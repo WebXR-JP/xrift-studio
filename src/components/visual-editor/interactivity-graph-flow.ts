@@ -85,6 +85,7 @@ export function operationData(
     index,
     op,
     label: template?.label ?? op,
+    ...(template ? { description: template.description } : {}),
     category: template?.category ?? "extension",
     flowInputs: template?.flowInputs ?? ["in"],
     flowOutputs: Array.from(

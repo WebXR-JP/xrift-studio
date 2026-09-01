@@ -26,6 +26,14 @@ export type GraphNodeData = {
   valueInputs: string[];
   valueOutputs: string[];
   runtimeSupport: InteractivityRuntimeSupport;
+  /**
+   * What the operation does, from its template.
+   *
+   * Shown on hover rather than on the card: thirty cards each carrying two
+   * lines of explanation stop reading as a structure. The tooltip is where an
+   * author asks「これは何をするノードだったか」about one card at a time.
+   */
+  description?: string;
   /** One-line description of an Interaction Trigger action's target. */
   summary?: string;
   /**
@@ -254,8 +262,8 @@ const SOCKET_HINTS: Readonly<Record<string, string>> = {
   condition: "true か false を出すノードをつなぎます",
   selection: "整数を出すノードをつなぎます。その番号の出力へ進みます",
   duration: "秒数。0 ならその場で、正の値ならその時間をかけて変わります",
-  delay: "取り消したい待機の ID。「待機」の待機ID からつなぎます",
-  lastDelay: "この待機の ID。「待機を取り消す」へつなげます",
+  delay: "取り消したい待機の ID。「指定した秒だけ待つ」の待機ID からつなぎます",
+  lastDelay: "この待機の ID。「待機を取り消す」の待機ID へつなげます",
   value: "書き込む値。数を出すノードをつないでも、直接入力してもかまいません",
   animation: "再生するクリップの番号",
   startTime: "クリップの何秒目から再生するか",
@@ -266,14 +274,33 @@ const SOCKET_HINTS: Readonly<Record<string, string>> = {
   startIndex: "繰り返しの開始番号",
   endIndex: "繰り返しの終了番号",
   index: "いま何回目かを出します。他のノードの値としてつなげます",
+  currentCount: "ここまでに通した回数を出します",
+  remainingInputs: "あと何本の入力を待っているかを出します",
+  lastRemainingTime: "次に通せるようになるまでの残り秒数を出します",
+  timeSinceStart: "ワールドが始まってからの秒数を出します",
+  timeSinceLastTick:
+    "前のフレームからの秒数を出します。速さを掛けると、フレームレートに関わらず同じ速度で動きます",
+  isValid: "変数を読めたかどうかを出します",
+  material: "書き込む先の Material。下のピッカーで選びます",
+  p1: "補間の効き方を決める制御点。0〜1 の間で指定します",
+  p2: "補間の効き方を決める制御点。0〜1 の間で指定します",
   event: "このノードが動いたことを値として出します",
   a: "1 つめの値",
   b: "2 つめの値",
   c: "3 つめの値",
+  d: "4 つめの値",
 };
 
 function socketHint(socket: string, kind: "flow" | "value", side: "left" | "right"): string {
-  const hint = SOCKET_HINTS[socket];
+  const hint =
+    SOCKET_HINTS[socket] ??
+    // A numbered socket has no name to look up, and「2番目」on its own does not
+    // say whether the author is looking at an order, a choice or a wait.
+    (/^\d+$/.test(socket) && kind === "flow"
+      ? side === "right"
+        ? "上から数えてこの位置の行き先です。ノードによって、順番に進むか、番号で選ばれます"
+        : "この位置の入力です。ここへ流れが来たことを、このノードが数えます"
+      : undefined);
   const role =
     kind === "flow"
       ? side === "left"
@@ -352,7 +379,7 @@ export function InteractivityNodeCard({ data, selected }: NodeProps<GraphFlowNod
           ) : null}
         </div>
         <p
-          title={data.label}
+          title={data.description ? `${data.label}\n${data.description}` : data.label}
           className="mt-0.5 line-clamp-2 text-[13px] font-bold leading-[1.3]"
         >
           {data.label}

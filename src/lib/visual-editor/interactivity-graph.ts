@@ -101,7 +101,23 @@ export type InteractivityDiagnostic = {
 
 export type InteractivityOperationTemplate = {
   op: string;
+  /**
+   * What the node does, as an action.
+   *
+   * 「無限値」or「乱数」name a thing and leave the author to guess what putting
+   * it on the canvas would do. A label that says the verb —「ランダムな数を出す」
+   * — is readable in the palette, on the card and in the Inspector without a
+   * second lookup, so every label here is written that way.
+   */
   label: string;
+  /**
+   * One plain sentence saying when the node runs and what it leaves behind.
+   *
+   * The palette used to show the raw `op` under the label, which only helps
+   * someone who already knows the spec. This is required rather than optional
+   * so an operation added later cannot reach the palette unexplained.
+   */
+  description: string;
   /**
    * glTF extension that defines this operation.
    *
@@ -318,27 +334,79 @@ const KHR_INTERACTIVITY_CORE_OPERATIONS = new Set([
 const MATH_PAIR_OPERATIONS: readonly {
   op: string;
   label: string;
+  description: string;
   kind: "float" | "bool";
 }[] = [
-  { op: "math/add", label: "足す", kind: "float" },
-  { op: "math/sub", label: "引く", kind: "float" },
-  { op: "math/mul", label: "掛ける", kind: "float" },
-  { op: "math/div", label: "割る", kind: "float" },
-  { op: "math/min", label: "小さいほう", kind: "float" },
-  { op: "math/max", label: "大きいほう", kind: "float" },
-  { op: "math/eq", label: "等しい", kind: "float" },
-  { op: "math/lt", label: "より小さい", kind: "float" },
-  { op: "math/le", label: "以下", kind: "float" },
-  { op: "math/gt", label: "より大きい", kind: "float" },
-  { op: "math/ge", label: "以上", kind: "float" },
-  { op: "math/and", label: "かつ", kind: "bool" },
-  { op: "math/or", label: "または", kind: "bool" },
+  { op: "math/add", label: "足す", description: "AとBを足した数を出します。A + B", kind: "float" },
+  { op: "math/sub", label: "引く", description: "AからBを引いた数を出します。A - B", kind: "float" },
+  { op: "math/mul", label: "掛ける", description: "AとBを掛けた数を出します。A × B", kind: "float" },
+  {
+    op: "math/div",
+    label: "割る",
+    description: "AをBで割った数を出します。Bが0のときは結果を使えません",
+    kind: "float",
+  },
+  {
+    op: "math/min",
+    label: "小さいほうを選ぶ",
+    description: "AとBのうち、小さいほうの数を出します",
+    kind: "float",
+  },
+  {
+    op: "math/max",
+    label: "大きいほうを選ぶ",
+    description: "AとBのうち、大きいほうの数を出します",
+    kind: "float",
+  },
+  {
+    op: "math/eq",
+    label: "等しいか調べる",
+    description: "AとBが同じ数なら true、違えば false を出します",
+    kind: "float",
+  },
+  {
+    op: "math/lt",
+    label: "より小さいか調べる",
+    description: "AがBより小さければ true、そうでなければ false を出します",
+    kind: "float",
+  },
+  {
+    op: "math/le",
+    label: "以下か調べる",
+    description: "AがB以下なら true、そうでなければ false を出します",
+    kind: "float",
+  },
+  {
+    op: "math/gt",
+    label: "より大きいか調べる",
+    description: "AがBより大きければ true、そうでなければ false を出します",
+    kind: "float",
+  },
+  {
+    op: "math/ge",
+    label: "以上か調べる",
+    description: "AがB以上なら true、そうでなければ false を出します",
+    kind: "float",
+  },
+  {
+    op: "math/and",
+    label: "両方そろったか調べる",
+    description: "AとBが両方 true のときだけ true を出します",
+    kind: "bool",
+  },
+  {
+    op: "math/or",
+    label: "どちらか成り立つか調べる",
+    description: "AとBのどちらかが true なら true を出します",
+    kind: "bool",
+  },
 ];
 
 const MATH_OPERATION_TEMPLATES: InteractivityOperationTemplate[] = [
   ...MATH_PAIR_OPERATIONS.map((entry) => ({
     op: entry.op,
     label: entry.label,
+    description: entry.description,
     category: "math" as const,
     flowInputs: [],
     flowOutputs: [],
@@ -353,7 +421,8 @@ const MATH_OPERATION_TEMPLATES: InteractivityOperationTemplate[] = [
   })),
   {
     op: "math/not",
-    label: "否定",
+    label: "true と false を入れ替える",
+    description: "Aが true なら false を、false なら true を出します",
     category: "math",
     flowInputs: [],
     flowOutputs: [],
@@ -363,7 +432,8 @@ const MATH_OPERATION_TEMPLATES: InteractivityOperationTemplate[] = [
   },
   {
     op: "math/random",
-    label: "乱数",
+    label: "ランダムな数を出す",
+    description: "0以上1未満の数をランダムに出します。読むたびに違う数になります",
     category: "math",
     flowInputs: [],
     flowOutputs: [],
@@ -373,6 +443,7 @@ const MATH_OPERATION_TEMPLATES: InteractivityOperationTemplate[] = [
   {
     op: "math/mix",
     label: "2つの値を混ぜる",
+    description: "AとBを、Cの割合で混ぜた数を出します。Cが0でA、1でB、0.5でちょうど中間",
     category: "math",
     flowInputs: [],
     flowOutputs: [],
@@ -389,6 +460,7 @@ const MATH_OPERATION_TEMPLATES: InteractivityOperationTemplate[] = [
   {
     op: "math/clamp",
     label: "範囲に収める",
+    description: "Aを、B以上C以下におさめた数を出します。範囲から出た値をはみ出させたくないときに使います",
     category: "math",
     flowInputs: [],
     flowOutputs: [],
@@ -407,7 +479,9 @@ const MATH_OPERATION_TEMPLATES: InteractivityOperationTemplate[] = [
 export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTemplate[] = [
   {
     op: "event/onStart",
-    label: "開始時",
+    label: "ワールドが始まったとき",
+    description:
+      "ワールドの読み込みが終わった瞬間に、一度だけ次へ進みます。最初の見た目を整えるときの入口です",
     category: "event",
     flowInputs: [],
     flowOutputs: ["out"],
@@ -416,7 +490,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "event/onTick",
-    label: "毎フレーム",
+    label: "毎フレーム進むたび",
+    description:
+      "画面を1フレーム描くたびに次へ進みます。毎秒何十回も動くので、重い処理はつながないでください",
     category: "event",
     flowInputs: [],
     flowOutputs: ["out"],
@@ -425,7 +501,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/branch",
-    label: "条件分岐",
+    label: "条件で分ける",
+    description: "条件が true なら「true」側へ、false なら「false」側へ進みます",
     category: "flow",
     flowInputs: ["in"],
     flowOutputs: ["true", "false"],
@@ -441,7 +518,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/setDelay",
-    label: "待機",
+    label: "指定した秒だけ待つ",
+    description:
+      "秒数を数えてから「完了後」へ進みます。「出力」はすぐ進むので、待ってからの続きは「完了後」につなぎます",
     category: "flow",
     flowInputs: ["in", "cancel"],
     flowOutputs: ["out", "err", "done"],
@@ -453,7 +532,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "animation/start",
-    label: "アニメーション再生",
+    label: "アニメーションを再生する",
+    description:
+      "選んだクリップを再生します。再生し終わると「完了後」へ進みます",
     category: "animation",
     flowInputs: ["in"],
     flowOutputs: ["out", "err", "done"],
@@ -470,7 +551,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "animation/stop",
-    label: "アニメーション停止",
+    label: "アニメーションを止める",
+    description: "再生中のクリップを止めます。止めた時点の姿勢のまま残ります",
     category: "animation",
     flowInputs: ["in"],
     flowOutputs: ["out", "err"],
@@ -480,7 +562,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "variable/get",
-    label: "変数を取得",
+    label: "変数を読む",
+    description: "このグラフの変数に今入っている値を出します",
     category: "variable",
     flowInputs: [],
     flowOutputs: [],
@@ -489,7 +572,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "variable/set",
-    label: "変数を設定",
+    label: "変数に書き込む",
+    description: "このグラフの変数へ値を入れてから、次へ進みます",
     category: "variable",
     flowInputs: ["in"],
     flowOutputs: ["out"],
@@ -498,7 +582,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "pointer/get",
-    label: "glTFプロパティを取得",
+    label: "glTFプロパティを読む",
+    description: "JSON pointer で指した glTF の値を読み出します",
     category: "pointer",
     flowInputs: [],
     flowOutputs: [],
@@ -507,7 +592,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "pointer/set",
-    label: "glTFプロパティを設定",
+    label: "glTFプロパティに書き込む",
+    description: "JSON pointer で指した glTF の値を、その場で書き換えます",
     category: "pointer",
     flowInputs: ["in"],
     flowOutputs: ["out", "err"],
@@ -516,7 +602,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "pointer/interpolate",
-    label: "glTFプロパティを補間",
+    label: "glTFプロパティを時間をかけて変える",
+    description:
+      "JSON pointer で指した値を、秒数をかけて今の値から目標の値まで少しずつ変えます。変え終わると「完了後」へ進みます",
     category: "animation",
     flowInputs: ["in"],
     flowOutputs: ["out", "err", "done"],
@@ -529,6 +617,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   {
     op: XRIFT_INTERACTION_OPERATIONS.onInteract,
     label: "インタラクトされたとき",
+    description:
+      "このグラフが付いたEntityをプレイヤーが押したときに、次へ進みます。Entityに公式のInteractableが要ります",
     category: "event",
     extension: XRIFT_INTERACTION_EXTENSION_NAME,
     flowInputs: [],
@@ -538,7 +628,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: XRIFT_INTERACTION_OPERATIONS.setProperty,
-    label: "プロパティを変える",
+    label: "プロパティを決めた値にする",
+    description:
+      "選んだEntityやComponentのプロパティを、決めた値にします。かける時間が0ならすぐ、正の秒数ならその時間をかけて変わります",
     category: "entity",
     extension: XRIFT_INTERACTION_EXTENSION_NAME,
     flowInputs: ["in"],
@@ -568,6 +660,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   {
     op: XRIFT_INTERACTION_OPERATIONS.toggleProperty,
     label: "プロパティを切り替える",
+    description:
+      "選んだプロパティの true と false を、流れが来るたびに入れ替えます。押すたびに点いたり消えたりする動きに使います",
     category: "entity",
     extension: XRIFT_INTERACTION_EXTENSION_NAME,
     flowInputs: ["in"],
@@ -585,7 +679,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "math/Inf",
-    label: "無限値",
+    label: "無限大の数を出す",
+    description: "無限大を値として出します。上限を作らずに比べたいときに使います",
     category: "math",
     flowInputs: [],
     flowOutputs: [],
@@ -595,6 +690,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   {
     op: "event/receive",
     label: "イベントを受け取る",
+    description:
+      "同じ名前の「イベントを送る」から知らせが来たときに、次へ進みます。離れた場所の処理を start させる入口です",
     category: "event",
     flowInputs: [],
     flowOutputs: ["out"],
@@ -604,6 +701,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   {
     op: "event/send",
     label: "イベントを送る",
+    description:
+      "同じ名前の「イベントを受け取る」へ知らせてから、次へ進みます。線をつながずに別の流れを動かせます",
     category: "event",
     flowInputs: ["in"],
     flowOutputs: ["out"],
@@ -612,7 +711,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/sequence",
-    label: "順番に実行",
+    label: "上から順に流す",
+    description: "つないだ行き先を、1番目から順に1回ずつ動かします",
     category: "flow",
     flowInputs: ["in"],
     // Three outputs is what makes the node usable without a socket editor. The
@@ -624,7 +724,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/doN",
-    label: "N回だけ通す",
+    label: "最初のN回だけ通す",
+    description:
+      "流れを最初のN回だけ先へ通し、それ以降は止めます。「やり直し」へ流れが来ると数え直します",
     category: "flow",
     flowInputs: ["in", "reset"],
     flowOutputs: ["out"],
@@ -634,7 +736,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/for",
-    label: "回数で繰り返す",
+    label: "回数を決めて繰り返す",
+    description:
+      "開始番号から終了番号まで、「繰り返す先」を1回ずつ動かします。終わると「すべて完了後」へ進みます",
     category: "flow",
     flowInputs: ["in"],
     flowOutputs: ["loopBody", "completed"],
@@ -649,7 +753,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/while",
-    label: "条件の間くり返す",
+    label: "条件が続く間くり返す",
+    description:
+      "条件が true の間、「繰り返す先」を動かし続けます。条件を false にする処理を必ず中に入れてください",
     category: "flow",
     flowInputs: ["in"],
     flowOutputs: ["loopBody", "completed"],
@@ -661,7 +767,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/multiGate",
-    label: "順番に切り替え",
+    label: "通るたびに行き先を変える",
+    description:
+      "流れが来るたびに、1番目、2番目と違う行き先へ順に進みます。押すたびに次の演出へ送りたいときに使います",
     category: "flow",
     flowInputs: ["in", "reset"],
     flowOutputs: ["0", "1", "2"],
@@ -670,7 +778,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/waitAll",
-    label: "すべて揃うまで待つ",
+    label: "全部そろうまで待つ",
+    description:
+      "つないだ入力すべてに流れが来てから、「すべて完了後」へ進みます。複数の動きが終わるのを待ち合わせます",
     category: "flow",
     flowInputs: ["0", "1", "reset"],
     flowOutputs: ["completed", "out"],
@@ -679,7 +789,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/throttle",
-    label: "連続実行を防ぐ",
+    label: "連続で動かないようにする",
+    description:
+      "一度通したら、指定した秒数が過ぎるまで次の流れを通しません。連打で二重に動くのを防ぎます",
     category: "flow",
     flowInputs: ["in", "reset"],
     flowOutputs: ["out", "err"],
@@ -692,6 +804,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   {
     op: "flow/cancelDelay",
     label: "待機を取り消す",
+    description:
+      "数えている途中の待機を止めます。「指定した秒だけ待つ」の待機IDを、このノードの待機IDへつなぎます",
     category: "flow",
     flowInputs: ["in"],
     flowOutputs: ["out"],
@@ -701,7 +815,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/switch",
-    label: "値で分岐",
+    label: "番号で行き先を決める",
+    description:
+      "選ぶ番号と同じ行き先へ進みます。当てはまる番号がなければ「その他」へ進みます",
     category: "flow",
     flowInputs: ["in"],
     flowOutputs: ["0", "1", "default"],
@@ -713,7 +829,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "animation/stopAt",
-    label: "時間を指定して停止",
+    label: "アニメーションを指定の位置で止める",
+    description:
+      "再生中のクリップを、クリップの何秒目かで止めます。止まると「完了後」へ進みます",
     category: "animation",
     flowInputs: ["in"],
     flowOutputs: ["out", "err", "done"],
@@ -728,7 +846,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "variable/interpolate",
-    label: "変数をゆっくり変える",
+    label: "変数を時間をかけて変える",
+    description:
+      "変数を、秒数をかけて今の値から目標の値まで少しずつ変えます。変え終わると「完了後」へ進みます",
     category: "variable",
     flowInputs: ["in"],
     flowOutputs: ["out", "err", "done"],

@@ -5469,6 +5469,9 @@ function listInteractivityOperations(
         return {
           op: template.op,
           label: template.label,
+          // The same sentence the palette shows, so an AI client picks an
+          // operation on what it does rather than on the shape of its name.
+          description: template.description,
           category: template.category,
           flowInputs: template.flowInputs,
           flowOutputs: template.flowOutputs,

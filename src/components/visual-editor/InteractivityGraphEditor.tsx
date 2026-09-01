@@ -37,6 +37,7 @@ import {
   renameInteractivityGraph,
   KHR_INTERACTIVITY_MATERIAL_POINTER_PRESETS,
   KHR_INTERACTIVITY_OPERATION_TEMPLATES,
+  getInteractivityOperationTemplate,
   parseKhrInteractivityExtension,
   readInteractivityNodePosition,
   readInteractivityTriggerActionDuration,
@@ -549,6 +550,17 @@ function InteractivityGraphEditorBody({
     configuredMaterialIndex < sortedMaterials.length
       ? configuredMaterialIndex
       : 0;
+  /**
+   * The template behind the selected node, so the Inspector can name it.
+   *
+   * The panel used to head itself with the raw `op` alone, which is the one
+   * string an author cannot look up from inside the editor. The Japanese name
+   * and its one-line description belong here, where they stay on screen while
+   * the fields below are edited, rather than only in a palette tooltip.
+   */
+  const selectedTemplate = selectedDeclaration
+    ? getInteractivityOperationTemplate(selectedDeclaration.op)
+    : undefined;
   const materialPointerNode = selectedDeclaration?.op.startsWith("pointer/") ?? false;
   const triggerActionNode = isInteractivityTriggerActionOp(selectedDeclaration?.op);
   const triggerAction =
@@ -654,6 +666,9 @@ function InteractivityGraphEditorBody({
           template.category === category &&
           (query === "" ||
             template.label.toLowerCase().includes(query) ||
+            // The description carries the words an author reaches for first —
+            // 「連打」,「待ち合わせ」— which the label had no room for.
+            template.description.toLowerCase().includes(query) ||
             template.op.toLowerCase().includes(query)),
       ),
     })).filter((group) => group.templates.length > 0);
@@ -1676,18 +1691,28 @@ function InteractivityGraphEditorBody({
                           type="button"
                           disabled={readOnly}
                           onClick={() => handleAddOperation(template.op)}
-                          className="flex w-full items-center gap-2 rounded border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-left hover:border-violet-500 hover:bg-slate-800 disabled:opacity-45"
+                          title={`${template.label}\n${template.description}\n${template.op}`}
+                          className="flex w-full items-start gap-2 rounded border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-left hover:border-violet-500 hover:bg-slate-800 disabled:opacity-45"
                         >
                           <span
                             aria-hidden="true"
-                            className="h-2.5 w-2.5 shrink-0 rounded-full"
+                            className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
                             style={{ background: CATEGORY_MINIMAP_COLOR[template.category] }}
                           />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-xs font-medium">
                               {template.label}
                             </span>
-                            <code className="block truncate text-[9px] text-slate-500">
+                            {/*
+                              What the node does, in the same place a recipe
+                              says it. The raw op stays underneath for anyone
+                              cross-reading the spec, but it is no longer the
+                              only thing under the name.
+                            */}
+                            <span className="block text-[9px] leading-3 text-slate-400">
+                              {template.description}
+                            </span>
+                            <code className="mt-0.5 block truncate text-[9px] text-slate-600">
                               {template.op}
                             </code>
                           </span>
@@ -1842,10 +1867,28 @@ function InteractivityGraphEditorBody({
         className="flex shrink-0 flex-col border-l border-slate-700 bg-slate-900"
       >
         <div className="border-b border-slate-700 px-3 py-2">
-          <p className="text-xs font-bold">Node Inspector</p>
-          <p className="text-[10px] text-slate-400">
-            {selectedDeclaration?.op ?? "ノードを選択してください"}
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            Node Inspector
           </p>
+          {selectedDeclaration ? (
+            <>
+              <p className="mt-0.5 text-xs font-bold text-slate-100">
+                {selectedTemplate?.label ?? selectedDeclaration.op}
+              </p>
+              {selectedTemplate ? (
+                <p className="mt-1 text-[10px] leading-4 text-slate-300">
+                  {selectedTemplate.description}
+                </p>
+              ) : null}
+              <code className="mt-1 block truncate text-[10px] text-slate-500">
+                {selectedDeclaration.op}
+              </code>
+            </>
+          ) : (
+            <p className="mt-0.5 text-[10px] text-slate-400">
+              ノードを選択してください
+            </p>
+          )}
         </div>
         <div className="scrollbar-thin min-h-0 flex-1 overflow-auto p-3">
           {selectedNode && selectedNodeIndex !== null ? (
