@@ -23,11 +23,11 @@ Visual project はコードを隠すだけの画面ではなく、Scene、Asset�
 | --- | --- | --- |
 | Visual project | 利用可能 | World / Item の作成、保存、再読込、autosave、reference validation。 |
 | Scene編集 | 利用可能 | Hierarchy、Scene View、Inspector、Assets、選択、transform、親子関係、複製、削除、Undo / Redo。 |
-| Model import | 利用可能 | GLB、自己完結 glTF、OBJ、VRM 0.x / 1.x を Model Asset として取り込む。 |
+| Model import | 利用可能 | GLB、自己完結 glTF、OBJ、VRM 0.x / 1.x をそのまま Model Asset として取り込む。FBX、COLLADA、STL、PLY、USD、Rhino 3DM など Three.js Editor が読む形式は、取り込み時に自己完結 GLB へ変換して同じ経路へ載せる。対応形式は `asset-format-registry.ts` の `ASSET_FORMATS.model` が正本である。 |
 | Avatar pose | 利用可能 | 取り込んだボーンの XYZ 回転と shape key の値を Entity ごとに保存し、Scene View と生成コードへ反映する。 |
 | Model Animation 再生 | 利用可能 | Animation を含む GLB / glTF の配置時に Animation Component を追加し、選択した clip を Play と生成物で再生する。Autoplay、Loop、再生速度を Inspector と MCP から設定する。 |
-| Texture / Material | 利用可能 | PNG、JPG、WebP、KTX2 を取り込み、PBR Material、slot binding、alpha、描画順、thumbnail を編集する。Classic import では静的に検査できる ShaderMaterial も Texture uniform と mesh 別 variant を保った Custom Material へ変換する。 |
-| Audio | 利用可能 | MP3 / WAV を Audio Asset として取り込み、Audio Source へ割り当てて Scene と生成物へ保存する。 |
+| Texture / Material | 利用可能 | PNG、JPG、WebP、AVIF、GIF、BMP、SVG、KTX2 を取り込み、PBR Material、slot binding、alpha、描画順、thumbnail を編集する。Classic import では静的に検査できる ShaderMaterial も Texture uniform と mesh 別 variant を保った Custom Material へ変換する。 |
+| Audio | 利用可能 | MP3 / WAV / Ogg / FLAC / AAC / WebM を Audio Asset として取り込み、Audio Source へ割り当てて Scene と生成物へ保存する。 |
 | Lighting | 利用可能 | Directional / Point / Spot / Area の Light を配置し、色、強度、影、距離を設定する。公式シェーダーも Scene の Light で陰影が付く。Light が無い Scene も既定光で見える。 |
 | 色味の調整 | 利用可能 | 露出、コントラスト、彩度などを一つの compositor で調整する。既定はオフ。 |
 | Terrain authoring | 利用可能 | Create メニューから高さサンプル Terrain を追加し、Inspector または MCP の Raise / Lower / Flatten / Smooth / Hole ブラシで編集する。草を層で塗り、Scene の Wind で揺らす。static Trimesh Collider、Play、compile、runtime manifest へ同じ Terrain を渡す。 |

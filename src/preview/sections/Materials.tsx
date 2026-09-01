@@ -10,6 +10,7 @@ export function Materials() {
             <h2 className="preview-section-title mt-4">いつもの素材から、すぐ始める。</h2>
             <p className="preview-section-copy mt-5">
               手元の3Dモデル、テクスチャ、音をそのまま取り込んで、シーンへ置けます。
+              FBXやSTLのようにXRiftがそのままでは読めない形式も、取り込むときにGLBへ変換します。
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-3" data-reveal>

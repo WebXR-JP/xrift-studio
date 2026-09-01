@@ -115,6 +115,7 @@ import {
   updateVegetationWindComponent,
   updateColliderComponent,
   type ColliderComponent,
+  type SceneComponent,
   optimizeColliderConfiguration,
   updateRigidBodyComponent,
   updateLightComponent,
@@ -390,7 +391,17 @@ const IMPORT_RESOURCE_KIND: Readonly<
   shader: "shader",
 };
 // Inspectorの削除通知で使う表示名。Component種別のidをそのまま出さない。
-const COMPONENT_REMOVAL_LABELS: Readonly<Record<string, string>> = {
+/**
+ * Named for every Component the generic remove path can reach. `transform` and
+ * `xrift-component` are excluded because they never get here — one is refused
+ * as required, the other has its own removal path — and the type is exact
+ * rather than `Record<string, string>` so a new Component in the schema
+ * registry fails typecheck instead of quietly falling back to "Component" in
+ * the notice a person reads after deleting it.
+ */
+const COMPONENT_REMOVAL_LABELS: Readonly<
+  Record<Exclude<SceneComponent["type"], "transform" | "xrift-component">, string>
+> = {
   mesh: "Mesh Renderer",
   light: "Light",
   text: "Text",
