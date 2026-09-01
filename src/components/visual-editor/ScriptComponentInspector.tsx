@@ -9,6 +9,7 @@ import {
   type ScriptPropDescriptor,
 } from "../../lib/visual-editor/scripting/script-contract";
 import { listScriptAssets } from "../../lib/visual-editor/scripting/script-files";
+import { ScrubNumberInput } from "./ScrubNumberInput";
 
 /**
  * Inspector fields for a Script Component.
@@ -225,26 +226,15 @@ function ScriptPropField({
           className="h-3.5 w-3.5"
         />
       ) : descriptor.kind === "number" ? (
-        <input
-          type="number"
+        <ScrubNumberInput
           value={typeof value === "number" ? value : 0}
           disabled={fieldDisabled}
-          {...(descriptor.min !== undefined ? { min: descriptor.min } : {})}
-          {...(descriptor.max !== undefined ? { max: descriptor.max } : {})}
-          {...(descriptor.step !== undefined ? { step: descriptor.step } : {})}
-          onChange={(event) => {
-            const raw = Number(event.target.value);
-            if (!Number.isFinite(raw)) return;
-            setValue(
-              Math.min(
-                descriptor.max ?? Number.POSITIVE_INFINITY,
-                Math.max(
-                  descriptor.min ?? Number.NEGATIVE_INFINITY,
-                  raw,
-                ),
-              ),
-            );
-          }}
+          min={descriptor.min}
+          max={descriptor.max}
+          step={descriptor.step}
+          ariaLabel={descriptor.label ?? descriptor.name}
+          scrubLabel={descriptor.label ?? descriptor.name}
+          onChange={setValue}
           className="w-full rounded border border-slate-300 px-2 py-1 text-xs disabled:opacity-45"
         />
       ) : descriptor.kind === "enum" ? (
@@ -356,17 +346,21 @@ function VectorField({
   return (
     <div className="flex gap-1">
       {current.map((entry, index) => (
-        <input
+        <ScrubNumberInput
           key={index}
-          type="number"
           value={entry}
+          scrubStep={0.01}
           disabled={disabled}
-          onChange={(event) => {
-            const next = [...current];
-            next[index] = Number(event.target.value);
-            onChange(next);
+          size="sm"
+          compact
+          prefix={"XYZ"[index]}
+          ariaLabel={`${"XYZ"[index]}軸`}
+          scrubLabel={`${"XYZ"[index]}軸`}
+          onChange={(next) => {
+            const nextValue = [...current];
+            nextValue[index] = next;
+            onChange(nextValue);
           }}
-          className="w-full min-w-0 rounded border border-slate-300 px-1.5 py-1 text-xs disabled:opacity-45"
         />
       ))}
     </div>

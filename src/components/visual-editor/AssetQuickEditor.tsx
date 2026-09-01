@@ -77,6 +77,8 @@ import {
   hasEditorDragData,
   readEditorDragData,
 } from "./editor-drag-data";
+import { ScrubNumberInput } from "./ScrubNumberInput";
+import { useValueScrubTransaction } from "./value-scrub-transaction";
 import { TEXTURE_DRAG_MIME } from "./types";
 import {
   type MaterialPreviewTextureLoadStatus,
@@ -837,23 +839,22 @@ function RangeControl({
   disabled: boolean;
   onChange: (value: number) => void;
 }) {
+  const transaction = useValueScrubTransaction();
   return (
     <label className="block text-xs text-slate-600">
       <span className="mb-1 flex items-center justify-between gap-2">
         <span>{label}</span>
-        <input
-          type="number"
-          aria-label={`${label}の数値`}
+        <ScrubNumberInput
+          ariaLabel={`${label}の数値`}
+          scrubLabel={label}
           min={min}
           max={max}
           step={step}
           value={Number.isInteger(step) ? value : Number(value.toFixed(3))}
           disabled={disabled}
-          onChange={(event) => {
-            const next = event.currentTarget.valueAsNumber;
-            if (Number.isFinite(next) && next >= min && next <= max) onChange(next);
-          }}
-          className="h-6 w-20 rounded border border-slate-300 bg-white px-1.5 text-right text-xs tabular-nums text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+          size="xs"
+          wrapperClassName="w-20 shrink-0"
+          onChange={onChange}
         />
       </span>
       <input
@@ -863,6 +864,9 @@ function RangeControl({
         step={step}
         value={value}
         disabled={disabled}
+        onPointerDown={() => transaction?.begin()}
+        onPointerUp={() => transaction?.end()}
+        onPointerCancel={() => transaction?.cancel()}
         onChange={(event) => {
           const next = event.currentTarget.valueAsNumber;
           if (Number.isFinite(next)) onChange(next);
@@ -902,22 +906,19 @@ function NumberControl({
   return (
     <label className="block text-xs text-slate-600">
       <span className="mb-1 block">{label}</span>
-      <input
-        type="number"
+      <ScrubNumberInput
         value={Number(value.toFixed(4))}
         min={min}
         max={max}
         step={step}
         disabled={disabled}
-        onChange={(event) => {
-          const next = event.currentTarget.valueAsNumber;
-          if (!Number.isFinite(next)) return;
-          if (min !== undefined && next < min) return;
-          if (max !== undefined && next > max) return;
+        size="sm"
+        ariaLabel={label}
+        scrubLabel={label}
+        onChange={(next) => {
           if (isAllowed && !isAllowed(next)) return;
           onChange(next);
         }}
-        className={INPUT_CLASS}
       />
       {description ? (
         <span className="mt-1 block text-[11px] leading-4 text-slate-500">
@@ -966,29 +967,24 @@ function Color3Control({
       </div>
       <div className="grid grid-cols-3 gap-1">
         {(["R", "G", "B"] as const).map((channel, index) => (
-          <label key={channel} className="relative block">
-            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-slate-400">
-              {channel}
-            </span>
-            <input
-              type="number"
-              min={0}
-              max={max}
-              step={0.01}
-              value={Number(value[index].toFixed(3))}
-              disabled={disabled}
-              aria-label={`${label} ${channel}`}
-              onChange={(event) => {
-                const next = event.currentTarget.valueAsNumber;
-                if (!Number.isFinite(next) || next < 0) return;
-                if (max !== undefined && next > max) return;
-                const color: Color3 = [value[0], value[1], value[2]];
-                color[index] = next;
-                onChange(color);
-              }}
-              className="h-7 w-full rounded border border-slate-300 bg-white py-1 pl-5 pr-1 text-right text-xs tabular-nums text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-            />
-          </label>
+          <ScrubNumberInput
+            key={channel}
+            min={0}
+            max={max}
+            step={0.01}
+            scrubStep={0.005}
+            value={Number(value[index].toFixed(3))}
+            disabled={disabled}
+            size="sm"
+            prefix={channel}
+            ariaLabel={`${label} ${channel}`}
+            scrubLabel={`${label} ${channel}`}
+            onChange={(next) => {
+              const color: Color3 = [value[0], value[1], value[2]];
+              color[index] = next;
+              onChange(color);
+            }}
+          />
         ))}
       </div>
       <p className="mt-1 text-[11px] leading-4 text-slate-500">{description}</p>
@@ -1072,24 +1068,20 @@ function TextureVectorControl({
       <legend className="mb-1 text-[11px] font-medium text-slate-500">{label}</legend>
       <div className="grid grid-cols-2 gap-1">
         {(["X", "Y"] as const).map((axis, index) => (
-          <label key={axis} className="relative block">
-            <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-slate-400">
-              {axis}
-            </span>
-            <input
-              type="number"
-              step={0.01}
-              value={value[index]}
-              disabled={disabled}
-              aria-label={`${label} ${axis}`}
-              onChange={(event) => {
-                const next = event.currentTarget.valueAsNumber;
-                if (!Number.isFinite(next)) return;
-                onChange(index === 0 ? [next, value[1]] : [value[0], next]);
-              }}
-              className="h-7 w-full rounded border border-slate-300 bg-white py-1 pl-5 pr-1 text-right text-xs tabular-nums text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-            />
-          </label>
+          <ScrubNumberInput
+            key={axis}
+            step={0.01}
+            scrubStep={0.01}
+            value={value[index]}
+            disabled={disabled}
+            size="sm"
+            prefix={axis}
+            ariaLabel={`${label} ${axis}`}
+            scrubLabel={`${label} ${axis}`}
+            onChange={(next) =>
+              onChange(index === 0 ? [next, value[1]] : [value[0], next])
+            }
+          />
         ))}
       </div>
     </fieldset>
@@ -1274,19 +1266,18 @@ function TextureSlot({
           <div className="grid grid-cols-[64px_minmax(0,1fr)] gap-2">
             <label className="block text-[11px] text-slate-500">
               UV Set
-              <input
-                type="number"
+              <ScrubNumberInput
                 min={0}
                 step={1}
+                precision={0}
                 value={value.texCoord}
                 disabled={disabled}
-                onChange={(event) => {
-                  const texCoord = event.currentTarget.valueAsNumber;
-                  if (Number.isInteger(texCoord) && texCoord >= 0) {
-                    onChange({ ...value, texCoord });
-                  }
-                }}
-                className={INPUT_CLASS}
+                size="sm"
+                ariaLabel="UV Set"
+                scrubLabel="UV Set"
+                onChange={(texCoord) =>
+                  onChange({ ...value, texCoord: Math.round(texCoord) })
+                }
               />
             </label>
             <div className="min-w-0 text-[11px] text-slate-500">
@@ -1356,18 +1347,17 @@ function TextureSlot({
               </div>
               <label className="block text-[11px] font-medium text-slate-500">
                 Rotation (°)
-                <input
-                  type="number"
+                <ScrubNumberInput
                   step={1}
+                  scrubStep={0.5}
                   value={Number(((transform.rotation * 180) / Math.PI).toFixed(2))}
                   disabled={disabled}
-                  onChange={(event) => {
-                    const degrees = event.currentTarget.valueAsNumber;
-                    if (Number.isFinite(degrees)) {
-                      updateTransform({ rotation: (degrees * Math.PI) / 180 });
-                    }
-                  }}
-                  className={INPUT_CLASS}
+                  size="sm"
+                  ariaLabel="Rotation (°)"
+                  scrubLabel="Rotation"
+                  onChange={(degrees) =>
+                    updateTransform({ rotation: (degrees * Math.PI) / 180 })
+                  }
                 />
               </label>
               {selectedTexture &&
@@ -1977,18 +1967,17 @@ function CustomShaderQuickEditor({
                         ) : null}
                       </span>
                       {uniform.kind === "number" ? (
-                        <input
-                          type="number"
+                        <ScrubNumberInput
                           value={uniform.value}
                           disabled={readOnly}
-                          step="any"
-                          onChange={(event) => {
-                            const value = Number(event.currentTarget.value);
-                            if (Number.isFinite(value)) {
-                              updateUniform(name, { kind: "number", value });
-                            }
-                          }}
-                          className={`${INPUT_CLASS} font-mono text-[10px]`}
+                          scrubStep={0.01}
+                          size="sm"
+                          ariaLabel={meta.label}
+                          scrubLabel={meta.label}
+                          onChange={(value) =>
+                            updateUniform(name, { kind: "number", value })
+                          }
+                          className="font-mono"
                         />
                       ) : uniform.kind === "color" ? (
                         <div className="flex items-center gap-1.5">

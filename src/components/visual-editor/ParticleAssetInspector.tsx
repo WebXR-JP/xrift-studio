@@ -22,6 +22,7 @@ import {
   readEditorDragData,
 } from "./editor-drag-data";
 import { TEXTURE_DRAG_MIME } from "./types";
+import { ScrubNumberInput } from "./ScrubNumberInput";
 
 type Props = {
   asset: ParticleAsset;
@@ -342,10 +343,7 @@ function NumberField({ label, value, min, max, step = 0.01, suffix, disabled, on
   return (
     <label className="grid grid-cols-[minmax(100px,1fr)_120px] items-center gap-2 text-xs text-slate-600">
       {label}
-      <span className="relative">
-        <input type="number" value={value} min={min} max={max} step={step} disabled={disabled} onChange={(event) => Number.isFinite(event.currentTarget.valueAsNumber) && onChange(event.currentTarget.valueAsNumber)} className={`${CONTROL} text-right ${suffix ? "pr-10" : ""}`} />
-        {suffix ? <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">{suffix}</span> : null}
-      </span>
+      <ScrubNumberInput value={value} min={min} max={max} step={step} suffix={suffix} disabled={disabled} ariaLabel={label} scrubLabel={label} onChange={onChange} />
     </label>
   );
 }
@@ -362,7 +360,7 @@ function RangeField({ label, value, min, max, preserveOrder = false, disabled, o
         {(["min", "max"] as const).map((key) => (
           <label key={key} className="block">
             <span className="mb-0.5 block text-center text-[9px] font-semibold uppercase leading-3 text-slate-400">{key}</span>
-            <input type="number" value={value[key]} min={min} max={max} step="any" disabled={disabled} onChange={(event) => Number.isFinite(event.currentTarget.valueAsNumber) && update(key, event.currentTarget.valueAsNumber)} className={`${CONTROL} px-1 text-right tabular-nums`} />
+            <ScrubNumberInput value={value[key]} min={min} max={max} scrubStep={0.01} disabled={disabled} ariaLabel={`${label} ${key}`} scrubLabel={`${label} ${key}`} onChange={(next) => update(key, next)} className="px-1" />
           </label>
         ))}
       </div>
@@ -410,7 +408,7 @@ function VectorField({ label, value, disabled, onChange }: { label: string; valu
         {value.map((entry, index) => (
           <label key={index} className="block">
             <span className="mb-0.5 block text-center text-[9px] font-semibold uppercase leading-3 text-slate-400">{"xyz"[index]}</span>
-            <input type="number" value={entry} step="any" disabled={disabled} onChange={(event) => { const next = [...value] as Vec3Like; next[index] = event.currentTarget.valueAsNumber; onChange(next); }} className={`${CONTROL} px-1 text-right tabular-nums`} />
+            <ScrubNumberInput value={entry} scrubStep={0.01} disabled={disabled} ariaLabel={`${label} ${"XYZ"[index]}`} scrubLabel={`${label} ${"XYZ"[index]}`} onChange={(next) => { const nextValue = [...value] as Vec3Like; nextValue[index] = next; onChange(nextValue); }} className="px-1" />
           </label>
         ))}
       </div>
@@ -445,25 +443,21 @@ function ColorField({ label, value, disabled, onChange }: { label: string; value
       <div className="grid grid-cols-4 gap-1">
         {(["R", "G", "B", "A"] as const).map((channel, index) => (
           <label key={channel} className="relative">
-            <span className="pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-slate-400">
-              {channel}
-            </span>
-            <input
-              type="number"
+            <ScrubNumberInput
               value={Number(value[index].toFixed(3))}
               min={0}
               max={1}
               step={0.01}
+              scrubStep={0.005}
               disabled={disabled}
-              aria-label={`${label} ${channel}`}
-              onChange={(event) => {
-                const next = event.currentTarget.valueAsNumber;
-                if (!Number.isFinite(next) || next < 0 || next > 1) return;
+              prefix={channel}
+              ariaLabel={`${label} ${channel}`}
+              scrubLabel={`${label} ${channel}`}
+              onChange={(next) => {
                 const color: Color4 = [value[0], value[1], value[2], value[3]];
                 color[index] = next;
                 onChange(color);
               }}
-              className={`${CONTROL} pl-5 pr-1 text-right tabular-nums`}
             />
           </label>
         ))}

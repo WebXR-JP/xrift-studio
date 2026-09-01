@@ -9,6 +9,7 @@ import {
   type XriftComponentFieldDefinition,
 } from "../../lib/visual-editor";
 import { EDITOR_ICONS } from "./editor-icons";
+import { ScrubNumberInput } from "./ScrubNumberInput";
 
 type Props = {
   component: XRiftComponent;
@@ -232,20 +233,17 @@ function renderFieldControl(
   }
 
   if (field.kind === "number") {
-    const numberValue = typeof value === "number" ? value : "";
     return (
-      <input
-        type="number"
-        value={numberValue}
+      <ScrubNumberInput
+        value={typeof value === "number" ? value : Number.NaN}
         min={field.range?.min}
         max={field.range?.max}
-        step={field.range?.step ?? "any"}
+        step={field.range?.step}
         disabled={readOnly}
-        onChange={(event) => {
-          const next = event.currentTarget.valueAsNumber;
-          onChange(Number.isFinite(next) ? next : undefined);
-        }}
-        className={INPUT_CLASS}
+        ariaLabel={field.label}
+        scrubLabel={field.label}
+        onChange={onChange}
+        onClear={() => onChange(undefined)}
       />
     );
   }
@@ -316,13 +314,13 @@ function renderFieldControl(
             onChange={onChange}
           />
         ) : (
-          <input
-            type="number"
+          <ScrubNumberInput
             value={typeof value === "number" ? value : 1}
-            step="any"
+            scrubStep={0.01}
             disabled={readOnly}
-            onChange={(event) => onChange(event.currentTarget.valueAsNumber)}
-            className={INPUT_CLASS}
+            ariaLabel={field.label}
+            scrubLabel={field.label}
+            onChange={onChange}
           />
         )}
       </div>
@@ -337,13 +335,13 @@ function renderFieldControl(
         <NestedVector label="Rotation" value={transform.rotation} disabled={readOnly} onChange={(rotation) => onChange({ ...transform, rotation })} />
         <label className="grid grid-cols-[58px_minmax(0,1fr)] items-center gap-2 text-xs text-slate-500">
           Scale
-          <input
-            type="number"
+          <ScrubNumberInput
             value={transform.scale}
-            step="any"
+            scrubStep={0.01}
             disabled={readOnly}
-            onChange={(event) => onChange({ ...transform, scale: event.currentTarget.valueAsNumber })}
-            className={INPUT_CLASS}
+            ariaLabel="Scale"
+            scrubLabel="Scale"
+            onChange={(scale) => onChange({ ...transform, scale })}
           />
         </label>
       </div>
@@ -448,23 +446,20 @@ function VectorInput({
   return (
     <div className={`grid ${size === 2 ? "grid-cols-2" : "grid-cols-3"} gap-1.5`}>
       {value.map((entry, index) => (
-        <label key={index} className="relative">
-          <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold uppercase text-slate-400">
-            {"xyz"[index]}
-          </span>
-          <input
-            type="number"
-            value={entry}
-            step="any"
-            disabled={disabled}
-            onChange={(event) => {
-              const next = [...value];
-              next[index] = event.currentTarget.valueAsNumber;
-              onChange(next);
-            }}
-            className={`${INPUT_CLASS} pl-5 text-right tabular-nums`}
-          />
-        </label>
+        <ScrubNumberInput
+          key={index}
+          value={entry}
+          scrubStep={0.01}
+          disabled={disabled}
+          prefix={"XYZ"[index]}
+          ariaLabel={`${"XYZ"[index]}軸`}
+          scrubLabel={`${"XYZ"[index]}軸`}
+          onChange={(next) => {
+            const nextValue = [...value];
+            nextValue[index] = next;
+            onChange(nextValue);
+          }}
+        />
       ))}
     </div>
   );
