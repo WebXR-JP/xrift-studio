@@ -46,7 +46,8 @@ The built-in `xrift-studio` MCP server exposes:
 **Read**
 
 - `list_interactivity_operations` — every operation the palette offers, each with
-  its sockets and whether the Play runtime executes it
+  its Japanese label and description, its sockets, and whether the Play runtime
+  executes it
 - `list_interaction_trigger_targets` — every Entity, Component and property an
   action can write to, with kinds, ranges and enum options
 - `get_interactivity_asset` — the canonical JSON
@@ -102,6 +103,29 @@ With this surface an MCP client can generate reusable animation-start graphs,
 delayed sequences, branches, variable and glTF Object Model pointer operations,
 or vendor-extension nodes. It can also inspect and repair an existing graph
 without replacing its canonical JSON.
+
+### Every operation says what it does, as an action
+
+An operation template carries a Japanese `label` and a required `description`,
+and both are written as something the node *does*:「ランダムな数を出す」rather
+than「乱数」,「指定した秒だけ待つ」rather than「待機」. A noun label names a
+concept and leaves the author to guess what dropping it on the canvas would
+change, which is the reading cost the palette was charging on every node.
+
+The description is one plain sentence saying when the node runs and what it
+leaves behind — including the part that is not visible from the sockets, such
+as `flow/setDelay` continuing out of「出力」immediately and out of「完了後」only
+after the wait. It appears under the label in the palette, in the Node
+Inspector's header while the fields below are being edited, and in the card's
+hover text; the palette's search matches it as well as the label and the raw
+`op`, so「連打」finds `flow/throttle`. `list_interactivity_operations` returns
+it too, so an MCP client chooses on behavior rather than on the shape of a name.
+
+It is a required field rather than an optional one: an operation added to the
+palette without a sentence explaining it is a node no author can be expected to
+try. When a label changes, the socket hints in `InteractivityNodeCard.tsx` that
+quote it by name (「指定した秒だけ待つ」の待機ID) change with it, or the two
+tell the author to look for a node that is no longer there.
 
 ### Refusing what the canvas cannot draw
 
