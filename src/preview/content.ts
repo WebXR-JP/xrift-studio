@@ -17,6 +17,8 @@ import {
   Upload,
   Workflow,
 } from "lucide-react";
+import { ASSET_FORMATS } from "../lib/visual-editor/asset-format-registry";
+import { XRIFT_MCP_TOOL_NAMES } from "../lib/visual-editor/mcp-tool-registry";
 import {
   XRIFT_STUDIO_REPOSITORY_URL,
 } from "../lib/support-links";
@@ -59,9 +61,10 @@ export const productKinds = [
  * Each line here is checked against the editor: the terrain brush and grass
  * painting, the Gerstner water parameters, the procedural sky presets, the
  * emissive lights, the spatial audio falloff, and the KHR_interactivity graph.
- * The interactivity wording is deliberately about time and events rather than
- * touch — the graph's only triggers are onStart, onTick and received events,
- * so a claim about reacting to a click would be false.
+ * The interactivity wording names the triggers the graph actually has —
+ * `event/onStart`, `event/onTick`, a received event, and `xrift/onInteract`.
+ * Touch belongs on this list because the interact trigger ships, but it is
+ * worded as being pressed rather than as gaze or proximity, which do not.
  */
 export const worldTools = [
   {
@@ -92,7 +95,7 @@ export const worldTools = [
   {
     icon: Workflow,
     title: "動きをつける",
-    text: "開始時や毎フレームをきっかけに、色・発光・アニメーションをノードでつないで動かせます。glTFのKHR_interactivity準拠です。",
+    text: "押されたとき、開始時、毎フレームをきっかけに、位置・色・アニメーション・音をノードでつないで動かせます。glTFのKHR_interactivity準拠です。",
   },
 ] as const;
 
@@ -123,23 +126,38 @@ export const creationFlow = [
   },
 ] as const;
 
+/**
+ * The formats an author can drop on the editor.
+ *
+ * The counts come from `ASSET_FORMATS`, the one table every importer resolves
+ * against, because the written-down version of this list had fallen a long way
+ * behind the app: the page offered four model formats while the importer
+ * converted 27 of them through the Three.js Editor loaders, and it offered
+ * "MP3 / 3D Audio" — a format and a feature in the same breath — for six audio
+ * containers. Named formats stay hand-picked so the cards read as copy rather
+ * than as a dump of every extension, but the counts beside them move on their
+ * own when the table does.
+ */
+const modelFormatCount = Object.keys(ASSET_FORMATS.model).length;
+const audioFormatCount = Object.keys(ASSET_FORMATS.audio).length;
+
 export const importGroups = [
   {
     icon: Box,
     label: "3Dモデル・アバター",
-    formats: "GLB / glTF / OBJ / VRM",
+    formats: `GLB / glTF / OBJ / VRM / FBX ほか計${modelFormatCount}形式`,
     tone: "preview-import-violet",
   },
   {
     icon: Image,
     label: "テクスチャ・空気感",
-    formats: "PNG / JPG / WebP / KTX2 / HDR / EXR",
+    formats: "PNG / JPG / WebP / AVIF / KTX2 / HDR / EXR",
     tone: "preview-import-cyan",
   },
   {
     icon: AudioLines,
     label: "BGM・効果音",
-    formats: "MP3 / 3D Audio",
+    formats: `MP3 / WAV / Ogg / FLAC ほか計${audioFormatCount}形式`,
     tone: "preview-import-amber",
   },
 ] as const;
@@ -177,10 +195,14 @@ export const assetSources = [
 /**
  * The MCP integration, told at the size it actually is.
  *
- * The tool count is the number the build checks: scripts/generate-mcp-tool-names.mjs
- * verifies it, and `pnpm cli:test` fails when the list drifts. Update this
- * number together with that check rather than guessing.
+ * The tool count is read from the registry rather than written down, because a
+ * written-down one had already drifted: the page said 83 while the editor
+ * exposed 119. `mcp-tool-registry` is the single table every surface derives
+ * from and it imports nothing, so counting it here costs the page nothing and
+ * cannot go stale.
  */
+const mcpToolCount = XRIFT_MCP_TOOL_NAMES.length;
+
 export const aiPoints = [
   {
     icon: Bot,
@@ -189,7 +211,7 @@ export const aiPoints = [
   },
   {
     icon: Blocks,
-    title: "83のツールで動く",
+    title: `${mcpToolCount}のツールで動く`,
     text: "地形を彫る、Prefabを置く、Materialを変える、Scriptを書く。エディターでできる操作を、AIからも呼び出せます。",
   },
   {
