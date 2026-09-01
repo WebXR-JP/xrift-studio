@@ -3,6 +3,7 @@ import { platform } from "@tauri-apps/plugin-os";
 
 import runtimePackageManifest from "../../packages/xrift-studio-runtime/package.json";
 import { tauri, type ProjectKind, type RuntimePaths } from "./tauri";
+import { COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC } from "./visual-editor/compiler/runtime-packages";
 
 export type LogKind = "stdout" | "stderr" | "info" | "exit";
 export type LogLine = { kind: LogKind; text: string; ts: number };
@@ -30,22 +31,10 @@ export type CompilerStagingTemplateRequest = {
 };
 
 /**
- * The `@xrift/world-components` version pinned into compiler-owned publish
- * staging.
- *
- * The official XRift template declares its own older range, so a published
- * world would otherwise type-check and bundle against a different version than
- * the one Studio Play runs. That breaks the Play/publish parity contract in
- * docs/SCRIPTING.md: a Component or Hook that exists in Play is missing at
- * publish time. Installing this spec over the template keeps both sides on the
- * same version.
- *
- * Update this together with `@xrift/world-components` in package.json. The two
- * must always name the same version — `pnpm cli:test` fails when they drift
- * (scripts/check-world-components-alignment.mjs).
+ * Re-exported for the publish pipeline. The spec itself lives with the
+ * compiler so the Node CLI can read it without the Tauri bindings.
  */
-export const COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC =
-  "@xrift/world-components@0.47.0";
+export { COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC };
 
 /**
  * The npm specs publish staging and Classic export are allowed to install.

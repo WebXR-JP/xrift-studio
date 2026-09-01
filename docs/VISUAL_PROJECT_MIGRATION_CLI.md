@@ -1,10 +1,10 @@
 # Visual Project Classic Export CLI
 
-最終更新: 2026-07-21
+最終更新: 2026-09-01
 
 ## 目的
 
-XRift StudioのVisual projectを、通常のXRift Classic projectと、Three.jsから再利用できる実行用データへ一方向に書き出す。
+XRift StudioのVisual projectを、通常のXRift Classic projectへ一方向に書き出す。書き出すのはdesktopの公開（Publish）がXRiftへ送るものと同じTypeScript / React Three Fiberのソースで、書き出し先は公式テンプレートの依存関係だけで`npm install`と`npm run dev`が通る。
 
 Classicの任意React／JavaScriptをVisual projectへ逆変換しない。Visual側の正本は`xrift-studio.project.json`、Scene、Asset Manifest、Prefab、source assetであり、Classic側は書き出し後に独立して編集できる別projectとする。
 
@@ -57,32 +57,41 @@ VisualProjectDocument + SceneDocument + AssetManifest + Prefab
   -> XRift Classic adapter
 ```
 
-desktop publishとCLIは別のScene変換器を持たず、同じ`compileVisualProject()`、Asset copy plan、diagnostics、provenanceを利用する。npm公開前の移行期間は、既存desktop publishを`classic-jsx` mode、`convert`を`classic-runtime` modeで呼び分け、未公開packageのために現行Uploadを壊さない。
+desktop publishとCLIは別のScene変換器を持たず、同じ`compileVisualProject()`、Asset copy plan、diagnostics、provenanceを利用する。
 
-編集用JSONをそのままRuntimeへ渡さない。選択、Inspector、履歴、folder表示、Prefab authoring metadataなどを除き、実行時に必要なEntity、Transform、Component、Asset URLだけを`runtime.json`へ正規化する。
+出力modeは二つある。
+
+| mode | 使う経路 | 生成物 |
+| --- | --- | --- |
+| `classic-jsx` | desktop Publish、`xrift-studio convert`、Editorからの既存Classic追加 | Scene全体のJSX entry、Playと同じruntime module、Script module。公式テンプレートの依存関係だけでビルドできる |
+| `classic-runtime` | ブラウザ版アップロードの事前ビルドshell | `xrift-runtime.json`と`xrift-studio-runtime/react-three-fiber`を呼ぶ薄いadapter |
+
+Classic exportが`classic-jsx`を使うのは、`xrift-studio-runtime`がnpmへ未公開だからである。`classic-runtime`の出力をClassic projectへ置くと`npm install`がE404で止まり、`xrift dev`はmoduleが見つからずに起動しない。書き出しは「書けたが動かない」状態を作らず、公開が`xrift check`でビルドしているのと同じfile一式を置く。npm公開後に`classic-runtime`をClassic exportへ戻すかどうかは、その時点で決める。
+
+編集用JSONをそのまま公開物へ渡さない。`classic-jsx`は実行に必要なEntity、Transform、Component、Asset URLだけをJSXへ書き、`classic-runtime`は同じ内容を`xrift-runtime.json`へ正規化する。
 
 ## 生成物
 
 ```text
 classic-world/
-  package.json
+  package.json                       # 公式template + compilerが要求する固定version
   xrift.json
   src/
-    World.tsx | Item.tsx
+    World.tsx | Item.tsx             # Scene全体のJSX
+    xrift-studio/*.ts(x)             # Light / Audio / Particle / Text / Script / Interactivity runtime
+    scripts/*.ts(x)                  # Script Assetをmoduleにしたもの
   public/
     thumbnail.png
-    xrift/
-      runtime.json
-      assets/
-        <asset-id>-model.glb
-        <asset-id>-texture.png
+    xrift-studio-<asset-id>-<file>   # Asset。公開Worldは直下しか配信しない
+    basis_transcoder.js ...          # KTX2 / Draco decoder（必要な時だけ）
+    <font>.woff                      # Textの書体（必要な時だけ）
   .xrift-studio/
     export-manifest.json
     compiler-provenance.json
   README.md
 ```
 
-`runtime.json`のroot contract:
+`classic-runtime`が書く`xrift-runtime.json`のroot contract:
 
 ```json
 {
@@ -98,17 +107,19 @@ classic-world/
 }
 ```
 
-Classic entryは自動生成Sceneを大量のJSXとして埋め込まず、薄いadapterにする。
+`classic-runtime`のentryは薄いadapterにする。manifestはXRiftの`baseUrl`から解決し、site rootの絶対pathを書かない。
 
 ```tsx
+import { useXRift } from "@xrift/world-components";
 import { XriftWorld } from "xrift-studio-runtime/react-three-fiber";
 
-export const World = () => (
-  <XriftWorld manifest="/xrift/runtime.json" />
-);
+export const World = () => {
+  const { baseUrl } = useXRift();
+  return <XriftWorld manifest={`${baseUrl}xrift-runtime.json`} />;
+};
 ```
 
-`package.json`にはcompilerが要求する正確な`xrift-studio-runtime` versionを追加する。Open Brushを含む場合は、対応renderer packageもcompiler planから追加する。
+`package.json`にはcompiler planが要求する正確なversionを追加する。`@xrift/world-components`はStudioのPlayと同じ版（`COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC`）を、既存rangeがその版へ届かない時だけ固定する。Textを含む場合は`troika-three-text`、Open Brushを含む場合は`three-icosa`をcompiler planから追加する。
 
 ## Three.js API
 
@@ -155,7 +166,7 @@ ModelとTextureの独立取得は並列に行う。Open Brush rendererは対象M
 repository内で次が接続済みである。
 
 - Visual document loaderとschema validation。
-- 既存compiler coreを使うRuntime JSON、Asset copy plan、diagnostics、provenance。
+- 既存compiler coreを使う`classic-jsx`出力、Asset copy plan、decoder / fontの同梱plan、diagnostics、provenance。Script sourceはVisual projectから読み、moduleとして出力する。
 - `xrift create`を使うClassic template生成とatomic commit。
 - `--dry-run`、`--update`、text／JSON report、衝突防止。
 - `xrift-studio-runtime/three`のPrimitive、Model、Texture、Material、Light、static pose、Entity Map、animation収集。
@@ -165,13 +176,14 @@ repository内で次が接続済みである。
 - Open Brush metadataと必要時だけの`three-icosa` loader。
 - Runtime JSONからThree.js sceneを作るfixtureと、改変済みexportの更新拒否fixture。
 - Visual Editor headerの「Classicへ書き出す」とOS folder picker。
-- 既存Classic projectへ、Visual Project IDごとに分離したRuntime、Asset、接続componentを追加するflow。
-- component追加、backup付きentry切替、npm dependency install、folder／VS Code／terminal／接続snippetの完了導線。
+- 既存Classic projectへ、Visual Project IDごとの`src/xrift-studio/<id>/`に生成`src/`一式を相対importを保ったまま置き、`Scene.tsx`から`XriftStudioScene`として公開するflow。Asset、decoder、fontは`public/`直下。
+- component追加、backup付きentry切替、不足packageだけのnpm install、前回exportの残骸除去、folder／VS Code／terminal／接続snippetの完了導線。
+- fixtureでの検証: 生成`src/`をexport配置へ移した状態でも公式templateのtsconfigで`tsc`が通ること（`pnpm cli:test`の`classic-export-relocated`）。
 
 未完了:
 
-- npmへの`xrift-studio`／`xrift-studio-runtime`公開。
-- Rigid Body／動的Collider、XRift固有ComponentのRuntime adapter完全対応。静的な直接Collider、Spawn Point、Audio、Particleは対応済みで、未対応分はcompile warningとして残す。
+- npmへの`xrift-studio`／`xrift-studio-runtime`公開。公開後も、Classic exportを`classic-runtime`へ戻すかは別途判断する。
+- `classic-runtime`側のRigid Body／動的Collider、XRift固有ComponentのRuntime adapter完全対応。静的な直接Collider、Spawn Point、Audio、Particleは対応済みで、未対応分はcompile warningとして残す。
 - 任意の`xrift check`実行option。現行公式CLI contractを確認してから追加する。
 - `.xriftpack`のpack／import。
 
@@ -182,19 +194,23 @@ repository内で次が接続済みである。
 Visual Editor headerの「Classicへ書き出す」は、OSのfolder pickerで同じ種別の既存Classic projectを選択する。CLIの新規project exportとは安全境界を分け、既存の`xrift.json`、thumbnail、手書きentryを既定では上書きしない。
 
 ```text
-public/xrift-studio/<visual-project-id>/
-  runtime.json
-  assets/
-
 src/xrift-studio/<visual-project-id>/
-  Scene.tsx
+  Scene.tsx                # export { World as XriftStudioScene }
+  World.tsx | Item.tsx     # 生成したScene
+  xrift-studio/*.ts(x)     # runtime module（Worldからは ./xrift-studio/...）
+  scripts/*.ts(x)          # Script module（Worldからは ./scripts/...）
+
+public/
+  xrift-studio-<asset-id>-<file>
+  <decoder> / <font>       # 必要な時だけ。既に同名のfileがあれば上書きしない
 
 .xrift-studio/exports/<visual-project-id>/
   export-manifest.json
   compiler-provenance.json
+  backups/src/World.tsx    # entry切替時だけ
 ```
 
-既定の「コンポーネントとして追加」は接続snippetを完了画面に残す。「エントリーを切り替える」は明示確認後だけ既存`World.tsx`／`Item.tsx`を管理領域へbackupして置き換える。npm projectでは固定allow-listのpackageを自動installし、pnpm／Yarn／Bunでは別lockfileを作らずdependency記録と既存package managerでのinstall案内までにする。
+既定の「コンポーネントとして追加」は接続snippetを完了画面に残す。「エントリーを切り替える」は明示確認後だけ既存`World.tsx`／`Item.tsx`を管理領域へbackupして置き換える。置き換えたentryは`WorldProps`／`ItemProps`も再exportし、templateの`src/index.tsx`が通るようにする。npm projectでは固定allow-listのpackageを自動installし、pnpm／Yarn／Bunでは別lockfileを作らずdependency記録と既存package managerでのinstall案内までにする。以前の書き出しが`xrift-studio-runtime`をpackage.jsonへ記録していた場合は取り除き、完了画面で知らせる。
 
 ## 将来のpackage分離
 

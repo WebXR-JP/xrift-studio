@@ -4,8 +4,10 @@
 // through a different door:
 //
 //   * package.json `dependencies` — what the editor and Play run against.
-//   * COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC (src/lib/xrift-cli.ts) — what a
-//     published world's staging installs over the official template.
+//   * COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC
+//     (src/lib/visual-editor/compiler/runtime-packages.ts) — what a published
+//     world's staging installs over the official template and what a Classic
+//     export records in the target package.json.
 //   * WORLD_COMPONENTS_SPEC (scripts/build-world-runtime-shell.mjs) — what the
 //     prebuilt web-upload shell bundles.
 //
@@ -35,13 +37,18 @@ if (!packageVersion || /[~^<>*x]/i.test(packageVersion)) {
 
 const specPattern = /@xrift\/world-components@([0-9][^"']*)/;
 
-const compilerSpec = read("src/lib/xrift-cli.ts").match(specPattern)?.[1];
+const compilerSpec = read(
+  "src/lib/visual-editor/compiler/runtime-packages.ts",
+).match(specPattern)?.[1];
 const shellSpec = read("scripts/build-world-runtime-shell.mjs").match(
   specPattern,
 )?.[1];
 
 const mismatches = [
-  ["src/lib/xrift-cli.ts COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC", compilerSpec],
+  [
+    "src/lib/visual-editor/compiler/runtime-packages.ts COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC",
+    compilerSpec,
+  ],
   ["scripts/build-world-runtime-shell.mjs WORLD_COMPONENTS_SPEC", shellSpec],
 ].filter(([, version]) => version !== packageVersion);
 

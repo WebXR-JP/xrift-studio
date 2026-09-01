@@ -21,6 +21,12 @@ import {
   VISUAL_COMPILER_VERSION,
 } from "../src/lib/visual-editor/compiler/index.ts";
 import {
+  COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
+  declaredVersionReaches,
+  parsePackageSpec,
+} from "../src/lib/visual-editor/compiler/runtime-packages.ts";
+import { resolveBundledAssetSource } from "./bundled-assets.mjs";
+import {
   assetManifestCodec,
   prefabDocumentCodec,
   sceneDocumentCodec,
@@ -50,8 +56,14 @@ export async function convertVisualProject(options) {
     targetKind: source.documents.project.projectKind,
   });
 
+  // The same output the desktop publish stages and builds with `xrift check`:
+  // self-contained TypeScript / JSX that needs only what the official template
+  // installs. The Runtime JSON output (`classic-runtime`) is reserved for the
+  // browser upload's prebuilt shell; a Classic project that imported the
+  // `xrift-studio-runtime` package could not be built, because that package
+  // is not published to npm.
   const compilation = compileVisualProject(source.documents, {
-    outputMode: "classic-runtime",
+    outputMode: "classic-jsx",
   });
   const diagnostics = [
     ...source.diagnostics,
@@ -62,6 +74,9 @@ export async function convertVisualProject(options) {
   const plannedFiles = [
     ...compilation.stagingPlan.overlayFiles.map((file) => file.relativePath),
     ...compilation.stagingPlan.assetCopyPlan.map((entry) => entry.targetRelativePath),
+    ...compilation.stagingPlan.bundledAssetCopyPlan.map(
+      (entry) => entry.targetRelativePath,
+    ),
     ...compilation.stagingPlan.requiredPublicationFiles.map(
       (entry) => entry.targetRelativePath,
     ),
@@ -79,11 +94,14 @@ export async function convertVisualProject(options) {
     compilerVersion: VISUAL_COMPILER_VERSION,
     diagnostics,
     plannedFiles,
+    runtimePackages: runtimePackagePlan(compilation),
     actions: [
       `create-classic-${compilation.targetKind}-template`,
       "write-compiler-overlay",
       "copy-assets",
+      "copy-bundled-assets",
       "copy-thumbnail",
+      "record-runtime-packages",
       "write-export-manifest",
       options.update ? "replace-owned-export" : "commit-new-export",
     ],
@@ -167,6 +185,7 @@ export async function loadVisualProject(sourceInput) {
   );
   const scenes = {};
   const prefabs = {};
+  const scriptSources = {};
   const diagnostics = [];
 
   for (const [sceneId, relativePath] of Object.entries(project.scenePaths).sort(
@@ -215,11 +234,34 @@ export async function loadVisualProject(sourceInput) {
     }
   }
 
+  // Script Assets are emitted as source modules, so the compiler has to see
+  // their text. Without it every Script is reported as unreadable and a world
+  // that runs fine in Play cannot be converted at all.
+  for (const asset of Object.values(assets.assets).sort((left, right) =>
+    left.id.localeCompare(right.id),
+  )) {
+    if (asset.kind !== "script" || asset.source?.kind !== "project") continue;
+    try {
+      const filePath = await resolveContainedFile(
+        root,
+        asset.source.relativePath,
+        `Script ${asset.id}`,
+      );
+      scriptSources[asset.id] = await readFile(filePath, "utf8");
+    } catch (error) {
+      appendLoadDiagnostic(diagnostics, error, {
+        code: "script-source-load-failed",
+        assetId: asset.id,
+        fieldPath: "source.relativePath",
+      });
+    }
+  }
+
   return {
     root,
     manifestPath,
     diagnostics,
-    documents: { project, scenes, assets, prefabs },
+    documents: { project, scenes, assets, prefabs, scriptSources },
   };
 }
 
@@ -273,7 +315,67 @@ async function validateCopyInputs(root, compilation) {
       });
     }
   }
+  for (const entry of compilation.stagingPlan.bundledAssetCopyPlan) {
+    try {
+      await resolveBundledAssetFile(entry);
+    } catch (error) {
+      appendLoadDiagnostic(diagnostics, error, {
+        code: "bundled-asset-missing",
+        fieldPath: entry.targetRelativePath,
+      });
+    }
+  }
   return diagnostics;
+}
+
+/**
+ * A decoder or font Studio ships, checked to be a real file before anything
+ * is written. These live in the CLI's own dependencies, not the Visual
+ * project, so a missing one is an installation problem and is reported as
+ * such rather than as a broken project.
+ */
+async function resolveBundledAssetFile(entry) {
+  let sourcePath;
+  try {
+    sourcePath = resolveBundledAssetSource(entry);
+  } catch (error) {
+    throw new ConvertError(
+      "bundled-asset-unresolvable",
+      `同梱ファイルを解決できません: ${entry.targetRelativePath} (${error instanceof Error ? error.message : String(error)})`,
+    );
+  }
+  let fileStat;
+  try {
+    fileStat = await stat(sourcePath);
+  } catch {
+    throw new ConvertError(
+      "bundled-asset-missing",
+      `同梱ファイルがありません: ${entry.targetRelativePath}`,
+    );
+  }
+  if (!fileStat.isFile()) {
+    throw new ConvertError(
+      "bundled-asset-missing",
+      `同梱ファイルが通常ファイルではありません: ${entry.targetRelativePath}`,
+    );
+  }
+  return sourcePath;
+}
+
+/**
+ * Exact packages the generated source needs beyond the official template.
+ *
+ * `@xrift/world-components` is always in the list: the emitted source is
+ * compiled against Studio's version, and the template's own range may be
+ * older. Recording it only when the template's range cannot reach that
+ * version happens at write time (`applyRuntimePackages`), where the template's
+ * package.json is known.
+ */
+function runtimePackagePlan(compilation) {
+  return [
+    ...compilation.stagingPlan.runtimePackageSpecs,
+    COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
+  ];
 }
 
 function appendLoadDiagnostic(diagnostics, error, context) {
@@ -447,10 +549,17 @@ async function materializeClassicProject({
     }
     await rejectSymlinks(projectRoot);
 
+    const templateIgnore = await readTemplateIgnorePatterns(projectRoot);
     for (const file of compilation.stagingPlan.overlayFiles) {
       const target = resolveOutputPath(projectRoot, file.relativePath);
       await mkdir(path.dirname(target), { recursive: true });
-      await writeFile(target, file.content, "utf8");
+      await writeFile(
+        target,
+        file.relativePath === "xrift.json"
+          ? mergeXriftJsonIgnore(file.content, templateIgnore)
+          : file.content,
+        "utf8",
+      );
     }
     for (const entry of compilation.stagingPlan.assetCopyPlan) {
       const from = await resolveContainedFile(
@@ -472,10 +581,13 @@ async function materializeClassicProject({
       await mkdir(path.dirname(target), { recursive: true });
       await copyFile(from, target);
     }
-    await applyRuntimePackages(
-      projectRoot,
-      compilation.stagingPlan.runtimePackageSpecs,
-    );
+    for (const entry of compilation.stagingPlan.bundledAssetCopyPlan) {
+      const from = await resolveBundledAssetFile(entry);
+      const target = resolveOutputPath(projectRoot, entry.targetRelativePath);
+      await mkdir(path.dirname(target), { recursive: true });
+      await copyFile(from, target);
+    }
+    await applyRuntimePackages(projectRoot, runtimePackagePlan(compilation));
 
     const outputFiles = await listRegularFiles(projectRoot);
     const files = [];
@@ -501,6 +613,39 @@ async function materializeClassicProject({
     await rm(container, { recursive: true, force: true }).catch(() => undefined);
     throw error;
   }
+}
+
+/**
+ * The template's own upload ignore rules.
+ *
+ * The official template lists the Module Federation shared chunks, the dev
+ * `index.html` and a few vendor bundles that XRift's player supplies itself.
+ * The compiler's `xrift.json` only knows the generic rules, so writing it over
+ * the template's would make every later `xrift upload` from the converted
+ * project send several megabytes the world never reads. The two lists are
+ * merged; the compiler's title, description and settings still win.
+ */
+async function readTemplateIgnorePatterns(projectRoot) {
+  let parsed;
+  try {
+    parsed = JSON.parse(await readFile(path.join(projectRoot, "xrift.json"), "utf8"));
+  } catch {
+    return [];
+  }
+  const section = parsed?.world ?? parsed?.item;
+  return Array.isArray(section?.ignore)
+    ? section.ignore.filter((pattern) => typeof pattern === "string")
+    : [];
+}
+
+export function mergeXriftJsonIgnore(compiledXriftJson, templateIgnore) {
+  if (templateIgnore.length === 0) return compiledXriftJson;
+  const parsed = JSON.parse(compiledXriftJson);
+  const kind = parsed.world ? "world" : parsed.item ? "item" : null;
+  if (!kind) return compiledXriftJson;
+  const current = Array.isArray(parsed[kind].ignore) ? parsed[kind].ignore : [];
+  parsed[kind].ignore = [...new Set([...current, ...templateIgnore])];
+  return stableSerializeJson(parsed);
 }
 
 async function runXriftCreate(kind, projectName, cwd, onProgress) {
@@ -586,15 +731,32 @@ async function applyRuntimePackages(projectRoot, packageSpecs) {
     );
   }
   const dependencies = { ...(packageJson.dependencies ?? {}) };
+  const devDependencies = packageJson.devDependencies ?? {};
+  const worldComponentsName = parsePackageSpec(
+    COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
+  ).name;
   for (const spec of packageSpecs) {
-    const splitAt = spec.lastIndexOf("@");
-    if (splitAt <= 0 || splitAt === spec.length - 1) {
+    let parsed;
+    try {
+      parsed = parsePackageSpec(spec);
+    } catch {
       throw new ConvertError(
         "runtime-package-invalid",
         `compiler runtime package指定が無効です: ${spec}`,
       );
     }
-    dependencies[spec.slice(0, splitAt)] = spec.slice(splitAt + 1);
+    // The template's own world-components range is kept when it already
+    // reaches the version the source was compiled against.
+    if (
+      parsed.name === worldComponentsName &&
+      declaredVersionReaches(
+        dependencies[parsed.name] ?? devDependencies[parsed.name],
+        parsed.version,
+      )
+    ) {
+      continue;
+    }
+    dependencies[parsed.name] = parsed.version;
   }
   packageJson.dependencies = Object.fromEntries(
     Object.entries(dependencies).sort(([left], [right]) => left.localeCompare(right)),
