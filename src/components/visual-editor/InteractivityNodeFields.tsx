@@ -20,6 +20,7 @@ import {
   xriftInteractionEnumIndex,
   type XriftInteractionPropertyDescriptor,
 } from "../../lib/visual-editor";
+import { ScrubNumberInput } from "./ScrubNumberInput";
 
 export function numbersOf(value: KhrInteractivityJsonValue[] | undefined, length: number): number[] {
   return Array.from({ length }, (_unused, index) => {
@@ -89,24 +90,22 @@ export function LiteralValueField({
           {alpha === null ? null : (
             <label className="ml-auto flex items-center gap-1 text-[10px] text-slate-400">
               A
-              <input
-                type="number"
+              <ScrubNumberInput
                 min={0}
                 max={1}
                 step={0.05}
+                scrubStep={0.005}
                 value={alpha}
                 disabled={disabled}
-                onChange={(event) => {
-                  const next = Number(event.target.value);
-                  if (!Number.isFinite(next)) return;
-                  onChange([
-                    channels[0],
-                    channels[1],
-                    channels[2],
-                    Math.min(1, Math.max(0, next)),
-                  ]);
-                }}
-                className="h-7 w-16 rounded border border-slate-600 bg-slate-950 px-1.5 text-[11px] disabled:opacity-45"
+                tone="dark"
+                size="sm"
+                compact
+                wrapperClassName="w-16"
+                ariaLabel={`${socket} のA`}
+                scrubLabel="A"
+                onChange={(next) =>
+                  onChange([channels[0], channels[1], channels[2], next])
+                }
               />
             </label>
           )}
@@ -114,20 +113,22 @@ export function LiteralValueField({
       ) : (
         <div className="flex gap-1">
           {channels.map((entry, index) => (
-            <input
+            <ScrubNumberInput
               key={index}
-              type="number"
               step={signature === "int" ? 1 : 0.1}
+              scrubStep={signature === "int" ? 0.25 : 0.01}
+              precision={signature === "int" ? 0 : undefined}
               value={entry}
               disabled={disabled}
-              onChange={(event) => {
-                const next = Number(event.target.value);
-                if (!Number.isFinite(next)) return;
+              tone="dark"
+              size="sm"
+              compact
+              ariaLabel={`${socket}${length > 1 ? ` ${index + 1}` : ""}`}
+              scrubLabel={socket}
+              onChange={(next) => {
                 const channel = signature === "int" ? Math.round(next) : next;
                 onChange(channels.map((prior, at) => (at === index ? channel : prior)));
               }}
-              className="h-7 w-full min-w-0 rounded border border-slate-600 bg-slate-950 px-1.5 text-[11px] disabled:opacity-45"
-              aria-label={`${socket}${length > 1 ? ` ${index + 1}` : ""}`}
             />
           ))}
         </div>
@@ -336,20 +337,18 @@ export function TriggerValueField({
           {(["X", "Y", "Z"] as const).map((axis, index) => (
             <label key={axis} className="flex min-w-0 flex-1 items-center gap-1">
               <span className="text-[9px] text-slate-500">{axis}</span>
-              <input
-                type="number"
+              <ScrubNumberInput
                 step={descriptor.step ?? 0.1}
+                scrubStep={0.01}
                 value={components[index] ?? 0}
                 disabled={disabled}
-                onChange={(event) => {
-                  const next = Number(event.target.value);
-                  if (!Number.isFinite(next)) return;
-                  onChange(
-                    components.map((prior, at) => (at === index ? next : prior)),
-                  );
-                }}
-                className="h-8 w-full min-w-0 rounded border border-slate-600 bg-slate-950 px-1.5 text-xs disabled:opacity-45"
-                aria-label={`${descriptor.label} ${axis}`}
+                tone="dark"
+                ariaLabel={`${descriptor.label} ${axis}`}
+                scrubLabel={`${descriptor.label} ${axis}`}
+                onChange={(next) =>
+                  onChange(components.map((prior, at) => (at === index ? next : prior)))
+                }
+                className="px-1.5"
               />
             </label>
           ))}
@@ -361,21 +360,18 @@ export function TriggerValueField({
   return (
     <label className="block text-[10px] text-slate-300">
       {descriptor.label}
-      <input
-        type="number"
+      <ScrubNumberInput
         value={numeric}
         min={descriptor.min}
         max={descriptor.max}
         step={descriptor.step ?? 0.1}
+        scrubStep={0.01}
         disabled={disabled}
-        onChange={(event) => {
-          const next = Number(event.target.value);
-          if (!Number.isFinite(next)) return;
-          const lower = descriptor.min ?? Number.NEGATIVE_INFINITY;
-          const upper = descriptor.max ?? Number.POSITIVE_INFINITY;
-          onChange([Math.min(Math.max(next, lower), upper)]);
-        }}
-        className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-950 px-2 text-xs"
+        tone="dark"
+        ariaLabel={descriptor.label}
+        scrubLabel={descriptor.label}
+        onChange={(next) => onChange([next])}
+        wrapperClassName="mt-1"
       />
     </label>
   );
@@ -456,19 +452,18 @@ export function TriggerTimingField({
     <div className="space-y-2 rounded border border-slate-700 bg-slate-950/60 p-2">
       <label className="block text-[10px] text-slate-300">
         かける時間（秒）
-        <input
-          type="number"
+        <ScrubNumberInput
           min={0}
           max={600}
           step={0.1}
+          scrubStep={0.02}
           value={seconds}
           disabled={disabled}
-          onChange={(event) => {
-            const next = Number(event.target.value);
-            if (!Number.isFinite(next)) return;
-            onSecondsChange(Math.min(600, Math.max(0, next)));
-          }}
-          className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-950 px-2 text-xs disabled:opacity-45"
+          tone="dark"
+          ariaLabel="かける時間（秒）"
+          scrubLabel="かける時間"
+          onChange={onSecondsChange}
+          wrapperClassName="mt-1"
         />
       </label>
       {seconds > 0 ? (

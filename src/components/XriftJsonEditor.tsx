@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Save, Code2, RefreshCw, Info } from "lucide-react";
 import { tauri, type ProjectKind } from "../lib/tauri";
 import { useToast } from "./Toast";
+import { ScrubNumberInput } from "./visual-editor/ScrubNumberInput";
 
 type Props = {
   projectPath: string;
@@ -335,11 +336,14 @@ export function XriftJsonEditor({
               <Section title="物理">
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="重力 (gravity)" hint="地球: 9.81 / 月: 1.62">
-                    <input
-                      type="number"
-                      step="0.01"
+                    <ScrubNumberInput
+                      step={0.01}
+                      scrubStep={0.02}
                       value={form.gravity}
-                      onChange={(e) => setForm({ ...form, gravity: Number(e.target.value) })}
+                      ariaLabel="重力"
+                      scrubLabel="重力"
+                      onChange={(value) => setForm({ ...form, gravity: value })}
+                      unstyled
                       className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm tabular-nums outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
                     />
                   </Field>
@@ -364,20 +368,26 @@ export function XriftJsonEditor({
               <Section title="カメラ">
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="near" hint="これより近いオブジェクトは描画されない">
-                    <input
-                      type="number"
-                      step="0.01"
+                    <ScrubNumberInput
+                      step={0.01}
+                      scrubStep={0.01}
                       value={form.cameraNear}
-                      onChange={(e) => setForm({ ...form, cameraNear: Number(e.target.value) })}
+                      ariaLabel="near"
+                      scrubLabel="near"
+                      onChange={(value) => setForm({ ...form, cameraNear: value })}
+                      unstyled
                       className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm tabular-nums outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
                     />
                   </Field>
                   <Field label="far" hint="これより遠いオブジェクトは描画されない">
-                    <input
-                      type="number"
-                      step="1"
+                    <ScrubNumberInput
+                      step={1}
+                      scrubStep={0.5}
                       value={form.cameraFar}
-                      onChange={(e) => setForm({ ...form, cameraFar: Number(e.target.value) })}
+                      ariaLabel="far"
+                      scrubLabel="far"
+                      onChange={(value) => setForm({ ...form, cameraFar: value })}
+                      unstyled
                       className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm tabular-nums outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
                     />
                   </Field>

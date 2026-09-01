@@ -149,6 +149,11 @@ import {
   getEditorComponentIcon,
 } from "./editor-icons";
 import { roundTo } from "./editor-utils";
+import { useValueScrubTransaction } from "./value-scrub-transaction";
+import {
+  NO_NUMBER_SPINNER_CLASS,
+  ScrubNumberInput,
+} from "./ScrubNumberInput";
 import {
   clearEditorDragData,
   hasEditorDragData,
@@ -360,6 +365,8 @@ type AxisScrubState = {
   startValue: Vec3;
   currentValue: Vec3;
   scaleLinked: boolean;
+  /** ドラッグ判定のしきい値を超えて、実際に値を動かし始めたか。 */
+  active: boolean;
 };
 
 function normalizeScaleAxis(value: number, fallback: number): number {
@@ -392,6 +399,8 @@ function updateVectorAxis(
     normalizeScaleAxis(entry * ratio, entry),
   ) as Vec3;
 }
+
+const AXIS_DRAG_THRESHOLD_PX = 3;
 
 function axisScrubSensitivity(valueKind: TransformValueKind): number {
   return valueKind === "rotation" ? Math.PI / 180 : 0.01;
@@ -428,9 +437,29 @@ function VectorEditor({
   onScrubCancel?: () => void;
 }) {
   const axes = ["X", "Y", "Z"] as const;
-  const scrubEnabled = Boolean(
+  const transaction = useValueScrubTransaction();
+  const hasScrubHandlers = Boolean(
     onScrubStart && onScrubChange && onScrubEnd && onScrubCancel,
   );
+  // Transform は専用のトランザクションを持つ。それ以外の Vector は共通の
+  // スクラブトランザクションへ合流し、ドラッグ一回を Undo 一件にする。
+  const scrubEnabled = hasScrubHandlers || Boolean(transaction);
+  const emitScrubStart = () => {
+    if (hasScrubHandlers) onScrubStart?.();
+    else transaction?.begin();
+  };
+  const emitScrubChange = (next: Vec3) => {
+    if (hasScrubHandlers) onScrubChange?.(next);
+    else onChange(next);
+  };
+  const emitScrubEnd = () => {
+    if (hasScrubHandlers) onScrubEnd?.();
+    else transaction?.end();
+  };
+  const emitScrubCancel = () => {
+    if (hasScrubHandlers) onScrubCancel?.();
+    else transaction?.cancel();
+  };
   const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const scrubRef = useRef<AxisScrubState | null>(null);
   const [scrub, setScrub] = useState<AxisScrubState | null>(null);
@@ -444,7 +473,7 @@ function VectorEditor({
     if (!active || (pointerId !== undefined && active.pointerId !== pointerId)) return;
     scrubRef.current = null;
     setScrub(null);
-    onScrubCancel?.();
+    if (active.active) emitScrubCancel();
   };
 
   const focusAxisInput = (axisIndex: number) => {
@@ -452,13 +481,16 @@ function VectorEditor({
   };
 
   const handleAxisPointerDown = (
-    event: ReactPointerEvent<HTMLButtonElement>,
+    event: ReactPointerEvent<HTMLElement>,
     axis: (typeof axes)[number],
     axisIndex: number,
+    immediate: boolean,
   ) => {
     if (!scrubEnabled || disabled || event.button !== 0 || scrubRef.current) return;
+    // 入力欄が編集中なら、カーソル移動と範囲選択を優先する。
+    if (!immediate && document.activeElement === event.currentTarget) return;
     event.preventDefault();
-    focusAxisInput(axisIndex);
+    if (immediate) focusAxisInput(axisIndex);
     event.currentTarget.setPointerCapture(event.pointerId);
     const startValue: Vec3 = [value[0], value[1], value[2]];
     const nextScrub: AxisScrubState = {
@@ -470,16 +502,24 @@ function VectorEditor({
       startValue,
       currentValue: startValue,
       scaleLinked: valueKind === "scale" && scaleLinked,
+      active: immediate,
     };
     scrubRef.current = nextScrub;
     setScrub(nextScrub);
-    onScrubStart?.();
+    if (immediate) emitScrubStart();
   };
 
-  const handleAxisPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    const active = scrubRef.current;
+  const handleAxisPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
+    let active = scrubRef.current;
     if (!active || active.pointerId !== event.pointerId) return;
     event.preventDefault();
+    if (!active.active) {
+      if (Math.abs(event.clientX - active.clientX) < AXIS_DRAG_THRESHOLD_PX) return;
+      active = { ...active, active: true };
+      scrubRef.current = active;
+      setScrub(active);
+      emitScrubStart();
+    }
     const horizontalDelta = event.clientX - active.clientX;
     if (horizontalDelta === 0) {
       const nextScrub = { ...active, clientY: event.clientY };
@@ -506,17 +546,23 @@ function VectorEditor({
     };
     scrubRef.current = nextScrub;
     setScrub(nextScrub);
-    onScrubChange?.(currentValue);
+    emitScrubChange(currentValue);
   };
 
-  const handleAxisPointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  const handleAxisPointerUp = (event: ReactPointerEvent<HTMLElement>) => {
     const active = scrubRef.current;
     if (!active || active.pointerId !== event.pointerId) return;
     event.preventDefault();
     scrubRef.current = null;
     setScrub(null);
+    if (!active.active) {
+      // 動かさずに離したのは通常のクリック。そのまま数値を打てるようにする。
+      focusAxisInput(active.axisIndex);
+      inputRefs.current[active.axisIndex]?.select();
+      return;
+    }
     focusAxisInput(active.axisIndex);
-    onScrubEnd?.();
+    emitScrubEnd();
   };
 
   return (
@@ -551,7 +597,7 @@ function VectorEditor({
                 disabled={disabled}
                 aria-label={`${label} ${axis}をドラッグして調整`}
                 title={`${label} ${axis}を左右にドラッグ。Shift: 微調整、Ctrl/Alt: 大きく調整。ダブルクリック: 数値入力`}
-                onPointerDown={(event) => handleAxisPointerDown(event, axis, index)}
+                onPointerDown={(event) => handleAxisPointerDown(event, axis, index, true)}
                 onPointerMove={handleAxisPointerMove}
                 onPointerUp={handleAxisPointerUp}
                 onPointerCancel={(event) => cancelScrub(event.pointerId)}
@@ -586,6 +632,17 @@ function VectorEditor({
               disabled={disabled}
               step={valueKind === "rotation" ? 1 : 0.1}
               aria-label={`${label} ${axis}`}
+              title={
+                scrubEnabled && !disabled
+                  ? `${label} ${axis}: 左右にドラッグして調整。Shift: 微調整、Ctrl/Alt: 大きく調整。クリックで数値を入力`
+                  : undefined
+              }
+              onPointerDown={(event) =>
+                handleAxisPointerDown(event, axis, index, false)
+              }
+              onPointerMove={handleAxisPointerMove}
+              onPointerUp={handleAxisPointerUp}
+              onPointerCancel={(event) => cancelScrub(event.pointerId)}
               onKeyDown={(event) => {
                 if (!scrubRef.current) return;
                 event.stopPropagation();
@@ -615,12 +672,14 @@ function VectorEditor({
                   ),
                 );
               }}
-              className="h-7 w-full rounded border border-slate-300 bg-white py-1 pl-5 pr-1 text-right text-xs tabular-nums text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+              className={`h-7 w-full touch-none rounded border border-slate-300 bg-white py-1 pl-5 pr-1 text-right text-xs tabular-nums text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${NO_NUMBER_SPINNER_CLASS} ${
+                scrubEnabled && !disabled ? "cursor-ew-resize focus:cursor-text" : ""
+              }`}
             />
           </div>
         ))}
       </fieldset>
-      {scrub ? (
+      {scrub?.active ? (
         <div
           className="pointer-events-none fixed z-50 whitespace-nowrap rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium tabular-nums text-slate-700 shadow-md"
           style={{
@@ -1050,22 +1109,22 @@ function MeshInspector({
             ) : null}
           </div>
           <div className="flex items-center gap-2">
-            <input
+            <ScrubNumberInput
               id={`mesh-max-distance-${component.id}`}
-              type="number"
               min={0.1}
               max={1_000_000}
               step={1}
-              value={component.maxDistance ?? ""}
+              scrubStep={0.5}
+              value={component.maxDistance ?? Number.NaN}
               placeholder="Scene Farを使用"
               disabled={readOnly}
-              onChange={(event) => {
-                const raw = event.currentTarget.value;
-                onChange({
-                  maxDistance: raw === "" ? null : Number(raw),
-                });
-              }}
-              className="h-7 min-w-0 flex-1 rounded-sm border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+              ariaLabel="Meshの描画距離"
+              scrubLabel="描画距離"
+              onChange={(next) => onChange({ maxDistance: next })}
+              onClear={() => onChange({ maxDistance: null })}
+              size="sm"
+              align="left"
+              wrapperClassName="flex-1"
             />
             <span className="text-[11px] text-slate-400">m</span>
           </div>
@@ -1094,22 +1153,21 @@ function MeshInspector({
               </button>
             ) : null}
           </div>
-          <input
+          <ScrubNumberInput
             id={`mesh-render-order-${component.id}`}
-            type="number"
             min={-1000}
             max={1000}
             step={1}
-            value={component.renderOrder ?? ""}
+            precision={0}
+            value={component.renderOrder ?? Number.NaN}
             placeholder="自動 (0)"
             disabled={readOnly}
-            onChange={(event) => {
-              const raw = event.currentTarget.value;
-              onChange({
-                renderOrder: raw === "" ? null : Number(raw),
-              });
-            }}
-            className="h-7 w-full min-w-0 rounded-sm border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+            ariaLabel="描画順 (Render Order)"
+            scrubLabel="描画順"
+            onChange={(next) => onChange({ renderOrder: Math.round(next) })}
+            onClear={() => onChange({ renderOrder: null })}
+            size="sm"
+            align="left"
           />
           <p className="text-[11px] leading-4 text-slate-500">
             半透明どうしはカメラからの距離で並ぶため、ガラスに貼ったデカールやランプの中の発光体のように重なる面では順序が定まりません。そこだけ手で決めます。
@@ -2406,19 +2464,15 @@ function TerrainNumberField({
   return (
     <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
       {label}
-      <input
-        type="number"
+      <ScrubNumberInput
         value={value}
         min={min}
         max={max}
         step={step}
         disabled={disabled}
-        onChange={(event) => {
-          const next = Number(event.currentTarget.value);
-          if (!Number.isFinite(next)) return;
-          onChange(Math.max(min, Math.min(max, next)));
-        }}
-        className="h-8 rounded border border-slate-300 bg-white px-2 text-right text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
+        ariaLabel={label}
+        scrubLabel={label}
+        onChange={onChange}
       />
     </label>
   );
@@ -2954,8 +3008,8 @@ function MultiSelectionInspector({
             <span className="mt-1 flex items-center gap-2"><input type="color" disabled={readOnly} value={materialColor ?? "#ffffff"} onChange={(event) => onApplyMaterialPatch({ color: event.currentTarget.value })} className="h-8 w-12 rounded border border-slate-300 bg-white p-0.5 disabled:opacity-45" /><span className="font-normal text-slate-500">{materialColor ?? "一部異なる"}</span></span>
           </label>
           <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs font-semibold text-slate-600">Metalness<input type="number" min="0" max="1" step="0.01" disabled={readOnly} value={materialMetalness ?? ""} placeholder="一部異なる" onChange={(event) => { const value = Number(event.currentTarget.value); if (Number.isFinite(value)) onApplyMaterialPatch({ metalness: value }); }} className="mt-1 h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs disabled:opacity-45" /></label>
-            <label className="text-xs font-semibold text-slate-600">Roughness<input type="number" min="0" max="1" step="0.01" disabled={readOnly} value={materialRoughness ?? ""} placeholder="一部異なる" onChange={(event) => { const value = Number(event.currentTarget.value); if (Number.isFinite(value)) onApplyMaterialPatch({ roughness: value }); }} className="mt-1 h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs disabled:opacity-45" /></label>
+            <label className="text-xs font-semibold text-slate-600">Metalness<ScrubNumberInput min={0} max={1} step={0.01} scrubStep={0.005} disabled={readOnly} value={materialMetalness ?? Number.NaN} placeholder="一部異なる" ariaLabel="Metalness" scrubLabel="Metalness" onChange={(value) => onApplyMaterialPatch({ metalness: value })} wrapperClassName="mt-1" /></label>
+            <label className="text-xs font-semibold text-slate-600">Roughness<ScrubNumberInput min={0} max={1} step={0.01} scrubStep={0.005} disabled={readOnly} value={materialRoughness ?? Number.NaN} placeholder="一部異なる" ariaLabel="Roughness" scrubLabel="Roughness" onChange={(value) => onApplyMaterialPatch({ roughness: value })} wrapperClassName="mt-1" /></label>
           </div>
         </ComponentCard>
       </div>
@@ -3188,17 +3242,16 @@ function ModelPoseEditor({
             {(["X", "Y", "Z"] as const).map((axis, index) => (
               <label key={axis} className="text-[11px] font-medium text-slate-600">
                 {axis}
-                <input
-                  type="number"
+                <ScrubNumberInput
                   min={-360}
                   max={360}
                   step={1}
                   value={roundTo((rotation[index] * 180) / Math.PI, 2)}
                   disabled={readOnly}
-                  onChange={(event) =>
-                    updateBoneAxis(index, event.currentTarget.valueAsNumber)
-                  }
-                  className="mt-1 h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs tabular-nums text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
+                  ariaLabel={`Bone回転 ${axis}`}
+                  scrubLabel={`Bone ${axis}`}
+                  onChange={(next) => updateBoneAxis(index, next)}
+                  wrapperClassName="mt-1"
                 />
               </label>
             ))}
@@ -3286,18 +3339,15 @@ function ColliderNumberField({
   return (
     <label className="grid grid-cols-[minmax(0,1fr)_92px] items-center gap-3 text-xs text-slate-700">
       <span>{label}</span>
-      <input
-        type="number"
+      <ScrubNumberInput
         value={roundTo(value, 3)}
         min={min}
         max={max}
         step={step}
         disabled={disabled}
-        onChange={(event) => {
-          const next = event.currentTarget.valueAsNumber;
-          if (Number.isFinite(next)) onChange(next);
-        }}
-        className="h-8 rounded border border-slate-300 bg-white px-2 text-right text-xs tabular-nums text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+        ariaLabel={label}
+        scrubLabel={label}
+        onChange={onChange}
       />
     </label>
   );

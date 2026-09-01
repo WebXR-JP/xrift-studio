@@ -268,6 +268,7 @@ import {
   useWorldPlayUsers,
 } from "./WorldPlayPlayer";
 import { resolveWorldPlayCapsuleSpawn } from "./world-play-spawn";
+import { ScrubNumberInput } from "./ScrubNumberInput";
 
 /**
  * Recompiles Materials when shadows are switched off or on.
@@ -4216,18 +4217,6 @@ function SnapStepField({
   onChange: (value: number) => void;
 }) {
   const minimum = minSnapStepForMode(mode);
-  const [draft, setDraft] = useState(String(value));
-  useEffect(() => setDraft(String(value)), [value]);
-
-  const commit = () => {
-    const next = Number(draft);
-    if (!Number.isFinite(next) || next < minimum) {
-      setDraft(String(value));
-      return;
-    }
-    if (next !== value) onChange(next);
-    else setDraft(String(value));
-  };
 
   return (
     <div
@@ -4239,20 +4228,21 @@ function SnapStepField({
         <label className="text-[11px] font-medium text-slate-700">
           {snapStepLabel(mode)}
           <div className="mt-1 flex items-center gap-1">
-            <input
-              type="number"
-              value={draft}
+            <ScrubNumberInput
+              value={value}
               min={minimum}
               step={minimum}
-              onChange={(event) => setDraft(event.currentTarget.value)}
-              onBlur={commit}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  commit();
-                }
-              }}
-              className="h-6 w-20 rounded border border-slate-300 px-1.5 text-right text-[11px] tabular-nums outline-none focus:border-violet-400"
+              scrubStep={minimum}
+              size="xs"
+              compact
+              wrapperClassName="w-20"
+              ariaLabel={snapStepLabel(mode)}
+              scrubLabel={snapStepLabel(mode)}
+              onChange={onChange}
+              /* スナップはUndoを増やさない設定なので、共通のトランザクションへ入れない。 */
+              onScrubStart={() => {}}
+              onScrubEnd={() => {}}
+              onScrubCancel={(startValue) => onChange(startValue)}
             />
             <span className="text-[10px] text-slate-500">
               {snapStepUnit(mode)}

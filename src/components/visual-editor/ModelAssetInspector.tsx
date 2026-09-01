@@ -12,6 +12,7 @@ import {
   type ModelReimportImpact,
 } from "../../lib/visual-editor";
 import { AssetOptimizationOriginCard } from "./AssetOptimizationOriginCard";
+import { ScrubNumberInput } from "./ScrubNumberInput";
 
 export type ModelOptimizationState =
   | { phase: "idle" }
@@ -197,20 +198,18 @@ export function ModelAssetInspector({
               Scene表示、Collider bounds、変換結果へ反映
             </span>
           </span>
-          <input
-            type="number"
+          <ScrubNumberInput
             min={0.0001}
             max={10000}
             step={0.1}
+            scrubStep={0.01}
             value={asset.importSettings.scale}
             disabled={readOnly}
-            onChange={(event) => {
-              const scale = event.currentTarget.valueAsNumber;
-              if (Number.isFinite(scale) && scale > 0) {
-                onChange({ importSettings: { scale } });
-              }
+            ariaLabel="Import Scale"
+            scrubLabel="Import Scale"
+            onChange={(scale) => {
+              if (scale > 0) onChange({ importSettings: { scale } });
             }}
-            className={INPUT_CLASS}
           />
         </label>
         <RecipeToggle

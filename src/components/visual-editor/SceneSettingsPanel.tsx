@@ -22,6 +22,7 @@ import {
   readEditorDragData,
 } from "./editor-drag-data";
 import { SKYBOX_DRAG_MIME, TEXTURE_DRAG_MIME } from "./types";
+import { ScrubNumberInput } from "./ScrubNumberInput";
 
 type SceneSettingsInspectorProps = {
   scene: SceneDocument;
@@ -215,6 +216,7 @@ function NumberField({
   min,
   max,
   step,
+  scrubStep,
   disabled,
   onChange,
 }: {
@@ -223,43 +225,25 @@ function NumberField({
   min?: number;
   max?: number;
   step?: number;
+  scrubStep?: number;
   disabled: boolean;
   onChange: (value: number) => void;
 }) {
-  const [draft, setDraft] = useState(String(value));
-  useEffect(() => setDraft(String(value)), [value]);
-
-  const commit = () => {
-    const next = Number(draft);
-    if (!Number.isFinite(next)) {
-      setDraft(String(value));
-      return;
-    }
-    const clamped = Math.max(min ?? -Infinity, Math.min(max ?? Infinity, next));
-    setDraft(String(clamped));
-    if (clamped !== value) onChange(clamped);
-  };
-
   return (
     <label className="flex items-center justify-between gap-3">
       <span className="text-xs font-medium text-slate-700">{label}</span>
-      <input
-        type="number"
-        value={draft}
+      <ScrubNumberInput
+        value={value}
         min={min}
         max={max}
-        step={step ?? "any"}
+        step={step}
+        scrubStep={scrubStep}
         disabled={disabled}
-        onChange={(event) => setDraft(event.currentTarget.value)}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") event.currentTarget.blur();
-          if (event.key === "Escape") {
-            setDraft(String(value));
-            event.currentTarget.blur();
-          }
-        }}
-        className="h-7 w-24 rounded border border-slate-300 bg-white px-2 text-right text-xs text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+        ariaLabel={label}
+        scrubLabel={label}
+        onChange={onChange}
+        size="sm"
+        wrapperClassName="w-24 shrink-0"
       />
     </label>
   );
@@ -385,40 +369,21 @@ function VectorAxisInput({
   disabled: boolean;
   onChange: (value: number) => void;
 }) {
-  const [draft, setDraft] = useState(String(value));
-  useEffect(() => setDraft(String(value)), [value]);
-  const commit = () => {
-    const parsed = Number(draft);
-    if (!Number.isFinite(parsed)) {
-      setDraft(String(value));
-      return;
-    }
-    const next = Math.max(min ?? -Infinity, parsed);
-    setDraft(String(next));
-    if (next !== value) onChange(next);
-  };
   return (
     <label className="min-w-0">
       <span className="mb-0.5 block text-[10px] font-semibold text-slate-500">
         {axis}
       </span>
-      <input
-        type="number"
-        aria-label={`${axis}軸`}
-        value={draft}
+      <ScrubNumberInput
+        value={value}
         min={min}
         step={step}
         disabled={disabled}
-        onChange={(event) => setDraft(event.currentTarget.value)}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") event.currentTarget.blur();
-          if (event.key === "Escape") {
-            setDraft(String(value));
-            event.currentTarget.blur();
-          }
-        }}
-        className="h-7 w-full rounded border border-slate-300 bg-white px-1.5 text-right text-[11px] text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+        ariaLabel={`${axis}軸`}
+        scrubLabel={`${axis}軸`}
+        onChange={onChange}
+        size="sm"
+        compact
       />
     </label>
   );
