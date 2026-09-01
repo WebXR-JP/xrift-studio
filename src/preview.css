@@ -1,8 +1,70 @@
+/*
+ * One palette, named once.
+ *
+ * The page had grown three accent hues — violet, cyan and amber — and used
+ * them to tint whole card surfaces, so colour marked "this is a card" rather
+ * than "this matters". That is the opposite of the product's own rule (quiet
+ * white and grey; brand colour reserved for meaningful emphasis), and it left
+ * four different card treatments that had to be kept in sync by hand.
+ *
+ * So: one accent, and it stays in the violet family because the nav carries
+ * the app's own violet brand mark and a second hue beside it would read as two
+ * products. Cards are white with a hairline edge; the accent appears on the
+ * eyebrow, the icon chip, a link, and the primary button — and nowhere a
+ * reader does not need to look.
+ */
 .preview-shell {
+  /* Ink */
+  --preview-ink: #18181b;
+  --preview-ink-soft: #52525b;
+  --preview-ink-faint: #71717a;
+
+  /* Surfaces and edges */
+  --preview-surface: #ffffff;
+  --preview-surface-soft: #fafafa;
+  --preview-line: #e4e4e7;
+  --preview-line-soft: #f4f4f5;
+  /* The same zinc-100, but where it fills rather than divides. */
+  --preview-surface-sunken: #f4f4f5;
+
+  /*
+   * The accent is darker than the violet-600 the page used for text before.
+   * #7c3aed on white measures 5.70:1 and #6d28d9 measures 7.10:1, so the
+   * eyebrow, the links and the small print all clear 7:1 rather than sitting
+   * just over the 4.5:1 line.
+   */
+  --preview-accent: #6d28d9;
+  --preview-accent-strong: #5b21b6;
+  --preview-accent-tint: #f5f3ff;
+  --preview-accent-line: #ddd6fe;
+
+  /*
+   * Two shadows, both anchored by a hairline border rather than replacing one.
+   * The page previously reached for 70px blurs at 8-14% opacity, which reads as
+   * haze on a white ground instead of elevation.
+   */
+  --preview-shadow-card: 0 1px 2px rgba(24, 24, 27, 0.04),
+    0 12px 32px -14px rgba(24, 24, 27, 0.14);
+  --preview-shadow-lift: 0 2px 6px rgba(24, 24, 27, 0.05),
+    0 22px 48px -20px rgba(24, 24, 27, 0.22);
+
   min-height: 100%;
   overflow-x: hidden;
-  color: #18181b;
-  background: #ffffff;
+  color: var(--preview-ink);
+  background: var(--preview-surface);
+}
+
+/*
+ * Japanese wraps at any character by default, so a heading could break inside
+ * a word — the materials heading read "いつもの素材か / ら、すぐ始める。".
+ * `auto-phrase` breaks at phrase boundaries instead. Browsers without it fall
+ * back to today's behaviour, so it is safe to state unconditionally.
+ */
+.preview-hero-title,
+.preview-section-title,
+.preview-shell h2,
+.preview-shell h3 {
+  word-break: auto-phrase;
 }
 
 .preview-compact-editor-gate {
@@ -47,7 +109,7 @@
   min-height: 2.5rem;
   padding: 0 0.8rem;
   border-radius: 999px;
-  color: #52525b;
+  color: var(--preview-ink-soft);
   font-size: 0.75rem;
   font-weight: 700;
   transition:
@@ -56,7 +118,7 @@
 }
 
 .preview-nav-link:hover {
-  color: #18181b;
+  color: var(--preview-ink);
   background: rgba(244, 244, 245, 0.9);
 }
 
@@ -97,7 +159,7 @@
 
 .preview-button-dark {
   color: #ffffff;
-  background: #18181b;
+  background: var(--preview-ink);
   box-shadow: 0 8px 22px rgba(24, 24, 27, 0.14);
 }
 
@@ -105,39 +167,46 @@
   background: #27272a;
 }
 
-/* Follows the app's gradient-brand so the site and the editor read as one product. */
+/*
+ * Solid, not the app's three-stop gradient. The gradient ran violet to blue
+ * across the button, so the label sat on a different colour at each end and the
+ * button competed with the headline for the eye. One flat accent leaves the
+ * headline first and the button unmistakably next.
+ */
 .preview-button-primary {
   color: #ffffff;
-  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 55%, #3b82f6 100%);
-  box-shadow: 0 15px 35px rgba(99, 102, 241, 0.26);
+  background: var(--preview-accent);
+  box-shadow: 0 1px 2px rgba(91, 33, 182, 0.2),
+    0 14px 30px -12px rgba(91, 33, 182, 0.45);
 }
 
 .preview-button-primary:hover {
-  background: linear-gradient(135deg, #6d28d9 0%, #4f46e5 55%, #2563eb 100%);
-  box-shadow: 0 18px 40px rgba(99, 102, 241, 0.32);
+  background: var(--preview-accent-strong);
+  box-shadow: 0 2px 4px rgba(91, 33, 182, 0.24),
+    0 18px 36px -14px rgba(91, 33, 182, 0.5);
 }
 
 .preview-button-light {
   color: #3f3f46;
-  border-color: #e4e4e7;
+  border-color: var(--preview-line);
   background: rgba(255, 255, 255, 0.88);
   box-shadow: 0 8px 25px rgba(24, 24, 27, 0.06);
 }
 
 .preview-button-light:hover {
-  color: #18181b;
-  border-color: #c4b5fd;
+  color: var(--preview-ink);
+  border-color: var(--preview-accent-line);
   background: #ffffff;
 }
 
 .preview-button-white {
-  color: #18181b;
+  color: var(--preview-ink);
   background: #ffffff;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
 }
 
 .preview-button-white:hover {
-  background: #f5f3ff;
+  background: var(--preview-accent-tint);
 }
 
 .preview-button-ghost {
@@ -200,23 +269,30 @@
   width: fit-content;
   align-items: center;
   gap: 0.5rem;
-  border: 1px solid #ddd6fe;
+  border: 1px solid var(--preview-accent-line);
   border-radius: 999px;
-  padding: 0.45rem 0.8rem;
-  color: #6d28d9;
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 8px 30px rgba(109, 40, 217, 0.07);
+  padding: 0.45rem 0.85rem;
+  color: var(--preview-accent);
+  background: rgba(255, 255, 255, 0.86);
   font-size: 0.7rem;
   font-weight: 800;
 }
 
-.preview-gradient-text {
-  color: transparent;
-  background: linear-gradient(100deg, #7c3aed 5%, #6366f1 55%, #3b82f6 95%);
-  background-clip: text;
-  -webkit-background-clip: text;
+/*
+ * The emphasised half of a headline. It was a violet-to-blue gradient clipped
+ * to the text, which loses contrast wherever the light end lands and is the
+ * one thing on the page that cannot be read at a glance in a screenshot.
+ * A single accent says the same thing and stays legible.
+ */
+.preview-title-accent {
+  color: var(--preview-accent-strong);
 }
 
+/*
+ * Three facts about the product, so they look like three of the same thing.
+ * They used to be violet, cyan and amber, which invited the reader to work out
+ * what the colours meant. They meant nothing.
+ */
 .preview-hero-pill {
   display: inline-flex;
   align-items: center;
@@ -224,29 +300,16 @@
   gap: 0.5rem;
   padding: 0.6rem 1rem;
   border-radius: 999px;
-  border: 1px solid transparent;
+  border: 1px solid var(--preview-line);
+  color: var(--preview-ink-soft);
+  background: rgba(255, 255, 255, 0.9);
   font-size: 0.78rem;
   font-weight: 800;
   white-space: nowrap;
-  box-shadow: 0 8px 22px rgba(39, 39, 42, 0.06);
 }
 
-.preview-hero-pill-violet {
-  color: #6d28d9;
-  border-color: #ddd6fe;
-  background: linear-gradient(145deg, #f5f3ff, #ffffff);
-}
-
-.preview-hero-pill-cyan {
-  color: #0e7490;
-  border-color: #a5f3fc;
-  background: linear-gradient(145deg, #ecfeff, #ffffff);
-}
-
-.preview-hero-pill-amber {
-  color: #b45309;
-  border-color: #fde68a;
-  background: linear-gradient(145deg, #fffbeb, #ffffff);
+.preview-hero-pill svg {
+  color: var(--preview-accent);
 }
 
 @media (max-width: 767px) {
@@ -321,22 +384,26 @@
   padding-bottom: 7rem;
 }
 
+/*
+ * The alternating band. It carried a violet wash in one corner, which put a
+ * third value behind the white cards that sit on it and made the section edge
+ * read as a gradient rather than a change of ground. Flat grey separates the
+ * bands on its own.
+ */
 .preview-section-soft {
-  background:
-    radial-gradient(circle at 12% 0%, rgba(221, 214, 254, 0.28), transparent 24rem),
-    #fafafa;
+  background: var(--preview-surface-soft);
 }
 
 .preview-eyebrow {
-  color: #7c3aed;
-  font-size: 0.68rem;
+  color: var(--preview-accent);
+  font-size: 0.7rem;
   font-weight: 900;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.16em;
 }
 
 .preview-section-title {
   text-wrap: balance;
-  color: #18181b;
+  color: var(--preview-ink);
   font-size: clamp(2.25rem, 4vw, 4rem);
   font-weight: 900;
   line-height: 1.06;
@@ -344,43 +411,45 @@
 }
 
 .preview-section-copy {
-  color: #52525b;
+  color: var(--preview-ink-soft);
   font-size: 1rem;
   line-height: 1.9;
 }
 
+/*
+ * World and Item are two of the same kind of thing, so they get the same card.
+ * They used to be a violet fill and a cyan fill with body text tinted to match,
+ * which made the pair look like a comparison — one preferred, one not — and put
+ * coloured text on a coloured ground. The difference between them is what they
+ * say, and the icon.
+ */
 .preview-kind-card {
   padding: 2rem;
-  border-radius: 1.75rem;
-  border: 1px solid transparent;
-  box-shadow: 0 24px 70px rgba(39, 39, 42, 0.08);
+  border-radius: 1.5rem;
+  border: 1px solid var(--preview-line);
+  color: var(--preview-ink);
+  background: var(--preview-surface);
+  box-shadow: var(--preview-shadow-card);
   transition:
     transform 180ms ease,
+    border-color 180ms ease,
     box-shadow 180ms ease;
 }
 
 .preview-kind-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 30px 80px rgba(39, 39, 42, 0.14);
-}
-
-.preview-kind-violet {
-  color: #4c1d95;
-  border-color: #ddd6fe;
-  background: linear-gradient(150deg, #f5f3ff 0%, #ede9fe 100%);
-}
-
-.preview-kind-cyan {
-  color: #155e75;
-  border-color: #a5f3fc;
-  background: linear-gradient(150deg, #ecfeff 0%, #cffafe 100%);
+  transform: translateY(-3px);
+  border-color: var(--preview-accent-line);
+  box-shadow: var(--preview-shadow-lift);
 }
 
 .preview-import-card {
-  min-height: 14rem;
-  padding: 1.35rem;
-  border: 1px solid transparent;
+  min-height: 12.5rem;
+  padding: 1.5rem;
+  border: 1px solid var(--preview-line);
   border-radius: 1.5rem;
+  color: var(--preview-ink);
+  background: var(--preview-surface);
+  box-shadow: var(--preview-shadow-card);
   transition:
     transform 180ms ease,
     border-color 180ms ease,
@@ -388,31 +457,23 @@
 }
 
 .preview-import-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 20px 45px rgba(39, 39, 42, 0.08);
+  transform: translateY(-3px);
+  border-color: var(--preview-accent-line);
+  box-shadow: var(--preview-shadow-lift);
 }
 
-.preview-import-violet {
-  color: #6d28d9;
-  border-color: #ddd6fe;
-  background: linear-gradient(145deg, #f5f3ff, #ffffff);
+/* The icon is where the accent is allowed; the formats below it are data. */
+.preview-import-card > svg {
+  color: var(--preview-accent);
 }
 
-.preview-import-cyan {
-  color: #0e7490;
-  border-color: #a5f3fc;
-  background: linear-gradient(145deg, #ecfeff, #ffffff);
-}
-
-.preview-import-amber {
-  color: #b45309;
-  border-color: #fde68a;
-  background: linear-gradient(145deg, #fffbeb, #ffffff);
+.preview-import-formats {
+  color: var(--preview-ink-soft);
 }
 
 .preview-source-strip {
   padding: 1.5rem;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--preview-line);
   border-radius: 1.5rem;
   background: rgba(255, 255, 255, 0.72);
 }
@@ -426,9 +487,9 @@
   width: 2.2rem;
   height: 2.2rem;
   place-items: center;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--preview-line);
   border-radius: 0.75rem;
-  color: #52525b;
+  color: var(--preview-ink-soft);
   background: #ffffff;
   box-shadow: 0 6px 15px rgba(39, 39, 42, 0.06);
   font-size: 0.72rem;
@@ -441,9 +502,8 @@
   z-index: -1;
   border-radius: 2.5rem;
   background:
-    radial-gradient(circle at 20% 25%, rgba(167, 139, 250, 0.35), transparent 32%),
-    radial-gradient(circle at 80% 80%, rgba(103, 232, 249, 0.3), transparent 34%),
-    #f4f4f5;
+    radial-gradient(circle at 20% 25%, rgba(167, 139, 250, 0.28), transparent 34%),
+    var(--preview-surface-sunken);
 }
 
 .preview-dark-section {
@@ -511,7 +571,7 @@
   justify-content: space-between;
   gap: 1rem;
   padding: 1.35rem 0;
-  color: #18181b;
+  color: var(--preview-ink);
   font-size: 0.95rem;
   font-weight: 800;
 }
@@ -523,7 +583,7 @@
 .preview-faq p {
   max-width: 48rem;
   padding: 0 2.5rem 1.4rem 0;
-  color: #52525b;
+  color: var(--preview-ink-soft);
   font-size: 0.875rem;
   line-height: 1.8;
 }
@@ -534,10 +594,10 @@
    different site from the one that described the app. */
 .preview-download-card {
   padding: 1.65rem;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--preview-line);
   border-radius: 1.5rem;
-  background: #ffffff;
-  box-shadow: 0 16px 45px rgba(39, 39, 42, 0.05);
+  background: var(--preview-surface);
+  box-shadow: var(--preview-shadow-card);
 }
 
 .preview-download-file {
@@ -547,7 +607,7 @@
   justify-content: space-between;
   gap: 0.5rem;
   margin-top: 0.85rem;
-  color: #52525b;
+  color: var(--preview-ink-soft);
   font-size: 0.7rem;
   font-weight: 600;
   word-break: break-all;
@@ -570,7 +630,7 @@
 
 .preview-download-details {
   margin-top: 0.85rem;
-  border-top: 1px solid #e4e4e7;
+  border-top: 1px solid var(--preview-line);
 }
 
 .preview-download-details summary {
@@ -595,7 +655,7 @@
 }
 
 .preview-download-details summary:hover > span:first-child {
-  color: #6d28d9;
+  color: var(--preview-accent);
 }
 
 .preview-download-hash {
@@ -611,14 +671,14 @@
 
 .preview-download-note {
   margin-top: 0.5rem;
-  color: #71717a;
+  color: var(--preview-ink-faint);
   font-size: 0.68rem;
   font-weight: 600;
   line-height: 1.7;
 }
 
 .preview-download-group-title {
-  color: #71717a;
+  color: var(--preview-ink-faint);
   font-size: 0.66rem;
   font-weight: 900;
   letter-spacing: 0.14em;
@@ -630,7 +690,7 @@
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.6rem 0.8rem;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--preview-line);
   border-radius: 0.9rem;
   background: #ffffff;
   transition:
@@ -639,7 +699,7 @@
 }
 
 .preview-download-option:hover {
-  border-color: #ddd6fe;
+  border-color: var(--preview-accent-line);
   background: #faf5ff;
 }
 
@@ -669,7 +729,7 @@
   display: grid;
   grid-template-columns: 1.5rem minmax(0, 1fr);
   gap: 0.7rem;
-  color: #52525b;
+  color: var(--preview-ink-soft);
   font-size: 0.78rem;
   font-weight: 600;
   line-height: 1.8;
@@ -681,8 +741,8 @@
   width: 1.5rem;
   height: 1.5rem;
   border-radius: 999px;
-  color: #6d28d9;
-  background: #f5f3ff;
+  color: var(--preview-accent);
+  background: var(--preview-accent-tint);
   font-size: 0.68rem;
   font-weight: 900;
 }
@@ -692,14 +752,14 @@
   align-items: center;
   gap: 0.35rem;
   margin-left: 0.5rem;
-  color: #6d28d9;
+  color: var(--preview-accent);
   font-weight: 800;
   text-decoration: underline;
   text-underline-offset: 4px;
 }
 
 .preview-hero-download-link {
-  color: #6d28d9;
+  color: var(--preview-accent);
   font-weight: 700;
   text-decoration: underline;
   text-underline-offset: 4px;
@@ -708,9 +768,8 @@
 .preview-final-cta {
   isolation: isolate;
   background:
-    radial-gradient(circle at 20% 0%, rgba(139, 92, 246, 0.5), transparent 30rem),
-    radial-gradient(circle at 85% 100%, rgba(8, 145, 178, 0.26), transparent 26rem),
-    #18181b;
+    radial-gradient(circle at 20% 0%, rgba(139, 92, 246, 0.45), transparent 30rem),
+    var(--preview-ink);
   box-shadow: 0 35px 90px rgba(49, 46, 129, 0.2);
 }
 
@@ -786,10 +845,10 @@
 .preview-showcase {
   position: relative;
   overflow: hidden;
-  border: 1px solid #e4e4e7;
-  border-radius: 1.75rem;
-  background: #ffffff;
-  box-shadow: 0 30px 80px rgba(39, 39, 42, 0.12);
+  border: 1px solid var(--preview-line);
+  border-radius: 1.5rem;
+  background: var(--preview-surface);
+  box-shadow: var(--preview-shadow-lift);
 }
 
 .preview-showcase img {
@@ -800,8 +859,8 @@
 
 .preview-showcase-caption {
   padding: 1rem 1.35rem 1.15rem;
-  border-top: 1px solid #f4f4f5;
-  color: #71717a;
+  border-top: 1px solid var(--preview-line-soft);
+  color: var(--preview-ink-faint);
   font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.7;
@@ -809,10 +868,10 @@
 
 .preview-tool-card {
   padding: 1.65rem;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--preview-line);
   border-radius: 1.5rem;
-  background: #ffffff;
-  box-shadow: 0 16px 45px rgba(39, 39, 42, 0.05);
+  background: var(--preview-surface);
+  box-shadow: var(--preview-shadow-card);
   transition:
     transform 180ms ease,
     border-color 180ms ease,
@@ -820,14 +879,14 @@
 }
 
 .preview-tool-card:hover {
-  transform: translateY(-4px);
-  border-color: #ddd6fe;
-  box-shadow: 0 22px 50px rgba(39, 39, 42, 0.09);
+  transform: translateY(-3px);
+  border-color: var(--preview-accent-line);
+  box-shadow: var(--preview-shadow-lift);
 }
 
 .preview-flow-list {
-  border-top: 1px solid #e4e4e7;
-  border-bottom: 1px solid #e4e4e7;
+  border-top: 1px solid var(--preview-line);
+  border-bottom: 1px solid var(--preview-line);
 }
 
 .preview-flow-row {
@@ -835,7 +894,7 @@
   grid-template-columns: 2.75rem minmax(0, 1fr);
   gap: 1rem;
   padding: 1.5rem 0;
-  border-bottom: 1px solid #e4e4e7;
+  border-bottom: 1px solid var(--preview-line);
 }
 
 .preview-flow-row:last-child {
@@ -844,10 +903,10 @@
 
 .preview-ai-figure {
   overflow: hidden;
-  border: 1px solid #e4e4e7;
-  border-radius: 1.75rem;
-  background: #ffffff;
-  box-shadow: 0 26px 70px rgba(39, 39, 42, 0.1);
+  border: 1px solid var(--preview-line);
+  border-radius: 1.5rem;
+  background: var(--preview-surface);
+  box-shadow: var(--preview-shadow-lift);
 }
 
 /* The publish dialog sits on the dark band, so its frame is a light edge
@@ -901,21 +960,21 @@
   font-size: 1rem;
   font-weight: 900;
   letter-spacing: -0.02em;
-  color: #18181b;
+  color: var(--preview-ink);
 }
 
 .preview-web-upload-lead {
   margin-top: 0.6rem;
   font-size: 0.8rem;
   line-height: 1.8;
-  color: #52525b;
+  color: var(--preview-ink-soft);
 }
 
 .preview-web-upload-lead code {
   margin: 0 0.2rem;
   border-radius: 0.35rem;
   padding: 0.1rem 0.35rem;
-  background: #f4f4f5;
+  background: var(--preview-surface-sunken);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.72rem;
 }
@@ -936,11 +995,11 @@
 .preview-web-upload-field input {
   width: 100%;
   min-height: 2.5rem;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--preview-line);
   border-radius: 0.7rem;
   padding: 0.55rem 0.75rem;
   font-size: 0.82rem;
-  color: #18181b;
+  color: var(--preview-ink);
 }
 
 .preview-web-upload-note {
@@ -958,21 +1017,21 @@
 .preview-web-upload-label {
   font-size: 0.82rem;
   font-weight: 800;
-  color: #18181b;
+  color: var(--preview-ink);
 }
 
 .preview-web-upload-track {
   height: 0.4rem;
   margin-top: 0.5rem;
   border-radius: 999px;
-  background: #f4f4f5;
+  background: var(--preview-surface-sunken);
   overflow: hidden;
 }
 
 .preview-web-upload-bar {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #7c3aed, #2563eb);
+  background: var(--preview-accent);
   transition: width 260ms ease;
 }
 
@@ -980,7 +1039,7 @@
   margin-top: 0.5rem;
   font-size: 0.72rem;
   line-height: 1.7;
-  color: #71717a;
+  color: var(--preview-ink-faint);
   overflow-wrap: anywhere;
 }
 
@@ -988,6 +1047,11 @@
   margin-top: 0.85rem;
 }
 
+/*
+ * The one hue on the page that is not the accent, and it earns it: this is the
+ * upload failing, which is exactly what colour is for. Decoration lost its
+ * colours; states kept theirs.
+ */
 .preview-web-upload-error {
   margin-top: 1rem;
   border: 1px solid #fde68a;
