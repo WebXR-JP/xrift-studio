@@ -14,7 +14,7 @@ export function TryDemo({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => voi
             <div className="max-w-3xl">
               <p className="preview-eyebrow">実際に触る</p>
               <h2 className="preview-section-title mt-4">
-                ダウンロードしなくても、触ってみられます。
+                ダウンロードする前に、ここで触れます。
               </h2>
               <p className="preview-section-copy mt-5 max-w-2xl">
                 実際のXRift Studioと同じビジュアルエディターが、このページで開きます。シーンを選び、素材を置き、見た目を整える流れを、インストール前に確かめられます。
