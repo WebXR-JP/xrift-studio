@@ -21,7 +21,7 @@ export function AiCollaboration() {
             </h2>
             <p className="preview-section-copy mt-5">
               手元のAIクライアントをXRift Studioへつなぐと、いま開いているシーンをそのまま編集してもらえます。
-              画面の操作を代わりにやってもらう感覚に近く、結果はすぐシーンに現れます。
+              画面を代わりに操作してもらう感覚に近く、結果はすぐシーンに出ます。
             </p>
             <div className="mt-9 divide-y divide-zinc-200 border-y border-zinc-200">
               {aiPoints.map((point) => {

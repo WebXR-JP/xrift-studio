@@ -21,7 +21,7 @@ export function FinalCta() {
             次のワールドは、ここから始まる。
           </h2>
           <p className="mx-auto mt-5 max-w-xl text-sm leading-7 text-zinc-300 sm:text-base">
-            いま持っている素材と、つくりたい景色を持ってきてください。XRiftへ届けるところまで、一緒に進めます。
+            手元の素材と、つくりたい景色を持ってきてください。XRiftへ届くところまで、一緒に進みます。
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <DownloadButton

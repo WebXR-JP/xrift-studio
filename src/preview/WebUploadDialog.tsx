@@ -122,7 +122,7 @@ export function WebUploadDialog({
               />
             </label>
             <p className="preview-web-upload-note">
-              素材を取り込んだワールドと、Scriptを含むワールドは、まだデスクトップ版から公開してください。
+              素材を取り込んだワールドと、Scriptを含むワールドは、いまのところデスクトップ版から公開してください。
             </p>
           </>
         ) : null}

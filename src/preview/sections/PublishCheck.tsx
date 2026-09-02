@@ -16,7 +16,7 @@ const checks = [
   },
   {
     title: "サムネイル",
-    text: "いま開いているワールドから撮れます。送信時にはコピー元とコピー先のSHA-256を照合します。",
+    text: "いま開いているワールドの画を、そのままサムネイルにできます。送信のときは、コピー元とコピー先のSHA-256を照合します。",
   },
   {
     title: "公開先",
@@ -33,7 +33,7 @@ export function PublishCheck() {
           <div data-reveal>
             <span className="preview-dark-kicker">
               <ScanSearch size={14} />
-              公開前まで、ちゃんと見える
+              公開する前に、全部見える
             </span>
             <h2 className="mt-6 text-balance text-4xl font-black leading-[1.05] tracking-[-0.055em] sm:text-5xl">
               「たぶん大丈夫」を、
@@ -61,7 +61,7 @@ export function PublishCheck() {
             </div>
 
             <p className="mt-7 text-xs leading-6 text-zinc-500">
-              ロード容量とVRAMの目安は、エディターの診断から別に確認できます。
+              ロード容量とVRAMの目安は、エディターの診断で確認できます。
             </p>
           </div>
 
