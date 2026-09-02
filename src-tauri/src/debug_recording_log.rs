@@ -109,7 +109,7 @@ mod tests {
     fn timestamps_are_iso8601_utc_with_milliseconds() {
         assert_eq!(iso8601_utc_millis(0), "1970-01-01T00:00:00.000Z");
         // 2026-09-02T00:20:19.123Z
-        assert_eq!(iso8601_utc_millis(1_788_654_019_123), "2026-09-02T00:20:19.123Z");
+        assert_eq!(iso8601_utc_millis(1_788_308_419_123), "2026-09-02T00:20:19.123Z");
         // A leap day, to exercise the calendar arithmetic.
         assert_eq!(iso8601_utc_millis(1_709_164_800_000), "2024-02-29T00:00:00.000Z");
     }
@@ -117,7 +117,7 @@ mod tests {
     #[test]
     fn directory_names_sort_by_start_time() {
         assert_eq!(
-            recording_directory_name(1_788_654_019_123),
+            recording_directory_name(1_788_308_419_123),
             "recording-20260902-002019"
         );
         assert!(recording_directory_name(1_000) < recording_directory_name(2_000_000_000_000));
@@ -139,7 +139,7 @@ mod tests {
         fields.insert("tool".to_string(), json!("place_asset"));
         fields.insert("event".to_string(), json!("spoofed"));
         fields.insert("t".to_string(), json!(999));
-        let line = log_line(1_788_654_019_123, 12.34567, "tool", fields);
+        let line = log_line(1_788_308_419_123, 12.34567, "tool", fields);
         let parsed: Value = serde_json::from_str(&line).expect("line is JSON");
         assert_eq!(parsed["at"], "2026-09-02T00:20:19.123Z");
         assert_eq!(parsed["t"], 12.346);
