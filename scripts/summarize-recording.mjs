@@ -87,10 +87,25 @@ function probeDuration(file, tools, dryRun) {
     { dryRun },
   );
   const seconds = Number(String(result.stdout).trim());
-  if (!Number.isFinite(seconds) || seconds <= 0) {
+  if (Number.isFinite(seconds) && seconds > 0) return seconds;
+  // A MediaRecorder WebM is written as a live stream and never gets a duration
+  // in its header, so the container says N/A. The last packet's timestamp is
+  // the length that matters here.
+  const packets = run(
+    tools.ffprobe,
+    ["-v", "error", "-select_streams", "v:0", "-show_entries", "packet=pts_time", "-of", "csv=p=0", file],
+    { dryRun },
+  );
+  const last = String(packets.stdout)
+    .trim()
+    .split(/\r?\n/)
+    .map((line) => Number(line.trim().replace(/,$/, "")))
+    .filter((value) => Number.isFinite(value))
+    .pop();
+  if (last === undefined || last <= 0) {
     throw new Error(`Could not read the duration of ${file}`);
   }
-  return seconds;
+  return last;
 }
 
 const options = parseArgs(process.argv.slice(2));
