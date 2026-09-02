@@ -36,7 +36,18 @@ OBS などの外部ツールを前提にせず、投稿先に合わせたアス�
 絵が保たれる。Scene View が戻れば続きから映る。
 
 符号化した chunk は 1 秒ごとに Rust へ raw body (`recording_append_chunk`) で渡し、
-その場でファイルへ追記する。メモリに動画を溜めないので、数時間の take でも
+その場でファイルへ追記する。
+
+WebView に `MediaRecorder` が無い場合 (Linux の WebKitGTK は「unsupported on this
+platform」を返す) は、PATH の FFmpeg があればフレーム単位の経路へ切り替える。
+録画用フレームをプロファイルのフレームレートで JPEG に読み出して同じ
+`recording_append_chunk` で Rust へ渡し、Rust が `ffmpeg -f image2pipe` へ流して
+H.264 の MP4 を書く。JPEG の符号化が遅れた分は壁時計に合わせて同じフレームを
+複製するので、動画の長さは実時間と一致する。sidecar の `encoder` に
+`media-recorder` か `frame-stream` のどちらで録ったかが残る。FFmpeg も無ければ
+`failed` と「FFmpeg を PATH に置くとフレーム単位で録画できます」を返す。
+Windows (WebView2) と macOS (WKWebView) は MediaRecorder を持つので、この経路は
+通らない。メモリに動画を溜めないので、数時間の take でも
 メモリは増えない。Rust 側が書けるのは `recording_begin_file` で開いたファイルだけで、
 開けるのは既定の保存先 (OS のビデオフォルダー直下 `XRift Studio`。無ければ app data
 の `recordings`) と、人がフォルダーダイアログで選んだ場所だけである。AI client は
@@ -119,13 +130,16 @@ MCP からの移動は純粋関数 (`recording-camera.ts` の `resolveRecordingC
 
 | 指定 | 動き |
 | --- | --- |
-| `fitScene` | Scene の全 root Entity の描画 bounds を union して収める。ワールドが広がったら呼び直す |
+| `fitScene` | Scene に描かれている Mesh の bounds を union して収める。半径 100 m を超える Mesh (空のドーム、地平線の板) は除外し、除外した数を `skippedLargeMeshCount` で返す。ワールドが広がったら呼び直す |
 | `focusEntityId` | F キーと同じ測り方で 1 つの Entity を収める |
 | `preset` | top / front / back / left / right / iso の向き。何も収めないなら注視点は保つ |
 | `position` / `target` | そのまま置く。`target` だけなら距離を保つ |
 | `distance`、`fov` | 上書き |
 
 収める距離は縦横の狭い方の画角で決めるので、9:16 では 16:9 より下がる。
+Mesh 単位で測るのは、Scene がしばしば 1 つの root Entity に空も世界も入れている
+ためで、Entity 単位の除外では空を落とせない。公式サンプルの Skybox は半径 500 m
+あり、これを含めるとカメラは霧の向こうへ行って何も映らない。
 
 ## MCP tool
 
@@ -177,6 +191,14 @@ pnpm recording:summarize -- --input ~/Videos/XRift\ Studio/xrift-sky-garden-2026
 - 字幕、BGM、トランジションは出力した MP4 に別途付ける
 
 FFmpeg が無ければ、実行するはずだったコマンドを表示して終わる。
+
+## 動作を確認した環境
+
+| 環境 | 経路 | 結果 |
+| --- | --- | --- |
+| Chromium (紹介ページのブラウザ版デモ) | MediaRecorder、メモリ保存 | 42 秒の WebM。UI 操作で確認 |
+| Linux デスクトップ版 (WebKitGTK、Xvfb) | frame-stream + FFmpeg | MCP だけで開始・制作・カメラ調整・停止。MP4 と sidecar |
+| Windows (WebView2)、macOS (WKWebView) | MediaRecorder、ディスクへ逐次書き込み | 未確認 |
 
 ## OBS を使う場合
 

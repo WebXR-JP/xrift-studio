@@ -42,7 +42,12 @@ const NON_MEASURABLE_OBJECT_FLAGS = [
   "isSprite",
 ] as const;
 
-function skipsFocusMeasurement(object: Object3D): boolean {
+/**
+ * Whether an object is editor chrome or a screen-sized draw type, which never
+ * says how big the authored world is. Exported for the recording camera's
+ * whole-Scene measurement, which walks the scene graph directly.
+ */
+export function skipsFocusMeasurement(object: Object3D): boolean {
   if (object.userData?.[EDITOR_HELPER_FLAG] === true) return true;
   const flags = object as unknown as Record<string, unknown>;
   return NON_MEASURABLE_OBJECT_FLAGS.some((flag) => flags[flag] === true);

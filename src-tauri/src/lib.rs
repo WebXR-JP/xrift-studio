@@ -5464,9 +5464,24 @@ pub struct RecordingFileState {
     files: Mutex<HashMap<String, OpenRecordingFile>>,
 }
 
+/// Where a take's bytes go: straight into the container the WebView encoded,
+/// or into an FFmpeg process that turns a stream of JPEG frames into one.
+///
+/// The second exists for WebViews without MediaRecorder (WebKitGTK on Linux
+/// today). The frontend then sends one JPEG per frame at the profile's rate,
+/// and FFmpeg, which the author already needs for the summary script, does
+/// the encoding. Nothing is written anywhere FFmpeg was not told to write.
+enum RecordingWriter {
+    Container(std::fs::File),
+    Ffmpeg {
+        child: std::process::Child,
+        stdin: std::process::ChildStdin,
+    },
+}
+
 struct OpenRecordingFile {
     path: PathBuf,
-    file: std::fs::File,
+    writer: RecordingWriter,
     bytes_written: u64,
 }
 
@@ -5480,6 +5495,47 @@ struct RecordingBeginRequest {
     directory: Option<String>,
     file_stem: String,
     extension: String,
+    /// `container` (default): the bytes are an encoded video already.
+    /// `ffmpeg-frames`: the bytes are JPEG frames for FFmpeg to encode.
+    encoder: Option<String>,
+    frame_rate: Option<u32>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RecordingEncoderSupport {
+    ffmpeg: bool,
+    ffmpeg_version: Option<String>,
+}
+
+/// Whether an FFmpeg on PATH can take over encoding. Asked once per take, so
+/// a `ffmpeg -version` is cheap enough and always current.
+#[tauri::command]
+fn recording_encoder_support() -> RecordingEncoderSupport {
+    let output = std::process::Command::new("ffmpeg")
+        .arg("-version")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .output();
+    match output {
+        Ok(output) if output.status.success() => {
+            let first_line = String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            RecordingEncoderSupport {
+                ffmpeg: true,
+                ffmpeg_version: if first_line.is_empty() { None } else { Some(first_line) },
+            }
+        }
+        _ => RecordingEncoderSupport {
+            ffmpeg: false,
+            ffmpeg_version: None,
+        },
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -5538,6 +5594,12 @@ fn recording_begin_file(
     if extension != "webm" && extension != "mp4" {
         return Err("録画はWebMまたはMP4形式でのみ保存できます。".to_string());
     }
+    let use_ffmpeg = match request.encoder.as_deref() {
+        None | Some("container") => false,
+        Some("ffmpeg-frames") => true,
+        Some(_) => return Err("録画のencoderが不正です。".to_string()),
+    };
+    let frame_rate = request.frame_rate.unwrap_or(30).clamp(1, 120);
     let stem: String = request
         .file_stem
         .chars()
@@ -5603,12 +5665,42 @@ fn recording_begin_file(
         }
     }
     let (path, file) = opened.ok_or_else(|| "録画ファイル名を決められませんでした。".to_string())?;
+    let writer = if use_ffmpeg {
+        // The exclusive create above reserved the name; FFmpeg now owns it.
+        drop(file);
+        let codec: &[&str] = if extension == "webm" {
+            &["-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "30"]
+        } else {
+            &["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-movflags", "+faststart"]
+        };
+        let mut child = std::process::Command::new("ffmpeg")
+            .args(["-hide_banner", "-loglevel", "error", "-y"])
+            .args(["-f", "image2pipe", "-framerate", &frame_rate.to_string(), "-i", "pipe:0"])
+            .args(codec)
+            .args(["-pix_fmt", "yuv420p", "-an"])
+            .arg(&path)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(|error| {
+                let _ = std::fs::remove_file(&path);
+                format!("FFmpegを起動できません: {}", error)
+            })?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| "FFmpegの入力を開けません。".to_string())?;
+        RecordingWriter::Ffmpeg { child, stdin }
+    } else {
+        RecordingWriter::Container(file)
+    };
     let id = recording_random_id()?;
     files.insert(
         id.clone(),
         OpenRecordingFile {
             path: path.clone(),
-            file,
+            writer,
             bytes_written: 0,
         },
     );
@@ -5649,10 +5741,14 @@ fn recording_append_chunk(
     let entry = files
         .get_mut(&id)
         .ok_or_else(|| "この録画ファイルは開かれていません。".to_string())?;
-    entry
-        .file
-        .write_all(bytes)
-        .map_err(|error| format!("録画データを書き込めません: {}", error))?;
+    match &mut entry.writer {
+        RecordingWriter::Container(file) => file
+            .write_all(bytes)
+            .map_err(|error| format!("録画データを書き込めません: {}", error))?,
+        RecordingWriter::Ffmpeg { stdin, .. } => stdin
+            .write_all(bytes)
+            .map_err(|error| format!("FFmpegへフレームを渡せません: {}", error))?,
+    }
     entry.bytes_written += bytes.len() as u64;
     Ok(entry.bytes_written)
 }
@@ -5668,11 +5764,31 @@ fn recording_close_file(
     let entry = files
         .remove(id)
         .ok_or_else(|| "この録画ファイルは開かれていません。".to_string())?;
-    entry
-        .file
-        .sync_all()
-        .map_err(|error| format!("録画ファイルを確定できません: {}", error))?;
-    Ok((entry.path, entry.bytes_written))
+    // Release the map before waiting on FFmpeg, so a concurrent append to
+    // another take is not held up by this one's final flush.
+    drop(files);
+    match entry.writer {
+        RecordingWriter::Container(file) => {
+            file.sync_all()
+                .map_err(|error| format!("録画ファイルを確定できません: {}", error))?;
+            Ok((entry.path, entry.bytes_written))
+        }
+        RecordingWriter::Ffmpeg { mut child, stdin } => {
+            // Closing stdin is how FFmpeg learns the stream ended; it then
+            // writes the container's trailer and exits.
+            drop(stdin);
+            let status = child
+                .wait()
+                .map_err(|error| format!("FFmpegの終了を待てません: {}", error))?;
+            if !status.success() {
+                return Err(format!("FFmpegが動画を書き終えられませんでした ({})", status));
+            }
+            let size = std::fs::metadata(&entry.path)
+                .map(|metadata| metadata.len())
+                .unwrap_or(entry.bytes_written);
+            Ok((entry.path, size))
+        }
+    }
 }
 
 /// Closes the take and writes its sidecar (`<name>.json`) next to the video,
@@ -5796,6 +5912,7 @@ pub fn run() {
             save_debug_video,
             save_debug_image,
             recording_default_directory,
+            recording_encoder_support,
             recording_begin_file,
             recording_append_chunk,
             recording_finish_file,

@@ -48,6 +48,7 @@ import {
   createDefaultRecordingSink,
   type RecordingSink,
 } from "./recording-sink";
+import { tauri } from "../tauri";
 
 export const RECORDING_STORAGE_KEY = "xrift-studio.recording.v1";
 
@@ -110,11 +111,36 @@ export type RecordingStopResult = {
   snapshot: RecordingSnapshot;
 };
 
+/**
+ * How a take is encoded.
+ *
+ * `media-recorder` is the WebView's own encoder (WebView2, WKWebView).
+ * `frame-stream` is for WebViews without one (WebKitGTK on Linux today): the
+ * recording frame is read back as one JPEG per tick at the profile's frame
+ * rate and handed to the native side, where FFmpeg encodes it. Slow frames
+ * are repeated rather than dropped, so the video stays in real time.
+ */
+export type RecordingEncoderMode = "media-recorder" | "frame-stream";
+
+const FRAME_STREAM_JPEG_QUALITY = 0.92;
+
 type ActiveTake = {
   sessionId: string;
-  recorder: MediaRecorder;
-  stream: MediaStream;
-  track: MediaStreamTrack & { requestFrame?: () => void };
+  mode: RecordingEncoderMode;
+  recorder: MediaRecorder | null;
+  stream: MediaStream | null;
+  track: (MediaStreamTrack & { requestFrame?: () => void }) | null;
+  /** frame-stream only: the tick timer, the last encoded frame, and the encode in flight. */
+  frameTimer: number | null;
+  lastJpeg: Uint8Array | null;
+  frameDirty: boolean;
+  missedTicks: number;
+  /** frame-stream only: frames handed to FFmpeg so far, against the wall clock. */
+  framesSent: number;
+  startedAtMs: number;
+  frameRate: number;
+  encodePromise: Promise<void>;
+  encodePromiseBusy: boolean;
   frame: HTMLCanvasElement;
   context: CanvasRenderingContext2D;
   sink: RecordingSink;
@@ -325,7 +351,79 @@ class RecordingSessionStore {
     }
     take.lastFrameAt = now;
     take.frameCount += 1;
-    take.track.requestFrame?.();
+    take.frameDirty = true;
+    take.track?.requestFrame?.();
+  }
+
+  /**
+   * Repeats a frame as many times as the wall clock says are due, so the
+   * video stays in real time however slowly the WebView encodes JPEGs or
+   * fires timers. FFmpeg is told a fixed frame rate; this is what makes the
+   * count of frames match the seconds that passed.
+   */
+  private sendDueFrames(take: ActiveTake, bytes: Uint8Array): void {
+    const due =
+      Math.floor(((Date.now() - take.startedAtMs) / 1000) * take.frameRate) -
+      take.framesSent;
+    const repeats = Math.max(1, Math.min(due, take.frameRate * 5));
+    for (let index = 0; index < repeats; index += 1) {
+      this.enqueueBytes(take, bytes);
+    }
+    take.framesSent += repeats;
+  }
+
+  /**
+   * One frame-stream tick. A fresh frame is encoded; an unchanged one is
+   * resent as the same bytes; either way as many copies go out as the clock
+   * is owed.
+   */
+  private frameStreamTick(take: ActiveTake): void {
+    if (this.active !== take || take.stopRequested) return;
+    if (take.lastJpeg && !take.frameDirty) {
+      this.sendDueFrames(take, take.lastJpeg);
+      return;
+    }
+    if (take.lastJpeg === null && !take.frameDirty) return;
+    let settled = false;
+    take.encodePromiseBusy = true;
+    take.encodePromise = take.encodePromise.then(
+      () =>
+        new Promise<void>((resolve) => {
+          const finish = () => {
+            if (settled) return;
+            settled = true;
+            take.encodePromiseBusy = false;
+            resolve();
+          };
+          try {
+            take.frameDirty = false;
+            take.frame.toBlob(
+              (blob) => {
+                if (!blob) {
+                  finish();
+                  return;
+                }
+                blob
+                  .arrayBuffer()
+                  .then((buffer) => {
+                    const bytes = new Uint8Array(buffer);
+                    take.lastJpeg = bytes;
+                    take.missedTicks = 0;
+                    if (this.active === take && !take.stopRequested) {
+                      this.sendDueFrames(take, bytes);
+                    }
+                  })
+                  .catch(() => {})
+                  .finally(finish);
+              },
+              "image/jpeg",
+              FRAME_STREAM_JPEG_QUALITY,
+            );
+          } catch {
+            finish();
+          }
+        }),
+    );
   }
 
   // ------------------------------------------------------------------- takes
@@ -365,16 +463,30 @@ class RecordingSessionStore {
       this.setState({ snapshot });
       return { started: false, snapshot, message: snapshot.message ?? undefined };
     }
-    const mimeType = MIME_CANDIDATES.find((candidate) =>
+    let mode: RecordingEncoderMode = "media-recorder";
+    let mimeType = MIME_CANDIDATES.find((candidate) =>
       MediaRecorder.isTypeSupported(candidate),
     );
     if (!mimeType) {
-      const snapshot = reduceRecordingFailed(IDLE_RECORDING_SNAPSHOT, {
-        message: "このWebViewで利用できる動画形式がありません",
-        now,
-      });
-      this.setState({ snapshot });
-      return { started: false, snapshot, message: snapshot.message ?? undefined };
+      // WebKitGTK ships a MediaRecorder that supports no type at all. FFmpeg
+      // on PATH is the way out, and the author needs it for the summary
+      // script anyway.
+      const ffmpeg = isDesktop()
+        ? await tauri.recordingEncoderSupport().catch(() => null)
+        : null;
+      if (ffmpeg?.ffmpeg) {
+        mode = "frame-stream";
+        mimeType = "video/mp4";
+      } else {
+        const snapshot = reduceRecordingFailed(IDLE_RECORDING_SNAPSHOT, {
+          message: isDesktop()
+            ? "このWebViewは動画の符号化に対応していません。FFmpegをPATHに置くとフレーム単位で録画できます"
+            : "このWebViewで利用できる動画形式がありません",
+          now,
+        });
+        this.setState({ snapshot });
+        return { started: false, snapshot, message: snapshot.message ?? undefined };
+      }
     }
 
     const frame = document.createElement("canvas");
@@ -412,6 +524,8 @@ class RecordingSessionStore {
         fileStem,
         extension,
         directory: this.state.outputDirectory,
+        encoder: mode === "frame-stream" ? "ffmpeg-frames" : "container",
+        frameRate: profile.frameRate,
       });
     } catch (error) {
       const snapshot = reduceRecordingFailed(IDLE_RECORDING_SNAPSHOT, {
@@ -432,24 +546,26 @@ class RecordingSessionStore {
       };
     }
 
-    let stream: MediaStream;
-    let recorder: MediaRecorder;
-    try {
-      stream = capture.captureStream(profile.frameRate);
-      recorder = new MediaRecorder(stream, {
-        mimeType,
-        videoBitsPerSecond: resolveRecordingBitrate(profile),
-      });
-    } catch (error) {
-      await sink.abort();
-      const snapshot = reduceRecordingFailed(IDLE_RECORDING_SNAPSHOT, {
-        message: `録画を開始できませんでした: ${errorMessage(error)}`,
-        now,
-      });
-      this.setState({ snapshot });
-      return { started: false, snapshot, message: snapshot.message ?? undefined };
+    let stream: MediaStream | null = null;
+    let recorder: MediaRecorder | null = null;
+    if (mode === "media-recorder") {
+      try {
+        stream = capture.captureStream(profile.frameRate);
+        recorder = new MediaRecorder(stream, {
+          mimeType,
+          videoBitsPerSecond: resolveRecordingBitrate(profile),
+        });
+      } catch (error) {
+        await sink.abort();
+        const snapshot = reduceRecordingFailed(IDLE_RECORDING_SNAPSHOT, {
+          message: `録画を開始できませんでした: ${errorMessage(error)}`,
+          now,
+        });
+        this.setState({ snapshot });
+        return { started: false, snapshot, message: snapshot.message ?? undefined };
+      }
     }
-    const [track] = stream.getVideoTracks();
+    const track = stream?.getVideoTracks()[0] ?? null;
 
     let settle: (snapshot: RecordingSnapshot) => void = () => {};
     const settled = new Promise<RecordingSnapshot>((resolve) => {
@@ -457,9 +573,19 @@ class RecordingSessionStore {
     });
     const take: ActiveTake = {
       sessionId,
+      mode,
       recorder,
       stream,
       track: track as ActiveTake["track"],
+      frameTimer: null,
+      lastJpeg: null,
+      frameDirty: false,
+      missedTicks: 0,
+      framesSent: 0,
+      startedAtMs: now,
+      frameRate: profile.frameRate,
+      encodePromise: Promise.resolve(),
+      encodePromiseBusy: false,
       frame,
       context,
       sink,
@@ -486,6 +612,7 @@ class RecordingSessionStore {
         width,
         height,
         mimeType,
+        encoder: mode,
         startedAt: new Date(now).toISOString(),
         camera: this.state.camera,
         viewport: this.state.viewport,
@@ -494,29 +621,38 @@ class RecordingSessionStore {
     };
     this.active = take;
 
-    recorder.ondataavailable = (event) => {
-      if (event.data.size === 0) return;
-      this.enqueueChunk(take, event.data);
-    };
-    recorder.onerror = () => {
-      this.failTake(take, "録画中にエンコーダーがエラーを返しました");
-    };
-    recorder.onstop = () => {
-      void this.finalizeTake(take);
-    };
-
-    try {
-      recorder.start(RECORDING_TIMESLICE_MS);
-    } catch (error) {
-      this.active = null;
-      stream.getTracks().forEach((t) => t.stop());
-      await sink.abort();
-      const snapshot = reduceRecordingFailed(IDLE_RECORDING_SNAPSHOT, {
-        message: `録画を開始できませんでした: ${errorMessage(error)}`,
-        now,
-      });
-      this.setState({ snapshot });
-      return { started: false, snapshot, message: snapshot.message ?? undefined };
+    if (recorder) {
+      recorder.ondataavailable = (event) => {
+        if (event.data.size === 0) return;
+        this.enqueueChunk(take, event.data);
+      };
+      recorder.onerror = () => {
+        this.failTake(take, "録画中にエンコーダーがエラーを返しました");
+      };
+      recorder.onstop = () => {
+        void this.finalizeTake(take);
+      };
+      try {
+        recorder.start(RECORDING_TIMESLICE_MS);
+      } catch (error) {
+        this.active = null;
+        stream?.getTracks().forEach((t) => t.stop());
+        await sink.abort();
+        const snapshot = reduceRecordingFailed(IDLE_RECORDING_SNAPSHOT, {
+          message: `録画を開始できませんでした: ${errorMessage(error)}`,
+          now,
+        });
+        this.setState({ snapshot });
+        return { started: false, snapshot, message: snapshot.message ?? undefined };
+      }
+    } else {
+      take.frameTimer = window.setInterval(() => {
+        if (take.encodePromiseBusy) {
+          take.missedTicks += 1;
+          return;
+        }
+        this.frameStreamTick(take);
+      }, 1000 / profile.frameRate);
     }
 
     const snapshot = reduceRecordingStarted({
@@ -549,10 +685,16 @@ class RecordingSessionStore {
   }
 
   private enqueueChunk(take: ActiveTake, blob: Blob): void {
+    void blob
+      .arrayBuffer()
+      .then((buffer) => this.enqueueBytes(take, new Uint8Array(buffer)))
+      .catch(() => {});
+  }
+
+  private enqueueBytes(take: ActiveTake, bytes: Uint8Array): void {
     take.writeChain = take.writeChain
       .then(async () => {
         if (take.writeFailure) return;
-        const bytes = new Uint8Array(await blob.arrayBuffer());
         await take.sink.append(bytes);
         take.bytesWritten += bytes.byteLength;
         take.chunkCount += 1;
@@ -589,21 +731,37 @@ class RecordingSessionStore {
         now: Date.now(),
       }),
     });
-    if (take.recorder.state !== "inactive") {
+    this.endEncoding(take);
+  }
+
+  /** Stops the encoder; `finalizeTake` follows, directly or via `onstop`. */
+  private endEncoding(take: ActiveTake): void {
+    if (take.frameTimer !== null) {
+      window.clearInterval(take.frameTimer);
+      take.frameTimer = null;
+    }
+    if (take.recorder && take.recorder.state !== "inactive") {
       try {
         take.recorder.stop();
+        return;
       } catch {
-        void this.finalizeTake(take);
+        // Fall through to finalize without the encoder's help.
       }
-    } else {
-      void this.finalizeTake(take);
     }
+    void this.finalizeTake(take);
   }
 
   private async finalizeTake(take: ActiveTake): Promise<void> {
     if (this.active !== take) return;
-    take.stream.getTracks().forEach((t) => t.stop());
+    take.stream?.getTracks().forEach((t) => t.stop());
     if (take.timeout !== null) window.clearTimeout(take.timeout);
+    if (take.frameTimer !== null) {
+      window.clearInterval(take.frameTimer);
+      take.frameTimer = null;
+    }
+    // A frame-stream encode still in flight lands its bytes on the chain;
+    // wait for it before the chain, or the last frame is lost.
+    await take.encodePromise;
     await take.writeChain;
     const now = Date.now();
     const failed = this.state.snapshot.status === "failed" || take.writeFailure;
@@ -677,15 +835,7 @@ class RecordingSessionStore {
         ? { ...stopping, message: options.reason }
         : stopping,
     });
-    if (take.recorder.state !== "inactive") {
-      try {
-        take.recorder.stop();
-      } catch {
-        void this.finalizeTake(take);
-      }
-    } else {
-      void this.finalizeTake(take);
-    }
+    this.endEncoding(take);
     const snapshot = await take.settled;
     return { stopped: true, snapshot };
   }

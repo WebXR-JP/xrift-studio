@@ -77,6 +77,7 @@ import {
 } from "react";
 import {
   BackSide,
+  Box3,
   BoxGeometry,
   BufferGeometry,
   Color,
@@ -93,6 +94,7 @@ import {
   Quaternion,
   Raycaster,
   SRGBColorSpace,
+  Sphere,
   SphereGeometry,
   TextureLoader,
   Vector2,
@@ -193,6 +195,7 @@ import {
   computeEntityFocusBounds,
   resolveEntityWorldPosition,
   resolveFocusDistance,
+  skipsFocusMeasurement,
 } from "../../lib/visual-editor/gizmo-focus";
 import {
   formatSnapStep,
@@ -3019,8 +3022,70 @@ export type SceneBoundsResult = {
   ok: boolean;
   bounds: RecordingCameraBounds | null;
   measuredEntityCount: number;
+  /** Meshes left out of a whole-Scene fit for being sky-sized. */
+  skippedLargeMeshCount?: number;
   message?: string;
 };
+
+/**
+ * A mesh bigger than this is a sky dome or a horizon plane, not the world.
+ * Framing it would put the camera kilometres away, inside the fog, looking at
+ * nothing; the official sample's skybox sphere alone is 500 m.
+ */
+const RECORDING_FIT_MAX_MESH_RADIUS = 100;
+
+type MeasurableGeometry = {
+  boundingBox: Box3 | null;
+  computeBoundingBox: () => void;
+};
+
+/**
+ * World-space bounds of everything drawn in the Scene, mesh by mesh, leaving
+ * out editor helpers and sky-sized meshes. Measured per mesh rather than per
+ * Entity because a Scene is often one root Entity holding the sky and the
+ * world alike, so no Entity-level rule could separate them.
+ */
+function measureDrawnSceneBounds(threeScene: Object3D): {
+  bounds: RecordingCameraBounds | null;
+  meshCount: number;
+  skippedLargeMeshCount: number;
+} {
+  threeScene.updateWorldMatrix(true, true);
+  const union = new Box3();
+  const meshBox = new Box3();
+  const meshSphere = new Sphere();
+  let meshCount = 0;
+  let skippedLargeMeshCount = 0;
+  threeScene.traverseVisible((object) => {
+    if (skipsFocusMeasurement(object)) return;
+    const geometry = (object as Object3D & { geometry?: MeasurableGeometry })
+      .geometry;
+    if (!geometry) return;
+    if (geometry.boundingBox === null) geometry.computeBoundingBox();
+    if (!geometry.boundingBox) return;
+    meshBox.copy(geometry.boundingBox).applyMatrix4(object.matrixWorld);
+    if (meshBox.isEmpty()) return;
+    meshBox.getBoundingSphere(meshSphere);
+    if (meshSphere.radius > RECORDING_FIT_MAX_MESH_RADIUS) {
+      skippedLargeMeshCount += 1;
+      return;
+    }
+    union.union(meshBox);
+    meshCount += 1;
+  });
+  if (meshCount === 0 || union.isEmpty()) {
+    return { bounds: null, meshCount, skippedLargeMeshCount };
+  }
+  const sphere = union.getBoundingSphere(new Sphere());
+  return {
+    bounds: {
+      center: [sphere.center.x, sphere.center.y, sphere.center.z],
+      radius: sphere.radius,
+    },
+    meshCount,
+    skippedLargeMeshCount,
+  };
+}
 
 function SceneBoundsProbe({
   request,
@@ -3062,13 +3127,25 @@ function SceneBoundsProbe({
       report({ ok: true, bounds: measure(object), measuredEntityCount: 1 });
       return;
     }
-    const measured: RecordingCameraBounds[] = [];
+    const drawn = measureDrawnSceneBounds(threeScene);
+    if (drawn.bounds) {
+      report({
+        ok: true,
+        bounds: drawn.bounds,
+        measuredEntityCount: drawn.meshCount,
+        skippedLargeMeshCount: drawn.skippedLargeMeshCount,
+      });
+      return;
+    }
+    // Nothing drawn under the size cap: fall back to where the root Entities
+    // sit, so an empty world still frames its origin.
+    const origins: RecordingCameraBounds[] = [];
     for (const entityId of rootEntityIds) {
       const object = findSceneEntityObject(threeScene, entityId);
       if (!object || !object.visible) continue;
-      measured.push(measure(object));
+      origins.push(measure(object));
     }
-    const union = unionRecordingCameraBounds(measured);
+    const union = unionRecordingCameraBounds(origins);
     if (!union) {
       report({
         ok: false,
@@ -3078,7 +3155,12 @@ function SceneBoundsProbe({
       });
       return;
     }
-    report({ ok: true, bounds: union, measuredEntityCount: measured.length });
+    report({
+      ok: true,
+      bounds: union,
+      measuredEntityCount: origins.length,
+      skippedLargeMeshCount: drawn.skippedLargeMeshCount,
+    });
   }, [request, rootEntityIds, threeScene]);
   return null;
 }

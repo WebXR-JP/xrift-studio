@@ -316,7 +316,8 @@ Undo 履歴も選択も動かさない。
   したフレーム) の表示、使うカメラ (保存した録画用カメラか編集中の視点か)、
   パネルを残すか、グリッドやギズモを絵に入れるか、REC 表示
 - `set_recording_camera` / `get_recording_camera` — 録画用カメラ。`fitScene` で
-  Scene 全体、`focusEntityId` で 1 つの Entity を収め、preset / position / target /
+  Scene 全体 (半径 100 m を超える空のドームなどは除外し `skippedLargeMeshCount`
+  で報告)、`focusEntityId` で 1 つの Entity を収め、preset / position / target /
   distance / fov も取る。姿勢は project ごとに保存し、録画ビューが録画用カメラで
   表示されている間だけ Scene View に適用するので、編集中のカメラを乱さない
 
