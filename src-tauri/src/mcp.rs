@@ -1906,7 +1906,7 @@ pub fn run_stdio_server() -> Result<(), String> {
                     "protocolVersion": MCP_PROTOCOL_VERSION,
                     "capabilities": { "tools": { "listChanged": false } },
                     "serverInfo": { "name": MCP_SERVER_NAME, "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": "Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Use get_terrain before sculpt_terrain; Terrain is a static height-sampled mesh with a fixed Trimesh Collider, so create_terrain and sculpt_terrain are Edit-only. Script execution is not sandboxed. XRift Studio enforces a project-scoped content-hash approval gate before evaluating Script source. XRift Studio's stdio MCP editor tools cannot grant approval. The debug-only privileged Tauri MCP bridge can execute webview JavaScript and is outside this trust boundary. set_play_mode returns SCRIPT_APPROVAL_REQUIRED when referenced source is not approved; the user must review and approve it in the Studio UI, or the client may explicitly request unapprovedPolicy:'skip' to start without those Scripts. Call get_scripting_capabilities and list_script_templates before authoring a Script. Use create_script_asset with templateId to create a built-in example, or apply_script_template to create it and attach its Script Component to an Entity in one editor revision. For custom source, use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, update_script_component to declare properties and references, then set_play_mode. Use import_audio_asset, import_font_asset, import_texture_asset, import_model_asset, import_skybox_asset, or import_shader_asset only for a trusted absolute local path while Edit is active; the Editor validates extension, signature, regular-file/no-link status, and size limits, then copies it into managed project storage without returning file bytes or the external path. Use get_model_asset/update_model_asset for import settings and material slots, and reimport_model_asset to apply derived Model changes. Use get_shader_asset/update_shader_asset for project shader source. Use get_audio_asset plus place_asset, or add_component with core.audio-source and update_component, for persistent Audio Source authoring. Use get_texture_asset/update_texture_asset for persistent sampler and import settings; updates are supported during Play and restart only consuming Entities. Runtime ctx.audioSources, ctx.materials, and ctx.particles changes reset on Stop; use persistent Audio Source, Material, or Particle tools to save authoring data. Call list_component_definitions and get_entity_components before add_component, update_component, or remove_component. Use create_prefab to turn an Entity hierarchy into a reusable Prefab Asset, then place_asset to instantiate it. While Play is active, Entity enabled state and supported component/scene structure tools synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. XRift Studio must be open with a visual project."
+                    "instructions": "Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Use get_terrain before sculpt_terrain; Terrain is a static height-sampled mesh with a fixed Trimesh Collider, so create_terrain and sculpt_terrain are Edit-only. Script execution is not sandboxed. XRift Studio enforces a project-scoped content-hash approval gate before evaluating Script source. XRift Studio's stdio MCP editor tools cannot grant approval. The debug-only privileged Tauri MCP bridge can execute webview JavaScript and is outside this trust boundary. set_play_mode returns SCRIPT_APPROVAL_REQUIRED when referenced source is not approved; the user must review and approve it in the Studio UI, or the client may explicitly request unapprovedPolicy:'skip' to start without those Scripts. Call get_scripting_capabilities and list_script_templates before authoring a Script. Use create_script_asset with templateId to create a built-in example, or apply_script_template to create it and attach its Script Component to an Entity in one editor revision. For custom source, use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, update_script_component to declare properties and references, then set_play_mode. Use import_audio_asset, import_font_asset, import_texture_asset, import_model_asset, import_skybox_asset, or import_shader_asset only for a trusted absolute local path while Edit is active; the Editor validates extension, signature, regular-file/no-link status, and size limits, then copies it into managed project storage without returning file bytes or the external path. Use get_model_asset/update_model_asset for import settings and material slots, and reimport_model_asset to apply derived Model changes. Use get_shader_asset/update_shader_asset for project shader source. Use get_audio_asset plus place_asset, or add_component with core.audio-source and update_component, for persistent Audio Source authoring. Use get_texture_asset/update_texture_asset for persistent sampler and import settings; updates are supported during Play and restart only consuming Entities. Runtime ctx.audioSources, ctx.materials, and ctx.particles changes reset on Stop; use persistent Audio Source, Material, or Particle tools to save authoring data. Call list_component_definitions and get_entity_components before add_component, update_component, or remove_component. Use create_prefab to turn an Entity hierarchy into a reusable Prefab Asset, then place_asset to instantiate it. While Play is active, Entity enabled state and supported component/scene structure tools synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. To record the Scene View while building, call get_recording_status, then start_recording (idempotent), set_recording_camera with fitScene as the world grows, and stop_recording when done; a failed recording call never affects editing tools. XRift Studio must be open with a visual project."
                 }),
             )?,
             "ping" => write_json_rpc_result(&mut stdout, id, json!({}))?,
@@ -3004,6 +3004,139 @@ fn tool_definitions() -> Value {
                     "distance": { "type": "number", "minimum": 0.1, "maximum": 5000 }
                 },
                 "required": ["projectId", "sceneId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "start_recording",
+            "description": "Start recording the Scene View into a video file at the stored recording profile (aspect ratio, size, frame rate), or return the take that is already running. Idempotent: calling it twice never opens a second file; the result says whether a new take started (started: true) or an existing one continues. The recording view is shown and the saved recording camera is applied unless showViewport is false. Frames are streamed to disk, so a take may run for hours; a take stops by itself after 6 hours. The file lands in the app's recordings folder (or the folder the author picked); the caller cannot choose the path. Does not change the project.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "label": { "type": "string", "maxLength": 80, "description": "Short name kept in the file name and sidecar, e.g. the session or the client run." },
+                    "profile": {
+                        "type": "object",
+                        "description": "Overrides the stored profile for this take only.",
+                        "properties": {
+                            "aspectRatio": { "type": "string", "enum": ["16:9", "9:16", "1:1", "4:5"] },
+                            "shortEdge": { "type": "integer", "enum": [720, 1080, 1440] },
+                            "frameRate": { "type": "integer", "enum": [30, 60] }
+                        },
+                        "additionalProperties": false
+                    },
+                    "showViewport": { "type": "boolean", "description": "Show the recording view while recording. Default true." }
+                },
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "stop_recording",
+            "description": "Stop the running take, wait for the file to be flushed and closed, and return its path, duration and size. Idempotent: when nothing is recording it returns the current state (stopped: false) without error, and while a stop is already in progress it waits for that same completion. A sidecar JSON with the project, scene, client, profile and camera is written next to the video.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 }
+                },
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "get_recording_status",
+            "description": "Read the recording state machine: status (idle, recording, stopping, completed, failed), session id, elapsed time, bytes written, frame count, file path, the stored profile, viewport settings and camera. Read-only; call it before start_recording when the previous run may have left a take running.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 }
+                },
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "set_recording_profile",
+            "description": "Set the frame the next take records: aspectRatio 16:9, 9:16, 1:1 or 4:5; shortEdge 720, 1080 or 1440 pixels (the long edge follows the ratio, e.g. 9:16 at 1080 is 1080x1920); frameRate 30 or 60. Never fails while recording: the result's effectiveFrom says whether the running take keeps its own profile (next-recording) or the change applies now. Returns the resolved width and height.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "aspectRatio": { "type": "string", "enum": ["16:9", "9:16", "1:1", "4:5"] },
+                    "shortEdge": { "type": "integer", "enum": [720, 1080, 1440] },
+                    "frameRate": { "type": "integer", "enum": [30, 60] }
+                },
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "set_recording_viewport",
+            "description": "Show or hide the recording view and choose what it draws. visible swaps the editor into the recording layout: the Scene View becomes a letterboxed frame of the profile's aspect ratio. cameraSource 'recording' shows the saved recording camera (moved with set_recording_camera); 'editor' records whatever the Scene View camera does. showEditorUi keeps Hierarchy, Inspector and Assets around the frame. showEditorHelpers draws the grid, gizmo, selection and helper icons into the frame (off for a clean take). showRecordingIndicator shows the small REC badge, which is never part of the recorded pixels. Only the fields given change.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "visible": { "type": "boolean" },
+                    "cameraSource": { "type": "string", "enum": ["recording", "editor"] },
+                    "showEditorUi": { "type": "boolean" },
+                    "showEditorHelpers": { "type": "boolean" },
+                    "showRecordingIndicator": { "type": "boolean" }
+                },
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "get_recording_viewport",
+            "description": "Read the recording view settings, the profile with its resolved width and height, the recording camera pose and whether a Scene View is currently feeding frames. Read-only.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 }
+                },
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "set_recording_camera",
+            "description": "Move the recording camera. fitScene frames every Entity in the Scene (call it again after the world grows); focusEntityId frames one Entity's real rendered bounds; preset picks a direction (top, front, back, left, right, iso) and keeps the current look-at unless something is being framed; position and target place it literally; distance overrides how far back it sits; fov sets the vertical field of view in degrees. The pose is saved per project and applied to the Scene View only while the recording view is shown with cameraSource 'recording', so calling this never disturbs the author's editing camera. Returns the resulting pose; changes nothing in the project.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "fitScene": { "type": "boolean" },
+                    "focusEntityId": { "type": "string", "minLength": 1 },
+                    "preset": { "type": "string", "enum": ["top", "front", "back", "left", "right", "iso"] },
+                    "position": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3,
+                        "maxItems": 3
+                    },
+                    "target": {
+                        "type": "array",
+                        "items": { "type": "number" },
+                        "minItems": 3,
+                        "maxItems": 3
+                    },
+                    "distance": { "type": "number", "minimum": 0.1, "maximum": 5000 },
+                    "fov": { "type": "number", "minimum": 10, "maximum": 150 }
+                },
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "get_recording_camera",
+            "description": "Read the saved recording camera pose (position, target, fov) and whether it is currently driving the Scene View. Read-only.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 }
+                },
                 "additionalProperties": false
             }
         },

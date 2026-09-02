@@ -125,6 +125,7 @@ import { runSkyboxImportFixtureAssertions } from "../src/lib/visual-editor/skybo
 import { runSkyShaderFixtureAssertions } from "../src/lib/visual-editor/sky-shader.fixture.ts";
 import { runSceneSettingsCompatFixtureAssertions } from "../src/lib/visual-editor/scene-settings-compat.fixture.ts";
 import { runGizmoFocusFixtureAssertions } from "../src/lib/visual-editor/gizmo-focus.fixture.ts";
+import { runRecordingFixtureAssertions } from "../src/lib/recording/recording.fixture.ts";
 import { runGizmoSnapFixtureAssertions } from "../src/lib/visual-editor/gizmo-snap.fixture.ts";
 import { runWindContractFixtureAssertions } from "../src/lib/visual-editor/wind-contract.fixture.ts";
 import { runWaterShaderFixtureAssertions } from "../src/lib/visual-editor/water-shader.fixture.ts";
@@ -407,6 +408,7 @@ try {
     ["sky shader", runSkyShaderFixtureAssertions],
     ["scene settings compat", runSceneSettingsCompatFixtureAssertions],
     ["gizmo focus", runGizmoFocusFixtureAssertions],
+    ["recording", runRecordingFixtureAssertions],
     ["gizmo snap", runGizmoSnapFixtureAssertions],
     ["wind contract", runWindContractFixtureAssertions],
     ["water shader", runWaterShaderFixtureAssertions],

@@ -5452,6 +5452,273 @@ fn save_debug_image(
     Ok(path.to_string_lossy().to_string())
 }
 
+/// Files a recording is streaming into, keyed by the id `recording_begin_file`
+/// handed out.
+///
+/// The map is the whole permission model for recording writes: bytes can only
+/// be appended to a file that was opened here, and a file can only be opened
+/// under the default recordings directory or a directory the author picked in
+/// the folder dialog. An AI client never names a path.
+#[derive(Default)]
+pub struct RecordingFileState {
+    files: Mutex<HashMap<String, OpenRecordingFile>>,
+}
+
+struct OpenRecordingFile {
+    path: PathBuf,
+    file: std::fs::File,
+    bytes_written: u64,
+}
+
+const RECORDING_MAX_OPEN_FILES: usize = 4;
+const RECORDING_MAX_CHUNK_BYTES: usize = 64 * 1024 * 1024;
+const RECORDING_ID_HEADER: &str = "x-xrift-recording-id";
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RecordingBeginRequest {
+    directory: Option<String>,
+    file_stem: String,
+    extension: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RecordingFileHandle {
+    id: String,
+    path: String,
+    directory: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RecordingFileSummary {
+    path: String,
+    bytes_written: u64,
+    metadata_path: Option<String>,
+}
+
+/// The Videos folder when the platform has one, because a recording is made
+/// to be opened, edited and posted rather than inspected like a debug capture.
+fn recording_default_directory_path(app: &AppHandle) -> Result<PathBuf, String> {
+    if let Some(videos) = dirs::video_dir() {
+        return Ok(videos.join("XRift Studio"));
+    }
+    app.path()
+        .app_local_data_dir()
+        .map(|directory| directory.join("recordings"))
+        .map_err(|error| format!("録画の保存先を確認できません: {}", error))
+}
+
+fn recording_random_id() -> Result<String, String> {
+    let mut random = [0_u8; 16];
+    getrandom::fill(&mut random).map_err(|error| format!("録画IDを生成できません: {}", error))?;
+    use std::fmt::Write as _;
+    let mut output = String::with_capacity(random.len() * 2);
+    for byte in random {
+        let _ = write!(&mut output, "{byte:02x}");
+    }
+    Ok(output)
+}
+
+#[tauri::command]
+fn recording_default_directory(app: AppHandle) -> Result<String, String> {
+    Ok(recording_default_directory_path(&app)?
+        .to_string_lossy()
+        .to_string())
+}
+
+#[tauri::command]
+fn recording_begin_file(
+    app: AppHandle,
+    state: tauri::State<'_, RecordingFileState>,
+    request: RecordingBeginRequest,
+) -> Result<RecordingFileHandle, String> {
+    let extension = request.extension.to_ascii_lowercase();
+    if extension != "webm" && extension != "mp4" {
+        return Err("録画はWebMまたはMP4形式でのみ保存できます。".to_string());
+    }
+    let stem: String = request
+        .file_stem
+        .chars()
+        .filter(|character| {
+            character.is_ascii_alphanumeric() || *character == '-' || *character == '_'
+        })
+        .take(120)
+        .collect();
+    let stem = stem.trim_matches('-').to_string();
+    if stem.is_empty() {
+        return Err("録画ファイル名が不正です。".to_string());
+    }
+
+    let directory = match request.directory {
+        Some(chosen) if !chosen.trim().is_empty() => {
+            let chosen = PathBuf::from(chosen);
+            if !chosen.is_absolute() {
+                return Err("録画の保存先は絶対パスで指定してください。".to_string());
+            }
+            if !chosen.is_dir() {
+                return Err("録画の保存先フォルダーが見つかりません。".to_string());
+            }
+            chosen
+        }
+        _ => {
+            let default = recording_default_directory_path(&app)?;
+            std::fs::create_dir_all(&default)
+                .map_err(|error| format!("録画の保存先を作成できません: {}", error))?;
+            default
+        }
+    };
+
+    let mut files = state
+        .files
+        .lock()
+        .map_err(|_| "録画の状態を取得できません。".to_string())?;
+    if files.len() >= RECORDING_MAX_OPEN_FILES {
+        return Err("同時に開ける録画ファイルの上限に達しました。".to_string());
+    }
+
+    // Never overwrite: a take that already exists gets a numbered sibling.
+    let mut opened = None;
+    for attempt in 1..=1000_u32 {
+        let name = if attempt == 1 {
+            format!("{}.{}", stem, extension)
+        } else {
+            format!("{}-{}.{}", stem, attempt, extension)
+        };
+        let candidate = directory.join(name);
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(file) => {
+                opened = Some((candidate, file));
+                break;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                return Err(format!("録画ファイルを作成できません: {}", error));
+            }
+        }
+    }
+    let (path, file) = opened.ok_or_else(|| "録画ファイル名を決められませんでした。".to_string())?;
+    let id = recording_random_id()?;
+    files.insert(
+        id.clone(),
+        OpenRecordingFile {
+            path: path.clone(),
+            file,
+            bytes_written: 0,
+        },
+    );
+    Ok(RecordingFileHandle {
+        id,
+        path: path.to_string_lossy().to_string(),
+        directory: directory.to_string_lossy().to_string(),
+    })
+}
+
+/// Appends one encoder chunk. The bytes arrive as the raw IPC body, with the
+/// file id in a header, so an hour of video never goes through JSON.
+#[tauri::command]
+fn recording_append_chunk(
+    state: tauri::State<'_, RecordingFileState>,
+    request: tauri::ipc::Request<'_>,
+) -> Result<u64, String> {
+    let id = request
+        .headers()
+        .get(RECORDING_ID_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| value.to_string())
+        .ok_or_else(|| "録画IDが指定されていません。".to_string())?;
+    let bytes = match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => bytes,
+        _ => return Err("録画データはバイナリで送信してください。".to_string()),
+    };
+    if bytes.is_empty() {
+        return Err("録画データが空です。".to_string());
+    }
+    if bytes.len() > RECORDING_MAX_CHUNK_BYTES {
+        return Err("録画データのチャンクが大きすぎます。".to_string());
+    }
+    let mut files = state
+        .files
+        .lock()
+        .map_err(|_| "録画の状態を取得できません。".to_string())?;
+    let entry = files
+        .get_mut(&id)
+        .ok_or_else(|| "この録画ファイルは開かれていません。".to_string())?;
+    entry
+        .file
+        .write_all(bytes)
+        .map_err(|error| format!("録画データを書き込めません: {}", error))?;
+    entry.bytes_written += bytes.len() as u64;
+    Ok(entry.bytes_written)
+}
+
+fn recording_close_file(
+    state: &RecordingFileState,
+    id: &str,
+) -> Result<(PathBuf, u64), String> {
+    let mut files = state
+        .files
+        .lock()
+        .map_err(|_| "録画の状態を取得できません。".to_string())?;
+    let entry = files
+        .remove(id)
+        .ok_or_else(|| "この録画ファイルは開かれていません。".to_string())?;
+    entry
+        .file
+        .sync_all()
+        .map_err(|error| format!("録画ファイルを確定できません: {}", error))?;
+    Ok((entry.path, entry.bytes_written))
+}
+
+/// Closes the take and writes its sidecar (`<name>.json`) next to the video,
+/// so a folder of recordings still says which project and session each one
+/// came from after the app has forgotten.
+#[tauri::command]
+fn recording_finish_file(
+    state: tauri::State<'_, RecordingFileState>,
+    id: String,
+    metadata: Option<serde_json::Value>,
+) -> Result<RecordingFileSummary, String> {
+    let (path, bytes_written) = recording_close_file(&state, &id)?;
+    let metadata_path = match metadata {
+        Some(value) => {
+            let sidecar = path.with_extension("json");
+            let rendered = serde_json::to_string_pretty(&value)
+                .map_err(|error| format!("録画情報を書き出せません: {}", error))?;
+            match std::fs::write(&sidecar, rendered) {
+                Ok(()) => Some(sidecar.to_string_lossy().to_string()),
+                Err(_) => None,
+            }
+        }
+        None => None,
+    };
+    Ok(RecordingFileSummary {
+        path: path.to_string_lossy().to_string(),
+        bytes_written,
+        metadata_path,
+    })
+}
+
+/// Releases the file without a sidecar. What was written stays on disk: a
+/// long take that failed at the end is still worth opening.
+#[tauri::command]
+fn recording_abort_file(
+    state: tauri::State<'_, RecordingFileState>,
+    id: String,
+) -> Result<RecordingFileSummary, String> {
+    let (path, bytes_written) = recording_close_file(&state, &id)?;
+    Ok(RecordingFileSummary {
+        path: path.to_string_lossy().to_string(),
+        bytes_written,
+        metadata_path: None,
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
@@ -5470,6 +5737,7 @@ pub fn run() {
 
     let builder = builder
         .manage(mcp::XriftMcpBrokerState::default())
+        .manage(RecordingFileState::default())
         .setup(|app| {
             mcp::start_broker(app.handle())?;
             if let Ok(root) = app_root(app.handle()) {
@@ -5527,6 +5795,11 @@ pub fn run() {
             save_video,
             save_debug_video,
             save_debug_image,
+            recording_default_directory,
+            recording_begin_file,
+            recording_append_chunk,
+            recording_finish_file,
+            recording_abort_file,
             read_audio_data_url,
             read_image_data_url,
             list_files,

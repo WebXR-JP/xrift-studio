@@ -154,6 +154,15 @@ export const XRIFT_MCP_TOOLS = [
   { name: "capture_scene_debug", surface: "debug" },
   { name: "capture_scene_view", surface: "debug" },
   { name: "set_scene_view_camera", surface: "debug" },
+
+  { name: "start_recording", surface: "debug" },
+  { name: "stop_recording", surface: "debug" },
+  { name: "get_recording_status", surface: "debug" },
+  { name: "set_recording_profile", surface: "debug" },
+  { name: "set_recording_viewport", surface: "debug" },
+  { name: "get_recording_viewport", surface: "debug" },
+  { name: "set_recording_camera", surface: "debug" },
+  { name: "get_recording_camera", surface: "debug" },
 ] as const satisfies readonly XriftMcpToolDefinition[];
 
 export type XriftMcpToolName = (typeof XRIFT_MCP_TOOLS)[number]["name"];

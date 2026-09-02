@@ -3,7 +3,7 @@
 // Source of truth: src/lib/visual-editor/mcp-tool-registry.ts
 // Regenerate with: pnpm mcp:tool-names
 
-pub const MCP_TOOL_NAMES: [&str; 119] = [
+pub const MCP_TOOL_NAMES: [&str; 127] = [
     "get_editor_context",
     "get_scripting_capabilities",
     "analyze_component_code",
@@ -123,4 +123,12 @@ pub const MCP_TOOL_NAMES: [&str; 119] = [
     "capture_scene_debug",
     "capture_scene_view",
     "set_scene_view_camera",
+    "start_recording",
+    "stop_recording",
+    "get_recording_status",
+    "set_recording_profile",
+    "set_recording_viewport",
+    "get_recording_viewport",
+    "set_recording_camera",
+    "get_recording_camera",
 ];
