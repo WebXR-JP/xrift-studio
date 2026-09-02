@@ -199,3 +199,30 @@ export function waitForEditorCommit(): Promise<void> {
     window.requestAnimationFrame(finish);
   });
 }
+
+/**
+ * Polls until `check` holds or `timeoutMs` passes. A mode switch that mounts
+ * a Play canvas can take well over one frame on a slow machine, so a tool
+ * that reports the result waits for the state it asked for, not for a fixed
+ * delay.
+ */
+export function waitForEditorState(
+  check: () => boolean,
+  timeoutMs: number,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const startedAt = Date.now();
+    const poll = () => {
+      if (check()) {
+        resolve(true);
+        return;
+      }
+      if (Date.now() - startedAt >= timeoutMs) {
+        resolve(false);
+        return;
+      }
+      window.setTimeout(poll, 50);
+    };
+    poll();
+  });
+}

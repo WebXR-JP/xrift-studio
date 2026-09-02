@@ -3074,6 +3074,29 @@ function measureDrawnSceneBounds(threeScene: Object3D): {
     meshCount += 1;
   });
   if (meshCount === 0 || union.isEmpty()) {
+    // Only sky-sized meshes: a lone Terrain, a bare ground plane. Framing
+    // them is still better than framing nothing, so the cap comes off.
+    if (skippedLargeMeshCount > 0 && RECORDING_FIT_MAX_MESH_RADIUS !== Infinity) {
+      threeScene.traverseVisible((object) => {
+        if (skipsFocusMeasurement(object)) return;
+        const geometry = (object as Object3D & { geometry?: MeasurableGeometry })
+          .geometry;
+        if (!geometry?.boundingBox) return;
+        meshBox.copy(geometry.boundingBox).applyMatrix4(object.matrixWorld);
+        if (!meshBox.isEmpty()) union.union(meshBox);
+      });
+      if (!union.isEmpty()) {
+        const sphere = union.getBoundingSphere(new Sphere());
+        return {
+          bounds: {
+            center: [sphere.center.x, sphere.center.y, sphere.center.z],
+            radius: sphere.radius,
+          },
+          meshCount: skippedLargeMeshCount,
+          skippedLargeMeshCount: 0,
+        };
+      }
+    }
     return { bounds: null, meshCount, skippedLargeMeshCount };
   }
   const sphere = union.getBoundingSphere(new Sphere());

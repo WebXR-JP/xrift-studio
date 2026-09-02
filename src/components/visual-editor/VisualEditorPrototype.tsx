@@ -297,6 +297,39 @@ import {
 import { useRecordingClock, useRecordingSelector } from "./useRecordingSession";
 
 /** Debug-surface tools the recording controller answers, before any project check. */
+/**
+ * The Assets a recipe added, laid over a manifest that moved underneath it.
+ *
+ * Anything the recipe created (Particle Assets, exported Models) is copied
+ * onto the latest manifest; everything else keeps whatever the background
+ * update wrote, such as a thumbnail that finished while the recipe's files
+ * were being written.
+ */
+function mergeRecipeAssetsOntoLatest(
+  before: AssetManifest,
+  placed: AssetManifest,
+  latest: AssetManifest,
+): AssetManifest {
+  const assets = { ...latest.assets };
+  for (const [id, asset] of Object.entries(placed.assets)) {
+    if (!(id in before.assets) || before.assets[id] !== asset) {
+      assets[id] = asset;
+    }
+  }
+  const folders = { ...(latest.folders ?? {}) };
+  for (const [id, folder] of Object.entries(placed.folders ?? {})) {
+    if (!(id in (before.folders ?? {}))) folders[id] = folder;
+  }
+  return {
+    ...latest,
+    assets,
+    ...(Object.keys(folders).length > 0 || latest.folders ? { folders } : {}),
+  };
+}
+
+/** How long set_play_mode waits for React to commit the requested mode. */
+const PLAY_MODE_SETTLE_TIMEOUT_MS = 15_000;
+
 const RECORDING_TOOL_NAMES: ReadonlySet<string> = new Set([
   "start_recording",
   "stop_recording",
@@ -392,6 +425,7 @@ import {
   mcpRequiredString,
   scriptCompileErrorsForMcp,
   waitForEditorCommit,
+  waitForEditorState,
 } from "./mcp-request-guards";
 import {
   approvalRequiredSnapshots,
@@ -3364,7 +3398,6 @@ export function VisualEditorPrototype({
               ] as [number, number, number]);
             // 部品のModel書き出しを待つ間にEditorが動くことがある。
             // 待つ前のrevisionを覚えておき、動いていたら適用しない。
-            const startingRevision = mcpRevisionRef.current;
             const placed = await instantiateSceneRecipe(
               sourceScene,
               sourceBundle.assets,
@@ -3380,9 +3413,17 @@ export function VisualEditorPrototype({
                 { recipeId, projectKind: sourceBundle.project.projectKind },
               );
             }
+            // Only the documents the recipe writes into can conflict. The
+            // AssetManifest moves on its own while Models are exported: the
+            // thumbnail queue records each generated (or failed) thumbnail,
+            // so right after an import this check used to fail every time.
+            // Those background updates are kept and the recipe's new Assets
+            // are added on top; a Scene that moved is still a conflict.
+            const latestBundle = bundleRef.current;
             if (
-              bundleRef.current !== sourceBundle ||
-              mcpRevisionRef.current !== startingRevision
+              latestBundle.scene !== sourceBundle.scene ||
+              latestBundle.prefabs !== sourceBundle.prefabs ||
+              latestBundle.project !== sourceBundle.project
             ) {
               throw new XriftMcpEditorToolError(
                 "STALE_REVISION",
@@ -3390,11 +3431,19 @@ export function VisualEditorPrototype({
                 { recipeId },
               );
             }
+            const mergedAssets =
+              latestBundle.assets === sourceBundle.assets
+                ? placed.assets
+                : mergeRecipeAssetsOntoLatest(
+                    sourceBundle.assets,
+                    placed.assets,
+                    latestBundle.assets,
+                  );
             // Subtree と、その Particle Asset を一件の history にする。
             // セットを Undo したときに Asset だけ残らないようにするため。
             const nextBundle = touchProject({
-              ...bundleRef.current,
-              assets: placed.assets,
+              ...latestBundle,
+              assets: mergedAssets,
               scene: placed.scene,
             });
             const revisionBefore = mcpRevisionRef.current;
@@ -4565,7 +4614,11 @@ export function VisualEditorPrototype({
                 },
               );
             }
-            if (editorModeRef.current !== mode) {
+            const modeSettled = await waitForEditorState(
+              () => editorModeRef.current === mode,
+              PLAY_MODE_SETTLE_TIMEOUT_MS,
+            );
+            if (!modeSettled) {
               throw new XriftMcpEditorToolError(
                 "PLAY_MODE_CHANGE_FAILED",
                 mode === "play"
