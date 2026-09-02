@@ -621,12 +621,15 @@ async fn handle_broker_connection(
         .lock()
         .await
         .insert(request_id.clone(), sender);
+    let client_name = envelope.client_name;
+    let tool_name = envelope.request.tool;
     let event = XriftMcpEditorRequestEvent {
         id: request_id.clone(),
-        client_name: envelope.client_name,
-        tool: envelope.request.tool,
+        client_name: client_name.clone(),
+        tool: tool_name.clone(),
         arguments: envelope.request.arguments,
     };
+    let forwarded_at = Instant::now();
     let emit_result = app
         .get_webview_window("main")
         .ok_or_else(|| "main Editor windowが見つかりません".to_string())?
@@ -671,6 +674,17 @@ async fn handle_broker_connection(
             }
         }
     };
+    // A long Scene View recording keeps a log of every call beside the video.
+    // Recorded here, after the editor answered, so the line carries the outcome
+    // and the editor's per-tool handlers need no knowledge of the recording.
+    crate::debug_recording::log_mcp_call(
+        &app,
+        &client_name,
+        &tool_name,
+        response.ok,
+        response.error.as_ref().map(|error| error.code.as_str()),
+        forwarded_at.elapsed().as_millis(),
+    );
     let payload = serde_json::to_vec(&response).map_err(|error| error.to_string())?;
     if payload.len() > MCP_MAX_MESSAGE_BYTES {
         return write_broker_error(
@@ -2950,14 +2964,16 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "capture_scene_debug",
-            "description": "Read live Scene View renderer metrics or start/stop a bounded, MCP-owned WebM capture. This does not change SceneDocument, AssetManifest, selection, or Undo history. metrics returns FPS, frame time, draw calls, triangles, visible mesh count, geometry/texture memory counts, and camera Far. start accepts durationMs from 1000 to 15000; stop saves the recording to the app debug-captures directory and returns its path.",
+            "description": "Read live Scene View renderer metrics or start/stop a Scene View WebM recording. This does not change SceneDocument, AssetManifest, selection, or Undo history. metrics returns FPS, frame time, draw calls, triangles, visible mesh count, geometry/texture memory counts, and camera Far. start with mode clip (the default) records at 30fps for durationMs (1000 to 15000) and keeps the frames in memory. start with mode session records with no time limit at fps frames per second (1 to 10, default 5), streaming the WebM to disk and writing an activity.jsonl beside it that logs every MCP tool call, when the video started, and when the window was hidden; use it to film a whole build session for a timelapse. stop saves the recording to the app debug-captures directory and returns its path, and for a session also the directory, log path, duration and size. Only one recording runs at a time.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "projectId": { "type": "string", "minLength": 1 },
                     "sceneId": { "type": "string", "minLength": 1 },
                     "action": { "type": "string", "enum": ["metrics", "start", "stop"] },
-                    "durationMs": { "type": "integer", "minimum": 1000, "maximum": 15000 }
+                    "mode": { "type": "string", "enum": ["clip", "session"] },
+                    "durationMs": { "type": "integer", "minimum": 1000, "maximum": 15000 },
+                    "fps": { "type": "integer", "minimum": 1, "maximum": 10 }
                 },
                 "required": ["projectId", "sceneId", "action"],
                 "additionalProperties": false

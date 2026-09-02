@@ -11,6 +11,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_opener::OpenerExt;
 
+mod debug_recording;
 mod debug_recording_log;
 mod external_store;
 pub mod mcp;
@@ -5471,6 +5472,7 @@ pub fn run() {
 
     let builder = builder
         .manage(mcp::XriftMcpBrokerState::default())
+        .manage(debug_recording::DebugRecordingState::default())
         .setup(|app| {
             mcp::start_broker(app.handle())?;
             if let Ok(root) = app_root(app.handle()) {
@@ -5528,6 +5530,10 @@ pub fn run() {
             save_video,
             save_debug_video,
             save_debug_image,
+            debug_recording::begin_debug_recording,
+            debug_recording::append_debug_recording_chunk,
+            debug_recording::append_debug_recording_event,
+            debug_recording::finish_debug_recording,
             read_audio_data_url,
             read_image_data_url,
             list_files,
