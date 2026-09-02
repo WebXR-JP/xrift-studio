@@ -273,7 +273,39 @@ import {
   type SceneViewCameraPreset,
   type SceneViewCameraRequest,
   type SceneViewCameraResult,
+  type SceneBoundsRequest,
+  type SceneBoundsResult,
 } from "./SceneViewport";
+import { recordingSession } from "../../lib/recording/recording-session";
+import {
+  isRecordingAspectRatio,
+  isRecordingFrameRate,
+  isRecordingShortEdge,
+  normalizeRecordingProfile,
+  recordingAspectValue,
+  type RecordingProfile,
+  type RecordingViewportSettings,
+} from "../../lib/recording/recording-profile";
+import {
+  isRecordingCameraPreset,
+  resolveRecordingCameraPose,
+  type RecordingCameraBounds,
+  type RecordingCameraMove,
+  type RecordingCameraPose,
+} from "../../lib/recording/recording-camera";
+import { useRecordingClock, useRecordingSelector } from "./useRecordingSession";
+
+/** Debug-surface tools the recording controller answers, before any project check. */
+const RECORDING_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "start_recording",
+  "stop_recording",
+  "get_recording_status",
+  "set_recording_profile",
+  "set_recording_viewport",
+  "get_recording_viewport",
+  "set_recording_camera",
+  "get_recording_camera",
+]);
 import type { SceneScreenshotRequest } from "./SceneScreenshotCapture";
 import type {
   SceneDebugCaptureRequest,
@@ -1003,6 +1035,119 @@ export function VisualEditorPrototype({
     if (!waiter) return;
     sceneCameraWaitersRef.current.delete(result.requestId);
     waiter(result);
+  }, []);
+  // Bounds for the recording camera, measured by the viewport the same way a
+  // camera move is requested: an id it reacts to, and a waiter the result
+  // resolves. A hidden Canvas never answers, so the waiter times out.
+  const [sceneBoundsRequest, setSceneBoundsRequest] =
+    useState<SceneBoundsRequest | null>(null);
+  const sceneBoundsRequestIdRef = useRef(0);
+  const sceneBoundsWaitersRef = useRef(
+    new Map<number, (result: SceneBoundsResult) => void>(),
+  );
+  const requestSceneBounds = useCallback(
+    (entityId?: string) =>
+      new Promise<SceneBoundsResult>((resolve) => {
+        const id = sceneBoundsRequestIdRef.current + 1;
+        sceneBoundsRequestIdRef.current = id;
+        sceneBoundsWaitersRef.current.set(id, resolve);
+        setSceneBoundsRequest({ id, ...(entityId ? { entityId } : {}) });
+        window.setTimeout(() => {
+          const waiter = sceneBoundsWaitersRef.current.get(id);
+          if (!waiter) return;
+          sceneBoundsWaitersRef.current.delete(id);
+          waiter({
+            requestId: id,
+            ok: false,
+            bounds: null,
+            measuredEntityCount: 0,
+            message: "Scene Viewが表示されていないため測定できませんでした",
+          });
+        }, 5_000);
+      }),
+    [],
+  );
+  const resolveSceneBounds = useCallback((result: SceneBoundsResult) => {
+    const waiter = sceneBoundsWaitersRef.current.get(result.requestId);
+    if (!waiter) return;
+    sceneBoundsWaitersRef.current.delete(result.requestId);
+    waiter(result);
+  }, []);
+
+  // Recording lives in its own controller so a take survives this component;
+  // the shell only binds it to the open project and gives it a place to move
+  // the camera from.
+  const recordingViewport = useRecordingSelector((state) => state.viewport);
+  useRecordingClock();
+  useEffect(() => {
+    recordingSession.setActiveProject(bundle.project.projectId);
+  }, [bundle.project.projectId]);
+  const [recordingBusy, setRecordingBusy] = useState(false);
+  const moveRecordingCamera = useCallback(
+    async (
+      move: RecordingCameraMove & { fitScene?: boolean; focusEntityId?: string },
+    ): Promise<{ pose: RecordingCameraPose; bounds: RecordingCameraBounds | null }> => {
+      let bounds: RecordingCameraBounds | null = null;
+      if (move.fitScene || move.focusEntityId) {
+        const measured = await requestSceneBounds(move.focusEntityId);
+        if (!measured.ok || !measured.bounds) {
+          throw new Error(
+            measured.message ?? "録画用カメラの対象を測定できませんでした",
+          );
+        }
+        bounds = measured.bounds;
+      }
+      const current = recordingSession.getState();
+      const pose = resolveRecordingCameraPose(
+        current.camera,
+        {
+          ...(move.preset ? { preset: move.preset } : {}),
+          ...(move.position ? { position: move.position } : {}),
+          ...(move.target ? { target: move.target } : {}),
+          ...(move.distance === undefined ? {} : { distance: move.distance }),
+          ...(move.fov === undefined ? {} : { fov: move.fov }),
+          bounds,
+        },
+        { aspect: recordingAspectValue(current.profile.aspectRatio) },
+      );
+      return { pose: recordingSession.setCamera(pose), bounds };
+    },
+    [requestSceneBounds],
+  );
+  const startRecordingTake = useCallback(
+    async (options: {
+      label?: string | null;
+      clientName?: string | null;
+      profile?: RecordingProfile;
+      showViewport?: boolean;
+    }) => {
+      if (options.showViewport !== false) {
+        recordingSession.setViewport({ visible: true });
+      }
+      setRecordingBusy(true);
+      try {
+        const current = bundleRef.current;
+        return await recordingSession.startRecording({
+          label: options.label ?? null,
+          clientName: options.clientName ?? null,
+          ...(options.profile ? { profile: options.profile } : {}),
+          projectId: current.project.projectId,
+          projectTitle: current.project.metadata.title,
+          sceneId: current.scene.sceneId,
+        });
+      } finally {
+        setRecordingBusy(false);
+      }
+    },
+    [],
+  );
+  const stopRecordingTake = useCallback(async () => {
+    setRecordingBusy(true);
+    try {
+      return await recordingSession.stopRecording();
+    } finally {
+      setRecordingBusy(false);
+    }
   }, []);
   const mcpRevisionRef = useRef(0);
   const mcpRevisionBundleRef = useRef(bundle);
@@ -2343,6 +2488,261 @@ export function VisualEditorPrototype({
     );
   }, [bundle.assets, bundle.scene, editorMode]);
 
+  // Recording tools never touch the document, so they run before the project
+  // check the other debug tools make: a stop after the author switched
+  // projects must still stop the take. Given ids are still verified.
+  const handleRecordingTool = async (
+    request: XriftMcpEditorRequestEvent,
+  ): Promise<Record<string, unknown>> => {
+    const args = request.arguments;
+    const projectId = mcpOptionalString(args.projectId);
+    const sceneId = mcpOptionalString(args.sceneId);
+    const current = bundleRef.current;
+    if (
+      (projectId && projectId !== current.project.projectId) ||
+      (sceneId && sceneId !== current.scene.sceneId)
+    ) {
+      throw new XriftMcpEditorToolError(
+        "STALE_REVISION",
+        "対象Sceneが現在のEditorと一致しません。get_editor_contextで再取得してください",
+        { projectId, sceneId },
+      );
+    }
+    const context = {
+      projectId: current.project.projectId,
+      sceneId: current.scene.sceneId,
+      revision: mcpRevisionRef.current,
+    };
+    const optionalBoolean = (value: unknown, name: string) => {
+      if (value === undefined) return undefined;
+      if (typeof value !== "boolean") {
+        throw new XriftMcpEditorToolError(
+          "INVALID_ARGUMENT",
+          `${name}はtrueまたはfalseで指定してください`,
+        );
+      }
+      return value;
+    };
+    const profilePatch = (source: Record<string, unknown>) => {
+      const patch: Partial<RecordingProfile> = {};
+      if (source.aspectRatio !== undefined) {
+        if (!isRecordingAspectRatio(source.aspectRatio)) {
+          throw new XriftMcpEditorToolError(
+            "INVALID_ARGUMENT",
+            "aspectRatioは16:9、9:16、1:1、4:5のいずれかで指定してください",
+          );
+        }
+        patch.aspectRatio = source.aspectRatio;
+      }
+      if (source.shortEdge !== undefined) {
+        if (!isRecordingShortEdge(source.shortEdge)) {
+          throw new XriftMcpEditorToolError(
+            "INVALID_ARGUMENT",
+            "shortEdgeは720、1080、1440のいずれかで指定してください",
+          );
+        }
+        patch.shortEdge = source.shortEdge;
+      }
+      if (source.frameRate !== undefined) {
+        if (!isRecordingFrameRate(source.frameRate)) {
+          throw new XriftMcpEditorToolError(
+            "INVALID_ARGUMENT",
+            "frameRateは30または60で指定してください",
+          );
+        }
+        patch.frameRate = source.frameRate;
+      }
+      return patch;
+    };
+    const cameraLive = () => {
+      const state = recordingSession.getState();
+      return (
+        state.viewport.visible &&
+        state.viewport.cameraSource === "recording" &&
+        editorModeRef.current === "edit"
+      );
+    };
+    switch (request.tool) {
+      case "start_recording": {
+        const label = mcpOptionalString(args.label);
+        if (label && label.length > 80) {
+          throw new XriftMcpEditorToolError(
+            "INVALID_ARGUMENT",
+            "labelは80文字以内で指定してください",
+          );
+        }
+        let profile: RecordingProfile | undefined;
+        if (args.profile !== undefined) {
+          if (!args.profile || typeof args.profile !== "object") {
+            throw new XriftMcpEditorToolError(
+              "INVALID_ARGUMENT",
+              "profileはオブジェクトで指定してください",
+            );
+          }
+          profile = normalizeRecordingProfile(
+            {
+              ...recordingSession.getState().profile,
+              ...profilePatch(args.profile as Record<string, unknown>),
+            },
+            recordingSession.getState().profile,
+          );
+        }
+        const showViewport = optionalBoolean(args.showViewport, "showViewport");
+        const started = await startRecordingTake({
+          label: label ?? null,
+          clientName: request.clientName,
+          ...(profile ? { profile } : {}),
+          ...(showViewport === undefined ? {} : { showViewport }),
+        });
+        if (started.started) {
+          setNotice(
+            `${request.clientName}が録画を開始しました${label ? `: ${label}` : ""}`,
+          );
+        }
+        return {
+          ...context,
+          started: started.started,
+          ...(started.message ? { message: started.message } : {}),
+          ...recordingSession.describe(),
+        };
+      }
+      case "stop_recording": {
+        const stopped = await stopRecordingTake();
+        if (stopped.stopped) {
+          setNotice(
+            stopped.snapshot.status === "completed" && stopped.snapshot.path
+              ? `録画を保存しました: ${stopped.snapshot.path}`
+              : stopped.snapshot.message ?? "録画を停止しました",
+          );
+        }
+        return {
+          ...context,
+          stopped: stopped.stopped,
+          ...recordingSession.describe(),
+        };
+      }
+      case "get_recording_status":
+      case "get_recording_viewport":
+        return { ...context, cameraLive: cameraLive(), ...recordingSession.describe() };
+      case "set_recording_profile": {
+        const applied = recordingSession.setProfile(profilePatch(args));
+        return {
+          ...context,
+          effectiveFrom: applied.effectiveFrom,
+          ...recordingSession.describe(),
+        };
+      }
+      case "set_recording_viewport": {
+        const patch: Partial<RecordingViewportSettings> = {};
+        for (const key of [
+          "visible",
+          "showEditorUi",
+          "showEditorHelpers",
+          "showRecordingIndicator",
+        ] as const) {
+          const value = optionalBoolean(args[key], key);
+          if (value !== undefined) patch[key] = value;
+        }
+        if (args.cameraSource !== undefined) {
+          if (args.cameraSource !== "recording" && args.cameraSource !== "editor") {
+            throw new XriftMcpEditorToolError(
+              "INVALID_ARGUMENT",
+              "cameraSourceはrecordingまたはeditorで指定してください",
+            );
+          }
+          patch.cameraSource = args.cameraSource;
+        }
+        recordingSession.setViewport(patch);
+        return { ...context, cameraLive: cameraLive(), ...recordingSession.describe() };
+      }
+      case "set_recording_camera": {
+        const preset = mcpOptionalString(args.preset);
+        if (preset !== undefined && !isRecordingCameraPreset(preset)) {
+          throw new XriftMcpEditorToolError(
+            "INVALID_ARGUMENT",
+            "presetはtop、front、back、left、right、isoのいずれかで指定してください",
+          );
+        }
+        const focusEntityId = mcpOptionalString(args.focusEntityId);
+        if (focusEntityId && !current.scene.entities[focusEntityId]) {
+          throw new XriftMcpEditorToolError(
+            "ENTITY_NOT_FOUND",
+            "指定されたEntityが見つかりません",
+            { entityId: focusEntityId },
+          );
+        }
+        const fitScene = optionalBoolean(args.fitScene, "fitScene");
+        const position = mcpOptionalVec3(args.position, "position");
+        const target = mcpOptionalVec3(args.target, "target");
+        const distance =
+          args.distance === undefined
+            ? undefined
+            : mcpFiniteNumber(args.distance, "distance", 0.1, 5_000);
+        const fov =
+          args.fov === undefined
+            ? undefined
+            : mcpFiniteNumber(args.fov, "fov", 10, 150);
+        if (
+          !preset &&
+          !focusEntityId &&
+          !fitScene &&
+          !position &&
+          !target &&
+          distance === undefined &&
+          fov === undefined
+        ) {
+          throw new XriftMcpEditorToolError(
+            "INVALID_ARGUMENT",
+            "fitScene、focusEntityId、preset、position/target、distance、fovのいずれかを指定してください",
+          );
+        }
+        let moved: Awaited<ReturnType<typeof moveRecordingCamera>>;
+        try {
+          moved = await moveRecordingCamera({
+            ...(preset ? { preset } : {}),
+            ...(focusEntityId ? { focusEntityId } : {}),
+            ...(fitScene ? { fitScene } : {}),
+            ...(position ? { position } : {}),
+            ...(target ? { target } : {}),
+            ...(distance === undefined ? {} : { distance }),
+            ...(fov === undefined ? {} : { fov }),
+          });
+        } catch (error) {
+          throw new XriftMcpEditorToolError(
+            "RECORDING_CAMERA_FAILED",
+            error instanceof Error
+              ? error.message
+              : "録画用カメラを動かせませんでした",
+          );
+        }
+        return {
+          ...context,
+          camera: moved.pose,
+          ...(moved.bounds ? { framedBounds: moved.bounds } : {}),
+          ...(focusEntityId ? { framedEntityId: focusEntityId } : {}),
+          cameraLive: cameraLive(),
+        };
+      }
+      case "get_recording_camera": {
+        const state = recordingSession.getState();
+        return {
+          ...context,
+          camera: state.camera,
+          cameraSource: state.viewport.cameraSource,
+          viewportVisible: state.viewport.visible,
+          cameraLive: cameraLive(),
+        };
+      }
+      default:
+        throw new XriftMcpEditorToolError(
+          "TOOL_NOT_FOUND",
+          "対応していないAI editor toolです",
+        );
+    }
+  };
+  const handleRecordingToolRef = useRef(handleRecordingTool);
+  handleRecordingToolRef.current = handleRecordingTool;
+
   useEffect(() => {
     if (!mcpNativeAvailable) return;
     let disposed = false;
@@ -2362,6 +2762,15 @@ export function VisualEditorPrototype({
             "TOOL_NOT_FOUND",
             "対応していないAI editor toolです",
           );
+        }
+        if (RECORDING_TOOL_NAMES.has(request.tool)) {
+          const result = await handleRecordingToolRef.current(request);
+          await tauri.completeXriftMcpRequest({
+            id: request.id,
+            ok: true,
+            result,
+          });
+          return;
         }
         const localAssetTool = surface === "local-asset";
         const debugTool = surface === "debug";
@@ -10848,13 +11257,18 @@ export function VisualEditorPrototype({
       ]
     : [];
 
-  const hierarchyTrack = viewportMaximized
+  // The recording view without editor UI is the same layout as a maximized
+  // viewport: the frame gets the whole editor area and the panels fold away.
+  const recordingUiHidden =
+    recordingViewport.visible && !recordingViewport.showEditorUi;
+  const panelsHidden = viewportMaximized || recordingUiHidden;
+  const hierarchyTrack = panelsHidden
     ? "0px"
     : `min(${layout.hierarchyWidth}px, 22%)`;
-  const inspectorTrack = viewportMaximized
+  const inspectorTrack = panelsHidden
     ? "0px"
     : `min(${layout.inspectorWidth}px, 36%)`;
-  const assetsTrack = viewportMaximized
+  const assetsTrack = panelsHidden
     ? "0px"
     : `min(${layout.assetsHeight}px, calc(100% - 240px))`;
   /*
@@ -10866,7 +11280,7 @@ export function VisualEditorPrototype({
    * putting the Scene View in the 0px column with its own header clipped away.
    */
   const sidePanelClass = (spansBothRows: boolean) =>
-    viewportMaximized
+    panelsHidden
       ? `overflow-hidden ${spansBothRows ? "row-span-2" : ""}`
       : "contents";
 
@@ -10971,7 +11385,11 @@ export function VisualEditorPrototype({
           </div>
         </header>
 
-        <div className="flex h-10 shrink-0 items-center border-b border-editor-border bg-editor-surface px-2.5" role="toolbar" aria-label="ビジュアルエディターのツール">
+        <div
+          className={`${recordingUiHidden ? "hidden" : "flex"} h-10 shrink-0 items-center border-b border-editor-border bg-editor-surface px-2.5`}
+          role="toolbar"
+          aria-label="ビジュアルエディターのツール"
+        >
           <div className="flex items-center gap-1.5">
             <button
               type="button"
@@ -11254,6 +11672,11 @@ export function VisualEditorPrototype({
             onScreenshotComplete={() => setSceneScreenshotRequest(null)}
             cameraRequest={sceneCameraRequest}
             onCameraResult={resolveSceneCamera}
+            boundsRequest={sceneBoundsRequest}
+            onBoundsResult={resolveSceneBounds}
+            onExitRecordingView={() =>
+              recordingSession.setViewport({ visible: false })
+            }
           />
           <div className={sidePanelClass(true)}>
           <InspectorPanel
@@ -11520,6 +11943,65 @@ export function VisualEditorPrototype({
             }
             onUndo={handleUndo}
             onOpenSupport={() => setSupportOpen(true)}
+            recording={{
+              busy: recordingBusy,
+              nativeAvailable: tauri.isAvailable(),
+              onStart: () => {
+                void startRecordingTake({}).then((result) => {
+                  if (!result.started && result.message) setNotice(result.message);
+                });
+              },
+              onStop: () => {
+                void stopRecordingTake().then((result) => {
+                  if (!result.stopped) return;
+                  setNotice(
+                    result.snapshot.status === "completed" && result.snapshot.path
+                      ? `録画を保存しました: ${result.snapshot.path}`
+                      : result.snapshot.message ?? "録画を停止しました",
+                  );
+                });
+              },
+              onProfileChange: (patch) => {
+                recordingSession.setProfile(patch);
+              },
+              onViewportChange: (patch) => {
+                recordingSession.setViewport(patch);
+              },
+              onChooseDirectory: () => {
+                void tauri
+                  .selectDirectory(
+                    "録画の保存先を選ぶ",
+                    recordingSession.getState().outputDirectory ?? undefined,
+                  )
+                  .then((directory) => {
+                    if (typeof directory === "string" && directory) {
+                      recordingSession.setOutputDirectory(directory);
+                    }
+                  })
+                  .catch(() => setNotice("保存先を選べませんでした"));
+              },
+              onResetDirectory: () => recordingSession.setOutputDirectory(null),
+              onRevealRecording: (path) => {
+                const folder = path.replace(/[\\/][^\\/]+$/, "");
+                void tauri.openPath(folder || path).catch(() => {
+                  setNotice("録画の保存先を開けませんでした");
+                });
+              },
+              onFitCamera: () => {
+                void moveRecordingCamera({ fitScene: true }).catch((error) => {
+                  setNotice(
+                    error instanceof Error ? error.message : "録画用カメラを動かせませんでした",
+                  );
+                });
+              },
+              onCameraPreset: (preset) => {
+                void moveRecordingCamera({ preset }).catch((error) => {
+                  setNotice(
+                    error instanceof Error ? error.message : "録画用カメラを動かせませんでした",
+                  );
+                });
+              },
+            }}
           />
           <ExternalAssetStoreDialog
             open={externalStoreOpen}

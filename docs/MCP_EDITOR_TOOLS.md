@@ -273,11 +273,14 @@ Script の実行境界と trust gate は [Scripting の契約](./SCRIPTING.md) �
 `search_external_assets`, `get_external_asset_options`,
 `install_external_asset`
 
-## debug (3)
+## debug (11)
 
-`capture_scene_debug`, `capture_scene_view`, `set_scene_view_camera`
+`capture_scene_debug`, `capture_scene_view`, `set_scene_view_camera`,
+`start_recording`, `stop_recording`, `get_recording_status`,
+`set_recording_profile`, `set_recording_viewport`, `get_recording_viewport`,
+`set_recording_camera`, `get_recording_camera`
 
-document を書き換えず、生きた Scene View を読む / 向きを変えるだけの 3 つ。
+document を書き換えず、生きた Scene View を読む / 向きを変える / 録画するだけ。
 Undo 履歴も選択も動かさない。
 
 - `capture_scene_debug` — fps、frame time、draw call、triangle、可視 Mesh 数、
@@ -297,6 +300,31 @@ Undo 履歴も選択も動かさない。
 保存先を caller が選べないのは意図的。確認のために撮った画像は一時的な成果物
 なので、project ではなく app data へ置く。
 
+**ワールド制作の録画**（詳細は [ワールド制作の録画](./RECORDING.md)）
+
+- `start_recording` / `stop_recording` — Scene View を、保存したプロファイル
+  (16:9 / 9:16 / 1:1 / 4:5、短辺 720 / 1080 / 1440、30 / 60fps) の動画として
+  ディスクへ逐次書き込む。どちらも冪等で、録画中の start は 2 つ目のファイルを
+  開かず `started: false` と現在の状態を返し、idle での stop は `stopped: false`
+  を返す。数時間の take を想定し、6 時間で自動停止する。動画の隣に project、
+  scene、client 名、label、カメラを書いた sidecar JSON を残す
+- `get_recording_status` — idle / recording / stopping / completed / failed の
+  状態機械と、経過時間、bytes、path、プロファイル、録画ビュー、カメラ
+- `set_recording_profile` — 次の take のフレーム。録画中でも失敗せず
+  `effectiveFrom` で「次の録画から」と答える
+- `set_recording_viewport` / `get_recording_viewport` — 録画ビュー (レターボックス
+  したフレーム) の表示、使うカメラ (保存した録画用カメラか編集中の視点か)、
+  パネルを残すか、グリッドやギズモを絵に入れるか、REC 表示
+- `set_recording_camera` / `get_recording_camera` — 録画用カメラ。`fitScene` で
+  Scene 全体、`focusEntityId` で 1 つの Entity を収め、preset / position / target /
+  distance / fov も取る。姿勢は project ごとに保存し、録画ビューが録画用カメラで
+  表示されている間だけ Scene View に適用するので、編集中のカメラを乱さない
+
+録画の tool は `projectId` / `sceneId` を任意にしている。録画は project を
+またいで生きるので、project を切り替えたあとでも `stop_recording` が通らなければ
+ならない。渡された場合だけ現在の Editor と照合する。録画の失敗は状態と message
+として返り、制作の tool には影響しない。
+
 ## 意図的に公開していない操作
 
 「まだ作っていない」ものと「公開しない」ものを混ぜないための一覧。
@@ -309,6 +337,7 @@ Undo 履歴も選択も動かさない。
 | 拡大・全体表示・パネル幅・タイムラインの範囲と時刻 | 見え方だけの状態で document に残らない。ノードの位置は document に残るので `move_interactivity_node` と `layout_interactivity_graph` にある |
 | Project の保存・公開・アップロード | 外向きの不可逆操作。アップロード前の `xrift.json` とサムネイルの確認は人が通る導線に残す |
 | Login / account 操作 | 認証情報を MCP 境界へ渡さない |
+| 録画の保存先の指定 | `recording_begin_file` が開けるのは既定の保存先と、人がフォルダーダイアログで選んだ場所だけ。AI client が path を書けると Rust 側の path 検証を迂回する。保存先を変えるのは録画パネルから |
 | 任意 path の読み書き・削除 | Rust 側の path 検証と権限制御を迂回させない |
 | 任意 JavaScript の実行 | Script は trust gate 付きの Asset としてだけ入る |
 | Texture の一括変換 | 人が複数選択したものをまとめて書き出すための導線。AI からは `process_texture_asset` を Asset ごとに呼べばよく、対象の選び方も AI 側で決まる |

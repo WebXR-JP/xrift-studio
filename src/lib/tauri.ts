@@ -268,6 +268,18 @@ export type XriftOllamaConfigurationResult = {
   message: string;
 };
 
+export type RecordingFileHandle = {
+  id: string;
+  path: string;
+  directory: string;
+};
+
+export type RecordingFileSummary = {
+  path: string;
+  bytesWritten: number;
+  metadataPath: string | null;
+};
+
 export type XriftMcpEditorRequestEvent = {
   id: string;
   clientName: string;
@@ -366,6 +378,31 @@ export const tauri = {
     invoke<string>("save_debug_video", { dataUrl, label }),
   saveDebugImage: (dataUrl: string, label = "scene-view") =>
     invoke<string>("save_debug_image", { dataUrl, label }),
+  /** Where recordings land unless the author picked a folder. */
+  recordingDefaultDirectory: () =>
+    invoke<string>("recording_default_directory"),
+  /**
+   * Opens a new, never-overwriting file for one take. The native side chooses
+   * the final name when the requested one already exists.
+   */
+  beginRecordingFile: (request: {
+    directory: string | null;
+    fileStem: string;
+    extension: "webm" | "mp4";
+  }) => invoke<RecordingFileHandle>("recording_begin_file", { request }),
+  /**
+   * Streams one encoder chunk into an open recording. The bytes travel as the
+   * raw request body rather than as JSON, so an hour-long take never passes
+   * through base64.
+   */
+  appendRecordingChunk: (id: string, chunk: Uint8Array) =>
+    invoke<number>("recording_append_chunk", chunk, {
+      headers: { "x-xrift-recording-id": id },
+    }),
+  finishRecordingFile: (id: string, metadata: Record<string, unknown> | null) =>
+    invoke<RecordingFileSummary>("recording_finish_file", { id, metadata }),
+  abortRecordingFile: (id: string) =>
+    invoke<RecordingFileSummary>("recording_abort_file", { id }),
   getVersions: () => invoke<Versions>("get_versions"),
   runtimePaths: () => invoke<RuntimePaths>("runtime_paths"),
   runtimeStatus: () => invoke<RuntimeStatus>("runtime_status"),

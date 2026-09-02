@@ -7,6 +7,7 @@ import {
 } from "./scene-entity-tree-context";
 import {
   Canvas,
+  addAfterEffect,
   useFrame,
   useThree,
   createPortal,
@@ -66,6 +67,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type DragEvent,
   type ElementRef,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -168,6 +170,19 @@ import {
   type InteractivityAnimationCue,
 } from "../../lib/visual-editor";
 import { tauri } from "../../lib/tauri";
+import { recordingSession } from "../../lib/recording/recording-session";
+import {
+  recordingAspectValue,
+  resolveRecordingResolution,
+} from "../../lib/recording/recording-profile";
+import { isRecordingActive } from "../../lib/recording/recording-state";
+import {
+  unionRecordingCameraBounds,
+  type RecordingCameraBounds,
+  type RecordingCameraPose,
+} from "../../lib/recording/recording-camera";
+import { useRecordingSelector } from "./useRecordingSession";
+import { RecordingFrameBadge, RecordingHeaderBadge } from "./RecordingIndicator";
 import {
   resolveSceneClickSelection,
   resolveSceneContextMenuTarget,
@@ -2986,6 +3001,148 @@ export type SceneViewCameraResult = {
   message?: string;
 };
 
+/**
+ * Measures the drawn bounds of one Entity, or of every root Entity, without
+ * moving anything. The recording camera is placed from these numbers by a pure
+ * function, so an MCP call can reframe the world while the author keeps the
+ * editing camera they are looking through.
+ */
+export type SceneBoundsRequest = {
+  /** Must change to run a new measurement. */
+  id: number;
+  /** Omit to measure the whole Scene. */
+  entityId?: string;
+};
+
+export type SceneBoundsResult = {
+  requestId: number;
+  ok: boolean;
+  bounds: RecordingCameraBounds | null;
+  measuredEntityCount: number;
+  message?: string;
+};
+
+function SceneBoundsProbe({
+  request,
+  rootEntityIds,
+  onResult,
+}: {
+  request?: SceneBoundsRequest | null;
+  rootEntityIds: readonly string[];
+  onResult?: (result: SceneBoundsResult) => void;
+}) {
+  const threeScene = useThree((state) => state.scene);
+  const handledRef = useRef(0);
+  const resultRef = useRef(onResult);
+  resultRef.current = onResult;
+  useLayoutEffect(() => {
+    if (!request || handledRef.current === request.id) return;
+    handledRef.current = request.id;
+    const report = (result: Omit<SceneBoundsResult, "requestId">) =>
+      resultRef.current?.({ ...result, requestId: request.id });
+    const measure = (object: Object3D): RecordingCameraBounds => {
+      const bounds = computeEntityFocusBounds(object);
+      if (bounds) return bounds;
+      object.updateWorldMatrix(true, true);
+      const origin = object.getWorldPosition(new Vector3());
+      // A bare grouping Entity or a marker still occupies its origin.
+      return { center: origin.toArray() as Vec3, radius: 0.5 };
+    };
+    if (request.entityId) {
+      const object = findSceneEntityObject(threeScene, request.entityId);
+      if (!object) {
+        report({
+          ok: false,
+          bounds: null,
+          measuredEntityCount: 0,
+          message: "指定されたEntityがScene Viewに見つかりません",
+        });
+        return;
+      }
+      report({ ok: true, bounds: measure(object), measuredEntityCount: 1 });
+      return;
+    }
+    const measured: RecordingCameraBounds[] = [];
+    for (const entityId of rootEntityIds) {
+      const object = findSceneEntityObject(threeScene, entityId);
+      if (!object || !object.visible) continue;
+      measured.push(measure(object));
+    }
+    const union = unionRecordingCameraBounds(measured);
+    if (!union) {
+      report({
+        ok: false,
+        bounds: null,
+        measuredEntityCount: 0,
+        message: "Scene Viewに測れるEntityがありません",
+      });
+      return;
+    }
+    report({ ok: true, bounds: union, measuredEntityCount: measured.length });
+  }, [request, rootEntityIds, threeScene]);
+  return null;
+}
+
+/**
+ * Hands the live canvas to the recording controller and copies each rendered
+ * frame into the recording frame right after React Three Fiber draws it, while
+ * the drawing buffer is still valid. Unmounting only unregisters: a take keeps
+ * running through a projection flip or a project reload and picks the Scene
+ * View back up when it returns.
+ */
+function RecordingCanvasSource() {
+  const gl = useThree((state) => state.gl);
+  useEffect(() => {
+    const unregister = recordingSession.registerSource(gl.domElement);
+    const remove = addAfterEffect(() => {
+      recordingSession.pumpFrame();
+    });
+    return () => {
+      remove();
+      unregister();
+    };
+  }, [gl]);
+  return null;
+}
+
+/**
+ * The saved recording camera, applied to the Scene View while the recording
+ * view is shown. Orbiting inside the recording view writes the new pose back,
+ * so the frame the author lines up by hand is the one the next take uses.
+ */
+export type RecordingCameraControl = {
+  pose: RecordingCameraPose;
+  onPoseChange: (pose: RecordingCameraPose) => void;
+};
+
+type RecordingEditorCameraSnapshot = EditCameraSnapshot & { fov?: number };
+
+function roundVec3(vector: Vector3): Vec3 {
+  return [
+    Math.round(vector.x * 1000) / 1000,
+    Math.round(vector.y * 1000) / 1000,
+    Math.round(vector.z * 1000) / 1000,
+  ];
+}
+
+function recordingPoseMatchesCamera(
+  pose: RecordingCameraPose,
+  camera: { position: Vector3; fov?: number },
+  target: Vector3,
+): boolean {
+  const near = (a: number, b: number, tolerance: number) =>
+    Math.abs(a - b) <= tolerance;
+  return (
+    near(pose.position[0], camera.position.x, 0.002) &&
+    near(pose.position[1], camera.position.y, 0.002) &&
+    near(pose.position[2], camera.position.z, 0.002) &&
+    near(pose.target[0], target.x, 0.002) &&
+    near(pose.target[1], target.y, 0.002) &&
+    near(pose.target[2], target.z, 0.002) &&
+    (camera.fov === undefined || near(pose.fov, camera.fov, 0.05))
+  );
+}
+
 /** Unit view directions, pointing from the target toward the camera. */
 const SCENE_VIEW_CAMERA_DIRECTIONS: Record<SceneViewCameraPreset, Vec3> = {
   top: [0, 1, 0],
@@ -3010,6 +3167,7 @@ function CameraControls({
   cameraRequest,
   onCameraResult,
   onFocusChange,
+  recordingCamera = null,
 }: {
   editorMode: EditorMode;
   projectKind: VisualProjectKind;
@@ -3023,6 +3181,7 @@ function CameraControls({
   cameraRequest?: SceneViewCameraRequest | null;
   onCameraResult?: (result: SceneViewCameraResult) => void;
   onFocusChange: (focus: SceneFocusState | null) => void;
+  recordingCamera?: RecordingCameraControl | null;
 }) {
   const camera = useThree((state) => state.camera);
   const threeScene = useThree((state) => state.scene);
@@ -3056,6 +3215,88 @@ function CameraControls({
     onFocusChange(null);
     return true;
   }, [camera, onFocusChange]);
+
+  // The recording camera borrows the Scene View camera while the recording
+  // view is shown in Edit. Entering it snapshots the editing camera and
+  // leaving restores it, so an author never loses their place to a take.
+  // Declared before the Play effect so that on Play the editing camera is
+  // restored first and then saved, and on Stop it is restored and then
+  // replaced by the recording pose again.
+  const recordingActive = recordingCamera !== null && editorMode === "edit";
+  const recordingPose = recordingCamera?.pose ?? null;
+  const recordingPoseChangeRef = useRef(recordingCamera?.onPoseChange);
+  recordingPoseChangeRef.current = recordingCamera?.onPoseChange;
+  const recordingSnapshotRef = useRef<RecordingEditorCameraSnapshot | null>(
+    null,
+  );
+  useLayoutEffect(() => {
+    const controls = controlsRef.current;
+    if (recordingActive) {
+      if (!recordingSnapshotRef.current && controls) {
+        restoreFocusSnapshot();
+        settleOrbitControls(controls);
+        recordingSnapshotRef.current = {
+          position: camera.position.clone(),
+          quaternion: camera.quaternion.clone(),
+          target: controls.target.clone(),
+          up: camera.up.clone(),
+          zoom: camera.zoom,
+          ...(camera instanceof PerspectiveCamera ? { fov: camera.fov } : {}),
+        };
+      }
+      return;
+    }
+    const snapshot = recordingSnapshotRef.current;
+    if (!snapshot || !controls) return;
+    recordingSnapshotRef.current = null;
+    settleOrbitControls(controls);
+    camera.position.copy(snapshot.position);
+    camera.up.copy(snapshot.up);
+    camera.zoom = snapshot.zoom;
+    if (camera instanceof PerspectiveCamera && snapshot.fov !== undefined) {
+      camera.fov = snapshot.fov;
+    }
+    controls.target.copy(snapshot.target);
+    settleOrbitControls(controls);
+    camera.updateProjectionMatrix();
+  }, [camera, recordingActive, restoreFocusSnapshot]);
+
+  useLayoutEffect(() => {
+    if (!recordingActive || !recordingPose) return;
+    const controls = controlsRef.current;
+    if (!controls) return;
+    // The store echoes the pose this control just emitted; applying it again
+    // would only fight the damping.
+    if (
+      recordingPoseMatchesCamera(
+        recordingPose,
+        camera instanceof PerspectiveCamera ? camera : { position: camera.position },
+        controls.target,
+      )
+    ) {
+      return;
+    }
+    settleOrbitControls(controls);
+    camera.position.set(...recordingPose.position);
+    camera.up.set(0, 1, 0);
+    controls.target.set(...recordingPose.target);
+    if (camera instanceof PerspectiveCamera) camera.fov = recordingPose.fov;
+    settleOrbitControls(controls);
+    camera.updateProjectionMatrix();
+  }, [camera, recordingActive, recordingPose]);
+
+  const handleControlsEnd = useCallback(() => {
+    if (!recordingActive) return;
+    const controls = controlsRef.current;
+    if (!controls) return;
+    // Spend the damping first, or the saved pose lags the frame on screen.
+    settleOrbitControls(controls);
+    recordingPoseChangeRef.current?.({
+      position: roundVec3(camera.position),
+      target: roundVec3(controls.target),
+      fov: camera instanceof PerspectiveCamera ? camera.fov : 50,
+    });
+  }, [camera, recordingActive]);
 
   useLayoutEffect(() => {
     const previous = previousMode.current;
@@ -3319,6 +3560,7 @@ function CameraControls({
       maxPolarAngle={Math.PI / 2 - 0.03}
       enableDamping
       dampingFactor={0.08}
+      onEnd={handleControlsEnd}
     />
   );
 }
@@ -4338,6 +4580,9 @@ export function SceneViewport({
   onDebugCaptureResult,
   cameraRequest = null,
   onCameraResult,
+  boundsRequest = null,
+  onBoundsResult,
+  onExitRecordingView,
 }: {
   scene: SceneDocument;
   assets: AssetManifest;
@@ -4432,8 +4677,59 @@ export function SceneViewport({
   onDebugCaptureResult?: (result: SceneDebugCaptureResult) => void;
   cameraRequest?: SceneViewCameraRequest | null;
   onCameraResult?: (result: SceneViewCameraResult) => void;
+  /** Measures Entity or Scene bounds for the recording camera. */
+  boundsRequest?: SceneBoundsRequest | null;
+  onBoundsResult?: (result: SceneBoundsResult) => void;
+  /** Shown as a button while the recording view is up. */
+  onExitRecordingView?: () => void;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
+  // The recording view: the same Canvas, letterboxed to the profile's aspect
+  // ratio and drawn at its resolution. Reading the controller here rather than
+  // threading props through the shell keeps the take's settings in one place.
+  const recordingViewport = useRecordingSelector((state) => state.viewport);
+  const recordingProfile = useRecordingSelector((state) => state.profile);
+  const recordingCameraPose = useRecordingSelector((state) => state.camera);
+  const recordingTakeActive = useRecordingSelector((state) =>
+    isRecordingActive(state.snapshot),
+  );
+  const recordingViewActive = recordingViewport.visible;
+  const recordingResolution = useMemo(
+    () => resolveRecordingResolution(recordingProfile),
+    [recordingProfile],
+  );
+  const recordingFrameRef = useRef<HTMLDivElement>(null);
+  const [recordingDpr, setRecordingDpr] = useState(1);
+  useEffect(() => {
+    if (!recordingViewActive) return;
+    const element = recordingFrameRef.current;
+    if (!element) return;
+    // Draw exactly the profile's pixels whatever the frame's CSS size is; the
+    // recording controller then copies them 1:1 instead of upscaling.
+    const update = () => {
+      const rect = element.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      setRecordingDpr(
+        Math.min(4, Math.max(0.5, recordingResolution.width / rect.width)),
+      );
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [recordingResolution.width, recordingViewActive]);
+  const recordingCameraControl = useMemo<RecordingCameraControl | null>(
+    () =>
+      recordingViewActive && recordingViewport.cameraSource === "recording"
+        ? {
+            pose: recordingCameraPose,
+            onPoseChange: (pose) => {
+              recordingSession.setCamera(pose);
+            },
+          }
+        : null,
+    [recordingCameraPose, recordingViewport.cameraSource, recordingViewActive],
+  );
   const dropResolverRef = useRef<SceneDropResolver | null>(null);
   // The brush centre under the cursor. A ref because it updates on every
   // pointer move and only the cursor mesh consumes it.
@@ -4466,6 +4762,12 @@ export function SceneViewport({
   // so the controls exist once in the DOM either way.
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const [thumbnailCaptureActive, setThumbnailCaptureActive] = useState(false);
+  // A clean frame: no grid, gizmo, selection or helper icons. Thumbnails always
+  // want one; the recording view wants one unless the author asked to keep
+  // the editing helpers in the take.
+  const cleanRender =
+    thumbnailCaptureActive ||
+    (recordingViewActive && !recordingViewport.showEditorHelpers);
   const [displayMode, setDisplayMode] =
     useState<SceneViewportDisplayMode>("scene");
   const [qualityMode, setQualityMode] = useState<SceneViewportQualityMode>(
@@ -4594,9 +4896,11 @@ export function SceneViewport({
   const qualityProfile = useMemo(
     () =>
       getSceneViewportQualityProfile(
-        editorMode === "play" || thumbnailCaptureActive ? "high" : qualityMode,
+        editorMode === "play" || thumbnailCaptureActive || recordingViewActive
+          ? "high"
+          : qualityMode,
       ),
-    [editorMode, qualityMode, thumbnailCaptureActive],
+    [editorMode, qualityMode, recordingViewActive, thumbnailCaptureActive],
   );
   const activeRenderScale = useMemo(
     () =>
@@ -4607,15 +4911,15 @@ export function SceneViewport({
     [qualityMode],
   );
   const colliderOnlyEdit = effectiveDisplayMode === "colliders";
-  const renderDisplayMode = thumbnailCaptureActive ? "scene" : effectiveDisplayMode;
+  const renderDisplayMode = cleanRender ? "scene" : effectiveDisplayMode;
   const displayProfile = useMemo(
     () => {
       const profile = getSceneViewportDisplayProfile(renderDisplayMode);
-      return thumbnailCaptureActive || editorMode === "play"
+      return cleanRender || editorMode === "play"
         ? { ...profile, showHelpers: false }
         : profile;
     },
-    [editorMode, renderDisplayMode, thumbnailCaptureActive],
+    [cleanRender, editorMode, renderDisplayMode],
   );
   const runtimeSpawn = useMemo(
     () => resolveRuntimeSpawn(preview.scene),
@@ -5424,21 +5728,19 @@ export function SceneViewport({
     () => ({
       scene: preview.scene,
       authoringEntityIdByEntityId: preview.authoringEntityIdByEntityId,
-      selectedEntityIds: thumbnailCaptureActive
-        ? EMPTY_SELECTION
-        : selectedEntityIdSet,
-      primaryEntityId: thumbnailCaptureActive ? null : selectedEntityId,
+      selectedEntityIds: cleanRender ? EMPTY_SELECTION : selectedEntityIdSet,
+      primaryEntityId: cleanRender ? null : selectedEntityId,
       runtimeEntityRevisions,
       materialDropTarget: readyMaterialDropTarget,
     }),
     [
+      cleanRender,
       preview.authoringEntityIdByEntityId,
       preview.scene,
       readyMaterialDropTarget,
       runtimeEntityRevisions,
       selectedEntityId,
       selectedEntityIdSet,
-      thumbnailCaptureActive,
     ],
   );
   const entityTreeShared = useMemo(
@@ -5447,7 +5749,7 @@ export function SceneViewport({
       projectPath,
       editable:
         editorMode === "edit" &&
-        !thumbnailCaptureActive &&
+        !cleanRender &&
         // A brush is a gesture over the ground; leaving gizmos live lets a
         // stroke grab and drag an object instead of painting.
         !terrainEditing,
@@ -5462,11 +5764,12 @@ export function SceneViewport({
       materialDragActive: dragOverKind === "material",
       displayMode: renderDisplayMode,
       displayProfile,
-      renderThumbnail: thumbnailCaptureActive,
+      renderThumbnail: cleanRender,
     }),
     [
       activeGizmo,
       assets,
+      cleanRender,
       displayProfile,
       dragOverKind,
       editorMode,
@@ -5476,7 +5779,6 @@ export function SceneViewport({
       projectPath,
       renderDisplayMode,
       terrainEditing,
-      thumbnailCaptureActive,
       transformMode,
       transformSpace,
     ],
@@ -5620,14 +5922,27 @@ export function SceneViewport({
           ) : (
             <h2
               id="scene-view-heading"
-              title={editorMode === "play" ? "Play Window" : "Scene View"}
+              title={
+                editorMode === "play"
+                  ? "Play Window"
+                  : recordingViewActive
+                    ? "録画ビュー"
+                    : "Scene View"
+              }
               className={`truncate text-[12px] font-semibold ${
                 editorMode === "play" ? "text-zinc-100" : "text-slate-800"
               }`}
             >
-              {editorMode === "play" ? "Play Window" : "Scene View"}
+              {editorMode === "play"
+                ? "Play Window"
+                : recordingViewActive
+                  ? "録画ビュー"
+                  : "Scene View"}
             </h2>
           )}
+          {recordingTakeActive ? (
+            <RecordingHeaderBadge playing={editorMode === "play"} />
+          ) : null}
           {editorMode === "play" ? (
             <>
               <span className="hidden shrink-0 truncate text-xs text-zinc-400 @[900px]/scene-header:inline">
@@ -5651,7 +5966,21 @@ export function SceneViewport({
             </span>
           ) : null}
         </div>
-        <div className="flex shrink-0 items-center">
+        <div className="flex shrink-0 items-center gap-1.5">
+          {recordingViewActive && onExitRecordingView ? (
+            <button
+              type="button"
+              onClick={onExitRecordingView}
+              title="録画ビューを閉じて編集表示へ戻る。録画中なら録画は続く"
+              className={`flex h-7 items-center whitespace-nowrap rounded-md border px-2 text-[11px] font-semibold transition-colors ${
+                editorMode === "play"
+                  ? "border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
+                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+              }`}
+            >
+              編集表示へ戻る
+            </button>
+          ) : null}
           <button
             type="button"
             disabled={playDisabled || playPreparing}
@@ -5948,11 +6277,41 @@ export function SceneViewport({
         onDropCapture={handleDrop}
         onContextMenu={openContextMenu}
       >
+        {/* Always present so toggling the recording view never remounts the
+            Canvas (and its GPU resources). Outside the recording view both
+            wrappers just fill the viewport. */}
+        <div
+          className={
+            recordingViewActive
+              ? "absolute inset-0 flex items-center justify-center bg-slate-950"
+              : "absolute inset-0"
+          }
+          style={{ containerType: "size" } as CSSProperties}
+        >
+        <div
+          ref={recordingFrameRef}
+          className={
+            recordingViewActive
+              ? "relative overflow-hidden shadow-2xl shadow-black/60"
+              : "absolute inset-0"
+          }
+          style={
+            recordingViewActive
+              ? {
+                  width: `min(100cqw, calc(100cqh * ${recordingAspectValue(
+                    recordingProfile.aspectRatio,
+                  )}))`,
+                  aspectRatio: `${recordingResolution.width} / ${recordingResolution.height}`,
+                  maxHeight: "100%",
+                }
+              : undefined
+          }
+        >
         <Canvas
           key={projection}
           orthographic={projection === "orthographic"}
           shadows={qualityProfile.shadows ? "basic" : false}
-          dpr={qualityProfile.dpr}
+          dpr={recordingViewActive ? recordingDpr : qualityProfile.dpr}
           camera={{
             position: [7, 5, 7],
             ...(projection === "orthographic"
@@ -6012,7 +6371,7 @@ export function SceneViewport({
             sceneDocument={preview.scene}
             settings={sceneSettings.vegetation}
           />
-          {sceneSettings.editor.gizmo.gridVisible && !thumbnailCaptureActive ? (
+          {sceneSettings.editor.gizmo.gridVisible && !cleanRender ? (
             <gridHelper
               args={[
                 sceneSettings.editor.gizmo.gridSize,
@@ -6037,6 +6396,13 @@ export function SceneViewport({
             request={screenshotRequest}
             onComplete={() => onScreenshotComplete?.()}
           />
+
+          <SceneBoundsProbe
+            request={boundsRequest}
+            rootEntityIds={scene.rootEntityIds}
+            onResult={onBoundsResult}
+          />
+          <RecordingCanvasSource />
 
           <ScenePerformanceProbe
             enabled={debugOverlayEnabled || videoRecording}
@@ -6136,12 +6502,18 @@ export function SceneViewport({
             cameraRequest={cameraRequest}
             onCameraResult={onCameraResult}
             onFocusChange={onFocusChange}
+            recordingCamera={recordingCameraControl}
           />
           </SceneWindContext.Provider>
           </SceneLightingContext.Provider>
         </Canvas>
+        {recordingViewActive && recordingViewport.showRecordingIndicator ? (
+          <RecordingFrameBadge profile={recordingProfile} />
+        ) : null}
+        </div>
+        </div>
 
-        {debugOverlayEnabled && debugMetrics && !thumbnailCaptureActive ? (
+        {debugOverlayEnabled && debugMetrics && !cleanRender ? (
           <div
             className="pointer-events-none absolute right-2.5 top-2.5 z-20 w-[min(18rem,calc(100%-1.25rem))] rounded-md border border-cyan-300/60 bg-slate-950/90 px-3 py-2.5 font-mono text-[10px] leading-4 text-cyan-50 shadow-lg backdrop-blur"
             role="status"
