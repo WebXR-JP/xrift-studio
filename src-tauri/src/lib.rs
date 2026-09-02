@@ -11,6 +11,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_opener::OpenerExt;
 
+mod debug_recording_log;
 mod external_store;
 pub mod mcp;
 mod script_trust;
