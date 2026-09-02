@@ -268,6 +268,24 @@ export type XriftOllamaConfigurationResult = {
   message: string;
 };
 
+export type DebugRecordingSettings = {
+  fps: number;
+  bitsPerSecond: number;
+};
+
+export type DebugRecordingSession = {
+  directory: string;
+  videoPath: string;
+  logPath: string;
+  startedAtMs: number;
+};
+
+export type DebugRecordingSummary = DebugRecordingSession & {
+  durationMs: number;
+  videoBytes: number;
+  toolCalls: number;
+};
+
 export type XriftMcpEditorRequestEvent = {
   id: string;
   clientName: string;
@@ -366,6 +384,20 @@ export const tauri = {
     invoke<string>("save_debug_video", { dataUrl, label }),
   saveDebugImage: (dataUrl: string, label = "scene-view") =>
     invoke<string>("save_debug_image", { dataUrl, label }),
+  /**
+   * A long Scene View recording streams to app data one chunk at a time and
+   * keeps an activity log beside the video. Only one runs at a time; begin
+   * fails while another is open.
+   */
+  beginDebugRecording: (settings: DebugRecordingSettings) =>
+    invoke<DebugRecordingSession>("begin_debug_recording", { settings }),
+  /** Appends one MediaRecorder chunk as raw bytes and returns the file size so far. */
+  appendDebugRecordingChunk: (bytes: Uint8Array) =>
+    invoke<number>("append_debug_recording_chunk", bytes),
+  appendDebugRecordingEvent: (event: string, data?: Record<string, unknown>) =>
+    invoke<void>("append_debug_recording_event", { event, data: data ?? null }),
+  finishDebugRecording: () =>
+    invoke<DebugRecordingSummary>("finish_debug_recording"),
   getVersions: () => invoke<Versions>("get_versions"),
   runtimePaths: () => invoke<RuntimePaths>("runtime_paths"),
   runtimeStatus: () => invoke<RuntimeStatus>("runtime_status"),

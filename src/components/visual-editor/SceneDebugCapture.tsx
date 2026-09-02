@@ -20,7 +20,14 @@ export type ScenePerformanceMetrics = SceneVramEstimate & {
 export type SceneDebugCaptureRequest = {
   id: number;
   action: "metrics" | "start" | "stop";
+  /**
+   * `clip` (default) is the bounded in-memory diagnostic clip. `session` is the
+   * long recording that streams to app data with an activity log beside it.
+   */
+  mode?: "clip" | "session";
   durationMs?: number;
+  /** Session mode only: frames per second, 1 to 10. */
+  fps?: number;
   autoSave?: boolean;
 };
 
@@ -28,8 +35,14 @@ export type SceneDebugCaptureResult = {
   requestId: number;
   action: SceneDebugCaptureRequest["action"];
   status: "ready" | "recording" | "saved" | "error";
+  mode?: "clip" | "session";
   metrics?: ScenePerformanceMetrics;
   path?: string;
+  /** Session mode: the folder holding the video and the activity log. */
+  directory?: string;
+  logPath?: string;
+  videoBytes?: number;
+  toolCalls?: number;
   durationMs?: number;
   message?: string;
 };
@@ -212,6 +225,188 @@ export function SceneVideoCapture({
     const { recorder } = activeRef.current;
     if (recorder.state !== "inactive") recorder.stop();
   }, [recording]);
+
+  useEffect(
+    () => () => {
+      const active = activeRef.current;
+      if (!active) return;
+      active.stream.getTracks().forEach((track) => track.stop());
+      if (active.recorder.state !== "inactive") active.recorder.stop();
+      activeRef.current = null;
+    },
+    [],
+  );
+
+  return null;
+}
+
+export type SceneSessionRecorderSettings = {
+  fps: number;
+  bitsPerSecond: number;
+  timesliceMs: number;
+  maxDurationMs: number;
+};
+
+export type SceneSessionRecorderProps = {
+  /** Non-null while a session should be recording. Set null to stop. */
+  settings: SceneSessionRecorderSettings | null;
+  /** The recorder produced its first data; the video clock starts here. */
+  onStarted: () => void;
+  /**
+   * One chunk of WebM. Chunks are delivered in order and the next is not
+   * handed over until the returned promise settles, so appending them to one
+   * file reproduces exactly the Blob the clip recorder would have built.
+   */
+  onChunk: (bytes: Uint8Array) => Promise<void>;
+  /** The recorder stopped and every chunk has been handed over. */
+  onStopped: () => void;
+  onError: (message: string) => void;
+  /** The safety cap was reached; the parent is expected to set settings null. */
+  onAutoStop: () => void;
+};
+
+type ActiveSessionRecorder = {
+  recorder: MediaRecorder;
+  stream: MediaStream;
+  /** Serialises chunk delivery so appends never race or reorder. */
+  queue: Promise<void>;
+  failed: boolean;
+};
+
+/**
+ * Records the real Scene View canvas for as long as it is asked to, handing
+ * each chunk over as it arrives instead of holding the whole recording in
+ * memory. Frame rate and bitrate come from the settings: a session is watched
+ * as a timelapse, so it records few frames and keeps each one sharp.
+ */
+export function SceneSessionRecorder({
+  settings,
+  onStarted,
+  onChunk,
+  onStopped,
+  onError,
+  onAutoStop,
+}: SceneSessionRecorderProps) {
+  const { gl } = useThree();
+  const activeRef = useRef<ActiveSessionRecorder | null>(null);
+  const startedRef = useRef(onStarted);
+  const chunkRef = useRef(onChunk);
+  const stoppedRef = useRef(onStopped);
+  const errorRef = useRef(onError);
+  const autoStopRef = useRef(onAutoStop);
+  startedRef.current = onStarted;
+  chunkRef.current = onChunk;
+  stoppedRef.current = onStopped;
+  errorRef.current = onError;
+  autoStopRef.current = onAutoStop;
+
+  useEffect(() => {
+    if (!settings || activeRef.current) return;
+    const canvas = gl.domElement as HTMLCanvasElement & {
+      captureStream?: (frameRate?: number) => MediaStream;
+    };
+    if (typeof MediaRecorder === "undefined" || !canvas.captureStream) {
+      errorRef.current("このWebViewはScene Viewの動画録画に対応していません。");
+      return;
+    }
+
+    let stream: MediaStream;
+    try {
+      stream = canvas.captureStream(settings.fps);
+    } catch (error) {
+      errorRef.current(error instanceof Error ? error.message : "Scene Viewを録画できませんでした。");
+      return;
+    }
+
+    const mimeType = [
+      "video/webm;codecs=vp9",
+      "video/webm;codecs=vp8",
+      "video/webm",
+    ].find((candidate) => MediaRecorder.isTypeSupported(candidate));
+    if (!mimeType) {
+      stream.getTracks().forEach((track) => track.stop());
+      errorRef.current("このWebViewで利用できるWebM録画形式がありません。");
+      return;
+    }
+
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(stream, {
+        mimeType,
+        videoBitsPerSecond: settings.bitsPerSecond,
+      });
+    } catch (error) {
+      stream.getTracks().forEach((track) => track.stop());
+      errorRef.current(error instanceof Error ? error.message : "Scene Viewを録画できませんでした。");
+      return;
+    }
+
+    const active: ActiveSessionRecorder = {
+      recorder,
+      stream,
+      queue: Promise.resolve(),
+      failed: false,
+    };
+    const fail = (message: string) => {
+      if (active.failed) return;
+      active.failed = true;
+      stream.getTracks().forEach((track) => track.stop());
+      if (recorder.state !== "inactive") recorder.stop();
+      errorRef.current(message);
+    };
+    recorder.onstart = () => {
+      startedRef.current();
+    };
+    recorder.ondataavailable = (event) => {
+      if (event.data.size === 0 || active.failed) return;
+      const blob = event.data;
+      active.queue = active.queue
+        .then(async () => {
+          if (active.failed) return;
+          const bytes = new Uint8Array(await blob.arrayBuffer());
+          await chunkRef.current(bytes);
+        })
+        .catch((error: unknown) => {
+          fail(error instanceof Error ? error.message : "録画データを保存できませんでした。");
+        });
+    };
+    recorder.onerror = () => {
+      fail("Scene Viewの動画録画中にエラーが発生しました。");
+    };
+    recorder.onstop = () => {
+      stream.getTracks().forEach((track) => track.stop());
+      // onstop fires after the final ondataavailable, so once the queue
+      // drains every chunk has reached the file.
+      void active.queue.finally(() => {
+        if (activeRef.current === active) activeRef.current = null;
+        if (!active.failed) stoppedRef.current();
+      });
+    };
+    activeRef.current = active;
+    try {
+      recorder.start(settings.timesliceMs);
+    } catch (error) {
+      activeRef.current = null;
+      fail(error instanceof Error ? error.message : "Scene Viewを録画できませんでした。");
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      if (activeRef.current === active) {
+        autoStopRef.current();
+      }
+    }, settings.maxDurationMs);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [gl, settings]);
+
+  useEffect(() => {
+    if (settings || !activeRef.current) return;
+    const { recorder } = activeRef.current;
+    if (recorder.state !== "inactive") recorder.stop();
+  }, [settings]);
 
   useEffect(
     () => () => {

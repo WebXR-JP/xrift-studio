@@ -167,7 +167,18 @@ import {
   getKhrInteractivityOnStartAnimationCues,
   type InteractivityAnimationCue,
 } from "../../lib/visual-editor";
-import { tauri } from "../../lib/tauri";
+import {
+  tauri,
+  type DebugRecordingSession,
+  type DebugRecordingSummary,
+} from "../../lib/tauri";
+import {
+  DEFAULT_SESSION_RECORDING_FPS,
+  createSessionRecordingSettings,
+  estimateSessionRecordingBytesPerHour,
+  formatRecordingBytes,
+  formatRecordingElapsed,
+} from "../../lib/visual-editor/scene-view-recording";
 import {
   resolveSceneClickSelection,
   resolveSceneContextMenuTarget,
@@ -194,6 +205,8 @@ import { SceneThumbnailCapture } from "./SceneThumbnailCapture";
 import { TerrainGrassVisual } from "./TerrainGrassVisual";
 import {
   ScenePerformanceProbe,
+  SceneSessionRecorder,
+  type SceneSessionRecorderSettings,
   SceneVideoCapture,
   formatDebugNumber,
   type SceneDebugCaptureRequest,
@@ -4482,6 +4495,22 @@ export function SceneViewport({
   const activeVideoRequestRef = useRef<SceneDebugCaptureRequest | null>(null);
   const activeVideoAutoSaveRef = useRef(false);
   const lastDebugVideoPathRef = useRef<string | null>(null);
+  // The long recording. `sessionSettings` is non-null while the recorder should
+  // run; the rest is what the header, the HUD and the result bar show about it.
+  const [sessionSettings, setSessionSettings] =
+    useState<SceneSessionRecorderSettings | null>(null);
+  const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
+  const [sessionElapsedMs, setSessionElapsedMs] = useState(0);
+  const [sessionBytes, setSessionBytes] = useState(0);
+  const [sessionFinishing, setSessionFinishing] = useState(false);
+  const [sessionResult, setSessionResult] =
+    useState<DebugRecordingSummary | null>(null);
+  // Mirrors "a recording is open on the Rust side" without waiting for a
+  // render, so a stop that lands during the same tick as the start still
+  // finds it.
+  const sessionActiveRef = useRef(false);
+  const sessionMcpRequestRef = useRef<SceneDebugCaptureRequest | null>(null);
+  const anyRecording = videoRecording || sessionSettings !== null;
   const debugResultRef = useRef(onDebugCaptureResult);
   debugResultRef.current = onDebugCaptureResult;
   const viewMenuRef = useRef<HTMLDivElement>(null);
@@ -4752,8 +4781,216 @@ export function SceneViewport({
     }
   }, []);
 
+  const startSessionRecording = useCallback(
+    async (fps: number, request: SceneDebugCaptureRequest | null) => {
+      const reportError = (message: string) => {
+        setDebugNotice(message);
+        if (request) {
+          debugResultRef.current?.({
+            requestId: request.id,
+            action: "start",
+            status: "error",
+            mode: "session",
+            message,
+          });
+        }
+      };
+      if (!tauri.isAvailable()) {
+        reportError("長期録画はデスクトップ版で使えます。");
+        return;
+      }
+      if (videoRecording || videoSaving) {
+        reportError("診断動画を録画中です。停止してから長期録画を始めてください。");
+        return;
+      }
+      if (sessionActiveRef.current || sessionFinishing) {
+        reportError("長期録画は同時に1つだけ実行できます。");
+        return;
+      }
+      const settings = createSessionRecordingSettings(fps);
+      let session: DebugRecordingSession;
+      try {
+        session = await tauri.beginDebugRecording({
+          fps: settings.fps,
+          bitsPerSecond: settings.bitsPerSecond,
+        });
+      } catch (error) {
+        reportError(
+          error instanceof Error ? error.message : "長期録画を開始できませんでした。",
+        );
+        return;
+      }
+      sessionActiveRef.current = true;
+      sessionMcpRequestRef.current = null;
+      setSessionResult(null);
+      setSessionBytes(0);
+      setSessionElapsedMs(0);
+      setSessionStartedAt(Date.now());
+      setDebugOverlayEnabled(true);
+      setSessionSettings(settings);
+      setDebugNotice(
+        `長期録画中 (${settings.fps}fps)。停止するまで記録し、AIの操作ログを一緒に残します`,
+      );
+      if (request) {
+        debugResultRef.current?.({
+          requestId: request.id,
+          action: "start",
+          status: "recording",
+          mode: "session",
+          path: session.videoPath,
+          directory: session.directory,
+          logPath: session.logPath,
+        });
+      }
+    },
+    [sessionFinishing, videoRecording, videoSaving],
+  );
+
+  const stopSessionRecording = useCallback(
+    (request: SceneDebugCaptureRequest | null) => {
+      if (!sessionActiveRef.current) return false;
+      sessionMcpRequestRef.current = request;
+      setSessionFinishing(true);
+      setSessionSettings(null);
+      setDebugNotice("長期録画を保存中…");
+      return true;
+    },
+    [],
+  );
+
+  const handleSessionStarted = useCallback(() => {
+    void tauri.appendDebugRecordingEvent("video-start").catch(() => {});
+  }, []);
+
+  const handleSessionChunk = useCallback(async (bytes: Uint8Array) => {
+    const total = await tauri.appendDebugRecordingChunk(bytes);
+    setSessionBytes(total);
+  }, []);
+
+  const finishSession = useCallback(async (failure: string | null) => {
+    sessionActiveRef.current = false;
+    const request = sessionMcpRequestRef.current;
+    sessionMcpRequestRef.current = null;
+    let summary: DebugRecordingSummary | null = null;
+    let message = failure;
+    try {
+      summary = await tauri.finishDebugRecording();
+    } catch (error) {
+      message ??=
+        error instanceof Error ? error.message : "長期録画を保存できませんでした。";
+    }
+    setSessionFinishing(false);
+    setSessionSettings(null);
+    setSessionStartedAt(null);
+    if (summary && !message) {
+      setSessionResult(summary);
+      setDebugNotice(null);
+      if (request) {
+        debugResultRef.current?.({
+          requestId: request.id,
+          action: "stop",
+          status: "saved",
+          mode: "session",
+          path: summary.videoPath,
+          directory: summary.directory,
+          logPath: summary.logPath,
+          durationMs: summary.durationMs,
+          videoBytes: summary.videoBytes,
+          toolCalls: summary.toolCalls,
+        });
+      }
+      return;
+    }
+    // A failure still leaves what was written on disk, so say where it is.
+    const text = summary
+      ? `${message ?? "長期録画が中断しました。"} 途中までの録画: ${summary.directory}`
+      : (message ?? "長期録画を保存できませんでした。");
+    setDebugNotice(text);
+    if (request) {
+      debugResultRef.current?.({
+        requestId: request.id,
+        action: request.action,
+        status: "error",
+        mode: "session",
+        message: text,
+        ...(summary
+          ? {
+              path: summary.videoPath,
+              directory: summary.directory,
+              logPath: summary.logPath,
+            }
+          : {}),
+      });
+    }
+  }, []);
+
+  const handleSessionStopped = useCallback(() => {
+    void finishSession(null);
+  }, [finishSession]);
+
+  const handleSessionError = useCallback(
+    (message: string) => {
+      if (!sessionActiveRef.current) {
+        setDebugNotice(message);
+        return;
+      }
+      setSessionFinishing(true);
+      setSessionSettings(null);
+      void finishSession(message);
+    },
+    [finishSession],
+  );
+
+  const handleSessionAutoStop = useCallback(() => {
+    setDebugNotice("長期録画が24時間に達したので停止して保存します…");
+    stopSessionRecording(null);
+  }, [stopSessionRecording]);
+
+  const toggleSessionRecording = useCallback(() => {
+    if (sessionFinishing) return;
+    if (sessionActiveRef.current) {
+      stopSessionRecording(null);
+      return;
+    }
+    void startSessionRecording(DEFAULT_SESSION_RECORDING_FPS, null);
+  }, [sessionFinishing, startSessionRecording, stopSessionRecording]);
+
+  useEffect(() => {
+    if (sessionStartedAt === null) return;
+    const tick = () => setSessionElapsedMs(Date.now() - sessionStartedAt);
+    tick();
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, [sessionStartedAt]);
+
+  // A hidden window stops the frame loop, so the video freezes there. The log
+  // records the span so the timelapse can cut it rather than show a still.
+  useEffect(() => {
+    if (!sessionSettings) return;
+    const report = () => {
+      void tauri
+        .appendDebugRecordingEvent("visibility", {
+          hidden: document.visibilityState === "hidden",
+        })
+        .catch(() => {});
+    };
+    document.addEventListener("visibilitychange", report);
+    return () => document.removeEventListener("visibilitychange", report);
+  }, [sessionSettings]);
+
+  useEffect(
+    () => () => {
+      // Leaving the editor closes the files; what was streamed stays on disk.
+      if (sessionActiveRef.current) {
+        sessionActiveRef.current = false;
+        void tauri.finishDebugRecording().catch(() => {});
+      }
+    },
+    [],
+  );
+
   const toggleVideoRecording = useCallback(() => {
-    if (videoSaving) return;
+    if (videoSaving || sessionActiveRef.current) return;
     if (videoRecording) {
       setVideoRecording(false);
       setDebugNotice("診断動画を保存中…");
@@ -4801,13 +5038,24 @@ export function SceneViewport({
       }
       return;
     }
+    if (request.action === "start" && request.mode === "session") {
+      void startSessionRecording(
+        request.fps ?? DEFAULT_SESSION_RECORDING_FPS,
+        request,
+      );
+      return;
+    }
+    if (request.action === "stop" && sessionActiveRef.current) {
+      stopSessionRecording(request);
+      return;
+    }
     if (request.action === "start") {
-      if (videoRecording || videoSaving) {
+      if (videoRecording || videoSaving || sessionActiveRef.current) {
         debugResultRef.current?.({
           requestId: request.id,
           action: "start",
           status: "error",
-          message: "別の診断動画を保存中です。完了後に再試行してください。",
+          message: "別の録画を実行中です。停止または保存の完了後に再試行してください。",
         });
         return;
       }
@@ -4850,7 +5098,15 @@ export function SceneViewport({
     };
     setVideoRecording(false);
     setDebugNotice("診断動画を保存中…");
-  }, [appliedDebugCaptureRequestId, debugCaptureRequest, debugMetrics, videoRecording, videoSaving]);
+  }, [
+    appliedDebugCaptureRequestId,
+    debugCaptureRequest,
+    debugMetrics,
+    startSessionRecording,
+    stopSessionRecording,
+    videoRecording,
+    videoSaving,
+  ]);
 
   useEffect(() => {
     if (editorMode === "play") setProjection("perspective");
@@ -5757,7 +6013,7 @@ export function SceneViewport({
               onClick={() => setViewMenuOpen((open) => !open)}
               title="カメラ投影方式、表示モード、診断、録画"
               className={`flex h-7 shrink-0 items-center justify-center gap-1 rounded border px-2 text-[11px] font-semibold transition-colors @[420px]/scene-header:min-w-[66px] @[760px]/scene-header:hidden ${
-                videoRecording
+                anyRecording
                   ? "border-rose-300 bg-rose-500/15 text-rose-700"
                   : debugOverlayEnabled
                     ? editorMode === "play"
@@ -5772,7 +6028,7 @@ export function SceneViewport({
             >
               <EDITOR_ICONS.settings size={13} aria-hidden="true" />
               <span className="hidden @[420px]/scene-header:inline">
-                {videoRecording ? "録画中" : "表示"}
+                {anyRecording ? "録画中" : "表示"}
               </span>
             </button>
             <div
@@ -5899,7 +6155,7 @@ export function SceneViewport({
                 type="button"
                 aria-label={videoRecording ? "診断動画を停止" : "診断動画を録画"}
                 onClick={toggleVideoRecording}
-                disabled={videoSaving}
+                disabled={videoSaving || sessionSettings !== null || sessionFinishing}
                 title={videoRecording ? "診断動画を停止して保存" : "Scene Viewを最大15秒録画"}
                 className={`flex h-7 min-w-[68px] shrink-0 items-center justify-center gap-1 rounded border px-2 text-[11px] font-semibold transition-colors disabled:cursor-wait disabled:opacity-50 ${
                   videoRecording
@@ -5911,6 +6167,31 @@ export function SceneViewport({
               >
                 <EDITOR_ICONS.record size={13} aria-hidden="true" />
                 {videoSaving ? "保存中" : videoRecording ? "停止" : "録画"}
+              </button>
+              <button
+                type="button"
+                aria-label={sessionSettings ? "長期録画を停止して保存" : "長期録画を開始"}
+                onClick={toggleSessionRecording}
+                disabled={videoRecording || videoSaving || sessionFinishing}
+                title={
+                  sessionSettings
+                    ? `長期録画中 ${formatRecordingElapsed(sessionElapsedMs)}・${formatRecordingBytes(sessionBytes)}。押すと停止して保存`
+                    : `Scene Viewを時間無制限で録画 (${DEFAULT_SESSION_RECORDING_FPS}fps、約${formatRecordingBytes(estimateSessionRecordingBytesPerHour(DEFAULT_SESSION_RECORDING_FPS))}/時)。AIの操作ログを一緒に残す`
+                }
+                className={`flex h-7 min-w-[68px] shrink-0 items-center justify-center gap-1 rounded border px-2 text-[11px] font-semibold tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                  sessionSettings
+                    ? "border-rose-300 bg-rose-500/15 text-rose-700 hover:bg-rose-500/25"
+                    : editorMode === "play"
+                      ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
+                      : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100"
+                }`}
+              >
+                <EDITOR_ICONS.record size={13} aria-hidden="true" />
+                {sessionFinishing
+                  ? "保存中"
+                  : sessionSettings
+                    ? `停止 ${formatRecordingElapsed(sessionElapsedMs)}`
+                    : "長期録画"}
               </button>
             </div>
           </div>
@@ -6039,8 +6320,16 @@ export function SceneViewport({
           />
 
           <ScenePerformanceProbe
-            enabled={debugOverlayEnabled || videoRecording}
+            enabled={debugOverlayEnabled || anyRecording}
             onSample={handleDebugMetrics}
+          />
+          <SceneSessionRecorder
+            settings={sessionSettings}
+            onStarted={handleSessionStarted}
+            onChunk={handleSessionChunk}
+            onStopped={handleSessionStopped}
+            onError={handleSessionError}
+            onAutoStop={handleSessionAutoStop}
           />
           <SceneVideoCapture
             recording={videoRecording}
@@ -6150,7 +6439,13 @@ export function SceneViewport({
           >
             <div className="flex items-center justify-between gap-2 font-sans text-[11px] font-semibold">
               <span>Scene View診断</span>
-              <span className="text-cyan-200">{videoRecording ? "REC" : "LIVE"}</span>
+              <span className="text-cyan-200">
+                {videoRecording
+                  ? "REC"
+                  : sessionSettings
+                    ? `REC ${formatRecordingElapsed(sessionElapsedMs)} ${formatRecordingBytes(sessionBytes)}`
+                    : "LIVE"}
+              </span>
             </div>
             <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-cyan-100/90">
               <span>FPS {formatDebugNumber(debugMetrics.fps, 1)}</span>
@@ -6368,7 +6663,34 @@ export function SceneViewport({
           </div>
         ) : null}
 
-        {notice ?? debugNotice ? (
+        {sessionResult && !sessionSettings && !notice ? (
+          <div
+            className="absolute bottom-2.5 left-1/2 z-10 flex max-w-[92%] -translate-x-1/2 items-center gap-2 rounded-md border border-zinc-700 bg-zinc-950/90 px-3 py-1.5 text-xs leading-4 text-zinc-100 shadow-lg"
+            role="status"
+            aria-live="polite"
+          >
+            <span className="truncate" title={sessionResult.directory}>
+              長期録画を保存しました {formatRecordingElapsed(sessionResult.durationMs)}・
+              {formatRecordingBytes(sessionResult.videoBytes)}・AIの操作 {sessionResult.toolCalls}件
+            </span>
+            <button
+              type="button"
+              onClick={() => void tauri.openPath(sessionResult.directory)}
+              className="shrink-0 rounded border border-zinc-600 px-2 py-0.5 font-semibold text-zinc-100 transition-colors hover:border-zinc-400 hover:bg-zinc-800"
+            >
+              保存先を開く
+            </button>
+            <button
+              type="button"
+              onClick={() => setSessionResult(null)}
+              className="shrink-0 rounded px-1.5 py-0.5 text-zinc-400 transition-colors hover:text-zinc-100"
+            >
+              閉じる
+            </button>
+          </div>
+        ) : null}
+
+        {(notice ?? debugNotice) && !(sessionResult && !sessionSettings && !notice) ? (
           <div
             className="pointer-events-none absolute bottom-2.5 left-1/2 z-10 max-w-[84%] -translate-x-1/2 rounded-md border border-zinc-700 bg-zinc-950/90 px-3 py-1.5 text-xs leading-4 text-zinc-100 shadow-lg"
             role="status"

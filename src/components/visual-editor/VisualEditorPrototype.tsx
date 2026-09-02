@@ -248,6 +248,11 @@ import { InteractivityGraphEditor } from "./InteractivityGraphEditor";
 import { EditorUtilityRail } from "./EditorUtilityRail";
 import { SupportReportModal } from "../SupportReportModal";
 import type { XriftMcpActivity } from "./AiConnectionPanel";
+import {
+  SESSION_RECORDING_MAX_FPS,
+  SESSION_RECORDING_MIN_FPS,
+  resolveSessionRecordingFps,
+} from "../../lib/visual-editor/scene-view-recording";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { HierarchyPanel } from "./HierarchyPanel";
 import {
@@ -2491,6 +2496,16 @@ export function VisualEditorPrototype({
               "actionはmetrics、start、stopのいずれかで指定してください",
             );
           }
+          const mode =
+            args.mode === undefined
+              ? "clip"
+              : mcpRequiredString(args.mode, "mode");
+          if (mode !== "clip" && mode !== "session") {
+            throw new XriftMcpEditorToolError(
+              "INVALID_ARGUMENT",
+              "modeはclipまたはsessionで指定してください",
+            );
+          }
           const requestedDuration =
             args.durationMs === undefined
               ? undefined
@@ -2504,10 +2519,38 @@ export function VisualEditorPrototype({
               "durationMsは1000〜15000の範囲で指定してください",
             );
           }
+          if (requestedDuration !== undefined && mode === "session") {
+            throw new XriftMcpEditorToolError(
+              "INVALID_ARGUMENT",
+              "session modeに時間の上限はありません。durationMsはclip modeでだけ指定できます",
+            );
+          }
+          const requestedFps =
+            args.fps === undefined
+              ? undefined
+              : resolveSessionRecordingFps(
+                  mcpOptionalInteger(args.fps, "fps"),
+                );
+          if (args.fps !== undefined && requestedFps === null) {
+            throw new XriftMcpEditorToolError(
+              "INVALID_ARGUMENT",
+              `fpsは${SESSION_RECORDING_MIN_FPS}〜${SESSION_RECORDING_MAX_FPS}の整数で指定してください`,
+            );
+          }
+          if (requestedFps !== undefined && mode !== "session") {
+            throw new XriftMcpEditorToolError(
+              "INVALID_ARGUMENT",
+              "fpsはsession modeでだけ指定できます。clip modeは30fpsで録画します",
+            );
+          }
           const result = await requestDebugCapture({
             action,
+            mode,
             ...(requestedDuration !== undefined
               ? { durationMs: requestedDuration }
+              : {}),
+            ...(requestedFps !== undefined && requestedFps !== null
+              ? { fps: requestedFps }
               : {}),
             autoSave: true,
           });

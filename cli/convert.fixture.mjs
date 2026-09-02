@@ -87,6 +87,7 @@ import { runSceneViewportQualityFixtureAssertions } from "../src/components/visu
 import { runSceneVramEstimateFixtureAssertions } from "../src/components/visual-editor/scene-vram-estimate.fixture.ts";
 import { runWorldPlaySpawnFixtureAssertions } from "../src/components/visual-editor/world-play-spawn.fixture.ts";
 import { runEditorLibraryDragFixture } from "../src/components/visual-editor/editor-library-drag.fixture.ts";
+import { runSceneViewRecordingFixtureAssertions } from "../src/lib/visual-editor/scene-view-recording.fixture.ts";
 import { runMaterialDragFixtureAssertions } from "../src/components/visual-editor/material-drag.fixture.ts";
 import { runProjectModelMaterialPreviewFixtureAssertions } from "../src/components/visual-editor/ProjectModelVisual.fixture.ts";
 import { runScriptExecutionScopeFixtureAssertions } from "../src/components/visual-editor/script-execution-scope.fixture.ts";
@@ -413,6 +414,7 @@ try {
     ["unity package import", runUnityPackageImportFixture],
     ["editor drag data", runEditorDragDataFixture],
     ["editor library drag", runEditorLibraryDragFixture],
+    ["scene view recording", runSceneViewRecordingFixtureAssertions],
     ["material drag", runMaterialDragFixtureAssertions],
     ["custom material preview", runCustomMaterialPreviewFixtureAssertions],
     ["project model material preview", runProjectModelMaterialPreviewFixtureAssertions],
