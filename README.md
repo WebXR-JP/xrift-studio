@@ -43,7 +43,7 @@ Node.js や `@xrift/cli` の導入、コードまたはビジュアルエディ�
 | 公開前に容量を見積もる | 対応 | 対応 | 初回ロード容量と回線別の時間、Assetと実行時VRAMの目安を確認し、resize、KTX2、Dracoを選んで適用してから同じ確認画面へ戻る。 |
 | 公開したものを確認する | 対応 | 対応 | アップロード後にworldId／itemId、version、content hashを表示する。公式の結果がURLを返した場合はそのページを開く。審査中を公開済みとしては表示しない。 |
 | AIと一緒にSceneを編集する | 検証中 | 検証中 | Codex、Claude Code、Claude Desktop / Cowork、OpenCode、Cursorをアプリから登録し、必要ならOllamaのローカルmodelでCodex、Claude Code、OpenCodeを構成する。開いているSceneの読取・設定変更・Asset配置を限定MCP toolで行う。 |
-| 外部ツールで作業を続ける | 対応 | 対応 | プロジェクトをVS Codeまたはターミナルで開く。開発版CLIはVisual projectをRuntime JSON付きClassic projectへ一方向に書き出せる。 |
+| 外部ツールで作業を続ける | 対応 | 対応 | プロジェクトをVS Codeまたはターミナルで開く。開発版CLIはVisual projectを、公開時と同じTypeScript / R3Fソースを持つClassic projectへ一方向に書き出せる。 |
 
 `対応` はデスクトップ版の主要導線で操作できること、`検証中` は実装済みの範囲を実データや配布環境で確認していることを示します。ブラウザ版は制作フローを確認するためのWebプレビューであり、ログイン、ローカルファイル操作、CLI実行、アップロードは行いません。
 
@@ -61,7 +61,7 @@ Visual Editor headerの「Classicへ書き出す」からは、既存のClassic 
 xrift-studio convert ./my-visual-project --to classic --out ./my-xrift-world
 ```
 
-CLIはnpm公開前のため、`pnpm cli:build`でビルドして`node dist/cli/xrift-studio.mjs`から実行します。生成するRuntime JSONは`xrift-studio-runtime/three`または`xrift-studio-runtime/react-three-fiber`から読み込みます。仕様とRuntime Componentの対応範囲は[Visual Project Classic Export CLI](./docs/VISUAL_PROJECT_MIGRATION_CLI.md)を参照してください。
+CLIはnpm公開前のため、`pnpm cli:build`でビルドして`node dist/cli/xrift-studio.mjs`から実行します。書き出すのは公開時にXRiftへ送るものと同じTypeScript / React Three Fiberのソースで、書き出し先は公式テンプレートの依存関係だけで`npm install`と`npm run dev`が通ります。仕様は[Visual Project Classic Export CLI](./docs/VISUAL_PROJECT_MIGRATION_CLI.md)を参照してください。
 
 ## 体験設計
 

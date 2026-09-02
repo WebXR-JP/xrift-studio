@@ -13,9 +13,9 @@ import { useDownloadCta } from "../lib/useLatestRelease";
 import { type ProjectKind } from "../content";
 
 const pills = [
-  { icon: Shapes, text: "ワールド制作", tone: "preview-hero-pill-violet" },
-  { icon: PackageOpen, text: "アイテム制作", tone: "preview-hero-pill-cyan" },
-  { icon: MonitorPlay, text: "画面でも、コードでも", tone: "preview-hero-pill-amber" },
+  { icon: Shapes, text: "ワールド制作" },
+  { icon: PackageOpen, text: "アイテム制作" },
+  { icon: MonitorPlay, text: "画面でも、コードでも" },
 ] as const;
 
 export function Hero({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => void }) {
@@ -42,7 +42,7 @@ export function Hero({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => void }
             data-reveal
           >
             置いて、動かして、
-            <span className="preview-gradient-text block">そのままXRiftへ。</span>
+            <span className="preview-title-accent block">そのままXRiftへ。</span>
           </h1>
           <p
             className="mx-auto mt-7 max-w-2xl text-pretty text-base leading-8 text-zinc-600 sm:text-lg"
@@ -58,7 +58,7 @@ export function Hero({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => void }
             {pills.map((pill) => {
               const Icon = pill.icon;
               return (
-                <li key={pill.text} className={`preview-hero-pill ${pill.tone}`}>
+                <li key={pill.text} className="preview-hero-pill">
                   <Icon size={15} />
                   {pill.text}
                 </li>

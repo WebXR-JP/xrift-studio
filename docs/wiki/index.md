@@ -83,7 +83,7 @@ XRift Studio での制作は、次のような流れで進みます。
 | ローカルで動作を確認する | 開発サーバーを起動・停止し、プレビュー URL をブラウザで開く。 |
 | 公開前に容量を見積もる | 初回ロード容量と回線別の時間、Asset と実行時 VRAM の目安を確認し、resize、KTX2、Draco を選んで適用する。 |
 | XRift に公開する | ログイン後、タイトル・説明・サムネイルを確認してアップロードする。 |
-| 通常の XRift 開発へ渡す | ビジュアル制作データを、Runtime JSON 付きの Classic プロジェクトへ一方向に書き出す。 |
+| 通常の XRift 開発へ渡す | ビジュアル制作データを、公開時と同じ TypeScript / R3F ソースを持つ Classic プロジェクトへ一方向に書き出す。 |
 | AI と一緒に Scene を編集する | Codex、Claude Code、OpenCode、Cursor などを登録し、限定 MCP tool で Scene を編集する。 |
 
 ## まずはブラウザで見る

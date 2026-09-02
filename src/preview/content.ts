@@ -42,16 +42,12 @@ export const productKinds = [
   {
     icon: Globe2,
     title: "ワールド",
-    label: "ワールド",
     text: "人が集まって一緒に過ごせる空間です。ロビーや美術館、遊び場を作ってXRiftに公開できます。",
-    tone: "preview-kind-violet",
   },
   {
     icon: Box,
     title: "アイテム",
-    label: "アイテム",
     text: "手に取って持ち歩ける道具や飾りです。どのワールドへも持っていける形で作って、みんなに共有できます。",
-    tone: "preview-kind-cyan",
   },
 ] as const;
 
@@ -152,19 +148,16 @@ export const importGroups = [
     icon: Box,
     label: "3Dモデル・アバター",
     formats: `GLB / glTF / OBJ / VRM / FBX ほか計${modelFormatCount}形式`,
-    tone: "preview-import-violet",
   },
   {
     icon: Image,
     label: "テクスチャ・空気感",
     formats: "PNG / JPG / WebP / AVIF / KTX2 / HDR / EXR",
-    tone: "preview-import-cyan",
   },
   {
     icon: AudioLines,
     label: "BGM・効果音",
     formats: `MP3 / WAV / Ogg / FLAC ほか計${audioFormatCount}形式`,
-    tone: "preview-import-amber",
   },
 ] as const;
 

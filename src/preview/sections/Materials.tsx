@@ -4,7 +4,12 @@ export function Materials() {
   return (
     <section className="preview-section preview-section-soft px-5 lg:px-8">
       <div className="mx-auto max-w-7xl">
-        <div className="grid gap-12 lg:grid-cols-[0.78fr_1.22fr] lg:items-end">
+        {/*
+          The heading column was 0.78fr, which is narrower than "いつもの素材から、
+          すぐ始める。" needs: it wrapped to three lines while the cards beside it
+          had room to spare. Nearly even columns give the heading its two lines.
+        */}
+        <div className="grid gap-12 lg:grid-cols-[0.95fr_1.05fr] lg:items-end">
           <div data-reveal>
             <p className="preview-eyebrow">使える素材</p>
             <h2 className="preview-section-title mt-4">いつもの素材から、すぐ始める。</h2>
@@ -17,12 +22,12 @@ export function Materials() {
             {importGroups.map((group) => {
               const Icon = group.icon;
               return (
-                <article key={group.label} className={`preview-import-card ${group.tone}`}>
+                <article key={group.label} className="preview-import-card">
                   <Icon size={22} />
-                  <h3 className="mt-8 text-base font-black tracking-tight text-zinc-950">
+                  <h3 className="mt-7 text-base font-black tracking-tight text-zinc-950">
                     {group.label}
                   </h3>
-                  <p className="mt-2 text-xs font-bold leading-6 text-zinc-600">
+                  <p className="preview-import-formats mt-2 text-xs font-bold leading-6">
                     {group.formats}
                   </p>
                 </article>

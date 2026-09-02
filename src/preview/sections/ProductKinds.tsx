@@ -15,17 +15,19 @@ export function ProductKinds() {
           {productKinds.map((kind) => {
             const Icon = kind.icon;
             return (
-              <article key={kind.title} className={`preview-kind-card ${kind.tone}`}>
-                <div className="flex items-center justify-between">
-                  <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white text-zinc-950 shadow-sm">
-                    <Icon size={22} />
-                  </span>
-                  <span className="text-[11px] font-black tracking-[0.2em] opacity-70">
-                    {kind.label}
-                  </span>
-                </div>
-                <h3 className="mt-7 text-2xl font-black tracking-[-0.04em]">{kind.title}</h3>
-                <p className="mt-3 max-w-md text-sm leading-7 opacity-80">{kind.text}</p>
+              <article key={kind.title} className="preview-kind-card">
+                {/*
+                  The corner used to repeat the card's own heading — "ワールド"
+                  above "ワールド" — so it is gone. The icon already says which
+                  card this is, and the heading says it in words.
+                */}
+                <span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-50 text-violet-700">
+                  <Icon size={22} />
+                </span>
+                <h3 className="mt-7 text-2xl font-black tracking-[-0.04em] text-zinc-950">
+                  {kind.title}
+                </h3>
+                <p className="mt-3 max-w-md text-sm leading-7 text-zinc-600">{kind.text}</p>
               </article>
             );
           })}

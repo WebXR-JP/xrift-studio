@@ -4,7 +4,9 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   rm,
+  stat,
   writeFile,
 } from "node:fs/promises";
 import os from "node:os";
@@ -18,6 +20,12 @@ import {
   visualProjectDocumentCodec,
 } from "../src/lib/visual-editor/serialization.ts";
 import { XriftThreeLoader } from "../packages/xrift-studio-runtime/src/three/index.ts";
+import { compileVisualProject } from "../src/lib/visual-editor/compiler/index.ts";
+import { createStagedTypecheckWorldDocuments } from "../src/lib/visual-editor/compiler/staged-world.fixture.ts";
+import {
+  generateClassicEntrySource,
+  planClassicExportFiles,
+} from "../src/lib/visual-editor/classic-export.ts";
 import { runStarterTemplateFixtureAssertions } from "../src/lib/visual-editor/starter-templates.fixture.ts";
 import { createStarterWorldProject } from "../src/lib/visual-editor/starter-templates.ts";
 import { prepareStarterVisualProject } from "../src/lib/visual-editor/persistence.ts";
@@ -224,8 +232,9 @@ try {
   });
   assert(dryRun.status === "ready", `dry-run must report a writable export, got ${dryRun.status}: ${JSON.stringify(dryRun.diagnostics ?? dryRun).slice(0, 400)}`);
   assert(
-    dryRun.plannedFiles.includes("public/xrift-runtime.json"),
-    "dry-run must include Runtime JSON",
+    dryRun.plannedFiles.includes("src/World.tsx") &&
+      !dryRun.plannedFiles.includes("public/xrift-runtime.json"),
+    "dry-run must plan the compiled Scene source, not a Runtime JSON",
   );
 
   const converted = await convertVisualProject({
@@ -236,27 +245,54 @@ try {
     cliVersion: "fixture",
   });
   assert(converted.status === "succeeded", "convert must succeed");
-  const runtime = JSON.parse(
-    await readFile(path.join(classicRoot, "public", "xrift-runtime.json"), "utf8"),
-  );
-  assert(runtime.format === "xrift-studio.runtime", "runtime format is incorrect");
-  const loaded = await new XriftThreeLoader().parse(runtime);
-  assert(loaded.entities.size === 4, "Three loader did not create all fixture entities");
   const worldSource = await readFile(path.join(classicRoot, "src", "World.tsx"), "utf8");
   assert(
-    worldSource.includes("xrift-studio-runtime/react-three-fiber") &&
-      worldSource.includes("xrift-runtime.json") &&
-      worldSource.includes("export interface WorldProps") &&
-      worldSource.includes("<group position={position} scale={scale}>"),
-    "Classic adapter is not using xrift-studio-runtime",
+    worldSource.includes("export const World: FC<WorldProps>") &&
+      worldSource.includes("<group position={position} scale={scale}") &&
+      worldSource.includes('from "./xrift-studio/light-runtime"'),
+    "Classic entry is not the compiled JSX Scene",
+  );
+  assert(
+    !worldSource.includes("xrift-studio-runtime"),
+    "Classic entry must not import the unpublished runtime package",
   );
   const packageJson = JSON.parse(
     await readFile(path.join(classicRoot, "package.json"), "utf8"),
   );
   assert(
-    packageJson.dependencies?.["xrift-studio-runtime"] === "0.1.0",
-    "Classic package is missing the runtime dependency",
+    packageJson.dependencies?.["xrift-studio-runtime"] === undefined,
+    "Classic package must not depend on the unpublished runtime package",
   );
+  assert(
+    packageJson.dependencies?.["@xrift/world-components"] === "0.47.0",
+    "Classic package must pin @xrift/world-components to the compiler's version when the template has none",
+  );
+  const xriftJson = JSON.parse(
+    await readFile(path.join(classicRoot, "xrift.json"), "utf8"),
+  );
+  assert(
+    xriftJson.world?.title === prototype.project.metadata.title &&
+      xriftJson.world.ignore.includes("**/index.html") &&
+      xriftJson.world.ignore.includes("**/__federation_shared_@react-three/drei-*.js") &&
+      xriftJson.world.ignore.includes("**/.DS_Store"),
+    `xrift.json must keep the template's upload ignore rules beside the compiler's, got ${JSON.stringify(xriftJson.world?.ignore)}`,
+  );
+
+  // The Runtime JSON output still exists for the browser upload's prebuilt
+  // shell, so the Three loader keeps reading what the compiler writes for it.
+  const runtimeCompilation = compileVisualProject(
+    {
+      project: prototype.project,
+      scenes: { [prototype.scene.sceneId]: prototype.scene },
+      assets: prototype.assets,
+      prefabs: prototype.prefabs,
+    },
+    { outputMode: "classic-runtime" },
+  );
+  const runtime = JSON.parse(runtimeCompilation.runtimeManifestFile.content);
+  assert(runtime.format === "xrift-studio.runtime", "runtime format is incorrect");
+  const loaded = await new XriftThreeLoader().parse(runtime);
+  assert(loaded.entities.size === 4, "Three loader did not create all fixture entities");
 
   const updated = await convertVisualProject({
     source: visualRoot,
@@ -282,6 +318,8 @@ try {
       error instanceof ConvertError && error.code === "update-file-modified";
   }
   assert(modifiedRejected, "--update must reject a modified Classic export");
+
+  await convertRichWorld(fixtureRoot);
   await runFixtureSuites([
     ["visual compiler", runVisualCompilerFixtureAssertions],
     ["terrain", runTerrainFixtureAssertions],
@@ -391,6 +429,107 @@ try {
 }
 
 /**
+ * Converts a world that reaches the emit paths a primitive-only Scene cannot:
+ * a Script (read from disk and emitted as a module), Text (a font copied to
+ * the world root and troika recorded), a Texture (copied to the world root)
+ * and the Sky / Water shaders. What the generated entry imports has to exist
+ * in the output, or the author's first `npm run build` fails.
+ */
+async function convertRichWorld(fixtureRoot) {
+  const documents = createStagedTypecheckWorldDocuments();
+  const visualRoot = path.join(fixtureRoot, "rich-visual-world");
+  const classicRoot = path.join(fixtureRoot, "rich-classic-world");
+  await mkdir(path.join(visualRoot, "scenes"), { recursive: true });
+  await mkdir(path.join(visualRoot, "assets", "textures"), { recursive: true });
+  await mkdir(path.join(visualRoot, "scripts"), { recursive: true });
+  await mkdir(path.join(visualRoot, "public"), { recursive: true });
+  await writeFile(
+    path.join(visualRoot, "xrift-studio.project.json"),
+    visualProjectDocumentCodec.serialize(documents.project),
+  );
+  const [sceneId, scene] = Object.entries(documents.scenes)[0];
+  await writeFile(
+    path.join(visualRoot, documents.project.scenePaths[sceneId]),
+    sceneDocumentCodec.serialize(scene),
+  );
+  await writeFile(
+    path.join(visualRoot, documents.project.assetManifestPath),
+    assetManifestCodec.serialize(documents.assets),
+  );
+  for (const asset of Object.values(documents.assets.assets)) {
+    if (asset.source?.kind !== "project") continue;
+    const target = path.join(visualRoot, asset.source.relativePath);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(
+      target,
+      asset.kind === "script"
+        ? documents.scriptSources[asset.id]
+        : `fixture bytes for ${asset.id}`,
+    );
+  }
+  await writeFile(path.join(visualRoot, "public", "thumbnail.png"), "thumbnail");
+
+  const converted = await convertVisualProject({
+    source: visualRoot,
+    out: classicRoot,
+    dryRun: false,
+    update: false,
+    cliVersion: "fixture",
+  });
+  assert(
+    converted.status === "succeeded",
+    `rich convert must succeed, got ${converted.status}: ${JSON.stringify(converted.diagnostics).slice(0, 600)}`,
+  );
+  const worldSource = await readFile(path.join(classicRoot, "src", "World.tsx"), "utf8");
+  const scriptImport = worldSource.match(/from "(\.\/scripts\/[^"]+)"/)?.[1];
+  assert(scriptImport, "the rich world's Script was not imported by the entry");
+  const scriptModule = await readFile(
+    path.join(classicRoot, "src", `${scriptImport.slice(2)}.ts`),
+    "utf8",
+  );
+  assert(
+    scriptModule.includes('from "../xrift-studio/script-api"'),
+    "the emitted Script module was not written from the Visual project's source",
+  );
+  const outputFiles = (await listFilesRecursively(classicRoot)).map((file) =>
+    path.relative(classicRoot, file).replaceAll(path.sep, "/"),
+  );
+  const font = outputFiles.find((file) => /^public\/[^/]+\.woff$/.test(file));
+  assert(font, `the Text font was not copied to the world root, got ${outputFiles.filter((file) => file.startsWith("public/")).join(", ")}`);
+  assert(
+    (await stat(path.join(classicRoot, font))).size > 1000,
+    "the copied font is not the real @fontsource file",
+  );
+  assert(
+    outputFiles.some((file) => /^public\/xrift-studio-.*\.png$/.test(file)),
+    "the Texture was not copied to the world root",
+  );
+  assert(
+    outputFiles.includes("src/xrift-studio/script-host.tsx") &&
+      outputFiles.includes("src/xrift-studio/text-panel-runtime.tsx"),
+    "the runtime modules the entry imports were not written",
+  );
+  const packageJson = JSON.parse(
+    await readFile(path.join(classicRoot, "package.json"), "utf8"),
+  );
+  assert(
+    typeof packageJson.dependencies?.["troika-three-text"] === "string" &&
+      packageJson.dependencies?.["xrift-studio-runtime"] === undefined,
+    "the rich world's package.json does not record what the Text runtime needs",
+  );
+}
+
+async function listFilesRecursively(root) {
+  const found = [];
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    const absolute = path.join(root, entry.name);
+    if (entry.isDirectory()) found.push(...(await listFilesRecursively(absolute)));
+    else found.push(absolute);
+  }
+  return found;
+}
+
+/**
  * The platform scans the built bundle and rejects a world whose own code makes
  * a network call it did not declare. The rule does not care that a request is
  * same-origin, so an emitted overlay reaching for `fetch` is a rejected publish
@@ -444,25 +583,7 @@ async function runStagedWorldTypecheck() {
     compiled.canStage && blocking.length === 0,
     `staged typecheck world must be stageable: ${JSON.stringify(blocking).slice(0, 400)}`,
   );
-  // Inside node_modules on purpose: the staged sources import three, react and
-  // @xrift/world-components, and tsc resolves them by walking up to this
-  // repository's node_modules — the same versions the compiler was built
-  // against.
-  const stagedRoot = path.resolve(
-    "node_modules",
-    ".cache",
-    "xrift-studio",
-    "staged-typecheck",
-  );
-  await rm(stagedRoot, { recursive: true, force: true });
-  const written = [];
-  for (const file of compiled.overlayFiles) {
-    if (!/\.(ts|tsx)$/.test(file.relativePath)) continue;
-    const target = path.join(stagedRoot, file.relativePath);
-    await mkdir(path.dirname(target), { recursive: true });
-    await writeFile(target, file.content);
-    written.push(file.relativePath);
-  }
+  const written = compiled.overlayFiles.map((file) => file.relativePath);
   assert(
     written.includes("src/World.tsx") &&
       written.includes("src/xrift-studio/script-host.tsx") &&
@@ -472,10 +593,53 @@ async function runStagedWorldTypecheck() {
   assertStagedWorldDeclaresItsNetworkUse(compiled);
   // The template consumes the world through src/index.tsx, so the staged
   // sources are imported the same way here.
-  await writeFile(
-    path.join(stagedRoot, "src", "index.tsx"),
+  await typecheckWithTemplateOptions(
+    "staged-typecheck",
+    compiled.overlayFiles,
     'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
   );
+
+  // The desktop export relocates the same sources under the export's own
+  // directory inside an existing project. Every relative import has to
+  // survive the move, and the replacement entry has to keep the names the
+  // template's index.tsx re-exports.
+  const plan = planClassicExportFiles(
+    compiled,
+    "staged-typecheck-export",
+    "world",
+  );
+  await typecheckWithTemplateOptions(
+    "classic-export-relocated",
+    [
+      ...plan.sourceFiles,
+      {
+        relativePath: "src/World.tsx",
+        content: generateClassicEntrySource("world", plan.exportId),
+      },
+    ],
+    'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
+  );
+}
+
+async function typecheckWithTemplateOptions(label, files, indexSource) {
+  // Inside node_modules on purpose: the staged sources import three, react and
+  // @xrift/world-components, and tsc resolves them by walking up to this
+  // repository's node_modules — the same versions the compiler was built
+  // against.
+  const stagedRoot = path.resolve(
+    "node_modules",
+    ".cache",
+    "xrift-studio",
+    label,
+  );
+  await rm(stagedRoot, { recursive: true, force: true });
+  for (const file of files) {
+    if (!/\.(ts|tsx)$/.test(file.relativePath)) continue;
+    const target = path.join(stagedRoot, file.relativePath);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, file.content);
+  }
+  await writeFile(path.join(stagedRoot, "src", "index.tsx"), indexSource);
   // Mirrors the @xrift/cli world template's tsconfig (verified against a real
   // publish staging). "types" deliberately leaves out @types/node: the staged
   // build has no Node globals, so the gate must not either.
@@ -530,7 +694,7 @@ async function runStagedWorldTypecheck() {
   });
   assert(
     result.code === 0,
-    `staged world sources do not typecheck under the publish template's tsconfig (${stagedRoot}):\n${result.output.slice(0, 4000)}`,
+    `${label}: sources do not typecheck under the publish template's tsconfig (${stagedRoot}):\n${result.output.slice(0, 4000)}`,
   );
 }
 
@@ -586,7 +750,7 @@ const root = path.join(process.cwd(), name);
 await mkdir(path.join(root, "src"), { recursive: true });
 await mkdir(path.join(root, "public"), { recursive: true });
 await writeFile(path.join(root, "package.json"), JSON.stringify({ name, private: true, type: "module", scripts: { build: "vite build" }, dependencies: { react: "^19.0.0", three: "^0.185.0" } }, null, 2) + "\\n");
-await writeFile(path.join(root, "xrift.json"), "{}\\n");
+await writeFile(path.join(root, "xrift.json"), JSON.stringify({ [kind]: { ignore: ["**/index.html", "**/__federation_shared_@react-three/drei-*.js"] } }) + "\\n");
 await writeFile(path.join(root, "src", kind === "world" ? "World.tsx" : "Item.tsx"), "export {};\\n");
 await writeFile(path.join(root, "README.md"), "# Fixture\\n");
 `,
