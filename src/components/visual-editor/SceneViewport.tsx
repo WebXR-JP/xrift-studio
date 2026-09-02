@@ -284,8 +284,15 @@ import {
   useWorldPlayPointerLocked,
   useWorldPlayTeleport,
   useWorldPlayUsers,
+  type WorldPlayLockFailure,
 } from "./WorldPlayPlayer";
 import { resolveWorldPlayCapsuleSpawn } from "./world-play-spawn";
+import {
+  SceneModelLoadTrackerContext,
+  createSceneModelLoadTracker,
+  useSceneModelLoadReport,
+  useWorldPlaySceneReady,
+} from "./scene-model-load-tracker";
 import { ScrubNumberInput } from "./ScrubNumberInput";
 
 /**
@@ -588,6 +595,10 @@ function MeshVisual({
   viewportMaterialStyle: SceneViewportMaterialStyle;
   projectPath?: string;
 }) {
+  // Play waits for this: a model that is still loading has no Collider yet, and
+  // a player dropped into a floorless Scene starts the session inside the
+  // ground the model was about to bring with it.
+  const reportModelLoad = useSceneModelLoadReport();
   const geometryAssetId =
     component.geometry?.kind === "asset"
       ? component.geometry.assetId
@@ -691,6 +702,7 @@ function MeshVisual({
               : undefined
           }
           viewportMaterialStyle={viewportMaterialStyle}
+          onLoadStateChange={reportModelLoad}
         />
       </RenderDistanceGate>
     );
@@ -4845,7 +4857,11 @@ export function SceneViewport({
   const pressedKeysRef = useRef(new Set<string>());
   const playPointerLocked = useWorldPlayPointerLocked();
   const [playAimHit, setPlayAimHit] = useState(false);
-  const [playLockRefused, setPlayLockRefused] = useState(false);
+  const [playLockRefused, setPlayLockRefused] =
+    useState<WorldPlayLockFailure | null>(null);
+  // Created once for the viewport: the tracker outlives a Play session so
+  // entering Play never races the Scene's models registering themselves.
+  const [sceneModelLoads] = useState(createSceneModelLoadTracker);
   const playGrabStore = useWorldPlayGrabStore();
   const playUsers = useWorldPlayUsers();
   const playTeleport = useWorldPlayTeleport();
@@ -5036,13 +5052,24 @@ export function SceneViewport({
   );
   /** A World running its player, as opposed to an Item shown on its own. */
   const worldPlayActive = editorMode === "play" && projectKind === "world";
-  const handlePlayLockRefused = useCallback(() => setPlayLockRefused(true), []);
-  // The refusal is transient - the browser's cooldown after Escape is about a
-  // second - so the warning clears itself once the lock lands or Play ends,
-  // rather than sitting there after the thing it describes has passed.
+  const handlePlayLockRefused = useCallback(
+    (reason: WorldPlayLockFailure) => setPlayLockRefused(reason),
+    [],
+  );
+  // A single refusal is usually transient - the browser's cooldown after Escape
+  // is about a second - so the warning clears itself once the lock lands or
+  // Play ends, rather than sitting there after the thing it describes has
+  // passed. A refusal the browser repeats is not transient, and says so.
   useEffect(() => {
-    if (playPointerLocked || !worldPlayActive) setPlayLockRefused(false);
+    if (playPointerLocked || !worldPlayActive) setPlayLockRefused(null);
   }, [playPointerLocked, worldPlayActive]);
+  // Play starts once the Scene's models have arrived. Until then there is no
+  // Collider under the spawn point, so a player mounted now falls through the
+  // world and the ground closes over them.
+  const playSceneReady = useWorldPlaySceneReady(
+    sceneModelLoads,
+    worldPlayActive,
+  );
   const modelProxyVisible = useMemo(
     () => hasModelProxy(preview.scene, assets, projectPath),
     [assets, preview.scene, projectPath],
@@ -5816,7 +5843,7 @@ export function SceneViewport({
     projectKind === "world"
       ? playPointerLocked
         ? "WASD / 矢印キーで移動 · マウスで視点 · Space / Eでジャンプ · Gで掴む · クリックでインタラクト · Escでマウス解放"
-        : "画面をクリックしてマウスを固定すると、公開ワールドと同じ一人称プレイヤーで歩けます"
+        : "画面をクリックしてマウスを固定すると、公開ワールドと同じ一人称プレイヤーで歩けます · 固定できないときはドラッグで視点を動かせます"
       : "ドラッグでアイテムをOrbit確認";
   const readyMaterialDropTarget =
     materialDropTarget?.status === "ready" ? materialDropTarget : null;
@@ -6527,7 +6554,11 @@ export function SceneViewport({
               // Scene settings hold gravity as a positive magnitude, matching
               // xrift.json, so Play applies the same number the published
               // world receives rather than a separate hardcoded constant.
-              worldPlayActive
+              // Held at zero until the Scene's models - and the Colliders
+              // that come with them - have arrived. Turning gravity on over an
+              // unloaded world drops every dynamic body through a floor that
+              // does not exist yet.
+              worldPlayActive && playSceneReady
                 ? [0, -sceneSettings.physics.gravity, 0]
                 : [0, 0, 0]
             }
@@ -6556,14 +6587,19 @@ export function SceneViewport({
             <ScriptViewportProvider value={scriptRuntime ?? null}>
             <XriftScriptRoot pressedKeys={pressedKeysRef.current}>
             <Fragment key={editorMode}>
-              <SceneEntityTreeProvider
-                input={entityTreeInput}
-                shared={entityTreeShared}
-              >
-                {preview.scene.rootEntityIds.map((entityId) => (
-                  <SceneEntityHierarchy key={entityId} entityId={entityId} />
-                ))}
-              </SceneEntityTreeProvider>
+              {/* Inside the Canvas, because the Scene's models are: the
+                  renderer keeps its own React root, so a provider outside it
+                  never reaches them. */}
+              <SceneModelLoadTrackerContext.Provider value={sceneModelLoads}>
+                <SceneEntityTreeProvider
+                  input={entityTreeInput}
+                  shared={entityTreeShared}
+                >
+                  {preview.scene.rootEntityIds.map((entityId) => (
+                    <SceneEntityHierarchy key={entityId} entityId={entityId} />
+                  ))}
+                </SceneEntityTreeProvider>
+              </SceneModelLoadTrackerContext.Provider>
               {terrainEditing && terrainBrushTarget ? (
                 <TerrainBrushCursorBinding
                   terrain={terrainBrushTarget.terrain}
@@ -6574,7 +6610,7 @@ export function SceneViewport({
                   hoverRef={terrainHoverRef}
                 />
               ) : null}
-              {worldPlayActive ? (
+              {worldPlayActive && playSceneReady ? (
                 <WorldPlayPlayer
                   spawnPosition={playCapsuleSpawn}
                   spawnYaw={runtimeSpawn.yaw}
@@ -6709,7 +6745,7 @@ export function SceneViewport({
 
         {/* The player's aim, drawn by the same component a published world
             shows, so what is in reach here is what is in reach after upload. */}
-        {worldPlayActive && !thumbnailCaptureActive ? (
+        {worldPlayActive && playSceneReady && !thumbnailCaptureActive ? (
           <WorldPlayCrosshair active={playAimHit} />
         ) : null}
 
@@ -6723,11 +6759,15 @@ export function SceneViewport({
                 role="status"
                 aria-live="polite"
               >
-                {playLockRefused
-                  ? "マウスを固定できませんでした。Escの直後はブラウザが約1秒受け付けません。少し待ってもう一度クリックしてください"
-                  : playPointerLocked
-                    ? "マウス固定中 · Escで解放するとHierarchyとInspectorを操作できます"
-                    : "マウス未固定 · 視点は動きませんが、クロスヘアの先はクリックできます"}
+                {!playSceneReady
+                  ? "3Dモデルを読み込み中 · 読み込みが終わってからプレイヤーが出るので、地面に埋まったまま始まりません"
+                  : playLockRefused === "unsupported"
+                    ? "この環境ではマウスを固定できません。画面をドラッグすると視点を動かせます"
+                    : playLockRefused === "retry"
+                      ? "マウスを固定できませんでした。Escの直後はブラウザが約1秒受け付けません。少し待ってもう一度クリックしてください。固定できない間もドラッグで視点を動かせます"
+                      : playPointerLocked
+                        ? "マウス固定中 · Escで解放するとHierarchyとInspectorを操作できます"
+                        : "マウス未固定 · ドラッグで視点を動かせます。クリックするとマウスを固定します"}
               </p>
             ) : null}
             {lastReloadedEntityName ? (
