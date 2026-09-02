@@ -75,6 +75,13 @@ export function SceneRecipeCatalogPreview({
 }
 
 function RecipePartVisual({ part }: { part: SceneRecipePart }) {
+  // A part the set places hidden is not drawn. The card is what the Scene
+  // gets, and showing the treasure the switch is supposed to reveal would give
+  // away the one thing that set exists to demonstrate.
+  if ((part.kind === "primitive" || part.kind === "model") && part.startsDisabled) {
+    return null;
+  }
+
   if (part.kind === "primitive") {
     const color = builtinMaterialColor(part.materialAssetId);
     // The glow Material is emissive, and a lamp drawn as a grey ball would

@@ -150,7 +150,7 @@ export function SceneRecipeStore({
             <div>
               <h3 className="text-xs font-semibold text-slate-900">3Dセット</h3>
               <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                組み立て済みの3Dオブジェクトです。置いたあとは中身を1つずつ編集できます
+                組み立て済みの3Dです。音としかけの入ったチュートリアルもあります
               </p>
             </div>
             <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-1 text-[10px] font-semibold text-orange-700">

@@ -9,6 +9,7 @@ import { expect, test } from "@playwright/test";
  * author does and checks that the placed Entity really carries all three.
  */
 test("しかけ付きの3Dセットは、音とグラフごとSceneへ入る", async ({ page }) => {
+  test.setTimeout(180_000);
   await page.goto("/e2e.html?scenario=ready");
   await expect(
     page.getByRole("heading", { name: "プロジェクト" }),
@@ -66,10 +67,23 @@ test("しかけ付きの3Dセットは、音とグラフごとSceneへ入る", a
   ).toHaveCount(2);
   await expect(assets.getByText("ボタンの音").first()).toBeVisible();
 
-  // The other three land too. Each one imports a different bundled sound and
-  // the two with graphs wire them to their own parts, so a set that failed
-  // halfway would leave its root Entity out of the Hierarchy entirely.
-  for (const name of ["灯りのスイッチ", "環境音のスピーカー", "自動で閉まる扉"]) {
+  // Every other tutorial set lands too. Placement is all-or-nothing — a set
+  // whose sound, Interactable or graph could not be built returns nothing and
+  // leaves no Entity — so the root appearing in the Hierarchy is what says the
+  // whole set was assembled, including the ones that write to a Particle
+  // Emitter, the Scene, the player, a Text, and a hidden Entity.
+  for (const name of [
+    "灯りのスイッチ",
+    "紙吹雪のボタン",
+    "自動で閉まる扉",
+    "隠し扉のスイッチ",
+    "テレポート台",
+    "色を変えるライトパネル",
+    "昼と夜のパネル",
+    "文字が変わる看板",
+    "環境音のスピーカー",
+    "画質のスイッチ",
+  ]) {
     await assets.getByRole("button", { name: "外部から追加" }).click();
     await page.getByRole("button", { name: /3Dセット/ }).click();
     await shelf.getByLabel("3Dセットを検索").fill(name);

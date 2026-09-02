@@ -37,6 +37,7 @@ function placeParts(recipe: SceneRecipe): Map<string, SceneRecipePlacedPart> {
     const componentIds: SceneRecipePlacedPart["componentIds"] = {};
     if (part.kind === "light") componentIds.light = `${entityId}-light`;
     if (part.kind === "text") componentIds.text = `${entityId}-text`;
+    if (part.kind === "particle") componentIds.particle = `${entityId}-particle`;
     if (
       part.kind === "audio" ||
       ((part.kind === "primitive" || part.kind === "model") && part.audio)
@@ -69,6 +70,15 @@ export function runSceneRecipeCatalogFixtureAssertions(): void {
         `${recipe.id} has two parts named ${part.name}`,
       );
       names.add(part.name);
+      // The root Entity takes the set's own name. On a one-part scenery set
+      // that repetition is harmless, but a set with graphs is one an author
+      // navigates by name -- two identical rows one level apart is then a
+      // Hierarchy where the part a behaviour writes to cannot be told from the
+      // set that contains it.
+      assert(
+        !recipe.behaviours?.length || part.name !== recipe.name,
+        `${recipe.id} has a part named after the set itself (${part.name})`,
+      );
       if (part.kind === "primitive") {
         assert(
           Boolean(getBuiltinPrimitiveCreation(part.creationId)),
@@ -118,6 +128,31 @@ export function runSceneRecipeCatalogFixtureAssertions(): void {
       }
     }
 
+    // A part that lands hidden is only findable through the graph that shows
+    // it. One with nothing writing its `enabled` is an Entity the author will
+    // never see in Play and will not know to look for in the Hierarchy.
+    for (const part of recipe.parts) {
+      if (
+        (part.kind !== "primitive" && part.kind !== "model") ||
+        !part.startsDisabled
+      ) {
+        continue;
+      }
+      const revealed = (recipe.behaviours ?? []).some((behaviour) =>
+        behaviour.actions.some(
+          (action) =>
+            action.target.scope === "part" &&
+            action.target.part === part.name &&
+            action.targetKind === "entity" &&
+            action.property === "enabled",
+        ),
+      );
+      assert(
+        revealed,
+        `${recipe.id} hides ${part.name} with nothing to show it again`,
+      );
+    }
+
     // Anything that teaches has to say what it teaches; anything with a graph
     // has to say what the graph does, because both are read before placing.
     if (recipe.category === "tutorial") {
@@ -144,6 +179,10 @@ export function runSceneRecipeCatalogFixtureAssertions(): void {
             Boolean(host.interactable)),
         `${recipe.id} presses ${behaviour.host}, which has no Interactable`,
       );
+      assert(
+        behaviour.actions[0]?.after !== "done",
+        `${recipe.id}/${behaviour.graphName} starts on a "done" socket, which its entry point does not have`,
+      );
       for (const action of behaviour.actions) {
         const descriptor = getXriftInteractionProperty(
           action.targetKind,
@@ -163,6 +202,32 @@ export function runSceneRecipeCatalogFixtureAssertions(): void {
             `${recipe.id} writes to a missing part ${action.target.part}`,
           );
         }
+      }
+
+      // A press that moves something has to put it back. The sets sink a
+      // button and slide a door, and a resting value that drifted from the
+      // part's authored position leaves it visibly offset after the first
+      // press -- which no test of the graph's shape would notice.
+      const movedParts = new Map<string, readonly number[]>();
+      for (const action of behaviour.actions) {
+        if (
+          action.target.scope !== "part" ||
+          action.targetKind !== "transform" ||
+          action.property !== "position" ||
+          !Array.isArray(action.value)
+        ) {
+          continue;
+        }
+        movedParts.set(action.target.part, action.value);
+      }
+      for (const [partName, last] of movedParts) {
+        const part = recipe.parts.find((candidate) => candidate.name === partName);
+        const authored = part && "position" in part ? part.position : undefined;
+        assert(
+          Boolean(authored) &&
+            authored!.every((value, index) => Math.abs(value - last[index]) < 1e-6),
+          `${recipe.id}/${behaviour.graphName} leaves ${partName} at ${last.join(", ")} instead of its authored position`,
+        );
       }
 
       const extension = createSceneRecipeBehaviourExtension(
