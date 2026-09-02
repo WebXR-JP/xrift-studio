@@ -46,6 +46,23 @@ node ../_kit/scripts/prepare-footage.mjs --force  # 整え直す
 
 `feature` や `bullets` の背景に動画を敷くのは避け、静止画を使う。ぼかして薄く出すだけなので動きは見えず、書き出しが安定する。ffmpeg で 1 フレームだけ取り出して `public/source/` に置く。
 
+## 制作セッションの長期録画から素材を作る
+
+AI client が MCP で World を組む制作風景は、Scene View の「長期録画」で撮る。外部の録画ツールは要らない。診断の「録画」の隣にあり、押してから止めるまで Scene View の Canvas を 5fps で app data へ逐次保存し、同じフォルダの `activity.jsonl` に録画中の MCP tool call を残す。MCP からは `capture_scene_debug` を `mode: "session"` で呼ぶ。詳細は [MCP 制作セッション動画 仕様](../../../docs/MCP_SESSION_VIDEO_SPEC.md)。
+
+1. 新規 project を開き、長期録画を始める (手で押すか、プロンプトの冒頭で AI に始めさせる)。
+2. AI に制作させる。公開・アップロード・削除はさせない。
+3. 停止し、結果バーの「保存先を開く」で `recording-<開始時刻>/` を取り出す。
+4. 動画プロジェクトでタイムラプスと cue を作る。
+
+```powershell
+node ../_kit/scripts/session-timelapse.mjs --recording <録画フォルダ> --target-seconds 18
+```
+
+`public/source/<録画フォルダ名>/timelapse.mp4` と `cues.json` ができる。tool call が途切れた区間は 1 秒に畳み、ウィンドウが隠れていた区間は切る。`cues.json` の tool call の列と所要時間は storyboard の字幕と HUD の出典になる。費用は script では出ないので、client 側の集計を手で書き、`sourceNotes` に出典を残す。
+
+録れるのは Scene View の Canvas だけで、Hierarchy、Inspector、terminal は入らない。「AI が何をしているか」は `cues.json` から字幕で描く。複数のモデルを比べるときは、同じ project 雛形、同じプロンプト、同じウィンドウサイズで撮る。
+
 ## 写ってはいけないものを伏せる
 
 収録に個人情報が入っていたら、撮り直すか storyboard で伏せる。素材そのものは加工せず、動画側で重ねるだけにして元の収録を残す。

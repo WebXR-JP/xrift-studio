@@ -283,7 +283,13 @@ Undo 履歴も選択も動かさない。
 - `capture_scene_debug` — fps、frame time、draw call、triangle、可視 Mesh 数、
   Geometry / Texture別のVRAM概算（geometryVramBytes / textureVramBytes）、未算定Texture数（unknownVramTextures）、
   Texture内訳（compressedTextureVramBytes / uncompressedTextureVramBytes、compressedTextureCount / uncompressedTextureCount。未算定は除外）、
-  カメラの Far。WebM の録画も start / stop で扱う
+  カメラの Far。WebM の録画も start / stop で扱う。`mode` は 2 つ。`clip`
+  (既定) は 30fps で最大 15 秒をメモリに録る診断用。`session` は `fps`
+  (1〜10、既定 5) で時間無制限に録り、chunk ごとに app data へ追記しながら、
+  隣の `activity.jsonl` へ録画中の tool call、動画の開始、ウィンドウが隠れて
+  いた区間を書く。制作セッションをタイムラプスにする素材で、`stop` は動画と
+  ログのパス、フォルダ、所要時間、容量、tool call 件数を返す。録画は同時に
+  1 つ。詳細は [MCP 制作セッション動画 仕様](./MCP_SESSION_VIDEO_SPEC.md)
 - `capture_scene_view` — 描画そのままの PNG を 1 枚、app の
   `debug-captures` へ保存してパスを返す。**数値と document は「何が映るはず
   か」しか言わない。実際に何が映っているかを言うのはフレームだけ**

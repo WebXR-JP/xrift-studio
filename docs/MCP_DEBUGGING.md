@@ -12,6 +12,7 @@ XRift Studioのデバッグ版は、標準MCP経由で現在の画面をAI clien
 - `ipc_monitor` / `ipc_get_captured`: Tauri IPCの呼び出しと結果を確認する
 - Scene Viewの「診断」: FPS、frame time、draw calls、triangles、visible mesh数、camera Farを表示する
 - Scene Viewの「録画」: 実際の3D Canvasを最大15秒WebMへ保存し、見た目の問題を再現する
+- Scene Viewの「長期録画」: 同じCanvasを時間無制限でapp dataへ逐次保存し、録画中のMCP tool callを活動ログ (JSONL) に残す。制作セッションをタイムラプスにする素材になる (`docs/MCP_SESSION_VIDEO_SPEC.md`)
 
 画像だけで判断せず、DOM、console、IPCを同じ変更の確認材料として使います。
 

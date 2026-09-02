@@ -99,6 +99,7 @@ F-06 アイテム検査
 | MI-77 | World Playを、公開ワールドと同じ一人称プレイヤーで歩く | Play開始時はSpawnPointの位置と向きから、`@xrift/world-components`の公式プレイヤー（カプセルの物理ボディ、重力、ジャンプ、落下時のリスポーン）を起動する。Play Windowをクリックするとマウスを固定し、マウスで視点、WASD / 矢印で移動、Space / Eでジャンプ、Gで掴む（Grabbable）、クリックで画面中央のクロスヘアからインタラクトする。クロスヘアは届く範囲のInteractableを狙ったときだけ強調する。TagBoardやMirrorなどの公式Componentは、Play中も編集中と同じ実描画を出す（SpawnPointのマーカーだけは公開ワールドに出ないので除く）。案内面にはマウス固定の有無と操作方法を残し、キー入力がワールド側へ渡ることを明示する。ブラウザがマウス固定を拒否したとき（Escの直後は約1秒受け付けない）は、その理由と待てば直ることを案内面に出す。狙いとクリックはマウス固定に依存させず、拒否されている間もクロスヘアの先を押せる状態を保つ。 | Escでマウス固定を解くと、HierarchyとInspectorの操作へ戻れる。マウス固定中はScene Viewの選択とcontext menuを確定しない。StopはCtrl / Cmd + EnterまたはStopボタンで行い、プレイヤー、マウス固定、Play専用状態を破棄して、開始前に保存したEdit cameraへ戻る。Play中の移動、ジャンプ、掴みはSceneDocument、選択、Undo履歴を変更しない。 |
 
 | MI-80 | Scene Viewの「診断」を開く、または「録画」を開始する | 実際のThree.js rendererからFPS、frame time、draw calls、triangles、visible mesh数、geometry / texture数、camera位置 / Farを0.5秒ごとに表示する。「録画」はScene ViewのCanvasを最大15秒WebMへ記録し、録画中は`REC`と保存状態を表示する。診断表示は編集データや描画結果を変更しない。 | 録画停止または15秒で保存ダイアログへ進み、キャンセルではScene Viewへ戻る。WebM非対応・保存失敗時は原因と再試行を残す。連続録画は上限で自動停止し、アプリのメモリを無制限に増やさない。 |
+| MI-122 | Scene Viewの「長期録画」を開始する、またはMCPの`capture_scene_debug`を`mode: "session"`で呼ぶ | 同じCanvasを5fps (MCPは1〜10fps) で記録し、5秒ごとのchunkをapp dataの`debug-captures/recording-<開始時刻>/scene-view.webm`へ追記する。同じフォルダの`activity.jsonl`に、録画中のMCP tool call、動画の開始、ウィンドウが隠れていた区間をセッション開始からの秒で書く。ボタンは「停止 h:mm:ss」に変わり、診断HUDは`REC`と経過時間・容量を出す。 | 停止で保存し、「保存先を開く」を持つ結果バーをScene Viewに残す。MCPには動画とログのパス、フォルダ、所要時間、容量、件数を返す。録画は同時に1つで、クリップ録画と互いに待つ。失敗時も途中までの録画の場所を示す。24時間で安全のため自動停止する。メモリには溜めない。 |
 | MI-81 | Entity InspectorでWind Componentを追加または編集する | Add Componentから対象EntityへWind Componentを付け、Enabledを切り替える。Componentが付いたEntityと子Meshだけを対象にし、Mesh名や植物らしさの推測を行わない。風の強さ・速度・突風はScene Settingsの「Wind（グローバル）」で一括編集し、Scene Viewへ反映する。 | 追加・変更は一件のScene更新として保存し、Play中は対象Entityの実行コピーへ同期する。無効値や古いrevisionではScene、selection、historyを変更せず、Inspectorの入力と再試行先を残す。成功後は同じEntity Inspectorに留まり、Preview / Compile / Playへ進める。 |
 | MI-82 | 「外部リソースを追加」の「Skybox Shader」からSkybox Shaderを選び、追加する | カードと詳細プレビューは実際のGLSLをWebGLで内側から描画し、SVGやCSSの疑似サムネイルを使わない。詳細では星の数、太陽と月の高さ・方角、月の満ち欠け、雲の量と厚み、遠景の高さと起伏、色をuniform名付きのsliderで調整し、プレビューへ即時反映する。カードは静止画1枚、選択中のpresetだけをアニメーションさせ、WebGL contextを増やしすぎない。追加中はボタンをローディング表示にして二重追加を防ぐ。 | 成功時はMaterial Assetを一件追加してassetSelectionにし、「空へ設定」時はScene設定のskybox.materialAssetIdへ割り当てる。トーストで終わらせず、追加後もInspectorのUniform valuesで再調整できることを示す。同じpresetの再追加は同じMaterialを更新し、重複Assetを作らない。 |
 | MI-83 | Scene設定の「Skybox Shader」でMaterialを選ぶ、または解除する | 割り当て中はSkybox画像とグラデーションより優先して空を描き、上空の色・地平線の色・オフセット・グラデーションを無効表示にする。水平回転と明るさはshaderのuniformへ渡すため有効なままにする。Materialが欠落または不正な場合は理由を示してグラデーションへ戻す。 | 割り当て・解除は一件のScene更新として保存する。割り当て中は当該MaterialのInspectorを開く操作を残し、星の数などの再調整へ到達できるようにする。 |
@@ -182,7 +183,7 @@ F-06 アイテム検査
 | F-32 | Scene post effects | MI-03, MI-05, MI-09, MI-13, MI-15, MI-16, MI-80 | Scene settingsでHDR / AO / Bloom / 露出を編集し、Scene View、Play、生成Worldの同じレンダリング設定へ反映する。設定は保存・再読込・公開レビューまで同じScene contractで扱う。 |
 | F-33 | Wind Component | MI-03, MI-05, MI-09, MI-11, MI-13, MI-14, MI-15, MI-16, MI-81 | Entity InspectorまたはMCPからWind Componentを明示的に追加し、対象Entityと子MeshだけへScene Settingsのグローバル風設定を適用する。Editor Preview、Play、生成World、Runtime manifestは同じComponentとScene値を使い、名前・Mesh分類・言語に依存した対象推測を行わない。 |
 | F-34 | Skybox Shader（手続き的な空） | MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-82, MI-83 | 画像Skyboxではなく、Custom Shader Materialとして昼・夕暮れ・朝焼け・夜空・オーロラ・星雲の空を追加できる。星の数、太陽と月の位置、月の満ち欠け、雲、地平線の遠景をuniformで調整でき、レイマーチする厚みのある雲も選べる。外部リソース集での調整とInspectorでの再調整が同じMaterialを指し、Scene View、Play、生成Worldが同じGLSLを描く。Materialが欠落した場合はグラデーションへ戻し、警告診断を残す。重いpresetはstep数をvariant defineとして残し、下げられる状態にする。 |
-| F-35 | Visual QA診断と短時間録画 | MI-03, MI-05, MI-14, MI-26, MI-80 | Scene ViewとPlay Windowで実rendererのFPS、frame time、draw calls、triangles、mesh可視数、camera Farを確認でき、最大15秒のWebMを保存して問題の発生前後を再現できる。診断や録画はSceneDocument、AssetManifest、Undo履歴を変更せず、停止・保存失敗・WebM非対応から同じScene Viewへ戻れる。 |
+| F-35 | Visual QA診断と短時間録画 | MI-03, MI-05, MI-14, MI-26, MI-80, MI-122 | Scene ViewとPlay Windowで実rendererのFPS、frame time、draw calls、triangles、mesh可視数、camera Farを確認でき、最大15秒のWebMを保存して問題の発生前後を再現できる。長期録画は同じCanvasを時間無制限でディスクへ逐次保存し、MCP tool callの活動ログを添えて、制作セッションをタイムラプスにする素材を残す。診断や録画はSceneDocument、AssetManifest、Undo履歴を変更せず、停止・保存失敗・WebM非対応から同じScene Viewへ戻れる。 |
 | F-36 | Audio Asset試聴 | MI-03, MI-05, MI-09, MI-15, MI-20 | Audio AssetのInspectorから音源を試聴でき、SceneDocumentとAudio Sourceの配置を変更しない。 |
 | F-37 | Texture解像度変更・圧縮の適用 | MI-03, MI-05, MI-09, MI-15, MI-16, MI-25, MI-67 | Texture Inspectorの最大解像度・圧縮設定を、その場で原本の画像ファイルへ書き出せる。変換前後の解像度、形式、容量を同じ場所で見比べ、未反映のまま公開されない状態にする。環境Textureや書き戻せない形式は理由を示して実行させない。 |
 | F-38 | インタラクトのトリガー | MI-05, MI-09, MI-11, MI-14, MI-25, MI-60, MI-89 | EntityへInteraction Triggerを付け、公式Interactableで押したときに別Entityやそのコンポーネントのプロパティを変えられる。対象、コンポーネント、プロパティ、値はノードエディタのSceneから選び、Inspectorには押したときの動きが一覧で残る。Play、公開ワールド、MCPは同じcanonical graphと同じ適用経路を使う。 |
@@ -1316,11 +1317,11 @@ F-06 アイテム検査
 
 - Texture VRAMはGPU圧縮済み／非圧縮の算定済み件数・MiBを分けて表示する。両者の容量合計はTexture全体と一致させ、未算定は別に数える。判定は実行中TextureのGPU形式を使い、JPEG/WEBPやKTX2のRGBAフォールバックをGPU圧縮済みと表示しない。
 
-参照: MI-03, MI-05, MI-14, MI-26, MI-80
+参照: MI-03, MI-05, MI-14, MI-26, MI-80, MI-122
 
 ### 操作前
 
-- Scene Viewのtoolbarに「診断」と「録画」を置く。どちらもEditとPlayの両方で使え、Play WindowではPlay中の実際のrendererを測る。
+- Scene Viewのtoolbarに「診断」「録画」「長期録画」を置く。どれもEditとPlayの両方で使え、Play WindowではPlay中の実際のrendererを測る。
 - 「診断」はtoggleとして状態を保ち、押している間だけ右上へ計測panelを重ねる。panelはpointer eventsを受けず、下のScene Viewの操作を妨げない。
 - panelはFPS、frame time、draw calls、triangles、可視Mesh数と総Mesh数、geometry数とtexture数、camera位置とFarを表示する。計測中は`LIVE`、録画中は`REC`を同じ位置に出す。
 - Geometry・Texture別のVRAM概算と合計をMiBで表示する。実Sceneが参照する頂点・インデックス・インスタンス属性、Material/Uniform・背景・環境Textureを集計し、同じ参照は重複除外する。Textureは実際の形式とmipmapを考慮する。未読込・非対応形式は未算定件数を表示し、ゼロと断定しない。影・描画バッファ・内部生成領域は対象外と明示する。最初の計測を待って表示し、診断を閉じたら計測を止める。MCPのcapture_scene_debugにも同じ値を返す。
@@ -1330,6 +1331,7 @@ F-06 アイテム検査
 - 計測は0.5秒ごとにThree.js rendererの実値から更新する。React stateからの推定値を表示しない。
 - 「録画」はScene ViewのCanvasを最大15秒のWebMへ記録する。開始時に診断表示を自動で有効にし、録画中であることと上限秒数を通知に出す。同じ操作でボタンは「停止」に変わる。
 - 上限に達した場合は自動で停止し、保存中であることを示す。保存中は開始も停止も受け付けない。
+- 「長期録画」は同じCanvasを5fpsで時間無制限に記録する。5秒ごとのchunkをその場でapp dataのファイルへ追記し、メモリに溜めない。録画中はボタンが「停止 h:mm:ss」になり、診断HUDに経過時間と容量を出す。同じフォルダの`activity.jsonl`に、broker を通ったMCP tool call、動画の開始、ウィンドウが隠れていた区間を書く。隠れている間は描画が止まるので動画も止まり、それをログで切れるようにする。クリップ録画と長期録画は同時に走らせず、片方が動いている間はもう片方を無効にする。24時間で安全のため自動停止する。
 - 診断表示と録画はSceneDocument、AssetManifest、Undo履歴、compile結果を変更しない。サムネイル撮影中はpanelを隠し、撮影結果へ写り込ませない。
 
 ### 成功時
@@ -1337,6 +1339,7 @@ F-06 アイテム検査
 - 停止または自動停止のあと、デスクトップ版では保存先を選んでWebMを保存し、保存したpathを通知に残す。ブラウザではファイルとしてダウンロードする。
 - MCPからの要求では、計測結果または保存したpathと録画時間を結果として返す。UIと同じ計測経路を使う。
 - 保存後はScene Viewへ戻り、診断表示の状態はそのまま残る。
+- 長期録画の停止後は、所要時間・容量・tool call件数と「保存先を開く」を持つ結果バーをScene Viewの下辺に残し、閉じるまで消さない。MCPには動画とログのパス、フォルダ、所要時間、容量、件数を返す。失敗時は途中までの録画の場所を通知に示す。
 
 ### 失敗時
 

@@ -28,6 +28,7 @@ XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを
 | [KHR_interactivity Editor / MCP design](./KHR_INTERACTIVITY_EDITOR.md) | ノードグラフの canonical 形式、検証、MCP 契約 |
 | [Terrain エディター 仕様](./TERRAIN_EDITOR_SPEC.md) | 地形と草のモード、ブラシ、性能、公開への反映 |
 | [カメラタイムライン 仕様](./CAMERA_TIMELINE_SPEC.md) | camera Component、時間で進む実行器、カメラ用 op、再生場所（未実装の設計） |
+| [MCP 制作セッション動画 仕様](./MCP_SESSION_VIDEO_SPEC.md) | Scene View の長期録画と活動ログ、タイムラプス script、動画に向けて次に足すもの |
 | [マテリアルカタログ 仕様](./MATERIAL_CATALOG_SPEC.md) | 空・水 Shader、草、Wind 契約 |
 | [Model Import Contract](./MODEL_IMPORT_CONTRACT.md) | Model の取り込みと再取り込み、永続化する情報 |
 | [UnityPackage import](./UNITY_PACKAGE_IMPORT.md) | `.unitypackage` / `.unity` / `.prefab` の変換フロー |

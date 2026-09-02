@@ -105,3 +105,4 @@ pnpm build:preview       # GitHub Pages 用プレビューのビルド
 - リリース動画の音: `.agents/skills/xrift-promo-audio/SKILL.md`
 - リリース動画の実画面収録: `.agents/skills/xrift-promo-capture/SKILL.md`
 - MCP画面デバッグ: `docs/MCP_DEBUGGING.md`
+- MCP 制作セッション動画 (長期録画とタイムラプス): `docs/MCP_SESSION_VIDEO_SPEC.md`
