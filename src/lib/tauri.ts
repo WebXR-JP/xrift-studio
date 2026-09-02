@@ -406,9 +406,17 @@ export const tauri = {
    * raw request body rather than as JSON, so an hour-long take never passes
    * through base64.
    */
-  appendRecordingChunk: (id: string, chunk: Uint8Array) =>
+  /**
+   * `repeats` > 1 asks the frame-stream writer to feed the same frame to
+   * FFmpeg that many times, so a slow WebView pays one IPC round trip per
+   * drawn frame rather than one per output frame.
+   */
+  appendRecordingChunk: (id: string, chunk: Uint8Array, repeats = 1) =>
     invoke<number>("recording_append_chunk", chunk, {
-      headers: { "x-xrift-recording-id": id },
+      headers: {
+        "x-xrift-recording-id": id,
+        "x-xrift-recording-repeat": String(Math.max(1, Math.floor(repeats))),
+      },
     }),
   finishRecordingFile: (id: string, metadata: Record<string, unknown> | null) =>
     invoke<RecordingFileSummary>("recording_finish_file", { id, metadata }),

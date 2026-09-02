@@ -5488,6 +5488,9 @@ struct OpenRecordingFile {
 const RECORDING_MAX_OPEN_FILES: usize = 4;
 const RECORDING_MAX_CHUNK_BYTES: usize = 64 * 1024 * 1024;
 const RECORDING_ID_HEADER: &str = "x-xrift-recording-id";
+/// How many times the frame-stream writer feeds one chunk to FFmpeg.
+const RECORDING_REPEAT_HEADER: &str = "x-xrift-recording-repeat";
+const RECORDING_MAX_REPEAT: usize = 60 * 60;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -5671,17 +5674,27 @@ fn recording_begin_file(
         let codec: &[&str] = if extension == "webm" {
             &["-c:v", "libvpx-vp9", "-b:v", "0", "-crf", "30"]
         } else {
-            &["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-movflags", "+faststart"]
+            // Fragmented, not faststart: a take that runs for hours must
+            // survive the app dying, and a fragmented file plays up to the
+            // last written fragment while a faststart one needs its trailer.
+            &["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-movflags", "+frag_keyframe+empty_moov+default_base_moof"]
         };
+        // FFmpeg's complaints go to a log beside the video. A take that dies
+        // mid-way otherwise leaves nothing to say why; the log is removed
+        // again when the take finishes cleanly and FFmpeg stayed quiet.
+        let log_path = path.with_extension("ffmpeg.log");
+        let stderr = std::fs::File::create(&log_path)
+            .map(std::process::Stdio::from)
+            .unwrap_or_else(|_| std::process::Stdio::null());
         let mut child = std::process::Command::new("ffmpeg")
-            .args(["-hide_banner", "-loglevel", "error", "-y"])
+            .args(["-hide_banner", "-loglevel", "warning", "-y"])
             .args(["-f", "image2pipe", "-framerate", &frame_rate.to_string(), "-i", "pipe:0"])
             .args(codec)
             .args(["-pix_fmt", "yuv420p", "-an"])
             .arg(&path)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
+            .stderr(stderr)
             .spawn()
             .map_err(|error| {
                 let _ = std::fs::remove_file(&path);
@@ -5724,6 +5737,17 @@ fn recording_append_chunk(
         .and_then(|value| value.to_str().ok())
         .map(|value| value.to_string())
         .ok_or_else(|| "録画IDが指定されていません。".to_string())?;
+    let repeats = request
+        .headers()
+        .get(RECORDING_REPEAT_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| value.trim().parse::<usize>())
+        .transpose()
+        .map_err(|_| "録画の繰り返し回数が不正です。".to_string())?
+        .unwrap_or(1);
+    if repeats == 0 || repeats > RECORDING_MAX_REPEAT {
+        return Err("録画の繰り返し回数が範囲外です。".to_string());
+    }
     let bytes = match request.body() {
         tauri::ipc::InvokeBody::Raw(bytes) => bytes,
         _ => return Err("録画データはバイナリで送信してください。".to_string()),
@@ -5742,14 +5766,32 @@ fn recording_append_chunk(
         .get_mut(&id)
         .ok_or_else(|| "この録画ファイルは開かれていません。".to_string())?;
     match &mut entry.writer {
-        RecordingWriter::Container(file) => file
-            .write_all(bytes)
-            .map_err(|error| format!("録画データを書き込めません: {}", error))?,
-        RecordingWriter::Ffmpeg { stdin, .. } => stdin
-            .write_all(bytes)
-            .map_err(|error| format!("FFmpegへフレームを渡せません: {}", error))?,
+        RecordingWriter::Container(file) => {
+            if repeats != 1 {
+                return Err("コンテナ経路の録画データは繰り返せません。".to_string());
+            }
+            file.write_all(bytes)
+                .map_err(|error| format!("録画データを書き込めません: {}", error))?
+        }
+        RecordingWriter::Ffmpeg { stdin, .. } => (0..repeats)
+            .try_for_each(|_| stdin.write_all(bytes))
+            .map_err(|error| {
+            let log_path = entry.path.with_extension("ffmpeg.log");
+            let tail: String = std::fs::read_to_string(&log_path)
+                .unwrap_or_default()
+                .lines()
+                .rev()
+                .take(3)
+                .collect::<Vec<_>>()
+                .join(" / ");
+            format!(
+                "FFmpegへフレームを渡せません: {}{}",
+                error,
+                if tail.is_empty() { String::new() } else { format!(" ({})", tail) }
+            )
+        })?,
     }
-    entry.bytes_written += bytes.len() as u64;
+    entry.bytes_written += (bytes.len() * repeats) as u64;
     Ok(entry.bytes_written)
 }
 
@@ -5780,8 +5822,18 @@ fn recording_close_file(
             let status = child
                 .wait()
                 .map_err(|error| format!("FFmpegの終了を待てません: {}", error))?;
+            let log_path = entry.path.with_extension("ffmpeg.log");
+            let log_text = std::fs::read_to_string(&log_path).unwrap_or_default();
             if !status.success() {
-                return Err(format!("FFmpegが動画を書き終えられませんでした ({})", status));
+                let tail: String = log_text.lines().rev().take(3).collect::<Vec<_>>().join(" / ");
+                return Err(format!(
+                    "FFmpegが動画を書き終えられませんでした ({}){}",
+                    status,
+                    if tail.is_empty() { String::new() } else { format!(": {}", tail) }
+                ));
+            }
+            if log_text.trim().is_empty() {
+                let _ = std::fs::remove_file(&log_path);
             }
             let size = std::fs::metadata(&entry.path)
                 .map(|metadata| metadata.len())

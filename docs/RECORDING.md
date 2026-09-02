@@ -43,9 +43,22 @@ platform」を返す) は、PATH の FFmpeg があればフレーム単位の経
 録画用フレームをプロファイルのフレームレートで JPEG に読み出して同じ
 `recording_append_chunk` で Rust へ渡し、Rust が `ffmpeg -f image2pipe` へ流して
 H.264 の MP4 を書く。JPEG の符号化が遅れた分は壁時計に合わせて同じフレームを
-複製するので、動画の長さは実時間と一致する。sidecar の `encoder` に
+複製するので、動画の長さは実時間と一致する。複製は `x-xrift-recording-repeat`
+ヘッダーで回数だけを伝え、Rust が同じ JPEG を FFmpeg へ繰り返し流す。描いた
+フレーム 1 枚につき IPC は 1 回で、描画が 4 fps まで落ちた WebView でも書き込みの
+待ち行列が伸びない。sidecar の `encoder` に
 `media-recorder` か `frame-stream` のどちらで録ったかが残る。FFmpeg も無ければ
 `failed` と「FFmpeg を PATH に置くとフレーム単位で録画できます」を返す。
+MP4 は fragmented (`frag_keyframe+empty_moov`) で書くので、途中で WebView が
+落ちても書けたところまでは再生できる。FFmpeg の警告とエラーは動画の隣の
+`<name>.ffmpeg.log` に残し、失敗の message にも末尾を添える。何も出なければ
+停止時に消す。
+
+停止は掛かり切りにならない。JPEG の読み出しが 5 秒、書き込み待ちが 20 秒を過ぎたら、
+そこまでにディスクへ届いた分でファイルを閉じ、残った frame は捨てる (console に
+件数を warn する)。ソフトウェア GL で WebGL の context が失われた take で起きる。
+失敗の message は最初の原因を保ち、その後ろで「ファイルが開いていない」と落ちる
+書き込みには置き換えない。
 Windows (WebView2) と macOS (WKWebView) は MediaRecorder を持つので、この経路は
 通らない。メモリに動画を溜めないので、数時間の take でも
 メモリは増えない。Rust 側が書けるのは `recording_begin_file` で開いたファイルだけで、
@@ -198,6 +211,7 @@ FFmpeg が無ければ、実行するはずだったコマンドを表示して�
 | --- | --- | --- |
 | Chromium (紹介ページのブラウザ版デモ) | MediaRecorder、メモリ保存 | 42 秒の WebM。UI 操作で確認 |
 | Linux デスクトップ版 (WebKitGTK、Xvfb) | frame-stream + FFmpeg | MCP だけで開始・制作・カメラ調整・停止。MP4 と sidecar |
+| Linux デスクトップ版、ソフトウェア GL (llvmpipe) | frame-stream + FFmpeg | 720p までは通る。1080p と草の Terrain を重ねると WebView が止まり、Poly Haven の PBR モデルを多数置くと WebGL の context が失われて take が途中で閉じる。GPU の無い CI 環境の制限で、Studio 側は書けた分を残す |
 | Windows (WebView2)、macOS (WKWebView) | MediaRecorder、ディスクへ逐次書き込み | 未確認 |
 
 ## OBS を使う場合

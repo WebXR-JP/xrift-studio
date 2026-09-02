@@ -129,6 +129,8 @@ function assertStateMachine(): void {
   const failed = reduceRecordingFailed(progressed, { message: "disk full", now: 70_000 });
   assert(failed.status === "failed" && failed.path === "/tmp/take.webm" && failed.message === "disk full", "Failure keeps the partial path");
   assert(decideRecordingStart(failed).ok, "A failed take may be retried");
+  const failedAgain = reduceRecordingFailed(failed, { message: "file not open", now: 71_000 });
+  assert(failedAgain.message === "disk full", "The first failure stays the reason; later write errors do not replace it");
 
   const serialized = serializeRecordingSnapshot(completed);
   assert(
