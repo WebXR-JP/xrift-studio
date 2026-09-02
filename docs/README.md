@@ -34,6 +34,7 @@ XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを
 | [Open Brush Material Provider 設計](./OPENBRUSH_MATERIAL_PROVIDER_DESIGN.md) | Open Brush 由来 Material の提供経路 |
 | [Visual Project Classic Export CLI](./VISUAL_PROJECT_MIGRATION_CLI.md) | Visual project から Classic project への一方向書き出し |
 | [ブラウザからのワールド公開](./WEB_UPLOAD.md) | Web 版からの upload 経路と未解決の制約 |
+| [ワールド制作の録画](./RECORDING.md) | 指定したアスペクト比での長時間録画、録画ビューと録画用カメラ、MCP からの操作、FFmpeg での短縮 |
 
 ## 運用と支援
 

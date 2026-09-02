@@ -37,7 +37,8 @@
     "cli:test": "node scripts/check-world-components-alignment.mjs && node scripts/check-fixture-coverage.mjs && node scripts/generate-mcp-tool-names.mjs --check && pnpm cli:build && node dist/cli/fixture.mjs",
     "runtime:build": "pnpm --filter xrift-studio-runtime build",
     "runtime:typecheck": "pnpm --filter xrift-studio-runtime typecheck",
-    "runtime:shell:check": "node scripts/check-world-runtime-shell.mjs"
+    "runtime:shell:check": "node scripts/check-world-runtime-shell.mjs",
+    "recording:summarize": "node scripts/summarize-recording.mjs"
   },
   "overrides": {
     "dompurify": "3.4.12"
