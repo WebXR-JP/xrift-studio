@@ -37,6 +37,7 @@ import {
 } from "../terrain-presets";
 import { WATER_SHADER_CATALOG } from "../water-shader-catalog";
 import { compileVisualProject } from "./compile";
+import type { VisualCompilerDocuments } from "./types";
 
 /**
  * Compiles one World that exercises as many emit paths at once as documents
@@ -56,6 +57,18 @@ import { compileVisualProject } from "./compile";
 export function compileStagedTypecheckWorld(): ReturnType<
   typeof compileVisualProject
 > {
+  return compileVisualProject(createStagedTypecheckWorldDocuments(), {
+    generatedAt: "2026-01-01T00:00:00.000Z",
+  });
+}
+
+/**
+ * The documents behind `compileStagedTypecheckWorld`, for callers that run a
+ * whole pipeline over them (the Classic export fixtures) rather than the
+ * compiler alone. The Script source is included so the emitted module set is
+ * the same one the publish gate typechecks.
+ */
+export function createStagedTypecheckWorldDocuments(): VisualCompilerDocuments {
   const prototype = createPrototypeProject("world", "staged-typecheck");
 
   const terrainPreset = getTerrainPreset("meadow-plain");
@@ -263,14 +276,11 @@ export function compileStagedTypecheckWorld(): ReturnType<
     },
   };
 
-  return compileVisualProject(
-    {
-      project: prototype.project,
-      scenes: { [scene.sceneId]: scene },
-      assets,
-      prefabs: prototype.prefabs,
-      scriptSources: { [scriptAssetId]: scriptSource },
-    },
-    { generatedAt: "2026-01-01T00:00:00.000Z" },
-  );
+  return {
+    project: prototype.project,
+    scenes: { [scene.sceneId]: scene },
+    assets,
+    prefabs: prototype.prefabs,
+    scriptSources: { [scriptAssetId]: scriptSource },
+  };
 }

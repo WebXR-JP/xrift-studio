@@ -1069,7 +1069,7 @@ VisualProjectDocument + SceneDocument + AssetManifest
 
 このパイプラインは実装境界であり、ビジュアルモードの操作手順として露出しない。ユーザーは同じエディターの Play を押し、Scene View 内で確認し、Stop で Edit へ戻る。Vite のポート、CLI コマンド、開発サーバー、別ブラウザの URL を選んだり起動したりする必要はない。
 
-compiler core は出力 adapter を二つ持つ。desktop の Publish は `classic-jsx`、Classic export CLI は `classic-runtime` を選ぶ。これは Scene 変換器の複製ではなく、同じ検証、Prefab 展開、Asset plan、diagnostics、provenance から出力 adapter だけを切り替える境界である。
+compiler core は出力 adapter を二つ持つ。desktop の Publish、Classic export CLI、Editor からの既存 Classic 追加は `classic-jsx`、ブラウザ版アップロードだけが事前ビルドの shell 向けに `classic-runtime` を選ぶ。これは Scene 変換器の複製ではなく、同じ検証、Prefab 展開、Asset plan、diagnostics、provenance から出力 adapter だけを切り替える境界である。
 
 Editor Play は visual documents を Three / R3F preview adapter が直接読むため、Node.js、XRift CLI、別の Vite process を要求しない。toolchain がなくてもビジュアル project を作成・編集・保存できる。Compiler、check、upload を実行する時だけ runtime gate で Node.js / XRift CLI / 認証状態を検査し、不足時は authoring を閉じずにセットアップ導線を示す。
 
@@ -1103,11 +1103,11 @@ XRiftStudioProvenance
 
 ### 9.4 Code Generation
 
-- `classic-runtime` mode は `public/xrift/runtime.json` と薄い adapter を生成する。desktop の Publish は `classic-jsx` mode を使う。
+- `classic-runtime` mode は `public/xrift-runtime.json` と薄い adapter を生成する。ブラウザ版アップロードの事前ビルド shell だけがこれを使う。desktop の Publish と Classic export は `classic-jsx` mode を使う。`xrift-studio-runtime` は npm 未公開なので、これを import する出力を Classic project へ置くとビルドできない。
 - 出力先は OS の一時ディレクトリまたは visual project の `.cache/generated-xrift/` とし、authoring root に `package.json` や `src/` を生成しない。
 - staging project 全体を compiler 所有とし、自動生成 marker と source document hash を記録する。次回 compile で破棄・再生成でき、ユーザー編集は受け付けない。
-- `public/xrift/runtime.json`は編集用documentを直接公開せず、実行時に必要なScene、Entity、Transform、Component、Asset URLだけを持つ`xrift-studio.runtime` schemaへ変換する。
-- `src/World.tsx`または`src/Item.tsx`は`xrift-studio-runtime/react-three-fiber`を呼ぶ薄いadapterとし、大量のScene JSXを正本として生成しない。
+- `public/xrift-runtime.json`は編集用documentを直接公開せず、実行時に必要なScene、Entity、Transform、Component、Asset URLだけを持つ`xrift-studio.runtime` schemaへ変換する。
+- `classic-runtime`の`src/World.tsx`または`src/Item.tsx`は`xrift-studio-runtime/react-three-fiber`を呼ぶ薄いadapterとする。`classic-jsx`のentryはScene全体のJSXと、Playと同じruntime moduleの`src/xrift-studio/`を生成する。どちらも正本はVisual documentであり、生成物を編集しても戻さない。
 - 素のThree.js利用者は`xrift-studio-runtime/three`だけをimportでき、React／Tauri／CLIをbundleへ含めない。ModelとTextureは並列にloadし、形式固有rendererは対象Assetがある場合だけ遅延loadする。
 - Entity、Asset、プロパティの出力順を安定させ、同じ canonical input set と compiler / adapter version から同じ staging project を生成する。
 - Component / Asset Registry は target-neutral な schema、reference、validation 層と、Three preview、R3F、XRift world、XRift item の target adapter 層に分ける。
@@ -1156,8 +1156,8 @@ SDK API reference の upload result は ID、version、content hash を定義す
 
 - classic projectはlocal folderまたはnative境界で浅くcloneしたHTTPS / git SSH Repositoryから`package.json`、`xrift.json`、同種の`src/World.tsx`または`src/Item.tsx`を検査し、file数、総容量、symlink、source graph byte上限を適用する。entryからrelative importを再帰解決し、moduleは実行せず、静的JSXとliteralをlossy importする。`group`、RigidBody、対応Drei / XRift wrapper、local Component instanceを独立Entityとして保持し、その親子関係とlocal Transformの下へ標準Geometry、R3F Light、Collider、typed XRift Componentを配置する。local Model、Texture、MP3 / WAVは通常のAsset import transactionで保存し、sphere / BackSide画像はSkybox、`new Audio`はAudio Sourceへ接続する。確定前reviewでも同じtransactionをfile書き込みなしで準備し、Asset原本容量、Texture解像度と展開量、Model bounds、Model import scale、親を含む配置Scale、配置後寸法を提示する。`THREE.ShaderMaterial`はGLSL、literal uniform、Texture sampler、mesh名variantだけをCustom Material IRへ変換し、元Model slot、Editor Preview、compilerへ同じdescriptorを渡す。OBJ内で明示されたCollider mesh名はnamed submesh参照として復元し、root Modelを通らないnamed nodeへModel import scaleと中心offsetを明示適用して可視Modelとphysics寸法を揃える。RigidBodyはCollider形状と分離した親EntityのComponentとしてfixed / dynamic / kinematic type、静的な一般設定、auto collider方式を保持する。Playとcompilerは次のnested RigidBody境界までのsubtree Mesh / Colliderを同じRapier Bodyへ戻し、親原点へ代替Colliderを生成しない。hook、callback、条件分岐、動的collection、解決できないAsset dependencyはsource path付き診断へ残す。完全なround-tripや暗黙の継続同期は提供しない。
 - visual project 内に手書き `src/` や、生成対象外 adapter を混在させない。拡張は versioned Component / Asset / runtime plugin contract として明示的に設計する。
-- CLIのExport / Ejectは`xrift-studio convert <visual-project> --to classic --out <directory>`と同じcompiler coreを使い、新しい空directoryへRuntime JSON付きClassic projectを作る。
-- Desktop Editorの「Classicへ書き出す」はOS folder pickerで同種の既存Classic projectを検査し、Visual Project IDごとの`public/xrift-studio/`、`src/xrift-studio/`、`.xrift-studio/exports/`へRuntime、Asset、bridge、provenanceを追加する。既存`xrift.json`、thumbnail、entryは既定で変更しない。
+- CLIのExport / Ejectは`xrift-studio convert <visual-project> --to classic --out <directory>`と同じcompiler coreを使い、新しい空directoryへ公開時と同じ`classic-jsx`ソースを持つClassic projectを作る。Script source、Asset、decoder、fontも同じprojectへコピーし、公式テンプレートの依存関係だけでビルドできる状態にする。
+- Desktop Editorの「Classicへ書き出す」はOS folder pickerで同種の既存Classic projectを検査し、生成した`src/`一式をVisual Project IDごとの`src/xrift-studio/<id>/`へ相対importを保ったまま移し、`Scene.tsx`から`XriftStudioScene`として公開する。Asset、decoder、fontは公開Worldが直下しか配信しないため`public/`直下へ置き、provenanceとexport manifestは`.xrift-studio/exports/<id>/`へ置く。既存`xrift.json`、thumbnail、entryは既定で変更しない。前回のexportが記録したfileのうち今回生成しないものは取り除き、手書きfileとbackupには触れない。
 - 既存Classicへの追加はcomponent接続を既定とし、entry切替はbackupと明示確認を必要とする。npmだけ固定allow-listのdependency installを自動化し、他package managerのlockfileをnpmで混在させない。
 - Eject先の`package.json`、`xrift.json`、`src/`、`public/xrift/`はユーザー所有へ移す。由来とhashを`.xrift-studio/export-manifest.json`へ残すが、自動同期やVisualへの逆変換は行わない。
 - `--update`は同じVisual project由来で、manifest記録後にfile追加・削除・変更がないexportだけに許可する。Classic側を編集した後は更新を拒否し、既存directoryへの混在や`--force`を提供しない。

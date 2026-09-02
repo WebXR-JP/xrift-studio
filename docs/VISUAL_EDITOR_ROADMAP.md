@@ -77,7 +77,7 @@ Visual project はコードを隠すだけの画面ではなく、Scene、Asset�
 | 9 | Interactivity | 利用可能・検証中 | canonical graph の編集、検証、保存に加えて、未対応 operation を Editor のノードバッジ・レシピ一覧・Diagnostics と公開側の compile diagnostics へ同じ内容で出す。`event`、`flow`、`variable`、`animation`、`math`、`type`、`XRIFT_studio_interaction` の operation を単一エンジンで実行し、8 種の対象へ書き込む。Scene 遷移と `pointer/*` の host を残す。 |
 | 10 | Scripting | 利用可能・検証中 | Script Asset、Script Component、承認 gate、Play 実行、静的 import 出力までを接続済み。実 XRift runtime で Play と公開の挙動一致を受け入れ、[Scripting Contract](./SCRIPTING.md) が未対応とする typed loader、pointer / player 参照、非同期例外の帰属を埋める。 |
 | 11 | Animation authoring | 計画中 | timeline 上で bone / shape key keyframe を編集・再生し、clip として保存できる。 |
-| 12 | Classic export UI / CLI / Runtime | 開発版 | Editor からの既存 Classic 追加、Runtime JSON、Three.js / R3F adapter、dependency plan、dry-run、衝突検知、Asset copy、provenance を実装済み。未対応 Runtime Component と npm 公開を完了する。 |
+| 12 | Classic export UI / CLI / Runtime | 開発版 | Editor からの既存 Classic 追加と CLI は、公開時と同じ `classic-jsx` ソースを書き出し、公式テンプレートの依存関係だけでビルドできる。dependency plan、dry-run、衝突検知、Asset / decoder / font copy、provenance を実装済み。Runtime JSON はブラウザ版アップロードの shell 専用で、`xrift-studio-runtime` の npm 公開は未完了。 |
 | 13 | Production readiness | 計画中 | 大規模 Scene 性能、accessibility、失敗回復、security、release checklist を満たす。 |
 
 ## 通常の XRift 開発へ渡す CLI
@@ -88,7 +88,7 @@ Visual project の manifest または project root を指定し、新しい XRif
 xrift-studio convert ./my-visual-project --to classic --out ./my-xrift-world
 ```
 
-repository 内では Runtime JSON、Three.js / R3F adapter、dry-run、未改変 export の update に加え、Visual Editor から既存 Classic project を選ぶ導線まで接続済みである。npm 公開と Runtime Component の対応範囲は [Visual Project Classic Export CLI](./VISUAL_PROJECT_MIGRATION_CLI.md) にまとめる。
+repository 内では、公開時と同じ TypeScript / R3F ソースの書き出し、dry-run、未改変 export の update に加え、Visual Editor から既存 Classic project を選ぶ導線まで接続済みである。書き出し先は公式テンプレートの依存関係だけで `npm install` と `npm run dev` が通る。Runtime JSON と `xrift-studio-runtime` の npm 公開は [Visual Project Classic Export CLI](./VISUAL_PROJECT_MIGRATION_CLI.md) にまとめる。
 
 ## 次に満たす条件
 

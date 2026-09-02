@@ -180,7 +180,7 @@ export function ClassicExportDialog({
               XRift Classicへ書き出す
             </h2>
             <p className="mt-1.5 text-sm leading-6 text-slate-600">
-              {projectName}のRuntime JSONとAssetを、選択したClassicプロジェクトへ一方向に追加します。
+              {projectName}のSceneを、公開時と同じTypeScript / React Three Fiberのソースとして、選択したClassicプロジェクトへ一方向に追加します。
             </p>
           </div>
           <button
@@ -203,10 +203,15 @@ export function ClassicExportDialog({
                   <div>
                     <h3 className="font-semibold text-emerald-950">Classicへの書き出しが完了しました</h3>
                     <p className="mt-1 text-sm leading-6 text-emerald-900/80">
-                      Runtime JSON、Asset、接続コンポーネントを追加しました。
+                      Sceneのソース、Asset、接続コンポーネントを追加しました。
                       {result.packageInstallation === "installed"
-                        ? " Runtime packageもインストール済みです。"
-                        : " Runtime依存関係はpackage.jsonへ記録しました。"}
+                        ? " 必要なpackageもインストール済みです。"
+                        : result.packageInstallation === "recorded"
+                          ? " 必要なpackageはpackage.jsonへ記録しました。"
+                          : " 追加のpackageは必要ありません。"}
+                    </p>
+                    <p className="mt-2 text-xs leading-5 text-emerald-900/70">
+                      Sceneの本体: <code className="rounded bg-white/70 px-1 py-0.5">{result.sceneSourceFile}</code>
                     </p>
                   </div>
                 </div>
@@ -240,11 +245,22 @@ export function ClassicExportDialog({
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <h3 className="text-sm font-semibold text-amber-950">依存packageのinstallを完了する</h3>
                   <p className="mt-1 text-xs leading-5 text-amber-900/80">
-                    書き出し先で次のコマンドを実行してください。
+                    {result.packageChanges.map((change) => `${change.name}@${change.version}`).join("、")}をpackage.jsonへ記録しました。書き出し先で次のコマンドを実行してください。
                   </p>
                   <code className="mt-2 block rounded-lg bg-amber-950 px-3 py-2 text-xs text-amber-50">
                     {result.installCommand}
                   </code>
+                </div>
+              ) : null}
+
+              {result.notes.length > 0 ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <h3 className="text-sm font-semibold text-slate-900">確認してください</h3>
+                  <ul className="mt-2 list-disc space-y-2 pl-4 text-xs leading-5 text-slate-700">
+                    {result.notes.map((note, index) => (
+                      <li key={`${index}-${note}`} className="whitespace-pre-wrap">{note}</li>
+                    ))}
+                  </ul>
                 </div>
               ) : null}
 
@@ -301,10 +317,10 @@ export function ClassicExportDialog({
               </section>
 
               <section className={!target ? "pointer-events-none opacity-45" : undefined}>
-                <h3 className="text-sm font-semibold text-slate-900">3. Runtime package</h3>
+                <h3 className="text-sm font-semibold text-slate-900">3. 依存package</h3>
                 <label className="mt-3 flex items-start gap-3 rounded-xl border border-slate-200 p-4">
                   <input type="checkbox" checked={installDependencies} disabled={!target?.canInstallAutomatically} onChange={(event) => setInstallDependencies(event.target.checked)} className="mt-1" />
-                  <span><span className="flex items-center gap-2 text-sm font-semibold text-slate-900"><PackageCheck size={16} aria-hidden="true" />xrift-studio-runtimeをインストール</span><span className="mt-1 block text-xs leading-5 text-slate-600">{target?.canInstallAutomatically ? "npmを使用して固定versionを追加します。" : target ? `${target.packageManager} projectのためpackage.jsonへの記録まで行います。完了後に既存のpackage managerでinstallしてください。` : "書き出し先を選ぶと利用方法を確認できます。"}</span></span>
+                  <span><span className="flex items-center gap-2 text-sm font-semibold text-slate-900"><PackageCheck size={16} aria-hidden="true" />不足しているpackageをインストール</span><span className="mt-1 block text-xs leading-5 text-slate-600">{target?.canInstallAutomatically ? "生成したSceneが必要とするpackage（@xrift/world-componentsの版、TextやOpen Brushのライブラリ）が足りない場合だけ、npmで固定versionを追加します。" : target ? `${target.packageManager} projectのためpackage.jsonへの記録まで行います。完了後に既存のpackage managerでinstallしてください。` : "書き出し先を選ぶと利用方法を確認できます。"}</span></span>
                 </label>
               </section>
 

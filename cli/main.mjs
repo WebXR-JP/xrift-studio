@@ -149,8 +149,18 @@ function formatTextReport(report) {
       lines.push(`- [${diagnostic.code}] ${diagnostic.message}`);
     }
   }
+  if (Array.isArray(report.runtimePackages) && report.runtimePackages.length > 0) {
+    lines.push("", "package.jsonへ記録する依存package");
+    for (const spec of report.runtimePackages) lines.push(`- ${spec}`);
+  }
   if (report.status === "succeeded") {
-    lines.push("", "次の操作", `cd ${quotePath(report.outputRoot)}`, "npm install");
+    lines.push(
+      "",
+      "次の操作",
+      `cd ${quotePath(report.outputRoot)}`,
+      "npm install",
+      "npm run dev    # 生成したSceneをブラウザで確認する",
+    );
   }
   return `${lines.join("\n")}\n`;
 }
