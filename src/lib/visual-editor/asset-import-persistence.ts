@@ -9,6 +9,7 @@ import {
 } from "./asset-import";
 import { getModelAsset, type AssetManifest, type TextureImportSettingsPatch } from "./asset-manifest";
 import { applyTextureProcessingBatch, planTextureProcessing, type TextureBatchProcessingProgress } from "./texture-processing";
+import type { BuiltinRecipeAudioDefinition } from "./builtin-recipe-audio";
 import type { BuiltinRecipeModelDefinition } from "./builtin-recipe-models";
 
 export type ModelReimportPhase =
@@ -157,6 +158,44 @@ export async function ensureBuiltinModelAsset(
     fileName: definition.fileName,
     bytes,
     mimeType: "model/gltf-binary",
+    displayName: definition.displayName,
+    folderId: null,
+    existingManifest: manifest,
+  });
+  if (!plan.canCommit || !plan.asset) return null;
+  return commitAssetImportPlanToDisk(projectPath, manifest, plan);
+}
+
+/**
+ * Imports one of the app's bundled recipe sounds into the open project, unless
+ * that project already has it. Same contract as `ensureBuiltinModelAsset`:
+ * idempotent, no I/O once the Asset exists, and null on any failure so the
+ * caller fails the whole placement rather than landing an Audio Source that
+ * points at nothing.
+ */
+export async function ensureBuiltinAudioAsset(
+  projectPath: string,
+  manifest: AssetManifest,
+  definition: BuiltinRecipeAudioDefinition,
+): Promise<AssetManifest | null> {
+  if (manifest.assets[definition.assetId]?.kind === "audio") return manifest;
+
+  let response: Response;
+  try {
+    response = await fetch(definition.publicPath, { cache: "reload" });
+  } catch {
+    return null;
+  }
+  if (!response.ok) return null;
+
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength !== definition.byteLength) return null;
+  if ((await sha256Bytes(bytes)) !== definition.sha256) return null;
+
+  const plan = await createAssetImportPlan({
+    fileName: definition.fileName,
+    bytes,
+    mimeType: "audio/wav",
     displayName: definition.displayName,
     folderId: null,
     existingManifest: manifest,

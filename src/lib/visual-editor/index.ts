@@ -10,6 +10,7 @@ export * from "./asset-optimization";
 export * from "./audio-import.fixture";
 export * from "./builtin-prefab-catalog";
 export * from "./builtin-prefab-catalog.fixture";
+export * from "./builtin-recipe-audio";
 export * from "./builtin-recipe-models";
 export * from "./component-registry";
 export * from "./component-code-import";

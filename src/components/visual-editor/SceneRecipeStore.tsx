@@ -1,5 +1,11 @@
-import { useMemo, useState } from "react";
-import { CheckCircle2, CircleAlert, LoaderCircle, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  CheckCircle2,
+  CircleAlert,
+  LoaderCircle,
+  MousePointerClick,
+  Search,
+} from "lucide-react";
 import {
   SCENE_RECIPE_CATEGORY_LABELS,
   getSceneRecipesForProjectKind,
@@ -10,6 +16,7 @@ import {
 import { SceneRecipeCatalogPreview } from "./SceneRecipeCatalogPreview";
 
 const CATEGORY_ORDER: readonly SceneRecipeCategory[] = [
+  "tutorial",
   "light",
   "nature",
   "weather",
@@ -77,10 +84,37 @@ export function SceneRecipeStore({
   // written by hand: a set that quietly grows a part should say so.
   const contents = useMemo(() => {
     if (!selected) return null;
-    const counts = { primitive: 0, model: 0, particle: 0, light: 0 };
-    for (const part of selected.parts) counts[part.kind] += 1;
-    return counts;
+    const counts = {
+      primitive: 0,
+      model: 0,
+      particle: 0,
+      light: 0,
+      audio: 0,
+      text: 0,
+    };
+    for (const part of selected.parts) {
+      counts[part.kind] += 1;
+      // An Audio Source riding on a shape is a sound the set brings, and the
+      // list would be lying if it counted only the standalone ones.
+      if (
+        (part.kind === "primitive" || part.kind === "model") &&
+        part.audio
+      ) {
+        counts.audio += 1;
+      }
+    }
+    return { ...counts, graph: selected.behaviours?.length ?? 0 };
   }, [selected]);
+
+  // The result lands under a full-height detail pane, so on a long lesson it
+  // renders below the fold: the author presses 追加 and nothing they can see
+  // changes. Bringing it into view is what makes the placement legible.
+  const addedRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (addedMessage) {
+      addedRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [addedMessage]);
 
   const addSelected = async () => {
     if (!selected || adding || disabledReason) return;
@@ -90,7 +124,9 @@ export function SceneRecipeStore({
     try {
       const result = await onAdd(selected);
       setAddedMessage(
-        `「${result.entityName}」をSceneへ配置しました。Particle Assetを${result.createdAssetCount}件追加しています。`,
+        result.createdAssetCount > 0
+          ? `「${result.entityName}」をSceneへ配置し、Assetを${result.createdAssetCount}件追加しました。`
+          : `「${result.entityName}」をSceneへ配置しました。`,
       );
     } catch (reason) {
       setError(
@@ -236,8 +272,52 @@ export function SceneRecipeStore({
                   <li>Particle {contents.particle} 種（Assetとして追加します）</li>
                 ) : null}
                 {contents.light > 0 ? <li>ライト {contents.light} 灯</li> : null}
+                {contents.audio > 0 ? (
+                  <li>音 {contents.audio} 個（Audio Sourceと音のAssetを追加します）</li>
+                ) : null}
+                {contents.text > 0 ? <li>文字 {contents.text} 枚</li> : null}
+                {contents.graph > 0 ? (
+                  <li>
+                    しかけ {contents.graph} 本（Interactivity Assetとして追加します）
+                  </li>
+                ) : null}
               </ul>
             </div>
+
+            {selected.behaviours?.length ? (
+              <div className="rounded-lg border border-slate-200 bg-white p-3 text-[11px] leading-5 text-slate-600">
+                <p className="font-semibold text-slate-800">動き</p>
+                <ul className="mt-1 space-y-1">
+                  {selected.behaviours.map((behaviour) => (
+                    <li key={behaviour.graphName} className="flex gap-1.5">
+                      <MousePointerClick
+                        size={13}
+                        className="mt-0.5 shrink-0 text-slate-400"
+                        aria-hidden
+                      />
+                      <span>{behaviour.summary}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {selected.lesson ? (
+              <div className="rounded-lg border border-brand-200 bg-brand-50 p-3 text-[11px] leading-5 text-brand-900">
+                <p className="font-semibold">このセットで分かること</p>
+                <p className="mt-1">{selected.lesson.goal}</p>
+                <ol className="mt-2 space-y-1.5">
+                  {selected.lesson.steps.map((step, index) => (
+                    <li key={step} className="flex gap-2">
+                      <span className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-600 text-[9px] font-semibold text-white">
+                        {index + 1}
+                      </span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
 
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] leading-4 text-amber-800">
               {selected.note}
@@ -263,10 +343,26 @@ export function SceneRecipeStore({
               <p className="text-[11px] text-slate-500">{disabledReason}</p>
             ) : null}
             {addedMessage ? (
-              <p className="flex items-start gap-1.5 text-[11px] text-emerald-700">
-                <CheckCircle2 size={13} className="mt-0.5 shrink-0" />
-                {addedMessage}
-              </p>
+              <div
+                ref={addedRef}
+                className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-[11px] leading-5 text-emerald-800">
+                <p className="flex items-start gap-1.5 font-semibold">
+                  <CheckCircle2 size={13} className="mt-0.5 shrink-0" />
+                  {addedMessage}
+                </p>
+                {selected.lesson ? (
+                  // A lesson the author cannot read once the shelf closes is a
+                  // note in a drawer. The steps stay here, and the shelf stays
+                  // open for a set that has them, until the author closes it.
+                  <p className="mt-1 pl-[18px]">
+                    上の手順を見ながら、この画面を閉じてPlayを開始してください。
+                  </p>
+                ) : (
+                  <p className="mt-1 pl-[18px]">
+                    中身のEntityはHierarchyから個別に編集できます。
+                  </p>
+                )}
+              </div>
             ) : null}
             {error ? (
               <p className="flex items-start gap-1.5 text-[11px] text-rose-700">

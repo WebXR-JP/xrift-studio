@@ -7632,11 +7632,16 @@ export function VisualEditorPrototype({
       );
       setSceneSelection({ kind: "entity", id: result.rootEntityId });
       setAssetSelection(null);
-      setExternalStoreOpen(false);
+      // A set that teaches something keeps its shelf open: the steps are on
+      // that panel, and closing it the moment the set lands would leave the
+      // author looking at a button with nothing telling them to press it.
+      if (!recipe.lesson) setExternalStoreOpen(false);
       const entityName =
         result.scene.entities[result.rootEntityId]?.name ?? recipe.name;
       setNotice(
-        `「${entityName}」をSceneへ配置しました。中身のEntityはHierarchyから個別に編集できます`,
+        recipe.lesson
+          ? `「${entityName}」をSceneへ配置しました。Playを開始して、手順のとおりに試してください`
+          : `「${entityName}」をSceneへ配置しました。中身のEntityはHierarchyから個別に編集できます`,
       );
       return {
         entityName,

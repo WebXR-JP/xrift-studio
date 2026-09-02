@@ -96,6 +96,14 @@ Animation を持つ GLB / VRM の展開ノード）は、ジオメトリを親 M
 明らかに見劣りする。`note` は配置後に作者がまだやることなので、落とさず
 そのまま返す。
 
+「しかけ・チュートリアル」カテゴリのセットは、形状に加えて Audio Source と
+Interactivity Graph まで組み込んで配置する。`behaviours` は押したときに何が
+起きるかを 1 本ずつ返し、`lesson` はそのセットが教える手順を返す。押すと音が
+鳴る、押すと灯りが点く、開いて自動で閉じる、といった仕掛けを、`add_component`
+と `create_interactivity_asset` を何度も呼んで組み直す必要はない。配置される
+のは普通の Interactable / Audio Source / Interaction Trigger なので、置いた
+あとは通常の tool でそのまま編集できる。
+
 `get_entity_bounds` は Transform ではなく**大きさ**を返す。`world` は既定で
 配下を含めた axis-aligned box、`local` は自身の Mesh の素の extent。回転して
 いる子は 8 隅を変換して含める箱にするので、重なり判定が安全側になる。extent

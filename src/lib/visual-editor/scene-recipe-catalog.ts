@@ -1,8 +1,41 @@
-import { ensureBuiltinModelAsset } from "./asset-import-persistence";
+import {
+  ensureBuiltinAudioAsset,
+  ensureBuiltinModelAsset,
+} from "./asset-import-persistence";
 import { BUILTIN_ASSET_IDS } from "./builtin-asset-ids";
+import { getBuiltinRecipeAudio } from "./builtin-recipe-audio";
 import { getBuiltinRecipeModel } from "./builtin-recipe-models";
+import {
+  createXriftComponent,
+  XRIFT_COMPONENT_SCHEMA_IDS,
+} from "./component-registry";
 import { BUILTIN_PRIMITIVE_CREATION_IDS, getBuiltinPrimitiveCreation } from "./creation-catalog";
 import { createDocumentId } from "./document-id";
+import { tintToLinearRgb } from "./glow-material-catalog";
+import { syncInteractionTriggerReferences } from "./interaction-trigger-targets";
+import {
+  addDefaultInteractivityAsset,
+  configureInteractivityTriggerAction,
+  createDefaultKhrInteractivityExtension,
+  getXriftInteractionProperty,
+  setInteractivityTriggerActionDuration,
+  setInteractivityTriggerActionText,
+  setInteractivityTriggerActionValue,
+  XRIFT_INTERACTION_OPERATIONS,
+  XRIFT_INTERACTION_PLAYER_ENTITY_ID,
+  XRIFT_INTERACTION_SCENE_ENTITY_ID,
+  xriftInteractionEnumIndex,
+  type KhrInteractivityExtension,
+  type KhrInteractivityGraph,
+  type KhrInteractivityJsonValue,
+  type XriftInteractionPropertyDescriptor,
+  type XriftInteractionTargetKind,
+} from "./interactivity-graph";
+import {
+  appendInteractivityOperation,
+  connectInteractivityFlow,
+  setInteractivityLiteralValue,
+} from "./interactivity-recipes";
 import {
   addDefaultParticleAsset,
   getParticleAuthoringPreset,
@@ -10,10 +43,13 @@ import {
 } from "./particle-system";
 import { ensureBuiltinMaterialAsset } from "./prototype-project";
 import {
+  createAudioSourceComponent,
   createBuiltinPrimitiveMeshComponent,
+  createInteractionTriggerComponent,
   createMeshComponent,
   createMeshColliderComponent,
   createParticleEmitterComponent,
+  createTextComponent,
   createTransformComponent,
   type LightComponent,
   type SceneComponent,
@@ -48,6 +84,9 @@ export type SceneRecipePart =
       position: Vec3;
       rotation: Vec3;
       scale: Vec3;
+      /** Makes this part pressable, which is what an `interact` graph needs. */
+      interactable?: { label: string };
+      audio?: SceneRecipeAudio;
     }
   | {
       /**
@@ -67,6 +106,8 @@ export type SceneRecipePart =
        * falling through the floor on the first Play.
        */
       collider?: "trimesh";
+      interactable?: { label: string };
+      audio?: SceneRecipeAudio;
     }
   | {
       kind: "particle";
@@ -82,7 +123,128 @@ export type SceneRecipePart =
       name: string;
       position: Vec3;
       light: Omit<LightComponent, "id" | "type" | "enabled">;
+      /**
+       * Lands switched off, for a set whose whole point is switching it on.
+       * The Light Component is still there and still selectable -- `enabled`
+       * is exactly what the graph writes.
+       */
+      startsOff?: boolean;
+    }
+  | {
+      /** A sound with nothing to look at: room tone, a loop under a machine. */
+      kind: "audio";
+      name: string;
+      position: Vec3;
+      audio: SceneRecipeAudio;
+    }
+  | {
+      /** A sign. What a set has to say to the person standing in front of it. */
+      kind: "text";
+      name: string;
+      position: Vec3;
+      rotation: Vec3;
+      text: string;
+      fontSize: number;
+      color?: string;
+      maxWidth?: number;
     };
+
+/** The variants the shorthand builders below return, named so a set can add
+ * `interactable` or `audio` to one without the spread widening to the union. */
+export type SceneRecipePrimitivePart = Extract<SceneRecipePart, { kind: "primitive" }>;
+export type SceneRecipeLightPart = Extract<SceneRecipePart, { kind: "light" }>;
+
+/**
+ * An Audio Source on one of the set's parts.
+ *
+ * `audioId` names a bundled sound (`builtin-recipe-audio.ts`) rather than an
+ * Asset the author has to find first: a set that lands with an empty Audio
+ * Source teaches nothing, because the first Play is silent and the author has
+ * no way to tell an unconfigured source from a broken one.
+ */
+export type SceneRecipeAudio = {
+  audioId: string;
+  /** False for a sound a graph starts. True for room tone. */
+  autoplay: boolean;
+  loop: boolean;
+  volume: number;
+  /** True places the sound in the world; false is one volume everywhere. */
+  spatial: boolean;
+  /** Metres the sound stays at full volume. Spatial sources only. */
+  refDistance?: number;
+  /** Metres past which it is inaudible. Spatial sources only. */
+  maxDistance?: number;
+};
+
+/** Which Entity one action of a set's graph writes to. */
+export type SceneRecipeActionTarget =
+  | { scope: "part"; part: string }
+  | { scope: "player" }
+  | { scope: "scene" };
+
+/**
+ * One property write in a set's graph, in the same terms the node editor uses.
+ *
+ * Declarative rather than a build callback so the same rows can be shown in the
+ * shelf before placing (「押すと何が起きるか」) and asserted in the fixture --
+ * and so a set can never describe an effect its graph does not produce.
+ */
+export type SceneRecipeAction = {
+  target: SceneRecipeActionTarget;
+  targetKind: XriftInteractionTargetKind;
+  property: string;
+  /**
+   * What to write: a bool, a number, an enum option's value, `#rrggbb` for a
+   * colour, or three numbers for a position, rotation or scale. Omitted keeps
+   * the property's own default, and is required for `mode: "toggle"`.
+   */
+  value?: boolean | number | string | readonly number[];
+  /** Seconds to ramp over. Enum, Asset and string properties ignore it. */
+  duration?: number;
+  mode?: "set" | "toggle";
+  /**
+   * Which socket of the previous node continues into this one. `"done"` waits
+   * for that node's timed change to finish; `"out"` runs alongside it.
+   */
+  after?: "out" | "done";
+  /** Seconds to wait before this action, as a `flow/setDelay` in between. */
+  delay?: number;
+};
+
+/**
+ * A graph the set brings with it, already pointed at the set's own parts.
+ *
+ * Wiring one of these by hand is four pickers and a literal per action, and it
+ * is the step where an author who has never opened the node editor stops. The
+ * set does it once; what lands is an ordinary Interactivity Asset and an
+ * ordinary Interaction Trigger, so the next thing the author does is edit it.
+ */
+export type SceneRecipeBehaviour = {
+  /** Part name that carries the Interaction Trigger. */
+  host: string;
+  graphName: string;
+  /** `interact` also adds the official Interactable the trigger needs. */
+  start: "interact" | "sceneStart";
+  /** Shown on the shelf card, in the author's words. */
+  summary: string;
+  /** Hover text on the Interactable. Interact-started behaviours only. */
+  interactionText?: string;
+  actions: readonly SceneRecipeAction[];
+};
+
+/**
+ * What a set teaches, for the sets that exist to teach something.
+ *
+ * The tutorial sets are not a separate feature: they are ordinary sets whose
+ * contents happen to be a working example of one mechanism. The steps are what
+ * turns a placed example into a lesson — where to press, what to open, and
+ * which value to change to make it yours.
+ */
+export type SceneRecipeLesson = {
+  /** One line: what the author will be able to do afterwards. */
+  goal: string;
+  steps: readonly string[];
+};
 
 /**
  * What an author is looking for when they open the shelf.
@@ -98,7 +260,8 @@ export type SceneRecipeCategory =
   | "water"
   | "structure"
   | "furniture"
-  | "effect";
+  | "effect"
+  | "tutorial";
 
 export const SCENE_RECIPE_CATEGORY_LABELS: Readonly<
   Record<SceneRecipeCategory, string>
@@ -110,6 +273,7 @@ export const SCENE_RECIPE_CATEGORY_LABELS: Readonly<
   structure: "建物",
   furniture: "家具",
   effect: "演出",
+  tutorial: "しかけ・チュートリアル",
 };
 
 export type SceneRecipe = {
@@ -137,6 +301,10 @@ export type SceneRecipe = {
     ground?: boolean;
   };
   parts: readonly SceneRecipePart[];
+  /** Graphs wired to those parts, placed with them. */
+  behaviours?: readonly SceneRecipeBehaviour[];
+  /** Present on the sets that are also a lesson. */
+  lesson?: SceneRecipeLesson;
 };
 
 export const SCENE_RECIPE_IDS = {
@@ -175,6 +343,10 @@ export const SCENE_RECIPE_IDS = {
   floorPanel: "scene-recipe.floor-panel",
   wallPanel: "scene-recipe.wall-panel",
   recordingStudio: "scene-recipe.recording-studio",
+  soundButton: "scene-recipe.sound-button",
+  lightSwitch: "scene-recipe.light-switch",
+  ambientSpeaker: "scene-recipe.ambient-speaker",
+  slidingDoor: "scene-recipe.sliding-door",
 } as const;
 
 /**
@@ -241,7 +413,7 @@ function shape(
   position: Vec3,
   scale: Vec3,
   rotation: Vec3 = [0, 0, 0],
-): SceneRecipePart {
+): SceneRecipePrimitivePart {
   return {
     kind: "primitive",
     name,
@@ -299,7 +471,7 @@ function lamp(
   color: string,
   intensity: number,
   distance: number,
-): SceneRecipePart {
+): SceneRecipeLightPart {
   return {
     kind: "light",
     name,
@@ -1194,6 +1366,312 @@ const RECORDING_STUDIO: SceneRecipe = {
   ],
 };
 
+/**
+ * The four sets that are also the tutorial.
+ *
+ * Everything above this line is scenery: an author places it and it looks like
+ * something. These four land as working mechanisms — a press that makes a
+ * sound, a switch that turns a Light on, room tone that fades with distance, a
+ * door that opens and closes itself — because that is the part of Studio that
+ * cannot be learned by looking at it. Each carries a `lesson`, and each is
+ * built only from Components the Inspector can already edit, so the first
+ * change the author makes is to the set they just placed.
+ */
+
+const SOUND_BUTTON: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.soundButton,
+  name: "音の出るボタン",
+  description:
+    "押すと音が鳴り、ボタンが一瞬光ります。Interactable、Audio Source、Interactivity Graphの3つがどう噛み合うかを、そのまま読める最小の形にしています。",
+  category: "tutorial",
+  projectKinds: ["world"],
+  note: "Playを開始して、ボタンにカーソルを合わせてクリックしてください。音はボタンのAudio Sourceから鳴ります。Inspectorの「Audio Source」でAssetを差し替えると、そのまま自分の音になります。",
+  lesson: {
+    goal: "押したら何かが起きる、をひと通り自分で作れるようになります",
+    steps: [
+      "Playを開始し、ボタンを見てクリックします。音が鳴り、ボタンが一瞬オレンジに光ります。",
+      "Playを停止し、Hierarchyで「ボタン」を選びます。Interactable、Audio Source、Interaction Triggerの3つが載っています。",
+      "Interaction TriggerのGraphを開きます。「押されたとき」から、音を鳴らす・光らせる・戻す、の3つのアクションが順につながっています。",
+      "光る色のアクションを選び、値を好きな色に変えてもう一度Playします。変えた色で光ります。",
+      "Audio SourceのAssetを、自分でImportした音に差し替えます。グラフはそのままで音だけ変わります。",
+    ],
+  },
+  behaviours: [
+    {
+      host: "ボタン",
+      graphName: "押すと音が鳴る",
+      start: "interact",
+      summary: "押す → 音を鳴らし、ボタンを0.15秒かけて光らせ、0.4秒かけて戻す",
+      interactionText: "押す",
+      actions: [
+        {
+          target: { scope: "part", part: "ボタン" },
+          targetKind: "audio-source",
+          property: "playback",
+          value: "play",
+        },
+        {
+          target: { scope: "part", part: "ボタン" },
+          targetKind: "material",
+          property: "emissive",
+          value: "#f97316",
+          duration: 0.15,
+        },
+        {
+          target: { scope: "part", part: "ボタン" },
+          targetKind: "material",
+          property: "emissive",
+          value: "#000000",
+          duration: 0.4,
+          after: "done",
+        },
+      ],
+    },
+  ],
+  parts: [
+    box("台座", M.slate, [0, 0.06, 0], [0.62, 0.12, 0.62]),
+    {
+      ...cyl("ボタン", M.orange, [0, 0.19, 0], [0.34, 0.14, 0.34]),
+      interactable: { label: "押す" },
+      audio: {
+        audioId: "pressChime",
+        autoplay: false,
+        loop: false,
+        volume: 1,
+        spatial: true,
+        refDistance: 2,
+        maxDistance: 30,
+      },
+    },
+    {
+      kind: "text",
+      name: "案内",
+      position: [0, 0.62, 0],
+      rotation: [0, 0, 0],
+      text: "押すと音が鳴ります",
+      fontSize: 0.11,
+      color: "#e2e8f0",
+    },
+  ],
+};
+
+const LIGHT_SWITCH: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.lightSwitch,
+  name: "灯りのスイッチ",
+  description:
+    "スイッチを押すと、別のEntityに載ったLightが点いたり消えたりします。押したものとは違うEntityを書き換える、いちばん短い例です。",
+  category: "tutorial",
+  projectKinds: ["world"],
+  note: "灯りは消えた状態で置かれます。Playを開始してスイッチを押すと点きます。Lightは「電球」の下のEntityにあるので、明るさや色はそこのInspectorで変えられます。",
+  lesson: {
+    goal: "押したEntityとは別のEntityを、グラフから動かせるようになります",
+    steps: [
+      "Playを開始してスイッチを押します。カチッと鳴って灯りが点き、もう一度押すと消えます。",
+      "Playを停止し、「スイッチ」のInteraction Triggerのグラフを開きます。2つ目のアクションの対象が「灯り」になっています。",
+      "対象のEntityを別のものに変えると、同じスイッチで別の灯りを点けられます。Sceneに灯りを増やして試してください。",
+      "「点灯」のアクションは「切り替える」なので、値を持ちません。ON/OFFを決め打ちしたいときは「設定する」に変えます。",
+      "「灯り」EntityのLightで、色と強さを変えてPlayし直します。",
+    ],
+  },
+  behaviours: [
+    {
+      host: "スイッチ",
+      graphName: "押すと灯りが切り替わる",
+      start: "interact",
+      summary: "押す → カチッと鳴らし、「灯り」のLightの点灯を切り替える",
+      interactionText: "スイッチを押す",
+      actions: [
+        {
+          target: { scope: "part", part: "スイッチ" },
+          targetKind: "audio-source",
+          property: "playback",
+          value: "play",
+        },
+        {
+          target: { scope: "part", part: "灯り" },
+          targetKind: "light",
+          property: "enabled",
+          mode: "toggle",
+        },
+      ],
+    },
+  ],
+  parts: [
+    box("支柱", M.slate, [0, 0.9, 0], [0.14, 1.8, 0.14]),
+    {
+      ...box("スイッチ", M.white, [0, 1.15, 0.12], [0.2, 0.2, 0.1]),
+      interactable: { label: "スイッチを押す" },
+      audio: {
+        audioId: "softClick",
+        autoplay: false,
+        loop: false,
+        volume: 0.9,
+        spatial: true,
+        refDistance: 1.5,
+        maxDistance: 20,
+      },
+    },
+    shape(C.sphere, "電球", M.white, [0, 1.92, 0], [0.26, 0.26, 0.26]),
+    {
+      ...lamp("灯り", [0, 1.92, 0], "#ffd9a0", 6, 9),
+      startsOff: true,
+    },
+    {
+      kind: "text",
+      name: "案内",
+      position: [0, 2.35, 0],
+      rotation: [0, 0, 0],
+      text: "押すと灯りが点きます",
+      fontSize: 0.11,
+      color: "#e2e8f0",
+    },
+  ],
+};
+
+const AMBIENT_SPEAKER: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.ambientSpeaker,
+  name: "環境音のスピーカー",
+  description:
+    "つなぎ目のない4秒のループを流し続けるスピーカーです。近づくと大きく、離れると聞こえなくなる距離の設定が、そのまま入っています。",
+  category: "tutorial",
+  projectKinds: ["world"],
+  note: "Playを開始した時点から鳴り続けます。ブラウザの仕様で、最初のクリックまで音が出ないことがあります。無音のまま置きたいときは、Audio SourceのAutoplayをオフにしてください。",
+  lesson: {
+    goal: "空間に置く音の、聞こえる範囲を自分で決められるようになります",
+    steps: [
+      "Playを開始して、スピーカーに近づいたり離れたりします。音量が距離で変わります。",
+      "Playを停止し、「環境音」EntityのAudio Sourceを開きます。Ref distanceが全開で聞こえる距離、Max distanceが聞こえなくなる距離です。",
+      "Max distanceを小さくしてPlayし直すと、すぐ聞こえなくなります。部屋ごとに違う音を置くときの調整です。",
+      "Spatialをオフにすると、どこにいても同じ音量で鳴ります。BGMはこちらです。",
+      "AssetをImportした自分の音に差し替えます。ループさせる音は、始まりと終わりがつながっているものを選んでください。",
+    ],
+  },
+  parts: [
+    box("スピーカー本体", M.charcoal, [0, 0.45, 0], [0.5, 0.9, 0.42]),
+    shape(C.cylinder, "コーン", M.slate, [0, 0.62, 0.22], [0.26, 0.04, 0.26], [
+      Math.PI / 2,
+      0,
+      0,
+    ]),
+    shape(C.cylinder, "コーン下", M.slate, [0, 0.28, 0.22], [0.18, 0.04, 0.18], [
+      Math.PI / 2,
+      0,
+      0,
+    ]),
+    {
+      kind: "audio",
+      name: "環境音",
+      position: [0, 0.9, 0],
+      audio: {
+        audioId: "ambientHum",
+        autoplay: true,
+        loop: true,
+        volume: 0.7,
+        spatial: true,
+        refDistance: 2,
+        maxDistance: 22,
+      },
+    },
+    {
+      kind: "text",
+      name: "案内",
+      position: [0, 1.15, 0],
+      rotation: [0, 0, 0],
+      text: "近づくと聞こえます",
+      fontSize: 0.1,
+      color: "#e2e8f0",
+    },
+  ],
+};
+
+const SLIDING_DOOR: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.slidingDoor,
+  name: "自動で閉まる扉",
+  description:
+    "押すと1秒かけて開き、2.5秒待って、また閉じます。時間をかけた変化と、変化が終わってからの続きを、1つのグラフで見せます。",
+  category: "tutorial",
+  projectKinds: ["world"],
+  note: "扉は横へスライドするだけで、コライダーは入れていません。通り抜けさせたくない壁として使うときは、扉と枠にMesh Colliderを足してください。",
+  lesson: {
+    goal: "「動かす」「待つ」「戻す」を1本のグラフでつなげられるようになります",
+    steps: [
+      "Playを開始して扉を押します。音とともに開き、少し待って閉まります。",
+      "Playを停止し、「扉」のInteraction Triggerのグラフを開きます。上から、音・開く・待つ・閉じる、の順に並んでいます。",
+      "「開く」のアクションの「かける時間」を3秒にすると、ゆっくり開きます。位置の値を変えれば開く幅が変わります。",
+      "待ち時間のノードの秒数を変えると、開いたままの長さが変わります。",
+      "「開く」から「待つ」へのつなぎは、出力ではなく「完了後」です。移動し終わってから数え始めたいので、ここだけ別のソケットを使っています。",
+    ],
+  },
+  behaviours: [
+    {
+      host: "扉",
+      graphName: "押すと開いて閉じる",
+      start: "interact",
+      summary: "押す → 音を鳴らして1秒で開き、2.5秒待って1秒で閉じる",
+      interactionText: "扉を開ける",
+      actions: [
+        {
+          target: { scope: "part", part: "扉" },
+          targetKind: "audio-source",
+          property: "playback",
+          value: "play",
+        },
+        {
+          target: { scope: "part", part: "扉" },
+          targetKind: "transform",
+          property: "position",
+          value: [0.92, 1.05, 0.14],
+          duration: 1,
+        },
+        {
+          target: { scope: "part", part: "扉" },
+          targetKind: "audio-source",
+          property: "playback",
+          value: "play",
+          after: "done",
+          delay: 2.5,
+        },
+        {
+          target: { scope: "part", part: "扉" },
+          targetKind: "transform",
+          property: "position",
+          value: [0, 1.05, 0.14],
+          duration: 1,
+        },
+      ],
+    },
+  ],
+  parts: [
+    box("枠 左", M.slate, [-0.62, 1.1, 0], [0.14, 2.2, 0.18]),
+    box("枠 右", M.slate, [1.16, 1.1, 0], [0.14, 2.2, 0.18]),
+    box("枠 上", M.slate, [0.27, 2.24, 0], [1.92, 0.16, 0.18]),
+    {
+      // The door hangs in front of the frame rather than inside it: sliding it
+      // sideways in the frame's own plane would push it through the right post.
+      ...box("扉", M.wood, [0, 1.05, 0.14], [1, 2.1, 0.08]),
+      interactable: { label: "扉を開ける" },
+      audio: {
+        audioId: "doorSlide",
+        autoplay: false,
+        loop: false,
+        volume: 0.9,
+        spatial: true,
+        refDistance: 2,
+        maxDistance: 26,
+      },
+    },
+    {
+      kind: "text",
+      name: "案内",
+      position: [0, 2.55, 0],
+      rotation: [0, 0, 0],
+      text: "押すと開きます",
+      fontSize: 0.12,
+      color: "#e2e8f0",
+    },
+  ],
+};
+
 export const SCENE_RECIPES: readonly SceneRecipe[] = [
   CAMPFIRE,
   TORCH,
@@ -1230,6 +1708,10 @@ export const SCENE_RECIPES: readonly SceneRecipe[] = [
   MAGIC_CIRCLE,
   WARP_PILLAR,
   SNOWMAN,
+  SOUND_BUTTON,
+  LIGHT_SWITCH,
+  AMBIENT_SPEAKER,
+  SLIDING_DOOR,
 ];
 
 export function getSceneRecipe(recipeId: string): SceneRecipe | undefined {
@@ -1248,7 +1730,12 @@ export type SceneRecipeInstantiation = {
   scene: SceneDocument;
   assets: AssetManifest;
   rootEntityId: string;
-  /** Particle Assets this placement added, for the message and for tests. */
+  /**
+   * Document Assets this placement added — Particle and Interactivity — for
+   * the message and for tests. Bundled Models and sounds are not here: those
+   * are files committed to disk and shared by content hash, so a second set
+   * that uses the same sound adds nothing.
+   */
   createdAssetIds: readonly string[];
 };
 
@@ -1275,18 +1762,30 @@ export async function instantiateSceneRecipe(
   const createdAssetIds: string[] = [];
   const rootEntityId = createDocumentId("entity");
   const children: SceneEntity[] = [];
+  /**
+   * Where each part landed, so a behaviour can point an action at another part
+   * of the same set. A graph targets an Entity id and, for the Components that
+   * can occur more than once on one Entity, a Component id — neither of which
+   * exists until the part is built, which is why the wiring runs after this
+   * loop rather than inside it.
+   */
+  const placed = new Map<string, SceneRecipePlacedPart>();
 
   for (const part of recipe.parts) {
     const entityId = createDocumentId("entity");
-    const hasTransform = part.kind === "primitive" || part.kind === "model";
+    const hasTransform =
+      part.kind === "primitive" || part.kind === "model" || part.kind === "text";
     const components: SceneComponent[] = [
       createTransformComponent(
         createDocumentId("component-transform"),
         part.position,
         hasTransform ? part.rotation : [0, 0, 0],
-        hasTransform ? part.scale : [1, 1, 1],
+        part.kind === "primitive" || part.kind === "model"
+          ? part.scale
+          : [1, 1, 1],
       ),
     ];
+    const componentIds: Partial<Record<XriftInteractionTargetKind, string>> = {};
 
     if (part.kind === "primitive") {
       const definition = getBuiltinPrimitiveCreation(part.creationId);
@@ -1343,14 +1842,87 @@ export async function instantiateSceneRecipe(
       );
       if (!emitter) return null;
       components.push(emitter);
-    } else {
+    } else if (part.kind === "light") {
+      const lightComponentId = createDocumentId("component-light");
+      componentIds.light = lightComponentId;
       components.push({
-        id: createDocumentId("component-light"),
+        id: lightComponentId,
         type: "light",
-        enabled: true,
+        enabled: !part.startsOff,
         ...part.light,
       });
+    } else if (part.kind === "text") {
+      const text = createTextComponent(createDocumentId("component-text"), {
+        text: part.text,
+        fontSize: part.fontSize,
+        ...(part.color === undefined ? {} : { color: part.color }),
+        ...(part.maxWidth === undefined ? {} : { maxWidth: part.maxWidth }),
+      });
+      if (!text) return null;
+      componentIds.text = text.id;
+      components.push(text);
     }
+
+    const audio =
+      part.kind === "audio"
+        ? part.audio
+        : part.kind === "primitive" || part.kind === "model"
+          ? part.audio
+          : undefined;
+    if (audio) {
+      const definition = getBuiltinRecipeAudio(audio.audioId);
+      if (!definition) return null;
+      const withAudio = await ensureBuiltinAudioAsset(
+        projectPath,
+        nextAssets,
+        definition,
+      );
+      if (!withAudio || withAudio.assets[definition.assetId]?.kind !== "audio") {
+        return null;
+      }
+      nextAssets = withAudio;
+      const source = createAudioSourceComponent(
+        createDocumentId("component-audio-source"),
+        definition.assetId,
+        audio.spatial,
+      );
+      if (!source) return null;
+      componentIds["audio-source"] = source.id;
+      components.push({
+        ...source,
+        volume: audio.volume,
+        loop: audio.loop,
+        autoplay: audio.autoplay,
+        ...(audio.refDistance === undefined
+          ? {}
+          : { refDistance: audio.refDistance }),
+        ...(audio.maxDistance === undefined
+          ? {}
+          : { maxDistance: audio.maxDistance }),
+      });
+    }
+
+    if (part.kind === "primitive" || part.kind === "model") {
+      if (part.interactable) {
+        // The graph hears `onInteract` from the official Interactable, and the
+        // compiler blocks a trigger without one. Its id has to be unique in the
+        // published world, so it is derived from the Entity's own id.
+        const interactable = createXriftComponent(
+          XRIFT_COMPONENT_SCHEMA_IDS.interactable,
+          {
+            componentId: createDocumentId("component-xrift"),
+            properties: {
+              id: entityId,
+              interactionText: part.interactable.label,
+            },
+          },
+        );
+        if (!interactable) return null;
+        components.push(interactable);
+      }
+    }
+
+    placed.set(part.name, { entityId, componentIds });
 
     children.push({
       id: entityId,
@@ -1360,6 +1932,35 @@ export async function instantiateSceneRecipe(
       enabled: true,
       components,
     });
+  }
+
+  for (const behaviour of recipe.behaviours ?? []) {
+    const host = placed.get(behaviour.host);
+    const hostEntity = host
+      ? children.find((child) => child.id === host.entityId)
+      : undefined;
+    if (!host || !hostEntity) return null;
+
+    const extension = createSceneRecipeBehaviourExtension(behaviour, placed);
+    if (!extension) return null;
+
+    const assetId = createDocumentId("interactivity");
+    const added = addDefaultInteractivityAsset(nextAssets, {
+      id: assetId,
+      name: uniqueAssetName(nextAssets, `${recipe.name}の${behaviour.graphName}`),
+      folderId: null,
+      extension,
+    });
+    if (!added.added) return null;
+    nextAssets = added.manifest;
+    createdAssetIds.push(assetId);
+
+    const trigger = createInteractionTriggerComponent(
+      createDocumentId("component-interaction-trigger"),
+      assetId,
+    );
+    if (!trigger) return null;
+    hostEntity.components.push(trigger);
   }
 
   const root: SceneEntity = {
@@ -1379,16 +1980,197 @@ export async function instantiateSceneRecipe(
   const entities = { ...scene.entities, [rootEntityId]: root };
   for (const child of children) entities[child.id] = child;
 
+  const nextScene: SceneDocument = {
+    ...scene,
+    rootEntityIds: [...scene.rootEntityIds, rootEntityId],
+    entities,
+  };
+
   return {
-    scene: {
-      ...scene,
-      rootEntityIds: [...scene.rootEntityIds, rootEntityId],
-      entities,
-    },
+    // `entityReferences` is derived, never authored: the same sync every graph
+    // write goes through is what records the Entities these behaviours depend
+    // on, so a set placed here publishes exactly like one wired by hand.
+    scene: recipe.behaviours?.length
+      ? syncInteractionTriggerReferences(nextScene, nextAssets)
+      : nextScene,
     assets: nextAssets,
     rootEntityId,
     createdAssetIds,
   };
+}
+
+/** Where one part of a set landed, for the graphs that write to it. */
+export type SceneRecipePlacedPart = {
+  entityId: string;
+  componentIds: Partial<Record<XriftInteractionTargetKind, string>>;
+};
+
+/**
+ * Builds one behaviour into an Interactivity Asset's extension.
+ *
+ * Exported so the fixture suite can prove every shipped behaviour produces a
+ * graph the runtime actually runs, without a project on disk: the wiring is
+ * where a set's promise is either kept or quietly broken, and the placement
+ * path around it needs files.
+ */
+export function createSceneRecipeBehaviourExtension(
+  behaviour: SceneRecipeBehaviour,
+  placed: ReadonlyMap<string, SceneRecipePlacedPart>,
+): KhrInteractivityExtension | null {
+  const extension = createDefaultKhrInteractivityExtension();
+  const graph = extension.graphs[0] as KhrInteractivityGraph;
+  graph.name = behaviour.graphName;
+  graph.nodes = [];
+  graph.declarations = [];
+  graph.types = [];
+  return buildRecipeBehaviourGraph(graph, behaviour, placed) ? extension : null;
+}
+
+/**
+ * Wires one behaviour into an empty graph.
+ *
+ * The actions are a straight line by construction: each one continues from the
+ * previous node's `out` — or from its `done`, which is what "after it has
+ * finished moving" means — with an optional wait spliced in between. Branching
+ * is deliberately not expressible here, because a set that lands as a chain is
+ * a chain the author can read top to bottom on their first look at the node
+ * editor.
+ */
+function buildRecipeBehaviourGraph(
+  graph: KhrInteractivityGraph,
+  behaviour: SceneRecipeBehaviour,
+  placed: ReadonlyMap<string, SceneRecipePlacedPart>,
+): boolean {
+  let column = 0;
+  const nextPosition = () => ({ x: 80 + column++ * 320, y: 160 });
+
+  let previous = appendInteractivityOperation(
+    graph,
+    behaviour.start === "interact"
+      ? XRIFT_INTERACTION_OPERATIONS.onInteract
+      : "event/onStart",
+    nextPosition(),
+  );
+  let previousSocket: "out" | "done" = "out";
+
+  for (const action of behaviour.actions) {
+    const socket = action.after ?? "out";
+    if (action.delay !== undefined) {
+      const delay = appendInteractivityOperation(graph, "flow/setDelay", nextPosition());
+      setInteractivityLiteralValue(graph, delay, "duration", [action.delay]);
+      connectInteractivityFlow(graph, previous, socket, delay);
+      previous = delay;
+      previousSocket = "done";
+    } else {
+      previousSocket = socket;
+    }
+
+    const target = resolveRecipeActionTarget(action, placed);
+    if (!target) return false;
+    const descriptor = getXriftInteractionProperty(
+      action.targetKind,
+      action.property,
+    );
+    if (!descriptor) return false;
+
+    const node = appendInteractivityOperation(
+      graph,
+      action.mode === "toggle"
+        ? XRIFT_INTERACTION_OPERATIONS.toggleProperty
+        : XRIFT_INTERACTION_OPERATIONS.setProperty,
+      nextPosition(),
+    );
+    if (
+      !configureInteractivityTriggerAction(graph, node, {
+        entityId: target.entityId,
+        componentId: target.componentId,
+        targetKind: action.targetKind,
+        property: action.property,
+      })
+    ) {
+      return false;
+    }
+    if (action.mode !== "toggle" && action.value !== undefined) {
+      if (descriptor.kind === "string") {
+        setInteractivityTriggerActionText(graph, node, String(action.value));
+      } else {
+        const value = recipeActionValue(descriptor, action.value);
+        if (!value) return false;
+        setInteractivityTriggerActionValue(graph, node, descriptor, value);
+      }
+    }
+    if (action.duration !== undefined) {
+      setInteractivityTriggerActionDuration(graph, node, action.duration);
+    }
+    connectInteractivityFlow(graph, previous, previousSocket, node);
+    previous = node;
+    previousSocket = "out";
+  }
+
+  return true;
+}
+
+function resolveRecipeActionTarget(
+  action: SceneRecipeAction,
+  placed: ReadonlyMap<string, SceneRecipePlacedPart>,
+): { entityId: string; componentId: string } | null {
+  if (action.target.scope === "player") {
+    return { entityId: XRIFT_INTERACTION_PLAYER_ENTITY_ID, componentId: "" };
+  }
+  if (action.target.scope === "scene") {
+    return { entityId: XRIFT_INTERACTION_SCENE_ENTITY_ID, componentId: "" };
+  }
+  const part = placed.get(action.target.part);
+  if (!part) return null;
+  // Entity, Transform and Material are one per Entity, so they are addressed by
+  // the Entity alone. An Audio Source, a Light or a Text is not — a set with
+  // two speakers has to say which one — so those actions carry the Component
+  // the part actually got.
+  const componentId = part.componentIds[action.targetKind];
+  if (
+    componentId === undefined &&
+    (action.targetKind === "audio-source" ||
+      action.targetKind === "light" ||
+      action.targetKind === "text")
+  ) {
+    return null;
+  }
+  return { entityId: part.entityId, componentId: componentId ?? "" };
+}
+
+/** The action's authored value, in the shape its property's socket takes. */
+function recipeActionValue(
+  descriptor: XriftInteractionPropertyDescriptor,
+  value: boolean | number | string | readonly number[],
+): KhrInteractivityJsonValue[] | null {
+  switch (descriptor.kind) {
+    case "bool":
+      return typeof value === "boolean" ? [value] : null;
+    case "float":
+      return typeof value === "number" ? [value] : null;
+    case "color": {
+      if (typeof value === "string") {
+        const [red, green, blue] = tintToLinearRgb(value);
+        return [red, green, blue];
+      }
+      return Array.isArray(value) && value.length >= 3
+        ? [value[0], value[1], value[2]]
+        : null;
+    }
+    case "vector3":
+      return Array.isArray(value) && value.length >= 3
+        ? [value[0], value[1], value[2]]
+        : null;
+    case "enum": {
+      if (typeof value !== "string") return null;
+      const index = xriftInteractionEnumIndex(descriptor, value);
+      return index < 0 ? null : [index];
+    }
+    case "asset":
+    case "string":
+      // Both live in `configuration`; nothing goes on the socket.
+      return [];
+  }
 }
 
 function uniqueEntityName(scene: SceneDocument, base: string): string {

@@ -70,6 +70,20 @@ GLSL のコメント、`applyWaterShaderCatalogInstall` が Material Asset へ�
 `attribution.authors`、そしてこの表。Water の GLSL は生成 World へ埋め込まれて
 公開ワールドごと配布されるので、Asset に表示が乗っていることが実質的な条件を満たす。
 
+## しかけ付き 3D セットの音
+
+チュートリアルの 3D セット（音の出るボタン、灯りのスイッチ、環境音のスピーカー、
+自動で閉まる扉）が使う WAV は、`scripts/generate-recipe-audio.mjs` が合成したもので、
+録音素材も第三者のサンプルも含みません。スクリプトを再実行すると同じバイト列になり、
+`src/lib/visual-editor/builtin-recipe-audio.ts` のハッシュと一致します。
+
+| Bundled file | Upstream source | License | SHA-256 |
+| --- | --- | --- | --- |
+| `public/visual-editor/recipe-assets/audio/press-chime.wav` | XRift Studio 制作（スクリプトで合成） | project-owned | `6b3aa614291997f00818a892eb13ef08fe790b2467e741c5a2351f8b13c62155` |
+| `public/visual-editor/recipe-assets/audio/soft-click.wav` | XRift Studio 制作（スクリプトで合成） | project-owned | `a5e9489b1f0fe73cffa39a0747b31305dc53090465903ddcecdb440b6d011132` |
+| `public/visual-editor/recipe-assets/audio/ambient-hum.wav` | XRift Studio 制作（スクリプトで合成） | project-owned | `d4337c78ec9fc27c3757ae6487eb5986b8a248af3c065db02c56890c414c0356` |
+| `public/visual-editor/recipe-assets/audio/door-slide.wav` | XRift Studio 制作（スクリプトで合成） | project-owned | `460d8601d3119e8eda7e116c328b17f66cf59f5a65871e4d28e3450515ef7c69` |
+
 ## Recording Studio Scene recipe
 
 収録スタジオ (`scene-recipe.recording-studio`) の GLB は XRift Studio 側で Blender を使って

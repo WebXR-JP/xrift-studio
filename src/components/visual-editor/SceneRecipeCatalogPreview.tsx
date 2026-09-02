@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { XriftScriptParticleEmitter } from "../../../packages/xrift-studio-runtime/src/script/particle";
+import { XriftTextPanel } from "../../../packages/xrift-studio-runtime/src/script/text-panel";
+import type { XriftTextPanelConfig } from "../../../packages/xrift-studio-runtime/src/text-panel-layout";
 import {
   BUILTIN_ASSET_IDS,
   BUILTIN_MATERIAL_ASSETS,
@@ -49,7 +51,7 @@ export function SceneRecipeCatalogPreview({
           point of a campfire. A set that brings none would otherwise be a dark
           smudge, so the card lights it neutrally. This is the card's lighting,
           not the scene's: what gets placed is unchanged either way. */}
-      {recipe.parts.some((part) => part.kind === "light") ? (
+      {recipe.parts.some((part) => part.kind === "light" && !part.startsOff) ? (
         <ambientLight intensity={0.22} />
       ) : (
         <>
@@ -97,6 +99,10 @@ function RecipePartVisual({ part }: { part: SceneRecipePart }) {
   }
 
   if (part.kind === "light") {
+    // A Light the set places switched off is drawn switched off. The card is
+    // what the Scene gets, and a lamp that looks lit until it is placed would
+    // hide the one thing the switch set exists to demonstrate.
+    if (part.startsOff) return null;
     return (
       <pointLight
         position={[...part.position]}
@@ -116,7 +122,45 @@ function RecipePartVisual({ part }: { part: SceneRecipePart }) {
     );
   }
 
+  if (part.kind === "text") {
+    return <RecipeTextVisual part={part} />;
+  }
+
+  // An Audio Source has nothing to draw. The card says what a set contains in
+  // its contents list, and inventing a speaker icon in 3D would put a shape in
+  // the card that the Scene never gets.
+  if (part.kind === "audio") return null;
+
   return <RecipeParticleVisual part={part} />;
+}
+
+/**
+ * Draws a sign through the runtime's own text object, so the card typesets it
+ * exactly as Play and the published world do.
+ */
+function RecipeTextVisual({
+  part,
+}: {
+  part: Extract<SceneRecipePart, { kind: "text" }>;
+}) {
+  const config = useMemo<XriftTextPanelConfig>(
+    () => ({
+      text: part.text,
+      color: part.color ?? "#ffffff",
+      fontSize: part.fontSize,
+      ...(part.maxWidth === undefined ? {} : { maxWidth: part.maxWidth }),
+      anchorX: "center",
+      anchorY: "middle",
+      outlineWidth: 0,
+      outlineColor: "#000000",
+    }),
+    [part.color, part.fontSize, part.maxWidth, part.text],
+  );
+  return (
+    <group position={[...part.position]} rotation={[...part.rotation]}>
+      <XriftTextPanel config={config} />
+    </group>
+  );
 }
 
 /**
