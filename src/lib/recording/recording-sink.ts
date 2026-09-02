@@ -15,6 +15,12 @@ export type RecordingSinkOpenRequest = {
   extension: "webm" | "mp4";
   /** null means the default directory the native side chooses. */
   directory: string | null;
+  /**
+   * `container`: chunks are the encoded video. `ffmpeg-frames`: chunks are
+   * JPEG frames at `frameRate`, for the native side to hand to FFmpeg.
+   */
+  encoder: "container" | "ffmpeg-frames";
+  frameRate: number;
 };
 
 export type RecordingSinkOpenResult = {

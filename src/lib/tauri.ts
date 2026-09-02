@@ -268,6 +268,11 @@ export type XriftOllamaConfigurationResult = {
   message: string;
 };
 
+export type RecordingEncoderSupport = {
+  ffmpeg: boolean;
+  ffmpegVersion: string | null;
+};
+
 export type RecordingFileHandle = {
   id: string;
   path: string;
@@ -385,10 +390,16 @@ export const tauri = {
    * Opens a new, never-overwriting file for one take. The native side chooses
    * the final name when the requested one already exists.
    */
+  /** Whether an FFmpeg on PATH can encode frames for a WebView without MediaRecorder. */
+  recordingEncoderSupport: () =>
+    invoke<RecordingEncoderSupport>("recording_encoder_support"),
   beginRecordingFile: (request: {
     directory: string | null;
     fileStem: string;
     extension: "webm" | "mp4";
+    /** `container` (default) or `ffmpeg-frames` (JPEG frames FFmpeg encodes). */
+    encoder?: "container" | "ffmpeg-frames";
+    frameRate?: number;
   }) => invoke<RecordingFileHandle>("recording_begin_file", { request }),
   /**
    * Streams one encoder chunk into an open recording. The bytes travel as the
