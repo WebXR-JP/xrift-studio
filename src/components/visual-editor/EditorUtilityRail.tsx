@@ -8,6 +8,9 @@ import {
   AiConnectionPanel,
   type XriftMcpActivity,
 } from "./AiConnectionPanel";
+import { RecordingPanel, type RecordingPanelProps } from "./RecordingPanel";
+import { isRecordingActive } from "../../lib/recording/recording-state";
+import { useRecordingSelector } from "./useRecordingSession";
 import type {
   XriftMcpClientId,
   XriftMcpClientStatus,
@@ -16,7 +19,7 @@ import type {
   XriftOllamaStatus,
 } from "../../lib/tauri";
 
-type UtilityPanel = "ai" | "shortcuts" | "help" | null;
+type UtilityPanel = "ai" | "recording" | "shortcuts" | "help" | null;
 
 const CATEGORY_LABELS: Record<EditorCommandDefinition["category"], string> = {
   project: "プロジェクト",
@@ -36,7 +39,7 @@ function UtilityButton({
   label: string;
   active?: boolean;
   expanded?: boolean;
-  icon: "ai" | "keyboard" | "help" | "report" | "settings";
+  icon: "ai" | "record" | "keyboard" | "help" | "report" | "settings";
   onClick: () => void;
 }) {
   const Icon = EDITOR_ICONS[icon];
@@ -81,6 +84,7 @@ export function EditorUtilityRail({
   onConfigureOllama,
   onUndo,
   onOpenSupport,
+  recording,
 }: {
   commands: readonly EditorCommandDefinition[];
   sceneSettingsOpen: boolean;
@@ -106,8 +110,13 @@ export function EditorUtilityRail({
   ) => void;
   onUndo: () => void;
   onOpenSupport: () => void;
+  /** The recording controls; omitted where recording is unavailable. */
+  recording?: RecordingPanelProps;
 }) {
   const [openPanel, setOpenPanel] = useState<UtilityPanel>(null);
+  const recordingActive = useRecordingSelector((state) =>
+    isRecordingActive(state.snapshot),
+  );
   const railRef = useRef<HTMLElement>(null);
   const shortcutGroups = useMemo(
     () =>
@@ -158,6 +167,15 @@ export function EditorUtilityRail({
           togglePanel("ai");
         }}
       />
+      {recording ? (
+        <UtilityButton
+          label={recordingActive ? "録画（録画中）" : "録画"}
+          icon="record"
+          active={openPanel === "recording" || recordingActive}
+          expanded={openPanel === "recording"}
+          onClick={() => togglePanel("recording")}
+        />
+      ) : null}
       <UtilityButton
         label="ショートカットキー一覧"
         icon="keyboard"
@@ -203,9 +221,11 @@ export function EditorUtilityRail({
             >
               {openPanel === "ai"
                 ? "AI接続"
-                : openPanel === "shortcuts"
-                  ? "ショートカットキー"
-                  : "エディターの使い方"}
+                : openPanel === "recording"
+                  ? "録画"
+                  : openPanel === "shortcuts"
+                    ? "ショートカットキー"
+                    : "エディターの使い方"}
             </h2>
             <button
               type="button"
@@ -236,6 +256,8 @@ export function EditorUtilityRail({
               onConfigureOllama={onConfigureOllama}
               onUndo={onUndo}
             />
+          ) : openPanel === "recording" && recording ? (
+            <RecordingPanel {...recording} />
           ) : openPanel === "shortcuts" ? (
             <div className="scrollbar-thin max-h-[min(28rem,calc(100vh-10rem))] space-y-4 overflow-y-auto p-3.5">
               {shortcutGroups.map((group) => (
