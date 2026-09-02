@@ -247,6 +247,7 @@ import { ComponentCodeImportDialog } from "./ComponentCodeImportDialog";
 import { InteractivityGraphEditor } from "./InteractivityGraphEditor";
 import { EditorUtilityRail } from "./EditorUtilityRail";
 import { SupportReportModal } from "../SupportReportModal";
+import { ConfirmDialog } from "../ConfirmDialog";
 import type { XriftMcpActivity } from "./AiConnectionPanel";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { HierarchyPanel } from "./HierarchyPanel";
@@ -2008,8 +2009,14 @@ export function VisualEditorPrototype({
       } catch (error) {
         if (coordinator.latestRequested() === savingBundle) {
           setSaveStatus("error");
+          // Tauri rejects with a plain string, so a native save error would
+          // otherwise be reported as nothing more than "failed".
           setNotice(
-            error instanceof Error ? error.message : "自動保存に失敗しました",
+            error instanceof Error
+              ? error.message
+              : typeof error === "string" && error
+                ? error
+                : "自動保存に失敗しました",
           );
         }
         return undefined;
@@ -11141,6 +11148,14 @@ export function VisualEditorPrototype({
     [resolvedCommands],
   );
 
+  // When the save that guards leaving fails, the author must still be able
+  // to leave: the failure and its message are shown, and leaving without the
+  // save is an explicit choice rather than a dead end.
+  const [leaveWithoutSaveError, setLeaveWithoutSaveError] = useState<
+    string | null
+  >(null);
+  const noticeRef = useRef<string | null>(null);
+  noticeRef.current = notice;
   const handleBack = useCallback(async () => {
     if (leaving) return;
     setPlaySession(null);
@@ -11155,6 +11170,9 @@ export function VisualEditorPrototype({
       await requestAutosave(target);
       if (lastSavedBundleRef.current !== target) {
         setLeaving(false);
+        setLeaveWithoutSaveError(
+          noticeRef.current ?? "自動保存に失敗しました",
+        );
         return;
       }
     }
@@ -12035,6 +12053,19 @@ export function VisualEditorPrototype({
               resolveSceneSettings(bundle.scene.settings).vegetation,
             )}
             onAddOfficialComponent={handleAddOfficialComponent}
+          />
+          <ConfirmDialog
+            open={leaveWithoutSaveError !== null}
+            title="保存できませんでした"
+            description={`${leaveWithoutSaveError ?? ""}。このまま戻ると、未保存の変更は失われます。`}
+            confirmLabel="保存せずに戻る"
+            cancelLabel="編集を続ける"
+            destructive
+            onConfirm={() => {
+              setLeaveWithoutSaveError(null);
+              onBack();
+            }}
+            onClose={() => setLeaveWithoutSaveError(null)}
           />
           <SupportReportModal
             open={supportOpen}
