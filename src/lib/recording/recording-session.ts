@@ -123,6 +123,28 @@ export type RecordingStopResult = {
 export type RecordingEncoderMode = "media-recorder" | "frame-stream";
 
 const FRAME_STREAM_JPEG_QUALITY = 0.92;
+/** A JPEG encode that has not called back by now is treated as dropped. */
+const FRAME_STREAM_ENCODE_TIMEOUT_MS = 5_000;
+/** Pending chunk writes get this long at stop before the file is closed anyway. */
+const RECORDING_FLUSH_TIMEOUT_MS = 20_000;
+/** How many seconds of repeated frames one catch-up may add at once. */
+const FRAME_STREAM_MAX_CATCH_UP_SECONDS = 30;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => resolve(undefined), ms);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        window.clearTimeout(timer);
+        resolve(undefined);
+      },
+    );
+  });
+}
 
 type ActiveTake = {
   sessionId: string;
@@ -151,6 +173,12 @@ type ActiveTake = {
   chunkCount: number;
   writeChain: Promise<void>;
   writeFailure: Error | null;
+  /**
+   * Set once the stop gave up waiting for the write chain. Writes still
+   * queued behind that point find the file closed, and that is expected,
+   * not a failure of the take.
+   */
+  abandoned: boolean;
   stopRequested: boolean;
   /** Resolves once the take has left `stopping`. */
   settled: Promise<RecordingSnapshot>;
@@ -365,10 +393,13 @@ class RecordingSessionStore {
     const due =
       Math.floor(((Date.now() - take.startedAtMs) / 1000) * take.frameRate) -
       take.framesSent;
-    const repeats = Math.max(1, Math.min(due, take.frameRate * 5));
-    for (let index = 0; index < repeats; index += 1) {
-      this.enqueueBytes(take, bytes);
-    }
+    // One IPC call carries all the copies; the cap bounds how far a take
+    // that was starved for a while catches up in one go.
+    const repeats = Math.max(
+      1,
+      Math.min(due, take.frameRate * FRAME_STREAM_MAX_CATCH_UP_SECONDS),
+    );
+    this.enqueueBytes(take, bytes, repeats);
     take.framesSent += repeats;
   }
 
@@ -395,6 +426,9 @@ class RecordingSessionStore {
             take.encodePromiseBusy = false;
             resolve();
           };
+          // WebKit has been seen never calling back while the page is
+          // starved; a stuck encode must not hold the stop forever.
+          window.setTimeout(finish, FRAME_STREAM_ENCODE_TIMEOUT_MS);
           try {
             take.frameDirty = false;
             take.frame.toBlob(
@@ -596,6 +630,7 @@ class RecordingSessionStore {
       chunkCount: 0,
       writeChain: Promise.resolve(),
       writeFailure: null,
+      abandoned: false,
       stopRequested: false,
       settled,
       settle,
@@ -691,13 +726,13 @@ class RecordingSessionStore {
       .catch(() => {});
   }
 
-  private enqueueBytes(take: ActiveTake, bytes: Uint8Array): void {
+  private enqueueBytes(take: ActiveTake, bytes: Uint8Array, repeats = 1): void {
     take.writeChain = take.writeChain
       .then(async () => {
-        if (take.writeFailure) return;
-        await take.sink.append(bytes);
-        take.bytesWritten += bytes.byteLength;
-        take.chunkCount += 1;
+        if (take.writeFailure || take.abandoned) return;
+        await take.sink.append(bytes, repeats);
+        take.bytesWritten += bytes.byteLength * repeats;
+        take.chunkCount += repeats;
         if (this.active === take) {
           this.setState({
             snapshot: reduceRecordingProgress(this.state.snapshot, {
@@ -710,7 +745,7 @@ class RecordingSessionStore {
         }
       })
       .catch((error: unknown) => {
-        if (take.writeFailure) return;
+        if (take.writeFailure || take.abandoned) return;
         take.writeFailure =
           error instanceof Error ? error : new Error(String(error));
         this.failTake(
@@ -760,9 +795,19 @@ class RecordingSessionStore {
       take.frameTimer = null;
     }
     // A frame-stream encode still in flight lands its bytes on the chain;
-    // wait for it before the chain, or the last frame is lost.
-    await take.encodePromise;
-    await take.writeChain;
+    // wait for it before the chain, or the last frame is lost. Neither wait
+    // is allowed to hang the stop: a take that cannot flush is closed with
+    // what reached the disk.
+    await withTimeout(take.encodePromise, FRAME_STREAM_ENCODE_TIMEOUT_MS + 1_000);
+    await withTimeout(take.writeChain, RECORDING_FLUSH_TIMEOUT_MS);
+    // From here the file closes. Chunks the chain has not reached yet are
+    // dropped rather than reported as "file not open" after a completed take.
+    take.abandoned = true;
+    if (take.recorder === null && take.chunkCount < take.framesSent) {
+      console.warn(
+        `[recording] ${take.framesSent - take.chunkCount} frames were still queued when the take closed`,
+      );
+    }
     const now = Date.now();
     const failed = this.state.snapshot.status === "failed" || take.writeFailure;
     let snapshot: RecordingSnapshot;

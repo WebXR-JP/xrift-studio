@@ -145,6 +145,35 @@ function withLatestPublication(
   };
 }
 
+/**
+ * `name`, then `name-2`, `name-3`, whichever does not exist under the
+ * projects root yet. Listing is what the library itself uses, so the check
+ * sees exactly the directories it would show.
+ */
+async function uniqueProjectDirectoryName(
+  projectsRoot: string,
+  name: string,
+): Promise<string> {
+  let taken = new Set<string>();
+  try {
+    const projects = await tauri.listProjects(projectsRoot);
+    taken = new Set(
+      projects.map(
+        (project) =>
+          project.path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? "",
+      ),
+    );
+  } catch {
+    return name;
+  }
+  if (!taken.has(name)) return name;
+  for (let index = 2; index < 1000; index += 1) {
+    const candidate = `${name}-${index}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return `${name}-${Date.now()}`;
+}
+
 function App() {
   const toast = useToast();
   const [runtime, setRuntime] = useState<RuntimeStatus | null>(null);
@@ -805,9 +834,15 @@ function App() {
         }
         return currentSession.project.path;
       } else {
+        // A demo opened from the setup screen carries the template's name, so
+        // a second one would collide with the first's directory forever and
+        // the editor could neither save nor leave.
         const project = await createVisualProjectOnDisk(
           projectsRoot,
-          persistedBundle.project.metadata.name,
+          await uniqueProjectDirectoryName(
+            projectsRoot,
+            persistedBundle.project.metadata.name,
+          ),
           documents,
         );
         const nextSession = { bundle: persistedBundle, project };

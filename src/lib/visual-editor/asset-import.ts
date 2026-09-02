@@ -1546,7 +1546,9 @@ function createSkyboxImportPlan(
     importSettings: normalizeTextureImportSettings({
       colorSpace: "linear",
       generateMipmaps: true,
-      flipY: false,
+      // Upright for the loader that will read it: HDRLoader's image needs
+      // flipY true, EXRLoader's needs false (see external-store.ts).
+      flipY: classification.format === "hdr",
       resize: { mode: "original" },
       compression: { format: "source", quality: 80 },
     }),

@@ -225,6 +225,12 @@ export function reduceRecordingFailed(
   snapshot: RecordingSnapshot,
   failure: { message: string; now: number; path?: string | null },
 ): RecordingSnapshot {
+  // The first failure is the cause; the writes queued behind it fail for
+  // having no file to go to, and those messages must not replace it.
+  const message =
+    snapshot.status === "failed" && snapshot.message
+      ? snapshot.message
+      : failure.message;
   return {
     ...snapshot,
     status: "failed",
@@ -234,7 +240,7 @@ export function reduceRecordingFailed(
         ? Math.max(0, (snapshot.stoppedAt ?? failure.now) - snapshot.startedAt)
         : snapshot.durationMs,
     path: failure.path === undefined ? snapshot.path : failure.path,
-    message: failure.message,
+    message,
   };
 }
 

@@ -36,7 +36,8 @@ export type RecordingSinkCloseResult = {
 
 export type RecordingSink = {
   open(request: RecordingSinkOpenRequest): Promise<RecordingSinkOpenResult>;
-  append(chunk: Uint8Array): Promise<void>;
+  /** `repeats` writes the same chunk that many times (frame-stream only). */
+  append(chunk: Uint8Array, repeats?: number): Promise<void>;
   /** Finishes the file and writes the sidecar next to it. */
   close(metadata: Record<string, unknown>): Promise<RecordingSinkCloseResult>;
   /** Keeps what was written so far and releases the file. */
@@ -53,9 +54,9 @@ export function createTauriRecordingSink(): RecordingSink {
       path = handle.path;
       return { path: handle.path, directory: handle.directory };
     },
-    async append(chunk) {
+    async append(chunk, repeats = 1) {
       if (!fileId) throw new Error("録画ファイルが開かれていません");
-      await tauri.appendRecordingChunk(fileId, chunk);
+      await tauri.appendRecordingChunk(fileId, chunk, repeats);
     },
     async close(metadata) {
       if (!fileId) return { path, metadataPath: null, bytesWritten: 0 };
@@ -117,9 +118,11 @@ export function createMemoryRecordingSink(): RecordingSink {
       bytes = 0;
       return { path: fileName, directory: "download" };
     },
-    async append(chunk) {
-      chunks.push(chunk);
-      bytes += chunk.byteLength;
+    async append(chunk, repeats = 1) {
+      for (let index = 0; index < repeats; index += 1) {
+        chunks.push(chunk);
+        bytes += chunk.byteLength;
+      }
     },
     async close() {
       return finish();

@@ -129,7 +129,11 @@ export function applyExternalStoreInstall(
       folderId: folder.id,
       importSettings: {
         colorSpace: "linear",
-        flipY: false,
+        // The Scene View applies this value to the loaded texture as is, and
+        // the loaders differ: HDRLoader hands back an image that is upright
+        // with flipY true, EXRLoader one that is upright with flipY false. A
+        // false here for HDR drew every Poly Haven sky upside down.
+        flipY: file.format === "hdr",
         resize: { mode: "original" },
         compression: { format: "source", quality: 80 },
       },
