@@ -2260,6 +2260,19 @@ export function VisualEditorPrototype({
     );
   }, []);
 
+  /**
+   * Store からのインストール直後の選択を揃える。Inspector は新しい Asset へ切り替
+   * わるが、Entity の選択は残す。Inspector の「戻る」は Entity Inspector への導線
+   * なので、ここで Entity を捨てると Asset Inspector から戻れなくなる。複数選択の
+   * ままだと Multi Selection Inspector が前に出て、追加した Asset が見えないので、
+   * 表示中の Entity 1件へ畳む。
+   */
+  const selectInstalledAsset = useCallback((assetId: string) => {
+    setSelectedAssetIds([assetId]);
+    const primaryEntityId = sceneSelectionRef.current?.id ?? null;
+    setSelectedEntityIds(primaryEntityId ? [primaryEntityId] : []);
+  }, []);
+
   const handleEntitySelectionChange = useCallback((entityIds: string[], primaryEntityId: string | null) => {
     const validIds = [...new Set(entityIds)].filter((id) => Boolean(bundleRef.current.scene.entities[id]));
     setSceneSettingsOpen(false);
@@ -5288,13 +5301,13 @@ export function VisualEditorPrototype({
           mcpRevisionRef.current += 1;
           mcpRevisionBundleRef.current = nextBundle;
           bundleRef.current = nextBundle;
-          sceneSelectionRef.current = null;
           assetSelectionRef.current = applied.primaryAssetId;
           saveStatusRef.current = "dirty";
+          selectInstalledAsset(applied.primaryAssetId);
           setHistory((current) =>
             commitEditorHistory(current, {
               bundle: nextBundle,
-              sceneSelection: null,
+              sceneSelection: current.present.sceneSelection,
               assetSelection: applied.primaryAssetId,
             }),
           );
@@ -6946,6 +6959,7 @@ export function VisualEditorPrototype({
           : current.present.bundle.scene;
         const primary = applied.manifest.assets[applied.primaryAssetId];
         setActiveAssetFolderId(primary?.folderId ?? null);
+        selectInstalledAsset(applied.primaryAssetId);
         setSaveStatus("dirty");
         setNotice(
           applySkybox
@@ -6960,13 +6974,13 @@ export function VisualEditorPrototype({
         bundleRef.current = nextBundle;
         return commitEditorHistory(current, {
           bundle: nextBundle,
-          sceneSelection: null,
+          sceneSelection: current.present.sceneSelection,
           assetSelection: applied.primaryAssetId,
         });
       });
       setSceneSettingsOpen(false);
     },
-    [],
+    [selectInstalledAsset],
   );
 
   const handleAddOpenBrushMaterial = useCallback(
@@ -6981,6 +6995,7 @@ export function VisualEditorPrototype({
         );
         const primary = applied.manifest.assets[applied.primaryAssetId];
         setActiveAssetFolderId(primary?.folderId ?? null);
+        selectInstalledAsset(applied.primaryAssetId);
         setNotice(
           applied.alreadyInstalled
             ? `「${entry.label}」は追加済みです。Assetsで選択しました`
@@ -6991,7 +7006,7 @@ export function VisualEditorPrototype({
             ...current,
             present: {
               ...current.present,
-              sceneSelection: null,
+              sceneSelection: current.present.sceneSelection,
               assetSelection: applied.primaryAssetId,
             },
           };
@@ -7002,14 +7017,14 @@ export function VisualEditorPrototype({
             ...current.present.bundle,
             assets: applied.manifest,
           }),
-          sceneSelection: null,
+          sceneSelection: current.present.sceneSelection,
           assetSelection: applied.primaryAssetId,
         });
       });
       setSceneSettingsOpen(false);
       return { alreadyInstalled: preview.alreadyInstalled };
     },
-    [bundle.assets],
+    [bundle.assets, selectInstalledAsset],
   );
 
   const handleAddSkyShader = useCallback(
@@ -7037,6 +7052,7 @@ export function VisualEditorPrototype({
           : current.present.bundle.scene;
         const primary = applied.manifest.assets[applied.primaryAssetId];
         setActiveAssetFolderId(primary?.folderId ?? null);
+        selectInstalledAsset(applied.primaryAssetId);
         setSaveStatus("dirty");
         setNotice(
           applyToSky
@@ -7051,7 +7067,7 @@ export function VisualEditorPrototype({
         bundleRef.current = nextBundle;
         return commitEditorHistory(current, {
           bundle: nextBundle,
-          sceneSelection: null,
+          sceneSelection: current.present.sceneSelection,
           assetSelection: applied.primaryAssetId,
         });
       });
@@ -7061,7 +7077,7 @@ export function VisualEditorPrototype({
         appliedToSky: applyToSky,
       };
     },
-    [bundle.assets],
+    [bundle.assets, selectInstalledAsset],
   );
 
   const handleAddWaterShader = useCallback(
@@ -7082,6 +7098,7 @@ export function VisualEditorPrototype({
         );
         const primary = applied.manifest.assets[applied.primaryAssetId];
         setActiveAssetFolderId(primary?.folderId ?? null);
+        selectInstalledAsset(applied.primaryAssetId);
         setSaveStatus("dirty");
         setNotice(
           `「${entry.label}」をMaterialとして追加しました。板ポリなどへ割り当てると水面になります`,
@@ -7093,14 +7110,14 @@ export function VisualEditorPrototype({
         bundleRef.current = nextBundle;
         return commitEditorHistory(current, {
           bundle: nextBundle,
-          sceneSelection: null,
+          sceneSelection: current.present.sceneSelection,
           assetSelection: applied.primaryAssetId,
         });
       });
       setSceneSettingsOpen(false);
       return { alreadyInstalled: preview.alreadyInstalled };
     },
-    [bundle.assets],
+    [bundle.assets, selectInstalledAsset],
   );
 
   /**
