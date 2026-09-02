@@ -56,8 +56,10 @@ export async function runSkyboxImportFixtureAssertions(): Promise<void> {
   assert(
     isEnvironmentTextureAsset(hdrPlan.asset) &&
       hdrPlan.asset.importMetadata?.sourceFormat === "hdr" &&
-      hdrPlan.asset.importSettings.flipY === false,
-    "HDR did not create an editable HDR Texture Asset",
+      // HDRLoader's image is upright with flipY true; the Scene View applies
+      // the stored value as is, so an HDR must start out true.
+      hdrPlan.asset.importSettings.flipY === true,
+    "HDR did not create an upright HDR Texture Asset",
   );
   assertManagedSkyboxWrite(hdrPlan, "hdr", "image/vnd.radiance");
 
