@@ -14,13 +14,13 @@ export function ClassicBridge() {
               コードで続けたいときも
             </span>
             <h2 className="mt-5 text-3xl font-black leading-tight tracking-[-0.045em] sm:text-4xl">
-              作ったシーンを、コードの世界へも渡せる。
+              画面で作ったシーンを、コードへ持ち出せる。
             </h2>
             <p className="mt-5 text-sm leading-7 text-zinc-400">
-              画面で作ったものをClassicプロジェクトへ書き出したり、既存のR3F／XRiftコードをシーンへ取り込めます。どの作り方から始めても先へ進めます。
+              画面で作ったものをClassicプロジェクトへ書き出すことも、既存のR3F／XRiftコードをシーンへ取り込むこともできます。どちらから始めても、行き止まりになりません。
             </p>
             <p className="mt-4 text-[11px] font-semibold text-zinc-500">
-              Classic変換は開発版として提供中です
+              Classic変換はまだ開発版です
             </p>
           </div>
           <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30 font-mono text-xs shadow-inner">

@@ -6,9 +6,9 @@ export function ProductKinds() {
       <div className="mx-auto max-w-7xl">
         <div className="max-w-3xl" data-reveal>
           <p className="preview-eyebrow">作れるもの</p>
-          <h2 className="preview-section-title mt-4">ふたつのものを作れます。</h2>
+          <h2 className="preview-section-title mt-4">作れるのは、ワールドとアイテム。</h2>
           <p className="preview-section-copy mt-5 max-w-2xl">
-            XRiftには「人が集まる空間」と「持ち歩けるもの」があります。どちらもこのアプリで作れます。
+            XRiftには「人が集まる空間」と「持ち歩けるもの」があります。どちらも、このアプリだけで作れます。
           </p>
         </div>
         <div className="mt-12 grid gap-5 md:grid-cols-2" data-reveal>

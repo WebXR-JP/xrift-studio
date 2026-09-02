@@ -48,7 +48,7 @@ export function Hero({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => void }
             className="mx-auto mt-7 max-w-2xl text-pretty text-base leading-8 text-zinc-600 sm:text-lg"
             data-reveal
           >
-            地形を彫り、草を生やし、水と空をつくる。持っている3Dモデルやアバターを置いて、その場でプレイ。
+            地形を彫り、草を生やし、水と空をつくる。手元の3Dモデルやアバターを置いて、その場でプレイ。
             書き出しもビルドも挟まず、XRiftへそのまま公開できます。
           </p>
           <ul

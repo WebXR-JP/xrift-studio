@@ -35,10 +35,10 @@ export function CompactEditorGate({
           <MonitorPlay size={22} />
         </span>
         <h1 className="mt-6 text-balance text-3xl font-black leading-tight tracking-[-0.045em] text-zinc-950">
-          エディターは、広い画面でいちばん使いやすく。
+          エディターは、広い画面がいちばん使いやすい。
         </h1>
         <p className="mt-4 text-sm leading-7 text-zinc-600">
-          最新版はHierarchy、Scene、Assets、Inspectorを同時に使う制作画面です。スマホでは横向きにするか、タブレット・PCでの操作をおすすめします。
+          Hierarchy、Scene、Assets、Inspectorを同時に開く制作画面です。スマホなら横向きに、できればタブレットかパソコンでどうぞ。
         </p>
 
         <div className="mx-auto mt-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl shadow-violet-950/10">

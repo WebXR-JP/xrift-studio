@@ -14,21 +14,21 @@ export function TryDemo({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => voi
             <div className="max-w-3xl">
               <p className="preview-eyebrow">実際に触る</p>
               <h2 className="preview-section-title mt-4">
-                ダウンロードしなくても、触ってみられます。
+                ダウンロードする前に、ここで触れます。
               </h2>
               <p className="preview-section-copy mt-5 max-w-2xl">
                 実際のXRift Studioと同じビジュアルエディターが、このページで開きます。シーンを選び、素材を置き、見た目を整える流れを、インストール前に確かめられます。
               </p>
               <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-bold">
                 <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-emerald-700">
-                  現在のエディター本体を使用
+                  エディター本体がそのまま動く
                 </span>
                 <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-zinc-600">
                   World / Item対応
                 </span>
               </div>
               <p className="mt-4 text-xs font-medium leading-6 text-zinc-500">
-                Webで操作感を確認できます。ファイル保存、AI接続、素材を含むワールドの公開はデスクトップ版で行います。
+                ここで確かめられるのは操作感までです。ファイルの保存、AI接続、素材を含むワールドの公開はデスクトップ版で行います。
               </p>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">

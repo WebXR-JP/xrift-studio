@@ -20,7 +20,7 @@ export function WorldTools() {
           <h2 className="preview-section-title mt-4">地形も、水も、空も、光も。</h2>
           <p className="preview-section-copy mt-5 max-w-2xl">
             素材を置いていくだけではありません。地面を彫って草を生やし、水面を揺らし、空の色を決める。
-            世界そのものを、このアプリの中で作れます。
+            世界そのものを、このアプリだけで作れます。
           </p>
         </div>
 
@@ -31,7 +31,7 @@ export function WorldTools() {
             className="block h-auto w-full"
           />
           <figcaption className="preview-showcase-caption">
-            このページのエディター画面と同じシーンです。地形、草、水、空、光のすべてをXRift Studioの中で作っています。
+            このページのエディター画面と同じシーンです。地形、草、水、空、光のすべてを、XRift Studioだけで作っています。
           </figcaption>
         </figure>
 
