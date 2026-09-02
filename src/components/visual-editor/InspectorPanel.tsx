@@ -26,7 +26,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { Link2 } from "lucide-react";
+import { ChevronRight, Link2 } from "lucide-react";
 import {
   ScriptComponentInspector,
   type ScriptComponentPatch,
@@ -5732,6 +5732,28 @@ export function InspectorPanel({
     : multiSelectionActive
       ? `${Math.max(selectedEntityIds.length, selectedAssetIds.length)}件を選択`
       : asset?.name ?? (entity ? null : "未選択");
+  /**
+   * The Inspector stacks layers: an Entity or Asset can be covered by the Asset
+   * it points at, or by Scene settings. An icon alone did not say that a layer
+   * was on top of another, so the way out carries the word 戻る, the name of
+   * what it goes back to, and the name of the layer that is showing now.
+   */
+  const inspectorBackTarget: { label: string; current: string; onBack: () => void; title: string } | null =
+    sceneSettingsOpen
+      ? {
+          label: asset?.name ?? entity?.name ?? "Inspector",
+          current: "シーン設定",
+          onBack: onCloseSceneSettings,
+          title: `シーン設定を閉じて${asset?.name ?? entity?.name ?? "Inspector"}へ戻る`,
+        }
+      : asset && entity
+        ? {
+            label: entity.name,
+            current: asset.name,
+            onBack: onCloseAsset,
+            title: commandTitle(`${entity.name}のEntity Inspectorへ戻る`, "ShowEntityInspector"),
+          }
+        : null;
 
   return (
     <aside className="row-span-2 flex min-h-0 flex-col border-l border-editor-border bg-editor-canvas" aria-labelledby="inspector-heading">
@@ -5742,35 +5764,37 @@ export function InspectorPanel({
             Inspector
           </h2>
         </div>
-        <div className="flex items-center gap-1">
-          {sceneSettingsOpen ? (
-            <button
-              type="button"
-              onClick={onCloseSceneSettings}
-              aria-label="前のInspectorへ戻る"
-              title="前のInspectorへ戻る"
-              className="flex h-6 w-6 items-center justify-center rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
-            >
-              <EDITOR_ICONS.back size={13} aria-hidden="true" />
-            </button>
-          ) : asset && entity ? (
-            <button
-              type="button"
-              onClick={onCloseAsset}
-              aria-label={`${entity.name}のInspectorへ戻る`}
-              title={commandTitle(`${entity.name}のEntity Inspectorへ戻る`, "ShowEntityInspector")}
-              className="flex h-6 w-6 items-center justify-center rounded border border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
-            >
-              <EDITOR_ICONS.sceneEntity size={13} aria-hidden="true" />
-            </button>
-          ) : null}
-          {inspectorContextLabel ? (
-            <span className="max-w-28 truncate text-xs text-slate-500">
-              {inspectorContextLabel}
-            </span>
-          ) : null}
-        </div>
+        {inspectorContextLabel && !inspectorBackTarget ? (
+          <span className="max-w-32 truncate text-xs text-slate-500" title={inspectorContextLabel}>
+            {inspectorContextLabel}
+          </span>
+        ) : null}
       </div>
+      {inspectorBackTarget ? (
+        <div className="flex h-8 shrink-0 items-center gap-1 border-b border-editor-border bg-editor-subtle px-2">
+          <button
+            type="button"
+            onClick={inspectorBackTarget.onBack}
+            aria-label={`${inspectorBackTarget.label}へ戻る`}
+            title={inspectorBackTarget.title}
+            className="flex min-w-0 shrink items-center gap-1 rounded border border-slate-300 bg-white px-1.5 py-1 text-[11px] font-semibold text-slate-700 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+          >
+            <EDITOR_ICONS.back size={12} aria-hidden="true" />
+            <span className="flex min-w-0 items-center">
+              <span className="max-w-28 truncate">{inspectorBackTarget.label}</span>
+              <span className="shrink-0">へ戻る</span>
+            </span>
+          </button>
+          <ChevronRight size={12} className="shrink-0 text-slate-400" aria-hidden="true" />
+          <span
+            className="min-w-0 truncate text-[11px] font-medium text-slate-600"
+            title={inspectorBackTarget.current}
+            aria-current="page"
+          >
+            {inspectorBackTarget.current}
+          </span>
+        </div>
+      ) : null}
       {readOnly ? (
         <div className="border-b border-violet-200 bg-violet-50 px-3 py-2 text-xs leading-4 text-violet-800">
           {playMode
