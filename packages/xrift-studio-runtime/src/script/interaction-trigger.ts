@@ -1243,8 +1243,19 @@ function collectGraphPrograms(parsed: ParsedGraph): XriftInteractionProgram[] {
         if (!action) return;
         actions.push(action);
         follow("out");
+        // A timed write continues on `done` when it finishes, and the engine
+        // runs that continuation. A walk that ignored it would report「押すと
+        // 何が起きるか」as only the first half of every open-wait-close chain,
+        // and would leave the Entities behind the wait out of the compiler's
+        // list of what a press writes to.
+        follow("done");
         return;
       }
+      case "flow/setDelay":
+        // The wait itself does nothing; both of its continuations run.
+        follow("out");
+        follow("done");
+        return;
       default:
         // Unimplemented operation: no side effect and no flow output.
         return;

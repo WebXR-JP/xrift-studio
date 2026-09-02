@@ -516,6 +516,13 @@ another. A write with no duration finishes immediately and takes both, so a
 sequence built through `done` does not stall the day its author sets the
 duration back to zero.
 
+The press walk behind「押したときの動き」follows both, and follows
+`flow/setDelay` as well, because the engine does: a door that opens, waits and
+closes itself is one press, and a walk that stopped at the first timed write
+would have shown the author only the opening — and would have left the Entities
+written after the wait out of the list of what a press touches, which is what
+the compiler emits a disabled trigger target from.
+
 An overshooting curve returns a ratio above 1 on purpose, and the blend is not
 clamped, so「少し行き過ぎて戻る」really passes its target. What keeps that from
 leaving a property outside its range is the write itself: a value is clamped to

@@ -2550,6 +2550,15 @@ function listSceneRecipes(
         note: recipe.note,
         partCount: recipe.parts.length,
         partKinds: [...new Set(recipe.parts.map((part) => part.kind))],
+        // What the set does once it is placed. A caller that can only see
+        // shapes would keep hand-wiring the graph a tutorial set already has.
+        behaviours: (recipe.behaviours ?? []).map((behaviour) => ({
+          graphName: behaviour.graphName,
+          start: behaviour.start,
+          summary: behaviour.summary,
+          actionCount: behaviour.actions.length,
+        })),
+        ...(recipe.lesson ? { lesson: recipe.lesson } : {}),
       })),
       count: recipes.length,
       categories: Object.entries(SCENE_RECIPE_CATEGORY_LABELS).map(

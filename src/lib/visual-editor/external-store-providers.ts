@@ -155,13 +155,13 @@ export const EXTERNAL_STORE_PROVIDERS = [
     group: "light-decoration",
     name: "3Dセット",
     badge: "公式",
-    summary: "焚き火・家具など置くだけの3Dを追加",
+    summary: "焚き火・家具に加え、しかけ付きのチュートリアルセットを追加",
     homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
     catalogKinds: [],
     installableKinds: [],
     authorFallback: "XRift Studio contributors",
     attributionNote:
-      "既存のPrimitive、Particle、Lightを組み合わせたEntityです。置いたあとは中身を1つずつ編集できます。",
+      "既存のPrimitive、Particle、Light、音、Interactivity Graphを組み合わせたEntityです。置いたあとは中身を1つずつ編集できます。",
   },
   {
     id: "open-brush",
