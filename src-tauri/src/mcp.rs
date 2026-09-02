@@ -3009,7 +3009,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "start_recording",
-            "description": "Start recording the Scene View into a video file at the stored recording profile (aspect ratio, size, frame rate), or return the take that is already running. Idempotent: calling it twice never opens a second file; the result says whether a new take started (started: true) or an existing one continues. The recording view is shown and the saved recording camera is applied unless showViewport is false. Frames are streamed to disk, so a take may run for hours; a take stops by itself after 6 hours. The file lands in the app's recordings folder (or the folder the author picked); the caller cannot choose the path. Does not change the project.",
+            "description": "Start recording the Scene View into a video file at the stored recording profile (aspect ratio, size, frame rate), or return the take that is already running. Idempotent: calling it twice never opens a second file; the result says whether a new take started (started: true) or an existing one continues. The recording view is shown and the saved recording camera is applied unless showViewport is false. Frames are streamed to disk, so a take may run for hours; a take stops by itself after 6 hours. On a WebView without MediaRecorder (WebKitGTK on Linux) the frames are handed to an FFmpeg found on PATH instead; without one the result is status failed with a message. The file lands in the app's recordings folder (or the folder the author picked); the caller cannot choose the path. Does not change the project.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3101,7 +3101,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "set_recording_camera",
-            "description": "Move the recording camera. fitScene frames every Entity in the Scene (call it again after the world grows); focusEntityId frames one Entity's real rendered bounds; preset picks a direction (top, front, back, left, right, iso) and keeps the current look-at unless something is being framed; position and target place it literally; distance overrides how far back it sits; fov sets the vertical field of view in degrees. The pose is saved per project and applied to the Scene View only while the recording view is shown with cameraSource 'recording', so calling this never disturbs the author's editing camera. Returns the resulting pose; changes nothing in the project.",
+            "description": "Move the recording camera. fitScene frames everything drawn in the Scene, leaving out sky-sized meshes over 100 m (a skybox sphere, a horizon plane) and reporting how many it skipped as skippedLargeMeshCount (call it again after the world grows); focusEntityId frames one Entity's real rendered bounds; preset picks a direction (top, front, back, left, right, iso) and keeps the current look-at unless something is being framed; position and target place it literally; distance overrides how far back it sits; fov sets the vertical field of view in degrees. The pose is saved per project and applied to the Scene View only while the recording view is shown with cameraSource 'recording', so calling this never disturbs the author's editing camera. Returns the resulting pose; changes nothing in the project.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

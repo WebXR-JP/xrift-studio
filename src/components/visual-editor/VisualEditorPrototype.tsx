@@ -1086,8 +1086,13 @@ export function VisualEditorPrototype({
   const moveRecordingCamera = useCallback(
     async (
       move: RecordingCameraMove & { fitScene?: boolean; focusEntityId?: string },
-    ): Promise<{ pose: RecordingCameraPose; bounds: RecordingCameraBounds | null }> => {
+    ): Promise<{
+      pose: RecordingCameraPose;
+      bounds: RecordingCameraBounds | null;
+      skippedLargeMeshCount: number;
+    }> => {
       let bounds: RecordingCameraBounds | null = null;
+      let skippedLargeMeshCount = 0;
       if (move.fitScene || move.focusEntityId) {
         const measured = await requestSceneBounds(move.focusEntityId);
         if (!measured.ok || !measured.bounds) {
@@ -1096,6 +1101,7 @@ export function VisualEditorPrototype({
           );
         }
         bounds = measured.bounds;
+        skippedLargeMeshCount = measured.skippedLargeMeshCount ?? 0;
       }
       const current = recordingSession.getState();
       const pose = resolveRecordingCameraPose(
@@ -1110,7 +1116,7 @@ export function VisualEditorPrototype({
         },
         { aspect: recordingAspectValue(current.profile.aspectRatio) },
       );
-      return { pose: recordingSession.setCamera(pose), bounds };
+      return { pose: recordingSession.setCamera(pose), bounds, skippedLargeMeshCount };
     },
     [requestSceneBounds],
   );
@@ -2719,6 +2725,9 @@ export function VisualEditorPrototype({
           ...context,
           camera: moved.pose,
           ...(moved.bounds ? { framedBounds: moved.bounds } : {}),
+          ...(moved.skippedLargeMeshCount > 0
+            ? { skippedLargeMeshCount: moved.skippedLargeMeshCount }
+            : {}),
           ...(focusEntityId ? { framedEntityId: focusEntityId } : {}),
           cameraLive: cameraLive(),
         };
