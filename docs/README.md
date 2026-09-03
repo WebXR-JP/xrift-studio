@@ -25,6 +25,7 @@ XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを
 | --- | --- |
 | [Scripting Contract](./SCRIPTING.md) | Script Asset の API、実行境界、承認 gate、対応範囲 |
 | [MCP editor tool の全体像](./MCP_EDITOR_TOOLS.md) | AI client へ公開する Editor 操作の一覧、surface ごとの権限、公開しない操作 |
+| [ワールド制作ハーネス](./WORLD_AUTHORING_HARNESS.md) | AI client がワールドを作るときに Terrain と草へ収束する原因と、instructions・tool 説明・戻り値・スキル・文書の各層に置いた手すり |
 | [KHR_interactivity Editor / MCP design](./KHR_INTERACTIVITY_EDITOR.md) | ノードグラフの canonical 形式、検証、MCP 契約 |
 | [Terrain エディター 仕様](./TERRAIN_EDITOR_SPEC.md) | 地形と草のモード、ブラシ、性能、公開への反映 |
 | [カメラタイムライン 仕様](./CAMERA_TIMELINE_SPEC.md) | camera Component、時間で進む実行器、カメラ用 op、再生場所（未実装の設計） |

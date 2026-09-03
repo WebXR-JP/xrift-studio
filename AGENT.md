@@ -82,6 +82,8 @@ pnpm build:preview       # GitHub Pages 用プレビューのビルド
 - SceneDocument を作り直す処理では、変更していない Entity のオブジェクト同一性を保つ。`editor-session.ts` の更新は `{ ...scene.entities, [id]: { ...entity } }` の形を守り、`prefab-resolver.ts` は Prefab を展開した Entity だけを差し替えて、それ以外は参照のまま返す。防御的に全 Entity を clone すると、`memo` も `useMemo` も比較で必ず外れ、Scene 全体の再描画に戻る。
 - 一覧を描くパネルで行数が Scene の Entity 数や Asset 数に比例する場合は、行を `memo` した部品として切り出す。行が親の closure を呼ぶ必要があるときは、毎 render 更新する 1 つの ref に束ねて渡す。closure を prop として直接渡すと毎 render 同一性が変わり、`memo` が意味を失う。
 - Scene View の描画品質は、devicePixelRatio の範囲ではなく CSS 表示サイズに対する固定の割合で持つ。React Three Fiber は渡された範囲へディスプレイの devicePixelRatio を丸め込むので、範囲で書くと 1 倍ディスプレイでは何も軽くならない。ラベルの割合と実際に描くピクセル数を一致させる。
+- MCP でワールドを作る・良くする作業 (Scene へ物を置く、雰囲気を変える) は、`.agents/skills/xrift-world-direction/SKILL.md` のブリーフを書いてから始める。Terrain と草を既定にしない。同じ要素を続けて直すときは `capture_scene_view` で見てから直す。案は 1 つに絞り、過去のワールドは参照しない。ハーネスには数値の上限とコードの雛形を入れない。上限はモデルがブリーフで自分で決め、形はその場で設計する。根拠は `docs/WORLD_AUTHORING_HARNESS.md` にある。
+- MCP tool の description と server の `instructions` は、AI client が読む唯一の取扱説明書である。tool を足す・直すときは「何をするか」に加えて「いつ使わないか」「使ったあと何をするか」を書き、代替の tool があれば名前を挙げる。説明文で禁じても効かない失敗は、戻り値の `harness` 警告や上限のようにコードへ降ろす。
 - Rust コマンドへ外部入力を渡すときは、既存のパス検証と権限制御を維持し、任意のパス実行や削除を追加しない。
 - 検証は「高速フィードバックループ」の 3 段階に従う。`pnpm typecheck`、`cargo check`、Vite の開発サーバーによるブラウザプレビュー、検証目的の `pnpm tauri:dev` 起動と MCP での読み取りは許可なしで行う。本番ビルドとインストーラ生成は通常の開発確認では実行せず、明示依頼、リリース成果物を作る直前、署名、バンドル、インストーラ設定の変更時だけ候補にする。実行前に目的と副作用を示してユーザーの許可を得る。実機での書き込みを伴う UI 操作も事前に許可を得る。許可なくビルド成果物、アプリデータ、公開先を変更しない。
 - 作業単位ごとに意図が分かるコミットを作成し、ユーザーの指示がある場合は `main` へ Push する。
@@ -101,6 +103,8 @@ pnpm build:preview       # GitHub Pages 用プレビューのビルド
 - 機能追加の方針スキル: `.agents/skills/xrift-studio-feature/SKILL.md`
 - 検証ループスキル: `.agents/skills/xrift-studio-verify/SKILL.md`
 - Blender × Studio モデリングスキル: `.agents/skills/xrift-mcp-blender-modeling/SKILL.md`
+- ワールドの制作工程: `.agents/skills/xrift-world-direction/SKILL.md`
+- ワールド制作ハーネスの設計: `docs/WORLD_AUTHORING_HARNESS.md`
 - リリース動画の企画と台本: `.agents/skills/xrift-release-promo-video/SKILL.md`
 - リリース動画キット: `.agents/skills/xrift-promo-kit/SKILL.md`（実装は `dev/release-promo/_kit`）
 - リリース動画の音: `.agents/skills/xrift-promo-audio/SKILL.md`
