@@ -290,14 +290,14 @@ function AssetFolderTree({
     return (
       <div key={folder.id}>
         <div
-          className={`group flex min-w-0 items-center gap-1 rounded-md pr-1 text-[13px] ${
+          className={`group flex min-w-0 items-center gap-1 rounded-md pr-1 text-xs ${
             isDropTarget
               ? "bg-brand-100 text-brand-900 ring-1 ring-brand-300"
               : isActive
                 ? "bg-brand-50 font-medium text-brand-900"
                 : "text-editor-muted hover:bg-editor-subtle hover:text-editor-text"
           }`}
-          style={{ paddingLeft: `${8 + depth * 14}px` }}
+          style={{ paddingLeft: `${6 + depth * 12}px` }}
           onDragOver={(event) => handleDragOver(event, folder.id)}
           onDragLeave={handleDragLeave}
           onDrop={(event) => handleDrop(event, folder.id)}
@@ -305,14 +305,14 @@ function AssetFolderTree({
           {children.length > 0 ? (
             <button
               type="button"
-              className="flex size-6 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-white hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+              className="flex size-5 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-white hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
               aria-label={expanded ? `${folder.name}を折りたたむ` : `${folder.name}を展開する`}
               onClick={() => toggleFolder(folder.id)}
             >
-              <ChevronIcon size={13} aria-hidden="true" />
+              <ChevronIcon size={12} aria-hidden="true" />
             </button>
           ) : (
-            <span className="w-6" aria-hidden="true" />
+            <span className="w-5" aria-hidden="true" />
           )}
           <button
             type="button"
@@ -330,13 +330,13 @@ function AssetFolderTree({
               setDropTargetId(null);
             }}
             onClick={() => onActiveFolderChange(folder.id)}
-            className="flex min-h-7 min-w-0 flex-1 cursor-grab items-center gap-2 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 active:cursor-grabbing"
+            className="flex min-h-6 min-w-0 flex-1 cursor-grab items-center gap-1.5 py-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 active:cursor-grabbing"
             title={`${folder.name}を開く`}
           >
             {expanded ? (
-              <FolderIcon size={15} className="shrink-0 text-brand-500" aria-hidden="true" />
+              <FolderIcon size={14} className="shrink-0 text-brand-500" aria-hidden="true" />
             ) : (
-              <FolderIcon size={14} className="shrink-0 text-slate-400" aria-hidden="true" />
+              <FolderIcon size={13} className="shrink-0 text-slate-400" aria-hidden="true" />
             )}
             <span className="min-w-0 flex-1 truncate">{folder.name}</span>
           </button>
@@ -356,16 +356,16 @@ function AssetFolderTree({
         key={folder.id}
         type="button"
         onClick={() => onActiveFolderChange(folder.id)}
-        className={`flex min-h-7 w-full items-center gap-2 rounded-md px-2 py-1 text-left text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 ${
+        className={`flex min-h-6 w-full items-center gap-1.5 rounded-md px-2 py-0.5 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 ${
           isActive
             ? "bg-brand-50 font-medium text-brand-900"
             : "text-editor-muted hover:bg-editor-subtle hover:text-editor-text"
         }`}
         title={`${folder.name}のアセットを表示`}
       >
-        <KindIcon size={14} className="shrink-0 text-slate-500" aria-hidden="true" />
+        <KindIcon size={13} className="shrink-0 text-slate-500" aria-hidden="true" />
         <span className="min-w-0 flex-1 truncate">{folder.name}</span>
-        <span className="tabular-nums text-[11px] text-slate-400">
+        <span className="tabular-nums text-[10px] text-slate-400">
           {folderItemCount(folder)}
         </span>
       </button>
@@ -373,8 +373,8 @@ function AssetFolderTree({
   };
 
   return (
-    <aside className="flex w-48 shrink-0 flex-col border-r border-editor-border bg-editor-surface" aria-label="Asset folders">
-      <div className="scrollbar-thin min-h-0 flex-1 overflow-auto px-2 py-2.5">
+    <aside className="flex w-44 shrink-0 flex-col border-r border-editor-border bg-editor-surface" aria-label="Asset folders">
+      <div className="scrollbar-thin min-h-0 flex-1 overflow-auto px-1.5 py-2">
         <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
           ライブラリ
         </p>
@@ -387,14 +387,14 @@ function AssetFolderTree({
           <button
             type="button"
             onClick={() => onActiveFolderChange(null)}
-            className={`flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 ${
+            className={`flex min-h-7 w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 ${
               activeFolderId === null
                 ? "bg-editor-subtle font-medium text-editor-text"
                 : "text-editor-text hover:bg-editor-subtle"
             }`}
             title="Assets直下を表示"
           >
-            <FolderIcon size={15} className="text-slate-500" aria-hidden="true" />
+            <FolderIcon size={14} className="text-slate-500" aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate">Assets</span>
           </button>
         </div>
@@ -520,7 +520,7 @@ function AssetCard({
     vramBytes !== null && asset.kind === "texture" && !isPublishedAsKtx2(asset);
   const sizeSummary =
     fileBytes !== null || vramBytes !== null ? (
-      <span className="pointer-events-none block text-right text-[11px] leading-4 tabular-nums">
+      <span className="pointer-events-none block text-right text-[10px] leading-4 tabular-nums">
         <span className="block text-slate-600">
           {fileBytes !== null ? formatFileSize(fileBytes) : "—"}
         </span>
@@ -561,7 +561,7 @@ function AssetCard({
     return (
       <div
         onContextMenu={onOpenContext}
-        className={`group relative grid min-w-0 grid-cols-[46px_minmax(110px,1fr)_86px_90px_70px_52px_28px] items-center gap-2 rounded-md border px-2 py-1 text-left ${
+        className={`group relative grid min-w-0 grid-cols-[40px_minmax(110px,1fr)_82px_86px_66px_46px_26px] items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-left ${
           selected
             ? "border-brand-300 bg-brand-50"
             : "border-transparent bg-editor-surface hover:bg-editor-subtle"
@@ -576,31 +576,31 @@ function AssetCard({
           onClick={(event) => onSelect(asset.id, event)}
           onDoubleClick={() => onOpen()}
           title={commandTitle(`${asset.name}を選択／${dragDescription}`, "SelectAsset")}
-          className="col-span-5 grid cursor-grab grid-cols-[46px_minmax(110px,1fr)_86px_90px_70px] items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 active:cursor-grabbing"
+          className="col-span-5 grid cursor-grab grid-cols-[40px_minmax(110px,1fr)_82px_86px_66px] items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 active:cursor-grabbing"
         >
           <span
             data-asset-drag-preview="true"
-            className="pointer-events-none h-9 overflow-hidden rounded-md bg-editor-subtle"
+            className="pointer-events-none h-8 overflow-hidden rounded bg-editor-subtle"
           >
             <AssetThumbnail asset={asset} assets={assets} projectPath={projectPath} />
           </span>
           <span className="min-w-0">
-            <span className="block truncate text-xs font-semibold text-slate-800">{asset.name}</span>
-            <span className="block truncate text-xs text-slate-500">
+            <span className="block truncate text-[11px] font-semibold leading-4 text-slate-800">{asset.name}</span>
+            <span className="block truncate text-[10px] leading-4 text-slate-500">
               {assetSourceLabel(asset)}
             </span>
             {folderPath ? (
-              <span className="block truncate text-[11px] text-slate-400" title={folderPath}>
+              <span className="block truncate text-[10px] leading-4 text-slate-400" title={folderPath}>
                 {folderPath}
               </span>
             ) : null}
           </span>
           {sizeSummary ?? <span />}
-          <span className="flex items-center gap-1 text-xs text-slate-500">
-            <KindIcon size={12} aria-hidden="true" />
-            {assetKindLabel(asset)}
+          <span className="flex items-center gap-1 text-[11px] text-slate-500">
+            <KindIcon size={11} aria-hidden="true" />
+            <span className="truncate">{assetKindLabel(asset)}</span>
           </span>
-          <span className="text-right text-xs font-medium text-slate-500">{asset.status}</span>
+          <span className="truncate text-right text-[11px] font-medium text-slate-500">{asset.status}</span>
         </button>
         {placeable ? (
           <button
@@ -612,7 +612,7 @@ function AssetCard({
               onPlace();
             }}
             title={commandTitle(`${asset.name}をScene Rootへ配置`, "PlaceSceneAsset")}
-            className="rounded-md px-2 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-40"
+            className="rounded-md px-1.5 py-0.5 text-[11px] font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-40"
           >
             配置
           </button>
@@ -659,7 +659,7 @@ function AssetCard({
       >
         <span
           data-asset-drag-preview="true"
-          className="pointer-events-none relative block h-16 w-full shrink-0 overflow-hidden border-b border-editor-border/70 bg-editor-subtle"
+          className="pointer-events-none relative block h-14 w-full shrink-0 overflow-hidden border-b border-editor-border/70 bg-editor-subtle"
         >
           <AssetThumbnail asset={asset} assets={assets} projectPath={projectPath} />
           <span
@@ -680,19 +680,19 @@ function AssetCard({
             </span>
           ) : null}
         </span>
-        <span className="min-w-0 px-2 py-1.5">
-          <span className="block truncate text-xs font-semibold text-slate-800">{asset.name}</span>
-          <span className="mt-0.5 block truncate text-xs text-slate-500">
+        <span className="min-w-0 px-1.5 py-1">
+          <span className="block truncate text-[11px] font-semibold leading-4 text-slate-800">{asset.name}</span>
+          <span className="block truncate text-[10px] leading-4 text-slate-500">
             {folderPath ?? assetSourceLabel(asset)}
           </span>
           {folderPath ? (
-            <span className="mt-0.5 block truncate text-[11px] text-slate-400" title={assetSourceLabel(asset)}>
+            <span className="block truncate text-[10px] leading-4 text-slate-400" title={assetSourceLabel(asset)}>
               {assetSourceLabel(asset)}
             </span>
           ) : null}
           {fileBytes !== null || vramBytes !== null ? (
             <span
-              className="mt-0.5 block truncate text-[11px] tabular-nums text-slate-500"
+              className="block truncate text-[10px] leading-4 tabular-nums text-slate-500"
               title={
                 vramBytes !== null && vramReducible
                   ? "KTX2に変換するとVRAMを下げられます"
@@ -720,7 +720,7 @@ function AssetCard({
             onPlace();
           }}
           title={commandTitle(`${asset.name}をScene Rootへ配置`, "PlaceSceneAsset")}
-          className="border-t border-editor-border/70 bg-editor-subtle px-2 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-40"
+          className="border-t border-editor-border/70 bg-editor-subtle px-1.5 py-1 text-[11px] font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-40"
         >
           Sceneへ配置
         </button>
@@ -829,12 +829,12 @@ function FolderCard({
     return (
       <div
         {...sharedProps}
-        className={`group grid grid-cols-[42px_minmax(110px,1fr)_90px_28px] items-center gap-2 rounded-md border px-2 py-1 text-left ${dropTarget ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200" : "border-transparent bg-editor-surface hover:bg-editor-subtle"}`}
+        className={`group grid grid-cols-[40px_minmax(110px,1fr)_86px_26px] items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-left ${dropTarget ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200" : "border-transparent bg-editor-surface hover:bg-editor-subtle"}`}
       >
-        <button type="button" draggable={Boolean(folder.custom) && !readOnly} data-editor-drag-source={folder.custom ? "asset-folder" : undefined} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onClick={onOpen} title={commandTitle(`${folder.name}を開く`, "OpenAssetFolder")} className="col-span-3 grid cursor-grab select-none grid-cols-[42px_minmax(110px,1fr)_90px] items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 active:cursor-grabbing">
-          <span className="flex h-9 items-center justify-center rounded-md bg-editor-subtle text-slate-500"><FolderIcon size={20} aria-hidden="true" /></span>
-          <span className="text-xs font-semibold text-slate-800">{folder.name}</span>
-          <span className="flex items-center gap-1 text-xs text-slate-500"><KindIcon size={12} aria-hidden="true" /> {folder.custom ? "フォルダー" : "コレクション"}</span>
+        <button type="button" draggable={Boolean(folder.custom) && !readOnly} data-editor-drag-source={folder.custom ? "asset-folder" : undefined} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onClick={onOpen} title={commandTitle(`${folder.name}を開く`, "OpenAssetFolder")} className="col-span-3 grid cursor-grab select-none grid-cols-[40px_minmax(110px,1fr)_86px] items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 active:cursor-grabbing">
+          <span className="flex h-8 items-center justify-center rounded bg-editor-subtle text-slate-500"><FolderIcon size={18} aria-hidden="true" /></span>
+          <span className="truncate text-[11px] font-semibold text-slate-800">{folder.name}</span>
+          <span className="flex items-center gap-1 text-[11px] text-slate-500"><KindIcon size={11} aria-hidden="true" /> <span className="truncate">{folder.custom ? "フォルダー" : "コレクション"}</span></span>
         </button>
         {folder.custom ? (
           <button type="button" disabled={readOnly} onClick={(event) => { event.stopPropagation(); onDelete(); }} title={commandTitle(`${folder.name}を削除`, "DeleteAssetFolder")} aria-label={`${folder.name}を削除`} className="rounded p-1 text-slate-400 opacity-0 hover:bg-rose-50 hover:text-rose-700 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-30"><DeleteIcon size={14} aria-hidden="true" /></button>
@@ -845,14 +845,14 @@ function FolderCard({
   return (
     <div
       {...sharedProps}
-      className={`group relative flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border text-slate-600 ${dropTarget ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200" : "border-transparent bg-editor-surface hover:bg-editor-subtle"}`}
+      className={`group relative flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border text-slate-600 ${dropTarget ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200" : "border-transparent bg-editor-surface hover:bg-editor-subtle"}`}
     >
-      <button type="button" draggable={Boolean(folder.custom) && !readOnly} data-editor-drag-source={folder.custom ? "asset-folder" : undefined} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onClick={onOpen} title={commandTitle(`${folder.name}を開く`, "OpenAssetFolder")} className="flex h-full w-full cursor-grab select-none flex-col items-center justify-center gap-1.5 px-2 active:cursor-grabbing">
+      <button type="button" draggable={Boolean(folder.custom) && !readOnly} data-editor-drag-source={folder.custom ? "asset-folder" : undefined} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onClick={onOpen} title={commandTitle(`${folder.name}を開く`, "OpenAssetFolder")} className="flex h-full w-full cursor-grab select-none flex-col items-center justify-center gap-1 px-1.5 py-1.5 active:cursor-grabbing">
         <span className="relative">
-          <FolderIcon size={24} strokeWidth={1.5} aria-hidden="true" />
-          <KindIcon size={11} className="absolute -bottom-0.5 -right-1 rounded bg-white" aria-hidden="true" />
+          <FolderIcon size={22} strokeWidth={1.5} aria-hidden="true" />
+          <KindIcon size={10} className="absolute -bottom-0.5 -right-1 rounded bg-white" aria-hidden="true" />
         </span>
-        <span className="max-w-full truncate text-xs font-semibold">{folder.name}</span>
+        <span className="max-w-full truncate text-[11px] font-semibold leading-4">{folder.name}</span>
       </button>
       {folder.custom ? (
         <button type="button" disabled={readOnly} onClick={(event) => { event.stopPropagation(); onDelete(); }} title={commandTitle(`${folder.name}を削除`, "DeleteAssetFolder")} aria-label={`${folder.name}を削除`} className="absolute right-1.5 top-1.5 rounded bg-white p-1 text-slate-400 opacity-0 shadow hover:bg-rose-50 hover:text-rose-700 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-30"><DeleteIcon size={13} aria-hidden="true" /></button>
@@ -1814,11 +1814,11 @@ export function AssetsPanel({
               </span>
             </span>
           </div>
-          <div className={`scrollbar-thin min-w-0 flex-1 overflow-auto p-2 ${viewMode === "grid" ? "grid auto-rows-max grid-cols-[repeat(auto-fill,minmax(104px,1fr))] content-start gap-1.5" : "space-y-1"}`}>
+          <div className={`scrollbar-thin min-w-0 flex-1 overflow-auto p-1.5 ${viewMode === "grid" ? "grid auto-rows-max grid-cols-[repeat(auto-fill,minmax(92px,1fr))] content-start gap-1" : "space-y-0.5"}`}>
         {!activeFolder?.builtinPrefabs
           ? visibleFolders.map((folder) => (
               renameRequest?.kind === "folder" && renameRequest.id === folder.id ? (
-                <div key={folder.id} className="flex min-h-[108px] items-center rounded-md border border-violet-400 bg-white p-2">
+                <div key={folder.id} className="flex min-h-[92px] items-center rounded-md border border-violet-400 bg-white p-1.5">
                   <input
                     ref={renameInputRef}
                     value={renameDraft}
@@ -1831,7 +1831,7 @@ export function AssetsPanel({
                         onRename({ kind: "folder", id: folder.id }, folder.name);
                       }
                     }}
-                    className="h-8 min-w-0 w-full rounded border border-violet-400 px-2 text-xs outline-none ring-2 ring-violet-100"
+                    className="h-7 min-w-0 w-full rounded border border-violet-400 px-1.5 text-[11px] outline-none ring-2 ring-violet-100"
                   />
                 </div>
               ) : (
@@ -1862,7 +1862,7 @@ export function AssetsPanel({
           : null}
         {visibleAssets.map((asset) => (
           renameRequest?.kind === "asset" && renameRequest.id === asset.id ? (
-            <div key={asset.id} className="flex min-h-[108px] items-center rounded-md border border-violet-400 bg-white p-2">
+            <div key={asset.id} className="flex min-h-[92px] items-center rounded-md border border-violet-400 bg-white p-1.5">
               <input
                 ref={renameInputRef}
                 value={renameDraft}
@@ -1875,7 +1875,7 @@ export function AssetsPanel({
                     onRename({ kind: "asset", id: asset.id }, asset.name);
                   }
                 }}
-                className="h-8 min-w-0 w-full rounded border border-violet-400 px-2 text-xs outline-none ring-2 ring-violet-100"
+                className="h-7 min-w-0 w-full rounded border border-violet-400 px-1.5 text-[11px] outline-none ring-2 ring-violet-100"
               />
             </div>
           ) : (
