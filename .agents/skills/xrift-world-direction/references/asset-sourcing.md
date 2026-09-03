@@ -1,24 +1,19 @@
-# 素材の調達順
+# 素材の調達先
 
-置くものが決まったら、この順で当たる。上ほど速く、光・材質・大きさが揃っている。下ほど自由だが
-往復が増える。1 段下へ降りるのは、上に無いことを確かめたときだけ。何を選ぶかはブリーフが決める。
-この文書は順番と条件だけを言い、候補の一覧は持たない。一覧は tool が返す。
+どこから素材を取るかは、設計図と品質の水準で決める。この文書は「何があるか」と「それぞれの
+向き不向き」を並べるだけで、順番も推奨も無い。組み合わせてよいし、ここに無い方法を設計しても
+よい。
 
-1. **出来合いのセット**: `list_scene_recipes` → `apply_scene_recipe`。光・Particle・Material が
-   合った subtree で置かれる。`note` に書かれた「作者がまだやること」を必ず実行する。
-2. **プロジェクトにある Model**: `list_assets { kind: "model" }` → `place_asset`。
-3. **CC0 の外部素材**: `search_external_assets` → `install_external_asset`。Model は結果の
-   `polycount` と `dimensionsMm` を読み、ブリーフで決めた予算と照らしてから入れる。写真スキャンの
-   木は数百万三角形あるので入れない。解像度は公開物の容量から決める。PBR Material は床・壁・
-   舗装に。HDRI は「特定の場所の光」が要るときで、普段は `list_material_presets` の空 shader の
-   方が軽く、時間帯を数値で変えられる。
-4. **Blender で作る**: 建築は `.claude/skills/xrift-blender-world/SKILL.md`、小物や木は
-   `.agents/skills/xrift-mcp-blender-modeling/SKILL.md`。形の作り方は決めない。Blender MCP が
-   接続されていれば、必要な形をその場で設計して作り、GLB で取り込む。
-5. **プリミティブの合成**: `create_primitive` + Material (PBR か発光色) + `core.particle` +
-   `core.light`。1 つの形で見せず、台座・本体・光・音の関係で見せる。
-6. **Script**: 同じ物を規則やばらつきで多数置く、動かす、反応させるなら
-   `references/scripting-patterns.md`。Entity を並べるより速く軽い。
+| 調達先 | 何が手に入るか | 向いている場面 | 気をつけること |
+| --- | --- | --- | --- |
+| 出来合いのセット (`list_scene_recipes` → `apply_scene_recipe`) | 光・Particle・Material が互いに合った subtree。しかけ付きのセットは音と Interactivity Graph も込み | 速く様になる物、仕掛けの雛形 | `note` に書かれた残作業 (Collider など) を実行する |
+| プロジェクトの Model (`list_assets` → `place_asset`) | スターターの Model と、取り込み済みのもの | すぐ置ける | |
+| 外部の CC0 素材 (`search_external_assets` → `install_external_asset`) | Poly Haven と ambientCG のモデル、PBR Material、HDRI | 写実の質感、実在の小物や家具や岩 | Model は結果の `polycount` と `dimensionsMm` を予算と照らす。写真スキャンの木のように数百万三角形のものがある。解像度は公開物の容量から決める |
+| Material のカタログ (`list_material_presets` → `create_material_from_preset`) | GLSL の空、水面、発光 | 軽く、時間帯や波を数値で変えられる空と水 | 発光は Bloom があるとより光って見えるが、無くても成立する |
+| Blender MCP | 何でも。建築は `.claude/skills/xrift-blender-world/SKILL.md`、小物や木は `.agents/skills/xrift-mcp-blender-modeling/SKILL.md` | 独自の形、寸法の合った部材、木 | 往復が増える。要件を決めてから作り、GLB で `import_model_asset` |
+| プリミティブ + Material + Particle + Light | 抽象的な形、ブロックアウト、台座と光の組み合わせ | 様式化、抽象空間、下地 | 既定の灰色を残さない |
+| Script (`references/scripting-patterns.md`) | 多数配置、動き、反応、生成的な構造 | Entity で作ると重く遅いもの | Play の前にユーザーの承認が要る |
+| コードから作成 (`analyze_component_code` → `apply_component_code_import_plan`) | R3F / Three.js の JSX を Entity と Component へ変換 | 手元にコードがあるとき | `useFrame` は変換できない |
 
 権利: Poly Haven と ambientCG は CC0 で、作者とライセンスは Asset と公開物へ自動で残る。
 MCP の import 経路に無い外部モデルは、ユーザーにライセンスを確認してもらう。

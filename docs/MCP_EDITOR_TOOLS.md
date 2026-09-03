@@ -31,8 +31,9 @@ snapshot への適用を弾くためで、複数 client が同時に触っても
 
 利用者のプロジェクトで動く AI client が読むのは、server の `instructions` と tool の
 description だけである。スキルも文書も届かない。だから「何を作るか」の工程は
-`instructions` の先頭にあり、各 tool の description は「何をするか」に加えて「いつ使わない
-か」「使ったあと何をするか」を書く。Terrain と草の tool が 14 本あるのに対して床を作る tool
+`instructions` の先頭にあり、各 tool の description は「何をするか」に加えて「何が決め手か」
+「使ったあと何をするか」「はまりやすい罠」を書く。使うかどうかは AI client が書く設計図が
+決めるので、「使うな」とは書かない。Terrain と草の tool が 14 本あるのに対して床を作る tool
 は 1 本しか無いので、説明文が黙っていると tool の数がワールドの形を決める。書き方の根拠と
 経緯は [ワールド制作ハーネス](./WORLD_AUTHORING_HARNESS.md) にある。
 
