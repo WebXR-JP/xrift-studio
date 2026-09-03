@@ -59,6 +59,7 @@ import {
   type SceneDocument,
   type ScriptRunMode,
 } from "./scene-document";
+import { migrateXriftComponentPlacementIntoTransform } from "./xrift-component-placement";
 
 export type DocumentValidationIssue = {
   path: string;
@@ -99,7 +100,9 @@ export const sceneDocumentCodec: VisualDocumentCodec<SceneDocument> = {
     return parsed.ok
       ? {
           ok: true,
-          document: migrateLegacyParentRigidBodies(parsed.document),
+          document: migrateXriftComponentPlacementIntoTransform(
+            migrateLegacyParentRigidBodies(parsed.document),
+          ),
           issues: [],
         }
       : parsed;

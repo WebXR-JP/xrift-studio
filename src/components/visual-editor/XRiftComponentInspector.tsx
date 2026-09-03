@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import {
   getXriftComponentDefinition,
   isBuiltinPrefabPropertyEditable,
+  isIdentityPlacement,
+  readXriftPlacementProperties,
   type JsonObject,
   type JsonValue,
   type XRiftComponent,
@@ -53,6 +55,29 @@ export function XRiftComponentInspector({
     .filter((field) => editablePropertyNames.has(field.name))
     .map((field) => field.label);
   const ComponentIcon = EDITOR_ICONS[definition.icon];
+
+  /*
+   * The Component's own position/rotation/scale are a second origin inside the
+   * Entity: the transform gizmo stays on the Entity origin while the Component
+   * draws itself elsewhere, so a rotation drag swings the content around a
+   * pivot the author cannot see. The Entity Transform is the one origin, so
+   * these props are hidden while they are at identity - which is what a fresh
+   * Component, a built-in Prefab and an opened project all have, since loading
+   * folds an imported offset into the Transform. A document that still carries
+   * one is an Entity holding other content the fold would have moved, and
+   * there the values stay editable behind an explanation.
+   */
+  const placement = readXriftPlacementProperties(
+    component.schemaId,
+    component.properties,
+  );
+  const placementDiverged = placement !== null && !isIdentityPlacement(placement);
+  const placementPropertyNames = new Set(
+    placement && !placementDiverged ? placement.propertyNames : [],
+  );
+  const placementLabels = definition.fields
+    .filter((field) => placementPropertyNames.has(field.name))
+    .map((field) => field.label);
 
   return (
     <section className="overflow-hidden rounded-md border border-slate-300 bg-white shadow-sm">
@@ -105,22 +130,35 @@ export function XRiftComponentInspector({
               : "XRift PrefabのComponent設定は読み取り専用です。位置・回転・大きさはEntityのTransformで調整できます。"}
           </div>
         ) : null}
-        {definition.fields.map((field) => (
-          <FieldEditor
-            key={field.name}
-            field={field}
-            value={component.properties[field.name]}
-            readOnly={
-              readOnly ||
-              !component.enabled ||
-              (recipeLocked && !editablePropertyNames.has(field.name))
-            }
-            templateEditable={
-              recipeLocked && editablePropertyNames.has(field.name)
-            }
-            onChange={(value) => onPropertyChange(field.name, value)}
-          />
-        ))}
+        {placementLabels.length > 0 ? (
+          <div className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs leading-4 text-slate-600">
+            {placementLabels.join("・")}はEntityのTransformで調整します。ギズモはEntityの原点に出ます。
+          </div>
+        ) : null}
+        {placementDiverged ? (
+          <div className="rounded border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs leading-4 text-amber-800">
+            このComponentは以下の値の分だけEntityの原点からずれた位置に描かれています。ギズモと回転の中心はEntityの原点のままです。
+            このEntityには他の内容もあるため自動では移せません。値を0にしてEntityのTransformで配置し直すと、選択したときの原点と一致します。
+          </div>
+        ) : null}
+        {definition.fields
+          .filter((field) => !placementPropertyNames.has(field.name))
+          .map((field) => (
+            <FieldEditor
+              key={field.name}
+              field={field}
+              value={component.properties[field.name]}
+              readOnly={
+                readOnly ||
+                !component.enabled ||
+                (recipeLocked && !editablePropertyNames.has(field.name))
+              }
+              templateEditable={
+                recipeLocked && editablePropertyNames.has(field.name)
+              }
+              onChange={(value) => onPropertyChange(field.name, value)}
+            />
+          ))}
         {definition.runtimeBindings.length > 0 ? (
           <div className="rounded border border-sky-200 bg-sky-50 px-2.5 py-2 text-xs leading-4 text-sky-800">
             {definition.runtimeBindings.map((binding) => binding.name).join(" / ")} は実行時の動作です。
