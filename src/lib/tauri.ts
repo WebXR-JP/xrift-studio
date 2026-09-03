@@ -167,7 +167,11 @@ export type ExternalStoreAsset = {
   tags: string[];
   thumbnailUrl: string;
   assetKind: ExternalStoreAssetKind;
-  maxResolution?: [number, number];
+  maxResolution?: [number, number] | null;
+  /** Triangle count for Models; the provider's value, absent for other kinds. */
+  polycount?: number | null;
+  /** Model bounding size in millimetres: width, depth, height. */
+  dimensionsMm?: [number, number, number] | null;
   downloadCount: number;
   authors: string[];
   assetUrl: string;

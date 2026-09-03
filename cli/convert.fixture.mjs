@@ -99,6 +99,7 @@ import { runDocumentAssetCreationFixtureAssertions } from "../src/lib/visual-edi
 import { runEditorSessionHierarchyFixtureAssertions } from "../src/lib/visual-editor/editor-session.fixture.ts";
 import { runSceneClickSelectionFixtureAssertions } from "../src/lib/visual-editor/scene-click-selection.fixture.ts";
 import { runEntityBoundsFixtureAssertions } from "../src/lib/visual-editor/entity-bounds.fixture.ts";
+import { runMcpHarnessGuardFixtureAssertions } from "../src/lib/visual-editor/mcp-harness-guard.fixture.ts";
 import { runGltfDerivedAssetFixtureAssertions } from "../src/lib/visual-editor/gltf-derived-assets.fixture.ts";
 import { runModelCompanionBatchFixtureAssertions } from "../src/lib/visual-editor/model-companion-batch.fixture.ts";
 import { runModelHierarchyFixtureAssertions } from "../src/lib/visual-editor/model-hierarchy.fixture.ts";
@@ -330,6 +331,7 @@ try {
     ["terrain grass publish", runTerrainGrassPublishFixtureAssertions],
     ["terrain surface", runTerrainSurfaceFixtureAssertions],
     ["entity bounds", runEntityBoundsFixtureAssertions],
+    ["mcp harness guard", runMcpHarnessGuardFixtureAssertions],
     ["runtime schema", runRuntimeSchemaFixtureAssertions],
     ["interactivity engine", runInteractivityEngineFixtureAssertions],
     ["animation runtime bridge", runAnimationRuntimeBridgeFixtureAssertions],

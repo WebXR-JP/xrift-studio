@@ -27,6 +27,19 @@ document 以外は React shell か Tauri 側が持つ副作用を伴う。
 書き込み tool は `projectId`、`sceneId`、`expectedRevision` を要求する。古い
 snapshot への適用を弾くためで、複数 client が同時に触っても編集は直列化される。
 
+## instructions と description が担う役割
+
+利用者のプロジェクトで動く AI client が読むのは、server の `instructions` と tool の
+description だけである。スキルも文書も届かない。だから「何を作るか」の工程は
+`instructions` の先頭にあり、各 tool の description は「何をするか」に加えて「いつ使わない
+か」「使ったあと何をするか」を書く。Terrain と草の tool が 14 本あるのに対して床を作る tool
+は 1 本しか無いので、説明文が黙っていると tool の数がワールドの形を決める。書き方の根拠と
+経緯は [ワールド制作ハーネス](./WORLD_AUTHORING_HARNESS.md) にある。
+
+document tool の戻り値には `harness` が付くことがある。同じ分類 (Terrain、草、同じ Entity の
+Transform、同じ Material) の書き込みが `capture_scene_view` を挟まずに 3 回続いたときの警告で、
+書き込みは拒否しない。数え方は Editor のメモリだけで、project には残らない。
+
 ## document (93)
 
 **Editor context / Project**
@@ -280,6 +293,11 @@ Script の実行境界と trust gate は [Scripting の契約](./SCRIPTING.md) �
 
 `search_external_assets`, `get_external_asset_options`,
 `install_external_asset`
+
+`search_external_assets` の Model には Poly Haven の一覧 API が返す `polycount` と
+`dimensionsMm` (幅、奥行、高さ、mm) が付く。Poly Haven の写真スキャンは木で数百万、岩でも
+数十万三角形のものがあり、重さを知らずに install すると公開物が壊れるため、入れる前に
+読んで、そのワールドに決めた予算と照らす。上限の数値はここでは決めない。
 
 ## debug (11)
 

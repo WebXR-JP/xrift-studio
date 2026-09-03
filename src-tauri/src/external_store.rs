@@ -37,6 +37,10 @@ pub struct ExternalStoreAsset {
     pub thumbnail_url: String,
     pub asset_kind: String,
     pub max_resolution: Option<[u64; 2]>,
+    /// Triangle count the provider reports for a Model; None for other kinds.
+    pub polycount: Option<u64>,
+    /// Model bounding size in millimetres (width, depth, height) as the provider reports it.
+    pub dimensions_mm: Option<[f64; 3]>,
     pub download_count: u64,
     pub authors: Vec<String>,
     pub asset_url: String,
@@ -236,6 +240,8 @@ fn otogura_asset(id: &str, value: &Value) -> ExternalStoreAsset {
             .to_string(),
         asset_kind: "audio".to_string(),
         max_resolution: None,
+        polycount: None,
+        dimensions_mm: None,
         download_count: value
             .get("download_count")
             .and_then(Value::as_u64)
@@ -318,6 +324,22 @@ fn max_resolution(value: Option<&Value>) -> Option<[u64; 2]> {
     Some([entries[0].as_u64()?, entries[1].as_u64()?])
 }
 
+fn dimensions_mm(value: Option<&Value>) -> Option<[f64; 3]> {
+    let entries = value?.as_array()?;
+    if entries.len() < 3 {
+        return None;
+    }
+    let mut out = [0.0; 3];
+    for (slot, entry) in out.iter_mut().zip(entries.iter()) {
+        let number = entry.as_f64()?;
+        if !number.is_finite() || number < 0.0 {
+            return None;
+        }
+        *slot = number;
+    }
+    Some(out)
+}
+
 fn ambient_cg_asset_kind(value: Option<&Value>) -> &'static str {
     match value.and_then(Value::as_str) {
         Some("hdri") => "hdri",
@@ -381,6 +403,8 @@ fn ambient_cg_asset_to_external(value: &Value) -> Option<ExternalStoreAsset> {
         thumbnail_url: ambient_cg_thumbnail(value.get("thumbnails")),
         asset_kind: kind.to_string(),
         max_resolution: None,
+        polycount: None,
+        dimensions_mm: None,
         download_count,
         authors: Vec::new(),
         asset_url,
@@ -586,6 +610,16 @@ pub async fn list_external_store_assets(
                     .to_string(),
                 asset_kind: kind.to_string(),
                 max_resolution: max_resolution(value.get("max_resolution")),
+                polycount: if kind == "model" {
+                    value.get("polycount").and_then(Value::as_u64)
+                } else {
+                    None
+                },
+                dimensions_mm: if kind == "model" {
+                    dimensions_mm(value.get("dimensions"))
+                } else {
+                    None
+                },
                 download_count: value
                     .get("download_count")
                     .and_then(Value::as_u64)

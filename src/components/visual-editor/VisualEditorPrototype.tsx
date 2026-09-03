@@ -212,6 +212,12 @@ import {
   type XriftOllamaIntegrationId,
   type XriftOllamaStatus,
 } from "../../lib/tauri";
+import {
+  EMPTY_MCP_HARNESS_STATE,
+  recordMcpHarnessCall,
+  withMcpHarnessWarning,
+  type McpHarnessState,
+} from "../../lib/visual-editor/mcp-harness-guard";
 import { setProjectThumbnailFromAsset } from "../../lib/project-thumbnail";
 import { AssetsPanel } from "./AssetsPanel";
 import {
@@ -1191,6 +1197,9 @@ export function VisualEditorPrototype({
     }
   }, []);
   const mcpRevisionRef = useRef(0);
+  // Streak of same-category writes since the last capture. Session memory only;
+  // it is never written to the project.
+  const mcpHarnessStateRef = useRef<McpHarnessState>(EMPTY_MCP_HARNESS_STATE);
   const mcpRevisionBundleRef = useRef(bundle);
   const mcpRevisionProjectRef = useRef(bundle.project.projectId);
   if (mcpRevisionProjectRef.current !== bundle.project.projectId) {
@@ -2815,6 +2824,12 @@ export function VisualEditorPrototype({
     const complete = async (
       request: XriftMcpEditorRequestEvent,
     ): Promise<void> => {
+      const harness = recordMcpHarnessCall(
+        mcpHarnessStateRef.current,
+        request.tool,
+        request.arguments,
+      );
+      mcpHarnessStateRef.current = harness.state;
       try {
         // The registry says which surface owns a tool, so an unknown name is
         // simply one with no surface rather than something five membership
@@ -5419,21 +5434,24 @@ export function VisualEditorPrototype({
           await tauri.completeXriftMcpRequest({
             id: request.id,
             ok: true,
-            result: synchronizesScriptRuntime
-              ? {
-                  ...outcome.result,
-                  runtimeUpdated: didScriptRuntimeApplyLatestSources(
-                    synchronizedRuntimeErrors,
-                    {
-                      unapprovedPolicy:
-                        synchronizedUnapprovedPolicy,
-                    },
-                  ),
-                  compileErrors: scriptCompileErrorsForMcp(
-                    synchronizedRuntimeErrors,
-                  ),
-                }
-              : outcome.result,
+            result: withMcpHarnessWarning(
+              synchronizesScriptRuntime
+                ? {
+                    ...outcome.result,
+                    runtimeUpdated: didScriptRuntimeApplyLatestSources(
+                      synchronizedRuntimeErrors,
+                      {
+                        unapprovedPolicy:
+                          synchronizedUnapprovedPolicy,
+                      },
+                    ),
+                    compileErrors: scriptCompileErrorsForMcp(
+                      synchronizedRuntimeErrors,
+                    ),
+                  }
+                : outcome.result,
+              harness.warning,
+            ),
           });
         } catch {
           setMcpError(
