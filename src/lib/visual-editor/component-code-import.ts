@@ -38,6 +38,7 @@ import {
   type Vec3,
 } from "./scene-document";
 import { updateXriftComponent } from "./component-registry";
+import { foldXriftPlacementIntoTransform } from "./xrift-component-placement";
 import {
   createEmbeddedReferencePattern,
   createQuotedReferenceScanPattern,
@@ -1053,6 +1054,26 @@ function convertJsxNode(
         sourcePath: context.sourcePath,
       });
     }
+    // The official Component's own position/rotation/scale become the Entity's
+    // Transform instead of a second origin inside it, so the transform gizmo
+    // lands on the screen, mirror or board the author selected and a rotation
+    // drag turns it in place. Skipped when something else on the Entity is
+    // drawn at the Entity origin - a Collider from an enclosing RigidBody, or
+    // a leaf Component's converted children - because that content would move
+    // with the origin. `<ScreenShareDisplay position={[-19.72, 2, 0]} .../>`
+    // in the official world template is the shape this exists for.
+    const movesOtherContent =
+      Boolean(context.rigidBody) ||
+      (definition.attachBehavior.kind === "leaf" && added > 0);
+    if (!movesOtherContent) {
+      const folded = foldXriftPlacementIntoTransform(
+        definition.schemaId,
+        componentNode.transform,
+        component.properties,
+      );
+      componentNode.transform = folded.transform;
+      component.properties = folded.properties;
+    }
     return output.length - before;
   }
 
@@ -1116,14 +1137,21 @@ function convertJsxNode(
     if (binding.imported === "Billboard") {
       const definition = getXriftComponentDefinition("BillboardY");
       if (!definition) return 0;
+      // The group props become the Entity's Transform rather than an offset
+      // inside the Component, so the Entity origin is where the wrapper draws.
+      const billboardPlacement = foldXriftPlacementIntoTransform(
+        definition.schemaId,
+        cloneTransform(IDENTITY_TRANSFORM),
+        pickProperties(attributes, ["position", "rotation", "scale"]),
+      );
       const billboard = appendImportNode(output, context, {
         ...sourceFields,
         name: staticNodeName(attributes, "BillboardY"),
         kind: "empty",
-        transform: cloneTransform(IDENTITY_TRANSFORM),
+        transform: billboardPlacement.transform,
         xriftComponents: [{
           schemaId: definition.schemaId,
-          properties: pickProperties(attributes, ["position", "rotation", "scale"]),
+          properties: billboardPlacement.properties,
           sourceName: "BillboardY",
         }],
       });
@@ -1148,8 +1176,21 @@ function convertJsxNode(
       const definition = getXriftComponentDefinition("Mirror");
       if (!definition) return 0;
       const args = asNumberArray(attributes.args);
+      // Same as above: the reflector's place in the world is the Entity's, so
+      // the props become the Transform unless an enclosing RigidBody put a
+      // Collider on the Entity origin that the move would drag along with it.
+      const mirrorPlacement = context.rigidBody
+        ? {
+            transform: cloneTransform(IDENTITY_TRANSFORM),
+            properties: pickProperties(attributes, ["position", "rotation"]),
+          }
+        : foldXriftPlacementIntoTransform(
+            definition.schemaId,
+            cloneTransform(IDENTITY_TRANSFORM),
+            pickProperties(attributes, ["position", "rotation"]),
+          );
       const properties: JsonObject = {
-        ...pickProperties(attributes, ["position", "rotation"]),
+        ...mirrorPlacement.properties,
         ...(args.length >= 2 ? { size: [args[0], args[1]] } : {}),
         ...(toColorNumber(attributes.color) !== undefined
           ? { color: toColorNumber(attributes.color)! }
@@ -1159,7 +1200,7 @@ function convertJsxNode(
         ...sourceFields,
         name: "Mirror",
         kind: "empty",
-        transform: cloneTransform(IDENTITY_TRANSFORM),
+        transform: mirrorPlacement.transform,
         ...(context.rigidBody ? { collider: context.rigidBody } : {}),
         xriftComponents: [
           { schemaId: definition.schemaId, properties, sourceName: "Mirror" },

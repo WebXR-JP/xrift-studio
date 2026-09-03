@@ -269,6 +269,10 @@ import {
   XRIFT_COMPONENT_SCHEMA_IDS,
   type UpdateXriftComponentPatch,
 } from "./component-registry";
+import {
+  isIdentityPlacement,
+  readXriftPlacementProperties,
+} from "./xrift-component-placement";
 import { addDefaultDocumentAsset } from "./document-asset-creation";
 import {
   addPrefabAsset,
@@ -4075,6 +4079,24 @@ function updateComponent(
           : recordValue(patch.properties, "patch.properties");
       if (properties && !isJsonValue(properties)) {
         invalidArgument("patch.properties", "finite JSON object");
+      }
+      // The Entity's Transform is the only origin an official Component has.
+      // A Component that keeps its own offset draws itself away from the
+      // gizmo, so the Inspector hides these props and the MCP surface refuses
+      // them rather than letting an AI client rebuild the mismatch by hand.
+      const requestedPlacement = properties
+        ? readXriftPlacementProperties(component.schemaId, properties)
+        : null;
+      if (requestedPlacement && !isIdentityPlacement(requestedPlacement)) {
+        throw new XriftMcpEditorToolError(
+          "COMPONENT_UPDATE_REJECTED",
+          "XRift Componentのposition・rotation・scaleはEntityのTransformで指定します",
+          {
+            entityId,
+            componentId,
+            properties: [...requestedPlacement.propertyNames],
+          },
+        );
       }
       const assetReferences = optionalUniqueStringArray(
         patch.assetReferences,

@@ -34,6 +34,7 @@ import { compileStagedTypecheckWorld } from "../src/lib/visual-editor/compiler/s
 import { runClassicExportFixtureAssertions } from "../src/lib/visual-editor/classic-export.fixture.ts";
 import { runComponentCodeImportFixtureAssertions } from "../src/lib/visual-editor/component-code-import.fixture.ts";
 import { runXriftMcpEditorToolFixtures } from "../src/lib/visual-editor/mcp-editor-tools.fixture.ts";
+import { runXriftComponentPlacementFixtureAssertions } from "../src/lib/visual-editor/xrift-component-placement.fixture.ts";
 import { runPlaySessionFixtureAssertions } from "../src/lib/visual-editor/play-session.fixture.ts";
 import { runScriptSpecifierFixtureAssertions } from "../src/lib/visual-editor/scripting/specifiers.fixture.ts";
 import { runScriptTemplateFixtureAssertions } from "../src/lib/visual-editor/scripting/script-templates.fixture.ts";
@@ -364,6 +365,7 @@ try {
     ["component code import", runComponentCodeImportFixtureAssertions],
     ["classic export", runClassicExportFixtureAssertions],
     ["xrift component registry", runXriftComponentRegistryFixtureAssertions],
+    ["xrift component placement", runXriftComponentPlacementFixtureAssertions],
     ["material extensions", runMaterialExtensionFixtureAssertions],
     ["builtin prefab catalog", runBuiltinPrefabCatalogFixtureAssertions],
     ["document asset creation", runDocumentAssetCreationFixtureAssertions],

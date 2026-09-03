@@ -356,6 +356,7 @@ Undo 履歴も選択も動かさない。
 | Project の保存・公開・アップロード | 外向きの不可逆操作。アップロード前の `xrift.json` とサムネイルの確認は人が通る導線に残す |
 | Login / account 操作 | 認証情報を MCP 境界へ渡さない |
 | 録画の保存先の指定 | `recording_begin_file` が開けるのは既定の保存先と、人がフォルダーダイアログで選んだ場所だけ。AI client が path を書けると Rust 側の path 検証を迂回する。保存先を変えるのは録画パネルから |
+| 公式 Component の position / rotation / scale | `update_component` は XRift Component のこれらの prop を受け取らない。Component 側に持たせると Entity の Transform と別の原点ができ、選択したときのギズモと回転の中心が描かれている場所からずれる。配置は `update_component` の `transform` patch で Entity へ書く |
 | 任意 path の読み書き・削除 | Rust 側の path 検証と権限制御を迂回させない |
 | 任意 JavaScript の実行 | Script は trust gate 付きの Asset としてだけ入る |
 | Texture の一括変換 | 人が複数選択したものをまとめて書き出すための導線。AI からは `process_texture_asset` を Asset ごとに呼べばよく、対象の選び方も AI 側で決まる |
