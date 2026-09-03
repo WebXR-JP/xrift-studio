@@ -15,7 +15,7 @@
 4. **Blender で作る**: 建築は `.claude/skills/xrift-blender-world/SKILL.md`、小物や木は
    `.agents/skills/xrift-mcp-blender-modeling/SKILL.md`。形の作り方は決めない。Blender MCP が
    接続されていれば、必要な形をその場で設計して作り、GLB で取り込む。
-5. **プリミティブの合成**: `create_primitive` + Material (PBR か glow) + `core.particle` +
+5. **プリミティブの合成**: `create_primitive` + Material (PBR か発光色) + `core.particle` +
    `core.light`。1 つの形で見せず、台座・本体・光・音の関係で見せる。
 6. **Script**: 同じ物を規則やばらつきで多数置く、動かす、反応させるなら
    `references/scripting-patterns.md`。Entity を並べるより速く軽い。
