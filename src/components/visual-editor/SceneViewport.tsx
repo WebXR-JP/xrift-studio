@@ -235,6 +235,11 @@ import {
   normalizeOpenBrushGlslSource,
 } from "../../lib/visual-editor/open-brush-preview-loader";
 import {
+  isUnlitMaterial,
+  physicalMaterialExtensionProps,
+  usesPhysicalMaterial,
+} from "./material-physical-props";
+import {
   readProjectTextureDataUrl,
   useCoreMaterialPreviewTextures,
   useMaterialPreviewRenderSync,
@@ -1121,6 +1126,42 @@ function PrimitiveMeshVisual({
       ? 1
       : (pbr?.baseColorFactor[3] ?? material?.properties.opacity ?? 1);
   const normalScale = material?.properties.normalTexture?.scale ?? 1;
+  // Which shading model the Material asks for, resolved through the same list
+  // the compiler reads. Without this the viewport drew every primitive with
+  // MeshStandardMaterial, so clearcoat, transmission, iridescence and the rest
+  // only appeared after publishing.
+  const materialIsUnlit = isUnlitMaterial(material?.properties);
+  const materialIsPhysical = usesPhysicalMaterial(material?.properties);
+  const physicalProps = useMemo(
+    () => physicalMaterialExtensionProps(material?.properties),
+    [material?.properties],
+  );
+  const litMaterialProps = {
+    color: material?.properties.color ?? "#f43f5e",
+    metalness: pbr?.metallicFactor ?? material?.properties.metalness ?? 0,
+    roughness: pbr?.roughnessFactor ?? material?.properties.roughness ?? 1,
+    emissive: colorFactorToHex(material?.properties.emissiveFactor),
+    emissiveIntensity:
+      material?.properties.extensions.KHR_materials_emissive_strength
+        ?.emissiveStrength ?? 1,
+    opacity,
+    transparent: alphaMode === "BLEND",
+    depthWrite: alphaMode !== "BLEND",
+    alphaTest:
+      alphaMode === "MASK" ? (material?.properties.alphaCutoff ?? 0.5) : 0,
+    map: materialTextures.baseColorMap,
+    metalnessMap: materialTextures.metallicRoughnessMap,
+    roughnessMap: materialTextures.metallicRoughnessMap,
+    normalMap: materialTextures.normalMap,
+    normalScale: [normalScale, normalScale] as [number, number],
+    aoMap: materialTextures.occlusionMap,
+    aoMapIntensity: material?.properties.occlusionTexture?.strength ?? 1,
+    emissiveMap: materialTextures.emissiveMap,
+    side:
+      primitive === "plane" || material?.properties.doubleSided
+        ? DoubleSide
+        : undefined,
+  };
 
   return (
     <mesh
@@ -1167,39 +1208,40 @@ function PrimitiveMeshVisual({
         />
       ) : customShaderInstance ? (
         <primitive object={customShaderInstance} attach="material" />
+      ) : materialIsUnlit ? (
+        // KHR_materials_unlit replaces the shading model instead of adding to
+        // it, so the viewport drops to Basic exactly where the compiler does.
+        // The ref is left off for the same reason the viewport's own unlit
+        // style leaves it off: only the base colour map reaches this branch.
+        <meshBasicMaterial
+          color={litMaterialProps.color}
+          opacity={litMaterialProps.opacity}
+          transparent={litMaterialProps.transparent}
+          depthWrite={litMaterialProps.depthWrite}
+          alphaTest={litMaterialProps.alphaTest}
+          map={litMaterialProps.map}
+          side={litMaterialProps.side}
+        />
+      ) : materialIsPhysical ? (
+        <meshPhysicalMaterial
+          ref={materialRef}
+          {...litMaterialProps}
+          {...physicalProps}
+          anisotropyMap={materialTextures.anisotropyMap}
+          clearcoatMap={materialTextures.clearcoatMap}
+          clearcoatRoughnessMap={materialTextures.clearcoatRoughnessMap}
+          clearcoatNormalMap={materialTextures.clearcoatNormalMap}
+          iridescenceMap={materialTextures.iridescenceMap}
+          iridescenceThicknessMap={materialTextures.iridescenceThicknessMap}
+          sheenColorMap={materialTextures.sheenColorMap}
+          sheenRoughnessMap={materialTextures.sheenRoughnessMap}
+          specularIntensityMap={materialTextures.specularIntensityMap}
+          specularColorMap={materialTextures.specularColorMap}
+          transmissionMap={materialTextures.transmissionMap}
+          thicknessMap={materialTextures.thicknessMap}
+        />
       ) : (
-      <meshStandardMaterial
-        ref={materialRef}
-        color={material?.properties.color ?? "#f43f5e"}
-        metalness={pbr?.metallicFactor ?? material?.properties.metalness ?? 0}
-        roughness={pbr?.roughnessFactor ?? material?.properties.roughness ?? 1}
-        emissive={colorFactorToHex(material?.properties.emissiveFactor)}
-        emissiveIntensity={
-          material?.properties.extensions.KHR_materials_emissive_strength
-            ?.emissiveStrength ?? 1
-        }
-        opacity={opacity}
-        transparent={alphaMode === "BLEND"}
-        depthWrite={alphaMode !== "BLEND"}
-        alphaTest={
-          alphaMode === "MASK"
-            ? (material?.properties.alphaCutoff ?? 0.5)
-            : 0
-        }
-        map={materialTextures.baseColorMap}
-        metalnessMap={materialTextures.metallicRoughnessMap}
-        roughnessMap={materialTextures.metallicRoughnessMap}
-        normalMap={materialTextures.normalMap}
-        normalScale={[normalScale, normalScale]}
-        aoMap={materialTextures.occlusionMap}
-        aoMapIntensity={material?.properties.occlusionTexture?.strength ?? 1}
-        emissiveMap={materialTextures.emissiveMap}
-        side={
-          primitive === "plane" || material?.properties.doubleSided
-            ? DoubleSide
-            : undefined
-        }
-      />
+        <meshStandardMaterial ref={materialRef} {...litMaterialProps} />
       )}
       {selected || materialDropHighlighted ? (
         <Edges

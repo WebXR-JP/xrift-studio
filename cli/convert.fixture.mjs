@@ -119,6 +119,7 @@ import {
   runModelAnimationGraphFixtureAssertions,
 } from "../src/lib/visual-editor/interactivity-recipes.fixture.ts";
 import { runSceneRecipeCatalogFixtureAssertions } from "../src/lib/visual-editor/scene-recipe-catalog.fixture.ts";
+import { runMaterialShowcaseCatalogFixtureAssertions } from "../src/lib/visual-editor/material-showcase-catalog.fixture.ts";
 import { runInteractionTriggerFixtureAssertions } from "../src/lib/visual-editor/interaction-trigger.fixture.ts";
 import { runInteractionTriggerApplierFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/interaction-trigger-applier.fixture.ts";
 import { runVisualUploadFixtureAssertions } from "../src/lib/visual-editor/upload.fixture.ts";
@@ -389,6 +390,7 @@ try {
     ["material alpha", runMaterialAlphaFixtureAssertions],
     ["interactivity recipes", runInteractivityRecipeFixtureAssertions],
     ["scene recipe catalog", runSceneRecipeCatalogFixtureAssertions],
+    ["material showcase catalog", runMaterialShowcaseCatalogFixtureAssertions],
     ["model animation graph", runModelAnimationGraphFixtureAssertions],
     ["interaction trigger", runInteractionTriggerFixtureAssertions],
     ["interaction trigger applier", runInteractionTriggerApplierFixtureAssertions],

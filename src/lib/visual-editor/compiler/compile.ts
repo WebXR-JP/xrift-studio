@@ -25,6 +25,7 @@ import {
   textureOutputExtension,
 } from "../texture-conversion";
 import { getBuiltinPrimitiveCreation } from "../creation-catalog";
+import { PHYSICAL_MATERIAL_EXTENSION_NAMES } from "../material-extension-registry";
 import {
   collectInteractivityRuntimeDiagnostics,
   collectXriftInteractionActions,
@@ -4108,23 +4109,11 @@ const SUPPORTED_COMPILED_MATERIAL_EXTENSIONS = new Set([
   "KHR_materials_volume",
 ]);
 
-const PHYSICAL_MATERIAL_EXTENSION_KEYS = [
-  "KHR_materials_anisotropy",
-  "KHR_materials_clearcoat",
-  "KHR_materials_dispersion",
-  "KHR_materials_ior",
-  "KHR_materials_iridescence",
-  "KHR_materials_sheen",
-  "KHR_materials_specular",
-  "KHR_materials_transmission",
-  "KHR_materials_volume",
-] as const;
-
 function getMaterialShaderModel(
   properties: MaterialProperties,
 ): MaterialShaderModel {
   if (properties.extensions.KHR_materials_unlit !== undefined) return "basic";
-  return PHYSICAL_MATERIAL_EXTENSION_KEYS.some(
+  return PHYSICAL_MATERIAL_EXTENSION_NAMES.some(
     (key) => properties.extensions[key] !== undefined,
   )
     ? "physical"

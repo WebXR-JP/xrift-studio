@@ -15,6 +15,7 @@ import {
   createGlowMaterialAsset,
   DEFAULT_GLOW_MATERIAL_PRESET,
 } from "./glow-material-catalog";
+import { getMaterialShowcaseAsset } from "./material-showcase-catalog";
 import { createDocumentId } from "./document-id";
 import {
   VISUAL_PROJECT_SCHEMA_VERSION,
@@ -109,9 +110,15 @@ export function ensureBuiltinMaterialAsset(
   materialAssetId: string,
 ): AssetManifest {
   if (assets.assets[materialAssetId]?.kind === "material") return assets;
-  const builtin = BUILTIN_MATERIAL_ASSETS.find(
-    (material) => material.id === materialAssetId,
-  );
+  const builtin =
+    BUILTIN_MATERIAL_ASSETS.find(
+      (material) => material.id === materialAssetId,
+    ) ??
+    // Showcase Materials are resolvable here but absent from the seed list:
+    // a project gets the one a placed 見本 uses and no more, which is why
+    // thirteen extension demonstrations do not lengthen every new project's
+    // Asset panel.
+    getMaterialShowcaseAsset(materialAssetId);
   if (!builtin) return assets;
   return {
     ...assets,

@@ -41,6 +41,10 @@ import {
   getParticleAuthoringPreset,
   type ParticlePropertiesPatch,
 } from "./particle-system";
+import {
+  materialShowcaseAssetId,
+  materialShowcaseBaselineAssetId,
+} from "./material-showcase-catalog";
 import { ensureBuiltinMaterialAsset } from "./prototype-project";
 import {
   createAudioSourceComponent,
@@ -269,6 +273,7 @@ export type SceneRecipeCategory =
   | "structure"
   | "furniture"
   | "effect"
+  | "material"
   | "tutorial";
 
 export const SCENE_RECIPE_CATEGORY_LABELS: Readonly<
@@ -281,6 +286,7 @@ export const SCENE_RECIPE_CATEGORY_LABELS: Readonly<
   structure: "建物",
   furniture: "家具",
   effect: "演出",
+  material: "マテリアル見本",
   tutorial: "しかけ・チュートリアル",
 };
 
@@ -362,6 +368,17 @@ export const SCENE_RECIPE_IDS = {
   qualitySwitch: "scene-recipe.quality-switch",
   hiddenDoorSwitch: "scene-recipe.hidden-door-switch",
   signTextButtons: "scene-recipe.sign-text-buttons",
+  materialClearcoat: "scene-recipe.material-clearcoat",
+  materialAnisotropy: "scene-recipe.material-anisotropy",
+  materialTransmission: "scene-recipe.material-transmission",
+  materialVolume: "scene-recipe.material-volume",
+  materialDispersion: "scene-recipe.material-dispersion",
+  materialIridescence: "scene-recipe.material-iridescence",
+  materialSheen: "scene-recipe.material-sheen",
+  materialSpecular: "scene-recipe.material-specular",
+  materialEmissiveStrength: "scene-recipe.material-emissive-strength",
+  materialIor: "scene-recipe.material-ior",
+  materialUnlit: "scene-recipe.material-unlit",
 } as const;
 
 /**
@@ -2287,6 +2304,341 @@ const SIGN_TEXT_BUTTONS: SceneRecipe = {
   ],
 };
 
+/**
+ * 見本台の共通部分。
+ *
+ * A glTF material extension is only legible next to its own absence: clearcoat
+ * on a red sphere is a red sphere until the sphere without it is standing next
+ * to it. Every 見本 in this section is therefore the same stand -- a bench, a
+ * backdrop, labels and two lights -- with the objects swapped, so the only
+ * thing that differs between left and right is the extension.
+ */
+const SHOWCASE = materialShowcaseAssetId;
+const SHOWCASE_PLAIN = materialShowcaseBaselineAssetId;
+
+/** 左が拡張あり、右が拡張なし。中央は3つ並べる見本だけが使う。 */
+const SHOWCASE_LEFT = -0.75;
+const SHOWCASE_CENTER = 0;
+const SHOWCASE_RIGHT = 0.75;
+/** 台の天板。見本はこの高さの上に載る。 */
+const SHOWCASE_TOP = 0.1;
+/** 札の高さ。背景板の上端より上にあるので、暗い背景に明るい字が乗る。 */
+const SHOWCASE_LABEL_Y = 1.3;
+
+function showcaseFrame(input: {
+  leftLabel: string;
+  centerLabel?: string;
+  rightLabel?: string;
+  /**
+   * Coloured bars on the backdrop, one directly behind each place on the
+   * bench.
+   *
+   * A transmissive Material bends whatever is behind it, and a flat panel
+   * bends into more of itself. The bars are what turns refraction, thickness
+   * attenuation and dispersion from present into visible, so every glass 見本
+   * asks for them and every opaque one does not.
+   */
+  stripes?: boolean;
+}): SceneRecipePart[] {
+  return [
+    box("台", M.charcoal, [0, 0.05, 0], [2.4, 0.1, 0.62]),
+    box("背景板", M.slate, [0, 0.62, -0.28], [2.4, 1.05, 0.06]),
+    ...(input.stripes
+      ? [
+          // Horizontal, so every place on the bench has the same thing behind
+          // it. Vertical bars in three colours made the left and right halves
+          // refract different backgrounds, which is the one thing a comparison
+          // stand must not do.
+          box("背景の帯 1", M.blue, [0, 0.28, -0.24], [2.2, 0.14, 0.03]),
+          box("背景の帯 2", M.orange, [0, 0.5, -0.24], [2.2, 0.14, 0.03]),
+          box("背景の帯 3", M.green, [0, 0.72, -0.24], [2.2, 0.14, 0.03]),
+        ]
+      : []),
+    sign("左のラベル", [SHOWCASE_LEFT, SHOWCASE_LABEL_Y, -0.1], input.leftLabel, 0.085),
+    ...(input.centerLabel
+      ? [sign("中央のラベル", [SHOWCASE_CENTER, SHOWCASE_LABEL_Y, -0.1], input.centerLabel, 0.085)]
+      : []),
+    ...(input.rightLabel
+      ? [sign("右のラベル", [SHOWCASE_RIGHT, SHOWCASE_LABEL_Y, -0.1], input.rightLabel, 0.085)]
+      : []),
+    // Both lights stand on the stand's centre line, because the 見本 is a
+    // comparison: a lamp closer to one half would light the two objects from
+    // different angles and show a difference the extension did not cause.
+    // Two of them because a highlight-driven extension -- clearcoat,
+    // anisotropy, sheen -- has nothing to show under flat ambient light, and
+    // a metal with a single lamp and no environment is a black shape with one
+    // dot on it.
+    lamp("正面のライト", [0, 1.1, 2.1], "#ffffff", 9, 10),
+    lamp("上のライト", [0, 1.9, 0.2], "#dbe4ff", 6, 10),
+  ];
+}
+
+/**
+ * 見本台を正面から見る位置。
+ *
+ * Framing derived from the parts would step back far enough to hold the two
+ * lamps, which stand well outside the stand and are the one thing on it
+ * nobody needs to look at.
+ */
+const SHOWCASE_PREVIEW = {
+  cameraPosition: [0.55, 1.35, 3.2] as Vec3,
+  lookAtY: 0.55,
+};
+
+/** 台の上に球を1つ。塗装とガラスの見本が共通して使う形。 */
+const showcaseBall = (
+  name: string,
+  material: string,
+  x: number,
+  diameter = 0.4,
+): SceneRecipePrimitivePart =>
+  shape(
+    C.sphere,
+    name,
+    material,
+    [x, SHOWCASE_TOP + diameter / 2, 0],
+    [diameter, diameter, diameter],
+  );
+
+const MATERIAL_CLEARCOAT: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.materialClearcoat,
+  name: "クリアコートの見本",
+  description:
+    "同じ赤いメタリック塗装を、透明な上塗りあり・なしで並べた見本台。車の塗装やピアノ塗装の作り方。",
+  category: "material",
+  projectKinds: ["world", "item"],
+  preview: SHOWCASE_PREVIEW,
+  note: "見本用のライトが2つ入っています。ワールドの照明が決まったら消してください。金属の塗装はSceneのSkyboxでIBLを有効にすると、映り込みが入って本来の見え方になります。強さはMaterialのInspectorのClearcoatで変えられます。",
+  parts: [
+    ...showcaseFrame({
+      leftLabel: "クリアコート あり",
+      rightLabel: "クリアコート なし",
+    }),
+    showcaseBall("塗装 あり", SHOWCASE("car-paint"), SHOWCASE_LEFT),
+    showcaseBall("塗装 なし", SHOWCASE_PLAIN("car-paint"), SHOWCASE_RIGHT),
+  ],
+};
+
+const MATERIAL_ANISOTROPY: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.materialAnisotropy,
+  name: "異方性の見本",
+  description:
+    "ヘアライン仕上げのステンレスボトル。金属の反射を一方向へ引き伸ばす異方性あり・なし。",
+  category: "material",
+  projectKinds: ["world", "item"],
+  preview: SHOWCASE_PREVIEW,
+  note: "異方性の向きはUVに沿います。円柱では周方向に流れるので、鍋やボトルの仕上げに合います。板に使うときはInspectorのAnisotropyのRotationで向きを合わせてください。金属なので、SceneのSkyboxでIBLを有効にすると映り込みが入って本来の見え方になります。",
+  parts: [
+    ...showcaseFrame({
+      leftLabel: "異方性 あり",
+      rightLabel: "異方性 なし",
+    }),
+    cyl("ボトル あり", SHOWCASE("brushed-metal"), [SHOWCASE_LEFT, 0.32, 0], [0.2, 0.44, 0.2]),
+    cyl("ふた あり", SHOWCASE("brushed-metal"), [SHOWCASE_LEFT, 0.57, 0], [0.14, 0.06, 0.14]),
+    cyl("ボトル なし", SHOWCASE_PLAIN("brushed-metal"), [SHOWCASE_RIGHT, 0.32, 0], [0.2, 0.44, 0.2]),
+    cyl("ふた なし", SHOWCASE_PLAIN("brushed-metal"), [SHOWCASE_RIGHT, 0.57, 0], [0.14, 0.06, 0.14]),
+  ],
+};
+
+const MATERIAL_TRANSMISSION: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.materialTransmission,
+  name: "透過の見本",
+  description:
+    "ガラスのコップ2つ。向こう側が透けて歪む透過あり・なし。窓、コップ、ショーケースに使えます。",
+  category: "material",
+  projectKinds: ["world", "item"],
+  preview: SHOWCASE_PREVIEW,
+  note: "透過は不透明(OPAQUE)のまま背景を屈折させる仕組みで、Opacityを下げる半透明とは別物です。このコップはVolumeを持たない薄い壁の設定なので、歪みは控えめです。中身が詰まったガラスにするにはVolumeのThicknessを足してください（厚みと減衰の見本）。背景の帯は屈折を見るために置いてあります。",
+  parts: [
+    ...showcaseFrame({
+      leftLabel: "透過 あり",
+      rightLabel: "透過 なし",
+      stripes: true,
+    }),
+    cyl("コップ あり", SHOWCASE("clear-glass"), [SHOWCASE_LEFT, 0.28, 0], [0.2, 0.36, 0.2]),
+    cyl("コップ なし", SHOWCASE_PLAIN("clear-glass"), [SHOWCASE_RIGHT, 0.28, 0], [0.2, 0.36, 0.2]),
+  ],
+};
+
+const MATERIAL_VOLUME: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.materialVolume,
+  name: "厚みと減衰の見本",
+  description:
+    "緑のガラス瓶2本。厚いところほど色が濃くなる減衰あり・なし。瓶、氷、宝石の中身に使えます。",
+  category: "material",
+  projectKinds: ["world", "item"],
+  preview: SHOWCASE_PREVIEW,
+  note: "色はBase ColorではなくVolumeのAttenuation ColorとAttenuation Distanceで付いています。距離を短くするほど濃くなります。",
+  parts: [
+    ...showcaseFrame({
+      leftLabel: "厚み あり",
+      rightLabel: "厚み なし",
+      stripes: true,
+    }),
+    cyl("瓶の胴 あり", SHOWCASE("bottle-glass"), [SHOWCASE_LEFT, 0.27, 0], [0.2, 0.34, 0.2]),
+    shape(C.cone, "瓶の肩 あり", SHOWCASE("bottle-glass"), [SHOWCASE_LEFT, 0.5, 0], [0.2, 0.14, 0.2]),
+    cyl("瓶の首 あり", SHOWCASE("bottle-glass"), [SHOWCASE_LEFT, 0.63, 0], [0.07, 0.14, 0.07]),
+    cyl("瓶の胴 なし", SHOWCASE_PLAIN("bottle-glass"), [SHOWCASE_RIGHT, 0.27, 0], [0.2, 0.34, 0.2]),
+    shape(C.cone, "瓶の肩 なし", SHOWCASE_PLAIN("bottle-glass"), [SHOWCASE_RIGHT, 0.5, 0], [0.2, 0.14, 0.2]),
+    cyl("瓶の首 なし", SHOWCASE_PLAIN("bottle-glass"), [SHOWCASE_RIGHT, 0.63, 0], [0.07, 0.14, 0.07]),
+  ],
+};
+
+const MATERIAL_DISPERSION: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.materialDispersion,
+  name: "分散の見本",
+  description:
+    "台座に載せた水晶球2つ。透過した光が色に分かれる分散あり・なし。宝石やプリズムに使えます。",
+  category: "material",
+  projectKinds: ["world", "item"],
+  preview: SHOWCASE_PREVIEW,
+  note: "分散はTransmissionとVolumeが揃っているときだけ効きます。どちらかを外すと値が残っていても見た目に出ません。負荷は透過と同じで、球が画面を覆うほど重くなります。",
+  parts: [
+    ...showcaseFrame({
+      leftLabel: "分散 あり",
+      rightLabel: "分散 なし",
+      stripes: true,
+    }),
+    cyl("台座 あり", M.charcoal, [SHOWCASE_LEFT, 0.125, 0], [0.2, 0.05, 0.2]),
+    cyl("台座 なし", M.charcoal, [SHOWCASE_RIGHT, 0.125, 0], [0.2, 0.05, 0.2]),
+    shape(C.sphere, "水晶 あり", SHOWCASE("crystal"), [SHOWCASE_LEFT, 0.39, 0], [0.48, 0.48, 0.48]),
+    shape(C.sphere, "水晶 なし", SHOWCASE_PLAIN("crystal"), [SHOWCASE_RIGHT, 0.39, 0], [0.48, 0.48, 0.48]),
+  ],
+};
+
+const MATERIAL_IRIDESCENCE: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.materialIridescence,
+  name: "虹色（薄膜）の見本",
+  description:
+    "玉虫塗装の球2つと、シャボン玉。薄い膜が見る角度で色を変える表現の、あり・なし。",
+  category: "material",
+  projectKinds: ["world", "item"],
+  preview: SHOWCASE_PREVIEW,
+  note: "薄膜の厚み(nm)で色が決まります。範囲を広げると色が面上を流れ、狭めると一色に寄ります。色が付くのは反射の側なので、丸い面と強いライトほど分かりやすくなります。透けるもの(シャボン玉)にも、透けないもの(玉虫塗装)にも付けられます。",
+  parts: [
+    ...showcaseFrame({
+      leftLabel: "虹色 あり",
+      centerLabel: "シャボン玉",
+      rightLabel: "虹色 なし",
+      stripes: true,
+    }),
+    // A curved opaque surface, because iridescence colours the specular
+    // reflection: on a flat panel there is one highlight to tint, on a sphere
+    // the whole sweep from front to rim shifts through the film's colours.
+    showcaseBall("玉虫塗装 あり", SHOWCASE("beetle-paint"), SHOWCASE_LEFT, 0.42),
+    showcaseBall("玉虫塗装 なし", SHOWCASE_PLAIN("beetle-paint"), SHOWCASE_RIGHT, 0.42),
+    shape(C.sphere, "シャボン玉", SHOWCASE("soap-bubble"), [SHOWCASE_CENTER, 0.48, 0], [0.4, 0.4, 0.4]),
+  ],
+};
+
+const MATERIAL_SHEEN: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.materialSheen,
+  name: "布の光沢の見本",
+  description:
+    "ベルベットのクッション2つ。縁だけがふわっと明るくなるSheenあり・なし。布、絨毯、カーテンに使えます。",
+  category: "material",
+  projectKinds: ["world", "item"],
+  preview: SHOWCASE_PREVIEW,
+  note: "Sheenは輪郭側に光沢を足します。Roughnessを下げると布に見えなくなるので、0.8前後のざらついた面と組み合わせてください。",
+  parts: [
+    ...showcaseFrame({
+      leftLabel: "Sheen あり",
+      rightLabel: "Sheen なし",
+    }),
+    box("クッション あり", SHOWCASE("velvet"), [SHOWCASE_LEFT, 0.18, 0], [0.46, 0.16, 0.36]),
+    box("クッション なし", SHOWCASE_PLAIN("velvet"), [SHOWCASE_RIGHT, 0.18, 0], [0.46, 0.16, 0.36]),
+  ],
+};
+
+const MATERIAL_SPECULAR: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.materialSpecular,
+  name: "スペキュラーの見本",
+  description:
+    "黒いレンズ鏡筒2つと、金コーティングの球。金属にせずに映り込みの強さと色を変える表現。",
+  category: "material",
+  projectKinds: ["world", "item"],
+  preview: SHOWCASE_PREVIEW,
+  note: "金属でない面も既定で4%ほど反射します。暗い小物が黒く沈まないのはこの反射のためで、Specularを下げると本当のマットになります。色を付けると、金属にせずに暖かい映り込みが作れます。",
+  parts: [
+    ...showcaseFrame({
+      leftLabel: "Specular 0.08",
+      centerLabel: "色付き",
+      rightLabel: "Specular 1.0",
+    }),
+    // Round, not boxes. A flat face reflects a point light only when the
+    // mirror direction happens to line up, so two black boxes show no
+    // highlight at all and the pair reads as identical. A barrel always
+    // catches a band somewhere along it.
+    cyl("レンズ鏡筒 あり", SHOWCASE("matte-coat"), [SHOWCASE_LEFT, 0.29, 0], [0.26, 0.38, 0.26]),
+    cyl("レンズ鏡筒 なし", SHOWCASE_PLAIN("matte-coat"), [SHOWCASE_RIGHT, 0.29, 0], [0.26, 0.38, 0.26]),
+    showcaseBall("金コーティングの球", SHOWCASE("gold-coat"), SHOWCASE_CENTER, 0.28),
+  ],
+};
+
+const MATERIAL_EMISSIVE_STRENGTH: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.materialEmissiveStrength,
+  name: "発光の強さの見本",
+  description:
+    "同じ色のネオン管2本。発光の強さだけが違います。看板、標識、装飾のライン照明に使えます。",
+  category: "material",
+  projectKinds: ["world", "item"],
+  preview: SHOWCASE_PREVIEW,
+  note: "glTFのEmissiveは1が上限なので、それより明るくするにはEmissive Strengthを使います。Bloomが拾うかどうかもこの値で決まります。管自体は周りを照らさないので、明かりが要る場所にはLightも置いてください。",
+  parts: [
+    ...showcaseFrame({
+      leftLabel: "強度 8",
+      rightLabel: "強度 1（既定）",
+    }),
+    cyl("ネオン管 あり", SHOWCASE("neon-tube"), [SHOWCASE_LEFT, 0.35, 0], [0.05, 0.5, 0.05]),
+    cyl("ネオン管 なし", SHOWCASE_PLAIN("neon-tube"), [SHOWCASE_RIGHT, 0.35, 0], [0.05, 0.5, 0.05]),
+  ],
+};
+
+const MATERIAL_IOR: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.materialIor,
+  name: "屈折率の見本",
+  description:
+    "同じ形のガラス球3つ。屈折率だけが違います。水、窓ガラス、宝石の描き分けに使えます。",
+  category: "material",
+  projectKinds: ["world", "item"],
+  preview: SHOWCASE_PREVIEW,
+  note: "屈折率は物質ごとにほぼ決まっています。水1.33、ガラス1.5、ダイヤモンド2.42。迷ったら1.5のままで構いません。",
+  parts: [
+    ...showcaseFrame({
+      leftLabel: "水 1.33",
+      centerLabel: "ガラス 1.5",
+      rightLabel: "ダイヤ 2.42",
+      stripes: true,
+    }),
+    showcaseBall("球 水", SHOWCASE("water-ior"), SHOWCASE_LEFT, 0.38),
+    showcaseBall("球 ガラス", SHOWCASE("glass-ior"), SHOWCASE_CENTER, 0.38),
+    showcaseBall("球 ダイヤモンド", SHOWCASE("diamond-ior"), SHOWCASE_RIGHT, 0.38),
+  ],
+};
+
+const MATERIAL_UNLIT: SceneRecipe = {
+  id: SCENE_RECIPE_IDS.materialUnlit,
+  name: "アンリットの見本",
+  description:
+    "同じ色の板2枚。片方はライティングを受けません。案内板、UI、遠景の書き割りに使えます。",
+  category: "material",
+  projectKinds: ["world", "item"],
+  preview: SHOWCASE_PREVIEW,
+  note: "Unlitはシェーディング自体を置き換えるので、ほかのMaterial拡張と併用できません。影も陰影も付かない代わりに一番軽い描き方です。",
+  parts: [
+    ...showcaseFrame({
+      leftLabel: "Unlit",
+      rightLabel: "ライティングあり",
+    }),
+    // Turned away from the camera on purpose. Face-on, a flat panel under
+    // even light and an unlit panel are nearly the same grey; at an angle the
+    // lit one shades from face to edge and the unlit one does not shade at
+    // all, which is the whole of what the extension does.
+    box("看板 Unlit", SHOWCASE("unlit-sign"), [SHOWCASE_LEFT, 0.32, 0], [0.56, 0.44, 0.08], [0, 0.5, 0]),
+    box("看板 ライティングあり", SHOWCASE_PLAIN("unlit-sign"), [SHOWCASE_RIGHT, 0.32, 0], [0.56, 0.44, 0.08], [0, 0.5, 0]),
+  ],
+};
+
 export const SCENE_RECIPES: readonly SceneRecipe[] = [
   CAMPFIRE,
   TORCH,
@@ -2334,6 +2686,17 @@ export const SCENE_RECIPES: readonly SceneRecipe[] = [
   SIGN_TEXT_BUTTONS,
   AMBIENT_SPEAKER,
   QUALITY_SWITCH,
+  MATERIAL_CLEARCOAT,
+  MATERIAL_ANISOTROPY,
+  MATERIAL_TRANSMISSION,
+  MATERIAL_VOLUME,
+  MATERIAL_DISPERSION,
+  MATERIAL_IRIDESCENCE,
+  MATERIAL_SHEEN,
+  MATERIAL_SPECULAR,
+  MATERIAL_EMISSIVE_STRENGTH,
+  MATERIAL_IOR,
+  MATERIAL_UNLIT,
 ];
 
 export function getSceneRecipe(recipeId: string): SceneRecipe | undefined {

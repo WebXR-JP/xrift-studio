@@ -118,6 +118,13 @@ import {
   getGlowMaterialPreset,
 } from "./glow-material-catalog";
 import {
+  MATERIAL_SHOWCASE_DEFINITIONS,
+  getMaterialShowcaseAsset,
+  getMaterialShowcaseDefinition,
+  materialShowcaseAssetId,
+  materialShowcaseBaselineAssetId,
+} from "./material-showcase-catalog";
+import {
   SCENE_RECIPE_CATEGORY_LABELS,
   getSceneRecipesForProjectKind,
 } from "./scene-recipe-catalog";
@@ -248,6 +255,7 @@ import {
   TEXTURE_WRAP_MODES,
   type AssetManifest,
   type InteractivityAsset,
+  type MaterialAsset,
   type MaterialAssetPatch,
   type MaterialProperties,
   type MaterialTextureInfo,
@@ -2280,6 +2288,20 @@ function listMaterialPresets(
         description: preset.description,
         tint: preset.tint,
       })),
+      // One Material per glTF material extension, each a surface somebody
+      // actually builds. `comparisonMaterialAssetId` is the same Material
+      // without the extension, which is what makes the effect readable next
+      // to it; `sceneRecipeId` places both on a lit stand in one call.
+      gltf: MATERIAL_SHOWCASE_DEFINITIONS.map((definition) => ({
+        id: definition.key,
+        label: definition.name,
+        extension: definition.extensionLabel,
+        materialAssetId: materialShowcaseAssetId(definition.key),
+        comparisonMaterialAssetId: definition.baselineName
+          ? materialShowcaseBaselineAssetId(definition.key)
+          : undefined,
+      })),
+      gltfShowcasesIn: "list_scene_recipes",
       // Terrain ground surfaces are their own catalog because they are chosen
       // with a Terrain shape rather than on their own.
       terrainSurfacesIn: "list_terrain_presets",
@@ -2288,20 +2310,20 @@ function listMaterialPresets(
   );
 }
 
-const MATERIAL_PRESET_KINDS = ["sky", "water", "glow"] as const;
+const MATERIAL_PRESET_KINDS = ["sky", "water", "glow", "gltf"] as const;
 
-function createMaterialFromPreset(
-  context: XriftMcpEditorContext,
-  argumentsValue: Record<string, unknown>,
-): XriftMcpEditorToolOutcome {
-  assertWritableContext(context, argumentsValue);
-  const kind = requiredEnum(argumentsValue.kind, "kind", MATERIAL_PRESET_KINDS);
-  const presetId = requiredString(argumentsValue.presetId, "presetId");
-
+/**
+ * The preset kinds that are a finished Material rather than a shader with
+ * parameters.
+ *
+ * Glow and glTF differ only in which catalog the Asset comes from, so the
+ * installation below reads one resolved Asset instead of branching twice.
+ */
+function resolvePrebuiltPresetMaterial(
+  kind: "glow" | "gltf",
+  presetId: string,
+): { asset: MaterialAsset; label: string } {
   if (kind === "glow") {
-    if (argumentsValue.parameters !== undefined) {
-      invalidArgument("parameters", "omitted for a glow preset");
-    }
     const preset = getGlowMaterialPreset(presetId);
     if (!preset) {
       throw new XriftMcpEditorToolError(
@@ -2313,7 +2335,39 @@ function createMaterialFromPreset(
         },
       );
     }
-    const asset = createGlowMaterialAsset(preset);
+    return { asset: createGlowMaterialAsset(preset), label: preset.label };
+  }
+  const definition = getMaterialShowcaseDefinition(presetId);
+  const asset = definition
+    ? getMaterialShowcaseAsset(materialShowcaseAssetId(definition.key))
+    : undefined;
+  if (!definition || !asset) {
+    throw new XriftMcpEditorToolError(
+      "MATERIAL_PRESET_NOT_FOUND",
+      "指定されたglTF Material presetが見つかりません",
+      {
+        presetId,
+        presetIds: MATERIAL_SHOWCASE_DEFINITIONS.map((entry) => entry.key),
+      },
+    );
+  }
+  return { asset, label: definition.name };
+}
+
+function createMaterialFromPreset(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const kind = requiredEnum(argumentsValue.kind, "kind", MATERIAL_PRESET_KINDS);
+  const presetId = requiredString(argumentsValue.presetId, "presetId");
+
+  if (kind === "glow" || kind === "gltf") {
+    if (argumentsValue.parameters !== undefined) {
+      invalidArgument("parameters", `omitted for a ${kind} preset`);
+    }
+    const kindLabel = kind === "glow" ? "glow" : "glTF拡張";
+    const { asset, label } = resolvePrebuiltPresetMaterial(kind, presetId);
     const existing = context.bundle.assets.assets[asset.id];
     if (existing?.kind === "material") {
       return unchanged(
@@ -2327,7 +2381,7 @@ function createMaterialFromPreset(
           materialAssetId: asset.id,
           alreadyInstalled: true,
         },
-        `glow「${preset.label}」はすでにProjectにあります`,
+        `${kindLabel}「${label}」はすでにProjectにあります`,
       );
     }
     const assets = {
@@ -2350,7 +2404,7 @@ function createMaterialFromPreset(
         materialAssetId: asset.id,
         alreadyInstalled: false,
       },
-      activity: `AIがglow Material「${preset.label}」を追加しました`,
+      activity: `AIが${kindLabel} Material「${label}」を追加しました`,
     };
   }
 

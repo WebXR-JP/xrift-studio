@@ -1,6 +1,8 @@
 import { BUILTIN_RECIPE_AUDIO, getBuiltinRecipeAudio } from "./builtin-recipe-audio";
 import { getBuiltinRecipeModel } from "./builtin-recipe-models";
 import { getBuiltinPrimitiveCreation } from "./creation-catalog";
+import { getMaterialShowcaseAsset } from "./material-showcase-catalog";
+import { BUILTIN_MATERIAL_ASSETS } from "./prototype-project";
 import {
   collectXriftInteractionActions,
   collectXriftInteractionPrograms,
@@ -83,6 +85,15 @@ export function runSceneRecipeCatalogFixtureAssertions(): void {
         assert(
           Boolean(getBuiltinPrimitiveCreation(part.creationId)),
           `${recipe.id} references an unknown primitive ${part.creationId}`,
+        );
+        // `instantiateSceneRecipe` returns null when a part's Material cannot
+        // be resolved, so a mistyped id is not a wrong colour -- it is a set
+        // that silently refuses to place.
+        assert(
+          BUILTIN_MATERIAL_ASSETS.some(
+            (material) => material.id === part.materialAssetId,
+          ) || Boolean(getMaterialShowcaseAsset(part.materialAssetId)),
+          `${recipe.id} references an unknown Material ${part.materialAssetId}`,
         );
       }
       if (part.kind === "model") {

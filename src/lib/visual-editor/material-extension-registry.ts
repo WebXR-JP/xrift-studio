@@ -157,6 +157,21 @@ export const LIT_MATERIAL_EXTENSION_NAMES = MATERIAL_EXTENSION_NAMES.filter(
   (name) => MATERIAL_EXTENSION_DESCRIPTORS[name].exclusive !== true,
 );
 
+/**
+ * Extensions three can only express through `MeshPhysicalMaterial`.
+ *
+ * Emissive strength is the one lit extension that is not here: it lands on
+ * `emissiveIntensity`, which `MeshStandardMaterial` already has, so a glowing
+ * Material does not have to pay for the physical shader. Every surface that
+ * renders a Material — the viewport, the Asset preview, the recipe cards and
+ * the compiler — picks its shading model from this one list, so a Material
+ * cannot look physical in one of them and flat in another.
+ */
+export const PHYSICAL_MATERIAL_EXTENSION_NAMES =
+  LIT_MATERIAL_EXTENSION_NAMES.filter(
+    (name) => name !== "KHR_materials_emissive_strength",
+  );
+
 export function isMaterialExtensionName(
   value: string,
 ): value is MaterialExtensionName {

@@ -5,16 +5,22 @@ import { XriftScriptParticleEmitter } from "../../../packages/xrift-studio-runti
 import { XriftTextPanel } from "../../../packages/xrift-studio-runtime/src/script/text-panel";
 import type { XriftTextPanelConfig } from "../../../packages/xrift-studio-runtime/src/text-panel-layout";
 import {
-  BUILTIN_ASSET_IDS,
   BUILTIN_MATERIAL_ASSETS,
   getBuiltinPrimitiveCreation,
   getBuiltinRecipeModel,
+  getMaterialShowcaseAsset,
   getParticleAuthoringPreset,
   normalizeParticleProperties,
+  type MaterialProperties,
   type SceneRecipe,
   type SceneRecipePart,
 } from "../../lib/visual-editor";
 import { CatalogPreviewFrame } from "./CatalogPreviewFrame";
+import {
+  isUnlitMaterial,
+  physicalMaterialExtensionProps,
+  usesPhysicalMaterial,
+} from "./material-physical-props";
 
 /**
  * Builds the card from the recipe's own parts.
@@ -83,10 +89,6 @@ function RecipePartVisual({ part }: { part: SceneRecipePart }) {
   }
 
   if (part.kind === "primitive") {
-    const color = builtinMaterialColor(part.materialAssetId);
-    // The glow Material is emissive, and a lamp drawn as a grey ball would
-    // misrepresent the one thing the set is for.
-    const emissive = part.materialAssetId === BUILTIN_ASSET_IDS.material.glow;
     return (
       <mesh
         position={[...part.position]}
@@ -94,13 +96,7 @@ function RecipePartVisual({ part }: { part: SceneRecipePart }) {
         scale={[...part.scale]}
       >
         <PrimitiveGeometry creationId={part.creationId} />
-        <meshStandardMaterial
-          color={color}
-          emissive={emissive ? color : "#000000"}
-          emissiveIntensity={emissive ? 2.4 : 0}
-          metalness={0}
-          roughness={0.9}
-        />
+        <RecipePrimitiveMaterial materialAssetId={part.materialAssetId} />
       </mesh>
     );
   }
@@ -277,15 +273,64 @@ function recipeFraming(recipe: SceneRecipe): {
 }
 
 /** The Material the placement will actually assign, read from one place. */
-function builtinMaterialColor(materialAssetId: string): string {
-  const material = BUILTIN_MATERIAL_ASSETS.find(
-    (candidate) => candidate.id === materialAssetId,
-  );
-  const factor = material?.properties.pbrMetallicRoughness?.baseColorFactor;
-  if (!factor) return "#94a3b8";
-  const channel = (value: number) =>
-    Math.round(Math.min(1, Math.max(0, value)) * 255)
+function recipeMaterialProperties(
+  materialAssetId: string,
+): MaterialProperties | undefined {
+  const material =
+    BUILTIN_MATERIAL_ASSETS.find(
+      (candidate) => candidate.id === materialAssetId,
+    ) ?? getMaterialShowcaseAsset(materialAssetId);
+  return material?.properties;
+}
+
+function colorFactorToHex(
+  value: readonly [number, number, number] | undefined,
+): string {
+  if (!value) return "#000000";
+  const channel = (channelValue: number) =>
+    Math.round(Math.min(1, Math.max(0, channelValue)) * 255)
       .toString(16)
       .padStart(2, "0");
-  return `#${channel(factor[0])}${channel(factor[1])}${channel(factor[2])}`;
+  return `#${channel(value[0])}${channel(value[1])}${channel(value[2])}`;
+}
+
+/**
+ * The card draws the Material rather than an approximation of it.
+ *
+ * A fixed grey `meshStandardMaterial` was enough while every set was made of
+ * stone and wood, and it is exactly wrong for a set whose whole subject is a
+ * Material: a glass 見本 card would show two identical white cylinders. The
+ * shading model comes from the same helpers the viewport uses, so a card, the
+ * Scene View and the published world agree.
+ */
+function RecipePrimitiveMaterial({
+  materialAssetId,
+}: {
+  materialAssetId: string;
+}) {
+  const properties = useMemo(
+    () => recipeMaterialProperties(materialAssetId),
+    [materialAssetId],
+  );
+  const physical = useMemo(
+    () => physicalMaterialExtensionProps(properties),
+    [properties],
+  );
+  const color = properties?.color ?? "#94a3b8";
+  if (isUnlitMaterial(properties)) {
+    return <meshBasicMaterial color={color} />;
+  }
+  const lit = {
+    color,
+    metalness: properties?.pbrMetallicRoughness.metallicFactor ?? 0,
+    roughness: properties?.pbrMetallicRoughness.roughnessFactor ?? 0.9,
+    emissive: colorFactorToHex(properties?.emissiveFactor),
+    emissiveIntensity:
+      properties?.extensions.KHR_materials_emissive_strength
+        ?.emissiveStrength ?? 1,
+  };
+  if (usesPhysicalMaterial(properties)) {
+    return <meshPhysicalMaterial {...lit} {...physical} />;
+  }
+  return <meshStandardMaterial {...lit} />;
 }

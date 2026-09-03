@@ -3765,7 +3765,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "list_scene_recipes",
-            "description": "List the ready-made 3D sets available for this project kind — campfire, torch, tree, rocks, snowfall, fountain, column, stairs, well, bench, recording studio and more — with their category, part count and the note saying what the author still has to do after placing. Each set is a subtree whose lights, particles and materials already agree with one another; building the same thing from primitives takes a dozen calls and comes out worse.",
+            "description": "List the ready-made 3D sets available for this project kind — campfire, torch, tree, rocks, snowfall, fountain, column, stairs, well, bench, recording studio, and the マテリアル見本 stands that show one glTF material extension each — with their category, part count and the note saying what the author still has to do after placing. Each set is a subtree whose lights, particles and materials already agree with one another; building the same thing from primitives takes a dozen calls and comes out worse.",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         },
         {
@@ -4068,23 +4068,23 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "list_material_presets",
-            "description": "List the Material catalogs an author picks from: sky shaders by category, water surfaces, and glow tints for emissive fixtures, each with its named parameters, ranges and defaults. create_custom_shader takes arbitrary GLSL, which is the wrong tool for \"make this look like a sky\" — writing one from scratch invents numbers this catalog already has. Terrain ground surfaces are in list_terrain_presets instead, because they are chosen together with a Terrain shape.",
+            "description": "List the Material catalogs an author picks from: sky shaders by category, water surfaces, glow tints for emissive fixtures, and one Material per glTF material extension (clearcoat, anisotropy, transmission, volume, dispersion, iridescence, sheen, specular, emissive strength, IOR, unlit) with the same Material minus the extension beside it, each with its named parameters, ranges and defaults. create_custom_shader takes arbitrary GLSL, which is the wrong tool for \"make this look like a sky\" — writing one from scratch invents numbers this catalog already has. Terrain ground surfaces are in list_terrain_presets instead, because they are chosen together with a Terrain shape.",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         },
         {
             "name": "create_material_from_preset",
-            "description": "Create one Material from a catalog preset: a sky or water shader Material with optional parameter overrides, or a glow tint. Returns the Material Asset id and the next step, because neither is finished on its own — a sky Material becomes the sky only once update_scene_settings points the skybox at it, and water is a Material assigned to a plane with set_material. Re-creating an already installed preset reports alreadyInstalled rather than duplicating it.",
+            "description": "Create one Material from a catalog preset: a sky or water shader Material with optional parameter overrides, a glow tint, or a glTF material extension Material (kind gltf) such as clearcoat car paint, brushed-metal anisotropy, transmissive glass, iridescence or dispersion. Returns the Material Asset id and the next step, because none is finished on its own — a sky Material becomes the sky only once update_scene_settings points the skybox at it, and water and gltf are Materials assigned to a mesh with set_material. A gltf preset needs something behind or beside it to read: use apply_scene_recipe with the matching 見本 set when the point is to see what the extension does, and this tool when the point is to use the surface. Re-creating an already installed preset reports alreadyInstalled rather than duplicating it.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "projectId": { "type": "string" },
                     "sceneId": { "type": "string" },
                     "expectedRevision": { "type": "integer", "minimum": 0 },
-                    "kind": { "type": "string", "enum": ["sky", "water", "glow"] },
+                    "kind": { "type": "string", "enum": ["sky", "water", "glow", "gltf"] },
                     "presetId": { "type": "string", "minLength": 1 },
                     "parameters": {
                         "type": "object",
-                        "description": "Uniform values from list_material_presets; numbers are clamped to the listed range and colours are #rrggbb. Not accepted for glow.",
+                        "description": "Uniform values from list_material_presets; numbers are clamped to the listed range and colours are #rrggbb. Not accepted for glow or gltf, which are finished Materials.",
                         "additionalProperties": { "type": ["number", "string"] }
                     }
                 },
