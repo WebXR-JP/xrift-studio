@@ -46,8 +46,8 @@ The built-in `xrift-studio` MCP server exposes:
 **Read**
 
 - `list_interactivity_operations` — every operation the palette offers, each with
-  its Japanese label and description, its sockets, and whether the Play runtime
-  executes it
+  its Japanese label and description, its sockets, which of its value inputs
+  have a type the operation fixes, and whether the Play runtime executes it
 - `list_interaction_trigger_targets` — every Entity, Component and property an
   action can write to, with kinds, ranges and enum options
 - `get_interactivity_asset` — the canonical JSON
@@ -126,6 +126,49 @@ palette without a sentence explaining it is a node no author can be expected to
 try. When a label changes, the socket hints in `InteractivityNodeCard.tsx` that
 quote it by name (「指定した秒だけ待つ」の待機ID) change with it, or the two
 tell the author to look for a node that is no longer there.
+
+### A fixed value is a socket's own literal
+
+KHR_interactivity has no constant node. A number that does not come from
+another node reaches a socket as that socket's `value`, and the socket's type
+entry is what decides whether the author is sending `3` or `(0, 1, 0)`. So
+「固定値を送る」and「型を選ぶ」are one act, and the Inspector has to offer both
+in the same place or neither is reachable.
+
+The Inspector's 値 list is therefore built from every value input the operation
+declares, unioned with whatever the node already carries — the same union the
+card and the height estimate use, so a socket drawn on the canvas is always one
+the author can type into. Reading `node.values` alone was the bug this replaced:
+`pointer/set` and `variable/set` land with no literal at all, so their `value`
+socket appeared on the card and the Inspector showed nothing, and the only ways
+to put a number there were to hand-edit the canonical JSON or to call
+`set_interactivity_value`. A socket fed by a wire is listed too, as connected,
+rather than hidden — a socket that vanishes when wired reads as a socket that
+stopped existing.
+
+Each free socket carries a type list: `bool`, `int`, `float`, `float2`,
+`float3`, `float4`. Matrices are left out because four rows of boxes typed by
+hand is not an input anyone finishes; `math/combine2x2` builds one out of
+numbers that are. Changing the type rewrites the literal to the new length,
+keeping the leading components and padding with zero, because a `float3` type
+over a one-entry value is rejected by the validator and read as zero by the
+runtime — the author would have changed the type and silently lost the number
+they had typed.
+
+Not every socket is free. `fixedValueTypes` on the operation template names the
+ones the operation decides: a delay in seconds, a loop count, an animation
+index, a bezier handle, the operands of a logical operation. Those show their
+type and do not offer to change it, and `set_interactivity_value` refuses
+another signature for them with `SIGNATURE_NOT_ALLOWED`, so the Inspector and
+MCP agree on what is legal. `list_interactivity_operations` returns the map, so
+a client can tell the fixed sockets from the ones it may send a vector into
+without first being refused. A socket left out of the map is genuinely free:
+`pointer/set` writes whatever the pointer holds, a variable takes its own type,
+and「AとBを足す」adds two numbers or two vectors.
+
+Retyping is refused for a socket fed by a wire as well. Such a socket takes its
+type from the node upstream, and writing one here would describe a value this
+node never reads.
 
 ### Refusing what the canvas cannot draw
 

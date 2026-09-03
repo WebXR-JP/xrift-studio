@@ -196,6 +196,7 @@ import {
   getXriftInteractionProperty,
   cloneKhrInteractivityExtension,
   configureInteractivityMaterialPointer,
+  fixedInteractivitySocketSignature,
   getInteractivityOperationTemplate,
   isInteractivityTriggerActionOp,
   parseKhrInteractivityExtension,
@@ -5490,6 +5491,11 @@ function listInteractivityOperations(
           flowOutputs: template.flowOutputs,
           valueInputs: template.valueInputs,
           valueOutputs: template.valueOutputs,
+          // Which of those inputs `set_interactivity_value` will only take one
+          // signature for. Without it a client learns the rule by being
+          // refused, and cannot tell the fixed sockets from the ones it may
+          // send a vector into.
+          fixedValueTypes: template.fixedValueTypes ?? {},
           runtimeSupport: runtime.support,
           runtimeNote: runtime.note,
         };
@@ -5971,6 +5977,18 @@ function setInteractivityValue(
     });
   }
   assertInteractivitySocket(graph, nodeIndex, "valueInputs", socket);
+  // The Inspector shows the type as fixed and refuses to change it for these
+  // sockets, because a delay that is not seconds or a loop count that is not an
+  // int only produces a node Play cannot run. An AI writing the same graph has
+  // to meet the same rule, or the two surfaces disagree about what is legal.
+  const fixed = fixedInteractivitySocketSignature(graph, nodeIndex, socket);
+  if (fixed !== undefined && fixed !== signature) {
+    throw new XriftMcpEditorToolError(
+      "SIGNATURE_NOT_ALLOWED",
+      `${socket} socketの型は${fixed}に固定されています`,
+      { nodeIndex, socket, signature, requiredSignature: fixed },
+    );
+  }
   graph.types ??= [];
   let type = graph.types.findIndex((candidate) => candidate.signature === signature);
   if (type < 0) {
