@@ -139,8 +139,159 @@ export type InteractivityOperationTemplate = {
   flowOutputs: string[];
   valueInputs: string[];
   valueOutputs: string[];
+  /**
+   * Sockets whose type the operation fixes.
+   *
+   * A socket left out of this is one the author may retype from the Inspector:
+   * `pointer/set` writes whatever the pointer holds, and「AとBを足す」adds two
+   * numbers or two vectors. A socket named here is one where a different type
+   * would only produce a node the runtime rejects — a loop count that is not an
+   * int, a delay that is not seconds — so the Inspector shows the type and does
+   * not offer to change it.
+   */
+  fixedValueTypes?: Record<string, InteractivityLiteralSignature>;
   createNode?: (typeIndices: Record<string, number>) => Omit<KhrInteractivityNode, "declaration">;
 };
+
+/**
+ * Type signatures an author can put on a value socket from the Inspector.
+ *
+ * KHR_interactivity has no constant node: a fixed number reaches a socket as
+ * that socket's own literal. So "send the number 3" and "send the vector
+ * (0, 1, 0)" are the same act with a different signature, and the signature has
+ * to be something the author can choose. `float2x2` and up are left out on
+ * purpose — a matrix typed by hand into four rows of boxes is not an input
+ * anyone finishes, and `math/combine2x2` builds one from numbers that are.
+ */
+export const INTERACTIVITY_LITERAL_SIGNATURES = [
+  "bool",
+  "int",
+  "float",
+  "float2",
+  "float3",
+  "float4",
+] as const;
+
+export type InteractivityLiteralSignature =
+  (typeof INTERACTIVITY_LITERAL_SIGNATURES)[number];
+
+/** Names the author reads, rather than the spec's signature strings. */
+export const INTERACTIVITY_LITERAL_SIGNATURE_LABELS: Readonly<
+  Record<InteractivityLiteralSignature, string>
+> = {
+  bool: "true / false",
+  int: "整数",
+  float: "小数",
+  float2: "2つの数 (X, Y)",
+  float3: "3つの数 (X, Y, Z)",
+  float4: "4つの数 (X, Y, Z, W)",
+};
+
+/** Axis names for each component, so a vector reads as X/Y/Z/W. */
+export const INTERACTIVITY_LITERAL_AXES = ["X", "Y", "Z", "W"] as const;
+
+export function isInteractivityLiteralSignature(
+  signature: string | undefined,
+): signature is InteractivityLiteralSignature {
+  return (INTERACTIVITY_LITERAL_SIGNATURES as readonly string[]).includes(
+    signature ?? "",
+  );
+}
+
+/** How many JSON entries a literal of this signature carries. */
+export function interactivityLiteralLength(signature: string | undefined): number {
+  switch (signature) {
+    case "float2":
+      return 2;
+    case "float3":
+      return 3;
+    case "float4":
+      return 4;
+    default:
+      return 1;
+  }
+}
+
+export function defaultInteractivityLiteralValue(
+  signature: string | undefined,
+): KhrInteractivityJsonValue[] {
+  if (signature === "bool") return [false];
+  return Array.from({ length: interactivityLiteralLength(signature) }, () => 0);
+}
+
+/**
+ * Rewrites a literal so it still matches the socket after a type change.
+ *
+ * Switching a socket from 小数 to「3つの数」without this leaves a one-entry
+ * value under a `float3` type, which the validator rejects and the runtime
+ * reads as zero — the author would have changed the type and silently lost the
+ * number they had typed. Widening keeps what was there and pads with zero;
+ * narrowing keeps the leading components.
+ */
+export function coerceInteractivityLiteralValue(
+  value: KhrInteractivityJsonValue[] | undefined,
+  signature: string | undefined,
+): KhrInteractivityJsonValue[] {
+  if (signature === "bool") {
+    const first = value?.[0];
+    return [typeof first === "boolean" ? first : typeof first === "number" && first !== 0];
+  }
+  const round = signature === "int";
+  return Array.from({ length: interactivityLiteralLength(signature) }, (_unused, index) => {
+    const entry = value?.[index];
+    const numeric =
+      typeof entry === "number" && Number.isFinite(entry)
+        ? entry
+        : entry === true
+          ? 1
+          : 0;
+    return round ? Math.round(numeric) : numeric;
+  });
+}
+
+/**
+ * Every value socket the Inspector should offer an editor for.
+ *
+ * The card already draws the template's sockets whether or not the node
+ * carries a literal for them, so reading `node.values` alone left sockets like
+ * `pointer/set`'s `value` visible on the canvas and uneditable in the
+ * Inspector: the only way to put a number there was to hand-edit the JSON or
+ * to ask the MCP tool. The union is the same one the card and the height
+ * estimate use, so what is drawn and what is editable cannot drift apart.
+ */
+export function interactivityValueInputSockets(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+): string[] {
+  const node = graph.nodes?.[nodeIndex];
+  if (!node) return [];
+  const op = graph.declarations?.[node.declaration]?.op;
+  const template = op ? getInteractivityOperationTemplate(op) : undefined;
+  return Array.from(
+    new Set([...(template?.valueInputs ?? []), ...Object.keys(node.values ?? {})]),
+  );
+}
+
+/**
+ * The signature the spec fixes for a socket, or undefined when it is free.
+ *
+ * A delay counted in seconds is a float and a loop count is an int, whatever
+ * an author picks; offering a type list there is an invitation to write a
+ * graph the runtime cannot run. `pointer/set`'s value, a variable's value and
+ * the operands of the maths nodes are genuinely free, and those are the ones
+ * that needed the list in the first place.
+ */
+export function fixedInteractivitySocketSignature(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+  socket: string,
+): InteractivityLiteralSignature | undefined {
+  const node = graph.nodes?.[nodeIndex];
+  if (!node) return undefined;
+  const op = graph.declarations?.[node.declaration]?.op;
+  if (!op) return undefined;
+  return getInteractivityOperationTemplate(op)?.fixedValueTypes?.[socket];
+}
 
 export type InteractivityMaterialPointerPreset = {
   id: string;
@@ -412,6 +563,12 @@ const MATH_OPERATION_TEMPLATES: InteractivityOperationTemplate[] = [
     flowOutputs: [],
     valueInputs: ["a", "b"],
     valueOutputs: ["value"],
+    // A logical operation only has an answer for true and false; the arithmetic
+    // ones add or compare vectors as readily as numbers, so their operands stay
+    // retypeable.
+    ...(entry.kind === "bool"
+      ? { fixedValueTypes: { a: "bool", b: "bool" } as const }
+      : {}),
     createNode: (types: Record<string, number>) => ({
       values: {
         a: { type: types[entry.kind], value: [entry.kind === "bool" ? false : 0] },
@@ -428,6 +585,7 @@ const MATH_OPERATION_TEMPLATES: InteractivityOperationTemplate[] = [
     flowOutputs: [],
     valueInputs: ["a"],
     valueOutputs: ["value"],
+    fixedValueTypes: { a: "bool" },
     createNode: (types) => ({ values: { a: { type: types.bool, value: [false] } } }),
   },
   {
@@ -508,6 +666,7 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     flowOutputs: ["true", "false"],
     valueInputs: ["condition"],
     valueOutputs: [],
+    fixedValueTypes: { condition: "bool" },
     // Without a declared socket the Inspector has nothing to edit and the
     // adapter has no condition to read, so a branch could only ever be
     // unevaluable. The default picks `false` explicitly rather than leaving
@@ -526,6 +685,7 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     flowOutputs: ["out", "err", "done"],
     valueInputs: ["duration"],
     valueOutputs: ["lastDelay"],
+    fixedValueTypes: { duration: "float" },
     createNode: (types) => ({
       values: { duration: { type: types.float, value: [1] } },
     }),
@@ -540,6 +700,12 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     flowOutputs: ["out", "err", "done"],
     valueInputs: ["animation", "startTime", "endTime", "speed"],
     valueOutputs: [],
+    fixedValueTypes: {
+      animation: "int",
+      startTime: "float",
+      endTime: "float",
+      speed: "float",
+    },
     createNode: (types) => ({
       values: {
         animation: { type: types.int },
@@ -558,6 +724,7 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     flowOutputs: ["out", "err"],
     valueInputs: ["animation"],
     valueOutputs: [],
+    fixedValueTypes: { animation: "int" },
     createNode: (types) => ({ values: { animation: { type: types.int } } }),
   },
   {
@@ -610,6 +777,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     flowOutputs: ["out", "err", "done"],
     valueInputs: ["value", "duration", "p1", "p2"],
     valueOutputs: [],
+    // `value` follows the pointer, so it stays retypeable; the seconds and the
+    // two bezier handles are the same shape whatever is being moved.
+    fixedValueTypes: { duration: "float", p1: "float2", p2: "float2" },
     createNode: (types) => ({
       values: { duration: { type: types.float, value: [1] } },
     }),
@@ -732,6 +902,7 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     flowOutputs: ["out"],
     valueInputs: ["n"],
     valueOutputs: ["currentCount"],
+    fixedValueTypes: { n: "int" },
     createNode: (types) => ({ values: { n: { type: types.int, value: [1] } } }),
   },
   {
@@ -744,6 +915,7 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     flowOutputs: ["loopBody", "completed"],
     valueInputs: ["startIndex", "endIndex"],
     valueOutputs: ["index"],
+    fixedValueTypes: { startIndex: "int", endIndex: "int" },
     createNode: (types) => ({
       values: {
         startIndex: { type: types.int, value: [0] },
@@ -761,6 +933,7 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     flowOutputs: ["loopBody", "completed"],
     valueInputs: ["condition"],
     valueOutputs: [],
+    fixedValueTypes: { condition: "bool" },
     createNode: (types) => ({
       values: { condition: { type: types.bool, value: [false] } },
     }),
@@ -797,6 +970,7 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     flowOutputs: ["out", "err"],
     valueInputs: ["duration"],
     valueOutputs: ["lastRemainingTime"],
+    fixedValueTypes: { duration: "float" },
     createNode: (types) => ({
       values: { duration: { type: types.float, value: [1] } },
     }),
@@ -811,6 +985,7 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     flowOutputs: ["out"],
     valueInputs: ["delay"],
     valueOutputs: [],
+    fixedValueTypes: { delay: "int" },
     createNode: (types) => ({ values: { delay: { type: types.int, value: [0] } } }),
   },
   {
@@ -823,6 +998,7 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     flowOutputs: ["0", "1", "default"],
     valueInputs: ["selection"],
     valueOutputs: [],
+    fixedValueTypes: { selection: "int" },
     createNode: (types) => ({
       values: { selection: { type: types.int, value: [0] } },
     }),
@@ -837,6 +1013,7 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     flowOutputs: ["out", "err", "done"],
     valueInputs: ["animation", "stopTime"],
     valueOutputs: [],
+    fixedValueTypes: { animation: "int", stopTime: "float" },
     createNode: (types) => ({
       values: {
         animation: { type: types.int },
@@ -854,6 +1031,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     flowOutputs: ["out", "err", "done"],
     valueInputs: ["value", "duration"],
     valueOutputs: [],
+    // The target follows the variable's own type, so it stays retypeable.
+    fixedValueTypes: { duration: "float" },
     createNode: (types) => ({
       values: {
         value: { type: types.float, value: [1] },
@@ -1013,19 +1192,14 @@ export function configureInteractivityMaterialPointer(
       : {
           value:
             node.values?.value?.node === undefined
-              ? { type: valueType, value: defaultInteractivityValue(preset.signature) }
+              ? {
+                  type: valueType,
+                  value: defaultInteractivityLiteralValue(preset.signature),
+                }
               : { ...node.values.value, type: valueType },
         }),
   };
   return true;
-}
-
-function defaultInteractivityValue(
-  signature: InteractivityMaterialPointerPreset["signature"],
-): KhrInteractivityJsonValue[] {
-  if (signature === "bool") return [false];
-  const length = signature === "float2" ? 2 : signature === "float3" ? 3 : signature === "float4" ? 4 : 1;
-  return Array.from({ length }, () => 0);
 }
 
 function cloneJson<T>(value: T): T {

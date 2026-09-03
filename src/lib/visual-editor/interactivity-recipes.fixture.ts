@@ -7,6 +7,9 @@ import {
   getInteractivityRuntimeSupport,
   getKhrInteractivityOnStartAnimationCues,
   INTERACTIVITY_NODE_CARD_WIDTH,
+  interactivityValueInputSockets,
+  isInteractivityLiteralSignature,
+  KHR_INTERACTIVITY_OPERATION_TEMPLATES,
   KHR_INTERACTIVITY_MATERIAL_POINTER_PRESETS,
   validateKhrInteractivityExtension,
   readInteractivityNodePosition,
@@ -29,6 +32,7 @@ import {
   INTERACTIVITY_RECIPE_COLOR,
   INTERACTIVITY_RECIPES,
   RUNNABLE_INTERACTIVITY_RECIPES,
+  setInteractivityLiteralSignature,
   setInteractivityLiteralValue,
 } from "./interactivity-recipes";
 import { removeNodesAndReindex } from "../../components/visual-editor/interactivity-graph-flow";
@@ -200,6 +204,75 @@ export function runInteractivityRecipeFixtureAssertions(): void {
   assert(
     reuseGraph.nodes?.[delayIndex]?.values?.notASocket === undefined,
     "A literal write invented a socket the operation does not have",
+  );
+
+  // A socket the operation declares but no template seeds still takes a fixed
+  // value. `pointer/set` is the case the author meets first: the card draws a
+  // `value` socket, so the Inspector has to be able to put a number in it.
+  const setIndex = appendInteractivityOperation(reuseGraph, "pointer/set", { x: 0, y: 0 });
+  assert(
+    interactivityValueInputSockets(reuseGraph, setIndex).includes("value"),
+    "pointer/set stopped offering the socket its literal goes into",
+  );
+  assert(
+    reuseGraph.nodes?.[setIndex]?.values?.value === undefined,
+    "pointer/set arrived with a literal, so the unseeded case is no longer covered",
+  );
+  setInteractivityLiteralValue(reuseGraph, setIndex, "value", [0.25]);
+  const authored = reuseGraph.nodes?.[setIndex]?.values ?? {};
+  assert(
+    authored.value?.value?.[0] === 0.25,
+    "A fixed number could not be written into an unseeded socket",
+  );
+
+  // Retyping is what makes a vector reachable at all: without it every literal
+  // is a single number, whatever the pointer on the other end expects.
+  assert(
+    setInteractivityLiteralSignature(reuseGraph, setIndex, "value", "float4"),
+    "A free socket refused to change type",
+  );
+  const retyped = (reuseGraph.nodes?.[setIndex]?.values ?? {}).value;
+  assert(
+    reuseGraph.types?.[retyped?.type ?? -1]?.signature === "float4",
+    "Retyping a socket did not point it at a float4 type",
+  );
+  assert(
+    retyped?.value?.length === 4 && retyped.value[0] === 0.25 && retyped.value[3] === 0,
+    "Retyping lost the number the author had already entered, or left a length the validator rejects",
+  );
+  assert(
+    !setInteractivityLiteralSignature(reuseGraph, delayIndex, "duration", "float4"),
+    "A socket the operation fixes was allowed to change type",
+  );
+  assert(
+    reuseGraph.types?.filter((type) => type.signature === "float4").length === 1,
+    "Retyping added a second float4 row instead of reusing the one it made",
+  );
+
+  // Every fixed signature has to be one the editor can actually draw, and has
+  // to name a socket the operation declares - otherwise the Inspector shows a
+  // type list for a socket the template says is fixed, or hides one it does not.
+  for (const template of KHR_INTERACTIVITY_OPERATION_TEMPLATES) {
+    for (const [socket, signature] of Object.entries(template.fixedValueTypes ?? {})) {
+      assert(
+        template.valueInputs.includes(socket),
+        `${template.op} fixes the type of ${socket}, which it does not declare`,
+      );
+      assert(
+        isInteractivityLiteralSignature(signature),
+        `${template.op} fixes ${socket} to ${signature}, which the Inspector cannot edit`,
+      );
+    }
+  }
+
+  const authoredErrors = validateKhrInteractivityExtension(reuse).filter(
+    (diagnostic) => diagnostic.severity === "error",
+  );
+  assert(
+    authoredErrors.length === 0,
+    `Authoring literals produced an invalid graph: ${authoredErrors
+      .map((diagnostic) => `${diagnostic.path} ${diagnostic.message}`)
+      .join(" / ")}`,
   );
 
   // Connecting twice from one flow socket replaces rather than duplicates: the

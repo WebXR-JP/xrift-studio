@@ -4373,7 +4373,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "set_interactivity_value",
-            "description": "Set a canonical inline value on a KHR_interactivity node input socket using a glTF type signature such as bool, int, float, float3, or ref.",
+            "description": "Set a canonical inline value on a KHR_interactivity node input socket using a glTF type signature such as bool, int, float, float2, float3, float4, or ref. The signature is how a fixed value gets its shape: a socket wired to nothing sends this literal, and the same socket sends a number or a vector depending on it. A socket whose type the operation fixes, such as a delay in seconds or a loop count, only accepts that signature.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

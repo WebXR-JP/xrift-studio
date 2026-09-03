@@ -10,9 +10,15 @@
 import {
   applyEasing,
   INTERACTIVITY_EASINGS,
+  INTERACTIVITY_LITERAL_AXES,
+  INTERACTIVITY_LITERAL_SIGNATURE_LABELS,
+  INTERACTIVITY_LITERAL_SIGNATURES,
+  interactivityLiteralLength,
+  isInteractivityLiteralSignature,
   linearRgbToTint,
   tintToLinearRgb,
   type InteractivityEasing,
+  type InteractivityLiteralSignature,
   type KhrInteractivityJsonValue,
 } from "../../lib/visual-editor";
 import {
@@ -35,6 +41,12 @@ export function numbersOf(value: KhrInteractivityJsonValue[] | undefined, length
  * Without this the only way to say which colour a `pointer/set` writes was to
  * hand-edit the KHR JSON, which is what made the graph editor feel like a
  * viewer rather than an editor.
+ *
+ * The type list beside the name is part of the same editor rather than a
+ * separate step: KHR_interactivity has no constant node, so a fixed value is
+ * always a socket's own literal, and「3 を送る」and「(0, 1, 0) を送る」differ
+ * only by the socket's signature. A socket whose type the operation fixes, and
+ * one already fed by a wire, show the type without offering to change it.
  */
 export function LiteralValueField({
   socket,
@@ -42,26 +54,64 @@ export function LiteralValueField({
   value,
   isColor,
   disabled,
+  connected = false,
   onChange,
+  onSignatureChange,
 }: {
   socket: string;
   signature: string | undefined;
   value: KhrInteractivityJsonValue[] | undefined;
   isColor: boolean;
   disabled: boolean;
+  /** True when a wire feeds this socket, so there is no literal to edit. */
+  connected?: boolean;
   onChange: (next: KhrInteractivityJsonValue[]) => void;
+  /** Omitted for a socket whose type the operation fixes. */
+  onSignatureChange?: (next: InteractivityLiteralSignature) => void;
 }) {
-  const length =
-    signature === "float2" ? 2 : signature === "float3" ? 3 : signature === "float4" ? 4 : 1;
+  const length = interactivityLiteralLength(signature);
   const channels = numbersOf(value, length);
   const alpha = signature === "float4" ? channels[3] : null;
 
+  const header = (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-[10px] font-medium text-slate-300">{socket}</span>
+      {onSignatureChange && !connected ? (
+        <select
+          value={isInteractivityLiteralSignature(signature) ? signature : "float"}
+          disabled={disabled}
+          onChange={(event) =>
+            onSignatureChange(event.target.value as InteractivityLiteralSignature)
+          }
+          aria-label={`${socket} の値の種類`}
+          className="h-6 rounded border border-slate-600 bg-slate-950 px-1 text-[10px] text-slate-300 disabled:opacity-45"
+        >
+          {INTERACTIVITY_LITERAL_SIGNATURES.map((entry) => (
+            <option key={entry} value={entry}>
+              {INTERACTIVITY_LITERAL_SIGNATURE_LABELS[entry]}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <code className="text-[9px] text-slate-500">{signature ?? "型未設定"}</code>
+      )}
+    </div>
+  );
+
+  if (connected) {
+    return (
+      <div className="space-y-1">
+        {header}
+        <p className="text-[10px] leading-4 text-slate-400">
+          つないだノードの値を使います。固定値に戻すには、この線を外してください。
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-1">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[10px] font-medium text-slate-300">{socket}</span>
-        <code className="text-[9px] text-slate-500">{signature ?? "型未設定"}</code>
-      </div>
+      {header}
       {signature === "bool" ? (
         <label className="flex items-center gap-2 text-[10px] text-slate-300">
           <input
@@ -112,22 +162,33 @@ export function LiteralValueField({
       ) : (
         <div className="flex gap-1">
           {channels.map((entry, index) => (
-            <ScrubNumberInput
-              key={index}
-              step={signature === "int" ? 1 : 0.1}
-              precision={signature === "int" ? 0 : undefined}
-              value={entry}
-              disabled={disabled}
-              tone="dark"
-              size="sm"
-              compact
-              ariaLabel={`${socket}${length > 1 ? ` ${index + 1}` : ""}`}
-              scrubLabel={socket}
-              onChange={(next) => {
-                const channel = signature === "int" ? Math.round(next) : next;
-                onChange(channels.map((prior, at) => (at === index ? channel : prior)));
-              }}
-            />
+            // The axis letter rather than an index: a vector whose boxes read
+            // "1 2 3" leaves the author counting to find which one is Z.
+            <label key={index} className="flex min-w-0 flex-1 items-center gap-1">
+              {length > 1 ? (
+                <span className="text-[9px] text-slate-500">
+                  {INTERACTIVITY_LITERAL_AXES[index]}
+                </span>
+              ) : null}
+              <ScrubNumberInput
+                step={signature === "int" ? 1 : 0.1}
+                precision={signature === "int" ? 0 : undefined}
+                value={entry}
+                disabled={disabled}
+                tone="dark"
+                size="sm"
+                compact
+                wrapperClassName="min-w-0 flex-1"
+                ariaLabel={`${socket}${
+                  length > 1 ? ` ${INTERACTIVITY_LITERAL_AXES[index]}` : ""
+                }`}
+                scrubLabel={socket}
+                onChange={(next) => {
+                  const channel = signature === "int" ? Math.round(next) : next;
+                  onChange(channels.map((prior, at) => (at === index ? channel : prior)));
+                }}
+              />
+            </label>
           ))}
         </div>
       )}

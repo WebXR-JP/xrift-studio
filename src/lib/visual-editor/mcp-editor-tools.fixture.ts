@@ -2811,6 +2811,35 @@ export function runXriftMcpEditorToolFixtures(): void {
   });
   current = { ...current, bundle: speedUpdated.bundle, revision: current.revision + 1 };
 
+  // The Inspector shows a fixed socket's type without offering to change it.
+  // MCP has to refuse the same change, or a graph an AI wrote could carry a
+  // playback speed shaped like a vector that the Editor can neither show nor
+  // repair.
+  let fixedSignatureCode: string | undefined;
+  try {
+    executeXriftMcpEditorTool(current, {
+      id: "fixture-interactivity-fixed-signature",
+      tool: "set_interactivity_value",
+      arguments: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        expectedRevision: current.revision,
+        assetId: interactivityAssetId,
+        nodeIndex: 1,
+        socket: "speed",
+        signature: "float4",
+        value: [1, 1, 1, 1],
+      },
+    });
+  } catch (error) {
+    fixedSignatureCode =
+      error instanceof XriftMcpEditorToolError ? error.code : undefined;
+  }
+  assert(
+    fixedSignatureCode === "SIGNATURE_NOT_ALLOWED",
+    "A socket whose type the operation fixes should refuse another signature",
+  );
+
   const graphValidation = executeXriftMcpEditorTool(current, {
     id: "fixture-interactivity-validate",
     tool: "validate_interactivity_asset",

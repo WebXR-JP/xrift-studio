@@ -201,6 +201,15 @@ Ctrl+C / Ctrl+V と同じく別のグラフへも置ける。同じグラフの�
 まま写せるが、別のグラフでは `declaration` の index も inline value の `type`
 の index も別のものを指すので、名前で持ち出して着地先で引き直す。
 
+`set_interactivity_value` は Inspector の「値」欄と同じ操作で、数値だけでなく
+`signature` も受ける。KHR_interactivity に定数ノードは無く、固定値は必ずソケット
+自身の literal なので、`3` を送るのと `(0, 1, 0)` を送るのは型の違いでしかない。
+operation が型を決めているソケット (秒数、繰り返し回数、animation の index、
+論理演算の入力) へ別の型を渡すと `SIGNATURE_NOT_ALLOWED` で拒否する。Inspector も
+同じソケットでは型を変えさせないので、どちらの surface から書いても同じ結果に
+なる。どのソケットが固定かは `list_interactivity_operations` の
+`fixedValueTypes` が返す。
+
 `configure_interactivity_trigger_action` は `set_interactivity_configuration`
 と `set_interactivity_value` で手書きできる 4 つの key を、Entity・Component・
 プロパティの実在と値の型ごと引き受ける。対象を間違えたグラフは保存でき、Play で

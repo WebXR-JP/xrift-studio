@@ -1,9 +1,12 @@
 import {
   cloneKhrInteractivityExtension,
+  coerceInteractivityLiteralValue,
   collectInteractivityRuntimeDiagnostics,
   createDefaultKhrInteractivityExtension,
   estimateInteractivityNodeHeight,
+  fixedInteractivitySocketSignature,
   getInteractivityOperationTemplate,
+  interactivityValueInputSockets,
   configureInteractivityTriggerAction,
   getXriftInteractionProperty,
   setInteractivityTriggerActionDuration,
@@ -12,6 +15,7 @@ import {
   XRIFT_INTERACTION_OPERATIONS,
   XRIFT_INTERACTION_PLAYER_ENTITY_ID,
   XRIFT_INTERACTION_SELF_ENTITY_ID,
+  type InteractivityLiteralSignature,
   type KhrInteractivityExtension,
   type KhrInteractivityGraph,
   type KhrInteractivityJsonValue,
@@ -39,6 +43,25 @@ export function ensureInteractivityTypes(
     return graph.types!.length - 1;
   };
   return { float: ensure("float"), int: ensure("int"), bool: ensure("bool") };
+}
+
+/**
+ * Index of one signature in `graph.types`, adding it when it is new.
+ *
+ * `ensureInteractivityTypes` seeds only the three every template needs, which
+ * is deliberate — a graph should not carry a `float4` entry no node uses. A
+ * socket retyped from the Inspector is the case where a fourth signature has to
+ * appear, and it appears then rather than up front.
+ */
+export function ensureInteractivityTypeIndex(
+  graph: KhrInteractivityGraph,
+  signature: string,
+): number {
+  graph.types ??= [];
+  const current = graph.types.findIndex((type) => type.signature === signature);
+  if (current >= 0) return current;
+  graph.types.push({ signature });
+  return graph.types.length - 1;
 }
 
 export function ensureInteractivityDeclaration(
@@ -86,11 +109,15 @@ export function connectInteractivityFlow(
 }
 
 /**
- * Writes a literal onto an existing socket.
+ * Writes a literal onto a value socket the node's operation declares.
  *
- * A socket that does not already exist is left alone: the operation template
- * decides which sockets a node has, and inventing one here would produce a node
- * the runtime cannot resolve.
+ * A socket the operation does not declare is left alone: inventing one here
+ * would produce a node the runtime cannot resolve. A declared socket that
+ * carries no literal yet is not that case — `pointer/set` and `variable/set`
+ * both start empty, and refusing to write there was why the only way to send a
+ * fixed number into them was to hand-edit the JSON. The socket is created with
+ * the signature the operation fixes for it, or with the one the value itself
+ * implies when the operation leaves the type to the author.
  */
 export function setInteractivityLiteralValue(
   graph: KhrInteractivityGraph,
@@ -99,9 +126,60 @@ export function setInteractivityLiteralValue(
   value: KhrInteractivityJsonValue[],
 ): void {
   const node = graph.nodes?.[nodeIndex];
-  const current = node?.values?.[socket];
-  if (!node || !current) return;
-  node.values = { ...node.values, [socket]: { ...current, value } };
+  if (!node) return;
+  const current = node.values?.[socket];
+  if (current) {
+    node.values = { ...node.values, [socket]: { ...current, value } };
+    return;
+  }
+  if (!interactivityValueInputSockets(graph, nodeIndex).includes(socket)) return;
+  const signature =
+    fixedInteractivitySocketSignature(graph, nodeIndex, socket) ??
+    (typeof value[0] === "boolean"
+      ? "bool"
+      : value.length === 2
+        ? "float2"
+        : value.length === 3
+          ? "float3"
+          : value.length === 4
+            ? "float4"
+            : "float");
+  node.values = {
+    ...node.values,
+    [socket]: { type: ensureInteractivityTypeIndex(graph, signature), value },
+  };
+}
+
+/**
+ * Retypes a value socket, keeping as much of the literal as the new type holds.
+ *
+ * The signature is what separates「3 を送る」from「(0, 1, 0) を送る」, so an
+ * author who can only edit the numbers can never send a vector at all. Sockets
+ * the operation fixes are refused here rather than in the caller, so the MCP
+ * path and the Inspector cannot disagree about which ones are free.
+ */
+export function setInteractivityLiteralSignature(
+  graph: KhrInteractivityGraph,
+  nodeIndex: number,
+  socket: string,
+  signature: InteractivityLiteralSignature,
+): boolean {
+  const node = graph.nodes?.[nodeIndex];
+  if (!node) return false;
+  if (!interactivityValueInputSockets(graph, nodeIndex).includes(socket)) return false;
+  if (fixedInteractivitySocketSignature(graph, nodeIndex, socket)) return false;
+  const current = node.values?.[socket];
+  // A socket fed by a wire takes its type from the node upstream; retyping it
+  // would describe a value this node never reads.
+  if (current?.node !== undefined) return false;
+  node.values = {
+    ...node.values,
+    [socket]: {
+      type: ensureInteractivityTypeIndex(graph, signature),
+      value: coerceInteractivityLiteralValue(current?.value, signature),
+    },
+  };
+  return true;
 }
 
 /**
