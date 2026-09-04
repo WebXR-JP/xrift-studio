@@ -1,60 +1,46 @@
-# XRift Studio ドキュメント
+# XRift Studio の文書
 
-XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを制作する有志製のデスクトップアプリである。UI は React 19 + TypeScript + Vite で作り、バックエンドは Tauri v2 の Rust で動く。
+使い方は [利用者向けガイド](./wiki/index.md)、開発環境は [DEVELOPMENT.md](../DEVELOPMENT.md) から読む。仕様を調べるときは、変更する分野から選ぶ。
 
-全体像をつかむには、次の順に読む。
+## 全体設計と対応状況
 
-1. [ビジュアルエディター設計](./VISUAL_EDITOR_ARCHITECTURE.md) — 製品の正本。データモデル、画面、Play、変換、セキュリティ境界。
-2. [対応範囲と段階](./VISUAL_EDITOR_ROADMAP.md) — 設計のどこまでが動き、各段階を何で完了とするか。
-3. [UX 原則](./UX_PRINCIPLES.md) — 画面文言と状態設計の基準。
-4. リポジトリ直下の [DEVELOPMENT.md](../DEVELOPMENT.md) と [AGENT.md](../AGENT.md) — 環境構築と、作業時のルール。
+- [ビジュアルエディター設計](./VISUAL_EDITOR_ARCHITECTURE.md): データ形式、保存、変換、実行、権限の基本設計
+- [対応範囲と今後の課題](./VISUAL_EDITOR_ROADMAP.md): 利用できる機能、制約、今後検討する項目
+- [UX 原則](./UX_PRINCIPLES.md): 操作と結果の表示方針
+- [機能別の操作・状態設計](./UX_INTERACTIONS.md): 分野別の F-ID と共通の MI-ID
 
-## 設計（正本）
+## 編集画面と素材
 
-| 文書 | 扱う範囲 |
+| 調べたいこと | 文書 |
 | --- | --- |
-| [ビジュアルエディター設計](./VISUAL_EDITOR_ARCHITECTURE.md) | project type、document model、Registry、Command、Asset lifecycle、変換パイプライン、セキュリティ境界 |
-| [対応範囲と段階](./VISUAL_EDITOR_ROADMAP.md) | 制作領域ごとの対応状況、設計上の境界、段階と完了判定 |
-| [UX 原則](./UX_PRINCIPLES.md) | 操作と結果の表示方針、新機能の設計手順、レビュー用チェックリスト |
-| [マイクロインタラクション Wiki](./UX_INTERACTIONS.md) | 機能ごとの操作前・処理中・成功時・失敗時・戻り先 |
-| [Inspector デザインガイド](./EDITOR_INSPECTOR_DESIGN.md) | 右 Inspector の密度、枠、参照フィールド |
+| Inspector のレイアウト | [Inspector デザイン](./EDITOR_INSPECTOR_DESIGN.md) |
+| Model の取り込みと再取り込み | [Model Import](./MODEL_IMPORT_CONTRACT.md) |
+| Unity の Scene・Prefab | [UnityPackage Import](./UNITY_PACKAGE_IMPORT.md) |
+| Open Brush の描画 | [Open Brush Material](./OPENBRUSH_MATERIAL_PROVIDER_DESIGN.md) |
+| 空・水・草・Wind | [マテリアルカタログ](./MATERIAL_CATALOG_SPEC.md) |
+| Terrain の編集 | [Terrain](./TERRAIN_EDITOR_SPEC.md) |
 
-## 機能ごとの仕様
+## 実行と公開
 
-| 文書 | 扱う範囲 |
+| 調べたいこと | 文書 |
 | --- | --- |
-| [Scripting Contract](./SCRIPTING.md) | Script Asset の API、実行境界、承認 gate、対応範囲 |
-| [MCP editor tool の全体像](./MCP_EDITOR_TOOLS.md) | AI client へ公開する Editor 操作の一覧、surface ごとの権限、公開しない操作 |
-| [ワールド制作ハーネス](./WORLD_AUTHORING_HARNESS.md) | ワールド制作が Terrain と草に偏った事例と、instructions・tool 説明・戻り値・スキル・文書の改善内容 |
-| [KHR_interactivity Editor / MCP design](./KHR_INTERACTIVITY_EDITOR.md) | ノードグラフの canonical 形式、検証、MCP 契約 |
-| [Terrain エディター 仕様](./TERRAIN_EDITOR_SPEC.md) | 地形と草のモード、ブラシ、性能、公開への反映 |
-| [カメラタイムライン 仕様](./CAMERA_TIMELINE_SPEC.md) | camera Component、時間で進む実行器、カメラ用 op、再生場所（未実装の設計） |
-| [マテリアルカタログ 仕様](./MATERIAL_CATALOG_SPEC.md) | 空・水 Shader、草、Wind 契約 |
-| [Model Import Contract](./MODEL_IMPORT_CONTRACT.md) | Model の取り込みと再取り込み、永続化する情報 |
-| [UnityPackage import](./UNITY_PACKAGE_IMPORT.md) | `.unitypackage` / `.unity` / `.prefab` の変換フロー |
-| [Open Brush Material Provider 設計](./OPENBRUSH_MATERIAL_PROVIDER_DESIGN.md) | Open Brush 由来 Material の提供経路 |
-| [Visual Project Classic Export CLI](./VISUAL_PROJECT_MIGRATION_CLI.md) | Visual project から Classic project への一方向書き出し |
-| [ブラウザからのワールド公開](./WEB_UPLOAD.md) | Web 版からの upload 経路と未解決の制約 |
-| [ワールド制作の録画](./RECORDING.md) | 指定したアスペクト比での長時間録画、録画ビューと録画用カメラ、MCP からの操作、FFmpeg での短縮 |
+| Script の API と実行権限 | [Scripting](./SCRIPTING.md) |
+| ノードグラフと実行エンジン | [KHR_interactivity](./KHR_INTERACTIVITY_EDITOR.md) |
+| Classic プロジェクトへの書き出し | [Classic Export](./VISUAL_PROJECT_MIGRATION_CLI.md) |
+| ブラウザ公開の試験実装と制約 | [Web Upload](./WEB_UPLOAD.md) |
+| 制作過程の録画 | [録画](./RECORDING.md) |
 
-## 運用と支援
+## AI 連携・開発・運用
 
-| 文書 | 扱う範囲 |
-| --- | --- |
-| [MCPで画面を見ながらデバッグする](./MCP_DEBUGGING.md) | デバッグ版を AI client から操作・観察する手順 |
-| [リリース前 E2E](./RELEASE_E2E.md) | Release workflow だけで走らせる受け入れテスト |
-| [XRift Studio Issue相談GPT](./BUG_REPORT_GPT.md) | 利用者がバグ報告と要望を整理するためのカスタム GPT 設計 |
+- [MCP ツール](./MCP_EDITOR_TOOLS.md): Editor 操作、権限、公開しない操作
+- [ワールド制作の支援方針](./WORLD_AUTHORING_HARNESS.md): 設計図、制作手順、検証の方針
+- [画面デバッグ](./MCP_DEBUGGING.md): MCP から画面とログを確認する手順
+- [リリース前 E2E](./RELEASE_E2E.md): 配布前の検証
+- [Issue 相談 GPT](./BUG_REPORT_GPT.md): バグ報告の作成支援と設定
+- [エージェント向け作業指示](../AGENT.md): 実装・検証の共通ルール
 
-## これから作るもの
+## 文書を更新するとき
 
-[ワールド部品の追加計画](./WORLD_CONTENT_PLAN.md) は、初めてのワールド制作で最初の一時間に必要になる部品を扱う。部品はカタログ preset・組み込み Prefab・新しい Component の三つに分けて並べている。現在の対応範囲ではなく、これから足すものだけを扱う。
+仕様は上の該当文書へ統合し、同じ内容の計画書を増やさない。未着手の提案はロードマップに目的と未決事項を残す。完了した調査や古い実装手順は Git の履歴で参照する。
 
-[カメラタイムライン 仕様](./CAMERA_TIMELINE_SPEC.md) は、決まった経路でカメラを動かしてデバッグするための設計だ。全体が未実装である。既存の静的な walk との共存が設計の要点である。
-
-## 利用者向けガイド
-
-[`docs/wiki/`](./wiki/index.md) は、インストールから公開までを利用者向けにまとめた使い方ガイドだ。GitHub Pages で Web サイトとしても配布する。掲載順とカテゴリは `src/lib/wiki-config.ts` が持つ。ページを追加・改名する際は、両方を同じ変更で揃える。
-
-## 過去の記録
-
-[`docs/history/`](./history/README.md) には、特定の日付時点の監査、調査、実行計画が当時の内容のまま残る。現在の設計や対応状況の正本ではない。仕様を確認する場合は、上の「設計（正本）」を読む。
+利用者向けページは `docs/wiki/` に置く。追加・改名するときは、掲載順を持つ `src/lib/wiki-config.ts` も更新する。

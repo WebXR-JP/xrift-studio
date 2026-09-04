@@ -6,48 +6,16 @@ Node.js や `@xrift/cli` の導入、コードまたはビジュアルエディ�
 
 > **注意**: XRift Studio は XRift 公式とは無関係の有志製ツールです。XRift 本体・公式 CLI・アカウントについては、[XRift 公式サイト](https://xrift.net/)をご確認ください。
 
-## 対応機能チェックリスト
+## できること
 
-現行のデスクトップ版で利用できる機能を、制作の流れに沿ってまとめています。
+- [プロジェクトを作る・再開する](./docs/wiki/projects.md): World / Item と、コード編集 / ビジュアル編集を選ぶ。
+- [シーンを編集する](./docs/wiki/visual-editor.md): オブジェクトを配置し、素材・光・地形を調整する。
+- [素材を取り込む](./docs/wiki/importing-assets.md): 3D モデル、画像、音などをプロジェクトで管理する。
+- [動きを付ける](./docs/wiki/interactivity.md): ノードグラフで動作を組み立てる。コードを書く場合は [Script](./docs/wiki/scripting.md) を使う。
+- [動作を確認する](./docs/wiki/play-mode.md): Play で歩いたり操作したりして、公開前に確認する。
+- [XRift に公開する](./docs/wiki/publishing.md): タイトル・説明・サムネイルを整え、保存・検査・変換してアップロードする。
 
-| やりたいこと | ワールド | アイテム | 現在できること |
-| --- | --- | --- | --- |
-| 制作環境を準備する | 対応 | 対応 | アプリ専用領域へ Node.js と `@xrift/cli` をセットアップする。システム側の環境と分けて管理できる。 |
-| CLI を最新にする | 対応 | 対応 | 起動時に現在と最新のバージョンを確認し、アプリが管理する CLI だけを更新する。 |
-| XRift Studio 本体を最新にする | 対応 | 対応 | 起動時または設定とバージョン情報から署名済み更新を確認し、更新内容と進捗を見ながらインストールして再起動する。 |
-| プロジェクトを探して再開する | 対応 | 対応 | 種別、サムネイル、名前、説明をカードで一覧表示し、選んだプロジェクトを開く。 |
-| 新しいプロジェクトを作る | 対応 | 対応 | ワールド／アイテムと、クラシック／ビジュアルの4通りから選び、作成後のプロジェクトをそのまま開く。 |
-| コードと設定を編集する | 対応 | 対応 | 内蔵エディタでテキストファイルを編集・保存する。`xrift.json` はフォームと raw JSON の両方で編集できる。 |
-| シーンをビジュアル編集する | 対応 | 対応 | Hierarchy、Scene View、Inspector、Assetsを使い、Primitive、Model、Prefab、XRift Componentを配置してギズモで調整する。 |
-| 3D素材を取り込む | 対応 | 対応 | GLB／glTF、OBJ、VRM 0.x／1.xをModel Assetとして取り込む。外部ファイルを参照するglTF／OBJは、参照先のファイルも一緒にドロップすると、1つのGLBにまとめて取り込める。Open Brush／Tilt Brush由来のglTFは専用表示を検証中。 |
-| Unity素材を引き継ぐ | 検証中 | 検証中 | UnityPackage、`.unity`、`.prefab`を解析し、対応するScene、Prefab、Model、Textureへ変換する。 |
-| アバターの見た目を保存する | 対応 | 対応 | ボーンのXYZ回転とshape keyの値をEntityごとに保存し、Scene ViewとXRift向け生成コードへ反映する。タイムラインによるアニメーションは今後対応する。 |
-| アセットと表現を作る | 対応 | 対応 | Texture、Material、Particle、PrefabをAssetsで管理し、Inspectorから編集する。PNG、JPG、WebP、KTX2に対応する。Textの書体はTTF、OTF、WOFFを取り込んで使える。 |
-| 文字を置く | 対応 | 対応 | Text、Text Panel（看板）、Text Caption（作品キャプション）をCreateから追加し、Google Fontsの日本語・欧文書体、色、太さ、揃えと、色または画像の背景板をInspectorで設定する。板は文字の実測値に合わせて組み立て、Scene View、Play、公開ワールドで同じ見た目になる。 |
-| 音を配置する | 対応 | 対応 | MP3をAudio Assetとして取り込み、Audio Sourceへ割り当てて保存・変換する。 |
-| 衝突判定を設定する | 対応 | 対応 | PrimitiveにはBox Collider、インポートModelにはMesh Colliderを初期設定し、Center／Half Extentsの編集と自動フィットを行う。 |
-| 地形をつくる | 対応 | 対応 | Createメニューから高さサンプルTerrainを追加し、盛り上げる、掘る、高さを設定、滑らかにする、穴を開けるブラシで編集する。Scene View、static Trimesh Collider、生成コードで同じ三角形を使う。 |
-| 草を生やす | 対応 | 対応 | Terrainへ草の層を重ね、ブラシで塗って生やす・消す。Scene設定のWindで揺れる。 |
-| 空と水をつくる | 対応 | 対応 | GLSLで描くSkybox Shaderと水面Materialを公式カタログから追加し、Uniform valuesで調整する。どちらもScene設定のWindとLightを共通入力にする。 |
-| 光と色味を整える | 対応 | 対応 | Directional／Point／Spot／AreaのLightを配置して色、強度、影、距離を設定する。露出やコントラストなどの色味は一つのcompositorで調整する。既定はオフ。 |
-| 外部の素材を取り込む | 対応 | 対応 | Poly HavenとambientCGのCC0素材、XRift公式のShader、Terrain、照明、Componentをアプリ内から追加する。作者とライセンスはAssetと公開物へ残す。 |
-| 同じ構成を再利用する | 対応 | 対応 | Entityと子階層をPrefab Assetとして保存し、何度でも配置する。配置ごとの差分はoverrideとして保持する。 |
-| ノードで動きをつける | 対応 | 対応 | KHR_interactivity準拠のグラフをノードエディターで編集し、開始時・毎フレーム・イベント受信をきっかけに色や再生を動かす。クリックや視線に反応するトリガーはない。 |
-| Entityに振る舞いを与える | 対応 | 対応 | Script AssetをTypeScriptで書き、Script ComponentとしてEntityへ付けてPlayで実行する。未承認のソースは内容のハッシュに基づく承認を受けてから実行する。同じScriptを公開ワールドへ静的importとして出力する。対応範囲は[Scripting Contract](./docs/SCRIPTING.md)にまとめている。 |
-| Editor内でPlay確認する | 対応 | 対応 | 編集状態を保持したままPlayへ切り替え、ワールドではWASD操作、アイテムでは周囲からの見え方を確認する。 |
-| 画像や 3D 素材を管理する | 対応 | 対応 | ファイルの追加、名前変更、削除、画像プレビュー、3D モデルプレビューを行う。 |
-| 公開情報を整える | 対応 | 対応 | タイトル、説明、ビルド設定、サムネイルを編集する。ワールドでは物理・カメラ、アイテムでは権限も設定できる。 |
-| ローカルで動作を確認する | 対応 | 対応 | 開発サーバーを起動・停止し、プレビュー URL をブラウザで開く。実行ログも同じ画面で確認する。 |
-| アイテムを検査する | 該当なし | 対応 | ビルドを含むセキュリティチェックを実行し、結果と修正に必要なログを確認する。 |
-| XRift に公開する | 対応 | 対応 | ログイン後、タイトル・説明・サムネイルを確認する。ビジュアル制作データは保存・検査・XRift向けTSX変換を行ってから種別に応じてアップロードする。 |
-| 公開前に容量を見積もる | 対応 | 対応 | 初回ロード容量と回線別の時間、Assetと実行時VRAMの目安を確認し、resize、KTX2、Dracoを選んで適用してから同じ確認画面へ戻る。 |
-| 公開したものを確認する | 対応 | 対応 | アップロード後にworldId／itemId、version、content hashを表示する。公式の結果がURLを返した場合はそのページを開く。審査中を公開済みとしては表示しない。 |
-| AIと一緒にSceneを編集する | 検証中 | 検証中 | Codex、Claude Code、Claude Desktop / Cowork、OpenCode、Cursorをアプリから登録し、必要ならOllamaのローカルmodelでCodex、Claude Code、OpenCodeを構成する。開いているSceneの読取・設定変更・Asset配置を限定MCP toolで行う。 |
-| 外部ツールで作業を続ける | 対応 | 対応 | プロジェクトをVS Codeまたはターミナルで開く。開発版CLIはVisual projectを、公開時と同じTypeScript / R3Fソースを持つClassic projectへ一方向に書き出せる。 |
-
-`対応` はデスクトップ版の主要導線で操作できること、`検証中` は実装済みの範囲を実データや配布環境で確認していることを示します。ブラウザ版は制作フローを確認するためのWebプレビューであり、ログイン、ローカルファイル操作、CLI実行、アップロードは行いません。
-
-現在の制約と今後の対応予定は[Visual Editor Roadmap](./docs/VISUAL_EDITOR_ROADMAP.md)にまとめています。ディスク上のMTL／Textureの自動探索、VRMのアニメーションタイムライン、Unity固有機能の完全互換は現時点では未対応です。
+対応形式と制約は各ガイド、開発中の項目は [対応範囲と今後の課題](./docs/VISUAL_EDITOR_ROADMAP.md) にまとめています。ブラウザ版は制作フローのデモです。ログイン、ローカルファイル操作、CLI 実行、公開はデスクトップ版を使ってください。
 
 ## Visual projectを通常のXRift開発へ書き出す
 
@@ -208,7 +176,7 @@ docs/VISUAL_EDITOR_ROADMAP.md      対応範囲、設計上の境界、段階と
 docs/UX_PRINCIPLES.md      再現可能な制作体験の設計原則
 docs/UX_INTERACTIONS.md    状態ごとの動きと機能一覧を定義する Wiki
 docs/wiki/                 利用者向けの使い方ガイド。GitHub Pages でも配布
-docs/history/              日付ごとの監査・調査・計画の記録。現在の設計ではない
+docs/ux/                   分野別の操作・状態設計と共通の動き
 .agents/skills/            XRift Studio の実装・UX・検証に使うエージェントスキル
 ```
 

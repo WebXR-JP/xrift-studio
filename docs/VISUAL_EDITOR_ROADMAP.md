@@ -25,7 +25,7 @@ Visual project はコードを隠す画面ではなく、Scene、Asset、Materia
 | Scene編集 | 利用可能 | Hierarchy、Scene View、Inspector、Assets、選択、transform、親子関係、複製、削除、Undo / Redo。 |
 | Model import | 利用可能 | GLB、自己完結 glTF、OBJ、VRM 0.x / 1.x をそのまま Model Asset として取り込む。FBX、COLLADA、STL、PLY、USD、Rhino 3DM など Three.js Editor が読む形式は取り込み時に自己完結 GLB へ変換する。変換後は同じ経路に載せる。対応形式の正本は `asset-format-registry.ts` の `ASSET_FORMATS.model` だ。 |
 | Avatar pose | 利用可能 | 取り込んだボーンの XYZ 回転と shape key の値を Entity ごとに保存する。保存した値を Scene View と生成コードへ反映する。 |
-| Model Animation 再生 | 利用可能 | Animation を含む GLB / glTF を配置したときは Animation Component を追加する。選択した clip を Play と生成物で再生する。Autoplay、Loop、再生速度は Inspector と MCP から設定する。 |
+| Model Animation 再生 | 利用可能 | Animation を含む GLB / glTF を配置すると、clip を再生する Interactivity Graph と Interaction Trigger を追加する。再生順序や繰り返しはグラフで編集する。[実行仕様](./KHR_INTERACTIVITY_EDITOR.md#animation-belongs-to-the-graph)を参照する。 |
 | Texture / Material | 利用可能 | PNG、JPG、WebP、AVIF、GIF、BMP、SVG、KTX2 を取り込む。PBR Material、slot binding、alpha、描画順、thumbnail を編集する。Classic import では静的に検査できる ShaderMaterial を変換する。Texture uniform と mesh 別 variant を保った Custom Material にする。 |
 | Audio | 利用可能 | MP3 / WAV / Ogg / FLAC / AAC / WebM を Audio Asset として取り込む。Audio Source へ割り当てる。割り当てた内容を Scene と生成物へ保存する。 |
 | Lighting | 利用可能 | Directional / Point / Spot / Area の Light を配置する。色、強度、影、距離を設定する。公式シェーダーの陰影も Scene の Light で付ける。Light が無い Scene も既定光で表示する。 |
@@ -52,7 +52,7 @@ Visual project はコードを隠す画面ではなく、Scene、Asset、Materia
 - OBJ の外部 MTL / Texture は disk 上から自動探索しない。同じ import batch に含めた分だけ解決する。
 - sidecar を参照する glTF / OBJ は依存ファイルを同じ import batch へ含めたときだけ自己完結 GLB へ正規化する。単体で選んだ場合は不足依存として止まる。
 - VRM の静的ポーズは保存できる。keyframe、clip、補間、timeline 編集は扱っていない。
-- Model Animation は clip 選択、Autoplay、Loop、再生速度に対応する。開始タイミングの指定、複数 clip の同時再生、clip 間の遷移は扱っていない。
+- Model の既存 clip は Interactivity Graph で再生する。ボーン・shape key の keyframe を作る Animation authoring は別の計画である。
 - Interactivity のきっかけは開始時、毎フレーム、イベント受信、インタラクトの四つだ。視線や近接に反応するトリガーは無い。視線や近接への反応は XRift Component または Scripting と組み合わせる。
 - Interactivity から次の Scene へ進むことはできない。compiler は entry scene だけを変換する。遷移の受け皿が公開側にない。`event/send` で名前付きイベントを送るところまでを扱う。
 - Interactivity の実行エンジンは operation 単位で実装する。未対応 operation は canonical JSON に保持したまま no-op になる。その node と、そこから先の flow は実行されない。対象と理由は Editor と公開側の診断に同じ内容で出す。glTF Object Model pointer を解決する host がまだない。`pointer/*` は未対応として扱う。
@@ -103,3 +103,17 @@ repository 内では公開時と同じ TypeScript / R3F ソースの書き出し
 ## 完了判定
 
 ファイルや button の存在だけでは完了としない。各機能は、実データによる操作、保存後の再読込、Undo / Redo、失敗時の復帰、compiler 出力まで一致した時に完了とする。CLI 移植の完了条件には、dry-run の内容が決定的であること、手書きファイルを既定で上書きしないこと、同じ入力を再実行しても不要な差分を出さないことを含める。
+
+## 今後検討する項目
+
+以下は旧計画から残す検討事項であり、実装済みの機能や確定した API ではない。着手時に現行の実装と必要性を確認する。
+
+| 分野 | 目的と未決事項 |
+| --- | --- |
+| カメラの経路再生 | 同じ視点移動を繰り返して検証できるようにする。カメラの保存形式、既存の Interactivity エンジンとの接続、手動操作への復帰、公開対象にするかを決める。再生・停止を同じ場所に置き、未対応の公開経路は診断する。旧案の専用実行器や op 名は確定仕様としない。 |
+| 制作向けカタログ | 空に合う照明、Terrain 表面、照明器具、建物・家具のセットを拡充する。既存 preset とレシピを使い、音源・Collider の有無を配置前に示す。水や公式 Component をレシピで扱う方法を確認する。 |
+| ワールドの仕掛け | Audio Zone、Weather、Trigger Zone、Sit、Door、Scatter、Day / Night Cycle、Reflection Probe を候補として検討する。既存 Script・Component で足りるかを先に確認し、新しい型が必要なら schema・Inspector・Play・compiler を同時に対応させる。 |
+| グラフの制作支援 | 再利用できる Graph テンプレート、ステップ実行、ブレークポイントを検討する。保存形式を増やさず canonical graph を使う。Scene 遷移と pointer の host は上記の未対応範囲を参照する。 |
+| 制作方針の引き継ぎ | ワールドの設計図を project metadata へ保存し、接続するクライアントが変わっても参照できるようにする。保存項目と MCP の返し方を決める。 |
+
+過去の監査にあった保存時の I/O 競合、定義の重複、巨大コンポーネントの分割は、当時の行番号や修正コードを再利用せず、現在の実装と fixture を基準に判断する。保存・取り込みの失敗回復と参照整合性は、引き続き上の完了判定に含める。
