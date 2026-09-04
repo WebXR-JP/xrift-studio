@@ -126,3 +126,5 @@ export * from "./shader-uniform-labels";
 export * from "./water-shader.fixture";
 export * from "./wind-contract";
 export * from "./wind-contract.fixture";
+export * from "./xrift-component-placement";
+export * from "./xrift-component-placement.fixture";

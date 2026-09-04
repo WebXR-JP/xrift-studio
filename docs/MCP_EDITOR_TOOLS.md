@@ -223,6 +223,15 @@ Ctrl+C / Ctrl+V と同じく別のグラフへも置ける。同じグラフの�
 まま写せる。別のグラフでは `declaration` の index も inline value の `type`
 の index も別のものを指す。名前で取り出して着地先で引き直す。
 
+`set_interactivity_value` は Inspector の「値」欄と同じ操作で、数値だけでなく
+`signature` も受ける。KHR_interactivity に定数ノードは無く、固定値は必ずソケット
+自身の literal なので、`3` を送るのと `(0, 1, 0)` を送るのは型の違いでしかない。
+operation が型を決めているソケット (秒数、繰り返し回数、animation の index、
+論理演算の入力) へ別の型を渡すと `SIGNATURE_NOT_ALLOWED` で拒否する。Inspector も
+同じソケットでは型を変えさせないので、どちらの surface から書いても同じ結果に
+なる。どのソケットが固定かは `list_interactivity_operations` の
+`fixedValueTypes` が返す。
+
 `configure_interactivity_trigger_action` は 4 つの key を引き受ける。`set_interactivity_configuration`
 と `set_interactivity_value` で手書きできる key だ。Entity・Component・
 プロパティの実在と値の型ごと扱う。対象を間違えたグラフは保存できる。Play で
@@ -350,6 +359,7 @@ project ではなく app data へ置く。
 | Project の保存・公開・アップロード | 外向きの不可逆操作だ。アップロード前に `xrift.json` とサムネイルを確認する導線は残す |
 | Login / account 操作 | 認証情報を MCP 境界へ渡さないためだ |
 | 録画の保存先の指定 | `recording_begin_file` が開けるのは既定の保存先と、フォルダーダイアログで選んだ場所だけだ。path を直接書けると Rust 側の path 検証を迂回する。保存先を変える場合は録画パネルを使う |
+| 公式 Component の position / rotation / scale | `update_component` は XRift Component のこれらの prop を受け取らない。Component 側に持たせると Entity の Transform と別の原点ができ、選択したときのギズモと回転の中心が描かれている場所からずれる。配置は `update_component` の `transform` patch で Entity へ書く |
 | 任意 path の読み書き・削除 | Rust 側の path 検証と権限制御を迂回させないためだ |
 | 任意 JavaScript の実行 | Script は trust gate 付きの Asset としてだけ入る |
 | Texture の一括変換 | 複数選択したものをまとめて書き出すための導線だ。MCP からは `process_texture_asset` を Asset ごとに呼ぶ。対象の選び方は設計図で決まる |

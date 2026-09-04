@@ -30,6 +30,8 @@ import {
   pasteInteractivityNode,
   readInteractivityNodeForCopy,
   freeInteractivityNodePosition,
+  fixedInteractivitySocketSignature,
+  interactivityValueInputSockets,
   isInteractivityTriggerActionOp,
   dryRunInteractivityGraph,
   duplicateInteractivityGraph,
@@ -44,6 +46,7 @@ import {
   readInteractivityTriggerActionAsset,
   readInteractivityTriggerActionText,
   readInteractivityTriggerActionEasing,
+  setInteractivityLiteralSignature,
   setInteractivityLiteralValue,
   setInteractivityTriggerActionAsset,
   setInteractivityTriggerActionText,
@@ -610,32 +613,42 @@ function InteractivityGraphEditorBody({
       : false;
 
 
-  // `material` is authored through the picker above, and a socket fed by a wire
-  // has no literal to edit - showing either as a number field would invite the
-  // author to overwrite a connection they cannot see from here.
-  const literalValues = useMemo(
-    () =>
-      Object.entries(selectedNode?.values ?? {})
-        .filter(
-          ([socket, input]) =>
-            input.node === undefined &&
-            socket !== "material" &&
-            // An Interaction Trigger value and its timing are edited by the
-            // pickers below, which know the property's range, options, colour
-            // space, and whether a duration means anything for it.
-            !(
-              (socket === "value" || socket === "duration") &&
-              isInteractivityTriggerActionOp(selectedDeclaration?.op)
-            ),
-        )
-        .map(([socket, input]) => ({
+  // Every value socket the operation declares, not only the ones the node
+  // already carries a literal for. `pointer/set` and `variable/set` start with
+  // none, so reading `node.values` alone drew the socket on the card and then
+  // offered nothing to type into - the number had to be written into the JSON
+  // by hand or through the MCP tool. `material` is authored through the picker
+  // above, and a socket fed by a wire is shown as connected rather than as a
+  // number field the author could overwrite without seeing the wire.
+  const literalValues = useMemo(() => {
+    if (selectedNodeIndex === null) return [];
+    return interactivityValueInputSockets(graph, selectedNodeIndex)
+      .filter(
+        (socket) =>
+          socket !== "material" &&
+          // An Interaction Trigger value and its timing are edited by the
+          // pickers below, which know the property's range, options, colour
+          // space, and whether a duration means anything for it.
+          !(
+            (socket === "value" || socket === "duration") &&
+            isInteractivityTriggerActionOp(selectedDeclaration?.op)
+          ),
+      )
+      .map((socket) => {
+        const input = selectedNode?.values?.[socket];
+        const fixed = fixedInteractivitySocketSignature(graph, selectedNodeIndex, socket);
+        return {
           socket,
-          value: input.value,
+          value: input?.value,
+          connected: input?.node !== undefined,
+          fixed: fixed !== undefined,
           signature:
-            input.type === undefined ? undefined : graph.types?.[input.type]?.signature,
-        })),
-    [graph.types, selectedDeclaration?.op, selectedNode],
-  );
+            input?.type === undefined
+              ? fixed
+              : graph.types?.[input.type]?.signature,
+        };
+      });
+  }, [graph, selectedDeclaration?.op, selectedNode, selectedNodeIndex]);
 
   /**
    * Recipes offered here, filtered by the same search box as the operations.
@@ -2251,21 +2264,40 @@ function InteractivityGraphEditorBody({
 
               {literalValues.length > 0 ? (
                 <section className="space-y-2.5 rounded border border-slate-700 bg-slate-950/60 p-2.5">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-300">
-                    値
-                  </p>
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-300">
+                      値
+                    </p>
+                    <p className="mt-1 text-[10px] leading-4 text-slate-400">
+                      線をつながない入力には、ここで入れた固定値がそのまま流れます。
+                    </p>
+                  </div>
                   {literalValues.map((entry) => (
                     <LiteralValueField
                       key={entry.socket}
                       socket={entry.socket}
                       signature={entry.signature}
                       value={entry.value}
+                      connected={entry.connected}
                       isColor={entry.socket === "value" && (selectedPointerPreset?.color ?? false)}
                       disabled={readOnly}
                       onChange={(next) =>
                         updateGraph((nextGraph) => {
                           setInteractivityLiteralValue(nextGraph, selectedNodeIndex, entry.socket, next);
                         })
+                      }
+                      onSignatureChange={
+                        entry.fixed
+                          ? undefined
+                          : (next) =>
+                              updateGraph((nextGraph) => {
+                                setInteractivityLiteralSignature(
+                                  nextGraph,
+                                  selectedNodeIndex,
+                                  entry.socket,
+                                  next,
+                                );
+                              })
                       }
                     />
                   ))}
