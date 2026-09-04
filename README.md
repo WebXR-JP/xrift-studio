@@ -29,7 +29,9 @@ Visual Editorのヘッダーにある「Classicへ書き出す」では、既存
 xrift-studio convert ./my-visual-project --to classic --out ./my-xrift-world
 ```
 
-CLIはnpm公開前のため、`pnpm cli:build`でビルドして`node dist/cli/xrift-studio.mjs`から実行します。書き出すのは公開時にXRiftへ送るものと同じTypeScript / React Three Fiberのソースで、書き出し先は公式テンプレートの依存関係だけで`npm install`と`npm run dev`が通ります。仕様は[Visual Project Classic Export CLI](./docs/VISUAL_PROJECT_MIGRATION_CLI.md)を参照してください。
+この変換CLIはnpm公開前のため、`pnpm cli:build`でビルドして`node dist/cli/xrift-studio.mjs`から実行します。書き出すのは公開時にXRiftへ送るものと同じTypeScript / React Three Fiberのソースで、書き出し先は公式テンプレートの依存関係だけで`npm install`と`npm run dev`が通ります。仕様は[Visual Project Classic Export CLI](./docs/VISUAL_PROJECT_MIGRATION_CLI.md)を参照してください。
+
+起動中の Studio をターミナルから操作する場合は、同梱の `xrift-studio-mcp-sidecar` を使います。MCP と同じ全ツールを呼び出し、結果を JSON、撮影画像を PNG で受け取れます。Node.js やリポジトリのクローンは不要です。[操作方法](./docs/MCP_EDITOR_TOOLS.md#cli-から操作する)を参照してください。
 
 ## 体験設計
 

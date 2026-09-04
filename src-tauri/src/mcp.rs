@@ -14,6 +14,9 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{oneshot, Mutex, Semaphore};
 
+#[path = "mcp_cli.rs"]
+pub mod cli;
+
 const MCP_SERVER_NAME: &str = "xrift-studio";
 const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
 const MCP_RENDEZVOUS_SCHEMA_VERSION: u32 = 1;
