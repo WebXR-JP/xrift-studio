@@ -22,6 +22,8 @@
     "starter:sync:xrift-official": "node scripts/sync-xrift-official-starter-assets.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "test:fixtures": "node scripts/run-fixtures.mjs",
+    "test:scripts": "node --test scripts/*.test.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",

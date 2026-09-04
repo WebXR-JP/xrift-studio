@@ -54,6 +54,21 @@ pnpm tauri:dev
 
 主要導線のE2Eは日常の検証やPull Requestでは実行せず、手動のRelease workflowでOS別ビルドの前に1回だけ実行します。テスト範囲、アップロード禁止境界、失敗時の確認方法は [リリース前 E2E](./docs/RELEASE_E2E.md) を参照してください。
 
+### ロジック変更をビルドなしで確認する
+
+変更した処理の fixture を指定すると、Vite で必要なモジュールだけを読み込み、公開された `run…FixtureAssertions` などの関数を実行できます。複数ファイルを指定でき、関数が失敗した場合や実行対象がない場合は終了コードが非ゼロになります。
+
+```bash
+pnpm typecheck
+pnpm test:fixtures packages/xrift-studio-runtime/src/interactivity/engine.fixture.ts
+pnpm test:scripts
+node scripts/check-fixture-coverage.mjs
+```
+
+`test:fixtures` は開発サーバーのポートを使わず、`dist/` へ出力しないため、別の worktree でも実行できます。引数はリポジトリ直下からのパスです。fixture 内の処理自体は実行されるので、CLI 専用の準備やブラウザの API を必要とするテストは既存の専用ランナーを使ってください。このコマンドは CLI 変換全体や実画面の確認を代替しません。fixture を追加したら、引き続き `cli/convert.fixture.mjs` の実行表にも登録します。
+
+タイマー処理の性能は、リポジトリ直下で `node scripts/benchmark-interactivity.mjs` を実行して比較できます。同時発火100・1,000・2,000件を対象に、5回の予備実行後、20回の中央値を表示します。全件の発火順も確認します。これは処理単体の測定で、実画面のフレームレートを表すものではありません。
+
 ## 紹介ページのダウンロード導線
 
 GitHub Pages の紹介ページは、最新リリースのインストーラーを直接ダウンロードできます。表示するリリースは 2 経路で決まります。
