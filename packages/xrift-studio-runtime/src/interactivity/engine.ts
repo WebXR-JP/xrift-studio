@@ -477,12 +477,20 @@ export class InteractivityEngine {
       if (next === null) break;
       this.advanceInterpolations(next);
       this.timeSeconds = next;
-      const due = this.timers
-        .filter((timer) => !timer.cancelled && timer.dueAt <= next)
-        .sort((left, right) => left.dueAt - right.dueAt || left.id - right.id)[0];
+      let dueIndex = -1;
+      let due: PendingTimer | undefined;
+      for (let index = 0; index < this.timers.length; index += 1) {
+        const timer = this.timers[index]!;
+        if (timer.cancelled || timer.dueAt > next) continue;
+        if (!due || timer.dueAt < due.dueAt ||
+          (timer.dueAt === due.dueAt && timer.id < due.id)) {
+          due = timer;
+          dueIndex = index;
+        }
+      }
       if (!due) continue;
       due.cancelled = true;
-      this.timers = this.timers.filter((timer) => timer !== due);
+      this.timers.splice(dueIndex, 1);
       this.runOutput(due.node, due.socket);
     }
 

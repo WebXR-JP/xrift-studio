@@ -119,6 +119,41 @@ function recordingHost(sink: RecordedWrite[], engine: () => InteractivityEngine)
 
 /** Deterministic assertions for the KHR_interactivity execution engine. */
 export function runInteractivityEngineFixtureAssertions(): void {
+  // Equal deadlines retain registration order, even when a callback cancels
+  // another due timer and schedules more work inside the same long frame.
+  {
+    const builder = new GraphBuilder();
+    const firstStart = builder.node("event/onStart");
+    const first = builder.node("flow/setDelay", { values: { duration: builder.float(1) } });
+    const secondStart = builder.node("event/onStart");
+    const second = builder.node("flow/setDelay", { values: { duration: builder.float(1) } });
+    const thirdStart = builder.node("event/onStart");
+    const third = builder.node("flow/setDelay", { values: { duration: builder.float(1) } });
+    const cancelSecond = builder.node("flow/cancelDelay", {
+      values: { delay: { node: second, socket: "lastDelay" } },
+    });
+    const again = builder.node("flow/setDelay", { values: { duration: builder.float(0.5) } });
+    const logs = ["first", "cancelled", "third", "again"].map((message) =>
+      builder.node("debug/log", { configuration: { message: { value: [message] } } }),
+    );
+    builder.connect(firstStart, "out", first);
+    builder.connect(secondStart, "out", second);
+    builder.connect(thirdStart, "out", third);
+    builder.connect(first, "done", cancelSecond);
+    builder.connect(cancelSecond, "out", again);
+    builder.connect(again, "out", logs[0]!);
+    builder.connect(second, "done", logs[1]!);
+    builder.connect(third, "done", logs[2]!);
+    builder.connect(again, "done", logs[3]!);
+    const logged: string[] = [];
+    const engine = new InteractivityEngine(builder.build(), {
+      log: (entry) => logged.push(entry.message),
+    });
+    engine.start();
+    engine.update(2);
+    assert(logged.join(",") === "first,third,again", `timer order/cancellation changed: ${logged}`);
+  }
+
   // A wait followed by a start lands on the wait's duration, and the immediate
   // `out` socket does not wait at all.
   {
