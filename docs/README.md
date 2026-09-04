@@ -33,7 +33,7 @@
 ## AI 連携・開発・運用
 
 - [MCP ツール](./MCP_EDITOR_TOOLS.md): Editor 操作、権限、公開しない操作
-- [ワールド制作の支援方針](./WORLD_AUTHORING_HARNESS.md): 設計図、制作手順、検証の方針
+- [ワールド制作用ハーネス](./WORLD_AUTHORING_HARNESS.md): 制作ツール、実行制御、状態、検証の設計
 - [画面デバッグ](./MCP_DEBUGGING.md): MCP から画面とログを確認する手順
 - [リリース前 E2E](./RELEASE_E2E.md): 配布前の検証
 - [Issue 相談 GPT](./BUG_REPORT_GPT.md): バグ報告の作成支援と設定
