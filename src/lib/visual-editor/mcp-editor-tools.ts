@@ -1,4 +1,5 @@
 import { isPlainObjectRecord } from "../json-guards";
+import { getWorldComponentAuthoring, getWorldComponentGuidance } from "./world-component-authoring";
 import { instantiateSceneAsset, isScenePlaceableAsset } from "./asset-placement";
 import {
   analyzeComponentCode,
@@ -1748,7 +1749,8 @@ function listComponentDefinitions(
   }));
   return unchanged(
     context,
-    { projectKind, definitions, count: definitions.length },
+    { projectKind, definitions, count: definitions.length,
+      worldComponents: getWorldComponentAuthoring(context.bundle.scene, projectKind) },
     "Component定義一覧を取得しました",
   );
 }
@@ -3727,6 +3729,8 @@ function placeBuiltinPrefab(
       recipeId,
       recipeName: placement.recipe.name,
       position,
+      componentId: placement.componentId,
+      placementGuidance: getWorldComponentGuidance(placement.recipe.schemaId),
     },
     activity: `AIが「${placement.recipe.name}」をSceneへ配置しました`,
   };

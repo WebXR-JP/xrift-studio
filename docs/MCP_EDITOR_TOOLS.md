@@ -11,7 +11,35 @@ XRift Studio は、開いている Editor をそのまま AI client へ開放す
 3つが同じ集合であることを保証する。この文書だけ古くなる場合がある。
 名前が食い違った場合は表の名前を優先する。
 
+## CLI から操作する
+
+Studio に同梱する `xrift-studio-mcp-sidecar` は、MCP サーバーと CLI を兼ねる。Windows では Studio のインストール先にある `xrift-studio-mcp-sidecar.exe` を指定する。PATH への登録は不要で、フルパスでも呼び出せる。macOS ではアプリ内の `Contents/MacOS`、Linux では配布形式に応じた同梱先を使う。
+
+```powershell
+# Studio のインストール先で実行する例
+.\xrift-studio-mcp-sidecar.exe tools
+.\xrift-studio-mcp-sidecar.exe describe capture_scene_view
+.\xrift-studio-mcp-sidecar.exe call get_editor_context
+.\xrift-studio-mcp-sidecar.exe call capture_scene_view --args-file .\capture.json --output-dir .\Recording
+```
+
+`tools` は全ツールの説明と JSON Schema、`describe` は指定したツールの定義を返す。両方ともオフラインで使える。`call` は起動中の Studio を操作する。MCP と同じツール名・引数を使い、revision、Script の承認、保存先などの制約も同じになる。編集対象の `projectId` と `sceneId` は `get_editor_context` で取得し、各ツールの定義に従って指定する。
+
+引数は UTF-8 の JSON オブジェクトで渡す。`--args-file <path>`、`--args <JSON>`、`--stdin` のうち一つを選ぶ。省略すると `{}`。PowerShell では引用符の解釈を避けるため `--args-file` を推奨する。接続先は自動検出するが、`--rendezvous <path>`、環境変数 `XRIFT_STUDIO_MCP_RENDEZVOUS` の順で上書きできる。接続ファイルには認証情報が含まれるため、共有しない。
+
+結果は標準出力に JSON で返る。`call` の `ok`、`result`、`error` は Studio の応答で、完成条件の未達などは `result` 内の `completionAccepted` や `nextActions` まで確認する。`--output-dir` を指定すると、撮影と制作状態取得の画像を指定フォルダーへ PNG として保存し、画像の `data` を絶対パスの `path` に置き換える。毎回別名で保存し、既存ファイルを上書きしない。省略時は base64 の画像データを保持する。動画の保存先はこのオプションでは変わらず、制作中のワールドの `Recording/` になる。
+
+終了コードは成功 `0`、Studio による拒否 `1`、引数の誤り `2`、接続失敗 `3`、画像の書き出し失敗 `4`。`4` では操作自体は成功している場合がある。応答と `exportError` を確認し、編集をそのまま再送しない。
+
+この CLI は Studio の描画環境を利用する。画面を起動しない完全なヘッドレス実行には対応しない。Visual から Classic へ変換する既存の `xrift-studio convert` は別の CLI で、詳細は [変換 CLI](./VISUAL_PROJECT_MIGRATION_CLI.md) を参照する。サブコマンドなしの起動は従来の MCP stdio 接続を維持する。
+
+開発時は `pnpm mcp:sidecar:prepare` 後、`src-tauri/target-mcp-sidecar/debug/xrift-studio-mcp.exe`（Windows）から同じコマンドを試せる。
+
 ## surface
+
+ワールド制作の開始・再開には `begin_world_authoring` / `get_world_authoring`、画像判定の記録には `review_world_authoring`、完成条件の確認には `complete_world_authoring` を使う。Studio に内蔵されており、利用者側のソースコードや追加ランナーは不要。`capture_scene_view` は保存パスに加えて MCP の画像を直接返す。制作状態の保存と鮮度の判定は [ワールド制作ハーネス](./WORLD_AUTHORING_HARNESS.md) を参照する。
+
+制作状態と `list_component_definitions` は、ワールドの場合に `worldComponents` も返す。用途別の公式設備、配置と検証の手順、公式フィールド、Prefab の編集可能項目、現在の設備一覧を確認できる。交流・共同作業・発表では ScreenShareDisplay を最初に検討し、採用・省略の理由と利用場所を設計図に残す。Mirror はアバター確認、TagBoard はイベントのタグ選択に合わせて選ぶ。`place_builtin_prefab` は `componentId` と該当する `placementGuidance` を返す。位置・向き・大きさを調整し、客席や操作位置から撮影してから、対応環境で動作を確認する。設備の存在だけで共有・同期が動いたとは判断しない。
 
 tool は「誰が実行するか」で5つに分かれる。この分類が権限の境界を示す。
 document 以外は React shell か Tauri 側の副作用を伴う。
@@ -22,7 +50,7 @@ document 以外は React shell か Tauri 側の副作用を伴う。
 | `local-asset` | React shell | ネイティブ file I/O を伴う |
 | `script` | React shell | project file I/O または Play mode の変更を伴う |
 | `external-store` | React shell | ネットワークと Import Queue を使う |
-| `debug` | React shell | document ではなく現在表示中の viewport を読む |
+| `debug` | React shell | viewport の取得、撮影、制作確認状態の保存。SceneDocument は変更しない |
 
 書き込み tool は `projectId`、`sceneId`、`expectedRevision` を要求する。古い
 snapshot への適用を防ぐためだ。複数 client が同時に触っても編集は直列化される。

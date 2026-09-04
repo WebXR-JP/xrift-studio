@@ -1,4 +1,5 @@
 import { createDefaultParticleAsset } from "./particle-system";
+import { getWorldComponentAuthoring } from "./world-component-authoring";
 import { BUILTIN_ASSET_IDS, createPrototypeProject } from "./prototype-project";
 import {
   createTextureAsset,
@@ -181,6 +182,8 @@ export function runXriftMcpEditorToolFixtures(): void {
       `),
     },
   };
+
+  assertWorldComponentAuthoring(context);
 
   const sceneSettingsResult = executeXriftMcpEditorTool(
     { ...context, editorMode: "play" },
@@ -3731,6 +3734,56 @@ export function Scene() {
     "apply_component_code_import_plan should create two Entities",
   );
   current = { ...current, bundle: applied.bundle, revision: current.revision + 1 };
+}
+
+function assertWorldComponentAuthoring(initial: XriftMcpEditorContext): void {
+  let current = initial;
+  const original = JSON.stringify(initial.bundle);
+  const guideBefore = getWorldComponentAuthoring(initial.bundle.scene, "world")!;
+  const ids: string[] = [];
+  for (const recipeId of ["xrift-prefab.screen-share-display", "xrift-prefab.mirror", "xrift-prefab.tag-board", "xrift-prefab.entry-log-board"]) {
+    const placed = executeXriftMcpEditorTool(current, {
+      id: `fixture-experience-${recipeId}`, tool: "place_builtin_prefab",
+      arguments: { projectId: current.bundle.project.projectId, sceneId: current.bundle.scene.sceneId,
+        expectedRevision: current.revision, recipeId, position: [0, 2, -4] },
+    });
+    const entityId = placed.result.entityId as string;
+    ids.push(entityId);
+    assert(placed.bundle.scene.entities[entityId].components.some(component => component.id === placed.result.componentId),
+      "Placement should return the actual official component ID for the next edit");
+    assert((placed.result.placementGuidance as { recipeId: string }).recipeId === recipeId,
+      "Placement guidance should match the component actually placed");
+    current = { ...current, bundle: placed.bundle, revision: current.revision + 1 };
+  }
+  const discovered = executeXriftMcpEditorTool(current, {
+    id: "fixture-experience-discovery", tool: "list_component_definitions", arguments: {},
+  });
+  const guide = discovered.result.worldComponents as NonNullable<ReturnType<typeof getWorldComponentAuthoring>>;
+  const screen = guide.components.find(component => component.componentName === "ScreenShareDisplay")!;
+  assert(screen.instances.some(instance => instance.entityId === ids[0] && instance.enabled),
+    "Discovery should find the newly placed screen instead of recommending a duplicate");
+  assert(guideBefore.screenShareDecision !== guide.screenShareDecision,
+    "Screen share guidance should reflect the current document");
+  assert(screen.fields.some(field => field.name === "width") && !screen.prefabEditablePropertyNames.includes("width"),
+    "Discovery must distinguish official configurable fields from protected prefab fields");
+  const scene = structuredClone(current.bundle.scene);
+  scene.entities[ids[0]].parentId = ids[1];
+  scene.entities[ids[1]].children.push(ids[0]);
+  scene.entities[ids[1]].enabled = false;
+  const disabled = getWorldComponentAuthoring(scene, "world")!;
+  assert(!disabled.components.find(component => component.componentName === "ScreenShareDisplay")!.instances[0].enabled,
+    "A screen under a disabled ancestor must not count as active");
+  scene.entities[ids[1]].enabled = true;
+  const screenComponent = scene.entities[ids[0]].components.find(component => component.type === "xrift-component")!;
+  screenComponent.enabled = false;
+  assert(!getWorldComponentAuthoring(scene, "world")!.components[0].instances[0].enabled,
+    "Disabled components must not count as active");
+  screenComponent.enabled = true;
+  scene.entities[ids[1]].parentId = ids[0];
+  assert(!getWorldComponentAuthoring(scene, "world")!.components[0].instances[0].enabled,
+    "Malformed parent cycles must terminate without reporting an active screen");
+  assert(getWorldComponentAuthoring(scene, "item") === null, "World planning should not be imposed on item projects");
+  assert(JSON.stringify(initial.bundle) === original, "Discovery and branched placements must not mutate the source document");
 }
 
 function assert(condition: unknown, message: string): asserts condition {

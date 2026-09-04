@@ -1,5 +1,7 @@
 import { textureProcessingSettings } from "../../lib/visual-editor/texture-processing";
 import { normalizeTextureImportSettings } from "../../lib/visual-editor/asset-manifest";
+import { authoringFingerprint, authoringStatus, changeAuthoringState, readAuthoringState } from "../../lib/visual-editor/world-authoring";
+import { getWorldComponentAuthoring } from "../../lib/visual-editor/world-component-authoring";
 import {
   useCallback,
   useEffect,
@@ -1175,6 +1177,7 @@ export function VisualEditorPrototype({
       try {
         const current = bundleRef.current;
         return await recordingSession.startRecording({
+          projectPath: projectPathRef.current,
           label: options.label ?? null,
           clientName: options.clientName ?? null,
           ...(options.profile ? { profile: options.profile } : {}),
@@ -2824,6 +2827,26 @@ export function VisualEditorPrototype({
     const complete = async (
       request: XriftMcpEditorRequestEvent,
     ): Promise<void> => {
+      const completeResponse = async (response: Parameters<typeof tauri.completeXriftMcpRequest>[0]) => {
+        // Preserve successful edit results even when auxiliary history cannot be saved.
+        // Reporting the edit itself as failed could make a client execute it twice.
+        const root = projectPathRef.current;
+        const sceneId = bundleRef.current.scene.sceneId;
+        if (root && response.ok && request.arguments.sceneId === sceneId && request.arguments.projectId === bundleRef.current.project.projectId) {
+          try {
+            const state = readAuthoringState(await tauri.readWorldAuthoring(root, sceneId));
+            const fingerprint = await authoringFingerprint(bundleRef.current);
+            if (state && state.activity.fingerprint !== fingerprint) {
+              const next = { ...state, sequence: state.sequence + 1, completedFingerprint: null,
+                activity: { tool: request.tool, at: new Date().toISOString(), fingerprint } };
+              await tauri.saveWorldAuthoring(root, sceneId, state.sequence, next);
+            }
+          } catch (error) {
+            response = { ...response, result: { ...response.result, authoringWarning: String(error) } };
+          }
+        }
+        return tauri.completeXriftMcpRequest(response);
+      };
       const harness = recordMcpHarnessCall(
         mcpHarnessStateRef.current,
         request.tool,
@@ -2843,10 +2866,11 @@ export function VisualEditorPrototype({
         }
         if (RECORDING_TOOL_NAMES.has(request.tool)) {
           const result = await handleRecordingToolRef.current(request);
-          await tauri.completeXriftMcpRequest({
+          await completeResponse({
             id: request.id,
             ok: true,
-            result,
+            result: { ...result, outputDirectory: projectPathRef.current
+              ? `${projectPathRef.current}/Recording` : result.outputDirectory },
           });
           return;
         }
@@ -2867,6 +2891,46 @@ export function VisualEditorPrototype({
               "対象Sceneが現在のEditorと一致しません。get_editor_contextで再取得してください",
               { projectId, sceneId },
             );
+          }
+          if (["begin_world_authoring", "get_world_authoring", "review_world_authoring", "complete_world_authoring"].includes(request.tool)) {
+            const root = projectPathRef.current;
+            if (!root) throw new Error("プロジェクトを保存してから制作を開始してください。");
+            const worldComponents = getWorldComponentAuthoring(bundleRef.current.scene, bundleRef.current.project.projectKind);
+            const fingerprint = await authoringFingerprint(bundleRef.current);
+            let state = readAuthoringState(await tauri.readWorldAuthoring(root, sceneId));
+            if (request.tool === "complete_world_authoring" && (!state || authoringStatus(state, fingerprint).uncheckedCriteria?.length)) {
+              await completeResponse({ id: request.id, ok: true, result: { projectId, sceneId,
+                ...authoringStatus(state, fingerprint), worldComponents, completionAccepted: false } });
+              return;
+            }
+            if (request.tool === "complete_world_authoring") {
+              try {
+                if ((await tauri.readWorldAuthoringImages(root, sceneId, fingerprint)).length !== 2) throw new Error("Missing images");
+              } catch {
+                await completeResponse({ id: request.id, ok: true, result: { projectId, sceneId,
+                  ...authoringStatus(state, fingerprint), worldComponents, completed: false, completionAccepted: false,
+                  imageWarning: "保存画像を読み取れません。両視点を撮り直してください。",
+                  missingViews: ["spawn", "iso"], nextActions: ["set_scene_view_camera", "capture_scene_view"] } });
+                return;
+              }
+            }
+            if (request.tool !== "get_world_authoring") {
+              const next = changeAuthoringState(state, request.tool, args, fingerprint);
+              if (fingerprint !== await authoringFingerprint(bundleRef.current)) throw new Error("Sceneが変更されました。状態を読み直してください。");
+              await tauri.saveWorldAuthoring(root, sceneId, state?.sequence ?? 0, next);
+              state = next;
+            }
+            let images;
+            let imageWarning;
+            if (request.tool === "get_world_authoring") {
+              try { images = await tauri.readWorldAuthoringImages(root, sceneId, fingerprint); }
+              catch { imageWarning = "保存画像を読み取れません。両視点を撮り直してください。"; }
+            }
+            await completeResponse({ id: request.id, ok: true, result: {
+              projectId, sceneId, ...authoringStatus(state, fingerprint), worldComponents, images, imageWarning,
+              ...(imageWarning ? { completed: false, missingViews: ["spawn", "iso"], nextActions: ["set_scene_view_camera", "capture_scene_view"] } : {}),
+            } });
+            return;
           }
           if (request.tool === "set_scene_view_camera") {
             const preset = mcpOptionalString(args.preset);
@@ -2915,7 +2979,7 @@ export function VisualEditorPrototype({
                 moved.message ?? "Scene Viewのカメラを動かせませんでした",
               );
             }
-            await tauri.completeXriftMcpRequest({
+            await completeResponse({
               id: request.id,
               ok: true,
               result: {
@@ -2933,6 +2997,7 @@ export function VisualEditorPrototype({
             return;
           }
           if (request.tool === "capture_scene_view") {
+            const fingerprint = await authoringFingerprint(bundleRef.current);
             // A frame is only worth anything from the Edit camera the caller
             // just placed; during Play the viewport is the play copy.
             const captured = await requestSceneScreenshot();
@@ -2957,7 +3022,17 @@ export function VisualEditorPrototype({
                 3) /
                 4,
             );
-            await tauri.completeXriftMcpRequest({
+            let authoring = undefined;
+            if (args.authoringView !== undefined) {
+              const root = projectPathRef.current;
+              if (!root) throw new Error("プロジェクトを保存してください。");
+              if (fingerprint !== await authoringFingerprint(bundleRef.current)) throw new Error("撮影中にSceneが変更されました。撮り直してください。");
+              const state = readAuthoringState(await tauri.readWorldAuthoring(root, sceneId));
+              const next = changeAuthoringState(state, request.tool, { ...args, path }, fingerprint);
+              await tauri.saveWorldAuthoring(root, sceneId, state?.sequence ?? 0, next);
+              authoring = authoringStatus(next, fingerprint);
+            }
+            await completeResponse({
               id: request.id,
               ok: true,
               result: {
@@ -2967,6 +3042,11 @@ export function VisualEditorPrototype({
                 path,
                 byteLength,
                 editorMode: editorModeRef.current,
+                image: {
+                  mimeType: "image/png",
+                  data: captured.dataUrl.slice(captured.dataUrl.indexOf(",") + 1),
+                },
+                authoring,
               },
             });
             return;
@@ -2998,7 +3078,7 @@ export function VisualEditorPrototype({
               : {}),
             autoSave: true,
           });
-          await tauri.completeXriftMcpRequest({
+          await completeResponse({
             id: request.id,
             ok: result.status !== "error",
             result,
@@ -3080,7 +3160,7 @@ export function VisualEditorPrototype({
                 }),
               );
               setActiveAssetFolderId(duplicate.folderId ?? null);
-              await tauri.completeXriftMcpRequest({
+              await completeResponse({
                 id: request.id,
                 ok: true,
                 result: {
@@ -3159,7 +3239,7 @@ export function VisualEditorPrototype({
               }).format(new Date()),
               revision: mcpRevisionRef.current,
             });
-            await tauri.completeXriftMcpRequest({
+            await completeResponse({
               id: request.id,
               ok: true,
               result: {
@@ -3219,7 +3299,7 @@ export function VisualEditorPrototype({
               currentProjectPath,
               shader.source.relativePath,
             );
-            await tauri.completeXriftMcpRequest({
+            await completeResponse({
               id: request.id,
               ok: true,
               result: {
@@ -3263,7 +3343,7 @@ export function VisualEditorPrototype({
               );
             }
             await setProjectThumbnailFromAsset(currentProjectPath, asset);
-            await tauri.completeXriftMcpRequest({
+            await completeResponse({
               id: request.id,
               ok: true,
               result: {
@@ -3385,7 +3465,7 @@ export function VisualEditorPrototype({
                 }).format(new Date()),
                 revision: mcpRevisionRef.current,
               });
-              await tauri.completeXriftMcpRequest({
+              await completeResponse({
                 id: request.id,
                 ok: true,
                 result: {
@@ -3507,7 +3587,7 @@ export function VisualEditorPrototype({
               }).format(new Date()),
               revision: mcpRevisionRef.current,
             });
-            await tauri.completeXriftMcpRequest({
+            await completeResponse({
               id: request.id,
               ok: true,
               result: {
@@ -3576,7 +3656,7 @@ export function VisualEditorPrototype({
             // 何も変わらない変換は実行しない。原本を書き直せば内容が同じでも
             // ハッシュとファイルサイズが動き、差分だけが増える。
             if (!plan.pending) {
-              await tauri.completeXriftMcpRequest({
+              await completeResponse({
                 id: request.id,
                 ok: true,
                 result: {
@@ -3689,7 +3769,7 @@ export function VisualEditorPrototype({
                 }).format(new Date()),
                 revision: mcpRevisionRef.current,
               });
-              await tauri.completeXriftMcpRequest({
+              await completeResponse({
                 id: request.id,
                 ok: true,
                 result: {
@@ -3790,7 +3870,7 @@ export function VisualEditorPrototype({
               }).format(new Date()),
               revision: mcpRevisionRef.current,
             });
-            await tauri.completeXriftMcpRequest({
+            await completeResponse({
               id: request.id,
               ok: true,
               result: {
@@ -3884,7 +3964,7 @@ export function VisualEditorPrototype({
             // 何も変わらない最適化は実行しない。原本を書き直せば内容が同じでも
             // ハッシュとファイルサイズが動き、差分だけが増える。
             if (plan.steps.length === 0) {
-              await tauri.completeXriftMcpRequest({
+              await completeResponse({
                 id: request.id,
                 ok: true,
                 result: {
@@ -3983,7 +4063,7 @@ export function VisualEditorPrototype({
                 }).format(new Date()),
                 revision: mcpRevisionRef.current,
               });
-              await tauri.completeXriftMcpRequest({
+              await completeResponse({
                 id: request.id,
                 ok: true,
                 result: {
@@ -4092,7 +4172,7 @@ export function VisualEditorPrototype({
             }).format(new Date()),
             revision: mcpRevisionRef.current,
           });
-          await tauri.completeXriftMcpRequest({
+          await completeResponse({
             id: request.id,
             ok: true,
             result: {
@@ -4364,7 +4444,7 @@ export function VisualEditorPrototype({
                 }).format(new Date()),
                 revision: mcpRevisionRef.current,
               });
-              await tauri.completeXriftMcpRequest({
+              await completeResponse({
                 id: request.id,
                 ok: true,
                 result: {
@@ -4462,7 +4542,7 @@ export function VisualEditorPrototype({
               }).format(new Date()),
               revision: mcpRevisionRef.current,
             });
-            await tauri.completeXriftMcpRequest({
+            await completeResponse({
               id: request.id,
               ok: true,
               result: {
@@ -4512,7 +4592,7 @@ export function VisualEditorPrototype({
           const args = request.arguments;
           const sourceBundle = bundleRef.current;
           if (request.tool === "list_script_templates") {
-            await tauri.completeXriftMcpRequest({
+            await completeResponse({
               id: request.id,
               ok: true,
               result: {
@@ -4544,7 +4624,7 @@ export function VisualEditorPrototype({
               currentProjectPath,
               asset.source.relativePath,
             );
-            await tauri.completeXriftMcpRequest({
+            await completeResponse({
               id: request.id,
               ok: true,
               result: {
@@ -4655,7 +4735,7 @@ export function VisualEditorPrototype({
                 { requestedMode: mode, currentMode: editorModeRef.current },
               );
             }
-            await tauri.completeXriftMcpRequest({
+            await completeResponse({
               id: request.id,
               ok: true,
               result: {
@@ -4844,7 +4924,7 @@ export function VisualEditorPrototype({
             setSaveStatus("dirty");
             const activity = `AIが「${template.name}」から「${name}」を作成し「${latestEntity?.name ?? entity.name}」へ追加しました`;
             setNotice(`${activity}。変更を自動保存します`);
-            await tauri.completeXriftMcpRequest({
+            await completeResponse({
               id: request.id,
               ok: true,
               result: {
@@ -5169,7 +5249,7 @@ export function VisualEditorPrototype({
               );
             }
           }
-          await tauri.completeXriftMcpRequest({
+          await completeResponse({
             id: request.id,
             ok: true,
             result: {
@@ -5221,7 +5301,7 @@ export function VisualEditorPrototype({
                   .includes(query);
               })
               .slice(0, limit);
-            await tauri.completeXriftMcpRequest({
+            await completeResponse({
               id: request.id,
               ok: true,
               result: { providerId, assets, count: assets.length },
@@ -5234,7 +5314,7 @@ export function VisualEditorPrototype({
               providerId,
               externalId,
             );
-            await tauri.completeXriftMcpRequest({
+            await completeResponse({
               id: request.id,
               ok: true,
               result: { options },
@@ -5339,7 +5419,7 @@ export function VisualEditorPrototype({
             }).format(new Date()),
             revision: mcpRevisionRef.current,
           });
-          await tauri.completeXriftMcpRequest({
+          await completeResponse({
             id: request.id,
             ok: true,
             result: {
@@ -5431,7 +5511,7 @@ export function VisualEditorPrototype({
           await waitForEditorCommit();
         }
         try {
-          await tauri.completeXriftMcpRequest({
+          await completeResponse({
             id: request.id,
             ok: true,
             result: withMcpHarnessWarning(
@@ -5464,10 +5544,12 @@ export function VisualEditorPrototype({
             ? error
             : new XriftMcpEditorToolError(
                 "EDITOR_ERROR",
-                "AI編集を完了できませんでした",
+                request.tool.includes("world_authoring") || request.arguments.authoringView !== undefined
+                  ? (error instanceof Error ? error.message : String(error))
+                  : "AI編集を完了できませんでした",
               );
         try {
-          await tauri.completeXriftMcpRequest({
+          await completeResponse({
             id: request.id,
             ok: false,
             error: {
@@ -12087,6 +12169,7 @@ export function VisualEditorPrototype({
               onViewportChange: (patch) => {
                 recordingSession.setViewport(patch);
               },
+              projectRecordingDirectory: projectPath ? `${projectPath}/Recording` : undefined,
               onChooseDirectory: () => {
                 void tauri
                   .selectDirectory(

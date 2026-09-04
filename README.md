@@ -29,7 +29,9 @@ Visual Editorのヘッダーにある「Classicへ書き出す」では、既存
 xrift-studio convert ./my-visual-project --to classic --out ./my-xrift-world
 ```
 
-CLIはnpm公開前のため、`pnpm cli:build`でビルドして`node dist/cli/xrift-studio.mjs`から実行します。書き出すのは公開時にXRiftへ送るものと同じTypeScript / React Three Fiberのソースで、書き出し先は公式テンプレートの依存関係だけで`npm install`と`npm run dev`が通ります。仕様は[Visual Project Classic Export CLI](./docs/VISUAL_PROJECT_MIGRATION_CLI.md)を参照してください。
+この変換CLIはnpm公開前のため、`pnpm cli:build`でビルドして`node dist/cli/xrift-studio.mjs`から実行します。書き出すのは公開時にXRiftへ送るものと同じTypeScript / React Three Fiberのソースで、書き出し先は公式テンプレートの依存関係だけで`npm install`と`npm run dev`が通ります。仕様は[Visual Project Classic Export CLI](./docs/VISUAL_PROJECT_MIGRATION_CLI.md)を参照してください。
+
+起動中の Studio をターミナルから操作する場合は、同梱の `xrift-studio-mcp-sidecar` を使います。MCP と同じ全ツールを呼び出し、結果を JSON、撮影画像を PNG で受け取れます。Node.js やリポジトリのクローンは不要です。[操作方法](./docs/MCP_EDITOR_TOOLS.md#cli-から操作する)を参照してください。
 
 ## 体験設計
 
@@ -140,6 +142,10 @@ pnpm dev
 Ollamaがある場合は、ローカルモデルと接続先（Codex、Claude Code、OpenCode）を選べます。XRift MCPの登録と、Ollamaをモデルの提供元として使う設定をまとめて行えます。設定時にモデルがツール呼び出しに対応しているか再確認します。モデルのダウンロードやクライアントの起動は自動では行いません。
 
 登録後にAIクライアントを再起動するか、MCPを再読み込みすると、開いているSceneの読み取り、Entityの更新、Assetの配置など、許可された操作を利用できます。
+
+制作目標と画像の確認状況はStudioが保存し、MCPの再接続後も引き継げます。撮影画像はMCPから直接受け取り、録画は制作中のワールドの`Recording/`に保存します。利用者がこのリポジトリをクローンしたり、追加の実行スクリプトを用意したりする必要はありません。[ワールド制作ハーネス](./docs/WORLD_AUTHORING_HARNESS.md)を参照してください。
+
+画面共有、ミラー、イベントのタグ選択などは、ワールドで体験することに合わせて選べます。MCPは既存設備の一覧と配置・確認の手順を返し、客席からの見え方、操作する場所、通路、周囲との収まりを整える作業を支援します。
 
 複数のクライアントが同時に操作した場合は、編集を順番に処理します。処理中で受け付けられない場合は`EDITOR_BUSY`を返します。クライアントはSceneの最新のリビジョンを取得して再試行できます。Claude Desktop / Coworkはローカルセッションで利用できます。リモートのCoworkではローカルMCPサーバーを起動できません。
 

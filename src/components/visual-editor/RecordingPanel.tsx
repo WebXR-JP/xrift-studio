@@ -17,6 +17,7 @@ import { EDITOR_ICONS } from "./editor-icons";
 import { useRecordingSession } from "./useRecordingSession";
 
 export type RecordingPanelProps = {
+  projectRecordingDirectory?: string;
   /** A start or stop is in flight; the main button waits for it. */
   busy: boolean;
   nativeAvailable: boolean;
@@ -51,6 +52,7 @@ const secondaryButton =
  * starting a take and a person pressing the button see the same thing.
  */
 export function RecordingPanel({
+  projectRecordingDirectory,
   busy,
   nativeAvailable,
   onStart,
@@ -303,10 +305,10 @@ export function RecordingPanel({
           <h3 id="recording-directory-heading" className={sectionHeading}>
             保存先
           </h3>
-          <p className="truncate font-mono text-[10px] text-slate-600" title={state.outputDirectory ?? "既定の保存先"}>
-            {state.outputDirectory ?? "既定（ビデオ / XRift Studio）"}
+          <p className="truncate font-mono text-[10px] text-slate-600" title={projectRecordingDirectory ?? state.outputDirectory ?? "既定の保存先"}>
+            {projectRecordingDirectory ?? state.outputDirectory ?? "既定（ビデオ / XRift Studio）"}
           </p>
-          <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+          {projectRecordingDirectory ? <p className="mt-1 text-[11px] text-slate-500">制作中のワールド内に保存します。</p> : <div className="mt-1.5 grid grid-cols-2 gap-1.5">
             <button type="button" onClick={onChooseDirectory} disabled={active} className={secondaryButton}>
               <EDITOR_ICONS.folder size={13} aria-hidden="true" />
               フォルダーを選ぶ
@@ -319,7 +321,7 @@ export function RecordingPanel({
             >
               既定に戻す
             </button>
-          </div>
+          </div>}
         </section>
       ) : null}
     </div>

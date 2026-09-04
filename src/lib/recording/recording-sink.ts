@@ -11,6 +11,7 @@
 import { tauri } from "../tauri";
 
 export type RecordingSinkOpenRequest = {
+  projectPath?: string;
   fileStem: string;
   extension: "webm" | "mp4";
   /** null means the default directory the native side chooses. */
