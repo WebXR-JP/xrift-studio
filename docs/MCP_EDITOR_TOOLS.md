@@ -13,6 +13,8 @@ XRift Studio は、開いている Editor をそのまま AI client へ開放す
 
 ## surface
 
+ワールド制作の開始・再開には `begin_world_authoring` / `get_world_authoring`、画像判定の記録には `review_world_authoring`、完成条件の確認には `complete_world_authoring` を使う。Studio に内蔵されており、利用者側のソースコードや追加ランナーは不要。`capture_scene_view` は保存パスに加えて MCP の画像を直接返す。制作状態の保存と鮮度の判定は [ワールド制作ハーネス](./WORLD_AUTHORING_HARNESS.md) を参照する。
+
 tool は「誰が実行するか」で5つに分かれる。この分類が権限の境界を示す。
 document 以外は React shell か Tauri 側の副作用を伴う。
 
@@ -22,7 +24,7 @@ document 以外は React shell か Tauri 側の副作用を伴う。
 | `local-asset` | React shell | ネイティブ file I/O を伴う |
 | `script` | React shell | project file I/O または Play mode の変更を伴う |
 | `external-store` | React shell | ネットワークと Import Queue を使う |
-| `debug` | React shell | document ではなく現在表示中の viewport を読む |
+| `debug` | React shell | viewport の取得、撮影、制作確認状態の保存。SceneDocument は変更しない |
 
 書き込み tool は `projectId`、`sceneId`、`expectedRevision` を要求する。古い
 snapshot への適用を防ぐためだ。複数 client が同時に触っても編集は直列化される。

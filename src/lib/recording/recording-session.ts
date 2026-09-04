@@ -87,6 +87,7 @@ type PersistedRecordingState = {
 };
 
 export type RecordingStartOptions = {
+  projectPath?: string;
   label?: string | null;
   projectId?: string | null;
   projectTitle?: string | null;
@@ -555,6 +556,7 @@ class RecordingSessionStore {
     let opened: { path: string; directory: string };
     try {
       opened = await sink.open({
+        projectPath: options.projectPath,
         fileStem,
         extension,
         directory: this.state.outputDirectory,

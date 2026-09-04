@@ -27,6 +27,7 @@ const MCP_EDITOR_QUEUE_TIMEOUT_MILLISECONDS: u64 = 2_000;
 const MCP_EDITOR_HEARTBEAT_TIMEOUT_MILLISECONDS: u64 = 120_000;
 const MCP_MAX_CONCURRENT_CONNECTIONS: usize = 32;
 const MCP_MAX_MESSAGE_BYTES: usize = 1024 * 1024;
+const MCP_MAX_RESPONSE_BYTES: usize = 32 * 1024 * 1024;
 const MCP_MAX_CLIENT_NAME_CHARS: usize = 128;
 // The allow-list is generated from src/lib/visual-editor/mcp-tool-registry.ts,
 // the one place a tool is declared. Rust matches names and forwards; it never
@@ -672,7 +673,7 @@ async fn handle_broker_connection(
         }
     };
     let payload = serde_json::to_vec(&response).map_err(|error| error.to_string())?;
-    if payload.len() > MCP_MAX_MESSAGE_BYTES {
+    if payload.len() > MCP_MAX_RESPONSE_BYTES {
         return write_broker_error(
             &mut writer,
             response.id,
@@ -1906,7 +1907,7 @@ pub fn run_stdio_server() -> Result<(), String> {
                     "protocolVersion": MCP_PROTOCOL_VERSION,
                     "capabilities": { "tools": { "listChanged": false } },
                     "serverInfo": { "name": MCP_SERVER_NAME, "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": "XRift Studio edits one Scene of a world that people visit together. Output: one finished world. Write a short blueprint before the first write (purpose, mood, quality level, ground type, signature element, exclusions, budget, assumptions). State the blueprint and continue. Stop only for Script approval, login, publishing. Terrain, grass, post effects, external assets, heavy models require one line of reason in the blueprint. Without that line, skip them. Build order (skip allowed, no reorder): ground and blockout with real Materials; signature element; sky, ambient light, fog together; remaining blueprint items; verification. Three same-category writes (Terrain, grass, one Entity Transform, one Material, Scene settings) without capture_scene_view return a harness warning. Post effects require a before/after capture_scene_view comparison. Do not ship default grey primitives. Motion, repetition, generative structure belong to Scripts. Read get_scripting_capabilities and list_script_templates before writing one. Do not report a world as done without capture_scene_view from the spawn point at eye height and from the iso view; metrics and the document state expectations, frames state results. When the client has the xrift-world-direction skill, read it before building. Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Use get_terrain before sculpt_terrain; Terrain is a static height-sampled mesh with a fixed Trimesh Collider, so create_terrain and sculpt_terrain are Edit-only. Script execution is not sandboxed. XRift Studio enforces a project-scoped content-hash approval gate before evaluating Script source. XRift Studio's stdio MCP editor tools cannot grant approval. The debug-only privileged Tauri MCP bridge can execute webview JavaScript and is outside this trust boundary. set_play_mode returns SCRIPT_APPROVAL_REQUIRED when referenced source is not approved; the user must review and approve it in the Studio UI, or the client may explicitly request unapprovedPolicy:'skip' to start without those Scripts. Call get_scripting_capabilities and list_script_templates before authoring a Script. Use create_script_asset with templateId to create a built-in example, or apply_script_template to create it and attach its Script Component to an Entity in one editor revision. For custom source, use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, update_script_component to declare properties and references, then set_play_mode. Use import_audio_asset, import_font_asset, import_texture_asset, import_model_asset, import_skybox_asset, or import_shader_asset only for a trusted absolute local path while Edit is active; the Editor validates extension, signature, regular-file/no-link status, and size limits, then copies it into managed project storage without returning file bytes or the external path. Use get_model_asset/update_model_asset for import settings and material slots, and reimport_model_asset to apply derived Model changes. Use get_shader_asset/update_shader_asset for project shader source. Use get_audio_asset plus place_asset, or add_component with core.audio-source and update_component, for persistent Audio Source authoring. Use get_texture_asset/update_texture_asset for persistent sampler and import settings; updates are supported during Play and restart only consuming Entities. Runtime ctx.audioSources, ctx.materials, and ctx.particles changes reset on Stop; use persistent Audio Source, Material, or Particle tools to save authoring data. Call list_component_definitions and get_entity_components before add_component, update_component, or remove_component. Use create_prefab to turn an Entity hierarchy into a reusable Prefab Asset, then place_asset to instantiate it. While Play is active, Entity enabled state and supported component/scene structure tools synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. To record the Scene View while building, call get_recording_status, then start_recording (idempotent), set_recording_camera with fitScene as the world grows, and stop_recording when done; a failed recording call never affects editing tools. XRift Studio must be open with a visual project."
+                    "instructions": "XRift Studio edits one Scene of a world that people visit together. Output: one finished world. Studio includes persistent world authoring: call get_world_authoring to resume, or begin_world_authoring to save the blueprint and completion criteria. No source checkout, Node.js runner or local skill is required. After edits, capture_scene_view with authoringView spawn and iso returns images and capture IDs; review_world_authoring records each criterion verdict, and complete_world_authoring checks current evidence. Recording files go to Recording inside the open world project. Write a short blueprint before the first write (purpose, mood, quality level, ground type, signature element, exclusions, budget, assumptions). State the blueprint and continue. Stop only for Script approval, login, publishing. Terrain, grass, post effects, external assets, heavy models require one line of reason in the blueprint. Without that line, skip them. Build order (skip allowed, no reorder): ground and blockout with real Materials; signature element; sky, ambient light, fog together; remaining blueprint items; verification. Three same-category writes (Terrain, grass, one Entity Transform, one Material, Scene settings) without capture_scene_view return a harness warning. Post effects require a before/after capture_scene_view comparison. Do not ship default grey primitives. Motion, repetition, generative structure belong to Scripts. Read get_scripting_capabilities and list_script_templates before writing one. Do not report a world as done without capture_scene_view from the spawn point at eye height and from the iso view; metrics and the document state expectations, frames state results. When the client has the xrift-world-direction skill, read it before building. Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Use get_terrain before sculpt_terrain; Terrain is a static height-sampled mesh with a fixed Trimesh Collider, so create_terrain and sculpt_terrain are Edit-only. Script execution is not sandboxed. XRift Studio enforces a project-scoped content-hash approval gate before evaluating Script source. XRift Studio's stdio MCP editor tools cannot grant approval. The debug-only privileged Tauri MCP bridge can execute webview JavaScript and is outside this trust boundary. set_play_mode returns SCRIPT_APPROVAL_REQUIRED when referenced source is not approved; the user must review and approve it in the Studio UI, or the client may explicitly request unapprovedPolicy:'skip' to start without those Scripts. Call get_scripting_capabilities and list_script_templates before authoring a Script. Use create_script_asset with templateId to create a built-in example, or apply_script_template to create it and attach its Script Component to an Entity in one editor revision. For custom source, use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, update_script_component to declare properties and references, then set_play_mode. Use import_audio_asset, import_font_asset, import_texture_asset, import_model_asset, import_skybox_asset, or import_shader_asset only for a trusted absolute local path while Edit is active; the Editor validates extension, signature, regular-file/no-link status, and size limits, then copies it into managed project storage without returning file bytes or the external path. Use get_model_asset/update_model_asset for import settings and material slots, and reimport_model_asset to apply derived Model changes. Use get_shader_asset/update_shader_asset for project shader source. Use get_audio_asset plus place_asset, or add_component with core.audio-source and update_component, for persistent Audio Source authoring. Use get_texture_asset/update_texture_asset for persistent sampler and import settings; updates are supported during Play and restart only consuming Entities. Runtime ctx.audioSources, ctx.materials, and ctx.particles changes reset on Stop; use persistent Audio Source, Material, or Particle tools to save authoring data. Call list_component_definitions and get_entity_components before add_component, update_component, or remove_component. Use create_prefab to turn an Entity hierarchy into a reusable Prefab Asset, then place_asset to instantiate it. While Play is active, Entity enabled state and supported component/scene structure tools synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. To record the Scene View while building, call get_recording_status, then start_recording (idempotent), set_recording_camera with fitScene as the world grows, and stop_recording when done; a failed recording call never affects editing tools. XRift Studio must be open with a visual project."
                 }),
             )?,
             "ping" => write_json_rpc_result(&mut stdout, id, json!({}))?,
@@ -1946,12 +1947,28 @@ pub fn run_stdio_server() -> Result<(), String> {
                     },
                 ) {
                     Ok(response) if response.ok => {
-                        let result = response.result.unwrap_or_else(|| json!({}));
+                        let mut result = response.result.unwrap_or_else(|| json!({}));
+                        let image = if tool_name == "capture_scene_view" {
+                            result.as_object_mut().and_then(|object| object.remove("image"))
+                        } else { None };
+                        let mut content = vec![json!({ "type": "text", "text": serde_json::to_string(&result).unwrap_or_else(|_| "{}".to_string()) })];
+                        if let Some(image) = image {
+                            content.push(json!({ "type": "image", "mimeType": image["mimeType"], "data": image["data"] }));
+                        }
+                        if tool_name == "get_world_authoring" {
+                            if let Some(Value::Array(images)) = result.as_object_mut().and_then(|object| object.remove("images")) {
+                                content[0] = json!({ "type": "text", "text": serde_json::to_string(&result).unwrap_or_default() });
+                                for image in images {
+                                    content.push(json!({ "type": "text", "text": format!("{} captureId={}", image["view"], image["captureId"]) }));
+                                    content.push(json!({ "type": "image", "mimeType": image["mimeType"], "data": image["data"] }));
+                                }
+                            }
+                        }
                         write_json_rpc_result(
                             &mut stdout,
                             id,
                             json!({
-                                "content": [{ "type": "text", "text": serde_json::to_string(&result).unwrap_or_else(|_| "{}".to_string()) }],
+                                "content": content,
                                 "structuredContent": result,
                                 "isError": false
                             }),
@@ -2086,10 +2103,10 @@ fn proxy_tool_call(
     stream.flush().map_err(|error| error.to_string())?;
     let mut response = String::new();
     let bytes = BufReader::new(stream)
-        .take((MCP_MAX_MESSAGE_BYTES + 1) as u64)
+        .take((MCP_MAX_RESPONSE_BYTES + 1) as u64)
         .read_line(&mut response)
         .map_err(|error| error.to_string())?;
-    if bytes == 0 || bytes > MCP_MAX_MESSAGE_BYTES {
+    if bytes == 0 || bytes > MCP_MAX_RESPONSE_BYTES {
         return Err("XRift Studio returned an invalid response".to_string());
     }
     serde_json::from_str(&response)
@@ -2265,6 +2282,35 @@ fn terrain_grass_appearance_schema() -> Value {
 
 fn tool_definitions() -> Value {
     json!([
+        {
+            "name": "begin_world_authoring",
+            "description": "Save a blueprint and unique completion criteria in the open world project before editing. No repository clone or client-side skill is required. If a goal already exists, use get_world_authoring to resume. Include visual and metrics/budget criteria. Capture both spawn and iso views after editing, then review each criterion.",
+            "inputSchema": { "type": "object", "properties": {
+                "projectId": { "type": "string" }, "sceneId": { "type": "string" },
+                "blueprint": { "type": "string", "minLength": 1, "maxLength": 20000 },
+                "replaceExisting": { "type": "boolean", "description": "Start a new goal or revise the blueprint. Explicit true replaces the current criteria and clears reviews; previous state remains in the journal." },
+                "criteria": { "type": "array", "minItems": 1, "maxItems": 100, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 1000 } }
+            }, "required": ["projectId", "sceneId", "blueprint", "criteria"], "additionalProperties": false }
+        },
+        {
+            "name": "get_world_authoring",
+            "description": "Resume persistent world authoring: return the blueprint, criteria, capture IDs, reviews and nextActions. Scene content changes invalidate previous captures even across app restarts. Follow nextActions; the LLM judges image quality, Studio checks evidence freshness.",
+            "inputSchema": { "type": "object", "properties": { "projectId": { "type": "string" }, "sceneId": { "type": "string" } }, "required": ["projectId", "sceneId"], "additionalProperties": false }
+        },
+        {
+            "name": "review_world_authoring",
+            "description": "Record the LLM's verdict for one exact completion criterion after viewing both current captures. Supply both capture IDs and concrete observations (plus metrics when relevant). A failed criterion needs edits and new captures. This does not automatically judge image quality.",
+            "inputSchema": { "type": "object", "properties": {
+                "projectId": { "type": "string" }, "sceneId": { "type": "string" },
+                "criterion": { "type": "string" }, "passed": { "type": "boolean" }, "reason": { "type": "string", "minLength": 1, "maxLength": 5000 },
+                "captureIds": { "type": "array", "minItems": 2, "maxItems": 2, "uniqueItems": true, "items": { "type": "string" } }
+            }, "required": ["projectId", "sceneId", "criterion", "passed", "reason", "captureIds"], "additionalProperties": false }
+        },
+        {
+            "name": "complete_world_authoring",
+            "description": "Check completion against the latest scene and saved image reviews. Missing or stale evidence is not completion; get_world_authoring returns unchecked criteria and nextActions. This never publishes the world or approves Scripts.",
+            "inputSchema": { "type": "object", "properties": { "projectId": { "type": "string" }, "sceneId": { "type": "string" } }, "required": ["projectId", "sceneId"], "additionalProperties": false }
+        },
         {
             "name": "get_editor_context",
             "description": "Read the currently open XRift Studio project, scene, selection, mode, save state, revision, and JSON-safe Script runtime diagnostics. Call this before a write and after Play changes.",
@@ -2965,12 +3011,13 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "capture_scene_view",
-            "description": "Save one PNG of the Scene View exactly as rendered and return its path in the app debug-captures directory. This is how a change is checked rather than assumed: metrics and the document say what should be on screen, and only a frame says what is. Point the camera with set_scene_view_camera first. Changes nothing in the project.",
+            "description": "Return the rendered Scene View as an MCP image, with a saved PNG path for reference. No external file access is needed. Point the camera with set_scene_view_camera first. For world authoring, set authoringView to spawn (camera at spawn eye height) or iso (isometric camera); this records a capture ID for review_world_authoring. Changes no scene content.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "projectId": { "type": "string", "minLength": 1 },
-                    "sceneId": { "type": "string", "minLength": 1 }
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "authoringView": { "type": "string", "enum": ["spawn", "iso"] }
                 },
                 "required": ["projectId", "sceneId"],
                 "additionalProperties": false
@@ -3009,7 +3056,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "start_recording",
-            "description": "Start recording the Scene View into a video file at the stored recording profile (aspect ratio, size, frame rate), or return the take that is already running. Idempotent: calling it twice never opens a second file; the result says whether a new take started (started: true) or an existing one continues. The recording view is shown and the saved recording camera is applied unless showViewport is false. Frames are streamed to disk, so a take may run for hours; a take stops by itself after 6 hours. On a WebView without MediaRecorder (WebKitGTK on Linux) the frames are handed to an FFmpeg found on PATH instead; without one the result is status failed with a message. The file lands in the app's recordings folder (or the folder the author picked); the caller cannot choose the path. Does not change the project.",
+            "description": "Start recording the Scene View into a video file at the stored recording profile (aspect ratio, size, frame rate), or return the take that is already running. Idempotent: calling it twice never opens a second file; the result says whether a new take started (started: true) or an existing one continues. The recording view is shown and the saved recording camera is applied unless showViewport is false. Frames are streamed to disk, so a take may run for hours; a take stops by itself after 6 hours. On a WebView without MediaRecorder (WebKitGTK on Linux) the frames are handed to an FFmpeg found on PATH instead; without one the result is status failed with a message. For a saved world, the file and metadata land in Recording inside the open world project, excluded from Git; the caller cannot choose a path outside that project. Does not change the project.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

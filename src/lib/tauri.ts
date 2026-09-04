@@ -398,6 +398,7 @@ export const tauri = {
   recordingEncoderSupport: () =>
     invoke<RecordingEncoderSupport>("recording_encoder_support"),
   beginRecordingFile: (request: {
+    projectPath?: string;
     directory: string | null;
     fileStem: string;
     extension: "webm" | "mp4";
@@ -448,6 +449,12 @@ export const tauri = {
     }),
   readVisualProject: (projectPath: string) =>
     invoke<VisualProjectFiles>("read_visual_project", { projectPath }),
+  readWorldAuthoring: (projectPath: string, sceneId: string) =>
+    invoke<unknown>("read_world_authoring", { projectPath, sceneId }),
+  readWorldAuthoringImages: (projectPath: string, sceneId: string, fingerprint: string) =>
+    invoke<Array<{ view: string; captureId: string; mimeType: string; data: string }>>("read_world_authoring_images", { projectPath, sceneId, fingerprint }),
+  saveWorldAuthoring: (projectPath: string, sceneId: string, expectedSequence: number, state: unknown) =>
+    invoke<void>("save_world_authoring", { projectPath, sceneId, expectedSequence, state }),
   saveVisualProject: (
     projectPath: string,
     request: VisualProjectWriteRequest,

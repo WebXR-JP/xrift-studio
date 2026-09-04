@@ -3,8 +3,12 @@
 // Source of truth: src/lib/visual-editor/mcp-tool-registry.ts
 // Regenerate with: pnpm mcp:tool-names
 
-pub const MCP_TOOL_NAMES: [&str; 127] = [
+pub const MCP_TOOL_NAMES: [&str; 131] = [
     "get_editor_context",
+    "begin_world_authoring",
+    "get_world_authoring",
+    "review_world_authoring",
+    "complete_world_authoring",
     "get_scripting_capabilities",
     "analyze_component_code",
     "apply_component_code_import_plan",

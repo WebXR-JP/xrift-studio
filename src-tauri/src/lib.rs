@@ -2,6 +2,7 @@
 
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
+mod world_authoring;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
@@ -5495,6 +5496,7 @@ const RECORDING_MAX_REPEAT: usize = 60 * 60;
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RecordingBeginRequest {
+    project_path: Option<String>,
     directory: Option<String>,
     file_stem: String,
     extension: String,
@@ -5616,7 +5618,17 @@ fn recording_begin_file(
         return Err("録画ファイル名が不正です。".to_string());
     }
 
-    let directory = match request.directory {
+    let directory = if let Some(project_path) = request.project_path.as_deref() {
+        let root = canonical_project_root(project_path)?;
+        if !root.join(VISUAL_PROJECT_MANIFEST).is_file() {
+            return Err("制作プロジェクトが見つかりません。".to_string());
+        }
+        let directory = safe_join_path(&root, "Recording")?;
+        world_authoring::ignore_generated_directory(&root, "/Recording/")?;
+        std::fs::create_dir_all(&directory)
+            .map_err(|error| format!("録画の保存先を作成できません: {error}"))?;
+        directory
+    } else { match request.directory {
         Some(chosen) if !chosen.trim().is_empty() => {
             let chosen = PathBuf::from(chosen);
             if !chosen.is_absolute() {
@@ -5633,7 +5645,7 @@ fn recording_begin_file(
                 .map_err(|error| format!("録画の保存先を作成できません: {}", error))?;
             default
         }
-    };
+    }};
 
     let mut files = state
         .files
@@ -5964,6 +5976,9 @@ pub fn run() {
             save_debug_video,
             save_debug_image,
             recording_default_directory,
+            world_authoring::read_world_authoring,
+            world_authoring::read_world_authoring_images,
+            world_authoring::save_world_authoring,
             recording_encoder_support,
             recording_begin_file,
             recording_append_chunk,

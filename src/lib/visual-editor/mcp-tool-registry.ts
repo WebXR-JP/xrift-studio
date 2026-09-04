@@ -22,7 +22,7 @@ export type XriftMcpToolSurface =
   | "script"
   /** Network plus the Import Queue, so the React shell owns it. */
   | "external-store"
-  /** Reads the live viewport rather than document history. */
+  /** Live viewport access and persistent authoring evidence, outside SceneDocument. */
   | "debug";
 
 export type XriftMcpToolDefinition = {
@@ -32,6 +32,10 @@ export type XriftMcpToolDefinition = {
 
 export const XRIFT_MCP_TOOLS = [
   { name: "get_editor_context", surface: "document" },
+  { name: "begin_world_authoring", surface: "debug" },
+  { name: "get_world_authoring", surface: "debug" },
+  { name: "review_world_authoring", surface: "debug" },
+  { name: "complete_world_authoring", surface: "debug" },
   { name: "get_scripting_capabilities", surface: "document" },
   { name: "analyze_component_code", surface: "document" },
   { name: "apply_component_code_import_plan", surface: "document" },
