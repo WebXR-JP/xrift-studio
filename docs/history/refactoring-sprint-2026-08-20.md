@@ -86,7 +86,7 @@ const visibleDetail = safeDetail?.split(/\r?\n/).slice(-6).join("\n");
 
 - `stderr` を先に連結してから末尾6行を取るので、**stderr は構造的に必ず捨てられる**
 - 末尾6行は今回、CLI が親切に出した「設定例の JSON」の閉じ括弧だった
-- `VisualUploadDialog.tsx` には `onLog` の受け口が無く、ストリームされている CLI ログは**どこにも表示されていない**
+- `VisualUploadDialog.tsx` には `onLog` を受け取る prop が無く、ストリームされている CLI ログは**どこにも表示されていない**
 
 監査 T5「診断・エラー契約の分裂」の現物。ユーザーは 28ファイル中どれが何で落ちたのかを知る手段が UI 上に無い。
 

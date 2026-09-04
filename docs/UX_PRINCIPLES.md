@@ -4,9 +4,9 @@ XRift Studio の体験は、華やかな演出ではなく、制作の流れを�
 
 この文書は、機能の追加、既存画面の変更、画面文言、レビューで共通に使う設計判断の基準である。実装時は `AGENT.md` のルールと `.agents/skills/xrift-studio-ux/SKILL.md` の手順も参照する。
 
-状態ごとの動きと機能一覧は [マイクロインタラクション Wiki](./UX_INTERACTIONS.md) を正とする。新機能の実装時は、その機能 ID と参照する `MI-xx` を明記する。右 Inspector の密度、枠、参照フィールドは [Inspector デザインガイド](./EDITOR_INSPECTOR_DESIGN.md) に従う。
+状態ごとの動きと機能一覧は [マイクロインタラクション Wiki](./UX_INTERACTIONS.md) に従う。新機能の実装時は、その機能 ID と参照する `MI-xx` を明記する。右 Inspector の密度、枠、参照フィールドは [Inspector デザインガイド](./EDITOR_INSPECTOR_DESIGN.md) に従う。
 
-## 体験の約束
+## 操作と結果の表示方針
 
 ### 1. 必要な変化を、必要な時に、行動できる形で届ける
 

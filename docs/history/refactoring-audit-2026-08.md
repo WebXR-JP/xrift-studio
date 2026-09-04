@@ -28,7 +28,7 @@
 
 ## 横断的な構造問題（重要度順）
 
-### T1.【最重要】「単一の真実」の不在 — 同じ知識の並列列挙が5系統
+### T1.【最重要】同じ定義が5系統に重複している
 
 **(a) Core component のスキーマが3重手書き**
 collider の `friction≥0`、animation の `speed 0.01–10`、audio の `maxDistance≥refDistance` … 同一制約が
@@ -96,12 +96,12 @@ fixture 側も: mcp fixture は `expectedRevision` リテラルを65箇所手書
 2. **B3**: texture の open を `open_absolute_file_without_links` に統一（H-3 の統合前でも1行で可能）。
 3. **B4**: dead starter template ~2,000行を削除 or registry 登録（意図確認の上）。`starter-templates.ts` 3,681 → ~1,500行。
 4. `get_scripting_capabilities` の静的ドキュメント520行を `scripting-capabilities.data.ts` へ分離。
-5. `json-guards.ts` / `import/shared.ts` 抽出 — `isRecord`×6 / `errorMessage`×4 / `safeSegment`×3（非互換2実装は fixture で現挙動固定後に명확히〔ミョンファキ＝明確に〕分離）等の統合。
-6. AnimationInspector の死んだ props 契約を削除、`list_files` のエラー握り潰し修正、ブローカトークンのフォールバック廃止（乱数失敗時は起動失敗に）。
+5. `json-guards.ts` / `import/shared.ts` 抽出 — `isRecord`×6 / `errorMessage`×4 / `safeSegment`×3（非互換2実装は fixture で現挙動固定後に明確に分離）等の統合。
+6. AnimationInspector の使われていない props 定義を削除、`list_files` がエラーを無視する処理の修正、ブローカトークンのフォールバック廃止（乱数失敗時は起動失敗に）。
 
 ### Phase 1 — Registry の確立（1〜2週）
 
-7. **asset-format-registry 完全化**: `kindForPath` / `mimeTypeForPath` / icon / label / placeable / openCommand を集約し、8箇所のハードコード正規表現と6箇所の UI switch を置換。`no-restricted-syntax` lint で再発防止（B2 系乖離はここで構造的に閉じる）。
+7. **asset-format-registry 完全化**: `kindForPath` / `mimeTypeForPath` / icon / label / placeable / openCommand を集約し、8箇所のハードコード正規表現と6箇所の UI switch を置換。`no-restricted-syntax` lint で再発防止（B2 系の定義の不一致を、共通化によって防ぐ）。
 8. **KHR 拡張ディスクリプタ表**（T1-d）: 適用・clone・glTF 取込を1表から駆動。**B2 はここで恒久修正**。既存 fixture で入出力パリティ検証後に旧実装削除。UI 側（StandardMaterialQuickEditor）のテーブル駆動化も同じ表で。
 9. **Core component スキーマ表**（T1-a, 本丸）: 最単純の light で schema 表＋汎用 validator / patch-applier を実装 → fixture で等価性確認 → 残り8 component へ展開。`scene-document.ts` / `serialization.ts` 合計 ~1,200–1,500行削減。B1 が構造的に再発不能になる。
 10. **MCP ツール契約の単一ソース化**（T1-c）: `defineTool` テーブル＋zod スキーマ → ビルド時 JSON 生成 → `mcp.rs` は `include_str!` 配信のみ。mcp fixture に `runTool()` ヘルパを先に導入して回帰網を整備。

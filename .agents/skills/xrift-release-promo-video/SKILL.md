@@ -164,6 +164,6 @@ npm run render:vertical        # 縦型 1080x1920
 
 - 差分の機械的な収集: `scripts/extract-release-diff.mjs`
 
-`references/storyboard-schema.md` と `references/remotion-patterns.md` は、キット導入前の書き方を残した資料。現在の実装は [xrift-promo-kit](../xrift-promo-kit/SKILL.md) を正とする。
+`references/storyboard-schema.md` と `references/remotion-patterns.md` は、キット導入前の書き方を残した資料。現在の実装は [xrift-promo-kit](../xrift-promo-kit/SKILL.md) に従う。
 
 Remotion の CLI や API は更新されるため、実装時は公式の [CLI reference](https://www.remotion.dev/docs/cli) と [Player guide](https://www.remotion.dev/docs/player) を優先して確認する。

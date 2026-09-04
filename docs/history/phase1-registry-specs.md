@@ -4,7 +4,7 @@
 
 ---
 
-## Task A — asset-format-registry を単一の真実にする
+## Task A — 形式の定義を asset-format-registry に集約する
 
 ## A-0. 現状の実測（live repo）
 

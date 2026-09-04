@@ -1,6 +1,6 @@
 # XRift Studio
 
-XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムの制作を始めるための、非公式デスクトップアプリです。
+XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを制作するための非公式デスクトップアプリです。
 
 Node.js や `@xrift/cli` の導入、コードまたはビジュアルエディターによる制作、ローカルプレビュー、XRift への公開までをひとつの画面にまとめます。
 
@@ -19,9 +19,9 @@ Node.js や `@xrift/cli` の導入、コードまたはビジュアルエディ�
 | 新しいプロジェクトを作る | 対応 | 対応 | ワールド／アイテムと、クラシック／ビジュアルの4通りから選び、作成後のプロジェクトをそのまま開く。 |
 | コードと設定を編集する | 対応 | 対応 | 内蔵エディタでテキストファイルを編集・保存する。`xrift.json` はフォームと raw JSON の両方で編集できる。 |
 | シーンをビジュアル編集する | 対応 | 対応 | Hierarchy、Scene View、Inspector、Assetsを使い、Primitive、Model、Prefab、XRift Componentを配置してギズモで調整する。 |
-| 3D素材を取り込む | 対応 | 対応 | GLB／glTF、OBJ、VRM 0.x／1.xをModel Assetとして取り込む。sidecarを参照するglTF／OBJは、依存ファイルを一緒にdropすると自己完結GLBへ正規化する。Open Brush／Tilt Brush由来のglTFは専用表示を検証中。 |
+| 3D素材を取り込む | 対応 | 対応 | GLB／glTF、OBJ、VRM 0.x／1.xをModel Assetとして取り込む。外部ファイルを参照するglTF／OBJは、参照先のファイルも一緒にドロップすると、1つのGLBにまとめて取り込める。Open Brush／Tilt Brush由来のglTFは専用表示を検証中。 |
 | Unity素材を引き継ぐ | 検証中 | 検証中 | UnityPackage、`.unity`、`.prefab`を解析し、対応するScene、Prefab、Model、Textureへ変換する。 |
-| アバターの見た目を保存する | 対応 | 対応 | ボーンのXYZ回転とshape keyの値をEntityごとに保存し、Scene ViewとXRift向け生成コードへ反映する。timeline animationは今後対応する。 |
+| アバターの見た目を保存する | 対応 | 対応 | ボーンのXYZ回転とshape keyの値をEntityごとに保存し、Scene ViewとXRift向け生成コードへ反映する。タイムラインによるアニメーションは今後対応する。 |
 | アセットと表現を作る | 対応 | 対応 | Texture、Material、Particle、PrefabをAssetsで管理し、Inspectorから編集する。PNG、JPG、WebP、KTX2に対応する。Textの書体はTTF、OTF、WOFFを取り込んで使える。 |
 | 文字を置く | 対応 | 対応 | Text、Text Panel（看板）、Text Caption（作品キャプション）をCreateから追加し、Google Fontsの日本語・欧文書体、色、太さ、揃えと、色または画像の背景板をInspectorで設定する。板は文字の実測値に合わせて組み立て、Scene View、Play、公開ワールドで同じ見た目になる。 |
 | 音を配置する | 対応 | 対応 | MP3をAudio Assetとして取り込み、Audio Sourceへ割り当てて保存・変換する。 |
@@ -33,7 +33,7 @@ Node.js や `@xrift/cli` の導入、コードまたはビジュアルエディ�
 | 外部の素材を取り込む | 対応 | 対応 | Poly HavenとambientCGのCC0素材、XRift公式のShader、Terrain、照明、Componentをアプリ内から追加する。作者とライセンスはAssetと公開物へ残す。 |
 | 同じ構成を再利用する | 対応 | 対応 | Entityと子階層をPrefab Assetとして保存し、何度でも配置する。配置ごとの差分はoverrideとして保持する。 |
 | ノードで動きをつける | 対応 | 対応 | KHR_interactivity準拠のグラフをノードエディターで編集し、開始時・毎フレーム・イベント受信をきっかけに色や再生を動かす。クリックや視線に反応するトリガーはない。 |
-| Entityに振る舞いを与える | 対応 | 対応 | Script AssetをTypeScriptで書き、Script ComponentとしてEntityへ付けてPlayで実行する。未承認のsourceは内容hashを確認してから実行し、同じScriptを公開ワールドへ静的importとして出力する。対応範囲は[Scripting Contract](./docs/SCRIPTING.md)にまとめている。 |
+| Entityに振る舞いを与える | 対応 | 対応 | Script AssetをTypeScriptで書き、Script ComponentとしてEntityへ付けてPlayで実行する。未承認のソースは内容のハッシュに基づく承認を受けてから実行する。同じScriptを公開ワールドへ静的importとして出力する。対応範囲は[Scripting Contract](./docs/SCRIPTING.md)にまとめている。 |
 | Editor内でPlay確認する | 対応 | 対応 | 編集状態を保持したままPlayへ切り替え、ワールドではWASD操作、アイテムでは周囲からの見え方を確認する。 |
 | 画像や 3D 素材を管理する | 対応 | 対応 | ファイルの追加、名前変更、削除、画像プレビュー、3D モデルプレビューを行う。 |
 | 公開情報を整える | 対応 | 対応 | タイトル、説明、ビルド設定、サムネイルを編集する。ワールドでは物理・カメラ、アイテムでは権限も設定できる。 |
@@ -47,15 +47,15 @@ Node.js や `@xrift/cli` の導入、コードまたはビジュアルエディ�
 
 `対応` はデスクトップ版の主要導線で操作できること、`検証中` は実装済みの範囲を実データや配布環境で確認していることを示します。ブラウザ版は制作フローを確認するためのWebプレビューであり、ログイン、ローカルファイル操作、CLI実行、アップロードは行いません。
 
-現在の制約と次の完了条件は[Visual Editor Roadmap](./docs/VISUAL_EDITOR_ROADMAP.md)にまとめています。disk上のMTL／Textureの自動探索、VRMのanimation timeline、Unity固有機能の完全互換は現時点では未対応です。
+現在の制約と今後の対応予定は[Visual Editor Roadmap](./docs/VISUAL_EDITOR_ROADMAP.md)にまとめています。ディスク上のMTL／Textureの自動探索、VRMのアニメーションタイムライン、Unity固有機能の完全互換は現時点では未対応です。
 
 ## Visual projectを通常のXRift開発へ書き出す
 
-Visual Editorで作ったproject JSONとAssets一式を、XRift Classic projectへ一方向に書き出せます。
+Visual Editorで作ったプロジェクトのJSONとアセット一式を、XRiftのクラシックプロジェクトへ書き出せます。逆方向の変換には対応していません。
 
-Visual Editor headerの「Classicへ書き出す」からは、既存のClassic projectを選んで追加できます。手書きentryを保つcomponent追加、backup付きentry切替、dependency plan、完了後のfolder／VS Code／terminal導線を用意しています。
+Visual Editorのヘッダーにある「Classicへ書き出す」では、既存のクラシックプロジェクトに追加できます。手書きのエントリーファイルを残してComponentを追加する方法と、バックアップを作ってエントリーファイルを切り替える方法を選べます。依存パッケージの変更予定も確認できます。完了後は、書き出し先のフォルダー、VS Code、ターミナルを開けます。
 
-新しい空のfolderへ書き出す場合はCLIを使います。`--dry-run`、未改変exportの`--update`、衝突検知、provenanceを利用できます。
+新しい空のフォルダーへ書き出す場合はCLIを使います。`--dry-run`で変更予定を確認でき、書き出した後に編集していないファイルは`--update`で更新できます。衝突の検出と、書き出し元・生成ファイルの記録（provenance）にも対応しています。
 
 ```bash
 xrift-studio convert ./my-visual-project --to classic --out ./my-xrift-world
@@ -65,12 +65,12 @@ CLIはnpm公開前のため、`pnpm cli:build`でビルドして`node dist/cli/x
 
 ## 体験設計
 
-XRift Studio は、制作の途中で「次に何をすればよいか」を考え直させないことを大切にします。更新、作成、起動、公開の各操作では、現在の状態、次にできる行動、完了後の到達点を同じ画面の流れで伝えます。
+XRift Studio は、制作の途中で「次に何をすればよいか」を考え直させないことを大切にします。更新、作成、起動、公開の各操作では、現在の状態と次にできる操作を表示し、完了後は作成物や公開先を開けるようにします。
 
 - 新しいアプリ本体と CLI は起動時に検知し、現在と最新のバージョンを示したうえでそれぞれ更新できる。
 - 作成前にワールドまたはアイテムを選べ、作成後は結果のプロジェクトをそのまま開ける。実行後は、起動中の URL をすぐ開ける。
 - アップロード前には、タイトル、説明、サムネイルが初期状態のままではないことを確認し、必要な編集から公開までをつなげる。
-- プロジェクトライブラリは、サムネイル、名前、説明、件数、作成入口を一望できる制作のホームとして扱う。
+- プロジェクトライブラリは、サムネイル、名前、説明、件数、新規作成ボタンをまとめて表示し、制作の開始と再開に使えるようにする。
 - 進行中・成功・失敗を明示し、失敗した場合でもログや元の画面からやり直せるようにする。
 
 詳細な原則と実装時の確認項目は [UX 原則](./docs/UX_PRINCIPLES.md) を参照してください。状態ごとの動きと機能一覧は [マイクロインタラクション Wiki](./docs/UX_INTERACTIONS.md) にまとめています。リポジトリの Markdown 文書では絵文字を使わず、操作名と状態を日本語で明確に書きます。
@@ -167,9 +167,15 @@ pnpm dev
 
 ### AI connection／Tauri MCPを使う
 
-ビジュアルエディターのAI connection panelは、インストール済みのCodex、Claude Code、Claude Desktop / Cowork、OpenCode、Cursorを検出し、XRift Studio MCP serverを登録できます。Ollamaがある場合はローカルmodelとCodex、Claude Code、OpenCodeのいずれかを選び、XRift MCP登録とOllama provider構成を一操作で行えます。構成時にmodelのtool calling対応を再確認し、model downloadやclientの自動起動は行いません。登録後にAI clientを再起動またはMCPを再読み込みすると、開いているSceneの読取、Entity更新、Asset配置など、許可されたEditor toolを利用できます。複数clientから同時操作された場合は編集を直列化し、混雑時は`EDITOR_BUSY`を返して最新のScene revisionから安全に再試行できます。Claude Desktop / Coworkはローカルsessionで利用でき、remote CoworkではローカルMCP serverを起動できません。
+ビジュアルエディターの「AI connection」パネルでは、インストール済みのCodex、Claude Code、Claude Desktop / Cowork、OpenCode、Cursorを検出し、XRift StudioのMCPサーバーを登録できます。
 
-MCP serverはTauri側のbrokerを介して現在開いているEditorへ接続します。request size、tool名、timeoutを制限し、Editorが待機していない時は操作を受け付けません。配布時は`pnpm mcp:sidecar:prepare:release`でserver binaryを準備し、Tauri sidecarとして同梱します。
+Ollamaがある場合は、ローカルモデルと接続先（Codex、Claude Code、OpenCode）を選べます。XRift MCPの登録と、Ollamaをモデルの提供元として使う設定をまとめて行えます。設定時にモデルがツール呼び出しに対応しているか再確認します。モデルのダウンロードやクライアントの起動は自動では行いません。
+
+登録後にAIクライアントを再起動するか、MCPを再読み込みすると、開いているSceneの読み取り、Entityの更新、Assetの配置など、許可された操作を利用できます。
+
+複数のクライアントが同時に操作した場合は、編集を順番に処理します。処理中で受け付けられない場合は`EDITOR_BUSY`を返します。クライアントはSceneの最新のリビジョンを取得して再試行できます。Claude Desktop / Coworkはローカルセッションで利用できます。リモートのCoworkではローカルMCPサーバーを起動できません。
+
+MCPサーバーはTauri側の中継処理を介して、現在開いているEditorへ接続します。リクエストのサイズ、利用できるツール名、応答の待ち時間を制限します。Editorが待機していないときは操作を受け付けません。配布時は`pnpm mcp:sidecar:prepare:release`でserver binaryを準備し、Tauri sidecarとして同梱します。
 
 公開しているEditor toolの一覧と、意図的に公開していない操作は[MCP editor toolの全体像](./docs/MCP_EDITOR_TOOLS.md)にまとめています。
 
@@ -196,7 +202,7 @@ scripts/prepare-mcp-sidecar.mjs    MCP sidecarの開発／配布準備
 .github/workflows/         Pages とリリースの自動化
 AGENT.md                   AI エージェント向け開発ルール
 DEVELOPMENT.md             OS 別の開発・リリース手順
-docs/README.md             文書全体の地図。最初に読む順序もここ
+docs/README.md             文書の一覧と、最初に読む順序
 docs/VISUAL_EDITOR_ARCHITECTURE.md 設計の正本。データ・実行境界・変換
 docs/VISUAL_EDITOR_ROADMAP.md      対応範囲、設計上の境界、段階と完了判定
 docs/UX_PRINCIPLES.md      再現可能な制作体験の設計原則
@@ -224,7 +230,7 @@ docs/history/              日付ごとの監査・調査・計画の記録。�
 
 ## 開発状況
 
-XRift Studioは開発中です。制作領域ごとの対応状況、設計上の境界、段階と完了判定は[対応範囲と段階](./docs/VISUAL_EDITOR_ROADMAP.md)にまとめています。設計そのものは[ビジュアルエディター設計](./docs/VISUAL_EDITOR_ARCHITECTURE.md)、文書全体の地図は[docs/README.md](./docs/README.md)を参照してください。
+XRift Studioは開発中です。機能ごとの対応状況と開発段階、各段階の完了条件は[対応範囲と段階](./docs/VISUAL_EDITOR_ROADMAP.md)にまとめています。設計そのものは[ビジュアルエディター設計](./docs/VISUAL_EDITOR_ARCHITECTURE.md)、文書の一覧は[docs/README.md](./docs/README.md)を参照してください。
 
 ## ライセンス
 

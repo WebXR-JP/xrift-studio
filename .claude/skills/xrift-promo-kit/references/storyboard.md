@@ -1,6 +1,6 @@
 # storyboard.json リファレンス
 
-型の定義は `dev/release-promo/_kit/src/core/storyboard.ts` にある。ここと食い違ったら型を正とする。
+型の定義は `dev/release-promo/_kit/src/core/storyboard.ts` にある。この文書と食い違った場合は、型の定義を優先する。
 
 ## トップレベル
 

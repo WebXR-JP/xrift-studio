@@ -9,7 +9,7 @@ XRift Studio は、開いている Editor をそのまま AI client へ開放す
 `pnpm mcp:tool-names --check` と Rust の
 `tool_list_matches_the_generated_allow_list` テストが、表・生成物・JSON schema の
 3つが同じ集合であることを保証する。この文書だけ古くなる場合がある。
-名前が食い違った場合は表を正とする。
+名前が食い違った場合は表の名前を優先する。
 
 ## surface
 
@@ -22,18 +22,17 @@ document 以外は React shell か Tauri 側の副作用を伴う。
 | `local-asset` | React shell | ネイティブ file I/O を伴う |
 | `script` | React shell | project file I/O または Play mode の変更を伴う |
 | `external-store` | React shell | ネットワークと Import Queue を使う |
-| `debug` | React shell | document ではなく生きた viewport を読む |
+| `debug` | React shell | document ではなく現在表示中の viewport を読む |
 
 書き込み tool は `projectId`、`sceneId`、`expectedRevision` を要求する。古い
 snapshot への適用を防ぐためだ。複数 client が同時に触っても編集は直列化される。
 
-## instructions と description が担う役割
+## instructions と description の役割
 
 利用者のプロジェクトで動く AI client に届くのは、server の `instructions` と tool の
 description だけだ。スキルも文書も届かない。「何を作るか」の手順は
 `instructions` の先頭に置く。各 tool の description には「何をするか」に加えて「選ぶ基準」
-「使ったあと何をするか」「行き詰まりやすい点」を書く。使うかどうかは設計図に
-照らして決める。description に禁止とは書かない。Terrain と草の tool は 14 本ある。
+「使ったあと何をするか」「行き詰まりやすい点」を書く。使うかどうかは設計図の内容に合わせて決める。description に禁止とは書かない。Terrain と草の tool は 14 本ある。
 一方で床を作る tool は 1 本しかない。説明文に何も書かないと tool の数がワールドの形を決めてしまう。書き方の理由と
 経緯は [ワールド制作ハーネス](./WORLD_AUTHORING_HARNESS.md) にある。
 
@@ -221,7 +220,7 @@ Animation Component は廃止された。`place_asset` で clip を持つ Model 
 `duplicate_interactivity_node` は `targetGraphIndex` を受ける。Editor の
 Ctrl+C / Ctrl+V と同じく別のグラフへも置ける。同じグラフの中なら node はその
 まま写せる。別のグラフでは `declaration` の index も inline value の `type`
-の index も別のものを指す。名前で取り出して着地先で引き直す。
+の index も別のものを指す。名前で取り出し、コピー先のグラフで index を割り当て直す。
 
 `set_interactivity_value` は Inspector の「値」欄と同じ操作で、数値だけでなく
 `signature` も受ける。KHR_interactivity に定数ノードは無く、固定値は必ずソケット
@@ -237,8 +236,7 @@ operation が型を決めているソケット (秒数、繰り返し回数、an
 プロパティの実在と値の型ごと扱う。対象を間違えたグラフは保存できる。Play で
 何も起きない。Editor のピッカーが防いでいるのはこの失敗だ。MCP から書くときも
 通してよいものではない。かける時間とイージングも同じ呼び出しにある。中間の
-値を持たないプロパティに時間を指定すると拒否する。runtime が作れない滑らかさを
-グラフが約束しないためだ。
+値を持たないプロパティに時間を指定すると拒否する。runtime が補間できない値を、滑らかに変化させられるように見せないためだ。
 
 値が数値でないプロパティは `value` を取らない。`kind` が `asset` のものは
 `valueAssetId`、`string` のものは `text` を取る。KHR_interactivity に string 型は
@@ -324,7 +322,7 @@ Script の実行境界と trust gate は [Scripting の契約](./SCRIPTING.md) �
 `set_recording_profile`, `set_recording_viewport`, `get_recording_viewport`,
 `set_recording_camera`, `get_recording_camera`
 
-document を書き換えない。生きた Scene View を読む / 向きを変える / 録画するだけだ。
+document を書き換えない。現在表示中の Scene View を読む / 向きを変える / 録画するだけだ。
 Undo 履歴も選択も動かさない。
 
 - `capture_scene_debug` — fps、frame time、draw call、triangle、可視 Mesh 数、

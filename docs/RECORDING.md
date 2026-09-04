@@ -101,7 +101,7 @@ MCP からの移動は純粋関数（`recording-camera.ts` の `resolveRecording
 
 ## MCP tool
 
-すべて `debug` surface である。`projectId` と `sceneId` は任意である。渡した場合だけ現在の Editor と照合する。録画は project をまたいで生きる。このため、project を切り替えたあとの `stop_recording` も通す。
+すべて `debug` surface である。`projectId` と `sceneId` は任意である。渡した場合だけ現在の Editor と照合する。project を切り替えても録画は続く。切り替えたあとも `stop_recording` を受け付ける。
 
 | tool | 役割 |
 | --- | --- |

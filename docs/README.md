@@ -15,7 +15,7 @@ XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを
 | --- | --- |
 | [ビジュアルエディター設計](./VISUAL_EDITOR_ARCHITECTURE.md) | project type、document model、Registry、Command、Asset lifecycle、変換パイプライン、セキュリティ境界 |
 | [対応範囲と段階](./VISUAL_EDITOR_ROADMAP.md) | 制作領域ごとの対応状況、設計上の境界、段階と完了判定 |
-| [UX 原則](./UX_PRINCIPLES.md) | 体験の約束、新機能の設計手順、レビュー用チェックリスト |
+| [UX 原則](./UX_PRINCIPLES.md) | 操作と結果の表示方針、新機能の設計手順、レビュー用チェックリスト |
 | [マイクロインタラクション Wiki](./UX_INTERACTIONS.md) | 機能ごとの操作前・処理中・成功時・失敗時・戻り先 |
 | [Inspector デザインガイド](./EDITOR_INSPECTOR_DESIGN.md) | 右 Inspector の密度、枠、参照フィールド |
 
@@ -25,7 +25,7 @@ XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを
 | --- | --- |
 | [Scripting Contract](./SCRIPTING.md) | Script Asset の API、実行境界、承認 gate、対応範囲 |
 | [MCP editor tool の全体像](./MCP_EDITOR_TOOLS.md) | AI client へ公開する Editor 操作の一覧、surface ごとの権限、公開しない操作 |
-| [ワールド制作ハーネス](./WORLD_AUTHORING_HARNESS.md) | AI client がワールドを作るときに Terrain と草へ収束する原因と、instructions・tool 説明・戻り値・スキル・文書の各層に置いた手すり |
+| [ワールド制作ハーネス](./WORLD_AUTHORING_HARNESS.md) | ワールド制作が Terrain と草に偏った事例と、instructions・tool 説明・戻り値・スキル・文書の改善内容 |
 | [KHR_interactivity Editor / MCP design](./KHR_INTERACTIVITY_EDITOR.md) | ノードグラフの canonical 形式、検証、MCP 契約 |
 | [Terrain エディター 仕様](./TERRAIN_EDITOR_SPEC.md) | 地形と草のモード、ブラシ、性能、公開への反映 |
 | [カメラタイムライン 仕様](./CAMERA_TIMELINE_SPEC.md) | camera Component、時間で進む実行器、カメラ用 op、再生場所（未実装の設計） |

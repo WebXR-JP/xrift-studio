@@ -7,7 +7,7 @@
 | 文書 | 時点 | 内容 |
 | --- | --- | --- |
 | [コード品質監査レポート](./refactoring-audit-2026-08.md) | 2026-08-08 | 1,000行超の大きいファイルを対象にした品質監査とリファクタリング計画 |
-| [リファクタリング4日スプリント計画](./refactoring-sprint-2026-08-20.md) | 2026-08-20 | 上の監査を受けて、4日で何を取るかを決めた実行計画と実測 |
-| [Task A / Task B レジストリ仕様](./phase1-registry-specs.md) | 2026-08-09 | asset-format-registry を単一の真実にするための作業仕様 |
+| [リファクタリング4日スプリント計画](./refactoring-sprint-2026-08-20.md) | 2026-08-20 | 上の監査を受けて、4日で取り組む作業を決めた実行計画と実測 |
+| [Task A / Task B レジストリ仕様](./phase1-registry-specs.md) | 2026-08-09 | 形式の定義を asset-format-registry に集約するための作業仕様 |
 | [スターターテンプレート削除プラン](./b4-dead-template-removal-plan.md) | 2026-08-09 | 到達不能だった starter template を削除するための手順 |
 | [「保存エラー」断続発生の調査レポート](./save-error-investigation.md) | 2026-08-09 | autosave と手動保存が断続的に失敗した事象の調査 |

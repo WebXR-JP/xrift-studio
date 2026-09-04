@@ -186,7 +186,7 @@ scrub 中にスキップされた変更は次の bundle 変更まで保存され
 
 ## 修正案
 
-### 修正1【最優先・最小】OS エラーを握り潰すのをやめる
+### 修正1【最優先・最小】OS エラーを呼び出し元へ返す
 
 ```rust
 // lib.rs:1875-1876  現状
@@ -311,7 +311,7 @@ original_existed: target.exists(),              // L2108
 `Path::exists()` は I/O エラーを `false` に潰す。一瞬でも `ERROR_ACCESS_DENIED` が返ると
 `original_existed = false` が記録され、コミットで **backup を取らずに上書き**し、
 以降のロールバックでは「新規作成ファイル」とみなして `remove_file` してしまう。
-`symlink_metadata` の結果を単一の真実の源にして、`NotFound` 以外は明示的にエラーにすべき。
+ファイルの存在判定を `symlink_metadata` の結果に統一して、`NotFound` 以外は明示的にエラーにすべき。
 
 ### 修正6 supersede をエラーではなく「委譲」として型で表す
 
@@ -405,9 +405,9 @@ journal の phase 遷移、committed マーカ、孤児 staging の回収、ロ�
 
 1. stale トランザクションディレクトリの削除に `force_remove_dir_all` を使用（`?` で伝播はするが、
    まずリトライしてから失敗するようになった）。
-2. 重複排除チェックを `symlink_metadata` を単一の真実の源とする形に書き換え、
+2. 重複排除チェックの判定を `symlink_metadata` の結果に統一する形に書き換え、
    `retry_transient_io` でラップ。`NotFound` 以外のエラーはリトライ後も残れば
-   実際の OS エラー文言を含めて返す（修正1と同じく握り潰さない）。
+   実際の OS エラー文言を含めて返す（修正1と同じくエラーを無視しない）。
 3. `staged → target` の `rename` を `retry_transient_io` でラップ。
 
 `commit_visual_asset_import` を使う全ての Import 系（Model 再取り込み含む、Texture、Shader、

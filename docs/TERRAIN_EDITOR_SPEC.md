@@ -9,7 +9,7 @@ Terrain は Studio の中で操作が最も多い機能である。他の Compon
 | 対象 | 場所 | 状態 |
 | --- | --- | --- |
 | 高さフィールド + ブラシ | `src/lib/visual-editor/terrain.ts` | 実装済み。raise / lower / flatten / smooth / stamp / hole-add / hole-remove |
-| ブラシ操作の受け口 | `src/components/visual-editor/useTerrainAuthoring.ts` | 実装済み |
+| ブラシ操作の処理 | `src/components/visual-editor/useTerrainAuthoring.ts` | 実装済み |
 | 草のルール配置 | `src/lib/visual-editor/terrain-grass.ts` | 実装済み。密度・高さ帯・傾斜上限・seed |
 | 草の描画 | `src/components/visual-editor/TerrainGrassVisual.tsx` | 実装済み。層ごとに1 InstancedMesh、風契約で揺れる |
 | 形と草入りの preset | `src/lib/visual-editor/terrain-presets.ts` | 実装済み。作成メニューから配置できる |
@@ -38,7 +38,7 @@ Terrain を選択して「地形を編集」に入ると、**専用モード**�
 
 Unity の Terrain Inspector に合わせる。モードは**アイコンのタブ**として横一列に並べる。選択中のモードだけが押された状態になる。選んだモードの設定だけを下へ出す。使わない設定は出さない。「操作」のドロップダウンから選ぶ形は使わない。いま何が有効なのかが読めないためである。
 
-アイコンだけに意味を預けない。各タブには読めるラベルを添える。`title` も付ける。形モードの中の筆（盛る・削る・ならす・高さを揃える・スタンプ）も同じ扱いにする。アイコン付きのボタン列にする。ドロップダウンでは、いま選んでいる筆が一覧の中に見えないためである。
+操作の意味をアイコンだけで示さない。各タブには読めるラベルを添える。`title` も付ける。形モードの中の筆（盛る・削る・ならす・高さを揃える・スタンプ）も同じ扱いにする。アイコン付きのボタン列にする。ドロップダウンでは、いま選んでいる筆が一覧の中に見えないためである。
 
 モードは 4 つである。同時に有効なのは常に 1 つである。いま何を触っているのかを画面が示す。
 
@@ -59,7 +59,7 @@ Unity の Terrain Inspector に合わせる。モードは**アイコンのタ�
 - ブラシ円は Scene View に**常時表示**する。半径と落ち方が見えていないと、どこが変わるか予測できない
 - `Ctrl` を押している間は逆操作にする（盛る↔削る、開ける↔塞ぐ）。持ち替えを挟まない
 
-1 ストロークで 1 件にする。押している間の連続適用を 1 件にまとめる。この境界は既存の `handleTerrainStrokeStart` が持っている。専用モードでも同じ扱いにする。
+ブラシを押してから離すまでを、Undo の 1 件にまとめる。既存の `handleTerrainStrokeStart` がこの区切りを管理している。専用モードでも同じ扱いにする。
 
 ### 高さを揃える
 

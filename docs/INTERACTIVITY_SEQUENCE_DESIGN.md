@@ -188,7 +188,7 @@ flow は後ろへ、value は前へ、という index 制約を検証から外�
 
 補間つきの書き込みは、専用 operation を増やさない。既存の `xrift/setProperty` に `duration` の value socket と `easing` の configuration を足す形で扱う。`duration` が 0 なら即時になる。正の値なら補間になる。
 
-イージングは任意の曲線ではなく、選ぶ意味のある範囲に絞る。`linear`、`ease-in`、`ease-out`、`ease-in-out`、`ease-in-strong`、`ease-out-strong`、および行き過ぎて戻る `ease-out-back` の 7 種とする。中間値を持たない bool と enum には時間を指定しない。途中のない値に「かける時間」を指定すると、最後に飛ぶだけの変化を補間として約束することになるためである。
+イージングは任意の曲線ではなく、選ぶ意味のある範囲に絞る。`linear`、`ease-in`、`ease-out`、`ease-in-out`、`ease-in-strong`、`ease-out-strong`、および行き過ぎて戻る `ease-out-back` の 7 種とする。中間値を持たない bool と enum には時間を指定しない。途中の値がない場合は、指定時間の最後に値が切り替わるだけで、補間できないためである。
 
 ### 5. Graph の合成
 
