@@ -1,6 +1,6 @@
 # Inspector デザインガイド
 
-XRift Studio の Inspector は、Unity と同じく「選択した対象を、短い視線移動で編集できる」ことを優先する。説明画面にはせず、値・状態・操作だけを高密度に並べる。
+XRift Studio の Inspector は、Unity と同じく「選択した対象を、短い視線移動で編集できる」ことを優先する。説明画面にはしない。値・状態・操作だけを高密度に並べる。
 
 ## 並び順
 
@@ -10,7 +10,7 @@ XRift Studio の Inspector は、Unity と同じく「選択した対象を、�
 4. Renderer、Light、Collider などの Component
 5. 追加 Component
 
-Component 自身の Enabled は見出しの先頭に置く。Entity 全体の Enabled と混同させない。
+Component 自身の Enabled は見出しの先頭に置く。Entity 全体の Enabled とは区別して示す。
 
 ## 密度
 
@@ -24,7 +24,7 @@ Component 自身の Enabled は見出しの先頭に置く。Entity 全体の En
 - Inspector パネルを第一の外枠、Component を第二の外枠とする。
 - Component 内の Material slot やプロパティ群へカード枠を重ねない。区切り線、余白、薄い背景で階層を示す。
 - 通常の Component に影を使わない。選択、警告、モーダルなど前後関係が必要な箇所だけに使う。
-- 角丸は小さく統一し、枠線と強い背景色を同じ階層へ同時に重ねすぎない。
+- 角丸は小さく統一する。枠線と強い背景色を同じ階層へ同時に重ねない。
 
 ## 参照フィールド
 
@@ -34,21 +34,21 @@ Material、Texture、Model など視覚的な Asset は、左から次の順に�
 2. Asset の選択欄
 3. 選択中 Asset を開くアイコン
 
-名前だけに識別を依存させない。Material のスウォッチは Base Color と透明度を表示し、Base Color Texture がある場合は Texture アイコンを重ねる。アイコンだけの操作には必ず tooltip と読み上げ名を付ける。
+識別を名前だけに頼らない。Material のスウォッチは Base Color と透明度を表示する。Base Color Texture がある場合は Texture アイコンを重ねる。アイコンだけの操作には必ず tooltip と読み上げ名を付ける。
 
 ## 状態
 
 - Enabled はチェック状態と無効時の濃淡で示す。
-- 選択中、hover、focus、disabled を別の見た目にする。focus ring は削らない。
-- 色だけで状態を伝えず、チェック、アイコン、読み上げ名のいずれかを併用する。
-- Play 中に編集できない値は同じ配置のまま無効化し、レイアウトを動かさない。
+- 選択中、hover、focus、disabled を別の見た目にする。focus ring は残す。
+- 色だけで状態を伝えない。チェック、アイコン、読み上げ名のいずれかを併用する。
+- Play 中に編集できない値は同じ配置のまま無効化する。レイアウトを動かさない。
 
 ## レビュー項目
 
 - [ ] 最初の一画面に主要な状態と値が収まる。
 - [ ] 同じ情報を見出し、ラベル、説明文で三重に表示していない。
 - [ ] Component 内にカード枠が入れ子になっていない。
-- [ ] 視覚的な Asset にプレビューがあり、その横で選択できる。
+- [ ] 視覚的な Asset にプレビューがある。その横で選択できる。
 - [ ] Component ごとの Enabled が見出しから操作できる。
 - [ ] アイコン操作を hover とキーボード focus の両方で理解できる。
 - [ ] エラー以外のガイド文を tooltip へ移せるか確認した。

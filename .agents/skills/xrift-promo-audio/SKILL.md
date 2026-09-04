@@ -31,7 +31,7 @@ node _kit/scripts/sync-assets.mjs --project <slug>   # public/audio へ配る
 
 ### 楽曲から切り出したもの（標準）
 
-XRift Studio の制作者が Suno で作成し、公開してよいものとして提供している。前奏と終わりがあるため繰り返さない。**動画の小節数をこの `bars` に合わせる。**
+XRift Studio の制作者が Suno で作成し、公開してよいものとして提供している。前奏と終わりがあるため繰り返さない。
 
 | ID | BPM | 長さ | 小節 | 向き |
 |---|---|---|---|---|

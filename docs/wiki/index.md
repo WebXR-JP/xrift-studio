@@ -94,17 +94,7 @@ XRift Studio での制作は、次のような流れで進みます。
 
 ## ダウンロード
 
-[**最新版を GitHub Releases からダウンロード →**](https://github.com/WebXR-JP/xrift-studio/releases/latest)
-
-| 対応 OS | 配布形式 |
-| --- | --- |
-| Windows 10 / 11 | `.msi`（推奨）、`.exe` |
-| macOS 12 以降 | `.dmg`（Apple Silicon / Intel） |
-| Linux | `.deb`、`.rpm`、`.AppImage` |
-
-> **macOS をお使いの場合**: 初回起動が「開発元を確認できないため開けません」という表示でブロックされることがあります。[macOS で開けないとき](./macos-gatekeeper.md) の手順で一度だけ許可すれば、次回以降は通常どおり起動できます。
-
-リリースがまだない場合は、[Web プレビュー](https://webxr-jp.github.io/xrift-studio/)またはソースからの開発環境をご利用ください。
+OS ごとの配布形式とセットアップの手順は [インストールとセットアップ](./installation.md) を参照してください。
 
 ## 開発者向け
 

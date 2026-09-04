@@ -124,8 +124,6 @@ node .agents/skills/xrift-release-promo-video/scripts/extract-release-diff.mjs `
 
 Remotion のシーンを書き直さない。`dev/release-promo/_kit` の部品を使い、動画ごとに書くのは `storyboard.json` だけにする。書き方、シーンの種類、演出の既定値、縦型の扱いは [xrift-promo-kit](../xrift-promo-kit/SKILL.md) にある。
 
-承認済み台本をそのまま storyboard のテキスト、尺、座標、根拠へ反映する。台本にない新しい主張や画面文言を実装側で追加しない。
-
 キットに無い演出が必要になったら、その動画のプロジェクトへ書かずキットへ足す。手順は [キットの拡張](../xrift-promo-kit/references/extending.md) にある。
 
 演出の既定値:
@@ -165,10 +163,6 @@ npm run render:vertical        # 縦型 1080x1920
 ## リソースの使い分け
 
 - 差分の機械的な収集: `scripts/extract-release-diff.mjs`
-- 30秒台本、自然な日本語、コピー監査: [short-video-copy.md](references/short-video-copy.md)
-- 実装、storyboard の書き方、シーン部品、書き出し: [xrift-promo-kit](../xrift-promo-kit/SKILL.md)
-- BGM と効果音、音量、拍とカットの同期: [xrift-promo-audio](../xrift-promo-audio/SKILL.md)
-- 実画面の収録とポインター座標の取り出し: [xrift-promo-capture](../xrift-promo-capture/SKILL.md)
 
 `references/storyboard-schema.md` と `references/remotion-patterns.md` は、キット導入前の書き方を残した資料。現在の実装は [xrift-promo-kit](../xrift-promo-kit/SKILL.md) を正とする。
 

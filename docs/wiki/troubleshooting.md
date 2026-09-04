@@ -20,13 +20,11 @@
 
 ## Play で Script が実行されない
 
-Script の実行は、プロジェクトスコープの内容ハッシュ承認ゲートで保護されています。未承認のソースは、Studio UI で確認・承認してから実行されます。`SCRIPT_APPROVAL_REQUIRED` が返る場合は、Studio UI で Script を確認・承認してください。
+`SCRIPT_APPROVAL_REQUIRED` が返る場合は、Studio UI で Script を確認・承認してください。詳しくは [Entity に振る舞いを与える（Scripting）](./scripting.md) を参照してください。
 
 ## 3D 素材が取り込めない
 
-- 対応形式（GLB、glTF、OBJ、VRM）であることを確認します。
-- sidecar を参照する glTF／OBJ は、依存ファイルを同じ import batch へ含めてください。単体で選んだ場合は不足依存として止まります。
-- OBJ の外部 MTL／Texture は disk 上から自動探索しません。同じ import batch へ含めてください。
+対応形式と取り込みの条件は [3D 素材の取り込み](./importing-assets.md) を参照してください。
 
 ## アップロードできない
 

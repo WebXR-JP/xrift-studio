@@ -1,19 +1,16 @@
-# 素材の調達先
+# 素材の入手先
 
-どこから素材を取るかは、設計図と品質の水準で決める。この文書は「何があるか」と「それぞれの
-向き不向き」を並べるだけで、順番も推奨も無い。組み合わせてよいし、ここに無い方法を設計しても
-よい。
+素材をどこから持ってくるかは、設計図の「品質の水準」に照らして選ぶ。この文書は、入手先ごとの内容・向いている場面・使う前の確認事項を並べたものだ。組み合わせて使ってもよいし、ここにない方法を使う場合は設計図に書く。
 
-| 調達先 | 何が手に入るか | 向いている場面 | 気をつけること |
+| 入手先 | 手に入るもの | 向いている場面 | 使う前の確認事項 |
 | --- | --- | --- | --- |
-| 出来合いのセット (`list_scene_recipes` → `apply_scene_recipe`) | 光・Particle・Material が互いに合った subtree。しかけ付きのセットは音と Interactivity Graph も込み | 速く様になる物、仕掛けの雛形 | `note` に書かれた残作業 (Collider など) を実行する |
-| プロジェクトの Model (`list_assets` → `place_asset`) | スターターの Model と、取り込み済みのもの | すぐ置ける | |
-| 外部の CC0 素材 (`search_external_assets` → `install_external_asset`) | Poly Haven と ambientCG のモデル、PBR Material、HDRI | 写実の質感、実在の小物や家具や岩 | Model は結果の `polycount` と `dimensionsMm` を予算と照らす。写真スキャンの木のように数百万三角形のものがある。解像度は公開物の容量から決める |
-| Material のカタログ (`list_material_presets` → `create_material_from_preset`) | GLSL の空、水面、発光 | 軽く、時間帯や波を数値で変えられる空と水 | 発光は Bloom があるとより光って見えるが、無くても成立する |
-| Blender MCP | 何でも。建築は `.claude/skills/xrift-blender-world/SKILL.md`、小物や木は `.agents/skills/xrift-mcp-blender-modeling/SKILL.md` | 独自の形、寸法の合った部材、木 | 往復が増える。要件を決めてから作り、GLB で `import_model_asset` |
-| プリミティブ + Material + Particle + Light | 抽象的な形、ブロックアウト、台座と光の組み合わせ | 様式化、抽象空間、下地 | 既定の灰色を残さない |
-| Script (`references/scripting-patterns.md`) | 多数配置、動き、反応、生成的な構造 | Entity で作ると重く遅いもの | Play の前にユーザーの承認が要る |
-| コードから作成 (`analyze_component_code` → `apply_component_code_import_plan`) | R3F / Three.js の JSX を Entity と Component へ変換 | 手元にコードがあるとき | `useFrame` は変換できない |
+| 出来合いのセット (`list_scene_recipes` → `apply_scene_recipe`) | 光・Particle・Material のつり合いが取れた一式。仕掛け付きのセットは音と Interactivity Graph も含む | 手早く見栄えを整えたいとき。仕掛けの出発点としても使える | `note` に書かれた残作業（Collider など）を済ませる |
+| プロジェクトの Model (`list_assets` → `place_asset`) | スターターに入っている Model と、取り込み済みの Model | すぐ置きたいとき | |
+| 外部の CC0 素材 (`search_external_assets` → `install_external_asset`) | Poly Haven と ambientCG のモデル、PBR Material、HDRI | 写実的な質感がほしいとき。実在の小物・家具・岩など | 検索結果の `polycount` と `dimensionsMm` を設計図の予算と照合する。写真スキャンの木には数百万三角形のものがある。解像度は公開物の容量に合わせて選ぶ |
+| Material のカタログ (`list_material_presets` → `create_material_from_preset`) | GLSL の空、水面、発光 | 数値で時間帯や波の様子を変えられる空と水がほしいとき | 発光は Bloom を有効にするとより明るく見える。Bloom なしでも成立する |
+| Blender MCP | 建築は `.claude/skills/xrift-blender-world/SKILL.md`、小物や木は `.agents/skills/xrift-mcp-blender-modeling/SKILL.md` の手順で作る | 独自の形、寸法の合った部材、木が必要なとき | 要件を固めてから作り始める。GLB にして `import_model_asset` で取り込む |
+| プリミティブ + Material + Particle + Light | 抽象的な形、ブロックアウト、台座と光の組み合わせ | 様式化した空間や抽象空間を作るとき。下地としても使える | 初期の灰色のまま残さない |
+| Script (`references/scripting-patterns.md`) | 多数配置、動き、反応、生成的な構造 | Entity を並べると書き込み回数や draw call が増えすぎるとき | Play する前にユーザーの承認が要る |
+| コードから作成 (`analyze_component_code` → `apply_component_code_import_plan`) | R3F / Three.js の JSX を Entity と Component に変換したもの | 手元に流用できるコードがあるとき | `useFrame` は変換できない |
 
-権利: Poly Haven と ambientCG は CC0 で、作者とライセンスは Asset と公開物へ自動で残る。
-MCP の import 経路に無い外部モデルは、ユーザーにライセンスを確認してもらう。
+権利について。Poly Haven と ambientCG は CC0 で、作者とライセンスの表示は Asset と公開物に自動で残る。MCP の取り込み経路にない外部モデルを使う場合は、先にユーザーにライセンスを確認してもらう。

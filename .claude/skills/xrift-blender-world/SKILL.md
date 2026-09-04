@@ -37,7 +37,7 @@ Blender MCP で部屋・インテリアを手続き的に組み、GLB にして 
 └── export/<name>.glb
 ```
 
-**ビルドはスクリプトに書く。** `execute_blender_code` を何度も叩いて形を積み上げると、やり直しが
+`execute_blender_code` を何度も叩いて形を積み上げると、やり直しが
 効かず、寸法変更のたびに全部やり直しになる。代わりに 1 本の冪等なスクリプトを書き、こう実行する：
 
 ```python
@@ -180,9 +180,7 @@ br.rotation_euler = (math.radians(9), 0, 0)      # 回す
 上 5 つは `scripts/validate_scene.py`、最後の 1 つは `scripts/find_coplanar.py` を `exec` する。
 `ready_to_export: true` かつ `suspect_count: 0` になるまで書き出さない。
 
-**Z-fighting は目視では取りこぼす。** 実測で、手で数えて 10 箇所ほどだと思っていたシーンから
-`find_coplanar.py` が 78 組の重なりを見つけた（窓枠・ドア枠・サイン筐体と発光面など）。
-必ず機械的に走らせる。
+**Z-fighting は目視では取りこぼす。** 必ず機械的に走らせる。
 
 ### GLB 書き出し
 

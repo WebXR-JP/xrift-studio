@@ -2,7 +2,7 @@
 
 XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを制作するデスクトップアプリである。制作方法はコードを直接書く「クラシック」と、画面上で Scene を組む「ビジュアル」の二つがあり、この文書は後者の設計を定義する。
 
-対象範囲は、ビジュアル project の作成、Asset import、Scene 編集、保存、Play、XRift project への決定的変換、check、upload までである。World と Item は同じ Scene View を使うが、input、controller、mount transform、camera の runtime profile は成果物種別ごとに分ける。各操作は実際の authoring document、生成 artifact、または XRift result に結び付き、処理中、失敗、stale、審査中を成功や公開済みとして表示しない。
+対象範囲は、ビジュアル project の作成、Asset import、Scene 編集、保存、Play、XRift project への決定的変換、check、upload までである。World と Item は同じ Scene View を使うが、input、controller、mount transform、camera の runtime profile は成果物種別ごとに分ける。各操作は実際の authoring document、生成 artifact、または XRift result に結び付ける。処理中、失敗、stale、審査中は成功や公開済みとして表示しない。
 
 この文書は設計の正本である。個別機能の詳細は次の文書に分ける。
 
@@ -21,7 +21,7 @@ XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを
 
 ## 1. 目標と設計原則
 
-ユーザーが得たい結果は、コードを直接編集する方法を失わずに、アセットをシーンへ置き、見た目を確認しながらワールドまたはアイテムを制作できることである。
+得たい結果は、コードを直接編集する方法を残したまま、アセットをシーンへ置き、見た目を確認しながらワールドまたはアイテムを制作できることである。
 
 設計では次を守る。
 
@@ -36,11 +36,9 @@ XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを
 9. XRift の認証情報とファイル操作はブラウザ UI から分離し、authoring document や生成バンドルへ含めない。
 10. ビジュアルモードでは Vite、CLI、開発サーバー、別ブラウザの起動を制作手順として意識させず、Edit から Play、Stop まで同じエディター内で完結させる。
 
-Hierarchy、Scene View、Inspector、Assets の責務を分離し、選択同期、ギズモ、アセットとシーンデータの分離、明示的な Inspector Schema、Edit / Play / Stop の状態分離を XRift Studio 自身の契約として定義する。Scene View は Play の表示面としても再利用する。
-
 ## 2. 四つの制作導線と project type
 
-新規作成の最初の画面には「アイテム・クラシック」「ワールド・クラシック」「アイテム・ビジュアル」「ワールド・ビジュアル」の四カードを同じ階層で置く。カード内では成果物、制作方法、正本、作成後に開く画面を一文で示す。成果物と project type を内部では二軸として扱っても、ユーザーに二段階の選択を往復させない。「クラシック / ビジュアル」は同じ project の編集画面切替ではなく、正本、利用できる機能、保存形式が異なる選択である。
+新規作成の最初の画面には「アイテム・クラシック」「ワールド・クラシック」「アイテム・ビジュアル」「ワールド・ビジュアル」の四カードを同じ階層で置く。カード内では成果物、制作方法、正本、作成後に開く画面を一文で示す。成果物と project type は内部では二軸として扱うが、二段階の選択を往復させる形にはしない。「クラシック / ビジュアル」は同じ project の編集画面切替ではなく、正本、利用できる機能、保存形式が異なる選択である。
 
 | 成果物 | Project type | 正本 | 開く機能 | XRift への到達方法 |
 | --- | --- | --- | --- | --- |
@@ -61,7 +59,7 @@ Hierarchy、Scene View、Inspector、Assets の責務を分離し、選択同期
 - ルートの `xrift-studio.project.json` を project manifest とし、`scenes/main.scene.json` と `assets/assets.json` を参照する。
 - `package.json`、`xrift.json`、`src/` は authoring project の正本にしない。
 - Compiler が生成する XRift code project は cache または一時出力であり、再生成可能で手編集不可とする。
-- Visual から Classic へ移る場合は Export / Eject で別の classic project を作る。一方向の所有権移行であり、自動同期は保証しない。Classic から Visual への取り込みは、検査済み source graph の静的 subset を明示的に lossy import する別 transaction であり、元 Visual document との round-trip 同期ではない。
+- Visual から Classic へ移る場合は Export / Eject で別の classic project を作る。一方向の所有権移行であり、自動同期は保証しない。Classic から Visual への取り込みは、検査済み source graph の静的 subset を明示的に lossy import する別 transaction である。元 Visual document との round-trip 同期ではない。
 
 `xrift-studio.project.json` は visual project の root manifest filename とする。filename を変更する場合は旧名の検出と明示的 migration を用意し、同じ project を classic と推測しない。
 
@@ -94,7 +92,7 @@ my-visual-project/
 
 Tauri 側の project scan は、ルートに有効な `xrift-studio.project.json` があれば visual、`package.json` と `xrift.json` があれば classic と判定する。visual の `.cache/generated-xrift/` は再帰 scan の対象外にする。
 
-visual manifest が存在するが壊れている場合、classic として推測して開かず、「ビジュアルプロジェクトを読み込めません」と対象 field と修復手段を示す。ライブラリカードには成果物種別とは別に「クラシック」または「ビジュアル」を表示し、開くエディターと正本を予測できるようにする。
+visual manifest が存在するが壊れている場合、classic として開かず、「ビジュアルプロジェクトを読み込めません」と対象 field と修復手段を示す。ライブラリカードには成果物種別とは別に「クラシック」または「ビジュアル」を表示し、開くエディターと正本を予測できるようにする。
 
 ビジュアルカードの作成成功時は上記専用 format を project root に保存し、ライブラリへ一件追加してビジュアルエディターを開く。作成途中の失敗では不完全な project を一覧へ追加せず、temporary directory を回収して四カードまたは保存先確認へ戻す。
 
@@ -598,7 +596,7 @@ authoring Registry が型付きで扱う XRift Component は `Interactable`、`G
 
 制作者が Entity へ振る舞いを与えるための、versioned contract として明示的に設計した例外である。
 本節は設計原則 7、4.3、4.7、9.4、10 章、Extension policy の各規定に対する唯一の例外範囲を定める。
-ここに書かれていない形の任意コード実行は禁止する。
+ここに書かれていない形の任意コード実行は対象外とする。
 
 #### 分離の原則
 
@@ -611,7 +609,7 @@ Particle と同じ関係を採る。再利用可能な定義は Asset 側に置�
 
 - 実行は `RuntimePlugin` の `start` / `update` / `stop` / `dispose` lifecycle に従い（4.6）、Play の開始と停止、および `entityRevisions` による Entity 単位の作り直しに従属する。
 - update 順序は Entity 階層順、次に Entity 内の Component 並び順で確定する。個別の `useFrame` を並べず、単一の scheduler が確定順で呼ぶ。system query や優先度指定は導入しない。
-- named `Render` は宣言的な追加描画だけを担う。R3F の `useFrame` は callback 例外を Script 単位に隔離できないため、Play と公開の診断で拒否し、フレーム処理は `start().update(delta)` へ統一する。
+- named `Render` の役割は宣言的な追加描画だけだ。R3F の `useFrame` は callback 例外を Script 単位に隔離できないため、Play と公開の診断で拒否し、フレーム処理は `start().update(delta)` へ統一する。
 - Stop は生成した module、blob URL、timer、listener を明示的に破棄する。React の unmount に依存しない。
 - Item project は重力と RigidBody を持たないため、物理へ触る API は未対応として degrade し、動くふりをしない。
 
@@ -667,7 +665,6 @@ Play は iframe や Worker を挟まないアプリと同一 realm で動き、`
 
 - Script source と host adapter を staging の overlay file として出力し、生成した `src/World.tsx` から静的 import で参照する。`.ts` / `.js` は静的 Asset として許可しないため、必ず overlay file として出す。
 - staging へ install できる npm package は既存の allow-list に限る。Script が任意 package を要求する形は取らない。
-- host adapter と authoring API は単一の実装を正本とし、Editor と生成物で二重管理しない。
 - runtime JSON 出力は Script を表現できないため、選択された場合は blocking 診断とする。未処理のまま manifest へ素通しさせない。
 - 同じ入力から同じ出力を得る決定性を維持する。生成する識別子は hash 由来とし、挿入順や時刻に依存させない。
 
@@ -803,7 +800,7 @@ workers/
   asset-processor/        別 runtime が必要になった場合だけ
 ```
 
-分割後も visual project format と schema を依存グラフの最下層に置き、UI、compiler、XRift adapter が相互参照しないようにする。package を増やすこと自体を設計の完成とせず、独立した利用者、runtime、リリースの存在を境界の根拠にする。
+分割後も visual project format と schema を依存グラフの最下層に置き、UI、compiler、XRift adapter が相互参照しないようにする。package を増やすこと自体を設計の完成とせず、独立した利用者、runtime、リリースがあるかどうかを見て境界を決める。
 
 ## 6. アセットのライフサイクル
 
@@ -1067,7 +1064,7 @@ VisualProjectDocument + SceneDocument + AssetManifest
   -> upload
 ```
 
-このパイプラインは実装境界であり、ビジュアルモードの操作手順として露出しない。ユーザーは同じエディターの Play を押し、Scene View 内で確認し、Stop で Edit へ戻る。Vite のポート、CLI コマンド、開発サーバー、別ブラウザの URL を選んだり起動したりする必要はない。
+このパイプラインは実装境界であり、ビジュアルモードの操作手順として露出しない。同じエディターの Play を押し、Scene View 内で確認し、Stop で Edit へ戻る。Vite のポート、CLI コマンド、開発サーバー、別ブラウザの URL を選んだり起動したりする必要はない。
 
 compiler core は出力 adapter を二つ持つ。desktop の Publish、Classic export CLI、Editor からの既存 Classic 追加は `classic-jsx`、ブラウザ版アップロードだけが事前ビルドの shell 向けに `classic-runtime` を選ぶ。これは Scene 変換器の複製ではなく、同じ検証、Prefab 展開、Asset plan、diagnostics、provenance から出力 adapter だけを切り替える境界である。
 

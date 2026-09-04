@@ -7,7 +7,7 @@ description: XRift Studio の制作体験を、更新、作成、起動、公開
 
 ## Overview
 
-制作の目的、画面の状態、主操作、完了後の到達点を一つの流れとして揃える。見た目の統一だけでなく、成功後にユーザーが次に進めることを完了条件にする。
+制作の目的、画面の状態、主操作、完了後の到達点を一つの流れとして揃える。
 
 開始前に、リポジトリの [UX 原則](../../../docs/UX_PRINCIPLES.md)、[マイクロインタラクション Wiki](../../../docs/UX_INTERACTIONS.md)、`AGENT.md` を読む。実装中は既存の `UpdateDialog.tsx`、`ProjectLibrary.tsx`、`ProjectCard.tsx`、`EditorView.tsx` を再利用できる実例として参照する。
 
@@ -19,7 +19,7 @@ description: XRift Studio の制作体験を、更新、作成、起動、公開
 4. 成功時は通知だけで完結させず、作成物、URL、更新済み状態のいずれかに到達できるようにする。
 5. 一覧へ戻る機能なら、結果を識別でき、新規作成の入口も失われないことを確認する。
 6. 対応する `MI-xx` を Wiki から選び、動き、無効化、文言、復帰先を機能仕様に記録する。新しい動きは Wiki に追加する。
-7. 実画面の確認は xrift-studio-verify スキルの手順（typecheck → ブラウザプレビュー → Tauri MCP）で行う。`pnpm tauri:build` とインストーラ生成だけは、実行前に目的と副作用を説明してユーザーの許可を得る。
+7. 実画面の確認は xrift-studio-verify スキルの手順（typecheck → ブラウザプレビュー → Tauri MCP）で行う。
 
 ## 実装上の判断
 

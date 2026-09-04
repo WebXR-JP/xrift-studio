@@ -2,15 +2,14 @@
 
 ## 目的
 
-制作者が Entity へ振る舞いを与えられるようにする。Script は TypeScript で書き、Editor の Play で実行し、
-同じ Script を公開ワールドへも出力して実 XRift 上で動かす。Play と公開で挙動が食い違わないことを契約とする。
+制作者が Entity に振る舞いを持たせるために使う。Script は TypeScript で書く。Editor の Play で実行する。同じ Script を公開ワールドへ出力し、実際の XRift 上で動かす。Play と公開で挙動が食い違わないことを契約とする。
 
 本書は [Visual Editor Architecture 4.8](./VISUAL_EDITOR_ARCHITECTURE.md#48-scripting-script-asset--script-component)
-が定めた例外範囲の実装契約である。ここに書かれていない形の任意コード実行は行わない。
+が定めた例外範囲の実装契約である。ここに書いていない形での任意コード実行は行わない。
 
 ## 分離の原則
 
-Particle Asset と同じ関係を採る。再利用可能な定義は Asset、Entity 固有の値は Component が持つ。
+Particle Asset と同じ分け方にする。再利用できる定義は Asset が持つ。Entity 固有の値は Component が持つ。
 
 | | 持つもの | 持たないもの |
 | --- | --- | --- |
@@ -18,11 +17,9 @@ Particle Asset と同じ関係を採る。再利用可能な定義は Asset、En
 | Script Component | `scriptAssetId`、宣言済み property 値、`assetReferences`、`entityReferences`、`runIn` | コード、関数、式 |
 
 コード本文は project 内の `scripts/` 以下の source file が正本である。AssetManifest には参照だけを置く。
-property schema は source から導出して Editor State に持ち、manifest へ保存しない。
+property schema は source から導出する。Editor State が持ち、manifest へは保存しない。
 
-この分離には実務上の理由がある。manifest の entry を本文編集に対して不変にしておくことで、Script の保存は
-その Script を使う Entity だけを compile・再起動できる。AssetManifest を変更した場合も依存関係を逆引きし、
-変更した Material / Particle / Texture などを参照する Entity だけの runtime 世代を上げる。
+この分離には実務上の理由がある。manifest の entry は本文を編集しても変えない。そのため Script を保存したときは、その Script を使う Entity だけを compile して再起動する。AssetManifest を変えた場合も依存関係を逆引きする。そして変更した Material / Particle / Texture などを参照する Entity だけ runtime 世代を上げる。
 
 ## 永続化する情報
 
@@ -40,7 +37,7 @@ property schema は source から導出して Editor State に持ち、manifest 
 - `assetReferences` / `entityReferences`: property が参照する Asset と Entity の ID
 - `runIn`: 現在は `play`。schema の `play-and-edit` は将来予約で、Inspector では選択できず実行もしない
 
-1 Entity へ複数の Script Component を付けられる。実行順は Entity 階層順、次に Entity 内の Component 並び順で確定する。
+1 つの Entity には複数の Script Component を付けられる。実行順は Entity 階層順で決まる。次に Entity 内の Component 並び順で決まる。
 
 ## オーサリング API
 
@@ -69,9 +66,9 @@ export default defineScript({
 
 lifecycle 名は Architecture 4.6 の `RuntimePlugin` に揃える。
 
-React Three Fiber で宣言的な見た目を追加したい場合は、同じ module から `Render` を export する。
-Entity の group の子として mount され、`start` と併用できる。フレーム更新は必ず `start` が返す `update(delta)` に置く。
-R3F の `useFrame` callback は React の Error Boundary 外で動いて Script 単位に隔離できないため、Play と公開の両方で blocking にする。
+React Three Fiber で宣言的な見た目を追加する場合は、同じ module から `Render` を export する。
+Entity の group の子として mount する。`start` と併用できる。フレーム更新は `start` が返す `update(delta)` に置く。
+R3F の `useFrame` callback は React の Error Boundary の外で動く。そのため Script 単位に隔離できない。Play と公開の両方で blocking にする。
 
 ```tsx
 import type { ScriptRenderProps } from "xrift:script";
@@ -86,11 +83,11 @@ export const Render = ({ ctx }: ScriptRenderProps) => {
 };
 ```
 
-`Render` は `start(ctx)` の成功後に mount され、同じ live `ctx` を `{ ctx }` として受け取る。
-宣言固有の property 型が必要な場合は `ScriptRenderProps<MyPropDeclaration>` を使う。
-Inspector / MCP の property 変更時は `Render` も新しい `ctx.props` で再描画される。TSX source は
+`Render` は `start(ctx)` の成功後に mount する。同じ live `ctx` を `{ ctx }` として受け取る。
+宣言固有の property 型が要る場合は `ScriptRenderProps<MyPropDeclaration>` を使う。
+Inspector / MCP で property を変えたときは `Render` も新しい `ctx.props` で再描画する。TSX source は
 Script Asset の `language: "tsx"` と `.tsx` path を持つ。組み込み `model-display` はこの入口から
-宣言済み Model URL を `useGLTF` / `Clone` へ渡す例であり、依存fileを内包した GLB を推奨する。
+宣言済み Model URL を `useGLTF` / `Clone` へ渡す例だ。依存fileを内包した GLB を推奨する。
 
 ### ScriptContext
 
@@ -116,8 +113,8 @@ Script Asset の `language: "tsx"` と `.tsx` path を持つ。組み込み `mod
 
 ### 非同期処理と cleanup
 
-hot reload、runtime failure、Play Stop、unmount のあとに古い callback が Entity を変更しないよう、
-非同期処理は `ctx.lifecycle` へ登録する。
+hot reload、runtime failure、Play の Stop、unmount のあとに古い callback が Entity を変えないようにする。
+そのため非同期処理は `ctx.lifecycle` へ登録する。
 
 | API | 契約 |
 | --- | --- |
@@ -139,15 +136,15 @@ ctx.lifecycle.interval(() => {
 }, 1_000);
 ```
 
-`task` は通信や decoder 自体を強制終了しない。処理側が `signal` に対応する場合は必ず渡し、
-完了後に Scene を変更する前にも `signal.aborted` を確認する。global の `setTimeout` や追跡していない Promise を直接使った場合は
-host の所有外であり、自動 cleanup と例外帰属の保証を受けない。
+`task` は通信や decoder 自体を強制終了しない。処理側が `signal` に対応する場合は必ず渡す。
+完了後に Scene を変える前にも `signal.aborted` を確認する。global の `setTimeout` や追跡していない Promise を直接使った場合は
+host の所有外になる。自動 cleanup と例外帰属の保証を受けない。
 `onDispose`、`timeout`、`interval` が返した Promise の rejection も、登録元の Entity / Script の
-`async` failure として Script Console と MCP runtime report へ帰属する。
+`async` failure として扱う。Script Console と MCP runtime report へ記載する。
 
 ### Texture / Material の実行時操作
 
-Texture は property で明示参照してから読み込む。Script が project 内の任意 Asset を走査したり、path を直接組み立てたりする API は提供しない。
+Texture は property で明示参照してから読み込む。project 内の任意 Asset を走査する Script 用の API はない。path を直接組み立てる Script 用の API もない。
 
 ```ts
 import { defineScript, prop } from "xrift:script";
@@ -189,7 +186,7 @@ export default defineScript({
 
 Inspector で `texture` を選ぶと、その ID は `properties.texture` と `assetReferences` の両方へ入る。
 MCP から設定する場合も `update_script_component` へ property 値と完全な `assetReferences` を渡す。
-宣言していない ID に対する `assets.url` は `null`、`assets.loadTexture` は `null` を返す Promise になり、project 内の別 Asset へ到達しない。
+宣言していない ID に対する `assets.url` は `null` を返す。`assets.loadTexture` は `null` を返す Promise になる。project 内の別 Asset へは到達しない。
 
 `assets` は次を提供する。
 
@@ -200,7 +197,7 @@ MCP から設定する場合も `update_script_component` へ property 値と完
 | `loadAudio(assetId, options?)` | 明示参照した MP3 / WAV の lifecycle-owned player を返す |
 
 `loadTexture` は参照先 Texture Asset の `importSettings` を実行時の既定値にする。
-option を省略した項目は Asset の値を継承し、Script で明示した項目だけをその読み込みに対して上書きする。
+option を省略した項目は Asset の値を継承する。Script で明示した項目だけをその読み込みに対して上書きする。
 
 | option | 値 |
 | --- | --- |
@@ -211,39 +208,39 @@ option を省略した項目は Asset の値を継承し、Script で明示し�
 | `flipY` / `generateMipmaps` | `boolean` |
 
 `generateMipmaps: false` と mipmap を必要とする `minFilter` を組み合わせた場合は、実行時に
-`minFilter: "linear"` へ正規化する。同一 Script instance 内では Asset ID と解決後の option ごとに cache し、
+`minFilter: "linear"` へ正規化する。同一 Script instance 内では Asset ID と解決後の option ごとに cache する。
 Script の再起動または Stop で自動的に dispose する。
 
-返した `ScriptTexture` は Three.js Texture と互換の transform field を持つが、Material 上の UV 演出には
-`ctx.materials.setTextureTransform` を使う。この API は Material slot ごとの所有 clone を作るため、
-同じ Texture を使う別 slot、別 Entity、共有 Texture Asset を変更しない。
+返した `ScriptTexture` は Three.js Texture と互換の transform field を持つ。Material 上の UV 演出には
+`ctx.materials.setTextureTransform` を使う。この API は Material slot ごとの所有 clone を作る。
+そのため同じ Texture を使う別 slot、別 Entity、共有 Texture Asset を変更しない。
 
-Material / Particle の preview と `ctx.assets.loadTexture` は別の読み込み経路である。Studio の preview は project source を
-Tauri IPC で読み、`importMetadata.sourceFormat` または拡張子が KTX2 なら、Studio に同梱した Basis JS / WASM で変換する。
+Material / Particle の preview と `ctx.assets.loadTexture` は別の読み込み経路だ。Studio の preview は project source を
+Tauri IPC で読む。`importMetadata.sourceFormat` または拡張子が KTX2 なら、Studio に同梱した Basis JS / WASM で変換する。
 OpenBrush の `source.kind = "builtin"` Texture は project path がなくても同梱 URL から表示できる。どちらも preview のために
-CDN を必要としない。生成物も KTX2 を使う場合は固定した Basis file を World へ同梱し、
+CDN を必要としない。生成物も KTX2 を使う場合は固定した Basis file を World へ同梱する。
 XRift の `baseUrl` から解決する。
 
 decoder を要する形式は KTX2 だけではない。Draco 圧縮した Model は decoder を同梱する。
-どの形式が何を必要とするかは `src/lib/visual-editor/vendor-assets.ts` の表が一箇所だけ持ち、
+どの形式が何を必要とするかは `src/lib/visual-editor/vendor-assets.ts` の表が一箇所だけで持つ。
 同梱の要否は staging へ copy する Asset の事実から決める。生成コードに特定の helper 名が
-現れるかで決めない。出力モードごとに生成物の形が違うため、文字列一致は片方の出力モードで
-静かに外れる。`classic-runtime` では Runtime manifest の `decoders` が同じ場所を示し、
+現れるかでは決めない。出力モードごとに生成物の形が違うため、文字列一致は片方の出力モードで
+外れることがある。`classic-runtime` では Runtime manifest の `decoders` が同じ場所を示す。
 loader は manifest からの相対で解決する。
 
 ### 公開物はワールド直下にしか置けない
 
-公開した World が配信するのは、World 直下のファイルだけである。`public/` のサブ
-ディレクトリは公開物に含まれず、置いても 404 になる。Asset のコピー先が
-`public/xrift-studio-<assetId>-<file>` のように平坦なのはこのためで、decoder、
+公開した World が配信するのは、World 直下のファイルだけだ。`public/` のサブ
+ディレクトリは公開物に含まれない。置いても 404 になる。Asset のコピー先が
+`public/xrift-studio-<assetId>-<file>` のように平坦なのはこのためだ。decoder、
 font、Runtime manifest も同じく直下へ置く。decoder はファイル名が loader 側で
 固定されている（DRACOLoader は `draco_wasm_wrapper.js`、KTX2Loader は
-`basis_transcoder.js` を decoder path へ足す）ので、名前はそのまま直下に置き、
+`basis_transcoder.js` を decoder path へ足す）。そのため名前はそのまま直下に置く。
 path には XRift の `baseUrl` を渡す。名前が固定でない同梱物は、他のファイルと
 ぶつからないよう接頭辞を付ける。
 
 この対応は Material / Particle の preview と生成物の描画経路に限る。Script の `ctx.assets.loadTexture` は引き続き
-Three.js の標準 `TextureLoader` を使うため、KTX2 / HDR / EXR を typed Texture として返さない。
+Three.js の標準 `TextureLoader` を使う。そのため KTX2 / HDR / EXR を typed Texture として返さない。
 
 ### Audio の実行時操作
 
@@ -252,13 +249,13 @@ options は `volume`（0..1）、`loop`、正の `playbackRate`、`preload: "non
 返す `ScriptAudio` は `play()`、`pause()`、`stop()`、`seek()`、`setVolume()`、`setLoop()`、
 `setPlaybackRate()` と、read-only の `playing`、`currentTime`、`duration` を持つ。
 
-ブラウザの自動再生規則により `play()` は reject しうる。ユーザー入力後に呼び、必要なら
-`ctx.lifecycle.task` 内で await して Script Console へ理由を残す。Script の再起動、失敗、Stop、
-unmount では host が全playerを停止し、sourceを解放する。Studio Playと公開生成物は同じ実装を使う。
+ブラウザの自動再生規則により `play()` は reject しうる。ユーザー入力後に呼ぶ。必要なら
+`ctx.lifecycle.task` 内で await し、Script Console へ理由を残す。Script の再起動、失敗、Stop、
+unmount では host が全playerを停止する。sourceを解放する。Studio Playと公開生成物は同じ実装を使う。
 
-`ctx.assets.loadAudio` は Script が所有する独立 player を新しく作る入口である。Entity に保存済みの
-Audio Source Component を操作する場合は `ctx.audioSources` を使い、別の player を二重に作らない。
-`ctx.audioSources` は Script Component を付けた Entity 自身の Audio Source だけを対象にし、子 Entity は含めない。
+`ctx.assets.loadAudio` は Script が所有する独立 player を新しく作る入口だ。Entity に保存済みの
+Audio Source Component を操作する場合は `ctx.audioSources` を使う。別の player を二重に作らない。
+`ctx.audioSources` は Script Component を付けた Entity 自身の Audio Source だけを対象にする。子 Entity は含めない。
 
 | API | 操作 |
 | --- | --- |
@@ -272,16 +269,16 @@ Audio Source Component を操作する場合は `ctx.audioSources` を使い、�
 | `reset()` | このScript、または選択handleが持つruntime overrideを取り除く |
 
 handle は同じ Entity で後から追加・更新された Audio Source にも選択条件を適用する。同じ Entity に複数 Script がある場合は
-Component 実行順で override を合成し、後の Script が同じ field を変更した値を採用する。`play()` は例外を外へ投げず、
-実際に再生を開始できた件数を必ず resolve する。ユーザー操作要件で拒否されたSourceは件数に含めず、
+Component 実行順で override を合成する。後の Script が同じ field を変更した値を採用する。`play()` は例外を外へ投げない。
+実際に再生を開始できた件数を必ず resolve する。ユーザー操作要件で拒否されたSourceは件数に含めない。
 `list()`の`status: "autoplay-blocked"`で確認できる。画面操作後に再度`play()`を呼べる。
-Script の再起動、runtime failure、Stop では、その owner の再生要求、seek、volume、loop overrideを外し、
+Script の再起動、runtime failure、Stop では、その owner の再生要求、seek、volume、loop overrideを外す。
 Audio Source Component に保存した値へ戻す。Audio Asset と Scene document は変更しない。
 
 ### Light と近接イベントの実行時操作
 
-`ctx.lights` は Script Component を付けた Entity 自身の Light だけを対象にし、子 Entity は含めない。
-disabled の Light にも Play 中の bridge を残すため、Script から一時的に点灯できる。
+`ctx.lights` は Script Component を付けた Entity 自身の Light だけを対象にする。子 Entity は含めない。
+disabled の Light にも Play 中の bridge を残す。そのため Script から一時的に点灯できる。
 
 | API | 操作 |
 | --- | --- |
@@ -293,26 +290,26 @@ disabled の Light にも Play 中の bridge を残すため、Script から一�
 | `setDistance(value)` | Point / Spot Light の距離を変更し、対応した件数だけを返す |
 | `reset()` | この Script または選択 handle の override を外す |
 
-同一 Script では最後に変更した field、複数 Script では Component 実行順が後の owner を優先する。
-Script の再起動、runtime failure、Stop ではその owner だけを外し、Inspector / MCP で保存した Light 値へ戻す。
+同一 Script では最後に変更した field を優先する。複数 Script では Component 実行順が後の owner を優先する。
+Script の再起動、runtime failure、Stop ではその owner だけを外す。Inspector / MCP で保存した Light 値へ戻す。
 Studio Play と `classic-jsx` は同じ `XriftScriptLight` と bridge を使う。Play 中に Light の
-enabled、color、intensity、shadow、距離、減衰、角度、半影、Area sizeを保存しても既存 runtime へ反映し、
+enabled、color、intensity、shadow、距離、減衰、角度、半影、Area sizeを保存しても既存 runtime へ反映する。
 `lightType` の変更、Component追加・削除だけ対象 Entity を再起動する。
 
-`ctx.on` / `ctx.emit` は同じ `XriftScriptRoot` 内だけの runtime event bus であり、
+`ctx.on` / `ctx.emit` は同じ `XriftScriptRoot` 内だけの runtime event bus だ。
 KHR_interactivity と Scene document には接続しない。payload は cloneも永続化もしない。
 組み込み `proximity-event` は Script Component の `entityReferences` に明示した authored Entity を
-`getWorldPosition` で判定し、`xrift:proximity-state`へ`channel`、inside状態、`kind`を送る。
-`event-light`は同じeventを受け、liveな`channel` propertyが一致した時だけLightを変える。
-各sensorは`sourceEntityId`で別々に追跡するため、同じchannelの複数sensorのうち一つが範囲を出ても、
-ほかが範囲内ならLightを維持する。`kind: "enter" | "exit"`は境界をまたいだ時だけ一度送り、
+`getWorldPosition` で判定する。`xrift:proximity-state`へ`channel`、inside状態、`kind`を送る。
+`event-light`は同じeventを受け取る。liveな`channel` propertyが一致した時だけLightを変える。
+各sensorは`sourceEntityId`で別々に追跡する。そのため同じchannelの複数sensorのうち一つが範囲を出ても、
+ほかが範囲内ならLightを維持する。`kind: "enter" | "exit"`は境界をまたいだ時だけ一度送る。
 `kind: "sync"`はlive channel変更や後から起動したreceiverを同期する状態通知として分ける。
-sensorの停止・削除時はそのsourceの`exit`を送るため、edge eventを滞在中に繰り返さない。
-`object3d.position`は親local座標なので、近接判定へ直接使わない。現時点でruntime player / avatarを
+sensorの停止・削除時はそのsourceの`exit`を送る。そのため edge eventを滞在中に繰り返さない。
+`object3d.position`は親local座標だ。近接判定へ直接使わない。現時点でruntime player / avatarを
 `ctx.find`するAPIはない。
 
 `materials` は Script Component を付けた Entity 自身が所有する Mesh だけを対象にする。子 Entity の Mesh は含めない。
-共有 Material Asset を直接変更せず runtime 用 clone へ次の override を重ねる。
+共有 Material Asset を直接変更しない。runtime 用 clone へ次の override を重ねる。
 
 | API | 操作 |
 | --- | --- |
@@ -329,19 +326,19 @@ sensorの停止・削除時はそのsourceの`exit`を送るため、edge event�
 | `resetTextureTransform(slot)` | 指定 slot にこの handle が付けた Texture transform だけを取り除く |
 | `reset()` | `ctx.materials`ではこのScript全体、選択handleではそのhandleのMaterial overrideを取り除く |
 
-setter の返り値は対応して変更した Material 数である。未対応の Material property は無視する。
-`select`の名前条件は同名Meshすべてに一致し、index条件は現在のowned Mesh traversalを対象にする。
-handleは非同期に追加されたMeshにも追従するため、Modelの読み込み完了を待って作り直す必要はない。
-同じ Entity に複数 Script がある場合は Component の実行順で override を合成し、後の Script が同じ property を変更した値を採用する。
-`setTextureTransform` は root の `ctx.materials` と `select(...)` が返す handle の両方にあり、値を省略した field は
-現在の slot 値を保つ。host は対象 Material slot ごとに Texture clone を所有し、source Texture と共有 Asset を直接変更しない。
+setter の返り値は対応して変更した Material 数だ。未対応の Material property は無視する。
+`select`の名前条件は同名Meshすべてに一致する。index条件は現在のowned Mesh traversalを対象にする。
+handleは非同期に追加されたMeshにも追従する。そのため Modelの読み込み完了を待って作り直す必要はない。
+同じ Entity に複数 Script がある場合は Component の実行順で override を合成する。後の Script が同じ property を変更した値を採用する。
+`setTextureTransform` は root の `ctx.materials` と `select(...)` が返す handle の両方にある。値を省略した field は
+現在の slot 値を保つ。host は対象 Material slot ごとに Texture clone を所有する。source Texture と共有 Asset を直接変更しない。
 `resetTextureTransform(slot)` はその slot だけを元の transform へ戻す。
-Script の再起動または Stop では、その Script の clone と override だけを外し、最後の Script が終了した時点で元の Material へ戻す。
+Script の再起動または Stop では、その Script の clone と override だけを外す。最後の Script が終了した時点で元の Material へ戻す。
 
 ### Particle の実行時操作
 
 `particles` は Script Component を付けた Entity 自身が所有する Particle Emitter を対象にする。
-Particle Asset の値を変更せず、Component 実行順で runtime override を重ねる。
+Particle Asset の値は変更しない。Component 実行順で runtime override を重ねる。
 
 | API | 操作 |
 | --- | --- |
@@ -357,26 +354,26 @@ Particle Asset の値を変更せず、Component 実行順で runtime override �
 
 Studio Play と `classic-jsx` で生成した World / Item は
 `packages/xrift-studio-runtime/src/script/particle.tsx` の同じ実装を使用する。
-Runtime JSON を出力する `classic-runtime` mode は Script と Particle を表現できないため、どちらも blocking 診断にする。
-Script ごとの `restart()` counter は共有 bridge が global revision へ変換するため、複数 Script が同じローカル番号を発行しても
+Runtime JSON を出力する `classic-runtime` mode は Script と Particle を表現できない。そのためどちらも blocking 診断にする。
+Script ごとの `restart()` counter は共有 bridge が global revision へ変換する。そのため複数 Script が同じローカル番号を発行しても
 command が相殺されない。Script の再起動または Stop では、その Script の override だけを外す。
 
 Particle Asset の `maxParticles` は 1 から **10,000**、`duration` は 0.01 から 600 秒へ正規化する。
-pool は `maxParticles` を越えて確保しない。continuous emission は同じ slot を再利用し、`looping: false` では
-`duration` まで新しい粒子を生成したあと、すでに生まれた粒子が `startLifetime` を終えるまで表示を続ける。
-`rateOverTime: 0` の burst-only emitter も動作し、`time`、`count`、`cycles`、`interval` を duration 内で展開する。
+pool は `maxParticles` を越えて確保しない。continuous emission は同じ slot を再利用する。`looping: false` では
+`duration` まで新しい粒子を生成する。そのあとすでに生まれた粒子が `startLifetime` を終えるまで表示を続ける。
+`rateOverTime: 0` の burst-only emitter も動作する。`time`、`count`、`cycles`、`interval` を duration 内で展開する。
 `looping: true` では同じ burst schedule を duration ごとに繰り返す。continuous slot が pool を使い切った場合や、
-burst の合計が残り容量を越えた場合は、後ろの burst から上限で切られる。
+burst の合計が残り容量を越えた場合は、後ろの burst から上限で切る。
 
-`ctx.particles.setEmissionRate` は authored emission 全体に対する runtime override である。override が有効な間は
-指定した continuous rate を使い、authored burst は発生しない。burst へ戻すには `ctx.particles.reset()` を呼ぶか
-Script を再起動する。
+`ctx.particles.setEmissionRate` は authored emission 全体に対する runtime override だ。override が有効な間は
+指定した continuous rate を使う。authored burst は発生しない。burst へ戻すには `ctx.particles.reset()` を呼ぶ。
+または Script を再起動する。
 
 ### ビューアーごとの見え方
 
 `ctx.viewer` は、シーン設定のうち「そのビューアーの画面に見えるもの」を実行時に上書きする。
-シーン設定は全ビューアー共通なので、ポストエフェクトを有効にすると重い端末のユーザーが自分で切れない。
-`ctx.viewer` の書き込みは、その Script を実行しているクライアントの描画にだけ効き、他のビューアーへ同期しない。
+シーン設定は全ビューアー共通だ。そのためポストエフェクトを有効にすると重い端末では見る側が自分で切れない。
+`ctx.viewer` の書き込みは、その Script を実行しているクライアントの描画にだけ効く。他のビューアーへ同期しない。
 ワールド作者は「画質を上げる」を用意し、選択を各自に委ねられる。
 
 | API | 操作 |
@@ -393,12 +390,12 @@ Script を再起動する。
 | `reset()` | この Script の viewer override を外す |
 
 Script の再起動、runtime failure、Stop では、その Script の override だけを外す。
-再入室したビューアーはシーン設定の値を見る。値の合成は他の bridge と同じく Component 実行順で、
+再入室したビューアーはシーン設定の値を見る。値の合成は他の bridge と同じく Component 実行順だ。
 同じ field を後の Script が上書きする。Interactivity Graph の `xrift/setProperty` が
-書く Scene プロパティとも同じ bridge を共有するため、Script とグラフが競合せず合成される。
+書く Scene プロパティとも同じ bridge を共有する。そのため Script とグラフが競合せず合成される。
 
 環境光がシーンに無い場合、`setAmbient` は runtime が所有する AmbientLight を追加する。
-これを持たないと、環境光を切っているシーンでだけ「明るくする」が効かないことになる。
+これがないと、環境光を切っているシーンでだけ「明るくする」が効かない。
 Skybox 画像そのものの差し替えは Script API には無く、Interactivity Graph の
 `skyboxImage` プロパティで行う。Asset の解決先はサーフェスが持っており、Script から
 任意 Asset を空へ差し込む API は提供しない。
@@ -418,13 +415,13 @@ Skybox 画像そのものの差し替えは Script API には無く、Interactiv
 
 Play 中の Inspector で永続編集できる Asset property は、現時点では既存の Material / Particle Asset に限る。
 Texture source の新規 import と Inspector からの Texture import settings 変更は Edit に戻って行う。
-MCP の `update_texture_asset` は同じ Play session 中でも永続化でき、Texture を直接参照する Entity と
+MCP の `update_texture_asset` は同じ Play session 中でも永続化できる。Texture を直接参照する Entity と
 Material / Particle 経由で参照する Entity だけを再起動する。`import_audio_asset` と `import_texture_asset` は
-atomic importを伴うため Edit 限定である。Scene settings の Inspector は Play 中 read-only のままだが、MCP の `update_scene_settings` は
+atomic importを伴う。そのため Edit 限定だ。Scene settings の Inspector は Play 中 read-only のままだ。一方 MCP の `update_scene_settings` は
 同じ Play session 中でも永続化と即時反映に対応する。MCP は `set_material` と `create_document_asset` を含むほかの対応済み write も実行できる。
-runtime 演出を保存したい場合は値を `ctx.*` から読み戻す仕組みはないため、Inspector または次の永続 MCP tool へ同じ値を明示する。
+runtime 演出を保存したい場合は値を `ctx.*` から読み戻す仕組みはない。そのため Inspector または次の永続 MCP tool へ同じ値を明示する。
 
-MCP client は最初に `get_scripting_capabilities` を呼ぶと、利用可能な Script API、Texture slot、参照制限、
+MCP client は最初に `get_scripting_capabilities` を呼ぶ。利用可能な Script API、Texture slot、参照制限、
 作成から Play までの tool 順序と、Play 中に永続化できる操作を機械可読な形で取得できる。
 
 Light / Audio / Texture / Material 操作は目的で入口を分ける。
@@ -443,8 +440,8 @@ Light / Audio / Texture / Material 操作は目的で入口を分ける。
 | Material Asset の PBR値やTexture bindingを保存する | 対象外 | `get_material_asset` / `update_material_asset` / `set_material_texture_transform` |
 | Material を Mesh slot へ保存して割り当てる | 対象外 | `set_material` |
 
-Script runtime の再生要求、option、transform は Stop で消え、MCP authoring は Scene document / AssetManifest と通常の履歴へ残る。
-同じ見た目を両方へ暗黙に書き戻さず、保存したい値は永続 tool へ明示する。
+Script runtime の再生要求、option、transform は Stop で消える。MCP authoring は Scene document / AssetManifest と通常の履歴へ残る。
+同じ見た目を両方へ暗黙に書き戻さない。保存したい値は永続 tool へ明示する。
 
 | 目的 | MCP tool |
 | --- | --- |
@@ -480,31 +477,31 @@ renderer を受ける。renderer の `materialAssetId` / `textureAssetId` は存
 
 `update_scene_settings` は `skybox`、`fog`、`ambient`、`camera`、`postprocessing`、`vegetation`、`physics`、
 `editor` を任意に組み合わせたnon-empty patchとして受ける。Skyboxは表示、IBL、projection、既存Texture参照、gradient、回転、反転、露出、
-有限mesh transformを、Editor sectionは背景、grid、gizmo size、snapを更新できる。
+有限mesh transformを更新できる。Editor sectionは背景、grid、gizmo size、snapを更新できる。
 `postprocessing` sectionは合成全体の有効・無効、`ao` / `bloom` / `grading` 各layerの有効・無効と値、
-HDR、露出、そして `order` を更新できる。`order` はlayerを適用順に並べた配列で、並べ替え可能なlayerを
-それぞれ1つずつ含む完全な配列だけを受ける。部分的な配列は残りの位置を推測することになり、
-作者が決めた見た目を黙って変えるためである。AOはsceneを描き直すpassで常に最初に適用されるため `order` に含めない。
-`skybox.imageAssetId` はAssetManifestに存在し、project sourceを持つTexture（または移行前のSkybox）だけを受け付け、
+HDR、露出、そして `order` を更新できる。`order` はlayerを適用順に並べた配列だ。並べ替え可能なlayerを
+それぞれ1つずつ含む完全な配列だけを受ける。部分的な配列は残りの位置を推測することになる。
+作者が決めた見た目を黙って変えるためだ。AOはsceneを描き直すpassで常に最初に適用される。そのため `order` に含めない。
+`skybox.imageAssetId` はAssetManifestに存在する Texture だけを受け付ける。project sourceを持つもの（または移行前のSkybox）に限る。
 `null`で参照とIBLを解除する。色、有限値、範囲、Fog / Cameraのnear-far関係は確定前に検証する。
 
-同じScene settings Inspectorに表示される公開title / descriptionはProject metadata、thumbnailはnative binary fileであり、
-SceneDocument.settingsではないためこのtoolへ混在させない。Directional / Point / Spot LightもEntity Componentであり、
-`get_entity_components` / `update_component`の対象である。これらをScene settingsとして暗黙に変更しない。
+同じScene settings Inspectorに表示される公開title / descriptionはProject metadata だ。thumbnailはnative binary fileだ。
+いずれも SceneDocument.settingsではない。そのためこのtoolへ混在させない。Directional / Point / Spot LightもEntity Componentだ。
+`get_entity_components` / `update_component`の対象になる。これらをScene settingsとして暗黙に変更しない。
 
-`import_audio_asset` は信頼できる絶対`sourcePath`と現在のrevisionを受け、MP3またはWAVだけを扱う。
+`import_audio_asset` は信頼できる絶対`sourcePath`と現在のrevisionを受ける。MP3またはWAVだけを扱う。
 native境界で絶対path、通常file、symlink / reparse pointなし、128 MB上限、拡張子とfile signatureの一致、
-read前後のsize一致を確認してから、既存importと同じcontent-addressed destination、atomic commit、history、
-autosaveを通す。MCP応答はAudio Asset ID、管理下のproject-relative path、format、MIME、byte lengthだけを返し、
+read前後のsize一致を確認する。そのあと既存importと同じcontent-addressed destination、atomic commit、history、
+autosaveを通す。MCP応答はAudio Asset ID、管理下のproject-relative path、format、MIME、byte lengthだけを返す。
 外部path、data URL、binary bytesを返さない。同じsource hashがあれば複製せず既存Audioを選択する。
-`get_audio_asset`も同じ管理下metadataだけを返す。永続Audio SourceはAudio Assetを`place_asset`で配置するか、
-`core.audio-source`を追加して`update_component.patch`の`audioAssetId`、`volume`、`loop`、`autoplay`、
+`get_audio_asset`も同じ管理下metadataだけを返す。永続Audio SourceはAudio Assetを`place_asset`で配置する。
+または `core.audio-source`を追加する。そして `update_component.patch`の`audioAssetId`、`volume`、`loop`、`autoplay`、
 `spatial`、`refDistance`、`rolloffFactor`、`maxDistance`を保存する。
 
-`import_texture_asset` は信頼できる絶対 `sourcePath` と現在の revision を受け、PNG、JPEG、WebP、AVIF、GIF、
-BMP、SVG、KTX2 の通常 file だけを 128 MB 上限で読み込む。最終 entry の symlink、相対 path、未対応拡張子を拒否し、
+`import_texture_asset` は信頼できる絶対 `sourcePath` と現在の revision を受ける。PNG、JPEG、WebP、AVIF、GIF、
+BMP、SVG、KTX2 の通常 file だけを 128 MB 上限で読み込む。最終 entry の symlink、相対 path、未対応拡張子を拒否する。
 既存 import と同じ signature / SVG external-reference 検査、content-addressed destination、atomic commit、
-thumbnail 生成を通す。MCP 応答には外部 path と file bytes を返さず、管理下の project-relative path と Asset ID だけを返す。
+thumbnail 生成を通す。MCP 応答には外部 path と file bytes を返さない。管理下の project-relative path と Asset ID だけを返す。
 同一 source hash が存在する場合は複製せず既存 Texture を返す。
 
 `update_texture_asset.patch` は `colorSpace`、`generateMipmaps`、`flipY`、`resize`、
@@ -515,33 +512,33 @@ Mipmaps を無効にした時の mipmap filter は既存モデルと同じく `l
 Script 側で option を明示した項目だけは、その Script instance の読み込みで保存値より優先する。
 
 基本手順は `get_editor_context`、`list_script_templates`、`create_script_asset` または `apply_script_template`、
-`add_component`、`update_script_component`、`set_play_mode` の順である。すべての write へ
-`projectId`、`sceneId`、`expectedRevision` を渡し、write 後は `get_editor_context` で最新 revision と
-`scriptRuntime` を取り直す。Play 中の対応済み write は直ちに authoring data へ保存され、
-Scene settingsは共有Scene viewへ即時反映し、Component / Entity 変更はその Entity、
+`add_component`、`update_script_component`、`set_play_mode` の順だ。すべての write へ
+`projectId`、`sceneId`、`expectedRevision` を渡す。write 後は `get_editor_context` で最新 revision と
+`scriptRuntime` を取り直す。Play 中の対応済み write は直ちに authoring data へ保存する。
+Scene settingsは共有Scene viewへ即時反映する。Component / Entity 変更はその Entity を再起動する。
 Material / Texture / Particle Asset 変更は参照 Entity だけを再起動する。Audio Source Componentの変更も
-そのEntityだけへ反映する。Lightのscalar変更は既存runtimeへ即時反映し、Light種別だけ対象Entityを再起動する。
+そのEntityだけへ反映する。Lightのscalar変更は既存runtimeへ即時反映する。Light種別だけ対象Entityを再起動する。
 `ctx.audioSources` / `ctx.lights`のruntime-only状態をAssetManifestやSceneDocumentへ暗黙に書き戻さない。
 
 MCP から生成・更新した Script も別の安全領域では動かない。`get_scripting_capabilities` は
 `sandboxed: false`、`trustGate: true` を返す。ここで承認権限を持たない「MCP」とは、
 XRift Studio が配布する stdio MCP editor tools / server を指す。未承認の source があれば、
 その server の `set_play_mode` は `SCRIPT_APPROVAL_REQUIRED` と対象 Asset、path、言語、SHA-256 を返す。
-ユーザーが Studio の確認面で許可するまで評価しない。Script なしでも Scene を確認したい場合だけ、
-MCP は `unapprovedPolicy: "skip"` を明示して未承認 Script を無効化したまま Play できる。
+Studio の確認面で許可があるまで評価しない。Script なしでも Scene を確認したい場合だけ、
+MCP は `unapprovedPolicy: "skip"` を明示する。未承認 Script を無効化したまま Play できる。
 現在の状態は `get_editor_context.scriptRuntime.trust` の `pending`、`disabled`、`running` で確認する。
 
-`pnpm tauri:dev` の debug build だけに登録する privileged Tauri MCP bridge は、webview JavaScript の実行や
-Tauri command の `invoke` を行える開発者向け automation であり、この stdio editor tool の trust boundary には含めない。
+`pnpm tauri:dev` の debug build だけに privileged Tauri MCP bridge を登録する。webview JavaScript の実行や
+Tauri command の `invoke` を行える開発者向け automation だ。この stdio editor tool の trust boundary には含めない。
 release build には同 bridge を登録・搭載しない。したがって debug bridge からの操作を、
-公開された承認 API や trust gate に保護された MCP 操作として扱ってはならない。
+公開された承認 API や trust gate に保護された MCP 操作として扱わない。
 
 ## 組み込み Template
 
-Assets の Create > Script と MCP は同じ version 5 catalog を使う。作成画面では source preview を確認でき、
+Assets の Create > Script と MCP は同じ version 5 catalog を使う。作成画面では source preview を確認できる。
 Entity を選択している場合は Script Asset と Script Component を 1 回の履歴操作で作成できる。
-XRift公式shortcutと競合するため、version 5では`keyboard-move`と`audio-hotkey`を組み込み一覧から外した。
-既存Script sourceと低レベル`ctx.input`の互換性は維持するが、新しい標準例はevent / propertyで接続する。
+XRift公式shortcutと競合する。そのため version 5では`keyboard-move`と`audio-hotkey`を組み込み一覧から外した。
+既存Script sourceと低レベル`ctx.input`の互換性は維持する。新しい標準例はevent / propertyで接続する。
 
 | ID | 用途 | 追加設定 |
 | --- | --- | --- |
@@ -560,7 +557,7 @@ XRift公式shortcutと競合するため、version 5では`keyboard-move`と`aud
 | `event-visibility` | Script event で表示切替 | なし |
 
 `create_script_asset` は `templateId` または任意 `source` のどちらかを受け取る。Templateはcatalogの
-`language`に従って`.ts` / `.tsx`を選び、任意のJSX sourceでは`language: "tsx"`を明示する。
+`language`に従って`.ts` / `.tsx`を選ぶ。任意のJSX sourceでは`language: "tsx"`を明示する。
 `apply_script_template` は Script Asset の作成と指定 Entity への Component 追加を 1 revision で行う。
 未知の template ID、存在しない Entity / Folder、古い revision では document を変更しない。
 
@@ -570,10 +567,10 @@ Inspector のフィールドは宣言から自動生成する。種別は既存�
 
 `string`、`number`、`boolean`、`enum`、`vec2`、`vec3`、`color`、`asset`、`entity`
 
-`asset` と `entity` は既存 Component にはない種別であり、Script のために追加する picker を使う。
-選択結果は `assetReferences` / `entityReferences` にも反映し、参照の検証と削除時の影響調査へ乗せる。
+`asset` と `entity` は既存 Component にはない種別だ。Script のために追加する picker を使う。
+選択結果は `assetReferences` / `entityReferences` にも反映する。参照の検証と削除時の影響調査へ乗せる。
 
-宣言を静的に読み取れない Script は、値を推測せず「property を読み取れません」と理由を示す。コードは実行しない。
+宣言を静的に読み取れない Script は、値を推測しない。「property を読み取れません」と理由を示す。コードは実行しない。
 
 ## モジュール解決
 
@@ -581,11 +578,11 @@ Inspector のフィールドは宣言から自動生成する。種別は既存�
 
 `three`、`@react-three/fiber`、`@react-three/drei`、`@react-three/rapier`、`@xrift/world-components`、`react`、`xrift:script`
 
-`three` を二重にロードすると `instanceof` と R3F の突き合わせが壊れ、同じ Scene を共有できない。
-この解決は公開先でも同じで、公開ワールドは共有 singleton を前提とする。
+`three` を二重にロードすると `instanceof` と R3F の突き合わせが壊れる。同じ Scene を共有できない。
+この解決は公開先でも同じだ。公開ワールドは共有 singleton を前提とする。
 
-`https://` から始まる module を解決する内部 opt-in はあるが、現在の Editor UI / MCP からは有効化しない。
-通常の Play は offline で完結し、remote module を blocking にする。**公開時は常に blocking 診断**とし、対象 Script と理由を示す。
+`https://` から始まる module を解決する内部 opt-in はある。現在の Editor UI / MCP からは有効化しない。
+通常の Play は offline で完結する。remote module を blocking にする。**公開時は常に blocking 診断**とする。対象 Script と理由を示す。
 動的 `import(...)` と `useFrame` も Play / 公開の両方で blocking にする。
 
 ## 対応範囲
@@ -618,117 +615,112 @@ Inspector のフィールドは宣言から自動生成する。種別は既存�
 
 対応する。
 
-- Play での実行と、Play 中の source 編集による該当 Entity だけのホットリロード
-- Stop では実行中の blob module とresourceを破棄し、同一sourceのTypeScript変換結果だけを
+- Play で実行する。Play 中の source 編集では該当 Entity だけをホットリロードする
+- Stop では実行中の blob module とresourceを破棄する。同一sourceのTypeScript変換結果だけを
   128件のbounded cacheへ残す。次のPlayはtop-level codeと`start`を必ず新しいmoduleとして実行し直す
-- Play 中の Entity / Component 構成と Material / Texture / Particle Asset property の永続変更、および参照 Entity だけへの差分反映
-- 1 Entity へ複数 Script
-- 公開ワールドへの静的 import としての出力
-- host が管理する `start` / `update` / `ctx.on` と React の `Render` render error を Script 単位で隔離
-- Inspector / MCP で変更した宣言済み property の frame 単位の反映
-- 明示参照した基本 Texture / Audio、TSX RenderのModel表示、Entity 単位のruntime Audio Source / Light / Material / Particle override
-- local / builtin Texture の Material / Particle preview と、local Basis transcoder を使う KTX2 preview / 公開描画
+- Play 中の Entity / Component 構成と Material / Texture / Particle Asset property を永続変更する。参照 Entity だけへ差分反映する
+- 1 Entity へ複数 Script を付ける
+- 公開ワールドへ静的 import として出力する
+- host が管理する `start` / `update` / `ctx.on` と React の `Render` render error を Script 単位で隔離する
+- Inspector / MCP で変更した宣言済み property を frame 単位で反映する
+- 明示参照した基本 Texture / Audio、TSX RenderのModel表示、Entity 単位のruntime Audio Source / Light / Material / Particle overrideに対応する
+- local / builtin Texture の Material / Particle preview に対応する。local Basis transcoder を使う KTX2 preview / 公開描画に対応する
 
 対応しない。
 
-- 物理 API は World project だけ。Item project は重力と RigidBody を持たないため未対応として degrade する
-- 低レベル`ctx.input`は既存Script互換用のkeyboard状態だけを持つ。公式shortcut競合を避けるため組み込みTemplateでは使わず、pointer lock、マウス移動、gamepadの配線も提供しない
+- 物理 API は World project だけに提供する。Item project は重力と RigidBody を持たないため未対応として degrade する
+- 低レベル`ctx.input`は既存Script互換用のkeyboard状態だけを持つ。公式shortcut競合を避けるため組み込みTemplateでは使わない。pointer lock、マウス移動、gamepadの配線も提供しない
 - `ctx.find`からruntime player / avatarを取得するAPIはない。近接Templateは明示参照したauthored Entity同士だけを扱う
-- runtime JSON 出力では Script を表現できないため blocking 診断とする
-- 任意 npm package の import。staging へ install できる package は固定の許可リストに限る
+- runtime JSON 出力では Script を表現できない。そのため blocking 診断とする
+- 任意 npm package の importには対応しない。staging へ install できる package は固定の許可リストに限る
 - Script から公式 XRift Component を imperative に操作する API は初版では提供しない
-- Script から Material Asset の recipe を永続変更することと、Material Asset を ID だけで一括適用すること
-- Script API からの `KTX2Loader`、`HDRLoader`、`EXRLoader` のように decoder や renderer 設定を伴う Texture loader
-- Asset 一覧の列挙、未宣言 Asset の読み込み、project path の直接参照
-- `Render` 内の `useFrame`。フレーム処理は host が隔離する `start().update(delta)` を使う
+- Script から Material Asset の recipe を永続変更することと、Material Asset を ID だけで一括適用することには対応しない
+- Script API からの `KTX2Loader`、`HDRLoader`、`EXRLoader` のように decoder や renderer 設定を伴う Texture loaderには対応しない
+- Asset 一覧の列挙、未宣言 Asset の読み込み、project path の直接参照には対応しない
+- `Render` 内の `useFrame`には対応しない。フレーム処理は host が隔離する `start().update(delta)` を使う
 
 ## 実行環境の権限と限界
 
 **Script は完全に隔離されていない。** この節の内容を「sandbox 済み」と表示してはならない。
 
-Play は iframe や Worker を挟まないアプリと同一 realm で動き、`withGlobalTauri` により IPC bridge が `window` に露出している。
-したがって Script は原理的にアプリと同じ権限、すなわちファイルシステムとシェルへの到達手段を持ちうる。
+Play は iframe や Worker を挟まない。アプリと同一 realm で動く。`withGlobalTauri` により IPC bridge が `window` に露出している。
+そのため Script は原理的にアプリと同じ権限を持つ。ファイルシステムとシェルへの到達手段を持ちうる。
 
 緩和は二段構えで実装する。
 
 1. module scope で `window`、`globalThis`、`self`、`document`、`fetch`、`XMLHttpRequest`、`Function`、
    `importScripts`、`__TAURI__`、`__TAURI_INTERNALS__` を遮蔽する。ES module は strict mode のため
-   `eval` を lexical binding として遮蔽できず、隔離境界にはならない。同一 realm である以上、ほかの遮蔽も回避可能であり、
+   `eval` を lexical binding として遮蔽できない。隔離境界にはならない。同一 realm である以上、ほかの遮蔽も回避可能だ。
    事故と素朴な悪用を止める緩和にすぎない。
-2. 評価前に source を一度だけ読み、その UTF-8 SHA-256、`language`、`contractVersion`、
+2. 評価前に source を一度だけ読む。その UTF-8 SHA-256、`language`、`contractVersion`、
    module policy version、`allowRemoteModules: false` を実行fingerprintにする。native側でcanonical化したproject pathと
-   project IDを合わせ、app data内のproject外承認storeで正確に一致した時だけ、その同じread-once source snapshotを変換・評価する。
-   承認面はfile、来歴、完全なhash、読み取り専用source、同一realmの警告を示し、
-   「許可してPlay」「Scriptを無効にしてPlay」「キャンセル」を選べる。来歴は表示専用で、project自身が
+   project IDを合わせる。app data内のproject外承認storeで正確に一致した時だけ、その同じread-once source snapshotを変換・評価する。
+   承認面はfile、来歴、完全なhash、読み取り専用source、同一realmの警告を示す。
+   「許可してPlay」「Scriptを無効にしてPlay」「キャンセル」を選べる。来歴は表示専用だ。project自身が
    `studio-template`などを名乗っても承認を迂回できない。
 
-Studio Editorでユーザーが直接保存した正確な新しい内容と、StudioのTemplate作成はUI操作の延長としてそのhashを承認し、
-Play中も対象Entityだけを即時hot reloadする。MCPまたは外部file変更は自動承認せず、Play中はlast-good moduleを維持する。
+Studio Editorで直接保存した正確な新しい内容と、StudioのTemplate作成はUI操作の延長としてそのhashを承認する。
+Play中も対象Entityだけを即時hot reloadする。MCPまたは外部file変更は自動承認しない。Play中はlast-good moduleを維持する。
 承認確認中にsource、言語、契約、対象一覧が変わった場合はstaleとして最新内容を再表示する。
-承認storeの破損・読取失敗はfail closedであり、project documentやprovenanceから復旧・自己承認しない。
-
-この段落のMCP制限もXRift Studio stdio MCP editor tools / serverに対する契約である。
-debug build限定のprivileged Tauri MCP bridgeはwebview JavaScript / Tauri invokeを行える境界外の開発機能で、
-release buildには登録されない。
+承認storeの破損・読取失敗はfail closedだ。project documentやprovenanceから復旧・自己承認しない。
 
 これは実行への**同意ゲート**であってsandboxではない。承認済みScriptの無限loop、同一realmからの権限到達、
-悪意ある処理を隔離または停止する保証はないため、「安全な sandbox」「外部 Script を安全に実行できる」とは表現しない。
+悪意ある処理を隔離または停止する保証はない。そのため「安全な sandbox」「外部 Script を安全に実行できる」とは表現しない。
 
-自分で書いた Script を自分の環境で動かす限りは、これは通常のローカル開発と同じ危険度である。
-危険なのは他人の project や Prefab を開いた場合であり、来歴ゲートはそこを守るために置く。
+自分で書いた Script を自分の環境で動かす限りは、これは通常のローカル開発と同じ危険度だ。
+危険なのは他人の project や Prefab を開いた場合だ。来歴ゲートはそこを守るために置く。
 
 ## 既知の課題
 
-- 完全な隔離は未対応。実現するには realm を分ける必要があり、Three.js インスタンス共有と両立しない
-- Monaco と TypeScript service は local 同梱済みで offline でも動く。Play変換は軽量な`transpileModule`、
-  Editor補完と診断はlanguage-service workerへ分離している。Architecture 10 章が求める CSP は未適用で、
+- 完全な隔離は未対応だ。実現するには realm を分ける必要がある。Three.js インスタンス共有と両立しない
+- Monaco と TypeScript service は local 同梱済みで offline でも動く。Play変換は軽量な`transpileModule`を使う。
+  Editor補完と診断はlanguage-service workerへ分離している。Architecture 10 章が求める CSP は未適用だ。
   Play の blob module と共有 module bridge を許可しながら権限を狭める方針が残っている
 - Script の `ctx.assets.loadTexture` は Three.js の標準 `TextureLoader` を使う。Material / Particle preview と
-  `classic-jsx` の KTX2 描画は local Basis transcoder に対応済みだが、KTX2、HDR、EXR、動画 Texture、cube Texture、
-  renderer capability に応じた transcoding、進捗と再試行を含む Script 用 typed loader は未対応
+  `classic-jsx` の KTX2 描画は local Basis transcoder に対応済みだ。一方 KTX2、HDR、EXR、動画 Texture、cube Texture、
+  renderer capability に応じた transcoding、進捗と再試行を含む Script 用 typed loader は未対応だ
 - `ctx.materials` は Mesh に既に設定された Material の runtime clone を操作する。Material Asset の recipe 全体、
-  shader 固有 uniform、複数 UV set の選択は未対応
-- Particle は Studio と公開で共通実装になり、burst の時刻 / cycle / interval と non-looping duration に対応した。
-  ただし world-space simulation、per-particle size / rotation、stretched billboard、sort mode は互換表示であり、
-  完全な simulation ではない。pool は 10,000 particles が上限で、容量を越える burst は切られる
-- `ctx.particles.setEmissionRate` は authored burst と加算する API ではなく、burst を抑止して continuous rate を
-  runtime override する。burst と continuous rate を同時に動的編集する API は未対応
-- Texture 読み込み失敗は `null` で返る。Asset 名、format、decode error をまとめた Script Console 診断と
-  preload / loading state の標準化が必要
-- Script Console は Script Editor 内で compile / lifecycle / event / Render の失敗と `ctx.log` を表示し、
+  shader 固有 uniform、複数 UV set の選択は未対応だ
+- Particle は Studio と公開で共通実装になった。burst の時刻 / cycle / interval と non-looping duration に対応した。
+  ただし world-space simulation、per-particle size / rotation、stretched billboard、sort mode は互換表示だ。
+  完全な simulation ではない。pool は 10,000 particles が上限だ。容量を越える burst は切る
+- `ctx.particles.setEmissionRate` は authored burst と加算する API ではない。burst を抑止して continuous rate を
+  runtime override する。burst と continuous rate を同時に動的編集する API は未対応だ
+- Texture 読み込み失敗は `null` で返す。Asset 名、format、decode error をまとめた Script Console 診断と
+  preload / loading state の標準化が要る
+- Script Console は Script Editor 内で compile / lifecycle / event / Render の失敗と `ctx.log` を表示する。
   MCP の `get_editor_context.scriptRuntime` からも JSON-safe な直近結果を取得できる。現時点ではsource mapによる行・列、
-  同一例外の集約、個別Scriptの再開操作は未対応
-- pointer / mouse / gamepad とruntime player / avatar参照は未対応
+  同一例外の集約、個別Scriptの再開操作は未対応だ
+- pointer / mouse / gamepad とruntime player / avatar参照は未対応だ
 - `ctx.lifecycle` を使わない `Promise.then`、global timer、Render の pointer / physics callback など、host の所有外で
-  開始した非同期 callback の例外帰属と自動停止は未対応
-- 公開先プラットフォームが upload された bundle を審査または sandbox するかは未確認。Studioの内容hash承認はlocal Playの同意であり、公開runtimeの隔離や審査を代替しない
+  開始した非同期 callback の例外帰属と自動停止は未対応だ
+- 公開先プラットフォームが upload された bundle を審査または sandbox するかは未確認だ。Studioの内容hash承認はlocal Playの同意だ。公開runtimeの隔離や審査を代替しない
 
 ## 公開
 
-Script source と host adapter を staging の overlay file として出力し、生成した `src/World.tsx` または
+Script source と host adapter を staging の overlay file として出力する。生成した `src/World.tsx` または
 `src/Item.tsx` から静的 import で参照する。
 
-- `.ts` / `.js` は静的 Asset として許可されないため、必ず overlay file として出す
+- `.ts` / `.js` は静的 Asset として許可されない。そのため必ず overlay file として出す
 - 生成物に `eval`、`Function`、動的 import を出さない
-- host adapter と authoring API は単一の実装を正本とし、Editor Play と生成物で二重管理しない
-- 生成した World / Item の Scene subtree は Play と同じ `XriftScriptRoot` で包み、各 Component は同じ
+- host adapter と authoring API は単一の実装を正本とする。Editor Play と生成物で二重管理しない
+- 生成した World / Item の Scene subtree は Play と同じ `XriftScriptRoot` で包む。各 Component は同じ
   `XriftScriptHost` へ default Script、任意の named `Render`、property、実行順、明示参照を渡す
-- `assetReferences` のうち staging へ copy した Asset だけを決定的な URL map へ入れ、
+- `assetReferences` のうち staging へ copy した Asset だけを決定的な URL map へ入れる。
   XRift の `baseUrl` で解決してから `ctx.assets.url` / `loadTexture` を Play と同じ参照 gate へ通す
 - KTX2 を参照する Material / Particle がある場合は pinned Basis JS / WASM を staging の `public/` 直下へ
-  copy し、`useKTX2` の transcoder path に XRift の `baseUrl` を渡す
-- Draco 圧縮した Model がある場合は pinned Draco decoder を同じく `public/` 直下へ copy し、
+  copy する。`useKTX2` の transcoder path に XRift の `baseUrl` を渡す
+- Draco 圧縮した Model がある場合は pinned Draco decoder を同じく `public/` 直下へ copy する。
   `useGLTF` の decoder path に XRift の `baseUrl` を渡す
-- Entity group へ安定 ID を付け、`entityReferences` に宣言した ID だけを `ctx.find` で解決する
-- World / Item instance ごとの scope marker 内だけを探索し、同じ Item を複数配置しても別 instance の Entity を返さない
-- Texture cache / dispose、Audio停止・解放、Material clone / restore、frame 更新と event bus は host の lifecycle に属し、
+- Entity group へ安定 ID を付ける。`entityReferences` に宣言した ID だけを `ctx.find` で解決する
+- World / Item instance ごとの scope marker 内だけを探索する。同じ Item を複数配置しても別 instance の Entity を返さない
+- Texture cache / dispose、Audio停止・解放、Material clone / restore、frame 更新と event bus は host の lifecycle に属する。
   Play の Stop と公開 world の unmount で同じ cleanup を行う
-- 出力は staging の build で型検査される。Script の型エラーは公開を止めるため、upload 前に Studio 側で提示する
-- 同じ入力から同じ出力を得る決定性を維持する。識別子は hash 由来とし、挿入順や時刻に依存させない
-- Prefab instance は合成 ID で事前展開されるため、Script instance の同一性は展開後の Component ID から導出する
+- 出力は staging の build で型検査する。Script の型エラーは公開を止める。そのため upload 前に Studio 側で提示する
+- 同じ入力から同じ出力を得る決定性を維持する。識別子は hash 由来とする。挿入順や時刻に依存させない
+- Prefab instance は合成 ID で事前展開する。そのため Script instance の同一性は展開後の Component ID から導出する
 
 ## 参照
 
 - 例外範囲の定義: [Visual Editor Architecture 4.8](./VISUAL_EDITOR_ARCHITECTURE.md#48-scripting-script-asset--script-component)
 - 状態設計: [UX Interactions F-28](./UX_INTERACTIONS.md)
-- 実行 lifecycle: Visual Editor Architecture 4.6 `RuntimePlugin`

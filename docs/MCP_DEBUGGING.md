@@ -1,6 +1,6 @@
 # MCPで画面を見ながらデバッグする
 
-XRift Studioのデバッグ版は、標準MCP経由で現在の画面をAI clientへ公開します。Codex、DeepSeekを使うMCP host、Claude、Cursorなど、stdio MCP serverを登録できるclientから同じ操作を利用できます。
+XRift Studioのデバッグ版は、標準MCP経由で現在の画面をAI clientへ公開します。Codex、DeepSeekを使うMCP host、Claude、Cursorなどが対象です。stdio MCP serverを登録できるclientから同じ操作を利用できます。
 
 ## できること
 
@@ -25,21 +25,17 @@ pnpm tauri:dev
 
 Tauri MCPはデバッグビルド専用です。アプリのウィンドウが開いた後、MCP client側でserver設定を読み直してください。
 
-## Codex
+**Codex** — リポジトリの [`.mcp.json`](../.mcp.json) に設定済みです。Codexでこのリポジトリを開きます。`tauri` MCP serverを再読み込みすると利用できます。
 
-リポジトリの [`.mcp.json`](../.mcp.json) に設定済みです。Codexでこのリポジトリを開き、`tauri` MCP serverを再読み込みすると利用できます。
-
-## DeepSeekなど、別のMCP host
-
-MCPを登録できるhostでは、次のコマンドでそのhost用の設定を生成できます。
+**DeepSeekなど、別のMCP host** — MCPを登録できるhostでは、次のコマンドでそのhost用の設定を生成できます。
 
 ```text
 pnpm mcp:debug-config
 ```
 
-出力された `mcpServers` のJSONをhostのMCP設定へ追加します。出力には現在のNode実行ファイルとリポジトリ内のserverラッパーの絶対パスが入るため、hostの作業ディレクトリに依存しません。
+出力された `mcpServers` のJSONをhostのMCP設定へ追加します。出力には現在のNode実行ファイルとリポジトリ内のserverラッパーの絶対パスが入ります。hostの作業ディレクトリに依存しません。
 
-DeepSeekのモデルを使う場合も、DeepSeekを接続できるMCP hostへこの設定を登録します。モデルAPIや単独のチャット画面がstdio MCPに対応していない場合は、MCP hostまたはIDE側が中継します。
+DeepSeekのモデルを使う場合も同じです。DeepSeekを接続できるMCP hostへこの設定を登録します。モデルAPIや単独のチャット画面がstdio MCPに対応していない場合は、MCP hostまたはIDE側が中継します。
 
 ## 開発時の確認ループ
 
@@ -50,9 +46,9 @@ DeepSeekのモデルを使う場合も、DeepSeekを接続できるMCP hostへ�
 3. 必要な操作を行い、処理中・成功・失敗の画面を取得
 4. `webview_dom_snapshot`で主要操作と状態ラベルを確認
 5. `read_logs`でconsole errorを確認
-6. Tauri commandを変更した場合は`ipc_monitor`と`ipc_get_captured`で通信を確認
+6. Tauri commandを変更した場合は`ipc_monitor`と`ipc_get_captured`で通信を確認します。
 
-Sceneの見た目や負荷を再現する時は、画面を手で操作せず、Scene MCPから次の順で呼び出します。
+Sceneの見た目や負荷を再現する時は、画面を手で操作しません。Scene MCPから次の順で呼び出します。
 
 ```json
 {"projectId":"…","sceneId":"…","action":"metrics"}
@@ -60,13 +56,13 @@ Sceneの見た目や負荷を再現する時は、画面を手で操作せず、
 {"projectId":"…","sceneId":"…","action":"stop"}
 ```
 
-`capture_scene_debug` の `stop` は、保存先ダイアログを開かず、アプリの `debug-captures` フォルダーへWebMを保存してパスを返します。`get_editor_context`で対象Project / Sceneを確認してから呼び出してください。
+`capture_scene_debug` の `stop` は保存先ダイアログを開きません。アプリの `debug-captures` フォルダーへWebMを保存してパスを返します。`get_editor_context`で対象Project / Sceneを確認してから呼び出してください。
 
-スクリーンショットは表示中のWebView領域だけを対象にします。OSのファイル選択ダイアログなどのネイティブUIは対象外です。Scene Viewの録画は3D Canvasだけを最大15秒記録し、アプリ全体やネイティブUIを記録しません。読み取り確認は安全に行えますが、ログイン、アップロード、削除、リセットなどの書き込み操作は明示的に確認してから実行します。
+スクリーンショットは表示中のWebView領域だけを対象にします。OSのファイル選択ダイアログなどのネイティブUIは対象外です。Scene Viewの録画は3D Canvasだけを最大15秒記録します。アプリ全体やネイティブUIを記録しません。読み取り確認は安全に行えます。ログイン、アップロード、削除、リセットなどの書き込み操作は明示的に確認してから実行します。
 
 ## 2種類のMCP server
 
 - `tauri` / `xrift-studio-debug`: 開発中の画面、DOM、console、IPCを確認するためのTauri MCP。デバッグビルドだけで利用します。
 - `xrift-studio`: Scene、Asset、ComponentなどをAIから編集するためのXRift Studio MCP。通常のUndo、自動保存、revision検査を通ります。
 
-画面を見ながらSceneを編集する場合は、両方のserverを同じMCP hostへ登録します。デバッグ用serverはWebView JavaScriptを扱えるため、Scene編集用serverとは異なる開発者向けの権限境界です。リリース版には追加しません。
+画面を見ながらSceneを編集する場合は、両方のserverを同じMCP hostへ登録します。デバッグ用serverはWebView JavaScriptを扱えます。Scene編集用serverとは異なる開発者向けの権限境界です。リリース版には追加しません。

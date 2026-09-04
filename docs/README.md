@@ -1,8 +1,8 @@
 # XRift Studio ドキュメント
 
-XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを制作する有志製のデスクトップアプリである。React 19 + TypeScript + Vite の UI と、Tauri v2 の Rust バックエンドで動く。
+XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを制作する有志製のデスクトップアプリである。UI は React 19 + TypeScript + Vite で作り、バックエンドは Tauri v2 の Rust で動く。
 
-初めて読む場合は、この順で読むと全体像がつかめる。
+全体像をつかむには、次の順に読む。
 
 1. [ビジュアルエディター設計](./VISUAL_EDITOR_ARCHITECTURE.md) — 製品の正本。データモデル、画面、Play、変換、セキュリティ境界。
 2. [対応範囲と段階](./VISUAL_EDITOR_ROADMAP.md) — 設計のどこまでが動き、各段階を何で完了とするか。
@@ -47,14 +47,14 @@ XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを
 
 ## これから作るもの
 
-[ワールド部品の追加計画](./WORLD_CONTENT_PLAN.md) は、初めてワールドを作る人が最初の一時間で欲しくなる部品を、カタログ preset・組み込み Prefab・新しい Component の三つに分けて並べた計画である。現在の対応範囲ではなく、これから足すものを扱う。
+[ワールド部品の追加計画](./WORLD_CONTENT_PLAN.md) は、初めてのワールド制作で最初の一時間に必要になる部品を扱う。部品はカタログ preset・組み込み Prefab・新しい Component の三つに分けて並べている。現在の対応範囲ではなく、これから足すものだけを扱う。
 
-[カメラタイムライン 仕様](./CAMERA_TIMELINE_SPEC.md) は、決まった経路をカメラで再生してデバッグするための設計である。camera Component、KHR_interactivity の上に載せるカメラ用 operation、そして「時間で進む実行器」を扱う。全体が未実装で、既存の静的な walk との共存が設計の要点になる。
+[カメラタイムライン 仕様](./CAMERA_TIMELINE_SPEC.md) は、決まった経路でカメラを動かしてデバッグするための設計だ。全体が未実装である。既存の静的な walk との共存が設計の要点である。
 
 ## 利用者向けガイド
 
-[`docs/wiki/`](./wiki/index.md) は、インストールから公開までを利用者向けにまとめた使い方ガイドである。GitHub Pages で Web サイトとしても配布する。掲載順とカテゴリは `src/lib/wiki-config.ts` が持ち、ページを追加・改名する時は両方を同じ変更で揃える。
+[`docs/wiki/`](./wiki/index.md) は、インストールから公開までを利用者向けにまとめた使い方ガイドだ。GitHub Pages で Web サイトとしても配布する。掲載順とカテゴリは `src/lib/wiki-config.ts` が持つ。ページを追加・改名する際は、両方を同じ変更で揃える。
 
 ## 過去の記録
 
-[`docs/history/`](./history/README.md) には、特定の日付時点の監査、調査、実行計画を当時の内容のまま残している。現在の設計や対応状況の正本ではない。仕様を知りたい場合は上の「設計（正本）」を参照する。
+[`docs/history/`](./history/README.md) には、特定の日付時点の監査、調査、実行計画が当時の内容のまま残る。現在の設計や対応状況の正本ではない。仕様を確認する場合は、上の「設計（正本）」を読む。

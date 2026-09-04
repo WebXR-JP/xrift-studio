@@ -69,15 +69,9 @@ Script の `ctx.materials`、`ctx.lights`、`ctx.audioSources` などによる�
 
 元の公式 Classic サンプルはボタンにもポータルにも処理が無く、「0回クリック」も増えない固定文字列でした。Studio へ変換したあとに Interactivity Graph を付けて、押したら動く状態にしています。中身は普通の Graph なので、開いて書き換えられます。
 
-## 空の見え方について
-
-Skybox Shader は Scene View には描画されません。編集中の背景は単色のままなので、空の見え方は Play で確認してください。
-
-## クラシックプロジェクトのローカル確認
-
-クラシックプロジェクトでは、**実行** を押すと開発サーバーが起動し、プレビュー URL をブラウザで開きます。実行ログは同じ画面で確認できます。
-
 ## 次のステップ
 
 - [XRift への公開（アップロード）](./publishing.md)
+- [空と水をつくる](./sky-and-water.md)
+- [クラシックエディター（コード編集）](./classic-editor.md)
 - [トラブルシューティング](./troubleshooting.md)
