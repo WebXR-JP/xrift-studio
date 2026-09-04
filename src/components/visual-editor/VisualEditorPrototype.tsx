@@ -1,6 +1,7 @@
 import { textureProcessingSettings } from "../../lib/visual-editor/texture-processing";
 import { normalizeTextureImportSettings } from "../../lib/visual-editor/asset-manifest";
 import { authoringFingerprint, authoringStatus, changeAuthoringState, readAuthoringState } from "../../lib/visual-editor/world-authoring";
+import { getWorldComponentAuthoring } from "../../lib/visual-editor/world-component-authoring";
 import {
   useCallback,
   useEffect,
@@ -2894,11 +2895,12 @@ export function VisualEditorPrototype({
           if (["begin_world_authoring", "get_world_authoring", "review_world_authoring", "complete_world_authoring"].includes(request.tool)) {
             const root = projectPathRef.current;
             if (!root) throw new Error("プロジェクトを保存してから制作を開始してください。");
+            const worldComponents = getWorldComponentAuthoring(bundleRef.current.scene, bundleRef.current.project.projectKind);
             const fingerprint = await authoringFingerprint(bundleRef.current);
             let state = readAuthoringState(await tauri.readWorldAuthoring(root, sceneId));
             if (request.tool === "complete_world_authoring" && (!state || authoringStatus(state, fingerprint).uncheckedCriteria?.length)) {
               await completeResponse({ id: request.id, ok: true, result: { projectId, sceneId,
-                ...authoringStatus(state, fingerprint), completionAccepted: false } });
+                ...authoringStatus(state, fingerprint), worldComponents, completionAccepted: false } });
               return;
             }
             if (request.tool === "complete_world_authoring") {
@@ -2906,7 +2908,7 @@ export function VisualEditorPrototype({
                 if ((await tauri.readWorldAuthoringImages(root, sceneId, fingerprint)).length !== 2) throw new Error("Missing images");
               } catch {
                 await completeResponse({ id: request.id, ok: true, result: { projectId, sceneId,
-                  ...authoringStatus(state, fingerprint), completed: false, completionAccepted: false,
+                  ...authoringStatus(state, fingerprint), worldComponents, completed: false, completionAccepted: false,
                   imageWarning: "保存画像を読み取れません。両視点を撮り直してください。",
                   missingViews: ["spawn", "iso"], nextActions: ["set_scene_view_camera", "capture_scene_view"] } });
                 return;
@@ -2925,7 +2927,7 @@ export function VisualEditorPrototype({
               catch { imageWarning = "保存画像を読み取れません。両視点を撮り直してください。"; }
             }
             await completeResponse({ id: request.id, ok: true, result: {
-              projectId, sceneId, ...authoringStatus(state, fingerprint), images, imageWarning,
+              projectId, sceneId, ...authoringStatus(state, fingerprint), worldComponents, images, imageWarning,
               ...(imageWarning ? { completed: false, missingViews: ["spawn", "iso"], nextActions: ["set_scene_view_camera", "capture_scene_view"] } : {}),
             } });
             return;

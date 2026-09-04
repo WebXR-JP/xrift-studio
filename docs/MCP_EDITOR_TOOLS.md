@@ -39,6 +39,8 @@ Studio に同梱する `xrift-studio-mcp-sidecar` は、MCP サーバーと CLI 
 
 ワールド制作の開始・再開には `begin_world_authoring` / `get_world_authoring`、画像判定の記録には `review_world_authoring`、完成条件の確認には `complete_world_authoring` を使う。Studio に内蔵されており、利用者側のソースコードや追加ランナーは不要。`capture_scene_view` は保存パスに加えて MCP の画像を直接返す。制作状態の保存と鮮度の判定は [ワールド制作ハーネス](./WORLD_AUTHORING_HARNESS.md) を参照する。
 
+制作状態と `list_component_definitions` は、ワールドの場合に `worldComponents` も返す。用途別の公式設備、配置と検証の手順、公式フィールド、Prefab の編集可能項目、現在の設備一覧を確認できる。交流・共同作業・発表では ScreenShareDisplay を最初に検討し、採用・省略の理由と利用場所を設計図に残す。Mirror はアバター確認、TagBoard はイベントのタグ選択に合わせて選ぶ。`place_builtin_prefab` は `componentId` と該当する `placementGuidance` を返す。位置・向き・大きさを調整し、客席や操作位置から撮影してから、対応環境で動作を確認する。設備の存在だけで共有・同期が動いたとは判断しない。
+
 tool は「誰が実行するか」で5つに分かれる。この分類が権限の境界を示す。
 document 以外は React shell か Tauri 側の副作用を伴う。
 
