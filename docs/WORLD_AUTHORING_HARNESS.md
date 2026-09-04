@@ -37,6 +37,8 @@ MCP の説明文とツールは、依頼に合ったワールドを制作し、�
 
 ## 参考にする設計
 
+独自の実行ループを試す実装は [ワールド制作ハーネスの試作](../dev/world-harness/README.md) にある。モデル接続、通常の stdio MCP 接続、履歴からの再開、画像と完成条件による判定を分離している。現時点ではアプリ本体へ組み込まず、CLI で検証する。
+
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) は、モデル接続、ツール、セッション記録、実行ループをプラグインとして構成する。[アーキテクチャ資料](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/architecture.md)では、ツール実行の前後に介入する仕組みと、モデルに渡した情報をセッションログから再構成する設計も説明している。
 
 XRift Studio では、この設計を次の検討に役立てる。以下は今後の設計の観点であり、DeepSeek Harness を導入済みという意味ではない。
