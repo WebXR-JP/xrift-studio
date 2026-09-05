@@ -56,6 +56,7 @@ export function CatalogPreviewFrame({
   );
   const [capturing, setCapturing] = useState(false);
   const cancelledRef = useRef(false);
+  const giveUpRef = useRef(false);
 
   useEffect(() => {
     cancelledRef.current = false;
@@ -74,7 +75,7 @@ export function CatalogPreviewFrame({
   }, [cacheKey]);
 
   useEffect(() => {
-    if (live || frame || capturing || !visible) return;
+    if (live || frame || capturing || !visible || giveUpRef.current) return;
     let released = false;
     void enqueueCapture(
       () =>
@@ -84,10 +85,14 @@ export function CatalogPreviewFrame({
             return;
           }
           setCapturing(true);
-          // Resolved by onCaptured below; the timeout is the safety net for a
-          // context that never produces a frame.
+          // Resolved by onCaptured below; the timeout stops a context that
+          // never produces a frame from blocking the queue. The card stays
+          // 表示待ち and does not retry, because the failures this guards
+          // against (a lost WebGL context under context churn) repeat on
+          // every attempt and would otherwise loop forever.
           const timeout = window.setTimeout(() => {
             released = true;
+            giveUpRef.current = true;
             setCapturing(false);
             resolve();
           }, 4000);
