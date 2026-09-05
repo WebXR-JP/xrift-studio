@@ -9,6 +9,15 @@ name: Release
 # `pnpm tauri:build --debug` を使うか、必要になった時点で Debug 版だけを
 # 作る手段を別に用意する。
 #
+# 所要時間の設計:
+#   OS 別ビルドの前に置く検査は verify と release-e2e の 2 job に分け、
+#   同時に走らせる。E2E は --shard で 3 台へ配り、1 台あたりの worker は
+#   1 のまま保つ。台を増やすだけなので、テスト同士が CPU を奪い合って
+#   タイムアウト付近で不安定になることはない。
+#   Rust の成果物は src-tauri/target と src-tauri/target-mcp-sidecar の
+#   両方をキャッシュする。sidecar は別の target ディレクトリへ出力するので、
+#   target だけをキャッシュしていた頃は毎回すべての依存を作り直していた。
+#
 # 使い方:
 #   Actions タブ → "Release" → "Run workflow" で
 #   タグ名 (例: v0.1.0) を入力して実行。
@@ -34,9 +43,15 @@ on:
 permissions:
   contents: write
 
+# 同じタグの実行が重なると、3 つの build job が同じ Release の資産と
+# latest.json を同時に書き換える。前の実行は止めずに、順番に流す。
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
 jobs:
-  release-e2e:
-    name: Release E2E
+  verify:
+    name: Verify
     runs-on: ubuntu-22.04
 
     steps:
@@ -71,23 +86,58 @@ jobs:
             throw new Error("Release tag must match app version: " + expected);
           }'
 
+      # E2E の shard は playwright だけを実行する。型検査はここで 1 回だけ
+      # 行い、3 台で同じ tsc を繰り返さない。
+      - name: Typecheck app and E2E
+        run: pnpm typecheck && pnpm e2e:typecheck
+
       # 公開ステージングの tsc をなぞる staged world typecheck を含む。
       # コンパイラが出力するコードが公開ビルドで落ちる退行は、ここで
       # リリース前に止まる。
       - name: Run compiler fixtures and publish-staging checks
         run: pnpm cli:test
 
+  release-e2e:
+    name: Release E2E ${{ matrix.shard }}/3
+    runs-on: ubuntu-22.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Setup Takumi Guard
+        uses: flatt-security/setup-takumi-guard-npm@v1
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Install Chromium for release E2E
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run release E2E before upload
-        run: pnpm e2e:release
+        run: pnpm e2e:test --shard=${{ matrix.shard }}/3
 
       - name: Upload E2E failure report
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: release-e2e-report
+          name: release-e2e-report-${{ matrix.shard }}
           path: |
             playwright-report/
             test-results/
@@ -97,7 +147,7 @@ jobs:
   build:
     name: Build ${{ matrix.label }}
     runs-on: ${{ matrix.platform }}
-    needs: release-e2e
+    needs: [verify, release-e2e]
 
     strategy:
       fail-fast: false
@@ -107,14 +157,20 @@ jobs:
             label: Windows
             args: ''
             rust-targets: ''
+            sidecar-reuse: ''
           - platform: macos-latest
             label: macOS (universal)
             args: '--target universal-apple-darwin'
             rust-targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
+            # macOS だけは universal 版のために sidecar を先に作る。
+            # beforeBuildCommand が同じものを host 向けに作り直さないよう、
+            # 用意済みの実行ファイルを使い回す。
+            sidecar-reuse: '1'
           - platform: ubuntu-22.04
             label: Linux
             args: ''
             rust-targets: ''
+            sidecar-reuse: ''
 
     steps:
       - name: Checkout
@@ -139,16 +195,44 @@ jobs:
         with:
           targets: ${{ matrix.rust-targets }}
 
+      # sidecar は --target-dir で target-mcp-sidecar へ出力する。ここに
+      # 挙げないとキャッシュされず、毎回すべての依存を作り直す。macOS では
+      # aarch64 と x86_64 の 2 回分で 6 分近くかかっていた。
       - name: Cache Cargo build
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: './src-tauri -> target'
+          workspaces: |
+            ./src-tauri -> target
+            ./src-tauri -> target-mcp-sidecar
           key: ${{ matrix.platform }}
 
+      # apt のミラーが不安定なとき、`apt-get update` が応答を待ち続けて
+      # 20 分以上止まったことがある。取得の再試行と時間制限を設定し、
+      # 遅いミラーには待たずに次の試行へ移る。
       - name: Install Linux system dependencies
         if: matrix.platform == 'ubuntu-22.04'
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt-get update
+          set -euo pipefail
+          printf '%s\n' \
+            'Acquire::Retries "3";' \
+            'Acquire::http::Timeout "20";' \
+            'Acquire::https::Timeout "20";' \
+            | sudo tee /etc/apt/apt.conf.d/99-xrift-release > /dev/null
+          updated=0
+          for attempt in 1 2 3; do
+            if sudo timeout 180 apt-get update; then
+              updated=1
+              break
+            fi
+            echo "apt-get update に失敗した (試行 ${attempt}/3)"
+            sleep $((attempt * 5))
+          done
+          if [ "${updated}" -ne 1 ]; then
+            echo "apt-get update が 3 回とも失敗した"
+            exit 1
+          fi
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
             librsvg2-dev \
@@ -191,6 +275,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          XRIFT_MCP_SIDECAR_REUSE_PREBUILT: ${{ matrix.sidecar-reuse }}
         with:
           tagName: ${{ inputs.tag }}
           releaseName: 'XRift Studio ${{ inputs.tag }}'

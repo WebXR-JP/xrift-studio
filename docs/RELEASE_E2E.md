@@ -25,14 +25,22 @@ XRift Studio の主要導線を、XRift への送信を始める直前まで確�
 
 ## リリース時の実行
 
-`.github/workflows/release.yml` の `Release E2E` job が次の順序で実行します。
+`.github/workflows/release.yml` の `verify` job と `Release E2E` job が同時に走り、両方が成功した場合だけWindows、macOS、Linuxのビルドを開始します。
 
-1. リリースタグとアプリバージョンの一致を確認する
-2. Chromiumと必要なシステム依存を導入する
-3. `pnpm e2e:release` を実行する
-4. 成功した場合だけWindows、macOS、Linuxのビルドを開始する
+`verify` job は次を確認します。
 
-失敗時は `playwright-report` と `test-results` を workflow artifact から確認できます。
+1. リリースタグとアプリバージョンの一致
+2. `pnpm typecheck` と `pnpm e2e:typecheck` の型検査
+3. `pnpm cli:test` のコンパイラfixtureと公開ステージング検査
+
+`Release E2E` job は3台に分かれ、それぞれ次を実行します。
+
+1. Chromiumと必要なシステム依存の導入
+2. `pnpm e2e:test --shard=N/3`
+
+分割で変わるのは台数だけです。1台あたりのworkerは1のままなので、同じ機械で2つのテストが同時に動くことはありません。テストがCPUを奪い合ってタイムアウト付近で不安定になる心配なく、待ち時間だけを短くできます。型検査は `verify` job で1回だけ行い、3台で繰り返しません。
+
+失敗時は `release-e2e-report-1` から `release-e2e-report-3` という名前の workflow artifact に、その台の `playwright-report` と `test-results` が入ります。
 
 ## 手動調査
 
