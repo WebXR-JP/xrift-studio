@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -35,11 +35,6 @@ const cargoArguments = [
 if (release) cargoArguments.push("--release");
 if (requestedTarget) cargoArguments.push("--target", requestedTarget);
 
-run("cargo", cargoArguments, false, {
-  // The sidecar is the file Tauri validates. Disable that validation only
-  // while compiling the sidecar itself so a clean checkout can bootstrap.
-  TAURI_CONFIG: JSON.stringify({ bundle: { externalBin: [] } }),
-});
 const rustcVersion = run("rustc", ["-vV"], true);
 const hostTarget = rustcVersion
   .split(/\r?\n/)
@@ -64,6 +59,32 @@ const destination = path.join(
   destinationDirectory,
   `xrift-studio-mcp-sidecar-${targetTriple}${executableSuffix}`,
 );
+
+// Release workflow の macOS job は、universal 版を作るために aarch64 と
+// x86_64 の sidecar を先に用意する。そのあと tauri build が呼ぶ
+// beforeBuildCommand が host 向けに同じものをもう一度作っていた。--target を
+// 付けない cargo は別の target ディレクトリへ出力するため、依存をすべて
+// 再コンパイルして 3 分近くかかっていた。
+//
+// XRIFT_MCP_SIDECAR_REUSE_PREBUILT に値を入れて呼ぶと、目的の実行ファイルが
+// すでにある場合だけ cargo を省く。無ければこれまでどおりビルドするので、
+// 用意し忘れた実行ファイルが黙って欠けることはない。設定してよいのは、
+// 同じ profile の sidecar を直前に用意した呼び出し元だけだ。debug と release
+// は同じファイル名へ書き出すので、開発中の既定では設定しない。
+const reusePrebuilt = Boolean(process.env.XRIFT_MCP_SIDECAR_REUSE_PREBUILT);
+if (reusePrebuilt && existsSync(destination)) {
+  process.stdout.write(
+    `Reused prebuilt XRift Studio MCP sidecar (${profile}, ${targetTriple})\n`,
+  );
+  process.exit(0);
+}
+
+run("cargo", cargoArguments, false, {
+  // The sidecar is the file Tauri validates. Disable that validation only
+  // while compiling the sidecar itself so a clean checkout can bootstrap.
+  TAURI_CONFIG: JSON.stringify({ bundle: { externalBin: [] } }),
+});
+
 mkdirSync(destinationDirectory, { recursive: true });
 copyFileSync(source, destination);
 process.stdout.write(`Prepared XRift Studio MCP sidecar (${profile}, ${targetTriple})\n`);

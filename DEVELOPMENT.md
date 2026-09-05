@@ -135,6 +135,14 @@ GitHub Actions のリポジトリ Secrets に次を登録してください。
 
 **プレリリース／ドラフト** として公開するオプションもあります（workflow 実行時のフォーム参照）。
 
+### 所要時間の作り
+
+OS 別ビルドの前に置く検査は `verify` と `Release E2E` の 2 job に分けて同時に走らせます。E2E は `--shard` で 3 台へ配り、1 台あたりの worker は 1 のまま保ちます。台数だけを増やす分割なので、テストが同じ機械で CPU を奪い合ってタイムアウト付近で不安定になることはありません。
+
+Rust の成果物は `src-tauri/target` と `src-tauri/target-mcp-sidecar` の両方をキャッシュします。MCP sidecar は `--target-dir` で別のディレクトリへ出力するため、`target` だけをキャッシュしていた頃は毎回すべての依存を作り直していました。`Swatinem/rust-cache` の `workspaces` から片方を落とすと、その分がまるごと戻ります。
+
+macOS は universal 版のために sidecar を aarch64 と x86_64 の 2 つ作ります。その後 `beforeBuildCommand` が host 向けに 3 つ目を作らないよう、build job だけが `XRIFT_MCP_SIDECAR_REUSE_PREBUILT` を設定します。この変数を立てると、`scripts/prepare-mcp-sidecar.mjs` は目的の実行ファイルがすでにある場合だけ cargo を省きます。無ければこれまでどおりビルドします。debug と release は同じファイル名へ書き出すので、日常の開発では設定しません。
+
 ## ロードマップ
 
 - [ ] v0.2: AI チャットパネル（Anthropic SDK、World.tsx 編集アシスタント）

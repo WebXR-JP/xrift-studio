@@ -4,7 +4,11 @@ const isCI = Boolean(process.env.CI);
 
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: false,
+  // 1 worker のままなので、同じ実行で 2 つのテストが並ぶことはない。
+  // fullyParallel はテストの分割単位だけを変える。false のままだと 1 ファイルが
+  // 分割できない 1 塊になり、14 個のテストを持つ release-gate.spec.ts が
+  // Release workflow の --shard 分割を丸ごと 1 台に寄せてしまう。
+  fullyParallel: true,
   workers: 1,
   retries: isCI ? 1 : 0,
   forbidOnly: isCI,
