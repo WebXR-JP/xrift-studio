@@ -1,5 +1,6 @@
 import {
   addEditorComponent,
+  deleteEntityHierarchy,
   getEntityReparentDecision,
   reparentEntityHierarchy,
   updateEntityEnabled,
@@ -16,10 +17,38 @@ import {
 import { createPrototypeProject } from "./prototype-project";
 import { extractScriptContract } from "./scripting/script-contract";
 import { createScriptAsset } from "./scripting/script-files";
+import { SceneEntityTreeStore } from "../../components/visual-editor/scene-entity-tree-store";
 
 /** Pure assertions for sibling ordering, reparenting, and Entity Enabled state. */
 export function runEditorSessionHierarchyFixtureAssertions(): void {
   const scene = hierarchyFixtureScene();
+
+  const input = {
+    scene,
+    authoringEntityIdByEntityId: {},
+    selectedEntityIds: new Set<string>(),
+    primaryEntityId: null,
+    runtimeEntityRevisions: undefined,
+    materialDropTarget: null,
+  };
+  const store = new SceneEntityTreeStore(input);
+  const notified: string[] = [];
+  for (const id of Object.keys(scene.entities)) {
+    store.getSnapshot(id);
+    store.subscribe(id, () => notified.push(id));
+  }
+  const deleted = deleteEntityHierarchy(scene, ["entity-d"]);
+  assert(!deleted.entities["entity-d"], "deleting a child must remove it");
+  assertEqual(deleted.entities["entity-a"].children, [], "the parent must lose the deleted child");
+  assertEqual(scene.entities["entity-a"].children, ["entity-d"], "deletion must not mutate the undo snapshot");
+  assert(deleted.entities["entity-b"] === scene.entities["entity-b"], "deletion must preserve unrelated Entity identity");
+  assert(deleted.rootEntityIds === scene.rootEntityIds, "deleting a nested child must preserve the root list");
+  store.publish({ ...input, scene: deleted });
+  assertEqual(notified, ["entity-a", "entity-d"], "deletion must notify only the changed parent and removed child");
+  const subtreeDeleted = deleteEntityHierarchy(scene, ["entity-a", "entity-d", "missing"]);
+  assertEqual(Object.keys(subtreeDeleted.entities), ["entity-b", "entity-c"], "overlapping deletion roots must remove the entire subtree");
+  assertEqual(subtreeDeleted.rootEntityIds, ["entity-b", "entity-c"], "deletion must remove the subtree root");
+  assert(deleteEntityHierarchy(scene, ["missing"]) === scene, "missing deletion roots must be a no-op");
 
   const reordered = reparentEntityHierarchy(scene, "entity-b", null, 2);
   assertEqual(

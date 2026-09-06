@@ -410,20 +410,22 @@ export function deleteEntityHierarchy(
   };
   rootEntityIds.forEach(visit);
   if (removed.size === 0) return scene;
-  const entities = Object.fromEntries(
-    Object.entries(scene.entities)
-      .filter(([id]) => !removed.has(id))
-      .map(([id, entity]) => [
-        id,
-        {
-          ...entity,
-          children: entity.children.filter((childId) => !removed.has(childId)),
-        },
-      ]),
-  );
+  const entities: Record<string, SceneEntity> = { ...scene.entities };
+  for (const id of removed) delete entities[id];
+  for (const [id, entity] of Object.entries(entities)) {
+    // Preserve unrelated Entity references so their Scene View subscriptions
+    // stay quiet. Check every child list to clean up stale incoming links too.
+    if (!entity.children.some((childId) => removed.has(childId))) continue;
+    entities[id] = {
+      ...entity,
+      children: entity.children.filter((childId) => !removed.has(childId)),
+    };
+  }
   return {
     ...scene,
-    rootEntityIds: scene.rootEntityIds.filter((id) => !removed.has(id)),
+    rootEntityIds: scene.rootEntityIds.some((id) => removed.has(id))
+      ? scene.rootEntityIds.filter((id) => !removed.has(id))
+      : scene.rootEntityIds,
     entities,
   };
 }
