@@ -50,6 +50,7 @@
 ### 操作中
 
 - authoring操作の確定後は250msの待機を挟む。最新revisionをvalidate、temporary write、commitへ進める。保存中に次の変更が確定した場合は並列writeしない。現在の保存完了後に最新revisionを続けて保存する。compileはasset prepare、generate、hash / provenance、必須の`public/thumbnail.png`のstaging copyとSHA-256一致確認へ進む。Upload modalはauth-check、saving、compiling、checking、uploading、processingを表示する。Upload reviewでは現行Sceneの実描画を撮影するか画像を選択する。同じ場所から`public/thumbnail.png`を更新できる。
+- まだ書き込みを始めていない古いrevisionは保存待ちから省く。新しいrevisionが要求されたら、古いrevisionの再試行待ち時間を解除し、最新の保存へ進む。実行中の書き込みは完了まで待ち、保存先で処理が重ならないようにする。
 - cancel button は安全に止められる stage だけ有効にする。remote upload 開始後は best effort であることを示す。結果不明のまま新規 upload を再開しない。
 
 ### 成功時

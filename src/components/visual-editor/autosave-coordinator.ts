@@ -32,9 +32,13 @@ export function createSerializedAutosaveCoordinator<Value, Result>(
   let latestValue: Value | null = null;
   let latestJob: { value: Value; promise: Promise<Result | AutosaveSuperseded> } | null =
     null;
+  let wakeRetry: (() => void) | null = null;
   const maxAttempts = Math.max(1, Math.floor(options.maxAttempts ?? 1));
 
   const saveWithRetry = async (value: Value): Promise<Result | AutosaveSuperseded> => {
+    // Only the latest queued snapshot needs to reach disk. An already running
+    // write still finishes before the next one starts.
+    if (latestValue !== value) return AUTOSAVE_SUPERSEDED;
     let attempt = 1;
     while (true) {
       try {
@@ -49,9 +53,17 @@ export function createSerializedAutosaveCoordinator<Value, Result>(
           options.retryDelayMs?.(attempt, error, value) ?? 0,
         );
         if (delayMs > 0) {
-          await new Promise<void>((resolve) =>
-            globalThis.setTimeout(resolve, delayMs),
-          );
+          await new Promise<void>((resolve) => {
+            const finish = () => {
+              wakeRetry = null;
+              resolve();
+            };
+            const timer = globalThis.setTimeout(finish, delayMs);
+            wakeRetry = () => {
+              globalThis.clearTimeout(timer);
+              finish();
+            };
+          });
         }
         if (latestValue !== value) return AUTOSAVE_SUPERSEDED;
         attempt += 1;
@@ -63,6 +75,8 @@ export function createSerializedAutosaveCoordinator<Value, Result>(
     request(value) {
       latestValue = value;
       if (latestJob?.value === value) return latestJob.promise;
+      // A new edit must not wait behind an obsolete snapshot's retry backoff.
+      wakeRetry?.();
 
       const promise = tail.then(() => saveWithRetry(value));
       tail = promise.then(
