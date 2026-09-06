@@ -2524,6 +2524,39 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "bake_mesh_collider",
+            "description": "Decimate only the collision geometry for an imported Model mesh node, preserving its visible mesh. First use set_mesh_collision add if it has no Mesh Collider, then get_entity_components for componentId. ratio is the fraction of triangles to retain (0 < ratio < 1). Inspect the returned triangle counts and test walking; simplification is approximate. update_component with collisionModelAssetId:null restores the original collision geometry. Whole unexpanded Models and primitives are not supported; select an expanded mesh node.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "componentId": { "type": "string", "minLength": 1 },
+                    "ratio": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId", "componentId", "ratio"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "set_mesh_collision",
+            "description": "Set one mesh's collision using the Inspector quick actions. add makes a fixed walkable mesh, remove disables its colliders, exclusive disables ALL Scene colliders including triggers and automatic generation before adding this mesh. Use exclusive only when the user requests scene-wide replacement. Inherited mesh generation is split into explicit meshes; inherited Ball/Cuboid generation is rejected to preserve shape. Inspect the returned sources and capture_scene_view afterward. inspect_colliders reads sources; update_component edits individual physics settings.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "action": { "enum": ["add", "remove", "exclusive"] }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId", "action"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "inspect_colliders",
             "description": "Inspect Collider and Rigid Body configuration, including fixable runtime and compile diagnostics. Pass entityIds to limit the read-only inspection.",
             "inputSchema": {

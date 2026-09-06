@@ -58,6 +58,9 @@ export async function bakeNodeColliderModel(
     createAssetId: () => string;
   },
 ): Promise<ColliderBakeResult> {
+  if (!Number.isFinite(input.ratio) || input.ratio <= 0 || input.ratio >= 1 || !Number.isInteger(input.sourceNodeIndex) || input.sourceNodeIndex < 0) {
+    return { ok: false, message: "残す割合は0より大きく100%未満、ノード番号は0以上の整数で指定してください。" };
+  }
   const source = manifest.assets[input.modelAssetId];
   if (source?.kind !== "model") {
     return { ok: false, message: "元になるModel Assetが見つかりませんでした。" };
@@ -79,6 +82,8 @@ export async function bakeNodeColliderModel(
       source.source.relativePath,
     );
     const io = new core.WebIO().registerExtensions(extensions.ALL_EXTENSIONS);
+    const { createDracoDecoder } = await import("./model-optimization");
+    io.registerDependencies({ "draco3d.decoder": await createDracoDecoder() });
     const document = await io.readBinary(copyAssetBytes(sourceBytes));
     const node = document.getRoot().listNodes()[input.sourceNodeIndex];
     const mesh = node?.getMesh();
@@ -94,6 +99,7 @@ export async function bakeNodeColliderModel(
     const buffer = baked.createBuffer();
     const bakedMesh = baked.createMesh("collision");
     for (const primitive of mesh.listPrimitives()) {
+      if (primitive.getMode() !== 4) continue;
       const position = primitive.getAttribute("POSITION");
       if (!position) continue;
       const positions = new Float32Array(position.getCount() * 3);

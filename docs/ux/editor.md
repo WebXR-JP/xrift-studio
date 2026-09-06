@@ -118,6 +118,11 @@
 
 ## F-11 Collider authoring / export の状態設計
 
+Mesh Rendererの「歩行・当たり判定」から追加、解除、シーン全体を選択メッシュだけへ置換できる（MI-03）。置換対象はTriggerを含むColliderとRigid Bodyの自動生成。操作前に範囲を常設し、処理は一件のUndoへまとめ、成功後も選択と設定一覧を残す。Play中と無効な階層では操作できない。親の自動Box / Ballをメッシュへ変換する必要がある場合は形状を勝手に変えず、設定元を示して変更を拒否する。親の独立したBox形状は「これを外す」の対象外で、設定一覧から開ける。
+
+共有Model Nodeと通常のMesh Rendererとして展開されたModelノードの両方にDecimationを表示する。当たり判定用の軽量化は表示用のメッシュを変更しない。
+
+
 ### 操作前
 
 - 新規 import した Model は `generateColliders` を既定で有効にする。Sceneへ初回配置した時に同じ Entityへ既定`Static (Fixed)`の`Mesh Collider`を追加する。既存 Asset で明示的に無効化された設定は移行で上書きしない。

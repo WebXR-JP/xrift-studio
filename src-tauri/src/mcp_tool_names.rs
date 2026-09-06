@@ -3,7 +3,7 @@
 // Source of truth: src/lib/visual-editor/mcp-tool-registry.ts
 // Regenerate with: pnpm mcp:tool-names
 
-pub const MCP_TOOL_NAMES: [&str; 131] = [
+pub const MCP_TOOL_NAMES: [&str; 133] = [
     "get_editor_context",
     "begin_world_authoring",
     "get_world_authoring",
@@ -22,6 +22,7 @@ pub const MCP_TOOL_NAMES: [&str; 131] = [
     "detach_asset_references",
     "delete_asset",
     "delete_asset_folder",
+    "set_mesh_collision",
     "inspect_colliders",
     "optimize_colliders",
     "get_audio_asset",
@@ -109,6 +110,7 @@ pub const MCP_TOOL_NAMES: [&str; 131] = [
     "import_shader_asset",
     "reimport_model_asset",
     "process_texture_asset",
+    "bake_mesh_collider",
     "optimize_model_asset",
     "revert_asset_optimization",
     "apply_scene_recipe",

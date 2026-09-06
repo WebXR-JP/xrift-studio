@@ -1,3 +1,5 @@
+import { createRigidBodyComponent } from "../scene-document";
+import { colliderModelNode } from "../mesh-collision-actions";
 import {
   getGeometryAsset,
   getAudioAsset,
@@ -2498,8 +2500,9 @@ function renderOwnedColliderContent(
     }
   }
 
-  let renderedChildren = children;
-  if (meshCollider && !entityHasEnabledMesh(entity)) {
+  const bakedOnly = meshCollider?.collisionModelAssetId && colliderModelNode(entity);
+  let renderedChildren = bakedOnly ? "" : children;
+  if (meshCollider && (!entityHasEnabledMesh(entity) || bakedOnly)) {
     const nodeColliderGeometry = renderModelNodeColliderGeometry(
       entity,
       meshCollider,
@@ -2562,6 +2565,7 @@ function renderOwnedColliderContent(
   }
   if (boxes.length > 0) context.rapierImports.add("CuboidCollider");
   return [
+    ...(bakedOnly ? [children] : []),
     renderedChildren,
     ...boxes.map(
       (collider) =>
@@ -2597,7 +2601,7 @@ function renderModelNodeColliderGeometry(
   collider: MeshColliderComponent,
   context: CompileContext,
 ): string | null {
-  const modelNode = entity.modelNode;
+  const modelNode = colliderModelNode(entity);
   if (!modelNode) return null;
   // 当たり判定だけ差し替えてあるなら、そちらのModelを使う。焼き出したModelは
   // Nodeが1つだけなので、選ぶのは常に先頭。見た目のMeshには触らない。
@@ -2694,6 +2698,11 @@ function renderColliderBody(
   context: CompileContext,
 ): string {
   if (colliders.length === 0) return children;
+  const bakedCollider = colliders.find((c) => c.shape === "mesh" && c.collisionModelAssetId);
+  if (bakedCollider && colliderModelNode(entity)) {
+    const body = createRigidBodyComponent(bakedCollider.id + "-body", bakedCollider);
+    return renderOwnedRigidBody(entity, body, renderOwnedColliderContent(entity, colliders, children, body.bodyType, "none", context), context);
+  }
 
   const boxes: BoxColliderComponent[] = [];
   const meshes: MeshColliderComponent[] = [];

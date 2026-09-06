@@ -1,3 +1,5 @@
+import { MeshCollisionControls } from "./MeshCollisionControls";
+import { colliderModelNode, type MeshCollisionAction } from "../../lib/visual-editor/mesh-collision-actions";
 import { normalizeTextureImportSettings, type TextureImportSettingsPatch } from "../../lib/visual-editor/asset-manifest";
 import { TEXTURE_MAX_SIZE_CHOICES } from "../../lib/visual-editor/texture-conversion";
 import { textureProcessingSettings } from "../../lib/visual-editor/texture-processing";
@@ -887,6 +889,7 @@ function MeshInspector({
   onTerrainEditingChange,
   terrainSceneEditing,
   onApplyTerrainSurface,
+  collisionControls,
   showModelPose = true,
   materialBindingSourceNodeIndex,
   onRemove,
@@ -914,6 +917,7 @@ function MeshInspector({
     entry: TerrainSurfaceCatalogEntry,
     values: Record<string, number | string>,
   ) => void;
+  collisionControls?: ReactNode;
   showModelPose?: boolean;
   materialBindingSourceNodeIndex?: number;
 }) {
@@ -973,6 +977,7 @@ function MeshInspector({
         onChange: (enabled) => onChange({ enabled }),
       }}
     >
+      {collisionControls}
       <dl className="grid grid-cols-[62px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
         <dt className="text-slate-500">形状</dt>
         <dd className="truncate text-right font-medium text-slate-700">
@@ -2506,6 +2511,8 @@ function ModelNodeInspector({
   optimizationState,
   onApplyModelOptimization,
   onRevertModelOptimization,
+  onMeshCollision,
+  onInspectCollisionEntity,
   onBakeNodeCollider,
   onClearNodeCollider,
 }: {
@@ -2526,11 +2533,13 @@ function ModelNodeInspector({
     options: ModelOptimizationOptions,
   ) => void;
   onRevertModelOptimization?: (assetId: string) => void;
+  onMeshCollision?: (entityId: string, action: MeshCollisionAction) => void;
+  onInspectCollisionEntity?: (entityId: string) => void;
   onBakeNodeCollider?: (
     entityId: string,
     componentId: string,
     ratio: number,
-  ) => void;
+  ) => void | Promise<void>;
   onClearNodeCollider?: (entityId: string, componentId: string) => void;
 }) {
   const node = entity.modelNode;
@@ -2609,33 +2618,9 @@ function ModelNodeInspector({
           Transformは共有Modelのこのノードだけへ適用されます。SkinとAnimationは親のModel Entityで維持します。
         </p>
       </ComponentCard>
-      {model?.kind === "model" &&
-      (node.nodeType === "mesh" || node.nodeType === "skinned-mesh") ? (
-        <>
-          <ModelNodeDecimatePanel
-            model={model}
-            sourceNodeIndex={node.sourceNodeIndex}
-            nodeName={entity.name}
-            readOnly={readOnly}
-            state={optimizationState}
-            onApply={onApplyModelOptimization}
-            onRevert={onRevertModelOptimization}
-          />
-          {nodeMeshCollider ? (
-            <ModelNodeColliderBakePanel
-              entityId={entity.id}
-              collider={nodeMeshCollider}
-              assets={assets}
-              nodeName={entity.name}
-              readOnly={readOnly}
-              onBake={onBakeNodeCollider}
-              onClear={onClearNodeCollider}
-            />
-          ) : null}
-        </>
-      ) : null}
-      {nodeMesh && node.sourceMaterialIndices.length > 0 ? (
+      {nodeMesh && (node.nodeType === "mesh" || node.nodeType === "skinned-mesh") ? (
         <MeshInspector
+          collisionControls={<MeshCollisionControls scene={scene} entity={entity} readOnly={readOnly} onAction={onMeshCollision} onSelect={onInspectCollisionEntity} />}
           component={nodeMesh}
           assets={assets}
           projectPath={projectPath}
@@ -2663,6 +2648,31 @@ function ModelNodeInspector({
             });
           }}
         />
+      ) : null}
+      {model?.kind === "model" &&
+      (node.nodeType === "mesh" || node.nodeType === "skinned-mesh") ? (
+        <>
+          <ModelNodeDecimatePanel
+            model={model}
+            sourceNodeIndex={node.sourceNodeIndex}
+            nodeName={entity.name}
+            readOnly={readOnly}
+            state={optimizationState}
+            onApply={onApplyModelOptimization}
+            onRevert={onRevertModelOptimization}
+          />
+          {nodeMeshCollider ? (
+            <ModelNodeColliderBakePanel
+              entityId={entity.id}
+              collider={nodeMeshCollider}
+              assets={assets}
+              nodeName={entity.name}
+              readOnly={readOnly}
+              onBake={onBakeNodeCollider}
+              onClear={onClearNodeCollider}
+            />
+          ) : null}
+        </>
       ) : null}
     </div>
   );
@@ -2835,9 +2845,10 @@ function ModelNodeColliderBakePanel({
   assets: AssetManifest;
   nodeName: string;
   readOnly: boolean;
-  onBake?: (entityId: string, componentId: string, ratio: number) => void;
+  onBake?: (entityId: string, componentId: string, ratio: number) => void | Promise<void>;
   onClear?: (entityId: string, componentId: string) => void;
 }) {
+  const [busy, setBusy] = useState(false);
   const [pendingRatio, setPendingRatio] = useState<number | null>(null);
   const baked = collider.collisionModelAssetId
     ? assets.assets[collider.collisionModelAssetId]
@@ -2845,7 +2856,7 @@ function ModelNodeColliderBakePanel({
   const bakedTriangles =
     baked?.kind === "model" ? baked.importMetadata?.primitiveCount : undefined;
   return (
-    <ComponentCard title="当たり判定だけ軽量化" subtitle="見た目はそのまま">
+    <ComponentCard title="当たり判定だけ軽量化" subtitle="Decimation">
       <p className="text-xs leading-5 text-slate-600">
         歩ければ十分な面は、当たり判定だけ荒くできます。「{nodeName}
         」の見た目は変わりません。
@@ -2858,7 +2869,7 @@ function ModelNodeColliderBakePanel({
           </p>
           <button
             type="button"
-            disabled={readOnly || !onClear}
+            disabled={busy || readOnly || !onClear}
             onClick={() => onClear?.(entityId, collider.id)}
             className="h-8 w-full rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
           >
@@ -2871,7 +2882,7 @@ function ModelNodeColliderBakePanel({
           <button
             key={ratio}
             type="button"
-            disabled={readOnly || !onBake}
+            disabled={busy || readOnly || !onBake}
             aria-pressed={pendingRatio === ratio}
             onClick={() =>
               setPendingRatio((current) => (current === ratio ? null : ratio))
@@ -2895,17 +2906,19 @@ function ModelNodeColliderBakePanel({
           <div className="flex gap-1.5">
             <button
               type="button"
-              disabled={readOnly || !onBake}
-              onClick={() => {
-                onBake?.(entityId, collider.id, pendingRatio);
-                setPendingRatio(null);
+              disabled={busy || readOnly || !onBake}
+              onClick={async () => {
+                setBusy(true);
+                try { await onBake?.(entityId, collider.id, pendingRatio); setPendingRatio(null); }
+                finally { setBusy(false); }
               }}
               className="h-8 flex-1 rounded-md border border-teal-600 bg-teal-600 px-3 text-xs font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              当たり判定を作る
+              {busy ? "当たり判定を作成中…" : "当たり判定を作る"}
             </button>
             <button
               type="button"
+              disabled={busy}
               onClick={() => setPendingRatio(null)}
               className="h-8 rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
             >
@@ -4717,6 +4730,8 @@ function EntityInspector({
   modelOptimizationState,
   onApplyModelOptimization,
   onRevertModelOptimization,
+  onMeshCollision,
+  onInspectCollisionEntity,
   onBakeNodeCollider,
   onClearNodeCollider,
   onColliderChange,
@@ -4793,7 +4808,9 @@ function EntityInspector({
     options: ModelOptimizationOptions,
   ) => void;
   onRevertModelOptimization?: (assetId: string) => void;
-  onBakeNodeCollider?: (entityId: string, componentId: string, ratio: number) => void;
+  onMeshCollision?: (entityId: string, action: MeshCollisionAction) => void;
+  onInspectCollisionEntity?: (entityId: string) => void;
+  onBakeNodeCollider?: (entityId: string, componentId: string, ratio: number) => void | Promise<void>;
   onClearNodeCollider?: (entityId: string, componentId: string) => void;
   onColliderChange: (componentId: string, patch: ColliderPatch) => void;
   onRigidBodyChange: (componentId: string, patch: RigidBodyPatch) => void;
@@ -5029,6 +5046,8 @@ function EntityInspector({
           optimizationState={modelOptimizationState}
           onApplyModelOptimization={onApplyModelOptimization}
           onRevertModelOptimization={onRevertModelOptimization}
+          onMeshCollision={onMeshCollision}
+          onInspectCollisionEntity={onInspectCollisionEntity}
           onBakeNodeCollider={onBakeNodeCollider}
           onClearNodeCollider={onClearNodeCollider}
         />
@@ -5040,6 +5059,7 @@ function EntityInspector({
           return (
             <MeshInspector
               key={component.id}
+              collisionControls={<MeshCollisionControls scene={scene} entity={entity} readOnly={readOnly} onAction={onMeshCollision} onSelect={onInspectCollisionEntity} />}
               component={component}
               assets={assets}
               projectPath={projectPath}
@@ -5267,6 +5287,16 @@ function EntityInspector({
           </ComponentCard>
         );
       })}
+
+      {!entity.modelNode && colliderModelNode(entity) ? (() => {
+        const node = colliderModelNode(entity)!;
+        const model = assets.assets[node.modelAssetId];
+        const collider = entity.components.find((c): c is Extract<ColliderComponent, { shape: "mesh" }> => c.type === "collider" && c.shape === "mesh");
+        return model?.kind === "model" ? <>
+          <ModelNodeDecimatePanel model={model} sourceNodeIndex={node.sourceNodeIndex} nodeName={entity.name} readOnly={readOnly} state={modelOptimizationState} onApply={onApplyModelOptimization} onRevert={onRevertModelOptimization} />
+          {collider ? <ModelNodeColliderBakePanel entityId={entity.id} collider={collider} assets={assets} nodeName={entity.name} readOnly={readOnly} onBake={onBakeNodeCollider} onClear={onClearNodeCollider} /> : null}
+        </> : null;
+      })() : null}
 
       {registeredComponents
         .filter(
@@ -5538,6 +5568,8 @@ export function InspectorPanel({
   onApplyTextureProcessing,
   onRevertTextureProcessing,
   onRevertModelOptimization,
+  onMeshCollision,
+  onInspectCollisionEntity,
   onBakeNodeCollider,
   onClearNodeCollider,
   textureBatchState,
@@ -5668,7 +5700,9 @@ export function InspectorPanel({
   onApplyTextureProcessing?: (assetId: string) => void;
   onRevertTextureProcessing?: (assetId: string) => void;
   onRevertModelOptimization?: (assetId: string) => void;
-  onBakeNodeCollider?: (entityId: string, componentId: string, ratio: number) => void;
+  onMeshCollision?: (entityId: string, action: MeshCollisionAction) => void;
+  onInspectCollisionEntity?: (entityId: string) => void;
+  onBakeNodeCollider?: (entityId: string, componentId: string, ratio: number) => void | Promise<void>;
   onClearNodeCollider?: (entityId: string, componentId: string) => void;
   textureBatchState?: TextureProcessingState;
   onApplyTextureBatch?: (assetIds: readonly string[], settings?: TextureImportSettingsPatch) => void;
@@ -5926,6 +5960,8 @@ export function InspectorPanel({
             modelOptimizationState={modelOptimizationState}
             onApplyModelOptimization={onApplyModelOptimization}
             onRevertModelOptimization={onRevertModelOptimization}
+            onMeshCollision={onMeshCollision}
+            onInspectCollisionEntity={onInspectCollisionEntity}
             onBakeNodeCollider={onBakeNodeCollider}
             onClearNodeCollider={onClearNodeCollider}
             onColliderChange={(componentId, patch) =>

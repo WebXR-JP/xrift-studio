@@ -442,6 +442,7 @@ type AssetReferenceTarget =
   | { scope: "asset"; assetId: string; match: AssetOwnedReferenceMatch };
 
 type ComponentReferenceSuffix =
+  | "collision-model"
   | "geometry"
   | "material"
   | "particle"
@@ -570,6 +571,14 @@ function describeComponentReferences(
   component: RegisteredSceneComponent,
   assetId: string,
 ): ComponentReferenceMatch[] {
+  if (component.type === "collider" && component.shape === "mesh" && component.collisionModelAssetId === assetId) {
+    return [{ suffix: "collision-model", detail: "当たり判定の軽量Mesh", detachEffect: "clear-slot",
+      detach: (current) => {
+        if (current.type !== "collider" || current.shape !== "mesh") return current;
+        const next = { ...current }; delete next.collisionModelAssetId; return next;
+      },
+    }];
+  }
   if (component.type === "mesh") {
     const matches: ComponentReferenceMatch[] = [];
     const geometryAssetId =

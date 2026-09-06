@@ -1,3 +1,4 @@
+import { colliderModelNode } from "../../lib/visual-editor/mesh-collision-actions";
 import { TerrainBrushCursor } from "./TerrainBrushCursor";
 import { getModelNodeMaterialSlots } from "./model-node-materials";
 import { SceneVramMetrics } from "./SceneDebugCapture";
@@ -2057,7 +2058,7 @@ function RuntimePhysicsEntity({
   );
   // A shared-Model node has no meshes of its own for Rapier to sweep; its
   // Mesh Collider arrives as explicit baked shapes through children instead.
-  const autoMeshCollider = entity.modelNode ? undefined : meshCollider;
+  const autoMeshCollider = entity.modelNode || meshCollider?.collisionModelAssetId ? undefined : meshCollider;
   const primaryCollider = meshCollider ?? colliders[0]!;
   const bodyType = primaryCollider.bodyType ?? "fixed";
 
@@ -2120,7 +2121,7 @@ function RuntimeOwnedColliderContent({
   let renderedChildren = children;
   // A shared-Model node's Mesh Collider ships explicit baked shapes through
   // children; wrapping its empty subtree here would generate nothing.
-  if (meshCollider && !entity.modelNode) {
+  if (meshCollider && !entity.modelNode && !meshCollider.collisionModelAssetId) {
     renderedChildren = (
       <MeshCollider
         type={
@@ -2355,7 +2356,7 @@ function EntityObject({
             showAllColliders={displayProfile.showAllColliders}
             effectivelyEnabled={effectivelyEnabled}
             projectPath={projectPath}
-            entityModelNode={entity.modelNode}
+            entityModelNode={colliderModelNode(entity)}
           />
         ),
       )}
@@ -2379,20 +2380,22 @@ function EntityObject({
   ) : (
     windScopedVisuals
   );
-  const modelNodeMeshCollider = entity.modelNode
+  const collisionNode = colliderModelNode(entity);
+  const modelNodeMeshCollider = collisionNode
     ? entity.components.find(
         (
           component,
         ): component is Extract<ColliderComponent, { shape: "mesh" }> =>
           component.type === "collider" &&
           component.enabled &&
-          component.shape === "mesh",
+          component.shape === "mesh" &&
+          (!!entity.modelNode || !!component.collisionModelAssetId),
       )
     : undefined;
   const modelNodeColliderShapes =
-    physicsEnabled && entity.modelNode && modelNodeMeshCollider ? (
+    physicsEnabled && collisionNode && modelNodeMeshCollider ? (
       <ModelNodeMeshColliderShapes
-        modelNode={entity.modelNode}
+        modelNode={collisionNode!}
         collider={modelNodeMeshCollider}
         assets={assets}
         projectPath={projectPath}

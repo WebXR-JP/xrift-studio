@@ -1,5 +1,6 @@
-import { isModelTextureMaxSize } from "./asset-manifest";
+import { setMeshCollision, collisionSources } from "./mesh-collision-actions";
 import { isPlainObjectRecord } from "../json-guards";
+import { isModelTextureMaxSize } from "./asset-manifest";
 import { getWorldComponentAuthoring, getWorldComponentGuidance } from "./world-component-authoring";
 import { instantiateSceneAsset, isScenePlaceableAsset } from "./asset-placement";
 import {
@@ -395,6 +396,7 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   detach_asset_references: detachLibraryAssetReferences,
   delete_asset: deleteLibraryAsset,
   delete_asset_folder: deleteLibraryAssetFolder,
+  set_mesh_collision: setMeshCollisionTool,
   inspect_colliders: inspectColliders,
   optimize_colliders: optimizeColliders,
   get_audio_asset: getAudio,
@@ -1078,6 +1080,20 @@ function deleteLibraryAssetFolder(
   };
 }
 
+function setMeshCollisionTool(context: XriftMcpEditorContext, args: Record<string, unknown>): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, args);
+  const entityId = requiredString(args.entityId, "entityId");
+  const action = args.action;
+  if (action !== "add" && action !== "remove" && action !== "exclusive") throw new XriftMcpEditorToolError("INVALID_ARGUMENT", "actionはadd / remove / exclusiveです");
+  let scene;
+  try { scene = setMeshCollision(context.bundle.scene, entityId, action); }
+  catch (error) { throw new XriftMcpEditorToolError("COLLISION_EDIT_REJECTED", error instanceof Error ? error.message : String(error)); }
+  const bundle = touchProject(context, { ...context.bundle, scene });
+  return { changed: true, bundle, sceneSelection: context.sceneSelection, assetSelection: context.assetSelection,
+    result: { entityId, action, sources: collisionSources(scene), revisionBefore: context.revision, revisionAfter: context.revision + 1 },
+    activity: "メッシュの当たり判定を変更しました" };
+}
+
 function inspectColliders(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
@@ -1104,6 +1120,7 @@ function inspectColliders(
       revision: context.revision,
       entityIds: entityIds ?? null,
       inspection,
+      sources: collisionSources(context.bundle.scene),
     },
     entityIds?.length === 1
       ? `Entity「${context.bundle.scene.entities[entityIds[0]!]?.name ?? entityIds[0]}」のColliderを診断しました`

@@ -1,4 +1,5 @@
 import { applyModelReimportSettings } from "../../lib/visual-editor/model-reimport-impact";
+import { colliderModelNode, setMeshCollision } from "../../lib/visual-editor/mesh-collision-actions";
 import { textureProcessingSettings } from "../../lib/visual-editor/texture-processing";
 import { normalizeTextureImportSettings } from "../../lib/visual-editor/asset-manifest";
 import { authoringFingerprint, authoringStatus, changeAuthoringState, readAuthoringState } from "../../lib/visual-editor/world-authoring";
@@ -3270,6 +3271,7 @@ export function VisualEditorPrototype({
           request.tool === "update_shader_asset" ||
           request.tool === "reimport_model_asset" ||
           request.tool === "process_texture_asset" ||
+          request.tool === "bake_mesh_collider" ||
           request.tool === "optimize_model_asset" ||
           request.tool === "revert_asset_optimization" ||
           request.tool === "apply_scene_recipe" ||
@@ -3886,6 +3888,35 @@ export function VisualEditorPrototype({
                 reverted: true,
               },
             });
+            return;
+          }
+
+          if (request.tool === "bake_mesh_collider") {
+            const entityId = mcpRequiredString(args.entityId, "entityId");
+            const componentId = mcpRequiredString(args.componentId, "componentId");
+            const entity = sourceBundle.scene.entities[entityId];
+            const node = entity && colliderModelNode(entity);
+            const collider = entity?.components.find((c) => c.id === componentId && c.type === "collider");
+            if (!node || collider?.type !== "collider" || collider.shape !== "mesh" || typeof args.ratio !== "number") throw new XriftMcpEditorToolError("INVALID_ARGUMENT", "ModelのメッシュノードとMesh Collider、残す割合を指定してください");
+            if (assetOperationRef.current || importRunningRef.current) throw new XriftMcpEditorToolError("EDITOR_BUSY", "素材の処理が終わってから再実行してください");
+            const token = Symbol("mcp-collider-bake");
+            assetOperationRef.current = { kind: "model-reimport", token };
+            try {
+              const result = await bakeNodeColliderModel(currentProjectPath, sourceBundle.assets, {
+                modelAssetId: node.modelAssetId, sourceNodeIndex: node.sourceNodeIndex,
+                ratio: args.ratio, nodeName: entity.name, existingAssetId: collider.collisionModelAssetId,
+                createAssetId: () => createDocumentId("model-collision"),
+              });
+              if (!result.ok) throw new XriftMcpEditorToolError("COLLIDER_BAKE_FAILED", result.message);
+              if (bundleRef.current !== sourceBundle) throw new XriftMcpEditorToolError("STALE_REVISION", "作成中にシーンが変わったため適用しませんでした。再実行してください");
+              const nextBundle = touchProject({ ...sourceBundle, assets: result.manifest,
+                scene: updateColliderComponent(sourceBundle.scene, entityId, { collisionModelAssetId: result.assetId }, componentId) });
+              const revisionBefore = mcpRevisionRef.current;
+              mcpRevisionRef.current += 1; mcpRevisionBundleRef.current = nextBundle; bundleRef.current = nextBundle;
+              saveStatusRef.current = "dirty"; setSaveStatus("dirty");
+              setHistory((current) => commitEditorHistory(current, { ...current.present, bundle: nextBundle }));
+              await completeResponse({ id: request.id, ok: true, result: { entityId, componentId, assetId: result.assetId, triangles: result.triangles, revisionBefore, revisionAfter: mcpRevisionRef.current } });
+            } finally { if (assetOperationRef.current?.token === token) assetOperationRef.current = null; }
             return;
           }
 
@@ -8683,7 +8714,7 @@ export function VisualEditorPrototype({
         return;
       }
       const entity = bundleRef.current.scene.entities[entityId];
-      const modelNode = entity?.modelNode;
+      const modelNode = entity ? colliderModelNode(entity) : undefined;
       const collider = entity?.components.find(
         (component): component is ColliderComponent =>
           component.type === "collider" && component.id === componentId,
@@ -8692,6 +8723,7 @@ export function VisualEditorPrototype({
         setNotice("当たり判定を作るMesh Colliderが見つかりませんでした");
         return;
       }
+      const startingModel = bundleRef.current.assets.assets[modelNode.modelAssetId];
       const token = Symbol("collider-bake");
       assetOperationRef.current = { kind: "model-reimport", token };
       setNotice(`「${entity.name}」の当たり判定を作成しています`);
@@ -8712,6 +8744,9 @@ export function VisualEditorPrototype({
           setNotice(result.message);
           return;
         }
+        if (bundleRef.current.scene.entities[entityId]?.components.find((c) => c.id === componentId) !== collider || bundleRef.current.assets.assets[modelNode.modelAssetId] !== startingModel) {
+          setNotice("作成中に対象の設定が変わったため適用しませんでした。もう一度実行してください"); return;
+        }
         setHistory((current) => {
           const scene = updateColliderComponent(
             current.present.bundle.scene,
@@ -8722,7 +8757,7 @@ export function VisualEditorPrototype({
           const nextBundle = touchProject({
             ...current.present.bundle,
             scene,
-            assets: result.manifest,
+            assets: { ...current.present.bundle.assets, assets: { ...current.present.bundle.assets.assets, [result.assetId]: result.manifest.assets[result.assetId] } },
           });
           bundleRef.current = nextBundle;
           setSaveStatus("dirty");
@@ -11974,8 +12009,17 @@ export function VisualEditorPrototype({
             onRevertTextureProcessing={(assetId) =>
               handleRevertAssetOptimization(assetId, "texture")
             }
+            onMeshCollision={(entityId, action) => {
+              if (editorMode !== "edit") return;
+              try {
+                const next = setMeshCollision(bundleRef.current.scene, entityId, action);
+                updateScene(() => next);
+                setNotice(action === "exclusive" ? "選んだメッシュだけを当たり判定にしました。Undoで戻せます" : action === "remove" ? "このメッシュの当たり判定を外しました" : "固定の当たり判定に追加しました");
+              } catch (error) { setNotice(error instanceof Error ? error.message : String(error)); }
+            }}
+            onInspectCollisionEntity={(entityId) => setSceneSelection({ kind: "entity", id: entityId })}
             onBakeNodeCollider={(entityId, componentId, ratio) => {
-              void handleBakeNodeCollider(entityId, componentId, ratio);
+              return handleBakeNodeCollider(entityId, componentId, ratio);
             }}
             onClearNodeCollider={handleClearNodeCollider}
             onRevertModelOptimization={(assetId) =>

@@ -165,7 +165,7 @@ Interactivity Graph まで組み込んで配置する。`behaviours` は押し�
 `remove_component`, `update_script_component`
 
 **Collider**
-`inspect_colliders`, `optimize_colliders`
+`set_mesh_collision`, `inspect_colliders`, `optimize_colliders`
 
 共有ソースの Model ノード（`modelNode` 付き Entity）には `add_component` で
 `physics.mesh-collider` / `physics.box-collider` を付けられる。Mesh Collider は
@@ -411,3 +411,7 @@ Scene document のスキーマを増やしたときは、`serialization.ts` の�
 ### 大きなモデルを取り込むとき
 
 Editorの `import_model_asset` と、`importSettings` を省略した `import_texture_asset` はImportメニューの設定を使う。未設定時は最大2048px・KTX2。対応する単体画像とモデル内蔵画像を変換してからManifestを採用するため、変換前の画像を先にScene Viewへ配置しない。元画像と元モデルは保持する。既存Assetには遡って適用しない。圧縮に失敗した場合は配置へ進まず、設定を変えて再試行できる。
+
+`set_mesh_collision` はMesh Rendererの追加・解除・シーン全体の置換を一件のrevisionで実行する。`exclusive`はTriggerを含む全Colliderと自動生成を解除する。`inspect_colliders`の`sources`から設定元のEntity、形状、階層の有効状態を読める。
+
+`bake_mesh_collider` は選んだModelノードの当たり判定だけを間引くlocal-asset操作。`entityId`、Mesh Colliderの`componentId`、残す割合`ratio`を渡す。結果のポリゴン数を確認し、歩行を検証する。共有Modelと通常の展開ノードに対応し、未展開Model全体と組み込みプリミティブは対象外。
