@@ -1,4 +1,5 @@
 import { tauri } from "../tauri";
+import { applyModelOptimization, planModelOptimization } from "./model-optimization";
 import {
   commitAssetImportPlan,
   createAssetImportPlan,
@@ -238,7 +239,8 @@ export async function reimportModelAssetFromDisk(
     );
   }
 
-  const sourcePath = asset.source.relativePath;
+  const sourcePath = asset.optimizedFrom?.source.kind === "project"
+    ? asset.optimizedFrom.source.relativePath : asset.source.relativePath;
   const fileName = sourcePath.split("/").pop() ?? `${asset.id}.glb`;
   const extension = fileName.toLowerCase().split(".").pop();
   const sourceFormat =
@@ -294,12 +296,27 @@ export async function reimportModelAssetFromDisk(
       "committing-assets",
       "検査済みモデルを保存しています",
     );
-    const committed = await commitAssetImportPlanToDisk(
+    let committed = await commitAssetImportPlanToDisk(
       projectPath,
       manifest,
       plan,
       (progress) => reportModelReimport(onProgress, "committing-assets", `${progress.message}（${Math.min(progress.completed + 1, progress.total)}/${progress.total}）`),
     );
+    if (asset.importSettings.optimizeMeshes || asset.importSettings.compressWithDraco) {
+      reportModelReimport(onProgress, "committing-assets", "Import設定でモデルを最適化しています");
+      const options = {
+        optimizeMeshes: asset.importSettings.optimizeMeshes,
+        compressWithDraco: asset.importSettings.compressWithDraco === true,
+      };
+      const model = getModelAsset(committed, assetId)!;
+      const optimization = planModelOptimization(model, options);
+      if (!optimization.supported) throw new Error(optimization.reason);
+      if (optimization.steps.length > 0) {
+        const optimized = await applyModelOptimization(projectPath, committed, assetId, options);
+        if (!optimized.ok) throw new Error(optimized.message);
+        committed = optimized.manifest;
+      }
+    }
     reportModelReimport(onProgress, "complete", "モデルを再取り込みしました");
     return {
       ok: true,

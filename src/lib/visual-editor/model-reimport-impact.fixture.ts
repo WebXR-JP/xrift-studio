@@ -8,6 +8,7 @@ import {
   collectModelMaterialBindingImpacts,
   diffModelMaterialSlots,
   removeImpactedModelMaterialBindings,
+  applyModelReimportSettings,
 } from "./model-reimport-impact";
 import {
   PREFAB_DOCUMENT_SCHEMA_VERSION,
@@ -15,13 +16,17 @@ import {
 } from "./prefab-document";
 import {
   SCENE_DOCUMENT_SCHEMA_VERSION,
+  createMeshColliderComponent,
+  createBoxColliderComponent,
   type MeshComponent,
   type SceneDocument,
   type SceneEntity,
 } from "./scene-document";
+import { createPrototypeProject } from "./prototype-project";
 
 /** Filesystem-free checks for destructive Model reimport slot changes. */
 export function runModelReimportImpactFixtureAssertions(): void {
+  assertColliderPolicyReachesPrefabs();
   const previous = modelAsset("model-building", [
     slot("body", "Body", 0, "material-body"),
     slot("glass", "Glass", 1, "material-glass"),
@@ -144,6 +149,30 @@ export function runModelReimportImpactFixtureAssertions(): void {
   assert(JSON.stringify(next) === nextSnapshot, "Next Model was mutated");
   assert(JSON.stringify(scene) === sceneSnapshot, "Scene was mutated");
   assert(JSON.stringify(prefab) === prefabSnapshot, "Prefab was mutated");
+}
+
+function assertColliderPolicyReachesPrefabs(): void {
+  const model = modelAsset("model-building", []);
+  model.importSettings = { ...model.importSettings, generateColliders: false };
+  const scene = sceneDocument();
+  const prefab = prefabDocument();
+  const targets = [...Object.values(scene.entities), ...Object.values(prefab.entities)];
+  for (const target of targets) {
+    target.components.push(createMeshColliderComponent(`${target.id}-collider`, { meshMode: "trimesh" }));
+    target.components.push(createBoxColliderComponent(`${target.id}-box`));
+  }
+  const bundle = { ...createPrototypeProject("world", "reimport-colliders"), scene, prefabs: { [prefab.prefabId]: prefab } };
+  const snapshot = JSON.stringify(bundle);
+  const result = applyModelReimportSettings(bundle, model);
+  for (const target of [...Object.values(result.scene.entities), ...Object.values(result.prefabs![prefab.prefabId].entities)]) {
+    const usesModel = target.components.some(c => c.type === "mesh" && c.geometryAssetId === model.id);
+    assert(target.components.some(c => c.type === "collider" && c.shape === "mesh") === !usesModel, "Reimport collider policy missed a prefab or removed an unrelated collider");
+    assert(target.components.some(c => c.type === "collider" && c.shape === "box"), "Reimport removed a Box Collider");
+  }
+  assert(JSON.stringify(bundle) === snapshot, "Reimport mutated the Undo snapshot");
+  assert(applyModelReimportSettings(result, model) === result, "Repeated reimport needlessly changes references");
+  const enabled = applyModelReimportSettings(result, { ...model, importSettings: { ...model.importSettings, generateColliders: true } });
+  assert(Object.values(enabled.prefabs![prefab.prefabId].entities).every(e => e.components.some(c => c.type === "collider" && c.shape === "mesh")), "Re-enabling colliders did not update the prefab");
 }
 
 function modelAsset(

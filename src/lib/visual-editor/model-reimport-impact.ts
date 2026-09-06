@@ -3,6 +3,9 @@ import type {
   ModelAsset,
 } from "./asset-manifest";
 import type { PrefabDocument } from "./prefab-document";
+import type { PrototypeVisualProject } from "./prototype-project";
+import { createMeshColliderComponent } from "./scene-document";
+import { createDocumentId } from "./document-id";
 import type {
   MeshComponent,
   SceneDocument,
@@ -17,6 +20,42 @@ export type ModelMaterialSlotDiff = {
   /** Slots which were introduced by the new source. */
   addedSlots: MaterialSlotDefinition[];
 };
+
+/** Apply the imported collider policy without rebuilding edited hierarchies. */
+export function applyModelReimportSettings(bundle: PrototypeVisualProject, model: ModelAsset): PrototypeVisualProject {
+  const reconcile = (source: Record<string, SceneEntity>) => {
+    let result = source;
+    for (const entity of Object.values(source)) {
+      const ownsMesh = entity.components.some(component => component.type === "mesh" &&
+        (component.geometry?.kind === "asset" ? component.geometry.assetId : component.geometryAssetId) === model.id);
+      if (!ownsMesh && entity.modelNode?.modelAssetId !== model.id) continue;
+      const hasMeshCollider = entity.components.some(component => component.type === "collider" && component.shape === "mesh");
+      let components = entity.components;
+      if (!model.importSettings.generateColliders && hasMeshCollider) {
+        components = components.filter(component => component.type !== "collider" || component.shape !== "mesh");
+      } else if (model.importSettings.generateColliders && ownsMesh && !hasMeshCollider) {
+        components = [...components, createMeshColliderComponent(createDocumentId("collider"), { meshMode: "trimesh" })];
+      }
+      if (components === entity.components) continue;
+      if (result === source) result = { ...source };
+      result[entity.id] = { ...entity, components };
+    }
+    return result;
+  };
+  const entities = reconcile(bundle.scene.entities);
+  let prefabs = bundle.prefabs;
+  for (const [id, prefab] of Object.entries(bundle.prefabs ?? {})) {
+    const next = reconcile(prefab.entities);
+    if (next === prefab.entities) continue;
+    if (prefabs === bundle.prefabs) prefabs = { ...bundle.prefabs };
+    prefabs![id] = { ...prefab, entities: next };
+  }
+  return entities === bundle.scene.entities && prefabs === bundle.prefabs ? bundle : {
+    ...bundle,
+    scene: entities === bundle.scene.entities ? bundle.scene : { ...bundle.scene, entities },
+    prefabs,
+  };
+}
 
 export type ModelMaterialBindingImpact = {
   documentKind: "scene" | "prefab";

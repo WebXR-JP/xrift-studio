@@ -97,6 +97,9 @@ export type ModelImportSettings = {
   scale: number;
   generateColliders: boolean;
   optimizeMeshes: boolean;
+  compressWithDraco?: boolean;
+  /** Omitted uses the Import menu; original keeps source resolution. */
+  textureMaxSize?: number | "original" | "default";
   importAnimations: boolean;
   /**
    * 公開したWorldで、動かないMeshをMaterialごとに1つへまとめる。
@@ -908,6 +911,12 @@ export function normalizeModelImportSettings(
         : typeof fallback.optimizeMeshes === "boolean"
           ? fallback.optimizeMeshes
           : DEFAULT_MODEL_IMPORT_SETTINGS.optimizeMeshes,
+    ...(typeof (patch.compressWithDraco ?? fallback.compressWithDraco) === "boolean"
+      ? { compressWithDraco: patch.compressWithDraco ?? fallback.compressWithDraco }
+      : {}),
+    ...(isModelTextureMaxSize(patch.textureMaxSize ?? fallback.textureMaxSize)
+      ? { textureMaxSize: patch.textureMaxSize ?? fallback.textureMaxSize }
+      : {}),
     importAnimations:
       typeof patch.importAnimations === "boolean"
         ? patch.importAnimations
@@ -921,6 +930,10 @@ export function normalizeModelImportSettings(
         ? { mergeStaticMeshes: fallback.mergeStaticMeshes }
         : {}),
   };
+}
+
+export function isModelTextureMaxSize(value: unknown): value is number | "original" | "default" {
+  return value === "original" || value === "default" || (typeof value === "number" && [256, 512, 1024, 2048, 4096, 8192].includes(value));
 }
 
 /** Updates only authorable Model fields; derived import metadata stays sealed. */

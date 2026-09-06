@@ -232,42 +232,7 @@ export async function applyModelOptimization(
     );
 
     const metadata = asset.importMetadata as ModelImportMetadata;
-    const processed: ModelAsset = {
-      ...asset,
-      source: { kind: "project", relativePath },
-      sourceHash,
-      thumbnail:
-        asset.thumbnail?.status === "generated"
-          ? { ...asset.thumbnail, status: "stale" }
-          : asset.thumbnail,
-      importMetadata: {
-        ...metadata,
-        sourceFormat: "glb",
-        sourceFileName: relativePath.split("/").pop(),
-        byteLength: optimized.bytes.byteLength,
-        meshCount: optimized.meshCount,
-        primitiveCount: optimized.primitiveCount,
-        extensionsUsed: optimized.extensionsUsed,
-        extensionsRequired: optimized.extensionsRequired,
-      },
-      importSettings: {
-        // 参照先が最適化後のGLBになったので、いま見えている設定は反映済みへ戻す。
-        // 実行時の設定は optimizedFrom に控えてあり、戻せば元へ復元される。
-        ...asset.importSettings,
-        optimizeMeshes: false,
-      },
-      // 原本のGLBは書き換えないので、ここを保持している限り必ず戻せる。
-      // 二度目以降の最適化では最初の原本を指したまま、時刻だけ更新する。
-      optimizedFrom: {
-        ...(asset.optimizedFrom ?? {
-          source: asset.source,
-          sourceHash: asset.sourceHash,
-          importMetadata: asset.importMetadata,
-          importSettings: asset.importSettings,
-        }),
-        appliedAt: new Date().toISOString(),
-      },
-    };
+    const processed = createOptimizedModelAsset(asset, optimized, sourceHash, relativePath, options);
 
     return {
       ok: true,
@@ -284,6 +249,46 @@ export async function applyModelOptimization(
       message: `${asset.name}を最適化できませんでした。${describeAssetImportFailure(error)}`,
     };
   }
+}
+
+/** The Inspector and publish review must record identical output and recipes. */
+export function createOptimizedModelAsset(
+  asset: ModelAsset,
+  optimized: OptimizedModelBytes,
+  sourceHash: string,
+  relativePath: string,
+  options: ModelOptimizationOptions,
+): ModelAsset {
+  return {
+    ...asset,
+    source: { kind: "project", relativePath },
+    sourceHash,
+    thumbnail: asset.thumbnail?.status === "generated" ? { ...asset.thumbnail, status: "stale" } : asset.thumbnail,
+    importMetadata: {
+      ...asset.importMetadata!,
+      sourceFormat: "glb",
+      sourceFileName: relativePath.split("/").pop(),
+      byteLength: optimized.bytes.byteLength,
+      meshCount: optimized.meshCount,
+      primitiveCount: optimized.primitiveCount,
+      extensionsUsed: optimized.extensionsUsed,
+      extensionsRequired: optimized.extensionsRequired,
+    },
+    importSettings: {
+      ...asset.importSettings,
+      optimizeMeshes: options.optimizeMeshes,
+      compressWithDraco: options.compressWithDraco,
+    },
+    optimizedFrom: {
+      ...(asset.optimizedFrom ?? {
+        source: asset.source,
+        sourceHash: asset.sourceHash,
+        importMetadata: asset.importMetadata,
+        importSettings: asset.importSettings,
+      }),
+      appliedAt: new Date().toISOString(),
+    },
+  };
 }
 
 export type OptimizedModelBytes = {

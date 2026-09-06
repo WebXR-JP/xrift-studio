@@ -1,3 +1,4 @@
+import { applyModelReimportSettings } from "../../lib/visual-editor/model-reimport-impact";
 import { textureProcessingSettings } from "../../lib/visual-editor/texture-processing";
 import { normalizeTextureImportSettings } from "../../lib/visual-editor/asset-manifest";
 import { authoringFingerprint, authoringStatus, changeAuthoringState, readAuthoringState } from "../../lib/visual-editor/world-authoring";
@@ -3428,10 +3429,12 @@ export function VisualEditorPrototype({
                   { modelAssetId },
                 );
               }
-              const nextBundle = touchProject({
+              const importedModel = result.manifest.assets[modelAssetId];
+              if (importedModel.kind !== "model") throw new Error("再インポートしたModelが見つかりません");
+              const nextBundle = touchProject(applyModelReimportSettings({
                 ...latestBundle,
                 assets: result.manifest,
-              });
+              }, importedModel));
               const revisionBefore = mcpRevisionRef.current;
               mcpRevisionRef.current += 1;
               mcpRevisionBundleRef.current = nextBundle;
@@ -8252,10 +8255,10 @@ export function VisualEditorPrototype({
           setNotice(message);
           return current;
         }
-        const nextBundle = touchProject({
+        const nextBundle = touchProject(applyModelReimportSettings({
           ...current.present.bundle,
           assets: result.manifest,
-        });
+        }, reimportedAsset));
         bundleRef.current = nextBundle;
         setSaveStatus("dirty");
         setModelReimportFeedback({

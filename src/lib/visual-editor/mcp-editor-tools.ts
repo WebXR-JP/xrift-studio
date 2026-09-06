@@ -1,3 +1,4 @@
+import { isModelTextureMaxSize } from "./asset-manifest";
 import { isPlainObjectRecord } from "../json-guards";
 import { getWorldComponentAuthoring, getWorldComponentGuidance } from "./world-component-authoring";
 import { instantiateSceneAsset, isScenePlaceableAsset } from "./asset-placement";
@@ -8392,6 +8393,8 @@ function modelAssetPatchValue(
       "generateColliders",
       "optimizeMeshes",
       "importAnimations",
+      "compressWithDraco",
+      "textureMaxSize",
     ]);
     if (importSettings.scale !== undefined) {
       sceneNumber(importSettings.scale, "patch.importSettings.scale", 0.000001);
@@ -8400,8 +8403,12 @@ function modelAssetPatchValue(
       "generateColliders",
       "optimizeMeshes",
       "importAnimations",
+      "compressWithDraco",
     ]) {
       optionalBoolean(importSettings[field], `patch.importSettings.${field}`);
+    }
+    if (importSettings.textureMaxSize !== undefined && !isModelTextureMaxSize(importSettings.textureMaxSize)) {
+      invalidArgument("patch.importSettings.textureMaxSize", "default, original, 256, 512, 1024, 2048, 4096, or 8192");
     }
     if (Object.keys(importSettings).length === 0) {
       invalidArgument("patch.importSettings", "non-empty object");

@@ -19,6 +19,8 @@ import {
   type GLTF,
 } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { resolveLocalVendorAssetPath } from "./vendor-assets";
 import {
   VRMLoaderPlugin,
   VRMUtils,
@@ -457,6 +459,14 @@ export async function createModelReimportPlan(
   return createAssetImportPlanInternal(
     {
       ...input,
+      ...(existingAsset.importSettings.textureMaxSize !== undefined && existingAsset.importSettings.textureMaxSize !== "default" ? {
+        textureImportSettings: {
+          ...input.textureImportSettings,
+          resize: existingAsset.importSettings.textureMaxSize === "original"
+            ? { mode: "original" as const }
+            : { mode: "max-size" as const, maxSize: existingAsset.importSettings.textureMaxSize },
+        },
+      } : {}),
       folderId: existingAsset.folderId ?? null,
       existingManifest: manifest ?? input.existingManifest,
     },
@@ -1929,6 +1939,8 @@ function parseWithGltfLoader(
   isOpenBrush = false,
 ): Promise<GLTF> {
   const loader = new GLTFLoader();
+  const draco = new DRACOLoader().setDecoderPath(resolveLocalVendorAssetPath("three-draco"));
+  loader.setDRACOLoader(draco);
   if (format === "vrm") {
     loader.register((parser) => new VRMLoaderPlugin(parser));
   }
@@ -1945,9 +1957,10 @@ function parseWithGltfLoader(
         const vrm = gltf.userData.vrm as VRM | undefined;
         if (vrm) VRMUtils.rotateVRM0(vrm);
         repairImportedObject3DHierarchy(gltf.scene);
+        draco.dispose();
         resolve(gltf);
       },
-      reject,
+      (error) => { draco.dispose(); reject(error); },
     );
   });
 }

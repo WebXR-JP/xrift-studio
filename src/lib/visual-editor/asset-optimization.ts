@@ -22,6 +22,7 @@ import {
 } from "./asset-import-transaction";
 import {
   optimizeModelBytes,
+  createOptimizedModelAsset,
   planModelOptimization,
 } from "./model-optimization";
 import type { VramRecommendation } from "./vram-estimate";
@@ -269,10 +270,8 @@ async function optimizeModel(
   asset: ModelAsset,
   sourceBytes: Uint8Array,
 ): Promise<OptimizedAsset> {
-  const plan = planModelOptimization(asset, {
-    optimizeMeshes: true,
-    compressWithDraco: true,
-  });
+  const options = { optimizeMeshes: asset.importSettings.optimizeMeshes, compressWithDraco: true };
+  const plan = planModelOptimization(asset, options);
   if (!plan.supported) throw new Error(`${asset.name}は${plan.reason}`);
   if (plan.steps.length === 0) {
     throw new Error(`${asset.name}はすでに最適化済みです。`);
@@ -290,35 +289,7 @@ async function optimizeModel(
     beforeBytes: sourceBytes.byteLength,
     bytes: optimized.bytes,
     relativePath,
-    asset: {
-      ...asset,
-      source: { kind: "project", relativePath },
-      sourceHash,
-      thumbnail:
-        asset.thumbnail?.status === "generated"
-          ? { ...asset.thumbnail, status: "stale" }
-          : asset.thumbnail,
-      importMetadata: {
-        ...metadata,
-        sourceFormat: "glb",
-        sourceFileName: relativePath.split("/").pop(),
-        byteLength: optimized.bytes.byteLength,
-        meshCount: optimized.meshCount,
-        primitiveCount: optimized.primitiveCount,
-        extensionsUsed: optimized.extensionsUsed,
-        extensionsRequired: optimized.extensionsRequired,
-      },
-      importSettings: { ...asset.importSettings, optimizeMeshes: false },
-      optimizedFrom: {
-        ...(asset.optimizedFrom ?? {
-          source: asset.source,
-          sourceHash: asset.sourceHash,
-          importMetadata: asset.importMetadata,
-          importSettings: asset.importSettings,
-        }),
-        appliedAt: new Date().toISOString(),
-      },
-    },
+    asset: createOptimizedModelAsset(asset, optimized, sourceHash, relativePath, options),
   };
 }
 

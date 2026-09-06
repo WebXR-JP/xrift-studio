@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import {
   describeModelOptimization,
   groupModelAnimations,
@@ -14,6 +14,7 @@ import {
 import { ModelMaterialSlots } from "./ModelMaterialSlots";
 import { AssetOptimizationOriginCard } from "./AssetOptimizationOriginCard";
 import { ScrubNumberInput } from "./ScrubNumberInput";
+import { TEXTURE_MAX_SIZE_CHOICES } from "../../lib/visual-editor/texture-conversion";
 
 export type ModelOptimizationState =
   | { phase: "idle" }
@@ -184,7 +185,7 @@ export function ModelAssetInspector({
 
       <InspectorSection
         title="Import Recipe"
-        description="配置に反映する設定と、将来用に保持している設定"
+        description="配置と再インポートに適用する設定"
       >
         <label className="grid grid-cols-[minmax(0,1fr)_100px] items-center gap-3 text-xs text-slate-700">
           <span>
@@ -208,7 +209,7 @@ export function ModelAssetInspector({
         </label>
         <RecipeToggle
           label="配置時にMesh Colliderを追加"
-          description="このModelを新しくSceneへ配置する時の既定値"
+          description="新規配置と再インポートに適用します。オフで再インポートすると、関連するScene・PrefabのMesh Colliderを外します"
           checked={asset.importSettings.generateColliders}
           disabled={readOnly}
           onChange={(generateColliders) =>
@@ -224,11 +225,21 @@ export function ModelAssetInspector({
             onChange({ importSettings: { importAnimations } })
           }
         />
+        <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+          <span>Textureの最大解像度<span className="mt-0.5 block text-[11px] text-slate-500">再インポート時に内蔵画像を縮小します。元画像と個別に保護した設定は保持します</span></span>
+          <select aria-label="Model Textureの最大解像度" className="h-7 rounded border border-slate-300 bg-white px-1.5 text-xs" disabled={readOnly || reimportBusy}
+            value={asset.importSettings.textureMaxSize ?? "default"}
+            onChange={event => onChange({ importSettings: { textureMaxSize: event.currentTarget.value === "original" || event.currentTarget.value === "default" ? event.currentTarget.value : Number(event.currentTarget.value) } })}>
+            <option value="default">Import設定に従う</option>
+            <option value="original">原寸のまま</option>
+            {TEXTURE_MAX_SIZE_CHOICES.map(size => <option key={size} value={size}>{size}px</option>)}
+          </select>
+        </label>
       </InspectorSection>
 
       <InspectorSection
         title="Mesh最適化 / Draco圧縮"
-        description="原本のGLBを書き換えて、配信サイズと頂点数を減らします"
+        description="設定は再インポートにも適用します。元のGLBを残して変換後のファイルを使います"
       >
         <ModelOptimizationPanel
           asset={asset}
@@ -443,10 +454,9 @@ function ModelOptimizationPanel({
   onOptimize?: (options: ModelOptimizationOptions) => void;
   onRevert?: () => void;
 }) {
-  // Mesh最適化はImport設定として残す値なので、Manifest側を唯一の状態にする。
-  // Draco圧縮は実行時だけの選択なので、ここでだけ持つ。
+  // 最適化の選択はManifestへ保存し、再インポートでも同じ設定を使う。
   const optimizeMeshes = asset.importSettings.optimizeMeshes;
-  const [compressWithDraco, setCompressWithDraco] = useState(true);
+  const compressWithDraco = asset.importSettings.compressWithDraco ?? false;
   const options: ModelOptimizationOptions = { optimizeMeshes, compressWithDraco };
   const plan = planModelOptimization(asset, options);
   const busy =
@@ -503,11 +513,11 @@ function ModelOptimizationPanel({
       />
       <RecipeToggle
         label="Draco圧縮をかける"
-        description="配信サイズを下げます。描画時は頂点へ展開されるためVRAMは大きく減りません"
+        description="配信サイズを下げます。再インポートにも適用します。チェックを外して再インポートすると保存してある原本から読み直します"
         checked={compressWithDraco}
-        disabled={readOnly || busy || plan.alreadyDraco}
+        disabled={readOnly || busy}
         status={plan.alreadyDraco ? "適用済み" : undefined}
-        onChange={setCompressWithDraco}
+        onChange={(next) => onChange({ importSettings: { compressWithDraco: next } })}
       />
       <dl className="grid grid-cols-[52px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
         <dt className="text-slate-500">現在</dt>
