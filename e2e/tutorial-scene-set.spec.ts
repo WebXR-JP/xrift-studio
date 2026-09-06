@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 /**
  * The tutorial sets are the one place in the shelf where what lands is not just
@@ -8,8 +8,7 @@ import { expect, test } from "@playwright/test";
  * shell, so a fixture cannot see any of it — this walks the same path the
  * author does and checks that the placed Entity really carries all three.
  */
-test("しかけ付きの3Dセットは、音とグラフごとSceneへ入る", async ({ page }) => {
-  test.setTimeout(180_000);
+async function openBlankWorld(page: Page) {
   await page.goto("/e2e.html?scenario=ready");
   await expect(
     page.getByRole("heading", { name: "プロジェクト" }),
@@ -20,6 +19,11 @@ test("しかけ付きの3Dセットは、音とグラフごとSceneへ入る", a
   await page.getByLabel("プロジェクト名").fill("tutorial-scene-set");
   await page.getByRole("button", { name: "作成して開く" }).click();
   await expect(page.getByText("ビジュアル編集")).toBeVisible();
+}
+
+test("しかけ付きの3Dセットは、音とグラフごとSceneへ入る", async ({ page }) => {
+  test.setTimeout(180_000);
+  await openBlankWorld(page);
 
   const assets = page.getByRole("region", { name: "Assets" });
   await assets.getByRole("button", { name: "外部から追加" }).click();
@@ -66,24 +70,30 @@ test("しかけ付きの3Dセットは、音とグラフごとSceneへ入る", a
     page.getByText("の発光色を 指定した色 にする", { exact: false }),
   ).toHaveCount(2);
   await expect(assets.getByText("ボタンの音").first()).toBeVisible();
+});
 
-  // Every other tutorial set lands too. Placement is all-or-nothing — a set
-  // whose sound, Interactable or graph could not be built returns nothing and
-  // leaves no Entity — so the root appearing in the Hierarchy is what says the
-  // whole set was assembled, including the ones that write to a Particle
-  // Emitter, the Scene, the player, a Text, and a hidden Entity.
-  for (const name of [
-    "灯りのスイッチ",
-    "紙吹雪のボタン",
-    "自動で閉まる扉",
-    "隠し扉のスイッチ",
-    "テレポート台",
-    "色を変えるライトパネル",
-    "昼と夜のパネル",
-    "文字が変わる看板",
-    "環境音のスピーカー",
-    "画質のスイッチ",
-  ]) {
+// Each set starts with a fresh Scene. Accumulating all eleven sets in one
+// software-rendered CI page made the whole test exceed its time budget.
+// Separate cases also let the release shards distribute the work.
+for (const name of [
+  "灯りのスイッチ",
+  "紙吹雪のボタン",
+  "自動で閉まる扉",
+  "隠し扉のスイッチ",
+  "テレポート台",
+  "色を変えるライトパネル",
+  "昼と夜のパネル",
+  "文字が変わる看板",
+  "環境音のスピーカー",
+  "画質のスイッチ",
+]) {
+  test(`3Dセット「${name}」をSceneへ追加できる`, async ({ page }) => {
+    test.setTimeout(180_000);
+    await openBlankWorld(page);
+    const assets = page.getByRole("region", { name: "Assets" });
+    const shelf = page.getByRole("region", { name: "3Dセット一覧" });
+    const detail = page.getByRole("complementary", { name: "選択した3Dセットの詳細" });
+    const tree = page.getByRole("tree", { name: "SceneのEntity階層" });
     await assets.getByRole("button", { name: "外部から追加" }).click();
     await page.getByRole("button", { name: /3Dセット/ }).click();
     await shelf.getByLabel("3Dセットを検索").fill(name);
@@ -92,9 +102,8 @@ test("しかけ付きの3Dセットは、音とグラフごとSceneへ入る", a
     await expect(detail.getByText(/Sceneへ配置し/)).toBeVisible();
     await page.getByRole("button", { name: "外部リソースを閉じる" }).click();
     await expect(tree.getByText(name, { exact: true })).toBeVisible();
-  }
-
-  // The looping set brings its own sound, so the library ends up with the
-  // bundled files themselves rather than four Audio Sources pointing at none.
-  await expect(assets.getByText("環境音のループ").first()).toBeVisible();
-});
+    if (name === "環境音のスピーカー") {
+      await expect(assets.getByText("環境音のループ").first()).toBeVisible();
+    }
+  });
+}

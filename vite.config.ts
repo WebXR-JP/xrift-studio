@@ -19,6 +19,10 @@ export default defineConfig(async () => ({
     // and full page reload in the middle of Script preparation.
     include: [
       "@xrift/world-components",
+      // The encoder is only imported by a Worker. Discovering it on the
+      // first encode otherwise re-optimizes dependencies and reloads the
+      // page while the caller is waiting for the result.
+      "ktx2-encoder",
       "monaco-editor/esm/vs/language/typescript/lib/typescriptServices.js",
     ],
     exclude: ["three-icosa"],

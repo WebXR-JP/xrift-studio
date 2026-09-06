@@ -15,6 +15,7 @@ test("大規模モデルの複製と自動品質の回帰検証", async ({ page 
 
 test("KTX2圧縮中も画面が応答し、失敗後も次の画像を処理できる", async ({ page }) => {
   await page.goto("/e2e.html?scenario=ready");
+  await expect(page.getByRole("button", { name: /新規プロジェクト/ })).toBeVisible();
   const result = await page.evaluate(async () => {
     const path = "/src/lib/visual-editor/texture-codec.ts";
     const { encodeKtx2 } = await import(/* @vite-ignore */ path);
