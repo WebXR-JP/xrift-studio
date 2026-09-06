@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
   Color,
@@ -40,6 +40,7 @@ import {
 } from "./text-runtime.js";
 import {
   emitXriftSceneEvent,
+  createXriftGraphEventQueue,
   findXriftSceneRuntimeBridge,
   type XriftSceneRuntimeBridge,
   readXriftScenePostprocessingBaseline,
@@ -1390,6 +1391,7 @@ function toInteractionValue(
  */
 export function createXriftInteractionHost(
   applier: XriftInteractionApplier,
+  eventScope?: object,
 ): InteractivityHost {
   const descriptorFor = (target: InteractivityActionTarget) =>
     getXriftInteractionProperty(target.targetKind, target.property);
@@ -1434,7 +1436,7 @@ export function createXriftInteractionHost(
     emitEvent(name, payload) {
       const values = new Map<string, readonly (number | boolean)[]>();
       for (const [key, entry] of payload) values.set(key, entry.data);
-      emitXriftSceneEvent(name, values);
+      emitXriftSceneEvent(name, values, eventScope);
     },
     /**
      * Points an Asset-valued property at another Asset for this viewer only.
@@ -1534,7 +1536,7 @@ export function XriftInteractionTriggerRuntime({
       }),
     [componentId, entityId, order, scene],
   );
-  const host = useMemo(() => createXriftInteractionHost(applier), [applier]);
+  const host = useMemo(() => createXriftInteractionHost(applier, scene), [applier, scene]);
   /**
    * One engine per graph in the Asset.
    *
@@ -1546,50 +1548,44 @@ export function XriftInteractionTriggerRuntime({
   const engines = useMemo(() => {
     if (!playing) return [];
     const parsed = parseInteractivityExtension(graph);
-    // Events are dispatched by this component rather than inside each engine,
-    // so a receiver in the sending graph runs exactly once.
-    const pending: string[] = [];
-    const created = parsed.graphs.map(
-      (candidate) =>
-        new InteractivityEngine(
-          graph,
-          {
-            ...host,
-            emitEvent: (name, payload) => {
-              pending.push(name);
-              host.emitEvent?.(name, payload);
-            },
-          },
-          { graphIndex: candidate.index, localEventDelivery: false },
-        ),
-    );
-    return created.map((engine) => ({ engine, pending, all: created }));
+    return parsed.graphs.map((candidate) => ({
+      engine: new InteractivityEngine(graph, host, { graphIndex: candidate.index, localEventDelivery: false }),
+    }));
   }, [graph, host, playing]);
 
+  const eventQueueRef = useRef<ReturnType<typeof createXriftGraphEventQueue> | null>(null);
   useEffect(() => () => applier.dispose(), [applier]);
 
   useEffect(() => {
     if (engines.length === 0) return;
+    const names = parseInteractivityExtension(graph).graphs.flatMap((candidate) =>
+      candidate.nodes.flatMap((node) => {
+        if (node.op !== "event/receive") return [];
+        const event = node.configuration.get("event")?.[0];
+        const name = typeof event === "string" ? event : typeof event === "number" ? candidate.events[event] : null;
+        return name ? [name] : [];
+      }),
+    );
+    const queue = createXriftGraphEventQueue(scene, names, (name) => {
+      for (const entry of engines) entry.engine.receiveEvent(name);
+    });
+    eventQueueRef.current = queue;
     // `event/onStart` is what makes a graph a timeline rather than only a
     // reaction: the same Asset can wait, repeat and finish on its own.
     for (const entry of engines) entry.engine.start();
     return () => {
+      queue.dispose();
+      eventQueueRef.current = null;
       for (const entry of engines) entry.engine.dispose();
       applier.dispose();
     };
-  }, [applier, engines]);
+  }, [applier, engines, graph, scene]);
 
   useFrame((_state, delta) => {
     const first = engines[0];
     if (!first) return;
     for (const entry of engines) entry.engine.update(delta);
-    // Delivered after the frame's own work so a send cannot recurse into the
-    // activation that produced it.
-    if (first.pending.length === 0) return;
-    const names = first.pending.splice(0, first.pending.length);
-    for (const name of names) {
-      for (const entry of engines) entry.engine.receiveEvent(name);
-    }
+    eventQueueRef.current?.flush();
   });
 
   useEffect(() => {

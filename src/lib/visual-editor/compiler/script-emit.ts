@@ -67,6 +67,7 @@ export const INTERACTION_TRIGGER_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/int
 export const ANIMATION_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/animation-runtime.ts`;
 export const ANIMATION_MIXER_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/animation-mixer-runtime.ts`;
 export const SCENE_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/scene-runtime.tsx`;
+export const SCENE_CONSTANTS_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/scene-constants.ts`;
 export const PLAYER_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/player-runtime.ts`;
 export const PLAYER_RUNTIME_HOST_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/player-runtime-host.tsx`;
 export const INSTANCE_STATE_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/instance-state-runtime.ts`;
@@ -457,7 +458,7 @@ export function createInteractivityRuntimeOverlayFiles(): CompilerOverlayFile[] 
     [ANIMATION_RUNTIME_OVERLAY_PATH, scriptAnimationSource, "script"],
     [ANIMATION_MIXER_OVERLAY_PATH, scriptAnimationMixerSource, "script"],
     [SCENE_RUNTIME_OVERLAY_PATH, sceneRuntimeSource, "script"],
-    [`${SCRIPT_RUNTIME_DIRECTORY}/scene-constants.ts`, sceneConstantsSource, "script"],
+    [SCENE_CONSTANTS_OVERLAY_PATH, sceneConstantsSource, "script"],
     [PLAYER_RUNTIME_OVERLAY_PATH, playerRuntimeSource, "script"],
     [PLAYER_RUNTIME_HOST_OVERLAY_PATH, playerRuntimeHostSource, "script"],
     [INSTANCE_STATE_RUNTIME_OVERLAY_PATH, instanceStateRuntimeSource, "script"],

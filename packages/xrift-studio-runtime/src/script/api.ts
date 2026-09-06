@@ -568,6 +568,10 @@ export type ScriptContext<
    * synchronised to other viewers or written to the Scene.
    */
   viewer: ScriptViewer;
+  /** Named notifications shared with Graph event/send and event/receive.
+   * Scene-local, transient, no payload or cross-viewer synchronization.
+   * Subscriptions are released on Script stop, failure and hot reload. */
+  graph: ScriptGraph;
   /** Only Entities declared through an `entity` prop are reachable. */
   find(entityId: string): ScriptObject3D | null;
   /** @deprecated Prefer `assets.url(assetId)`. */
@@ -631,3 +635,8 @@ export function isCompiledScript(value: unknown): value is CompiledScript {
     (value as { __xriftScript?: unknown }).__xriftScript === true
   );
 }
+
+export type ScriptGraph = {
+  on(event: string, handler: () => void | PromiseLike<void>): () => void;
+  emit(event: string): void;
+};

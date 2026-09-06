@@ -53,6 +53,7 @@ export function useScriptEditor({
     error: null,
   });
   const openAssetIdRef = useRef<string | null>(null);
+  const readRevisionRef = useRef(0);
   const [contracts, setContracts] = useState<
     Readonly<Record<string, ScriptContract>>
   >({});
@@ -129,6 +130,7 @@ export function useScriptEditor({
     async (assetId: string, createdAsset?: ScriptAsset) => {
       const asset = createdAsset ?? assets.assets[assetId];
       if (!asset || asset.kind !== "script") return;
+      const readRevision = ++readRevisionRef.current;
       openAssetIdRef.current = assetId;
       setState({ openAssetId: assetId, source: "", loading: true, error: null });
       if (!projectPath) {
@@ -147,6 +149,7 @@ export function useScriptEditor({
           projectPath,
           asset.source.relativePath,
         );
+        if (readRevision !== readRevisionRef.current) return;
         if (
           (contractVersionsRef.current.get(assetId) ?? 0) ===
           contractVersion
@@ -160,6 +163,7 @@ export function useScriptEditor({
           error: null,
         });
       } catch (error) {
+        if (readRevision !== readRevisionRef.current) return;
         setState({
           openAssetId: assetId,
           source: "",
@@ -175,6 +179,7 @@ export function useScriptEditor({
   );
 
   const close = useCallback(() => {
+    ++readRevisionRef.current;
     openAssetIdRef.current = null;
     setState({ openAssetId: null, source: "", loading: false, error: null });
   }, []);
@@ -182,6 +187,7 @@ export function useScriptEditor({
   const acceptExternalSource = useCallback(
     (assetId: string, source: string): boolean => {
       if (openAssetIdRef.current !== assetId) return false;
+      ++readRevisionRef.current;
       setState((previous) =>
         previous.openAssetId === assetId
           ? { ...previous, source, loading: false, error: null }
@@ -212,7 +218,9 @@ export function useScriptEditor({
           source,
         );
       }
-      setState((previous) => ({ ...previous, source, error: null }));
+      setState((previous) => previous.openAssetId === assetId
+        ? { ...previous, source, error: null }
+        : previous);
       setContract(assetId, extractScriptContract(source));
       await onSaved?.(assetId, source);
     },

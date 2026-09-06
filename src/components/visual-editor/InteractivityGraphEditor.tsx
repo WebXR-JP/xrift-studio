@@ -139,6 +139,7 @@ export type InteractivityAssetChoice = {
 };
 
 export function InteractivityGraphEditor(props: {
+  active?: boolean;
   asset: InteractivityAsset;
   materials: readonly MaterialAsset[];
   /**
@@ -297,6 +298,7 @@ const TEXT_FONT_OPTIONS: readonly { value: string; label: string }[] = [
 ];
 
 function InteractivityGraphEditorBody({
+  active = true,
   asset,
   materials,
   assetChoices = NO_ASSET_CHOICES,
@@ -308,6 +310,7 @@ function InteractivityGraphEditorBody({
   onClose,
   setup,
 }: {
+  active?: boolean;
   asset: InteractivityAsset;
   materials: readonly MaterialAsset[];
   assetChoices?: readonly InteractivityAssetChoice[];
@@ -1068,6 +1071,7 @@ function InteractivityGraphEditorBody({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (!active) return;
       const modifier = event.metaKey || event.ctrlKey;
       // Ctrl+Z belongs to whatever text field has focus. Taking it while the
       // author is typing in the JSON panel or renaming a graph would undo the
@@ -1123,6 +1127,7 @@ function InteractivityGraphEditorBody({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     closeConfirmOpen,
+    active,
     graphMenuOpen,
     handleCopyNode,
     handleDuplicateNode,

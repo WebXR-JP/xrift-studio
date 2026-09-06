@@ -137,7 +137,7 @@ import {
 } from "../open-brush";
 import { createOpenBrushRuntimeOverlayFile } from "./open-brush-emit";
 import {
-  createScenePostprocessingBridgeOverlayFile,
+  createScenePostprocessingBridgeOverlayFiles,
   createScenePostprocessingOverlayFile,
 } from "./scene-postprocessing-emit";
 import {
@@ -481,9 +481,9 @@ export function compileVisualProject(
   ) {
     for (const file of [
       createScenePostprocessingOverlayFile(),
-      // The compositor imports the Scene bridge, so it ships even when no
+      // The compositor imports the Scene bridge, so they ship even when no
       // graph does.
-      createScenePostprocessingBridgeOverlayFile(),
+      ...createScenePostprocessingBridgeOverlayFiles(),
     ]) {
       if (
         !overlayFiles.some(

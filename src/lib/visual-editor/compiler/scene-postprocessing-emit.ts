@@ -1,9 +1,11 @@
 import scenePostprocessingSource from "../../../../packages/xrift-studio-runtime/src/scene/postprocessing.tsx?raw";
 import sceneRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/scene-runtime.tsx?raw";
+import sceneConstantsSource from "../../../../packages/xrift-studio-runtime/src/scene-constants.ts?raw";
 import type { CompilerOverlayFile } from "./types";
 import {
   rewriteRuntimeLocalImports,
   SCENE_RUNTIME_OVERLAY_PATH,
+  SCENE_CONSTANTS_OVERLAY_PATH,
   SCRIPT_RUNTIME_DIRECTORY,
 } from "./script-emit";
 
@@ -35,13 +37,23 @@ export function createScenePostprocessingOverlayFile(): CompilerOverlayFile {
  *
  * A world with post effects but no behavior graph still carries the compositor,
  * and the compositor now reads the bridge, so the bridge module ships with it
- * rather than only with the trigger runtime.
+ * rather than only with the trigger runtime. The bridge re-exports the shared
+ * sky flag from `scene-constants`, so that module ships beside it the way the
+ * graph path already does.
  */
-export function createScenePostprocessingBridgeOverlayFile(): CompilerOverlayFile {
-  return {
-    relativePath: SCENE_RUNTIME_OVERLAY_PATH,
-    content: rewriteRuntimeLocalImports(sceneRuntimeSource),
-    kind: "source",
-    owner: "xrift-studio-compiler",
-  };
+export function createScenePostprocessingBridgeOverlayFiles(): CompilerOverlayFile[] {
+  return [
+    {
+      relativePath: SCENE_RUNTIME_OVERLAY_PATH,
+      content: rewriteRuntimeLocalImports(sceneRuntimeSource),
+      kind: "source",
+      owner: "xrift-studio-compiler",
+    },
+    {
+      relativePath: SCENE_CONSTANTS_OVERLAY_PATH,
+      content: sceneConstantsSource,
+      kind: "source",
+      owner: "xrift-studio-compiler",
+    },
+  ];
 }

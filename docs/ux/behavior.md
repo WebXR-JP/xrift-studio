@@ -18,6 +18,10 @@
 
 ## F-28 Script AssetとScript Componentの状態設計
 
+Script編集はScene View・Graphと同じ領域のタブで行う（MI-69、MI-72）。左のScript一覧には検索、ファイル名、パス、新規作成を置く。開いた直後は読み込み状態を示し、失敗時には再読み込みできる。Scene ViewやGraphへ移っても編集中のコードとUndo履歴を保持する。別ファイルへの切り替えと閉じる操作では未保存変更を確認し、保存中は切り替えと閉じる操作を止める。保存後は同じコードへ戻り、Play中は該当Entityへ反映する。
+
+GraphとScriptの連携には明示的な `ctx.graph.on` / `ctx.graph.emit` を使う。同じScene内の `event/send` / `event/receive` とイベント名を合わせると、双方向に処理を開始できる。連携は実行中だけの通知で、値の受け渡し、イベントの再送、コードとGraphの相互変換は行わない。Stop・再起動・失敗時には購読を解除する。
+
 参照: MI-03, MI-05, MI-09, MI-14, MI-69, MI-70, MI-71, MI-72, MI-73
 
 ### 操作前
