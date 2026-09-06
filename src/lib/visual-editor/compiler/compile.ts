@@ -1,4 +1,5 @@
 import { createRigidBodyComponent } from "../scene-document";
+import { collectPublishedAssetIds, planModelDownload } from "./download-plan";
 import { colliderModelNode } from "../mesh-collision-actions";
 import {
   getGeometryAsset,
@@ -235,11 +236,6 @@ export function compileVisualProject(
   };
   const diagnostics: CompilerDiagnostic[] = [];
   validateCompilerDocuments(documents, diagnostics);
-  const assetCopyPlan = createAssetCopyPlan(
-    documents.assets,
-    diagnostics,
-    outputMode,
-  );
   const entryScene = documents.scenes[documents.project.entrySceneId];
   const resolvedEntryScene = entryScene
     ? resolvePrefabInstances(
@@ -248,6 +244,16 @@ export function compileVisualProject(
         documents.prefabs ?? {},
       )
     : null;
+  const publishedAssetIds = collectPublishedAssetIds(resolvedEntryScene?.scene ?? null, documents.assets);
+  const publishedAssets = {
+    ...documents.assets,
+    assets: Object.fromEntries(Object.entries(documents.assets.assets).filter(([id]) => publishedAssetIds.has(id))),
+  };
+  const assetCopyPlan = createAssetCopyPlan(publishedAssets, diagnostics, outputMode);
+  for (const entry of assetCopyPlan) {
+    const asset = documents.assets.assets[entry.assetId];
+    if (asset.kind === "model") entry.modelDownload = planModelDownload(asset, resolvedEntryScene?.scene ?? null, documents.assets);
+  }
   if (resolvedEntryScene) {
     diagnostics.push(...resolvedEntryScene.diagnostics);
     appendXriftComponentDiagnostics(
@@ -320,7 +326,7 @@ export function compileVisualProject(
       );
     }
     const runtimeManifest = compileRuntimeManifest(
-      documents,
+      { ...documents, assets: publishedAssets },
       resolvedEntryScene?.scene ?? null,
       assetCopyPlan,
       VISUAL_COMPILER_VERSION,
@@ -348,7 +354,7 @@ export function compileVisualProject(
         )
       : emptySource(documents.project.projectKind);
   }
-  const usesOpenBrushModels = projectUsesOpenBrushModels(documents.assets);
+  const usesOpenBrushModels = projectUsesOpenBrushModels(publishedAssets);
   // Every emitted feature that trips a platform security rule declares its own
   // requirement; nothing here knows what those rules are.
   const publishPermissions = resolvePublishPermissions([

@@ -1,3 +1,4 @@
+import { optimizePublishedModel } from "./model-download";
 import {
   XriftApiError,
   XriftAuthError,
@@ -44,7 +45,7 @@ export const DEFAULT_SHELL_BASE_URL = "./xrift-runtime-shell";
 const SHELL_MANIFEST_FILE = "shell-manifest.json";
 /** The shell must be rebuilt when Runtime adapters change. */
 export const REQUIRED_RUNTIME_SHELL_CONTRACT =
-  "2026-08-31-flat-published-files-v1" as const;
+  "2026-09-06-published-material-slots-v1" as const;
 
 /**
  * One file of the prebuilt runtime shell.
@@ -189,13 +190,12 @@ export async function assembleWebUploadFiles(
     const targetPath = entry.targetRelativePath.replace(/^public\//, "");
     // 未反映のTexture Import設定は、ここで配るバイト列にだけ適用する。
     // プロジェクトの原本は読むだけで書き換えない。
-    files.set(
-      targetPath,
-      await convertPublishedTextureBytes(
-        await request.readAssetBytes(entry.sourceRelativePath),
-        entry.textureConversion,
-      ),
-    );
+    const sourceBytes = await request.readAssetBytes(entry.sourceRelativePath);
+    const bytes = entry.modelDownload
+      ? (await optimizePublishedModel(sourceBytes, entry.modelDownload)).bytes
+      : await convertPublishedTextureBytes(sourceBytes, entry.textureConversion);
+    throwIfAborted(request.signal);
+    files.set(targetPath, bytes);
   }
 
   if (request.thumbnail) files.set(THUMBNAIL_PATH, request.thumbnail);

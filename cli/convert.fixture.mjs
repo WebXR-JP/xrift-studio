@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { runModelDownloadFixtureAssertions } from "../src/lib/visual-editor/model-download.fixture.ts";
 import {
   chmod,
   mkdir,
@@ -328,6 +329,7 @@ try {
 
   await convertRichWorld(fixtureRoot);
   await runFixtureSuites([
+    ["model download optimization", runModelDownloadFixtureAssertions],
     ["visual compiler", runVisualCompilerFixtureAssertions],
     ["terrain", runTerrainFixtureAssertions],
     ["terrain grass", runTerrainGrassFixtureAssertions],

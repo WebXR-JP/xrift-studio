@@ -1,11 +1,12 @@
 import {
   getGeometryAsset,
+  getGeometryMaterialSlots,
   getTextureSourceFormat,
   isEnvironmentTextureAsset,
   type AssetManifest,
   type SceneAsset,
 } from "../asset-manifest";
-import type { SceneDocument, SceneEntity } from "../scene-document";
+import type { MeshComponent, SceneDocument, SceneEntity } from "../scene-document";
 import { resolveSceneSettings } from "../scene-settings";
 import type {
   XriftRuntimeAsset,
@@ -122,12 +123,19 @@ function compileRuntimeEntity(
         });
         continue;
       }
+      const geometryAsset = getGeometryAsset(assets, component.geometry?.kind === "asset" ? component.geometry.assetId : component.geometryAssetId);
+      const materialBindings: MeshComponent["materialBindings"] = [
+        ...(geometryAsset ? getGeometryMaterialSlots(geometryAsset) : [])
+          .filter((slot) => slot.defaultMaterialAssetId && !component.materialBindings.some((binding) => binding.slot === slot.slot && binding.sourceNodeIndex === undefined))
+          .map((slot) => ({ slot: slot.slot, materialAssetId: slot.defaultMaterialAssetId! })),
+        ...component.materialBindings,
+      ];
       components.push({
         id: component.id,
         type: "mesh",
         enabled: component.enabled,
         geometry,
-        materialBindings: component.materialBindings.map((binding) => ({
+        materialBindings: materialBindings.map((binding) => ({
           slot: binding.slot,
           materialAssetId: binding.materialAssetId,
           ...(binding.sourceNodeIndex === undefined

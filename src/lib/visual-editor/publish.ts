@@ -1,4 +1,5 @@
 import { XriftClient } from "@xrift/sdk";
+import { optimizePublishedModel, describeModelDownload } from "./model-download";
 import type { CompilerPublicationMetadata, ProjectKind } from "../tauri";
 import { tauri } from "../tauri";
 import { collectDistUploadFiles } from "./dist-upload-files";
@@ -468,7 +469,17 @@ export async function materializeVisualCompilation(
     signal,
     report,
   );
-  const binaryOverlayFiles = [...bundledOverlayFiles, ...convertedTextures.files];
+  const modelFiles: Array<{ targetRelativePath: string; dataUrl: string }> = [];
+  const modelTargets = compilation.stagingPlan.assetCopyPlan.filter((entry) => entry.modelDownload);
+  for (const [index, entry] of modelTargets.entries()) {
+    throwIfAborted(signal);
+    report({ stage: "compiling", label: "Modelのダウンロード容量を減らしています", detail: `${index + 1} / ${modelTargets.length}件目。${entry.assetId}`, percent: 40, cancelSafe: true });
+    const result = await optimizePublishedModel(await readProjectAssetBytes(authoringProjectPath, entry.sourceRelativePath), entry.modelDownload!);
+    throwIfAborted(signal);
+    onLog({ kind: "stdout", text: describeModelDownload(entry.assetId, result), ts: Date.now() });
+    modelFiles.push({ targetRelativePath: entry.targetRelativePath, dataUrl: await assetBytesToDataUrl(result.bytes, "model/gltf-binary") });
+  }
+  const binaryOverlayFiles = [...bundledOverlayFiles, ...convertedTextures.files, ...modelFiles];
   let staged: Awaited<ReturnType<typeof tauri.applyCompilerStaging>>;
   try {
     staged = await tauri.applyCompilerStaging(
@@ -480,7 +491,7 @@ export async function materializeVisualCompilation(
       })),
       binaryOverlayFiles,
       compilation.stagingPlan.assetCopyPlan
-        .filter((entry) => !entry.textureConversion)
+        .filter((entry) => !entry.textureConversion && !entry.modelDownload)
         .map((entry) => ({
           sourceRelativePath: entry.sourceRelativePath,
           targetRelativePath: entry.targetRelativePath,

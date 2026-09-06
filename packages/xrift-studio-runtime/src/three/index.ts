@@ -1118,12 +1118,15 @@ function applyModelMaterials(
     const original = Array.isArray(object.material) ? object.material : [object.material];
     const next = original.map((material, index) => {
       const taggedIndex = material.userData.xriftSourceMaterialIndex;
-      const slot = asset.materialSlots.find(
-        (candidate) =>
-          candidate.sourceMaterialIndex === taggedIndex ||
-          candidate.sourceMaterialIndex === index ||
-          candidate.name === material.name,
-      );
+      // The position within one Mesh's material array is not the glTF material
+      // index. A global index must win before the legacy local-index fallback,
+      // especially when the published GLB no longer carries replaced textures.
+      const slot =
+        (typeof taggedIndex === "number"
+          ? asset.materialSlots.find((candidate) => candidate.sourceMaterialIndex === taggedIndex)
+          : undefined) ??
+        asset.materialSlots.find((candidate) => candidate.name === material.name) ??
+        asset.materialSlots.find((candidate) => candidate.sourceMaterialIndex === index);
       const sourceNodeIndex = nearestSourceNodeIndex(object);
       const materialId = slot
         ? (sourceNodeIndex === undefined
