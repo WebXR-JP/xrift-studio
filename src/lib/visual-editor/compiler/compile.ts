@@ -3,6 +3,7 @@ import { collectModelInstancingEntities } from "../model-instancing";
 import modelInstancingSource from "../../../../packages/xrift-studio-runtime/src/model-instancing.ts?raw";
 import modelInstancingHostSource from "../../../../packages/xrift-studio-runtime/src/script/model-instancing.tsx?raw";
 import { collectPublishedAssetIds, planModelDownload } from "./download-plan";
+import publishedAssetBaseSource from "./published-asset-base.ts?raw";
 import { colliderModelNode } from "../mesh-collision-actions";
 import {
   getGeometryAsset,
@@ -1048,12 +1049,12 @@ function renderScript(
   context.extraImports.add(
     `import { XriftScriptHost, XriftScriptRoot } from "./xrift-studio/script-host";`,
   );
-  context.imports.add("useXRift");
+  registerCompiledAssetBase(context);
   context.reactTypeImports.add("PropsWithChildren");
   context.supportDeclarations.set(
     "script-runtime:published-root",
     `const XriftPublishedScriptRoot: FC<PropsWithChildren> = ({ children }) => {
-  const { baseUrl } = useXRift();
+  const baseUrl = useCompiledAssetBaseUrl();
   return <XriftScriptRoot assetBaseUrl={baseUrl}>{children}</XriftScriptRoot>;
 };`,
   );
@@ -4891,7 +4892,7 @@ function registerCompiledKtx2Runtime(context: CompileContext): void {
   const key = "texture-runtime:use-compiled-ktx2";
   if (context.supportDeclarations.has(key)) return;
   context.dreiImports.add("useKTX2");
-  context.imports.add("useXRift");
+  registerCompiledAssetBase(context);
   context.threeTypeImports.add("Texture");
   context.supportDeclarations.set(
     key,
@@ -4899,7 +4900,7 @@ function registerCompiledKtx2Runtime(context: CompileContext): void {
     // serves nothing below its root, so the directory handed to the loader is
     // the world's base URL itself.
     `function useCompiledKtx2(assetUrl: string): Texture {
-  const { baseUrl } = useXRift();
+  const baseUrl = useCompiledAssetBaseUrl();
   return useKTX2(assetUrl, baseUrl);
 }`,
   );
@@ -4915,13 +4916,13 @@ function registerCompiledKtx2Runtime(context: CompileContext): void {
 function registerCompiledDracoRuntime(context: CompileContext): void {
   const key = "model-runtime:use-compiled-draco-decoder-path";
   if (context.supportDeclarations.has(key)) return;
-  context.imports.add("useXRift");
+  registerCompiledAssetBase(context);
   context.supportDeclarations.set(
     key,
     // As with KTX2: the decoder files are world-root files, so the decoder
     // directory is the world's base URL.
     `function useCompiledDracoDecoderPath(): string {
-  const { baseUrl } = useXRift();
+  const baseUrl = useCompiledAssetBaseUrl();
   return baseUrl;
 }`,
   );
@@ -5453,9 +5454,8 @@ function renderText(
   );
   // Every published Text reads a font file the world ships — the automatic face
   // is substituted at compile time, because it is a CDN resolver a published
-  // world cannot reach — and XRift decides at load time where the world's own
-  // files are served from. So the base is always read.
-  context.imports.add("useXRift");
+  // world cannot reach. Use the same publication version as the generated code.
+  registerCompiledAssetBase(context);
   const props = [
     `config={${configName}}`,
     // A graph aimed at one of an Entity's two signs must not re-letter both.
@@ -5467,7 +5467,7 @@ function renderText(
   context.supportDeclarations.set(
     `text-panel:${componentName}`,
     `const ${componentName}: FC = () => {
-  const { baseUrl } = useXRift();
+  const baseUrl = useCompiledAssetBaseUrl();
 ${projectFont?.lines ?? ""}${backgroundTexture?.lines ?? ""}  return <XriftTextPanel ${props} />;
 };`,
   );
@@ -6165,17 +6165,31 @@ function generatedIdentifier(prefix: string, value: string): string {
   return `${prefix}_${stem || "asset"}_${sha256Utf8(value).slice(0, 8)}`;
 }
 
+function compiledAssetBaseSource(): string {
+  return `${publishedAssetBaseSource.replace(/^export /gm, "")}
+const compiledAssetModuleBaseUrl = publishedAssetBaseUrl(import.meta.url);
+const useCompiledAssetBaseUrl = (): string => {
+  const { baseUrl } = useXRift();
+  return compiledAssetModuleBaseUrl ?? baseUrl;
+};`;
+}
+
+function registerCompiledAssetBase(context: CompileContext): void {
+  context.imports.add("useXRift");
+  context.supportDeclarations.set("asset-url:00-base", compiledAssetBaseSource());
+}
+
 function registerAssetUrl(
   asset: SceneAsset,
   runtimeUrl: string,
   context: CompileContext,
 ): string {
   const constantName = generatedIdentifier("ASSET_URL", asset.id);
-  context.imports.add("useXRift");
+  registerCompiledAssetBase(context);
   context.supportDeclarations.set(
     "asset-url:00-runtime",
     `const useCompiledAssetUrl = (assetPath: string): string => {
-  const { baseUrl } = useXRift();
+  const baseUrl = useCompiledAssetBaseUrl();
   return \`\${baseUrl}\${assetPath}\`;
 };`,
   );
@@ -6271,12 +6285,12 @@ function generateRuntimeAdapterSource(kind: VisualProjectKind): string {
   const component = kind === "world" ? "World" : "Item";
   const runtimeComponent = kind === "world" ? "XriftWorld" : "XriftItem";
   const defaultExport = kind === "item" ? `\nexport default ${component};\n` : "";
-  // The manifest is one of the world's own files, and XRift decides at load
-  // time where those are served from. A site-root path would look outside the
-  // world entirely, so the base is read the same way the JSX output reads it.
+  // Pin the manifest to the same module version, just like Classic JSX assets.
   return `import type { FC } from "react";
 import { useXRift } from "@xrift/world-components";
 import { ${runtimeComponent} } from "xrift-studio-runtime/react-three-fiber";
+
+${compiledAssetBaseSource()}
 
 export interface ${component}Props {
   position?: [number, number, number];
@@ -6284,7 +6298,7 @@ export interface ${component}Props {
 }
 
 export const ${component}: FC<${component}Props> = ({ position = [0, 0, 0], scale = 1 }) => {
-  const { baseUrl } = useXRift();
+  const baseUrl = useCompiledAssetBaseUrl();
   return (
     <group position={position} scale={scale}>
       <${runtimeComponent} manifest={\`\${baseUrl}${PUBLISHED_RUNTIME_MANIFEST_FILE}\`} />

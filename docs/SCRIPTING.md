@@ -219,7 +219,7 @@ Material / Particle の preview と `ctx.assets.loadTexture` は別の読み込�
 Tauri IPC で読む。`importMetadata.sourceFormat` または拡張子が KTX2 なら、Studio に同梱した Basis JS / WASM で変換する。
 OpenBrush の `source.kind = "builtin"` Texture は project path がなくても同梱 URL から表示できる。どちらも preview のために
 CDN を必要としない。生成物も KTX2 を使う場合は固定した Basis file を World へ同梱する。
-XRift の `baseUrl` から解決する。
+生成JavaScriptと同じ公開バージョンのディレクトリから解決する。
 
 decoder を要する形式は KTX2 だけではない。Draco 圧縮した Model は decoder を同梱する。
 どの形式が何を必要とするかは `src/lib/visual-editor/vendor-assets.ts` の表が一箇所だけで持つ。
@@ -236,8 +236,13 @@ loader は manifest からの相対で解決する。
 font、Runtime manifest も同じく直下へ置く。decoder はファイル名が loader 側で
 固定されている（DRACOLoader は `draco_wasm_wrapper.js`、KTX2Loader は
 `basis_transcoder.js` を decoder path へ足す）。そのため名前はそのまま直下に置く。
-path には XRift の `baseUrl` を渡す。名前が固定でない同梱物は、他のファイルと
+path には生成JavaScriptと同じ公開ディレクトリを渡す。名前が固定でない同梱物は、他のファイルと
 ぶつからないよう接頭辞を付ける。
+
+公開コードの `import.meta.url` からその公開バージョンのディレクトリを決め、Model、Texture、
+Audio、font、decoder、Script Asset、Runtime manifestで共有する。XRift側の画面更新中に古い
+Worldが残っても、新しい `baseUrl` と古いファイル名を組み合わせない。Viteのソースモジュール
+など、HTTPで配信されたJavaScript以外では従来どおりXRiftの `baseUrl` を使う。
 
 この対応は Material / Particle の preview と生成物の描画経路に限る。Script の `ctx.assets.loadTexture` は引き続き
 Three.js の標準 `TextureLoader` を使う。そのため KTX2 / HDR / EXR を typed Texture として返さない。
@@ -707,11 +712,11 @@ Script source と host adapter を staging の overlay file として出力す�
 - 生成した World / Item の Scene subtree は Play と同じ `XriftScriptRoot` で包む。各 Component は同じ
   `XriftScriptHost` へ default Script、任意の named `Render`、property、実行順、明示参照を渡す
 - `assetReferences` のうち staging へ copy した Asset だけを決定的な URL map へ入れる。
-  XRift の `baseUrl` で解決してから `ctx.assets.url` / `loadTexture` を Play と同じ参照 gate へ通す
+  生成JavaScriptと同じ公開ディレクトリで解決してから `ctx.assets.url` / `loadTexture` を Play と同じ参照 gate へ通す
 - KTX2 を参照する Material / Particle がある場合は pinned Basis JS / WASM を staging の `public/` 直下へ
-  copy する。`useKTX2` の transcoder path に XRift の `baseUrl` を渡す
+  copy する。`useKTX2` の transcoder path に生成JavaScriptと同じ公開ディレクトリを渡す
 - Draco 圧縮した Model がある場合は pinned Draco decoder を同じく `public/` 直下へ copy する。
-  `useGLTF` の decoder path に XRift の `baseUrl` を渡す
+  `useGLTF` の decoder path に生成JavaScriptと同じ公開ディレクトリを渡す
 - Entity group へ安定 ID を付ける。`entityReferences` に宣言した ID だけを `ctx.find` で解決する
 - World / Item instance ごとの scope marker 内だけを探索する。同じ Item を複数配置しても別 instance の Entity を返さない
 - Texture cache / dispose、Audio停止・解放、Material clone / restore、frame 更新と event bus は host の lifecycle に属する。

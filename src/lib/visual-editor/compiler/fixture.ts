@@ -71,6 +71,7 @@ import {
   isVisualCompilationStale,
 } from "./compile";
 import { sha256Utf8 } from "./hash";
+import { publishedAssetBaseUrl } from "./published-asset-base";
 import type { VisualCompilerDocuments } from "./types";
 
 export type VisualCompilerFixtureSources = {
@@ -84,6 +85,23 @@ export type VisualCompilerFixtureSources = {
 export function runVisualCompilerFixtureAssertions(
   captureSources?: (sources: VisualCompilerFixtureSources) => void,
 ): void {
+  const oldBase = "https://assets.example/worlds/world/old-version/";
+  const newBase = "https://assets.example/worlds/world/new-version/";
+  // Reproduce an earlier World still mounted after the host context changes.
+  // Only these two matching version/file pairs exist on the server.
+  const available = new Set([`${oldBase}old-model.glb`, `${newBase}new-model.glb`]);
+  for (const [moduleBase, model] of [[oldBase, "old-model.glb"], [newBase, "new-model.glb"]]) {
+    const base = publishedAssetBaseUrl(`${moduleBase}__federation_expose_World-hash.js?cache=1`) ?? newBase;
+    assert(available.has(`${base}${model}`), "World code and assets must retain the same publication version");
+  }
+  assert(!available.has(`${newBase}old-model.glb`), "The mixed-version regression must reproduce a missing asset");
+  assert(
+    publishedAssetBaseUrl("https://assets.example/items/item/version/__federation_expose_Item-hash.js") === "https://assets.example/items/item/version/",
+    "Items must use their own publication directory rather than the surrounding world",
+  );
+  for (const moduleUrl of ["http://localhost:5173/src/World.tsx?t=1", "blob:https://assets.example/uuid", "file:///tmp/World.js", "invalid"]) {
+    assert(publishedAssetBaseUrl(moduleUrl) === null, "Source/virtual modules must preserve the host base URL fallback");
+  }
   assert(
     sha256Utf8("abc") ===
       "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
@@ -2072,6 +2090,16 @@ export function runVisualCompilerFixtureAssertions(
       repeatedSource.includes('case "0:Detail"'),
     "Repeated model placements must share one resolver while preserving node-specific overrides",
   );
+  for (const result of [audioResult, audioRuntimeResult]) {
+    const entry = result.overlayFiles.find((file) => file.relativePath === "src/World.tsx")?.content ?? "";
+    assert(
+      entry.includes("publishedAssetBaseUrl(import.meta.url)") &&
+        entry.includes("return compiledAssetModuleBaseUrl ?? baseUrl;") &&
+        entry.includes("const baseUrl = useCompiledAssetBaseUrl();") &&
+        entry.split("const { baseUrl } = useXRift();").length === 2,
+      "Both JSX assets and Runtime manifest must share the module-bound base with a single host fallback",
+    );
+  }
   const distinctId = "repeated-model-0";
   const distinctEntity = repeatedModelScene.entities[distinctId];
   repeatedModelScene.entities[distinctId] = {
