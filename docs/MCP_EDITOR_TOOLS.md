@@ -380,7 +380,7 @@ project ではなく app data へ置く。
 | --- | --- |
 | Undo / Redo | 操作は revision で直列化する。Editor の履歴は人の操作単位だ。片方から巻き戻すと、もう片方が何を失ったのか分からなくなる |
 | 選択の変更だけ | 各 tool が結果として選択を移す。選択のためだけの tool は履歴も document も変えない。状態だけずらす |
-| Scene View の描画品質（高品質 / 軽量 / 描画50% / 描画25%） | 編集中の描き方だけを変える Editor State だ。document にも公開物にも残らない。Play とサムネイル撮影は常に高品質で描く。読み取る見た目も変わらない |
+| Scene View の描画品質（自動 / 高品質 / 軽量 / 描画50% / 描画25%） | 編集中の描き方だけを変える Editor State だ。既定の自動は75%から開始し、負荷が続くと25%まで下げる。document にも公開物にも残らない。Play とサムネイル撮影は常に高品質で描く。読み取る見た目も変わらない |
 | 拡大・全体表示・パネル幅・タイムラインの範囲と時刻 | 見え方だけの状態だ。document に残らない。ノードの位置は document に残るので `move_interactivity_node` と `layout_interactivity_graph` で扱う |
 | Project の保存・公開・アップロード | 外向きの不可逆操作だ。アップロード前に `xrift.json` とサムネイルを確認する導線は残す |
 | Login / account 操作 | 認証情報を MCP 境界へ渡さないためだ |
@@ -405,3 +405,7 @@ project ではなく app data へ置く。
 Scene document のスキーマを増やしたときは、`serialization.ts` の許可キーと
 対応する MCP tool を同時に更新する。片方だけ更新すると、保存した時点で Scene が
 読めなくなる。
+
+### 大きなモデルを取り込むとき
+
+Editorの `import_model_asset` と、`importSettings` を省略した `import_texture_asset` はImportメニューの設定を使う。未設定時は最大2048px・KTX2。対応する単体画像とモデル内蔵画像を変換してからManifestを採用するため、変換前の画像を先にScene Viewへ配置しない。元画像と元モデルは保持する。既存Assetには遡って適用しない。圧縮に失敗した場合は配置へ進まず、設定を変えて再試行できる。

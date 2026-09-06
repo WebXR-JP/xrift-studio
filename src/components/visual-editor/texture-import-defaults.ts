@@ -20,9 +20,9 @@ export const TEXTURE_IMPORT_MAX_SIZE_STORAGE_KEY =
 export const TEXTURE_IMPORT_COMPRESSION_STORAGE_KEY =
   "xrift-studio.visual-editor.texture-import-compression.v1";
 
-export const DEFAULT_TEXTURE_IMPORT_MAX_SIZE: TextureImportMaxSize = "original";
+export const DEFAULT_TEXTURE_IMPORT_MAX_SIZE: TextureImportMaxSize = 2048;
 
-export const DEFAULT_TEXTURE_IMPORT_COMPRESSION: TextureImportCompression = "source";
+export const DEFAULT_TEXTURE_IMPORT_COMPRESSION: TextureImportCompression = "ktx2";
 
 export function isTextureImportMaxSize(value: unknown): value is TextureImportMaxSize {
   return (

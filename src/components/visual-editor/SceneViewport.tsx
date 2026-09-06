@@ -1,4 +1,5 @@
 import { TerrainBrushCursor } from "./TerrainBrushCursor";
+import { getModelNodeMaterialSlots } from "./model-node-materials";
 import { SceneVramMetrics } from "./SceneDebugCapture";
 import {
   SceneEntityTreeProvider,
@@ -279,8 +280,12 @@ import {
   getSceneViewportRenderScale,
   loadSceneViewportQualityMode,
   saveSceneViewportQualityMode,
+  sampleSceneViewportLoad,
+  lowerSceneViewportQuality,
+  type SceneViewportFixedQuality,
   type SceneViewportQualityMode,
 } from "./scene-viewport-quality";
+
 import {
   WorldPlayCrosshair,
   WorldPlayPlayer,
@@ -299,6 +304,20 @@ import {
   useWorldPlaySceneReady,
 } from "./scene-model-load-tracker";
 import { ScrubNumberInput } from "./ScrubNumberInput";
+
+function ViewportLoadProtection({ onReduce }: { onReduce: () => void }) {
+  const slowSeconds = useRef(0);
+  useFrame((_state, delta) => {
+    slowSeconds.current = sampleSceneViewportLoad(
+      slowSeconds.current, delta, document.visibilityState === "visible",
+    );
+    if (slowSeconds.current >= 1.5) {
+      slowSeconds.current = 0;
+      onReduce();
+    }
+  });
+  return null;
+}
 
 /**
  * Recompiles Materials when shadows are switched off or on.
@@ -630,13 +649,14 @@ function MeshVisual({
   const assignedModelMaterials = useMemo(
     () => {
       if (geometry?.kind !== "model") return [];
-      const globalAssignments = geometry.materialSlots.flatMap((slot) => {
+      const nodeIndex = component.geometry?.kind === "asset" ? component.geometry.sourceNodeIndex : undefined;
+      const nodeName = component.geometry?.kind === "asset" ? component.geometry.sourceNodeName : undefined;
+      const slots = getModelNodeMaterialSlots(geometry, nodeIndex, nodeName);
+      const slotsByName = new Map(slots.map(slot => [slot.slot, slot]));
+      const globalBindings = new Map(component.materialBindings.filter(binding => binding.sourceNodeIndex === undefined).map(binding => [binding.slot, binding]));
+      const globalAssignments = slots.flatMap((slot) => {
             if (slot.sourceMaterialIndex === undefined) return [];
-            const binding = component.materialBindings.find(
-              (candidate) =>
-                candidate.slot === slot.slot &&
-                candidate.sourceNodeIndex === undefined,
-            );
+            const binding = globalBindings.get(slot.slot);
             const materialAssetId =
               binding?.materialAssetId ?? slot.defaultMaterialAssetId;
             const material = materialAssetId
@@ -654,9 +674,8 @@ function MeshVisual({
           });
       const nodeAssignments = component.materialBindings.flatMap((binding) => {
         if (binding.sourceNodeIndex === undefined) return [];
-        const slot = geometry.materialSlots.find(
-          (candidate) => candidate.slot === binding.slot,
-        );
+        if (nodeIndex !== undefined && binding.sourceNodeIndex !== nodeIndex) return [];
+        const slot = slotsByName.get(binding.slot);
         const material = getMaterialAsset(assets, binding.materialAssetId);
         return slot?.sourceMaterialIndex !== undefined && material
           ? [{
@@ -669,7 +688,7 @@ function MeshVisual({
       });
       return [...globalAssignments, ...nodeAssignments];
     },
-    [assets, component.materialBindings, geometry],
+    [assets, component.materialBindings, component.geometry, geometry],
   );
 
   if (!component.enabled) return null;
@@ -4936,6 +4955,11 @@ export function SceneViewport({
   const [qualityMode, setQualityMode] = useState<SceneViewportQualityMode>(
     loadSceneViewportQualityMode,
   );
+  const [automaticQuality, setAutomaticQuality] = useState<SceneViewportFixedQuality>("low");
+  const effectiveQuality = qualityMode === "auto" ? automaticQuality : qualityMode;
+  const reduceAutomaticQuality = useCallback(() => {
+    setAutomaticQuality(lowerSceneViewportQuality);
+  }, []);
   const [debugOverlayEnabled, setDebugOverlayEnabled] = useState(false);
   const [debugMetrics, setDebugMetrics] =
     useState<ScenePerformanceMetrics | null>(null);
@@ -5061,17 +5085,17 @@ export function SceneViewport({
       getSceneViewportQualityProfile(
         editorMode === "play" || thumbnailCaptureActive || recordingViewActive
           ? "high"
-          : qualityMode,
+          : effectiveQuality,
       ),
-    [editorMode, qualityMode, recordingViewActive, thumbnailCaptureActive],
+    [editorMode, effectiveQuality, recordingViewActive, thumbnailCaptureActive],
   );
   const activeRenderScale = useMemo(
     () =>
       getSceneViewportRenderScale(
-        qualityMode,
+        effectiveQuality,
         typeof window === "undefined" ? 1 : window.devicePixelRatio,
       ),
-    [qualityMode],
+    [effectiveQuality],
   );
   const colliderOnlyEdit = effectiveDisplayMode === "colliders";
   const renderDisplayMode = cleanRender ? "scene" : effectiveDisplayMode;
@@ -6347,6 +6371,7 @@ export function SceneViewport({
                     const next = event.currentTarget
                       .value as SceneViewportQualityMode;
                     setQualityMode(next);
+                    setAutomaticQuality("low");
                     saveSceneViewportQualityMode(next);
                   }}
                   aria-label="Scene View描画品質"
@@ -6374,7 +6399,7 @@ export function SceneViewport({
                 >
                   {SCENE_VIEWPORT_QUALITY_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
-                      {option.label}
+                      {option.value === "auto" && qualityMode === "auto" ? `自動 (描画${Math.round(activeRenderScale * 100)}%)` : option.label}
                     </option>
                   ))}
                 </select>
@@ -6495,6 +6520,9 @@ export function SceneViewport({
             far: sceneSettings.camera.far,
           }}
         >
+          {qualityMode === "auto" && automaticQuality !== "quarter" && editorMode === "edit" && !thumbnailCaptureActive && !recordingViewActive ? (
+            <ViewportLoadProtection onReduce={reduceAutomaticQuality} />
+          ) : null}
           <SceneLightingContext.Provider value={viewportLighting}>
           <SceneWindContext.Provider value={viewportWind}>
           <color

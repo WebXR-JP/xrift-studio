@@ -1,8 +1,11 @@
 import {
-  ktx2QualityLevel,
   resolveTargetSize,
   type TextureConversion,
 } from "./texture-conversion";
+import type { TextureEncodeRequest } from "./texture-encoder.worker";
+
+// Bound peak WASM memory even when multiple import/export callers overlap.
+let encodingQueue: Promise<unknown> = Promise.resolve();
 
 /**
  * Textureのバイト列を実際に作り直す処理をまとめる。
@@ -80,27 +83,35 @@ export async function renderImageBytes(
   }
 }
 
-export async function encodeKtx2(
+export function encodeKtx2(
   bytes: Uint8Array,
   options: { quality: number; generateMipmaps: boolean; srgb: boolean },
 ): Promise<Uint8Array> {
-  const { encodeToKTX2 } = await import("ktx2-encoder");
-  const encoded = await encodeToKTX2(copyAssetBytes(bytes), {
-    isUASTC: false,
-    qualityLevel: ktx2QualityLevel(options.quality),
-    compressionLevel: 2,
-    generateMipmap: options.generateMipmaps,
-    isPerceptual: options.srgb,
-    isSetKTX2SRGBTransferFunc: options.srgb,
-    isKTX2File: true,
-  });
-  const result = new Uint8Array(encoded);
-  if (result.byteLength === 0) {
-    throw new Error(
-      "KTX2エンコーダーが空の結果を返しました。最大解像度を下げるか、WEBPで書き出してください。",
-    );
-  }
-  return result;
+  const task = encodingQueue.then(() => new Promise<Uint8Array>((resolve, reject) => {
+    const worker = new Worker(new URL("./texture-encoder.worker.ts", import.meta.url), { type: "module" });
+    const finish = (error?: string, result?: Uint8Array) => {
+      clearTimeout(timeout);
+      worker.terminate();
+      if (error) reject(new Error(error));
+      else if (result?.byteLength) resolve(result);
+      else reject(new Error("KTX2圧縮の結果が空です。"));
+    };
+    const timeout = setTimeout(() => finish("KTX2圧縮が時間内に完了しませんでした。最大解像度を下げるか、WEBPを選んで再試行してください。"), 120_000);
+    worker.onmessage = (event: MessageEvent<{ bytes?: Uint8Array; error?: string }>) => finish(event.data.error, event.data.bytes);
+    worker.onerror = (event) => {
+      event.preventDefault();
+      finish(event.message || "KTX2圧縮を開始できませんでした。WEBPを選んで再試行してください。");
+    };
+    worker.onmessageerror = () => finish("KTX2圧縮の結果を受け取れませんでした。");
+    try {
+      const request: TextureEncodeRequest = { bytes: copyAssetBytes(bytes), options };
+      worker.postMessage(request, [request.bytes.buffer]);
+    } catch (error) {
+      finish(error instanceof Error ? error.message : String(error));
+    }
+  }));
+  encodingQueue = task.catch(() => undefined);
+  return task;
 }
 
 /**

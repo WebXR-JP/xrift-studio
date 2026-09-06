@@ -7,7 +7,8 @@
  * authoring data — it stays out of the SceneDocument, the Undo history and the
  * published world, and Play restores full quality so the preview stays honest.
  */
-export type SceneViewportQualityMode = "high" | "low" | "half" | "quarter";
+export type SceneViewportQualityMode = "auto" | "high" | "low" | "half" | "quarter";
+export type SceneViewportFixedQuality = Exclude<SceneViewportQualityMode, "auto">;
 
 export type SceneViewportQualityProfile = {
   /** Canvas device pixel ratio range, passed to React Three Fiber. */
@@ -21,6 +22,11 @@ export const SCENE_VIEWPORT_QUALITY_OPTIONS: readonly {
   label: string;
   description: string;
 }[] = [
+  {
+    value: "auto",
+    label: "自動",
+    description: "描画75%から開始し、重い状態が続くと50%・25%へ下げます。高品質などへ手動で切り替えられます。編集時のみ",
+  },
   {
     value: "high",
     label: "高品質",
@@ -56,6 +62,7 @@ export function getSceneViewportQualityProfile(
       // The only mode that follows the display: a HiDPI screen gets its own
       // sharpness up to 1.5x, a 1x screen gets exactly its CSS pixels.
       return { dpr: [1, 1.5], shadows: true, postprocessing: true };
+    case "auto":
     case "low":
       // A single number, not a range. React Three Fiber clamps the display's
       // own devicePixelRatio into whatever range it is given, so the previous
@@ -88,19 +95,34 @@ export const SCENE_VIEWPORT_QUALITY_STORAGE_KEY =
 export function normalizeSceneViewportQualityMode(
   candidate: unknown,
 ): SceneViewportQualityMode {
-  return candidate === "low" || candidate === "half" || candidate === "quarter" ? candidate : "high";
+  return candidate === "high" || candidate === "low" || candidate === "half" || candidate === "quarter" ? candidate : "auto";
 }
 
-/** Unreadable storage falls back to full quality rather than to a surprise. */
+/** New installations start with the editor's adaptive protection. */
 export function loadSceneViewportQualityMode(): SceneViewportQualityMode {
-  if (typeof window === "undefined") return "high";
+  if (typeof window === "undefined") return "auto";
   try {
     return normalizeSceneViewportQualityMode(
       window.localStorage.getItem(SCENE_VIEWPORT_QUALITY_STORAGE_KEY),
     );
   } catch {
-    return "high";
+    return "auto";
   }
+}
+
+/** Accumulate sustained slow frames, ignoring pauses and hidden windows. */
+export function sampleSceneViewportLoad(
+  slowSeconds: number,
+  delta: number,
+  visible: boolean,
+): number {
+  if (!visible || !Number.isFinite(delta) || delta <= 0) return 0;
+  // One stall cannot trigger a downgrade, but repeated multi-second frames can.
+  return delta > 1 / 24 ? slowSeconds + Math.min(delta, 0.5) : 0;
+}
+
+export function lowerSceneViewportQuality(mode: SceneViewportFixedQuality): SceneViewportFixedQuality {
+  return mode === "high" ? "low" : mode === "low" ? "half" : "quarter";
 }
 
 export function saveSceneViewportQualityMode(

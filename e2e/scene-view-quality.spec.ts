@@ -32,12 +32,12 @@ test("Scene Viewを軽量にすると描画解像度が下がる", async ({ page
       return width > 0 ? node.width / width : 0;
     });
 
-  await expect.poll(bufferScale, { timeout: 20_000 }).toBeCloseTo(1, 1);
-
   const quality = page.getByLabel("Scene View描画品質");
   if (!(await quality.isVisible())) {
     await page.getByRole("button", { name: "表示と診断の設定" }).click();
   }
+  await expect(quality).toHaveValue("auto");
+  await expect.poll(bufferScale, { timeout: 20_000 }).toBeLessThanOrEqual(0.76);
   await quality.selectOption("low");
 
   await expect.poll(bufferScale, { timeout: 20_000 }).toBeCloseTo(0.75, 1);

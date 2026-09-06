@@ -167,7 +167,6 @@ export type ProjectModelMaterialRuntimeInfo = {
   pbrFallback?: OpenBrushPbrFallbackInfo;
 };
 
-const MODEL_DATA_CACHE = new Map<string, Promise<string>>();
 type ProjectModelData = {
   object: Object3D;
   animations: AnimationClip[];
@@ -191,15 +190,12 @@ export function loadProjectModelData(
   const cacheKey = `${projectPath}\n${sourceRelativePath}\n${sourceHash ?? ""}\n${loadRevision}`;
   const cached = MODEL_OBJECT_CACHE.get(cacheKey);
   if (cached) return cached;
-  const dataPromise =
-    MODEL_DATA_CACHE.get(cacheKey) ??
-    tauri.readProjectFileDataUrl(projectPath, sourceRelativePath);
-  MODEL_DATA_CACHE.set(cacheKey, dataPromise);
-  const promise = dataPromise
+  // The parsed-object promise already deduplicates concurrent callers. Keeping
+  // the base64 transport too retains another ~4/3 of every source file forever.
+  const promise = tauri.readProjectFileDataUrl(projectPath, sourceRelativePath)
     .then(dataUrlToArrayBuffer)
     .then((buffer) => parseSelfContainedModel(buffer, sourceRelativePath));
   promise.catch(() => {
-    MODEL_DATA_CACHE.delete(cacheKey);
     MODEL_OBJECT_CACHE.delete(cacheKey);
   });
   MODEL_OBJECT_CACHE.set(cacheKey, promise);
@@ -431,13 +427,9 @@ function ProjectModelRender({
       : EMPTY_ANIMATION_CUES;
   const renderedModel = useMemo(() => {
     if (!readyObject) return null;
-    // Sanitize the cached source before SkeletonUtils.clone recurses through it.
-    repairImportedObject3DHierarchy(readyObject);
-    const source = clone(readyObject);
-    repairImportedObject3DHierarchy(source);
-    const sourceMaterials = collectSourceMaterials(source);
-    const object = selectSourceModelNode(
-      source,
+    const sourceMaterials = getSourceModelIndex(readyObject).materials;
+    const object = cloneSourceModelNode(
+      readyObject,
       sourceNodeIndex,
       sourceNodeName,
     );
@@ -1576,6 +1568,48 @@ function tagSourceMaterialIndices(
         sourceMaterialIndex;
     }
   });
+}
+
+const SOURCE_MODEL_INDEX = new WeakMap<Object3D, {
+  nodes: Map<number, Object3D>;
+  names: Map<string, Object3D>;
+  materials: Map<number, Material>;
+  skinned: boolean;
+}>();
+
+function getSourceModelIndex(root: Object3D) {
+  const cached = SOURCE_MODEL_INDEX.get(root);
+  if (cached) return cached;
+  const index = { nodes: new Map<number, Object3D>(), names: new Map<string, Object3D>(), materials: collectSourceMaterials(root), skinned: false };
+  root.traverse((node) => {
+    const id = node.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY];
+    if (typeof id === "number" && !index.nodes.has(id)) index.nodes.set(id, node);
+    if (!index.names.has(node.name)) index.names.set(node.name, node);
+    if ((node as Object3D & { isSkinnedMesh?: boolean }).isSkinnedMesh) index.skinned = true;
+  });
+  SOURCE_MODEL_INDEX.set(root, index);
+  return index;
+}
+
+/** Expanded static models clone only the node being drawn, not the whole town
+ * once per Entity. Skinned models retain SkeletonUtils' full skeleton remap. */
+export function cloneSourceModelNode(root: Object3D, sourceNodeIndex?: number, sourceNodeName?: string): Object3D {
+  const index = getSourceModelIndex(root);
+  if ((sourceNodeIndex === undefined && !sourceNodeName) || index.skinned) {
+    return selectSourceModelNode(clone(root), sourceNodeIndex, sourceNodeName);
+  }
+  const selected = sourceNodeIndex !== undefined ? index.nodes.get(sourceNodeIndex) : index.names.get(sourceNodeName!);
+  if (!selected) return selectSourceModelNode(new Group(), sourceNodeIndex, sourceNodeName);
+  const object = selected.clone(false);
+  for (const child of selected.children) {
+    if (typeof child.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY] !== "number") object.add(child.clone(true));
+  }
+  object.position.set(0, 0, 0);
+  object.quaternion.identity();
+  object.scale.set(1, 1, 1);
+  object.updateMatrix();
+  object.updateMatrixWorld(true);
+  return object;
 }
 
 /** Keeps one authored glTF node while its Transform lives on the Scene Entity. */

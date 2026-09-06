@@ -4279,10 +4279,12 @@ export function VisualEditorPrototype({
             );
           }
           const importSettings =
-            isAudioImport || isFontImport || isModelImport || isSkyboxImport
+            isAudioImport || isFontImport || isSkyboxImport
             ? undefined
+            : args.importSettings === undefined || isModelImport
+            ? textureImportSettingsPatch(textureImportMaxSizeRef.current, textureImportCompressionRef.current)
             : mcpTextureImportSettingsPatch(
-                args.importSettings ?? {},
+                args.importSettings,
                 "importSettings",
                 { allowEmpty: true },
               );
@@ -4340,7 +4342,7 @@ export function VisualEditorPrototype({
               ...(importSettings
                 ? {
                     textureImportSettings: importSettings,
-                    preferredKind: "texture" as const,
+                    ...(isModelImport ? {} : { preferredKind: "texture" as const }),
                   }
                 : {}),
               ...(isModelImport ? { preferredKind: "model" as const } : {}),

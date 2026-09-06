@@ -153,3 +153,7 @@ macOS は universal 版のために sidecar を aarch64 と x86_64 の 2 つ作�
 
 - Issue / Pull Request は歓迎します
 - 大きめの変更は事前に Issue で相談いただけるとスムーズです
+
+## 大規模Sceneの開発時計測
+
+React 19.2とReact Three Fiber内蔵のreconcilerは、開発用Performance Tracksへpropsを書き出す際に巨大なTypedArrayなどを列挙・複製する。大規模モデルでは描画前にメモリ不足になるため、開発版の起動時に `console.timeStamp` を無効にして、この任意の計測経路を止めている。Chrome DevToolsのReactタイムライントラックは使えなくなるが、Reactの警告・Profiler、Studioの診断、通常の `performance.mark/measure` は利用できる。本番版には適用しない。React DOMとR3F内蔵reconcilerの両方で列挙量が制限されたら、この回避策を外す。

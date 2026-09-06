@@ -26,6 +26,7 @@ import {
   updateMaterialAsset,
   type ClassicR3fMaterialShader,
   type MaterialAsset,
+  type ModelAsset,
   type TextureAsset,
 } from "../../lib/visual-editor";
 import {
@@ -40,7 +41,9 @@ import {
   getModelSelectionBounds,
   inspectProjectModelMaterialRuntime,
   selectSourceModelNode,
+  cloneSourceModelNode,
 } from "./ProjectModelVisual";
+import { getModelNodeMaterialSlots } from "./model-node-materials";
 import {
   configureMaterialPreviewTexture,
   refreshMaterialPreviewRender,
@@ -61,6 +64,8 @@ export async function runProjectModelMaterialPreviewFixtureAssertions(): Promise
   assertModelSelectionBoundsStayLocal();
   assertStaticModelPoseUsesRestOffsets();
   assertSourceNodeSelectionDoesNotDuplicateTheWholeModel();
+  assertSourceNodeCloneAvoidsUnrelatedBranches();
+  assertNodeMaterialsExcludeUnrelatedSlots();
   assertObject3DHierarchyRepairKeepsValidOwner();
   assertCustomShaderRuntimeCanBeInspected();
   assertClassicR3fMaterialReceivesSceneFog();
@@ -527,6 +532,47 @@ function assertSourceNodeSelectionDoesNotDuplicateTheWholeModel(): void {
 
   ownMesh.geometry.dispose();
   (ownMesh.material as MeshBasicMaterial).dispose();
+}
+
+function assertNodeMaterialsExcludeUnrelatedSlots(): void {
+  const slots = [0, 1, 2].map(id => ({ slot: `slot-${id}`, sourceMaterialIndex: id }));
+  const model = {
+    materialSlots: slots,
+    importMetadata: { nodes: [
+      { sourceNodeIndex: 7, name: "wall", sourceMaterialIndices: [1] },
+      { sourceNodeIndex: 8, name: "empty", sourceMaterialIndices: [] },
+    ] },
+  } as unknown as ModelAsset;
+  const wall = getModelNodeMaterialSlots(model, 7);
+  assert(wall.length === 1 && wall[0] === slots[1], "An expanded node prepares unrelated materials");
+  assert(getModelNodeMaterialSlots(model, undefined, "wall") === wall, "Named nodes do not share the cached slot lookup");
+  assert(getModelNodeMaterialSlots(model, 8).length === 0, "Empty nodes prepare the entire model's materials");
+  assert(getModelNodeMaterialSlots(model) === slots, "Whole-model rendering lost material slots");
+  assert(getModelNodeMaterialSlots(model, 999) === slots, "Unknown metadata must preserve the original fallback");
+}
+
+function assertSourceNodeCloneAvoidsUnrelatedBranches(): void {
+  const root = new Group();
+  const selected = new Group();
+  selected.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY] = 7;
+  selected.position.set(10, 20, 30);
+  const ownMesh = new Mesh(new BoxGeometry(), new MeshBasicMaterial());
+  const nested = new Group();
+  nested.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY] = 8;
+  selected.add(ownMesh, nested);
+  const unrelated = new Group();
+  unrelated.clone = () => { throw new Error("Unrelated model branch was cloned"); };
+  root.add(selected, unrelated);
+  const copied = cloneSourceModelNode(root, 7);
+  const again = cloneSourceModelNode(root, 7);
+  assert(copied !== selected && copied !== again, "Entities share mutable objects");
+  assert(copied.children.length === 1 && copied.children[0] !== ownMesh, "Authored children were duplicated or shared");
+  assert((copied.children[0] as Mesh).geometry === ownMesh.geometry, "Static geometry should remain shared");
+  assert(selected.parent === root && selected.children.length === 2 && selected.position.x === 10, "Cloning mutated the cached model");
+  assert(copied.position.lengthSq() === 0, "Expanded Entity transform was applied twice");
+  assert(cloneSourceModelNode(root, 999).userData.xriftMissingSourceNodeIndex === 999, "Missing node fallback changed");
+  ownMesh.geometry.dispose();
+  ownMesh.material.dispose();
 }
 
 function assertStaticModelPoseUsesRestOffsets(): void {
