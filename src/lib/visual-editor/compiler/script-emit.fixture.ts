@@ -26,6 +26,9 @@ import {
 import { compileVisualProject } from "./compile";
 import { resolvePrefabInstances } from "./prefab-resolver";
 import {
+  createInteractivityRuntimeOverlayFiles,
+  INTERACTIVITY_ENGINE_OVERLAY_PATH,
+  INTERACTIVITY_TIMER_QUEUE_OVERLAY_PATH,
   SCRIPT_API_OVERLAY_PATH,
   SCRIPT_HOST_OVERLAY_PATH,
   SCRIPT_LIGHT_OVERLAY_PATH,
@@ -35,6 +38,10 @@ import {
 
 /** Filesystem-free assertions for Script emission into the staging project. */
 export function runScriptEmitFixtureAssertions(): void {
+  const overlays = createInteractivityRuntimeOverlayFiles();
+  assert(overlays.some(file => file.relativePath === INTERACTIVITY_TIMER_QUEUE_OVERLAY_PATH), "published graphs must include the timer queue source");
+  const engine = overlays.find(file => file.relativePath === INTERACTIVITY_ENGINE_OVERLAY_PATH);
+  assert(Boolean(engine?.content.includes('from "./interactivity-timer-queue"')), "published engine imports must resolve to the flattened timer queue overlay");
   assertEmitsStaticImports();
   assertAssetRuntimeDescriptors();
   assertVectorPropertiesAreExtracted();

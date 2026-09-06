@@ -17,6 +17,7 @@ import interactivityGraphSource from "../../../../packages/xrift-studio-runtime/
 import interactivityValueSource from "../../../../packages/xrift-studio-runtime/src/interactivity/value.ts?raw";
 import interactivityHostSource from "../../../../packages/xrift-studio-runtime/src/interactivity/host.ts?raw";
 import interactivityEngineSource from "../../../../packages/xrift-studio-runtime/src/interactivity/engine.ts?raw";
+import interactivityTimerQueueSource from "../../../../packages/xrift-studio-runtime/src/interactivity/timer-queue.ts?raw";
 import textPanelRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/text-panel.tsx?raw";
 import textPanelObjectSource from "../../../../packages/xrift-studio-runtime/src/text-panel.ts?raw";
 import textPanelLayoutSource from "../../../../packages/xrift-studio-runtime/src/text-panel-layout.ts?raw";
@@ -73,6 +74,7 @@ export const INTERACTIVITY_GRAPH_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/int
 export const INTERACTIVITY_VALUE_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/interactivity-value.ts`;
 export const INTERACTIVITY_HOST_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/interactivity-host.ts`;
 export const INTERACTIVITY_ENGINE_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/interactivity-engine.ts`;
+export const INTERACTIVITY_TIMER_QUEUE_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/interactivity-timer-queue.ts`;
 export const TEXT_PANEL_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/text-panel-runtime.tsx`;
 export const TEXT_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/text-runtime.ts`;
 export const TEXT_PANEL_OBJECT_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/text-panel.ts`;
@@ -395,6 +397,7 @@ const INTERACTIVITY_OVERLAY_MODULES: Readonly<Record<string, string>> = {
   value: "interactivity-value",
   host: "interactivity-host",
   engine: "interactivity-engine",
+  "timer-queue": "interactivity-timer-queue",
 };
 
 /**
@@ -448,6 +451,7 @@ export function createInteractivityRuntimeOverlayFiles(): CompilerOverlayFile[] 
     [INTERACTIVITY_VALUE_OVERLAY_PATH, interactivityValueSource, "interactivity"],
     [INTERACTIVITY_HOST_OVERLAY_PATH, interactivityHostSource, "interactivity"],
     [INTERACTIVITY_ENGINE_OVERLAY_PATH, interactivityEngineSource, "interactivity"],
+    [INTERACTIVITY_TIMER_QUEUE_OVERLAY_PATH, interactivityTimerQueueSource, "interactivity"],
     [ANIMATION_RUNTIME_OVERLAY_PATH, scriptAnimationSource, "script"],
     [ANIMATION_MIXER_OVERLAY_PATH, scriptAnimationMixerSource, "script"],
     [SCENE_RUNTIME_OVERLAY_PATH, sceneRuntimeSource, "script"],

@@ -45,6 +45,7 @@ import { runScriptAudioFixtureAssertions } from "../src/lib/visual-editor/script
 import { runAudioSourceRuntimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/audio-source.fixture.ts";
 import { runRuntimeSchemaFixtureAssertions } from "../packages/xrift-studio-runtime/src/schema.fixture.ts";
 import { runInteractivityEngineFixtureAssertions } from "../packages/xrift-studio-runtime/src/interactivity/engine.fixture.ts";
+import { runTimerQueueFixtureAssertions } from "../packages/xrift-studio-runtime/src/interactivity/timer-queue.fixture.ts";
 import {
   runAnimationActionComponentIdFixtureAssertions,
   runAnimationComponentLoadMigrationFixtureAssertions,
@@ -98,6 +99,7 @@ import { runMaterialExtensionFixtureAssertions } from "../src/lib/visual-editor/
 import { runXriftComponentRegistryFixtureAssertions } from "../src/lib/visual-editor/compiler/xrift-component-registry.fixture.ts";
 import { runDocumentAssetCreationFixtureAssertions } from "../src/lib/visual-editor/document-asset-creation.fixture.ts";
 import { runEditorSessionHierarchyFixtureAssertions } from "../src/lib/visual-editor/editor-session.fixture.ts";
+import { runSceneEntityTreeStoreFixtureAssertions } from "../src/components/visual-editor/scene-entity-tree-store.fixture.ts";
 import { runSceneClickSelectionFixtureAssertions } from "../src/lib/visual-editor/scene-click-selection.fixture.ts";
 import { runEntityBoundsFixtureAssertions } from "../src/lib/visual-editor/entity-bounds.fixture.ts";
 import { runMcpHarnessGuardFixtureAssertions } from "../src/lib/visual-editor/mcp-harness-guard.fixture.ts";
@@ -336,6 +338,7 @@ try {
     ["mcp harness guard", runMcpHarnessGuardFixtureAssertions],
     ["runtime schema", runRuntimeSchemaFixtureAssertions],
     ["interactivity engine", runInteractivityEngineFixtureAssertions],
+    ["interactivity timer queue", runTimerQueueFixtureAssertions],
     ["animation runtime bridge", runAnimationRuntimeBridgeFixtureAssertions],
     ["animation component migration", runAnimationComponentMigrationFixtureAssertions],
     ["animation component load migration", runAnimationComponentLoadMigrationFixtureAssertions],
@@ -373,6 +376,7 @@ try {
     ["builtin prefab catalog", runBuiltinPrefabCatalogFixtureAssertions],
     ["document asset creation", runDocumentAssetCreationFixtureAssertions],
     ["editor session hierarchy", runEditorSessionHierarchyFixtureAssertions],
+    ["scene entity tree store", runSceneEntityTreeStoreFixtureAssertions],
     ["scene click selection", runSceneClickSelectionFixtureAssertions],
     ["editor layout", runEditorLayoutFixtureAssertions],
     ["scene viewport quality", runSceneViewportQualityFixtureAssertions],

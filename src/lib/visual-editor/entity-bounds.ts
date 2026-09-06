@@ -147,17 +147,18 @@ export function entityWorldMatrix(
   }
   let matrix = IDENTITY;
   for (const entity of chain.reverse()) {
-    const transform = getTransform(entity);
-    matrix = multiply(
-      matrix,
-      compose(
-        transform?.position ?? [0, 0, 0],
-        transform?.rotation ?? [0, 0, 0],
-        transform?.scale ?? [1, 1, 1],
-      ),
-    );
+    matrix = multiply(matrix, localEntityMatrix(entity));
   }
   return matrix;
+}
+
+function localEntityMatrix(entity: SceneEntity): Matrix4x4 {
+  const transform = getTransform(entity);
+  return compose(
+    transform?.position ?? [0, 0, 0],
+    transform?.rotation ?? [0, 0, 0],
+    transform?.scale ?? [1, 1, 1],
+  );
 }
 
 function boundsOf(min: Vec3, max: Vec3): EntityBounds {
@@ -229,14 +230,21 @@ export function getEntityWorldBounds(
   let min: Vec3 | null = null;
   let max: Vec3 | null = null;
 
-  const visit = (current: SceneEntity): void => {
+  // Carry the parent's world matrix down once instead of recomposing every
+  // ancestor for every mesh. An explicit stack also handles deeply imported
+  // hierarchies, and visited IDs stop corrupt child cycles from hanging a query.
+  const visited = new Set<string>();
+  const stack = [{ entity: root, matrix: entityWorldMatrix(scene, root.id) }];
+  while (stack.length > 0) {
+    const { entity: current, matrix } = stack.pop()!;
+    if (visited.has(current.id)) continue;
+    visited.add(current.id);
     const local = localMeshBounds(current, assets);
     const hasMesh =
       current.components.some((component) => component.type === "mesh") ||
       isModelNodeGeometryEntity(current);
     if (local) {
       measured.push(current.id);
-      const matrix = entityWorldMatrix(scene, current.id);
       for (const corner of [
         [local.min[0], local.min[1], local.min[2]],
         [local.min[0], local.min[1], local.max[2]],
@@ -266,13 +274,22 @@ export function getEntityWorldBounds(
     } else if (hasMesh) {
       unmeasured.push(current.id);
     }
-    if (!includeDescendants) return;
-    for (const childId of current.children) {
+    if (!includeDescendants) continue;
+    for (let i = current.children.length - 1; i >= 0; i--) {
+      const childId = current.children[i];
+      if (visited.has(childId)) continue;
       const child = scene.entities[childId];
-      if (child) visit(child);
+      if (!child) continue;
+      stack.push({
+        entity: child,
+        // Legacy child links may disagree with parentId. Keep the document's
+        // parent-chain coordinate semantics in that case.
+        matrix: child.parentId === current.id
+          ? multiply(matrix, localEntityMatrix(child))
+          : entityWorldMatrix(scene, child.id),
+      });
     }
-  };
-  visit(root);
+  }
 
   return {
     world: min && max ? boundsOf(min, max) : null,

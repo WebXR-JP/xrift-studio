@@ -27,6 +27,7 @@ import {
   type ParsedGraph,
   type ParsedNode,
 } from "./graph.js";
+import { TimerQueue } from "./timer-queue.js";
 import type {
   InteractivityActionTarget,
   InteractivityHost,
@@ -237,14 +238,6 @@ type LoopState = {
   condition: boolean;
 };
 
-type PendingTimer = {
-  readonly id: number;
-  readonly dueAt: number;
-  readonly node: number;
-  readonly socket: string;
-  cancelled: boolean;
-};
-
 type Interpolation = {
   readonly id: number;
   readonly node: number;
@@ -342,7 +335,7 @@ export class InteractivityEngine {
   private readonly gateCursor = new Map<number, number>();
   private readonly waitAllSeen = new Map<number, Set<string>>();
   private readonly throttleUntil = new Map<number, number>();
-  private timers: PendingTimer[] = [];
+  private readonly timers = new TimerQueue();
   private interpolations: Interpolation[] = [];
   private readonly issues: InteractivityIssue[] = [];
   private readonly trace: InteractivityTraceEntry[] = [];
@@ -416,7 +409,7 @@ export class InteractivityEngine {
   /** True while a timer or an interpolation is still pending. */
   get hasPendingWork(): boolean {
     return (
-      this.timers.some((timer) => !timer.cancelled) ||
+      this.timers.size > 0 ||
       this.interpolations.some((entry) => !entry.cancelled)
     );
   }
@@ -428,11 +421,7 @@ export class InteractivityEngine {
 
   /** The next moment something is scheduled to happen, or `null`. */
   nextScheduledTime(): number | null {
-    let next: number | null = null;
-    for (const timer of this.timers) {
-      if (timer.cancelled) continue;
-      if (next === null || timer.dueAt < next) next = timer.dueAt;
-    }
+    let next: number | null = this.timers.peek()?.dueAt ?? null;
     for (const entry of this.interpolations) {
       if (entry.cancelled) continue;
       const due = this.timeSeconds + Math.max(0, entry.duration - entry.elapsed);
@@ -477,12 +466,11 @@ export class InteractivityEngine {
       if (next === null) break;
       this.advanceInterpolations(next);
       this.timeSeconds = next;
-      const due = this.timers
-        .filter((timer) => !timer.cancelled && timer.dueAt <= next)
-        .sort((left, right) => left.dueAt - right.dueAt || left.id - right.id)[0];
-      if (!due) continue;
-      due.cancelled = true;
-      this.timers = this.timers.filter((timer) => timer !== due);
+      // Interpolation continuations may have inserted or cancelled timers.
+      // Read the queue after advancing them, preserving same-moment ordering.
+      const due = this.timers.peek();
+      if (!due || due.dueAt > next) continue;
+      this.timers.pop();
       this.runOutput(due.node, due.socket);
     }
 
@@ -519,7 +507,7 @@ export class InteractivityEngine {
 
   /** Drops pending work so a stopped Play session leaves nothing running. */
   dispose(): void {
-    this.timers = [];
+    this.timers.clear();
     this.interpolations = [];
     this.loops.clear();
   }
@@ -657,10 +645,7 @@ export class InteractivityEngine {
 
       case "flow/cancelDelay": {
         const delayId = asInteger(this.readSocket(node, "delay", seen));
-        for (const timer of this.timers) {
-          if (timer.id === delayId) timer.cancelled = true;
-        }
-        this.timers = this.timers.filter((timer) => !timer.cancelled);
+        this.timers.remove(delayId);
         return this.follow(node, "out");
       }
 
@@ -1345,7 +1330,7 @@ export class InteractivityEngine {
   // ------------------------------------------------------------ scheduling
 
   private schedule(node: number, socket: string, delaySeconds: number): number | null {
-    if (this.timers.length >= MAX_PENDING_TIMERS) return null;
+    if (this.timers.size >= MAX_PENDING_TIMERS) return null;
     const id = this.nextTimerId;
     this.nextTimerId += 1;
     this.timers.push({
@@ -1353,7 +1338,6 @@ export class InteractivityEngine {
       dueAt: this.timeSeconds + Math.max(0, delaySeconds),
       node,
       socket,
-      cancelled: false,
     });
     return id;
   }
@@ -1372,9 +1356,8 @@ export class InteractivityEngine {
       if (clamped > frameEnd) return;
       if (next === null || clamped < next) next = clamped;
     };
-    for (const timer of this.timers) {
-      if (!timer.cancelled) consider(timer.dueAt);
-    }
+    const timer = this.timers.peek();
+    if (timer) consider(timer.dueAt);
     for (const entry of this.interpolations) {
       if (entry.cancelled) continue;
       consider(this.timeSeconds + Math.max(0, entry.duration - entry.elapsed));
@@ -1383,10 +1366,7 @@ export class InteractivityEngine {
   }
 
   private cancelTimersOf(nodeIndex: number): void {
-    for (const timer of this.timers) {
-      if (timer.node === nodeIndex) timer.cancelled = true;
-    }
-    this.timers = this.timers.filter((timer) => !timer.cancelled);
+    this.timers.removeNode(nodeIndex);
   }
 
   private beginInterpolation(entry: {

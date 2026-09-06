@@ -5,8 +5,10 @@ import { BUILTIN_ASSET_IDS, createPrototypeProject } from "./prototype-project";
 import {
   addBuiltinPrimitiveEntity,
   addTerrainEntity,
+  createTransformComponent,
   updateEntityTransform,
   type SceneDocument,
+  type SceneEntity,
   type Vec3,
 } from "./scene-document";
 
@@ -211,10 +213,60 @@ function assertMissingGeometryIsReported(): void {
 }
 
 export function runEntityBoundsFixtureAssertions(): void {
+  assertHierarchyMeasurementScalesLinearly();
   assertUnitBox();
   assertTransformIsApplied();
   assertRotationWidensTheBox();
   assertParentChainIsWalked();
   assertTerrainFootprint();
   assertMissingGeometryIsReported();
+}
+
+function assertHierarchyMeasurementScalesLinearly(): void {
+  const { assets, scene: base } = project();
+  const box = addBox(base, assets, [0, 0, 0]);
+  const mesh = box.scene.entities[box.entityId].components.find(component => component.type === "mesh")!;
+  let transformReads = 0;
+  const entities: Record<string, SceneEntity> = {};
+  const count = 250;
+  for (let i = 0; i < count; i++) {
+    const id = `nested-${i}`;
+    const transform = createTransformComponent(`transform-${i}`, [1, 0, 0]);
+    Object.defineProperty(transform, "position", { get() { transformReads++; return [1, 0, 0]; } });
+    entities[id] = { id, name: id, parentId: i > 0 ? `nested-${i - 1}` : null,
+      children: i + 1 < count ? [`nested-${i + 1}`] : [], enabled: true, components: [transform, mesh] };
+  }
+  const scene = { ...base, rootEntityIds: ["nested-0"], entities };
+  const result = getEntityWorldBounds(scene, assets, "nested-0");
+  assert(closeVec(result.world!.min, [0.5, -0.5, -0.5]) && closeVec(result.world!.max, [250.5, 0.5, 0.5]), "all nested meshes must contribute their world bounds");
+  assert(result.measured.join(",") === Object.keys(entities).join(","), "measurement order must remain depth-first");
+  assert(transformReads <= count, `subtree measurement composed ${transformReads} transforms for ${count} Entities`);
+  const nested = getEntityWorldBounds(scene, assets, "nested-100", { includeDescendants: false });
+  assert(close(nested.world!.center[0], 101), "a query below the root must still include all ancestors");
+
+  // Follow parentId for coordinates even when a stale child link disagrees.
+  const stale: SceneDocument = { ...scene, entities: {
+    ...entities,
+    "nested-1": { ...entities["nested-1"], parentId: null },
+  } };
+  const staleBounds = getEntityWorldBounds(stale, assets, "nested-0");
+  assert(close(staleBounds.world!.max[0], 249.5), "stale hierarchy links must not invent a parent transform");
+
+  // A repeated/cyclic child link must terminate and contribute geometry once.
+  const corrupt = { ...scene, entities: {
+    ...entities,
+    "nested-249": { ...entities["nested-249"], children: ["nested-0", "nested-1"] },
+  } };
+  assert(getEntityWorldBounds(corrupt, assets, "nested-0").measured.length === count, "cycles and shared child links must not revisit geometry");
+
+  // Imported hierarchies may be deeper than the JavaScript call stack.
+  const deepEntities: Record<string, SceneEntity> = {};
+  for (let i = 0; i < 12000; i++) {
+    const id = `deep-${i}`;
+    deepEntities[id] = { id, name: id, enabled: true, parentId: i > 0 ? `deep-${i - 1}` : null,
+      children: i < 11999 ? [`deep-${i + 1}`] : [],
+      components: [createTransformComponent(`deep-transform-${i}`, [1, 0, 0]), ...(i === 11999 ? [mesh] : [])] };
+  }
+  const deep = getEntityWorldBounds({ ...base, rootEntityIds: ["deep-0"], entities: deepEntities }, assets, "deep-0");
+  assert(deep.measured.length === 1 && close(deep.world!.center[0], 12000), "deep hierarchies must measure without call-stack recursion");
 }

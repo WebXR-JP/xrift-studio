@@ -119,6 +119,8 @@ function recordingHost(sink: RecordedWrite[], engine: () => InteractivityEngine)
 
 /** Deterministic assertions for the KHR_interactivity execution engine. */
 export function runInteractivityEngineFixtureAssertions(): void {
+  assertTimerCancellationAndTies();
+  assertCancelledTimersReleaseCapacity();
   // A wait followed by a start lands on the wait's duration, and the immediate
   // `out` socket does not wait at all.
   {
@@ -912,4 +914,71 @@ export function runInteractivityEngineFixtureAssertions(): void {
     );
   }
 
+}
+
+function assertTimerCancellationAndTies(): void {
+  for (const operation of ["cancel", "schedule"] as const) {
+    const builder = new GraphBuilder();
+    const firstStart = builder.node("event/onStart");
+    const firstDelay = builder.node("flow/setDelay", { values: { duration: builder.float(2) } });
+    const firstLog = builder.node("debug/log", { configuration: { message: { value: ["first"] } } });
+    const secondStart = builder.node("event/onStart");
+    const secondDelay = builder.node("flow/setDelay", { values: { duration: builder.float(2) } });
+    const secondLog = builder.node("debug/log", { configuration: { message: { value: ["second"] } } });
+    builder.connect(firstStart, "out", firstDelay);
+    builder.connect(firstDelay, "done", firstLog);
+    builder.connect(secondStart, "out", secondDelay);
+    builder.connect(secondDelay, "done", secondLog);
+    if (operation === "cancel") {
+      const cancel = builder.node("flow/cancelDelay", { values: { delay: { node: secondDelay, socket: "lastDelay" } } });
+      builder.connect(firstLog, "out", cancel);
+    } else {
+      const immediate = builder.node("flow/setDelay", { values: { duration: builder.float(0) } });
+      const thirdLog = builder.node("debug/log", { configuration: { message: { value: ["third"] } } });
+      builder.connect(firstLog, "out", immediate);
+      builder.connect(immediate, "done", thirdLog);
+    }
+    const logs: string[] = [];
+    const engine = new InteractivityEngine(builder.build(), { log: entry => logs.push(entry.message) });
+    engine.start();
+    assert(engine.nextScheduledTime() === 2, "next deadline must be visible before execution");
+    engine.update(10);
+    assert(logs.join(",") === (operation === "cancel" ? "first" : "first,second,third"), "a due callback must be able to cancel or append same-time work without reordering it");
+    assert(!engine.hasPendingWork && engine.nextScheduledTime() === null, "drained work must leave no pending deadline");
+  }
+
+  const builder = new GraphBuilder();
+  const delay = builder.node("flow/setDelay", { values: { duration: builder.float(2) } });
+  const logged = builder.node("debug/log", { configuration: { message: { value: ["done"] } } });
+  builder.connect(delay, "done", logged);
+  for (let i = 0; i < 3; i++) builder.connect(builder.node("event/onStart"), "out", delay);
+  const cancel = builder.node("flow/cancelDelay", { values: { delay: { node: delay, socket: "lastDelay" } } });
+  builder.connect(builder.node("event/onStart"), "out", cancel);
+  let count = 0;
+  const engine = new InteractivityEngine(builder.build(), { log: () => count++ });
+  engine.start();
+  engine.update(2);
+  assert(count === 2, "cancelDelay must cancel one ID, not every delay of the same node");
+}
+
+function assertCancelledTimersReleaseCapacity(): void {
+  const builder = new GraphBuilder();
+  const delay = builder.node("flow/setDelay", { values: { duration: builder.float(2) } });
+  const logged = builder.node("debug/log", { configuration: { message: { value: ["done"] } } });
+  builder.connect(delay, "done", logged);
+  for (let i = 0; i < 4097; i++) builder.connect(builder.node("event/onStart"), "out", delay);
+  builder.connect(builder.node("xrift/onInteract"), "out", delay, "cancel");
+  builder.connect(builder.node("event/onTick"), "out", delay);
+  let count = 0;
+  const engine = new InteractivityEngine(builder.build(), { log: () => count++ });
+  engine.start();
+  assert(engine.getIssues().length === 1 && engine.getIssues()[0]?.reason === "budget-exceeded", "pending timer cap must remain enforced");
+  engine.interact();
+  assert(!engine.hasPendingWork && engine.nextScheduledTime() === null, "node cancellation must remove all of its delays");
+  engine.update(0); // onTick can immediately use the released capacity.
+  assert(engine.hasPendingWork && engine.getIssues().length === 1, "cancelled timers must not consume the pending timer budget");
+  engine.update(2);
+  assert(count === 1, "cancelled delays must not run when their old deadline arrives");
+  engine.dispose();
+  assert(!engine.hasPendingWork && engine.nextScheduledTime() === null, "dispose must release queued timers");
 }
