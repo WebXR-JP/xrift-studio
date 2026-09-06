@@ -2038,6 +2038,61 @@ export function runVisualCompilerFixtureAssertions(
       (file) => file.relativePath === "src/World.tsx",
     )?.content ?? "";
   assert(modelResult.canStage, "Project GLB should be stageable");
+  // Expanded GLBs repeat the same slot table on hundreds of nodes. Its
+  // emitted resolver must grow with distinct bindings, not placement count.
+  const repeatedModelScene = {
+    ...modelScene,
+    rootEntityIds: [...modelScene.rootEntityIds],
+    entities: { ...modelScene.entities },
+  };
+  for (let index = 0; index < 24; index += 1) {
+    const id = `repeated-model-${index}`;
+    repeatedModelScene.entities[id] = {
+      ...modelScene.entities[modelEntity.id],
+      id,
+      parentId: null,
+      children: [],
+      components: modelScene.entities[modelEntity.id].components.map((component) => ({
+        ...component,
+        id: `${id}-${component.id}`,
+      })),
+    };
+    repeatedModelScene.rootEntityIds.push(id);
+  }
+  const repeatedSource = compileVisualProject({
+    ...modelProject,
+    scenes: { [modelScene.sceneId]: repeatedModelScene },
+  }, { generatedAt: fixedTime }).overlayFiles.find(
+    (file) => file.relativePath === "src/World.tsx",
+  )?.content ?? "";
+  assert(
+    (repeatedSource.match(/const injectModelMaterials_/g) ?? []).length === 1 &&
+      (repeatedSource.match(/inject=\{injectModelMaterials_/g) ?? []).length === 25 &&
+      (repeatedSource.match(/case "Body"/g) ?? []).length === 1 &&
+      repeatedSource.includes('case "0:Detail"'),
+    "Repeated model placements must share one resolver while preserving node-specific overrides",
+  );
+  const distinctId = "repeated-model-0";
+  const distinctEntity = repeatedModelScene.entities[distinctId];
+  repeatedModelScene.entities[distinctId] = {
+    ...distinctEntity,
+    components: distinctEntity.components.map((component) => component.type === "mesh"
+      ? { ...component, materialBindings: [] }
+      : component),
+  };
+  const distinctSource = compileVisualProject({
+    ...modelProject,
+    scenes: { [modelScene.sceneId]: repeatedModelScene },
+  }, { generatedAt: fixedTime }).overlayFiles.find(
+    (file) => file.relativePath === "src/World.tsx",
+  )?.content ?? "";
+  const resolverUses = [...distinctSource.matchAll(/inject=\{(injectModelMaterials_\w+)\}/g)]
+    .map((match) => match[1]);
+  assert(
+    (distinctSource.match(/const injectModelMaterials_/g) ?? []).length === 2 &&
+      resolverUses.length === 25 && new Set(resolverUses).size === 2,
+    "Different material bindings must retain distinct resolvers",
+  );
   assert(modelSource.includes("useGLTF"), "GLTF loader was not generated");
   assert(
     /import \{[^}]*\buseXRift\b[^}]*\} from "@xrift\/world-components";/.test(

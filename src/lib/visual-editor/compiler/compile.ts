@@ -3465,6 +3465,7 @@ function renderModelMesh(
   const inject = renderModelMaterialInjection(
     materialComponents,
     getGeometryMaterialSlots(model).length === 1,
+    context,
   );
   const sourceNodeIndex =
     mesh.geometry?.kind === "asset"
@@ -3971,6 +3972,7 @@ function renderModelMaterialInjection(
     ModelMaterialOverride & { componentName: string }
   >,
   allowWildcard: boolean,
+  context: CompileContext,
 ): string {
   if (overrides.length === 0) return "";
   const globalByName = new Map<
@@ -4032,8 +4034,7 @@ function renderModelMaterialInjection(
                 ? String(material.name)
                 : "";
 `;
-  return `
-        inject={(object) => {
+  const source = `(object: Object3D) => {
 ${sourceNodeLookup}
           if (!("material" in object)) return null;
           const renderOverride = (${wildcard ? "_material" : "material"}: unknown, attach: string, key: string) => {
@@ -4046,7 +4047,17 @@ ${resolver}
                 renderOverride(material, \`material-\${index}\`, \`material-\${index}\`),
               )
             : renderOverride(sourceMaterial, "material", "material");
-        }}`;
+        }`;
+  // Expanded model nodes often share hundreds of material slots. Emitting
+  // this resolver inside every Clone multiplies the TypeScript/Babel AST by
+  // node count, even though the callback captures no per-node state.
+  const name = `injectModelMaterials_${sha256Utf8(source)}`;
+  context.threeTypeImports.add("Object3D");
+  context.supportDeclarations.set(
+    `model-material-injection:${name}`,
+    `const ${name} = ${source};`,
+  );
+  return `\n        inject={${name}}`;
 }
 
 function resolveMeshMaterial(
