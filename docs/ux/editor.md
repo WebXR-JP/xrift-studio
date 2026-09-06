@@ -16,9 +16,11 @@
 - World には World Play Profile、Item には Item Preview Profile を使うことを示す。World Playは`@xrift/world-components`の公式プレイヤーを起動する。SpawnPointから一人称で歩く。World の controller / physics / spawn adapter を Item へ適用しない。利用可能な input capability を Play 前に示す。
 - Node.js / XRift CLI がなくても authoring と同一画面の Play shell を利用できる。Vite、CLI、開発サーバー、別ブラウザの起動を制作操作として置かない。
 - クラシックを選んだ場合は既存の名前入力、作成、一覧更新、コードエディターへの流れを変えない。
+- クラシックのファイル選択では、最後に選んだファイルの読み込み結果だけを反映する。既定ファイルの探索中に手動でファイルを選んだ場合は、その選択を優先する。読み込み中は本文の編集と保存を無効にする。
 
 ### 操作中
 
+- クラシックの保存はMI-03に従い「保存中…」と無効な保存ボタンで示す。クリックと保存ショートカットが続けて届いても書き込みは一度だけ行う。成功時は書き込んだ内容を保存済みにし、保存中に加えた変更は未保存のまま残す。別ファイルへ切り替えた後に保存が完了しても、切り替え先の保存状態を変えない。失敗時は編集内容を維持し、同じ保存操作から再試行できる。
 - Asset の一回クリックは `assetSelection` と右 Inspector の Asset context を更新する。`sceneSelection` を維持する。Model / Prefab を Scene View へ drag するか「配置」を実行するまで Entity を増やさない。
 - Hierarchy と Assets は Shift の範囲選択、Ctrl・Cmd の追加／解除を受け付ける。複数選択時は右Inspectorで対象数を表示する。全対象が持つMesh Renderer / LightまたはMaterialの共通プロパティだけを表示する。
 - Hierarchy / Scene の右クリック Create は selected parent / click point を menu header に示す。primitive 選択前には Entity を増やさない。

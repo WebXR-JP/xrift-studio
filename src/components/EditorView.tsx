@@ -80,6 +80,12 @@ export function EditorView({
   const [content, setContent] = useState<string>("");
   const [savedContent, setSavedContent] = useState<string>("");
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const fileLoadRunRef = useRef(0);
+  const selectionIntentRef = useRef(0);
+  const preloadedFileRef = useRef<{ key: string; text: string } | null>(null);
+  const [loadedFileKey, setLoadedFileKey] = useState<string | null>(null);
   const [showErrorSupport, setShowErrorSupport] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,13 +103,17 @@ export function EditorView({
   const [checkingPublish, setCheckingPublish] = useState(false);
   const [resumePublishAfterPreparation, setResumePublishAfterPreparation] = useState(false);
 
-  const isDirty = content !== savedContent;
   const isXriftJson = selectedRel === "xrift.json";
   const isXriftJsonForm = isXriftJson && !xriftJsonRaw;
   const isText = selectedKind === "text" && !isXriftJsonForm;
   const isThumbnail = selectedRel === "public/thumbnail.png";
   const isImage = selectedKind === "image" && !isThumbnail;
   const isModel = selectedKind === "model";
+  const fileKey = selectedRel && isText ? JSON.stringify([project.path, selectedRel]) : null;
+  const activeFileKeyRef = useRef(fileKey);
+  activeFileKeyRef.current = fileKey;
+  const fileReady = fileKey !== null && loadedFileKey === fileKey;
+  const isDirty = fileReady && content !== savedContent;
 
   useEffect(() => {
     devHandleRef.current = devHandle;
@@ -123,12 +133,17 @@ export function EditorView({
   // Auto-select a sensible file when project changes.
   useEffect(() => {
     let cancelled = false;
+    const selectionIntent = selectionIntentRef.current;
+    const isCurrent = () => !cancelled && selectionIntentRef.current === selectionIntent;
+    preloadedFileRef.current = null;
     setXriftJsonRaw(false);
     (async () => {
       for (const candidate of DEFAULT_CANDIDATES) {
+        if (!isCurrent()) return;
         try {
-          await tauri.readTextFile(project.path, candidate);
-          if (!cancelled) {
+          const text = await tauri.readTextFile(project.path, candidate);
+          if (isCurrent()) {
+            preloadedFileRef.current = { key: JSON.stringify([project.path, candidate]), text };
             setSelectedRel(candidate);
             setSelectedKind("text");
           }
@@ -138,12 +153,13 @@ export function EditorView({
         }
       }
       // Fallback: pick the first text file in root
+      if (!isCurrent()) return;
       try {
         const entries = await tauri.listFiles(project.path, "");
         const first = entries.find(
           (e) => !e.isDir && classifyFile(e.rel) === "text",
         );
-        if (first && !cancelled) {
+        if (first && isCurrent()) {
           setSelectedRel(first.rel);
           setSelectedKind("text");
         }
@@ -157,38 +173,60 @@ export function EditorView({
   }, [project.path]);
 
   const loadFile = useCallback(async () => {
-    if (!selectedRel || !isText) return;
+    if (!selectedRel || !fileKey) return;
+    const run = ++fileLoadRunRef.current;
+    const isCurrent = () => run === fileLoadRunRef.current && activeFileKeyRef.current === fileKey;
     setLoading(true);
+    setLoadedFileKey(null);
+    setContent("");
+    setSavedContent("");
     setError(null);
     try {
-      const txt = await tauri.readTextFile(project.path, selectedRel);
+      const preloaded = preloadedFileRef.current;
+      preloadedFileRef.current = null;
+      const txt = preloaded?.key === fileKey
+        ? preloaded.text
+        : await tauri.readTextFile(project.path, selectedRel);
+      if (!isCurrent()) return;
       setContent(txt);
       setSavedContent(txt);
+      setLoadedFileKey(fileKey);
     } catch (e) {
+      if (!isCurrent()) return;
       setError(`${e}`);
       setContent("");
       setSavedContent("");
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [project.path, selectedRel, isText]);
+  }, [project.path, selectedRel, fileKey]);
 
   useEffect(() => {
-    if (selectedRel && isText) loadFile();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project.path, selectedRel, isText]);
+    void loadFile();
+    return () => { fileLoadRunRef.current++; };
+  }, [loadFile]);
 
   const handleSave = useCallback(async () => {
-    if (!selectedRel || !isText || !isDirty) return;
+    if (!selectedRel || !fileKey || activeFileKeyRef.current !== fileKey || !isDirty || loading || savingRef.current) return;
+    // The ref closes the same-event gap before React disables the button.
+    savingRef.current = true;
+    setSaving(true);
+    const loadRun = fileLoadRunRef.current;
     try {
       await tauri.writeTextFile(project.path, selectedRel, content);
-      setSavedContent(content);
+      // A save may finish after switching files (or reloading the same file).
+      if (activeFileKeyRef.current === fileKey && fileLoadRunRef.current === loadRun) {
+        setSavedContent(content);
+      }
       toast({ kind: "success", title: "保存しました", description: selectedRel });
     } catch (e) {
       toast({ kind: "error", title: "保存に失敗しました", description: `${e}` });
       appendLog({ kind: "stderr", text: `save failed: ${e}`, ts: Date.now() });
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
-  }, [isText, isDirty, project.path, selectedRel, content, appendLog, toast]);
+  }, [fileKey, isDirty, loading, project.path, selectedRel, content, appendLog, toast]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -298,6 +336,7 @@ export function EditorView({
   };
 
   const handleEditPublishMetadata = () => {
+    selectionIntentRef.current++;
     setPublishReadiness(null);
     setSelectedRel("xrift.json");
     setSelectedKind("text");
@@ -373,6 +412,7 @@ export function EditorView({
   };
 
   const handleOpenThumbnail = () => {
+    selectionIntentRef.current++;
     setSelectedRel("public/thumbnail.png");
     setSelectedKind("image");
   };
@@ -534,11 +574,13 @@ export function EditorView({
               selected={selectedRel}
               refreshKey={fileTreeKey}
               onSelect={(rel, kind) => {
+                selectionIntentRef.current++;
                 setSelectedRel(rel);
                 setSelectedKind(kind);
                 if (rel === "xrift.json") setXriftJsonRaw(false);
               }}
               onPathChanged={(change) => {
+                selectionIntentRef.current++;
                 if (change.type === "rename") {
                   if (selectedRel === change.oldRel) {
                     setSelectedRel(change.newRel);
@@ -610,7 +652,8 @@ export function EditorView({
               filename={selectedRel}
               content={content}
               isDirty={isDirty}
-              loading={loading}
+              loading={loading || !fileReady}
+              saving={saving}
               error={null}
               onChange={setContent}
               onSave={handleSave}
