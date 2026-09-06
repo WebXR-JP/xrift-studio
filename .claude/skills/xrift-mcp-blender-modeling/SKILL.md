@@ -59,8 +59,7 @@ TSX Script の `Render` で直接 R3F を書く。
 #### B-3. 確定と確認（共通）
 
 1. `update_script_component` で `assetReferences` / `entityReferences` を宣言（未宣言は解決しない）。
-2. `set_play_mode(mode: "play")` で確認。未承認ソースは `SCRIPT_APPROVAL_REQUIRED` が返るので
-   ユーザーに Studio で承認してもらう。`unapprovedPolicy: "skip"` はスクリプトなしで始める場合のみ。
+2. `set_play_mode(mode: "play")` で実行し、`get_editor_context.scriptRuntime` の変換・実行エラーを確認する。Script ごとの承認操作は不要。
 3. `get_editor_context` の scriptRuntime で compile error / trust 状態を確認。
 
 ### C. Blender でメッシュを作る（必要なときだけ）

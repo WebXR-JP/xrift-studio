@@ -431,7 +431,7 @@ Skybox 画像そのものの差し替えは Script API には無く、Interactiv
 | --- | --- | --- | --- |
 | `ctx.audioSources`、`ctx.lights`、`ctx.materials`、`ctx.particles`、`ctx.viewer`、`setTextureTransform` | runtime-only。document revision は変えない | setter を呼んだ時点から対象 Entity の所有 player / Light / clone に反映 | その Script の再生要求、clone、overrideを外し、元の Component / Asset 値へ戻る |
 | Script Component の宣言済み property | Scene document | 同じ Script instance の `ctx.props` へ次の frame から反映 | 保存値として残る |
-| Script source、Script / Asset / Entity 参照、Component 構成 | source / Scene document | 承認済みの正確な内容だけをcompileし、成功後に影響する Entity だけを再起動。未承認または失敗時は last-good module を継続 | 保存値として残る |
+| Script source、Script / Asset / Entity 参照、Component 構成 | source / Scene document | 保存済みsourceをcompileし、成功後に影響する Entity だけを再起動。失敗時は last-good module を継続 | 保存値として残る |
 | 既存 Material / Particle Asset の property | AssetManifest | Inspector または MCP から保存し、その Asset を参照する Entity / Emitter だけを再反映 | 保存値として残る |
 | 既存 Texture Asset の import settings | AssetManifest | MCP から保存し、直接参照または Material / Particle 経由で参照する Entity だけを再起動 | 保存値として残る |
 | Light Component の scalar property | Scene document | Inspector または MCP から保存し、既存 Light runtimeへ再起動なしで反映 | 保存値として残る |
@@ -545,18 +545,15 @@ Material / Texture / Particle Asset 変更は参照 Entity だけを再起動す
 そのEntityだけへ反映する。Lightのscalar変更は既存runtimeへ即時反映する。Light種別だけ対象Entityを再起動する。
 `ctx.audioSources` / `ctx.lights`のruntime-only状態をAssetManifestやSceneDocumentへ暗黙に書き戻さない。
 
-MCP から生成・更新した Script も別の安全領域では動かない。`get_scripting_capabilities` は
-`sandboxed: false`、`trustGate: true` を返す。ここで承認権限を持たない「MCP」とは、
-XRift Studio が配布する stdio MCP editor tools / server を指す。未承認の source があれば、
-その server の `set_play_mode` は `SCRIPT_APPROVAL_REQUIRED` と対象 Asset、path、言語、SHA-256 を返す。
-Studio の確認面で許可があるまで評価しない。Script なしでも Scene を確認したい場合だけ、
-MCP は `unapprovedPolicy: "skip"` を明示する。未承認 Script を無効化したまま Play できる。
-現在の状態は `get_editor_context.scriptRuntime.trust` の `pending`、`disabled`、`running` で確認する。
+MCPから生成・更新したScriptも、Playで保存済みsourceを変換して実行する。
+Scriptごとの承認ダイアログは表示しない。`get_scripting_capabilities` は
+`sandboxed: false`、`trustGate: false` を返す。変換失敗時はEditに留まり、
+Play中の更新に失敗した場合は直前の正常なmoduleを維持する。
+`unapprovedPolicy` は旧clientとの互換性のため受け付けるが、実行可否には影響しない。
+`get_editor_context.scriptRuntime.trust` は `status: "not-required"` と実行中のsource情報を返す。
 
-`pnpm tauri:dev` の debug build だけに privileged Tauri MCP bridge を登録する。webview JavaScript の実行や
-Tauri command の `invoke` を行える開発者向け automation だ。この stdio editor tool の trust boundary には含めない。
-release build には同 bridge を登録・搭載しない。したがって debug bridge からの操作を、
-公開された承認 API や trust gate に保護された MCP 操作として扱わない。
+`pnpm tauri:dev` のdebug buildだけにTauri MCP bridgeを登録する。
+webview JavaScriptやTauri commandを扱う開発用機能であり、release buildには搭載しない。
 
 ## 組み込み Template
 
@@ -671,29 +668,17 @@ Inspector のフィールドは宣言から自動生成する。種別は既存�
 Play は iframe や Worker を挟まない。アプリと同一 realm で動く。`withGlobalTauri` により IPC bridge が `window` に露出している。
 そのため Script は原理的にアプリと同じ権限を持つ。ファイルシステムとシェルへの到達手段を持ちうる。
 
-緩和は二段構えで実装する。
+module scopeでは `window`、`globalThis`、`self`、`document`、`fetch`、
+`XMLHttpRequest`、`Function`、`importScripts`、`__TAURI__`、`__TAURI_INTERNALS__` を遮蔽する。
+ES moduleのstrict modeでは `eval` をlexical bindingで遮蔽できない。
+これらは意図しないアクセスを減らす処理であり、隔離境界にはならない。
 
-1. module scope で `window`、`globalThis`、`self`、`document`、`fetch`、`XMLHttpRequest`、`Function`、
-   `importScripts`、`__TAURI__`、`__TAURI_INTERNALS__` を遮蔽する。ES module は strict mode のため
-   `eval` を lexical binding として遮蔽できない。隔離境界にはならない。同一 realm である以上、ほかの遮蔽も回避可能だ。
-   事故と素朴な悪用を止める緩和にすぎない。
-2. 評価前に source を一度だけ読む。その UTF-8 SHA-256、`language`、`contractVersion`、
-   module policy version、`allowRemoteModules: false` を実行fingerprintにする。native側でcanonical化したproject pathと
-   project IDを合わせる。app data内のproject外承認storeで正確に一致した時だけ、その同じread-once source snapshotを変換・評価する。
-   承認面はfile、来歴、完全なhash、読み取り専用source、同一realmの警告を示す。
-   「許可してPlay」「Scriptを無効にしてPlay」「キャンセル」を選べる。来歴は表示専用だ。project自身が
-   `studio-template`などを名乗っても承認を迂回できない。
-
-Studio Editorで直接保存した正確な新しい内容と、StudioのTemplate作成はUI操作の延長としてそのhashを承認する。
-Play中も対象Entityだけを即時hot reloadする。MCPまたは外部file変更は自動承認しない。Play中はlast-good moduleを維持する。
-承認確認中にsource、言語、契約、対象一覧が変わった場合はstaleとして最新内容を再表示する。
-承認storeの破損・読取失敗はfail closedだ。project documentやprovenanceから復旧・自己承認しない。
-
-これは実行への**同意ゲート**であってsandboxではない。承認済みScriptの無限loop、同一realmからの権限到達、
-悪意ある処理を隔離または停止する保証はない。そのため「安全な sandbox」「外部 Script を安全に実行できる」とは表現しない。
-
-自分で書いた Script を自分の環境で動かす限りは、これは通常のローカル開発と同じ危険度だ。
-危険なのは他人の project や Prefab を開いた場合だ。来歴ゲートはそこを守るために置く。
+2026-09-07にScriptごとの内容hash承認を廃止した。UIとMCPのPlayは同じ実行経路を使う。
+sourceは一度だけ読み、変換と評価に同じ値を使う。hash、言語、契約version、来歴は、
+実行中の版の特定とhot reloadのために保持する。旧承認storeへの照会・書き込みは行わない。
+プロジェクト切り替え時の破棄、固定のimport許可リスト、ファイルパス検証、
+変換失敗時の開始防止は維持する。Scriptは通常のローカルコードとして動作し、
+無限loopや同一realmからの権限到達を隔離する保証はない。
 
 ## 既知の課題
 
@@ -719,7 +704,7 @@ Play中も対象Entityだけを即時hot reloadする。MCPまたは外部file�
 - pointer / mouse / gamepad とruntime player / avatar参照は未対応だ
 - `ctx.lifecycle` を使わない `Promise.then`、global timer、Render の pointer / physics callback など、host の所有外で
   開始した非同期 callback の例外帰属と自動停止は未対応だ
-- 公開先プラットフォームが upload された bundle を審査または sandbox するかは未確認だ。Studioの内容hash承認はlocal Playの同意だ。公開runtimeの隔離や審査を代替しない
+- 公開先プラットフォームが upload された bundle を審査または sandbox するかは未確認だ。Studioのlocal Playは公開runtimeの隔離や審査を代替しない
 
 ## 公開
 

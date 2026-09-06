@@ -23,7 +23,7 @@ Studio に同梱する `xrift-studio-mcp-sidecar` は、MCP サーバーと CLI 
 .\xrift-studio-mcp-sidecar.exe call capture_scene_view --args-file .\capture.json --output-dir .\Recording
 ```
 
-`tools` は全ツールの説明と JSON Schema、`describe` は指定したツールの定義を返す。両方ともオフラインで使える。`call` は起動中の Studio を操作する。MCP と同じツール名・引数を使い、revision、Script の承認、保存先などの制約も同じになる。編集対象の `projectId` と `sceneId` は `get_editor_context` で取得し、各ツールの定義に従って指定する。
+`tools` は全ツールの説明と JSON Schema、`describe` は指定したツールの定義を返す。両方ともオフラインで使える。`call` は起動中の Studio を操作する。MCP と同じツール名・引数を使い、revision、Script の変換、保存先などの扱いも同じになる。編集対象の `projectId` と `sceneId` は `get_editor_context` で取得し、各ツールの定義に従って指定する。
 
 引数は UTF-8 の JSON オブジェクトで渡す。`--args-file <path>`、`--args <JSON>`、`--stdin` のうち一つを選ぶ。省略すると `{}`。PowerShell では引用符の解釈を避けるため `--args-file` を推奨する。接続先は自動検出するが、`--rendezvous <path>`、環境変数 `XRIFT_STUDIO_MCP_RENDEZVOUS` の順で上書きできる。接続ファイルには認証情報が含まれるため、共有しない。
 

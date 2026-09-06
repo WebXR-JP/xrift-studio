@@ -10,7 +10,7 @@
 | Material のカタログ (`list_material_presets` → `create_material_from_preset`) | GLSL の空、水面、発光 | 数値で時間帯や波の様子を変えられる空と水がほしいとき | 発光は Bloom を有効にするとより明るく見える。Bloom なしでも成立する |
 | Blender MCP | 建築は `.claude/skills/xrift-blender-world/SKILL.md`、小物や木は `.agents/skills/xrift-mcp-blender-modeling/SKILL.md` の手順で作る | 独自の形、寸法の合った部材、木が必要なとき | 要件を固めてから作り始める。GLB にして `import_model_asset` で取り込む |
 | プリミティブ + Material + Particle + Light | 抽象的な形、ブロックアウト、台座と光の組み合わせ | 様式化した空間や抽象空間を作るとき。下地としても使える | 初期の灰色のまま残さない |
-| Script (`references/scripting-patterns.md`) | 多数配置、動き、反応、生成的な構造 | Entity を並べると書き込み回数や draw call が増えすぎるとき | Play する前にユーザーの承認が要る |
+| Script (`references/scripting-patterns.md`) | 多数配置、動き、反応、生成的な構造 | Entity を並べると書き込み回数や draw call が増えすぎるとき | Play で変換と実行を確認する |
 | コードから作成 (`analyze_component_code` → `apply_component_code_import_plan`) | R3F / Three.js の JSX を Entity と Component に変換したもの | 手元に流用できるコードがあるとき | `useFrame` は変換できない |
 
 権利について。Poly Haven と ambientCG は CC0 で、作者とライセンスの表示は Asset と公開物に自動で残る。MCP の取り込み経路にない外部モデルを使う場合は、先にユーザーにライセンスを確認してもらう。

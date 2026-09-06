@@ -16,27 +16,22 @@ import {
 export const XRIFT_SCRIPTING_CAPABILITIES: Record<string, unknown> = {
   contractVersion: "1.0.0",
   sandboxed: false,
-  trustGate: true,
+  trustGate: false,
   trustBoundary: {
     executionRealm:
       "Studio Play runs Script modules in the application realm, not an iframe or Worker.",
     hostAccess:
       "Module-scope shadowing reduces accidental access but is not a security boundary; application globals and the application's Tauri IPC bridge may be reachable.",
     approval:
-      "Before evaluation, Studio checks the exact source SHA-256, language, contract version, module policy version, project ID, and canonical project path against an approval store outside the project.",
+      "Play compiles and evaluates saved project Scripts without a separate approval dialog. Source hashes identify the running version for diagnostics, not permission.",
     provenance:
-      "Source provenance is shown to the user but never grants trust. A project manifest cannot approve itself.",
+      "Source provenance is diagnostic metadata and does not change execution behavior.",
     mcpAuthority:
-      "The XRift Studio stdio MCP editor tools/server expose no Script approval tool or authority.",
-    approvalRequiredError: {
-      code: "SCRIPT_APPROVAL_REQUIRED",
-      description:
-        "set_play_mode returns this error for unapproved Script source. The user can review and approve the exact fingerprint in Studio, or the stdio client can request unapprovedPolicy:'skip' to enter Play with those Scripts disabled; skip never grants approval.",
-    },
+      "The XRift Studio stdio MCP editor tools/server start Scripts through the same compilation path as the Studio Play button. No Script approval operation is required.",
     debugAutomationBridge:
       "Debug builds may register a privileged Tauri MCP bridge for webview JavaScript and Tauri invoke automation. That developer bridge is outside this stdio editor-tool trust boundary and is not registered or shipped in release builds.",
     clientRule:
-      "After SCRIPT_APPROVAL_REQUIRED from the XRift Studio stdio MCP server, ask the user to review in Studio. Use unapprovedPolicy:'skip' only when Play without those Scripts is acceptable.",
+      "Call set_play_mode, then inspect scriptRuntime for compilation and runtime failures. The legacy unapprovedPolicy argument has no effect.",
   },
   workflow: [
     {
@@ -116,7 +111,7 @@ export const XRIFT_SCRIPTING_CAPABILITIES: Record<string, unknown> = {
     frameUpdates:
       "Return update(delta) from start(ctx). R3F useFrame is rejected in Play and publish because its callback cannot be isolated per Script.",
     diagnostics:
-      "Call get_editor_context and inspect scriptRuntime plus scriptRuntime.trust for approval-required, disabled, and running fingerprints; compile errors; lifecycle/event/Render failures; and bounded JSON-safe ctx.log output.",
+      "Call get_editor_context and inspect scriptRuntime for compile errors, lifecycle/event/Render failures, running source fingerprints, and bounded JSON-safe ctx.log output. trust.status is not-required.",
     render: {
       export: "Named export Render",
       props:

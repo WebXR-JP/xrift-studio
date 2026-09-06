@@ -64,11 +64,6 @@ export type ScriptCompileError = {
   trustSnapshot?: ScriptSourceSnapshot;
 };
 
-export type ScriptTrustCheckResult = Readonly<{
-  /** Snapshot keys whose exact fingerprints are approved for this project. */
-  approvedSnapshotKeys: ReadonlySet<string>;
-}>;
-
 export type ScriptRunningTrustSnapshot = Readonly<
   Pick<
     ScriptSourceSnapshot,
@@ -124,14 +119,7 @@ export type UseScriptRuntimeOptions = {
   assets: AssetManifest;
   projectPath?: string;
   allowRemoteModules?: boolean;
-  /**
-   * Native app-data approval lookup. Omission fails closed: a caller may only
-   * proceed by explicitly compiling with unapprovedPolicy="skip".
-   */
-  checkScriptTrust?: (
-    snapshots: readonly ScriptSourceSnapshot[],
-  ) => Promise<ScriptTrustCheckResult>;
-  /** Display-only provenance. It can never affect approval lookup. */
+  /** Diagnostic provenance; it does not change execution behavior. */
   resolveScriptProvenance?: (
     assetId: string,
   ) => Partial<ScriptProvenanceDto> | null | undefined;
@@ -142,7 +130,6 @@ export function useScriptRuntime({
   assets,
   projectPath,
   allowRemoteModules,
-  checkScriptTrust,
   resolveScriptProvenance,
 }: UseScriptRuntimeOptions) {
   const [state, setState] = useState<ScriptRuntimeState>({
@@ -187,8 +174,8 @@ export function useScriptRuntime({
   }, []);
 
   /**
-   * Reads every referenced Script exactly once, checks the native app-data
-   * approval store, and only then evaluates the approved snapshots.
+   * Reads each referenced Script once and compiles that exact saved source.
+   * Play is the execution action; no separate approval is required.
    */
   const compile = useCallback(async (
     input: {
@@ -242,9 +229,8 @@ export function useScriptRuntime({
     const errors: ScriptCompileError[] = [];
     const snapshots: ScriptSourceSnapshot[] = [];
 
-    // Source is read only here. Hashing, approval lookup, transpilation, and
-    // evaluation all use this immutable value, closing the read/check/read
-    // race that would otherwise permit a filesystem swap.
+    // Hashing, transpilation and evaluation share the same immutable source.
+    // The hash identifies the running version for diagnostics and hot reload.
     for (const assetId of assetIds) {
       const asset = currentAssets.assets[assetId];
       if (!asset || asset.kind !== "script") {
@@ -283,69 +269,9 @@ export function useScriptRuntime({
       }
     }
 
-    let approvedSnapshotKeys = new Set<string>();
-    if (snapshots.length > 0 && checkScriptTrust) {
-      try {
-        const trust = await checkScriptTrust(snapshots);
-        approvedSnapshotKeys = new Set(trust.approvedSnapshotKeys);
-      } catch {
-        // Corrupt or inaccessible app data fails closed. The caller can still
-        // explicitly choose skip, but the source is never evaluated.
-      }
-    }
-    const pendingTrust = snapshots.filter(
-      (snapshot) => !approvedSnapshotKeys.has(snapshot.snapshotKey),
-    );
-    const trustErrors: ScriptCompileError[] = pendingTrust.map((snapshot) => ({
-      assetId: snapshot.assetId,
-      assetName: snapshot.name,
-      relativePath: snapshot.path,
-      code: "SCRIPT_APPROVAL_REQUIRED",
-      message:
-        "内容がまだ承認されていないため実行しません。Studioでソースを確認して許可してください",
-      trustSnapshot: snapshot,
-    }));
-    if (
-      pendingTrust.length > 0 &&
-      (input.unapprovedPolicy ?? "block") === "block"
-    ) {
-      const blockedErrors = [...trustErrors, ...errors];
-      const running = runningSnapshotsFor(previousScripts, assetIds);
-      if (compileGenerationRef.current === generation) {
-        setState((previous) => ({
-          ...previous,
-          status: "approval-required",
-          errors: blockedErrors,
-          trust: {
-            status: "approval-required",
-            pending: pendingTrust,
-            skipped: [],
-            running,
-          },
-        }));
-      }
-      return blockedErrors;
-    }
-
-    const skippedTrust =
-      input.unapprovedPolicy === "skip" ? pendingTrust : [];
-    const executableSnapshots = snapshots.filter((snapshot) =>
-      approvedSnapshotKeys.has(snapshot.snapshotKey),
-    );
     const compiled = new Map<string, CompiledScriptEntry>();
 
-    // An explicitly skipped replacement must not tear down an Entity that is
-    // already running an approved version. Preserve that exact module as
-    // last-good; a newly introduced unapproved Script has no previous entry
-    // and therefore remains disabled.
-    for (const snapshot of skippedTrust) {
-      const previousEntry = previousScripts.get(snapshot.assetId);
-      if (previousEntry) {
-        compiled.set(snapshot.assetId, previousEntry);
-      }
-    }
-
-    for (const snapshot of executableSnapshots) {
+    for (const snapshot of snapshots) {
       const cacheKey = JSON.stringify([
         snapshot.path,
         snapshot.fingerprint,
@@ -449,9 +375,9 @@ export function useScriptRuntime({
         status: "error",
         errors,
         trust: {
-          status: skippedTrust.length > 0 ? "skipped" : "approved",
+          status: "not-required",
           pending: [],
-          skipped: skippedTrust,
+          skipped: [],
           running,
         },
       }));
@@ -490,19 +416,16 @@ export function useScriptRuntime({
           unchangedComponentIds.has(entry.componentId),
         ),
         trust: {
-          status: skippedTrust.length > 0 ? "skipped" : "approved",
+          status: "not-required",
           pending: [],
-          skipped: skippedTrust,
+          skipped: [],
           running: runningSnapshotsFor(compiled),
         },
       }));
     }
-    return input.unapprovedPolicy === "skip"
-      ? [...trustErrors, ...errors]
-      : errors;
+    return errors;
   }, [
     allowRemoteModules,
-    checkScriptTrust,
     projectPath,
     resolveScriptProvenance,
   ]);

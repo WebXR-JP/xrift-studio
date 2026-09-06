@@ -629,20 +629,15 @@ export function runXriftMcpEditorToolFixtures(): void {
   );
   assert(
     scriptingCapabilities.result.sandboxed === false &&
-      scriptingCapabilities.result.trustGate === true &&
+      scriptingCapabilities.result.trustGate === false &&
       typeof trustBoundary?.clientRule === "string" &&
       typeof trustBoundary?.mcpAuthority === "string" &&
       trustBoundary.mcpAuthority.includes("stdio MCP editor tools/server") &&
-      trustBoundary.approvalRequiredError?.code ===
-        "SCRIPT_APPROVAL_REQUIRED" &&
-      typeof trustBoundary.approvalRequiredError.description === "string" &&
-      trustBoundary.approvalRequiredError.description.includes(
-        "skip never grants approval",
-      ) &&
+      trustBoundary.approvalRequiredError === undefined &&
       typeof trustBoundary.debugAutomationBridge === "string" &&
       trustBoundary.debugAutomationBridge.includes("webview JavaScript") &&
       trustBoundary.debugAutomationBridge.includes("release builds"),
-    "Scripting capabilities must expose the non-sandboxed MCP trust gate",
+    "Scripting capabilities must describe direct, non-sandboxed Play without an approval gate",
   );
   assert(
     sceneSettingsResult.changed &&

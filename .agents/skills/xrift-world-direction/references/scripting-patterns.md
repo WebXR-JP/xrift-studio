@@ -25,21 +25,21 @@ Script の契約の全文は `docs/SCRIPTING.md` にある。使える API の�
 - 非同期処理は `ctx.lifecycle.task` / `timeout` / `interval` に登録する。グローバルの `setTimeout` は使わない。
 - Asset を使うときは `prop.asset` で宣言し、`update_script_component` の `assetReferences` にも同じものを入れる。宣言していない Asset は `null` になる。
 - 使える import は `three`、`@react-three/fiber`、`@react-three/drei`、`@react-three/rapier`、`@xrift/world-components`、`react`、`xrift:script` だけだ。
-- Script は sandbox では動かない。Play する前にユーザーが Studio で承認する必要がある。`set_play_mode` が `SCRIPT_APPROVAL_REQUIRED` を返したら、承認をお願いして待つ。
+- Script は sandbox では動かない。Play で保存済みソースを変換して実行する。Script ごとの承認操作は不要。
 
 ## 手順
 
 1. `get_editor_context` → `get_scripting_capabilities` → `list_script_templates` の順に読む。
 2. `create_script_asset` で作る（`templateId` を指定するか、`language: "tsx"` と `source` を渡す）。
 3. `add_component` で `scripting.script` を Entity に付け、`update_script_component` で property と `assetReferences` / `entityReferences` を宣言する。
-4. `set_play_mode { mode: "play" }` で Play する。承認待ちになったらユーザーにお願いする。
+4. `set_play_mode { mode: "play" }` で Play する。変換・実行エラーを確認する。
 5. `get_editor_context` の `scriptRuntime` で compile error がないか確かめ、`capture_scene_view` で見た目を確かめる。
 
 ## よくある不具合と対処
 
 | 症状 | 原因と対処 |
 | --- | --- |
-| Play しても何も出ない | `set_play_mode` が承認待ちになっている。`get_editor_context.scriptRuntime.trust` を見る |
+| Play しても何も出ない | `get_editor_context.scriptRuntime` の変換エラーと実行エラーを見る |
 | `useFrame` でエラーになる | `start().update` の形に書き換える |
 | Model が出ない | `prop.asset` の宣言と `assetReferences` の両方が要る。片方だけでは動かない |
 | 重い | 個別の mesh を instancing に変える。`capture_scene_debug` で draw call を見る |

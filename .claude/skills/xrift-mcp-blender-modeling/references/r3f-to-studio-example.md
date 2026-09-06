@@ -102,4 +102,4 @@ export function Scene() {
 2. `create_script_asset(language: "tsx")` で上記サンプルを作成。
 3. `add_component(id: "scripting.script", scriptAssetId)` で Entity に付与。
 4. `update_script_component` で `assetReferences` / プロパティを設定。
-5. `set_play_mode(mode: "play")` → Studio で承認 → 確認。
+5. `set_play_mode(mode: "play")` → 変換・実行結果を確認。
