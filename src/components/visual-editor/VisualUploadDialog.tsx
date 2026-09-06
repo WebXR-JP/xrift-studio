@@ -95,6 +95,8 @@ export type VisualPublishReview = {
   /** A legacy project has upload history whose target must be recovered. */
   previouslyPublished?: boolean;
   diagnostics: VisualPublishDiagnostic[];
+  /** The current snapshot is still being checked; an older result cannot unlock publication. */
+  checking?: boolean;
   vramEstimate?: WorldVramEstimate;
   /**
    * 公開時にだけ適用するTexture変換の内容。
@@ -295,10 +297,12 @@ export function VisualUploadDialog({
       id: "diagnostics",
       label: "公開チェック",
       detail:
-        blockingDiagnostics.length === 0
+        review.checking
+          ? "公開データを確認中…"
+          : blockingDiagnostics.length === 0
           ? "公開を止める問題はありません"
           : `${blockingDiagnostics.length}件の問題を修正してください`,
-      ready: blockingDiagnostics.length === 0,
+      ready: !review.checking && blockingDiagnostics.length === 0,
     },
   ];
   const ready = requirements.every((requirement) => requirement.ready);
@@ -1134,7 +1138,7 @@ export function VisualUploadDialog({
                   className="flex items-center gap-1.5 rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <UploadCloud size={15} aria-hidden="true" />
-                  XRiftへ公開
+                  {review.checking ? "公開データを確認中…" : "XRiftへ公開"}
                 </button>
               </>
             )}

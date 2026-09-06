@@ -1,4 +1,7 @@
 import { createRigidBodyComponent } from "../scene-document";
+import { collectModelInstancingEntities } from "../model-instancing";
+import modelInstancingSource from "../../../../packages/xrift-studio-runtime/src/model-instancing.ts?raw";
+import modelInstancingHostSource from "../../../../packages/xrift-studio-runtime/src/script/model-instancing.tsx?raw";
 import { collectPublishedAssetIds, planModelDownload } from "./download-plan";
 import { colliderModelNode } from "../mesh-collision-actions";
 import {
@@ -72,7 +75,7 @@ import {
   terrainGrassRuntimeSource,
 } from "../terrain-grass-runtime";
 import { detectTimeUniforms } from "../../../../packages/xrift-studio-runtime/src/shader-time";
-import { XRIFT_SCENE_SKYBOX_USER_DATA_KEY } from "../../../../packages/xrift-studio-runtime/src/script/scene-runtime";
+import { XRIFT_SCENE_SKYBOX_USER_DATA_KEY } from "../../../../packages/xrift-studio-runtime/src/scene-constants";
 import type { VisualProjectKind } from "../project-document";
 import {
   type BoxColliderComponent,
@@ -194,6 +197,9 @@ type CompileContext = {
   threeValueImports: Set<string>;
   threeTypeImports: Set<string>;
   supportDeclarations: Map<string, string>;
+  /** Per compilation: expanded nodes share the same material IDs and resolvers. */
+  materialComponentNames: Map<string, string>;
+  materialInjectionNames: Map<string, string>;
   assetRuntimeUrls: ReadonlyMap<string, string>;
   referencedAssetIds: Set<string>;
   visitedEntityIds: Set<string>;
@@ -1239,6 +1245,8 @@ function generateComponentSource(
     threeValueImports: new Set(),
     threeTypeImports: new Set(),
     supportDeclarations: new Map(),
+    materialComponentNames: new Map(),
+    materialInjectionNames: new Map(),
     assetRuntimeUrls: new Map(
       assetCopyPlan
         .filter((entry) => entry.supportedByCompiler)
@@ -1262,6 +1270,17 @@ function generateComponentSource(
     const rendered = renderEntity(entityId, context, 0);
     return rendered ? [rendered] : [];
   });
+  const instancingEntities = collectModelInstancingEntities(scene, assets);
+  if (instancingEntities.length > 0) {
+    for (const name of ["useEffect", "useRef"]) context.reactValueImports.add(name);
+    context.fiberImports.add("useFrame");
+    for (const name of ["InstancedMesh", "Material", "Matrix4", "Mesh"]) context.threeValueImports.add(name);
+    for (const name of ["Group", "Object3D"]) context.threeTypeImports.add(name);
+    context.supportDeclarations.set("model-instancing", [modelInstancingSource, modelInstancingHostSource]
+      .map((source) => source.replace(/^import .*;\r?$/gm, "").replace(/^export /gm, "")).join("\n"));
+    context.supportDeclarations.set("model-instancing-entities", `const modelInstancingEntities = ${JSON.stringify(instancingEntities)};`);
+    roots.push("<XriftModelInstancing entityIds={modelInstancingEntities} />");
+  }
   for (const entityId of Object.keys(scene.entities).sort()) {
     if (!context.visitedEntityIds.has(entityId)) {
       addDiagnostic(context, {
@@ -4057,7 +4076,10 @@ ${resolver}
   // Expanded model nodes often share hundreds of material slots. Emitting
   // this resolver inside every Clone multiplies the TypeScript/Babel AST by
   // node count, even though the callback captures no per-node state.
+  const cachedName = context.materialInjectionNames.get(source);
+  if (cachedName) return `\n        inject={${cachedName}}`;
   const name = `injectModelMaterials_${sha256Utf8(source)}`;
+  context.materialInjectionNames.set(source, name);
   context.threeTypeImports.add("Object3D");
   context.supportDeclarations.set(
     `model-material-injection:${name}`,
@@ -4210,7 +4232,11 @@ function registerMaterialComponent(
   asset: MaterialAsset,
   context: CompileContext,
 ): string {
-  const componentName = generatedIdentifier("CompiledMaterial", asset.id);
+  let componentName = context.materialComponentNames.get(asset.id);
+  if (!componentName) {
+    componentName = generatedIdentifier("CompiledMaterial", asset.id);
+    context.materialComponentNames.set(asset.id, componentName);
+  }
   const declarationKey = `material:${componentName}`;
   if (context.supportDeclarations.has(declarationKey)) return componentName;
   if (asset.shader?.kind === "classic-r3f") {

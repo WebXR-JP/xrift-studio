@@ -252,6 +252,7 @@ import {
   type AssetDeleteDialogTarget,
 } from "./AssetDeleteDialog";
 import { EditorCreateMenu } from "./EditorCreateMenu";
+import { TextureImportSettingsPanel } from "./TextureImportSettingsPanel";
 import { EditorImportMenu } from "./EditorImportMenu";
 import { ComponentCodeImportDialog } from "./ComponentCodeImportDialog";
 import { InteractivityGraphEditor } from "./InteractivityGraphEditor";
@@ -11587,16 +11588,6 @@ export function VisualEditorPrototype({
                   ? "Playを停止してからImportしてください"
                   : assetImportPanelAvailability.disabledReason
               }
-              textureMaxSize={textureImportMaxSize}
-              onTextureMaxSizeChange={(value) => {
-                setTextureImportMaxSize(value);
-                saveTextureImportMaxSize(value);
-              }}
-              textureCompression={textureImportCompression}
-              onTextureCompressionChange={(value) => {
-                setTextureImportCompression(value);
-                saveTextureImportCompression(value);
-              }}
               onImportModel={() => globalModelImportInputRef.current?.click()}
               onImportR3f={() => setComponentImportOpen(true)}
             />
@@ -12036,6 +12027,18 @@ export function VisualEditorPrototype({
             }
             onUpdateXriftComponent={handleUpdateXriftComponent}
             onRemoveXriftComponent={handleRemoveXriftComponent}
+            assetImportSettings={<TextureImportSettingsPanel
+              textureMaxSize={textureImportMaxSize}
+              onTextureMaxSizeChange={(value) => {
+                setTextureImportMaxSize(value);
+                saveTextureImportMaxSize(value);
+              }}
+              textureCompression={textureImportCompression}
+              onTextureCompressionChange={(value) => {
+                setTextureImportCompression(value);
+                saveTextureImportCompression(value);
+              }}
+            />}
             sceneSettingsOpen={sceneSettingsOpen}
             onCloseSceneSettings={() => setSceneSettingsOpen(false)}
             onSceneSettingsChange={handleSceneSettingsChange}

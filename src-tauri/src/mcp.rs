@@ -2860,7 +2860,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "update_model_asset",
-            "description": "Persist Model import settings and authoring default Material slot bindings through Editor history and autosave. Reimport is required before source-derived geometry changes take effect.",
+            "description": "Persist Model import settings and authoring default Material slot bindings through Editor history and autosave. Set instanceMeshes to batch repeated static opaque meshes in Play and publication without changing source geometry; disable it to restore normal rendering. Animated models, dynamic entities, and scenes with scripts or interaction triggers keep normal rendering. Source-derived geometry changes still require reimport.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2877,7 +2877,8 @@ fn tool_definitions() -> Value {
                                     "scale": { "type": "number", "exclusiveMinimum": 0 },
                                     "generateColliders": { "type": "boolean" },
                                     "optimizeMeshes": { "type": "boolean" },
-                                    "importAnimations": { "type": "boolean" }
+                                    "importAnimations": { "type": "boolean" },
+                                    "instanceMeshes": { "type": "boolean" }
                                 },
                                 "minProperties": 1,
                                 "additionalProperties": false

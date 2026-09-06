@@ -54,7 +54,8 @@ export const XRIFT_SCENE_RUNTIME_USER_DATA_KEY = "xriftSceneRuntime" as const;
  * thing that reads it — which is why the flag lives here rather than in each
  * of them.
  */
-export const XRIFT_SCENE_SKYBOX_USER_DATA_KEY = "xriftSceneSkybox" as const;
+import { XRIFT_SCENE_SKYBOX_USER_DATA_KEY } from "../scene-constants.js";
+export { XRIFT_SCENE_SKYBOX_USER_DATA_KEY } from "../scene-constants.js";
 
 /**
  * The authored compositor values, published for whoever needs to read them.

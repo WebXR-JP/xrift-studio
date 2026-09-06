@@ -460,7 +460,7 @@ export function VramEstimateDialog({
                     {actionable ? (
                       <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-violet-700">
                         <Sparkles size={13} aria-hidden="true" />
-                        選択するとStudio内で変換して同じAssetへ反映します
+                        {recommendation.operation === "instance-model" ? "選択して適用すると有効になります。モデルの設定から解除できます" : "選択するとStudio内で変換して同じAssetへ反映します"}
                       </p>
                     ) : null}
                       </div>
@@ -502,8 +502,7 @@ export function VramEstimateDialog({
                   {applyResult.optimizedAssetCount}件のAssetを最適化しました
                 </div>
                 <div className="mt-0.5 text-xs">
-                  原本 {formatVramBytes(applyResult.beforeBytes)} → 変換後{" "}
-                  {formatVramBytes(applyResult.afterBytes)}
+                  {applyResult.beforeBytes > 0 ? <>原本 {formatVramBytes(applyResult.beforeBytes)} → 変換後 {formatVramBytes(applyResult.afterBytes)}</> : "描画設定を更新しました。ファイル容量は変わりません。"}
                 </div>
                 {applyResult.skipped && applyResult.skipped.length > 0 ? (
                   <details className="mt-1.5 text-xs">

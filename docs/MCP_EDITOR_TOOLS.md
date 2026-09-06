@@ -320,6 +320,14 @@ Animation キーフレームの間引きを行う。任意で Draco 圧縮も行
 側の Material 割当が別の Material へ移る。統合や平坦化は行わない。実行する
 処理がなければ `changed: false` を返す。
 
+`instanceMeshes` は描画の設定で、再インポートなしでPlayと公開先へ反映する。
+`update_model_asset` の `patch.importSettings.instanceMeshes` をtrueにすると有効、
+falseにすると解除する。静的GLBの同じ形状・マテリアルの不透明な部品を近隣ごとに
+まとめる。動的な親、Animation、Skin、Morph、反転した部品は除外する。
+ScriptやInteraction Triggerがあるシーンは通常描画を維持する。原本やColliderは変更しない。
+取り込みテクスチャの端末共通設定は歯車から変更できる。MCPでは既存の取り込みtoolの
+明示設定を使うため、端末の既定値専用toolは設けない。
+
 変換と最適化はどちらも非破壊だ。原本のファイルは書き換えない。変換結果を
 `assets/.optimized/` へ書く。Asset の `source` が指す先だけを差し替える。変換前の
 `source`、解析結果、Import 設定は `optimizedFrom` に控える。
@@ -412,7 +420,7 @@ Scene document のスキーマを増やしたときは、`serialization.ts` の�
 
 ### 大きなモデルを取り込むとき
 
-Editorの `import_model_asset` と、`importSettings` を省略した `import_texture_asset` はImportメニューの設定を使う。未設定時は最大2048px・KTX2。対応する単体画像とモデル内蔵画像を変換してからManifestを採用するため、変換前の画像を先にScene Viewへ配置しない。元画像と元モデルは保持する。既存Assetには遡って適用しない。圧縮に失敗した場合は配置へ進まず、設定を変えて再試行できる。
+Editorの `import_model_asset` と、`importSettings` を省略した `import_texture_asset` は歯車から開く設定パネルの共通設定を使う。未設定時は最大1024px・KTX2。対応する単体画像とモデル内蔵画像を変換してからManifestを採用するため、変換前の画像を先にScene Viewへ配置しない。元画像と元モデルは保持する。既存Assetには遡って適用しない。圧縮に失敗した場合は配置へ進まず、設定を変えて再試行できる。
 
 `set_mesh_collision` はMesh Rendererの追加・解除・シーン全体の置換を一件のrevisionで実行する。`exclusive`はTriggerを含む全Colliderと自動生成を解除する。`inspect_colliders`の`sources`から設定元のEntity、形状、階層の有効状態を読める。
 

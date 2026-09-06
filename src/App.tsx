@@ -44,17 +44,16 @@ import {
 } from "./lib/app-updater";
 import {
   VisualUploadDialog,
-  type VisualPublishDiagnostic,
 } from "./components/visual-editor/VisualUploadDialog";
 import { VisualEditorErrorBoundary } from "./components/visual-editor/VisualEditorErrorBoundary";
+import { usePublishReview } from "./lib/visual-editor/use-publish-review";
+import { PUBLISH_REVIEW_FAILURE } from "./lib/visual-editor/publish-review";
 import { ClassicExportDialog } from "./components/visual-editor/ClassicExportDialog";
 import {
-  compileVisualProject,
   applyAssetOptimizations,
   exportVisualProjectToClassic,
   estimateWorldVram,
   applyTextureProcessingBatch,
-  summarizeTexturePublishConversions,
   inspectClassicExportTarget,
   createVisualProjectFromClassicSource,
   createStarterVisualProject,
@@ -66,7 +65,6 @@ import {
   clearStaleXriftUploadAttempt,
   readVisualProjectFromDisk,
   prepareStarterVisualProject,
-  sanitizePublishFailure,
   saveVisualProjectToDisk,
   StarterAssetCopyError,
   listScriptAssets,
@@ -922,54 +920,13 @@ function App() {
     visualPublishScriptSourceRequestKey,
     visualSession?.project?.path,
   ]);
-  const visualPublishDiagnostics = useMemo<VisualPublishDiagnostic[]>(() => {
-    if (!visualPublishBundle) return [];
-    if (
-      visualPublishScriptSources.requestKey !==
-        visualPublishScriptSourceRequestKey ||
-      visualPublishScriptSources.loading
-    ) {
-      return [
-        {
-          severity: "blocking",
-          code: "visual-script-source-checking",
-          message: "Scriptを含む公開データを確認しています。",
-        },
-      ];
-    }
-    try {
-      return compileVisualProject({
-        project: visualPublishBundle.project,
-        scenes: {
-          [visualPublishBundle.scene.sceneId]: visualPublishBundle.scene,
-        },
-        assets: visualPublishBundle.assets,
-        prefabs: visualPublishBundle.prefabs,
-        scriptSources: visualPublishScriptSources.sources,
-      }).diagnostics;
-    } catch (error) {
-      return [
-        {
-          severity: "blocking",
-          code: "visual-compiler-unavailable",
-          message:
-            error instanceof Error
-              ? `XRift向け変換を開始できません: ${sanitizePublishFailure(
-                  error.message,
-                  visualSession?.project?.path
-                    ? [visualSession.project.path]
-                    : [],
-                )}`
-              : "XRift向け変換を開始できません。Editorを再読み込みしてください。",
-        },
-      ];
-    }
-  }, [
-    visualPublishBundle,
-    visualPublishScriptSourceRequestKey,
-    visualPublishScriptSources,
-    visualSession?.project?.path,
-  ]);
+  const visualPublishReviewRequest = useMemo(() => {
+    if (!visualPublishBundle ||
+      visualPublishScriptSources.requestKey !== visualPublishScriptSourceRequestKey ||
+      visualPublishScriptSources.loading) return null;
+    return { bundle: visualPublishBundle, scriptSources: visualPublishScriptSources.sources };
+  }, [visualPublishBundle, visualPublishScriptSourceRequestKey, visualPublishScriptSources]);
+  const visualPublishReview = usePublishReview(visualPublishReviewRequest);
 
   if (visualSession) {
     const publishBundle = visualPublishBundle;
@@ -1075,13 +1032,12 @@ function App() {
             previouslyPublished: Boolean(
               publishBundle?.project.lastPublication,
             ),
-            diagnostics: visualPublishDiagnostics,
-            vramEstimate: publishBundle
-              ? estimateWorldVram(publishBundle)
-              : undefined,
-            textureConversions: publishBundle
-              ? summarizeTexturePublishConversions(publishBundle.assets)
-              : undefined,
+            checking: Boolean(publishBundle && (!visualPublishReviewRequest || visualPublishReview.checking)),
+            diagnostics: visualPublishReview.failed
+              ? [PUBLISH_REVIEW_FAILURE]
+              : visualPublishReview.result?.diagnostics ?? [],
+            vramEstimate: visualPublishReview.result?.vramEstimate,
+            textureConversions: visualPublishReview.result?.textureConversions,
           }}
           onClose={() => setVisualPublishBundle(null)}
           onMetadataChange={(title, description) => {

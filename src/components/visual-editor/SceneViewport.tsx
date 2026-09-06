@@ -1,3 +1,5 @@
+import { XriftModelInstancing } from "../../../packages/xrift-studio-runtime/src/script/model-instancing";
+import { collectModelInstancingEntities } from "../../lib/visual-editor/model-instancing";
 import { colliderModelNode } from "../../lib/visual-editor/mesh-collision-actions";
 import { TerrainBrushCursor } from "./TerrainBrushCursor";
 import { getModelNodeMaterialSlots } from "./model-node-materials";
@@ -5027,6 +5029,7 @@ export function SceneViewport({
     () => createSceneViewportPreview(scene, assets, prefabs),
     [assets, prefabs, scene],
   );
+  const modelInstancingEntities = useMemo(() => collectModelInstancingEntities(preview.scene, assets), [preview.scene, assets]);
   const sceneSettings = useMemo(
     () => resolveSceneSettings(scene.settings),
     [scene.settings],
@@ -6668,6 +6671,7 @@ export function SceneViewport({
                   input={entityTreeInput}
                   shared={entityTreeShared}
                 >
+                  {editorMode === "play" ? <XriftModelInstancing entityIds={modelInstancingEntities} entityKey="renderedEntityId" /> : null}
                   {preview.scene.rootEntityIds.map((entityId) => (
                     <SceneEntityHierarchy key={entityId} entityId={entityId} />
                   ))}

@@ -5581,6 +5581,7 @@ export function InspectorPanel({
   onUpdateXriftComponent,
   onRemoveXriftComponent,
   sceneSettingsOpen,
+  assetImportSettings,
   onCloseSceneSettings,
   onSceneSettingsChange,
   onProjectMetadataChange,
@@ -5722,6 +5723,7 @@ export function InspectorPanel({
   onRemoveXriftComponent: (entityId: string, componentId: string) => void;
   /** The right inspector can temporarily present scene-wide settings. */
   sceneSettingsOpen: boolean;
+  assetImportSettings?: ReactNode;
   onCloseSceneSettings: () => void;
   onSceneSettingsChange: (settings: SceneSettings) => void;
   onProjectMetadataChange: (
@@ -5838,6 +5840,8 @@ export function InspectorPanel({
       ) : null}
       <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto p-3">
         {sceneSettingsOpen ? (
+          <>
+          {assetImportSettings}
           <SceneSettingsInspector
             scene={scene}
             assets={assets}
@@ -5850,6 +5854,7 @@ export function InspectorPanel({
             onThumbnailChanged={onThumbnailChanged}
             onOpenAsset={onSelectAsset}
           />
+          </>
         ) : multiSelectionActive ? (
           <MultiSelectionInspector
             scene={scene}

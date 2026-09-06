@@ -9,7 +9,12 @@ const host = env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react(), tailwindcss(), localThreeVendorAssets(), localTextFontAssets()],
+  plugins: [
+    // Compiler templates are strings, including when imported inside a Worker.
+    // React Refresh assumes window exists and must never wrap these raw modules.
+    react({ exclude: [/\/node_modules\//, /[?&]raw(?:&|$)/] }),
+    tailwindcss(), localThreeVendorAssets(), localTextFontAssets(),
+  ],
   // three-icosa publishes a valid ESM `module` entry but no Node-style `main`.
   // Serving that module directly avoids a missing optimized dependency when
   // the lazily loaded Visual Editor first enables Open Brush rendering.

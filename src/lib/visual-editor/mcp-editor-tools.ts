@@ -8412,6 +8412,7 @@ function modelAssetPatchValue(
       "importAnimations",
       "compressWithDraco",
       "textureMaxSize",
+      "instanceMeshes",
     ]);
     if (importSettings.scale !== undefined) {
       sceneNumber(importSettings.scale, "patch.importSettings.scale", 0.000001);
@@ -8421,6 +8422,7 @@ function modelAssetPatchValue(
       "optimizeMeshes",
       "importAnimations",
       "compressWithDraco",
+      "instanceMeshes",
     ]) {
       optionalBoolean(importSettings[field], `patch.importSettings.${field}`);
     }

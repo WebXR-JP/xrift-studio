@@ -6,7 +6,7 @@ export const XRIFT_STUDIO_RUNTIME_SCHEMA_VERSION = "1.0.0" as const;
  * manifest, and the browser upload path refuses an older shell.
  */
 export const XRIFT_RUNTIME_CONTRACT_VERSION =
-  "2026-09-06-published-material-slots-v1" as const;
+  "2026-09-06-model-instancing-v1" as const;
 
 export type XriftRuntimeDiagnostic = {
   severity: "warning" | "error";
@@ -248,6 +248,7 @@ export type XriftRuntimeScene = {
   name: string;
   rootEntityIds: string[];
   entities: Record<string, XriftRuntimeEntity>;
+  modelInstancingEntityIds?: string[];
   settings?: Record<string, unknown>;
 };
 

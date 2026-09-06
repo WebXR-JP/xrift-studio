@@ -1,3 +1,5 @@
+import { XriftModelInstancing } from "../script/model-instancing.js";
+const EMPTY_INSTANCING_ENTITIES: readonly string[] = [];
 import {
   Fragment,
   useEffect,
@@ -185,6 +187,7 @@ function XriftRuntimeScene({
   const content = (
     <>
       <primitive object={result.root} />
+      <XriftModelInstancing root={result.root} entityKey="xriftStudioEntityId" entityIds={result.manifest.scenes[result.manifest.entryScene]?.modelInstancingEntityIds ?? EMPTY_INSTANCING_ENTITIES} />
       <XriftRuntimeSceneEnvironment result={result} />
       <XriftRuntimeOfficialComponentAdapters result={result} />
       <XriftRuntimeMeshVisibility result={result} />

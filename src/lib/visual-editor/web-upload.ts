@@ -45,7 +45,7 @@ export const DEFAULT_SHELL_BASE_URL = "./xrift-runtime-shell";
 const SHELL_MANIFEST_FILE = "shell-manifest.json";
 /** The shell must be rebuilt when Runtime adapters change. */
 export const REQUIRED_RUNTIME_SHELL_CONTRACT =
-  "2026-09-06-published-material-slots-v1" as const;
+  "2026-09-06-model-instancing-v1" as const;
 
 /**
  * One file of the prebuilt runtime shell.

@@ -110,6 +110,8 @@ export type ModelImportSettings = {
    * 省略はfalse。
    */
   mergeStaticMeshes?: boolean;
+  /** Share repeated static geometry in Play and publication; preserves source nodes. */
+  instanceMeshes?: boolean;
 };
 
 export type ModelImportSettingsPatch = Partial<ModelImportSettings>;
@@ -928,6 +930,11 @@ export function normalizeModelImportSettings(
       ? { mergeStaticMeshes: patch.mergeStaticMeshes }
       : typeof fallback.mergeStaticMeshes === "boolean"
         ? { mergeStaticMeshes: fallback.mergeStaticMeshes }
+        : {}),
+    ...(typeof patch.instanceMeshes === "boolean"
+      ? { instanceMeshes: patch.instanceMeshes }
+      : typeof fallback.instanceMeshes === "boolean"
+        ? { instanceMeshes: fallback.instanceMeshes }
         : {}),
   };
 }

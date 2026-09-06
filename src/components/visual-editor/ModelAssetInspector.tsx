@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { canInstanceModel } from "../../lib/visual-editor/model-instancing";
 import {
   describeModelOptimization,
   groupModelAnimations,
@@ -500,6 +501,14 @@ function ModelOptimizationPanel({
         checked={optimizeMeshes}
         disabled={readOnly || busy}
         onChange={(next) => onChange({ importSettings: { optimizeMeshes: next } })}
+      />
+      <RecipeToggle
+        label="重複Meshをインスタンス化"
+        description="Playと公開先で、近くの同じ形状・マテリアルの不透明な部品をまとめて描画します。元の部品と当たり判定は保持します。動く部品、Scriptやしかけがあるシーンは通常描画します"
+        checked={asset.importSettings.instanceMeshes === true}
+        disabled={readOnly || busy || !canInstanceModel(asset)}
+        status={canInstanceModel(asset) ? "実験的" : "静的なGLBのみ対応"}
+        onChange={(next) => onChange({ importSettings: { instanceMeshes: next } })}
       />
       <RecipeToggle
         label="公開時に静的Meshをまとめる"

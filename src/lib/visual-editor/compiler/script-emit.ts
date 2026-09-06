@@ -9,6 +9,7 @@ import scriptParticleSource from "../../../../packages/xrift-studio-runtime/src/
 import scriptAnimationSource from "../../../../packages/xrift-studio-runtime/src/script/animation.ts?raw";
 import scriptAnimationMixerSource from "../../../../packages/xrift-studio-runtime/src/script/animation-mixer.ts?raw";
 import sceneRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/scene-runtime.tsx?raw";
+import sceneConstantsSource from "../../../../packages/xrift-studio-runtime/src/scene-constants.ts?raw";
 import playerRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/player-runtime.ts?raw";
 import playerRuntimeHostSource from "../../../../packages/xrift-studio-runtime/src/script/player-runtime-host.tsx?raw";
 import instanceStateRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/instance-state-runtime.ts?raw";
@@ -384,6 +385,7 @@ const RUNTIME_SIBLING_OVERLAY_MODULES: Readonly<Record<string, string>> = {
   animation: "animation-runtime",
   "animation-mixer": "animation-mixer-runtime",
   "scene-runtime": "scene-runtime",
+  "scene-constants": "scene-constants",
   "player-runtime": "player-runtime",
   "player-runtime-host": "player-runtime-host",
   "instance-state-runtime": "instance-state-runtime",
@@ -455,6 +457,7 @@ export function createInteractivityRuntimeOverlayFiles(): CompilerOverlayFile[] 
     [ANIMATION_RUNTIME_OVERLAY_PATH, scriptAnimationSource, "script"],
     [ANIMATION_MIXER_OVERLAY_PATH, scriptAnimationMixerSource, "script"],
     [SCENE_RUNTIME_OVERLAY_PATH, sceneRuntimeSource, "script"],
+    [`${SCRIPT_RUNTIME_DIRECTORY}/scene-constants.ts`, sceneConstantsSource, "script"],
     [PLAYER_RUNTIME_OVERLAY_PATH, playerRuntimeSource, "script"],
     [PLAYER_RUNTIME_HOST_OVERLAY_PATH, playerRuntimeHostSource, "script"],
     [INSTANCE_STATE_RUNTIME_OVERLAY_PATH, instanceStateRuntimeSource, "script"],

@@ -891,6 +891,7 @@ export function runXriftMcpEditorToolFixtures(): void {
           scale: 0.5,
           generateColliders: false,
           importAnimations: false,
+          instanceMeshes: true,
         },
         materialSlotBindings: { body: BUILTIN_ASSET_IDS.material.blue },
       },
@@ -902,6 +903,7 @@ export function runXriftMcpEditorToolFixtures(): void {
       updatedModel?.kind === "model" &&
       updatedModel.importSettings.scale === 0.5 &&
       updatedModel.importSettings.generateColliders === false &&
+      updatedModel.importSettings.instanceMeshes === true &&
       updatedModel.materialSlots[0]?.defaultMaterialAssetId ===
         BUILTIN_ASSET_IDS.material.blue,
     "update_model_asset should persist import settings and Material slot bindings",

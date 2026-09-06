@@ -1,4 +1,5 @@
 import { tauri } from "../tauri";
+import { canInstanceModel } from "./model-instancing";
 import {
   normalizeTextureImportSettings,
   type ModelAsset,
@@ -86,10 +87,15 @@ export async function applyAssetOptimizations(
   }
 
   const optimized: OptimizedAsset[] = [];
+  const instanced = new Map<string, ModelAsset>();
   const skipped: AssetOptimizationSkip[] = [];
   for (let index = 0; index < plans.length; index += 1) {
     const plan = plans[index];
     const sourceAsset = bundle.assets.assets[plan.assetId];
+    if (plan.operations.has("instance-model") && sourceAsset?.kind === "model" && canInstanceModel(sourceAsset)) {
+      instanced.set(sourceAsset.id, { ...sourceAsset, importSettings: { ...sourceAsset.importSettings, instanceMeshes: true } });
+      if (plan.operations.size === 1) continue;
+    }
     // 1件でも対応外があると全部が止まっていた。まとめて選ぶ操作なので、
     // 変換できたものは残し、見送った理由を呼び出し側へ返す。
     if (!sourceAsset || sourceAsset.source.kind !== "project") {
@@ -145,7 +151,7 @@ export async function applyAssetOptimizations(
     }
   }
 
-  if (optimized.length === 0) {
+  if (optimized.length === 0 && instanced.size === 0) {
     throw new Error(
       `選択した${plans.length}件はどれも最適化できませんでした。${
         skipped[0]?.reason ?? ""
@@ -160,7 +166,7 @@ export async function applyAssetOptimizations(
     phase: "saving",
   });
   try {
-    await tauri.commitVisualAssetImport(
+    if (optimized.length > 0) await tauri.commitVisualAssetImport(
       projectPath,
       createAssetImportTransactionId("optimize"),
       await Promise.all(
@@ -178,6 +184,10 @@ export async function applyAssetOptimizations(
 
   const assets = { ...bundle.assets.assets };
   for (const entry of optimized) assets[entry.asset.id] = entry.asset;
+  for (const [id, source] of instanced) {
+    const asset = assets[id]?.kind === "model" ? assets[id] as ModelAsset : source;
+    assets[id] = { ...asset, importSettings: { ...asset.importSettings, instanceMeshes: true } };
+  }
   return {
     bundle: {
       ...bundle,
@@ -190,7 +200,7 @@ export async function applyAssetOptimizations(
       },
       assets: { ...bundle.assets, assets },
     },
-    optimizedAssetCount: optimized.length,
+    optimizedAssetCount: new Set([...optimized.map((entry) => entry.asset.id), ...instanced.keys()]).size,
     beforeBytes: optimized.reduce((sum, entry) => sum + entry.beforeBytes, 0),
     afterBytes: optimized.reduce((sum, entry) => sum + entry.bytes.byteLength, 0),
     skipped,

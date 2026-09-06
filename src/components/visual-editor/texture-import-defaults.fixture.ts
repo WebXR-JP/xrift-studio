@@ -20,7 +20,7 @@ export function runTextureImportDefaultsFixtureAssertions(): void {
   assertPatchShapes();
   assertPatchDrivesConversion();
   const defaults = textureImportSettingsPatch(DEFAULT_TEXTURE_IMPORT_MAX_SIZE, DEFAULT_TEXTURE_IMPORT_COMPRESSION);
-  assert(defaults?.resize?.mode === "max-size" && defaults.resize.maxSize === 2048 && defaults.compression?.format === "ktx2", "New imports must be bounded and GPU compressed before placement");
+  assert(defaults?.resize?.mode === "max-size" && defaults.resize.maxSize === 1024 && defaults.compression?.format === "ktx2", "New imports must be bounded and GPU compressed before placement");
 }
 
 function assertPatchShapes(): void {

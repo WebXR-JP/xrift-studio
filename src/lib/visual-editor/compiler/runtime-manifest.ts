@@ -26,6 +26,7 @@ import type {
   VisualCompilerDocuments,
 } from "./types";
 import { OPEN_BRUSH_BRUSH_BASE_URL } from "../open-brush";
+import { collectModelInstancingEntities } from "../model-instancing";
 import { isPublishedAsKtx2 } from "../texture-conversion";
 import { resolveRenderedTextFontId } from "../../../../packages/xrift-studio-runtime/src/text-font-catalog";
 
@@ -74,6 +75,7 @@ function compileRuntimeScene(
     id: scene.sceneId,
     name: scene.name,
     rootEntityIds: [...scene.rootEntityIds],
+    modelInstancingEntityIds: collectModelInstancingEntities(scene, assets),
     entities: Object.fromEntries(
       Object.entries(scene.entities)
         .sort(([left], [right]) => left.localeCompare(right))

@@ -22,4 +22,4 @@ Materialを外せるのは、同じModelを使う全MeshでそのSlotが置き�
 
 ## ブラウザ版の配布
 
-Runtime JSONでもMaterial Slotの既定割当を出力し、読み込み時はglTFのMaterial番号をMesh内の配列位置より優先する。古いランタイムで内蔵画像を除くと、一部のMeshで差し替え先を見失うため、ランタイム契約を`2026-09-06-published-material-slots-v1`へ更新する。ブラウザ版を配布する前に`node scripts/build-world-runtime-shell.mjs`でシェルを再生成し、`pnpm runtime:shell:check`で一致を確認する。古いシェルでの公開は拒否する。デスクトップのJSX公開はこの事前生成シェルに依存しない。
+Runtime JSONでもMaterial Slotの既定割当を出力し、読み込み時はglTFのMaterial番号をMesh内の配列位置より優先する。古いランタイムで内蔵画像を除くと、一部のMeshで差し替え先を見失うため、ランタイム契約を`2026-09-06-model-instancing-v1`へ更新する。ブラウザ版を配布する前に`node scripts/build-world-runtime-shell.mjs`でシェルを再生成し、`pnpm runtime:shell:check`で一致を確認する。古いシェルでの公開は拒否する。デスクトップのJSX公開はこの事前生成シェルに依存しない。

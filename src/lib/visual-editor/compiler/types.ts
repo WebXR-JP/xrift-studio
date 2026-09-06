@@ -8,7 +8,7 @@ import type { ResolvedPublishPermissions } from "./publish-permissions";
 import type { TextureConversion } from "../texture-conversion";
 import type { ModelDownloadPlan } from "./download-plan";
 
-export const VISUAL_COMPILER_VERSION = "0.7.0" as const;
+export const VISUAL_COMPILER_VERSION = "0.7.1" as const;
 
 export type VisualCompilerDocuments = {
   project: VisualProjectDocument;
