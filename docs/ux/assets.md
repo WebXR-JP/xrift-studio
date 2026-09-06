@@ -13,6 +13,8 @@
 - Import 前に対応形式を確認できる。HDR / EXRがSkyboxへ直ちに設定されること、source 保持、既定 max resolution / quality / mipmap / compression、resource budget、external URI が local dependency に限られることも確認できる。
 - Model Inspectorはsourceとlast-good解析結果、Material slot、animation、bounds、現在のimport recipeを同時に示す。解析済みの値と次回再import用の設定を区別する。
 
+Material Slotsは件数付きで初期表示を折り畳み、閉じている間は行と選択肢を生成しない。展開後は20件ずつ表示し、スロット名とIDで検索できる。検索変更時は先頭ページへ戻る。該当なしの場合は検索語の変更を案内する。折り畳み・再展開時は検索とページを初期化するが、保存済みの割当は保持する（MI-117）。Model Inspectorのプレビューは80px、Assetsのグリッドは最小幅76px・サムネイル高40pxにする。フォルダーアイコンは18pxに抑える。
+
 ### 操作中
 
 - Material 作成は dialog 内の validation、Texture / Model / HDRI import は Import Queue の validate、copy、decode、derive、thumbnail、commit を表示する。cancel を処理中 stage に合わせる。

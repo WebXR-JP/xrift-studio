@@ -2214,8 +2214,8 @@ function StandardMaterialQuickEditor({
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-[112px_minmax(0,1fr)] gap-3 rounded-md border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="h-28 overflow-hidden rounded-md border border-slate-300 shadow-sm">
+      <div className="grid grid-cols-[80px_minmax(0,1fr)] gap-2 rounded-md border border-slate-200 bg-white p-2 shadow-sm">
+        <div className="h-20 overflow-hidden rounded-md border border-slate-300">
           <MaterialThumbnail
             asset={asset}
             assets={assets}

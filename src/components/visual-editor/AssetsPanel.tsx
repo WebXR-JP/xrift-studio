@@ -659,7 +659,7 @@ function AssetCard({
       >
         <span
           data-asset-drag-preview="true"
-          className="pointer-events-none relative block h-14 w-full shrink-0 overflow-hidden border-b border-editor-border/70 bg-editor-subtle"
+          className="pointer-events-none relative block h-10 w-full shrink-0 overflow-hidden border-b border-editor-border/70 bg-editor-subtle"
         >
           <AssetThumbnail asset={asset} assets={assets} projectPath={projectPath} />
           <span
@@ -845,11 +845,11 @@ function FolderCard({
   return (
     <div
       {...sharedProps}
-      className={`group relative flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border text-slate-600 ${dropTarget ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200" : "border-transparent bg-editor-surface hover:bg-editor-subtle"}`}
+      className={`group relative flex min-h-10 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border text-slate-600 ${dropTarget ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200" : "border-transparent bg-editor-surface hover:bg-editor-subtle"}`}
     >
       <button type="button" draggable={Boolean(folder.custom) && !readOnly} data-editor-drag-source={folder.custom ? "asset-folder" : undefined} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onClick={onOpen} title={commandTitle(`${folder.name}を開く`, "OpenAssetFolder")} className="flex h-full w-full cursor-grab select-none flex-col items-center justify-center gap-1 px-1.5 py-1.5 active:cursor-grabbing">
         <span className="relative">
-          <FolderIcon size={22} strokeWidth={1.5} aria-hidden="true" />
+          <FolderIcon size={18} strokeWidth={1.5} aria-hidden="true" />
           <KindIcon size={10} className="absolute -bottom-0.5 -right-1 rounded bg-white" aria-hidden="true" />
         </span>
         <span className="max-w-full truncate text-[11px] font-semibold leading-4">{folder.name}</span>
@@ -1814,7 +1814,7 @@ export function AssetsPanel({
               </span>
             </span>
           </div>
-          <div className={`scrollbar-thin min-w-0 flex-1 overflow-auto p-1.5 ${viewMode === "grid" ? "grid auto-rows-max grid-cols-[repeat(auto-fill,minmax(92px,1fr))] content-start gap-1" : "space-y-0.5"}`}>
+          <div className={`scrollbar-thin min-w-0 flex-1 overflow-auto p-1.5 ${viewMode === "grid" ? "grid auto-rows-max grid-cols-[repeat(auto-fill,minmax(76px,1fr))] content-start gap-1" : "space-y-0.5"}`}>
         {!activeFolder?.builtinPrefabs
           ? visibleFolders.map((folder) => (
               renameRequest?.kind === "folder" && renameRequest.id === folder.id ? (

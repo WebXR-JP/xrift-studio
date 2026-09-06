@@ -162,3 +162,5 @@ F-06 アイテム検査
 5. 実機確認が必要な変更は、実行前にユーザーへ確認方法と副作用を伝え、許可を得てから確認する。
 
 Interactivity の編集契約は [4.9 Interactivity](../VISUAL_EDITOR_ARCHITECTURE.md#49-interactivity-khr_interactivity) と MI-84、MI-86 による。
+
+| MI-117 | Model InspectorのMaterial Slotsを開閉・検索・ページ切替する | 初期状態は件数付きで折り畳む。展開時だけ最大20行と選択肢を生成する。開閉はアニメーションなしで即時反映する。検索はスロット名とIDを対象とし、先頭ページへ戻す。 | 該当なしは検索語の変更を案内する。折り畳み・再展開で検索とページは初期化する。割当は保持し、開閉と検索ではAsset、Scene、Undo履歴を変更しない。 |

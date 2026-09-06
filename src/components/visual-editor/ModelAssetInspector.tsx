@@ -11,6 +11,7 @@ import {
   type ModelOptimizationOptions,
   type ModelReimportImpact,
 } from "../../lib/visual-editor";
+import { ModelMaterialSlots } from "./ModelMaterialSlots";
 import { AssetOptimizationOriginCard } from "./AssetOptimizationOriginCard";
 import { ScrubNumberInput } from "./ScrubNumberInput";
 
@@ -30,9 +31,6 @@ export type ModelReimportImpactNotice = {
   context: "before-apply" | "applied-result";
   impact: ModelReimportImpact;
 };
-
-const INPUT_CLASS =
-  "h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400";
 
 export function ModelAssetInspector({
   asset,
@@ -69,9 +67,6 @@ export function ModelAssetInspector({
 }) {
   const metadata = asset.importMetadata;
   const openBrush = metadata?.openBrush;
-  const materials = Object.values(assets.assets)
-    .filter((candidate) => candidate.kind === "material")
-    .sort((left, right) => left.name.localeCompare(right.name, "ja"));
   const reimportBusy =
     reimportState.phase === "reading" ||
     reimportState.phase === "processing" ||
@@ -86,8 +81,8 @@ export function ModelAssetInspector({
 
   return (
     <div className="space-y-3">
-      <section className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-        <div className="h-28 overflow-hidden rounded-md border border-slate-300 bg-slate-100">
+      <section className="grid grid-cols-[80px_minmax(0,1fr)] gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="h-20 overflow-hidden rounded-md border border-slate-300 bg-slate-100">
           {preview}
         </div>
         <div className="min-w-0 self-center">
@@ -286,89 +281,8 @@ export function ModelAssetInspector({
         )}
       </InspectorSection>
 
-      <InspectorSection
-        title={`Material Slots (${asset.materialSlots.length})`}
-        description={openBrush
-          ? "OpenBrush Brush Shaderが既定。割り当てたSlotだけXRift Materialで上書きします"
-          : "Model全体の既定Material。Entity側の割当が優先されます"}
-      >
-        {asset.materialSlots.length > 0 ? (
-          asset.materialSlots.map((slot) => {
-            const selected = slot.defaultMaterialAssetId
-              ? assets.assets[slot.defaultMaterialAssetId]
-              : undefined;
-            const missing = Boolean(slot.defaultMaterialAssetId && selected?.kind !== "material");
-            return (
-              <div
-                key={slot.slot}
-                className={`rounded-md border p-2.5 ${
-                  missing
-                    ? "border-rose-200 bg-rose-50"
-                    : "border-slate-200 bg-slate-50"
-                }`}
-              >
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="truncate text-xs font-semibold text-slate-800">
-                      {slot.name}
-                    </p>
-                    <p className="mt-0.5 truncate font-mono text-[11px] text-slate-400">
-                      {slot.slot}
-                    </p>
-                  </div>
-                  {slot.sourceMaterialIndex !== undefined ? (
-                    <span className="shrink-0 text-[11px] text-slate-500">
-                      Source #{slot.sourceMaterialIndex}
-                    </span>
-                  ) : null}
-                </div>
-                <div className="grid grid-cols-[minmax(0,1fr)_62px] gap-2">
-                  <select
-                    value={slot.defaultMaterialAssetId ?? ""}
-                    disabled={readOnly}
-                    onChange={(event) =>
-                      onChange({
-                        materialSlotBindings: {
-                          [slot.slot]: event.currentTarget.value || null,
-                        },
-                      })
-                    }
-                    className={INPUT_CLASS}
-                  >
-                    <option value="">
-                      {openBrush ? "OpenBrush Brush Shader" : "Model内のMaterial"}
-                    </option>
-                    {missing && slot.defaultMaterialAssetId ? (
-                      <option value={slot.defaultMaterialAssetId}>
-                        Missing: {slot.defaultMaterialAssetId}
-                      </option>
-                    ) : null}
-                    {materials.map((material) => (
-                      <option key={material.id} value={material.id}>
-                        {material.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    disabled={selected?.kind !== "material"}
-                    onClick={() =>
-                      selected?.kind === "material" && onOpenMaterial(selected.id)
-                    }
-                    className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    開く
-                  </button>
-                </div>
-              </div>
-            );
-          })
-        ) : (
-          <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
-            ソース内で使用されるMaterial Slotはありません。
-          </p>
-        )}
-      </InspectorSection>
+      <ModelMaterialSlots key={asset.id} asset={asset} assets={assets} readOnly={readOnly}
+        onChange={onChange} onOpenMaterial={onOpenMaterial} />
 
       <InspectorSection
         title={`Animations (${metadata?.animations.length ?? 0})`}
