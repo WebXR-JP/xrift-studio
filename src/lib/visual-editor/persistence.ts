@@ -7,6 +7,7 @@ import {
   type VisualProjectWriteRequest,
 } from "../tauri";
 import type { AssetManifest, AssetFolder, ModelAsset, SceneAsset } from "./asset-manifest";
+import { assetFolderNameFromLabel } from "./asset-manifest";
 import { expandGltfAssets, type GltfJson } from "./gltf-derived-assets";
 import type { PrefabDocument } from "./prefab-document";
 import { updatePrefabDocumentFromSource } from "./prefab-document";
@@ -821,7 +822,7 @@ function ensureStarterModelFolders(
   ensureStarterFolder(
     folders,
     modelFolderId,
-    model.name,
+    assetFolderNameFromLabel(model.name),
     STARTER_ASSET_FOLDER_IDS.models,
     nextStarterFolderOrder(folders, STARTER_ASSET_FOLDER_IDS.models),
   );

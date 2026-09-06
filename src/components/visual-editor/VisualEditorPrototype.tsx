@@ -5,6 +5,7 @@ import { normalizeTextureImportSettings } from "../../lib/visual-editor/asset-ma
 import { authoringFingerprint, authoringStatus, changeAuthoringState, readAuthoringState } from "../../lib/visual-editor/world-authoring";
 import { getWorldComponentAuthoring } from "../../lib/visual-editor/world-component-authoring";
 import {
+  startTransition,
   useCallback,
   useEffect,
   useMemo,
@@ -984,14 +985,23 @@ export function VisualEditorPrototype({
     }),
     [initialBundle],
   );
-  const [history, setHistory] = useState(() =>
+  const [history, setRenderedHistory] = useState(() =>
     createEditorHistory(createInitialSnapshot(), 80),
   );
   const bundle = history.present.bundle;
   const bundleRef = useRef(bundle);
-  bundleRef.current = bundle;
   const historyRef = useRef(history);
-  historyRef.current = history;
+  // Editor commands also update notices, selection and save status. Execute
+  // them once at dispatch, not inside a React updater which can be replayed
+  // during render. Keep consecutive commands on the latest pending history.
+  const setHistory = useCallback((action: SetStateAction<typeof history>) => {
+    const current = historyRef.current;
+    const next = typeof action === "function" ? action(current) : action;
+    if (next === current) return;
+    historyRef.current = next;
+    bundleRef.current = next.present.bundle;
+    setRenderedHistory(next);
+  }, []);
   /**
    * 数値をドラッグで動かしている間に立つ。ドラッグ中の変更は present を
    * 置き換えるだけにし、ポインタを離した時に Undo 一件へまとめる。
@@ -8102,18 +8112,23 @@ export function VisualEditorPrototype({
   const handleMaterialChange = useCallback(
     (assetId: string, patch: MaterialAssetPatch) => {
       if (editorMode !== "edit" && !playSession) return;
-      setBundle((current) => {
-        const assets = updateMaterialAsset(current.assets, assetId, patch);
-        if (assets === current.assets) {
-          setNotice("Material値は変更されませんでした。不正値は元の値を保持します");
-          return current;
-        }
-        setNotice(
-          editorMode === "play"
-            ? "Material設定を保存し、参照中のEntityだけPlayへ再反映しました"
-            : "Material IRを更新し、参照中のMesh previewへ反映しました",
-        );
-        return touchProject({ ...current, assets });
+      // Native color pickers can emit many synchronous input events before
+      // yielding. Commit each edit immediately, but let React batch rendering
+      // instead of nesting a synchronous render for every intermediate color.
+      startTransition(() => {
+        setBundle((current) => {
+          const assets = updateMaterialAsset(current.assets, assetId, patch);
+          if (assets === current.assets) {
+            setNotice("Material値は変更されませんでした。不正値は元の値を保持します");
+            return current;
+          }
+          setNotice(
+            editorMode === "play"
+              ? "Material設定を保存し、参照中のEntityだけPlayへ再反映しました"
+              : "Material IRを更新し、参照中のMesh previewへ反映しました",
+          );
+          return touchProject({ ...current, assets });
+        });
       });
     },
     [editorMode, playSession],

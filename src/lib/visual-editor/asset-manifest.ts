@@ -2341,6 +2341,12 @@ export type AddAssetFolderResult = {
   reason?: "duplicate-id" | "duplicate-name" | "invalid-input";
 };
 
+/** Model labels are unrestricted display text; generated folders are not. */
+export function assetFolderNameFromLabel(label: string): string {
+  const name = label.replace(/[\\/\0]/g, " - ").trim().slice(0, 100).trim();
+  return name && name !== "." && name !== ".." ? name : "Model";
+}
+
 export function isValidAssetFolderName(value: unknown): value is string {
   if (typeof value !== "string") return false;
   const name = value.trim();

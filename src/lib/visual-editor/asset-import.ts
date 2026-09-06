@@ -27,6 +27,8 @@ import {
   type VRM,
 } from "@pixiv/three-vrm";
 import {
+  assetFolderNameFromLabel,
+  isValidAssetFolderName,
   normalizeModelImportSettings,
   normalizeProjectRelativePath,
   normalizeTextureImportSettings,
@@ -713,6 +715,9 @@ export async function commitAssetImportPlan(
 
   const folders: Record<string, AssetFolder> = { ...(manifest.folders ?? {}) };
   for (const folder of plan.folders ?? []) {
+    if (!folder.id || !isValidAssetFolderName(folder.name)) {
+      throw new Error(`Asset import folder name is invalid: ${folder.id}`);
+    }
     const current = folders[folder.id];
     if (
       current &&
@@ -2761,7 +2766,8 @@ function findMatchingModelImport(
         : undefined;
       const logicalParent =
         currentFolder &&
-        currentFolder.name.toLocaleLowerCase() === asset.name.toLocaleLowerCase()
+        currentFolder.name.toLocaleLowerCase() ===
+          assetFolderNameFromLabel(asset.name).toLocaleLowerCase()
           ? currentFolder.parentId
           : asset.folderId ?? null;
       return (
@@ -2831,6 +2837,7 @@ function ensureImportFolder(
   name: string,
   parentId: string | null,
 ): AssetFolder {
+  name = assetFolderNameFromLabel(name);
   const matching = Object.values(knownFolders).find(
     (folder) =>
       folder.parentId === parentId &&
