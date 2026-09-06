@@ -44,6 +44,7 @@ import {
   cloneSourceModelNode,
 } from "./ProjectModelVisual";
 import { getModelNodeMaterialSlots } from "./model-node-materials";
+import { attachModelSelectionHighlight } from "./model-selection-highlight";
 import {
   configureMaterialPreviewTexture,
   refreshMaterialPreviewRender,
@@ -62,6 +63,7 @@ export async function runProjectModelMaterialPreviewFixtureAssertions(): Promise
     "the OpenBrush adapter should let Three.js own the GLSL version directive",
   );
   assertModelSelectionBoundsStayLocal();
+  assertModelSelectionFollowsSurfaces();
   assertStaticModelPoseUsesRestOffsets();
   assertSourceNodeSelectionDoesNotDuplicateTheWholeModel();
   assertSourceNodeCloneAvoidsUnrelatedBranches();
@@ -549,6 +551,37 @@ function assertNodeMaterialsExcludeUnrelatedSlots(): void {
   assert(getModelNodeMaterialSlots(model, 8).length === 0, "Empty nodes prepare the entire model's materials");
   assert(getModelNodeMaterialSlots(model) === slots, "Whole-model rendering lost material slots");
   assert(getModelNodeMaterialSlots(model, 999) === slots, "Unknown metadata must preserve the original fallback");
+}
+
+function assertModelSelectionFollowsSurfaces(): void {
+  const root = new Group();
+  const geometry = new BoxGeometry(0.2, 4, 0.2);
+  const material = new MeshBasicMaterial();
+  const near = new Mesh(geometry, material);
+  const far = new Mesh(geometry, material);
+  far.position.x = 100;
+  root.add(near, far);
+  near.position.set(3, 2, 1);
+  near.rotation.z = 0.2;
+  near.morphTargetInfluences = [0.5];
+  const dispose = attachModelSelectionHighlight(near);
+  const overlay = near.children[0] as Mesh;
+  assert(far.children.length === 0, "Selecting one model node must not highlight remote siblings");
+  assert(overlay.geometry === geometry, "Selection must follow the actual geometry without copying it");
+  assert(overlay.morphTargetInfluences === near.morphTargetInfluences, "Selection must follow morph animation");
+  root.updateMatrixWorld(true);
+  assert(overlay.matrixWorld.equals(near.matrixWorld), "Selection must apply node transforms exactly once");
+  assert(overlay.userData.editorHelper === true, "Selection must be excluded from focus measurement");
+  assert((overlay.material as MeshBasicMaterial).depthWrite === false, "Selection must not occlude authored geometry");
+  const hits: unknown[] = [];
+  overlay.raycast(null as never, hits as never);
+  assert(hits.length === 0, "Selection must not intercept drill-down raycasts");
+  let geometryDisposed = false;
+  geometry.addEventListener("dispose", () => { geometryDisposed = true; });
+  dispose();
+  assert(near.children.length === 0 && !geometryDisposed, "Deselect must remove only helper resources");
+  geometry.dispose();
+  material.dispose();
 }
 
 function assertSourceNodeCloneAvoidsUnrelatedBranches(): void {

@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
+import { attachModelSelectionHighlight } from "./model-selection-highlight";
 import {
   XRIFT_ANIMATION_RUNTIME_USER_DATA_KEY,
   createXriftAnimationRuntimeBridge,
@@ -665,10 +666,8 @@ function ProjectModelRender({
       <group scale={modelScale * previewScale}>
         <group position={previewOffset}>
           <primitive object={renderedModel.object} />
+          {selected ? <ModelSelectionHighlight object={renderedModel.object} /> : null}
         </group>
-        {selected ? (
-          <ModelSelectionBounds bounds={renderedModel.selectionBounds} />
-        ) : null}
       </group>
     );
   }
@@ -1480,23 +1479,9 @@ export function getModelSelectionBounds(
   };
 }
 
-function ModelSelectionBounds({
-  bounds,
-}: {
-  bounds: ModelSelectionBoundsValue;
-}) {
-  return (
-    <mesh position={bounds.position} scale={bounds.scale}>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshBasicMaterial
-        color="#a78bfa"
-        wireframe
-        transparent
-        opacity={0.7}
-        depthTest={false}
-      />
-    </mesh>
-  );
+function ModelSelectionHighlight({ object }: { object: Object3D }) {
+  useLayoutEffect(() => attachModelSelectionHighlight(object), [object]);
+  return null;
 }
 
 async function dataUrlToArrayBuffer(dataUrl: string): Promise<ArrayBuffer> {
