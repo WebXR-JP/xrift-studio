@@ -1,0 +1,80 @@
+[
+  {
+    "name": "terrain-main",
+    "path": "terrain-main.glb",
+    "bytes": 20480,
+    "objects": 2
+  },
+  {
+    "name": "terrain-ridges",
+    "path": "terrain-ridges.glb",
+    "bytes": 5500,
+    "objects": 4
+  },
+  {
+    "name": "monolith",
+    "path": "monolith.glb",
+    "bytes": 80276,
+    "objects": 10
+  },
+  {
+    "name": "node-core",
+    "path": "node-core.glb",
+    "bytes": 295692,
+    "objects": 10
+  },
+  {
+    "name": "membrane",
+    "path": "membrane.glb",
+    "bytes": 38088,
+    "objects": 1
+  },
+  {
+    "name": "anisotropic-disc",
+    "path": "anisotropic-disc.glb",
+    "bytes": 70708,
+    "objects": 1
+  },
+  {
+    "name": "volume-crystal",
+    "path": "volume-crystal.glb",
+    "bytes": 42792,
+    "objects": 5
+  },
+  {
+    "name": "node-parts",
+    "path": "node-parts.glb",
+    "bytes": 10928,
+    "objects": 2
+  },
+  {
+    "name": "grass-cluster",
+    "path": "grass-cluster.glb",
+    "bytes": 28108,
+    "objects": 1
+  },
+  {
+    "name": "abstract-vegetation",
+    "path": "abstract-vegetation.glb",
+    "bytes": 13384,
+    "objects": 5
+  },
+  {
+    "name": "distant-ring",
+    "path": "distant-ring.glb",
+    "bytes": 132756,
+    "objects": 2
+  },
+  {
+    "name": "distant-architecture",
+    "path": "distant-architecture.glb",
+    "bytes": 31788,
+    "objects": 4
+  },
+  {
+    "name": "terrain-distant",
+    "path": "terrain-distant.glb",
+    "bytes": 9872,
+    "objects": 8
+  }
+]

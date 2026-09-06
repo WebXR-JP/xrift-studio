@@ -1,0 +1,5533 @@
+{
+  "entities": {
+    "entity-01457aac-59c6-4503-ba03-dc10f74783ce": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-82802e08-20d9-489b-8f9b-5f5d83158240",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "assetReferences": [],
+          "contractVersion": "1.0.0",
+          "enabled": true,
+          "entityReferences": [
+            "entity-72e89b57-69ae-4905-a1fb-c1999657f623",
+            "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc",
+            "entity-3ab04314-90a2-426c-8876-516ce96b14c7",
+            "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a",
+            "entity-5025e191-fbfa-4182-bade-11d14a9b4ada",
+            "entity-dc3566a2-8890-4c28-aa81-43a5932d0def",
+            "entity-ce929637-5691-4878-8869-fe0d396b9921",
+            "entity-e7087797-a98e-4491-bc68-a913d3255041",
+            "entity-67a4f027-e0aa-4eb0-931b-ded5034a5d5e",
+            "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525",
+            "entity-40a75833-b032-4ee6-a3e0-d863d2a91787",
+            "entity-b63ab8a4-af25-4a77-974c-f399eacdc392",
+            "entity-8bf4b634-b948-4ec6-a164-61895269fab5",
+            "entity-a52639e0-2af0-4745-8212-93287fe13f83",
+            "entity-42d22895-8ec1-4733-9418-7f48bf9174ad",
+            "entity-d3d2b22d-cb91-4f33-ab28-9ad33ea56748",
+            "entity-7ac557ab-4d93-4fcd-bcbb-23d5647ae77c",
+            "entity-c5ff5e53-c9a0-44e9-87fb-c3fa97e72394",
+            "entity-d8eb6a7f-dfd5-4605-8fd9-79dbfe689333",
+            "entity-4fe0f577-8820-44ad-a78a-cee91db7890d",
+            "entity-a2ba5c58-0ff8-46c6-b6be-f36af27e3e3d",
+            "entity-f35ad42e-a055-4270-b672-2ae033029026",
+            "entity-143c7efb-9a9d-4409-b04f-79b6aca0ae49",
+            "entity-eb09c558-e1ce-4f07-84f5-54481a965db9",
+            "entity-d8f70d1d-4681-472c-a0ce-5f09a3163f1e",
+            "entity-59faeaac-bb8b-4238-a8bf-e1b7bb494c1d",
+            "entity-d63e873f-80f0-4def-96ce-18cfe1a84994"
+          ],
+          "id": "component-c2f5c80e-a975-4252-b6d6-dcb420dde38d",
+          "properties": {
+            "bgmVolume": 0.12,
+            "clearcoat": 0.7,
+            "environmentPhase": 0,
+            "iridescence": 0.8,
+            "nodeSpeed": 0.16,
+            "windDirection": 35,
+            "windFrequency": 0.8,
+            "windStrength": 0.3,
+            "worldEnergy": 0.65,
+            "worldPulse": 0
+          },
+          "runIn": "play",
+          "scriptAssetId": "asset-61909947-fd04-4591-8291-919d175762b5",
+          "type": "script"
+        },
+        {
+          "audioAssetId": "audio-living-ambient-f79d64715859",
+          "autoplay": true,
+          "enabled": true,
+          "id": "component-8968cad1-d694-4c9a-9001-566d410978d7",
+          "loop": true,
+          "maxDistance": 10000,
+          "refDistance": 1,
+          "rolloffFactor": 1,
+          "spatial": false,
+          "type": "audio-source",
+          "volume": 0.12
+        }
+      ],
+      "enabled": true,
+      "id": "entity-01457aac-59c6-4503-ba03-dc10f74783ce",
+      "name": "Living World Controls",
+      "parentId": null
+    },
+    "entity-143c7efb-9a9d-4409-b04f-79b6aca0ae49": {
+      "children": [
+        "entity-143c7efb-9a9d-4409-b04f-79b6aca0ae49-model-node-0",
+        "entity-143c7efb-9a9d-4409-b04f-79b6aca0ae49-model-node-1"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-a851b4bc-e97f-4179-a784-057092d0a22f",
+          "position": [
+            -6,
+            1,
+            -3
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-143c7efb-9a9d-4409-b04f-79b6aca0ae49",
+      "name": "LMW node-parts 3",
+      "parentId": null
+    },
+    "entity-143c7efb-9a9d-4409-b04f-79b6aca0ae49-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-143c7efb-9a9d-4409-b04f-79b6aca0ae49-model-node-0-transform",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-parts-11e4468c6d62",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-node-parts-11e4468c6d62",
+          "id": "entity-143c7efb-9a9d-4409-b04f-79b6aca0ae49-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-parts-11e4468c6d62-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-143c7efb-9a9d-4409-b04f-79b6aca0ae49-model-node-0",
+      "name": "LMW_Hex_node",
+      "parentId": "entity-143c7efb-9a9d-4409-b04f-79b6aca0ae49"
+    },
+    "entity-143c7efb-9a9d-4409-b04f-79b6aca0ae49-model-node-1": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-143c7efb-9a9d-4409-b04f-79b6aca0ae49-model-node-1-transform",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-parts-11e4468c6d62",
+            "kind": "asset",
+            "sourceNodeIndex": 1
+          },
+          "geometryAssetId": "model-node-parts-11e4468c6d62",
+          "id": "entity-143c7efb-9a9d-4409-b04f-79b6aca0ae49-model-node-1-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-parts-11e4468c6d62-1",
+              "slot": "material-1"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-143c7efb-9a9d-4409-b04f-79b6aca0ae49-model-node-1",
+      "name": "LMW_Node_outer_frame",
+      "parentId": "entity-143c7efb-9a9d-4409-b04f-79b6aca0ae49"
+    },
+    "entity-1ac0f86b-0439-4e44-998d-019640c65da4": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-31ffd5df-22a0-47c1-ac54-47856ee1aa6b",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "angularDamping": 0,
+          "bodyType": "fixed",
+          "canSleep": true,
+          "ccd": false,
+          "center": [
+            0,
+            -0.25,
+            0
+          ],
+          "enabled": true,
+          "fitMode": "manual",
+          "friction": 0.5,
+          "gravityScale": 1,
+          "halfExtents": [
+            20,
+            0.25,
+            25
+          ],
+          "id": "component-39a928b2-0c7a-4593-bfe7-31983123b2f3",
+          "isTrigger": false,
+          "linearDamping": 0,
+          "lockRotations": false,
+          "lockTranslations": false,
+          "restitution": 0,
+          "shape": "box",
+          "type": "collider"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-1ac0f86b-0439-4e44-998d-019640c65da4",
+      "name": "LMW Walkable Foundation",
+      "parentId": null
+    },
+    "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc": {
+      "children": [
+        "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-0",
+        "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-1",
+        "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-2",
+        "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-3"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-c0a423b5-067e-40b8-a467-d43d4e15d996",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc",
+      "name": "LMW terrain-ridges",
+      "parentId": null
+    },
+    "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-0-transform",
+          "position": [
+            -24.445253372192383,
+            1.0400301218032837,
+            -8.161877632141113
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-terrain-ridges-15713387ab44",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-terrain-ridges-15713387ab44",
+          "id": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-terrain-ridges-15713387ab44-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        },
+        {
+          "angularDamping": 0,
+          "bodyType": "fixed",
+          "canSleep": true,
+          "ccd": false,
+          "enabled": true,
+          "fitMode": "auto",
+          "friction": 0.5,
+          "gravityScale": 1,
+          "id": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-0-collider",
+          "isTrigger": false,
+          "linearDamping": 0,
+          "lockRotations": false,
+          "lockTranslations": false,
+          "meshMode": "trimesh",
+          "restitution": 0,
+          "shape": "mesh",
+          "type": "collider"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-0",
+      "name": "LMW_Ridge_0",
+      "parentId": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc"
+    },
+    "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-1": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-1-transform",
+          "position": [
+            -26.462493896484375,
+            2.1467576026916504,
+            -19.131084442138672
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-terrain-ridges-15713387ab44",
+            "kind": "asset",
+            "sourceNodeIndex": 1
+          },
+          "geometryAssetId": "model-terrain-ridges-15713387ab44",
+          "id": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-1-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-terrain-ridges-15713387ab44-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        },
+        {
+          "angularDamping": 0,
+          "bodyType": "fixed",
+          "canSleep": true,
+          "ccd": false,
+          "enabled": true,
+          "fitMode": "auto",
+          "friction": 0.5,
+          "gravityScale": 1,
+          "id": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-1-collider",
+          "isTrigger": false,
+          "linearDamping": 0,
+          "lockRotations": false,
+          "lockTranslations": false,
+          "meshMode": "trimesh",
+          "restitution": 0,
+          "shape": "mesh",
+          "type": "collider"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-1",
+      "name": "LMW_Ridge_1",
+      "parentId": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc"
+    },
+    "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-2": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-2-transform",
+          "position": [
+            23.56365394592285,
+            0.6712596416473389,
+            -20.177785873413086
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-terrain-ridges-15713387ab44",
+            "kind": "asset",
+            "sourceNodeIndex": 2
+          },
+          "geometryAssetId": "model-terrain-ridges-15713387ab44",
+          "id": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-2-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-terrain-ridges-15713387ab44-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        },
+        {
+          "angularDamping": 0,
+          "bodyType": "fixed",
+          "canSleep": true,
+          "ccd": false,
+          "enabled": true,
+          "fitMode": "auto",
+          "friction": 0.5,
+          "gravityScale": 1,
+          "id": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-2-collider",
+          "isTrigger": false,
+          "linearDamping": 0,
+          "lockRotations": false,
+          "lockTranslations": false,
+          "meshMode": "trimesh",
+          "restitution": 0,
+          "shape": "mesh",
+          "type": "collider"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-2",
+      "name": "LMW_Ridge_2",
+      "parentId": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc"
+    },
+    "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-3": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-3-transform",
+          "position": [
+            24.591598510742188,
+            -0.06583549827337265,
+            13.772299766540527
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-terrain-ridges-15713387ab44",
+            "kind": "asset",
+            "sourceNodeIndex": 3
+          },
+          "geometryAssetId": "model-terrain-ridges-15713387ab44",
+          "id": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-3-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-terrain-ridges-15713387ab44-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        },
+        {
+          "angularDamping": 0,
+          "bodyType": "fixed",
+          "canSleep": true,
+          "ccd": false,
+          "enabled": true,
+          "fitMode": "auto",
+          "friction": 0.5,
+          "gravityScale": 1,
+          "id": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-3-collider",
+          "isTrigger": false,
+          "linearDamping": 0,
+          "lockRotations": false,
+          "lockTranslations": false,
+          "meshMode": "trimesh",
+          "restitution": 0,
+          "shape": "mesh",
+          "type": "collider"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc-model-node-3",
+      "name": "LMW_Ridge_3",
+      "parentId": "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc"
+    },
+    "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525": {
+      "children": [
+        "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-0",
+        "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-1",
+        "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-2",
+        "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-3",
+        "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-4"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-38f88f47-0a51-4fdc-b6fc-dc0ea9ef5779",
+          "position": [
+            -14,
+            0.15,
+            -16
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525",
+      "name": "LMW volume-crystal",
+      "parentId": null
+    },
+    "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-0-transform",
+          "position": [
+            -1,
+            2.5,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-volume-crystal-37336571e79c",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-volume-crystal-37336571e79c",
+          "id": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-volume-crystal-37336571e79c-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-0",
+      "name": "LMW_Volume_plate_0",
+      "parentId": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525"
+    },
+    "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-1": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-1-transform",
+          "position": [
+            -0.5,
+            2.799999952316284,
+            -0.16829413175582886
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-volume-crystal-37336571e79c",
+            "kind": "asset",
+            "sourceNodeIndex": 1
+          },
+          "geometryAssetId": "model-volume-crystal-37336571e79c",
+          "id": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-1-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-volume-crystal-37336571e79c-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-1",
+      "name": "LMW_Volume_plate_1",
+      "parentId": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525"
+    },
+    "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-2": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-2-transform",
+          "position": [
+            0,
+            3.0999999046325684,
+            -0.18185947835445404
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-volume-crystal-37336571e79c",
+            "kind": "asset",
+            "sourceNodeIndex": 2
+          },
+          "geometryAssetId": "model-volume-crystal-37336571e79c",
+          "id": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-2-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-volume-crystal-37336571e79c-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-2",
+      "name": "LMW_Volume_plate_2",
+      "parentId": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525"
+    },
+    "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-3": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-3-transform",
+          "position": [
+            0.5,
+            3.4000000953674316,
+            -0.028224045410752296
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-volume-crystal-37336571e79c",
+            "kind": "asset",
+            "sourceNodeIndex": 3
+          },
+          "geometryAssetId": "model-volume-crystal-37336571e79c",
+          "id": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-3-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-volume-crystal-37336571e79c-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-3",
+      "name": "LMW_Volume_plate_3",
+      "parentId": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525"
+    },
+    "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-4": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-4-transform",
+          "position": [
+            1,
+            3.700000047683716,
+            0.15136052668094635
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-volume-crystal-37336571e79c",
+            "kind": "asset",
+            "sourceNodeIndex": 4
+          },
+          "geometryAssetId": "model-volume-crystal-37336571e79c",
+          "id": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-4-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-volume-crystal-37336571e79c-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525-model-node-4",
+      "name": "LMW_Volume_plate_4",
+      "parentId": "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525"
+    },
+    "entity-3ab04314-90a2-426c-8876-516ce96b14c7": {
+      "children": [
+        "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-0",
+        "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-1",
+        "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-2",
+        "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-3",
+        "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-4",
+        "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-5",
+        "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-6",
+        "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-7",
+        "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-8",
+        "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-9"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-b1c23006-ebad-4131-a70b-bb1a5400a769",
+          "position": [
+            -5,
+            3.8,
+            -7
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7",
+      "name": "LMW node-core",
+      "parentId": null
+    },
+    "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-0-transform",
+          "position": [
+            0.00006478515570051968,
+            -0.006617620587348938,
+            -0.0020579576957970858
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-core-dfce7c15763a",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-node-core-dfce7c15763a",
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-core-dfce7c15763a-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-0",
+      "name": "LMW_Core",
+      "parentId": "entity-3ab04314-90a2-426c-8876-516ce96b14c7"
+    },
+    "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-1": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-1-transform",
+          "position": [
+            0.000002335675844733487,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-core-dfce7c15763a",
+            "kind": "asset",
+            "sourceNodeIndex": 1
+          },
+          "geometryAssetId": "model-node-core-dfce7c15763a",
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-1-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-core-dfce7c15763a-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-1",
+      "name": "LMW_Core_ring_0",
+      "parentId": "entity-3ab04314-90a2-426c-8876-516ce96b14c7"
+    },
+    "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-2": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-2-transform",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-core-dfce7c15763a",
+            "kind": "asset",
+            "sourceNodeIndex": 2
+          },
+          "geometryAssetId": "model-node-core-dfce7c15763a",
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-2-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-core-dfce7c15763a-1",
+              "slot": "material-1"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-2",
+      "name": "LMW_Core_ring_1",
+      "parentId": "entity-3ab04314-90a2-426c-8876-516ce96b14c7"
+    },
+    "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-3": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-3-transform",
+          "position": [
+            0.000002218402187281754,
+            0.0000040420209188596345,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-core-dfce7c15763a",
+            "kind": "asset",
+            "sourceNodeIndex": 3
+          },
+          "geometryAssetId": "model-node-core-dfce7c15763a",
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-3-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-core-dfce7c15763a-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-3",
+      "name": "LMW_Core_ring_2",
+      "parentId": "entity-3ab04314-90a2-426c-8876-516ce96b14c7"
+    },
+    "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-4": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-4-transform",
+          "position": [
+            0.000005825091193401022,
+            0,
+            -0.000007292034297279315
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-core-dfce7c15763a",
+            "kind": "asset",
+            "sourceNodeIndex": 4
+          },
+          "geometryAssetId": "model-node-core-dfce7c15763a",
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-4-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-core-dfce7c15763a-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-4",
+      "name": "LMW_Core_ring_3",
+      "parentId": "entity-3ab04314-90a2-426c-8876-516ce96b14c7"
+    },
+    "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-5": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-5-transform",
+          "position": [
+            3,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-core-dfce7c15763a",
+            "kind": "asset",
+            "sourceNodeIndex": 5
+          },
+          "geometryAssetId": "model-node-core-dfce7c15763a",
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-5-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-core-dfce7c15763a-2",
+              "slot": "material-2"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-5",
+      "name": "LMW_Core_satellite_0",
+      "parentId": "entity-3ab04314-90a2-426c-8876-516ce96b14c7"
+    },
+    "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-6": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-6-transform",
+          "position": [
+            0.9270510077476501,
+            2.8531694412231445,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-core-dfce7c15763a",
+            "kind": "asset",
+            "sourceNodeIndex": 6
+          },
+          "geometryAssetId": "model-node-core-dfce7c15763a",
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-6-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-core-dfce7c15763a-2",
+              "slot": "material-2"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-6",
+      "name": "LMW_Core_satellite_1",
+      "parentId": "entity-3ab04314-90a2-426c-8876-516ce96b14c7"
+    },
+    "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-7": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-7-transform",
+          "position": [
+            -2.427051067352295,
+            1.7633557319641113,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-core-dfce7c15763a",
+            "kind": "asset",
+            "sourceNodeIndex": 7
+          },
+          "geometryAssetId": "model-node-core-dfce7c15763a",
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-7-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-core-dfce7c15763a-2",
+              "slot": "material-2"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-7",
+      "name": "LMW_Core_satellite_2",
+      "parentId": "entity-3ab04314-90a2-426c-8876-516ce96b14c7"
+    },
+    "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-8": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-8-transform",
+          "position": [
+            -2.427051067352295,
+            -1.7633557319641113,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-core-dfce7c15763a",
+            "kind": "asset",
+            "sourceNodeIndex": 8
+          },
+          "geometryAssetId": "model-node-core-dfce7c15763a",
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-8-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-core-dfce7c15763a-2",
+              "slot": "material-2"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-8",
+      "name": "LMW_Core_satellite_3",
+      "parentId": "entity-3ab04314-90a2-426c-8876-516ce96b14c7"
+    },
+    "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-9": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-9-transform",
+          "position": [
+            0.9270510077476501,
+            -2.8531694412231445,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-core-dfce7c15763a",
+            "kind": "asset",
+            "sourceNodeIndex": 9
+          },
+          "geometryAssetId": "model-node-core-dfce7c15763a",
+          "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-9-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-core-dfce7c15763a-2",
+              "slot": "material-2"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-3ab04314-90a2-426c-8876-516ce96b14c7-model-node-9",
+      "name": "LMW_Core_satellite_4",
+      "parentId": "entity-3ab04314-90a2-426c-8876-516ce96b14c7"
+    },
+    "entity-40a75833-b032-4ee6-a3e0-d863d2a91787": {
+      "children": [
+        "entity-40a75833-b032-4ee6-a3e0-d863d2a91787-model-node-0",
+        "entity-40a75833-b032-4ee6-a3e0-d863d2a91787-model-node-1"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-99ea0d5e-317f-4d3e-8fb2-091204c456da",
+          "position": [
+            -8,
+            0.8,
+            9
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-40a75833-b032-4ee6-a3e0-d863d2a91787",
+      "name": "LMW node-parts",
+      "parentId": null
+    },
+    "entity-40a75833-b032-4ee6-a3e0-d863d2a91787-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-40a75833-b032-4ee6-a3e0-d863d2a91787-model-node-0-transform",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-parts-11e4468c6d62",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-node-parts-11e4468c6d62",
+          "id": "entity-40a75833-b032-4ee6-a3e0-d863d2a91787-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-parts-11e4468c6d62-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-40a75833-b032-4ee6-a3e0-d863d2a91787-model-node-0",
+      "name": "LMW_Hex_node",
+      "parentId": "entity-40a75833-b032-4ee6-a3e0-d863d2a91787"
+    },
+    "entity-40a75833-b032-4ee6-a3e0-d863d2a91787-model-node-1": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-40a75833-b032-4ee6-a3e0-d863d2a91787-model-node-1-transform",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-parts-11e4468c6d62",
+            "kind": "asset",
+            "sourceNodeIndex": 1
+          },
+          "geometryAssetId": "model-node-parts-11e4468c6d62",
+          "id": "entity-40a75833-b032-4ee6-a3e0-d863d2a91787-model-node-1-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-parts-11e4468c6d62-1",
+              "slot": "material-1"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-40a75833-b032-4ee6-a3e0-d863d2a91787-model-node-1",
+      "name": "LMW_Node_outer_frame",
+      "parentId": "entity-40a75833-b032-4ee6-a3e0-d863d2a91787"
+    },
+    "entity-42d22895-8ec1-4733-9418-7f48bf9174ad": {
+      "children": [
+        "entity-42d22895-8ec1-4733-9418-7f48bf9174ad-model-node-0"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-78ef5846-ddd7-4bfd-8685-854760c78a5f",
+          "position": [
+            -15,
+            0.14,
+            13
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-42d22895-8ec1-4733-9418-7f48bf9174ad",
+      "name": "LMW grass-cluster 3",
+      "parentId": null
+    },
+    "entity-42d22895-8ec1-4733-9418-7f48bf9174ad-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-42d22895-8ec1-4733-9418-7f48bf9174ad-model-node-0-transform",
+          "position": [
+            1.325835943222046,
+            0.3464938700199127,
+            0.5115529298782349
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-grass-cluster-4b6bbddefa70",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-grass-cluster-4b6bbddefa70",
+          "id": "entity-42d22895-8ec1-4733-9418-7f48bf9174ad-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-grass-cluster-4b6bbddefa70-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-42d22895-8ec1-4733-9418-7f48bf9174ad-model-node-0",
+      "name": "LMW_Wind_blades",
+      "parentId": "entity-42d22895-8ec1-4733-9418-7f48bf9174ad"
+    },
+    "entity-4fe0f577-8820-44ad-a78a-cee91db7890d": {
+      "children": [
+        "entity-4fe0f577-8820-44ad-a78a-cee91db7890d-model-node-0"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-c084ee28-8cdb-4208-bdf8-b6a6e9851a15",
+          "position": [
+            16,
+            0.14,
+            8
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-4fe0f577-8820-44ad-a78a-cee91db7890d",
+      "name": "LMW grass-cluster 8",
+      "parentId": null
+    },
+    "entity-4fe0f577-8820-44ad-a78a-cee91db7890d-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-4fe0f577-8820-44ad-a78a-cee91db7890d-model-node-0-transform",
+          "position": [
+            1.325835943222046,
+            0.3464938700199127,
+            0.5115529298782349
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-grass-cluster-4b6bbddefa70",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-grass-cluster-4b6bbddefa70",
+          "id": "entity-4fe0f577-8820-44ad-a78a-cee91db7890d-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-grass-cluster-4b6bbddefa70-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-4fe0f577-8820-44ad-a78a-cee91db7890d-model-node-0",
+      "name": "LMW_Wind_blades",
+      "parentId": "entity-4fe0f577-8820-44ad-a78a-cee91db7890d"
+    },
+    "entity-5025e191-fbfa-4182-bade-11d14a9b4ada": {
+      "children": [
+        "entity-5025e191-fbfa-4182-bade-11d14a9b4ada-model-node-0",
+        "entity-5025e191-fbfa-4182-bade-11d14a9b4ada-model-node-1"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-da6fef90-c9ed-4029-b1af-46235768472b",
+          "position": [
+            -14,
+            25,
+            -96
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-5025e191-fbfa-4182-bade-11d14a9b4ada",
+      "name": "LMW distant-ring",
+      "parentId": null
+    },
+    "entity-5025e191-fbfa-4182-bade-11d14a9b4ada-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-5025e191-fbfa-4182-bade-11d14a9b4ada-model-node-0-transform",
+          "position": [
+            -0.000010107616617460735,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-distant-ring-674d698c0267",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-distant-ring-674d698c0267",
+          "id": "entity-5025e191-fbfa-4182-bade-11d14a9b4ada-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-distant-ring-674d698c0267-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-5025e191-fbfa-4182-bade-11d14a9b4ada-model-node-0",
+      "name": "LMW_Distant_ring",
+      "parentId": "entity-5025e191-fbfa-4182-bade-11d14a9b4ada"
+    },
+    "entity-5025e191-fbfa-4182-bade-11d14a9b4ada-model-node-1": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-5025e191-fbfa-4182-bade-11d14a9b4ada-model-node-1-transform",
+          "position": [
+            -0.0006058702128939331,
+            0.00010009773541241884,
+            -0.00006232326268218458
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-distant-ring-674d698c0267",
+            "kind": "asset",
+            "sourceNodeIndex": 1
+          },
+          "geometryAssetId": "model-distant-ring-674d698c0267",
+          "id": "entity-5025e191-fbfa-4182-bade-11d14a9b4ada-model-node-1-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-distant-ring-674d698c0267-1",
+              "slot": "material-1"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-5025e191-fbfa-4182-bade-11d14a9b4ada-model-node-1",
+      "name": "LMW_Distant_ring_inner",
+      "parentId": "entity-5025e191-fbfa-4182-bade-11d14a9b4ada"
+    },
+    "entity-59faeaac-bb8b-4238-a8bf-e1b7bb494c1d": {
+      "children": [
+        "entity-59faeaac-bb8b-4238-a8bf-e1b7bb494c1d-model-node-0"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-058aff09-5f7b-4d1a-873c-031ec8bc024c",
+          "position": [
+            15,
+            4,
+            -1
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-59faeaac-bb8b-4238-a8bf-e1b7bb494c1d",
+      "name": "LMW membrane 2",
+      "parentId": null
+    },
+    "entity-59faeaac-bb8b-4238-a8bf-e1b7bb494c1d-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-59faeaac-bb8b-4238-a8bf-e1b7bb494c1d-model-node-0-transform",
+          "position": [
+            0.0001097838394343853,
+            -0.006617635954171419,
+            -0.0015010950155556202
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-membrane-26db490a2198",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-membrane-26db490a2198",
+          "id": "entity-59faeaac-bb8b-4238-a8bf-e1b7bb494c1d-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-membrane-26db490a2198-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-59faeaac-bb8b-4238-a8bf-e1b7bb494c1d-model-node-0",
+      "name": "LMW_Membrane",
+      "parentId": "entity-59faeaac-bb8b-4238-a8bf-e1b7bb494c1d"
+    },
+    "entity-67a4f027-e0aa-4eb0-931b-ded5034a5d5e": {
+      "children": [
+        "entity-67a4f027-e0aa-4eb0-931b-ded5034a5d5e-model-node-0"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-6c5d7cbf-d55e-4360-a6e1-e5b3382e07d8",
+          "position": [
+            -12,
+            0.25,
+            8
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-67a4f027-e0aa-4eb0-931b-ded5034a5d5e",
+      "name": "LMW anisotropic-disc",
+      "parentId": null
+    },
+    "entity-67a4f027-e0aa-4eb0-931b-ded5034a5d5e-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-67a4f027-e0aa-4eb0-931b-ded5034a5d5e-model-node-0-transform",
+          "position": [
+            0,
+            0.3774755001068115,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-anisotropic-disc-91c37fe78643",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-anisotropic-disc-91c37fe78643",
+          "id": "entity-67a4f027-e0aa-4eb0-931b-ded5034a5d5e-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-anisotropic-disc-91c37fe78643-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-67a4f027-e0aa-4eb0-931b-ded5034a5d5e-model-node-0",
+      "name": "LMW_Disc",
+      "parentId": "entity-67a4f027-e0aa-4eb0-931b-ded5034a5d5e"
+    },
+    "entity-72e89b57-69ae-4905-a1fb-c1999657f623": {
+      "children": [
+        "entity-72e89b57-69ae-4905-a1fb-c1999657f623-model-node-0",
+        "entity-72e89b57-69ae-4905-a1fb-c1999657f623-model-node-1"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-44c859c8-0834-4f77-9cf8-c4bf90729707",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-72e89b57-69ae-4905-a1fb-c1999657f623",
+      "name": "LMW terrain-main",
+      "parentId": null
+    },
+    "entity-72e89b57-69ae-4905-a1fb-c1999657f623-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-72e89b57-69ae-4905-a1fb-c1999657f623-model-node-0-transform",
+          "position": [
+            0.3008847236633301,
+            -2.313039779663086,
+            0.2061314582824707
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-terrain-main-cb2b70172ca4",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-terrain-main-cb2b70172ca4",
+          "id": "entity-72e89b57-69ae-4905-a1fb-c1999657f623-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-terrain-main-cb2b70172ca4-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        },
+        {
+          "angularDamping": 0,
+          "bodyType": "fixed",
+          "canSleep": true,
+          "ccd": false,
+          "enabled": true,
+          "fitMode": "auto",
+          "friction": 0.5,
+          "gravityScale": 1,
+          "id": "entity-72e89b57-69ae-4905-a1fb-c1999657f623-model-node-0-collider",
+          "isTrigger": false,
+          "linearDamping": 0,
+          "lockRotations": false,
+          "lockTranslations": false,
+          "meshMode": "trimesh",
+          "restitution": 0,
+          "shape": "mesh",
+          "type": "collider"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-72e89b57-69ae-4905-a1fb-c1999657f623-model-node-0",
+      "name": "LMW_Island_cut",
+      "parentId": "entity-72e89b57-69ae-4905-a1fb-c1999657f623"
+    },
+    "entity-72e89b57-69ae-4905-a1fb-c1999657f623-model-node-1": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-72e89b57-69ae-4905-a1fb-c1999657f623-model-node-1-transform",
+          "position": [
+            19,
+            0.0927734375,
+            -0.5
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-terrain-main-cb2b70172ca4",
+            "kind": "asset",
+            "sourceNodeIndex": 1
+          },
+          "geometryAssetId": "model-terrain-main-cb2b70172ca4",
+          "id": "entity-72e89b57-69ae-4905-a1fb-c1999657f623-model-node-1-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-terrain-main-cb2b70172ca4-1",
+              "slot": "material-1"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        },
+        {
+          "angularDamping": 0,
+          "bodyType": "fixed",
+          "canSleep": true,
+          "ccd": false,
+          "enabled": true,
+          "fitMode": "auto",
+          "friction": 0.5,
+          "gravityScale": 1,
+          "id": "entity-72e89b57-69ae-4905-a1fb-c1999657f623-model-node-1-collider",
+          "isTrigger": false,
+          "linearDamping": 0,
+          "lockRotations": false,
+          "lockTranslations": false,
+          "meshMode": "trimesh",
+          "restitution": 0,
+          "shape": "mesh",
+          "type": "collider"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-72e89b57-69ae-4905-a1fb-c1999657f623-model-node-1",
+      "name": "LMW_Plateau",
+      "parentId": "entity-72e89b57-69ae-4905-a1fb-c1999657f623"
+    },
+    "entity-7ac557ab-4d93-4fcd-bcbb-23d5647ae77c": {
+      "children": [
+        "entity-7ac557ab-4d93-4fcd-bcbb-23d5647ae77c-model-node-0"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-8096372d-7ee9-4c7a-a340-03fbbbd823ec",
+          "position": [
+            -10,
+            0.14,
+            11
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-7ac557ab-4d93-4fcd-bcbb-23d5647ae77c",
+      "name": "LMW grass-cluster 5",
+      "parentId": null
+    },
+    "entity-7ac557ab-4d93-4fcd-bcbb-23d5647ae77c-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-7ac557ab-4d93-4fcd-bcbb-23d5647ae77c-model-node-0-transform",
+          "position": [
+            1.325835943222046,
+            0.3464938700199127,
+            0.5115529298782349
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-grass-cluster-4b6bbddefa70",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-grass-cluster-4b6bbddefa70",
+          "id": "entity-7ac557ab-4d93-4fcd-bcbb-23d5647ae77c-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-grass-cluster-4b6bbddefa70-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-7ac557ab-4d93-4fcd-bcbb-23d5647ae77c-model-node-0",
+      "name": "LMW_Wind_blades",
+      "parentId": "entity-7ac557ab-4d93-4fcd-bcbb-23d5647ae77c"
+    },
+    "entity-8b2d60e8-878b-4ca8-9edf-e01cdc6d8240": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-745deefd-f086-43de-b5d8-38e6639cc7a6",
+          "position": [
+            5,
+            4,
+            -4
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "assetReferences": [],
+          "enabled": true,
+          "entityReferences": [],
+          "id": "component-fa7eadb9-e15f-42ff-a0cc-b1027a5297b7",
+          "properties": {
+            "id": "living-material-hands-on",
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "rotation": [
+              0,
+              0,
+              0
+            ],
+            "targetFps": 30,
+            "width": 8
+          },
+          "schemaId": "xrift.screen-share-display",
+          "schemaVersion": "1.0.0",
+          "type": "xrift-component"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-8b2d60e8-878b-4ca8-9edf-e01cdc6d8240",
+      "name": "LMW Hands-on Screen",
+      "parentId": null
+    },
+    "entity-8bf4b634-b948-4ec6-a164-61895269fab5": {
+      "children": [
+        "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-0",
+        "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-1",
+        "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-2",
+        "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-3",
+        "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-4"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-4c01ec13-7848-4d0c-a452-009b6e11502f",
+          "position": [
+            15,
+            0.13,
+            12
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-8bf4b634-b948-4ec6-a164-61895269fab5",
+      "name": "LMW abstract-vegetation",
+      "parentId": null
+    },
+    "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-0-transform",
+          "position": [
+            0.12021501362323761,
+            0.6992300748825073,
+            -0.15453293919563293
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-abstract-vegetation-90aa4c7ca654",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-abstract-vegetation-90aa4c7ca654",
+          "id": "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-abstract-vegetation-90aa4c7ca654-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-0",
+      "name": "LMW_Ribbon_0",
+      "parentId": "entity-8bf4b634-b948-4ec6-a164-61895269fab5"
+    },
+    "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-1": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-1-transform",
+          "position": [
+            0.32428041100502014,
+            1.651561975479126,
+            0.13835100829601288
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-abstract-vegetation-90aa4c7ca654",
+            "kind": "asset",
+            "sourceNodeIndex": 1
+          },
+          "geometryAssetId": "model-abstract-vegetation-90aa4c7ca654",
+          "id": "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-1-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-abstract-vegetation-90aa4c7ca654-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-1",
+      "name": "LMW_Ribbon_1",
+      "parentId": "entity-8bf4b634-b948-4ec6-a164-61895269fab5"
+    },
+    "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-2": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-2-transform",
+          "position": [
+            0.4324708580970764,
+            1.3058878183364868,
+            0.1585717350244522
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-abstract-vegetation-90aa4c7ca654",
+            "kind": "asset",
+            "sourceNodeIndex": 2
+          },
+          "geometryAssetId": "model-abstract-vegetation-90aa4c7ca654",
+          "id": "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-2-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-abstract-vegetation-90aa4c7ca654-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-2",
+      "name": "LMW_Ribbon_2",
+      "parentId": "entity-8bf4b634-b948-4ec6-a164-61895269fab5"
+    },
+    "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-3": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-3-transform",
+          "position": [
+            0.5475835204124451,
+            0.8909463882446289,
+            0.14051641523838043
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-abstract-vegetation-90aa4c7ca654",
+            "kind": "asset",
+            "sourceNodeIndex": 3
+          },
+          "geometryAssetId": "model-abstract-vegetation-90aa4c7ca654",
+          "id": "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-3-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-abstract-vegetation-90aa4c7ca654-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-3",
+      "name": "LMW_Ribbon_3",
+      "parentId": "entity-8bf4b634-b948-4ec6-a164-61895269fab5"
+    },
+    "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-4": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-4-transform",
+          "position": [
+            0.7660514116287231,
+            1.775085687637329,
+            -0.1417768895626068
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-abstract-vegetation-90aa4c7ca654",
+            "kind": "asset",
+            "sourceNodeIndex": 4
+          },
+          "geometryAssetId": "model-abstract-vegetation-90aa4c7ca654",
+          "id": "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-4-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-abstract-vegetation-90aa4c7ca654-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-8bf4b634-b948-4ec6-a164-61895269fab5-model-node-4",
+      "name": "LMW_Ribbon_4",
+      "parentId": "entity-8bf4b634-b948-4ec6-a164-61895269fab5"
+    },
+    "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a": {
+      "children": [
+        "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-0",
+        "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-1",
+        "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-2",
+        "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-3",
+        "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-4",
+        "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-5",
+        "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-6",
+        "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-7",
+        "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-8",
+        "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-9"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-29cdf812-d46f-43c8-aa32-ecb1753499f8",
+          "position": [
+            12,
+            0.12,
+            -15
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a",
+      "name": "LMW monolith",
+      "parentId": null
+    },
+    "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-0-transform",
+          "position": [
+            0,
+            0.15000000596046448,
+            1.059999942779541
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-monolith-4e44a0f229e3",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-monolith-4e44a0f229e3",
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-monolith-4e44a0f229e3-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        },
+        {
+          "angularDamping": 0,
+          "bodyType": "fixed",
+          "canSleep": true,
+          "ccd": false,
+          "enabled": true,
+          "fitMode": "auto",
+          "friction": 0.5,
+          "gravityScale": 1,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-0-collider",
+          "isTrigger": false,
+          "linearDamping": 0,
+          "lockRotations": false,
+          "lockTranslations": false,
+          "meshMode": "trimesh",
+          "restitution": 0,
+          "shape": "mesh",
+          "type": "collider"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-0",
+      "name": "LMW_Monolith_seam_0",
+      "parentId": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a"
+    },
+    "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-1": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-1-transform",
+          "position": [
+            0.31825411319732666,
+            3.200000047683716,
+            1.059999942779541
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-monolith-4e44a0f229e3",
+            "kind": "asset",
+            "sourceNodeIndex": 1
+          },
+          "geometryAssetId": "model-monolith-4e44a0f229e3",
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-1-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-monolith-4e44a0f229e3-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        },
+        {
+          "angularDamping": 0,
+          "bodyType": "fixed",
+          "canSleep": true,
+          "ccd": false,
+          "enabled": true,
+          "fitMode": "auto",
+          "friction": 0.5,
+          "gravityScale": 1,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-1-collider",
+          "isTrigger": false,
+          "linearDamping": 0,
+          "lockRotations": false,
+          "lockTranslations": false,
+          "meshMode": "trimesh",
+          "restitution": 0,
+          "shape": "mesh",
+          "type": "collider"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-1",
+      "name": "LMW_Monolith_seam_1",
+      "parentId": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a"
+    },
+    "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-2": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-2-transform",
+          "position": [
+            -0.26488086581230164,
+            6.25,
+            1.059999942779541
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-monolith-4e44a0f229e3",
+            "kind": "asset",
+            "sourceNodeIndex": 2
+          },
+          "geometryAssetId": "model-monolith-4e44a0f229e3",
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-2-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-monolith-4e44a0f229e3-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        },
+        {
+          "angularDamping": 0,
+          "bodyType": "fixed",
+          "canSleep": true,
+          "ccd": false,
+          "enabled": true,
+          "fitMode": "auto",
+          "friction": 0.5,
+          "gravityScale": 1,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-2-collider",
+          "isTrigger": false,
+          "linearDamping": 0,
+          "lockRotations": false,
+          "lockTranslations": false,
+          "meshMode": "trimesh",
+          "restitution": 0,
+          "shape": "mesh",
+          "type": "collider"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-2",
+      "name": "LMW_Monolith_seam_2",
+      "parentId": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a"
+    },
+    "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-3": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-3-transform",
+          "position": [
+            -0.09779541194438934,
+            9.300000190734863,
+            1.059999942779541
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-monolith-4e44a0f229e3",
+            "kind": "asset",
+            "sourceNodeIndex": 3
+          },
+          "geometryAssetId": "model-monolith-4e44a0f229e3",
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-3-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-monolith-4e44a0f229e3-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        },
+        {
+          "angularDamping": 0,
+          "bodyType": "fixed",
+          "canSleep": true,
+          "ccd": false,
+          "enabled": true,
+          "fitMode": "auto",
+          "friction": 0.5,
+          "gravityScale": 1,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-3-collider",
+          "isTrigger": false,
+          "linearDamping": 0,
+          "lockRotations": false,
+          "lockTranslations": false,
+          "meshMode": "trimesh",
+          "restitution": 0,
+          "shape": "mesh",
+          "type": "collider"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-3",
+      "name": "LMW_Monolith_seam_3",
+      "parentId": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a"
+    },
+    "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-4": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-4-transform",
+          "position": [
+            0.3462753891944885,
+            12.350000381469727,
+            1.059999942779541
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-monolith-4e44a0f229e3",
+            "kind": "asset",
+            "sourceNodeIndex": 4
+          },
+          "geometryAssetId": "model-monolith-4e44a0f229e3",
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-4-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-monolith-4e44a0f229e3-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        },
+        {
+          "angularDamping": 0,
+          "bodyType": "fixed",
+          "canSleep": true,
+          "ccd": false,
+          "enabled": true,
+          "fitMode": "auto",
+          "friction": 0.5,
+          "gravityScale": 1,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-4-collider",
+          "isTrigger": false,
+          "linearDamping": 0,
+          "lockRotations": false,
+          "lockTranslations": false,
+          "meshMode": "trimesh",
+          "restitution": 0,
+          "shape": "mesh",
+          "type": "collider"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-4",
+      "name": "LMW_Monolith_seam_4",
+      "parentId": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a"
+    },
+    "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-5": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-5-transform",
+          "position": [
+            0,
+            1.4500000476837158,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-monolith-4e44a0f229e3",
+            "kind": "asset",
+            "sourceNodeIndex": 5
+          },
+          "geometryAssetId": "model-monolith-4e44a0f229e3",
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-5-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-monolith-4e44a0f229e3-1",
+              "slot": "material-1"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        },
+        {
+          "angularDamping": 0,
+          "bodyType": "fixed",
+          "canSleep": true,
+          "ccd": false,
+          "enabled": true,
+          "fitMode": "auto",
+          "friction": 0.5,
+          "gravityScale": 1,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-5-collider",
+          "isTrigger": false,
+          "linearDamping": 0,
+          "lockRotations": false,
+          "lockTranslations": false,
+          "meshMode": "trimesh",
+          "restitution": 0,
+          "shape": "mesh",
+          "type": "collider"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-5",
+      "name": "LMW_Monolith_segment_0",
+      "parentId": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a"
+    },
+    "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-6": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-6-transform",
+          "position": [
+            0.31825417280197144,
+            4.5,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-monolith-4e44a0f229e3",
+            "kind": "asset",
+            "sourceNodeIndex": 6
+          },
+          "geometryAssetId": "model-monolith-4e44a0f229e3",
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-6-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-monolith-4e44a0f229e3-2",
+              "slot": "material-2"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        },
+        {
+          "angularDamping": 0,
+          "bodyType": "fixed",
+          "canSleep": true,
+          "ccd": false,
+          "enabled": true,
+          "fitMode": "auto",
+          "friction": 0.5,
+          "gravityScale": 1,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-6-collider",
+          "isTrigger": false,
+          "linearDamping": 0,
+          "lockRotations": false,
+          "lockTranslations": false,
+          "meshMode": "trimesh",
+          "restitution": 0,
+          "shape": "mesh",
+          "type": "collider"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-6",
+      "name": "LMW_Monolith_segment_1",
+      "parentId": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a"
+    },
+    "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-7": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-7-transform",
+          "position": [
+            -0.26488086581230164,
+            7.550000190734863,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-monolith-4e44a0f229e3",
+            "kind": "asset",
+            "sourceNodeIndex": 7
+          },
+          "geometryAssetId": "model-monolith-4e44a0f229e3",
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-7-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-monolith-4e44a0f229e3-1",
+              "slot": "material-1"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        },
+        {
+          "angularDamping": 0,
+          "bodyType": "fixed",
+          "canSleep": true,
+          "ccd": false,
+          "enabled": true,
+          "fitMode": "auto",
+          "friction": 0.5,
+          "gravityScale": 1,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-7-collider",
+          "isTrigger": false,
+          "linearDamping": 0,
+          "lockRotations": false,
+          "lockTranslations": false,
+          "meshMode": "trimesh",
+          "restitution": 0,
+          "shape": "mesh",
+          "type": "collider"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-7",
+      "name": "LMW_Monolith_segment_2",
+      "parentId": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a"
+    },
+    "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-8": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-8-transform",
+          "position": [
+            -0.09779539704322815,
+            10.600000381469727,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-monolith-4e44a0f229e3",
+            "kind": "asset",
+            "sourceNodeIndex": 8
+          },
+          "geometryAssetId": "model-monolith-4e44a0f229e3",
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-8-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-monolith-4e44a0f229e3-2",
+              "slot": "material-2"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        },
+        {
+          "angularDamping": 0,
+          "bodyType": "fixed",
+          "canSleep": true,
+          "ccd": false,
+          "enabled": true,
+          "fitMode": "auto",
+          "friction": 0.5,
+          "gravityScale": 1,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-8-collider",
+          "isTrigger": false,
+          "linearDamping": 0,
+          "lockRotations": false,
+          "lockTranslations": false,
+          "meshMode": "trimesh",
+          "restitution": 0,
+          "shape": "mesh",
+          "type": "collider"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-8",
+      "name": "LMW_Monolith_segment_3",
+      "parentId": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a"
+    },
+    "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-9": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-9-transform",
+          "position": [
+            0.3462754487991333,
+            13.649999618530273,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-monolith-4e44a0f229e3",
+            "kind": "asset",
+            "sourceNodeIndex": 9
+          },
+          "geometryAssetId": "model-monolith-4e44a0f229e3",
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-9-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-monolith-4e44a0f229e3-1",
+              "slot": "material-1"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        },
+        {
+          "angularDamping": 0,
+          "bodyType": "fixed",
+          "canSleep": true,
+          "ccd": false,
+          "enabled": true,
+          "fitMode": "auto",
+          "friction": 0.5,
+          "gravityScale": 1,
+          "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-9-collider",
+          "isTrigger": false,
+          "linearDamping": 0,
+          "lockRotations": false,
+          "lockTranslations": false,
+          "meshMode": "trimesh",
+          "restitution": 0,
+          "shape": "mesh",
+          "type": "collider"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a-model-node-9",
+      "name": "LMW_Monolith_segment_4",
+      "parentId": "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a"
+    },
+    "entity-a2ba5c58-0ff8-46c6-b6be-f36af27e3e3d": {
+      "children": [
+        "entity-a2ba5c58-0ff8-46c6-b6be-f36af27e3e3d-model-node-0"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-17258eac-0ff0-4338-87ae-72091bc4be03",
+          "position": [
+            15,
+            0.14,
+            5
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-a2ba5c58-0ff8-46c6-b6be-f36af27e3e3d",
+      "name": "LMW grass-cluster 9",
+      "parentId": null
+    },
+    "entity-a2ba5c58-0ff8-46c6-b6be-f36af27e3e3d-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-a2ba5c58-0ff8-46c6-b6be-f36af27e3e3d-model-node-0-transform",
+          "position": [
+            1.325835943222046,
+            0.3464938700199127,
+            0.5115529298782349
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-grass-cluster-4b6bbddefa70",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-grass-cluster-4b6bbddefa70",
+          "id": "entity-a2ba5c58-0ff8-46c6-b6be-f36af27e3e3d-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-grass-cluster-4b6bbddefa70-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-a2ba5c58-0ff8-46c6-b6be-f36af27e3e3d-model-node-0",
+      "name": "LMW_Wind_blades",
+      "parentId": "entity-a2ba5c58-0ff8-46c6-b6be-f36af27e3e3d"
+    },
+    "entity-a52639e0-2af0-4745-8212-93287fe13f83": {
+      "children": [
+        "entity-a52639e0-2af0-4745-8212-93287fe13f83-model-node-0"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-b7f04b15-041f-4ffb-92b8-87fca4f56726",
+          "position": [
+            -13,
+            0.14,
+            15
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-a52639e0-2af0-4745-8212-93287fe13f83",
+      "name": "LMW grass-cluster 2",
+      "parentId": null
+    },
+    "entity-a52639e0-2af0-4745-8212-93287fe13f83-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-a52639e0-2af0-4745-8212-93287fe13f83-model-node-0-transform",
+          "position": [
+            1.325835943222046,
+            0.3464938700199127,
+            0.5115529298782349
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-grass-cluster-4b6bbddefa70",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-grass-cluster-4b6bbddefa70",
+          "id": "entity-a52639e0-2af0-4745-8212-93287fe13f83-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-grass-cluster-4b6bbddefa70-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-a52639e0-2af0-4745-8212-93287fe13f83-model-node-0",
+      "name": "LMW_Wind_blades",
+      "parentId": "entity-a52639e0-2af0-4745-8212-93287fe13f83"
+    },
+    "entity-b17648d7-1f07-4808-b6cf-31db51c8e47e": {
+      "children": [
+        "entity-b17648d7-1f07-4808-b6cf-31db51c8e47e-model-node-0"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-3ec5948b-fd05-4c21-82bf-f2435201c732",
+          "position": [
+            5,
+            0.1,
+            -4.2
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-b17648d7-1f07-4808-b6cf-31db51c8e47e",
+      "name": "LMW Hands-on architecture",
+      "parentId": null
+    },
+    "entity-b17648d7-1f07-4808-b6cf-31db51c8e47e-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-b17648d7-1f07-4808-b6cf-31db51c8e47e-model-node-0-transform",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-hands-on-frame-fa7a9942c7ac",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-hands-on-frame-fa7a9942c7ac",
+          "id": "entity-b17648d7-1f07-4808-b6cf-31db51c8e47e-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-hands-on-frame-fa7a9942c7ac-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        },
+        {
+          "angularDamping": 0,
+          "bodyType": "fixed",
+          "canSleep": true,
+          "ccd": false,
+          "enabled": true,
+          "fitMode": "auto",
+          "friction": 0.5,
+          "gravityScale": 1,
+          "id": "entity-b17648d7-1f07-4808-b6cf-31db51c8e47e-model-node-0-collider",
+          "isTrigger": false,
+          "linearDamping": 0,
+          "lockRotations": false,
+          "lockTranslations": false,
+          "meshMode": "trimesh",
+          "restitution": 0,
+          "shape": "mesh",
+          "type": "collider"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-b17648d7-1f07-4808-b6cf-31db51c8e47e-model-node-0",
+      "name": "LMW_Screen_architecture",
+      "parentId": "entity-b17648d7-1f07-4808-b6cf-31db51c8e47e"
+    },
+    "entity-b63ab8a4-af25-4a77-974c-f399eacdc392": {
+      "children": [
+        "entity-b63ab8a4-af25-4a77-974c-f399eacdc392-model-node-0"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-3acae21e-3f1a-4ba6-a88a-8bbafafd78b7",
+          "position": [
+            -10,
+            0.13,
+            14
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-b63ab8a4-af25-4a77-974c-f399eacdc392",
+      "name": "LMW grass-cluster",
+      "parentId": null
+    },
+    "entity-b63ab8a4-af25-4a77-974c-f399eacdc392-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-b63ab8a4-af25-4a77-974c-f399eacdc392-model-node-0-transform",
+          "position": [
+            1.325835943222046,
+            0.3464938700199127,
+            0.5115529298782349
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-grass-cluster-4b6bbddefa70",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-grass-cluster-4b6bbddefa70",
+          "id": "entity-b63ab8a4-af25-4a77-974c-f399eacdc392-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-grass-cluster-4b6bbddefa70-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-b63ab8a4-af25-4a77-974c-f399eacdc392-model-node-0",
+      "name": "LMW_Wind_blades",
+      "parentId": "entity-b63ab8a4-af25-4a77-974c-f399eacdc392"
+    },
+    "entity-c5ff5e53-c9a0-44e9-87fb-c3fa97e72394": {
+      "children": [
+        "entity-c5ff5e53-c9a0-44e9-87fb-c3fa97e72394-model-node-0"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-50313f92-df8c-43af-8150-9fac942f6ed8",
+          "position": [
+            12,
+            0.14,
+            12
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-c5ff5e53-c9a0-44e9-87fb-c3fa97e72394",
+      "name": "LMW grass-cluster 6",
+      "parentId": null
+    },
+    "entity-c5ff5e53-c9a0-44e9-87fb-c3fa97e72394-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-c5ff5e53-c9a0-44e9-87fb-c3fa97e72394-model-node-0-transform",
+          "position": [
+            1.325835943222046,
+            0.3464938700199127,
+            0.5115529298782349
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-grass-cluster-4b6bbddefa70",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-grass-cluster-4b6bbddefa70",
+          "id": "entity-c5ff5e53-c9a0-44e9-87fb-c3fa97e72394-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-grass-cluster-4b6bbddefa70-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-c5ff5e53-c9a0-44e9-87fb-c3fa97e72394-model-node-0",
+      "name": "LMW_Wind_blades",
+      "parentId": "entity-c5ff5e53-c9a0-44e9-87fb-c3fa97e72394"
+    },
+    "entity-ce929637-5691-4878-8869-fe0d396b9921": {
+      "children": [
+        "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-0",
+        "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-1",
+        "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-2",
+        "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-3",
+        "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-4",
+        "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-5",
+        "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-6",
+        "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-7"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-0e10f78d-0fe5-4090-90ba-7fd4ccbbe63e",
+          "position": [
+            0,
+            -4,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-ce929637-5691-4878-8869-fe0d396b9921",
+      "name": "LMW terrain-distant",
+      "parentId": null
+    },
+    "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-0-transform",
+          "position": [
+            69.25718688964844,
+            -0.8209254145622253,
+            -0.8936781883239746
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-terrain-distant-fcce8491df64",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-terrain-distant-fcce8491df64",
+          "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-terrain-distant-fcce8491df64-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-0",
+      "name": "LMW_Distant_ridge_0",
+      "parentId": "entity-ce929637-5691-4878-8869-fe0d396b9921"
+    },
+    "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-1": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-1-transform",
+          "position": [
+            48.75465774536133,
+            -1.1048997640609741,
+            -50.391151428222656
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-terrain-distant-fcce8491df64",
+            "kind": "asset",
+            "sourceNodeIndex": 1
+          },
+          "geometryAssetId": "model-terrain-distant-fcce8491df64",
+          "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-1-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-terrain-distant-fcce8491df64-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-1",
+      "name": "LMW_Distant_ridge_1",
+      "parentId": "entity-ce929637-5691-4878-8869-fe0d396b9921"
+    },
+    "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-2": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-2-transform",
+          "position": [
+            -0.7428158521652222,
+            -2.3047003746032715,
+            -70.8936767578125
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-terrain-distant-fcce8491df64",
+            "kind": "asset",
+            "sourceNodeIndex": 2
+          },
+          "geometryAssetId": "model-terrain-distant-fcce8491df64",
+          "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-2-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-terrain-distant-fcce8491df64-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-2",
+      "name": "LMW_Distant_ridge_2",
+      "parentId": "entity-ce929637-5691-4878-8869-fe0d396b9921"
+    },
+    "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-3": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-3-transform",
+          "position": [
+            -50.240291595458984,
+            -2.142479419708252,
+            -50.391151428222656
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-terrain-distant-fcce8491df64",
+            "kind": "asset",
+            "sourceNodeIndex": 3
+          },
+          "geometryAssetId": "model-terrain-distant-fcce8491df64",
+          "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-3-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-terrain-distant-fcce8491df64-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-3",
+      "name": "LMW_Distant_ridge_3",
+      "parentId": "entity-ce929637-5691-4878-8869-fe0d396b9921"
+    },
+    "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-4": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-4-transform",
+          "position": [
+            -70.74281311035156,
+            -1.3602453470230103,
+            -0.8936781883239746
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-terrain-distant-fcce8491df64",
+            "kind": "asset",
+            "sourceNodeIndex": 4
+          },
+          "geometryAssetId": "model-terrain-distant-fcce8491df64",
+          "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-4-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-terrain-distant-fcce8491df64-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-4",
+      "name": "LMW_Distant_ridge_4",
+      "parentId": "entity-ce929637-5691-4878-8869-fe0d396b9921"
+    },
+    "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-5": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-5-transform",
+          "position": [
+            -50.240291595458984,
+            0.5430914759635925,
+            48.603797912597656
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-terrain-distant-fcce8491df64",
+            "kind": "asset",
+            "sourceNodeIndex": 5
+          },
+          "geometryAssetId": "model-terrain-distant-fcce8491df64",
+          "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-5-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-terrain-distant-fcce8491df64-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-5",
+      "name": "LMW_Distant_ridge_5",
+      "parentId": "entity-ce929637-5691-4878-8869-fe0d396b9921"
+    },
+    "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-6": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-6-transform",
+          "position": [
+            -0.7428160905838013,
+            -1.2945588827133179,
+            69.1063232421875
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-terrain-distant-fcce8491df64",
+            "kind": "asset",
+            "sourceNodeIndex": 6
+          },
+          "geometryAssetId": "model-terrain-distant-fcce8491df64",
+          "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-6-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-terrain-distant-fcce8491df64-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-6",
+      "name": "LMW_Distant_ridge_6",
+      "parentId": "entity-ce929637-5691-4878-8869-fe0d396b9921"
+    },
+    "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-7": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-7-transform",
+          "position": [
+            48.75465774536133,
+            0.15882715582847595,
+            48.603797912597656
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-terrain-distant-fcce8491df64",
+            "kind": "asset",
+            "sourceNodeIndex": 7
+          },
+          "geometryAssetId": "model-terrain-distant-fcce8491df64",
+          "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-7-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-terrain-distant-fcce8491df64-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-ce929637-5691-4878-8869-fe0d396b9921-model-node-7",
+      "name": "LMW_Distant_ridge_7",
+      "parentId": "entity-ce929637-5691-4878-8869-fe0d396b9921"
+    },
+    "entity-d3d2b22d-cb91-4f33-ab28-9ad33ea56748": {
+      "children": [
+        "entity-d3d2b22d-cb91-4f33-ab28-9ad33ea56748-model-node-0"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-96533224-0ccd-43ec-aca6-b3957eca0cbb",
+          "position": [
+            -12,
+            0.14,
+            12
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-d3d2b22d-cb91-4f33-ab28-9ad33ea56748",
+      "name": "LMW grass-cluster 4",
+      "parentId": null
+    },
+    "entity-d3d2b22d-cb91-4f33-ab28-9ad33ea56748-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-d3d2b22d-cb91-4f33-ab28-9ad33ea56748-model-node-0-transform",
+          "position": [
+            1.325835943222046,
+            0.3464938700199127,
+            0.5115529298782349
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-grass-cluster-4b6bbddefa70",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-grass-cluster-4b6bbddefa70",
+          "id": "entity-d3d2b22d-cb91-4f33-ab28-9ad33ea56748-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-grass-cluster-4b6bbddefa70-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-d3d2b22d-cb91-4f33-ab28-9ad33ea56748-model-node-0",
+      "name": "LMW_Wind_blades",
+      "parentId": "entity-d3d2b22d-cb91-4f33-ab28-9ad33ea56748"
+    },
+    "entity-d63e873f-80f0-4def-96ce-18cfe1a84994": {
+      "children": [
+        "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-0",
+        "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-1",
+        "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-2",
+        "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-3",
+        "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-4"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-e98abe35-d08e-4fdc-bf75-21a0411a30da",
+          "position": [
+            16,
+            0.15,
+            6
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994",
+      "name": "LMW abstract-vegetation 2",
+      "parentId": null
+    },
+    "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-0-transform",
+          "position": [
+            0.12021501362323761,
+            0.6992300748825073,
+            -0.15453293919563293
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-abstract-vegetation-90aa4c7ca654",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-abstract-vegetation-90aa4c7ca654",
+          "id": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-abstract-vegetation-90aa4c7ca654-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-0",
+      "name": "LMW_Ribbon_0",
+      "parentId": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994"
+    },
+    "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-1": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-1-transform",
+          "position": [
+            0.32428041100502014,
+            1.651561975479126,
+            0.13835100829601288
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-abstract-vegetation-90aa4c7ca654",
+            "kind": "asset",
+            "sourceNodeIndex": 1
+          },
+          "geometryAssetId": "model-abstract-vegetation-90aa4c7ca654",
+          "id": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-1-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-abstract-vegetation-90aa4c7ca654-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-1",
+      "name": "LMW_Ribbon_1",
+      "parentId": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994"
+    },
+    "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-2": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-2-transform",
+          "position": [
+            0.4324708580970764,
+            1.3058878183364868,
+            0.1585717350244522
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-abstract-vegetation-90aa4c7ca654",
+            "kind": "asset",
+            "sourceNodeIndex": 2
+          },
+          "geometryAssetId": "model-abstract-vegetation-90aa4c7ca654",
+          "id": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-2-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-abstract-vegetation-90aa4c7ca654-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-2",
+      "name": "LMW_Ribbon_2",
+      "parentId": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994"
+    },
+    "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-3": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-3-transform",
+          "position": [
+            0.5475835204124451,
+            0.8909463882446289,
+            0.14051641523838043
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-abstract-vegetation-90aa4c7ca654",
+            "kind": "asset",
+            "sourceNodeIndex": 3
+          },
+          "geometryAssetId": "model-abstract-vegetation-90aa4c7ca654",
+          "id": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-3-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-abstract-vegetation-90aa4c7ca654-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-3",
+      "name": "LMW_Ribbon_3",
+      "parentId": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994"
+    },
+    "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-4": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-4-transform",
+          "position": [
+            0.7660514116287231,
+            1.775085687637329,
+            -0.1417768895626068
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-abstract-vegetation-90aa4c7ca654",
+            "kind": "asset",
+            "sourceNodeIndex": 4
+          },
+          "geometryAssetId": "model-abstract-vegetation-90aa4c7ca654",
+          "id": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-4-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-abstract-vegetation-90aa4c7ca654-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994-model-node-4",
+      "name": "LMW_Ribbon_4",
+      "parentId": "entity-d63e873f-80f0-4def-96ce-18cfe1a84994"
+    },
+    "entity-d8eb6a7f-dfd5-4605-8fd9-79dbfe689333": {
+      "children": [
+        "entity-d8eb6a7f-dfd5-4605-8fd9-79dbfe689333-model-node-0"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-473d7116-9618-475f-b35b-a5f96b4505be",
+          "position": [
+            14,
+            0.14,
+            10
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-d8eb6a7f-dfd5-4605-8fd9-79dbfe689333",
+      "name": "LMW grass-cluster 7",
+      "parentId": null
+    },
+    "entity-d8eb6a7f-dfd5-4605-8fd9-79dbfe689333-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-d8eb6a7f-dfd5-4605-8fd9-79dbfe689333-model-node-0-transform",
+          "position": [
+            1.325835943222046,
+            0.3464938700199127,
+            0.5115529298782349
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-grass-cluster-4b6bbddefa70",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-grass-cluster-4b6bbddefa70",
+          "id": "entity-d8eb6a7f-dfd5-4605-8fd9-79dbfe689333-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-grass-cluster-4b6bbddefa70-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-d8eb6a7f-dfd5-4605-8fd9-79dbfe689333-model-node-0",
+      "name": "LMW_Wind_blades",
+      "parentId": "entity-d8eb6a7f-dfd5-4605-8fd9-79dbfe689333"
+    },
+    "entity-d8f70d1d-4681-472c-a0ce-5f09a3163f1e": {
+      "children": [
+        "entity-d8f70d1d-4681-472c-a0ce-5f09a3163f1e-model-node-0",
+        "entity-d8f70d1d-4681-472c-a0ce-5f09a3163f1e-model-node-1"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-f6e1c137-e59b-46e5-80fe-bafec4a02007",
+          "position": [
+            12,
+            0.7,
+            -9
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-d8f70d1d-4681-472c-a0ce-5f09a3163f1e",
+      "name": "LMW node-parts 5",
+      "parentId": null
+    },
+    "entity-d8f70d1d-4681-472c-a0ce-5f09a3163f1e-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-d8f70d1d-4681-472c-a0ce-5f09a3163f1e-model-node-0-transform",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-parts-11e4468c6d62",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-node-parts-11e4468c6d62",
+          "id": "entity-d8f70d1d-4681-472c-a0ce-5f09a3163f1e-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-parts-11e4468c6d62-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-d8f70d1d-4681-472c-a0ce-5f09a3163f1e-model-node-0",
+      "name": "LMW_Hex_node",
+      "parentId": "entity-d8f70d1d-4681-472c-a0ce-5f09a3163f1e"
+    },
+    "entity-d8f70d1d-4681-472c-a0ce-5f09a3163f1e-model-node-1": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-d8f70d1d-4681-472c-a0ce-5f09a3163f1e-model-node-1-transform",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-parts-11e4468c6d62",
+            "kind": "asset",
+            "sourceNodeIndex": 1
+          },
+          "geometryAssetId": "model-node-parts-11e4468c6d62",
+          "id": "entity-d8f70d1d-4681-472c-a0ce-5f09a3163f1e-model-node-1-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-parts-11e4468c6d62-1",
+              "slot": "material-1"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-d8f70d1d-4681-472c-a0ce-5f09a3163f1e-model-node-1",
+      "name": "LMW_Node_outer_frame",
+      "parentId": "entity-d8f70d1d-4681-472c-a0ce-5f09a3163f1e"
+    },
+    "entity-dc3566a2-8890-4c28-aa81-43a5932d0def": {
+      "children": [
+        "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-0",
+        "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-1",
+        "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-2",
+        "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-3"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-acf16a98-c361-4566-b300-37621c204549",
+          "position": [
+            69,
+            -3,
+            -75
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-dc3566a2-8890-4c28-aa81-43a5932d0def",
+      "name": "LMW distant-architecture",
+      "parentId": null
+    },
+    "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-0-transform",
+          "position": [
+            7,
+            29,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-distant-architecture-eca6e153713f",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-distant-architecture-eca6e153713f",
+          "id": "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-distant-architecture-eca6e153713f-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-0",
+      "name": "LMW_Frame_bridge",
+      "parentId": "entity-dc3566a2-8890-4c28-aa81-43a5932d0def"
+    },
+    "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-1": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-1-transform",
+          "position": [
+            0,
+            14,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-distant-architecture-eca6e153713f",
+            "kind": "asset",
+            "sourceNodeIndex": 1
+          },
+          "geometryAssetId": "model-distant-architecture-eca6e153713f",
+          "id": "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-1-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-distant-architecture-eca6e153713f-1",
+              "slot": "material-1"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-1",
+      "name": "LMW_Frame_pillar_0",
+      "parentId": "entity-dc3566a2-8890-4c28-aa81-43a5932d0def"
+    },
+    "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-2": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-2-transform",
+          "position": [
+            7,
+            16,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-distant-architecture-eca6e153713f",
+            "kind": "asset",
+            "sourceNodeIndex": 2
+          },
+          "geometryAssetId": "model-distant-architecture-eca6e153713f",
+          "id": "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-2-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-distant-architecture-eca6e153713f-1",
+              "slot": "material-1"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-2",
+      "name": "LMW_Frame_pillar_1",
+      "parentId": "entity-dc3566a2-8890-4c28-aa81-43a5932d0def"
+    },
+    "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-3": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-3-transform",
+          "position": [
+            14,
+            18,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-distant-architecture-eca6e153713f",
+            "kind": "asset",
+            "sourceNodeIndex": 3
+          },
+          "geometryAssetId": "model-distant-architecture-eca6e153713f",
+          "id": "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-3-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-distant-architecture-eca6e153713f-1",
+              "slot": "material-1"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-dc3566a2-8890-4c28-aa81-43a5932d0def-model-node-3",
+      "name": "LMW_Frame_pillar_2",
+      "parentId": "entity-dc3566a2-8890-4c28-aa81-43a5932d0def"
+    },
+    "entity-e7087797-a98e-4491-bc68-a913d3255041": {
+      "children": [
+        "entity-e7087797-a98e-4491-bc68-a913d3255041-model-node-0"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-320eceb4-8d62-424e-beca-f657ab211095",
+          "position": [
+            12,
+            3,
+            7
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-e7087797-a98e-4491-bc68-a913d3255041",
+      "name": "LMW membrane",
+      "parentId": null
+    },
+    "entity-e7087797-a98e-4491-bc68-a913d3255041-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-e7087797-a98e-4491-bc68-a913d3255041-model-node-0-transform",
+          "position": [
+            0.0001097838394343853,
+            -0.006617635954171419,
+            -0.0015010950155556202
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-membrane-26db490a2198",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-membrane-26db490a2198",
+          "id": "entity-e7087797-a98e-4491-bc68-a913d3255041-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-membrane-26db490a2198-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-e7087797-a98e-4491-bc68-a913d3255041-model-node-0",
+      "name": "LMW_Membrane",
+      "parentId": "entity-e7087797-a98e-4491-bc68-a913d3255041"
+    },
+    "entity-eb09c558-e1ce-4f07-84f5-54481a965db9": {
+      "children": [
+        "entity-eb09c558-e1ce-4f07-84f5-54481a965db9-model-node-0",
+        "entity-eb09c558-e1ce-4f07-84f5-54481a965db9-model-node-1"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-b08e88eb-e09d-49c5-9e3e-b933aa58b35f",
+          "position": [
+            4,
+            0.7,
+            -10
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-eb09c558-e1ce-4f07-84f5-54481a965db9",
+      "name": "LMW node-parts 4",
+      "parentId": null
+    },
+    "entity-eb09c558-e1ce-4f07-84f5-54481a965db9-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-eb09c558-e1ce-4f07-84f5-54481a965db9-model-node-0-transform",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-parts-11e4468c6d62",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-node-parts-11e4468c6d62",
+          "id": "entity-eb09c558-e1ce-4f07-84f5-54481a965db9-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-parts-11e4468c6d62-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-eb09c558-e1ce-4f07-84f5-54481a965db9-model-node-0",
+      "name": "LMW_Hex_node",
+      "parentId": "entity-eb09c558-e1ce-4f07-84f5-54481a965db9"
+    },
+    "entity-eb09c558-e1ce-4f07-84f5-54481a965db9-model-node-1": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-eb09c558-e1ce-4f07-84f5-54481a965db9-model-node-1-transform",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-parts-11e4468c6d62",
+            "kind": "asset",
+            "sourceNodeIndex": 1
+          },
+          "geometryAssetId": "model-node-parts-11e4468c6d62",
+          "id": "entity-eb09c558-e1ce-4f07-84f5-54481a965db9-model-node-1-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-parts-11e4468c6d62-1",
+              "slot": "material-1"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-eb09c558-e1ce-4f07-84f5-54481a965db9-model-node-1",
+      "name": "LMW_Node_outer_frame",
+      "parentId": "entity-eb09c558-e1ce-4f07-84f5-54481a965db9"
+    },
+    "entity-f35ad42e-a055-4270-b672-2ae033029026": {
+      "children": [
+        "entity-f35ad42e-a055-4270-b672-2ae033029026-model-node-0",
+        "entity-f35ad42e-a055-4270-b672-2ae033029026-model-node-1"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "component-transform-7f4ebdfd-e170-49ee-9ad2-362c7bfed8c9",
+          "position": [
+            -7,
+            0.7,
+            3
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-f35ad42e-a055-4270-b672-2ae033029026",
+      "name": "LMW node-parts 2",
+      "parentId": null
+    },
+    "entity-f35ad42e-a055-4270-b672-2ae033029026-model-node-0": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-f35ad42e-a055-4270-b672-2ae033029026-model-node-0-transform",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-parts-11e4468c6d62",
+            "kind": "asset",
+            "sourceNodeIndex": 0
+          },
+          "geometryAssetId": "model-node-parts-11e4468c6d62",
+          "id": "entity-f35ad42e-a055-4270-b672-2ae033029026-model-node-0-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-parts-11e4468c6d62-0",
+              "slot": "material-0"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-f35ad42e-a055-4270-b672-2ae033029026-model-node-0",
+      "name": "LMW_Hex_node",
+      "parentId": "entity-f35ad42e-a055-4270-b672-2ae033029026"
+    },
+    "entity-f35ad42e-a055-4270-b672-2ae033029026-model-node-1": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "entity-f35ad42e-a055-4270-b672-2ae033029026-model-node-1-transform",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "enabled": true,
+          "geometry": {
+            "assetId": "model-node-parts-11e4468c6d62",
+            "kind": "asset",
+            "sourceNodeIndex": 1
+          },
+          "geometryAssetId": "model-node-parts-11e4468c6d62",
+          "id": "entity-f35ad42e-a055-4270-b672-2ae033029026-model-node-1-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "material-model-node-parts-11e4468c6d62-1",
+              "slot": "material-1"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        }
+      ],
+      "enabled": true,
+      "id": "entity-f35ad42e-a055-4270-b672-2ae033029026-model-node-1",
+      "name": "LMW_Node_outer_frame",
+      "parentId": "entity-f35ad42e-a055-4270-b672-2ae033029026"
+    },
+    "starter-environment": {
+      "children": [
+        "starter-floor"
+      ],
+      "components": [
+        {
+          "enabled": true,
+          "id": "starter-environment-transform",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        }
+      ],
+      "enabled": true,
+      "id": "starter-environment",
+      "name": "Environment",
+      "parentId": null
+    },
+    "starter-floor": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "starter-floor-transform",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            -1.5707963267948966,
+            0,
+            0
+          ],
+          "scale": [
+            8,
+            8,
+            8
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": false,
+          "enabled": true,
+          "geometry": {
+            "creationId": "builtin-primitive/plane",
+            "kind": "builtin-primitive",
+            "primitive": "plane"
+          },
+          "geometryAssetId": "builtin-primitive/plane",
+          "id": "starter-floor-mesh",
+          "materialBindings": [
+            {
+              "materialAssetId": "starter-material-ground",
+              "slot": "default"
+            }
+          ],
+          "receiveShadow": true,
+          "type": "mesh"
+        },
+        {
+          "angularDamping": 0,
+          "bodyType": "fixed",
+          "canSleep": true,
+          "ccd": false,
+          "center": [
+            0,
+            0,
+            0
+          ],
+          "enabled": true,
+          "fitMode": "auto",
+          "friction": 0.5,
+          "gravityScale": 1,
+          "halfExtents": [
+            0.5,
+            0.5,
+            0.01
+          ],
+          "id": "starter-floor-collider",
+          "isTrigger": false,
+          "linearDamping": 0,
+          "lockRotations": false,
+          "lockTranslations": false,
+          "restitution": 0,
+          "shape": "box",
+          "type": "collider"
+        }
+      ],
+      "enabled": false,
+      "id": "starter-floor",
+      "name": "床",
+      "parentId": "starter-environment"
+    },
+    "starter-spawn": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "starter-spawn-transform",
+          "position": [
+            0,
+            1.25,
+            19
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "assetReferences": [],
+          "authoring": {
+            "readOnly": true,
+            "recipeId": "xrift-prefab.spawn-point",
+            "source": "builtin-prefab"
+          },
+          "enabled": true,
+          "entityReferences": [],
+          "id": "starter-spawn-xrift-component",
+          "properties": {
+            "position": [
+              0,
+              0,
+              0
+            ],
+            "yaw": 0
+          },
+          "schemaId": "xrift.spawn-point",
+          "schemaVersion": "1.0.0",
+          "type": "xrift-component"
+        }
+      ],
+      "enabled": true,
+      "id": "starter-spawn",
+      "name": "Spawn Point",
+      "parentId": null
+    },
+    "starter-sun": {
+      "children": [],
+      "components": [
+        {
+          "enabled": true,
+          "id": "starter-sun-transform",
+          "position": [
+            5,
+            8,
+            4
+          ],
+          "rotation": [
+            -0.65,
+            0.55,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "type": "transform"
+        },
+        {
+          "castShadow": true,
+          "color": "#fff7ed",
+          "enabled": true,
+          "id": "starter-sun-light",
+          "intensity": 2.4,
+          "lightType": "directional",
+          "type": "light"
+        }
+      ],
+      "enabled": true,
+      "id": "starter-sun",
+      "name": "メインライト",
+      "parentId": null
+    }
+  },
+  "name": "空のワールド",
+  "rootEntityIds": [
+    "starter-environment",
+    "starter-sun",
+    "starter-spawn",
+    "entity-72e89b57-69ae-4905-a1fb-c1999657f623",
+    "entity-2eefc48d-647c-4a75-a253-5c2932a6c3fc",
+    "entity-3ab04314-90a2-426c-8876-516ce96b14c7",
+    "entity-977f76d0-8bdd-429e-b2af-77a0415e4a7a",
+    "entity-5025e191-fbfa-4182-bade-11d14a9b4ada",
+    "entity-dc3566a2-8890-4c28-aa81-43a5932d0def",
+    "entity-ce929637-5691-4878-8869-fe0d396b9921",
+    "entity-8b2d60e8-878b-4ca8-9edf-e01cdc6d8240",
+    "entity-e7087797-a98e-4491-bc68-a913d3255041",
+    "entity-67a4f027-e0aa-4eb0-931b-ded5034a5d5e",
+    "entity-341dee33-4730-4a5d-8e2f-89e4ea9b3525",
+    "entity-40a75833-b032-4ee6-a3e0-d863d2a91787",
+    "entity-b63ab8a4-af25-4a77-974c-f399eacdc392",
+    "entity-8bf4b634-b948-4ec6-a164-61895269fab5",
+    "entity-a52639e0-2af0-4745-8212-93287fe13f83",
+    "entity-42d22895-8ec1-4733-9418-7f48bf9174ad",
+    "entity-d3d2b22d-cb91-4f33-ab28-9ad33ea56748",
+    "entity-7ac557ab-4d93-4fcd-bcbb-23d5647ae77c",
+    "entity-c5ff5e53-c9a0-44e9-87fb-c3fa97e72394",
+    "entity-d8eb6a7f-dfd5-4605-8fd9-79dbfe689333",
+    "entity-4fe0f577-8820-44ad-a78a-cee91db7890d",
+    "entity-a2ba5c58-0ff8-46c6-b6be-f36af27e3e3d",
+    "entity-f35ad42e-a055-4270-b672-2ae033029026",
+    "entity-143c7efb-9a9d-4409-b04f-79b6aca0ae49",
+    "entity-eb09c558-e1ce-4f07-84f5-54481a965db9",
+    "entity-d8f70d1d-4681-472c-a0ce-5f09a3163f1e",
+    "entity-59faeaac-bb8b-4238-a8bf-e1b7bb494c1d",
+    "entity-d63e873f-80f0-4def-96ce-18cfe1a84994",
+    "entity-01457aac-59c6-4503-ba03-dc10f74783ce",
+    "entity-1ac0f86b-0439-4e44-998d-019640c65da4",
+    "entity-b17648d7-1f07-4808-b6cf-31db51c8e47e"
+  ],
+  "sceneId": "scene-2f237590-fbbc-448e-929c-0723283c392d",
+  "schemaVersion": "0.1.0",
+  "settings": {
+    "ambient": {
+      "color": "#b5d5e4",
+      "enabled": false,
+      "intensity": 1.2
+    },
+    "camera": {
+      "far": 2000,
+      "fov": 46,
+      "near": 0.1
+    },
+    "editor": {
+      "backgroundColor": "#18181b",
+      "gizmo": {
+        "gridDivisions": 40,
+        "gridSize": 40,
+        "gridVisible": true,
+        "rotateSnapDegrees": 15,
+        "scaleSnap": 0.1,
+        "size": 0.82,
+        "snapEnabled": false,
+        "snapHoldShift": true,
+        "translateSnap": 0.5
+      }
+    },
+    "fog": {
+      "color": "#678e98",
+      "enabled": true,
+      "far": 175,
+      "near": 45
+    },
+    "physics": {
+      "allowInfiniteJump": true,
+      "gravity": 9.81
+    },
+    "postprocessing": {
+      "ao": {
+        "enabled": true,
+        "maxDistance": 0.1,
+        "minDistance": 0.005,
+        "radius": 8
+      },
+      "bloom": {
+        "enabled": true,
+        "radius": 0.18,
+        "strength": 0.12,
+        "threshold": 8
+      },
+      "enabled": false,
+      "exposure": 0.85,
+      "grading": {
+        "contrast": 1,
+        "enabled": false,
+        "saturation": 1,
+        "temperature": 0,
+        "tint": 0
+      },
+      "hdr": {
+        "enabled": true,
+        "toneMapping": "aces"
+      },
+      "order": [
+        "bloom",
+        "grading"
+      ]
+    },
+    "skybox": {
+      "bottomColor": "#94bcb9",
+      "center": [
+        0,
+        0.01,
+        0
+      ],
+      "enabled": true,
+      "exponent": 0.75,
+      "exposure": 1.1,
+      "flipY": false,
+      "iblEnabled": true,
+      "imageAssetId": "texture-living-environment-6e17f32185f9",
+      "meshPosition": [
+        0,
+        0,
+        0
+      ],
+      "meshRotationDegrees": [
+        0,
+        0,
+        0
+      ],
+      "meshScale": [
+        100,
+        100,
+        100
+      ],
+      "offset": 0,
+      "projection": "infinite",
+      "rotationDegrees": 0,
+      "topColor": "#20273f"
+    },
+    "vegetation": {
+      "enabled": true,
+      "gustStrength": 0.35,
+      "windDirectionDegrees": 45,
+      "windSpeed": 0.8,
+      "windStrength": 0.08
+    }
+  }
+}
