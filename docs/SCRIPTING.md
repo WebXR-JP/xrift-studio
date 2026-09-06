@@ -303,6 +303,26 @@ enabled、color、intensity、shadow、距離、減衰、角度、半影、Area 
 
 `ctx.on` / `ctx.emit` は同じ `XriftScriptRoot` 内だけの runtime event bus だ。
 KHR_interactivity と Scene document には接続しない。payload は cloneも永続化もしない。
+
+Graphと連携するときは `ctx.graph.on(name, handler)` / `ctx.graph.emit(name)` を使う。
+Graphの `event/send` と同名の通知をScriptで受け、Scriptから送った通知はGraphの
+`event/receive` で受ける。Graph側ではeventのIDまたは名前を一致させる。
+同じThree.js Scene内だけで動き、Studio Playと公開ワールドは同じ実装を使う。
+通知は値を渡さず、保存・再送・他のビューアーへの同期もしない。Graphへの通知は
+フレームごとにまとめて処理し、処理中に生じた通知は次のフレームへ送る。
+Scriptの停止・失敗・再起動で購読は自動解除される。返された関数でも解除できる。
+既存の `ctx.on` / `ctx.emit` は引き続きScript間のpayload付きイベントに使う。
+任意のTypeScriptとGraphの自動変換は提供しない。
+
+```ts
+start(ctx) {
+  ctx.graph.on("door.open", () => {
+    ctx.audioSources.play();
+    ctx.graph.emit("door.opened");
+  });
+}
+```
+
 組み込み `proximity-event` は Script Component の `entityReferences` に明示した authored Entity を
 `getWorldPosition` で判定する。`xrift:proximity-state`へ`channel`、inside状態、`kind`を送る。
 `event-light`は同じeventを受け取る。liveな`channel` propertyが一致した時だけLightを変える。

@@ -15,6 +15,10 @@ Assets パネルで **Script** を作成します。組み込みのテンプレ�
 
 ## コードを書く
 
+Script Assetを開くと、Scene Viewの横にScriptのタブが開きます。左の一覧から名前やパスで検索し、別のScriptへ切り替えられます。「新規Script」から追加することもできます。
+
+Scene ViewやGraphのタブへ移っても、編集中のコードとUndo履歴は残ります。別のScriptを開くときやタブを閉じるときは、未保存の変更を確認します。保存はボタンかCtrl/Cmd+Sで行います。読み込みに失敗したら「再読み込み」で同じファイルを開き直せます。
+
 Script は `xrift:script` から `defineScript` と `prop` を import して書きます。
 
 ```ts

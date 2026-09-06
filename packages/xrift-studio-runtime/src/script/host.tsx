@@ -70,6 +70,7 @@ import {
 import { createXriftLightRuntimeResources } from "./light.js";
 import { createScriptLifecycle } from "./lifecycle.js";
 import {
+  createScriptGraphEvents,
   findXriftSceneRuntimeBridge,
   type XriftSceneRuntimeBridge,
   type XriftSceneRuntimeOverrides,
@@ -454,6 +455,8 @@ export function XriftScriptHost<
       (error) => fail("async", error),
     );
 
+    const graphEvents = createScriptGraphEvents(scene, () => active && !stopped, (error) => fail("event", error));
+    unsubscribes.add(graphEvents.dispose);
     const context: ScriptContext<Declaration> = {
       entity: { id: entityId, name: entityName, enabled: true },
       object3d: object3d as unknown as ScriptContext["object3d"],
@@ -475,6 +478,7 @@ export function XriftScriptHost<
       lights: resources.lights,
       particles: resources.particles,
       viewer: resources.viewer,
+      graph: graphEvents.graph,
       find: (targetId) =>
         (active && allowedEntityIds.has(targetId)
           ? resolveEntityRef.current?.(targetId) ??

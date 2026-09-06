@@ -363,7 +363,7 @@ import {
   type ScriptCompileError,
 } from "./useScriptRuntime";
 import { useScriptEditor } from "./useScriptEditor";
-import { ScriptEditorDialog } from "./ScriptEditorDialog";
+import { ScriptEditorWorkspace } from "./ScriptEditorWorkspace";
 import { useShaderEditor } from "./useShaderEditor";
 import { ShaderEditorDialog } from "./ShaderEditorDialog";
 import {
@@ -949,6 +949,7 @@ function sanitizedImportMessage(error: unknown, projectPath: string): string {
 
 /** The graph editor's tab in the Scene View's cell. */
 const INTERACTIVITY_GRAPH_TAB_ID = "interactivity-graph";
+const SCRIPT_TAB_ID = "script-editor";
 
 export function VisualEditorPrototype({
   projectKind,
@@ -1549,9 +1550,21 @@ export function VisualEditorPrototype({
   acceptExternalScriptSourceRef.current = scriptEditor.acceptExternalSource;
   const scriptCompileRef = useRef(scriptRuntime.compile);
   scriptCompileRef.current = scriptRuntime.compile;
+  const [activeEditorTab, setActiveEditorTab] = useState(SCENE_VIEW_TAB_ID);
+  const graphTabActive = activeEditorTab === INTERACTIVITY_GRAPH_TAB_ID;
+  const scriptTabActive = activeEditorTab === SCRIPT_TAB_ID;
+  const setGraphTabActive = useCallback((active: boolean) => {
+    setActiveEditorTab(active ? INTERACTIVITY_GRAPH_TAB_ID : SCENE_VIEW_TAB_ID);
+  }, []);
+  const scriptEditorSavingRef = useRef(false);
+  const handleScriptEditorSavingChange = useCallback((saving: boolean) => {
+    scriptEditorSavingRef.current = saving;
+  }, []);
   const scriptEditorDirtyRef = useRef(false);
+  const [scriptEditorDirty, setScriptEditorDirty] = useState(false);
   const handleScriptEditorDirtyChange = useCallback((dirty: boolean) => {
     scriptEditorDirtyRef.current = dirty;
+    setScriptEditorDirty(dirty);
   }, []);
   const scriptEditorOpenAssetIdRef = useRef(
     scriptEditor.state.openAssetId,
@@ -1559,7 +1572,12 @@ export function VisualEditorPrototype({
   scriptEditorOpenAssetIdRef.current = scriptEditor.state.openAssetId;
   const openScriptEditor = useCallback(
     async (assetId: string, createdAsset?: ScriptAsset): Promise<boolean> => {
+      if (scriptEditorSavingRef.current) return false;
       const currentAssetId = scriptEditorOpenAssetIdRef.current;
+      if (currentAssetId === assetId) {
+        setActiveEditorTab(SCRIPT_TAB_ID);
+        return true;
+      }
       if (
         scriptEditorDirtyRef.current &&
         currentAssetId !== null &&
@@ -1571,11 +1589,18 @@ export function VisualEditorPrototype({
         if (!discard) return false;
         scriptEditorDirtyRef.current = false;
       }
+      setActiveEditorTab(SCRIPT_TAB_ID);
       await scriptEditor.open(assetId, createdAsset);
       return true;
     },
     [scriptEditor.open],
   );
+  const closeScriptEditor = useCallback(() => {
+    if (scriptEditorSavingRef.current) return;
+    if (scriptEditorDirtyRef.current && !window.confirm("保存していない変更があります。破棄して閉じますか。")) return;
+    scriptEditor.close();
+    setActiveEditorTab((current) => current === SCRIPT_TAB_ID ? SCENE_VIEW_TAB_ID : current);
+  }, [scriptEditor.close]);
   const scriptOpenRef = useRef(openScriptEditor);
   scriptOpenRef.current = openScriptEditor;
   const enterPlayModeRef = useRef<
@@ -1814,14 +1839,6 @@ export function VisualEditorPrototype({
   const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
   const [externalStoreOpen, setExternalStoreOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
-  /**
-   * Whether the graph tab is the one in front of the Scene View's cell.
-   *
-   * The editor used to float over the viewport, where it fought the Inspector
-   * for width and had to be expanded to be usable. As a tab it takes the cell
-   * whole, and the Scene View is one click away rather than underneath.
-   */
-  const [graphTabActive, setGraphTabActive] = useState(true);
   /**
    * Gives the Scene View's cell the whole editor area.
    *
@@ -11337,7 +11354,8 @@ export function VisualEditorPrototype({
         // cutting a wire also deleted the selected Entity and undo stepped
         // through two histories at once. Only while it is the tab in front:
         // behind the Scene View it is not taking keystrokes.
-        (interactivityEditorAssetId !== null && graphTabActive)
+        (interactivityEditorAssetId !== null && graphTabActive) ||
+        (scriptEditor.state.openAssetId !== null && scriptTabActive)
       ) {
         return;
       }
@@ -11350,6 +11368,8 @@ export function VisualEditorPrototype({
     return () => window.removeEventListener("keydown", handleShortcut);
   }, [
     deleteDialog,
+    scriptEditor.state.openAssetId,
+    scriptTabActive,
     graphTabActive,
     interactivityEditorAssetId,
     executeCommand,
@@ -11490,7 +11510,7 @@ export function VisualEditorPrototype({
     return entity ? { entityId: entity.id, name: entity.name } : null;
   })();
 
-  const interactivityEditorTabs = interactivityEditorAsset
+  const viewportEditorTabs = interactivityEditorAsset
     ? [
         {
           id: INTERACTIVITY_GRAPH_TAB_ID,
@@ -11499,6 +11519,11 @@ export function VisualEditorPrototype({
         },
       ]
     : [];
+  if (scriptEditorAsset) viewportEditorTabs.push({
+    id: SCRIPT_TAB_ID,
+    label: `${scriptEditorAsset.name}${scriptEditorDirty ? " · 未保存" : ""}`,
+    closable: true,
+  });
 
   // The recording view without editor UI is the same layout as a maximized
   // viewport: the frame gets the whole editor area and the panels fold away.
@@ -11834,14 +11859,20 @@ export function VisualEditorPrototype({
               setGraphTabActive(false);
               executeCommand("play.toggle");
             }}
-            tabs={interactivityEditorTabs}
+            tabs={viewportEditorTabs}
             activeTabId={
-              graphTabActive && interactivityEditorTabs.length > 0
-                ? INTERACTIVITY_GRAPH_TAB_ID
+              viewportEditorTabs.some((tab) => tab.id === activeEditorTab)
+                ? activeEditorTab
                 : SCENE_VIEW_TAB_ID
             }
-            onSelectTab={(id) => setGraphTabActive(id === INTERACTIVITY_GRAPH_TAB_ID)}
-            onCloseTab={() => setInteractivityEditorAssetId(null)}
+            onSelectTab={setActiveEditorTab}
+            onCloseTab={(id) => {
+              if (id === SCRIPT_TAB_ID) closeScriptEditor();
+              else {
+                setInteractivityEditorAssetId(null);
+                setActiveEditorTab((current) => current === id ? SCENE_VIEW_TAB_ID : current);
+              }
+            }}
             maximized={viewportMaximized}
             onToggleMaximize={() => setViewportMaximized((current) => !current)}
             onTransformModeChange={(mode) => {
@@ -12315,6 +12346,7 @@ export function VisualEditorPrototype({
           {interactivityEditorAsset ? (
             <div className={graphTabActive ? "contents" : "hidden"}>
             <InteractivityGraphEditor
+              active={graphTabActive}
               key={interactivityEditorAsset.id}
               asset={interactivityEditorAsset}
               materials={Object.values(bundle.assets.assets).filter(
@@ -12362,8 +12394,14 @@ export function VisualEditorPrototype({
             </div>
           ) : null}
           {scriptEditorAsset ? (
-            <ScriptEditorDialog
-              key={scriptEditorAsset.id}
+            <ScriptEditorWorkspace
+              assets={bundle.assets}
+              active={scriptTabActive}
+              onOpen={(assetId) => { void openScriptEditor(assetId); }}
+              onCreate={() => setScriptTemplateFolderId(null)}
+              createDisabled={renderedEditorMode === "play" || !projectPath}
+              onRetry={() => { void scriptEditor.open(scriptEditorAsset.id); }}
+              onSavingChange={handleScriptEditorSavingChange}
               asset={scriptEditorAsset}
               source={scriptEditor.state.source}
               loading={scriptEditor.state.loading}
@@ -12372,7 +12410,7 @@ export function VisualEditorPrototype({
               runtime={scriptRuntimeReport}
               onSave={scriptEditor.save}
               onDirtyChange={handleScriptEditorDirtyChange}
-              onClose={scriptEditor.close}
+              onClose={closeScriptEditor}
             />
           ) : null}
           {shaderEditorAsset && shaderEditorRequest?.kind === "asset" ? (

@@ -18,6 +18,7 @@
  */
 
 import { useEffect, useMemo, useRef } from "react";
+import type { ScriptGraph } from "./api.js";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
   AmbientLight,
@@ -342,12 +343,20 @@ type XriftSceneEventHandler = (
   payload: ReadonlyMap<string, readonly (number | boolean)[]>,
 ) => void;
 
-const sceneEventHandlers = new Map<string, Set<XriftSceneEventHandler>>();
+const defaultEventScope = {};
+const sceneEventScopes = new WeakMap<object, Map<string, Set<XriftSceneEventHandler>>>();
+function eventHandlers(scope: object) {
+  let handlers = sceneEventScopes.get(scope);
+  if (!handlers) { handlers = new Map(); sceneEventScopes.set(scope, handlers); }
+  return handlers;
+}
 
 export function subscribeXriftSceneEvent(
   name: string,
   handler: XriftSceneEventHandler,
+  scope: object = defaultEventScope,
 ): () => void {
+  const sceneEventHandlers = eventHandlers(scope);
   const existing = sceneEventHandlers.get(name) ?? new Set();
   existing.add(handler);
   sceneEventHandlers.set(name, existing);
@@ -362,10 +371,73 @@ export function subscribeXriftSceneEvent(
 export function emitXriftSceneEvent(
   name: string,
   payload: ReadonlyMap<string, readonly (number | boolean)[]>,
+  scope: object = defaultEventScope,
 ): void {
+  const sceneEventHandlers = eventHandlers(scope);
   const handlers = sceneEventHandlers.get(name);
   if (!handlers) return;
   for (const handler of [...handlers]) handler(payload);
+}
+
+/** Script-facing signals: isolate callback errors and release every listener. */
+export function createScriptGraphEvents(
+  scope: object,
+  isActive: () => boolean,
+  onError: (error: unknown) => void,
+): { graph: ScriptGraph; dispose: () => void } {
+  const subscriptions = new Set<() => void>();
+  let disposed = false;
+  let depth = 0;
+  const active = () => !disposed && isActive();
+  return {
+    graph: {
+      on(event, handler) {
+        if (!active()) return () => {};
+        const off = subscribeXriftSceneEvent(event, () => {
+          if (!active()) return;
+          try {
+            const result = handler();
+            if (result) void Promise.resolve(result).catch((error) => { if (active()) onError(error); });
+          } catch (error) { onError(error); }
+        }, scope);
+        const unsubscribe = () => { off(); subscriptions.delete(unsubscribe); };
+        subscriptions.add(unsubscribe);
+        return unsubscribe;
+      },
+      emit(event) {
+        if (!active()) return;
+        // A Script can react synchronously. Stop an accidental signal cycle
+        // before it overflows the stack; Graph receivers use a frame queue.
+        if (depth >= 32) throw new Error("Graph event recursion limit exceeded");
+        depth += 1;
+        try { emitXriftSceneEvent(event, new Map(), scope); }
+        finally { depth -= 1; }
+      },
+    },
+    dispose() {
+      disposed = true;
+      for (const off of [...subscriptions]) off();
+    },
+  };
+}
+
+/** Snapshot delivery prevents a receiving Graph from recursively running itself. */
+export function createXriftGraphEventQueue(scope: object, names: Iterable<string>, receive: (name: string) => void) {
+  let pending: string[] = [];
+  let disposed = false;
+  const subscriptions = [...new Set(names)].map((name) => subscribeXriftSceneEvent(name, () => {
+    if (disposed) return;
+    if (pending.length >= 1024) throw new Error("Graph event queue limit exceeded");
+    pending.push(name);
+  }, scope));
+  return {
+    flush() {
+      const batch = pending;
+      pending = [];
+      for (const name of batch) { if (!disposed) receive(name); }
+    },
+    dispose() { disposed = true; pending = []; subscriptions.forEach((off) => off()); },
+  };
 }
 
 /**

@@ -382,6 +382,8 @@ project ではなく app data へ置く。
 
 ## 意図的に公開していない操作
 
+- Script一覧の検索・折り畳み・Scene View横のタブ切り替えは画面内の表示状態なので、専用toolは設けない。Assetの取得・作成・更新は既存のScript toolを使う。Graphとのイベント連携APIは `get_scripting_capabilities` に含め、Script sourceとGraphの既存編集toolで設定する。
+
 - 公開用GLBの不要画像除去とキャッシュ管理は、公開・書き出し処理に自動適用する。編集用AssetやPlayの状態を変える操作ではないため、専用のMCP toolは設けない。仕様は[公開時のダウンロード容量削減](./PUBLISH_DOWNLOAD_OPTIMIZATION.md)を参照する。
 
 - Material Slotsの開閉・検索・ページ切替は表示だけの状態なのでMCPへ公開しない。Material割当の読み取り・変更は既存のModel Asset操作を使う。

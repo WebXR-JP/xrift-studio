@@ -305,6 +305,11 @@ export const XRIFT_SCRIPTING_CAPABILITIES: Record<string, unknown> = {
       playerBoundary:
         "ctx.find resolves authored Entity IDs only. It does not expose the runtime player/avatar.",
     },
+    graphEvents: {
+      methods: ["ctx.graph.on(eventName, handler): () => void", "ctx.graph.emit(eventName): void"],
+      scope: "Named notifications shared with Graph event/send and event/receive in the same Three.js Scene, in both Studio Play and published worlds. No payload, replay, persistence, or cross-viewer synchronization. Stop, failure and hot reload unsubscribe automatically.",
+      recipe: 'Graph event/send("door.open") -> ctx.graph.on("door.open", handler); after the Script work, ctx.graph.emit("door.opened") -> Graph event/receive("door.opened"). Configure the same event ID/name on both sides.',
+    },
     events: {
       methods: [
         "ctx.on(eventName, handler): () => void",

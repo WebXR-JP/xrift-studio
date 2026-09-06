@@ -1,5 +1,18 @@
 # KHR_interactivity Editor / MCP design
 
+## Script interoperability
+
+`event/send` notifies `ctx.graph.on(name, handler)` and `ctx.graph.emit(name)`
+starts matching `event/receive` nodes. Use the same event ID/name on both sides.
+Delivery is scoped to the Three.js Scene and uses the same runtime in Studio Play
+and published worlds. Receivers in separate trigger Components can communicate.
+Graph delivery is queued per frame, including self-delivery exactly once; stopping
+or rebuilding a trigger drops its queue. Script listeners are released on stop,
+failure and reload. These are transient notifications without payloads or replay,
+not a TypeScript-to-Graph converter. Script-only payload events retain their existing
+`ctx.on` / `ctx.emit` API. The Script editor's API guide and
+`get_scripting_capabilities` expose this contract and a two-way example.
+
 ## Goal
 
 XRift Studio stores reusable behavior as a canonical glTF `KHR_interactivity`

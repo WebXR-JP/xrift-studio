@@ -12,17 +12,18 @@ import { CodeTokens } from "../CodeBlock";
 setupMonaco();
 
 /**
- * Docked Script editor.
+ * Script code pane within the Scene View tab.
  *
- * Follows the Interactivity graph editor precedent: an overlay that leaves the
- * left of the Scene View visible so behaviour can be watched while it is
- * edited. Unlike the rest of the Inspector this stays usable during Play,
- * because a Script source is a project file and saving it does not change
+ * Remains mounted when another tab is selected, preserving draft and undo.
+ * It stays usable during Play because a Script source is a project file and saving it does not change
  * Entity placement. See MI-69 and MI-72.
  */
 
 export type ScriptEditorDialogProps = {
   asset: ScriptAsset;
+  active?: boolean;
+  onSavingChange?: (saving: boolean) => void;
+  onRetry?: () => void;
   source: string;
   loading: boolean;
   error: string | null;
@@ -35,6 +36,9 @@ export type ScriptEditorDialogProps = {
 
 export function ScriptEditorDialog({
   asset,
+  active = true,
+  onSavingChange,
+  onRetry,
   source,
   loading,
   error,
@@ -46,6 +50,7 @@ export function ScriptEditorDialog({
 }: ScriptEditorDialogProps) {
   const [draft, setDraft] = useState(source);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [apiGuideOpen, setApiGuideOpen] = useState(false);
   const [consoleOpen, setConsoleOpen] = useState(false);
@@ -71,7 +76,7 @@ export function ScriptEditorDialog({
   useEffect(() => {
     const editor = monacoEditorRef.current;
     if (editor) layoutMonacoWhenVisible(editor);
-  }, [apiGuideOpen]);
+  }, [apiGuideOpen, active]);
 
   useEffect(() => {
     if (runtime.failureRevision > observedFailureRevisionRef.current) {
@@ -89,8 +94,10 @@ export function ScriptEditorDialog({
   }, [isDirty, onDirtyChange]);
 
   const save = useCallback(async () => {
-    if (!isDirty || saving) return;
+    if (!isDirty || savingRef.current || loading || error) return;
+    savingRef.current = true;
     setSaving(true);
+    onSavingChange?.(true);
     setSaveError(null);
     try {
       await onSave(draft);
@@ -101,31 +108,22 @@ export function ScriptEditorDialog({
       );
     } finally {
       setSaving(false);
+      savingRef.current = false;
+      onSavingChange?.(false);
     }
-  }, [draft, isDirty, onSave, saving]);
-
-  const requestClose = useCallback(() => {
-    if (!isDirty) {
-      onClose();
-      return;
-    }
-    const keep = window.confirm(
-      "保存していない変更があります。破棄して閉じますか。",
-    );
-    if (keep) onClose();
-  }, [isDirty, onClose]);
+  }, [draft, isDirty, onSave, saving, loading, error, onSavingChange]);
 
   useEffect(() => {
+    if (!active) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
         event.preventDefault();
         void save();
       }
-      if (event.key === "Escape") requestClose();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [requestClose, save]);
+  }, [active, save]);
 
   const SaveIcon = EDITOR_ICONS.save;
   const CloseIcon = EDITOR_ICONS.close;
@@ -133,10 +131,10 @@ export function ScriptEditorDialog({
 
   return (
     <section
-      className="absolute bottom-6 left-[clamp(260px,26vw,440px)] right-6 top-20 z-[75] flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-300 bg-white text-slate-900 shadow-2xl"
+      className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-white text-slate-900"
       aria-label={`Script editor: ${asset.name}`}
     >
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-slate-200 bg-slate-50 px-3">
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2">
         <h2 className="truncate text-sm font-bold">{asset.name}</h2>
         <span className="truncate text-[11px] text-slate-500">
           {asset.source.relativePath}
@@ -188,7 +186,7 @@ export function ScriptEditorDialog({
           <button
             type="button"
             onClick={() => void save()}
-            disabled={!isDirty || saving || loading}
+            disabled={!isDirty || saving || loading || !!error}
             className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-40"
           >
             <SaveIcon size={13} aria-hidden="true" />
@@ -196,7 +194,8 @@ export function ScriptEditorDialog({
           </button>
           <button
             type="button"
-            onClick={requestClose}
+            onClick={onClose}
+            disabled={saving}
             aria-label="Script editorを閉じる"
             className="rounded-md border border-slate-300 bg-white p-1 text-slate-600 hover:bg-slate-50"
           >
@@ -208,6 +207,7 @@ export function ScriptEditorDialog({
       {error || saveError ? (
         <p className="border-b border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
           {error ?? saveError}
+          {error && onRetry ? <button type="button" onClick={onRetry} className="ml-3 underline">再読み込み</button> : null}
         </p>
       ) : null}
 
@@ -215,7 +215,7 @@ export function ScriptEditorDialog({
         <div className="min-w-0 flex-1">
           {loading ? (
             <p className="p-4 text-xs text-slate-500">読み込み中…</p>
-          ) : (
+          ) : error ? null : (
             <Editor
               height="100%"
               language="typescript"
@@ -232,6 +232,7 @@ export function ScriptEditorDialog({
               }}
               onChange={(value) => setDraft(value ?? "")}
               options={{
+                readOnly: saving,
                 fontSize: 13,
                 minimap: { enabled: false },
                 automaticLayout: true,
@@ -360,6 +361,19 @@ function ScriptApiGuide() {
       </div>
 
       <div className="space-y-4 p-3">
+        <section>
+          <h4 className="text-[11px] font-bold text-slate-700">Graphとつなぐ</h4>
+          <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+            Graphのevent/send・event/receiveと同じイベント名を使います。
+            同じScene内で処理を開始する通知です。値の受け渡しや他のビューアーへの同期は行いません。
+          </p>
+          <GuideCode>{`start(ctx) {
+  ctx.graph.on("door.open", () => {
+    ctx.audioSources.play();
+    ctx.graph.emit("door.opened");
+  });
+}`}</GuideCode>
+        </section>
         <section>
           <h4 className="text-[11px] font-bold text-slate-700">
             Inspectorへ値を公開
