@@ -276,6 +276,14 @@ Material Slotsは件数付きで初期表示を折り畳み、閉じている間
 
 参照: MI-03, MI-05, MI-09, MI-15, MI-16, MI-19, MI-25, MI-48
 
+### Water Shaderカタログ
+
+- 操作前: Assets → 外部から追加 → Water Shaderで21種類を検索・分類し、一覧の実描画静止画と選択中の詳細アニメーションで比較する。調整は「波・さざ波」「反射・透明感」「泡」「演出」「色」にまとめる。
+- 処理中（MI-03）: Material追加中は検索、カテゴリ、選択、パラメータ編集と再追加を無効にする。詳細の試し風はSceneを変更しない。
+- 成功時（MI-05）: 追加・更新したMaterial名と割り当て方法をパネルに残し、AssetsのMaterialからInspectorへ進める。既存Materialの更新は同じプリセットを追加し直した場合に限る。
+- 失敗時・戻り先（MI-09）: 選択と値を保ってエラーを表示し、同じ追加操作を再試行できる。検索0件は空状態を表示し、条件の解除で一覧に戻る。
+- 一覧は共有レンダラーの静止画、詳細だけは動画にする。非表示・一時停止・動きを減らす設定ではアニメーションを止める。既存の`list_material_presets`と`install_material_preset`で全種類とパラメータを扱う。
+
 ### 操作前
 
 - Material Inspectorに「Custom Shaderを作成」を置き、標準PBR Materialから切り替えるとstarter GLSL、uniform、default variantを同じMaterial Assetへ作成する。作成だけではSceneのbindingを変えず、Material Assetを選択した状態を保つ。

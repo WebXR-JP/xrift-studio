@@ -1,142 +1,110 @@
-import { Canvas, useFrame } from "@react-three/fiber";
-import { useEffect, useMemo } from "react";
-import { DoubleSide, PlaneGeometry, Vector2, type ShaderMaterial } from "three";
-import type {
-  ClassicR3fMaterialShader,
-  ResolvedWind,
-} from "../../lib/visual-editor";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { ClassicR3fMaterialShader } from "../../lib/visual-editor/custom-shader-contract";
+import { validateClassicR3fMaterialShader } from "../../lib/visual-editor/custom-shader-contract";
+import type { ResolvedWind } from "../../lib/visual-editor/wind-contract";
 import {
-  validateClassicR3fMaterialShader,
-  windDrivenUniforms,
-} from "../../lib/visual-editor";
-import {
-  applyTimeUniformValue,
-  type MutableUniformValue,
-  type TimeUniformSpec,
-} from "../../../packages/xrift-studio-runtime/src/shader-time";
-import { createClassicR3fMaterial } from "./ProjectModelVisual";
+  WATER_PREVIEW_CAMERA, WATER_PREVIEW_TARGET, WATER_PREVIEW_TIME,
+  applyWaterPreviewTime, createWaterPreviewObjects, requestWaterThumbnail,
+  retainWaterThumbnailRenderer, waterPreviewBackground,
+} from "./water-preview-renderer";
 
-/**
- * Renders a Water preset the way a scene does: the real GLSL on a horizontal
- * plane, seen from a low angle so the Fresnel edge and the wave normals are
- * both readable. The store never shows a drawn stand-in for a material.
- */
-export function WaterShaderCatalogPreview({
-  shader,
-  wind,
-  className = "h-full w-full",
-  animated = false,
-}: {
+/** Real GLSL, one shared snapshot context for cards and one live detail Canvas. */
+export function WaterShaderCatalogPreview({ shader, wind, className = "h-full w-full", animated = false, paused = false }: {
   shader: ClassicR3fMaterialShader;
-  /** The scene's wind, so the store preview moves like the world will. */
   wind: ResolvedWind;
   className?: string;
   animated?: boolean;
+  paused?: boolean;
 }) {
-  const diagnostics = useMemo(
-    () => validateClassicR3fMaterialShader(shader),
-    [shader],
-  );
+  const diagnostics = useMemo(() => validateClassicR3fMaterialShader(shader), [shader]);
+  const host = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  const [documentVisible, setDocumentVisible] = useState(true);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const [image, setImage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
 
-  if (diagnostics.length > 0) {
-    return (
-      <div
-        className={`flex flex-col items-center justify-center bg-slate-100 px-3 text-center ${className}`}
-      >
-        <span className="text-[11px] font-semibold text-slate-700">
-          Water Shaderを表示できません
-        </span>
-        <span className="mt-1 text-[10px] leading-4 text-slate-500">
-          {diagnostics[0]}
-        </span>
-      </div>
+  useEffect(() => {
+    const element = host.current;
+    if (!element) return;
+    if (typeof IntersectionObserver === "undefined") { setVisible(true); return; }
+    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), { rootMargin: "100px" });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => { setDocumentVisible(!document.hidden); setReducedMotion(media.matches); };
+    update();
+    document.addEventListener("visibilitychange", update);
+    media.addEventListener("change", update);
+    return () => { document.removeEventListener("visibilitychange", update); media.removeEventListener("change", update); };
+  }, []);
+  useEffect(() => animated ? undefined : retainWaterThumbnailRenderer(), [animated]);
+  useEffect(() => {
+    if (animated || !visible || diagnostics.length > 0) return;
+    let active = true;
+    setError(null); setImage(null);
+    void requestWaterThumbnail(shader, wind).then(
+      (url) => { if (active) setImage(url); },
+      (reason) => { if (active) setError(reason instanceof Error ? reason.message : "WebGLを確認してください"); },
     );
-  }
+    return () => { active = false; };
+  }, [animated, visible, shader, wind, diagnostics.length, retry]);
 
+  useEffect(() => { if (animated) setError(null); }, [animated, shader]);
+
+  const problem = diagnostics[0] ?? error;
+  const running = visible && documentVisible && !paused && !reducedMotion;
   return (
-    <div
-      className={`relative overflow-hidden bg-slate-900 ${className}`}
-      data-water-shader-preview={shader.sourceModulePath}
-    >
-      <Canvas
-        frameloop={animated ? "always" : "demand"}
-        dpr={[1, 1.5]}
-        camera={{ position: [0, 1.15, 4.2], fov: 42 }}
-        gl={{ antialias: true, alpha: false }}
-      >
-        <WaterPreviewSurface shader={shader} wind={wind} animated={animated} />
-      </Canvas>
+    <div ref={host} className={`relative overflow-hidden bg-slate-100 ${className}`}
+      data-water-shader-preview={shader.sourceModulePath}>
+      {problem ? (
+        <div className="flex h-full flex-col items-center justify-center gap-1 px-3 text-center text-slate-600" role="status">
+          <span className="text-[11px] font-semibold">Water Shaderを表示できません</span>
+          <span className="line-clamp-2 text-[10px]">{problem}</span>
+          {!diagnostics.length && animated ? <span className="text-[10px]">別のプリセットを選び直してください。</span> : null}
+          {!diagnostics.length && !animated ? <span className="text-[10px]">カードを選ぶと詳細で確認できます。</span> : null}
+        </div>
+      ) : animated ? (
+        <Canvas frameloop={running ? "always" : "demand"} dpr={1}
+          camera={{ ...WATER_PREVIEW_CAMERA, near: 0.1, far: 500 }} gl={{ antialias: true, alpha: false }}
+          onCreated={({ camera, gl }) => {
+            camera.lookAt(...WATER_PREVIEW_TARGET);
+            gl.debug.onShaderError = (_context, _program, vertex, fragment) => {
+              const context = gl.getContext();
+              setError(context.getShaderInfoLog(vertex) || context.getShaderInfoLog(fragment) || "GLSLのコンパイルに失敗しました");
+            };
+          }} fallback={<span className="text-xs text-slate-600">WebGL対応ブラウザで確認してください。</span>}>
+          <color attach="background" args={[waterPreviewBackground(shader)]} />
+          <WaterPreviewSurface shader={shader} wind={wind} running={running} />
+        </Canvas>
+      ) : image ? (
+        <img src={image} alt="水面シェーダーの実描画プレビュー" className="h-full w-full object-cover" draggable={false}
+          onError={() => { setImage(null); if (retry < 1) setRetry(retry+1); else setError("画像を再表示できませんでした"); }} />
+      ) : (
+        <div className="flex h-full items-center justify-center text-[10px] text-slate-500" role="status">
+          {visible ? "水面を描画中…" : "プレビュー"}
+        </div>
+      )}
     </div>
   );
 }
 
-function WaterPreviewSurface({
-  shader,
-  wind,
-  animated,
-}: {
-  shader: ClassicR3fMaterialShader;
-  wind: ResolvedWind;
-  animated: boolean;
+function WaterPreviewSurface({ shader, wind, running }: {
+  shader: ClassicR3fMaterialShader; wind: ResolvedWind; running: boolean;
 }) {
-  // Large enough that the far edge reaches a grazing angle, which is where
-  // water actually reads as water.
-  const geometry = useMemo(() => new PlaneGeometry(90, 90, 1, 1), []);
-  const material = useMemo(() => {
-    const next = createClassicR3fMaterial(shader, {}, "");
-    next.side = DoubleSide;
-    next.needsUpdate = true;
-    return next;
-  }, [shader]);
-
-  useEffect(() => () => geometry.dispose(), [geometry]);
-  useEffect(() => () => material.dispose(), [material]);
-  useEffect(() => {
-    for (const entry of windDrivenUniforms(shader, wind)) {
-      const uniform = material.uniforms[entry.name];
-      if (!uniform) continue;
-      if (entry.kind === "number") {
-        uniform.value = entry.value;
-        continue;
-      }
-      const current = uniform.value;
-      if (current instanceof Vector2) {
-        current.set(entry.value[0], entry.value[1]);
-      } else {
-        uniform.value = new Vector2(entry.value[0], entry.value[1]);
-      }
-    }
-    material.needsUpdate = true;
-  }, [material, shader, wind]);
-  // A still card should not read as frozen water, so it samples a moment part
-  // way into the wave motion rather than time zero.
-  useEffect(() => {
-    if (!animated) applyPreviewTime(material, 12.5);
-  }, [animated, material]);
-
-  useFrame((state) => {
-    if (animated) applyPreviewTime(material, state.clock.getElapsedTime());
+  const objects = useMemo(() => createWaterPreviewObjects(shader, wind), [shader, wind]);
+  const elapsed = useRef(WATER_PREVIEW_TIME);
+  const invalidate = useThree((state) => state.invalidate);
+  useEffect(() => { applyWaterPreviewTime(objects.material, elapsed.current); invalidate(); }, [objects, invalidate]);
+  useEffect(() => () => objects.dispose(), [objects]);
+  useFrame((_state, delta) => {
+    // Pauses do not jump on resume, and hidden tabs do not accumulate a huge delta.
+    if (running) elapsed.current += Math.min(delta, 0.1);
+    applyWaterPreviewTime(objects.material, elapsed.current);
   });
-
-  return (
-    <mesh
-      geometry={geometry}
-      material={material}
-      rotation={[-Math.PI / 2, 0, 0]}
-      frustumCulled={false}
-    />
-  );
-}
-
-function applyPreviewTime(material: ShaderMaterial, elapsed: number): void {
-  const specs = material.userData.xriftTimeUniforms as
-    | TimeUniformSpec[]
-    | undefined;
-  if (!Array.isArray(specs)) return;
-  for (const spec of specs) {
-    const uniform = material.uniforms[spec.name];
-    if (uniform) {
-      applyTimeUniformValue(uniform as MutableUniformValue, spec, elapsed);
-    }
-  }
+  return <primitive object={objects.scene} />;
 }

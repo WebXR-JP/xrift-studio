@@ -1,0 +1,14 @@
+[
+  {
+    "file": "ocean-grid-64m-64.glb",
+    "vertices": 4225,
+    "triangles": 8192,
+    "bytes": 185464
+  },
+  {
+    "file": "ocean-grid-64m-128.glb",
+    "vertices": 16641,
+    "triangles": 32768,
+    "bytes": 730244
+  }
+]

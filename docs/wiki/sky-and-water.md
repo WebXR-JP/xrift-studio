@@ -47,20 +47,30 @@ Material を選ぶと、Inspector の **Uniform values** で数値と色を変�
 
 ### プリセット
 
-| プリセット | 用途 |
+海・水面を21種類から選べます。名前だけでなく、日本語の説明や特徴でも検索できます。
+
+| カテゴリ | プリセット |
 | --- | --- |
-| **Calm Lake** | 静かな湖面。波は小さく反射は控えめ |
-| **Ocean Waves** | 海。うねりが大きい |
-| **Stylized Toon** | セルルックの水 |
+| 外洋・うねり | Ocean Waves、Deep Ocean Swell、Trade Wind Sea |
+| 海岸・磯 | Coastal Surf、Rocky Coast Surge |
+| 南国・浅瀬 | Tropical Lagoon、Coral Shallows |
+| 荒天・雨 | Storm Sea、Rainy Harbor |
+| 夕景・夜の海 | Golden Tide、Moonlit Ocean、Bioluminescent Bay |
+| アニメ・絵画 | Stylized Toon、Anime Summer Sea、Watercolor Sea、Ink Waves |
+| 幻想・SF | Aurora Tide、Holographic Sea、Iridescent Sea、Glacial Sea |
+| 湖・内海 | Calm Lake |
 
 ### 調整する
 
-Inspector の Uniform values で、波と見た目を調整できます。
+追加する前は、詳細プレビューの下にある「波・さざ波」「反射・透明感」「泡」「演出」「色」で調整します。追加した後も Inspector の **Uniform values** で変更できます。
 
-- **波**: 速さ、重ね数、高さ、細かさ
-- **さざ波**: タイリング、強さ
-- **反射**: 強さ、縁の反射、太陽のきらめき
-- **不透明度**
+一覧は実際のGLSLを描いた静止画で、選択中の詳細だけが動きます。「試し風」はプレビュー専用です。Scene設定や追加するMaterialの風設定は変更しません。
+
+通常のPlaneでは「頂点変位」を0にします。波の輪郭も上下させる場合は、十分に分割した水平メッシュを使って頂点変位を上げます。
+
+> **表現の範囲**: 岸の泡は「岸の位置・方角・幅」による直線の演出です。地形や岩との接触を自動検出しません。反射は設定した空色の近似、集光模様は水面上の演出です。物体の鏡映、実際の水深、背景の屈折、水底への集光は扱いません。
+
+同じプリセットを追加し直すと、同じMaterialが現在の設定で更新されます。既存の調整を残す場合は、更新する前にプロジェクトを保存・バックアップしてください。詳細は [Water Shader v2の仕様と検証範囲](../WATER_SHADER_V2.md) にまとめています。
 
 ### 風は Scene 設定から来る
 

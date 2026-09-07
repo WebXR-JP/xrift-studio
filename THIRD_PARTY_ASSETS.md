@@ -58,7 +58,7 @@ The original local storage paths are intentionally not recorded in source code o
 
 | 取り込み先 | 上流ソース | ライセンス | 表示 |
 | --- | --- | --- | --- |
-| `src/lib/visual-editor/water-shader-catalog.ts` の `xriftWaterGerstner` | [`MochiesCode/Mochies-Unity-Shaders`](https://github.com/MochiesCode/Mochies-Unity-Shaders) `Assets/Mochie/Water Shader/WaterFunctions.cginc` の `GerstnerWave` | MIT | Copyright (c) 2020 MochiesCode |
+| `src/lib/visual-editor/water-shader-core.ts` の `xriftWaterGerstner` | [`MochiesCode/Mochies-Unity-Shaders`](https://github.com/MochiesCode/Mochies-Unity-Shaders) `Assets/Mochie/Water Shader/WaterFunctions.cginc` の `GerstnerWave` | MIT | Copyright (c) 2020 MochiesCode |
 
 移植したのは分散関係 `c = sqrt(9.8 / k)`、振幅と急峻さの関係 `a = steepness / k`、
 および接線・従法線の解析微分だけで、HLSL から GLSL へ書き換えている。Unity 側の

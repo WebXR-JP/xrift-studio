@@ -41,11 +41,23 @@ function emptyManifest(): AssetManifest {
 }
 
 function assertCatalogIntegrity(): void {
-  assert(WATER_SHADER_CATALOG.length > 0, "Water catalog is empty");
+  assert(WATER_SHADER_CATALOG.length >= 21, "Water catalog lost the expanded collection");
+  assert(new Set(WATER_SHADER_CATALOG.map((entry) => entry.category)).size >= 8,
+    "Water catalog lost a genre");
+  assert(new Set(WATER_SHADER_CATALOG.map((entry) => JSON.stringify(entry.shader.variants[0].defines))).size >= 12,
+    "Water catalog became color-only variations");
   const ids = new Set<string>();
   for (const entry of WATER_SHADER_CATALOG) {
     assert(!ids.has(entry.id), `Duplicate Water entry id: ${entry.id}`);
     ids.add(entry.id);
+    assert(entry.features.length >= 2 && entry.notes.length > 0,
+      `Water「${entry.id}」must explain its effects and limitations`);
+    const displacement = entry.shader.uniforms.uWaveDisplacement;
+    assert(displacement?.kind === "number" && displacement.value === 0,
+      `Water「${entry.id}」must be safe on an ordinary Plane`);
+    assert(entry.shader.fragmentShader.includes("#include <colorspace_fragment>") &&
+      entry.shader.fragmentShader.includes("#include <fog_fragment>"),
+      `Water「${entry.id}」must retain output color and scene fog handling`);
     assert(
       isClassicR3fMaterialShader(entry.shader),
       `Water「${entry.id}」is not a valid Classic R3F shader`,

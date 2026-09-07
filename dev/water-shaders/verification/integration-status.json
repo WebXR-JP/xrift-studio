@@ -1,0 +1,7 @@
+{
+  "fullTypecheck": "not passed: missing dependencies; local compiler differs from project compiler",
+  "dependencyInstall": "blocked: DNS unavailable for configured npm registry",
+  "browserWebGL": "not verified: Chromium could not create WebGL2 context",
+  "appAndDevices": "not run: Three.js/R3F, Tauri, published-world runtime, Quest/WebXR, save/reload, FPS",
+  "scope": "Only catalog integrity, TS/TSX syntax, native GLES reference rendering, and GLB structure/winding were verified."
+}

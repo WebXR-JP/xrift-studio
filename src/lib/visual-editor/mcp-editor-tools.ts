@@ -113,6 +113,7 @@ import {
   WATER_SHADER_CATALOG,
   defaultWaterShaderParameterValues,
   getWaterShaderCatalogEntry,
+  waterShaderCategoryLabel,
   type WaterShaderCatalogEntry,
 } from "./water-shader-catalog";
 import {
@@ -2302,6 +2303,11 @@ function listMaterialPresets(
         id: entry.id,
         label: entry.label,
         description: entry.description,
+        category: entry.category,
+        categoryLabel: waterShaderCategoryLabel(entry.category),
+        features: entry.features,
+        cost: entry.cost,
+        notes: entry.notes,
         parameters: describeParameters(
           entry.parameters,
           defaultWaterShaderParameterValues(entry),

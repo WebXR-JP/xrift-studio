@@ -1,0 +1,15 @@
+{
+  "status": "passed",
+  "files": 7,
+  "compiler": "5.8.3",
+  "scope": "TypeScript/TSX syntactic transpilation only, not dependency-aware semantic typechecking.",
+  "checked": [
+    "src/lib/visual-editor/water-shader-core.ts",
+    "src/lib/visual-editor/water-shader-catalog.ts",
+    "src/lib/visual-editor/water-shader.fixture.ts",
+    "src/lib/visual-editor/mcp-editor-tools.ts",
+    "src/components/visual-editor/WaterShaderStore.tsx",
+    "src/components/visual-editor/WaterShaderCatalogPreview.tsx",
+    "src/components/visual-editor/water-preview-renderer.ts"
+  ]
+}

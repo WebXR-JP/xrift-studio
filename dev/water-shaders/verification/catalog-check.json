@@ -1,0 +1,18 @@
+{
+  "status": "passed",
+  "presets": 21,
+  "categories": 8,
+  "featurePrograms": 16,
+  "parameterBindings": 532,
+  "checks": [
+    "stable IDs",
+    "schema/ranges",
+    "parameter sanitizing",
+    "no catalog mutation",
+    "wind/time declaration",
+    "safe Plane defaults",
+    "shader feature bindings",
+    "fog chunks"
+  ],
+  "scope": "Catalog/TypeScript syntax only. Run browser GLSL and full application checks separately."
+}

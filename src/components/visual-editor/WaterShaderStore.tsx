@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   CircleAlert,
@@ -11,6 +11,8 @@ import {
   WATER_SHADER_CATALOG,
   WATER_SHADER_CATALOG_SOURCE_URL,
   WATER_SHADER_CATEGORIES,
+  WATER_SHADER_PARAMETER_GROUPS,
+  waterShaderCostLabel,
   applyWaterShaderParameters,
   defaultWaterShaderParameterValues,
   waterShaderCategoryLabel,
@@ -27,9 +29,9 @@ export type WaterShaderInstallResult = {
 };
 
 /**
- * The Sky Shader shelf of the external resource store.
+ * The Water Shader shelf of the external resource store.
  *
- * Presets are tuned here before they land in the project, because the star
+ * Presets are tuned here before they land in the project, because the
  * wave shape is the reason to pick one preset over another. The same values
  * stay editable afterwards on the installed Material, so this panel is a
  * starting point rather than the only place the water can be changed.
@@ -48,6 +50,11 @@ export function WaterShaderStore({
   ) => Promise<WaterShaderInstallResult>;
 }) {
   const [query, setQuery] = useState("");
+  const [sampleWind, setSampleWind] = useState(wind.speed <= 0);
+  const [paused, setPaused] = useState(false);
+  const previewWind = useMemo<ResolvedWind>(() => sampleWind
+    ? { direction: wind.direction, speed: 1, turbulence: 0.25 }
+    : wind, [sampleWind, wind]);
   const [category, setCategory] = useState<"all" | WaterShaderCatalogCategory>(
     "all",
   );
@@ -71,6 +78,7 @@ export function WaterShaderStore({
         entry.label,
         entry.id,
         entry.description,
+        ...entry.features,
         waterShaderCategoryLabel(entry.category),
       ]
         .join(" ")
@@ -87,6 +95,13 @@ export function WaterShaderStore({
     const defaults = defaultWaterShaderParameterValues(selected);
     return Object.entries(defaults).some(([name, value]) => values[name] !== value);
   }, [selected, values]);
+
+  useEffect(() => {
+    if (adding || !visible.length || visible.some((entry) => entry.id === selectedId)) return;
+    setSelectedId(visible[0].id);
+    setValues(defaultWaterShaderParameterValues(visible[0]));
+    setAddedMessage(null); setError(null);
+  }, [visible, selectedId, adding]);
 
   const selectEntry = (entry: WaterShaderCatalogEntry) => {
     if (adding) return;
@@ -133,7 +148,7 @@ export function WaterShaderStore({
             <div>
               <h3 className="text-xs font-semibold text-slate-900">Water Shader</h3>
               <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                Gerstner波で水面を描くMaterialです。波はScene設定のWindから駆動します
+                外洋・浅瀬・荒天・夜光・絵画調。波と泡の表現から選べます
               </p>
             </div>
             <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] font-semibold text-sky-700">
@@ -149,6 +164,7 @@ export function WaterShaderStore({
               <span className="sr-only">Water Shaderを検索</span>
               <input
                 value={query}
+                disabled={adding}
                 onChange={(event) => setQuery(event.currentTarget.value)}
                 placeholder="名前または説明で検索"
                 className="h-8 w-full rounded-md border border-slate-300 bg-white pl-8 pr-3 text-xs outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
@@ -156,6 +172,7 @@ export function WaterShaderStore({
             </label>
             <select
               value={category}
+              disabled={adding}
               onChange={(event) =>
                 setCategory(
                   event.currentTarget.value as "all" | WaterShaderCatalogCategory,
@@ -188,6 +205,7 @@ export function WaterShaderStore({
                     key={entry.id}
                     type="button"
                     aria-pressed={active}
+                    disabled={adding}
                     onClick={() => selectEntry(entry)}
                     className={`overflow-hidden rounded-lg border bg-white text-left transition ${
                       active
@@ -197,7 +215,7 @@ export function WaterShaderStore({
                   >
                     <WaterShaderCatalogPreview
                       shader={entry.shader}
-                      wind={wind}
+                      wind={previewWind}
                       className="aspect-[16/9] w-full"
                     />
                     <div className="p-2.5">
@@ -205,7 +223,10 @@ export function WaterShaderStore({
                         {entry.label}
                       </p>
                       <p className="mt-1 text-[10px] font-medium text-slate-500">
-                        {waterShaderCategoryLabel(entry.category)}
+                        {waterShaderCategoryLabel(entry.category)} · {waterShaderCostLabel(entry.cost)}
+                      </p>
+                      <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-slate-500">
+                        {entry.features.join(" / ")}
                       </p>
                     </div>
                   </button>
@@ -215,7 +236,7 @@ export function WaterShaderStore({
           )}
         </div>
         <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
-          カードは実際のGLSLをWebGLで描画しています。
+          カードは実際のGLSLを描画した静止画です。詳細で動きを確認できます。
         </footer>
       </section>
 
@@ -227,10 +248,23 @@ export function WaterShaderStore({
           <div className="space-y-4">
             <WaterShaderCatalogPreview
               shader={previewShader}
-              wind={wind}
+              wind={previewWind}
               className="aspect-[16/10] w-full rounded-lg"
               animated
+              paused={paused}
             />
+            <div className="space-y-2 text-[11px] text-slate-600">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={!paused} onChange={(event) => setPaused(!event.currentTarget.checked)} />
+                アニメーションを表示
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={sampleWind} onChange={(event) => setSampleWind(event.currentTarget.checked)} />
+                プレビューだけ試し風を使う
+              </label>
+              <p className="text-[10px] leading-4 text-slate-500">照明と水底は見本です。Scene設定は変更しません。</p>
+              {wind.speed <= 0 ? <Notice tone="warning" text="SceneのWindは停止中です。追加後の水面を動かすには、Scene設定のWindを有効にしてください。" /> : null}
+            </div>
             <div>
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -253,44 +287,9 @@ export function WaterShaderStore({
               <p className="mt-2 text-xs leading-5 text-slate-600">
                 {selected.description}
               </p>
+              <p className="mt-2 text-[10px] text-slate-500">{waterShaderCostLabel(selected.cost)}（端末ごとのFPS保証ではありません）</p>
             </div>
 
-            <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <span className="text-[11px] font-semibold text-slate-700">
-                  Uniform values
-                </span>
-                <button
-                  type="button"
-                  disabled={!modified || adding}
-                  onClick={() => setValues(defaultWaterShaderParameterValues(selected))}
-                  className="flex items-center gap-1 rounded border border-slate-300 bg-white px-1.5 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  <RotateCcw size={11} aria-hidden="true" />
-                  既定値へ戻す
-                </button>
-              </div>
-              <div className="space-y-2.5">
-                {selected.parameters.map((parameter) => (
-                  <WaterShaderParameterField
-                    key={parameter.uniform}
-                    parameter={parameter}
-                    value={values[parameter.uniform]}
-                    disabled={adding}
-                    onChange={(next) =>
-                      setValues((current) => ({
-                        ...current,
-                        [parameter.uniform]: next,
-                      }))
-                    }
-                  />
-                ))}
-              </div>
-            </div>
-
-
-            <Notice text="追加後はMaterial Assetとして残ります。板ポリや地形メッシュへ割り当ててください。波の高さ・色・重ね数はInspectorのUniform valuesから何度でも変更できます。" />
-            <Notice text="Gerstner波はMochie's Unity Shaders (MIT, (c) 2020 MochiesCode) を移植しています。反射は実反射ではなく空色の近似です。" />
             {disabledReason ? (
               <Notice tone="warning" text={disabledReason} />
             ) : null}
@@ -327,6 +326,48 @@ export function WaterShaderStore({
                 `${selected.label}をMaterialへ追加`
               )}
             </button>
+
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold text-slate-700">
+                  Uniform values
+                </span>
+                <button
+                  type="button"
+                  disabled={!modified || adding}
+                  onClick={() => setValues(defaultWaterShaderParameterValues(selected))}
+                  className="flex items-center gap-1 rounded border border-slate-300 bg-white px-1.5 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <RotateCcw size={11} aria-hidden="true" />
+                  既定値へ戻す
+                </button>
+              </div>
+              <div className="space-y-2.5">
+                {WATER_SHADER_PARAMETER_GROUPS.map((group) => {
+                  const parameters = selected.parameters.filter((parameter) => (parameter.group ?? "演出") === group);
+                  if (!parameters.length) return null;
+                  return (
+                    <details key={group} open={group === "波・さざ波"} className="rounded border border-slate-200 bg-white">
+                      <summary className="cursor-pointer px-2 py-2 text-[11px] font-semibold text-slate-700">{group}</summary>
+                      <div className="space-y-2 p-2 pt-0">
+                        {parameters.map((parameter) => (
+                          <WaterShaderParameterField key={parameter.uniform} parameter={parameter}
+                            value={values[parameter.uniform]} disabled={adding}
+                            onChange={(next) => setValues((current) => ({ ...current, [parameter.uniform]: next }))} />
+                        ))}
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
+            </div>
+
+
+            <Notice text="追加後はMaterial Assetとして残ります。板ポリや地形メッシュへ割り当ててください。波の高さ・色・重ね数はInspectorのUniform valuesから何度でも変更できます。" />
+            <Notice text={selected.notes} />
+            {selected.shader.variants[0]?.defines.WATER_SHORE ? <Notice tone="warning" text="寄せ波は指定した直線の岸に合わせる演出です。「演出」の岸の位置・方角・幅を調整してください。岩や地形の接触箇所は自動検出しません。" /> : null}
+            <Notice text="Gerstner波の基礎部分はMochie's Unity Shaders (MIT, (c) 2020 MochiesCode) を移植しています。" />
+
           </div>
         ) : null}
       </aside>
@@ -365,7 +406,8 @@ function WaterShaderParameterField({
             className="h-7 w-12 rounded border border-slate-300 bg-white p-0.5 disabled:opacity-50"
           />
         </div>
-        <p className="mt-1 font-mono text-[9px] text-slate-400">
+        <p className="mt-1 text-[10px] leading-4 text-slate-500">{parameter.hint}</p>
+        <p className="mt-0.5 font-mono text-[9px] text-slate-400">
           {parameter.uniform}
         </p>
       </div>

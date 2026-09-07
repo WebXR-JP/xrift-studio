@@ -1,0 +1,178 @@
+{
+  "scope": "Native OpenGL ES 3 reference rendering through Mesa/EGL with a minimal Three shader-chunk adapter. NOT a browser, Three.js, R3F, Tauri or XR device integration test.",
+  "renderer": "llvmpipe (LLVM 19.1.7, 256 bits)",
+  "version": "OpenGL ES 3.2 Mesa 25.0.7-2",
+  "presets": [
+    {
+      "id": "calm-lake",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 12.869
+    },
+    {
+      "id": "ocean-waves",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 29.624
+    },
+    {
+      "id": "stylized-toon",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 17.872
+    },
+    {
+      "id": "deep-swell",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 36.49
+    },
+    {
+      "id": "trade-wind-sea",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 31.622
+    },
+    {
+      "id": "tropical-lagoon",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 9.982
+    },
+    {
+      "id": "coral-shallows",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 7.723
+    },
+    {
+      "id": "coastal-surf",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 14.23
+    },
+    {
+      "id": "rocky-coast",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 15.09
+    },
+    {
+      "id": "storm-sea",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 43.169
+    },
+    {
+      "id": "rainy-harbor",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 13.249
+    },
+    {
+      "id": "golden-tide",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 19.899
+    },
+    {
+      "id": "moonlit-ocean",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 17.572
+    },
+    {
+      "id": "bioluminescent-bay",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 28.323
+    },
+    {
+      "id": "anime-ocean",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 15.765
+    },
+    {
+      "id": "watercolor-sea",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 13.231
+    },
+    {
+      "id": "ink-waves",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 16.511
+    },
+    {
+      "id": "aurora-tide",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 38.475
+    },
+    {
+      "id": "holographic-sea",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 30.072
+    },
+    {
+      "id": "iridescent-sea",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 19.23
+    },
+    {
+      "id": "glacial-sea",
+      "renders": 23,
+      "windZeroFrozen": true,
+      "speedZeroFrozen": true,
+      "opacityZeroHidden": true,
+      "animationMeanPixelDelta": 5.944
+    }
+  ],
+  "status": "passed",
+  "programs": 32,
+  "renderCases": 483
+}
