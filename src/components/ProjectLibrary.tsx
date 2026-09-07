@@ -2,14 +2,20 @@ import { useMemo, useState } from "react";
 import {
   ArrowUpDown,
   ExternalLink,
+  GitBranch,
   LifeBuoy,
+  PackageOpen,
   RefreshCw,
   Search,
   Settings,
   X,
 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { Project } from "../lib/tauri";
+import type {
+  Project,
+  ProjectArchiveExport,
+  ProjectArchiveInspection,
+} from "../lib/tauri";
 import type { AppUpdateState } from "../lib/app-updater";
 import type { Whoami } from "../lib/xrift-cli";
 import { NewProjectCard, ProjectCard } from "./ProjectCard";
@@ -19,6 +25,12 @@ import { UserMenu } from "./UserMenu";
 import { ThumbnailEditorModal } from "./ThumbnailEditorModal";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { SupportReportModal } from "./SupportReportModal";
+import {
+  DuplicateProjectDialog,
+  ExportProjectResultDialog,
+  ImportProjectArchiveDialog,
+  ImportProjectRepositoryDialog,
+} from "./ProjectTransferDialogs";
 
 type ProjectSort =
   | "updated-desc"
@@ -43,6 +55,25 @@ type Props = {
   projectsRoot: string;
   onOpen: (project: Project) => void;
   onDelete: (project: Project) => Promise<boolean>;
+  /** Copies the project to a new folder; resolves to the copy or null on failure. */
+  onDuplicate: (
+    project: Project,
+    directoryName: string,
+    title: string | undefined,
+  ) => Promise<Project | null>;
+  /** Writes the project to a zip; null when the person cancelled the save dialog. */
+  onExport: (project: Project) => Promise<ProjectArchiveExport | null>;
+  /** Reads a zip picked by the person; null when the picker was cancelled. */
+  onInspectArchive: () => Promise<ProjectArchiveInspection | null>;
+  onImportArchive: (
+    inspection: ProjectArchiveInspection,
+    directoryName: string,
+  ) => Promise<Project | null>;
+  onImportRepository: (
+    repositoryUrl: string,
+    directoryName: string,
+  ) => Promise<Project | null>;
+  onOpenPath: (path: string) => void;
   onNew: () => void;
   onLogin: () => void;
   onLogout: () => void;
@@ -81,6 +112,12 @@ export function ProjectLibrary({
   projectsRoot,
   onOpen,
   onDelete,
+  onDuplicate,
+  onExport,
+  onInspectArchive,
+  onImportArchive,
+  onImportRepository,
+  onOpenPath,
   onNew,
   onLogin,
   onLogout,
@@ -94,6 +131,21 @@ export function ProjectLibrary({
   const [editingThumb, setEditingThumb] = useState<Project | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [duplicateTarget, setDuplicateTarget] = useState<Project | null>(null);
+  const [duplicating, setDuplicating] = useState(false);
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportResult, setExportResult] = useState<
+    (ProjectArchiveExport & { projectLabel: string }) | null
+  >(null);
+  const [inspectingArchive, setInspectingArchive] = useState(false);
+  const [importInspection, setImportInspection] =
+    useState<ProjectArchiveInspection | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [showRepositoryImport, setShowRepositoryImport] = useState(false);
+  const [importingRepository, setImportingRepository] = useState(false);
+  const [repositoryError, setRepositoryError] = useState<string | null>(null);
   const [thumbRefresh, setThumbRefresh] = useState(0);
   const [sort, setSort] = useState<ProjectSort>("updated-desc");
   const [publishFilter, setPublishFilter] = useState<PublishFilter>("all");
@@ -124,6 +176,80 @@ export function ProjectLibrary({
     }
   };
 
+  const existingNames = useMemo(
+    () => new Set(projects.map((project) => project.name)),
+    [projects],
+  );
+
+  const confirmDuplicate = async (directoryName: string, title: string | undefined) => {
+    if (!duplicateTarget || duplicating) return;
+    setDuplicating(true);
+    setDuplicateError(null);
+    try {
+      const copy = await onDuplicate(duplicateTarget, directoryName, title);
+      if (copy) setDuplicateTarget(null);
+    } catch (error) {
+      setDuplicateError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setDuplicating(false);
+    }
+  };
+
+  const runExport = async (project: Project) => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const result = await onExport(project);
+      if (result) {
+        setExportResult({ ...result, projectLabel: project.title || project.name });
+      }
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const startImport = async () => {
+    if (inspectingArchive) return;
+    setInspectingArchive(true);
+    setImportError(null);
+    try {
+      const inspection = await onInspectArchive();
+      if (inspection) setImportInspection(inspection);
+    } finally {
+      setInspectingArchive(false);
+    }
+  };
+
+  const confirmImport = async (directoryName: string) => {
+    if (!importInspection || importing) return;
+    setImporting(true);
+    setImportError(null);
+    try {
+      const imported = await onImportArchive(importInspection, directoryName);
+      if (imported) setImportInspection(null);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const confirmRepositoryImport = async (repositoryUrl: string, directoryName: string) => {
+    if (importingRepository) return;
+    setImportingRepository(true);
+    setRepositoryError(null);
+    try {
+      const imported = await onImportRepository(repositoryUrl, directoryName);
+      if (imported) setShowRepositoryImport(false);
+    } catch (error) {
+      setRepositoryError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setImportingRepository(false);
+    }
+  };
+
+  const transferBusy =
+    duplicating || exporting || inspectingArchive || importing || importingRepository;
   const filtered = publishFilter !== "all" || query.trim().length > 0;
 
   return (
@@ -216,6 +342,53 @@ export function ProjectLibrary({
         onConfirm={() => void confirmDelete()}
         onClose={() => !deleting && setDeleteTarget(null)}
       />
+      <DuplicateProjectDialog
+        project={duplicateTarget}
+        existingNames={existingNames}
+        busy={duplicating}
+        error={duplicateError}
+        onConfirm={(directoryName, title) => void confirmDuplicate(directoryName, title)}
+        onClose={() => {
+          if (duplicating) return;
+          setDuplicateTarget(null);
+          setDuplicateError(null);
+        }}
+      />
+      <ImportProjectArchiveDialog
+        inspection={importInspection}
+        existingNames={existingNames}
+        busy={importing}
+        error={importError}
+        onConfirm={(directoryName) => void confirmImport(directoryName)}
+        onClose={() => {
+          if (importing) return;
+          setImportInspection(null);
+          setImportError(null);
+        }}
+      />
+      <ImportProjectRepositoryDialog
+        open={showRepositoryImport}
+        existingNames={existingNames}
+        busy={importingRepository}
+        error={repositoryError}
+        onConfirm={(repositoryUrl, directoryName) =>
+          void confirmRepositoryImport(repositoryUrl, directoryName)
+        }
+        onClose={() => {
+          if (importingRepository) return;
+          setShowRepositoryImport(false);
+          setRepositoryError(null);
+        }}
+      />
+      <ExportProjectResultDialog
+        result={exportResult}
+        onOpenFolder={() => {
+          if (!exportResult) return;
+          const parent = exportResult.archivePath.replace(/[\\/][^\\/]*$/, "");
+          onOpenPath(parent || exportResult.archivePath);
+        }}
+        onClose={() => setExportResult(null)}
+      />
 
       <main className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
         <div className="mx-auto max-w-[1120px] px-5 py-5">
@@ -299,7 +472,52 @@ export function ProjectLibrary({
             </div>
           </div>
 
-          <NewProjectCard busy={busy} onClick={onNew} />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+            <div className="min-w-0 flex-1">
+              <NewProjectCard busy={busy || transferBusy} onClick={onNew} />
+            </div>
+            <button
+              type="button"
+              disabled={busy || transferBusy}
+              onClick={() => void startImport()}
+              className="flex min-h-20 shrink-0 items-center gap-3 rounded-lg border border-dashed border-zinc-300 bg-white/70 px-4 text-left text-zinc-600 hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50 sm:w-64"
+              title="書き出したzipからプロジェクトを取り込む"
+            >
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-current">
+                <PackageOpen size={16} aria-hidden="true" />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold">
+                  {inspectingArchive ? "zipを確認中…" : "zipから取り込む"}
+                </span>
+                <span className="mt-0.5 block text-[11px] text-zinc-500">
+                  書き出したプロジェクトを受け取る
+                </span>
+              </span>
+            </button>
+            <button
+              type="button"
+              disabled={busy || transferBusy}
+              onClick={() => {
+                setRepositoryError(null);
+                setShowRepositoryImport(true);
+              }}
+              className="flex min-h-20 shrink-0 items-center gap-3 rounded-lg border border-dashed border-zinc-300 bg-white/70 px-4 text-left text-zinc-600 hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50 sm:w-64"
+              title="Gitリポジトリのプロジェクトを自分の保存先へコピーする"
+            >
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-current">
+                <GitBranch size={16} aria-hidden="true" />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold">
+                  {importingRepository ? "取得中…" : "Gitから取り込む"}
+                </span>
+                <span className="mt-0.5 block text-[11px] text-zinc-500">
+                  リポジトリを fork して始める
+                </span>
+              </span>
+            </button>
+          </div>
 
           <div className="mb-2 mt-4 flex items-center justify-between gap-3 border-t border-zinc-200 pt-3">
             <h2 className="text-xs font-semibold text-zinc-700">
@@ -315,9 +533,14 @@ export function ProjectLibrary({
               <ProjectCard
                 key={project.path}
                 project={project}
-                busy={busy || deleting}
+                busy={busy || deleting || transferBusy}
                 onOpen={() => onOpen(project)}
                 onEditThumbnail={() => setEditingThumb(project)}
+                onDuplicate={() => {
+                  setDuplicateError(null);
+                  setDuplicateTarget(project);
+                }}
+                onExport={() => void runExport(project)}
                 onDelete={() => setDeleteTarget(project)}
                 refreshKey={thumbRefresh}
               />
@@ -327,7 +550,7 @@ export function ProjectLibrary({
           {!loading && projects.length === 0 ? (
             <div className="mt-6 rounded-lg border border-dashed border-zinc-300 bg-white/60 px-4 py-5 text-center">
               <p className="text-sm font-medium text-zinc-700">まだプロジェクトがありません</p>
-              <p className="mt-1 text-xs text-zinc-500">上の「新規プロジェクト」から制作を始められます。</p>
+              <p className="mt-1 text-xs text-zinc-500">上の「新規プロジェクト」から制作を始めるか、「zipから取り込む」「Gitから取り込む」で受け取ったプロジェクトを開けます。</p>
             </div>
           ) : null}
 

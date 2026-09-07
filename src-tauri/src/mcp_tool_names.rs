@@ -3,12 +3,15 @@
 // Source of truth: src/lib/visual-editor/mcp-tool-registry.ts
 // Regenerate with: pnpm mcp:tool-names
 
-pub const MCP_TOOL_NAMES: [&str; 142] = [
+pub const MCP_TOOL_NAMES: [&str; 145] = [
     "list_projects",
     "list_starter_templates",
     "create_project",
     "open_project",
     "close_project",
+    "duplicate_project",
+    "export_project",
+    "import_project",
     "get_account",
     "login",
     "get_publish_readiness",

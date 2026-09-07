@@ -12,10 +12,13 @@ import { EditorView } from "./components/EditorView";
 import { NewProjectDialog } from "./components/NewProjectDialog";
 import { SetupView } from "./components/SetupView";
 import { UpdateDialog } from "./components/UpdateDialog";
+import { suggestedNameForRepositoryUrl } from "./components/ProjectTransferDialogs";
 import { AppUpdateDialog } from "./components/AppUpdateDialog";
 import {
   tauri,
   type Project,
+  type ProjectArchiveExport,
+  type ProjectArchiveInspection,
   type ProjectKind,
   type RuntimeStatus,
   type XriftMcpEditorRequestEvent,
@@ -73,7 +76,11 @@ import {
   isXriftMcpProjectTool,
   listStarterTemplates,
   parseCreateProjectArguments,
+  parseNewProjectDirectoryName,
+  parseOptionalProjectTitle,
+  parseRequiredPath,
   resolveProjectTarget,
+  resolveTransferableProject,
   summarizeProject,
   type VisualPublishPipelineProgress,
   readVisualProjectFromDisk,
@@ -593,6 +600,140 @@ function App() {
     }
   };
 
+  const handleDuplicateProject = async (
+    project: Project,
+    directoryName: string,
+    title: string | undefined,
+  ): Promise<Project | null> => {
+    setBusy(true);
+    try {
+      const copy = await tauri.duplicateProject(
+        projectsRoot,
+        project.path,
+        directoryName,
+        title,
+      );
+      appendLog({
+        kind: "info",
+        text: `duplicated project: ${project.path} -> ${copy.path}`,
+        ts: Date.now(),
+      });
+      await refreshProjects();
+      toast({
+        kind: "success",
+        title: "プロジェクトを複製しました",
+        description: `${copy.title || copy.name}（${copy.name}）を一覧に追加しました`,
+      });
+      return copy;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleExportProject = async (
+    project: Project,
+  ): Promise<ProjectArchiveExport | null> => {
+    setBusy(true);
+    try {
+      const destination = await tauri.selectProjectArchiveDestination(
+        `${project.name}.zip`,
+      );
+      if (!destination) return null;
+      const result = await tauri.exportProjectArchive(
+        projectsRoot,
+        project.path,
+        destination,
+      );
+      appendLog({
+        kind: "info",
+        text: `exported project archive: ${result.archivePath} (${result.fileCount} files)`,
+        ts: Date.now(),
+      });
+      return result;
+    } catch (error) {
+      toast({
+        kind: "error",
+        title: "プロジェクトを書き出せませんでした",
+        description: String(error),
+      });
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleInspectProjectArchive =
+    async (): Promise<ProjectArchiveInspection | null> => {
+      const archivePath = await tauri.selectProjectArchive();
+      if (!archivePath) return null;
+      try {
+        return await tauri.inspectProjectArchive(archivePath);
+      } catch (error) {
+        toast({
+          kind: "error",
+          title: "zipを読み込めませんでした",
+          description: String(error),
+        });
+        return null;
+      }
+    };
+
+  const handleImportProjectArchive = async (
+    inspection: ProjectArchiveInspection,
+    directoryName: string,
+  ): Promise<Project | null> => {
+    setBusy(true);
+    try {
+      const imported = await tauri.importProjectArchive(
+        projectsRoot,
+        inspection.archivePath,
+        directoryName,
+      );
+      appendLog({
+        kind: "info",
+        text: `imported project archive: ${inspection.archivePath} -> ${imported.path}`,
+        ts: Date.now(),
+      });
+      await refreshProjects();
+      toast({
+        kind: "success",
+        title: "プロジェクトを取り込みました",
+        description: `${imported.title || imported.name}（${imported.name}）を一覧に追加しました`,
+      });
+      return imported;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleImportProjectRepository = async (
+    repositoryUrl: string,
+    directoryName: string,
+  ): Promise<Project | null> => {
+    setBusy(true);
+    try {
+      const imported = await tauri.importProjectFromRepository(
+        projectsRoot,
+        repositoryUrl,
+        directoryName,
+      );
+      appendLog({
+        kind: "info",
+        text: `imported project from repository: ${repositoryUrl} -> ${imported.path}`,
+        ts: Date.now(),
+      });
+      await refreshProjects();
+      toast({
+        kind: "success",
+        title: "Gitリポジトリから取り込みました",
+        description: `${imported.title || imported.name}（${imported.name}）を一覧に追加しました`,
+      });
+      return imported;
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleCreate = (kind: ProjectKind, name: string) =>
     wrap(async () => {
       const result = await xrift.createProject(projectsRoot, kind, name, appendLog);
@@ -1026,6 +1167,109 @@ function App() {
           alreadyOpen: false,
           nextActions: ["get_editor_context", "get_world_authoring"],
         });
+      }
+      case "duplicate_project": {
+        const root = requireMcpProjectsRoot();
+        const list = await tauri.listProjects(root);
+        const source = resolveTransferableProject(list, args);
+        const directoryName = parseNewProjectDirectoryName(args, "newName", list);
+        const title = parseOptionalProjectTitle(args);
+        const copy = await tauri.duplicateProject(root, source.path, directoryName, title);
+        await refreshProjects();
+        const openPath = visualSessionRef.current?.project?.path ?? null;
+        return {
+          source: summarizeProject(source, openPath),
+          project: summarizeProject(copy, openPath),
+          nextActions: copy.format === "visual" ? ["open_project"] : ["list_projects"],
+        };
+      }
+      case "export_project": {
+        const root = requireMcpProjectsRoot();
+        const list = await tauri.listProjects(root);
+        const source = resolveTransferableProject(list, args);
+        // The destination is fixed under the Library so a client can never
+        // point the zip at a file outside it.
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        const archivePath = `${root}/.cache/exports/${source.name}-${stamp}.zip`;
+        const result = await tauri.exportProjectArchive(root, source.path, archivePath);
+        appendLog({
+          kind: "info",
+          text: `exported project archive: ${result.archivePath} (${result.fileCount} files)`,
+          ts: Date.now(),
+        });
+        return {
+          project: summarizeProject(source, visualSessionRef.current?.project?.path ?? null),
+          archivePath: result.archivePath,
+          fileCount: result.fileCount,
+          totalBytes: result.totalBytes,
+          excluded: ["node_modules", ".git", "dist", ".cache", "publication record"],
+          message:
+            "zipはLibraryの.cache/exportsに書きました。人に渡すときはこのファイルを移動または送信してください",
+          nextActions: ["import_project"],
+        };
+      }
+      case "import_project": {
+        const root = requireMcpProjectsRoot();
+        if (typeof args.repositoryUrl === "string" && args.repositoryUrl.trim()) {
+          const repositoryUrl = args.repositoryUrl.trim();
+          const list = await tauri.listProjects(root);
+          const requestedName =
+            typeof args.name === "string" && args.name.trim()
+              ? args.name.trim()
+              : suggestedNameForRepositoryUrl(repositoryUrl);
+          const directoryName = parseNewProjectDirectoryName(
+            { name: requestedName },
+            "name",
+            list,
+          );
+          const imported = await tauri.importProjectFromRepository(
+            root,
+            repositoryUrl,
+            directoryName,
+          );
+          appendLog({
+            kind: "info",
+            text: `imported project from repository: ${repositoryUrl} -> ${imported.path}`,
+            ts: Date.now(),
+          });
+          await refreshProjects();
+          return {
+            repositoryUrl,
+            project: summarizeProject(imported, visualSessionRef.current?.project?.path ?? null),
+            nextActions: imported.format === "visual" ? ["open_project"] : ["list_projects"],
+          };
+        }
+        const archivePath = parseRequiredPath(args, "archivePath");
+        const inspection = await tauri.inspectProjectArchive(archivePath);
+        const list = await tauri.listProjects(root);
+        const requestedName =
+          typeof args.name === "string" && args.name.trim()
+            ? args.name.trim()
+            : inspection.suggestedName;
+        const directoryName = parseNewProjectDirectoryName(
+          { name: requestedName },
+          "name",
+          list,
+        );
+        const imported = await tauri.importProjectArchive(root, archivePath, directoryName);
+        appendLog({
+          kind: "info",
+          text: `imported project archive: ${archivePath} -> ${imported.path}`,
+          ts: Date.now(),
+        });
+        await refreshProjects();
+        return {
+          archive: {
+            path: inspection.archivePath,
+            kind: inspection.kind,
+            format: inspection.format,
+            title: inspection.title,
+            fileCount: inspection.fileCount,
+            totalBytes: inspection.totalBytes,
+          },
+          project: summarizeProject(imported, visualSessionRef.current?.project?.path ?? null),
+          nextActions: imported.format === "visual" ? ["open_project"] : ["list_projects"],
+        };
       }
       case "close_project": {
         const closing = describeOpenMcpSession();
@@ -1840,6 +2084,12 @@ function App() {
         projectsRoot={projectsRoot}
         onOpen={handleOpenProject}
         onDelete={handleDeleteProject}
+        onDuplicate={handleDuplicateProject}
+        onExport={handleExportProject}
+        onInspectArchive={handleInspectProjectArchive}
+        onImportArchive={handleImportProjectArchive}
+        onImportRepository={handleImportProjectRepository}
+        onOpenPath={(path) => void tauri.openPath(path).catch(() => undefined)}
         onNew={() => {
           setNewProjectError(null);
           setShowNewDialog(true);

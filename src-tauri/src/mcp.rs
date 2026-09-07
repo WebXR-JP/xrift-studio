@@ -733,7 +733,8 @@ fn editor_error(code: &str, message: &str) -> XriftMcpEditorError {
 /// The broker waits longer on tools whose work is a whole pipeline, not one edit.
 fn request_timeout_seconds(tool_name: &str) -> u64 {
     match tool_name {
-        "publish_project" | "create_project" | "open_project" | "close_project" => {
+        "publish_project" | "create_project" | "open_project" | "close_project"
+        | "duplicate_project" | "export_project" | "import_project" => {
             MCP_LONG_REQUEST_TIMEOUT_SECONDS
         }
         _ => MCP_REQUEST_TIMEOUT_SECONDS,
@@ -2332,6 +2333,33 @@ fn tool_definitions() -> Value {
             "name": "close_project",
             "description": "Save the open project and return to the Library. Rarely needed: create_project and open_project close the current project themselves. Answers EDITOR_BUSY when the save fails, in which case the person must look at Studio.",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "duplicate_project",
+            "description": "Copy a Library project (Visual or Classic) into a new folder under the projects root, as an unpublished, independent project: the copy gets a new projectId, the publication record is dropped, and publishing it never overwrites the original's world. Use it to branch a world before a risky change or to start a new world from a finished one; use create_project for a fresh starter instead. Target by path (preferred) or name from list_projects; newName becomes the folder (a plain folder name, no path separators) and must not exist yet (PROJECT_EXISTS). title replaces the Visual title, otherwise the original title stays. The copy is not opened: call open_project with the returned path. Needs no open project.",
+            "inputSchema": { "type": "object", "properties": {
+                "path": { "type": "string", "minLength": 1 },
+                "name": { "type": "string", "minLength": 1 },
+                "newName": { "type": "string", "minLength": 1, "maxLength": 80 },
+                "title": { "type": "string", "minLength": 1 }
+            }, "required": ["newName"], "additionalProperties": false }
+        },
+        {
+            "name": "export_project",
+            "description": "Write a Library project (Visual or Classic) to one zip archive so it can be handed to another person or machine and taken in with import_project. The archive lands in the Library's own cache folder (.cache/exports under the projects root) and the returned archivePath says where; this tool takes no destination, because an arbitrary path would let a client overwrite files outside the Library. Ask the person to move or send the file from there. The archive carries the project folder without node_modules, .git, dist, caches or the publication record; a Classic project therefore needs its dependencies installed after import. Target by path (preferred) or name from list_projects. Needs no open project; the open project is not saved first, so call close_project or save before exporting the project that is open.",
+            "inputSchema": { "type": "object", "properties": {
+                "path": { "type": "string", "minLength": 1 },
+                "name": { "type": "string", "minLength": 1 }
+            }, "additionalProperties": false }
+        },
+        {
+            "name": "import_project",
+            "description": "Take a project into the Library as a new, unpublished project, from one of two sources: archivePath, a zip made by export_project (or any zip whose top level, or single top-level folder, holds xrift-studio.project.json or xrift.json); or repositoryUrl, an HTTPS or git SSH URL of a repository with that file at its root, cloned shallowly by the machine's git (a private repository works only when that git can authenticate) and kept without its history, a fork of the content. Give exactly one of the two. name becomes the folder; when omitted the archive's folder name or the repository name is used, and an existing name answers PROJECT_EXISTS rather than merging. The import is not opened: call open_project with the returned path (Classic projects stay outside MCP and need their dependencies installed). Needs no open project.",
+            "inputSchema": { "type": "object", "properties": {
+                "archivePath": { "type": "string", "minLength": 1 },
+                "repositoryUrl": { "type": "string", "minLength": 1 },
+                "name": { "type": "string", "minLength": 1, "maxLength": 80 }
+            }, "additionalProperties": false }
         },
         {
             "name": "get_account",

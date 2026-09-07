@@ -19,6 +19,23 @@ export type Project = {
   publicationId: string | null;
 };
 
+export type ProjectArchiveExport = {
+  archivePath: string;
+  fileCount: number;
+  totalBytes: number;
+};
+
+export type ProjectArchiveInspection = {
+  archivePath: string;
+  suggestedName: string;
+  kind: ProjectKind;
+  format: ProjectFormat;
+  title: string | null;
+  description: string | null;
+  fileCount: number;
+  totalBytes: number;
+};
+
 export type RuntimePaths = {
   appRoot: string;
   runtimeDir: string;
@@ -437,6 +454,52 @@ export const tauri = {
     invoke<Project[]>("list_projects", { root }),
   deleteProject: (root: string, projectPath: string) =>
     invoke<void>("delete_project", { root, projectPath }),
+  duplicateProject: (
+    root: string,
+    projectPath: string,
+    directoryName: string,
+    title?: string,
+  ) =>
+    invoke<Project>("duplicate_project", {
+      root,
+      projectPath,
+      directoryName,
+      title: title ?? null,
+    }),
+  /** Opens the OS save dialog for a project archive; null when cancelled. */
+  selectProjectArchiveDestination: async (defaultFileName: string) => {
+    if (!isTauri()) return null;
+    const path = await saveDialog({
+      title: "プロジェクトを書き出す",
+      defaultPath: defaultFileName,
+      filters: [{ name: "XRift Studioプロジェクト (zip)", extensions: ["zip"] }],
+    });
+    return typeof path === "string" && path.trim() ? path : null;
+  },
+  exportProjectArchive: (root: string, projectPath: string, archivePath: string) =>
+    invoke<ProjectArchiveExport>("export_project_archive", {
+      root,
+      projectPath,
+      archivePath,
+    }),
+  /** Opens the OS file picker for a project archive; null when cancelled. */
+  selectProjectArchive: async () => {
+    if (!isTauri()) return null;
+    const selected = await openDialog({
+      title: "取り込むプロジェクトのzipを選択",
+      multiple: false,
+      directory: false,
+      filters: [{ name: "XRift Studioプロジェクト (zip)", extensions: ["zip"] }],
+    });
+    const path = Array.isArray(selected) ? selected[0] : selected;
+    return typeof path === "string" && path.trim() ? path : null;
+  },
+  inspectProjectArchive: (archivePath: string) =>
+    invoke<ProjectArchiveInspection>("inspect_project_archive", { archivePath }),
+  importProjectArchive: (root: string, archivePath: string, directoryName: string) =>
+    invoke<Project>("import_project_archive", { root, archivePath, directoryName }),
+  importProjectFromRepository: (root: string, repositoryUrl: string, directoryName: string) =>
+    invoke<Project>("import_project_from_repository", { root, repositoryUrl, directoryName }),
   createVisualProject: (
     root: string,
     directoryName: string,

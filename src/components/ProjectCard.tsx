@@ -5,6 +5,8 @@ import {
   Camera,
   Cloud,
   Code2,
+  Copy,
+  FileDown,
   Globe2,
   ImageOff,
   PanelsTopLeft,
@@ -26,6 +28,8 @@ type Props = {
   busy: boolean;
   onOpen: () => void;
   onEditThumbnail: () => void;
+  onDuplicate: () => void;
+  onExport: () => void;
   onDelete: () => void;
   refreshKey?: number;
 };
@@ -42,6 +46,8 @@ export function ProjectCard({
   busy,
   onOpen,
   onEditThumbnail,
+  onDuplicate,
+  onExport,
   onDelete,
   refreshKey = 0,
 }: Props) {
@@ -155,6 +161,26 @@ export function ProjectCard({
           aria-label={`${project.title || project.name}の表紙を編集`}
         >
           <Camera size={14} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onDuplicate}
+          className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-40"
+          title="プロジェクトを複製"
+          aria-label={`${project.title || project.name}を複製`}
+        >
+          <Copy size={14} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onExport}
+          className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-40"
+          title="zipに書き出して渡す"
+          aria-label={`${project.title || project.name}をzipに書き出す`}
+        >
+          <FileDown size={14} aria-hidden="true" />
         </button>
         <button
           type="button"
