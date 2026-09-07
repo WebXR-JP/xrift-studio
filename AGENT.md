@@ -83,7 +83,7 @@ pnpm build:preview       # GitHub Pages 用プレビューのビルド
 - SceneDocument を作り直す処理では、変更していない Entity のオブジェクト同一性を保つ。`editor-session.ts` の更新は `{ ...scene.entities, [id]: { ...entity } }` の形を守り、`prefab-resolver.ts` は Prefab を展開した Entity だけを差し替えて、それ以外は参照のまま返す。防御的に全 Entity を clone すると、`memo` も `useMemo` も比較で必ず外れ、Scene 全体の再描画に戻る。
 - 一覧を描くパネルで行数が Scene の Entity 数や Asset 数に比例する場合は、行を `memo` した部品として切り出す。行が親の closure を呼ぶ必要があるときは、毎 render で更新する 1 つの ref に束ねて渡す。closure を prop として直接渡すと毎 render で同一性が変わり、`memo` が意味を失う。
 - Scene View の描画品質は、devicePixelRatio の範囲ではなく CSS 表示サイズに対する固定の割合で持つ。React Three Fiber は渡された範囲へディスプレイの devicePixelRatio を丸め込むので、範囲で書くと 1 倍ディスプレイでは何も軽くならない。ラベルの割合と実際に描くピクセル数を一致させる。
-- MCP でワールドを作る・良くする作業（Scene へ物を置く、雰囲気を変える）は、`.agents/skills/xrift-world-direction/SKILL.md` を先に読み、設計図（blueprint）を書いてから始める。作業を止めてよいのは ログイン・公開の場合だけだ。Terrain・草・ポストエフェクト・外部素材を使うかどうかは設計図に照らして決める。数値の上限、コードの雛形、入手先の順位付けはハーネスに入れない。理由は `docs/WORLD_AUTHORING_HARNESS.md` にある。
+- MCP でワールドを作る・良くする作業（Scene へ物を置く、雰囲気を変える）は、`.agents/skills/xrift-world-direction/SKILL.md` を先に読み、設計図（blueprint）を書いてから始める。作業を止めてよいのは、ログインにブラウザ操作が必要なときと、公開を依頼されていないときだけだ。作成・開く・公開は `project` surface の MCP tool（`create_project`、`open_project`、`publish_project`）で行える。Terrain・草・ポストエフェクト・外部素材を使うかどうかは設計図に照らして決める。数値の上限、コードの雛形、入手先の順位付けはハーネスに入れない。理由は `docs/WORLD_AUTHORING_HARNESS.md` にある。
 - MCP tool の description と server の `instructions` は、AI client が読む唯一の取扱説明書だ。tool を足す・直すときは「何をするか」に加えて「選ぶ基準」「使ったあと何をするか」「行き詰まりやすい点」を書く。代わりになる tool があれば名前を挙げる。説明文では防げない失敗は、戻り値の `harness` 警告のようにコードの側に書く。
 - Rust コマンドへ外部入力を渡すときは、既存のパス検証と権限制御を保ち、任意のパス実行や削除を追加しない。
 - 検証は「高速フィードバックループ」の 3 段階に従う。

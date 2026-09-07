@@ -23,7 +23,13 @@ export type XriftMcpToolSurface =
   /** Network plus the Import Queue, so the React shell owns it. */
   | "external-store"
   /** Live viewport access and persistent authoring evidence, outside SceneDocument. */
-  | "debug";
+  | "debug"
+  /**
+   * Project lifecycle and the account: create, open, publish. Owned by the
+   * desktop shell (`App.tsx`) because the Editor only exists once a project is
+   * open, and these are the tools that make one exist.
+   */
+  | "project";
 
 export type XriftMcpToolDefinition = {
   name: string;
@@ -31,6 +37,15 @@ export type XriftMcpToolDefinition = {
 };
 
 export const XRIFT_MCP_TOOLS = [
+  { name: "list_projects", surface: "project" },
+  { name: "list_starter_templates", surface: "project" },
+  { name: "create_project", surface: "project" },
+  { name: "open_project", surface: "project" },
+  { name: "close_project", surface: "project" },
+  { name: "get_account", surface: "project" },
+  { name: "login", surface: "project" },
+  { name: "get_publish_readiness", surface: "project" },
+  { name: "publish_project", surface: "project" },
   { name: "get_editor_context", surface: "document" },
   { name: "begin_world_authoring", surface: "debug" },
   { name: "get_world_authoring", surface: "debug" },
@@ -183,6 +198,7 @@ export type XriftMcpLocalAssetToolName = ToolNameForSurface<"local-asset">;
 export type XriftMcpScriptToolName = ToolNameForSurface<"script">;
 export type XriftMcpExternalStoreTool = ToolNameForSurface<"external-store">;
 export type XriftMcpDebugToolName = ToolNameForSurface<"debug">;
+export type XriftMcpProjectToolName = ToolNameForSurface<"project">;
 
 const SURFACE_BY_TOOL_NAME = new Map<string, XriftMcpToolSurface>(
   XRIFT_MCP_TOOLS.map((tool) => [tool.name, tool.surface]),
@@ -212,3 +228,4 @@ export const XRIFT_MCP_SCRIPT_TOOLS = toolNamesForSurface("script");
 export const XRIFT_MCP_EXTERNAL_STORE_TOOLS =
   toolNamesForSurface("external-store");
 export const XRIFT_MCP_DEBUG_TOOLS = toolNamesForSurface("debug");
+export const XRIFT_MCP_PROJECT_TOOLS = toolNamesForSurface("project");
