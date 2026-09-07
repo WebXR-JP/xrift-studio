@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   ArrowUpDown,
   ExternalLink,
+  GitBranch,
   LifeBuoy,
   PackageOpen,
   RefreshCw,
@@ -28,6 +29,7 @@ import {
   DuplicateProjectDialog,
   ExportProjectResultDialog,
   ImportProjectArchiveDialog,
+  ImportProjectRepositoryDialog,
 } from "./ProjectTransferDialogs";
 
 type ProjectSort =
@@ -65,6 +67,10 @@ type Props = {
   onInspectArchive: () => Promise<ProjectArchiveInspection | null>;
   onImportArchive: (
     inspection: ProjectArchiveInspection,
+    directoryName: string,
+  ) => Promise<Project | null>;
+  onImportRepository: (
+    repositoryUrl: string,
     directoryName: string,
   ) => Promise<Project | null>;
   onOpenPath: (path: string) => void;
@@ -110,6 +116,7 @@ export function ProjectLibrary({
   onExport,
   onInspectArchive,
   onImportArchive,
+  onImportRepository,
   onOpenPath,
   onNew,
   onLogin,
@@ -136,6 +143,9 @@ export function ProjectLibrary({
     useState<ProjectArchiveInspection | null>(null);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [showRepositoryImport, setShowRepositoryImport] = useState(false);
+  const [importingRepository, setImportingRepository] = useState(false);
+  const [repositoryError, setRepositoryError] = useState<string | null>(null);
   const [thumbRefresh, setThumbRefresh] = useState(0);
   const [sort, setSort] = useState<ProjectSort>("updated-desc");
   const [publishFilter, setPublishFilter] = useState<PublishFilter>("all");
@@ -224,7 +234,22 @@ export function ProjectLibrary({
     }
   };
 
-  const transferBusy = duplicating || exporting || inspectingArchive || importing;
+  const confirmRepositoryImport = async (repositoryUrl: string, directoryName: string) => {
+    if (importingRepository) return;
+    setImportingRepository(true);
+    setRepositoryError(null);
+    try {
+      const imported = await onImportRepository(repositoryUrl, directoryName);
+      if (imported) setShowRepositoryImport(false);
+    } catch (error) {
+      setRepositoryError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setImportingRepository(false);
+    }
+  };
+
+  const transferBusy =
+    duplicating || exporting || inspectingArchive || importing || importingRepository;
   const filtered = publishFilter !== "all" || query.trim().length > 0;
 
   return (
@@ -339,6 +364,20 @@ export function ProjectLibrary({
           if (importing) return;
           setImportInspection(null);
           setImportError(null);
+        }}
+      />
+      <ImportProjectRepositoryDialog
+        open={showRepositoryImport}
+        existingNames={existingNames}
+        busy={importingRepository}
+        error={repositoryError}
+        onConfirm={(repositoryUrl, directoryName) =>
+          void confirmRepositoryImport(repositoryUrl, directoryName)
+        }
+        onClose={() => {
+          if (importingRepository) return;
+          setShowRepositoryImport(false);
+          setRepositoryError(null);
         }}
       />
       <ExportProjectResultDialog
@@ -456,6 +495,28 @@ export function ProjectLibrary({
                 </span>
               </span>
             </button>
+            <button
+              type="button"
+              disabled={busy || transferBusy}
+              onClick={() => {
+                setRepositoryError(null);
+                setShowRepositoryImport(true);
+              }}
+              className="flex min-h-20 shrink-0 items-center gap-3 rounded-lg border border-dashed border-zinc-300 bg-white/70 px-4 text-left text-zinc-600 hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50 sm:w-64"
+              title="Gitリポジトリのプロジェクトを自分の保存先へコピーする"
+            >
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-current">
+                <GitBranch size={16} aria-hidden="true" />
+              </span>
+              <span>
+                <span className="block text-sm font-semibold">
+                  {importingRepository ? "取得中…" : "Gitから取り込む"}
+                </span>
+                <span className="mt-0.5 block text-[11px] text-zinc-500">
+                  リポジトリを fork して始める
+                </span>
+              </span>
+            </button>
           </div>
 
           <div className="mb-2 mt-4 flex items-center justify-between gap-3 border-t border-zinc-200 pt-3">
@@ -489,7 +550,7 @@ export function ProjectLibrary({
           {!loading && projects.length === 0 ? (
             <div className="mt-6 rounded-lg border border-dashed border-zinc-300 bg-white/60 px-4 py-5 text-center">
               <p className="text-sm font-medium text-zinc-700">まだプロジェクトがありません</p>
-              <p className="mt-1 text-xs text-zinc-500">上の「新規プロジェクト」から制作を始めるか、「zipから取り込む」で受け取ったプロジェクトを開けます。</p>
+              <p className="mt-1 text-xs text-zinc-500">上の「新規プロジェクト」から制作を始めるか、「zipから取り込む」「Gitから取り込む」で受け取ったプロジェクトを開けます。</p>
             </div>
           ) : null}
 

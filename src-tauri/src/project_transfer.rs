@@ -170,11 +170,9 @@ fn copy_project_tree(
     destination: &Path,
     portable: bool,
 ) -> Result<(u64, u64), String> {
-    let (directories, files) = collect_transfer_entries(source, portable)?;
-    for directory in &directories {
-        std::fs::create_dir_all(destination.join(directory))
-            .map_err(|e| format!("{}: {}", directory.display(), e))?;
-    }
+    // Directories come from their files' paths, so a directory whose only
+    // content was excluded (the publication sidecar) does not come along.
+    let (_, files) = collect_transfer_entries(source, portable)?;
     let mut total_bytes = 0u64;
     for file in &files {
         let target = destination.join(file);
@@ -546,6 +544,126 @@ pub fn import_project_archive(
     })
 }
 
+/// Clones a Git repository and takes it into the Library as a new, unpublished
+/// project. The clone is a shallow, single-branch checkout; `.git` is not kept,
+/// because the result is a fork of the content, not of the history.
+#[tauri::command]
+pub async fn import_project_from_repository(
+    root: String,
+    repository_url: String,
+    directory_name: String,
+) -> Result<Project, String> {
+    let repository_url = validate_classic_repository_url(&repository_url)?;
+    // Validate the destination before the network round trip.
+    validate_project_directory_name(&directory_name)?;
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_nanos();
+    let clone_root = std::env::temp_dir()
+        .join("xrift-studio")
+        .join("repository-import")
+        .join(format!("{}-{}", std::process::id(), nonce));
+    let parent = clone_root
+        .parent()
+        .ok_or_else(|| "repository cache path is invalid".to_string())?;
+    std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+
+    let output = tokio::process::Command::new("git")
+        .args(["clone", "--depth", "1", "--single-branch", "--no-tags", "--", &repository_url])
+        .arg(&clone_root)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .output()
+        .await
+        .map_err(|error| format!("gitを起動できませんでした: {}", error))?;
+    if !output.status.success() {
+        let _ = force_remove_dir_all(&clone_root);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let message = stderr.lines().last().unwrap_or("git clone failed").trim();
+        return Err(format!("repositoryを取得できませんでした: {}", message));
+    }
+
+    let result = take_checkout_into_library(&root, &clone_root, &directory_name);
+    let _ = force_remove_dir_all(&clone_root);
+    result
+}
+
+/// Copies a finished checkout into the Library as a new project, dropping
+/// `.git`, caches and the publication record on the way.
+fn take_checkout_into_library(
+    root: &str,
+    checkout: &Path,
+    directory_name: &str,
+) -> Result<Project, String> {
+    inspect_cloned_repository_tree(checkout)?;
+    if !checkout.join(VISUAL_PROJECT_MANIFEST).is_file() && !checkout.join("xrift.json").is_file() {
+        return Err(format!(
+            "repositoryの直下に {} か xrift.json がありません",
+            VISUAL_PROJECT_MANIFEST
+        ));
+    }
+    let _guard = VISUAL_PROJECT_IO_LOCK
+        .lock()
+        .map_err(|_| "visual project I/O lock is unavailable".to_string())?;
+    materialize_library_project(root, directory_name, |temporary| {
+        copy_project_tree(checkout, temporary, true)?;
+        detach_visual_manifest(temporary, None)
+    })
+}
+
+/// Size and entry-type limits shared with the Classic repository import, minus
+/// its Classic-only manifest check.
+fn inspect_cloned_repository_tree(repository_root: &Path) -> Result<(), String> {
+    const MAX_REPOSITORY_FILES: usize = 20_000;
+    const MAX_REPOSITORY_BYTES: u64 = 768 * 1024 * 1024;
+    let mut pending = vec![repository_root.to_path_buf()];
+    let mut file_count = 0usize;
+    let mut total_bytes = 0u64;
+    while let Some(directory) = pending.pop() {
+        for entry in std::fs::read_dir(&directory).map_err(|error| error.to_string())? {
+            let entry = entry.map_err(|error| error.to_string())?;
+            if entry.file_name().to_string_lossy().eq_ignore_ascii_case(".git") {
+                continue;
+            }
+            let metadata =
+                std::fs::symlink_metadata(entry.path()).map_err(|error| error.to_string())?;
+            if metadata.file_type().is_symlink() {
+                return Err("repository contains a symbolic link".to_string());
+            }
+            if metadata.is_dir() {
+                pending.push(entry.path());
+                continue;
+            }
+            if !metadata.is_file() {
+                return Err("repository contains an unsupported filesystem entry".to_string());
+            }
+            file_count = file_count.saturating_add(1);
+            total_bytes = total_bytes.saturating_add(metadata.len());
+            if file_count > MAX_REPOSITORY_FILES || total_bytes > MAX_REPOSITORY_BYTES {
+                return Err("repository is too large to import safely".to_string());
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Folder name proposed for a repository URL: its last path segment without `.git`.
+pub fn suggested_name_for_repository_url(repository_url: &str) -> String {
+    let trimmed = repository_url.trim().trim_end_matches('/');
+    let last = trimmed
+        .rsplit(|c| c == '/' || c == ':')
+        .next()
+        .unwrap_or("")
+        .trim_end_matches(".git");
+    let cleaned: String = last
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' })
+        .collect();
+    let cleaned = cleaned.trim_matches('-');
+    if cleaned.is_empty() { "imported-project".to_string() } else { cleaned.to_string() }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -653,6 +771,38 @@ mod tests {
         assert!(dest.join("scenes/main.json").is_file());
         assert!(!dest.join("node_modules").exists());
         assert!(!dest.join(".xrift").exists());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn repository_url_suggests_a_folder_name() {
+        assert_eq!(suggested_name_for_repository_url("https://github.com/o/My_World.git"), "my-world");
+        assert_eq!(suggested_name_for_repository_url("git@github.com:o/plaza"), "plaza");
+        assert_eq!(suggested_name_for_repository_url("https://x/.git"), "imported-project");
+    }
+
+    #[test]
+    fn checkout_is_taken_in_without_git_or_publication() {
+        let root = temp_root("checkout");
+        let checkout = seed_visual_project(&root, "checkout");
+        write(&checkout.join(".git/HEAD"), "ref: refs/heads/main");
+        let imported = take_checkout_into_library(
+            &root.to_string_lossy(),
+            &checkout,
+            "forked-world",
+        )
+        .unwrap();
+        assert_eq!(imported.name, "forked-world");
+        assert!(imported.uploaded_at.is_none());
+        let dest = root.join("forked-world");
+        assert!(dest.join("scenes/main.json").is_file());
+        assert!(!dest.join(".git").exists());
+        assert!(!dest.join("node_modules").exists());
+        assert!(!dest.join(".xrift").exists());
+
+        let empty = root.join("empty");
+        std::fs::create_dir_all(&empty).unwrap();
+        assert!(take_checkout_into_library(&root.to_string_lossy(), &empty, "nothing").is_err());
         let _ = std::fs::remove_dir_all(&root);
     }
 

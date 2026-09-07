@@ -5949,6 +5949,7 @@ pub fn run() {
             project_transfer::export_project_archive,
             project_transfer::inspect_project_archive,
             project_transfer::import_project_archive,
+            project_transfer::import_project_from_repository,
             create_visual_project,
             read_visual_project,
             save_visual_project,

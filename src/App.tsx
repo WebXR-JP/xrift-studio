@@ -12,6 +12,7 @@ import { EditorView } from "./components/EditorView";
 import { NewProjectDialog } from "./components/NewProjectDialog";
 import { SetupView } from "./components/SetupView";
 import { UpdateDialog } from "./components/UpdateDialog";
+import { suggestedNameForRepositoryUrl } from "./components/ProjectTransferDialogs";
 import { AppUpdateDialog } from "./components/AppUpdateDialog";
 import {
   tauri,
@@ -705,6 +706,34 @@ function App() {
     }
   };
 
+  const handleImportProjectRepository = async (
+    repositoryUrl: string,
+    directoryName: string,
+  ): Promise<Project | null> => {
+    setBusy(true);
+    try {
+      const imported = await tauri.importProjectFromRepository(
+        projectsRoot,
+        repositoryUrl,
+        directoryName,
+      );
+      appendLog({
+        kind: "info",
+        text: `imported project from repository: ${repositoryUrl} -> ${imported.path}`,
+        ts: Date.now(),
+      });
+      await refreshProjects();
+      toast({
+        kind: "success",
+        title: "Gitリポジトリから取り込みました",
+        description: `${imported.title || imported.name}（${imported.name}）を一覧に追加しました`,
+      });
+      return imported;
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleCreate = (kind: ProjectKind, name: string) =>
     wrap(async () => {
       const result = await xrift.createProject(projectsRoot, kind, name, appendLog);
@@ -1181,6 +1210,35 @@ function App() {
       }
       case "import_project": {
         const root = requireMcpProjectsRoot();
+        if (typeof args.repositoryUrl === "string" && args.repositoryUrl.trim()) {
+          const repositoryUrl = args.repositoryUrl.trim();
+          const list = await tauri.listProjects(root);
+          const requestedName =
+            typeof args.name === "string" && args.name.trim()
+              ? args.name.trim()
+              : suggestedNameForRepositoryUrl(repositoryUrl);
+          const directoryName = parseNewProjectDirectoryName(
+            { name: requestedName },
+            "name",
+            list,
+          );
+          const imported = await tauri.importProjectFromRepository(
+            root,
+            repositoryUrl,
+            directoryName,
+          );
+          appendLog({
+            kind: "info",
+            text: `imported project from repository: ${repositoryUrl} -> ${imported.path}`,
+            ts: Date.now(),
+          });
+          await refreshProjects();
+          return {
+            repositoryUrl,
+            project: summarizeProject(imported, visualSessionRef.current?.project?.path ?? null),
+            nextActions: imported.format === "visual" ? ["open_project"] : ["list_projects"],
+          };
+        }
         const archivePath = parseRequiredPath(args, "archivePath");
         const inspection = await tauri.inspectProjectArchive(archivePath);
         const list = await tauri.listProjects(root);
@@ -2030,6 +2088,7 @@ function App() {
         onExport={handleExportProject}
         onInspectArchive={handleInspectProjectArchive}
         onImportArchive={handleImportProjectArchive}
+        onImportRepository={handleImportProjectRepository}
         onOpenPath={(path) => void tauri.openPath(path).catch(() => undefined)}
         onNew={() => {
           setNewProjectError(null);

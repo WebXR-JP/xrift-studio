@@ -2354,11 +2354,12 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "import_project",
-            "description": "Take a zip made by export_project (or any zip whose top level, or single top-level folder, holds xrift-studio.project.json or xrift.json) into the Library as a new, unpublished project. name becomes the folder; when omitted the archive's folder name is used, and an existing name answers PROJECT_EXISTS rather than merging. The import is not opened: call open_project with the returned path (Classic projects stay outside MCP). Needs no open project.",
+            "description": "Take a project into the Library as a new, unpublished project, from one of two sources: archivePath, a zip made by export_project (or any zip whose top level, or single top-level folder, holds xrift-studio.project.json or xrift.json); or repositoryUrl, an HTTPS or git SSH URL of a repository with that file at its root, cloned shallowly by the machine's git (a private repository works only when that git can authenticate) and kept without its history, a fork of the content. Give exactly one of the two. name becomes the folder; when omitted the archive's folder name or the repository name is used, and an existing name answers PROJECT_EXISTS rather than merging. The import is not opened: call open_project with the returned path (Classic projects stay outside MCP and need their dependencies installed). Needs no open project.",
             "inputSchema": { "type": "object", "properties": {
                 "archivePath": { "type": "string", "minLength": 1 },
+                "repositoryUrl": { "type": "string", "minLength": 1 },
                 "name": { "type": "string", "minLength": 1, "maxLength": 80 }
-            }, "required": ["archivePath"], "additionalProperties": false }
+            }, "additionalProperties": false }
         },
         {
             "name": "get_account",

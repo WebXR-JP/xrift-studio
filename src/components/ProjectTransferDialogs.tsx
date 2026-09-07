@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Copy, FileDown, FolderOpen, PackageOpen, X } from "lucide-react";
+import { Copy, FileDown, FolderOpen, GitBranch, PackageOpen, X } from "lucide-react";
 import type {
   Project,
   ProjectArchiveExport,
@@ -34,6 +34,18 @@ export function toProjectDirectoryName(value: string): string {
     .replace(/[^a-z0-9-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .replace(/-{2,}/g, "-");
+}
+
+const REPOSITORY_URL_PATTERN = /^(https:\/\/\S+|ssh:\/\/git@\S+|git@[^\s:]{5,}:\S+)$/;
+
+export function isValidRepositoryUrl(value: string): boolean {
+  return REPOSITORY_URL_PATTERN.test(value.trim());
+}
+
+/** Folder name proposed for a repository URL: its last path segment without `.git`. */
+export function suggestedNameForRepositoryUrl(value: string): string {
+  const last = value.trim().replace(/\/+$/, "").split(/[/:]/).pop() ?? "";
+  return toProjectDirectoryName(last.replace(/\.git$/, "")) || "imported-project";
 }
 
 export function formatArchiveBytes(value: number): string {
@@ -351,6 +363,113 @@ export function ImportProjectArchiveDialog({
         {inspection.format === "classic"
           ? " Classicは node_modules を含まないので、初回の起動前にプロジェクトフォルダーで依存関係をインストールしてください。"
           : ""}
+      </p>
+      <ErrorNote error={error} />
+    </DialogFrame>
+  );
+}
+
+type RepositoryImportProps = {
+  open: boolean;
+  existingNames: ReadonlySet<string>;
+  busy: boolean;
+  error?: string | null;
+  onClose: () => void;
+  onConfirm: (repositoryUrl: string, directoryName: string) => void;
+};
+
+export function ImportProjectRepositoryDialog({
+  open,
+  existingNames,
+  busy,
+  error,
+  onClose,
+  onConfirm,
+}: RepositoryImportProps) {
+  const [url, setUrl] = useState("");
+  const [name, setName] = useState("");
+  const [nameEdited, setNameEdited] = useState(false);
+  useEscapeToClose(open, busy, onClose);
+
+  useEffect(() => {
+    if (!open) return;
+    setUrl("");
+    setName("");
+    setNameEdited(false);
+  }, [open]);
+
+  useEffect(() => {
+    if (nameEdited || !url.trim()) return;
+    setName(uniqueProjectDirectoryName(suggestedNameForRepositoryUrl(url), existingNames));
+    // The suggestion follows the URL until the person edits the name themselves.
+  }, [url, nameEdited, existingNames]);
+
+  if (!open) return null;
+  const urlValid = isValidRepositoryUrl(url);
+  const canSubmit =
+    !busy && urlValid && isValidProjectDirectoryName(name) && !existingNames.has(name);
+  const submit = () => {
+    if (canSubmit) onConfirm(url.trim(), name);
+  };
+
+  return (
+    <DialogFrame
+      titleId="import-repository-title"
+      title="Gitリポジトリから取り込む"
+      icon={<GitBranch size={16} strokeWidth={2} />}
+      busy={busy}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" onClick={onClose} disabled={busy} className={secondaryButton}>
+            キャンセル
+          </button>
+          <button type="button" onClick={submit} disabled={!canSubmit} className={primaryButton}>
+            {busy ? "取得中…" : "取り込む"}
+          </button>
+        </>
+      }
+    >
+      <p className="mt-1 text-xs text-zinc-600">
+        リポジトリの直下に xrift-studio.project.json か xrift.json があるプロジェクトを、
+        自分の保存先に新しいプロジェクトとしてコピーします。Git の履歴は持ち込みません。
+      </p>
+      <label className="mt-4 block">
+        <span className="text-sm font-medium text-zinc-700">Repository URL</span>
+        <input
+          autoFocus
+          type="url"
+          value={url}
+          onChange={(event) => setUrl(event.currentTarget.value)}
+          disabled={busy}
+          placeholder="https://github.com/owner/repository.git"
+          onKeyDown={(event) => {
+            if (event.key === "Enter") submit();
+          }}
+          className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 font-mono text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200 disabled:opacity-50"
+        />
+        {url.length > 0 && !urlValid ? (
+          <span className="mt-2 block text-xs text-amber-700">
+            HTTPS または git SSH の URL を入力してください。
+          </span>
+        ) : (
+          <span className="mt-1 block text-[11px] text-zinc-500">
+            非公開リポジトリは、この PC の git が認証できる場合だけ取得できます。
+          </span>
+        )}
+      </label>
+      <NameField
+        value={name}
+        onChange={(value) => {
+          setNameEdited(true);
+          setName(value);
+        }}
+        disabled={busy}
+        onSubmit={submit}
+        existingNames={existingNames}
+      />
+      <p className="mt-3 text-[11px] text-zinc-500">
+        取り込んだプロジェクトは未公開の状態から始まります。Classic は node_modules を含まないので、初回の起動前に依存関係をインストールしてください。
       </p>
       <ErrorNote error={error} />
     </DialogFrame>

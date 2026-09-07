@@ -98,7 +98,7 @@ Transform、同じ Material）の書き込みを `capture_scene_view` を挟ま�
 **複製と受け渡し**
 `duplicate_project`, `export_project`, `import_project`
 
-`duplicate_project` は Library のプロジェクトを同じ保存先へ別名でコピーする。`export_project` は 1 つの zip に書き出し、`import_project` はその zip を Library へ展開する。三つとも Classic プロジェクトも対象にするが、結果を Editor では開かない。開くには返ってきた path で `open_project` を呼ぶ。複製と取り込みは `projectId` を新しくし、`lastPublication` と `.xrift/*.json` の公開記録を落とすので、公開しても元のワールドを上書きしない。zip には `node_modules`、`.git`、`dist`、キャッシュを含めない。同名のフォルダーは `PROJECT_EXISTS` で断り、上書きも統合もしない。`export_project` は保存先を受け取らず、Library の `.cache/exports` に書いた zip の path を返す。任意の path へ書けると Library の外のファイルを上書きできてしまうからだ。`import_project` の `archivePath` は読むだけで、zip の直下または 1 つのフォルダーの中にプロジェクトの定義がないと `inspect` の段階で断る。
+`duplicate_project` は Library のプロジェクトを同じ保存先へ別名でコピーする。`export_project` は 1 つの zip に書き出し、`import_project` はその zip、または Git リポジトリを Library へ展開する。三つとも Classic プロジェクトも対象にするが、結果を Editor では開かない。開くには返ってきた path で `open_project` を呼ぶ。複製と取り込みは `projectId` を新しくし、`lastPublication` と `.xrift/*.json` の公開記録を落とすので、公開しても元のワールドを上書きしない。zip には `node_modules`、`.git`、`dist`、キャッシュを含めない。同名のフォルダーは `PROJECT_EXISTS` で断り、上書きも統合もしない。`export_project` は保存先を受け取らず、Library の `.cache/exports` に書いた zip の path を返す。任意の path へ書けると Library の外のファイルを上書きできてしまうからだ。`import_project` は `archivePath`（zip）か `repositoryUrl`（Git の HTTPS / SSH URL、shallow clone して履歴は持ち込まない）のどちらか一つを受け取る。`archivePath` は読むだけで、zip の直下または 1 つのフォルダーの中にプロジェクトの定義がないと `inspect` の段階で断る。
 
 **アカウント**
 `get_account`, `login`

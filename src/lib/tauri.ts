@@ -498,6 +498,8 @@ export const tauri = {
     invoke<ProjectArchiveInspection>("inspect_project_archive", { archivePath }),
   importProjectArchive: (root: string, archivePath: string, directoryName: string) =>
     invoke<Project>("import_project_archive", { root, archivePath, directoryName }),
+  importProjectFromRepository: (root: string, repositoryUrl: string, directoryName: string) =>
+    invoke<Project>("import_project_from_repository", { root, repositoryUrl, directoryName }),
   createVisualProject: (
     root: string,
     directoryName: string,
