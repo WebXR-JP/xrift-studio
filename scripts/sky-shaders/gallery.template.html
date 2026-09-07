@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XRift Studio — Sky Shader Gallery</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0c1018;color:#e7edf7;font:14px system-ui,sans-serif}header{height:78px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;border-bottom:1px solid #293346}h1{font-size:19px;margin:0 0 5px}header p{margin:0;font-size:12px;color:#a4b3c8}main{display:grid;grid-template-columns:285px minmax(0,1fr);height:calc(100vh - 78px)}nav{padding:12px;overflow:auto;border-right:1px solid #293346}nav button{display:block;width:100%;padding:11px 10px;margin:3px 0;background:none;color:#bcc8db;border:1px solid transparent;border-radius:6px;text-align:left;cursor:pointer;font-size:12px}nav button:hover{background:#182130}nav button[aria-pressed=true]{border-color:#668bb9;background:#1d2b41;color:white}section{display:flex;flex-direction:column;min-width:0;overflow:auto}.view{position:relative;background:#030611;min-height:250px;flex:1}canvas{width:100%;height:100%;display:block;cursor:grab}.view:active canvas{cursor:grabbing}article{padding:22px 28px;min-height:176px;border-top:1px solid #293346}h2{margin:0 0 9px;font-size:20px}article p{margin:8px 0;color:#a4b3c8;font-size:13px;line-height:1.8}.controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}select,button.action{background:#182333;border:1px solid #45536b;border-radius:5px;padding:8px 12px;color:#e7edf7;cursor:pointer}.badge{font-size:11px;color:#a4b3c8;border:1px solid #45536b;border-radius:20px;padding:6px 10px}#error{color:#ffb8b8;white-space:pre-wrap}input{accent-color:#8aafdf}.note{position:absolute;left:15px;bottom:12px;color:#d6e2f4;font-size:11px;text-shadow:0 1px 5px #000;pointer-events:none}
+@media(max-width:700px){main{grid-template-columns:150px 1fr}header{padding:0 14px}nav{padding:5px}article{padding:15px}.badge{display:none}}
+</style>
+<header><div><h1>XRift Studio / Sky Shader Library</h1><p>__COUNTS__ · editable GLSL · texture-free</p></div><span class="badge">Local WebGL2 renderer</span></header>
+<main><nav id="list" aria-label="Skybox Shader一覧"></nav><section><div class="view"><canvas id="sky"></canvas><span class="note">ドラッグで見回す / 同じGLSLをローカル描画</span></div><article><h2 id="title"></h2><p id="description"></p><div class="controls"><select id="quality" aria-label="描画品質"><option value="low">軽量</option><option value="balanced" selected>標準</option><option value="high">高精細</option></select><button class="action" id="play">再生</button><button class="action" id="reset">視点を戻す</button><span class="badge" id="cost"></span></div><p id="error" role="alert"></p></article></section></main>
+<script id="catalog" type="application/json">__DATA__</script>
+<script>
+'use strict';
+const CATALOG=JSON.parse(document.getElementById('catalog').textContent);
+const canvas=document.getElementById('sky');
+const gl=canvas.getContext('webgl2',{alpha:false,antialias:true,preserveDrawingBuffer:true});
+const errors=[];window.skyErrors=errors;
+if(!gl)throw new Error('WebGL2が利用できません。');
+// ACES fitted transform and sRGB output: the test renderer's display transform.
+// Shader code, uniforms and defines are copied from the source catalog unchanged.
+const DISPLAY=`
+vec3 skyRrtOdt(vec3 v) {
+  return (v*(v+0.0245786)-0.000090537)/(v*(0.983729*v+0.4329510)+0.238081);
+}
+vec3 skyTone(vec3 color) {
+  const mat3 inputMat=mat3(0.59719,0.07600,0.02840,0.35458,0.90834,0.13383,0.04823,0.01566,0.83777);
+  const mat3 outputMat=mat3(1.60475,-0.10208,-0.00327,-0.53108,1.10813,-0.07276,-0.07367,-0.00605,1.07602);
+  return clamp(outputMat*skyRrtOdt(inputMat*(color/0.6)),0.0,1.0);
+}
+vec3 skyToSrgb(vec3 c) {
+  return mix(c*12.92,1.055*pow(max(c,vec3(0.0)),vec3(1.0/2.4))-0.055,step(vec3(0.0031308),c));
+}
+`;
+const IDENTITY=new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);
+const cache=new Map();
+function compileShader(type,source){const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){const log=gl.getShaderInfoLog(s);gl.deleteShader(s);throw new Error(log)}return s;}
+function programFor(entry,quality){
+ const key=entry.id+'@'+quality+(finiteMode?':finite':'');if(cache.has(key))return cache.get(key);
+ const shader=entry.shader;
+ const defines=CATALOG.qualityVariants[entry.id][quality];
+ const flags=Object.entries(defines).map(([k,v])=>`#define ${k} ${v}`).join('\n');
+ const vs='#version 300 es\nprecision highp float;\n#define attribute in\n#define varying out\nuniform mat4 modelMatrix;\nuniform mat4 modelViewMatrix;\nuniform mat4 projectionMatrix;\nin vec3 position;\n'+flags+'\n'+shader.vertexShader;
+ const fs='#version 300 es\nprecision highp float;\n#define varying in\nout vec4 skyOutput;\n#define gl_FragColor skyOutput\n'+flags+'\n'+DISPLAY+'\n'+shader.fragmentShader.replace('#include <tonemapping_fragment>', (finiteMode?'bool skyNonFinite=any(isnan(gl_FragColor))||any(isinf(gl_FragColor));\n':'')+'gl_FragColor.rgb=skyTone(gl_FragColor.rgb);').replace('#include <colorspace_fragment>','gl_FragColor.rgb=skyToSrgb(gl_FragColor.rgb);'+(finiteMode?'gl_FragColor=skyNonFinite?vec4(1,0,1,1):vec4(0,1,0,1);':''));
+ let vert,frag,program;
+ try{vert=compileShader(gl.VERTEX_SHADER,vs);frag=compileShader(gl.FRAGMENT_SHADER,fs);program=gl.createProgram();gl.attachShader(program,vert);gl.attachShader(program,frag);gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program));}
+ catch(error){if(program)gl.deleteProgram(program);errors.push({id:key,error:String(error)});throw error;}
+ finally{if(vert)gl.deleteShader(vert);if(frag)gl.deleteShader(frag);}
+ const uniforms={};for(let i=0;i<gl.getProgramParameter(program,gl.ACTIVE_UNIFORMS);i++){const u=gl.getActiveUniform(program,i);uniforms[u.name]={location:gl.getUniformLocation(program,u.name),type:u.type};}
+ const result={program,uniforms,position:gl.getAttribLocation(program,'position')};
+ if(cache.size>=8){const oldest=cache.keys().next().value;gl.deleteProgram(cache.get(oldest).program);cache.delete(oldest);}
+ cache.set(key,result);return result;
+}
+// An enclosing cube uses the real catalog vertex stage, including uCenter.
+const positions=new Float32Array([
+ -1,-1,-1, 1,-1,-1, 1,1,-1, -1,-1,-1, 1,1,-1, -1,1,-1,
+ -1,-1,1, 1,1,1, 1,-1,1, -1,-1,1, -1,1,1, 1,1,1,
+ -1,-1,-1, -1,1,-1, -1,1,1, -1,-1,-1, -1,1,1, -1,-1,1,
+ 1,-1,-1, 1,1,1, 1,1,-1, 1,-1,-1, 1,-1,1, 1,1,1,
+ -1,1,-1, 1,1,-1, 1,1,1, -1,1,-1, 1,1,1, -1,1,1,
+ -1,-1,-1, 1,-1,1, 1,-1,-1, -1,-1,-1, -1,-1,1, 1,-1,1
+]);
+const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,positions,gl.STATIC_DRAW);gl.disable(gl.CULL_FACE);gl.disable(gl.DEPTH_TEST);
+let finiteMode=false;
+let current=CATALOG.entries[0],heading=-110,elevation=20,time=6.5,playing=false,quality='balanced',fixedSize=null;
+function defaultView(e){if(e.preview)return e.preview;const u=e.shader.uniforms;return {azimuth:u.uMoonStrength?.value>0?(u.uMoonAzimuth?.value??-110):(u.uSunAzimuth?.value??-110),elevation:20};}
+function resetView(){const v=defaultView(current);heading=v.azimuth;elevation=v.elevation;}
+function matrixView(az,el){const a=az*Math.PI/180,e=el*Math.PI/180;const f=[Math.cos(e)*Math.cos(a),Math.sin(e),Math.cos(e)*Math.sin(a)];const r=[-f[2],0,f[0]];const rl=Math.hypot(...r);r[0]/=rl;r[2]/=rl;const u=[r[1]*f[2]-r[2]*f[1],r[2]*f[0]-r[0]*f[2],r[0]*f[1]-r[1]*f[0]];return new Float32Array([r[0],u[0],-f[0],0,r[1],u[1],-f[1],0,r[2],u[2],-f[2],0,0,0,0,1]);}
+function projection(aspect){const f=1/Math.tan(62*Math.PI/360),near=.05,far=10;return new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(far+near)/(near-far),-1,0,0,2*far*near/(near-far),0]);}
+function linear(hex){return [1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255).map(v=>v<=.04045?v/12.92:Math.pow((v+.055)/1.055,2.4));}
+function draw(){
+ const w=fixedSize?.[0]??Math.max(1,Math.round(canvas.clientWidth)),h=fixedSize?.[1]??Math.max(1,Math.round(canvas.clientHeight));
+ if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}gl.viewport(0,0,w,h);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT);
+ let p;try{p=programFor(current,quality);}catch(error){document.getElementById('error').textContent=String(error);return false;}
+ gl.useProgram(p.program);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(p.position);gl.vertexAttribPointer(p.position,3,gl.FLOAT,false,0,0);
+ for(const[name,value]of Object.entries({modelMatrix:IDENTITY,modelViewMatrix:matrixView(heading,elevation),projectionMatrix:projection(w/h)}))if(p.uniforms[name])gl.uniformMatrix4fv(p.uniforms[name].location,false,value);
+ for(const[name,uniform]of Object.entries(current.shader.uniforms)){
+  const u=p.uniforms[name];if(!u)continue;
+  if(uniform.kind==='number')gl.uniform1f(u.location,name===current.shader.animatedTimeUniform?time:uniform.value);
+  else if(uniform.kind==='color')gl.uniform3fv(u.location,linear(uniform.value));
+  else if(uniform.kind==='vector'){if(uniform.value.length===2)gl.uniform2fv(u.location,uniform.value);else if(uniform.value.length===3)gl.uniform3fv(u.location,uniform.value);else gl.uniform4fv(u.location,uniform.value);}
+ }
+ gl.drawArrays(gl.TRIANGLES,0,36);return gl.getError()===gl.NO_ERROR;
+}
+function select(id){current=CATALOG.entries.find(e=>e.id===id);if(!current)throw new Error('Unknown preset '+id);resetView();time=6.5;document.getElementById('title').textContent=current.label;document.getElementById('description').textContent=current.description;document.getElementById('cost').textContent='描画量: '+({light:'少',medium:'中',heavy:'多'}[current.cost]??(current.id.startsWith('volumetric-')?'多':'少'));document.getElementById('error').textContent='';document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.id===id?'true':'false'));return draw();}
+for(const e of CATALOG.entries){const b=document.createElement('button');b.textContent=e.label;b.dataset.id=e.id;b.onclick=()=>select(e.id);document.getElementById('list').appendChild(b);}
+document.getElementById('quality').onchange=e=>{quality=e.target.value;draw()};document.getElementById('reset').onclick=()=>{resetView();draw()};
+document.getElementById('play').onclick=()=>{playing=!playing;document.getElementById('play').textContent=playing?'一時停止':'再生';};
+let drag=null;canvas.onpointerdown=e=>{drag=[e.clientX,e.clientY,heading,elevation];canvas.setPointerCapture(e.pointerId)};canvas.onpointerup=()=>drag=null;canvas.onpointercancel=()=>drag=null;canvas.onpointermove=e=>{if(drag){heading=drag[2]-(e.clientX-drag[0])*.2;elevation=Math.max(-85,Math.min(85,drag[3]+(e.clientY-drag[1])*.2));draw()}};
+let last=0;function frame(t){if(playing&&!document.hidden){time+=Math.min((t-last)/1000,.05);draw();}last=t;requestAnimationFrame(frame)}requestAnimationFrame(frame);new ResizeObserver(()=>draw()).observe(canvas);
+window.skyGallery={entries:CATALOG.entries,select,draw,programFor,errors,
+ setQuality(q){quality=q;document.getElementById('quality').value=q;return draw()},
+ setTime(t){time=t;return draw()},setView(az,el){heading=az;elevation=el;return draw()},
+ setSize(w,h){fixedSize=w&&h?[w,h]:null;return draw()},
+ capture(format='image/png',quality=0.88){return canvas.toDataURL(format,quality)},
+ checkFinite(){finiteMode=true;const okay=draw();const pixels=new Uint8Array(canvas.width*canvas.height*4);gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);let invalid=0;for(let i=0;i<pixels.length;i+=4)if(pixels[i]>200&&pixels[i+1]<50)invalid++;finiteMode=false;return{okay,invalid}},
+ stats(){const pixels=new Uint8Array(canvas.width*canvas.height*4);gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);let min=255,max=0,total=0,nonzero=0;for(let i=0;i<pixels.length;i+=4){const l=(pixels[i]+pixels[i+1]+pixels[i+2])/3;min=Math.min(min,l);max=Math.max(max,l);total+=l;if(l>2)nonzero++;}return{min,max,mean:total/(pixels.length/4),nonzero:nonzero/(pixels.length/4)}}
+};select(current.id);
+</script></html>

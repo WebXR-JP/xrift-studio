@@ -1,0 +1,175 @@
+{
+  "revision": "xrift-studio-sky-shaders@3",
+  "renderer": "Three.js / createClassicR3fMaterial",
+  "width": 640,
+  "height": 400,
+  "quality": "balanced",
+  "time": 6.5,
+  "images": [
+    {
+      "id": "alpine-cumulus",
+      "bytes": 15782,
+      "shaderHash": "80e22d9c1e1e1d41c5ba080dcf2fc6537e72da30a3a9cd6f132f83d029f86cee"
+    },
+    {
+      "id": "high-cirrus",
+      "bytes": 9460,
+      "shaderHash": "c291f54db95161c5c1467fd436ea9361760558eda2d43174b07dd301391da3c9"
+    },
+    {
+      "id": "coastal-haze",
+      "bytes": 2222,
+      "shaderHash": "f569286e586cbcee9d6fb7ebe9d5663a09fb9ad3e575883f0aed27732163a5df"
+    },
+    {
+      "id": "amber-cloud-sea",
+      "bytes": 19538,
+      "shaderHash": "17efa5ba2c933e0f32f98acd149d517d2174d793d62c85e8f0933254ba0b09dc"
+    },
+    {
+      "id": "lavender-blue-hour",
+      "bytes": 9778,
+      "shaderHash": "f3268b1b8e883cf6d91944af47a91f550486cdc59b5c5fd11e4b6c3f9aa4a7e6"
+    },
+    {
+      "id": "storm-front",
+      "bytes": 8054,
+      "shaderHash": "4f2fc262badb04b486b22044db87b3c74a090170937b5b458fbbc1a1affb139e"
+    },
+    {
+      "id": "overcast-silver",
+      "bytes": 4858,
+      "shaderHash": "9ef6a807ab0dc4638d66d42c3a9af88c2887107556f62afb6943ab38420e9c6e"
+    },
+    {
+      "id": "desert-dust",
+      "bytes": 2664,
+      "shaderHash": "b5421a8aae200ac27a6587215f0241d13f88a0de32caa5bb90654409390f8752"
+    },
+    {
+      "id": "lunar-halo",
+      "bytes": 7510,
+      "shaderHash": "bf8479a4b8211e4a5797c9a188cb08180fc0382532313b915fdc70512cc56f9a"
+    },
+    {
+      "id": "milky-way-core",
+      "bytes": 18704,
+      "shaderHash": "d4770d5ab6687dd550b6b6009e69127773f09378078fefa1d05561b583714349"
+    },
+    {
+      "id": "polar-curtains",
+      "bytes": 20410,
+      "shaderHash": "252f44e77eb6b5388b72bccfcf5fd453843368d4dc47b9bfa850d10ff90cb6a1"
+    },
+    {
+      "id": "aurora-corona",
+      "bytes": 22514,
+      "shaderHash": "ebfd14c8b03e17a74b495591203b311f5359ec791ed036dc769c223143b76ad8"
+    },
+    {
+      "id": "ringed-planet",
+      "bytes": 20698,
+      "shaderHash": "b0ad175059b76f205785b209a483f46ca490d5d376881411a38a1d728c93ae1e"
+    },
+    {
+      "id": "red-giant",
+      "bytes": 22150,
+      "shaderHash": "9a3bb8436ce4174882fb1b7d112b7c01b3e9eb712fe123aa1f4d0f7c7533eb51"
+    },
+    {
+      "id": "cosmic-dust",
+      "bytes": 33658,
+      "shaderHash": "2bd0837d03ea32bd2619aa1e45f54697f43c65533a003d80facd74d0cf2e8450"
+    },
+    {
+      "id": "eclipse-corona",
+      "bytes": 8184,
+      "shaderHash": "66d7fc965d718b60917b46e770d5b2bd917bce8f6ab64c0a84b556ae5dd1d8c0"
+    },
+    {
+      "id": "astral-ribbons",
+      "bytes": 12222,
+      "shaderHash": "66f50e235170cdd1cd0156fcec0c52c874a96ccff7a4729409d1a306c4faeeeb"
+    },
+    {
+      "id": "celestial-gate",
+      "bytes": 16830,
+      "shaderHash": "8bf8cac23b96fbd02a8a47a1be32e5f4f84d40dd89461447e955323ca9975458"
+    },
+    {
+      "id": "crystal-vault",
+      "bytes": 20650,
+      "shaderHash": "31765c3e7a0475f84c69d2296ecc26a7c88b022e10b00f5ba8bd7929638d5b93"
+    },
+    {
+      "id": "painted-clouds",
+      "bytes": 5644,
+      "shaderHash": "1e5ff62c4d025b5a9b74493a1bf0594ccff9503ea4101af76f097532c23ee1f6"
+    },
+    {
+      "id": "synthwave-horizon",
+      "bytes": 24372,
+      "shaderHash": "46de6a7b20774da1e323a3d605fbddbe759495fc95ce84f682a08b5ac2839c4d"
+    },
+    {
+      "id": "prismatic-flow",
+      "bytes": 28340,
+      "shaderHash": "faf2548381e1377e633b84f7a8693ee92654ab86383664f3cdd0c53e0d29e48c"
+    },
+    {
+      "id": "ink-marble",
+      "bytes": 47658,
+      "shaderHash": "f1d020dd792e381631f79674088cc4f83a3df8d43e1701c5e1d3d39f8e21ec93"
+    },
+    {
+      "id": "submerged-caustics",
+      "bytes": 8398,
+      "shaderHash": "aace9347f42a420a5f8528c4463db1f368fa67ed06afddd97b7697457a985f9c"
+    },
+    {
+      "id": "volumetric-daylight",
+      "bytes": 11318,
+      "shaderHash": "167932f118a22eb2a866b2f3e1af654e20114a645a18263481a5d2ad739e5efa"
+    },
+    {
+      "id": "volumetric-sunset",
+      "bytes": 12164,
+      "shaderHash": "b658cf067377bc9874183fd3bd89f5232cf3b7473f803a786ef1296c6b730e8d"
+    },
+    {
+      "id": "daylight-clear",
+      "bytes": 6454,
+      "shaderHash": "09005d3380194cad44a3f86f41949de607671315de21e605593ee052251ebdc4"
+    },
+    {
+      "id": "golden-sunset",
+      "bytes": 7626,
+      "shaderHash": "b77127a3fed66079002bb23942161fe29de87a662bb42866309b026602a2c0c4"
+    },
+    {
+      "id": "morning-glow",
+      "bytes": 6172,
+      "shaderHash": "995b9969b180e028162cf228addebd648ed04e504bf46641d419f6785c111c9c"
+    },
+    {
+      "id": "moonlit-night",
+      "bytes": 4462,
+      "shaderHash": "4ca0401812d406de3f02d9ebd7d6453a8e001e4a64eace43d7c7976942b49cc7"
+    },
+    {
+      "id": "starfield-night",
+      "bytes": 4854,
+      "shaderHash": "690b08c75993930726e61218b80d6aed19b89c5605c3d37e4886e31a0fe6c469"
+    },
+    {
+      "id": "aurora-night",
+      "bytes": 5116,
+      "shaderHash": "dc659108765eb2c1993c432fd42cb609230de768bed82af141c3163979755223"
+    },
+    {
+      "id": "nebula-space",
+      "bytes": 16484,
+      "shaderHash": "e25185cf1911e9d32426248aeb2dd577151b6d000eff15e876daac1669ef380d"
+    }
+  ]
+}

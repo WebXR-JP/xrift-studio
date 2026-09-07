@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   CircleAlert,
@@ -14,6 +14,10 @@ import {
   applySkyShaderParameters,
   defaultSkyShaderParameterValues,
   skyShaderCategoryLabel,
+  SKY_SHADER_QUALITY_OPTIONS,
+  skyShaderCostLabel,
+  withSkyShaderQuality,
+  type SkyShaderQuality,
   type SkyShaderCatalogCategory,
   type SkyShaderCatalogEntry,
   type SkyShaderParameter,
@@ -53,6 +57,7 @@ export function SkyShaderStore({
   const [values, setValues] = useState<Record<string, number | string>>(() =>
     defaultSkyShaderParameterValues(SKY_SHADER_CATALOG[0]),
   );
+  const [quality, setQuality] = useState<SkyShaderQuality>("balanced");
   const [applyToSky, setApplyToSky] = useState(true);
   const [adding, setAdding] = useState(false);
   const [addedMessage, setAddedMessage] = useState<string | null>(null);
@@ -70,6 +75,7 @@ export function SkyShaderStore({
         entry.label,
         entry.id,
         entry.description,
+        ...(entry.tags ?? []),
         skyShaderCategoryLabel(entry.category),
       ]
         .join(" ")
@@ -78,14 +84,22 @@ export function SkyShaderStore({
     });
   }, [category, query]);
   const previewShader = useMemo(
-    () => (selected ? applySkyShaderParameters(selected, values) : undefined),
-    [selected, values],
+    () => (selected ? withSkyShaderQuality(applySkyShaderParameters(selected, values), quality) : undefined),
+    [selected, values, quality],
   );
   const modified = useMemo(() => {
     if (!selected) return false;
     const defaults = defaultSkyShaderParameterValues(selected);
     return Object.entries(defaults).some(([name, value]) => values[name] !== value);
   }, [selected, values]);
+
+  useEffect(() => {
+    if (adding || !visible.length || visible.some(entry => entry.id === selectedId)) return;
+    setSelectedId(visible[0].id);
+    setValues(defaultSkyShaderParameterValues(visible[0]));
+    setAddedMessage(null);
+    setError(null);
+  }, [visible, selectedId, adding]);
 
   const selectEntry = (entry: SkyShaderCatalogEntry) => {
     if (adding) return;
@@ -101,14 +115,15 @@ export function SkyShaderStore({
     setAddedMessage(null);
     setError(null);
     try {
-      const result = await onAdd(selected, values, applyToSky);
+      const installEntry = { ...selected, shader: withSkyShaderQuality(selected.shader, quality) };
+      const result = await onAdd(installEntry, values, applyToSky);
       setAddedMessage(
         [
           result.alreadyInstalled
             ? `「${selected.label}」のMaterialを今の設定で更新しました。`
             : `「${selected.label}」をMaterialとして追加しました。`,
           result.appliedToSky
-            ? "Sceneの空に設定済みです。星の数などはInspectorのUniform valuesで調整できます。"
+            ? "Sceneの空に設定済みです。色・雲量・動きはInspectorのUniform valuesで調整できます。"
             : "Scene設定の「Skybox Shader」から割り当てると空になります。",
         ].join(""),
       );
@@ -134,11 +149,11 @@ export function SkyShaderStore({
             <div>
               <h3 className="text-xs font-semibold text-slate-900">Skybox Shader</h3>
               <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                画像ではなくGLSLで空を描くMaterialです。星の数などをuniformで調整できます
+                自然・天候・宇宙・幻想・抽象・水中の空を、画像なしで描くMaterialです
               </p>
             </div>
             <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-[10px] font-semibold text-indigo-700">
-              {SKY_SHADER_CATALOG.length} shaders
+              {SKY_SHADER_CATALOG.length} presets
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -150,6 +165,7 @@ export function SkyShaderStore({
               <span className="sr-only">Skybox Shaderを検索</span>
               <input
                 value={query}
+                disabled={adding}
                 onChange={(event) => setQuery(event.currentTarget.value)}
                 placeholder="名前または説明で検索"
                 className="h-8 w-full rounded-md border border-slate-300 bg-white pl-8 pr-3 text-xs outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
@@ -157,6 +173,7 @@ export function SkyShaderStore({
             </label>
             <select
               value={category}
+              disabled={adding}
               onChange={(event) =>
                 setCategory(
                   event.currentTarget.value as "all" | SkyShaderCatalogCategory,
@@ -189,6 +206,7 @@ export function SkyShaderStore({
                     key={entry.id}
                     type="button"
                     aria-pressed={active}
+                    disabled={adding}
                     onClick={() => selectEntry(entry)}
                     className={`overflow-hidden rounded-lg border bg-white text-left transition ${
                       active
@@ -198,14 +216,16 @@ export function SkyShaderStore({
                   >
                     <SkyShaderCatalogPreview
                       shader={entry.shader}
+                      thumbnailId={entry.id}
+                      label={entry.label}
                       className="aspect-[16/9] w-full"
                     />
                     <div className="p-2.5">
-                      <p className="truncate text-xs font-semibold text-slate-800">
+                      <p title={entry.label} className="min-h-8 text-xs font-semibold leading-4 text-slate-800">
                         {entry.label}
                       </p>
                       <p className="mt-1 text-[10px] font-medium text-slate-500">
-                        {skyShaderCategoryLabel(entry.category)}
+                        {skyShaderCategoryLabel(entry.category)} · {skyShaderCostLabel(entry)}
                       </p>
                     </div>
                   </button>
@@ -215,7 +235,7 @@ export function SkyShaderStore({
           )}
         </div>
         <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
-          カードは実際のGLSLをWebGLで描画しています。
+          一覧はGLSLの描画サムネイルです。選択した空だけをライブ表示します。
         </footer>
       </section>
 
@@ -227,6 +247,8 @@ export function SkyShaderStore({
           <div className="space-y-4">
             <SkyShaderCatalogPreview
               shader={previewShader}
+              preview={selected.preview}
+              label={selected.label}
               className="aspect-[16/10] w-full rounded-lg"
               animated
             />
@@ -253,6 +275,29 @@ export function SkyShaderStore({
                 {selected.description}
               </p>
             </div>
+
+            <fieldset className="rounded-md border border-slate-200 bg-slate-50 p-2.5" disabled={adding}>
+              <legend className="px-1 text-[11px] font-semibold text-slate-700">描画品質</legend>
+              <div className="flex gap-1">
+                {SKY_SHADER_QUALITY_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    aria-pressed={quality === option.id}
+                    onClick={() => setQuality(option.id)}
+                    className={`flex-1 rounded border px-2 py-1.5 text-xs transition disabled:opacity-50 ${
+                      quality === option.id
+                        ? "border-brand-400 bg-brand-50 font-semibold text-brand-700"
+                        : "border-slate-300 bg-white text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >{option.label}</button>
+                ))}
+              </div>
+              <p className="mt-2 text-[10px] leading-4 text-slate-500">
+                {SKY_SHADER_QUALITY_OPTIONS.find((option) => option.id === quality)?.description}
+              </p>
+              <p className="mt-1 text-[10px] text-slate-500">{skyShaderCostLabel(selected)} · 追加したMaterialにも品質設定を保存します。単純な空では品質差がない場合があります。</p>
+            </fieldset>
 
             <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
               <div className="mb-2 flex items-center justify-between gap-2">
@@ -303,7 +348,7 @@ export function SkyShaderStore({
               </span>
             </label>
 
-            <Notice text="追加後はMaterial Assetとして残ります。星の数や色はInspectorのUniform valuesから何度でも変更できます。" />
+            <Notice text="追加後はMaterial Assetとして残ります。色・雲量・光・動きはInspectorのUniform valuesから変更できます。背景だけの表現で、ワールドの照明や反射は自動では変更しません。" />
             {disabledReason ? (
               <Notice tone="warning" text={disabledReason} />
             ) : null}
@@ -337,9 +382,9 @@ export function SkyShaderStore({
                   追加中
                 </>
               ) : applyToSky ? (
-                `${selected.label}を空へ設定`
+                "このSkyboxを空へ設定"
               ) : (
-                `${selected.label}をMaterialへ追加`
+                "Materialとして追加"
               )}
             </button>
           </div>
@@ -422,7 +467,7 @@ function SkyShaderParameterField({
 
 function formatParameterValue(value: number, step: number): string {
   if (step >= 1) return String(Math.round(value));
-  const decimals = Math.min(3, Math.max(0, Math.ceil(-Math.log10(step))));
+  const decimals = Math.min(5, Math.max(0, Math.ceil(-Math.log10(step))));
   return value.toFixed(decimals);
 }
 

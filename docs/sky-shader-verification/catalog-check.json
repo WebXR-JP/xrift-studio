@@ -1,0 +1,18 @@
+{
+  "presets": 33,
+  "categories": [
+    "day",
+    "dusk",
+    "dawn",
+    "weather",
+    "night",
+    "aurora",
+    "space",
+    "fantasy",
+    "stylized",
+    "abstract",
+    "underwater"
+  ],
+  "checks": 2237,
+  "qualityVariants": 99
+}

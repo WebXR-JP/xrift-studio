@@ -130,3 +130,5 @@ export * from "./wind-contract";
 export * from "./wind-contract.fixture";
 export * from "./xrift-component-placement";
 export * from "./xrift-component-placement.fixture";
+
+export * from "./sky-shader-quality";

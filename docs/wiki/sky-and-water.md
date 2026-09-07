@@ -14,16 +14,13 @@
 
 ### プリセット
 
-| カテゴリ | プリセット |
-| --- | --- |
-| 昼 | Volumetric Daylight、Daylight Clear |
-| 夕暮れ | Volumetric Sunset、Golden Sunset |
-| 朝焼け | Morning Glow |
-| 夜空 | Moonlit Night、Starfield Night |
-| オーロラ | Aurora Night |
-| 宇宙 | Nebula Space |
+33種類・11カテゴリから選べます。昼・夕暮れ・朝焼け・夜空・オーロラ・宇宙に加え、天候・幻想・スタイル・抽象・水中の表現を収録しています。積雲、巻雲、雲海、天の川、環のある惑星など、全種類は[Skybox Shaderの一覧](../SKY_SHADERS.md)を参照してください。
+
+一覧は実描画の静止画、詳細だけはライブ表示です。詳細をドラッグするか矢印キーで見回し、一時停止・再生・視点リセットで比較できます。
 
 ### 調整する
+
+追加前は「軽量・標準・高精細」から描画品質を選べます。品質はMaterialに保存されます。追加後はVariantsのdefinesを編集するか、同じプリセットを追加し直して変更します。
 
 Material を選ぶと、Inspector の **Uniform values** で数値と色を変更できます。プリセットによって項目は変わりますが、たとえば Volumetric Sunset では次のようなものを調整できます。
 

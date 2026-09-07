@@ -1,0 +1,903 @@
+{
+  "qualityRenders": [
+    {
+      "id": "alpine-cumulus",
+      "quality": "low",
+      "okay": true,
+      "min": 143.66666666666666,
+      "max": 222,
+      "mean": 195.39554398148087,
+      "nonzero": 1
+    },
+    {
+      "id": "alpine-cumulus",
+      "quality": "balanced",
+      "okay": true,
+      "min": 139.33333333333334,
+      "max": 220.33333333333334,
+      "mean": 190.95179398148088,
+      "nonzero": 1
+    },
+    {
+      "id": "alpine-cumulus",
+      "quality": "high",
+      "okay": true,
+      "min": 140,
+      "max": 220,
+      "mean": 188.61174768518507,
+      "nonzero": 1
+    },
+    {
+      "id": "high-cirrus",
+      "quality": "low",
+      "okay": true,
+      "min": 171,
+      "max": 238,
+      "mean": 204.02557870370316,
+      "nonzero": 1
+    },
+    {
+      "id": "high-cirrus",
+      "quality": "balanced",
+      "okay": true,
+      "min": 171.66666666666666,
+      "max": 237,
+      "mean": 207.64872685185173,
+      "nonzero": 1
+    },
+    {
+      "id": "high-cirrus",
+      "quality": "high",
+      "okay": true,
+      "min": 171.66666666666666,
+      "max": 236.33333333333334,
+      "mean": 209.4092013888896,
+      "nonzero": 1
+    },
+    {
+      "id": "coastal-haze",
+      "quality": "low",
+      "okay": true,
+      "min": 186.33333333333334,
+      "max": 237,
+      "mean": 202.86446759259297,
+      "nonzero": 1
+    },
+    {
+      "id": "coastal-haze",
+      "quality": "balanced",
+      "okay": true,
+      "min": 186.66666666666666,
+      "max": 237,
+      "mean": 203.09276620370366,
+      "nonzero": 1
+    },
+    {
+      "id": "coastal-haze",
+      "quality": "high",
+      "okay": true,
+      "min": 186.66666666666666,
+      "max": 237,
+      "mean": 203.20787037036962,
+      "nonzero": 1
+    },
+    {
+      "id": "amber-cloud-sea",
+      "quality": "low",
+      "okay": true,
+      "min": 130.66666666666666,
+      "max": 221.66666666666666,
+      "mean": 178.01273148148164,
+      "nonzero": 1
+    },
+    {
+      "id": "amber-cloud-sea",
+      "quality": "balanced",
+      "okay": true,
+      "min": 132.33333333333334,
+      "max": 216.33333333333334,
+      "mean": 176.46093749999955,
+      "nonzero": 1
+    },
+    {
+      "id": "amber-cloud-sea",
+      "quality": "high",
+      "okay": true,
+      "min": 133,
+      "max": 214.66666666666666,
+      "mean": 175.37083333333308,
+      "nonzero": 1
+    },
+    {
+      "id": "lavender-blue-hour",
+      "quality": "low",
+      "okay": true,
+      "min": 125.66666666666667,
+      "max": 224,
+      "mean": 186.26168981481464,
+      "nonzero": 1
+    },
+    {
+      "id": "lavender-blue-hour",
+      "quality": "balanced",
+      "okay": true,
+      "min": 125.66666666666667,
+      "max": 225.66666666666666,
+      "mean": 191.24461805555515,
+      "nonzero": 1
+    },
+    {
+      "id": "lavender-blue-hour",
+      "quality": "high",
+      "okay": true,
+      "min": 125.66666666666667,
+      "max": 226.33333333333334,
+      "mean": 193.7502314814805,
+      "nonzero": 1
+    },
+    {
+      "id": "storm-front",
+      "quality": "low",
+      "okay": true,
+      "min": 31,
+      "max": 173.66666666666666,
+      "mean": 88.26012731481407,
+      "nonzero": 1
+    },
+    {
+      "id": "storm-front",
+      "quality": "balanced",
+      "okay": true,
+      "min": 30.333333333333332,
+      "max": 173.66666666666666,
+      "mean": 83.26684027777752,
+      "nonzero": 1
+    },
+    {
+      "id": "storm-front",
+      "quality": "high",
+      "okay": true,
+      "min": 30.666666666666668,
+      "max": 173.66666666666666,
+      "mean": 81.41510416666627,
+      "nonzero": 1
+    },
+    {
+      "id": "overcast-silver",
+      "quality": "low",
+      "okay": true,
+      "min": 143,
+      "max": 201.33333333333334,
+      "mean": 163.53165509259708,
+      "nonzero": 1
+    },
+    {
+      "id": "overcast-silver",
+      "quality": "balanced",
+      "okay": true,
+      "min": 143,
+      "max": 201.33333333333334,
+      "mean": 162.0731481481527,
+      "nonzero": 1
+    },
+    {
+      "id": "overcast-silver",
+      "quality": "high",
+      "okay": true,
+      "min": 143,
+      "max": 201.33333333333334,
+      "mean": 161.46140046296662,
+      "nonzero": 1
+    },
+    {
+      "id": "desert-dust",
+      "quality": "low",
+      "okay": true,
+      "min": 157.33333333333334,
+      "max": 208.66666666666666,
+      "mean": 175.1994791666661,
+      "nonzero": 1
+    },
+    {
+      "id": "desert-dust",
+      "quality": "balanced",
+      "okay": true,
+      "min": 158,
+      "max": 208.66666666666666,
+      "mean": 176.0399884259258,
+      "nonzero": 1
+    },
+    {
+      "id": "desert-dust",
+      "quality": "high",
+      "okay": true,
+      "min": 158,
+      "max": 208.66666666666666,
+      "mean": 176.47552083333326,
+      "nonzero": 1
+    },
+    {
+      "id": "lunar-halo",
+      "quality": "low",
+      "okay": true,
+      "min": 0,
+      "max": 198,
+      "mean": 7.666956018518572,
+      "nonzero": 0.8548611111111111
+    },
+    {
+      "id": "lunar-halo",
+      "quality": "balanced",
+      "okay": true,
+      "min": 0,
+      "max": 201,
+      "mean": 7.700289351851905,
+      "nonzero": 0.8550347222222222
+    },
+    {
+      "id": "lunar-halo",
+      "quality": "high",
+      "okay": true,
+      "min": 0,
+      "max": 202,
+      "mean": 7.728530092592635,
+      "nonzero": 0.8550347222222222
+    },
+    {
+      "id": "milky-way-core",
+      "quality": "low",
+      "okay": true,
+      "min": 1,
+      "max": 219,
+      "mean": 55.1361689814815,
+      "nonzero": 0.9802083333333333
+    },
+    {
+      "id": "milky-way-core",
+      "quality": "balanced",
+      "okay": true,
+      "min": 1,
+      "max": 220,
+      "mean": 55.447280092592386,
+      "nonzero": 0.9795138888888889
+    },
+    {
+      "id": "milky-way-core",
+      "quality": "high",
+      "okay": true,
+      "min": 1,
+      "max": 221.66666666666666,
+      "mean": 55.57233796296278,
+      "nonzero": 0.9795138888888889
+    },
+    {
+      "id": "polar-curtains",
+      "quality": "low",
+      "okay": true,
+      "min": 6,
+      "max": 230.66666666666666,
+      "mean": 85.27627314814907,
+      "nonzero": 1
+    },
+    {
+      "id": "polar-curtains",
+      "quality": "balanced",
+      "okay": true,
+      "min": 6,
+      "max": 231,
+      "mean": 82.77719907407536,
+      "nonzero": 1
+    },
+    {
+      "id": "polar-curtains",
+      "quality": "high",
+      "okay": true,
+      "min": 6,
+      "max": 231,
+      "mean": 82.13518518518634,
+      "nonzero": 1
+    },
+    {
+      "id": "aurora-corona",
+      "quality": "low",
+      "okay": true,
+      "min": 1.6666666666666667,
+      "max": 230.33333333333334,
+      "mean": 98.83726851851843,
+      "nonzero": 0.9173611111111111
+    },
+    {
+      "id": "aurora-corona",
+      "quality": "balanced",
+      "okay": true,
+      "min": 1.6666666666666667,
+      "max": 231,
+      "mean": 96.15931712962946,
+      "nonzero": 0.9166666666666666
+    },
+    {
+      "id": "aurora-corona",
+      "quality": "high",
+      "okay": true,
+      "min": 1.6666666666666667,
+      "max": 231,
+      "mean": 95.36556712962935,
+      "nonzero": 0.9166666666666666
+    },
+    {
+      "id": "ringed-planet",
+      "quality": "low",
+      "okay": true,
+      "min": 1.3333333333333333,
+      "max": 208.66666666666666,
+      "mean": 35.83912037037048,
+      "nonzero": 0.8921875
+    },
+    {
+      "id": "ringed-planet",
+      "quality": "balanced",
+      "okay": true,
+      "min": 1.3333333333333333,
+      "max": 208.66666666666666,
+      "mean": 35.889930555555694,
+      "nonzero": 0.8921875
+    },
+    {
+      "id": "ringed-planet",
+      "quality": "high",
+      "okay": true,
+      "min": 1.3333333333333333,
+      "max": 208.66666666666666,
+      "mean": 35.92731481481497,
+      "nonzero": 0.8921875
+    },
+    {
+      "id": "red-giant",
+      "quality": "low",
+      "okay": true,
+      "min": 1.6666666666666667,
+      "max": 238.66666666666666,
+      "mean": 45.95515046296314,
+      "nonzero": 0.9814236111111111
+    },
+    {
+      "id": "red-giant",
+      "quality": "balanced",
+      "okay": true,
+      "min": 1.6666666666666667,
+      "max": 238.66666666666666,
+      "mean": 46.07349537037061,
+      "nonzero": 0.9814236111111111
+    },
+    {
+      "id": "red-giant",
+      "quality": "high",
+      "okay": true,
+      "min": 1.6666666666666667,
+      "max": 238.66666666666666,
+      "mean": 46.12071759259274,
+      "nonzero": 0.9814236111111111
+    },
+    {
+      "id": "cosmic-dust",
+      "quality": "low",
+      "okay": true,
+      "min": 5.333333333333333,
+      "max": 225.33333333333334,
+      "mean": 151.96828703703756,
+      "nonzero": 1
+    },
+    {
+      "id": "cosmic-dust",
+      "quality": "balanced",
+      "okay": true,
+      "min": 5,
+      "max": 225.66666666666666,
+      "mean": 154.902141203704,
+      "nonzero": 1
+    },
+    {
+      "id": "cosmic-dust",
+      "quality": "high",
+      "okay": true,
+      "min": 5,
+      "max": 230.66666666666666,
+      "mean": 154.04722222222284,
+      "nonzero": 1
+    },
+    {
+      "id": "eclipse-corona",
+      "quality": "low",
+      "okay": true,
+      "min": 0,
+      "max": 231.33333333333334,
+      "mean": 12.28674768518513,
+      "nonzero": 0.8871527777777778
+    },
+    {
+      "id": "eclipse-corona",
+      "quality": "balanced",
+      "okay": true,
+      "min": 0,
+      "max": 231.33333333333334,
+      "mean": 12.343402777777733,
+      "nonzero": 0.8869791666666667
+    },
+    {
+      "id": "eclipse-corona",
+      "quality": "high",
+      "okay": true,
+      "min": 0,
+      "max": 231.33333333333334,
+      "mean": 12.378935185185135,
+      "nonzero": 0.8869791666666667
+    },
+    {
+      "id": "astral-ribbons",
+      "quality": "low",
+      "okay": true,
+      "min": 4.666666666666667,
+      "max": 214.66666666666666,
+      "mean": 74.92795138888832,
+      "nonzero": 1
+    },
+    {
+      "id": "astral-ribbons",
+      "quality": "balanced",
+      "okay": true,
+      "min": 4.666666666666667,
+      "max": 214.66666666666666,
+      "mean": 75.29739583333287,
+      "nonzero": 1
+    },
+    {
+      "id": "astral-ribbons",
+      "quality": "high",
+      "okay": true,
+      "min": 4.666666666666667,
+      "max": 214.33333333333334,
+      "mean": 75.58402777777744,
+      "nonzero": 1
+    },
+    {
+      "id": "celestial-gate",
+      "quality": "low",
+      "okay": true,
+      "min": 5,
+      "max": 219,
+      "mean": 31.733738425925985,
+      "nonzero": 1
+    },
+    {
+      "id": "celestial-gate",
+      "quality": "balanced",
+      "okay": true,
+      "min": 5,
+      "max": 219,
+      "mean": 32.02002314814817,
+      "nonzero": 1
+    },
+    {
+      "id": "celestial-gate",
+      "quality": "high",
+      "okay": true,
+      "min": 5,
+      "max": 219,
+      "mean": 32.15908564814821,
+      "nonzero": 1
+    },
+    {
+      "id": "crystal-vault",
+      "quality": "low",
+      "okay": true,
+      "min": 49.666666666666664,
+      "max": 204,
+      "mean": 115.91776620370378,
+      "nonzero": 1
+    },
+    {
+      "id": "crystal-vault",
+      "quality": "balanced",
+      "okay": true,
+      "min": 49.666666666666664,
+      "max": 204,
+      "mean": 115.91776620370378,
+      "nonzero": 1
+    },
+    {
+      "id": "crystal-vault",
+      "quality": "high",
+      "okay": true,
+      "min": 49.666666666666664,
+      "max": 204,
+      "mean": 115.91776620370378,
+      "nonzero": 1
+    },
+    {
+      "id": "painted-clouds",
+      "quality": "low",
+      "okay": true,
+      "min": 179.66666666666666,
+      "max": 226.33333333333334,
+      "mean": 207.27800925926024,
+      "nonzero": 1
+    },
+    {
+      "id": "painted-clouds",
+      "quality": "balanced",
+      "okay": true,
+      "min": 180,
+      "max": 221.33333333333334,
+      "mean": 208.85295138888975,
+      "nonzero": 1
+    },
+    {
+      "id": "painted-clouds",
+      "quality": "high",
+      "okay": true,
+      "min": 180,
+      "max": 220.33333333333334,
+      "mean": 209.2395254629638,
+      "nonzero": 1
+    },
+    {
+      "id": "synthwave-horizon",
+      "quality": "low",
+      "okay": true,
+      "min": 6.666666666666667,
+      "max": 220,
+      "mean": 80.7925347222216,
+      "nonzero": 1
+    },
+    {
+      "id": "synthwave-horizon",
+      "quality": "balanced",
+      "okay": true,
+      "min": 6.666666666666667,
+      "max": 220,
+      "mean": 80.7925347222216,
+      "nonzero": 1
+    },
+    {
+      "id": "synthwave-horizon",
+      "quality": "high",
+      "okay": true,
+      "min": 6.666666666666667,
+      "max": 220,
+      "mean": 80.7925347222216,
+      "nonzero": 1
+    },
+    {
+      "id": "prismatic-flow",
+      "quality": "low",
+      "okay": true,
+      "min": 140.33333333333334,
+      "max": 208.66666666666666,
+      "mean": 174.1185185185195,
+      "nonzero": 1
+    },
+    {
+      "id": "prismatic-flow",
+      "quality": "balanced",
+      "okay": true,
+      "min": 145.66666666666666,
+      "max": 209,
+      "mean": 176.68032407407452,
+      "nonzero": 1
+    },
+    {
+      "id": "prismatic-flow",
+      "quality": "high",
+      "okay": true,
+      "min": 146,
+      "max": 209.66666666666666,
+      "mean": 177.4199652777782,
+      "nonzero": 1
+    },
+    {
+      "id": "ink-marble",
+      "quality": "low",
+      "okay": true,
+      "min": 49.666666666666664,
+      "max": 195,
+      "mean": 145.65057870370217,
+      "nonzero": 1
+    },
+    {
+      "id": "ink-marble",
+      "quality": "balanced",
+      "okay": true,
+      "min": 49.666666666666664,
+      "max": 195,
+      "mean": 152.97818287036944,
+      "nonzero": 1
+    },
+    {
+      "id": "ink-marble",
+      "quality": "high",
+      "okay": true,
+      "min": 49.666666666666664,
+      "max": 195,
+      "mean": 150.46788194444298,
+      "nonzero": 1
+    },
+    {
+      "id": "submerged-caustics",
+      "quality": "low",
+      "okay": true,
+      "min": 56.666666666666664,
+      "max": 197,
+      "mean": 116.85949074074041,
+      "nonzero": 1
+    },
+    {
+      "id": "submerged-caustics",
+      "quality": "balanced",
+      "okay": true,
+      "min": 56.666666666666664,
+      "max": 197,
+      "mean": 116.85949074074041,
+      "nonzero": 1
+    },
+    {
+      "id": "submerged-caustics",
+      "quality": "high",
+      "okay": true,
+      "min": 56.666666666666664,
+      "max": 197,
+      "mean": 116.85949074074041,
+      "nonzero": 1
+    },
+    {
+      "id": "volumetric-daylight",
+      "quality": "low",
+      "okay": true,
+      "min": 122,
+      "max": 229.66666666666666,
+      "mean": 183.5234375,
+      "nonzero": 1
+    },
+    {
+      "id": "volumetric-daylight",
+      "quality": "balanced",
+      "okay": true,
+      "min": 122,
+      "max": 229,
+      "mean": 182.1147569444446,
+      "nonzero": 1
+    },
+    {
+      "id": "volumetric-daylight",
+      "quality": "high",
+      "okay": true,
+      "min": 122,
+      "max": 229,
+      "mean": 181.45659722222217,
+      "nonzero": 1
+    },
+    {
+      "id": "volumetric-sunset",
+      "quality": "low",
+      "okay": true,
+      "min": 25.333333333333332,
+      "max": 207.66666666666666,
+      "mean": 136.83327546296314,
+      "nonzero": 1
+    },
+    {
+      "id": "volumetric-sunset",
+      "quality": "balanced",
+      "okay": true,
+      "min": 25.333333333333332,
+      "max": 204,
+      "mean": 134.98333333333352,
+      "nonzero": 1
+    },
+    {
+      "id": "volumetric-sunset",
+      "quality": "high",
+      "okay": true,
+      "min": 25.333333333333332,
+      "max": 204,
+      "mean": 134.24450231481467,
+      "nonzero": 1
+    },
+    {
+      "id": "daylight-clear",
+      "quality": "low",
+      "okay": true,
+      "min": 125.66666666666667,
+      "max": 235.33333333333334,
+      "mean": 188.41678240740723,
+      "nonzero": 1
+    },
+    {
+      "id": "daylight-clear",
+      "quality": "balanced",
+      "okay": true,
+      "min": 125.66666666666667,
+      "max": 235.33333333333334,
+      "mean": 188.41678240740723,
+      "nonzero": 1
+    },
+    {
+      "id": "daylight-clear",
+      "quality": "high",
+      "okay": true,
+      "min": 125.66666666666667,
+      "max": 235.33333333333334,
+      "mean": 188.41678240740723,
+      "nonzero": 1
+    },
+    {
+      "id": "golden-sunset",
+      "quality": "low",
+      "okay": true,
+      "min": 25,
+      "max": 217.33333333333334,
+      "mean": 114.78842592592511,
+      "nonzero": 1
+    },
+    {
+      "id": "golden-sunset",
+      "quality": "balanced",
+      "okay": true,
+      "min": 25,
+      "max": 217.33333333333334,
+      "mean": 114.78842592592511,
+      "nonzero": 1
+    },
+    {
+      "id": "golden-sunset",
+      "quality": "high",
+      "okay": true,
+      "min": 25,
+      "max": 217.33333333333334,
+      "mean": 114.78842592592511,
+      "nonzero": 1
+    },
+    {
+      "id": "morning-glow",
+      "quality": "low",
+      "okay": true,
+      "min": 49,
+      "max": 220.33333333333334,
+      "mean": 147.79450231481493,
+      "nonzero": 1
+    },
+    {
+      "id": "morning-glow",
+      "quality": "balanced",
+      "okay": true,
+      "min": 49,
+      "max": 220.33333333333334,
+      "mean": 147.79450231481493,
+      "nonzero": 1
+    },
+    {
+      "id": "morning-glow",
+      "quality": "high",
+      "okay": true,
+      "min": 49,
+      "max": 220.33333333333334,
+      "mean": 147.79450231481493,
+      "nonzero": 1
+    },
+    {
+      "id": "moonlit-night",
+      "quality": "low",
+      "okay": true,
+      "min": 2.3333333333333335,
+      "max": 230.66666666666666,
+      "mean": 21.812152777777936,
+      "nonzero": 1
+    },
+    {
+      "id": "moonlit-night",
+      "quality": "balanced",
+      "okay": true,
+      "min": 2.3333333333333335,
+      "max": 230.66666666666666,
+      "mean": 21.812152777777936,
+      "nonzero": 1
+    },
+    {
+      "id": "moonlit-night",
+      "quality": "high",
+      "okay": true,
+      "min": 2.3333333333333335,
+      "max": 230.66666666666666,
+      "mean": 21.812152777777936,
+      "nonzero": 1
+    },
+    {
+      "id": "starfield-night",
+      "quality": "low",
+      "okay": true,
+      "min": 1.6666666666666667,
+      "max": 83.33333333333333,
+      "mean": 11.418807870370314,
+      "nonzero": 0.7517361111111112
+    },
+    {
+      "id": "starfield-night",
+      "quality": "balanced",
+      "okay": true,
+      "min": 1.6666666666666667,
+      "max": 83.33333333333333,
+      "mean": 11.418807870370314,
+      "nonzero": 0.7517361111111112
+    },
+    {
+      "id": "starfield-night",
+      "quality": "high",
+      "okay": true,
+      "min": 1.6666666666666667,
+      "max": 83.33333333333333,
+      "mean": 11.418807870370314,
+      "nonzero": 0.7517361111111112
+    },
+    {
+      "id": "aurora-night",
+      "quality": "low",
+      "okay": true,
+      "min": 1,
+      "max": 132.33333333333334,
+      "mean": 17.304513888888863,
+      "nonzero": 0.759375
+    },
+    {
+      "id": "aurora-night",
+      "quality": "balanced",
+      "okay": true,
+      "min": 1,
+      "max": 132.33333333333334,
+      "mean": 17.304513888888863,
+      "nonzero": 0.759375
+    },
+    {
+      "id": "aurora-night",
+      "quality": "high",
+      "okay": true,
+      "min": 1,
+      "max": 132.33333333333334,
+      "mean": 17.304513888888863,
+      "nonzero": 0.759375
+    },
+    {
+      "id": "nebula-space",
+      "quality": "low",
+      "okay": true,
+      "min": 1.3333333333333333,
+      "max": 131.33333333333334,
+      "mean": 50.53784722222212,
+      "nonzero": 0.9732638888888889
+    },
+    {
+      "id": "nebula-space",
+      "quality": "balanced",
+      "okay": true,
+      "min": 1.3333333333333333,
+      "max": 131.33333333333334,
+      "mean": 50.53784722222212,
+      "nonzero": 0.9732638888888889
+    },
+    {
+      "id": "nebula-space",
+      "quality": "high",
+      "okay": true,
+      "min": 1.3333333333333333,
+      "max": 131.33333333333334,
+      "mean": 50.53784722222212,
+      "nonzero": 0.9732638888888889
+    }
+  ],
+  "directionChecks": 198,
+  "boundaryChecks": 980,
+  "finiteChecks": 1277,
+  "exposureChecks": 33,
+  "stoppedMotionChecks": 24,
+  "failures": [],
+  "compileErrors": [],
+  "pageErrors": []
+}

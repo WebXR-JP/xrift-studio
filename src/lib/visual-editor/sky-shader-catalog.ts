@@ -1,4 +1,6 @@
 import type { ClassicR3fMaterialShader } from "./custom-shader-contract";
+import { SKY_VERTEX_SHADER, SKY_COMMON_GLSL } from "./sky-shader-glsl";
+import { EXTENDED_SKY_SHADER_CATALOG } from "./sky-shader-extended-catalog";
 
 /**
  * Studio's official Sky Shader presets.
@@ -8,9 +10,9 @@ import type { ClassicR3fMaterialShader } from "./custom-shader-contract";
  * values, and the compiler emits it through the same path as any other custom
  * shader. Nothing here is a preset-only feature the author cannot reach later.
  *
- * The star count is an actual count rather than a density: each layer converts
- * it against its own cell budget (4pi * scale^2 cells over the sphere), so the
- * value an author types is roughly the number of stars the sky draws.
+ * Star count is an approximate whole-sphere count, converted into occupancy
+ * of the six cube-face grids (24 * scale^2 cells). Subpixel stars are filtered
+ * rather than inflated into bright discs; this is not an astronomical catalog.
  *
  * Presets that share a look share a program. The four scenery presets are one
  * fragment shader with different uniform defaults, so a daylight sky and a
@@ -22,7 +24,12 @@ export type SkyShaderCatalogCategory =
   | "dawn"
   | "night"
   | "aurora"
-  | "space";
+  | "space"
+  | "weather"
+  | "fantasy"
+  | "stylized"
+  | "abstract"
+  | "underwater";
 
 export type SkyShaderParameter = {
   /** Uniform this control writes. Must exist in the entry's shader. */
@@ -42,223 +49,18 @@ export type SkyShaderCatalogEntry = {
   /** Controls surfaced in the store. The Inspector still shows every uniform. */
   parameters: readonly SkyShaderParameter[];
   shader: ClassicR3fMaterialShader;
+  /** Work estimate, not a frame-rate guarantee. */
+  cost?: "light" | "medium" | "heavy";
+  /** Semantic tags are included in store search. */
+  tags?: readonly string[];
+  /** Default look direction for the preview, in compass degrees. */
+  preview?: { azimuth: number; elevation: number };
 };
 
-export const SKY_SHADER_CATALOG_REVISION = "xrift-studio-sky-shaders@2";
+export const SKY_SHADER_CATALOG_REVISION = "xrift-studio-sky-shaders@3";
 export const SKY_SHADER_CATALOG_SOURCE_URL =
   "https://github.com/WebXR-JP/xrift-studio";
 export const SKY_SHADER_CATALOG_AUTHOR = "XRift Studio contributors";
-
-/**
- * Direction from the capture center, matching the built-in sky. `uCenter` lets
- * the Box and Dome projections keep their tripod origin.
- */
-const SKY_VERTEX_SHADER = `uniform vec3 uCenter;
-varying vec3 vDirection;
-
-void main() {
-  vec3 worldPosition = (modelMatrix * vec4(position, 1.0)).xyz;
-  vec3 worldCenter = (modelMatrix * vec4(uCenter, 1.0)).xyz;
-  vDirection = worldPosition - worldCenter;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}`;
-
-/** Hashes, value noise, star cells and the Y rotation shared by every preset. */
-const SKY_COMMON_GLSL = `const float XRIFT_SKY_TAU = 6.28318530718;
-const float XRIFT_SKY_SPHERE_CELLS = 12.56637061;
-
-float xriftSkyHash13(vec3 p) {
-  p = fract(p * 0.1031);
-  p += dot(p, p.zyx + 31.32);
-  return fract((p.x + p.y) * p.z);
-}
-
-vec3 xriftSkyHash33(vec3 p) {
-  p = fract(p * vec3(0.1031, 0.1030, 0.0973));
-  p += dot(p, p.yxz + 33.33);
-  return fract((p.xxy + p.yxx) * p.zyx);
-}
-
-float xriftSkyNoise(vec3 p) {
-  vec3 cell = floor(p);
-  vec3 f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-  float n000 = xriftSkyHash13(cell);
-  float n100 = xriftSkyHash13(cell + vec3(1.0, 0.0, 0.0));
-  float n010 = xriftSkyHash13(cell + vec3(0.0, 1.0, 0.0));
-  float n110 = xriftSkyHash13(cell + vec3(1.0, 1.0, 0.0));
-  float n001 = xriftSkyHash13(cell + vec3(0.0, 0.0, 1.0));
-  float n101 = xriftSkyHash13(cell + vec3(1.0, 0.0, 1.0));
-  float n011 = xriftSkyHash13(cell + vec3(0.0, 1.0, 1.0));
-  float n111 = xriftSkyHash13(cell + vec3(1.0, 1.0, 1.0));
-  return mix(
-    mix(mix(n000, n100, f.x), mix(n010, n110, f.x), f.y),
-    mix(mix(n001, n101, f.x), mix(n011, n111, f.x), f.y),
-    f.z
-  );
-}
-
-float xriftSkyFbm(vec3 p) {
-  float total = 0.0;
-  float amplitude = 0.5;
-  for (int index = 0; index < 3; index += 1) {
-    total += xriftSkyNoise(p) * amplitude;
-    p *= 2.03;
-    amplitude *= 0.5;
-  }
-  return total;
-}
-
-vec3 xriftSkyRotateY(vec3 direction, float radiansAngle) {
-  float c = cos(radiansAngle);
-  float s = sin(radiansAngle);
-  return vec3(
-    c * direction.x - s * direction.z,
-    direction.y,
-    s * direction.x + c * direction.z
-  );
-}
-
-/** Direction of a sun or moon placed by compass azimuth and elevation. */
-vec3 xriftSkyBodyDirection(float azimuthDegrees, float elevationDegrees) {
-  float azimuth = radians(azimuthDegrees);
-  float elevation = radians(elevationDegrees);
-  float horizontal = cos(elevation);
-  return vec3(horizontal * cos(azimuth), sin(elevation), horizontal * sin(azimuth));
-}
-
-/**
- * One star per cell of a direction-space grid. \`count\` is the number of stars
- * wanted over the whole sphere; it becomes the probability that a given cell
- * holds one, so raising it adds stars without moving the existing ones.
- */
-float xriftSkyStarLayer(
-  vec3 direction,
-  float scale,
-  float count,
-  float size,
-  float time,
-  float twinkleSpeed
-) {
-  vec3 p = direction * scale;
-  // Screen-space derivatives are read before the per-cell branch below, where
-  // control flow stops being uniform. They set the floor on a star's radius so
-  // one never falls below a pixel and disappears in a small preview.
-  float pixelRadius = length(fwidth(p)) * 0.45;
-  float density = clamp(
-    count / max(XRIFT_SKY_SPHERE_CELLS * scale * scale, 1.0),
-    0.0,
-    1.0
-  );
-  if (density <= 0.0) {
-    return 0.0;
-  }
-  vec3 cell = floor(p);
-  vec3 rnd = xriftSkyHash33(cell);
-  if (rnd.x > density) {
-    return 0.0;
-  }
-  vec3 local = fract(p) - 0.5;
-  vec3 jitter = (xriftSkyHash33(cell + 19.19) - 0.5) * 0.5;
-  float brightness = 0.25 + 0.75 * rnd.y;
-  float radius = max(size * (0.45 + 0.55 * rnd.z), pixelRadius);
-  float dist = length(local - jitter);
-  // A star smaller than a pixel disappears entirely at preview sizes, so the
-  // core carries a soft halo several radii wide that survives downsampling.
-  float core = 1.0 - smoothstep(0.0, radius, dist);
-  float squaredRadius = radius * radius;
-  float halo = squaredRadius / (squaredRadius + dist * dist);
-  float twinkle =
-    0.62 + 0.38 * sin(time * twinkleSpeed * (0.5 + rnd.z * 1.8) + rnd.y * XRIFT_SKY_TAU);
-  return (core * core * 0.85 + halo * halo * 0.55) * brightness * twinkle;
-}
-
-/** Sums the three star layers so a preset only spends one call on them. */
-float xriftSkyStarField(
-  vec3 direction,
-  float count,
-  float size,
-  float time,
-  float twinkleSpeed
-) {
-  return xriftSkyStarLayer(direction, 42.0, count * 0.5, size, time, twinkleSpeed)
-    + xriftSkyStarLayer(direction, 78.0, count * 0.32, size * 0.8, time, twinkleSpeed * 1.4) * 0.7
-    + xriftSkyStarLayer(direction, 134.0, count * 0.18, size * 0.62, time, twinkleSpeed * 0.8) * 0.45;
-}
-
-/**
- * Distant ridgeline. Returns 1 below the silhouette and 0 above it. The noise
- * is sampled around a circle, so the ridge closes on itself without a seam
- * where the first and last degree of azimuth meet.
- */
-float xriftSkyRidgeMask(vec3 direction, float height, float roughness, float seed) {
-  float azimuth = atan(direction.z, direction.x);
-  vec3 ring = vec3(cos(azimuth), sin(azimuth), seed) * max(roughness, 0.05);
-  float ridge = xriftSkyFbm(ring * 2.6) * 0.72 + xriftSkyFbm(ring * 6.1) * 0.28;
-  float silhouette = height * (0.25 + ridge * 1.35);
-  return 1.0 - smoothstep(silhouette - 0.006, silhouette + 0.006, direction.y);
-}
-
-/** Disc coverage in x and the surrounding glow in y, for a sun or a moon. */
-vec2 xriftSkyCelestial(
-  vec3 direction,
-  vec3 bodyDirection,
-  float angularRadius,
-  float glowFalloff
-) {
-  float angle = acos(clamp(dot(direction, bodyDirection), -1.0, 1.0));
-  float radius = max(angularRadius, 0.002);
-  float disc = 1.0 - smoothstep(radius * 0.86, radius, angle);
-  float glow = exp(-angle / max(glowFalloff, 0.002));
-  return vec2(disc, glow);
-}
-
-/**
- * Moon disc shading: the phase terminator plus surface mottling. \`phase\` runs
- * 0 (new) to 1 (full); the terminator is the standard ellipse, so a half moon
- * is a straight edge and a crescent bows the way the real one does.
- */
-float xriftSkyMoonShade(
-  vec3 direction,
-  vec3 moonDirection,
-  float angularRadius,
-  float phase
-) {
-  vec3 reference = abs(moonDirection.y) > 0.99
-    ? vec3(0.0, 0.0, 1.0)
-    : vec3(0.0, 1.0, 0.0);
-  vec3 right = normalize(cross(reference, moonDirection));
-  vec3 up = cross(moonDirection, right);
-  float radius = max(angularRadius, 0.002);
-  float u = dot(direction, right) / radius;
-  float v = dot(direction, up) / radius;
-  float terminator =
-    (1.0 - 2.0 * clamp(phase, 0.0, 1.0)) * sqrt(max(1.0 - v * v, 0.0));
-  float lit = smoothstep(terminator - 0.09, terminator + 0.09, u);
-  float mottle = xriftSkyFbm(vec3(u, v, 3.0) * 2.4);
-  // Earthshine keeps the unlit limb faintly readable instead of pure black.
-  return mix(0.07, 1.0, lit) * (0.78 + 0.34 * mottle);
-}
-
-/** Cloud cover on a flat plane above the viewer, drifting with time. */
-float xriftSkyClouds(
-  vec3 direction,
-  float coverage,
-  float scale,
-  float time,
-  float speed
-) {
-  if (direction.y <= 0.008) {
-    return 0.0;
-  }
-  vec2 plane = direction.xz / (direction.y + 0.14);
-  vec3 p = vec3(plane.x, plane.y, 0.0) * max(scale, 0.05);
-  p.x += time * speed * 0.03;
-  float density = xriftSkyFbm(p) + xriftSkyFbm(p * 2.7 + 5.0) * 0.4;
-  float cover = clamp(coverage, 0.0, 1.0);
-  float mask = smoothstep(1.05 - cover, 1.35 - cover, density);
-  return mask * smoothstep(0.0, 0.16, direction.y);
-}`;
 
 /** Uniform block shared by every preset that draws a distant ridgeline. */
 const SKY_RIDGE_UNIFORMS = `uniform vec3 uRidgeColor;
@@ -300,14 +102,16 @@ ${SKY_COMMON_GLSL}
 
 void main() {
   vec3 direction = xriftSkyRotateY(normalize(vDirection), uRotation);
-  float height = clamp(direction.y * 0.5 + 0.5, 0.0, 1.0);
+  float height = clamp(direction.y, 0.0, 1.0);
   vec3 color = mix(uHorizonColor, uZenithColor, pow(height, 1.4));
   float above = smoothstep(-0.05, max(uHorizonFade, 0.001), direction.y);
 
   vec3 milkyWayAxis = normalize(vec3(0.42, 0.58, -0.7));
   float band = pow(clamp(1.0 - abs(dot(direction, milkyWayAxis)), 0.0, 1.0), 7.0);
   float clouds = xriftSkyFbm(direction * 4.2 + 7.3);
-  color += uMilkyWayColor * band * (0.3 + 0.9 * clouds) * uMilkyWayStrength * above;
+  float dust = smoothstep(0.35, 0.64, xriftSkyFbm(direction * 17.0 + 8.0));
+  color += uMilkyWayColor * band * (0.12 + 1.8 * clouds * clouds)
+    * (1.0 - 0.78 * dust) * uMilkyWayStrength * above;
 
   float stars = xriftSkyStarField(direction, uStarCount, uStarSize, uTime, uTwinkleSpeed);
   color += uStarColor * stars * above * uStarBrightness * (0.75 + 0.5 * band);
@@ -362,7 +166,7 @@ float xriftSkyAurora(vec3 direction, float time, float speed, float height) {
 
 void main() {
   vec3 direction = xriftSkyRotateY(normalize(vDirection), uRotation);
-  float height = clamp(direction.y * 0.5 + 0.5, 0.0, 1.0);
+  float height = clamp(direction.y, 0.0, 1.0);
   vec3 color = mix(uHorizonColor, uZenithColor, pow(height, 1.5));
   float above = smoothstep(-0.05, max(uHorizonFade, 0.001), direction.y);
 
@@ -402,14 +206,16 @@ ${SKY_COMMON_GLSL}
 
 void main() {
   vec3 direction = xriftSkyRotateY(normalize(vDirection), uRotation);
-  float height = clamp(direction.y * 0.5 + 0.5, 0.0, 1.0);
+  float height = clamp(direction.y, 0.0, 1.0);
   vec3 color = mix(uHorizonColor, uZenithColor, pow(height, 1.2));
 
   vec3 drift = vec3(0.0, 0.0, uTime * uDriftSpeed * 0.02);
   float scale = max(uNebulaScale, 0.1);
   float cloudA = xriftSkyFbm(direction * scale + drift);
   float cloudB = xriftSkyFbm(direction * scale * 1.9 + drift * 1.7 + 21.7);
-  float nebula = pow(clamp(cloudA * 1.35 - cloudB * 0.45, 0.0, 1.0), 2.2) * uNebulaStrength;
+  float filaments = xriftSkyFbm(direction * scale * 4.7 + cloudA * 3.0);
+  float nebula = pow(clamp(cloudA * 1.7 - cloudB * 0.65, 0.0, 1.0), 1.6)
+    * (1.0 - smoothstep(0.36, 0.65, filaments) * 0.72) * uNebulaStrength;
   color += mix(uNebulaColor, uNebulaAccentColor, clamp(cloudB * 1.6, 0.0, 1.0)) * nebula;
 
   float stars = xriftSkyStarField(direction, uStarCount, uStarSize, uTime, uTwinkleSpeed);
@@ -466,7 +272,7 @@ ${SKY_COMMON_GLSL}
 
 void main() {
   vec3 direction = xriftSkyRotateY(normalize(vDirection), uRotation);
-  float height = clamp(direction.y * 0.5 + 0.5, 0.0, 1.0);
+  float height = clamp(direction.y, 0.0, 1.0);
   vec3 color = mix(uHorizonColor, uZenithColor, pow(height, max(uSkyExponent, 0.05)));
 
   vec3 sunDirection = xriftSkyBodyDirection(uSunAzimuth, uSunElevation);
@@ -503,6 +309,8 @@ void main() {
     // Cloud faces turned toward the sun pick up its colour.
     float sunFacing = clamp(dot(direction, sunDirection) * 0.5 + 0.5, 0.0, 1.0);
     vec3 cloudColor = mix(uCloudColor, uCloudColor * uSunGlowColor * 2.2, pow(sunFacing, 3.0));
+    float belly = smoothstep(0.25, 0.9, clouds);
+    cloudColor *= mix(1.08, 0.55, belly * (1.0 - sunFacing * 0.65));
     color = mix(color, cloudColor, clamp(clouds * uCloudStrength, 0.0, 1.0));
   }
 
@@ -592,7 +400,7 @@ float xriftCloudDensity(
 
 void main() {
   vec3 direction = xriftSkyRotateY(normalize(vDirection), uRotation);
-  float height = clamp(direction.y * 0.5 + 0.5, 0.0, 1.0);
+  float height = clamp(direction.y, 0.0, 1.0);
   vec3 color = mix(uHorizonColor, uZenithColor, pow(height, max(uSkyExponent, 0.05)));
 
   vec3 sunDirection = xriftSkyBodyDirection(uSunAzimuth, uSunElevation);
@@ -887,7 +695,7 @@ function skyVariants(): ClassicR3fMaterialShader["variants"] {
 /** Framework uniforms Scene Settings drives on every preset. */
 function frameworkUniforms(): ClassicR3fMaterialShader["uniforms"] {
   return {
-    uCenter: { kind: "vector", value: [0, 0.01, 0] },
+    uCenter: { kind: "vector", value: [0, 0, 0] },
     uRotation: { kind: "number", value: 0 },
     uExposure: { kind: "number", value: 1 },
     uTime: { kind: "number", value: 0 },
@@ -928,7 +736,7 @@ function volumetricShader(
         ...skyVariants()[0],
         // Step counts live here so a standalone-headset build can lower them
         // from the Material's variant without touching the GLSL.
-        defines: { XRIFT_CLOUD_STEPS: "40", XRIFT_CLOUD_LIGHT_STEPS: "4" },
+        defines: { XRIFT_CLOUD_STEPS: "24", XRIFT_CLOUD_LIGHT_STEPS: "3" },
       },
     ],
     animatedTimeUniform: "uTime",
@@ -966,12 +774,13 @@ const VOLUMETRIC_STORE_PARAMETERS: readonly SkyShaderParameter[] = [
 ];
 
 export const SKY_SHADER_CATALOG: readonly SkyShaderCatalogEntry[] = [
+  ...EXTENDED_SKY_SHADER_CATALOG,
   {
     id: "volumetric-daylight",
     label: "Volumetric Daylight",
     category: "day",
     description:
-      "雲の層をレイマーチして厚みごと描く昼の空です。太陽に向いた面が白く光り、底が影になります。カタログで最も重いpresetなので、Quest向けにはvariantのXRIFT_CLOUD_STEPSを下げてください。",
+      "雲の層をレイマーチして厚みごと描く昼の空です。太陽に向いた面が白く光り、底が影になります。カタログで最も重いpresetなので、スタンドアロンVR向けにはストアの描画品質を「軽量」にして確認してください。",
     parameters: VOLUMETRIC_STORE_PARAMETERS,
     shader: volumetricShader("volumetric-daylight", {
       ...frameworkUniforms(),
@@ -1640,6 +1449,11 @@ export const SKY_SHADER_CATEGORIES = [
   "night",
   "aurora",
   "space",
+  "weather",
+  "fantasy",
+  "stylized",
+  "abstract",
+  "underwater",
 ] as const satisfies readonly SkyShaderCatalogCategory[];
 
 export function skyShaderCategoryLabel(
@@ -1650,7 +1464,12 @@ export function skyShaderCategoryLabel(
   if (category === "dawn") return "朝焼け";
   if (category === "night") return "夜空";
   if (category === "aurora") return "オーロラ";
-  return "宇宙";
+  if (category === "space") return "宇宙";
+  if (category === "weather") return "天候・大気";
+  if (category === "fantasy") return "幻想";
+  if (category === "stylized") return "イラスト・レトロSF";
+  if (category === "abstract") return "抽象・アート";
+  return "水中";
 }
 
 export function getSkyShaderCatalogEntry(

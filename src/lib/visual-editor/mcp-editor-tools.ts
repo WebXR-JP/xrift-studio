@@ -1,3 +1,4 @@
+import { SKY_SHADER_QUALITY_OPTIONS, withSkyShaderQuality } from "./sky-shader-quality";
 import { setMeshCollision, collisionSources } from "./mesh-collision-actions";
 import { isPlainObjectRecord } from "../json-guards";
 import { isModelTextureMaxSize } from "./asset-manifest";
@@ -2293,6 +2294,13 @@ function listMaterialPresets(
         label: entry.label,
         category: entry.category,
         categoryLabel: skyShaderCategoryLabel(entry.category),
+        tags: entry.tags ?? [],
+        cost: entry.cost ?? (entry.id.startsWith("volumetric-") ? "heavy" : "light"),
+        qualityOptions: SKY_SHADER_QUALITY_OPTIONS.map(option => ({
+          ...option,
+          variants: withSkyShaderQuality(entry.shader, option.id).variants,
+        })),
+        qualityNextStep: "After create_material_from_preset, use update_custom_shader with patch.variants from the chosen qualityOptions entry. This preserves edited uniforms. When modifying custom variants, merge only the quality defines into the current variants from get_custom_shader.",
         description: entry.description,
         parameters: describeParameters(
           entry.parameters,

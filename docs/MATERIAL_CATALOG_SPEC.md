@@ -9,7 +9,7 @@ Sky シェーダーで確立した「プリセット付きカスタムシェー�
 | 対象 | 場所 | 状態 |
 | --- | --- | --- |
 | Sky シェーダー | `src/lib/visual-editor/sky-shader.ts` | 実装済み |
-| Sky プリセット | `src/lib/visual-editor/sky-shader-catalog.ts` | 9件。昼 / 夕暮れ / 朝焼け / 月夜 / 星空 / オーロラ / 星雲、うち2件はレイマーチのボリュメトリック雲。遠景の稜線は宇宙以外の全presetが持つ |
+| Sky プリセット | `src/lib/visual-editor/sky-shader-catalog.ts` | 33件・11カテゴリ。自然・天候・宇宙・幻想・抽象・水中を含む。軽量・標準・高精細のdefinesをMaterialに保持する。詳細は[Skybox Shader](./SKY_SHADERS.md) |
 | Sky プレビュー | `src/components/visual-editor/SkyShaderCatalogPreview.tsx` | 実装済み |
 | 外部ストア | `src/components/visual-editor/SkyShaderStore.tsx` | 実装済み |
 | Wind コンポーネント | `src/lib/visual-editor/editor-session.ts` | Entity への追加とグローバル設定の両方あり |

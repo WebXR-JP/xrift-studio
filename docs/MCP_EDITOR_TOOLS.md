@@ -136,6 +136,10 @@ Transform、同じ Material）の書き込みを `capture_scene_view` を挟ま�
 パラメーターと範囲と既定値を含む。`create_material_from_preset` は Material
 を作る。`nextStep` を返す。空は Scene settings の skybox が指して初めて空に
 なる。水は板ポリへ割り当てて初めて水面になる。作っただけでは終わらない。
+Skyboxの各項目は`qualityOptions`に軽量・標準・高精細のvariantsと説明を返す。
+作成後の`update_custom_shader`へ`patch.variants`として渡すとUniformを保って品質を変えられる。
+独自variantがある場合は`get_custom_shader`で取得し、品質用definesだけを統合する。
+ストアの見回し・再生停止は一時的なプレビュー操作なのでMCPには追加しない。
 Terrain の地面は形と一緒に選ぶ。`list_terrain_presets` の方にある。
 
 `kind: "gltf"` は glTF の Material 拡張ごとに 1 つずつ用意した Material を返す。

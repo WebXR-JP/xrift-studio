@@ -17,11 +17,14 @@ import {
 } from "./sky-shader";
 import {
   SKY_SHADER_CATALOG,
+  SKY_SHADER_CATEGORIES,
   applySkyShaderParameters,
   defaultSkyShaderParameterValues,
   getSkyShaderCatalogEntry,
   type SkyShaderCatalogEntry,
 } from "./sky-shader-catalog";
+
+import { SKY_SHADER_QUALITY_OPTIONS, withSkyShaderQuality } from "./sky-shader-quality";
 
 /**
  * Filesystem-free assertions for the Sky Shader slot: catalog integrity, the
@@ -31,6 +34,7 @@ import {
 export function runSkyShaderFixtureAssertions(): void {
   assertCatalogIntegrity();
   assertParameterEditing();
+  assertQualityInstallRoundTrip();
   assertSlotResolution();
   assertCatalogInstall();
   assertSceneSettingsRoundTrip();
@@ -38,7 +42,7 @@ export function runSkyShaderFixtureAssertions(): void {
 }
 
 function assertCatalogIntegrity(): void {
-  assert(SKY_SHADER_CATALOG.length > 0, "Sky Shader catalog is empty");
+  assert(SKY_SHADER_CATALOG.length >= 33, "Sky Shader catalog lost presets");
   const ids = new Set<string>();
   for (const entry of SKY_SHADER_CATALOG) {
     assert(!ids.has(entry.id), `Duplicate Sky Shader entry id: ${entry.id}`);
@@ -114,9 +118,9 @@ function assertCatalogIntegrity(): void {
         `Sky Shader「${entry.id}」ray marches without exposing its step counts as defines`,
       );
     }
-    // The distant ridge is the one element that turns a gradient into a place,
-    // so a preset that has a horizon at all must let the author move it.
-    if (entry.category !== "space") {
+    // A ridge is optional. Abstract, underwater and celestial backgrounds must
+    // not acquire terrain merely to satisfy a catalog-level assertion.
+    if (entry.shader.uniforms.uRidgeHeight) {
       assert(
         entry.parameters.some((parameter) => parameter.uniform === "uRidgeHeight"),
         `Sky Shader「${entry.id}」has a horizon but never exposes the distant ridge`,
@@ -128,10 +132,10 @@ function assertCatalogIntegrity(): void {
     }
   }
   assert(
-    ["day", "dusk", "dawn", "night"].every((category) =>
+    SKY_SHADER_CATEGORIES.every((category) =>
       SKY_SHADER_CATALOG.some((entry) => entry.category === category),
     ),
-    "The catalog must cover day, dusk, dawn and night",
+    "Every declared Sky Shader category must have a preset",
   );
   assert(
     SKY_SHADER_CATALOG.some(
@@ -211,6 +215,35 @@ function assertParameterEditing(): void {
       entry.shader.uniforms.uStarCount.value !== 4200,
     "applySkyShaderParameters mutated the shared catalog entry",
   );
+}
+
+/** Quality is stored as variant defines, never as editor-only UI state. */
+function assertQualityInstallRoundTrip(): void {
+  const empty: AssetManifest = {
+    schemaVersion: ASSET_MANIFEST_SCHEMA_VERSION, assets: {}, folders: {},
+  };
+  for (const entry of SKY_SHADER_CATALOG) {
+    const before = JSON.stringify(entry);
+    for (const option of SKY_SHADER_QUALITY_OPTIONS) {
+      const shader = withSkyShaderQuality(entry.shader, option.id);
+      assert(shader !== entry.shader, `${entry.id}: quality must return a new shader`);
+      assert(shader.uniforms === entry.shader.uniforms, `${entry.id}: quality must preserve uniform defaults`);
+      const installed = applySkyShaderCatalogInstall(empty, { ...entry, shader });
+      // Material assets carry literal JSON through persistence and MCP.
+      const restored = JSON.parse(JSON.stringify(installed.manifest)) as AssetManifest;
+      const resolved = resolveSkyShaderMaterial(restored, installed.primaryAssetId);
+      assert(resolved.status === "ready", `${entry.id}: ${option.id} could not be resolved after serialization`);
+      if (resolved.status !== "ready") continue;
+      assert(
+        JSON.stringify(resolved.shader.variants) === JSON.stringify(shader.variants),
+        `${entry.id}: ${option.id} lost its quality defines during installation`,
+      );
+      const reinstalled = applySkyShaderCatalogInstall(restored, { ...entry, shader });
+      assert(reinstalled.alreadyInstalled && reinstalled.primaryAssetId === installed.primaryAssetId,
+        `${entry.id}: ${option.id} duplicated the Material on reinstall`);
+    }
+    assert(JSON.stringify(entry) === before, `${entry.id}: quality/install mutated the catalog`);
+  }
 }
 
 function assertSlotResolution(): void {
