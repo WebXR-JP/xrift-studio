@@ -7,7 +7,11 @@ import {
   listStarterTemplates,
   parseCreateProjectArguments,
   parseProjectName,
+  parseNewProjectDirectoryName,
+  parseOptionalProjectTitle,
+  parseRequiredPath,
   resolveProjectTarget,
+  resolveTransferableProject,
   summarizeProject,
   editorSessionUnavailableError,
 } from "./mcp-project-tools";
@@ -100,6 +104,15 @@ export function runXriftMcpProjectToolFixtures(): void {
   expectToolError(() => resolveProjectTarget(PROJECTS, {}), "INVALID_ARGUMENT", "open_project without a target");
   expectToolError(() => resolveProjectTarget(PROJECTS, { name: "nope" }), "PROJECT_NOT_FOUND", "an unknown project");
   expectToolError(() => resolveProjectTarget(PROJECTS, { name: "legacy" }), "PROJECT_NOT_EDITABLE", "a classic project");
+
+  assert(resolveTransferableProject(PROJECTS, { name: "legacy" }).format === "classic", "duplicate_project and export_project accept a classic project");
+  expectToolError(() => resolveTransferableProject(PROJECTS, { name: "nope" }), "PROJECT_NOT_FOUND", "an unknown transfer target");
+  assert(parseNewProjectDirectoryName({ newName: "plaza-copy" }, "newName", PROJECTS) === "plaza-copy", "a free folder name is accepted");
+  expectToolError(() => parseNewProjectDirectoryName({ newName: "plaza" }, "newName", PROJECTS), "PROJECT_EXISTS", "a taken folder name");
+  expectToolError(() => parseNewProjectDirectoryName({ newName: "plaza/copy" }, "newName", PROJECTS), "INVALID_ARGUMENT", "a folder name with a path separator");
+  assert(parseOptionalProjectTitle({}) === undefined && parseOptionalProjectTitle({ title: " Night " }) === "Night", "title is optional and trimmed");
+  expectToolError(() => parseOptionalProjectTitle({ title: "  " }), "INVALID_ARGUMENT", "a blank title");
+  expectToolError(() => parseRequiredPath({}, "archivePath"), "INVALID_ARGUMENT", "a missing archive path");
 
   const starter = createStarterVisualProject("world", "blank", "plaza");
   const untouched = inspectVisualPublishMetadata(starter);

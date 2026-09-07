@@ -173,6 +173,73 @@ export function resolveProjectTarget(
   return found;
 }
 
+/**
+ * Finds a Library project for tools that copy it whole: duplicate_project and
+ * export_project. Unlike resolveProjectTarget, a Classic project is a valid
+ * target because the copy never opens it in the Editor.
+ */
+export function resolveTransferableProject(
+  projects: readonly Project[],
+  args: Record<string, unknown>,
+): Project {
+  const path = typeof args.path === "string" ? args.path.trim() : "";
+  const name = typeof args.name === "string" ? args.name.trim() : "";
+  if (!path && !name) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      "pathまたはnameでプロジェクトを指定してください。list_projectsで一覧を取得できます",
+    );
+  }
+  const found =
+    (path && projects.find((project) => project.path === path)) ||
+    (name && projects.find((project) => project.name === name));
+  if (!found) {
+    throw new XriftMcpEditorToolError(
+      "PROJECT_NOT_FOUND",
+      "指定したプロジェクトが見つかりません。list_projectsで一覧を確認してください",
+      { path: path || undefined, name: name || undefined },
+    );
+  }
+  return found;
+}
+
+/** The folder name a duplicate or an import lands in; refuses one already taken. */
+export function parseNewProjectDirectoryName(
+  args: Record<string, unknown>,
+  key: string,
+  projects: readonly Project[],
+): string {
+  const name = parseProjectName(args[key]);
+  const existing = projects.find((project) => project.name === name);
+  if (existing) {
+    throw new XriftMcpEditorToolError(
+      "PROJECT_EXISTS",
+      `同じ名前のプロジェクトがすでにあります。${key}に別の名前を指定してください`,
+      { path: existing.path, name },
+    );
+  }
+  return name;
+}
+
+export function parseOptionalProjectTitle(args: Record<string, unknown>): string | undefined {
+  if (args.title === undefined || args.title === null) return undefined;
+  if (typeof args.title !== "string" || !args.title.trim()) {
+    throw new XriftMcpEditorToolError("INVALID_ARGUMENT", "titleは空でない文字列で指定してください");
+  }
+  return args.title.trim();
+}
+
+export function parseRequiredPath(args: Record<string, unknown>, key: string): string {
+  const value = args[key];
+  if (typeof value !== "string" || !value.trim()) {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      `${key}は絶対パスの文字列で指定してください`,
+    );
+  }
+  return value.trim();
+}
+
 export type PublishMetadataReadiness = {
   state: "ready" | "needs-attention";
   title: string;

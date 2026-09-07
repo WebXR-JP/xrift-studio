@@ -13,6 +13,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_opener::OpenerExt;
 
 mod external_store;
+mod project_transfer;
 pub mod mcp;
 mod script_trust;
 
@@ -5944,6 +5945,10 @@ pub fn run() {
             ensure_dir,
             list_projects,
             delete_project,
+            project_transfer::duplicate_project,
+            project_transfer::export_project_archive,
+            project_transfer::inspect_project_archive,
+            project_transfer::import_project_archive,
             create_visual_project,
             read_visual_project,
             save_visual_project,
