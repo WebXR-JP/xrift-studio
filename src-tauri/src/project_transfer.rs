@@ -647,23 +647,6 @@ fn inspect_cloned_repository_tree(repository_root: &Path) -> Result<(), String> 
     Ok(())
 }
 
-/// Folder name proposed for a repository URL: its last path segment without `.git`.
-pub fn suggested_name_for_repository_url(repository_url: &str) -> String {
-    let trimmed = repository_url.trim().trim_end_matches('/');
-    let last = trimmed
-        .rsplit(|c| c == '/' || c == ':')
-        .next()
-        .unwrap_or("")
-        .trim_end_matches(".git");
-    let cleaned: String = last
-        .to_lowercase()
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' })
-        .collect();
-    let cleaned = cleaned.trim_matches('-');
-    if cleaned.is_empty() { "imported-project".to_string() } else { cleaned.to_string() }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -772,13 +755,6 @@ mod tests {
         assert!(!dest.join("node_modules").exists());
         assert!(!dest.join(".xrift").exists());
         let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn repository_url_suggests_a_folder_name() {
-        assert_eq!(suggested_name_for_repository_url("https://github.com/o/My_World.git"), "my-world");
-        assert_eq!(suggested_name_for_repository_url("git@github.com:o/plaza"), "plaza");
-        assert_eq!(suggested_name_for_repository_url("https://x/.git"), "imported-project");
     }
 
     #[test]
