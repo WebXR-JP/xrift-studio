@@ -6,6 +6,10 @@ Node.js や `@xrift/cli` の導入、コードまたはビジュアルエディ�
 
 > **注意**: XRift Studio は XRift 公式とは無関係の有志製ツールです。XRift 本体・公式 CLI・アカウントについては、[XRift 公式サイト](https://xrift.net/)をご確認ください。
 
+## 3Dセットのモデル
+
+32点のGLBと造形ソースを収録しています。変更内容、容量の比較、再生成方法は[モデル更新ガイド](./MODEL_REFRESH_README.ja.md)を参照してください。
+
 ## できること
 
 - [プロジェクトを作る・再開する](./docs/wiki/projects.md): World / Item と、コード編集 / ビジュアル編集を選ぶ。

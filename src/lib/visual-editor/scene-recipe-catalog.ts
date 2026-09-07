@@ -697,17 +697,31 @@ function scatterBamboo(
 const CAMPFIRE: SceneRecipe = {
   id: SCENE_RECIPE_IDS.campfire,
   name: "焚き火",
-  description: "炎、煙、暖色のライト、石の輪をひとまとめに置きます。",
+  description: "石の炉、焦げた薪と熾火、炎、薄い煙、暖色のライトをまとめて置きます。",
   category: "light",
   projectKinds: ["world", "item"],
   note: "音は含みません。焚き火の音を鳴らすには、MP3をAudio Assetとして取り込み、この焚き火へAudio Sourceを追加してください。",
   parts: [
-    ...stoneRing(8, 0.5, [0.26, 0.14, 0.22]),
+    {
+      kind: "model",
+      name: "石の炉と薪",
+      modelId: "campfireBase",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
     {
       kind: "particle",
       name: "炎",
       presetId: "fire",
-      position: [0, 0.06, 0],
+      position: [0, 0.18, 0],
+      overrides: {
+        maxParticles: 96,
+        startLifetime: { min: 0.5, max: 0.95 },
+        startSize: { min: 0.08, max: 0.22 },
+        emission: { rateOverTime: 32, bursts: [] },
+        shape: { type: "cone", radius: 0.17, angle: 12 },
+      },
     },
     {
       kind: "particle",
@@ -717,9 +731,10 @@ const CAMPFIRE: SceneRecipe = {
       // inside the stone ring, so it has to be narrower and thinner or it
       // swallows the flame it is supposed to sit above.
       overrides: {
-        maxParticles: 90,
-        startSize: { min: 0.18, max: 0.38 },
-        emission: { rateOverTime: 6, bursts: [] },
+        maxParticles: 32,
+        startSize: { min: 0.15, max: 0.30 },
+        startLifetime: { min: 1.2, max: 2.4 },
+        emission: { rateOverTime: 4, bursts: [] },
         shape: { type: "cone", radius: 0.16, angle: 18 },
         colorOverLifetime: {
           start: [0.72, 0.74, 0.78, 0.34],
@@ -727,6 +742,21 @@ const CAMPFIRE: SceneRecipe = {
         },
       },
       position: [0, 0.45, 0],
+    },
+    {
+      kind: "particle",
+      name: "火の粉",
+      presetId: "spark",
+      position: [0, 0.2, 0],
+      overrides: {
+        maxParticles: 24,
+        startLifetime: { min: 0.4, max: 0.8 },
+        startSpeed: { min: 0.25, max: 0.6 },
+        startSize: { min: 0.008, max: 0.018 },
+        gravity: [0, 0.2, 0],
+        emission: { rateOverTime: 5, bursts: [] },
+        shape: { type: "cone", radius: 0.12, angle: 14 },
+      },
     },
     {
       kind: "light",
@@ -842,26 +872,33 @@ const TORCH: SceneRecipe = {
 const FOUNTAIN: SceneRecipe = {
   id: SCENE_RECIPE_IDS.fountain,
   name: "噴水",
-  description: "石の縁と中央の台、弧を描いて落ちる飛沫。",
+  description: "二段の石造噴水。受け皿と水面、流れ落ちる水筋、中央の飛沫。",
   category: "water",
   projectKinds: ["world", "item"],
-  note: "水音は含みません。Colliderは石にも台にも入っていないので、乗れないようにするならColliderを追加してください。",
+  note: "水面と水筋は静的なGLBで、中央の飛沫だけが動きます。水音とColliderは含みません。",
   parts: [
-    ...stoneRing(12, 0.95, [0.3, 0.24, 0.26]),
     {
-      kind: "primitive",
-      name: "台",
-      creationId: BUILTIN_PRIMITIVE_CREATION_IDS.cylinder,
-      materialAssetId: BUILTIN_ASSET_IDS.material.slate,
-      position: [0, 0.14, 0],
+      kind: "model",
+      name: "石造噴水と水面",
+      modelId: "fountain",
+      position: [0, 0, 0],
       rotation: [0, 0, 0],
-      scale: [0.22, 0.28, 0.22],
+      scale: [1, 1, 1],
     },
     {
       kind: "particle",
-      name: "飛沫",
+      name: "中央の飛沫",
       presetId: "fountain",
-      position: [0, 0.32, 0],
+      position: [0, 1.05, 0],
+      overrides: {
+        maxParticles: 80,
+        startLifetime: { min: 0.62, max: 0.78 },
+        startSpeed: { min: 1.15, max: 1.4 },
+        startSize: { min: 0.012, max: 0.025 },
+        gravity: [0, -3.8, 0],
+        emission: { rateOverTime: 32, bursts: [] },
+        shape: { type: "cone", radius: 0.016, angle: 10 },
+      },
     },
   ],
 };
@@ -1060,7 +1097,7 @@ const CANDELABRA: SceneRecipe = {
 const TREE: SceneRecipe = {
   id: SCENE_RECIPE_IDS.tree,
   name: "木",
-  description: "幹と根元の張り、重なる3つの葉のかたまりでできた3.5mの木。",
+  description: "根元から枝先へ細くなる幹と枝、一枚ずつ形のある葉でできた約3mの木。",
   category: "nature",
   projectKinds: ["world", "item"],
   note: "森にするときはこのセットを複製し、Transformで大きさと向きを変えてください。同じ木が並ぶと不自然に見えます。",
@@ -1404,10 +1441,16 @@ const WELL: SceneRecipe = {
   description: "石囲いと屋根、水面まで。広場の中心に。",
   category: "structure",
   projectKinds: ["world", "item"],
-  note: "水は青いMaterialの面です。落ちないようにするなら石囲いへColliderを追加してください。",
+  note: "石積みの内側に静的な水面があります。Colliderは含みません。落ちないようにするには石囲いへColliderを追加してください。",
   parts: [
-    ...stoneRing(10, 0.62, [0.24, 0.4, 0.2]),
-    cyl("水", M.blue, [0, 0.06, 0], [0.5, 0.1, 0.5]),
+    {
+      kind: "model",
+      name: "石囲いと水面",
+      modelId: "wellBasin",
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
     {
       kind: "model",
       name: "柱と屋根",

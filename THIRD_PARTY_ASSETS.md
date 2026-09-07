@@ -92,16 +92,16 @@ GLSL のコメント、`applyWaterShaderCatalogInstall` が Material Asset へ�
 
 | Bundled file | Upstream source | License | SHA-256 |
 | --- | --- | --- | --- |
-| `public/visual-editor/recipe-assets/recording-studio.glb` | XRift Studio 制作（Blender で生成） | project-owned | `cc638574d4356502a93221006c45b30506ae5b554c642d0ab66c61ecc48aba8d` |
+| `public/visual-editor/recipe-assets/recording-studio.glb` | XRift Studio 制作（元のBlender形状を保持して再パック） | project-owned | `fbd21a2d1212511c9ebf0c599da7dc9dd0c35e23c93eab6783e825b48ecfccdf` |
 
 埋め込まれている PBR テクスチャ（`baseColorTexture` / `normalTexture` /
 `metallicRoughnessTexture`、計 9 枚）の出所は次のとおりです。
 
 | テクスチャ | 出所 | 作者 | License | 加工 |
 | --- | --- | --- | --- | --- |
-| `oak_veneer_01` (1K) | [Poly Haven](https://polyhaven.com/a/oak_veneer_01) | Jenelle van Heerden | CC0-1.0 | なし |
-| `plastered_wall_04` (1K) | [Poly Haven](https://polyhaven.com/a/plastered_wall_04) | Rob Tuytel | CC0-1.0 | なし |
-| `dirty_carpet` (512) | [Poly Haven](https://polyhaven.com/a/dirty_carpet) | Rohit Seervi | CC0-1.0 | 彩度を落として 512 へ縮小 |
+| `oak_veneer_01` (512) | [Poly Haven](https://polyhaven.com/a/oak_veneer_01) | Jenelle van Heerden | CC0-1.0 | 512pxへ縮小、JPEG再圧縮 |
+| `plastered_wall_04` (512) | [Poly Haven](https://polyhaven.com/a/plastered_wall_04) | Rob Tuytel | CC0-1.0 | 512pxへ縮小、JPEG再圧縮 |
+| `dirty_carpet` (512) | [Poly Haven](https://polyhaven.com/a/dirty_carpet) | Rohit Seervi | CC0-1.0 | 既存の彩度調整・512pxを維持し、JPEG再圧縮 |
 
 [Poly Haven のライセンス](https://polyhaven.com/license)は全アセット CC0 で、商用利用・
 再配布・改変が可能、クレジット表記は不要です。CC0 は追加の義務を課さないため、GLB 全体の
@@ -161,3 +161,11 @@ compiler が `text-font-not-bundled` の warning を出し、自動の書体で�
 `https://cdn.jsdelivr.net/gh/lojjic/unicode-font-resolver@v1.0.1/packages/data`
 から文字種に応じた Noto を取得します。これは troika 自身の既定動作で、
 XRift Studio が追加した依存ではありません。
+
+## 3Dセット用モデルの差し替え（2026-09-07）
+
+収録スタジオ以外の31点は、`tools/recipe-models/` の新しい造形コードとテクスチャ生成コードから作成しました。新たな第三者のモデル・画像素材は取り込んでいません。元のライセンスを他のファイルへ拡張したり、リポジトリ全体を再ライセンスしたりする変更ではありません。
+
+全点の出所・サイズ・SHA-256は `docs/asset-refresh/manifest.json` にあります。収録スタジオの編集用原本 `tools/recipe-models/sources/recording-studio.original.glb` は、従来の形状と元のCC0テクスチャを保持しています。配布GLBとはハッシュが異なります。
+
+今回のBlender実行状況と編集用データについては `MODEL_REFRESH_README.ja.md` を参照してください。

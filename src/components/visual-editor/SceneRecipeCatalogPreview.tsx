@@ -15,7 +15,8 @@ import {
   type SceneRecipe,
   type SceneRecipePart,
 } from "../../lib/visual-editor";
-import { CatalogPreviewFrame } from "./CatalogPreviewFrame";
+import { CatalogPreviewFrame, useCatalogPreviewAssetLoad } from "./CatalogPreviewFrame";
+import { disposeCatalogModel } from "./dispose-catalog-model";
 import {
   isUnlitMaterial,
   physicalMaterialExtensionProps,
@@ -46,7 +47,10 @@ export function SceneRecipeCatalogPreview({
 
   return (
     <CatalogPreviewFrame
-      cacheKey={`recipe:${recipe.id}`}
+      cacheKey={`recipe:${recipe.id}:${recipe.parts
+        .filter((part) => part.kind === "model")
+        .map((part) => getBuiltinRecipeModel(part.modelId)?.sha256.slice(0, 12) ?? part.modelId)
+        .join(":")}`}
       cameraPosition={framing.cameraPosition}
       lookAtY={framing.lookAtY}
       className={className}
@@ -175,29 +179,45 @@ function RecipeTextVisual({
  */
 function RecipeModelVisual({ modelId }: { modelId: string }) {
   const [object, setObject] = useState<THREE.Object3D | null>(null);
+  const trackAssetLoad = useCatalogPreviewAssetLoad();
 
   useEffect(() => {
+    setObject(null);
     const definition = getBuiltinRecipeModel(modelId);
     if (!definition) return;
     let cancelled = false;
+    let loaded: THREE.Object3D | null = null;
+    const finishLoad = trackAssetLoad();
     const loader = new GLTFLoader();
     loader.load(
-      definition.publicPath,
+      `${definition.publicPath}?v=${definition.sha256.slice(0, 12)}`,
       (gltf) => {
-        if (!cancelled) setObject(gltf.scene);
+        if (cancelled) {
+          disposeCatalogModel(gltf.scene);
+          return;
+        }
+        loaded = gltf.scene;
+        setObject(loaded);
+        finishLoad();
       },
       undefined,
       () => {
-        if (!cancelled) setObject(null);
+        if (!cancelled) {
+          setObject(null);
+          finishLoad(false);
+        }
       },
     );
     return () => {
       cancelled = true;
+      finishLoad();
+      if (loaded) disposeCatalogModel(loaded);
     };
-  }, [modelId]);
+  }, [modelId, trackAssetLoad]);
 
   if (!object) return null;
-  return <primitive object={object} />;
+  // Ownership lives in the loader effect; R3F must not dispose these twice.
+  return <primitive object={object} dispose={null} />;
 }
 
 function RecipeParticleVisual({
@@ -253,6 +273,23 @@ function recipeFraming(recipe: SceneRecipe): {
   let maxRadius = 0.6;
   for (const part of recipe.parts) {
     const [x, y, z] = part.position;
+    if (part.kind === "model") {
+      const bounds = getBuiltinRecipeModel(part.modelId)?.bounds;
+      if (bounds) {
+        const transform = new THREE.Matrix4().compose(
+          new THREE.Vector3(...part.position),
+          new THREE.Quaternion().setFromEuler(new THREE.Euler(...part.rotation)),
+          new THREE.Vector3(...part.scale),
+        );
+        const box = new THREE.Box3(new THREE.Vector3(...bounds.min), new THREE.Vector3(...bounds.max)).applyMatrix4(transform);
+        maxY = Math.max(maxY, box.max.y);
+        maxRadius = Math.max(maxRadius, Math.hypot(
+          Math.max(Math.abs(box.min.x), Math.abs(box.max.x)),
+          Math.max(Math.abs(box.min.z), Math.abs(box.max.z)),
+        ));
+        continue;
+      }
+    }
     const half =
       part.kind === "primitive"
         ? Math.max(part.scale[0], part.scale[1], part.scale[2]) / 2

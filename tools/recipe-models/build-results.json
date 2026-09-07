@@ -1,0 +1,250 @@
+[
+  {
+    "file": "torch.glb",
+    "bytes": 102088,
+    "sha256": "12823625f7a45034c76b310bbee55361ec8e506e5126c06d9d49775c1361557b",
+    "triangles": 2496,
+    "drawPrimitives": 4,
+    "authoringParts": 10
+  },
+  {
+    "file": "bench.glb",
+    "bytes": 124748,
+    "sha256": "79f8ff4b7ab56e73c69d7d82b65686bd3edd051451ed7c4359db76243928ebe0",
+    "triangles": 2212,
+    "drawPrimitives": 3,
+    "authoringParts": 37
+  },
+  {
+    "file": "stone-lantern.glb",
+    "bytes": 119568,
+    "sha256": "f87641eab6f2d2be3fef71a55831b2176b79595319e2bfa5b567cba8db8e0dfc",
+    "triangles": 1092,
+    "drawPrimitives": 3,
+    "authoringParts": 13
+  },
+  {
+    "file": "tree.glb",
+    "bytes": 499084,
+    "sha256": "3cbee4a6d0222eecb728397dea471195be15fc32f378ff133fd7cc2bca91a87e",
+    "triangles": 9820,
+    "drawPrimitives": 3,
+    "authoringParts": 686
+  },
+  {
+    "file": "street-light.glb",
+    "bytes": 60044,
+    "sha256": "f6c18bbe65457ab0ecea58ed2893e2440d5da5e6277bf8d791a02f5e5bbb5b41",
+    "triangles": 1184,
+    "drawPrimitives": 3,
+    "authoringParts": 13
+  },
+  {
+    "file": "rock-a.glb",
+    "bytes": 53320,
+    "sha256": "bb9a3c95667912e980792927bc0b544ac254f9b49da676e09d33d05f18133f56",
+    "triangles": 440,
+    "drawPrimitives": 1,
+    "authoringParts": 1
+  },
+  {
+    "file": "rock-b.glb",
+    "bytes": 53320,
+    "sha256": "83f7636bc358c1a7ed4f9c9bd3353cc5e4cdc761063c6b2eb1dab583344af470",
+    "triangles": 440,
+    "drawPrimitives": 1,
+    "authoringParts": 1
+  },
+  {
+    "file": "brazier.glb",
+    "bytes": 85916,
+    "sha256": "1a200236e61b62dfc9b97a5b547363073be2014441f4103b5c278f96bf575a5e",
+    "triangles": 2204,
+    "drawPrimitives": 3,
+    "authoringParts": 15
+  },
+  {
+    "file": "lantern.glb",
+    "bytes": 188180,
+    "sha256": "772c099be529e2edc992074d3823fd1fb3bd4904a211afef422932e6409d925a",
+    "triangles": 4168,
+    "drawPrimitives": 3,
+    "authoringParts": 14
+  },
+  {
+    "file": "candelabra.glb",
+    "bytes": 74120,
+    "sha256": "18cf5bd045b91b4612f9cef4d917d9fa28863b16a65802740da166a87e37ec6f",
+    "triangles": 1916,
+    "drawPrimitives": 3,
+    "authoringParts": 21
+  },
+  {
+    "file": "bamboo-stalk.glb",
+    "bytes": 155676,
+    "sha256": "a50d1fff6aff4e93ed0e46105b1caff2f78e63f0654033445707970acb9347d4",
+    "triangles": 3184,
+    "drawPrimitives": 3,
+    "authoringParts": 64
+  },
+  {
+    "file": "stump.glb",
+    "bytes": 82660,
+    "sha256": "735c858da8cc172c31b66e4111505b4412ea2119471691940fb2980f29457c22",
+    "triangles": 600,
+    "drawPrimitives": 2,
+    "authoringParts": 7
+  },
+  {
+    "file": "log.glb",
+    "bytes": 69616,
+    "sha256": "0144847967f0a242a6138dd689062f573850e59e0ddce0ae11bd10267c845d00",
+    "triangles": 256,
+    "drawPrimitives": 2,
+    "authoringParts": 4
+  },
+  {
+    "file": "bush.glb",
+    "bytes": 142700,
+    "sha256": "adb3484c44ee8ee59b19f4f58153bb5299cfaa1e60c415a23af30d6bc7788287",
+    "triangles": 2112,
+    "drawPrimitives": 3,
+    "authoringParts": 154
+  },
+  {
+    "file": "pillar.glb",
+    "bytes": 100612,
+    "sha256": "5ee3fa0c438083479717f0bee1301ffabf6c635597a4f6c2e423a591c9598209",
+    "triangles": 1156,
+    "drawPrimitives": 1,
+    "authoringParts": 6
+  },
+  {
+    "file": "stairs.glb",
+    "bytes": 176332,
+    "sha256": "7872d31f018c523184d522632eca6f16c9dbde76fb7e4e41a3430e1c45766da1",
+    "triangles": 880,
+    "drawPrimitives": 2,
+    "authoringParts": 20
+  },
+  {
+    "file": "wall.glb",
+    "bytes": 284476,
+    "sha256": "80f7822be7baf7d2f890d3a26868b335dea347f32418f7b0f1dad326d3cdc460",
+    "triangles": 1892,
+    "drawPrimitives": 3,
+    "authoringParts": 43
+  },
+  {
+    "file": "well-frame.glb",
+    "bytes": 308072,
+    "sha256": "5ab6e9d24c237044175c01620700c2deefabada2416f85da18ef026304928800",
+    "triangles": 4268,
+    "drawPrimitives": 5,
+    "authoringParts": 46
+  },
+  {
+    "file": "pier.glb",
+    "bytes": 306576,
+    "sha256": "61ba9fc60ae46f2a08abb6924f9cbcb4b8e4ecd54e7b6604c8382b8eb2050e26",
+    "triangles": 3360,
+    "drawPrimitives": 5,
+    "authoringParts": 56
+  },
+  {
+    "file": "table.glb",
+    "bytes": 97036,
+    "sha256": "b0d84ca2ad7bf75b6f5365f36a1a2b2d5a1103ed6fea038b85498ba4f07e41f6",
+    "triangles": 716,
+    "drawPrimitives": 3,
+    "authoringParts": 17
+  },
+  {
+    "file": "stool.glb",
+    "bytes": 74024,
+    "sha256": "4435fd760ce224ed7e6567308d048d68d04d491f0b13f27f283513d58b0c7fc4",
+    "triangles": 816,
+    "drawPrimitives": 2,
+    "authoringParts": 9
+  },
+  {
+    "file": "magic-circle.glb",
+    "bytes": 160900,
+    "sha256": "3a3059e4d98ef15def6a5b16d98dad3439fd0dc4d2d1b71477f1c284d500d254",
+    "triangles": 4672,
+    "drawPrimitives": 3,
+    "authoringParts": 48
+  },
+  {
+    "file": "warp-pillar.glb",
+    "bytes": 52044,
+    "sha256": "91a2524cd0bf10e6080bf37be2b963ebf4b1644549577b4871c85c26132f7f18",
+    "triangles": 396,
+    "drawPrimitives": 3,
+    "authoringParts": 10
+  },
+  {
+    "file": "snowman.glb",
+    "bytes": 152860,
+    "sha256": "8308126e1837de10ecec52cbeee776f33a60ec87f0acb3cb7f5ec22bcfac5bdd",
+    "triangles": 3088,
+    "drawPrimitives": 5,
+    "authoringParts": 22
+  },
+  {
+    "file": "door.glb",
+    "bytes": 132612,
+    "sha256": "6ceedd6155073262434054030cc717a4b599713a4692a0cf373f0b63cf28f5d3",
+    "triangles": 1176,
+    "drawPrimitives": 4,
+    "authoringParts": 23
+  },
+  {
+    "file": "window.glb",
+    "bytes": 131884,
+    "sha256": "0a87aaf32e91055dad6a7d988e25cecab54240c1e6e7d964d3a3b56104eccb2d",
+    "triangles": 612,
+    "drawPrimitives": 5,
+    "authoringParts": 13
+  },
+  {
+    "file": "floor-panel.glb",
+    "bytes": 142088,
+    "sha256": "a1e714f44ea93b6ea7b2a568b44968d3b65260bba04ff8e912e3141e2a38dc56",
+    "triangles": 924,
+    "drawPrimitives": 2,
+    "authoringParts": 21
+  },
+  {
+    "file": "wall-panel.glb",
+    "bytes": 67344,
+    "sha256": "782a592378b1b3848ff14f53cb1ff260d24da24b5b55f4a8129dcbb0ac7e11d1",
+    "triangles": 264,
+    "drawPrimitives": 3,
+    "authoringParts": 6
+  },
+  {
+    "file": "campfire-base.glb",
+    "bytes": 304528,
+    "sha256": "f3d7d0182995254233c575d16e9d8ed3fcd1e0e40c277baf74cc1bca7bfe298c",
+    "triangles": 5024,
+    "drawPrimitives": 5,
+    "authoringParts": 52
+  },
+  {
+    "file": "fountain.glb",
+    "bytes": 343992,
+    "sha256": "61acff98f19fbcf7f1d1726ff1f9f0a9530a1471bab4147b4c6f43c898a8ad96",
+    "triangles": 6160,
+    "drawPrimitives": 4,
+    "authoringParts": 36
+  },
+  {
+    "file": "well-basin.glb",
+    "bytes": 263112,
+    "sha256": "470f7ebeb74945e4a6391f3a2e6c4aa05a8f980a2adb5c3615a26bdb1b168b55",
+    "triangles": 3168,
+    "drawPrimitives": 3,
+    "authoringParts": 38
+  }
+]

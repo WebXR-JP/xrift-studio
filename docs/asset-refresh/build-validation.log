@@ -1,0 +1,80 @@
+Generated 26 original PBR materials, 258410 bytes
+torch {'file': 'torch.glb', 'bytes': 102088, 'sha256': '12823625f7a45034c76b310bbee55361ec8e506e5126c06d9d49775c1361557b', 'triangles': 2496, 'drawPrimitives': 4, 'authoringParts': 10}
+bench {'file': 'bench.glb', 'bytes': 124748, 'sha256': '79f8ff4b7ab56e73c69d7d82b65686bd3edd051451ed7c4359db76243928ebe0', 'triangles': 2212, 'drawPrimitives': 3, 'authoringParts': 37}
+stone-lantern {'file': 'stone-lantern.glb', 'bytes': 119568, 'sha256': 'f87641eab6f2d2be3fef71a55831b2176b79595319e2bfa5b567cba8db8e0dfc', 'triangles': 1092, 'drawPrimitives': 3, 'authoringParts': 13}
+tree {'file': 'tree.glb', 'bytes': 499084, 'sha256': '3cbee4a6d0222eecb728397dea471195be15fc32f378ff133fd7cc2bca91a87e', 'triangles': 9820, 'drawPrimitives': 3, 'authoringParts': 686}
+street-light {'file': 'street-light.glb', 'bytes': 60044, 'sha256': 'f6c18bbe65457ab0ecea58ed2893e2440d5da5e6277bf8d791a02f5e5bbb5b41', 'triangles': 1184, 'drawPrimitives': 3, 'authoringParts': 13}
+rock-a {'file': 'rock-a.glb', 'bytes': 53320, 'sha256': 'bb9a3c95667912e980792927bc0b544ac254f9b49da676e09d33d05f18133f56', 'triangles': 440, 'drawPrimitives': 1, 'authoringParts': 1}
+rock-b {'file': 'rock-b.glb', 'bytes': 53320, 'sha256': '83f7636bc358c1a7ed4f9c9bd3353cc5e4cdc761063c6b2eb1dab583344af470', 'triangles': 440, 'drawPrimitives': 1, 'authoringParts': 1}
+brazier {'file': 'brazier.glb', 'bytes': 85916, 'sha256': '1a200236e61b62dfc9b97a5b547363073be2014441f4103b5c278f96bf575a5e', 'triangles': 2204, 'drawPrimitives': 3, 'authoringParts': 15}
+lantern {'file': 'lantern.glb', 'bytes': 188180, 'sha256': '772c099be529e2edc992074d3823fd1fb3bd4904a211afef422932e6409d925a', 'triangles': 4168, 'drawPrimitives': 3, 'authoringParts': 14}
+candelabra {'file': 'candelabra.glb', 'bytes': 74120, 'sha256': '18cf5bd045b91b4612f9cef4d917d9fa28863b16a65802740da166a87e37ec6f', 'triangles': 1916, 'drawPrimitives': 3, 'authoringParts': 21}
+bamboo-stalk {'file': 'bamboo-stalk.glb', 'bytes': 155676, 'sha256': 'a50d1fff6aff4e93ed0e46105b1caff2f78e63f0654033445707970acb9347d4', 'triangles': 3184, 'drawPrimitives': 3, 'authoringParts': 64}
+stump {'file': 'stump.glb', 'bytes': 82660, 'sha256': '735c858da8cc172c31b66e4111505b4412ea2119471691940fb2980f29457c22', 'triangles': 600, 'drawPrimitives': 2, 'authoringParts': 7}
+log {'file': 'log.glb', 'bytes': 69616, 'sha256': '0144847967f0a242a6138dd689062f573850e59e0ddce0ae11bd10267c845d00', 'triangles': 256, 'drawPrimitives': 2, 'authoringParts': 4}
+bush {'file': 'bush.glb', 'bytes': 142700, 'sha256': 'adb3484c44ee8ee59b19f4f58153bb5299cfaa1e60c415a23af30d6bc7788287', 'triangles': 2112, 'drawPrimitives': 3, 'authoringParts': 154}
+pillar {'file': 'pillar.glb', 'bytes': 100612, 'sha256': '5ee3fa0c438083479717f0bee1301ffabf6c635597a4f6c2e423a591c9598209', 'triangles': 1156, 'drawPrimitives': 1, 'authoringParts': 6}
+stairs {'file': 'stairs.glb', 'bytes': 176332, 'sha256': '7872d31f018c523184d522632eca6f16c9dbde76fb7e4e41a3430e1c45766da1', 'triangles': 880, 'drawPrimitives': 2, 'authoringParts': 20}
+wall {'file': 'wall.glb', 'bytes': 284476, 'sha256': '80f7822be7baf7d2f890d3a26868b335dea347f32418f7b0f1dad326d3cdc460', 'triangles': 1892, 'drawPrimitives': 3, 'authoringParts': 43}
+well-frame {'file': 'well-frame.glb', 'bytes': 308072, 'sha256': '5ab6e9d24c237044175c01620700c2deefabada2416f85da18ef026304928800', 'triangles': 4268, 'drawPrimitives': 5, 'authoringParts': 46}
+pier {'file': 'pier.glb', 'bytes': 306576, 'sha256': '61ba9fc60ae46f2a08abb6924f9cbcb4b8e4ecd54e7b6604c8382b8eb2050e26', 'triangles': 3360, 'drawPrimitives': 5, 'authoringParts': 56}
+table {'file': 'table.glb', 'bytes': 97036, 'sha256': 'b0d84ca2ad7bf75b6f5365f36a1a2b2d5a1103ed6fea038b85498ba4f07e41f6', 'triangles': 716, 'drawPrimitives': 3, 'authoringParts': 17}
+stool {'file': 'stool.glb', 'bytes': 74024, 'sha256': '4435fd760ce224ed7e6567308d048d68d04d491f0b13f27f283513d58b0c7fc4', 'triangles': 816, 'drawPrimitives': 2, 'authoringParts': 9}
+magic-circle {'file': 'magic-circle.glb', 'bytes': 160900, 'sha256': '3a3059e4d98ef15def6a5b16d98dad3439fd0dc4d2d1b71477f1c284d500d254', 'triangles': 4672, 'drawPrimitives': 3, 'authoringParts': 48}
+warp-pillar {'file': 'warp-pillar.glb', 'bytes': 52044, 'sha256': '91a2524cd0bf10e6080bf37be2b963ebf4b1644549577b4871c85c26132f7f18', 'triangles': 396, 'drawPrimitives': 3, 'authoringParts': 10}
+snowman {'file': 'snowman.glb', 'bytes': 152860, 'sha256': '8308126e1837de10ecec52cbeee776f33a60ec87f0acb3cb7f5ec22bcfac5bdd', 'triangles': 3088, 'drawPrimitives': 5, 'authoringParts': 22}
+door {'file': 'door.glb', 'bytes': 132612, 'sha256': '6ceedd6155073262434054030cc717a4b599713a4692a0cf373f0b63cf28f5d3', 'triangles': 1176, 'drawPrimitives': 4, 'authoringParts': 23}
+window {'file': 'window.glb', 'bytes': 131884, 'sha256': '0a87aaf32e91055dad6a7d988e25cecab54240c1e6e7d964d3a3b56104eccb2d', 'triangles': 612, 'drawPrimitives': 5, 'authoringParts': 13}
+floor-panel {'file': 'floor-panel.glb', 'bytes': 142088, 'sha256': 'a1e714f44ea93b6ea7b2a568b44968d3b65260bba04ff8e912e3141e2a38dc56', 'triangles': 924, 'drawPrimitives': 2, 'authoringParts': 21}
+wall-panel {'file': 'wall-panel.glb', 'bytes': 67344, 'sha256': '782a592378b1b3848ff14f53cb1ff260d24da24b5b55f4a8129dcbb0ac7e11d1', 'triangles': 264, 'drawPrimitives': 3, 'authoringParts': 6}
+campfire-base {'file': 'campfire-base.glb', 'bytes': 304528, 'sha256': 'f3d7d0182995254233c575d16e9d8ed3fcd1e0e40c277baf74cc1bca7bfe298c', 'triangles': 5024, 'drawPrimitives': 5, 'authoringParts': 52}
+fountain {'file': 'fountain.glb', 'bytes': 343992, 'sha256': '61acff98f19fbcf7f1d1726ff1f9f0a9530a1471bab4147b4c6f43c898a8ad96', 'triangles': 6160, 'drawPrimitives': 4, 'authoringParts': 36}
+well-basin {'file': 'well-basin.glb', 'bytes': 263112, 'sha256': '470f7ebeb74945e4a6391f3a2e6c4aa05a8f980a2adb5c3615a26bdb1b168b55', 'triangles': 3168, 'drawPrimitives': 3, 'authoringParts': 38}
+Pinned 32 model definitions and manifest entries.
+PASS torch.glb                  102088 B   2496 triangles  4 primitives
+PASS bench.glb                  124748 B   2212 triangles  3 primitives
+PASS stone-lantern.glb          119568 B   1092 triangles  3 primitives
+PASS tree.glb                   499084 B   9820 triangles  3 primitives
+PASS street-light.glb            60044 B   1184 triangles  3 primitives
+PASS rock-a.glb                  53320 B    440 triangles  1 primitives
+PASS rock-b.glb                  53320 B    440 triangles  1 primitives
+PASS brazier.glb                 85916 B   2204 triangles  3 primitives
+PASS lantern.glb                188180 B   4168 triangles  3 primitives
+PASS candelabra.glb              74120 B   1916 triangles  3 primitives
+PASS bamboo-stalk.glb           155676 B   3184 triangles  3 primitives
+PASS stump.glb                   82660 B    600 triangles  2 primitives
+PASS log.glb                     69616 B    256 triangles  2 primitives
+PASS bush.glb                   142700 B   2112 triangles  3 primitives
+PASS pillar.glb                 100612 B   1156 triangles  1 primitives
+PASS stairs.glb                 176332 B    880 triangles  2 primitives
+PASS wall.glb                   284476 B   1892 triangles  3 primitives
+PASS well-frame.glb             308072 B   4268 triangles  5 primitives
+PASS pier.glb                   306576 B   3360 triangles  5 primitives
+PASS table.glb                   97036 B    716 triangles  3 primitives
+PASS stool.glb                   74024 B    816 triangles  2 primitives
+PASS magic-circle.glb           160900 B   4672 triangles  3 primitives
+PASS warp-pillar.glb             52044 B    396 triangles  3 primitives
+PASS snowman.glb                152860 B   3088 triangles  5 primitives
+PASS door.glb                   132612 B   1176 triangles  4 primitives
+PASS window.glb                 131884 B    612 triangles  5 primitives
+PASS floor-panel.glb            142088 B    924 triangles  2 primitives
+PASS wall-panel.glb              67344 B    264 triangles  3 primitives
+PASS recording-studio.glb       842596 B   5576 triangles 15 primitives
+PASS campfire-base.glb          304528 B   5024 triangles  5 primitives
+PASS fountain.glb               343992 B   6160 triangles  4 primitives
+PASS well-basin.glb             263112 B   3168 triangles  3 primitives
+{
+  "models": 32,
+  "beforeModels": 29,
+  "beforeBytes": 20882492,
+  "afterBytes": 5752128,
+  "beforeTriangles": 55100,
+  "afterTriangles": 76272,
+  "beforeDrawPrimitives": 189,
+  "afterDrawPrimitives": 110,
+  "modelStructuralChecks": "passed",
+  "existingPlacementEnvelopes": "29 matched within 0.15 mm",
+  "officialKhronosValidator": "not run",
+  "BlenderReconstruction": "not run (Blender unavailable)",
+  "StudioRuntimeAndFPS": "not run (dependencies / desktop environment unavailable)"
+}

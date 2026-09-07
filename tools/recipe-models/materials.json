@@ -1,0 +1,347 @@
+{
+  "limestone": {
+    "roughness": 0.86,
+    "metallic": 0,
+    "doubleSided": false,
+    "baseColorTexture": "limestone-basecolor.jpg",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "normalTexture": "limestone-normal.png"
+  },
+  "basalt": {
+    "roughness": 0.88,
+    "metallic": 0,
+    "doubleSided": false,
+    "baseColorTexture": "basalt-basecolor.jpg",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "normalTexture": "basalt-normal.png"
+  },
+  "oak": {
+    "roughness": 0.61,
+    "metallic": 0,
+    "doubleSided": false,
+    "baseColorTexture": "oak-basecolor.jpg",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "normalTexture": "oak-normal.png"
+  },
+  "darkwood": {
+    "roughness": 0.69,
+    "metallic": 0,
+    "doubleSided": false,
+    "baseColorTexture": "darkwood-basecolor.jpg",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "normalTexture": "darkwood-normal.png"
+  },
+  "bark": {
+    "roughness": 0.95,
+    "metallic": 0,
+    "doubleSided": false,
+    "baseColorTexture": "bark-basecolor.jpg",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "normalTexture": "bark-normal.png"
+  },
+  "endgrain": {
+    "roughness": 0.8,
+    "metallic": 0,
+    "doubleSided": false,
+    "baseColorTexture": "endgrain-basecolor.jpg",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "normalTexture": "endgrain-normal.png"
+  },
+  "charcoal": {
+    "roughness": 0.98,
+    "metallic": 0,
+    "doubleSided": false,
+    "baseColorTexture": "charcoal-basecolor.jpg",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "normalTexture": "charcoal-normal.png"
+  },
+  "ash": {
+    "roughness": 1,
+    "metallic": 0,
+    "doubleSided": false,
+    "baseColorTexture": "ash-basecolor.jpg",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "normalTexture": "ash-normal.png"
+  },
+  "paper": {
+    "roughness": 0.89,
+    "metallic": 0,
+    "doubleSided": false,
+    "baseColorTexture": "paper-basecolor.jpg",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "normalTexture": "paper-normal.png",
+    "emissive": [
+      0.18,
+      0.11,
+      0.04
+    ]
+  },
+  "leaf": {
+    "roughness": 0.76,
+    "metallic": 0,
+    "doubleSided": true,
+    "baseColorTexture": "leaf-basecolor.jpg",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "normalTexture": "leaf-normal.png"
+  },
+  "leaf-light": {
+    "roughness": 0.78,
+    "metallic": 0,
+    "doubleSided": true,
+    "baseColorTexture": "leaf-light-basecolor.jpg",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "normalTexture": "leaf-light-normal.png"
+  },
+  "bamboo": {
+    "roughness": 0.7,
+    "metallic": 0,
+    "doubleSided": false,
+    "baseColorTexture": "bamboo-basecolor.jpg",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "normalTexture": "bamboo-normal.png"
+  },
+  "water": {
+    "roughness": 0.22,
+    "metallic": 0,
+    "doubleSided": false,
+    "baseColorTexture": "water-basecolor.jpg",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "normalTexture": "water-normal.png"
+  },
+  "iron": {
+    "roughness": 0.38,
+    "metallic": 0.83,
+    "doubleSided": false,
+    "color": [
+      0.075,
+      0.085,
+      0.09,
+      1
+    ]
+  },
+  "bronze": {
+    "roughness": 0.34,
+    "metallic": 0.8,
+    "doubleSided": false,
+    "color": [
+      0.45,
+      0.26,
+      0.095,
+      1
+    ]
+  },
+  "silver": {
+    "roughness": 0.25,
+    "metallic": 0.95,
+    "doubleSided": false,
+    "color": [
+      0.49,
+      0.54,
+      0.59,
+      1
+    ]
+  },
+  "ivory": {
+    "roughness": 0.74,
+    "metallic": 0,
+    "doubleSided": false,
+    "color": [
+      0.83,
+      0.8,
+      0.7,
+      1
+    ]
+  },
+  "wax": {
+    "roughness": 0.55,
+    "metallic": 0,
+    "doubleSided": false,
+    "color": [
+      0.91,
+      0.79,
+      0.57,
+      1
+    ]
+  },
+  "ember": {
+    "roughness": 0.95,
+    "metallic": 0,
+    "doubleSided": false,
+    "color": [
+      0.28,
+      0.018,
+      0.003,
+      1
+    ],
+    "emissive": [
+      1,
+      0.14,
+      0.008
+    ]
+  },
+  "warm-light": {
+    "roughness": 0.5,
+    "metallic": 0,
+    "doubleSided": false,
+    "color": [
+      0.92,
+      0.58,
+      0.23,
+      1
+    ],
+    "emissive": [
+      1,
+      0.57,
+      0.16
+    ]
+  },
+  "aqua-light": {
+    "roughness": 0.3,
+    "metallic": 0,
+    "doubleSided": false,
+    "color": [
+      0.02,
+      0.4,
+      0.44,
+      1
+    ],
+    "emissive": [
+      0.06,
+      0.9,
+      1
+    ]
+  },
+  "snow": {
+    "roughness": 0.94,
+    "metallic": 0,
+    "doubleSided": false,
+    "baseColorTexture": "snow-basecolor.jpg",
+    "color": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "normalTexture": "snow-normal.png"
+  },
+  "scarlet": {
+    "roughness": 0.95,
+    "metallic": 0,
+    "doubleSided": false,
+    "color": [
+      0.45,
+      0.025,
+      0.014,
+      1
+    ]
+  },
+  "orange": {
+    "roughness": 0.8,
+    "metallic": 0,
+    "doubleSided": false,
+    "color": [
+      0.82,
+      0.22,
+      0.035,
+      1
+    ]
+  },
+  "black": {
+    "roughness": 0.8,
+    "metallic": 0,
+    "doubleSided": false,
+    "color": [
+      0.018,
+      0.023,
+      0.026,
+      1
+    ]
+  },
+  "glass": {
+    "roughness": 0.14,
+    "metallic": 0.45,
+    "doubleSided": false,
+    "color": [
+      0.15,
+      0.25,
+      0.27,
+      1
+    ]
+  },
+  "window-glass": {
+    "color": [
+      0.16,
+      0.29,
+      0.32,
+      0.18
+    ],
+    "roughness": 0.15,
+    "metallic": 0.1,
+    "alphaMode": "BLEND"
+  }
+}

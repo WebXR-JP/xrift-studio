@@ -1,0 +1,903 @@
+[
+  {
+    "file": "bamboo-stalk.glb",
+    "bytes": 40924,
+    "sha256": "1c4d94a7cb117b45dbe46d6835455ae2089edb84ba1af0560b0d2b88fd68c53e",
+    "triangles": 660,
+    "uniqueTriangles": 660,
+    "meshInstances": 4,
+    "drawPrimitives": 4,
+    "materials": 4,
+    "images": [],
+    "min": [
+      -0.3436,
+      0.0,
+      -0.3794
+    ],
+    "max": [
+      0.5027,
+      3.2333,
+      0.4236
+    ]
+  },
+  {
+    "file": "bench.glb",
+    "bytes": 1957836,
+    "sha256": "46300fa6215e3803e91b4e6adb0b00870245b5ec2092d4672c25d057d0a550dd",
+    "triangles": 6848,
+    "uniqueTriangles": 6848,
+    "meshInstances": 5,
+    "drawPrimitives": 5,
+    "materials": 2,
+    "images": [
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 108
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 112
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 108
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 104
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 108
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 112
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 108
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 104
+      }
+    ],
+    "min": [
+      -0.86,
+      -0.44,
+      -0.225
+    ],
+    "max": [
+      0.86,
+      0.52,
+      0.225
+    ]
+  },
+  {
+    "file": "brazier.glb",
+    "bytes": 8980,
+    "sha256": "b37eab4ba4b341b3beae5dfcbe272ebb20c06fa9f5db11c45fb2d6d5b20cfcea",
+    "triangles": 216,
+    "uniqueTriangles": 216,
+    "meshInstances": 4,
+    "drawPrimitives": 4,
+    "materials": 4,
+    "images": [],
+    "min": [
+      -0.195,
+      -0.021,
+      -0.2096
+    ],
+    "max": [
+      0.233,
+      0.81,
+      0.2096
+    ]
+  },
+  {
+    "file": "bush.glb",
+    "bytes": 26516,
+    "sha256": "786140fee3133f6aac333f70001c25b7a855bfa4109df7b3ad7b89f4b5f9f14a",
+    "triangles": 240,
+    "uniqueTriangles": 240,
+    "meshInstances": 3,
+    "drawPrimitives": 3,
+    "materials": 3,
+    "images": [],
+    "min": [
+      -0.4655,
+      0.0121,
+      -0.359
+    ],
+    "max": [
+      0.5356,
+      0.4477,
+      0.3896
+    ]
+  },
+  {
+    "file": "candelabra.glb",
+    "bytes": 21568,
+    "sha256": "c7125c4387cfc91455580c002319bf173d91e422e9f3d1463c867ba2f39428d9",
+    "triangles": 456,
+    "uniqueTriangles": 456,
+    "meshInstances": 8,
+    "drawPrimitives": 8,
+    "materials": 8,
+    "images": [],
+    "min": [
+      -0.16,
+      0.0,
+      -0.14
+    ],
+    "max": [
+      0.16,
+      0.55,
+      0.14
+    ]
+  },
+  {
+    "file": "door.glb",
+    "bytes": 18456,
+    "sha256": "146099ac4f8730f765ee86e3e4b1b5e0b4454118798604337d5e8702b40b638e",
+    "triangles": 192,
+    "uniqueTriangles": 192,
+    "meshInstances": 5,
+    "drawPrimitives": 5,
+    "materials": 5,
+    "images": [],
+    "min": [
+      -0.54,
+      0.0,
+      -0.06
+    ],
+    "max": [
+      0.54,
+      2.09,
+      0.08
+    ]
+  },
+  {
+    "file": "floor-panel.glb",
+    "bytes": 17976,
+    "sha256": "3354a6907dfe11f1971e8c7a2e354c3f7bafd6135937d222f76d4bf774792c3e",
+    "triangles": 140,
+    "uniqueTriangles": 140,
+    "meshInstances": 5,
+    "drawPrimitives": 5,
+    "materials": 2,
+    "images": [],
+    "min": [
+      -1.0,
+      -0.05,
+      -1.0
+    ],
+    "max": [
+      1.0,
+      0.002,
+      1.0
+    ]
+  },
+  {
+    "file": "lantern.glb",
+    "bytes": 11748,
+    "sha256": "896454119ac9fae898433b74f3e7d0346b7f235df5b0819ec12f039cc461370f",
+    "triangles": 224,
+    "uniqueTriangles": 224,
+    "meshInstances": 3,
+    "drawPrimitives": 3,
+    "materials": 3,
+    "images": [],
+    "min": [
+      -0.1236,
+      0.0,
+      -0.13
+    ],
+    "max": [
+      0.1236,
+      0.35,
+      0.13
+    ]
+  },
+  {
+    "file": "log.glb",
+    "bytes": 9168,
+    "sha256": "6bb298856a654c9cad8741f351f660e673cb9c8953303e82c39f14ae108a032e",
+    "triangles": 96,
+    "uniqueTriangles": 96,
+    "meshInstances": 3,
+    "drawPrimitives": 3,
+    "materials": 3,
+    "images": [],
+    "min": [
+      -0.0,
+      0.0,
+      -0.052
+    ],
+    "max": [
+      0.863,
+      0.104,
+      0.052
+    ]
+  },
+  {
+    "file": "magic-circle.glb",
+    "bytes": 14164,
+    "sha256": "028dc11cee1fa3ece600cf22ba9499462922c7570f8c7f8733521c5dfa5bf113",
+    "triangles": 336,
+    "uniqueTriangles": 336,
+    "meshInstances": 2,
+    "drawPrimitives": 2,
+    "materials": 2,
+    "images": [],
+    "min": [
+      -0.75,
+      0.0,
+      -0.75
+    ],
+    "max": [
+      0.75,
+      0.05,
+      0.75
+    ]
+  },
+  {
+    "file": "pier.glb",
+    "bytes": 30768,
+    "sha256": "63e595a4556b5047bba801c0cf5dabb37a114771dac99c0ab92174f5a1cd35b2",
+    "triangles": 268,
+    "uniqueTriangles": 268,
+    "meshInstances": 9,
+    "drawPrimitives": 9,
+    "materials": 9,
+    "images": [],
+    "min": [
+      -0.7,
+      0.0,
+      -2.22
+    ],
+    "max": [
+      0.7,
+      0.53,
+      0.22
+    ]
+  },
+  {
+    "file": "pillar.glb",
+    "bytes": 11144,
+    "sha256": "e1b16b8f3f088fca51773a2e137b78034b7fcb0b9c42384a78070ea5dbb1e871",
+    "triangles": 264,
+    "uniqueTriangles": 264,
+    "meshInstances": 3,
+    "drawPrimitives": 3,
+    "materials": 3,
+    "images": [],
+    "min": [
+      -0.31,
+      0.0,
+      -0.31
+    ],
+    "max": [
+      0.31,
+      3.08,
+      0.31
+    ]
+  },
+  {
+    "file": "recording-studio.glb",
+    "bytes": 3702596,
+    "sha256": "cc638574d4356502a93221006c45b30506ae5b554c642d0ab66c61ecc48aba8d",
+    "triangles": 5576,
+    "uniqueTriangles": 5576,
+    "meshInstances": 48,
+    "drawPrimitives": 65,
+    "materials": 15,
+    "images": [
+      {
+        "size": [
+          1024,
+          1024
+        ],
+        "bytes": 427268
+      },
+      {
+        "size": [
+          1024,
+          1024
+        ],
+        "bytes": 299230
+      },
+      {
+        "size": [
+          1024,
+          1024
+        ],
+        "bytes": 212525
+      },
+      {
+        "size": [
+          512,
+          512
+        ],
+        "bytes": 94084
+      },
+      {
+        "size": [
+          512,
+          512
+        ],
+        "bytes": 96050
+      },
+      {
+        "size": [
+          512,
+          512
+        ],
+        "bytes": 70359
+      },
+      {
+        "size": [
+          1024,
+          1024
+        ],
+        "bytes": 484844
+      },
+      {
+        "size": [
+          1024,
+          1024
+        ],
+        "bytes": 641756
+      },
+      {
+        "size": [
+          1024,
+          1024
+        ],
+        "bytes": 982665
+      }
+    ],
+    "min": [
+      -1.9,
+      -0.1,
+      -2.6
+    ],
+    "max": [
+      1.9,
+      2.6,
+      1.5
+    ]
+  },
+  {
+    "file": "rock-a.glb",
+    "bytes": 8952,
+    "sha256": "5c69a1e02b87f9e1adea39475b0607ecb3b7e291e4bb22472324f998769f392a",
+    "triangles": 80,
+    "uniqueTriangles": 80,
+    "meshInstances": 1,
+    "drawPrimitives": 1,
+    "materials": 1,
+    "images": [],
+    "min": [
+      -0.3597,
+      0.0,
+      -0.3952
+    ],
+    "max": [
+      0.4106,
+      0.6537,
+      0.4033
+    ]
+  },
+  {
+    "file": "rock-b.glb",
+    "bytes": 8948,
+    "sha256": "bbe51e12d578a311ba5ac070316b0a08d6e30afd06c8822c399e9bbe734935fe",
+    "triangles": 80,
+    "uniqueTriangles": 80,
+    "meshInstances": 1,
+    "drawPrimitives": 1,
+    "materials": 1,
+    "images": [],
+    "min": [
+      -0.3709,
+      0.0,
+      -0.4145
+    ],
+    "max": [
+      0.4028,
+      0.797,
+      0.3991
+    ]
+  },
+  {
+    "file": "snowman.glb",
+    "bytes": 56796,
+    "sha256": "a0c6b14c79d644e8e9b3f786f4020a0786fc04db62fb72baa3952bd9ae29c40e",
+    "triangles": 536,
+    "uniqueTriangles": 536,
+    "meshInstances": 5,
+    "drawPrimitives": 5,
+    "materials": 5,
+    "images": [],
+    "min": [
+      -0.3986,
+      -0.0052,
+      -0.4061
+    ],
+    "max": [
+      0.4293,
+      1.3402,
+      0.4131
+    ]
+  },
+  {
+    "file": "stairs.glb",
+    "bytes": 18732,
+    "sha256": "1adc222a90806db593ac380f66b2e6573f4378ac51c56b949ce5f7b6b5dcf91f",
+    "triangles": 140,
+    "uniqueTriangles": 140,
+    "meshInstances": 5,
+    "drawPrimitives": 5,
+    "materials": 5,
+    "images": [],
+    "min": [
+      -0.8,
+      -0.0,
+      -1.8
+    ],
+    "max": [
+      0.8,
+      0.9,
+      0.2
+    ]
+  },
+  {
+    "file": "stone-lantern.glb",
+    "bytes": 6447252,
+    "sha256": "d7e90cb234a17b8000550cb585b7a4b4b3a1fddce27528fa558ba67a27f54ee7",
+    "triangles": 16928,
+    "uniqueTriangles": 16928,
+    "meshInstances": 9,
+    "drawPrimitives": 9,
+    "materials": 2,
+    "images": [
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 108
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 112
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 108
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 104
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 108
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 108
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 108
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 104
+      }
+    ],
+    "min": [
+      -0.36,
+      -0.08,
+      -0.36
+    ],
+    "max": [
+      0.36,
+      1.42,
+      0.36
+    ]
+  },
+  {
+    "file": "stool.glb",
+    "bytes": 7692,
+    "sha256": "c656cb6dc82f69c1c9ea8aa687343692b1acca94ea651bb01e09f50bfe3e5c11",
+    "triangles": 152,
+    "uniqueTriangles": 152,
+    "meshInstances": 2,
+    "drawPrimitives": 2,
+    "materials": 2,
+    "images": [],
+    "min": [
+      -0.2,
+      0.0,
+      -0.2
+    ],
+    "max": [
+      0.2,
+      0.44,
+      0.2
+    ]
+  },
+  {
+    "file": "street-light.glb",
+    "bytes": 16700,
+    "sha256": "c524ee6799c7f92ced4e53074e40ff3bc98fe833a89140ca8089d11cb7c28cc8",
+    "triangles": 340,
+    "uniqueTriangles": 340,
+    "meshInstances": 2,
+    "drawPrimitives": 2,
+    "materials": 2,
+    "images": [],
+    "min": [
+      -0.3234,
+      0.0,
+      -0.34
+    ],
+    "max": [
+      0.3234,
+      3.34,
+      0.34
+    ]
+  },
+  {
+    "file": "stump.glb",
+    "bytes": 36260,
+    "sha256": "8c4734728e49ea5cf45aae9b6df776438e5db858f2363e4709f0a156c2ec8d14",
+    "triangles": 624,
+    "uniqueTriangles": 624,
+    "meshInstances": 9,
+    "drawPrimitives": 9,
+    "materials": 7,
+    "images": [],
+    "min": [
+      -0.46,
+      -0.011,
+      -0.46
+    ],
+    "max": [
+      0.46,
+      0.417,
+      0.46
+    ]
+  },
+  {
+    "file": "table.glb",
+    "bytes": 14376,
+    "sha256": "006c45dbc7a2b619b16623949331fbeb4ec11a6a8efa2e1a2b90c6e022e8ad6a",
+    "triangles": 124,
+    "uniqueTriangles": 124,
+    "meshInstances": 5,
+    "drawPrimitives": 5,
+    "materials": 5,
+    "images": [],
+    "min": [
+      -0.7,
+      0.0,
+      -0.4
+    ],
+    "max": [
+      0.7,
+      0.77,
+      0.4
+    ]
+  },
+  {
+    "file": "torch.glb",
+    "bytes": 607588,
+    "sha256": "86a17324dc6016eb8d1a990658dd825532078c9a8a128112c12ba048a918c330",
+    "triangles": 2464,
+    "uniqueTriangles": 2464,
+    "meshInstances": 2,
+    "drawPrimitives": 2,
+    "materials": 2,
+    "images": [
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 108
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 112
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 108
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 104
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 108
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 112
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 108
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 104
+      }
+    ],
+    "min": [
+      -0.055,
+      -0.6,
+      -0.055
+    ],
+    "max": [
+      0.055,
+      0.6,
+      0.055
+    ]
+  },
+  {
+    "file": "tree.glb",
+    "bytes": 7709528,
+    "sha256": "308af9d6be9d18fca160b4d390b228ec81d691d0b85404900615e27cc0ee0c53",
+    "triangles": 17440,
+    "uniqueTriangles": 17440,
+    "meshInstances": 5,
+    "drawPrimitives": 5,
+    "materials": 2,
+    "images": [
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 108
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 112
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 108
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 104
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 108
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 108
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 108
+      },
+      {
+        "size": [
+          8,
+          8
+        ],
+        "bytes": 104
+      }
+    ],
+    "min": [
+      -0.995,
+      -0.86,
+      -0.95
+    ],
+    "max": [
+      1.15,
+      2.125,
+      0.95
+    ]
+  },
+  {
+    "file": "wall-panel.glb",
+    "bytes": 7596,
+    "sha256": "5de024a40101008168377fb03f6d480e230047089d41c06b74783b7d52d59598",
+    "triangles": 56,
+    "uniqueTriangles": 56,
+    "meshInstances": 2,
+    "drawPrimitives": 2,
+    "materials": 2,
+    "images": [],
+    "min": [
+      -1.0,
+      -0.0,
+      -0.09
+    ],
+    "max": [
+      1.0,
+      2.4,
+      0.11
+    ]
+  },
+  {
+    "file": "wall.glb",
+    "bytes": 24228,
+    "sha256": "a08e2586e82579a63a0b0c9cfcaf35289b0bd08edf233c31e56956ceffbe4e0d",
+    "triangles": 164,
+    "uniqueTriangles": 164,
+    "meshInstances": 8,
+    "drawPrimitives": 8,
+    "materials": 8,
+    "images": [],
+    "min": [
+      -2.8394,
+      0.0,
+      -0.3394
+    ],
+    "max": [
+      2.8394,
+      2.16,
+      0.3394
+    ]
+  },
+  {
+    "file": "warp-pillar.glb",
+    "bytes": 6880,
+    "sha256": "7f9f9bd6d3a2a92225ed4d69f7bb3839f551c762657a6663c829a0cf6a600509",
+    "triangles": 152,
+    "uniqueTriangles": 152,
+    "meshInstances": 2,
+    "drawPrimitives": 2,
+    "materials": 2,
+    "images": [],
+    "min": [
+      -0.34,
+      0.0,
+      -0.34
+    ],
+    "max": [
+      0.34,
+      3.16,
+      0.34
+    ]
+  },
+  {
+    "file": "well-frame.glb",
+    "bytes": 11012,
+    "sha256": "ad14bf1629ed290423aa6c17c1aed600e3df366564280f40327f0de672fe457d",
+    "triangles": 96,
+    "uniqueTriangles": 96,
+    "meshInstances": 4,
+    "drawPrimitives": 4,
+    "materials": 4,
+    "images": [],
+    "min": [
+      -0.78,
+      0.0,
+      -0.45
+    ],
+    "max": [
+      0.78,
+      2.22,
+      0.45
+    ]
+  },
+  {
+    "file": "window.glb",
+    "bytes": 28108,
+    "sha256": "7d8ec97d6c90a57a217a3371a20f4e06674146a312eed232e3c3c5c0f1a5e9e2",
+    "triangles": 208,
+    "uniqueTriangles": 208,
+    "meshInstances": 8,
+    "drawPrimitives": 8,
+    "materials": 8,
+    "images": [],
+    "min": [
+      -0.58,
+      -0.0,
+      -0.065
+    ],
+    "max": [
+      0.58,
+      1.39,
+      0.065
+    ]
+  }
+]

@@ -1,0 +1,26 @@
+{
+  "compilerVersion": "5.8.3",
+  "kind": "transpile-only syntax check; not project typecheck",
+  "results": [
+    {
+      "file": "src/components/visual-editor/CatalogPreviewFrame.tsx",
+      "syntaxErrors": []
+    },
+    {
+      "file": "src/components/visual-editor/SceneRecipeCatalogPreview.tsx",
+      "syntaxErrors": []
+    },
+    {
+      "file": "src/components/visual-editor/dispose-catalog-model.ts",
+      "syntaxErrors": []
+    },
+    {
+      "file": "src/lib/visual-editor/builtin-recipe-models.ts",
+      "syntaxErrors": []
+    },
+    {
+      "file": "src/lib/visual-editor/scene-recipe-catalog.ts",
+      "syntaxErrors": []
+    }
+  ]
+}

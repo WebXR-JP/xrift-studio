@@ -1,0 +1,15 @@
+{
+  "models": 32,
+  "beforeModels": 29,
+  "beforeBytes": 20882492,
+  "afterBytes": 5752128,
+  "beforeTriangles": 55100,
+  "afterTriangles": 76272,
+  "beforeDrawPrimitives": 189,
+  "afterDrawPrimitives": 110,
+  "modelStructuralChecks": "passed",
+  "existingPlacementEnvelopes": "29 matched within 0.15 mm",
+  "officialKhronosValidator": "not run",
+  "BlenderReconstruction": "not run (Blender unavailable)",
+  "StudioRuntimeAndFPS": "not assessed by this structural validator"
+}

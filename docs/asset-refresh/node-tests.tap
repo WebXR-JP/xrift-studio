@@ -1,0 +1,60 @@
+TAP version 13
+# (node:3748) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: all 32 actual GLBs match pinned metadata and content-derived asset IDs
+ok 1 - all 32 actual GLBs match pinned metadata and content-derived asset IDs
+  ---
+  duration_ms: 8.323537
+  type: 'test'
+  ...
+# Subtest: every literal recipe model reference exists in the updated catalog
+ok 2 - every literal recipe model reference exists in the updated catalog
+  ---
+  duration_ms: 0.272002
+  type: 'test'
+  ...
+# Subtest: campfire uses its GLB with bounded flame, smoke and ember capacities
+ok 3 - campfire uses its GLB with bounded flame, smoke and ember capacities
+  ---
+  duration_ms: 0.801011
+  type: 'test'
+  ...
+# Subtest: fountain replaces primitive ring and locates the 80-particle jet at its nozzle
+ok 4 - fountain replaces primitive ring and locates the 80-particle jet at its nozzle
+  ---
+  duration_ms: 0.743304
+  type: 'test'
+  ...
+# Subtest: well uses a hollow stone basin alongside the existing stable roof model ID
+ok 5 - well uses a hollow stone basin alongside the existing stable roof model ID
+  ---
+  duration_ms: 0.616963
+  type: 'test'
+  ...
+# Subtest: catalog disposal releases shared geometry, materials, textures and bitmaps once
+ok 6 - catalog disposal releases shared geometry, materials, textures and bitmaps once
+  ---
+  duration_ms: 0.341576
+  type: 'test'
+  ...
+# Subtest: non-bitmap textures and objects without meshes can be disposed safely
+ok 7 - non-bitmap textures and objects without meshes can be disposed safely
+  ---
+  duration_ms: 0.25761
+  type: 'test'
+  ...
+# Subtest: preview code waits for model loads and releases late-completing GLB loads
+ok 8 - preview code waits for model loads and releases late-completing GLB loads
+  ---
+  duration_ms: 0.388668
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 110.240189

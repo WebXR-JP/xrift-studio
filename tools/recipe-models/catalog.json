@@ -1,0 +1,162 @@
+[
+  {
+    "modelId": "torch",
+    "fileName": "torch.glb",
+    "displayName": "松明"
+  },
+  {
+    "modelId": "bench",
+    "fileName": "bench.glb",
+    "displayName": "ベンチ"
+  },
+  {
+    "modelId": "stoneLantern",
+    "fileName": "stone-lantern.glb",
+    "displayName": "石灯籠"
+  },
+  {
+    "modelId": "tree",
+    "fileName": "tree.glb",
+    "displayName": "木"
+  },
+  {
+    "modelId": "streetLight",
+    "fileName": "street-light.glb",
+    "displayName": "街灯"
+  },
+  {
+    "modelId": "rockA",
+    "fileName": "rock-a.glb",
+    "displayName": "岩A"
+  },
+  {
+    "modelId": "rockB",
+    "fileName": "rock-b.glb",
+    "displayName": "岩B"
+  },
+  {
+    "modelId": "brazier",
+    "fileName": "brazier.glb",
+    "displayName": "かがり火の鉢"
+  },
+  {
+    "modelId": "lantern",
+    "fileName": "lantern.glb",
+    "displayName": "提灯"
+  },
+  {
+    "modelId": "candelabra",
+    "fileName": "candelabra.glb",
+    "displayName": "燭台"
+  },
+  {
+    "modelId": "bambooStalk",
+    "fileName": "bamboo-stalk.glb",
+    "displayName": "竹"
+  },
+  {
+    "modelId": "stump",
+    "fileName": "stump.glb",
+    "displayName": "切り株"
+  },
+  {
+    "modelId": "log",
+    "fileName": "log.glb",
+    "displayName": "薪"
+  },
+  {
+    "modelId": "bush",
+    "fileName": "bush.glb",
+    "displayName": "茂み"
+  },
+  {
+    "modelId": "pillar",
+    "fileName": "pillar.glb",
+    "displayName": "石柱"
+  },
+  {
+    "modelId": "stairs",
+    "fileName": "stairs.glb",
+    "displayName": "階段"
+  },
+  {
+    "modelId": "wall",
+    "fileName": "wall.glb",
+    "displayName": "塀"
+  },
+  {
+    "modelId": "wellFrame",
+    "fileName": "well-frame.glb",
+    "displayName": "井戸の屋根"
+  },
+  {
+    "modelId": "pier",
+    "fileName": "pier.glb",
+    "displayName": "桟橋"
+  },
+  {
+    "modelId": "table",
+    "fileName": "table.glb",
+    "displayName": "テーブル"
+  },
+  {
+    "modelId": "stool",
+    "fileName": "stool.glb",
+    "displayName": "丸椅子"
+  },
+  {
+    "modelId": "magicCircle",
+    "fileName": "magic-circle.glb",
+    "displayName": "魔法陣"
+  },
+  {
+    "modelId": "warpPillar",
+    "fileName": "warp-pillar.glb",
+    "displayName": "ワープの柱"
+  },
+  {
+    "modelId": "snowman",
+    "fileName": "snowman.glb",
+    "displayName": "雪だるま"
+  },
+  {
+    "modelId": "door",
+    "fileName": "door.glb",
+    "displayName": "ドア"
+  },
+  {
+    "modelId": "window",
+    "fileName": "window.glb",
+    "displayName": "窓"
+  },
+  {
+    "modelId": "floorPanel",
+    "fileName": "floor-panel.glb",
+    "displayName": "床パネル"
+  },
+  {
+    "modelId": "wallPanel",
+    "fileName": "wall-panel.glb",
+    "displayName": "壁パネル"
+  },
+  {
+    "modelId": "recordingStudio",
+    "fileName": "recording-studio.glb",
+    "displayName": "収録スタジオ"
+  },
+  {
+    "modelId": "campfireBase",
+    "fileName": "campfire-base.glb",
+    "displayName": "焚き火の炉と薪"
+  },
+  {
+    "modelId": "fountain",
+    "fileName": "fountain.glb",
+    "displayName": "二段の石造噴水"
+  },
+  {
+    "modelId": "wellBasin",
+    "fileName": "well-basin.glb",
+    "displayName": "井戸の石囲いと水面"
+  }
+]
