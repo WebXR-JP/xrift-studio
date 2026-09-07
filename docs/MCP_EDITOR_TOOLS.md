@@ -23,7 +23,23 @@ Studio に同梱する `xrift-studio-mcp-sidecar` は、MCP サーバーと CLI 
 .\xrift-studio-mcp-sidecar.exe call capture_scene_view --args-file .\capture.json --output-dir .\Recording
 ```
 
-`tools` は全ツールの説明と JSON Schema、`describe` は指定したツールの定義を返す。両方ともオフラインで使える。`call` は起動中の Studio を操作する。MCP と同じツール名・引数を使い、revision、Script の変換、保存先などの扱いも同じになる。編集対象の `projectId` と `sceneId` は `get_editor_context` で取得し、各ツールの定義に従って指定する。
+`tools` は全ツールの説明と JSON Schema、`describe` は指定したツールの定義を返す。両方ともオフラインで使える。`call` は起動中の Studio を操作する。MCP と同じツール名・引数を使い、revision、Script の変換、保存先などの扱いも同じになる。プロジェクトが開いていなくても Studio が起動していれば呼べる。`list_projects` で状態を確認し、`create_project` または `open_project` で Editor を開いてから、編集対象の `projectId` と `sceneId` を `get_editor_context` で取得する。
+
+ワールドの作成から公開までを CLI だけで通す例を示す。
+
+```powershell
+.\xrift-studio-mcp-sidecar.exe call create_project --args '{"name":"night-plaza","templateId":"blank"}'
+.\xrift-studio-mcp-sidecar.exe call get_editor_context
+# ここで document tool や local-asset tool を使って Scene を作る
+.\xrift-studio-mcp-sidecar.exe call update_project_metadata --args-file .\metadata.json
+.\xrift-studio-mcp-sidecar.exe call set_project_thumbnail --args-file .\thumbnail.json
+.\xrift-studio-mcp-sidecar.exe call get_account
+.\xrift-studio-mcp-sidecar.exe call login          # 未ログインならブラウザで完了させる
+.\xrift-studio-mcp-sidecar.exe call get_publish_readiness --args-file .\scene.json
+.\xrift-studio-mcp-sidecar.exe call publish_project --args-file .\scene.json
+```
+
+`publish_project` は `get_publish_readiness` と同じ確認を先に行い、足りない項目があれば `PUBLISH_NOT_READY` で `requirements` と `nextActions` を返す。公開は数分かかることがあり、その間の他の呼び出しは `EDITOR_BUSY` になる。
 
 引数は UTF-8 の JSON オブジェクトで渡す。`--args-file <path>`、`--args <JSON>`、`--stdin` のうち一つを選ぶ。省略すると `{}`。PowerShell では引用符の解釈を避けるため `--args-file` を推奨する。接続先は自動検出するが、`--rendezvous <path>`、環境変数 `XRIFT_STUDIO_MCP_RENDEZVOUS` の順で上書きできる。接続ファイルには認証情報が含まれるため、共有しない。
 
@@ -41,11 +57,12 @@ Studio に同梱する `xrift-studio-mcp-sidecar` は、MCP サーバーと CLI 
 
 制作状態と `list_component_definitions` は、ワールドの場合に `worldComponents` も返す。用途別の公式設備、配置と検証の手順、公式フィールド、Prefab の編集可能項目、現在の設備一覧を確認できる。交流・共同作業・発表では ScreenShareDisplay を最初に検討し、採用・省略の理由と利用場所を設計図に残す。Mirror はアバター確認、TagBoard はイベントのタグ選択に合わせて選ぶ。`place_builtin_prefab` は `componentId` と該当する `placementGuidance` を返す。位置・向き・大きさを調整し、客席や操作位置から撮影してから、対応環境で動作を確認する。設備の存在だけで共有・同期が動いたとは判断しない。
 
-tool は「誰が実行するか」で5つに分かれる。この分類が権限の境界を示す。
+tool は「誰が実行するか」で6つに分かれる。この分類が権限の境界を示す。
 document 以外は React shell か Tauri 側の副作用を伴う。
 
 | surface | 実行する場所 | 性質 |
 | --- | --- | --- |
+| `project` | `App.tsx` | プロジェクトの作成・開く・閉じる、公開、アカウント確認。Editor の外で動くので、プロジェクトが開いていなくても呼べる |
 | `document` | `mcp-editor-tools.ts` | document set への純粋な関数。副作用なし |
 | `local-asset` | React shell | ネイティブ file I/O を伴う |
 | `script` | React shell | project file I/O または Play mode の変更を伴う |
@@ -54,6 +71,8 @@ document 以外は React shell か Tauri 側の副作用を伴う。
 
 書き込み tool は `projectId`、`sceneId`、`expectedRevision` を要求する。古い
 snapshot への適用を防ぐためだ。複数 client が同時に触っても編集は直列化される。
+
+MCP の要求は常に shell (`App.tsx`) が受け取る。`project` tool は shell が処理し、それ以外は開いている Editor が処理する。Editor が無いあいだは shell が `EDITOR_UNAVAILABLE` を返し、`list_projects`、`open_project`、`create_project` を案内する。Editor は MCP の listener を登録した時点で shell へ bridge（最新 bundle、保存、退出）を登録し、shell はこの bridge を通じて公開と閉じる操作を行う。
 
 ## instructions と description の役割
 
@@ -67,6 +86,24 @@ description だけだ。スキルも文書も届かない。「何を作るか�
 document tool の戻り値には `harness` が付くことがある。同じ種類（Terrain、草、同じ Entity の
 Transform、同じ Material）の書き込みを `capture_scene_view` を挟まずに 3 回続けると付く警告だ。
 書き込み自体は拒否しない。数え方は Editor のメモリだけを使う。project には残らない。
+
+## project (9)
+
+**Library / セッション**
+`list_projects`, `list_starter_templates`, `create_project`, `open_project`,
+`close_project`
+
+`create_project` はスターターからプロジェクトを作って Editor で開き、`open_project` は Library の Visual プロジェクトを開く。どちらも開いているプロジェクトを保存して閉じてから切り替える。Classic プロジェクトは `PROJECT_NOT_EDITABLE` で断る。
+
+**アカウント**
+`get_account`, `login`
+
+`login` は Studio の中で `xrift login` を始める。ブラウザでの認証は人が完了し、認証情報は Studio の runtime home に残る。MCP へは「ログインしているか」と表示名だけを返す。
+
+**公開**
+`get_publish_readiness`, `publish_project`
+
+`get_publish_readiness` は保存してから、公開情報（スターターのタイトル・説明のままでないこと）、サムネイル、ログイン、compiler の blocking diagnostics を確認し、足りない項目ごとに直す tool を `nextActions` に返す。`publish_project` は同じ確認を通ったときだけ、公開ダイアログと同じ `publishVisualProject` パイプライン（保存・変換・`xrift check --build`・アップロード）を実行し、結果を project の `lastPublication` に保存する。人が公開を依頼した場合にだけ呼ぶ。
 
 ## document (93)
 
@@ -396,8 +433,8 @@ project ではなく app data へ置く。
 | 選択の変更だけ | 各 tool が結果として選択を移す。選択のためだけの tool は履歴も document も変えない。状態だけずらす |
 | Scene View の描画品質（自動 / 高品質 / 軽量 / 描画50% / 描画25%） | 編集中の描き方だけを変える Editor State だ。既定の自動は75%から開始し、負荷が続くと25%まで下げる。document にも公開物にも残らない。Play とサムネイル撮影は常に高品質で描く。読み取る見た目も変わらない |
 | 拡大・全体表示・パネル幅・タイムラインの範囲と時刻 | 見え方だけの状態だ。document に残らない。ノードの位置は document に残るので `move_interactivity_node` と `layout_interactivity_graph` で扱う |
-| Project の保存・公開・アップロード | 外向きの不可逆操作だ。アップロード前に `xrift.json` とサムネイルを確認する導線は残す |
-| Login / account 操作 | 認証情報を MCP 境界へ渡さないためだ |
+| 公開ダイアログの Texture 一括変換・Asset 最適化 | 公開前の容量削減は `process_texture_asset` と Asset ごとの tool で行う。`publish_project` は確認済みの document をそのまま公開する |
+| Logout、トークンの受け渡し | 認証情報を MCP 境界へ渡さないためだ。`login` は Studio の中で認証を始めるだけで、`get_account` は状態だけを返す |
 | 録画の保存先の指定 | `recording_begin_file` が開けるのは既定の保存先と、フォルダーダイアログで選んだ場所だけだ。path を直接書けると Rust 側の path 検証を迂回する。保存先を変える場合は録画パネルを使う |
 | 公式 Component の position / rotation / scale | `update_component` は XRift Component のこれらの prop を受け取らない。Component 側に持たせると Entity の Transform と別の原点ができ、選択したときのギズモと回転の中心が描かれている場所からずれる。配置は `update_component` の `transform` patch で Entity へ書く |
 | 任意 path の読み書き・削除 | Rust 側の path 検証と権限制御を迂回させないためだ |

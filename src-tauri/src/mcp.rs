@@ -22,6 +22,9 @@ const MCP_PROTOCOL_VERSION: &str = "2025-06-18";
 const MCP_RENDEZVOUS_SCHEMA_VERSION: u32 = 1;
 const MCP_EVENT_NAME: &str = "xrift-mcp-editor-request";
 const MCP_REQUEST_TIMEOUT_SECONDS: u64 = 180;
+// Publishing compiles, runs `xrift check --build` and uploads, so it can run
+// for many minutes. Opening a project also loads a lazily bundled Editor.
+const MCP_LONG_REQUEST_TIMEOUT_SECONDS: u64 = 1_800;
 const MCP_INITIAL_MESSAGE_TIMEOUT_SECONDS: u64 = 5;
 const MCP_EDITOR_QUEUE_TIMEOUT_MILLISECONDS: u64 = 2_000;
 // WebKit can throttle a background window's JavaScript timers to roughly one
@@ -597,7 +600,7 @@ async fn handle_broker_connection(
             &mut writer,
             envelope.request.id,
             "EDITOR_UNAVAILABLE",
-            "Visual EditorでProjectを開いてから再試行してください",
+            "XRift Studioのウィンドウが応答していません。Studioを起動してから再試行してください",
         )
         .await;
     }
@@ -620,6 +623,7 @@ async fn handle_broker_connection(
     };
     let (sender, receiver) = oneshot::channel();
     let request_id = envelope.request.id.clone();
+    let request_timeout = request_timeout_seconds(&envelope.request.tool);
     state
         .pending
         .lock()
@@ -646,7 +650,7 @@ async fn handle_broker_connection(
         .await;
     }
     let response = match tokio::time::timeout(
-        std::time::Duration::from_secs(MCP_REQUEST_TIMEOUT_SECONDS),
+        std::time::Duration::from_secs(request_timeout),
         receiver,
     )
     .await
@@ -723,6 +727,16 @@ fn editor_error(code: &str, message: &str) -> XriftMcpEditorError {
         code: code.to_string(),
         message: message.to_string(),
         details: None,
+    }
+}
+
+/// The broker waits longer on tools whose work is a whole pipeline, not one edit.
+fn request_timeout_seconds(tool_name: &str) -> u64 {
+    match tool_name {
+        "publish_project" | "create_project" | "open_project" | "close_project" => {
+            MCP_LONG_REQUEST_TIMEOUT_SECONDS
+        }
+        _ => MCP_REQUEST_TIMEOUT_SECONDS,
     }
 }
 
@@ -1910,7 +1924,7 @@ pub fn run_stdio_server() -> Result<(), String> {
                     "protocolVersion": MCP_PROTOCOL_VERSION,
                     "capabilities": { "tools": { "listChanged": false } },
                     "serverInfo": { "name": MCP_SERVER_NAME, "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": "XRift Studio edits one Scene of a world that people visit together. Output: one finished world. Studio includes persistent world authoring: call get_world_authoring to resume, or begin_world_authoring to save the blueprint and completion criteria. No source checkout, Node.js runner or local skill is required. After edits, capture_scene_view with authoringView spawn and iso returns images and capture IDs; review_world_authoring records each criterion verdict, and complete_world_authoring checks current evidence. Recording files go to Recording inside the open world project. Write a short blueprint before the first write (visitor activities, mood, quality level, ground type, main experience and visual focus, functional components, audience/operator/circulation areas, exclusions, budget, assumptions). For social, collaborative and presentation worlds, consider ScreenShareDisplay first and record inclusion or a purpose-based omission reason. Use Mirror when avatar viewing matters and TagBoard when an event needs participant tag selection; do not invent a TagMarker API. Read list_component_definitions worldComponents for official recipes, fields, existing instances and placement/verification guidance. Reserve functional equipment and its usage areas before decoration. Frame screens and mirrors with the architecture without covering displays or controls, and check sightlines from front/back/side audience and operator positions. An Edit placeholder or component presence does not prove live sharing, multi-user synchronization or tag selection; verify in a supported runtime and report untested behavior. State the blueprint and continue. Stop only for login or publishing. Terrain, grass, post effects, external assets, heavy models require one line of reason in the blueprint. Without that line, skip them. Build order (skip allowed, no reorder): ground and blockout with real Materials and circulation; main experience equipment and visual focus; sky, ambient light, fog together; remaining blueprint items; verification. Three same-category writes (Terrain, grass, one Entity Transform, one Material, Scene settings) without capture_scene_view return a harness warning. Post effects require a before/after capture_scene_view comparison. Do not ship default grey primitives. Motion, repetition, generative structure belong to Scripts. Read get_scripting_capabilities and list_script_templates before writing one. Do not report a world as done without capture_scene_view from the spawn point at eye height and from the iso view; metrics and the document state expectations, frames state results. When the client has the xrift-world-direction skill, read it before building. Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Use get_terrain before sculpt_terrain; Terrain is a static height-sampled mesh with a fixed Trimesh Collider, so create_terrain and sculpt_terrain are Edit-only. Script execution is not sandboxed. Studio Play and set_play_mode compile and execute saved Scripts without a separate approval dialog. Source fingerprints are diagnostics, not permission. Compilation failure leaves the editor in Edit; failed hot reload keeps the last working module. Inspect scriptRuntime after starting or updating Scripts. Call get_scripting_capabilities and list_script_templates before authoring a Script. Use create_script_asset with templateId to create a built-in example, or apply_script_template to create it and attach its Script Component to an Entity in one editor revision. For custom source, use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, update_script_component to declare properties and references, then set_play_mode. Use import_audio_asset, import_font_asset, import_texture_asset, import_model_asset, import_skybox_asset, or import_shader_asset only for a trusted absolute local path while Edit is active; the Editor validates extension, signature, regular-file/no-link status, and size limits, then copies it into managed project storage without returning file bytes or the external path. Use get_model_asset/update_model_asset for import settings and material slots, and reimport_model_asset to apply derived Model changes. Use get_shader_asset/update_shader_asset for project shader source. Use get_audio_asset plus place_asset, or add_component with core.audio-source and update_component, for persistent Audio Source authoring. Use get_texture_asset/update_texture_asset for persistent sampler and import settings; updates are supported during Play and restart only consuming Entities. Runtime ctx.audioSources, ctx.materials, and ctx.particles changes reset on Stop; use persistent Audio Source, Material, or Particle tools to save authoring data. Call list_component_definitions and get_entity_components before add_component, update_component, or remove_component. Use create_prefab to turn an Entity hierarchy into a reusable Prefab Asset, then place_asset to instantiate it. While Play is active, Entity enabled state and supported component/scene structure tools synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. To record the Scene View while building, call get_recording_status, then start_recording (idempotent), set_recording_camera with fitScene as the world grows, and stop_recording when done; a failed recording call never affects editing tools. XRift Studio must be open with a visual project."
+                    "instructions": "XRift Studio edits one Scene of a world that people visit together. Output: one finished world. Start with list_projects: it says which project is open. With none open, create_project (name, optional kind and templateId from list_starter_templates) or open_project makes one the Editor session; until then editing tools answer EDITOR_UNAVAILABLE. Publishing is available: get_publish_readiness names what is missing (starter metadata via update_project_metadata, a thumbnail via set_project_thumbnail, sign-in via login and get_account, blocking diagnostics), and publish_project uploads to XRift and returns the URL or id. Call publish_project only when the person asked for the world to be published. Studio includes persistent world authoring: call get_world_authoring to resume, or begin_world_authoring to save the blueprint and completion criteria. No source checkout, Node.js runner or local skill is required. After edits, capture_scene_view with authoringView spawn and iso returns images and capture IDs; review_world_authoring records each criterion verdict, and complete_world_authoring checks current evidence. Recording files go to Recording inside the open world project. Write a short blueprint before the first write (visitor activities, mood, quality level, ground type, main experience and visual focus, functional components, audience/operator/circulation areas, exclusions, budget, assumptions). For social, collaborative and presentation worlds, consider ScreenShareDisplay first and record inclusion or a purpose-based omission reason. Use Mirror when avatar viewing matters and TagBoard when an event needs participant tag selection; do not invent a TagMarker API. Read list_component_definitions worldComponents for official recipes, fields, existing instances and placement/verification guidance. Reserve functional equipment and its usage areas before decoration. Frame screens and mirrors with the architecture without covering displays or controls, and check sightlines from front/back/side audience and operator positions. An Edit placeholder or component presence does not prove live sharing, multi-user synchronization or tag selection; verify in a supported runtime and report untested behavior. State the blueprint and continue. Stop only when login needs the person's browser, or when publishing was not requested. Terrain, grass, post effects, external assets, heavy models require one line of reason in the blueprint. Without that line, skip them. Build order (skip allowed, no reorder): ground and blockout with real Materials and circulation; main experience equipment and visual focus; sky, ambient light, fog together; remaining blueprint items; verification. Three same-category writes (Terrain, grass, one Entity Transform, one Material, Scene settings) without capture_scene_view return a harness warning. Post effects require a before/after capture_scene_view comparison. Do not ship default grey primitives. Motion, repetition, generative structure belong to Scripts. Read get_scripting_capabilities and list_script_templates before writing one. Do not report a world as done without capture_scene_view from the spawn point at eye height and from the iso view; metrics and the document state expectations, frames state results. When the client has the xrift-world-direction skill, read it before building. Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Use get_terrain before sculpt_terrain; Terrain is a static height-sampled mesh with a fixed Trimesh Collider, so create_terrain and sculpt_terrain are Edit-only. Script execution is not sandboxed. Studio Play and set_play_mode compile and execute saved Scripts without a separate approval dialog. Source fingerprints are diagnostics, not permission. Compilation failure leaves the editor in Edit; failed hot reload keeps the last working module. Inspect scriptRuntime after starting or updating Scripts. Call get_scripting_capabilities and list_script_templates before authoring a Script. Use create_script_asset with templateId to create a built-in example, or apply_script_template to create it and attach its Script Component to an Entity in one editor revision. For custom source, use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, update_script_component to declare properties and references, then set_play_mode. Use import_audio_asset, import_font_asset, import_texture_asset, import_model_asset, import_skybox_asset, or import_shader_asset only for a trusted absolute local path while Edit is active; the Editor validates extension, signature, regular-file/no-link status, and size limits, then copies it into managed project storage without returning file bytes or the external path. Use get_model_asset/update_model_asset for import settings and material slots, and reimport_model_asset to apply derived Model changes. Use get_shader_asset/update_shader_asset for project shader source. Use get_audio_asset plus place_asset, or add_component with core.audio-source and update_component, for persistent Audio Source authoring. Use get_texture_asset/update_texture_asset for persistent sampler and import settings; updates are supported during Play and restart only consuming Entities. Runtime ctx.audioSources, ctx.materials, and ctx.particles changes reset on Stop; use persistent Audio Source, Material, or Particle tools to save authoring data. Call list_component_definitions and get_entity_components before add_component, update_component, or remove_component. Use create_prefab to turn an Entity hierarchy into a reusable Prefab Asset, then place_asset to instantiate it. While Play is active, Entity enabled state and supported component/scene structure tools synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. To record the Scene View while building, call get_recording_status, then start_recording (idempotent), set_recording_camera with fitScene as the world grows, and stop_recording when done; a failed recording call never affects editing tools. XRift Studio must be running; open or create a project with the project tools before editing."
                 }),
             )?,
             "ping" => write_json_rpc_result(&mut stdout, id, json!({}))?,
@@ -2093,7 +2107,9 @@ fn proxy_tool_call(
     .map_err(|_| "XRift Studio is not running".to_string())?;
     stream
         .set_read_timeout(Some(std::time::Duration::from_secs(
-            MCP_REQUEST_TIMEOUT_SECONDS + (MCP_EDITOR_QUEUE_TIMEOUT_MILLISECONDS / 1_000) + 5,
+            request_timeout_seconds(&request.tool)
+                + (MCP_EDITOR_QUEUE_TIMEOUT_MILLISECONDS / 1_000)
+                + 5,
         )))
         .map_err(|error| error.to_string())?;
     let envelope = XriftMcpBrokerEnvelope {
@@ -2285,6 +2301,64 @@ fn terrain_grass_appearance_schema() -> Value {
 
 fn tool_definitions() -> Value {
     json!([
+        {
+            "name": "list_projects",
+            "description": "List the projects in the Studio Library with path, kind, format, title, last upload and which one is open. Call it before open_project, and to learn whether anything is open at all: while nothing is open, every editing tool answers EDITOR_UNAVAILABLE. Only Visual projects (editable: true) can be opened here; Classic projects are code projects and stay outside MCP. Needs no open project.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "list_starter_templates",
+            "description": "List the starter templates create_project accepts, per kind (world or item), with the default marked. Choose blank for a world you will build from the blueprint; xrift-official is a furnished sample for studying the official components. Needs no open project.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "create_project",
+            "description": "Create a new Visual project from a starter template in the Studio Library and open it in the Editor, so the next call can be get_editor_context. name becomes the project folder and the initial title; pick a distinct one, an existing name is refused with PROJECT_EXISTS (use open_project instead). kind defaults to world, templateId to the kind's default starter. Any project already open is saved and closed first. After this, begin_world_authoring records the blueprint; update_project_metadata replaces the starter title and description before publishing.",
+            "inputSchema": { "type": "object", "properties": {
+                "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                "kind": { "type": "string", "enum": ["world", "item"] },
+                "templateId": { "type": "string", "minLength": 1 }
+            }, "required": ["name"], "additionalProperties": false }
+        },
+        {
+            "name": "open_project",
+            "description": "Open a Visual project from the Library in the Editor by path (preferred) or name, saving and closing any project that is open. Returns projectId and sceneId; still call get_editor_context for the revision before writing. Classic projects answer PROJECT_NOT_EDITABLE. Resume authoring with get_world_authoring.",
+            "inputSchema": { "type": "object", "properties": {
+                "path": { "type": "string", "minLength": 1 },
+                "name": { "type": "string", "minLength": 1 }
+            }, "additionalProperties": false }
+        },
+        {
+            "name": "close_project",
+            "description": "Save the open project and return to the Library. Rarely needed: create_project and open_project close the current project themselves. Answers EDITOR_BUSY when the save fails, in which case the person must look at Studio.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "get_account",
+            "description": "Report whether Studio is signed in to XRift and as whom. Publishing requires a signed-in account; no credential ever crosses this boundary. Needs no open project.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "login",
+            "description": "Start XRift sign-in from Studio: the person's browser opens the XRift login page and the credential stays inside Studio. Returns immediately with started: true; poll get_account until signedIn is true, and tell the person to finish the login in the browser. Already signed in answers started: false. Needs no open project.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "get_publish_readiness",
+            "description": "Save the open project and report what still blocks publishing: requirements (metadata not left as the starter's, a project thumbnail, a signed-in account, no blocking compiler diagnostics), the update target when the project was published before, blocking and warning diagnostics with entityId/assetId, and nextActions naming the tool that clears each unmet requirement. Call it before publish_project and after fixing anything it named. Changes no scene content.",
+            "inputSchema": { "type": "object", "properties": {
+                "projectId": { "type": "string", "minLength": 1 },
+                "sceneId": { "type": "string", "minLength": 1 }
+            }, "required": ["projectId", "sceneId"], "additionalProperties": false }
+        },
+        {
+            "name": "publish_project",
+            "description": "Publish the open project to XRift: save, compile, run the official check, and upload, then record the result in the project. Only call it when the person asked for the world to be published; publishing is public and cannot be undone from here. Runs get_publish_readiness first and refuses with PUBLISH_NOT_READY (carrying requirements and nextActions) when anything is missing. Updates the existing world or item when the project was published before. Can take several minutes; other tools answer EDITOR_BUSY meanwhile. Returns remoteId, url when XRift returned one, versionNumber and progress. Report the URL or remoteId to the person.",
+            "inputSchema": { "type": "object", "properties": {
+                "projectId": { "type": "string", "minLength": 1 },
+                "sceneId": { "type": "string", "minLength": 1 }
+            }, "required": ["projectId", "sceneId"], "additionalProperties": false }
+        },
         {
             "name": "begin_world_authoring",
             "description": "Save a blueprint and unique completion criteria in the open world project before editing. No repository clone or client-side skill is required. If a goal already exists, use get_world_authoring to resume. Record what visitors do together, the ScreenShareDisplay inclusion or omission decision, required functional components, audience/operator/circulation areas and visual plus functional criteria. Returns worldComponents with current instances and placement guidance. Include metrics/budget criteria. Capture spawn and iso views plus relevant usage viewpoints; verify interactions in a supported runtime and record untested behavior honestly before reviewing each criterion.",

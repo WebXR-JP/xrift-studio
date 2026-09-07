@@ -59,6 +59,8 @@ export * from "./lighting-contract";
 export * from "./mcp-tool-registry";
 export * from "./mcp-editor-tools";
 export * from "./mcp-editor-tools.fixture";
+export * from "./mcp-project-tools";
+export * from "./mcp-project-tools.fixture";
 export * from "./three-model-converter";
 export * from "./model-companion-batch";
 export * from "./model-companion-batch.fixture";

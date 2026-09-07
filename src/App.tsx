@@ -18,7 +18,10 @@ import {
   type Project,
   type ProjectKind,
   type RuntimeStatus,
+  type XriftMcpEditorRequestEvent,
+  type XriftMcpEditorResponse,
 } from "./lib/tauri";
+import type { VisualEditorMcpProjectBridge } from "./components/visual-editor/VisualEditorPrototype";
 import {
   xrift,
   clearCaches,
@@ -47,7 +50,7 @@ import {
 } from "./components/visual-editor/VisualUploadDialog";
 import { VisualEditorErrorBoundary } from "./components/visual-editor/VisualEditorErrorBoundary";
 import { usePublishReview } from "./lib/visual-editor/use-publish-review";
-import { PUBLISH_REVIEW_FAILURE } from "./lib/visual-editor/publish-review";
+import { PUBLISH_REVIEW_FAILURE, analyzePublishReview } from "./lib/visual-editor/publish-review";
 import { ClassicExportDialog } from "./components/visual-editor/ClassicExportDialog";
 import {
   applyAssetOptimizations,
@@ -63,6 +66,16 @@ import {
   defaultVisualStarterTemplateId,
   publishVisualProject,
   clearStaleXriftUploadAttempt,
+  XriftMcpEditorToolError,
+  buildPublishReadiness,
+  editorSessionUnavailableError,
+  inspectVisualPublishMetadata,
+  isXriftMcpProjectTool,
+  listStarterTemplates,
+  parseCreateProjectArguments,
+  resolveProjectTarget,
+  summarizeProject,
+  type VisualPublishPipelineProgress,
   readVisualProjectFromDisk,
   prepareStarterVisualProject,
   saveVisualProjectToDisk,
@@ -677,6 +690,490 @@ function App() {
     });
   };
 
+  /**
+   * Save, compile, check and upload one Visual project. Shared by the upload
+   * dialog and the MCP publish_project tool so both leave the same
+   * publication record behind.
+   */
+  const runVisualPublish = async (
+    publishBundle: PrototypeVisualProject,
+    report: (progress: VisualPublishPipelineProgress) => void,
+    signal: AbortSignal,
+  ) => {
+    const session = visualSessionRef.current;
+    let savedProjectPath: string | null = null;
+    let result: Awaited<ReturnType<typeof publishVisualProject>>;
+    try {
+      result = await publishVisualProject({
+        authoringProjectPath: session?.project?.path,
+        kind: publishBundle.project.projectKind,
+        documents: {
+          project: publishBundle.project,
+          scenes: { [publishBundle.scene.sceneId]: publishBundle.scene },
+          assets: publishBundle.assets,
+          prefabs: publishBundle.prefabs,
+          // The compiler stays synchronous, so Script sources are read
+          // here and handed over with the rest of the documents.
+          scriptSources: await readScriptSources(
+            session?.project?.path,
+            publishBundle.assets,
+          ),
+        },
+        save: async () => {
+          savedProjectPath = await handleSaveVisualProject(
+            publishBundle,
+            false,
+          );
+          return savedProjectPath;
+        },
+        report: (progress) => {
+          if (progress.thumbnailStaging?.state === "verified") {
+            setVisualCompilationFresh(true);
+          }
+          report(progress);
+        },
+        onLog: appendLog,
+        signal,
+      });
+    } catch (error) {
+      setVisualCompilationFresh(false);
+      throw error;
+    }
+    const publishedBundle: PrototypeVisualProject = {
+      ...publishBundle,
+      project: {
+        ...publishBundle.project,
+        metadata: {
+          ...publishBundle.project.metadata,
+          updatedAt: new Date().toISOString(),
+        },
+        lastPublication: {
+          ...result,
+          uploadedAt: result.uploadedAt ?? new Date().toISOString(),
+        },
+      },
+    };
+    setVisualPublishBundle((current) => (current ? publishedBundle : current));
+    // Keep the authoritative remote result in memory even if the
+    // follow-up manifest write fails. A later Save must not restore an
+    // older publication target over the durable CLI sidecar.
+    setVisualSession((current) =>
+      current ? { ...current, bundle: publishedBundle } : current,
+    );
+    try {
+      if (!savedProjectPath) {
+        throw new Error("保存先を確認できませんでした。");
+      }
+      await saveVisualProjectToDisk(savedProjectPath, {
+        project: publishedBundle.project,
+        scenes: {
+          [publishedBundle.scene.sceneId]: publishedBundle.scene,
+        },
+        assets: publishedBundle.assets,
+        prefabs: publishedBundle.prefabs,
+      });
+      await refreshProjects();
+    } catch {
+      toast({
+        kind: "error",
+        title: "アップロードは完了しましたが、結果をプロジェクトへ保存できませんでした",
+      });
+    }
+    return result;
+  };
+
+  // ---------------------------------------------------------------------
+  // MCP project tools. The Editor answers document, asset, script and debug
+  // tools once a project is open; the shell answers the tools that make a
+  // project exist (create, open, close), publish it, and read the account.
+  // The shell also owns the bridge heartbeat, so a client that connects while
+  // the Library is showing gets a clear "open a project" answer instead of a
+  // timeout.
+  // ---------------------------------------------------------------------
+  const mcpProjectBridgeRef = useRef<VisualEditorMcpProjectBridge | null>(null);
+  const registerMcpProjectBridge = useCallback(
+    (bridge: VisualEditorMcpProjectBridge | null) => {
+      mcpProjectBridgeRef.current = bridge;
+    },
+    [],
+  );
+  const mcpPublishActiveRef = useRef(false);
+
+  const requireMcpProjectsRoot = (): string => {
+    if (!projectsRoot) {
+      throw new XriftMcpEditorToolError(
+        "EDITOR_UNAVAILABLE",
+        "XRift Studioのセットアップが完了していません。Studioのセットアップ画面を先に終えてください",
+      );
+    }
+    return projectsRoot;
+  };
+
+  const requireMcpProjectBridge = (tool: string): VisualEditorMcpProjectBridge => {
+    const bridge = mcpProjectBridgeRef.current;
+    if (!bridge || !visualSessionRef.current) {
+      throw editorSessionUnavailableError(tool);
+    }
+    return bridge;
+  };
+
+  /** Resolves once the Editor for a newly opened project has registered its bridge. */
+  const waitForMcpProjectBridge = async (
+    previous: VisualEditorMcpProjectBridge | null,
+  ): Promise<VisualEditorMcpProjectBridge> => {
+    const deadline = Date.now() + 60_000;
+    while (Date.now() < deadline) {
+      const bridge = mcpProjectBridgeRef.current;
+      if (bridge && bridge !== previous && visualSessionRef.current) return bridge;
+      await new Promise((resolve) => window.setTimeout(resolve, 100));
+    }
+    throw new XriftMcpEditorToolError(
+      "EDITOR_TIMEOUT",
+      "Editorの起動を確認できませんでした。get_editor_contextで状態を確認してください",
+    );
+  };
+
+  /** Leaves the current Editor session, saving first. */
+  const leaveMcpProjectSession = async (): Promise<void> => {
+    const bridge = mcpProjectBridgeRef.current;
+    if (!bridge || !visualSessionRef.current) return;
+    const left = await bridge.leave();
+    if (!left || visualSessionRef.current) {
+      throw new XriftMcpEditorToolError(
+        "EDITOR_BUSY",
+        "開いているプロジェクトを保存して閉じられませんでした。Studioの画面で保存の失敗を確認してください",
+      );
+    }
+  };
+
+  const describeOpenMcpSession = (extra: Record<string, unknown> = {}) => {
+    const session = visualSessionRef.current;
+    if (!session) throw editorSessionUnavailableError("open_project");
+    return {
+      path: session.project?.path ?? null,
+      name: session.project?.name ?? session.bundle.project.metadata.name,
+      kind: session.bundle.project.projectKind,
+      projectId: session.bundle.project.projectId,
+      sceneId: session.bundle.scene.sceneId,
+      ...extra,
+    };
+  };
+
+  const readMcpAccount = async () => {
+    const account = await xrift.whoami(silentLog).catch(() => null);
+    if (account) setUser(account);
+    return {
+      signedIn: account !== null,
+      displayName: account?.displayName ?? null,
+      id: account?.id ?? null,
+    };
+  };
+
+  const inspectMcpPublishReadiness = async (
+    tool: string,
+    args: Record<string, unknown>,
+  ) => {
+    const bridge = requireMcpProjectBridge(tool);
+    const session = visualSessionRef.current;
+    if (!session) throw editorSessionUnavailableError(tool);
+    const bundle = withLatestPublication(
+      bridge.currentBundle(),
+      session.bundle.project.lastPublication,
+    );
+    if (
+      (typeof args.projectId === "string" && args.projectId !== bundle.project.projectId) ||
+      (typeof args.sceneId === "string" && args.sceneId !== bundle.scene.sceneId)
+    ) {
+      throw new XriftMcpEditorToolError(
+        "STALE_REVISION",
+        "対象Sceneが現在のEditorと一致しません。get_editor_contextで再取得してください",
+        { projectId: bundle.project.projectId, sceneId: bundle.scene.sceneId },
+      );
+    }
+    const path = (await bridge.saveNow()) ?? visualSessionRef.current?.project?.path;
+    if (!path) {
+      throw new XriftMcpEditorToolError(
+        "EDITOR_ERROR",
+        "プロジェクトを保存できませんでした。Studioの画面で保存の失敗を確認してください",
+      );
+    }
+    const kind = bundle.project.projectKind;
+    const [thumbnail, account, scriptSources] = await Promise.all([
+      inspectPublishThumbnail(path, kind),
+      readMcpAccount(),
+      readScriptSources(path, bundle.assets),
+    ]);
+    const review = analyzePublishReview({ bundle, scriptSources });
+    const publication = bundle.project.lastPublication;
+    const readiness = buildPublishReadiness({
+      kind,
+      metadata: inspectVisualPublishMetadata(bundle),
+      thumbnail,
+      signedIn: account.signedIn,
+      displayName: account.displayName,
+      diagnostics: review.diagnostics,
+      remoteId:
+        kind === "world"
+          ? publication?.worldId ?? publication?.contentId
+          : publication?.itemId ?? publication?.contentId,
+    });
+    return {
+      bundle,
+      path,
+      readiness,
+      review,
+      result: {
+        projectId: bundle.project.projectId,
+        sceneId: bundle.scene.sceneId,
+        path,
+        kind,
+        ...readiness,
+        vramEstimate: review.vramEstimate,
+        previousPublication: publication ?? null,
+      },
+    };
+  };
+
+  const handleMcpProjectTool = async (
+    request: XriftMcpEditorRequestEvent,
+  ): Promise<Record<string, unknown>> => {
+    const args = request.arguments ?? {};
+    switch (request.tool) {
+      case "list_starter_templates":
+        return { templates: listStarterTemplates() };
+      case "list_projects": {
+        const root = requireMcpProjectsRoot();
+        await tauri.ensureDir(root);
+        const list = await tauri.listProjects(root);
+        setProjects(list);
+        const openPath = visualSessionRef.current?.project?.path ?? null;
+        return {
+          projectsRoot: root,
+          openProjectPath: openPath,
+          projects: list.map((project) => summarizeProject(project, openPath)),
+        };
+      }
+      case "get_account":
+        return readMcpAccount();
+      case "login": {
+        const account = await readMcpAccount();
+        if (account.signedIn) return { ...account, started: false };
+        void handleLogin();
+        return {
+          ...account,
+          started: true,
+          message:
+            "ブラウザでXRiftのログインを完了してください。完了したかどうかはget_accountで確認します",
+          nextActions: ["get_account"],
+        };
+      }
+      case "create_project": {
+        const root = requireMcpProjectsRoot();
+        const { kind, name, templateId } = parseCreateProjectArguments(args);
+        const existing = (await tauri.listProjects(root)).find(
+          (project) => project.name === name,
+        );
+        if (existing) {
+          throw new XriftMcpEditorToolError(
+            "PROJECT_EXISTS",
+            "同じ名前のプロジェクトがすでにあります。open_projectで開くか、別の名前を使ってください",
+            { path: existing.path, name },
+          );
+        }
+        const previousBridge = mcpProjectBridgeRef.current;
+        await leaveMcpProjectSession();
+        const plan = createStarterVisualProject(kind, templateId, name);
+        const prepared = await prepareStarterVisualProject(plan);
+        const bundle: PrototypeVisualProject = {
+          project: prepared.plan.project,
+          scene: prepared.plan.scene,
+          assets: prepared.plan.assets,
+          prefabs: prepared.plan.prefabs,
+        };
+        const project = await createPreparedStarterVisualProjectOnDisk(
+          root,
+          name,
+          prepared,
+        );
+        setNewProjectError(null);
+        setShowNewDialog(false);
+        setVisualCompilationFresh(false);
+        setVisualThumbnailReadiness(null);
+        setVisualSession({ bundle, project });
+        await refreshProjects();
+        await waitForMcpProjectBridge(previousBridge);
+        return describeOpenMcpSession({
+          created: true,
+          templateId,
+          nextActions: ["get_editor_context", "begin_world_authoring"],
+        });
+      }
+      case "open_project": {
+        const root = requireMcpProjectsRoot();
+        const target = resolveProjectTarget(await tauri.listProjects(root), args);
+        const current = visualSessionRef.current;
+        if (current?.project?.path === target.path && mcpProjectBridgeRef.current) {
+          return describeOpenMcpSession({
+            alreadyOpen: true,
+            nextActions: ["get_editor_context"],
+          });
+        }
+        const previousBridge = mcpProjectBridgeRef.current;
+        await leaveMcpProjectSession();
+        await loadVisualProjectSession(target);
+        await waitForMcpProjectBridge(previousBridge);
+        return describeOpenMcpSession({
+          alreadyOpen: false,
+          nextActions: ["get_editor_context", "get_world_authoring"],
+        });
+      }
+      case "close_project": {
+        const closing = describeOpenMcpSession();
+        requireMcpProjectBridge(request.tool);
+        await leaveMcpProjectSession();
+        return { ...closing, closed: true, nextActions: ["list_projects"] };
+      }
+      case "get_publish_readiness":
+        return (await inspectMcpPublishReadiness(request.tool, args)).result;
+      case "publish_project": {
+        if (mcpPublishActiveRef.current) {
+          throw new XriftMcpEditorToolError(
+            "EDITOR_BUSY",
+            "公開を処理中です。完了してからget_publish_readinessで状態を確認してください",
+          );
+        }
+        const inspected = await inspectMcpPublishReadiness(request.tool, args);
+        if (!inspected.readiness.ready) {
+          throw new XriftMcpEditorToolError(
+            "PUBLISH_NOT_READY",
+            "公開の条件が揃っていません。requirementsとnextActionsに従って直してから、もう一度publish_projectを呼んでください",
+            {
+              requirements: inspected.readiness.requirements,
+              nextActions: inspected.readiness.nextActions,
+              blockingDiagnostics: inspected.readiness.blockingDiagnostics,
+            },
+          );
+        }
+        mcpPublishActiveRef.current = true;
+        const progress: string[] = [];
+        try {
+          const controller = new AbortController();
+          const result = await runVisualPublish(
+            inspected.bundle,
+            (step) => {
+              const line = step.detail ? `${step.label}: ${step.detail}` : step.label;
+              if (progress[progress.length - 1] !== line) progress.push(line);
+            },
+            controller.signal,
+          );
+          const kind = inspected.bundle.project.projectKind;
+          const remoteId =
+            kind === "world"
+              ? result.worldId ?? result.contentId
+              : result.itemId ?? result.contentId;
+          toast({
+            kind: "success",
+            title: `AI clientから${kind === "world" ? "ワールド" : "アイテム"}を公開しました`,
+            description: result.url ?? remoteId ?? undefined,
+          });
+          return {
+            projectId: inspected.bundle.project.projectId,
+            sceneId: inspected.bundle.scene.sceneId,
+            kind,
+            published: true,
+            remoteId: remoteId ?? null,
+            url: result.url ?? null,
+            versionId: result.versionId ?? null,
+            versionNumber: result.versionNumber ?? null,
+            uploadedAt: result.uploadedAt ?? null,
+            status: result.status ?? null,
+            warnings: inspected.readiness.warningDiagnostics,
+            progress,
+            message: result.url
+              ? "公開しました。URLを利用者に伝えてください"
+              : "公開しました。XRiftの公開先を確認してください",
+          };
+        } finally {
+          mcpPublishActiveRef.current = false;
+        }
+      }
+      default:
+        throw new XriftMcpEditorToolError(
+          "TOOL_NOT_FOUND",
+          "対応していないAI editor toolです",
+        );
+    }
+  };
+  const handleMcpProjectToolRef = useRef(handleMcpProjectTool);
+  handleMcpProjectToolRef.current = handleMcpProjectTool;
+
+  useEffect(() => {
+    if (!tauri.isAvailable()) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    let heartbeat: number | undefined;
+    const respond = (response: XriftMcpEditorResponse) =>
+      tauri.completeXriftMcpRequest(response).catch(() => undefined);
+    const fail = (id: string, error: unknown) => {
+      const editorError =
+        error instanceof XriftMcpEditorToolError
+          ? error
+          : new XriftMcpEditorToolError(
+              "EDITOR_ERROR",
+              error instanceof Error ? error.message : String(error),
+            );
+      return respond({
+        id,
+        ok: false,
+        error: {
+          code: editorError.code,
+          message: editorError.message,
+          details: editorError.details,
+        },
+      });
+    };
+    void tauri
+      .onXriftMcpEditorRequest((request) => {
+        if (disposed) return;
+        if (isXriftMcpProjectTool(request.tool)) {
+          void handleMcpProjectToolRef
+            .current(request)
+            .then((result) => respond({ id: request.id, ok: true, result }))
+            .catch((error) => fail(request.id, error));
+          return;
+        }
+        // Editor tools with no Editor listening would otherwise wait for the
+        // broker's timeout. Editor-backed project tools are handled above.
+        if (!mcpProjectBridgeRef.current) {
+          void fail(request.id, editorSessionUnavailableError(request.tool));
+        }
+      })
+      .then(async (dispose) => {
+        if (disposed) {
+          dispose();
+          return;
+        }
+        unlisten = dispose;
+        try {
+          await tauri.setXriftMcpEditorReady(true);
+          heartbeat = window.setInterval(() => {
+            void tauri.setXriftMcpEditorReady(true).catch(() => undefined);
+          }, 5_000);
+        } catch (error) {
+          appendLog({ kind: "stderr", text: `mcp bridge: ${String(error)}`, ts: Date.now() });
+        }
+      })
+      .catch((error) => {
+        appendLog({ kind: "stderr", text: `mcp bridge: ${String(error)}`, ts: Date.now() });
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+      if (heartbeat !== undefined) window.clearInterval(heartbeat);
+      void tauri.setXriftMcpEditorReady(false).catch(() => undefined);
+    };
+  }, [appendLog]);
+
   const handleImportClassicProject = (
     kind: ProjectKind,
     name: string,
@@ -745,16 +1242,13 @@ function App() {
       : null;
   };
 
-  const handleOpenProject = (project: Project) => {
-    if (project.format === "classic") {
-      setSelected(project);
-      return;
-    }
+  /** Reads a Visual project from disk and makes it the open Editor session. */
+  const loadVisualProjectSession = async (project: Project) => {
     setVisualCompilationFresh(false);
     setVisualThumbnailReadiness(null);
     setVisualLoading(true);
-    void readVisualProjectFromDisk(project.path)
-      .then((documents) => {
+    try {
+      await readVisualProjectFromDisk(project.path).then((documents) => {
         const scene = documents.scenes[documents.project.entrySceneId];
         if (!scene) throw new Error("Entry Sceneが見つかりません");
         // v1 removed the Animation Component, so a project saved before it was
@@ -789,15 +1283,24 @@ function App() {
             prefabs: documents.prefabs,
           },
         });
-      })
-      .catch((error) => {
-        toast({
-          kind: "error",
-          title: "ビジュアルプロジェクトを開けませんでした",
-          description: String(error),
-        });
-      })
-      .finally(() => setVisualLoading(false));
+      });
+    } finally {
+      setVisualLoading(false);
+    }
+  };
+
+  const handleOpenProject = (project: Project) => {
+    if (project.format === "classic") {
+      setSelected(project);
+      return;
+    }
+    void loadVisualProjectSession(project).catch((error) => {
+      toast({
+        kind: "error",
+        title: "ビジュアルプロジェクトを開けませんでした",
+        description: String(error),
+      });
+    });
   };
 
   const handleSaveVisualProject = async (
@@ -998,6 +1501,7 @@ function App() {
               onRegisterExternalAssetsCommit={(commit) => {
                 visualExternalAssetsCommitRef.current = commit;
               }}
+              onRegisterMcpProjectBridge={registerMcpProjectBridge}
               onClassicExport={(bundle) => {
                 setVisualClassicExportBundle(bundle);
               }}
@@ -1184,85 +1688,7 @@ function App() {
           })()}
           onPublish={async (report, signal) => {
             if (!publishBundle) throw new Error("公開する制作データがありません。");
-            let savedProjectPath: string | null = null;
-            let result: Awaited<ReturnType<typeof publishVisualProject>>;
-            try {
-              result = await publishVisualProject({
-                authoringProjectPath: visualSession.project?.path,
-                kind: publishBundle.project.projectKind,
-                documents: {
-                  project: publishBundle.project,
-                  scenes: { [publishBundle.scene.sceneId]: publishBundle.scene },
-                  assets: publishBundle.assets,
-                  prefabs: publishBundle.prefabs,
-                  // The compiler stays synchronous, so Script sources are read
-                  // here and handed over with the rest of the documents.
-                  scriptSources: await readScriptSources(
-                    visualSession.project?.path,
-                    publishBundle.assets,
-                  ),
-                },
-                save: async () => {
-                  savedProjectPath = await handleSaveVisualProject(
-                    publishBundle,
-                    false,
-                  );
-                  return savedProjectPath;
-                },
-                report: (progress) => {
-                  if (progress.thumbnailStaging?.state === "verified") {
-                    setVisualCompilationFresh(true);
-                  }
-                  report(progress);
-                },
-                onLog: appendLog,
-                signal,
-              });
-            } catch (error) {
-              setVisualCompilationFresh(false);
-              throw error;
-            }
-            const publishedBundle: PrototypeVisualProject = {
-              ...publishBundle,
-              project: {
-                ...publishBundle.project,
-                metadata: {
-                  ...publishBundle.project.metadata,
-                  updatedAt: new Date().toISOString(),
-                },
-                lastPublication: {
-                  ...result,
-                  uploadedAt: result.uploadedAt ?? new Date().toISOString(),
-                },
-              },
-            };
-            setVisualPublishBundle(publishedBundle);
-            // Keep the authoritative remote result in memory even if the
-            // follow-up manifest write fails. A later Save must not restore an
-            // older publication target over the durable CLI sidecar.
-            setVisualSession((current) =>
-              current ? { ...current, bundle: publishedBundle } : current,
-            );
-            try {
-              if (!savedProjectPath) {
-                throw new Error("保存先を確認できませんでした。");
-              }
-              await saveVisualProjectToDisk(savedProjectPath, {
-                project: publishedBundle.project,
-                scenes: {
-                  [publishedBundle.scene.sceneId]: publishedBundle.scene,
-                },
-                assets: publishedBundle.assets,
-                prefabs: publishedBundle.prefabs,
-              });
-              await refreshProjects();
-            } catch {
-              toast({
-                kind: "error",
-                title: "アップロードは完了しましたが、結果をプロジェクトへ保存できませんでした",
-              });
-            }
-            return result;
+            return runVisualPublish(publishBundle, report, signal);
           }}
         />
         <ClassicExportDialog

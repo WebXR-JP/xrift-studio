@@ -699,6 +699,15 @@ export type ExternalAssetsCommit = (update: {
   notice: string;
 }) => boolean;
 
+export type VisualEditorMcpProjectBridge = {
+  /** The Editor's current documents, ahead of any pending autosave. */
+  currentBundle: () => PrototypeVisualProject;
+  /** Flushes the pending autosave. Resolves to the project path when known. */
+  saveNow: () => Promise<string | undefined>;
+  /** Saves, then leaves to the Library. Resolves false when the save failed. */
+  leave: () => Promise<boolean>;
+};
+
 export type VisualEditorPrototypeProps = {
   projectKind: VisualProjectKind;
   onBack: () => void;
@@ -722,6 +731,15 @@ export type VisualEditorPrototypeProps = {
    */
   onRegisterExternalAssetsCommit?: (
     commit: ExternalAssetsCommit | null,
+  ) => void;
+  /**
+   * MCP の project tool（公開・閉じる）を扱う shell に、この Editor の最新
+   * bundle、保存、退出を渡す登録口。Editor が MCP 要求を受け取れる状態に
+   * なってから登録し、unmount で null に戻す。shell はこれが null のあいだ、
+   * Editor 向けの tool を「プロジェクトが開いていない」として断る。
+   */
+  onRegisterMcpProjectBridge?: (
+    bridge: VisualEditorMcpProjectBridge | null,
   ) => void;
   /** Opens the desktop Classic export flow without changing authoring data. */
   onClassicExport?: (bundle: PrototypeVisualProject) => void | Promise<void>;
@@ -947,6 +965,7 @@ export function VisualEditorPrototype({
   onSave,
   onUpload,
   onRegisterExternalAssetsCommit,
+  onRegisterMcpProjectBridge,
   onClassicExport,
   compilationFresh = false,
   onThumbnailChanged,
@@ -1690,6 +1709,17 @@ export function VisualEditorPrototype({
   }, [scriptRuntimeReport.failureRevision, scriptRuntimeReport.failures]);
   const [leaving, setLeaving] = useState(false);
   const mcpNativeAvailable = tauri.isAvailable();
+  // The bridge is registered in the same step that installs the MCP listener,
+  // so the shell never sees a moment where Editor tools have a listener but no
+  // bridge (it would answer EDITOR_UNAVAILABLE while the Editor also answers).
+  // Save and leave are defined further down, so the bridge reaches them
+  // through a ref that every render refreshes.
+  const onRegisterMcpProjectBridgeRef = useRef(onRegisterMcpProjectBridge);
+  onRegisterMcpProjectBridgeRef.current = onRegisterMcpProjectBridge;
+  const mcpProjectBridgeActionsRef = useRef<{
+    saveNow: () => Promise<string | undefined>;
+    leave: () => Promise<boolean>;
+  } | null>(null);
   const [mcpClients, setMcpClients] = useState<XriftMcpClientStatus[]>([]);
   const [mcpLoading, setMcpLoading] = useState(false);
   const [mcpRegisteringClientId, setMcpRegisteringClientId] =
@@ -2631,7 +2661,6 @@ export function VisualEditorPrototype({
     if (!mcpNativeAvailable) return;
     let disposed = false;
     let unlisten: (() => void) | undefined;
-    let heartbeat: number | undefined;
 
     const complete = async (
       request: XriftMcpEditorRequestEvent,
@@ -2656,6 +2685,10 @@ export function VisualEditorPrototype({
         }
         return tauri.completeXriftMcpRequest(response);
       };
+      // Project tools (create, open, publish) belong to the shell, which
+      // answers them itself. Answering here too would complete one request
+      // twice.
+      if (xriftMcpToolSurface(request.tool) === "project") return;
       const harness = recordMcpHarnessCall(
         mcpHarnessStateRef.current,
         request.tool,
@@ -5397,16 +5430,18 @@ export function VisualEditorPrototype({
           return;
         }
         unlisten = dispose;
-        try {
-          await tauri.setXriftMcpEditorReady(true);
-          heartbeat = window.setInterval(() => {
-            void tauri.setXriftMcpEditorReady(true).catch(() => undefined);
-          }, 5_000);
-        } catch {
-          setMcpError(
-            "AI editor bridgeを有効にできませんでした。XRift Studioを再起動してください",
-          );
-        }
+        // The shell keeps the bridge's heartbeat alive for the whole app
+        // lifetime; registering here tells it that Editor tools now have a
+        // listener, so it stops answering them with EDITOR_UNAVAILABLE.
+        onRegisterMcpProjectBridgeRef.current?.({
+          currentBundle: () => bundleRef.current,
+          saveNow: () =>
+            mcpProjectBridgeActionsRef.current?.saveNow() ??
+            Promise.resolve(undefined),
+          leave: () =>
+            mcpProjectBridgeActionsRef.current?.leave() ??
+            Promise.resolve(false),
+        });
       })
       .catch(() => {
         if (!disposed) {
@@ -5419,8 +5454,7 @@ export function VisualEditorPrototype({
     return () => {
       disposed = true;
       unlisten?.();
-      if (heartbeat !== undefined) window.clearInterval(heartbeat);
-      void tauri.setXriftMcpEditorReady(false).catch(() => undefined);
+      onRegisterMcpProjectBridgeRef.current?.(null);
     };
   }, [mcpNativeAvailable]);
   const assetImportPanelAvailability = resolveAssetOperationAvailability(
@@ -11000,13 +11034,13 @@ export function VisualEditorPrototype({
   >(null);
   const noticeRef = useRef<string | null>(null);
   noticeRef.current = notice;
-  const handleBack = useCallback(async () => {
-    if (leaving) return;
+  const handleBack = useCallback(async (): Promise<boolean> => {
+    if (leaving) return false;
     setPlaySession(null);
     setEditorMode("edit");
     if (!onSaveRef.current) {
       onBack();
-      return;
+      return true;
     }
     setLeaving(true);
     while (lastSavedBundleRef.current !== bundleRef.current) {
@@ -11017,12 +11051,15 @@ export function VisualEditorPrototype({
         setLeaveWithoutSaveError(
           noticeRef.current ?? "自動保存に失敗しました",
         );
-        return;
+        return false;
       }
     }
     setLeaving(false);
     onBack();
+    return true;
   }, [leaving, onBack, requestAutosave]);
+
+  mcpProjectBridgeActionsRef.current = { saveNow: runSave, leave: handleBack };
 
   const kindLabel = projectKind === "world" ? "ワールド" : "アイテム";
   const KindIcon = projectKind === "world" ? EDITOR_ICONS.world : EDITOR_ICONS.item;

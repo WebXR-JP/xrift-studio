@@ -20,6 +20,7 @@ import {
   XRIFT_MCP_DEBUG_TOOLS,
   XRIFT_MCP_EDITOR_TOOLS,
   XRIFT_MCP_EXTERNAL_STORE_TOOLS,
+  XRIFT_MCP_PROJECT_TOOLS,
   XRIFT_MCP_SCRIPT_TOOLS,
   XRIFT_MCP_TOOLS,
   xriftMcpToolSurface,
@@ -49,13 +50,14 @@ function assertMcpToolRegistryIsCoherent(): void {
     XRIFT_MCP_LOCAL_ASSET_TOOLS.length +
     XRIFT_MCP_SCRIPT_TOOLS.length +
     XRIFT_MCP_EXTERNAL_STORE_TOOLS.length +
-    XRIFT_MCP_DEBUG_TOOLS.length;
+    XRIFT_MCP_DEBUG_TOOLS.length +
+    XRIFT_MCP_PROJECT_TOOLS.length;
   assert(
     derivedTotal === names.length,
     `Derived tool lists cover ${derivedTotal} of ${names.length} registered tools`,
   );
   assert(
-    Object.keys(surfaces).length === 5,
+    Object.keys(surfaces).length === 6,
     "A registered tool uses a surface no derived list reads",
   );
   for (const name of names) {

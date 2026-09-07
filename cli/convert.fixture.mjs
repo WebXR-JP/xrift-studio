@@ -36,6 +36,7 @@ import { compileStagedTypecheckWorld } from "../src/lib/visual-editor/compiler/s
 import { runClassicExportFixtureAssertions } from "../src/lib/visual-editor/classic-export.fixture.ts";
 import { runComponentCodeImportFixtureAssertions } from "../src/lib/visual-editor/component-code-import.fixture.ts";
 import { runXriftMcpEditorToolFixtures } from "../src/lib/visual-editor/mcp-editor-tools.fixture.ts";
+import { runXriftMcpProjectToolFixtures } from "../src/lib/visual-editor/mcp-project-tools.fixture.ts";
 import { runXriftComponentPlacementFixtureAssertions } from "../src/lib/visual-editor/xrift-component-placement.fixture.ts";
 import { runPlaySessionFixtureAssertions } from "../src/lib/visual-editor/play-session.fixture.ts";
 import { runScriptSpecifierFixtureAssertions } from "../src/lib/visual-editor/scripting/specifiers.fixture.ts";
@@ -355,6 +356,7 @@ try {
     ["font import", runFontImportFixtureAssertions],
     ["text component", runTextComponentFixtureAssertions],
     ["mcp editor tools", runXriftMcpEditorToolFixtures],
+    ["mcp project tools", runXriftMcpProjectToolFixtures],
     ["play session", runPlaySessionFixtureAssertions],
     ["script specifiers", runScriptSpecifierFixtureAssertions],
     ["script templates", runScriptTemplateFixtureAssertions],
