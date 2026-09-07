@@ -250,6 +250,8 @@ function collectEntityAssetReferences(entity: SceneEntity): string[] {
       references.add(component.particleAssetId);
     } else if (component.type === "audio-source" && component.audioAssetId) {
       references.add(component.audioAssetId);
+    } else if (component.type === "image" && component.textureAssetId) {
+      references.add(component.textureAssetId);
     } else if (component.type === "prefab-instance") {
       references.add(component.prefabAssetId);
     } else if (component.type === "interaction-trigger") {

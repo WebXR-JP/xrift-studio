@@ -449,6 +449,7 @@ type ComponentReferenceSuffix =
   | "audio"
   | "prefab"
   | "text"
+  | "image"
   | "xrift";
 
 type ComponentReferenceMatch = {
@@ -664,6 +665,21 @@ function describeComponentReferences(
           if (current.type !== "text" || !current.background) return current;
           const { textureAssetId: _removed, ...background } = current.background;
           return { ...current, background: { ...background, mode: "color" } };
+        },
+      },
+    ];
+  }
+
+  if (component.type === "image" && component.textureAssetId === assetId) {
+    return [
+      {
+        suffix: "image",
+        detail: "Image",
+        detachEffect: "clear-slot",
+        detach: (current) => {
+          if (current.type !== "image") return current;
+          const { textureAssetId: _removed, ...rest } = current;
+          return rest;
         },
       },
     ];

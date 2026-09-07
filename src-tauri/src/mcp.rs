@@ -3557,7 +3557,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "place_asset",
-            "description": "Place a project asset (Model, Prefab, Audio, or an installed external Model) into the current XRift Studio scene and select the created entity. The origin of a Model lands at position, so read get_entity_bounds or sample_terrain_point to put its base on the floor, and vary yaw and scale between copies of the same asset instead of repeating an identical instance.",
+            "description": "Place a project asset (Model, Prefab, Audio, a picture Texture, or an installed external Model) into the current XRift Studio scene and select the created entity. A Texture lands as an Image Entity: a one metre wide quad showing the picture at its own aspect ratio, centred on position — the way to hang photos in a gallery or put a poster on a wall; resize it with update_component (width, height) and rotate it to face the room with update_transform. Environment Textures (HDRI) are not placeable; they go to the skybox. The origin of a Model lands at position, so read get_entity_bounds or sample_terrain_point to put its base on the floor, and vary yaw and scale between copies of the same asset instead of repeating an identical instance.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3999,7 +3999,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "add_component",
-            "description": "Add a Component from the central Editor registry to an existing Entity. Call list_component_definitions for valid definitionId values. For scripting.script, also pass the Script Asset ID returned by list_assets. For interaction.trigger, pass the Interactivity Asset ID as interactivityAssetId.",
+            "description": "Add a Component from the central Editor registry to an existing Entity. Call list_component_definitions for valid definitionId values. For scripting.script, also pass the Script Asset ID returned by list_assets. For interaction.trigger, pass the Interactivity Asset ID as interactivityAssetId. For core.image (a picture on a flat quad: gallery walls, posters, a clock face with a Text child below it), pass the picture's Texture Asset ID as textureAssetId; omit it to add an empty quad and set patch.textureAssetId later with update_component. To create a new Entity with the picture in one call, place_asset with the Texture instead.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -4009,6 +4009,7 @@ fn tool_definitions() -> Value {
                     "entityId": { "type": "string" },
                     "scriptAssetId": { "type": "string" },
                     "interactivityAssetId": { "type": "string" },
+                    "textureAssetId": { "type": "string" },
                     "definitionId": { "type": "string", "minLength": 1 }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "entityId", "definitionId"],
@@ -4017,7 +4018,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "update_component",
-            "description": "Persist supported Component fields and enabled state through Editor history. Built-in Mesh Renderer, Rigid Body, Collider, Light, Text, Audio Source, Animation, and Particle Emitter patches use the same validators as Inspector. Mesh Renderer patches can update enabled, complete materialBindings, Cast/Receive Shadow, static Model pose, and optional maxDistance (null clears the Mesh Far Clip and restores Scene Camera Far). Use update_transform for Transform values and update_script_component for Script properties/references.",
+            "description": "Persist supported Component fields and enabled state through Editor history. Built-in Mesh Renderer, Rigid Body, Collider, Light, Text, Image, Audio Source, Animation, and Particle Emitter patches use the same validators as Inspector, and each type accepts exactly the keys its Inspector edits; an unknown key for that type is rejected. Mesh Renderer patches can update enabled, complete materialBindings, Cast/Receive Shadow, static Model pose, and optional maxDistance (null clears the Mesh Far Clip and restores Scene Camera Far). Image patches take textureAssetId (a picture Texture; empty string clears it), width, height (a number, or null to follow the picture's own aspect ratio), anchorX, anchorY, color, opacity, alphaMode (cutout or blend), doubleSided and lit. Text patches take the Text Inspector fields including background. Use update_transform for Transform values and update_script_component for Script properties/references.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -4029,8 +4030,19 @@ fn tool_definitions() -> Value {
                     "patch": {
                         "type": "object",
                         "minProperties": 1,
+                        "description": "Fields of the target Component type. Mesh Renderer keys are listed below; other types accept their Inspector fields (Image: textureAssetId, width, height, anchorX, anchorY, color, opacity, alphaMode, doubleSided, lit).",
                         "properties": {
                             "enabled": { "type": "boolean" },
+                            "textureAssetId": { "type": "string" },
+                            "width": { "type": "number", "exclusiveMinimum": 0 },
+                            "height": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+                            "anchorX": { "type": "string", "enum": ["left", "center", "right"] },
+                            "anchorY": { "type": "string", "enum": ["top", "middle", "bottom"] },
+                            "color": { "type": "string" },
+                            "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+                            "alphaMode": { "type": "string", "enum": ["cutout", "blend"] },
+                            "doubleSided": { "type": "boolean" },
+                            "lit": { "type": "boolean" },
                             "materialBindings": {
                                 "type": "array",
                                 "items": {
@@ -4057,7 +4069,7 @@ fn tool_definitions() -> Value {
                                 "additionalProperties": false
                             }
                         },
-                        "additionalProperties": false
+                        "additionalProperties": true
                     }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "entityId", "componentId", "patch"],
@@ -4253,7 +4265,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "create_texture_card",
-            "description": "Turn a transparent Texture into a cut-out card Entity: a flat or curved distant backdrop, or a single or crossed grass card. Creates the alpha-blended two-sided Material and the collider-free Entity in one transaction, so undoing the card does not leave its Material behind. Environment Textures are rejected — they belong on the skybox.",
+            "description": "Turn a transparent Texture into a cut-out card Entity: a flat or curved distant backdrop, or a single or crossed grass card. Creates the alpha-blended two-sided Material and the collider-free Entity in one transaction, so undoing the card does not leave its Material behind. Environment Textures are rejected — they belong on the skybox. For an ordinary picture (a photo, a poster, a painting on a gallery wall) use place_asset with the Texture instead: that makes an Image Entity sized to the picture with no Material Asset to manage.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

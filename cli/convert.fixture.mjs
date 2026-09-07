@@ -62,6 +62,7 @@ import { runShaderTimeFixtureAssertions } from "../packages/xrift-studio-runtime
 import { runTextPanelFixtureAssertions } from "../packages/xrift-studio-runtime/src/text-panel.fixture.ts";
 import { runFontImportFixtureAssertions } from "../src/lib/visual-editor/font-import.fixture.ts";
 import { runTextComponentFixtureAssertions } from "../src/lib/visual-editor/text-component.fixture.ts";
+import { runImageComponentFixtureAssertions } from "../src/lib/visual-editor/image-component.fixture.ts";
 import { runScriptAudioSourceHostFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/audio-source-host.fixture.ts";
 import { runLightRuntimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/light.fixture.ts";
 import { runScriptMaterialTextureFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/material-texture.fixture.ts";
@@ -355,6 +356,7 @@ try {
     ["text panel", runTextPanelFixtureAssertions],
     ["font import", runFontImportFixtureAssertions],
     ["text component", runTextComponentFixtureAssertions],
+    ["image component", runImageComponentFixtureAssertions],
     ["mcp editor tools", runXriftMcpEditorToolFixtures],
     ["mcp project tools", runXriftMcpProjectToolFixtures],
     ["play session", runPlaySessionFixtureAssertions],

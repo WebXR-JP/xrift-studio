@@ -367,6 +367,7 @@ it through the same runtime bridge:
 | Audio Source | `playback` (play / pause / stop), `volume`, `loop` |
 | Light | `enabled`, `intensity`, `color` |
 | Text | `enabled`, `text`, `color`, `fontSize`, `fontWeight`, `fontId`, `textAlign`, `lineHeight`, `letterSpacing`, `maxWidth`, `outlineWidth`, `outlineColor` |
+| Image | `enabled`, `color`, `opacity` |
 | Scene | `exposure`, `fade`, `fadeColor`, `postprocessing`, `bloom` (+`bloomStrength`, `bloomRadius`, `bloomThreshold`), `ao`, `grading`, `fog` (+`fogColor`, `fogNear`, `fogFar`), `ambient` (+`ambientColor`, `ambientIntensity`), `skybox`, `skyboxIbl`, `skyboxExposure`, `skyboxRotation`, `skyboxImage`, `cameraFov` |
 | Player | `teleport` |
 
@@ -374,6 +375,17 @@ Entity, Transform, Material, Scene and Player belong to the Entity rather than
 to a Component that can appear twice, so they carry no Component id. Scene and
 Player are addressed through reserved Entity ids, because they belong to no
 Entity at all and an action still needs something in that slot.
+
+Image deliberately offers no picture swap (`textureAssetId`). A swapped-in
+picture has to be decoded at runtime from an Asset id, and a published world
+converts its pictures to KTX2, so that decode needs the world's transcoder path
+the way the authored picture's loader already has it. The Scene target's
+`skyboxImage` gets away with a plain loader because a sky is never converted.
+Until the swap can go through the same decoder on Play and on the published
+world, a graph fades a picture (`opacity` with a duration), hides it
+(`enabled`) or tints it (`color`), and a slideshow is two Images toggled
+against each other. The size and the anchor are geometry, not runtime state,
+and stay out for the same reason the Text plate does.
 
 ### A value can come from the graph
 
@@ -437,7 +449,7 @@ things were hiding under that one fact, and the registry now separates them:
 | Scope | Targets | What it means |
 | --- | --- | --- |
 | `viewer`「この端末だけ」 | Scene, Player | One viewer is the right answer and always will be |
-| `world`「押した人だけ」 | Entity, Transform, Animation, Material, Particle, Audio Source, Light, Text | World content everyone should be seeing, **not synchronised yet** |
+| `world`「押した人だけ」 | Entity, Transform, Animation, Material, Particle, Audio Source, Light, Text, Image | World content everyone should be seeing, **not synchronised yet** |
 
 The first is a design: synchronising the picture would decide for the person on
 the slowest headset, and synchronising a teleport would move somebody who

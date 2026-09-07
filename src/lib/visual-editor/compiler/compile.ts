@@ -91,6 +91,7 @@ import {
   type SceneDocument,
   type SceneEntity,
   type TextComponent,
+  type ImageComponent,
   type TransformComponent,
   type Vec3,
   type XRiftComponent,
@@ -115,11 +116,14 @@ import { sha256Utf8 } from "./hash";
 import { collectRequiredScriptAssetIds } from "../scripting/script-schedule";
 import { createScriptAssetRuntimeDescriptorMap } from "../scripting/asset-runtime";
 import {
+  createImageQuadOverlayFiles,
   createInteractionTriggerOverlayFiles,
+  createRuntimeBridgeOverlayFiles,
   createScriptAudioSourceOverlayFile,
   createScriptLightOverlayFile,
   createScriptParticleOverlayFile,
   createTextPanelOverlayFiles,
+  IMAGE_QUAD_RUNTIME_OVERLAY_PATH,
   planScriptEmission,
   renderScriptComponent,
   SCRIPT_AUDIO_SOURCE_OVERLAY_PATH,
@@ -317,6 +321,9 @@ export function compileVisualProject(
     usesTextPanel && resolvedEntryScene
       ? createPublishedTextFontCopyPlan(resolvedEntryScene.scene)
       : [];
+  const usesImageQuad = resolvedEntryScene
+    ? sceneUsesImageQuadRuntime(resolvedEntryScene.scene)
+    : false;
   let runtimeManifestFile: CompilerOverlayFile | undefined;
   let generated: string;
   if (outputMode === "classic-runtime") {
@@ -428,6 +435,15 @@ export function compileVisualProject(
   }
   if (
     outputMode === "classic-jsx" &&
+    usesImageQuad &&
+    !overlayFiles.some(
+      (file) => file.relativePath === IMAGE_QUAD_RUNTIME_OVERLAY_PATH,
+    )
+  ) {
+    overlayFiles.push(...createImageQuadOverlayFiles());
+  }
+  if (
+    outputMode === "classic-jsx" &&
     resolvedEntryScene &&
     sceneUsesInteractionTriggerRuntime(resolvedEntryScene.scene, documents.assets)
   ) {
@@ -462,6 +478,17 @@ export function compileVisualProject(
       )
     ) {
       overlayFiles.push(createScriptParticleOverlayFile());
+    }
+    // The Text and Image bridges too: the trigger runtime imports both, so a
+    // world with a graph and no Text or Image would otherwise fail to build.
+    for (const file of createRuntimeBridgeOverlayFiles()) {
+      if (
+        !overlayFiles.some(
+          (candidate) => candidate.relativePath === file.relativePath,
+        )
+      ) {
+        overlayFiles.push(file);
+      }
     }
   }
   // Emitted for both output modes: the brush loader is self-contained, so a
@@ -776,6 +803,12 @@ function sceneUsesLightRuntime(scene: SceneDocument): boolean {
 function sceneUsesTextPanelRuntime(scene: SceneDocument): boolean {
   return Object.values(scene.entities).some((entity) =>
     entity.components.some((component) => component.type === "text"),
+  );
+}
+
+function sceneUsesImageQuadRuntime(scene: SceneDocument): boolean {
+  return Object.values(scene.entities).some((entity) =>
+    entity.components.some((component) => component.type === "image"),
   );
 }
 
@@ -2334,6 +2367,8 @@ function renderEntity(
       localContent.push(renderLight(component, context));
     } else if (component.type === "text") {
       localContent.push(renderText(entity, component, context));
+    } else if (component.type === "image") {
+      localContent.push(renderImage(entity, component, context));
     } else if (component.type === "audio-source") {
       const rendered = renderAudioSource(entity, component, context);
       if (rendered) localContent.push(rendered);
@@ -5627,6 +5662,144 @@ function registerCompiledTextPanelRuntime(context: CompileContext): void {
   );
   context.extraImports.add(
     'import type { XriftTextPanelConfig } from "./xrift-studio/text-panel-layout";',
+  );
+}
+
+/**
+ * Emits the Image component as the shared runtime quad.
+ *
+ * The quad is sized from the decoded picture at runtime, so the emission
+ * hands over the config and the loaded Texture and lets the same object the
+ * editor drew decide the height — emitting a `<mesh>` with a guessed plane
+ * would put a photo at a different shape than the editor showed.
+ */
+function renderImage(
+  entity: SceneEntity,
+  image: ImageComponent,
+  context: CompileContext,
+): string {
+  registerCompiledImageQuadRuntime(context);
+  context.reactTypeImports.add("FC");
+  const configName = generatedIdentifier("IMAGE_QUAD_CONFIG", `${entity.id}:${image.id}`);
+  context.supportDeclarations.set(
+    `image-quad-config:${configName}`,
+    `const ${configName}: XriftImageQuadConfig = ${JSON.stringify(
+      compiledImageQuadConfig(image),
+    )};`,
+  );
+  const texture = resolveImageTexture(entity, image, context);
+  const componentName = generatedIdentifier(
+    "CompiledImageQuad",
+    `${entity.id}:${image.id}`,
+  );
+  const props = [
+    `config={${configName}}`,
+    // A graph aimed at one of an Entity's two pictures must not fade both.
+    `componentId={${JSON.stringify(image.id)}}`,
+    ...(texture ? ["map={imageQuadMap}", "awaitingMap"] : []),
+  ].join(" ");
+  context.supportDeclarations.set(
+    `image-quad:${componentName}`,
+    `const ${componentName}: FC = () => {
+${texture?.lines ?? ""}  return <XriftImageQuad ${props} />;
+};`,
+  );
+  return `<${componentName} />`;
+}
+
+/**
+ * Drops the picture when its Texture cannot be published.
+ *
+ * A missing picture is reported and the quad still ships as its tinted
+ * plate: the author sees exactly the empty frame the editor showed, and the
+ * diagnostic says which Asset to fix.
+ */
+function resolveImageTexture(
+  entity: SceneEntity,
+  image: ImageComponent,
+  context: CompileContext,
+): { lines: string } | null {
+  const textureAssetId = image.textureAssetId?.trim() ?? "";
+  if (!textureAssetId) {
+    addDiagnostic(context, {
+      severity: "warning",
+      code: "image-texture-unset",
+      message: "ImageにTexture Assetが未選択のため、色だけの板を出力します",
+      sceneId: context.scene.sceneId,
+      entityId: entity.id,
+      componentId: image.id,
+      fieldPath: "textureAssetId",
+    });
+    return null;
+  }
+  context.referencedAssetIds.add(textureAssetId);
+  const texture = getTextureAsset(context.assets, textureAssetId);
+  const runtimeUrl = texture
+    ? context.assetRuntimeUrls.get(texture.id)
+    : undefined;
+  if (!texture || !runtimeUrl) {
+    addDiagnostic(context, {
+      severity: "warning",
+      code: "image-texture-missing",
+      message: "ImageのTexture Assetを出力できないため、色だけの板を出力します",
+      sceneId: context.scene.sceneId,
+      entityId: entity.id,
+      componentId: image.id,
+      assetId: textureAssetId,
+      fieldPath: "textureAssetId",
+    });
+    return null;
+  }
+  const usesKtx2 = isPublishedAsKtx2(texture);
+  registerCompiledTextureRuntime(context, usesKtx2);
+  const urlConstant = registerAssetUrl(texture, runtimeUrl, context);
+  const optionsConstant = generatedIdentifier(
+    "TEXTURE_OPTIONS",
+    `image-quad:${image.id}`,
+  );
+  const settings = texture.importSettings;
+  context.supportDeclarations.set(
+    `texture-options:${optionsConstant}`,
+    `const ${optionsConstant}: CompiledTextureOptions = ${JSON.stringify({
+      channel: 0,
+      colorSpace: settings.colorSpace === "linear" ? "linear" : "srgb",
+      flipY: settings.flipY,
+      generateMipmaps: settings.generateMipmaps,
+      magFilter: settings.sampler.magFilter,
+      minFilter: settings.sampler.minFilter,
+      wrapS: settings.sampler.wrapS,
+      wrapT: settings.sampler.wrapT,
+    })};`,
+  );
+  return {
+    lines: `  const imageQuadMapUrl = useCompiledAssetUrl(${urlConstant});
+  const imageQuadMap = useCompiledTexture(${
+    usesKtx2 ? "useCompiledKtx2" : "useTexture"
+  }(imageQuadMapUrl), ${optionsConstant});
+`,
+  };
+}
+
+function compiledImageQuadConfig(image: ImageComponent): Record<string, unknown> {
+  return {
+    width: image.width,
+    ...(image.height === undefined ? {} : { height: image.height }),
+    anchorX: image.anchorX,
+    anchorY: image.anchorY,
+    color: image.color,
+    opacity: image.opacity,
+    alphaMode: image.alphaMode,
+    doubleSided: image.doubleSided,
+    lit: image.lit,
+  };
+}
+
+function registerCompiledImageQuadRuntime(context: CompileContext): void {
+  context.extraImports.add(
+    'import { XriftImageQuad } from "./xrift-studio/image-quad-runtime";',
+  );
+  context.extraImports.add(
+    'import type { XriftImageQuadConfig } from "./xrift-studio/image-quad-layout";',
   );
 }
 

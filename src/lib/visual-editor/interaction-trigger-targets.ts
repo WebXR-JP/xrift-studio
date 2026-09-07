@@ -53,6 +53,7 @@ function componentLabel(
     (candidate) =>
       (targetKind === "audio-source" && candidate.type === "audio-source") ||
       (targetKind === "text" && candidate.type === "text") ||
+      (targetKind === "image" && candidate.type === "image") ||
       (targetKind === "light" && candidate.type === "light"),
   );
   return siblings.length > 1 ? `${base} ${index + 1}` : base;
@@ -102,7 +103,7 @@ export function collectInteractionTriggerTargets(
           label: XRIFT_INTERACTION_TARGET_LABELS.material,
           properties: getXriftInteractionProperties("material"),
         },
-        ...(["animation", "audio-source", "light", "particle", "text"] as const).map(
+        ...(["animation", "audio-source", "light", "particle", "text", "image"] as const).map(
           (targetKind) => ({
             componentId: "",
             targetKind,
@@ -171,6 +172,7 @@ export function collectInteractionTriggerTargets(
     let audioIndex = 0;
     let lightIndex = 0;
     let textIndex = 0;
+    let imageIndex = 0;
     for (const component of entity.components) {
       if (component.type === "audio-source") {
         components.push({
@@ -215,6 +217,14 @@ export function collectInteractionTriggerTargets(
           properties: getXriftInteractionProperties("text"),
         });
         textIndex += 1;
+      } else if (component.type === "image") {
+        components.push({
+          componentId: component.id,
+          targetKind: "image",
+          label: componentLabel(entity, "image", imageIndex),
+          properties: getXriftInteractionProperties("image"),
+        });
+        imageIndex += 1;
       }
     }
     targets.push({

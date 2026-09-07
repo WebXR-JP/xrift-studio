@@ -1,10 +1,12 @@
-import type {
-  AudioAsset,
-  AssetManifest,
-  ModelAsset,
-  ParticleAsset,
-  PrefabAsset,
-  SceneAsset,
+import {
+  isEnvironmentTextureAsset,
+  type AudioAsset,
+  type AssetManifest,
+  type ModelAsset,
+  type ParticleAsset,
+  type PrefabAsset,
+  type SceneAsset,
+  type TextureAsset,
 } from "./asset-manifest";
 import { createDocumentId } from "./document-id";
 import { addDefaultInteractivityAsset } from "./interactivity-graph";
@@ -18,6 +20,7 @@ import {
   type PrefabDocument,
 } from "./prefab-document";
 import {
+  createImageComponent,
   createInteractionTriggerComponent,
   createMeshColliderComponent,
   createMeshComponent,
@@ -45,7 +48,7 @@ export type SceneAssetPlacementResult =
       assets: AssetManifest;
       entityId: string;
       assetName: string;
-      assetKind: "model" | "particle" | "prefab" | "audio";
+      assetKind: "model" | "particle" | "prefab" | "audio" | "texture";
     }
   | {
       placed: false;
@@ -60,12 +63,15 @@ export type SceneAssetPlacementResult =
 
 export function isScenePlaceableAsset(
   asset: SceneAsset | undefined,
-): asset is AudioAsset | ModelAsset | ParticleAsset | PrefabAsset {
+): asset is AudioAsset | ModelAsset | ParticleAsset | PrefabAsset | TextureAsset {
   return Boolean(
     asset &&
       (asset.kind === "model" ||
         asset.kind === "particle" ||
         asset.kind === "audio" ||
+        // A picture lands as an Image Entity. An environment Texture is a sky,
+        // not a picture, and keeps its own Skybox drop target.
+        (asset.kind === "texture" && !isEnvironmentTextureAsset(asset)) ||
         (asset.kind === "template" && asset.templateType === "prefab")),
   );
 }
@@ -92,7 +98,7 @@ export function instantiateSceneAsset(
   const entityId = createDocumentId("entity");
   const position = options.position ?? [0, 0, 0];
   let entity: SceneEntity;
-  let assetKind: "model" | "particle" | "prefab" | "audio";
+  let assetKind: "model" | "particle" | "prefab" | "audio" | "texture";
 
   if (!isScenePlaceableAsset(asset)) {
     return { placed: false, scene, reason: "unsupported-kind" };
@@ -129,6 +135,15 @@ export function instantiateSceneAsset(
       parentEntityId,
     );
     assetKind = "audio";
+  } else if (asset.kind === "texture") {
+    entity = createImageEntity(
+      scene,
+      entityId,
+      asset,
+      position,
+      parentEntityId,
+    );
+    assetKind = "texture";
   } else if (asset.kind === "template") {
     const prefabAsset = asset;
     const prefab = resolvePrefabDocument(prefabAsset, prefabs);
@@ -221,6 +236,40 @@ function createAudioEntity(
         position,
       ),
       ...(audioSource ? [audioSource] : []),
+    ],
+  };
+}
+
+/**
+ * A dropped picture becomes an Image Entity at one metre wide.
+ *
+ * The height follows the picture's own aspect ratio, so a photo dragged onto
+ * a wall is the right shape before anyone opens the Inspector. Standing at
+ * `position` on its bottom edge would be wrong for a wall hanging, so the
+ * quad is centred like every other placed Asset.
+ */
+function createImageEntity(
+  scene: SceneDocument,
+  entityId: string,
+  asset: TextureAsset,
+  position: Vec3,
+  parentEntityId: string | null,
+): SceneEntity {
+  const image = createImageComponent(createDocumentId("component-image"), {
+    textureAssetId: asset.id,
+  });
+  return {
+    id: entityId,
+    name: uniqueEntityName(scene, asset.name),
+    parentId: parentEntityId,
+    children: [],
+    enabled: true,
+    components: [
+      createTransformComponent(
+        createDocumentId("component-transform"),
+        position,
+      ),
+      ...(image ? [image] : []),
     ],
   };
 }

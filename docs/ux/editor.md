@@ -464,3 +464,39 @@ Mesh Rendererの「歩行・当たり判定」から追加、解除、シーン�
 - 変更は一件のScene更新として保存し、Undoで直前の書体・背景へ戻る。追加や編集の後も同じEntity Inspectorに留まり、Preview / Compile / Playへ進める。
 
 完了条件: Text、Text Panel（看板）、Text Caption（作品キャプション）を同じComponent Registryから追加する。同梱書体または取り込んだフォント、色、太さ、揃え、行間と、色または画像の背景板をInspectorで設定できる。板は文字の実測値に合わせて組み立てる。Scene View、Play、生成Classic source、公開Worldが同じ描画経路で同じ見た目になる。取得できない書体は自動の書体へ落とす。出力できない背景画像は色だけの板へ落とす。文字は必ず表示する。
+
+<a id="f-44"></a>
+
+## F-44 Image Component（画像の板）の状態設計
+
+参照: MI-05, MI-09, MI-11, MI-15, MI-118
+
+### 操作前
+
+- Create、Hierarchy右クリック、InspectorのAdd ComponentのRenderingに「Image (画像)」を並べる。Texture Assetを1枚の板として置くComponentで、美術館の展示、ポスター、時計の文字盤のように「画像そのものを貼る」用途に使う。文字を添えるときは同じEntityの子にTextを置く。
+- AssetsのTexture AssetをScene ViewまたはHierarchyへドラッグする、右クリックの「Sceneへ配置」を選ぶ、MCPの`place_asset`へTextureを渡すと、そのTextureを貼ったImage Entityができる。幅1mで、高さは画像の縦横比から決まる。環境Texture（HDRI）はSkyboxの落とし先のままにし、Imageにはしない。
+- Add ComponentでImageを足すとき、Assetsで画像Textureを選択中ならその画像を貼った状態で始める。選択がなければ画像は未設定で、Inspectorに画像の選択欄と取り込みの案内を出す。
+- Inspectorは画像（サムネイル、選択欄、Texture Inspectorを開くボタン）、幅、高さ（画像に合わせる・サイズを指定）、基準点、色味、不透明度、透明部分の扱い（切り抜く・なめらかに重ねる）、裏からの見え方、ライトの影響を一つのカードに並べる。既定はライトの影響を受けない表示で、部屋の明るさに関わらず画像そのままの色になる。
+
+### 処理中
+
+- 画像はプロジェクトのTexture Assetをそのまま読み、Scene ViewとPlayで同じ板を描く。画像を選んでいて読み込みが終わるまでは板を出さず、途中の大きさで一瞬ちらつかない。画像が未設定のときだけ、色味と不透明度どおりの正方形の板を置いて選べる状態にする。
+- 高さが「画像に合わせる」のときは、読み込んだ画像のピクセル寸法から縦横比を取り、幅から高さを決める。取り込み時に寸法が分かっているTextureでは、Inspectorに決まる高さを先に示す。
+
+### 成功時
+
+- Scene View、Play、生成したClassic source、公開したWorldは同じImage Componentの値から同じ描画経路で板を描く。Studioが独自に別の見た目を作ることはない。
+- 貼ったTexture Assetは公開時の同梱対象になり、Runtime manifestにも参照が残る。公開時のKTX2変換も通常のTextureと同じに扱う。
+- Interactivity Graphの「プロパティを変える」では、Imageの表示、色味、不透明度を変えられる。不透明度に時間をかけるとフェードになる。画像の差し替えは対象にしない。理由は[KHR_INTERACTIVITY_EDITOR.md](../KHR_INTERACTIVITY_EDITOR.md)の「What a trigger can write」にある。
+
+### 失敗時
+
+- 画像が未設定、または参照先が公開できないTextureのときは、compileで警告を出して色だけの板として出力する。板が消えることはなく、Editorで見えていた枠がそのまま公開先に出る。
+- 0以下の幅・高さ、範囲外の不透明度、未知の基準点・透明の扱いはSceneDocument、selection、historyを変更しない。MCPの`update_component`も同じ境界で拒否し、`textureAssetId`は画像のTexture Assetを指すときだけ受け付ける。空文字で画像を外し、`height: null`で画像の縦横比へ戻す。
+- Textureを削除するときは参照元としてImageを数え、「参照を外す」で画像だけを外してImageは残す。
+
+### 戻り先
+
+- 追加、配置、編集は一件のScene更新として保存し、Undoで直前の状態へ戻る。配置後は新しいEntityを選択し、Transform、幅、画像の差し替えへ進める。編集の後も同じEntity Inspectorに留まり、Preview / Compile / Playへ進める。
+
+完了条件: Image Componentを同じComponent Registryから追加し、Texture Assetのドラッグ・配置・MCPの`place_asset`でImage Entityを作れる。幅と縦横比、基準点、色味、不透明度、透明部分の扱い、両面、ライトの影響をInspectorで設定できる。Scene View、Play、生成Classic source、公開Worldが同じ描画経路で同じ見た目になる。画像を出力できないときは色だけの板へ落とし、警告を残す。Graphから表示、色味、不透明度を変えられる。

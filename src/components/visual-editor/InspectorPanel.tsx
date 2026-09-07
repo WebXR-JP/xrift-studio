@@ -79,6 +79,7 @@ import {
   describeModelOptimization,
   planModelOptimization,
   MODEL_SIMPLIFY_RATIOS,
+  isEnvironmentTextureAsset,
   type TextureAsset,
   planTextureProcessing,
   type ModelBoneMetadata,
@@ -121,6 +122,8 @@ import {
   type TextBackgroundMode,
   type TextBackgroundPatch,
   type TextPatch,
+  type ImageComponent,
+  type ImagePatch,
   DEFAULT_TEXT_BACKGROUND,
   type TransformPatch,
   type VegetationWindComponent,
@@ -135,6 +138,7 @@ import {
 } from "../../lib/visual-editor";
 import {
   AssetQuickEditor,
+  AssetThumbnail,
   type TextureProcessingState,
 } from "./AssetQuickEditor";
 import { tauri } from "../../lib/tauri";
@@ -4392,6 +4396,269 @@ function groupTextFonts(): Array<{
   ].filter((group) => group.fonts.length > 0);
 }
 
+function ImageInspector({
+  component,
+  assets,
+  projectPath,
+  readOnly,
+  onChange,
+  onOpenAsset,
+  onRemove,
+}: {
+  component: ImageComponent;
+  assets: AssetManifest;
+  projectPath?: string;
+  readOnly: boolean;
+  onChange: (patch: ImagePatch) => void;
+  onOpenAsset: (assetId: string) => void;
+  onRemove?: () => void;
+}) {
+  // Only pictures: an environment Texture is a sky, and offering it here would
+  // draw an equirectangular panorama as a squashed rectangle.
+  const textureAssets = useMemo(
+    () =>
+      Object.values(assets.assets)
+        .filter(
+          (asset): asset is TextureAsset =>
+            asset.kind === "texture" && !isEnvironmentTextureAsset(asset),
+        )
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    [assets],
+  );
+  const selectedTexture = component.textureAssetId
+    ? assets.assets[component.textureAssetId]
+    : undefined;
+  const texture =
+    selectedTexture?.kind === "texture" ? selectedTexture : undefined;
+  const pixelWidth = texture?.importMetadata?.width;
+  const pixelHeight = texture?.importMetadata?.height;
+  const aspect =
+    pixelWidth && pixelHeight && pixelWidth > 0 && pixelHeight > 0
+      ? pixelWidth / pixelHeight
+      : null;
+  const fitsImage = component.height === undefined;
+  const resolvedHeight = fitsImage
+    ? roundTo(component.width / (aspect ?? 1), 3)
+    : component.height;
+  const OpenIcon = EDITOR_ICONS.texture;
+
+  return (
+    <ComponentCard
+      title="Image"
+      subtitle="画像"
+      remove={
+        onRemove
+          ? { label: "Imageを削除", disabled: readOnly, onRemove }
+          : undefined
+      }
+    >
+      <ToggleRow
+        label="Enabled"
+        checked={component.enabled}
+        disabled={readOnly}
+        onChange={(enabled) => onChange({ enabled })}
+      />
+      <div className="space-y-1">
+        <span className="block text-xs font-medium text-slate-600">
+          画像 (Texture Asset)
+        </span>
+        <div className="flex items-center gap-2">
+          <span
+            className="h-7 w-7 shrink-0 overflow-hidden rounded-sm border border-slate-300 bg-white"
+            title={texture ? `${texture.name}のプレビュー` : "画像未設定"}
+            aria-hidden="true"
+          >
+            {texture ? (
+              <AssetThumbnail
+                asset={texture}
+                assets={assets}
+                projectPath={projectPath}
+              />
+            ) : (
+              <span className="relative block h-full w-full bg-slate-100">
+                <span className="absolute left-1/2 top-1/2 h-px w-8 -translate-x-1/2 -translate-y-1/2 -rotate-45 bg-slate-400" />
+              </span>
+            )}
+          </span>
+          <select
+            value={component.textureAssetId ?? ""}
+            disabled={readOnly}
+            aria-label="画像のTexture Asset"
+            onChange={(event) =>
+              onChange({ textureAssetId: event.currentTarget.value })
+            }
+            className="h-8 min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-100"
+          >
+            <option value="">未設定</option>
+            {textureAssets.map((asset) => (
+              <option key={asset.id} value={asset.id}>
+                {asset.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            disabled={!texture}
+            onClick={() => texture && onOpenAsset(texture.id)}
+            aria-label={
+              texture ? `${texture.name}のTexture Inspectorを開く` : "画像未設定"
+            }
+            title={
+              texture ? `${texture.name}のTexture Inspectorを開く` : "画像未設定"
+            }
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <OpenIcon size={13} aria-hidden="true" />
+          </button>
+        </div>
+        {textureAssets.length === 0 ? (
+          <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-4 text-amber-800">
+            Assetsのインポートから画像（PNG / JPG / WebP）を追加すると、ここで選べます。Assetsの画像をScene Viewへドラッグしても貼れます。
+          </p>
+        ) : !component.textureAssetId ? (
+          <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-4 text-amber-800">
+            画像が未選択のため、色だけの板を表示します。
+          </p>
+        ) : texture && pixelWidth && pixelHeight ? (
+          <p className="text-[11px] leading-4 text-slate-500">
+            {pixelWidth} × {pixelHeight} px
+          </p>
+        ) : null}
+      </div>
+      <ColliderNumberField
+        label="幅"
+        value={component.width}
+        min={0.01}
+        step={0.05}
+        disabled={readOnly}
+        onChange={(width) => onChange({ width })}
+      />
+      <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+        高さ
+        <select
+          value={fitsImage ? "auto" : "fixed"}
+          disabled={readOnly}
+          onChange={(event) =>
+            onChange({
+              height:
+                event.currentTarget.value === "auto"
+                  ? null
+                  : (resolvedHeight ?? component.width),
+            })
+          }
+          className="h-8 rounded border border-slate-300 bg-white px-2 text-xs outline-none focus:border-violet-500 disabled:bg-slate-100"
+        >
+          <option value="auto">画像に合わせる</option>
+          <option value="fixed">サイズを指定</option>
+        </select>
+      </label>
+      {fitsImage ? (
+        <p className="text-[11px] leading-4 text-slate-500">
+          {aspect
+            ? `画像の縦横比から高さ ${resolvedHeight} になります。`
+            : component.textureAssetId
+              ? "読み込んだ画像の縦横比に合わせて高さが決まります。"
+              : "画像を選ぶまでは正方形で表示します。"}
+        </p>
+      ) : (
+        <ColliderNumberField
+          label="高さ"
+          value={component.height ?? component.width}
+          min={0.01}
+          step={0.05}
+          disabled={readOnly}
+          onChange={(height) => onChange({ height })}
+        />
+      )}
+      <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+        Anchor X
+        <select
+          value={component.anchorX}
+          disabled={readOnly}
+          onChange={(event) =>
+            onChange({ anchorX: event.currentTarget.value as ImageComponent["anchorX"] })
+          }
+          className="h-8 rounded border border-slate-300 bg-white px-2 text-xs outline-none focus:border-violet-500 disabled:bg-slate-100"
+        >
+          <option value="left">Left</option>
+          <option value="center">Center</option>
+          <option value="right">Right</option>
+        </select>
+      </label>
+      <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+        Anchor Y
+        <select
+          value={component.anchorY}
+          disabled={readOnly}
+          onChange={(event) =>
+            onChange({ anchorY: event.currentTarget.value as ImageComponent["anchorY"] })
+          }
+          className="h-8 rounded border border-slate-300 bg-white px-2 text-xs outline-none focus:border-violet-500 disabled:bg-slate-100"
+        >
+          <option value="top">Top</option>
+          <option value="middle">Middle</option>
+          <option value="bottom">Bottom</option>
+        </select>
+      </label>
+      <div className="space-y-2 border-t border-slate-100 pt-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+          <span>色味</span>
+          <input
+            type="color"
+            value={component.color}
+            disabled={readOnly}
+            aria-label="画像の色味"
+            onChange={(event) => onChange({ color: event.currentTarget.value })}
+            className="h-8 w-full cursor-pointer rounded border border-slate-300 bg-white p-1 disabled:opacity-50"
+          />
+        </div>
+        <ColliderNumberField
+          label="不透明度"
+          value={component.opacity}
+          min={0}
+          max={1}
+          step={0.05}
+          disabled={readOnly}
+          onChange={(opacity) => onChange({ opacity })}
+        />
+        <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+          透明部分
+          <select
+            value={component.alphaMode}
+            disabled={readOnly}
+            onChange={(event) =>
+              onChange({
+                alphaMode: event.currentTarget.value as ImageComponent["alphaMode"],
+              })
+            }
+            className="h-8 rounded border border-slate-300 bg-white px-2 text-xs outline-none focus:border-violet-500 disabled:bg-slate-100"
+          >
+            <option value="cutout">切り抜く</option>
+            <option value="blend">なめらかに重ねる</option>
+          </select>
+        </label>
+        <ToggleRow
+          label="裏からも見える"
+          checked={component.doubleSided}
+          disabled={readOnly}
+          onChange={(doubleSided) => onChange({ doubleSided })}
+        />
+        <ToggleRow
+          label="ライトの影響を受ける"
+          checked={component.lit}
+          disabled={readOnly}
+          onChange={(lit) => onChange({ lit })}
+        />
+        <p className="text-[11px] leading-4 text-slate-500">
+          {component.lit
+            ? "Sceneのライトで明るさが変わります。スポットライトを当てた展示に向きます。"
+            : "ライトの影響を受けず、部屋の明るさに関わらず画像そのままの色で表示します。"}
+        </p>
+      </div>
+    </ComponentCard>
+  );
+}
+
 function AudioSourceInspector({
   component,
   assets,
@@ -4742,6 +5009,7 @@ function EntityInspector({
   onRemoveComponent,
   onLightChange,
   onTextChange,
+  onImageChange,
   onVegetationWindChange,
   onAudioSourceChange,
   onParticleEmitterChange,
@@ -4820,6 +5088,7 @@ function EntityInspector({
   onRemoveComponent: (componentId: string) => void;
   onLightChange: (componentId: string, patch: LightPatch) => void;
   onTextChange: (componentId: string, patch: TextPatch) => void;
+  onImageChange: (componentId: string, patch: ImagePatch) => void;
   onVegetationWindChange: (
     componentId: string,
     patch: VegetationWindPatch,
@@ -5136,6 +5405,20 @@ function EntityInspector({
               assets={assets}
               readOnly={readOnly && !liveRuntimeTuning}
               onChange={(patch) => onTextChange(component.id, patch)}
+              onOpenAsset={onOpenMaterial}
+              onRemove={() => onRemoveComponent(component.id)}
+            />
+          );
+        }
+        if (component.type === "image") {
+          return (
+            <ImageInspector
+              key={component.id}
+              component={component}
+              assets={assets}
+              projectPath={projectPath}
+              readOnly={readOnly && !liveRuntimeTuning}
+              onChange={(patch) => onImageChange(component.id, patch)}
               onOpenAsset={onOpenMaterial}
               onRemove={() => onRemoveComponent(component.id)}
             />
@@ -5540,6 +5823,7 @@ export function InspectorPanel({
   onRemoveComponent,
   onLightChange,
   onTextChange,
+  onImageChange,
   onVegetationWindChange,
   onAudioSourceChange,
   onSelectAsset,
@@ -5648,6 +5932,7 @@ export function InspectorPanel({
   onRemoveComponent: (entityId: string, componentId: string) => void;
   onLightChange: (entityId: string, componentId: string, patch: LightPatch) => void;
   onTextChange: (entityId: string, componentId: string, patch: TextPatch) => void;
+  onImageChange: (entityId: string, componentId: string, patch: ImagePatch) => void;
   onVegetationWindChange: (
     entityId: string,
     componentId: string,
@@ -5992,6 +6277,9 @@ export function InspectorPanel({
             }
             onTextChange={(componentId, patch) =>
               onTextChange(entity.id, componentId, patch)
+            }
+            onImageChange={(componentId, patch) =>
+              onImageChange(entity.id, componentId, patch)
             }
             onVegetationWindChange={(componentId, patch) =>
               onVegetationWindChange(entity.id, componentId, patch)

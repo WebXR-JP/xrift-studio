@@ -182,6 +182,8 @@ export function getEditorComponentIcon(
       return EDITOR_ICONS.script;
     case "text":
       return EDITOR_ICONS.text;
+    case "image":
+      return EDITOR_ICONS.texture;
     default:
       return EDITOR_ICONS.component;
   }

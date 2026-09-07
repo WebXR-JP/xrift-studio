@@ -31,6 +31,7 @@ import {
 } from "@react-three/rapier";
 import { SpawnPoint } from "@xrift/world-components";
 import { TextPanelVisual } from "./TextPanelVisual";
+import { ImageQuadVisual } from "./ImageQuadVisual";
 import { XriftScriptRoot } from "../../../packages/xrift-studio-runtime/src/script/host";
 import {
   XriftAudioSource,
@@ -1714,6 +1715,16 @@ function ComponentVisual({
       // they drop every other authored visual.
       return (showHelpers || playing || renderThumbnail) && component.enabled ? (
         <TextPanelVisual
+          component={component}
+          assets={assets}
+          projectPath={projectPath}
+        />
+      ) : null;
+    case "image":
+      // World content like a wall label: shown in Play for the same reason the
+      // Text panel is.
+      return (showHelpers || playing || renderThumbnail) && component.enabled ? (
+        <ImageQuadVisual
           component={component}
           assets={assets}
           projectPath={projectPath}

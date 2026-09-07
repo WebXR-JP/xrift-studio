@@ -257,6 +257,8 @@ export function collectSceneAssetReferences(
         particles.add(component.particleAssetId);
       } else if (component.type === "audio-source" && component.audioAssetId) {
         audio.add(component.audioAssetId);
+      } else if (component.type === "image" && component.textureAssetId) {
+        textures.add(component.textureAssetId);
       } else if (component.type === "prefab-instance") {
         prefabs.add(component.prefabAssetId);
       } else if (component.type === "xrift-component") {

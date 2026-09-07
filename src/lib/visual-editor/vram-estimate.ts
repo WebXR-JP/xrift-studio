@@ -272,6 +272,8 @@ function collectComponentReferences(
     if (component.background?.mode === "texture") {
       addReference(component.background.textureAssetId);
     }
+  } else if (component.type === "image") {
+    addReference(component.textureAssetId);
   } else if (component.type === "xrift-component") {
     for (const assetId of component.assetReferences) addReference(assetId);
   }

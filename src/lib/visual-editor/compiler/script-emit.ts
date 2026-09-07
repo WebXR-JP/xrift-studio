@@ -24,6 +24,10 @@ import textPanelObjectSource from "../../../../packages/xrift-studio-runtime/src
 import textPanelLayoutSource from "../../../../packages/xrift-studio-runtime/src/text-panel-layout.ts?raw";
 import textFontCatalogSource from "../../../../packages/xrift-studio-runtime/src/text-font-catalog.ts?raw";
 import textRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/text-runtime.ts?raw";
+import imageQuadRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/image-quad.tsx?raw";
+import imageQuadObjectSource from "../../../../packages/xrift-studio-runtime/src/image-quad.ts?raw";
+import imageQuadLayoutSource from "../../../../packages/xrift-studio-runtime/src/image-quad-layout.ts?raw";
+import imageRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/image-runtime.ts?raw";
 import troikaTextTypesSource from "../../../../packages/xrift-studio-runtime/src/troika-three-text.d.ts?raw";
 import runtimePackageManifest from "../../../../packages/xrift-studio-runtime/package.json";
 
@@ -83,6 +87,10 @@ export const TEXT_PANEL_OBJECT_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/text-
 export const TEXT_PANEL_LAYOUT_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/text-panel-layout.ts`;
 export const TEXT_FONT_CATALOG_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/text-font-catalog.ts`;
 export const TEXT_PANEL_TYPES_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/troika-three-text.d.ts`;
+export const IMAGE_QUAD_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/image-quad-runtime.tsx`;
+export const IMAGE_QUAD_OBJECT_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/image-quad.ts`;
+export const IMAGE_QUAD_LAYOUT_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/image-quad-layout.ts`;
+export const IMAGE_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/image-runtime.ts`;
 
 /**
  * npm spec installed into a staged Classic project that contains Text.
@@ -278,8 +286,47 @@ export function createTextPanelOverlayFiles(): CompilerOverlayFile[] {
   ];
 }
 
+/**
+ * The Image quad's runtime, emitted as a flat set of modules.
+ *
+ * The published world draws pictures through the same object Studio does, so
+ * a gallery wall is the same size in the editor and once the world is built.
+ */
+export function createImageQuadOverlayFiles(): CompilerOverlayFile[] {
+  return [
+    overlay(IMAGE_QUAD_RUNTIME_OVERLAY_PATH, rewriteImageQuadImports(imageQuadRuntimeSource)),
+    overlay(IMAGE_QUAD_OBJECT_OVERLAY_PATH, rewriteImageQuadImports(imageQuadObjectSource)),
+    overlay(IMAGE_QUAD_LAYOUT_OVERLAY_PATH, rewriteImageQuadImports(imageQuadLayoutSource)),
+    overlay(IMAGE_RUNTIME_OVERLAY_PATH, rewriteImageQuadImports(imageRuntimeSource)),
+  ];
+}
+
+/**
+ * The override bridges the trigger runtime writes through, on their own.
+ *
+ * The trigger runtime imports the Text and Image bridges whether or not the
+ * Scene has a Text or an Image, so a world with a graph and neither has to
+ * carry both modules or its staged build fails on a missing import. The
+ * bridges are small and have no renderer of their own, so shipping them
+ * unused costs nothing the author would notice.
+ */
+export function createRuntimeBridgeOverlayFiles(): CompilerOverlayFile[] {
+  return [
+    overlay(TEXT_RUNTIME_OVERLAY_PATH, rewriteTextPanelImports(textRuntimeSource)),
+    overlay(IMAGE_RUNTIME_OVERLAY_PATH, rewriteImageQuadImports(imageRuntimeSource)),
+  ];
+}
+
 function overlay(relativePath: string, content: string): CompilerOverlayFile {
   return { relativePath, content, kind: "source", owner: "xrift-studio-compiler" };
+}
+
+function rewriteImageQuadImports(source: string): string {
+  return source.replace(
+    /(\bfrom\s*)(["'])\.{1,2}\/(image-quad|image-quad-layout|image-runtime)\.js\2/g,
+    (_whole, prefix: string, quote: string, moduleName: string) =>
+      `${prefix}${quote}./${moduleName}${quote}`,
+  );
 }
 
 function rewriteTextPanelImports(source: string): string {
@@ -392,6 +439,7 @@ const RUNTIME_SIBLING_OVERLAY_MODULES: Readonly<Record<string, string>> = {
   "instance-state-runtime": "instance-state-runtime",
   "instance-state-runtime-host": "instance-state-runtime-host",
   "text-runtime": "text-runtime",
+  "image-runtime": "image-runtime",
   host: "script-host",
 };
 

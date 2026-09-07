@@ -1,4 +1,8 @@
-import type { AssetManifest, SceneAsset } from "./asset-manifest";
+import {
+  isEnvironmentTextureAsset,
+  type AssetManifest,
+  type SceneAsset,
+} from "./asset-manifest";
 import {
   XRIFT_COMPONENT_REGISTRY,
   addXriftComponent,
@@ -25,6 +29,7 @@ import {
   createParticleEmitterComponent,
   createRigidBodyComponent,
   createScriptComponent,
+  createImageComponent,
   createTextComponent,
   textComponentPresetInput,
   createTransformComponent,
@@ -165,6 +170,7 @@ export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
     "text",
     { textPreset: "caption" },
   ),
+  definition("core.image", "Image (画像)", "rendering", true, "image"),
   definition("scripting.script", "Script", "scripting", true, "script"),
   definition(
     "interaction.trigger",
@@ -836,6 +842,19 @@ function createRegisteredComponent(
   }
   if (definition.componentType === "text") {
     return createTextComponent(id, textComponentPresetInput(definition.textPreset));
+  }
+  if (definition.componentType === "image") {
+    // The Texture selected in Assets is the picture the author has in hand,
+    // so Add Component right after importing it puts that picture up. Nothing
+    // else is guessed: a gallery wants a different picture on every Image.
+    const preferred = preferredAssetId
+      ? assets.assets[preferredAssetId]
+      : undefined;
+    const texture =
+      preferred?.kind === "texture" && !isEnvironmentTextureAsset(preferred)
+        ? preferred
+        : undefined;
+    return createImageComponent(id, texture ? { textureAssetId: texture.id } : {});
   }
   if (definition.componentType === "interaction-trigger") {
     // Prefer the Interactivity Graph selected in Assets, for the same reason a

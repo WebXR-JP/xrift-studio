@@ -62,6 +62,7 @@ import {
   MESH_MAX_DISTANCE_MIN,
   updateRigidBodyComponent,
   updateTextComponent,
+  updateImageComponent,
   updateInteractionTriggerComponent,
   type AudioSourcePatch,
   type ColliderPatch,
@@ -73,6 +74,7 @@ import {
   type SceneEntity,
   type ScriptComponent,
   type TextPatch,
+  type ImagePatch,
   type Vec3,
   type ModelPoseState,
   type MeshVisibilityPatch,
@@ -254,6 +256,7 @@ import {
   updateModelAsset,
   updateMaterialAsset,
   updateTextureAsset,
+  isEnvironmentTextureAsset,
   TEXTURE_COLOR_SPACES,
   TEXTURE_COMPRESSION_FORMATS,
   TEXTURE_MAG_FILTERS,
@@ -1765,7 +1768,9 @@ function listComponentDefinitions(
           ? "audio"
           : definition.componentType === "script"
             ? "script"
-            : null,
+            : definition.componentType === "image"
+              ? "texture"
+              : null,
   }));
   return unchanged(
     context,
@@ -3849,6 +3854,22 @@ function addComponent(
   const interactivityAssetId = optionalString(
     argumentsValue.interactivityAssetId,
   );
+  const textureAssetId = optionalString(argumentsValue.textureAssetId);
+  if (textureAssetId) {
+    // Checked up front so「Modelを指したImage」does not land as a blank quad
+    // that only the compiler would later complain about.
+    const textureAsset = context.bundle.assets.assets[textureAssetId];
+    if (
+      textureAsset?.kind !== "texture" ||
+      isEnvironmentTextureAsset(textureAsset)
+    ) {
+      throw new XriftMcpEditorToolError(
+        textureAsset ? "ASSET_KIND_MISMATCH" : "ASSET_NOT_FOUND",
+        "textureAssetIdには存在する画像のTexture Assetを指定してください。環境Texture（HDRI）はSkyboxへ使います",
+        { textureAssetId, actualKind: textureAsset?.kind },
+      );
+    }
+  }
   if (definitionId === "scripting.script") {
     const scriptAsset = scriptAssetId
       ? context.bundle.assets.assets[scriptAssetId]
@@ -3877,7 +3898,7 @@ function addComponent(
     context.bundle.project.projectKind,
     // One preferred Asset per Component kind; only one of these is ever set
     // because a definition consumes a single Asset kind.
-    scriptAssetId ?? interactivityAssetId,
+    scriptAssetId ?? interactivityAssetId ?? textureAssetId,
     context.scriptContracts,
   );
   if (!result.added) {
@@ -3889,6 +3910,7 @@ function addComponent(
         definitionId,
         scriptAssetId,
         interactivityAssetId,
+        textureAssetId,
         reason: result.reason,
       },
     );
@@ -3911,6 +3933,7 @@ function addComponent(
       definitionId,
       scriptAssetId,
       interactivityAssetId,
+      textureAssetId,
       componentId: result.componentId,
     },
     activity: `AIが${definitionId}をEntityへ追加しました`,
@@ -4048,6 +4071,50 @@ function updateComponent(
         context.bundle.scene,
         entityId,
         patch as TextPatch,
+        componentId,
+      );
+      break;
+    }
+    case "image": {
+      assertPatchKeys(
+        patch,
+        IMAGE_PATCH_KEYS,
+        component.type,
+      );
+      const textureAssetId = patch.textureAssetId;
+      if (textureAssetId !== undefined) {
+        if (typeof textureAssetId !== "string") {
+          invalidArgument("patch.textureAssetId", "string");
+        }
+        // Resolved here rather than in the document layer, which has no
+        // Asset manifest: an id pointing at a Model would draw a blank quad
+        // with no explanation. An empty string clears the picture.
+        const textureAsset = textureAssetId
+          ? context.bundle.assets.assets[textureAssetId]
+          : undefined;
+        if (
+          textureAssetId &&
+          (textureAsset?.kind !== "texture" ||
+            isEnvironmentTextureAsset(textureAsset))
+        ) {
+          throw new XriftMcpEditorToolError(
+            textureAsset ? "ASSET_KIND_MISMATCH" : "ASSET_NOT_FOUND",
+            "patch.textureAssetIdには存在する画像のTexture Assetを指定してください。環境Texture（HDRI）はSkyboxへ使い、空文字で画像を外せます",
+            { textureAssetId, actualKind: textureAsset?.kind },
+          );
+        }
+      }
+      if (
+        patch.height !== undefined &&
+        patch.height !== null &&
+        typeof patch.height !== "number"
+      ) {
+        invalidArgument("patch.height", "number or null");
+      }
+      scene = updateImageComponent(
+        context.bundle.scene,
+        entityId,
+        patch as ImagePatch,
         componentId,
       );
       break;
@@ -8012,6 +8079,8 @@ function componentDefinitionId(component: SceneComponent): string | null {
       return "core.audio-source";
     case "text":
       return "core.text";
+    case "image":
+      return "core.image";
     case "script":
       return "scripting.script";
     case "interaction-trigger":
@@ -8305,6 +8374,20 @@ const TEXT_PATCH_KEYS = patchKeysOf<TextPatch>()([
   "lineHeight",
   "letterSpacing",
   "background",
+]);
+
+const IMAGE_PATCH_KEYS = patchKeysOf<ImagePatch>()([
+  "enabled",
+  "textureAssetId",
+  "width",
+  "height",
+  "anchorX",
+  "anchorY",
+  "color",
+  "opacity",
+  "alphaMode",
+  "doubleSided",
+  "lit",
 ]);
 
 const AUDIO_SOURCE_PATCH_KEYS = patchKeysOf<AudioSourcePatch>()([

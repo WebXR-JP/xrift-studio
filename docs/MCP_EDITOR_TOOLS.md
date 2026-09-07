@@ -157,6 +157,16 @@ Terrain の地面は形と一緒に選ぶ。`list_terrain_presets` の方にあ�
 Material と Entity を一件にまとめる。Undo でカードだけ消えて Material が
 残ることはない。
 
+写真・ポスター・展示画のように「画像そのものを貼る」ときはカードではなく
+Image Component を使う。`place_asset` へ画像の Texture を渡すと、幅 1 m で
+画像の縦横比どおりの Image Entity ができる。Material Asset は作らない。既存の
+Entity へ付けるなら `add_component` の `core.image` に `textureAssetId` を渡す。
+大きさ、基準点、色味、不透明度、透明部分の扱い、両面、ライトの影響は
+`update_component` で変える。`height: null` は画像の縦横比へ戻す指示で、
+`textureAssetId: ""` は画像を外す指示だ。環境 Texture（HDRI）は Image に貼れず、
+Skybox へ使う。Interactivity Graph からは表示・色味・不透明度だけを変えられる。
+画像の差し替えを対象にしない理由は `docs/KHR_INTERACTIVITY_EDITOR.md` にある。
+
 **Scene / Entity**
 `update_scene_settings`, `list_entities`, `get_entity_components`,
 `get_entity_bounds`, `create_empty_entity`, `create_primitive`, `place_asset`,

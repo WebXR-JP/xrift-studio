@@ -164,3 +164,4 @@ F-06 アイテム検査
 Interactivity の編集契約は [4.9 Interactivity](../VISUAL_EDITOR_ARCHITECTURE.md#49-interactivity-khr_interactivity) と MI-84、MI-86 による。
 
 | MI-117 | Model InspectorのMaterial Slotsを開閉・検索・ページ切替する | 初期状態は件数付きで折り畳む。展開時だけ最大20行と選択肢を生成する。開閉はアニメーションなしで即時反映する。検索はスロット名とIDを対象とし、先頭ページへ戻す。 | 該当なしは検索語の変更を案内する。折り畳み・再展開で検索とページは初期化する。割当は保持し、開閉と検索ではAsset、Scene、Undo履歴を変更しない。 |
+| MI-118 | Image Componentで画像を選び、板の大きさを決める | 画像はAssetsの画像Textureの一覧から選ぶ。サムネイル、選択欄、Texture Inspectorを開くボタンを一行に置く。高さは「画像に合わせる」を既定にし、読み込んだ画像の縦横比から幅に応じて決める。画像を選んでいて読み込み中は板を出さない。未設定のときだけ色味どおりの正方形の板を置く。板は既定でライトの影響を受けない。 | Texture AssetをScene ViewまたはHierarchyへドラッグしても同じImage Entityができる。0以下の幅・高さ、範囲外の不透明度、未知の基準点はSceneDocument、selection、historyを変更しない。画像を外すと板だけが残り、Inspectorに未設定であることを示す。Scene View、Play、公開先で同じ大きさになる。 |

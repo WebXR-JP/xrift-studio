@@ -53,6 +53,10 @@ import {
   XriftTextPanelObject,
   type XriftTextPanelConfig,
 } from "../text-panel.js";
+import {
+  XriftImageQuadObject,
+  type XriftImageQuadConfig,
+} from "../image-quad.js";
 
 import { detectTimeUniforms, stampObjectTimeUniforms } from "../shader-time.js";
 import {
@@ -642,6 +646,29 @@ export class XriftThreeLoader {
       );
       panel.userData.xriftStudioComponentId = component.id;
       return panel;
+    }
+    if (component.type === "image") {
+      const textureAssetId = component.textureAssetId;
+      const texture = textureAssetId
+        ? input.textures.get(textureAssetId) ?? null
+        : null;
+      if (textureAssetId && !texture) {
+        input.diagnostics.push({
+          severity: "warning",
+          code: "image-texture-missing",
+          message: `Image texture could not be loaded: ${textureAssetId}`,
+          entityId: input.entity.id,
+          componentId: component.id,
+          assetId: textureAssetId,
+        });
+      }
+      const quad = new XriftImageQuadObject();
+      // A picture the world cannot load is drawn as its tinted quad rather
+      // than left invisible: the diagnostic above says why, and an empty wall
+      // would hide that there was ever a picture there.
+      quad.update(runtimeImageQuadConfig(component), texture, false);
+      quad.userData.xriftStudioComponentId = component.id;
+      return quad;
     }
     if (
       component.type === "xrift-component" &&
@@ -1332,6 +1359,23 @@ function runtimeTextPanelConfig(
     ...(component.background === undefined
       ? {}
       : { background: component.background }),
+  };
+}
+
+/** Maps the manifest's Image component onto the shared quad configuration. */
+function runtimeImageQuadConfig(
+  component: Extract<XriftRuntimeComponent, { type: "image" }>,
+): XriftImageQuadConfig {
+  return {
+    width: component.width,
+    ...(component.height === undefined ? {} : { height: component.height }),
+    anchorX: component.anchorX,
+    anchorY: component.anchorY,
+    color: component.color,
+    opacity: component.opacity,
+    alphaMode: component.alphaMode,
+    doubleSided: component.doubleSided,
+    lit: component.lit,
   };
 }
 

@@ -29,6 +29,7 @@
 - [F-33 Wind Component](./ux/editor.md#f-33)
 - [F-34 Skybox Shader（手続き的な空）](./ux/editor.md#f-34)
 - [F-39 Text Component（書体・背景）](./ux/editor.md#f-39)
+- [F-44 Image Component（画像の板）](./ux/editor.md#f-44)
 
 ## 素材の取り込み・編集
 

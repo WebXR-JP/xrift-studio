@@ -125,6 +125,7 @@ import {
   updateRigidBodyComponent,
   updateLightComponent,
   updateTextComponent,
+  updateImageComponent,
   updateMeshShadowSettings,
   MESH_MAX_DISTANCE_MAX,
   MESH_MAX_DISTANCE_MIN,
@@ -190,6 +191,7 @@ import {
   type TextureCardProfile,
   type TerrainViewportEditing,
   type TextPatch,
+  type ImagePatch,
   type TransformPatch,
   type UpdateXriftComponentPatch,
   type Vec3,
@@ -473,6 +475,7 @@ const COMPONENT_REMOVAL_LABELS: Readonly<
   mesh: "Mesh Renderer",
   light: "Light",
   text: "Text",
+  image: "Image",
   "audio-source": "Audio Source",
   "vegetation-wind": "Wind",
   "particle-emitter": "Particle Emitter",
@@ -7194,6 +7197,11 @@ export function VisualEditorPrototype({
           created.entityId,
           componentDefinitionId,
           projectKind,
+          // Create > Image right after selecting a picture in Assets puts that
+          // picture up, the same courtesy Add Component gives a Script.
+          componentDefinitionId === "core.image"
+            ? assetSelection ?? undefined
+            : undefined,
         );
         if (!added.added) {
           setNotice(`${definition.label}をSceneへ作成できませんでした`);
@@ -7217,7 +7225,7 @@ export function VisualEditorPrototype({
         });
       });
     },
-    [editorMode, importBusy, projectKind],
+    [assetSelection, editorMode, importBusy, projectKind],
   );
 
   const handleLightChange = useCallback(
@@ -7247,6 +7255,21 @@ export function VisualEditorPrototype({
         editorMode === "play"
           ? "Text設定を保存し、このEntityのPlayを先頭から再実行しました"
           : "Text設定をSceneへ反映しました",
+      );
+    },
+    [editorMode, playSession, updateScene],
+  );
+
+  const handleImageChange = useCallback(
+    (entityId: string, componentId: string, patch: ImagePatch) => {
+      if (editorMode !== "edit" && !playSession) return;
+      updateScene((scene) =>
+        updateImageComponent(scene, entityId, patch, componentId),
+      );
+      setNotice(
+        editorMode === "play"
+          ? "Image設定を保存し、このEntityのPlayを先頭から再実行しました"
+          : "Image設定をSceneへ反映しました",
       );
     },
     [editorMode, playSession, updateScene],
@@ -9559,7 +9582,8 @@ export function VisualEditorPrototype({
           componentDefinitionId,
           projectKind,
           componentDefinitionId === "scripting.script" ||
-          componentDefinitionId === "interaction.trigger"
+          componentDefinitionId === "interaction.trigger" ||
+          componentDefinitionId === "core.image"
             ? createdInteractivityAssetId ?? assetSelection ?? undefined
             : undefined,
           componentDefinitionId === "scripting.script"
@@ -11602,6 +11626,7 @@ export function VisualEditorPrototype({
             onRemoveComponent={handleRemoveComponent}
             onLightChange={handleLightChange}
             onTextChange={handleTextChange}
+            onImageChange={handleImageChange}
             onVegetationWindChange={handleVegetationWindChange}
             onAudioSourceChange={handleAudioSourceChange}
             onSelectAsset={handleSelectAsset}

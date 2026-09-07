@@ -133,6 +133,24 @@ export type XriftRuntimeComponent =
       background?: XriftRuntimeTextBackground;
     }
   | {
+      /** A picture on a flat quad: a Texture Asset drawn at an authored size. */
+      id: string;
+      type: "image";
+      enabled: boolean;
+      /** Id of a `texture` Asset in this manifest. Absent draws a tinted quad. */
+      textureAssetId?: string;
+      width: number;
+      /** Absent keeps the picture's own aspect ratio. */
+      height?: number;
+      anchorX: "left" | "center" | "right";
+      anchorY: "top" | "middle" | "bottom";
+      color: string;
+      opacity: number;
+      alphaMode: "cutout" | "blend";
+      doubleSided: boolean;
+      lit: boolean;
+    }
+  | {
       id: string;
       type: "collider";
       enabled: boolean;

@@ -39,6 +39,12 @@ import {
   getTextFontDefinition,
   resolveTextFontWeight,
 } from "../../../packages/xrift-studio-runtime/src/text-font-catalog";
+import {
+  DEFAULT_IMAGE_QUAD_CONFIG,
+  type XriftImageQuadAlphaMode,
+  type XriftImageQuadAnchorX,
+  type XriftImageQuadAnchorY,
+} from "../../../packages/xrift-studio-runtime/src/image-quad-layout";
 
 export const SCENE_DOCUMENT_SCHEMA_VERSION = "0.1.0" as const;
 
@@ -335,6 +341,60 @@ export type TextPatch = Partial<
   >
 > & { background?: TextBackgroundPatch };
 
+export type ImageAlphaMode = XriftImageQuadAlphaMode;
+export type ImageAnchorX = XriftImageQuadAnchorX;
+export type ImageAnchorY = XriftImageQuadAnchorY;
+
+export { DEFAULT_IMAGE_QUAD_CONFIG };
+
+/**
+ * A picture on a flat quad.
+ *
+ * The first Component that points at a Texture Asset directly: a gallery
+ * wall, a poster or a clock face is one image at one size, and asking for a
+ * Material Asset per picture is what made `create_texture_card` heavy for
+ * that. The shape is shared with the runtime so the compiler hands the
+ * authored value straight to the manifest.
+ */
+export type ImageComponent = ComponentBase & {
+  type: "image";
+  /** Texture Asset drawn on the quad. Absent until the author picks one. */
+  textureAssetId?: string;
+  /** Width in local units. */
+  width: number;
+  /** Absent keeps the picture's own aspect ratio from its pixel size. */
+  height?: number;
+  anchorX: ImageAnchorX;
+  anchorY: ImageAnchorY;
+  /** Tint multiplied over the picture. White keeps it as-is. */
+  color: string;
+  opacity: number;
+  alphaMode: ImageAlphaMode;
+  doubleSided: boolean;
+  /** Lit by the Scene's lights instead of drawn as-is. */
+  lit: boolean;
+};
+
+/**
+ * `height: null` puts the picture back on its own aspect ratio; the field is
+ * otherwise merged like every other.
+ */
+export type ImagePatch = Partial<
+  Pick<
+    ImageComponent,
+    | "enabled"
+    | "textureAssetId"
+    | "width"
+    | "anchorX"
+    | "anchorY"
+    | "color"
+    | "opacity"
+    | "alphaMode"
+    | "doubleSided"
+    | "lit"
+  >
+> & { height?: number | null };
+
 export type SpawnPointComponent = ComponentBase & {
   type: "spawn-point";
   target: "player" | "item-preview";
@@ -551,6 +611,7 @@ export interface SceneComponentSchemaRegistry {
   collider: ColliderComponent;
   light: LightComponent;
   text: TextComponent;
+  image: ImageComponent;
   animation: AnimationComponent;
   "vegetation-wind": VegetationWindComponent;
   "audio-source": AudioSourceComponent;
@@ -787,6 +848,7 @@ export function migrateLegacyParentRigidBodies(
           "mesh",
           "light",
           "text",
+          "image",
           "audio-source",
           "particle-emitter",
           "spawn-point",
@@ -2175,6 +2237,151 @@ export function updateTextComponent(
     if (font) next.fontWeight = resolveTextFontWeight(font, next.fontWeight);
   }
   if (!textComponentsDiffer(current, next)) return scene;
+  return {
+    ...scene,
+    entities: {
+      ...scene.entities,
+      [entityId]: {
+        ...entity,
+        components: entity.components.map((component) =>
+          component.id === current.id ? next : component,
+        ),
+      },
+    },
+  };
+}
+
+export function createImageComponent(
+  id: string,
+  input: Partial<Omit<ImageComponent, "id" | "type">> = {},
+): ImageComponent | null {
+  const normalizedId = id.trim();
+  if (!normalizedId) return null;
+  const textureAssetId =
+    typeof input.textureAssetId === "string" && input.textureAssetId.trim()
+      ? input.textureAssetId.trim()
+      : undefined;
+  return {
+    id: normalizedId,
+    type: "image",
+    enabled: input.enabled ?? true,
+    ...(textureAssetId ? { textureAssetId } : {}),
+    width: positiveOr(input.width, DEFAULT_IMAGE_QUAD_CONFIG.width),
+    ...(typeof input.height === "number" &&
+    Number.isFinite(input.height) &&
+    input.height > 0
+      ? { height: input.height }
+      : {}),
+    anchorX:
+      input.anchorX === "left" || input.anchorX === "right"
+        ? input.anchorX
+        : "center",
+    anchorY:
+      input.anchorY === "top" || input.anchorY === "bottom"
+        ? input.anchorY
+        : "middle",
+    color:
+      typeof input.color === "string" && input.color.trim()
+        ? input.color
+        : DEFAULT_IMAGE_QUAD_CONFIG.color,
+    opacity: clampTextUnit(input.opacity, DEFAULT_IMAGE_QUAD_CONFIG.opacity),
+    alphaMode: input.alphaMode === "blend" ? "blend" : "cutout",
+    doubleSided: input.doubleSided === true,
+    lit: input.lit === true,
+  };
+}
+
+/** Applies an Image edit atomically; an invalid field rejects the patch. */
+export function updateImageComponent(
+  scene: SceneDocument,
+  entityId: string,
+  patch: ImagePatch,
+  componentId?: string,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  const current = entity?.components.find(
+    (component): component is ImageComponent =>
+      component.type === "image" &&
+      (componentId === undefined || component.id === componentId),
+  );
+  if (!entity || !current) return scene;
+  if (patch.enabled !== undefined && typeof patch.enabled !== "boolean") return scene;
+  if (
+    patch.textureAssetId !== undefined &&
+    typeof patch.textureAssetId !== "string"
+  ) {
+    return scene;
+  }
+  if (
+    patch.width !== undefined &&
+    (!Number.isFinite(patch.width) || patch.width <= 0)
+  ) {
+    return scene;
+  }
+  if (
+    patch.height !== undefined &&
+    patch.height !== null &&
+    (!Number.isFinite(patch.height) || patch.height <= 0)
+  ) {
+    return scene;
+  }
+  if (
+    patch.anchorX !== undefined &&
+    !["left", "center", "right"].includes(patch.anchorX)
+  ) {
+    return scene;
+  }
+  if (
+    patch.anchorY !== undefined &&
+    !["top", "middle", "bottom"].includes(patch.anchorY)
+  ) {
+    return scene;
+  }
+  if (
+    patch.color !== undefined &&
+    (typeof patch.color !== "string" || !patch.color.trim())
+  ) {
+    return scene;
+  }
+  if (
+    patch.opacity !== undefined &&
+    (!Number.isFinite(patch.opacity) || patch.opacity < 0 || patch.opacity > 1)
+  ) {
+    return scene;
+  }
+  if (
+    patch.alphaMode !== undefined &&
+    !["cutout", "blend"].includes(patch.alphaMode)
+  ) {
+    return scene;
+  }
+  for (const flag of [patch.doubleSided, patch.lit]) {
+    if (flag !== undefined && typeof flag !== "boolean") return scene;
+  }
+  const { height: heightPatch, textureAssetId: texturePatch, ...rest } = patch;
+  const next: ImageComponent = { ...current, ...rest };
+  // An empty id is how the Inspector says「画像を外す」; storing it would leave
+  // two spellings of the same document state.
+  if (texturePatch !== undefined) {
+    const trimmed = texturePatch.trim();
+    if (trimmed) next.textureAssetId = trimmed;
+    else delete next.textureAssetId;
+  }
+  // `null` means「画像の縦横比に合わせる」, which is the absence of a height
+  // rather than a height of nothing.
+  if (heightPatch === null) delete next.height;
+  else if (heightPatch !== undefined) next.height = heightPatch;
+  const keys = new Set([...Object.keys(current), ...Object.keys(next)]);
+  let changed = false;
+  for (const key of keys) {
+    if (
+      current[key as keyof ImageComponent] !== next[key as keyof ImageComponent]
+    ) {
+      changed = true;
+      break;
+    }
+  }
+  if (!changed) return scene;
   return {
     ...scene,
     entities: {

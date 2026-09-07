@@ -39,6 +39,12 @@ import {
   type XriftTextRuntimeOverrides,
 } from "./text-runtime.js";
 import {
+  isXriftImageRuntimeBridge,
+  XRIFT_IMAGE_RUNTIME_USER_DATA_KEY,
+  type XriftImageRuntimeBridge,
+  type XriftImageRuntimeOverrides,
+} from "./image-runtime.js";
+import {
   emitXriftSceneEvent,
   createXriftGraphEventQueue,
   findXriftSceneRuntimeBridge,
@@ -210,6 +216,29 @@ function textRuntimeOverrides(
       return value.kind === "float" ? { maxWidth: value.value } : null;
     case "outlineWidth":
       return value.kind === "float" ? { outlineWidth: value.value } : null;
+    default:
+      return null;
+  }
+}
+
+/**
+ * One action, as the Image bridge's override shape.
+ *
+ * The same colour conversion as Text: the action carries linear RGB, the quad
+ * config takes CSS hex.
+ */
+function imageRuntimeOverrides(
+  action: XriftInteractionAction,
+): XriftImageRuntimeOverrides | null {
+  const value = action.value;
+  if (!value) return null;
+  switch (action.property) {
+    case "enabled":
+      return value.kind === "bool" ? { enabled: value.value } : null;
+    case "color":
+      return value.kind === "color" ? { color: hexFromLinear(value.value) } : null;
+    case "opacity":
+      return value.kind === "float" ? { opacity: value.value } : null;
     default:
       return null;
   }
@@ -426,6 +455,7 @@ export function createXriftInteractionApplier({
   const animationOwners = new Set<XriftAnimationRuntimeBridge>();
   const sceneOwners = new Set<XriftSceneRuntimeBridge>();
   const textOwners = new Set<XriftTextRuntimeBridge>();
+  const imageOwners = new Set<XriftImageRuntimeBridge>();
   /**
    * Meshes whose Material this trigger replaced with its own clone.
    *
@@ -680,6 +710,59 @@ export function createXriftInteractionApplier({
     "fogColor",
     "ambientColor",
   ] as const;
+
+  /**
+   * Image is written through its own bridge for the same reason Text is: the
+   * quad is drawn from one config object, so fading a picture goes through the
+   * thing that owns that object rather than poking at the mesh's material.
+   */
+  const applyImage = (target: Object3D, action: XriftInteractionAction) => {
+    forEachOwnedBridge(
+      target,
+      ownEntityId(action.entityId),
+      XRIFT_IMAGE_RUNTIME_USER_DATA_KEY,
+      isXriftImageRuntimeBridge,
+      (bridge) => {
+        if (action.componentId && bridge.read().componentId !== action.componentId) {
+          return;
+        }
+        const overrides = imageRuntimeOverrides(action);
+        if (!overrides) return;
+        imageOwners.add(bridge);
+        bridge.setOwner(owner, order, componentId, overrides);
+      },
+    );
+  };
+
+  const readImage = (
+    target: Object3D,
+    action: { entityId: string; componentId: string | null; property: string },
+  ): XriftInteractionValue | null => {
+    const found: { value: XriftInteractionValue | null } = { value: null };
+    forEachOwnedBridge(
+      target,
+      ownEntityId(action.entityId),
+      XRIFT_IMAGE_RUNTIME_USER_DATA_KEY,
+      isXriftImageRuntimeBridge,
+      (bridge) => {
+        const state = bridge.read();
+        if (
+          found.value ||
+          (action.componentId && state.componentId !== action.componentId)
+        ) {
+          return;
+        }
+        if (action.property === "enabled") {
+          found.value = { kind: "bool", value: state.enabled ?? true };
+          return;
+        }
+        if (action.property === "opacity" && state.overrides.opacity !== undefined) {
+          found.value = { kind: "float", value: state.overrides.opacity };
+        }
+      },
+    );
+    return found.value;
+  };
 
   /**
    * Text is written through its own bridge, like Light and Particle: the panel
@@ -1200,6 +1283,7 @@ export function createXriftInteractionApplier({
         return readMaterial(object, target);
       }
       if (target.targetKind === "text") return readText(object, target);
+      if (target.targetKind === "image") return readImage(object, target);
       if (target.targetKind === "light") return readLight(object, target);
       return readAudioSource(object, target);
     },
@@ -1242,6 +1326,10 @@ export function createXriftInteractionApplier({
         applyText(target, action);
         return;
       }
+      if (action.target === "image") {
+        applyImage(target, action);
+        return;
+      }
       if (action.target === "light") {
         applyLight(target, action);
         return;
@@ -1275,6 +1363,8 @@ export function createXriftInteractionApplier({
       sceneOwners.clear();
       for (const bridge of textOwners) bridge.removeOwner(owner);
       textOwners.clear();
+      for (const bridge of imageOwners) bridge.removeOwner(owner);
+      imageOwners.clear();
       for (const bridge of particleOverrides.keys()) bridge.removeOwner(owner);
       particleOverrides.clear();
       for (const [mesh, original] of materialRestores) {

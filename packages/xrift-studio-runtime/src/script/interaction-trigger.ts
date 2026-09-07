@@ -42,6 +42,7 @@ export type XriftInteractionTargetKind =
   | "particle"
   | "material"
   | "text"
+  | "image"
   | "scene"
   | "player";
 
@@ -109,6 +110,7 @@ export const XRIFT_INTERACTION_TARGET_KINDS: readonly XriftInteractionTargetKind
   "particle",
   "material",
   "text",
+  "image",
   "scene",
 ];
 
@@ -164,6 +166,7 @@ export const XRIFT_INTERACTION_TARGET_LABELS: Readonly<
   particle: "Particle",
   material: "Material",
   text: "Text",
+  image: "Image",
   scene: "Scene（この端末だけ）",
   player: "プレイヤー（この端末だけ）",
 };
@@ -861,6 +864,35 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     description: "縁取りの色です。値はリニア空間のRGBで保存されます。",
     kind: "color",
     defaultValue: [0, 0, 0],
+  },
+  {
+    target: "image",
+    name: "enabled",
+    label: "表示",
+    description:
+      "このImageだけを表示・非表示にします。Entityごと消すわけではありません。",
+    kind: "bool",
+    defaultValue: true,
+  },
+  {
+    target: "image",
+    name: "color",
+    label: "色味",
+    description:
+      "画像に掛ける色を変えます。白で元の画像のままです。値はリニア空間のRGBで保存されます。",
+    kind: "color",
+    defaultValue: [1, 1, 1],
+  },
+  {
+    target: "image",
+    name: "opacity",
+    label: "不透明度",
+    description: "0で見えなくなり、1で元の濃さになります。時間をかけるとフェードになります。",
+    kind: "float",
+    defaultValue: 1,
+    min: 0,
+    max: 1,
+    step: 0.01,
   },
   {
     target: "player",
