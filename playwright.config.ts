@@ -12,9 +12,13 @@ export default defineConfig({
   workers: 1,
   retries: isCI ? 1 : 0,
   forbidOnly: isCI,
-  timeout: 60_000,
+  // The first Visual Editor load compiles the editor and initializes its WebGL
+  // scene. Release runners without hardware acceleration can spend well over a
+  // minute there before the actual interaction starts, so keep this above the
+  // cold-start budget instead of turning a slow runner into a false failure.
+  timeout: 180_000,
   expect: {
-    timeout: 12_000,
+    timeout: 30_000,
   },
   reporter: isCI
     ? [

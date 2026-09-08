@@ -680,7 +680,7 @@ function AssetCard({
         }}
         title={commandTitle(`${asset.name}を削除`, "DeleteAsset")}
         aria-label={`${asset.name}を削除`}
-        className={`absolute right-1.5 top-1.5 rounded bg-white/95 p-1 text-slate-500 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30 ${selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}
+        className={`absolute right-1.5 top-1.5 z-10 rounded bg-white/95 p-1 text-slate-500 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30 ${selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}
       >
         <DeleteIcon size={13} aria-hidden="true" />
       </button>
