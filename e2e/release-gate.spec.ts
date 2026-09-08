@@ -51,6 +51,7 @@ test("初回セットアップからプロジェクト一覧へ進める", async
   await expect(
     page.getByRole("heading", { name: /XRift Studio へようこそ/ }),
   ).toBeVisible();
+  await page.getByText("公開の準備（後からでもできます）", { exact: true }).click();
   await page.getByRole("button", { name: "セットアップを開始" }).click();
   await expect(
     page.getByRole("heading", { name: "プロジェクト" }),
@@ -66,6 +67,7 @@ test("セットアップエラーを伏字付きでヘルプ相談へ引き継�
   page,
 }) => {
   await openReleaseApp(page, "setup-error");
+  await page.getByText("公開の準備（後からでもできます）", { exact: true }).click();
   await page.getByRole("button", { name: "セットアップを開始" }).click();
 
   await expect(page.getByText("Runtime install failed", { exact: false })).toBeVisible();

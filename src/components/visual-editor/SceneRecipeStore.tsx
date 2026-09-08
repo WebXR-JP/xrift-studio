@@ -17,6 +17,7 @@ import { SceneRecipeCatalogPreview } from "./SceneRecipeCatalogPreview";
 
 const CATEGORY_ORDER: readonly SceneRecipeCategory[] = [
   "tutorial",
+  "material",
   "light",
   "nature",
   "weather",
@@ -42,17 +43,21 @@ export type SceneRecipeInstallResult = {
  */
 export function SceneRecipeStore({
   projectKind,
+  shelf = "models",
   disabledReason,
   onAdd,
 }: {
   projectKind: VisualProjectKind;
+  shelf?: "models" | "materials" | "gimmicks";
   disabledReason?: string | null;
   onAdd: (recipe: SceneRecipe) => Promise<SceneRecipeInstallResult>;
 }) {
   const recipes = useMemo(
-    () => getSceneRecipesForProjectKind(projectKind),
-    [projectKind],
+    () => getSceneRecipesForProjectKind(projectKind, shelf),
+    [projectKind, shelf],
   );
+  const title = shelf === "materials" ? "glTFマテリアル" : shelf === "gimmicks" ? "ギミック" : "3Dセット";
+  const description = shelf === "materials" ? "特殊な質感を比較できる見本です。配置後はマテリアルを編集できます" : shelf === "gimmicks" ? "操作できるしかけです。配置後はPlayで試し、ノードグラフで編集できます" : "家具や装飾など、組み立て済みの3Dを配置できます";
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<"all" | SceneRecipeCategory>("all");
   const [selectedId, setSelectedId] = useState(recipes[0]?.id ?? "");
@@ -132,7 +137,7 @@ export function SceneRecipeStore({
       setError(
         reason instanceof Error && reason.message.trim()
           ? reason.message
-          : "3Dセットを追加できませんでした",
+          : `${title}を追加できませんでした`,
       );
     } finally {
       setAdding(false);
@@ -143,14 +148,14 @@ export function SceneRecipeStore({
     <>
       <section
         className="flex min-w-0 flex-1 flex-col border-r border-slate-200"
-        aria-label="3Dセット一覧"
+        aria-label={`${title}一覧`}
       >
         <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-2.5">
           <div className="mb-2 flex items-start justify-between gap-3">
             <div>
-              <h3 className="text-xs font-semibold text-slate-900">3Dセット</h3>
+              <h3 className="text-xs font-semibold text-slate-900">{title}</h3>
               <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                組み立て済みの3Dです。音としかけの入ったチュートリアルもあります
+                {description}
               </p>
             </div>
             <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-1 text-[10px] font-semibold text-orange-700">
@@ -163,7 +168,7 @@ export function SceneRecipeStore({
                 size={14}
                 className="pointer-events-none absolute left-2.5 top-2 text-slate-400"
               />
-              <span className="sr-only">3Dセットを検索</span>
+              <span className="sr-only">{title}を検索</span>
               <input
                 value={query}
                 onChange={(event) => setQuery(event.currentTarget.value)}
@@ -178,11 +183,11 @@ export function SceneRecipeStore({
                   event.currentTarget.value as "all" | SceneRecipeCategory,
                 )
               }
-              aria-label="3Dセットのカテゴリ"
+              aria-label={`${title}のカテゴリ`}
               className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700"
             >
               <option value="all">すべて</option>
-              {CATEGORY_ORDER.map((entry) => (
+              {CATEGORY_ORDER.filter((entry) => recipes.some((recipe) => recipe.category === entry)).map((entry) => (
                 <option key={entry} value={entry}>
                   {SCENE_RECIPE_CATEGORY_LABELS[entry]}
                 </option>
@@ -194,7 +199,7 @@ export function SceneRecipeStore({
           {visible.length === 0 ? (
             <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center text-xs text-slate-500">
               <Search size={22} />
-              <p>条件に合う3Dセットがありません</p>
+              <p>条件に合う{title}がありません</p>
             </div>
           ) : (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2.5">
@@ -238,7 +243,7 @@ export function SceneRecipeStore({
 
       <aside
         className="scrollbar-thin w-[350px] shrink-0 overflow-auto bg-white p-4"
-        aria-label="選択した3Dセットの詳細"
+        aria-label={`選択した${title}の詳細`}
       >
         {selected && contents ? (
           <div className="space-y-4">
@@ -370,7 +375,7 @@ export function SceneRecipeStore({
           </div>
         ) : (
           <p className="text-xs text-slate-500">
-            このプロジェクト種別で使える3Dセットがありません
+            このプロジェクト種別で使える{title}がありません
           </p>
         )}
       </aside>

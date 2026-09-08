@@ -1,3 +1,4 @@
+import { GuideLink } from "../guide/GuideLink";
 import {
   useRef,
   useEffect,
@@ -1668,6 +1669,7 @@ export function AssetsPanel({
           </nav>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          <GuideLink page="assets" label="Assetsの使い方" compact />
           {normalizedExternalLockReason ? (
             <span
               role="status"

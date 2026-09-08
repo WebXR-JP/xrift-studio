@@ -443,6 +443,8 @@ export function ExternalAssetStoreDialog({
             />
           ) : provider.kind === "scene-recipe" ? (
             <SceneRecipeStore
+              key={provider.id}
+              shelf={provider.recipeShelf}
               projectKind={projectKind}
               disabledReason={disabledReason}
               onAdd={onAddSceneRecipe}

@@ -11,19 +11,19 @@ export function WikiCallout() {
         >
           <div>
             <p className="preview-eyebrow">使い方ガイド</p>
-            <h2 className="preview-section-title mt-4">使い方は、ガイドにまとめています。</h2>
+            <h2 className="preview-section-title mt-4">最初の作品を、ここから。</h2>
             <p className="preview-section-copy mt-5 max-w-2xl">
-              ビジュアルエディターとコードエディターの使い方から、Play / Stop、XRiftへの公開まで。制作の流れに沿って案内しています。
+              インストールして画面を開き、物を置いて色を変える。保存してPlayで歩くところまで、順番に進められます。
             </p>
           </div>
           <a
-            href={XRIFT_STUDIO_WIKI_URL}
+            href={`${XRIFT_STUDIO_WIKI_URL}first-world.html`}
             target="_blank"
             rel="noreferrer"
             className="preview-button preview-button-dark preview-button-large w-full sm:w-auto"
           >
             <BookOpen size={17} />
-            使い方ガイドを開く
+            最初のワールドを作る
             <ExternalLink size={13} />
           </a>
         </div>

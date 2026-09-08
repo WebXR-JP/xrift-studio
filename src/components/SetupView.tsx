@@ -1,3 +1,4 @@
+import { GuideLink } from "./guide/GuideLink";
 import { useEffect, useRef, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
@@ -68,14 +69,14 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
   const percent = Math.min(100, Math.max(0, progress?.percent ?? 0));
 
   return (
-    <div className="relative flex h-screen w-screen items-center justify-center overflow-hidden bg-aurora px-8">
+    <div className="relative flex h-screen w-screen items-start justify-center overflow-y-auto bg-aurora px-4 py-8">
       <div className="pointer-events-none absolute inset-0 opacity-60">
         <div className="absolute left-[10%] top-[15%] h-64 w-64 rounded-full bg-brand-400/30 blur-3xl" />
         <div className="absolute right-[15%] top-[10%] h-80 w-80 rounded-full bg-blue-400/20 blur-3xl" />
         <div className="absolute bottom-[10%] left-[30%] h-72 w-72 rounded-full bg-pink-400/20 blur-3xl" />
       </div>
 
-      <div className="relative w-full max-w-lg animate-scale-in">
+      <div className="relative my-auto w-full max-w-lg animate-scale-in">
         <div className="mb-8 flex flex-col items-center text-center">
           <BrandMark size={72} animate />
           <h1 className="mt-5 text-[28px] font-semibold tracking-tight text-zinc-900">
@@ -90,95 +91,16 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
         </div>
 
         <div className="rounded-2xl border border-white/60 bg-white/80 p-6 shadow-brand backdrop-blur-sm">
-          <div className="flex items-center gap-2 text-xs text-zinc-500">
-            <Sparkles size={14} className="text-brand-500" strokeWidth={2} />
-            <span>作成・公開に必要なツールをインストールします。</span>
-          </div>
-
-          <ul className="mt-4 space-y-2.5 text-sm">
-            <SetupItem done={status.nodeInstalled} label="Node.js v24 LTS" hint="アプリ専用のNode.jsとnpm" />
-            <SetupItem done={status.xriftInstalled} label="@xrift/cli" hint="ワールドやアイテムの作成・公開に使う XRift 公式ツール" />
-          </ul>
-
-          <div className="mt-4 rounded-lg bg-zinc-50 px-3 py-2 text-[11px] text-zinc-500">
-            <div>インストール先</div>
-            <div className="mt-0.5 truncate font-mono text-zinc-700" title={status.paths.appRoot}>
-              {status.paths.appRoot}
-            </div>
-          </div>
-
-          {running && (
-            <div className="mt-5 rounded-xl border border-brand-200 bg-brand-50 p-4 animate-fade-in">
-              <div className="mb-2 flex items-center justify-between text-xs">
-                <span className="flex items-center gap-1.5 font-medium text-brand-700">
-                  <Loader2 size={12} className="animate-spin" strokeWidth={2.25} />
-                  {setupProgressLabel(progress?.step)}
-                </span>
-                <span className="tabular-nums text-brand-500">{percent.toFixed(1)}%</span>
-              </div>
-              <div className="h-1.5 overflow-hidden rounded-full bg-white">
-                <div
-                  className="h-full gradient-brand transition-all"
-                  style={{ width: `${percent}%` }}
-                />
-              </div>
-              <div className="mt-2 text-[12px] text-brand-900">{progress?.message}</div>
-              {logs.length > 2 && (
-                <div className="scrollbar-thin mt-3 max-h-28 overflow-y-auto rounded bg-white/70 p-2 font-mono text-[10px] leading-4 text-zinc-500">
-                  {logs.slice(-10).map((l, i) => (
-                    <div key={i}>
-                      [{setupProgressLabel(l.step)}] {l.message}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {error && (
-            <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 animate-fade-in">
-              <div className="font-semibold">セットアップを完了できませんでした</div>
-              <div className="mt-1 whitespace-pre-wrap font-mono text-[11px]">{error}</div>
-              <button
-                type="button"
-                onClick={() => setShowSupport(true)}
-                className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-800 hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
-              >
-                <LifeBuoy size={13} aria-hidden="true" />
-                ヘルプと報告
-              </button>
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={start}
-            disabled={running}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl gradient-brand py-3 text-sm font-semibold text-white shadow-brand-lg transition hover:shadow-brand-lg hover:brightness-105 active:brightness-95 disabled:opacity-60"
-          >
-            {running ? (
-              <>
-                <Loader2 size={14} className="animate-spin" strokeWidth={2.25} />
-                セットアップ中…
-              </>
-            ) : (
-              <>
-                <Sparkles size={14} strokeWidth={2.25} />
-                セットアップを開始
-              </>
-            )}
-          </button>
-
-          <div className="mt-5 border-t border-zinc-200 pt-5">
+          <div className="pb-5">
             <div className="flex items-start gap-2.5">
               <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-50 text-cyan-700">
                 <PanelsTopLeft size={16} strokeWidth={2} />
               </span>
               <div>
-                <div className="text-xs font-semibold text-zinc-800">
+                <div className="text-sm font-semibold text-zinc-800">
                   セットアップせずに作り始める
                 </div>
-                <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+                <p className="mt-1 text-sm leading-6 text-zinc-600">
                   ビジュアルエディターでの編集と保存には、セットアップは不要です。XRiftに公開するときに準備できます。
                 </p>
               </div>
@@ -188,7 +110,7 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
                 type="button"
                 disabled={running}
                 onClick={() => onOpenVisualEditor("world")}
-                className="flex items-center justify-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 transition hover:border-violet-300 hover:bg-violet-100 disabled:opacity-50"
+                className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50"
               >
                 <Globe2 size={14} strokeWidth={2} />
                 ワールドを作る
@@ -197,13 +119,95 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
                 type="button"
                 disabled={running}
                 onClick={() => onOpenVisualEditor("item")}
-                className="flex items-center justify-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-800 transition hover:border-cyan-300 hover:bg-cyan-100 disabled:opacity-50"
+                className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
               >
                 <Box size={14} strokeWidth={2} />
                 アイテムを作る
               </button>
             </div>
           </div>
+          <GuideLink page="first-world" label="最初のワールドの作り方" />
+          <details className="mt-4 border-t border-zinc-200 pt-4">
+            <summary className="cursor-pointer py-2 text-sm font-medium text-zinc-700">公開の準備（後からでもできます）</summary>
+            <div className="flex items-center gap-2 text-xs text-zinc-500">
+              <Sparkles size={14} className="text-brand-500" strokeWidth={2} />
+              <span>XRiftへの公開に必要なツールをインストールします。</span>
+            </div>
+
+            <ul className="mt-4 space-y-2.5 text-sm">
+              <SetupItem done={status.nodeInstalled} label="Node.js v24 LTS" hint="アプリ専用のNode.jsとnpm" />
+              <SetupItem done={status.xriftInstalled} label="@xrift/cli" hint="ワールドやアイテムの作成・公開に使う XRift 公式ツール" />
+            </ul>
+
+            <div className="mt-4 rounded-lg bg-zinc-50 px-3 py-2 text-[11px] text-zinc-500">
+              <div>インストール先</div>
+              <div className="mt-0.5 truncate font-mono text-zinc-700" title={status.paths.appRoot}>
+                {status.paths.appRoot}
+              </div>
+            </div>
+
+            {running && (
+              <div className="mt-5 rounded-xl border border-brand-200 bg-brand-50 p-4 animate-fade-in">
+                <div className="mb-2 flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1.5 font-medium text-brand-700">
+                    <Loader2 size={12} className="animate-spin" strokeWidth={2.25} />
+                    {setupProgressLabel(progress?.step)}
+                  </span>
+                  <span className="tabular-nums text-brand-500">{percent.toFixed(1)}%</span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-white">
+                  <div
+                    className="h-full gradient-brand transition-all"
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+                <div className="mt-2 text-[12px] text-brand-900">{progress?.message}</div>
+                {logs.length > 2 && (
+                  <div className="scrollbar-thin mt-3 max-h-28 overflow-y-auto rounded bg-white/70 p-2 font-mono text-[10px] leading-4 text-zinc-500">
+                    {logs.slice(-10).map((l, i) => (
+                      <div key={i}>
+                        [{setupProgressLabel(l.step)}] {l.message}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {error && (
+              <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 animate-fade-in">
+                <div className="font-semibold">セットアップを完了できませんでした</div>
+                <div className="mt-1 whitespace-pre-wrap font-mono text-[11px]">{error}</div>
+                <button
+                  type="button"
+                  onClick={() => setShowSupport(true)}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-800 hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                >
+                  <LifeBuoy size={13} aria-hidden="true" />
+                  ヘルプと報告
+                </button>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={start}
+              disabled={running}
+              className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl gradient-brand py-3 text-sm font-semibold text-white shadow-brand-lg transition hover:shadow-brand-lg hover:brightness-105 active:brightness-95 disabled:opacity-60"
+            >
+              {running ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" strokeWidth={2.25} />
+                  セットアップ中…
+                </>
+              ) : (
+                <>
+                  <Sparkles size={14} strokeWidth={2.25} />
+                  セットアップを開始
+                </>
+              )}
+            </button>
+          </details>
         </div>
 
         <div className="mt-5 text-center text-[11px] text-zinc-400">

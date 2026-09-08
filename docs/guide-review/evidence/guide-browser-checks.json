@@ -1,0 +1,892 @@
+{
+  "mode": "DOM/layout/component verification. Production template/CSS/client inlined. Mistune Markdown adapter. Search data served from generated fixtures. Actual navigation blocked by managed browser policy and NOT tested.",
+  "width_checks": [
+    {
+      "page": "index",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "installation",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "first-world",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "editor-basics",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "objects",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "assets",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "materials",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "textures",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "save-and-open",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "play-mode",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "external-resources",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "lighting",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "sky-and-water",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "terrain",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "collision",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "audio",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "screens",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "particles",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "prefabs",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "interactivity",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "ai-connection",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "transparent-materials",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "material-extensions",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "publishing",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "performance",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "troubleshooting",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "installation-problems",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "recovery",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "glossary",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "shortcuts",
+      "width": 320,
+      "scroll": 320,
+      "font": 16,
+      "article": 280
+    },
+    {
+      "page": "index",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "installation",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "first-world",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "editor-basics",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "objects",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "assets",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "materials",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "textures",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "save-and-open",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "play-mode",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "external-resources",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "lighting",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "sky-and-water",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "terrain",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "collision",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "audio",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "screens",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "particles",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "prefabs",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "interactivity",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "ai-connection",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "transparent-materials",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "material-extensions",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "publishing",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "performance",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "troubleshooting",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "installation-problems",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "recovery",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "glossary",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "shortcuts",
+      "width": 390,
+      "scroll": 390,
+      "font": 16,
+      "article": 350
+    },
+    {
+      "page": "index",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "installation",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "first-world",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "editor-basics",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "objects",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "assets",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "materials",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "textures",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "save-and-open",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "play-mode",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "external-resources",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "lighting",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "sky-and-water",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "terrain",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "collision",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "audio",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "screens",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "particles",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "prefabs",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "interactivity",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "ai-connection",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "transparent-materials",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "material-extensions",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "publishing",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "performance",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "troubleshooting",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "installation-problems",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "recovery",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "glossary",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "shortcuts",
+      "width": 768,
+      "scroll": 768,
+      "font": 17,
+      "article": 720
+    },
+    {
+      "page": "index",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 960
+    },
+    {
+      "page": "installation",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "first-world",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "editor-basics",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "objects",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "assets",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "materials",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "textures",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "save-and-open",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "play-mode",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "external-resources",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "lighting",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "sky-and-water",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "terrain",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "collision",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "audio",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "screens",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "particles",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "prefabs",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "interactivity",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "ai-connection",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "transparent-materials",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "material-extensions",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "publishing",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "performance",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "troubleshooting",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "installation-problems",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "recovery",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "glossary",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    },
+    {
+      "page": "shortcuts",
+      "width": 1440,
+      "scroll": 1440,
+      "font": 17,
+      "article": 790
+    }
+  ],
+  "checks": [
+    {
+      "name": "30 articles × 4 widths: no horizontal body overflow; body text >=16px",
+      "passed": true
+    },
+    {
+      "name": "TOC uses an existing fragment in the same document (not a page route)",
+      "passed": true
+    },
+    {
+      "name": "Full-text search result has the matching page and heading URL",
+      "passed": true
+    },
+    {
+      "name": "Japanese alias search, modal focus and Escape restoration",
+      "passed": true
+    },
+    {
+      "name": "No-results state leaves a contents recovery path",
+      "passed": true
+    },
+    {
+      "name": "Specialist handoff and not-found pages contain a recovery action",
+      "passed": true
+    },
+    {
+      "name": "Mobile first-screen primary action and menu Escape/focus return",
+      "passed": true
+    },
+    {
+      "name": "320px search and Japanese multi-word query without page overflow",
+      "passed": true
+    },
+    {
+      "name": "Search fixture failure, explanation and successful retry",
+      "passed": true
+    },
+    {
+      "name": "320px article with body font enlarged to 32px stays within page",
+      "passed": true
+    },
+    {
+      "name": "Without guide JavaScript: static body, native details TOC and next link remain usable",
+      "passed": true
+    }
+  ],
+  "page_errors": []
+}

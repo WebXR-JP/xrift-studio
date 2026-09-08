@@ -100,7 +100,8 @@ test('local file addition and publishing are distinct, in both editor entry poin
     assert.match(text, /Play/);
     assert.match(text, /プロジェクト一覧/);
   }
-  assert.match(read('docs/wiki/classic-editor.md'), /Play \/ XRiftへ公開/);
+  assert.match(read('docs/guide/play-mode.md'), /Play/);
+  assert.match(read('docs/guide/publishing.md'), /XRiftへ公開/);
 });
 
 test('project-transfer labels do not promise a remote Git fork or retained publication ID', () => {
@@ -132,7 +133,7 @@ test('the publish flow keeps uncertainty, duplicate-publication safeguards and n
   ]) assert.ok(dialog.includes(text), text);
   assert.doesNotMatch(dialog, /ステージング|原本にもこの設定/);
   assert.match(read('src-tauri/src/lib.rs'), /公開されていないことを確認できた場合に限り/);
-  const guide = read('docs/wiki/publishing.md');
+  const guide = read('docs/guide/publishing.md');
   assert.match(guide, /公開されていないことを確認できた場合に限り/);
   assert.doesNotMatch(guide, /重複して作ることはありません/);
 });
@@ -149,8 +150,8 @@ test('mixed implementation vocabulary stays out of AI connection and recording l
 
 test('glow presets are not mislabeled as light sources or a second Hierarchy', () => {
   const glow = read(`${visual}GlowMaterialStore.tsx`);
-  assert.match(glow, /aria-label="発光Entity一覧"/);
-  assert.match(glow, /条件に合う発光Entityがありません/);
+  assert.match(glow, /aria-label="Emissive一覧"/);
+  assert.match(glow, /条件に合うEmissiveがありません/);
   assert.doesNotMatch(glow, /発光Hierarchy|照明/);
   assert.match(glow, /Post ProcessingとBloomを有効にしてください/);
 });
@@ -169,7 +170,7 @@ test('recovery and reset documentation matches current controls without dropping
   const reset = read('src/components/AboutModal.tsx');
   assert.match(reset, /ランタイムをリセット/);
   assert.match(reset, /すべてのプロジェクトを削除/);
-  assert.match(read('docs/wiki/data-and-reset.md'), /完全リセットは元に戻せません/);
+  assert.match(read('docs/guide/recovery.md'), /完全リセットは元に戻せません/);
 });
 
 test('broken literal translations do not return to user-facing source', () => {

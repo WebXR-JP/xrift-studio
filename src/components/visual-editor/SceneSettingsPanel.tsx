@@ -1,3 +1,4 @@
+import { GuideLink } from "../guide/GuideLink";
 import { useCallback, useEffect, useState, type DragEvent, type ReactNode } from "react";
 import { ChevronDown, ChevronUp, CheckCircle2, ImagePlus, X } from "lucide-react";
 import { ThumbnailEditor } from "../ThumbnailEditor";
@@ -748,6 +749,8 @@ export function SceneSettingsInspector({
   return (
     <>
       <div className="space-y-3">
+        <GuideLink page="lighting" label="ライトと明るさの使い方" />
+        <GuideLink page="sky-and-water" label="Skyboxと水の使い方" />
         <Section
           title="公開情報"
           description="一覧と公開ページに表示する名前と説明です。"
