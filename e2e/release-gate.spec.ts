@@ -122,7 +122,7 @@ async function openVisualWorld(page: Page, name: string): Promise<void> {
   await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
   await page.getByLabel("プロジェクト名").fill(name);
   await page.getByRole("button", { name: "作成して開く" }).click();
-  await expect(page.getByText("ビジュアル編集")).toBeVisible();
+  await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
 }
 
 /**
@@ -278,7 +278,7 @@ for (const creationCase of creationCases) {
     await page.getByRole("button", { name: "作成して開く" }).click();
 
     if (creationCase.visual) {
-      await expect(page.getByText("ビジュアル編集")).toBeVisible();
+      await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
       await expect(
         page.getByRole("button", { name: "XRiftへ公開", exact: true }),
       ).toBeVisible();
@@ -293,7 +293,7 @@ for (const creationCase of creationCases) {
   });
 }
 
-test("コード編集のワールドを編集・保存・動作確認し、公開前確認で停止する", async ({
+test("コードエディターのワールドを編集・保存・動作確認し、公開前確認で停止する", async ({
   page,
 }) => {
   await openProjectLibrary(page);
@@ -371,7 +371,7 @@ test("ビジュアルワールドを編集・Playし、公開確認で送信前�
   await page.getByLabel("プロジェクト名").fill("release-visual-flow");
   await page.getByRole("button", { name: "作成して開く" }).click();
 
-  await expect(page.getByText("ビジュアル編集")).toBeVisible();
+  await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
   await page.getByRole("button", { name: "追加", exact: true }).click();
   await page.getByRole("button", { name: /空のEntity/ }).click();
   await expect(
@@ -416,7 +416,7 @@ test("ビジュアルワールドを編集・Playし、公開確認で送信前�
   ).toBeDisabled();
 });
 
-test("ビジュアル編集でテキスト看板を置き、書体と背景を設定できる", async ({
+test("ビジュアルエディターでテキスト看板を置き、書体と背景を設定できる", async ({
   page,
 }) => {
   await openProjectLibrary(page);
@@ -483,7 +483,7 @@ test("ビジュアル編集でテキスト看板を置き、書体と背景を�
   );
 });
 
-test("ビジュアル編集で地形を作成・整形できる", async ({ page }) => {
+test("ビジュアルエディターで地形を作成・整形できる", async ({ page }) => {
   await openProjectLibrary(page);
   await page.getByRole("button", { name: /新規プロジェクト/ }).click();
   await page
@@ -532,7 +532,7 @@ test("ビジュアル編集で地形を作成・整形できる", async ({ page 
   ).toHaveCount(0);
 });
 
-test("ビジュアル編集の一時保存失敗は自動再試行で復帰する", async ({
+test("ビジュアルエディターの一時保存失敗は自動再試行で復帰する", async ({
   page,
 }) => {
   await page.goto("/e2e.html?scenario=ready&saveFailures=3");

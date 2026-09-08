@@ -294,7 +294,7 @@ export function compileVisualProject(
       severity: "blocking",
       code: "script-unsupported-runtime-output",
       message:
-        "Runtime JSON出力ではスクリプトを表現できません。コード編集 JSX出力を選んでください。",
+        "Runtime JSON出力ではスクリプトを表現できません。Classic JSX出力を選んでください。",
     });
   }
   // Interaction Triggers used to be blocked here: the manifest could carry the

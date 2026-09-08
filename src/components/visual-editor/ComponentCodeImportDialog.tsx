@@ -206,10 +206,10 @@ export function ComponentCodeImportDialog({
         <header data-app-modal-header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4">
           <div>
             <h2 id="component-import-title" className="text-base font-semibold text-slate-950">
-              R3F / コード編集からインポート
+              R3F / コードプロジェクトからインポート
             </h2>
             <p className="mt-1 text-xs leading-5 text-slate-600">
-              R3FのTSXまたはコード編集プロジェクトをシーンへ変換します。
+              R3FのTSXまたはコードプロジェクトをシーンへ変換します。
             </p>
           </div>
           <button
@@ -369,7 +369,7 @@ function CodeConverter({
             ) : (
               <FolderOpen size={13} aria-hidden="true" />
             )}
-            {loading ? "読み込み中…" : "コード編集プロジェクトを選択"}
+            {loading ? "読み込み中…" : "コードプロジェクトを選択"}
           </button>
           <button
             type="button"

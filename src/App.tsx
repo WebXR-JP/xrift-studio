@@ -810,7 +810,7 @@ function App() {
         toast({
           kind: "success",
           title: `${kind === "item" ? "アイテム" : "ワールド"}を作成しました`,
-          description: `${name} / ビジュアル編集`,
+          description: `${name} / ビジュアルエディター`,
         });
       } catch (error) {
         const starterCopyError =
@@ -1453,17 +1453,17 @@ function App() {
         }
         toast({
           kind: "success",
-          title: "コード編集プロジェクトを変換しました",
+          title: "コードプロジェクトを変換しました",
           description: detailParts.join(" / "),
         });
       } catch (error) {
         toast({
           kind: "error",
-          title: "コード編集プロジェクトを変換できませんでした",
+          title: "コードプロジェクトを変換できませんでした",
           description:
             error instanceof Error
               ? error.message
-              : "コード編集プロジェクトとプロジェクト種別を確認して、もう一度お試しください。",
+              : "コードプロジェクトとプロジェクト種別を確認して、もう一度お試しください。",
         });
       }
     });
@@ -1474,11 +1474,11 @@ function App() {
   ): Promise<string | null> => {
     if (!tauri.isAvailable()) {
       throw new Error(
-        "コード編集プロジェクトのフォルダー選択はデスクトップ版で利用できます。",
+        "コードプロジェクトのフォルダー選択はデスクトップ版で利用できます。",
       );
     }
     const selected = await tauri.selectDirectory(
-      `コード編集の${kind === "world" ? "ワールド" : "アイテム"}プロジェクトを選択`,
+      `コードエディターの${kind === "world" ? "ワールド" : "アイテム"}プロジェクトを選択`,
     );
     const projectPath = Array.isArray(selected) ? selected[0] : selected;
     return typeof projectPath === "string" && projectPath.trim()
@@ -1942,7 +1942,7 @@ function App() {
           onClose={() => setVisualClassicExportBundle(null)}
           onChooseTarget={async () => {
             const selectedPath = await tauri.selectDirectory(
-              "XRift コード編集プロジェクトを選択",
+              "XRift コードプロジェクトを選択",
               projectsRoot || undefined,
             );
             if (!selectedPath || Array.isArray(selectedPath)) return null;
@@ -1959,7 +1959,7 @@ function App() {
           ) => {
             const exportBundle = visualClassicExportBundle;
             if (!exportBundle) {
-              throw new Error("書き出すビジュアル編集のプロジェクトがありません。");
+              throw new Error("書き出すビジュアルエディターのプロジェクトがありません。");
             }
             const result = await exportVisualProjectToClassic({
               authoringProjectPath: visualSession.project?.path ?? "",
@@ -1978,7 +1978,7 @@ function App() {
             });
             toast({
               kind: "success",
-              title: "XRift コード編集へ書き出しました",
+              title: "XRift コードエディターへ書き出しました",
               description:
                 integration === "component"
                   ? "組み込み用コードを追加すると、既存のシーンと一緒に使えます。"

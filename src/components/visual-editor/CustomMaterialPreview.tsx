@@ -87,7 +87,7 @@ export function resolveCustomMaterialPreviewSource(
     ) {
       return {
         status: "unavailable",
-        reason: "元のコード編集 3Dモデルが見つかりません",
+        reason: "元のコードプロジェクトの3Dモデルが見つかりません",
       };
     }
     return {

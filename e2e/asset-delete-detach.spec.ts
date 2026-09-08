@@ -73,7 +73,7 @@ test("参照されているAssetを、削除ダイアログから参照を外し
   await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
   await page.getByLabel("プロジェクト名").fill("asset-delete-detach");
   await page.getByRole("button", { name: "作成して開く" }).click();
-  await expect(page.getByText("ビジュアル編集")).toBeVisible();
+  await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
 
   // The blank starter's floor Material is used by the Scene and by the Ground
   // Platform Prefab, so the delete is refused with one row per owner.
@@ -126,7 +126,7 @@ test("Scene Viewの右クリックから、指しているEntityを削除でき�
   await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
   await page.getByLabel("プロジェクト名").fill("viewport-context-delete");
   await page.getByRole("button", { name: "作成して開く" }).click();
-  await expect(page.getByText("ビジュアル編集")).toBeVisible();
+  await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
 
   const tree = page.getByRole("tree", { name: "SceneのEntity階層" });
   await expect(tree.getByText("床", { exact: true })).toBeVisible();

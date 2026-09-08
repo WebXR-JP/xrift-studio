@@ -106,7 +106,7 @@ export function ClassicExportDialog({
       setError(
         selectionError instanceof Error
           ? selectionError.message
-          : "コード編集プロジェクトを確認できませんでした。",
+          : "コードプロジェクトを確認できませんでした。",
       );
     } finally {
       setChoosing(false);
@@ -136,7 +136,7 @@ export function ClassicExportDialog({
       setError(
         exportError instanceof Error
           ? exportError.message
-          : "コード編集への書き出しに失敗しました。",
+          : "コードエディターへの書き出しに失敗しました。",
       );
       setErrorDetails(
         exportError instanceof ClassicExportError
@@ -177,10 +177,10 @@ export function ClassicExportDialog({
         <header data-app-modal-header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6 sm:py-5">
           <div>
             <h2 id="classic-export-title" className="text-xl font-semibold text-slate-950">
-              XRift コード編集へ書き出す
+              XRift コードエディターへ書き出す
             </h2>
             <p className="mt-1.5 text-sm leading-6 text-slate-600">
-              {projectName}のシーンをコード編集プロジェクトに書き出します。
+              {projectName}のシーンをコードプロジェクトに書き出します。
             </p>
           </div>
           <button
@@ -201,7 +201,7 @@ export function ClassicExportDialog({
                 <div className="flex items-start gap-3">
                   <CheckCircle2 className="mt-0.5 text-emerald-700" size={22} aria-hidden="true" />
                   <div>
-                    <h3 className="font-semibold text-emerald-950">コード編集への書き出しが完了しました</h3>
+                    <h3 className="font-semibold text-emerald-950">コードエディターへの書き出しが完了しました</h3>
                     <p className="mt-1 text-sm leading-6 text-emerald-900/80">
                       シーンのソース、素材、組み込み用Componentを追加しました。
                       {result.packageInstallation === "installed"
@@ -286,7 +286,7 @@ export function ClassicExportDialog({
                   </div>
                   <button type="button" disabled={busy} onClick={() => void chooseTarget()} className="flex shrink-0 items-center gap-2 rounded-lg border border-violet-300 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-wait disabled:opacity-50">
                     {choosing ? <Loader2 className="animate-spin" size={16} aria-hidden="true" /> : <FolderOpen size={16} aria-hidden="true" />}
-                    {target ? "選び直す" : "コード編集プロジェクトを選ぶ"}
+                    {target ? "選び直す" : "コードプロジェクトを選ぶ"}
                   </button>
                 </div>
                 {target ? (
@@ -339,10 +339,10 @@ export function ClassicExportDialog({
         </div>
 
         <footer data-app-modal-footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3 sm:px-6 sm:py-4">
-          <p className="text-xs text-slate-500">書き出したコードを変更しても、ビジュアル編集のシーンには反映されません。</p>
+          <p className="text-xs text-slate-500">書き出したコードを変更しても、ビジュアルエディターのシーンには反映されません。</p>
           <div className="flex items-center gap-2">
             <button type="button" disabled={busy} onClick={onClose} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-wait disabled:opacity-50">{result ? "閉じる" : "キャンセル"}</button>
-            {!result ? <button type="button" disabled={!canExport} onClick={() => void startExport()} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300">{busy ? "書き出し中…" : "コード編集へ書き出す"}</button> : null}
+            {!result ? <button type="button" disabled={!canExport} onClick={() => void startExport()} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300">{busy ? "書き出し中…" : "コードエディターへ書き出す"}</button> : null}
           </div>
         </footer>
       </section>

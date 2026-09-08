@@ -112,7 +112,7 @@ export function ProjectCard({
               ) : (
                 <Code2 size={11} aria-hidden="true" />
               )}
-              {project.format === "visual" ? "ビジュアル編集" : "コード編集"}
+              {project.format === "visual" ? "ビジュアルエディター" : "コードエディター"}
             </span>
           </span>
           <span className="mt-1 truncate text-sm font-semibold text-zinc-900 group-hover:text-brand-700">

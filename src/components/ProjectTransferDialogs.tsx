@@ -263,7 +263,7 @@ export function DuplicateProjectDialog({
         </label>
       ) : (
         <p className="mt-3 text-[11px] text-zinc-500">
-          コード編集プロジェクトのタイトルは xrift.json をそのまま引き継ぎます。
+          コードプロジェクトのタイトルは xrift.json をそのまま引き継ぎます。
         </p>
       )}
       <ErrorNote error={error} />
@@ -336,7 +336,7 @@ export function ImportProjectArchiveDialog({
         <dt className="text-zinc-500">内容</dt>
         <dd className="text-zinc-800">
           {inspection.kind === "item" ? "アイテム" : "ワールド"} /{" "}
-          {inspection.format === "visual" ? "ビジュアル編集" : "コード編集"}
+          {inspection.format === "visual" ? "ビジュアルエディター" : "コードエディター"}
         </dd>
         <dt className="text-zinc-500">タイトル</dt>
         <dd className="truncate text-zinc-800">{inspection.title || "（未設定）"}</dd>
@@ -361,7 +361,7 @@ export function ImportProjectArchiveDialog({
       <p className="mt-3 text-[11px] text-zinc-500">
         取り込んだプロジェクトは未公開の状態から始まります。
         {inspection.format === "classic"
-          ? " コード編集プロジェクトにはnode_modulesが含まれません。最初の動作確認の前に、プロジェクトフォルダーで必要なパッケージをインストールしてください。"
+          ? " コードプロジェクトにはnode_modulesが含まれません。最初の動作確認の前に、プロジェクトフォルダーで必要なパッケージをインストールしてください。"
           : ""}
       </p>
       <ErrorNote error={error} />
@@ -469,7 +469,7 @@ export function ImportProjectRepositoryDialog({
         existingNames={existingNames}
       />
       <p className="mt-3 text-[11px] text-zinc-500">
-        取り込んだプロジェクトは未公開になります。コード編集プロジェクトでは、最初の動作確認の前に必要なパッケージをインストールしてください。
+        取り込んだプロジェクトは未公開になります。コードプロジェクトでは、最初の動作確認の前に必要なパッケージをインストールしてください。
       </p>
       <ErrorNote error={error} />
     </DialogFrame>

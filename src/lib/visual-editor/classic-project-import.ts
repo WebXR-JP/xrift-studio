@@ -200,11 +200,11 @@ export async function pickClassicProjectVisualImportSource(
 ): Promise<ClassicProjectVisualImportSource | null> {
   if (!tauri.isAvailable()) {
     throw new Error(
-      "コード編集プロジェクトのフォルダー読み込みはデスクトップ版で利用できます。",
+      "コードプロジェクトのフォルダー読み込みはデスクトップ版で利用できます。",
     );
   }
   const selected = await tauri.selectDirectory(
-    `コード編集の${expectedKind === "world" ? "ワールド" : "アイテム"}プロジェクトを選択`,
+    `コードエディターの${expectedKind === "world" ? "ワールド" : "アイテム"}プロジェクトを選択`,
   );
   const projectPath = Array.isArray(selected) ? selected[0] : selected;
   if (typeof projectPath !== "string" || !projectPath.trim()) return null;
@@ -451,14 +451,14 @@ export function createClassicProjectVisualImportPreview(input: {
         severity: "warning",
         code: "classic-import-model-size-high",
         fileName: model.fileName,
-        message: `配置後の最大寸法が${formatClassicDimension(maximumExtent)}です。コード編集側のscale、3Dモデルの読み込み時の倍率、単位系を確認してください。`,
+        message: `配置後の最大寸法が${formatClassicDimension(maximumExtent)}です。コードエディター側のscale、3Dモデルの読み込み時の倍率、単位系を確認してください。`,
       });
     } else if (maximumExtent > 0 && maximumExtent < minimumExtent) {
       diagnostics.push({
         severity: "warning",
         code: "classic-import-model-size-low",
         fileName: model.fileName,
-        message: `配置後の最大寸法が${formatClassicDimension(maximumExtent)}です。コード編集側のscaleと3Dモデルの単位系を確認してください。`,
+        message: `配置後の最大寸法が${formatClassicDimension(maximumExtent)}です。コードエディター側のscaleと3Dモデルの単位系を確認してください。`,
       });
     }
   }
@@ -1859,7 +1859,7 @@ async function prepareClassicDependency(
           severity: "warning",
           code: "classic-asset-convert-failed",
           fileName: dependency.fileName,
-          message: `${resolvedSourcePath}をビジュアル編集用のアセットに変換できないため、この素材だけをスキップして残りの変換を続けます: ${errorMessage(error)}`,
+          message: `${resolvedSourcePath}をビジュアルエディター用のアセットに変換できないため、この素材だけをスキップして残りの変換を続けます: ${errorMessage(error)}`,
         },
       ],
     };

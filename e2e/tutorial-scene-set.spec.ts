@@ -18,7 +18,7 @@ async function openBlankWorld(page: Page) {
   await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
   await page.getByLabel("プロジェクト名").fill("tutorial-scene-set");
   await page.getByRole("button", { name: "作成して開く" }).click();
-  await expect(page.getByText("ビジュアル編集")).toBeVisible();
+  await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
 }
 
 test("しかけ付きの3Dセットは、音とグラフごとシーンへ入る", async ({ page }) => {

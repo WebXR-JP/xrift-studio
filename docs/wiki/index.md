@@ -11,7 +11,7 @@ XRift Studioでは、3Dモデルや画像、音声を組み合わせて、XRift�
 | アプリを入れる | [インストールとセットアップ](./installation.md) |
 | 新しく作る・制作を再開する | [プロジェクトを作る・開く](./projects.md) |
 | 画面の使い方を知る | [編集画面の使い方](./visual-editor.md) |
-| コードを直接書く | [コード編集](./classic-editor.md) |
+| コードを直接書く | [コードエディター](./classic-editor.md) |
 
 ## 制作する
 
@@ -34,7 +34,7 @@ XRift Studioでは、3Dモデルや画像、音声を組み合わせて、XRift�
 | 歩いたりボタンを押したりして確かめる | [動作を確認する](./play-mode.md) |
 | XRiftに公開する | [公開する](./publishing.md) |
 | AIと一緒に編集する | [AI連携](./ai-connection.md) |
-| コード編集用のプロジェクトへ移す | [コード編集用に書き出す](./classic-export.md) |
+| コードエディター用のプロジェクトへ移す | [コードエディター用に書き出す](./classic-export.md) |
 | 保存場所やリセットの範囲を調べる | [データの保存とリセット](./data-and-reset.md) |
 | 問題を解決する | [困ったとき](./troubleshooting.md) · [macOSで開けないとき](./macos-gatekeeper.md) |
 

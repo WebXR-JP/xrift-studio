@@ -113,7 +113,7 @@ test("親を動かした子Entityでもギズモが対象の上に描かれる",
   await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
   await page.getByLabel("プロジェクト名").fill("gizmo-transform");
   await page.getByRole("button", { name: "作成して開く" }).click();
-  await expect(page.getByText("ビジュアル編集")).toBeVisible();
+  await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
 
   const tree = page.getByRole("tree", { name: "SceneのEntity階層" });
 

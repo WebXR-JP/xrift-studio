@@ -17,7 +17,7 @@ async function openBlankWorld(page: Page, name: string): Promise<void> {
   await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
   await page.getByLabel("プロジェクト名").fill(name);
   await page.getByRole("button", { name: "作成して開く" }).click();
-  await expect(page.getByText("ビジュアル編集")).toBeVisible();
+  await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
 }
 
 async function dragHorizontally(

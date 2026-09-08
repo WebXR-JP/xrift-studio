@@ -6444,7 +6444,7 @@ export function VisualEditorPrototype({
         if (classicSource && plan.assetDependencies.length > 0) {
           if (!projectPath) {
             setNotice(
-              "コード編集素材の保存先が必要です。先にビジュアル編集のプロジェクトを保存してから変換してください",
+              "コード素材の保存先が必要です。先にビジュアルエディターのプロジェクトを保存してから変換してください",
             );
             return false;
           }
@@ -6553,7 +6553,7 @@ export function VisualEditorPrototype({
         setNotice(
           error instanceof Error
             ? error.message
-            : "コード編集プロジェクトを変換できませんでした",
+            : "コードプロジェクトを変換できませんでした",
         );
         return false;
       } finally {
@@ -10685,7 +10685,7 @@ export function VisualEditorPrototype({
 
   const runClassicExport = useCallback(async () => {
     if (!onClassicExport) {
-      setNotice("コード編集への書き出しはデスクトップ版で利用できます");
+      setNotice("コードエディターへの書き出しはデスクトップ版で利用できます");
       return;
     }
     try {
@@ -10694,7 +10694,7 @@ export function VisualEditorPrototype({
       setNotice(
         error instanceof Error
           ? error.message
-          : "コード編集への書き出しを開始できませんでした",
+          : "コードエディターへの書き出しを開始できませんでした",
       );
     }
   }, [bundle, onClassicExport]);
@@ -11243,7 +11243,7 @@ export function VisualEditorPrototype({
               </p>
               <p className="flex items-center gap-1 text-xs text-editor-muted">
                 <KindIcon size={11} aria-hidden="true" />
-                {kindLabel} · ビジュアル編集
+                {kindLabel} · ビジュアルエディター
               </p>
             </div>
           </div>
@@ -11292,7 +11292,7 @@ export function VisualEditorPrototype({
               className="flex items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-3 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle"
             >
               <ExportIcon size={13} aria-hidden="true" />
-              コード編集へ書き出す
+              コードエディターへ書き出す
             </button>
             <button
               type="button"

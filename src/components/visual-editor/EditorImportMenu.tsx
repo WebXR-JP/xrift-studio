@@ -64,8 +64,8 @@ export function EditorImportMenu({
           />
           <MenuItem
             icon={Code2}
-            label="R3F / コード編集から変換"
-            description="TSXを貼り付けるか、コード編集のプロジェクトを選びます。"
+            label="R3F / コードプロジェクトから変換"
+            description="TSXを貼り付けるか、コードプロジェクトを選びます。"
             onClick={() => {
               setOpen(false);
               onImportR3f();

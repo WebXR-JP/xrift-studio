@@ -166,7 +166,7 @@ export function resolveProjectTarget(
   if (found.format !== "visual") {
     throw new XriftMcpEditorToolError(
       "PROJECT_NOT_EDITABLE",
-      "コード編集プロジェクトはMCPから開けません。Visualプロジェクトを選ぶか、create_projectで新しく作ってください",
+      "コードプロジェクトはMCPから開けません。Visualプロジェクトを選ぶか、create_projectで新しく作ってください",
       { path: found.path, format: found.format },
     );
   }

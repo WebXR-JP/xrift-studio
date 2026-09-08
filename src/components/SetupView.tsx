@@ -179,7 +179,7 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
                   セットアップせずに作り始める
                 </div>
                 <p className="mt-1 text-[11px] leading-5 text-zinc-500">
-                  ビジュアル編集と保存には、セットアップは不要です。XRiftに公開するときに準備できます。
+                  ビジュアルエディターでの編集と保存には、セットアップは不要です。XRiftに公開するときに準備できます。
                 </p>
               </div>
             </div>

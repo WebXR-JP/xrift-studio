@@ -24,7 +24,7 @@ export const WIKI_PAGES: WikiPage[] = [
   { slug: "installation", file: "installation.md", title: "インストールとセットアップ", category: "start", order: 1 },
   { slug: "projects", file: "projects.md", title: "プロジェクトを作る・開く", category: "start", order: 2 },
   { slug: "data-and-reset", file: "data-and-reset.md", title: "データの保存場所とリセット", category: "start", order: 3 },
-  { slug: "classic-editor", file: "classic-editor.md", title: "コード編集", category: "create", order: 0 },
+  { slug: "classic-editor", file: "classic-editor.md", title: "コードエディター", category: "create", order: 0 },
   { slug: "visual-editor", file: "visual-editor.md", title: "編集画面の使い方", category: "create", order: 1 },
   { slug: "importing-assets", file: "importing-assets.md", title: "3Dモデルの読み込み", category: "create", order: 2 },
   { slug: "blender-world-modeling", file: "blender-world-modeling.md", title: "Blender で部屋をつくって取り込む", category: "create", order: 3 },
@@ -38,7 +38,7 @@ export const WIKI_PAGES: WikiPage[] = [
   { slug: "play-mode", file: "play-mode.md", title: "動作を確認する", category: "publish", order: 0 },
   { slug: "publishing", file: "publishing.md", title: "XRift への公開（アップロード）", category: "publish", order: 1 },
   { slug: "ai-connection", file: "ai-connection.md", title: "AIと一緒に編集する", category: "advanced", order: 0 },
-  { slug: "classic-export", file: "classic-export.md", title: "コード編集用に書き出す", category: "advanced", order: 1 },
+  { slug: "classic-export", file: "classic-export.md", title: "コードエディター用に書き出す", category: "advanced", order: 1 },
   { slug: "troubleshooting", file: "troubleshooting.md", title: "トラブルシューティング", category: "troubleshoot", order: 0 },
   { slug: "macos-gatekeeper", file: "macos-gatekeeper.md", title: "macOS で開けないとき", category: "troubleshoot", order: 1 },
 ];

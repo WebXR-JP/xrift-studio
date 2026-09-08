@@ -325,7 +325,7 @@ export const STARTER_WORLD_TEMPLATES = [
   {
     id: "xrift-official",
     name: "XRift公式サンプル",
-    description: "XRift公式のコード編集テンプレートを、画面上で編集できるようにした作例です。",
+    description: "XRift公式のコード用テンプレートを、画面上で編集できるようにした作例です。",
     bundledAssetIds: [
       "xrift-official-duck",
       "xrift-official-bunny",

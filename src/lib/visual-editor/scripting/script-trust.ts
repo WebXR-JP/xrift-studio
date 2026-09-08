@@ -128,7 +128,7 @@ const PROVENANCE_LABELS: Readonly<Record<ScriptProvenanceKind, string>> = {
   "studio-template": "Studioテンプレート",
   "studio-editor": "Studioエディター",
   mcp: "MCP",
-  "classic-import": "コード編集プロジェクトからの取り込み",
+  "classic-import": "コードプロジェクトからの取り込み",
   prefab: "プレハブ",
   starter: "Starter 素材",
   "external-store": "外部ストア",

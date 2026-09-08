@@ -9,7 +9,7 @@
 ## はじめて使う
 
 1. アプリを起動し、**セットアップを開始**を押します。制作に必要なNode.jsと`@xrift/cli`を、アプリ専用のフォルダーに準備します。
-2. **新規プロジェクト**から、ワールドかアイテムを選びます。画面上で素材を配置する場合は**ビジュアル編集**を選んでください。
+2. **新規プロジェクト**から、ワールドかアイテムを選びます。画面上で素材を配置する場合は**ビジュアルエディター**を選んでください。
 3. **Assets**に3Dモデルや画像、音声を読み込み、**シーン**へドラッグして配置します。
 4. Entityを選び、**Inspector**で位置、マテリアル、音などを調整します。動きは**ノードグラフ**で組み立てられます。
 5. `Ctrl/⌘ + S`で保存し、**動作確認**を押します。完成したら**XRiftへ公開**から公開します。
@@ -24,7 +24,7 @@ OS別の導入手順は[インストールガイド](./docs/wiki/installation.md
 | 色や質感を変える | [素材とマテリアル](./docs/wiki/assets-and-materials.md) |
 | 押すと動く仕掛けを作る | [ノードで動きを作る](./docs/wiki/interactivity.md) |
 | AIに制作を手伝ってもらう | [AI連携](./docs/wiki/ai-connection.md) |
-| コードで続きを作る | [コード編集用に書き出す](./docs/wiki/classic-export.md) |
+| コードで続きを作る | [コードエディター用に書き出す](./docs/wiki/classic-export.md) |
 | 起動や保存で困っている | [困ったとき](./docs/wiki/troubleshooting.md) |
 
 保存場所と削除範囲は[データの保存とリセット](./docs/wiki/data-and-reset.md)、機能の制約は[対応状況](./docs/VISUAL_EDITOR_ROADMAP.md)にまとめています。不具合は[GitHub Issues](https://github.com/WebXR-JP/xrift-studio/issues)へ報告できます。ログを添える場合は、アクセストークンや個人情報を取り除いてください。

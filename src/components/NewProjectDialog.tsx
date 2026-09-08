@@ -304,7 +304,7 @@ export function NewProjectDialog({
       setClassicProjectSelectError(
         error instanceof Error
           ? error.message
-          : "コード編集プロジェクトのフォルダーを選択できませんでした。",
+          : "コードプロジェクトのフォルダーを選択できませんでした。",
       );
     } finally {
       setClassicProjectSelectBusy(false);
@@ -477,10 +477,10 @@ export function NewProjectDialog({
                     </div>
                     <div className="p-3">
                       <div className="text-sm font-semibold text-zinc-900">
-                        コード編集プロジェクトから変換
+                        コードプロジェクトから変換
                       </div>
                       <p className="mt-1 text-xs leading-5 text-zinc-500">
-                        コードで作ったシーンを、ビジュアル編集用に変換します。
+                        コードで作ったシーンを、ビジュアルエディター用に変換します。
                       </p>
                       <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-zinc-500">
                         <FolderOpen size={12} aria-hidden="true" />
@@ -494,7 +494,7 @@ export function NewProjectDialog({
                     <div
                       className="grid grid-cols-2 gap-1 rounded-lg bg-zinc-100 p-1"
                       role="tablist"
-                      aria-label="コード編集プロジェクトの読み込み元"
+                      aria-label="コードプロジェクトの読み込み元"
                     >
                       <button
                         type="button"
@@ -539,7 +539,7 @@ export function NewProjectDialog({
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <div className="text-sm font-medium text-zinc-700">
-                              コード編集プロジェクト
+                              コードプロジェクト
                             </div>
                             <p className="mt-1 text-xs text-zinc-500">
                               package.json、xrift.json、srcがあるフォルダーを選択します。
@@ -729,7 +729,7 @@ export function NewProjectDialog({
                         />
                       </span>
                       <span className="rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-semibold text-zinc-600">
-                        {visual ? "ビジュアル編集" : "コード編集"}
+                        {visual ? "ビジュアルエディター" : "コードエディター"}
                       </span>
                     </div>
                     <div className="mt-4 text-base font-semibold text-zinc-900">

@@ -22,7 +22,7 @@ test("Scene Viewを軽量にすると描画解像度が下がる", async ({ page
   await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
   await page.getByLabel("プロジェクト名").fill("scene-view-quality");
   await page.getByRole("button", { name: "作成して開く" }).click();
-  await expect(page.getByText("ビジュアル編集")).toBeVisible();
+  await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
 
   const canvas = page.locator("canvas").first();
   const bufferScale = async () =>
