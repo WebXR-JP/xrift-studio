@@ -4,6 +4,10 @@
 
 **始める前に：** [マテリアルの割り当て](./materials.md)を済ませ、Play中ならStopしてください。
 
+![マテリアルのInspectorでAlpha ModeとAlphaが表示された状態](./media/transparent-materials.png)
+
+*半透明はAlpha ModeをBlendにし、切り抜きはMaskにします。目的に合う方法を選びます。*
+
 ## 全体を半透明にする
 
 マテリアルの**Alpha Mode**を**Blend**にし、**Alpha**を下げます。看板の薄い板など、表面全体を薄く表示したいときに使います。

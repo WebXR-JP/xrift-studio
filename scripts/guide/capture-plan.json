@@ -1,0 +1,217 @@
+{
+  "version": 1,
+  "window": { "width": 1440, "height": 900 },
+  "maxWidth": 1280,
+  "notes": "全ショットは Tauri デバッグ版の WebView を pnpm mcp:cli webview_screenshot で撮影する。OS のファイル選択ダイアログなどネイティブ UI は写らない。個人情報やトークンが映らないサンプルプロジェクトで撮影する。撮影中は docs/guide/ へ書き込まない。Vite が変更を検知して再読み込みし、編集中のプロジェクトが一覧へ戻るため、画像の配置は全ショットの確認後にまとめて行う。セットアップ画面は初回起動時にしか出ないため撮影対象に含めない。インストールで困ったときの記事は OS 側の画面が中心のため画像を付けない。",
+  "omitted": [
+    {
+      "page": "installation-problems",
+      "reason": "配布ファイルや OS の保護機能の画面が中心で、Tauri WebView の撮影範囲に収まらないため画像を付けない。"
+    }
+  ],
+  "shots": [
+    {
+      "file": "index.png",
+      "page": "index",
+      "alt": "床と球が置かれたビジュアルエディターの全体",
+      "caption": "このビジュアルエディターで配置・色変更・保存・Playを行います。",
+      "setup": ["サンプルプロジェクトをビジュアルエディターで開く", "床と球が中央のシーンに見える視点にする"]
+    },
+    {
+      "file": "installation.png",
+      "page": "installation",
+      "alt": "プロジェクト一覧の新規プロジェクトボタン",
+      "caption": "プロジェクト一覧が出ている場合は、新規プロジェクトからビジュアルエディターを選びます。",
+      "setup": ["アプリを起動し、プロジェクト一覧を表示する", "新規プロジェクトのボタンが見える状態にする"]
+    },
+    {
+      "file": "first-world.png",
+      "page": "first-world",
+      "alt": "中央のシーンに置いた球が選ばれた状態",
+      "caption": "追加 → Primitive → Sphereで球を置くと、Hierarchyに項目が増え、中央のシーンに現れます。",
+      "setup": ["空のワールドを開く", "追加 → Primitive → Sphere で球を置く", "撮影後に元に戻すで球を消す"]
+    },
+    {
+      "file": "editor-layout.png",
+      "page": "editor-basics",
+      "alt": "左にHierarchy、中央にシーン、右にInspector、下にAssetsが並ぶ編集画面",
+      "caption": "左で選び、中央で見て、右で調整し、下から素材を使います。画像を開くと拡大して確認できます。",
+      "setup": ["サンプルプロジェクトをビジュアルエディターで開く", "Hierarchy・シーン・Inspector・Assetsの四つが見える配置にする"]
+    },
+    {
+      "file": "objects.png",
+      "page": "objects",
+      "alt": "Entityを選択し、右のInspectorにTransformが表示された状態",
+      "caption": "Entityを選ぶとInspectorのTransformで位置・回転・大きさを確認できます。",
+      "setup": ["サンプルプロジェクトを開く", "シーンまたはHierarchyで球などのEntityを選ぶ", "InspectorのTransformが見える状態にする"]
+    },
+    {
+      "file": "assets.png",
+      "page": "assets",
+      "alt": "下のAssetsパネルに取り込んだモデルが並んだ状態",
+      "caption": "取り込んだファイルはAssetsに集まります。シーンへドラッグすると配置できます。",
+      "setup": ["サンプルプロジェクトを開く", "GLBモデルをAssetsへ取り込む", "Assetsパネルが見える状態にする"]
+    },
+    {
+      "file": "materials.png",
+      "page": "materials",
+      "alt": "Assetsでマテリアルを選び、InspectorにBase Color・Metallic・Roughnessが表示された状態",
+      "caption": "マテリアルを選ぶとInspectorに色と質感の設定が表示されます。最初は三つの項目だけ使います。",
+      "setup": ["サンプルプロジェクトを開く", "Assetsで新規マテリアルを作って選ぶ", "InspectorにBase Color・Metallic・Roughnessが見える状態にする"]
+    },
+    {
+      "file": "textures.png",
+      "page": "textures",
+      "alt": "マテリアルのInspectorでBase Color MapとNormal Mapの欄が見える状態",
+      "caption": "画像はBase Color MapやNormal Mapなど、用途に合う欄へ割り当てます。",
+      "setup": ["サンプルプロジェクトを開く", "Assetsでマテリアルを選ぶ", "Inspectorのテクスチャ欄が見える位置までスクロールする"]
+    },
+    {
+      "file": "save-and-open.png",
+      "page": "save-and-open",
+      "alt": "プロジェクト一覧に作品のカードが並んだ状態",
+      "caption": "保存した作品はプロジェクト一覧のカードから開き直せます。名前とサムネイルで見分けます。",
+      "setup": ["編集画面からライブラリへ戻り、プロジェクト一覧を表示する", "サンプルプロジェクトのカードが見える状態にする"]
+    },
+    {
+      "file": "play-mode.png",
+      "page": "play-mode",
+      "alt": "Play中に中央のPlay Windowでワールドを見回している状態",
+      "caption": "Playを押してPlay Windowをクリックすると、プレイヤー視点で歩けます。戻るときはStopです。",
+      "setup": ["サンプルプロジェクトを開く", "Playを押し、読み込み完了後にPlay Windowをクリックする", "プレイヤー視点で球が見える位置へ進む"]
+    },
+    {
+      "file": "external-resources.png",
+      "page": "external-resources",
+      "alt": "外部から追加のカタログで素材の詳細と見本が表示された状態",
+      "caption": "外部から追加では詳細の見本と追加内容を確認してから取り込みます。",
+      "setup": ["サンプルプロジェクトを開く", "Assets → 外部から追加を開く", "いずれかの素材の詳細が見える状態にする"]
+    },
+    {
+      "file": "lighting.png",
+      "page": "lighting",
+      "alt": "シーン設定パネルでAmbient LightとExposureを調整している状態",
+      "caption": "全体の明るさはシーン設定で調整します。ライトの追加と分けて確認します。",
+      "setup": ["サンプルプロジェクトを開く", "エディター左下からシーン設定を開く", "Ambient Light・Exposureが見える状態にする"]
+    },
+    {
+      "file": "sky-and-water.png",
+      "page": "sky-and-water",
+      "alt": "Skyboxが設定され、空が変わったシーン",
+      "caption": "Skyboxを設定すると背景が変わります。照明に使う場合はIBLを別に設定します。",
+      "setup": ["サンプルプロジェクトを開く", "外部から追加 → Skybox Shaderでプリセットを追加後にSkyboxへ設定する", "背景が変わったシーンが見える視点にする"]
+    },
+    {
+      "file": "terrain.png",
+      "page": "terrain",
+      "alt": "地形を選び、Inspectorにブラシの設定が表示された状態",
+      "caption": "地形を選ぶとブラシで盛り上げ・掘る・滑らかにするを切り替えて整えます。",
+      "setup": ["地形のあるサンプルプロジェクトを開く", "Hierarchyで地形を選ぶ", "Inspectorのブラシ設定が見える状態にする"]
+    },
+    {
+      "file": "collision.png",
+      "page": "collision",
+      "alt": "床のEntityを選び、InspectorにColliderが表示された状態",
+      "caption": "床を選んでColliderが有効か確認します。開始位置は床の上に置きます。",
+      "setup": ["サンプルプロジェクトを開く", "Hierarchyで床のEntityを選ぶ", "InspectorにColliderが見える状態にする"]
+    },
+    {
+      "file": "audio.png",
+      "page": "audio",
+      "alt": "音源を持つEntityを選び、Inspectorに音源設定が表示された状態",
+      "caption": "音源のEntityを選ぶと使う音声・音量・繰り返しを確認できます。",
+      "setup": ["環境音のスピーカーの3Dセットを配置したプロジェクトを開く", "Hierarchyで音源のEntityを選ぶ", "Inspectorの音源設定が見える状態にする"]
+    },
+    {
+      "file": "screens.png",
+      "page": "screens",
+      "alt": "画面共有などの機能を持つEntityを配置したシーン",
+      "caption": "鏡・動画・画面共有はComponentとして配置し、向きと大きさを調整します。",
+      "setup": ["サンプルプロジェクトを開く", "外部から追加 → Componentで鏡などの機能を配置する", "配置したEntityを選んだ状態にする"]
+    },
+    {
+      "file": "particles.png",
+      "page": "particles",
+      "alt": "焚き火の煙のパーティクル設定を開いた状態",
+      "caption": "パーティクルを置くと粒が出る位置と方向を確認できます。量と大きさから調整します。",
+      "setup": ["パーティクルがあるプロジェクトを開く", "Hierarchyで粒のEntityを選ぶ", "Inspectorのパーティクル設定が見える状態にする"]
+    },
+    {
+      "file": "prefabs.png",
+      "page": "prefabs",
+      "alt": "Hierarchyで親子にまとめたEntityとAssetsのプレハブ",
+      "caption": "親の下にまとめると全体を一緒に動かせます。Assetsへドラッグするとプレハブになります。",
+      "setup": ["家具などの組み合わせがあるプロジェクトを開く", "Hierarchyで親子関係が見える状態にする", "Assetsパネルも見える配置にする"]
+    },
+    {
+      "file": "interactivity.png",
+      "page": "interactivity",
+      "alt": "ノードエディターで音の出るボタンのグラフを開いた状態",
+      "caption": "グラフではきっかけから処理への線を確認します。最初は一つの値だけ変えて試します。",
+      "setup": ["音の出るボタンの3Dセットを配置したプロジェクトを開く", "Assetsでボタンのノードグラフを開く", "きっかけから処理への線が見える状態にする"]
+    },
+    {
+      "file": "ai-connection.png",
+      "page": "ai-connection",
+      "alt": "エディター左下のAI接続パネルを開いた状態",
+      "caption": "AI接続は保存してから開きます。接続状態を確認してから小さな変更を頼みます。",
+      "setup": ["サンプルプロジェクトを開き、保存する", "エディター左下のAI接続を開く", "対応クライアントの一覧と接続状態が見える状態にする"]
+    },
+    {
+      "file": "transparent-materials.png",
+      "page": "transparent-materials",
+      "alt": "マテリアルのInspectorでAlpha ModeとAlphaが表示された状態",
+      "caption": "半透明はAlpha ModeをBlendにし、切り抜きはMaskにします。目的に合う方法を選びます。",
+      "setup": ["サンプルプロジェクトを開く", "Assetsでマテリアルを選ぶ", "InspectorのAlpha Mode・Alphaが見える状態にする"]
+    },
+    {
+      "file": "material-extensions.png",
+      "page": "material-extensions",
+      "alt": "マテリアルのInspectorでClearcoatなどの拡張設定が表示された状態",
+      "caption": "基本の表面が整ってから、必要な拡張だけを有効にします。項目名は英語名で確認します。",
+      "setup": ["サンプルプロジェクトを開く", "Assetsでマテリアルを選ぶ", "InspectorのClearcoatなど拡張設定が見える状態にする"]
+    },
+    {
+      "file": "publishing.png",
+      "page": "publishing",
+      "alt": "XRiftへ公開の確認画面でタイトルと保存状態を確認している状態",
+      "caption": "XRiftへ公開の確認画面で作品の情報と保存状態を整えてから送信します。",
+      "setup": ["公開可能なサンプルプロジェクトを開き、保存する", "XRiftへ公開を押して確認画面を表示する", "タイトル・説明・サムネイルが見える状態にする"]
+    },
+    {
+      "file": "performance.png",
+      "page": "performance",
+      "alt": "公開の確認画面で容量の見積りと内訳が表示された状態",
+      "caption": "容量と負荷の大きい順に内訳を見て、効果の大きい対象から調整します。",
+      "setup": ["サンプルプロジェクトを開く", "XRiftへ公開の確認画面を表示する", "容量の見積りと内訳が見える状態にする"]
+    },
+    {
+      "file": "troubleshooting.png",
+      "page": "troubleshooting",
+      "alt": "エディター左下のヘルプからパネル配置を初期化できる状態",
+      "caption": "パネルが見つからないときは、左下のヘルプからパネル配置を初期化します。",
+      "setup": ["サンプルプロジェクトを開く", "エディター左下のヘルプを開く", "パネル配置を初期化が見える状態にする"]
+    },
+    {
+      "file": "recovery.png",
+      "page": "recovery",
+      "alt": "ヘルプと報告で相談情報とスクリーンショットを用意できる状態",
+      "caption": "問い合わせの前に保存とバックアップを残し、ヘルプと報告で必要な情報をまとめます。",
+      "setup": ["サンプルプロジェクトを開く", "アプリのヘルプと報告を開く", "相談情報のコピーとスクリーンショット保存が見える状態にする"]
+    },
+    {
+      "file": "glossary.png",
+      "page": "glossary",
+      "alt": "Hierarchy・シーン・Inspector・Assetsが見える編集画面",
+      "caption": "用語は画面の表示名そのままです。分からない名前はこの配置と照らして探します。",
+      "setup": ["サンプルプロジェクトをビジュアルエディターで開く", "Hierarchy・シーン・Inspector・Assetsの四つが見える配置にする"]
+    },
+    {
+      "file": "shortcuts.png",
+      "page": "shortcuts",
+      "alt": "エディター左下のショートカットキー一覧を開いた状態",
+      "caption": "そのほかの操作は左下のショートカットキー一覧で現在の組み合わせを確認します。",
+      "setup": ["サンプルプロジェクトを開く", "エディター左下のショートカットキー一覧を開く"]
+    }
+  ]
+}

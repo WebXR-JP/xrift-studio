@@ -2,6 +2,10 @@
 
 **テクスチャ**は、色や細かな凹凸などに使う画像です。まず[マテリアルを作って割り当てる](./materials.md#作って割り当てる)ところまで済ませてください。
 
+![マテリアルのInspectorでBase Color MapとNormal Mapの欄が見える状態](./media/textures.png)
+
+*画像はBase Color MapやNormal Mapなど、用途に合う欄へ割り当てます。*
+
 ## 色の画像を貼る
 
 1. PNG、JPGなどの画像を**Assets**へ追加します。

@@ -2,6 +2,10 @@
 
 Entityを選んでから、移動・回転・大きさを調整します。Assetsの素材そのものを変更する操作とは分けて考えてください。
 
+![Entityを選択し、右のInspectorにTransformが表示された状態](./media/objects.png)
+
+*Entityを選ぶとInspectorのTransformで位置・回転・大きさを確認できます。*
+
 ## 物を配置する
 
 基本形状は**追加 → Primitive**から選びます。取り込んだモデルは、**Assets**から中央のシーンへドラッグします。配置するとHierarchyにEntityが増えます。

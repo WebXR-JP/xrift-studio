@@ -2,6 +2,10 @@
 
 [Base Color・Metallic・Roughness](./materials.md)で基本の表面を作ってから、表現に必要な拡張だけを有効にします。項目名はglTFなどと照合できるよう、英語名を使っています。
 
+![マテリアルのInspectorでClearcoatなどの拡張設定が表示された状態](./media/material-extensions.png)
+
+*基本の表面が整ってから、必要な拡張だけを有効にします。項目名は英語名で確認します。*
+
 ## Clearcoat
 
 Clearcoat（クリアコート）は、塗装やニスのような透明な光沢の層を重ねます。下地のRoughnessと、上塗りのRoughnessは別です。
