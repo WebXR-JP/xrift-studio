@@ -72,3 +72,13 @@ test("JavaScriptなしでも本文・次の手順・目次を読める",async({b
  await page.goto("/wiki/materials.html");await expect(page.getByText("Base Color（ベースカラー）は",{exact:false})).toBeVisible();
  await expect(page.locator(".guide-next")).toBeVisible();await context.close();
 });
+
+
+test("ガイドのダウンロードリンクに対応するLPの欄が表示される", async ({ page }) => {
+  await page.goto("/wiki/index.html");
+  await expect(page.getByRole("link", { name: "ダウンロード", exact: true })).toHaveAttribute("href", "../index.html#download");
+  // Pages renames preview.html to index.html when publishing.
+  await page.goto("/preview.html#download");
+  await expect(page.locator("#download")).toBeVisible();
+  await expect(page.locator("#download")).toBeInViewport();
+});

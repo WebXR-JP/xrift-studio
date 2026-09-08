@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { VisualEditorErrorBoundary } from "./components/visual-editor/VisualEditorErrorBoundary";
 import { CompactEditorGate } from "./preview/CompactEditorGate";
@@ -52,6 +52,21 @@ export default function PreviewApp() {
   const [compactEditorConfirmed, setCompactEditorConfirmed] = useState(false);
   const compactViewport = useCompactViewport();
   const landingScrollPosition = useRef(0);
+
+  useEffect(() => {
+    // Direct guide links arrive before React has mounted the target section.
+    let id: string;
+    try {
+      id = decodeURIComponent(window.location.hash.slice(1));
+    } catch {
+      return;
+    }
+    if (!id) return;
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: "instant" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   const openDemo = (projectKind: ProjectKind) => {
     landingScrollPosition.current = window.scrollY;

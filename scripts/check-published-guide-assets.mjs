@@ -12,6 +12,20 @@ else failures.push("Guide was not built");
 if(!pages.includes("wiki/index.html"))failures.push("Guide home was not built");
 const getHtml=(file)=>fs.readFileSync(file,"utf8");
 const decode=(text)=>text.replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,"<").replace(/&gt;/g,">");
+// The landing page is a React shell. Its entry bundle contains JSX ids that
+// do not exist in the HTML until mount; guide articles must still have real ids.
+const landingClientIds = new Set();
+if (landing) {
+ const html = getHtml(path.join(root, landing));
+ for (const tag of html.matchAll(/<script\b[^>]*>/g)) {
+  if (!/\btype="module"/.test(tag[0])) continue;
+  const src = tag[0].match(/\bsrc="([^"?#]+)"/)?.[1];
+  if (!src || /^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(src)) continue;
+  const bundle = path.resolve(root, src);
+  if (!bundle.startsWith(root + path.sep) || !fs.existsSync(bundle)) continue;
+  for (const match of getHtml(bundle).matchAll(/(?:\bid|["']id["'])\s*:\s*["']([^"']+)["']/g)) landingClientIds.add(match[1]);
+ }
+}
 let count=0;
 for(const page of pages){
  const absolute=path.join(root,page),html=getHtml(absolute);
@@ -27,7 +41,7 @@ for(const page of pages){
   if(!fs.existsSync(target)){failures.push(`${page}: missing ${reference}`);continue;}
   if(fragment && target.endsWith(".html")){
     const id=decodeURIComponent(fragment),document=getHtml(target);
-    if(![...document.matchAll(/\bid="([^"]+)"/g)].some((m)=>decode(m[1])===id))failures.push(`${page}: missing anchor ${reference}`);
+    if(!(target === path.join(root, landing ?? "") && landingClientIds.has(id)) && ![...document.matchAll(/\bid="([^"]+)"/g)].some((m)=>decode(m[1])===id))failures.push(`${page}: missing anchor ${reference}`);
   }
  }
 }
