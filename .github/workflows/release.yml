@@ -75,17 +75,10 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Validate release tag
+      - name: Validate release tag and notes
         env:
           RELEASE_TAG: ${{ inputs.tag }}
-        run: >-
-          node -e 'const fs = require("node:fs");
-          const config = JSON.parse(fs.readFileSync("src-tauri/tauri.conf.json", "utf8"));
-          const expected = "v" + config.version;
-          if (process.env.RELEASE_TAG !== expected) {
-            throw new Error("Release tag must match app version: " + expected);
-          }'
-
+        run: node scripts/prepare-release-notes.mjs
       # E2E の shard は playwright だけを実行する。型検査はここで 1 回だけ
       # 行い、3 台で同じ tsc を繰り返さない。
       - name: Typecheck app and E2E
@@ -269,6 +262,12 @@ jobs:
             src-tauri/target-mcp-sidecar/x86_64-apple-darwin/release/xrift-studio-mcp \
             -output src-tauri/target/universal-apple-darwin/release/xrift-studio-mcp
 
+      - name: Prepare release notes
+        id: release-notes
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: node scripts/prepare-release-notes.mjs
+
       - name: Build & upload Release bundles
         uses: tauri-apps/tauri-action@v0
         env:
@@ -279,27 +278,7 @@ jobs:
         with:
           tagName: ${{ inputs.tag }}
           releaseName: 'XRift Studio ${{ inputs.tag }}'
-          releaseBody: |
-            ## XRift Studio ${{ inputs.tag }}
-
-            XRift のワールドやアイテムを作り、動かし、公開する流れを
-            ひとつの画面で進められる有志製デスクトップアプリです。
-
-            ### ダウンロード
-
-            | OS | 形式 |
-            |---|---|
-            | Windows | `.msi` (Windows Installer) / `.exe` (NSIS) |
-            | macOS | `.dmg` (universal — Apple Silicon + Intel) |
-            | Linux | `.deb` / `.rpm` / `.AppImage` |
-
-            添付しているのは通常利用向けの Release 版です。お使いの OS の
-            ファイルをダウンロードしてください。
-
-            不具合を見つけた場合は Issue で知らせてください。調査に詳しい
-            ログが必要なときは、こちらから確認手順を案内します。
-
-            本アプリは XRift 公式とは無関係の有志製ツールです。
+          releaseBody: ${{ steps.release-notes.outputs.body }}
           releaseDraft: ${{ inputs.draft }}
           prerelease: ${{ inputs.prerelease }}
           includeRelease: true

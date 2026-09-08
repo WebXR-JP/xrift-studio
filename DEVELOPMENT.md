@@ -121,9 +121,10 @@ GitHub Actions のリポジトリ Secrets に次を登録してください。
 
 公開鍵は `src-tauri/tauri.conf.json` の updater 設定に含まれます。秘密鍵ファイルとパスワードはリポジトリへ追加しないでください。
 
-1. GitHub Actions タブ → **Release** → **Run workflow**
-2. タグ名（例: `v0.1.0`）を入力して実行
-3. 完了後、GitHub Release に全 OS のインストーラ、署名、`latest.json` が自動添付されます
+1. バージョン更新時に `docs/releases/<version>.md` を作成します。先頭は `# XRift Studio v<version>` とし、前回のリリースから利用者に関わる変更点を箇条書きで記載します。空の更新文やバージョンの不一致はリリース前の検証で止まります。
+2. GitHub Actions タブ → **Release** → **Run workflow**
+3. タグ名（例: `v0.1.0`）を入力して実行
+4. 完了後、更新文がGitHub Releaseと自動更新用の説明に入り、GitHub Release に全 OS のインストーラ、署名、`latest.json` が自動添付されます
 
 公開済みの通常リリースだけがアプリの `releases/latest/download/latest.json` から取得されます。ドラフトは公開するまで、プレリリースは通常リリースになるまで自動更新の対象になりません。
 
