@@ -237,7 +237,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.interactable,
     importName: "Interactable",
-    label: "操作を受け付ける",
+    label: "Interactable",
     description: "Entityをクリック／インタラクト可能にします。",
     icon: "interactable",
     category: "interaction",
@@ -267,7 +267,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.grabbable,
     importName: "Grabbable",
-    label: "つかんで移動",
+    label: "Grabbable",
     description: "配下のEntityを掴んで移動できる対象にします。",
     icon: "grabbable",
     category: "interaction",
@@ -308,7 +308,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.mirror,
     importName: "Mirror",
-    label: "鏡",
+    label: "Mirror",
     description: "リアルタイム反射面を配置します。",
     icon: "mirror",
     category: "rendering",
@@ -350,7 +350,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.videoScreen,
     importName: "VideoScreen",
-    label: "動画スクリーン",
+    label: "VideoScreen",
     description: "同期された動画再生用スクリーンを配置します。",
     icon: "videoScreen",
     category: "media",
@@ -391,7 +391,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.videoPlayer,
     importName: "VideoPlayer",
-    label: "動画プレイヤー",
+    label: "VideoPlayer",
     description: "操作UI付きの録画動画プレイヤーを配置します。",
     icon: "videoPlayer",
     category: "media",
@@ -401,7 +401,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.liveVideoPlayer,
     importName: "LiveVideoPlayer",
-    label: "ライブ配信",
+    label: "LiveVideoPlayer",
     description: "HLS／DASH向けのライブ動画プレイヤーを配置します。",
     icon: "liveVideo",
     category: "media",
@@ -411,7 +411,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.video180Sphere,
     importName: "Video180Sphere",
-    label: "180度動画",
+    label: "Video180Sphere",
     description: "Side-by-Side形式の180度ステレオ動画を半球へ表示します。",
     icon: "videoSphere",
     category: "media",
@@ -470,7 +470,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.screenShareDisplay,
     importName: "ScreenShareDisplay",
-    label: "画面共有",
+    label: "ScreenShareDisplay",
     description: "画面共有の映像を3D空間に表示します。",
     icon: "screenShare",
     category: "media",
@@ -494,7 +494,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.spawnPoint,
     importName: "SpawnPoint",
-    label: "開始位置",
+    label: "SpawnPoint",
     description: "ワールド内でプレイヤーが出現する地点を指定します。",
     icon: "spawn",
     category: "world",
@@ -513,7 +513,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.textInput,
     importName: "TextInput",
-    label: "文字入力",
+    label: "TextInput",
     description: "配下の3DEntityからテキストを入力できるようにします。",
     icon: "textInput",
     category: "interaction",
@@ -545,7 +545,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.tagBoard,
     importName: "TagBoard",
-    label: "タグ選択",
+    label: "TagBoard",
     description: "ユーザーがタグを選択するボードを配置します。",
     icon: "tagBoard",
     category: "interaction",
@@ -577,7 +577,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.entryLogBoard,
     importName: "EntryLogBoard",
-    label: "入退室履歴",
+    label: "EntryLogBoard",
     description: "ワールドへの入退室履歴を同期表示するボードを配置します。",
     icon: "entryLogBoard",
     category: "world",
@@ -631,7 +631,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.portal,
     importName: "Portal",
-    label: "移動先への入口",
+    label: "Portal",
     description: "別のXRiftインスタンスへ移動するポータルを配置します。",
     icon: "portal",
     category: "world",
@@ -654,7 +654,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.billboardY,
     importName: "BillboardY",
-    label: "カメラの方向を向く",
+    label: "BillboardY",
     description: "配下のEntityをY軸だけでカメラへ追従させます。",
     icon: "billboardY",
     category: "rendering",

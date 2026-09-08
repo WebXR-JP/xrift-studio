@@ -1,3 +1,4 @@
+import { getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
 import {
   memo,
   useEffect,
@@ -292,35 +293,8 @@ function getEntityTypeLabel(entity: SceneEntity): string {
   if (entity.modelNode?.nodeType === "skinned-mesh") return "スキン";
   if (entity.modelNode?.nodeType === "mesh") return "メッシュ";
   if (entity.modelNode) return "ノード";
-  if (entity.components.some((component) => component.type === "mesh")) {
-    return "メッシュ";
-  }
-  if (entity.components.some((component) => component.type === "light")) {
-    return "ライト";
-  }
-  if (entity.components.some((component) => component.type === "rigid-body")) {
-    return "Rigid Body";
-  }
-  if (entity.components.some((component) => component.type === "audio-source")) {
-    return "オーディオ";
-  }
-  if (
-    entity.components.some((component) => component.type === "particle-emitter")
-  ) {
-    return "パーティクル";
-  }
-  if (entity.components.some((component) => component.type === "spawn-point")) {
-    return "スポーン";
-  }
-  const xriftComponent = entity.components.find(
-    (component) => component.type === "xrift-component",
-  );
-  if (xriftComponent?.type === "xrift-component") {
-    return (
-      getXriftComponentDefinition(xriftComponent.schemaId)?.label ??
-      "XRift Component"
-    );
-  }
+  const component = entity.components.find((entry) => entry.type !== "transform");
+  if (component) return getEditorComponentLabel(component);
   return "Entity";
 }
 

@@ -4456,7 +4456,7 @@ function updateComponent(
         if (!currentMesh) {
           throw new XriftMcpEditorToolError(
             "COMPONENT_UPDATE_REJECTED",
-            "メッシュの描画を更新できませんでした",
+            "Mesh Rendererを更新できませんでした",
             { entityId, componentId },
           );
         }
@@ -8607,7 +8607,7 @@ function meshMaterialBindingsValue(
     if (!availableSlots.has(slot)) {
       throw new XriftMcpEditorToolError(
         "INVALID_COMPONENT_PATCH",
-        `指定されたマテリアル枠「${slot}」はメッシュの描画にありません`,
+        `指定されたマテリアル枠「${slot}」はMesh Rendererにありません`,
         { slot, availableSlots: [...availableSlots] },
       );
     }
@@ -8626,7 +8626,7 @@ function meshMaterialBindingsValue(
     if (material.kind !== "material") {
       throw new XriftMcpEditorToolError(
         "ASSET_KIND_MISMATCH",
-        "メッシュの描画のbindingにはマテリアルを指定してください",
+        "Mesh Rendererのbindingにはマテリアルを指定してください",
         { materialAssetId, actualKind: material.kind },
       );
     }

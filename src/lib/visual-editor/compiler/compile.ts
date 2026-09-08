@@ -2578,7 +2578,7 @@ function renderOwnedColliderContent(
       addDiagnostic(context, {
         severity: "warning",
         code: "mesh-collider-without-local-mesh",
-        message: "メッシュ衝突判定のEntityに有効なメッシュの描画がありません",
+        message: "メッシュ衝突判定のEntityに有効なMesh Rendererがありません",
         sceneId: context.scene.sceneId,
         entityId: entity.id,
         componentId: meshCollider.id,
@@ -2828,7 +2828,7 @@ function renderColliderBody(
       addDiagnostic(context, {
         severity: "warning",
         code: "mesh-collider-without-local-mesh",
-        message: "メッシュ衝突判定のEntityに有効なメッシュの描画がありません",
+        message: "メッシュ衝突判定のEntityに有効なMesh Rendererがありません",
         sceneId: context.scene.sceneId,
         entityId: entity.id,
         componentId: meshCollider.id,

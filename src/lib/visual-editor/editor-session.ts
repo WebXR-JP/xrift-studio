@@ -159,18 +159,18 @@ export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
     { audioSpatial: false },
   ),
   definition("core.text", "Text", "rendering", true, "text"),
-  definition("core.text.panel", "テキスト看板", "rendering", true, "text", {
+  definition("core.text.panel", "Text (Panel)", "rendering", true, "text", {
     textPreset: "panel",
   }),
   definition(
     "core.text.caption",
-    "作品キャプション",
+    "Text (Caption)",
     "rendering",
     true,
     "text",
     { textPreset: "caption" },
   ),
-  definition("core.image", "画像", "rendering", true, "image"),
+  definition("core.image", "Image", "rendering", true, "image"),
   definition("scripting.script", "Script", "scripting", true, "script"),
   definition(
     "interaction.trigger",
@@ -191,6 +191,33 @@ export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
     }),
   ),
 ] as const;
+
+/** Use the Add Component registry for component names on every editor surface. */
+export function getEditorComponentLabel(component: SceneComponent): string {
+  if (component.type === "xrift-component") {
+    return XRIFT_COMPONENT_REGISTRY.find(
+      (entry) => entry.schemaId === component.schemaId,
+    )?.label ?? component.schemaId;
+  }
+  const definition = EDITOR_COMPONENT_REGISTRY.find((entry) => {
+    if (component.type === "mesh") return entry.componentType === "builtin-mesh";
+    if (entry.componentType !== component.type) return false;
+    if (component.type === "collider") {
+      return entry.id === (component.shape === "box"
+        ? "physics.box-collider"
+        : "physics.mesh-collider");
+    }
+    if (component.type === "light") return entry.lightType === component.lightType;
+    if (component.type === "audio-source") {
+      return entry.audioSpatial === (component.spatial === false ? false : undefined);
+    }
+    return true;
+  });
+  if (definition) return definition.label;
+  if (component.type === "animation") return "Animation";
+  if (component.type === "prefab-instance") return "Prefab Instance";
+  return component.type;
+}
 
 /** Components shown by both the Create menu and Hierarchy context menu. */
 export function getEditorComponentMenuDefinitions(

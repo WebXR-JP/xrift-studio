@@ -1,3 +1,4 @@
+import { getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
 import { applyModelReimportSettings } from "../../lib/visual-editor/model-reimport-impact";
 import { colliderModelNode, setMeshCollision } from "../../lib/visual-editor/mesh-collision-actions";
 import { textureProcessingSettings } from "../../lib/visual-editor/texture-processing";
@@ -120,7 +121,6 @@ import {
   updateVegetationWindComponent,
   updateColliderComponent,
   type ColliderComponent,
-  type SceneComponent,
   optimizeColliderConfiguration,
   updateRigidBodyComponent,
   updateLightComponent,
@@ -460,34 +460,6 @@ const IMPORT_RESOURCE_KIND: Readonly<
   font: "font",
   shader: "shader",
 };
-// Inspectorの削除通知で使う表示名。Component種別のidをそのまま出さない。
-/**
- * Named for every Component the generic remove path can reach. `transform` and
- * `xrift-component` are excluded because they never get here — one is refused
- * as required, the other has its own removal path — and the type is exact
- * rather than `Record<string, string>` so a new Component in the schema
- * registry fails typecheck instead of quietly falling back to "Component" in
- * the notice a person reads after deleting it.
- */
-const COMPONENT_REMOVAL_LABELS: Readonly<
-  Record<Exclude<SceneComponent["type"], "transform" | "xrift-component">, string>
-> = {
-  mesh: "メッシュの描画",
-  light: "ライト",
-  text: "テキスト",
-  image: "画像",
-  "audio-source": "音源",
-  "vegetation-wind": "風",
-  "particle-emitter": "パーティクルの放出",
-  collider: "衝突判定",
-  "rigid-body": "物理挙動",
-  "spawn-point": "開始位置",
-  "interaction-trigger": "グラフの実行",
-  script: "スクリプト",
-  animation: "旧アニメーション設定",
-  "prefab-instance": "プレハブの配置",
-};
-
 const AUTOSAVE_DELAY_MS = 800;
 const AUTOSAVE_MAX_ATTEMPTS = 4;
 const AUTOSAVE_RETRY_DELAYS_MS = [300, 900, 1_800] as const;
@@ -6811,7 +6783,7 @@ export function VisualEditorPrototype({
       });
       setNotice(
         typeof patch.enabled === "boolean"
-          ? `メッシュの描画を${patch.enabled ? "有効" : "無効"}にしました`
+          ? `Mesh Rendererを${patch.enabled ? "有効" : "無効"}にしました`
           : patch.modelPose
           ? "モデルポーズをこの配置へ保存しました"
           : patch.maxDistance !== undefined
@@ -6875,8 +6847,8 @@ export function VisualEditorPrototype({
       );
       setNotice(
         editorMode === "play"
-          ? "物理挙動設定を保存し、このRigidBodyの動作確認をやり直しました"
-          : "物理挙動設定をシーンへ反映しました",
+          ? "Rigid Body設定を保存し、このRigidBodyの動作確認をやり直しました"
+          : "Rigid Body設定をシーンへ反映しました",
       );
     },
     [editorMode, playSession, updateScene],
@@ -7300,7 +7272,7 @@ export function VisualEditorPrototype({
             next,
           );
       }, scene));
-      setNotice(`${selectedEntityIds.length}件のメッシュの描画へ影設定を反映しました`);
+      setNotice(`${selectedEntityIds.length}件のMesh Rendererへ影設定を反映しました`);
     },
     [editorMode, selectedEntityIds, updateScene],
   );
@@ -7375,8 +7347,8 @@ export function VisualEditorPrototype({
       );
       setNotice(
         editorMode === "play"
-          ? "グラフの実行を保存し、このEntityの動作確認を先頭から再実行しました"
-          : "グラフの実行をシーンへ反映しました",
+          ? "Interaction Triggerを保存し、このEntityの動作確認を先頭から再実行しました"
+          : "Interaction Triggerをシーンへ反映しました",
       );
     },
     [editorMode, playSession, updateScene],
@@ -7689,7 +7661,7 @@ export function VisualEditorPrototype({
           },
         };
       });
-      setNotice("衝突判定を削除しました");
+      setNotice("Colliderを削除しました");
     },
     [editorMode, playSession, updateScene],
   );
@@ -7736,8 +7708,8 @@ export function VisualEditorPrototype({
       });
       setNotice(
         editorMode === "play"
-          ? "パーティクルの放出設定を保存し、このEntityの動作確認を先頭から再実行しました"
-          : "パーティクルの放出の設定を更新しました",
+          ? "Particle Emitter設定を保存し、このEntityの動作確認を先頭から再実行しました"
+          : "Particle Emitterの設定を更新しました",
       );
     },
     [bundle.assets.assets, editorMode, playSession, updateScene],
@@ -7765,8 +7737,8 @@ export function VisualEditorPrototype({
       });
       setNotice(
         editorMode === "play"
-          ? "パーティクルの放出を削除し、このEntityの動作確認を先頭から再実行しました"
-          : "パーティクルの放出を削除しました",
+          ? "Particle Emitterを削除し、このEntityの動作確認を先頭から再実行しました"
+          : "Particle Emitterを削除しました",
       );
     },
     [editorMode, playSession, updateScene],
@@ -9018,7 +8990,7 @@ export function VisualEditorPrototype({
           },
         };
       });
-      setNotice("物理挙動を削除しました。子孫の衝突判定は保持されています");
+      setNotice("Rigid Bodyを削除しました。子孫の衝突判定は保持されています");
     },
     [editorMode, playSession, updateScene],
   );
@@ -9608,9 +9580,9 @@ export function VisualEditorPrototype({
         }
         setNotice(
           createdParticle
-            ? "パーティクルを作成し、パーティクルの放出を追加しました"
+            ? "パーティクルを作成し、Particle Emitterを追加しました"
             : createdGraph
-              ? "ノードグラフを作成し、グラフの実行を追加しました"
+              ? "ノードグラフを作成し、Interaction Triggerを追加しました"
               : "Componentを追加しました",
         );
         return touchProject({ ...current, assets, scene: result.scene });
@@ -9696,7 +9668,7 @@ export function VisualEditorPrototype({
       );
       if (!target) return;
       if (target.type === "transform") {
-        setNotice("位置・回転・大きさはEntityに必須のため削除できません");
+        setNotice("TransformはEntityに必須のため削除できません");
         return;
       }
       if (target.type === "xrift-component") {
@@ -9718,7 +9690,7 @@ export function VisualEditorPrototype({
           },
         };
       });
-      const label = COMPONENT_REMOVAL_LABELS[target.type] ?? "Component";
+      const label = getEditorComponentLabel(target);
       setNotice(
         editorMode === "play"
           ? `${label}を削除し、このEntityの動作確認を先頭から再実行しました`

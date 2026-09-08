@@ -1,3 +1,4 @@
+import { getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
 import { MeshCollisionControls } from "./MeshCollisionControls";
 import { colliderModelNode, type MeshCollisionAction } from "../../lib/visual-editor/mesh-collision-actions";
 import { normalizeTextureImportSettings, type TextureImportSettingsPatch } from "../../lib/visual-editor/asset-manifest";
@@ -226,11 +227,6 @@ function findPrefabSourceContext(
         })),
     )[0];
 }
-
-// Inspectorに専用UIが無いComponentの表示名。種別idをそのまま見せない。
-const UNSUPPORTED_COMPONENT_LABELS: Readonly<Record<string, string>> = {
-  animation: "旧アニメーション設定",
-};
 
 function ComponentCard({
   title,
@@ -962,11 +958,11 @@ function MeshInspector({
   return (
     <div className="space-y-3">
       <ComponentCard
-      title="メッシュの描画"
+      title={getEditorComponentLabel(component)}
       remove={
         onRemove
           ? {
-              label: "メッシュの描画を削除",
+              label: `${getEditorComponentLabel(component)}を削除`,
               disabled: readOnly,
               onRemove,
             }
@@ -976,8 +972,8 @@ function MeshInspector({
         checked: component.enabled,
         disabled: readOnly,
         label: component.enabled
-          ? "メッシュの描画を無効にする"
-          : "メッシュの描画を有効にする",
+          ? "Mesh Rendererを無効にする"
+          : "Mesh Rendererを有効にする",
         onChange: (enabled) => onChange({ enabled }),
       }}
     >
@@ -1144,7 +1140,7 @@ function MeshInspector({
               value={component.maxDistance ?? Number.NaN}
               placeholder="シーンの終了距離を使う"
               disabled={readOnly}
-              ariaLabel="メッシュの描画距離"
+              ariaLabel="Mesh Rendererの描画距離"
               scrubLabel="描画距離"
               onChange={(next) => onChange({ maxDistance: next })}
               onClear={() => onChange({ maxDistance: null })}
@@ -1583,7 +1579,7 @@ function TerrainInspector({
         : TERRAIN_SCULPT_BRUSHES;
 
   return (
-    <ComponentCard title="地形" subtitle="高さマップ・固定コライダー">
+    <ComponentCard title="Terrain" subtitle="高さマップ・固定コライダー">
       <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-xs">
         <dt className="text-slate-500">大きさ</dt>
         <dd className="text-right font-medium text-slate-700">
@@ -2994,7 +2990,7 @@ function MultiSelectionInspector({
           </div>
         </ComponentCard>
         {allHaveMesh ? (
-          <ComponentCard title="メッシュの描画" subtitle="全選択で共通">
+          <ComponentCard title="Mesh Renderer" subtitle="全選択で共通">
             <p className="text-xs text-slate-500">影を落とす: {meshCastShadow === null ? "一部異なる" : meshCastShadow ? "有効" : "無効"} / 影を受ける: {meshReceiveShadow === null ? "一部異なる" : meshReceiveShadow ? "有効" : "無効"}</p>
             <div className="flex flex-wrap gap-2">
               <button type="button" disabled={readOnly} onClick={() => onSetMeshShadow({ castShadow: true })} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">影を落とす</button>
@@ -3005,7 +3001,7 @@ function MultiSelectionInspector({
           </ComponentCard>
         ) : null}
         {allHaveLight ? (
-          <ComponentCard title="ライト" subtitle="全選択で共通">
+          <ComponentCard title="Light" subtitle="全選択で共通">
             <p className="text-xs text-slate-500">影を落とす: {lightCastShadow === null ? "一部異なる" : lightCastShadow ? "有効" : "無効"}</p>
             <div className="flex gap-2">
               <button type="button" disabled={readOnly} onClick={() => onSetLightShadow(true)} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">影を落とす</button>
@@ -3013,7 +3009,7 @@ function MultiSelectionInspector({
             </div>
           </ComponentCard>
         ) : null}
-        {!allHaveMesh && !allHaveLight ? <p className="rounded border border-dashed border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">共通のメッシュの描画またはライトComponentはありません。</p> : null}
+        {!allHaveMesh && !allHaveLight ? <p className="rounded border border-dashed border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">共通のMesh RendererまたはLight Componentはありません。</p> : null}
       </div>
     );
   }
@@ -3414,7 +3410,7 @@ function ColliderInspector({
 
   return (
     <ComponentCard
-      title={component.shape === "box" ? "Box 衝突判定" : "メッシュ衝突判定"}
+      title={getEditorComponentLabel(component)}
     >
       <ToggleRow
         label="有効"
@@ -3425,15 +3421,15 @@ function ColliderInspector({
 
       {bodyOwner ? (
         <p className="rounded border border-indigo-100 bg-indigo-50 px-2 py-1.5 text-xs leading-5 text-indigo-800">
-          物理挙動: {bodyOwner.name}。この衝突判定は親Bodyの形状として使われます。
+          Rigid Body: {bodyOwner.name}。この衝突判定は親Bodyの形状として使われます。
         </p>
       ) : (
       <div className="space-y-2.5 border-t border-slate-100 pt-2.5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-          物理挙動 · Entity共通
+          Rigid Body · Entity共通
         </p>
         <label className="grid grid-cols-[minmax(0,1fr)_150px] items-center gap-3 text-xs text-slate-700">
-          物理挙動
+          Rigid Body
           <select
             value={component.bodyType ?? "fixed"}
             disabled={readOnly}
@@ -3602,7 +3598,7 @@ function ColliderInspector({
         onClick={onRemove}
         className="w-full rounded border border-rose-200 bg-white px-2.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-45"
       >
-        衝突判定を削除
+        {getEditorComponentLabel(component)}を削除
       </button>
     </ComponentCard>
   );
@@ -3625,11 +3621,11 @@ function RigidBodyInspector({
 }) {
   return (
     <ComponentCard
-      title="物理挙動"
+      title={getEditorComponentLabel(component)}
       enabled={{
         checked: component.enabled,
         disabled: readOnly,
-        label: "物理挙動を有効化",
+        label: "Rigid Bodyを有効化",
         onChange: (enabled) => onChange({ enabled }),
       }}
       actions={
@@ -3637,8 +3633,8 @@ function RigidBodyInspector({
           type="button"
           disabled={readOnly}
           onClick={onRemove}
-          aria-label="物理挙動を削除"
-          title="物理挙動を削除"
+          aria-label="Rigid Bodyを削除"
+          title="Rigid Bodyを削除"
           className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-40"
         >
           <EDITOR_ICONS.delete size={13} aria-hidden="true" />
@@ -3646,7 +3642,7 @@ function RigidBodyInspector({
       }
     >
       <p className="rounded bg-indigo-50 px-2 py-1.5 text-xs leading-5 text-indigo-800">
-        このEntity以下を1つの物体として扱います。別の物理挙動を持つ子は除きます。
+        このEntity以下を1つの物体として扱います。別のRigid Bodyを持つ子は除きます。
         衝突判定 {descendantColliderCount} / メッシュ {descendantMeshCount}
       </p>
       {(component.autoColliders === "none" &&
@@ -3793,10 +3789,10 @@ function LightInspector({
 
   return (
     <ComponentCard
-      title={LIGHT_LABELS[component.lightType]}
+      title={getEditorComponentLabel(component)}
       remove={
         onRemove
-          ? { label: "ライトを削除", disabled: readOnly, onRemove }
+          ? { label: "Lightを削除", disabled: readOnly, onRemove }
           : undefined
       }
     >
@@ -3988,10 +3984,10 @@ function TextInspector({
 
   return (
     <ComponentCard
-      title="テキスト"
+      title={getEditorComponentLabel(component)}
       remove={
         onRemove
-          ? { label: "テキストを削除", disabled: readOnly, onRemove }
+          ? { label: `${getEditorComponentLabel(component)}を削除`, disabled: readOnly, onRemove }
           : undefined
       }
     >
@@ -4440,10 +4436,10 @@ function ImageInspector({
 
   return (
     <ComponentCard
-      title="画像"
+      title={getEditorComponentLabel(component)}
       remove={
         onRemove
-          ? { label: "画像を削除", disabled: readOnly, onRemove }
+          ? { label: `${getEditorComponentLabel(component)}を削除`, disabled: readOnly, onRemove }
           : undefined
       }
     >
@@ -4677,10 +4673,10 @@ function AudioSourceInspector({
     : undefined;
   return (
     <ComponentCard
-      title="音源"
+      title={getEditorComponentLabel(component)}
       remove={
         onRemove
-          ? { label: "音源を削除", disabled: readOnly, onRemove }
+          ? { label: `${getEditorComponentLabel(component)}を削除`, disabled: readOnly, onRemove }
           : undefined
       }
     >
@@ -4805,11 +4801,11 @@ function VegetationWindInspector({
 }) {
   return (
     <ComponentCard
-      title="風"
+      title={getEditorComponentLabel(component)}
       subtitle="EntityComponent"
       remove={
         onRemove
-          ? { label: "風を削除", disabled: readOnly, onRemove }
+          ? { label: `${getEditorComponentLabel(component)}を削除`, disabled: readOnly, onRemove }
           : undefined
       }
     >
@@ -4850,14 +4846,14 @@ function ParticleEmitterInspector({
 
   return (
     <ComponentCard
-      title="パーティクルの放出"
+      title={getEditorComponentLabel(component)}
       actions={
         <button
           type="button"
           disabled={readOnly}
           onClick={onRemove}
-          aria-label="パーティクルの放出を削除"
-          title="パーティクルの放出を削除"
+          aria-label="Particle Emitterを削除"
+          title="Particle Emitterを削除"
           className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <DeleteIcon size={13} aria-hidden="true" />
@@ -5254,7 +5250,7 @@ function EntityInspector({
       ) : null}
 
       {transform ? (
-        <ComponentCard title="位置・回転・大きさ" subtitle="Entity基準">
+        <ComponentCard title="Transform" subtitle="Entity基準">
           <VectorEditor
             label="位置"
             value={transform.position}
@@ -5457,10 +5453,10 @@ function EntityInspector({
           return (
             <ComponentCard
               key={component.id}
-              title="開始位置"
+              title={getEditorComponentLabel(component)}
               subtitle={component.target}
               remove={{
-                label: "開始位置を削除",
+                label: `${getEditorComponentLabel(component)}を削除`,
                 disabled: readOnly && !liveRuntimeTuning,
                 onRemove: () => onRemoveComponent(component.id),
               }}
@@ -5476,10 +5472,10 @@ function EntityInspector({
           return (
             <ComponentCard
               key={component.id}
-              title="グラフの実行"
+              title={getEditorComponentLabel(component)}
               subtitle={graphAsset?.name ?? "未設定"}
               remove={{
-                label: "グラフの実行を削除",
+                label: `${getEditorComponentLabel(component)}を削除`,
                 disabled: readOnly && !liveRuntimeTuning,
                 onRemove: () => onRemoveComponent(component.id),
               }}
@@ -5506,10 +5502,10 @@ function EntityInspector({
           return (
             <ComponentCard
               key={component.id}
-              title="スクリプト"
+              title={getEditorComponentLabel(component)}
               subtitle={scriptAsset?.name ?? "未設定"}
               remove={{
-                label: "スクリプトを削除",
+                label: `${getEditorComponentLabel(component)}を削除`,
                 disabled: readOnly && !liveRuntimeTuning,
                 onRemove: () => onRemoveComponent(component.id),
               }}
@@ -5542,11 +5538,11 @@ function EntityInspector({
         return (
           <ComponentCard
             key={component.id}
-            title={UNSUPPORTED_COMPONENT_LABELS[component.type] ?? component.type}
+            title={getEditorComponentLabel(component)}
             subtitle="設定未対応"
             remove={{
               label: `${
-                UNSUPPORTED_COMPONENT_LABELS[component.type] ?? component.type
+                getEditorComponentLabel(component)
               }を削除`,
               disabled: readOnly && !liveRuntimeTuning,
               onRemove: () => onRemoveComponent(component.id),
@@ -5578,10 +5574,10 @@ function EntityInspector({
         .map((component) => (
           <ComponentCard
             key={component.id}
-            title="プレハブの配置"
+            title={getEditorComponentLabel(component)}
             subtitle={component.type}
             remove={{
-              label: "プレハブの配置を削除",
+              label: `${getEditorComponentLabel(component)}を削除`,
               disabled: readOnly && !liveRuntimeTuning,
               onRemove: () => onRemoveComponent(component.id),
             }}

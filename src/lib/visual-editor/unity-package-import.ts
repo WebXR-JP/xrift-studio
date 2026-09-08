@@ -839,7 +839,7 @@ function convertUnityDocument(
     diagnostics.push({
       severity: "warning",
       code: "unity-mesh-source-unsupported",
-      message: `${skippedMeshCount}件のメッシュの描画は対応モデルを解決できず、GameObject階層のみ再構築しました`,
+      message: `${skippedMeshCount}件のMesh Rendererは対応モデルを解決できず、GameObject階層のみ再構築しました`,
       sourcePath,
     });
   }

@@ -199,7 +199,7 @@ export function inspectColliderConfiguration(
           entityId: entity.id,
           entityName: entity.name,
           componentId: collider.id,
-          message: "メッシュ衝突判定の範囲に有効なメッシュの描画がありません",
+          message: "メッシュ衝突判定の範囲に有効なMesh Rendererがありません",
           fixable: false,
         });
       }

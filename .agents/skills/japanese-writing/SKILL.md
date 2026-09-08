@@ -43,3 +43,5 @@ XRift Studioでは `Entity / Inspector / Hierarchy / Assets / Components` の表
 Normal Map、Skybox、IBL、Bloom、SSAO、Fog、Color Gradingなど、制作ツールで定着した名前も主ラベルに残す。名前は英語、効果と操作の説明は短い日本語にする。「上空の色」のような実際の色名や一般的な操作まで機械的に英語にしない。SkyboxとIBL、Normal Mapと形状の変形、EmissiveとBloomの違いを保つ。
 
 起動から保存・公開・終了まで、未選択・処理中・成功・失敗の案内も確認する。説明に出すボタン名を実際の表示と照合する。ファイルの追加とXRiftへの公開を区別し、進捗IDは表示だけ日本語にする。ラベルは接続先の値を確認し、音声のvolumeをマテリアルのVolumeと取り違えない。
+
+コンポーネント名はすべて英語で、Add Componentと同じ表記にする。Mesh Renderer、Rigid Body、Colliderなどを日本語の機能説明へ置き換えない。詳しい照合手順は[UXスキル](../xrift-studio-ux/SKILL.md#コンポーネント名の表記)に従う。

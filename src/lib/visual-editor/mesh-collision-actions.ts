@@ -53,7 +53,7 @@ export function collisionSources(scene: SceneDocument) {
 /** One history transaction; untouched entities keep their identity. Never deletes authored settings. */
 export function setMeshCollision(scene: SceneDocument, entityId: string, action: MeshCollisionAction): SceneDocument {
   const selected = scene.entities[entityId];
-  if (!selected || !hasCollisionMesh(selected)) throw new Error("有効なメッシュの描画を選んでください。");
+  if (!selected || !hasCollisionMesh(selected)) throw new Error("有効なMesh Rendererを選んでください。");
   if (!collisionAncestors(scene, entityId).every((e) => e.enabled)) {
     throw new Error("このEntityと親を有効にしてから当たり判定を設定してください。");
   }
