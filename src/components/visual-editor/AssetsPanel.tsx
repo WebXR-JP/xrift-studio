@@ -514,8 +514,8 @@ function AssetCard({
     vramBytes !== null && asset.kind === "texture" && !isPublishedAsKtx2(asset);
   const sizeSummary =
     fileBytes !== null || vramBytes !== null ? (
-      <span className="pointer-events-none block text-right text-[10px] leading-4 tabular-nums">
-        <span className="block text-slate-600">
+      <span className="pointer-events-none block text-right text-[11px] leading-4 tabular-nums">
+        <span className="block text-slate-600" aria-label={fileBytes !== null ? `ファイルサイズ: ${formatFileSize(fileBytes)}` : undefined}>
           {fileBytes !== null ? formatFileSize(fileBytes) : "—"}
         </span>
         {vramBytes !== null ? (
