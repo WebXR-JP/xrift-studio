@@ -134,6 +134,7 @@ import {
 import {
   SCENE_RECIPE_CATEGORY_LABELS,
   getSceneRecipesForProjectKind,
+  getSceneRecipeShelf,
 } from "./scene-recipe-catalog";
 import { createTextureCard } from "./texture-card";
 import {
@@ -2643,6 +2644,7 @@ function listSceneRecipes(
         id: recipe.id,
         name: recipe.name,
         description: recipe.description,
+        shelf: getSceneRecipeShelf(recipe),
         category: recipe.category,
         categoryLabel: SCENE_RECIPE_CATEGORY_LABELS[recipe.category],
         note: recipe.note,
@@ -2663,7 +2665,7 @@ function listSceneRecipes(
         ([id, label]) => ({ id, label }),
       ),
     },
-    "3Dセットの一覧を取得しました",
+    "3Dセット・マテリアル表現・ギミックの一覧を取得しました",
   );
 }
 

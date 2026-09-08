@@ -8,7 +8,8 @@ import type { ExternalStoreAssetKind } from "../tauri";
 export const EXTERNAL_STORE_PROVIDER_GROUPS = [
   { id: "material-sites", label: "素材サイト" },
   { id: "sky-nature", label: "空と自然" },
-  { id: "light-decoration", label: "光と演出" },
+  { id: "light-decoration", label: "3Dと演出" },
+  { id: "special-materials", label: "マテリアル表現" },
   { id: "world-features", label: "ワールド機能" },
 ] as const;
 
@@ -28,6 +29,7 @@ export type ExternalStoreProvider = {
     | "particle-preset"
     | "scene-recipe";
   group: ExternalStoreProviderGroupId;
+  recipeShelf?: "models" | "materials" | "gimmicks";
   name: string;
   badge: string;
   summary: string;
@@ -124,8 +126,8 @@ export const EXTERNAL_STORE_PROVIDERS = [
   {
     id: "xrift-glow-materials",
     kind: "glow-material",
-    group: "light-decoration",
-    name: "発光Entity",
+    group: "special-materials",
+    name: "Emissive",
     badge: "公式",
     summary: "Bloomでネオンのように光がにじむ形を追加",
     homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
@@ -155,7 +157,8 @@ export const EXTERNAL_STORE_PROVIDERS = [
     group: "light-decoration",
     name: "3Dセット",
     badge: "公式",
-    summary: "焚き火・家具に加え、しかけ付きのチュートリアルセットを追加",
+    recipeShelf: "models",
+    summary: "焚き火・家具・装飾などの組み立て済み3Dを追加",
     homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
     catalogKinds: [],
     installableKinds: [],
@@ -166,7 +169,7 @@ export const EXTERNAL_STORE_PROVIDERS = [
   {
     id: "open-brush",
     kind: "open-brush",
-    group: "light-decoration",
+    group: "special-materials",
     name: "Open Brush",
     badge: "公式",
     summary: "手描き風ブラシのマテリアルを追加",
@@ -177,10 +180,38 @@ export const EXTERNAL_STORE_PROVIDERS = [
     attributionNote: "ブラシのGUIDと描画エンジンのバージョンをマテリアルに保存します。",
   },
   {
+    id: "xrift-material-showcases",
+    kind: "scene-recipe",
+    recipeShelf: "materials",
+    group: "special-materials",
+    name: "glTFマテリアル",
+    badge: "公式",
+    summary: "Clearcoat・Transmissionなどの特殊な質感を見比べて追加",
+    homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
+    catalogKinds: [],
+    installableKinds: [],
+    authorFallback: "XRift Studio contributors",
+    attributionNote: "配置後はHierarchyとInspectorから中身を編集できます。",
+  },
+  {
+    id: "xrift-gimmicks",
+    kind: "scene-recipe",
+    recipeShelf: "gimmicks",
+    group: "world-features",
+    name: "ギミック",
+    badge: "公式",
+    summary: "スイッチ・音・動きなど、操作できるしかけを追加",
+    homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
+    catalogKinds: [],
+    installableKinds: [],
+    authorFallback: "XRift Studio contributors",
+    attributionNote: "配置後はHierarchyとInspectorから中身を編集できます。",
+  },
+  {
     id: "xrift-components",
     kind: "xrift-components",
     group: "world-features",
-    name: "Component",
+    name: "XRift公式コンポーネント",
     badge: "公式",
     summary: "Portal・Mirrorなどの機能を追加",
     homepageUrl: "https://github.com/WebXR-JP/xrift",

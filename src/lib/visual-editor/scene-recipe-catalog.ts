@@ -2746,11 +2746,20 @@ export function getSceneRecipe(recipeId: string): SceneRecipe | undefined {
   return SCENE_RECIPES.find((recipe) => recipe.id === recipeId);
 }
 
+export type SceneRecipeShelf = "models" | "materials" | "gimmicks";
+
+export function getSceneRecipeShelf(recipe: SceneRecipe): SceneRecipeShelf {
+  if (recipe.category === "material") return "materials";
+  if (recipe.category === "tutorial" || recipe.behaviours?.length) return "gimmicks";
+  return "models";
+}
+
 export function getSceneRecipesForProjectKind(
   projectKind: VisualProjectKind,
+  shelf?: SceneRecipeShelf,
 ): readonly SceneRecipe[] {
   return SCENE_RECIPES.filter((recipe) =>
-    recipe.projectKinds.includes(projectKind),
+    recipe.projectKinds.includes(projectKind) && (!shelf || getSceneRecipeShelf(recipe) === shelf),
   );
 }
 

@@ -15,6 +15,8 @@ import { getParticleAuthoringPreset } from "./particle-system";
 import {
   createSceneRecipeBehaviourExtension,
   SCENE_RECIPES,
+  getSceneRecipeShelf,
+  getSceneRecipesForProjectKind,
   SCENE_RECIPE_CATEGORY_LABELS,
   type SceneRecipe,
   type SceneRecipePlacedPart,
@@ -53,6 +55,19 @@ function placeParts(recipe: SceneRecipe): Map<string, SceneRecipePlacedPart> {
 
 /** Deterministic assertions for the 3D set catalog and its wired behaviours. */
 export function runSceneRecipeCatalogFixtureAssertions(): void {
+  for (const projectKind of ["world", "item"] as const) {
+    const all = getSceneRecipesForProjectKind(projectKind);
+    const shelves = ["models", "materials", "gimmicks"] as const;
+    const distributed = shelves.flatMap((shelf) => getSceneRecipesForProjectKind(projectKind, shelf));
+    assert(distributed.length === all.length && new Set(distributed.map((recipe) => recipe.id)).size === all.length,
+      "Every recipe must be distributed once without changing project compatibility");
+    for (const recipe of all) {
+      const shelf = getSceneRecipeShelf(recipe);
+      assert(recipe.category !== "material" || shelf === "materials", "glTF examples belong in special materials");
+      assert(!recipe.behaviours?.length || recipe.category === "material" || shelf === "gimmicks", "Interactive recipes belong in gimmicks");
+    }
+  }
+
   const ids = new Set<string>();
   for (const recipe of SCENE_RECIPES) {
     assert(!ids.has(recipe.id), `Duplicate scene recipe id: ${recipe.id}`);

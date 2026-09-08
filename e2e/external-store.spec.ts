@@ -1,0 +1,31 @@
+import { expect, test } from "@playwright/test";
+
+test("外部カタログを3D・マテリアル表現・ギミックで選べる", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto("/e2e.html?scenario=ready");
+  await page.getByRole("button", { name: /新規プロジェクト/ }).click();
+  await page.getByRole("button", { name: /ワールドをビジュアルで作る/ }).click();
+  await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
+  await page.getByLabel("プロジェクト名").fill("catalog-shelves");
+  await page.getByRole("button", { name: "作成して開く" }).click();
+  await page.getByRole("button", { name: "外部から追加", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: /glTFマテリアル/ }).click();
+  const materials = dialog.getByRole("region", { name: "glTFマテリアル一覧", exact: true });
+  await expect(materials.getByRole("button")).toHaveCount(11);
+  await materials.getByRole("textbox").fill("存在しない候補");
+  await expect(materials.getByText("条件に合うglTFマテリアルがありません")).toBeVisible();
+  await dialog.getByRole("button", { name: /ギミック/ }).click();
+  const gimmicks = dialog.getByRole("region", { name: "ギミック一覧", exact: true });
+  await expect(gimmicks.getByRole("textbox")).toHaveValue("");
+  await expect(gimmicks.getByRole("button").first()).toBeVisible();
+  await expect(gimmicks.getByRole("combobox")).not.toContainText("マテリアル見本");
+  await dialog.getByRole("button", { name: /3Dセット/ }).click();
+  const models = dialog.getByRole("region", { name: "3Dセット一覧", exact: true });
+  await expect(models.getByRole("combobox")).not.toContainText("チュートリアル");
+  await expect(models.getByRole("combobox")).not.toContainText("マテリアル見本");
+  await dialog.getByRole("button", { name: /Emissive/ }).click();
+  await expect(dialog.getByRole("region", { name: "Emissive一覧", exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: /XRift公式コンポーネント/ }).click();
+  await expect(dialog.getByRole("heading", { name: "XRift公式コンポーネント", exact: true })).toBeVisible();
+});
