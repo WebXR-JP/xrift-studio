@@ -2,9 +2,9 @@
 
 **プレハブ**は、Entityとその子をまとめて再利用するための素材です。同じ家具、看板、仕掛けを何度も置くときに使います。
 
-![Hierarchyで親子にまとめたEntityとAssetsのプレハブ](./media/prefabs.png)
+![Hierarchyで親の下に複数のEntityが並んだ状態](./media/prefabs.png)
 
-*親の下にまとめると全体を一緒に動かせます。Assetsへドラッグするとプレハブになります。*
+*左のHierarchyで親子関係を確認できます。プレハブへの保存は、このあとAssetsへドラッグして行います。*
 
 ## 組み合わせを作る
 

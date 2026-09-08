@@ -48,6 +48,9 @@ async function listShots(plan) {
     }
   }
   for (const row of rows) console.log(`${row.status === "不足" ? "不足" : "あり"}  ${row.file}  (${row.page})${row.status.startsWith("あり") ? `  ${row.status}` : ""}`);
+  for (const shot of plan.shots) {
+    if (shot.review?.status === "retake-required") console.log(`掲載保留  ${shot.file}: ${shot.review.note}`);
+  }
   const missing = rows.filter((row) => row.status === "不足");
   console.log(`\n${rows.length - missing.length}/${rows.length} 件あり。不足 ${missing.length} 件。`);
   return missing;

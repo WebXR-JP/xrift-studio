@@ -22,6 +22,8 @@ Entity / Hierarchy / Inspector / Assets / Componentsやマテリアル名は画�
 
 ## 画像の撮影
 
+2026-09-08の画像29枚の判定と撮り直し条件は、[画像の目視レビュー](./GUIDE_IMAGE_REVIEW.md)にあります。`capture-plan.json` の `review.status` が `retake-required` の画像は掲載保留です。ファイルが存在しても、そのまま記事へ戻さず、指摘を解消した実画面を撮って確認してください。
+
 記事の画像は `docs/guide/media/` に置き、本文から `![何が写っているか](./media/<slug>.png)` の形式で参照します。画像の直後には、どこを見るかを一文のキャプション（`*...*`）で添えます。必要な撮影の一覧は `scripts/guide/capture-plan.json` で管理します。
 
 撮影には Tauri MCP のデバッグ機能（`webview_screenshot`）を使い、現在のデスクトップ版の画面を写します。OS のファイル選択ダイアログなどネイティブ UI は写らないため、撮影対象に含めません。個人情報やトークンが映らないサンプルプロジェクトで撮影します。

@@ -4,9 +4,9 @@
 
 **始める前に：** [マテリアルの割り当て](./materials.md)を済ませ、Play中ならStopしてください。
 
-![マテリアルのInspectorでAlpha ModeとAlphaが表示された状態](./media/transparent-materials.png)
+![マテリアルのInspectorにAlpha ModeとAlphaが表示された操作前の状態](./media/transparent-materials.png)
 
-*半透明はAlpha ModeをBlendにし、切り抜きはMaskにします。目的に合う方法を選びます。*
+*画像は変更前のOpaqueです。半透明にするときは、右のAlpha ModeをBlendへ変更します。*
 
 ## 全体を半透明にする
 

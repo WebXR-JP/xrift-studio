@@ -1,6 +1,9 @@
 {
   "version": 1,
-  "window": { "width": 1440, "height": 900 },
+  "window": {
+    "width": 1440,
+    "height": 900
+  },
   "maxWidth": 1280,
   "notes": "全ショットは Tauri デバッグ版の WebView を pnpm mcp:cli webview_screenshot で撮影する。OS のファイル選択ダイアログなどネイティブ UI は写らない。個人情報やトークンが映らないサンプルプロジェクトで撮影する。撮影中は docs/guide/ へ書き込まない。Vite が変更を検知して再読み込みし、編集中のプロジェクトが一覧へ戻るため、画像の配置は全ショットの確認後にまとめて行う。セットアップ画面は初回起動時にしか出ないため撮影対象に含めない。インストールで困ったときの記事は OS 側の画面が中心のため画像を付けない。",
   "omitted": [
@@ -15,203 +18,458 @@
       "page": "index",
       "alt": "床と球が置かれたビジュアルエディターの全体",
       "caption": "このビジュアルエディターで配置・色変更・保存・Playを行います。",
-      "setup": ["サンプルプロジェクトをビジュアルエディターで開く", "床と球が中央のシーンに見える視点にする"]
+      "setup": [
+        "サンプルプロジェクトをビジュアルエディターで開く",
+        "床と球が中央のシーンに見える視点にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "retake-required",
+        "note": "床と球という説明に対し、球のない複雑な会場。床と球だけの練習用シーンを撮る。"
+      }
     },
     {
       "file": "installation.png",
       "page": "installation",
       "alt": "プロジェクト一覧の新規プロジェクトボタン",
       "caption": "プロジェクト一覧が出ている場合は、新規プロジェクトからビジュアルエディターを選びます。",
-      "setup": ["アプリを起動し、プロジェクト一覧を表示する", "新規プロジェクトのボタンが見える状態にする"]
+      "setup": [
+        "アプリを起動し、プロジェクト一覧を表示する",
+        "新規プロジェクトのボタンが見える状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "retake-required",
+        "note": "ローカルのユーザーパス、アカウント表示、無関係な試作名が写る。撮影用の一覧で新規プロジェクトを大きく写す。"
+      }
     },
     {
       "file": "first-world.png",
       "page": "first-world",
       "alt": "中央のシーンに置いた球が選ばれた状態",
       "caption": "追加 → Primitive → Sphereで球を置くと、Hierarchyに項目が増え、中央のシーンに現れます。",
-      "setup": ["空のワールドを開く", "追加 → Primitive → Sphere で球を置く", "撮影後に元に戻すで球を消す"]
+      "setup": [
+        "空のワールドを開く",
+        "追加 → Primitive → Sphere で球を置く",
+        "撮影後に元に戻すで球を消す"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "retake-required",
+        "note": "空のワールドの手順と会場の画像が一致しない。手順の位置 X:0 / Y:1 / Z:0 に置いた球を撮る。"
+      }
     },
     {
       "file": "editor-layout.png",
       "page": "editor-basics",
       "alt": "左にHierarchy、中央にシーン、右にInspector、下にAssetsが並ぶ編集画面",
       "caption": "左で選び、中央で見て、右で調整し、下から素材を使います。画像を開くと拡大して確認できます。",
-      "setup": ["サンプルプロジェクトをビジュアルエディターで開く", "Hierarchy・シーン・Inspector・Assetsの四つが見える配置にする"]
+      "setup": [
+        "サンプルプロジェクトをビジュアルエディターで開く",
+        "Hierarchy・シーン・Inspector・Assetsの四つが見える配置にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "improve-framing",
+        "note": "四つのパネルは見えるが文字が小さく、未接続の画面共有表示が目立つ。簡単なシーンで四領域を撮る。"
+      }
     },
     {
       "file": "objects.png",
       "page": "objects",
       "alt": "Entityを選択し、右のInspectorにTransformが表示された状態",
       "caption": "Entityを選ぶとInspectorのTransformで位置・回転・大きさを確認できます。",
-      "setup": ["サンプルプロジェクトを開く", "シーンまたはHierarchyで球などのEntityを選ぶ", "InspectorのTransformが見える状態にする"]
+      "setup": [
+        "サンプルプロジェクトを開く",
+        "シーンまたはHierarchyで球などのEntityを選ぶ",
+        "InspectorのTransformが見える状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "improve-framing",
+        "note": "Transformは写るが選択したテーブルが小さい。Fで対象に寄せて位置・回転・大きさを見せる。"
+      }
     },
     {
       "file": "assets.png",
       "page": "assets",
       "alt": "下のAssetsパネルに取り込んだモデルが並んだ状態",
       "caption": "取り込んだファイルはAssetsに集まります。シーンへドラッグすると配置できます。",
-      "setup": ["サンプルプロジェクトを開く", "GLBモデルをAssetsへ取り込む", "Assetsパネルが見える状態にする"]
+      "setup": [
+        "サンプルプロジェクトを開く",
+        "GLBモデルをAssetsへ取り込む",
+        "Assetsパネルが見える状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "improve-framing",
+        "note": "モデルとAssetsは写る。Assetsを広げ、素材名とドラッグ元を読み取れる大きさにする。"
+      }
     },
     {
       "file": "materials.png",
       "page": "materials",
       "alt": "Assetsでマテリアルを選び、InspectorにBase Color・Metallic・Roughnessが表示された状態",
       "caption": "マテリアルを選ぶとInspectorに色と質感の設定が表示されます。最初は三つの項目だけ使います。",
-      "setup": ["サンプルプロジェクトを開く", "Assetsで新規マテリアルを作って選ぶ", "InspectorにBase Color・Metallic・Roughnessが見える状態にする"]
+      "setup": [
+        "サンプルプロジェクトを開く",
+        "Assetsで新規マテリアルを作って選ぶ",
+        "InspectorにBase Color・Metallic・Roughnessが見える状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "improve-framing",
+        "note": "Base Color・Metallic・Roughnessは写る。Inspectorを広げ、対象物と設定の関係を見せる。"
+      }
     },
     {
       "file": "textures.png",
       "page": "textures",
-      "alt": "マテリアルのInspectorでBase Color MapとNormal Mapの欄が見える状態",
-      "caption": "画像はBase Color MapやNormal Mapなど、用途に合う欄へ割り当てます。",
-      "setup": ["サンプルプロジェクトを開く", "Assetsでマテリアルを選ぶ", "Inspectorのテクスチャ欄が見える位置までスクロールする"]
+      "alt": "マテリアルのInspectorにBase Color Mapが表示された状態",
+      "caption": "右のInspectorにあるBase Color Mapで、色に使う画像を選びます。",
+      "setup": [
+        "サンプルプロジェクトを開く",
+        "Assetsでマテリアルを選ぶ",
+        "Inspectorのテクスチャ欄が見える位置までスクロールする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "caption-corrected",
+        "note": "Normal Mapは画面外。画像の説明を実際に写るBase Color Mapに限定する。撮り直しでは割り当て済みの画像と結果を写す。"
+      }
     },
     {
       "file": "save-and-open.png",
       "page": "save-and-open",
       "alt": "プロジェクト一覧に作品のカードが並んだ状態",
       "caption": "保存した作品はプロジェクト一覧のカードから開き直せます。名前とサムネイルで見分けます。",
-      "setup": ["編集画面からライブラリへ戻り、プロジェクト一覧を表示する", "サンプルプロジェクトのカードが見える状態にする"]
+      "setup": [
+        "編集画面からライブラリへ戻り、プロジェクト一覧を表示する",
+        "サンプルプロジェクトのカードが見える状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "retake-required",
+        "note": "ローカルパスと無関係な試作一覧が写る。サムネイルのある撮影用作品一件を中心に撮る。"
+      }
     },
     {
       "file": "play-mode.png",
       "page": "play-mode",
       "alt": "Play中に中央のPlay Windowでワールドを見回している状態",
       "caption": "Playを押してPlay Windowをクリックすると、プレイヤー視点で歩けます。戻るときはStopです。",
-      "setup": ["サンプルプロジェクトを開く", "Playを押し、読み込み完了後にPlay Windowをクリックする", "プレイヤー視点で球が見える位置へ進む"]
+      "setup": [
+        "サンプルプロジェクトを開く",
+        "Playを押し、読み込み完了後にPlay Windowをクリックする",
+        "プレイヤー視点で球が見える位置へ進む"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "retake-required",
+        "note": "未接続の画面共有が主役で、手順の球もStopボタンも確認できない。球のある練習用シーンをPlayし、Stopを含める。"
+      }
     },
     {
       "file": "external-resources.png",
       "page": "external-resources",
       "alt": "外部から追加のカタログで素材の詳細と見本が表示された状態",
       "caption": "外部から追加では詳細の見本と追加内容を確認してから取り込みます。",
-      "setup": ["サンプルプロジェクトを開く", "Assets → 外部から追加を開く", "いずれかの素材の詳細が見える状態にする"]
+      "setup": [
+        "サンプルプロジェクトを開く",
+        "Assets → 外部から追加を開く",
+        "いずれかの素材の詳細が見える状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "improve-framing",
+        "note": "素材カタログと見本は写る。ダイアログを大きくし、下端の取り込みボタンまで含める。"
+      }
     },
     {
       "file": "lighting.png",
       "page": "lighting",
-      "alt": "シーン設定パネルでAmbient LightとExposureを調整している状態",
-      "caption": "全体の明るさはシーン設定で調整します。ライトの追加と分けて確認します。",
-      "setup": ["サンプルプロジェクトを開く", "エディター左下からシーン設定を開く", "Ambient Light・Exposureが見える状態にする"]
+      "alt": "シーン設定のInspectorにAmbient Lightが表示された状態",
+      "caption": "右のInspectorのAmbient Lightで環境光を設定します。画像では無効になっています。",
+      "setup": [
+        "サンプルプロジェクトを開く",
+        "エディター左下からシーン設定を開く",
+        "Ambient Light・Exposureが見える状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "caption-corrected",
+        "note": "Ambient Lightは写るがExposureは画面外。代替テキストからExposureを外す。撮り直しでは有効な設定と明るさの変化を見せる。"
+      }
     },
     {
       "file": "sky-and-water.png",
       "page": "sky-and-water",
       "alt": "Skyboxが設定され、空が変わったシーン",
       "caption": "Skyboxを設定すると背景が変わります。照明に使う場合はIBLを別に設定します。",
-      "setup": ["サンプルプロジェクトを開く", "外部から追加 → Skybox Shaderでプリセットを追加後にSkyboxへ設定する", "背景が変わったシーンが見える視点にする"]
+      "setup": [
+        "サンプルプロジェクトを開く",
+        "外部から追加 → Skybox Shaderでプリセットを追加後にSkyboxへ設定する",
+        "背景が変わったシーンが見える視点にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "retake-required",
+        "note": "空の変化が分からず、Skybox設定も下端で切れている。空と設定欄を同時に写す。"
+      }
     },
     {
       "file": "terrain.png",
       "page": "terrain",
       "alt": "地形を選び、Inspectorにブラシの設定が表示された状態",
       "caption": "地形を選ぶとブラシで盛り上げ・掘る・滑らかにするを切り替えて整えます。",
-      "setup": ["地形のあるサンプルプロジェクトを開く", "Hierarchyで地形を選ぶ", "Inspectorのブラシ設定が見える状態にする"]
+      "setup": [
+        "地形のあるサンプルプロジェクトを開く",
+        "Hierarchyで地形を選ぶ",
+        "Inspectorのブラシ設定が見える状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "retake-required",
+        "note": "水面が大半を占め、地形の起伏が分からない。陸地へ視点を移し、起伏とブラシ設定を同時に写す。"
+      }
     },
     {
       "file": "collision.png",
       "page": "collision",
       "alt": "床のEntityを選び、InspectorにColliderが表示された状態",
       "caption": "床を選んでColliderが有効か確認します。開始位置は床の上に置きます。",
-      "setup": ["サンプルプロジェクトを開く", "Hierarchyで床のEntityを選ぶ", "InspectorにColliderが見える状態にする"]
+      "setup": [
+        "サンプルプロジェクトを開く",
+        "Hierarchyで床のEntityを選ぶ",
+        "InspectorにColliderが見える状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "improve-framing",
+        "note": "Box Colliderは写る。床と開始位置の関係が分かる構図にし、Collider欄を広げる。"
+      }
     },
     {
       "file": "audio.png",
       "page": "audio",
       "alt": "音源を持つEntityを選び、Inspectorに音源設定が表示された状態",
       "caption": "音源のEntityを選ぶと使う音声・音量・繰り返しを確認できます。",
-      "setup": ["環境音のスピーカーの3Dセットを配置したプロジェクトを開く", "Hierarchyで音源のEntityを選ぶ", "Inspectorの音源設定が見える状態にする"]
+      "setup": [
+        "環境音のスピーカーの3Dセットを配置したプロジェクトを開く",
+        "Hierarchyで音源のEntityを選ぶ",
+        "Inspectorの音源設定が見える状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "improve-framing",
+        "note": "Audio Sourceの設定は写る。選択名と音量・繰り返しを読みやすく撮り、上端の切れをなくす。"
+      }
     },
     {
       "file": "screens.png",
       "page": "screens",
       "alt": "画面共有などの機能を持つEntityを配置したシーン",
       "caption": "鏡・動画・画面共有はComponentとして配置し、向きと大きさを調整します。",
-      "setup": ["サンプルプロジェクトを開く", "外部から追加 → Componentで鏡などの機能を配置する", "配置したEntityを選んだ状態にする"]
+      "setup": [
+        "サンプルプロジェクトを開く",
+        "外部から追加 → Componentで鏡などの機能を配置する",
+        "配置したEntityを選んだ状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "retake-required",
+        "note": "選択対象は画面共有本体ではなくメインスクリーンの枠で、InspectorはMesh Renderer。機能本体のEntityとComponent設定を写す。"
+      }
     },
     {
       "file": "particles.png",
       "page": "particles",
       "alt": "焚き火の煙のパーティクル設定を開いた状態",
       "caption": "パーティクルを置くと粒が出る位置と方向を確認できます。量と大きさから調整します。",
-      "setup": ["パーティクルがあるプロジェクトを開く", "Hierarchyで粒のEntityを選ぶ", "Inspectorのパーティクル設定が見える状態にする"]
+      "setup": [
+        "パーティクルがあるプロジェクトを開く",
+        "Hierarchyで粒のEntityを選ぶ",
+        "Inspectorのパーティクル設定が見える状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "retake-required",
+        "note": "煙の設定は写るが煙そのものが見えず、水面が主役。発生場所へ寄り、粒が出ている瞬間を撮る。"
+      }
     },
     {
       "file": "prefabs.png",
       "page": "prefabs",
-      "alt": "Hierarchyで親子にまとめたEntityとAssetsのプレハブ",
-      "caption": "親の下にまとめると全体を一緒に動かせます。Assetsへドラッグするとプレハブになります。",
-      "setup": ["家具などの組み合わせがあるプロジェクトを開く", "Hierarchyで親子関係が見える状態にする", "Assetsパネルも見える配置にする"]
+      "alt": "Hierarchyで親の下に複数のEntityが並んだ状態",
+      "caption": "左のHierarchyで親子関係を確認できます。プレハブへの保存は、このあとAssetsへドラッグして行います。",
+      "setup": [
+        "家具などの組み合わせがあるプロジェクトを開く",
+        "Hierarchyで親子関係が見える状態にする",
+        "Assetsパネルも見える配置にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "caption-corrected",
+        "note": "親子階層は写るがAssetsのプレハブは確認できない。代替テキストを親子関係に限定。撮り直しでは保存したプレハブも見せる。"
+      }
     },
     {
       "file": "interactivity.png",
       "page": "interactivity",
       "alt": "ノードエディターで音の出るボタンのグラフを開いた状態",
       "caption": "グラフではきっかけから処理への線を確認します。最初は一つの値だけ変えて試します。",
-      "setup": ["音の出るボタンの3Dセットを配置したプロジェクトを開く", "Assetsでボタンのノードグラフを開く", "きっかけから処理への線が見える状態にする"]
+      "setup": [
+        "音の出るボタンの3Dセットを配置したプロジェクトを開く",
+        "Assetsでボタンのノードグラフを開く",
+        "きっかけから処理への線が見える状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "improve-framing",
+        "note": "グラフと接続線は写るがノードの文字が小さい。きっかけと一つの処理だけのグラフを拡大する。"
+      }
     },
     {
       "file": "ai-connection.png",
       "page": "ai-connection",
       "alt": "エディター左下のAI接続パネルを開いた状態",
       "caption": "AI接続は保存してから開きます。接続状態を確認してから小さな変更を頼みます。",
-      "setup": ["サンプルプロジェクトを開き、保存する", "エディター左下のAI接続を開く", "対応クライアントの一覧と接続状態が見える状態にする"]
+      "setup": [
+        "サンプルプロジェクトを開き、保存する",
+        "エディター左下のAI接続を開く",
+        "対応クライアントの一覧と接続状態が見える状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "improve-framing",
+        "note": "トークンの露出は目視では見当たらない。パネルが小さいため接続状態を大きく撮り、個人の登録状態は撮影用環境へ揃える。"
+      }
     },
     {
       "file": "transparent-materials.png",
       "page": "transparent-materials",
-      "alt": "マテリアルのInspectorでAlpha ModeとAlphaが表示された状態",
-      "caption": "半透明はAlpha ModeをBlendにし、切り抜きはMaskにします。目的に合う方法を選びます。",
-      "setup": ["サンプルプロジェクトを開く", "Assetsでマテリアルを選ぶ", "InspectorのAlpha Mode・Alphaが見える状態にする"]
+      "alt": "マテリアルのInspectorにAlpha ModeとAlphaが表示された操作前の状態",
+      "caption": "画像は変更前のOpaqueです。半透明にするときは、右のAlpha ModeをBlendへ変更します。",
+      "setup": [
+        "サンプルプロジェクトを開く",
+        "Assetsでマテリアルを選ぶ",
+        "InspectorのAlpha Mode・Alphaが見える状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "caption-corrected",
+        "note": "Alpha ModeはOpaqueのまま。操作前の欄の例と明記する。撮り直しではBlendまたはMaskの結果を見せる。"
+      }
     },
     {
       "file": "material-extensions.png",
       "page": "material-extensions",
       "alt": "マテリアルのInspectorでClearcoatなどの拡張設定が表示された状態",
       "caption": "基本の表面が整ってから、必要な拡張だけを有効にします。項目名は英語名で確認します。",
-      "setup": ["サンプルプロジェクトを開く", "Assetsでマテリアルを選ぶ", "InspectorのClearcoatなど拡張設定が見える状態にする"]
+      "setup": [
+        "サンプルプロジェクトを開く",
+        "Assetsでマテリアルを選ぶ",
+        "InspectorのClearcoatなど拡張設定が見える状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "improve-framing",
+        "note": "拡張名は写るがすべて閉じている。Clearcoatなど一つを開き、設定と効果を同時に写す。"
+      }
     },
     {
       "file": "publishing.png",
       "page": "publishing",
       "alt": "XRiftへ公開の確認画面でタイトルと保存状態を確認している状態",
       "caption": "XRiftへ公開の確認画面で作品の情報と保存状態を整えてから送信します。",
-      "setup": ["公開可能なサンプルプロジェクトを開き、保存する", "XRiftへ公開を押して確認画面を表示する", "タイトル・説明・サムネイルが見える状態にする"]
+      "setup": [
+        "公開可能なサンプルプロジェクトを開き、保存する",
+        "XRiftへ公開を押して確認画面を表示する",
+        "タイトル・説明・サムネイルが見える状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "retake-required",
+        "note": "アカウント名と既存ワールドの公開先IDが写る。撮影専用の未公開作品で情報欄を撮り、送信しない。"
+      }
     },
     {
       "file": "performance.png",
       "page": "performance",
       "alt": "公開の確認画面で容量の見積りと内訳が表示された状態",
       "caption": "容量と負荷の大きい順に内訳を見て、効果の大きい対象から調整します。",
-      "setup": ["サンプルプロジェクトを開く", "XRiftへ公開の確認画面を表示する", "容量の見積りと内訳が見える状態にする"]
+      "setup": [
+        "サンプルプロジェクトを開く",
+        "XRiftへ公開の確認画面を表示する",
+        "容量の見積りと内訳が見える状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "retake-required",
+        "note": "容量の内訳が閉じたままで、多数のrootEntityIdsの変換警告が写る。警告のない撮影用作品で容量の詳細を開く。"
+      }
     },
     {
       "file": "troubleshooting.png",
       "page": "troubleshooting",
       "alt": "エディター左下のヘルプからパネル配置を初期化できる状態",
       "caption": "パネルが見つからないときは、左下のヘルプからパネル配置を初期化します。",
-      "setup": ["サンプルプロジェクトを開く", "エディター左下のヘルプを開く", "パネル配置を初期化が見える状態にする"]
+      "setup": [
+        "サンプルプロジェクトを開く",
+        "エディター左下のヘルプを開く",
+        "パネル配置を初期化が見える状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "improve-framing",
+        "note": "パネル配置の初期化は写る。ヘルプを大きくして該当ボタンを読めるようにする。"
+      }
     },
     {
       "file": "recovery.png",
       "page": "recovery",
       "alt": "ヘルプと報告で相談情報とスクリーンショットを用意できる状態",
       "caption": "問い合わせの前に保存とバックアップを残し、ヘルプと報告で必要な情報をまとめます。",
-      "setup": ["サンプルプロジェクトを開く", "アプリのヘルプと報告を開く", "相談情報のコピーとスクリーンショット保存が見える状態にする"]
+      "setup": [
+        "サンプルプロジェクトを開く",
+        "アプリのヘルプと報告を開く",
+        "相談情報のコピーとスクリーンショット保存が見える状態にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "improve-framing",
+        "note": "ヘルプと報告は写り、秘密情報の露出は目視では見当たらない。ダイアログを大きく写す。"
+      }
     },
     {
       "file": "glossary.png",
       "page": "glossary",
       "alt": "Hierarchy・シーン・Inspector・Assetsが見える編集画面",
       "caption": "用語は画面の表示名そのままです。分からない名前はこの配置と照らして探します。",
-      "setup": ["サンプルプロジェクトをビジュアルエディターで開く", "Hierarchy・シーン・Inspector・Assetsの四つが見える配置にする"]
+      "setup": [
+        "サンプルプロジェクトをビジュアルエディターで開く",
+        "Hierarchy・シーン・Inspector・Assetsの四つが見える配置にする"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "improve-framing",
+        "note": "四領域は写るが文字が小さい。簡単なシーンでHierarchy・Inspector・Assetsを読みやすく撮る。"
+      }
     },
     {
       "file": "shortcuts.png",
       "page": "shortcuts",
       "alt": "エディター左下のショートカットキー一覧を開いた状態",
       "caption": "そのほかの操作は左下のショートカットキー一覧で現在の組み合わせを確認します。",
-      "setup": ["サンプルプロジェクトを開く", "エディター左下のショートカットキー一覧を開く"]
+      "setup": [
+        "サンプルプロジェクトを開く",
+        "エディター左下のショートカットキー一覧を開く"
+      ],
+      "review": {
+        "date": "2026-09-08",
+        "status": "improve-framing",
+        "note": "一覧は写るが小さく下が切れている。説明対象のキーが読める範囲を大きく撮る。"
+      }
     }
   ]
 }

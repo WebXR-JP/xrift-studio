@@ -2,9 +2,9 @@
 
 物を照らす設定と、画面全体の見え方を変える設定を分けて調整します。Play中なら**Stop**で編集に戻ってください。
 
-![シーン設定パネルでAmbient LightとExposureを調整している状態](./media/lighting.png)
+![シーン設定のInspectorにAmbient Lightが表示された状態](./media/lighting.png)
 
-*全体の明るさはシーン設定で調整します。ライトの追加と分けて確認します。*
+*右のInspectorのAmbient Lightで環境光を設定します。画像では無効になっています。*
 
 ## ライトで物を照らす
 

@@ -2,10 +2,6 @@
 
 空は**Skybox**、水面は**Water Shaderのマテリアル**を使って作ります。それぞれ割り当て先が違います。
 
-![Skyboxが設定され、空が変わったシーン](./media/sky-and-water.png)
-
-*Skyboxを設定すると背景が変わります。照明に使う場合はIBLを別に設定します。*
-
 ## Skybox Shaderを背景にする
 
 1. **Assets → 外部から追加 → Skybox Shader**を開きます。
