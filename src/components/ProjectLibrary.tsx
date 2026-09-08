@@ -1,3 +1,4 @@
+import { GuideLink } from "./guide/GuideLink";
 import { useMemo, useState } from "react";
 import {
   ArrowUpDown,
@@ -261,6 +262,7 @@ export function ProjectLibrary({
         </div>
 
         <div className="flex items-center gap-1.5">
+          <GuideLink page="first-world" label="使い方" />
           <button
             type="button"
             onClick={() => setShowSupport(true)}

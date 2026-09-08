@@ -5,7 +5,7 @@ import { XRIFT_STUDIO_WIKI_URL } from "../../lib/support-links";
 export function Nav() {
   return (
     <nav className="preview-nav sticky top-0 z-40 border-b border-white/70 bg-white/75 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 lg:px-8">
+      <div className="mx-auto flex min-h-16 max-w-7xl flex-wrap items-center justify-between gap-y-1 px-4 py-2 lg:px-8">
         <a href="#top" aria-label="XRift Studioのトップへ">
           <BrandLockup />
         </a>
@@ -26,9 +26,10 @@ export function Nav() {
             href={XRIFT_STUDIO_WIKI_URL}
             target="_blank"
             rel="noreferrer"
-            className="preview-nav-link hidden xl:inline-flex"
+            className="preview-nav-link inline-flex"
           >
-            使い方ガイド
+            <span className="hidden sm:inline">使い方ガイド</span>
+            <span className="sm:hidden">使い方</span>
           </a>
           {/*
             Scrolls rather than downloads. A sticky button that starts saving a
@@ -39,7 +40,7 @@ export function Nav() {
           <a href="#download" className="preview-button preview-button-dark ml-2">
             <Download size={15} />
             <span className="hidden sm:inline">無料でダウンロード</span>
-            <span className="sm:hidden">ダウンロード</span>
+            <span className="sm:hidden">入手</span>
           </a>
         </div>
       </div>

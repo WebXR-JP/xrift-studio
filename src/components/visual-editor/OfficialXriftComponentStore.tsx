@@ -56,13 +56,13 @@ export function OfficialXriftComponentStore({
       <div className="flex h-full min-h-0 min-w-0 flex-1">
         <section
           className="flex min-w-0 flex-1 flex-col border-r border-slate-200"
-          aria-label="XRift公式Component一覧"
+          aria-label="XRift公式コンポーネント"
         >
           <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-xs font-semibold text-slate-900">
-                  XRift公式Component一覧
+                  XRift公式コンポーネント
                 </h3>
               </div>
               <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-semibold text-violet-700">
@@ -114,7 +114,7 @@ export function OfficialXriftComponentStore({
 
         <aside
           className="scrollbar-thin w-[340px] shrink-0 overflow-auto bg-white p-4"
-          aria-label="選択した公式Componentの詳細"
+          aria-label="選択したXRift公式コンポーネントの詳細"
         >
           {selected ? (
             <div className="space-y-4">

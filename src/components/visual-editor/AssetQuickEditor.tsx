@@ -1,3 +1,4 @@
+import { GuideLink } from "../guide/GuideLink";
 import {
   MATERIAL_EXTENSION_DESCRIPTORS,
   type MaterialExtensionName,
@@ -2201,6 +2202,7 @@ function StandardMaterialQuickEditor({
 
   return (
     <div className="space-y-3">
+      <GuideLink page="materials" label="色と質感の使い方" />
       <div className="grid grid-cols-[80px_minmax(0,1fr)] gap-2 rounded-md border border-slate-200 bg-white p-2 shadow-sm">
         <div className="h-20 overflow-hidden rounded-md border border-slate-300">
           <MaterialThumbnail

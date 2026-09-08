@@ -236,7 +236,7 @@ test('product pane labels remain Inspector, Hierarchy and Assets', () => {
   assert.equal(jsxTextWithId(`${base}InspectorPanel.tsx`, 'inspector-heading'), 'Inspector');
   assert.equal(jsxTextWithId(`${base}HierarchyPanel.tsx`, 'hierarchy-heading'), 'Hierarchy');
   assert.equal(jsxTextWithId(`${base}AssetsPanel.tsx`, 'assets-heading'), 'Assets');
-  assert.match(read(`${base}InspectorPanel.tsx`), /Componentsを追加/);
+  assert.match(read(`${base}InspectorPanel.tsx`), /Add Component/);
   assert.equal(template('xrift/setProperty').label, 'Entityの設定を変更');
   const source = read(`${base}VisualEditorPrototype.tsx`);
   for (const word of ['Inspectorの幅を変更', 'Hierarchyの幅を変更', 'Assetsの高さを変更'])
@@ -299,9 +299,9 @@ test('built-in TSX code samples retain valid tags and syntax', () => {
 });
 
 test('all guide pages resolve and their menu names match their headings', () => {
-  const { WIKI_PAGES } = load('src/lib/wiki-config.ts');
+  const { pages: WIKI_PAGES } = JSON.parse(read('docs/guide/manifest.json'));
   for (const page of WIKI_PAGES) {
-    const body = read(`docs/wiki/${page.file}`);
+    const body = read(`docs/guide/${page.file}`);
     const heading = body.match(/^# (.+)$/m)?.[1];
     if (page.slug !== 'index') assert.equal(page.title, heading, page.file);
   }
@@ -309,7 +309,7 @@ test('all guide pages resolve and their menu names match their headings', () => 
 
 test('user guides do not point at deleted documents or mistranslated brands', () => {
   const files = ['README.md', 'docs/README.md', 'docs/JAPANESE_WRITING.md',
-    ...fs.readdirSync(path.join(root, 'docs/wiki')).filter(f => f.endsWith('.md')).map(f => `docs/wiki/${f}`)];
+    ...fs.readdirSync(path.join(root, 'docs/guide')).filter(f => f.endsWith('.md')).map(f => `docs/guide/${f}`)];
   for (const file of files) {
     const body = read(file).replace(/```[\s\S]*?```/g, '');
     assert.doesNotMatch(body, /開くブラシ|Tilt ブラシ|3D 3Dモデル|glTF Object 3Dモデル/, file);
@@ -528,7 +528,7 @@ test('all 218 material value bindings, ranges and update callbacks are unchanged
 });
 
 test('the material guide preserves cross-tool differences instead of inventing synonyms', () => {
-  const guide = read('docs/wiki/assets-and-materials.md');
+  const guide = read('docs/guide/material-extensions.md') + read('docs/guide/transparent-materials.md');
   assert.match(guide, /Base ColorをDiffuse Colorに読み替えない/);
   assert.match(guide, /RoughnessとSmoothnessは増減の向きが逆/);
   assert.match(guide, /Alpha.*Transmission/);
@@ -544,7 +544,7 @@ test('Normal Map help separates visible shading from geometry and states the inp
   assert.match(source, /上塗りの層に凹凸の陰影を加えます。下地のNormal Mapとは別の設定です。/);
   assert.equal((source.match(/inputHint="Tangent Space（接線空間）の画像を使用します。色補正なし（Linear）で読み込みます。"/g) ?? []).length, 2);
   assert.equal((source.match(/0で効果なし、1が標準です。負の値で凹凸の向きを反転します。/g) ?? []).length, 2);
-  const guide = read('docs/wiki/assets-and-materials.md');
+  const guide = read('docs/guide/textures.md');
   assert.match(guide, /輪郭や衝突判定は変わりません/);
   assert.match(guide, /Occlusion Map.*画像/);
   assert.match(guide, /SSAO.*画面に映った形状/);
@@ -636,10 +636,10 @@ test('catalog actions, notices and current help agree on Skybox Shader and Water
   const component = read('src/lib/visual-editor/component-registry.ts');
   assert.match(component, /label: "Skybox"/);
   assert.doesNotMatch(component, /label: "空の背景"/);
-  const guide = read('docs/wiki/sky-and-water.md');
+  const guide = read('docs/guide/sky-and-water.md');
   assert.match(guide, /\*\*Skyboxに設定\*\*/);
   assert.match(guide, /\*\*追加後にSkyboxへ設定\*\*/);
-  assert.match(guide, /## Water Shader/);
+  assert.match(guide, /## 水面を作る/);
   assert.doesNotMatch(guide, /〇〇を空へ設定|背景は単色のまま/);
 });
 
@@ -654,8 +654,8 @@ test('editor visibility guidance matches actual display and quality profiles', (
     assert.equal(quality.getSceneViewportQualityProfile(mode).postprocessing, false);
     assert.equal(quality.getSceneViewportQualityProfile(mode).shadows, false);
   }
-  assert.match(read('docs/wiki/sky-and-water.md'), /Skybox Shaderは編集中も表示されます/);
-  assert.match(read('docs/wiki/visual-editor.md'), /表示モードを\*\*シーン\*\*、描画品質を\*\*高品質\*\*/);
+  assert.match(read('docs/guide/sky-and-water.md'), /Skybox Shaderは編集中も表示されます/);
+  assert.match(read('docs/guide/editor-basics.md'), /表示モードを\*\*シーン\*\*、描画品質を\*\*高品質\*\*/);
 });
 
 // Captured from v3; copy, layout and accessibility attributes are intentionally

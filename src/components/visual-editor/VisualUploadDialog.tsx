@@ -1,3 +1,4 @@
+import { GuideExternalLink } from "../guide/GuideLink";
 import { useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
@@ -497,6 +498,7 @@ export function VisualUploadDialog({
             <p className="mt-1 text-sm leading-6 text-slate-600">
               編集内容を保存し、XRiftに公開します。
             </p>
+            <GuideExternalLink page="publishing" label="公開の手順（ブラウザー）" />
           </div>
           <button
             type="button"

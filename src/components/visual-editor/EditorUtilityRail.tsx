@@ -1,3 +1,4 @@
+import { GuideLink } from "../guide/GuideLink";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   shortcutForCommand,
@@ -157,6 +158,7 @@ export function EditorUtilityRail({
       aria-label="エディターのヘルプと設定"
       className="absolute bottom-3 left-3 z-50 flex gap-0.5 rounded-lg border border-editor-border bg-editor-surface/95 p-1 shadow-sm backdrop-blur"
     >
+      <GuideLink page="first-world" label="使い方" />
       <UtilityButton
         label="AI接続"
         icon="ai"
@@ -288,6 +290,11 @@ export function EditorUtilityRail({
             </div>
           ) : (
             <div className="space-y-4 p-3.5 text-xs leading-5 text-slate-600">
+              <div className="flex flex-col items-start gap-1">
+                <GuideLink page="editor-basics" label="画面と視点操作の使い方" />
+                <GuideLink page="materials" label="色と質感の変え方" />
+                <GuideLink page="save-and-open" label="保存して再開する方法" />
+              </div>
               <ol className="space-y-2.5">
                 <li>
                   <span className="font-semibold text-slate-800">1. 作る</span>

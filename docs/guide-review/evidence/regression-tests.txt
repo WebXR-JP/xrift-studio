@@ -1,0 +1,358 @@
+TAP version 13
+# Subtest: operations: names, types, ports, options and defaults retain the original contract
+ok 1 - operations: names, types, ports, options and defaults retain the original contract
+  ---
+  duration_ms: 2.030834
+  type: 'test'
+  ...
+# Subtest: properties: names, types, ports, options and defaults retain the original contract
+ok 2 - properties: names, types, ports, options and defaults retain the original contract
+  ---
+  duration_ms: 0.377618
+  type: 'test'
+  ...
+# Subtest: materials: names, types, ports, options and defaults retain the original contract
+ok 3 - materials: names, types, ports, options and defaults retain the original contract
+  ---
+  duration_ms: 0.198639
+  type: 'test'
+  ...
+# Subtest: all 45 nodes have short Japanese titles and complete descriptions
+ok 4 - all 45 nodes have short Japanese titles and complete descriptions
+  ---
+  duration_ms: 0.396697
+  type: 'test'
+  ...
+# Subtest: current labels, descriptions, operation IDs, full-width and AND searches work
+ok 5 - current labels, descriptions, operation IDs, full-width and AND searches work
+  ---
+  duration_ms: 0.772662
+  type: 'test'
+  ...
+# Subtest: search has no alias table or extra vocabulary
+ok 6 - search has no alias table or extra vocabulary
+  ---
+  duration_ms: 0.231578
+  type: 'test'
+  ...
+# Subtest: wait copy: out is immediate and done follows the requested delay
+ok 7 - wait copy: out is immediate and done follows the requested delay
+  ---
+  duration_ms: 2.32702
+  type: 'test'
+  ...
+# Subtest: sequence copy: the next output does not wait for a pending delay
+ok 8 - sequence copy: the next output does not wait for a pending delay
+  ---
+  duration_ms: 0.467012
+  type: 'test'
+  ...
+# Subtest: loop copy: start 0 and end 3 produce exactly 0, 1, 2
+ok 9 - loop copy: start 0 and end 3 produce exactly 0, 1, 2
+  ---
+  duration_ms: 0.687134
+  type: 'test'
+  ...
+# Subtest: the documented opening finishes at 12 seconds, with a white initial fade
+ok 10 - the documented opening finishes at 12 seconds, with a white initial fade
+  ---
+  duration_ms: 2.076433
+  type: 'test'
+  ...
+# Subtest: material help uses glTF names and explains Alpha, Metallic and Roughness
+ok 11 - material help uses glTF names and explains Alpha, Metallic and Roughness
+  ---
+  duration_ms: 0.876058
+  type: 'test'
+  ...
+# Subtest: product pane labels remain Inspector, Hierarchy and Assets
+ok 12 - product pane labels remain Inspector, Hierarchy and Assets
+  ---
+  duration_ms: 97.761699
+  type: 'test'
+  ...
+# Subtest: empty selection states lead to actual panes without repeated explanations
+ok 13 - empty selection states lead to actual panes without repeated explanations
+  ---
+  duration_ms: 0.976489
+  type: 'test'
+  ...
+# Subtest: node guidance names real nodes and preserves completion semantics
+ok 14 - node guidance names real nodes and preserves completion semantics
+  ---
+  duration_ms: 0.378309
+  type: 'test'
+  ...
+# Subtest: shorter help retains shared changes, numerical conditions and publication warnings
+ok 15 - shorter help retains shared changes, numerical conditions and publication warnings
+  ---
+  duration_ms: 0.710178
+  type: 'test'
+  ...
+# Subtest: catalogs no longer expose preview implementation in permanent footers
+ok 16 - catalogs no longer expose preview implementation in permanent footers
+  ---
+  duration_ms: 0.39241
+  type: 'test'
+  ...
+# Subtest: built-in TSX code samples retain valid tags and syntax
+ok 17 - built-in TSX code samples retain valid tags and syntax
+  ---
+  duration_ms: 22.390196
+  type: 'test'
+  ...
+# Subtest: all guide pages resolve and their menu names match their headings
+ok 18 - all guide pages resolve and their menu names match their headings
+  ---
+  duration_ms: 1.740658
+  type: 'test'
+  ...
+# Subtest: user guides do not point at deleted documents or mistranslated brands
+ok 19 - user guides do not point at deleted documents or mistranslated brands
+  ---
+  duration_ms: 2.612519
+  type: 'test'
+  ...
+# Subtest: the complete existing runtime fixture still passes
+ok 20 - the complete existing runtime fixture still passes
+  ---
+  duration_ms: 67.310139
+  type: 'test'
+  ...
+# Subtest: an empty loop goes straight to completion without running its body
+ok 21 - an empty loop goes straight to completion without running its body
+  ---
+  duration_ms: 0.376496
+  type: 'test'
+  ...
+# Subtest: while rechecks the condition after the body updates a variable
+ok 22 - while rechecks the condition after the body updates a variable
+  ---
+  duration_ms: 0.409456
+  type: 'test'
+  ...
+# Subtest: technical IDs stay available without permanent explanatory rows
+ok 23 - technical IDs stay available without permanent explanatory rows
+  ---
+  duration_ms: 0.970279
+  type: 'test'
+  ...
+# Subtest: dynamic help keeps complete sentences and real export filenames
+ok 24 - dynamic help keeps complete sentences and real export filenames
+  ---
+  duration_ms: 0.310407
+  type: 'test'
+  ...
+# Subtest: header-only component cards do not render an empty padded body
+ok 25 - header-only component cards do not render an empty padded body
+  ---
+  duration_ms: 0.603247
+  type: 'test'
+  ...
+# Subtest: all 11 material extensions keep their glTF name plus a Japanese reading
+ok 26 - all 11 material extensions keep their glTF name plus a Japanese reading
+  ---
+  duration_ms: 0.221013
+  type: 'test'
+  ...
+# Subtest: the material Inspector derives each extension heading from the shared registry
+ok 27 - the material Inspector derives each extension heading from the shared registry
+  ---
+  duration_ms: 38.301537
+  type: 'test'
+  ...
+# Subtest: Alpha Mode, Alpha, Cutoff and Opacity Map are together and precede material effects
+ok 28 - Alpha Mode, Alpha, Cutoff and Opacity Map are together and precede material effects
+  ---
+  duration_ms: 53.443122
+  type: 'test'
+  ...
+# Subtest: material names stay consistent in the batch Inspector and node property lists
+ok 29 - material names stay consistent in the batch Inspector and node property lists
+  ---
+  duration_ms: 1.013014
+  type: 'test'
+  ...
+# Subtest: thin-film thickness and IOR are not described as bulk Volume settings
+ok 30 - thin-film thickness and IOR are not described as bulk Volume settings
+  ---
+  duration_ms: 18.66294
+  type: 'test'
+  ...
+# Subtest: the Emissive color picker is labeled Color, not Strength
+ok 31 - the Emissive color picker is labeled Color, not Strength
+  ---
+  duration_ms: 12.824058
+  type: 'test'
+  ...
+# Subtest: all 218 material value bindings, ranges and update callbacks are unchanged from v2
+ok 32 - all 218 material value bindings, ranges and update callbacks are unchanged from v2
+  ---
+  duration_ms: 25.819088
+  type: 'test'
+  ...
+# Subtest: the material guide preserves cross-tool differences instead of inventing synonyms
+ok 33 - the material guide preserves cross-tool differences instead of inventing synonyms
+  ---
+  duration_ms: 0.672512
+  type: 'test'
+  ...
+# Subtest: Normal Map help separates visible shading from geometry and states the input format
+ok 34 - Normal Map help separates visible shading from geometry and states the input format
+  ---
+  duration_ms: 13.036377
+  type: 'test'
+  ...
+# Subtest: Normal Map format guidance agrees with actual linear texture-loading requests
+ok 35 - Normal Map format guidance agrees with actual linear texture-loading requests
+  ---
+  duration_ms: 0.222935
+  type: 'test'
+  ...
+# Subtest: texture help is visible and associated with the corresponding selector
+ok 36 - texture help is visible and associated with the corresponding selector
+  ---
+  duration_ms: 15.43785
+  type: 'test'
+  ...
+# Subtest: scene property names are shared technical terms without changing their IDs
+ok 37 - scene property names are shared technical terms without changing their IDs
+  ---
+  duration_ms: 0.361113
+  type: 'test'
+  ...
+# Subtest: Skybox, lighting and post-effect headings expose English names visibly
+ok 38 - Skybox, lighting and post-effect headings expose English names visibly
+  ---
+  duration_ms: 6.293806
+  type: 'test'
+  ...
+# Subtest: Skybox Texture, Shader and IBL help refer to distinct settings and valid fallback paths
+ok 39 - Skybox Texture, Shader and IBL help refer to distinct settings and valid fallback paths
+  ---
+  duration_ms: 0.248534
+  type: 'test'
+  ...
+# Subtest: Bloom guidance separates the threshold, intensity and spread, without promising illumination
+ok 40 - Bloom guidance separates the threshold, intensity and spread, without promising illumination
+  ---
+  duration_ms: 0.370777
+  type: 'test'
+  ...
+# Subtest: catalog actions, notices and current help agree on Skybox Shader and Water Shader
+ok 41 - catalog actions, notices and current help agree on Skybox Shader and Water Shader
+  ---
+  duration_ms: 0.502035
+  type: 'test'
+  ...
+# Subtest: editor visibility guidance matches actual display and quality profiles
+ok 42 - editor visibility guidance matches actual display and quality profiles
+  ---
+  duration_ms: 5.56421
+  type: 'test'
+  ...
+# Subtest: SceneSettingsPanel.tsx: all value bindings, ranges and update callbacks remain identical to v3
+ok 43 - SceneSettingsPanel.tsx: all value bindings, ranges and update callbacks remain identical to v3
+  ---
+  duration_ms: 16.963123
+  type: 'test'
+  ...
+# Subtest: AssetQuickEditor.tsx: all value bindings, ranges and update callbacks remain identical to v3
+ok 44 - AssetQuickEditor.tsx: all value bindings, ranges and update callbacks remain identical to v3
+  ---
+  duration_ms: 24.020889
+  type: 'test'
+  ...
+# Subtest: writing rules retain professional terms while keeping actions and explanations Japanese
+ok 45 - writing rules retain professional terms while keeping actions and explanations Japanese
+  ---
+  duration_ms: 0.367343
+  type: 'test'
+  ...
+# Subtest: setup progress IDs have readable labels, including safe unknown-ID fallback
+ok 46 - setup progress IDs have readable labels, including safe unknown-ID fallback
+  ---
+  duration_ms: 56.404126
+  type: 'test'
+  ...
+# Subtest: the first screen offers visual editing without implying publishing needs no setup
+ok 47 - the first screen offers visual editing without implying publishing needs no setup
+  ---
+  duration_ms: 0.337207
+  type: 'test'
+  ...
+# Subtest: project naming rules are visible before typing and linked to the unchanged validator
+ok 48 - project naming rules are visible before typing and linked to the unchanged validator
+  ---
+  duration_ms: 25.603269
+  type: 'test'
+  ...
+# Subtest: audio volume has the correct label and retains its numeric range and update callback
+ok 49 - audio volume has the correct label and retains its numeric range and update callback
+  ---
+  duration_ms: 86.189205
+  type: 'test'
+  ...
+# Subtest: local file addition and publishing are distinct, in both editor entry points
+ok 50 - local file addition and publishing are distinct, in both editor entry points
+  ---
+  duration_ms: 2.371677
+  type: 'test'
+  ...
+# Subtest: project-transfer labels do not promise a remote Git fork or retained publication ID
+ok 51 - project-transfer labels do not promise a remote Git fork or retained publication ID
+  ---
+  duration_ms: 0.612802
+  type: 'test'
+  ...
+# Subtest: instructions refer to actual prefab-update and model-revert buttons
+ok 52 - instructions refer to actual prefab-update and model-revert buttons
+  ---
+  duration_ms: 1.01065
+  type: 'test'
+  ...
+# Subtest: the publish flow keeps uncertainty, duplicate-publication safeguards and non-destructive image wording
+ok 53 - the publish flow keeps uncertainty, duplicate-publication safeguards and non-destructive image wording
+  ---
+  duration_ms: 0.992623
+  type: 'test'
+  ...
+# Subtest: mixed implementation vocabulary stays out of AI connection and recording labels
+ok 54 - mixed implementation vocabulary stays out of AI connection and recording labels
+  ---
+  duration_ms: 0.629557
+  type: 'test'
+  ...
+# Subtest: glow presets are not mislabeled as light sources or a second Hierarchy
+ok 55 - glow presets are not mislabeled as light sources or a second Hierarchy
+  ---
+  duration_ms: 0.672972
+  type: 'test'
+  ...
+# Subtest: texture-quality fallback describes the level, rather than concatenating a whole sentence
+ok 56 - texture-quality fallback describes the level, rather than concatenating a whole sentence
+  ---
+  duration_ms: 0.613403
+  type: 'test'
+  ...
+# Subtest: recovery and reset documentation matches current controls without dropping loss warnings
+ok 57 - recovery and reset documentation matches current controls without dropping loss warnings
+  ---
+  duration_ms: 0.360482
+  type: 'test'
+  ...
+# Subtest: broken literal translations do not return to user-facing source
+ok 58 - broken literal translations do not return to user-facing source
+  ---
+  duration_ms: 24.203324
+  type: 'test'
+  ...
+1..58
+# tests 58
+# suites 0
+# pass 58
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1104.290829

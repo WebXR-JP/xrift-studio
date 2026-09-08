@@ -43,11 +43,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # 使い方ガイドは wiki/index.html として最初からその階層に出力される。
-      # 以前はビルド後に wiki.html を wiki/ へ移していたが、相対パスの基準が
-      # ずれてJSとCSSが全て404になり、公開版が白紙になっていた。
-      # build:preview には公開ページが自分のアセットを解決できるかの検査が
-      # 含まれているので、同じ壊れ方が黙って再発することはない。
+      # ガイドは既存のMarkdownレンダラーで静的HTMLへ変換する。
+      # build:previewで全記事・ページ内見出し・相対アセットを検査する。
       # 埋め込むのは最新リリースのタグ、ファイル名、サイズ、SHA-256 だけで、
       # ページは表示後に GitHub API へ問い合わせて自分を更新する。取得に
       # 失敗してもビルドは止めず、コミット済みのスナップショットを使う。
@@ -58,6 +55,7 @@ jobs:
 
       - name: Build web preview
         run: |
+          pnpm run test:guide
           pnpm run build:preview
           mv preview-dist/preview.html preview-dist/index.html
 

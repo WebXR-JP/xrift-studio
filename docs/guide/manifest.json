@@ -1,0 +1,441 @@
+{
+  "title": "XRift Studio 使い方ガイド",
+  "reviewedVersion": "0.9.25",
+  "reviewedOn": "2026-09-08",
+  "siteUrl": "https://webxr-jp.github.io/xrift-studio/wiki/",
+  "groups": [
+    {
+      "id": "start",
+      "label": "はじめて使う"
+    },
+    {
+      "id": "basics",
+      "label": "基本の操作"
+    },
+    {
+      "id": "create",
+      "label": "ワールドを仕上げる"
+    },
+    {
+      "id": "behavior",
+      "label": "動き・AI"
+    },
+    {
+      "id": "materials-advanced",
+      "label": "質感を作り込む"
+    },
+    {
+      "id": "publish",
+      "label": "公開する"
+    },
+    {
+      "id": "support",
+      "label": "困ったとき・用語"
+    }
+  ],
+  "pages": [
+    {
+      "slug": "index",
+      "title": "XRift Studio 使い方ガイド",
+      "description": "インストールから、配置・色の変更・保存・Play・公開まで。ビジュアルエディターで最初の作品を作ります。",
+      "group": "start",
+      "file": "index.md",
+      "keywords": "",
+      "related": []
+    },
+    {
+      "slug": "installation",
+      "title": "インストールして起動する",
+      "description": "アプリを入れてビジュアルエディターを開きます。コードや開発環境の準備は不要です。",
+      "group": "start",
+      "file": "installation.md",
+      "keywords": "インストール ダウンロード 起動 Windows macOS Mac Linux セットアップ",
+      "related": [
+        "installation-problems",
+        "editor-basics"
+      ],
+      "next": "first-world"
+    },
+    {
+      "slug": "first-world",
+      "title": "最初のワールドを作る",
+      "description": "床の上に球を置き、色を変えて保存し、Playで見て回ります。外部素材やAI接続は使いません。",
+      "group": "start",
+      "file": "first-world.md",
+      "keywords": "チュートリアル 初めて 入門 新規プロジェクト 作成 球",
+      "related": [
+        "editor-basics",
+        "assets",
+        "save-and-open"
+      ],
+      "next": "materials"
+    },
+    {
+      "slug": "editor-basics",
+      "title": "画面の見方と視点操作",
+      "description": "Hierarchy・シーン・Inspector・Assetsの役割を理解し、物の編集と視点移動を使い分けます。",
+      "group": "start",
+      "file": "editor-basics.md",
+      "keywords": "画面 視点 カメラ Inspector Hierarchy Assets Components 選択 F",
+      "related": [
+        "shortcuts",
+        "materials",
+        "troubleshooting"
+      ],
+      "next": "objects"
+    },
+    {
+      "slug": "objects",
+      "title": "配置・移動・整理する",
+      "description": "Entityを配置し、位置・回転・大きさを変えます。複製、親子関係、削除の違いも確認します。",
+      "group": "basics",
+      "file": "objects.md",
+      "keywords": "移動 回転 大きさ 拡大 縮小 複製 削除 親子 Transform Entity",
+      "related": [
+        "assets",
+        "prefabs",
+        "save-and-open"
+      ],
+      "next": "materials"
+    },
+    {
+      "slug": "assets",
+      "title": "モデルや画像を取り込む",
+      "description": "手元のファイルをAssetsに追加し、シーンに配置するまでを説明します。",
+      "group": "basics",
+      "file": "assets.md",
+      "keywords": "インポート GLB GLTF モデル 画像 音声 ファイル 読み込み",
+      "related": [
+        "external-resources",
+        "textures",
+        "troubleshooting"
+      ]
+    },
+    {
+      "slug": "materials",
+      "title": "色と質感を変える",
+      "description": "マテリアルを作る・割り当てる・編集する基本と、Base Color・Metallic・Roughnessの意味を説明します。",
+      "group": "basics",
+      "file": "materials.md",
+      "keywords": "マテリアル 材質 色 反射 Base Color Metallic Roughness ラフネス メタリック プラスチック 金属",
+      "related": [
+        "textures",
+        "transparent-materials",
+        "material-extensions"
+      ],
+      "next": "save-and-open"
+    },
+    {
+      "slug": "textures",
+      "title": "テクスチャで模様を付ける",
+      "description": "色の画像とNormal Mapの役割を分け、マテリアルに貼るまでを説明します。",
+      "group": "basics",
+      "file": "textures.md",
+      "keywords": "Normal Map ノーマルマップ Texture テクスチャ UV Occlusion Map 模様 凹凸 画像 Linear Mipmaps",
+      "related": [
+        "materials",
+        "external-resources",
+        "performance"
+      ]
+    },
+    {
+      "slug": "save-and-open",
+      "title": "保存して制作を再開する",
+      "description": "保存状態を確認し、プロジェクトを開き直します。作品を守るための複製とZIP保存も説明します。",
+      "group": "basics",
+      "file": "save-and-open.md",
+      "keywords": "保存 自動保存 バックアップ ZIP 複製 プロジェクト 再開 データ",
+      "related": [
+        "recovery",
+        "publishing"
+      ],
+      "next": "play-mode"
+    },
+    {
+      "slug": "play-mode",
+      "title": "Playで動作を確かめる",
+      "description": "ワールドを歩き、仕掛けを試し、Stopで編集に戻ります。保存データと実行中の変化を区別します。",
+      "group": "basics",
+      "file": "play-mode.md",
+      "keywords": "Play Stop プレイ 動作確認 歩く 移動 Esc マウス固定 落ちる",
+      "related": [
+        "collision",
+        "interactivity",
+        "publishing"
+      ],
+      "next": "publishing"
+    },
+    {
+      "slug": "external-resources",
+      "title": "カタログから素材を追加する",
+      "description": "外部から追加で、モデル・マテリアル・空・水・仕掛けの見本を選びます。",
+      "group": "create",
+      "file": "external-resources.md",
+      "keywords": "外部から追加 カタログ Poly Haven ambientCG 素材 配布 モデル",
+      "related": [
+        "assets",
+        "materials",
+        "interactivity"
+      ]
+    },
+    {
+      "slug": "lighting",
+      "title": "ライトと画面の明るさを調整する",
+      "description": "ライト・IBL・Emissive・Bloomを使い分け、暗いワールドや反射が見えない原因を確認します。",
+      "group": "create",
+      "file": "lighting.md",
+      "keywords": "ライト 明るさ 暗い 照明 影 IBL Bloom ブルーム Emissive Exposure SSAO",
+      "related": [
+        "materials",
+        "sky-and-water",
+        "performance"
+      ]
+    },
+    {
+      "slug": "sky-and-water",
+      "title": "空と水を作る",
+      "description": "Skybox Shaderを背景へ、Water Shaderを水面へ設定します。背景と照明は分けて扱います。",
+      "group": "create",
+      "file": "sky-and-water.md",
+      "keywords": "Skybox Skybox Shader Water Shader 空 水 海 背景 HDRI IBL 風",
+      "related": [
+        "lighting",
+        "external-resources",
+        "collision"
+      ]
+    },
+    {
+      "slug": "terrain",
+      "title": "地形と草を作る",
+      "description": "必要な場所にだけ起伏や草を加え、歩いて確認します。",
+      "group": "create",
+      "file": "terrain.md",
+      "keywords": "地形 terrain 草 山 島 ブラシ 掘る 盛り上げる 風",
+      "related": [
+        "collision",
+        "sky-and-water",
+        "performance"
+      ]
+    },
+    {
+      "slug": "collision",
+      "title": "歩ける床と開始位置を作る",
+      "description": "床が見えるのに落ちるとき、ColliderとSpawn Pointを確認します。",
+      "group": "create",
+      "file": "collision.md",
+      "keywords": "床 すり抜ける 落ちる 衝突判定 Collider Spawn Point スポーン 開始位置",
+      "related": [
+        "play-mode",
+        "objects",
+        "interactivity"
+      ]
+    },
+    {
+      "slug": "audio",
+      "title": "BGMや環境音を鳴らす",
+      "description": "音声を取り込み、音源に割り当て、繰り返しと聞こえる範囲を確認します。",
+      "group": "create",
+      "file": "audio.md",
+      "keywords": "音 BGM 環境音 音源 音量 スピーカー 再生 ループ",
+      "related": [
+        "assets",
+        "interactivity",
+        "external-resources"
+      ]
+    },
+    {
+      "slug": "screens",
+      "title": "鏡・動画・画面共有を置く",
+      "description": "公式Componentを配置し、Playと公開先で確認する範囲を分けます。",
+      "group": "create",
+      "file": "screens.md",
+      "keywords": "画面共有 スクリーン 動画 鏡 ミラー Component Video",
+      "related": [
+        "external-resources",
+        "play-mode",
+        "publishing"
+      ]
+    },
+    {
+      "slug": "particles",
+      "title": "煙・雪・光の粒を置く",
+      "description": "パーティクルを配置し、量や大きさを調整します。見た目と負荷を一緒に確認します。",
+      "group": "create",
+      "file": "particles.md",
+      "keywords": "パーティクル Particle 煙 雪 桜 火花 エフェクト",
+      "related": [
+        "interactivity",
+        "external-resources",
+        "performance"
+      ]
+    },
+    {
+      "slug": "prefabs",
+      "title": "組み合わせをプレハブにする",
+      "description": "Entityと子をまとめて、同じ家具や仕掛けを繰り返し配置します。",
+      "group": "create",
+      "file": "prefabs.md",
+      "keywords": "Prefab プレハブ 再利用 グループ 組み合わせ",
+      "related": [
+        "objects",
+        "materials",
+        "save-and-open"
+      ]
+    },
+    {
+      "slug": "interactivity",
+      "title": "ボタンで動く仕掛けを作る",
+      "description": "動く見本から始め、ノードグラフとEntityの関係を覚えます。",
+      "group": "behavior",
+      "file": "interactivity.md",
+      "keywords": "ノード グラフ Interactivity インタラクティブ ボタン 音 完了後 仕掛け 同期",
+      "related": [
+        "audio",
+        "external-resources",
+        "ai-connection"
+      ]
+    },
+    {
+      "slug": "ai-connection",
+      "title": "AIに編集を手伝ってもらう",
+      "description": "基本操作を覚えたあとで、AI接続から制作を手伝ってもらいます。",
+      "group": "behavior",
+      "file": "ai-connection.md",
+      "keywords": "AI MCP 接続 Claude Codex Ollama 登録",
+      "related": [
+        "save-and-open",
+        "first-world",
+        "recovery"
+      ]
+    },
+    {
+      "slug": "transparent-materials",
+      "title": "半透明・切り抜き・ガラスを作る",
+      "description": "AlphaとTransmissionを使い分け、目的に合う透明表現を選びます。",
+      "group": "materials-advanced",
+      "file": "transparent-materials.md",
+      "keywords": "Alpha 透明 半透明 Blend Mask Opaque Transmission ガラス IOR Volume Opacity",
+      "related": [
+        "materials",
+        "material-extensions",
+        "performance"
+      ]
+    },
+    {
+      "slug": "material-extensions",
+      "title": "Clearcoat・Iridescenceなどを使う",
+      "description": "標準の色と反射が整ってから、表現に必要な拡張だけを追加します。",
+      "group": "materials-advanced",
+      "file": "material-extensions.md",
+      "keywords": "Clearcoat Iridescence IOR Volume Dispersion Sheen Specular Anisotropy Unlit クリアコート イリデッセンス",
+      "related": [
+        "materials",
+        "transparent-materials",
+        "lighting"
+      ]
+    },
+    {
+      "slug": "publishing",
+      "title": "XRiftへ公開する",
+      "description": "作品の情報、保存状態、ログインを確認して公開します。審査中と公開完了を区別します。",
+      "group": "publish",
+      "file": "publishing.md",
+      "keywords": "公開 アップロード ログイン セットアップ 審査 更新 URL 送信保留",
+      "related": [
+        "performance",
+        "play-mode",
+        "recovery"
+      ]
+    },
+    {
+      "slug": "performance",
+      "title": "容量と描画負荷を減らす",
+      "description": "読み込みの遅さと表示の重さを分け、公開前の見積りを使って改善します。",
+      "group": "publish",
+      "file": "performance.md",
+      "keywords": "重い 遅い 軽くする 容量 パフォーマンス FPS VRAM KTX2 Draco 圧縮",
+      "related": [
+        "publishing",
+        "textures",
+        "particles"
+      ]
+    },
+    {
+      "slug": "troubleshooting",
+      "title": "困ったときに探す",
+      "description": "いま起きている症状から、次に確認する場所へ進みます。",
+      "group": "support",
+      "file": "troubleshooting.md",
+      "keywords": "困った エラー できない 見えない 消えた 落下 保存失敗 公開失敗",
+      "related": [
+        "recovery",
+        "installation-problems",
+        "glossary"
+      ]
+    },
+    {
+      "slug": "installation-problems",
+      "title": "インストール・起動で困ったとき",
+      "description": "起動できない原因を切り分け、OSの保護機能をまとめて無効にせずに対処します。",
+      "group": "support",
+      "file": "installation-problems.md",
+      "keywords": "起動できない インストール Mac Gatekeeper Windows Linux セキュリティ セットアップ失敗",
+      "related": [
+        "installation",
+        "recovery"
+      ]
+    },
+    {
+      "slug": "recovery",
+      "title": "データを守って復旧・問い合わせする",
+      "description": "安全な確認から始め、報告に必要な情報と含めてはいけない情報を整理します。",
+      "group": "support",
+      "file": "recovery.md",
+      "keywords": "復旧 リセット 問い合わせ バグ サポート 完全リセット データ ログ",
+      "related": [
+        "save-and-open",
+        "troubleshooting",
+        "publishing"
+      ]
+    },
+    {
+      "slug": "glossary",
+      "title": "画面に出てくる用語",
+      "description": "Entity・Assets・マテリアルなど、操作に必要な用語を短く確認します。",
+      "group": "support",
+      "file": "glossary.md",
+      "keywords": "用語 辞典 意味 読み方 Entity Hierarchy Inspector Assets Components",
+      "related": [
+        "editor-basics",
+        "materials",
+        "shortcuts"
+      ]
+    },
+    {
+      "slug": "shortcuts",
+      "title": "よく使うショートカット",
+      "description": "保存・取り消し・視点合わせ・Playをすぐに確認できます。",
+      "group": "support",
+      "file": "shortcuts.md",
+      "keywords": "ショートカット キーボード Ctrl Cmd F6 F 保存 取り消し",
+      "related": [
+        "editor-basics",
+        "play-mode"
+      ]
+    }
+  ],
+  "homeTopics": [
+    "assets",
+    "materials",
+    "lighting",
+    "audio",
+    "interactivity",
+    "publishing"
+  ],
+  "firstSteps": [
+    "installation",
+    "first-world",
+    "save-and-open",
+    "play-mode"
+  ]
+}

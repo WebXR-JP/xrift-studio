@@ -29,3 +29,7 @@ src-tauri/updater.key.pub
 *.njsproj
 *.sln
 *.sw?
+
+# Generated static documentation preview
+.guide-dev/
+.guide-review/

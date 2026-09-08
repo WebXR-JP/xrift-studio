@@ -1,3 +1,4 @@
+import { GuideExternalLink } from "./guide/GuideLink";
 import { useEffect, useMemo, useState } from "react";
 import {
   Bug,
@@ -282,6 +283,11 @@ ${createSupportReportDraft(context, sanitizedErrorMessage)}
         </div>
 
         <div data-app-modal-body className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5">
+          <section className="mb-4 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+            <h3 className="text-sm font-semibold text-zinc-800">まずは症状から確認する</h3>
+            <GuideExternalLink page="troubleshooting" label="困ったときのガイド（ブラウザー）" />
+            <p className="text-xs leading-5 text-zinc-600">ログインや環境情報のコピーなしで読めます。</p>
+          </section>
           <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
             相談先
           </div>

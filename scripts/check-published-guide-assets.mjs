@@ -1,68 +1,36 @@
-// Fails when the published usage guide cannot load its own assets.
-//
-// The guide is served one directory below the site root, at /wiki/, and Vite
-// writes relative "./assets/..." references into it. Get the entry's depth
-// wrong and every script and stylesheet answers 404: the page still loads, so
-// the build passes and the guide serves a blank white page, with the landing
-// page's nav, footer and "使い方ガイドを開く" button all leading to it.
-//
-// This check resolves each local reference against the directory the file is
-// actually served from, so that failure cannot ship unnoticed.
-
+/** Check all built guide pages, native fragments and local assets at their actual publishing depth. */
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const distRoot = path.join(repoRoot, "preview-dist");
-
-/**
- * Pages to check. The landing page is built as preview.html and published as
- * index.html, so whichever name the build left behind is the one to read.
- */
-const PAGES = [
-  { file: ["index.html", "preview.html"], label: "landing page" },
-  { file: ["wiki/index.html"], label: "usage guide" },
-];
-
-const REFERENCE_PATTERN = /(?:src|href)="([^"]+)"/g;
-
-const isExternal = (reference) =>
-  /^(?:https?:)?\/\//.test(reference) ||
-  reference.startsWith("data:") ||
-  reference.startsWith("#") ||
-  reference.startsWith("mailto:");
-
-let checked = 0;
-const failures = [];
-
-for (const page of PAGES) {
-  const pagePath = page.file
-    .map((candidate) => path.join(distRoot, candidate))
-    .find((candidate) => fs.existsSync(candidate));
-  if (!pagePath) {
-    failures.push(`${page.label}: ${page.file.join(" / ")} was not built`);
-    continue;
+const root=process.argv[2] ? path.resolve(process.argv[2]) : path.resolve(path.dirname(fileURLToPath(import.meta.url)),"../preview-dist");
+const failures=[], pages=[];
+const landing=["index.html","preview.html"].find((file)=>fs.existsSync(path.join(root,file)));
+if (landing) pages.push(landing);else failures.push("Landing page was not built");
+const wiki=path.join(root,"wiki");
+if(fs.existsSync(wiki)) { for(const file of fs.readdirSync(wiki)) if(file.endsWith(".html"))pages.push(`wiki/${file}`); }
+else failures.push("Guide was not built");
+if(!pages.includes("wiki/index.html"))failures.push("Guide home was not built");
+const getHtml=(file)=>fs.readFileSync(file,"utf8");
+const decode=(text)=>text.replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,"<").replace(/&gt;/g,">");
+let count=0;
+for(const page of pages){
+ const absolute=path.join(root,page),html=getHtml(absolute);
+ if(page.startsWith("wiki/") && (!html.includes('<main id="main"') || !/<h1\b/.test(html)))failures.push(`${page}: no static readable article`);
+ for(const match of html.matchAll(/(?:src|href)="([^"]+)"/g)){
+  const reference=decode(match[1]);
+  if(/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(reference))continue;
+  count++;
+  const [local,fragment]=reference.split("#");
+  let target=local?path.resolve(path.dirname(absolute),decodeURIComponent(local.split("?")[0])):absolute;
+  if(!target.startsWith(root+path.sep)){failures.push(`${page}: reference escapes publication ${reference}`);continue;}
+  if(target===path.join(root,"index.html") && !fs.existsSync(target) && landing)target=path.join(root,landing);
+  if(!fs.existsSync(target)){failures.push(`${page}: missing ${reference}`);continue;}
+  if(fragment && target.endsWith(".html")){
+    const id=decodeURIComponent(fragment),document=getHtml(target);
+    if(![...document.matchAll(/\bid="([^"]+)"/g)].some((m)=>decode(m[1])===id))failures.push(`${page}: missing anchor ${reference}`);
   }
-  const html = fs.readFileSync(pagePath, "utf8");
-  const servedFrom = path.dirname(pagePath);
-  for (const match of html.matchAll(REFERENCE_PATTERN)) {
-    const reference = match[1];
-    if (isExternal(reference)) continue;
-    checked += 1;
-    const resolved = path.resolve(servedFrom, reference.replace(/[?#].*$/, ""));
-    if (!fs.existsSync(resolved)) {
-      failures.push(`${page.label}: ${reference} does not exist under preview-dist`);
-    }
-  }
+ }
 }
-
-if (failures.length > 0) {
-  throw new Error(
-    `Published pages reference files that are not published:\n  ${failures.join("\n  ")}`,
-  );
-}
-
-process.stdout.write(
-  `published page assets resolved: ${checked} references across ${PAGES.length} pages\n`,
-);
+for(const file of ["wiki/guide-client.mjs","wiki/guide-utils.mjs","wiki/search-index.json","404.html"]){if(!fs.existsSync(path.join(root,file)))failures.push(`Missing build asset ${file}`);}
+if(failures.length)throw new Error(`Published guide validation failed:\n${failures.join("\n")}`);
+console.log(`Published page checks: ${count} local references across ${pages.length} HTML pages`);
