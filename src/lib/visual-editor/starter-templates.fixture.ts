@@ -2,7 +2,7 @@ import { getPrefabAssetDocumentReference } from "./compiler/prefab-resolver";
 import { collectXriftInteractionActions } from "./interactivity-graph";
 import { compileVisualProject } from "./compiler/compile";
 import { serializeVisualProjectDocuments } from "./persistence";
-import { updatePrefabDocumentFromSource } from "./prefab-document";
+import { createPrefabDocument, updatePrefabDocumentFromSource } from "./prefab-document";
 import {
   createTransformComponent,
   type RegisteredSceneComponent,
@@ -144,7 +144,7 @@ export function runStarterTemplateFixtureAssertions(): void {
     const materialAssets = assets.filter(
       (asset) =>
         asset.kind === "material" &&
-        asset.folderId === STARTER_ASSET_FOLDER_IDS.materials,
+        (templateId === "blank" || asset.folderId === STARTER_ASSET_FOLDER_IDS.materials),
     );
     const prefabAssets = assets.filter(
       (asset) => asset.kind === "template" && asset.templateType === "prefab",
@@ -194,7 +194,8 @@ export function runStarterTemplateFixtureAssertions(): void {
         : materialAssets.length >= expected.materials.atLeast,
       `${templateId}: converted Material library is incorrect`,
     );
-    assert(prefabAssets.length > 0, `${templateId}: Prefab library is empty`);
+    assert(templateId === "blank" ? prefabAssets.length === 0 : prefabAssets.length > 0,
+      `${templateId}: Prefab library is incorrect`);
     assert(starterWorldContainsNoPrimitiveAssets(plan),
       `${templateId}: primitives must stay in the Create catalog`);
 
@@ -370,8 +371,16 @@ export function runStarterTemplateFixtureAssertions(): void {
   assert(blankModelsInScene.length === 0,
     "Blank World must not place optional Models in the Scene");
 
-  const groundPrefab = blank.prefabs["starter-ground"];
-  assert(groundPrefab !== undefined, "Ground Prefab fixture is missing");
+  assert(Object.keys(blank.assets.folders ?? {}).length === 0,
+    "Blank World must not seed Starter Library folders");
+  assert(Object.values(blank.assets.assets).length === 1 &&
+    Object.values(blank.assets.assets).every((asset) => asset.kind === "material" && !asset.folderId),
+    "Blank World must contain only its floor Material at the asset root");
+  assert(Object.keys(blank.prefabs).length === 0, "Blank World must not seed Prefabs");
+  const groundPrefab = createPrefabDocument(blank.scene, blank.assets, {
+    prefabId: "fixture-ground", name: "Ground", sourceRootEntityIds: ["starter-floor"],
+  })?.document;
+  assert(groundPrefab !== undefined, "Ground Prefab fixture could not be created");
   const childId = "starter-floor-fixture-child";
   const floor = blank.scene.entities["starter-floor"];
   const editedScene = {

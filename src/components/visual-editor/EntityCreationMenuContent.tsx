@@ -1,19 +1,16 @@
 import { useState, type ReactNode } from "react";
 import { ChevronRight, type LucideIcon } from "lucide-react";
-import { filterEntityCreationMenuEntries, type EntityCreationMenuEntry } from "../../lib/visual-editor/entity-creation-menu";
+import { type EntityCreationMenuEntry } from "../../lib/visual-editor/entity-creation-menu";
 import { EDITOR_ICONS, getEditorComponentIcon } from "./editor-icons";
 
-export function EntityCreationMenuContent({ entries, searchQuery, disabled, onSelect }: {
+export function EntityCreationMenuContent({ entries, disabled, onSelect }: {
   entries: readonly EntityCreationMenuEntry[];
-  searchQuery: string;
   disabled: boolean;
   onSelect: (entry: EntityCreationMenuEntry) => void;
 }) {
-  const visible = filterEntityCreationMenuEntries(entries, searchQuery);
-  const searching = Boolean(searchQuery.trim());
   return <div className="space-y-1">
-    {(["basic", "Light", "display", "Audio", "Effects", "XRift"] as const).map((group) => {
-      const items = visible.filter((entry) => entry.group === group);
+    {(["Entity", "Primitive", "World", "Light", "UI", "Audio", "Effect", "XRift"] as const).map((group) => {
+      const items = entries.filter((entry) => entry.group === group);
       if (!items.length) return null;
       const rows = items.map((entry) => <MenuItem
         key={entry.id}
@@ -21,14 +18,13 @@ export function EntityCreationMenuContent({ entries, searchQuery, disabled, onSe
           : entry.xrift ? EDITOR_ICONS[entry.xrift.icon]
             : entry.kind === "empty" ? EDITOR_ICONS.sceneEntity : EDITOR_ICONS.primitive}
         label={entry.label}
-        detail={entry.hint ?? (searching && entry.group === "XRift" ? entry.description : undefined)}
+        detail={entry.hint}
         title={entry.description || entry.label}
         disabled={disabled}
         trailing="作成"
         onClick={() => onSelect(entry)}
       />);
-      if (group === "basic" || group === "display" || items.length === 1) return <div key={group}>{rows}</div>;
-      return <MenuSection key={`${group}-${searching}`} label={group} collapsible count={items.length} defaultOpen={searching}>{rows}</MenuSection>;
+      return <MenuSection key={group} label={group} collapsible count={items.length}>{rows}</MenuSection>;
     })}
   </div>;
 }

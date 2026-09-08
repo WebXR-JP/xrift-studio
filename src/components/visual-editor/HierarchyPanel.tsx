@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import { EntityCreationMenuContent } from "./EntityCreationMenuContent";
-import { getEntityCreationMenuEntries, filterEntityCreationMenuEntries } from "../../lib/visual-editor/entity-creation-menu";
+import { getEntityCreationMenuEntries } from "../../lib/visual-editor/entity-creation-menu";
 import { getEditorComponentDisabledReason, getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
 import {
   memo,
@@ -814,53 +814,19 @@ export function HierarchyPanel({
     y: number;
     entityId: string | null;
   } | null>(null);
-  const [contextMenuSearchQuery, setContextMenuSearchQuery] = useState("");
-  const contextMenuSearchTerms = contextMenuSearchQuery
-    .trim()
-    .toLocaleLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
-  const searchingContextMenu = contextMenuSearchTerms.length > 0;
-  const matchesContextMenuSearch = (...values: Array<string | undefined>) => {
-    if (!searchingContextMenu) return true;
-    const text = values
-      .filter((value): value is string => Boolean(value))
-      .join(" ")
-      .toLocaleLowerCase();
-    return contextMenuSearchTerms.every((term) => text.includes(term));
-  };
+  const contextEntityId = contextMenu?.entityId
+    ?? (selectedEntityIds.length > 1 ? selectedEntityIds[0] : null);
+  const contextMultiple = selectedEntityIds.length > 1
+    && Boolean(contextEntityId && selectedEntityIds.includes(contextEntityId));
   const creationEntries = useMemo(
     () => getEntityCreationMenuEntries(projectKind, builtinPrefabRecipes),
     [projectKind, builtinPrefabRecipes],
   );
-  const contextComponentDefinitions = contextMenu?.entityId
+  const contextComponentDefinitions = contextMenu?.entityId && !contextMultiple
     ? getEditorComponentMenuDefinitions(projectKind) : [];
-  const contextXriftGroups = contextMenu?.entityId
+  const contextXriftGroups = contextMenu?.entityId && !contextMultiple
     ? getXriftComponentMenuGroups(projectKind) : [];
-  const contextMenuComponentResultCount = contextComponentDefinitions.filter((definition) =>
-    matchesContextMenuSearch(
-      definition.label,
-      definition.id,
-      definition.category,
-      "component",
-    ),
-  ).length;
-  const contextMenuXriftComponentResultCount = contextXriftGroups.flatMap((group) =>
-    group.components.filter((definition) =>
-      matchesContextMenuSearch(
-        definition.label,
-        definition.description,
-        definition.schemaId,
-        definition.importName,
-        group.label,
-        "xrift component",
-      ),
-    ),
-  ).length;
-  const contextMenuSearchResultCount = filterEntityCreationMenuEntries(creationEntries, contextMenuSearchQuery).length
-    + contextMenuComponentResultCount + contextMenuXriftComponentResultCount;
   const contextMenuRef = useRef<HTMLDivElement>(null);
-  const contextMenuSearchInputRef = useRef<HTMLInputElement>(null);
   const entityButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const [renameDraft, setRenameDraft] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
@@ -1129,7 +1095,7 @@ export function HierarchyPanel({
   }, [readOnly]);
 
   useEffect(() => {
-    if (contextMenu) contextMenuSearchInputRef.current?.focus();
+    if (contextMenu) contextMenuRef.current?.focus();
   }, [contextMenu]);
 
   useEffect(() => {
@@ -1157,7 +1123,6 @@ export function HierarchyPanel({
       y: Math.max(12, Math.min(event.clientY, window.innerHeight - menuHeight - 12)),
       entityId,
     });
-    setContextMenuSearchQuery("");
   };
 
   const handleMaterialDrop = (event: DragEvent<HTMLElement>, entityId: string) => {
@@ -1651,65 +1616,23 @@ export function HierarchyPanel({
       {contextMenu ? createPortal(
         <div
           ref={contextMenuRef}
-          className="fixed z-[80] max-h-[min(640px,calc(100vh-24px))] w-72 max-w-[calc(100vw-24px)] overflow-y-auto rounded-md border border-slate-300 bg-white p-1 shadow-xl"
+          className="fixed z-[85] max-h-[min(640px,calc(100vh-24px))] w-72 max-w-[calc(100vw-24px)] overflow-y-auto rounded-md border border-slate-300 bg-white p-1 shadow-xl"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           role="menu"
           aria-label="Hierarchyのメニュー"
+          tabIndex={-1}
           onPointerDown={(event) => event.stopPropagation()}
           onKeyDown={(event) => {
                 if (event.key !== "Escape") return;
                 event.preventDefault();
                 event.stopPropagation();
-                if (contextMenuSearchQuery) setContextMenuSearchQuery("");
-                else setContextMenu(null);
+                setContextMenu(null);
               }}
         >
           <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Entity
+            {contextMultiple ? `${selectedEntityIds.length}件のEntity` : "Entity"}
           </p>
-          <label className="relative mb-1 block px-1">
-            <span className="sr-only">追加するComponentやEntityを検索</span>
-            <input
-              ref={contextMenuSearchInputRef}
-              type="search"
-              value={contextMenuSearchQuery}
-              onChange={(event) => setContextMenuSearchQuery(event.currentTarget.value)}
-
-              placeholder="Component・Entityを検索…"
-              className="h-8 w-full rounded border border-slate-300 bg-white px-2 pr-14 text-xs text-slate-800 placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
-            />
-            {searchingContextMenu ? (
-              <button
-                type="button"
-                onClick={() => setContextMenuSearchQuery("")}
-                className="absolute right-2 top-1.5 rounded px-1.5 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                aria-label="追加候補の検索をクリア"
-              >
-                クリア
-              </button>
-            ) : null}
-          </label>
-          {searchingContextMenu && contextMenuSearchResultCount === 0 ? (
-            <p className="px-2 py-4 text-center text-xs leading-5 text-slate-500">
-              「{contextMenuSearchQuery.trim()}」に一致するComponentまたはEntityはありません。
-            </p>
-          ) : null}
-          <EntityCreationMenuContent
-            entries={creationEntries}
-            searchQuery={contextMenuSearchQuery}
-            disabled={readOnly}
-            onSelect={(entry) => {
-              const parentEntityId = contextMenu.entityId;
-              setContextMenu(null);
-              if (entry.kind === "empty") onCommand("entity.create-empty", { parentEntityId });
-              else if (entry.kind === "primitive") onCommand("entity.create-primitive", { creationId: entry.actionId });
-              else if (entry.kind === "prefab") onDropBuiltinPrefab(entry.actionId, parentEntityId);
-              else if (entry.kind === "component") onCreateComponentObject(entry.actionId);
-              else onCreateXriftObject(entry.actionId);
-            }}
-          />
-          {contextMenu.entityId ? (
-            <>
+          {contextEntityId ? <>
               {([
                 ["selection.rename", "名前を変更", "settings"],
                 ["edit.copy", "コピー", "copy"],
@@ -1724,7 +1647,7 @@ export function HierarchyPanel({
                     type="button"
                     disabled={readOnly}
                     onClick={() => {
-                      const entityId = contextMenu.entityId ?? undefined;
+                      const entityId = contextEntityId ?? undefined;
                       setContextMenu(null);
                       onCommand(
                         commandId,
@@ -1746,29 +1669,40 @@ export function HierarchyPanel({
                 );
               })}
               <div className="my-1 border-t border-slate-200" />
-              {!searchingContextMenu || contextMenuComponentResultCount > 0 ? (
-              <details open={searchingContextMenu} className="overflow-hidden rounded border border-slate-200">
+          </> : null}
+          {!contextMultiple ? (
+          <EntityCreationMenuContent
+            entries={creationEntries}
+            disabled={readOnly}
+            onSelect={(entry) => {
+              const parentEntityId = contextMenu.entityId;
+              setContextMenu(null);
+              if (entry.kind === "empty") onCommand("entity.create-empty", { parentEntityId });
+              else if (entry.kind === "primitive") onCommand("entity.create-primitive", { creationId: entry.actionId });
+              else if (entry.kind === "prefab") onDropBuiltinPrefab(entry.actionId, parentEntityId);
+              else if (entry.kind === "component") onCreateComponentObject(entry.actionId);
+              else onCreateXriftObject(entry.actionId);
+            }}
+          />
+          ) : null}
+          {contextMenu.entityId ? (
+            <>
+              {contextComponentDefinitions.length > 0 ? (
+              <details className="overflow-hidden rounded border border-slate-200">
                 <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-                  選択したEntityにComponentを追加 ({searchingContextMenu ? contextMenuComponentResultCount : contextComponentDefinitions.length})
+                  選択したEntityにComponentを追加 ({contextComponentDefinitions.length})
                 </summary>
                 <div className="space-y-1 border-t border-slate-100 p-1">
                   {EDITOR_COMPONENT_CATEGORY_ORDER.map(
                     (category) => {
                       const definitions = contextComponentDefinitions.filter(
                         (definition) =>
-                          definition.category === category &&
-                          matchesContextMenuSearch(
-                            definition.label,
-                            definition.id,
-                            definition.category,
-                            "component",
-                          ),
+                          definition.category === category,
                       );
                       if (definitions.length === 0) return null;
                       return (
                         <details
                           key={category}
-                          open={searchingContextMenu || category === "rendering"}
                         >
                           <summary className="cursor-pointer select-none rounded px-1.5 py-1 text-xs font-medium capitalize text-slate-500 hover:bg-slate-50">
                             {category} ({definitions.length})
@@ -1816,31 +1750,20 @@ export function HierarchyPanel({
               ) : null}
             </>
           ) : null}
-          {contextMenu.entityId && (!searchingContextMenu || contextMenuXriftComponentResultCount > 0) ? (
+          {contextMenu.entityId && contextXriftGroups.length > 0 ? (
           <details className="overflow-hidden rounded border border-slate-200">
             <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-              選択したEntityにXRift Componentを追加 ({searchingContextMenu
-                ? contextMenuXriftComponentResultCount
-                : contextXriftGroups.reduce(
+              選択したEntityにXRift Componentを追加 ({contextXriftGroups.reduce(
                 (count, group) => count + group.components.length,
                 0,
               )})
             </summary>
             <div className="space-y-1 border-t border-slate-100 p-1">
               {contextXriftGroups.map((group) => {
-                const definitions = group.components.filter((definition) =>
-                  matchesContextMenuSearch(
-                    definition.label,
-                    definition.description,
-                    definition.schemaId,
-                    definition.importName,
-                    group.label,
-                    "xrift component",
-                  ),
-                );
+                const definitions = group.components;
                 if (definitions.length === 0) return null;
                 return (
-                <details key={group.category} open={searchingContextMenu}>
+                <details key={group.category}>
                   <summary className="cursor-pointer select-none rounded px-1.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-50">
                     {group.label} ({definitions.length})
                   </summary>

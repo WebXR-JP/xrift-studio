@@ -450,9 +450,9 @@ export function createStarterWorldProject(
     .map((definition) => createStarterTextureAsset(definition.id));
   const baseAssets: AssetManifest = {
     ...prototype.assets,
-    folders: createStarterAssetFolders(),
+    folders: templateId === "blank" ? {} : createStarterAssetFolders(),
     assets: {
-      ...prototype.assets.assets,
+      ...(templateId === "blank" ? {} : prototype.assets.assets),
       ...Object.fromEntries(customMaterials.map((asset) => [asset.id, asset])),
       ...Object.fromEntries(models.map((asset) => [asset.id, asset])),
       ...Object.fromEntries(textures.map((asset) => [asset.id, asset])),
@@ -701,13 +701,7 @@ function starterPrefabSeeds(
         ]
       : [];
   }
-  const ground: StarterPrefabSeed = {
-    prefabId: "starter-ground",
-    assetId: "starter-prefab-ground",
-    name: "Ground Platform",
-    sourceEntityId: "starter-floor",
-  };
-  return [ground];
+  return [];
 }
 
 function createTemplateEntities(): SceneEntity[] {
@@ -783,7 +777,7 @@ function createStarterMaterials(
   if (templateId === "xrift-official") {
     return [];
   }
-  return [
+  const materials = [
     createMaterial(
       STARTER_MATERIAL_IDS.ground,
       "Neutral Ground",
@@ -794,6 +788,7 @@ function createStarterMaterials(
       0,
     ),
   ];
+  return materials.map(({ folderId: _folderId, ...material }) => material);
 }
 
 function createMaterial(

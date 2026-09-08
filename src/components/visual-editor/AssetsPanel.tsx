@@ -399,22 +399,18 @@ function AssetFolderTree({
           </button>
         </div>
 
-        <p className="mb-1 mt-3 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-          種類
-        </p>
-        <div className="space-y-0.5">{kindFolders.map(renderCollection)}</div>
-
-        <p className="mb-1 mt-3 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-          フォルダー
-        </p>
         <div className="space-y-0.5">
-          {childrenOf(null).map((folder) => renderCustomFolder(folder, 0))}
+          {childrenOf(null).map((folder) => renderCustomFolder(folder, 1))}
           {customFolders.length === 0 ? (
             <p className="px-2 py-2 text-[11px] leading-4 text-slate-400">
               右クリックでフォルダーを作成します。
             </p>
           ) : null}
         </div>
+        <p className="mb-1 mt-3 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+          種類で絞り込み
+        </p>
+        <div className="space-y-0.5">{kindFolders.map(renderCollection)}</div>
       </div>
     </aside>
   );
@@ -1370,10 +1366,10 @@ export function AssetsPanel({
     ? []
     : !activeFolderId
       ? [
-          ...KIND_FOLDERS,
           ...customFolders.filter(
             (folder) => assets.folders?.[folder.id]?.parentId === null,
           ),
+          ...KIND_FOLDERS,
         ]
       : activeFolder?.custom
         ? customFolders.filter(

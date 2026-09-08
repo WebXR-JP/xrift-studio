@@ -43,9 +43,13 @@ description: XRift Studio の制作体験を、更新、作成、起動、公開
 
 Entityの作成メニューは選択状態によって既存Entityへの追加へ切り替えない。新しいEntityを作る操作と、Inspectorや対象Entityの右クリックからComponentを追加する操作を明示する。候補、名前、順序、重複・依存条件は共通定義から用途に合わせて選ぶ。Transformのような必須Component、同じ機能の旧追加口、既存のメッシュや子要素が必要で単独では成立しない項目をEntity作成候補に並べない。追加できない理由は選択前に示す。
 
-空のEntityとCube、Planeなどの基本形状を最初に置く。形状名を「床」のような用途名にしない。Light、Text、SpawnPointなど配置するものを選びやすくし、Rigid Bodyなど既存Entityへ付ける機能を新規Entityの候補へ混ぜない。XRiftの配置は同じ機能のPrefabとComponentを二重に並べず、一つの候補にまとめる。「Component付きEntity」のような内部構成を分類名に使わない。
+すべてのEntity配置候補を折りたたみにまとめる。先頭のEntityに空のEntityを置き、PrimitiveにCube、Planeなど、WorldにSpawnPointを入れる。Entity追加の検索欄は置かず、Entity、Primitive、World、Light、UI、Audio、Effect、XRiftの折りたたみで選ぶ。形状名を「床」のような用途名にしない。Light、Text、SpawnPointなど配置するものを選びやすくし、Rigid Bodyなど既存Entityへ付ける機能を新規Entityの候補へ混ぜない。XRiftの配置は同じ機能のPrefabとComponentを二重に並べず、一つの候補にまとめる。「Component付きEntity」のような内部構成を分類名に使わない。
+
+複数選択時の右クリックでは名前変更・削除などの操作を上に出し、EntityやComponentの追加候補を混ぜない。単体選択と複数選択で操作の対象が変わる場合は、選択状態を保って対象に合うメニューを表示する。
 
 ## 完了前の確認
+
+AssetsはAssets直下にフォルダー階層を表示し、その下に種類の絞り込みを置く。種類を保存先のフォルダーより先に並べない。空のワールドにはシーンが実際に使う素材だけを入れ、テスト用Material、サンプルPrefab、空のStarter Libraryフォルダーを初期生成しない。PrimitiveのMaterialは配置時に必要なものだけ追加する。
 
 - 状態、主操作、成功後の到達点、失敗時の復帰手段をすべて確認する。
 - 作成または更新後に一覧と選択状態が最新になっていることを確認する。

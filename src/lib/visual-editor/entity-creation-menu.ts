@@ -8,13 +8,17 @@ export type EntityCreationMenuEntry = {
   id: string;
   label: string;
   description: string;
-  group: "basic" | "Light" | "display" | "Audio" | "Effects" | "XRift";
+  group: "Entity" | "Primitive" | "World" | "Light" | "UI" | "Audio" | "Effect" | "XRift";
   kind: "empty" | "primitive" | "component" | "xrift" | "prefab";
   actionId: string;
   hint?: string;
   component?: EditorComponentDefinition;
   xrift?: XriftComponentDefinition;
 };
+
+const HIDDEN_ENTITY_CREATION_SCHEMAS = new Set<string>([
+  "xrift.skybox", "xrift.tag-board", "xrift.entry-log-board", "xrift.portal",
+]);
 
 /** One placement choice per XRift schema. Recipes provide the ready-to-use setup. */
 export function getEntityCreationMenuEntries(
@@ -27,29 +31,30 @@ export function getEntityCreationMenuEntries(
     return priority(left.creationId) - priority(right.creationId);
   });
   const entries: EntityCreationMenuEntry[] = [
-    { id: "empty", label: "空のEntity", description: "", group: "basic", kind: "empty", actionId: "" },
+    { id: "empty", label: "空のEntity", description: "", group: "Entity", kind: "empty", actionId: "" },
     ...ordered.map((entry): EntityCreationMenuEntry => ({
       id: entry.creationId, label: entry.name, description: entry.description,
-      group: "basic", kind: "primitive", actionId: entry.creationId,
+      group: "Primitive", kind: "primitive", actionId: entry.creationId,
     })),
   ];
   const xrift = new Map<string, EntityCreationMenuEntry>();
   for (const group of getXriftEntityCreationMenuGroups(projectKind)) {
     for (const definition of group.components) {
+      if (HIDDEN_ENTITY_CREATION_SCHEMAS.has(definition.schemaId)) continue;
       xrift.set(definition.schemaId, {
         id: definition.schemaId, label: definition.label, description: definition.description,
-        group: definition.schemaId === "xrift.spawn-point" ? "basic" : "XRift",
+        group: definition.schemaId === "xrift.spawn-point" ? "World" : "XRift",
         kind: "xrift", actionId: definition.schemaId, xrift: definition,
       });
     }
   }
   for (const recipe of recipes) {
-    if (!recipe.projectKinds.includes(projectKind)) continue;
+    if (!recipe.projectKinds.includes(projectKind) || HIDDEN_ENTITY_CREATION_SCHEMAS.has(recipe.schemaId)) continue;
     const definition = getXriftComponentDefinition(recipe.schemaId);
     xrift.set(recipe.schemaId, {
       id: recipe.schemaId, label: definition?.label ?? recipe.name,
       description: [recipe.description, recipe.configuration?.hint].filter(Boolean).join(" "),
-      group: recipe.schemaId === "xrift.spawn-point" ? "basic" : "XRift",
+      group: recipe.schemaId === "xrift.spawn-point" ? "World" : "XRift",
       kind: "prefab", actionId: recipe.id, xrift: definition,
       hint: recipe.configuration?.requiredBeforeCompile ? recipe.configuration.hint : undefined,
     });
@@ -61,18 +66,10 @@ export function getEntityCreationMenuEntries(
       id: definition.id, label: definition.label, description: "", kind: "component", actionId: definition.id,
       group: definition.componentType === "light" ? "Light"
         : definition.componentType === "audio-source" ? "Audio"
-          : definition.componentType === "particle-emitter" ? "Effects" : "display",
+          : definition.componentType === "particle-emitter" ? "Effect" : "UI",
       component: definition,
     });
   }
   entries.push(...[...xrift.values()].filter((entry) => entry.group === "XRift"));
   return entries;
-}
-
-export function filterEntityCreationMenuEntries(entries: readonly EntityCreationMenuEntry[], query: string) {
-  const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
-  return entries.filter((entry) => {
-    const text = `${entry.label} ${entry.description} ${entry.group} ${entry.id}`.toLocaleLowerCase();
-    return terms.every((term) => text.includes(term));
-  });
 }
