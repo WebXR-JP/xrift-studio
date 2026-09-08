@@ -313,7 +313,9 @@ export function createImageQuadOverlayFiles(): CompilerOverlayFile[] {
 export function createRuntimeBridgeOverlayFiles(): CompilerOverlayFile[] {
   return [
     overlay(TEXT_RUNTIME_OVERLAY_PATH, rewriteTextPanelImports(textRuntimeSource)),
+    overlay(TEXT_PANEL_LAYOUT_OVERLAY_PATH, rewriteTextPanelImports(textPanelLayoutSource)),
     overlay(IMAGE_RUNTIME_OVERLAY_PATH, rewriteImageQuadImports(imageRuntimeSource)),
+    overlay(IMAGE_QUAD_LAYOUT_OVERLAY_PATH, rewriteImageQuadImports(imageQuadLayoutSource)),
   ];
 }
 
@@ -498,6 +500,7 @@ export function rewriteRuntimeLocalImports(
  */
 export function createInteractivityRuntimeOverlayFiles(): CompilerOverlayFile[] {
   const entries: readonly [string, string, "script" | "interactivity"][] = [
+    [SCRIPT_API_OVERLAY_PATH, scriptApiSource, "script"],
     [INTERACTIVITY_GRAPH_OVERLAY_PATH, interactivityGraphSource, "interactivity"],
     [INTERACTIVITY_VALUE_OVERLAY_PATH, interactivityValueSource, "interactivity"],
     [INTERACTIVITY_HOST_OVERLAY_PATH, interactivityHostSource, "interactivity"],

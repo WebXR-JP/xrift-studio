@@ -103,6 +103,7 @@ pnpm build:preview       # GitHub Pages 用プレビューのビルド
 - UX スキル: `.agents/skills/xrift-studio-ux/SKILL.md`
 - 機能追加の方針スキル: `.agents/skills/xrift-studio-feature/SKILL.md`
 - 検証ループスキル: `.agents/skills/xrift-studio-verify/SKILL.md`
+- エラー報告の原因調査と再発防止: `.agents/skills/xrift-studio-error-recovery/SKILL.md`
 - Blender × Studio モデリングスキル: `.agents/skills/xrift-mcp-blender-modeling/SKILL.md`
 - ワールドの制作工程: `.agents/skills/xrift-world-direction/SKILL.md`
 - ワールド制作ハーネスの設計: `docs/WORLD_AUTHORING_HARNESS.md`

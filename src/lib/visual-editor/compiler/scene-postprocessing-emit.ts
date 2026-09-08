@@ -1,12 +1,14 @@
 import scenePostprocessingSource from "../../../../packages/xrift-studio-runtime/src/scene/postprocessing.tsx?raw";
 import sceneRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/scene-runtime.tsx?raw";
 import sceneConstantsSource from "../../../../packages/xrift-studio-runtime/src/scene-constants.ts?raw";
+import scriptApiSource from "../../../../packages/xrift-studio-runtime/src/script/api.ts?raw";
 import type { CompilerOverlayFile } from "./types";
 import {
   rewriteRuntimeLocalImports,
   SCENE_RUNTIME_OVERLAY_PATH,
   SCENE_CONSTANTS_OVERLAY_PATH,
   SCRIPT_RUNTIME_DIRECTORY,
+  SCRIPT_API_OVERLAY_PATH,
 } from "./script-emit";
 
 export const SCENE_POSTPROCESSING_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/scene-postprocessing.tsx`;
@@ -43,6 +45,13 @@ export function createScenePostprocessingOverlayFile(): CompilerOverlayFile {
  */
 export function createScenePostprocessingBridgeOverlayFiles(): CompilerOverlayFile[] {
   return [
+    // Type-only dependencies must also ship: publish runs tsc before Vite.
+    {
+      relativePath: SCRIPT_API_OVERLAY_PATH,
+      content: scriptApiSource,
+      kind: "source",
+      owner: "xrift-studio-compiler",
+    },
     {
       relativePath: SCENE_RUNTIME_OVERLAY_PATH,
       content: rewriteRuntimeLocalImports(sceneRuntimeSource),

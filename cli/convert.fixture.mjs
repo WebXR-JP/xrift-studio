@@ -33,6 +33,7 @@ import { createStarterWorldProject } from "../src/lib/visual-editor/starter-temp
 import { prepareStarterVisualProject } from "../src/lib/visual-editor/persistence.ts";
 import { runVisualCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/fixture.ts";
 import { compileStagedTypecheckWorld } from "../src/lib/visual-editor/compiler/staged-world.fixture.ts";
+import * as runtimeEmission from "../src/lib/visual-editor/compiler/script-emit.ts";
 import { runClassicExportFixtureAssertions } from "../src/lib/visual-editor/classic-export.fixture.ts";
 import { runComponentCodeImportFixtureAssertions } from "../src/lib/visual-editor/component-code-import.fixture.ts";
 import { runXriftMcpEditorToolFixtures } from "../src/lib/visual-editor/mcp-editor-tools.fixture.ts";
@@ -597,6 +598,43 @@ function assertStagedWorldDeclaresItsNetworkUse(compiled) {
  * author's publish dialog.
  */
 async function runStagedWorldTypecheck() {
+  // Keep independent feature outputs separate: combining them can conceal a
+  // missing dependency supplied accidentally by another feature.
+  for (const [label, files] of [
+    ["runtime-bridges-only", runtimeEmission.createRuntimeBridgeOverlayFiles()],
+    ["interactivity-only", runtimeEmission.createInteractivityRuntimeOverlayFiles()],
+    ["text-only", runtimeEmission.createTextPanelOverlayFiles()],
+    ["image-only", runtimeEmission.createImageQuadOverlayFiles()],
+    ["audio-only", [runtimeEmission.createScriptAudioSourceOverlayFile()]],
+    ["light-only", [runtimeEmission.createScriptLightOverlayFile()]],
+    ["particle-only", [runtimeEmission.createScriptParticleOverlayFile()]],
+  ]) {
+    await typecheckWithTemplateOptions(label, files, "export {};\n");
+  }
+  // Feature-rich worlds carry the Script API incidentally. Also check the
+  // compositor alone so missing type-only dependencies cannot hide there.
+  const prototype = createPrototypeProject("world", "postprocessing-only");
+  prototype.scene.settings = {
+    ...prototype.scene.settings,
+    postprocessing: { enabled: true },
+  };
+  const postprocessingOnly = compileVisualProject({
+    project: prototype.project,
+    scenes: { [prototype.scene.sceneId]: prototype.scene },
+    assets: prototype.assets,
+    prefabs: prototype.prefabs,
+  });
+  assert(postprocessingOnly.canStage, "postprocessing-only world must be stageable");
+  assert(
+    postprocessingOnly.overlayFiles.some((file) => file.relativePath.endsWith("/scene-runtime.tsx")) &&
+      !postprocessingOnly.overlayFiles.some((file) => file.relativePath.endsWith("/script-host.tsx")),
+    "regression world must carry the Scene bridge without the Script host",
+  );
+  await typecheckWithTemplateOptions(
+    "postprocessing-only",
+    postprocessingOnly.overlayFiles,
+    'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
+  );
   const compiled = compileStagedTypecheckWorld();
   const blocking = compiled.diagnostics.filter(
     (diagnostic) => diagnostic.severity === "blocking",
