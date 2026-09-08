@@ -408,32 +408,12 @@ export function MaterialThumbnail({
 
 function AssetThumbnailFallback({ asset }: { asset: SceneAsset }) {
   const Icon = EDITOR_ICONS[ASSET_KIND_UI[asset.kind].icon];
-  const label =
-    asset.status === "invalid"
-      ? "解析失敗・再生成"
-      : asset.status === "missing"
-        ? "元ファイルなし・再インポート"
-        : asset.kind === "audio"
-          ? asset.importMetadata.sourceFormat.toUpperCase()
-          : asset.kind === "script"
-            ? "TypeScript"
-          : asset.kind === "shader"
-            ? "GLSL"
-          : isEnvironmentTextureAsset(asset)
-            ? "HDRIプレビューを生成中"
-            : asset.kind === "material"
-              ? "Material"
-              : asset.kind === "model"
-                ? "サムネイルを生成中"
-                : "プレビュー準備中";
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-slate-100 px-2 text-center text-slate-500">
-      <Icon size={24} aria-hidden="true" />
-      <span className="text-xs font-medium">{label}</span>
+    <div className="flex h-full w-full items-center justify-center bg-slate-100 text-slate-500" role="img" aria-label={ASSET_KIND_UI[asset.kind].label}>
+      <Icon size={28} aria-hidden="true" />
     </div>
   );
 }
-
 function PrefabQuickEditor({
   asset,
   document,
@@ -661,19 +641,8 @@ function ProjectAssetThumbnail({
     );
   }
 
-  const Icon = EDITOR_ICONS[ASSET_KIND_UI[asset.kind].icon];
-  return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-white text-slate-500">
-      <Icon size={22} aria-hidden="true" />
-      <span className="text-xs font-medium">
-        {state.status === "loading"
-          ? "プレビュー準備中"
-          : "プレビューの読み込み失敗・再生成"}
-      </span>
-    </div>
-  );
+  return <AssetThumbnailFallback asset={asset} />;
 }
-
 export function AssetThumbnail({
   asset,
   assets,
@@ -804,12 +773,10 @@ function MaterialFallbackThumbnail({
         background: `radial-gradient(circle at 35% 25%, #ffffff 0%, ${color} 42%, #cbd5e1 140%)`,
       }}
     >
-      <span className="flex size-9 items-center justify-center rounded-full border border-white/70 bg-white/75 shadow-sm backdrop-blur">
+      <span className="flex size-7 items-center justify-center rounded-full border border-white/70 bg-white/75 shadow-sm backdrop-blur">
         <Icon size={20} aria-hidden="true" />
       </span>
-      <span className="rounded bg-white/75 px-1.5 py-0.5 text-[10px] font-semibold backdrop-blur">
-        マテリアル
-      </span>
+
     </div>
   );
 }

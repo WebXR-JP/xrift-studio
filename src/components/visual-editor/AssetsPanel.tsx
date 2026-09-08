@@ -655,16 +655,9 @@ function AssetCard({
       >
         <span
           data-asset-drag-preview="true"
-          className="pointer-events-none relative block h-10 w-full shrink-0 overflow-hidden border-b border-editor-border/70 bg-editor-subtle"
+          className="pointer-events-none relative block h-9 w-full shrink-0 overflow-hidden border-b border-editor-border/70 bg-editor-subtle"
         >
           <AssetThumbnail asset={asset} assets={assets} projectPath={projectPath} />
-          <span
-            className="absolute left-1.5 top-1.5 flex items-center rounded bg-slate-950/80 p-1 text-white"
-            title={assetKindLabel(asset)}
-          >
-            <KindIcon size={11} aria-hidden="true" />
-            <span className="sr-only">{assetKindLabel(asset)}</span>
-          </span>
           {asset.status !== "ready" ? (
             <span
               title={asset.status}
@@ -678,12 +671,9 @@ function AssetCard({
         </span>
         <span className="min-w-0 px-1.5 py-1">
           <span className="block truncate text-[11px] font-semibold leading-4 text-slate-800">{asset.name}</span>
-          <span className="block truncate text-[10px] leading-4 text-slate-500">
-            {folderPath ?? assetSourceLabel(asset)}
-          </span>
           {folderPath ? (
-            <span className="block truncate text-[10px] leading-4 text-slate-400" title={assetSourceLabel(asset)}>
-              {assetSourceLabel(asset)}
+            <span className="block truncate text-[10px] leading-4 text-slate-400" title={folderPath}>
+              {folderPath}
             </span>
           ) : null}
           {fileBytes !== null || vramBytes !== null ? (
