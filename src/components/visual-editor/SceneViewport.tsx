@@ -1,3 +1,4 @@
+import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
 import { XriftModelInstancing } from "../../../packages/xrift-studio-runtime/src/script/model-instancing";
 import { collectModelInstancingEntities } from "../../lib/visual-editor/model-instancing";
 import { colliderModelNode } from "../../lib/visual-editor/mesh-collision-actions";
@@ -900,6 +901,7 @@ function TerrainMeshVisual({
         <meshBasicMaterial
           color={material?.properties.color ?? "#6b8e4e"}
           map={materialTextures.baseColorMap}
+          {...materialSurfaceProps(material?.properties, materialTextures.opacityMap)}
           opacity={opacity}
           transparent={alphaMode === "BLEND"}
           depthWrite={alphaMode !== "BLEND"}
@@ -944,6 +946,7 @@ function TerrainMeshVisual({
           alphaToCoverage={alphaProps.alphaToCoverage}
           blending={THREE_BLENDING[alphaProps.blending]}
           map={materialTextures.baseColorMap}
+          {...materialSurfaceProps(material?.properties, materialTextures.opacityMap)}
           metalnessMap={materialTextures.metallicRoughnessMap}
           roughnessMap={materialTextures.metallicRoughnessMap}
           normalMap={materialTextures.normalMap}
@@ -1173,6 +1176,7 @@ function PrimitiveMeshVisual({
     alphaTest:
       alphaMode === "MASK" ? (material?.properties.alphaCutoff ?? 0.5) : 0,
     map: materialTextures.baseColorMap,
+    ...materialSurfaceProps(material?.properties, materialTextures.opacityMap),
     metalnessMap: materialTextures.metallicRoughnessMap,
     roughnessMap: materialTextures.metallicRoughnessMap,
     normalMap: materialTextures.normalMap,
@@ -1197,6 +1201,7 @@ function PrimitiveMeshVisual({
         <meshBasicMaterial
           color={material?.properties.color ?? "#f43f5e"}
           map={materialTextures.baseColorMap}
+          {...materialSurfaceProps(material?.properties, materialTextures.opacityMap)}
           opacity={opacity}
           transparent={alphaProps.transparent}
           depthWrite={alphaProps.depthWrite}

@@ -1,3 +1,4 @@
+import { opacityShaderChunk } from "../material-surface";
 import { createRigidBodyComponent } from "../scene-document";
 import { collectModelInstancingEntities } from "../model-instancing";
 import modelInstancingSource from "../../../../packages/xrift-studio-runtime/src/model-instancing.ts?raw";
@@ -4312,6 +4313,8 @@ function registerMaterialComponent(
     textureLines,
     textureProps,
   );
+  addCompiledTexture("opacityMap", "alphaMap", properties.opacityTexture, "linear",
+    entity, mesh, asset, context, textureLines, textureProps);
   if (materialKind !== "basic") {
     const metallicRoughnessMap = addCompiledTexture(
       "metallicRoughnessMap",
@@ -4975,10 +4978,20 @@ function renderMaterialProps(
   // Material blends, clips and sorts the way it did while being authored.
   const alpha = materialAlphaRenderProps(properties);
   const props = [
+    `vertexColors={${properties.vertexColors}}`,
     `color=${JSON.stringify(color)}`,
     `opacity={${formatNumber(opacity)}}`,
     `transparent={${alpha.transparent}}`,
   ];
+  if (properties.opacityTexture && properties.opacityChannel !== "g") {
+    props.push(
+      `onBeforeCompile={(shader) => { shader.fragmentShader = shader.fragmentShader.replace("#include <alphamap_fragment>", ${JSON.stringify(opacityShaderChunk(properties.opacityChannel))}); }}`,
+      `customProgramCacheKey={() => ${JSON.stringify(`xrift-opacity-${properties.opacityChannel}`)}}`,
+    );
+  }
+  if (properties.vertexColors) {
+    props.push(`onBeforeRender={function (this: { vertexColors: boolean; needsUpdate: boolean }, _renderer, _scene, _camera, geometry) { const enabled = geometry.hasAttribute("color"); if (this.vertexColors !== enabled) { this.vertexColors = enabled; this.needsUpdate = true; } }}`);
+  }
   if (materialKind !== "basic") {
     props.push(
       `metalness={${formatNumber(pbr.metallicFactor)}}`,
@@ -5189,7 +5202,7 @@ function hasMaterialTextures(
   properties: MaterialProperties,
   materialKind: MaterialShaderModel,
 ): boolean {
-  if (properties.pbrMetallicRoughness.baseColorTexture) return true;
+  if (properties.pbrMetallicRoughness.baseColorTexture || properties.opacityTexture) return true;
   if (materialKind === "basic") return false;
   if (
     properties.pbrMetallicRoughness.metallicRoughnessTexture ||

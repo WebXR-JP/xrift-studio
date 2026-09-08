@@ -1,5 +1,7 @@
 # MCP editor tool の全体像
 
+Materialの頂点カラーとOpacityマップは`update_material_asset`で設定する。`patch.vertexColors`はboolean、`patch.opacityTexture`は既存Texture AssetのIDまたはTextureInfo（nullで解除）、`patch.opacityChannel`は`r`・`g`・`b`・`a`（既定は`a`）。透過には`alphaMode: "BLEND"`または`"MASK"`を併せて指定し、裏面も表示するなら`doubleSided: true`にする。更新後は割当先モデルで色と透過を確認する。Unityの独自Shaderをそのまま実行する設定ではない。
+
 XRift Studio は、開いている Editor をそのまま AI client へ開放する MCP server を
 同梱している。この文書は「どの Editor 操作が MCP から動くのか」を一覧で示す。
 機能を足したときは、ここで MCP への対応漏れを確認する。

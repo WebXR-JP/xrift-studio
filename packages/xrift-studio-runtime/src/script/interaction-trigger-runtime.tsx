@@ -489,9 +489,17 @@ export function createXriftInteractionApplier({
   const ownMaterials = (mesh: Mesh): Material[] => {
     if (!materialRestores.has(mesh)) {
       materialRestores.set(mesh, mesh.material);
+      const cloneMaterial = (source: Material) => {
+        const clone = source.clone();
+        // Three's clone omits callbacks, including authored opacity channels.
+        clone.onBeforeCompile = source.onBeforeCompile;
+        clone.onBeforeRender = source.onBeforeRender;
+        clone.customProgramCacheKey = source.customProgramCacheKey;
+        return clone;
+      };
       mesh.material = Array.isArray(mesh.material)
-        ? mesh.material.map((entry) => entry.clone())
-        : mesh.material.clone();
+        ? mesh.material.map(cloneMaterial)
+        : cloneMaterial(mesh.material);
     }
     return Array.isArray(mesh.material) ? mesh.material : [mesh.material];
   };

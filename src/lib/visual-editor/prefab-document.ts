@@ -311,6 +311,7 @@ function collectMaterialTextureReferences(
     properties.normalTexture,
     properties.occlusionTexture,
     properties.emissiveTexture,
+    properties.opacityTexture,
     properties.extensions.KHR_materials_iridescence?.iridescenceTexture,
     properties.extensions.KHR_materials_iridescence
       ?.iridescenceThicknessTexture,

@@ -935,6 +935,9 @@ function createSceneViewportMaterial(
     material.alphaTest = source.alphaTest;
     material.depthWrite = source.depthWrite;
     material.vertexColors = Boolean(sourceWithSurface.vertexColors);
+    material.onBeforeCompile = source.onBeforeCompile;
+    material.customProgramCacheKey = source.customProgramCacheKey;
+    material.onBeforeRender = source.onBeforeRender;
   } else if (style === "wireframe") {
     material.color.set("#52606d");
     material.wireframe = true;

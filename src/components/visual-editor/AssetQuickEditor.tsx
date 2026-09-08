@@ -1,3 +1,4 @@
+import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
 import { readImageDimensions } from "../../lib/visual-editor/gltf-derived-assets";
 import { readProjectAssetBytes, textureProcessingSettings } from "../../lib/visual-editor/texture-processing";
 import { normalizeTextureImportSettings } from "../../lib/visual-editor/asset-manifest";
@@ -208,6 +209,7 @@ function MaterialPreviewScene({
             alphaTest={alphaTest}
             side={side}
             map={textures.baseColorMap}
+            {...materialSurfaceProps(asset.properties, textures.opacityMap)}
           />
         ) : usesPhysicalMaterial ? (
           <meshPhysicalMaterial
@@ -223,6 +225,7 @@ function MaterialPreviewScene({
             alphaTest={alphaTest}
             side={side}
             map={textures.baseColorMap}
+            {...materialSurfaceProps(asset.properties, textures.opacityMap)}
             metalnessMap={textures.metallicRoughnessMap}
             roughnessMap={textures.metallicRoughnessMap}
             normalMap={textures.normalMap}
@@ -291,6 +294,7 @@ function MaterialPreviewScene({
             alphaTest={alphaTest}
             side={side}
             map={textures.baseColorMap}
+            {...materialSurfaceProps(asset.properties, textures.opacityMap)}
             metalnessMap={textures.metallicRoughnessMap}
             roughnessMap={textures.metallicRoughnessMap}
             normalMap={textures.normalMap}
@@ -2309,7 +2313,13 @@ function StandardMaterialQuickEditor({
         </p>
       </MaterialExtensionSection>
 
-      <EditorSection title="Base Color RGBA">
+      <EditorSection title="Diffuse / Base Color RGBA">
+        <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
+          頂点カラーを使用
+          <input type="checkbox" checked={asset.properties.vertexColors ?? false} disabled={readOnly}
+            onChange={(event) => onChange({ vertexColors: event.currentTarget.checked })} />
+        </label>
+        <p className="text-[11px] text-slate-500">モデルの頂点カラーを基本色に掛け合わせます。頂点カラーを持たないモデルには影響しません。</p>
         <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
           RGB
           <span className="flex items-center gap-1.5">
@@ -2361,6 +2371,31 @@ function StandardMaterialQuickEditor({
             onChange({ pbrMetallicRoughness: { baseColorTexture } })
           }
         />
+      </EditorSection>
+
+      <EditorSection title="Opacity Map">
+        <TextureSlot
+          label="Opacity Texture"
+          description="選んだチャンネルを透明度に使用します。0は透明、1は不透明です。AlphaとBase Color TextureのAに掛け合わせます。"
+          value={asset.properties.opacityTexture}
+          textures={textures}
+          projectPath={projectPath}
+          disabled={readOnly}
+          previewStatus={previewTextureStatuses.opacityMap}
+          onOpenTexture={onOpenTexture}
+          onChange={(opacityTexture) => onChange({ opacityTexture,
+            ...(opacityTexture && asset.properties.alphaMode === "OPAQUE" ? { alphaMode: "BLEND" } : {}),
+          })}
+        />
+        <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
+          Opacity Channel
+          <select value={asset.properties.opacityChannel ?? "a"} disabled={readOnly}
+            className="rounded border border-slate-300 bg-white px-2 py-1 text-xs"
+            onChange={(event) => onChange({ opacityChannel: event.currentTarget.value as "r" | "g" | "b" | "a" })}>
+            {(["r", "g", "b", "a"] as const).map(channel => <option key={channel} value={channel}>{channel.toUpperCase()}</option>)}
+          </select>
+        </label>
+        <p className="text-[11px] text-slate-500">透過にはAlpha ModeのBlendかMaskを使用します。裏側も表示する場合はDouble sidedを有効にしてください。</p>
       </EditorSection>
 
       <EditorSection title="Metallic / Roughness">

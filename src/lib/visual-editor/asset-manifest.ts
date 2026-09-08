@@ -390,6 +390,9 @@ export type PbrMetallicRoughnessProperties = {
  * keep the aliases synchronized for older Inspector code.
  */
 export type MaterialProperties = {
+  vertexColors: boolean;
+  opacityTexture?: MaterialTextureInfo;
+  opacityChannel: "r" | "g" | "b" | "a";
   pbrMetallicRoughness: PbrMetallicRoughnessProperties;
   normalTexture?: NormalTextureInfo;
   occlusionTexture?: OcclusionTextureInfo;
@@ -1160,6 +1163,9 @@ export type MaterialExtensionsPatch = Partial<{
 }>;
 
 export type MaterialAssetPatch = {
+  vertexColors?: boolean;
+  opacityTexture?: MaterialTextureInfoPatch;
+  opacityChannel?: "r" | "g" | "b" | "a";
   shader?: MaterialShader | null;
   pbrMetallicRoughness?: PbrMetallicRoughnessPatch;
   normalTexture?: NormalTextureInfoPatch;
@@ -1187,6 +1193,8 @@ export type MaterialAssetPatch = {
 };
 
 const DEFAULT_MATERIAL_PROPERTIES: MaterialProperties = {
+  vertexColors: false,
+  opacityChannel: "a",
   pbrMetallicRoughness: {
     baseColorFactor: [1, 1, 1, 1],
     metallicFactor: 1,
@@ -1491,6 +1499,9 @@ function applyMaterialPatch(
     currentPbr.roughnessFactor,
   );
 
+  const opacityTexture = hasOwn(patch, "opacityTexture")
+    ? resolveTextureInfo(patch.opacityTexture, current.opacityTexture, manifest)
+    : cloneTextureInfo(current.opacityTexture);
   const baseColorTexture = resolveChosenTextureInfo(
     pbrPatch,
     "baseColorTexture",
@@ -1568,6 +1579,9 @@ function applyMaterialPatch(
 
   return {
     pbrMetallicRoughness,
+    vertexColors: typeof patch.vertexColors === "boolean" ? patch.vertexColors : current.vertexColors,
+    opacityChannel: patch.opacityChannel === "r" || patch.opacityChannel === "g" || patch.opacityChannel === "b" || patch.opacityChannel === "a" ? patch.opacityChannel : current.opacityChannel,
+    ...(opacityTexture ? { opacityTexture } : {}),
     ...(normalTexture ? { normalTexture } : {}),
     ...(occlusionTexture ? { occlusionTexture } : {}),
     emissiveFactor,

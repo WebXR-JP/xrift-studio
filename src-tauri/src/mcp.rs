@@ -4232,6 +4232,9 @@ fn tool_definitions() -> Value {
                         "description": "Material properties. Canonical glTF fields are accepted; the listed aliases assign imported Texture Assets directly.",
                         "properties": {
                             "baseColor": material_texture_slot_schema(),
+                            "vertexColors": { "type": "boolean", "description": "Multiply the model's vertex colors into Diffuse. Models without colors are unchanged." },
+                            "opacityTexture": material_texture_slot_schema(),
+                            "opacityChannel": { "type": "string", "enum": ["r", "g", "b", "a"], "description": "Opacity map component (default a). Set alphaMode to BLEND or MASK, then inspect the assigned model. Use doubleSided for back faces." },
                             "baseColorTexture": material_texture_slot_schema(),
                             "metallicRoughness": material_texture_slot_schema(),
                             "metallicRoughnessTexture": material_texture_slot_schema(),

@@ -658,6 +658,7 @@ function validateMaterialAsset(
     return;
   }
   const properties = asset.properties;
+  validateMaterialTextureInfo(properties.opacityTexture, `${path}.properties.opacityTexture`, assets, issues, "core");
   if (isRecord(properties.pbrMetallicRoughness)) {
     validateMaterialTextureInfo(
       properties.pbrMetallicRoughness.baseColorTexture,

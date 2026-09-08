@@ -25,6 +25,7 @@ import {
 } from "three";
 import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
 import { tauri } from "../../lib/tauri";
+import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
 import { resolveLocalBasisTranscoderPath } from "../../lib/visual-editor/basis-transcoder";
 import {
   getTextureAsset,
@@ -39,6 +40,7 @@ import {
 } from "../../lib/visual-editor";
 
 export type MaterialPreviewTextures = {
+  opacityMap?: Texture;
   baseColorMap?: Texture;
   metallicRoughnessMap?: Texture;
   normalMap?: Texture;
@@ -309,7 +311,7 @@ export function applyCoreMaterialPreviewTextures(
   target.aoMap = textures.occlusionMap ?? null;
   target.aoMapIntensity = properties.occlusionTexture?.strength ?? 1;
   target.emissiveMap = textures.emissiveMap ?? null;
-  target.alphaMap = null;
+  Object.assign(target, materialSurfaceProps(properties, textures.opacityMap));
   target.needsUpdate = true;
 }
 
@@ -333,6 +335,7 @@ function resolvePreviewTextureRequests(
     ]
   > = [
     ["baseColorMap", pbr.baseColorTexture, "srgb"],
+    ["opacityMap", properties.opacityTexture, "linear"],
     ["metallicRoughnessMap", pbr.metallicRoughnessTexture, "linear"],
     ["normalMap", properties.normalTexture, "linear"],
     ["occlusionMap", properties.occlusionTexture, "linear"],
