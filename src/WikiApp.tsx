@@ -22,6 +22,8 @@ import { XRIFT_STUDIO_REPOSITORY_URL } from "./lib/support-links";
 import { BrandMark as AppBrandMark } from "./components/Brand";
 import { CodeBlock } from "./components/CodeBlock";
 
+const STUDIO_SITE_HREF = import.meta.env.DEV ? "../preview.html" : "../";
+
 const REPO_BLOB_BASE = `${XRIFT_STUDIO_REPOSITORY_URL}/blob/main`;
 const WIKI_RAW_BASE = `${REPO_BLOB_BASE}/docs/wiki`;
 
@@ -436,7 +438,7 @@ export default function WikiApp() {
         <div>
           <h1 className="text-xl font-black text-zinc-900">ページが見つかりません</h1>
           <a href="#/index" className="mt-4 inline-block text-sm font-semibold text-violet-700 hover:underline">
-            ホームへ戻る
+            使い方ガイドのトップへ戻る
           </a>
         </div>
       </div>
@@ -446,7 +448,7 @@ export default function WikiApp() {
   return (
     <div className="min-h-screen bg-zinc-50">
       <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white/80 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex min-h-16 max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:h-16 sm:flex-nowrap sm:px-6 sm:py-0 lg:px-8">
           <div className="flex min-w-0 items-center gap-1 sm:gap-2">
             <button
               type="button"
@@ -463,13 +465,11 @@ export default function WikiApp() {
             <SearchResults query={query} onSelect={() => setQuery("")} />
           </div>
           <a
-            href={XRIFT_STUDIO_REPOSITORY_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="hidden items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 sm:inline-flex"
+            href={STUDIO_SITE_HREF}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900"
           >
-            GitHub
-            <ExternalLink size={13} />
+            <ArrowLeft size={13} />
+            XRift Studioの紹介サイト
           </a>
         </div>
       </header>
@@ -562,6 +562,9 @@ export default function WikiApp() {
             XRift Studio 使い方ガイド
           </p>
           <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs font-medium text-zinc-500">
+            <a href={STUDIO_SITE_HREF} className="transition-colors hover:text-violet-700">
+              XRift Studioの紹介サイト
+            </a>
             <a
               href={`${WIKI_RAW_BASE}/index.md`}
               target="_blank"

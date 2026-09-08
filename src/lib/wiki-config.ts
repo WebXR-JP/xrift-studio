@@ -20,7 +20,7 @@ export const WIKI_CATEGORIES: WikiCategory[] = [
 ];
 
 export const WIKI_PAGES: WikiPage[] = [
-  { slug: "index", file: "index.md", title: "使い方の一覧", category: "start", order: 0 },
+  { slug: "index", file: "index.md", title: "はじめて使う方へ", category: "start", order: 0 },
   { slug: "installation", file: "installation.md", title: "インストールとセットアップ", category: "start", order: 1 },
   { slug: "projects", file: "projects.md", title: "プロジェクトを作る・開く", category: "start", order: 2 },
   { slug: "data-and-reset", file: "data-and-reset.md", title: "データの保存場所とリセット", category: "start", order: 3 },
