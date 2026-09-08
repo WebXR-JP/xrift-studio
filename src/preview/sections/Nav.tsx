@@ -1,6 +1,6 @@
 import { Download } from "lucide-react";
 import { BrandLockup } from "../BrandLockup";
-import { XRIFT_STUDIO_WIKI_URL } from "../../lib/support-links";
+import { XRIFT_STUDIO_GUIDE_URL } from "../../lib/support-links";
 
 export function Nav() {
   return (
@@ -23,7 +23,7 @@ export function Nav() {
             試す
           </a>
           <a
-            href={XRIFT_STUDIO_WIKI_URL}
+            href={XRIFT_STUDIO_GUIDE_URL}
             target="_blank"
             rel="noreferrer"
             className="preview-nav-link inline-flex"

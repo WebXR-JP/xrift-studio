@@ -1,12 +1,12 @@
 import { BookOpen, ExternalLink } from "lucide-react";
-import { XRIFT_STUDIO_WIKI_URL } from "../../lib/support-links";
+import { XRIFT_STUDIO_GUIDE_URL } from "../../lib/support-links";
 
-export function WikiCallout() {
+export function GuideCallout() {
   return (
     <section className="preview-section bg-white px-5 lg:px-8">
       <div className="mx-auto max-w-7xl">
         <div
-          className="preview-wiki-callout grid gap-8 rounded-[2rem] border border-zinc-200 bg-zinc-50 p-7 sm:p-10 lg:grid-cols-[1fr_auto] lg:items-center"
+          className="preview-guide-callout grid gap-8 rounded-[2rem] border border-zinc-200 bg-zinc-50 p-7 sm:p-10 lg:grid-cols-[1fr_auto] lg:items-center"
           data-reveal
         >
           <div>
@@ -17,7 +17,7 @@ export function WikiCallout() {
             </p>
           </div>
           <a
-            href={`${XRIFT_STUDIO_WIKI_URL}first-world.html`}
+            href={`${XRIFT_STUDIO_GUIDE_URL}first-world.html`}
             target="_blank"
             rel="noreferrer"
             className="preview-button preview-button-dark preview-button-large w-full sm:w-auto"

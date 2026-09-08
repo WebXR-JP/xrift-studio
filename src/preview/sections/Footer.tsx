@@ -4,7 +4,7 @@ import { repositoryUrl } from "../content";
 import {
   XRIFT_STUDIO_ISSUE_ASSISTANT_GPT_URL,
   XRIFT_STUDIO_ISSUES_URL,
-  XRIFT_STUDIO_WIKI_URL,
+  XRIFT_STUDIO_GUIDE_URL,
 } from "../../lib/support-links";
 
 export function Footer() {
@@ -51,7 +51,7 @@ export function Footer() {
             GitHub
           </a>
           <a
-            href={XRIFT_STUDIO_WIKI_URL}
+            href={XRIFT_STUDIO_GUIDE_URL}
             target="_blank"
             rel="noreferrer"
             className="transition-colors duration-200 hover:text-violet-700"

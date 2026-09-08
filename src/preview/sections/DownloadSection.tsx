@@ -1,4 +1,4 @@
-import { XRIFT_STUDIO_WIKI_URL } from "../../lib/support-links";
+import { XRIFT_STUDIO_GUIDE_URL } from "../../lib/support-links";
 import { useState } from "react";
 import {
   CheckCircle2,
@@ -104,7 +104,7 @@ export function DownloadSection() {
             どのファイルを選ぶか迷う必要はありません。配布元はGitHubのリリースで、
             ファイル名とサイズ、SHA-256はここに表示しています。
           </p>
-          <a href={`${XRIFT_STUDIO_WIKI_URL}installation.html`} className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-violet-700 underline underline-offset-4">
+          <a href={`${XRIFT_STUDIO_GUIDE_URL}installation.html`} className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-violet-700 underline underline-offset-4">
             入手したら：インストールと最初の操作 →
           </a>
           <dl className="mt-7 space-y-2 text-xs font-semibold text-zinc-600">

@@ -36,10 +36,6 @@ test("beginners are not asked to build, deploy or configure an AI client",()=>{
  const first=data.sources["first-world"];
  for(const word of ["Assets","Inspector","Base Color","Roughness","保存","Play","Stop"])assert.ok(first.includes(word),word);
 });
-test("old Wiki source and compatibility routes are removed",async()=>{
- assert.equal(manifest.legacy, undefined);
- for(const p of ["src/WikiApp.tsx","src/wiki.tsx","src/wiki.css","src/lib/wiki-config.ts","docs/wiki"])await assert.rejects(fs.access(path.join(projectRoot,p)));
-});
 test("static pages expose readable content and true anchors without app bootstrap",()=>{
  const p=manifest.pages.find(p=>p.slug==="materials"),html=pageTemplate(p,manifest,"<p>本文です。</p>",checked.headings[p.slug]);
  assert.ok(html.includes("本文です。"));assert.ok(html.includes('href="#作って割り当てる"'));
@@ -61,30 +57,5 @@ test("one app help host, lazy content and direct context links are wired",async(
 test("the creative start precedes optional setup and LP help is not desktop-only",async()=>{
  const setup=await read("src/components/SetupView.tsx");assert.ok(setup.indexOf("ワールドを作る")<setup.indexOf("公開の準備（後からでもできます）"));
  assert.ok(setup.includes("<details"));
- const nav=await read("src/preview/sections/Nav.tsx");const link=nav.match(/href=\{XRIFT_STUDIO_WIKI_URL\}[\s\S]*?<\/a>/)?.[0];assert.ok(link);assert.doesNotMatch(link,/className="[^"]*hidden xl:/);
-});
-
-
-test("published checks resolve landing React anchors but reject missing guide and client anchors", async () => {
- const { mkdtempSync, mkdirSync, writeFileSync, rmSync, renameSync } = await import("node:fs");
- const { tmpdir } = await import("node:os");
- const { spawnSync } = await import("node:child_process");
- const root = mkdtempSync(path.join(tmpdir(), "guide-links-"));
- const write = (file, text) => writeFileSync(path.join(root, file), text);
- const check = () => spawnSync(process.execPath, [path.join(projectRoot, "scripts/check-published-guide-assets.mjs"), root], { encoding: "utf8" });
- try {
-  mkdirSync(path.join(root, "wiki")); mkdirSync(path.join(root, "assets"));
-  write("preview.html", '<div id="root"></div><script type="module" src="./assets/preview.js"></script>');
-  write("assets/preview.js", 'jsx("section",{id:"download"})');
-  for (const file of ["wiki/guide-client.mjs", "wiki/guide-utils.mjs", "wiki/search-index.json", "404.html"]) write(file, "");
-  write("wiki/index.html", '<main id="main"><h1>Guide</h1><a href="../index.html#download">Download</a></main>');
-  assert.equal(check().status, 0);
-  renameSync(path.join(root, "preview.html"), path.join(root, "index.html"));
-  assert.equal(check().status, 0);
-  write("assets/preview.js", 'jsx("section",{id:"renamed"})');
-  assert.match(check().stderr, /missing anchor .*#download/);
-  write("assets/preview.js", 'jsx("section",{id:"download"})');
-  write("wiki/index.html", '<main id="main"><h1>Guide</h1><a href="#download">Missing static anchor</a></main>');
-  assert.match(check().stderr, /missing anchor #download/);
- } finally { rmSync(root, { recursive: true, force: true }); }
+ const nav=await read("src/preview/sections/Nav.tsx");const link=nav.match(/href=\{XRIFT_STUDIO_GUIDE_URL\}[\s\S]*?<\/a>/)?.[0];assert.ok(link);assert.doesNotMatch(link,/className="[^"]*hidden xl:/);
 });

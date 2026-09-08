@@ -21,7 +21,7 @@ import { TryDemo } from "./preview/sections/TryDemo";
 import { ClassicBridge } from "./preview/sections/ClassicBridge";
 import { DownloadSection } from "./preview/sections/DownloadSection";
 import { Faq } from "./preview/sections/Faq";
-import { WikiCallout } from "./preview/sections/WikiCallout";
+import { GuideCallout } from "./preview/sections/GuideCallout";
 import { FinalCta } from "./preview/sections/FinalCta";
 import { Footer } from "./preview/sections/Footer";
 
@@ -148,7 +148,7 @@ export default function PreviewApp() {
       <ClassicBridge />
       <DownloadSection />
       <Faq />
-      <WikiCallout />
+      <GuideCallout />
       <FinalCta />
       <Footer />
     </main>

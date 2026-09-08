@@ -299,8 +299,8 @@ test('built-in TSX code samples retain valid tags and syntax', () => {
 });
 
 test('all guide pages resolve and their menu names match their headings', () => {
-  const { pages: WIKI_PAGES } = JSON.parse(read('docs/guide/manifest.json'));
-  for (const page of WIKI_PAGES) {
+  const { pages: GUIDE_PAGES } = JSON.parse(read('docs/guide/manifest.json'));
+  for (const page of GUIDE_PAGES) {
     const body = read(`docs/guide/${page.file}`);
     const heading = body.match(/^# (.+)$/m)?.[1];
     if (page.slug !== 'index') assert.equal(page.title, heading, page.file);

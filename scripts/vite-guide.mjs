@@ -13,21 +13,21 @@ export function staticGuide({ publish = false } = {}) {
       server.watcher.on("all", (_event, file) => {
         if (/\/(docs\/guide|scripts\/guide)\//.test(file.replaceAll("\\","/")) || file.endsWith("guide-utils.mjs")) {
           generation++;
-          server.ws.send({type:"full-reload",path:"/wiki/*"});
+          server.ws.send({type:"full-reload",path:"/guide/*"});
         }
       });
       server.middlewares.use(async (req,res,next) => {
         let pathname;
         try { pathname = decodeURIComponent(new URL(req.url ?? "/", "http://localhost").pathname); } catch { res.statusCode=400;res.end("Invalid URL");return; }
-        if (pathname === "/wiki") { res.writeHead(302,{Location:"/wiki/"});res.end();return; }
-        if (!pathname.startsWith("/wiki/")) return next();
+        if (pathname === "/guide") { res.writeHead(302,{Location:"/guide/"});res.end();return; }
+        if (!pathname.startsWith("/guide/")) return next();
         try {
           if (!pending && built !== generation) {
             const version=generation;
-            pending=buildGuide({outDir:".guide-dev/wiki"}).then((result) => {built=version;return result;}).finally(() => {pending=undefined;});
+            pending=buildGuide({outDir:".guide-dev/guide"}).then((result) => {built=version;return result;}).finally(() => {pending=undefined;});
           }
           if (pending) await pending;
-          const root=path.join(config.root,".guide-dev/wiki"), relative=pathname.slice("/wiki/".length)||"index.html";
+          const root=path.join(config.root,".guide-dev/guide"), relative=pathname.slice("/guide/".length)||"index.html";
           if (relative.split("/").some((part) => part===".." || part===".") || relative.includes("\\") || relative.includes("\0")) {res.statusCode=400;res.end("Invalid path");return;}
           let file=path.join(root,relative), status=200;
           try { await fs.access(file); } catch {file=path.join(root,"404.html");status=404;}
@@ -37,7 +37,7 @@ export function staticGuide({ publish = false } = {}) {
       });
     },
     async closeBundle() {
-      if (publish && config.command === "build") await buildGuide({outDir:path.join(config.build.outDir,"wiki")});
+      if (publish && config.command === "build") await buildGuide({outDir:path.join(config.build.outDir,"guide")});
     },
   };
 }

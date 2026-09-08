@@ -12,5 +12,5 @@ export const XRIFT_STUDIO_HELP_GPT_URL =
 
 export const XRIFT_STUDIO_ISSUE_ASSISTANT_GPT_URL = XRIFT_STUDIO_HELP_GPT_URL;
 
-export const XRIFT_STUDIO_WIKI_URL =
-  "https://webxr-jp.github.io/xrift-studio/wiki/";
+export const XRIFT_STUDIO_GUIDE_URL =
+  "https://webxr-jp.github.io/xrift-studio/guide/";

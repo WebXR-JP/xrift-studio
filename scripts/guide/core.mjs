@@ -13,11 +13,17 @@ export async function readGuide() {
   }
   return { manifest, sources };
 }
+export function guideContent({ manifest, sources }) {
+  return {
+    headings: Object.fromEntries(Object.entries(sources).map(([slug, text]) => [slug, markdownHeadings(text)])),
+    search: makeSearchEntries(manifest, sources),
+  };
+}
 export async function validateGuide({ manifest, sources }) {
   const errors = [], slugs = new Set(manifest.pages.map((p) => p.slug));
   if (slugs.size !== manifest.pages.length) errors.push("Duplicate page slug");
   if (!slugs.has("index")) errors.push("Missing index");
-  const allHeads = Object.fromEntries(Object.entries(sources).map(([slug, text]) => [slug, markdownHeadings(text)]));
+  const content = guideContent({ manifest, sources }), allHeads = content.headings;
   for (const page of manifest.pages) {
     const heads = allHeads[page.slug];
     if (heads.filter((h) => h.depth === 1).length !== 1 || heads[0]?.text !== page.title) errors.push(`${page.slug}: heading/title mismatch`);
@@ -38,6 +44,6 @@ export async function validateGuide({ manifest, sources }) {
   }
   for (const target of [...manifest.firstSteps, ...manifest.homeTopics]) if (!slugs.has(target)) errors.push(`Missing landing target ${target}`);
   if (errors.length) throw new Error(errors.join("\n"));
-  return { ...manifest, headings: allHeads, search: makeSearchEntries(manifest, sources) };
+  return { ...manifest, ...content };
 }
 export const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));

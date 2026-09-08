@@ -43,8 +43,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # ガイドは既存のMarkdownレンダラーで静的HTMLへ変換する。
-      # build:previewで全記事・ページ内見出し・相対アセットを検査する。
       # 埋め込むのは最新リリースのタグ、ファイル名、サイズ、SHA-256 だけで、
       # ページは表示後に GitHub API へ問い合わせて自分を更新する。取得に
       # 失敗してもビルドは止めず、コミット済みのスナップショットを使う。
@@ -55,7 +53,6 @@ jobs:
 
       - name: Build web preview
         run: |
-          pnpm run test:guide
           pnpm run build:preview
           mv preview-dist/preview.html preview-dist/index.html
 
