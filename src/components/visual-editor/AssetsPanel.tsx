@@ -1365,19 +1365,14 @@ export function AssetsPanel({
   const visibleFolders = searching
     ? []
     : !activeFolderId
-      ? [
-          ...customFolders.filter(
+      ? customFolders.filter(
             (folder) => assets.folders?.[folder.id]?.parentId === null,
-          ),
-          ...KIND_FOLDERS,
-        ]
+          )
       : activeFolder?.custom
         ? customFolders.filter(
             (folder) => assets.folders?.[folder.id]?.parentId === activeFolder.id,
           )
-        : activeFolder?.kind === "model"
-          ? customFolders.filter((folder) => modelFolderIds.has(folder.id))
-          : [];
+        : [];
   const folderAssets = activeFolder?.kind
     ? allAssets.filter((asset) => asset.kind === activeFolder.kind)
     : activeFolder?.custom
