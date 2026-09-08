@@ -228,6 +228,8 @@ export function getEditorComponentMenuDefinitions(
       definition.componentType !== "official-xrift" &&
       // Every Entity already owns its required Transform.
       definition.componentType !== "transform" &&
+      // Offer the official XRift SpawnPoint instead of a second spawn entry.
+      definition.componentType !== "spawn-point" &&
       definition.projectKinds.includes(projectKind),
   );
 }
