@@ -21,6 +21,7 @@ import {
   type CompilerBundledAssetFile,
 } from "./compiler-bundled-assets";
 import { stableSerializeJson } from "./serialization";
+import { sha256Utf8 } from "./compiler/hash";
 import {
   assetBytesToDataUrl,
   convertPublishedTextureBytes,
@@ -329,6 +330,9 @@ export async function exportVisualProjectToClassic(input: {
     input.target.path,
     plan.exportRoot,
   );
+  for (const file of previousManifest?.files ?? []) {
+    if (file.startsWith(`${plan.exportRoot}/backups/`)) generatedFiles.add(file);
+  }
 
   // Bytes are gathered before anything is written, so a missing decoder or
   // font stops the export without leaving a half-written Scene behind.
@@ -400,14 +404,19 @@ export async function exportVisualProjectToClassic(input: {
       input.target.path,
       input.target.entryFile,
     );
-    const backupFile = `${plan.exportRoot}/backups/${input.target.entryFile}`;
-    await tauri.writeTextFile(input.target.path, backupFile, entrySource);
+    const generatedEntry = generateClassicEntrySource(input.documents.project.projectKind, plan.exportId);
+    // Never replace the author's backup with our own generated entry on retry.
+    // Content-addressed revisions preserve edits made between later exports.
+    if (entrySource !== generatedEntry) {
+      const revisionBackup = `${plan.exportRoot}/backups/${input.target.entryFile}.${sha256Utf8(entrySource)}.bak`;
+      await tauri.writeTextFile(input.target.path, revisionBackup, entrySource);
+      generatedFiles.add(revisionBackup);
+    }
     await tauri.writeTextFile(
       input.target.path,
       input.target.entryFile,
-      generateClassicEntrySource(input.documents.project.projectKind, plan.exportId),
+      generatedEntry,
     );
-    generatedFiles.add(backupFile);
     generatedFiles.add(input.target.entryFile);
     integrationFile = input.target.entryFile;
     importSnippet = undefined;
@@ -449,11 +458,24 @@ ${plan.xriftJsonPermissions}`,
     previousManifest?.runtimePackage,
     notes,
   );
+  const installSpecs = new Set(packageState.changes.map((change) => `${change.name}@${change.version}`));
+  for (const spec of plan.packageSpecs) {
+    const { name, version } = parsePackageSpec(spec);
+    let installedVersion: string | undefined;
+    try {
+      const installed: unknown = JSON.parse(await tauri.readTextFile(input.target.path, `node_modules/${name}/package.json`));
+      if (isRecord(installed) && typeof installed.version === "string") installedVersion = installed.version;
+    } catch { /* A declared dependency may not have been installed yet. */ }
+    const satisfies = name === COMPILER_WORLD_COMPONENTS_NAME
+      ? declaredVersionReaches(installedVersion, version)
+      : installedVersion === version;
+    if (!satisfies) installSpecs.add(spec);
+  }
 
   let packageInstallation: ClassicExportResult["packageInstallation"] =
-    packageState.changes.length > 0 ? "recorded" : "unchanged";
+    installSpecs.size > 0 ? "recorded" : "unchanged";
   if (
-    packageState.changes.length > 0 &&
+    installSpecs.size > 0 &&
     input.installDependencies &&
     input.target.canInstallAutomatically
   ) {
@@ -465,7 +487,7 @@ ${plan.xriftJsonPermissions}`,
     });
     const installed = await xrift.installClassicExportPackages(
       input.target.path,
-      packageState.changes.map((change) => `${change.name}@${change.version}`),
+      [...installSpecs],
       input.onLog,
     );
     if (installed.code !== 0) {

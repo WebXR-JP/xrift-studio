@@ -87,11 +87,11 @@
 
 - 最新ビジュアル編集 documentsを先に保存する。公開と同じ`classic-jsx` compiler modeでシーンのソース、素材 copy plan、デコーダー / フォントの同梱plan、diagnostics、生成元の記録を作る。blocking diagnosticがあればコード編集側へ書き始めない。
 - 生成した`src/`一式は`src/xrift-studio/<project-id>/`へ相対importを保ったまま移す。`Scene.tsx`から`XriftStudioScene`として読めるようにする。素材、デコーダー、フォントは公開ワールドが直下しか配信しないため`public/`直下へ置く。生成元の記録とexport manifestは`.xrift-studio/exports/<project-id>/`へ置く。既存`xrift.json`とthumbnailをビジュアル編集 metadataで上書きしない。`permissions`が必要な場合は追加すべき内容を完了画面に示す。
-- 依存packageはcompiler planから決める。`@xrift/world-components`は既存rangeが必要版へ届かない時だけ固定する。テキスト（troika-three-text）とOpen Brush（three-icosa）は必要な時だけ追加する。npm projectでは固定allow-listのpackageを自動installできる。変更がなければinstallを走らせない。pnpm／Yarn／Bun projectは別lockfileを作らない。`package.json`へのdependency記録と既存package managerでのinstall案内までにする。
+- 依存packageはcompiler planから決める。`@xrift/world-components`は既存rangeが必要版へ届かない時だけ固定する。テキスト（troika-three-text）とOpen Brush（three-icosa）は必要な時だけ追加する。npm projectでは固定allow-listのpackageを自動installできる。package.jsonの記載だけでなく取得済みバージョンも確認し、不足がある場合は再試行でもinstallを実行する。不足がなければinstallを走らせない。pnpm／Yarn／Bun projectは別lockfileを作らない。`package.json`へのdependency記録と既存package managerでのinstall案内までにする。
 
 ### 成功時
 
-- シーンのソース、実行環境 module、素材、デコーダー / フォント、接続component、生成元の記録、export manifestを残す。前回のexportが記録したfileのうち今回生成しないものは取り除く。手書きfileとbackupには触れない。開始ファイル切替時は元開始ファイルのbackup pathをmanifest管理領域へ保存する。
+- シーンのソース、実行環境 module、素材、デコーダー / フォント、接続component、生成元の記録、export manifestを残す。前回のexportが記録したfileのうち今回生成しないものは取り除く。手書きfileとbackupには触れない。開始ファイル切替時は内容ごとにバックアップを保存し、そのパスをmanifestへ記録する。再実行でも初回と途中の手直しを保持する。生成済みの開始ファイルはバックアップを増やさない。
 - 完了dialogに「フォルダーを開く」「VS Codeで開く」「ターミナルを開く」を残す。コンポーネント追加では開始ファイルへ貼るimport／JSX snippetをコピーできる。
 
 ### 失敗時

@@ -24,6 +24,7 @@ export async function runClassicExportFixtureAssertions(): Promise<void> {
     [key(targetPath, "package.json"), `${JSON.stringify({ name: "fixture-classic", private: true, dependencies: { react: "19.0.0", "@xrift/world-components": "^0.47.0" } }, null, 2)}\n`],
     [key(targetPath, "xrift.json"), "{}\n"],
     [key(targetPath, "src/World.tsx"), originalEntry],
+    [key(targetPath, "node_modules/@xrift/world-components/package.json"), JSON.stringify({ version: "0.47.0" })],
   ]);
   const rootEntries: FsEntry[] = [
     { name: "package.json", rel: "package.json", isDir: false, size: 1 },
@@ -177,7 +178,7 @@ export async function runClassicExportFixtureAssertions(): Promise<void> {
       files.get(key(targetPath, `.xrift-studio/exports/${exportId}/export-manifest.json`)) ?? "{}",
     );
     const backupPath = replaceManifest.files?.find((file: unknown) =>
-      typeof file === "string" && file.endsWith("/backups/src/World.tsx"),
+      typeof file === "string" && file.includes("/backups/src/World.tsx.") && file.endsWith(".bak"),
     );
     assert(typeof backupPath === "string", "entry backup was not recorded in the manifest");
     assert(
@@ -192,6 +193,59 @@ export async function runClassicExportFixtureAssertions(): Promise<void> {
       deleted.length === 0,
       `re-exporting the same Scene must not delete files it still generates, deleted ${deleted.join(", ")}`,
     );
+
+    await exportVisualProjectToClassic({
+      authoringProjectPath: authoringPath, target, documents,
+      integration: "replace-entry", installDependencies: false,
+      save: async () => authoringPath, report: () => undefined,
+      onLog: () => undefined, loadBundledAssets: async () => [],
+    });
+    assert(files.get(key(targetPath, backupPath)) === originalEntry,
+      "replacing the entry twice destroyed the author's original backup");
+    const editedEntry = 'export const World = () => <group name="edited-after-export" />;\n';
+    files.set(key(targetPath, "src/World.tsx"), editedEntry);
+    await exportVisualProjectToClassic({
+      authoringProjectPath: authoringPath, target, documents,
+      integration: "replace-entry", installDependencies: false,
+      save: async () => authoringPath, report: () => undefined,
+      onLog: () => undefined, loadBundledAssets: async () => [],
+    });
+    assert(files.get(key(targetPath, backupPath)) === originalEntry,
+      "backing up a later edit replaced the first backup");
+    assert([...files.entries()].some(([path, content]) => path.includes("/backups/") && content === editedEntry),
+      "a hand-written revision made after export was not backed up");
+
+    // package.json can already be correct after an interrupted installation.
+    // The next export must check what is actually installed and retry it.
+    files.delete(key(targetPath, "node_modules/@xrift/world-components/package.json"));
+    const retryInput = {
+      authoringProjectPath: authoringPath, target, documents,
+      integration: "component" as const, installDependencies: true,
+      save: async () => authoringPath, report: () => undefined,
+      onLog: () => undefined, loadBundledAssets: async () => [],
+    };
+    let attempts = 0;
+    const successfulInstall = xrift.installClassicExportPackages;
+    Object.assign(xrift, { installClassicExportPackages: async () => {
+      attempts += 1;
+      if (attempts === 1) return { code: 1, stdout: "", stderr: "fixture offline" };
+      files.set(key(targetPath, "node_modules/@xrift/world-components/package.json"), JSON.stringify({ version: "0.47.0" }));
+      return { code: 0, stdout: "installed", stderr: "" };
+    } });
+    let failed = false;
+    try { await exportVisualProjectToClassic(retryInput); } catch { failed = true; }
+    assert(failed && attempts === 1, "missing installed dependency did not attempt installation");
+    const retried = await exportVisualProjectToClassic(retryInput);
+    assert(Number(attempts) === 2 && retried.packageInstallation === "installed", "failed installation was skipped on retry");
+    await exportVisualProjectToClassic(retryInput);
+    assert(Number(attempts) === 2, "installed dependency was unnecessarily installed again");
+    files.set(key(targetPath, "node_modules/@xrift/world-components/package.json"), JSON.stringify({ version: "0.43.0" }));
+    const manual = await exportVisualProjectToClassic({ ...retryInput, installDependencies: false });
+    assert(manual.packageInstallation === "recorded" && manual.installCommand === "npm install" && Number(attempts) === 2,
+      "an outdated installation must offer manual install when automatic install is off");
+    await exportVisualProjectToClassic(retryInput);
+    assert(Number(attempts) === 3, "outdated installed dependency was accepted because package.json was current");
+    Object.assign(xrift, { installClassicExportPackages: successfulInstall });
 
     // A richer world: Text pulls in a font and the troika package, a Script
     // emits its own module under scripts/, and a texture is copied to the

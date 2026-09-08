@@ -245,7 +245,10 @@ export function ClassicExportDialog({
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <h3 className="text-sm font-semibold text-amber-950">必要なパッケージをインストールする</h3>
                   <p className="mt-1 text-xs leading-5 text-amber-900/80">
-                    {result.packageChanges.map((change) => `${change.name}@${change.version}`).join("、")}をpackage.jsonへ記録しました。書き出し先で次のコマンドを実行してください。
+                    {result.packageChanges.length > 0
+                      ? `${result.packageChanges.map((change) => `${change.name}@${change.version}`).join("、")}をpackage.jsonへ記録しました。`
+                      : "必要なパッケージが未取得か、インストール済みのバージョンが不足しています。"}
+                    書き出し先で次のコマンドを実行してください。
                   </p>
                   <code className="mt-2 block rounded-lg bg-amber-950 px-3 py-2 text-xs text-amber-50">
                     {result.installCommand}
