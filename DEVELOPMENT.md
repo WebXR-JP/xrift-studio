@@ -52,7 +52,7 @@ pnpm tauri:dev
 
 日常の検証は AGENT.md の「高速フィードバックループ」に従います。`pnpm typecheck`、`cargo check`、ブラウザプレビュー（`.claude/launch.json` の `web` サーバーで `http://localhost:1420/preview.html`）、検証目的の `pnpm tauri:dev` と Tauri MCP による読み取りは、そのまま実行して構いません。`pnpm tauri:build`、インストーラ生成、実機での書き込みを伴う UI 操作は、成果物・アプリデータ・外部公開先に影響するため、実行前にユーザーへ目的と副作用を示して許可を得ます。Markdown の追加・編集時には絵文字を使いません。
 
-主要導線のE2Eは日常の検証やPull Requestでは実行せず、手動のRelease workflowでOS別ビルドの前に1回だけ実行します。テスト範囲、アップロード禁止境界、失敗時の確認方法は [リリース前 E2E](./docs/RELEASE_E2E.md) を参照してください。
+手動のRelease workflowでは、主要導線9件のE2EをOS別ビルドの前に実行します。個別機能の回帰テストは変更時に `pnpm e2e:test e2e/<対象>.spec.ts` で実行し、全件は `pnpm e2e:test` で確認できます。テスト範囲、アップロード禁止境界、失敗時の確認方法は [リリース前 E2E](./docs/RELEASE_E2E.md) を参照してください。
 
 ## 紹介ページのダウンロード導線
 
@@ -138,7 +138,7 @@ GitHub Actions のリポジトリ Secrets に次を登録してください。
 
 ### 所要時間の作り
 
-OS 別ビルドの前に置く検査は `verify` と `Release E2E` の 2 job に分けて同時に走らせます。E2E は `--shard` で 3 台へ配り、1 台あたりの worker は 1 のまま保ちます。台数だけを増やす分割なので、テストが同じ機械で CPU を奪い合ってタイムアウト付近で不安定になることはありません。
+OS別ビルドの前に置く検査は `verify` と `Release smoke E2E` の2 jobに分けて同時に走らせます。E2Eは `pnpm e2e:smoke` で主要導線9件に絞り、1台・1 workerで実行します。型検査とコンパイラfixture・公開ステージング検査は引き続き `verify` で行います。
 
 Rust の成果物は `src-tauri/target` と `src-tauri/target-mcp-sidecar` の両方をキャッシュします。MCP sidecar は `--target-dir` で別のディレクトリへ出力するため、`target` だけをキャッシュしていた頃は毎回すべての依存を作り直していました。`Swatinem/rust-cache` の `workspaces` から片方を落とすと、その分がまるごと戻ります。
 

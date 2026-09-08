@@ -11,9 +11,8 @@ name: Release
 #
 # 所要時間の設計:
 #   OS 別ビルドの前に置く検査は verify と release-e2e の 2 job に分け、
-#   同時に走らせる。E2E は --shard で 3 台へ配り、1 台あたりの worker は
-#   1 のまま保つ。台を増やすだけなので、テスト同士が CPU を奪い合って
-#   タイムアウト付近で不安定になることはない。
+#   同時に走らせる。E2E は主要導線9件に絞り、1台・1 worker で実行する。
+#   個別機能の回帰テストは変更時に選んで実行する。
 #   Rust の成果物は src-tauri/target と src-tauri/target-mcp-sidecar の
 #   両方をキャッシュする。sidecar は別の target ディレクトリへ出力するので、
 #   target だけをキャッシュしていた頃は毎回すべての依存を作り直していた。
@@ -79,8 +78,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ inputs.tag }}
         run: node scripts/prepare-release-notes.mjs
-      # E2E の shard は playwright だけを実行する。型検査はここで 1 回だけ
-      # 行い、3 台で同じ tsc を繰り返さない。
+      # 型検査はここで1回だけ行い、E2E jobでは繰り返さない。
       - name: Typecheck app and E2E
         run: pnpm typecheck && pnpm e2e:typecheck
 
@@ -91,13 +89,8 @@ jobs:
         run: pnpm cli:test
 
   release-e2e:
-    name: Release E2E ${{ matrix.shard }}/3
+    name: Release smoke E2E
     runs-on: ubuntu-22.04
-
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
 
     steps:
       - name: Checkout
@@ -124,13 +117,13 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run release E2E before upload
-        run: pnpm e2e:test --shard=${{ matrix.shard }}/3
+        run: pnpm e2e:smoke
 
       - name: Upload E2E failure report
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: release-e2e-report-${{ matrix.shard }}
+          name: release-e2e-report
           path: |
             playwright-report/
             test-results/

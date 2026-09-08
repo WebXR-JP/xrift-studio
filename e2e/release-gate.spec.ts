@@ -45,7 +45,7 @@ test.afterEach(async ({ page }) => {
   ).toEqual([]);
 });
 
-test("初回セットアップからプロジェクト一覧へ進める", async ({ page }) => {
+test("初回セットアップからプロジェクト一覧へ進める", { tag: "@release-smoke" }, async ({ page }) => {
   await openReleaseApp(page, "setup");
 
   await expect(
@@ -265,7 +265,7 @@ const creationCases = [
 ] as const;
 
 for (const creationCase of creationCases) {
-  test(`${creationCase.title}を作成して編集画面まで開ける`, async ({ page }) => {
+  test(`${creationCase.title}を作成して編集画面まで開ける`, { tag: "@release-smoke" }, async ({ page }) => {
     await openProjectLibrary(page);
     await page.getByRole("button", { name: /新規プロジェクト/ }).click();
     await page
@@ -295,7 +295,7 @@ for (const creationCase of creationCases) {
   });
 }
 
-test("コードエディターのワールドを編集・保存・動作確認し、公開前確認で停止する", async ({
+test("コードエディターのワールドを編集・保存・動作確認し、公開前確認で停止する", { tag: "@release-smoke" }, async ({
   page,
 }) => {
   await openProjectLibrary(page);
@@ -343,7 +343,7 @@ test("コードエディターのワールドを編集・保存・動作確認�
   );
 });
 
-test("クラシックアイテムのセキュリティチェックを完了できる", async ({
+test("クラシックアイテムのセキュリティチェックを完了できる", { tag: "@release-smoke" }, async ({
   page,
 }) => {
   await openProjectLibrary(page);
@@ -361,7 +361,7 @@ test("クラシックアイテムのセキュリティチェックを完了で�
   ).toBe(true);
 });
 
-test("ビジュアルワールドを編集・Playし、公開確認で送信前に停止する", async ({
+test("ビジュアルワールドを編集・Playし、公開確認で送信前に停止する", { tag: "@release-smoke" }, async ({
   page,
 }) => {
   await openProjectLibrary(page);
@@ -534,7 +534,7 @@ test("ビジュアルエディターで地形を作成・整形できる", async
   ).toHaveCount(0);
 });
 
-test("ビジュアルエディターの一時保存失敗は自動再試行で復帰する", async ({
+test("ビジュアルエディターの一時保存失敗は自動再試行で復帰する", { tag: "@release-smoke" }, async ({
   page,
 }) => {
   await page.goto("/e2e.html?scenario=ready&saveFailures=3");
