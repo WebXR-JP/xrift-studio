@@ -75,8 +75,8 @@ test("参照されているAssetを、削除ダイアログから参照を外し
   await page.getByRole("button", { name: "作成して開く" }).click();
   await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
 
-  // The blank starter's floor Material is used by the Scene and by the Ground
-  // Platform Prefab, so the delete is refused with one row per owner.
+  // The blank starter's floor Material is used by the Scene, so the delete is
+  // refused with a row that lets the author unlink that owner in place.
   await page.getByPlaceholder("アセットを検索…").fill("Neutral Ground");
   await page
     .getByRole("button", { name: "Neutral Groundを削除" })
@@ -85,24 +85,23 @@ test("参照されているAssetを、削除ダイアログから参照を外し
 
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("heading", { name: "アセットを削除" })).toBeVisible();
-  await expect(dialog.getByText("2件の参照があります")).toBeVisible();
+  await expect(dialog.getByText("1件の参照があります")).toBeVisible();
   const references = dialog.getByRole("list", { name: "素材の参照元" });
-  await expect(references.getByRole("listitem")).toHaveCount(2);
+  await expect(references.getByRole("listitem")).toHaveCount(1);
   await expect(references.getByText("参照を空にする").first()).toBeVisible();
 
-  // Unlinking one row clears that owner and leaves the rest, in place.
+  // Unlinking the row clears the final owner and keeps the dialog open so the
+  // now-safe deletion can be completed without finding the Asset again.
   await dialog
     .getByRole("button", { name: "床の参照を外す", exact: true })
     .click();
-  await expect(dialog.getByText("1件の参照があります")).toBeVisible();
-  await expect(references.getByRole("listitem")).toHaveCount(1);
+  await expect(references).toHaveCount(0);
   await expect(page.getByText("「床」の参照を外しました")).toBeVisible();
 
-  // The footer finishes the job: unlink what is left, then delete.
-  await dialog.getByRole("button", { name: "参照を外して削除" }).click();
+  await dialog.getByRole("button", { name: "削除", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(
-    page.getByText("参照1件を外して「Neutral Ground」を削除しました"),
+    page.getByText("「Neutral Ground」をAssetsから削除しました"),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Neutral Groundを削除" }),

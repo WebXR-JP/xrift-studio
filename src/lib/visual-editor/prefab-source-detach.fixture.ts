@@ -1,6 +1,7 @@
 import { serializeVisualProjectDocuments } from "./persistence";
 import { createStarterWorldProject } from "./starter-templates";
 import type { SceneDocument } from "./scene-document";
+import { addPrefabAsset, createPrefabDocument } from "./prefab-document";
 
 function assert(condition: boolean, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -18,19 +19,32 @@ function assert(condition: boolean, message: string): asserts condition {
  */
 export function runPrefabSourceDetachFixtureAssertions(): void {
   const plan = createStarterWorldProject("blank", "prefab-detach-fixture");
+  const prefab = createPrefabDocument(plan.scene, plan.assets, {
+    prefabId: "prefab-detach-fixture",
+    name: "Detached source fixture",
+    sourceRootEntityIds: ["starter-floor"],
+  })?.document;
+  assert(prefab !== undefined, "The Prefab source fixture could not be created");
+  const prefabs = { [prefab.prefabId]: prefab };
+  const prefabAsset = addPrefabAsset(plan.assets, {
+    id: "prefab-detach-fixture-asset",
+    name: prefab.name,
+    prefabPath: `prefabs/${prefab.prefabId}.prefab.json`,
+  });
+  assert(prefabAsset.added, "The Prefab fixture Asset could not be created");
   const documents = {
     project: plan.project,
     scenes: { [plan.scene.sceneId]: plan.scene },
-    assets: plan.assets,
-    prefabs: plan.prefabs,
+    assets: prefabAsset.manifest,
+    prefabs,
   };
 
-  const sourceRootIds = Object.values(plan.prefabs).flatMap(
+  const sourceRootIds = Object.values(prefabs).flatMap(
     (prefab) => prefab.source.rootEntityIds,
   );
   assert(
     sourceRootIds.length > 0,
-    "The blank starter no longer ships a Prefab to detach",
+    "The Prefab fixture has no source Entity to detach",
   );
   const detachedId = sourceRootIds[0];
   assert(
@@ -66,16 +80,16 @@ export function runPrefabSourceDetachFixtureAssertions(): void {
 
   // The scene reference is still required: a Prefab pointing at a Scene the
   // document set does not contain means the set itself is incomplete.
-  const [prefabId, prefab] = Object.entries(plan.prefabs)[0];
+  const [prefabId, currentPrefab] = Object.entries(prefabs)[0];
   let missingSceneFailure: string | null = null;
   try {
     serializeVisualProjectDocuments({
       ...documents,
       prefabs: {
-        ...plan.prefabs,
+        ...prefabs,
         [prefabId]: {
-          ...prefab,
-          source: { ...prefab.source, sceneId: "scene-that-is-gone" },
+          ...currentPrefab,
+          source: { ...currentPrefab.source, sceneId: "scene-that-is-gone" },
         },
       },
     });
