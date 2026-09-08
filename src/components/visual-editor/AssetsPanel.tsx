@@ -487,7 +487,6 @@ function AssetCard({
   viewMode,
   readOnly,
   onSelect,
-  onPlace,
   onOpen,
   onDelete,
   onOpenContext,
@@ -500,7 +499,6 @@ function AssetCard({
   viewMode: ViewMode;
   readOnly: boolean;
   onSelect: (assetId: string, event: MouseEvent<HTMLButtonElement>) => void;
-  onPlace: () => void;
   onOpen: () => void;
   onDelete: () => void;
   onOpenContext: (event: MouseEvent<HTMLElement>) => void;
@@ -557,7 +555,7 @@ function AssetCard({
     return (
       <div
         onContextMenu={onOpenContext}
-        className={`group relative grid min-w-0 grid-cols-[40px_minmax(110px,1fr)_82px_86px_66px_46px_26px] items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-left ${
+        className={`group relative grid min-w-0 grid-cols-[28px_minmax(110px,1fr)_82px_86px_24px_26px] items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-left ${
           selected
             ? "border-brand-300 bg-brand-50"
             : "border-transparent bg-editor-surface hover:bg-editor-subtle"
@@ -572,49 +570,24 @@ function AssetCard({
           onClick={(event) => onSelect(asset.id, event)}
           onDoubleClick={() => onOpen()}
           title={commandTitle(`${asset.name}を選択／${dragDescription}`, "SelectAsset")}
-          className="col-span-5 grid cursor-grab grid-cols-[40px_minmax(110px,1fr)_82px_86px_66px] items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 active:cursor-grabbing"
+          className="col-span-5 grid cursor-grab grid-cols-[28px_minmax(110px,1fr)_82px_86px_24px] items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 active:cursor-grabbing"
         >
           <span
             data-asset-drag-preview="true"
-            className="pointer-events-none h-8 overflow-hidden rounded bg-editor-subtle"
+            className="pointer-events-none h-7 overflow-hidden rounded bg-editor-subtle"
           >
             <AssetThumbnail asset={asset} assets={assets} projectPath={projectPath} />
           </span>
           <span className="min-w-0">
             <span className="block truncate text-[11px] font-semibold leading-4 text-slate-800">{asset.name}</span>
-            <span className="block truncate text-[10px] leading-4 text-slate-500">
-              {assetSourceLabel(asset)}
-            </span>
-            {folderPath ? (
-              <span className="block truncate text-[10px] leading-4 text-slate-400" title={folderPath}>
-                {folderPath}
-              </span>
-            ) : null}
           </span>
           {sizeSummary ?? <span />}
           <span className="flex items-center gap-1 text-[11px] text-slate-500">
             <KindIcon size={11} aria-hidden="true" />
             <span className="truncate">{assetKindLabel(asset)}</span>
           </span>
-          <span className="truncate text-right text-[11px] font-medium text-slate-500">{asset.status}</span>
+          <span title={asset.status !== "ready" ? asset.status : undefined}>{asset.status !== "ready" ? <EDITOR_ICONS.warning size={14} aria-label={asset.status} className="text-amber-700" /> : null}</span>
         </button>
-        {placeable ? (
-          <button
-            type="button"
-            data-no-asset-drag="true"
-            disabled={readOnly}
-            onClick={(event) => {
-              event.stopPropagation();
-              onPlace();
-            }}
-            title={commandTitle(`${asset.name}をシーンの直下へ配置`, "PlaceSceneAsset")}
-            className="rounded-md px-1.5 py-0.5 text-[11px] font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-40"
-          >
-            配置
-          </button>
-        ) : (
-          <span />
-        )}
         <button
           type="button"
           data-no-asset-drag="true"
@@ -696,21 +669,6 @@ function AssetCard({
           ) : null}
         </span>
       </button>
-      {placeable ? (
-        <button
-          type="button"
-          data-no-asset-drag="true"
-          disabled={readOnly}
-          onClick={(event) => {
-            event.stopPropagation();
-            onPlace();
-          }}
-          title={commandTitle(`${asset.name}をシーンの直下へ配置`, "PlaceSceneAsset")}
-          className="border-t border-editor-border/70 bg-editor-subtle px-1.5 py-1 text-[11px] font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-40"
-        >
-          シーンへ配置
-        </button>
-      ) : null}
       <button
         type="button"
         data-no-asset-drag="true"
@@ -1866,7 +1824,7 @@ export function AssetsPanel({
               viewMode={viewMode}
               readOnly={assetMutationLocked}
               onSelect={handleAssetSelect}
-              onPlace={() => onPlaceSceneAsset(asset.id)}
+
               onOpen={() => {
                 if (asset.kind === "interactivity") onOpenInteractivity(asset.id);
                 if (asset.kind === "script") {

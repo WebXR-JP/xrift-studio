@@ -186,6 +186,10 @@ test("Inspector adds to the selection while Create adds a new Entity", async ({ 
   await expect(tree.getByRole("treeitem")).toHaveCount(initialCount + 1);
   await expect(tree.getByRole("treeitem", { selected: true })).toContainText("Cube");
   await page.screenshot({ path: testInfo.outputPath("editor-component-flow.png") });
+  await page.getByRole("button", { name: "リスト表示", exact: true }).click();
+  await expect(page.getByText("document", { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath("asset-list-compact.png") });
+  await page.getByRole("button", { name: "グリッド表示", exact: true }).click();
   await tree.getByText("床", { exact: true }).click();
   await tree.getByText("Cube", { exact: true }).click({ modifiers: ["Control"] });
   await expect(tree.getByRole("treeitem", { selected: true })).toHaveCount(2);
