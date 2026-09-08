@@ -375,7 +375,9 @@ test("ビジュアルワールドを編集・Playし、公開確認で送信前�
 
   await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
   await page.getByRole("button", { name: "追加", exact: true }).click();
-  await page.getByRole("button", { name: /空のEntity/ }).click();
+  const menu = page.getByRole("menu", { name: "Entityを追加" });
+  await menu.getByRole("button", { name: /^Entity [0-9]+$/ }).click();
+  await menu.getByRole("button", { name: /空のEntity/ }).click();
   await expect(
     page
       .getByRole("tree", { name: "シーンのEntity階層" })
@@ -431,17 +433,13 @@ test("ビジュアルエディターでテキスト看板を置き、書体と�
   await page.getByRole("button", { name: "作成して開く" }).click();
 
   await page.getByRole("button", { name: "追加", exact: true }).click();
-  // Searched rather than navigated: the entry has to be findable by name from
-  // the same box that finds every other creation.
-  await page.getByPlaceholder("Component・Entityを検索…").fill("テキスト看板");
-  await page.getByRole("button", { name: /テキスト看板/ }).first().click();
+  const menu = page.getByRole("menu", { name: "Entityを追加" });
+  await menu.getByRole("button", { name: /^Entity [0-9]+$/ }).click();
+  await menu.getByRole("button", { name: /空のEntity/ }).click();
+  await page.getByRole("button", { name: "Add Component", exact: true }).click();
+  await page.getByPlaceholder("Componentを検索…").fill("Text (Panel)");
+  await page.getByRole("button", { name: "Text (Panel)", exact: true }).click();
   await expect(page.getByText("Componentを追加しました")).toBeVisible();
-  // The Assets pane owns the Inspector until an Entity is picked again.
-  await page
-    .getByRole("tree", { name: "シーンのEntity階層" })
-    .getByText("Environment", { exact: true })
-    .click();
-
   // The preset has to arrive usable: a plate behind the words and a Japanese
   // face already chosen, not a bare Text the author has to assemble.
   const inspector = page.getByRole("textbox", { name: "表示する文字" });
@@ -496,7 +494,9 @@ test("ビジュアルエディターで地形を作成・整形できる", async
   await page.getByRole("button", { name: "作成して開く" }).click();
 
   await page.getByRole("button", { name: "追加", exact: true }).click();
-  await page.getByRole("button", { name: /地形/ }).click();
+  const menu = page.getByRole("menu", { name: "Entityを追加" });
+  await menu.locator("summary").filter({ hasText: /^Terrain$/ }).click();
+  await menu.getByRole("button", { name: "Terrain", exact: true }).click();
   await expect(
     page
       .getByRole("tree", { name: "シーンのEntity階層" })
@@ -550,7 +550,9 @@ test("ビジュアルエディターの一時保存失敗は自動再試行で�
   await page.getByRole("button", { name: "作成して開く" }).click();
 
   await page.getByRole("button", { name: "追加", exact: true }).click();
-  await page.getByRole("button", { name: /空のEntity/ }).click();
+  const menu = page.getByRole("menu", { name: "Entityを追加" });
+  await menu.getByRole("button", { name: /^Entity [0-9]+$/ }).click();
+  await menu.getByRole("button", { name: /空のEntity/ }).click();
 
   const header = page.locator("header");
   await expect(header.getByText("保存エラー", { exact: true })).toHaveCount(0);
