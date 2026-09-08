@@ -12,7 +12,7 @@ export function CompactEditorGate({
   onBack: () => void;
   onContinue: () => void;
 }) {
-  const kindLabel = projectKind === "world" ? "World" : "Item";
+  const kindLabel = projectKind === "world" ? "ワールド" : "アイテム";
 
   return (
     <main className="preview-compact-editor-gate min-h-screen overflow-x-hidden px-5 py-5">
@@ -26,7 +26,7 @@ export function CompactEditorGate({
           紹介ページ
         </button>
         <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-700">
-          最新{kindLabel} Editor
+          {kindLabel}のデモ
         </span>
       </div>
 
@@ -38,7 +38,7 @@ export function CompactEditorGate({
           編集には広い画面をおすすめします。
         </h1>
         <p className="mt-4 text-sm leading-7 text-zinc-600">
-          Hierarchy、シーン、Assets、Inspectorを同時に開く制作画面です。スマホなら横向きに、できればタブレットかパソコンでどうぞ。
+          ビジュアルエディターは、Hierarchy、シーン、Assets、Inspectorを同時に使う画面です。スマホなら横向きに、できればタブレットかパソコンでどうぞ。
         </p>
 
         <div className="mx-auto mt-8 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl shadow-violet-950/10">
@@ -52,7 +52,7 @@ export function CompactEditorGate({
             className="preview-button preview-button-primary preview-button-large w-full"
           >
             <Play size={16} fill="currentColor" />
-            このまま最新エディターを開く
+            ビジュアルエディターを開く
           </button>
           <a
             href={releaseUrl}

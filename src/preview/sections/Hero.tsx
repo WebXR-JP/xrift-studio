@@ -48,7 +48,7 @@ export function Hero({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => void }
             className="mx-auto mt-7 max-w-2xl text-pretty text-base leading-8 text-zinc-600 sm:text-lg"
             data-reveal
           >
-            地形を彫り、草を生やし、水と空をつくる。手元の3Dモデルやアバターを置いて、その場でプレイ。
+            ビジュアルエディターで地形や水、空をつくり、モデルを配置。Playで歩いて確かめたら、Stopで編集へ戻れます。
             書き出しもビルドも挟まず、XRiftへそのまま公開できます。
           </p>
           <ul
@@ -82,7 +82,7 @@ export function Hero({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => void }
               className="preview-button preview-button-light preview-button-large w-full max-w-xs sm:w-auto"
             >
               <Play size={16} fill="currentColor" />
-              エディターを試す（このページで）
+              ビジュアルエディターを試す
             </button>
           </div>
           {/*
@@ -142,7 +142,7 @@ export function Hero({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => void }
           className="mx-auto mt-8 grid max-w-5xl grid-cols-2 gap-x-6 gap-y-4 border-y border-zinc-200/80 py-5 text-center sm:grid-cols-4"
           data-reveal
         >
-          {["ビジュアル制作", "コード制作", "プレイで確認", "XRiftへ公開"].map((item) => (
+          {["ビジュアルエディター", "コードエディター", "Play / Stop", "XRiftへ公開"].map((item) => (
             <span
               key={item}
               className="flex items-center justify-center gap-2 text-xs font-bold text-zinc-600 sm:text-sm"

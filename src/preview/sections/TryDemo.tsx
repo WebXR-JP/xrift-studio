@@ -17,11 +17,11 @@ export function TryDemo({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => voi
                 ダウンロードする前に、ここで触れます。
               </h2>
               <p className="preview-section-copy mt-5 max-w-2xl">
-                実際のXRift Studioと同じビジュアルエディターが、このページで開きます。シーンを選び、素材を置き、見た目を整える流れを、インストール前に確かめられます。
+                ビジュアルエディターを、このページで試せます。素材を配置してPlayで確かめ、Stopで編集へ戻る流れを、インストール前に体験できます。
               </p>
               <div className="mt-5 flex flex-wrap gap-2 text-[11px] font-bold">
                 <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-emerald-700">
-                  エディター本体がそのまま動く
+                  ビジュアルエディターのデモ
                 </span>
                 <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-zinc-600">
                   ワールド / アイテム対応
@@ -38,7 +38,7 @@ export function TryDemo({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => voi
                 className="preview-button preview-button-primary preview-button-large w-full sm:w-auto"
               >
                 <Globe2 size={17} />
-                ワールドエディターを試す
+                ワールドのデモを開く
               </button>
               <button
                 type="button"
@@ -46,7 +46,7 @@ export function TryDemo({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => voi
                 className="preview-button preview-button-light preview-button-large w-full sm:w-auto"
               >
                 <Box size={17} />
-                アイテムエディターを試す
+                アイテムのデモを開く
               </button>
             </div>
           </div>

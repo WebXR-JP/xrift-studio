@@ -11,13 +11,13 @@ export function ClassicBridge() {
           <div>
             <span className="inline-flex items-center gap-2 text-xs font-black text-blue-300">
               <Code2 size={15} />
-              コードで続けたいときも
+              コードエディター
             </span>
             <h2 className="mt-5 text-3xl font-black leading-tight tracking-[-0.045em] sm:text-4xl">
               画面で作ったシーンを、コードへ持ち出せる。
             </h2>
             <p className="mt-5 text-sm leading-7 text-zinc-400">
-              画面で作ったものをコードプロジェクトへ書き出すことも、既存のR3F／XRiftコードをシーンへ取り込むこともできます。どちらから始めても、行き止まりになりません。
+              「コードエディターへ書き出す」で、ビジュアルエディターのシーンをコードプロジェクトへ引き継げます。既存のR3F／XRiftコードをビジュアルエディターへ取り込むこともできます。
             </p>
             <p className="mt-4 text-[11px] font-semibold text-zinc-500">
               コードプロジェクトへの変換はまだ開発版です
@@ -26,7 +26,7 @@ export function ClassicBridge() {
           <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30 font-mono text-xs shadow-inner">
             <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 text-zinc-500">
               <span className="h-2 w-2 rounded-full bg-violet-400" />
-              ワールド.tsx
+              World.tsx
             </div>
             <div className="overflow-x-auto p-5 leading-7 text-zinc-300">
               <p>
@@ -35,7 +35,7 @@ export function ClassicBridge() {
                 <span className="text-amber-200">'./xrift-studio/twilight-lakeside'</span>
               </p>
               <p className="mt-3">
-                <span className="text-violet-300">export const</span> ワールド = () =&gt; {"("}
+                <span className="text-violet-300">export const</span> World = () =&gt; {"("}
               </p>
               <p className="pl-5 text-blue-200">&lt;XRiftStudioScene /&gt;</p>
               <p>{")"}</p>

@@ -63,7 +63,7 @@ export function WorldTools() {
           <figure className="preview-showcase">
             <img
               src="./editor-interactivity.webp"
-              alt="ノードグラフのノードエディター。「開始時」のノードから「アニメーション再生」のノードへ線がつながっている"
+              alt="ワールドの開始時にアニメーションを再生するノードグラフ。実行の順序を線でつないでいる"
               className="block h-auto w-full"
             />
           </figure>
@@ -72,7 +72,7 @@ export function WorldTools() {
               動きは、線でつなぐ。
             </h3>
             <p className="mt-4 text-sm leading-7 text-zinc-600">
-              「開始時」から「アニメーション再生」へ線を引けば、ワールドに入った瞬間から動きはじめます。
+              「開始時に実行」から「アニメーションを再生」へ線を引けば、ワールドに入った瞬間から動きはじめます。
               色や発光も同じつなぎ方で動かせます。
             </p>
             <p className="mt-4 text-xs leading-6 text-zinc-500">

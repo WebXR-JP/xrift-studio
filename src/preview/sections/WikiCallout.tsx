@@ -13,7 +13,7 @@ export function WikiCallout() {
             <p className="preview-eyebrow">使い方ガイド</p>
             <h2 className="preview-section-title mt-4">使い方は、ガイドにまとめています。</h2>
             <p className="preview-section-copy mt-5 max-w-2xl">
-              インストールから、素材の取り込み、シーン編集、プレイ、公開まで。制作の流れに沿った使い方ガイドです。
+              ビジュアルエディターとコードエディターの使い方から、Play / Stop、XRiftへの公開まで。制作の流れに沿って案内しています。
             </p>
           </div>
           <a

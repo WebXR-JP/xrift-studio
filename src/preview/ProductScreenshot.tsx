@@ -27,7 +27,7 @@ export function ProductScreenshot({
       </div>
       <img
         src={EDITOR_SCREENSHOT}
-        alt="XRift Studioのビジュアルエディター。左にオブジェクト一覧、中央に湖畔のシーン、下に素材、右に設定を表示している"
+        alt="XRift Studioのビジュアルエディター。左にHierarchy、中央に湖畔のシーン、下にAssets、右にInspectorを表示している"
         className="block h-auto w-full"
       />
       {interactive ? (
