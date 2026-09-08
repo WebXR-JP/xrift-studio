@@ -227,7 +227,12 @@
 
 ### 操作前
 
-- 追加、オブジェクト一覧右クリック、設定のコンポーネントを追加は同じ基本コンポーネント Registryを使う。Core、Rendering、Physics、Interaction、Media、ワールド、スクリプトを折りたたみsectionとして表示する。三つの入口は同じcategory一覧を表示し、いずれかだけが特定categoryを省略しない。追加メニューには検索欄を置く。コンポーネントは名前、category、IDで絞り込める。XRiftのコンポーネントは名前、description、category、schema IDで絞り込める。追加とオブジェクト一覧右クリックでは空のオブジェクト、基本形状、XRift プレハブも同じ検索結果に含める。ライト種別、パーティクルの放出、音源はRendering / Mediaの意味が分かる名前とiconを共有する。
+- Entity作成メニューは、選択中のEntityの有無にかかわらず、新しいEntityを作る。空のEntity、Cube、Planeを先頭に置き、Sphere、Cylinder、Cone、SpawnPointを続ける。「床」のような用途名を基本形状の名前にしない。光るCubeなどの装飾プリセットは追加候補から外す。
+- Light、Text、Image、Audio Source、Particle Emitterは配置候補として残す。Rigid Body、Collider、Script、Interaction Trigger、Windなど、既存Entityへ付ける機能はInspectorと対象Entityの右クリックから追加する。「Component付きEntity」という分類を作らない。
+- XRiftの配置候補は一つの一覧にし、同じschemaのPrefabがある場合は設定済みのPrefabを使う。Prefabと生のComponentを二つの配置候補として並べない。配置前に必要な設定がある場合は案内を残す。Hierarchyと上部メニューは同じ配置リストを使う。
+- InspectorのAdd ComponentとHierarchyのEntity右クリックは、対象Entityへの追加操作とする。右クリックの見出しに追加先を明示する。Transformは必須なので候補に出さず、Spawn Pointの旧追加口も出さない。SpawnPointは公式の一つに揃える。
+- Hierarchyの右クリックメニューは他パネルの上へ表示し、画面内に収まる位置と最大高さを使う。追加カテゴリは通常は折りたたみ、検索中は一致する項目を開く。外側のクリックで閉じ、Escapeは検索を解除してからメニューを閉じる（MI-11）。
+- 名前、カテゴリ順、重複規則、Mesh Colliderの前提条件は共通定義を参照する。候補に追加できない理由を表示する。検索中は一致するカテゴリを開き、空のカテゴリを表示しない。基本Componentと公式XRift Componentは英語名を使う。
 - 音源は追加直後も既存オブジェクト selectionを維持する。設定で読み込む済み音声素材を選択できる。直接URLは新規設定に使わない。既定では自動再生しない。編集画面を開いただけで音を鳴らさない。
 
 ### 操作中
@@ -249,7 +254,7 @@
 
 - コンポーネントを追加を閉じると同じオブジェクト設定へ戻る。追加後は同じオブジェクトを選択したままにする。元に戻すでコンポーネント追加前へ戻る。やり直すで同じコンポーネント IDと設定へ戻れる。
 
-完了条件: 追加、オブジェクト一覧右クリック、設定のコンポーネントを追加が同じコンポーネント Registryとcategoryを表示する。検索から一件追加する。設定へ到達できる。音源は読み込む済み音声素材を選ぶ。編集画面を開いただけでは音を鳴らさない。
+完了条件: Entity作成とComponent追加の対象が明確で、共通Registryから用途に合う候補を表示する。検索から一件追加する。設定へ到達できる。音源は読み込む済み音声素材を選ぶ。編集画面を開いただけでは音を鳴らさない。
 
 <a id="f-25"></a>
 

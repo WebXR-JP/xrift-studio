@@ -1,4 +1,4 @@
-import { getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
+import { getEditorEntityCreationDefinitions, getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
 import { applyModelReimportSettings } from "../../lib/visual-editor/model-reimport-impact";
 import { colliderModelNode, setMeshCollision } from "../../lib/visual-editor/mesh-collision-actions";
 import { textureProcessingSettings } from "../../lib/visual-editor/texture-processing";
@@ -66,7 +66,6 @@ import {
   didScriptRuntimeApplyLatestSources,
   getBuiltinPrimitiveCreation,
   getColliderAutoFitBounds,
-  getEditorComponentMenuDefinitions,
   getTransform,
   getMaterialAssignmentTarget,
   getMesh,
@@ -7129,14 +7128,10 @@ export function VisualEditorPrototype({
   const handleCreateComponentObject = useCallback(
     (componentDefinitionId: string) => {
       if (importBusy) return;
-      const definition = getEditorComponentMenuDefinitions(projectKind).find(
+      const definition = getEditorEntityCreationDefinitions(projectKind).find(
         (candidate) => candidate.id === componentDefinitionId,
       );
-      if (
-        !definition ||
-        definition.id === "core.transform" ||
-        definition.id === "physics.mesh-collider"
-      ) {
+      if (!definition) {
         setNotice("既存のEntityに追加してください");
         return;
       }
@@ -11332,11 +11327,6 @@ export function VisualEditorPrototype({
                 readOnly={false}
                 importBusy={importBusy}
                 projectKind={projectKind}
-                selectedEntity={
-                  sceneSelection?.id
-                    ? bundle.scene.entities[sceneSelection.id]
-                    : undefined
-                }
                 builtinPrefabRecipes={builtinPrefabRecipes}
                 onClose={() => setCreateMenuOpen(false)}
                 onCreateEmpty={() => executeCommand("entity.create-empty")}
@@ -11349,12 +11339,6 @@ export function VisualEditorPrototype({
                 onPlaceBuiltinPrefab={handlePlaceBuiltinPrefab}
                 onCreateXriftObject={handleCreateXriftObject}
                 onCreateComponentObject={handleCreateComponentObject}
-                onAddComponent={(entityId, componentDefinitionId) =>
-                  executeCommand("entity.add-component", {
-                    entityId,
-                    componentDefinitionId,
-                  })
-                }
               />
             </div>
           </div>

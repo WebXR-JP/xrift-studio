@@ -234,6 +234,32 @@ export function getEditorComponentMenuDefinitions(
   );
 }
 
+/** Components that can start a new Entity without existing geometry or children. */
+export function getEditorEntityCreationDefinitions(projectKind: VisualProjectKind) {
+  return getEditorComponentMenuDefinitions(projectKind).filter(
+    (definition) =>
+      ["light", "text", "image", "audio-source", "particle-emitter"].includes(definition.componentType) &&
+      !definition.textPreset,
+  );
+}
+
+/** The same preconditions are shown by Inspector and Hierarchy before adding. */
+export function getEditorComponentDisabledReason(
+  entity: SceneEntity | undefined,
+  definitionId: string,
+): string | undefined {
+  if (!entity) return "Entityを選択";
+  const definition = EDITOR_COMPONENT_REGISTRY.find((entry) => entry.id === definitionId);
+  if (!definition) return "未対応のComponent";
+  if (!definition.allowMultiple && hasRegisteredComponent(entity, definition)) {
+    return "追加済み";
+  }
+  if (definition.id === "physics.mesh-collider" && !getMesh(entity) && !isModelNodeGeometryEntity(entity)) {
+    return "Mesh Rendererまたはモデルのメッシュが必要";
+  }
+  return undefined;
+}
+
 export type AddEditorComponentResult = {
   scene: SceneDocument;
   componentId?: string;

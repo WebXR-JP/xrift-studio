@@ -1,4 +1,4 @@
-import { getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
+import { getEditorComponentDisabledReason, getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
 import { MeshCollisionControls } from "./MeshCollisionControls";
 import { colliderModelNode, type MeshCollisionAction } from "../../lib/visual-editor/mesh-collision-actions";
 import { normalizeTextureImportSettings, type TextureImportSettingsPatch } from "../../lib/visual-editor/asset-manifest";
@@ -5614,7 +5614,7 @@ function EntityInspector({
           }}
           className="w-full rounded-md border border-violet-300 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-45"
         >
-          Componentsを追加
+          Add Component
         </button>
         {addComponentOpen ? (
           <div className="mt-2 max-h-80 space-y-1 overflow-y-auto rounded-md border border-slate-300 bg-white p-1 shadow-lg">
@@ -5677,30 +5677,25 @@ function EntityInspector({
                     <div className="space-y-0.5 border-t border-slate-100 p-1">
                     {definitions.map((definition) => {
                       const DefinitionIcon = getEditorComponentIcon(definition);
-                      const duplicate =
-                        !definition.allowMultiple &&
-                        registeredComponents.some((component) =>
-                          definition.componentType === "builtin-mesh"
-                            ? component.type === "mesh"
-                            : component.type === definition.componentType,
-                        );
+                      const disabledReason = getEditorComponentDisabledReason(entity, definition.id);
                       return (
                         <button
                           key={definition.id}
                           type="button"
-                          disabled={duplicate}
+                          disabled={Boolean(disabledReason)}
+                        title={disabledReason}
                           onClick={() => {
                             onAddComponent(definition.id);
                             setAddComponentOpen(false);
                             setAddComponentSearchQuery("");
                           }}
-                          className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:text-slate-400"
+                          className="flex w-full flex-wrap items-center justify-between rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:text-slate-400"
                         >
                           <span className="flex min-w-0 items-center gap-2">
                             <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
                             <span className="truncate">{definition.label}</span>
                           </span>
-                          {duplicate ? <span className="text-xs">追加済み</span> : null}
+                          {disabledReason ? <span className="mt-1 w-full text-left text-xs">{disabledReason}</span> : null}
                         </button>
                       );
                     })}
@@ -5733,30 +5728,25 @@ function EntityInspector({
                   <div className="space-y-0.5 border-t border-slate-100 p-1">
                   {definitions.map((definition) => {
                     const DefinitionIcon = EDITOR_ICONS[definition.icon];
-                    const duplicate =
-                      !definition.allowMultiplePerEntity &&
-                      registeredComponents.some(
-                        (component) =>
-                          component.type === "xrift-component" &&
-                          component.schemaId === definition.schemaId,
-                      );
+                    const disabledReason = getEditorComponentDisabledReason(entity, definition.schemaId);
                     return (
                       <button
                         key={definition.schemaId}
                         type="button"
-                        disabled={duplicate}
+                        disabled={Boolean(disabledReason)}
+                        title={disabledReason}
                         onClick={() => {
                           onAddComponent(definition.schemaId);
                           setAddComponentOpen(false);
                           setAddComponentSearchQuery("");
                         }}
-                        className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:text-slate-400"
+                        className="flex w-full flex-wrap items-center justify-between rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:text-slate-400"
                       >
                         <span className="flex min-w-0 items-center gap-2">
                           <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
                           <span className="truncate">{definition.label}</span>
                         </span>
-                        {duplicate ? <span className="text-xs">追加済み</span> : null}
+                        {disabledReason ? <span className="mt-1 w-full text-left text-xs">{disabledReason}</span> : null}
                       </button>
                     );
                   })}

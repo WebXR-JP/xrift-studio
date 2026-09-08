@@ -743,6 +743,16 @@ export function getXriftComponentMenuGroups(
   });
 }
 
+/** Standalone XRift Entities; wrappers need an existing Entity to wrap. */
+export function getXriftEntityCreationMenuGroups(projectKind: VisualProjectKind) {
+  return getXriftComponentMenuGroups(projectKind)
+    .map((group) => ({
+      ...group,
+      components: group.components.filter((definition) => definition.attachBehavior.kind === "leaf"),
+    }))
+    .filter((group) => group.components.length > 0);
+}
+
 export function createDefaultXriftComponentProperties(
   schemaId: string,
 ): JsonObject | null {

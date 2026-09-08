@@ -39,6 +39,12 @@ description: XRift Studio の制作体験を、更新、作成、起動、公開
 
 文言を変更したら、追加メニュー → 追加後の見出し → 操作と通知の順で同じ英語名になっているか確認する。
 
+## Entity作成とComponent追加
+
+Entityの作成メニューは選択状態によって既存Entityへの追加へ切り替えない。新しいEntityを作る操作と、Inspectorや対象Entityの右クリックからComponentを追加する操作を明示する。候補、名前、順序、重複・依存条件は共通定義から用途に合わせて選ぶ。Transformのような必須Component、同じ機能の旧追加口、既存のメッシュや子要素が必要で単独では成立しない項目をEntity作成候補に並べない。追加できない理由は選択前に示す。
+
+空のEntityとCube、Planeなどの基本形状を最初に置く。形状名を「床」のような用途名にしない。Light、Text、SpawnPointなど配置するものを選びやすくし、Rigid Bodyなど既存Entityへ付ける機能を新規Entityの候補へ混ぜない。XRiftの配置は同じ機能のPrefabとComponentを二重に並べず、一つの候補にまとめる。「Component付きEntity」のような内部構成を分類名に使わない。
+
 ## 完了前の確認
 
 - 状態、主操作、成功後の到達点、失敗時の復帰手段をすべて確認する。

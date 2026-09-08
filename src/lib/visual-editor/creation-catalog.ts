@@ -52,7 +52,7 @@ export const BUILTIN_PRIMITIVE_CREATION_IDS = {
 export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
   createDefinition(
     BUILTIN_PRIMITIVE_CREATION_IDS.box,
-    "立方体",
+    "Cube",
     "壁、台、建物のブロックに使える基本形状",
     "box",
     "#60a5fa",
@@ -60,7 +60,7 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
   ),
   createDefinition(
     BUILTIN_PRIMITIVE_CREATION_IDS.sphere,
-    "球",
+    "Sphere",
     "装飾やインタラクションの目印に使える球体",
     "sphere",
     "#a78bfa",
@@ -68,7 +68,7 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
   ),
   createDefinition(
     BUILTIN_PRIMITIVE_CREATION_IDS.cylinder,
-    "円柱",
+    "Cylinder",
     "柱や足場のベースに使える円柱",
     "cylinder",
     "#34d399",
@@ -76,7 +76,7 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
   ),
   createDefinition(
     BUILTIN_PRIMITIVE_CREATION_IDS.cone,
-    "円錐",
+    "Cone",
     "マーカーや屋根に使える円錐",
     "cone",
     "#fb923c",
@@ -84,8 +84,8 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
   ),
   createDefinition(
     BUILTIN_PRIMITIVE_CREATION_IDS.plane,
-    "床",
-    "ワールドの土台として配置できる床",
+    "Plane",
+    "床や壁などに使える平面",
     "plane",
     "#94a3b8",
     BUILTIN_ASSET_IDS.material.slate,
@@ -110,6 +110,7 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
       castShadow: false,
       receiveShadow: false,
       addCollider: false,
+      showInCreateMenu: false,
     },
   ),
   createDefinition(
@@ -129,6 +130,7 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
       castShadow: false,
       receiveShadow: false,
       addCollider: false,
+      showInCreateMenu: false,
     },
   ),
   createDefinition(
@@ -148,6 +150,7 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
       castShadow: false,
       receiveShadow: false,
       addCollider: false,
+      showInCreateMenu: false,
     },
   ),
   createDefinition(
@@ -166,6 +169,7 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
       castShadow: false,
       receiveShadow: false,
       addCollider: false,
+      showInCreateMenu: false,
     },
   ),
   createDefinition(

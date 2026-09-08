@@ -1,4 +1,7 @@
-import { getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
+import { createPortal } from "react-dom";
+import { EntityCreationMenuContent } from "./EntityCreationMenuContent";
+import { getEntityCreationMenuEntries, filterEntityCreationMenuEntries } from "../../lib/visual-editor/entity-creation-menu";
+import { getEditorComponentDisabledReason, getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
 import {
   memo,
   useEffect,
@@ -12,13 +15,12 @@ import {
   type RefObject,
 } from "react";
 import {
-  BUILTIN_PRIMITIVE_CREATION_CATALOG,
   BUILTIN_PREFAB_DRAG_MIME,
   getEntityReparentDecision,
   EDITOR_COMPONENT_CATEGORY_ORDER,
   getEditorComponentMenuDefinitions,
-  getXriftComponentDefinition,
   getXriftComponentMenuGroups,
+  getXriftComponentDefinition,
   type BuiltinPrefabRecipe,
   type EntityReparentBlockReason,
   type EditorCommandId,
@@ -827,52 +829,15 @@ export function HierarchyPanel({
       .toLocaleLowerCase();
     return contextMenuSearchTerms.every((term) => text.includes(term));
   };
-  const contextMenuSearchResultCount =
-    Number(
-      matchesContextMenuSearch(
-        "Empty Entity Transform scene object entity",
-      ),
-    ) +
-    BUILTIN_PRIMITIVE_CREATION_CATALOG.filter((entry) =>
-      matchesContextMenuSearch(
-        entry.name,
-        entry.description,
-        entry.creationId,
-        "primitive scene object entity",
-      ),
-    ).length +
-    getEditorComponentMenuDefinitions(projectKind).filter((definition) =>
-      matchesContextMenuSearch(
-        definition.label,
-        definition.id,
-        definition.category,
-        "component",
-      ),
-    ).length +
-    getXriftComponentMenuGroups(projectKind).flatMap((group) =>
-      group.components.filter((definition) =>
-        matchesContextMenuSearch(
-          definition.label,
-          definition.description,
-          definition.schemaId,
-          definition.importName,
-          group.label,
-          "xrift component",
-        ),
-      ),
-    ).length +
-    builtinPrefabRecipes.filter((recipe) =>
-      matchesContextMenuSearch(
-        recipe.name,
-        recipe.description,
-        recipe.id,
-        recipe.configuration?.hint,
-        "xrift prefab entity",
-      ),
-    ).length;
-  const contextMenuComponentResultCount = getEditorComponentMenuDefinitions(
-    projectKind,
-  ).filter((definition) =>
+  const creationEntries = useMemo(
+    () => getEntityCreationMenuEntries(projectKind, builtinPrefabRecipes),
+    [projectKind, builtinPrefabRecipes],
+  );
+  const contextComponentDefinitions = contextMenu?.entityId
+    ? getEditorComponentMenuDefinitions(projectKind) : [];
+  const contextXriftGroups = contextMenu?.entityId
+    ? getXriftComponentMenuGroups(projectKind) : [];
+  const contextMenuComponentResultCount = contextComponentDefinitions.filter((definition) =>
     matchesContextMenuSearch(
       definition.label,
       definition.id,
@@ -880,9 +845,7 @@ export function HierarchyPanel({
       "component",
     ),
   ).length;
-  const contextMenuXriftComponentResultCount = getXriftComponentMenuGroups(
-    projectKind,
-  ).flatMap((group) =>
+  const contextMenuXriftComponentResultCount = contextXriftGroups.flatMap((group) =>
     group.components.filter((definition) =>
       matchesContextMenuSearch(
         definition.label,
@@ -894,30 +857,9 @@ export function HierarchyPanel({
       ),
     ),
   ).length;
-  const contextMenuPrefabResultCount = builtinPrefabRecipes.filter((recipe) =>
-    matchesContextMenuSearch(
-      recipe.name,
-      recipe.description,
-      recipe.id,
-      recipe.configuration?.hint,
-      "xrift prefab entity",
-    ),
-  ).length;
-  const contextMenuSceneObjectResultCount =
-    Number(
-      matchesContextMenuSearch(
-        "Empty Entity Transform scene object entity",
-      ),
-    ) +
-    BUILTIN_PRIMITIVE_CREATION_CATALOG.filter((entry) =>
-      matchesContextMenuSearch(
-        entry.name,
-        entry.description,
-        entry.creationId,
-        "primitive scene object entity",
-      ),
-    ).length;
-  const panelRef = useRef<HTMLElement>(null);
+  const contextMenuSearchResultCount = filterEntityCreationMenuEntries(creationEntries, contextMenuSearchQuery).length
+    + contextMenuComponentResultCount + contextMenuXriftComponentResultCount;
+  const contextMenuRef = useRef<HTMLDivElement>(null);
   const contextMenuSearchInputRef = useRef<HTMLInputElement>(null);
   const entityButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const [renameDraft, setRenameDraft] = useState("");
@@ -1190,17 +1132,29 @@ export function HierarchyPanel({
     if (contextMenu) contextMenuSearchInputRef.current?.focus();
   }, [contextMenu]);
 
+  useEffect(() => {
+    if (!contextMenu) return;
+    const dismissOutside = (event: PointerEvent) => {
+      if (!contextMenuRef.current?.contains(event.target as Node)) setContextMenu(null);
+    };
+    const dismissOnResize = () => setContextMenu(null);
+    document.addEventListener("pointerdown", dismissOutside, true);
+    window.addEventListener("resize", dismissOnResize);
+    return () => {
+      document.removeEventListener("pointerdown", dismissOutside, true);
+      window.removeEventListener("resize", dismissOnResize);
+    };
+  }, [contextMenu]);
+
   const openContextMenu = (
     event: MouseEvent<HTMLElement>,
     entityId: string | null = null,
   ) => {
     event.preventDefault();
-    const bounds =
-      panelRef.current?.getBoundingClientRect() ??
-      event.currentTarget.getBoundingClientRect();
+    const menuHeight = Math.min(640, window.innerHeight - 24);
     setContextMenu({
-      x: Math.min(event.clientX - bounds.left, Math.max(8, bounds.width - 174)),
-      y: Math.min(event.clientY - bounds.top, Math.max(8, bounds.height - 196)),
+      x: Math.max(12, Math.min(event.clientX, window.innerWidth - 300)),
+      y: Math.max(12, Math.min(event.clientY, window.innerHeight - menuHeight - 12)),
       entityId,
     });
     setContextMenuSearchQuery("");
@@ -1440,7 +1394,6 @@ export function HierarchyPanel({
 
   return (
     <aside
-      ref={panelRef}
       className="relative row-span-2 flex min-h-0 flex-col border-r border-editor-border bg-editor-canvas"
       aria-labelledby="hierarchy-heading"
       onContextMenu={openContextMenu}
@@ -1695,12 +1648,21 @@ export function HierarchyPanel({
           />
         ))}
       </div>
-      {contextMenu ? (
+      {contextMenu ? createPortal(
         <div
-          className="absolute z-50 max-h-[80%] w-52 overflow-y-auto rounded-md border border-slate-300 bg-white p-1 shadow-xl"
+          ref={contextMenuRef}
+          className="fixed z-[80] max-h-[min(640px,calc(100vh-24px))] w-72 max-w-[calc(100vw-24px)] overflow-y-auto rounded-md border border-slate-300 bg-white p-1 shadow-xl"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           role="menu"
+          aria-label="Hierarchyのメニュー"
           onPointerDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+                if (event.key !== "Escape") return;
+                event.preventDefault();
+                event.stopPropagation();
+                if (contextMenuSearchQuery) setContextMenuSearchQuery("");
+                else setContextMenu(null);
+              }}
         >
           <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
             Entity
@@ -1712,12 +1674,7 @@ export function HierarchyPanel({
               type="search"
               value={contextMenuSearchQuery}
               onChange={(event) => setContextMenuSearchQuery(event.currentTarget.value)}
-              onKeyDown={(event) => {
-                if (event.key !== "Escape" || !contextMenuSearchQuery) return;
-                event.preventDefault();
-                event.stopPropagation();
-                setContextMenuSearchQuery("");
-              }}
+
               placeholder="Component・Entityを検索…"
               className="h-8 w-full rounded border border-slate-300 bg-white px-2 pr-14 text-xs text-slate-800 placeholder:text-slate-400 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-100"
             />
@@ -1737,6 +1694,20 @@ export function HierarchyPanel({
               「{contextMenuSearchQuery.trim()}」に一致するComponentまたはEntityはありません。
             </p>
           ) : null}
+          <EntityCreationMenuContent
+            entries={creationEntries}
+            searchQuery={contextMenuSearchQuery}
+            disabled={readOnly}
+            onSelect={(entry) => {
+              const parentEntityId = contextMenu.entityId;
+              setContextMenu(null);
+              if (entry.kind === "empty") onCommand("entity.create-empty", { parentEntityId });
+              else if (entry.kind === "primitive") onCommand("entity.create-primitive", { creationId: entry.actionId });
+              else if (entry.kind === "prefab") onDropBuiltinPrefab(entry.actionId, parentEntityId);
+              else if (entry.kind === "component") onCreateComponentObject(entry.actionId);
+              else onCreateXriftObject(entry.actionId);
+            }}
+          />
           {contextMenu.entityId ? (
             <>
               {([
@@ -1776,16 +1747,14 @@ export function HierarchyPanel({
               })}
               <div className="my-1 border-t border-slate-200" />
               {!searchingContextMenu || contextMenuComponentResultCount > 0 ? (
-              <details open className="overflow-hidden rounded border border-slate-200">
+              <details open={searchingContextMenu} className="overflow-hidden rounded border border-slate-200">
                 <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-                  Componentsを追加 ({getEditorComponentMenuDefinitions(projectKind).length})
+                  選択したEntityにComponentを追加 ({searchingContextMenu ? contextMenuComponentResultCount : contextComponentDefinitions.length})
                 </summary>
                 <div className="space-y-1 border-t border-slate-100 p-1">
                   {EDITOR_COMPONENT_CATEGORY_ORDER.map(
                     (category) => {
-                      const definitions = getEditorComponentMenuDefinitions(
-                        projectKind,
-                      ).filter(
+                      const definitions = contextComponentDefinitions.filter(
                         (definition) =>
                           definition.category === category &&
                           matchesContextMenuSearch(
@@ -1810,18 +1779,13 @@ export function HierarchyPanel({
                               const entity = contextMenu.entityId
                                 ? scene.entities[contextMenu.entityId]
                                 : undefined;
-                              const duplicate =
-                                !definition.allowMultiple &&
-                                entity?.components.some((component) =>
-                                  definition.componentType === "builtin-mesh"
-                                    ? component.type === "mesh"
-                                    : component.type === definition.componentType,
-                                );
+                              const disabledReason = getEditorComponentDisabledReason(entity, definition.id);
                               return (
                                 <button
                                   key={definition.id}
                                   type="button"
-                                  disabled={readOnly || duplicate}
+                                  disabled={readOnly || Boolean(disabledReason)}
+                                  title={disabledReason}
                                   onClick={() => {
                                     const entityId = contextMenu.entityId ?? undefined;
                                     setContextMenu(null);
@@ -1830,14 +1794,14 @@ export function HierarchyPanel({
                                       componentDefinitionId: definition.id,
                                     });
                                   }}
-                                  className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
+                                  className="flex w-full flex-wrap items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
                                 >
                                   <span className="flex min-w-0 items-center gap-2">
                                     <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
                                     <span className="truncate">{definition.label}</span>
                                   </span>
-                                  {duplicate ? (
-                                    <span className="text-xs text-slate-400">追加済み</span>
+                                  {disabledReason ? (
+                                    <span className="mt-1 w-full text-left text-xs text-slate-400">{disabledReason}</span>
                                   ) : null}
                                 </button>
                               );
@@ -1852,86 +1816,18 @@ export function HierarchyPanel({
               ) : null}
             </>
           ) : null}
-          {!contextMenu.entityId ? (
-            !searchingContextMenu || contextMenuComponentResultCount > 0 ? (
-            <details open className="overflow-hidden rounded border border-slate-200">
-              <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-                Componentsを追加 ({getEditorComponentMenuDefinitions(projectKind).length})
-              </summary>
-              <div className="space-y-1 border-t border-slate-100 p-1">
-                {EDITOR_COMPONENT_CATEGORY_ORDER.map(
-                  (category) => {
-                    const definitions = getEditorComponentMenuDefinitions(
-                      projectKind,
-                    ).filter(
-                      (definition) =>
-                        definition.category === category &&
-                        matchesContextMenuSearch(
-                          definition.label,
-                          definition.id,
-                          definition.category,
-                          "component",
-                        ),
-                    );
-                    if (definitions.length === 0) return null;
-                    return (
-                      <details
-                        key={category}
-                        open={searchingContextMenu || category === "rendering"}
-                      >
-                        <summary className="cursor-pointer select-none rounded px-1.5 py-1 text-xs font-medium capitalize text-slate-500 hover:bg-slate-50">
-                          {category} ({definitions.length})
-                        </summary>
-                        <div className="space-y-0.5 pl-1">
-                          {definitions.map((definition) => {
-                            const DefinitionIcon = getEditorComponentIcon(definition);
-                            const canCreateHost = ![
-                              "core.transform",
-                              "physics.mesh-collider",
-                            ].includes(definition.id);
-                            return (
-                              <button
-                                key={definition.id}
-                                type="button"
-                                disabled={readOnly || !canCreateHost}
-                                onClick={() => {
-                                  setContextMenu(null);
-                                  onCreateComponentObject(definition.id);
-                                }}
-                                className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
-                              >
-                                <span className="flex min-w-0 items-center gap-2">
-                                  <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
-                                  <span className="truncate">{definition.label}</span>
-                                </span>
-                                <span className="text-xs text-slate-400">
-                                  {canCreateHost ? "作成" : "Entityを選択"}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </details>
-                    );
-                  },
-                )}
-              </div>
-            </details>
-            ) : null
-          ) : null}
-          <div className="my-1 border-t border-slate-200" />
-          {!searchingContextMenu || contextMenuXriftComponentResultCount > 0 ? (
+          {contextMenu.entityId && (!searchingContextMenu || contextMenuXriftComponentResultCount > 0) ? (
           <details className="overflow-hidden rounded border border-slate-200">
             <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-              XRift Components ({searchingContextMenu
+              選択したEntityにXRift Componentを追加 ({searchingContextMenu
                 ? contextMenuXriftComponentResultCount
-                : getXriftComponentMenuGroups(projectKind).reduce(
+                : contextXriftGroups.reduce(
                 (count, group) => count + group.components.length,
                 0,
               )})
             </summary>
             <div className="space-y-1 border-t border-slate-100 p-1">
-              {getXriftComponentMenuGroups(projectKind).map((group) => {
+              {contextXriftGroups.map((group) => {
                 const definitions = group.components.filter((definition) =>
                   matchesContextMenuSearch(
                     definition.label,
@@ -1954,24 +1850,15 @@ export function HierarchyPanel({
                       const entity = contextMenu.entityId
                         ? scene.entities[contextMenu.entityId]
                         : undefined;
-                      const duplicate = Boolean(
-                        entity &&
-                          !definition.allowMultiplePerEntity &&
-                          entity.components.some(
-                            (component) =>
-                              component.type === "xrift-component" &&
-                              component.schemaId === definition.schemaId,
-                          ),
-                      );
-                      const canCreateHost = definition.attachBehavior.kind === "leaf";
+                      const disabledReason = entity
+                        ? getEditorComponentDisabledReason(entity, definition.schemaId)
+                        : undefined;
                       return (
                         <button
                           key={definition.schemaId}
                           type="button"
                           disabled={
-                            readOnly ||
-                            duplicate ||
-                            (!contextMenu.entityId && !canCreateHost)
+                            readOnly || Boolean(disabledReason)
                           }
                           onClick={() => {
                             const entityId = contextMenu.entityId;
@@ -1985,20 +1872,14 @@ export function HierarchyPanel({
                               onCreateXriftObject(definition.schemaId);
                             }
                           }}
-                          className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
+                          className="flex w-full flex-wrap items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
                         >
                           <span className="flex min-w-0 items-center gap-2">
                             <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
                             <span className="truncate">{definition.label}</span>
                           </span>
                           <span className="text-xs text-slate-400">
-                            {duplicate
-                              ? "追加済み"
-                              : contextMenu.entityId
-                                ? "追加"
-                                : canCreateHost
-                                  ? "作成"
-                                  : "Entityを選択"}
+                            {disabledReason ?? (contextMenu.entityId ? "追加" : "作成")}
                           </span>
                         </button>
                       );
@@ -2010,107 +1891,9 @@ export function HierarchyPanel({
             </div>
           </details>
           ) : null}
-          <div className="my-1 border-t border-slate-200" />
-          {!searchingContextMenu || contextMenuPrefabResultCount > 0 ? (
-          <details className="overflow-hidden rounded border border-slate-200">
-            <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-              XRift プレハブ ({searchingContextMenu ? contextMenuPrefabResultCount : builtinPrefabRecipes.length})
-            </summary>
-            <div className="space-y-0.5 border-t border-slate-100 p-1">
-              {builtinPrefabRecipes.filter((recipe) =>
-                matchesContextMenuSearch(
-                  recipe.name,
-                  recipe.description,
-                  recipe.id,
-                  recipe.configuration?.hint,
-                  "xrift prefab entity",
-                ),
-              ).map((recipe) => {
-                const definition = getXriftComponentDefinition(recipe.schemaId);
-                const DefinitionIcon = definition
-                  ? EDITOR_ICONS[definition.icon]
-                  : EDITOR_ICONS.prefab;
-                return (
-                  <button
-                    key={recipe.id}
-                    type="button"
-                    disabled={readOnly}
-                    onClick={() => {
-                      const parentEntityId = contextMenu.entityId;
-                      setContextMenu(null);
-                      onDropBuiltinPrefab(recipe.id, parentEntityId);
-                    }}
-                    title={recipe.description}
-                    className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
-                      <span className="truncate">{recipe.name}</span>
-                    </span>
-                    <span className="text-xs text-slate-400">
-                      {recipe.configuration?.requiredBeforeCompile ? "設定" : "作成"}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </details>
-          ) : null}
-          <div className="my-1 border-t border-slate-200" />
-          {!searchingContextMenu || contextMenuSceneObjectResultCount > 0 ? (
-          <details open className="overflow-hidden rounded border border-slate-200">
-            <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-              Entity ({searchingContextMenu ? contextMenuSceneObjectResultCount : BUILTIN_PRIMITIVE_CREATION_CATALOG.length + 1})
-            </summary>
-            <div className="space-y-0.5 border-t border-slate-100 p-1">
-              {matchesContextMenuSearch("Empty Entity Transform scene object entity") ? <button
-                type="button"
-                disabled={readOnly}
-                onClick={() => {
-                  const parentEntityId = contextMenu.entityId;
-                  setContextMenu(null);
-                  onCommand("entity.create-empty", { parentEntityId });
-                }}
-                title={commandTitle(
-                  contextMenu.entityId
-                    ? "選択Entityの子に空のEntityを作成"
-                    : "シーンの直下に空のEntityを作成",
-                  "entity.create-empty",
-                )}
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
-              >
-                <EDITOR_ICONS.sceneEntity size={14} aria-hidden="true" />
-                空のEntity
-              </button> : null}
-              {BUILTIN_PRIMITIVE_CREATION_CATALOG.filter((entry) =>
-                matchesContextMenuSearch(
-                  entry.name,
-                  entry.description,
-                  entry.creationId,
-                  "primitive scene object entity",
-                ),
-              ).map((entry) => (
-                <button
-                  key={entry.creationId}
-                  type="button"
-                  disabled={readOnly}
-                  onClick={() => {
-                    setContextMenu(null);
-                    onCommand("entity.create-primitive", {
-                      creationId: entry.creationId,
-                    });
-                  }}
-                  title={commandTitle(`${entry.name}をシーンへ作成`, "entity.create-primitive")}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
-                >
-                  <EDITOR_ICONS.primitive size={14} aria-hidden="true" />
-                  {entry.name}
-                </button>
-              ))}
-            </div>
-          </details>
-          ) : null}
-        </div>
+
+        </div>,
+        document.body,
       ) : null}
     </aside>
   );
