@@ -41,11 +41,11 @@ export function EditorImportMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        title={disabledReason ?? "Model、R3F、XRift Classicから取り込む"}
+        title={disabledReason ?? "モデルやコードをインポート"}
         className="flex items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-3 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-not-allowed disabled:opacity-45"
       >
         <Import size={13} aria-hidden="true" />
-        Import
+        読み込む
         <ChevronDown size={12} aria-hidden="true" />
       </button>
       {open ? (
@@ -55,7 +55,7 @@ export function EditorImportMenu({
         >
           <MenuItem
             icon={FileBox}
-            label="Model / 3Dアセット"
+            label="3Dモデル / 3Dアセット"
             description="GLB、glTF、OBJ、VRM、UnityPackageなど"
             onClick={() => {
               setOpen(false);
@@ -64,15 +64,15 @@ export function EditorImportMenu({
           />
           <MenuItem
             icon={Code2}
-            label="R3F / Classicから変換"
-            description="TSXを貼る、またはClassic projectを選択"
+            label="R3F / コード編集から変換"
+            description="TSXを貼り付けるか、コード編集のプロジェクトを選びます。"
             onClick={() => {
               setOpen(false);
               onImportR3f();
             }}
           />
           <p className="mx-1 mt-2 border-t border-slate-100 px-2 pt-2 text-[10px] leading-4 text-slate-500">
-            公式ComponentとOpen BrushはAssetsの「外部から追加」から選べます。
+            公式ComponentとOpen Brushは、Assetsの「外部から追加」で選べます。
           </p>
         </div>
       ) : null}

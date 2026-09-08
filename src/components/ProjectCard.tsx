@@ -82,14 +82,14 @@ export function ProjectCard({
           {thumb ? (
             <img
               src={thumb}
-              alt={`${project.title || project.name}の表紙`}
+              alt={`${project.title || project.name}のサムネイル`}
               className="h-full w-full object-cover"
             />
           ) : (
             <span className="flex h-full flex-col items-center justify-center gap-1 text-zinc-400">
               <ImageOff size={20} strokeWidth={1.5} aria-hidden="true" />
               <span className="text-[9px]">
-                {loading ? "読込中" : "表紙なし"}
+                {loading ? "読み込み中" : "サムネイルなし"}
               </span>
             </span>
           )}
@@ -103,7 +103,7 @@ export function ProjectCard({
               ) : (
                 <Globe2 size={11} aria-hidden="true" />
               )}
-              {project.kind === "item" ? "Item" : "World"}
+              {project.kind === "item" ? "アイテム" : "ワールド"}
             </span>
             <span className="text-zinc-300" aria-hidden="true">/</span>
             <span className="inline-flex items-center gap-1 text-[10px] font-medium text-zinc-500">
@@ -112,7 +112,7 @@ export function ProjectCard({
               ) : (
                 <Code2 size={11} aria-hidden="true" />
               )}
-              {project.format === "visual" ? "Visual" : "Classic"}
+              {project.format === "visual" ? "ビジュアル編集" : "コード編集"}
             </span>
           </span>
           <span className="mt-1 truncate text-sm font-semibold text-zinc-900 group-hover:text-brand-700">
@@ -157,8 +157,8 @@ export function ProjectCard({
           disabled={busy}
           onClick={onEditThumbnail}
           className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-40"
-          title="表紙を編集"
-          aria-label={`${project.title || project.name}の表紙を編集`}
+          title="サムネイルを編集"
+          aria-label={`${project.title || project.name}のサムネイルを編集`}
         >
           <Camera size={14} aria-hidden="true" />
         </button>
@@ -177,8 +177,8 @@ export function ProjectCard({
           disabled={busy}
           onClick={onExport}
           className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-40"
-          title="zipに書き出して渡す"
-          aria-label={`${project.title || project.name}をzipに書き出す`}
+          title="ZIPに書き出す"
+          aria-label={`${project.title || project.name}をZIPに書き出す`}
         >
           <FileDown size={14} aria-hidden="true" />
         </button>
@@ -217,7 +217,7 @@ export function NewProjectCard({
       <span>
         <span className="block text-sm font-semibold">新規プロジェクト</span>
         <span className="mt-0.5 block text-[11px] text-zinc-500">
-          種別と制作方法を選んで開始
+          作るものと作り方を選ぶ
         </span>
       </span>
     </button>

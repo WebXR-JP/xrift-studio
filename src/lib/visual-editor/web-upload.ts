@@ -318,7 +318,7 @@ export async function uploadVisualProjectFromWeb(
   throwIfAborted(request.signal);
   request.report({
     stage: "compiling",
-    label: "SceneとAssetを検証しています",
+    label: "シーンと素材を検証しています",
     detail: "ブラウザではビルドを行わないため、Runtime JSONとして書き出します。",
     percent: 14,
     cancelSafe: true,
@@ -338,7 +338,7 @@ export async function uploadVisualProjectFromWeb(
     ) {
       throw new WebUploadUnsupportedError(
         "scripts-unsupported",
-        "Scriptを含むワールドはブラウザ版から公開できません。Runtime JSONがScriptを表現できないため、デスクトップ版から公開してください。",
+        "スクリプトを含むワールドはブラウザ版から公開できません。Runtime JSONがスクリプトを表現できないため、デスクトップ版から公開してください。",
       );
     }
     throw error;

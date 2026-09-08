@@ -78,15 +78,15 @@ export function PublishReadinessDialog({
             type="button"
             onClick={onClose}
             className="absolute right-3 top-3 rounded-md p-1 text-zinc-500 hover:bg-white/60 hover:text-zinc-800"
-            aria-label="公開準備を閉じる"
+            aria-label="公開前の確認を閉じる"
           >
             <X size={14} strokeWidth={2} />
           </button>
           <h2 id="publish-readiness-title" className="text-lg font-semibold tracking-tight text-zinc-900">
-            公開前の準備
+            公開前の確認
           </h2>
           <p className="mt-1 text-xs leading-relaxed text-zinc-600">
-            このまま公開すると、XRift 上で初期{projectLabel}のように表示される可能性があります。公開情報を整えてからアップロードします。
+            タイトル・説明・サムネイルを設定してください。保存すると、公開前の確認を続けます。
           </p>
         </div>
 

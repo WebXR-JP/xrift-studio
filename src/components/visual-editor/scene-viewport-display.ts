@@ -19,22 +19,22 @@ export const SCENE_VIEWPORT_DISPLAY_OPTIONS: readonly {
   {
     value: "scene",
     label: "シーン",
-    description: "Skybox、Fog、ライト、Materialを含む通常表示",
+    description: "Skybox、Fog、ライト、マテリアルを表示します。",
   },
   {
     value: "unlit",
-    label: "ライトなし",
-    description: "ライトと環境効果を外し、Materialの基本色を確認",
+    label: "Unlit",
+    description: "ライトやSkyboxを表示せず、マテリアルの基本色を確認します。",
   },
   {
     value: "wireframe",
-    label: "ワイヤー",
-    description: "環境効果を外し、Meshのエッジを確認",
+    label: "Wireframe",
+    description: "メッシュの辺を線で表示します。",
   },
   {
     value: "colliders",
     label: "コライダー編集",
-    description: "Meshを抑え、BoxとMesh Colliderだけを表示して編集・診断",
+    description: "直方体とメッシュの衝突判定を確認しやすく表示します。",
   },
 ] as const;
 

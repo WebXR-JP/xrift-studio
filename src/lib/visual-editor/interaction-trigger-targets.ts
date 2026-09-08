@@ -41,7 +41,7 @@ export type InteractionTriggerTargetEntity = {
   components: readonly InteractionTriggerTargetComponent[];
 };
 
-const ENTITY_SELF_LABEL = "Entity 本体";
+const ENTITY_SELF_LABEL = "Entity本体";
 
 function componentLabel(
   entity: SceneEntity,
@@ -82,7 +82,7 @@ export function collectInteractionTriggerTargets(
       // known while authoring, so the runtime takes whichever Light or Audio
       // Source that Entity turns out to have.
       entityId: XRIFT_INTERACTION_SELF_ENTITY_ID,
-      name: "このグラフが付いた Entity",
+      name: "このグラフが付いたEntity",
       path: "付けた先で決まる",
       components: [
         {
@@ -116,7 +116,7 @@ export function collectInteractionTriggerTargets(
     {
       entityId: XRIFT_INTERACTION_SCENE_ENTITY_ID,
       name: "Scene",
-      path: "Scene 全体",
+      path: "シーン全体",
       components: [
         {
           componentId: "",
@@ -425,7 +425,7 @@ export function formatTriggerValue(
     case "asset":
       // The id lives in configuration, not the value socket, so there is
       // nothing here to format; callers describe it from the Asset's name.
-      return "選んだAsset";
+      return "選んだ素材";
     case "string":
       return typeof first === "string" && first.length > 0 ? `「${first}」` : "空の文字";
   }

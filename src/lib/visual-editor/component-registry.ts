@@ -237,8 +237,8 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.interactable,
     importName: "Interactable",
-    label: "Interactable",
-    description: "オブジェクトをクリック／インタラクト可能にします。",
+    label: "操作を受け付ける",
+    description: "Entityをクリック／インタラクト可能にします。",
     icon: "interactable",
     category: "interaction",
     attachBehavior: REQUIRED_WRAPPER,
@@ -267,8 +267,8 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.grabbable,
     importName: "Grabbable",
-    label: "Grabbable",
-    description: "配下のオブジェクトを掴んで移動できる対象にします。",
+    label: "つかんで移動",
+    description: "配下のEntityを掴んで移動できる対象にします。",
     icon: "grabbable",
     category: "interaction",
     attachBehavior: REQUIRED_WRAPPER,
@@ -308,7 +308,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.mirror,
     importName: "Mirror",
-    label: "Mirror",
+    label: "鏡",
     description: "リアルタイム反射面を配置します。",
     icon: "mirror",
     category: "rendering",
@@ -328,15 +328,15 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.skybox,
     importName: "Skybox",
     label: "Skybox",
-    description: "上下2色のグラデーションで全天背景を描画します。",
+    description: "空や周囲の背景を、上下2色のグラデーションで表示します。",
     icon: "skybox",
     category: "rendering",
     attachBehavior: LEAF,
     fields: [
-      field("topColor", "Top color", "空の上部カラー。", "color-number", false, {
+      field("topColor", "Top Color", "上空の色。", "color-number", false, {
         defaultValue: 0x87ceeb,
       }),
-      field("bottomColor", "Bottom color", "地平線側のカラー。", "color-number", false, {
+      field("bottomColor", "Bottom Color", "地平線側の色。", "color-number", false, {
         defaultValue: 0xffffff,
       }),
       field("offset", "Offset", "グラデーションの開始位置。", "number", false, {
@@ -350,7 +350,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.videoScreen,
     importName: "VideoScreen",
-    label: "VideoScreen",
+    label: "動画スクリーン",
     description: "同期された動画再生用スクリーンを配置します。",
     icon: "videoScreen",
     category: "media",
@@ -391,7 +391,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.videoPlayer,
     importName: "VideoPlayer",
-    label: "VideoPlayer",
+    label: "動画プレイヤー",
     description: "操作UI付きの録画動画プレイヤーを配置します。",
     icon: "videoPlayer",
     category: "media",
@@ -401,7 +401,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.liveVideoPlayer,
     importName: "LiveVideoPlayer",
-    label: "LiveVideoPlayer",
+    label: "ライブ配信",
     description: "HLS／DASH向けのライブ動画プレイヤーを配置します。",
     icon: "liveVideo",
     category: "media",
@@ -411,7 +411,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.video180Sphere,
     importName: "Video180Sphere",
-    label: "Video180Sphere",
+    label: "180度動画",
     description: "Side-by-Side形式の180度ステレオ動画を半球へ表示します。",
     icon: "videoSphere",
     category: "media",
@@ -470,7 +470,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.screenShareDisplay,
     importName: "ScreenShareDisplay",
-    label: "ScreenShareDisplay",
+    label: "画面共有",
     description: "画面共有の映像を3D空間に表示します。",
     icon: "screenShare",
     category: "media",
@@ -494,7 +494,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.spawnPoint,
     importName: "SpawnPoint",
-    label: "SpawnPoint",
+    label: "開始位置",
     description: "ワールド内でプレイヤーが出現する地点を指定します。",
     icon: "spawn",
     category: "world",
@@ -513,8 +513,8 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.textInput,
     importName: "TextInput",
-    label: "TextInput",
-    description: "配下の3Dオブジェクトからテキストを入力できるようにします。",
+    label: "文字入力",
+    description: "配下の3DEntityからテキストを入力できるようにします。",
     icon: "textInput",
     category: "interaction",
     attachBehavior: REQUIRED_WRAPPER,
@@ -545,7 +545,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.tagBoard,
     importName: "TagBoard",
-    label: "TagBoard",
+    label: "タグ選択",
     description: "ユーザーがタグを選択するボードを配置します。",
     icon: "tagBoard",
     category: "interaction",
@@ -577,7 +577,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.entryLogBoard,
     importName: "EntryLogBoard",
-    label: "EntryLogBoard",
+    label: "入退室履歴",
     description: "ワールドへの入退室履歴を同期表示するボードを配置します。",
     icon: "entryLogBoard",
     category: "world",
@@ -631,7 +631,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.portal,
     importName: "Portal",
-    label: "Portal",
+    label: "移動先への入口",
     description: "別のXRiftインスタンスへ移動するポータルを配置します。",
     icon: "portal",
     category: "world",
@@ -654,8 +654,8 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.billboardY,
     importName: "BillboardY",
-    label: "BillboardY",
-    description: "配下のオブジェクトをY軸だけでカメラへ追従させます。",
+    label: "カメラの方向を向く",
+    description: "配下のEntityをY軸だけでカメラへ追従させます。",
     icon: "billboardY",
     category: "rendering",
     attachBehavior: OPTIONAL_WRAPPER,
@@ -679,7 +679,7 @@ export const XRIFT_COMPONENT_CATEGORY_LABELS: Readonly<
   interaction: "Interaction",
   media: "Media",
   rendering: "Rendering",
-  world: "World",
+  world: "ワールド",
 };
 
 const definitionLookup = new Map<string, XriftComponentDefinition>();
@@ -873,7 +873,7 @@ export function addXriftComponent(
     return mutationFailure(
       scene,
       "unknown-xrift-component-schema",
-      `未登録のXRift component schemaです: ${schemaId}`,
+      `未登録のXRiftのComponent schemaです: ${schemaId}`,
       `${entityPath(entityId)}.components`,
       { entityId, schemaId },
     );
@@ -911,7 +911,7 @@ export function addXriftComponent(
     return mutationFailure(
       scene,
       "unknown-xrift-component-schema",
-      `未登録のXRift component schemaです: ${schemaId}`,
+      `未登録のXRiftのComponent schemaです: ${schemaId}`,
       `${entityPath(entityId)}.components`,
       { entityId, schemaId },
     );
@@ -972,7 +972,7 @@ export function removeXriftComponent(
     return mutationFailure(
       scene,
       "component-type",
-      "指定されたComponentはXRift componentではありません。",
+      "指定されたComponentはXRiftのComponentではありません。",
       `${entityPath(entityId)}.components`,
       { entityId, componentId },
     );
@@ -981,7 +981,7 @@ export function removeXriftComponent(
     return mutationFailure(
       scene,
       "xrift-component-authoring-locked",
-      "Builtin PrefabのXRift Componentは読み取り専用です。Entityを削除するか、通常のComponentを追加してください。",
+      "組み込みプレハブのXRiftのComponentは読み取り専用です。Entityを削除するか、通常のComponentを追加してください。",
       `${entityPath(entityId)}.components`,
       { entityId, componentId, schemaId: component.schemaId },
     );
@@ -1036,7 +1036,7 @@ export function updateXriftComponent(
     return mutationFailure(
       scene,
       "component-type",
-      "指定されたComponentはXRift componentではありません。",
+      "指定されたComponentはXRiftのComponentではありません。",
       `${entityPath(entityId)}.components[${componentIndex}]`,
       { entityId, componentId },
     );
@@ -1055,7 +1055,7 @@ export function updateXriftComponent(
       return mutationFailure(
         scene,
         "xrift-component-authoring-locked",
-        "Builtin PrefabではInspectorに許可された設定だけを変更できます。構成とTransformは保護されています。",
+        "組み込みプレハブでは設定に許可された設定だけを変更できます。構成と位置・回転・大きさは保護されています。",
         `${entityPath(entityId)}.components[${componentIndex}]`,
         { entityId, componentId, schemaId: component.schemaId },
       );
@@ -1229,7 +1229,7 @@ export function validateXriftComponent(
       makeDiagnostic(
         "error",
         "invalid-xrift-component",
-        "XRift componentはオブジェクトで、typeはxrift-componentである必要があります。",
+        "XRiftのComponentはEntityで、typeはxrift-componentである必要があります。",
         path,
         { entityId: context.entityId },
       ),
@@ -1301,7 +1301,7 @@ export function validateXriftComponent(
       makeDiagnostic(
         "error",
         "invalid-xrift-component",
-        "authoringは有効なBuiltin Prefab保護情報である必要があります。",
+        "authoringは有効な組み込みプレハブ保護情報である必要があります。",
         `${path}.authoring`,
         common,
       ),
@@ -1315,7 +1315,7 @@ export function validateXriftComponent(
         makeDiagnostic(
           "warning",
           "unknown-xrift-component-schema",
-          `未登録のXRift component schemaを保持しています: ${schemaId}`,
+          `未登録のXRiftのComponent schemaを保持しています: ${schemaId}`,
           `${path}.schemaId`,
           common,
         ),
@@ -1369,7 +1369,7 @@ export function validateXriftComponent(
         makeDiagnostic(
           "error",
           "invalid-xrift-component",
-          `Builtin Prefabの編集許可項目「${propertyName}」は${definition.label}で変更できません。`,
+          `組み込みプレハブの編集許可項目「${propertyName}」は${definition.label}で変更できません。`,
           `${path}.authoring.editablePropertyNames`,
           { ...common, schemaId: definition.schemaId },
         ),

@@ -14,7 +14,7 @@ export function TextureImportSettingsPanel({
       <div className="border-b border-slate-100 px-3 py-2.5">
         <h3 className="text-[13px] font-semibold text-slate-800">取り込むテクスチャのサイズと圧縮</h3>
         <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
-          この端末の共通設定です。次の取り込みとモデルの再インポートに適用します。既存のテクスチャはアセットの設定で変更できます。
+          次の読み込みと再インポートに適用します。既存の画像はAssetsで変更してください。
         </p>
       </div>
       <div className="space-y-2.5 p-3">
@@ -27,11 +27,11 @@ export function TextureImportSettingsPanel({
         <label className="block text-xs text-slate-700">圧縮方式
           <select value={textureCompression} onChange={(event) => onTextureCompressionChange(event.currentTarget.value as TextureImportCompression)} className="mt-1 h-8 w-full rounded-md border border-slate-300 bg-white px-2 focus-visible:ring-2 focus-visible:ring-violet-100">
             <option value="source">画像形式を維持</option>
-            <option value="webp">WEBP（配信サイズを下げる）</option>
+            <option value="webp">WEBP（ファイルサイズを減らす）</option>
             <option value="ktx2">KTX2 / Basis（GPU圧縮）</option>
           </select>
         </label>
-        <p className="text-[11px] leading-4 text-slate-500">モデル内蔵の画像も対象です。元画像を保持し、編集画面と公開先では変換した画像を使います。保護した個別設定を優先します。変更は自動で記憶します。</p>
+        <p className="text-[11px] leading-4 text-slate-500">モデル内の画像も対象です。元画像は残し、個別に保護した設定を優先します。</p>
       </div>
     </section>
   );

@@ -87,7 +87,7 @@ export function resolveCustomMaterialPreviewSource(
     ) {
       return {
         status: "unavailable",
-        reason: "元のClassic Model Assetが見つかりません",
+        reason: "元のコード編集 3Dモデルが見つかりません",
       };
     }
     return {
@@ -104,7 +104,7 @@ export function resolveCustomMaterialPreviewSource(
   if (shader?.kind !== "openbrush") {
     return {
       status: "unavailable",
-      reason: "このMaterialにはCustom Shader Preview Adapterがありません",
+      reason: "このマテリアルにはカスタムシェーダープレビュー Adapterがありません",
     };
   }
   const modelAssetId = asset.importedFromModel?.modelAssetId;
@@ -117,20 +117,20 @@ export function resolveCustomMaterialPreviewSource(
     if (entry) return { status: "standalone", entry };
     return {
       status: "unavailable",
-      reason: "元のOpenBrush Model参照がMaterialに保存されていません",
+      reason: "元のOpenBrush 3Dモデル参照がマテリアルに保存されていません",
     };
   }
   const candidate = assets.assets[modelAssetId];
   if (!candidate || candidate.kind !== "model") {
     return {
       status: "unavailable",
-      reason: "元のOpenBrush Model Assetが見つかりません",
+      reason: "元のOpenBrush 3Dモデルが見つかりません",
     };
   }
   if (candidate.source.kind !== "project") {
     return {
       status: "unavailable",
-      reason: "プレビュー可能なOpenBrush Modelソースがありません",
+      reason: "プレビュー可能なOpenBrush 3Dモデルソースがありません",
     };
   }
   const sourceMaterialIndex = shader.sourceMaterialIndex;
@@ -358,10 +358,10 @@ export function CustomMaterialPreview({
         {loadState.status === "ready"
           ? runtimeInfo?.pbrFallback
             ? "glTF PBRへフォールバック"
-            : "three-icosa shader適用済み"
+            : "three-icosa シェーダー適用済み"
           : loadState.status === "error"
-            ? "shader読込失敗"
-            : "three-icosa shaderを再構築中"}
+            ? "Shaderの読み込み失敗"
+            : "three-icosa シェーダーを再構築中"}
       </span> : null}
 
       {!compact && loadState.status === "error" ? (
@@ -430,9 +430,9 @@ function StandaloneCustomShaderPreview({
   ) {
     return (
       <PreviewMessage className={className}>
-        <span className="font-semibold text-slate-700">Custom Shaderを表示できません</span>
+        <span className="font-semibold text-slate-700">カスタムシェーダーを表示できません</span>
         <span className="mt-1 text-[11px] leading-4 text-slate-500">
-          {shaderDiagnostics[0] ?? "shader materialを作成できません"}
+          {shaderDiagnostics[0] ?? "シェーダー materialを作成できません"}
         </span>
       </PreviewMessage>
     );
@@ -479,7 +479,7 @@ function StandaloneCustomShaderPreview({
       </Canvas>
       {!compact ? (
         <span className="pointer-events-none absolute left-2 top-2 rounded border border-slate-500/60 bg-slate-900/85 px-1.5 py-0.5 text-[10px] font-semibold text-slate-100">
-          Custom Shader
+          カスタムシェーダー
         </span>
       ) : null}
     </div>
@@ -533,11 +533,11 @@ function formatPbrFallbackReason(
   reason: "unsupported-preset" | "shader-load-error" | "attribute-mismatch",
 ): string {
   if (reason === "unsupported-preset") {
-    return "未対応のブラシpresetのため、GLB内のPBR Materialを表示しています";
+    return "未対応のブラシプリセットのため、GLB内のPBR マテリアルを表示しています";
   }
   return reason === "attribute-mismatch"
-    ? "必要なMesh attributeがないため、GLB内のPBR Materialを表示しています"
-    : "専用shaderを再構築できなかったため、GLB内のPBR Materialを表示しています";
+    ? "必要なメッシュ attributeがないため、GLB内のPBR マテリアルを表示しています"
+    : "専用シェーダーを再構築できなかったため、GLB内のPBR マテリアルを表示しています";
 }
 
 function PreviewTurntable({

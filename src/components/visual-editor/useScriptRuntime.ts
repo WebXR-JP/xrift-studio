@@ -217,7 +217,7 @@ export function useScriptRuntime({
         assetId,
         assetName: currentAssets.assets[assetId]?.name ?? assetId,
         relativePath: "",
-        message: "プロジェクトのpathが未確定のためScriptを読み込めません",
+        message: "プロジェクトのpathが未確定のためスクリプトを読み込めません",
       }));
       if (compileGenerationRef.current === generation) {
         setState((previous) => ({ ...previous, status: "error", errors }));
@@ -238,7 +238,7 @@ export function useScriptRuntime({
           assetId,
           assetName: asset?.name ?? assetId,
           relativePath: "",
-          message: "参照しているScript Assetが見つかりません",
+          message: "参照しているスクリプトが見つかりません",
         });
         continue;
       }
@@ -264,7 +264,7 @@ export function useScriptRuntime({
           message:
             error instanceof Error
               ? error.message
-              : "Script fileを読み込めませんでした",
+              : "スクリプト fileを読み込めませんでした",
         });
       }
     }

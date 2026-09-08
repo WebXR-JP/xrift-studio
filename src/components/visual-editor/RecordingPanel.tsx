@@ -100,12 +100,12 @@ export function RecordingPanel({
           </div>
           {snapshot.status === "idle" ? (
             <p className="mt-1 text-[11px] leading-4 text-slate-500">
-              録画ビューの内容を {resolution.width}x{resolution.height} の動画として保存します。MCP からも同じ録画を開始・停止できます。
+              録画ビューの内容を {resolution.width}x{resolution.height} の動画として保存します。
             </p>
           ) : null}
           {snapshot.status === "recording" && !state.sourceAvailable ? (
             <p className="mt-1 text-[11px] leading-4">
-              Scene View が表示されていません。表示されるまで最後のフレームが続きます。
+              シーンが表示されていません。表示されるまで最後のフレームが続きます。
             </p>
           ) : null}
           {snapshot.status === "failed" && snapshot.message ? (
@@ -157,7 +157,7 @@ export function RecordingPanel({
 
       <section aria-labelledby="recording-profile-heading">
         <h3 id="recording-profile-heading" className={sectionHeading}>
-          フレーム
+          録画サイズ
         </h3>
         <div className="grid grid-cols-4 gap-1" role="radiogroup" aria-label="アスペクト比">
           {RECORDING_ASPECT_RATIO_OPTIONS.map((option) => (
@@ -249,7 +249,7 @@ export function RecordingPanel({
         <div className="mt-2 space-y-1">
           {(
             [
-              { key: "showEditorUi", label: "パネルを残す" },
+              { key: "showEditorUi", label: "エディターのパネルを表示" },
               { key: "showEditorHelpers", label: "グリッドやギズモを映す" },
               { key: "showRecordingIndicator", label: "REC 表示（動画には入りません）" },
             ] as const
@@ -275,7 +275,7 @@ export function RecordingPanel({
           <button
             type="button"
             onClick={onFitCamera}
-            title="Scene の全 Entity が収まる位置へ移動"
+            title="すべてのEntityが画面に収まる位置へ移動"
             className={`${chipBase} ${chipOff}`}
           >
             全体
@@ -308,7 +308,7 @@ export function RecordingPanel({
           <p className="truncate font-mono text-[10px] text-slate-600" title={projectRecordingDirectory ?? state.outputDirectory ?? "既定の保存先"}>
             {projectRecordingDirectory ?? state.outputDirectory ?? "既定（ビデオ / XRift Studio）"}
           </p>
-          {projectRecordingDirectory ? <p className="mt-1 text-[11px] text-slate-500">制作中のワールド内に保存します。</p> : <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+          {projectRecordingDirectory ? <p className="mt-1 text-[11px] text-slate-500">プロジェクトフォルダーに保存します。</p> : <div className="mt-1.5 grid grid-cols-2 gap-1.5">
             <button type="button" onClick={onChooseDirectory} disabled={active} className={secondaryButton}>
               <EDITOR_ICONS.folder size={13} aria-hidden="true" />
               フォルダーを選ぶ

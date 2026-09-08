@@ -131,7 +131,7 @@ export async function loadScriptModule(
     return {
       ok: false,
       message:
-        "ScriptではuseFrameなどR3F frame callback APIを使用できません。フレーム更新はdefineScript(...).start()が返すupdate(delta)へ記述してください。@react-three/fiberはnamed importを使用してください。",
+        "スクリプトではuseFrameなどR3F frame callback APIを使用できません。フレーム更新はdefineScript(...).start()が返すupdate(delta)へ記述してください。@react-three/fiberはnamed importを使用してください。",
     };
   }
   const transpiled = await transpileScriptModuleCached(source, fileName);
@@ -255,7 +255,7 @@ function describeRejection(
     return `${specifier} を読み込むにはリモートimportの許可が必要です。`;
   }
   if (reason === "relative-not-supported") {
-    return `${specifier} はScript間のimportです。まだ対応していません。`;
+    return `${specifier} はスクリプト間のimportです。まだ対応していません。`;
   }
   return `${specifier} は使用できないmoduleです。`;
 }

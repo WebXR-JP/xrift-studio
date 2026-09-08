@@ -147,7 +147,7 @@ function assertCatalogIntegrity(): void {
     "The catalog must ship a sky with a visible, adjustable moon",
   );
   assert(
-    getSkyShaderCatalogEntry("starfield-night")?.label === "Starfield Night",
+    getSkyShaderCatalogEntry("starfield-night")?.id === "starfield-night",
     "getSkyShaderCatalogEntry did not resolve a known preset",
   );
   assert(

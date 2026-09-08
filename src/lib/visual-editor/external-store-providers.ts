@@ -63,7 +63,7 @@ export const EXTERNAL_STORE_PROVIDERS = [
     catalogKinds: ["hdri", "texture", "model"],
     installableKinds: ["hdri", "texture"],
     authorFallback: "ambientCG contributors",
-    attributionNote: "API提供元を明示し、アセットにはCC0情報を保存します。ModelはglTF対応後にインストールできます。",
+    attributionNote: "API提供元を明示し、アセットにはCC0情報を保存します。現在、3Dモデルは追加できません。",
   },
   {
     id: "otogura",
@@ -91,7 +91,7 @@ export const EXTERNAL_STORE_PROVIDERS = [
     installableKinds: [],
     authorFallback: "XRift Studio contributors",
     attributionNote:
-      "画像ではなくGLSLで空を描くMaterialです。追加後もInspectorでuniformを編集できます。",
+      "背景の色や動きを描くマテリアルです。追加後もInspectorで調整できます。",
   },
   {
     id: "xrift-water-shaders",
@@ -105,7 +105,7 @@ export const EXTERNAL_STORE_PROVIDERS = [
     installableKinds: [],
     authorFallback: "XRift Studio contributors",
     attributionNote:
-      "Gerstner波はMochie's Unity Shaders (MIT) を移植しています。波はScene設定のWindから駆動します。",
+      "Gerstner波はMochie's Unity Shaders (MIT) を移植しています。波の動きはシーン設定の風に連動します。",
   },
   {
     id: "xrift-terrain-presets",
@@ -119,21 +119,21 @@ export const EXTERNAL_STORE_PROVIDERS = [
     installableKinds: [],
     authorFallback: "XRift Studio contributors",
     attributionNote:
-      "高さフィールドと草の配置規則から生成します。追加後は普通のTerrainとして彫れます。",
+      "追加後も地形ブラシで形を変えられます。草の量はInspectorで調整できます。",
   },
   {
     id: "xrift-glow-materials",
     kind: "glow-material",
     group: "light-decoration",
-    name: "発光オブジェクト",
+    name: "発光Entity",
     badge: "公式",
-    summary: "ネオンのようにBloomで光る形を追加",
+    summary: "Bloomでネオンのように光がにじむ形を追加",
     homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
     catalogKinds: [],
     installableKinds: [],
     authorFallback: "XRift Studio contributors",
     attributionNote:
-      "発光するPBR Materialです。Scene設定のBloomが拾う明るさで置きます。形と色は別に選べます。",
+      "発光するマテリアルです。形と色を選び、シーン設定のBloomで光をにじませます。",
   },
   {
     id: "xrift-particle-presets",
@@ -147,7 +147,7 @@ export const EXTERNAL_STORE_PROVIDERS = [
     installableKinds: [],
     authorFallback: "XRift Studio contributors",
     attributionNote:
-      "追加後は普通のParticle Assetです。放出量、寿命、色、TextureをそのままInspectorで変えられます。",
+      "放出量、寿命、色、テクスチャは、追加後もInspectorで調整できます。",
   },
   {
     id: "xrift-scene-recipes",
@@ -161,7 +161,7 @@ export const EXTERNAL_STORE_PROVIDERS = [
     installableKinds: [],
     authorFallback: "XRift Studio contributors",
     attributionNote:
-      "既存のPrimitive、Particle、Light、音、Interactivity Graphを組み合わせたEntityです。置いたあとは中身を1つずつ編集できます。",
+      "既存のPrimitive、パーティクル、ライト、音、ノードグラフを組み合わせたEntityです。置いたあとは中身を1つずつ編集できます。",
   },
   {
     id: "open-brush",
@@ -169,12 +169,12 @@ export const EXTERNAL_STORE_PROVIDERS = [
     group: "light-decoration",
     name: "Open Brush",
     badge: "公式",
-    summary: "手描き風ブラシのMaterialを追加",
+    summary: "手描き風ブラシのマテリアルを追加",
     homepageUrl: "https://openbrush.app",
     catalogKinds: [],
     installableKinds: [],
     authorFallback: "Icosa Foundation contributors",
-    attributionNote: "検証済みのbrush GUIDとrenderer versionをMaterialへ保存します。",
+    attributionNote: "ブラシのGUIDと描画エンジンのバージョンをマテリアルに保存します。",
   },
   {
     id: "xrift-components",
@@ -187,7 +187,7 @@ export const EXTERNAL_STORE_PROVIDERS = [
     catalogKinds: [],
     installableKinds: [],
     authorFallback: "WebXR-JP contributors",
-    attributionNote: "公開package本体を同じrendererで描画します。",
+    attributionNote: "公開されているパッケージのComponentを使用します。",
   },
 ] as const satisfies readonly ExternalStoreProvider[];
 

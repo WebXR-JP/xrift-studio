@@ -100,5 +100,5 @@ export function textureImportSettingsPatch(
 }
 
 export function describeTextureImportMaxSize(value: TextureImportMaxSize): string {
-  return value === "original" ? "原寸のまま" : `長辺 最大 ${value}px`;
+  return value === "original" ? "原寸のまま" : `長辺最大 ${value}px`;
 }

@@ -21,7 +21,7 @@ export function ModelMaterialSlots(props: Props) {
         onClick={() => setExpanded(value => !value)}
         className="flex min-h-8 w-full items-center gap-1.5 rounded-lg bg-slate-50 px-3 py-2 text-left text-xs font-semibold text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300">
         <Icon size={14} aria-hidden="true" />
-        Material Slots ({props.asset.materialSlots.length})
+        マテリアルスロット ({props.asset.materialSlots.length})
       </button>
       <div id={contentId}>
         {expanded ? <SlotList key={props.asset.id} {...props} /> : null}
@@ -46,10 +46,10 @@ function SlotList({ asset, assets, readOnly, onChange, onOpenMaterial }: Props) 
   const lastPage = Math.max(0, Math.ceil(filtered.length / PAGE_SIZE) - 1);
   const currentPage = Math.min(page, lastPage);
   const start = currentPage * PAGE_SIZE;
-  const fallback = asset.importMetadata?.openBrush ? "OpenBrush Brush Shader" : "Model内のMaterial";
+  const fallback = asset.importMetadata?.openBrush ? "OpenBrush Brush Shader" : "3Dモデル内のマテリアル";
   return (
     <div className="space-y-2 border-t border-slate-200 p-2">
-      <p className="text-[11px] text-slate-500">Model全体の既定Material。Entity側の割当が優先されます。</p>
+      <p className="text-[11px] text-slate-500">3Dモデル全体の既定マテリアル。Entity側の割り当てが優先されます。</p>
       {asset.materialSlots.length > PAGE_SIZE || query ? (
         <input aria-label="マテリアルスロットを検索" placeholder="スロット名で検索" value={query}
           onChange={event => { setQuery(event.currentTarget.value); setPage(0); }}

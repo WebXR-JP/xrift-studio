@@ -62,7 +62,7 @@ export function compileXriftComponent(
       diagnostic(
         source,
         "unknown-xrift-component",
-        `未対応のXRift component schemaです: ${component.schemaId}`,
+        `未対応のXRiftのComponent schemaです: ${component.schemaId}`,
         { fieldPath: "schemaId" },
       ),
     ]);

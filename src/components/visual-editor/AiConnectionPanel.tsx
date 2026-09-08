@@ -103,11 +103,11 @@ export function AiConnectionPanel({
         <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
           <p className="font-semibold text-slate-800">デスクトップ版で利用できます</p>
           <p className="mt-1">
-            ブラウザ表示ではAI clientの検出や登録は実行しません。
+            ブラウザ表示ではAIクライアントの検出や登録は実行しません。
           </p>
         </div>
         <p>
-          CodexなどのAI clientをXRift Studio MCPへ登録すると、開いているSceneを会話から読み取り・編集できます。AIの変更も通常のUndoと自動保存へ統合されます。
+          CodexなどのAIクライアントにXRift StudioのMCPを登録すると、開いているシーンを会話から読み取り・編集できます。AIによる変更も自動保存され、「元に戻す」で取り消せます。
         </p>
       </div>
     );
@@ -121,24 +121,24 @@ export function AiConnectionPanel({
     registeredCount > 0
       ? {
           label: "AI編集を待機中",
-          detail: "XRift Studioを開いている間だけ、現在のSceneを操作できます。",
+          detail: "XRift Studioを開いている間だけ、現在のシーンを操作できます。",
           indicator: "bg-emerald-500",
         }
       : updateCount > 0
         ? {
-            label: "MCP serverの更新が必要",
-            detail: "「更新」後、対象clientを再起動または再読み込みしてください。",
+            label: "MCPサーバーの更新が必要です",
+            detail: "「更新」後、登録したAIクライアントを再起動または再読み込みしてください。",
             indicator: "bg-amber-500",
           }
         : {
-            label: "AI clientは未登録",
-            detail: "利用するclientの「登録」を選んでください。",
+            label: "AIクライアントは未登録",
+            detail: "使うAIクライアントの「登録」を選んでください。",
             indicator: "bg-slate-400",
           };
   return (
     <div className="scrollbar-thin max-h-[min(32rem,calc(100vh-10rem))] space-y-3 overflow-y-auto p-3.5 text-xs text-slate-600">
       <p className="rounded-md border border-violet-100 bg-violet-50/70 p-3 leading-5 text-slate-700">
-        CodexなどのAI clientをXRift Studio MCPへワンクリック登録できます。開いているSceneを会話から読み取り・編集し、変更は通常のUndoと自動保存へ統合されます。
+        CodexなどのAIクライアントをXRift StudioのMCPに接続できます。開いているシーンを会話から読み取り・編集し、変更は自動保存され、「元に戻す」で取り消せます。
       </p>
       <div className="flex items-start justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
         <div>
@@ -153,8 +153,8 @@ export function AiConnectionPanel({
         </div>
         <button
           type="button"
-          title="AI clientを再検出"
-          aria-label="AI clientを再検出"
+          title="AIクライアントを再検出"
+          aria-label="AIクライアントを再検出"
           disabled={
             loading || registeringClientId !== null || ollamaConfiguring
           }
@@ -174,7 +174,7 @@ export function AiConnectionPanel({
           id="ai-client-heading"
           className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500"
         >
-          ワンクリック登録
+          AIクライアントの登録
         </h3>
         <div className="space-y-1.5">
           {clients.map((client) => {
@@ -221,12 +221,12 @@ export function AiConnectionPanel({
           })}
           {!loading && clients.length === 0 ? (
             <p className="rounded-md border border-slate-200 p-3 text-slate-500">
-              client情報を取得できませんでした。再検出してください。
+              AIクライアントの情報を取得できませんでした。再検出してください。
             </p>
           ) : null}
         </div>
         <p className="mt-2 text-[11px] leading-4 text-slate-500">
-          登録後は対象clientを再起動またはMCP再読み込みしてください。Claude Desktop / Coworkはローカルsessionで利用でき、remote CoworkではローカルMCPを起動できません。
+          登録後はAIクライアントを再起動するか、MCPを再読み込みしてください。Claude Desktop / Coworkではローカルセッションで利用できます。リモートのCoworkでは利用できません。
         </p>
       </section>
 
@@ -244,7 +244,7 @@ export function AiConnectionPanel({
             <div>
               <p className="font-semibold text-slate-800">Ollamaは未検出です</p>
               <p className="mt-1 text-[11px] leading-4 text-slate-500">
-                install後に再検出すると、ローカルmodelで対応clientを構成できます。
+                Ollamaをインストールして再検出すると、対応するAIクライアントでローカルモデルを使えます。
               </p>
             </div>
           ) : (
@@ -259,27 +259,27 @@ export function AiConnectionPanel({
                   </p>
                 </div>
                 <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-                  {ollama.models.length} models
+                  {ollama.models.length}モデル
                 </span>
               </div>
 
               {!ollama.serverReachable ? (
                 <p className="rounded border border-amber-200 bg-amber-50 p-2 text-[11px] leading-4 text-amber-800">
-                  Ollamaはinstall済みですが起動していません。Ollamaアプリを起動してから再検出してください。
+                  Ollamaが起動していません。Ollamaアプリを起動してから再検出してください。
                 </p>
               ) : !ollama.launchSupported ? (
                 <p className="rounded border border-amber-200 bg-amber-50 p-2 text-[11px] leading-4 text-amber-800">
-                  このversionはワンクリック構成に未対応です。Ollamaを更新して再検出してください。
+                  このバージョンは自動設定に対応していません。Ollamaを更新して再検出してください。
                 </p>
               ) : ollama.models.length === 0 ? (
                 <p className="rounded border border-slate-200 bg-slate-50 p-2 text-[11px] leading-4 text-slate-600">
-                  Ollamaを起動し、先に利用するmodelを追加してから再検出してください。
+                  Ollamaを起動し、先に使うモデルを追加してから再検出してください。
                 </p>
               ) : (
                 <>
                   <label className="block">
                     <span className="mb-1 block text-[11px] font-semibold text-slate-600">
-                      ローカルmodel
+                      ローカルモデル
                     </span>
                     <select
                       value={selectedOllamaModel}
@@ -299,7 +299,7 @@ export function AiConnectionPanel({
 
                   <label className="block">
                     <span className="mb-1 block text-[11px] font-semibold text-slate-600">
-                      構成するAI client
+                      設定するAIクライアント
                     </span>
                     <select
                       value={selectedOllamaIntegration}
@@ -321,7 +321,7 @@ export function AiConnectionPanel({
 
                   {ollamaTargets.length === 0 ? (
                     <p className="text-[11px] leading-4 text-amber-700">
-                      Codex、Claude Code、OpenCodeのいずれかを先にinstallしてください。
+                      Codex、Claude Code、OpenCodeのいずれかを先にインストールしてください。
                     </p>
                   ) : null}
 
@@ -342,11 +342,11 @@ export function AiConnectionPanel({
                     className="w-full rounded-md bg-brand-600 px-3 py-2 font-semibold text-white hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-500"
                   >
                     {ollamaConfiguring
-                      ? "MCPとmodelを構成中"
-                      : "XRift MCPとOllamaを構成"}
+                      ? "MCPとモデルを設定中"
+                      : "XRift MCPとOllamaを設定"}
                   </button>
                   <p className="text-[10px] leading-4 text-slate-500">
-                    選択modelのtool対応を確認し、XRift MCP登録とmodel設定を行います。modelのdownloadやclient起動は行いません。
+                    選んだモデルがツール呼び出しに対応しているか確認し、MCPとモデルを設定します。モデルのダウンロードやAIクライアントの起動は行いません。
                   </p>
                 </>
               )}
@@ -361,14 +361,14 @@ export function AiConnectionPanel({
               ) : null}
               {ollamaResult ? (
                 <p className="rounded border border-emerald-200 bg-emerald-50 p-2 text-[11px] leading-4 text-emerald-800">
-                  {ollamaResult.integrationLabel}を{ollamaResult.model}で構成しました。clientを起動または再起動してください。
+                  {ollamaResult.integrationLabel}を{ollamaResult.model}で使うように設定しました。AIクライアントを起動または再起動してください。
                 </p>
               ) : null}
             </div>
           )}
         </div>
         <p className="mt-2 text-[11px] leading-4 text-slate-500">
-          Ollamaはmodelの実行基盤です。Scene操作は構成したAI clientからXRift MCPを通して行います。
+          シーンを操作するには、設定したAIクライアントで指示してください。
         </p>
       </section>
 
@@ -376,7 +376,7 @@ export function AiConnectionPanel({
         <div role="alert" className="rounded-md border border-rose-200 bg-rose-50 p-2.5 text-rose-700">
           <p>{error}</p>
           <p className="mt-1 text-[11px] leading-4">
-            上の「登録」から再試行できます。clientを更新した場合は状態を再確認してください。
+            上の「登録」から再試行できます。AIクライアントを更新した場合は状態を再確認してください。
           </p>
           <button
             type="button"
@@ -384,7 +384,7 @@ export function AiConnectionPanel({
             onClick={onRefresh}
             className="mt-1.5 font-semibold underline underline-offset-2 disabled:opacity-50"
           >
-            client状態を再確認
+            AIクライアントの状態を再確認
           </button>
         </div>
       ) : null}
@@ -414,7 +414,7 @@ export function AiConnectionPanel({
           </div>
         ) : (
           <p className="rounded-md border border-slate-200 p-3 leading-4 text-slate-500">
-            まだAIからの操作はありません。登録後、clientを再起動して利用してください。
+            まだAIからの操作はありません。登録後、AIクライアントを再起動して利用してください。
           </p>
         )}
       </section>

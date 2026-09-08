@@ -182,7 +182,7 @@ export async function createUnityPackageImportPlan(
     return blockedUnityPlan(input, sourceName, diagnostics);
   }
 
-  reportProgress(input, 24, "アセットとScene参照を調べています");
+  reportProgress(input, 24, "アセットとシーン参照を調べています");
   const relevantPaths = entries
     .filter((entry) =>
       SUPPORTED_PACKAGE_ASSET.test(entry.path) ||
@@ -263,7 +263,7 @@ export async function createUnityPackageImportPlan(
     selectedAssetId = plan.asset.id;
   }
 
-  reportProgress(input, 52, "Unity Materialを変換しています");
+  reportProgress(input, 52, "Unity マテリアルを変換しています");
   let materialCount = 0;
   for (const entry of entries.filter(
     (candidate) => candidate.asset && UNITY_MATERIAL.test(candidate.path),
@@ -323,7 +323,7 @@ export async function createUnityPackageImportPlan(
   let prefabCount = 0;
   let entityCount = 0;
 
-  reportProgress(input, 68, "Scene階層とComponentを再構築しています");
+  reportProgress(input, 68, "シーン階層とComponentを再構築しています");
   for (const entry of yamlEntries) {
     const sourceHash = await sha256AssetBytes(entry.asset!);
     const existingPrefab = Object.values(prefabs).find(
@@ -342,7 +342,7 @@ export async function createUnityPackageImportPlan(
       diagnostics.push({
         severity: "warning",
         code: "unity-prefab-duplicate",
-        message: `「${entry.path}」は変換済みPrefabを再利用しました`,
+        message: `「${entry.path}」は変換済みプレハブを再利用しました`,
         sourcePath: entry.path,
       });
       continue;
@@ -381,7 +381,7 @@ export async function createUnityPackageImportPlan(
       diagnostics.push({
         severity: "warning",
         code: "unity-prefab-create-failed",
-        message: `「${entry.path}」のPrefabを作成できませんでした`,
+        message: `「${entry.path}」のプレハブを作成できませんでした`,
         sourcePath: entry.path,
       });
       continue;
@@ -424,10 +424,10 @@ export async function createUnityPackageImportPlan(
       severity: "blocking",
       code: "unity-no-convertible-content",
       message:
-        "GameObject階層、GLB / glTF、対応Texture、Materialのいずれも変換できませんでした",
+        "GameObject階層、GLB / glTF、対応テクスチャ、マテリアルのいずれも変換できませんでした",
     });
   }
-  reportProgress(input, 100, hasUsefulResult ? "Unity Importの準備ができました" : "変換対象がありません");
+  reportProgress(input, 100, hasUsefulResult ? "Unity 読み込みの準備ができました" : "変換対象がありません");
 
   return {
     canCommit:
@@ -818,7 +818,7 @@ function convertUnityDocument(
     diagnostics.push({
       severity: "warning",
       code: "unity-hierarchy-too-deep",
-      message: `「${sourcePath}」のHierarchy深度は${hierarchy.maxDepth}です。安定して編集できる上限${UNITY_HIERARCHY_MAX_DEPTH}を超えるため、このScene / Prefabは追加しませんでした`,
+      message: `「${sourcePath}」のHierarchy深度は${hierarchy.maxDepth}です。安定して編集できる上限${UNITY_HIERARCHY_MAX_DEPTH}を超えるため、このシーン / プレハブは追加しませんでした`,
       sourcePath,
     });
     return {
@@ -839,7 +839,7 @@ function convertUnityDocument(
     diagnostics.push({
       severity: "warning",
       code: "unity-mesh-source-unsupported",
-      message: `${skippedMeshCount}件のMesh Rendererは対応モデルを解決できず、GameObject階層のみ再構築しました`,
+      message: `${skippedMeshCount}件のメッシュの描画は対応モデルを解決できず、GameObject階層のみ再構築しました`,
       sourcePath,
     });
   }
@@ -847,7 +847,7 @@ function convertUnityDocument(
     diagnostics.push({
       severity: "warning",
       code: "unity-collider-approximated",
-      message: `Sphere / Capsule Collider ${approximatedColliderCount}件をBox Colliderで近似しました`,
+      message: `Sphere / Capsule Collider ${approximatedColliderCount}件をBox 衝突判定で近似しました`,
       sourcePath,
     });
   }
@@ -900,7 +900,7 @@ function repairUnityHierarchy(
         diagnostics.push({
           severity: "warning",
           code: "unity-hierarchy-cycle",
-          message: `「${cycleRoot.name}」の循環した親参照をScene Rootへ戻しました`,
+          message: `「${cycleRoot.name}」の循環した親参照をシーンの直下へ戻しました`,
           sourcePath,
         });
         break;

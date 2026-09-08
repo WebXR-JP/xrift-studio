@@ -88,7 +88,7 @@ export class VisualCompilationError extends Error {
     );
     super(
       blocking.length > 0
-        ? `変換を止める問題が${blocking.length}件あります。Inspectorで修正してください。`
+        ? `変換できない原因となる問題が${blocking.length}件あります。エディターで該当する項目を修正してください。`
         : "XRift向けの変換結果を作成できませんでした。",
     );
     this.name = "VisualCompilationError";
@@ -261,7 +261,8 @@ function publishCommandRecovery(operation: string, detail?: string): string {
     /^(World|Item)の検査$/.test(operation) &&
     BUILD_FAILURE_MARKER.test(detail ?? "")
   ) {
-    return `公開用ステージングのビルドが失敗しました。下の「${BUILD_OUTPUT_SEPARATOR}」以降にコンパイラの出力があります。該当するScene・Asset・Scriptを修正してから再試行してください。\n`;
+    return `公開用データをビルドできませんでした。下の「${BUILD_OUTPUT_SEPARATOR}」以降にコンパイラの出力があります。該当するシーン・素材・スクリプトを修正してから再試行してください。
+`;
   }
   return "";
 }
@@ -383,7 +384,7 @@ async function convertStagedTextures(
     if (!conversion) continue;
     report({
       stage: "compiling",
-      label: "Textureを公開用に変換しています",
+      label: "テクスチャを公開用に変換しています",
       detail: `${index + 1} / ${targets.length}枚目。制作データの原本はそのまま残ります。`,
       percent: 29 + Math.round((index / targets.length) * 10),
       cancelSafe: true,
@@ -397,7 +398,7 @@ async function convertStagedTextures(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(
-        `Texture「${entry.assetId}」を公開用に変換できませんでした。${message}`,
+        `テクスチャ「${entry.assetId}」を公開用に変換できませんでした。${message}`,
       );
     }
     files.push({
@@ -442,7 +443,7 @@ export async function materializeVisualCompilation(
   report({
     stage: "compiling",
     label: "XRiftプロジェクトへ変換しています",
-    detail: "XRift公式テンプレートへSceneとAssetを反映しています。",
+    detail: "XRift公式テンプレートへシーンと素材を反映しています。",
     percent: 42,
     cancelSafe: false,
   });
@@ -473,7 +474,7 @@ export async function materializeVisualCompilation(
   const modelTargets = compilation.stagingPlan.assetCopyPlan.filter((entry) => entry.modelDownload);
   for (const [index, entry] of modelTargets.entries()) {
     throwIfAborted(signal);
-    report({ stage: "compiling", label: "Modelのダウンロード容量を減らしています", detail: `${index + 1} / ${modelTargets.length}件目。${entry.assetId}`, percent: 40, cancelSafe: true });
+    report({ stage: "compiling", label: "3Dモデルのダウンロード容量を減らしています", detail: `${index + 1} / ${modelTargets.length}件目。${entry.assetId}`, percent: 40, cancelSafe: true });
     const result = await optimizePublishedModel(await readProjectAssetBytes(authoringProjectPath, entry.sourceRelativePath), entry.modelDownload!);
     throwIfAborted(signal);
     onLog({ kind: "stdout", text: describeModelDownload(entry.assetId, result), ts: Date.now() });
@@ -502,7 +503,7 @@ export async function materializeVisualCompilation(
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes("required publication thumbnail")) {
       throw new Error(
-        "公開用サムネイルをステージングへコピーして検証できませんでした。public/thumbnail.pngを設定し直してから再試行してください。",
+        "公開用サムネイルを準備できませんでした。public/thumbnail.pngを設定し直してから再試行してください。",
       );
     }
     throw error;
@@ -512,7 +513,7 @@ export async function materializeVisualCompilation(
   );
   if (!thumbnail) {
     throw new Error(
-      "公開用サムネイルのステージング検証結果を確認できないため、アップロードを停止しました。",
+      "公開用サムネイルを確認できないため、送信を中止しました。",
     );
   }
   throwIfAborted(signal);
@@ -543,7 +544,7 @@ export async function materializeVisualCompilation(
   ]);
   report({
     stage: "compiling",
-    label: "サムネイルを公開用ステージングへコピー済み",
+    label: "公開用サムネイルを準備しました",
     detail: "コピー元とコピー先のSHA-256が一致しました。",
     percent: 56,
     cancelSafe: true,
@@ -592,7 +593,7 @@ export async function publishVisualProject({
     throwIfAborted(signal);
     report({
       stage: "compiling",
-      label: "SceneとAssetを検証しています",
+      label: "シーンと素材を検証しています",
       percent: 18,
       cancelSafe: true,
     });
@@ -610,7 +611,7 @@ export async function publishVisualProject({
     report({
       stage: "checking",
       label: "XRiftの検査を実行しています",
-      detail: `公式CLIで${kind === "world" ? "World" : "Item"}をビルドし、問題がないか確認します。`,
+      detail: `公式CLIで${kind === "world" ? "ワールド" : "アイテム"}をビルドし、問題がないか確認します。`,
       percent: 66,
       cancelSafe: false,
     });
@@ -621,7 +622,7 @@ export async function publishVisualProject({
     if (checked.code !== 0) {
       throw new PublishCommandError(
         formatPublishCommandFailure(
-          `${kind === "world" ? "World" : "Item"}の検査`,
+          `${kind === "world" ? "ワールド" : "アイテム"}の検査`,
           await withRecoveredBuildOutput(
             checked,
             stagingPath,
@@ -866,13 +867,13 @@ export function parseStagedXriftConfig(
   try {
     parsed = JSON.parse(source);
   } catch {
-    throw new Error("公開用ステージングのxrift.jsonを解析できませんでした。");
+    throw new Error("公開用の一時プロジェクトのxrift.jsonを解析できませんでした。");
   }
   const root = parsed as Record<string, unknown> | null;
   const section = root?.[kind];
   if (!section || typeof section !== "object") {
     throw new Error(
-      `公開用ステージングのxrift.jsonに"${kind}"の設定がありません。`,
+      `公開用の一時プロジェクトのxrift.jsonに"${kind}"の設定がありません。`,
     );
   }
   const record = section as Record<string, unknown>;

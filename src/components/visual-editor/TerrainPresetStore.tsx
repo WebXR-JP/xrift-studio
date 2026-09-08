@@ -94,13 +94,13 @@ export function TerrainPresetStore({
     try {
       const result = await onAdd(selected, effectiveGrassId);
       setAddedMessage(
-        `「${result.entityName}」をSceneへ追加しました。ブラシで彫り足したり、草の密度をInspectorで変えられます。`,
+        `「${result.entityName}」をシーンへ追加しました。ブラシで彫り足したり、草の密度をInspectorで変えられます。`,
       );
     } catch (reason) {
       setError(
         reason instanceof Error && reason.message.trim()
           ? reason.message
-          : "Terrainを追加できませんでした",
+          : "地形を追加できませんでした",
       );
     } finally {
       setAdding(false);
@@ -111,14 +111,14 @@ export function TerrainPresetStore({
     <>
       <section
         className="flex min-w-0 flex-1 flex-col border-r border-slate-200"
-        aria-label="Terrain preset一覧"
+        aria-label="地形プリセット一覧"
       >
         <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-2.5">
           <div className="mb-2 flex items-start justify-between gap-3">
             <div>
-              <h3 className="text-xs font-semibold text-slate-900">Terrain</h3>
+              <h3 className="text-xs font-semibold text-slate-900">地形</h3>
               <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                形と草が入った地形です。追加後は普通のTerrainとして彫れます
+                形と草が入った地形です。追加後は地形ブラシで形を変えられます
               </p>
             </div>
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">
@@ -130,7 +130,7 @@ export function TerrainPresetStore({
               size={14}
               className="pointer-events-none absolute left-2.5 top-2 text-slate-400"
             />
-            <span className="sr-only">Terrainを検索</span>
+            <span className="sr-only">地形を検索</span>
             <input
               value={query}
               onChange={(event) => setQuery(event.currentTarget.value)}
@@ -143,7 +143,7 @@ export function TerrainPresetStore({
           {visible.length === 0 ? (
             <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center text-xs text-slate-500">
               <Search size={22} />
-              <p>条件に合うTerrainがありません</p>
+              <p>条件に合う地形がありません</p>
             </div>
           ) : (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2.5">
@@ -184,14 +184,11 @@ export function TerrainPresetStore({
             </div>
           )}
         </div>
-        <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
-          カードは実際の高さフィールドと草の配置をWebGLで描画しています。
-        </footer>
       </section>
 
       <aside
         className="scrollbar-thin w-[350px] shrink-0 overflow-auto bg-white p-4"
-        aria-label="選択したTerrainの詳細"
+        aria-label="選択した地形の詳細"
       >
         {selected ? (
           <div className="space-y-4">
@@ -265,7 +262,7 @@ export function TerrainPresetStore({
                 )?.description ?? "草を植えずに地形だけを置きます。"}
               </p>
             </label>
-            <Notice text="追加するとSceneへTerrain Entityが1つ増えます。形はブラシで彫り足せ、草の密度や種類はInspectorで変えられます。" />
+            <Notice text="形はブラシ、草の密度や種類はInspectorで調整します。" />
             {disabledReason ? (
               <Notice tone="warning" text={disabledReason} />
             ) : null}
@@ -299,7 +296,7 @@ export function TerrainPresetStore({
                   追加中
                 </>
               ) : (
-                `${selected.label}をSceneへ追加`
+                `${selected.label}をシーンへ追加`
               )}
             </button>
           </div>

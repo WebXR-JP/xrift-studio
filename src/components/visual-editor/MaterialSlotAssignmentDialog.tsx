@@ -51,7 +51,7 @@ export function MaterialSlotAssignmentDialog({
             </span>
             <div className="min-w-0">
               <h2 id={titleId} className="text-sm font-semibold text-slate-900">
-                適用するMaterial Slot
+                適用するマテリアルスロット
               </h2>
               <p className="mt-1 text-xs leading-5 text-slate-600">
                 「{materialName}」を「{entityName}」のどの面へ適用するか選びます。
@@ -114,10 +114,10 @@ export function MaterialSlotAssignmentDialog({
               />
               <span>
                 <span className="block text-xs font-semibold text-slate-800">
-                  すべてのSlot
+                  すべてのスロット
                 </span>
                 <span className="mt-1 block text-[11px] leading-4 text-slate-500">
-                  このMeshの{slots.length}個のMaterial Slotをまとめて置き換えます。
+                  このメッシュの{slots.length}個のマテリアルスロットをまとめて置き換えます。
                 </span>
               </span>
             </label>
@@ -139,7 +139,7 @@ export function MaterialSlotAssignmentDialog({
               onClick={() => onConfirm(choice)}
               className="h-8 rounded-md bg-violet-600 px-3 text-xs font-semibold text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              Materialを適用
+              マテリアルを適用
             </button>
           </div>
         </footer>

@@ -777,10 +777,10 @@ export const SKY_SHADER_CATALOG: readonly SkyShaderCatalogEntry[] = [
   ...EXTENDED_SKY_SHADER_CATALOG,
   {
     id: "volumetric-daylight",
-    label: "Volumetric Daylight",
+    label: "立体的な雲の昼空",
     category: "day",
     description:
-      "雲の層をレイマーチして厚みごと描く昼の空です。太陽に向いた面が白く光り、底が影になります。カタログで最も重いpresetなので、スタンドアロンVR向けにはストアの描画品質を「軽量」にして確認してください。",
+      "雲の層をレイマーチして厚みごと描く昼の空です。太陽に向いた面が白く光り、底が影になります。カタログで最も重いプリセットなので、スタンドアロンVR向けにはストアの描画品質を「軽量」にして確認してください。",
     parameters: VOLUMETRIC_STORE_PARAMETERS,
     shader: volumetricShader("volumetric-daylight", {
       ...frameworkUniforms(),
@@ -816,7 +816,7 @@ export const SKY_SHADER_CATALOG: readonly SkyShaderCatalogEntry[] = [
   },
   {
     id: "volumetric-sunset",
-    label: "Volumetric Sunset",
+    label: "立体的な雲の夕空",
     category: "dusk",
     description:
       "同じレイマーチの雲を夕日で照らした空です。低い太陽が雲の縁を橙に染め、底が紫に沈みます。太陽の高さを動かすと日没が進みます。",
@@ -855,7 +855,7 @@ export const SKY_SHADER_CATALOG: readonly SkyShaderCatalogEntry[] = [
   },
   {
     id: "daylight-clear",
-    label: "Daylight Clear",
+    label: "澄んだ青空",
     category: "day",
     description:
       "昼の青空です。太陽の高さと方角、流れる雲、地平線に並ぶ遠くの山を調整できます。太陽を低くすると夕方寄りの空になります。",
@@ -931,7 +931,7 @@ export const SKY_SHADER_CATALOG: readonly SkyShaderCatalogEntry[] = [
   },
   {
     id: "golden-sunset",
-    label: "Golden Sunset",
+    label: "黄金色の夕焼け",
     category: "dusk",
     description:
       "夕暮れの空です。低い太陽が雲と遠景を橙に染めます。太陽の高さを下げるほど日没へ近づき、星の数を上げると宵の明星が出ます。",
@@ -1016,7 +1016,7 @@ export const SKY_SHADER_CATALOG: readonly SkyShaderCatalogEntry[] = [
   },
   {
     id: "morning-glow",
-    label: "Morning Glow",
+    label: "朝焼け",
     category: "dawn",
     description:
       "朝焼けの空です。低い朝日が薄い雲を桃色に染め、遠景が明けきらない青に沈みます。太陽の高さを上げると昼へつながります。",
@@ -1101,7 +1101,7 @@ export const SKY_SHADER_CATALOG: readonly SkyShaderCatalogEntry[] = [
   },
   {
     id: "moonlit-night",
-    label: "Moonlit Night",
+    label: "月明かりの夜空",
     category: "night",
     description:
       "月のある夜空です。満ち欠け、大きさ、位置を調整でき、遠景の山が月と星を隠します。月をしまうと星だけの夜になります。",
@@ -1221,7 +1221,7 @@ export const SKY_SHADER_CATALOG: readonly SkyShaderCatalogEntry[] = [
   },
   {
     id: "starfield-night",
-    label: "Starfield Night",
+    label: "満天の星",
     category: "night",
     description:
       "天の川と3層の星を手続き的に描く夜空です。星の数、大きさ、またたきの速さ、遠景の山、地平線の色を調整できます。",
@@ -1288,7 +1288,7 @@ export const SKY_SHADER_CATALOG: readonly SkyShaderCatalogEntry[] = [
   },
   {
     id: "aurora-night",
-    label: "Aurora Night",
+    label: "オーロラの夜空",
     category: "aurora",
     description:
       "星空の上に揺れるオーロラのカーテンを重ねます。オーロラの強さ、速さ、高さと星の数、遠景の山を個別に調整できます。",
@@ -1370,7 +1370,7 @@ export const SKY_SHADER_CATALOG: readonly SkyShaderCatalogEntry[] = [
   },
   {
     id: "nebula-space",
-    label: "Nebula Space",
+    label: "星雲の宇宙",
     category: "space",
     description:
       "地平線を持たない宇宙空間です。星雲がゆっくり流れ、星は全天に広がります。屋内や宇宙ステーションのワールドに向きます。",

@@ -121,9 +121,9 @@ export function WaterShaderStore({
       setAddedMessage(
         [
           result.alreadyInstalled
-            ? `「${selected.label}」のMaterialを今の設定で更新しました。`
-            : `「${selected.label}」をMaterialとして追加しました。`,
-          "AssetsのMaterialとして追加したので、Sceneの板ポリや地形へ割り当ててください。波の高さや色はInspectorのUniform valuesで調整できます。",
+            ? `「${selected.label}」のマテリアルを今の設定で更新しました。`
+            : `「${selected.label}」をマテリアルとして追加しました。`,
+          "板や地形に割り当ててください。波の高さや色はInspectorで調整できます。",
         ].join(""),
       );
     } catch (reason) {
@@ -235,9 +235,6 @@ export function WaterShaderStore({
             </div>
           )}
         </div>
-        <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
-          カードは実際のGLSLを描画した静止画です。詳細で動きを確認できます。
-        </footer>
       </section>
 
       <aside
@@ -260,10 +257,10 @@ export function WaterShaderStore({
               </label>
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={sampleWind} onChange={(event) => setSampleWind(event.currentTarget.checked)} />
-                プレビューだけ試し風を使う
+                プレビューに風を適用
               </label>
-              <p className="text-[10px] leading-4 text-slate-500">照明と水底は見本です。Scene設定は変更しません。</p>
-              {wind.speed <= 0 ? <Notice tone="warning" text="SceneのWindは停止中です。追加後の水面を動かすには、Scene設定のWindを有効にしてください。" /> : null}
+              <p className="text-[10px] leading-4 text-slate-500">照明と水底は見本です。シーン設定は変更しません。</p>
+              {wind.speed <= 0 ? <Notice tone="warning" text="シーンの風は停止中です。追加後の水面を動かすには、シーン設定の風を有効にしてください。" /> : null}
             </div>
             <div>
               <div className="flex items-start justify-between gap-2">
@@ -278,7 +275,7 @@ export function WaterShaderStore({
                 <button
                   type="button"
                   onClick={() => void tauri.openUrl(WATER_SHADER_CATALOG_SOURCE_URL)}
-                  title="Shaderのソースを開く"
+                  title="シェーダーのソースを開く"
                   className="rounded p-1.5 text-slate-500 hover:bg-slate-100"
                 >
                   <ExternalLink size={15} aria-hidden="true" />
@@ -323,14 +320,14 @@ export function WaterShaderStore({
                   追加中
                 </>
               ) : (
-                `${selected.label}をMaterialへ追加`
+                `${selected.label}をマテリアルへ追加`
               )}
             </button>
 
             <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="text-[11px] font-semibold text-slate-700">
-                  Uniform values
+                  シェーダーの調整値
                 </span>
                 <button
                   type="button"
@@ -363,9 +360,9 @@ export function WaterShaderStore({
             </div>
 
 
-            <Notice text="追加後はMaterial Assetとして残ります。板ポリや地形メッシュへ割り当ててください。波の高さ・色・重ね数はInspectorのUniform valuesから何度でも変更できます。" />
+            <Notice text="板や地形に割り当てて使います。波の高さや色はInspectorで調整できます。" />
             <Notice text={selected.notes} />
-            {selected.shader.variants[0]?.defines.WATER_SHORE ? <Notice tone="warning" text="寄せ波は指定した直線の岸に合わせる演出です。「演出」の岸の位置・方角・幅を調整してください。岩や地形の接触箇所は自動検出しません。" /> : null}
+            {selected.shader.variants[0]?.defines.WATER_SHORE ? <Notice tone="warning" text="寄せ波は「演出」で岸の位置・方角・幅を調整します。岩や地形には自動で合わせません。" /> : null}
             <Notice text="Gerstner波の基礎部分はMochie's Unity Shaders (MIT, (c) 2020 MochiesCode) を移植しています。" />
 
           </div>

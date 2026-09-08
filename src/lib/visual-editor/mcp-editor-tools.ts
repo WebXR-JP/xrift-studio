@@ -542,7 +542,7 @@ function applyComponentCodeImportPlanTool(
   if (result.entityIds.length === 0) {
     throw new XriftMcpEditorToolError(
       "COMPONENT_IMPORT_FAILED",
-      result.diagnostics[0]?.message ?? "変換したComponentをSceneへ追加できませんでした",
+      result.diagnostics[0]?.message ?? "変換したComponentをシーンへ追加できませんでした",
       { diagnostics: result.diagnostics },
     );
   }
@@ -661,7 +661,7 @@ function listAssets(
   return unchanged(
     context,
     { assets, folders, count: assets.length, folderCount: folders.length },
-    "Asset一覧を取得しました",
+    "素材一覧を取得しました",
   );
 }
 
@@ -773,7 +773,7 @@ function renameLibraryAsset(
   if (!asset || !isUserLibraryAsset(asset)) {
     throw new XriftMcpEditorToolError(
       "ASSET_NOT_FOUND",
-      "名前を変更できるLibrary Assetが見つかりません",
+      "名前を変更できるLibrary 素材が見つかりません",
       { assetId },
     );
   }
@@ -800,7 +800,7 @@ function renameLibraryAsset(
       revisionBefore: context.revision,
       revisionAfter: context.revision + 1,
     },
-    activity: `AIがAsset「${asset.name}」の名前を変更しました`,
+    activity: `AIが素材「${asset.name}」の名前を変更しました`,
   };
 }
 
@@ -850,11 +850,11 @@ function moveLibraryAssetTool(
   const folderId = optionalNullableString(argumentsValue.folderId, "folderId");
   const asset = context.bundle.assets.assets[assetId];
   if (!asset || !isUserLibraryAsset(asset)) {
-    throw new XriftMcpEditorToolError("ASSET_NOT_FOUND", "移動できるLibrary Assetが見つかりません", { assetId });
+    throw new XriftMcpEditorToolError("ASSET_NOT_FOUND", "移動できるLibrary 素材が見つかりません", { assetId });
   }
   const moved = moveLibraryAsset(context.bundle.assets, assetId, folderId);
   if (!moved.changed) {
-    throw new XriftMcpEditorToolError("ASSET_MOVE_REJECTED", "Assetを指定されたFolderへ移動できません", {
+    throw new XriftMcpEditorToolError("ASSET_MOVE_REJECTED", "素材を指定されたFolderへ移動できません", {
       assetId,
       folderId,
       reason: moved.reason,
@@ -874,7 +874,7 @@ function moveLibraryAssetTool(
       revisionBefore: context.revision,
       revisionAfter: context.revision + 1,
     },
-    activity: `AIがAsset「${asset.name}」をFolderへ移動しました`,
+    activity: `AIが素材「${asset.name}」をFolderへ移動しました`,
   };
 }
 
@@ -935,7 +935,7 @@ function detachLibraryAssetReferences(
   };
   const analysis = analyzeAssetDeletion(documents, assetId);
   if (!analysis.asset) {
-    throw new XriftMcpEditorToolError("ASSET_NOT_FOUND", "Assetが見つかりません", {
+    throw new XriftMcpEditorToolError("ASSET_NOT_FOUND", "素材が見つかりません", {
       assetId,
     });
   }
@@ -987,7 +987,7 @@ function detachLibraryAssetReferences(
       revisionBefore: context.revision,
       revisionAfter: context.revision + 1,
     },
-    activity: `AIがAsset「${analysis.asset.name}」の参照${detached.length}件を外しました`,
+    activity: `AIが素材「${analysis.asset.name}」の参照${detached.length}件を外しました`,
   };
 }
 
@@ -1022,7 +1022,7 @@ function deleteLibraryAsset(
   if (!deleted.changed) {
     throw new XriftMcpEditorToolError(
       "ASSET_DELETE_REJECTED",
-      "Assetは削除できません。detachReferencesを指定するか、参照を解除してから再試行してください",
+      "素材は削除できません。detachReferencesを指定するか、参照を解除してから再試行してください",
       { assetId, reason: deleted.reason, references: deleted.references },
     );
   }
@@ -1046,7 +1046,7 @@ function deleteLibraryAsset(
       revisionBefore: context.revision,
       revisionAfter: context.revision + 1,
     },
-    activity: `AIがAsset「${deleted.asset?.name ?? assetId}」を削除しました`,
+    activity: `AIが素材「${deleted.asset?.name ?? assetId}」を削除しました`,
   };
 }
 
@@ -1128,8 +1128,8 @@ function inspectColliders(
       sources: collisionSources(context.bundle.scene),
     },
     entityIds?.length === 1
-      ? `Entity「${context.bundle.scene.entities[entityIds[0]!]?.name ?? entityIds[0]}」のColliderを診断しました`
-      : "Scene全体のColliderを診断しました",
+      ? `Entity「${context.bundle.scene.entities[entityIds[0]!]?.name ?? entityIds[0]}」の衝突判定を診断しました`
+      : "シーン全体の衝突判定を診断しました",
   );
 }
 
@@ -1163,7 +1163,7 @@ function optimizeColliders(
         inspection: optimized.after,
         changes: [],
       },
-      "Colliderに自動修正が必要な問題はありません",
+      "衝突判定に自動修正が必要な問題はありません",
     );
   }
   const bundle = touchProject(context, {
@@ -1185,7 +1185,7 @@ function optimizeColliders(
       changes: optimized.changes,
       synchronizedDuringPlay: context.editorMode === "play",
     },
-    activity: `AIがCollider設定を${optimized.changes.length}件最適化しました`,
+    activity: `AIが衝突判定設定を${optimized.changes.length}件最適化しました`,
   };
 }
 
@@ -1227,7 +1227,7 @@ function getAudio(
   if (!audio) {
     throw new XriftMcpEditorToolError(
       "AUDIO_NOT_FOUND",
-      "指定されたAudio Assetが見つかりません",
+      "指定された音声素材が見つかりません",
       { audioAssetId },
     );
   }
@@ -1252,7 +1252,7 @@ function getTexture(
   if (!texture) {
     throw new XriftMcpEditorToolError(
       "TEXTURE_NOT_FOUND",
-      "指定されたTexture Assetが見つかりません",
+      "指定されたテクスチャが見つかりません",
       { textureAssetId },
     );
   }
@@ -1278,7 +1278,7 @@ function updateTexture(
   if (!texture) {
     throw new XriftMcpEditorToolError(
       "TEXTURE_NOT_FOUND",
-      "指定されたTexture Assetが見つかりません",
+      "指定されたテクスチャが見つかりません",
       { textureAssetId },
     );
   }
@@ -1299,7 +1299,7 @@ function updateTexture(
         textureAssetId,
         importSettings: texture.importSettings,
       },
-      "Textureはすでに指定された状態です",
+      "テクスチャはすでに指定された状態です",
     );
   }
   const updated = getTextureAsset(assets, textureAssetId);
@@ -1318,7 +1318,7 @@ function updateTexture(
       importSettings: updated?.importSettings,
       synchronizedDuringPlay: context.editorMode === "play",
     },
-    activity: `AIがTexture「${texture.name}」のImport設定を更新しました`,
+    activity: `AIがテクスチャ「${texture.name}」の読み込み設定を更新しました`,
   };
 }
 
@@ -1358,7 +1358,7 @@ function createDocumentAsset(
   if (!created.added) {
     throw new XriftMcpEditorToolError(
       "ASSET_CREATE_FAILED",
-      `${kind} Assetを作成できませんでした`,
+      `${kind} 素材を作成できませんでした`,
       { kind, folderId },
     );
   }
@@ -1369,7 +1369,7 @@ function createDocumentAsset(
   if (!asset) {
     throw new XriftMcpEditorToolError(
       "ASSET_CREATE_FAILED",
-      "作成したAssetを取得できませんでした",
+      "作成した素材を取得できませんでした",
       { assetId: created.assetId },
     );
   }
@@ -1386,7 +1386,7 @@ function createDocumentAsset(
       revisionAfter: context.revision + 1,
       asset: JSON.parse(JSON.stringify(asset)) as Record<string, unknown>,
     },
-    activity: `AIが「${asset.name}」を${kind} Assetとして作成しました`,
+    activity: `AIが「${asset.name}」を${kind} 素材として作成しました`,
   };
 }
 
@@ -1402,7 +1402,7 @@ function getParticleAsset(
   if (!asset || asset.kind !== "particle") {
     throw new XriftMcpEditorToolError(
       "PARTICLE_ASSET_NOT_FOUND",
-      "指定されたParticle Assetが見つかりません",
+      "指定されたパーティクルが見つかりません",
       { particleAssetId },
     );
   }
@@ -1431,7 +1431,7 @@ function updateParticleAssetTool(
   if (!current || current.kind !== "particle") {
     throw new XriftMcpEditorToolError(
       "PARTICLE_ASSET_NOT_FOUND",
-      "指定されたParticle Assetが見つかりません",
+      "指定されたパーティクルが見つかりません",
       { particleAssetId },
     );
   }
@@ -1447,14 +1447,14 @@ function updateParticleAssetTool(
     if (!referencedAsset) {
       throw new XriftMcpEditorToolError(
         "ASSET_NOT_FOUND",
-        `patch.renderer.${field}に指定されたAssetが見つかりません`,
+        `patch.renderer.${field}に指定された素材が見つかりません`,
         { particleAssetId, referencedAssetId, field },
       );
     }
     if (referencedAsset.kind !== expectedKind) {
       throw new XriftMcpEditorToolError(
         "ASSET_KIND_MISMATCH",
-        `patch.renderer.${field}には${expectedKind} Assetを指定してください`,
+        `patch.renderer.${field}には${expectedKind} 素材を指定してください`,
         {
           particleAssetId,
           referencedAssetId,
@@ -1479,7 +1479,7 @@ function updateParticleAssetTool(
         particleAssetId,
         properties: current.properties,
       },
-      "Particle Assetはすでに指定された状態です",
+      "パーティクルはすでに指定された状態です",
     );
   }
   const asset = assets.assets[particleAssetId];
@@ -1500,7 +1500,7 @@ function updateParticleAssetTool(
           ? JSON.parse(JSON.stringify(asset.properties))
           : null,
     },
-    activity: `AIがParticle Asset「${current.name}」を更新しました`,
+    activity: `AIがパーティクル「${current.name}」を更新しました`,
   };
 }
 
@@ -1651,7 +1651,7 @@ function updateSceneSettings(
         sceneSettings: settings,
         synchronizedDuringPlay: context.editorMode === "play",
       },
-      "Scene設定はすでに指定された状態です",
+      "シーン設定はすでに指定された状態です",
     );
   }
 
@@ -1675,7 +1675,7 @@ function updateSceneSettings(
       sceneSettings: settings,
       synchronizedDuringPlay: context.editorMode === "play",
     },
-    activity: "AIがScene設定を更新しました",
+    activity: "AIがシーン設定を更新しました",
   };
 }
 
@@ -1726,7 +1726,7 @@ function placeAsset(
       position,
       parentEntityId,
     },
-    activity: `AIが「${placement.assetName}」をSceneへ配置しました`,
+    activity: `AIが「${placement.assetName}」をシーンへ配置しました`,
   };
 }
 
@@ -1744,7 +1744,7 @@ function listEntities(context: XriftMcpEditorContext): XriftMcpEditorToolOutcome
       components: entity.components,
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
-  return unchanged(context, { entities, count: entities.length }, "Entity一覧を取得しました");
+  return unchanged(context, { entities, count: entities.length }, "Hierarchyを取得しました");
 }
 
 function listComponentDefinitions(
@@ -1823,7 +1823,7 @@ function getModel(
   if (!model) {
     throw new XriftMcpEditorToolError(
       "MODEL_NOT_FOUND",
-      "指定されたModel Assetが見つかりません",
+      "指定された3Dモデルが見つかりません",
       { modelAssetId },
     );
   }
@@ -1847,7 +1847,7 @@ function updateModel(
   if (!model) {
     throw new XriftMcpEditorToolError(
       "MODEL_NOT_FOUND",
-      "指定されたModel Assetが見つかりません",
+      "指定された3Dモデルが見つかりません",
       { modelAssetId },
     );
   }
@@ -1858,7 +1858,7 @@ function updateModel(
   if (unknownMaterialSlots.length > 0) {
     throw new XriftMcpEditorToolError(
       "INVALID_ARGUMENT",
-      "Modelに存在しないMaterial slotは変更できません",
+      "3Dモデルに存在しないマテリアル枠は変更できません",
       { modelAssetId, materialSlots: unknownMaterialSlots },
     );
   }
@@ -1893,7 +1893,7 @@ function updateModel(
       importSettings: updated?.importSettings,
       materialSlots: updated?.materialSlots,
     },
-    activity: `AIがModel「${model.name}」のImport設定を更新しました`,
+    activity: `AIが3Dモデル「${model.name}」の読み込み設定を更新しました`,
   };
 }
 
@@ -1915,7 +1915,7 @@ function createPrimitive(
   if (!materialAssetId) {
     throw new XriftMcpEditorToolError(
       "NO_MATERIAL_AVAILABLE",
-      "Projectに割り当てられるMaterialがありません",
+      "プロジェクトに割り当てられるマテリアルがありません",
     );
   }
   const placement = addBuiltinPrimitiveEntity(
@@ -1928,7 +1928,7 @@ function createPrimitive(
   if (!placement) {
     throw new XriftMcpEditorToolError(
       "INVALID_ARGUMENT",
-      "指定されたMaterialでPrimitiveを作成できません",
+      "指定されたマテリアルでPrimitiveを作成できません",
       { materialAssetId },
     );
   }
@@ -1981,7 +1981,7 @@ function requireTerrain(
   if (!mesh || !terrain) {
     throw new XriftMcpEditorToolError(
       "TERRAIN_NOT_FOUND",
-      "指定されたEntityにTerrainが見つかりません",
+      "指定されたEntityに地形が見つかりません",
       { entityId, ...(componentId ? { componentId } : {}) },
     );
   }
@@ -2060,7 +2060,7 @@ function createTerrain(
   if (!materialAssetId) {
     throw new XriftMcpEditorToolError(
       "NO_MATERIAL_AVAILABLE",
-      "ProjectにTerrainへ割り当てられるMaterialがありません",
+      "プロジェクトに地形へ割り当てられるマテリアルがありません",
     );
   }
   const created = addTerrainEntity(
@@ -2072,7 +2072,7 @@ function createTerrain(
   if (!created) {
     throw new XriftMcpEditorToolError(
       "TERRAIN_CREATE_FAILED",
-      "指定されたMaterialでTerrainを作成できません",
+      "指定されたマテリアルで地形を作成できません",
       { materialAssetId },
     );
   }
@@ -2097,7 +2097,7 @@ function createTerrain(
       materialAssetId,
       position,
     },
-    activity: "AIがTerrainをSceneへ作成しました",
+    activity: "AIが地形をシーンへ作成しました",
   };
 }
 
@@ -2160,7 +2160,7 @@ function sculptTerrain(
   if (scene === context.bundle.scene) {
     throw new XriftMcpEditorToolError(
       "TERRAIN_BRUSH_NO_EFFECT",
-      "Terrainの範囲内に有効なブラシ操作を適用できませんでした",
+      "地形の範囲内に有効なブラシ操作を適用できませんでした",
       { entityId, componentId: mesh.id, operation },
     );
   }
@@ -2187,7 +2187,7 @@ function sculptTerrain(
       minHeight: range?.min ?? null,
       maxHeight: range?.max ?? null,
     },
-    activity: `AIがTerrainへ${kind}ブラシを適用しました`,
+    activity: `AIが地形へ${kind}ブラシを適用しました`,
   };
 }
 
@@ -2252,7 +2252,7 @@ function updateTerrain(
       depth,
       resolution,
     },
-    activity: `AIがTerrain「${entity.name}」のサイズと解像度を更新しました`,
+    activity: `AIが地形「${entity.name}」のサイズと解像度を更新しました`,
   };
 }
 
@@ -2350,7 +2350,7 @@ function listMaterialPresets(
       // with a Terrain shape rather than on their own.
       terrainSurfacesIn: "list_terrain_presets",
     },
-    "Material presetの一覧を取得しました",
+    "マテリアルプリセットの一覧を取得しました",
   );
 }
 
@@ -2372,7 +2372,7 @@ function resolvePrebuiltPresetMaterial(
     if (!preset) {
       throw new XriftMcpEditorToolError(
         "MATERIAL_PRESET_NOT_FOUND",
-        "指定されたglow presetが見つかりません",
+        "指定されたglow プリセットが見つかりません",
         {
           presetId,
           presetIds: GLOW_MATERIAL_PRESETS.map((entry) => entry.id),
@@ -2388,7 +2388,7 @@ function resolvePrebuiltPresetMaterial(
   if (!definition || !asset) {
     throw new XriftMcpEditorToolError(
       "MATERIAL_PRESET_NOT_FOUND",
-      "指定されたglTF Material presetが見つかりません",
+      "指定されたglTF マテリアルプリセットが見つかりません",
       {
         presetId,
         presetIds: MATERIAL_SHOWCASE_DEFINITIONS.map((entry) => entry.key),
@@ -2425,7 +2425,7 @@ function createMaterialFromPreset(
           materialAssetId: asset.id,
           alreadyInstalled: true,
         },
-        `${kindLabel}「${label}」はすでにProjectにあります`,
+        `${kindLabel}「${label}」はすでにプロジェクトにあります`,
       );
     }
     const assets = {
@@ -2459,7 +2459,7 @@ function createMaterialFromPreset(
   if (!entry) {
     throw new XriftMcpEditorToolError(
       "MATERIAL_PRESET_NOT_FOUND",
-      "指定されたMaterial presetが見つかりません",
+      "指定されたマテリアルプリセットが見つかりません",
       {
         kind,
         presetId,
@@ -2535,8 +2535,8 @@ function createMaterialFromPreset(
       // water is a Material on a plane. Neither happens here.
       nextStep:
         kind === "sky"
-          ? "update_scene_settings の skybox でこのMaterialを指定してください"
-          : "set_material で板ポリなどのMesh slotへ割り当ててください",
+          ? "update_scene_settings の skybox でこのマテリアルを指定してください"
+          : "set_material で板ポリなどのメッシュの割り当て枠へ割り当ててください",
     },
     activity: `AIが${kind === "sky" ? "Skybox" : "Water"} Material「${entry.label}」を追加しました`,
   };
@@ -2586,9 +2586,9 @@ function createTextureCardTool(
           ? "ASSET_KIND_MISMATCH"
           : "TEXTURE_CARD_CREATE_FAILED",
       created.reason === "texture-missing"
-        ? "指定されたTexture Assetが見つかりません"
+        ? "指定されたテクスチャが見つかりません"
         : created.reason === "environment-texture"
-          ? "環境Textureは遠景・草カードに使用できません"
+          ? "環境テクスチャは遠景・草カードに使用できません"
           : "カードを作成できませんでした",
       { textureAssetId, profile, reason: created.reason },
     );
@@ -2614,7 +2614,7 @@ function createTextureCardTool(
       entityName: created.entityName,
       materialAssetId: created.materialId,
     },
-    activity: `AIが「${created.entityName}」をSceneへ作成しました`,
+    activity: `AIが「${created.entityName}」をシーンへ作成しました`,
   };
 }
 
@@ -2711,7 +2711,7 @@ function listTerrainPresets(
       })),
       catalogRevision: TERRAIN_SURFACE_CATALOG_REVISION,
     },
-    "Terrainのpresetと表面カタログを取得しました",
+    "地形のプリセットと表面カタログを取得しました",
   );
 }
 
@@ -2725,7 +2725,7 @@ function createTerrainFromPresetTool(
   if (!preset) {
     throw new XriftMcpEditorToolError(
       "TERRAIN_PRESET_NOT_FOUND",
-      "指定されたTerrain presetが見つかりません",
+      "指定された地形プリセットが見つかりません",
       { presetId, presetIds: TERRAIN_PRESETS.map((entry) => entry.id) },
     );
   }
@@ -2756,7 +2756,7 @@ function createTerrainFromPresetTool(
   if (!materialAssetId) {
     throw new XriftMcpEditorToolError(
       "NO_MATERIAL_AVAILABLE",
-      "ProjectにTerrainへ割り当てられるMaterialがありません",
+      "プロジェクトに地形へ割り当てられるマテリアルがありません",
     );
   }
   // Two Terrains over the same ground are two nearly coplanar surfaces that
@@ -2777,7 +2777,7 @@ function createTerrainFromPresetTool(
   if (!created) {
     throw new XriftMcpEditorToolError(
       "TERRAIN_CREATE_FAILED",
-      "指定されたMaterialでTerrainを作成できません",
+      "指定されたマテリアルで地形を作成できません",
       { materialAssetId },
     );
   }
@@ -2810,7 +2810,7 @@ function createTerrainFromPresetTool(
       // on purpose, but they should never find out from the moire.
       overlappingTerrainCount: overlaps.length,
     },
-    activity: `AIがTerrain preset「${preset.label}」をSceneへ配置しました`,
+    activity: `AIが地形プリセット「${preset.label}」をシーンへ配置しました`,
   };
 }
 
@@ -2834,7 +2834,7 @@ function applyTerrainSurface(
   if (!entry) {
     throw new XriftMcpEditorToolError(
       "TERRAIN_SURFACE_NOT_FOUND",
-      "指定された表面presetが見つかりません",
+      "指定された表面プリセットが見つかりません",
       {
         surfaceId,
         surfaceIds: TERRAIN_SURFACE_CATALOG.map((candidate) => candidate.id),
@@ -2899,7 +2899,7 @@ function applyTerrainSurface(
         materialAssetId: installed.primaryAssetId,
         parameters: values,
       },
-      `Terrainの表面はすでに「${entry.label}」です`,
+      `地形の表面はすでに「${entry.label}」です`,
     );
   }
   const bundle = touchProject(context, {
@@ -2925,7 +2925,7 @@ function applyTerrainSurface(
       materialAssetId: installed.primaryAssetId,
       parameters: values,
     },
-    activity: `AIがTerrain「${target.entity.name}」の表面へ「${entry.label}」を適用しました`,
+    activity: `AIが地形「${target.entity.name}」の表面へ「${entry.label}」を適用しました`,
   };
 }
 
@@ -3229,7 +3229,7 @@ function listTerrainGrassTypes(
         appearance: TERRAIN_GRASS_APPEARANCE_RANGES,
       },
     },
-    "Terrainの草の種類とセットを取得しました",
+    "地形の草の種類とセットを取得しました",
   );
 }
 
@@ -3262,7 +3262,7 @@ function applyTerrainGrassPreset(
         describeTerrainGrassLayer(target.terrain, layer),
       ),
     },
-    `AIがTerrain「${target.entity.name}」へ草のセット「${preset.label}」を適用しました`,
+    `AIが地形「${target.entity.name}」へ草のセット「${preset.label}」を適用しました`,
   );
 }
 
@@ -3325,7 +3325,7 @@ function addTerrainGrassLayer(
       layer: describeTerrainGrassLayer(target.terrain, withAppearance),
       layerCount: layers.length,
     },
-    `AIがTerrain「${target.entity.name}」へ草のレイヤーを追加しました`,
+    `AIが地形「${target.entity.name}」へ草のレイヤーを追加しました`,
   );
 }
 
@@ -3463,7 +3463,7 @@ function updateTerrainGrassLayer(
       layer: describeTerrainGrassLayer(target.terrain, next),
       order: nextLayers.map((layer) => layer.id),
     },
-    `AIがTerrain「${target.entity.name}」の草のレイヤーを更新しました`,
+    `AIが地形「${target.entity.name}」の草のレイヤーを更新しました`,
   );
 }
 
@@ -3485,7 +3485,7 @@ function deleteTerrainGrassLayer(
     target,
     nextLayers,
     { layerId, layerCount: nextLayers.length },
-    `AIがTerrain「${target.entity.name}」の草のレイヤーを削除しました`,
+    `AIが地形「${target.entity.name}」の草のレイヤーを削除しました`,
   );
 }
 
@@ -3534,7 +3534,7 @@ function paintTerrainGrass(
   if (scene === context.bundle.scene) {
     throw new XriftMcpEditorToolError(
       "TERRAIN_BRUSH_NO_EFFECT",
-      "Terrainの範囲内に有効な草のブラシ操作を適用できませんでした",
+      "地形の範囲内に有効な草のブラシ操作を適用できませんでした",
       { entityId: target.entityId, componentId: target.mesh.id, operation },
     );
   }
@@ -3566,7 +3566,7 @@ function paintTerrainGrass(
           ? describeTerrainGrassLayer(updatedTerrain, updatedLayer)
           : null,
     },
-    activity: `AIがTerrainの草へ${mode}ブラシを適用しました`,
+    activity: `AIが地形の草へ${mode}ブラシを適用しました`,
   };
 }
 
@@ -3689,7 +3689,7 @@ function listInteractionTriggerTargets(
       })),
       count: targets.length,
     },
-    "Interaction Triggerの対象一覧を取得しました",
+    "グラフの実行の対象一覧を取得しました",
   );
 }
 
@@ -3726,7 +3726,7 @@ function placeBuiltinPrefab(
   if (!recipe) {
     throw new XriftMcpEditorToolError(
       "RECIPE_NOT_FOUND",
-      "指定されたPrefab recipeが見つかりません",
+      "指定されたプレハブ recipeが見つかりません",
       { recipeId },
     );
   }
@@ -3734,7 +3734,7 @@ function placeBuiltinPrefab(
   if (!recipe.projectKinds.includes(projectKind)) {
     throw new XriftMcpEditorToolError(
       "PROJECT_KIND_MISMATCH",
-      `このPrefabは${projectKind} projectでは配置できません`,
+      `このプレハブは${projectKind} projectでは配置できません`,
       { recipeId, projectKind },
     );
   }
@@ -3747,7 +3747,7 @@ function placeBuiltinPrefab(
   if (!placement) {
     throw new XriftMcpEditorToolError(
       "PLACEMENT_FAILED",
-      "Prefabを配置できませんでした",
+      "プレハブを配置できませんでした",
       { recipeId },
     );
   }
@@ -3769,7 +3769,7 @@ function placeBuiltinPrefab(
       componentId: placement.componentId,
       placementGuidance: getWorldComponentGuidance(placement.recipe.schemaId),
     },
-    activity: `AIが「${placement.recipe.name}」をSceneへ配置しました`,
+    activity: `AIが「${placement.recipe.name}」をシーンへ配置しました`,
   };
 }
 
@@ -3797,7 +3797,7 @@ function createPrefab(
   if (!created) {
     throw new XriftMcpEditorToolError(
       "PREFAB_CREATE_FAILED",
-      "指定されたEntityからPrefabを作成できませんでした",
+      "指定されたEntityからプレハブを作成できませんでした",
       { entityId },
     );
   }
@@ -3809,7 +3809,7 @@ function createPrefab(
   if (!added.added) {
     throw new XriftMcpEditorToolError(
       "PREFAB_CREATE_FAILED",
-      "Prefab AssetをProjectへ追加できませんでした",
+      "プレハブをプロジェクトへ追加できませんでした",
       { prefabAssetId, reason: added.reason },
     );
   }
@@ -3839,7 +3839,7 @@ function createPrefab(
       document: created.document,
       references: created.references,
     },
-    activity: `AIがEntity「${entity.name}」からPrefab「${name}」を作成しました`,
+    activity: `AIがEntity「${entity.name}」からプレハブ「${name}」を作成しました`,
   };
 }
 
@@ -3865,7 +3865,7 @@ function addComponent(
     ) {
       throw new XriftMcpEditorToolError(
         textureAsset ? "ASSET_KIND_MISMATCH" : "ASSET_NOT_FOUND",
-        "textureAssetIdには存在する画像のTexture Assetを指定してください。環境Texture（HDRI）はSkyboxへ使います",
+        "textureAssetIdには存在する画像のテクスチャを指定してください。環境テクスチャ（HDRI）はSkyboxへ使います",
         { textureAssetId, actualKind: textureAsset?.kind },
       );
     }
@@ -3881,7 +3881,7 @@ function addComponent(
       if (!contract?.complete) {
         throw new XriftMcpEditorToolError(
           "SCRIPT_CONTRACT_UNAVAILABLE",
-          "Scriptのproperty契約を完全に読み取れません。sourceのdefineScript、props、default、enum optionsを静的リテラルで宣言してから再試行してください",
+          "スクリプトのproperty契約を完全に読み取れません。元データのdefineScript、props、default、enum optionsを静的リテラルで宣言してから再試行してください",
           {
             scriptAssetId: scriptAsset.id,
             issues: contract?.issues ?? [],
@@ -4062,7 +4062,7 @@ function updateComponent(
         if (fontAssetId && fontAsset?.kind !== "font") {
           throw new XriftMcpEditorToolError(
             fontAsset ? "ASSET_KIND_MISMATCH" : "ASSET_NOT_FOUND",
-            "patch.fontAssetIdには存在するFont Assetを指定してください。空文字で同梱書体へ戻せます",
+            "patch.fontAssetIdには存在するFont 素材を指定してください。空文字で同梱書体へ戻せます",
             { fontAssetId, actualKind: fontAsset?.kind },
           );
         }
@@ -4099,7 +4099,7 @@ function updateComponent(
         ) {
           throw new XriftMcpEditorToolError(
             textureAsset ? "ASSET_KIND_MISMATCH" : "ASSET_NOT_FOUND",
-            "patch.textureAssetIdには存在する画像のTexture Assetを指定してください。環境Texture（HDRI）はSkyboxへ使い、空文字で画像を外せます",
+            "patch.textureAssetIdには存在する画像のテクスチャを指定してください。環境テクスチャ（HDRI）はSkyboxへ使い、空文字で画像を外せます",
             { textureAssetId, actualKind: textureAsset?.kind },
           );
         }
@@ -4138,7 +4138,7 @@ function updateComponent(
             audioAsset
               ? "ASSET_KIND_MISMATCH"
               : "ASSET_NOT_FOUND",
-            "patch.audioAssetIdには存在するAudio Assetを指定してください",
+            "patch.audioAssetIdには存在する音声素材を指定してください",
             { audioAssetId, actualKind: audioAsset?.kind },
           );
         }
@@ -4157,7 +4157,7 @@ function updateComponent(
       // that has not been opened since; editing it would keep it alive.
       throw new XriftMcpEditorToolError(
         "COMPONENT_REMOVED",
-        "Animation Componentは廃止されました。clipの再生はInteractivity Graphのanimation/startノードで行います",
+        "Animation Componentは廃止されました。クリップの再生はノードグラフのanimation/startノードで行います",
         { entityId, componentId, componentType: component.type },
       );
     }
@@ -4168,7 +4168,7 @@ function updateComponent(
         component.type,
         {
           guidance:
-            "Windの強さ・速度・突風はScene SettingsのWind（グローバル）で変更してください（MCPではupdate_scene_settingsのvegetation section）",
+            "風の強さ・速度・突風はシーン Settingsの風（グローバル）で変更してください（MCPではupdate_scene_settingsのvegetation section）",
         },
       );
       const enabled = optionalBoolean(patch.enabled, "patch.enabled");
@@ -4202,7 +4202,7 @@ function updateComponent(
           context.bundle.assets.assets[particleAssetId]
             ? "ASSET_KIND_MISMATCH"
             : "ASSET_NOT_FOUND",
-          "patch.particleAssetIdには存在するParticle Assetを指定してください",
+          "patch.particleAssetIdには存在するパーティクルを指定してください",
           { particleAssetId },
         );
       }
@@ -4247,7 +4247,7 @@ function updateComponent(
       if (requestedPlacement && !isIdentityPlacement(requestedPlacement)) {
         throw new XriftMcpEditorToolError(
           "COMPONENT_UPDATE_REJECTED",
-          "XRift Componentのposition・rotation・scaleはEntityのTransformで指定します",
+          "XRiftのComponentのposition・rotation・scaleはEntityの位置・回転・大きさで指定します",
           {
             entityId,
             componentId,
@@ -4267,7 +4267,7 @@ function updateComponent(
         if (!context.bundle.assets.assets[assetId]) {
           throw new XriftMcpEditorToolError(
             "ASSET_NOT_FOUND",
-            "patch.assetReferencesに指定されたAssetが見つかりません",
+            "patch.assetReferencesに指定された素材が見つかりません",
             { assetId },
           );
         }
@@ -4298,7 +4298,7 @@ function updateComponent(
         throw new XriftMcpEditorToolError(
           "COMPONENT_UPDATE_REJECTED",
           result.diagnostics[0]?.message ??
-            "XRift Componentを更新できませんでした",
+            "XRiftのComponentを更新できませんでした",
           {
             entityId,
             componentId,
@@ -4313,7 +4313,7 @@ function updateComponent(
     case "script":
       assertPatchKeys(patch, ["enabled"], component.type, {
         guidance:
-          "Scriptのproperties、assetReferences、entityReferencesはupdate_script_componentを使用してください",
+          "スクリプトのproperties、assetReferences、entityReferencesはupdate_script_componentを使用してください",
       });
       scene = updateSceneComponentEnabled(
         context.bundle.scene,
@@ -4325,7 +4325,7 @@ function updateComponent(
     case "transform":
       assertPatchKeys(patch, ["enabled"], component.type, {
         guidance:
-          "Transform値はupdate_transformを使用してください",
+          "位置・回転・大きさ値はupdate_transformを使用してください",
       });
       scene = updateSceneComponentEnabled(
         context.bundle.scene,
@@ -4456,7 +4456,7 @@ function updateComponent(
         if (!currentMesh) {
           throw new XriftMcpEditorToolError(
             "COMPONENT_UPDATE_REJECTED",
-            "Mesh Rendererを更新できませんでした",
+            "メッシュの描画を更新できませんでした",
             { entityId, componentId },
           );
         }
@@ -4606,7 +4606,7 @@ function removeComponent(
   if (component.type === "transform") {
     throw new XriftMcpEditorToolError(
       "TRANSFORM_COMPONENT_REQUIRED",
-      "Transform ComponentはEntityに必須のため削除できません",
+      "位置・回転・大きさComponentはEntityに必須のため削除できません",
       { entityId, componentId },
     );
   }
@@ -4620,7 +4620,7 @@ function removeComponent(
     if (!result.changed) {
       throw new XriftMcpEditorToolError(
         "COMPONENT_REMOVE_REJECTED",
-        result.diagnostics[0]?.message ?? "XRift Componentを削除できません",
+        result.diagnostics[0]?.message ?? "XRiftのComponentを削除できません",
         { entityId, componentId, diagnostics: result.diagnostics },
       );
     }
@@ -4769,7 +4769,7 @@ function updateScriptComponent(
   if (!targetComponent || targetComponent.type !== "script") {
     throw new XriftMcpEditorToolError(
       "SCRIPT_COMPONENT_NOT_FOUND",
-      "指定されたScript Componentが見つかりません",
+      "指定されたスクリプトComponentが見つかりません",
       { entityId, componentId },
     );
   }
@@ -4777,7 +4777,7 @@ function updateScriptComponent(
     if (!context.bundle.assets.assets[assetId]) {
       throw new XriftMcpEditorToolError(
         "ASSET_NOT_FOUND",
-        "assetReferencesに指定されたAssetが見つかりません",
+        "assetReferencesに指定された素材が見つかりません",
         { assetId },
       );
     }
@@ -4795,7 +4795,7 @@ function updateScriptComponent(
   if (argumentsValue.properties !== undefined && !contract?.complete) {
     throw new XriftMcpEditorToolError(
       "SCRIPT_CONTRACT_UNAVAILABLE",
-      "Scriptのproperty契約を完全に読み取れないためpropertiesを更新できません。sourceの静的宣言を修正してから再試行してください",
+      "スクリプトのproperty契約を完全に読み取れないためpropertiesを更新できません。元データの静的宣言を修正してから再試行してください",
       {
         scriptAssetId: targetComponent.scriptAssetId,
         issues: contract?.issues ?? [],
@@ -4873,9 +4873,9 @@ function updateScriptComponent(
     activity:
       context.editorMode === "play"
         ? referencesChanged
-          ? `AIがScript参照を更新し「${entity.name}」だけ再起動しました`
-          : `AIが「${entity.name}」のScript propertyを次のフレームへ反映しました`
-        : `AIが「${entity.name}」のScript propertyを更新しました`,
+          ? `AIがスクリプト参照を更新し「${entity.name}」だけ再起動しました`
+          : `AIが「${entity.name}」のスクリプト propertyを次のフレームへ反映しました`
+        : `AIが「${entity.name}」のスクリプト propertyを更新しました`,
   };
 }
 
@@ -4908,7 +4908,7 @@ function updateTransform(
         revision: context.revision,
         entityId,
       },
-      "Transformはすでに指定された状態です",
+      "位置・回転・大きさはすでに指定された状態です",
     );
   }
   const bundle = touchProject(context, { ...context.bundle, scene });
@@ -4927,7 +4927,7 @@ function updateTransform(
       rotation,
       scale,
     },
-    activity: "AIがTransformを更新しました",
+    activity: "AIが位置・回転・大きさを更新しました",
   };
 }
 
@@ -4967,7 +4967,7 @@ function setMaterial(
           entityId,
           materialAssetId,
         },
-        "Materialはすでに指定された状態です",
+        "マテリアルはすでに指定された状態です",
       );
     }
     throw new XriftMcpEditorToolError(
@@ -4991,7 +4991,7 @@ function setMaterial(
       materialAssetId,
       slots: "slots" in outcome ? outcome.slots : [outcome.slot],
     },
-    activity: "AIがMaterialを割り当てました",
+    activity: "AIがマテリアルを割り当てました",
   };
 }
 
@@ -5007,7 +5007,7 @@ function getMaterial(
   if (!material) {
     throw new XriftMcpEditorToolError(
       "MATERIAL_NOT_FOUND",
-      "指定されたMaterial Assetが見つかりません",
+      "指定されたマテリアルが見つかりません",
       { materialAssetId },
     );
   }
@@ -5031,7 +5031,7 @@ function updateMaterial(
   if (!material) {
     throw new XriftMcpEditorToolError(
       "MATERIAL_NOT_FOUND",
-      "指定されたMaterial Assetが見つかりません",
+      "指定されたマテリアルが見つかりません",
       { materialAssetId },
     );
   }
@@ -5041,7 +5041,7 @@ function updateMaterial(
     return unchanged(
       context,
       { materialAssetId, revision: context.revision },
-      "Materialはすでに指定された状態です",
+      "マテリアルはすでに指定された状態です",
     );
   }
   const bundle = touchProject(context, { ...context.bundle, assets });
@@ -5056,7 +5056,7 @@ function updateMaterial(
       revisionAfter: context.revision + 1,
       properties: getMaterialAsset(assets, materialAssetId)?.properties,
     },
-    activity: `AIがMaterial「${material.name}」を更新しました`,
+    activity: `AIがマテリアル「${material.name}」を更新しました`,
   };
 }
 
@@ -5094,7 +5094,7 @@ function createCustomShader(
     if (!material) {
       throw new XriftMcpEditorToolError(
         "MATERIAL_NOT_FOUND",
-        "指定されたMaterial Assetが見つかりません",
+        "指定されたマテリアルが見つかりません",
         { materialAssetId },
       );
     }
@@ -5110,7 +5110,7 @@ function createCustomShader(
     if (!created.added) {
       throw new XriftMcpEditorToolError(
         "ASSET_CREATE_FAILED",
-        "Custom Shader用Materialを作成できませんでした",
+        "カスタムシェーダー用マテリアルを作成できませんでした",
         { folderId },
       );
     }
@@ -5126,7 +5126,7 @@ function createCustomShader(
   if (!material?.shader || material.shader.kind !== "classic-r3f") {
     throw new XriftMcpEditorToolError(
       "CUSTOM_SHADER_INVALID",
-      "Custom ShaderをMaterialへ保存できませんでした",
+      "カスタムシェーダーをマテリアルへ保存できませんでした",
       { materialAssetId: selectedMaterialId },
     );
   }
@@ -5139,7 +5139,7 @@ function createCustomShader(
         shader: JSON.parse(JSON.stringify(material.shader)),
         revision: context.revision,
       },
-      `Material「${material.name}」のCustom Shaderはすでに設定済みです`,
+      `Material「${material.name}」のカスタムシェーダーはすでに設定済みです`,
     );
   }
   const bundle = touchProject(context, { ...context.bundle, assets });
@@ -5157,7 +5157,7 @@ function createCustomShader(
       revisionBefore: context.revision,
       revisionAfter: context.revision + 1,
     },
-    activity: `AIがMaterial「${material.name}」にCustom Shaderを設定しました`,
+    activity: `AIがマテリアル「${material.name}」にカスタムシェーダーを設定しました`,
   };
 }
 
@@ -5173,14 +5173,14 @@ function getCustomShader(
   if (!material) {
     throw new XriftMcpEditorToolError(
       "MATERIAL_NOT_FOUND",
-      "指定されたMaterial Assetが見つかりません",
+      "指定されたマテリアルが見つかりません",
       { materialAssetId },
     );
   }
   if (!material.shader || material.shader.kind !== "classic-r3f") {
     throw new XriftMcpEditorToolError(
       "CUSTOM_SHADER_NOT_FOUND",
-      "MaterialにCustom Shaderが設定されていません",
+      "マテリアルにカスタムシェーダーが設定されていません",
       { materialAssetId },
     );
   }
@@ -5191,7 +5191,7 @@ function getCustomShader(
       materialName: material.name,
       shader: JSON.parse(JSON.stringify(material.shader)),
     },
-    `Material「${material.name}」のCustom Shaderを取得しました`,
+    `Material「${material.name}」のカスタムシェーダーを取得しました`,
   );
 }
 
@@ -5208,7 +5208,7 @@ function updateCustomShader(
   if (!material) {
     throw new XriftMcpEditorToolError(
       "MATERIAL_NOT_FOUND",
-      "指定されたMaterial Assetが見つかりません",
+      "指定されたマテリアルが見つかりません",
       { materialAssetId },
     );
   }
@@ -5226,7 +5226,7 @@ function updateCustomShader(
   if (validation.length > 0) {
     throw new XriftMcpEditorToolError(
       "CUSTOM_SHADER_INVALID",
-      "Custom Shaderの形式が不正です",
+      "カスタムシェーダーの形式が不正です",
       { materialAssetId, diagnostics: validation },
     );
   }
@@ -5242,7 +5242,7 @@ function updateCustomShader(
         shader: JSON.parse(JSON.stringify(shader)),
         revision: context.revision,
       },
-      `Material「${material.name}」のCustom Shaderはすでに指定された状態です`,
+      `Material「${material.name}」のカスタムシェーダーはすでに指定された状態です`,
     );
   }
   const updated = getMaterialAsset(assets, materialAssetId);
@@ -5263,7 +5263,7 @@ function updateCustomShader(
       revisionAfter: context.revision + 1,
       synchronizedDuringPlay: context.editorMode === "play",
     },
-    activity: `AIがMaterial「${material.name}」のCustom Shaderを更新しました`,
+    activity: `AIがマテリアル「${material.name}」のカスタムシェーダーを更新しました`,
   };
 }
 
@@ -5292,7 +5292,7 @@ function setMaterialTextureTransform(
   if (!material) {
     throw new XriftMcpEditorToolError(
       "MATERIAL_NOT_FOUND",
-      "指定されたMaterial Assetが見つかりません",
+      "指定されたマテリアルが見つかりません",
       { materialAssetId },
     );
   }
@@ -5300,7 +5300,7 @@ function setMaterialTextureTransform(
   if (!current) {
     throw new XriftMcpEditorToolError(
       "TEXTURE_SLOT_EMPTY",
-      "指定されたMaterial texture slotにTextureがありません",
+      "指定されたマテリアル texture slotにテクスチャがありません",
       { materialAssetId, slot },
     );
   }
@@ -5338,7 +5338,7 @@ function setMaterialTextureTransform(
     return unchanged(
       context,
       { materialAssetId, slot, revision: context.revision },
-      "Texture transformはすでに指定された状態です",
+      "テクスチャ transformはすでに指定された状態です",
     );
   }
   const bundle = touchProject(context, { ...context.bundle, assets });
@@ -5357,7 +5357,7 @@ function setMaterialTextureTransform(
       revisionBefore: context.revision,
       revisionAfter: context.revision + 1,
     },
-    activity: `AIがMaterial「${material.name}」のタイリングを更新しました`,
+    activity: `AIがマテリアル「${material.name}」のタイリングを更新しました`,
   };
 }
 
@@ -5529,7 +5529,7 @@ function reparentEntity(
     },
     activity:
       context.editorMode === "play"
-        ? "AIがHierarchyを変更し実行中のSceneへ同期しました"
+        ? "AIがHierarchyを変更し実行中のシーンへ同期しました"
         : "AIがHierarchyを変更しました",
   };
 }
@@ -5561,7 +5561,7 @@ function deleteEntity(
           deleted: false,
           modelNodeVisibility: "hidden",
         },
-        "このEntityはModel内のノードで、すでに非表示です。削除するにはModel Assetを編集して再インポートしてください",
+        "このEntityは3Dモデル内のノードで、すでに非表示です。削除するには3Dモデルを編集して再インポートしてください",
       );
     }
     const bundle = touchProject(context, { ...context.bundle, scene: hiddenScene });
@@ -5579,7 +5579,7 @@ function deleteEntity(
         deleted: false,
         modelNodeVisibility: "hidden",
         message:
-          "Model内のノードはModel本体の一部のため、Entityとしては削除せず非表示にしました。再表示はset_entity_enabled(enabled: true)。Modelから完全に取り除くにはソースを編集して再インポートしてください",
+          "3Dモデル内のノードは3Dモデル本体の一部のため、Entityとしては削除せず非表示にしました。再表示はset_entity_enabled(enabled: true)。3Dモデルから完全に取り除くにはソースを編集して再インポートしてください",
       },
       activity: `AIが「${target.name}」を非表示にしました`,
     };
@@ -5722,7 +5722,7 @@ function listInteractivityRecipes(
         needsMaterial: recipe.needsMaterial === true,
       })),
     },
-    "Interactivity Graphのレシピ一覧を取得しました",
+    "ノードグラフのレシピ一覧を取得しました",
   );
 }
 
@@ -5759,7 +5759,7 @@ function applyInteractivityRecipe(
   }
   const folderId = optionalNullableString(argumentsValue.folderId, "folderId");
   if (folderId && !context.bundle.assets.folders?.[folderId]) {
-    throw new XriftMcpEditorToolError("FOLDER_NOT_FOUND", "指定されたAsset Folderが見つかりません", {
+    throw new XriftMcpEditorToolError("FOLDER_NOT_FOUND", "指定された素材 Folderが見つかりません", {
       folderId,
     });
   }
@@ -5781,7 +5781,7 @@ function applyInteractivityRecipe(
     extension,
   });
   if (!added.added) {
-    throw new XriftMcpEditorToolError("ASSET_NOT_CREATED", "Interactivity Assetを作成できませんでした");
+    throw new XriftMcpEditorToolError("ASSET_NOT_CREATED", "ノードグラフ素材を作成できませんでした");
   }
 
   let scene = context.bundle.scene;
@@ -5849,14 +5849,14 @@ function applyInteractivityRecipe(
       readyToRun: entityId ? attached : false,
       nextStep: entityId
         ? attached
-          ? "Playで確認できます"
+          ? "動作確認で確認できます"
           : "Entityへ付けられませんでした。add_componentでinteraction.triggerを付けてください"
         : "entityIdを指定するか、add_componentでinteraction.triggerを付けてください",
       extension,
     },
     activity: entityId
       ? `AIがレシピ「${recipe.label}」を作り、Entityへ付けました`
-      : `AIがレシピ「${recipe.label}」からInteractivity Graphを作りました`,
+      : `AIがレシピ「${recipe.label}」からノードグラフを作りました`,
   };
 }
 
@@ -5895,7 +5895,7 @@ function createInteractivityAsset(
     ["start", "empty"] as const,
   );
   if (folderId && !context.bundle.assets.folders?.[folderId]) {
-    throw new XriftMcpEditorToolError("FOLDER_NOT_FOUND", "指定されたAsset Folderが見つかりません", {
+    throw new XriftMcpEditorToolError("FOLDER_NOT_FOUND", "指定された素材 Folderが見つかりません", {
       folderId,
     });
   }
@@ -5906,7 +5906,7 @@ function createInteractivityAsset(
     folderId,
   });
   if (!added.added) {
-    throw new XriftMcpEditorToolError("ASSET_NOT_CREATED", "Interactivity Assetを作成できませんでした");
+    throw new XriftMcpEditorToolError("ASSET_NOT_CREATED", "ノードグラフ素材を作成できませんでした");
   }
   let assets = added.manifest;
   if (template === "empty") {
@@ -5938,7 +5938,7 @@ function createInteractivityAsset(
       template,
       extension: (assets.assets[assetId] as InteractivityAsset).extension,
     },
-    activity: `AIがInteractivity Asset「${name}」を作成しました`,
+    activity: `AIがノードグラフ素材「${name}」を作成しました`,
   };
 }
 
@@ -5958,7 +5958,7 @@ function createModelAnimationGraph(
   const modelAssetId = requiredString(argumentsValue.modelAssetId, "modelAssetId");
   const model = context.bundle.assets.assets[modelAssetId];
   if (model?.kind !== "model") {
-    throw new XriftMcpEditorToolError("ASSET_NOT_FOUND", "Model Assetが見つかりません", {
+    throw new XriftMcpEditorToolError("ASSET_NOT_FOUND", "3Dモデルが見つかりません", {
       modelAssetId,
     });
   }
@@ -5966,14 +5966,14 @@ function createModelAnimationGraph(
   if (clips.length === 0) {
     throw new XriftMcpEditorToolError(
       "MODEL_HAS_NO_ANIMATION",
-      "このModelにはanimation clipがありません",
+      "この3Dモデルにはアニメーションクリップがありません",
       { modelAssetId },
     );
   }
   const folderId =
     optionalNullableString(argumentsValue.folderId, "folderId") ?? model.folderId ?? null;
   if (folderId && !context.bundle.assets.folders?.[folderId]) {
-    throw new XriftMcpEditorToolError("FOLDER_NOT_FOUND", "指定されたAsset Folderが見つかりません", {
+    throw new XriftMcpEditorToolError("FOLDER_NOT_FOUND", "指定された素材 Folderが見つかりません", {
       folderId,
     });
   }
@@ -5986,7 +5986,7 @@ function createModelAnimationGraph(
     extension: createModelAnimationGraphExtension(clips.map((clip) => clip.name)),
   });
   if (!added.added) {
-    throw new XriftMcpEditorToolError("ASSET_NOT_CREATED", "Interactivity Assetを作成できませんでした");
+    throw new XriftMcpEditorToolError("ASSET_NOT_CREATED", "ノードグラフ素材を作成できませんでした");
   }
   const bundle = touchProject(context, { ...context.bundle, assets: added.manifest });
   return {
@@ -6007,7 +6007,7 @@ function createModelAnimationGraph(
       attached: false,
       extension: (added.manifest.assets[assetId] as InteractivityAsset).extension,
     },
-    activity: `AIが${clips.length}件のclipを再生するInteractivity Asset「${name}」を作成しました`,
+    activity: `AIが${clips.length}件のクリップを再生するノードグラフ素材「${name}」を作成しました`,
   };
 }
 
@@ -6067,7 +6067,7 @@ function addInteractivityNode(
       declaration,
       op,
     },
-    `AIが${op} nodeを追加しました`,
+    `AIが${op} ノードを追加しました`,
   );
 }
 
@@ -6092,7 +6092,7 @@ function connectInteractivityNodes(
   const source = graph.nodes?.[sourceNode];
   const target = graph.nodes?.[targetNode];
   if (!source || !target) {
-    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "接続元または接続先nodeが見つかりません", {
+    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "接続元または接続先ノードが見つかりません", {
       sourceNode,
       targetNode,
     });
@@ -6126,7 +6126,7 @@ function connectInteractivityNodes(
     asset,
     extension,
     { assetId: asset.id, graphIndex, kind, sourceNode, sourceSocket, targetNode, targetSocket },
-    `AIがInteractivity ${kind} socketを接続しました`,
+    `AIがノードグラフ ${kind} 接続口を接続しました`,
   );
 }
 
@@ -6151,7 +6151,7 @@ function setInteractivityValue(
   const graph = requireInteractivityGraph(extension.graphs, graphIndex);
   const node = graph.nodes?.[nodeIndex];
   if (!node) {
-    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "指定されたnodeが見つかりません", {
+    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "指定されたノードが見つかりません", {
       nodeIndex,
     });
   }
@@ -6164,7 +6164,7 @@ function setInteractivityValue(
   if (fixed !== undefined && fixed !== signature) {
     throw new XriftMcpEditorToolError(
       "SIGNATURE_NOT_ALLOWED",
-      `${socket} socketの型は${fixed}に固定されています`,
+      `${socket} 接続口の型は${fixed}に固定されています`,
       { nodeIndex, socket, signature, requiredSignature: fixed },
     );
   }
@@ -6207,7 +6207,7 @@ function setInteractivityConfiguration(
   const graph = requireInteractivityGraph(extension.graphs, graphIndex);
   const node = graph.nodes?.[nodeIndex];
   if (!node) {
-    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "指定されたnodeが見つかりません", {
+    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "指定されたノードが見つかりません", {
       nodeIndex,
     });
   }
@@ -6249,7 +6249,7 @@ function configureInteractivityMaterial(
   if (!preset) {
     throw new XriftMcpEditorToolError(
       "MATERIAL_POINTER_PRESET_NOT_FOUND",
-      "指定されたMaterial pointer presetが見つかりません",
+      "指定されたマテリアル pointer プリセットが見つかりません",
       {
         presetId,
         supportedPresetIds: KHR_INTERACTIVITY_MATERIAL_POINTER_PRESETS.map(
@@ -6267,7 +6267,7 @@ function configureInteractivityMaterial(
   if (materialIndex < 0) {
     throw new XriftMcpEditorToolError(
       "MATERIAL_NOT_FOUND",
-      "指定されたMaterial Assetが見つかりません",
+      "指定されたマテリアルが見つかりません",
       { materialAssetId },
     );
   }
@@ -6283,7 +6283,7 @@ function configureInteractivityMaterial(
   ) {
     throw new XriftMcpEditorToolError(
       "INVALID_POINTER_NODE",
-      "指定されたnodeはMaterialを設定できるpointer operationではありません",
+      "指定されたノードはマテリアルを設定できるpointer operationではありません",
       { nodeIndex, graphIndex },
     );
   }
@@ -6299,7 +6299,7 @@ function configureInteractivityMaterial(
       materialIndex,
       preset,
     },
-    `AIがInteractivity nodeのMaterial targetを「${preset.label}」に設定しました`,
+    `AIがノードグラフノードのマテリアル targetを「${preset.label}」に設定しました`,
   );
 }
 
@@ -6320,13 +6320,13 @@ function disconnectInteractivitySocket(
   const graph = requireInteractivityGraph(extension.graphs, graphIndex);
   const node = graph.nodes?.[nodeIndex];
   if (!node) {
-    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "指定されたnodeが見つかりません", {
+    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "指定されたノードが見つかりません", {
       nodeIndex,
     });
   }
   const sockets = kind === "flow" ? node.flows : node.values;
   if (!sockets?.[socket]) {
-    throw new XriftMcpEditorToolError("SOCKET_NOT_CONNECTED", "指定されたsocketに接続はありません", {
+    throw new XriftMcpEditorToolError("SOCKET_NOT_CONNECTED", "指定された接続口に接続はありません", {
       nodeIndex,
       socket,
       kind,
@@ -6342,7 +6342,7 @@ function disconnectInteractivitySocket(
     asset,
     extension,
     { assetId: asset.id, graphIndex, nodeIndex, socket, kind },
-    `AIがInteractivity ${kind} socketの接続を解除しました`,
+    `AIがノードグラフ ${kind} 接続口の接続を解除しました`,
   );
 }
 
@@ -6360,7 +6360,7 @@ function deleteInteractivityNode(
   const extension = cloneKhrInteractivityExtension(asset.extension);
   const graph = requireInteractivityGraph(extension.graphs, graphIndex);
   if (!graph.nodes?.[nodeIndex]) {
-    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "指定されたnodeが見つかりません", {
+    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "指定されたノードが見つかりません", {
       nodeIndex,
     });
   }
@@ -6397,7 +6397,7 @@ function deleteInteractivityNode(
     asset,
     extension,
     { assetId: asset.id, graphIndex, deletedNodeIndex: nodeIndex },
-    "AIがInteractivity nodeを削除しました",
+    "AIがノードグラフノードを削除しました",
   );
 }
 
@@ -6469,7 +6469,7 @@ function addInteractivityGraphTool(
   if (graphIndex < 0) {
     throw new XriftMcpEditorToolError(
       "GRAPH_LIMIT_REACHED",
-      `1つのAssetが持てるgraphは${KHR_INTERACTIVITY_MAX_GRAPHS}個までです`,
+      `1つの素材が持てるgraphは${KHR_INTERACTIVITY_MAX_GRAPHS}個までです`,
       { graphCount: extension.graphs.length, limit: KHR_INTERACTIVITY_MAX_GRAPHS },
     );
   }
@@ -6545,7 +6545,7 @@ function deleteInteractivityGraphTool(
   if (!removeInteractivityGraph(extension, graphIndex)) {
     throw new XriftMcpEditorToolError(
       "LAST_GRAPH",
-      "Assetの最後のbehavior graphは削除できません",
+      "素材の最後のbehavior graphは削除できません",
       { graphIndex },
     );
   }
@@ -6592,7 +6592,7 @@ function moveInteractivityNode(
   const graph = requireInteractivityGraph(extension.graphs, graphIndex);
   const node = graph.nodes?.[nodeIndex];
   if (!node) {
-    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "指定されたnodeが見つかりません", {
+    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "指定されたノードが見つかりません", {
       nodeIndex,
     });
   }
@@ -6611,7 +6611,7 @@ function moveInteractivityNode(
     asset,
     extension,
     { assetId: asset.id, graphIndex, nodeIndex, position: [placed.x, placed.y] },
-    "AIがInteractivity nodeを移動しました",
+    "AIがノードグラフノードを移動しました",
   );
 }
 
@@ -6644,7 +6644,7 @@ function layoutInteractivityGraph(
         return { nodeIndex: index, position: [position.x, position.y] };
       }),
     },
-    "AIがInteractivity graphを整列しました",
+    "AIがノードグラフを整列しました",
   );
 }
 
@@ -6679,7 +6679,7 @@ function duplicateInteractivityNodeTool(
           return entry ? pasteInteractivityNode(target, entry) : -1;
         })();
   if (created < 0) {
-    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "指定されたnodeが見つかりません", {
+    throw new XriftMcpEditorToolError("NODE_NOT_FOUND", "指定されたノードが見つかりません", {
       nodeIndex,
     });
   }
@@ -6699,7 +6699,7 @@ function duplicateInteractivityNodeTool(
       // client that assumed the wires came along would build a broken graph.
       connectionsCopied: false,
     },
-    `AIが${op} nodeを複製しました`,
+    `AIが${op} ノードを複製しました`,
   );
 }
 
@@ -6734,7 +6734,7 @@ function configureInteractivityTriggerActionTool(
   if (!node || !isInteractivityTriggerActionOp(op)) {
     throw new XriftMcpEditorToolError(
       "NOT_A_TRIGGER_ACTION",
-      "指定されたnodeはプロパティを変えるaction（xrift/setProperty または xrift/toggleProperty）ではありません",
+      "指定されたノードはプロパティを変えるaction（xrift/setProperty または xrift/toggleProperty）ではありません",
       { nodeIndex, op: op ?? null },
     );
   }
@@ -6762,7 +6762,7 @@ function configureInteractivityTriggerActionTool(
   if (!targetEntity) {
     throw new XriftMcpEditorToolError(
       "TARGET_ENTITY_NOT_FOUND",
-      "指定されたEntityはInteraction Triggerの対象になりません",
+      "指定されたEntityはグラフの実行の対象になりません",
       {
         entityId,
         hint: "list_interaction_trigger_targets で対象と対応プロパティを確認できます",
@@ -6814,7 +6814,7 @@ function configureInteractivityTriggerActionTool(
   ) {
     throw new XriftMcpEditorToolError(
       "TARGET_NOT_APPLIED",
-      "Interaction Triggerのactionへ対象を設定できませんでした",
+      "グラフの実行のactionへ対象を設定できませんでした",
       { nodeIndex, entityId, componentId, property },
     );
   }
@@ -6828,14 +6828,14 @@ function configureInteractivityTriggerActionTool(
   const assetArgument = optionalString(argumentsValue.valueAssetId);
   const textArgument = optionalString(argumentsValue.text);
   if (assetArgument !== undefined && descriptor.kind !== "asset") {
-    invalidArgument("valueAssetId", "Assetを取るpropertyだけが受け付けます");
+    invalidArgument("valueAssetId", "素材を取るpropertyだけが受け付けます");
   }
   if (textArgument !== undefined && descriptor.kind !== "string") {
     invalidArgument("text", "文字列を取るpropertyだけが受け付けます");
   }
   if (assetArgument !== undefined) {
     if (assetArgument !== "" && !context.bundle.assets.assets[assetArgument]) {
-      invalidArgument("valueAssetId", "ProjectにあるAssetのid、または空文字");
+      invalidArgument("valueAssetId", "プロジェクトにある素材のid、または空文字");
     }
     setInteractivityTriggerActionAsset(graph, nodeIndex, assetArgument);
   }
@@ -6983,7 +6983,7 @@ function triggerActionValueFromArgument(
     case "asset":
       // Handled before this point: an Asset property takes `assetId`, not
       // `value`, because the id is configuration rather than a socket value.
-      invalidArgument("value", "assetId（このpropertyはAssetを指定します）");
+      invalidArgument("value", "assetId（このpropertyは素材を指定します）");
     case "string":
       invalidArgument("value", "text（このpropertyは文字列を指定します）");
   }
@@ -7060,8 +7060,8 @@ function simulateInteractivityAsset(
       nodeCount,
     },
     run.entries.length === 0
-      ? "Interactivity graphを実行しましたが、起きることはありませんでした"
-      : `Interactivity graphの${run.simulatedSeconds}秒ぶんの進行を取得しました`,
+      ? "ノードグラフを実行しましたが、起きることはありませんでした"
+      : `ノードグラフの${run.simulatedSeconds}秒ぶんの進行を取得しました`,
   );
 }
 
@@ -7143,7 +7143,7 @@ function updateInteractivityAssetTool(
         0,
       ),
     },
-    `AIがInteractivity Asset「${asset.name}」のgraphを置き換えました`,
+    `AIがノードグラフ素材「${asset.name}」のgraphを置き換えました`,
   );
 }
 
@@ -7173,7 +7173,7 @@ function assertInteractivitySocket(
   }
   throw new XriftMcpEditorToolError(
     "SOCKET_NOT_FOUND",
-    `${op} には${socket} socketがありません`,
+    `${op} には${socket} 接続口がありません`,
     { nodeIndex, op, socket, availableSockets: template[kind] },
   );
 }
@@ -7234,7 +7234,7 @@ function requireInteractivityAsset(
   if (asset?.kind !== "interactivity") {
     throw new XriftMcpEditorToolError(
       asset ? "ASSET_KIND_MISMATCH" : "ASSET_NOT_FOUND",
-      asset ? "指定されたAssetはInteractivity Graphではありません" : "指定されたAssetが見つかりません",
+      asset ? "指定された素材はノードグラフではありません" : "指定された素材が見つかりません",
       { assetId },
     );
   }
@@ -7287,13 +7287,13 @@ function assertWritableContext(
   if (context.editorMode !== "edit" && !options.allowPlay) {
     throw new XriftMcpEditorToolError(
       "EDITOR_READ_ONLY",
-      "Playを停止してからAI編集を実行してください",
+      "動作確認を停止してからAI編集を実行してください",
     );
   }
   if (context.importBusy) {
     throw new XriftMcpEditorToolError(
       "EDITOR_BUSY",
-      "Asset Importの完了後にAI編集を再試行してください",
+      "素材読み込みの完了後にAI編集を再試行してください",
     );
   }
   const projectId = requiredString(argumentsValue.projectId, "projectId");
@@ -7305,21 +7305,21 @@ function assertWritableContext(
   if (projectId !== context.bundle.project.projectId) {
     throw new XriftMcpEditorToolError(
       "PROJECT_MISMATCH",
-      "現在開いているProjectと要求されたProjectが一致しません",
+      "現在開いているプロジェクトと要求されたプロジェクトが一致しません",
       { currentProjectId: context.bundle.project.projectId },
     );
   }
   if (sceneId !== context.bundle.scene.sceneId) {
     throw new XriftMcpEditorToolError(
       "SCENE_MISMATCH",
-      "現在開いているSceneと要求されたSceneが一致しません",
+      "現在開いているシーンと要求されたシーンが一致しません",
       { currentSceneId: context.bundle.scene.sceneId },
     );
   }
   if (expectedRevision !== context.revision) {
     throw new XriftMcpEditorToolError(
       "STALE_REVISION",
-      "Sceneが更新されています。最新のEditor contextを取得してください",
+      "シーンが更新されています。最新のEditor contextを取得してください",
       { expectedRevision, currentRevision: context.revision },
     );
   }
@@ -7336,7 +7336,7 @@ function sceneSettingsPatch(
   if (unsupported) {
     throw new XriftMcpEditorToolError(
       "INVALID_ARGUMENT",
-      `${name}.${unsupported}はScene設定で変更できません`,
+      `${name}.${unsupported}はシーン設定で変更できません`,
       { section: name, unsupportedField: unsupported },
     );
   }
@@ -7445,21 +7445,21 @@ function assertSkyboxImageAsset(
   if (!asset) {
     throw new XriftMcpEditorToolError(
       "ASSET_NOT_FOUND",
-      "skybox.imageAssetIdに指定されたAssetが見つかりません",
+      "skybox.imageAssetIdに指定された素材が見つかりません",
       { imageAssetId },
     );
   }
   if (asset.kind !== "texture" && asset.kind !== "skybox") {
     throw new XriftMcpEditorToolError(
       "ASSET_KIND_MISMATCH",
-      "skybox.imageAssetIdにはTexture Assetを指定してください",
+      "skybox.imageAssetIdにはテクスチャを指定してください",
       { imageAssetId, actualKind: asset.kind },
     );
   }
   if (asset.source.kind !== "project") {
     throw new XriftMcpEditorToolError(
       "INVALID_ARGUMENT",
-      "skybox.imageAssetIdにはproject sourceを持つTexture Assetを指定してください",
+      "skybox.imageAssetIdにはproject 元データを持つテクスチャを指定してください",
       { imageAssetId, sourceKind: asset.source.kind },
     );
   }
@@ -7473,21 +7473,21 @@ function assertSkyShaderMaterialAsset(
   if (!asset) {
     throw new XriftMcpEditorToolError(
       "ASSET_NOT_FOUND",
-      "skybox.materialAssetIdに指定されたAssetが見つかりません",
+      "skybox.materialAssetIdに指定された素材が見つかりません",
       { materialAssetId },
     );
   }
   if (asset.kind !== "material") {
     throw new XriftMcpEditorToolError(
       "ASSET_KIND_MISMATCH",
-      "skybox.materialAssetIdにはMaterial Assetを指定してください",
+      "skybox.materialAssetIdにはマテリアルを指定してください",
       { materialAssetId, actualKind: asset.kind },
     );
   }
   if (!isSkyShaderMaterialAsset(asset)) {
     throw new XriftMcpEditorToolError(
       "INVALID_ARGUMENT",
-      "skybox.materialAssetIdにはCustom Shader（classic-r3f）を持つMaterial Assetを指定してください",
+      "skybox.materialAssetIdにはカスタムシェーダー（classic-r3f）を持つマテリアルを指定してください",
       { materialAssetId },
     );
   }
@@ -7962,14 +7962,14 @@ function hasCanonicalSceneQualitySettings(value: unknown): boolean {
 function placementFailureMessage(reason: string): string {
   switch (reason) {
     case "asset-missing":
-      return "指定されたAssetが見つかりません";
+      return "指定された素材が見つかりません";
     case "parent-missing":
       return "配置先のEntityが見つかりません";
     case "prefab-document-missing":
     case "prefab-empty":
-      return "Prefab documentを読み込めないため配置できません";
+      return "プレハブ documentを読み込めないため配置できません";
     default:
-      return "指定されたAssetはSceneへ配置できません";
+      return "指定された素材はシーンへ配置できません";
   }
 }
 
@@ -8009,7 +8009,7 @@ function addComponentFailureMessage(reason?: string): string {
     case "definition-missing":
       return "指定されたComponentの定義が見つかりません";
     case "project-kind":
-      return "このComponentは現在のProject種別では追加できません";
+      return "このComponentは現在のプロジェクト種別では追加できません";
     case "duplicate":
       return "同じComponentが既に追加されています";
     case "dependency-missing":
@@ -8039,13 +8039,13 @@ function setMaterialFailureMessage(reason: string): string {
     case "entity-missing":
       return "指定されたEntityが見つかりません";
     case "mesh-missing":
-      return "指定されたEntityにMeshがありません";
+      return "指定されたEntityにメッシュがありません";
     case "material-missing":
-      return "指定されたMaterial Assetが見つかりません";
+      return "指定されたマテリアルが見つかりません";
     case "slot-missing":
-      return "指定されたMaterial slotが見つかりません";
+      return "指定されたマテリアル枠が見つかりません";
     default:
-      return "Materialを割り当てられませんでした";
+      return "マテリアルを割り当てられませんでした";
   }
 }
 
@@ -8275,7 +8275,7 @@ function particlePatchValue(value: unknown): ParticlePropertiesPatch {
   if (unsupported) {
     throw new XriftMcpEditorToolError(
       "INVALID_ARGUMENT",
-      `patch.${unsupported}はParticle Assetで変更できません`,
+      `patch.${unsupported}はパーティクルで変更できません`,
     );
   }
   if (Object.keys(patch).length === 0) {
@@ -8551,14 +8551,14 @@ function modelAssetPatchValue(
       if (!material) {
         throw new XriftMcpEditorToolError(
           "ASSET_NOT_FOUND",
-          "ModelのMaterial slotに指定されたAssetが見つかりません",
+          "3Dモデルのマテリアル枠に指定された素材が見つかりません",
           { materialAssetId, slot },
         );
       }
       if (material.kind !== "material") {
         throw new XriftMcpEditorToolError(
           "ASSET_KIND_MISMATCH",
-          "ModelのMaterial slotにはMaterial Assetを指定してください",
+          "3Dモデルのマテリアル枠にはマテリアルを指定してください",
           { materialAssetId, slot, actualKind: material.kind },
         );
       }
@@ -8607,7 +8607,7 @@ function meshMaterialBindingsValue(
     if (!availableSlots.has(slot)) {
       throw new XriftMcpEditorToolError(
         "INVALID_COMPONENT_PATCH",
-        `指定されたMaterial slot「${slot}」はMesh Rendererにありません`,
+        `指定されたマテリアル枠「${slot}」はメッシュの描画にありません`,
         { slot, availableSlots: [...availableSlots] },
       );
     }
@@ -8619,14 +8619,14 @@ function meshMaterialBindingsValue(
     if (!material) {
       throw new XriftMcpEditorToolError(
         "ASSET_NOT_FOUND",
-        "Material bindingに指定されたAssetが見つかりません",
+        "マテリアル bindingに指定された素材が見つかりません",
         { materialAssetId },
       );
     }
     if (material.kind !== "material") {
       throw new XriftMcpEditorToolError(
         "ASSET_KIND_MISMATCH",
-        "Mesh RendererのbindingにはMaterial Assetを指定してください",
+        "メッシュの描画のbindingにはマテリアルを指定してください",
         { materialAssetId, actualKind: material.kind },
       );
     }
@@ -8772,7 +8772,7 @@ function customShaderValue(value: unknown, name: string): ClassicR3fMaterialShad
   if (diagnostics.length > 0) {
     throw new XriftMcpEditorToolError(
       "CUSTOM_SHADER_INVALID",
-      "Custom Shaderの形式が不正です",
+      "カスタムシェーダーの形式が不正です",
       { diagnostics },
     );
   }
@@ -8817,14 +8817,14 @@ function assertCustomShaderAssetReferences(
     if (!asset || asset.kind !== "shader") {
       throw new XriftMcpEditorToolError(
         "SHADER_ASSET_NOT_FOUND",
-        `${field}で指定されたShader Assetが見つかりません`,
+        `${field}で指定されたシェーダー素材が見つかりません`,
         { field, assetId },
       );
     }
     if (asset.stage !== stage) {
       throw new XriftMcpEditorToolError(
         "SHADER_STAGE_MISMATCH",
-        `${field}には${stage} Shader Assetを指定してください`,
+        `${field}には${stage} シェーダー素材を指定してください`,
         { field, assetId, expectedStage: stage, actualStage: asset.stage },
       );
     }
@@ -8964,7 +8964,7 @@ function validateScriptPropertyPatch({
     if (!descriptor) {
       throw new XriftMcpEditorToolError(
         "SCRIPT_PROPERTY_UNKNOWN",
-        `Scriptに宣言されていないpropertyです: ${name}`,
+        `スクリプトに宣言されていないpropertyです: ${name}`,
         { property: name, scriptName: contract.name },
       );
     }
@@ -8988,14 +8988,14 @@ function validateScriptPropertyPatch({
       if (!asset) {
         throw new XriftMcpEditorToolError(
           "ASSET_NOT_FOUND",
-          `${name} が参照するAssetが見つかりません`,
+          `${name} が参照する素材が見つかりません`,
           { property: name, assetId: value },
         );
       }
       if (descriptor.assetKind && asset.kind !== descriptor.assetKind) {
         throw new XriftMcpEditorToolError(
           "SCRIPT_PROPERTY_TYPE_MISMATCH",
-          `${name} は ${descriptor.assetKind} Assetを参照してください`,
+          `${name} は ${descriptor.assetKind} 素材を参照してください`,
           {
             property: name,
             assetId: value,
@@ -9007,7 +9007,7 @@ function validateScriptPropertyPatch({
       if (!allowedAssets.has(value as string)) {
         throw new XriftMcpEditorToolError(
           "SCRIPT_REFERENCE_NOT_DECLARED",
-          `${name} のAsset IDをassetReferencesにも指定してください`,
+          `${name} の素材 IDをassetReferencesにも指定してください`,
           { property: name, assetId: value },
         );
       }

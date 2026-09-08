@@ -122,7 +122,7 @@ export function WebUploadDialog({
               />
             </label>
             <p className="preview-web-upload-note">
-              素材を取り込んだワールドと、Scriptを含むワールドは、いまのところデスクトップ版から公開してください。
+              素材を取り込んだワールドと、スクリプトを含むワールドは、いまのところデスクトップ版から公開してください。
             </p>
           </>
         ) : null}
@@ -178,7 +178,7 @@ export function WebUploadDialog({
             onClick={onClose}
             disabled={running}
           >
-            {state.phase === "done" ? "閉じる" : "やめる"}
+            {state.phase === "done" ? "閉じる" : "キャンセル"}
           </button>
           {state.phase === "form" || state.phase === "failed" ? (
             <button

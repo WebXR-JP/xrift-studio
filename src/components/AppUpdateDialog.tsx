@@ -124,10 +124,10 @@ export function AppUpdateDialog({
                 更新内容
               </div>
               <div className="mt-1 max-h-36 overflow-y-auto whitespace-pre-wrap rounded-lg border border-zinc-100 bg-zinc-50/50 px-3 py-2.5 text-[11px] leading-relaxed text-zinc-600 scrollbar-thin">
-                {state.releaseNotes?.trim() || "このリリースの更新内容はありません。"}
+                {state.releaseNotes?.trim() || "更新内容の説明はありません。"}
               </div>
               <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">
-                ダウンロード後にアプリを再起動します。プロジェクトとアプリ内ランタイムは変更しません。
+                インストール後にアプリが再起動します。プロジェクトやアプリ専用のNode.js・@xrift/cliは変更しません。
               </p>
             </>
           )}

@@ -278,7 +278,7 @@ export function describeAnimationComponentMigration(
   const parts: string[] = [];
   if (result.converted.length > 0) {
     parts.push(
-      `${result.converted.length}件のAnimationをInteractivity Graphへ変換しました`,
+      `${result.converted.length}件のAnimationをノードグラフへ変換しました`,
     );
   }
   const dropped = result.skipped.filter(
@@ -294,11 +294,11 @@ export function describeAnimationComponentMigration(
   }
   const missing = result.skipped.filter((entry) => entry.reason === "no-clip");
   if (missing.length > 0) {
-    parts.push(`clipが見つからない${missing.length}件は外しました`);
+    parts.push(`クリップが見つからない${missing.length}件は外しました`);
   }
   if (clearedActions > 0) {
     parts.push(
-      `Animationを操作する${clearedActions}件のノードは、Entityの Model を直接指すようにしました`,
+      `Animationを操作する${clearedActions}件のノードは、Entityの 3Dモデルを直接指すようにしました`,
     );
   }
   return parts.join("。");

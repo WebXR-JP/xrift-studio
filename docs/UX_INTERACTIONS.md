@@ -24,13 +24,13 @@
 - [F-12 Scene environment settings](./ux/editor.md#f-12)
 - [F-13 XRift Component editor preview](./ux/editor.md#f-13)
 - [F-14 Basic Component menu / Audio Source](./ux/editor.md#f-14)
-- [F-25 AssetsとOSファイルエクスプローラー](./ux/editor.md#f-25)
+- [F-25 素材とOSファイルエクスプローラー](./ux/editor.md#f-25)
 - [F-31 Terrain authoring / MCP](./ux/editor.md#f-31)
 - [F-32 Scene post effects](./ux/editor.md#f-32)
 - [F-33 Wind Component](./ux/editor.md#f-33)
-- [F-34 Skybox Shader（手続き的な空）](./ux/editor.md#f-34)
-- [F-39 Text Component（書体・背景）](./ux/editor.md#f-39)
-- [F-44 Image Component（画像の板）](./ux/editor.md#f-44)
+- [F-34 空の背景シェーダー（手続き的な空）](./ux/editor.md#f-34)
+- [F-39 テキストコンポーネント（書体・背景）](./ux/editor.md#f-39)
+- [F-44 画像コンポーネント（画像の板）](./ux/editor.md#f-44)
 
 ## 素材の取り込み・編集
 
@@ -38,31 +38,31 @@
 - [F-15 OBJ / VRM import と静的モデルポーズ](./ux/assets.md#f-15)
 - [F-16 UnityPackage / Scene / Prefab import](./ux/assets.md#f-16)
 - [F-18 OpenBrush import / shader rendering](./ux/assets.md#f-18)
-- [F-21 外部リソースStoreと環境Texture Asset](./ux/assets.md#f-21)
-- [F-23 公式XRift ComponentカタログとClassic / TSX変換](./ux/assets.md#f-23)
-- [F-24 glTF Material制御とBehavior連携](./ux/assets.md#f-24)
-- [F-29 Custom Shader authoringとMaterial適用](./ux/assets.md#f-29)
-- [F-30 Textureから遠景 / 草カードを作成](./ux/assets.md#f-30)
-- [F-36 Audio Asset試聴](./ux/assets.md#f-36)
-- [F-37 Texture解像度変更・圧縮の適用](./ux/assets.md#f-37)
-- [F-40 公開時のTexture変換と取り込み時の最大解像度](./ux/assets.md#f-40)
+- [F-21 外部リソースStoreと環境テクスチャ](./ux/assets.md#f-21)
+- [F-23 公式XRiftのコンポーネントカタログとコード編集 / TSX変換](./ux/assets.md#f-23)
+- [F-24 glTF マテリアル制御とBehavior連携](./ux/assets.md#f-24)
+- [F-29 カスタムシェーダー authoringとマテリアル適用](./ux/assets.md#f-29)
+- [F-30 テクスチャから遠景 / 草カードを作成](./ux/assets.md#f-30)
+- [F-36 音声素材試聴](./ux/assets.md#f-36)
+- [F-37 テクスチャ解像度変更・圧縮の適用](./ux/assets.md#f-37)
+- [F-40 公開時のテクスチャ変換と取り込み時の最大解像度](./ux/assets.md#f-40)
 - [F-43 しかけ付き3Dセット（チュートリアル）](./ux/assets.md#f-43)
 
 ## 保存・公開・書き出し
 
 - [F-05 公開準備とアップロード](./ux/publishing.md#f-05)
 - [F-10 Visual Save / Compile / Preview / Upload](./ux/publishing.md#f-10)
-- [F-19 VisualからClassicへの書き出し](./ux/publishing.md#f-19)
-- [F-27 公開前パフォーマンス概算とAsset最適化](./ux/publishing.md#f-27)
+- [F-19 ビジュアル編集からコード編集への書き出し](./ux/publishing.md#f-19)
+- [F-27 公開前パフォーマンス概算と素材最適化](./ux/publishing.md#f-27)
 
 ## アニメーション・スクリプト
 
 - [F-22 GLB / glTF Animation自動再生](./ux/behavior.md#f-22)
-- [F-28 Script AssetとScript Component](./ux/behavior.md#f-28)
-- [F-38 インタラクトのトリガー](./ux/behavior.md#f-38)
+- [F-28 スクリプトとスクリプトのコンポーネント](./ux/behavior.md#f-28)
+- [F-38 操作のトリガー](./ux/behavior.md#f-38)
 
 ## AI 接続・診断・録画
 
 - [F-17 AI editor integration / MCP](./ux/tools.md#f-17)
-- [F-35 Visual QA診断と短時間録画](./ux/tools.md#f-35)
+- [F-35 ビジュアル編集 QA診断と短時間録画](./ux/tools.md#f-35)
 - [F-42 ワールド制作の録画](./ux/tools.md#f-42)

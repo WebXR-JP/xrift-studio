@@ -104,7 +104,7 @@ export function ScriptEditorDialog({
       loadedSourceRef.current = draft;
     } catch (cause) {
       setSaveError(
-        cause instanceof Error ? cause.message : "Scriptを保存できませんでした",
+        cause instanceof Error ? cause.message : "スクリプトを保存できませんでした",
       );
     } finally {
       setSaving(false);
@@ -147,7 +147,7 @@ export function ScriptEditorDialog({
         ) : null}
         {playing ? (
           <span className="shrink-0 rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-semibold text-brand-700">
-            Play中: 保存すると該当Entityだけ再起動します
+            動作確認中: 保存すると該当Entityだけ再起動します
           </span>
         ) : null}
         <div className="ml-auto flex items-center gap-2">
@@ -196,7 +196,7 @@ export function ScriptEditorDialog({
             type="button"
             onClick={onClose}
             disabled={saving}
-            aria-label="Script editorを閉じる"
+            aria-label="スクリプトエディターを閉じる"
             className="rounded-md border border-slate-300 bg-white p-1 text-slate-600 hover:bg-slate-50"
           >
             <CloseIcon size={14} aria-hidden="true" />
@@ -264,7 +264,7 @@ export function ScriptEditorDialog({
               ? `${contract.name}: property ${contract.props
                   .map((entry) => entry.name)
                   .join(", ")}`
-              : `${contract.name || "Script"}: propertyの宣言はありません`}
+              : `${contract.name || "Script"}: 設定項目はありません`}
           </p>
         )}
       </footer>
@@ -282,7 +282,7 @@ function ScriptRuntimeConsole({ runtime }: { runtime: ScriptRuntimeReport }) {
   return (
     <section
       id="script-runtime-console"
-      aria-label="Script Console"
+      aria-label="スクリプト Console"
       className="h-36 shrink-0 overflow-y-auto border-t border-slate-700 bg-slate-950 px-3 py-2 font-mono text-[10px] text-slate-200"
     >
       <div className="mb-1 flex items-center gap-2 text-slate-400">
@@ -292,7 +292,7 @@ function ScriptRuntimeConsole({ runtime }: { runtime: ScriptRuntimeReport }) {
       </div>
       {empty ? (
         <p className="text-slate-500">
-          ctx.log(...) の出力と実行エラーがここに表示されます。
+          ログと実行エラーを表示します。
         </p>
       ) : null}
       {runtime.compileErrors.map((entry, index) => (
@@ -316,7 +316,7 @@ function ScriptRuntimeConsole({ runtime }: { runtime: ScriptRuntimeReport }) {
           key={`trust-skipped:${entry.assetId}:${entry.sourceSha256}`}
           className="whitespace-pre-wrap text-slate-400"
         >
-          [skipped] {entry.name}: Play中は実行しません
+          [skipped] {entry.name}: 動作確認中は実行しません
         </p>
       ))}
       {runtime.failures.map((entry, index) => (
@@ -351,21 +351,19 @@ function ScriptApiGuide() {
         <div className="flex items-center gap-2">
           <h3 className="text-xs font-bold text-slate-800">Scripting API</h3>
           <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[9px] font-semibold text-brand-700">
-            Play
+            動作確認
           </span>
         </div>
         <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-          Inspectorの値、Texture、Entity内のMaterialとParticleをPlay中に操作できます。
-          Assetへ保存する編集とは分離されています。
+          動作確認中のEntityや素材を操作します。変更は保存されません。
         </p>
       </div>
 
       <div className="space-y-4 p-3">
         <section>
-          <h4 className="text-[11px] font-bold text-slate-700">Graphとつなぐ</h4>
+          <h4 className="text-[11px] font-bold text-slate-700">ノードグラフとつなぐ</h4>
           <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-            Graphのevent/send・event/receiveと同じイベント名を使います。
-            同じScene内で処理を開始する通知です。値の受け渡しや他のビューアーへの同期は行いません。
+            ノードの「イベントを送信」「イベントを受信」と共通の通知です。値の受け渡しや他の参加者への同期は行いません。
           </p>
           <GuideCode>{`start(ctx) {
   ctx.graph.on("door.open", () => {
@@ -376,10 +374,10 @@ function ScriptApiGuide() {
         </section>
         <section>
           <h4 className="text-[11px] font-bold text-slate-700">
-            Inspectorへ値を公開
+            Inspectorに設定項目を追加
           </h4>
           <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-            propertyの変更は次のフレームから
+            値の変更は次のフレームから
             <code className="mx-0.5 text-slate-700">ctx.props</code>
             に反映されます。
           </p>
@@ -396,14 +394,14 @@ start(ctx) {
 
         <section>
           <h4 className="text-[11px] font-bold text-slate-700">
-            Textureを読み込む
+            テクスチャを読み込む
           </h4>
           <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-            許可したTexture参照だけを
+            許可したテクスチャ参照だけを
             <code className="mx-0.5 text-slate-700">ctx.assets</code>
             経由で読み込めます。未指定のSampler、色空間、Flip Y、Mipmap設定は
-            Texture Assetから継承し、明示した項目だけを上書きします。
-            Script自体はsandboxではありません。
+            テクスチャから継承し、明示した項目だけを上書きします。
+            スクリプトは隔離環境で実行されるわけではありません。
           </p>
           <GuideCode>{`void ctx.lifecycle.task(async (signal) => {
   const texture = await ctx.assets.loadTexture(
@@ -429,10 +427,10 @@ start(ctx) {
 
         <section>
           <h4 className="text-[11px] font-bold text-slate-700">
-            非同期処理を所有する
+            非同期処理を管理する
           </h4>
           <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-            hot reloadとStopでsignal、timer、taskを自動的に解除します。
+            再読み込みや停止時に、通知・タイマー・タスクを解除します。
           </p>
           <GuideCode>{`ctx.lifecycle.timeout(() => {
   ctx.emit("ready");
@@ -449,7 +447,7 @@ ctx.lifecycle.onDispose(() => {
 
         <section>
           <h4 className="text-[11px] font-bold text-slate-700">
-            Materialを変える
+            マテリアルを変える
           </h4>
           <div className="mt-2 flex flex-wrap gap-1">
             {[
@@ -490,20 +488,20 @@ body.setTextureTransform("baseColor", {
 
 ctx.log(ctx.materials.list());`}</GuideCode>
           <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
-            UV変換は対象Material専用のTexture cloneへ適用されます。
+            UVの変更は対象のマテリアルだけに反映します。
             <code className="mx-0.5 text-slate-700">
               resetTextureTransform(slot)
             </code>
-            で、そのslotだけ元へ戻せます。
+            で、そのスロットだけ元に戻せます。
           </p>
         </section>
 
         <section>
           <h4 className="text-[11px] font-bold text-slate-700">
-            Particleを動かす
+            パーティクルを動かす
           </h4>
           <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-            同じEntityのParticle Emitterへ、再起動時に戻る一時設定を重ねます。
+            このEntityのパーティクルを変更します。再起動すると元に戻ります。
           </p>
           <GuideCode>{`ctx.particles.play();
 ctx.particles.setEmissionRate(ctx.props.rate);
@@ -515,11 +513,11 @@ ctx.particles.setOpacity(0.75);`}</GuideCode>
 
         <section>
           <h4 className="text-[11px] font-bold text-slate-700">
-            Lightを動かす
+            ライトを動かす
           </h4>
           <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-            同じEntityのLightだけを選び、点灯、色、強度、Point / Spotの距離を
-            Play中に変えられます。
+            同じEntityのライトだけを選び、点灯、色、強度、Point / Spotの距離を
+            動作確認中に変えられます。
           </p>
           <GuideCode>{`const lights = ctx.lights.select({ lightType: "point" });
 lights.setEnabled(true);
@@ -535,9 +533,7 @@ ctx.log(ctx.lights.list());`}</GuideCode>
             近接イベントをつなぐ
           </h4>
           <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-            「範囲に入ったらイベント」と「イベントでLightを切替」で同じ
-            channelを指定します。距離判定はScript Componentで明示参照した
-            Entity同士のworld座標だけが対象です。
+            「範囲に入ったらイベント」と「イベントでライトを切替」で同じchannelを指定します。距離は、スクリプトComponentで指定したEntity同士のワールド座標から計算します。
           </p>
           <GuideCode>{`ctx.emit("xrift:proximity-state", {
   channel: "lamp-zone-1",
@@ -554,12 +550,12 @@ const unsubscribe = ctx.on(
 
         <section className="rounded-lg border border-sky-200 bg-sky-50 p-2.5">
           <h4 className="text-[10px] font-bold text-sky-800">
-            変更はruntime-only
+            変更は実行中だけ有効
           </h4>
           <p className="mt-1 text-[10px] leading-relaxed text-sky-700">
-            Light / Material / Texture / Particle Assetと、別Entityが使う共有Textureは上書きしません。
-            Scriptの再起動・Stop時にcloneとoverrideを元へ戻し、読み込んだTextureも自動で破棄します。
-            保存したい変更はInspectorまたは永続編集用MCP toolでAssetへ反映します。
+            ライト / マテリアル / テクスチャ / パーティクルと、別Entityが使う共有テクスチャは上書きしません。
+            スクリプトの再起動・停止時に変更を元に戻し、読み込んだテクスチャを解放します。
+            変更を保存するには、Inspectorか保存用のMCPツールで素材を編集してください。
           </p>
         </section>
       </div>

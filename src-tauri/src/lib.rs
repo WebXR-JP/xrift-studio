@@ -464,7 +464,7 @@ fn emit_progress(app: &AppHandle, step: &str, percent: f64, message: &str) {
 async fn download_node(app: &AppHandle, paths: &RuntimePaths) -> Result<PathBuf, String> {
     let archive_path = PathBuf::from(&paths.runtime_dir).join(NODE_ARCHIVE_NAME);
     let url = node_url();
-    emit_progress(app, "download", 0.0, &format!("DL中: {}", url));
+    emit_progress(app, "download", 0.0, &format!("ダウンロード中: {}", url));
 
     let response = reqwest::get(&url).await.map_err(|e| e.to_string())?;
     let total = response.content_length().unwrap_or(0);
@@ -486,7 +486,7 @@ async fn download_node(app: &AppHandle, paths: &RuntimePaths) -> Result<PathBuf,
                 "download",
                 percent,
                 &format!(
-                    "Node.js DL中  {:.1} / {:.1} MB",
+                    "Node.jsをダウンロード中 {:.1} / {:.1} MB",
                     downloaded as f64 / 1_048_576.0,
                     total as f64 / 1_048_576.0
                 ),
@@ -570,7 +570,7 @@ async fn run_npm_install_global(paths: &RuntimePaths, package_spec: &str) -> Res
 }
 
 async fn install_xrift(app: &AppHandle, paths: &RuntimePaths) -> Result<(), String> {
-    emit_progress(app, "npm-install", 0.0, "xrift CLI をインストール中...");
+    emit_progress(app, "npm-install", 0.0, "@xrift/cliをインストール中…");
     run_npm_install_global(paths, "@xrift/cli").await
 }
 
@@ -597,7 +597,7 @@ async fn check_xrift_latest() -> Result<Option<String>, String> {
 #[tauri::command]
 async fn update_xrift(app: AppHandle) -> Result<(), String> {
     let paths = runtime_paths(app.clone())?;
-    emit_progress(&app, "xrift-update", 0.0, "@xrift/cli をアップデート中...");
+    emit_progress(&app, "xrift-update", 0.0, "@xrift/cliをアップデート中…");
     run_npm_install_global(&paths, "@xrift/cli@latest").await?;
     emit_progress(&app, "xrift-update", 100.0, "アップデート完了");
     Ok(())
@@ -618,19 +618,19 @@ async fn setup_runtime(app: AppHandle) -> Result<RuntimeStatus, String> {
     }
 
     if !node_runtime_installed(&paths) {
-        emit_progress(&app, "download", 0.0, "Node.js をダウンロード中...");
+        emit_progress(&app, "download", 0.0, "Node.jsをダウンロード中…");
         let archive = download_node(&app, &paths).await?;
-        emit_progress(&app, "extract", 0.0, "アーカイブを展開中...");
+        emit_progress(&app, "extract", 0.0, "ダウンロードしたファイルを展開中…");
         extract_archive(&archive, Path::new(&paths.runtime_dir))?;
         let _ = std::fs::remove_file(&archive);
     } else {
-        emit_progress(&app, "node-cached", 100.0, "Node.js は導入済み");
+        emit_progress(&app, "node-cached", 100.0, "Node.jsはインストール済みです");
     }
 
     if !Path::new(&paths.xrift_cmd).exists() {
         install_xrift(&app, &paths).await?;
     } else {
-        emit_progress(&app, "xrift-cached", 100.0, "xrift CLI は導入済み");
+        emit_progress(&app, "xrift-cached", 100.0, "@xrift/cliはインストール済みです");
     }
 
     emit_progress(&app, "done", 100.0, "セットアップ完了");
@@ -2720,7 +2720,7 @@ const XRIFT_UPLOAD_ATTEMPT_UNRESOLVED: &str = "XRIFT_UPLOAD_ATTEMPT_UNRESOLVED";
 
 fn unresolved_upload_attempt_message(detail: &str) -> String {
     format!(
-        "{}: 前回のXRiftへの送信結果を確認できていません（{}）。XRiftで公開状況を確認し、重複していなければ前回の送信試行を解除してから再送信してください。",
+        "{}: 前回のXRiftへの送信結果を確認できていません（{}）。XRiftで公開されていないことを確認できた場合に限り、送信の保留を解除してやり直してください。",
         XRIFT_UPLOAD_ATTEMPT_UNRESOLVED, detail
     )
 }
@@ -4836,7 +4836,7 @@ async fn clone_classic_project_repository(repository_url: String) -> Result<Stri
         let _ = std::fs::remove_dir_all(&repository_root);
         let stderr = String::from_utf8_lossy(&output.stderr);
         let message = stderr.lines().last().unwrap_or("git clone failed").trim();
-        return Err(format!("repositoryを取得できませんでした: {}", message));
+        return Err(format!("リポジトリを取得できませんでした: {}", message));
     }
     if let Err(error) = inspect_cloned_classic_repository(&repository_root) {
         let _ = std::fs::remove_dir_all(&repository_root);
@@ -5603,7 +5603,7 @@ fn recording_begin_file(
     let use_ffmpeg = match request.encoder.as_deref() {
         None | Some("container") => false,
         Some("ffmpeg-frames") => true,
-        Some(_) => return Err("録画のencoderが不正です。".to_string()),
+        Some(_) => return Err("録画のエンコーダーの指定が不正です。".to_string()),
     };
     let frame_rate = request.frame_rate.unwrap_or(30).clamp(1, 120);
     let stem: String = request

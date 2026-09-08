@@ -189,7 +189,7 @@ async function extractImages(
       if (!detected) {
         warnings.push({
           code: "gltf-image-format-unsupported",
-          message: `埋め込み画像 ${index + 1} の形式をAsset化できませんでした`,
+          message: `埋め込み画像 ${index + 1} の形式を素材化できませんでした`,
           fieldPath: `images[${index}]`,
         });
         continue;
@@ -285,7 +285,7 @@ function expandTextures(
     if (!image || imageIndex === undefined) {
       warnings.push({
         code: "gltf-texture-source-missing",
-        message: `Texture ${textureIndex + 1} の画像をAsset化できませんでした`,
+        message: `Texture ${textureIndex + 1} の画像を素材化できませんでした`,
         fieldPath: `textures[${textureIndex}].source`,
       });
       continue;
@@ -773,7 +773,7 @@ function materialExtensions(
           : "gltf-material-extension-unlit-conflict",
       message:
         reason === "dependency"
-          ? `${name} が必要とする拡張が同じMaterialに存在しないため取り込みませんでした`
+          ? `${name} が必要とする拡張が同じマテリアルに存在しないため取り込みませんでした`
           : `${name} は KHR_materials_unlit と併用できないため取り込みませんでした`,
       fieldPath: `materials[${materialIndex}].extensions.${name}`,
     });
@@ -807,7 +807,7 @@ function textureInfo(
   if (!textureAssetId) {
     warnings.push({
       code: "gltf-material-texture-missing",
-      message: `${path} のTextureをAssetへ関連付けられませんでした`,
+      message: `${path} のテクスチャを素材へ関連付けられませんでした`,
       fieldPath: `${path}.index`,
     });
     return undefined;

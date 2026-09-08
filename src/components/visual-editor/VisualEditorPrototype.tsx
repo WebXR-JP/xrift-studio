@@ -472,20 +472,20 @@ const IMPORT_RESOURCE_KIND: Readonly<
 const COMPONENT_REMOVAL_LABELS: Readonly<
   Record<Exclude<SceneComponent["type"], "transform" | "xrift-component">, string>
 > = {
-  mesh: "Mesh Renderer",
-  light: "Light",
-  text: "Text",
-  image: "Image",
-  "audio-source": "Audio Source",
-  "vegetation-wind": "Wind",
-  "particle-emitter": "Particle Emitter",
-  collider: "Collider",
-  "rigid-body": "Rigid Body",
-  "spawn-point": "Spawn Point",
-  "interaction-trigger": "Interaction Trigger",
-  script: "Script",
-  animation: "Animation（廃止）",
-  "prefab-instance": "Prefab Instance",
+  mesh: "メッシュの描画",
+  light: "ライト",
+  text: "テキスト",
+  image: "画像",
+  "audio-source": "音源",
+  "vegetation-wind": "風",
+  "particle-emitter": "パーティクルの放出",
+  collider: "衝突判定",
+  "rigid-body": "物理挙動",
+  "spawn-point": "開始位置",
+  "interaction-trigger": "グラフの実行",
+  script: "スクリプト",
+  animation: "旧アニメーション設定",
+  "prefab-instance": "プレハブの配置",
 };
 
 const AUTOSAVE_DELAY_MS = 800;
@@ -961,7 +961,7 @@ const SCRIPT_TAB_ID = "script-editor";
 export function VisualEditorPrototype({
   projectKind,
   onBack,
-  backLabel = "ライブラリ",
+  backLabel = "プロジェクト一覧",
   projectName,
   projectPath,
   initialBundle: providedInitialBundle,
@@ -1070,7 +1070,7 @@ export function VisualEditorPrototype({
             () =>
               settle({
                 ok: false,
-                message: "Scene Viewのフレームを取得できませんでした",
+                message: "シーンのフレームを取得できませんでした",
               }),
             5_000,
           );
@@ -1125,7 +1125,7 @@ export function VisualEditorPrototype({
             ok: false,
             bounds: null,
             measuredEntityCount: 0,
-            message: "Scene Viewが表示されていないため測定できませんでした",
+            message: "シーンが表示されていないため測定できませんでした",
           });
         }, 5_000);
       }),
@@ -1326,7 +1326,7 @@ export function VisualEditorPrototype({
     ) => {
       const relativePath = asset.source.relativePath;
       if (pendingScriptPathsRef.current.has(relativePath)) {
-        throw new Error("同じScript fileを保存中です。完了後に再試行してください");
+        throw new Error("スクリプトを保存中です。完了後にやり直してください");
       }
       pendingScriptPathsRef.current.add(relativePath);
       try {
@@ -1370,7 +1370,7 @@ export function VisualEditorPrototype({
           blockingScriptCompileErrors(runtimeErrors);
         if (blockingErrors.length > 0) {
           setNotice(
-            `Scriptを更新できません: ${blockingErrors[0]?.assetName ?? ""} ${blockingErrors[0]?.message ?? ""}`,
+            `スクリプトを更新できません: ${blockingErrors[0]?.assetName ?? ""} ${blockingErrors[0]?.message ?? ""}`,
           );
         }
       }
@@ -1444,7 +1444,7 @@ export function VisualEditorPrototype({
         currentAssetId !== assetId
       ) {
         const discard = window.confirm(
-          "編集中のScriptに保存していない変更があります。破棄して別のScriptを開きますか。",
+          "編集中のスクリプトに保存していない変更があります。破棄して別のスクリプトを開きますか。",
         );
         if (!discard) return false;
         scriptEditorDirtyRef.current = false;
@@ -1703,7 +1703,7 @@ export function VisualEditorPrototype({
         ];
       if (failure) {
         setNotice(
-          `${failure.scriptName} を ${failure.phase} エラーで停止しました。Scriptを開いてConsoleを確認してください: ${failure.message}`,
+          `${failure.scriptName} を ${failure.phase} エラーで停止しました。スクリプトを開いてConsoleを確認してください: ${failure.message}`,
         );
       }
     }
@@ -1756,7 +1756,7 @@ export function VisualEditorPrototype({
         if (cancelled || errors.length === 0) return;
         const blockingErrors = blockingScriptCompileErrors(errors);
         setNotice(
-          `Scriptを更新できません: ${blockingErrors[0]?.assetName ?? ""} ${blockingErrors[0]?.message ?? ""}`,
+          `スクリプトを更新できません: ${blockingErrors[0]?.assetName ?? ""} ${blockingErrors[0]?.message ?? ""}`,
         );
       });
     return () => {
@@ -1779,7 +1779,7 @@ export function VisualEditorPrototype({
       setOllamaStatus(ollama);
     } catch {
       setMcpError(
-        "AI clientまたはOllamaを確認できませんでした。XRift Studioを再起動して再試行してください",
+        "AIクライアントまたはOllamaを確認できませんでした。XRift Studioを再起動して再試行してください",
       );
     } finally {
       setMcpLoading(false);
@@ -1803,13 +1803,13 @@ export function VisualEditorPrototype({
           current.map((client) => (client.id === status.id ? status : client)),
         );
         setNotice(
-          `${status.label}へXRift Studioを登録しました。clientを再起動すると利用できます`,
+          `${status.label}に登録しました。AIクライアントを再起動してください`,
         );
       } catch (error) {
         setMcpError(
           typeof error === "string" && error.trim()
             ? error
-            : "AI clientへ登録できませんでした。clientのinstall状態を確認してください",
+            : "登録できません。AIクライアントがインストールされているか確認してください",
         );
       } finally {
         setMcpRegisteringClientId(null);
@@ -1830,7 +1830,7 @@ export function VisualEditorPrototype({
       const target = mcpClients.find((client) => client.id === integrationId);
       if (!target?.installed) {
         setOllamaError(
-          "構成先のAI clientが見つかりません。先にclientをinstallしてください",
+          "AIクライアントをインストールしてください",
         );
         return;
       }
@@ -1854,13 +1854,13 @@ export function VisualEditorPrototype({
         );
         setOllamaResult(result);
         setNotice(
-          `${result.integrationLabel}をOllamaの${result.model}で構成しました。clientを起動または再起動してください`,
+          `${result.integrationLabel}にOllamaの${result.model}を設定しました。AIクライアントを起動し直してください`,
         );
       } catch (error) {
         setOllamaError(
           typeof error === "string" && error.trim()
             ? error
-            : "OllamaでAI clientを構成できませんでした。Ollamaとclientの状態を確認してください",
+            : "設定できません。OllamaとAIクライアントの状態を確認してください",
         );
       } finally {
         setMcpRegisteringClientId(null);
@@ -2036,7 +2036,7 @@ export function VisualEditorPrototype({
           }),
         );
         if (!changed) return current;
-        setNotice("GLSLを保存し、参照中のMaterialへ反映しました");
+        setNotice("GLSLを保存し、使用中のマテリアルに反映しました");
         return touchProject({
           ...current,
           assets: { ...current.assets, assets: nextAssets },
@@ -2374,7 +2374,7 @@ export function VisualEditorPrototype({
     setPlayPreparing(false);
     scriptRuntime.reset();
     setNotice(
-      "Projectの実行範囲が変わったためPlay準備を中止しました。現在のProjectで改めてPlayしてください",
+      "プロジェクトの実行範囲が変わったため動作確認準備を中止しました。現在のプロジェクトで改めて動作確認してください",
     );
   }, [scriptExecutionScopeInputKey, scriptRuntime.reset]);
   useEffect(() => {
@@ -2418,7 +2418,7 @@ export function VisualEditorPrototype({
     ) {
       throw new XriftMcpEditorToolError(
         "STALE_REVISION",
-        "対象Sceneが現在のEditorと一致しません。get_editor_contextで再取得してください",
+        "対象シーンが現在のEditorと一致しません。get_editor_contextで再取得してください",
         { projectId, sceneId },
       );
     }
@@ -2490,7 +2490,7 @@ export function VisualEditorPrototype({
           if (!args.profile || typeof args.profile !== "object") {
             throw new XriftMcpEditorToolError(
               "INVALID_ARGUMENT",
-              "profileはオブジェクトで指定してください",
+              "profileはEntityで指定してください",
             );
           }
           profile = normalizeRecordingProfile(
@@ -2574,7 +2574,7 @@ export function VisualEditorPrototype({
         if (preset !== undefined && !isRecordingCameraPreset(preset)) {
           throw new XriftMcpEditorToolError(
             "INVALID_ARGUMENT",
-            "presetはtop、front、back、left、right、isoのいずれかで指定してください",
+            "プリセットはtop、front、back、left、right、isoのいずれかで指定してください",
           );
         }
         const focusEntityId = mcpOptionalString(args.focusEntityId);
@@ -2607,7 +2607,7 @@ export function VisualEditorPrototype({
         ) {
           throw new XriftMcpEditorToolError(
             "INVALID_ARGUMENT",
-            "fitScene、focusEntityId、preset、position/target、distance、fovのいずれかを指定してください",
+            "fitScene、focusEntityId、プリセット、position/target、distance、fovのいずれかを指定してください",
           );
         }
         let moved: Awaited<ReturnType<typeof moveRecordingCamera>>;
@@ -2733,7 +2733,7 @@ export function VisualEditorPrototype({
           ) {
             throw new XriftMcpEditorToolError(
               "STALE_REVISION",
-              "対象Sceneが現在のEditorと一致しません。get_editor_contextで再取得してください",
+              "対象シーンが現在のEditorと一致しません。get_editor_contextで再取得してください",
               { projectId, sceneId },
             );
           }
@@ -2761,7 +2761,7 @@ export function VisualEditorPrototype({
             }
             if (request.tool !== "get_world_authoring") {
               const next = changeAuthoringState(state, request.tool, args, fingerprint);
-              if (fingerprint !== await authoringFingerprint(bundleRef.current)) throw new Error("Sceneが変更されました。状態を読み直してください。");
+              if (fingerprint !== await authoringFingerprint(bundleRef.current)) throw new Error("シーンが変更されました。状態を読み直してください。");
               await tauri.saveWorldAuthoring(root, sceneId, state?.sequence ?? 0, next);
               state = next;
             }
@@ -2785,7 +2785,7 @@ export function VisualEditorPrototype({
             ) {
               throw new XriftMcpEditorToolError(
                 "INVALID_ARGUMENT",
-                `presetは${SCENE_VIEW_CAMERA_PRESETS.join("、")}のいずれかで指定してください`,
+                `プリセットは${SCENE_VIEW_CAMERA_PRESETS.join("、")}のいずれかで指定してください`,
               );
             }
             const focusEntityId = mcpOptionalString(args.focusEntityId);
@@ -2808,7 +2808,7 @@ export function VisualEditorPrototype({
             if (!preset && !focusEntityId && !position && !target) {
               throw new XriftMcpEditorToolError(
                 "INVALID_ARGUMENT",
-                "preset、focusEntityId、position/targetのいずれかを指定してください",
+                "プリセット、focusEntityId、position/targetのいずれかを指定してください",
               );
             }
             const moved = await requestSceneCamera({
@@ -2821,7 +2821,7 @@ export function VisualEditorPrototype({
             if (!moved.ok) {
               throw new XriftMcpEditorToolError(
                 "SCENE_VIEW_CAMERA_FAILED",
-                moved.message ?? "Scene Viewのカメラを動かせませんでした",
+                moved.message ?? "シーンのカメラを動かせませんでした",
               );
             }
             await completeResponse({
@@ -2855,7 +2855,7 @@ export function VisualEditorPrototype({
             if (!tauri.isAvailable()) {
               throw new XriftMcpEditorToolError(
                 "SCENE_VIEW_CAPTURE_FAILED",
-                "デスクトップ版でのみScene Viewを保存できます",
+                "デスクトップ版でのみシーンを保存できます",
               );
             }
             const path = await tauri.saveDebugImage(
@@ -2871,7 +2871,7 @@ export function VisualEditorPrototype({
             if (args.authoringView !== undefined) {
               const root = projectPathRef.current;
               if (!root) throw new Error("プロジェクトを保存してください。");
-              if (fingerprint !== await authoringFingerprint(bundleRef.current)) throw new Error("撮影中にSceneが変更されました。撮り直してください。");
+              if (fingerprint !== await authoringFingerprint(bundleRef.current)) throw new Error("撮影中にシーンが変更されました。撮り直してください。");
               const state = readAuthoringState(await tauri.readWorldAuthoring(root, sceneId));
               const next = changeAuthoringState(state, request.tool, { ...args, path }, fingerprint);
               await tauri.saveWorldAuthoring(root, sceneId, state?.sequence ?? 0, next);
@@ -2931,7 +2931,7 @@ export function VisualEditorPrototype({
               ? {
                   error: {
                     code: "DEBUG_CAPTURE_FAILED",
-                    message: result.message ?? "Scene Viewの診断取得に失敗しました",
+                    message: result.message ?? "シーンの診断取得に失敗しました",
                   },
                 }
               : {}),
@@ -2951,13 +2951,13 @@ export function VisualEditorPrototype({
           if (!currentProjectPath) {
             throw new XriftMcpEditorToolError(
               "PROJECT_NOT_SAVED",
-              "Shaderを追加する前にProjectを保存してください",
+              "シェーダーを追加する前にプロジェクトを保存してください",
             );
           }
           if (importRunningRef.current || assetOperationRef.current !== null) {
             throw new XriftMcpEditorToolError(
               "EDITOR_BUSY",
-              "別のAsset操作の完了後にShader Importを再試行してください",
+              "別の素材操作の完了後にシェーダー読み込みを再試行してください",
             );
           }
           const sourcePath = mcpRequiredString(args.sourcePath, "sourcePath");
@@ -2972,7 +2972,7 @@ export function VisualEditorPrototype({
           if (folderId && !sourceBundle.assets.folders?.[folderId]) {
             throw new XriftMcpEditorToolError(
               "FOLDER_NOT_FOUND",
-              "作成先のFolderが見つかりません",
+              "作成先のフォルダーが見つかりません",
               { folderId },
             );
           }
@@ -2987,7 +2987,7 @@ export function VisualEditorPrototype({
             } catch {
               throw new XriftMcpEditorToolError(
                 "SHADER_SOURCE_REJECTED",
-                "ローカルShaderを読み取れませんでした。絶対パス、GLSL拡張子、通常ファイル、8MiB上限を確認してください",
+                "ローカルシェーダーを読み取れませんでした。絶対パス、GLSL拡張子、通常ファイル、8MiB上限を確認してください",
               );
             }
             const sourceHash = await sha256AssetBytes(
@@ -3051,7 +3051,7 @@ export function VisualEditorPrototype({
               await tauri.deletePath(currentProjectPath, relativePath).catch(() => undefined);
               throw new XriftMcpEditorToolError(
                 "STALE_REVISION",
-                "Shader検証中に作成先Folderが更新されました。最新のEditor contextで再試行してください",
+                "シェーダー検証中に作成先フォルダーが更新されました。最新の編集状態を取得してから再試行してください",
                 { folderId },
               );
             }
@@ -3072,7 +3072,7 @@ export function VisualEditorPrototype({
             );
             setActiveAssetFolderId(shader.folderId ?? null);
             setSaveStatus("dirty");
-            const activity = `AIがShader「${shader.name}」をインポートしました`;
+            const activity = `AIがシェーダー「${shader.name}」をインポートしました`;
             setNotice(`${activity}。変更を自動保存します`);
             setMcpLastActivity({
               clientName: request.clientName || "AI client",
@@ -3131,14 +3131,14 @@ export function VisualEditorPrototype({
             if (!shader || shader.kind !== "shader") {
               throw new XriftMcpEditorToolError(
                 "SHADER_NOT_FOUND",
-                "指定されたShader Assetが見つかりません",
+                "指定されたシェーダー素材が見つかりません",
                 { shaderAssetId },
               );
             }
             if (!currentProjectPath) {
               throw new XriftMcpEditorToolError(
                 "PROJECT_NOT_SAVED",
-                "Shaderを読み取る前にProjectを保存してください",
+                "シェーダーを読み取る前にプロジェクトを保存してください",
               );
             }
             const source = await tauri.readTextFile(
@@ -3172,7 +3172,7 @@ export function VisualEditorPrototype({
           if (!currentProjectPath) {
             throw new XriftMcpEditorToolError(
               "PROJECT_NOT_SAVED",
-              "このMCP操作の前にProjectを保存してください",
+              "このMCP操作の前にプロジェクトを保存してください",
             );
           }
           if (request.tool === "set_project_thumbnail") {
@@ -3184,7 +3184,7 @@ export function VisualEditorPrototype({
             ) {
               throw new XriftMcpEditorToolError(
                 "THUMBNAIL_ASSET_INVALID",
-                "サムネイルにはTexture Assetを指定してください",
+                "サムネイルにはテクスチャを指定してください",
                 { assetId },
               );
             }
@@ -3210,14 +3210,14 @@ export function VisualEditorPrototype({
             if (!currentProjectPath) {
               throw new XriftMcpEditorToolError(
                 "PROJECT_NOT_SAVED",
-                "Modelを再インポートする前にProjectを保存してください",
+                "3Dモデルを再インポートする前にプロジェクトを保存してください",
               );
             }
             const model = sourceBundle.assets.assets[modelAssetId];
             if (!model || model.kind !== "model") {
               throw new XriftMcpEditorToolError(
                 "MODEL_NOT_FOUND",
-                "指定されたModel Assetが見つかりません",
+                "指定された3Dモデルが見つかりません",
                 { modelAssetId },
               );
             }
@@ -3227,7 +3227,7 @@ export function VisualEditorPrototype({
             ) {
               throw new XriftMcpEditorToolError(
                 "EDITOR_BUSY",
-                "別のAsset操作の完了後にModel再インポートを再試行してください",
+                "別の素材操作の完了後に3Dモデル再インポートを再試行してください",
               );
             }
             const operationToken = Symbol("mcp-model-reimport");
@@ -3270,12 +3270,12 @@ export function VisualEditorPrototype({
               ) {
                 throw new XriftMcpEditorToolError(
                   "STALE_REVISION",
-                  "Model再インポート中にProjectが更新されました。最新のEditor contextで再試行してください",
+                  "3Dモデル再インポート中にプロジェクトが更新されました。最新の編集状態を取得してから再試行してください",
                   { modelAssetId },
                 );
               }
               const importedModel = result.manifest.assets[modelAssetId];
-              if (importedModel.kind !== "model") throw new Error("再インポートしたModelが見つかりません");
+              if (importedModel.kind !== "model") throw new Error("再インポートした3Dモデルが見つかりません");
               const nextBundle = touchProject(applyModelReimportSettings({
                 ...latestBundle,
                 assets: result.manifest,
@@ -3298,10 +3298,10 @@ export function VisualEditorPrototype({
                 assetId: modelAssetId,
                 state: {
                   phase: "succeeded",
-                  message: "Modelを再インポートしました。変更を自動保存します",
+                  message: "3Dモデルを読み込み直しました",
                 },
               });
-              const activity = `AIがModel「${model.name}」を再インポートしました`;
+              const activity = `AIが3Dモデル「${model.name}」を再インポートしました`;
               setNotice(`${activity}。変更を自動保存します`);
               setMcpLastActivity({
                 clientName: request.clientName || "AI client",
@@ -3365,7 +3365,7 @@ export function VisualEditorPrototype({
             if (!placed) {
               throw new XriftMcpEditorToolError(
                 "SCENE_RECIPE_UNAVAILABLE",
-                "この3Dセットを現在のProjectへ配置できませんでした。recipeIdとproject kindを確認してください",
+                "この3Dセットを現在のプロジェクトへ配置できませんでした。recipeIdとproject kindを確認してください",
                 { recipeId, projectKind: sourceBundle.project.projectKind },
               );
             }
@@ -3383,7 +3383,7 @@ export function VisualEditorPrototype({
             ) {
               throw new XriftMcpEditorToolError(
                 "STALE_REVISION",
-                "3Dセットの配置中にProjectが更新されました。最新のEditor contextで再試行してください",
+                "3Dセットの配置中にプロジェクトが更新されました。最新の編集状態を取得してから再試行してください",
                 { recipeId },
               );
             }
@@ -3423,7 +3423,7 @@ export function VisualEditorPrototype({
             setSaveStatus("dirty");
             const entityName =
               placed.scene.entities[placed.rootEntityId]?.name ?? recipeId;
-            const activity = `AIが3Dセット「${entityName}」をSceneへ配置しました`;
+            const activity = `AIが3Dセット「${entityName}」をシーンへ配置しました`;
             setNotice(`${activity}。変更を自動保存します`);
             setMcpLastActivity({
               clientName: request.clientName || "AI client",
@@ -3469,7 +3469,7 @@ export function VisualEditorPrototype({
             if (!texture || texture.kind !== "texture") {
               throw new XriftMcpEditorToolError(
                 "TEXTURE_NOT_FOUND",
-                "指定されたTexture Assetが見つかりません",
+                "指定されたテクスチャが見つかりません",
                 { textureAssetId },
               );
             }
@@ -3489,7 +3489,7 @@ export function VisualEditorPrototype({
             if (!availability.allowed) {
               throw new XriftMcpEditorToolError(
                 "EDITOR_BUSY",
-                availability.disabledReason ?? "いまはTextureを変換できません",
+                availability.disabledReason ?? "いまはテクスチャを変換できません",
                 { textureAssetId },
               );
             }
@@ -3567,7 +3567,7 @@ export function VisualEditorPrototype({
                 mcpRevisionRef.current !== startingRevision
               ) {
                 const staleMessage =
-                  "変換中にTexture設定が変更されたため、適用を取り消しました。元の画像は残っています";
+                  "変換中にテクスチャ設定が変更されたため、適用を取り消しました。元の画像は残っています";
                 setTextureProcessingFeedback({
                   assetId: textureAssetId,
                   state: { phase: "failed", message: staleMessage },
@@ -3605,7 +3605,7 @@ export function VisualEditorPrototype({
                 assetId: textureAssetId,
                 state: { phase: "succeeded", message: summary },
               });
-              const activity = `AIがTexture「${result.assetName}」を${summary}`;
+              const activity = `AIがテクスチャ「${result.assetName}」を${summary}`;
               setNotice(`${activity}。変更を自動保存します`);
               setMcpLastActivity({
                 clientName: request.clientName || "AI client",
@@ -3653,7 +3653,7 @@ export function VisualEditorPrototype({
             if (!target || (target.kind !== "texture" && target.kind !== "model")) {
               throw new XriftMcpEditorToolError(
                 "ASSET_NOT_FOUND",
-                "Texture または Model Asset が見つかりません",
+                "テクスチャまたは 3Dモデルが見つかりません",
                 { assetId },
               );
             }
@@ -3740,7 +3740,7 @@ export function VisualEditorPrototype({
             const entity = sourceBundle.scene.entities[entityId];
             const node = entity && colliderModelNode(entity);
             const collider = entity?.components.find((c) => c.id === componentId && c.type === "collider");
-            if (!node || collider?.type !== "collider" || collider.shape !== "mesh" || typeof args.ratio !== "number") throw new XriftMcpEditorToolError("INVALID_ARGUMENT", "ModelのメッシュノードとMesh Collider、残す割合を指定してください");
+            if (!node || collider?.type !== "collider" || collider.shape !== "mesh" || typeof args.ratio !== "number") throw new XriftMcpEditorToolError("INVALID_ARGUMENT", "3Dモデルのメッシュノードとメッシュ衝突判定、残す割合を指定してください");
             if (assetOperationRef.current || importRunningRef.current) throw new XriftMcpEditorToolError("EDITOR_BUSY", "素材の処理が終わってから再実行してください");
             const token = Symbol("mcp-collider-bake");
             assetOperationRef.current = { kind: "model-reimport", token };
@@ -3773,7 +3773,7 @@ export function VisualEditorPrototype({
             if (!model || model.kind !== "model") {
               throw new XriftMcpEditorToolError(
                 "MODEL_NOT_FOUND",
-                "Model Assetが見つかりません",
+                "3Dモデルが見つかりません",
                 { modelAssetId },
               );
             }
@@ -3826,7 +3826,7 @@ export function VisualEditorPrototype({
             if (!availability.allowed) {
               throw new XriftMcpEditorToolError(
                 "EDITOR_BUSY",
-                availability.disabledReason ?? "いまはModelを最適化できません",
+                availability.disabledReason ?? "いまは3Dモデルを最適化できません",
                 { modelAssetId },
               );
             }
@@ -3894,7 +3894,7 @@ export function VisualEditorPrototype({
                 mcpRevisionRef.current !== startingRevision
               ) {
                 const staleMessage =
-                  "最適化中にModel設定が変更されたため、適用を取り消しました。元のModelは残っています";
+                  "最適化中に3Dモデル設定が変更されたため、適用を取り消しました。元の3Dモデルは残っています";
                 setModelOptimizationFeedback({
                   assetId: modelAssetId,
                   state: { phase: "failed", message: staleMessage },
@@ -3928,7 +3928,7 @@ export function VisualEditorPrototype({
                 assetId: modelAssetId,
                 state: { phase: "succeeded", message: summary },
               });
-              const activity = `AIがModel「${result.assetName}」を${summary}`;
+              const activity = `AIが3Dモデル「${result.assetName}」を${summary}`;
               setNotice(`${activity}。変更を自動保存します`);
               setMcpLastActivity({
                 clientName: request.clientName || "AI client",
@@ -3972,20 +3972,20 @@ export function VisualEditorPrototype({
           if (!shader || shader.kind !== "shader") {
             throw new XriftMcpEditorToolError(
               "SHADER_NOT_FOUND",
-              "指定されたShader Assetが見つかりません",
+              "指定されたシェーダー素材が見つかりません",
               { shaderAssetId },
             );
           }
           if (typeof args.source !== "string" || !args.source.trim()) {
             throw new XriftMcpEditorToolError(
               "INVALID_ARGUMENT",
-              "sourceは空でない文字列で指定してください",
+              "元データは空でない文字列で指定してください",
             );
           }
           if (new TextEncoder().encode(args.source).byteLength > 8 * 1024 * 1024) {
             throw new XriftMcpEditorToolError(
               "INVALID_ARGUMENT",
-              "sourceは8MiB以内で指定してください",
+              "元データは8MiB以内で指定してください",
             );
           }
           const previousSource = await tauri.readTextFile(
@@ -4008,7 +4008,7 @@ export function VisualEditorPrototype({
             ).catch(() => undefined);
             throw new XriftMcpEditorToolError(
               "STALE_REVISION",
-              "Shader保存中にAssetが更新されました。最新のEditor contextで再試行してください",
+              "シェーダー保存中に素材が更新されました。最新の編集状態を取得してから再試行してください",
               { shaderAssetId },
             );
           }
@@ -4037,7 +4037,7 @@ export function VisualEditorPrototype({
             }),
           );
           setSaveStatus("dirty");
-          const activity = `AIがShader「${shader.name}」を更新しました`;
+          const activity = `AIがシェーダー「${shader.name}」を更新しました`;
           setNotice(`${activity}。変更を自動保存します`);
           setMcpLastActivity({
             clientName: request.clientName || "AI client",
@@ -4129,14 +4129,14 @@ export function VisualEditorPrototype({
           ) {
             throw new XriftMcpEditorToolError(
               "EDITOR_BUSY",
-              `別のAsset操作の完了後に${assetLabel} Importを再試行してください`,
+              `別の素材操作の完了後に${assetLabel} 読み込みを再試行してください`,
             );
           }
           const currentProjectPath = projectPathRef.current;
           if (!currentProjectPath) {
             throw new XriftMcpEditorToolError(
               "PROJECT_NOT_SAVED",
-              `${assetLabel}を追加する前にProjectを保存してください`,
+              `${assetLabel}を追加する前にプロジェクトを保存してください`,
             );
           }
           const sourcePath = mcpRequiredString(args.sourcePath, "sourcePath");
@@ -4151,7 +4151,7 @@ export function VisualEditorPrototype({
           if (folderId && !sourceBundle.assets.folders?.[folderId]) {
             throw new XriftMcpEditorToolError(
               "FOLDER_NOT_FOUND",
-              "作成先のFolderが見つかりません",
+              "作成先のフォルダーが見つかりません",
               { folderId },
             );
           }
@@ -4263,7 +4263,7 @@ export function VisualEditorPrototype({
             if (folderId && !latestBundle.assets.folders?.[folderId]) {
               throw new XriftMcpEditorToolError(
                 "STALE_REVISION",
-                `${assetLabel}検証中に作成先Folderが更新されました。最新のEditor contextで再試行してください`,
+                `${assetLabel}検証中に作成先フォルダーが更新されました。最新の編集状態を取得してから再試行してください`,
                 { folderId },
               );
             }
@@ -4486,7 +4486,7 @@ export function VisualEditorPrototype({
           if (!currentProjectPath) {
             throw new XriftMcpEditorToolError(
               "PROJECT_NOT_SAVED",
-              "Scriptを操作する前にProjectを保存してください",
+              "スクリプトを操作する前にプロジェクトを保存してください",
             );
           }
           if (request.tool === "get_script_asset") {
@@ -4495,7 +4495,7 @@ export function VisualEditorPrototype({
             if (!asset || asset.kind !== "script") {
               throw new XriftMcpEditorToolError(
                 "SCRIPT_NOT_FOUND",
-                "指定されたScript Assetが見つかりません",
+                "指定されたスクリプトが見つかりません",
                 { scriptAssetId: assetId },
               );
             }
@@ -4533,7 +4533,7 @@ export function VisualEditorPrototype({
             ) {
               throw new XriftMcpEditorToolError(
                 "INVALID_ARGUMENT",
-                "unapprovedPolicyはPlay開始時にskipだけ指定できます",
+                "unapprovedPolicyは動作確認開始時にskipだけ指定できます",
               );
             }
             assertMcpExternalStoreWrite(
@@ -4574,7 +4574,7 @@ export function VisualEditorPrototype({
               );
               throw new XriftMcpEditorToolError(
                 "SCRIPT_COMPILE_FAILED",
-                `Scriptを変換できないためPlayを開始しません: ${blockingErrors[0]?.assetName ?? ""} ${blockingErrors[0]?.message ?? ""}`.trim(),
+                `スクリプトを変換できないため動作確認を開始しません: ${blockingErrors[0]?.assetName ?? ""} ${blockingErrors[0]?.message ?? ""}`.trim(),
                 {
                   compileErrors:
                     scriptCompileErrorsForMcp(blockingErrors),
@@ -4589,8 +4589,8 @@ export function VisualEditorPrototype({
               throw new XriftMcpEditorToolError(
                 "PLAY_MODE_CHANGE_FAILED",
                 mode === "play"
-                  ? "Scriptの変換またはPlay初期化に失敗しました。Editorの通知を確認してください"
-                  : "Playを停止できませんでした。もう一度実行してください",
+                  ? "スクリプトの変換または動作確認初期化に失敗しました。Editorの通知を確認してください"
+                  : "動作確認を停止できませんでした。もう一度実行してください",
                 { requestedMode: mode, currentMode: editorModeRef.current },
               );
             }
@@ -4625,7 +4625,7 @@ export function VisualEditorPrototype({
             if (!template) {
               throw new XriftMcpEditorToolError(
                 "SCRIPT_TEMPLATE_NOT_FOUND",
-                "指定されたScript Templateが見つかりません",
+                "指定されたスクリプト Templateが見つかりません",
                 { templateId },
               );
             }
@@ -4643,7 +4643,7 @@ export function VisualEditorPrototype({
             if (folderId && !sourceBundle.assets.folders?.[folderId]) {
               throw new XriftMcpEditorToolError(
                 "FOLDER_NOT_FOUND",
-                "作成先のFolderが見つかりません",
+                "作成先のフォルダーが見つかりません",
                 { folderId },
               );
             }
@@ -4657,7 +4657,7 @@ export function VisualEditorPrototype({
             if (source === null) {
               throw new XriftMcpEditorToolError(
                 "SCRIPT_TEMPLATE_NOT_FOUND",
-                "指定されたScript Templateを生成できません",
+                "指定されたスクリプト Templateを生成できません",
                 { templateId },
               );
             }
@@ -4682,7 +4682,7 @@ export function VisualEditorPrototype({
             if (!componentResult.added || !componentResult.componentId) {
               throw new XriftMcpEditorToolError(
                 "SCRIPT_TEMPLATE_APPLY_FAILED",
-                "Script Componentを指定されたEntityへ追加できません",
+                "スクリプトComponentを指定されたEntityへ追加できません",
                 {
                   templateId,
                   entityId,
@@ -4745,7 +4745,7 @@ export function VisualEditorPrototype({
               }
               throw new XriftMcpEditorToolError(
                 "STALE_REVISION",
-                "Script作成中にEntityまたはFolderが更新されました。最新のEditor contextで再試行してください",
+                "スクリプト作成中にEntityまたはフォルダーが更新されました。最新の編集状態を取得してから再試行してください",
                 {
                   entityId,
                   folderId,
@@ -4825,13 +4825,13 @@ export function VisualEditorPrototype({
             ) {
               throw new XriftMcpEditorToolError(
                 "INVALID_ARGUMENT",
-                "templateIdとsourceは同時に指定できません",
+                "templateIdと元データは同時に指定できません",
               );
             }
             if (args.source !== undefined && typeof args.source !== "string") {
               throw new XriftMcpEditorToolError(
                 "INVALID_ARGUMENT",
-                "sourceは文字列で指定してください",
+                "元データは文字列で指定してください",
               );
             }
             const templateId =
@@ -4844,7 +4844,7 @@ export function VisualEditorPrototype({
             if (templateId && !template) {
               throw new XriftMcpEditorToolError(
                 "SCRIPT_TEMPLATE_NOT_FOUND",
-                "指定されたScript Templateが見つかりません",
+                "指定されたスクリプト Templateが見つかりません",
                 { templateId },
               );
             }
@@ -4856,7 +4856,7 @@ export function VisualEditorPrototype({
             ) {
               throw new XriftMcpEditorToolError(
                 "INVALID_ARGUMENT",
-                `Template ${template.id} は${template.language} Scriptです`,
+                `Template ${template.id} は${template.language} スクリプトです`,
                 {
                   templateId: template.id,
                   requestedLanguage,
@@ -4877,7 +4877,7 @@ export function VisualEditorPrototype({
             if (folderId && !sourceBundle.assets.folders?.[folderId]) {
               throw new XriftMcpEditorToolError(
                 "FOLDER_NOT_FOUND",
-                "作成先のFolderが見つかりません",
+                "作成先のフォルダーが見つかりません",
                 { folderId },
               );
             }
@@ -4912,14 +4912,14 @@ export function VisualEditorPrototype({
               pendingScriptPathsRef.current.delete(relativePath);
             }
             scriptSourceRevisionRef.current += 1;
-            activity = `AIが「${name}」をScript Assetとして作成しました`;
+            activity = `AIが「${name}」をスクリプトとして作成しました`;
           } else {
             const assetId = mcpRequiredString(args.scriptAssetId, "scriptAssetId");
             const candidate = sourceBundle.assets.assets[assetId];
             if (!candidate || candidate.kind !== "script") {
               throw new XriftMcpEditorToolError(
                 "SCRIPT_NOT_FOUND",
-                "指定されたScript Assetが見つかりません",
+                "指定されたスクリプトが見つかりません",
                 { scriptAssetId: assetId },
               );
             }
@@ -4929,7 +4929,7 @@ export function VisualEditorPrototype({
             ) {
               throw new XriftMcpEditorToolError(
                 "EDITOR_BUSY",
-                "このScriptにはEditorで保存していない変更があります。保存または破棄してから再試行してください",
+                "このスクリプトにはEditorで保存していない変更があります。保存または破棄してから再試行してください",
                 { scriptAssetId: candidate.id },
               );
             }
@@ -4939,7 +4939,7 @@ export function VisualEditorPrototype({
                 : (() => {
                     throw new XriftMcpEditorToolError(
                       "INVALID_ARGUMENT",
-                      "sourceは文字列で指定してください",
+                      "元データは文字列で指定してください",
                     );
                   })();
             writtenSource = source;
@@ -4950,7 +4950,7 @@ export function VisualEditorPrototype({
             ) {
               throw new XriftMcpEditorToolError(
                 "EDITOR_BUSY",
-                "同じScript fileを保存中です。完了後に再試行してください",
+                "スクリプトを保存中です。完了後にやり直してください",
                 { scriptAssetId: candidate.id },
               );
             }
@@ -4972,7 +4972,7 @@ export function VisualEditorPrototype({
             }
             scriptSourceRevisionRef.current += 1;
             asset = candidate;
-            activity = `AIが「${candidate.name}」のScript sourceを更新しました`;
+            activity = `AIが「${candidate.name}」のスクリプト元データを更新しました`;
           }
 
           const latestBundle = bundleRef.current;
@@ -4994,7 +4994,7 @@ export function VisualEditorPrototype({
               }
               throw new XriftMcpEditorToolError(
                 "STALE_REVISION",
-                "Script作成中にAssetsまたはFolderが更新されました。最新のEditor contextで再試行してください",
+                "スクリプト作成中に素材またはフォルダーが更新されました。最新の編集状態を取得してから再試行してください",
                 { folderId: requestedFolderId ?? null },
               );
             }
@@ -5027,12 +5027,12 @@ export function VisualEditorPrototype({
               }
               throw new XriftMcpEditorToolError(
                 "STALE_REVISION",
-                "Script保存中にAssetが更新されました。最新のEditor contextで再試行してください",
+                "スクリプト保存中に素材が更新されました。最新の編集状態を取得してから再試行してください",
                 { scriptAssetId: asset.id },
               );
             }
             asset = latestCandidate;
-            activity = `AIが「${latestCandidate.name}」のScript sourceを更新しました`;
+            activity = `AIが「${latestCandidate.name}」のスクリプト元データを更新しました`;
           }
           const nextAssets =
             request.tool === "create_script_asset"
@@ -5102,7 +5102,7 @@ export function VisualEditorPrototype({
               const blockingErrors =
                 blockingScriptCompileErrors(runtimeErrors);
               setNotice(
-                `「${asset.name}」は保存しましたが、変換できないため実行中のScriptは更新していません: ${blockingErrors[0]?.message ?? ""}`,
+                `「${asset.name}」は保存しましたが、変換できないため実行中のスクリプトは更新していません: ${blockingErrors[0]?.message ?? ""}`,
               );
             }
           }
@@ -5188,7 +5188,7 @@ export function VisualEditorPrototype({
           if (!currentProjectPath) {
             throw new XriftMcpEditorToolError(
               "PROJECT_NOT_SAVED",
-              "外部アセットを追加する前にProjectを保存してください",
+              "外部アセットを追加する前にプロジェクトを保存してください",
             );
           }
           const resolution = mcpRequiredString(args.resolution, "resolution");
@@ -5221,7 +5221,7 @@ export function VisualEditorPrototype({
               "MODEL_ANALYSIS_FAILED",
               error instanceof Error
                 ? error.message
-                : "インストールしたModelの構造を解析できませんでした",
+                : "追加した3Dモデルの構造を解析できませんでした",
             );
           }
           const installedAssets = applied.installedAssetIds.flatMap(
@@ -5264,7 +5264,7 @@ export function VisualEditorPrototype({
             }),
           );
           setSaveStatus("dirty");
-          const activity = `AIが${installed.providerName}から「${installed.name}」をインストールしました`;
+          const activity = `AIが${installed.providerName}から「${installed.name}」を追加しました`;
           setNotice(`${activity}。変更を自動保存します`);
           setMcpLastActivity({
             clientName: request.clientName || "AI client",
@@ -5392,7 +5392,7 @@ export function VisualEditorPrototype({
           });
         } catch {
           setMcpError(
-            "AI clientへ編集結果を返せませんでした。もう一度実行してください",
+            "AIクライアントへ編集結果を返せませんでした。もう一度実行してください",
           );
         }
       } catch (error) {
@@ -5417,7 +5417,7 @@ export function VisualEditorPrototype({
           });
         } catch {
           setMcpError(
-            "AI clientへerrorを返せませんでした。もう一度実行してください",
+            "AIクライアントへエラーの内容を返せませんでした。もう一度実行してください",
           );
         }
       }
@@ -5449,7 +5449,7 @@ export function VisualEditorPrototype({
       .catch(() => {
         if (!disposed) {
           setMcpError(
-            "AI editor bridgeへ接続できませんでした。XRift Studioを再起動してください",
+            "AI編集用の接続を確立できませんでした。XRift Studioを再起動してください",
           );
         }
       });
@@ -5640,7 +5640,7 @@ export function VisualEditorPrototype({
         : sceneSelection,
     );
     setAssetSelection(null);
-    setNotice("コピーしたHierarchyを貼り付けました");
+    setNotice("コピーしたEntityを貼り付けました");
   }, [bundle, editorMode, sceneSelection, setAssetSelection, setBundle, setSceneSelection]);
 
   const handleDuplicate = useCallback((requestedEntityId?: string) => {
@@ -5709,8 +5709,8 @@ export function VisualEditorPrototype({
     if (hiddenNames.length > 0) {
       messages.push(
         hiddenNames.length === 1
-          ? `「${hiddenNames[0]}」はModelの一部のため非表示にしました。目のアイコンで再表示できます`
-          : `${hiddenNames.length}件のノードはModelの一部のため非表示にしました。目のアイコンで再表示できます`,
+          ? `「${hiddenNames[0]}」は3Dモデルの一部のため非表示にしました。目のアイコンで再表示できます`
+          : `${hiddenNames.length}件のノードは3Dモデルの一部のため非表示にしました。目のアイコンで再表示できます`,
       );
     }
     if (messages.length > 0) setNotice(messages.join("。"));
@@ -5721,14 +5721,14 @@ export function VisualEditorPrototype({
       if (editorMode !== "edit" || importBusy) {
         setNotice(
           editorMode !== "edit"
-            ? "Playを停止してからAssetを削除してください"
+            ? "動作確認を停止してから素材を削除してください"
             : "アセットのインポート完了後に削除してください",
         );
         return;
       }
       const target = describeAssetDeleteTarget(bundle, assetId);
       if (!target) {
-        setNotice("削除するAssetが見つかりませんでした");
+        setNotice("削除する素材が見つかりませんでした");
         return;
       }
       setDeleteDialog(target);
@@ -5741,14 +5741,14 @@ export function VisualEditorPrototype({
       if (editorMode !== "edit" || importBusy) {
         setNotice(
           editorMode !== "edit"
-            ? "Playを停止してからFolderを削除してください"
+            ? "動作確認を停止してからフォルダーを削除してください"
             : "アセットのインポート完了後にフォルダーを削除してください",
         );
         return;
       }
       const folder = bundle.assets.folders?.[folderId];
       if (!folder) {
-        setNotice("削除するFolderが見つかりませんでした");
+        setNotice("削除するフォルダーが見つかりませんでした");
         return;
       }
       const analysis = analyzeAssetFolderDeletion(bundle.assets, folderId);
@@ -5785,7 +5785,7 @@ export function VisualEditorPrototype({
           setNotice(
             result.reason === "referenced"
               ? "参照が追加されたため削除を中止しました"
-              : "Assetは削除されませんでした",
+              : "素材は削除されませんでした",
           );
           return current;
         }
@@ -5813,7 +5813,7 @@ export function VisualEditorPrototype({
         target.id,
       );
       if (!result.changed) {
-        setNotice("Folderに内容が追加されたため削除を中止しました");
+        setNotice("フォルダーに内容が追加されたため削除を中止しました");
         return current;
       }
       setSaveStatus("dirty");
@@ -5847,7 +5847,7 @@ export function VisualEditorPrototype({
       if (editorMode !== "edit" || importBusy) {
         setNotice(
           editorMode !== "edit"
-            ? "Playを停止してから参照を外してください"
+            ? "動作確認を停止してから参照を外してください"
             : "アセットのインポート完了後に参照を外してください",
         );
         return;
@@ -5891,7 +5891,7 @@ export function VisualEditorPrototype({
     if (editorMode !== "edit" || importBusy) {
       setNotice(
         editorMode !== "edit"
-          ? "Playを停止してからAssetを削除してください"
+          ? "動作確認を停止してから素材を削除してください"
           : "アセットのインポート完了後に削除してください",
       );
       return;
@@ -5919,7 +5919,7 @@ export function VisualEditorPrototype({
         setNotice(
           result.reason === "referenced"
             ? "外せない参照が残っているため削除を中止しました"
-            : "Assetは削除されませんでした",
+            : "素材は削除されませんでした",
         );
         setDeleteDialog(
           describeAssetDeleteTarget(current.present.bundle, target.id) ?? null,
@@ -5966,7 +5966,7 @@ export function VisualEditorPrototype({
       }
       if (reference.kind.startsWith("prefab-")) {
         setNotice(
-          `「${reference.ownerName}」はPrefabの中の参照です。ここから外すか、Prefabを編集してください`,
+          `「${reference.ownerName}」はプレハブの中の参照です。ここから外すか、プレハブを編集してください`,
         );
         return;
       }
@@ -5982,7 +5982,7 @@ export function VisualEditorPrototype({
       if (editorMode !== "edit" || importBusy) {
         setNotice(
           editorMode !== "edit"
-            ? "Playを停止してからAssetを移動してください"
+            ? "動作確認を停止してから素材を移動してください"
             : "アセットのインポート完了後に移動してください",
         );
         return;
@@ -5996,8 +5996,8 @@ export function VisualEditorPrototype({
         if (!result.changed) {
           setNotice(
             result.reason === "same-parent"
-              ? "AssetはすでにこのFolderにあります"
-              : "この場所へAssetを移動できませんでした",
+              ? "素材はすでにこのフォルダーにあります"
+              : "この場所へ素材を移動できませんでした",
           );
           return current;
         }
@@ -6025,7 +6025,7 @@ export function VisualEditorPrototype({
       if (editorMode !== "edit" || importBusy) {
         setNotice(
           editorMode !== "edit"
-            ? "Playを停止してからFolderを移動してください"
+            ? "動作確認を停止してからフォルダーを移動してください"
             : "アセットのインポート完了後にフォルダーを移動してください",
         );
         return;
@@ -6039,12 +6039,12 @@ export function VisualEditorPrototype({
         if (!result.changed) {
           const message =
             result.reason === "cycle"
-              ? "Folderを自分自身または子Folderへ移動できません"
+              ? "フォルダーを自分自身またはサブフォルダーへ移動できません"
               : result.reason === "same-parent"
-                ? "Folderはすでにこの場所にあります"
+                ? "フォルダーはすでにこの場所にあります"
                 : result.reason === "duplicate-name"
-                  ? "同じ名前のFolderが移動先にあります"
-                  : "この場所へFolderを移動できませんでした";
+                  ? "同じ名前のフォルダーが移動先にあります"
+                  : "この場所へフォルダーを移動できませんでした";
           setNotice(message);
           return current;
         }
@@ -6074,7 +6074,7 @@ export function VisualEditorPrototype({
       parentEntityId: string | null = null,
     ) => {
       if (importBusy) {
-        setNotice("アセットのインポート完了後にXRift Componentを配置してください");
+        setNotice("素材の読み込み後に配置してください");
         return;
       }
       setHistory((current) => {
@@ -6092,7 +6092,7 @@ export function VisualEditorPrototype({
           position,
         );
         if (!result) {
-          setNotice("このプロジェクトにはXRift Componentを配置できませんでした");
+          setNotice("このプロジェクトには配置できません");
           return current;
         }
         const scene =
@@ -6111,7 +6111,7 @@ export function VisualEditorPrototype({
         setNotice(
           parentName
             ? `「${result.recipe.name}」を「${parentName}」の子へ配置しました`
-            : `「${result.recipe.name}」をSceneへ配置しました`,
+            : `「${result.recipe.name}」をシーンへ配置しました`,
         );
         return commitEditorHistory(current, {
           ...current.present,
@@ -6134,7 +6134,7 @@ export function VisualEditorPrototype({
       siblingIndex?: number,
     ) => {
       if (importBusy) {
-        setNotice("アセットのインポート完了後にHierarchyを移動してください");
+        setNotice("素材の読み込み後にEntityを移動してください");
         return;
       }
       setHistory((current) => {
@@ -6207,10 +6207,10 @@ export function VisualEditorPrototype({
           const message =
             result.reason === "prefab-document-missing" ||
             result.reason === "prefab-empty"
-              ? "Prefab documentが見つからないため配置できませんでした"
+              ? "プレハブのデータが見つからないため配置できませんでした"
               : result.reason === "parent-missing"
                 ? "配置先のEntityが見つかりませんでした"
-                : "このAssetはSceneへ配置できません";
+                : "この素材はシーンへ配置できません";
           setNotice(message);
           return current;
         }
@@ -6219,7 +6219,7 @@ export function VisualEditorPrototype({
           : null;
         setSaveStatus("dirty");
         setNotice(
-          `「${result.assetName}」を${parentName ? `「${parentName}」の子` : "Scene"}へ配置しました`,
+          `「${result.assetName}」を${parentName ? `「${parentName}」の子` : "シーン"}へ配置しました`,
         );
         return commitEditorHistory(current, {
           ...current.present,
@@ -6273,7 +6273,7 @@ export function VisualEditorPrototype({
               (asset) => asset.kind === "material",
             )?.id;
       if (!materialAssetId) {
-        setNotice("Primitiveを配置するMaterialがありません");
+        setNotice("プリミティブに使用するマテリアルがありません");
         return;
       }
 
@@ -6303,7 +6303,7 @@ export function VisualEditorPrototype({
       setNotice(
         materialAssetId.startsWith(BUILTIN_ASSET_IDS.material.glow) &&
           !sceneBloomIsActive(bundle.scene)
-          ? `「${definition.name}」を追加しました。光らせるにはScene設定のポストエフェクトとBloomを有効にしてください`
+          ? `「${definition.name}」を追加しました。光をにじませるにはシーン設定のPost ProcessingとBloomを有効にしてください`
           : `「${definition.name}」をシーンへ追加しました`,
       );
     },
@@ -6331,8 +6331,8 @@ export function VisualEditorPrototype({
           : null;
         setNotice(
           parentName
-            ? `「${parentName}」の子にEmpty Entityを作成しました`
-            : "Scene RootにEmpty Entityを作成しました",
+            ? `「${parentName}」の子に空のEntityを作成しました`
+            : "シーンの直下に空のEntityを作成しました",
         );
         return commitEditorHistory(current, {
           ...current.present,
@@ -6353,7 +6353,7 @@ export function VisualEditorPrototype({
       if (importBusy) return;
       const definition = getXriftComponentDefinition(componentDefinitionId);
       if (!definition || definition.attachBehavior.kind !== "leaf") {
-        setNotice("このXRift Componentは既存Entityへ追加してください");
+        setNotice("既存のEntityに追加してください");
         return;
       }
       setHistory((current) => {
@@ -6371,12 +6371,12 @@ export function VisualEditorPrototype({
           projectKind,
         );
         if (!added.added) {
-          setNotice(`${definition.label}をSceneへ作成できませんでした`);
+          setNotice(`${definition.label}をシーンへ作成できませんでした`);
           return current;
         }
         setSaveStatus("dirty");
         setNotice(
-          `${definition.label}をSceneへ作成しました。Inspectorで設定できます`,
+          `${definition.label}をシーンに追加しました。Inspectorで調整できます。`,
         );
         return commitEditorHistory(current, {
           ...current.present,
@@ -6427,8 +6427,8 @@ export function VisualEditorPrototype({
       if (editorMode !== "edit" || importBusy) {
         setNotice(
           editorMode !== "edit"
-            ? "Playを停止してからXRift Componentを追加してください"
-            : "アセットのインポート完了後にXRift Componentを追加してください",
+            ? "追加するには動作確認を停止してください"
+            : "素材の読み込み後に追加してください",
         );
         return false;
       }
@@ -6444,7 +6444,7 @@ export function VisualEditorPrototype({
         if (classicSource && plan.assetDependencies.length > 0) {
           if (!projectPath) {
             setNotice(
-              "Classic Assetの保存先が必要です。先にVisualプロジェクトを保存してから変換してください",
+              "コード編集素材の保存先が必要です。先にビジュアル編集のプロジェクトを保存してから変換してください",
             );
             return false;
           }
@@ -6472,7 +6472,7 @@ export function VisualEditorPrototype({
         if (result.entityIds.length === 0) {
           setNotice(
             result.diagnostics[0]?.message ??
-              "変換したComponentをSceneへ追加できませんでした",
+              "変換結果をシーンに追加できません",
           );
           return false;
         }
@@ -6537,15 +6537,15 @@ export function VisualEditorPrototype({
         }
         const importMessage =
           unavailableAssetCount > 0
-            ? `${result.entityIds.length}件とAsset ${assetCount}件を追加しました。読み取れなかったAsset ${unavailableAssetCount}件はスキップしました`
+            ? `Entity ${result.entityIds.length}件と素材 ${assetCount}件を追加しました。素材 ${unavailableAssetCount}件は読み込めませんでした`
             : warningCount > 0
-            ? `${result.entityIds.length}件とAsset ${assetCount}件を追加しました。${warningCount}件の変換メモがあります`
-            : `${result.entityIds.length}件とAsset ${assetCount}件をSceneへ変換しました`;
+            ? `Entity ${result.entityIds.length}件と素材 ${assetCount}件を追加しました。変換時の注意が${warningCount}件あります`
+            : `Entity ${result.entityIds.length}件と素材 ${assetCount}件をシーンへ変換しました`;
         setNotice(
           enterPlayAfterImport && playStarted
-            ? `${importMessage}。Playで実行結果を確認しています`
+            ? `${importMessage}。動作確認で実行結果を確認しています`
             : enterPlayAfterImport
-              ? `${importMessage}。Scriptの確認または変換が完了していないためEditのままです`
+              ? `${importMessage}。スクリプトの確認または変換が完了していないため、動作確認は開始していません`
             : importMessage,
         );
         return true;
@@ -6553,7 +6553,7 @@ export function VisualEditorPrototype({
         setNotice(
           error instanceof Error
             ? error.message
-            : "Classicプロジェクトを変換できませんでした",
+            : "コード編集プロジェクトを変換できませんでした",
         );
         return false;
       } finally {
@@ -6675,7 +6675,7 @@ export function VisualEditorPrototype({
       };
       bundleRef.current = committed.bundle;
       setSaveStatus("dirty");
-      setNotice("Transformの変更をシーンへ反映しました");
+      setNotice("位置・回転・大きさの変更をシーンへ反映しました");
       return commitEditorHistory(
         { ...current, present: transaction.before },
         committed,
@@ -6699,7 +6699,7 @@ export function VisualEditorPrototype({
           ? "saved"
           : transaction.saveStatus,
       );
-      if (changed) setNotice("Transformの変更を取り消しました");
+      if (changed) setNotice("位置・回転・大きさの変更を取り消しました");
       return replaceEditorHistoryPresent(current, transaction.before);
     });
   }, []);
@@ -6720,7 +6720,7 @@ export function VisualEditorPrototype({
       updateScene((scene) => renameEntity(scene, entityId, name));
       setNotice(
         editorMode === "play"
-          ? "Entity名を保存し、実行中のSceneへ即時反映しました"
+          ? "Entity名を保存し、実行中のシーンへ即時反映しました"
           : "Entity名を変更しました",
       );
     },
@@ -6811,14 +6811,14 @@ export function VisualEditorPrototype({
       });
       setNotice(
         typeof patch.enabled === "boolean"
-          ? `Mesh Rendererを${patch.enabled ? "有効" : "無効"}にしました`
+          ? `メッシュの描画を${patch.enabled ? "有効" : "無効"}にしました`
           : patch.modelPose
           ? "モデルポーズをこの配置へ保存しました"
           : patch.maxDistance !== undefined
           ? patch.maxDistance === null
-            ? "Mesh固有の描画距離を解除しました"
-            : "Mesh固有の描画距離をシーンへ反映しました"
-          : "Mesh Rendererのマテリアルスロットと影設定をシーンへ反映しました",
+            ? "メッシュ固有の描画距離を解除しました"
+            : "メッシュ固有の描画距離をシーンへ反映しました"
+          : "メッシュのマテリアルスロットと影の設定をシーンへ反映しました",
       );
     },
     [editorMode, updateScene],
@@ -6860,8 +6860,8 @@ export function VisualEditorPrototype({
       });
       setNotice(
         editorMode === "play"
-          ? "Collider設定を保存し、このEntityのPlayを先頭から再実行しました"
-          : "Collider設定をSceneへ反映しました",
+          ? "衝突判定設定を保存し、このEntityの動作確認を先頭から再実行しました"
+          : "衝突判定設定をシーンへ反映しました",
       );
     },
     [editorMode, playSession, updateScene],
@@ -6875,8 +6875,8 @@ export function VisualEditorPrototype({
       );
       setNotice(
         editorMode === "play"
-          ? "Rigid Body設定を保存し、このBodyを先頭から再実行しました"
-          : "Rigid Body設定をSceneへ反映しました",
+          ? "物理挙動設定を保存し、このRigidBodyの動作確認をやり直しました"
+          : "物理挙動設定をシーンへ反映しました",
       );
     },
     [editorMode, playSession, updateScene],
@@ -6889,7 +6889,7 @@ export function VisualEditorPrototype({
     ) => {
       const projectPath = projectPathRef.current;
       if (!projectPath) {
-        throw new Error("初回の自動保存完了後に外部Assetを追加できます");
+        throw new Error("初回の自動保存完了後に外部素材を追加できます");
       }
       // A Model must never be committed with sourceHash but no importMetadata
       // (the manifest contract requires both), so the structure analysis has
@@ -6905,7 +6905,7 @@ export function VisualEditorPrototype({
       setHistory((current) => {
         if (current.present.bundle.assets !== startingAssets) {
           setNotice(
-            "処理中にAssetsが変更されたため、インストールを取り消しました。もう一度お試しください",
+            "処理中に素材が変更されたため、追加を取り消しました。もう一度お試しください",
           );
           return current;
         }
@@ -6921,8 +6921,8 @@ export function VisualEditorPrototype({
         setSaveStatus("dirty");
         setNotice(
           applySkybox
-            ? `「${result.name}」をインストールし、Skyboxへ設定しました`
-            : `「${result.name}」をインストールしました。Assetsで選択されています`,
+            ? `「${result.name}」を追加し、Skyboxに設定しました`
+            : `「${result.name}」をAssetsに追加しました`,
         );
         const nextBundle = touchProject({
           ...current.present.bundle,
@@ -6957,7 +6957,7 @@ export function VisualEditorPrototype({
         setNotice(
           applied.alreadyInstalled
             ? `「${entry.label}」は追加済みです。Assetsで選択しました`
-            : `「${entry.label}」をOpen Brush Materialとして追加しました`,
+            : `「${entry.label}」をOpen Brush マテリアルとして追加しました`,
         );
         if (applied.alreadyInstalled) {
           return {
@@ -7014,8 +7014,8 @@ export function VisualEditorPrototype({
         setSaveStatus("dirty");
         setNotice(
           applyToSky
-            ? `「${entry.label}」をSkybox Shaderに設定しました。星の数などはInspectorで調整できます`
-            : `「${entry.label}」をMaterialとして追加しました。Assetsで選択されています`,
+            ? `「${entry.label}」をSkybox Shaderに設定しました。色や動きはInspectorで調整できます`
+            : `「${entry.label}」をマテリアルとしてAssetsに追加しました`,
         );
         const nextBundle = touchProject({
           ...current.present.bundle,
@@ -7059,7 +7059,7 @@ export function VisualEditorPrototype({
         selectInstalledAsset(applied.primaryAssetId);
         setSaveStatus("dirty");
         setNotice(
-          `「${entry.label}」をMaterialとして追加しました。板ポリなどへ割り当てると水面になります`,
+          `「${entry.label}」をマテリアルとして追加しました。板ポリなどへ割り当てると水面になります`,
         );
         const nextBundle = touchProject({
           ...current.present.bundle,
@@ -7121,7 +7121,7 @@ export function VisualEditorPrototype({
         }
         setSaveStatus("dirty");
         setNotice(
-          `表面に「${entry.label}」を適用しました。Materialとして細かく調整できます`,
+          `表面に「${entry.label}」を適用しました。マテリアルとして細かく調整できます`,
         );
         const nextBundle = touchProject({
           ...current.present.bundle,
@@ -7145,7 +7145,7 @@ export function VisualEditorPrototype({
       if (editorMode !== "edit") return;
       const asset = bundle.assets.assets[assetId];
       if (!isEnvironmentTextureAsset(asset) && asset?.kind !== "skybox") {
-        setNotice("Skyboxに使えるTexture Assetを読み取れませんでした");
+        setNotice("Skyboxに使えるテクスチャを読み取れませんでした");
         return;
       }
       updateScene((scene) => assignSkyboxToScene(scene, assetId));
@@ -7165,7 +7165,7 @@ export function VisualEditorPrototype({
         definition.id === "core.transform" ||
         definition.id === "physics.mesh-collider"
       ) {
-        setNotice("このComponentは既存Entityへ追加してください");
+        setNotice("既存のEntityに追加してください");
         return;
       }
       const fallbackParticleId = createDocumentId("particle");
@@ -7178,7 +7178,7 @@ export function VisualEditorPrototype({
         ) {
           const addedParticle = addDefaultParticleAsset(assets, {
             id: fallbackParticleId,
-            name: "新規Particle 1",
+            name: "新規パーティクル 1",
           });
           if (addedParticle.added) {
             assets = addedParticle.manifest;
@@ -7204,13 +7204,13 @@ export function VisualEditorPrototype({
             : undefined,
         );
         if (!added.added) {
-          setNotice(`${definition.label}をSceneへ作成できませんでした`);
+          setNotice(`${definition.label}をシーンへ作成できませんでした`);
           return current;
         }
         setSaveStatus("dirty");
         setNotice(
           createdParticle
-            ? "Particle AssetとParticle Emitter Entityを作成しました"
+            ? "パーティクルと、放出用のEntityを作成しました"
             : `${definition.label} Entityを作成しました`,
         );
         return commitEditorHistory(current, {
@@ -7237,9 +7237,9 @@ export function VisualEditorPrototype({
       setNotice(
         editorMode === "play"
           ? Object.prototype.hasOwnProperty.call(patch, "lightType")
-            ? "Light種別を保存し、このEntityのPlayを先頭から再実行しました"
-            : "Light設定を保存し、実行状態を保ったままPlayへ即時反映しました"
-          : "Light設定をSceneへ反映しました",
+            ? "ライト種別を保存し、このEntityの動作確認を先頭から再実行しました"
+            : "ライト設定を保存し、実行状態を保ったまま動作確認へ即時反映しました"
+          : "ライト設定をシーンへ反映しました",
       );
     },
     [editorMode, playSession, updateScene],
@@ -7253,8 +7253,8 @@ export function VisualEditorPrototype({
       );
       setNotice(
         editorMode === "play"
-          ? "Text設定を保存し、このEntityのPlayを先頭から再実行しました"
-          : "Text設定をSceneへ反映しました",
+          ? "テキスト設定を保存し、このEntityの動作確認を先頭から再実行しました"
+          : "テキスト設定をシーンへ反映しました",
       );
     },
     [editorMode, playSession, updateScene],
@@ -7268,8 +7268,8 @@ export function VisualEditorPrototype({
       );
       setNotice(
         editorMode === "play"
-          ? "Image設定を保存し、このEntityのPlayを先頭から再実行しました"
-          : "Image設定をSceneへ反映しました",
+          ? "画像設定を保存し、このEntityの動作確認を先頭から再実行しました"
+          : "画像設定をシーンへ反映しました",
       );
     },
     [editorMode, playSession, updateScene],
@@ -7300,7 +7300,7 @@ export function VisualEditorPrototype({
             next,
           );
       }, scene));
-      setNotice(`${selectedEntityIds.length}件のMesh Rendererへ影設定を反映しました`);
+      setNotice(`${selectedEntityIds.length}件のメッシュの描画へ影設定を反映しました`);
     },
     [editorMode, selectedEntityIds, updateScene],
   );
@@ -7318,7 +7318,7 @@ export function VisualEditorPrototype({
             next,
           );
       }, scene));
-      setNotice(`${selectedEntityIds.length}件のLightへCast Shadow設定を反映しました`);
+      setNotice(`${selectedEntityIds.length}件のライトへ影を落とす設定を反映しました`);
     },
     [editorMode, selectedEntityIds, updateScene],
   );
@@ -7336,7 +7336,7 @@ export function VisualEditorPrototype({
           current.assets,
         );
         if (assets === current.assets) return current;
-        setNotice(`${materialIds.length}件のMaterialを更新し、参照中のMesh previewへ反映しました`);
+        setNotice(`${materialIds.length}件のマテリアルを更新し、使用しているメッシュの表示に反映しました`);
         return touchProject({ ...current, assets });
       });
     },
@@ -7356,9 +7356,9 @@ export function VisualEditorPrototype({
       setNotice(
         editorMode === "play"
           ? restartsEntity
-            ? "Audio Source構成を保存し、このEntityのPlayを先頭から再実行しました"
-            : "Audio Source設定を保存し、実行状態を保ったままPlayへ即時反映しました"
-          : "Audio Source設定をSceneへ反映しました",
+            ? "音源構成を保存し、このEntityの動作確認を先頭から再実行しました"
+            : "音源設定を保存し、実行状態を保ったまま動作確認へ即時反映しました"
+          : "音源設定をシーンへ反映しました",
       );
     },
     [editorMode, playSession, updateScene],
@@ -7375,8 +7375,8 @@ export function VisualEditorPrototype({
       );
       setNotice(
         editorMode === "play"
-          ? "Interaction Triggerを保存し、このEntityのPlayを先頭から再実行しました"
-          : "Interaction TriggerをSceneへ反映しました",
+          ? "グラフの実行を保存し、このEntityの動作確認を先頭から再実行しました"
+          : "グラフの実行をシーンへ反映しました",
       );
     },
     [editorMode, playSession, updateScene],
@@ -7394,8 +7394,8 @@ export function VisualEditorPrototype({
       );
       setNotice(
         editorMode === "play"
-          ? "Wind設定を保存し、Playへ即時反映しました"
-          : "Wind設定をSceneへ反映しました",
+          ? "風設定を保存し、動作確認へ即時反映しました"
+          : "風設定をシーンへ反映しました",
       );
     },
     [editorMode, playSession, updateScene],
@@ -7407,7 +7407,7 @@ export function VisualEditorPrototype({
       const entity = bundle.scene.entities[entityId];
       const mesh = entity ? getMesh(entity) : undefined;
       if (!mesh || !getColliderAutoFitBounds(mesh, bundle.assets)) {
-        setNotice("自動フィットに使えるMesh boundsがありません");
+        setNotice("大きさを取得できるメッシュがありません");
         return;
       }
       const fitted = autoFitBoxCollider(
@@ -7417,11 +7417,11 @@ export function VisualEditorPrototype({
         componentId,
       );
       if (fitted === bundle.scene) {
-        setNotice("Box Colliderは現在のMesh boundsに一致しています");
+        setNotice("Box Colliderは、すでにメッシュの大きさに合っています");
         return;
       }
       updateScene(() => fitted);
-      setNotice("Box Colliderを現在のMesh boundsへ合わせました");
+      setNotice("Box Colliderをメッシュの大きさに合わせました");
     },
     [bundle.assets, bundle.scene, editorMode, playSession, updateScene],
   );
@@ -7464,7 +7464,7 @@ export function VisualEditorPrototype({
     // Overlapping Terrains tear into moire bands, and the cause is invisible:
     // the author sees broken ground, not two surfaces. Naming it is the fix.
     setNotice(
-      `地形が${terrainOverlapCount}組重なっています。同じ場所に2つの地面があると表示が縞状に乱れます。Createメニューの「地形を横へ並べ直す」で解消できます`,
+      `地形が${terrainOverlapCount}組重なっています。同じ場所に2つの地面があると表示が縞状に乱れます。「追加」メニューの「地形を横へ並べ直す」で解消できます`,
     );
   }, [terrainOverlapCount]);
 
@@ -7511,7 +7511,7 @@ export function VisualEditorPrototype({
       // The store throws so the shelf shows the reason next to the button the
       // author just pressed, rather than a notice behind the modal.
       if (editorMode !== "edit") {
-        throw new Error("Playを停止してからParticleを追加してください");
+        throw new Error("動作確認を停止してからパーティクルを追加してください");
       }
       if (importBusy) {
         throw new Error("アセットのインポート完了後に追加してください");
@@ -7530,7 +7530,7 @@ export function VisualEditorPrototype({
         properties: preset.properties,
       });
       if (!added.added) {
-        throw new Error("Particle Assetを作成できませんでした");
+        throw new Error("パーティクルを作成できませんでした");
       }
 
       // Asset creation and placement land as one history entry: undoing a
@@ -7554,7 +7554,7 @@ export function VisualEditorPrototype({
           },
         );
         if (!placement.placed) {
-          throw new Error("ParticleをSceneへ配置できませんでした");
+          throw new Error("パーティクルをシーンへ配置できませんでした");
         }
         scene = placement.scene;
         placedAssets = placement.assets;
@@ -7568,10 +7568,10 @@ export function VisualEditorPrototype({
         // the author look at it — the same rule Terrain and the glow shelf use.
         setExternalStoreOpen(false);
         setNotice(
-          `「${name}」をSceneへ配置しました。放出量や色はAsset Inspectorで変えられます`,
+          `「${name}」をシーンへ配置しました。放出量や色はInspectorで調整できます`,
         );
       } else {
-        setNotice(`「${name}」をAssetsへ追加しました`);
+        setNotice(`「${name}」をAssetsに追加しました`);
       }
       setAssetSelection(assetId);
       return { assetName: name, placed: Boolean(placedEntityId) };
@@ -7590,7 +7590,7 @@ export function VisualEditorPrototype({
   const handleAddSceneRecipe = useCallback(
     async (recipe: SceneRecipe): Promise<SceneRecipeInstallResult> => {
       if (editorMode !== "edit") {
-        throw new Error("Playを停止してから3Dセットを追加してください");
+        throw new Error("動作確認を停止してから3Dセットを追加してください");
       }
       if (importBusy) {
         throw new Error("アセットのインポート完了後に追加してください");
@@ -7635,8 +7635,8 @@ export function VisualEditorPrototype({
         result.scene.entities[result.rootEntityId]?.name ?? recipe.name;
       setNotice(
         recipe.lesson
-          ? `「${entityName}」をSceneへ配置しました。Playを開始して、手順のとおりに試してください`
-          : `「${entityName}」をSceneへ配置しました。中身のEntityはHierarchyから個別に編集できます`,
+          ? `「${entityName}」をシーンへ配置しました。動作確認を開始して、手順のとおりに試してください`
+          : `「${entityName}」を配置しました`,
       );
       return {
         entityName,
@@ -7659,12 +7659,12 @@ export function VisualEditorPrototype({
       if (editorMode !== "edit" && !playSession) return;
       const optimized = optimizeColliderConfiguration(bundle.scene, { entityIds });
       if (optimized.changes.length === 0) {
-        setNotice("Colliderの設定に自動修正できる問題はありません");
+        setNotice("衝突判定の設定に自動修正できる問題はありません");
         return;
       }
       updateScene(() => optimized.scene);
       setNotice(
-        `${optimized.changes.length}件のCollider設定を最適化しました。MCPのinspect_colliders / optimize_collidersでも同じ操作ができます`,
+        `${optimized.changes.length}件の衝突判定の設定を最適化しました`,
       );
     },
     [bundle.scene, editorMode, playSession, updateScene],
@@ -7689,7 +7689,7 @@ export function VisualEditorPrototype({
           },
         };
       });
-      setNotice("Colliderを削除しました");
+      setNotice("衝突判定を削除しました");
     },
     [editorMode, playSession, updateScene],
   );
@@ -7705,7 +7705,7 @@ export function VisualEditorPrototype({
         patch.particleAssetId &&
         bundle.assets.assets[patch.particleAssetId]?.kind !== "particle"
       ) {
-        setNotice("選択したParticle Assetを参照できませんでした");
+        setNotice("選択したパーティクルを参照できませんでした");
         return;
       }
       updateScene((scene) => {
@@ -7736,8 +7736,8 @@ export function VisualEditorPrototype({
       });
       setNotice(
         editorMode === "play"
-          ? "Particle Emitter設定を保存し、このEntityのPlayを先頭から再実行しました"
-          : "Particle Emitterの設定を更新しました",
+          ? "パーティクルの放出設定を保存し、このEntityの動作確認を先頭から再実行しました"
+          : "パーティクルの放出の設定を更新しました",
       );
     },
     [bundle.assets.assets, editorMode, playSession, updateScene],
@@ -7765,8 +7765,8 @@ export function VisualEditorPrototype({
       });
       setNotice(
         editorMode === "play"
-          ? "Particle Emitterを削除し、このEntityのPlayを先頭から再実行しました"
-          : "Particle Emitterを削除しました",
+          ? "パーティクルの放出を削除し、このEntityの動作確認を先頭から再実行しました"
+          : "パーティクルの放出を削除しました",
       );
     },
     [editorMode, playSession, updateScene],
@@ -7780,7 +7780,7 @@ export function VisualEditorPrototype({
       meshComponentId?: string,
     ) => {
       if (editorMode !== "edit") {
-        setNotice("Playを停止してからMaterialを適用してください");
+        setNotice("動作確認を停止してからマテリアルを適用してください");
         return;
       }
       setHistory((current) => {
@@ -7794,11 +7794,11 @@ export function VisualEditorPrototype({
         );
         if (!assignment.applied) {
           const message = {
-            "entity-missing": "Materialの適用先Entityが見つかりません",
-            "mesh-missing": "MaterialはMeshを持つEntityへドロップしてください",
-            "material-missing": "ドラッグしたMaterial Assetが見つかりません",
-            "slot-missing": "Meshに適用できるMaterial slotがありません",
-            unchanged: "選択したSlotにはこのMaterialが適用済みです",
+            "entity-missing": "マテリアルの適用先Entityが見つかりません",
+            "mesh-missing": "マテリアルはメッシュを持つEntityへドロップしてください",
+            "material-missing": "ドラッグしたマテリアルが見つかりません",
+            "slot-missing": "メッシュに適用できるマテリアルスロットがありません",
+            unchanged: "選択したスロットにはこのマテリアルが適用済みです",
           }[assignment.reason];
           setNotice(message);
           return current;
@@ -7811,8 +7811,8 @@ export function VisualEditorPrototype({
         setSaveStatus("dirty");
         setNotice(
           assignment.slots.length === 1
-            ? `Materialを「${assignment.slots[0]}」slotへ適用しました`
-            : `Materialを${assignment.slots.length}個のslotへ適用しました`,
+            ? `マテリアルを「${assignment.slots[0]}」スロットに適用しました`
+            : `マテリアルを${assignment.slots.length}個のスロットに適用しました`,
         );
         return commitEditorHistory(current, {
           ...current.present,
@@ -7832,7 +7832,7 @@ export function VisualEditorPrototype({
       meshComponentId?: string,
     ) => {
       if (editorMode !== "edit") {
-        setNotice("Playを停止してからMaterialを適用してください");
+        setNotice("動作確認を停止してからマテリアルを適用してください");
         return;
       }
       const target = getMaterialAssignmentTarget(
@@ -7843,16 +7843,16 @@ export function VisualEditorPrototype({
       );
       if (!target.ready) {
         const message = {
-          "entity-missing": "Materialの適用先Entityが見つかりません",
-          "mesh-missing": "MaterialはMeshを持つEntityへドロップしてください",
-          "slot-missing": "Meshに適用できるMaterial slotがありません",
+          "entity-missing": "マテリアルの適用先Entityが見つかりません",
+          "mesh-missing": "マテリアルはメッシュを持つEntityへドロップしてください",
+          "slot-missing": "メッシュに適用できるマテリアルスロットがありません",
         }[target.reason];
         setNotice(message);
         return;
       }
       const material = bundle.assets.assets[materialAssetId];
       if (material?.kind !== "material") {
-        setNotice("ドラッグしたMaterial Assetが見つかりません");
+        setNotice("ドラッグしたマテリアルが見つかりません");
         return;
       }
       if (target.slots.length === 1) {
@@ -7871,7 +7871,7 @@ export function VisualEditorPrototype({
         (component) => component.id === target.meshId && component.type === "mesh",
       );
       if (!entity || mesh?.type !== "mesh") {
-        setNotice("Materialの適用先Meshが見つかりません");
+        setNotice("マテリアルの適用先メッシュが見つかりません");
         return;
       }
       const geometryAssetId =
@@ -7918,7 +7918,7 @@ export function VisualEditorPrototype({
         materialName: material.name,
         slots,
       });
-      setNotice("適用するMaterial slotを選択してください");
+      setNotice("適用するマテリアルスロットを選択してください");
     },
     [bundle, commitMaterialAssignment, editorMode],
   );
@@ -7933,13 +7933,13 @@ export function VisualEditorPrototype({
         setBundle((current) => {
           const assets = updateMaterialAsset(current.assets, assetId, patch);
           if (assets === current.assets) {
-            setNotice("Material値は変更されませんでした。不正値は元の値を保持します");
+            setNotice("マテリアルは変更していません。入力できない値は、元の値に戻します");
             return current;
           }
           setNotice(
             editorMode === "play"
-              ? "Material設定を保存し、参照中のEntityだけPlayへ再反映しました"
-              : "Material IRを更新し、参照中のMesh previewへ反映しました",
+              ? "マテリアル設定を保存し、参照中のEntityだけ動作確認へ再反映しました"
+              : "マテリアルの設定を更新し、使用しているメッシュの表示に反映しました",
           );
           return touchProject({ ...current, assets });
         });
@@ -7965,11 +7965,11 @@ export function VisualEditorPrototype({
       }
       const shaderAsset = bundleRef.current.assets.assets[shaderAssetId];
       if (shaderAsset?.kind === "shader" && shaderAsset.stage !== stage) {
-        setNotice(`このShader Assetは${shaderAsset.stage}用です。${stage}用のAssetを選択してください`);
+        setNotice(`このシェーダー素材は${shaderAsset.stage}用です。${stage}用の素材を選択してください`);
         return;
       }
       if (shaderAsset?.kind !== "shader" || !projectPath) {
-        setNotice("GLSL Assetを読み込むにはプロジェクトを保存してください");
+        setNotice("GLSL 素材を読み込むにはプロジェクトを保存してください");
         return;
       }
       try {
@@ -7995,12 +7995,12 @@ export function VisualEditorPrototype({
             [assetField]: shaderAssetId,
           },
         });
-        setNotice(`「${shaderAsset.name}」を${stage} GLSLとしてMaterialへ設定しました`);
+        setNotice(`「${shaderAsset.name}」を${stage} GLSLとしてマテリアルへ設定しました`);
       } catch (cause) {
         setNotice(
           cause instanceof Error
-            ? `GLSL Assetを読み込めませんでした: ${cause.message}`
-            : "GLSL Assetを読み込めませんでした",
+            ? `GLSL 素材を読み込めませんでした: ${cause.message}`
+            : "GLSL 素材を読み込めませんでした",
         );
       }
     },
@@ -8011,16 +8011,16 @@ export function VisualEditorPrototype({
     (assetId: string, patch: ModelAssetPatch) => {
       if (editorMode !== "edit") return;
       if (modelReimportBusy) {
-        setNotice("Modelの再インポート完了後に設定を変更できます");
+        setNotice("3Dモデルの再インポート完了後に設定を変更できます");
         return;
       }
       setBundle((current) => {
         const assets = updateModelAsset(current.assets, assetId, patch);
         if (assets === current.assets) {
-          setNotice("Model設定は変更されませんでした。不正値は元の値を保持します");
+          setNotice("モデルの設定は変更していません。入力できない値は、元の値に戻します");
           return current;
         }
-        setNotice("ModelのImport Recipeと既定Material割当を更新しました");
+        setNotice("モデルの読み込み設定と既定マテリアルの割り当てを更新しました");
         return touchProject({ ...current, assets });
       });
     },
@@ -8047,18 +8047,18 @@ export function VisualEditorPrototype({
         return;
       }
       if (!projectPath) {
-        setNotice("初回の自動保存完了後にModelを再インポートできます");
+        setNotice("初回の自動保存完了後に3Dモデルを再インポートできます");
         return;
       }
 
       const startingBundle = bundleRef.current;
       const startingAsset = startingBundle.assets.assets[assetId];
       if (startingAsset?.kind !== "model") {
-        setNotice("再インポートするModel Assetが見つかりません");
+        setNotice("再インポートする3Dモデルが見つかりません");
         return;
       }
       if (startingAsset.source.kind !== "project") {
-        setNotice("プロジェクト内に保存されたModelだけ再インポートできます");
+        setNotice("プロジェクト内に保存された3Dモデルだけ再インポートできます");
         return;
       }
 
@@ -8102,7 +8102,7 @@ export function VisualEditorPrototype({
 
       const reimportedAsset = result.manifest.assets[assetId];
       if (reimportedAsset?.kind !== "model") {
-        const message = "再インポート結果を確認できませんでした。元のAssetは保持されています";
+        const message = "再インポート結果を確認できませんでした。元の素材は保持されています";
         setModelReimportFeedback({
           assetId,
           state: { phase: "failed", message },
@@ -8113,7 +8113,7 @@ export function VisualEditorPrototype({
 
       if (bundleRef.current.assets.assets[assetId] !== startingAsset) {
         const message =
-          "処理中にModel設定が変更されたため、自動適用を取り消しました。元のAssetは保持されています";
+          "処理中に3Dモデル設定が変更されたため、自動適用を取り消しました。元の素材は保持されています";
         setModelReimportFeedback({
           assetId,
           state: { phase: "failed", message },
@@ -8125,7 +8125,7 @@ export function VisualEditorPrototype({
         setHistory((current) => {
         if (current.present.bundle.assets.assets[assetId] !== startingAsset) {
           const message =
-            "処理中にModel設定が変更されたため、自動適用を取り消しました。元のAssetは保持されています";
+            "処理中に3Dモデル設定が変更されたため、自動適用を取り消しました。元の素材は保持されています";
           setModelReimportFeedback({
             assetId,
             state: { phase: "failed", message },
@@ -8143,11 +8143,11 @@ export function VisualEditorPrototype({
           assetId,
           state: {
             phase: "succeeded",
-            message: "Modelを再インポートしました。変更を自動保存します",
+            message: "3Dモデルを読み込み直しました",
           },
         });
         setNotice(
-          `「${reimportedAsset.name}」を再インポートし、モデル由来MaterialとTextureを更新しました`,
+          `「${reimportedAsset.name}」を再インポートし、モデル由来マテリアルとテクスチャを更新しました`,
         );
         return commitEditorHistory(current, {
           ...current.present,
@@ -8168,7 +8168,7 @@ export function VisualEditorPrototype({
     (assetId: string, patch: TextureAssetPatch) => {
       if (editorMode !== "edit") return;
       if (textureProcessingBusy) {
-        setNotice("Textureの変換完了後に設定を変更できます");
+        setNotice("テクスチャの変換完了後に設定を変更できます");
         return;
       }
       setBundle((current) => {
@@ -8179,7 +8179,7 @@ export function VisualEditorPrototype({
           feedback?.assetId === assetId ? null : feedback,
         );
         setNotice(
-          "Texture Import設定を更新しました。公開時にこの設定へ変換されます。Editorの表示も合わせるときは「この設定で画像を書き出す」を使います",
+          "テクスチャ読み込み設定を更新しました。公開時にこの設定で変換します。編集画面の表示にも適用するには「この設定で画像を書き出す」を使います",
         );
         return touchProject({ ...current, assets });
       });
@@ -8204,7 +8204,7 @@ export function VisualEditorPrototype({
         },
       );
       if (!availability.allowed) {
-        const message = availability.disabledReason ?? "いまはTextureを変換できません";
+        const message = availability.disabledReason ?? "いまはテクスチャを変換できません";
         setTextureProcessingFeedback({
           assetId,
           state: { phase: "failed", message },
@@ -8213,7 +8213,7 @@ export function VisualEditorPrototype({
         return;
       }
       if (!projectPath) {
-        const message = "初回の自動保存完了後にTextureを変換できます";
+        const message = "初回の自動保存完了後にテクスチャを変換できます";
         setTextureProcessingFeedback({
           assetId,
           state: { phase: "failed", message },
@@ -8224,7 +8224,7 @@ export function VisualEditorPrototype({
 
       const startingAsset = bundleRef.current.assets.assets[assetId];
       if (startingAsset?.kind !== "texture") {
-        const message = "変換するTexture Assetが見つかりません";
+        const message = "変換するテクスチャが見つかりません";
         setTextureProcessingFeedback({
           assetId,
           state: { phase: "failed", message },
@@ -8270,7 +8270,7 @@ export function VisualEditorPrototype({
 
         // 変換中に設定が動いた場合は、書き出した画像を採用せず原本のまま残す。
         const staleMessage =
-          "変換中にTexture設定が変更されたため、適用を取り消しました。元の画像は残っています";
+          "変換中にテクスチャ設定が変更されたため、適用を取り消しました。元の画像は残っています";
         if (bundleRef.current.assets.assets[assetId] !== startingAsset) {
           setTextureProcessingFeedback({
             assetId,
@@ -8341,18 +8341,18 @@ export function VisualEditorPrototype({
         setNotice(message);
       };
       if (!availability.allowed) {
-        fail(availability.disabledReason ?? "いまはTextureを変換できません");
+        fail(availability.disabledReason ?? "いまはテクスチャを変換できません");
         return;
       }
       if (!projectPath) {
-        fail("初回の自動保存完了後にTextureを変換できます");
+        fail("初回の自動保存完了後にテクスチャを変換できます");
         return;
       }
       const targets = assetIds.filter(
         (assetId) => bundleRef.current.assets.assets[assetId]?.kind === "texture",
       );
       if (targets.length === 0) {
-        fail("変換するTexture Assetが見つかりません");
+        fail("変換するテクスチャが見つかりません");
         return;
       }
 
@@ -8366,7 +8366,7 @@ export function VisualEditorPrototype({
       );
       setTextureBatchFeedback({
         phase: "reading",
-        message: `${targets.length}件のTextureを読み込んでいます`,
+        message: `${targets.length}件のテクスチャを読み込んでいます`,
       });
 
       try {
@@ -8395,7 +8395,7 @@ export function VisualEditorPrototype({
 
         // 変換中に設定が動いたTextureがあれば、どのAssetも差し替えない。
         const staleMessage =
-          "変換中にTexture設定が変更されたため、適用を取り消しました。元の画像は残っています";
+          "変換中にテクスチャ設定が変更されたため、適用を取り消しました。元の画像は残っています";
         const unchanged = targets.every(
           (assetId, index) =>
             bundleRef.current.assets.assets[assetId] === startingAssets[index],
@@ -8477,7 +8477,7 @@ export function VisualEditorPrototype({
   const handleRevertAssetOptimization = useCallback(
     (assetId: string, kind: "texture" | "model") => {
       if (editorMode !== "edit") {
-        setNotice("Playを停止してから原本に戻してください");
+        setNotice("動作確認を停止してから原本に戻してください");
         return;
       }
       if (
@@ -8507,7 +8507,7 @@ export function VisualEditorPrototype({
             assetId,
             state: {
               phase: "succeeded",
-              message: "原本に戻しました。変換前のImport設定も復元しています",
+              message: "原本に戻しました。変換前の読み込み設定も復元しています",
             },
           });
         } else {
@@ -8515,7 +8515,7 @@ export function VisualEditorPrototype({
             assetId,
             state: {
               phase: "succeeded",
-              message: "原本に戻しました。変換前のImport設定も復元しています",
+              message: "原本に戻しました。変換前の読み込み設定も復元しています",
             },
           });
         }
@@ -8567,7 +8567,7 @@ export function VisualEditorPrototype({
           component.type === "collider" && component.id === componentId,
       );
       if (!entity || !modelNode || collider?.shape !== "mesh") {
-        setNotice("当たり判定を作るMesh Colliderが見つかりませんでした");
+        setNotice("当たり判定を作るメッシュ衝突判定が見つかりませんでした");
         return;
       }
       const startingModel = bundleRef.current.assets.assets[modelNode.modelAssetId];
@@ -8663,16 +8663,16 @@ export function VisualEditorPrototype({
         setNotice(message);
       };
       if (!availability.allowed) {
-        fail(availability.disabledReason ?? "いまはModelを最適化できません");
+        fail(availability.disabledReason ?? "いまは3Dモデルを最適化できません");
         return;
       }
       if (!projectPath) {
-        fail("初回の自動保存完了後にModelを最適化できます");
+        fail("初回の自動保存完了後に3Dモデルを最適化できます");
         return;
       }
       const startingAsset = bundleRef.current.assets.assets[assetId];
       if (startingAsset?.kind !== "model") {
-        fail("最適化するModel Assetが見つかりません");
+        fail("最適化する3Dモデルが見つかりません");
         return;
       }
 
@@ -8704,7 +8704,7 @@ export function VisualEditorPrototype({
 
         // 最適化中に設定が動いた場合は、書き出したGLBを採用せず原本のまま残す。
         const staleMessage =
-          "最適化中にModel設定が変更されたため、適用を取り消しました。元のModelは残っています";
+          "最適化中に3Dモデル設定が変更されたため、適用を取り消しました。元の3Dモデルは残っています";
         if (bundleRef.current.assets.assets[assetId] !== startingAsset) {
           fail(staleMessage);
           return;
@@ -8754,7 +8754,7 @@ export function VisualEditorPrototype({
       if (editorMode !== "edit" || importBusy) {
         setNotice(
           editorMode !== "edit"
-            ? "Playを停止してからカードを作成してください"
+            ? "動作確認を停止してからカードを作成してください"
             : "アセットのインポート完了後にカードを作成してください",
         );
         return;
@@ -8769,16 +8769,16 @@ export function VisualEditorPrototype({
         if (!created.created) {
           setNotice(
             created.reason === "environment-texture"
-              ? "環境Textureは遠景・草カードに使用できません"
+              ? "環境テクスチャは遠景・草カードに使用できません"
               : created.reason === "texture-missing"
-                ? "Texture Assetが見つかりません。Assetsを開き直してください"
-                : "カードを作成できませんでした。TextureとAssetの状態を確認してください",
+                ? "テクスチャが見つかりません。素材を開き直してください"
+                : "カードを作成できませんでした。テクスチャと素材の状態を確認してください",
           );
           return current;
         }
         setSaveStatus("dirty");
         setNotice(
-          `「${created.entityName}」を配置しました。選択中のEntityを移動し、Materialから透明度を調整できます`,
+          `「${created.entityName}」を配置しました。選択中のEntityを移動し、マテリアルのAlphaで透明度を調整できます`,
         );
         return commitEditorHistory(current, {
           ...current.present,
@@ -8803,8 +8803,8 @@ export function VisualEditorPrototype({
         if (assets === current.assets) return current;
         setNotice(
           editorMode === "play"
-            ? "Particle設定を保存し、参照中のEmitterだけPlayへ再反映しました"
-            : "Particle設定を更新し、参照中のEmitterへ反映しました",
+            ? "パーティクル設定を保存し、参照中のEmitterだけ動作確認へ再反映しました"
+            : "パーティクル設定を更新し、参照中のEmitterへ反映しました",
         );
         return touchProject({ ...current, assets });
       });
@@ -8820,7 +8820,7 @@ export function VisualEditorPrototype({
       if (editorMode !== "edit" || importBusy) {
         setNotice(
           editorMode !== "edit"
-            ? "Playを停止してからAssetを作成してください"
+            ? "動作確認を停止してから素材を作成してください"
             : "アセットのインポート完了後に作成してください",
         );
         return;
@@ -8833,7 +8833,7 @@ export function VisualEditorPrototype({
           requestedFolderId !== null &&
           !assets.folders?.[requestedFolderId]
         ) {
-          setNotice("作成先のFolderが見つかりません。Folderを開き直してください");
+          setNotice("作成先のフォルダーが見つかりません。フォルダーを開き直してください");
           return current;
         }
         const folderId =
@@ -8846,7 +8846,7 @@ export function VisualEditorPrototype({
           folderId,
         });
         if (!added.added) {
-          setNotice("Assetを作成できませんでした。作成先を確認してください");
+          setNotice("素材を作成できませんでした。作成先を確認してください");
           return current;
         }
         const destination = folderId
@@ -8855,10 +8855,10 @@ export function VisualEditorPrototype({
         setSaveStatus("dirty");
         setNotice(
           kind === "material"
-            ? `標準glTFマテリアルを${destination}に作成し、Asset Inspectorで開きました`
+            ? `標準glTFマテリアルを${destination}に作成し、Inspectorで開きました`
             : kind === "particle"
-              ? `Particleを${destination}に作成し、Asset Inspectorで開きました`
-              : `KHR_interactivity Graphを${destination}に作成し、専用Editorで開きました`,
+              ? `パーティクルを${destination}に作成し、Inspectorで開きました`
+              : `ノードグラフを${destination}に作成し、ノードエディターで開きました`,
         );
         if (kind === "interactivity") {
           setInteractivityEditorAssetId(added.assetId);
@@ -8890,14 +8890,14 @@ export function VisualEditorPrototype({
   const handleCreateModelAnimationGraph = useCallback(
     (assetId: string) => {
       if (editorMode !== "edit") {
-        setNotice("Playを停止してからGraphを作成してください");
+        setNotice("動作確認を停止してからノードグラフを作成してください");
         return;
       }
       const model = bundleRef.current.assets.assets[assetId];
       if (model?.kind !== "model") return;
       const clips = model.importMetadata?.animations ?? [];
       if (clips.length === 0) {
-        setNotice("このModelにはanimation clipがありません");
+        setNotice("この3Dモデルにはアニメーションクリップがありません");
         return;
       }
       const graphAssetId = createDocumentId("asset");
@@ -8912,12 +8912,12 @@ export function VisualEditorPrototype({
           ),
         });
         if (!added.added) {
-          setNotice("Graphを作成できませんでした");
+          setNotice("ノードグラフを作成できませんでした");
           return current;
         }
         setSaveStatus("dirty");
         setNotice(
-          `${clips.length}件のclipを再生するGraphを作成しました。Entityに付けるとPlayでループ再生されます`,
+          `${clips.length}件のクリップを再生するノードグラフを作成しました。Entityに付けると動作確認でループ再生されます`,
         );
         setInteractivityEditorAssetId(added.assetId);
         setGraphTabActive(true);
@@ -8950,7 +8950,7 @@ export function VisualEditorPrototype({
       });
       if (!added.added) return current;
       setActiveAssetFolderId(folderId);
-      setNotice("Folderを作成しました");
+      setNotice("フォルダーを作成しました");
       return touchProject({ ...current, assets: added.manifest });
     });
   }, [activeAssetFolderId, editorMode, setBundle]);
@@ -8981,7 +8981,7 @@ export function VisualEditorPrototype({
         });
         if (!added.added) return current;
         setSaveStatus("dirty");
-        setNotice(`「${entity.name}」からPrefabを作成しました`);
+        setNotice(`「${entity.name}」からプレハブを作成しました`);
         return commitEditorHistory(current, {
           ...current.present,
           bundle: touchProject({
@@ -9018,7 +9018,7 @@ export function VisualEditorPrototype({
           },
         };
       });
-      setNotice("Rigid Bodyを削除しました。子孫のColliderは保持されています");
+      setNotice("物理挙動を削除しました。子孫の衝突判定は保持されています");
     },
     [editorMode, playSession, updateScene],
   );
@@ -9098,9 +9098,9 @@ export function VisualEditorPrototype({
         setNotice(
           editorMode === "play"
             ? restartsRuntime
-              ? `「${entity.name}」のScript設定を反映し、このEntityだけ再起動しました`
-              : `「${entity.name}」のScript propertyを次のフレームへ反映しました`
-            : "Script Componentを更新しました",
+              ? `「${entity.name}」のスクリプト設定を反映し、このEntityだけ再起動しました`
+              : `「${entity.name}」のスクリプトのプロパティを次のフレームに反映しました`
+            : "スクリプトComponentを更新しました",
         );
         return touchProject({
           ...current,
@@ -9124,24 +9124,24 @@ export function VisualEditorPrototype({
       return false;
     }
     if (!projectPathRef.current) {
-      setNotice("プロジェクトを保存するとScriptを作成できます");
+      setNotice("プロジェクトを保存するとスクリプトを作成できます");
       return false;
     }
     const template = getScriptTemplate(request.templateId);
     const source = createScriptTemplateSource(request.templateId, request.name);
     if (!template || source === null) {
-      setNotice("選択したScript Templateを読み込めませんでした");
+      setNotice("選択したスクリプトのテンプレートを読み込めませんでした");
       return false;
     }
     const currentAssets = bundleRef.current.assets;
     const folderId = scriptTemplateFolderId;
     if (folderId && !currentAssets.folders?.[folderId]) {
-      setNotice("作成先のFolderが見つかりません。Folderを開き直してください");
+      setNotice("作成先のフォルダーが見つかりません。フォルダーを開き直してください");
       return false;
     }
     const name = request.name.trim();
     if (!name) {
-      setNotice("Script名を入力してください");
+      setNotice("スクリプト名を入力してください");
       return false;
     }
     const relativePath = createScriptRelativePath(
@@ -9166,7 +9166,7 @@ export function VisualEditorPrototype({
     if (entityId) {
       const entity = previewScene.entities[entityId];
       if (!entity) {
-        setNotice("選択中のEntityが見つかりません。Hierarchyで選び直してください");
+        setNotice("Entityが見つかりません。Hierarchyで選び直してください");
         return false;
       }
       const componentResult = addEditorComponent(
@@ -9181,7 +9181,7 @@ export function VisualEditorPrototype({
       if (!componentResult.added) {
         setNotice(
           componentResult.reason ??
-            "選択中のEntityへScript Componentを追加できませんでした",
+            "選択中のEntityへスクリプトComponentを追加できませんでした",
         );
         return false;
       }
@@ -9197,8 +9197,8 @@ export function VisualEditorPrototype({
     } catch (error) {
       setNotice(
         error instanceof Error
-          ? `Scriptを作成できませんでした: ${error.message}`
-          : "Scriptを作成できませんでした",
+          ? `スクリプトを作成できませんでした: ${error.message}`
+          : "スクリプトを作成できませんでした",
       );
       return false;
     } finally {
@@ -9252,7 +9252,7 @@ export function VisualEditorPrototype({
         attachedEntityName
           ? `${template.name}から「${name}」を${destination}に作成し、「${attachedEntityName}」へ追加しました`
           : entityId
-            ? `${template.name}から「${name}」を${destination}に作成しました。選択Entityが更新されたためComponentは追加していません`
+            ? `${template.name}から「${name}」を${destination}に作成しました。選択中のEntityが変わったため、Componentは追加していません`
             : `${template.name}から「${name}」を${destination}に作成しました`,
       );
       return commitEditorHistory(current, {
@@ -9318,7 +9318,7 @@ export function VisualEditorPrototype({
           return current;
         }
         if (!auto) {
-          setNotice("KHR_interactivity GraphをAssetへ保存しました。別Sceneでも再利用できます");
+          setNotice("ノードグラフをAssetsに保存しました");
         }
         // The Entities the graph writes to are Component data, so saving the
         // graph is what keeps each trigger's reference list true.
@@ -9370,7 +9370,7 @@ export function VisualEditorPrototype({
       }
       const asset = bundleRef.current.assets.assets[assetId];
       if (!asset || (asset.kind !== "texture" && asset.kind !== "skybox")) {
-        setNotice("サムネイルに使用できるTexture Assetが見つかりません");
+        setNotice("サムネイルに使用できるテクスチャが見つかりません");
         return;
       }
       projectThumbnailBusyRef.current = true;
@@ -9418,8 +9418,8 @@ export function VisualEditorPrototype({
       const asset = bundleRef.current.assets.assets[assetId];
       setNotice(
         asset?.kind === "material"
-          ? `「${asset.name}」のサムネイルを更新できませんでした。プロジェクトを開き直すかMaterialを変更すると再試行します`
-          : "Materialサムネイルの準備に失敗しました。プロジェクトを開き直すと再試行します",
+          ? `「${asset.name}」のサムネイルを更新できませんでした。プロジェクトを開き直すかマテリアルを変更すると再試行します`
+          : "マテリアルサムネイルの準備に失敗しました。プロジェクトを開き直すと再試行します",
       );
     },
     [],
@@ -9443,7 +9443,7 @@ export function VisualEditorPrototype({
       setNotice(
         asset?.kind === "model"
           ? `「${asset.name}」のサムネイルを生成できませんでした。ソースを確認してプロジェクトを開き直すと再試行します`
-          : "Modelサムネイルの自動生成に失敗しました。プロジェクトを開き直すと再試行します",
+          : "3Dモデルサムネイルの自動生成に失敗しました。プロジェクトを開き直すと再試行します",
       );
     },
     [],
@@ -9454,15 +9454,15 @@ export function VisualEditorPrototype({
       if (editorMode !== "edit" || importBusy) {
         setNotice(
           editorMode !== "edit"
-            ? "Playを停止してからPrefabをUpdateしてください"
-            : "アセットのインポート完了後にPrefabをUpdateしてください",
+            ? "動作確認を停止してからプレハブを更新してください"
+            : "アセットのインポート完了後にプレハブを更新してください",
         );
         return;
       }
       setHistory((current) => {
         const document = current.present.bundle.prefabs[prefabId];
         if (!document) {
-          setNotice("UpdateするPrefab documentが見つかりません");
+          setNotice("更新するプレハブのデータが見つかりません");
           return current;
         }
         const updated = updatePrefabDocumentFromSource(
@@ -9471,11 +9471,11 @@ export function VisualEditorPrototype({
           document,
         );
         if (!updated) {
-          setNotice("Prefab sourceのHierarchyを読み取れませんでした");
+          setNotice("プレハブの構造を読み取れません");
           return current;
         }
         setSaveStatus("dirty");
-        setNotice(`「${document.name}」を現在のHierarchyで更新しました`);
+        setNotice(`「${document.name}」に現在の構造を反映しました`);
         return commitEditorHistory(current, {
           ...current.present,
           bundle: touchProject({
@@ -9550,7 +9550,7 @@ export function VisualEditorPrototype({
         if (createdInteractivityAssetId) {
           const added = addDefaultInteractivityAsset(assets, {
             id: createdInteractivityAssetId,
-            name: "新規Interactivity 1",
+            name: "新規ノードグラフ 1",
             folderId: null,
           });
           if (added.added) {
@@ -9568,7 +9568,7 @@ export function VisualEditorPrototype({
         ) {
           const added = addDefaultParticleAsset(assets, {
             id: fallbackParticleId,
-            name: "新規Particle 1",
+            name: "新規パーティクル 1",
           });
           if (added.added) {
             assets = added.manifest;
@@ -9595,22 +9595,22 @@ export function VisualEditorPrototype({
             result.reason === "duplicate"
               ? "同じComponentは重複追加できません"
               : result.reason === "project-kind"
-                ? "このProject種別では追加できません"
+                ? "このプロジェクト種別では追加できません"
                 : result.reason === "dependency-missing"
                   ? componentDefinitionId === "scripting.script"
-                    ? "先にAssetsでScriptを作成してください"
+                    ? "Assetsでスクリプトを作成してください"
                     : componentDefinitionId === "interaction.trigger"
-                      ? "先にAssetsでInteractivity Graphを作成してください"
-                      : "必要なMeshまたはAssetがありません"
+                      ? "Assetsでノードグラフを作成してください"
+                      : "必要なメッシュまたは素材がありません"
                   : "Componentを追加できませんでした";
           setNotice(reason);
           return current;
         }
         setNotice(
           createdParticle
-            ? "Particle Assetを作成し、Particle Emitterを追加しました"
+            ? "パーティクルを作成し、パーティクルの放出を追加しました"
             : createdGraph
-              ? "Interactivity Graphを作成し、Interaction Triggerを追加しました"
+              ? "ノードグラフを作成し、グラフの実行を追加しました"
               : "Componentを追加しました",
         );
         return touchProject({ ...current, assets, scene: result.scene });
@@ -9644,7 +9644,7 @@ export function VisualEditorPrototype({
         if (!result.changed) {
           setNotice(
             result.diagnostics[0]?.message ??
-              "XRift Componentを更新できませんでした",
+              "XRiftのComponentを更新できませんでした",
           );
           return scene;
         }
@@ -9654,8 +9654,8 @@ export function VisualEditorPrototype({
         setNotice(
           error?.message ??
             (editorMode === "play"
-              ? "XRift Component設定を保存し、このEntityのPlayを先頭から再実行しました"
-              : "XRift Componentの設定をシーンへ反映しました"),
+              ? "設定を保存し、このEntityの動作確認をやり直しました"
+              : "設定を反映しました"),
         );
         return result.scene;
       });
@@ -9671,14 +9671,14 @@ export function VisualEditorPrototype({
         if (!result.changed) {
           setNotice(
             result.diagnostics[0]?.message ??
-              "XRift Componentを削除できませんでした",
+              "XRiftのComponentを削除できませんでした",
           );
           return scene;
         }
         setNotice(
           editorMode === "play"
-            ? "XRift Componentを削除し、このEntityのPlayを先頭から再実行しました"
-            : "XRift Componentを削除しました",
+            ? "Componentを削除し、このEntityの動作確認をやり直しました"
+            : "XRiftのComponentを削除しました",
         );
         return result.scene;
       });
@@ -9696,7 +9696,7 @@ export function VisualEditorPrototype({
       );
       if (!target) return;
       if (target.type === "transform") {
-        setNotice("TransformはEntityに必須のため削除できません");
+        setNotice("位置・回転・大きさはEntityに必須のため削除できません");
         return;
       }
       if (target.type === "xrift-component") {
@@ -9721,8 +9721,8 @@ export function VisualEditorPrototype({
       const label = COMPONENT_REMOVAL_LABELS[target.type] ?? "Component";
       setNotice(
         editorMode === "play"
-          ? `${label}を削除し、このEntityのPlayを先頭から再実行しました`
-          : `${label}を削除しました。取り消すにはUndoを使います`,
+          ? `${label}を削除し、このEntityの動作確認を先頭から再実行しました`
+          : `${label}を削除しました。取り消すには「元に戻す」を使ってください`,
       );
     },
     [editorMode, handleRemoveXriftComponent, playSession, updateScene],
@@ -9731,7 +9731,7 @@ export function VisualEditorPrototype({
   const handleSelectAsset = useCallback((assetId: string) => {
     setSceneSettingsOpen(false);
     setAssetSelection(assetId);
-    setNotice("Asset Inspectorへ切り替えました。シーン内の選択は維持しています");
+    setNotice("Inspectorで素材を開きました。シーン内の選択は維持しています");
   }, []);
 
   const requestRename = useCallback(
@@ -9806,7 +9806,7 @@ export function VisualEditorPrototype({
                         {
                           severity: "blocking",
                           code: "asset-import-source-released",
-                          message: "Import元ファイルを読み直してください",
+                          message: "読み込み元ファイルを読み直してください",
                         },
                       ],
                     }
@@ -9971,7 +9971,7 @@ export function VisualEditorPrototype({
                 ),
               );
               setNotice(
-                `「${queued.name}」からPrefab ${unityPlan.result.prefabCount}件、Entity ${unityPlan.result.entityCount}件、Asset ${unityPlan.result.assetCount}件を再構築しました`,
+                `「${queued.name}」からプレハブ ${unityPlan.result.prefabCount}件、Entity ${unityPlan.result.entityCount}件、素材 ${unityPlan.result.assetCount}件を再構築しました`,
               );
               continue;
             }
@@ -10001,14 +10001,14 @@ export function VisualEditorPrototype({
                             {
                               severity: "warning",
                               code: "duplicate-source-hash",
-                              message: `同じ内容のShader Asset「${duplicate.name}」を選択しました。`,
+                              message: `同じ内容のシェーダー素材「${duplicate.name}」を選択しました。`,
                             },
                           ],
                         }
                       : entry,
                   ),
                 );
-                setNotice(`同じ内容のShader Asset「${duplicate.name}」は登録済みです`);
+                setNotice(`同じ内容のシェーダー素材「${duplicate.name}」は登録済みです`);
                 continue;
               }
               if (!source.trim()) {
@@ -10032,7 +10032,7 @@ export function VisualEditorPrototype({
                       : entry,
                   ),
                 );
-                setNotice(`${queued.name}をShader Assetにできませんでした`);
+                setNotice(`${queued.name}をシェーダー素材にできませんでした`);
                 continue;
               }
               const relativePath = createShaderRelativePath(
@@ -10099,7 +10099,7 @@ export function VisualEditorPrototype({
                     : entry,
                 ),
               );
-              setNotice(`「${imported.name}」をGLSL Shader Assetとしてインポートしました`);
+              setNotice(`「${imported.name}」をGLSL シェーダー素材としてインポートしました`);
               continue;
             }
             // Sidecars stay out of the manifest as standalone Assets: the
@@ -10180,7 +10180,7 @@ export function VisualEditorPrototype({
               setNotice(
                 plan.diagnostics.find(
                   (diagnostic) => diagnostic.severity === "blocking",
-                )?.message ?? `${queued.name}をImportできませんでした`,
+                )?.message ?? `${queued.name}を読み込めませんでした`,
               );
               continue;
             }
@@ -10234,7 +10234,7 @@ export function VisualEditorPrototype({
                           {
                             severity: "warning",
                             code: "duplicate-source-hash",
-                            message: `同じ内容のアセット「${duplicate.name}」を選択しました。ファイルは再コピーしていません。`,
+                            message: `同じ内容のアセット「${duplicate.name}」があるため、既存のものを選択しました。`,
                           },
                           ...entry.diagnostics,
                         ],
@@ -10264,7 +10264,7 @@ export function VisualEditorPrototype({
             );
             const importedAsset = committedManifest.assets[plan.asset.id];
             if (!importedAsset) {
-              throw new Error("Import済みAssetをManifestへ反映できませんでした");
+              throw new Error("読み込んだ素材をプロジェクトに登録できませんでした");
             }
             workingManifest = committedManifest;
             knownByHash.set(plan.sourceHash, importedAsset);
@@ -10316,8 +10316,8 @@ export function VisualEditorPrototype({
               isEnvironmentTextureAsset(importedAsset)
                 ? `「${importedAsset.name}」をインポートし、Skyboxへ設定しました`
                 : plan.replacesAssetId
-                  ? `「${importedAsset.name}」を更新し、MaterialとTextureの参照を維持しました`
-                  : `「${importedAsset.name}」をインポートし、Material ${plan.derivedAssets?.filter((asset) => asset.kind === "material").length ?? 0}件、Texture ${plan.derivedAssets?.filter((asset) => asset.kind === "texture").length ?? 0}件を展開しました`,
+                  ? `「${importedAsset.name}」を更新し、マテリアルとテクスチャの参照を維持しました`
+                  : `「${importedAsset.name}」をインポートし、マテリアル ${plan.derivedAssets?.filter((asset) => asset.kind === "material").length ?? 0}件、テクスチャ ${plan.derivedAssets?.filter((asset) => asset.kind === "texture").length ?? 0}件を展開しました`,
             );
           } catch (error) {
             const message = sanitizedImportMessage(error, targetProjectPath);
@@ -10341,7 +10341,7 @@ export function VisualEditorPrototype({
                   : entry,
               ),
             );
-            setNotice(`${queued.name}のImportに失敗しました: ${message}`);
+            setNotice(`${queued.name}の読み込みに失敗しました: ${message}`);
           }
         }
       } finally {
@@ -10433,7 +10433,7 @@ export function VisualEditorPrototype({
     if (projectPath) {
       setNotice(
         companionPaths.size > 0
-          ? `アセット${accepted.length}件のインポートを開始しました。依存ファイル${companionPaths.size}件をModelへ同梱します`
+          ? `アセット${accepted.length}件のインポートを開始しました。依存ファイル${companionPaths.size}件を3Dモデルへ同梱します`
           : `アセット${accepted.length}件のインポートを開始しました`,
       );
       void processImportQueue(projectPath);
@@ -10466,7 +10466,7 @@ export function VisualEditorPrototype({
       skippedAssetIds: [],
     });
     if (importBusy && !options.ignoreImportBusy) {
-      setNotice("アセットのインポート完了後にPlayを開始できます");
+      setNotice("アセットのインポート完了後に動作確認を開始できます");
       return stopped();
     }
     if (playPreparationActiveRef.current) return stopped();
@@ -10490,7 +10490,7 @@ export function VisualEditorPrototype({
       setEditorMode("edit");
       scriptRuntime.reset();
       setNotice(
-        "Projectの実行範囲が変わったためPlay準備を中止しました。現在のProjectで改めてPlayしてください",
+        "プロジェクトの実行範囲が変わったため動作確認準備を中止しました。現在のプロジェクトで改めて動作確認してください",
       );
       return stopped();
     };
@@ -10517,7 +10517,7 @@ export function VisualEditorPrototype({
       }
       if (pendingScriptPathsRef.current.size > 0) {
         setNotice(
-          "Scriptを保存中のためPlayを開始できません。保存完了後にもう一度開始してください",
+          "スクリプトを保存中のため動作確認を開始できません。保存完了後にもう一度開始してください",
         );
         return stopped();
       }
@@ -10563,7 +10563,7 @@ export function VisualEditorPrototype({
         const blockingErrors = blockingScriptCompileErrors(errors);
         if (blockingErrors.length > 0) {
           setNotice(
-            `Scriptを変換できないためPlayを開始しません: ${blockingErrors[0]?.assetName ?? ""} ${blockingErrors[0]?.message ?? ""}`,
+            `スクリプトを変換できないため動作確認を開始しません: ${blockingErrors[0]?.assetName ?? ""} ${blockingErrors[0]?.message ?? ""}`,
           );
           return stopped(errors);
         }
@@ -10581,8 +10581,8 @@ export function VisualEditorPrototype({
         setEditorMode("play");
         setNotice(
           projectKind === "world"
-              ? "World Play Modeを開始しました"
-              : "Item Play Modeを開始しました",
+              ? "ワールドの動作確認を開始しました"
+              : "アイテムの動作確認を開始しました",
         );
         return {
           started: true,
@@ -10592,7 +10592,7 @@ export function VisualEditorPrototype({
         };
       }
       setNotice(
-        "Play準備中にScriptまたはSceneが続けて更新されました。更新が落ち着いてからもう一度開始してください",
+        "動作確認準備中にスクリプトまたはシーンが続けて更新されました。更新が落ち着いてからもう一度開始してください",
       );
       return stopped();
     } finally {
@@ -10620,7 +10620,7 @@ export function VisualEditorPrototype({
     // Script modules own blob URLs and event subscriptions that React unmount
     // does not release, so Stop disposes them explicitly.
     scriptRuntime.reset();
-    setNotice("Playを停止しました。Play中の状態を破棄し、編集カメラへ戻りました");
+    setNotice("動作確認を停止しました。動作確認中の状態を破棄し、編集カメラへ戻りました");
   }, [scriptRuntime]);
   enterPlayModeRef.current = enterPlayMode;
   stopPlayModeRef.current = stopPlayMode;
@@ -10685,7 +10685,7 @@ export function VisualEditorPrototype({
 
   const runClassicExport = useCallback(async () => {
     if (!onClassicExport) {
-      setNotice("Classicへの書き出しはデスクトップ版で利用できます");
+      setNotice("コード編集への書き出しはデスクトップ版で利用できます");
       return;
     }
     try {
@@ -10694,7 +10694,7 @@ export function VisualEditorPrototype({
       setNotice(
         error instanceof Error
           ? error.message
-          : "Classicへの書き出しを開始できませんでした",
+          : "コード編集への書き出しを開始できませんでした",
       );
     }
   }, [bundle, onClassicExport]);
@@ -10918,14 +10918,14 @@ export function VisualEditorPrototype({
         case "asset.create-script":
           if (editorMode !== "edit" || importBusy) return false;
           if (!projectPathRef.current) {
-            setNotice("プロジェクトを保存するとScriptを作成できます");
+            setNotice("プロジェクトを保存するとスクリプトを作成できます");
             return false;
           }
           if (
             payload.folderId &&
             !bundle.assets.folders?.[payload.folderId]
           ) {
-            setNotice("作成先のFolderが見つかりません。Folderを開き直してください");
+            setNotice("作成先のフォルダーが見つかりません。フォルダーを開き直してください");
             return false;
           }
           setScriptTemplateFolderId(
@@ -11279,7 +11279,7 @@ export function VisualEditorPrototype({
             <EditorImportMenu
               disabledReason={
                 renderedReadOnly
-                  ? "Playを停止してからImportしてください"
+                  ? "動作確認を停止してから読み込んでください"
                   : assetImportPanelAvailability.disabledReason
               }
               onImportModel={() => globalModelImportInputRef.current?.click()}
@@ -11288,11 +11288,11 @@ export function VisualEditorPrototype({
             <button
               type="button"
               onClick={() => void runClassicExport()}
-              title="Runtime JSONとAssetをXRift Classicプロジェクトへ書き出す"
+              title="制作データと素材を、コードで編集できるXRiftプロジェクトへ書き出します。"
               className="flex items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-3 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle"
             >
               <ExportIcon size={13} aria-hidden="true" />
-              Classicへ書き出す
+              コード編集へ書き出す
             </button>
             <button
               type="button"
@@ -11349,7 +11349,7 @@ export function VisualEditorPrototype({
                 aria-haspopup="menu"
                 aria-expanded={createMenuOpen}
                 onClick={() => setCreateMenuOpen((open) => !open)}
-                title={commandTitle("シーンオブジェクトを作成", "OpenCreateMenu", "Ctrl+Shift+A")}
+                title={commandTitle("シーンEntityを作成", "OpenCreateMenu", "Ctrl+Shift+A")}
                 className="flex h-7 items-center gap-1.5 rounded border border-editor-border bg-editor-surface px-2 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <CreateIcon size={13} aria-hidden="true" />
@@ -11401,7 +11401,7 @@ export function VisualEditorPrototype({
           folderName={
             scriptTemplateFolderId
               ? bundle.assets.folders?.[scriptTemplateFolderId]?.name ??
-                "選択中のFolder"
+                "選択中のフォルダー"
               : "Assets直下"
           }
           selectedEntityName={
@@ -11418,7 +11418,7 @@ export function VisualEditorPrototype({
           accept={ASSET_IMPORT_ACCEPT}
           multiple
           className="hidden"
-          aria-label="Modelまたは3DアセットをImport"
+          aria-label="3Dモデルまたは3Dアセットを読み込み"
           onChange={(event) => {
             handleQueueFiles(Array.from(event.currentTarget.files ?? []));
             event.currentTarget.value = "";
@@ -11561,8 +11561,8 @@ export function VisualEditorPrototype({
             focusedEntity={focusedEntity}
             onFocusChange={setFocusedEntity}
             onExitFocus={() => executeCommand("view.exit-focus")}
-            onViewportFileDrop={() => setNotice("外部Assetは下のAssets Browserへドロップしてください")}
-            onPlayDropAttempt={() => setNotice("Play中もHierarchyまたは追加メニューからEntityを配置できます")}
+            onViewportFileDrop={() => setNotice("外部の素材はAssetsへドロップしてください")}
+            onPlayDropAttempt={() => setNotice("動作確認中もHierarchyまたは追加メニューからEntityを配置できます")}
             onDropRejected={setNotice}
             onOptimizeColliders={handleOptimizeColliders}
             terrainEditing={terrainEditing}
@@ -11686,7 +11686,7 @@ export function VisualEditorPrototype({
               try {
                 const next = setMeshCollision(bundleRef.current.scene, entityId, action);
                 updateScene(() => next);
-                setNotice(action === "exclusive" ? "選んだメッシュだけを当たり判定にしました。Undoで戻せます" : action === "remove" ? "このメッシュの当たり判定を外しました" : "固定の当たり判定に追加しました");
+                setNotice(action === "exclusive" ? "選んだメッシュだけを当たり判定にしました。「元に戻す」で取り消せます" : action === "remove" ? "このメッシュの当たり判定を外しました" : "固定の当たり判定に追加しました");
               } catch (error) { setNotice(error instanceof Error ? error.message : String(error)); }
             }}
             onInspectCollisionEntity={(entityId) => setSceneSelection({ kind: "entity", id: entityId })}
@@ -11730,13 +11730,13 @@ export function VisualEditorPrototype({
             }}
             onSelectPrefabSourceEntity={(entityId) => {
               if (!bundle.scene.entities[entityId]) {
-                setNotice("Prefab source Entityが見つかりません");
+                setNotice("プレハブ元データEntityが見つかりません");
                 return;
               }
               setAssetSelection(null);
               setSceneSettingsOpen(false);
               setSceneSelection({ kind: "entity", id: entityId });
-              setNotice("Prefabの編集元Hierarchyを開きました");
+              setNotice("プレハブの編集元を開きました");
             }}
             onUpdatePrefab={handleUpdatePrefab}
             onSetEntitiesEnabled={handleSetSelectedEntitiesEnabled}
@@ -11792,7 +11792,7 @@ export function VisualEditorPrototype({
             onOpenAssetLocation={async (sourceRelativePath) => {
               if (!projectPath) {
                 setNotice(
-                  "プロジェクトを保存してからAssetsをエクスプローラーで開いてください",
+                  "プロジェクトを保存してから素材の保存先を開いてください",
                 );
                 return;
               }
@@ -11803,14 +11803,14 @@ export function VisualEditorPrototype({
                 );
                 setNotice(
                   sourceRelativePath
-                    ? "アセットの保存場所をエクスプローラーで表示しました"
-                    : "Assetsフォルダーをエクスプローラーで開きました",
+                    ? "アセットの保存先を開きました"
+                    : "素材のフォルダーを開きました",
                 );
               } catch {
                 setNotice(
                   sourceRelativePath
-                    ? "アセットの保存場所をエクスプローラーで表示できませんでした。ソースファイルを確認してください"
-                    : "Assetsフォルダーをエクスプローラーで開けませんでした。プロジェクトの保存場所を確認してください",
+                    ? "アセットの保存先を開けませんでした。ソースファイルを確認してください"
+                    : "素材のフォルダーを開けませんでした。プロジェクトの保存場所を確認してください",
                 );
               }
             }}
@@ -11945,7 +11945,7 @@ export function VisualEditorPrototype({
             projectKind={projectKind}
             disabledReason={
               renderedReadOnly
-                ? "Playを停止してから外部アセットを追加してください"
+                ? "動作確認を停止してから外部アセットを追加してください"
                 : assetImportPanelAvailability.disabledReason
             }
             onClose={() => setExternalStoreOpen(false)}
@@ -12097,8 +12097,8 @@ export function VisualEditorPrototype({
           ) : null}
           <button
             type="button"
-            aria-label="Hierarchy panelの幅を変更"
-            title={commandTitle("Hierarchy幅を変更", "ResizePanel.Hierarchy")}
+            aria-label="Hierarchyの幅を変更"
+            title={commandTitle("Hierarchyの幅を変更", "ResizePanel.Hierarchy")}
             onPointerDown={(event) => beginResize("hierarchy", event)}
             className={`absolute bottom-0 top-0 z-40 w-1 cursor-col-resize bg-transparent hover:bg-violet-400/70 focus:bg-violet-400/70 ${
               viewportMaximized ? "hidden" : ""
@@ -12122,7 +12122,7 @@ export function VisualEditorPrototype({
               slots={pendingMaterialAssignment.slots}
               onCancel={() => {
                 setPendingMaterialAssignment(null);
-                setNotice("Materialの適用を取り消しました");
+                setNotice("マテリアルの適用を取り消しました");
               }}
               onConfirm={(choice) => {
                 const pending = pendingMaterialAssignment;
@@ -12140,8 +12140,8 @@ export function VisualEditorPrototype({
           ) : null}
           <button
             type="button"
-            aria-label="Inspector panelの幅を変更"
-            title={commandTitle("Inspector幅を変更", "ResizePanel.Inspector")}
+            aria-label="Inspectorの幅を変更"
+            title={commandTitle("Inspectorの幅を変更", "ResizePanel.Inspector")}
             onPointerDown={(event) => beginResize("inspector", event)}
             className={`absolute bottom-0 top-0 z-40 w-1 cursor-col-resize bg-transparent hover:bg-violet-400/70 focus:bg-violet-400/70 ${
               viewportMaximized ? "hidden" : ""
@@ -12150,8 +12150,8 @@ export function VisualEditorPrototype({
           />
           <button
             type="button"
-            aria-label="Assets panelの高さを変更"
-            title={commandTitle("Assets高さを変更", "ResizePanel.Assets")}
+            aria-label="Assetsの高さを変更"
+            title={commandTitle("Assetsの高さを変更", "ResizePanel.Assets")}
             onPointerDown={(event) => beginResize("assets", event)}
             className={`absolute z-40 h-1 cursor-row-resize bg-transparent hover:bg-violet-400/70 focus:bg-violet-400/70 ${
               viewportMaximized ? "hidden" : ""

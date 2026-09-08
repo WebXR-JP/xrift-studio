@@ -235,7 +235,7 @@ async function optimizeTexture(
   const shouldResize = operations.has("resize-texture");
   const shouldEncodeKtx2 = operations.has("ktx2-texture");
   if (!shouldResize && !shouldEncodeKtx2) {
-    throw new Error(`${asset.name}にはTexture最適化が選択されていません。`);
+    throw new Error(`${asset.name}にはテクスチャ最適化が選択されていません。`);
   }
 
   const base = textureProcessingSettings(asset);

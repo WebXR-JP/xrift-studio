@@ -107,7 +107,7 @@ export function XriftJsonEditor({
       const raw = await tauri.readTextFile(projectPath, "xrift.json");
       const result = fromJson(raw, projectKind);
       if (!result) {
-        setError("xrift.json の JSON を解析できませんでした。「raw JSON で編集」を試してください。");
+        setError("xrift.jsonの形式に誤りがあります。「JSONで編集」から内容を確認してください。");
       } else {
         setForm(result.form);
         setSaved(result.form);
@@ -210,7 +210,7 @@ export function XriftJsonEditor({
     return (
       <section className="flex flex-1 flex-col items-center justify-center gap-3 bg-white p-8 text-sm">
         <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700">
-          <div className="font-medium">xrift.json を読めませんでした</div>
+          <div className="font-medium">xrift.jsonを読み込めませんでした</div>
           <div className="mt-1 font-mono text-[11px]">{error}</div>
         </div>
         <div className="flex gap-2">
@@ -228,7 +228,7 @@ export function XriftJsonEditor({
             className="flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50"
           >
             <Code2 size={12} strokeWidth={2} />
-            raw JSON で編集
+            JSONで編集
           </button>
         </div>
       </section>
@@ -252,7 +252,7 @@ export function XriftJsonEditor({
             type="button"
             onClick={onOpenRaw}
             className="flex items-center gap-1 rounded border border-zinc-200 bg-white px-2 py-1 text-[11px] text-zinc-600 hover:bg-zinc-50"
-            title="raw JSON として開く"
+            title="JSONとして開く"
           >
             <Code2 size={11} strokeWidth={2} />
             JSON
@@ -286,11 +286,11 @@ export function XriftJsonEditor({
                 type="text"
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
-                placeholder={projectKind === "item" ? "My XR Item" : "My XR World"}
+                placeholder={projectKind === "item" ? "アイテムのタイトル" : "ワールドのタイトル"}
                 className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
               />
             </Field>
-            <Field label="説明" hint="複数行可。マークダウンは非対応。">
+            <Field label="説明" hint="改行できます。Markdownには対応していません。">
               <textarea
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -299,7 +299,7 @@ export function XriftJsonEditor({
                 className="w-full resize-none rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
               />
             </Field>
-            <Field label="サムネイル" hint="distDir からの相対パス。通常 public/thumbnail.png がビルドで dist/ に配置される。">
+            <Field label="サムネイル" hint="出力ディレクトリからの相対パスを指定します。通常はthumbnail.pngです。">
               <input
                 type="text"
                 value={form.thumbnailPath}
@@ -347,7 +347,7 @@ export function XriftJsonEditor({
                       className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm tabular-nums outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
                     />
                   </Field>
-                  <Field label="無限ジャンプ" hint="ON で空中でもジャンプ可能（デモ向き）">
+                  <Field label="無限ジャンプ" hint="オンにすると、空中でもジャンプできます。">
                     <label className="inline-flex cursor-pointer items-center gap-2 pt-1">
                       <input
                         type="checkbox"
@@ -367,24 +367,24 @@ export function XriftJsonEditor({
 
               <Section title="カメラ">
                 <div className="grid grid-cols-2 gap-4">
-                  <Field label="near" hint="これより近いオブジェクトは描画されない">
+                  <Field label="描画の開始距離" hint="これより近いものは表示しません。">
                     <ScrubNumberInput
                       step={0.01}
                       value={form.cameraNear}
-                      ariaLabel="near"
-                      scrubLabel="near"
+                      ariaLabel="描画の開始距離"
+                      scrubLabel="描画の開始距離"
                       onChange={(value) => setForm({ ...form, cameraNear: value })}
                       unstyled
                       className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm tabular-nums outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
                     />
                   </Field>
-                  <Field label="far" hint="これより遠いオブジェクトは描画されない">
+                  <Field label="描画の終了距離" hint="これより遠いものは表示しません。">
                     <ScrubNumberInput
                       step={1}
                       scrubStep={0.5}
                       value={form.cameraFar}
-                      ariaLabel="far"
-                      scrubLabel="far"
+                      ariaLabel="描画の終了距離"
+                      scrubLabel="描画の終了距離"
                       onChange={(value) => setForm({ ...form, cameraFar: value })}
                       unstyled
                       className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm tabular-nums outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
@@ -422,7 +422,7 @@ export function XriftJsonEditor({
           <div className="flex items-start gap-2 rounded-lg bg-brand-50 px-3 py-2.5 text-[11px] text-brand-900">
             <Info size={13} className="mt-0.5 shrink-0 text-brand-600" strokeWidth={2} />
             <div>
-              より詳細な設定（ignore パターンなど）は「JSON」ボタンから raw 編集できます。このフォームで管理していない項目は保存時に保持されます。
+              ignoreなどの詳細設定は「JSON」から編集できます。この画面にない設定も、保存時に保持されます。
             </div>
           </div>
         </div>

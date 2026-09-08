@@ -502,9 +502,9 @@ function modelRecommendations(
       id: `instances:${asset.id}`,
       operation: "instance-model",
       severity: placementCount >= 20 ? "recommended" : "consider",
-      title: `${asset.name}の重複Mesh（${placementCount}部品）をインスタンス化`,
+      title: `${asset.name}の重複メッシュ（${placementCount}部品）をインスタンス化`,
       detail:
-        "同じ形状とマテリアルの静的な部品を、Playと公開先でまとめて描画します。近くの不透明な部品が対象です。動く部品や振る舞いのあるシーンは通常描画を維持します。ファイル容量は変わりません。",
+        "同じ形状とマテリアルの静的な部品を、動作確認と公開先でまとめて描画します。近くの不透明な部品が対象です。動く部品や振る舞いのあるシーンは通常描画を維持します。ファイル容量は変わりません。",
       assetId: asset.id,
       impact: "render",
     });

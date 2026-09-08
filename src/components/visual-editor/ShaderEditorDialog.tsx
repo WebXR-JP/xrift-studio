@@ -79,7 +79,7 @@ export function ShaderEditorDialog({
       onClose();
       return;
     }
-    if (window.confirm("保存していないGLSL変更があります。破棄して閉じますか。")) {
+    if (window.confirm("GLSLに未保存の変更があります。破棄して閉じますか。")) {
       onClose();
     }
   }, [isDirty, onClose]);
@@ -110,7 +110,7 @@ export function ShaderEditorDialog({
           {stage}
         </span>
         <span className="truncate text-[11px] text-slate-500">
-          {sourcePath ?? "Material内のShader"}
+          {sourcePath ?? "マテリアル内のシェーダー"}
         </span>
         {isDirty ? (
           <span
@@ -131,7 +131,7 @@ export function ShaderEditorDialog({
           <button
             type="button"
             onClick={requestClose}
-            aria-label="GLSL editorを閉じる"
+            aria-label="GLSLエディターを閉じる"
             className="rounded-md border border-slate-300 bg-white p-1 text-slate-600 hover:bg-slate-50"
           >
             <CloseIcon size={14} aria-hidden="true" />
@@ -175,7 +175,7 @@ export function ShaderEditorDialog({
       </div>
 
       <footer className="shrink-0 border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
-        GLSLの保存後、参照しているMaterialのプレビューとScene Viewへ反映されます。
+        GLSLの保存後、参照しているマテリアルのプレビューとシーンへ反映されます。
       </footer>
     </section>
   );

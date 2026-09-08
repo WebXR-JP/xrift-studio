@@ -141,8 +141,8 @@ export function getXriftInteractionScope(
 export const XRIFT_INTERACTION_SCOPE_LABELS: Readonly<
   Record<XriftInteractionScope, string>
 > = {
-  viewer: "この端末だけ",
-  world: "押した人だけ",
+  viewer: "この画面だけ",
+  world: "操作した人だけ",
 };
 
 /** The sentence under the picker, which is where the surprise gets removed. */
@@ -150,24 +150,24 @@ export const XRIFT_INTERACTION_SCOPE_NOTES: Readonly<
   Record<XriftInteractionScope, string>
 > = {
   viewer:
-    "押した人の画面だけが変わります。ほかの人には同期されず、これは仕様です。",
+    "操作した人の画面や位置だけが変わります。ほかの人には反映されません。",
   world:
-    "いまは押した人にだけ見えます。グラフは押した人の端末で動き、変更はまだ同期されません。同じ部屋の別の人には元のままに見えます。",
+    "初期状態では操作した人にだけ反映されます。「みんなに見せる」を有効にすると、同じ部屋の参加者にも反映されます。",
 };
 
 export const XRIFT_INTERACTION_TARGET_LABELS: Readonly<
   Record<XriftInteractionTargetKind, string>
 > = {
   entity: "Entity",
-  transform: "Transform",
+  transform: "位置・回転・大きさ",
   animation: "Animation",
-  "audio-source": "Audio Source",
-  light: "Light",
-  particle: "Particle",
-  material: "Material",
-  text: "Text",
-  image: "Image",
-  scene: "Scene（この端末だけ）",
+  "audio-source": "音源",
+  light: "ライト",
+  particle: "パーティクル",
+  material: "マテリアル",
+  text: "テキスト",
+  image: "画像",
+  scene: "シーン（この端末だけ）",
   player: "プレイヤー（この端末だけ）",
 };
 
@@ -287,7 +287,7 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     name: "position",
     label: "位置",
     description:
-      "Entityの位置を、親から見たXYZ（メートル）で設定します。Playを止めると元の位置に戻ります。",
+      "Entityの位置を、親から見たXYZ（メートル）で設定します。動作確認を止めると元の位置に戻ります。",
     kind: "vector3",
     defaultValue: [0, 0, 0],
   },
@@ -296,7 +296,7 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     name: "rotation",
     label: "回転",
     description:
-      "EntityのXYZ回転を度で設定します。Playを止めると元の回転に戻ります。",
+      "EntityのXYZ回転を度で設定します。動作確認を止めると元の回転に戻ります。",
     kind: "vector3",
     defaultValue: [0, 0, 0],
   },
@@ -305,7 +305,7 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     name: "scale",
     label: "大きさ",
     description:
-      "EntityのXYZ倍率を設定します。0にすると見えなくなります。Playを止めると元に戻ります。",
+      "EntityのXYZ倍率を設定します。0にすると見えなくなります。動作確認を止めると元に戻ります。",
     kind: "vector3",
     defaultValue: [1, 1, 1],
   },
@@ -314,7 +314,7 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     name: "playing",
     label: "再生中",
     description:
-      "AnimationのclipをONで再生し、OFFで止めます。押したときに動かすには、AnimationのAutoplayをオフにしておきます。",
+      "モデルのアニメーションを再生・停止します。操作時だけ再生する場合は、開始時に再生するノードを外してください。",
     kind: "bool",
     defaultValue: true,
   },
@@ -323,7 +323,7 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     name: "clip",
     label: "クリップ番号",
     description:
-      "再生するclipを番号で選びます。0がModelの最初のclipです。範囲外の番号は最後のclipになります。",
+      "再生するクリップを番号で選びます。0が3Dモデルの最初のクリップです。範囲外の番号は最後のクリップになります。",
     kind: "float",
     defaultValue: 0,
     min: 0,
@@ -345,7 +345,7 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     target: "animation",
     name: "time",
     label: "再生位置",
-    description: "clipの先頭からの秒数へ移動します。再生中なら、その位置から続けます。",
+    description: "クリップの先頭からの秒数へ移動します。再生中なら、その位置から続けます。",
     kind: "float",
     defaultValue: 0,
     min: 0,
@@ -355,16 +355,16 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
   {
     target: "material",
     name: "baseColor",
-    label: "色",
+    label: "Base Color",
     description:
-      "このEntityが描くMaterialの色を変えます。Entity内のすべてのMaterialが対象です。Playを止めると元へ戻ります。",
+      "このEntityが描くマテリアルの色を変えます。Entity内のすべてのマテリアルが対象です。動作確認を止めると元へ戻ります。",
     kind: "color",
     defaultValue: [1, 1, 1],
   },
   {
     target: "material",
     name: "emissive",
-    label: "発光色",
+    label: "Emissive",
     description:
       "自己発光の色を変えます。Bloomと合わせると光って見えます。値はリニア空間のRGBです。",
     kind: "color",
@@ -373,8 +373,8 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
   {
     target: "material",
     name: "emissiveIntensity",
-    label: "発光の強さ",
-    description: "発光色の強さを変えます。0で消灯します。",
+    label: "Emissive Strength",
+    description: "Emissiveの強さを変えます。0で消灯します。",
     kind: "float",
     defaultValue: 1,
     min: 0,
@@ -384,9 +384,9 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
   {
     target: "material",
     name: "opacity",
-    label: "不透明度",
+    label: "Opacity",
     description:
-      "1で不透明、0で透明になります。1未満にすると半透明として描きます。",
+      "1で不透明、0で透明になります。1未満で半透明に描きます。ガラスのTransmissionとは別です。",
     kind: "float",
     defaultValue: 1,
     min: 0,
@@ -457,7 +457,7 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     name: "exposure",
     label: "露出",
     description:
-      "画面全体の明るさを設定します。1が既定です。Playを止めるとSceneの設定へ戻ります。",
+      "画面全体の明るさを設定します。1が既定です。動作確認を止めるとシーンの設定へ戻ります。",
     kind: "float",
     defaultValue: 1,
     min: 0,
@@ -487,26 +487,24 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
   {
     target: "scene",
     name: "postprocessing",
-    label: "ポストエフェクト",
-    description:
-      "ポストエフェクト全体をONとOFFで切り替えます。押した人の画面にだけ効くので、重い端末のユーザーは切ったまま遊べます。",
+    label: "Post Processing",
+    description: "画面全体の効果を切り替えます。操作した人の画面だけに反映され、各効果の設定は残ります。",
     kind: "bool",
     defaultValue: true,
   },
   {
     target: "scene",
     name: "bloom",
-    label: "発光（Bloom）",
-    description:
-      "明るい部分のにじみを切り替えます。ポストエフェクトが有効なときに効きます。",
+    label: "Bloom",
+    description: "明るい部分の光のにじみを切り替えます。Post Processingも有効にしてください。",
     kind: "bool",
     defaultValue: true,
   },
   {
     target: "scene",
     name: "bloomStrength",
-    label: "発光の強さ",
-    description: "にじみの強さです。0で消え、大きいほど広がります。",
+    label: "Bloom Strength",
+    description: "光のにじみの強さです。0で効果なし、大きくすると強くなります。",
     kind: "float",
     defaultValue: 1,
     min: 0,
@@ -516,8 +514,8 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
   {
     target: "scene",
     name: "bloomRadius",
-    label: "発光の広がり",
-    description: "にじみの広がりです。0で鋭く、1で最も柔らかくなります。",
+    label: "Bloom Radius",
+    description: "光のにじみの広がりです。大きくすると、広く柔らかく見えます。",
     kind: "float",
     defaultValue: 0.4,
     min: 0,
@@ -527,8 +525,8 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
   {
     target: "scene",
     name: "bloomThreshold",
-    label: "発光のしきい値",
-    description: "この明るさを超えた部分だけがにじみます。下げるほど広く光ります。",
+    label: "Bloom Threshold",
+    description: "この明るさを超えた部分にBloomをかけます。下げると、より暗い部分も対象になります。",
     kind: "float",
     defaultValue: 0.8,
     min: 0,
@@ -538,43 +536,40 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
   {
     target: "scene",
     name: "ao",
-    label: "陰影（AO）",
-    description:
-      "物の接地部分に落ちる陰影を切り替えます。重い処理なので、低スペック端末では切れるようにしておきます。",
+    label: "SSAO",
+    description: "接地部分や隙間の陰影を切り替えます。Post Processingも有効にしてください。",
     kind: "bool",
     defaultValue: true,
   },
   {
     target: "scene",
     name: "grading",
-    label: "色味の調整",
-    description:
-      "コントラスト・彩度・色温度の調整を切り替えます。ポストエフェクトが有効なときに効きます。",
+    label: "Color Grading",
+    description: "画面全体の明暗差や色味の調整を切り替えます。Post Processingも有効にしてください。",
     kind: "bool",
     defaultValue: true,
   },
   {
     target: "scene",
     name: "fog",
-    label: "フォグ",
-    description:
-      "距離フォグを切り替えます。OFFにすると遠景がそのまま見えるので、描画負荷ではなく見え方が変わります。",
+    label: "Fog",
+    description: "遠くを霧でかすませる効果を切り替えます。オフにしても遠景の描画は省略されません。",
     kind: "bool",
     defaultValue: true,
   },
   {
     target: "scene",
     name: "fogColor",
-    label: "フォグの色",
-    description: "フォグの色です。値はリニア空間のRGBで保存されます。",
+    label: "Fog Color",
+    description: "霧の色を変えます。RGBはLinearの値です。",
     kind: "color",
     defaultValue: [1, 1, 1],
   },
   {
     target: "scene",
     name: "fogNear",
-    label: "フォグの開始距離",
-    description: "カメラからこの距離を超えたところからフォグが濃くなります。",
+    label: "Fog Near",
+    description: "カメラから、この距離を超えると霧がかかり始めます。",
     kind: "float",
     defaultValue: 10,
     min: 0,
@@ -584,8 +579,8 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
   {
     target: "scene",
     name: "fogFar",
-    label: "フォグの終了距離",
-    description: "この距離でフォグが最も濃くなります。開始距離より手前にはできません。",
+    label: "Fog Far",
+    description: "霧が最も濃くなる距離です。Fog Nearより手前にはできません。",
     kind: "float",
     defaultValue: 100,
     min: 0,
@@ -595,25 +590,24 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
   {
     target: "scene",
     name: "ambient",
-    label: "環境光",
-    description:
-      "全体を一律に持ち上げるアンビエントライトを切り替えます。OFFにするとライトの当たらない面は黒くなります。",
+    label: "Ambient Light",
+    description: "全体を均一に照らすライトを切り替えます。IBLや他のライトは変わりません。",
     kind: "bool",
     defaultValue: true,
   },
   {
     target: "scene",
     name: "ambientColor",
-    label: "環境光の色",
-    description: "環境光の色です。値はリニア空間のRGBで保存されます。",
+    label: "Ambient Light Color",
+    description: "全体を均一に照らすライトの色です。RGBはLinearの値です。",
     kind: "color",
     defaultValue: [1, 1, 1],
   },
   {
     target: "scene",
     name: "ambientIntensity",
-    label: "環境光の強さ",
-    description: "環境光の強度です。0で環境光なしと同じになります。",
+    label: "Ambient Light Intensity",
+    description: "全体を均一に照らすライトの強さです。0で効果なし、大きくすると明るくなります。",
     kind: "float",
     defaultValue: 1,
     min: 0,
@@ -623,26 +617,24 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
   {
     target: "scene",
     name: "skybox",
-    label: "背景のSkybox",
-    description:
-      "Skyboxを背景として表示するかどうかを切り替えます。OFFのあいだは背景が消え、シーンの素の背景色になります。",
+    label: "Skybox",
+    description: "Skyboxの表示を切り替えます。オフにするとシーンの背景色に戻ります。",
     kind: "bool",
     defaultValue: true,
   },
   {
     target: "scene",
     name: "skyboxIbl",
-    label: "SkyboxのIBL",
-    description:
-      "Skybox画像を反射と照明に使うかどうかを切り替えます。切ると反射の計算が減ります。",
+    label: "IBL",
+    description: "Skybox Textureを照明と反射に使うか切り替えます。先にシーンへ画像を設定してください。",
     kind: "bool",
     defaultValue: true,
   },
   {
     target: "scene",
     name: "skyboxExposure",
-    label: "Skyboxの明るさ",
-    description: "背景とIBLの強度です。1が既定です。",
+    label: "Skybox Intensity",
+    description: "背景とIBLの明るさです。1が標準です。Skybox Shaderは対応するものに反映されます。",
     kind: "float",
     defaultValue: 1,
     min: 0,
@@ -652,8 +644,8 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
   {
     target: "scene",
     name: "skyboxRotation",
-    label: "Skyboxの水平回転",
-    description: "Skybox画像を水平方向に回します。度で指定します。",
+    label: "Skybox Rotation",
+    description: "背景とIBLを水平に回転します。単位は度です。Skybox Shaderは対応するものに反映されます。",
     kind: "float",
     defaultValue: 0,
     min: -360,
@@ -663,9 +655,8 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
   {
     target: "scene",
     name: "skyboxImage",
-    label: "Skybox画像",
-    description:
-      "背景とIBLに使う等距円筒（equirectangular）画像のAssetを差し替えます。Assetを選ばないと元の画像へ戻ります。時間をかけた変化はできません。",
+    label: "Skybox Texture",
+    description: "背景とIBLに使う全天球画像を差し替えます。未選択で元の画像へ戻ります。徐々に切り替えることはできません。",
     kind: "asset",
     defaultValue: "",
     assetKinds: ["skybox", "texture"],
@@ -687,7 +678,7 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     name: "playback",
     label: "再生",
     description:
-      "Audio Sourceの再生・一時停止・停止を切り替えます。押したときに鳴らすには、Audio SourceのEnabledはONのまま、Autoplayをオフにしておきます。",
+      "音源の再生・一時停止・停止を切り替えます。操作時だけ鳴らす場合は、音源を有効にしたまま「自動で再生する」をオフにします。",
     kind: "enum",
     defaultValue: "play",
     options: [
@@ -719,15 +710,15 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     target: "light",
     name: "enabled",
     label: "点灯",
-    description: "Lightの点灯と消灯を切り替えます。",
+    description: "ライトの点灯と消灯を切り替えます。",
     kind: "bool",
     defaultValue: true,
   },
   {
     target: "light",
     name: "intensity",
-    label: "強さ",
-    description: "Lightの強度を変えます。",
+    label: "明るさ",
+    description: "0で消灯し、値を大きくすると明るくなります。",
     kind: "float",
     defaultValue: 1,
     min: 0,
@@ -738,7 +729,7 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     target: "light",
     name: "color",
     label: "色",
-    description: "Lightの色を変えます。値はリニア空間のRGBで保存されます。",
+    description: "ライトの色を変えます。値はリニア空間のRGBで保存されます。",
     kind: "color",
     defaultValue: [1, 1, 1],
   },
@@ -746,7 +737,7 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     target: "text",
     name: "enabled",
     label: "表示",
-    description: "このTextだけを表示・非表示にします。Entityごと消すわけではありません。",
+    description: "このテキストだけを表示・非表示にします。Entityごと消すわけではありません。",
     kind: "bool",
     defaultValue: true,
   },
@@ -795,7 +786,7 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     name: "fontId",
     label: "フォント",
     description:
-      "カタログのフォントへ切り替えます。autoで自動選択に戻ります。Projectへ取り込んだフォントAssetを使っているTextでは、切り替えたあいだそのAssetを使いません。",
+      "カタログのフォントへ切り替えます。autoで自動選択に戻ります。プロジェクトへ取り込んだフォント素材を使っているテキストでは、切り替えたあいだその素材を使いません。",
     kind: "string",
     defaultValue: "auto",
   },
@@ -803,7 +794,7 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     target: "text",
     name: "textAlign",
     label: "行揃え",
-    description: "複数行の揃え方を変えます。1行の位置はAnchorが決めます。",
+    description: "複数行の文字揃えを変えます。テキスト全体の位置は基準位置で決まります。",
     kind: "enum",
     defaultValue: "left",
     options: [
@@ -870,7 +861,7 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     name: "enabled",
     label: "表示",
     description:
-      "このImageだけを表示・非表示にします。Entityごと消すわけではありません。",
+      "この画像だけを表示・非表示にします。Entityごと消すわけではありません。",
     kind: "bool",
     defaultValue: true,
   },
@@ -899,7 +890,7 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     name: "teleport",
     label: "テレポート",
     description:
-      "押した人をこの座標へ移動させます。SpawnPointと同じで、足が着く位置を指定します。落ちたときに戻る場所は変わりません。",
+      "操作した人を指定の座標へ移動させます。足が着く位置を指定してください。落下時に戻る場所は変わりません。",
     kind: "vector3",
     defaultValue: [0, 0, 0],
   },

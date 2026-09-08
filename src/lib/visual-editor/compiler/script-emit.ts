@@ -144,7 +144,7 @@ export function planScriptEmission(
       diagnostics.push({
         severity: "blocking",
         code: "script-asset-missing",
-        message: "Script Componentが参照するScript Assetがありません",
+        message: "スクリプトComponentが参照するスクリプトがありません",
         assetId,
       });
       continue;
@@ -154,7 +154,7 @@ export function planScriptEmission(
       diagnostics.push({
         severity: "blocking",
         code: "script-source-unreadable",
-        message: `Script source を読み込めませんでした: ${asset.source.relativePath}`,
+        message: `スクリプト元データを読み込めませんでした: ${asset.source.relativePath}`,
         assetId,
       });
       continue;
@@ -177,9 +177,9 @@ export function planScriptEmission(
             entry.reason === "remote"
               ? `${entry.specifier} はネットワークからのmoduleです。公開ワールドへは出力できません。`
               : entry.reason === "dynamic"
-                ? "動的 import(...) はPlayと公開で使用できません。許可されたmoduleを静的importしてください。"
+                ? "動的 import(...) は動作確認と公開で使用できません。許可されたmoduleを静的importしてください。"
                 : entry.reason === "frame-hook"
-                  ? "useFrameなどR3F frame callback APIはScript単位で例外を隔離できません。defineScript(...).start()が返すupdate(delta)を使用し、@react-three/fiberはnamed importしてください。"
+                  ? "useFrameなどR3F frame callback APIはスクリプト単位で例外を隔離できません。defineScript(...).start()が返すupdate(delta)を使用し、@react-three/fiberはnamed importしてください。"
                   : `${entry.specifier} は公開ワールドで解決できないmoduleです。`,
           assetId,
         });

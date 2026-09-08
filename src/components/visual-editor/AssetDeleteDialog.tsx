@@ -47,7 +47,7 @@ export function AssetDeleteDialog({
   const DeleteIcon = EDITOR_ICONS.delete;
   const DetachIcon = EDITOR_ICONS.close;
 
-  const title = target.kind === "asset" ? "Assetを削除" : "Folderを削除";
+  const title = target.kind === "asset" ? "アセットを削除" : "フォルダーを削除";
   const referenceCount = target.kind === "asset" ? target.references.length : 0;
   // Only an Asset held by other documents can be unlinked from here. A Folder
   // is blocked by its own contents, which the author moves or deletes instead.
@@ -56,8 +56,8 @@ export function AssetDeleteDialog({
     target.kind === "asset"
       ? `${referenceCount}件の参照があります。参照を外すと削除できます。`
       : target.analysis.assetCount > 0
-        ? `${target.analysis.assetCount}件のAssetが入っています。中身を移動してから削除してください。`
-        : `${target.analysis.childFolderCount}件の子Folderがあります。子Folderを移動または削除してから操作してください。`;
+        ? `${target.analysis.assetCount}件の素材が入っています。中身を移動してから削除してください。`
+        : `${target.analysis.childFolderCount}件のサブフォルダーがあります。サブフォルダーを移動または削除してから操作してください。`;
 
   return (
     <EditorDialog
@@ -85,13 +85,13 @@ export function AssetDeleteDialog({
           </p>
           {detachable ? (
             <p className="mt-1 text-xs leading-5 text-slate-500">
-              参照を外すと、Material slotは空になり、Geometryのように参照なしでは成立しないComponentは外れます。Entityは残り、「元に戻す」で復元できます。
+              参照を外すと、マテリアルの割り当てが解除されます。Geometryなど、参照が必要なComponentも削除されます。Entityは残ります。「元に戻す」で復元できます。
             </p>
           ) : null}
 
           {target.kind === "asset" && referenceCount > 0 ? (
             <div className="mt-3 max-h-56 overflow-auto rounded-lg border border-amber-200 bg-amber-50/70 p-2">
-              <ul className="space-y-1.5" aria-label="Assetの参照元">
+              <ul className="space-y-1.5" aria-label="素材の参照元">
                 {target.references.map((reference) => (
                   <li key={assetReferenceKey(reference)} className="rounded border border-amber-100 bg-white px-2.5 py-2">
                     <div className="flex items-center justify-between gap-2">

@@ -182,7 +182,7 @@ export function inspectColliderConfiguration(
         severity: "warning",
         entityId: entity.id,
         entityName: entity.name,
-        message: "Colliderは有効ですが、Entityが無効なので実行時には使われません",
+        message: "衝突判定は有効ですが、Entityが無効なので実行時には使われません",
         fixable: false,
       });
     }
@@ -199,7 +199,7 @@ export function inspectColliderConfiguration(
           entityId: entity.id,
           entityName: entity.name,
           componentId: collider.id,
-          message: "Mesh Colliderの範囲に有効なMesh Rendererがありません",
+          message: "メッシュ衝突判定の範囲に有効なメッシュの描画がありません",
           fixable: false,
         });
       }
@@ -222,7 +222,7 @@ export function inspectColliderConfiguration(
           entityId: entity.id,
           entityName: entity.name,
           componentId: collider.id,
-          message: "明示的なMesh ColliderとRigid Bodyの自動Colliderが重複する可能性があります",
+          message: "明示的なメッシュ衝突判定と物理挙動の自動衝突判定が重複する可能性があります",
           fixable: false,
         });
       }
@@ -233,7 +233,7 @@ export function inspectColliderConfiguration(
           entityId: entity.id,
           entityName: entity.name,
           componentId: collider.id,
-          message: "同じEntityのMesh Colliderは先頭の1つだけが実行・出力されます",
+          message: "同じEntityのメッシュ衝突判定は先頭の1つだけが実行・出力されます",
           fixable: true,
           fixLabel: "重複を無効化",
         });
@@ -249,7 +249,7 @@ export function inspectColliderConfiguration(
           entityId: entity.id,
           entityName: entity.name,
           componentId: collider.id,
-          message: "移動するColliderのCCDが無効です。高速移動時のすり抜け対策を有効にできます",
+          message: "移動する衝突判定のCCDが無効です。高速移動時のすり抜け対策を有効にできます",
           fixable: true,
           fixLabel: "CCDを有効化",
         });
@@ -284,7 +284,7 @@ export function inspectColliderConfiguration(
           entityId: entity.id,
           entityName: entity.name,
           componentId: rigidBody.id,
-          message: "Rigid Bodyの範囲に有効なMeshまたはColliderがありません",
+          message: "物理挙動の範囲に有効なメッシュまたは衝突判定がありません",
           fixable: false,
         });
       } else if (rigidBody.autoColliders !== "none" && !hasEnabledMeshInBody(scene, entity.id)) {
@@ -294,7 +294,7 @@ export function inspectColliderConfiguration(
           entityId: entity.id,
           entityName: entity.name,
           componentId: rigidBody.id,
-          message: "自動Colliderを作成する有効なMeshがBody範囲にありません",
+          message: "自動衝突判定を作成する有効なメッシュがBody範囲にありません",
           fixable: false,
         });
       }
@@ -358,7 +358,7 @@ export function optimizeColliderConfiguration(
         code: diagnostic.code,
         entityId: entity.id,
         componentId: collider.id,
-        message: "Dynamic / Kinematic用にMesh ColliderをConvex Hullへ変更しました",
+        message: "Dynamic / Kinematic用にメッシュ衝突判定をConvex Hullへ変更しました",
       });
       continue;
     }
@@ -374,7 +374,7 @@ export function optimizeColliderConfiguration(
         code: diagnostic.code,
         entityId: entity.id,
         componentId: collider.id,
-        message: "出力時に折りたたまれる重複Mesh Colliderを無効化しました",
+        message: "出力時に折りたたまれる重複メッシュ衝突判定を無効化しました",
       });
       continue;
     }
@@ -416,7 +416,7 @@ export function optimizeColliderConfiguration(
         code: diagnostic.code,
         entityId: entity.id,
         componentId: collider.id,
-        message: "Colliderの摩擦・反発値を有効範囲へ正規化しました",
+        message: "衝突判定の摩擦・反発値を有効範囲へ正規化しました",
       });
     }
   }

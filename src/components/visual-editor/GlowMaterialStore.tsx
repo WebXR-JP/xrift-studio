@@ -81,13 +81,13 @@ export function GlowMaterialStore({
     try {
       const result = await onAdd(selected, tint);
       setAddedMessage(
-        `「${result.entityName}」をSceneへ追加しました。大きさはTransform、色や強さはMaterial Inspectorで変えられます。`,
+        `「${result.entityName}」をシーンへ追加しました。大きさや発光色はInspectorで調整できます。`,
       );
     } catch (reason) {
       setError(
         reason instanceof Error && reason.message.trim()
           ? reason.message
-          : "照明を追加できませんでした",
+          : "発光Entityを追加できませんでした",
       );
     } finally {
       setAdding(false);
@@ -98,20 +98,20 @@ export function GlowMaterialStore({
     <>
       <section
         className="flex min-w-0 flex-1 flex-col border-r border-slate-200"
-        aria-label="発光オブジェクト一覧"
+        aria-label="発光Entity一覧"
       >
         <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-2.5">
           <div className="mb-2 flex items-start justify-between gap-3">
             <div>
               <h3 className="text-xs font-semibold text-slate-900">
-                発光オブジェクト
+                発光Entity
               </h3>
               <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                ネオンのようにBloomで光るオブジェクトです。ライトを増やさずに置けます
+                Bloomでネオンのように光がにじむEntityです
               </p>
             </div>
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">
-              {GLOW_FIXTURE_SHAPES.length} fixtures
+              {GLOW_FIXTURE_SHAPES.length}種類
             </span>
           </div>
           <label className="relative block">
@@ -119,7 +119,7 @@ export function GlowMaterialStore({
               size={14}
               className="pointer-events-none absolute left-2.5 top-2 text-slate-400"
             />
-            <span className="sr-only">発光オブジェクトを検索</span>
+            <span className="sr-only">発光Entityを検索</span>
             <input
               value={query}
               onChange={(event) => setQuery(event.currentTarget.value)}
@@ -132,7 +132,7 @@ export function GlowMaterialStore({
           {visible.length === 0 ? (
             <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center text-xs text-slate-500">
               <Search size={22} />
-              <p>条件に合う照明がありません</p>
+              <p>条件に合う発光Entityがありません</p>
             </div>
           ) : (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2.5">
@@ -177,14 +177,11 @@ export function GlowMaterialStore({
             </div>
           )}
         </div>
-        <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
-          カードは実際のMaterialをWebGLで描画しています。Bloomの光り方は右の詳細で確認できます。
-        </footer>
       </section>
 
       <aside
         className="scrollbar-thin w-[350px] shrink-0 overflow-auto bg-white p-4"
-        aria-label="選択した照明の詳細"
+        aria-label="選択した発光Entityの詳細"
       >
         {selected ? (
           <div className="space-y-4">
@@ -233,17 +230,17 @@ export function GlowMaterialStore({
               </dd>
               <dt className="text-slate-400">発光強度</dt>
               <dd className="text-slate-700">{summary.strength}</dd>
-              <dt className="text-slate-400">Bloom閾値</dt>
+              <dt className="text-slate-400">Bloom Threshold</dt>
               <dd className="text-slate-700">{summary.threshold}</dd>
             </dl>
-            <Notice text="発光強度は色ごとに決めています。同じ明るさに見えても、濃い色ほどBloomが拾う輝度は低いためです。" />
+            <Notice text="発光の強さは色に合わせて設定しています。" />
             {bloomActive ? null : (
               <Notice
                 tone="warning"
-                text="このSceneはポストエフェクトかBloomが無効なので、置いても光りません。Scene設定から有効にしてください。"
+                text="光のにじみを出すには、シーン設定でPost ProcessingとBloomを有効にしてください。"
               />
             )}
-            <Notice text="追加するとSceneへEntityが1つ増えます。大きさや向きはTransform、色や強さはMaterial Inspectorで変えられます。" />
+            <Notice text="大きさや向きはEntity、色や明るさはマテリアルで調整します。" />
             {disabledReason ? (
               <Notice tone="warning" text={disabledReason} />
             ) : null}
@@ -277,7 +274,7 @@ export function GlowMaterialStore({
                   追加中
                 </>
               ) : (
-                `${selected.label}をSceneへ追加`
+                `${selected.label}をシーンへ追加`
               )}
             </button>
           </div>

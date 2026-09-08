@@ -126,7 +126,7 @@ export function VramEstimateDialog({
               </h2>
             </div>
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              公開対象のTexture・Model・Audioから、ロード容量とGPU使用量を概算しています。
+              公開するテクスチャ・モデル・音声から、読み込み容量とVRAM使用量を概算します。
             </p>
           </div>
           <button
@@ -144,13 +144,13 @@ export function VramEstimateDialog({
         <div data-app-modal-body className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <SummaryCard
-              label="Asset VRAM"
+              label="素材 VRAM"
               value={formatVramBytes(estimate.assetBytes)}
               detail={`${estimate.textureCount} Texture / ${estimate.modelCount} Model`}
               icon={<Box size={16} aria-hidden="true" />}
             />
             <SummaryCard
-              label="初回Assetロード"
+              label="初回の読み込み"
               value={formatVramBytes(estimate.loadBytes)}
               detail={`10 Mbpsで約${formatLoadSeconds(estimate.mobileLoadSeconds)}`}
               icon={<Download size={16} aria-hidden="true" />}
@@ -188,7 +188,7 @@ export function VramEstimateDialog({
                 ]}
               </span>
               <div className="mt-2 text-xs leading-5 text-slate-500">
-                VRAM 256 MB、初回Asset 20 MB以下を余裕ありとするStudio基準
+                VRAM 256 MB、初回素材 20 MB以下を余裕ありとするStudio基準
               </div>
             </div>
           </div>
@@ -207,7 +207,7 @@ export function VramEstimateDialog({
             </span>
             {estimate.unknownDimensionTextureCount > 0 ? (
               <span className="rounded-full bg-amber-100 px-2.5 py-1.5 text-amber-800">
-                解像度不明: {estimate.unknownDimensionTextureCount} Texture
+                解像度不明: {estimate.unknownDimensionTextureCount} テクスチャ
               </span>
             ) : null}
           </div>
@@ -219,11 +219,11 @@ export function VramEstimateDialog({
                   VRAM使用量が多い順
                 </h3>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  同じAssetの複数配置はGPUリソースを共有する前提です。
+                  同じ素材の複数配置はGPUリソースを共有する前提です。
                 </p>
               </div>
               <span className="text-xs text-slate-400">
-                {estimate.contributions.length} Assets
+                {estimate.contributions.length} 素材
               </span>
             </div>
             <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
@@ -247,7 +247,7 @@ export function VramEstimateDialog({
                             <div className="min-w-0 truncate text-sm font-semibold text-slate-800">
                               {contribution.name}
                               <span className="ml-2 text-xs font-normal text-slate-400">
-                                {contribution.kind === "texture" ? "Texture" : "Model"}
+                                {contribution.kind === "texture" ? "テクスチャ" : "3Dモデル"}
                                 {contribution.referenceCount > 1
                                   ? ` / ${contribution.referenceCount}参照`
                                   : ""}
@@ -273,7 +273,7 @@ export function VramEstimateDialog({
                 })
               ) : (
                 <div className="px-4 py-8 text-center text-sm text-slate-500">
-                  VRAMを概算できる公開対象Assetはありません。
+                  VRAMを概算できる公開対象素材はありません。
                 </div>
               )}
             </div>
@@ -284,14 +284,14 @@ export function VramEstimateDialog({
               <div>
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                   <Download size={16} className="text-sky-600" aria-hidden="true" />
-                  ロード容量が多い順
+                  読み込み容量が多い順
                 </h3>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  公開時にコピーされるAsset原本の合計です。アプリ本体と通信オーバーヘッドは含みません。
+                  公開時にコピーされる素材原本の合計です。アプリ本体と通信オーバーヘッドは含みません。
                 </p>
               </div>
               <span className="text-xs text-slate-400">
-                {estimate.loadContributions.length} Assets
+                {estimate.loadContributions.length} 素材
               </span>
             </div>
             <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
@@ -323,10 +323,10 @@ export function VramEstimateDialog({
                               {contribution.name}
                               <span className="ml-2 text-xs font-normal text-slate-400">
                                 {contribution.kind === "texture"
-                                  ? "Texture"
+                                  ? "テクスチャ"
                                   : contribution.kind === "model"
-                                    ? "Model"
-                                    : "Audio"}
+                                    ? "3Dモデル"
+                                    : "音声"}
                               </span>
                             </div>
                             <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">
@@ -349,7 +349,7 @@ export function VramEstimateDialog({
                 })
               ) : (
                 <div className="px-4 py-8 text-center text-sm text-slate-500">
-                  ロード容量を概算できる公開対象Assetはありません。
+                  読み込み容量を概算できる公開対象素材はありません。
                 </div>
               )}
             </div>
@@ -432,7 +432,7 @@ export function VramEstimateDialog({
                         {recommendation.estimatedLoadSavingBytes &&
                         recommendation.estimatedLoadSavingBytes > 0 ? (
                           <span className="rounded-full bg-sky-100 px-2 py-1 text-xs font-semibold text-sky-800">
-                            ロード 最大 約
+                            読み込み 最大約
                             {formatVramBytes(
                               recommendation.estimatedLoadSavingBytes,
                             )}削減
@@ -441,7 +441,7 @@ export function VramEstimateDialog({
                         {recommendation.estimatedVramSavingBytes &&
                         recommendation.estimatedVramSavingBytes > 0 ? (
                           <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">
-                            VRAM 最大 約
+                            VRAM 最大約
                             {formatVramBytes(
                               recommendation.estimatedVramSavingBytes,
                             )}削減
@@ -460,7 +460,7 @@ export function VramEstimateDialog({
                     {actionable ? (
                       <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-violet-700">
                         <Sparkles size={13} aria-hidden="true" />
-                        {recommendation.operation === "instance-model" ? "選択して適用すると有効になります。モデルの設定から解除できます" : "選択するとStudio内で変換して同じAssetへ反映します"}
+                        {recommendation.operation === "instance-model" ? "選択して適用すると有効になります。モデルの設定から解除できます" : "選択するとStudio内で変換して同じ素材へ反映します"}
                       </p>
                     ) : null}
                       </div>
@@ -499,7 +499,7 @@ export function VramEstimateDialog({
               <CheckCircle2 size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
               <div>
                 <div className="font-semibold">
-                  {applyResult.optimizedAssetCount}件のAssetを最適化しました
+                  {applyResult.optimizedAssetCount}件の素材を最適化しました
                 </div>
                 <div className="mt-0.5 text-xs">
                   {applyResult.beforeBytes > 0 ? <>原本 {formatVramBytes(applyResult.beforeBytes)} → 変換後 {formatVramBytes(applyResult.afterBytes)}</> : "描画設定を更新しました。ファイル容量は変わりません。"}
@@ -507,7 +507,7 @@ export function VramEstimateDialog({
                 {applyResult.skipped && applyResult.skipped.length > 0 ? (
                   <details className="mt-1.5 text-xs">
                     <summary className="cursor-pointer font-semibold">
-                      {applyResult.skipped.length}件は見送りました
+                      {applyResult.skipped.length}件は対象外でした
                     </summary>
                     <ul className="mt-1 space-y-0.5">
                       {applyResult.skipped.map((entry) => (
@@ -525,7 +525,7 @@ export function VramEstimateDialog({
             <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
               {applyError}
               <div className="mt-1 text-xs">
-                元のAssetは変更されていません。選択内容を確認して再試行できます。
+                元の素材は変更されていません。選択内容を確認して再試行できます。
               </div>
             </div>
           ) : null}
@@ -533,8 +533,8 @@ export function VramEstimateDialog({
           <div className="mt-6 flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
             <Info size={15} className="mt-0.5 shrink-0 text-slate-500" aria-hidden="true" />
             <p className="text-xs leading-5 text-slate-600">
-              これは実測値ではありません。ロード時間はAsset原本と回線速度からの単純計算で、キャッシュ、CDN、アプリ本体、HTTP処理を含みません。
-              VRAMはブラウザ、GPU、画面解像度、影、ポストエフェクト、KTX2の転送先形式で変動します。
+              これは実測値ではありません。ロード時間は素材原本と回線速度からの単純計算で、キャッシュ、CDN、アプリ本体、HTTP処理を含みません。
+              VRAMはブラウザ、GPU、画面解像度、影、Post Processing、KTX2の転送先形式で変動します。
               PNG・JPEG・WebPはGPU上のRGBA展開を基準にし、mipmap有効時は約33%を加算しています。
             </p>
           </div>
@@ -544,7 +544,7 @@ export function VramEstimateDialog({
           <div className="text-xs text-slate-500">
             {selectedIds.size > 0
               ? `${selectedIds.size}件の改善を選択中`
-              : "チェックした改善だけをAssetへ反映します"}
+              : "チェックした改善だけを素材へ反映します"}
           </div>
           <div className="flex items-center gap-2">
           {onApplyOptimizations && actionableRecommendations.length > 0 ? (
@@ -565,7 +565,7 @@ export function VramEstimateDialog({
                     setApplyError(
                       error instanceof Error
                         ? error.message
-                        : "Assetを最適化できませんでした。",
+                        : "素材を最適化できませんでした。",
                     ),
                   )
                   .finally(() => {

@@ -1,3 +1,7 @@
+import {
+  MATERIAL_EXTENSION_DESCRIPTORS,
+  type MaterialExtensionName,
+} from "../../lib/visual-editor/material-extension-registry";
 import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
 import { readImageDimensions } from "../../lib/visual-editor/gltf-derived-assets";
 import { readProjectAssetBytes, textureProcessingSettings } from "../../lib/visual-editor/texture-processing";
@@ -5,6 +9,7 @@ import { normalizeTextureImportSettings } from "../../lib/visual-editor/asset-ma
 import {
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
   type DragEvent,
@@ -130,7 +135,7 @@ function colorToThree(value: Color3 | undefined, fallback: Color3): Color {
 function sourceLabel(asset: SceneAsset): string {
   if (asset.source.kind === "builtin") return `Builtin / ${asset.source.key}`;
   if (asset.source.kind === "project") return asset.source.relativePath;
-  return "Document内の設定（画像データなし）";
+  return "画像データなし";
 }
 
 function MaterialPreviewScene({
@@ -407,7 +412,7 @@ function AssetThumbnailFallback({ asset }: { asset: SceneAsset }) {
     asset.status === "invalid"
       ? "解析失敗・再生成"
       : asset.status === "missing"
-        ? "ソース未検出・再取込"
+        ? "元ファイルなし・再インポート"
         : asset.kind === "audio"
           ? asset.importMetadata.sourceFormat.toUpperCase()
           : asset.kind === "script"
@@ -445,7 +450,7 @@ function PrefabQuickEditor({
   if (!document) {
     return (
       <div className="rounded border border-rose-200 bg-rose-50 p-3 text-xs leading-5 text-rose-800">
-        Prefab documentが見つかりません。Assetの参照先を確認してください。
+        プレハブが見つかりません。参照先を確認してください。
       </div>
     );
   }
@@ -469,10 +474,10 @@ function PrefabQuickEditor({
           {asset.name}
         </h3>
         <p className="mt-1 text-xs text-slate-500">
-          {rows.length} Entity・{document.rootEntityIds.length} Root
+          {rows.length} Entity・{document.rootEntityIds.length} 最上位
         </p>
       </div>
-      <EditorSection title="Prefab Hierarchy">
+      <EditorSection title="プレハブの構造">
         <div className="max-h-80 overflow-y-auto rounded border border-slate-200 bg-slate-50 p-1">
           {rows.map(({ id, depth }) => {
             const entity = document.entities[id];
@@ -487,7 +492,7 @@ function PrefabQuickEditor({
                 style={{ paddingLeft: `${8 + depth * 14}px` }}
                 title={
                   sourceEntityId
-                    ? `${entity.name}をsource Hierarchyで開く`
+                    ? `${entity.name}の元のEntityを開く`
                     : entity.name
                 }
               >
@@ -497,7 +502,7 @@ function PrefabQuickEditor({
           })}
         </div>
         <p className="text-xs leading-4 text-slate-500">
-          Entityを選ぶと編集元のHierarchyへ移動します。構造を変更した後はUpdateでPrefabへ反映します。
+          選ぶと編集元のHierarchyへ移動します。編集後は「プレハブに反映」を押してください。
         </p>
       </EditorSection>
       <div className="grid grid-cols-2 gap-2">
@@ -507,7 +512,7 @@ function PrefabQuickEditor({
           onClick={() => firstSourceRoot && onSelectSourceEntity(firstSourceRoot)}
           className="rounded border border-slate-300 bg-white px-2 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40"
         >
-          Sourceを開く
+          元のEntityを開く
         </button>
         <button
           type="button"
@@ -515,7 +520,7 @@ function PrefabQuickEditor({
           onClick={onUpdate}
           className="rounded border border-violet-300 bg-violet-50 px-2 py-2 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-40"
         >
-          PrefabをUpdate
+          プレハブに反映
         </button>
       </div>
     </div>
@@ -571,12 +576,12 @@ function AudioAssetInspector({
           </p>
         </div>
       </div>
-      <EditorSection title="Source">
+      <EditorSection title="元ファイル">
         <p className="break-all text-xs leading-4 text-slate-600">
           {sourceLabel(asset)}
         </p>
         <p className="text-[11px] leading-4 text-slate-500">
-          Audio Sourceから参照され、実行・公開時に管理済み音声としてコピーされます。
+          音源に割り当てる音声ファイルです。
         </p>
       </EditorSection>
       <EditorSection title="試聴">
@@ -590,7 +595,7 @@ function AudioAssetInspector({
         ) : null}
         {source.status === "failed" ? (
           <p className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs leading-4 text-amber-800">
-            このAudio Assetの再生用ファイルを読み込めませんでした。Assetsの保存先を確認して、再取込してください。
+            音声を読み込めません。保存先を確認し、読み込み直してください。
           </p>
         ) : null}
       </EditorSection>
@@ -663,7 +668,7 @@ function ProjectAssetThumbnail({
       <span className="text-xs font-medium">
         {state.status === "loading"
           ? "プレビュー準備中"
-          : "プレビュー読込失敗・再生成"}
+          : "プレビューの読み込み失敗・再生成"}
       </span>
     </div>
   );
@@ -782,7 +787,7 @@ function MaterialFallbackThumbnail({
           projectPath={projectPath}
         />
         <span className="absolute bottom-1 right-1 rounded bg-slate-950/75 px-1.5 py-0.5 text-[9px] font-semibold text-white backdrop-blur">
-          Material
+          マテリアル
         </span>
       </div>
     );
@@ -803,7 +808,7 @@ function MaterialFallbackThumbnail({
         <Icon size={20} aria-hidden="true" />
       </span>
       <span className="rounded bg-white/75 px-1.5 py-0.5 text-[10px] font-semibold backdrop-blur">
-        Material
+        マテリアル
       </span>
     </div>
   );
@@ -811,14 +816,19 @@ function MaterialFallbackThumbnail({
 
 function EditorSection({
   title,
+  reading,
   children,
 }: {
   title: string;
+  reading?: string;
   children: React.ReactNode;
 }) {
   return (
     <section className="rounded-md border border-slate-200 bg-white p-2 shadow-sm">
-      <h4 className="mb-2 text-[13px] font-semibold text-slate-800">{title}</h4>
+      <h4 className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13px] font-semibold text-slate-800">
+        <span lang={reading ? "en" : undefined}>{title}</span>
+        {reading ? <span lang="ja" className="text-[11px] font-normal text-slate-500">{reading}</span> : null}
+      </h4>
       <div className="space-y-2">{children}</div>
     </section>
   );
@@ -863,6 +873,7 @@ function RangeControl({
       </span>
       <input
         type="range"
+        aria-label={`${label}のスライダー`}
         min={min}
         max={max}
         step={step}
@@ -997,7 +1008,6 @@ function Color3Control({
 }
 
 function MaterialExtensionSection({
-  title,
   extensionName,
   description,
   enabled,
@@ -1005,14 +1015,14 @@ function MaterialExtensionSection({
   onToggle,
   children,
 }: {
-  title: string;
-  extensionName: string;
+  extensionName: MaterialExtensionName;
   description: string;
   enabled: boolean;
   readOnly: boolean;
   onToggle: (enabled: boolean) => void;
   children: React.ReactNode;
 }) {
+  const { label: title, reading } = MATERIAL_EXTENSION_DESCRIPTORS[extensionName];
   return (
     <section
       className={`rounded-md border bg-white p-2 shadow-sm transition-colors ${
@@ -1021,11 +1031,11 @@ function MaterialExtensionSection({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h4 className="text-[13px] font-semibold text-slate-800">{title}</h4>
+          <h4 title={extensionName} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13px] font-semibold text-slate-800">
+            <span lang="en">{title}</span>
+            <span lang="ja" className="text-[11px] font-normal text-slate-500">{reading}</span>
+          </h4>
           <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{description}</p>
-          <code className="mt-1 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">
-            {extensionName}
-          </code>
         </div>
         <label className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-slate-600">
           <span>{enabled ? "有効" : "無効"}</span>
@@ -1095,6 +1105,7 @@ function TextureVectorControl({
 function TextureSlot({
   label,
   description,
+  inputHint,
   value,
   textures,
   projectPath,
@@ -1105,6 +1116,7 @@ function TextureSlot({
 }: {
   label: string;
   description: string;
+  inputHint?: string;
   value?: MaterialTextureInfo;
   textures: TextureAsset[];
   projectPath?: string;
@@ -1115,6 +1127,7 @@ function TextureSlot({
 }) {
   const [dropActive, setDropActive] = useState(false);
   const [showTransform, setShowTransform] = useState(true);
+  const helpId = useId();
   const selectedTexture = value
     ? textures.find((texture) => texture.id === value.textureAssetId)
     : undefined;
@@ -1185,11 +1198,12 @@ function TextureSlot({
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-xs font-semibold text-slate-800">{label}</p>
-          <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{description}</p>
+          <p id={helpId} className="mt-0.5 text-[11px] leading-4 text-slate-500">{description}</p>
+          {inputHint ? <p id={`${helpId}-format`} className="mt-1 text-[11px] leading-4 text-slate-500">{inputHint}</p> : null}
         </div>
         {value?.transform ? (
           <span className="shrink-0 rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-800">
-            タイリング {transform.scale[0]} × {transform.scale[1]}
+            繰り返し {transform.scale[0]} × {transform.scale[1]}
           </span>
         ) : null}
       </div>
@@ -1205,9 +1219,11 @@ function TextureSlot({
           )}
         </div>
         <label className="block min-w-0 text-[11px] text-slate-500">
-          Texture Asset
+          テクスチャ
           <select
             value={value?.textureAssetId ?? ""}
+            aria-label={`${label}のテクスチャ`}
+            aria-describedby={inputHint ? `${helpId} ${helpId}-format` : helpId}
             disabled={disabled || textures.length === 0}
             onChange={(event) => {
               const textureAssetId = event.currentTarget.value;
@@ -1238,12 +1254,12 @@ function TextureSlot({
 
       {textures.length === 0 ? (
         <p className="mt-2 rounded border border-dashed border-slate-300 bg-white px-2 py-1.5 text-[11px] leading-4 text-slate-500">
-          利用できるTexture Assetがありません。Assetsへ画像をインポートしてください。
+          Assetsに画像を追加してください。
         </p>
       ) : null}
       {missingReference && value ? (
         <p className="mt-2 text-[11px] font-medium leading-4 text-rose-700">
-          参照先のTexture Assetが見つかりません。別のTextureを選ぶか解除してください。
+          画像が見つかりません。選び直すか、割り当てを解除してください。
         </p>
       ) : null}
       {displayedPreviewStatus ? (
@@ -1261,7 +1277,7 @@ function TextureSlot({
             ? "シーンビューに反映済み"
             : displayedPreviewStatus === "loading"
               ? "シーンビューへ反映中…"
-              : "シーンビューでTextureを読み込めませんでした。Texture設定を確認してください。"}
+              : "画像を表示できません。テクスチャの設定を確認してください。"}
         </p>
       ) : null}
 
@@ -1269,7 +1285,7 @@ function TextureSlot({
         <div className="mt-2 space-y-2 border-t border-slate-200 pt-2">
           <div className="grid grid-cols-[64px_minmax(0,1fr)] gap-2">
             <label className="block text-[11px] text-slate-500">
-              UV Set
+              UVセット
               <ScrubNumberInput
                 min={0}
                 step={1}
@@ -1277,15 +1293,15 @@ function TextureSlot({
                 value={value.texCoord}
                 disabled={disabled}
                 size="sm"
-                ariaLabel="UV Set"
-                scrubLabel="UV Set"
+                ariaLabel="UVセット"
+                scrubLabel="UVセット"
                 onChange={(texCoord) =>
                   onChange({ ...value, texCoord: Math.round(texCoord) })
                 }
               />
             </label>
             <div className="min-w-0 text-[11px] text-slate-500">
-              <span className="block">Sampler参照</span>
+              <span className="block">テクスチャの読み取り設定</span>
               <p className="mt-1 truncate rounded border border-slate-200 bg-white px-2 py-1.5 text-slate-700" title={selectedTexture ? `${selectedTexture.importSettings.sampler.wrapS} / ${selectedTexture.importSettings.sampler.wrapT} / ${selectedTexture.importSettings.sampler.minFilter}` : "参照先なし"}>
                 {selectedTexture
                   ? `${selectedTexture.importSettings.sampler.wrapS} · ${selectedTexture.importSettings.sampler.wrapT} · ${selectedTexture.importSettings.sampler.minFilter}`
@@ -1308,7 +1324,7 @@ function TextureSlot({
               onClick={() => selectedTexture && onOpenTexture(selectedTexture.id)}
               className="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Texture設定を開く
+              テクスチャ設定を開く
             </button>
             <button
               type="button"
@@ -1324,7 +1340,7 @@ function TextureSlot({
             <div className="space-y-2 rounded border border-sky-200 bg-white p-2">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-[11px] leading-4 text-slate-500">
-                  glTF KHR_texture_transform互換。タイリングを2にするとTextureが2回繰り返されます。
+                  2にすると画像を2回並べます。
                 </p>
                 <button
                   type="button"
@@ -1337,27 +1353,27 @@ function TextureSlot({
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <TextureVectorControl
-                  label="Offset"
+                  label="ずらす量"
                   value={transform.offset}
                   disabled={disabled}
                   onChange={(offset) => updateTransform({ offset })}
                 />
                 <TextureVectorControl
-                  label="タイリング"
+                  label="繰り返し"
                   value={transform.scale}
                   disabled={disabled}
                   onChange={(scale) => updateTransform({ scale })}
                 />
               </div>
               <label className="block text-[11px] font-medium text-slate-500">
-                Rotation (°)
+                回転（度）
                 <ScrubNumberInput
                   step={1}
                   value={Number(((transform.rotation * 180) / Math.PI).toFixed(2))}
                   disabled={disabled}
                   size="sm"
-                  ariaLabel="Rotation (°)"
-                  scrubLabel="Rotation"
+                  ariaLabel="回転（度）"
+                  scrubLabel="回転"
                   onChange={(degrees) =>
                     updateTransform({ rotation: (degrees * Math.PI) / 180 })
                   }
@@ -1368,7 +1384,7 @@ function TextureSlot({
               (selectedTexture.importSettings.sampler.wrapS !== "repeat" ||
                 selectedTexture.importSettings.sampler.wrapT !== "repeat") ? (
                 <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] leading-4 text-amber-800">
-                  繰り返し表示にはTexture設定のWrap S / TをRepeatにしてください。
+                  繰り返す方向の表示方法を「繰り返す」にしてください。
                 </p>
               ) : null}
             </div>
@@ -1378,7 +1394,7 @@ function TextureSlot({
 
       {dropActive ? (
         <span className="pointer-events-none absolute inset-1 flex items-center justify-center rounded bg-violet-600/95 px-2 text-center text-xs font-semibold text-white shadow-sm">
-          {label}へTextureを設定
+          {label}へテクスチャを設定
         </span>
       ) : null}
     </div>
@@ -1476,47 +1492,47 @@ export function OpenBrushMaterialQuickEditor({
             {asset.name}
           </h3>
           <p className="text-xs font-medium text-violet-700">
-            OpenBrush Brush Material
+            Open Brushのマテリアル
           </p>
           <p className="mt-2 text-xs leading-4 text-slate-600">
-            three-icosaのGLSL・uniform・brush textureを保持する専用Materialです。
+            Open Brushの筆跡を再現するマテリアルです。
           </p>
           <p className="mt-2 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600">
             {referenceSummary && referenceSummary.slotCount > 0
-              ? `共有中: ${referenceSummary.entityCount} Entity / ${referenceSummary.slotCount} Slot`
+              ? `使用箇所: ${referenceSummary.entityCount} Entity / ${referenceSummary.slotCount}スロット`
               : "シーン内の参照はありません"}
           </p>
         </div>
       </div>
 
-      <EditorSection title="Brush preset">
+      <EditorSection title="ブラシの種類">
         <dl className="grid grid-cols-[92px_minmax(0,1fr)] gap-x-2 gap-y-1.5 text-xs">
-          <dt className="text-slate-500">Brush</dt>
+          <dt className="text-slate-500">ブラシ</dt>
           <dd className="font-semibold text-slate-800">{shader.brushName}</dd>
-          <dt className="text-slate-500">Renderer</dt>
+          <dt className="text-slate-500">描画方式</dt>
           <dd className="text-slate-700">{shader.rendererVersion}</dd>
-          <dt className="text-slate-500">glTF Material</dt>
+          <dt className="text-slate-500">glTF マテリアル</dt>
           <dd className="text-slate-700">#{shader.sourceMaterialIndex}</dd>
           {shader.brushGuid ? (
             <>
-              <dt className="text-slate-500">Brush GUID</dt>
+              <dt className="text-slate-500">ブラシのGUID</dt>
               <dd className="break-all font-mono text-[10px] text-slate-700">
                 {shader.brushGuid}
               </dd>
             </>
           ) : null}
-          <dt className="text-slate-500">Source Model</dt>
+          <dt className="text-slate-500">元の3Dモデル</dt>
           <dd className="break-all font-mono text-[10px] text-slate-700">
             {asset.importedFromModel?.modelAssetId ?? "—"}
           </dd>
         </dl>
       </EditorSection>
 
-      <EditorSection title="Resolved custom shader">
+      <EditorSection title="使用中のシェーダー">
         {runtimeInfo ? (
           <div className="space-y-2 text-xs">
             <dl className="grid grid-cols-[92px_minmax(0,1fr)] gap-x-2 gap-y-1.5">
-              <dt className="text-slate-500">Material</dt>
+              <dt className="text-slate-500">マテリアル</dt>
               <dd
                 className={`font-semibold ${
                   runtimeInfo.pbrFallback
@@ -1526,7 +1542,7 @@ export function OpenBrushMaterialQuickEditor({
               >
                 {runtimeInfo.materialType} / {runtimeInfo.pbrFallback ? "PBR fallback" : "適用済み"}
               </dd>
-              <dt className="text-slate-500">Shader</dt>
+              <dt className="text-slate-500">シェーダー</dt>
               <dd className="text-slate-700">
                 {runtimeInfo.pbrFallback
                   ? "glTF 2.0 PBR"
@@ -1536,11 +1552,11 @@ export function OpenBrushMaterialQuickEditor({
               </dd>
               {runtimeInfo.pbrFallback ? (
                 <>
-                  <dt className="text-slate-500">Fallback</dt>
+                  <dt className="text-slate-500">代替表示</dt>
                   <dd className="text-amber-700">
                     {formatOpenBrushFallbackReason(runtimeInfo.pbrFallback.reason)}
                   </dd>
-                  <dt className="text-slate-500">Brush</dt>
+                  <dt className="text-slate-500">ブラシ</dt>
                   <dd className="break-all font-mono text-[10px] text-slate-700">
                     {runtimeInfo.pbrFallback.brushName}
                   </dd>
@@ -1551,37 +1567,37 @@ export function OpenBrushMaterialQuickEditor({
                   <dd className="text-slate-700">
                     {runtimeInfo.glslVersion ?? "WebGL compatible"}
                   </dd>
-                  <dt className="text-slate-500">Vertex</dt>
+                  <dt className="text-slate-500">頂点シェーダー</dt>
                   <dd className="text-slate-700">
-                    {shaderLineCount(runtimeInfo.vertexShader)} lines
+                    {shaderLineCount(runtimeInfo.vertexShader)} 行
                   </dd>
-                  <dt className="text-slate-500">Fragment</dt>
+                  <dt className="text-slate-500">フラグメントシェーダー</dt>
                   <dd className="text-slate-700">
-                    {shaderLineCount(runtimeInfo.fragmentShader)} lines
+                    {shaderLineCount(runtimeInfo.fragmentShader)} 行
                   </dd>
-                  <dt className="text-slate-500">Uniforms</dt>
+                  <dt className="text-slate-500">調整値</dt>
                   <dd className="text-slate-700">
                     {runtimeInfo.uniformNames.length}
                   </dd>
-                  <dt className="text-slate-500">Attributes</dt>
+                  <dt className="text-slate-500">頂点属性</dt>
                   <dd className="text-slate-700">
                     {formatAttributeBindingSummary(runtimeInfo.attributeBindings)}
                   </dd>
                 </>
               )}
-              <dt className="text-slate-500">Textures</dt>
+              <dt className="text-slate-500">テクスチャ</dt>
               <dd className="break-words text-slate-700">
                 {runtimeInfo.textureNames.length > 0
                   ? runtimeInfo.textureNames.join(", ")
                   : "なし"}
               </dd>
-              <dt className="text-slate-500">Resources</dt>
+              <dt className="text-slate-500">使用する素材</dt>
               <dd className="whitespace-pre-wrap break-words font-mono text-[9px] leading-4 text-slate-700">
                 {runtimeInfo.resourcePaths.length > 0
                   ? runtimeInfo.resourcePaths.join("\n")
                   : runtimeInfo.pbrFallback
-                    ? "GLB内のPBR / texture"
-                    : "three-icosa preset内"}
+                    ? "GLB内のPBR / テクスチャ"
+                    : "three-icosa プリセット内"}
               </dd>
             </dl>
 
@@ -1592,7 +1608,7 @@ export function OpenBrushMaterialQuickEditor({
                 </p>
                 {shader.sourceOverrides?.vertexShader !== undefined ? (
                   <ShaderSourceEditor
-                    label="Vertex GLSLを修正"
+                    label="頂点シェーダーを編集"
                     source={shader.sourceOverrides.vertexShader}
                     overridden
                     readOnly={readOnly}
@@ -1603,7 +1619,7 @@ export function OpenBrushMaterialQuickEditor({
                 ) : null}
                 {shader.sourceOverrides?.fragmentShader !== undefined ? (
                   <ShaderSourceEditor
-                    label="Fragment GLSLを修正"
+                    label="フラグメントシェーダーを編集"
                     source={shader.sourceOverrides.fragmentShader}
                     overridden
                     readOnly={readOnly}
@@ -1617,7 +1633,7 @@ export function OpenBrushMaterialQuickEditor({
               <>
                 <details className="rounded border border-slate-200 bg-slate-50">
                   <summary className="cursor-pointer px-2 py-1.5 font-semibold text-slate-700">
-                    Uniform一覧を表示
+                    シェーダーの変数を表示
                   </summary>
                   <p className="whitespace-pre-wrap break-words border-t border-slate-200 px-2 py-1.5 font-mono text-[10px] leading-4 text-slate-600">
                     {runtimeInfo.uniformBindings.length > 0
@@ -1627,13 +1643,13 @@ export function OpenBrushMaterialQuickEditor({
                               `${uniform.glslType} ${uniform.name} · ${formatUniformBindingStatus(uniform.status)}`,
                           )
                           .join("\n")
-                      : runtimeInfo.uniformNames.join(", ") || "Uniformなし"}
+                      : runtimeInfo.uniformNames.join(", ") || "シェーダーの変数なし"}
                   </p>
                 </details>
 
                 <details className="rounded border border-slate-200 bg-slate-50">
                   <summary className="cursor-pointer px-2 py-1.5 font-semibold text-slate-700">
-                    Mesh attribute対応を表示
+                    頂点属性の対応を表示
                   </summary>
                   <div className="space-y-1.5 border-t border-slate-200 p-2">
                     {runtimeInfo.attributeBindings.length > 0 ? (
@@ -1663,23 +1679,23 @@ export function OpenBrushMaterialQuickEditor({
                               )
                             }
                             className="min-w-0 rounded border border-slate-300 bg-white px-1.5 py-1 font-mono text-[10px] text-slate-700 disabled:bg-slate-100"
-                            aria-label={`${binding.shaderName}のMesh attribute`}
+                            aria-label={`${binding.shaderName}のメッシュの頂点属性`}
                           />
                         </label>
                       ))
                     ) : (
                       <p className="text-[10px] text-slate-500">
-                        宣言されたvertex attributeなし
+                        宣言された頂点属性はありません
                       </p>
                     )}
                     <p className="text-[9px] leading-3 text-slate-500">
-                      空欄は自動semantic mapping。任意のgeometry attribute名で上書きできます。
+                      通常は空欄のまま使います。手動で指定する場合は形状の属性名を入力してください。
                     </p>
                   </div>
                 </details>
 
                 <ShaderSourceEditor
-                  label="Vertex GLSLを表示"
+                  label="頂点シェーダーを表示"
                   source={
                     shader.sourceOverrides?.vertexShader ??
                     runtimeInfo.vertexShader
@@ -1689,7 +1705,7 @@ export function OpenBrushMaterialQuickEditor({
                   onChange={(source) => updateShaderSource("vertexShader", source)}
                 />
                 <ShaderSourceEditor
-                  label="Fragment GLSLを表示"
+                  label="フラグメントシェーダーを表示"
                   source={
                     shader.sourceOverrides?.fragmentShader ??
                     runtimeInfo.fragmentShader
@@ -1703,13 +1719,13 @@ export function OpenBrushMaterialQuickEditor({
           </div>
         ) : (
           <p className="rounded border border-slate-200 bg-slate-50 px-2 py-2 text-[11px] leading-4 text-slate-600">
-            リアルタイムプレビューでthree-icosa shaderを解決すると、実際のGLSL・uniform・brush texture情報をここに表示します。
+            プレビューを読み込むとシェーダーの詳細を表示します。
           </p>
         )}
       </EditorSection>
 
       <p className="rounded-md border border-sky-200 bg-sky-50 px-2.5 py-2 text-[11px] leading-4 text-sky-800">
-        このMaterialは元Modelの該当nodeとmaterial indexをPreview Adapterで分離し、埋め込み済みのthree-icosa brush libraryから再構築します。未対応presetまたはshader読込失敗時だけ、GLB内のPBR Materialへ安全にフォールバックします。
+        未対応のブラシや読み込めないシェーダーは、モデル内の標準マテリアルで表示します。
       </p>
     </div>
   );
@@ -1718,10 +1734,10 @@ export function OpenBrushMaterialQuickEditor({
 function formatOpenBrushFallbackReason(
   reason: "unsupported-preset" | "shader-load-error" | "attribute-mismatch",
 ): string {
-  if (reason === "unsupported-preset") return "未対応preset";
+  if (reason === "unsupported-preset") return "未対応プリセット";
   return reason === "attribute-mismatch"
-    ? "Mesh attribute不足"
-    : "shader読込失敗";
+    ? "メッシュの頂点属性不足"
+    : "Shaderの読み込み失敗";
 }
 
 function shaderLineCount(source: string | undefined): number {
@@ -1743,7 +1759,7 @@ function formatAttributeBindingSummary(
 function formatUniformBindingStatus(
   status: ProjectModelMaterialRuntimeInfo["uniformBindings"][number]["status"],
 ): string {
-  if (status === "texture") return "texture設定済み";
+  if (status === "texture") return "テクスチャ設定済み";
   return status === "value" ? "値設定済み" : "未設定";
 }
 
@@ -1763,7 +1779,7 @@ function ShaderSourceEditor({
   return (
     <details className="rounded border border-slate-200 bg-slate-950">
       <summary className="cursor-pointer px-2 py-1.5 font-semibold text-slate-200">
-        {label}{overridden ? " · Material copy編集中" : ""}
+        {label}{overridden ? " · マテリアルのコピーを編集中" : ""}
       </summary>
       <div className="border-t border-slate-700 p-2">
         <textarea
@@ -1780,7 +1796,7 @@ function ShaderSourceEditor({
             onClick={() => onChange(undefined)}
             className="mt-1 rounded border border-slate-600 px-2 py-1 text-[10px] font-semibold text-slate-200 hover:bg-slate-800"
           >
-            presetへ戻す
+            プリセットへ戻す
           </button>
         ) : null}
       </div>
@@ -1823,11 +1839,11 @@ function CustomShaderQuickEditor({
   };
 
   return (
-    <EditorSection title="Custom Shader">
+    <EditorSection title="カスタムシェーダー">
       {!shader ? (
         <div className="space-y-2">
           <p className="text-xs leading-4 text-slate-600">
-            GLSLをMaterialに保存し、Mesh slotへ割り当てた状態でScene View、Play、公開用コードへ同じShaderを渡します。
+            GLSLで見た目を編集します。
           </p>
           <button
             type="button"
@@ -1835,7 +1851,7 @@ function CustomShaderQuickEditor({
             onClick={enableShader}
             className="rounded-md bg-brand-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Custom Shaderを作成
+            カスタムシェーダーを作成
           </button>
         </div>
       ) : (
@@ -1850,7 +1866,7 @@ function CustomShaderQuickEditor({
             />
           </div>
           <div className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] text-slate-600">
-            <span>GLSLはMaterialに保存され、参照中のMeshへ反映されます。</span>
+            <span>保存すると、このマテリアルの使用箇所すべてに反映します。</span>
             <button
               type="button"
               disabled={readOnly}
@@ -1861,7 +1877,7 @@ function CustomShaderQuickEditor({
             </button>
           </div>
           <label className="block text-[11px] text-slate-600">
-            Shader ID
+            シェーダー ID
             <input
               type="text"
               value={shader.sourceModulePath}
@@ -1874,12 +1890,12 @@ function CustomShaderQuickEditor({
           </label>
           <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
             <div className="mb-1.5 flex items-center justify-between gap-2">
-              <span className="text-[11px] font-semibold text-slate-700">Shaderコード</span>
-              <span className="text-[10px] text-slate-500">GLSL Editorで編集</span>
+              <span className="text-[11px] font-semibold text-slate-700">シェーダーコード</span>
+              <span className="text-[10px] text-slate-500">コードを編集</span>
             </div>
             <div className="space-y-1.5">
               <ShaderSourceReferenceRow
-                label="Vertex"
+                label="頂点シェーダー"
                 stage="vertex"
                 source={shader.vertexShader}
                 sourceAssetId={shader.vertexShaderAssetId}
@@ -1894,7 +1910,7 @@ function CustomShaderQuickEditor({
                 }
               />
               <ShaderSourceReferenceRow
-                label="Fragment"
+                label="フラグメントシェーダー"
                 stage="fragment"
                 source={shader.fragmentShader}
                 sourceAssetId={shader.fragmentShaderAssetId}
@@ -1911,7 +1927,7 @@ function CustomShaderQuickEditor({
             </div>
           </div>
           <label className="block text-[11px] text-slate-600">
-            時間uniform（任意）
+            時間を受け取る変数名（任意）
             <input
               type="text"
               value={shader.animatedTimeUniform ?? ""}
@@ -1928,7 +1944,7 @@ function CustomShaderQuickEditor({
           <div className="rounded border border-slate-200 bg-slate-50 p-2">
             <div className="mb-1.5 flex items-center justify-between gap-2">
               <span className="text-[11px] font-semibold text-slate-700">
-                Uniform values
+                シェーダーの調整値
               </span>
               <button
                 type="button"
@@ -2037,7 +2053,7 @@ function CustomShaderQuickEditor({
                           >
                             {textures.length === 0 ? (
                               <option value={uniform.textureAssetId}>
-                                Textureなし
+                                テクスチャなし
                               </option>
                             ) : (
                               textures.map((texture) => (
@@ -2050,7 +2066,7 @@ function CustomShaderQuickEditor({
                           <button
                             type="button"
                             onClick={() => onOpenTexture(uniform.textureAssetId)}
-                            title="Textureを開く"
+                            title="テクスチャを開く"
                             className="shrink-0 rounded border border-slate-300 px-1 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
                           >
                             開く
@@ -2074,7 +2090,7 @@ function CustomShaderQuickEditor({
             onClick={() => onChange({ shader: createDefaultCustomShader() })}
             className="rounded border border-slate-300 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Starter Shaderへ戻す
+            初期のシェーダーに戻す
           </button>
         </div>
       )}
@@ -2118,7 +2134,7 @@ function ShaderSourceReferenceRow({
         <div className="min-w-0">
           <p className="text-[11px] font-semibold text-slate-700">{label} GLSL</p>
           <p className="truncate font-mono text-[10px] text-slate-500">
-            {selected?.name ?? "Material内のコード"} · {source.split(/\r?\n/).length}行
+            {selected?.name ?? "マテリアル内のコード"} · {source.split(/\r?\n/).length}行
           </p>
         </div>
         <button
@@ -2140,7 +2156,7 @@ function ShaderSourceReferenceRow({
           className="h-7 min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 font-mono text-[10px] text-slate-700 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-200 disabled:bg-slate-100 disabled:text-slate-400"
           aria-label={`${label} GLSL Asset`}
         >
-          <option value="">Material内のコード</option>
+          <option value="">マテリアル内のコード</option>
           {selectableShaderAssets.map((asset) => (
             <option key={asset.id} value={asset.id}>
               {asset.name} ({asset.stage})
@@ -2153,13 +2169,13 @@ function ShaderSourceReferenceRow({
             onClick={() => onOpenShader(selected.id)}
             className="shrink-0 rounded border border-slate-300 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
           >
-            Assetを開く
+            素材を開く
           </button>
         ) : null}
       </div>
       {selected && selected.stage !== stage ? (
         <p className="mt-1 text-[10px] text-amber-700">
-          このAssetは {selected.stage} 用として登録されています。
+          この素材は {selected.stage} 用として登録されています。
         </p>
       ) : null}
     </div>
@@ -2233,7 +2249,7 @@ function StandardMaterialQuickEditor({
             {openBrush
               ? `OpenBrush ブラシ · ${openBrush.brushName}`
               : customShader
-                ? "Custom Shader Material"
+                ? "カスタムシェーダーマテリアル"
                 : "glTF 2.0 標準マテリアル"}
           </p>
           {asset.importedFromModel ? (
@@ -2244,20 +2260,20 @@ function StandardMaterialQuickEditor({
             </p>
           ) : null}
           <p className="mt-2 text-xs leading-4 text-slate-600">
-            変更はプレビューとシーン内の参照メッシュへ即時反映されます。
+            変更は、このマテリアルの使用箇所すべてに反映します。
           </p>
           <p className="mt-2 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600">
             {referenceSummary && referenceSummary.slotCount > 0
-              ? `共有中: ${referenceSummary.entityCount} Entity / ${referenceSummary.slotCount} Slot`
+              ? `使用箇所: ${referenceSummary.entityCount} Entity / ${referenceSummary.slotCount}スロット`
               : "シーン内の参照はありません"}
           </p>
         </div>
       </div>
 
       {openBrush ? (
-        <EditorSection title="OpenBrush 表現">
+        <EditorSection title="Open Brushの描画">
           <p className="text-xs leading-4 text-slate-600">
-            ブラシ固有の描画を保ったまま、下のテクスチャと基本値を編集できます。
+            ブラシの見た目を保ったまま、色やテクスチャを調整します。
           </p>
           <details className="rounded border border-slate-200 bg-slate-50">
             <summary className="cursor-pointer px-2 py-1.5 text-[11px] font-semibold text-slate-700">
@@ -2266,11 +2282,11 @@ function StandardMaterialQuickEditor({
             <dl className="grid grid-cols-[76px_minmax(0,1fr)] gap-x-2 gap-y-1 border-t border-slate-200 px-2 py-2 text-[11px]">
               <dt className="text-slate-500">ブラシ</dt>
               <dd className="font-medium text-slate-800">{openBrush.brushName}</dd>
-              <dt className="text-slate-500">Texture</dt>
+              <dt className="text-slate-500">テクスチャ</dt>
               <dd className="text-slate-700">
                 {Object.keys(openBrush.textureBindings ?? {}).length > 0
                   ? Object.keys(openBrush.textureBindings ?? {}).length
-                  : "GLBのMaterial slotを使用"}
+                  : "GLBのマテリアルスロットを使用"}
               </dd>
             </dl>
           </details>
@@ -2292,9 +2308,8 @@ function StandardMaterialQuickEditor({
       ) : null}
 
       <MaterialExtensionSection
-        title="Unlit"
         extensionName="KHR_materials_unlit"
-        description="シーンのライトを使わず、Base Colorをそのまま表示します。"
+        description="ライトの影響を受けず、Base Colorで表示します。"
         enabled={unlit !== undefined}
         readOnly={readOnly}
         onToggle={(enabled) =>
@@ -2309,17 +2324,17 @@ function StandardMaterialQuickEditor({
         }
       >
         <p className="rounded border border-sky-200 bg-sky-50 px-2 py-1.5 text-[11px] leading-4 text-sky-800">
-          UnlitではBase Colorと透明度だけを使用します。切り替え時に互換性のないライティング拡張は解除されます。
+          有効にすると、併用できない反射・透過の設定を解除します。
         </p>
       </MaterialExtensionSection>
 
-      <EditorSection title="Diffuse / Base Color RGBA">
+      <EditorSection title="Base Color" reading="ベースカラー">
         <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
           頂点カラーを使用
           <input type="checkbox" checked={asset.properties.vertexColors ?? false} disabled={readOnly}
             onChange={(event) => onChange({ vertexColors: event.currentTarget.checked })} />
         </label>
-        <p className="text-[11px] text-slate-500">モデルの頂点カラーを基本色に掛け合わせます。頂点カラーを持たないモデルには影響しません。</p>
+        <p className="text-[11px] text-slate-500">モデルの頂点カラーをBase Colorに掛け合わせます。頂点カラーがない場合は変わりません。</p>
         <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
           RGB
           <span className="flex items-center gap-1.5">
@@ -2341,8 +2356,42 @@ function StandardMaterialQuickEditor({
             />
           </span>
         </label>
+        <TextureSlot
+          label="Base Color Map"
+          description="RGBはBase Color、AはAlphaに掛け合わせます（RGBはsRGB）。"
+          value={pbr.baseColorTexture}
+          textures={textures}
+          projectPath={projectPath}
+          disabled={readOnly}
+          previewStatus={previewTextureStatuses.baseColorMap}
+          onOpenTexture={onOpenTexture}
+          onChange={(baseColorTexture) =>
+            onChange({ pbrMetallicRoughness: { baseColorTexture } })
+          }
+        />
+      </EditorSection>
+
+      <EditorSection title="Alpha" reading="アルファ">
+        <label className="block text-xs text-slate-600">
+          <span className="mb-1 block">Alpha Mode</span>
+          <select
+            value={asset.properties.alphaMode}
+            disabled={readOnly}
+            onChange={(event) =>
+              onChange({
+                alphaMode: event.currentTarget.value as "OPAQUE" | "MASK" | "BLEND",
+              })
+            }
+            className={INPUT_CLASS}
+          >
+            <option value="OPAQUE">Opaque（不透明）</option>
+            <option value="MASK">Mask（切り抜き）</option>
+            <option value="BLEND">Blend（半透明）</option>
+          </select>
+        </label>
         <RangeControl
           label="Alpha"
+          description="0で透明、1で不透明。通常はAlpha ModeをBlendかMaskにします。"
           value={pbr.baseColorFactor[3]}
           disabled={readOnly}
           onChange={(alpha) =>
@@ -2358,25 +2407,42 @@ function StandardMaterialQuickEditor({
             })
           }
         />
+        {asset.properties.alphaMode === "MASK" ? (
+          <>
+            <RangeControl
+              label="Alpha Cutoff"
+              description="Alphaがこの値未満の部分を切り抜きます。"
+              value={asset.properties.alphaCutoff}
+              disabled={readOnly}
+              onChange={(alphaCutoff) => onChange({ alphaCutoff })}
+            />
+            <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
+              <span>
+                Alpha to Coverage
+                <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">
+                  切り抜きの縁を滑らかにします。MSAAが有効な環境で使えます。
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={asset.properties.alphaToCoverage}
+                disabled={readOnly}
+                onChange={(event) =>
+                  onChange({ alphaToCoverage: event.currentTarget.checked })
+                }
+                className="h-4 w-4 accent-violet-600"
+              />
+            </label>
+          </>
+        ) : null}
+        {asset.properties.alphaMode === "OPAQUE" && asset.properties.blending === "normal" ? (
+          <p className="text-[11px] leading-4 text-slate-500">
+            OpaqueではAlphaを使いません。ガラスの透け方はTransmissionで調整します。
+          </p>
+        ) : null}
         <TextureSlot
-          label="Base Color Texture"
-          description="RGBは色、Aは透明度として使用します。"
-          value={pbr.baseColorTexture}
-          textures={textures}
-          projectPath={projectPath}
-          disabled={readOnly}
-          previewStatus={previewTextureStatuses.baseColorMap}
-          onOpenTexture={onOpenTexture}
-          onChange={(baseColorTexture) =>
-            onChange({ pbrMetallicRoughness: { baseColorTexture } })
-          }
-        />
-      </EditorSection>
-
-      <EditorSection title="Opacity Map">
-        <TextureSlot
-          label="Opacity Texture"
-          description="選んだチャンネルを透明度に使用します。0は透明、1は不透明です。AlphaとBase Color TextureのAに掛け合わせます。"
+          label="Opacity Map"
+          description="選んだチャンネルをAlphaに掛け合わせます。黒で透明、白で変化なし。Opaqueで追加するとBlendに切り替わります。"
           value={asset.properties.opacityTexture}
           textures={textures}
           projectPath={projectPath}
@@ -2388,19 +2454,19 @@ function StandardMaterialQuickEditor({
           })}
         />
         <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
-          Opacity Channel
+          Channel
           <select value={asset.properties.opacityChannel ?? "a"} disabled={readOnly}
             className="rounded border border-slate-300 bg-white px-2 py-1 text-xs"
             onChange={(event) => onChange({ opacityChannel: event.currentTarget.value as "r" | "g" | "b" | "a" })}>
             {(["r", "g", "b", "a"] as const).map(channel => <option key={channel} value={channel}>{channel.toUpperCase()}</option>)}
           </select>
         </label>
-        <p className="text-[11px] text-slate-500">透過にはAlpha ModeのBlendかMaskを使用します。裏側も表示する場合はDouble sidedを有効にしてください。</p>
       </EditorSection>
 
-      <EditorSection title="Metallic / Roughness">
+      <EditorSection title="Metallic / Roughness" reading="メタリック / ラフネス">
         <RangeControl
           label="Metallic"
+          description="0で非金属、1で金属の見た目になります。"
           value={pbr.metallicFactor}
           disabled={readOnly}
           onChange={(metallicFactor) =>
@@ -2409,6 +2475,7 @@ function StandardMaterialQuickEditor({
         />
         <RangeControl
           label="Roughness"
+          description="0で反射がくっきりし、1で反射がぼやけます。"
           value={pbr.roughnessFactor}
           disabled={readOnly}
           onChange={(roughnessFactor) =>
@@ -2416,8 +2483,8 @@ function StandardMaterialQuickEditor({
           }
         />
         <TextureSlot
-          label="Metallic / Roughness Texture"
-          description="GにRoughness、BにMetallicを格納するglTF packed mapです。"
+          label="Metallic Roughness Map"
+          description="G（緑）をRoughness、B（青）をMetallicに掛け合わせます（リニア色空間）。"
           value={pbr.metallicRoughnessTexture}
           textures={textures}
           projectPath={projectPath}
@@ -2430,10 +2497,11 @@ function StandardMaterialQuickEditor({
         />
       </EditorSection>
 
-      <EditorSection title="Normal / Occlusion">
+      <EditorSection title="Normal / Occlusion" reading="ノーマル / オクルージョン">
         <TextureSlot
-          label="Normal"
-          description="タンジェント空間の法線マップ。Linearで扱います。"
+          label="Normal Map"
+          description="陰影で細かな凹凸を表します。メッシュの形や輪郭は変わりません。"
+          inputHint="Tangent Space（接線空間）の画像を使用します。色補正なし（Linear）で読み込みます。"
           value={asset.properties.normalTexture}
           textures={textures}
           projectPath={projectPath}
@@ -2449,10 +2517,10 @@ function StandardMaterialQuickEditor({
           }
         />
         <NumberControl
-          label="Normal scale"
+          label="Normal Scale"
           value={asset.properties.normalTexture?.scale ?? 1}
           step={0.01}
-          description="有限値。負の値では法線方向を反転します。"
+          description="0で効果なし、1が標準です。負の値で凹凸の向きを反転します。"
           disabled={readOnly || !asset.properties.normalTexture}
           onChange={(scale) => {
             const current = asset.properties.normalTexture;
@@ -2460,8 +2528,8 @@ function StandardMaterialQuickEditor({
           }}
         />
         <TextureSlot
-          label="Occlusion"
-          description="Rチャンネルを遮蔽強度として使用します。"
+          label="Occlusion Map"
+          description="溝や隙間を暗く見せます。画像のR（赤）が暗いほど効果が強くなります。"
           value={asset.properties.occlusionTexture}
           textures={textures}
           projectPath={projectPath}
@@ -2477,7 +2545,8 @@ function StandardMaterialQuickEditor({
           }
         />
         <RangeControl
-          label="Occlusion strength"
+          label="Occlusion Strength"
+          description="0で効果なし、1で画像どおりの陰影になります。"
           value={asset.properties.occlusionTexture?.strength ?? 1}
           disabled={readOnly || !asset.properties.occlusionTexture}
           onChange={(strength) => {
@@ -2487,9 +2556,9 @@ function StandardMaterialQuickEditor({
         />
       </EditorSection>
 
-      <EditorSection title="Emissive">
+      <EditorSection title="Emissive" reading="エミッシブ">
         <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
-          Factor
+          Color
           <span className="flex items-center gap-1.5">
             <span className="font-mono text-slate-500">{emissiveColor}</span>
             <input
@@ -2505,8 +2574,8 @@ function StandardMaterialQuickEditor({
           </span>
         </label>
         <TextureSlot
-          label="Emissive Texture"
-          description="発光色へ乗算するsRGBテクスチャです。"
+          label="Emissive Map"
+          description="光らせる場所と色をEmissiveに掛け合わせます（sRGB）。"
           value={asset.properties.emissiveTexture}
           textures={textures}
           projectPath={projectPath}
@@ -2518,9 +2587,8 @@ function StandardMaterialQuickEditor({
       </EditorSection>
 
       <MaterialExtensionSection
-        title="Emissive Strength"
         extensionName="KHR_materials_emissive_strength"
-        description="Emissiveの明るさを1倍より強くし、発光表現を調整します。"
+        description="表面を明るく見せます。周囲を照らすにはライトが必要です。"
         enabled={Boolean(emissiveStrength)}
         readOnly={readOnly}
         onToggle={(enabled) =>
@@ -2537,7 +2605,7 @@ function StandardMaterialQuickEditor({
             value={emissiveStrength.emissiveStrength}
             min={0}
             step={0.1}
-            description="0以上。1がglTFの標準強度で、1を超える値はBloomやTone Mappingにも影響します。"
+            description="1が標準。大きいほど明るくなり、Bloomにも影響します。"
             disabled={readOnly}
             onChange={(value) =>
               updateLitExtension({
@@ -2551,9 +2619,8 @@ function StandardMaterialQuickEditor({
       </MaterialExtensionSection>
 
       <MaterialExtensionSection
-        title="Clearcoat"
         extensionName="KHR_materials_clearcoat"
-        description="塗装やワニスのような透明な上塗り層を追加します。"
+        description="塗装やニスのような透明な光沢を重ねます。"
         enabled={Boolean(clearcoat)}
         readOnly={readOnly}
         onToggle={(enabled) =>
@@ -2570,9 +2637,9 @@ function StandardMaterialQuickEditor({
         {clearcoat ? (
           <>
             <RangeControl
-              label="Layer intensity"
+              label="Factor"
               value={clearcoat.clearcoatFactor}
-              description="0〜1。0では上塗り層が無効になり、RチャンネルのTextureと乗算します。"
+              description="0で上塗りなし、1で最大。テクスチャのR（赤）を掛け合わせます。"
               disabled={readOnly}
               onChange={(clearcoatFactor) =>
                 updateLitExtension({
@@ -2581,8 +2648,8 @@ function StandardMaterialQuickEditor({
               }
             />
             <TextureSlot
-              label="Clearcoat map"
-              description="Linear TextureのRチャンネルで層の強さを制御します。"
+              label="Clearcoat Map"
+              description="R（赤）が上塗りの強さです（リニア色空間）。"
               value={clearcoat.clearcoatTexture}
               textures={textures}
               projectPath={projectPath}
@@ -2596,9 +2663,9 @@ function StandardMaterialQuickEditor({
               }
             />
             <RangeControl
-              label="Layer roughness"
+              label="Roughness"
               value={clearcoat.clearcoatRoughnessFactor}
-              description="0〜1。0は鋭い反射、1は粗い反射です。GチャンネルのTextureと乗算します。"
+              description="0でくっきり、1でぼやけた反射。テクスチャのG（緑）を掛け合わせます。"
               disabled={readOnly}
               onChange={(clearcoatRoughnessFactor) =>
                 updateLitExtension({
@@ -2607,8 +2674,8 @@ function StandardMaterialQuickEditor({
               }
             />
             <TextureSlot
-              label="Clearcoat roughness map"
-              description="Linear TextureのGチャンネルで上塗り層の粗さを制御します。"
+              label="Roughness Map"
+              description="G（緑）が上塗りの粗さです（リニア色空間）。"
               value={clearcoat.clearcoatRoughnessTexture}
               textures={textures}
               projectPath={projectPath}
@@ -2622,8 +2689,9 @@ function StandardMaterialQuickEditor({
               }
             />
             <TextureSlot
-              label="Clearcoat normal map"
-              description="上塗り層だけに適用するタンジェント空間のLinear法線マップです。"
+              label="Normal Map"
+              description="上塗りの層に凹凸の陰影を加えます。下地のNormal Mapとは別の設定です。"
+              inputHint="Tangent Space（接線空間）の画像を使用します。色補正なし（Linear）で読み込みます。"
               value={clearcoat.clearcoatNormalTexture}
               textures={textures}
               projectPath={projectPath}
@@ -2644,10 +2712,10 @@ function StandardMaterialQuickEditor({
               }
             />
             <NumberControl
-              label="Clearcoat normal scale"
+              label="Normal Scale"
               value={clearcoat.clearcoatNormalTexture?.scale ?? 1}
               step={0.01}
-              description="有限値。負の値では法線方向を反転します。"
+              description="0で効果なし、1が標準です。負の値で凹凸の向きを反転します。"
               disabled={readOnly || !clearcoat.clearcoatNormalTexture}
               onChange={(scale) => {
                 if (!clearcoat.clearcoatNormalTexture) return;
@@ -2666,9 +2734,8 @@ function StandardMaterialQuickEditor({
       </MaterialExtensionSection>
 
       <MaterialExtensionSection
-        title="Anisotropy"
         extensionName="KHR_materials_anisotropy"
-        description="ヘアライン金属など、方向性を持つ細長い反射を表現します。"
+        description="筋のある金属のように、反射を一方向に伸ばします。"
         enabled={Boolean(anisotropy)}
         readOnly={readOnly}
         onToggle={(enabled) =>
@@ -2687,7 +2754,7 @@ function StandardMaterialQuickEditor({
             <RangeControl
               label="Strength"
               value={anisotropy.anisotropyStrength}
-              description="0〜1。Textureを使う場合はBチャンネルの強さと乗算します。"
+              description="大きいほど反射が伸びます。テクスチャのB（青）を掛け合わせます。"
               disabled={readOnly}
               onChange={(anisotropyStrength) =>
                 updateLitExtension({
@@ -2699,7 +2766,7 @@ function StandardMaterialQuickEditor({
               label="Rotation (°)"
               value={(anisotropy.anisotropyRotation * 180) / Math.PI}
               step={1}
-              description="タンジェントから反時計回りの角度。保存時はラジアンへ変換します。"
+              description="反射を伸ばす向きです。接線を基準に反時計回りで指定します。"
               disabled={readOnly}
               onChange={(degrees) =>
                 updateLitExtension({
@@ -2710,8 +2777,8 @@ function StandardMaterialQuickEditor({
               }
             />
             <TextureSlot
-              label="Anisotropy map"
-              description="Linear Texture。RGに方向、Bに強さを格納します。"
+              label="Anisotropy Map"
+              description="RGが反射の方向、B（青）が強さです（リニア色空間）。"
               value={anisotropy.anisotropyTexture}
               textures={textures}
               projectPath={projectPath}
@@ -2729,9 +2796,8 @@ function StandardMaterialQuickEditor({
       </MaterialExtensionSection>
 
       <MaterialExtensionSection
-        title="Sheen"
         extensionName="KHR_materials_sheen"
-        description="布やベルベットのような、輪郭側に現れる柔らかな反射層です。"
+        description="ベルベットのような柔らかな光沢を付けます。"
         enabled={Boolean(sheen)}
         readOnly={readOnly}
         onToggle={(enabled) =>
@@ -2748,10 +2814,10 @@ function StandardMaterialQuickEditor({
         {sheen ? (
           <>
             <Color3Control
-              label="Sheen color"
+              label="Color"
               value={sheen.sheenColorFactor}
               max={1}
-              description="Linear RGB、各チャンネル0〜1。すべて0でSheen層は無効です。"
+              description="黒で効果なし。RGBは0〜1で指定します（リニア色空間）。"
               disabled={readOnly}
               onChange={(sheenColorFactor) =>
                 updateLitExtension({
@@ -2760,8 +2826,8 @@ function StandardMaterialQuickEditor({
               }
             />
             <TextureSlot
-              label="Sheen color map"
-              description="sRGB TextureのRGBをSheen colorへ乗算します。"
+              label="Color Map"
+              description="テクスチャの色を光沢の色に掛け合わせます（sRGB）。"
               value={sheen.sheenColorTexture}
               textures={textures}
               projectPath={projectPath}
@@ -2775,9 +2841,9 @@ function StandardMaterialQuickEditor({
               }
             />
             <RangeControl
-              label="Sheen roughness"
+              label="Roughness"
               value={sheen.sheenRoughnessFactor}
-              description="0〜1。AlphaチャンネルのTextureと乗算します。"
+              description="大きいほど光沢がぼやけます。テクスチャのAを掛け合わせます。"
               disabled={readOnly}
               onChange={(sheenRoughnessFactor) =>
                 updateLitExtension({
@@ -2786,8 +2852,8 @@ function StandardMaterialQuickEditor({
               }
             />
             <TextureSlot
-              label="Sheen roughness map"
-              description="Linear TextureのAlphaチャンネルで粗さを制御します。"
+              label="Roughness Map"
+              description="Aが光沢の粗さです（リニア色空間）。"
               value={sheen.sheenRoughnessTexture}
               textures={textures}
               projectPath={projectPath}
@@ -2805,9 +2871,8 @@ function StandardMaterialQuickEditor({
       </MaterialExtensionSection>
 
       <MaterialExtensionSection
-        title="Specular"
         extensionName="KHR_materials_specular"
-        description="非金属表面の鏡面反射の強さとF0色を調整します。"
+        description="金属以外の表面で、反射の強さと色を調整します。"
         enabled={Boolean(specular)}
         readOnly={readOnly}
         onToggle={(enabled) =>
@@ -2824,9 +2889,9 @@ function StandardMaterialQuickEditor({
         {specular ? (
           <>
             <RangeControl
-              label="Intensity"
+              label="Factor"
               value={specular.specularFactor}
-              description="0〜1。Textureを使う場合はAlphaチャンネルと乗算します。"
+              description="0で反射なし、1が標準。テクスチャのAを掛け合わせます。"
               disabled={readOnly}
               onChange={(specularFactor) =>
                 updateLitExtension({
@@ -2835,8 +2900,8 @@ function StandardMaterialQuickEditor({
               }
             />
             <TextureSlot
-              label="Specular intensity map"
-              description="Linear TextureのAlphaチャンネルで鏡面反射の強さを制御します。"
+              label="Specular Map"
+              description="Aが反射の強さです（リニア色空間）。"
               value={specular.specularTexture}
               textures={textures}
               projectPath={projectPath}
@@ -2850,9 +2915,9 @@ function StandardMaterialQuickEditor({
               }
             />
             <Color3Control
-              label="F0 color"
+              label="Color"
               value={specular.specularColorFactor}
-              description="Linear RGB、各チャンネル0以上。HDR値は数値欄から1を超えて設定できます。"
+              description="反射の色です。RGBは1を超える値も指定できます（リニア色空間）。"
               disabled={readOnly}
               onChange={(specularColorFactor) =>
                 updateLitExtension({
@@ -2861,8 +2926,8 @@ function StandardMaterialQuickEditor({
               }
             />
             <TextureSlot
-              label="Specular color map"
-              description="sRGB TextureのRGBをF0 colorへ乗算します。"
+              label="Color Map"
+              description="反射の色に掛け合わせます（sRGB）。"
               value={specular.specularColorTexture}
               textures={textures}
               projectPath={projectPath}
@@ -2880,9 +2945,8 @@ function StandardMaterialQuickEditor({
       </MaterialExtensionSection>
 
       <MaterialExtensionSection
-        title="Index of Refraction"
         extensionName="KHR_materials_ior"
-        description="誘電体の反射と屈折に使う屈折率を指定します。"
+        description="金属以外の表面で、反射と光の曲がり方を調整します。"
         enabled={Boolean(ior)}
         readOnly={readOnly}
         onToggle={(enabled) =>
@@ -2898,7 +2962,7 @@ function StandardMaterialQuickEditor({
             min={0}
             step={0.01}
             isAllowed={(value) => value === 0 || value >= 1}
-            description="1以上。一般的な素材は1〜2程度です。0はglTFの特殊な互換モードとして保持されます。"
+            description="通常は1以上で指定します。ガラスの目安は1.5です。"
             disabled={readOnly}
             onChange={(value) =>
               updateLitExtension({ KHR_materials_ior: { ior: value } })
@@ -2908,9 +2972,8 @@ function StandardMaterialQuickEditor({
       </MaterialExtensionSection>
 
       <MaterialExtensionSection
-        title="Transmission"
         extensionName="KHR_materials_transmission"
-        description="表面を通過する光の割合を指定し、ガラスなどの透過を表現します。"
+        description="反射を残して、ガラスのように光を通します。Alphaによる半透明とは別の設定です。"
         enabled={Boolean(transmission)}
         readOnly={readOnly}
         onToggle={(enabled) =>
@@ -2927,10 +2990,13 @@ function StandardMaterialQuickEditor({
       >
         {transmission ? (
           <>
+            <p className="text-[11px] leading-4 text-slate-500">
+              ガラスの基本設定はAlpha 1・Alpha Mode Opaque・Metallic 0です。
+            </p>
             <RangeControl
-              label="Transmission"
+              label="Factor"
               value={transmission.transmissionFactor}
-              description="0〜1。1で、鏡面反射されなかった光をすべて透過します。RチャンネルのTextureと乗算します。"
+              description="0で透過なし、1で反射以外の光を通します。テクスチャのR（赤）を掛け合わせます。"
               disabled={readOnly}
               onChange={(transmissionFactor) =>
                 updateLitExtension({
@@ -2939,8 +3005,8 @@ function StandardMaterialQuickEditor({
               }
             />
             <TextureSlot
-              label="Transmission map"
-              description="Linear TextureのRチャンネルで透過率を制御します。"
+              label="Transmission Map"
+              description="R（赤）が光の透過率です（リニア色空間）。"
               value={transmission.transmissionTexture}
               textures={textures}
               projectPath={projectPath}
@@ -2958,9 +3024,8 @@ function StandardMaterialQuickEditor({
       </MaterialExtensionSection>
 
       <MaterialExtensionSection
-        title="Volume"
         extensionName="KHR_materials_volume"
-        description="閉じたメッシュ内部の厚みと、光が吸収される距離・色を設定します。"
+        description="ガラスや樹脂の、厚い部分ほど濃くなる色を調整します。"
         enabled={Boolean(volume)}
         readOnly={readOnly}
         onToggle={(enabled) =>
@@ -2983,14 +3048,14 @@ function StandardMaterialQuickEditor({
         {volume ? (
           <>
             <p className="rounded border border-sky-200 bg-sky-50 px-2 py-1.5 text-[11px] leading-4 text-sky-800">
-              VolumeにはTransmissionが必要です。有効化時に同じ変更として準備されます。厚みが0より大きい場合は閉じたメッシュを使用してください。
+              Transmissionも有効になります。穴のない閉じたメッシュを使ってください。
             </p>
             <NumberControl
               label="Thickness"
               value={volume.thicknessFactor}
               min={0}
               step={0.01}
-              description="0以上、メッシュ座標系の距離。0では薄い表面として扱います。"
+              description="光が通る厚みです（メッシュ内の距離）。0で厚みなし。"
               disabled={readOnly}
               onChange={(thicknessFactor) =>
                 updateLitExtension({
@@ -2999,8 +3064,8 @@ function StandardMaterialQuickEditor({
               }
             />
             <TextureSlot
-              label="Thickness map"
-              description="Linear TextureのGチャンネルをThicknessへ乗算します。"
+              label="Thickness Map"
+              description="G（緑）を厚みに掛け合わせます（リニア色空間）。"
               value={volume.thicknessTexture}
               textures={textures}
               projectPath={projectPath}
@@ -3015,9 +3080,9 @@ function StandardMaterialQuickEditor({
             />
             <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
               <span>
-                有限の減衰距離
+                Attenuationを有効にする
                 <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">
-                  無効時はglTF標準の無限距離です。
+                  距離に応じた光の減衰です。無効にすると、色も明るさも変わりません。
                 </span>
               </span>
               <input
@@ -3036,11 +3101,11 @@ function StandardMaterialQuickEditor({
             </label>
             {volume.attenuationDistance !== undefined ? (
               <NumberControl
-                label="Attenuation distance"
+                label="Attenuation Distance"
                 value={volume.attenuationDistance}
                 min={0.0001}
                 step={0.01}
-                description="0より大きいワールド距離。白色光がAttenuation colorへ変化する平均距離です。"
+                description="白い光がAttenuation Colorになる距離です。ワールド内の距離で、0より大きい値を指定します。"
                 disabled={readOnly}
                 onChange={(attenuationDistance) =>
                   updateLitExtension({
@@ -3050,10 +3115,10 @@ function StandardMaterialQuickEditor({
               />
             ) : null}
             <Color3Control
-              label="Attenuation color"
+              label="Attenuation Color"
               value={volume.attenuationColor}
               max={1}
-              description="Linear RGB、各チャンネル0〜1。減衰距離に達した白色光の色です。"
+              description="指定した距離を通った後の光の色です。白で減衰なし。RGBは0〜1です（リニア色空間）。"
               disabled={readOnly}
               onChange={(attenuationColor) =>
                 updateLitExtension({
@@ -3066,9 +3131,8 @@ function StandardMaterialQuickEditor({
       </MaterialExtensionSection>
 
       <MaterialExtensionSection
-        title="Dispersion"
         extensionName="KHR_materials_dispersion"
-        description="透過する光の色分離を追加し、宝石や高分散ガラスを表現します。"
+        description="プリズムのように、通り抜ける光を虹色に分けます。"
         enabled={Boolean(dispersion)}
         readOnly={readOnly}
         onToggle={(enabled) =>
@@ -3089,14 +3153,14 @@ function StandardMaterialQuickEditor({
         {dispersion ? (
           <>
             <p className="rounded border border-sky-200 bg-sky-50 px-2 py-1.5 text-[11px] leading-4 text-sky-800">
-              DispersionにはVolumeとTransmissionが必要です。有効化時に同じ変更として準備されます。
+              VolumeとTransmissionも同時に有効になります。
             </p>
             <NumberControl
               label="Dispersion"
               value={dispersion.dispersion}
               min={0}
               step={0.01}
-              description="0以上。0〜1が現実的な範囲で、1を超える値も強調表現として有効です。"
+              description="0で効果なし。通常は0〜1、強調する場合は1を超える値を指定します。"
               disabled={readOnly}
               onChange={(value) =>
                 updateLitExtension({
@@ -3109,9 +3173,8 @@ function StandardMaterialQuickEditor({
       </MaterialExtensionSection>
 
       <MaterialExtensionSection
-        title="Iridescence"
         extensionName="KHR_materials_iridescence"
-        description="薄膜干渉による、見る角度で色が変化する遊色効果を追加します。"
+        description="シャボン玉のように、角度で色が変わる薄い膜を表します。"
         enabled={Boolean(iridescence)}
         readOnly={readOnly}
         onToggle={(enabled) =>
@@ -3132,7 +3195,7 @@ function StandardMaterialQuickEditor({
             <RangeControl
               label="Factor"
               value={iridescence.iridescenceFactor}
-              description="0〜1。Linear TextureのRチャンネルと乗算します。"
+              description="0で効果なし、1で最大。テクスチャのR（赤）を掛け合わせます。"
               disabled={readOnly}
               onChange={(iridescenceFactor) =>
                 updateLitExtension({
@@ -3141,8 +3204,8 @@ function StandardMaterialQuickEditor({
               }
             />
             <TextureSlot
-              label="Factor map"
-              description="Linear TextureのRチャンネルで遊色効果の強さを制御します。"
+              label="Iridescence Map"
+              description="R（赤）が色の変化の強さです（リニア色空間）。"
               value={iridescence.iridescenceTexture}
               textures={textures}
               projectPath={projectPath}
@@ -3160,7 +3223,7 @@ function StandardMaterialQuickEditor({
               value={iridescence.iridescenceIor}
               min={1}
               step={0.01}
-              description="1以上。薄膜層の屈折率で、glTF標準値は1.3です。"
+              description="薄膜の屈折率です。1以上で指定し、標準値は1.3です。素材本体のIORとは別です。"
               disabled={readOnly}
               onChange={(iridescenceIor) =>
                 updateLitExtension({
@@ -3170,11 +3233,11 @@ function StandardMaterialQuickEditor({
             />
             <div className="grid grid-cols-2 gap-2">
               <NumberControl
-                label="Thickness min"
+                label="Thickness Min (nm)"
                 value={iridescence.iridescenceThicknessMinimum}
                 min={0}
                 step={1}
-                description="0以上のnm値。TextureのG=0で使われ、Maxより大きい逆方向の範囲も有効です。"
+                description="マップのG（緑）が0の部分の膜厚です。Maxより大きい値も指定できます。"
                 disabled={readOnly}
                 onChange={(iridescenceThicknessMinimum) =>
                   updateLitExtension({
@@ -3185,11 +3248,11 @@ function StandardMaterialQuickEditor({
                 }
               />
               <NumberControl
-                label="Thickness max"
+                label="Thickness Max (nm)"
                 value={iridescence.iridescenceThicknessMaximum}
                 min={0}
                 step={1}
-                description="0以上のnm値。TextureのG=1で使われます。"
+                description="マップのG（緑）が1の部分の膜厚です。マップなしでは、この値を使います。"
                 disabled={readOnly}
                 onChange={(iridescenceThicknessMaximum) =>
                   updateLitExtension({
@@ -3201,8 +3264,8 @@ function StandardMaterialQuickEditor({
               />
             </div>
             <TextureSlot
-              label="Thickness map"
-              description="Linear TextureのGチャンネルで最小〜最大の薄膜厚を補間します。"
+              label="Thickness Map"
+              description="G（緑）をThickness Min〜Maxに対応させます（リニア色空間）。"
               value={iridescence.iridescenceThicknessTexture}
               textures={textures}
               projectPath={projectPath}
@@ -3221,50 +3284,9 @@ function StandardMaterialQuickEditor({
         ) : null}
       </MaterialExtensionSection>
 
-      <EditorSection title="Alpha / Sidedness">
+      <EditorSection title="Rendering" reading="描画設定">
         <label className="block text-xs text-slate-600">
-          <span className="mb-1 block">Alpha mode</span>
-          <select
-            value={asset.properties.alphaMode}
-            disabled={readOnly}
-            onChange={(event) =>
-              onChange({
-                alphaMode: event.currentTarget.value as "OPAQUE" | "MASK" | "BLEND",
-              })
-            }
-            className={INPUT_CLASS}
-          >
-            <option value="OPAQUE">OPAQUE</option>
-            <option value="MASK">MASK</option>
-            <option value="BLEND">BLEND</option>
-          </select>
-        </label>
-        {asset.properties.alphaMode === "MASK" ? (
-          <>
-            <RangeControl
-              label="Alpha cutoff"
-              value={asset.properties.alphaCutoff}
-              disabled={readOnly}
-              onChange={(alphaCutoff) => onChange({ alphaCutoff })}
-            />
-            <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
-              <span title="MSAAで切り抜きの境界をならします。葉や柵の縁がMASKより滑らかになり、BLENDと違って並び替えが要りません。">
-                Alpha to coverage
-              </span>
-              <input
-                type="checkbox"
-                checked={asset.properties.alphaToCoverage}
-                disabled={readOnly}
-                onChange={(event) =>
-                  onChange({ alphaToCoverage: event.currentTarget.checked })
-                }
-                className="h-4 w-4 accent-violet-600"
-              />
-            </label>
-          </>
-        ) : null}
-        <label className="block text-xs text-slate-600">
-          <span className="mb-1 block">Blend mode</span>
+          <span className="mb-1 block">Blending</span>
           <select
             value={asset.properties.blending}
             disabled={readOnly}
@@ -3276,18 +3298,18 @@ function StandardMaterialQuickEditor({
             className={INPUT_CLASS}
           >
             <option value="normal">Normal（通常）</option>
-            <option value="additive">Additive（加算・光として重なる）</option>
-            <option value="multiply">Multiply（乗算・暗く重なる）</option>
+            <option value="additive">Additive（加算）</option>
+            <option value="multiply">Multiply（乗算）</option>
             <option value="subtractive">Subtractive（減算）</option>
           </select>
           {asset.properties.blending !== "normal" ? (
             <span className="mt-1 block text-[11px] leading-4 text-slate-500">
-              通常以外は透明パスで描くため、Alpha modeに関わらず半透明として扱われます。
+              Normal以外は、Alpha Modeにかかわらず半透明として描画します。
             </span>
           ) : null}
         </label>
         <label className="block text-xs text-slate-600">
-          <span className="mb-1 block">Depth write</span>
+          <span className="mb-1 block">Depth Write</span>
           <select
             value={asset.properties.depthWrite}
             disabled={readOnly}
@@ -3298,16 +3320,16 @@ function StandardMaterialQuickEditor({
             }
             className={INPUT_CLASS}
           >
-            <option value="auto">Auto（Alpha modeに従う）</option>
-            <option value="on">On（常に書き込む）</option>
-            <option value="off">Off（書き込まない）</option>
+            <option value="auto">自動（Alpha Modeに従う）</option>
+            <option value="on">常に書き込む</option>
+            <option value="off">書き込まない</option>
           </select>
           <span className="mt-1 block text-[11px] leading-4 text-slate-500">
-            重なった半透明の前後関係がおかしいときに手で決めます。
+            半透明のものを重ねたとき、前後関係が正しく表示されない場合に調整します。
           </span>
         </label>
         <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
-          Double sided
+          <span>Double Sided<span className="mt-0.5 block text-[11px] text-slate-500">裏面も表示します。</span></span>
           <input
             type="checkbox"
             checked={asset.properties.doubleSided}
@@ -3403,7 +3425,7 @@ export function TextureQuickEditor({
           {asset.importedFromModel ? (
             <p className={`mt-1 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${asset.importedFromModel.isUserOverridden ? "border-amber-200 bg-amber-50 text-amber-800" : "border-sky-200 bg-sky-50 text-sky-800"}`}>
               {asset.importedFromModel.isUserOverridden
-                ? "モデル由来・Import設定を保護"
+                ? "モデル由来・読み込み設定を保護"
                 : "モデル由来・再インポートで同期"}
             </p>
           ) : null}
@@ -3456,7 +3478,7 @@ export function TextureQuickEditor({
               辺を2のべき乗に揃える
             </span>
             <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">
-              256、512、1024のような辺にします。mipmap、繰り返しタイリング、GPU圧縮がきれいに効きます
+              幅と高さを256、512、1024など、2の累乗に揃えます。
             </span>
           </span>
           <input
@@ -3489,7 +3511,7 @@ export function TextureQuickEditor({
         ) : null}
         {resizePreview?.upscales ? (
           <p className="text-[11px] leading-4 text-amber-700">
-            いちばん近い2のべき乗が原本より大きいため、引き伸ばされます。容量を減らしたい時は最大解像度も下げてください。
+            元画像より大きくなります。容量を減らすには最大解像度を下げてください。
           </p>
         ) : null}
         <label className="block text-xs text-slate-600">
@@ -3532,7 +3554,7 @@ export function TextureQuickEditor({
       {!environmentTexture ? (
         <EditorSection title="遠景 / 草カード">
           <p className="text-[11px] leading-4 text-slate-500">
-            テクスチャのアルファを保持した両面Materialと、Colliderを持たないカードをまとめて作成します。
+            透明部分を保った両面の板を作ります。当たり判定は付きません。
           </p>
           <div className="mt-2">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">遠景</p>
@@ -3596,9 +3618,9 @@ export function TextureQuickEditor({
         </EditorSection>
       ) : null}
 
-      <EditorSection title="Color / Mipmap">
+      <EditorSection title="色と縮小表示">
         <label className="block text-xs text-slate-600">
-          <span className="mb-1 block">カラースペース</span>
+          <span className="mb-1 block">Color Space（色空間）</span>
           <select
             value={settings.colorSpace}
             disabled={settingsDisabled}
@@ -3607,11 +3629,11 @@ export function TextureQuickEditor({
             }
             className={INPUT_CLASS}
           >
-            {TEXTURE_COLOR_SPACES.map((value) => <option key={value} value={value}>{value}</option>)}
+            {TEXTURE_COLOR_SPACES.map((value) => <option key={value} value={value}>{value === "srgb" ? "sRGB" : "Linear"}</option>)}
           </select>
         </label>
         <label className="flex items-center justify-between text-xs text-slate-600">
-          Mipmap生成
+          <span>Mipmaps<span className="mt-0.5 block text-[11px] text-slate-500">遠くや小さく表示したときのちらつきを抑えます。</span></span>
           <input
             type="checkbox"
             checked={settings.generateMipmaps}
@@ -3621,7 +3643,7 @@ export function TextureQuickEditor({
           />
         </label>
         <label className="flex items-center justify-between text-xs text-slate-600">
-          Flip Y
+          上下を反転する
           <input
             type="checkbox"
             checked={settings.flipY}
@@ -3632,7 +3654,7 @@ export function TextureQuickEditor({
         </label>
       </EditorSection>
 
-      <EditorSection title="Sampler">
+      <EditorSection title="画像の繰り返しと補間">
         <div className="grid grid-cols-2 gap-1.5">
           {(["wrapS", "wrapT"] as const).map((axis) => (
             <label key={axis} className="block text-xs text-slate-600">
@@ -3765,12 +3787,12 @@ function TextureQualityControl({
       <p className="mt-1 text-[11px] leading-4 text-slate-500">
         {exact
           ? nearest.hint
-          : `${nearest.hint}に近い設定です（保存値 ${quality}）`}
+          : `${nearest.label}に近い設定です（保存値 ${quality}）`}
       </p>
       <p className="mt-1 text-[11px] leading-4 text-slate-500">
         {ktx2
-          ? "KTX2ではGPU上の容量は解像度だけで決まります。ここで変わるのは通信量と見た目、それに変換にかかる時間です。"
-          : "PNGは可逆のため、この設定では容量が変わりません。軽くしたい時はWEBPかKTX2を選びます。"}
+          ? "KTX2の画質・通信量・変換時間を調整します。VRAM使用量は変わりません。"
+          : "PNGでは画質の設定は効きません。圧縮にはWEBPかKTX2を選んでください。"}
       </p>
     </div>
   );
@@ -3841,9 +3863,9 @@ const TEXTURE_COMPRESSION_FORMAT_HINTS: Record<
   (typeof TEXTURE_COMPRESSION_FORMATS)[number],
   string
 > = {
-  source: "変換元の画像形式を維持します。変換済みの場合は、保持した元画像の形式です。サイズの指定がなければ追加の変換はしません。",
-  webp: "通信量は減りますが、GPU上ではRGBAへ展開されるためVRAMは変わりません。",
-  ktx2: "GPUが圧縮のまま扱えるため、通信量とVRAMの両方を下げられます。端末により見た目が変わります。",
+  source: "元画像の形式を使います。サイズの指定がなければ変換しません。",
+  webp: "通信量を減らします。VRAM使用量は変わりません。",
+  ktx2: "通信量とVRAM使用量を減らします。端末によって見た目が変わります。",
 };
 
 /**
@@ -3876,7 +3898,7 @@ function TextureProcessingPanel({
       currentBytes={optimization.current.byteLength}
       originalLabel={optimization.original.label}
       originalBytes={optimization.original.byteLength}
-      revertLabel="原本の画像に戻す"
+      revertLabel="元の画像に戻す"
       disabled={busy || readOnly || !onRevert}
       onRevert={onRevert}
     />
@@ -3905,7 +3927,7 @@ function TextureProcessingPanel({
         : currentSize;
   const targetFormat = plan.outputFormat === "jpeg" ? "JPEG" : plan.outputFormat.toUpperCase();
   const blockedReason = readOnly
-    ? "Playを停止すると変換できます。"
+    ? "動作確認を停止すると変換できます。"
     : !canApply
       ? "初回の自動保存が終わると変換できます。"
       : null;
@@ -3940,7 +3962,7 @@ function TextureProcessingPanel({
       ) : null}
       {plan.pending && !plan.qualityApplies && plan.outputFormat === "png" ? (
         <p className="text-[11px] leading-4 text-slate-500">
-          PNGは可逆のため、画質の設定では容量が変わりません。圧縮するときはWEBPかKTX2を選びます。
+          PNGでは画質の設定は効きません。圧縮にはWEBPかKTX2を選んでください。
         </p>
       ) : null}
       <button
@@ -3968,7 +3990,7 @@ function TextureProcessingPanel({
         <p className="text-[11px] leading-4 text-slate-500">{blockedReason}</p>
       ) : plan.pending ? (
         <p className="rounded border border-amber-200 bg-amber-50 p-1.5 text-xs leading-4 text-amber-800">
-          変換すると、シーンの表示と公開物の両方がこの画像を使います。元の画像ファイルは残るので、いつでも原本へ戻せます。変換しないまま公開した場合も、公開時に同じ設定で変換されます。
+          変換後の画像を編集・公開に使います。元画像は残り、元に戻せます。未変換の画像にも公開時にこの設定を適用します。
         </p>
       ) : (
         <p className="text-[11px] leading-4 text-slate-500">{plan.settledReason}</p>
@@ -4147,10 +4169,10 @@ export function AssetQuickEditor({
 
   if (asset.kind === "shader") {
     return (
-      <EditorSection title="GLSL Shader">
+      <EditorSection title="GLSLシェーダー">
         <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
           <p className="text-xs leading-4 text-slate-600">
-            {asset.stage} shaderとしてインポートされています。Materialから参照してScene Viewへ反映できます。
+            {asset.stage} シェーダーとしてインポートされています。マテリアルから参照してシーンへ反映できます。
           </p>
           <button
             type="button"
@@ -4189,8 +4211,8 @@ export function AssetQuickEditor({
         <p className="mt-1 text-xs text-slate-500">{sourceLabel(asset)}</p>
         <p className="mt-3 rounded border border-slate-200 bg-slate-50 p-2 text-xs leading-4 text-slate-600">
           {projectPath && asset.thumbnail && asset.thumbnail.status !== "missing"
-            ? "生成済みサムネイルを表示しています。ソースはプロジェクト相対パスで管理されます。"
-            : "生成済みサムネイルがないため代替プレビューを表示しています。ソースの状態は上のアセット情報で確認できます。"}
+            ? "保存済みのサムネイルです。"
+            : "サムネイルがないため、代わりの画像を表示しています。"}
         </p>
       </div>
     </div>

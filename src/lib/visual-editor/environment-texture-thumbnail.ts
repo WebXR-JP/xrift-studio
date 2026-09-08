@@ -79,11 +79,11 @@ export async function renderEnvironmentTextureThumbnail(
   asset: TextureAsset,
 ): Promise<string> {
   if (!isEnvironmentTextureAsset(asset) || asset.source.kind !== "project") {
-    throw new Error("HDRI Textureのプロジェクトソースを確認できません");
+    throw new Error("HDRI テクスチャのプロジェクトソースを確認できません");
   }
   const sourceFormat = getTextureSourceFormat(asset);
   if (sourceFormat !== "hdr" && sourceFormat !== "exr") {
-    throw new Error("HDRI Textureの形式を確認できません");
+    throw new Error("HDRI テクスチャの形式を確認できません");
   }
 
   const dataUrl = await tauri.readProjectFileDataUrl(

@@ -79,7 +79,7 @@ export function ModelAssetInspector({
       ? asset.source.relativePath
       : asset.source.kind === "builtin"
         ? `Built-in: ${asset.source.key}`
-        : "Document内のModel";
+        : "プロジェクト内の3Dモデル";
 
   return (
     <div className="space-y-3">
@@ -122,7 +122,7 @@ export function ModelAssetInspector({
             onClick={onReimport}
             className="mt-2 h-8 rounded-md border border-violet-300 bg-violet-50 px-3 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
           >
-            {reimportBusy ? "再インポート中" : "ソースから再インポート"}
+            {reimportBusy ? "再インポート中" : "元ファイルから再インポート"}
           </button>
         </div>
       </section>
@@ -134,24 +134,24 @@ export function ModelAssetInspector({
               OpenBrush / three-icosa
             </h3>
             <span className="rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-fuchsia-700 shadow-sm">
-              {openBrush.brushNames.length} Brushes
+              {openBrush.brushNames.length} ブラシ
             </span>
           </div>
           <p className="mt-2 text-xs leading-5 text-fuchsia-900/80">
-            各brushをthree-icosa専用Material Assetとして展開し、対応するMaterial Slotへ初期設定します。通常のXRift Materialを割り当てると、そのブラシだけを上書きできます。
+            ブラシごとに専用マテリアルを使います。別のマテリアルを割り当てると、そのブラシだけ置き換えます。
           </p>
           <dl className="mt-2 grid grid-cols-[64px_minmax(0,1fr)] gap-x-2 gap-y-1 text-[11px]">
-            <dt className="text-fuchsia-700">Exporter</dt>
+            <dt className="text-fuchsia-700">作成ソフト</dt>
             <dd className="truncate text-fuchsia-950">
               {openBrush.exporter ?? "Open Brush glTF"}
             </dd>
-            <dt className="text-fuchsia-700">Renderer</dt>
+            <dt className="text-fuchsia-700">描画方式</dt>
             <dd className="truncate font-mono text-fuchsia-950">
               {openBrush.rendererVersion}
             </dd>
           </dl>
           <p className="mt-2 text-[11px] leading-4 text-fuchsia-800">
-            プレビューと公開実行時は、three-icosa公式テンプレートのブラシ素材をネットワークから読み込みます。
+            表示にはブラシ素材のダウンロードが必要です。
           </p>
         </section>
       ) : null}
@@ -173,7 +173,7 @@ export function ModelAssetInspector({
         </div>
       ) : !canReimport ? (
         <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-          保存済みのproject-relative sourceがあるGLB / glTF / OBJ / VRMだけ再インポートできます。
+          元データをプロジェクト内に保存したGLB / glTF / OBJ / VRMが対象です。
         </div>
       ) : null}
 
@@ -185,14 +185,14 @@ export function ModelAssetInspector({
       ) : null}
 
       <InspectorSection
-        title="Import Recipe"
+        title="読み込み設定"
         description="配置と再インポートに適用する設定"
       >
         <label className="grid grid-cols-[minmax(0,1fr)_100px] items-center gap-3 text-xs text-slate-700">
           <span>
-            Import Scale
+            読み込み時の倍率
             <span className="mt-0.5 block text-[11px] text-slate-500">
-              Scene表示、Collider bounds、変換結果へ反映
+              表示と当たり判定に反映します
             </span>
           </span>
           <ScrubNumberInput
@@ -201,16 +201,16 @@ export function ModelAssetInspector({
             step={0.1}
             value={asset.importSettings.scale}
             disabled={readOnly}
-            ariaLabel="Import Scale"
-            scrubLabel="Import Scale"
+            ariaLabel="読み込み時の倍率"
+            scrubLabel="読み込み時の倍率"
             onChange={(scale) => {
               if (scale > 0) onChange({ importSettings: { scale } });
             }}
           />
         </label>
         <RecipeToggle
-          label="配置時にMesh Colliderを追加"
-          description="新規配置と再インポートに適用します。オフで再インポートすると、関連するScene・PrefabのMesh Colliderを外します"
+          label="配置時にメッシュ衝突判定を追加"
+          description="オフで再インポートすると、シーンとプレハブのメッシュ当たり判定を外します"
           checked={asset.importSettings.generateColliders}
           disabled={readOnly}
           onChange={(generateColliders) =>
@@ -218,8 +218,8 @@ export function ModelAssetInspector({
           }
         />
         <RecipeToggle
-          label="Animationを取り込む"
-          description="Animationを含むModelを新しく配置した時、自動再生用Componentを追加します"
+          label="配置時にアニメーションを再生する"
+          description="配置時に、アニメーションを再生するノードグラフを付けます。"
           checked={asset.importSettings.importAnimations}
           disabled={readOnly}
           onChange={(importAnimations) =>
@@ -227,11 +227,11 @@ export function ModelAssetInspector({
           }
         />
         <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
-          <span>Textureの最大解像度<span className="mt-0.5 block text-[11px] text-slate-500">再インポート時に内蔵画像を縮小します。元画像と個別に保護した設定は保持します</span></span>
-          <select aria-label="Model Textureの最大解像度" className="h-7 rounded border border-slate-300 bg-white px-1.5 text-xs" disabled={readOnly || reimportBusy}
+          <span>テクスチャの最大解像度<span className="mt-0.5 block text-[11px] text-slate-500">再インポート時に内蔵画像を縮小します。元画像と保護した設定は残します</span></span>
+          <select aria-label="3Dモデルテクスチャの最大解像度" className="h-7 rounded border border-slate-300 bg-white px-1.5 text-xs" disabled={readOnly || reimportBusy}
             value={asset.importSettings.textureMaxSize ?? "default"}
             onChange={event => onChange({ importSettings: { textureMaxSize: event.currentTarget.value === "original" || event.currentTarget.value === "default" ? event.currentTarget.value : Number(event.currentTarget.value) } })}>
-            <option value="default">Import設定に従う</option>
+            <option value="default">読み込み設定に従う</option>
             <option value="original">原寸のまま</option>
             {TEXTURE_MAX_SIZE_CHOICES.map(size => <option key={size} value={size}>{size}px</option>)}
           </select>
@@ -239,8 +239,8 @@ export function ModelAssetInspector({
       </InspectorSection>
 
       <InspectorSection
-        title="Mesh最適化 / Draco圧縮"
-        description="設定は再インポートにも適用します。元のGLBを残して変換後のファイルを使います"
+        title="メッシュ最適化 / Draco圧縮"
+        description="再インポートにも適用します。元のGLBは残します"
       >
         <ModelOptimizationPanel
           asset={asset}
@@ -254,32 +254,32 @@ export function ModelAssetInspector({
       </InspectorSection>
 
       <InspectorSection
-        title="Model Structure"
-        description="ソースを最後に正常解析した時の構造"
+        title="モデルの構造"
+        description="最後に読み込んだモデルの構造"
       >
         {metadata ? (
           <>
             <dl className="grid grid-cols-3 gap-2">
-              <Metric label="Nodes" value={metadata.nodeCount} />
-              <Metric label="Meshes" value={metadata.meshCount} />
-              <Metric label="Primitives" value={metadata.primitiveCount} />
+              <Metric label="ノード" value={metadata.nodeCount} />
+              <Metric label="メッシュ" value={metadata.meshCount} />
+              <Metric label="描画単位" value={metadata.primitiveCount} />
             </dl>
             <dl className="grid grid-cols-2 gap-2">
-              <Metric label="Bones" value={metadata.bones?.length ?? 0} />
-              <Metric label="Shape Keys" value={metadata.morphTargets?.length ?? 0} />
+              <Metric label="ボーン" value={metadata.bones?.length ?? 0} />
+              <Metric label="シェイプキー" value={metadata.morphTargets?.length ?? 0} />
             </dl>
             <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
-              <p className="text-xs font-semibold text-slate-700">Local Bounds</p>
+              <p className="text-xs font-semibold text-slate-700">モデルの範囲</p>
               <dl className="mt-2 grid grid-cols-[58px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
-                <dt className="text-slate-500">Size</dt>
+                <dt className="text-slate-500">大きさ</dt>
                 <dd className="font-mono text-slate-700">
                   {formatVector(metadata.bounds.size)}
                 </dd>
-                <dt className="text-slate-500">Center</dt>
+                <dt className="text-slate-500">中央</dt>
                 <dd className="font-mono text-slate-700">
                   {formatVector(metadata.bounds.center)}
                 </dd>
-                <dt className="text-slate-500">Radius</dt>
+                <dt className="text-slate-500">半径</dt>
                 <dd className="font-mono text-slate-700">
                   {formatNumber(metadata.bounds.boundingSphereRadius)}
                 </dd>
@@ -288,7 +288,7 @@ export function ModelAssetInspector({
           </>
         ) : (
           <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
-            構造解析結果がありません。ソースから再インポートするとnode、mesh、boundsを確認できます。
+            構造を確認するには、元データから再インポートしてください。
           </p>
         )}
       </InspectorSection>
@@ -298,7 +298,7 @@ export function ModelAssetInspector({
 
       <InspectorSection
         title={`Animations (${metadata?.animations.length ?? 0})`}
-        description="ソース内で検出したanimation clip"
+        description="モデルに含まれるアニメーションクリップ"
       >
         <ModelAnimationList
           animations={metadata?.animations ?? []}
@@ -309,9 +309,9 @@ export function ModelAssetInspector({
 
       {metadata &&
       (metadata.extensionsUsed.length > 0 || metadata.extensionsRequired.length > 0) ? (
-        <InspectorSection title="glTF Extensions" description="ソースが宣言する拡張">
-          <ExtensionList label="Required" values={metadata.extensionsRequired} />
-          <ExtensionList label="Used" values={metadata.extensionsUsed} />
+        <InspectorSection title="glTFの拡張機能" description="モデルに記録された拡張機能">
+          <ExtensionList label="必須" values={metadata.extensionsRequired} />
+          <ExtensionList label="使用中" values={metadata.extensionsUsed} />
         </InspectorSection>
       ) : null}
     </div>
@@ -365,25 +365,25 @@ function ModelReimportImpactSummary({
         {isPreview ? "再インポート前の確認" : "再インポート結果の確認"}
       </h3>
       <p className="mt-1 text-xs leading-5">
-        Material Slot {slotDiff.removedSlots.length}件が
+        マテリアルスロット {slotDiff.removedSlots.length}件が
         {isPreview ? "ソースから消えます" : "ソースから削除されました"}。
         {bindingReferences.length > 0
-          ? ` Scene / Prefabの割当 ${bindingReferences.length}件を確認してください。`
-          : " Scene / Prefabの明示的な割当は見つかりませんでした。"}
+          ? ` シーンやプレハブの割り当て ${bindingReferences.length}件を確認してください。`
+          : " シーンやプレハブでの割り当てはありません。"}
       </p>
       {removedDefaultCount > 0 ? (
         <p className="mt-1 text-[11px] leading-4 text-amber-800">
-          削除対象にはModel既定Materialの割当が{removedDefaultCount}件あります。
+          削除対象にはモデルの既定マテリアルの割り当てが{removedDefaultCount}件あります。
         </p>
       ) : null}
       {slotDiff.addedSlots.length > 0 ? (
         <p className="mt-1 text-[11px] leading-4 text-amber-800">
-          新しいMaterial Slotは{slotDiff.addedSlots.length}件です。必要に応じてMaterialを割り当ててください。
+          新しいマテリアルスロットは{slotDiff.addedSlots.length}件です。必要に応じてマテリアルを割り当ててください。
         </p>
       ) : null}
 
       <div className="mt-2 rounded-md border border-amber-200 bg-white/80 px-2.5 py-2">
-        <p className="text-[11px] font-semibold text-amber-900">削除されるSlot</p>
+        <p className="text-[11px] font-semibold text-amber-900">削除されるスロット</p>
         <ul className="mt-1.5 space-y-1">
           {slotDiff.removedSlots.map((slot) => {
             const material = slot.defaultMaterialAssetId
@@ -395,7 +395,7 @@ function ModelReimportImpactSummary({
                 <span className="ml-1 font-mono text-amber-700">{slot.slot}</span>
                 {slot.defaultMaterialAssetId ? (
                   <span className="block text-amber-700">
-                    既定Material: {material?.name ?? slot.defaultMaterialAssetId}
+                    既定マテリアル: {material?.name ?? slot.defaultMaterialAssetId}
                   </span>
                 ) : null}
               </li>
@@ -407,7 +407,7 @@ function ModelReimportImpactSummary({
       {bindingReferences.length > 0 ? (
         <details className="mt-2 rounded-md border border-amber-200 bg-white/80 px-2.5 py-2" open={isPreview}>
           <summary className="cursor-pointer text-[11px] font-semibold text-amber-900">
-            影響する割当 {bindingReferences.length}件
+            影響する割り当て {bindingReferences.length}件
           </summary>
           <ul className="mt-2 space-y-1.5">
             {bindingReferences.map((reference) => {
@@ -418,7 +418,7 @@ function ModelReimportImpactSummary({
                   className="text-[11px] leading-4 text-amber-900"
                 >
                   <span className="font-medium">
-                    {reference.documentKind === "scene" ? "Scene" : "Prefab"}: {reference.documentName}
+                    {reference.documentKind === "scene" ? "シーン" : "プレハブ"}: {reference.documentName}
                   </span>
                   <span className="block text-amber-700">
                     {reference.entityName} / {reference.slot} / {material?.name ?? reference.materialAssetId}
@@ -487,7 +487,7 @@ function ModelOptimizationPanel({
   }
 
   const blockedReason = readOnly
-    ? "Playを停止すると最適化できます。"
+    ? "動作確認を停止すると最適化できます。"
     : !canOptimize
       ? "初回の自動保存が終わると最適化できます。"
       : null;
@@ -496,23 +496,23 @@ function ModelOptimizationPanel({
     <>
       {inUse}
       <RecipeToggle
-        label="Meshを最適化"
-        description="重複頂点の結合、頂点バッファの共有、Animationキーフレームの間引き"
+        label="メッシュを最適化"
+        description="重複する頂点と不要なキーフレームを減らします。"
         checked={optimizeMeshes}
         disabled={readOnly || busy}
         onChange={(next) => onChange({ importSettings: { optimizeMeshes: next } })}
       />
       <RecipeToggle
-        label="重複Meshをインスタンス化"
-        description="Playと公開先で、近くの同じ形状・マテリアルの不透明な部品をまとめて描画します。元の部品と当たり判定は保持します。動く部品、Scriptやしかけがあるシーンは通常描画します"
+        label="重複メッシュをインスタンス化"
+        description="近くの同じ不透明な部品をまとめて描画します。当たり判定は維持します。動く部品や、動作を設定したシーンは対象外です。"
         checked={asset.importSettings.instanceMeshes === true}
         disabled={readOnly || busy || !canInstanceModel(asset)}
         status={canInstanceModel(asset) ? "実験的" : "静的なGLBのみ対応"}
         onChange={(next) => onChange({ importSettings: { instanceMeshes: next } })}
       />
       <RecipeToggle
-        label="公開時に静的Meshをまとめる"
-        description="動かないMeshをMaterialごとに1つへ束ね、公開したWorldのdraw callを減らします。原本もEditorの表示も変わりません"
+        label="公開時に静的メッシュをまとめる"
+        description="動かないメッシュをまとめ、公開後の描画回数を減らします。元データと編集画面は変わりません。"
         checked={asset.importSettings.mergeStaticMeshes === true}
         disabled={readOnly || busy}
         status="実験的"
@@ -521,8 +521,8 @@ function ModelOptimizationPanel({
         }
       />
       <RecipeToggle
-        label="Draco圧縮をかける"
-        description="配信サイズを下げます。再インポートにも適用します。チェックを外して再インポートすると保存してある原本から読み直します"
+        label="Dracoで圧縮"
+        description="配信サイズを減らします。元に戻すには、オフにして再インポートしてください"
         checked={compressWithDraco}
         disabled={readOnly || busy}
         status={plan.alreadyDraco ? "適用済み" : undefined}
@@ -551,7 +551,7 @@ function ModelOptimizationPanel({
         onClick={() => onOptimize?.(options)}
         className="h-8 w-full rounded-md border border-violet-300 bg-violet-50 px-3 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
       >
-        {busy ? "最適化中" : "この設定でModelを最適化する"}
+        {busy ? "最適化中" : "この設定で3Dモデルを最適化する"}
       </button>
       {state.phase !== "idle" ? (
         <p
@@ -570,7 +570,7 @@ function ModelOptimizationPanel({
         <p className="text-[11px] leading-4 text-slate-500">{blockedReason}</p>
       ) : (
         <p className="rounded border border-amber-200 bg-amber-50 p-1.5 text-xs leading-4 text-amber-800">
-          実行すると元のGLBは残したまま、Assetの参照先が最適化後のGLBへ切り替わります。
+          元のGLBを残し、軽量化したGLBに差し替えます。
         </p>
       )}
     </>
@@ -591,7 +591,7 @@ function ModelAnimationList({
   onCreateAnimationGraph?: () => void;
 }) {
   if (animations.length === 0) {
-    return <p className="text-xs text-slate-500">Animationは検出されていません。</p>;
+    return <p className="text-xs text-slate-500">アニメーションはありません。</p>;
   }
 
   const groups = groupModelAnimations(animations);
@@ -607,19 +607,17 @@ function ModelAnimationList({
   return (
     <>
       <dl className="grid grid-cols-3 gap-2">
-        <Metric label="Clips" value={animations.length} />
-        <Metric label="Groups" value={groups.length} />
-        <Metric label="Tracks" value={totalTracks} />
+        <Metric label="アニメーション" value={animations.length} />
+        <Metric label="グループ" value={groups.length} />
+        <Metric label="トラック" value={totalTracks} />
       </dl>
       <p className="text-[11px] leading-4 text-slate-500">
-        合計 {formatNumber(totalDuration)}s。Sceneへ配置すると、全clipをループ再生するInteractivity
-        Graphが一緒に作られ、そのEntityに付きます。
+        再生時間の合計: {formatNumber(totalDuration)}秒
       </p>
       {onCreateAnimationGraph ? (
         <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
           <p className="text-[11px] leading-4 text-slate-600">
-            すでに置いてあるEntity用に、全{animations.length}
-            clipを同時にループ再生するGraphをあとから作れます。作成したGraphはAssetsに置くだけで、Entityには付きません。
+            全{animations.length}本を同時にループ再生するグラフをAssetsに作ります。Entityへの追加は別途必要です。
           </p>
           <button
             type="button"
@@ -627,7 +625,7 @@ function ModelAnimationList({
             onClick={onCreateAnimationGraph}
             className="mt-2 h-8 rounded-md border border-violet-300 bg-white px-2.5 text-xs font-semibold text-violet-700 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            アニメーションのGraphを作る
+            アニメーション用グラフを作成
           </button>
         </div>
       ) : null}
@@ -639,13 +637,13 @@ function ModelAnimationList({
                 {group.label}
                 {group.animations.length > 1 ? (
                   <span className="ml-1.5 rounded border border-slate-300 bg-slate-50 px-1 py-0.5 text-[10px] font-semibold text-slate-500">
-                    {group.animations.length} clips
+                    {group.animations.length} アニメーション
                   </span>
                 ) : null}
               </span>
               <span className="text-[11px] tabular-nums text-slate-500">
                 {formatNumber(group.animations[0].duration)}s ·{" "}
-                {group.totalTrackCount} tracks
+                {group.totalTrackCount} トラック
               </span>
             </summary>
             <div className="mt-1.5 space-y-1 border-t border-slate-100 pt-1.5">
@@ -658,7 +656,7 @@ function ModelAnimationList({
                     {animation.name}
                   </span>
                   <span className="text-[11px] tabular-nums text-slate-400">
-                    {formatNumber(animation.duration)}s · {animation.trackCount} tracks
+                    {formatNumber(animation.duration)}s · {animation.trackCount} トラック
                   </span>
                 </div>
               ))}

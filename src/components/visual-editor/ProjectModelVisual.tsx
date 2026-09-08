@@ -845,7 +845,7 @@ export function applyAssignedMaterialPreviews(
               renderer: "gltf-pbr",
               reason: "shader-load-error",
               brushName: assignment.material.shader.brushName,
-              message: "Vertex or fragment shader has no void main() entrypoint",
+              message: "Vertex or fragment シェーダー has no void main() entrypoint",
             });
             ownedMaterials.push(fallback);
             return fallback;

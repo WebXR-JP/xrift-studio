@@ -82,7 +82,7 @@ export function useShaderEditor({
       }
       const asset = assets.assets[assetId];
       if (!asset || asset.kind !== "shader") {
-        throw new Error("Shader Assetが見つかりません");
+        throw new Error("シェーダー素材が見つかりません");
       }
       await tauri.writeTextFile(projectPath, asset.source.relativePath, source);
       setState((previous) => ({ ...previous, source, error: null }));

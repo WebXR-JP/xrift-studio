@@ -370,7 +370,7 @@ export const INTERACTIVITY_RECIPES: readonly InteractivityRecipe[] = [
   {
     id: "start-set-color",
     label: "開始時に色を変える",
-    description: "開始と同時に、このEntityのMaterialのBase Colorを変えます",
+    description: "開始と同時に、このEntityのマテリアルの基本色を変えます",
     focusOffset: 1,
     build: (graph, origin) => {
       const start = appendInteractivityOperation(graph, "event/onStart", origin);
@@ -389,7 +389,7 @@ export const INTERACTIVITY_RECIPES: readonly InteractivityRecipe[] = [
   {
     id: "start-fade-color",
     label: "開始時に色をゆっくり変える",
-    description: "開始からBase Colorを1秒かけて変えます。「かける時間」で速さを変えられます",
+    description: "開始から基本色を1秒かけて変えます。「かける時間」で速さを変えられます",
     focusOffset: 1,
     build: (graph, origin) => {
       const start = appendInteractivityOperation(graph, "event/onStart", origin);
@@ -410,7 +410,7 @@ export const INTERACTIVITY_RECIPES: readonly InteractivityRecipe[] = [
     id: "start-emissive",
     label: "開始時に発光させる",
     description:
-      "開始と同時にEmissiveを立ち上げます。SceneのBloomと合わせると光って見えます",
+      "開始時に発光を強めます。シーンのBloomを有効にすると、明るい部分がにじみます。",
     focusOffset: 1,
     build: (graph, origin) => {
       const start = appendInteractivityOperation(graph, "event/onStart", origin);
@@ -429,7 +429,7 @@ export const INTERACTIVITY_RECIPES: readonly InteractivityRecipe[] = [
   {
     id: "start-animation",
     label: "開始時にアニメーションを再生",
-    description: "開始と同時にanimation 0を再生します。ドアの開閉などに",
+    description: "開始時にモデルの最初のアニメーションを再生します。",
     focusOffset: 1,
     build: (graph, origin) => {
       const start = appendInteractivityOperation(graph, "event/onStart", origin);
@@ -443,7 +443,7 @@ export const INTERACTIVITY_RECIPES: readonly InteractivityRecipe[] = [
   {
     id: "delayed-animation",
     label: "少し待ってから再生",
-    description: "開始から1秒待ってanimation 0を再生します",
+    description: "開始から1秒待ち、モデルの最初のアニメーションを再生します。",
     focusOffset: 1,
     build: (graph, origin) => {
       const start = appendInteractivityOperation(graph, "event/onStart", origin);

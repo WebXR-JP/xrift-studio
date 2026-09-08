@@ -234,7 +234,7 @@ export async function reimportModelAssetFromDisk(
     return failedModelReimport(
       manifest,
       [],
-      "再取り込みできるプロジェクト内のModel Assetを選択してください",
+      "再取り込みできるプロジェクト内の3Dモデルを選択してください",
       onProgress,
     );
   }
@@ -303,7 +303,7 @@ export async function reimportModelAssetFromDisk(
       (progress) => reportModelReimport(onProgress, "committing-assets", `${progress.message}（${Math.min(progress.completed + 1, progress.total)}/${progress.total}）`),
     );
     if (asset.importSettings.optimizeMeshes || asset.importSettings.compressWithDraco) {
-      reportModelReimport(onProgress, "committing-assets", "Import設定でモデルを最適化しています");
+      reportModelReimport(onProgress, "committing-assets", "読み込み設定でモデルを最適化しています");
       const options = {
         optimizeMeshes: asset.importSettings.optimizeMeshes,
         compressWithDraco: asset.importSettings.compressWithDraco === true,
@@ -327,7 +327,7 @@ export async function reimportModelAssetFromDisk(
     return failedModelReimport(
       manifest,
       diagnostics,
-      "モデルの再取り込みに失敗しました。元のAssetは保持されています",
+      "モデルの再取り込みに失敗しました。元の素材は保持されています",
       onProgress,
     );
   }

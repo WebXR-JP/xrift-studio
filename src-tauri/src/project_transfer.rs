@@ -265,7 +265,7 @@ pub fn export_project_archive(
     }
     if let Ok(existing) = std::fs::symlink_metadata(&archive) {
         if !existing.is_file() {
-            return Err("書き出し先にはzipファイルのパスを指定してください".to_string());
+            return Err("書き出し先にはZIPファイルのパスを指定してください".to_string());
         }
     }
     if let Some(parent) = archive.parent() {
@@ -395,9 +395,9 @@ fn open_project_archive(archive_path: &str) -> Result<(PathBuf, zip::ZipArchive<
     }
     let file = std::fs::File::open(&path).map_err(|e| format!("アーカイブを開けません: {}", e))?;
     let archive = zip::ZipArchive::new(file)
-        .map_err(|e| format!("zipアーカイブとして読み込めません: {}", e))?;
+        .map_err(|e| format!("ZIPアーカイブとして読み込めません: {}", e))?;
     if archive.len() > PROJECT_ARCHIVE_MAX_ENTRIES {
-        return Err("アーカイブのエントリー数が多すぎます".to_string());
+        return Err("ZIP内のファイル・フォルダー数が多すぎます".to_string());
     }
     Ok((path, archive))
 }
@@ -580,7 +580,7 @@ pub async fn import_project_from_repository(
         let _ = force_remove_dir_all(&clone_root);
         let stderr = String::from_utf8_lossy(&output.stderr);
         let message = stderr.lines().last().unwrap_or("git clone failed").trim();
-        return Err(format!("repositoryを取得できませんでした: {}", message));
+        return Err(format!("リポジトリを取得できませんでした: {}", message));
     }
 
     let result = take_checkout_into_library(&root, &clone_root, &directory_name);
@@ -598,7 +598,7 @@ fn take_checkout_into_library(
     inspect_cloned_repository_tree(checkout)?;
     if !checkout.join(VISUAL_PROJECT_MANIFEST).is_file() && !checkout.join("xrift.json").is_file() {
         return Err(format!(
-            "repositoryの直下に {} か xrift.json がありません",
+            "リポジトリの直下に {} か xrift.json がありません",
             VISUAL_PROJECT_MANIFEST
         ));
     }

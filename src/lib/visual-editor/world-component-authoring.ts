@@ -52,7 +52,7 @@ const GUIDANCE: Record<string, WorldComponentGuidance> = {
     purpose: "入室して目的の場所へ向かう",
     selection: "訪問者が最初に見るものと、受付・客席への移動を設計する。既存スポーンを確認してから配置する。",
     placement: ["安全な床面へ置き、主な体験や案内へ向ける。スクリーン・鏡・受付の利用場所や待機列の中へ出現させない。"],
-    verification: ["スポーンの目の高さで撮影し、進む方向が分かるか、床とColliderが移動を支えるかPlayで確認する。"],
+    verification: ["スポーンの目の高さで撮影し、進む方向が分かるか、床と衝突判定が移動を支えるか動作確認で確認する。"],
   },
   [XRIFT_COMPONENT_SCHEMA_IDS.entryLogBoard]: {
     purpose: "イベント会場で入退室の履歴を確認する",
@@ -88,7 +88,7 @@ export function getWorldComponentGuidance(schemaId: string) {
     ...guidance,
     fields: definition.fields,
     prefabEditablePropertyNames: recipe.editablePropertyNames,
-    authoring: "place_builtin_prefabで公式部品を配置し、get_entity_componentsでComponentとTransformを確認する。位置・回転・大きさはupdate_transformで調整する。Prefabの保護された寸法等を個別指定する場合はcreate_empty_entityとadd_componentで通常のComponentを作り、update_componentのpatch.propertiesで設定する。TransformとComponentのposition/rotationを二重に適用しない。",
+    authoring: "place_builtin_prefabで公式部品を配置し、get_entity_componentsでComponentと位置・回転・大きさを確認する。位置・回転・大きさはupdate_transformで調整する。プレハブの保護された寸法等を個別指定する場合はcreate_empty_entityとadd_componentで通常のComponentを作り、update_componentのpatch.propertiesで設定する。位置・回転・大きさとComponentのposition/rotationを二重に適用しない。",
   };
 }
 
@@ -121,7 +121,7 @@ export function getWorldComponentAuthoring(scene: SceneDocument, projectKind: Vi
       .instances.some(instance => instance.enabled)
       ? "有効なScreenShareDisplayがある。既存設備を確認し、重複追加より先に向き・寸法・利用場所を調整する。"
       : "有効なScreenShareDisplayが文書内に見つからない。交流・共同作業・発表に必要なら配置し、省く場合は用途に基づく理由を設計図へ残す。",
-    evidenceLimit: "instancesはSceneDocument内の公式Componentの一覧。未展開PrefabやScript内の描画は含まない。存在だけでは配置品質や共有・同期の動作を証明しない。利用視点の画像と実行環境で確認し、未検証項目を報告する。",
+    evidenceLimit: "instancesはSceneDocument内の公式Componentの一覧。未展開プレハブやスクリプト内の描画は含まない。存在だけでは配置品質や共有・同期の動作を証明しない。利用視点の画像と実行環境で確認し、未検証項目を報告する。",
     tools: ["get_entity_components", "place_builtin_prefab", "update_transform", "capture_scene_view"],
   };
 }

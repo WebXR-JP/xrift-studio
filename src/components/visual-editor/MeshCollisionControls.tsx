@@ -26,19 +26,19 @@ export function MeshCollisionControls({ scene, entity, readOnly, onAction, onSel
   const enabled = chain.every((e) => e.enabled);
   return <div className="space-y-2 border-t border-slate-100 pt-2">
     <div className="flex justify-between gap-2 text-xs"><span className="font-medium text-slate-700">歩行・当たり判定</span>
-      <span className="text-slate-500">{!enabled ? "オブジェクトが無効" : local.length ? "このオブジェクトに設定あり" : inherited.length ? "親に設定あり" : "設定なし"}</span>
+      <span className="text-slate-500">{!enabled ? "Entityが無効" : local.length ? "このEntityに設定あり" : inherited.length ? "親に設定あり" : "設定なし"}</span>
     </div>
     {inherited.map((r) => <button key={r.componentId} type="button" onClick={() => onSelect?.(r.entityId)} className="block text-left text-[11px] text-slate-500 hover:text-violet-700">親: {r.entityName} · {r.label}</button>)}
     <div className="flex flex-wrap gap-1">
       {([["add", "当たり判定に追加"], ["remove", "これを外す"], ["exclusive", "これだけを歩けるようにする"]] as const).map(([action, label]) =>
         <button key={action} type="button" disabled={readOnly || !enabled || !onAction}
-          title={action === "exclusive" ? "シーン全体のほかのCollider（Triggerを含む）と自動生成を解除します。Undoで戻せます。" : action === "add" ? "このメッシュを固定のMesh Colliderとして追加します。" : "このメッシュのColliderを無効にします。親のBox Colliderなど独立した形状は一覧から編集できます。"}
+          title={action === "exclusive" ? "シーン全体のほかの衝突判定（Triggerを含む）と自動生成を解除します。Undoで戻せます。" : action === "add" ? "このメッシュを固定のメッシュ衝突判定として追加します。" : "このメッシュの衝突判定を無効にします。親のBox 衝突判定など独立した形状は一覧から編集できます。"}
           onClick={() => onAction?.(entity.id, action)}
           className="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-45">{label}</button>)}
     </div>
     <p className="text-[11px] leading-4 text-slate-500">「これだけ」はシーン全体を置き換えます。Undoで戻せます。</p>
     <details><summary className="cursor-pointer text-xs text-slate-600">当たり判定の設定一覧（{rows.length}）</summary>
-      <div className="max-h-40 overflow-y-auto">{rows.length ? rows.map((row) => <CollisionRow key={`${row.entityId}:${row.componentId}`} row={row} select={select} />) : <p className="py-1 text-xs text-slate-500">Colliderと自動生成の設定はありません。</p>}</div>
+      <div className="max-h-40 overflow-y-auto">{rows.length ? rows.map((row) => <CollisionRow key={`${row.entityId}:${row.componentId}`} row={row} select={select} />) : <p className="py-1 text-xs text-slate-500">衝突判定と自動生成の設定はありません。</p>}</div>
     </details>
   </div>;
 }

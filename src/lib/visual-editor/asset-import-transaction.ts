@@ -51,7 +51,7 @@ export function createAssetImportTransactionId(scope: string): string {
   );
   // 呼び出し側が壊れたidをRustへ渡さないよう、ここで必ず弾く。
   if (!isValidAssetImportTransactionId(id)) {
-    throw new Error("Asset書き込み用のtransaction idを生成できませんでした。");
+    throw new Error("素材書き込み用のtransaction idを生成できませんでした。");
   }
   return id;
 }
@@ -66,16 +66,16 @@ export function describeAssetImportFailure(error: unknown): string {
     return "書き込み処理の識別子をStudioが正しく作れませんでした。Studioを再起動しても続く場合は不具合として報告してください。";
   }
   if (raw.includes("outside the managed Asset folders")) {
-    return "変換結果の保存先がAsset管理フォルダーの外でした。Studioを最新版へ更新してください。";
+    return "変換結果の保存先が素材管理フォルダーの外でした。Studioを最新版へ更新してください。";
   }
   if (raw.includes("has different content")) {
-    return "同じ名前の変換結果が別内容で残っています。Assetを選び直してもう一度変換してください。";
+    return "同じ名前の変換結果が別内容で残っています。素材を選び直してもう一度変換してください。";
   }
   if (raw.includes("transaction is too large")) {
-    return "一度に書き出す容量が上限を超えました。選択するAssetを減らして変換し直してください。";
+    return "一度に書き出す容量が上限を超えました。選択する素材を減らして変換し直してください。";
   }
   if (raw.includes("invalid write count")) {
-    return "一度に変換できるAsset数の上限を超えました。選択を分けて変換してください。";
+    return "一度に変換できる素材数の上限を超えました。選択を分けて変換してください。";
   }
   if (raw.includes("payload size is invalid")) {
     return "変換結果のサイズが上限を超えました。最大解像度を下げてから変換してください。";

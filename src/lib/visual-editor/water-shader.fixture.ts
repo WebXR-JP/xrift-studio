@@ -170,7 +170,7 @@ function assertCatalogIntegrity(): void {
     );
   }
   assert(
-    getWaterShaderCatalogEntry("calm-lake")?.label === "Calm Lake" &&
+    getWaterShaderCatalogEntry("calm-lake")?.id === "calm-lake" &&
       getWaterShaderCatalogEntry("nope") === undefined,
     "getWaterShaderCatalogEntry did not resolve presets correctly",
   );

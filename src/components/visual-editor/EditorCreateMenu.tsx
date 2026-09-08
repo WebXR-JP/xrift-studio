@@ -53,7 +53,7 @@ const CATEGORY_LABELS: Readonly<Record<string, string>> = {
   physics: "Physics",
   interaction: "Interaction",
   media: "Media",
-  world: "World",
+  world: "ワールド",
 };
 
 export function EditorCreateMenu({
@@ -179,9 +179,9 @@ export function EditorCreateMenu({
       .map((definition) => ({ definition, category })),
   );
   const emptyEntityMatches = matchesSearch(
-    "Empty Entity Transform scene object entity",
+    "空のEntity Empty Entity Transform scene object entity",
   );
-  const terrainMatches = matchesSearch("地形 Terrain heightmap scene object entity");
+  const terrainMatches = matchesSearch("地形 terrain heightmap scene object entity");
   const searchResultCount =
     Number(emptyEntityMatches) +
     Number(terrainMatches) +
@@ -214,7 +214,7 @@ export function EditorCreateMenu({
       />
       <div
         role="menu"
-        aria-label="Create"
+        aria-label="追加"
         className="absolute left-0 top-8 z-50 flex max-h-[min(620px,calc(100vh-150px))] w-[340px] flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-xl"
       >
       <header className="flex shrink-0 items-center gap-2 border-b border-slate-200 bg-slate-50 px-2.5 py-2">
@@ -222,7 +222,7 @@ export function EditorCreateMenu({
           <button
             type="button"
             onClick={() => setPage("root")}
-            aria-label="Createの最初へ戻る"
+            aria-label="追加メニューの最初に戻る"
             className="rounded p-1 text-slate-500 hover:bg-white hover:text-slate-900"
           >
             <ChevronLeft size={15} aria-hidden="true" />
@@ -233,27 +233,27 @@ export function EditorCreateMenu({
             {searching
               ? "検索結果"
               : page === "root"
-              ? "Create"
+              ? "追加"
               : page === "primitive"
-                ? "Primitive"
+                ? "基本形状"
                 : page === "xrift"
-                  ? "XRift Component"
+                  ? "XRiftのComponent"
                   : "Component"}
           </div>
           <div className="truncate text-[11px] text-slate-500">
             {searching
               ? `「${searchQuery.trim()}」に一致する追加候補`
               : page === "root"
-              ? "Sceneへ作成するものを選びます"
+              ? "シーンへ作成するものを選びます"
               : page === "xrift"
                 ? selectedEntity
-                  ? `Sceneへ配置、または「${selectedEntity.name}」へ追加`
-                  : "Sceneへ配置。Entityを選択するとComponentも追加できます"
+                  ? `シーンへ配置、または「${selectedEntity.name}」へ追加`
+                  : "シーンへ配置。Entityを選択するとComponentも追加できます"
                 : page === "component"
                   ? selectedEntity
                     ? `「${selectedEntity.name}」へ追加`
-                    : "選んだComponentを持つEntityをSceneへ作成"
-                  : "基本形状をSceneへ追加"}
+                    : "選んだComponentを持つEntityをシーンへ作成"
+                  : "基本形状をシーンへ追加"}
           </div>
         </div>
       </header>
@@ -291,12 +291,12 @@ export function EditorCreateMenu({
               </p>
             ) : null}
             {emptyEntityMatches || terrainMatches || visiblePrimitives.length > 0 ? (
-              <MenuSection label="Scene Object">
+              <MenuSection label="Entity">
                 {emptyEntityMatches ? (
                   <MenuItem
                     icon={EDITOR_ICONS.sceneEntity}
-                    label="Empty Entity"
-                    detail="Transformだけを持つ整理用のEntity"
+                    label="空のEntity"
+                    detail="位置・回転・大きさだけを持つ整理用のEntity"
                     disabled={disabled}
                     trailing="作成"
                     onClick={() => {
@@ -365,7 +365,7 @@ export function EditorCreateMenu({
             ) : null}
 
             {visibleBuiltinPrefabs.length > 0 ? (
-              <MenuSection label="XRift Prefab">
+              <MenuSection label="XRift プレハブ">
                 {visibleBuiltinPrefabs.map((recipe) => {
                   const definition = xriftGroups
                     .flatMap((group) => group.components)
@@ -393,7 +393,7 @@ export function EditorCreateMenu({
             ) : null}
 
             {visibleXriftComponents.length > 0 ? (
-              <MenuSection label="XRift Component">
+              <MenuSection label="XRiftのComponent">
                 {visibleXriftComponents.map(({ definition, group }) => {
                   const Icon = EDITOR_ICONS[definition.icon];
                   const canCreateHost = definition.attachBehavior.kind === "leaf";
@@ -505,18 +505,18 @@ export function EditorCreateMenu({
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-xs font-semibold text-slate-800">
-                  Empty Entity
+                  空のEntity
                 </span>
                 <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">
-                  Transformだけを持つ整理用のEntity
+                  位置・回転・大きさだけを持つ整理用のEntity
                 </span>
               </span>
               <span className="text-[10px] font-medium text-slate-400">作成</span>
             </button>
             <RootChoice
               icon={Cuboid}
-              title="Primitive"
-              description="Box、Sphere、Planeなどの基本形状"
+              title="基本形状"
+              description="直方体、球、平面などの基本形状"
               onClick={() => setPage("primitive")}
             />
             <RootChoice
@@ -531,8 +531,8 @@ export function EditorCreateMenu({
             />
             <RootChoice
               icon={Sparkles}
-              title="XRift Component"
-              description="XRift向けの配置済み機能とComponent"
+              title="XRiftのComponent"
+              description="画面共有やミラーなど、XRift向けの機能"
               onClick={() => setPage("xrift")}
             />
             <RootChoice
@@ -540,8 +540,8 @@ export function EditorCreateMenu({
               title="Component"
               description={
                 selectedEntity
-                  ? `Light、Audio、Particleなどを「${selectedEntity.name}」へ追加`
-                  : "Light、Audio、Particleなどの専用Entityを作成"
+                  ? `ライト、音源、パーティクルなどを「${selectedEntity.name}」へ追加`
+                  : "ライト、音源、パーティクルなどの専用Entityを作成"
               }
               onClick={() => setPage("component")}
             />
@@ -549,7 +549,7 @@ export function EditorCreateMenu({
         ) : null}
 
         {!searching && page === "primitive" ? (
-          <MenuSection label="Scene Object">
+          <MenuSection label="Entity">
             {BUILTIN_PRIMITIVE_CREATION_CATALOG.filter(
               (entry) => entry.showInCreateMenu,
             ).map((entry) => (
@@ -572,7 +572,7 @@ export function EditorCreateMenu({
         {!searching && page === "xrift" ? (
           <div className="space-y-2">
             <MenuSection
-              label="Sceneへ配置"
+              label="シーンへ配置"
               collapsible
               count={builtinPrefabRecipes.length}
               defaultOpen

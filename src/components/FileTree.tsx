@@ -274,7 +274,7 @@ export function FileTree({
       }
       toast({
         kind: "success",
-        title: `${arr.length} 個のファイルをアップロードしました`,
+        title: `${arr.length}件のファイルを追加しました`,
         description: dirRel || "(ルート)",
       });
       setExpanded((prev) => {
@@ -286,7 +286,7 @@ export function FileTree({
     } catch (e) {
       toast({
         kind: "error",
-        title: "アップロードに失敗しました",
+        title: "ファイルを追加できませんでした",
         description: `${e}`,
       });
     } finally {
@@ -343,7 +343,7 @@ export function FileTree({
       toast({
         kind: "success",
         title: confirmDelete.isDir
-          ? "フォルダを削除しました"
+          ? "フォルダーを削除しました"
           : "ファイルを削除しました",
         description: confirmDelete.rel,
       });
@@ -442,7 +442,7 @@ export function FileTree({
               !clickable
                 ? "編集できないファイル形式"
                 : node.isDir
-                  ? `${node.name}（ファイルをドロップでアップロード / 右クリックで操作）`
+                  ? `${node.name}（ファイルをドロップして追加 / 右クリックで操作）`
                   : `${node.name}（右クリックで操作）`
             }
           >
@@ -477,7 +477,7 @@ export function FileTree({
           {isDropTarget && (
             <span className="ml-auto flex items-center gap-0.5 text-[10px] text-brand-600">
               <UploadCloud size={10} strokeWidth={2} />
-              drop
+              ここに移動
             </span>
           )}
           {!isRenaming && !isDropTarget && (
@@ -541,7 +541,7 @@ export function FileTree({
         {uploading && (
           <div className="mx-1 mb-1 flex items-center gap-1.5 rounded-md bg-brand-50 px-2 py-1 text-[11px] text-brand-700">
             <UploadCloud size={11} strokeWidth={2} className="animate-pulse" />
-            アップロード中…
+            追加中…
           </div>
         )}
         {error && (
@@ -590,7 +590,7 @@ export function FileTree({
 
       <ConfirmDialog
         open={!!confirmDelete}
-        title={confirmDelete?.isDir ? "フォルダを削除" : "ファイルを削除"}
+        title={confirmDelete?.isDir ? "フォルダーを削除" : "ファイルを削除"}
         description={
           confirmDelete
             ? `${confirmDelete.rel}\n\n${confirmDelete.isDir ? "中身ごと完全に削除されます。" : "完全に削除されます。"} 元に戻せません。`

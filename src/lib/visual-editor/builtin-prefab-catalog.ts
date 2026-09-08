@@ -138,7 +138,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     ],
     configuration: {
       requiredBeforeCompile: false,
-      hint: "Inspectorで履歴件数、文言、配色を変更できます。",
+      hint: "設定で履歴件数、文言、配色を変更できます。",
     },
     defaultTransform: {
       position: [0, 1.5, -3],
@@ -161,7 +161,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     editablePropertyNames: ["instanceId", "disabled"],
     configuration: {
       requiredBeforeCompile: true,
-      hint: "配置後にInspectorで移動先のInstance IDを設定してください。",
+      hint: "配置後に設定で移動先のInstance IDを設定してください。",
     },
     defaultTransform: {
       position: [0, 0, -3],
@@ -189,7 +189,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     ],
     configuration: {
       requiredBeforeCompile: false,
-      hint: "標準タグをそのまま使うか、Inspectorで内容を変更できます。",
+      hint: "標準タグをそのまま使うか、設定で内容を変更できます。",
     },
     defaultTransform: {
       position: [0, 0, -3],
@@ -220,7 +220,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     ],
     configuration: {
       requiredBeforeCompile: false,
-      hint: "Inspectorで動画URLと同期方法を設定できます。",
+      hint: "設定で動画URLと同期方法を設定できます。",
     },
     defaultTransform: {
       position: [0, 2, -4],
@@ -243,7 +243,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     editablePropertyNames: ["id", "url", "playing", "volume"],
     configuration: {
       requiredBeforeCompile: false,
-      hint: "Inspectorまたは実行中の操作UIから動画URLを設定できます。",
+      hint: "設定または実行中の操作UIから動画URLを設定できます。",
     },
     defaultTransform: {
       position: [0, 2, -4],
@@ -266,7 +266,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     editablePropertyNames: ["id", "url", "playing", "volume", "sync"],
     configuration: {
       requiredBeforeCompile: false,
-      hint: "Inspectorまたは実行中の操作UIから配信URLを設定できます。",
+      hint: "設定または実行中の操作UIから配信URLを設定できます。",
     },
     defaultTransform: {
       position: [0, 2, -4],
@@ -289,7 +289,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     editablePropertyNames: ["id", "targetFps"],
     configuration: {
       requiredBeforeCompile: false,
-      hint: "Inspectorで識別IDと更新フレームレートを設定できます。",
+      hint: "設定で識別IDと更新フレームレートを設定できます。",
     },
     defaultTransform: {
       position: [0, 2, -4],

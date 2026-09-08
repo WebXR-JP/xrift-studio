@@ -68,8 +68,8 @@ const creationChoices: CreationChoice[] = [
     kind: "world",
     method: "classic",
     title: "ワールドをコードで作る",
-    description: "XRiftテンプレートから始め、コードとファイルを直接編集します。",
-    detail: "package.json・xrift.json・src が制作データです。",
+    description: "XRiftのテンプレートを使い、コードでワールドを作ります。",
+    detail: "コードとファイルを直接編集します。",
     example: "my-first-world",
     KindIcon: Globe2,
     MethodIcon: Code2,
@@ -79,8 +79,8 @@ const creationChoices: CreationChoice[] = [
     kind: "item",
     method: "classic",
     title: "アイテムをコードで作る",
-    description: "再利用できるXRiftアイテムをコードから組み立てます。",
-    detail: "package.json・xrift.json・src が制作データです。",
+    description: "コードを書いて、XRiftで使うアイテムを作ります。",
+    detail: "コードとファイルを直接編集します。",
     example: "my-first-item",
     KindIcon: Box,
     MethodIcon: Code2,
@@ -90,8 +90,8 @@ const creationChoices: CreationChoice[] = [
     kind: "world",
     method: "visual",
     title: "ワールドをビジュアルで作る",
-    description: "シーンへ3Dアセットを配置し、見たまま空間を組み立てます。",
-    detail: "専用のScene・Asset JSONが制作データです。",
+    description: "シーンにモデルやライトを配置して、ワールドを作ります。",
+    detail: "コードを書かずに作り始められます。",
     example: "my-visual-world",
     KindIcon: Globe2,
     MethodIcon: PanelsTopLeft,
@@ -101,8 +101,8 @@ const creationChoices: CreationChoice[] = [
     kind: "item",
     method: "visual",
     title: "アイテムをビジュアルで作る",
-    description: "モデル、マテリアル、振る舞いを専用エディターで設定します。",
-    detail: "専用のScene・Asset JSONが制作データです。",
+    description: "モデルやマテリアル、動きを画面上で設定します。",
+    detail: "コードを書かずに作り始められます。",
     example: "my-visual-item",
     KindIcon: Box,
     MethodIcon: PanelsTopLeft,
@@ -148,7 +148,7 @@ function StarterScenePreview({
           className="h-full w-full object-cover"
         />
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-zinc-950/80 to-transparent px-3 pb-2.5 pt-8 text-[10px] font-semibold tracking-wide text-white">
-          公式Classic JSXから変換
+          XRift公式テンプレートから変換
         </div>
       </div>
     );
@@ -169,7 +169,7 @@ function StarterScenePreview({
           </span>
         </div>
         <span className="text-[10px] font-medium tracking-wide text-zinc-500">
-          床・メインライト1灯・スポーン
+          床・ライト1灯・開始位置
         </span>
       </div>
     );
@@ -304,7 +304,7 @@ export function NewProjectDialog({
       setClassicProjectSelectError(
         error instanceof Error
           ? error.message
-          : "Classicプロジェクトのフォルダーを選択できませんでした。",
+          : "コード編集プロジェクトのフォルダーを選択できませんでした。",
       );
     } finally {
       setClassicProjectSelectBusy(false);
@@ -356,10 +356,10 @@ export function NewProjectDialog({
             {choice.method === "visual" && (
               <fieldset className="mt-6">
                 <legend className="text-sm font-medium text-zinc-700">
-                  最初のシーンとAssets
+                  テンプレート
                 </legend>
                 <p className="mt-1 text-xs leading-5 text-zinc-500">
-                  配置済みのシーンと再利用できる素材をまとめて用意します。作成後はすべて編集できます。
+                  使いたいシーンを選んでください。配置や素材は、作成後に変更できます。
                 </p>
                 <div
                   className={`mt-3 grid gap-3 ${
@@ -368,7 +368,7 @@ export function NewProjectDialog({
                       : "sm:grid-cols-2"
                   }`}
                   role="radiogroup"
-                  aria-label={`${choice.kind === "world" ? "ワールド" : "アイテム"}のスターター`}
+                  aria-label={`${choice.kind === "world" ? "ワールド" : "アイテム"}のテンプレート`}
                 >
                   {starterTemplates.map((template) => {
                     const selected = template.id === starterTemplateId;
@@ -430,9 +430,9 @@ export function NewProjectDialog({
                           <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-zinc-500">
                             <Package size={12} aria-hidden="true" />
                             {template.id === "xrift-official"
-                              ? "公式R3F / Rapierから変換"
+                              ? "XRift公式テンプレートを使用"
                               : template.bundledAssetIds.length > 0
-                              ? `${template.bundledAssetIds.length}個の素材をAssetsへ追加`
+                              ? `${template.bundledAssetIds.length}件の素材をAssetsに追加`
                               : "基本オブジェクトのみ"}
                           </div>
                         </div>
@@ -477,14 +477,14 @@ export function NewProjectDialog({
                     </div>
                     <div className="p-3">
                       <div className="text-sm font-semibold text-zinc-900">
-                        XRift Classicからインポート
+                        コード編集プロジェクトから変換
                       </div>
                       <p className="mt-1 text-xs leading-5 text-zinc-500">
-                        読み込み元のシーンだけをVisualへ変換します。
+                        コードで作ったシーンを、ビジュアル編集用に変換します。
                       </p>
                       <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-zinc-500">
                         <FolderOpen size={12} aria-hidden="true" />
-                        コードは実行せず静的に解析
+                        コードを実行せずに変換
                       </div>
                     </div>
                   </button>
@@ -494,7 +494,7 @@ export function NewProjectDialog({
                     <div
                       className="grid grid-cols-2 gap-1 rounded-lg bg-zinc-100 p-1"
                       role="tablist"
-                      aria-label="Classicプロジェクトの読み込み元"
+                      aria-label="コード編集プロジェクトの読み込み元"
                     >
                       <button
                         type="button"
@@ -530,7 +530,7 @@ export function NewProjectDialog({
                         }`}
                       >
                         <GitBranch size={15} aria-hidden="true" />
-                        Repository URL
+                        リポジトリのURL
                       </button>
                     </div>
 
@@ -539,7 +539,7 @@ export function NewProjectDialog({
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <div className="text-sm font-medium text-zinc-700">
-                              Classicプロジェクト
+                              コード編集プロジェクト
                             </div>
                             <p className="mt-1 text-xs text-zinc-500">
                               package.json、xrift.json、srcがあるフォルダーを選択します。
@@ -573,7 +573,7 @@ export function NewProjectDialog({
                               </div>
                             </>
                           ) : (
-                            "まだプロジェクトフォルダーが選択されていません。"
+                            "フォルダーを選択してください。"
                           )}
                         </div>
                       </div>
@@ -581,7 +581,7 @@ export function NewProjectDialog({
                       <div className="mt-4">
                         <label className="block">
                           <span className="text-sm font-medium text-zinc-700">
-                            Classic Repository URL
+                            リポジトリのURL
                           </span>
                           <input
                             type="url"
@@ -595,17 +595,17 @@ export function NewProjectDialog({
                           />
                         </label>
                         <p className="mt-2 text-xs leading-5 text-zinc-500">
-                          HTTPSまたはgit SSH URLに対応します。
+                          HTTPSまたはSSH形式のGit URLに対応しています。
                         </p>
                         {repositoryUrl.length > 0 && !repositoryUrlValid && (
                           <p className="mt-2 text-sm text-amber-700">
-                            HTTPSまたはgit SSH形式のRepository URLを入力してください。
+                            HTTPSまたはSSH形式のGit URLを入力してください。
                           </p>
                         )}
                       </div>
                     )}
                     <p className="mt-3 text-xs leading-5 text-zinc-500">
-                      同種のentryを検査し、対応できない動的処理は変換しません。読み込み元にない床、ライト、SpawnPointは追加しません。
+                      選んだ種類（ワールド・アイテム）のシーンを読み込みます。動的な処理は変換できません。元のシーンにない床、ライト、SpawnPointは追加しません。
                     </p>
                     {classicProjectSelectError && (
                       <p className="mt-2 text-sm text-rose-700">
@@ -618,11 +618,13 @@ export function NewProjectDialog({
             )}
 
             <label className="mt-6 block">
-              <span className="text-sm font-medium text-zinc-700">プロジェクト名</span>
+              <span className="text-sm font-medium text-zinc-700">プロジェクト名（フォルダー名）</span>
               <input
                 autoFocus
                 type="text"
                 value={name}
+                aria-describedby="new-project-name-hint"
+                aria-invalid={name.length > 0 && !valid}
                 onChange={(event) => setName(event.target.value)}
                 disabled={interactionBusy}
                 onKeyDown={(event) => {
@@ -632,11 +634,12 @@ export function NewProjectDialog({
                 className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-base outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
               />
             </label>
-            {!valid && name.length > 0 && (
-              <div className="mt-2 text-sm text-amber-700">
-                先頭を小文字英数字にし、小文字英数字とハイフンだけを使ってください。
-              </div>
-            )}
+            <p
+              id="new-project-name-hint"
+              className={`mt-2 text-xs leading-5 ${!valid && name.length > 0 ? "text-amber-700" : "text-zinc-500"}`}
+            >
+              半角の英小文字・数字・ハイフンが使えます。先頭は英小文字か数字にしてください。
+            </p>
 
             {creationError ? (
               <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-rose-900" role="alert">
@@ -726,7 +729,7 @@ export function NewProjectDialog({
                         />
                       </span>
                       <span className="rounded-full bg-zinc-100 px-2 py-1 text-[11px] font-semibold text-zinc-600">
-                        {visual ? "ビジュアル" : "クラシック"}
+                        {visual ? "ビジュアル編集" : "コード編集"}
                       </span>
                     </div>
                     <div className="mt-4 text-base font-semibold text-zinc-900">

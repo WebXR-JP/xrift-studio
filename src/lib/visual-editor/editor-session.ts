@@ -159,18 +159,18 @@ export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
     { audioSpatial: false },
   ),
   definition("core.text", "Text", "rendering", true, "text"),
-  definition("core.text.panel", "Text Panel (看板)", "rendering", true, "text", {
+  definition("core.text.panel", "テキスト看板", "rendering", true, "text", {
     textPreset: "panel",
   }),
   definition(
     "core.text.caption",
-    "Text Caption (作品キャプション)",
+    "作品キャプション",
     "rendering",
     true,
     "text",
     { textPreset: "caption" },
   ),
-  definition("core.image", "Image (画像)", "rendering", true, "image"),
+  definition("core.image", "画像", "rendering", true, "image"),
   definition("scripting.script", "Script", "scripting", true, "script"),
   definition(
     "interaction.trigger",

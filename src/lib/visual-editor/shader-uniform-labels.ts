@@ -59,12 +59,12 @@ const CATALOG_LABELS: Map<string, Map<string, ShaderUniformLabel>> = new Map([
  */
 const DRIVEN_UNIFORM_LABELS: Readonly<Record<string, ShaderUniformLabel>> = {
   uTime: { label: "時間", hint: "毎フレーム自動で進みます" },
-  uWindDirection: { label: "風向き", hint: "Sceneの風から自動で入ります" },
-  uWindSpeed: { label: "風速", hint: "Sceneの風から自動で入ります" },
-  uWindTurbulence: { label: "風の乱れ", hint: "Sceneの風から自動で入ります" },
-  uCenter: { label: "中心", hint: "空のSlotから自動で入ります" },
-  uRotation: { label: "回転", hint: "空のSlotから自動で入ります" },
-  uExposure: { label: "露出", hint: "空のSlotから自動で入ります" },
+  uWindDirection: { label: "風向き", hint: "シーンの風から自動で入ります" },
+  uWindSpeed: { label: "風速", hint: "シーンの風から自動で入ります" },
+  uWindTurbulence: { label: "風の乱れ", hint: "シーンの風から自動で入ります" },
+  uCenter: { label: "中心", hint: "空の設定から自動で反映されます。" },
+  uRotation: { label: "回転", hint: "空の設定から自動で反映されます。" },
+  uExposure: { label: "露出", hint: "空の設定から自動で反映されます。" },
 };
 
 /** True when Studio writes this uniform itself, so editing it has no effect. */

@@ -308,7 +308,7 @@ ${createSupportReportDraft(context, sanitizedErrorMessage)}
               <Bug size={14} className="shrink-0 text-zinc-500" aria-hidden="true" />
               <span className="min-w-0 flex-1 break-words">
                 <span className="block">GitHub Issueを作成</span>
-                <span className="mt-0.5 block text-[10px] font-normal text-zinc-400">相談情報をコピーしてIssue画面を開く</span>
+                <span className="mt-0.5 block text-[10px] font-normal text-zinc-400">相談情報をコピーしてGitHubの報告画面を開く</span>
               </span>
               <ExternalLink size={12} className="shrink-0 text-zinc-400" aria-hidden="true" />
             </button>
@@ -342,7 +342,7 @@ ${createSupportReportDraft(context, sanitizedErrorMessage)}
             <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-3">
               <div className="flex items-center gap-2 text-[11px] font-semibold text-amber-900">
                 <TriangleAlert size={13} aria-hidden="true" />
-                自動添付されるエラーと診断
+                相談文に含めるエラーと診断
               </div>
               <div className="mt-2 max-h-28 overflow-y-auto whitespace-pre-wrap break-words font-mono text-[10px] leading-4 text-amber-950">
                 {sanitizedErrorMessage ? <p>{sanitizedErrorMessage}</p> : null}
@@ -355,7 +355,7 @@ ${createSupportReportDraft(context, sanitizedErrorMessage)}
                 ) : null}
               </div>
               <p className="mt-2 text-[10px] leading-4 text-amber-800">
-                絶対パスや認証情報は伏せています。GPTsへ貼り付けた後も内容を確認できます。
+                絶対パスや認証情報は伏せています。送信前に、貼り付けた内容を確認してください。
               </p>
             </div>
           ) : null}

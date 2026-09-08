@@ -66,14 +66,14 @@ export function SceneScreenshotCapture({ request, onComplete }: Props) {
           gl.render(scene, camera);
           const dataUrl = gl.domElement.toDataURL("image/png");
           if (!dataUrl.startsWith("data:image/") || dataUrl.length < 100) {
-            throw new Error("Scene Viewから画像を取得できませんでした");
+            throw new Error("シーンから画像を取得できませんでした");
           }
           current?.onCapture(dataUrl);
         } catch (error) {
           const message =
             error instanceof Error
               ? error.message
-              : "Scene Viewから画像を取得できませんでした";
+              : "シーンから画像を取得できませんでした";
           current?.onError?.(message);
         } finally {
           completeRef.current?.();

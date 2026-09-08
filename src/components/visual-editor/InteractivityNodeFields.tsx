@@ -93,7 +93,11 @@ export function LiteralValueField({
           ))}
         </select>
       ) : (
-        <code className="text-[9px] text-slate-500">{signature ?? "型未設定"}</code>
+        <span className="text-[9px] text-slate-500" title={signature}>
+          {isInteractivityLiteralSignature(signature)
+            ? INTERACTIVITY_LITERAL_SIGNATURE_LABELS[signature]
+            : signature ?? "種類未設定"}
+        </span>
       )}
     </div>
   );
@@ -103,7 +107,7 @@ export function LiteralValueField({
       <div className="space-y-1">
         {header}
         <p className="text-[10px] leading-4 text-slate-400">
-          つないだノードの値を使います。固定値に戻すには、この線を外してください。
+          接続元の値を使います。直接入力するには線を外してください。
         </p>
       </div>
     );
@@ -121,7 +125,7 @@ export function LiteralValueField({
             onChange={(event) => onChange([event.target.checked])}
             className="h-3.5 w-3.5"
           />
-          {value?.[0] === true ? "true" : "false"}
+          {value?.[0] === true ? "成立（true）" : "不成立（false）"}
         </label>
       ) : isColor ? (
         <div className="flex items-center gap-2">
@@ -295,9 +299,9 @@ export function TriggerAssetField({
         onChange={(event) => onChange(event.target.value)}
         className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-950 px-2 text-xs"
       >
-        <option value="">Sceneの設定に戻す</option>
+        <option value="">シーンの設定に戻す</option>
         {missing ? (
-          <option value={assetId}>見つからないAsset</option>
+          <option value={assetId}>見つからない素材</option>
         ) : null}
         {offered.map((choice) => (
           <option key={choice.id} value={choice.id}>
@@ -307,7 +311,7 @@ export function TriggerAssetField({
       </select>
       {offered.length === 0 ? (
         <span className="mt-1 block text-[10px] leading-4 text-amber-200">
-          差し替えられるAssetがProjectにありません。先にAssetsへ追加してください。
+          Assetsに差し替え用の素材を追加してください。
         </span>
       ) : null}
     </label>
@@ -450,9 +454,9 @@ export const EASING_LABELS: Readonly<Record<InteractivityEasing, string>> = {
   linear: "一定の速さ",
   "ease-in": "ゆっくり始まる",
   "ease-out": "ゆっくり止まる",
-  "ease-in-out": "両端がゆっくり",
-  "ease-in-strong": "強くゆっくり始まる",
-  "ease-out-strong": "強くゆっくり止まる",
+  "ease-in-out": "ゆっくり始まり、ゆっくり止まる",
+  "ease-in-strong": "ゆっくり始まる（強め）",
+  "ease-out-strong": "ゆっくり止まる（強め）",
   "ease-out-back": "少し行き過ぎて戻る",
 };
 
@@ -545,7 +549,7 @@ export function TriggerTimingField({
         </div>
       ) : (
         <p className="text-[10px] leading-4 text-slate-400">
-          0 のままなら、その場ですぐ変わります。秒数を入れると、その時間をかけて変化します。
+          0秒で即時、それ以外は指定した時間で変化します。
         </p>
       )}
     </div>

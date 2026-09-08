@@ -138,7 +138,7 @@ export function useScriptEditor({
           openAssetId: assetId,
           source: "",
           loading: false,
-          error: "プロジェクトを保存するとScriptを編集できます",
+          error: "プロジェクトを保存するとスクリプトを編集できます",
         });
         return;
       }
@@ -171,7 +171,7 @@ export function useScriptEditor({
           error:
             error instanceof Error
               ? error.message
-              : "Scriptを読み込めませんでした",
+              : "スクリプトを読み込めませんでした",
         });
       }
     },
@@ -203,11 +203,11 @@ export function useScriptEditor({
     async (source: string) => {
       const assetId = state.openAssetId;
       if (!assetId || !projectPath) {
-        throw new Error("プロジェクトを保存するとScriptを保存できます");
+        throw new Error("プロジェクトを保存するとスクリプトを保存できます");
       }
       const asset = assets.assets[assetId];
       if (!asset || asset.kind !== "script") {
-        throw new Error("Script Assetが見つかりません");
+        throw new Error("スクリプトが見つかりません");
       }
       if (writeSource) {
         await writeSource(projectPath, asset, source);

@@ -212,7 +212,7 @@ function SkyShaderPreviewDome({ shader, running, view, onError }: {
     const previous = gl.debug.onShaderError;
     gl.debug.onShaderError = (context, program, vertex, fragment) => {
       const message = [context.getProgramInfoLog(program), context.getShaderInfoLog(vertex), context.getShaderInfoLog(fragment)].filter(Boolean).join(" ").slice(0, 360);
-      queueMicrotask(() => onError(message || "GLSLのコンパイルに失敗しました。MaterialのShaderを確認してください。"));
+      queueMicrotask(() => onError(message || "GLSLのコンパイルに失敗しました。マテリアルのシェーダーを確認してください。"));
     };
     const lost = () => onError("WebGLの描画コンテキストを失いました。再試行してください。");
     gl.domElement.addEventListener("webglcontextlost", lost);

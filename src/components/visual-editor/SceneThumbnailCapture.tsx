@@ -41,14 +41,14 @@ export function SceneThumbnailCapture({
           gl.render(scene, camera);
           const dataUrl = gl.domElement.toDataURL("image/png");
           if (!dataUrl.startsWith("data:image/") || dataUrl.length < 100) {
-            throw new Error("Scene Viewから画像を取得できませんでした");
+            throw new Error("シーンから画像を取得できませんでした");
           }
           onCapture(dataUrl);
         } catch (error) {
           onError(
             error instanceof Error
               ? error.message
-              : "Scene Viewから画像を取得できませんでした",
+              : "シーンから画像を取得できませんでした",
           );
         }
       });

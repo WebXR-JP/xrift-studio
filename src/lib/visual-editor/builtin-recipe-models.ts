@@ -49,7 +49,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 0.6,
     bounds: {"min": [-0.054999999701976776, -0.6000000238418579, -0.054999999701976776], "max": [0.054999999701976776, 0.6000000238418579, 0.054999999701976776]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "bench",
@@ -63,7 +63,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 0.86,
     bounds: {"min": [-0.8600000143051147, -0.4399999976158142, -0.22499999403953552], "max": [0.8600000143051147, 0.5199999809265137, 0.22499999403953552]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "stoneLantern",
@@ -77,7 +77,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 0.75,
     bounds: {"min": [-0.36000001430511475, -0.07999999821186066, -0.36000001430511475], "max": [0.36000001430511475, 1.4199999570846558, 0.36000001430511475]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "tree",
@@ -91,7 +91,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 1.4925,
     bounds: {"min": [-0.9950000047683716, -0.8600000143051147, -0.949999988079071], "max": [1.149999976158142, 2.125, 0.949999988079071]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "streetLight",
@@ -105,7 +105,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 1.67,
     bounds: {"min": [-0.32339999079704285, 0.0, -0.3400000035762787], "max": [0.32339999079704285, 3.3399999141693115, 0.3400000035762787]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "rockA",
@@ -119,7 +119,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 0.3993,
     bounds: {"min": [-0.3596999943256378, 0.0, -0.3952000141143799], "max": [0.4106000065803528, 0.6536999940872192, 0.4032999873161316]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "rockB",
@@ -133,7 +133,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 0.4068,
     bounds: {"min": [-0.3709000051021576, 0.0, -0.41449999809265137], "max": [0.4027999937534332, 0.796999990940094, 0.39910000562667847]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "brazier",
@@ -147,7 +147,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 0.4155,
     bounds: {"min": [-0.19499999284744263, -0.020999999716877937, -0.20960000157356262], "max": [0.2329999953508377, 0.8100000023841858, 0.20960000157356262]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "lantern",
@@ -161,7 +161,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 0.175,
     bounds: {"min": [-0.12359999865293503, 0.0, -0.12999999523162842], "max": [0.12359999865293503, 0.3499999940395355, 0.12999999523162842]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "candelabra",
@@ -175,7 +175,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 0.275,
     bounds: {"min": [-0.1599999964237213, 0.0, -0.14000000059604645], "max": [0.1599999964237213, 0.550000011920929, 0.14000000059604645]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "bambooStalk",
@@ -189,7 +189,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 1.6166,
     bounds: {"min": [-0.34360000491142273, 0.0, -0.37940001487731934], "max": [0.5026999711990356, 3.233299970626831, 0.4235999882221222]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "stump",
@@ -203,7 +203,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 0.46,
     bounds: {"min": [-0.46000000834465027, -0.010999999940395355, -0.46000000834465027], "max": [0.46000000834465027, 0.4169999957084656, 0.46000000834465027]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "log",
@@ -217,7 +217,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 0.4315,
     bounds: {"min": [0.0, 0.0, -0.052000001072883606], "max": [0.8629999756813049, 0.10400000214576721, 0.052000001072883606]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "bush",
@@ -231,7 +231,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 0.5006,
     bounds: {"min": [-0.46549999713897705, 0.01209999993443489, -0.35899999737739563], "max": [0.5356000065803528, 0.44769999384880066, 0.38960000872612]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "pillar",
@@ -245,7 +245,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 1.54,
     bounds: {"min": [-0.3100000023841858, 0.0, -0.3100000023841858], "max": [0.3100000023841858, 3.0799999237060547, 0.3100000023841858]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "stairs",
@@ -259,7 +259,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 1.0,
     bounds: {"min": [-0.800000011920929, 0.0, -1.7999999523162842], "max": [0.800000011920929, 0.8999999761581421, 0.20000000298023224]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "wall",
@@ -273,7 +273,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 2.8394,
     bounds: {"min": [-2.839400053024292, 0.0, -0.3393999934196472], "max": [2.839400053024292, 2.1600000858306885, 0.3393999934196472]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "wellFrame",
@@ -287,7 +287,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 1.11,
     bounds: {"min": [-0.7799999713897705, 0.0, -0.44999998807907104], "max": [0.7799999713897705, 2.2200000286102295, 0.44999998807907104]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "pier",
@@ -301,7 +301,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 1.22,
     bounds: {"min": [-0.699999988079071, 0.0, -2.2200000286102295], "max": [0.699999988079071, 0.5299999713897705, 0.2199999988079071]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "table",
@@ -315,7 +315,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 0.7,
     bounds: {"min": [-0.699999988079071, 0.0, -0.4000000059604645], "max": [0.699999988079071, 0.7699999809265137, 0.4000000059604645]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "stool",
@@ -329,7 +329,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 0.22,
     bounds: {"min": [-0.20000000298023224, 0.0, -0.20000000298023224], "max": [0.20000000298023224, 0.4399999976158142, 0.20000000298023224]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "magicCircle",
@@ -343,7 +343,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 0.75,
     bounds: {"min": [-0.75, 0.0, -0.75], "max": [0.75, 0.05000000074505806, 0.75]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "warpPillar",
@@ -357,7 +357,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 1.58,
     bounds: {"min": [-0.3400000035762787, 0.0, -0.3400000035762787], "max": [0.3400000035762787, 3.1600000858306885, 0.3400000035762787]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "snowman",
@@ -371,7 +371,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 0.6727,
     bounds: {"min": [-0.3986000120639801, -0.005200000014156103, -0.40610000491142273], "max": [0.4293000102043152, 1.3401999473571777, 0.413100004196167]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "door",
@@ -385,7 +385,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 1.045,
     bounds: {"min": [-0.5400000214576721, 0.0, -0.05999999865889549], "max": [0.5400000214576721, 2.0899999141693115, 0.07999999821186066]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "window",
@@ -399,7 +399,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 0.695,
     bounds: {"min": [-0.5799999833106995, 0.0, -0.06499999761581421], "max": [0.5799999833106995, 1.3899999856948853, 0.06499999761581421]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "floorPanel",
@@ -413,7 +413,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 1.0,
     bounds: {"min": [-1.0, -0.05000000074505806, -1.0], "max": [1.0, 0.0020000000949949026, 1.0]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "wallPanel",
@@ -427,7 +427,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 1.2,
     bounds: {"min": [-1.0, 0.0, -0.09000000357627869], "max": [1.0, 2.4000000953674316, 0.10999999940395355]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "recordingStudio",
@@ -455,7 +455,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 0.5806,
     bounds: {"min": [-0.5698636174201965, -0.005332989618182182, -0.5867459177970886], "max": [0.5913352966308594, 0.2646869122982025, 0.567358136177063]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "fountain",
@@ -469,7 +469,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 1.08,
     bounds: {"min": [-1.0800000429153442, 0.0, -1.0800000429153442], "max": [1.0800000429153442, 1.0499999523162842, 1.0800000429153442]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
   {
     modelId: "wellBasin",
@@ -483,7 +483,7 @@ export const BUILTIN_RECIPE_MODELS: readonly BuiltinRecipeModelDefinition[] = [
     approxRadius: 0.66,
     bounds: {"min": [-0.6600000262260437, 0.0, -0.6600000262260437], "max": [0.6600000262260437, 0.6800000071525574, 0.6600000262260437]},
     provenance:
-      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md.",
+      "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md.",
   },
 ];
 

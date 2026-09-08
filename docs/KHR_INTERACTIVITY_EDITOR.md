@@ -120,7 +120,7 @@ without replacing its canonical JSON.
 ### Every operation says what it does, as an action
 
 An operation template carries a Japanese `label` and a required `description`,
-and both are written as something the node *does*:「ランダムな数を出す」rather
+and both are written as something the ノード *does*:「ランダムな数を出す」rather
 than「乱数」,「指定した秒だけ待つ」rather than「待機」. A noun label names a
 concept and leaves the author to guess what dropping it on the canvas would
 change, which is the reading cost the palette was charging on every node.
@@ -145,10 +145,10 @@ tell the author to look for a node that is no longer there.
 KHR_interactivity has no constant node. A number that does not come from
 another node reaches a socket as that socket's `value`, and the socket's type
 entry is what decides whether the author is sending `3` or `(0, 1, 0)`. So
-「固定値を送る」and「型を選ぶ」are one act, and the Inspector has to offer both
+「固定値を送る」and「型を選ぶ」are one act, and the 設定 has to offer both
 in the same place or neither is reachable.
 
-The Inspector's 値 list is therefore built from every value input the operation
+The 設定's 値 list is therefore built from every value input the operation
 declares, unioned with whatever the node already carries — the same union the
 card and the height estimate use, so a socket drawn on the canvas is always one
 the author can type into. Reading `node.values` alone was the bug this replaced:
@@ -448,8 +448,8 @@ things were hiding under that one fact, and the registry now separates them:
 
 | Scope | Targets | What it means |
 | --- | --- | --- |
-| `viewer`「この端末だけ」 | Scene, Player | One viewer is the right answer and always will be |
-| `world`「押した人だけ」 | Entity, Transform, Animation, Material, Particle, Audio Source, Light, Text, Image | World content everyone should be seeing, **not synchronised yet** |
+| `viewer`「この画面だけ」 | シーン, Player | One viewer is the right answer and always will be |
+| `world`「操作した人だけ」 | オブジェクト, 位置・回転・大きさ, Animation, マテリアル, パーティクル, 音源, ライト, テキスト, 画像 | ワールド content everyone should be seeing, **not synchronised yet** |
 
 The first is a design: synchronising the picture would decide for the person on
 the slowest headset, and synchronising a teleport would move somebody who
@@ -462,7 +462,7 @@ property picker carries the note under it. `getXriftInteractionScope` derives it
 from the target, and a fixture asserts every property lands in the half its
 target belongs to, so a new target cannot arrive without an answer.
 
-A `world`-scoped action can be marked「みんなに見せる」, which is what makes that
+A `world`-scoped action can be marked「同じ部屋の全員に反映する」, which is what makes that
 half real rather than only honest. See below.
 
 ### Sharing an action with the room
@@ -551,7 +551,7 @@ the Entity and Component ids, rather than in the `value` socket. Two reasons,
 and both are the same reason the target lives there: `KHR_interactivity` has no
 string type, and neither an Asset id nor a sentence is a quantity to
 interpolate toward. A duration on one of them is not honoured — half of an
-Asset is nothing, and half of「開いています」is not a word.
+素材 is nothing, and half of「開いています」is not a word.
 
 They reach the host as `writeAsset` and `writeString`, which are separate
 because the obligations differ: an Asset id names something the published world

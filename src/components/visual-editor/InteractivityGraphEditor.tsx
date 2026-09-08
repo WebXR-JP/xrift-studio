@@ -1,3 +1,4 @@
+import { matchesInteractivityOperation } from "../../lib/visual-editor/interactivity-search";
 import {
   useCallback,
   useEffect,
@@ -680,12 +681,7 @@ function InteractivityGraphEditorBody({
       templates: KHR_INTERACTIVITY_OPERATION_TEMPLATES.filter(
         (template) =>
           template.category === category &&
-          (query === "" ||
-            template.label.toLowerCase().includes(query) ||
-            // The description carries the words an author reaches for first —
-            // 「連打」,「待ち合わせ」— which the label had no room for.
-            template.description.toLowerCase().includes(query) ||
-            template.op.toLowerCase().includes(query)),
+          matchesInteractivityOperation(template, query),
       ),
     })).filter((group) => group.templates.length > 0);
   }, [paletteQuery]);
@@ -1178,7 +1174,7 @@ function InteractivityGraphEditorBody({
     try {
       const parsed = parseKhrInteractivityExtension(JSON.parse(jsonDraft));
       if (!parsed) {
-        setJsonMessage("公式スキーマ互換性エラーがあります。下の診断を確認してください");
+        setJsonMessage("データ形式に誤りがあります。「問題の一覧」を確認してください。");
         return;
       }
       commitDraft(parsed);
@@ -1213,7 +1209,7 @@ function InteractivityGraphEditorBody({
       type="button"
       onClick={requestClose}
       className="shrink-0 rounded p-1.5 text-slate-300 hover:bg-slate-800 hover:text-white"
-      aria-label="Interactivity editorを閉じる"
+      aria-label="ノードエディターを閉じる"
     >
       <CloseIcon size={16} aria-hidden="true" />
     </button>
@@ -1236,7 +1232,7 @@ function InteractivityGraphEditorBody({
         right: "var(--xrift-inspector-track, 0px)",
         bottom: "var(--xrift-assets-track, 0px)",
       }}
-      aria-label="KHR_interactivity graph editor"
+      aria-label="ノードエディター"
     >
       <div className="flex min-w-0 flex-1 flex-col">
         {/*
@@ -1267,7 +1263,7 @@ function InteractivityGraphEditorBody({
                   setSelectedNodeIndex(null);
                 }}
                 className="h-7 max-w-[11rem] shrink-0 rounded border border-slate-600 bg-slate-800 px-2 text-xs"
-                aria-label="Behavior graph"
+                aria-label="ノードグラフ"
               >
                 {draft.graphs.map((candidate, index) => (
                   <option key={index} value={index}>
@@ -1295,7 +1291,7 @@ function InteractivityGraphEditorBody({
                     name things, and the Assets panel's right-click Rename is
                     not somewhere anyone looks from inside the graph. */}
                 <label className="block text-[10px] text-slate-300">
-                  Asset名
+                  素材の名前
                   <input
                     type="text"
                     value={assetNameDraft}
@@ -1333,7 +1329,7 @@ function InteractivityGraphEditorBody({
                   />
                 </label>
                 <p className="text-[10px] leading-4 text-slate-400">
-                  Assetの中のすべてのグラフが動きます。「イベントを送る」と「イベントを受け取る」でグラフ同士をつなげます。
+                  この素材のグラフはすべて実行されます。
                 </p>
                 <button
                   type="button"
@@ -1379,7 +1375,7 @@ function InteractivityGraphEditorBody({
                     });
                     setGraphMenuOpen(false);
                   }}
-                  title="Modelへ埋め込んだ場合や、1つだけを走らせる書き出しで使われるグラフです"
+                  title="モデルへの埋め込みなど、1つだけを使う場合のグラフです"
                   className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1.5 text-left text-xs hover:border-violet-500 hover:bg-slate-800 disabled:opacity-40"
                 >
                   既定のグラフにする
@@ -1515,9 +1511,9 @@ function InteractivityGraphEditorBody({
           <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-amber-500/40 bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-100">
             {setupStep.kind === "unattached" ? (
               <>
-                <span className="font-semibold">このグラフはまだ動きません。</span>
+                <span className="font-semibold">このグラフはEntityに付いていません。</span>
                 <span className="text-amber-200/90">
-                  Entity へ付けると、{setupStep.usesInteract ? "押したときに" : "ワールドに入ったときに"}動きます。
+                  Entityへ付けると、{setupStep.usesInteract ? "押したときに" : "ワールドに入ったときに"}動きます。
                 </span>
                 {setup.selectedEntity ? (
                   <button
@@ -1530,16 +1526,15 @@ function InteractivityGraphEditorBody({
                   </button>
                 ) : (
                   <span className="text-amber-200/80">
-                    Hierarchy で Entity を選ぶと、ここから付けられます。
+                    HierarchyでEntityを選んでください。
                   </span>
                 )}
               </>
             ) : setupStep.kind === "no-clips" ? (
               <>
-                <span className="font-semibold">再生するclipがありません。</span>
+                <span className="font-semibold">再生するクリップがありません。</span>
                 <span className="text-amber-200/90">
-                  「{setupStep.entity.name}」のModelにanimation
-                  clipがないため、アニメーションのノードは何も動かしません。clipを持つModelのEntityへ付け替えてください。
+                  アニメーションのある3DモデルのEntityに付け替えてください。
                 </span>
                 <button
                   type="button"
@@ -1551,9 +1546,9 @@ function InteractivityGraphEditorBody({
               </>
             ) : (
               <>
-                <span className="font-semibold">押しても始まりません。</span>
+                <span className="font-semibold">操作を受け付ける設定がありません。</span>
                 <span className="text-amber-200/90">
-                  「インタラクト時」から始まるグラフには、付け先の Entity に Interactable が要ります。
+                  「操作されたとき」を使うには、同じEntityに「操作を受け付ける」が必要です。
                 </span>
                 <button
                   type="button"
@@ -1561,7 +1556,7 @@ function InteractivityGraphEditorBody({
                   onClick={() => setup.onAddInteractable(setupStep.entity.entityId)}
                   className="h-6 shrink-0 rounded bg-amber-400 px-2 text-[11px] font-bold text-amber-950 hover:bg-amber-300 disabled:opacity-40"
                 >
-                  「{setupStep.entity.name}」に Interactable を追加
+                  「{setupStep.entity.name}」に「操作を受け付ける」を追加
                 </button>
               </>
             )}
@@ -1741,7 +1736,7 @@ function InteractivityGraphEditorBody({
                 ))}
                 {paletteGroups.length === 0 ? (
                   <p className="rounded border border-slate-700 bg-slate-900 p-3 text-[11px] leading-5 text-slate-400">
-                    一致するノードがありません。検索語を短くしてください。
+                    一致するノードがありません。
                   </p>
                 ) : null}
               </div>
@@ -1804,19 +1799,19 @@ function InteractivityGraphEditorBody({
           <span className="shrink-0 rounded bg-emerald-400/15 px-1.5 py-0.5 font-semibold text-emerald-300">
             KHR_interactivity RC
           </span>
-          <span className="shrink-0">{graph.nodes?.length ?? 0} nodes</span>
-          <span className="shrink-0">{edges.length} connections</span>
+          <span className="shrink-0">{graph.nodes?.length ?? 0} ノード</span>
+          <span className="shrink-0">{edges.length} 接続</span>
           {errors.length > 0 ? (
             <span className="shrink-0 font-semibold text-rose-300">
-              {errors.length} errors・保存不可
+              {errors.length} 件のエラー・保存できません
             </span>
           ) : warnings.length > 0 ? (
-            <span className="shrink-0 text-amber-300">{warnings.length} warnings</span>
+            <span className="shrink-0 text-amber-300">{warnings.length} 件の注意</span>
           ) : (
-            <span className="shrink-0 text-emerald-300">KHR graph validation OK</span>
+            <span className="shrink-0 text-emerald-300">グラフに問題はありません</span>
           )}
           {readOnly ? (
-            <span className="shrink-0 text-slate-300">Play中は編集できません</span>
+            <span className="shrink-0 text-slate-300">動作確認中は編集できません</span>
           ) : dirty && errors.length > 0 ? (
             <span className="shrink-0 font-semibold text-rose-300">
               エラーのため自動保存を止めています
@@ -1828,7 +1823,7 @@ function InteractivityGraphEditorBody({
           )}
           {setupStep?.kind === "ready" && setup ? (
             <span className="flex shrink-0 items-center gap-1 text-slate-400">
-              付いている Entity:
+              付いているEntity:
               {setup.attachments.slice(0, 3).map((entry) => (
                 <button
                   key={entry.entityId}
@@ -1846,9 +1841,9 @@ function InteractivityGraphEditorBody({
             </span>
           ) : null}
           <span className="ml-auto hidden shrink-0 2xl:inline">
-            ドラッグ / ホイールで移動・Ctrl+ホイールで拡大・線を選んでDeleteで切断
+            移動：ドラッグ・ホイール／拡大縮小：Ctrl＋ホイール／接続の削除：線を選んでDelete
           </span>
-          <span className="hidden shrink-0 xl:inline">紫: flow / 水色: value</span>
+          <span className="hidden shrink-0 xl:inline">紫：処理の流れ／水色：値</span>
         </footer>
       </div>
 
@@ -1890,7 +1885,7 @@ function InteractivityGraphEditorBody({
           </p>
           {selectedDeclaration ? (
             <>
-              <p className="mt-0.5 text-xs font-bold text-slate-100">
+              <p title={selectedDeclaration.op} className="mt-0.5 text-xs font-bold text-slate-100">
                 {selectedTemplate?.label ?? selectedDeclaration.op}
               </p>
               {selectedTemplate ? (
@@ -1898,15 +1893,8 @@ function InteractivityGraphEditorBody({
                   {selectedTemplate.description}
                 </p>
               ) : null}
-              <code className="mt-1 block truncate text-[10px] text-slate-500">
-                {selectedDeclaration.op}
-              </code>
             </>
-          ) : (
-            <p className="mt-0.5 text-[10px] text-slate-400">
-              ノードを選択してください
-            </p>
-          )}
+          ) : null}
         </div>
         <div className="scrollbar-thin min-h-0 flex-1 overflow-auto p-3">
           {selectedNode && selectedNodeIndex !== null ? (
@@ -1918,12 +1906,12 @@ function InteractivityGraphEditorBody({
                       対象
                     </p>
                     <p className="mt-1 text-[10px] leading-4 text-slate-400">
-                      インタラクトされたときに書き込むEntityとプロパティを選びます。
+                      変更するEntityと項目を選んでください。
                     </p>
                   </div>
                   {triggerTargets.length === 0 ? (
                     <p className="rounded border border-slate-700 bg-slate-950 p-2 text-[10px] leading-4 text-slate-400">
-                      Sceneを開いた状態でこのグラフを編集すると、対象のEntityを選べます。
+                      対象のEntityを選ぶには、シーンからこのグラフを開いてください。
                     </p>
                   ) : (
                     <>
@@ -2000,7 +1988,7 @@ function InteractivityGraphEditorBody({
                         </label>
                       ) : (
                         <p className="rounded border border-amber-800 bg-amber-950/30 p-2 text-[10px] leading-4 text-amber-200">
-                          このEntityはSceneにありません。対象を選び直すまで、この node は動きません。
+                          Entityが見つかりません。選び直してください。
                         </p>
                       )}
                       {triggerComponent ? (
@@ -2089,11 +2077,11 @@ function InteractivityGraphEditorBody({
                                 />
                                 <span>
                                   <span className="font-semibold">
-                                    みんなに見せる
+                                    同じ部屋の全員に反映する
                                   </span>
                                   <span className="ml-1">
                                     {triggerActionShared
-                                      ? "同じ部屋の全員に反映し、あとから入った人にも同じ状態で見えます。最後に押した人の値が残ります。"
+                                      ? "あとから入る人も含め、全員に反映します。最後の操作の値を使います。"
                                       : XRIFT_INTERACTION_SCOPE_NOTES.world}
                                   </span>
                                 </span>
@@ -2191,14 +2179,14 @@ function InteractivityGraphEditorBody({
                 <section className="space-y-2 rounded border border-cyan-800 bg-cyan-950/30 p-2.5">
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-cyan-300">
-                      Material target
+                      変更するマテリアル
                     </p>
                     <p className="mt-1 text-[10px] leading-4 text-slate-400">
-                      glTFのMaterial項目を選ぶと、Pointer・型・Material indexをまとめて設定します。
+                      マテリアルと変更する項目を選んでください。
                     </p>
                   </div>
                   <label className="block text-[10px] text-slate-300">
-                    Material
+                    マテリアル
                     <select
                       value={selectedMaterialIndex}
                       disabled={readOnly || sortedMaterials.length === 0}
@@ -2216,7 +2204,7 @@ function InteractivityGraphEditorBody({
                       className="mt-1 h-8 w-full rounded border border-slate-600 bg-slate-950 px-2 text-xs"
                     >
                       {sortedMaterials.length === 0 ? (
-                        <option value={0}>Material Assetなし</option>
+                        <option value={0}>マテリアルなし</option>
                       ) : null}
                       {sortedMaterials.map((material, index) => (
                         <option key={material.id} value={index}>
@@ -2274,7 +2262,7 @@ function InteractivityGraphEditorBody({
                       値
                     </p>
                     <p className="mt-1 text-[10px] leading-4 text-slate-400">
-                      線をつながない入力には、ここで入れた固定値がそのまま流れます。
+                      未接続の入力には、ここで設定した値を使います。
                     </p>
                   </div>
                   {literalValues.map((entry) => (
@@ -2311,7 +2299,7 @@ function InteractivityGraphEditorBody({
 
               <details className="rounded border border-slate-700 bg-slate-950">
                 <summary className="cursor-pointer px-2 py-1.5 text-[10px] font-semibold uppercase text-slate-400">
-                  Canonical node
+                  保存されるノードデータ
                 </summary>
                 <pre className="max-h-72 overflow-auto whitespace-pre-wrap border-t border-slate-800 p-2 text-[10px] leading-4 text-slate-200">
                   <CodeTokens
@@ -2348,17 +2336,14 @@ function InteractivityGraphEditorBody({
           ) : (
             <div className="space-y-2 rounded border border-slate-700 bg-slate-950 p-3 text-xs leading-5 text-slate-400">
               <p>
-                canvas を右クリック、または「追加」からノードを置きます。「開始時」から線をつないでいくと動きになります。
-              </p>
-              <p>
-                ノードを選ぶと、色や時間などの値をこの欄で直接編集できます。独自JavaScriptは保存しません。
+                ノードを選ぶと、ここで設定を変更できます。
               </p>
             </div>
           )}
 
           {diagnostics.length > 0 ? (
             <div className="mt-4 space-y-1.5">
-              <p className="text-[10px] font-semibold uppercase text-slate-400">Diagnostics</p>
+              <p className="text-[10px] font-semibold uppercase text-slate-400">問題の一覧</p>
               {diagnostics.map((diagnostic, index) => {
                 const target = parseDiagnosticTarget(diagnostic.path);
                 const tone =
@@ -2405,7 +2390,7 @@ function InteractivityGraphEditorBody({
         {jsonOpen ? (
           <div className="border-t border-slate-700 p-3">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-bold">KHR JSON import / export</p>
+              <p className="text-xs font-bold">グラフのJSONを読み込む・書き出す</p>
               <button
                 type="button"
                 onClick={() => setJsonOpen(false)}
@@ -2460,7 +2445,7 @@ function InteractivityGraphEditorBody({
               id="interactivity-close-dialog-description"
               className="text-xs leading-5 text-slate-600"
             >
-              このグラフは自動保存されますが、検証エラーがある間は書き込みません。今の変更はまだAssetに入っていないため、閉じると失われます。
+              保存せずに閉じると、未保存の変更は失われます。
             </p>
           </div>
           <footer
@@ -2490,7 +2475,7 @@ function InteractivityGraphEditorBody({
               }}
               className="rounded-lg border border-rose-300 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
             >
-              破棄して閉じる
+              保存せずに閉じる
             </button>
           </footer>
         </EditorDialog>

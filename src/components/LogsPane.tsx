@@ -52,7 +52,7 @@ export function LogsPane({ logs, busy, collapsed, onToggle, onClear }: Props) {
           onClick={onToggle}
           className="flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-800"
         >
-          <span className="font-medium">Logs</span>
+          <span className="font-medium">ログ</span>
           {busy && (
             <span className="flex items-center gap-1 text-[11px] text-violet-600">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500" />
@@ -61,7 +61,7 @@ export function LogsPane({ logs, busy, collapsed, onToggle, onClear }: Props) {
           )}
           {hasNew && !busy && (
             <span className="rounded-full bg-violet-500 px-1.5 py-0.5 text-[9px] font-semibold text-white">
-              NEW
+              新着
             </span>
           )}
           {recent && (
@@ -85,7 +85,7 @@ export function LogsPane({ logs, busy, collapsed, onToggle, onClear }: Props) {
     <section className="flex h-72 shrink-0 flex-col border-t border-zinc-200 bg-white">
       <div className="flex items-center justify-between border-b border-zinc-200 bg-zinc-50 px-4 py-1.5">
         <div className="flex items-center gap-2 text-xs text-zinc-500">
-          <span className="font-medium">Logs</span>
+          <span className="font-medium">ログ</span>
           {busy && (
             <span className="flex items-center gap-1 text-violet-600">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500" />
@@ -107,7 +107,7 @@ export function LogsPane({ logs, busy, collapsed, onToggle, onClear }: Props) {
             onClick={onToggle}
             className="rounded px-1.5 py-0.5 text-[11px] text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
           >
-            たたむ
+            折りたたむ
           </button>
         </div>
       </div>
@@ -117,7 +117,7 @@ export function LogsPane({ logs, busy, collapsed, onToggle, onClear }: Props) {
       >
         {logs.length === 0 ? (
           <div className="text-zinc-400">
-            コマンドを実行するとここにログが流れます。
+            操作の実行結果やエラーをここに表示します。
           </div>
         ) : (
           logs.map((line, i) => (

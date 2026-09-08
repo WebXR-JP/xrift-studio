@@ -711,7 +711,7 @@ export const TERRAIN_GRASS_PRESETS: readonly TerrainGrassPreset[] = [
     id: "hillside",
     label: "丘の斜面",
     description:
-      "低い所を芝、高い所を枯れ草にします。起伏のあるTerrainほど差がはっきり出ます。",
+      "低い所を芝、高い所を枯れ草にします。起伏のある地形ほど差がはっきり出ます。",
     layers: [
       {
         typeId: "short-grass",
@@ -733,7 +733,7 @@ export const TERRAIN_GRASS_PRESETS: readonly TerrainGrassPreset[] = [
     id: "sparse-dry",
     label: "まばらな枯れ地",
     description:
-      "枯れ草だけを薄く置きます。荒地や砂地のTerrainに向きます。",
+      "枯れ草だけを薄く置きます。荒地や砂地の地形に向きます。",
     layers: [
       {
         typeId: "dry-grass",

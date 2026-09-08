@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { tauri, type ProjectKind, type RuntimeStatus } from "../lib/tauri";
 import { BrandMark } from "./Brand";
+import { setupProgressLabel } from "../lib/setup-progress";
 import { SupportReportModal } from "./SupportReportModal";
 
 type SetupProgress = {
@@ -56,7 +57,7 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
     try {
       const next = await tauri.setupRuntime();
       if (next.ready) onReady(next);
-      else setError("セットアップが完了しませんでした。");
+      else setError("セットアップを完了できませんでした。もう一度お試しください。");
     } catch (e) {
       setError(`${e}`);
     } finally {
@@ -81,21 +82,21 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
             <span className="text-gradient-brand">XRift Studio</span> へようこそ
           </h1>
           <p className="mt-2 text-sm text-zinc-500">
-            ワールドやアイテムを、作り始めるところから公開まで
+            ワールドやアイテムを作成して、XRiftに公開できます。
           </p>
           <p className="mt-1 text-[11px] text-zinc-400">
-            XRift 公式とは無関係の有志製ツールです
+            有志が開発する、XRiftの非公式制作ツールです。
           </p>
         </div>
 
         <div className="rounded-2xl border border-white/60 bg-white/80 p-6 shadow-brand backdrop-blur-sm">
           <div className="flex items-center gap-2 text-xs text-zinc-500">
             <Sparkles size={14} className="text-brand-500" strokeWidth={2} />
-            <span>準備はアプリにおまかせ。ワンクリックで始められます</span>
+            <span>作成・公開に必要なツールをインストールします。</span>
           </div>
 
           <ul className="mt-4 space-y-2.5 text-sm">
-            <SetupItem done={status.nodeInstalled} label="Node.js v24 LTS" hint="Node.js 本体と npm を同梱（約 30MB）" />
+            <SetupItem done={status.nodeInstalled} label="Node.js v24 LTS" hint="アプリ専用のNode.jsとnpm" />
             <SetupItem done={status.xriftInstalled} label="@xrift/cli" hint="ワールドやアイテムの作成・公開に使う XRift 公式ツール" />
           </ul>
 
@@ -111,7 +112,7 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
               <div className="mb-2 flex items-center justify-between text-xs">
                 <span className="flex items-center gap-1.5 font-medium text-brand-700">
                   <Loader2 size={12} className="animate-spin" strokeWidth={2.25} />
-                  {progress?.step ?? "..."}
+                  {setupProgressLabel(progress?.step)}
                 </span>
                 <span className="tabular-nums text-brand-500">{percent.toFixed(1)}%</span>
               </div>
@@ -126,7 +127,7 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
                 <div className="scrollbar-thin mt-3 max-h-28 overflow-y-auto rounded bg-white/70 p-2 font-mono text-[10px] leading-4 text-zinc-500">
                   {logs.slice(-10).map((l, i) => (
                     <div key={i}>
-                      [{l.step}] {l.message}
+                      [{setupProgressLabel(l.step)}] {l.message}
                     </div>
                   ))}
                 </div>
@@ -136,7 +137,7 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
 
           {error && (
             <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 animate-fade-in">
-              <div className="font-semibold">エラー</div>
+              <div className="font-semibold">セットアップを完了できませんでした</div>
               <div className="mt-1 whitespace-pre-wrap font-mono text-[11px]">{error}</div>
               <button
                 type="button"
@@ -175,10 +176,10 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
               </span>
               <div>
                 <div className="text-xs font-semibold text-zinc-800">
-                  環境準備なしでビジュアル制作を始める
+                  セットアップせずに作り始める
                 </div>
                 <p className="mt-1 text-[11px] leading-5 text-zinc-500">
-                  SceneとAssetの編集・保存にはNode.jsやXRift CLIは不要です。XRiftへの変換・公開時に必要な環境は後から準備できます。
+                  ビジュアル編集と保存には、セットアップは不要です。XRiftに公開するときに準備できます。
                 </p>
               </div>
             </div>
@@ -190,7 +191,7 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
                 className="flex items-center justify-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 transition hover:border-violet-300 hover:bg-violet-100 disabled:opacity-50"
               >
                 <Globe2 size={14} strokeWidth={2} />
-                Worldを作る
+                ワールドを作る
               </button>
               <button
                 type="button"
@@ -199,14 +200,14 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
                 className="flex items-center justify-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-800 transition hover:border-cyan-300 hover:bg-cyan-100 disabled:opacity-50"
               >
                 <Box size={14} strokeWidth={2} />
-                Itemを作る
+                アイテムを作る
               </button>
             </div>
           </div>
         </div>
 
         <div className="mt-5 text-center text-[11px] text-zinc-400">
-          お使いのシステムには影響しません。すべてアプリ専用のフォルダで完結します。
+          ツールはアプリ専用のフォルダーにインストールします。
         </div>
       </div>
       <SupportReportModal

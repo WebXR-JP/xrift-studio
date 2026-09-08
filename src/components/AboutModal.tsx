@@ -45,13 +45,13 @@ const RESET_META: Record<
   runtime: {
     title: "ランタイムをリセット",
     description:
-      "同梱の Node.js と @xrift/cli を削除し、ログイン状態もクリアします。\nプロジェクトは残ります。リセット後、アプリを再起動してランタイムを再セットアップします。",
+      "同梱の Node.js と @xrift/cli を削除し、ログイン情報も削除します。\nプロジェクトは残ります。リセット後、アプリを再起動して必要なツールを再インストールします。",
     confirm: "リセットして再起動",
   },
   all: {
     title: "完全リセット",
     description:
-      "Node.js / @xrift/cli / ログイン状態 / すべてのプロジェクトを削除します。\nこの操作は元に戻せません。削除後、アプリを再起動します。本当に実行しますか？",
+      "アプリ専用のNode.js、@xrift/cli、ログイン情報、すべてのプロジェクトを削除します。\nこの操作は元に戻せません。削除後、アプリを再起動します。本当に実行しますか？",
     confirm: "すべて削除して再起動",
   },
 };
@@ -182,10 +182,10 @@ export function AboutModal({
 
         <div data-app-modal-body className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
-            本アプリは XRift 公式とは無関係の有志製ツールです。ワールドやアイテムの作成、確認、公開を進めやすくすることを目的としています。
+            XRift Studioは、有志が開発する非公式制作ツールです。ワールドやアイテムの作成・動作確認・公開に使えます。
           </div>
           <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-            Versions
+            バージョン
           </div>
           <dl className="mt-2 divide-y divide-zinc-100">
             <Row label="XRift Studio" value={v.app} hint="アプリ本体" />
@@ -208,10 +208,10 @@ export function AboutModal({
           <div className="mt-5 rounded-lg border border-rose-200 bg-rose-50/50 px-3 py-3">
             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-rose-700">
               <AlertTriangle size={11} strokeWidth={2.5} />
-              危険領域 (Danger Zone)
+              データの削除とリセット
             </div>
             <div className="mt-1 text-[11px] leading-relaxed text-rose-700/80">
-              トラブル時の最終手段です。実行するとアプリが再読み込みされます。
+              リセット後はアプリが再起動し、セットアップが必要になります。
             </div>
             <div className="mt-2.5 grid grid-cols-2 gap-2">
               <button
@@ -229,7 +229,7 @@ export function AboutModal({
                 }
               >
                 <RefreshCw size={11} strokeWidth={2.25} />
-                ランタイムのみ
+                ランタイムをリセット
               </button>
               <button
                 type="button"
@@ -268,7 +268,7 @@ export function AboutModal({
               className="flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-700"
             >
               <ExternalLink size={11} strokeWidth={2} />
-              Issue相談GPT
+              ヘルプセンターGPT
             </button>
           ) : (
             <button
@@ -277,7 +277,7 @@ export function AboutModal({
               className="flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-700"
             >
               <ExternalLink size={11} strokeWidth={2} />
-              Issueを相談
+              GitHubで不具合を報告
             </button>
           )}
           <button

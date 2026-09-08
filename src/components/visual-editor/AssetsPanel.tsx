@@ -138,7 +138,7 @@ function assetSourceLabel(asset: SceneAsset): string {
   return "document";
 }
 
-/** 一覧で並び替えに使う、いま使っているファイルの容量。 */
+/** 一覧で並び順に使う、いま使っているファイルの容量。 */
 function assetFileBytes(asset: SceneAsset): number | null {
   if (!("importMetadata" in asset) || !asset.importMetadata) return null;
   const byteLength = (asset.importMetadata as { byteLength?: unknown }).byteLength;
@@ -373,7 +373,7 @@ function AssetFolderTree({
   };
 
   return (
-    <aside className="flex w-44 shrink-0 flex-col border-r border-editor-border bg-editor-surface" aria-label="Asset folders">
+    <aside className="flex w-44 shrink-0 flex-col border-r border-editor-border bg-editor-surface" aria-label="Assetsのフォルダー">
       <div className="scrollbar-thin min-h-0 flex-1 overflow-auto px-1.5 py-2">
         <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
           ライブラリ
@@ -411,7 +411,7 @@ function AssetFolderTree({
           {childrenOf(null).map((folder) => renderCustomFolder(folder, 0))}
           {customFolders.length === 0 ? (
             <p className="px-2 py-2 text-[11px] leading-4 text-slate-400">
-              フォルダーはまだありません。右クリックから作成できます。
+              右クリックでフォルダーを作成します。
             </p>
           ) : null}
         </div>
@@ -450,17 +450,17 @@ function importStatusLabel(status: PendingImport["status"]): string {
     case "queued":
       return "待機中";
     case "reading":
-      return "読込中";
+      return "読み込み中";
     case "processing":
       return "解析・生成中";
     case "committing":
-      return "確定中";
+      return "追加中";
     case "succeeded":
       return "完了";
     case "updated":
-      return "既存Assetを更新";
+      return "既存素材を更新";
     case "duplicate":
-      return "既存Assetを再利用";
+      return "既存素材を再利用";
     case "failed":
       return "失敗";
   }
@@ -529,7 +529,7 @@ function AssetCard({
             className={`block ${vramReducible ? "font-medium text-amber-700" : "text-slate-400"}`}
             title={
               vramReducible
-                ? `VRAM概算 ${formatVramBytes(vramBytes)}。KTX2に変換するとVRAMを下げられます`
+                ? `VRAM概算 ${formatVramBytes(vramBytes)}。KTX2に変換するとVRAM使用量を減らせます`
                 : `VRAM概算 ${formatVramBytes(vramBytes)}`
             }
           >
@@ -540,10 +540,10 @@ function AssetCard({
     ) : null;
   const dragDescription =
     asset.kind === "material"
-      ? "Meshへ適用、またはFolderへ移動"
+      ? "メッシュへ適用、またはフォルダーへ移動"
       : placeable
-        ? "Sceneへ配置、またはFolderへ移動"
-        : "Folderへ移動";
+        ? "シーンへ配置、またはフォルダーへ移動"
+        : "フォルダーへ移動";
   const handleDragStart = (event: DragEvent<HTMLElement>) => {
     const origin = event.target;
     if (
@@ -611,7 +611,7 @@ function AssetCard({
               event.stopPropagation();
               onPlace();
             }}
-            title={commandTitle(`${asset.name}をScene Rootへ配置`, "PlaceSceneAsset")}
+            title={commandTitle(`${asset.name}をシーンの直下へ配置`, "PlaceSceneAsset")}
             className="rounded-md px-1.5 py-0.5 text-[11px] font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-40"
           >
             配置
@@ -695,7 +695,7 @@ function AssetCard({
               className="block truncate text-[10px] leading-4 tabular-nums text-slate-500"
               title={
                 vramBytes !== null && vramReducible
-                  ? "KTX2に変換するとVRAMを下げられます"
+                  ? "KTX2に変換するとVRAM使用量を減らせます"
                   : undefined
               }
             >
@@ -719,10 +719,10 @@ function AssetCard({
             event.stopPropagation();
             onPlace();
           }}
-          title={commandTitle(`${asset.name}をScene Rootへ配置`, "PlaceSceneAsset")}
+          title={commandTitle(`${asset.name}をシーンの直下へ配置`, "PlaceSceneAsset")}
           className="border-t border-editor-border/70 bg-editor-subtle px-1.5 py-1 text-[11px] font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-40"
         >
-          Sceneへ配置
+          シーンへ配置
         </button>
       ) : null}
       <button
@@ -894,7 +894,7 @@ function BuiltinPrefabCard({
           onDragStart={handleDragStart}
           onDragEnd={clearEditorDragData}
           className="col-span-3 grid cursor-grab select-none grid-cols-[54px_minmax(110px,1fr)_minmax(120px,1fr)] items-center gap-2 active:cursor-grabbing"
-          title={`${recipe.name}をSceneへドラッグ`}
+          title={`${recipe.name}をシーンへドラッグ`}
         >
           {thumbnailUrl ? (
             <CatalogThumbnailImage
@@ -921,7 +921,7 @@ function BuiltinPrefabCard({
         onDragStart={handleDragStart}
         onDragEnd={clearEditorDragData}
         className="min-w-0 flex-1 cursor-grab select-none active:cursor-grabbing"
-        title={`${recipe.name}をSceneへドラッグ`}
+        title={`${recipe.name}をシーンへドラッグ`}
       >
         {thumbnailUrl ? (
           <CatalogThumbnailImage
@@ -943,7 +943,7 @@ function BuiltinPrefabCard({
           </p>
         ) : null}
       </div>
-      <button type="button" disabled={readOnly} onClick={onPlace} title={commandTitle(`${recipe.name}をSceneへ配置`, "PlaceBuiltinPrefab")} className="mt-auto rounded bg-sky-600 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-40">配置</button>
+      <button type="button" disabled={readOnly} onClick={onPlace} title={commandTitle(`${recipe.name}をシーンへ配置`, "PlaceBuiltinPrefab")} className="mt-auto rounded bg-sky-600 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-40">配置</button>
     </article>
   );
 }
@@ -1016,11 +1016,8 @@ function ImportActivityDrawer({
       <div className="mb-2 flex items-center justify-between gap-2">
         <div>
           <h3 id="asset-activity-heading" className="text-xs font-semibold text-editor-text">
-            アセットアクティビティ
+            インポート履歴
           </h3>
-          <p className="text-[11px] text-editor-muted">
-            インポート結果と診断をここで確認できます。
-          </p>
         </div>
         {error ? (
           <button type="button" onClick={onClearError} className="rounded px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300">
@@ -1032,7 +1029,7 @@ function ImportActivityDrawer({
       {!projectPersisted && waitingForSave ? (
         <div className="mb-2 rounded-md border border-brand-200 bg-brand-50 p-2.5">
           <p className="text-xs leading-4 text-slate-700">
-            アセットの保存先を確定するため、先にプロジェクトを保存してください。選択したファイルはこのセッション内で待機します。
+            先にプロジェクトを保存してください。選択したファイルはこの画面を開いている間、保持します。
           </p>
           <button
             type="button"
@@ -1124,16 +1121,16 @@ function ImportQueueEntry({
       {entry.result ? (
         <p className="mt-1 text-[11px] text-editor-muted">
           {entry.resourceKind === "unity-package"
-            ? `Prefab ${entry.result.prefabCount ?? 0}件・Entity ${entry.result.entityCount ?? 0}件・Asset ${entry.result.assetCount ?? 0}件${entry.result.warningCount ? `・要確認 ${entry.result.warningCount}件` : ""}`
+            ? `Prefab ${entry.result.prefabCount ?? 0}件・Entity ${entry.result.entityCount ?? 0}件・素材 ${entry.result.assetCount ?? 0}件${entry.result.warningCount ? `・要確認 ${entry.result.warningCount}件` : ""}`
             : entry.resourceKind === "skybox"
-              ? "HDRI Texture 1件・Skyboxへ設定済み"
+              ? "HDRI テクスチャ 1件・Skyboxへ設定済み"
               : entry.resourceKind === "audio"
-                ? "Audio Asset 1件"
+                ? "音声素材 1件"
               : entry.resourceKind === "font"
-                ? "Font Asset 1件"
+                ? "フォント 1件"
               : entry.resourceKind === "shader"
-                ? "GLSL Shader Asset 1件"
-                : `Material ${entry.result.materialCount}件・Texture ${entry.result.textureCount}件`}
+                ? "GLSL シェーダー素材 1件"
+                : `マテリアル ${entry.result.materialCount}件・テクスチャ ${entry.result.textureCount}件`}
         </p>
       ) : null}
       {entry.assetId || removable ? (
@@ -1343,7 +1340,7 @@ export function AssetsPanel({
     externalOperationLockReason?.trim() || null;
   const activeAssetImport = hasActiveAssetImport(pendingImports);
   const importDisabledReason = readOnly
-    ? "Playを停止してからアセットをインポートしてください"
+    ? "動作確認を停止してからアセットをインポートしてください"
     : normalizedExternalLockReason;
   const importLocked = Boolean(importDisabledReason);
   const assetMutationLocked =
@@ -1351,7 +1348,7 @@ export function AssetsPanel({
     Boolean(normalizedExternalLockReason) ||
     activeAssetImport;
   const assetMutationDisabledReason = readOnly
-    ? "Playを停止してからアセットを編集してください"
+    ? "動作確認を停止してからアセットを編集してください"
     : normalizedExternalLockReason ??
       (activeAssetImport
         ? "アセットのインポート完了後に編集できます"
@@ -1392,7 +1389,7 @@ export function AssetsPanel({
       : activeFolder?.builtinPrefabs
         ? []
         : allAssets.filter((asset) => (asset.folderId ?? null) === null);
-  // 容量・VRAMの並び替えは大きい順。未変換の重いTextureを上へ集めて、
+  // 容量・VRAMの並び順は大きい順。未変換の重いTextureを上へ集めて、
   // そのままInspectorの変換へつなげるための並びなので、値が無いAssetは後ろへ。
   const sortAssetsByMetric = (
     list: readonly SceneAsset[],
@@ -1525,7 +1522,7 @@ export function AssetsPanel({
         if (assetMutationDisabledReason) onPhaseNotice(assetMutationDisabledReason);
       } else if (entityId) onCommand("prefab.create", { entityId });
       else {
-        onPhaseNotice("Prefab化するEntityを読み取れませんでした");
+        onPhaseNotice("プレハブ化するEntityを読み取れませんでした");
       }
       return;
     }
@@ -1607,7 +1604,7 @@ export function AssetsPanel({
     setRootDropTarget(false);
     if (assetMutationLocked) return true;
     if (!assetId && !sourceFolderId) {
-      onPhaseNotice("移動するAssetまたはFolderを読み取れませんでした");
+      onPhaseNotice("移動する素材またはフォルダーを読み取れませんでした");
       return true;
     }
     if (assetId) onMoveAsset(assetId, folderId);
@@ -1698,7 +1695,7 @@ export function AssetsPanel({
       <div className="@container/assets-header flex h-10 shrink-0 items-center justify-between gap-3 border-b border-editor-border bg-editor-surface px-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <h2 id="assets-heading" className="shrink-0 text-[13px] font-semibold text-slate-800">Assets</h2>
-          <nav className="hidden min-w-0 items-center gap-1 overflow-hidden text-xs text-slate-500 @[460px]/assets-header:flex" aria-label="Asset folder breadcrumb">
+          <nav className="hidden min-w-0 items-center gap-1 overflow-hidden text-xs text-slate-500 @[460px]/assets-header:flex" aria-label="Assetsのフォルダー階層">
             <button
               type="button"
               onClick={() => onActiveFolderChange(null)}
@@ -1706,7 +1703,7 @@ export function AssetsPanel({
               onDragLeave={() => setRootDropTarget(false)}
               onDrop={(event) => handleLibraryMove(event, null)}
               className={`shrink-0 rounded-md px-1.5 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 ${rootDropTarget ? "bg-brand-100 text-brand-800" : "hover:bg-editor-subtle hover:text-editor-text"}`}
-              title="Assets直下を開く。アセットまたはフォルダーをここへドロップして移動"
+              title="Assets直下へ移動（素材やフォルダーをドロップ）"
             >
               Assets
             </button>
@@ -1772,7 +1769,7 @@ export function AssetsPanel({
           <button type="button" onClick={() => setViewMode("grid")} aria-label="グリッド表示" aria-pressed={viewMode === "grid"} title={commandTitle("グリッド表示", "SetAssetView.Grid")} className={`shrink-0 rounded p-1 ${viewMode === "grid" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><GridIcon size={14} aria-hidden="true" /></button>
           <button type="button" onClick={() => setViewMode("list")} aria-label="リスト表示" aria-pressed={viewMode === "list"} title={commandTitle("リスト表示", "SetAssetView.List")} className={`shrink-0 rounded p-1 ${viewMode === "list" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><ListIcon size={14} aria-hidden="true" /></button>
           <button type="button" disabled={assetMutationLocked} onClick={openCreationMenu} aria-label="新規アセットまたはフォルダー" title={assetMutationDisabledReason ?? "新規アセットまたはフォルダー"} className="ml-1 shrink-0 rounded border border-slate-300 bg-white p-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45"><CreateIcon size={14} aria-hidden="true" /></button>
-          <button type="button" disabled={assetMutationLocked} onClick={onOpenExternalStore} title={assetMutationDisabledReason ?? "外部リソースからAssetまたは公式Componentを追加"} aria-label="外部から追加" className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45 @[620px]/assets-header:px-2.5"><Store size={12} aria-hidden="true" /><span className="hidden @[620px]/assets-header:inline">外部から追加</span></button>
+          <button type="button" disabled={assetMutationLocked} onClick={onOpenExternalStore} title={assetMutationDisabledReason ?? "外部リソースから素材または公式Componentを追加"} aria-label="外部から追加" className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45 @[620px]/assets-header:px-2.5"><Store size={12} aria-hidden="true" /><span className="hidden @[620px]/assets-header:inline">外部から追加</span></button>
           <button type="button" disabled={importLocked} onClick={() => { if (onCommand("asset.import")) fileInputRef.current?.click(); }} title={importDisabledReason ?? commandTitle("アセットをインポート", "asset.import")} aria-label="アセットをインポート" className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md bg-brand-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45 @[520px]/assets-header:px-2.5"><ImportIcon size={12} aria-hidden="true" /><span className="hidden @[520px]/assets-header:inline">インポート</span></button>
         </div>
       </div>
@@ -1796,7 +1793,7 @@ export function AssetsPanel({
             </span>
             <span className="flex shrink-0 items-center gap-2">
               <label className="flex items-center gap-1 text-[11px] text-editor-muted">
-                <span>並び替え</span>
+                <span>並び順</span>
                 <select
                   value={sortMode}
                   onChange={(event) =>
@@ -1908,7 +1905,7 @@ export function AssetsPanel({
           <div className="col-span-full rounded border border-dashed border-slate-300 bg-white px-4 py-4 text-center text-xs text-slate-600">
             <p className="font-semibold text-slate-700">一致するアセットがありません</p>
             <p className="mt-1 text-[11px] text-slate-500">
-              名前、種類、ソースパス、フォルダーパスを検索できます。
+              名前・種類・パスで検索します。
             </p>
             <button
               type="button"
@@ -1928,7 +1925,7 @@ export function AssetsPanel({
             onDrop={(event) => handleLibraryMove(event, null)}
             className={`col-span-full rounded border border-dashed bg-white px-4 py-3 text-xs ${rootDropTarget ? "border-violet-500 bg-violet-50 text-violet-800" : "border-slate-300 text-slate-500 hover:border-violet-300 hover:text-violet-700"}`}
           >
-            Folderは空です。Assetsへ戻る
+            このフォルダーには素材がありません。Assets直下へ戻る
             <span className="mt-1 block text-[11px]">ここへドロップするとAssets直下へ移動します</span>
           </button>
         ) : null}
@@ -1964,12 +1961,12 @@ export function AssetsPanel({
             label={
               contextMenu.assetId &&
               assets.assets[contextMenu.assetId]?.source.kind === "project"
-                ? "エクスプローラーで表示"
-                : "Assetsをエクスプローラーで開く"
+                ? "保存先を開く"
+                : "素材の保存先を開く"
             }
             command="OpenAssetLocation"
             disabled={!projectPath}
-            disabledReason="プロジェクトを保存してからエクスプローラーで開いてください"
+            disabledReason="保存先を開くには、先にプロジェクトを保存してください"
             onClick={() => {
               const asset = contextMenu.assetId
                 ? assets.assets[contextMenu.assetId]
@@ -1986,7 +1983,7 @@ export function AssetsPanel({
           isScenePlaceableAsset(assets.assets[contextMenu.assetId]) ? (
             <ContextMenuItem
               icon="move"
-              label="Sceneへ配置"
+              label="シーンへ配置"
               command="PlaceSceneAsset"
               disabled={assetMutationLocked}
               onClick={() => {
@@ -2015,7 +2012,7 @@ export function AssetsPanel({
                   ? assetMutationDisabledReason
                   : !projectPath
                     ? "プロジェクトを保存すると設定できます"
-                    : "このTextureには使用できる画像がありません"
+                    : "このテクスチャには使用できる画像がありません"
               }
               onClick={() => {
                 const assetId = contextMenu.assetId;
@@ -2027,7 +2024,7 @@ export function AssetsPanel({
           {contextMenu.assetId || assets.folders?.[contextMenu.folderId ?? ""] ? (
             <ContextMenuItem
               icon="settings"
-              label="Rename"
+              label="名前を変更"
               command="selection.rename"
               disabled={assetMutationLocked}
               onClick={() => {
@@ -2041,7 +2038,7 @@ export function AssetsPanel({
           {contextMenu.assetId && assets.assets[contextMenu.assetId]?.kind === "interactivity" ? (
             <ContextMenuItem
               icon="settings"
-              label="Interactivity Graphを編集"
+              label="ノードグラフを編集"
               command="asset.edit-interactivity"
               onClick={() => {
                 const assetId = contextMenu.assetId;
@@ -2067,17 +2064,17 @@ export function AssetsPanel({
           ) : null}
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="folder" label="新規フォルダー" command="asset.create-folder" onClick={() => { setContextMenu(null); onCommand("asset.create-folder"); }} />
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="material" label="新規マテリアル" command="asset.create-material" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-material", { folderId }); }} />
-          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="particle" label="新規Particle" command="asset.create-particle" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-particle", { folderId }); }} />
-          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="asset" label="新規Interactivity Graph" command="asset.create-interactivity" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-interactivity", { folderId }); }} />
-          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="script" label="新規Script" command="asset.create-script" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-script", { folderId }); }} />
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="particle" label="新規パーティクル" command="asset.create-particle" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-particle", { folderId }); }} />
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="asset" label="新規ノードグラフ" command="asset.create-interactivity" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-interactivity", { folderId }); }} />
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="script" label="新規スクリプト" command="asset.create-script" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-script", { folderId }); }} />
           <ContextMenuItem disabled={importLocked} disabledReason={importDisabledReason} icon="texture" label="ファイルをインポート…" command="asset.import" onClick={() => { setContextMenu(null); if (onCommand("asset.import")) fileInputRef.current?.click(); }} />
-          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="prefab" label="EntityからPrefabを作成" command="prefab.create" onClick={() => { setContextMenu(null); onPhaseNotice("HierarchyのEntityをAssetsへドラッグしてください"); }} />
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="prefab" label="Entityからプレハブを作成" command="prefab.create" onClick={() => { setContextMenu(null); onPhaseNotice("HierarchyのEntityをAssetsへドラッグしてください"); }} />
         </div>
       ) : null}
 
       {fileDragOver ? (
         <div className="pointer-events-none absolute inset-2 z-40 flex items-center justify-center rounded-md border-2 border-dashed border-violet-500 bg-white/95 px-4 text-center text-[12px] font-semibold leading-5 text-violet-900 shadow-lg">
-          {importDisabledReason ?? "UnityPackage / Scene / Prefab / Model / Texture / GLSL を解析してインポート"}
+          {importDisabledReason ?? "UnityPackage / シーン / プレハブ / 3Dモデル / テクスチャ / GLSL を解析してインポート"}
         </div>
       ) : null}
     </section>

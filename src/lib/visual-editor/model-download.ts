@@ -114,7 +114,7 @@ export function compactPublishedGlb(source: Uint8Array, plan: ModelDownloadPlan)
     const clearedMaterials = new Set<number>();
     for (const replacement of plan.replacedMaterials) {
       const material = materials[replacement.index];
-      if (!material || material.name !== replacement.name) return unchanged("Materialの番号と名前が取り込み時の情報と一致しません");
+      if (!material || material.name !== replacement.name) return unchanged("マテリアルの番号と名前が取り込み時の情報と一致しません");
       clearedMaterials.add(replacement.index);
     }
     for (const [index, material] of materials.entries()) {

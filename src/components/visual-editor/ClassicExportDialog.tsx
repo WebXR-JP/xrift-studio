@@ -106,7 +106,7 @@ export function ClassicExportDialog({
       setError(
         selectionError instanceof Error
           ? selectionError.message
-          : "Classicプロジェクトを確認できませんでした。",
+          : "コード編集プロジェクトを確認できませんでした。",
       );
     } finally {
       setChoosing(false);
@@ -136,7 +136,7 @@ export function ClassicExportDialog({
       setError(
         exportError instanceof Error
           ? exportError.message
-          : "Classicへの書き出しに失敗しました。",
+          : "コード編集への書き出しに失敗しました。",
       );
       setErrorDetails(
         exportError instanceof ClassicExportError
@@ -154,7 +154,7 @@ export function ClassicExportDialog({
       await navigator.clipboard.writeText(result.importSnippet);
       setCopied(true);
     } catch {
-      setError("接続コードをコピーできませんでした。VS Codeで生成ファイルを確認してください。");
+      setError("組み込み用コードをコピーできませんでした。VS Codeで生成ファイルを確認してください。");
     }
   };
 
@@ -177,17 +177,17 @@ export function ClassicExportDialog({
         <header data-app-modal-header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6 sm:py-5">
           <div>
             <h2 id="classic-export-title" className="text-xl font-semibold text-slate-950">
-              XRift Classicへ書き出す
+              XRift コード編集へ書き出す
             </h2>
             <p className="mt-1.5 text-sm leading-6 text-slate-600">
-              {projectName}のSceneを、公開時と同じTypeScript / React Three Fiberのソースとして、選択したClassicプロジェクトへ一方向に追加します。
+              {projectName}のシーンをコード編集プロジェクトに書き出します。
             </p>
           </div>
           <button
             type="button"
             disabled={busy}
             onClick={onClose}
-            aria-label="Classic exportを閉じる"
+            aria-label="書き出しを閉じる"
             className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-wait disabled:opacity-40"
           >
             <X size={18} aria-hidden="true" />
@@ -201,17 +201,17 @@ export function ClassicExportDialog({
                 <div className="flex items-start gap-3">
                   <CheckCircle2 className="mt-0.5 text-emerald-700" size={22} aria-hidden="true" />
                   <div>
-                    <h3 className="font-semibold text-emerald-950">Classicへの書き出しが完了しました</h3>
+                    <h3 className="font-semibold text-emerald-950">コード編集への書き出しが完了しました</h3>
                     <p className="mt-1 text-sm leading-6 text-emerald-900/80">
-                      Sceneのソース、Asset、接続コンポーネントを追加しました。
+                      シーンのソース、素材、組み込み用Componentを追加しました。
                       {result.packageInstallation === "installed"
-                        ? " 必要なpackageもインストール済みです。"
+                        ? " 必要なパッケージもインストールしました。"
                         : result.packageInstallation === "recorded"
-                          ? " 必要なpackageはpackage.jsonへ記録しました。"
-                          : " 追加のpackageは必要ありません。"}
+                          ? " 必要なパッケージをpackage.jsonに記録しました。"
+                          : " 追加のパッケージはありません。"}
                     </p>
                     <p className="mt-2 text-xs leading-5 text-emerald-900/70">
-                      Sceneの本体: <code className="rounded bg-white/70 px-1 py-0.5">{result.sceneSourceFile}</code>
+                      シーンの本体: <code className="rounded bg-white/70 px-1 py-0.5">{result.sceneSourceFile}</code>
                     </p>
                   </div>
                 </div>
@@ -221,9 +221,9 @@ export function ClassicExportDialog({
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <h3 className="text-sm font-semibold text-slate-900">既存Sceneへ接続する</h3>
+                      <h3 className="text-sm font-semibold text-slate-900">既存のシーンに追加する</h3>
                       <p className="mt-1 text-xs leading-5 text-slate-600">
-                        既存の{projectKind === "world" ? "World.tsx" : "Item.tsx"}へ次のコンポーネントを追加してください。
+                        既存の{projectKind === "world" ? "World.tsx" : "Item.tsx"}へ次のComponentを追加してください。
                       </p>
                     </div>
                     <button
@@ -232,7 +232,7 @@ export function ClassicExportDialog({
                       className="flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100"
                     >
                       {copied ? <Check size={14} aria-hidden="true" /> : <Clipboard size={14} aria-hidden="true" />}
-                      {copied ? "コピー済み" : "接続コードをコピー"}
+                      {copied ? "コピー済み" : "組み込み用コードをコピー"}
                     </button>
                   </div>
                   <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-950 p-3 text-xs leading-5 text-slate-100">
@@ -243,7 +243,7 @@ export function ClassicExportDialog({
 
               {result.installCommand ? (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-                  <h3 className="text-sm font-semibold text-amber-950">依存packageのinstallを完了する</h3>
+                  <h3 className="text-sm font-semibold text-amber-950">必要なパッケージをインストールする</h3>
                   <p className="mt-1 text-xs leading-5 text-amber-900/80">
                     {result.packageChanges.map((change) => `${change.name}@${change.version}`).join("、")}をpackage.jsonへ記録しました。書き出し先で次のコマンドを実行してください。
                   </p>
@@ -286,26 +286,26 @@ export function ClassicExportDialog({
                   </div>
                   <button type="button" disabled={busy} onClick={() => void chooseTarget()} className="flex shrink-0 items-center gap-2 rounded-lg border border-violet-300 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-wait disabled:opacity-50">
                     {choosing ? <Loader2 className="animate-spin" size={16} aria-hidden="true" /> : <FolderOpen size={16} aria-hidden="true" />}
-                    {target ? "選び直す" : "Classicプロジェクトを選ぶ"}
+                    {target ? "選び直す" : "コード編集プロジェクトを選ぶ"}
                   </button>
                 </div>
                 {target ? (
                   <div className="mt-3 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-3">
-                    <div><p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Project</p><p className="mt-1 truncate text-sm font-semibold text-slate-900" title={target.packageName}>{target.packageName}</p></div>
-                    <div><p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Target</p><p className="mt-1 text-sm text-slate-800">{target.kind === "world" ? "World" : "Item"}</p></div>
-                    <div><p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Package manager</p><p className="mt-1 text-sm text-slate-800">{target.packageManager}</p></div>
+                    <div><p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">プロジェクト</p><p className="mt-1 truncate text-sm font-semibold text-slate-900" title={target.packageName}>{target.packageName}</p></div>
+                    <div><p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">書き出し先</p><p className="mt-1 text-sm text-slate-800">{target.kind === "world" ? "ワールド" : "アイテム"}</p></div>
+                    <div><p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">パッケージ管理ツール</p><p className="mt-1 text-sm text-slate-800">{target.packageManager}</p></div>
                   </div>
                 ) : null}
               </section>
 
               <section className={!target ? "pointer-events-none opacity-45" : undefined}>
-                <h3 className="text-sm font-semibold text-slate-900">2. 接続方法</h3>
+                <h3 className="text-sm font-semibold text-slate-900">2. 組み込み方法</h3>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <label className={`cursor-pointer rounded-xl border p-4 ${integration === "component" ? "border-violet-400 bg-violet-50 ring-1 ring-violet-200" : "border-slate-200 hover:bg-slate-50"}`}>
-                    <span className="flex items-start gap-3"><input type="radio" name="classic-integration" checked={integration === "component"} onChange={() => { setIntegration("component"); setReplaceConfirmed(false); }} className="mt-1" /><span><span className="block text-sm font-semibold text-slate-900">コンポーネントとして追加</span><span className="mt-1 block text-xs leading-5 text-slate-600">推奨。既存コードを保ち、接続コードと生成ファイルだけを追加します。</span></span></span>
+                    <span className="flex items-start gap-3"><input type="radio" name="classic-integration" checked={integration === "component"} onChange={() => { setIntegration("component"); setReplaceConfirmed(false); }} className="mt-1" /><span><span className="block text-sm font-semibold text-slate-900">Componentとして追加</span><span className="mt-1 block text-xs leading-5 text-slate-600">既存コードを残し、必要なファイルだけを追加します。</span></span></span>
                   </label>
                   <label className={`cursor-pointer rounded-xl border p-4 ${integration === "replace-entry" ? "border-amber-400 bg-amber-50 ring-1 ring-amber-200" : "border-slate-200 hover:bg-slate-50"}`}>
-                    <span className="flex items-start gap-3"><input type="radio" name="classic-integration" checked={integration === "replace-entry"} onChange={() => setIntegration("replace-entry")} className="mt-1" /><span><span className="block text-sm font-semibold text-slate-900">エントリーを切り替える</span><span className="mt-1 block text-xs leading-5 text-slate-600">既存エントリーをバックアップし、Visual Sceneをプロジェクトの入口にします。</span></span></span>
+                    <span className="flex items-start gap-3"><input type="radio" name="classic-integration" checked={integration === "replace-entry"} onChange={() => setIntegration("replace-entry")} className="mt-1" /><span><span className="block text-sm font-semibold text-slate-900">起動するシーンを切り替える</span><span className="mt-1 block text-xs leading-5 text-slate-600">起動ファイルをバックアップし、このシーンから起動するように変更します。</span></span></span>
                   </label>
                 </div>
                 {integration === "replace-entry" ? (
@@ -317,10 +317,10 @@ export function ClassicExportDialog({
               </section>
 
               <section className={!target ? "pointer-events-none opacity-45" : undefined}>
-                <h3 className="text-sm font-semibold text-slate-900">3. 依存package</h3>
+                <h3 className="text-sm font-semibold text-slate-900">3. 必要なパッケージ</h3>
                 <label className="mt-3 flex items-start gap-3 rounded-xl border border-slate-200 p-4">
                   <input type="checkbox" checked={installDependencies} disabled={!target?.canInstallAutomatically} onChange={(event) => setInstallDependencies(event.target.checked)} className="mt-1" />
-                  <span><span className="flex items-center gap-2 text-sm font-semibold text-slate-900"><PackageCheck size={16} aria-hidden="true" />不足しているpackageをインストール</span><span className="mt-1 block text-xs leading-5 text-slate-600">{target?.canInstallAutomatically ? "生成したSceneが必要とするpackage（@xrift/world-componentsの版、TextやOpen Brushのライブラリ）が足りない場合だけ、npmで固定versionを追加します。" : target ? `${target.packageManager} projectのためpackage.jsonへの記録まで行います。完了後に既存のpackage managerでinstallしてください。` : "書き出し先を選ぶと利用方法を確認できます。"}</span></span>
+                  <span><span className="flex items-center gap-2 text-sm font-semibold text-slate-900"><PackageCheck size={16} aria-hidden="true" />不足しているパッケージをインストール</span><span className="mt-1 block text-xs leading-5 text-slate-600">{target?.canInstallAutomatically ? "書き出すシーンに必要なパッケージが不足している場合、対応するバージョンをnpmでインストールします。" : target ? `${target.packageManager}のプロジェクトでは、package.jsonへの記録のみ行います。書き出し後に${target.packageManager}でインストールしてください。` : "書き出し先を選ぶと、必要なパッケージを確認できます。"}</span></span>
                 </label>
               </section>
 
@@ -339,10 +339,10 @@ export function ClassicExportDialog({
         </div>
 
         <footer data-app-modal-footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3 sm:px-6 sm:py-4">
-          <p className="text-xs text-slate-500">Classic側の変更をVisual Editorへ逆変換しません。</p>
+          <p className="text-xs text-slate-500">書き出したコードを変更しても、ビジュアル編集のシーンには反映されません。</p>
           <div className="flex items-center gap-2">
             <button type="button" disabled={busy} onClick={onClose} className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-wait disabled:opacity-50">{result ? "閉じる" : "キャンセル"}</button>
-            {!result ? <button type="button" disabled={!canExport} onClick={() => void startExport()} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300">{busy ? "書き出し中…" : "Classicへ書き出す"}</button> : null}
+            {!result ? <button type="button" disabled={!canExport} onClick={() => void startExport()} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300">{busy ? "書き出し中…" : "コード編集へ書き出す"}</button> : null}
           </div>
         </footer>
       </section>

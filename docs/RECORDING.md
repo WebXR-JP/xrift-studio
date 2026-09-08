@@ -23,16 +23,16 @@ LLM が MCP 経由でワールドを作る様子を、XRift Studio だけで動�
 
 ## 仕組み
 
-録画は React の外にある 1 つの controller（`src/lib/recording/recording-session.ts`）が持つ。Scene View の Canvas は投影の切り替えや Project の再読み込みで作り直される。このため、Canvas そのものを録画すると take が途中で終わる。そこで controller がプロファイルどおりの大きさの録画用フレーム（通常の canvas）を持つ。Scene View は自分を「ソース」として登録するだけにする。React Three Fiber が 1 フレーム描くたびに（`addAfterEffect`）そのフレームを録画用フレームへコピーする。`MediaRecorder` が録画用フレームの `captureStream` を符号化する。ソースが消えても take は続く。最後のフレームが保たれる。Scene View が戻れば続きから映る。
+録画は React の外にある 1 つの controller（`src/lib/recording/recording-session.ts`）が持つ。シーンの Canvas は投影の切り替えやプロジェクトの再読み込みで作り直される。このため、Canvas そのものを録画すると take が途中で終わる。そこで controller がプロファイルどおりの大きさの録画用フレーム（通常の編集領域）を持つ。シーンは自分を「ソース」として登録するだけにする。React Three Fiber が 1 フレーム描くたびに（`addAfterEffect`）そのフレームを録画用フレームへコピーする。`MediaRecorder` が録画用フレームの `captureStream` を符号化する。ソースが消えても take は続く。最後のフレームが保たれる。シーンが戻れば続きから映る。
 
 符号化した chunk は 1 秒ごとに Rust へ raw body（`recording_append_chunk`）で渡す。その場でファイルへ追記する。
 
-WebView に `MediaRecorder` が無い場合（Linux の WebKitGTK は「unsupported on this platform」を返す）は、PATH の FFmpeg があればフレーム単位の経路へ切り替える。録画用フレームをプロファイルのフレームレートで JPEG に読み出す。同じ `recording_append_chunk` で Rust へ渡す。Rust が `ffmpeg -f image2pipe` へ流して H.264 の MP4 を書く。JPEG の符号化が遅れた分は壁時計に合わせる。同じフレームを複製するため、動画の長さは実時間と一致する。複製は `x-xrift-recording-repeat` ヘッダーで回数だけを伝える。Rust が同じ JPEG を FFmpeg へ繰り返し送る。描いたフレーム 1 枚につき IPC は 1 回である。このため、描画が 4 fps まで落ちた WebView でも書き込みの待ち行列は伸びない。sidecar の `encoder` に `media-recorder` か `frame-stream` のどちらで録ったかが残る。FFmpeg も無ければ `failed` と「FFmpeg を PATH に置くとフレーム単位で録画できます」を返す。MP4 は fragmented（`frag_keyframe+empty_moov`）で書く。このため、途中で WebView が落ちても書けたところまでは再生できる。FFmpeg の警告とエラーは動画の隣の `<name>.ffmpeg.log` に残す。失敗の message にも末尾を添える。何も出なければ停止時に消す。
+WebView に `MediaRecorder` が無い場合（Linux の WebKitGTK は「unsupported on this platform」を返す）は、PATH の FFmpeg があればフレーム単位の経路へ切り替える。録画用フレームをプロファイルのフレームレートで JPEG に読み出す。同じ `recording_append_chunk` で Rust へ渡す。Rust が `ffmpeg -f image2pipe` へ流して H.264 の MP4 を書く。JPEG の符号化が遅れた分は壁時計に合わせる。同じフレームを複製するため、動画の長さは実時間と一致する。複製は `x-xrift-recording-repeat` ヘッダーで回数だけを伝える。Rust が同じ JPEG を FFmpeg へ繰り返し送る。描いたフレーム 1 枚につき IPC は 1 回である。このため、描画が 4 fps まで落ちた WebView でも書き込みの待ち行列は伸びない。付属ファイルの `encoder` に `media-recorder` か `frame-stream` のどちらで録ったかが残る。FFmpeg も無ければ `failed` と「FFmpeg を PATH に置くとフレーム単位で録画できます」を返す。MP4 は fragmented（`frag_keyframe+empty_moov`）で書く。このため、途中で WebView が落ちても書けたところまでは再生できる。FFmpeg の警告とエラーは動画の隣の `<name>.ffmpeg.log` に残す。失敗の message にも末尾を添える。何も出なければ停止時に消す。
 
 停止は無期限に待たない。JPEG の読み出しが 5 秒、書き込み待ちが 20 秒を過ぎたら、そこまでにディスクへ届いた分でファイルを閉じる。残った frame は捨てる（console に件数を warn する）。ソフトウェア GL で WebGL の context が失われた take で起きる。失敗の message は最初の原因を保つ。その後ろで「ファイルが開いていない」と失敗する書き込みには置き換えない。
-Windows（WebView2）と macOS（WKWebView）は MediaRecorder を持つ。このため、この経路は通らない。メモリに動画を溜めない。このため、数時間の take でもメモリは増えない。Rust 側が書けるのは `recording_begin_file` で開いたファイルだけである。保存済みのワールドでは、Studio が開いているプロジェクトの `Recording/` に動画と JSON を保存する。保存先はプロジェクトのパスから決め、シンボリックリンクを経由する保存は拒否する。`/Recording/` をワールドの `.gitignore` に追加する。AI client は任意の保存パスを指定できない。未保存のプレビューだけは従来の既定先（OS のビデオフォルダー直下 `XRift Studio`、なければ app data の `recordings`）と、人が選んだ保存先を使う。同名のファイルがあれば番号を付けて別名にする。上書きしない。
+Windows（WebView2）と macOS（WKWebView）は MediaRecorder を持つ。このため、この経路は通らない。メモリに動画を溜めない。このため、数時間の take でもメモリは増えない。Rust 側が書けるのは `recording_begin_file` で開いたファイルだけである。保存済みのワールドでは、Studio が開いているプロジェクトの `Recording/` に動画と JSON を保存する。保存先はプロジェクトのパスから決め、シンボリックリンクを経由する保存は拒否する。`/Recording/` をワールドの `.gitignore` に追加する。AIクライアントは任意の保存パスを指定できない。未保存のプレビューだけは従来の既定先（OS のビデオフォルダー直下 `XRift Studio`、なければ app data の `recordings`）と、人が選んだ保存先を使う。同名のファイルがあれば番号を付けて別名にする。上書きしない。
 
-保存後、動画の隣に同名の `.json`（sidecar）を書く。project id とタイトル、scene id、開始した MCP client の名前、label、プロファイル、解像度、開始・停止時刻、録画用カメラの姿勢が入る。どの録画がどの制作セッションか、あとから読める。
+保存後、動画の隣に同名の `.json`（付属ファイル）を書く。project id とタイトル、scene id、開始した MCP client の名前、label、プロファイル、解像度、開始・停止時刻、録画用カメラの姿勢が入る。どの録画がどの制作セッションか、あとから読める。
 
 ファイル名は `xrift-<project>-<yyyymmdd-hhmmss>-<aspect>-<edge>p[-<label>].webm` である。同じ project の take が並ぶ。時刻で区別できる。開く前に縦横が分かる。
 
@@ -67,37 +67,37 @@ idle ──start──▶ recording ──stop──▶ stopping ──flush─�
 
 ## 録画ビュー
 
-「録画ビューを表示」で、Scene View のセルが黒地の中央にプロファイルの比率でレターボックスされる。Canvas は同じものである。CSS の大きさに対する devicePixelRatio を計算し直して**プロファイルどおりの画素数**で描く。controller はそれを 1:1 でコピーする。このため、拡大でぼやけない。モニターの大きさや普段のパネル配置の影響を受けない。
+「録画ビューを表示」で、シーンのセルが黒地の中央にプロファイルの比率でレターボックスされる。Canvas は同じものである。CSS の大きさに対する devicePixelRatio を計算し直して**プロファイルどおりの画素数**で描く。controller はそれを 1:1 でコピーする。このため、拡大でぼやけない。モニターの大きさや普段のパネル配置の影響を受けない。
 
 | 設定 | 意味 |
 | --- | --- |
 | `cameraSource: recording` | 保存した録画用カメラを表示する。ワールドが変わっても構図は動かない |
-| `cameraSource: editor` | 編集中の Scene View カメラをそのまま映す。人の手つきを残す take 向け |
-| `showEditorUi` | Hierarchy、Inspector、Assets、ツールバーを残す。既定は隠す |
+| `cameraSource: editor` | 編集中のシーンカメラをそのまま映す。人の手つきを残す take 向け |
+| `showEditorUi` | オブジェクト一覧、設定、素材、ツールバーを残す。既定は隠す |
 | `showEditorHelpers` | グリッド、ギズモ、選択枠、ヘルパーアイコンを絵に入れる。既定は入れない (サムネイル撮影と同じ「公開物の見た目」で描く) |
 | `showRecordingIndicator` | フレーム左上の REC 表示。DOM なので動画には入らない |
 
-録画ビューを閉じても録画は続く（ヘッダーの REC 表示は残る）。閉じたあとの映像は編集中の Scene View をアスペクト比に合わせて中央で切り抜いたものになる。
+録画ビューを閉じても録画は続く（ヘッダーの REC 表示は残る）。閉じたあとの映像は編集中のシーンをアスペクト比に合わせて中央で切り抜いたものになる。
 
-Play 中も録画ビューは使える。完成したワールドを一人称で歩く紹介パートは、Play を開始して同じ録画を回す。Play 中は録画用カメラではなくプレイヤーの視点が映る。
+動作確認中も録画ビューは使える。完成したワールドを一人称で歩く紹介パートは、動作確認を開始して同じ録画を回す。動作確認中は録画用カメラではなくプレイヤーの視点が映る。
 
 録画ビューを表示して `showEditorUi: false` にすれば、OBS のウィンドウキャプチャにそのまま黒地とフレームが映る。Studio の録画と同時に回してもよい。必須ではない。
 
 ## 録画用カメラ
 
-姿勢は position、target、fov の 3 つである。project ごとに保存する。録画ビューを `cameraSource: recording` で表示している間だけ Scene View のカメラに適用する。閉じると編集中のカメラへ戻す。録画ビューの中でドラッグした構図は、そのまま保存される。
+姿勢は position、target、fov の 3 つである。project ごとに保存する。録画ビューを `cameraSource: recording` で表示している間だけシーンのカメラに適用する。閉じると編集中のカメラへ戻す。録画ビューの中でドラッグした構図は、そのまま保存される。
 
 MCP からの移動は純粋関数（`recording-camera.ts` の `resolveRecordingCameraPose`）で処理する。境界の測定だけを viewport に頼む。録画ビューが隠れていても、編集中のカメラを動かさずに姿勢を更新できる。
 
 | 指定 | 動き |
 | --- | --- |
-| `fitScene` | Scene に描かれている Mesh の bounds を union して収める。半径 100 m を超える Mesh (空のドーム、地平線の板) は除外し、除外した数を `skippedLargeMeshCount` で返す。ワールドが広がったら呼び直す |
-| `focusEntityId` | F キーと同じ測り方で 1 つの Entity を収める |
+| `fitScene` | シーンに描かれているメッシュの bounds を union して収める。半径 100 m を超えるメッシュ (空のドーム、地平線の板) は除外し、除外した数を `skippedLargeMeshCount` で返す。ワールドが広がったら呼び直す |
+| `focusEntityId` | F キーと同じ測り方で 1 つのオブジェクトを収める |
 | `preset` | top / front / back / left / right / iso の向き。何も収めないなら注視点は保つ |
 | `position` / `target` | そのまま置く。`target` だけなら距離を保つ |
 | `distance`、`fov` | 上書き |
 
-収める距離は縦横の狭い方の画角で決める。このため、9:16 では 16:9 より離れる。Mesh 単位で測る理由は、Scene がしばしば 1 つの root Entity に空も世界も入れているためである。Entity 単位の除外では空を除外できない。公式サンプルの Skybox は半径 500 m ある。これを含めるとカメラは霧の向こうへ行く。何も映らなくなる。
+収める距離は縦横の狭い方の画角で決める。このため、9:16 では 16:9 より離れる。メッシュ単位で測る理由は、シーンがしばしば 1 つの root オブジェクトに空も世界も入れているためである。オブジェクト単位の除外では空を除外できない。公式サンプルの空の背景は半径 500 m ある。これを含めるとカメラは霧の向こうへ行く。何も映らなくなる。
 
 ## MCP tool
 
@@ -112,7 +112,7 @@ MCP からの移動は純粋関数（`recording-camera.ts` の `resolveRecording
 | `set_recording_viewport` | 録画ビューの表示と描く内容 |
 | `get_recording_viewport` | 上の読み取り |
 | `set_recording_camera` | 録画用カメラの移動 |
-| `get_recording_camera` | 姿勢と、いま Scene View を動かしているか |
+| `get_recording_camera` | 姿勢と、いまシーンを動かしているか |
 
 録画の呼び出しが失敗しても、制作の tool には影響しない。controller は document の外にある。失敗は `failed` 状態と message として返るだけである。
 
@@ -151,8 +151,8 @@ FFmpeg が無ければ、実行するはずだったコマンドを表示して�
 | 環境 | 経路 | 結果 |
 | --- | --- | --- |
 | Chromium (紹介ページのブラウザ版デモ) | MediaRecorder、メモリ保存 | 42 秒の WebM。UI 操作で確認 |
-| Linux デスクトップ版 (WebKitGTK、Xvfb) | frame-stream + FFmpeg | MCP だけで開始・制作・カメラ調整・停止。MP4 と sidecar |
-| Linux デスクトップ版、ソフトウェア GL (llvmpipe) | frame-stream + FFmpeg | 720p までは通る。1080p と草の Terrain を重ねると WebView が止まり、Poly Haven の PBR モデルを多数置くと WebGL の context が失われて take が途中で閉じる。GPU の無い CI 環境の制限で、Studio 側は書けた分を残す |
+| Linux デスクトップ版 (WebKitGTK、Xvfb) | frame-stream + FFmpeg | MCP だけで開始・制作・カメラ調整・停止。MP4 と付属ファイル |
+| Linux デスクトップ版、ソフトウェア GL (llvmpipe) | frame-stream + FFmpeg | 720p までは通る。1080p と草の地形を重ねると WebView が止まり、Poly Haven の PBR モデルを多数置くと WebGL の context が失われて take が途中で閉じる。GPU の無い CI 環境の制限で、Studio 側は書けた分を残す |
 | Windows (WebView2)、macOS (WKWebView) | MediaRecorder、ディスクへ逐次書き込み | 未確認 |
 
 ## 参照

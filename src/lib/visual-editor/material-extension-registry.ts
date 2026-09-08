@@ -51,8 +51,9 @@ export type MaterialExtensionDescriptor = {
   readonly requires?: readonly MaterialExtensionName[];
   /** Replaces the lit shading model and cannot be combined with any other. */
   readonly exclusive?: boolean;
-  /** Inspector section title. */
+  /** UI names follow glTF; Japanese readings are presentation-only metadata. */
   readonly label: string;
+  readonly reading: string;
 };
 
 export const MATERIAL_EXTENSION_DESCRIPTORS: Readonly<
@@ -60,6 +61,7 @@ export const MATERIAL_EXTENSION_DESCRIPTORS: Readonly<
 > = {
   KHR_materials_anisotropy: {
     label: "Anisotropy",
+    reading: "アニソトロピー",
     fields: [
       { kind: "unit", name: "anisotropyStrength", default: 0 },
       { kind: "finite", name: "anisotropyRotation", default: 0 },
@@ -68,6 +70,7 @@ export const MATERIAL_EXTENSION_DESCRIPTORS: Readonly<
   },
   KHR_materials_clearcoat: {
     label: "Clearcoat",
+    reading: "クリアコート",
     fields: [
       { kind: "unit", name: "clearcoatFactor", default: 0 },
       { kind: "texture", name: "clearcoatTexture" },
@@ -78,19 +81,23 @@ export const MATERIAL_EXTENSION_DESCRIPTORS: Readonly<
   },
   KHR_materials_dispersion: {
     label: "Dispersion",
+    reading: "ディスパージョン",
     requires: ["KHR_materials_volume"],
     fields: [{ kind: "nonNegative", name: "dispersion", default: 0 }],
   },
   KHR_materials_emissive_strength: {
-    label: "Emissive strength",
+    label: "Emissive Strength",
+    reading: "エミッシブの強さ",
     fields: [{ kind: "nonNegative", name: "emissiveStrength", default: 1 }],
   },
   KHR_materials_ior: {
     label: "IOR",
+    reading: "屈折率",
     fields: [{ kind: "ior", name: "ior", default: 1.5 }],
   },
   KHR_materials_iridescence: {
     label: "Iridescence",
+    reading: "イリデッセンス",
     fields: [
       { kind: "unit", name: "iridescenceFactor", default: 0 },
       { kind: "texture", name: "iridescenceTexture" },
@@ -104,6 +111,7 @@ export const MATERIAL_EXTENSION_DESCRIPTORS: Readonly<
   },
   KHR_materials_sheen: {
     label: "Sheen",
+    reading: "シーン",
     fields: [
       { kind: "unitColor3", name: "sheenColorFactor", default: [0, 0, 0] },
       { kind: "texture", name: "sheenColorTexture" },
@@ -113,6 +121,7 @@ export const MATERIAL_EXTENSION_DESCRIPTORS: Readonly<
   },
   KHR_materials_specular: {
     label: "Specular",
+    reading: "スペキュラー",
     fields: [
       { kind: "unit", name: "specularFactor", default: 1 },
       { kind: "texture", name: "specularTexture" },
@@ -126,6 +135,7 @@ export const MATERIAL_EXTENSION_DESCRIPTORS: Readonly<
   },
   KHR_materials_transmission: {
     label: "Transmission",
+    reading: "トランスミッション",
     fields: [
       { kind: "unit", name: "transmissionFactor", default: 0 },
       { kind: "texture", name: "transmissionTexture" },
@@ -133,11 +143,13 @@ export const MATERIAL_EXTENSION_DESCRIPTORS: Readonly<
   },
   KHR_materials_unlit: {
     label: "Unlit",
+    reading: "アンリット",
     exclusive: true,
     fields: [],
   },
   KHR_materials_volume: {
     label: "Volume",
+    reading: "ボリューム",
     requires: ["KHR_materials_transmission"],
     fields: [
       { kind: "nonNegative", name: "thicknessFactor", default: 0 },

@@ -24,7 +24,7 @@ export function TryDemo({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => voi
                   エディター本体がそのまま動く
                 </span>
                 <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-zinc-600">
-                  World / Item対応
+                  ワールド / アイテム対応
                 </span>
               </div>
               <p className="mt-4 text-xs font-medium leading-6 text-zinc-500">
@@ -38,7 +38,7 @@ export function TryDemo({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => voi
                 className="preview-button preview-button-primary preview-button-large w-full sm:w-auto"
               >
                 <Globe2 size={17} />
-                Worldエディターを試す
+                ワールドエディターを試す
               </button>
               <button
                 type="button"
@@ -46,7 +46,7 @@ export function TryDemo({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => voi
                 className="preview-button preview-button-light preview-button-large w-full sm:w-auto"
               >
                 <Box size={17} />
-                Itemエディターを試す
+                アイテムエディターを試す
               </button>
             </div>
           </div>

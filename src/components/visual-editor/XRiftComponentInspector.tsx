@@ -37,7 +37,7 @@ export function XRiftComponentInspector({
   if (!definition) {
     return (
       <section className="rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
-        <div className="font-semibold">不明なXRift Component</div>
+        <div className="font-semibold">不明なXRiftのComponent</div>
         <div className="mt-1 font-mono text-xs">{component.schemaId}</div>
       </section>
     );
@@ -99,7 +99,7 @@ export function XRiftComponentInspector({
             {recipeLocked ? (
               <span
                 className="inline-flex shrink-0 items-center gap-1 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-600"
-                title="Builtin Prefabの設定を保護しています"
+                title="組み込みプレハブの設定を保護しています"
               >
                 <LockKeyhole size={10} aria-hidden="true" />
                 Built-in
@@ -126,19 +126,19 @@ export function XRiftComponentInspector({
         {recipeLocked ? (
           <div className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs leading-4 text-slate-600">
             {editableFieldLabels.length > 0
-              ? `XRift Prefabの構成は保護されています。${editableFieldLabels.join("、")}はこのテンプレートの設定として変更できます。位置・回転・大きさはEntityのTransformで調整します。`
-              : "XRift PrefabのComponent設定は読み取り専用です。位置・回転・大きさはEntityのTransformで調整できます。"}
+              ? `XRift プレハブの構成は保護されています。${editableFieldLabels.join("、")}はこのテンプレートの設定として変更できます。位置・回転・大きさはEntityの位置・回転・大きさで調整します。`
+              : "XRift プレハブのComponent設定は読み取り専用です。位置・回転・大きさはEntityの位置・回転・大きさで調整できます。"}
           </div>
         ) : null}
         {placementLabels.length > 0 ? (
           <div className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs leading-4 text-slate-600">
-            {placementLabels.join("・")}はEntityのTransformで調整します。ギズモはEntityの原点に出ます。
+            {placementLabels.join("・")}はEntityの位置・回転・大きさで調整します。ギズモはEntityの原点に出ます。
           </div>
         ) : null}
         {placementDiverged ? (
           <div className="rounded border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs leading-4 text-amber-800">
             このComponentは以下の値の分だけEntityの原点からずれた位置に描かれています。ギズモと回転の中心はEntityの原点のままです。
-            このEntityには他の内容もあるため自動では移せません。値を0にしてEntityのTransformで配置し直すと、選択したときの原点と一致します。
+            このEntityには他の内容もあるため自動では移せません。値を0にしてEntityの位置・回転・大きさで配置し直すと、選択したときの原点と一致します。
           </div>
         ) : null}
         {definition.fields
@@ -162,7 +162,7 @@ export function XRiftComponentInspector({
         {definition.runtimeBindings.length > 0 ? (
           <div className="rounded border border-sky-200 bg-sky-50 px-2.5 py-2 text-xs leading-4 text-sky-800">
             {definition.runtimeBindings.map((binding) => binding.name).join(" / ")} は実行時の動作です。
-            Visual Editorでは安全な設定値だけを保存します。
+            ビジュアルエディターでは安全な設定値だけを保存します。
           </div>
         ) : null}
       </div>
@@ -329,7 +329,7 @@ function renderFieldControl(
       <div className="space-y-2">
         <div className="flex rounded-md border border-slate-300 bg-slate-100 p-0.5">
           <ModeButton
-            label="Uniform"
+            label="同じ倍率"
             active={!isVector}
             disabled={readOnly}
             onClick={() => onChange(isVector ? Number(value[0] ?? 1) : value ?? 1)}
@@ -368,15 +368,15 @@ function renderFieldControl(
     const transform = asTransform(value);
     return (
       <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-2">
-        <NestedVector label="Position" value={transform.position} disabled={readOnly} onChange={(position) => onChange({ ...transform, position })} />
-        <NestedVector label="Rotation" value={transform.rotation} disabled={readOnly} onChange={(rotation) => onChange({ ...transform, rotation })} />
+        <NestedVector label="位置" value={transform.position} disabled={readOnly} onChange={(position) => onChange({ ...transform, position })} />
+        <NestedVector label="回転" value={transform.rotation} disabled={readOnly} onChange={(rotation) => onChange({ ...transform, rotation })} />
         <label className="grid grid-cols-[58px_minmax(0,1fr)] items-center gap-2 text-xs text-slate-500">
-          Scale
+          大きさ
           <ScrubNumberInput
             value={transform.scale}
             disabled={readOnly}
-            ariaLabel="Scale"
-            scrubLabel="Scale"
+            ariaLabel="大きさ"
+            scrubLabel="大きさ"
             onChange={(scale) => onChange({ ...transform, scale })}
           />
         </label>
@@ -571,7 +571,7 @@ function TagsEditor({
         onClick={() =>
           onChange([
             ...value,
-            { id: `tag-${value.length + 1}`, label: "New Tag", color: "#64748b" },
+            { id: `tag-${value.length + 1}`, label: "新しいタグ", color: "#64748b" },
           ])
         }
         className="w-full rounded-md border border-dashed border-slate-300 bg-slate-50 py-1.5 text-xs font-semibold text-slate-600 hover:border-violet-400 hover:text-violet-700 disabled:opacity-40"

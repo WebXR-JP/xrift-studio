@@ -56,7 +56,7 @@ export function addDefaultDocumentAsset(
     input.kind === "material"
       ? `新規マテリアル ${count + 1}`
       : input.kind === "particle"
-        ? `新規Particle ${count + 1}`
+        ? `新規パーティクル ${count + 1}`
         : `Interactivity Graph ${count + 1}`;
   const result =
     input.kind === "material"

@@ -594,7 +594,7 @@ for (const [uniform, label, hint] of [
 ]) PARAMS[uniform] = { uniform, label, hint, kind: "color" };
 numberControl("uScale", "模様の細かさ", 0.3, 5, 0.05, "大きくすると雲や模様が細かくなります。");
 numberControl("uSpeed", "動きの速さ", 0, 2, 0.02, "0で雲や模様の動きを止めます。星の瞬きは別に設定します。");
-numberControl("uIntensity", "表現の強さ", 0, 3, 0.05, "発光や空の色の強さです。Sceneの露出設定とは独立しています。");
+numberControl("uIntensity", "表現の強さ", 0, 3, 0.05, "発光や空の色の強さです。シーンの露出設定とは独立しています。");
 numberControl("uSeed", "模様の配置", 0, 50, 0.1, "ノイズの位置を変え、別の雲や模様を作ります。");
 numberControl("uStarCount", "星の数（目安）", 0, 14000, 100, "全天のセルを確率的に選ぶため、表示される数は目安です。");
 numberControl("uStarBrightness", "星の明るさ", 0, 5, 0.05, "星だけの明るさを調整します。");
@@ -608,7 +608,7 @@ numberControl("uSunSize", "太陽の半径", 0.15, 4, 0.05, "太陽の見かけ�
 numberControl("uSunStrength", "太陽の光", 0, 2, 0.05, "太陽と雲の縁の光の強さです。");
 numberControl("uHaze", "霞・砂塵の濃さ", 0, 1.5, 0.02, "地平線の霞や大気の色を濃くします。");
 numberControl("uRain", "遠くの雨筋", 0, 1, 0.02, "雲の下に遠くの雨筋を描きます。手前の雨粒ではありません。");
-numberControl("uRidgeStrength", "遠景の山", 0, 1, 0.05, "0で山並みを隠します。Sceneの地形とは別の背景表現です。");
+numberControl("uRidgeStrength", "遠景の山", 0, 1, 0.05, "0で山並みを隠します。シーンの地形とは別の背景表現です。");
 numberControl("uRidgeHeight", "遠景の山の高さ", 0, 0.25, 0.005, "背景の山並みの高さです。");
 numberControl("uBodyAzimuth", "天体・主役の方角", -180, 180, 1, "天体や光の輪の方角を調整します。");
 numberControl("uBodyElevation", "天体・主役の高さ", -15, 85, 1, "天体や光の輪の高さを度数で設定します。");

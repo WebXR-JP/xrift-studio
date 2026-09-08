@@ -40,17 +40,22 @@ type SceneSettingsInspectorProps = {
 
 function Section({
   title,
+  reading,
   description,
   children,
 }: {
   title: string;
+  reading?: string;
   description?: string;
   children: ReactNode;
 }) {
   return (
     <section className="rounded-md border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-100 px-3 py-2.5">
-        <h3 className="text-[13px] font-semibold text-slate-800">{title}</h3>
+        <h3 className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13px] font-semibold text-slate-800">
+          <span lang={reading ? "en" : undefined}>{title}</span>
+          {reading ? <span lang="ja" className="text-[11px] font-normal text-slate-500">{reading}</span> : null}
+        </h3>
         {description ? (
           <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{description}</p>
         ) : null}
@@ -106,6 +111,7 @@ function Toggle({
 function PostEffectLayer({
   position,
   label,
+  reading,
   description,
   enabled,
   disabled,
@@ -117,6 +123,7 @@ function PostEffectLayer({
 }: {
   position: number;
   label: string;
+  reading?: string;
   description: string;
   enabled: boolean;
   /** Post effects are off entirely, or the Scene is read-only. */
@@ -153,16 +160,20 @@ function PostEffectLayer({
         <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded bg-slate-100 text-[11px] font-semibold text-slate-600">
           {position}
         </span>
-        <label className="flex flex-1 cursor-pointer items-start gap-2">
+        <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-2">
           <input
             type="checkbox"
+            aria-label={`${label}を有効にする`}
             checked={enabled}
             disabled={disabled}
             onChange={(event) => onToggle(event.currentTarget.checked)}
             className="mt-0.5 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500 disabled:cursor-not-allowed"
           />
           <span>
-            <span className="block text-xs font-medium text-slate-700">{label}</span>
+            <span className="flex flex-wrap items-baseline gap-x-2 text-xs font-medium text-slate-700">
+              <span lang={reading ? "en" : undefined}>{label}</span>
+              {reading ? <span lang="ja" className="text-[11px] font-normal text-slate-500">{reading}</span> : null}
+            </span>
             <span className="block text-[11px] leading-4 text-slate-500">{description}</span>
             {fixedNote ? (
               <span className="mt-0.5 block text-[11px] leading-4 text-slate-400">{fixedNote}</span>
@@ -212,6 +223,8 @@ function ColorField({
 
 function NumberField({
   label,
+  description,
+  ariaLabel,
   value,
   min,
   max,
@@ -221,6 +234,8 @@ function NumberField({
   onChange,
 }: {
   label: string;
+  description?: string;
+  ariaLabel?: string;
   value: number;
   min?: number;
   max?: number;
@@ -230,8 +245,11 @@ function NumberField({
   onChange: (value: number) => void;
 }) {
   return (
-    <label className="flex items-center justify-between gap-3">
-      <span className="text-xs font-medium text-slate-700">{label}</span>
+    <label className="flex items-start justify-between gap-3">
+      <span className="min-w-0">
+        <span className="block text-xs font-medium text-slate-700">{label}</span>
+        {description ? <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">{description}</span> : null}
+      </span>
       <ScrubNumberInput
         value={value}
         min={min}
@@ -239,7 +257,7 @@ function NumberField({
         step={step}
         scrubStep={scrubStep}
         disabled={disabled}
-        ariaLabel={label}
+        ariaLabel={ariaLabel ?? label}
         scrubLabel={label}
         onChange={onChange}
         size="sm"
@@ -326,13 +344,13 @@ function SkyboxProjectionField({
   onChange: (value: SceneSettings["skybox"]["projection"]) => void;
 }) {
   const descriptions: Record<SceneSettings["skybox"]["projection"], string> = {
-    infinite: "カメラから常に無限遠に見える標準の空です。",
-    box: "室内や街区を囲む箱へ投影します。底面は位置Yを基準にします。",
-    dome: "下側を平らにしたドームへ投影し、地面との境界を合わせます。",
+    infinite: "移動しても遠ざからない、無限遠の背景です。",
+    box: "箱に投影します。底面の高さは位置Yです。",
+    dome: "底が平らなドームへ投影します。地面の位置に合わせて調整できます。",
   };
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-medium text-slate-700">投影方式</span>
+      <span className="mb-1 block text-xs font-medium text-slate-700">Projection（投影方式）</span>
       <select
         value={value}
         disabled={disabled}
@@ -343,9 +361,9 @@ function SkyboxProjectionField({
         }
         className="h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
       >
-        <option value="infinite">無限遠</option>
-        <option value="box">ボックス</option>
-        <option value="dome">ドーム（地面付き）</option>
+        <option value="infinite">Infinite（無限遠）</option>
+        <option value="box">Box（ボックス）</option>
+        <option value="dome">Dome（ドーム）</option>
       </select>
       <span className="mt-1 block text-[11px] leading-4 text-slate-500">
         {descriptions[value]}
@@ -511,18 +529,18 @@ function SkyboxImageField({
   return (
     <div className="space-y-2">
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-slate-700">Skybox（Assets）</span>
+        <span className="mb-1 block text-xs font-medium text-slate-700">Skybox Texture</span>
         <select
           value={imageAssetId ?? ""}
           disabled={disabled || skyboxes.length === 0}
           onChange={(event) => onChange(event.currentTarget.value || undefined)}
           className="h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
         >
-          <option value="">グラデーションを使用</option>
+          <option value="">なし</option>
           {skyboxes.map((skybox) => (
             <option key={skybox.id} value={skybox.id}>
               {skybox.name}
-              {isEnvironmentTextureAsset(skybox) ? "（HDRI Texture）" : "（画像Texture）"}
+              {isEnvironmentTextureAsset(skybox) ? "（HDRI テクスチャ）" : "（画像テクスチャ）"}
             </option>
           ))}
         </select>
@@ -553,10 +571,10 @@ function SkyboxImageField({
         }}
       >
         {(assigned?.kind === "skybox" || assigned?.kind === "texture") && assigned.source.kind === "project"
-          ? `設定中: ${assigned.name}。Assetsから別のTextureをここへドロップできます。`
+          ? "Assetsから別のテクスチャをドロップして変更できます。"
           : imageAssetId
-            ? "設定済みの画像がAssetsに見つかりません。別のTextureを選択してください。"
-            : "Texture AssetをAssetsからここへドロップできます。"}
+            ? "設定した画像がAssetsに見つかりません。別のテクスチャを選んでください。"
+            : "Assetsから全天球画像やHDRIをドロップしてください。"}
       </div>
     </div>
   );
@@ -587,7 +605,7 @@ function SkyShaderField({
     <div className="space-y-2">
       <label className="block">
         <span className="mb-1 block text-xs font-medium text-slate-700">
-          Skybox Shader（Custom Shader Material）
+          Skybox Shader
         </span>
         <select
           value={materialAssetId ?? ""}
@@ -606,26 +624,25 @@ function SkyShaderField({
       {resolution.status === "ready" ? (
         <div className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] leading-4 text-slate-600">
           <p>
-            画像とグラデーションより優先して空を描いています。星の数や色はMaterialのUniform
-            valuesで変更します。
+            Skybox Textureより優先して背景を描きます。色や動きはInspectorで調整できます。
           </p>
           <button
             type="button"
             onClick={() => onOpenAsset(resolution.asset.id)}
             className="mt-1.5 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100"
           >
-            {resolution.asset.name}のUniformを編集
+            {resolution.asset.name}を編集
           </button>
         </div>
       ) : resolution.status === "unavailable" ? (
         <p className="rounded border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] leading-4 text-amber-800">
-          {resolution.reason}。グラデーションの空を表示しています。
+          {resolution.reason}。代わりにSkybox Textureまたはグラデーションを使います。
         </p>
       ) : (
         <p className="rounded border border-dashed border-slate-300 bg-slate-50 px-2.5 py-2 text-[11px] leading-4 text-slate-600">
           {candidates.length === 0
-            ? "「外部リソースを追加」のSkybox Shaderから、星空などのMaterialを追加できます。"
-            : "選ぶと画像とグラデーションより優先して空を描きます。"}
+            ? "「外部から追加 → Skybox Shader」で追加できます。"
+            : "Shaderを使わない場合は、Skybox Textureまたはグラデーションを表示します。"}
         </p>
       )}
     </div>
@@ -676,7 +693,7 @@ export function SceneSettingsInspector({
   const everyPostLayerDisabled =
     !post.ao.enabled && !post.bloom.enabled && !post.grading.enabled;
   const disabledHint = readOnly
-    ? "Play中は停止してから設定を変更できます"
+    ? "設定を変更するには動作確認を停止してください"
     : undefined;
   const imageControlsDisabled = readOnly || !settings.skybox.imageAssetId;
   const skyboxControlsDisabled = readOnly || !settings.skybox.enabled;
@@ -754,9 +771,6 @@ export function SceneSettingsInspector({
               onMetadataChange({ title: metadata.title, description })
             }
           />
-          <p className="text-[11px] leading-4 text-slate-500">
-            入力欄から移動すると変更を自動保存します。公開前にも同じ内容を確認できます。
-          </p>
         </Section>
 
         <Section title="サムネイル" description="一覧と公開情報に表示する画像です。">
@@ -802,7 +816,7 @@ export function SceneSettingsInspector({
             onClick={() => setThumbnailOpen(true)}
             title={
               readOnly
-                ? "Playを停止してからサムネイルを変更できます"
+                ? "動作確認を停止してからサムネイルを変更できます"
                 : projectPath
                   ? "サムネイルを変更"
                   : "保存済みプロジェクトを開くと設定できます"
@@ -817,17 +831,19 @@ export function SceneSettingsInspector({
           </button>
         </Section>
 
-        <Section title="スカイボックス">
+        <Section title="Skybox" reading="スカイボックス" description="空や周囲の景色を、シーンの背景に表示します。">
           <Toggle
             label="背景に表示"
-            title="SkyboxをSceneの背景として表示します"
+            title="Skyboxの表示を切り替えます。IBLは別に設定します。"
             checked={settings.skybox.enabled}
             disabled={readOnly}
             onChange={(enabled) => update({ ...settings, skybox: { ...settings.skybox, enabled } })}
           />
           <Toggle
-            label="IBLライティングに使用"
-            title="Skybox画像をImage-Based Lightingとしてマテリアルの反射と照明に使用します"
+            label="IBL（画像による照明）"
+            description={settings.skybox.imageAssetId
+              ? "Skybox Textureの明るさと色を、照明と反射に使います。背景を非表示にしても使えます。"
+              : "先にSkybox Textureを選んでください。"}
             checked={settings.skybox.iblEnabled}
             disabled={readOnly || !settings.skybox.imageAssetId}
             onChange={(iblEnabled) =>
@@ -873,15 +889,15 @@ export function SceneSettingsInspector({
               });
             }}
           />
-          <NumberField label="空の水平回転 (度)" value={settings.skybox.rotationDegrees} step={1} disabled={rotationControlsDisabled} onChange={(rotationDegrees) => update({ ...settings, skybox: { ...settings.skybox, rotationDegrees } })} />
+          <NumberField label="Rotation（水平回転・度）" value={settings.skybox.rotationDegrees} step={1} disabled={rotationControlsDisabled} onChange={(rotationDegrees) => update({ ...settings, skybox: { ...settings.skybox, rotationDegrees } })} />
           <Toggle
-            label="シーンで追加反転"
-            title="Texture InspectorのFlip Yに加えて、このSceneだけ上下を反転します"
+            label="Flip Y（上下反転）"
+            title="テクスチャ自体の設定は変えず、このシーンだけ画像の上下を反転します。"
             checked={settings.skybox.flipY}
             disabled={imageControlsDisabled}
             onChange={(flipY) => update({ ...settings, skybox: { ...settings.skybox, flipY } })}
           />
-          <NumberField label="明るさ" value={settings.skybox.exposure} min={0} step={0.05} disabled={exposureControlsDisabled} onChange={(exposure) => update({ ...settings, skybox: { ...settings.skybox, exposure } })} />
+          <NumberField label="Intensity（明るさ）" description="1が標準です。背景とIBLの明るさを調整します。" value={settings.skybox.exposure} min={0} step={0.05} disabled={exposureControlsDisabled} onChange={(exposure) => update({ ...settings, skybox: { ...settings.skybox, exposure } })} />
           <ColorField label="上空の色" value={settings.skybox.topColor} disabled={gradientControlsDisabled} onChange={(topColor) => update({ ...settings, skybox: { ...settings.skybox, topColor } })} />
           <ColorField label="地平線の色" value={settings.skybox.bottomColor} disabled={gradientControlsDisabled} onChange={(bottomColor) => update({ ...settings, skybox: { ...settings.skybox, bottomColor } })} />
           <NumberField label="オフセット" value={settings.skybox.offset} step={0.05} disabled={gradientControlsDisabled} onChange={(offset) => update({ ...settings, skybox: { ...settings.skybox, offset } })} />
@@ -889,7 +905,7 @@ export function SceneSettingsInspector({
           {settings.skybox.projection !== "infinite" ? (
             <div className="space-y-2.5 rounded border border-slate-200 bg-slate-50 p-2.5">
               <p className="text-[11px] leading-4 text-slate-600">
-                有限Skyメッシュの位置と大きさです。位置Yを床面の基準にし、Scene Viewへ即時反映します。
+                背景の位置と大きさです。位置Yを地面の高さに合わせます。
               </p>
               <Vector3Field
                 label="メッシュ位置"
@@ -932,36 +948,38 @@ export function SceneSettingsInspector({
           ) : null}
         </Section>
 
-        <Section title="フォグ" description="Scene Viewと生成されたWorldに同じ距離フォグを適用します。">
-          <Toggle label="フォグを有効にする" checked={settings.fog.enabled} disabled={readOnly} onChange={(enabled) => update({ ...settings, fog: { ...settings.fog, enabled } })} />
-          <ColorField label="フォグの色" value={settings.fog.color} disabled={readOnly || !settings.fog.enabled} onChange={(color) => update({ ...settings, fog: { ...settings.fog, color } })} />
-          <NumberField label="開始距離" value={settings.fog.near} min={0} max={settings.fog.far - 0.001} step={0.5} disabled={readOnly || !settings.fog.enabled} onChange={(near) => update({ ...settings, fog: { ...settings.fog, near } })} />
-          <NumberField label="終了距離" value={settings.fog.far} min={0} step={0.5} disabled={readOnly || !settings.fog.enabled} onChange={(far) => update({ ...settings, fog: { ...settings.fog, far: Math.max(far, settings.fog.near + 0.001) } })} />
+        <Section title="Fog" reading="フォグ" description="遠くのものを霧でかすませます。">
+          <Toggle label="Fogを有効にする" checked={settings.fog.enabled} disabled={readOnly} onChange={(enabled) => update({ ...settings, fog: { ...settings.fog, enabled } })} />
+          <ColorField label="Color（色）" value={settings.fog.color} disabled={readOnly || !settings.fog.enabled} onChange={(color) => update({ ...settings, fog: { ...settings.fog, color } })} />
+          <NumberField label="Near（開始距離）" description="カメラから、この距離を超えると霧がかかり始めます。" value={settings.fog.near} min={0} max={settings.fog.far - 0.001} step={0.5} disabled={readOnly || !settings.fog.enabled} onChange={(near) => update({ ...settings, fog: { ...settings.fog, near } })} />
+          <NumberField label="Far（終了距離）" description="この距離で霧が最も濃くなります。" value={settings.fog.far} min={0} step={0.5} disabled={readOnly || !settings.fog.enabled} onChange={(far) => update({ ...settings, fog: { ...settings.fog, far: Math.max(far, settings.fog.near + 0.001) } })} />
         </Section>
 
         <Section
-          title="環境光"
-          description="全体を一律に持ち上げるアンビエントライトです。向きも減衰もないため、無効にするとライトの当たらない面は黒くなります。"
+          title="Ambient Light"
+          reading="環境光"
+          description="全体を均一に照らします。影や映り込みは作りません。"
         >
           <Toggle
-            label="環境光を有効にする"
+            label="Ambient Lightを有効にする"
             checked={settings.ambient.enabled}
             disabled={readOnly}
             onChange={(enabled) =>
               update({ ...settings, ambient: { ...settings.ambient, enabled } })
             }
           />
-          <ColorField label="環境光の色" value={settings.ambient.color} disabled={readOnly || !settings.ambient.enabled} onChange={(color) => update({ ...settings, ambient: { ...settings.ambient, color } })} />
-          <NumberField label="強さ" value={settings.ambient.intensity} min={0} step={0.05} disabled={readOnly || !settings.ambient.enabled} onChange={(intensity) => update({ ...settings, ambient: { ...settings.ambient, intensity } })} />
+          <ColorField label="Color（色）" value={settings.ambient.color} disabled={readOnly || !settings.ambient.enabled} onChange={(color) => update({ ...settings, ambient: { ...settings.ambient, color } })} />
+          <NumberField label="Intensity（強さ）" value={settings.ambient.intensity} min={0} step={0.05} disabled={readOnly || !settings.ambient.enabled} onChange={(intensity) => update({ ...settings, ambient: { ...settings.ambient, intensity } })} />
         </Section>
 
         <Section
-          title="ポストエフェクト"
-          description="Scene View、Play、公開Worldで共有します。レイヤーは上から順に適用され、同じ設定でも順番で仕上がりが変わります。"
+          title="Post Processing"
+          reading="ポストプロセス"
+          description="上から順に重ねます。順番によって見た目が変わります。"
         >
           <Toggle
-            label="ポストエフェクトを有効にする"
-            description="オフにすると各レイヤーの設定を残したまま合成そのものを止めます。"
+            label="Post Processingを有効にする"
+            description="オフにしても、各効果の設定は残ります。"
             checked={post.enabled}
             disabled={readOnly}
             onChange={(enabled) => updatePostprocessing({ enabled })}
@@ -994,9 +1012,10 @@ export function SceneSettingsInspector({
           <ul className="space-y-2">
             <PostEffectLayer
               position={1}
-              label="スクリーンスペースAO"
-              description="深度と法線から接地影を生成します。"
-              fixedNote="シーンを描き直すため、常に最初に適用します。"
+              label="SSAO"
+              reading="スクリーンスペースAO"
+              description="物の接地部分や隙間に陰影を加えます。"
+              fixedNote="常に最初に適用します。"
               enabled={settings.postprocessing.ao.enabled}
               disabled={postLayersDisabled}
               onToggle={(enabled) =>
@@ -1004,7 +1023,8 @@ export function SceneSettingsInspector({
               }
             >
               <NumberField
-                label="AO半径"
+                label="Radius（範囲）"
+                ariaLabel="SSAO Radius"
                 value={settings.postprocessing.ao.radius}
                 min={0.1}
                 step={0.5}
@@ -1014,7 +1034,8 @@ export function SceneSettingsInspector({
                 }
               />
               <NumberField
-                label="AO最大距離"
+                label="Max Distance（最大距離）"
+                ariaLabel="SSAO Max Distance"
                 value={settings.postprocessing.ao.maxDistance}
                 min={settings.postprocessing.ao.minDistance + 0.001}
                 step={0.01}
@@ -1047,7 +1068,8 @@ export function SceneSettingsInspector({
                     key={id}
                     position={position}
                     label="Bloom"
-                    description="しきい値を超えた明るさをにじませます。"
+                    reading="ブルーム"
+                    description="明るい部分の光をにじませます。周囲を照らす効果ではありません。"
                     enabled={settings.postprocessing.bloom.enabled}
                     disabled={postLayersDisabled}
                     onToggle={(enabled) =>
@@ -1057,7 +1079,9 @@ export function SceneSettingsInspector({
                     onMoveDown={onMoveDown}
                   >
                     <NumberField
-                      label="Bloomしきい値"
+                      label="Threshold（しきい値）"
+                      ariaLabel="Bloom Threshold"
+                      description="この明るさを超えた部分に適用します。"
                       value={settings.postprocessing.bloom.threshold}
                       min={0}
                       step={0.01}
@@ -1069,7 +1093,9 @@ export function SceneSettingsInspector({
                       }
                     />
                     <NumberField
-                      label="Bloom強度"
+                      label="Strength（強さ）"
+                      ariaLabel="Bloom Strength"
+                      description="0でにじみなし。大きくすると強くなります。"
                       value={settings.postprocessing.bloom.strength}
                       min={0}
                       step={0.05}
@@ -1081,7 +1107,9 @@ export function SceneSettingsInspector({
                       }
                     />
                     <NumberField
-                      label="Bloom半径"
+                      label="Radius（広がり）"
+                      ariaLabel="Bloom Radius"
+                      description="大きくすると、光が広がって見えます。"
                       value={settings.postprocessing.bloom.radius}
                       min={0}
                       max={1}
@@ -1100,8 +1128,9 @@ export function SceneSettingsInspector({
                 <PostEffectLayer
                   key={id}
                   position={position}
-                  label="色味"
-                  description="仕上がった絵の色を整えます。露出は光の量、こちらは光が届いたあとの見え方です。"
+                  label="Color Grading"
+                  reading="カラーグレーディング"
+                  description="画面全体の明暗差や色味を調整します。"
                   enabled={settings.postprocessing.grading.enabled}
                   disabled={postLayersDisabled}
                   onToggle={(enabled) =>
@@ -1113,7 +1142,7 @@ export function SceneSettingsInspector({
                   onMoveDown={onMoveDown}
                 >
                   <NumberField
-                    label="コントラスト"
+                    label="Contrast（コントラスト）"
                     value={settings.postprocessing.grading.contrast}
                     min={0}
                     max={3}
@@ -1126,7 +1155,7 @@ export function SceneSettingsInspector({
                     }
                   />
                   <NumberField
-                    label="彩度"
+                    label="Saturation（彩度）"
                     value={settings.postprocessing.grading.saturation}
                     min={0}
                     max={3}
@@ -1139,7 +1168,7 @@ export function SceneSettingsInspector({
                     }
                   />
                   <NumberField
-                    label="色温度"
+                    label="Temperature（色温度）"
                     value={settings.postprocessing.grading.temperature}
                     min={-1}
                     max={1}
@@ -1152,7 +1181,7 @@ export function SceneSettingsInspector({
                     }
                   />
                   <NumberField
-                    label="色かぶり"
+                    label="Tint（色かぶり）"
                     value={settings.postprocessing.grading.tint}
                     min={-1}
                     max={1}
@@ -1168,7 +1197,8 @@ export function SceneSettingsInspector({
           </ul>
           <Toggle
             label="HDRレンダリング"
-            title="Half FloatのHDRバッファとACESトーンマッピングを使用します"
+            description="明るい部分の階調を保って描画します。"
+            title="Half FloatのHDRバッファとACES Tone Mappingを使用します"
             checked={settings.postprocessing.hdr.enabled}
             disabled={postLayersDisabled}
             onChange={(enabled) =>
@@ -1176,7 +1206,8 @@ export function SceneSettingsInspector({
             }
           />
           <NumberField
-            label="露出"
+            label="Exposure（露出）"
+            description="1が標準です。画面全体の明るさを調整します。"
             value={settings.postprocessing.exposure}
             min={0}
             step={0.05}
@@ -1186,11 +1217,11 @@ export function SceneSettingsInspector({
         </Section>
 
         <Section
-          title="Wind（グローバル）"
-          description="Wind Componentを付けたEntityと子Mesh全体、および風に反応するShader Materialへ適用します。シーンの風は常にこの1つです。Mesh名から対象を推測しません。"
+          title="風（グローバル）"
+          description="風のComponentと、風に対応したシェーダーに適用します。"
         >
           <Toggle
-            label="Windを有効にする"
+            label="風を有効にする"
             checked={settings.vegetation.enabled}
             disabled={readOnly}
             onChange={(enabled) =>
@@ -1243,7 +1274,7 @@ export function SceneSettingsInspector({
 
         <Section
           title="プレイヤーの物理"
-          description="公開後のワールドでの重力とジャンプです。xrift.jsonのphysicsとして保存され、Playでも同じ値で確認できます。"
+          description="重力とジャンプを調整します。公開後も同じ設定を使います。"
         >
           <NumberField
             label="重力"
@@ -1272,10 +1303,10 @@ export function SceneSettingsInspector({
 
         <Section
           title="カメラ"
-          description="クリッピング範囲と画角です。NearとFarはxrift.jsonのcameraとして公開先にも反映されます。"
+          description="カメラに映す距離と画角です。公開後も同じ設定を使います。"
         >
-          <NumberField label="Near" value={settings.camera.near} min={0.01} max={settings.camera.far - 0.0001} step={0.01} disabled={readOnly} onChange={(near) => update({ ...settings, camera: { ...settings.camera, near } })} />
-          <NumberField label="Far" value={settings.camera.far} min={1} step={1} disabled={readOnly} onChange={(far) => update({ ...settings, camera: { ...settings.camera, far: Math.max(far, settings.camera.near + 0.0001) } })} />
+          <NumberField label="手前" value={settings.camera.near} min={0.01} max={settings.camera.far - 0.0001} step={0.01} disabled={readOnly} onChange={(near) => update({ ...settings, camera: { ...settings.camera, near } })} />
+          <NumberField label="奥" value={settings.camera.far} min={1} step={1} disabled={readOnly} onChange={(far) => update({ ...settings, camera: { ...settings.camera, far: Math.max(far, settings.camera.near + 0.0001) } })} />
           <NumberField label="視野角" value={settings.camera.fov} min={1} max={179} step={1} disabled={readOnly} onChange={(fov) => update({ ...settings, camera: { ...settings.camera, fov } })} />
         </Section>
 
@@ -1284,7 +1315,7 @@ export function SceneSettingsInspector({
           <NumberField label="グリッドサイズ" value={settings.editor.gizmo.gridSize} min={1} step={1} disabled={readOnly || !settings.editor.gizmo.gridVisible} onChange={(gridSize) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, gridSize } } })} />
           <NumberField label="分割数" value={settings.editor.gizmo.gridDivisions} min={1} step={1} disabled={readOnly || !settings.editor.gizmo.gridVisible} onChange={(gridDivisions) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, gridDivisions: Math.round(gridDivisions) } } })} />
           <NumberField label="ギズモの大きさ" value={settings.editor.gizmo.size} min={0.1} step={0.01} disabled={readOnly} onChange={(size) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, size } } })} />
-          <Toggle label="スナップを有効にする" description="移動・回転・拡縮の操作を一定間隔にそろえます。Scene Viewのツールバーからも切り替えられます。" checked={settings.editor.gizmo.snapEnabled} disabled={readOnly} onChange={(snapEnabled) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, snapEnabled } } })} />
+          <Toggle label="スナップを有効にする" description="移動・回転・拡縮を一定間隔に揃えます。" checked={settings.editor.gizmo.snapEnabled} disabled={readOnly} onChange={(snapEnabled) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, snapEnabled } } })} />
           <Toggle label="Shiftを押している間は反転する" description="スナップがオフの時は一時的にそろえ、オンの時は一時的に自由に動かせます。" checked={settings.editor.gizmo.snapHoldShift} disabled={readOnly} onChange={(snapHoldShift) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, snapHoldShift } } })} />
           <NumberField label="移動スナップ" value={settings.editor.gizmo.translateSnap} min={0.001} step={0.1} disabled={readOnly} onChange={(translateSnap) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, translateSnap } } })} />
           <NumberField label="回転スナップ (度)" value={settings.editor.gizmo.rotateSnapDegrees} min={0.1} step={1} disabled={readOnly} onChange={(rotateSnapDegrees) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, rotateSnapDegrees } } })} />

@@ -142,7 +142,7 @@ export function SceneVideoCapture({
       captureStream?: (frameRate?: number) => MediaStream;
     };
     if (typeof MediaRecorder === "undefined" || !canvas.captureStream) {
-      errorRef.current("このWebViewはScene Viewの動画録画に対応していません。");
+      errorRef.current("このWebViewはシーンの動画録画に対応していません。");
       return;
     }
 
@@ -150,7 +150,7 @@ export function SceneVideoCapture({
     try {
       stream = canvas.captureStream(30);
     } catch (error) {
-      errorRef.current(error instanceof Error ? error.message : "Scene Viewを録画できませんでした。");
+      errorRef.current(error instanceof Error ? error.message : "シーンを録画できませんでした。");
       return;
     }
 
@@ -171,7 +171,7 @@ export function SceneVideoCapture({
       recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8_000_000 });
     } catch (error) {
       stream.getTracks().forEach((track) => track.stop());
-      errorRef.current(error instanceof Error ? error.message : "Scene Viewを録画できませんでした。");
+      errorRef.current(error instanceof Error ? error.message : "シーンを録画できませんでした。");
       return;
     }
 
@@ -181,7 +181,7 @@ export function SceneVideoCapture({
     recorder.onerror = () => {
       stream.getTracks().forEach((track) => track.stop());
       activeRef.current = null;
-      errorRef.current("Scene Viewの動画録画中にエラーが発生しました。");
+      errorRef.current("シーンの動画録画中にエラーが発生しました。");
     };
     recorder.onstop = () => {
       stream.getTracks().forEach((track) => track.stop());
@@ -240,8 +240,8 @@ export function SceneVramMetrics({ metrics }: { metrics: SceneVramEstimate }) {
     <div className="mt-1 border-t border-cyan-200/20 pt-1 text-cyan-100/90">
       <div className="font-semibold">VRAM概算（シーン参照分）</div>
       <div className="grid grid-cols-2 gap-x-3">
-        <span>Geometry {format(metrics.geometryVramBytes)}</span>
-        <span>Texture {format(metrics.textureVramBytes)}</span>
+        <span>形状 {format(metrics.geometryVramBytes)}</span>
+        <span>テクスチャ {format(metrics.textureVramBytes)}</span>
       </div>
       <dl className="mt-0.5 grid grid-cols-[1fr_auto] gap-x-2">
         <dt>GPU圧縮済み {metrics.compressedTextureCount}件</dt>
@@ -249,8 +249,8 @@ export function SceneVramMetrics({ metrics }: { metrics: SceneVramEstimate }) {
         <dt>非圧縮 {metrics.uncompressedTextureCount}件</dt>
         <dd className="text-right">{format(metrics.uncompressedTextureVramBytes)}</dd>
       </dl>
-      <div className="text-[10px] text-cyan-200/70">Textureの内訳。JPEG / WEBPもGPU上では非圧縮です。</div>
-      <div>合計 {format(metrics.geometryVramBytes + metrics.textureVramBytes)}{metrics.unknownVramTextures > 0 ? `・未算定Texture ${metrics.unknownVramTextures}件` : ""}</div>
+      <div className="text-[10px] text-cyan-200/70">テクスチャの内訳。JPEG / WEBPもGPU上では非圧縮です。</div>
+      <div>合計 {format(metrics.geometryVramBytes + metrics.textureVramBytes)}{metrics.unknownVramTextures > 0 ? `・未算定テクスチャ ${metrics.unknownVramTextures}件` : ""}</div>
       <div className="text-[10px] text-cyan-200/70">共有参照は重複除外。影・描画バッファ・内部生成領域は含みません。</div>
     </div>
   );

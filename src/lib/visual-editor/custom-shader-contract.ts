@@ -110,7 +110,7 @@ export function validateClassicR3fMaterialShader(
   value: unknown,
 ): string[] {
   if (isClassicR3fMaterialShader(value)) return [];
-  if (!value || typeof value !== "object") return ["shaderはobjectで指定してください"];
+  if (!value || typeof value !== "object") return ["シェーダーはobjectで指定してください"];
   const shader = value as Partial<ClassicR3fMaterialShader>;
   const errors: string[] = [];
   if (shader.kind !== "classic-r3f") errors.push('kindは"classic-r3f"で指定してください');

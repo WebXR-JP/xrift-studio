@@ -1,8 +1,8 @@
 # XRift Studio ビジュアルエディター設計
 
-XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを制作するデスクトップアプリである。制作方法はコードを直接書く「クラシック」と、画面上で Scene を組む「ビジュアル」の二つがあり、この文書は後者の設計を定義する。
+XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを制作するデスクトップアプリである。制作方法はコードを直接書く「コード編集」と、画面上でシーンを組む「ビジュアル」の二つがあり、この文書は後者の設計を定義する。
 
-対象範囲は、ビジュアル project の作成、Asset import、Scene 編集、保存、Play、XRift project への決定的変換、check、upload までである。World と Item は同じ Scene View を使うが、input、controller、mount transform、camera の runtime profile は成果物種別ごとに分ける。各操作は実際の authoring document、生成 artifact、または XRift result に結び付ける。処理中、失敗、stale、審査中は成功や公開済みとして表示しない。
+対象範囲は、ビジュアル project の作成、素材 import、シーン編集、保存、動作確認、XRift project への決定的変換、check、upload までである。ワールドとアイテムは同じシーンを使うが、input、controller、mount transform、camera の実行環境 profile は成果物種別ごとに分ける。各操作は実際の authoring document、生成 artifact、または XRift result に結び付ける。処理中、失敗、stale、審査中は成功や公開済みとして表示しない。
 
 この文書は設計の正本である。個別機能の詳細は次の文書に分ける。
 
@@ -10,44 +10,44 @@ XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを
 | --- | --- |
 | [UX 原則](./UX_PRINCIPLES.md) | 画面文言、状態設計、レビュー基準 |
 | [マイクロインタラクション Wiki](./UX_INTERACTIONS.md) | 機能ごとの操作前・処理中・成功・失敗・戻り先 |
-| [Scripting Contract](./SCRIPTING.md) | Script Asset の API、実行境界、対応範囲 |
+| [スクリプト Contract](./SCRIPTING.md) | スクリプトの API、実行境界、対応範囲 |
 | [KHR_interactivity Editor / MCP design](./KHR_INTERACTIVITY_EDITOR.md) | ノードグラフの canonical 形式と MCP 契約 |
-| [Terrain エディター 仕様](./TERRAIN_EDITOR_SPEC.md) | 地形と草のモード、ブラシ、性能 |
-| [マテリアルカタログ 仕様](./MATERIAL_CATALOG_SPEC.md) | 空・水 Shader、草、Wind 契約 |
-| [Model Import Contract](./MODEL_IMPORT_CONTRACT.md) | Model の取り込みと再取り込み |
-| [Inspector デザインガイド](./EDITOR_INSPECTOR_DESIGN.md) | 右 Inspector の密度と参照 field |
-| [Visual Project Classic Export CLI](./VISUAL_PROJECT_MIGRATION_CLI.md) | Classic への書き出し |
+| [地形エディター仕様](./TERRAIN_EDITOR_SPEC.md) | 地形と草のモード、ブラシ、性能 |
+| [マテリアルカタログ仕様](./MATERIAL_CATALOG_SPEC.md) | 空・水シェーダー、草、風契約 |
+| [3Dモデル読み込む Contract](./MODEL_IMPORT_CONTRACT.md) | 3Dモデルの取り込みと再取り込み |
+| [設定デザインガイド](./EDITOR_INSPECTOR_DESIGN.md) | 右設定の密度と参照 field |
+| [ビジュアル編集のプロジェクトコード編集書き出す CLI](./VISUAL_PROJECT_MIGRATION_CLI.md) | コード編集への書き出し |
 | [対応範囲と段階](./VISUAL_EDITOR_ROADMAP.md) | どこまで実装され、次に何を満たすか |
 
 ## 1. 目標と設計原則
 
-得たい結果は、コードを直接編集する方法を残したまま、アセットをシーンへ置き、見た目を確認しながらワールドまたはアイテムを制作できることである。
+得たい結果は、コードを直接編集する方法を残したまま、素材をシーンへ置き、見た目を確認しながらワールドまたはアイテムを制作できることである。
 
 設計では次を守る。
 
-1. クラシックとビジュアルを対等な制作入口として扱う。
-2. クラシックとビジュアルは同じ project に付く表示モードではなく、正本と機能境界が異なる project type とする。
+1. コード編集とビジュアルを対等な制作入口として扱う。
+2. コード編集とビジュアルは同じ project に付く表示モードではなく、正本と機能境界が異なる project type とする。
 3. ビジュアル制作の正本は、任意の JSX や `package.json` ではなく、`VisualProjectDocument`、`SceneDocument`、`AssetManifest` とする。
 4. SceneDocument、AssetManifest と、選択、カメラ、開いているパネルなどの Editor State を分離する。
-5. エンティティ、コンポーネント、アセットには表示名とは別の安定 ID を持たせる。
-6. Inspector とコンパイラは同じ明示的な Component / Asset Schema を参照する。
-7. 汎用 ECS ランタイムを持たず、ECS に着想を得た正規化データとして実装する。system scheduler と query は導入しない。per-frame の更新順序を必要とするのは Script Component だけであり、その scheduling は [4.8 Scripting](#48-scripting-script-asset--script-component) の `RuntimePlugin` lifecycle と固定順序に限定する。
+5. エンティティ、コンポーネント、素材には表示名とは別の安定 ID を持たせる。
+6. 設定とコンパイラは同じ明示的なコンポーネント / 素材 Schema を参照する。
+7. 汎用 ECS ランタイムを持たず、ECS に着想を得た正規化データとして実装する。system scheduler と query は導入しない。per-frame の更新順序を必要とするのはスクリプトのコンポーネントだけであり、その scheduling は [4.8 スクリプト](#48-scripting-script-asset--script-component) の `RuntimePlugin` lifecycle と固定順序に限定する。
 8. 未保存、未変換、未公開を区別し、実行していない処理の成功表示を出さない。
 9. XRift の認証情報とファイル操作はブラウザ UI から分離し、authoring document や生成バンドルへ含めない。
-10. ビジュアルモードでは Vite、CLI、開発サーバー、別ブラウザの起動を制作手順として意識させず、Edit から Play、Stop まで同じエディター内で完結させる。
+10. ビジュアルモードでは Vite、CLI、開発サーバー、別ブラウザの起動を制作手順として意識させず、編集から動作確認、停止まで同じエディター内で完結させる。
 
 ## 2. 四つの制作導線と project type
 
-新規作成の最初の画面には「アイテム・クラシック」「ワールド・クラシック」「アイテム・ビジュアル」「ワールド・ビジュアル」の四カードを同じ階層で置く。カード内では成果物、制作方法、正本、作成後に開く画面を一文で示す。成果物と project type は内部では二軸として扱うが、二段階の選択を往復させる形にはしない。「クラシック / ビジュアル」は同じ project の編集画面切替ではなく、正本、利用できる機能、保存形式が異なる選択である。
+新規作成の最初の画面には「アイテム・コード編集」「ワールド・コード編集」「アイテム・ビジュアル」「ワールド・ビジュアル」の四カードを同じ階層で置く。カード内では成果物、制作方法、正本、作成後に開く画面を一文で示す。成果物と project type は内部では二軸として扱うが、二段階の選択を往復させる形にはしない。「コード編集 / ビジュアル」は同じ project の編集画面切替ではなく、正本、利用できる機能、保存形式が異なる選択である。
 
-| 成果物 | Project type | 正本 | 開く機能 | XRift への到達方法 |
+| 成果物 | プロジェクト type | 正本 | 開く機能 | XRift への到達方法 |
 | --- | --- | --- | --- | --- |
-| アイテム | クラシック | `package.json`、`xrift.json`、`src/` | コードエディター | 既存の item check/build/upload |
-| ワールド | クラシック | `package.json`、`xrift.json`、`src/` | コードエディター | 既存の world check/build/upload |
-| アイテム | ビジュアル | `xrift-studio.project.json`、`scenes/`、`assets/` | ビジュアルエディターと Item Preview Profile | Compiler が一時的な XRift item project を生成して既存処理へ渡す |
-| ワールド | ビジュアル | `xrift-studio.project.json`、`scenes/`、`assets/` | ビジュアルエディターと World Play Profile | Compiler が一時的な XRift world project を生成して既存処理へ渡す |
+| アイテム | コード編集 | `package.json`、`xrift.json`、`src/` | コードエディター | 既存の item check/build/upload |
+| ワールド | コード編集 | `package.json`、`xrift.json`、`src/` | コードエディター | 既存の world check/build/upload |
+| アイテム | ビジュアル | `xrift-studio.project.json`、`scenes/`、`assets/` | ビジュアルエディターとアイテムプレビュー Profile | Compiler が一時的な XRift item project を生成して既存処理へ渡す |
+| ワールド | ビジュアル | `xrift-studio.project.json`、`scenes/`、`assets/` | ビジュアルエディターとワールド動作確認 Profile | Compiler が一時的な XRift world project を生成して既存処理へ渡す |
 
-### 2.1 クラシック project
+### 2.1 コード編集 project
 
 - `xrift create item` または `xrift create world` が作る XRift code project をそのまま扱う。
 - `package.json`、`xrift.json`、`src/` がユーザー編集可能な正本である。
@@ -59,7 +59,7 @@ XRift Studio は、[XRift](https://xrift.net/) のワールドとアイテムを
 - ルートの `xrift-studio.project.json` を project manifest とし、`scenes/main.scene.json` と `assets/assets.json` を参照する。
 - `package.json`、`xrift.json`、`src/` は authoring project の正本にしない。
 - Compiler が生成する XRift code project は cache または一時出力であり、再生成可能で手編集不可とする。
-- Visual から Classic へ移る場合は Export / Eject で別の classic project を作る。一方向の所有権移行であり、自動同期は保証しない。Classic から Visual への取り込みは、検査済み source graph の静的 subset を明示的に lossy import する別 transaction である。元 Visual document との round-trip 同期ではない。
+- ビジュアル編集からコード編集へ移る場合は書き出す / Eject で別の classic project を作る。一方向の所有権移行であり、自動同期は保証しない。コード編集からビジュアル編集への取り込みは、検査済み元データ graph の静的 subset を明示的に lossy import する別 transaction である。元ビジュアル編集 document との round-trip 同期ではない。
 
 `xrift-studio.project.json` は visual project の root manifest filename とする。filename を変更する場合は旧名の検出と明示的 migration を用意し、同じ project を classic と推測しない。
 
@@ -92,7 +92,7 @@ my-visual-project/
 
 Tauri 側の project scan は、ルートに有効な `xrift-studio.project.json` があれば visual、`package.json` と `xrift.json` があれば classic と判定する。visual の `.cache/generated-xrift/` は再帰 scan の対象外にする。
 
-visual manifest が存在するが壊れている場合、classic として開かず、「ビジュアルプロジェクトを読み込めません」と対象 field と修復手段を示す。ライブラリカードには成果物種別とは別に「クラシック」または「ビジュアル」を表示し、開くエディターと正本を予測できるようにする。
+visual manifest が存在するが壊れている場合、classic として開かず、「ビジュアル編集のプロジェクトを読み込めません」と対象 field と修復手段を示す。ライブラリカードには成果物種別とは別に「コード編集」または「ビジュアル」を表示し、開くエディターと正本を予測できるようにする。
 
 ビジュアルカードの作成成功時は上記専用 format を project root に保存し、ライブラリへ一件追加してビジュアルエディターを開く。作成途中の失敗では不完全な project を一覧へ追加せず、temporary directory を回収して四カードまたは保存先確認へ戻す。
 
@@ -116,66 +116,66 @@ visual manifest が存在するが壊れている場合、classic として開�
 ### Hierarchy
 
 - SceneDocument の親子関係を表示する。
-- クリックしたエンティティを選択し、Scene View のアウトラインと Inspector を同時に更新する。
+- クリックしたエンティティを選択し、シーンのアウトラインと設定を同時に更新する。
 - 表示名を変更しても ID は変えない。
-- 親子付け替え、複数選択、複製、削除、Prefab 作成は Command として扱い、Scene View と同じ履歴へ入れる（[7. Command と Undo / Redo](#7-command-と-undo--redo)）。
+- 親子付け替え、複数選択、複製、削除、プレハブ作成は Command として扱い、シーンと同じ履歴へ入れる（[7. Command と元に戻す / やり直す](#7-command-と元に戻す--やり直す)）。
 
 ### Scene View
 
-- React Three Fiber と Three.js を表示層に使い、SceneDocument の Entity と AssetManifest の参照を解決して描画する。
+- React Three Fiber と Three.js を表示層に使い、SceneDocument のオブジェクトと AssetManifest の参照を解決して描画する。
 - 選択中のエンティティだけに移動、回転、拡大縮小のギズモを表示する。
-- 通常clickは単体選択、Shift / Ctrl・Cmd clickは追加／解除とし、複数選択中は全対象へoutline、最後に選んだprimary Entityだけにgizmoを表示する。pointer downからupまでにcamera drag相当の移動があれば選択を確定しない。
+- 通常clickは単体選択、Shift / Ctrl・Cmd clickは追加／解除とし、複数選択中は全対象へoutline、最後に選んだprimary オブジェクトだけにgizmoを表示する。pointer downからupまでにcamera drag相当の移動があれば選択を確定しない。
 - ギズモ操作中はカメラ操作との競合を止め、操作終了時に一つの履歴として確定する。
-- Editの表示は一つの目的別selectorで「シーン」「ライトなし」「ワイヤー」「コライダー」を切り替える。Skybox、Fog、Lightを個別toolbar toggleとして並べず、診断用の3モードは既定のグレーMaterialと形状を見分けられる暗いneutral背景を使う。表示モードはSceneDocument、Undo、自動保存、compile、Play結果を変更しない。
-- 空間へ Model / Prefab をドロップした場合は、配置したエンティティを直ちに選択する。Material の drop は Entity を増やさず、対象 Mesh slot の binding を変更する。
-- Scene View の空間または Entity を右クリックすると Create submenu を開き、Empty、Box、Sphere、Plane、Cylinder など Registry 登録済み primitive を click point または選択親の下へ作成する。作成位置と親を menu 内で読めるようにし、`CreatePrimitiveCommand` 一件で追加と選択を確定する。
-- Edit と Play は明示的に分け、同じ Scene View で切り替える。
-- Edit では Entity / Asset の選択、アセット配置、ギズモ、Transform と Material Asset の編集を有効にする。
-- Play では SceneDocument と AssetManifest の編集を [4.6](#46-playsession-と-runtime-profile) が許可する範囲へ制限し、ギズモと drop target を隠す。project kind に対応する Preview Profile で体験確認する。
-- Stop では Play 中のアバター、カメラ、入力状態を破棄し、Play 開始前の Edit の選択状態へ戻る。
-- World Play Profile の keyboard / gamepad / XR input は `InputAdapter` と `ControllerPlugin` を介し、Item Preview Profile へ world navigation を混ぜない。
+- 編集の表示は一つの目的別selectorで「シーン」「ライトなし」「ワイヤー」「コライダー」を切り替える。空の背景、Fog、ライトを個別toolbar toggleとして並べず、診断用の3モードは既定のグレーマテリアルと形状を見分けられる暗いneutral背景を使う。表示モードはSceneDocument、元に戻す、自動保存、compile、動作確認結果を変更しない。
+- 空間へ 3Dモデル / プレハブをドロップした場合は、配置したエンティティを直ちに選択する。マテリアルのここに移動はオブジェクトを増やさず、対象メッシュの割り当て枠の binding を変更する。
+- シーンの空間またはオブジェクトを右クリックすると追加 submenu を開き、Empty、Box、Sphere、Plane、Cylinder など Registry 登録済み primitive を click point または選択親の下へ作成する。作成位置と親を menu 内で読めるようにし、`CreatePrimitiveCommand` 一件で追加と選択を確定する。
+- 編集と動作確認は明示的に分け、同じシーンで切り替える。
+- 編集ではオブジェクト / 素材の選択、素材配置、ギズモ、位置・回転・大きさとマテリアルの編集を有効にする。
+- 動作確認では SceneDocument と AssetManifest の編集を [4.6](#46-playsession-と実行環境-profile) が許可する範囲へ制限し、ギズモとここに移動 target を隠す。project kind に対応するプレビュー Profile で体験確認する。
+- 停止では動作確認中のアバター、カメラ、入力状態を破棄し、動作確認開始前の編集の選択状態へ戻る。
+- ワールド動作確認 Profile の keyboard / gamepad / XR input は `InputAdapter` と `ControllerPlugin` を介し、アイテムプレビュー Profile へ world navigation を混ぜない。
 
 ### Inspector
 
-- 右側は Entity と Asset の唯一の property editor とする。`sceneSelection` と `assetSelection` は独立して保持し、最後に明示操作した対象を `inspectorContext` として表示する。Asset を選んでも Entity selection 自体は消えず、Inspector header の Entity / Asset breadcrumb または pinned tab で直前の Entity properties へ一操作で戻れる。
-- Entity context は Transform、Component、geometry / model reference、material slots、`castShadow` / `receiveShadow`、XRift Studio 固有 authoring field を扱う。Material context は glTF PBR / extensions、Texture context は source、色空間、resize、mipmap / sampler、compression、derived / diagnostics を扱う。Model、Prefab、Particle、Script、Interactivity も同じ右 Inspector の kind-specific section を使う。
-- Material Asset の変更は、その ID を参照するすべての Entity へ反映する。Inspector header には Asset kind、stable ID、参照数、「共有中」、dirty / stale status を表示する。
-- Mesh の Material は glTF mesh primitive に対応する slot ごとに表示し、`materialBindings[].slot` と `materialAssetId` を編集する。`castShadow` と `receiveShadow` は Material ではなく Entity の Mesh Component にある「影」section で扱う。アセット単位の任意の `maxDistance`（Far Clip）は同じ Mesh Component に保存し、未設定時は Scene Camera の `far` を使う。Inspector、MCP、Editor Preview、Play、Classic compiler はこの値を共有し、葉や遠景モデルだけを安全に距離制限できる。
-- Assets から Material を Entity Inspector の slot または Scene View の Mesh へ drag できる。hover 中は対象 Entity / slot と置換前後の Material 名を表示し、drop は `AssignMaterialCommand` 一件にする。複数 slot が曖昧なら drop 前に slot chooser を開き、推測適用しない。
-- Assets から Texture を Material Inspector の対応 slot へ drag できる。用途が base color / emissive なら sRGB、metallic-roughness / normal / occlusion なら linear の recipe を提案し、既存 recipe と衝突する場合は確定前に選択肢を示す。
-- Entity 固有の Material override を追加する場合は、共有 Material Asset の編集とは別の明示的 Component / Command にし、現在どちらを編集しているか header と field group で区別する。
-- Entity の値は SceneDocument、Asset の値は AssetManifest に反映する。Inspector context を切り替えても `sceneSelection` と `assetSelection` は維持する。
-- Play 中も runtime が生成した値を SceneDocument や AssetManifest へ書き戻さない。任意の JSX、スクリプト、式を評価して properties を生成しない。作者がInspectorまたはMCPから明示的に変更したScene構造と宣言済みScript propertyだけはauthoring Commandとして保存し、追加・削除・更新されたEntityのruntime revisionへ差分同期する。Play 中に編集できるのは 4.6 が許可する範囲、Script source file、宣言済みScript propertyとする。
-- Component Registry により Mesh、Light、Collider、Particle、Spawn Point、Terrain と typed XRift component を追加する。
+- 右側はオブジェクトと素材の唯一の property editor とする。`sceneSelection` と `assetSelection` は独立して保持し、最後に明示操作した対象を `inspectorContext` として表示する。素材を選んでもオブジェクト selection 自体は消えず、設定 header のオブジェクト / 素材 breadcrumb または pinned tab で直前のオブジェクト properties へ一操作で戻れる。
+- オブジェクト context は位置・回転・大きさ、コンポーネント、geometry / model reference、material slots、`castShadow` / `receiveShadow`、XRift Studio 固有 authoring field を扱う。マテリアル context は glTF PBR / extensions、テクスチャ context は元データ、色空間、resize、mipmap / sampler、compression、derived / diagnostics を扱う。3Dモデル、プレハブ、パーティクル、スクリプト、ノードグラフも同じ右設定の kind-specific section を使う。
+- マテリアルの変更は、その ID を参照するすべてのオブジェクトへ反映する。設定 header には素材 kind、stable ID、参照数、「共有中」、dirty / stale status を表示する。
+- メッシュのマテリアルは glTF メッシュ primitive に対応する slot ごとに表示し、`materialBindings[].slot` と `materialAssetId` を編集する。`castShadow` と `receiveShadow` はマテリアルではなくオブジェクトのメッシュコンポーネントにある「影」section で扱う。素材単位の任意の `maxDistance`（奥 Clip）は同じメッシュコンポーネントに保存し、未設定時はシーン Camera の `far` を使う。設定、MCP、Editor プレビュー、動作確認、コード編集 compiler はこの値を共有し、葉や遠景モデルだけを安全に距離制限できる。
+- 素材からマテリアルをオブジェクト設定の slot またはシーンのメッシュへ drag できる。hover 中は対象オブジェクト / slot と置換前後のマテリアル名を表示し、ここに移動は `AssignMaterialCommand` 一件にする。複数 slot が曖昧ならここに移動前に slot chooser を開き、推測適用しない。
+- 素材からテクスチャをマテリアル設定の対応 slot へ drag できる。用途が base color / emissive なら sRGB、metallic-roughness / normal / occlusion なら linear の recipe を提案し、既存 recipe と衝突する場合は確定前に選択肢を示す。
+- オブジェクト固有のマテリアル override を追加する場合は、共有マテリアルの編集とは別の明示的コンポーネント / Command にし、現在どちらを編集しているか header と field group で区別する。
+- オブジェクトの値は SceneDocument、素材の値は AssetManifest に反映する。設定 context を切り替えても `sceneSelection` と `assetSelection` は維持する。
+- 動作確認中も実行環境が生成した値を SceneDocument や AssetManifest へ書き戻さない。任意の JSX、スクリプト、式を評価して properties を生成しない。作者が設定またはMCPから明示的に変更したシーン構造と宣言済みスクリプト propertyだけはauthoring Commandとして保存し、追加・削除・更新されたオブジェクトの実行環境 revisionへ差分同期する。動作確認中に編集できるのは 4.6 が許可する範囲、スクリプト元データ file、宣言済みスクリプト propertyとする。
+- コンポーネント Registry によりメッシュ、ライト、衝突判定、パーティクル、開始位置、地形と typed XRiftのコンポーネントを追加する。
 
 ### Assets
 
-- Assets は探索、検索、folder 整理、selection、drag source、import status に専念し、Material / Texture property form を下部へ埋め込まない。Box、Sphere、Plane などは保存対象 Asset ではなく、Hierarchy / Scene View の右クリック Create submenu と toolbar の Create palette から作る primitive とする。
-- Assets に表示するユーザー管理対象は Model / GLTF、Texture、Material、Prefab、Particle、Audio、Script、Shader、Interactivity とし、安定 ID、表示名、種別、状態、thumbnail を持たせる。
-- 一回のクリックは `assetSelection` を変えて右 Inspector を Asset context へ切り替える。Model / Prefab の Scene View への drag または「配置」だけが Entity を作り、Material の drag は Mesh slot binding、Texture の drag は Material texture slot reference を変更する。
-- Create palette の primitive と、Model、Texture、Material、Prefab、Particle を見た目とラベルの両方で区別する。検索と filter は表示名、kind、diagnostic status を対象にする。
-- thumbnail は `pending -> generating -> ready | failed | stale` の lifecycle を持つ動的な derived view とする。source、Material property、dependency、thumbnail recipe の変更を検知して background queue で再生成する。Model / Prefab は固定 camera、Material は基準球、Texture は用途の色空間、Particle は代表時刻を使い、選択中または hover 中だけ budget 内で orbit / particle loop など短い live preview を許す。
-- Texture / GLB / GLTF の外部 drag-and-drop は Import Queue で検証、source copy、derived / thumbnail 生成、manifest commit まで実行する。import 完了前に Scene や Material slot の参照を確定せず、成功後は Asset を右 Inspector で編集できる。
-- 「外部から追加」は [6.8 外部リソースカタログ](#68-外部リソースカタログ) の catalog を開き、CC0 provider と XRift 公式カタログから同じ import transaction で Asset を追加する。
+- 素材は探索、検索、folder 整理、selection、drag 元データ、import status に専念し、マテリアル / テクスチャ property form を下部へ埋め込まない。Box、Sphere、Plane などは保存対象素材ではなく、オブジェクト一覧 / シーンの右クリック追加 submenu と toolbar の追加 palette から作る primitive とする。
+- 素材に表示するユーザー管理対象は 3Dモデル / GLTF、テクスチャ、マテリアル、プレハブ、パーティクル、音声、スクリプト、シェーダー、ノードグラフとし、安定 ID、表示名、種別、状態、thumbnail を持たせる。
+- 一回のクリックは `assetSelection` を変えて右設定を素材 context へ切り替える。3Dモデル / プレハブのシーンへの drag または「配置」だけがオブジェクトを作り、マテリアルの drag はメッシュの割り当て枠 binding、テクスチャの drag はマテリアル texture slot reference を変更する。
+- 追加 palette の primitive と、3Dモデル、テクスチャ、マテリアル、プレハブ、パーティクルを見た目とラベルの両方で区別する。検索と filter は表示名、kind、diagnostic status を対象にする。
+- thumbnail は `pending -> generating -> ready | failed | stale` の lifecycle を持つ動的な derived view とする。元データ、マテリアル property、dependency、thumbnail recipe の変更を検知して background queue で再生成する。3Dモデル / プレハブは固定 camera、マテリアルは基準球、テクスチャは用途の色空間、パーティクルは代表時刻を使い、選択中または hover 中だけ budget 内で orbit / particle loop など短い live preview を許す。
+- テクスチャ / GLB / GLTF の外部 drag-and-drop は読み込む Queue で検証、元データ copy、derived / thumbnail 生成、manifest commit まで実行する。import 完了前にシーンやマテリアル枠の参照を確定せず、成功後は素材を右設定で編集できる。
+- 「外部から追加」は [6.8 外部リソースカタログ](#68-外部リソースカタログ) の catalog を開き、CC0 provider と XRift 公式カタログから同じ import transaction で素材を追加する。
 - 非対応形式はシーンを変更せず、対応形式と次の操作を表示する。
-- folder は Asset ID と別の安定 `folderId` を持つ表示上の整理単位とし、source / derived の実ファイル path を folder 移動だけで変更しない。空白部または folder の context menu から「Material / Prefab / Particle を作成」「Model / Texture をインポート」「新しいフォルダー」を選べる。Asset の context menu には「名前を変更」「複製」「削除」「参照元を表示」「再インポート」「サムネイルを再生成」を kind と状態に応じて出す。
-- 削除前には参照中の Entity、Prefab、Material slot 件数を示す。参照を壊す削除は暗黙に続けず、置換または明示的な参照解除を同じ Command Transaction に含める。
+- folder は素材 ID と別の安定 `folderId` を持つ表示上の整理単位とし、元データ / derived の実ファイル path を folder 移動だけで変更しない。空白部または folder の context menu から「マテリアル / プレハブ / パーティクルを作成」「3Dモデル / テクスチャをインポート」「新しいフォルダー」を選べる。素材の context menu には「名前を変更」「複製」「削除」「参照元を表示」「再インポート」「サムネイルを再生成」を kind と状態に応じて出す。
+- 削除前には参照中のオブジェクト、プレハブ、マテリアル枠件数を示す。参照を壊す削除は暗黙に続けず、置換または明示的な参照解除を同じ Command Transaction に含める。
 
 ### Resizable / dockable layout
 
-- Hierarchy、Scene View、Inspector、Assets は splitter で resize でき、Hierarchy / Inspector / Assets は定義済み dock zone へ移動できる。drag 中は drop preview と最終 panel order を表示し、Escape または領域外 drop は layout を変えない。
-- layout は `layoutSchemaVersion`、panel ID、dock zone、order、size ratio、collapsed / pinned inspector tabs として Editor Preferences に保存する。pixel absolute 値だけを保存せず、window size と minimum width / height に合わせて正規化する。Asset、Scene、selection など authoring data は layout document へ入れない。
-- 起動、window resize、project kind 切替で saved layout を復元し、存在しない panel ID、画面外 floating rect、minimum 未満の size は safe default へ migration する。「レイアウトをリセット」で既定の左 Hierarchy、中央 Scene View、右 Inspector、下 Assets へ戻せる。
-- panel resize / dock の最中は authoring Undo 履歴を増やさない。Preferences save 失敗でも編集を止めず、その session の layout と再試行を保つ。
+- オブジェクト一覧、シーン、設定、素材は splitter で resize でき、オブジェクト一覧 / 設定 / 素材は定義済み dock zone へ移動できる。drag 中はここに移動 preview と最終 panel order を表示し、Escape または領域外ここに移動は layout を変えない。
+- layout は `layoutSchemaVersion`、panel ID、dock zone、order、size ratio、collapsed / pinned inspector tabs として Editor Preferences に保存する。pixel absolute 値だけを保存せず、window size と minimum width / height に合わせて正規化する。素材、シーン、selection など authoring data は layout document へ入れない。
+- 起動、window resize、project kind 切替で saved layout を復元し、存在しない panel ID、画面外 floating rect、minimum 未満の size は safe default へ migration する。「レイアウトをリセット」で既定の左オブジェクト一覧、中央シーン、右設定、下素材へ戻せる。
+- panel resize / dock の最中は authoring 元に戻す履歴を増やさない。Preferences save 失敗でも編集を止めず、その session の layout と再試行を保つ。
 
 ### 視覚基準
 
-- エディターは明るい neutral surface を既定 theme とし、白から neutral-50 の panel、neutral-200 の境界、neutral-900 の本文を使う。3D View の背景色や Asset thumbnail の内容色を theme の代わりにしない。dark theme を追加する場合も semantic color token と contrast 基準は共有する。
-- UI font は OS の system sans-serif を基準とし、本文 13px、補助情報 12px、panel 見出し 14px、画面見出し 16px を最小基準にする。Asset 名や Entity 名を 12px 未満へ縮めない。
+- エディターは明るい neutral surface を既定 theme とし、白から neutral-50 の panel、neutral-200 の境界、neutral-900 の本文を使う。3D View の背景色や素材 thumbnail の内容色を theme の代わりにしない。dark theme を追加する場合も semantic color token と contrast 基準は共有する。
+- UI フォントは OS の system sans-serif を基準とし、本文 13px、補助情報 12px、panel 見出し 14px、画面見出し 16px を最小基準にする。素材名やオブジェクト名を 12px 未満へ縮めない。
 - 本文は neutral-900、補助情報は neutral-600、無効状態は neutral-400、境界は neutral-200 を基準にする。brand color は選択、主操作、focus ring に限定し、warning / error / success は色と短い文言を併用する。
-- 基本 spacing は 4px grid とし、field 内 4px、field 間 8px、section 内 12px、panel 内 16px を基準にする。Hierarchy row と Asset row の hit area は最低 32px、主要 button は最低 36px とする。
+- 基本 spacing は 4px grid とし、field 内 4px、field 間 8px、section 内 12px、panel 内 16px を基準にする。オブジェクト一覧 row と素材 row の hit area は最低 32px、主要 button は最低 36px とする。
 - 数値 label、単位、入力欄の列を揃え、3軸値は X / Y / Z を色だけでなく文字でも示す。keyboard focus は 2px 以上の輪郭で示し、hover と同じ見た目にしない。
-- panel resize 後も Hierarchy、Scene View、Inspector、Assets の主 surface を見失わない。狭い幅では Hierarchy / Inspector / Assets を collapsed tab にできるが、active inspector context、選択対象、未保存状態を header に残す。
+- panel resize 後もオブジェクト一覧、シーン、設定、素材の主 surface を見失わない。狭い幅ではオブジェクト一覧 / 設定 / 素材を collapsed tab にできるが、active inspector context、選択対象、未保存状態を header に残す。
 
 ### Icon Registry と inventory
 
@@ -187,19 +187,19 @@ icon だけの button は必ず同じ語の visible tooltip と `aria-label` を
 | --- | --- | --- | --- | --- | --- |
 | `project.world` | `Globe2` | ワールド | ワールドを作成 | なし | neutral / 選択時 active |
 | `project.item` | `Box` | アイテム | アイテムを作成 | なし | neutral / 選択時 active |
-| `project.classic` | `Code2` | クラシック | コードで作成 | なし | neutral / 選択時 active |
+| `project.classic` | `Code2` | コード編集 | コードで作成 | なし | neutral / 選択時 active |
 | `project.visual` | `PanelsTopLeft` | ビジュアル | ビジュアルエディターで作成 | なし | neutral / 選択時 active |
 | `create.primitive` | `Cuboid` | プリミティブ | プリミティブを作成 | なし | neutral |
-| `asset.model` | `Boxes` | Model / GLTF | モデル | なし | kind fallback の neutral |
-| `asset.texture` | `Image` | Texture | テクスチャ | なし | kind fallback の neutral |
-| `asset.material` | `Palette` | Material | マテリアル | なし | kind fallback の neutral |
-| `asset.prefab` | `Package` | Prefab | プレハブ | なし | kind fallback の neutral |
-| `asset.particle` | `Sparkles` | Particle | パーティクル | なし | kind fallback の neutral |
-| `asset.folder` | `Folder` / `FolderOpen` | フォルダー | フォルダーを開く / 閉じる | なし | neutral / drop target は active |
-| `asset.import` | `HardDriveUpload` | インポート | Model または Texture をインポート | なし | neutral |
-| `asset.reimport` | `RefreshCw` | 再インポート | Source から再インポート | なし | neutral / 実行中 active |
+| `asset.model` | `Boxes` | 3Dモデル / GLTF | モデル | なし | kind fallback の neutral |
+| `asset.texture` | `Image` | テクスチャ | テクスチャ | なし | kind fallback の neutral |
+| `asset.material` | `Palette` | マテリアル | マテリアル | なし | kind fallback の neutral |
+| `asset.prefab` | `Package` | プレハブ | プレハブ | なし | kind fallback の neutral |
+| `asset.particle` | `Sparkles` | パーティクル | パーティクル | なし | kind fallback の neutral |
+| `asset.folder` | `Folder` / `FolderOpen` | フォルダー | フォルダーを開く / 閉じる | なし | neutral / ここに移動 target は active |
+| `asset.import` | `HardDriveUpload` | インポート | 3Dモデルまたはテクスチャをインポート | なし | neutral |
+| `asset.reimport` | `RefreshCw` | 再インポート | 元ファイルから再インポート | なし | neutral / 実行中 active |
 | `asset.new-folder` | `FolderPlus` | 新しいフォルダー | 新しいフォルダー | なし | neutral |
-| `asset.new-prefab` | `PackagePlus` | Prefab を作成 | 選択 Entity から Prefab を作成 | なし | neutral |
+| `asset.new-prefab` | `PackagePlus` | プレハブを作成 | 選択オブジェクトからプレハブを作成 | なし | neutral |
 | `edit.select` | `MousePointer2` | 選択 | 選択ツール | なし | 押下中 active |
 | `edit.move` | `Move3d` | 移動 | 移動ツール | `W` | 押下中 active |
 | `edit.rotate` | `Rotate3d` | 回転 | 回転ツール | `E` | 押下中 active |
@@ -221,7 +221,7 @@ icon だけの button は必ず同じ語の visible tooltip と `aria-label` を
 | `status.error` | `CircleX` | エラー | エラーを表示 | なし | error |
 | `status.loading` | `LoaderCircle` | 処理中 | 処理中 | なし | active、回転 motion |
 
-Model、Texture、Material は `thumbnail.status === ready` なら generated thumbnail を第一表示にする。Prefab と Particle も生成可能なら同じ規則を使う。kind icon は thumbnail が未生成、失敗、または表示不能な場合だけ fallback とし、失敗時は kind icon に status badge とテキストを加える。generated thumbnail の上へ製品固有の装飾 icon や Lucide icon を常時重ねない。
+3Dモデル、テクスチャ、マテリアルは `thumbnail.status === ready` なら generated thumbnail を第一表示にする。プレハブとパーティクルも生成可能なら同じ規則を使う。kind icon は thumbnail が未生成、失敗、または表示不能な場合だけ fallback とし、失敗時は kind icon に status badge とテキストを加える。generated thumbnail の上へ製品固有の装飾 icon や Lucide icon を常時重ねない。
 
 ## 4. ビジュアル project の document model
 
@@ -237,13 +237,13 @@ VisualProjectDocument (xrift-studio.project.json)
 SceneDocument の mesh component ─ asset ID 参照 ─┘
 ```
 
-- `VisualProjectDocument` は project kind、entry scene ID、scene paths、asset manifest path、metadata を定義する。
-- `SceneDocument` は Entity、親子関係、Component、Asset ID 参照だけを持つ。Asset 本体や Material 値を埋め込まない。
-- `AssetManifest` は Model / GLTF、Texture、Material、Prefab、Particle、Audio、Script、Shader、Interactivity と、source metadata、再生成可能な derived metadata を持つ。
+- `VisualProjectDocument` は project kind、開始ファイル scene ID、scene paths、asset manifest path、metadata を定義する。
+- `SceneDocument` はオブジェクト、親子関係、コンポーネント、素材 ID 参照だけを持つ。素材本体やマテリアル値を埋め込まない。
+- `AssetManifest` は 3Dモデル / GLTF、テクスチャ、マテリアル、プレハブ、パーティクル、音声、スクリプト、シェーダー、ノードグラフと、元データ metadata、再生成可能な derived metadata を持つ。
 - 三 document はそれぞれ `schemaVersion` を持ち、別々に validation と migration を行う（[4.10](#410-schemaversion-と-migration)）。
 - ID は表示名や相対パスを変更しても変えない。参照はファイル名ではなく ID で解決する。
 
-三つは project を開くための root document である。VisualProjectDocument は `assetFoldersPath` と `saveCommitId` / committed hash set を持ち、Prefab Asset が参照する Prefab SceneDocument と folder document も versioned save set に含める。Prefab や folder を AssetManifest へ巨大な inline JSON として埋め込まない。
+三つは project を開くための root document である。VisualProjectDocument は `assetFoldersPath` と `saveCommitId` / committed hash set を持ち、プレハブが参照するプレハブ SceneDocument と folder document も versioned save set に含める。プレハブや folder を AssetManifest へ巨大な inline JSON として埋め込まない。
 
 ### 4.2 VisualProjectDocument
 
@@ -273,7 +273,7 @@ visual の判定は root の manifest filename と schema で行い、classic pr
 
 ### 4.3 SceneDocument
 
-SceneDocument は ECS に着想を得た正規化 Entity graph であり、system scheduler、query、独自 runtime ECS を持たない。Script Component は per-entity の update 順序を必要とするが、その順序は Entity 階層順と Component 並び順から決まる固定規則であり、SceneDocument に scheduler や query を追加しない（[4.8 Scripting](#48-scripting-script-asset--script-component)）。
+SceneDocument は ECS に着想を得た正規化オブジェクト graph であり、system scheduler、query、独自実行環境 ECS を持たない。スクリプトのコンポーネントは per-entity の update 順序を必要とするが、その順序はオブジェクト階層順とコンポーネント並び順から決まる固定規則であり、SceneDocument に scheduler や query を追加しない（[4.8 スクリプト](#48-scripting-script-asset--script-component)）。
 
 ```json
 {
@@ -342,11 +342,11 @@ SceneDocument は ECS に着想を得た正規化 Entity graph であり、syste
 }
 ```
 
-Mesh Component の形状参照は二種類に分ける。ユーザー Asset ではない組み込み形状は `geometry: { kind: "builtin", primitive: "box" }` のような typed Create Registry reference、取り込んだ Model は `modelAssetId` の Asset ID 参照とする。`materialBindings[].materialAssetId` は `material` Asset だけを参照する。上の二 Entity は同じ Material Asset を共有するため、Material の変更は両方へ反映される。Entity 固有 override は共有 Asset の編集とは別の versioned component として扱う。
+メッシュコンポーネントの形状参照は二種類に分ける。ユーザー素材ではない組み込み形状は `geometry: { kind: "builtin", primitive: "box" }` のような typed 追加 Registry reference、取り込んだ 3Dモデルは `modelAssetId` の素材 ID 参照とする。`materialBindings[].materialAssetId` は `material` 素材だけを参照する。上の二オブジェクトは同じマテリアルを共有するため、マテリアルの変更は両方へ反映される。オブジェクト固有 override は共有素材の編集とは別の versioned component として扱う。
 
 ### 4.4 AssetManifest
 
-AssetManifest は SceneDocument から独立し、右 Inspector の Asset context と importer の正本になる。
+AssetManifest は SceneDocument から独立し、右設定の素材 context と importer の正本になる。
 
 ```json
 {
@@ -431,9 +431,9 @@ AssetManifest は SceneDocument から独立し、右 Inspector の Asset contex
 }
 ```
 
-Asset kind は `model | texture | material | prefab | particle | audio | script | shader | interactivity` の閉じた集合とし、検証、Inspector、compiler adapter を同じ変更で揃える。`source.kind = "project"` の `relativePath` は project root 相対の `/` 区切りへ正規化し、OS の絶対パス、Blob URL、token を保存しない。`script` kind は [4.8 Scripting](#48-scripting-script-asset--script-component) の contract に従い、`source.kind = "project"` だけを許してコード本文と派生 schema を manifest へ保存しない。
+素材 kind は `model | texture | material | prefab | particle | audio | script | shader | interactivity` の閉じた集合とし、検証、設定、compiler adapter を同じ変更で揃える。`source.kind = "project"` の `relativePath` は project root 相対の `/` 区切りへ正規化し、OS の絶対パス、Blob URL、token を保存しない。`script` kind は [4.8 スクリプト](#48-scripting-script-asset--script-component) の contract に従い、`source.kind = "project"` だけを許してコード本文と派生 schema を manifest へ保存しない。
 
-Model / Texture Asset は次の metadata を持つ。
+3Dモデル / テクスチャは次の metadata を持つ。
 
 ```json
 {
@@ -457,13 +457,13 @@ Model / Texture Asset は次の metadata を持つ。
 }
 ```
 
-derived は source hash と importer version から再生成できる cache とし、欠落しても source から復元できる。
+derived は元データ hash と importer version から再生成できる cache とし、欠落しても元データから復元できる。
 
-外部カタログから取り込んだ Asset は、配布元、作者、ライセンス、配布ページ URL を `attribution` として保持し、公開時の生成物へも同じ情報を出力する（[6.8](#68-外部リソースカタログ)）。
+外部カタログから取り込んだ素材は、配布元、作者、ライセンス、配布ページ URL を `attribution` として保持し、公開時の生成物へも同じ情報を出力する（[6.8](#68-外部リソースカタログ)）。
 
 ### 4.5 EditorSession と Editor State
 
-`EditorSession` は読み込んだ三つの root document、参照される Prefab / folder document と一時状態を束ねるが、document 自体と同一視しない。
+`EditorSession` は読み込んだ三つの root document、参照されるプレハブ / folder document と一時状態を束ねるが、document 自体と同一視しない。
 
 ```text
 EditorSession
@@ -479,40 +479,40 @@ EditorSession
   revisions: { project: number, scene: number, assets: number }
 ```
 
-Scene View、Hierarchy、Assets、Inspector は document を直接書き換えず、EditorSession へ Command または Intent を渡す。
+シーン、オブジェクト一覧、素材、設定は document を直接書き換えず、EditorSession へ Command または Intent を渡す。
 
-- `SelectEntityIntent` は `sceneSelection` を変え、Scene View、Hierarchy、右 Inspector の Entity context を同期する。`SelectAssetIntent` は独立した `assetSelection` を変え、Assets と右 Inspector の Asset context を同期する。どちらも通常の選択だけでは Undo 履歴に入れない。
-- Material や Texture を選択しても `sceneSelection` を解除しない。右 Inspector は `inspectorContext` に従って Asset properties を表示し、header の pinned Entity tab から保持済み `sceneSelection` へ戻れる。Entity を選び直しても `assetSelection` は明示的な Asset 選択解除まで保持する。
-- `PlaceAssetIntent` は Asset ID と drop point を検証し、SceneDocument に Entity を追加する Command へ変換する。
-- `ImportFilesIntent` は外部 File を Import Queue へ渡し、成功するまで SceneDocument と AssetManifest を変えない。
+- `SelectEntityIntent` は `sceneSelection` を変え、シーン、オブジェクト一覧、右設定のオブジェクト context を同期する。`SelectAssetIntent` は独立した `assetSelection` を変え、素材と右設定の素材 context を同期する。どちらも通常の選択だけでは元に戻す履歴に入れない。
+- マテリアルやテクスチャを選択しても `sceneSelection` を解除しない。右設定は `inspectorContext` に従って素材 properties を表示し、header の pinned オブジェクト tab から保持済み `sceneSelection` へ戻れる。オブジェクトを選び直しても `assetSelection` は明示的な素材選択解除まで保持する。
+- `PlaceAssetIntent` は素材 ID とここに移動 point を検証し、SceneDocument にオブジェクトを追加する Command へ変換する。
+- `ImportFilesIntent` は外部 File を読み込む Queue へ渡し、成功するまで SceneDocument と AssetManifest を変えない。
 - `UpdateEntityComponentCommand` は SceneDocument、`UpdateAssetCommand` は AssetManifest だけを変更する。
 - document の変更は対象 revision を増やし、保存成功時の revision と比較して未保存状態を決める。
 
-カメラ位置、panel layout、検索、hover、`inspectorContext`、ギズモ操作中の一時値は Editor State であり、authoring document や authoring Undo 履歴に入れない。panel layout は別の versioned Editor Preferences として保存する。Place、Material assign、duplicate、delete、Prefab 作成など document と選択を同時に変える Command は、前後の `sceneSelection` と `assetSelection` を一つの selection snapshot として履歴へ持つ。
+カメラ位置、panel layout、検索、hover、`inspectorContext`、ギズモ操作中の一時値は Editor State であり、authoring document や authoring 元に戻す履歴に入れない。panel layout は別の versioned Editor Preferences として保存する。Place、マテリアル assign、duplicate、delete、プレハブ作成など document と選択を同時に変える Command は、前後の `sceneSelection` と `assetSelection` を一つの selection snapshot として履歴へ持つ。
 
-### 4.6 PlaySession と runtime profile
+### 4.6 PlaySession と実行環境 profile
 
-Play の実行中だけ存在する値は `PlaySession` の Editor Runtime State とする。SceneDocument と AssetManifest の snapshot から authoring object と参照を共有しない runtime scene を作り、Stop で必ず破棄する。中央は通常のScene Viewから境界とheaderが異なる`Play Window`へ切り替え、HierarchyとInspectorが編集データ、Play Windowが実行コピーを表示していることを同時に読めるようにする。
+動作確認の実行中だけ存在する値は `PlaySession` の Editor Runtime State とする。SceneDocument と AssetManifest の snapshot から authoring object と参照を共有しない実行環境 scene を作り、停止で必ず破棄する。中央は通常のシーンから境界とheaderが異なる`Play Window`へ切り替え、オブジェクト一覧と設定が編集データ、動作確認の画面が実行コピーを表示していることを同時に読めるようにする。
 
-- `WorldPlayProfile`: spawn の解決、world navigation、character / physics runtime を組み立てる。
+- `WorldPlayProfile`: spawn の解決、world navigation、character / physics 実行環境を組み立てる。
 - `ItemPreviewProfile`: XRift から渡される item transform、preview stage、camera、interaction を組み立てる。player spawn を前提にしない。
 - `InputAdapter`: keyboard、gamepad、XR controller などを正規化した action へ変換する。
-- `ControllerPlugin`: action から runtime avatar または preview target の状態を更新する。
+- `ControllerPlugin`: action から実行環境 avatar または preview target の状態を更新する。
 - `PhysicsRuntimePlugin`: collision、gravity、step を担当する。未導入時は明示的な no-physics 実装を使う。
 - `RuntimePlugin`: `start`、`update`、`stop`、`dispose` の lifecycle を持つ。
-- `entityRevisions`: Entity IDごとのruntime世代。許可されたauthoring変更を反映する時だけ対象Entityを増分し、そのEntityのplugin、animation mixer、physics bodyをdisposeして再生成する。
+- `entityRevisions`: オブジェクト IDごとの実行環境世代。許可されたauthoring変更を反映する時だけ対象オブジェクトを増分し、そのオブジェクトのplugin、animation mixer、physics bodyをdisposeして再生成する。
 
-World Preview の keyboard / gamepad / XR action は `InputAdapter`、移動と physics は登録済み `ControllerPlugin` / `PhysicsRuntimePlugin` で処理する。controller 固有の一時 runtime state を project document へ保存せず、Item Preview Profile には world navigation を適用しない。
+ワールドプレビューの keyboard / gamepad / XR action は `InputAdapter`、移動と physics は登録済み `ControllerPlugin` / `PhysicsRuntimePlugin` で処理する。controller 固有の一時実行環境 state を project document へ保存せず、アイテムプレビュー Profile には world navigation を適用しない。
 
-Play中もEntity選択、Transform、Collider、Animation、Hierarchy構造、Entity追加・削除・複製・親変更・Component追加のauthoring Commandを許可する。これらは通常どおり履歴と自動保存へ入り、PlaySessionは更新後のruntime inputをコピーして追加・削除・更新されたEntityだけを差分同期する。MCP書き込みも同じrevision検査と同期経路を使う。Asset、Material、Scene settingsとruntime生成値の書き戻しは無効にする。Stopはinput listener、animation frame、controller、physics、XRSessionをdisposeし、runtimeの位置や速度をdocumentへ書き戻さず、最新のauthoring SceneDocument / AssetManifestとEditの選択・カメラへ戻す。
+動作確認中もオブジェクト選択、位置・回転・大きさ、衝突判定、Animation、オブジェクト一覧構造、オブジェクト追加・削除・複製・親変更・コンポーネント追加のauthoring Commandを許可する。これらは通常どおり履歴と自動保存へ入り、PlaySessionは更新後の実行環境 inputをコピーして追加・削除・更新されたオブジェクトだけを差分同期する。MCP書き込みも同じrevision検査と同期経路を使う。素材、マテリアル、シーン settingsと実行環境生成値の書き戻しは無効にする。停止はinput listener、animation frame、controller、physics、XRSessionをdisposeし、実行環境の位置や速度をdocumentへ書き戻さず、最新のauthoring SceneDocument / AssetManifestと編集の選択・カメラへ戻す。
 
 ### 4.7 Component / Asset Registry
 
-Inspector、validation、compiler の食い違いを防ぐため、Component `type` と Asset `kind` ごとに target-neutral な schema、default、対応 project kind、Inspector field、reference rule を一か所へ定義する。Three preview、R3F、XRift world、XRift item の adapter は別層に置き、同じ Component type / Asset kind へ登録する。未知 type / kind または対応 adapter の欠落は無視して続行せず、document path、Entity / Asset ID、field、target を含む診断にする。
+設定、validation、compiler の食い違いを防ぐため、コンポーネント `type` と素材 `kind` ごとに target-neutral な schema、default、対応 project kind、設定 field、reference rule を一か所へ定義する。Three preview、R3F、XRift world、XRift item の adapter は別層に置き、同じコンポーネント type / 素材 kind へ登録する。未知 type / kind または対応 adapter の欠落は無視して続行せず、document path、オブジェクト / 素材 ID、field、target を含む診断にする。
 
 #### Material schema: glTF 2.0 core
 
-Material schema は Khronos glTF 2.0 core の metallic-roughness Material を欠落なく typed schema として持ち、import、右 Inspector、preview、compiler で同じ field を使う。
+マテリアル schema は Khronos glTF 2.0 core の metallic-roughness マテリアルを欠落なく typed schema として持ち、import、右設定、preview、compiler で同じ field を使う。
 
 | glTF core field | Authoring 表現と既定値 | 検証と意味 |
 | --- | --- | --- |
@@ -529,7 +529,7 @@ Material schema は Khronos glTF 2.0 core の metallic-roughness Material を欠
 | `alphaCutoff` | `0.5` | `MASK` の時だけ有効な有限数かつ `>= 0`。他 mode では保存・出力しない |
 | `doubleSided` | `false` | true では back-face culling を無効にし、裏面法線を反転して評価する |
 
-Opacity は独立した曖昧な `opacity` field にしない。`baseColorFactor[3]` と `baseColorTexture` の alpha を乗算し、`alphaMode` と `alphaCutoff` で解釈する。UI の「透明度」はこの関係を一つの section で示し、alpha を変えただけで `alphaMode` を暗黙に `BLEND` へ変えない。
+不透明度は独立した曖昧な `opacity` field にしない。`baseColorFactor[3]` と `baseColorTexture` の alpha を乗算し、`alphaMode` と `alphaCutoff` で解釈する。UI の「透明度」はこの関係を一つの section で示し、alpha を変えただけで `alphaMode` を暗黙に `BLEND` へ変えない。
 
 `TextureInfo` の core と extension は次のように分ける。
 
@@ -537,44 +537,44 @@ Opacity は独立した曖昧な `opacity` field にしない。`baseColorFactor
 | --- | --- | --- |
 | texture `index` | core | `textureAssetId` として安定 ID 参照へ変換する |
 | `texCoord` | core | `TEXCOORD_n` の `n`。既定 `0`。対象 primitive に同じ attribute が必要 |
-| normal `scale` | core specialized TextureInfo | normal X/Y の強度。Texture Asset 全体ではなく Material slot に保存 |
-| occlusion `strength` | core specialized TextureInfo | occlusion の強度。Material slot に保存 |
+| normal `scale` | core specialized TextureInfo | normal X/Y の強度。テクスチャ全体ではなくマテリアル枠に保存 |
+| occlusion `strength` | core specialized TextureInfo | occlusion の強度。マテリアル枠に保存 |
 | `offset`、`rotation`、`scale` | `KHR_texture_transform` extension | core field と混ぜず、typed extension block に保存。offset `[0,0]`、rotation `0` radians、scale `[1,1]` |
 | extension 内 `texCoord` | `KHR_texture_transform` extension | extension 対応時に core `texCoord` を上書きする。core field とは別に表示する |
 
-`KHR_texture_transform` の `extensionsUsed` / `extensionsRequired` と fallback UV の有無も診断する。任意の extension JSON を Material Asset へ流し込まず、Registry に登録した typed extension だけを active authoring data として扱う。
+`KHR_texture_transform` の `extensionsUsed` / `extensionsRequired` と fallback UV の有無も診断する。任意の extension JSON をマテリアルへ流し込まず、Registry に登録した typed extension だけを active authoring data として扱う。
 
-色空間はファイルの ICC profile ではなく Material slot の用途で決める。base color と emissive の RGB は sRGB decode、metallic-roughness、normal、occlusion、alpha は linear とする。同じ source image を異なる用途で共有する場合、source を複製せず、用途別 recipe / derived artifact を分ける。Inspector には「sRGB画像」ではなく「Base Color: sRGB」「Normal: Linear」のように参照先の意味を表示する。
+色空間はファイルの ICC profile ではなくマテリアル枠の用途で決める。base color と emissive の RGB は sRGB decode、metallic-roughness、normal、occlusion、alpha は linear とする。同じ元データ image を異なる用途で共有する場合、元データを複製せず、用途別 recipe / derived artifact を分ける。設定には「sRGB画像」ではなく「基本色: sRGB」「法線マップ: Linear」のように参照先の意味を表示する。
 
-#### Material slot、影、import の対応
+#### マテリアル枠、影、import の対応
 
-glTF は一つの mesh に複数の mesh primitive を持ち、各 primitive が Material を一つ参照できる。Model importer は material 名だけでなく、mesh index、primitive index、元 material index から安定した slot ID を作り、Model Asset の derived metadata に slot 一覧を持つ。`MeshComponent.materialBindings[]` は slot ID ごとに Material Asset ID を一つ参照し、slot 重複、欠落、別 kind の参照を validation error にする。組み込み primitive は `default` slot 一件を使う。
+glTF は一つのメッシュに複数のメッシュ primitive を持ち、各 primitive がマテリアルを一つ参照できる。3Dモデル importer は material 名だけでなく、メッシュ index、primitive index、元 material index から安定した slot ID を作り、3Dモデルの素材の derived metadata に slot 一覧を持つ。`MeshComponent.materialBindings[]` は slot ID ごとにマテリアル ID を一つ参照し、slot 重複、欠落、別 kind の参照を validation error にする。組み込み primitive は `default` slot 一件を使う。
 
-再 import で primitive 構成が変わった場合は、元 index、名前、構造 fingerprint の順に binding を照合する。自動対応できない binding は削除や別 slot への推測をせず `stale-binding` diagnostic とし、右 Inspector から置換先を選べるようにする。
+再 import で primitive 構成が変わった場合は、元 index、名前、構造 fingerprint の順に binding を照合する。自動対応できない binding は削除や別 slot への推測をせず `stale-binding` diagnostic とし、右設定から置換先を選べるようにする。
 
-`castShadow` と `receiveShadow` は XRift Studio の Mesh Component / target adapter 用 authoring 設定であり、glTF 2.0 core Material field ではない。glTF import では profile の既定値を入れ、Material から推測しない。glTF へ再出力する場合も Material JSON へ追加せず、XRift compiler adapter が runtime 設定として扱う。`maxDistance` も同じく renderer adapter の設定で、`0.1..1,000,000` の有限値または未設定を受け付け、`null` 更新で Scene Camera の `far` へ戻す。`doubleSided` は Material、影と描画距離は Entity / Mesh と、UI section と保存先を分ける。
+`castShadow` と `receiveShadow` は XRift Studio のメッシュコンポーネント / target adapter 用 authoring 設定であり、glTF 2.0 core マテリアル field ではない。glTF import では profile の既定値を入れ、マテリアルから推測しない。glTF へ再出力する場合もマテリアル JSON へ追加せず、XRift compiler adapter が実行環境設定として扱う。`maxDistance` も同じく renderer adapter の設定で、`0.1..1,000,000` の有限値または未設定を受け付け、`null` 更新でシーン Camera の `far` へ戻す。`doubleSided` はマテリアル、影と描画距離はオブジェクト / メッシュと、UI section と保存先を分ける。
 
 #### Material extension Registry
 
-Material schema は core metallic-roughness を完全対応し、extension を core field のように見せない。typed Material extension は `KHR_materials_iridescence` を最初の対応とし、`iridescenceFactor`、`iridescenceTexture`、`iridescenceIor`、`iridescenceThicknessMinimum`、`iridescenceThicknessMaximum`、`iridescenceThicknessTexture` を Khronos schema に沿って一つの extension adapter で扱う。factor 既定 `0`、IOR 既定 `1.3`、thickness 既定 `100nm..400nm` とし、iridescence texture の linear R channel と thickness texture の linear G channel を使う。minimum が maximum を超える値は確定せず、`KHR_materials_unlit` との同時利用も拒否する。
+マテリアル schema は core metallic-roughness を完全対応し、extension を core field のように見せない。typed マテリアル extension は `KHR_materials_iridescence` を最初の対応とし、`iridescenceFactor`、`iridescenceTexture`、`iridescenceIor`、`iridescenceThicknessMinimum`、`iridescenceThicknessMaximum`、`iridescenceThicknessTexture` を Khronos schema に沿って一つの extension adapter で扱う。factor 既定 `0`、屈折率既定 `1.3`、thickness 既定 `100nm..400nm` とし、iridescence texture の linear R channel と thickness texture の linear G channel を使う。minimum が maximum を超える値は確定せず、`KHR_materials_unlit` との同時利用も拒否する。
 
-`KHR_materials_clearcoat`、`KHR_materials_transmission`、`KHR_materials_ior`、`KHR_materials_volume`、`KHR_materials_sheen`、`KHR_materials_specular`、`KHR_materials_anisotropy`、`KHR_materials_emissive_strength`、`KHR_materials_unlit`、`KHR_materials_dispersion` などは、一つずつ typed adapter、validation、Inspector section、preview adapter、compiler adapter を揃えて Registry へ登録する。未対応の `extensionsRequired` がある model は ready にせず、extension 名と対応策を示す。未対応の optional extension は core fallback の preview と差異が出ることを診断し、source は非破壊で保持する。
+`KHR_materials_clearcoat`、`KHR_materials_transmission`、`KHR_materials_ior`、`KHR_materials_volume`、`KHR_materials_sheen`、`KHR_materials_specular`、`KHR_materials_anisotropy`、`KHR_materials_emissive_strength`、`KHR_materials_unlit`、`KHR_materials_dispersion` などは、一つずつ typed adapter、validation、設定 section、preview adapter、compiler adapter を揃えて Registry へ登録する。未対応の `extensionsRequired` がある model は ready にせず、extension 名と対応策を示す。未対応の optional extension は core fallback の preview と差異が出ることを診断し、元データは非破壊で保持する。
 
-`KHR_texture_basisu` と `EXT_texture_webp` は Material model ではなく Texture source を差し替える glTF extension として別 Registry に置く。KTX2 / WebP を core PNG / JPEG と同一 field のように保存しない。
+`KHR_texture_basisu` と `EXT_texture_webp` はマテリアル model ではなくテクスチャ元データを差し替える glTF extension として別 Registry に置く。KTX2 / WebP を core PNG / JPEG と同一 field のように保存しない。
 
 #### Custom Shader Material
 
-GLSL を直接書く Material は Shader Asset として持つ。Shader Asset は UTF-8 の GLSL source と hash を管理下に保存し、Material 側は Shader Asset ID、typed uniform values、Texture uniform の Asset ID 参照を持つ。Studio Play、Editor Preview、生成物は同じ uniform descriptor を読む。Skybox Shader と水面 Material もこの仕組みの上に置き、Scene の Wind と Light を共通入力として受け取る（[マテリアルカタログ 仕様](./MATERIAL_CATALOG_SPEC.md)）。
+GLSL を直接書くマテリアルはシェーダー素材として持つ。シェーダー素材は UTF-8 の GLSL 元データと hash を管理下に保存し、マテリアル側はシェーダー素材 ID、typed uniform values、テクスチャ uniform の素材 ID 参照を持つ。Studio 動作確認、Editor プレビュー、生成物は同じ uniform descriptor を読む。空の背景シェーダーと水面マテリアルもこの仕組みの上に置き、シーンの風とライトを共通入力として受け取る（[マテリアルカタログ仕様](./MATERIAL_CATALOG_SPEC.md)）。
 
-#### Material Asset の新規作成
+#### マテリアルの新規作成
 
-Assets の「作成」から「Material」を選び、名前と authoring preset を指定する。既定 preset は「標準サーフェス」として白、不透明、metallic `0`、roughness `0.7`、double-sided off を明示し、Khronos core の省略時既定値と同一だと誤解させない。「glTF 既定値」preset を選んだ場合だけ metallic / roughness を `1` にする。
+素材の「作成」から「マテリアル」を選び、名前と authoring プリセットを指定する。既定プリセットは「標準サーフェス」として白、不透明、metallic `0`、roughness `0.7`、double-sided off を明示し、Khronos core の省略時既定値と同一だと誤解させない。「glTF 既定値」プリセットを選んだ場合だけ metallic / roughness を `1` にする。
 
-作成成功では `source.kind = "document"` の Material Asset を一つ AssetManifest に追加し、Assets で選択して右 Inspector に表示する。Entity や material slot へ自動 binding しない。空の名前、重複 ID、無効な preset では AssetManifest、selection、history を変えず、field 近くに修正方法を示す。表示名の重複は許して ID で識別し、必要なら同名件数を表示する。取消では Assets の直前 selection と Inspector context へ戻る。
+作成成功では `source.kind = "document"` のマテリアルを一つ AssetManifest に追加し、素材で選択して右設定に表示する。オブジェクトやマテリアル枠へ自動 binding しない。空の名前、重複 ID、無効なプリセットでは AssetManifest、selection、history を変えず、field 近くに修正方法を示す。表示名の重複は許して ID で識別し、必要なら同名件数を表示する。取消では素材の直前 selection と設定 context へ戻る。
 
-#### Component 定義と XRift Component
+#### コンポーネント定義と XRiftのコンポーネント
 
-Component Registry は「保存 schema」と「各 target で実行できる adapter」を分離し、少なくとも次を登録単位にする。
+コンポーネント Registry は「保存 schema」と「各 target で実行できる adapter」を分離し、少なくとも次を登録単位にする。
 
 ```text
 ComponentDefinition
@@ -584,100 +584,100 @@ ComponentDefinition
   previewAdapter / worldCompilerAdapter / itemCompilerAdapter
 ```
 
-基礎 component は Transform、Mesh、Light、Collider、Rigid Body、Audio Source、Spawn Point、Terrain とする。Particle は Particle Asset に emitter、shape、lifetime、rate、size / color curve、Material / Texture 参照などの再利用可能な effect definition を持たせ、Entity の `ParticleRendererComponent` は Particle Asset ID と Entity 固有の play / loop / seed 設定だけを参照する。Particle の値を Mesh や Entity へ inline copy しない。Terrain は高さサンプルと草の散布ルールを持つ静的 Mesh であり、固定の Trimesh Collider を伴う（[Terrain エディター 仕様](./TERRAIN_EDITOR_SPEC.md)）。
+基礎 component は位置・回転・大きさ、メッシュ、ライト、衝突判定、物理挙動、音源、開始位置、地形とする。パーティクルはパーティクルに emitter、shape、lifetime、rate、size / color curve、マテリアル / テクスチャ参照などの再利用可能な effect definition を持たせ、オブジェクトの `ParticleRendererComponent` はパーティクル ID とオブジェクト固有の play / loop / seed 設定だけを参照する。パーティクルの値をメッシュやオブジェクトへ inline copy しない。地形は高さサンプルと草の散布ルールを持つ静的メッシュであり、固定のメッシュと同じ形衝突判定を伴う（[地形エディター仕様](./TERRAIN_EDITOR_SPEC.md)）。
 
-XRift 固有 component は `xrift.*` namespace と明示的な world / item profile を持たせる。Registry に schema、Inspector、preview、対象 compiler adapter がすべて揃った component だけを作成可能にし、任意の JavaScript component や文字列で指定された module を visual document からロードしない。Script Component だけは例外で、visual document ではなく project 内の Script source file を asset ID で参照する。document 側が持つのは参照と宣言済み property 値だけで、コード文字列は持たない（[4.8 Scripting](#48-scripting-script-asset--script-component)）。preview adapter がないが compiler adapter はある場合は「Preview 未対応」を表示し、偽の見た目で代用しない。target に対応しない component は保存時 warning、compile 前 error とし、別 project kind 向けに黙って削除しない。
+XRift 固有 component は `xrift.*` namespace と明示的な world / item profile を持たせる。Registry に schema、設定、preview、対象 compiler adapter がすべて揃った component だけを作成可能にし、任意の JavaScript component や文字列で指定された module を visual document からロードしない。スクリプトのコンポーネントだけは例外で、visual document ではなく project 内のスクリプト元データ file を asset ID で参照する。document 側が持つのは参照と宣言済み property 値だけで、コード文字列は持たない（[4.8 スクリプト](#48-scripting-script-asset--script-component)）。preview adapter がないが compiler adapter はある場合は「プレビュー未対応」を表示し、偽の見た目で代用しない。target に対応しない component は保存時 warning、compile 前 error とし、別 project kind 向けに黙って削除しない。
 
-authoring Registry が型付きで扱う XRift Component は `Interactable`、`Grabbable`、`Mirror`、`Skybox`、`VideoScreen`、`VideoPlayer`、`LiveVideoPlayer`、`Video180Sphere`、`ScreenShareDisplay`、`SpawnPoint`、`TextInput`、`TagBoard`、`EntryLogBoard`、`Portal`、`BillboardY` とする。Props は [公式 API リファレンス](https://docs.xrift.net/world-components/components/) ではなく、実際に staging へインストールされる `@xrift/world-components` の公開 export を正とする。対象 version は `src/lib/xrift-cli.ts` の `COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC` を単一の宣言箇所とし、`package.json` と world runtime shell の三箇所が一致することを `pnpm cli:test`（`scripts/check-world-components-alignment.mjs`）で強制する。生成コードは、例えば `VideoScreen` に必須の `id` と任意の `url` を出力し、`sync` は `VideoPlayer` ではなく `LiveVideoPlayer` にだけ出力する。
+authoring Registry が型付きで扱う XRiftのコンポーネントは `Interactable`、`Grabbable`、`Mirror`、`Skybox`、`VideoScreen`、`VideoPlayer`、`LiveVideoPlayer`、`Video180Sphere`、`ScreenShareDisplay`、`SpawnPoint`、`TextInput`、`TagBoard`、`EntryLogBoard`、`Portal`、`BillboardY` とする。Props は [公式 API リファレンス](https://docs.xrift.net/world-components/components/) ではなく、実際に staging へインストールされる `@xrift/world-components` の公開 export を正とする。対象 version は `src/lib/xrift-cli.ts` の `COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC` を単一の宣言箇所とし、`package.json` と world 実行環境 shell の三箇所が一致することを `pnpm cli:test`（`scripts/check-world-components-alignment.mjs`）で強制する。生成コードは、例えば `VideoScreen` に必須の `id` と任意の `url` を出力し、`sync` は `VideoPlayer` ではなく `LiveVideoPlayer` にだけ出力する。
 
-`EntryLogBoard` の nested partial object は JSON object として schema 検証し、関数型の `formatTimestamp` / `onJoin` / `onLeave` は visual document にコードを保存せず package 既定動作へ委ねる。`Interactable` の必須 `onInteract` は固定の no-op adapter を生成し、任意コードを document から注入しない。`DevEnvironment` はローカル起動 wrapper であり Scene authoring component にはしない。Box / Mesh Collider は `@xrift/world-components` の export ではなく Rapier の物理 component として、汎用 Collider Registry と compiler adapter で扱う。
+`EntryLogBoard` の nested partial object は JSON object として schema 検証し、関数型の `formatTimestamp` / `onJoin` / `onLeave` は visual document にコードを保存せず package 既定動作へ委ねる。`Interactable` の必須 `onInteract` は固定の no-op adapter を生成し、任意コードを document から注入しない。`DevEnvironment` はローカル起動 wrapper でありシーン authoring component にはしない。Box / メッシュの衝突判定は `@xrift/world-components` の export ではなく Rapier の物理 component として、汎用衝突判定 Registry と compiler adapter で扱う。
 
 ### 4.8 Scripting (Script Asset / Script Component)
 
-制作者が Entity へ振る舞いを与えるための、versioned contract として明示的に設計した例外である。
+制作者がオブジェクトへ振る舞いを与えるための、versioned contract として明示的に設計した例外である。
 本節は設計原則 7、4.3、4.7、9.4、10 章、Extension policy の各規定に対する唯一の例外範囲を定める。
 ここに書かれていない形の任意コード実行は対象外とする。
 
 #### 分離の原則
 
-Particle と同じ関係を採る。再利用可能な定義は Asset 側に置き、Entity 側は参照と Entity 固有の値だけを持つ。
+パーティクルと同じ関係を採る。再利用可能な定義は素材側に置き、オブジェクト側は参照とオブジェクト固有の値だけを持つ。
 
-- **Script Asset** は `kind: "script"`、`source.kind = "project"` の Asset とし、実体は project 内の `scripts/` 以下の TypeScript source file とする。AssetManifest に持つのは参照と language、contract version だけで、**コード本文と派生した property schema を manifest へ保存しない**。property schema は source から導出して Editor State に置く。これにより source の編集が AssetManifest を変えず、Play 中の保存が全 Entity の runtime 世代を上げない。
-- **Script Component** は `scriptAssetId`、宣言済み property 値、`assetReferences`、`entityReferences` を持つ。値は純 JSON かつ有限数に限り、コード、関数、式を持たない。1 Entity へ複数付けられる。
+- **スクリプト** は `kind: "script"`、`source.kind = "project"` の素材とし、実体は project 内の `scripts/` 以下の TypeScript 元データ file とする。AssetManifest に持つのは参照と language、contract version だけで、**コード本文と派生した property schema を manifest へ保存しない**。property schema は元データから導出して Editor State に置く。これにより元データの編集が AssetManifest を変えず、動作確認中の保存が全オブジェクトの実行環境世代を上げない。
+- **スクリプトのコンポーネント** は `scriptAssetId`、宣言済み property 値、`assetReferences`、`entityReferences` を持つ。値は純 JSON かつ有限数に限り、コード、関数、式を持たない。1 オブジェクトへ複数付けられる。
 
 #### 実行境界
 
-- 実行は `RuntimePlugin` の `start` / `update` / `stop` / `dispose` lifecycle に従い（4.6）、Play の開始と停止、および `entityRevisions` による Entity 単位の作り直しに従属する。
-- update 順序は Entity 階層順、次に Entity 内の Component 並び順で確定する。個別の `useFrame` を並べず、単一の scheduler が確定順で呼ぶ。system query や優先度指定は導入しない。
-- named `Render` の役割は宣言的な追加描画だけだ。R3F の `useFrame` は callback 例外を Script 単位に隔離できないため、Play と公開の診断で拒否し、フレーム処理は `start().update(delta)` へ統一する。
-- Stop は生成した module、blob URL、timer、listener を明示的に破棄する。React の unmount に依存しない。
-- Item project は重力と RigidBody を持たないため、物理へ触る API は未対応として degrade し、動くふりをしない。
+- 実行は `RuntimePlugin` の `start` / `update` / `stop` / `dispose` lifecycle に従い（4.6）、動作確認の開始と停止、および `entityRevisions` によるオブジェクト単位の作り直しに従属する。
+- update 順序はオブジェクト階層順、次にオブジェクト内のコンポーネント並び順で確定する。個別の `useFrame` を並べず、単一の scheduler が確定順で呼ぶ。system query や優先度指定は導入しない。
+- named `Render` の役割は宣言的な追加描画だけだ。R3F の `useFrame` は callback 例外をスクリプト単位に隔離できないため、動作確認と公開の診断で拒否し、フレーム処理は `start().update(delta)` へ統一する。
+- 停止は生成した module、blob URL、timer、listener を明示的に破棄する。React の unmount に依存しない。
+- アイテム project は重力と RigidBody を持たないため、物理へ触る API は未対応として degrade し、動くふりをしない。
 
-#### Audio / Audio Source の所有境界
+#### 音声 / 音源の所有境界
 
-- Audio Assetはproject管理下のMP3 / WAV原本とformat、MIME、byte lengthを持ち、外部絶対pathやbytesをAssetManifestへ保存しない。EditのScene ViewはAudio Sourceをiconで示すだけでsourceを取得・再生せず、Playと`classic-jsx`生成物は同じAudio Source runtimeを使う。
-- Studio Playがmanaged Audioを読むnative境界は`assets/`配下のproject-relative pathだけを受け付ける。path traversal、通常file以外、symlink / reparse point、128 MiB超過、拡張子とMP3 / WAV signatureの不一致、read中のsize変化を拒否してからdata URLをruntimeへ渡す。
-- `ctx.assets.loadAudio`はScript ownerが独立playerを作るAPIであり、保存済みAudio Source Componentを操作しない。`ctx.audioSources`はattached Entity自身のAudio Sourceだけを`componentId` / `audioAssetId`で選び、play / pause / stop / seek / volume / loopをowner単位で上書きする。子Entity、別Entity、共有Audio Assetを変更しない。
-- 同じEntityの複数ScriptはComponent順でAudio Source overrideを合成する。Script再起動、runtime failure、Stopではそのownerの再生要求とoverrideを外し、Audio Source Componentの保存値へ戻す。browser / webviewのautoplay policyで拒否されても`play()`は例外を外へ出さず開始件数0をresolveし、`list().status`を`autoplay-blocked`にする。Scene全体を止めず、ユーザー操作後の再試行を許す。
-- Audio Sourceのvolume / loop / autoplay /距離propertyは既存runtimeへ更新し、Audio Asset参照、spatial、enabled、Component追加・削除は対象Entityだけを再同期する。Edit時にAudio Assetを`place_asset`すると参照設定済みAudio Source Entityを作り、既存Entityには`core.audio-source`のadd / update / removeを使う。
-- `import_audio_asset`はEdit mode限定で、trustedな絶対pathをnative側の通常file、no-link、128 MiB、extension + signature、read前後size検査へ通し、content-addressed copy、atomic commit、history、autosaveを一件で確定する。`get_audio_asset`とimport結果は管理下relative pathとmetadataだけを返し、外部path、data URL、binary bytesをMCPへ返さない。
-- `import_model_asset`は単一ファイルのGLB / glTF / VRM / OBJを同じnative file境界で検証し、`get_model_asset` / `update_model_asset`でimport設定とMaterial slot defaultを保存する。`reimport_model_asset`は管理下sourceを再解析してderived metadataをModel IDと参照を維持したままatomicに更新する。`import_skybox_asset`はHDR / EXRのequirectangular TextureをScene skyboxへ設定し、`set_project_thumbnail`は既存のTexture Assetから管理下thumbnailだけを更新する。
-- `import_shader_asset`はUTF-8 GLSL sourceを管理下Shader Assetへ追加し、`get_shader_asset` / `update_shader_asset`はsource本文とhashを同じrevision、history、autosave境界で扱う。任意の外部pathやshell操作は実行せず、Shader sourceは明示的なMCP入力またはmanaged local importだけを受け付ける。
-- `create_prefab`は選択Entityと子孫をPrefab documentへ複製し、Prefab Asset、managed document path、dependency referencesを一つのEditor revisionへ確定する。作成後はPrefab Assetを選択し、`place_asset`で再利用できる。
-- `ctx.audioSources`はruntime-onlyでSceneDocument revisionを変えない。保存するAudio Source設定は`place_asset`、`add_component`、`update_component`、`remove_component`を使い、runtime状態を暗黙に永続化しない。
+- 音声素材はproject管理下のMP3 / WAV原本とformat、MIME、byte lengthを持ち、外部絶対pathやbytesをAssetManifestへ保存しない。編集のシーンは音源をiconで示すだけで元データを取得・再生せず、動作確認と`classic-jsx`生成物は同じ音源実行環境を使う。
+- Studio 動作確認がmanaged 音声を読むnative境界は`assets/`配下のproject-relative pathだけを受け付ける。path traversal、通常file以外、symlink / reparse point、128 MiB超過、拡張子とMP3 / WAV signatureの不一致、read中のsize変化を拒否してからdata URLを実行環境へ渡す。
+- `ctx.assets.loadAudio`はスクリプト ownerが独立playerを作るAPIであり、保存済み音源コンポーネントを操作しない。`ctx.audioSources`はattached オブジェクト自身の音源だけを`componentId` / `audioAssetId`で選び、play / pause / stop / seek / volume / loopをowner単位で上書きする。子オブジェクト、別オブジェクト、共有音声素材を変更しない。
+- 同じオブジェクトの複数スクリプトはコンポーネント順で音源 overrideを合成する。スクリプト再起動、実行環境 failure、停止ではそのownerの再生要求とoverrideを外し、音源コンポーネントの保存値へ戻す。browser / webviewのautoplay policyで拒否されても`play()`は例外を外へ出さず開始件数0をresolveし、`list().status`を`autoplay-blocked`にする。シーン全体を止めず、ユーザー操作後の再試行を許す。
+- 音源のvolume / loop / autoplay /距離propertyは既存実行環境へ更新し、音声素材参照、spatial、enabled、コンポーネント追加・削除は対象オブジェクトだけを再同期する。編集時に音声素材を`place_asset`すると参照設定済み音源オブジェクトを作り、既存オブジェクトには`core.audio-source`のadd / update / removeを使う。
+- `import_audio_asset`は編集 mode限定で、trustedな絶対pathをnative側の通常file、no-link、128 MiB、extension + signature、read前後size検査へ通し、content-addressed copy、atomic commit、history、自動保存を一件で確定する。`get_audio_asset`とimport結果は管理下relative pathとmetadataだけを返し、外部path、data URL、binary bytesをMCPへ返さない。
+- `import_model_asset`は単一ファイルのGLB / glTF / VRM / OBJを同じnative file境界で検証し、`get_model_asset` / `update_model_asset`でimport設定とマテリアル枠 defaultを保存する。`reimport_model_asset`は管理下元データを再解析してderived metadataを3Dモデル IDと参照を維持したままatomicに更新する。`import_skybox_asset`はHDR / EXRのequirectangular テクスチャをシーン skyboxへ設定し、`set_project_thumbnail`は既存のテクスチャから管理下thumbnailだけを更新する。
+- `import_shader_asset`はUTF-8 GLSL 元データを管理下シェーダー素材へ追加し、`get_shader_asset` / `update_shader_asset`は元データ本文とhashを同じrevision、history、自動保存境界で扱う。任意の外部pathやshell操作は実行せず、シェーダー元データは明示的なMCP入力またはmanaged local importだけを受け付ける。
+- `create_prefab`は選択オブジェクトと子孫をプレハブ documentへ複製し、プレハブ、managed document path、dependency referencesを一つのEditor revisionへ確定する。作成後はプレハブを選択し、`place_asset`で再利用できる。
+- `ctx.audioSources`はruntime-onlyでSceneDocument revisionを変えない。保存する音源設定は`place_asset`、`add_component`、`update_component`、`remove_component`を使い、実行環境状態を暗黙に永続化しない。
 
-#### Light と runtime event の所有境界
+#### ライトと実行環境 event の所有境界
 
-- Studio Playと`classic-jsx`生成物は同じ`XriftScriptLight`とLight bridgeを使う。disabledのLightもbridgeをmountしたまま描画だけを止め、ScriptからPlay中に一時点灯できるようにする。Directional / Spotのtargetもこの共通runtimeで構成し、Editorと公開ワールドで向きを別実装にしない。
-- `ctx.lights`はattached Entity自身のLightだけを`componentId` / `lightType`で選び、enabled、color、intensity、Point / Spotのdistanceをowner単位で上書きする。子Entity、別Entity、Scene環境Light、共有設定を暗黙に変更しない。late mountまたは置換されたLightにも同じ選択規則を適用する。
-- 同じEntityの複数ScriptはComponent順でLight overrideを合成する。同一Script内ではfieldごとの最後の変更を優先し、Script再起動、runtime failure、Stopではそのownerだけを外してLight Componentの保存値へ戻す。`reset()`は呼び出したScript ownerのoverrideだけを外す。
-- Inspector / MCPによるenabled、color、intensity、shadow、distance、decay、angle、penumbra、Area sizeの永続変更は既存Light runtimeへ即時反映する。Light種別とComponent追加・削除は構造変更として対象Entityだけを再同期する。`ctx.lights`はruntime-onlyでSceneDocument revisionを変えず、永続化には`core.light.*`の`add_component` / `update_component` / `remove_component`を使う。
-- Script event busは同じ`XriftScriptRoot`内だけにあり、payloadをSceneDocumentへ保存せず、KHR_interactivityへ暗黙に接続しない。近接判定はScript Componentで明示参照したauthored Entityの`getWorldPosition`を使う。runtime player / avatarは`ctx.find`へ公開しないため、player近接を実装済みと表示しない。
-- 組み込み`proximity-event`は固定event名`xrift:proximity-state`へ`channel`、inside状態、`sourceEntityId`、`kind: enter | exit | sync`を送る。enter / exitは境界遷移時だけ一度送り、syncはlive channel変更と後から起動したreceiverの状態同期に限定する。停止・削除時は同sourceのexitを送る。`event-light`はchannelごとのactive sourceをSetで追跡するため複数sensorの一つが退出しても残りを維持する。event名の動的変更でlistenerを残留させず、Scriptの停止・再起動時に購読を確実に解除する。
+- Studio 動作確認と`classic-jsx`生成物は同じ`XriftScriptLight`とライト bridgeを使う。disabledのライトもbridgeをmountしたまま描画だけを止め、スクリプトから動作確認中に一時点灯できるようにする。Directional / Spotのtargetもこの共通実行環境で構成し、Editorと公開ワールドで向きを別実装にしない。
+- `ctx.lights`はattached オブジェクト自身のライトだけを`componentId` / `lightType`で選び、enabled、color、intensity、Point / Spotのdistanceをowner単位で上書きする。子オブジェクト、別オブジェクト、シーン環境ライト、共有設定を暗黙に変更しない。late mountまたは置換されたライトにも同じ選択規則を適用する。
+- 同じオブジェクトの複数スクリプトはコンポーネント順でライト overrideを合成する。同一スクリプト内ではfieldごとの最後の変更を優先し、スクリプト再起動、実行環境 failure、停止ではそのownerだけを外してライトのコンポーネントの保存値へ戻す。`reset()`は呼び出したスクリプト ownerのoverrideだけを外す。
+- 設定 / MCPによるenabled、color、intensity、shadow、distance、decay、angle、penumbra、Area sizeの永続変更は既存ライト実行環境へ即時反映する。ライト種別とコンポーネント追加・削除は構造変更として対象オブジェクトだけを再同期する。`ctx.lights`はruntime-onlyでSceneDocument revisionを変えず、永続化には`core.light.*`の`add_component` / `update_component` / `remove_component`を使う。
+- スクリプト event busは同じ`XriftScriptRoot`内だけにあり、payloadをSceneDocumentへ保存せず、KHR_interactivityへ暗黙に接続しない。近接判定はスクリプトのコンポーネントで明示参照したauthored オブジェクトの`getWorldPosition`を使う。実行環境 player / avatarは`ctx.find`へ公開しないため、player近接を実装済みと表示しない。
+- 組み込み`proximity-event`は固定event名`xrift:proximity-state`へ`channel`、inside状態、`sourceEntityId`、`kind: enter | exit | sync`を送る。enter / exitは境界遷移時だけ一度送り、syncはlive channel変更と後から起動したreceiverの状態同期に限定する。停止・削除時は同元データのexitを送る。`event-light`はchannelごとのactive 元データをSetで追跡するため複数sensorの一つが退出しても残りを維持する。event名の動的変更でlistenerを残留させず、スクリプトの停止・再起動時に購読を確実に解除する。
 
-#### Texture / Material の所有境界
+#### テクスチャ / マテリアルの所有境界
 
-- `ctx.assets.loadTexture` は Script Component の `assetReferences` にある Texture Asset だけを受け付ける。runtime resolver は URL だけでなく、Asset ID、`colorSpace`、Sampler の wrap / mag / min filter、`flipY`、`generateMipmaps` を descriptor として Play host と公開 adapter の両方へ渡す。
-- Script が省略した load option は Texture Asset の Import 設定を継承し、明示した field だけを Script instance の読み込みへ優先する。`generateMipmaps: false` と mipmap filter の組み合わせは `linear` へ正規化する。Studio Play と生成物で別の暗黙 default を持たない。
-- `ctx.materials` は attached Entity 自身の owned Mesh だけへ runtime override を重ねる。`setTextureTransform` は Material slot ごとの Texture clone に `offset`、`repeat`、`center`、`rotation` を適用し、読み込んだ source Texture、共有 Texture Asset、別 slot、子 Entity、別 Entityを変更しない。
-- Script の再起動、runtime failure、Stop では、その Script owner の Material clone、Texture clone、override、読み込み cache を破棄する。`resetTextureTransform(slot)` は実行中に指定 slot の transform だけを戻し、他 Script owner の override を外さない。
-- `ctx.assets` / `ctx.materials` は runtime-only で、AssetManifest revision を変更しない。保存する Texture の Import / Sampler 設定は `get_texture_asset` / `update_texture_asset`、Material の PBR / Texture binding は `get_material_asset` / `update_material_asset` / `set_material_texture_transform`、Mesh slotへの割当は`set_material`を使う。新規 local Texture import は Edit mode の `import_texture_asset` に限定する。
-- `get_scripting_capabilities` は上記の Asset default、明示 option の優先順位、filter / mipmap、clone 隔離と、runtime 一時操作 / MCP 永続操作の tool 対応を機械可読に返す。MCP client が Script API から永続化を推測しないようにする。
+- `ctx.assets.loadTexture` はスクリプトのコンポーネントの `assetReferences` にあるテクスチャだけを受け付ける。実行環境 resolver は URL だけでなく、素材 ID、`colorSpace`、画像の繰り返しと補間の wrap / mag / min filter、`flipY`、`generateMipmaps` を descriptor として動作確認 host と公開 adapter の両方へ渡す。
+- スクリプトが省略した load option はテクスチャの読み込む設定を継承し、明示した field だけをスクリプト instance の読み込みへ優先する。`generateMipmaps: false` と mipmap filter の組み合わせは `linear` へ正規化する。Studio 動作確認と生成物で別の暗黙 default を持たない。
+- `ctx.materials` は attached オブジェクト自身の owned メッシュだけへ実行環境 override を重ねる。`setTextureTransform` はマテリアル枠ごとのテクスチャ clone に `offset`、`repeat`、`center`、`rotation` を適用し、読み込んだ元データテクスチャ、共有テクスチャ、別 slot、子オブジェクト、別オブジェクトを変更しない。
+- スクリプトの再起動、実行環境 failure、停止では、そのスクリプト owner のマテリアル clone、テクスチャ clone、override、読み込み cache を破棄する。`resetTextureTransform(slot)` は実行中に指定 slot の transform だけを戻し、他スクリプト owner の override を外さない。
+- `ctx.assets` / `ctx.materials` は runtime-only で、AssetManifest revision を変更しない。保存するテクスチャの読み込む / 画像の繰り返しと補間設定は `get_texture_asset` / `update_texture_asset`、マテリアルの PBR / テクスチャ binding は `get_material_asset` / `update_material_asset` / `set_material_texture_transform`、メッシュの割り当て枠への割当は`set_material`を使う。新規 local テクスチャ import は編集 mode の `import_texture_asset` に限定する。
+- `get_scripting_capabilities` は上記の素材 default、明示 option の優先順位、filter / mipmap、clone 隔離と、実行環境一時操作 / MCP 永続操作の tool 対応を機械可読に返す。MCP client がスクリプト API から永続化を推測しないようにする。
 
 #### 動的評価の限定
 
-- Editor の Play では、source を Monaco と同梱した TypeScript service の `transpileModule` で変換し、生成した module を評価する。言語サービス worker はEditor補完と診断に限定し、Play開始時のmodel同期を挟まない。これが本節で認める唯一の動的評価であり、対象は project 内の Script source file に限る。visual document 内の文字列を評価しない。
+- Editor の動作確認では、元データを Monaco と同梱した TypeScript service の `transpileModule` で変換し、生成した module を評価する。言語サービス worker はEditor補完と診断に限定し、動作確認開始時のmodel同期を挟まない。これが本節で認める唯一の動的評価であり、対象は project 内のスクリプト元データ file に限る。visual document 内の文字列を評価しない。
 - 許可した bare specifier は Studio が既に読み込んでいる同一 module インスタンスへ解決する。`three` を二重ロードしない。
-- `https://` から始まる module は Play でだけ opt-in で許し、**公開時は blocking 診断**とする。
+- `https://` から始まる module は動作確認でだけ opt-in で許し、**公開時は blocking 診断**とする。
 - 生成コードは静的 import だけを出力する。`eval`、`Function`、動的 import を生成物へ出さない（9.4）。
 
 #### 権限と残存リスク
 
-Play は iframe や Worker を挟まないアプリと同一 realm で動き、`withGlobalTauri` により IPC bridge が `window` に露出している。したがって Script は原理的にアプリと同じ権限を持つ。
+動作確認は iframe や Worker を挟まないアプリと同一 realm で動き、`withGlobalTauri` により IPC bridge が `window` に露出している。したがってスクリプトは原理的にアプリと同じ権限を持つ。
 
-- module scope で `window`、`globalThis`、`__TAURI__`、`fetch`、`document`、`Function` などを遮蔽する。ES module は常に strict mode であり `eval` を lexical binding として宣言すると構文エラーになるため、`eval` は遮蔽一覧へ入れない。同一 realm である以上これは完全な sandbox ではなく、事故と素朴な悪用を止める緩和である。この限界を [Scripting Contract](./SCRIPTING.md) に明記し、隔離済みと表示しない。
-- Script sourceは一度だけ読み、SHA-256、言語、contract version、module policy version、remote module禁止をfingerprintにする。canonical project pathとproject IDを合わせた承認をproject外のapp dataへ保存し、正確に一致したread-once snapshotだけを評価する。確認面はfile、来歴、完全なhash、source、同一realm警告を示す。来歴は表示専用で自己承認には使わない。
-- XRift Studio stdio MCP editor tools / serverは承認toolと承認権限を持たない。未承認時の`set_play_mode`は`SCRIPT_APPROVAL_REQUIRED`を返し、明示した`unapprovedPolicy: "skip"`だけがScriptを無効化したPlayを許す。Play中に同serverまたはfilesystemからsourceが変わった場合はlast-good moduleを維持する。
-- debug buildだけに登録するprivileged Tauri MCP bridgeは、webview JavaScript実行とTauri commandの`invoke`を許す開発者向けautomationであり、stdio MCP editor tools / serverのtrust boundaryには含めない。release buildには同bridgeを登録・搭載せず、Script承認の公開APIとして扱わない。
-- 完全な隔離と、10 章が求める CSP の適用は未達である。Monaco は local 同梱済みだが、Play の blob module と共有 module bridge を許可しながら権限を狭める CSP 設計を要する。
+- module scope で `window`、`globalThis`、`__TAURI__`、`fetch`、`document`、`Function` などを遮蔽する。ES module は常に strict mode であり `eval` を lexical binding として宣言すると構文エラーになるため、`eval` は遮蔽一覧へ入れない。同一 realm である以上これは完全な sandbox ではなく、事故と素朴な悪用を止める緩和である。この限界を [スクリプト Contract](./SCRIPTING.md) に明記し、隔離済みと表示しない。
+- スクリプト元データは一度だけ読み、SHA-256、言語、contract version、module policy version、remote module禁止をfingerprintにする。canonical project pathとproject IDを合わせた承認をproject外のapp dataへ保存し、正確に一致したread-once snapshotだけを評価する。確認面はfile、来歴、完全なhash、元データ、同一realm警告を示す。来歴は表示専用で自己承認には使わない。
+- XRift Studio stdio MCP editor tools / serverは承認toolと承認権限を持たない。未承認時の`set_play_mode`は`SCRIPT_APPROVAL_REQUIRED`を返し、明示した`unapprovedPolicy: "skip"`だけがスクリプトを無効化した動作確認を許す。動作確認中に同serverまたはfilesystemから元データが変わった場合はlast-good moduleを維持する。
+- debug buildだけに登録するprivileged Tauri MCP bridgeは、webview JavaScript実行とTauri commandの`invoke`を許す開発者向けautomationであり、stdio MCP editor tools / serverのtrust boundaryには含めない。release buildには同bridgeを登録・搭載せず、スクリプト承認の公開APIとして扱わない。
+- 完全な隔離と、10 章が求める CSP の適用は未達である。Monaco は local 同梱済みだが、動作確認の blob module と共有 module bridge を許可しながら権限を狭める CSP 設計を要する。
 
 #### 公開
 
-- Script source と host adapter を staging の overlay file として出力し、生成した `src/World.tsx` から静的 import で参照する。`.ts` / `.js` は静的 Asset として許可しないため、必ず overlay file として出す。
-- staging へ install できる npm package は既存の allow-list に限る。Script が任意 package を要求する形は取らない。
-- runtime JSON 出力は Script を表現できないため、選択された場合は blocking 診断とする。未処理のまま manifest へ素通しさせない。
+- スクリプト元データと host adapter を staging の overlay file として出力し、生成した `src/World.tsx` から静的 import で参照する。`.ts` / `.js` は静的素材として許可しないため、必ず overlay file として出す。
+- staging へ install できる npm package は既存の allow-list に限る。スクリプトが任意 package を要求する形は取らない。
+- 実行環境 JSON 出力はスクリプトを表現できないため、選択された場合は blocking 診断とする。未処理のまま manifest へ素通しさせない。
 - 同じ入力から同じ出力を得る決定性を維持する。生成する識別子は hash 由来とし、挿入順や時刻に依存させない。
 
 ### 4.9 Interactivity (KHR_interactivity)
 
-コードを書かずに時間とイベントで動く振る舞いを組むための仕組みである。Scripting とは別の道具として並立させ、どちらか一方へ寄せない。
+コードを書かずに時間とイベントで動く振る舞いを組むための仕組みである。スクリプトとは別の道具として並立させ、どちらか一方へ寄せない。
 
-- 保存形式は独自 graph ではなく glTF の `KHR_interactivity` extension object そのものとする。Interactivity Asset は `extensionName`、`specStatus`、`extension.graphs` を持ち、node ごとの表示位置だけを `extras.xriftStudio.position` に置く。React Flow の state を可搬な正本にしない。
-- ノードエディターは Visual Editor の中央から右へ docked modal として開き、Scene View の左側を残す。振る舞いを組みながら Scene の状態を確認できる。
-- UI からの書き込みも MCP からの書き込みも、同じ validator を通してから確定する。検証対象は declaration / node / flow / value-source / type の index、RC の型シグネチャ、inline・type-default・connected の value source、value connection が先行 node を指すこと、flow connection が後続 node を指すこと、node の declaration 有無、editor 安全のための graph / node 数上限とする。構造 error は書き込みを atomic に拒否し、未知の extension operation は warning に留めて破壊しない。
-- 未知の extension-defined operation は保存したまま保持する。理解できる operation にだけ専用 socket template を与え、独自イベント名や JavaScript へ置き換えない。
+- 保存形式は独自 graph ではなく glTF の `KHR_interactivity` extension object そのものとする。ノードグラフ素材は `extensionName`、`specStatus`、`extension.graphs` を持ち、ノードごとの表示位置だけを `extras.xriftStudio.position` に置く。React Flow の state を可搬な正本にしない。
+- ノードエディターはビジュアルエディターの中央から右へ docked modal として開き、シーンの左側を残す。振る舞いを組みながらシーンの状態を確認できる。
+- UI からの書き込みも MCP からの書き込みも、同じ validator を通してから確定する。検証対象は declaration / ノード / flow / value-source / type の index、RC の型シグネチャ、inline・type-default・connected の value 元データ、value connection が先行ノードを指すこと、flow connection が後続ノードを指すこと、ノードの declaration 有無、editor 安全のための graph / ノード数上限とする。構造 error は書き込みを atomic に拒否し、未知の extension operation は warning に留めて破壊しない。
+- 未知の extension-defined operation は保存したまま保持する。理解できる operation にだけ専用接続口 template を与え、独自イベント名や JavaScript へ置き換えない。
 - MCP からは `list_interactivity_operations`、`get_interactivity_asset`、`create_interactivity_asset`、`add_interactivity_node`、`connect_interactivity_nodes`、`set_interactivity_value`、`set_interactivity_configuration`、`disconnect_interactivity_socket`、`delete_interactivity_node`、`validate_interactivity_asset` を提供する。書き込み tool は他の編集 tool と同じく `projectId`、`sceneId`、`expectedRevision` を要求し、stale な snapshot への適用を防ぐ。
-- runtime adapter は operation 単位で実装する。未対応 operation は canonical JSON に保持したまま no-op とし、任意 JavaScript へ翻訳しない。WebXR の controller / input 取得はアプリ側の責務であり、graph event へは runtime adapter の境界で接続する。
+- 実行環境 adapter は operation 単位で実装する。未対応 operation は canonical JSON に保持したまま no-op とし、任意 JavaScript へ翻訳しない。WebXR の controller / input 取得はアプリ側の責務であり、graph event へは実行環境 adapter の境界で接続する。
 
 詳細は [KHR_interactivity Editor / MCP design](./KHR_INTERACTIVITY_EDITOR.md) に置く。
 
@@ -685,20 +685,20 @@ Play は iframe や Worker を挟まないアプリと同一 realm で動き、`
 
 document を跨いだ互換規則を一か所に集める。個別 section へ互換の例外を散らさない。
 
-- VisualProjectDocument、SceneDocument、AssetManifest、Prefab document、folder document はそれぞれ `schemaVersion` を必須とし、依存順に段階的な migration を通す。
+- VisualProjectDocument、SceneDocument、AssetManifest、プレハブ document、folder document はそれぞれ `schemaVersion` を必須とし、依存順に段階的な migration を通す。
 - migration は元データを直接壊さず、移行後のコピーを検証してから保存する。検証を通らない場合は classic と推測して開かず、対象 field と修復手段を示す。
 - 読み込み時にだけ受け付ける旧表現は、次の対応で現行 schema へ移す。編集・再保存の出力には使わない。
 
 | 旧表現 | 現行 schema | 移行規則 |
 | --- | --- | --- |
-| Asset kind `template` | Asset kind `prefab` | user-facing 名と一致させる。旧 `templatePath` は `prefabDocumentPath` として検証する |
-| Asset kind `primitive` の内部 record | Create Registry の builtin geometry reference | Mesh Component の `geometry: { kind: "builtin", primitive }` へ移す。ユーザー Asset として一覧に出さない |
-| Mesh Component の `geometryAssetId` | `geometry` または `modelAssetId` | 参照先が builtin なら `geometry`、Model Asset なら `modelAssetId` へ振り分ける |
-| Material の `color` / `metalness` / `roughness` / `*TextureId` | glTF core metallic-roughness | base color factor、metallic / roughness factor、typed TextureInfo へ移す |
+| 素材 kind `template` | 素材 kind `prefab` | user-facing 名と一致させる。旧 `templatePath` は `prefabDocumentPath` として検証する |
+| 素材 kind `primitive` の内部 record | 追加 Registry の builtin geometry reference | メッシュコンポーネントの `geometry: { kind: "builtin", primitive }` へ移す。ユーザー素材として一覧に出さない |
+| メッシュコンポーネントの `geometryAssetId` | `geometry` または `modelAssetId` | 参照先が builtin なら `geometry`、3Dモデルの素材なら `modelAssetId` へ振り分ける |
+| マテリアルの `color` / `metalness` / `roughness` / `*TextureId` | glTF core metallic-roughness | base color factor、metallic / roughness factor、typed TextureInfo へ移す |
 
-Material の移行では、旧表現になかった alpha、emissive、normal、occlusion、sampler、texture transform、extension を glTF 既定値または未設定として明示し、推測した画像や mode を追加しない。移行結果は `UpdateAssetCommand` として AssetManifest にだけ保存し、Play 中は読み取り専用にする。
+マテリアルの移行では、旧表現になかった alpha、emissive、normal、occlusion、sampler、texture transform、extension を glTF 既定値または未設定として明示し、推測した画像や mode を追加しない。移行結果は `UpdateAssetCommand` として AssetManifest にだけ保存し、動作確認中は読み取り専用にする。
 
-未知 kind、未知 Component type へ推測変換しない。新しい kind の追加は、閉じた検証集合、Inspector、compiler adapter を同じ変更で揃え、既存 project を読めなくする schema version の引き上げを伴わない。
+未知 kind、未知コンポーネント type へ推測変換しない。新しい kind の追加は、閉じた検証集合、設定、compiler adapter を同じ変更で揃え、既存 project を読めなくする schema version の引き上げを伴わない。
 
 ## 5. XRift Studio のコード境界
 
@@ -706,18 +706,18 @@ Material の移行では、旧表現になかった alpha、emissive、normal、
 
 ビジュアルエディターは、次の責務を明確な境界で分ける。
 
-- authoring document と schema: Scene、Asset、Material、Prefab の永続データと migration
+- authoring document と schema: シーン、素材、マテリアル、プレハブの永続データと migration
 - editor session: query、selection、command、history、reference 解決
-- React UI: Hierarchy、Scene View、Inspector、Assets と操作状態
-- preview / play runtime: Three.js による編集表示と成果物種別ごとの実行環境
+- React UI: オブジェクト一覧、シーン、設定、素材と操作状態
+- preview / play 実行環境: Three.js による編集表示と成果物種別ごとの実行環境
 - native processing: Tauri によるファイル操作、CLI、変換、検査、upload
 - generated outputs: thumbnail、texture 変換、staging artifact などの再生成可能な成果物
 
-package 構成そのものを目的にせず、Scene Data、Editor API、UI、runtime、native processing の依存方向と実行境界を固定する。
+package 構成そのものを目的にせず、シーン Data、Editor API、UI、実行環境、native processing の依存方向と実行境界を固定する。
 
 ### 5.2 単一 package と module 境界
 
-XRift Studio は単一 package を維持し、その中で document / command / asset processing / UI の module boundary を固定する。build、型解決、Tauri path、Preview 配布設定を同時に動かす monorepo 化は、独立 runtime または複数 consumer が実在するまで行わない（5.3）。
+XRift Studio は単一 package を維持し、その中で document / command / asset processing / UI の module boundary を固定する。build、型解決、Tauri path、プレビュー配布設定を同時に動かす monorepo 化は、独立実行環境または複数 consumer が実在するまで行わない（5.3）。
 
 後から抽出できるよう、依存方向は最初から固定する。
 
@@ -745,14 +745,14 @@ src/components/visual-editor/
   assets/
 ```
 
-依存方向は `components/visual-editor -> EditorSession façade -> documents / commands / asset API / play session` の一方向にする。`lib/visual-editor` は React、Three.js、Tauri、DOM に依存させない。UI は document mutator を直接 import せず、typed Selection、query と Command / Intent だけを EditorSession へ渡す。これにより Hierarchy、Viewport、Inspector、Assets が独自の履歴や参照解決を持つことを防ぐ。
+依存方向は `components/visual-editor -> EditorSession façade -> documents / commands / asset API / play session` の一方向にする。`lib/visual-editor` は React、Three.js、Tauri、DOM に依存させない。UI は document mutator を直接 import せず、typed Selection、query と Command / Intent だけを EditorSession へ渡す。これによりオブジェクト一覧、Viewport、設定、素材が独自の履歴や参照解決を持つことを防ぐ。
 
 entity、asset、selection、history、schema を画面実装から分けるため、次を一つの EditorSession 境界として扱う。
 
 - 独立した typed `SceneSelection` と `AssetSelection`、両方を束ねる `SelectionSnapshot`
 - `CommandDispatcher` と `CommandHistory`
 - Asset query / import / reference API
-- Component / Asset Schema と Reference API
+- コンポーネント / 素材 Schema と Reference API
 - `DropIntent = PlaceAssetIntent | ImportFilesIntent`
 - `PlaySession = WorldPlaySession | ItemPreviewSession`
 
@@ -762,26 +762,26 @@ entity、asset、selection、history、schema を画面実装から分けるた�
 
 ### 5.3 package を分ける条件
 
-次のいずれかが強い独立 runtime / consumer / release boundary として実際に発生した時点、または複数の弱い兆候が継続した時点で pnpm workspace への移行を決める。「二つ以上」を機械的な必須条件にはしない。
+次のいずれかが強い独立実行環境 / consumer / release boundary として実際に発生した時点、または複数の弱い兆候が継続した時点で pnpm workspace への移行を決める。「二つ以上」を機械的な必須条件にはしない。
 
 1. デスクトップアプリと Web エディターが、それぞれ独立した配布周期を持つ。
-2. Compiler を CLI や CI から UI なしで利用する、二つ目の実利用者ができる。または compiler 自体が独立 runtime として配布・version 管理を必要とする。
-3. Asset Processor を Worker、Node.js、WASM など別 runtime で実行する。
+2. Compiler を CLI や CI から UI なしで利用する、二つ目の実利用者ができる。または compiler 自体が独立実行環境として配布・version 管理を必要とする。
+3. 素材 Processor を Worker、Node.js、WASM など別実行環境で実行する。
 4. VisualProjectDocument / SceneDocument / AssetManifest または Registry を公開 API として SemVer 管理する必要が出る。
 5. アプリ全体を起動しないと core の test ができず、開発フィードバックが継続的に遅くなる。
 6. Tauri 専用依存と Web 専用依存の分離が、条件分岐や bundle サイズの問題を実際に起こす。
 
-ファイル数や見た目上の整理だけを移行理由にしない。逆に、上の条件が満たされた後も単一 package に留めると runtime 境界とリリース境界が曖昧になるため、その段階では分割を採る。
+ファイル数や見た目上の整理だけを移行理由にしない。逆に、上の条件が満たされた後も単一 package に留めると実行環境境界とリリース境界が曖昧になるため、その段階では分割を採る。
 
 ### 5.4 分割の順序
 
 分割する場合も一度に全面移行せず、利用者が確定した package から抽出する。
 
 1. 単一 package 内で `lib/visual-editor` を純粋ロジック、`components/visual-editor` を UI として分離する。
-2. format の Editor / Compiler consumer が独立 release または runtime を必要とした時に `packages/visual-project-format` と `packages/compiler` を抽出し、既存 import は re-export で維持する。
+2. format の Editor / Compiler consumer が独立 release または実行環境を必要とした時に `packages/visual-project-format` と `packages/compiler` を抽出し、既存 import は re-export で維持する。
 3. Web エディターの独立配布が始まった時: `apps/desktop` と `apps/web-editor` を作り、共有 UI が実在する範囲だけ `packages/editor-ui` へ移す。
-4. Asset Processor が別 runtime になった時: `packages/asset-contracts` を共有し、実装は `workers/asset-processor` または専用 app へ置く。
-5. 各段階で typecheck と開発サーバーを先に通し、Tauri、Preview、生成先のパスを一段階ずつ移す。
+4. 素材 Processor が別実行環境になった時: `packages/asset-contracts` を共有し、実装は `workers/asset-processor` または専用 app へ置く。
+5. 各段階で typecheck と開発サーバーを先に通し、Tauri、プレビュー、生成先のパスを一段階ずつ移す。
 
 到達形の候補は次の通りである。空 package を先に作らない。
 
@@ -800,33 +800,33 @@ workers/
   asset-processor/        別 runtime が必要になった場合だけ
 ```
 
-分割後も visual project format と schema を依存グラフの最下層に置き、UI、compiler、XRift adapter が相互参照しないようにする。package を増やすこと自体を設計の完成とせず、独立した利用者、runtime、リリースがあるかどうかを見て境界を決める。
+分割後も visual project format と schema を依存グラフの最下層に置き、UI、compiler、XRift adapter が相互参照しないようにする。package を増やすこと自体を設計の完成とせず、独立した利用者、実行環境、リリースがあるかどうかを見て境界を決める。
 
-## 6. アセットのライフサイクル
+## 6. 素材のライフサイクル
 
-アセットは SceneDocument から分離し、AssetManifest の安定した `assetId` で参照する。外部ファイルの import は、ファイル操作と document 更新を一つの未検証処理にしない。Box、Sphere、Plane などは Create Registry の組み込み primitive であり、ユーザーの Assets grid、import、thumbnail 管理の対象にはしない。
+素材は SceneDocument から分離し、AssetManifest の安定した `assetId` で参照する。外部ファイルの import は、ファイル操作と document 更新を一つの未検証処理にしない。Box、Sphere、Plane などは追加 Registry の組み込み primitive であり、ユーザーの素材 grid、import、thumbnail 管理の対象にはしない。
 
 ### 6.1 Import transaction
 
-1. `ImportFilesIntent` を Import Queue へ登録する。この時点では authoring document を変えない。
+1. `ImportFilesIntent` を読み込む Queue へ登録する。この時点では authoring document を変えない。
 2. ネイティブ境界または隔離 Worker で拡張子、MIME、magic bytes、サイズ、ファイル名、展開後 / decode 後サイズを検証する。
 3. `.gltf` の場合は JSON と external URI 一覧だけを budget 内で解析し、[6.7](#67-gltf-external-uri-policy) の URI policy に従って dependency closure を確定する。ネットワーク取得は行わない。
-4. Asset ID を払い出し、project root 内の一時領域へ source と許可済み dependency を byte-preserving copy して SHA-256 を計算する。
-5. Importer が Material、Texture、Model slot metadata を正規化し、`.cache/assets/<asset-id>/` に derived artifact、thumbnail、diagnostic を生成する。
-6. source、dependency、Material slot、TextureInfo、derived hash の参照整合性を検証する。
-7. source を `assets/source/<asset-id>/` へ移し、AssetManifest の追加を原子的に確定する。
-8. `assetSelection` を新しい Asset へ移し、右 Inspector で source、recipe、derived、diagnostic を表示する。`sceneSelection` と SceneDocument は変えない。
-9. Model / Prefab を Scene View へ配置した時だけ、`PlaceAssetCommand` が Asset ID を参照する Entity を作る。
+4. 素材 ID を払い出し、project root 内の一時領域へ元データと許可済み dependency を byte-preserving copy して SHA-256 を計算する。
+5. Importer がマテリアル、テクスチャ、3Dモデル slot metadata を正規化し、`.cache/assets/<asset-id>/` に derived artifact、thumbnail、diagnostic を生成する。
+6. 元データ、dependency、マテリアル枠、TextureInfo、derived hash の参照整合性を検証する。
+7. 元データを `assets/source/<asset-id>/` へ移し、AssetManifest の追加を原子的に確定する。
+8. `assetSelection` を新しい素材へ移し、右設定で元データ、recipe、derived、diagnostic を表示する。`sceneSelection` と SceneDocument は変えない。
+9. 3Dモデル / プレハブをシーンへ配置した時だけ、`PlaceAssetCommand` が素材 ID を参照するオブジェクトを作る。
 
-失敗時は一時領域を片付け、SceneDocument、AssetManifest、両 selection、history を開始前のまま保つ。再 import は同じ Asset ID の source hash と processor version を更新し、参照中 Entity の ID を変えない。material slot を再対応できない場合は binding を推測変更せず diagnostic にする。
+失敗時は一時領域を片付け、SceneDocument、AssetManifest、両 selection、history を開始前のまま保つ。再 import は同じ素材 ID の元データ hash と processor version を更新し、参照中オブジェクトの ID を変えない。マテリアル枠を再対応できない場合は binding を推測変更せず diagnostic にする。
 
-### 6.2 Source と derived の非破壊境界
+### 6.2 元ファイルと derived の非破壊境界
 
 - `assets/source/` はユーザーが選んだ元データと許可済み dependency の byte-preserving copy を保持する。resize、mipmap 生成、色空間変換、WebP / KTX2 圧縮、thumbnail 生成で上書きしない。
-- `.cache/assets/` の derived は source、dependency hashes、processing recipe、processor version、target profile から再生成できる。欠落しても source から復元できる。
-- source / derived path は project root 相対の `/` 区切りにする。OS の絶対パス、元のユーザーディレクトリ、Blob URL、署名付き URL、token を document または diagnostic に保存しない。
-- 表示名を変えても Asset ID、source hash、参照を変えない。source を差し替える再 import でも Asset ID は維持する。
-- Model 内蔵 Material は core / typed extension schema に正規化した Material Asset、image / texture / sampler は Texture Asset として作り、Mesh Component へ Material 値を inline 化しない。
+- `.cache/assets/` の derived は元データ、dependency hashes、processing recipe、processor version、target profile から再生成できる。欠落しても元データから復元できる。
+- 元データ / derived path は project root 相対の `/` 区切りにする。OS の絶対パス、元のユーザーディレクトリ、Blob URL、署名付き URL、token を document または diagnostic に保存しない。
+- 表示名を変えても素材 ID、元データ hash、参照を変えない。元データを差し替える再 import でも素材 ID は維持する。
+- 3Dモデル内蔵マテリアルは core / typed extension schema に正規化したマテリアル、image / texture / sampler はテクスチャとして作り、メッシュコンポーネントへマテリアル値を inline 化しない。
 - 最後に成功した derived は再生成中も preview に使えるが、hash が一致しなければ「古いプレビュー」と明記し、compile / upload の入力にはしない。
 
 derived metadata は少なくとも次を持つ。
@@ -850,24 +850,24 @@ DerivedArtifact
 
 ### 6.3 Texture processing recipe
 
-Texture import は一つの「最適化」checkbox にまとめず、右 Inspector で次を独立して確認できる recipe にする。
+テクスチャ import は一つの「最適化」checkbox にまとめず、右設定で次を独立して確認できる recipe にする。
 
 | Section | 設定 | 方針 |
 | --- | --- | --- |
-| 用途と色空間 | `auto / sRGB / linear` と参照 slot | `auto` は Material slot から決める。base color / emissive RGB は sRGB、metallic-roughness / normal / occlusion / alpha は linear |
-| Resize | `maxDimension` と aspect ratio 保持 | 候補は 1024 / 2048 / 4096 / source。source は target budget 内の時だけ選べる。縦横比を変えず、元画像は保持 |
-| Quality | `fast / balanced / high` | encoder ごとに意味が違うため、偽の共通 0..100 値にしない。lossy format では preset の実 encoder parameters と推定容量を詳細表示 |
+| 用途と色空間 | `auto / sRGB / linear` と参照 slot | `auto` はマテリアル枠から決める。base color / emissive RGB は sRGB、metallic-roughness / normal / occlusion / alpha は linear |
+| Resize | `maxDimension` と aspect ratio 保持 | 候補は 1024 / 2048 / 4096 / 元データ。元データは target budget 内の時だけ選べる。縦横比を変えず、元画像は保持 |
+| Quality | `fast / balanced / high` | encoder ごとに意味が違うため、偽の共通 0..100 値にしない。lossy format ではプリセットの実 encoder parameters と推定容量を詳細表示 |
 | Mipmap | `preserve / generate / none` | glTF sampler の minification filter が mipmap を使う場合、full mip chain がない `none` は warning または compile blocker |
-| Sampler | mag / min filter、wrap S / T | glTF core の sampler として扱う。mag は NEAREST / LINEAR、min は mipmap を含む6種、wrap は CLAMP / MIRRORED_REPEAT / REPEAT |
-| Compression | source / WebP / KTX2 ETC1S / KTX2 UASTC | PNG / JPEG は core。WebP は `EXT_texture_webp`、KTX2 は `KHR_texture_basisu` を出力し、fallback と `extensionsUsed` / `extensionsRequired` を明示 |
+| 画像の繰り返しと補間 | mag / min filter、wrap S / T | glTF core の sampler として扱う。mag は NEAREST / LINEAR、min は mipmap を含む6種、wrap は CLAMP / MIRRORED_REPEAT / REPEAT |
+| Compression | 元データ / WebP / KTX2 ETC1S / KTX2 UASTC | PNG / JPEG は core。WebP は `EXT_texture_webp`、KTX2 は `KHR_texture_basisu` を出力し、fallback と `extensionsUsed` / `extensionsRequired` を明示 |
 
 KTX2 では color data の容量優先に ETC1S、normal や metallic-roughness など non-color data の品質優先に UASTC を提案できるが、自動決定を隠さず recipe に残す。KTX2 は mip levels を格納できる。WebP / KTX2 は core image MIME を増やしたように扱わず、それぞれの glTF extension adapter を通す。未対応 target へは PNG / JPEG fallback を生成するか、compile を止めて必要 extension を示す。
 
-一つの source image を sRGB と linear の両用途で使う場合は、source Asset を複製せず usage-specific derived を作る。normal map を sRGB として圧縮する、base color を linear として preview する、alpha を premultiply するなど slot semantics と矛盾する recipe は確定しない。
+一つの元データ image を sRGB と linear の両用途で使う場合は、元データ素材を複製せず usage-specific derived を作る。normal map を sRGB として圧縮する、base color を linear として preview する、alpha を premultiply するなど slot semantics と矛盾する recipe は確定しない。
 
 ### 6.4 Thumbnail lifecycle
 
-Model、Texture、Material、Prefab、Particle の thumbnail は authoring Asset と別の derived artifact とする。
+3Dモデル、テクスチャ、マテリアル、プレハブ、パーティクルの thumbnail は authoring 素材と別の derived artifact とする。
 
 ```text
 pending -> generating -> ready
@@ -875,42 +875,42 @@ pending -> generating -> ready
 ready -- source/recipe/generator changed --> stale -> generating
 ```
 
-- `ready` は source hash、thumbnail recipe hash、generator version が一致した時だけにする。
-- `failed` / `stale` でも Asset card、表示名、diagnostic、再生成操作を残す。placeholder だけで Asset が消えたように見せない。
-- Model / Prefab の framing、Material の基準球、Particle の代表時刻は deterministic recipe とする。Scene light や現在 camera に依存させない。
-- Texture thumbnail は Material slot の色空間に応じた preview を用意し、linear data を base color のように gamma 表示した結果を正しい見た目として扱わない。
-- 生成中は同じ Asset の重複生成を防ぎ、取消では last-good thumbnail を維持する。
+- `ready` は元データ hash、thumbnail recipe hash、generator version が一致した時だけにする。
+- `failed` / `stale` でも素材 card、表示名、diagnostic、再生成操作を残す。placeholder だけで素材が消えたように見せない。
+- 3Dモデル / プレハブの framing、マテリアルの基準球、パーティクルの代表時刻は deterministic recipe とする。シーン light や現在 camera に依存させない。
+- テクスチャ thumbnail はマテリアル枠の色空間に応じた preview を用意し、linear data を base color のように gamma 表示した結果を正しい見た目として扱わない。
+- 生成中は同じ素材の重複生成を防ぎ、取消では last-good thumbnail を維持する。
 
 ### 6.5 Stale status と diagnostic
 
-diagnostic は `code`、`severity`、`stage`、`assetId`、任意の `sourceUri`、`materialSlot`、`fieldPath`、短い message、recovery action を持つ。元ユーザー directory の絶対パスや raw decoder error をそのまま表示・保存しない。
+diagnostic は `code`、`severity`、`stage`、`assetId`、任意の `sourceUri`、`materialSlot`、`fieldPath`、短い message、recovery action を持つ。元ユーザー directory の絶対パスや raw デコーダー error をそのまま表示・保存しない。
 
-- `stale-source`: source / dependency hash が derived と違う。
+- `stale-source`: 元データ / dependency hash が derived と違う。
 - `stale-recipe`: resize、quality、mipmap、sampler、compression が last-good derived と違う。
 - `unsupported-required-extension`: `extensionsRequired` に未対応 extension がある。
 - `unsupported-optional-extension`: core fallback は表示できるが見た目が異なる可能性がある。
 - `missing-external-resource` / `blocked-external-uri`: external URI が欠落または policy 違反。
 - `decode-budget-exceeded`: decode 前見積りが memory budget を超える。
-- `stale-material-binding`: Model 再 import 後に material slot を安全に照合できない。
-- `color-space-conflict` / `mipmap-sampler-conflict`: Texture recipe と参照用途が矛盾する。
+- `stale-material-binding`: 3Dモデル再 import 後にマテリアル枠を安全に照合できない。
+- `color-space-conflict` / `mipmap-sampler-conflict`: テクスチャ recipe と参照用途が矛盾する。
 
-Assets card は最高 severity と件数だけを示し、右 Inspector の「診断」section で対象 field と「再生成」「参照を置換」「設定を開く」「source を再選択」の一つ以上へ移動できる。warning を無視して ready と同じ表示にしない。
+素材 card は最高 severity と件数だけを示し、右設定の「診断」section で対象 field と「再生成」「参照を置換」「設定を開く」「元データを再選択」の一つ以上へ移動できる。warning を無視して ready と同じ表示にしない。
 
 ### 6.6 Browser Worker と memory budget
 
-Web / WebView importer は UI thread で glTF JSON parse、image decode、圧縮を行わない。専用 Worker に transfer 可能な buffer を渡し、処理終了、取消、project 切替で buffer、decoder、object URL、Worker を解放する。同じ ArrayBuffer の不要な複製を避け、Texture は一枚ずつ decode / encode / release する。
+Web / WebView importer は UI thread で glTF JSON parse、image decode、圧縮を行わない。専用 Worker に transfer 可能な buffer を渡し、処理終了、取消、project 切替で buffer、デコーダー、object URL、Worker を解放する。同じ ArrayBuffer の不要な複製を避け、テクスチャは一枚ずつ decode / encode / release する。
 
 security budget は公開 API ではなく調整可能な profile として次を起点にする。
 
 | Budget | 値 | 超過時 |
 | --- | --- | --- |
-| glTF JSON | 16 MiB | parse 前に拒否し、desktop processor または source 整理を案内 |
+| glTF JSON | 16 MiB | parse 前に拒否し、desktop processor または元データ整理を案内 |
 | 単一 external resource | 128 MiB | resource 名と上限を診断 |
-| source と dependency 合計 | 256 MiB | import を確定しない |
+| 元データと dependency 合計 | 256 MiB | import を確定しない |
 | external resource 数 | 256 | URI 一覧だけを示して確定しない |
 | 単一 decoded image | 128 MiB 見積り | decode 前に maxDimension の引き下げを案内 |
 | Worker decoded working set | 256 MiB | concurrency を下げ、それでも超える場合は中止 |
-| texture derived maxDimension | 既定 4096、hard cap 8192 | source は保持できても preview / derived を ready にしない |
+| texture derived maxDimension | 既定 4096、hard cap 8192 | 元データは保持できても preview / derived を ready にしない |
 | processor concurrency | 最大2、端末状況で1へ低下 | queue と進捗を表示 |
 
 image header、accessor / bufferView 範囲、KTX2 level index などから可能な限り allocation 前に見積もる。`navigator.deviceMemory` の有無だけを安全判定にせず、hard budget、実測 working set、AbortSignal を併用する。Worker crash / out-of-memory では last-saved documents と last-good derived を維持し、同じ設定の自動 retry loop を行わない。
@@ -919,30 +919,30 @@ image header、accessor / bufferView 範囲、KTX2 level index などから可�
 
 glTF 2.0 core は buffer / image に data URI と relative path を許し、client が追加 scheme を任意対応できる。XRift Studio importer はこれより厳しい allow-list を採る。
 
-- GLB 内部 bufferView、許可 MIME の data URI、drop された `.gltf` と同じ import root 内に実在する relative URI だけを受け入れる。
-- `http:`、`https:`、`file:`、その他 scheme、authority、drive letter、UNC、root absolute path、query、fragment は取得しない。Import が暗黙のネットワークアクセスにならないようにする。
+- GLB 内部 bufferView、許可 MIME の data URI、ここに移動された `.gltf` と同じ import root 内に実在する relative URI だけを受け入れる。
+- `http:`、`https:`、`file:`、その他 scheme、authority、drive letter、UNC、root absolute path、query、fragment は取得しない。読み込むが暗黙のネットワークアクセスにならないようにする。
 - percent-decode と Unicode normalization を一度だけ行い、`..`、encoded traversal、NUL、backslash 混在、symlink / junction 越しの project root 脱出を canonical path 検査で拒否する。
 - data URI は MIME allow-list、encoded length、decoded length を decode 前に検査する。base64 の膨張分も working set に数える。
-- JSON の declared byteLength、bufferView、accessor、image MIME と magic bytes を照合し、範囲外参照や type 不一致を decoder へ渡さない。
-- relative dependency は import transaction の source directory へ copy し、実行時に元 directory や remote host へ再取得しない。
+- JSON の declared byteLength、bufferView、accessor、image MIME と magic bytes を照合し、範囲外参照や type 不一致をデコーダーへ渡さない。
+- relative dependency は import transaction の元データ directory へ copy し、実行時に元 directory や remote host へ再取得しない。
 - unsupported `extensionsRequired` は active preview / compile を止める。optional extension は core fallback の可否と見た目の差を診断する。
 
 外部モデルの描画は [10 章](#10-セキュリティと認証境界) の CSP、path、content、resource limit の gate を満たしてから有効にする。
 
-Import Queue は source copy、derived / thumbnail generation、AssetManifest commit までを実処理として追跡する。各 stage が成功していない Asset を ready、保存済み、配置可能と表示しない。
+読み込む Queue は元データ copy、derived / thumbnail generation、AssetManifest commit までを実処理として追跡する。各 stage が成功していない素材を ready、保存済み、配置可能と表示しない。
 
 ### 6.8 外部リソースカタログ
 
 自分のファイル以外から素材を得る経路も、通常の import transaction の上に載せる。ブラウザで探して保存し直す手順をユーザーに要求しない。
 
-- Assets の「外部から追加」は catalog を開く。CC0 provider として Poly Haven（HDRI / Material / Model）と ambientCG（HDRI / Material、Model は検索のみ）、XRift 公式カタログとして Open Brush ブラシ Material、Skybox Shader、Water Shader、Terrain preset、発光オブジェクト、公式 Component を扱う。
-- ダウンロードは解像度と形式を選ばせ、確定前に容量の目安を示す。取得した実体は 6.1 の import transaction を通し、検証、source copy、derived 生成、manifest commit まで同じ経路で確定する。catalog 専用の抜け道を作らない。
-- catalog card は静止画のサムネイルではなく、実際の GLSL や高さフィールドを WebGL で描画する。カードで見えているものと、追加後に Scene へ入るものを一致させる。
-- 追加した Asset は作者、ライセンス、配布ページ URL を `attribution` として保持し、公開したワールドの生成物へも同じ情報を出力する。CC0 と MIT を同じ表示にせず、詳細パネルから配布ページとライセンス原文へ移動できるようにする。
-- HDRI は環境 Texture Asset として保存し、「追加後に Skybox へ設定」を選んだ場合だけ Scene settings の skybox を同じ transaction で更新する。Skybox Shader と Water Shader は Material Asset、Terrain preset は Terrain Entity 一件として追加し、追加後は通常の Asset / Entity として編集できる。
+- 素材の「外部から追加」は catalog を開く。CC0 provider として Poly Haven（HDRI / マテリアル / 3Dモデル）と ambientCG（HDRI / マテリアル、3Dモデルは検索のみ）、XRift 公式カタログとしてOpen Brushのマテリアル、空の背景シェーダー、水面シェーダー、地形プリセット、発光オブジェクト、公式コンポーネントを扱う。
+- ダウンロードは解像度と形式を選ばせ、確定前に容量の目安を示す。取得した実体は 6.1 の import transaction を通し、検証、元データ copy、derived 生成、manifest commit まで同じ経路で確定する。catalog 専用の抜け道を作らない。
+- catalog card は静止画のサムネイルではなく、実際の GLSL や高さフィールドを WebGL で描画する。カードで見えているものと、追加後にシーンへ入るものを一致させる。
+- 追加した素材は作者、ライセンス、配布ページ URL を `attribution` として保持し、公開したワールドの生成物へも同じ情報を出力する。CC0 と MIT を同じ表示にせず、詳細パネルから配布ページとライセンス原文へ移動できるようにする。
+- HDRI は環境テクスチャとして保存し、「追加後に空の背景へ設定」を選んだ場合だけシーン settings の skybox を同じ transaction で更新する。空の背景シェーダーと水面シェーダーはマテリアル、地形プリセットは地形オブジェクト一件として追加し、追加後は通常の素材 / オブジェクトとして編集できる。
 - 一時的な I/O 失敗は限定回数の再試行で吸収し、それでも失敗する場合は provider、対象ファイル、再試行手段を示して document を変更しない。
 
-## 7. Command と Undo / Redo
+## 7. Command と元に戻す / やり直す
 
 SceneDocument または AssetManifest を変える操作は、EditorSession の `CommandDispatcher` を通して Command Transaction にまとめる。
 
@@ -962,21 +962,21 @@ Command {
 ```
 
 - ギズモの pointer down で変更前スナップショットを保持する。
-- pointer move 中は Scene View と Inspector に一時値を反映する。
-- pointer up で一つの Transform Command を確定する。
+- pointer move 中はシーンと設定に一時値を反映する。
+- pointer up で一つの位置・回転・大きさ Command を確定する。
 - Escape は確定前の値を戻す。
-- Undo は `beforePatch`、Redo は `afterPatch` を対象 document の revision 検査後に適用する。
-- Transform、親子付け替え、複製、削除、Component 追加は SceneDocument の Command とする。
-- Material 変更、rename、texture slot 変更は AssetManifest の Command とする。
-- 通常の選択、hover、カメラ操作は履歴 entry にしない。ただし document 変更と選択が一体の操作では、前後 selection を transaction に含める。
-- `PlaceAssetCommand` の実行は Entity 追加と新 Entity の選択を一件にする。Undo は Entity を除き、配置前の `sceneSelection` / `assetSelection` を復元する。Redo は同じ ID の Entity を戻して再選択する。
-- Copy は document を変えず、選択 subtree、component、内部 Entity 参照、必要 Asset ID を versioned copy buffer に直列化する Intent とするため、authoring Undo 履歴には積まない。Paste は貼り付け先を検証し、新しい Entity ID を払い出し、subtree 内参照だけを remap する `PasteEntitiesCommand` とする。project 外からの copy buffer や schema version 不一致は migration / validation を通過するまで貼り付けない。
-- Duplicate は copy buffer を経由して結果が揺れない `DuplicateEntitiesCommand` とし、同じ親の直後へ複製する。元の Entity と複製 Entity の ID 対応を Command に保持し、Undo は元の `sceneSelection` と `assetSelection`、Redo は同じ複製 ID と両 selection を復元する。外部 Asset ID は共有参照のままにし、Material / Texture を暗黙複製しない。
-- Hierarchy から Assets / folder への drop は `CreatePrefabFromEntitiesCommand` とする。Prefab document、AssetManifest entry、folder membership、元 subtree の Prefab instance metadata を一つの cross-document transaction で確定し、失敗時は一件も変更しない。Undo / Redo は生成 ID、元 subtree、`sceneSelection`、`assetSelection` を完全に復元する。
-- 非同期 Import は staged file operation と AssetManifest 更新がすべて成功した場合だけ履歴へ確定する。失敗時は document、revision、selection、history を変更しない。
+- 元に戻すは `beforePatch`、やり直すは `afterPatch` を対象 document の revision 検査後に適用する。
+- 位置・回転・大きさ、親子付け替え、複製、削除、コンポーネント追加は SceneDocument の Command とする。
+- マテリアル変更、rename、texture slot 変更は AssetManifest の Command とする。
+- 通常の選択、hover、カメラ操作は履歴開始ファイルにしない。ただし document 変更と選択が一体の操作では、前後 selection を transaction に含める。
+- `PlaceAssetCommand` の実行はオブジェクト追加と新オブジェクトの選択を一件にする。元に戻すはオブジェクトを除き、配置前の `sceneSelection` / `assetSelection` を復元する。やり直すは同じ ID のオブジェクトを戻して再選択する。
+- Copy は document を変えず、選択 subtree、component、内部オブジェクト参照、必要素材 ID を versioned copy buffer に直列化する Intent とするため、authoring 元に戻す履歴には積まない。Paste は貼り付け先を検証し、新しいオブジェクト ID を払い出し、subtree 内参照だけを remap する `PasteEntitiesCommand` とする。project 外からの copy buffer や schema version 不一致は migration / validation を通過するまで貼り付けない。
+- 複製は copy buffer を経由して結果が揺れない `DuplicateEntitiesCommand` とし、同じ親の直後へ複製する。元のオブジェクトと複製オブジェクトの ID 対応を Command に保持し、元に戻すは元の `sceneSelection` と `assetSelection`、やり直すは同じ複製 ID と両 selection を復元する。外部素材 ID は共有参照のままにし、マテリアル / テクスチャを暗黙複製しない。
+- オブジェクト一覧から素材 / folder へのここに移動は `CreatePrefabFromEntitiesCommand` とする。プレハブ document、AssetManifest 開始ファイル、folder membership、元 subtree のプレハブ instance metadata を一つの cross-document transaction で確定し、失敗時は一件も変更しない。元に戻す / やり直すは生成 ID、元 subtree、`sceneSelection`、`assetSelection` を完全に復元する。
+- 非同期読み込むは staged file operation と AssetManifest 更新がすべて成功した場合だけ履歴へ確定する。失敗時は document、revision、selection、history を変更しない。
 - revision が競合した Command は暗黙に上書きせず、再読込または再適用を選べる診断にする。
 
-Command history は project session 中の確定 transaction を保持し、Undo / Redo button と shortcut は同じ履歴へ接続する。履歴が空、revision conflict、Play 中の時は理由付きで無効にする。
+Command history は project session 中の確定 transaction を保持し、元に戻す / やり直す button と shortcut は同じ履歴へ接続する。履歴が空、revision conflict、動作確認中の時は理由付きで無効にする。
 
 ### 7.1 Shortcut Registry
 
@@ -997,58 +997,58 @@ context priority は `modal > text-input / composition > quick-asset-editor > hi
 
 | Command ID | Active context | Windows / Linux | macOS | 備考 |
 | --- | --- | --- | --- | --- |
-| `edit.copy` | Hierarchy / Assets | `Ctrl+C` | `Cmd+C` | active selection を copy buffer へ保存 |
-| `edit.paste` | Hierarchy / Assets / Viewport | `Ctrl+V` | `Cmd+V` | 貼り付け可能な buffer がある時だけ |
-| `edit.duplicate` | Hierarchy / Viewport | `Ctrl+D` | `Cmd+D` | Entity subtree を複製 |
-| `edit.delete` | Hierarchy / Assets / Viewport | `Delete` | `Delete` | Asset は参照確認を通す |
+| `edit.copy` | オブジェクト一覧 / 素材 | `Ctrl+C` | `Cmd+C` | active selection を copy buffer へ保存 |
+| `edit.paste` | オブジェクト一覧 / 素材 / Viewport | `Ctrl+V` | `Cmd+V` | 貼り付け可能な buffer がある時だけ |
+| `edit.duplicate` | オブジェクト一覧 / Viewport | `Ctrl+D` | `Cmd+D` | オブジェクト subtree を複製 |
+| `edit.delete` | オブジェクト一覧 / 素材 / Viewport | `Delete` | `Delete` | 素材は参照確認を通す |
 | `viewport.focus-selection` | Viewport | `F` | `F` | `sceneSelection` へ camera focus |
-| `tool.move` | Viewport | `W` | `W` | Edit mode のみ |
-| `tool.rotate` | Viewport | `E` | `E` | Edit mode のみ |
-| `tool.scale` | Viewport | `R` | `R` | Edit mode のみ |
+| `tool.move` | Viewport | `W` | `W` | 編集 mode のみ |
+| `tool.rotate` | Viewport | `E` | `E` | 編集 mode のみ |
+| `tool.scale` | Viewport | `R` | `R` | 編集 mode のみ |
 | `history.undo` | Editor global | `Ctrl+Z` | `Cmd+Z` | active transaction が確定済みの時だけ |
-| `history.redo` | Editor global | `Ctrl+Shift+Z`、代替 `Ctrl+Y` | `Cmd+Shift+Z` | 同じ Redo command へ解決 |
-| `project.save` | Editor global | `Ctrl+S` | `Cmd+S` | Play 中は保存可能な authoring snapshot がある時だけ |
-| `preview.toggle-play` | Editor global | `Ctrl+Enter` | `Cmd+Enter` | Edit は Play、Play は Stop |
+| `history.redo` | Editor global | `Ctrl+Shift+Z`、代替 `Ctrl+Y` | `Cmd+Shift+Z` | 同じやり直す command へ解決 |
+| `project.save` | Editor global | `Ctrl+S` | `Cmd+S` | 動作確認中は保存可能な authoring snapshot がある時だけ |
+| `preview.toggle-play` | Editor global | `Ctrl+Enter` | `Cmd+Enter` | 編集は動作確認、動作確認は停止 |
 
-`input`、`textarea`、`select`、`contenteditable`、数値 field の編集中、IME composition 中は `allowInTextInput = false` の shortcut を実行しない。したがって `W/E/R/F/Delete/C/V/D` は文字入力や値削除を奪わない。Escape による field 編集取消、Enter による確定など field 所有の key は Shortcut Registry より先に処理する。Play 中は authoring shortcut の `canExecute` を false にし、Stop と camera / runtime 用 input だけを active にする。
+`input`、`textarea`、`select`、`contenteditable`、数値 field の編集中、IME composition 中は `allowInTextInput = false` の shortcut を実行しない。したがって `W/E/R/F/Delete/C/V/D` は文字入力や値削除を奪わない。Escape による field 編集取消、Enter による確定など field 所有の key は Shortcut Registry より先に処理する。動作確認中は authoring shortcut の `canExecute` を false にし、停止と camera / 実行環境用 input だけを active にする。
 
 toolbar、context menu、command palette、tooltip、Shortcut 設定、ユーザー向けショートカット表は同じ Registry から label、binding、enabled reason を生成する。docs の既定 shortcut 表も Registry snapshot から検査可能にし、UI と文書の drift を CI で検出する。
 
 ## 8. Prefabs
 
-Prefab は、ユーザーが用意するテクスチャ、パーティクル、モデル、設定済みコンポーネント群を Entity subtree として再利用する単位である。UI、schema、folder 名では `Prefab` に統一する。
+プレハブは、ユーザーが用意するテクスチャ、パーティクル、モデル、設定済みコンポーネント群をオブジェクト subtree として再利用する単位である。UI、schema、folder 名では `Prefab` に統一する。
 
-- Hierarchy の一つ以上の root Entity を Assets または folder へ drag するか、context menu の「選択から Prefab を作成」で開始する。drop 中は作成先 folder と dependency 件数を示し、Scene View への reparent と混同しない。
-- Prefab Asset は AssetManifest に stable `prefabAssetId` と `prefabDocumentPath` を持ち、`scenes/prefabs/<prefab-id>.scene.json` の versioned document を参照する。
-- dependency closure は選択 root 以下の Entity、Component、subtree 内参照、参照する Model、Texture、Material、Particle、入れ子 Prefab ID を含む。Asset binary は複製せず stable Asset ID で共有し、外部参照と入れ子循環を validation する。portable package 化は別の明示操作とし、Prefab 作成時に source file を隠れてコピーしない。
-- 作成成功では選択 subtree を同じ見た目の Prefab Instance に変換し、`prefabAssetId`、`prefabRevision`、prefab-local Entity ID と scene Entity ID の対応を保持する。Asset grid は新 Prefab を選択し、`sceneSelection` は元 root に対応する instance root を保つ。
-- Instance 差分は `overrides` に `prefabEntityId / componentType / fieldPath / value` の typed operation として保持する。Prefab 更新時は override のない field だけを追従し、削除された field や依存切れは conflict diagnostic にする。名前や配列 index だけで override を対応しない。
-- 「Override を適用」「元に戻す」は対象 field または component 単位の Command とする。Prefab Asset 自体の変更と一 instance の override を同じ Inspector field で曖昧に編集しない。
-- Unpack は Instance を通常 Entity 群へ変換する一方向 Command とし、Prefab Asset と他 instance は変更しない。Undo では同じ IDs、overrides、両 selection を復元する。
-- Prefab を削除する時は全 instance と入れ子参照を列挙し、Unpack、置換、取消のいずれかを選ばせる。参照中のまま dangling ID を残さない。
-- Prefab 化した subtree の元 Entity を削除しても、Prefab Asset と Prefab document は独立して保存できる状態を保つ。
+- オブジェクト一覧の一つ以上の root オブジェクトを素材または folder へ drag するか、context menu の「選択からプレハブを作成」で開始する。ここに移動中は作成先 folder と dependency 件数を示し、シーンへの reparent と混同しない。
+- プレハブは AssetManifest に stable `prefabAssetId` と `prefabDocumentPath` を持ち、`scenes/prefabs/<prefab-id>.scene.json` の versioned document を参照する。
+- dependency closure は選択 root 以下のオブジェクト、コンポーネント、subtree 内参照、参照する 3Dモデル、テクスチャ、マテリアル、パーティクル、入れ子プレハブ ID を含む。素材 binary は複製せず stable 素材 ID で共有し、外部参照と入れ子循環を validation する。portable package 化は別の明示操作とし、プレハブ作成時に元データ file を隠れてコピーしない。
+- 作成成功では選択 subtree を同じ見た目のプレハブの配置に変換し、`prefabAssetId`、`prefabRevision`、prefab-local オブジェクト ID と scene オブジェクト ID の対応を保持する。素材 grid は新プレハブを選択し、`sceneSelection` は元 root に対応する instance root を保つ。
+- Instance 差分は `overrides` に `prefabEntityId / componentType / fieldPath / value` の typed operation として保持する。プレハブ更新時は override のない field だけを追従し、削除された field や依存切れは conflict diagnostic にする。名前や配列 index だけで override を対応しない。
+- 「Override を適用」「元に戻す」は対象 field または component 単位の Command とする。プレハブ自体の変更と一 instance の override を同じ設定 field で曖昧に編集しない。
+- Unpack は Instance を通常オブジェクト群へ変換する一方向 Command とし、プレハブと他 instance は変更しない。元に戻すでは同じ IDs、overrides、両 selection を復元する。
+- プレハブを削除する時は全 instance と入れ子参照を列挙し、Unpack、置換、取消のいずれかを選ばせる。参照中のまま dangling ID を残さない。
+- プレハブ化した subtree の元オブジェクトを削除しても、プレハブとプレハブ document は独立して保存できる状態を保つ。
 
-Create palette の組み込み形状は Create Registry が提供する Entity geometry であり、Prefab Asset として Assets へ保存しない。
+追加 palette の組み込み形状は追加 Registry が提供するオブジェクト geometry であり、プレハブとして素材へ保存しない。
 
 ## 9. XRift への変換パイプライン
 
 ビジュアル project の変換は、authoring project を classic project へ書き換えず、一時 staging project を作る一方向パイプラインにする。
 
-### 9.1 Save transaction と crash recovery
+### 9.1 保存 transaction と crash recovery
 
-保存対象は VisualProjectDocument、entry SceneDocument、AssetManifest の三 document だけではない。`assets/folders.json`、すべての Prefab document、追加 scene、document が参照する source metadata も同じ save set として扱う。source binary / derived cache の確定は [6 章](#6-アセットのライフサイクル) の import transaction が担当し、通常の Save が画像を再圧縮したり cache を正本へ昇格したりしない。
+保存対象は VisualProjectDocument、開始ファイル SceneDocument、AssetManifest の三 document だけではない。`assets/folders.json`、すべてのプレハブ document、追加 scene、document が参照する元データ metadata も同じ save set として扱う。元データ binary / derived cache の確定は [6 章](#6-素材のライフサイクル) の import transaction が担当し、通常の保存が画像を再圧縮したり cache を正本へ昇格したりしない。
 
-1. Save 開始時の各 document revision と `sceneSelection` / `assetSelection` を snapshot し、in-memory schema、参照、path、Prefab cycle を検証する。
+1. 保存開始時の各 document revision と `sceneSelection` / `assetSelection` を snapshot し、in-memory schema、参照、path、プレハブ cycle を検証する。
 2. 同一 project volume の `.xrift-studio/transactions/<transaction-id>/` に canonical JSON の temporary file を全件書き、flush 後に読み戻して schema と SHA-256 を検証する。project 外の OS temporary directory から rename しない。
 3. journal に transaction ID、base / next save revision、対象 relative path、before / after hash、temporary path、状態 `prepared` を記録する。token、absolute path、Blob URL は含めない。
-4. Tauri backend の same-volume atomic replace で leaf document と folder / Prefab document を確定し、最後に VisualProjectDocument の `saveCommitId` と document hash set を commit marker として置き換える。複数 file の rename 自体を単一 OS atomic operation とは主張せず、最後の commit marker と journal で project 全体の可視 revision を決める。
+4. Tauri backend の same-volume atomic replace で leaf document と folder / プレハブ document を確定し、最後に VisualProjectDocument の `saveCommitId` と document hash set を commit marker として置き換える。複数 file の rename 自体を単一 OS atomic operation とは主張せず、最後の commit marker と journal で project 全体の可視 revision を決める。
 5. 全 hash と committed revision が一致した時だけ journal を `committed` とし、EditorSession の saved revisions を進めて「未保存」を解除する。その後に temporary file と旧 backup を回収する。
 
-起動時に未完了 journal があれば、commit marker と file hashes から「旧 revision へ rollback」または「全 after hash が揃った transaction を roll-forward」の一方だけを選び、ユーザーへ復旧内容を示す。途中 file を現在 document と混ぜて推測ロードしない。Save 失敗時は最後に committed な revision を開ける状態に保ち、EditorSession は dirty のまま、再試行、別名保存、診断表示を選べるようにする。Save 中に編集された新 revision はその完了表示へ含めず、直後も「未保存」を残す。
+起動時に未完了 journal があれば、commit marker と file hashes から「旧 revision へ rollback」または「全 after hash が揃った transaction を roll-forward」の一方だけを選び、ユーザーへ復旧内容を示す。途中 file を現在 document と混ぜて推測ロードしない。保存失敗時は最後に committed な revision を開ける状態に保ち、EditorSession は dirty のまま、再試行、別名保存、診断表示を選べるようにする。保存中に編集された新 revision はその完了表示へ含めず、直後も「未保存」を残す。
 
-保存の Undo / Redo は作らない。Undo / Redo は authoring state を変え、Save は現在 revision を durable にする操作である。保存後に Undo した場合は通常どおり新しい未保存 revision になる。
+保存の元に戻す / やり直すは作らない。元に戻す / やり直すは authoring state を変え、保存は現在 revision を durable にする操作である。保存後に元に戻すした場合は通常どおり新しい未保存 revision になる。
 
-### 9.2 Compiler staging と provenance
+### 9.2 Compiler staging と生成元の記録
 
 ```text
 VisualProjectDocument + SceneDocument + AssetManifest
@@ -1064,17 +1064,17 @@ VisualProjectDocument + SceneDocument + AssetManifest
   -> upload
 ```
 
-このパイプラインは実装境界であり、ビジュアルモードの操作手順として露出しない。同じエディターの Play を押し、Scene View 内で確認し、Stop で Edit へ戻る。Vite のポート、CLI コマンド、開発サーバー、別ブラウザの URL を選んだり起動したりする必要はない。
+このパイプラインは実装境界であり、ビジュアルモードの操作手順として露出しない。同じエディターの動作確認を押し、シーン内で確認し、停止で編集へ戻る。Vite のポート、CLI コマンド、開発サーバー、別ブラウザの URL を選んだり起動したりする必要はない。
 
-compiler core は出力 adapter を二つ持つ。desktop の Publish、Classic export CLI、Editor からの既存 Classic 追加は `classic-jsx`、ブラウザ版アップロードだけが事前ビルドの shell 向けに `classic-runtime` を選ぶ。これは Scene 変換器の複製ではなく、同じ検証、Prefab 展開、Asset plan、diagnostics、provenance から出力 adapter だけを切り替える境界である。
+compiler core は出力 adapter を二つ持つ。desktop の Publish、コード編集 export CLI、Editor からの既存コード編集追加は `classic-jsx`、ブラウザ版アップロードだけが事前ビルドの shell 向けに `classic-runtime` を選ぶ。これはシーン変換器の複製ではなく、同じ検証、プレハブ展開、素材 plan、diagnostics、生成元の記録から出力 adapter だけを切り替える境界である。
 
-Editor Play は visual documents を Three / R3F preview adapter が直接読むため、Node.js、XRift CLI、別の Vite process を要求しない。toolchain がなくてもビジュアル project を作成・編集・保存できる。Compiler、check、upload を実行する時だけ runtime gate で Node.js / XRift CLI / 認証状態を検査し、不足時は authoring を閉じずにセットアップ導線を示す。
+Editor 動作確認は visual documents を Three / R3F preview adapter が直接読むため、Node.js、XRift CLI、別の Vite process を要求しない。toolchain がなくてもビジュアル project を作成・編集・保存できる。Compiler、check、upload を実行する時だけ実行環境 gate で Node.js / XRift CLI / 認証状態を検査し、不足時は authoring を閉じずにセットアップ導線を示す。
 
-staging project の runtime 確認も準備と終了をエディターが管理し、Scene View または同一ウィンドウ内の隔離された preview surface に表示する。準備に時間がかかる場合は「生成結果を準備中」と Stop を示し、CLI の生ログは詳細表示へ分離する。自動で外部ブラウザを開かない。公開が失敗した場合は CLI とビルドの出力を捨てず、失敗した stage と併せて読める形で残す。
+staging project の実行環境確認も準備と終了をエディターが管理し、シーンまたは同一ウィンドウ内の隔離された preview surface に表示する。準備に時間がかかる場合は「生成結果を準備中」と停止を示し、CLI の生ログは詳細表示へ分離する。自動で外部ブラウザを開かない。公開が失敗した場合は CLI とビルドの出力を捨てず、失敗した stage と併せて読める形で残す。
 
-compile input fingerprint は canonical 化した全 authoring documents、Prefab / folder documents、参照する source / dependency hashes、derived recipe / artifact hashes、schema versions、compiler version、target (`world | item`)、Registry / adapter versions から作る。現在の fingerprint と一致する成功 staging だけを fresh とし、mtime や「一度ビルドした」flag で判断しない。Save 後でも compiler version、target、asset recipe のいずれかが変われば stale である。
+compile input fingerprint は canonical 化した全 authoring documents、プレハブ / folder documents、参照する元データ / dependency hashes、derived recipe / artifact hashes、schema versions、compiler version、target (`world | item`)、Registry / adapter versions から作る。現在の fingerprint と一致する成功 staging だけを fresh とし、mtime や「一度ビルドした」flag で判断しない。保存後でも compiler version、target、asset recipe のいずれかが変われば stale である。
 
-staging には生成物と別に次の provenance manifest を置く。
+staging には生成物と別に次の生成元の記録 manifest を置く。
 
 ```text
 XRiftStudioProvenance
@@ -1086,60 +1086,60 @@ XRiftStudioProvenance
   sourceMappings[]: generatedRange -> sceneId / entityId / componentType / assetId / fieldPath
 ```
 
-生成内容へ wall-clock time、absolute path、random ID を入れない。同じ fingerprint から byte-equivalent な staging を得る。生成時刻のような UI metadata が必要なら provenance hash の外に置く。Preview、check、upload の開始直前に fingerprint と全 generated file hash を再検証し、stale または手編集を検出したら自動再生成か中止を選ばせる。last-good staging を「最新」と偽らない。
+生成内容へ wall-clock time、absolute path、random ID を入れない。同じ fingerprint から byte-equivalent な staging を得る。生成時刻のような UI metadata が必要なら生成元の記録 hash の外に置く。プレビュー、check、upload の開始直前に fingerprint と全 generated file hash を再検証し、stale または手編集を検出したら自動再生成か中止を選ばせる。last-good staging を「最新」と偽らない。
 
-ここでいう双方向性は、XRift Studio が生成した artifact の diagnostic、generated range、check result、upload result を provenance により元 Entity / Asset / field へ戻せることを指す。これとは別に、既存Classicの検査済みentryとrelative importで到達するlocal moduleから、対応する静的JSXを一度Visualへ取り込むlossy importを提供する。任意コードの実行、Asset graph、`package.json`、`xrift.json`を完全なvisual documentsへ戻すround-tripとは扱わず、未対応箇所を診断へ残す。generated file の編集を検出した場合は上書き再生成または Export / Eject を選ばせ、差分を元authoring documentへ自動反映しない。
+ここでいう双方向性は、XRift Studio が生成した artifact の diagnostic、generated range、check result、upload result を生成元の記録により元オブジェクト / 素材 / field へ戻せることを指す。これとは別に、既存コード編集の検査済み開始ファイルとrelative importで到達するlocal moduleから、対応する静的JSXを一度ビジュアル編集へ取り込むlossy importを提供する。任意コードの実行、素材 graph、`package.json`、`xrift.json`を完全なvisual documentsへ戻すround-tripとは扱わず、未対応箇所を診断へ残す。generated file の編集を検出した場合は上書き再生成または書き出す / Eject を選ばせ、差分を元authoring documentへ自動反映しない。
 
 ### 9.3 Validation / Migration
 
-- 三つの root document と参照される Scene / Prefab / folder document の `schemaVersion` を必須にし、依存順に段階的に移行する（[4.10](#410-schemaversion-と-migration)）。
+- 三つの root document と参照されるシーン / プレハブ / folder document の `schemaVersion` を必須にし、依存順に段階的に移行する（[4.10](#410-schemaversion-と-migration)）。
 - migration は元データを直接壊さず、移行後のコピーを検証してから保存する。
-- path、Entity、Component、Asset、Material / texture slot の参照整合性、有限数、許容スケール、親子循環を検査する。
-- world / item ごとの許容 Component と必須設定を profile で検査する。
+- path、オブジェクト、コンポーネント、素材、マテリアル / texture slot の参照整合性、有限数、許容スケール、親子循環を検査する。
+- world / item ごとの許容コンポーネントと必須設定を profile で検査する。
 - 生成コードは公開テンプレートと同じ TypeScript 設定で検査する。同じ識別子を型 import と値 import で二重に束縛しないなど、テンプレート側の `strict` / `noUnusedLocals` / `noUnusedParameters` に違反する出力を作らない。この検査は fixture として CI で実行する。
 
 ### 9.4 Code Generation
 
-- `classic-runtime` mode は `public/xrift-runtime.json` と薄い adapter を生成する。ブラウザ版アップロードの事前ビルド shell だけがこれを使う。desktop の Publish と Classic export は `classic-jsx` mode を使う。`xrift-studio-runtime` は npm 未公開なので、これを import する出力を Classic project へ置くとビルドできない。
+- `classic-runtime` mode は `public/xrift-runtime.json` と薄い adapter を生成する。ブラウザ版アップロードの事前ビルド shell だけがこれを使う。desktop の Publish とコード編集 export は `classic-jsx` mode を使う。`xrift-studio-runtime` は npm 未公開なので、これを import する出力をコード編集のプロジェクトへ置くとビルドできない。
 - 出力先は OS の一時ディレクトリまたは visual project の `.cache/generated-xrift/` とし、authoring root に `package.json` や `src/` を生成しない。
-- staging project 全体を compiler 所有とし、自動生成 marker と source document hash を記録する。次回 compile で破棄・再生成でき、ユーザー編集は受け付けない。
-- `public/xrift-runtime.json`は編集用documentを直接公開せず、実行時に必要なScene、Entity、Transform、Component、Asset URLだけを持つ`xrift-studio.runtime` schemaへ変換する。
-- `classic-runtime`の`src/World.tsx`または`src/Item.tsx`は`xrift-studio-runtime/react-three-fiber`を呼ぶ薄いadapterとする。`classic-jsx`のentryはScene全体のJSXと、Playと同じruntime moduleの`src/xrift-studio/`を生成する。どちらも正本はVisual documentであり、生成物を編集しても戻さない。
-- 素のThree.js利用者は`xrift-studio-runtime/three`だけをimportでき、React／Tauri／CLIをbundleへ含めない。ModelとTextureは並列にloadし、形式固有rendererは対象Assetがある場合だけ遅延loadする。
-- Entity、Asset、プロパティの出力順を安定させ、同じ canonical input set と compiler / adapter version から同じ staging project を生成する。
-- Component / Asset Registry は target-neutral な schema、reference、validation 層と、Three preview、R3F、XRift world、XRift item の target adapter 層に分ける。
-- Mesh、Light などは allow-list 済み adapter だけで変換する。document 内の文字列を `eval`、`Function`、任意の動的 import として実行しない。この禁止は生成コードに対して無条件に維持する。Script Asset は document 内の文字列ではなく独立した source file であり、生成コードへは**静的 import** としてだけ出力する（[4.8 Scripting](#48-scripting-script-asset--script-component)）。
+- staging project 全体を compiler 所有とし、自動生成 marker と元データ document hash を記録する。次回 compile で破棄・再生成でき、ユーザー編集は受け付けない。
+- `public/xrift-runtime.json`は編集用documentを直接公開せず、実行時に必要なシーン、オブジェクト、位置・回転・大きさ、コンポーネント、素材 URLだけを持つ`xrift-studio.runtime` schemaへ変換する。
+- `classic-runtime`の`src/World.tsx`または`src/Item.tsx`は`xrift-studio-runtime/react-three-fiber`を呼ぶ薄いadapterとする。`classic-jsx`の開始ファイルはシーン全体のJSXと、動作確認と同じ実行環境 moduleの`src/xrift-studio/`を生成する。どちらも正本はビジュアル編集 documentであり、生成物を編集しても戻さない。
+- 素のThree.js利用者は`xrift-studio-runtime/three`だけをimportでき、React／Tauri／CLIをbundleへ含めない。3Dモデルとテクスチャは並列にloadし、形式固有rendererは対象素材がある場合だけ遅延loadする。
+- オブジェクト、素材、プロパティの出力順を安定させ、同じ canonical input set と compiler / adapter version から同じ staging project を生成する。
+- コンポーネント / 素材 Registry は target-neutral な schema、reference、validation 層と、Three preview、R3F、XRift world、XRift item の target adapter 層に分ける。
+- メッシュ、ライトなどは allow-list 済み adapter だけで変換する。document 内の文字列を `eval`、`Function`、任意の動的 import として実行しない。この禁止は生成コードに対して無条件に維持する。スクリプトは document 内の文字列ではなく独立した元データ file であり、生成コードへは**静的 import** としてだけ出力する（[4.8 スクリプト](#48-scripting-script-asset--script-component)）。
 
-World Adapter はワールドのルート、物理、スポーンなどの compiler profile を接続する。Item Adapter は XRift から渡される位置やスケールなどの Item props をルートへ適用し、アイテム用 profile にない機能を生成しない。これら compiler adapter と、Editor 内の World Play Profile / Item Preview Profile は責務が異なる。
+ワールド Adapter はワールドのルート、物理、スポーンなどの compiler profile を接続する。アイテム Adapter は XRift から渡される位置やスケールなどのアイテム props をルートへ適用し、アイテム用 profile にない機能を生成しない。これら compiler adapter と、Editor 内のワールド動作確認 Profile / アイテムプレビュー Profile は責務が異なる。
 
-### 9.5 Preview 経路の選択
+### 9.5 プレビュー経路の選択
 
 「動作を確認する」には複数の経路があり得るため、公式に契約が定義されている経路と、そうでない経路を分けて採用する。公式ドキュメントに記載のない API を前提にした UI を作らない。
 
 | 経路 | 公式に確認できる契約 | XRift Studio の採用 |
 | --- | --- | --- |
-| Editor direct preview | XRift 固有 API ではない。visual documents を Three / R3F adapter が読める | 採用する。Edit / Play に使い、XRift 本番 runtime と同一とは表示しない |
+| Editor direct preview | XRift 固有 API ではない。visual documents を Three / R3F adapter が読める | 採用する。編集 / 動作確認に使い、XRift 本番実行環境と同一とは表示しない |
 | classic item の local preview | item tutorial が `npm run dev`、`src/dev.tsx`、`localhost:5173` の Canvas / Physics / OrbitControls preview を示す | 制約付きで採用する。generated staging 検査に使い、Node / template / port lifecycle を Editor が管理する。Editor direct preview とは別 profile |
 | XRift CLI preview command | command reference には login / whoami / create / upload / check があり、preview command はない | 使わない。存在を仮定した command や UI を作らない |
 | SDK upload | `@xrift/sdk` は world / item upload、progress、result の ID / version / content hash を定義する | upload の根拠としてだけ使う。preview API の根拠にはしない。desktop は既存 CLI / Tauri 認証境界を優先する |
 | Public API v1 | 公開 world、公開 instance などの read endpoint を定義する | 未公開 staging の実行面として使わない |
 | XRift 上の unpublished / draft preview | CLI、SDK、Public API に契約の記載がない | 設計上の依存にしない。公式 auth、lifecycle、URL、cleanup contract が公開された時点で再評価する |
 
-「Play」は Editor direct preview、「生成結果を確認」は staging の local dev preview と明確に分ける。後者は Editor が server 起動、ready 検知、sandboxed surface、Stop、port 解放、stderr redaction を管理する。CLI `upload` は build と審査 / 公開へ進むため preview button の代替に使わず、実データを送信する通常検証もしない。
+「動作確認」は Editor direct preview、「生成結果を確認」は staging の local dev preview と明確に分ける。後者は Editor が server 起動、ready 検知、sandboxed surface、停止、port 解放、stderr redaction を管理する。CLI `upload` は build と審査 / 公開へ進むため preview button の代替に使わず、実データを送信する通常検証もしない。
 
 ### 9.6 Upload modal と既存 XRift flow
 
 Upload は editor の light theme 内に専用 modal を開き、既存の `whoami` / `login`、公開準備確認、種別別 `check --build`、`upload` 実装を再利用する。別の token store、shell command builder、公開 metadata schema を visual mode 専用に複製しない。
 
-公式 CLI が同じ公開先を更新するための remote ID は `xrift.json` ではなく、World では `.xrift/world.json`、Item では `.xrift/item.json` に保存される。Visual project はこの CLI sidecar を authoring root の非表示・編集不可 metadata として保持し、毎回作り直す staging へ upload 前に復元する。staging には `projectId` と成果物種別を持つ app-owned owner marker を最後に書き、次回 staging を消す前にも CLI sidecar を authoring project へ回収する。upload 成功後は CLI が更新した sidecar を authoring project へ journal 付きで戻してから成功結果を確定し、`lastPublication` には UI で表示する ID と結果を同期する。既存 sidecar、`lastPublication`、owner marker、CLI result の ID が一致しない場合、または以前の ID を一意に復元できない場合は、新しい remote を重複作成しないよう upload / retry を停止する。
+公式 CLI が同じ公開先を更新するための remote ID は `xrift.json` ではなく、ワールドでは `.xrift/world.json`、アイテムでは `.xrift/item.json` に保存される。ビジュアル編集のプロジェクトはこの CLI 付属ファイルを authoring root の非表示・編集不可 metadata として保持し、毎回作り直す staging へ upload 前に復元する。staging には `projectId` と成果物種別を持つ app-owned owner marker を最後に書き、次回 staging を消す前にも CLI 付属ファイルを authoring project へ回収する。upload 成功後は CLI が更新した付属ファイルを authoring project へ journal 付きで戻してから成功結果を確定し、`lastPublication` には UI で表示する ID と結果を同期する。既存付属ファイル、`lastPublication`、owner marker、CLI result の ID が一致しない場合、または以前の ID を一意に復元できない場合は、新しい remote を重複作成しないよう upload / retry を停止する。
 
 | State | 表示と動作 | 取消 / 失敗からの戻り先 |
 | --- | --- | --- |
-| `review` | target、タイトル、説明、thumbnail、既存 worldId / itemId、保存・compile freshness、diagnostic 件数を表示。未編集 placeholder や blocker を field 近くに示す | 閉じると Edit。document と remote は不変 |
+| `review` | target、タイトル、説明、thumbnail、既存 worldId / itemId、保存・compile freshness、diagnostic 件数を表示。未編集 placeholder や blocker を field 近くに示す | 閉じると編集。document と remote は不変 |
 | `auth-check` | `whoami` の結果を表示し、未認証なら既存 login 導線を同じ modal から開始 | login 取消後も metadata 入力を保持して `review` |
 | `saving` | 9.1 の transaction と対象 revision を表示 | safe point で取消し、未完了 save は journal recovery 対象。remote は不変 |
 | `compiling` | input fingerprint、target、asset processing、生成件数を段階表示 | worker / compiler を取消して `review`。last-good を latest 扱いしない |
-| `checking` | 既存 check/build の APPROVE / REVIEW / REJECT と provenance 上の Entity / Asset link を表示 | local process を取消して `review`。REJECT は upload へ進めない |
+| `checking` | 既存 check/build の APPROVE / REVIEW / REJECT と生成元の記録上のオブジェクト / 素材 link を表示 | local process を取消して `review`。REJECT は upload へ進めない |
 | `uploading` | files、bytes、current file、content hash、remote target を表示 | remote commit 前だけ取消可能。開始後の cancel は best effort と明記し、結果不明なら status 確認まで再 upload しない |
 | `processing` | upload 後の自動審査中であり未公開かもしれないことを表示 | modal を閉じても result ID を保持。公開完了とは表示しない |
 | `succeeded` | SDK / CLI が返した worldId / itemId、versionId、versionNumber、contentHash を表示 | 「Editor に戻る」と「結果をコピー」。公式 result が URL を返した時だけ URL を開く |
@@ -1149,25 +1149,25 @@ SDK API reference の upload result は ID、version、content hash を定義す
 
 自動テスト、E2E、手動 UI 検証は compile / check までを fake backend または fixture で行い、実 XRift upload を実行しない。実 upload はユーザーが modal の最終確認を明示実行した本番操作だけに限定する。
 
-### 9.7 Classic と Visual の境界
+### 9.7 コード編集とビジュアル編集の境界
 
-- classic projectはlocal folderまたはnative境界で浅くcloneしたHTTPS / git SSH Repositoryから`package.json`、`xrift.json`、同種の`src/World.tsx`または`src/Item.tsx`を検査し、file数、総容量、symlink、source graph byte上限を適用する。entryからrelative importを再帰解決し、moduleは実行せず、静的JSXとliteralをlossy importする。`group`、RigidBody、対応Drei / XRift wrapper、local Component instanceを独立Entityとして保持し、その親子関係とlocal Transformの下へ標準Geometry、R3F Light、Collider、typed XRift Componentを配置する。local Model、Texture、MP3 / WAVは通常のAsset import transactionで保存し、sphere / BackSide画像はSkybox、`new Audio`はAudio Sourceへ接続する。確定前reviewでも同じtransactionをfile書き込みなしで準備し、Asset原本容量、Texture解像度と展開量、Model bounds、Model import scale、親を含む配置Scale、配置後寸法を提示する。`THREE.ShaderMaterial`はGLSL、literal uniform、Texture sampler、mesh名variantだけをCustom Material IRへ変換し、元Model slot、Editor Preview、compilerへ同じdescriptorを渡す。OBJ内で明示されたCollider mesh名はnamed submesh参照として復元し、root Modelを通らないnamed nodeへModel import scaleと中心offsetを明示適用して可視Modelとphysics寸法を揃える。RigidBodyはCollider形状と分離した親EntityのComponentとしてfixed / dynamic / kinematic type、静的な一般設定、auto collider方式を保持する。Playとcompilerは次のnested RigidBody境界までのsubtree Mesh / Colliderを同じRapier Bodyへ戻し、親原点へ代替Colliderを生成しない。hook、callback、条件分岐、動的collection、解決できないAsset dependencyはsource path付き診断へ残す。完全なround-tripや暗黙の継続同期は提供しない。
-- visual project 内に手書き `src/` や、生成対象外 adapter を混在させない。拡張は versioned Component / Asset / runtime plugin contract として明示的に設計する。
-- CLIのExport / Ejectは`xrift-studio convert <visual-project> --to classic --out <directory>`と同じcompiler coreを使い、新しい空directoryへ公開時と同じ`classic-jsx`ソースを持つClassic projectを作る。Script source、Asset、decoder、fontも同じprojectへコピーし、公式テンプレートの依存関係だけでビルドできる状態にする。
-- Desktop Editorの「Classicへ書き出す」はOS folder pickerで同種の既存Classic projectを検査し、生成した`src/`一式をVisual Project IDごとの`src/xrift-studio/<id>/`へ相対importを保ったまま移し、`Scene.tsx`から`XriftStudioScene`として公開する。Asset、decoder、fontは公開Worldが直下しか配信しないため`public/`直下へ置き、provenanceとexport manifestは`.xrift-studio/exports/<id>/`へ置く。既存`xrift.json`、thumbnail、entryは既定で変更しない。前回のexportが記録したfileのうち今回生成しないものは取り除き、手書きfileとbackupには触れない。
-- 既存Classicへの追加はcomponent接続を既定とし、entry切替はbackupと明示確認を必要とする。npmだけ固定allow-listのdependency installを自動化し、他package managerのlockfileをnpmで混在させない。
-- Eject先の`package.json`、`xrift.json`、`src/`、`public/xrift/`はユーザー所有へ移す。由来とhashを`.xrift-studio/export-manifest.json`へ残すが、自動同期やVisualへの逆変換は行わない。
-- `--update`は同じVisual project由来で、manifest記録後にfile追加・削除・変更がないexportだけに許可する。Classic側を編集した後は更新を拒否し、既存directoryへの混在や`--force`を提供しない。
-- Eject transactionは一方向であり、Eject先の変更を元のVisual projectへ自動同期しない。戻す場合は別Visual projectまたは明示したScene追加として静的lossy importを行う。sourceとoutputが同一または親子になる配置も拒否する。
+- classic projectはlocal folderまたはnative境界で浅くcloneしたHTTPS / git SSH Repositoryから`package.json`、`xrift.json`、同種の`src/World.tsx`または`src/Item.tsx`を検査し、file数、総容量、symlink、元データ graph byte上限を適用する。開始ファイルからrelative importを再帰解決し、moduleは実行せず、静的JSXとliteralをlossy importする。`group`、RigidBody、対応Drei / XRift wrapper、local コンポーネント instanceを独立オブジェクトとして保持し、その親子関係とlocal 位置・回転・大きさの下へ標準形状、R3F ライト、衝突判定、typed XRiftのコンポーネントを配置する。local 3Dモデル、テクスチャ、MP3 / WAVは通常の素材 import transactionで保存し、sphere / BackSide画像は空の背景、`new Audio`は音源へ接続する。確定前reviewでも同じtransactionをfile書き込みなしで準備し、素材原本容量、テクスチャ解像度と展開量、3Dモデル bounds、3Dモデル import scale、親を含む配置大きさ、配置後寸法を提示する。`THREE.ShaderMaterial`はGLSL、literal uniform、テクスチャ sampler、メッシュ名variantだけをCustom マテリアル IRへ変換し、元3Dモデル slot、Editor プレビュー、compilerへ同じdescriptorを渡す。OBJ内で明示された衝突判定メッシュ名はnamed submesh参照として復元し、root 3Dモデルを通らないnamed ノードへ3Dモデル import scaleと中心offsetを明示適用して可視3Dモデルとphysics寸法を揃える。RigidBodyは衝突判定形状と分離した親オブジェクトのコンポーネントとしてfixed / dynamic / kinematic type、静的な一般設定、auto collider方式を保持する。動作確認とcompilerは次のnested RigidBody境界までのsubtree メッシュ / 衝突判定を同じRapier Bodyへ戻し、親原点へ代替衝突判定を生成しない。hook、callback、条件分岐、動的collection、解決できない素材 dependencyは元データ path付き診断へ残す。完全なround-tripや暗黙の継続同期は提供しない。
+- visual project 内に手書き `src/` や、生成対象外 adapter を混在させない。拡張は versioned コンポーネント / 素材 / 実行環境 plugin contract として明示的に設計する。
+- CLIの書き出す / Ejectは`xrift-studio convert <visual-project> --to classic --out <directory>`と同じcompiler coreを使い、新しい空directoryへ公開時と同じ`classic-jsx`ソースを持つコード編集のプロジェクトを作る。スクリプト元データ、素材、デコーダー、フォントも同じprojectへコピーし、公式テンプレートの依存関係だけでビルドできる状態にする。
+- Desktop Editorの「コード編集へ書き出す」はOS folder pickerで同種の既存コード編集のプロジェクトを検査し、生成した`src/`一式をビジュアル編集のプロジェクト IDごとの`src/xrift-studio/<id>/`へ相対importを保ったまま移し、`Scene.tsx`から`XriftStudioScene`として公開する。素材、デコーダー、フォントは公開ワールドが直下しか配信しないため`public/`直下へ置き、生成元の記録とexport manifestは`.xrift-studio/exports/<id>/`へ置く。既存`xrift.json`、thumbnail、開始ファイルは既定で変更しない。前回のexportが記録したfileのうち今回生成しないものは取り除き、手書きfileとbackupには触れない。
+- 既存コード編集への追加はcomponent接続を既定とし、開始ファイル切替はbackupと明示確認を必要とする。npmだけ固定allow-listのdependency installを自動化し、他package managerのlockfileをnpmで混在させない。
+- Eject先の`package.json`、`xrift.json`、`src/`、`public/xrift/`はユーザー所有へ移す。由来とhashを`.xrift-studio/export-manifest.json`へ残すが、自動同期やビジュアル編集への逆変換は行わない。
+- `--update`は同じビジュアル編集のプロジェクト由来で、manifest記録後にfile追加・削除・変更がないexportだけに許可する。コード編集側を編集した後は更新を拒否し、既存directoryへの混在や`--force`を提供しない。
+- Eject transactionは一方向であり、Eject先の変更を元のビジュアル編集のプロジェクトへ自動同期しない。戻す場合は別ビジュアル編集のプロジェクトまたは明示したシーン追加として静的lossy importを行う。元データとoutputが同一または親子になる配置も拒否する。
 
 ## 10. セキュリティと認証境界
 
-- visual documents は宣言データだけを受け入れ、任意スクリプト、HTML、シェルコマンドを保持・実行しない。Script の実体は project 内の source file であり、visual document が持つのは asset 参照と宣言済み property 値だけとする。Script の評価は Editor の Play 内部に限り、その実行境界と残存リスクは [4.8 Scripting](#48-scripting-script-asset--script-component) と [Scripting Contract](./SCRIPTING.md) に明記する。
-- 外部アセットは拡張子だけで信用せず、サイズ、MIME、実体、展開後サイズをネイティブ境界で検証する。
+- visual documents は宣言データだけを受け入れ、任意スクリプト、HTML、シェルコマンドを保持・実行しない。スクリプトの実体は project 内の元データ file であり、visual document が持つのは asset 参照と宣言済み property 値だけとする。スクリプトの評価は Editor の動作確認内部に限り、その実行境界と残存リスクは [4.8 スクリプト](#48-scripting-script-asset--script-component) と [スクリプト Contract](./SCRIPTING.md) に明記する。
+- 外部素材は拡張子だけで信用せず、サイズ、MIME、実体、展開後サイズをネイティブ境界で検証する。
 - パスはプロジェクトルート内へ正規化し、`..`、絶対パス、シンボリックリンク越しの脱出を拒否する。
-- Importer と生成器は既知の Asset / Component 型だけを処理する。
-- 外部 Asset の preview URL と Tauri asset protocol は project 管理下の source / cache だけへ制限し、CSP の `default-src`、`script-src`、`connect-src`、`img-src`、`media-src` を必要最小限に保つ。外部モデル描画前にこの gate を確認する。
-- shell scope は固定した XRift executable と許可済み subcommand / argument に限定し、document や Asset 名を任意コマンドとして連結しない。Compiler 接続前に capability と scope を review する。
+- Importer と生成器は既知の素材 / コンポーネント型だけを処理する。
+- 外部素材の preview URL と Tauri asset protocol は project 管理下の元データ / cache だけへ制限し、CSP の `default-src`、`script-src`、`connect-src`、`img-src`、`media-src` を必要最小限に保つ。外部モデル描画前にこの gate を確認する。
+- shell scope は固定した XRift executable と許可済み subcommand / argument に限定し、document や素材名を任意コマンドとして連結しない。Compiler 接続前に capability と scope を review する。
 - アップロードトークンは visual documents、staging project、ブラウザの永続ストレージ、ログへ保存しない。
 - デスクトップ版では、認証済み CLI または Tauri バックエンドをアップロード境界にする。
 - ログへ出す前に access token、cookie、Authorization header、署名付き URL、ユーザーホームの絶対パスを redaction する。compiler / upload の raw stderr を無加工で UI や telemetry へ送らない。
@@ -1176,38 +1176,38 @@ SDK API reference の upload result は ID、version、content hash を定義す
 - upload 前には既存の公開準備確認を再利用し、タイトル、説明、サムネイルが初期値のままなら開始しない。
 - debug build だけに登録する privileged Tauri MCP bridge は、webview JavaScript 実行と Tauri command の `invoke` を許す開発者向け automation である。release build へ登録・搭載しない。
 
-外部 Asset 描画、Compiler、check/upload はこの security gate と threat review を通過した実装だけを有効にする。gate に失敗した処理は開始せず、対象と修復手段を Editor に示す。
+外部素材描画、Compiler、check/upload はこの security gate と threat review を通過した実装だけを有効にする。gate に失敗した処理は開始せず、対象と修復手段を Editor に示す。
 
 ## 11. 製品能力
 
 ### Authoring workspace
 
 - 新規作成は item / world と classic / visual の四カードを同じ画面に示し、visual project は専用 documents を journal 付きで保存してライブラリへ登録する。
-- light theme の左 Hierarchy、中央 Scene View、右 Inspector、下 Assets を resize / dock でき、versioned Editor Preferences から layout を復元・reset できる。
-- Hierarchy / Scene の右クリック Create、gizmo、Inspector、Asset / Material / Texture drag-and-drop は Command Dispatcher、Undo / Redo、両 selection snapshot を共有する。
-- Assets は folder、検索、import、外部カタログ、動的 thumbnail、drag source を提供し、Material / Texture / Model properties は右 Inspector で編集する。
-- World / Item Play は同じ Scene View と別 runtime profile を使い、Stop 後に authoring documents、両 selection、Inspector context、camera を復元する。
+- light theme の左オブジェクト一覧、中央シーン、右設定、下素材を resize / dock でき、versioned Editor Preferences から layout を復元・reset できる。
+- オブジェクト一覧 / シーンの右クリック追加、gizmo、設定、素材 / マテリアル / テクスチャ drag-and-drop は Command Dispatcher、元に戻す / やり直す、両 selection snapshot を共有する。
+- 素材は folder、検索、import、外部カタログ、動的 thumbnail、drag 元データを提供し、マテリアル / テクスチャ / 3Dモデル properties は右設定で編集する。
+- ワールド / アイテム動作確認は同じシーンと別実行環境 profile を使い、停止後に authoring documents、両 selection、設定 context、camera を復元する。
 
 ### Asset and scene data
 
-- GLB / GLTF / OBJ / VRM、PNG / JPEG / WebP / KTX2、HDR / EXR、MP3 / WAV を allow-list、Worker / memory budget、source 非破壊の import transaction で扱う。
-- glTF core metallic-roughness Material、TextureInfo / sampler、Material slots、`KHR_texture_transform`、typed `KHR_materials_iridescence` を import、右 Inspector、preview、compiler で共有する。
-- Model / Texture / Material / Prefab / Particle / Audio / Script / Shader / Interactivity、Prefab dependency / override、Component Registry を stable ID と versioned migration で扱う。
-- Terrain は高さサンプルと草の散布ルールを SceneDocument に保存し、Scene View、static Trimesh Collider、生成物で同じ三角形を使う。
-- source、recipe、processor、target hash が変わると derived と thumbnail を stale にし、background queue で再生成する。
+- GLB / GLTF / OBJ / VRM、PNG / JPEG / WebP / KTX2、HDR / EXR、MP3 / WAV を allow-list、Worker / memory budget、元データ非破壊の import transaction で扱う。
+- glTF core metallic-roughness マテリアル、TextureInfo / sampler、マテリアル slots、`KHR_texture_transform`、typed `KHR_materials_iridescence` を import、右設定、preview、compiler で共有する。
+- 3Dモデル / テクスチャ / マテリアル / プレハブ / パーティクル / 音声 / スクリプト / シェーダー / ノードグラフ、プレハブ dependency / override、コンポーネント Registry を stable ID と versioned migration で扱う。
+- 地形は高さサンプルと草の散布ルールを SceneDocument に保存し、シーン、static メッシュと同じ形衝突判定、生成物で同じ三角形を使う。
+- 元データ、recipe、processor、target hash が変わると derived と thumbnail を stale にし、background queue で再生成する。
 
 ### Save, compile, preview, upload
 
-- Scene / Prefab / Asset / folder document set を temporary write、validate / hash、same-volume replace、journal、commit marker で保存し、crash 後は旧または新の完全な revision へ復旧する。
-- target-neutral Registry と world / item adapter は provenance 付きの決定的 staging project を生成し、stale check 後に既存 XRift check / build へ渡す。
+- シーン / プレハブ / 素材 / folder document set を temporary write、validate / hash、same-volume replace、journal、commit marker で保存し、crash 後は旧または新の完全な revision へ復旧する。
+- target-neutral Registry と world / item adapter は生成元の記録付きの決定的 staging project を生成し、stale check 後に既存 XRift check / build へ渡す。
 - Editor direct preview と generated staging preview を分け、公式に定義されていない hosted / CLI preview を仮定しない。
 - Upload modal は既存 whoami / login / check / build / upload を再利用し、review、進捗、取消、retry、remote ID / version、審査状態を Editor 内に示す。
 
 ### Extension policy
 
-- 後続 `KHR_materials_*` は一つずつ typed Registry adapter、validation、Inspector、preview、compiler を揃えて追加する。
-- Component / Asset Plugin は任意 script 実行ではなく versioned declarative schema と allow-listed target adapter に限定する。ここでいう Plugin は third-party が Studio 本体を拡張する機構を指す。制作者が自分の World / Item のために書く Script Asset は [4.8 Scripting](#48-scripting-script-asset--script-component) の versioned contract として別に扱い、Plugin 機構としては開放しない。
-- ECS runtime は正規化 document と Command / Registry で表現できない scheduling requirement が確認された時だけ評価する。Script Component の per-frame update がその確認された要件であり、対応は固定順序の `RuntimePlugin` lifecycle にとどめる。汎用 ECS runtime は導入しない。
+- 後続 `KHR_materials_*` は一つずつ typed Registry adapter、validation、設定、preview、compiler を揃えて追加する。
+- コンポーネント / 素材 Plugin は任意 script 実行ではなく versioned declarative schema と allow-listed target adapter に限定する。ここでいう Plugin は third-party が Studio 本体を拡張する機構を指す。制作者が自分のワールド / アイテムのために書くスクリプトは [4.8 スクリプト](#48-scripting-script-asset--script-component) の versioned contract として別に扱い、Plugin 機構としては開放しない。
+- ECS 実行環境は正規化 document と Command / Registry で表現できない scheduling requirement が確認された時だけ評価する。スクリプトのコンポーネントの per-frame update がその確認された要件であり、対応は固定順序の `RuntimePlugin` lifecycle にとどめる。汎用 ECS 実行環境は導入しない。
 
 ## 12. 検証と受け入れ条件
 
@@ -1217,28 +1217,28 @@ SDK API reference の upload result は ID、version、content hash を定義す
 - [ ] classic と visual が同じ project の編集モードではなく、正本と利用機能が異なる project type だと選択画面から分かる。
 - [ ] classic は既存の code project 作成、一覧更新、コードエディターへの遷移を変えない。
 - [ ] visual は専用 document format を project root へ保存し、ライブラリから再度開ける。
-- [ ] light theme 上で左 Hierarchy、中央 Scene View、右 Inspector、下 Assets の責務を識別できる。
-- [ ] Hierarchy または Scene View で選ぶと同じ `sceneSelection` が選択表示され、右 Entity Inspector が更新される。
-- [ ] Asset の一回クリックは独立した `assetSelection` と右 Inspector の Asset context を更新し、`sceneSelection` 自体を消さない。
-- [ ] primitive は Create palette にあり、user Asset grid の Model / GLTF、Texture、Material、Prefab、Particle と区別できる。
-- [ ] Hierarchy / Scene View の右クリック Create から primitive を作ると、Hierarchy は選択親、Scene View は click point を使って Entity を一件追加し、Undo / Redo で同じ ID と両 selection を復元する。
-- [ ] Model / Prefab の配置操作だけが Entity を増やし、Asset の一回クリック、Material / Texture の drag では Entity を増やさない。
-- [ ] Material を Scene Mesh または Entity Inspector slot へ drag すると hover 中に対象 slot と置換前後を確認でき、drop と Undo / Redo が一件の `AssignMaterialCommand` になる。複数 slot は chooser なしに推測適用しない。
-- [ ] Texture を右 Material Inspector の slot へ drag すると用途別色空間を検証し、衝突時は確定前に解決方法を選べる。
-- [ ] Entity Inspector は Asset ID 参照を示し、Material 値を Entity に inline 保存しない。
-- [ ] 共有 Material Asset を編集すると、その ID を参照するすべての Entity 表示が更新される。
-- [ ] Model / Texture / Material は source / Material / dependency の変更に追従する動的 generated thumbnail を表示し、欠落 / 失敗時だけ kind icon と状態 label を表示する。
-- [ ] Hierarchy、Scene View、Inspector、Assets を resize / dock した layout が再起動後に復元され、invalid / off-screen layout は safe default、「レイアウトをリセット」は既定配置へ戻る。
-- [ ] toolbar と Assets は中央 semantic Icon Registry の Lucide icon、label、tooltip を使い、他製品の icon asset や custom SVG を含まない。
-- [ ] ギズモまたは Inspector から position、rotation、scale を変更すると両方の表示が一致する。
-- [ ] Playは同じエディター中央のPlay Windowで始まり、境界、header、実行コピーlabelでScene Viewと区別できる。Vite、CLI、ポート、別ブラウザを操作する必要がない。
-- [ ] Play中はEntityのTransform、Collider、Animation、追加・削除・複製・親変更・Component追加を通常の履歴と自動保存で変更でき、追加・削除・更新されたEntityだけをruntimeへ差分同期する。Asset、Material、Scene settingsは変更できない。
-- [ ] World Preview の controller / physics は登録済み runtime adapter を使い、Item Preview に World 用 controller を適用しない。
-- [ ] Stop後はPlaySessionが破棄され、Play中の許可された調整を含む最新SceneDocument、Play前と同じAssetManifest、selection、Edit cameraへ戻る。runtime位置や速度は書き戻さない。
-- [ ] Material / Texture は右 Inspector の schema で編集し、Assets 下部に別 property form を作らない。
-- [ ] GLB / GLTF を Assets へ drop すると source、derived、thumbnail、AssetManifest が transaction として保存され、明示的な Scene drop 以外では Entity を増やさない。
+- [ ] light theme 上で左オブジェクト一覧、中央シーン、右設定、下素材の責務を識別できる。
+- [ ] オブジェクト一覧またはシーンで選ぶと同じ `sceneSelection` が選択表示され、右オブジェクト設定が更新される。
+- [ ] 素材の一回クリックは独立した `assetSelection` と右設定の素材 context を更新し、`sceneSelection` 自体を消さない。
+- [ ] primitive は追加 palette にあり、user 素材 grid の 3Dモデル / GLTF、テクスチャ、マテリアル、プレハブ、パーティクルと区別できる。
+- [ ] オブジェクト一覧 / シーンの右クリック追加から primitive を作ると、オブジェクト一覧は選択親、シーンは click point を使ってオブジェクトを一件追加し、元に戻す / やり直すで同じ ID と両 selection を復元する。
+- [ ] 3Dモデル / プレハブの配置操作だけがオブジェクトを増やし、素材の一回クリック、マテリアル / テクスチャの drag ではオブジェクトを増やさない。
+- [ ] マテリアルをシーンメッシュまたはオブジェクト設定 slot へ drag すると hover 中に対象 slot と置換前後を確認でき、ここに移動と元に戻す / やり直すが一件の `AssignMaterialCommand` になる。複数 slot は chooser なしに推測適用しない。
+- [ ] テクスチャを右マテリアル設定の slot へ drag すると用途別色空間を検証し、衝突時は確定前に解決方法を選べる。
+- [ ] オブジェクト設定は素材 ID 参照を示し、マテリアル値をオブジェクトに inline 保存しない。
+- [ ] 共有マテリアルを編集すると、その ID を参照するすべてのオブジェクト表示が更新される。
+- [ ] 3Dモデル / テクスチャ / マテリアルは元データ / マテリアル / dependency の変更に追従する動的 generated thumbnail を表示し、欠落 / 失敗時だけ kind icon と状態 label を表示する。
+- [ ] オブジェクト一覧、シーン、設定、素材を resize / dock した layout が再起動後に復元され、invalid / off-screen layout は safe default、「レイアウトをリセット」は既定配置へ戻る。
+- [ ] toolbar と素材は中央 semantic Icon Registry の Lucide icon、label、tooltip を使い、他製品の icon asset や custom SVG を含まない。
+- [ ] ギズモまたは設定から position、rotation、scale を変更すると両方の表示が一致する。
+- [ ] 動作確認は同じエディター中央の動作確認の画面で始まり、境界、header、実行コピーlabelでシーンと区別できる。Vite、CLI、ポート、別ブラウザを操作する必要がない。
+- [ ] 動作確認中はオブジェクトの位置・回転・大きさ、衝突判定、Animation、追加・削除・複製・親変更・コンポーネント追加を通常の履歴と自動保存で変更でき、追加・削除・更新されたオブジェクトだけを実行環境へ差分同期する。素材、マテリアル、シーン settingsは変更できない。
+- [ ] ワールドプレビューの controller / physics は登録済み実行環境 adapter を使い、アイテムプレビューにワールド用 controller を適用しない。
+- [ ] 停止後はPlaySessionが破棄され、動作確認中の許可された調整を含む最新SceneDocument、動作確認前と同じAssetManifest、selection、編集 cameraへ戻る。実行環境位置や速度は書き戻さない。
+- [ ] マテリアル / テクスチャは右設定の schema で編集し、素材下部に別 property form を作らない。
+- [ ] GLB / GLTF を素材へここに移動すると元データ、derived、thumbnail、AssetManifest が transaction として保存され、明示的なシーンここに移動以外ではオブジェクトを増やさない。
 - [ ] 非対応ファイルでは authoring document を変更せず、対応形式が分かる。
-- [ ] Node.js / XRift CLI がなくても visual project を開いて編集・保存・Editor Play でき、compile / upload 時だけ runtime gate を示す。
+- [ ] Node.js / XRift CLI がなくても visual project を開いて編集・保存・Editor 動作確認でき、compile / upload 時だけ実行環境 gate を示す。
 - [ ] 保存、変換、外部モデル描画、check、upload は実結果に基づいて状態を更新し、stale / failed / processing を success と表示しない。
 - [ ] ライブラリへの戻り先があり、未保存変更がある時は保存、破棄、取消を選べる。
 - [ ] `pnpm typecheck` が通り、Vite 開発サーバーで主要導線とコンソールエラーを確認できる。
@@ -1247,30 +1247,30 @@ SDK API reference の upload result は ID、version、content hash を定義す
 
 ### Material / Texture / Import
 
-- [ ] glTF 2.0 core Material の baseColorFactor / Texture、metallicFactor、roughnessFactor、metallicRoughnessTexture、normalTexture / scale、occlusionTexture / strength、emissiveTexture / Factor、alphaMode / Cutoff、doubleSided を欠落なく import、編集、保存、preview、再出力できる。
+- [ ] glTF 2.0 core マテリアルの baseColorFactor / テクスチャ、metallicFactor、roughnessFactor、metallicRoughnessTexture、normalTexture / scale、occlusionTexture / strength、emissiveTexture / 強さ、alphaMode / Cutoff、doubleSided を欠落なく import、編集、保存、preview、再出力できる。
 - [ ] base color / emissive RGB は sRGB、metallic-roughness / normal / occlusion は linear として扱い、base color alpha は linear / unpremultiplied のまま保持する。
 - [ ] metallic-roughness texture の G=roughness / B=metallic、occlusion の R、normal scale、alpha mode の意味を fixture で検証できる。
 - [ ] core TextureInfo の `texCoord` と `KHR_texture_transform` の offset / rotation / scale / override texCoord を別 field として保持し、extension の有無を失わない。
 - [ ] `KHR_materials_iridescence` の全 field、既定値、linear single-channel texture を typed adapter で保持し、他の未知 `KHR_materials_*` を editable field として推測しない。
-- [ ] `castShadow` / `receiveShadow` は Mesh Component、`doubleSided` は Material に保存され、glTF Material JSON へ shadow field を混入しない。
-- [ ] 複数 mesh primitive の stable material slot と binding を保持し、再 import で照合不能な binding を自動置換せず `stale-material-binding` にする。
-- [ ] Material Asset を preset から新規作成でき、作成後は Asset だけを選択し、Entity へ自動 binding しない。
-- [ ] Texture import は source を byte-preserving で残し、resize、mipmap、sampler、quality、WebP / KTX2 recipe と derived artifact を別管理する。
+- [ ] `castShadow` / `receiveShadow` はメッシュコンポーネント、`doubleSided` はマテリアルに保存され、glTF マテリアル JSON へ shadow field を混入しない。
+- [ ] 複数メッシュ primitive の stable マテリアル枠と binding を保持し、再 import で照合不能な binding を自動置換せず `stale-material-binding` にする。
+- [ ] マテリアルをプリセットから新規作成でき、作成後は素材だけを選択し、オブジェクトへ自動 binding しない。
+- [ ] テクスチャ import は元データを byte-preserving で残し、resize、mipmap、sampler、quality、WebP / KTX2 recipe と derived artifact を別管理する。
 - [ ] KTX2 / WebP をそれぞれ `KHR_texture_basisu` / `EXT_texture_webp` として扱い、target 非対応時の fallback または blocker を示す。
-- [ ] source / dependency / recipe / processor / target hash の変化で derived と thumbnail が stale になり、last-good を upload 入力にしない。
+- [ ] 元データ / dependency / recipe / processor / target hash の変化で derived と thumbnail が stale になり、last-good を upload 入力にしない。
 - [ ] GLTF relative URI は import root 内だけを解決し、remote、absolute、traversal、scheme、budget 超過を document 変更前に拒否する。
-- [ ] Worker 取消 / crash / OOM / decode error 後も最後に保存した documents、source、last-good derived、両 selection、history が壊れない。
-- [ ] Asset folder の create / rename / move と context menu 操作が stable ID を保ち、表示上の folder 移動で source path を変えない。
-- [ ] 外部カタログから追加した Asset は作者とライセンスを保持し、公開した生成物にも同じ表記が出力される。
+- [ ] Worker 取消 / crash / OOM / decode error 後も最後に保存した documents、元データ、last-good derived、両 selection、history が壊れない。
+- [ ] 素材 folder の create / rename / move と context menu 操作が stable ID を保ち、表示上の folder 移動で元データ path を変えない。
+- [ ] 外部カタログから追加した素材は作者とライセンスを保持し、公開した生成物にも同じ表記が出力される。
 
 ### Command / Shortcut / Prefab
 
-- [ ] Place、Paste、Duplicate、Delete、Prefab 作成の Undo / Redo が document IDs と前後の `sceneSelection` / `assetSelection` を両方復元する。
-- [ ] Duplicate は subtree 内 Entity 参照だけを新 ID へ remap し、Material / Texture など外部 Asset 参照を暗黙複製しない。
-- [ ] Hierarchy から Assets / folder への drop で Prefab document、Asset entry、folder membership、instance metadata が一 transaction として確定し、途中失敗では一件も残らない。
-- [ ] Prefab dependency closure、nested cycle、instance override、Prefab 更新、Unpack を stable prefab-local ID と field path で検証できる。
-- [ ] Prefab 化した元 Entity を削除した後も、project を保存して再度開ける。
-- [ ] Ctrl/Cmd+C/V/D、Delete、F、W/E/R、Undo / Redo、Save、Play / Stop が Shortcut Registry の既定 binding から実行され、toolbar / tooltip / docs と一致する。
+- [ ] Place、Paste、複製、削除、プレハブ作成の元に戻す / やり直すが document IDs と前後の `sceneSelection` / `assetSelection` を両方復元する。
+- [ ] 複製は subtree 内オブジェクト参照だけを新 ID へ remap し、マテリアル / テクスチャなど外部素材参照を暗黙複製しない。
+- [ ] オブジェクト一覧から素材 / folder へのここに移動でプレハブ document、素材開始ファイル、folder membership、instance metadata が一 transaction として確定し、途中失敗では一件も残らない。
+- [ ] プレハブ dependency closure、nested cycle、instance override、プレハブ更新、Unpack を stable prefab-local ID と field path で検証できる。
+- [ ] プレハブ化した元オブジェクトを削除した後も、project を保存して再度開ける。
+- [ ] Ctrl/Cmd+C/V/D、削除、F、W/E/R、元に戻す / やり直す、保存、動作確認 / 停止が Shortcut Registry の既定 binding から実行され、toolbar / tooltip / docs と一致する。
 - [ ] text input、contenteditable、数値 field、IME composition 中は editor shortcut が入力を奪わない。
 - [ ] shortcut conflict はどちらも実行せず、user override と既定へ戻す操作が Editor Preferences に保存される。
 
@@ -1278,22 +1278,22 @@ SDK API reference の upload result は ID、version、content hash を定義す
 
 - [ ] Tauri library は root の有効な `xrift-studio.project.json` で visual を判定し、`.cache/generated-xrift/` を project として列挙しない。
 - [ ] visual manifest が壊れている場合は classic と推測せず、対象 field と修復手段を示す。
-- [ ] VisualProjectDocument、Scene / Prefab documents、AssetManifest、folder document の serialize / load で ID、値、参照が失われない。
+- [ ] VisualProjectDocument、シーン / プレハブ documents、AssetManifest、folder document の serialize / load で ID、値、参照が失われない。
 - [ ] 旧 `schemaVersion` の fixture が依存順に最新形式へ移行でき、[4.10](#410-schemaversion-と-migration) の対応表どおりに解決される。
 - [ ] temporary write 後の validation / hash、same-volume replace、journal、commit marker の順で保存し、各 fault injection point から旧または新の完全な document set に復旧できる。
-- [ ] Save 中に編集が進んだ場合、保存対象 revision だけを committed とし、新 revision の「未保存」を消さない。
-- [ ] 欠落 Asset、未知 Component、循環 Hierarchy が対象 ID 付きで失敗する。
-- [ ] Material / texture slot の型違いと欠落参照を Asset / Entity ID 付きで検出できる。
-- [ ] 同じ canonical input fingerprint、compiler / adapter version、target から byte-equivalent な staging project と同じ provenance mapping を得られる。
+- [ ] 保存中に編集が進んだ場合、保存対象 revision だけを committed とし、新 revision の「未保存」を消さない。
+- [ ] 欠落素材、未知コンポーネント、循環オブジェクト一覧が対象 ID 付きで失敗する。
+- [ ] マテリアル / texture slot の型違いと欠落参照を素材 / オブジェクト ID 付きで検出できる。
+- [ ] 同じ canonical input fingerprint、compiler / adapter version、target から byte-equivalent な staging project と同じ生成元の記録 mapping を得られる。
 - [ ] 生成した staging project が公開テンプレートと同じ TypeScript 設定で型検査を通る。
-- [ ] source、derived recipe、compiler version、target または generated file hash が変わると staging を stale と判定し、preview / check / upload 前に再生成または中止する。
-- [ ] generated diagnostic の path / range を provenance により元 Scene / Entity / Component / Asset / field へ戻せる。
-- [ ] Classicの検査済み`src` module graphからallow-list済み静的JSXをlossy importし、親子関係、local Component境界、typed XRift Componentをfixtureで維持する。arbitrary codeや手編集stagingを実行・完全変換せず、未対応箇所はsource path付きで診断する。
+- [ ] 元データ、derived recipe、compiler version、target または generated file hash が変わると staging を stale と判定し、preview / check / upload 前に再生成または中止する。
+- [ ] generated diagnostic の path / range を生成元の記録により元シーン / オブジェクト / コンポーネント / 素材 / field へ戻せる。
+- [ ] コード編集の検査済み`src` module graphからallow-list済み静的JSXをlossy importし、親子関係、local コンポーネント境界、typed XRiftのコンポーネントをfixtureで維持する。arbitrary codeや手編集stagingを実行・完全変換せず、未対応箇所は元データ path付きで診断する。
 - [ ] world / item profile の違反を生成前に検出できる。
 - [ ] visual authoring root に compiler が `package.json`、`xrift.json`、`src/` を生成しない。
-- [ ] CLI Ejectは新しいclassic projectだけを作る。Desktopの既存Classic追加はVisual Project IDごとの所有領域だけを更新し、手書きentryは明示確認なしに変更しない。
+- [ ] CLI Ejectは新しいclassic projectだけを作る。Desktopの既存コード編集追加はビジュアル編集のプロジェクト IDごとの所有領域だけを更新し、手書き開始ファイルは明示確認なしに変更しない。
 - [ ] Editor direct preview と generated item の local dev preview を別 profile として表示し、公式に未記載の CLI / hosted preview を実装済みと表示しない。
-- [ ] Import、Save、compile または生成失敗後も最後に committed な document set、revision、両 selection、履歴が壊れない。
+- [ ] 読み込む、保存、compile または生成失敗後も最後に committed な document set、revision、両 selection、履歴が壊れない。
 - [ ] 公開が失敗した場合に CLI とビルドの出力を読める。
 - [ ] upload token、絶対パス、Blob URL が authoring document と staging project へ含まれない。
 - [ ] CSP、Tauri shell scope、path validation、log redaction の security gate を external render / compiler 接続前に検証する。

@@ -33,8 +33,8 @@ const CATEGORY_LABELS = {
   basic: "基本",
   movement: "移動",
   appearance: "見た目",
-  particle: "Particle",
-  media: "Asset",
+  particle: "パーティクル",
+  media: "素材",
   interaction: "イベント",
 } as const;
 
@@ -112,7 +112,7 @@ export function ScriptTemplateDialog({
   const submit = async () => {
     const normalizedName = name.trim();
     if (!normalizedName) {
-      setError("Script名を入力してください");
+      setError("スクリプト名を入力してください");
       return;
     }
     setBusy(true);
@@ -124,7 +124,7 @@ export function ScriptTemplateDialog({
         attachToSelectedEntity: attach && Boolean(selectedEntityName),
       });
       if (!created) {
-        setError("Scriptを作成できませんでした。Editorの通知を確認してください");
+        setError("スクリプトを作成できませんでした。エディターの通知を確認してください");
         return;
       }
       onClose();
@@ -132,7 +132,7 @@ export function ScriptTemplateDialog({
       setError(
         cause instanceof Error
           ? cause.message
-          : "Scriptを作成できませんでした",
+          : "スクリプトを作成できませんでした",
       );
     } finally {
       setBusy(false);
@@ -161,7 +161,7 @@ export function ScriptTemplateDialog({
               id="script-template-title"
               className="text-sm font-semibold text-slate-900"
             >
-              Scriptを作成
+              スクリプトを作成
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
               テンプレートを選び、{folderName}へ作成します
@@ -171,7 +171,7 @@ export function ScriptTemplateDialog({
             type="button"
             onClick={onClose}
             disabled={busy}
-            aria-label="Script作成を閉じる"
+            aria-label="スクリプト作成を閉じる"
             className="rounded-md p-1.5 text-slate-500 hover:bg-white hover:text-slate-900 disabled:opacity-40"
           >
             <X size={17} aria-hidden="true" />
@@ -235,7 +235,7 @@ export function ScriptTemplateDialog({
             <div className="grid shrink-0 gap-3 border-b border-slate-200 p-4 md:grid-cols-2">
               <label className="block">
                 <span className="mb-1 block text-xs font-semibold text-slate-700">
-                  Script名
+                  スクリプト名
                 </span>
                 <input
                   value={name}
@@ -267,7 +267,7 @@ export function ScriptTemplateDialog({
                     onChange={(event) => setAttach(event.currentTarget.checked)}
                   />
                   {selectedEntityName
-                    ? `「${selectedEntityName}」へScript Componentを追加`
+                    ? `「${selectedEntityName}」へスクリプトComponentを追加`
                     : "Entityを選択すると同時に追加できます"}
                 </label>
               </div>
@@ -288,12 +288,12 @@ export function ScriptTemplateDialog({
                     key={kind}
                     className="rounded bg-sky-50 px-2 py-1 text-sky-800"
                   >
-                    {kind} AssetをInspectorで設定
+                    {kind} Inspectorで素材を選択
                   </span>
                 ))}
                 {template.entityReferenceCount > 0 ? (
                   <span className="rounded bg-emerald-50 px-2 py-1 text-emerald-800">
-                    Entity参照をInspectorで設定
+                    Inspectorで対象のEntityを選択
                   </span>
                 ) : null}
               </div>
@@ -301,7 +301,7 @@ export function ScriptTemplateDialog({
 
             <div className="min-h-0 flex-1 bg-slate-950 p-4">
               <div className="mb-2 flex items-center justify-between text-[11px]">
-                <span className="font-semibold text-slate-200">Source preview</span>
+                <span className="font-semibold text-slate-200">コードのプレビュー</span>
                 <span className="text-slate-400">
                   {template.language === "tsx" ? "TypeScript JSX" : "TypeScript"}
                 </span>

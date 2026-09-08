@@ -1,88 +1,55 @@
-# ビジュアルエディターの概要
+# 編集画面の使い方
 
-ビジュアルエディターでは、コードを書かずに、視覚的に Scene を組み立ててワールドやアイテムを制作できます。制作データは型付きデータとして保存され、そのまま XRift 向けのコードへ変換して公開できます。
+ビジュアル編集では、素材を配置してシーンを作ります。まずは3Dモデルを1つ読み込み、位置を調整してみてください。
 
-## 画面の構成
+## 画面の見方
 
-ビジュアルエディターは、次のパネルで構成されています。
-
-| パネル | 役割 |
+| 場所 | できること |
 | --- | --- |
-| **Hierarchy** | Scene 内の Entity をツリーで一覧表示し、選択・親子関係の整理・複製・削除を行います。 |
-| **Scene View** | 3D ビュー。Entity を配置し、ギズモで移動・回転・拡縮します。 |
-| **Inspector** | 選択した Entity や Asset の設定を編集します。 |
-| **Assets** | プロジェクト内の Asset（Model、Texture、Material、Particle、Prefab、Script など）を管理します。 |
-| **Create メニュー** | Scene へ Entity や Component を追加します。 |
+| Hierarchy | 配置したものを選ぶ、まとめる、複製する、削除する |
+| シーン | ワールドを見ながら、Entityを移動・回転・拡大縮小する |
+| Inspector | 選んだEntityや素材の数値を変える |
+| Assets | 3Dモデル、画像、音声、マテリアルなどを管理する |
+| 追加メニュー | 基本形状、地形、ライトなどを追加する |
 
-## 基本用語
+**Entity**はシーンに配置したものです。**Assets**では、配置や設定に使う素材を管理します。同じ素材を使って複数のEntityを作れます。**Components**は、音源や衝突判定など、Entityに追加する機能です。
 
-- **Entity**: Scene 内のオブジェクト。Transform（位置・回転・スケール）を持ち、Component を追加できます。
-- **Component**: Entity に機能を追加する部品。Mesh、Light、Audio Source、Collider、Script などがあります。
-- **Asset**: プロジェクトで再利用できる素材。Model、Texture、Material、Particle、Prefab、Script などがあります。
-- **Prefab**: Entity とその子階層を再利用可能な Asset にしたもの。
+## 配置して調整する
 
-## 基本操作
+1. モデルファイルを**Assets**へドラッグします。詳しい形式は[3Dモデルの読み込み](./importing-assets.md)を参照してください。
+2. 追加されたモデルを**シーン**へドラッグします。
+3. 配置したEntityを選び、**Inspector**の**位置・回転・大きさ**を調整します。画面上の矢印や回転の輪をドラッグしても変更できます。
 
-### Entity を追加する
+モデルを使わずに始める場合は、追加メニューから基本形状を選びます。ライト、音源、衝突判定などは、EntityのComponentとして追加・編集できます。
 
-1. **Create メニュー** を開きます。
-2. 次のいずれかを選びます。
+## 整理する
 
-| 項目 | 説明 |
+**Hierarchy**の右クリックメニューから複製・削除できます。Entityを別のEntityの下へドラッグすると、親子関係を作れます。親を動かすと子も一緒に動きます。
+
+同じ組み合わせを繰り返し使う場合は、プレハブとして保存します。プレハブは、Entityとその子をまとめて再利用するための素材です。
+
+## 画面の効果を調整する
+
+**シーン設定**で、背景の**Skybox**、遠景をかすませる**Fog**、全体を均一に照らす**Ambient Light**を設定します。画像による照明や反射には**IBL**を使います。背景とIBLの違いは[空と水をつくる](./sky-and-water.md#背景と照明を分けて設定する)を参照してください。
+
+**Post Processing**では、画面に重ねる効果を設定します。
+
+| 項目 | 効果 |
 | --- | --- |
-| **Empty Entity** | Transform だけを持つ整理用の Entity |
-| **Primitive** | Box、Sphere、Plane などの基本形状 |
-| **地形** | ブラシで形を整えられる高さマップ |
-| **XRift Component** | XRift 向けの配置済み機能と Component |
-| **Component** | Light、Audio、Particle などの専用 Entity を作成、または選択中の Entity へ追加 |
+| SSAO | 接地部分や隙間に陰影を加えます。常に最初に適用します。 |
+| Bloom | 明るい部分の光をにじませます。周囲を照らす効果ではありません。 |
+| Color Grading | 画面全体の明暗差や色味を調整します。 |
 
-### Entity を選択する
+Bloomの**Threshold**は光をにじませる明るさの境目、**Strength**はにじみの強さ、**Radius**は広がりです。Emissiveは表面自体の明るさで、Bloomとは別の設定です。周囲を照らすにはライトを追加してください。
 
-Hierarchy または Scene View で Entity をクリックして選択します。選択すると Inspector に設定が表示されます。
+効果は上から順に適用します。BloomとColor Gradingは矢印で順番を変えられます。**Exposure**は画面全体の明るさで、Skyboxの**Intensity**とは対象が違います。
 
-### Entity を移動・回転・拡縮する
+編集中にBloomや影が見えない場合は、表示モードを**シーン**、描画品質を**高品質**にしてください。自動・軽量・描画50%・描画25%では、負荷を抑えるため影とPost Processingを省きます。この品質設定は動作確認や公開したワールドには影響しません。
 
-Scene View で Entity を選択し、**ギズモ**を使って調整します。ギズモのモード（移動・回転・拡縮）を切り替えられます。
+## 保存して確かめる
 
-### Entity を複製・削除する
+`Ctrl/⌘ + S`で保存します。自動保存にも対応していますが、終了前には画面の保存状態を確認してください。
 
-Hierarchy で Entity を右クリック（またはメニュー）して、複製・削除を行います。Undo／Redo にも対応しています。
+**動作確認**で歩いたり、仕掛けを操作したりできます。終えるときは**停止**を押します。詳しくは[動作を確認する](./play-mode.md)を参照してください。
 
-### 親子関係を整理する
-
-Hierarchy で Entity をドラッグして、別の Entity の下に移動できます。親子関係は、複数の Entity をまとめて扱うのに便利です。
-
-## Inspector で設定する
-
-選択した Entity の Component を Inspector で編集します。主な設定は次のとおりです。
-
-- **Transform**: 位置、回転、スケール
-- **Mesh Renderer**: メッシュ、マテリアル、影の設定
-- **Light**: 光の種類、色、強度、距離
-- **Audio Source**: 音声、音量、ループ
-- **Collider**: 衝突判定の形状とサイズ
-- **Rigid Body**: 物理挙動
-- **Script**: Script Component のプロパティと参照
-
-## Assets パネルで管理する
-
-Assets パネルでは、プロジェクト内の Asset を管理します。
-
-- **Asset の追加**: ファイルをドラッグ＆ドロップ、またはインポートメニューから追加します。
-- **Asset の配置**: Asset を Scene View へドラッグして配置します。
-- **Asset の編集**: Asset を選択して Inspector で編集します。
-- **Asset の管理**: 名前変更、削除、フォルダ整理を行います。
-
-詳しくは [3D 素材の取り込み](./importing-assets.md) と [アセットと表現](./assets-and-materials.md) を参照してください。
-
-## 保存
-
-`Ctrl/⌘ + S` で保存します。ビジュアルプロジェクトは自動保存（autosave）にも対応しています。
-
-## 次のステップ
-
-- [3D 素材の取り込み](./importing-assets.md)
-- [アセットと表現（Texture / Material / Particle）](./assets-and-materials.md)
-- [地形と衝突判定](./terrain-and-colliders.md)
-- [Entity に振る舞いを与える（Scripting）](./scripting.md)
-- [Play で動作を確認する](./play-mode.md)
+色や質感の調整は[素材とマテリアル](./assets-and-materials.md)、仕掛けの作成は[ノードで動きを作る](./interactivity.md)へ進んでください。

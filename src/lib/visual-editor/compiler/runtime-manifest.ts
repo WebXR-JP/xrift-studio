@@ -117,7 +117,7 @@ function compileRuntimeEntity(
         diagnostics.push({
           severity: "blocking",
           code: "runtime-mesh-geometry-missing",
-          message: "Runtime JSONへ変換できるMesh geometryがありません",
+          message: "Runtime JSONへ変換できるメッシュ geometryがありません",
           sceneId,
           entityId: entity.id,
           componentId: component.id,
@@ -162,7 +162,7 @@ function compileRuntimeEntity(
           severity: "blocking",
           code: "runtime-interaction-trigger-graph-missing",
           message:
-            "Interaction Triggerが参照するInteractivity Assetが見つかりません",
+            "グラフの実行が参照するノードグラフ素材が見つかりません",
           sceneId,
           entityId: entity.id,
           componentId: component.id,

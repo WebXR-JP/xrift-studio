@@ -93,7 +93,7 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
   createDefinition(
     BUILTIN_PRIMITIVE_CREATION_IDS.glowCube,
     "光るキューブ",
-    "Bloomで光って見えるキューブ。手軽な間接照明として置ける",
+    "Bloomで光がにじむキューブ。周囲を照らすにはライトを追加してください。",
     "box",
     "#ffedd5",
     BUILTIN_ASSET_IDS.material.glow,
@@ -115,7 +115,7 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
   createDefinition(
     BUILTIN_PRIMITIVE_CREATION_IDS.glowPanel,
     "光るパネル",
-    "面で照らす板状の光。天井や壁に埋め込む面光源として",
+    "天井や壁に使う発光パネル。周囲を照らすにはライトを追加してください。",
     "plane",
     "#ffedd5",
     BUILTIN_ASSET_IDS.material.glow,
@@ -134,7 +134,7 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
   createDefinition(
     BUILTIN_PRIMITIVE_CREATION_IDS.glowTube,
     "光るチューブ",
-    "細長い蛍光灯のような光。通路や什器の縁に沿わせて",
+    "通路や家具の縁に使う発光チューブ。周囲を照らすにはライトを追加してください。",
     "cylinder",
     "#e0f2fe",
     BUILTIN_ASSET_IDS.material.glow,

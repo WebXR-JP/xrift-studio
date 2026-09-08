@@ -167,10 +167,10 @@ export function describeScriptSpecifierRejection(
   reason: ScriptSpecifierRejection,
 ): string {
   if (reason === "remote-not-allowed") {
-    return `${specifier} はネットワークからのmoduleです。プロジェクト設定でリモートimportを許可すると Play で使えます。公開はできません。`;
+    return `${specifier} はネットワークからのmoduleです。プロジェクト設定でリモートimportを許可すると動作確認で使えます。公開はできません。`;
   }
   if (reason === "relative-not-supported") {
-    return `${specifier} は他のfileへの参照です。Script間のimportにはまだ対応していません。`;
+    return `${specifier} は他のfileへの参照です。スクリプト間のimportにはまだ対応していません。`;
   }
   return `${specifier} は使用できないmoduleです。使えるのは ${SCRIPT_MODULE_SPECIFIERS.join(", ")} です。`;
 }

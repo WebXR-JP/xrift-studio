@@ -125,8 +125,8 @@ export function SceneRecipeStore({
       const result = await onAdd(selected);
       setAddedMessage(
         result.createdAssetCount > 0
-          ? `「${result.entityName}」をSceneへ配置し、Assetを${result.createdAssetCount}件追加しました。`
-          : `「${result.entityName}」をSceneへ配置しました。`,
+          ? `「${result.entityName}」をシーンへ配置し、素材を${result.createdAssetCount}件追加しました。`
+          : `「${result.entityName}」をシーンへ配置しました。`,
       );
     } catch (reason) {
       setError(
@@ -154,7 +154,7 @@ export function SceneRecipeStore({
               </p>
             </div>
             <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-1 text-[10px] font-semibold text-orange-700">
-              {recipes.length} sets
+              {recipes.length} セット
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -234,9 +234,6 @@ export function SceneRecipeStore({
             </div>
           )}
         </div>
-        <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
-          カードは配置されるものと同じ形状・Particle・ライトで描いた1フレームです。動きは右で確認できます。
-        </footer>
       </section>
 
       <aside
@@ -269,16 +266,16 @@ export function SceneRecipeStore({
                   <li>モデル {contents.model} 個</li>
                 ) : null}
                 {contents.particle > 0 ? (
-                  <li>Particle {contents.particle} 種（Assetとして追加します）</li>
+                  <li>パーティクル {contents.particle} 種（素材として追加します）</li>
                 ) : null}
                 {contents.light > 0 ? <li>ライト {contents.light} 灯</li> : null}
                 {contents.audio > 0 ? (
-                  <li>音 {contents.audio} 個（Audio Sourceと音のAssetを追加します）</li>
+                  <li>音 {contents.audio} 個（音源と音の素材を追加します）</li>
                 ) : null}
                 {contents.text > 0 ? <li>文字 {contents.text} 枚</li> : null}
                 {contents.graph > 0 ? (
                   <li>
-                    しかけ {contents.graph} 本（Interactivity Assetとして追加します）
+                    しかけ {contents.graph} 本（ノードグラフ素材として追加します）
                   </li>
                 ) : null}
               </ul>
@@ -335,7 +332,7 @@ export function SceneRecipeStore({
                   追加中
                 </>
               ) : (
-                `${selected.name}をSceneへ追加`
+                `${selected.name}をシーンへ追加`
               )}
             </button>
 
@@ -355,7 +352,7 @@ export function SceneRecipeStore({
                   // note in a drawer. The steps stay here, and the shelf stays
                   // open for a set that has them, until the author closes it.
                   <p className="mt-1 pl-[18px]">
-                    上の手順を見ながら、この画面を閉じてPlayを開始してください。
+                    上の手順を見ながら、この画面を閉じて動作確認を開始してください。
                   </p>
                 ) : (
                   <p className="mt-1 pl-[18px]">

@@ -25,28 +25,28 @@ export const SCENE_VIEWPORT_QUALITY_OPTIONS: readonly {
   {
     value: "auto",
     label: "自動",
-    description: "描画75%から開始し、重い状態が続くと50%・25%へ下げます。高品質などへ手動で切り替えられます。編集時のみ",
+    description: "編集中の描画解像度を75%から自動で下げます。必要に応じて高品質へ切り替えてください。",
   },
   {
     value: "high",
     label: "高品質",
-    description: "影とポストエフェクトを含む通常の描画",
+    description: "影とPost Processingを含めて表示します。",
   },
   {
     value: "low",
     label: "軽量 (描画75%)",
     description:
-      "影とポストエフェクトを外し、CSS表示サイズの75%で描画する。Modelが多いSceneの編集用で、Play中と公開物には影響しない",
+      "編集中は表示サイズの75%の解像度で描画し、影とPost Processingを省きます。動作確認や公開には影響しません。",
   },
   {
     value: "half",
     label: "描画50%",
-    description: "CSS表示サイズの50%の解像度。影・ポストエフェクトなし。編集時のみ",
+    description: "編集中は表示サイズの50%の解像度で描画します。影とPost Processingは省きます。",
   },
   {
     value: "quarter",
     label: "描画25%",
-    description: "CSS表示サイズの25%の解像度。影・ポストエフェクトなし。編集時のみ",
+    description: "編集中は表示サイズの25%の解像度で描画します。影とPost Processingは省きます。",
   },
 ] as const;
 

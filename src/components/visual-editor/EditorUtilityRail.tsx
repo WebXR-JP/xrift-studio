@@ -26,7 +26,7 @@ const CATEGORY_LABELS: Record<EditorCommandDefinition["category"], string> = {
   edit: "編集",
   view: "表示",
   transform: "変形",
-  play: "Play",
+  play: "動作確認",
 };
 
 function UtilityButton({
@@ -291,19 +291,19 @@ export function EditorUtilityRail({
               <ol className="space-y-2.5">
                 <li>
                   <span className="font-semibold text-slate-800">1. 作る</span>
-                  <p>上の「追加」から、EntityやPrimitiveをシーンへ加えます。</p>
+                  <p>「追加」からEntityや図形を配置します。</p>
                 </li>
                 <li>
                   <span className="font-semibold text-slate-800">2. 選ぶ</span>
-                  <p>HierarchyまたはScene Viewで選び、右のInspectorで調整します。</p>
+                  <p>Hierarchyやシーンで選び、Inspectorで調整します。</p>
                 </li>
                 <li>
                   <span className="font-semibold text-slate-800">3. 素材を使う</span>
-                  <p>AssetsのModelやMaterialをScene Viewへドラッグして配置します。</p>
+                  <p>Assetsからモデルを配置し、マテリアルを割り当てます。</p>
                 </li>
                 <li>
                   <span className="font-semibold text-slate-800">4. 確認する</span>
-                  <p>「Play」で動作を確認し、停止すると編集位置へ戻ります。</p>
+                  <p>「動作確認」で試し、終わったら「停止」を押します。</p>
                 </li>
               </ol>
               <div className="border-t border-slate-200 pt-3">
@@ -319,7 +319,7 @@ export function EditorUtilityRail({
                   パネル配置を初期化
                 </button>
                 <p className="mt-1.5 text-[11px] leading-4 text-slate-500">
-                  パネルが狭くなったり画面外へ寄ったときに使います。
+                  パネルの大きさと位置を元に戻します。
                 </p>
               </div>
             </div>

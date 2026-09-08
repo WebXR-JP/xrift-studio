@@ -161,14 +161,14 @@ export function planTextureProcessing(input: TextureAsset): TextureProcessingPla
   if (asset.status !== "ready") {
     return {
       supported: false,
-      reason: "Assetの状態がReadyになってから変換できます。",
+      reason: "素材の状態がReadyになってから変換できます。",
     };
   }
   if (isEnvironmentTextureAsset(asset)) {
     return {
       supported: false,
       reason:
-        "環境Texture（HDRI）は解像度変更・圧縮に対応していません。Skyboxの解像度は書き出し元で調整してください。",
+        "環境テクスチャ（HDRI）は解像度変更・圧縮に対応していません。Skyboxの解像度は書き出し元で調整してください。",
     };
   }
   const metadata = asset.importMetadata;
@@ -254,7 +254,7 @@ export async function applyTextureProcessing(
 ): Promise<TextureProcessingResult> {
   const asset = getTextureAsset(manifest, assetId);
   if (!asset) {
-    return { ok: false, message: "変換するTexture Assetが見つかりませんでした。" };
+    return { ok: false, message: "変換するテクスチャが見つかりませんでした。" };
   }
   const plan = planTextureProcessing(asset);
   if (!plan.supported) return { ok: false, message: plan.reason };
@@ -338,7 +338,7 @@ export async function applyTextureProcessingBatch(
       skipped.push({
         assetId,
         assetName: assetId,
-        reason: "Texture Assetが見つかりませんでした。",
+        reason: "テクスチャが見つかりませんでした。",
       });
       continue;
     }
@@ -362,7 +362,7 @@ export async function applyTextureProcessingBatch(
     return {
       ok: false,
       message:
-        "変換できるTextureがありません。最大解像度か圧縮方式を設定してから実行してください。",
+        "変換できるテクスチャがありません。最大解像度か圧縮方式を設定してから実行してください。",
       skipped,
     };
   }
@@ -580,7 +580,7 @@ export function revertTextureOptimization(
 ): { ok: false; message: string } | { ok: true; manifest: AssetManifest; assetName: string } {
   const asset = getTextureAsset(manifest, assetId);
   if (!asset) {
-    return { ok: false, message: "対象のTexture Assetが見つかりませんでした。" };
+    return { ok: false, message: "対象のテクスチャが見つかりませんでした。" };
   }
   const origin = asset.optimizedFrom;
   if (!origin) {

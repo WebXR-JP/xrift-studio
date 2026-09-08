@@ -70,7 +70,7 @@ export function InteractionTriggerInspector({
     <div className="space-y-2">
       <label className="block">
         <span className="mb-1 block text-[11px] font-medium text-slate-600">
-          Interactivity Graph
+          ノードグラフ
         </span>
         <div className="flex items-center gap-1.5">
           <select
@@ -105,7 +105,7 @@ export function InteractionTriggerInspector({
             Interactableがありません
           </p>
           <p className="mt-0.5 text-[11px] leading-4 text-amber-700">
-            このEntityにXRift公式のInteractableを付けると、ボタンとして押せるようになります。
+            「操作を受け付ける」を追加すると、押して実行できます。
           </p>
           <button
             type="button"
@@ -122,15 +122,15 @@ export function InteractionTriggerInspector({
         <p className="text-[11px] font-medium text-slate-600">押したときの動き</p>
         {!graph ? (
           <p className="mt-1 text-[11px] text-slate-500">
-            Interactivity Graphを選ぶと、押したときの動きを設定できます。
+            実行するノードグラフを選んでください。
           </p>
         ) : programs.length === 0 ? (
           <p className="mt-1 text-[11px] text-slate-500">
-            このGraphに「インタラクトされたとき」がありません。開いて追加してください。
+            グラフに「操作されたとき」を追加してください。
           </p>
         ) : actions.length === 0 ? (
           <p className="mt-1 text-[11px] text-slate-500">
-            トリガーの先に動きがありません。開いて「プロパティを変える」をつないでください。
+            「操作されたとき」に処理をつないでください。
           </p>
         ) : (
           <ul className="mt-1 space-y-1">

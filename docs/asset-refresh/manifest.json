@@ -20,7 +20,7 @@
         0.054999999701976776
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "bench",
@@ -43,7 +43,7 @@
         0.22499999403953552
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "stoneLantern",
@@ -66,7 +66,7 @@
         0.36000001430511475
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "tree",
@@ -89,7 +89,7 @@
         0.949999988079071
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "streetLight",
@@ -112,7 +112,7 @@
         0.3400000035762787
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "rockA",
@@ -135,7 +135,7 @@
         0.4032999873161316
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "rockB",
@@ -158,7 +158,7 @@
         0.39910000562667847
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "brazier",
@@ -181,7 +181,7 @@
         0.20960000157356262
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "lantern",
@@ -204,7 +204,7 @@
         0.12999999523162842
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "candelabra",
@@ -227,7 +227,7 @@
         0.14000000059604645
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "bambooStalk",
@@ -250,7 +250,7 @@
         0.4235999882221222
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "stump",
@@ -273,7 +273,7 @@
         0.46000000834465027
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "log",
@@ -296,7 +296,7 @@
         0.052000001072883606
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "bush",
@@ -319,7 +319,7 @@
         0.38960000872612
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "pillar",
@@ -342,7 +342,7 @@
         0.3100000023841858
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "stairs",
@@ -365,7 +365,7 @@
         0.20000000298023224
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "wall",
@@ -388,7 +388,7 @@
         0.3393999934196472
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "wellFrame",
@@ -411,7 +411,7 @@
         0.44999998807907104
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "pier",
@@ -434,7 +434,7 @@
         0.2199999988079071
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "table",
@@ -457,7 +457,7 @@
         0.4000000059604645
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "stool",
@@ -480,7 +480,7 @@
         0.20000000298023224
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "magicCircle",
@@ -503,7 +503,7 @@
         0.75
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "warpPillar",
@@ -526,7 +526,7 @@
         0.3400000035762787
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "snowman",
@@ -549,7 +549,7 @@
         0.413100004196167
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "door",
@@ -572,7 +572,7 @@
         0.07999999821186066
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "window",
@@ -595,7 +595,7 @@
         0.06499999761581421
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "floorPanel",
@@ -618,7 +618,7 @@
         1.0
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "wallPanel",
@@ -641,7 +641,7 @@
         0.10999999940395355
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "recordingStudio",
@@ -687,7 +687,7 @@
         0.567358136177063
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "fountain",
@@ -710,7 +710,7 @@
         1.0800000429153442
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   },
   {
     "modelId": "wellBasin",
@@ -733,6 +733,6 @@
         0.6600000262260437
       ]
     },
-    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see MODEL_REFRESH_README.ja.md."
+    "provenance": "Project-original mesh and PBR texture authoring; editable Blender reconstruction source included under tools/recipe-models/. GLBs generated independently of Blender; see docs/asset-refresh/README.md."
   }
 ]

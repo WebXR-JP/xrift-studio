@@ -671,7 +671,7 @@ function App() {
       } catch (error) {
         toast({
           kind: "error",
-          title: "zipを読み込めませんでした",
+          title: "ZIPを読み込めませんでした",
           description: String(error),
         });
         return null;
@@ -774,7 +774,7 @@ function App() {
         name,
       );
     } catch (error) {
-      const title = "スターターを選択できませんでした";
+      const title = "テンプレートを選択できませんでした";
       const message = String(error);
       setNewProjectError({ title, message });
       toast({
@@ -810,16 +810,16 @@ function App() {
         toast({
           kind: "success",
           title: `${kind === "item" ? "アイテム" : "ワールド"}を作成しました`,
-          description: `${name} / ビジュアル`,
+          description: `${name} / ビジュアル編集`,
         });
       } catch (error) {
         const starterCopyError =
           error instanceof StarterAssetCopyError ? error : undefined;
         const title = starterCopyError?.copy.assetId.includes("license")
-          ? "スターターのライセンスをコピーできませんでした"
+          ? "テンプレートのライセンスをコピーできませんでした"
           : starterCopyError
-            ? "スターター素材を検証できませんでした"
-            : "スターターを準備できませんでした";
+            ? "テンプレート素材を検証できませんでした"
+            : "テンプレートを準備できませんでした";
         const message = describeStarterPreparationError(error);
         setNewProjectError({ title, message });
         toast({
@@ -1027,7 +1027,7 @@ function App() {
     ) {
       throw new XriftMcpEditorToolError(
         "STALE_REVISION",
-        "対象Sceneが現在のEditorと一致しません。get_editor_contextで再取得してください",
+        "対象シーンが現在のEditorと一致しません。get_editor_contextで再取得してください",
         { projectId: bundle.project.projectId, sceneId: bundle.scene.sceneId },
       );
     }
@@ -1317,7 +1317,7 @@ function App() {
               : result.itemId ?? result.contentId;
           toast({
             kind: "success",
-            title: `AI clientから${kind === "world" ? "ワールド" : "アイテム"}を公開しました`,
+            title: `AIクライアントから${kind === "world" ? "ワールド" : "アイテム"}を公開しました`,
             description: result.url ?? remoteId ?? undefined,
           });
           return {
@@ -1441,29 +1441,29 @@ function App() {
         await refreshProjects();
 
         const detailParts = [
-          `${imported.importedEntityCount}件のScene要素`,
-          `${imported.importedAssetCount}件のAsset`,
+          `${imported.importedEntityCount}件のシーン要素`,
+          `${imported.importedAssetCount}件の素材`,
         ];
         if (imported.unavailableAssetCount > 0) {
           detailParts.push(
-            `${imported.unavailableAssetCount}件の未対応Assetをスキップ`,
+            `${imported.unavailableAssetCount}件の未対応素材をスキップ`,
           );
         } else if (imported.warningCount > 0) {
-          detailParts.push(`${imported.warningCount}件の変換メモ`);
+          detailParts.push(`変換時の注意${imported.warningCount}件`);
         }
         toast({
           kind: "success",
-          title: "XRift Classicからインポートしました",
+          title: "コード編集プロジェクトを変換しました",
           description: detailParts.join(" / "),
         });
       } catch (error) {
         toast({
           kind: "error",
-          title: "XRift Classicをインポートできませんでした",
+          title: "コード編集プロジェクトを変換できませんでした",
           description:
             error instanceof Error
               ? error.message
-              : "Classicプロジェクトとプロジェクト種別を確認して、もう一度お試しください。",
+              : "コード編集プロジェクトとプロジェクト種別を確認して、もう一度お試しください。",
         });
       }
     });
@@ -1474,11 +1474,11 @@ function App() {
   ): Promise<string | null> => {
     if (!tauri.isAvailable()) {
       throw new Error(
-        "Classicプロジェクトのフォルダー選択はデスクトップ版で利用できます。",
+        "コード編集プロジェクトのフォルダー選択はデスクトップ版で利用できます。",
       );
     }
     const selected = await tauri.selectDirectory(
-      `XRift Classic ${kind === "world" ? "World" : "Item"}プロジェクトを選択`,
+      `コード編集の${kind === "world" ? "ワールド" : "アイテム"}プロジェクトを選択`,
     );
     const projectPath = Array.isArray(selected) ? selected[0] : selected;
     return typeof projectPath === "string" && projectPath.trim()
@@ -1494,7 +1494,7 @@ function App() {
     try {
       await readVisualProjectFromDisk(project.path).then((documents) => {
         const scene = documents.scenes[documents.project.entrySceneId];
-        if (!scene) throw new Error("Entry Sceneが見つかりません");
+        if (!scene) throw new Error("開始時に読み込むシーンが見つかりません");
         // v1 removed the Animation Component, so a project saved before it was
         // converted while it loaded. Said once, on open, because the author is
         // about to look at a Scene whose Hierarchy changed under them.
@@ -1870,7 +1870,7 @@ function App() {
             visualExternalAssetsCommitRef.current?.({
               expectedAssets: publishBundle.assets,
               nextAssets: result.manifest,
-              notice: `${result.convertedAssetNames.length}件のTextureを変換しました。シーンも変換後の画像を使います`,
+              notice: `${result.convertedAssetNames.length}件のテクスチャを変換しました。シーンも変換後の画像を使います`,
             });
             return {
               convertedAssetCount: result.convertedAssetNames.length,
@@ -1906,7 +1906,7 @@ function App() {
             visualExternalAssetsCommitRef.current?.({
               expectedAssets: publishBundle.assets,
               nextAssets: result.bundle.assets,
-              notice: `${result.optimizedAssetCount}件のAssetを最適化しました。シーンも最適化後のAssetを使います`,
+              notice: `${result.optimizedAssetCount}件の素材を最適化しました。シーンも最適化後の素材を使います`,
             });
             return {
               optimizedAssetCount: result.optimizedAssetCount,
@@ -1942,7 +1942,7 @@ function App() {
           onClose={() => setVisualClassicExportBundle(null)}
           onChooseTarget={async () => {
             const selectedPath = await tauri.selectDirectory(
-              "XRift Classicプロジェクトを選択",
+              "XRift コード編集プロジェクトを選択",
               projectsRoot || undefined,
             );
             if (!selectedPath || Array.isArray(selectedPath)) return null;
@@ -1959,7 +1959,7 @@ function App() {
           ) => {
             const exportBundle = visualClassicExportBundle;
             if (!exportBundle) {
-              throw new Error("書き出すVisualプロジェクトがありません。");
+              throw new Error("書き出すビジュアル編集のプロジェクトがありません。");
             }
             const result = await exportVisualProjectToClassic({
               authoringProjectPath: visualSession.project?.path ?? "",
@@ -1978,10 +1978,10 @@ function App() {
             });
             toast({
               kind: "success",
-              title: "XRift Classicへ書き出しました",
+              title: "XRift コード編集へ書き出しました",
               description:
                 integration === "component"
-                  ? "接続コードを追加すると既存Sceneと一緒に利用できます。"
+                  ? "組み込み用コードを追加すると、既存のシーンと一緒に使えます。"
                   : "バックアップを残してエントリーを切り替えました。",
             });
             return result;
@@ -2122,10 +2122,10 @@ function describeStarterPreparationError(error: unknown): string {
 
   const { copy, details, reason } = error;
   const label = copy.assetId.includes("license")
-    ? "スターターのライセンス"
+    ? "テンプレートのライセンス"
     : copy.mediaType.startsWith("text/")
-      ? "スターターの由来ファイル"
-      : "スターター素材";
+      ? "テンプレートの由来ファイル"
+      : "テンプレート素材";
   const receivedSize = details.actualByteLength;
   const formatBytes = (value: number) => `${value.toLocaleString("ja-JP")} bytes`;
 

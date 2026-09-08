@@ -191,13 +191,13 @@ export const ASSET_FORMATS = {
       extensions: ["glsl"],
     },
     vertex: {
-      label: "GLSL vertex shader",
+      label: "GLSL頂点シェーダー",
       mimeType: "text/x-glsl",
       extensions: ["vert", "vertex", "vs"],
       resolveFromMimeType: false,
     },
     fragment: {
-      label: "GLSL fragment shader",
+      label: "GLSLフラグメントシェーダー",
       mimeType: "text/x-glsl",
       extensions: ["frag", "fragment", "fs"],
       resolveFromMimeType: false,
@@ -661,18 +661,18 @@ export type AssetKindPresentation = {
 };
 
 export const ASSET_KIND_UI = {
-  primitive: { icon: "primitive", label: "Primitive" },
-  model: { icon: "model", label: "Model" },
-  material: { icon: "material", label: "Material" },
-  texture: { icon: "texture", label: "Texture" },
-  skybox: { icon: "texture", label: "Texture / HDRI" },
-  particle: { icon: "particle", label: "Particle" },
-  interactivity: { icon: "asset", label: "KHR Interactivity" },
-  audio: { icon: "audio", label: "Audio" },
-  font: { icon: "font", label: "Font" },
-  script: { icon: "script", label: "Script" },
-  shader: { icon: "script", label: "GLSL Shader" },
-  template: { icon: "prefab", label: "Prefab" },
+  primitive: { icon: "primitive", label: "基本形状" },
+  model: { icon: "model", label: "3Dモデル" },
+  material: { icon: "material", label: "マテリアル" },
+  texture: { icon: "texture", label: "テクスチャ" },
+  skybox: { icon: "texture", label: "テクスチャ / HDRI" },
+  particle: { icon: "particle", label: "パーティクル" },
+  interactivity: { icon: "asset", label: "KHR ノードグラフ" },
+  audio: { icon: "audio", label: "音声" },
+  font: { icon: "font", label: "フォント" },
+  script: { icon: "script", label: "スクリプト" },
+  shader: { icon: "script", label: "GLSLシェーダー" },
+  template: { icon: "prefab", label: "プレハブ" },
 } as const satisfies Readonly<
   Record<SceneAsset["kind"], AssetKindPresentation>
 >;

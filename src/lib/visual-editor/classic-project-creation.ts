@@ -76,7 +76,7 @@ export async function createVisualProjectFromClassicSource(input: {
   if (planErrors.length > 0 || componentPlan.nodes.length === 0) {
     throw new Error(
       planErrors[0]?.message ??
-        "変換できるScene要素がClassicプロジェクトに見つかりませんでした。",
+        "変換できるシーン要素がコード編集プロジェクトに見つかりませんでした。",
     );
   }
 
@@ -99,7 +99,7 @@ export async function createVisualProjectFromClassicSource(input: {
   if (applied.entityIds.length === 0) {
     throw new Error(
       applied.diagnostics[0]?.message ??
-        "ClassicプロジェクトのSceneをVisualへ変換できませんでした。",
+        "コード編集プロジェクトのシーンをVisualへ変換できませんでした。",
     );
   }
   applied = applyClassicProjectVisualImportEnhancements({

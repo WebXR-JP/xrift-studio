@@ -44,7 +44,7 @@ test("sky store filters, pauses, preserves quality and retries installation", as
   await search.fill("no-such-sky");
   await expect(page.getByText("条件に合うSkybox Shaderがありません")).toBeVisible();
   await search.fill("alpine-cumulus");
-  const add = page.getByRole("button", { name: /を空へ設定$/ });
+  const add = page.getByRole("button", { name: "Skyboxに設定", exact: true });
   await add.click();
   await expect(search).toBeDisabled();
   const settle = (fail: boolean) => page.evaluate(async fail => {
@@ -57,7 +57,7 @@ test("sky store filters, pauses, preserves quality and retries installation", as
   expect(defines.XRIFT_SKY_CLOUD_STEPS).toBe("10");
   await expect(page.getByRole("alert")).toContainText("Test install failed");
   await add.click(); await settle(false);
-  await expect(page.getByText(/Sceneの空に設定済みです/)).toBeVisible();
+  await expect(page.getByText(/Skyboxに設定しました/)).toBeVisible();
   await preview.scrollIntoViewIfNeeded();
   await page.screenshot({ path: "test-results/sky-shaders.png" });
   expect(errors).toEqual([]);

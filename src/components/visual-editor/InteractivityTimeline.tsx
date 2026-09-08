@@ -238,7 +238,7 @@ export function InteractivityTimeline({
   return (
     <section
       className="flex min-h-0 flex-1 flex-col border-t border-slate-700 bg-slate-950"
-      aria-label="Behavior graph timeline"
+      aria-label="ノードグラフのタイムライン"
     >
       <div className="flex shrink-0 items-center gap-2 border-b border-slate-800 px-3 py-1.5">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
@@ -292,8 +292,8 @@ export function InteractivityTimeline({
         {tracks.length === 0 ? (
           <p className="p-3 text-[11px] leading-5 text-slate-400">
             {entryPoint === "start"
-              ? "開始時から動くものがありません。「開始時」ノードから順に繋ぐと、ここに時刻が並びます。"
-              : "インタラクトから動くものがありません。「インタラクトされたとき」ノードから順に繋ぐと、ここに時刻が並びます。"}
+              ? "開始時に実行する処理がありません。「開始時」ノードに処理をつなぐと、実行時刻を確認できます。"
+              : "操作時に実行する処理がありません。「操作されたとき」ノードに処理をつなぐと、実行時刻を確認できます。"}
           </p>
         ) : (
           <div className="min-w-[420px]">

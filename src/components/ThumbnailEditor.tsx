@@ -95,7 +95,7 @@ export function ThumbnailEditor({
         </div>
         {publishPreparation && (
           <div className="mt-1 text-xs text-amber-800">
-            公開準備中です。画像を保存すると、公開前の確認を続けます。
+            画像を保存すると、公開前の確認を続けます。
           </div>
         )}
       </div>
@@ -124,10 +124,10 @@ export function ThumbnailEditor({
               </div>
             ) : thumb ? (
               <>
-                <img src={thumb} alt="thumbnail" className="h-full w-full object-cover" />
+                <img src={thumb} alt="現在のサムネイル" className="h-full w-full object-cover" />
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition group-hover:opacity-100">
                   <span className="rounded-md bg-white/90 px-3 py-1.5 text-sm font-medium text-zinc-900">
-                    クリック / ドロップで差し替え
+                    クリックまたはドロップで画像を変更
                   </span>
                 </div>
               </>
@@ -135,7 +135,7 @@ export function ThumbnailEditor({
               <div className="flex h-full flex-col items-center justify-center gap-2 text-zinc-400">
                 <ImagePlus size={48} strokeWidth={1.5} aria-hidden="true" />
                 <div className="text-sm">サムネイル未設定</div>
-                <div className="text-xs">ドラッグ&ドロップ または下のボタンから画像を追加</div>
+                <div className="text-xs">画像をドロップするか、「画像を選択」を押してください。</div>
               </div>
             )}
             <button
@@ -189,7 +189,7 @@ export function ThumbnailEditor({
               <span>
                 <span className="block font-semibold">サムネイルを設定しました</span>
                 <span className="mt-0.5 block text-emerald-700">
-                  この画像は保存済みで、一覧と公開情報に使用されます。
+                  プロジェクト一覧に反映しました。XRiftには、次の公開時に反映します。
                 </span>
               </span>
             </div>

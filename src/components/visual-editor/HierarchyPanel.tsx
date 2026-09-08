@@ -179,8 +179,8 @@ function getHierarchyFilterResult(
     if (!entityMatchesKindFilters(entity, kindFilters)) continue;
     const effectivelyEnabled = isEntityEffectivelyEnabled(scene, entity);
     const statusTerms = effectivelyEnabled
-      ? "enabled visible 有効 表示"
-      : "disabled hidden 無効 非表示";
+      ? "enabled visible 有効表示"
+      : "disabled hidden 無効非表示";
     const haystack = [
       entity.name,
       getEntityTypeLabel(entity),
@@ -321,7 +321,7 @@ function getEntityTypeLabel(entity: SceneEntity): string {
       "XRift Component"
     );
   }
-  return "エンティティ";
+  return "Entity";
 }
 
 function getEntityIcon(entity: SceneEntity) {
@@ -356,12 +356,12 @@ function getEntityIcon(entity: SceneEntity) {
 const HIERARCHY_KIND_FILTERS = [
   { id: "mesh", label: "メッシュ", icon: EDITOR_ICONS.model },
   { id: "light", label: "ライト", icon: EDITOR_ICONS.light },
-  { id: "rigid-body", label: "Rigid Body", icon: EDITOR_ICONS.axis },
+  { id: "rigid-body", label: "物理挙動", icon: EDITOR_ICONS.axis },
   { id: "collider", label: "コライダー", icon: EDITOR_ICONS.primitive },
   { id: "audio-source", label: "オーディオ", icon: EDITOR_ICONS.audio },
   { id: "particle-emitter", label: "パーティクル", icon: EDITOR_ICONS.particle },
   { id: "spawn-point", label: "スポーン", icon: EDITOR_ICONS.spawn },
-  { id: "xrift-component", label: "XRift Component", icon: EDITOR_ICONS.component },
+  { id: "xrift-component", label: "XRiftのComponent", icon: EDITOR_ICONS.component },
 ] as const satisfies ReadonlyArray<{
   id: HierarchyKindFilter;
   label: string;
@@ -381,7 +381,7 @@ function reparentBlockedMessage(
     case "unchanged-parent":
       return parentName
         ? `「${sourceName}」はすでに「${parentName}」の子です`
-        : `「${sourceName}」はすでにScene Rootにあります`;
+        : `「${sourceName}」はすでにシーンの直下にあります`;
     case "unchanged-order":
       return `「${sourceName}」はすでにこの位置にあります`;
     case "entity-missing":
@@ -497,9 +497,9 @@ const HierarchyEntityRow = memo(function HierarchyEntityRow({
         {canCollapse ? (
           <button
             type="button"
-            aria-label={`${entity.name}を${collapsed ? "展開" : "折り畳む"}`}
+            aria-label={`${entity.name}を${collapsed ? "展開" : "折りたたむ"}`}
             aria-expanded={!collapsed}
-            title={`${entity.name}の子Entity ${childCount}件を${collapsed ? "展開" : "折り畳む"}`}
+            title={`${entity.name}の子Entity ${childCount}件を${collapsed ? "展開" : "折りたたむ"}`}
             onClick={() => handlersRef.current.toggleEntityCollapsed(entity.id)}
             className="flex h-5 w-4 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-slate-200 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
           >
@@ -574,7 +574,7 @@ const HierarchyEntityRow = memo(function HierarchyEntityRow({
           handlers.replaceAssetDropTarget({
             kind: "entity",
             entityId: entity.id,
-            message: `Asset / XRift Prefabを「${entity.name}」の子へ配置`,
+            message: `素材 / XRift プレハブを「${entity.name}」の子へ配置`,
           });
           return;
         }
@@ -643,9 +643,9 @@ const HierarchyEntityRow = memo(function HierarchyEntityRow({
         <button
           type="button"
           data-no-entity-drag="true"
-          aria-label={`${entity.name}を${collapsed ? "展開" : "折り畳む"}`}
+          aria-label={`${entity.name}を${collapsed ? "展開" : "折りたたむ"}`}
           aria-expanded={!collapsed}
-          title={`${entity.name}の子Entity ${childCount}件を${collapsed ? "展開" : "折り畳む"}`}
+          title={`${entity.name}の子Entity ${childCount}件を${collapsed ? "展開" : "折りたたむ"}`}
           onClick={(event) => {
             event.stopPropagation();
             handlersRef.current.toggleEntityCollapsed(entity.id);
@@ -727,7 +727,7 @@ const HierarchyEntityRow = memo(function HierarchyEntityRow({
         aria-label={`${entity.name}を${entity.enabled ? "無効" : "有効"}にする`}
         title={
           readOnly
-            ? "Playを停止するとEnabledを変更できます"
+            ? "有効・無効を変更するには動作確認を停止してください"
             : entity.enabled && !effectiveEnabled
               ? `親Entityが無効です。「${entity.name}」自身を無効にする`
               : `${entity.name}を${entity.enabled ? "無効" : "有効"}にする`
@@ -758,7 +758,7 @@ const HierarchyEntityRow = memo(function HierarchyEntityRow({
         aria-label={`${entity.name}を削除`}
         title={
           readOnly
-            ? "Playを停止するとEntityを削除できます"
+            ? "動作確認を停止するとEntityを削除できます"
             : commandTitle(`${entity.name}を削除`, "edit.delete")
         }
         className={`my-0.5 flex w-6 shrink-0 items-center justify-center rounded text-slate-500 transition-opacity hover:bg-rose-100 hover:text-rose-700 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-30 ${
@@ -1267,7 +1267,7 @@ export function HierarchyPanel({
             parentEntityId: null,
             siblingIndex,
             allowed: true,
-            message: `「${source?.name ?? "Entity"}」をScene Rootの末尾へ移動`,
+            message: `「${source?.name ?? "Entity"}」をシーンの直下の末尾へ移動`,
           }
         : {
             kind: "root",
@@ -1489,7 +1489,7 @@ export function HierarchyPanel({
               }
               title={
                 readOnly
-                  ? "Playを停止するとEntityを削除できます"
+                  ? "動作確認を停止するとEntityを削除できます"
                   : commandTitle(`${selectedEntityIds.length}件のEntityを削除`, "edit.delete")
               }
               className="flex h-7 items-center gap-1 rounded border border-editor-border bg-editor-surface px-2 text-xs font-semibold text-editor-muted transition-colors hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-45"
@@ -1568,7 +1568,7 @@ export function HierarchyPanel({
       </div>
       {playMode ? (
         <div className="border-b border-violet-200 bg-violet-50 px-3 py-2 text-xs leading-4 text-violet-800">
-          Live編集: Entityの追加・削除・並べ替えとComponent構成を実行中のSceneへ即時反映します。
+          動作確認中の編集も保存し、シーンに反映します。
         </div>
       ) : null}
       {dragEntityId || assetDropTarget ? (
@@ -1584,13 +1584,13 @@ export function HierarchyPanel({
           aria-live="polite"
         >
           <EDITOR_ICONS.move size={13} className="shrink-0" aria-hidden="true" />
-          <span>{assetDropTarget?.message ?? dropTarget?.message ?? "移動先のEntityまたはScene Rootを選択"}</span>
+          <span>{assetDropTarget?.message ?? dropTarget?.message ?? "移動先のEntityまたはシーンの直下を選択"}</span>
         </div>
       ) : null}
       <div
         className="scrollbar-thin min-h-0 flex-1 overflow-y-auto py-1.5"
         role="tree"
-        aria-label="SceneのEntity階層"
+        aria-label="シーンのEntity階層"
         tabIndex={rows.length > 0 ? 0 : -1}
         onKeyDown={handleHierarchyKeyDown}
         onDragEnter={(event) => {
@@ -1600,7 +1600,7 @@ export function HierarchyPanel({
           if (readOnly) return;
           replaceAssetDropTarget({
             kind: "root",
-            message: "Asset / XRift PrefabをScene Rootへ配置",
+            message: "素材 / XRift プレハブをシーンの直下へ配置",
           });
         }}
         onDragOver={(event) => {
@@ -1635,7 +1635,7 @@ export function HierarchyPanel({
                 if (readOnly) return;
                 replaceAssetDropTarget({
                   kind: "root",
-                  message: "Asset / XRift PrefabをScene Rootへ配置",
+                  message: "素材 / XRift プレハブをシーンの直下へ配置",
                 });
                 return;
               }
@@ -1667,7 +1667,7 @@ export function HierarchyPanel({
             }}
           >
             <EDITOR_ICONS.world size={13} aria-hidden="true" />
-            {assetDropTarget ? "Scene Rootへ配置" : "Scene Rootへ移動"}
+            {assetDropTarget ? "シーンの直下へ配置" : "シーンの直下へ移動"}
           </div>
         ) : null}
         {filterResult && filterResult.matchingEntityIds.size === 0 ? (
@@ -1770,7 +1770,7 @@ export function HierarchyPanel({
                 ["edit.copy", "コピー", "copy"],
                 ["edit.duplicate", "複製", "duplicate"],
                 ["edit.delete", "削除", "delete"],
-                ["prefab.create", "Prefabを作成", "prefab"],
+                ["prefab.create", "プレハブを作成", "prefab"],
               ] as const).map(([commandId, label, icon]) => {
                 const Icon = EDITOR_ICONS[icon];
                 return (
@@ -1790,7 +1790,7 @@ export function HierarchyPanel({
                     }}
                     title={
                       readOnly
-                        ? "Playを停止すると編集できます"
+                        ? "動作確認を停止すると編集できます"
                         : commandTitle(label, commandId)
                     }
                     className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:opacity-45"
@@ -1804,7 +1804,7 @@ export function HierarchyPanel({
               {!searchingContextMenu || contextMenuComponentResultCount > 0 ? (
               <details open className="overflow-hidden rounded border border-slate-200">
                 <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-                  Add Component ({getEditorComponentMenuDefinitions(projectKind).length})
+                  Componentsを追加 ({getEditorComponentMenuDefinitions(projectKind).length})
                 </summary>
                 <div className="space-y-1 border-t border-slate-100 p-1">
                   {EDITOR_COMPONENT_CATEGORY_ORDER.map(
@@ -1882,7 +1882,7 @@ export function HierarchyPanel({
             !searchingContextMenu || contextMenuComponentResultCount > 0 ? (
             <details open className="overflow-hidden rounded border border-slate-200">
               <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-                Add Component ({getEditorComponentMenuDefinitions(projectKind).length})
+                Componentsを追加 ({getEditorComponentMenuDefinitions(projectKind).length})
               </summary>
               <div className="space-y-1 border-t border-slate-100 p-1">
                 {EDITOR_COMPONENT_CATEGORY_ORDER.map(
@@ -1949,7 +1949,7 @@ export function HierarchyPanel({
           {!searchingContextMenu || contextMenuXriftComponentResultCount > 0 ? (
           <details className="overflow-hidden rounded border border-slate-200">
             <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-              XRift Component ({searchingContextMenu
+              XRift Components ({searchingContextMenu
                 ? contextMenuXriftComponentResultCount
                 : getXriftComponentMenuGroups(projectKind).reduce(
                 (count, group) => count + group.components.length,
@@ -2040,7 +2040,7 @@ export function HierarchyPanel({
           {!searchingContextMenu || contextMenuPrefabResultCount > 0 ? (
           <details className="overflow-hidden rounded border border-slate-200">
             <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-              XRift Prefab ({searchingContextMenu ? contextMenuPrefabResultCount : builtinPrefabRecipes.length})
+              XRift プレハブ ({searchingContextMenu ? contextMenuPrefabResultCount : builtinPrefabRecipes.length})
             </summary>
             <div className="space-y-0.5 border-t border-slate-100 p-1">
               {builtinPrefabRecipes.filter((recipe) =>
@@ -2086,7 +2086,7 @@ export function HierarchyPanel({
           {!searchingContextMenu || contextMenuSceneObjectResultCount > 0 ? (
           <details open className="overflow-hidden rounded border border-slate-200">
             <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-              Scene Object ({searchingContextMenu ? contextMenuSceneObjectResultCount : BUILTIN_PRIMITIVE_CREATION_CATALOG.length + 1})
+              Entity ({searchingContextMenu ? contextMenuSceneObjectResultCount : BUILTIN_PRIMITIVE_CREATION_CATALOG.length + 1})
             </summary>
             <div className="space-y-0.5 border-t border-slate-100 p-1">
               {matchesContextMenuSearch("Empty Entity Transform scene object entity") ? <button
@@ -2099,14 +2099,14 @@ export function HierarchyPanel({
                 }}
                 title={commandTitle(
                   contextMenu.entityId
-                    ? "選択Entityの子にEmpty Entityを作成"
-                    : "Scene RootにEmpty Entityを作成",
+                    ? "選択Entityの子に空のEntityを作成"
+                    : "シーンの直下に空のEntityを作成",
                   "entity.create-empty",
                 )}
                 className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
               >
                 <EDITOR_ICONS.sceneEntity size={14} aria-hidden="true" />
-                Empty Entity
+                空のEntity
               </button> : null}
               {BUILTIN_PRIMITIVE_CREATION_CATALOG.filter((entry) =>
                 matchesContextMenuSearch(
@@ -2126,7 +2126,7 @@ export function HierarchyPanel({
                       creationId: entry.creationId,
                     });
                   }}
-                  title={commandTitle(`${entry.name}をSceneへ作成`, "entity.create-primitive")}
+                  title={commandTitle(`${entry.name}をシーンへ作成`, "entity.create-primitive")}
                   className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
                 >
                   <EDITOR_ICONS.primitive size={14} aria-hidden="true" />

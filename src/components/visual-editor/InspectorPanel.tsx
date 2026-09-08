@@ -229,7 +229,7 @@ function findPrefabSourceContext(
 
 // Inspectorに専用UIが無いComponentの表示名。種別idをそのまま見せない。
 const UNSUPPORTED_COMPONENT_LABELS: Readonly<Record<string, string>> = {
-  animation: "Animation（廃止）",
+  animation: "旧アニメーション設定",
 };
 
 function ComponentCard({
@@ -255,7 +255,7 @@ function ComponentCard({
     disabled: boolean;
     onRemove: () => void;
   };
-  children: ReactNode;
+  children?: ReactNode;
 }) {
   return (
     <section className="overflow-hidden rounded border border-slate-200 bg-white">
@@ -291,7 +291,7 @@ function ComponentCard({
           ) : null}
         </span>
       </div>
-      <div className="space-y-2 p-2.5">{children}</div>
+      {children != null ? <div className="space-y-2 p-2.5">{children}</div> : null}
     </section>
   );
 }
@@ -331,7 +331,7 @@ function EntityNameField({
   return (
     <label
       className={compact ? "min-w-0 flex-1" : "block"}
-      title="Entity名。Enterまたはフォーカス移動で確定します"
+      title="Entity名（Enterで確定）"
     >
       <span
         className={
@@ -340,7 +340,7 @@ function EntityNameField({
             : "mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500"
         }
       >
-        Entity name
+        Entity名
       </span>
       <input
         type="text"
@@ -824,7 +824,7 @@ function MaterialSwatch({
     return (
       <span
         className="relative h-7 w-7 shrink-0 overflow-hidden rounded-sm border border-slate-300 bg-slate-100"
-        title="Material未設定"
+        title="マテリアル未設定"
         aria-hidden="true"
       >
         <span className="absolute left-1/2 top-1/2 h-px w-8 -translate-x-1/2 -translate-y-1/2 -rotate-45 bg-slate-400" />
@@ -962,11 +962,11 @@ function MeshInspector({
   return (
     <div className="space-y-3">
       <ComponentCard
-      title="Mesh Renderer"
+      title="メッシュの描画"
       remove={
         onRemove
           ? {
-              label: "Mesh Rendererを削除",
+              label: "メッシュの描画を削除",
               disabled: readOnly,
               onRemove,
             }
@@ -976,8 +976,8 @@ function MeshInspector({
         checked: component.enabled,
         disabled: readOnly,
         label: component.enabled
-          ? "Mesh Rendererを無効にする"
-          : "Mesh Rendererを有効にする",
+          ? "メッシュの描画を無効にする"
+          : "メッシュの描画を有効にする",
         onChange: (enabled) => onChange({ enabled }),
       }}
     >
@@ -1004,12 +1004,12 @@ function MeshInspector({
           const assignedId = binding?.materialAssetId ?? slot.defaultMaterialAssetId ?? "";
           const assigned = assignedId ? getMaterialAsset(assets, assignedId) : undefined;
           const materialStatusTitle = assigned?.shader?.kind === "openbrush"
-            ? `${assigned.shader.brushName}をthree-icosa専用Materialとして設定済み。Materialをドロップして変更できます`
+            ? `${assigned.shader.brushName}をthree-icosa専用マテリアルとして設定済み。マテリアルをドロップして変更できます`
             : openBrush && !assigned
-              ? "source brushを使用中。MaterialをドロップするとXRift Materialで上書きします"
+              ? "元のブラシを使用しています。マテリアルをドロップすると、表示を置き換えます。"
               : openBrush
-                ? "XRift MaterialでOpenBrush shaderを上書き中。Materialをドロップして変更できます"
-                : "Materialをドロップして割り当てできます";
+                ? "Open BrushのShaderを、指定したマテリアルで置き換えています。マテリアルをドロップして変更できます"
+                : "マテリアルをドロップして割り当てできます";
           return (
             <div
               key={slot.slot}
@@ -1069,12 +1069,12 @@ function MeshInspector({
                       ),
                     })
                   }
-                  aria-label={`${slot.name}のMaterial`}
-                  title={`${slot.name}のMaterialを選択`}
+                  aria-label={`${slot.name}のマテリアル`}
+                  title={`${slot.name}のマテリアルを選択`}
                   className="h-7 min-w-0 rounded-sm border border-slate-300 bg-white px-1.5 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                 >
                   <option value="">
-                    {openBrush ? "OpenBrush Brush Shader" : "未設定"}
+                    {openBrush ? "OpenBrush Brush シェーダー" : "未設定"}
                   </option>
                   {materials.map((material) => (
                     <option key={material.id} value={material.id}>{material.name}</option>
@@ -1084,8 +1084,8 @@ function MeshInspector({
                   type="button"
                   disabled={!assigned}
                   onClick={() => assigned && onOpenMaterial(assigned.id)}
-                  aria-label="割り当て中のMaterialをInspectorで開く"
-                  title={commandTitle("マテリアルをインスペクターで開く", "EditAssignedMaterial")}
+                  aria-label="割り当て中のマテリアルをInspectorで開く"
+                  title={commandTitle("マテリアルをInspectorで開く", "EditAssignedMaterial")}
                   className="flex h-7 items-center justify-center rounded-sm text-slate-500 hover:bg-violet-100 hover:text-violet-700 disabled:cursor-not-allowed disabled:opacity-35"
                 >
                   <EDITOR_ICONS.asset size={13} aria-hidden="true" />
@@ -1096,7 +1096,7 @@ function MeshInspector({
         })}
         {slots.length === 0 ? (
           <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs leading-4 text-amber-800">
-            形状にマテリアルスロット情報がありません。インポート解析を確認してください。
+            マテリアルを割り当てられません。モデルの読み込み結果を確認してください。
           </p>
         ) : null}
       </div>
@@ -1119,7 +1119,7 @@ function MeshInspector({
             <label
               htmlFor={`mesh-max-distance-${component.id}`}
               className="text-xs font-medium text-slate-600"
-              title="このMeshをカメラから何メートルまで描画するか。未設定ならScene CameraのFarを使用します。"
+              title="表示する最大距離です（m）。未設定ならシーンのカメラ設定を使います。"
             >
               描画距離 (Far Clip)
             </label>
@@ -1129,9 +1129,9 @@ function MeshInspector({
                 disabled={readOnly}
                 onClick={() => onChange({ maxDistance: null })}
                 className="rounded px-1.5 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-45"
-                title="Mesh固有の描画距離を解除してScene CameraのFarへ戻す"
+                title="個別の描画距離を解除し、シーンのカメラ設定に戻します。"
               >
-                Scene Farへ戻す
+                シーンの設定に戻す
               </button>
             ) : null}
           </div>
@@ -1142,9 +1142,9 @@ function MeshInspector({
               max={1_000_000}
               step={1}
               value={component.maxDistance ?? Number.NaN}
-              placeholder="Scene Farを使用"
+              placeholder="シーンの終了距離を使う"
               disabled={readOnly}
-              ariaLabel="Meshの描画距離"
+              ariaLabel="メッシュの描画距離"
               scrubLabel="描画距離"
               onChange={(next) => onChange({ maxDistance: next })}
               onClear={() => onChange({ maxDistance: null })}
@@ -1155,7 +1155,7 @@ function MeshInspector({
             <span className="text-[11px] text-slate-400">m</span>
           </div>
           <p className="text-[11px] leading-4 text-slate-500">
-            葉や遠景モデルの負荷を抑える任意設定です。Editor / Play / 公開先で同じ距離判定を使います。
+            遠くのモデルを非表示にして、描画の負荷を減らします。
           </p>
         </div>
         <div className="space-y-1">
@@ -1163,7 +1163,7 @@ function MeshInspector({
             <label
               htmlFor={`mesh-render-order-${component.id}`}
               className="text-xs font-medium text-slate-600"
-              title="半透明の描画順を手で決めます。大きいほど後に描かれ、手前に出ます。0はレンダラー任せです。"
+              title="大きい値ほど後に描画します。0では自動で決めます。"
             >
               描画順 (Render Order)
             </label>
@@ -1173,7 +1173,7 @@ function MeshInspector({
                 disabled={readOnly}
                 onClick={() => onChange({ renderOrder: null })}
                 className="rounded px-1.5 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-45"
-                title="描画順の指定を解除してレンダラー任せへ戻す"
+                title="描画順の指定を解除して自動へ戻す"
               >
                 自動へ戻す
               </button>
@@ -1196,17 +1196,17 @@ function MeshInspector({
             align="left"
           />
           <p className="text-[11px] leading-4 text-slate-500">
-            半透明どうしはカメラからの距離で並ぶため、ガラスに貼ったデカールやランプの中の発光体のように重なる面では順序が定まりません。そこだけ手で決めます。
+            半透明の面が重なり、前後関係が崩れる場合に調整します。
           </p>
         </div>
         <ToggleRow
-          label="Cast Shadows"
+          label="影を落とす"
           checked={component.castShadow}
           disabled={readOnly}
           onChange={(castShadow) => onChange({ castShadow })}
         />
         <ToggleRow
-          label="Receive Shadows"
+          label="影を受ける"
           checked={component.receiveShadow}
           disabled={readOnly}
           onChange={(receiveShadow) => onChange({ receiveShadow })}
@@ -1644,7 +1644,7 @@ function TerrainInspector({
             onChange={setDepth}
           />
           <TerrainNumberField
-            label="Heightmap 解像度"
+            label="高さを記録する画像の解像度"
             value={resolution}
             min={9}
             max={257}
@@ -1669,7 +1669,7 @@ function TerrainInspector({
             サイズ・解像度を適用
           </button>
           <p className="text-[11px] leading-4 text-slate-500">
-            解像度を変えても高さは補間、穴はセル単位で保持します。
+            解像度を変えると高さを補間します。穴の位置はセル単位で引き継ぎます。
           </p>
         </section>
       ) : (
@@ -1691,7 +1691,7 @@ function TerrainInspector({
                   : "border border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100"
               }`}
             >
-              {sceneEditing ? "Scene編集を終了" : "Sceneで編集"}
+              {sceneEditing ? "シーン編集を終了" : "シーンで編集"}
             </button>
           </div>
 
@@ -1711,7 +1711,7 @@ function TerrainInspector({
 
           {mode === "grass" && grassLayers.length === 0 ? (
             <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] leading-4 text-amber-800">
-              草のレイヤーがありません。下の一覧から追加するか、セットを適用すると塗れます。
+              草のレイヤーを追加するか、セットを選んでください。
             </p>
           ) : mode === "grass" &&
             grassKind === "grass-paint" &&
@@ -1720,7 +1720,7 @@ function TerrainInspector({
             // the layer has been erased. Without saying so, the first stroke an
             // author tries looks like a broken brush.
             <p className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] leading-4 text-slate-600">
-              このレイヤーはまだ全面に生えています。「生やす」は消した所を戻す筆なので、先に「消す」で間引いてください。
+              草が全面に生えています。先に「消す」で間引いてください。
             </p>
           ) : null}
 
@@ -1831,8 +1831,8 @@ function TerrainInspector({
 
           <p className="text-[11px] leading-4 text-slate-500">
             {sceneEditing
-              ? "Scene上を左ドラッグして編集します。1ストロークは1件のUndoです。Escで取り消せます。"
-              : "「Sceneで編集」を押すと、Scene上を直接ドラッグして編集できます。"}
+              ? "左ドラッグで編集します。Escで今の操作を取り消します。"
+              : "「シーンで編集」を押し、地形をドラッグしてください。"}
           </p>
         </section>
       )}
@@ -1897,7 +1897,7 @@ function TerrainSurfaceSection({
   return (
     <section className="space-y-2" aria-label="地形の表面">
       <p className="text-[11px] leading-4 text-slate-500">
-        高さと傾斜でマテリアルを混ぜます。急斜面には岩、高い所には別の色が自動で出るので、塗らなくても地形らしくなります。
+        高さと傾斜に合わせて、マテリアルを自動で塗り分けます。
       </p>
 
       <label className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-xs text-slate-700">
@@ -1968,7 +1968,7 @@ function TerrainSurfaceSection({
             </dl>
           ) : null}
           <p className="text-[10px] leading-4 text-slate-500">
-            境界はこの地形の高さに合わせて調整されます。適用後はMaterialとしてInspectorから細かく調整できます。
+            境界を地形の高さに合わせます。適用後はInspectorで調整できます。
           </p>
         </div>
       ) : null}
@@ -2028,7 +2028,7 @@ function TerrainGrassLayerList({
 
       {grassLayers.length === 0 ? (
         <p className="text-[11px] leading-4 text-slate-500">
-          レイヤーを追加すると草が生えます。密度・高さ帯・傾斜のルールが配置を決め、ブラシで部分的に足し引きできます。
+          密度・高さ・傾斜で草の生え方を決め、ブラシで調整します。
         </p>
       ) : (
         <ul className="space-y-1">
@@ -2317,7 +2317,7 @@ function TerrainGrassCounts({ terrain }: { terrain: TerrainGeometry }) {
             <span className="font-mono text-slate-500">
               {entry.placement.placed.toLocaleString()}本
               {entry.placement.clampedByLimit
-                ? `（上限で丸め・要求${entry.placement.requested.toLocaleString()}）`
+                ? `（上限に達しています。指定数: ${entry.placement.requested.toLocaleString()}）`
                 : ""}
             </span>
           </li>
@@ -2329,7 +2329,7 @@ function TerrainGrassCounts({ terrain }: { terrain: TerrainGeometry }) {
           is already being ignored. */}
       {clamped ? (
         <p className="text-[10px] leading-4 text-slate-500">
-          上限（1層{TERRAIN_GRASS_MAX_INSTANCES.toLocaleString()}本）に達した層は、密度どおりには生えず地面が透けます。密度を下げるか、Terrainを分けて層ごとの面積を小さくしてください。
+          上限（1層{TERRAIN_GRASS_MAX_INSTANCES.toLocaleString()}本）に達した層は、密度どおりには生えず地面が透けます。密度を下げるか、地形を分けて層ごとの面積を小さくしてください。
         </p>
       ) : null}
     </div>
@@ -2426,7 +2426,7 @@ function TerrainGrassAppearanceFields({
         onChange={(fill) => onChange({ fill }, "草の空の明るさを変更しました")}
       />
       <p className="text-[10px] leading-4 text-slate-500">
-        空の明るさは、Sceneの光が届かない面を空からの照り返しでどれだけ起こすかです。0にすると光源だけで陰影が決まり、Skyboxしか光源がないSceneでは草が暗くなります。
+        光が当たらない面を明るくします。0ではライトだけで照らすため、草が暗くなる場合があります。
       </p>
     </div>
   );
@@ -2601,25 +2601,25 @@ function ModelNodeInspector({
           node.nodeType === "bone"
             ? "Bone"
             : node.nodeType === "skinned-mesh"
-              ? "Skinned Mesh Node"
+              ? "Skinned Meshのノード"
               : node.nodeType === "mesh"
-                ? "Mesh Node"
-                : "Model Node"
+                ? "メッシュのノード"
+                : "3Dモデルのノード"
         }
         subtitle={`glTF #${node.sourceNodeIndex}`}
       >
         <dl className="grid grid-cols-[70px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
-          <dt className="text-slate-500">Model</dt>
+          <dt className="text-slate-500">3Dモデル</dt>
           <dd className="truncate text-right font-medium text-slate-700">
             {model?.name ?? node.modelAssetId}
           </dd>
           <dt className="text-slate-500">編集</dt>
           <dd className="text-right text-slate-700">
-            {node.nodeType === "bone" ? "関節Transform" : "Node Transform"}
+            {node.nodeType === "bone" ? "関節位置・回転・大きさ" : "ノードの位置・回転・大きさ"}
           </dd>
         </dl>
         <p className="border-t border-slate-100 pt-2 text-xs leading-5 text-slate-500">
-          Transformは共有Modelのこのノードだけへ適用されます。SkinとAnimationは親のModel Entityで維持します。
+          このノードの位置・回転・大きさを変更します。スキンとアニメーションは親モデルで保ちます。
         </p>
       </ComponentCard>
       {nodeMesh && (node.nodeType === "mesh" || node.nodeType === "skinned-mesh") ? (
@@ -2749,7 +2749,7 @@ function ModelNodeDecimatePanel({
             <div className="space-y-1.5 rounded border border-violet-200 bg-violet-50 p-2">
               <p className="text-xs leading-5 text-violet-900">
                 「{nodeName}」のポリゴンを{Math.round(pendingRatio * 100)}
-                %まで減らします。この Model を使っている配置すべてに反映されます。
+                %まで減らします。この 3Dモデルを使っている配置すべてに反映されます。
               </p>
               <div className="flex gap-1.5">
                 <button
@@ -2782,7 +2782,7 @@ function ModelNodeDecimatePanel({
             </div>
           ) : null}
           <p className="text-[11px] leading-4 text-slate-500">
-            Node構造とMaterialの割当は変わりません。継ぎ目の法線とUVは統合されます。
+            ノード構造とマテリアルの割り当ては維持します。継ぎ目の法線とUVは統合します。
           </p>
           {/*
            * 間違えた直後に戻せる場所へ置く。原本は書き換えていないので、
@@ -2817,7 +2817,7 @@ function ModelNodeDecimatePanel({
             </p>
           ) : readOnly ? (
             <p className="text-[11px] leading-4 text-slate-500">
-              Playを停止すると軽量化できます。
+              動作確認を停止すると軽量化できます。
             </p>
           ) : null}
         </>
@@ -2860,9 +2860,9 @@ function ModelNodeColliderBakePanel({
   const bakedTriangles =
     baked?.kind === "model" ? baked.importMetadata?.primitiveCount : undefined;
   return (
-    <ComponentCard title="当たり判定だけ軽量化" subtitle="Decimation">
+    <ComponentCard title="当たり判定だけ軽量化">
       <p className="text-xs leading-5 text-slate-600">
-        歩ければ十分な面は、当たり判定だけ荒くできます。「{nodeName}
+        歩ければ十分な面は、当たり判定だけ粗くできます。「{nodeName}
         」の見た目は変わりません。
       </p>
       {baked?.kind === "model" ? (
@@ -2905,7 +2905,7 @@ function ModelNodeColliderBakePanel({
         <div className="space-y-1.5 rounded border border-teal-200 bg-teal-50 p-2">
           <p className="text-xs leading-5 text-teal-900">
             当たり判定を{Math.round(pendingRatio * 100)}
-            %のポリゴンで作り直します。見た目のMeshは変わりません。
+            %のポリゴンで作り直します。見た目のメッシュは変わりません。
           </p>
           <div className="flex gap-1.5">
             <button
@@ -2987,33 +2987,33 @@ function MultiSelectionInspector({
     return (
       <div className="space-y-3">
         <ComponentCard title="複数のEntity" subtitle={`${entities.length}件`}>
-          <p className="text-xs leading-5 text-slate-600">共通するコンポーネントだけを一括変更できます。変更は一回のUndoにまとまります。</p>
+          <p className="text-xs leading-5 text-slate-600">共通するComponentをまとめて変更します。</p>
           <div className="flex flex-wrap gap-2">
             <button type="button" disabled={readOnly} onClick={() => onSetEntitiesEnabled(true)} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">有効にする</button>
             <button type="button" disabled={readOnly} onClick={() => onSetEntitiesEnabled(false)} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">無効にする</button>
           </div>
         </ComponentCard>
         {allHaveMesh ? (
-          <ComponentCard title="Mesh Renderer" subtitle="全選択で共通">
-            <p className="text-xs text-slate-500">Cast Shadow: {meshCastShadow === null ? "一部異なる" : meshCastShadow ? "有効" : "無効"} / Receive Shadow: {meshReceiveShadow === null ? "一部異なる" : meshReceiveShadow ? "有効" : "無効"}</p>
+          <ComponentCard title="メッシュの描画" subtitle="全選択で共通">
+            <p className="text-xs text-slate-500">影を落とす: {meshCastShadow === null ? "一部異なる" : meshCastShadow ? "有効" : "無効"} / 影を受ける: {meshReceiveShadow === null ? "一部異なる" : meshReceiveShadow ? "有効" : "無効"}</p>
             <div className="flex flex-wrap gap-2">
-              <button type="button" disabled={readOnly} onClick={() => onSetMeshShadow({ castShadow: true })} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">Cast Shadowを有効</button>
-              <button type="button" disabled={readOnly} onClick={() => onSetMeshShadow({ castShadow: false })} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">Cast Shadowを無効</button>
-              <button type="button" disabled={readOnly} onClick={() => onSetMeshShadow({ receiveShadow: true })} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">Receive Shadowを有効</button>
-              <button type="button" disabled={readOnly} onClick={() => onSetMeshShadow({ receiveShadow: false })} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">Receive Shadowを無効</button>
+              <button type="button" disabled={readOnly} onClick={() => onSetMeshShadow({ castShadow: true })} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">影を落とす</button>
+              <button type="button" disabled={readOnly} onClick={() => onSetMeshShadow({ castShadow: false })} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">影を落とさない</button>
+              <button type="button" disabled={readOnly} onClick={() => onSetMeshShadow({ receiveShadow: true })} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">影を受ける</button>
+              <button type="button" disabled={readOnly} onClick={() => onSetMeshShadow({ receiveShadow: false })} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">影を受けない</button>
             </div>
           </ComponentCard>
         ) : null}
         {allHaveLight ? (
-          <ComponentCard title="Light" subtitle="全選択で共通">
-            <p className="text-xs text-slate-500">Cast Shadow: {lightCastShadow === null ? "一部異なる" : lightCastShadow ? "有効" : "無効"}</p>
+          <ComponentCard title="ライト" subtitle="全選択で共通">
+            <p className="text-xs text-slate-500">影を落とす: {lightCastShadow === null ? "一部異なる" : lightCastShadow ? "有効" : "無効"}</p>
             <div className="flex gap-2">
-              <button type="button" disabled={readOnly} onClick={() => onSetLightShadow(true)} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">Cast Shadowを有効</button>
-              <button type="button" disabled={readOnly} onClick={() => onSetLightShadow(false)} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">Cast Shadowを無効</button>
+              <button type="button" disabled={readOnly} onClick={() => onSetLightShadow(true)} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">影を落とす</button>
+              <button type="button" disabled={readOnly} onClick={() => onSetLightShadow(false)} className="rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-45">影を落とさない</button>
             </div>
           </ComponentCard>
         ) : null}
-        {!allHaveMesh && !allHaveLight ? <p className="rounded border border-dashed border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">共通のMesh RendererまたはLightコンポーネントはありません。</p> : null}
+        {!allHaveMesh && !allHaveLight ? <p className="rounded border border-dashed border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">共通のメッシュの描画またはライトComponentはありません。</p> : null}
       </div>
     );
   }
@@ -3036,13 +3036,13 @@ function MultiSelectionInspector({
   if (allMaterials) {
     return (
       <div className="space-y-3">
-        <ComponentCard title="複数のMaterial" subtitle={`${materials.length}件`}>
-          <p className="text-xs leading-5 text-slate-600">共通のPBR値をまとめて変更します。カラー、Metalness、Roughnessは参照中のすべてのMesh previewへ反映されます。</p>
+        <ComponentCard title="複数のマテリアル" subtitle={`${materials.length}件`}>
+          <p className="text-xs leading-5 text-slate-600">選択したマテリアルをまとめて変更します。すべての使用箇所に反映します。</p>
           <label className="block text-xs font-semibold text-slate-600">Base Color
             <span className="mt-1 flex items-center gap-2"><input type="color" disabled={readOnly} value={materialColor ?? "#ffffff"} onChange={(event) => onApplyMaterialPatch({ color: event.currentTarget.value })} className="h-8 w-12 rounded border border-slate-300 bg-white p-0.5 disabled:opacity-45" /><span className="font-normal text-slate-500">{materialColor ?? "一部異なる"}</span></span>
           </label>
           <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs font-semibold text-slate-600">Metalness<ScrubNumberInput min={0} max={1} step={0.01} scrubStep={0.002} disabled={readOnly} value={materialMetalness ?? Number.NaN} placeholder="一部異なる" ariaLabel="Metalness" scrubLabel="Metalness" onChange={(value) => onApplyMaterialPatch({ metalness: value })} wrapperClassName="mt-1" /></label>
+            <label className="text-xs font-semibold text-slate-600">Metallic<ScrubNumberInput min={0} max={1} step={0.01} scrubStep={0.002} disabled={readOnly} value={materialMetalness ?? Number.NaN} placeholder="一部異なる" ariaLabel="Metallic" scrubLabel="Metallic" onChange={(value) => onApplyMaterialPatch({ metalness: value })} wrapperClassName="mt-1" /></label>
             <label className="text-xs font-semibold text-slate-600">Roughness<ScrubNumberInput min={0} max={1} step={0.01} scrubStep={0.002} disabled={readOnly} value={materialRoughness ?? Number.NaN} placeholder="一部異なる" ariaLabel="Roughness" scrubLabel="Roughness" onChange={(value) => onApplyMaterialPatch({ roughness: value })} wrapperClassName="mt-1" /></label>
           </div>
         </ComponentCard>
@@ -3050,7 +3050,7 @@ function MultiSelectionInspector({
     );
   }
 
-  return <p className="rounded border border-dashed border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">複数選択では同種のEntityまたはMaterialを選ぶと共通プロパティを編集できます。Textureを2件以上選ぶと、Import設定でまとめて変換できます。</p>;
+  return <p className="rounded border border-dashed border-slate-300 bg-white px-3 py-2 text-xs text-slate-500">同じ種類を選ぶとまとめて編集できます。テクスチャは一括変換できます。</p>;
 }
 
 /**
@@ -3101,20 +3101,20 @@ function TextureBatchProcessingCard({
     .join(" / ");
 
   return (
-    <ComponentCard title="複数のTexture" subtitle={`${textures.length}件`}>
+    <ComponentCard title="複数のテクスチャ" subtitle={`${textures.length}件`}>
       <p className="text-xs leading-5 text-slate-600">
-        共通の設定で、編集に使う画像を変換します。変換済みの画像は、保存してある元画像から作り直します。
+        元画像から、選択したテクスチャをまとめて変換します。
       </p>
       <label className="block text-xs text-slate-600">最大解像度
         <select value={maxSize} disabled={busy || readOnly} onChange={(event) => setMaxSize(event.currentTarget.value)} className="mt-1 h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs">
-          <option value="keep">各Textureの設定を使う</option>
+          <option value="keep">各テクスチャの設定を使う</option>
           <option value="original">変換元のサイズを維持</option>
-          {TEXTURE_MAX_SIZE_CHOICES.map((size) => <option key={size} value={size}>長辺 最大 {size}px</option>)}
+          {TEXTURE_MAX_SIZE_CHOICES.map((size) => <option key={size} value={size}>長辺最大 {size}px</option>)}
         </select>
       </label>
       <label className="block text-xs text-slate-600">圧縮方式
         <select value={format} disabled={busy || readOnly} onChange={(event) => setFormat(event.currentTarget.value)} className="mt-1 h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs">
-          <option value="keep">各Textureの設定を使う</option>
+          <option value="keep">各テクスチャの設定を使う</option>
           <option value="source">変換元の画像形式を維持</option>
           <option value="webp">WEBP</option>
           <option value="ktx2">KTX2（GPU圧縮）</option>
@@ -3135,7 +3135,7 @@ function TextureBatchProcessingCard({
         ) : null}
       </dl>
       <details className="text-xs text-slate-600">
-        <summary className="cursor-pointer">Textureごとの内訳と理由</summary>
+        <summary className="cursor-pointer">テクスチャごとの内訳と理由</summary>
         <ul className="mt-2 max-h-48 space-y-2 overflow-auto">
           {plans.map(({ texture, plan }) => <li key={texture.id}>
             <span className="font-medium">{texture.name}</span>
@@ -3145,7 +3145,7 @@ function TextureBatchProcessingCard({
       </details>
       {otherSelectionCount > 0 ? (
         <p className="text-[11px] leading-4 text-slate-500">
-          Texture以外の{otherSelectionCount}件は変換しません。
+          テクスチャ以外の{otherSelectionCount}件は変換しません。
         </p>
       ) : null}
       <button
@@ -3171,11 +3171,11 @@ function TextureBatchProcessingCard({
         </p>
       ) : pending.length === 0 ? (
         <p className="text-[11px] leading-4 text-slate-500">
-          上の最大解像度・圧縮方式を選んでください。変更不要・対象外の理由は内訳で確認できます。
+          最大解像度と圧縮方式を選んでください。対象外の理由は内訳に表示します。
         </p>
       ) : (
         <p className="rounded border border-amber-200 bg-amber-50 p-1.5 text-xs leading-4 text-amber-800">
-          元の画像ファイルは残したまま、Assetの参照先が変換後の画像へ切り替わります。1件でも失敗した場合は、どのAssetも差し替えません。
+          元画像は残します。1件でも失敗した場合は、すべての差し替えを中止します。
         </p>
       )}
     </ComponentCard>
@@ -3247,7 +3247,7 @@ function ModelPoseEditor({
         モデルポーズ
       </summary>
       <p className="mt-1 text-xs leading-4 text-slate-500">
-        この配置だけに保存する静的なポーズです。Asset共通値や別の配置は変更しません。
+        この配置だけのポーズです。元モデルや他の配置は変わりません。
       </p>
 
       {bones.length > 0 ? (
@@ -3414,11 +3414,10 @@ function ColliderInspector({
 
   return (
     <ComponentCard
-      title={component.shape === "box" ? "Box Collider" : "Mesh Collider"}
-      subtitle="Physics"
+      title={component.shape === "box" ? "Box 衝突判定" : "メッシュ衝突判定"}
     >
       <ToggleRow
-        label="Enabled"
+        label="有効"
         checked={component.enabled}
         disabled={readOnly}
         onChange={(enabled) => onChange({ enabled })}
@@ -3426,15 +3425,15 @@ function ColliderInspector({
 
       {bodyOwner ? (
         <p className="rounded border border-indigo-100 bg-indigo-50 px-2 py-1.5 text-xs leading-5 text-indigo-800">
-          Rigid Body: {bodyOwner.name}。このColliderは親Bodyの形状として使われます。
+          物理挙動: {bodyOwner.name}。この衝突判定は親Bodyの形状として使われます。
         </p>
       ) : (
       <div className="space-y-2.5 border-t border-slate-100 pt-2.5">
         <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-          Rigid Body · Entity共通
+          物理挙動 · Entity共通
         </p>
         <label className="grid grid-cols-[minmax(0,1fr)_150px] items-center gap-3 text-xs text-slate-700">
-          Rigid Body
+          物理挙動
           <select
             value={component.bodyType ?? "fixed"}
             disabled={readOnly}
@@ -3447,14 +3446,14 @@ function ColliderInspector({
             }
             className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
           >
-            <option value="fixed">Static（Fixed）</option>
-            <option value="dynamic">Dynamic</option>
-            <option value="kinematicPosition">Kinematic Position</option>
-            <option value="kinematicVelocity">Kinematic Velocity</option>
+            <option value="fixed">固定</option>
+            <option value="dynamic">物理演算で動かす</option>
+            <option value="kinematicPosition">位置を指定して動かす</option>
+            <option value="kinematicVelocity">速度を指定して動かす</option>
           </select>
         </label>
         <ColliderNumberField
-          label="Gravity Scale"
+          label="重力の倍率"
           value={component.gravityScale ?? 1}
           min={-100}
           max={100}
@@ -3463,7 +3462,7 @@ function ColliderInspector({
           onChange={(gravityScale) => onChange({ gravityScale })}
         />
         <ColliderNumberField
-          label="Linear Damping"
+          label="移動の減衰"
           value={component.linearDamping ?? 0}
           min={0}
           step={0.05}
@@ -3471,7 +3470,7 @@ function ColliderInspector({
           onChange={(linearDamping) => onChange({ linearDamping })}
         />
         <ColliderNumberField
-          label="Angular Damping"
+          label="回転の減衰"
           value={component.angularDamping ?? 0}
           min={0}
           step={0.05}
@@ -3479,25 +3478,25 @@ function ColliderInspector({
           onChange={(angularDamping) => onChange({ angularDamping })}
         />
         <ToggleRow
-          label="Can Sleep"
+          label="静止中は計算を休止する"
           checked={component.canSleep ?? true}
           disabled={readOnly}
           onChange={(canSleep) => onChange({ canSleep })}
         />
         <ToggleRow
-          label="CCD"
+          label="高速移動時の衝突判定"
           checked={component.ccd ?? false}
           disabled={readOnly}
           onChange={(ccd) => onChange({ ccd })}
         />
         <ToggleRow
-          label="Lock Position"
+          label="移動を固定する軸"
           checked={component.lockTranslations ?? false}
           disabled={readOnly}
           onChange={(lockTranslations) => onChange({ lockTranslations })}
         />
         <ToggleRow
-          label="Lock Rotation"
+          label="回転を固定する軸"
           checked={component.lockRotations ?? false}
           disabled={readOnly}
           onChange={(lockRotations) => onChange({ lockRotations })}
@@ -3509,7 +3508,7 @@ function ColliderInspector({
         <div className="space-y-2.5 border-t border-slate-100 pt-2.5">
           <div className="flex items-center justify-between gap-2">
             <label className="flex min-w-0 flex-1 items-center gap-2 text-xs text-slate-700">
-              Fit
+              大きさを合わせる
               <select
                 value={component.fitMode}
                 disabled={readOnly}
@@ -3519,7 +3518,7 @@ function ColliderInspector({
                 }}
                 className="h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
               >
-                <option value="auto">Meshに追従</option>
+                <option value="auto">メッシュに追従</option>
                 <option value="manual">手動</option>
               </select>
             </label>
@@ -3533,14 +3532,14 @@ function ColliderInspector({
             </button>
           </div>
           <VectorEditor
-            label="Center"
+            label="中央"
             value={component.center}
             valueKind="position"
             disabled={readOnly}
             onChange={(center) => onChange({ center, fitMode: "manual" })}
           />
           <VectorEditor
-            label="Half Extents"
+            label="各軸の半幅"
             value={component.halfExtents}
             valueKind="scale"
             disabled={readOnly}
@@ -3556,7 +3555,7 @@ function ColliderInspector({
         </div>
       ) : (
         <label className="grid grid-cols-[78px_minmax(0,1fr)] items-center gap-2 border-t border-slate-100 pt-2.5 text-xs text-slate-700">
-          Mesh Mode
+          形の作り方
           <select
             value={component.meshMode}
             disabled={readOnly}
@@ -3565,21 +3564,21 @@ function ColliderInspector({
             }
             className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
           >
-            <option value="trimesh">Trimesh（地形・固定物）</option>
-            <option value="convex">Convex Hull（軽量）</option>
+            <option value="trimesh">メッシュの形を使う（固定物向け）</option>
+            <option value="convex">外形を囲む形を使う（凸包）</option>
           </select>
         </label>
       )}
 
       <div className="space-y-2.5 border-t border-slate-100 pt-2.5">
         <ToggleRow
-          label="Is Trigger"
+          label="接触の検知に使う"
           checked={component.isTrigger}
           disabled={readOnly}
           onChange={(isTrigger) => onChange({ isTrigger })}
         />
         <ColliderNumberField
-          label="Friction"
+          label="摩擦"
           value={component.friction}
           min={0}
           step={0.05}
@@ -3587,7 +3586,7 @@ function ColliderInspector({
           onChange={(friction) => onChange({ friction })}
         />
         <ColliderNumberField
-          label="Restitution"
+          label="跳ね返り"
           value={component.restitution}
           min={0}
           max={1}
@@ -3603,7 +3602,7 @@ function ColliderInspector({
         onClick={onRemove}
         className="w-full rounded border border-rose-200 bg-white px-2.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-45"
       >
-        Colliderを削除
+        衝突判定を削除
       </button>
     </ComponentCard>
   );
@@ -3626,12 +3625,11 @@ function RigidBodyInspector({
 }) {
   return (
     <ComponentCard
-      title="Rigid Body"
-      subtitle="Physics · 子孫を所有"
+      title="物理挙動"
       enabled={{
         checked: component.enabled,
         disabled: readOnly,
-        label: "Rigid Bodyを有効化",
+        label: "物理挙動を有効化",
         onChange: (enabled) => onChange({ enabled }),
       }}
       actions={
@@ -3639,8 +3637,8 @@ function RigidBodyInspector({
           type="button"
           disabled={readOnly}
           onClick={onRemove}
-          aria-label="Rigid Bodyを削除"
-          title="Rigid Bodyを削除"
+          aria-label="物理挙動を削除"
+          title="物理挙動を削除"
           className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-rose-50 hover:text-rose-700 disabled:opacity-40"
         >
           <EDITOR_ICONS.delete size={13} aria-hidden="true" />
@@ -3648,26 +3646,26 @@ function RigidBodyInspector({
       }
     >
       <p className="rounded bg-indigo-50 px-2 py-1.5 text-xs leading-5 text-indigo-800">
-        このEntityを原点に、入れ子のRigid Bodyまでの子孫をまとめます。
-        Collider {descendantColliderCount} / Mesh {descendantMeshCount}
+        このEntity以下を1つの物体として扱います。別の物理挙動を持つ子は除きます。
+        衝突判定 {descendantColliderCount} / メッシュ {descendantMeshCount}
       </p>
       {(component.autoColliders === "none" &&
         descendantColliderCount === 0) ||
       (component.autoColliders !== "none" && descendantMeshCount === 0) ? (
         <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-5 text-amber-800">
           {component.autoColliders === "none"
-            ? "このBody範囲に有効なColliderがありません。子EntityへColliderを追加してください。"
-            : "自動Colliderを作成できるMeshがこのBody範囲にありません。"}
+            ? "当たり判定がありません。子Entityに追加してください。"
+            : "当たり判定の自動作成に使えるメッシュがありません。"}
         </p>
       ) : null}
       {component.autoColliders === "trimesh" &&
       component.bodyType !== "fixed" ? (
         <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-5 text-amber-800">
-          Dynamic / Kinematicでは安全なConvex Hullとして実行・出力します。
+          動く物体では、外形を囲む形（凸包）にして動作確認と書き出しを行います。
         </p>
       ) : null}
       <label className="grid grid-cols-[minmax(0,1fr)_150px] items-center gap-3 text-xs text-slate-700">
-        Type
+        種類
         <select
           value={component.bodyType}
           disabled={readOnly}
@@ -3678,14 +3676,14 @@ function RigidBodyInspector({
           }
           className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
         >
-          <option value="fixed">Static（Fixed）</option>
-          <option value="dynamic">Dynamic</option>
-          <option value="kinematicPosition">Kinematic Position</option>
-          <option value="kinematicVelocity">Kinematic Velocity</option>
+          <option value="fixed">固定</option>
+          <option value="dynamic">物理演算で動かす</option>
+          <option value="kinematicPosition">位置を指定して動かす</option>
+          <option value="kinematicVelocity">速度を指定して動かす</option>
         </select>
       </label>
       <label className="grid grid-cols-[minmax(0,1fr)_150px] items-center gap-3 text-xs text-slate-700">
-        Auto Colliders
+        衝突判定を自動で作る
         <select
           value={component.autoColliders}
           disabled={readOnly}
@@ -3697,21 +3695,21 @@ function RigidBodyInspector({
           }
           className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
         >
-          <option value="none">Off（明示Colliderのみ）</option>
-          <option value="cuboid">Cuboid</option>
-          <option value="ball">Ball</option>
-          <option value="hull">Convex Hull</option>
-          <option value="trimesh">Trimesh</option>
+          <option value="none">自動で付けない（手動の設定だけ使う）</option>
+          <option value="cuboid">直方体</option>
+          <option value="ball">球</option>
+          <option value="hull">凹みを省いた外形</option>
+          <option value="trimesh">メッシュと同じ形</option>
         </select>
       </label>
       <ToggleRow
-        label="Auto Collider Trigger"
+        label="自動生成した判定で接触を検知する"
         checked={component.isTrigger}
         disabled={readOnly}
         onChange={(isTrigger) => onChange({ isTrigger })}
       />
       <ColliderNumberField
-        label="Auto Friction"
+        label="自動生成した判定の摩擦"
         value={component.friction}
         min={0}
         step={0.05}
@@ -3719,7 +3717,7 @@ function RigidBodyInspector({
         onChange={(friction) => onChange({ friction })}
       />
       <ColliderNumberField
-        label="Auto Restitution"
+        label="自動生成した判定の跳ね返り"
         value={component.restitution}
         min={0}
         max={1}
@@ -3728,7 +3726,7 @@ function RigidBodyInspector({
         onChange={(restitution) => onChange({ restitution })}
       />
       <ColliderNumberField
-        label="Gravity Scale"
+        label="重力の倍率"
         value={component.gravityScale}
         min={-100}
         max={100}
@@ -3737,7 +3735,7 @@ function RigidBodyInspector({
         onChange={(gravityScale) => onChange({ gravityScale })}
       />
       <ColliderNumberField
-        label="Linear Damping"
+        label="移動の減衰"
         value={component.linearDamping}
         min={0}
         step={0.05}
@@ -3745,7 +3743,7 @@ function RigidBodyInspector({
         onChange={(linearDamping) => onChange({ linearDamping })}
       />
       <ColliderNumberField
-        label="Angular Damping"
+        label="回転の減衰"
         value={component.angularDamping}
         min={0}
         step={0.05}
@@ -3753,25 +3751,25 @@ function RigidBodyInspector({
         onChange={(angularDamping) => onChange({ angularDamping })}
       />
       <ToggleRow
-        label="Can Sleep"
+        label="静止中は計算を休止する"
         checked={component.canSleep}
         disabled={readOnly}
         onChange={(canSleep) => onChange({ canSleep })}
       />
       <ToggleRow
-        label="CCD"
+        label="高速移動時の衝突判定"
         checked={component.ccd}
         disabled={readOnly}
         onChange={(ccd) => onChange({ ccd })}
       />
       <ToggleRow
-        label="Lock Position"
+        label="移動を固定する軸"
         checked={component.lockTranslations}
         disabled={readOnly}
         onChange={(lockTranslations) => onChange({ lockTranslations })}
       />
       <ToggleRow
-        label="Lock Rotation"
+        label="回転を固定する軸"
         checked={component.lockRotations}
         disabled={readOnly}
         onChange={(lockRotations) => onChange({ lockRotations })}
@@ -3796,21 +3794,20 @@ function LightInspector({
   return (
     <ComponentCard
       title={LIGHT_LABELS[component.lightType]}
-      subtitle="Three.js"
       remove={
         onRemove
-          ? { label: "Lightを削除", disabled: readOnly, onRemove }
+          ? { label: "ライトを削除", disabled: readOnly, onRemove }
           : undefined
       }
     >
       <ToggleRow
-        label="Enabled"
+        label="有効"
         checked={component.enabled}
         disabled={readOnly}
         onChange={(enabled) => onChange({ enabled })}
       />
       <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
-        Type
+        種類
         <select
           value={component.lightType}
           disabled={readOnly}
@@ -3836,7 +3833,7 @@ function LightInspector({
         </select>
       </label>
       <div className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
-        <span>Color</span>
+        <span>色</span>
         <input
           type="color"
           value={component.color}
@@ -3846,7 +3843,7 @@ function LightInspector({
         />
       </div>
       <ColliderNumberField
-        label="Intensity"
+        label="強さ"
         value={component.intensity}
         min={0}
         step={0.1}
@@ -3856,7 +3853,7 @@ function LightInspector({
 
       {component.lightType === "hemisphere" ? (
         <div className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 border-t border-slate-100 pt-2 text-xs text-slate-700">
-          <span>Ground Color</span>
+          <span>地面側の色</span>
           <input
             type="color"
             value={component.groundColor ?? "#334155"}
@@ -3870,7 +3867,7 @@ function LightInspector({
       {component.lightType === "point" || component.lightType === "spot" ? (
         <div className="space-y-2 border-t border-slate-100 pt-2">
           <ColliderNumberField
-            label="Distance"
+            label="届く距離"
             value={component.distance ?? 0}
             min={0}
             step={0.1}
@@ -3878,7 +3875,7 @@ function LightInspector({
             onChange={(distance) => onChange({ distance })}
           />
           <ColliderNumberField
-            label="Decay"
+            label="距離による減衰"
             value={component.decay ?? 2}
             min={0}
             step={0.1}
@@ -3891,7 +3888,7 @@ function LightInspector({
       {component.lightType === "spot" ? (
         <div className="space-y-2 border-t border-slate-100 pt-2">
           <ColliderNumberField
-            label="Angle (°)"
+            label="広がる角度（度）"
             value={((component.angle ?? Math.PI / 3) * 180) / Math.PI}
             min={1}
             max={90}
@@ -3900,7 +3897,7 @@ function LightInspector({
             onChange={(degrees) => onChange({ angle: (degrees * Math.PI) / 180 })}
           />
           <ColliderNumberField
-            label="Penumbra"
+            label="光の縁のぼかし"
             value={component.penumbra ?? 0.5}
             min={0}
             max={1}
@@ -3914,7 +3911,7 @@ function LightInspector({
       {component.lightType === "rectArea" ? (
         <div className="space-y-2 border-t border-slate-100 pt-2">
           <ColliderNumberField
-            label="Width"
+            label="幅"
             value={component.width ?? 1}
             min={0.01}
             step={0.1}
@@ -3922,7 +3919,7 @@ function LightInspector({
             onChange={(width) => onChange({ width })}
           />
           <ColliderNumberField
-            label="Height"
+            label="高さ"
             value={component.height ?? 1}
             min={0.01}
             step={0.1}
@@ -3935,7 +3932,7 @@ function LightInspector({
       {supportsShadow ? (
         <div className="border-t border-slate-100 pt-2">
           <ToggleRow
-            label="Cast Shadows"
+            label="影を落とす"
             checked={component.castShadow}
             disabled={readOnly}
             onChange={(castShadow) => onChange({ castShadow })}
@@ -3991,22 +3988,21 @@ function TextInspector({
 
   return (
     <ComponentCard
-      title="Text"
-      subtitle="SDF"
+      title="テキスト"
       remove={
         onRemove
-          ? { label: "Textを削除", disabled: readOnly, onRemove }
+          ? { label: "テキストを削除", disabled: readOnly, onRemove }
           : undefined
       }
     >
       <ToggleRow
-        label="Enabled"
+        label="有効"
         checked={component.enabled}
         disabled={readOnly}
         onChange={(enabled) => onChange({ enabled })}
       />
       <label className="block text-xs font-medium text-slate-600">
-        Content
+        表示する文字
         <textarea
           value={component.text}
           disabled={readOnly}
@@ -4016,7 +4012,7 @@ function TextInspector({
         />
       </label>
       <label className="block text-xs font-medium text-slate-600">
-        Font
+        フォント
         <select
           value={
             component.fontAssetId
@@ -4062,13 +4058,13 @@ function TextInspector({
       </label>
       <p className="text-[11px] leading-4 text-slate-500">
         {projectFontAsset
-          ? "取り込んだフォントファイルで表示します。太さは選べません。公開したWorldにも同じファイルを同梱します。"
+          ? "追加したフォントを使います。太さは変更できません。"
           : component.fontId && component.fontId !== AUTOMATIC_TEXT_FONT_ID
-            ? "選んだ書体のファイルはStudioに同梱し、公開したWorldにも同梱します。"
-            : "日本語と欧文を含む標準書体で表示します。Studioも公開したWorldも同じ同梱ファイルを読みます。"}
+            ? "公開後も同じ書体で表示します。"
+            : "日本語と欧文に対応した標準書体です。"}
       </p>
       <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
-        Weight
+        文字の太さ
         <select
           value={String(component.fontWeight ?? 400)}
           disabled={readOnly}
@@ -4085,7 +4081,7 @@ function TextInspector({
         </select>
       </label>
       <div className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
-        <span>Color</span>
+        <span>色</span>
         <input
           type="color"
           value={component.color}
@@ -4095,7 +4091,7 @@ function TextInspector({
         />
       </div>
       <ColliderNumberField
-        label="Font Size"
+        label="文字の大きさ"
         value={component.fontSize}
         min={0.001}
         step={0.01}
@@ -4103,10 +4099,10 @@ function TextInspector({
         onChange={(fontSize) => onChange({ fontSize })}
       />
       <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
-        <span className="text-[11px] text-slate-500">大きさを引いて調整</span>
+        <span className="text-[11px] text-slate-500">ドラッグして文字の大きさを調整</span>
         <input
           type="range"
-          aria-label="Font Sizeのスライダー"
+          aria-label="文字サイズのスライダー"
           min={0.01}
           // 大きな見出しを数値で入れた後もつまみが端に張り付かないよう、上限を追従させる。
           max={Math.max(1, roundTo(component.fontSize, 2))}
@@ -4121,7 +4117,7 @@ function TextInspector({
         />
       </label>
       <ColliderNumberField
-        label="Max Width"
+        label="最大幅"
         value={component.maxWidth ?? 10}
         min={0.01}
         step={0.1}
@@ -4129,7 +4125,7 @@ function TextInspector({
         onChange={(maxWidth) => onChange({ maxWidth })}
       />
       <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
-        Text Align
+        文字の配置
         <select
           value={component.textAlign ?? "center"}
           disabled={readOnly}
@@ -4142,14 +4138,14 @@ function TextInspector({
           }
           className="h-8 rounded border border-slate-300 bg-white px-2 text-xs outline-none focus:border-violet-500 disabled:bg-slate-100"
         >
-          <option value="left">Left</option>
-          <option value="center">Center</option>
-          <option value="right">Right</option>
-          <option value="justify">Justify</option>
+          <option value="left">左</option>
+          <option value="center">中央</option>
+          <option value="right">右</option>
+          <option value="justify">文字揃え</option>
         </select>
       </label>
       <ColliderNumberField
-        label="Line Height"
+        label="行の高さ"
         value={component.lineHeight ?? 1.25}
         min={0.5}
         step={0.05}
@@ -4157,7 +4153,7 @@ function TextInspector({
         onChange={(lineHeight) => onChange({ lineHeight })}
       />
       <ColliderNumberField
-        label="Letter Spacing"
+        label="文字の間隔"
         value={component.letterSpacing ?? 0}
         min={-0.5}
         step={0.005}
@@ -4165,7 +4161,7 @@ function TextInspector({
         onChange={(letterSpacing) => onChange({ letterSpacing })}
       />
       <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
-        Anchor X
+        横方向の基準位置
         <select
           value={component.anchorX}
           disabled={readOnly}
@@ -4174,13 +4170,13 @@ function TextInspector({
           }
           className="h-8 rounded border border-slate-300 bg-white px-2 text-xs outline-none focus:border-violet-500 disabled:bg-slate-100"
         >
-          <option value="left">Left</option>
-          <option value="center">Center</option>
-          <option value="right">Right</option>
+          <option value="left">左</option>
+          <option value="center">中央</option>
+          <option value="right">右</option>
         </select>
       </label>
       <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
-        Anchor Y
+        縦方向の基準位置
         <select
           value={component.anchorY}
           disabled={readOnly}
@@ -4189,13 +4185,13 @@ function TextInspector({
           }
           className="h-8 rounded border border-slate-300 bg-white px-2 text-xs outline-none focus:border-violet-500 disabled:bg-slate-100"
         >
-          <option value="top">Top</option>
-          <option value="middle">Middle</option>
-          <option value="bottom">Bottom</option>
+          <option value="top">上</option>
+          <option value="middle">中央</option>
+          <option value="bottom">下</option>
         </select>
       </label>
       <ColliderNumberField
-        label="Outline"
+        label="縁取りの幅"
         value={component.outlineWidth}
         min={0}
         step={0.005}
@@ -4203,7 +4199,7 @@ function TextInspector({
         onChange={(outlineWidth) => onChange({ outlineWidth })}
       />
       <div className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
-        <span>Outline Color</span>
+        <span>縁取りの色</span>
         <input
           type="color"
           value={component.outlineColor}
@@ -4215,7 +4211,7 @@ function TextInspector({
 
       <div className="space-y-2 border-t border-slate-100 pt-2">
         <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs font-medium text-slate-700">
-          Background
+          背景
           <select
             value={background.mode}
             disabled={readOnly}
@@ -4233,7 +4229,7 @@ function TextInspector({
         </label>
         {background.mode === "none" ? (
           <p className="text-[11px] leading-4 text-slate-500">
-            文字だけを空間に置きます。壁の解説や看板を作るときは「色」または「画像」を選ぶと、文字の後ろに板が付きます。
+            背景を付けるには「色」か「画像」を選んでください。
           </p>
         ) : null}
       </div>
@@ -4243,7 +4239,7 @@ function TextInspector({
           {background.mode === "texture" ? (
             <>
               <label className="block text-xs font-medium text-slate-600">
-                背景の画像 (Texture Asset)
+                背景の画像 (テクスチャ)
                 <select
                   value={background.textureAssetId ?? ""}
                   disabled={readOnly}
@@ -4271,7 +4267,7 @@ function TextInspector({
               ) : null}
               {textureAssets.length === 0 ? (
                 <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-4 text-amber-800">
-                  Assetsのインポートから画像を追加すると、背景に選べます。
+                  Assetsに背景用の画像を追加してください。
                 </p>
               ) : !background.textureAssetId ? (
                 <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-4 text-amber-800">
@@ -4371,7 +4367,7 @@ function TextInspector({
             onChange={(doubleSided) => patchBackground({ doubleSided })}
           />
           <p className="text-[11px] leading-4 text-slate-500">
-            背景と文字はライトの影響を受けません。展示の解説パネルのように、部屋の明るさに関わらず同じ見え方になります。
+            背景と文字はライトの影響を受けません。
           </p>
         </div>
       ) : null}
@@ -4444,23 +4440,22 @@ function ImageInspector({
 
   return (
     <ComponentCard
-      title="Image"
-      subtitle="画像"
+      title="画像"
       remove={
         onRemove
-          ? { label: "Imageを削除", disabled: readOnly, onRemove }
+          ? { label: "画像を削除", disabled: readOnly, onRemove }
           : undefined
       }
     >
       <ToggleRow
-        label="Enabled"
+        label="有効"
         checked={component.enabled}
         disabled={readOnly}
         onChange={(enabled) => onChange({ enabled })}
       />
       <div className="space-y-1">
         <span className="block text-xs font-medium text-slate-600">
-          画像 (Texture Asset)
+          画像 (テクスチャ)
         </span>
         <div className="flex items-center gap-2">
           <span
@@ -4483,7 +4478,7 @@ function ImageInspector({
           <select
             value={component.textureAssetId ?? ""}
             disabled={readOnly}
-            aria-label="画像のTexture Asset"
+            aria-label="画像のテクスチャ"
             onChange={(event) =>
               onChange({ textureAssetId: event.currentTarget.value })
             }
@@ -4501,10 +4496,10 @@ function ImageInspector({
             disabled={!texture}
             onClick={() => texture && onOpenAsset(texture.id)}
             aria-label={
-              texture ? `${texture.name}のTexture Inspectorを開く` : "画像未設定"
+              texture ? `${texture.name}のテクスチャ設定を開く` : "画像未設定"
             }
             title={
-              texture ? `${texture.name}のTexture Inspectorを開く` : "画像未設定"
+              texture ? `${texture.name}のテクスチャ設定を開く` : "画像未設定"
             }
             className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 disabled:cursor-not-allowed disabled:opacity-40"
           >
@@ -4513,7 +4508,7 @@ function ImageInspector({
         </div>
         {textureAssets.length === 0 ? (
           <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-4 text-amber-800">
-            Assetsのインポートから画像（PNG / JPG / WebP）を追加すると、ここで選べます。Assetsの画像をScene Viewへドラッグしても貼れます。
+            Assetsに画像を追加してください（PNG / JPG / WebP）。
           </p>
         ) : !component.textureAssetId ? (
           <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-4 text-amber-800">
@@ -4571,7 +4566,7 @@ function ImageInspector({
         />
       )}
       <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
-        Anchor X
+        横方向の基準位置
         <select
           value={component.anchorX}
           disabled={readOnly}
@@ -4580,13 +4575,13 @@ function ImageInspector({
           }
           className="h-8 rounded border border-slate-300 bg-white px-2 text-xs outline-none focus:border-violet-500 disabled:bg-slate-100"
         >
-          <option value="left">Left</option>
-          <option value="center">Center</option>
-          <option value="right">Right</option>
+          <option value="left">左</option>
+          <option value="center">中央</option>
+          <option value="right">右</option>
         </select>
       </label>
       <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
-        Anchor Y
+        縦方向の基準位置
         <select
           value={component.anchorY}
           disabled={readOnly}
@@ -4595,9 +4590,9 @@ function ImageInspector({
           }
           className="h-8 rounded border border-slate-300 bg-white px-2 text-xs outline-none focus:border-violet-500 disabled:bg-slate-100"
         >
-          <option value="top">Top</option>
-          <option value="middle">Middle</option>
-          <option value="bottom">Bottom</option>
+          <option value="top">上</option>
+          <option value="middle">中央</option>
+          <option value="bottom">下</option>
         </select>
       </label>
       <div className="space-y-2 border-t border-slate-100 pt-2">
@@ -4651,8 +4646,8 @@ function ImageInspector({
         />
         <p className="text-[11px] leading-4 text-slate-500">
           {component.lit
-            ? "Sceneのライトで明るさが変わります。スポットライトを当てた展示に向きます。"
-            : "ライトの影響を受けず、部屋の明るさに関わらず画像そのままの色で表示します。"}
+            ? "ライトに合わせて明るさが変わります。"
+            : "ライトの影響を受けず、画像の色をそのまま表示します。"}
         </p>
       </div>
     </ComponentCard>
@@ -4682,22 +4677,21 @@ function AudioSourceInspector({
     : undefined;
   return (
     <ComponentCard
-      title="Audio Source"
-      subtitle="Three.js"
+      title="音源"
       remove={
         onRemove
-          ? { label: "Audio Sourceを削除", disabled: readOnly, onRemove }
+          ? { label: "音源を削除", disabled: readOnly, onRemove }
           : undefined
       }
     >
       <ToggleRow
-        label="Enabled"
+        label="有効"
         checked={component.enabled}
         disabled={readOnly}
         onChange={(enabled) => onChange({ enabled })}
       />
       <label className="block text-xs font-medium text-slate-600">
-        Audio Asset
+        音声素材
         <select
           value={component.audioAssetId ?? ""}
           disabled={readOnly}
@@ -4725,11 +4719,11 @@ function AudioSourceInspector({
       ) : null}
       {audioAssets.length === 0 ? (
         <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-4 text-amber-800">
-          AssetsのインポートからMP3またはWAVを追加してください。
+          Assetsに音声を追加してください（MP3 / WAV）。
         </p>
       ) : null}
       <ColliderNumberField
-        label="Volume"
+        label="音量"
         value={component.volume}
         min={0}
         max={1}
@@ -4739,19 +4733,19 @@ function AudioSourceInspector({
       />
       <div className="space-y-2 border-t border-slate-100 pt-2">
         <ToggleRow
-          label="Loop"
+          label="繰り返す"
           checked={component.loop}
           disabled={readOnly}
           onChange={(loop) => onChange({ loop })}
         />
         <ToggleRow
-          label="Autoplay"
+          label="自動で再生する"
           checked={component.autoplay}
           disabled={readOnly}
           onChange={(autoplay) => onChange({ autoplay })}
         />
         <ToggleRow
-          label="距離で減衰 (Spatial)"
+          label="距離に応じて音を小さくする"
           checked={component.spatial}
           disabled={readOnly}
           onChange={(spatial) => onChange({ spatial })}
@@ -4759,13 +4753,13 @@ function AudioSourceInspector({
       </div>
       {!component.spatial ? (
         <p className="border-t border-slate-100 pt-2 text-[11px] leading-4 text-slate-500">
-          距離減衰なしで再生します。Entityの位置に関わらずシーン全体へ同じ音量で届くので、BGMや環境音に向きます。
+          距離に関係なく同じ音量で再生します。BGMなどに使います。
         </p>
       ) : null}
       {component.spatial ? (
         <div className="space-y-2 border-t border-slate-100 pt-2">
           <ColliderNumberField
-            label="Reference Distance"
+            label="音量を保つ距離"
             value={component.refDistance}
             min={0.01}
             step={0.1}
@@ -4778,7 +4772,7 @@ function AudioSourceInspector({
             }
           />
           <ColliderNumberField
-            label="Rolloff"
+            label="音の減衰率"
             value={component.rolloffFactor}
             min={0}
             step={0.1}
@@ -4786,7 +4780,7 @@ function AudioSourceInspector({
             onChange={(rolloffFactor) => onChange({ rolloffFactor })}
           />
           <ColliderNumberField
-            label="Max Distance"
+            label="最大距離"
             value={component.maxDistance}
             min={component.refDistance}
             step={1}
@@ -4811,26 +4805,23 @@ function VegetationWindInspector({
 }) {
   return (
     <ComponentCard
-      title="Wind"
-      subtitle="Entity Component"
+      title="風"
+      subtitle="EntityComponent"
       remove={
         onRemove
-          ? { label: "Windを削除", disabled: readOnly, onRemove }
+          ? { label: "風を削除", disabled: readOnly, onRemove }
           : undefined
       }
     >
       <p className="text-xs leading-4 text-slate-600">
-        このEntityと子Meshを風の対象にします。風の強さ・速度・突風はScene Settingsのグローバル設定を使います。Mesh名からは判定しません。
+        このEntityと子メッシュを風で揺らします。風の強さはシーン設定で調整します。
       </p>
       <ToggleRow
-        label="Enabled"
+        label="有効"
         checked={component.enabled}
         disabled={readOnly}
         onChange={(enabled) => onChange({ enabled })}
       />
-      <p className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] leading-4 text-slate-600">
-        Scene Settingsの「Wind（グローバル）」から、対象Entity全体の風を調整できます。
-      </p>
     </ComponentCard>
   );
 }
@@ -4859,15 +4850,14 @@ function ParticleEmitterInspector({
 
   return (
     <ComponentCard
-      title="Particle Emitter"
-      subtitle="Rendering"
+      title="パーティクルの放出"
       actions={
         <button
           type="button"
           disabled={readOnly}
           onClick={onRemove}
-          aria-label="Particle Emitterを削除"
-          title="Particle Emitterを削除"
+          aria-label="パーティクルの放出を削除"
+          title="パーティクルの放出を削除"
           className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <DeleteIcon size={13} aria-hidden="true" />
@@ -4875,13 +4865,13 @@ function ParticleEmitterInspector({
       }
     >
       <ToggleRow
-        label="Enabled"
+        label="有効"
         checked={component.enabled}
         disabled={readOnly}
         onChange={(enabled) => onChange({ enabled })}
       />
       <label className="block text-xs font-medium text-slate-600">
-        Particle Asset
+        パーティクル
         <select
           value={component.particleAssetId}
           disabled={readOnly || particles.length === 0}
@@ -4893,7 +4883,7 @@ function ParticleEmitterInspector({
           {!particleReady ? (
             <option value={component.particleAssetId}>
               {particles.length === 0
-                ? "Particle Assetがありません"
+                ? "パーティクルがありません"
                 : `参照が見つかりません: ${component.particleAssetId}`}
             </option>
           ) : null}
@@ -4910,11 +4900,11 @@ function ParticleEmitterInspector({
         onClick={() => onOpenAsset(component.particleAssetId)}
         className="w-full rounded-md border border-violet-300 bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-40"
       >
-        Particle Assetを編集
+        パーティクルを編集
       </button>
       {!particleReady ? (
         <p className="rounded border border-amber-200 bg-amber-50 p-2 text-xs leading-4 text-amber-800">
-          AssetsでParticleを作成し、このコンポーネントへ割り当ててください。
+          Assetsでパーティクルを作り、ここに割り当ててください。
         </p>
       ) : null}
     </ComponentCard>
@@ -5201,10 +5191,10 @@ function EntityInspector({
           checked={entity.enabled}
           disabled={readOnly && !liveRuntimeTuning}
           onChange={(event) => onEnabledChange(event.currentTarget.checked)}
-          aria-label={`${entity.name}のEnabled`}
+          aria-label={`${entity.name}の有効・無効`}
           title={
             disabledAncestor && entity.enabled
-              ? `自身はEnabledですが、親Entity「${disabledAncestor.name}」が無効なため表示されません`
+              ? `このEntityは有効ですが、親Entity「${disabledAncestor.name}」が無効なため表示されません`
               : entity.enabled
                 ? "Entityと子Entityを無効にする"
                 : "Entityを有効にする。親が無効な場合は親の状態を継承します"
@@ -5229,8 +5219,8 @@ function EntityInspector({
         {liveRuntimeTuning ? (
           <span
             className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-violet-600"
-            title="Play中も保存されます。Script propertyは次のフレーム、構造変更は対象Entityだけへ反映します"
-            aria-label="Play中のEntity調整"
+            title="動作確認中の編集も保存し、実行中のシーンに反映します。"
+            aria-label="動作確認中のEntity調整"
           >
             <EDITOR_ICONS.play size={13} aria-hidden="true" />
           </span>
@@ -5240,7 +5230,7 @@ function EntityInspector({
       {prefabSource ? (
         <section
           className="flex h-9 items-center gap-2 rounded border border-slate-200 bg-slate-50 px-2"
-          title={`編集元Prefab: ${prefabSource.name}`}
+          title={`編集元プレハブ: ${prefabSource.name}`}
         >
           <EDITOR_ICONS.prefab
             size={14}
@@ -5255,7 +5245,7 @@ function EntityInspector({
             disabled={readOnly}
             onClick={() => onUpdatePrefab(prefabSource.prefabId)}
             aria-label={`${prefabSource.name}へ変更を反映`}
-            title="現在のHierarchyと設定をPrefabへ反映"
+            title="現在のHierarchyと設定をプレハブへ反映"
             className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-slate-500 hover:bg-violet-100 hover:text-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <EDITOR_ICONS.refresh size={13} aria-hidden="true" />
@@ -5264,9 +5254,9 @@ function EntityInspector({
       ) : null}
 
       {transform ? (
-        <ComponentCard title="Transform" subtitle="Local">
+        <ComponentCard title="位置・回転・大きさ" subtitle="Entity基準">
           <VectorEditor
-            label="Position"
+            label="位置"
             value={transform.position}
             valueKind="position"
             disabled={readOnly && !liveRuntimeTuning}
@@ -5277,7 +5267,7 @@ function EntityInspector({
             onScrubCancel={onTransformScrubCancel}
           />
           <VectorEditor
-            label="Rotation"
+            label="回転"
             value={transform.rotation}
             valueKind="rotation"
             disabled={readOnly && !liveRuntimeTuning}
@@ -5288,7 +5278,7 @@ function EntityInspector({
             onScrubCancel={onTransformScrubCancel}
           />
           <VectorEditor
-            label="Scale"
+            label="大きさ"
             value={transform.scale}
             valueKind="scale"
             disabled={readOnly && !liveRuntimeTuning}
@@ -5467,16 +5457,16 @@ function EntityInspector({
           return (
             <ComponentCard
               key={component.id}
-              title="Spawn Point"
+              title="開始位置"
               subtitle={component.target}
               remove={{
-                label: "Spawn Pointを削除",
+                label: "開始位置を削除",
                 disabled: readOnly && !liveRuntimeTuning,
                 onRemove: () => onRemoveComponent(component.id),
               }}
             >
               <p className="text-xs leading-4 text-slate-600">
-                Play開始位置の基準点です。Play中の移動結果はシーンに保存されません。
+                動作確認の開始位置です。確認中に移動しても保存されません。
               </p>
             </ComponentCard>
           );
@@ -5486,10 +5476,10 @@ function EntityInspector({
           return (
             <ComponentCard
               key={component.id}
-              title="Interaction Trigger"
+              title="グラフの実行"
               subtitle={graphAsset?.name ?? "未設定"}
               remove={{
-                label: "Interaction Triggerを削除",
+                label: "グラフの実行を削除",
                 disabled: readOnly && !liveRuntimeTuning,
                 onRemove: () => onRemoveComponent(component.id),
               }}
@@ -5516,10 +5506,10 @@ function EntityInspector({
           return (
             <ComponentCard
               key={component.id}
-              title="Script"
+              title="スクリプト"
               subtitle={scriptAsset?.name ?? "未設定"}
               remove={{
-                label: "Scriptを削除",
+                label: "スクリプトを削除",
                 disabled: readOnly && !liveRuntimeTuning,
                 onRemove: () => onRemoveComponent(component.id),
               }}
@@ -5553,7 +5543,7 @@ function EntityInspector({
           <ComponentCard
             key={component.id}
             title={UNSUPPORTED_COMPONENT_LABELS[component.type] ?? component.type}
-            subtitle="Inspector未対応"
+            subtitle="設定未対応"
             remove={{
               label: `${
                 UNSUPPORTED_COMPONENT_LABELS[component.type] ?? component.type
@@ -5564,8 +5554,8 @@ function EntityInspector({
           >
             <p className="text-xs leading-4 text-slate-600">
               {component.type === "animation"
-                ? "Animation Componentは廃止されました。clipの再生はInteractivity Graphのanimation/startノードで行います。プロジェクトを開き直すと自動で変換されますが、ここから削除もできます。"
-                : "このComponentはInspectorで編集できません。不要であれば削除できます。"}
+                ? "このComponentは使えません。プロジェクトを開き直すと再生用のノードグラフに変換します。"
+                : "このComponentはInspectorで編集できません。削除は可能です。"}
             </p>
           </ComponentCard>
         );
@@ -5588,18 +5578,14 @@ function EntityInspector({
         .map((component) => (
           <ComponentCard
             key={component.id}
-            title="Prefab Instance"
+            title="プレハブの配置"
             subtitle={component.type}
             remove={{
-              label: "Prefab Instanceを削除",
+              label: "プレハブの配置を削除",
               disabled: readOnly && !liveRuntimeTuning,
               onRemove: () => onRemoveComponent(component.id),
             }}
-          >
-            <p className="text-xs leading-4 text-slate-600">
-              コンポーネント設定はシーンと一緒に保存されます。
-            </p>
-          </ComponentCard>
+          />
         ))}
 
       {registeredComponents
@@ -5632,7 +5618,7 @@ function EntityInspector({
           }}
           className="w-full rounded-md border border-violet-300 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-45"
         >
-          Add Component
+          Componentsを追加
         </button>
         {addComponentOpen ? (
           <div className="mt-2 max-h-80 space-y-1 overflow-y-auto rounded-md border border-slate-300 bg-white p-1 shadow-lg">
@@ -6072,7 +6058,7 @@ export function InspectorPanel({
             label: entity.name,
             current: asset.name,
             onBack: onCloseAsset,
-            title: commandTitle(`${entity.name}のEntity Inspectorへ戻る`, "ShowEntityInspector"),
+            title: commandTitle(`${entity.name}のEntity設定へ戻る`, "ShowEntityInspector"),
           }
         : null;
 
@@ -6119,8 +6105,8 @@ export function InspectorPanel({
       {readOnly ? (
         <div className="border-b border-violet-200 bg-violet-50 px-3 py-2 text-xs leading-4 text-violet-800">
           {playMode
-            ? "Play Windowは分離された実行コピーです。Entityの構成と許可された設定は実行中のSceneへ即時反映されます。"
-            : "シーンとアセット設定は閲覧のみです。"}
+            ? "閲覧のみです。編集は元のエディターで行ってください。"
+            : "閲覧のみです。"}
         </div>
       ) : null}
       <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto p-3">
@@ -6322,8 +6308,7 @@ export function InspectorPanel({
           />
         ) : (
           <div className="rounded-md border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-xs leading-5 text-slate-500">
-            HierarchyまたはScene ViewでEntityを選択してください。<br />
-            下のAssetsでアセットを選ぶとAsset Inspectorへ切り替わります。
+            Hierarchy、シーン、Assetsから編集するものを選んでください。
           </div>
         )}
       </div>

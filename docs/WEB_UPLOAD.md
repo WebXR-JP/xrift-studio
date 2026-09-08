@@ -20,8 +20,8 @@
 | --- | --- |
 | CORS | 2026-08-15 の調査では GitHub Pages と localhost に `Access-Control-Allow-Origin` が返らず、送信結果をブラウザから読めなかった。着手時に許可オリジンを再確認する。フロントエンドだけでは回避できない。 |
 | 素材 | 読み取りが Tauri と projectPath に依存する。ブラウザ向けの素材保存先と読み取り経路が必要。 |
-| Script | Runtime JSON は実行コードを表せない。compiler は `script-unsupported-runtime-output` で拒否する。 |
-| Item | この経路の対象外。 |
+| スクリプト | Runtime JSON は実行コードを表せない。compiler は `script-unsupported-runtime-output` で拒否する。 |
+| アイテム | この経路の対象外。 |
 | シェルの再利用 | Module Federation の remote 名を複数ワールドで共用できるか、公開先での確認が必要。 |
 | 公開結果 | 送信から公開後の再生までの成功系、署名付き URL のホスト、公開 URL の形式は未確認。URL を推測せず、SDK が返す ID と結果を表示する。 |
 

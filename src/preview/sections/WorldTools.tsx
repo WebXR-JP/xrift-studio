@@ -63,7 +63,7 @@ export function WorldTools() {
           <figure className="preview-showcase">
             <img
               src="./editor-interactivity.webp"
-              alt="Interactivityのノードエディター。「開始時」のノードから「アニメーション再生」のノードへ線がつながっている"
+              alt="ノードグラフのノードエディター。「開始時」のノードから「アニメーション再生」のノードへ線がつながっている"
               className="block h-auto w-full"
             />
           </figure>

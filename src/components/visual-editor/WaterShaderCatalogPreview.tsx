@@ -82,7 +82,7 @@ export function WaterShaderCatalogPreview({ shader, wind, className = "h-full w-
           <WaterPreviewSurface shader={shader} wind={wind} running={running} />
         </Canvas>
       ) : image ? (
-        <img src={image} alt="水面シェーダーの実描画プレビュー" className="h-full w-full object-cover" draggable={false}
+        <img src={image} alt="Water Shaderの実描画プレビュー" className="h-full w-full object-cover" draggable={false}
           onError={() => { setImage(null); if (retry < 1) setRetry(retry+1); else setError("画像を再表示できませんでした"); }} />
       ) : (
         <div className="flex h-full items-center justify-center text-[10px] text-slate-500" role="status">

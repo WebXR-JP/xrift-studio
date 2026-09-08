@@ -404,7 +404,7 @@ function analyzeComponentSources(input: {
     return emptyImportPlan({
       severity: "error",
       code: "entry-module-missing",
-      message: `${normalizedEntryFile}をsource module一覧から読み取れませんでした。`,
+      message: `${normalizedEntryFile}を元データ module一覧から読み取れませんでした。`,
       sourcePath: normalizedEntryFile,
     });
   }
@@ -749,7 +749,7 @@ export function applyComponentCodeImportPlan(input: {
       diagnostics.push({
         severity: "error",
         code: "entity-create-failed",
-        message: `${node.name}をSceneへ作成できませんでした。`,
+        message: `${node.name}をシーンへ作成できませんでした。`,
         line: node.sourceLine,
         sourcePath: node.sourcePath,
       });
@@ -921,7 +921,7 @@ function convertJsxNode(
         severity: "warning",
         code: "rapier-cuboid-collider-dynamic",
         message:
-          "CuboidColliderのargs/positionを静的に確定できないため、誤ったColliderを作らず構造だけ保持します。",
+          "CuboidColliderのargs/positionを静的に確定できないため、誤った衝突判定を作らず構造だけ保持します。",
         line: node.line,
         sourcePath: context.sourcePath,
       });
@@ -1049,7 +1049,7 @@ function convertJsxNode(
       diagnostics.push({
         severity: "warning",
         code: "wrapper-children-missing",
-        message: `${definition.importName}の子要素を変換できなかったため、Component Entityだけを保持します。`,
+        message: `${definition.importName}の子要素を変換できなかったため、ComponentEntityだけを保持します。`,
         line: node.line,
         sourcePath: context.sourcePath,
       });
@@ -1233,8 +1233,8 @@ function convertJsxNode(
         code: "drei-sky-converted",
         message:
           binding.imported === "Environment"
-            ? "Drei EnvironmentをXRift Skyboxへ変換します。HDRI参照は別途Assetsへインポートしてください。"
-            : "Drei SkyをXRift Skyboxへ変換します。",
+            ? "Drei EnvironmentをSkyboxへ変換します。HDRIは別途Assetsへ読み込んでください。"
+            : "Drei SkyをSkyboxへ変換します。",
         line: node.line,
         sourcePath: context.sourcePath,
       });
@@ -1296,7 +1296,7 @@ function convertJsxNode(
       diagnostics.push({
         severity: "warning",
         code: "unsupported-mesh-geometry",
-        message: "mesh内に対応する標準Geometryがないため、Mesh Entityと子構造だけを保持します。",
+        message: "メッシュ内に対応する標準Geometryがないため、メッシュEntityと子構造だけを保持します。",
         line: node.line,
         sourcePath: context.sourcePath,
       });

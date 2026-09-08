@@ -38,11 +38,11 @@ export function ModelReimportImpactDialog({
             </span>
             <div className="min-w-0">
               <h2 id={titleId} className="text-sm font-semibold text-amber-950">
-                Material Slotの変更を確認
+                マテリアルスロットの変更を確認
               </h2>
               <p className="mt-1 text-xs leading-5 text-amber-900">
                 「{modelName}」の再インポート結果から
-                {impact.slotDiff.removedSlots.length}件のSlotが消えます。
+                {impact.slotDiff.removedSlots.length}件のスロットが消えます。
               </p>
             </div>
           </div>
@@ -50,12 +50,12 @@ export function ModelReimportImpactDialog({
 
         <div data-app-modal-body className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
           <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
-            適用すると、消えるSlotを参照するScene / PrefabのMaterial割当
-            {removedBindings}件を同じUndo単位で解除します。キャンセルすると現在のModelと割当を維持します。
+            適用すると、削除されるスロットを参照するシーン / プレハブのマテリアルの割り当て
+            {removedBindings}件を解除します。キャンセルすると現在の3Dモデルと割り当てを変更しません。
           </p>
 
           <section>
-            <h3 className="text-xs font-semibold text-slate-800">消えるSlot</h3>
+            <h3 className="text-xs font-semibold text-slate-800">削除されるスロット</h3>
             <ul className="mt-1.5 divide-y divide-slate-200 rounded-md border border-slate-200 bg-white">
               {impact.slotDiff.removedSlots.map((slot) => {
                 const material = slot.defaultMaterialAssetId
@@ -69,7 +69,7 @@ export function ModelReimportImpactDialog({
                     </span>
                     {slot.defaultMaterialAssetId ? (
                       <span className="mt-0.5 block text-[11px] text-slate-500">
-                        Model既定Material: {material?.name ?? slot.defaultMaterialAssetId}
+                        モデルの既定マテリアル: {material?.name ?? slot.defaultMaterialAssetId}
                       </span>
                     ) : null}
                   </li>
@@ -81,7 +81,7 @@ export function ModelReimportImpactDialog({
           {impact.bindingReferences.length > 0 ? (
             <section>
               <h3 className="text-xs font-semibold text-slate-800">
-                解除する割当 ({impact.bindingReferences.length})
+                解除する割り当て ({impact.bindingReferences.length})
               </h3>
               <ul className="mt-1.5 divide-y divide-slate-200 rounded-md border border-slate-200 bg-white">
                 {impact.bindingReferences.map((reference) => {
@@ -92,7 +92,7 @@ export function ModelReimportImpactDialog({
                       className="px-3 py-2 text-xs text-slate-700"
                     >
                       <span className="font-semibold">
-                        {reference.documentKind === "scene" ? "Scene" : "Prefab"}: {reference.documentName}
+                        {reference.documentKind === "scene" ? "シーン" : "プレハブ"}: {reference.documentName}
                       </span>
                       <span className="mt-0.5 block text-[11px] text-slate-500">
                         {reference.entityName} / {reference.slot} / {material?.name ?? reference.materialAssetId}
@@ -107,7 +107,7 @@ export function ModelReimportImpactDialog({
 
         <footer data-app-modal-footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-4 py-3">
           <p className="text-[11px] leading-4 text-slate-500">
-            Model置換と割当解除は1回のUndoで戻せます。
+            モデルの差し替えと割り当ての解除は、1回の「元に戻す」で取り消せます。
           </p>
           <div className="flex shrink-0 items-center gap-2">
             <button
@@ -115,7 +115,7 @@ export function ModelReimportImpactDialog({
               onClick={onCancel}
               className="h-8 rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100"
             >
-              現在のModelを維持
+              キャンセル
             </button>
             <button
               type="button"
@@ -123,7 +123,7 @@ export function ModelReimportImpactDialog({
               onClick={onConfirm}
               className="h-8 rounded-md bg-amber-600 px-3 text-xs font-semibold text-white hover:bg-amber-700"
             >
-              割当を整理して適用
+              割り当てを解除して適用
             </button>
           </div>
         </footer>

@@ -120,7 +120,7 @@ export function OpenBrushCatalogPreview({
             {loadState.status === "ready"
               ? "three-icosa 実ストローク"
               : loadState.status === "error"
-                ? "shader読込失敗"
+                ? "Shaderの読み込み失敗"
                 : "ブラシを再構築中"}
           </span>
           <span className="pointer-events-none absolute inset-x-2 bottom-1.5 text-center text-[9px] text-slate-300/80">

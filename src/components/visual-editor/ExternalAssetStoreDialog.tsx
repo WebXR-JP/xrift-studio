@@ -306,7 +306,7 @@ export function ExternalAssetStoreDialog({
           : result.name,
       );
     } catch (reason) {
-      setDetailError(errorMessage(reason, "アセットをインストールできませんでした"));
+      setDetailError(errorMessage(reason, "アセットを追加できませんでした"));
     } finally {
       setInstalling(false);
     }
@@ -333,7 +333,7 @@ export function ExternalAssetStoreDialog({
             </span>
             <div>
               <h2 id="external-store-title" className="text-sm font-semibold text-slate-900">
-                外部リソースを追加
+                外部から追加
               </h2>
             </div>
           </div>
@@ -341,7 +341,7 @@ export function ExternalAssetStoreDialog({
             type="button"
             onClick={onClose}
             disabled={installing}
-            aria-label="外部リソースを閉じる"
+            aria-label="「外部から追加」を閉じる"
             className="rounded-md p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
           >
             <X size={17} />
@@ -351,11 +351,11 @@ export function ExternalAssetStoreDialog({
         <div data-app-modal-body className="flex min-h-0 flex-1 overflow-x-auto overscroll-contain">
           <nav
             className="flex w-52 shrink-0 flex-col border-r border-slate-200 bg-slate-50"
-            aria-label="外部リソース集"
+            aria-label="素材と機能"
           >
             <div className="border-b border-slate-200 px-3 py-3">
-              <p className="text-xs font-semibold text-slate-800">リソース集</p>
-              <p className="mt-0.5 text-[10px] leading-4 text-slate-500">追加したいものから選びます</p>
+              <p className="text-xs font-semibold text-slate-800">カテゴリ</p>
+              <p className="mt-0.5 text-[10px] leading-4 text-slate-500">追加したい素材や機能を選んでください</p>
             </div>
             <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto p-2">
               {EXTERNAL_STORE_PROVIDER_GROUPS.map((group) => (
@@ -407,9 +407,6 @@ export function ExternalAssetStoreDialog({
                 </div>
               ))}
             </div>
-            <p className="shrink-0 border-t border-slate-200 px-3 py-3 text-[10px] leading-4 text-slate-500">
-              選択したリソース集のカタログ、利用条件、提供元情報を表示します。
-            </p>
           </nav>
 
           {provider.kind === "open-brush" ? (
@@ -561,7 +558,7 @@ export function ExternalAssetStoreDialog({
               ) : null}
             </div>
             <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
-              Powered by{" "}
+              提供元{" "}
               <button
                 type="button"
                 onClick={() => void tauri.openUrl(provider.homepageUrl)}
@@ -623,7 +620,7 @@ export function ExternalAssetStoreDialog({
                 </dl>
                 {!selectedIsInstallable ? (
                   <Notice
-                    text={`${kindLabel(selected.assetKind)}の直接インストールには対応していません。現在は${installableKindsLabel(provider)}を追加できます。`}
+                    text={`${kindLabel(selected.assetKind)}の追加には対応していません。現在は${installableKindsLabel(provider)}を追加できます。`}
                   />
                 ) : (
                   <>
@@ -668,7 +665,7 @@ export function ExternalAssetStoreDialog({
                           </select>
                           {selectedFormat ? (
                             <p className="mt-1 text-[11px] text-slate-500">
-                              ダウンロード目安 {formatFileSize(selectedFormat.byteLength)}。{selectedFormat.label}を環境Texture Assetとして保存します。
+                              ダウンロード目安 {formatFileSize(selectedFormat.byteLength)}。{selectedFormat.label}を環境テクスチャとして保存します。
                             </p>
                           ) : null}
                         </label>
@@ -680,9 +677,9 @@ export function ExternalAssetStoreDialog({
                             className="mt-0.5"
                           />
                           <span>
-                            <span className="block font-semibold">インストール後にSkyboxへ設定</span>
+                            <span className="block font-semibold">追加後にSkyboxに設定</span>
                             <span className="mt-0.5 block text-[11px] text-slate-500">
-                              HDRとEXRはどちらもTexture Assetになり、Flip Yなどを編集できます。後からScene Viewへドロップして変更できます。
+                              追加した画像はAssetsで編集できます。シーンへドラッグすると背景を変更します。
                             </span>
                           </span>
                         </label>
@@ -692,20 +689,20 @@ export function ExternalAssetStoreDialog({
                         <p className="text-[11px] text-slate-500">
                           ダウンロード目安 {selectedResolution ? formatFileSize(selectedResolution.byteLength) : "—"}
                         </p>
-                        <Notice text="glTF本体・bin・Textureを検証し、参照切れを防ぐ自己完結glTF Model Assetとして保存します。" />
+                        <Notice text="必要なテクスチャもまとめて保存します。" />
                       </>
                     ) : (
                       <>
                         <p className="text-[11px] text-slate-500">
                           ダウンロード目安 {selectedResolution ? formatFileSize(selectedResolution.byteLength) : "—"}
                         </p>
-                        <Notice text="Diffuse、Normal、ARMをTextureとして保存し、参照済みMaterialを作成します。" />
+                        <Notice text="テクスチャを割り当てたマテリアルを作成します。" />
                       </>
                     )}
                   </>
                 )}
                 {!projectPath ? (
-                  <Notice tone="warning" text="先にプロジェクトを保存すると外部アセットを追加できます。" />
+                  <Notice tone="warning" text="追加するにはプロジェクトを保存してください。" />
                 ) : null}
                 {disabledReason ? <Notice tone="warning" text={disabledReason} /> : null}
                 {detailError ? (
@@ -746,9 +743,9 @@ export function ExternalAssetStoreDialog({
                         ダウンロード中…
                       </>
                     ) : selected.assetKind === "hdri" && applySkybox ? (
-                      `${fileFormat.toUpperCase()}をインストールしてSkyboxに設定`
+                      `${fileFormat.toUpperCase()}を追加してSkyboxに設定`
                     ) : (
-                      "プロジェクトへインストール"
+                      "プロジェクトに追加"
                     )}
                   </button>
                 ) : null}
@@ -814,10 +811,10 @@ function OpenBrushStore({
       setAddedMessage(
         result.alreadyInstalled
           ? `「${selected.label}」は追加済みです。Assetsで選択しました。`
-          : `「${selected.label}」をMaterialとして追加しました。`,
+          : `「${selected.label}」をマテリアルとして追加しました。`,
       );
     } catch (reason) {
-      setError(errorMessage(reason, "Open Brush Materialを追加できませんでした"));
+      setError(errorMessage(reason, "Open Brush マテリアルを追加できませんでした"));
     } finally {
       setAdding(false);
     }
@@ -827,20 +824,20 @@ function OpenBrushStore({
     <>
       <section
         className="flex min-w-0 flex-1 flex-col border-r border-slate-200"
-        aria-label="Open Brush Material一覧"
+        aria-label="Open Brush マテリアル一覧"
       >
         <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-2.5">
           <div className="mb-2 flex items-start justify-between gap-3">
             <div>
               <h3 className="text-xs font-semibold text-slate-900">
-                Open Brush Material
+                Open Brush マテリアル
               </h3>
               <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                検証済み48ブラシを専用shaderのMaterialとして追加できます
+                検証済み48ブラシを専用シェーダーのマテリアルとして追加できます
               </p>
             </div>
             <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] font-semibold text-sky-700">
-              {OPEN_BRUSH_CATALOG.length} brushes
+              {OPEN_BRUSH_CATALOG.length} ブラシ
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -926,14 +923,11 @@ function OpenBrushStore({
             </div>
           )}
         </div>
-        <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
-          three-icosaの実ストロークから作成した保存済みプレビューを表示しています。
-        </footer>
       </section>
 
       <aside
         className="scrollbar-thin w-[350px] shrink-0 overflow-auto bg-white p-4"
-        aria-label="選択したOpen Brush Materialの詳細"
+        aria-label="選択したOpen Brush マテリアルの詳細"
       >
         {selected ? (
           <div className="space-y-4">
@@ -967,7 +961,7 @@ function OpenBrushStore({
               </p>
             </div>
             <dl className="grid grid-cols-[76px_1fr] gap-x-2 gap-y-1.5 text-xs">
-              <dt className="text-slate-400">Brush</dt>
+              <dt className="text-slate-400">ブラシ</dt>
               <dd className="font-medium text-slate-700">
                 {selected.brushName}
               </dd>
@@ -975,11 +969,11 @@ function OpenBrushStore({
               <dd className="break-all font-mono text-[10px] text-slate-600">
                 {selected.brushGuid}
               </dd>
-              <dt className="text-slate-400">Renderer</dt>
+              <dt className="text-slate-400">描画方式</dt>
               <dd className="text-slate-700">
                 {selected.shader.rendererVersion}
               </dd>
-              <dt className="text-slate-400">License</dt>
+              <dt className="text-slate-400">ライセンス</dt>
               <dd>
                 <button
                   type="button"
@@ -992,7 +986,7 @@ function OpenBrushStore({
                 </button>
               </dd>
             </dl>
-            <Notice text="追加後はMaterial Assetとして保持し、PrimitiveやOpen Brush Meshへ割り当てられます。GUIDとrenderer versionも保存します。" />
+            <Notice text="追加したマテリアルは、図形やOpen Brushのメッシュに割り当てられます。" />
             {disabledReason ? (
               <Notice tone="warning" text={disabledReason} />
             ) : null}
@@ -1026,7 +1020,7 @@ function OpenBrushStore({
                   追加中…
                 </>
               ) : (
-                `${selected.label}をMaterialへ追加`
+                `${selected.label}をマテリアルへ追加`
               )}
             </button>
           </div>

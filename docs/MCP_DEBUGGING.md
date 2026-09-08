@@ -1,6 +1,6 @@
 # MCPで画面を見ながらデバッグする
 
-XRift Studioのデバッグ版は、標準MCP経由で現在の画面をAI clientへ公開します。Codex、DeepSeekを使うMCP host、Claude、Cursorなどが対象です。stdio MCP serverを登録できるclientから同じ操作を利用できます。
+XRift Studioのデバッグ版は、標準MCP経由で現在の画面をAIクライアントへ公開します。Codex、DeepSeekを使うMCP host、Claude、Cursorなどが対象です。stdio MCP serverを登録できるclientから同じ操作を利用できます。
 
 ## できること
 
@@ -10,8 +10,8 @@ XRift Studioのデバッグ版は、標準MCP経由で現在の画面をAI clien
 - `webview_get_styles`: 指定要素のcomputed styleを確認する
 - `webview_select_element`: 要素を選択し、注釈付き画像と要素情報を取得する
 - `ipc_monitor` / `ipc_get_captured`: Tauri IPCの呼び出しと結果を確認する
-- Scene Viewの「診断」: FPS、frame time、draw calls、triangles、visible mesh数、camera Farを表示する
-- Scene Viewの「録画」: 実際の3D Canvasを最大15秒WebMへ保存し、見た目の問題を再現する
+- シーンの「診断」: FPS、frame time、draw calls、triangles、visible メッシュ数、camera 奥を表示する
+- シーンの「録画」: 実際の3D Canvasを最大15秒WebMへ保存し、見た目の問題を再現する
 
 画像だけで判断せず、DOM、console、IPCを同じ変更の確認材料として使います。
 
@@ -48,7 +48,7 @@ DeepSeekのモデルを使う場合も同じです。DeepSeekを接続できるM
 5. `read_logs`でconsole errorを確認
 6. Tauri commandを変更した場合は`ipc_monitor`と`ipc_get_captured`で通信を確認します。
 
-Sceneの見た目や負荷を再現する時は、画面を手で操作しません。Scene MCPから次の順で呼び出します。
+シーンの見た目や負荷を再現する時は、画面を手で操作しません。シーン MCPから次の順で呼び出します。
 
 ```json
 {"projectId":"…","sceneId":"…","action":"metrics"}
@@ -56,13 +56,13 @@ Sceneの見た目や負荷を再現する時は、画面を手で操作しませ
 {"projectId":"…","sceneId":"…","action":"stop"}
 ```
 
-`capture_scene_debug` の `stop` は保存先ダイアログを開きません。アプリの `debug-captures` フォルダーへWebMを保存してパスを返します。`get_editor_context`で対象Project / Sceneを確認してから呼び出してください。
+`capture_scene_debug` の `stop` は保存先ダイアログを開きません。アプリの `debug-captures` フォルダーへWebMを保存してパスを返します。`get_editor_context`で対象プロジェクト / シーンを確認してから呼び出してください。
 
-スクリーンショットは表示中のWebView領域だけを対象にします。OSのファイル選択ダイアログなどのネイティブUIは対象外です。Scene Viewの録画は3D Canvasだけを最大15秒記録します。アプリ全体やネイティブUIを記録しません。読み取り確認は安全に行えます。ログイン、アップロード、削除、リセットなどの書き込み操作は明示的に確認してから実行します。
+スクリーンショットは表示中のWebView領域だけを対象にします。OSのファイル選択ダイアログなどのネイティブUIは対象外です。シーンの録画は3D Canvasだけを最大15秒記録します。アプリ全体やネイティブUIを記録しません。読み取り確認は安全に行えます。ログイン、アップロード、削除、リセットなどの書き込み操作は明示的に確認してから実行します。
 
 ## 2種類のMCP server
 
 - `tauri` / `xrift-studio-debug`: 開発中の画面、DOM、console、IPCを確認するためのTauri MCP。デバッグビルドだけで利用します。
-- `xrift-studio`: Scene、Asset、ComponentなどをAIから編集するためのXRift Studio MCP。通常のUndo、自動保存、revision検査を通ります。
+- `xrift-studio`: シーン、素材、コンポーネントなどをAIから編集するためのXRift Studio MCP。通常の元に戻す、自動保存、revision検査を通ります。
 
-画面を見ながらSceneを編集する場合は、両方のserverを同じMCP hostへ登録します。デバッグ用serverはWebView JavaScriptを扱えます。Scene編集用serverとは異なる開発者向けの権限境界です。リリース版には追加しません。
+画面を見ながらシーンを編集する場合は、両方のserverを同じMCP hostへ登録します。デバッグ用serverはWebView JavaScriptを扱えます。シーン編集用serverとは異なる開発者向けの権限境界です。リリース版には追加しません。

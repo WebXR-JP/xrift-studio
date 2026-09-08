@@ -56,7 +56,7 @@ export function ParticleAssetInspector({
       <section className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
         <h3 className="text-[13px] font-semibold text-slate-900">{asset.name}</h3>
         <p className="mt-1 text-xs leading-5 text-slate-500">
-          Particle Assetの変更は、参照するParticle Emitterへ即時反映されます。
+          変更は、このパーティクルの使用箇所すべてに反映します。
         </p>
       </section>
 
@@ -66,26 +66,26 @@ export function ParticleAssetInspector({
         onChange={onChange}
       />
 
-      <Section title="System">
-        <NumberField label="Max Particles" value={properties.maxParticles} min={1} max={10000} step={1} disabled={readOnly} onChange={(maxParticles) => onChange({ maxParticles })} />
-        <NumberField label="Duration" value={properties.duration} min={0.01} max={600} step={0.1} suffix="sec" disabled={readOnly} onChange={(duration) => onChange({ duration })} />
-        <SelectField label="Simulation Space" value={properties.simulationSpace} values={["local", "world"]} disabled={readOnly} onChange={(simulationSpace) => onChange({ simulationSpace: simulationSpace as "local" | "world" })} />
-        <Toggle label="Looping" checked={properties.looping} disabled={readOnly} onChange={(looping) => onChange({ looping })} />
-        <Toggle label="Prewarm" checked={properties.prewarm} disabled={readOnly || !properties.looping} onChange={(prewarm) => onChange({ prewarm })} />
+      <Section title="全体の設定">
+        <NumberField label="最大数" value={properties.maxParticles} min={1} max={10000} step={1} disabled={readOnly} onChange={(maxParticles) => onChange({ maxParticles })} />
+        <NumberField label="継続時間" value={properties.duration} min={0.01} max={600} step={0.1} suffix="秒" disabled={readOnly} onChange={(duration) => onChange({ duration })} />
+        <SelectField label="動きの基準" value={properties.simulationSpace} values={["local", "world"]} disabled={readOnly} onChange={(simulationSpace) => onChange({ simulationSpace: simulationSpace as "local" | "world" })} />
+        <Toggle label="繰り返す" checked={properties.looping} disabled={readOnly} onChange={(looping) => onChange({ looping })} />
+        <Toggle label="放出済みの状態で始める" checked={properties.prewarm} disabled={readOnly || !properties.looping} onChange={(prewarm) => onChange({ prewarm })} />
       </Section>
 
-      <Section title="Emission">
-        <NumberField label="Rate over Time" value={properties.emission.rateOverTime} min={0} max={100000} step={1} disabled={readOnly} onChange={(rateOverTime) => onChange({ emission: { ...properties.emission, rateOverTime } })} />
-        <RangeField label="Start Delay" value={properties.startDelay} min={0} max={600} disabled={readOnly} onChange={(startDelay) => onChange({ startDelay })} />
-        <RangeField label="Lifetime" value={properties.startLifetime} min={0.01} max={600} disabled={readOnly} onChange={(startLifetime) => onChange({ startLifetime })} />
-        <RangeField label="Speed" value={properties.startSpeed} min={-1000} max={1000} disabled={readOnly} onChange={(startSpeed) => onChange({ startSpeed })} />
-        <RangeField label="Size" value={properties.startSize} min={0} max={1000} disabled={readOnly} onChange={(startSize) => onChange({ startSize })} />
-        <AngleRangeField label="Start Rotation" value={properties.startRotation} disabled={readOnly} onChange={(startRotation) => onChange({ startRotation })} />
+      <Section title="放出">
+        <NumberField label="1秒あたりの放出数" value={properties.emission.rateOverTime} min={0} max={100000} step={1} disabled={readOnly} onChange={(rateOverTime) => onChange({ emission: { ...properties.emission, rateOverTime } })} />
+        <RangeField label="開始までの待ち時間" value={properties.startDelay} min={0} max={600} disabled={readOnly} onChange={(startDelay) => onChange({ startDelay })} />
+        <RangeField label="消えるまでの時間" value={properties.startLifetime} min={0.01} max={600} disabled={readOnly} onChange={(startLifetime) => onChange({ startLifetime })} />
+        <RangeField label="速さ" value={properties.startSpeed} min={-1000} max={1000} disabled={readOnly} onChange={(startSpeed) => onChange({ startSpeed })} />
+        <RangeField label="大きさ" value={properties.startSize} min={0} max={1000} disabled={readOnly} onChange={(startSize) => onChange({ startSize })} />
+        <AngleRangeField label="放出時の回転" value={properties.startRotation} disabled={readOnly} onChange={(startRotation) => onChange({ startRotation })} />
       </Section>
 
-      <Section title="Shape">
+      <Section title="形状">
         <SelectField
-          label="Shape"
+          label="形状"
           value={properties.shape.type}
           values={["point", "sphere", "cone", "box"]}
           disabled={readOnly}
@@ -97,32 +97,32 @@ export function ParticleAssetInspector({
           }}
         />
         {properties.shape.type === "sphere" ? (
-          <NumberField label="Radius" value={properties.shape.radius} min={0} max={10000} disabled={readOnly} onChange={(radius) => onChange({ shape: { type: "sphere", radius } })} />
+          <NumberField label="半径" value={properties.shape.radius} min={0} max={10000} disabled={readOnly} onChange={(radius) => onChange({ shape: { type: "sphere", radius } })} />
         ) : properties.shape.type === "cone" ? (
           <>
-            <NumberField label="Radius" value={properties.shape.radius} min={0} max={10000} disabled={readOnly} onChange={(radius) => onChange({ shape: { type: "cone", radius, angle: properties.shape.type === "cone" ? properties.shape.angle : 25 } })} />
-            <NumberField label="Angle" value={properties.shape.angle} min={0} max={90} suffix="°" disabled={readOnly} onChange={(angle) => onChange({ shape: { type: "cone", radius: properties.shape.type === "cone" ? properties.shape.radius : 0.25, angle } })} />
+            <NumberField label="半径" value={properties.shape.radius} min={0} max={10000} disabled={readOnly} onChange={(radius) => onChange({ shape: { type: "cone", radius, angle: properties.shape.type === "cone" ? properties.shape.angle : 25 } })} />
+            <NumberField label="広がる角度" value={properties.shape.angle} min={0} max={90} suffix="°" disabled={readOnly} onChange={(angle) => onChange({ shape: { type: "cone", radius: properties.shape.type === "cone" ? properties.shape.radius : 0.25, angle } })} />
           </>
         ) : properties.shape.type === "box" ? (
-          <VectorField label="Size" value={properties.shape.size} disabled={readOnly} onChange={(size) => onChange({ shape: { type: "box", size } })} />
+          <VectorField label="大きさ" value={properties.shape.size} disabled={readOnly} onChange={(size) => onChange({ shape: { type: "box", size } })} />
         ) : null}
       </Section>
 
-      <Section title="Motion">
-        <VectorField label="Gravity" value={properties.gravity} disabled={readOnly} onChange={(gravity) => onChange({ gravity })} />
-        <VectorField label="Linear Velocity" value={properties.velocityOverLifetime.linear} disabled={readOnly} onChange={(linear) => onChange({ velocityOverLifetime: { ...properties.velocityOverLifetime, linear } })} />
-        <VectorField label="Orbital Velocity" value={properties.velocityOverLifetime.orbital} disabled={readOnly} onChange={(orbital) => onChange({ velocityOverLifetime: { ...properties.velocityOverLifetime, orbital } })} />
-        <RangeField label="Size over Lifetime" value={properties.sizeOverLifetime} min={0} max={100} preserveOrder disabled={readOnly} onChange={(sizeOverLifetime) => onChange({ sizeOverLifetime })} />
+      <Section title="動き">
+        <VectorField label="重力" value={properties.gravity} disabled={readOnly} onChange={(gravity) => onChange({ gravity })} />
+        <VectorField label="移動速度" value={properties.velocityOverLifetime.linear} disabled={readOnly} onChange={(linear) => onChange({ velocityOverLifetime: { ...properties.velocityOverLifetime, linear } })} />
+        <VectorField label="回転速度" value={properties.velocityOverLifetime.orbital} disabled={readOnly} onChange={(orbital) => onChange({ velocityOverLifetime: { ...properties.velocityOverLifetime, orbital } })} />
+        <RangeField label="時間による大きさの変化" value={properties.sizeOverLifetime} min={0} max={100} preserveOrder disabled={readOnly} onChange={(sizeOverLifetime) => onChange({ sizeOverLifetime })} />
       </Section>
 
-      <Section title="Color over Lifetime">
+      <Section title="時間による色の変化">
         <ColorGradientPreview
           start={properties.colorOverLifetime.start}
           end={properties.colorOverLifetime.end}
         />
         <div className="grid grid-cols-2 gap-1.5">
           <UtilityButton
-            label="Start / Endを交換"
+            label="開始時と終了時を入れ替え"
             disabled={readOnly}
             onClick={() =>
               onChange({
@@ -188,15 +188,15 @@ export function ParticleAssetInspector({
             }
           />
         </div>
-        <ColorField label="Start" value={properties.colorOverLifetime.start} disabled={readOnly} onChange={(start) => onChange({ colorOverLifetime: { ...properties.colorOverLifetime, start } })} />
-        <ColorField label="End" value={properties.colorOverLifetime.end} disabled={readOnly} onChange={(end) => onChange({ colorOverLifetime: { ...properties.colorOverLifetime, end } })} />
+        <ColorField label="開始時" value={properties.colorOverLifetime.start} disabled={readOnly} onChange={(start) => onChange({ colorOverLifetime: { ...properties.colorOverLifetime, start } })} />
+        <ColorField label="終了時" value={properties.colorOverLifetime.end} disabled={readOnly} onChange={(end) => onChange({ colorOverLifetime: { ...properties.colorOverLifetime, end } })} />
       </Section>
 
-      <Section title="Renderer">
-        <SelectField label="Mode" value={properties.renderer.mode} values={["billboard", "stretched-billboard"]} disabled={readOnly} onChange={(mode) => onChange({ renderer: { mode: mode as typeof properties.renderer.mode } })} />
-        <SelectField label="Blending" value={properties.renderer.blending} values={["normal", "additive"]} disabled={readOnly} onChange={(blending) => onChange({ renderer: { blending: blending as typeof properties.renderer.blending } })} />
-        <SelectField label="Sort" value={properties.renderer.sortMode} values={["none", "distance", "youngest", "oldest"]} disabled={readOnly} onChange={(sortMode) => onChange({ renderer: { sortMode: sortMode as typeof properties.renderer.sortMode } })} />
-        <AssetSelect label="Material" value={properties.renderer.materialAssetId} options={materials} disabled={readOnly} onChange={(materialAssetId) => onChange({ renderer: { materialAssetId } })} />
+      <Section title="描画方式">
+        <SelectField label="表示方式" value={properties.renderer.mode} values={["billboard", "stretched-billboard"]} disabled={readOnly} onChange={(mode) => onChange({ renderer: { mode: mode as typeof properties.renderer.mode } })} />
+        <SelectField label="色の重ね方" value={properties.renderer.blending} values={["normal", "additive"]} disabled={readOnly} onChange={(blending) => onChange({ renderer: { blending: blending as typeof properties.renderer.blending } })} />
+        <SelectField label="描画順" value={properties.renderer.sortMode} values={["none", "distance", "youngest", "oldest"]} disabled={readOnly} onChange={(sortMode) => onChange({ renderer: { sortMode: sortMode as typeof properties.renderer.sortMode } })} />
+        <AssetSelect label="マテリアル" value={properties.renderer.materialAssetId} options={materials} disabled={readOnly} onChange={(materialAssetId) => onChange({ renderer: { materialAssetId } })} />
         <ParticleTextureField
           value={properties.renderer.textureAssetId}
           textures={textures}
@@ -204,8 +204,8 @@ export function ParticleAssetInspector({
           onChange={(textureAssetId) => onChange({ renderer: { textureAssetId } })}
           onOpenTexture={onOpenTexture}
         />
-        <Toggle label="Cast Shadows" checked={properties.renderer.castShadow} disabled={readOnly} onChange={(castShadow) => onChange({ renderer: { castShadow } })} />
-        <Toggle label="Receive Shadows" checked={properties.renderer.receiveShadow} disabled={readOnly} onChange={(receiveShadow) => onChange({ renderer: { receiveShadow } })} />
+        <Toggle label="影を落とす" checked={properties.renderer.castShadow} disabled={readOnly} onChange={(castShadow) => onChange({ renderer: { castShadow } })} />
+        <Toggle label="影を受ける" checked={properties.renderer.receiveShadow} disabled={readOnly} onChange={(receiveShadow) => onChange({ renderer: { receiveShadow } })} />
       </Section>
     </div>
   );
@@ -232,10 +232,10 @@ function ParticleQuickTools({
   };
 
   return (
-    <Section title="Quick Tools">
+    <Section title="まとめて操作">
       <div>
         <p className="mb-1.5 text-[11px] leading-4 text-slate-500">
-          TextureとMaterialの参照を保ったまま、よく使う動きと色へ整えます。
+          テクスチャとマテリアルを保ち、動きと色を変更します。
         </p>
         <div className="grid grid-cols-2 gap-1.5">
           {PARTICLE_AUTHORING_PRESETS.map((preset) => (
@@ -261,7 +261,7 @@ function ParticleQuickTools({
       <div className="rounded-md border border-slate-200 bg-slate-50/70 p-2">
         <p className="text-xs font-semibold text-slate-700">発生量</p>
         <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
-          RateとMax Particlesを同じ比率で調整します。
+          放出量と最大数を同じ割合で調整します。
         </p>
         <div className="mt-2 grid grid-cols-4 gap-1">
           {[0.25, 0.5, 2, 4].map((multiplier) => (
@@ -491,7 +491,7 @@ function ColorGradientPreview({
         }}
       />
       <p className="mt-1 text-[11px] leading-4 text-slate-500">
-        RGBとAlphaをStartからEndへ補間します。Alpha 0は完全に透明です。
+        発生時から消えるまで、色と不透明度を変えます。不透明度0で透明になります。
       </p>
     </div>
   );
@@ -524,8 +524,25 @@ function colorToCss(value: Color4): string {
   )}, ${a})`;
 }
 
+const PARTICLE_OPTION_LABELS: Readonly<Record<string, string>> = {
+  "local": "Entity基準",
+  "world": "ワールド基準",
+  "point": "点",
+  "sphere": "球",
+  "cone": "円すい",
+  "box": "直方体",
+  "billboard": "カメラの方向を向く",
+  "stretched-billboard": "移動方向に伸ばす",
+  "normal": "通常",
+  "additive": "加算（明るく重ねる）",
+  "none": "変更しない",
+  "distance": "距離順",
+  "youngest": "新しい粒から",
+  "oldest": "古い粒から"
+};
+
 function SelectField({ label, value, values, disabled, onChange }: { label: string; value: string; values: string[]; disabled: boolean; onChange: (value: string) => void }) {
-  return <label className="grid grid-cols-[minmax(100px,1fr)_120px] items-center gap-2 text-xs text-slate-600">{label}<select value={value} disabled={disabled} onChange={(event) => onChange(event.currentTarget.value)} className={CONTROL}>{values.map((entry) => <option key={entry} value={entry}>{entry}</option>)}</select></label>;
+  return <label className="grid grid-cols-[minmax(100px,1fr)_120px] items-center gap-2 text-xs text-slate-600">{label}<select value={value} disabled={disabled} onChange={(event) => onChange(event.currentTarget.value)} className={CONTROL}>{values.map((entry) => <option key={entry} value={entry}>{PARTICLE_OPTION_LABELS[entry] ?? entry}</option>)}</select></label>;
 }
 
 function AssetSelect({ label, value, options, disabled, onChange }: { label: string; value?: string; options: Array<{ id: string; name: string }>; disabled: boolean; onChange: (value: string | undefined) => void }) {
@@ -595,13 +612,13 @@ function ParticleTextureField({
       }`}
     >
       <div className="mb-2">
-        <p className="text-xs font-semibold text-slate-800">Particle Texture</p>
+        <p className="text-xs font-semibold text-slate-800">パーティクルテクスチャ</p>
         <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
-          Texture Assetを選ぶか、Assetsからここへドロップします。透過画像のAlphaも描画へ反映します。
+          Assetsから画像をドロップできます。透明部分も反映します。
         </p>
       </div>
       <label className="block text-[11px] text-slate-500">
-        Texture Asset
+        テクスチャ
         <select
           value={value ?? ""}
           disabled={disabled || textures.length === 0}
@@ -635,17 +652,17 @@ function ParticleTextureField({
             onClick={() => onOpenTexture(selectedTexture.id)}
             className="shrink-0 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:border-violet-300 hover:text-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Texture設定を開く
+            テクスチャ設定を開く
           </button>
         </div>
       ) : textures.length === 0 ? (
         <p className="mt-2 rounded border border-dashed border-slate-300 bg-white px-2 py-1.5 text-[11px] leading-4 text-slate-500">
-          利用できるTexture Assetがありません。Assetsへ画像をインポートしてください。
+          Assetsに画像を追加してください。
         </p>
       ) : null}
       {missingReference ? (
         <p role="alert" className="mt-2 text-[11px] font-medium leading-4 text-rose-700">
-          参照先のTexture Assetが見つかりません。別のTextureを選ぶか解除してください。
+          画像が見つかりません。選び直すか、割り当てを解除してください。
         </p>
       ) : null}
     </div>

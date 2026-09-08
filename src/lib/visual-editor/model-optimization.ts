@@ -18,7 +18,7 @@ import {
  *
  * Import設定の「Mesh最適化」は長らく保存値だけで、変換にも再インポートにも
  * 反映されていなかった。ここでは実際にglTFを書き換えるが、Material Slotと
- * Entity側の割当を壊さないことを最優先にする。そのため、Materialの統合、
+ * Entity側の割り当てを壊さないことを最優先にする。そのため、Materialの統合、
  * Nodeの平坦化、Primitiveの結合のように索引が動く変換は行わない。
  */
 
@@ -109,13 +109,13 @@ export function planModelOptimization(
   if (asset.source.kind !== "project") {
     return {
       supported: false,
-      reason: "プロジェクト内に保存されたModelだけ最適化できます。",
+      reason: "プロジェクト内に保存された3Dモデルだけ最適化できます。",
     };
   }
   if (asset.status !== "ready") {
     return {
       supported: false,
-      reason: "Assetの状態がReadyになってから最適化できます。",
+      reason: "素材の状態がReadyになってから最適化できます。",
     };
   }
   const metadata = asset.importMetadata;
@@ -165,8 +165,8 @@ export function planModelOptimization(
     alreadyDraco,
     requiresDracoDecoder: alreadyDraco,
     preservedNotice: steps.includes("simplify")
-      ? "Material Slot、Node構造、Animationの本数は変わりません。形状は変わるので、元に戻すときは「最適化を元に戻す」を使ってください。"
-      : "Material Slot、Node構造、Animationの本数は変わりません。Entity側の割当はそのまま使えます。",
+      ? "マテリアルスロット、ノードの構造、アニメーションの数は変わりません。形状は変わるので、元に戻すには「原本のGLBに戻す」を使ってください。"
+      : "マテリアルスロット、ノードの構造、アニメーションの数は変わりません。Entity側の割り当てはそのまま使えます。",
   };
 }
 
@@ -183,7 +183,7 @@ export async function applyModelOptimization(
 ): Promise<ModelOptimizationResult> {
   const asset = manifest.assets[assetId];
   if (!asset || asset.kind !== "model") {
-    return { ok: false, message: "最適化するModel Assetが見つかりませんでした。" };
+    return { ok: false, message: "最適化する3Dモデルが見つかりませんでした。" };
   }
   const plan = planModelOptimization(asset, options);
   if (!plan.supported) return { ok: false, message: plan.reason };
@@ -191,12 +191,12 @@ export async function applyModelOptimization(
     return {
       ok: false,
       message: plan.alreadyDraco
-        ? "このModelはすでにDraco圧縮済みです。Mesh最適化を選ぶと頂点だけ整理できます。"
-        : "実行する処理が選ばれていません。Mesh最適化かDraco圧縮を有効にしてください。",
+        ? "この3DモデルはすでにDraco圧縮済みです。メッシュ最適化を選ぶと頂点だけ整理できます。"
+        : "実行する処理が選ばれていません。メッシュ最適化かDraco圧縮を有効にしてください。",
     };
   }
   if (asset.source.kind !== "project") {
-    return { ok: false, message: "プロジェクト内に保存されたModelだけ最適化できます。" };
+    return { ok: false, message: "プロジェクト内に保存された3Dモデルだけ最適化できます。" };
   }
 
   try {
@@ -330,7 +330,7 @@ export async function optimizeModelBytes(
 
   // cleanup を切って、未使用に見えるMaterialやTextureが消えないようにする。
   // Material Slotはソースのmaterial indexで対応付けているので、索引が動くと
-  // Entity側の割当が別のMaterialへ移ってしまう。
+  // Entity側の割り当てが別のMaterialへ移ってしまう。
   if (steps.includes("weld")) {
     await document.transform(functions.weld());
   }
@@ -393,7 +393,7 @@ async function simplifyDocument(
   const targets = collectSimplifyTargetMeshes(document, options.target);
   if (targets.length === 0) {
     throw new Error(
-      "間引く対象のMeshが見つかりませんでした。Meshを持つNodeを選んでください。",
+      "間引く対象のメッシュが見つかりませんでした。メッシュを持つNodeを選んでください。",
     );
   }
   let before = 0;
@@ -488,7 +488,7 @@ export function revertModelOptimization(
   | { ok: true; manifest: AssetManifest; assetName: string } {
   const asset = manifest.assets[assetId];
   if (!asset || asset.kind !== "model") {
-    return { ok: false, message: "対象のModel Assetが見つかりませんでした。" };
+    return { ok: false, message: "対象の3Dモデルが見つかりませんでした。" };
   }
   const origin = asset.optimizedFrom;
   if (!origin) {

@@ -77,7 +77,7 @@ export function modelStaticMergeRuntimeSource(options: {
   const maybeGeometryCast = typed ? " as BufferGeometry | undefined" : "";
   return [
     `/**`,
-    ` * 動かないMeshをMaterialごとに1つへまとめる。Modelの読み込み後に一度だけ走り、`,
+    ` * 動かないメッシュをマテリアルごとに1つへまとめる。3Dモデルの読み込み後に一度だけ走り、`,
     ` * 元のNodeは取り除く。動くNode、Skin、Morph、作者がNode単位で設定したものは`,
     ` * 触らない。`,
     ` */`,

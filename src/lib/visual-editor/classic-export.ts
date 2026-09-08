@@ -137,7 +137,7 @@ export async function inspectClassicExportTarget(
   if (!normalized) {
     throw new ClassicExportError(
       "target-required",
-      "XRift Classicプロジェクトのフォルダーを選択してください。",
+      "XRift コード編集プロジェクトのフォルダーを選択してください。",
     );
   }
   const [packageSource, xriftSource, entries] = await Promise.all([
@@ -225,7 +225,7 @@ export function planClassicExportFiles(
   if (!sourceFiles.some((file) => file.relativePath === sceneSourceFile)) {
     throw new ClassicExportError(
       "compilation-entry-missing",
-      `compilerが${entryName}.tsxを生成しませんでした。`,
+      `${entryName}.tsxを生成できませんでした。`,
       compilation.diagnostics,
     );
   }
@@ -274,7 +274,7 @@ export async function exportVisualProjectToClassic(input: {
   input.report({
     stage: "saving",
     label: "制作データを保存しています",
-    detail: "最新のSceneとAssetをClassicへ渡す準備をしています。",
+    detail: "最新のシーンと素材をコード編集へ渡す準備をしています。",
     percent: 8,
   });
   const savedPath = await input.save();
@@ -285,15 +285,15 @@ export async function exportVisualProjectToClassic(input: {
   if (!authoringPath.trim()) {
     throw new ClassicExportError(
       "authoring-save-required",
-      "書き出す前にVisualプロジェクトを保存できませんでした。",
+      "書き出す前にビジュアル編集のプロジェクトを保存できませんでした。",
     );
   }
   assertSeparateProjects(authoringPath, input.target.path);
 
   input.report({
     stage: "compiling",
-    label: "Sceneのソースを生成しています",
-    detail: "公開時と同じ変換で、Classicプロジェクトがそのままビルドできるコードを作ります。",
+    label: "シーンのソースを生成しています",
+    detail: "公開時と同じ変換で、コード編集プロジェクトがそのままビルドできるコードを作ります。",
     percent: 24,
   });
   // Same output mode as publish: the staged world is what `xrift check` builds,
@@ -304,7 +304,7 @@ export async function exportVisualProjectToClassic(input: {
   if (!compilation.canStage) {
     throw new ClassicExportError(
       "compilation-blocked",
-      "Classicへ書き出す前に修正が必要な項目があります。",
+      "コード編集へ書き出す前に修正が必要な項目があります。",
       compilation.diagnostics,
     );
   }
@@ -314,7 +314,7 @@ export async function exportVisualProjectToClassic(input: {
   if (unsupported) {
     throw new ClassicExportError(
       "asset-unsupported",
-      `Asset「${unsupported.assetId}」はClassic向け変換に対応していません。`,
+      `Asset「${unsupported.assetId}」はコード編集向け変換に対応していません。`,
       compilation.diagnostics,
     );
   }
@@ -338,11 +338,11 @@ export async function exportVisualProjectToClassic(input: {
 
   input.report({
     stage: "writing",
-    label: "Classicプロジェクトへ追加しています",
+    label: "コード編集プロジェクトへ追加しています",
     detail:
       input.integration === "component"
-        ? "既存のエントリーを保ち、XRift Studio Sceneを独立コンポーネントとして追加します。"
-        : "既存エントリーをバックアップしてXRift Studio Sceneへ切り替えます。",
+        ? "既存のエントリーを保ち、XRift Studio シーンを独立したComponentとして追加します。"
+        : "既存エントリーをバックアップしてXRift Studio シーンへ切り替えます。",
     percent: 46,
   });
 
@@ -420,7 +420,8 @@ export async function exportVisualProjectToClassic(input: {
 
   if (plan.xriftJsonPermissions) {
     notes.push(
-      `このSceneはxrift.jsonへ次の権限が必要です。既存のxrift.jsonへ追加してください。\n${plan.xriftJsonPermissions}`,
+      `このシーンはxrift.jsonへ次の権限が必要です。既存のxrift.jsonへ追加してください。
+${plan.xriftJsonPermissions}`,
     );
   }
 
@@ -458,8 +459,8 @@ export async function exportVisualProjectToClassic(input: {
   ) {
     input.report({
       stage: "installing",
-      label: "依存packageをインストールしています",
-      detail: "既存のnpm projectへ固定versionを追加します。",
+      label: "必要なパッケージをインストールしています",
+      detail: "書き出し先のプロジェクトに、指定バージョンのパッケージを追加します。",
       percent: 78,
     });
     const installed = await xrift.installClassicExportPackages(
@@ -470,7 +471,7 @@ export async function exportVisualProjectToClassic(input: {
     if (installed.code !== 0) {
       throw new ClassicExportError(
         "package-install-failed",
-        "依存packageをインストールできませんでした。生成内容とpackage.jsonの記録は保持しているため、ターミナルからinstallを再実行できます。",
+        "必要なパッケージをインストールできませんでした。生成内容とpackage.jsonの記録は保持しているため、ターミナルからパッケージのインストールを再実行できます。",
         compilation.diagnostics,
       );
     }
@@ -612,7 +613,7 @@ async function recordPackageDependencies(
         delete dependencies[name];
         dirty = true;
         notes.push(
-          `以前の書き出しが記録した${name}は公開されていないpackageのため、package.jsonから外しました。`,
+          `以前の書き出しが記録した${name}は公開されていないパッケージのため、package.jsonから外しました。`,
         );
       }
     } catch {
@@ -647,8 +648,8 @@ const COMPILER_WORLD_COMPONENTS_NAME = parsePackageSpec(
  */
 function generateBridgeSource(kind: ProjectKind): string {
   const component = kind === "world" ? "World" : "Item";
-  return `// XRift Studioが生成したSceneを、既存のClassic projectから読み込むための入口です。
-// Sceneの本体は同じフォルダーの${component}.tsxにあります。
+  return `// XRift Studioが生成したシーンを、既存のコード編集プロジェクトから読み込むための入口です。
+// シーンの本体は同じフォルダーの${component}.tsxにあります。
 export { ${component} as XriftStudioScene } from "./${component}";
 export type { ${component}Props as XriftStudioSceneProps } from "./${component}";
 `;
@@ -722,7 +723,7 @@ function assertSeparateProjects(authoringPath: string, targetPath: string): void
   ) {
     throw new ClassicExportError(
       "project-overlap",
-      "VisualプロジェクトとClassicプロジェクトは別のフォルダーを選択してください。",
+      "ビジュアル編集のプロジェクトとコード編集プロジェクトは別のフォルダーを選択してください。",
     );
   }
 }

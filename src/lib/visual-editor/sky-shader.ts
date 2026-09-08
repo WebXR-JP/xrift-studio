@@ -48,14 +48,14 @@ export function resolveSkyShaderMaterial(
     return {
       status: "unavailable",
       assetId: materialAssetId,
-      reason: "Skybox Shaderに指定したMaterial Assetが見つかりません",
+      reason: "Skybox Shaderに指定したマテリアルが見つかりません",
     };
   }
   if (asset.kind !== "material") {
     return {
       status: "unavailable",
       assetId: materialAssetId,
-      reason: `「${asset.name}」はMaterial AssetではないためSkybox Shaderに使えません`,
+      reason: `「${asset.name}」はマテリアルではないためSkybox Shaderに使えません`,
     };
   }
   const shader = asset.shader;
@@ -63,7 +63,7 @@ export function resolveSkyShaderMaterial(
     return {
       status: "unavailable",
       assetId: materialAssetId,
-      reason: `「${asset.name}」にCustom ShaderがないためSkybox Shaderに使えません`,
+      reason: `「${asset.name}」にカスタムシェーダーがないためSkybox Shaderに使えません`,
     };
   }
   const diagnostics = validateClassicR3fMaterialShader(shader);
@@ -71,7 +71,7 @@ export function resolveSkyShaderMaterial(
     return {
       status: "unavailable",
       assetId: materialAssetId,
-      reason: `「${asset.name}」のCustom Shaderを検証できません: ${diagnostics.join("、")}`,
+      reason: `「${asset.name}」のカスタムシェーダーを検証できません: ${diagnostics.join("、")}`,
     };
   }
   return { status: "ready", asset, shader };

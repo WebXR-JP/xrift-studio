@@ -61,7 +61,7 @@ export function ScriptComponentInspector({
     <div className="space-y-2">
       <label className="block">
         <span className="mb-1 block text-[11px] font-medium text-slate-600">
-          Script
+          スクリプト
         </span>
         <div className="flex items-center gap-1.5">
           <select
@@ -104,19 +104,19 @@ export function ScriptComponentInspector({
           }
           className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs disabled:opacity-45"
         >
-          <option value="play">Playのみ</option>
+          <option value="play">動作確認のみ</option>
           <option value="play-and-edit" disabled>
-            Playと編集中（予約済み・未対応）
+            動作確認と編集中（未対応）
           </option>
         </select>
       </label>
 
       {contract === null ? (
-        <p className="text-[11px] text-slate-500">Scriptを読み込んでいます…</p>
+        <p className="text-[11px] text-slate-500">スクリプトを読み込んでいます…</p>
       ) : contract.props.length === 0 && contract.issues.length > 0 ? (
         <div className="rounded border border-amber-200 bg-amber-50 p-2">
           <p className="text-[11px] font-medium text-amber-800">
-            propertyを読み取れません
+            プロパティを読み取れません
           </p>
           <ul className="mt-1 space-y-0.5">
             {contract.issues.slice(0, 3).map((issue, index) => (
@@ -128,7 +128,7 @@ export function ScriptComponentInspector({
         </div>
       ) : contract.props.length === 0 ? (
         <p className="text-[11px] text-slate-500">
-          このScriptはpropertyを宣言していません。
+          このスクリプトに設定項目はありません。
         </p>
       ) : (
         <div className="space-y-2 border-t border-slate-200 pt-2">

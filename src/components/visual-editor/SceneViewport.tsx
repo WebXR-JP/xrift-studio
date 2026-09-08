@@ -1409,7 +1409,7 @@ function AudioSourceVisual({ selected }: { selected: boolean }) {
     >
       <div
         aria-hidden="true"
-        title="Audio Source"
+        title="音源"
         style={{
           alignItems: "center",
           background: selected ? "rgba(255,255,255,0.96)" : "rgba(15,23,42,0.82)",
@@ -2726,14 +2726,14 @@ function resolveMaterialDropTarget(
   ) {
     return {
       status: "rejected",
-      message: "Materialを適用するMeshの上へドロップしてください",
+      message: "マテリアルを適用するメッシュの上へドロップしてください",
     };
   }
   if (hit.renderedEntityId !== hit.authoringEntityId) {
     return {
       status: "rejected",
       message:
-        "Prefab内のMeshはインスタンスから直接変更できません。Prefab Assetを編集してください",
+        "プレハブ内のメッシュはインスタンスから直接変更できません。プレハブを編集してください",
     };
   }
 
@@ -2745,7 +2745,7 @@ function resolveMaterialDropTarget(
   if (!entity?.enabled || !mesh?.enabled) {
     return {
       status: "rejected",
-      message: "ドロップ先に有効なMeshがありません",
+      message: "ドロップ先に有効なメッシュがありません",
     };
   }
   const target = getMaterialAssignmentTarget(
@@ -2759,8 +2759,8 @@ function resolveMaterialDropTarget(
       status: "rejected",
       message:
         target.reason === "slot-missing"
-          ? "ドロップ先のMeshに適用できるMaterial slotがありません"
-          : "ドロップ先に編集可能なMeshがありません",
+          ? "ドロップ先のメッシュに適用できるマテリアル枠がありません"
+          : "ドロップ先に編集可能なメッシュがありません",
     };
   }
   return {
@@ -3237,7 +3237,7 @@ function SceneBoundsProbe({
           ok: false,
           bounds: null,
           measuredEntityCount: 0,
-          message: "指定されたEntityがScene Viewに見つかりません",
+          message: "指定されたEntityがシーンに見つかりません",
         });
         return;
       }
@@ -3268,7 +3268,7 @@ function SceneBoundsProbe({
         ok: false,
         bounds: null,
         measuredEntityCount: 0,
-        message: "Scene Viewに測れるEntityがありません",
+        message: "シーンに測れるEntityがありません",
       });
       return;
     }
@@ -3633,7 +3633,7 @@ function CameraControls({
         ok: false,
         position: camera.position.toArray() as Vec3,
         target: [0, 0, 0],
-        message: "Scene Viewのカメラがまだ準備できていません",
+        message: "シーンのカメラがまだ準備できていません",
       });
       return;
     }
@@ -3679,7 +3679,7 @@ function CameraControls({
           ok: false,
           position: currentPosition.toArray() as Vec3,
           target: currentTarget.toArray() as Vec3,
-          message: "指定されたEntityがScene Viewに見つかりません",
+          message: "指定されたEntityがシーンに見つかりません",
         });
         return;
       }
@@ -3703,7 +3703,7 @@ function CameraControls({
         ok: false,
         position: currentPosition.toArray() as Vec3,
         target: currentTarget.toArray() as Vec3,
-        message: "preset、focusEntityId、position/targetのいずれかを指定してください",
+        message: "プリセット、focusEntityId、position/targetのいずれかを指定してください",
       });
       return;
     }
@@ -5363,7 +5363,7 @@ export function SceneViewport({
         requestId: request.id,
         action: "stop",
         status: "error",
-        message: "録画中のScene Viewがありません。",
+        message: "録画中のシーンがありません。",
       });
       return;
     }
@@ -5835,7 +5835,7 @@ export function SceneViewport({
       if (target.status === "rejected") {
         onDropRejected(target.message);
       } else if (!intent.id) {
-        onDropRejected("Materialのドラッグ情報を読み取れませんでした。もう一度ドラッグしてください");
+        onDropRejected("マテリアルのドラッグ情報を読み取れませんでした。もう一度ドラッグしてください");
       } else {
         onDropMaterial(target.entityId, intent.id, target.meshComponentId);
       }
@@ -5851,14 +5851,14 @@ export function SceneViewport({
           groundPosition[2],
         ]);
       } else {
-        onDropRejected("XRift Prefabのドラッグ情報を読み取れませんでした");
+        onDropRejected("XRift プレハブのドラッグ情報を読み取れませんでした");
       }
       return;
     }
 
     if (intent.kind === "scene-asset") {
       if (intent.id) onDropSceneAsset(intent.id, groundPosition);
-      else onDropRejected("Assetのドラッグ情報を読み取れませんでした。もう一度ドラッグしてください");
+      else onDropRejected("素材のドラッグ情報を読み取れませんでした。もう一度ドラッグしてください");
       return;
     }
 
@@ -5931,7 +5931,7 @@ export function SceneViewport({
     projectKind === "world"
       ? playPointerLocked
         ? "WASD / 矢印キーで移動 · マウスで視点 · Space / Eでジャンプ · Gで掴む · クリックでインタラクト · Escでマウス解放"
-        : "画面をクリックしてマウスを固定すると、公開ワールドと同じ一人称プレイヤーで歩けます · 固定できないときはドラッグで視点を動かせます"
+        : "クリックして操作を開始 · ドラッグでも視点を動かせます"
       : "ドラッグでアイテムをOrbit確認";
   const readyMaterialDropTarget =
     materialDropTarget?.status === "ready" ? materialDropTarget : null;
@@ -6006,21 +6006,21 @@ export function SceneViewport({
   const PlayIcon = editorMode === "play" ? EDITOR_ICONS.stop : EDITOR_ICONS.play;
   const dropMessage =
     editorMode === "play"
-      ? "Playを停止してから配置してください"
+      ? "動作確認を停止してから配置してください"
       : dragOverKind === "files"
-        ? "外部モデルは下のAssetsへドロップ"
+        ? "外部モデルはAssetsへドロップ"
         : dragOverKind === "material"
           ? materialDropTarget?.status === "rejected"
             ? materialDropTarget.message
             : readyMaterialDropTarget
-              ? `${scene.entities[readyMaterialDropTarget.entityId]?.name ?? "Mesh"}へMaterialを適用`
-              : "Materialを適用するMeshの上へ移動"
+              ? `${scene.entities[readyMaterialDropTarget.entityId]?.name ?? "Mesh"}へマテリアルを適用`
+              : "マテリアルを適用するメッシュの上へ移動"
           : dragOverKind === "skybox"
             ? `${dragOverLabel ?? "Skybox"}をシーン全体へ設定`
           : dragOverKind === "builtin-prefab"
             ? `${dragOverLabel ?? "XRift Component"}を配置`
             : dragOverKind === "scene-asset"
-              ? `${dragOverLabel ?? "Model / Prefab / Particle"}をSceneへ配置`
+              ? `${dragOverLabel ?? "Model / Prefab / Particle"}をシーンへ配置`
         : "CreateメニューからPrimitiveを追加";
 
   const MaximizeIcon = EDITOR_ICONS.maximize;
@@ -6057,7 +6057,7 @@ export function SceneViewport({
               title={
                 maximized
                   ? "パネルを戻す"
-                  : "このビューだけを広げる（Hierarchy・Inspector・Assetsを畳む）"
+                  : "このビューだけを広げる（Hierarchy・設定・素材を畳む）"
               }
               aria-label={maximized ? "パネルを戻す" : "このビューだけを広げる"}
               className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ${
@@ -6078,7 +6078,7 @@ export function SceneViewport({
           {tabs && tabs.length > 0 ? (
             <div
               role="tablist"
-              aria-label="Scene Viewとエディター"
+              aria-label="シーンとエディター"
               className="flex min-w-0 items-center gap-px overflow-x-auto"
             >
               {[
@@ -6144,20 +6144,20 @@ export function SceneViewport({
               id="scene-view-heading"
               title={
                 editorMode === "play"
-                  ? "Play Window"
+                  ? "動作確認 Window"
                   : recordingViewActive
                     ? "録画ビュー"
-                    : "Scene View"
+                    : "シーン"
               }
               className={`truncate text-[12px] font-semibold ${
                 editorMode === "play" ? "text-zinc-100" : "text-slate-800"
               }`}
             >
               {editorMode === "play"
-                ? "Play Window"
+                ? "動作確認 Window"
                 : recordingViewActive
                   ? "録画ビュー"
-                  : "Scene View"}
+                  : "シーン"}
             </h2>
           )}
           {recordingTakeActive ? (
@@ -6191,7 +6191,7 @@ export function SceneViewport({
             <button
               type="button"
               onClick={onExitRecordingView}
-              title="録画ビューを閉じて編集表示へ戻る。録画中なら録画は続く"
+              title="編集画面へ戻る（録画は継続）"
               className={`flex h-7 items-center whitespace-nowrap rounded-md border px-2 text-[11px] font-semibold transition-colors ${
                 editorMode === "play"
                   ? "border-zinc-600 bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
@@ -6208,12 +6208,12 @@ export function SceneViewport({
             onClick={onTogglePlay}
             title={commandTitle(
               editorMode === "play"
-                ? "Playを停止"
+                ? "動作確認を停止"
                 : playPreparing
-                  ? "Scriptを変換しています"
+                  ? "スクリプトを変換しています"
                   : playDisabled
-                    ? "アセットの読み込みが終わるとPlayできます"
-                    : "Playを開始",
+                    ? "アセットの読み込みが終わると動作確認できます"
+                    : "動作確認を開始",
               "play.toggle",
               playShortcut,
             )}
@@ -6228,10 +6228,10 @@ export function SceneViewport({
               ? "停止"
               : playPreparing
                 ? "準備中"
-                : "Play"}
+                : "動作確認"}
           </button>
         </div>
-        <div className="flex flex-1 items-center justify-end gap-1.5" role="toolbar" aria-label="Scene Viewの操作">
+        <div className="flex flex-1 items-center justify-end gap-1.5" role="toolbar" aria-label="シーンの操作">
           {(["translate", "rotate", "scale"] as const).map((mode) => {
             const Icon = EDITOR_ICONS[mode === "translate" ? "move" : mode];
             const label = mode === "translate" ? "移動" : mode === "rotate" ? "回転" : "拡縮";
@@ -6340,15 +6340,15 @@ export function SceneViewport({
                   disabled={editorMode !== "edit"}
                   onChange={(event) => setProjection(event.currentTarget.value as ViewProjection)}
                   aria-label="カメラ投影方式"
-                  title="Perspective / Ortho"
+                  title="透視投影と平行投影を切り替え"
                   className={`h-7 shrink-0 rounded border px-1.5 text-[11px] font-medium outline-none focus:border-violet-400 disabled:cursor-not-allowed disabled:opacity-50 ${
                     editorMode === "play"
                       ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500"
                       : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
                   }`}
                 >
-                  <option value="perspective">Perspective</option>
-                  <option value="orthographic">Ortho</option>
+                  <option value="perspective">透視投影</option>
+                  <option value="orthographic">平行投影</option>
                 </select>
               </div>
               <div className="flex items-center justify-between gap-2 @[760px]/scene-header:contents">
@@ -6361,7 +6361,7 @@ export function SceneViewport({
                   onChange={(event) =>
                     setDisplayMode(event.currentTarget.value as SceneViewportDisplayMode)
                   }
-                  aria-label="Scene View表示モード"
+                  aria-label="シーン表示モード"
                   title={
                     SCENE_VIEWPORT_DISPLAY_OPTIONS.find(
                       (option) => option.value === effectiveDisplayMode,
@@ -6396,10 +6396,10 @@ export function SceneViewport({
                     setAutomaticQuality("low");
                     saveSceneViewportQualityMode(next);
                   }}
-                  aria-label="Scene View描画品質"
+                  aria-label="シーン描画品質"
                   title={
                     editorMode === "play"
-                      ? "Play中は高品質で描画します"
+                      ? "動作確認中は高品質で描画します"
                       : // The resolved number, not just the mode's description:
                         // "高品質" follows the display, so what a mode costs is
                         // only answerable on the screen it is running on.
@@ -6428,7 +6428,7 @@ export function SceneViewport({
               </div>
               <button
                 type="button"
-                aria-label="Scene View診断表示"
+                aria-label="シーン診断表示"
                 aria-pressed={debugOverlayEnabled}
                 onClick={() => setDebugOverlayEnabled((enabled) => !enabled)}
                 title="FPS、描画負荷、カメラ距離を表示"
@@ -6450,7 +6450,7 @@ export function SceneViewport({
                 aria-label={videoRecording ? "診断動画を停止" : "診断動画を録画"}
                 onClick={toggleVideoRecording}
                 disabled={videoSaving}
-                title={videoRecording ? "診断動画を停止して保存" : "Scene Viewを最大15秒録画"}
+                title={videoRecording ? "診断動画を停止して保存" : "シーンを最大15秒録画"}
                 className={`flex h-7 min-w-[68px] shrink-0 items-center justify-center gap-1 rounded border px-2 text-[11px] font-semibold transition-colors disabled:cursor-wait disabled:opacity-50 ${
                   videoRecording
                     ? "border-rose-300 bg-rose-500/15 text-rose-700 hover:bg-rose-500/25"
@@ -6752,19 +6752,19 @@ export function SceneViewport({
             className="pointer-events-none absolute right-2.5 top-2.5 z-20 w-[min(18rem,calc(100%-1.25rem))] rounded-md border border-cyan-300/60 bg-slate-950/90 px-3 py-2.5 font-mono text-[10px] leading-4 text-cyan-50 shadow-lg backdrop-blur"
             role="status"
             aria-live="polite"
-            aria-label="Scene View診断メトリクス"
+            aria-label="シーン診断メトリクス"
           >
             <div className="flex items-center justify-between gap-2 font-sans text-[11px] font-semibold">
-              <span>Scene View診断</span>
+              <span>シーン診断</span>
               <span className="text-cyan-200">{videoRecording ? "REC" : "LIVE"}</span>
             </div>
             <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-cyan-100/90">
               <span>FPS {formatDebugNumber(debugMetrics.fps, 1)}</span>
-              <span>Frame {formatDebugNumber(debugMetrics.frameTimeMs, 1)}ms</span>
-              <span>Draw {formatDebugNumber(debugMetrics.drawCalls)}</span>
-              <span>Tris {formatDebugNumber(debugMetrics.triangles)}</span>
-              <span>Mesh {formatDebugNumber(debugMetrics.visibleMeshes)} / {formatDebugNumber(debugMetrics.totalMeshes)}</span>
-              <span>Geo {formatDebugNumber(debugMetrics.geometries)} · Tex {formatDebugNumber(debugMetrics.textures)}</span>
+              <span>フレーム {formatDebugNumber(debugMetrics.frameTimeMs, 1)}ms</span>
+              <span>描画回数 {formatDebugNumber(debugMetrics.drawCalls)}</span>
+              <span>三角形 {formatDebugNumber(debugMetrics.triangles)}</span>
+              <span>メッシュ {formatDebugNumber(debugMetrics.visibleMeshes)} / {formatDebugNumber(debugMetrics.totalMeshes)}</span>
+              <span>形状 {formatDebugNumber(debugMetrics.geometries)} · Tex {formatDebugNumber(debugMetrics.textures)}</span>
             </div>
             <SceneVramMetrics metrics={debugMetrics} />
             <div className="mt-1 border-t border-cyan-200/20 pt-1 text-cyan-200/80">
@@ -6782,7 +6782,7 @@ export function SceneViewport({
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-semibold">コライダー専用編集</p>
               <span className="text-[11px] tabular-nums text-slate-300">
-                Box {colliderPanelInspection.boxColliderCount} · Mesh {colliderPanelInspection.meshColliderCount}
+                Box {colliderPanelInspection.boxColliderCount} · メッシュ {colliderPanelInspection.meshColliderCount}
               </span>
             </div>
             <p className="mt-1 text-[11px] leading-4 text-slate-300">
@@ -6812,7 +6812,7 @@ export function SceneViewport({
               >
                 {selectedColliderInspection && selectedColliderInspection.colliderCount > 0
                   ? "選択Entityを最適化"
-                  : "Scene全体を最適化"}
+                  : "シーン全体を最適化"}
               </button>
             ) : null}
             <p className="mt-2 border-t border-slate-700 pt-1.5 text-[10px] text-slate-400">
@@ -6853,13 +6853,13 @@ export function SceneViewport({
                 aria-live="polite"
               >
                 {!playSceneReady
-                  ? "3Dモデルを読み込み中 · 読み込みが終わってからプレイヤーが出るので、地面に埋まったまま始まりません"
+                  ? "3Dモデルを読み込み中…"
                   : playLockRefused === "unsupported"
-                    ? "この環境ではマウスを固定できません。画面をドラッグすると視点を動かせます"
+                    ? "マウスを固定できません。ドラッグで視点を動かせます"
                     : playLockRefused === "retry"
-                      ? "マウスを固定できませんでした。Escの直後はブラウザが約1秒受け付けません。少し待ってもう一度クリックしてください。固定できない間もドラッグで視点を動かせます"
+                      ? "マウスを固定できません。少し待ってクリックするか、ドラッグで視点を動かしてください"
                       : playPointerLocked
-                        ? "マウス固定中 · Escで解放するとHierarchyとInspectorを操作できます"
+                        ? "マウス固定中 · Escで解放するとHierarchyと設定を操作できます"
                         : "マウス未固定 · ドラッグで視点を動かせます。クリックするとマウスを固定します"}
               </p>
             ) : null}
@@ -6877,7 +6877,7 @@ export function SceneViewport({
             role="status"
             aria-live="polite"
           >
-            <p className="font-semibold">Terrain Scene 編集 · {terrainEditing.kind}</p>
+            <p className="font-semibold">地形シーン編集 · {terrainEditing.kind}</p>
             <p className="text-violet-200">
               左ドラッグでブラシを適用 · 半径 {terrainEditing.radius.toFixed(1)}m · Escで現在のストロークを取り消し
             </p>
@@ -6886,7 +6886,7 @@ export function SceneViewport({
 
         {modelProxyVisible ? (
           <div className="pointer-events-none absolute right-2.5 top-2.5 z-10 rounded border border-amber-700/60 bg-amber-950/75 px-2 py-1 text-xs text-amber-200">
-            Model proxy preview
+            3Dモデル proxy preview
           </div>
         ) : null}
 
@@ -6958,7 +6958,7 @@ export function SceneViewport({
               </>
             ) : null}
             <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Create Mesh
+              Create メッシュ
             </p>
             {BUILTIN_PRIMITIVE_CREATION_CATALOG.map((entry) => (
               <button
@@ -6968,7 +6968,7 @@ export function SceneViewport({
                   setContextMenu(null);
                   onCreatePrimitive(entry.creationId);
                 }}
-                title={commandTitle(`${entry.name}をSceneへ作成`, `CreatePrimitive.${entry.name}`)}
+                title={commandTitle(`${entry.name}をシーンへ作成`, `CreatePrimitive.${entry.name}`)}
                 className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-violet-50 hover:text-violet-800"
               >
                 <EDITOR_ICONS.primitive size={14} aria-hidden="true" />

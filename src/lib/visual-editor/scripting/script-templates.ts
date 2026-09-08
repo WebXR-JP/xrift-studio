@@ -38,8 +38,8 @@ export const SCRIPT_TEMPLATE_CATALOG_VERSION = 5 as const;
 export const SCRIPT_TEMPLATE_CATALOG: readonly ScriptTemplateDefinition[] = [
   {
     id: "blank",
-    name: "空のScript",
-    description: "最小のlifecycleから自由に実装します。",
+    name: "空のスクリプト",
+    description: "基本の開始・更新処理から、自分で動きを作ります。",
     category: "basic",
     suggestedName: "New Script",
     language: "ts",
@@ -166,8 +166,8 @@ export default defineScript({
   },
   {
     id: "material-pulse",
-    name: "Materialパルス",
-    description: "色、発光、粗さをPlay中にアニメーションします。",
+    name: "マテリアルパルス",
+    description: "色、発光、粗さを動作確認中にアニメーションします。",
     category: "appearance",
     suggestedName: "Material Pulse",
     language: "ts",
@@ -179,11 +179,11 @@ export default defineScript({
 export default defineScript({
   name: "${NAME_TOKEN}",
   props: {
-    color: prop.color({ label: "基本色", default: "#38bdf8" }),
-    emissive: prop.color({ label: "発光色", default: "#7c3aed" }),
+    color: prop.color({ label: "Base Color", default: "#38bdf8" }),
+    emissive: prop.color({ label: "Emissive", default: "#7c3aed" }),
     speed: prop.number({ label: "パルス速度", default: 2, min: 0, max: 20 }),
-    minRoughness: prop.number({ label: "粗さ 最小", default: 0.2, min: 0, max: 1 }),
-    maxRoughness: prop.number({ label: "粗さ 最大", default: 0.8, min: 0, max: 1 }),
+    minRoughness: prop.number({ label: "Roughness Min", default: 0.2, min: 0, max: 1 }),
+    maxRoughness: prop.number({ label: "Roughness Max", default: 0.8, min: 0, max: 1 }),
   },
   start(ctx) {
     return {
@@ -206,9 +206,9 @@ export default defineScript({
   },
   {
     id: "light-flicker",
-    name: "Lightの点滅",
+    name: "ライトの点滅",
     description:
-      "同じEntityのLightを、Inspectorで変えられる強度・色・速度で自然に点滅させます。",
+      "同じEntityのライトを、設定で変えられる強度・色・速度で自然に点滅させます。",
     category: "appearance",
     suggestedName: "Light Flicker",
     language: "ts",
@@ -266,9 +266,9 @@ export default defineScript({
   },
   {
     id: "texture-scroll",
-    name: "Textureスクロール",
+    name: "テクスチャスクロール",
     description:
-      "Texture Assetの設定を継承して読み込み、共有Textureを変えずにUVをスクロールします。",
+      "テクスチャの設定を継承して読み込み、共有テクスチャを変えずにUVをスクロールします。",
     category: "appearance",
     suggestedName: "Texture Scroller",
     language: "ts",
@@ -322,8 +322,8 @@ export default defineScript({
   },
   {
     id: "particle-control",
-    name: "Particleコントローラー",
-    description: "Particle Emitterの再生、Emission、速度、サイズ、色を制御します。",
+    name: "パーティクルコントローラー",
+    description: "パーティクルの再生、放出量、速度、大きさ、色を変えます。",
     category: "particle",
     suggestedName: "Particle Controller",
     language: "ts",
@@ -363,9 +363,9 @@ export default defineScript({
   },
   {
     id: "model-display",
-    name: "外部Modelを表示",
+    name: "外部3Dモデルを表示",
     description:
-      "明示参照したGLBまたは自己完結したglTFをRenderへ読み込み、速度を変えながら回転します。",
+      "指定したGLBまたは単独で読み込めるglTFを表示し、速度を変えながら回転させます。",
     category: "media",
     suggestedName: "Model Display",
     language: "tsx",
@@ -419,9 +419,9 @@ export function Render({ ctx }: ScriptRenderProps<ModelDisplayProps>) {
   },
   {
     id: "audio-source-control",
-    name: "Audio Sourceコントローラー",
+    name: "音源コントローラー",
     description:
-      "同じEntityのAudio Sourceを選び、再生、音量、ループ、再生位置をPlay中に制御します。",
+      "同じEntityの音源を選び、再生、音量、ループ、再生位置を動作確認中に制御します。",
     category: "media",
     suggestedName: "Audio Source Controller",
     language: "ts",
@@ -493,7 +493,7 @@ export default defineScript({
     id: "proximity-event",
     name: "範囲に入ったらイベント",
     description:
-      "明示参照したEntityがこのEntityの範囲へ入った／出た状態をchannel付きイベントで送ります。",
+      "指定したEntityが範囲に入ったときと出たときに、指定のチャンネルへ通知します。",
     category: "interaction",
     suggestedName: "Proximity Event",
     language: "ts",
@@ -606,9 +606,9 @@ export default defineScript({
   },
   {
     id: "event-light",
-    name: "イベントでLightを切替",
+    name: "イベントでライトを切替",
     description:
-      "同じchannelの近接イベントを受け、同じEntityのLightの色と強度を滑らかに変えます。",
+      "同じチャンネルから近づいた通知を受けて、ライトの色と明るさを滑らかに変えます。",
     category: "interaction",
     suggestedName: "Event Light",
     language: "ts",
@@ -724,7 +724,7 @@ export default defineScript({
   {
     id: "event-visibility",
     name: "イベントで表示切替",
-    description: "Scriptイベントを受け取り、Entityの表示状態を切り替えます。",
+    description: "スクリプトイベントを受け取り、Entityの表示状態を切り替えます。",
     category: "interaction",
     suggestedName: "Visibility Event",
     language: "ts",

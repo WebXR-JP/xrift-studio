@@ -73,7 +73,7 @@ test("セットアップエラーを伏字付きでヘルプ相談へ引き継�
 
   const supportDialog = page.getByRole("dialog", { name: "ヘルプと報告" });
   await expect(supportDialog).toBeVisible();
-  await expect(supportDialog.getByText("自動添付されるエラーと診断")).toBeVisible();
+  await expect(supportDialog.getByText("相談文に含めるエラーと診断")).toBeVisible();
   await expect(supportDialog.getByText("[ローカルパス]", { exact: false })).toBeVisible();
   await expect(supportDialog.getByText("password=[削除]", { exact: false })).toBeVisible();
   await expect(supportDialog).not.toContainText("C:\\Users\\release-e2e");
@@ -195,21 +195,21 @@ test("狭い画面でもエディターのツールバーが一行に収まり�
   await page.setViewportSize({ width: 900, height: 720 });
   await openVisualWorld(page, "release-narrow-toolbar");
 
-  const sceneToolbar = page.getByRole("toolbar", { name: "Scene Viewの操作" });
+  const sceneToolbar = page.getByRole("toolbar", { name: "シーンの操作" });
   await expect(sceneToolbar).toBeVisible();
   for (const gizmo of ["移動", "回転", "拡縮"]) {
     await expect(sceneToolbar.getByRole("button", { name: gizmo })).toBeVisible();
   }
-  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "動作確認", exact: true })).toBeVisible();
   expect(await editorHeaderLayoutProblems(page)).toEqual([]);
 
   // The view controls that no longer fit stay reachable instead of being cut off.
-  const diagnostics = page.getByRole("button", { name: "Scene View診断表示" });
+  const diagnostics = page.getByRole("button", { name: "シーン診断表示" });
   await expect(diagnostics).toBeHidden();
   await page.getByRole("button", { name: "表示と診断の設定" }).click();
   await expect(diagnostics).toBeVisible();
   await expect(page.getByLabel("カメラ投影方式")).toBeVisible();
-  await expect(page.getByLabel("Scene View表示モード")).toBeVisible();
+  await expect(page.getByLabel("シーン表示モード")).toBeVisible();
   await expect(
     page.getByRole("button", { name: "診断動画を録画" }),
   ).toBeVisible();
@@ -284,7 +284,7 @@ for (const creationCase of creationCases) {
       ).toBeVisible();
     } else {
       await expect(
-        page.getByRole("button", { name: "実行", exact: true }),
+        page.getByRole("button", { name: "動作確認", exact: true }),
       ).toBeVisible();
       await expect(
         page.getByRole("banner").getByText(creationCase.name, { exact: true }),
@@ -293,7 +293,7 @@ for (const creationCase of creationCases) {
   });
 }
 
-test("クラシックワールドを編集・保存・実行し、公開前確認で停止する", async ({
+test("コード編集のワールドを編集・保存・動作確認し、公開前確認で停止する", async ({
   page,
 }) => {
   await openProjectLibrary(page);
@@ -305,7 +305,7 @@ test("クラシックワールドを編集・保存・実行し、公開前確�
   await search.fill("");
 
   await page.getByTitle("E2E Classic Worldを開く").click();
-  const titleInput = page.getByPlaceholder("My XR World");
+  const titleInput = page.getByPlaceholder("ワールドのタイトル");
   const descriptionInput = page.getByPlaceholder(
     "どんなワールドか簡単に説明しましょう",
   );
@@ -317,7 +317,7 @@ test("クラシックワールドを編集・保存・実行し、公開前確�
     .click();
   await expect(page.getByText("ワールド設定を保存しました")).toBeVisible();
 
-  await page.getByRole("button", { name: "実行", exact: true }).click();
+  await page.getByRole("button", { name: "動作確認", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "停止", exact: true }),
   ).toBeVisible();
@@ -326,11 +326,11 @@ test("クラシックワールドを編集・保存・実行し、公開前確�
   ).toBeVisible();
   await page.getByRole("button", { name: "停止", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "実行", exact: true }),
+    page.getByRole("button", { name: "動作確認", exact: true }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "アップロード" }).click();
-  await expect(page.getByText("公開前の準備", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "XRiftへ公開" }).click();
+  await expect(page.getByText("公開前の確認", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "サムネイルを設定" }),
   ).toBeVisible();
@@ -347,10 +347,10 @@ test("クラシックアイテムのセキュリティチェックを完了で�
   await openProjectLibrary(page);
   await page.getByTitle("E2E Classic Itemを開く").click();
 
-  await expect(page.getByPlaceholder("My XR Item")).toHaveValue("Sample Item");
+  await expect(page.getByPlaceholder("アイテムのタイトル")).toHaveValue("Sample Item");
   await page.getByRole("button", { name: "チェック", exact: true }).click();
   await expect(
-    page.getByText("アイテムのセキュリティチェックに通過しました"),
+    page.getByText("アイテムのセキュリティチェックが完了しました"),
   ).toBeVisible();
 
   const state = await releaseE2EState(page);
@@ -373,10 +373,10 @@ test("ビジュアルワールドを編集・Playし、公開確認で送信前�
 
   await expect(page.getByText("ビジュアル編集")).toBeVisible();
   await page.getByRole("button", { name: "追加", exact: true }).click();
-  await page.getByRole("button", { name: /Empty Entity/ }).click();
+  await page.getByRole("button", { name: /空のEntity/ }).click();
   await expect(
     page
-      .getByRole("tree", { name: "SceneのEntity階層" })
+      .getByRole("tree", { name: "シーンのEntity階層" })
       .getByText("Empty Entity", { exact: true }),
   ).toBeVisible();
   await expect(page.locator('header [role="status"]').first()).toContainText(
@@ -392,13 +392,13 @@ test("ビジュアルワールドを編集・Playし、公開確認で送信前�
     })
     .toBeGreaterThan(0);
 
-  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await page.getByRole("button", { name: "動作確認", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "停止", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "停止", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Play", exact: true }),
+    page.getByRole("button", { name: "動作確認", exact: true }),
   ).toBeVisible();
 
   await page
@@ -431,52 +431,52 @@ test("ビジュアル編集でテキスト看板を置き、書体と背景を�
   await page.getByRole("button", { name: "追加", exact: true }).click();
   // Searched rather than navigated: the entry has to be findable by name from
   // the same box that finds every other creation.
-  await page.getByPlaceholder("Component・Entityを検索…").fill("Text Panel");
-  await page.getByRole("button", { name: /Text Panel/ }).first().click();
+  await page.getByPlaceholder("Component・Entityを検索…").fill("テキスト看板");
+  await page.getByRole("button", { name: /テキスト看板/ }).first().click();
   await expect(page.getByText("Componentを追加しました")).toBeVisible();
   // The Assets pane owns the Inspector until an Entity is picked again.
   await page
-    .getByRole("tree", { name: "SceneのEntity階層" })
+    .getByRole("tree", { name: "シーンのEntity階層" })
     .getByText("Environment", { exact: true })
     .click();
 
   // The preset has to arrive usable: a plate behind the words and a Japanese
   // face already chosen, not a bare Text the author has to assemble.
-  const inspector = page.getByRole("textbox", { name: "Content" });
+  const inspector = page.getByRole("textbox", { name: "表示する文字" });
   await expect(inspector).toHaveValue("見出し");
-  await expect(page.getByRole("combobox", { name: "Font", exact: true })).toHaveValue(
+  await expect(page.getByRole("combobox", { name: "フォント", exact: true })).toHaveValue(
     "noto-sans-jp",
   );
-  await expect(page.getByRole("combobox", { name: "Background", exact: true })).toHaveValue("color");
+  await expect(page.getByRole("combobox", { name: "背景", exact: true })).toHaveValue("color");
   await expect(page.getByRole("combobox", { name: "板のサイズ" })).toHaveValue("text");
 
   await inspector.fill("常設展 第1室");
   // Studio bundles one family, so the choice left to the author is between
   // naming that face and letting the runtime resolve it. Both have to land on
   // the same bundled file, and the note under the picker is what says so.
-  const font = page.getByRole("combobox", { name: "Font", exact: true });
+  const font = page.getByRole("combobox", { name: "フォント", exact: true });
   await font.selectOption("auto");
   await expect(font).toHaveValue("auto");
   await expect(
-    page.getByText("日本語と欧文を含む標準書体で表示します。"),
+    page.getByText("日本語と欧文に対応した標準書体です。"),
   ).toBeVisible();
   await font.selectOption("noto-sans-jp");
   await expect(font).toHaveValue("noto-sans-jp");
   await expect(
-    page.getByText("選んだ書体のファイルはStudioに同梱し、"),
+    page.getByText("公開後も同じ書体で表示します。"),
   ).toBeVisible();
 
   // Switching to an image background must ask for a Texture rather than
   // silently drawing an empty plate.
-  await page.getByRole("combobox", { name: "Background", exact: true }).selectOption("texture");
+  await page.getByRole("combobox", { name: "背景", exact: true }).selectOption("texture");
   await expect(
-    page.getByText("Assetsのインポートから画像を追加すると、背景に選べます。"),
+    page.getByText("Assetsに背景用の画像を追加してください。"),
   ).toBeVisible();
 
-  await page.getByRole("combobox", { name: "Background", exact: true }).selectOption("color");
+  await page.getByRole("combobox", { name: "背景", exact: true }).selectOption("color");
   await page.getByRole("combobox", { name: "板のサイズ" }).selectOption("fixed");
-  await expect(page.getByRole("spinbutton", { name: "幅" })).toBeVisible();
-  await expect(page.getByRole("spinbutton", { name: "高さ" })).toBeVisible();
+  await expect(page.getByRole("spinbutton", { name: "幅", exact: true })).toBeVisible();
+  await expect(page.getByRole("spinbutton", { name: "高さ", exact: true })).toBeVisible();
 
   await expect(page.locator('header [role="status"]').first()).toContainText(
     "保存済み",
@@ -497,7 +497,7 @@ test("ビジュアル編集で地形を作成・整形できる", async ({ page 
   await page.getByRole("button", { name: /地形/ }).click();
   await expect(
     page
-      .getByRole("tree", { name: "SceneのEntity階層" })
+      .getByRole("tree", { name: "シーンのEntity階層" })
       .getByText("地形", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("高さマップ・固定コライダー")).toBeVisible();
@@ -548,7 +548,7 @@ test("ビジュアル編集の一時保存失敗は自動再試行で復帰す�
   await page.getByRole("button", { name: "作成して開く" }).click();
 
   await page.getByRole("button", { name: "追加", exact: true }).click();
-  await page.getByRole("button", { name: /Empty Entity/ }).click();
+  await page.getByRole("button", { name: /空のEntity/ }).click();
 
   const header = page.locator("header");
   await expect(header.getByText("保存エラー", { exact: true })).toHaveCount(0);

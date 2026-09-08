@@ -101,22 +101,9 @@ export type InteractivityDiagnostic = {
 
 export type InteractivityOperationTemplate = {
   op: string;
-  /**
-   * What the node does, as an action.
-   *
-   * 「無限値」or「乱数」name a thing and leave the author to guess what putting
-   * it on the canvas would do. A label that says the verb —「ランダムな数を出す」
-   * — is readable in the palette, on the card and in the Inspector without a
-   * second lookup, so every label here is written that way.
-   */
+  /** 追加パネル・カード・設定欄で共通して使う、短い日本語の名前。 */
   label: string;
-  /**
-   * One plain sentence saying when the node runs and what it leaves behind.
-   *
-   * The palette used to show the raw `op` under the label, which only helps
-   * someone who already knows the spec. This is required rather than optional
-   * so an operation added later cannot reach the palette unexplained.
-   */
+  /** 動く条件・結果・注意点を説明する。接続先は画面の表示名で示す。 */
   description: string;
   /**
    * glTF extension that defines this operation.
@@ -179,7 +166,7 @@ export type InteractivityLiteralSignature =
 export const INTERACTIVITY_LITERAL_SIGNATURE_LABELS: Readonly<
   Record<InteractivityLiteralSignature, string>
 > = {
-  bool: "true / false",
+  bool: "真偽値（true / false）",
   int: "整数",
   float: "小数",
   float2: "2つの数 (X, Y)",
@@ -319,13 +306,13 @@ export const KHR_INTERACTIVITY_MATERIAL_POINTER_PRESETS: readonly InteractivityM
   { id: "normal-scale", label: "Normal Scale", pointer: "/materials/[material]/normalTexture/scale", signature: "float" },
   { id: "occlusion-strength", label: "Occlusion Strength", pointer: "/materials/[material]/occlusionTexture/strength", signature: "float" },
   { id: "double-sided", label: "Double Sided", pointer: "/materials/[material]/doubleSided", signature: "bool" },
-  { id: "base-color-tiling", label: "Base Color タイリング", pointer: "/materials/[material]/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/scale", signature: "float2", extension: "KHR_texture_transform" },
-  { id: "base-color-offset", label: "Base Color Offset", pointer: "/materials/[material]/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/offset", signature: "float2", extension: "KHR_texture_transform" },
-  { id: "base-color-rotation", label: "Base Color Rotation", pointer: "/materials/[material]/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/rotation", signature: "float", extension: "KHR_texture_transform" },
-  { id: "metallic-roughness-tiling", label: "Metallic / Roughness タイリング", pointer: "/materials/[material]/pbrMetallicRoughness/metallicRoughnessTexture/extensions/KHR_texture_transform/scale", signature: "float2", extension: "KHR_texture_transform" },
-  { id: "normal-tiling", label: "Normal タイリング", pointer: "/materials/[material]/normalTexture/extensions/KHR_texture_transform/scale", signature: "float2", extension: "KHR_texture_transform" },
-  { id: "occlusion-tiling", label: "Occlusion タイリング", pointer: "/materials/[material]/occlusionTexture/extensions/KHR_texture_transform/scale", signature: "float2", extension: "KHR_texture_transform" },
-  { id: "emissive-tiling", label: "Emissive タイリング", pointer: "/materials/[material]/emissiveTexture/extensions/KHR_texture_transform/scale", signature: "float2", extension: "KHR_texture_transform" },
+  { id: "base-color-tiling", label: "Base Color Map / Tiling", pointer: "/materials/[material]/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/scale", signature: "float2", extension: "KHR_texture_transform" },
+  { id: "base-color-offset", label: "Base Color Map / Offset", pointer: "/materials/[material]/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/offset", signature: "float2", extension: "KHR_texture_transform" },
+  { id: "base-color-rotation", label: "Base Color Map / Rotation", pointer: "/materials/[material]/pbrMetallicRoughness/baseColorTexture/extensions/KHR_texture_transform/rotation", signature: "float", extension: "KHR_texture_transform" },
+  { id: "metallic-roughness-tiling", label: "Metallic Roughness Map / Tiling", pointer: "/materials/[material]/pbrMetallicRoughness/metallicRoughnessTexture/extensions/KHR_texture_transform/scale", signature: "float2", extension: "KHR_texture_transform" },
+  { id: "normal-tiling", label: "Normal Map / Tiling", pointer: "/materials/[material]/normalTexture/extensions/KHR_texture_transform/scale", signature: "float2", extension: "KHR_texture_transform" },
+  { id: "occlusion-tiling", label: "Occlusion Map / Tiling", pointer: "/materials/[material]/occlusionTexture/extensions/KHR_texture_transform/scale", signature: "float2", extension: "KHR_texture_transform" },
+  { id: "emissive-tiling", label: "Emissive Map / Tiling", pointer: "/materials/[material]/emissiveTexture/extensions/KHR_texture_transform/scale", signature: "float2", extension: "KHR_texture_transform" },
 ];
 
 const KHR_INTERACTIVITY_TYPE_SIGNATURES = new Set([
@@ -488,67 +475,67 @@ const MATH_PAIR_OPERATIONS: readonly {
   description: string;
   kind: "float" | "bool";
 }[] = [
-  { op: "math/add", label: "足す", description: "AとBを足した数を出します。A + B", kind: "float" },
-  { op: "math/sub", label: "引く", description: "AからBを引いた数を出します。A - B", kind: "float" },
-  { op: "math/mul", label: "掛ける", description: "AとBを掛けた数を出します。A × B", kind: "float" },
+  { op: "math/add", label: "足し算", description: "AとBを足します（A + B）。", kind: "float" },
+  { op: "math/sub", label: "引き算", description: "AからBを引きます（A − B）。", kind: "float" },
+  { op: "math/mul", label: "掛け算", description: "AとBを掛けます（A × B）。", kind: "float" },
   {
     op: "math/div",
-    label: "割る",
-    description: "AをBで割った数を出します。Bが0のときは結果を使えません",
+    label: "割り算",
+    description: "AをBで割ります（A ÷ B）。Bに0は指定しないでください。",
     kind: "float",
   },
   {
     op: "math/min",
-    label: "小さいほうを選ぶ",
-    description: "AとBのうち、小さいほうの数を出します",
+    label: "小さい方の値",
+    description: "AとBを比べ、小さい方の値を返します。",
     kind: "float",
   },
   {
     op: "math/max",
-    label: "大きいほうを選ぶ",
-    description: "AとBのうち、大きいほうの数を出します",
+    label: "大きい方の値",
+    description: "AとBを比べ、大きい方の値を返します。",
     kind: "float",
   },
   {
     op: "math/eq",
-    label: "等しいか調べる",
-    description: "AとBが同じ数なら true、違えば false を出します",
+    label: "等しいか比べる",
+    description: "AとBが等しければtrue、異なればfalseを返します。",
     kind: "float",
   },
   {
     op: "math/lt",
-    label: "より小さいか調べる",
-    description: "AがBより小さければ true、そうでなければ false を出します",
+    label: "より小さいか比べる",
+    description: "AがBより小さければtrue、それ以外はfalseを返します。",
     kind: "float",
   },
   {
     op: "math/le",
-    label: "以下か調べる",
-    description: "AがB以下なら true、そうでなければ false を出します",
+    label: "以下か比べる",
+    description: "AがB以下ならtrue、それ以外はfalseを返します。",
     kind: "float",
   },
   {
     op: "math/gt",
-    label: "より大きいか調べる",
-    description: "AがBより大きければ true、そうでなければ false を出します",
+    label: "より大きいか比べる",
+    description: "AがBより大きければtrue、それ以外はfalseを返します。",
     kind: "float",
   },
   {
     op: "math/ge",
-    label: "以上か調べる",
-    description: "AがB以上なら true、そうでなければ false を出します",
+    label: "以上か比べる",
+    description: "AがB以上ならtrue、それ以外はfalseを返します。",
     kind: "float",
   },
   {
     op: "math/and",
-    label: "両方そろったか調べる",
-    description: "AとBが両方 true のときだけ true を出します",
+    label: "両方の条件が成立",
+    description: "AとBが両方ともtrueのときだけtrueを返します。",
     kind: "bool",
   },
   {
     op: "math/or",
-    label: "どちらか成り立つか調べる",
-    description: "AとBのどちらかが true なら true を出します",
+    label: "どちらかの条件が成立",
+    description: "AとBの少なくとも一方がtrueならtrueを返します。",
     kind: "bool",
   },
 ];
@@ -578,8 +565,8 @@ const MATH_OPERATION_TEMPLATES: InteractivityOperationTemplate[] = [
   })),
   {
     op: "math/not",
-    label: "true と false を入れ替える",
-    description: "Aが true なら false を、false なら true を出します",
+    label: "条件を反転",
+    description: "trueをfalseに、falseをtrueに変えます。",
     category: "math",
     flowInputs: [],
     flowOutputs: [],
@@ -590,8 +577,8 @@ const MATH_OPERATION_TEMPLATES: InteractivityOperationTemplate[] = [
   },
   {
     op: "math/random",
-    label: "ランダムな数を出す",
-    description: "0以上1未満の数をランダムに出します。読むたびに違う数になります",
+    label: "ランダムな数",
+    description: "0以上1未満の数をランダムに返します。",
     category: "math",
     flowInputs: [],
     flowOutputs: [],
@@ -600,8 +587,8 @@ const MATH_OPERATION_TEMPLATES: InteractivityOperationTemplate[] = [
   },
   {
     op: "math/mix",
-    label: "2つの値を混ぜる",
-    description: "AとBを、Cの割合で混ぜた数を出します。Cが0でA、1でB、0.5でちょうど中間",
+    label: "2つの値の間を求める",
+    description: "AとBの間の値をCの割合で求めます。Cが0ならA、1ならB、0.5なら中間の値になります。",
     category: "math",
     flowInputs: [],
     flowOutputs: [],
@@ -617,8 +604,8 @@ const MATH_OPERATION_TEMPLATES: InteractivityOperationTemplate[] = [
   },
   {
     op: "math/clamp",
-    label: "範囲に収める",
-    description: "Aを、B以上C以下におさめた数を出します。範囲から出た値をはみ出させたくないときに使います",
+    label: "値を範囲内に収める",
+    description: "AがBより小さければB、Cより大きければCを返します。B以上C以下ならAをそのまま返します。",
     category: "math",
     flowInputs: [],
     flowOutputs: [],
@@ -637,9 +624,9 @@ const MATH_OPERATION_TEMPLATES: InteractivityOperationTemplate[] = [
 export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTemplate[] = [
   {
     op: "event/onStart",
-    label: "ワールドが始まったとき",
+    label: "開始時に実行",
     description:
-      "ワールドの読み込みが終わった瞬間に、一度だけ次へ進みます。最初の見た目を整えるときの入口です",
+      "ワールドの開始時に一度だけ実行します。",
     category: "event",
     flowInputs: [],
     flowOutputs: ["out"],
@@ -648,9 +635,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "event/onTick",
-    label: "毎フレーム進むたび",
+    label: "毎フレーム実行",
     description:
-      "画面を1フレーム描くたびに次へ進みます。毎秒何十回も動くので、重い処理はつながないでください",
+      "毎フレーム実行します。重い処理はつながないでください。",
     category: "event",
     flowInputs: [],
     flowOutputs: ["out"],
@@ -659,8 +646,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/branch",
-    label: "条件で分ける",
-    description: "条件が true なら「true」側へ、false なら「false」側へ進みます",
+    label: "条件で分岐",
+    description: "条件がtrueなら「成立」、falseなら「不成立」へ進みます。",
     category: "flow",
     flowInputs: ["in"],
     flowOutputs: ["true", "false"],
@@ -677,9 +664,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/setDelay",
-    label: "指定した秒だけ待つ",
+    label: "指定時間待つ",
     description:
-      "秒数を数えてから「完了後」へ進みます。「出力」はすぐ進むので、待ってからの続きは「完了後」につなぎます",
+      "指定した秒数だけ待って「完了後」へ進みます。「出力」は待たずに進みます。",
     category: "flow",
     flowInputs: ["in", "cancel"],
     flowOutputs: ["out", "err", "done"],
@@ -692,9 +679,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "animation/start",
-    label: "アニメーションを再生する",
+    label: "アニメーションを再生",
     description:
-      "選んだクリップを再生します。再生し終わると「完了後」へ進みます",
+      "選んだアニメーションを再生します。再生後の処理は「完了後」につなぎます。",
     category: "animation",
     flowInputs: ["in"],
     flowOutputs: ["out", "err", "done"],
@@ -717,8 +704,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "animation/stop",
-    label: "アニメーションを止める",
-    description: "再生中のクリップを止めます。止めた時点の姿勢のまま残ります",
+    label: "アニメーションを停止",
+    description: "再生中のアニメーションを、その時点の姿勢で止めます。",
     category: "animation",
     flowInputs: ["in"],
     flowOutputs: ["out", "err"],
@@ -729,8 +716,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "variable/get",
-    label: "変数を読む",
-    description: "このグラフの変数に今入っている値を出します",
+    label: "変数の値を取得",
+    description: "このグラフの変数から現在の値を読み取ります。",
     category: "variable",
     flowInputs: [],
     flowOutputs: [],
@@ -739,8 +726,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "variable/set",
-    label: "変数に書き込む",
-    description: "このグラフの変数へ値を入れてから、次へ進みます",
+    label: "変数に値を保存",
+    description: "このグラフの変数に値を保存してから、次の処理へ進みます。",
     category: "variable",
     flowInputs: ["in"],
     flowOutputs: ["out"],
@@ -749,8 +736,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "pointer/get",
-    label: "glTFプロパティを読む",
-    description: "JSON pointer で指した glTF の値を読み出します",
+    label: "glTFの値を取得",
+    description: "指定したglTFの項目から値を読み取ります。対象はJSON Pointer（項目の場所を表すパス）で指定します。",
     category: "pointer",
     flowInputs: [],
     flowOutputs: [],
@@ -759,8 +746,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "pointer/set",
-    label: "glTFプロパティに書き込む",
-    description: "JSON pointer で指した glTF の値を、その場で書き換えます",
+    label: "glTFの値を変更",
+    description: "指定したglTFの項目を新しい値に変えます。対象はJSON Pointer（項目の場所を表すパス）で指定します。",
     category: "pointer",
     flowInputs: ["in"],
     flowOutputs: ["out", "err"],
@@ -769,9 +756,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "pointer/interpolate",
-    label: "glTFプロパティを時間をかけて変える",
+    label: "glTFの値を徐々に変更",
     description:
-      "JSON pointer で指した値を、秒数をかけて今の値から目標の値まで少しずつ変えます。変え終わると「完了後」へ進みます",
+      "glTFの値を、指定した秒数で現在の値から目標値へ変えます。変更後の処理は「完了後」につなぎます。",
     category: "animation",
     flowInputs: ["in"],
     flowOutputs: ["out", "err", "done"],
@@ -786,9 +773,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: XRIFT_INTERACTION_OPERATIONS.onInteract,
-    label: "インタラクトされたとき",
+    label: "操作されたとき",
     description:
-      "このグラフが付いたEntityをプレイヤーが押したときに、次へ進みます。Entityに公式のInteractableが要ります",
+      "このEntityが操作されると実行します。同じEntityに「操作を受け付ける」が必要です。",
     category: "event",
     extension: XRIFT_INTERACTION_EXTENSION_NAME,
     flowInputs: [],
@@ -798,9 +785,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: XRIFT_INTERACTION_OPERATIONS.setProperty,
-    label: "プロパティを決めた値にする",
+    label: "Entityの設定を変更",
     description:
-      "選んだEntityやComponentのプロパティを、決めた値にします。かける時間が0ならすぐ、正の秒数ならその時間をかけて変わります",
+      "位置・色・音量などを変えます。0秒なら即時、それ以外は指定した時間で変化します。",
     category: "entity",
     extension: XRIFT_INTERACTION_EXTENSION_NAME,
     flowInputs: ["in"],
@@ -829,9 +816,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: XRIFT_INTERACTION_OPERATIONS.toggleProperty,
-    label: "プロパティを切り替える",
+    label: "オン・オフを切り替え",
     description:
-      "選んだプロパティの true と false を、流れが来るたびに入れ替えます。押すたびに点いたり消えたりする動きに使います",
+      "実行するたびに、設定のオン・オフを切り替えます。",
     category: "entity",
     extension: XRIFT_INTERACTION_EXTENSION_NAME,
     flowInputs: ["in"],
@@ -849,8 +836,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "math/Inf",
-    label: "無限大の数を出す",
-    description: "無限大を値として出します。上限を作らずに比べたいときに使います",
+    label: "無限大を取得",
+    description: "正の無限大を返します。",
     category: "math",
     flowInputs: [],
     flowOutputs: [],
@@ -859,9 +846,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "event/receive",
-    label: "イベントを受け取る",
+    label: "イベントを受信",
     description:
-      "同じ名前の「イベントを送る」から知らせが来たときに、次へ進みます。離れた場所の処理を start させる入口です",
+      "同じイベントの送信を受けて実行します。線をつながずに別の処理から呼び出せます。",
     category: "event",
     flowInputs: [],
     flowOutputs: ["out"],
@@ -870,9 +857,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "event/send",
-    label: "イベントを送る",
+    label: "イベントを送信",
     description:
-      "同じ名前の「イベントを受け取る」へ知らせてから、次へ進みます。線をつながずに別の流れを動かせます",
+      "指定したイベントを送り、対応する「イベントを受信」を実行します。",
     category: "event",
     flowInputs: ["in"],
     flowOutputs: ["out"],
@@ -881,8 +868,8 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/sequence",
-    label: "上から順に流す",
-    description: "つないだ行き先を、1番目から順に1回ずつ動かします",
+    label: "順に実行",
+    description: "接続先の処理を上から順に開始します。待機やアニメーションの完了は待ちません。",
     category: "flow",
     flowInputs: ["in"],
     // Three outputs is what makes the node usable without a socket editor. The
@@ -894,9 +881,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/doN",
-    label: "最初のN回だけ通す",
+    label: "実行回数を制限",
     description:
-      "流れを最初のN回だけ先へ通し、それ以降は止めます。「やり直し」へ流れが来ると数え直します",
+      "指定した回数だけ次の処理へ進みます。「やり直し」に接続すると回数を数え直します。",
     category: "flow",
     flowInputs: ["in", "reset"],
     flowOutputs: ["out"],
@@ -907,9 +894,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/for",
-    label: "回数を決めて繰り返す",
+    label: "番号を変えて繰り返す",
     description:
-      "開始番号から終了番号まで、「繰り返す先」を1回ずつ動かします。終わると「すべて完了後」へ進みます",
+      "開始番号から、終了番号の1つ前まで繰り返します。開始0・終了3なら、番号0・1・2の3回実行します。",
     category: "flow",
     flowInputs: ["in"],
     flowOutputs: ["loopBody", "completed"],
@@ -925,9 +912,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/while",
-    label: "条件が続く間くり返す",
+    label: "条件が成立する間繰り返す",
     description:
-      "条件が true の間、「繰り返す先」を動かし続けます。条件を false にする処理を必ず中に入れてください",
+      "条件がtrueの間、処理を繰り返します。終了できるよう、繰り返しの中で条件を変えてください。",
     category: "flow",
     flowInputs: ["in"],
     flowOutputs: ["loopBody", "completed"],
@@ -940,9 +927,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/multiGate",
-    label: "通るたびに行き先を変える",
+    label: "実行先を順に切り替え",
     description:
-      "流れが来るたびに、1番目、2番目と違う行き先へ順に進みます。押すたびに次の演出へ送りたいときに使います",
+      "実行するたびに、1番目、2番目と次の接続先へ進みます。「やり直し」で最初に戻ります。",
     category: "flow",
     flowInputs: ["in", "reset"],
     flowOutputs: ["0", "1", "2"],
@@ -951,9 +938,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/waitAll",
-    label: "全部そろうまで待つ",
+    label: "すべての入力を待つ",
     description:
-      "つないだ入力すべてに流れが来てから、「すべて完了後」へ進みます。複数の動きが終わるのを待ち合わせます",
+      "必要な入力がすべて届くと「すべて完了後」へ進みます。複数の処理を待つときは、それぞれの「完了後」を入力につなぎます。",
     category: "flow",
     flowInputs: ["0", "1", "reset"],
     flowOutputs: ["completed", "out"],
@@ -962,9 +949,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/throttle",
-    label: "連続で動かないようにする",
+    label: "実行の間隔を空ける",
     description:
-      "一度通したら、指定した秒数が過ぎるまで次の流れを通しません。連打で二重に動くのを防ぎます",
+      "実行後、指定した秒数が過ぎるまで次の実行を受け付けません。",
     category: "flow",
     flowInputs: ["in", "reset"],
     flowOutputs: ["out", "err"],
@@ -979,7 +966,7 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
     op: "flow/cancelDelay",
     label: "待機を取り消す",
     description:
-      "数えている途中の待機を止めます。「指定した秒だけ待つ」の待機IDを、このノードの待機IDへつなぎます",
+      "実行中の待機を取り消します。「指定時間待つ」の待機IDを、このノードの待機IDにつなぎます。",
     category: "flow",
     flowInputs: ["in"],
     flowOutputs: ["out"],
@@ -990,9 +977,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "flow/switch",
-    label: "番号で行き先を決める",
+    label: "番号で分岐",
     description:
-      "選ぶ番号と同じ行き先へ進みます。当てはまる番号がなければ「その他」へ進みます",
+      "指定した番号の接続先へ進みます。0は1番目、1は2番目です。該当する番号がなければ「その他」へ進みます。",
     category: "flow",
     flowInputs: ["in"],
     flowOutputs: ["0", "1", "default"],
@@ -1005,9 +992,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "animation/stopAt",
-    label: "アニメーションを指定の位置で止める",
+    label: "アニメーションの停止位置を指定",
     description:
-      "再生中のクリップを、クリップの何秒目かで止めます。止まると「完了後」へ進みます",
+      "アニメーションを指定した再生位置で止めます。位置は秒で指定し、停止後の処理は「完了後」につなぎます。",
     category: "animation",
     flowInputs: ["in"],
     flowOutputs: ["out", "err", "done"],
@@ -1023,9 +1010,9 @@ export const KHR_INTERACTIVITY_OPERATION_TEMPLATES: InteractivityOperationTempla
   },
   {
     op: "variable/interpolate",
-    label: "変数を時間をかけて変える",
+    label: "変数の値を徐々に変更",
     description:
-      "変数を、秒数をかけて今の値から目標の値まで少しずつ変えます。変え終わると「完了後」へ進みます",
+      "変数を、指定した秒数で現在の値から目標値へ変えます。変更後の処理は「完了後」につなぎます。",
     category: "variable",
     flowInputs: ["in"],
     flowOutputs: ["out", "err", "done"],
@@ -1071,7 +1058,7 @@ export type InteractivityRuntimeAdapterEntry = {
 };
 
 const KHR_INTERACTIVITY_IGNORED_FLOW_NOTE =
-  "Play の実行エンジンが未対応の operation です。この node と、ここから先の flow は動きません。canonical JSON には保存され、公開先でも同じく何も起きません。";
+  "この処理は実行に対応していません。データは保存されますが、このノードから先には進みません。公開先でも動きません。";
 
 /**
  * Why an operation reads the way it does in the Editor.
@@ -1082,35 +1069,35 @@ const KHR_INTERACTIVITY_IGNORED_FLOW_NOTE =
  * adapted operation from silently reading as unsupported.
  */
 const KHR_INTERACTIVITY_RUNTIME_NOTES: Readonly<Record<string, string>> = {
-  "event/onStart": "Play の開始時に、この node から flow を辿ります。",
-  "event/onTick": "毎フレーム、この node から flow を辿ります。",
-  "event/receive": "同じ Asset の `event/send` が送ったイベントを受け取ります。",
+  "event/onStart": "動作確認の開始時に、つないだ処理を実行します。",
+  "event/onTick": "画面が更新されるたびに、つないだ処理を実行します。",
+  "event/receive": "同じグラフの「イベントを送信」から届いた通知を受け取ります。",
   "event/send":
-    "名前付きイベントを送ります。同じ Asset の `event/receive` が受け取り、Scene 側へも通知します。",
+    "名前を付けて通知を送ります。同じグラフの「イベントを受信」で受け取れます。シーン側にも通知します。",
   "flow/setDelay":
-    "`out` は待たずに続き、`done` は duration 秒後に続きます。`cancel` で待機を取り消せます。",
-  "flow/sequence": "接続した出力を、番号順に上から実行します。",
-  "flow/doN": "この node を通る回数を n 回までに制限します。`reset` で数え直します。",
-  "flow/for": "startIndex から endIndex まで、`loopBody` を繰り返します。",
-  "flow/while": "condition が true の間、`loopBody` を繰り返します。",
+    "「出力」は待たずに進み、「完了後」は指定した秒数だけ待ってから進みます。待機は取り消せます。",
+  "flow/sequence": "つないだ処理を上から順に開始します。待機やアニメーションの完了は待ちません。",
+  "flow/doN": "指定した回数だけ処理を通します。「やり直し」で回数を0に戻します。",
+  "flow/for": "開始番号から終了番号の1つ前まで繰り返します。開始0・終了3なら、0、1、2の3回です。",
+  "flow/while": "条件が成立している間、繰り返しの接続先を実行します。条件を変えないと終了しません。",
   "flow/multiGate": "通るたびに、接続した出力を順番に切り替えます。",
-  "flow/waitAll": "接続したすべての入力が揃ってから `completed` へ進みます。",
-  "flow/throttle": "duration 秒の間、2 回目以降の入力を `err` へ流します。",
+  "flow/waitAll": "すべての入力が届いてから「すべて完了後」へ進みます。",
+  "flow/throttle": "指定した間隔より早い入力は受け付けず、「失敗時」へ進めます。",
   "animation/start":
-    "Model の animation を再生します。対象の Model を持つ Entity へ接続されている必要があります。",
+    "3Dモデルのアニメーションを再生します。そのモデルを持つEntityにグラフを付けてください。",
   "animation/stop":
-    "再生中の animation を止めます。対象の Model を持つ Entity へ接続されている必要があります。",
+    "3Dモデルのアニメーションを止めます。そのモデルを持つEntityにグラフを付けてください。",
   "pointer/set":
-    "glTF の値を書き換えます。対象を解決できる Entity または Material へ接続されている必要があります。",
+    "glTF の値を書き換えます。対象を解決できるEntityまたはマテリアルへ接続されている必要があります。",
   "pointer/interpolate":
     "glTF の値を duration 秒かけて変えます。対象を解決できる接続が必要です。",
   "pointer/get": "glTF の値を読み取ります。",
   [XRIFT_INTERACTION_OPERATIONS.onInteract]:
-    "このグラフをInteraction ComponentでEntityへ接続し、そのEntityに公式のInteractableがあるときに動きます。",
+    "Entityに「グラフの実行」と「操作を受け付ける」を追加すると、押されたときに実行できます。",
   [XRIFT_INTERACTION_OPERATIONS.setProperty]:
-    "対象Entity、Component、プロパティへ値を書き込みます。duration を指定すると、その秒数をかけて変化させます。",
+    "選んだ対象の設定を変更します。「かける時間」を指定すると、その秒数で目標値へ変わります。",
   [XRIFT_INTERACTION_OPERATIONS.toggleProperty]:
-    "対象のON/OFFを、通るたびに反転します。切り替えられるのはON/OFFのプロパティだけです。",
+    "選んだ対象のオン・オフを切り替えます。数値や色の設定には使えません。",
 };
 
 /**
@@ -1123,11 +1110,11 @@ const KHR_INTERACTIVITY_RUNTIME_NOTES: Readonly<Record<string, string>> = {
  */
 const KHR_INTERACTIVITY_UNSUPPORTED_NOTES: Readonly<Record<string, string>> = {
   "pointer/get":
-    "glTF Object Model の pointer を解決する接続がまだないため、Play と公開先では動きません。Entity や Material を変えるには「プロパティを変える」を使ってください。",
+    "このglTF参照の操作は、動作確認と公開先では使えません。対象の設定変更には「Entityの設定を変更」を使ってください。",
   "pointer/set":
-    "glTF Object Model の pointer を解決する接続がまだないため、Play と公開先では動きません。Entity や Material を変えるには「プロパティを変える」を使ってください。",
+    "このglTF参照の操作は、動作確認と公開先では使えません。対象の設定変更には「Entityの設定を変更」を使ってください。",
   "pointer/interpolate":
-    "glTF Object Model の pointer を解決する接続がまだないため、Play と公開先では動きません。時間をかけた変化は「プロパティを変える」の「かける時間」で作れます。",
+    "このglTF参照の操作は、動作確認と公開先では使えません。「Entityの設定を変更」の「かける時間」を使ってください。",
 };
 
 export function getInteractivityRuntimeSupport(
@@ -1146,7 +1133,7 @@ export function getInteractivityRuntimeSupport(
     support,
     note:
       KHR_INTERACTIVITY_RUNTIME_NOTES[op] ??
-      "Play の実行エンジンがこの operation を実行します。",
+      "動作確認で実行できます。",
   };
 }
 
@@ -1357,13 +1344,13 @@ export type {
  */
 const RUNTIME_ISSUE_MESSAGES: Readonly<Record<string, string>> = {
   "missing-declaration":
-    "declaration を解決できないため、この node と、ここから先の flow は動きません。",
+    "declaration を解決できないため、このノードと、ここから先の flow は動きません。",
   "unsupported-operation":
-    "Play の実行エンジンが未対応の operation です。この node と、ここから先の flow は動きません。",
+    "動作確認の実行エンジンが未対応の operation です。このノードと、ここから先の flow は動きません。",
   "unsupported-by-host":
-    "この操作に必要な接続がありません。対象の Entity・Model・Material へ接続すると動きます。",
+    "この操作に必要な接続がありません。対象のEntity・3Dモデル・マテリアルへ接続すると動きます。",
   "value-cycle":
-    "value の接続が循環しています。循環した socket は評価できないため、この入力は使われません。",
+    "value の接続が循環しています。循環した接続口は評価できないため、この入力は使われません。",
   "invalid-input":
     "入力値をこの操作に使えません。値を確認してください。",
   "budget-exceeded":
@@ -1428,9 +1415,9 @@ export function collectInteractivityRuntimeDiagnostics(
 
 const INTERACTION_ISSUE_MESSAGES: Readonly<Record<string, string>> = {
   "incomplete-configuration":
-    "対象のEntity・Component・値がまだ決まっていないため、この node と、ここから先の flow は動きません。",
+    "対象のEntity・Component・値がまだ決まっていないため、このノードと、ここから先の flow は動きません。",
   "unknown-property":
-    "このプロパティはPlayと公開先のどちらでも変更できません。対応しているプロパティを選び直してください。",
+    "このプロパティは動作確認と公開先のどちらでも変更できません。対応しているプロパティを選び直してください。",
   "unsupported-toggle":
     "切り替えはON/OFFのプロパティだけに使えます。数値や色は「プロパティを変える」で設定してください。",
 };

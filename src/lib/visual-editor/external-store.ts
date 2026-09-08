@@ -117,9 +117,9 @@ export function applyExternalStoreInstall(
 
   if (result.assetKind === "hdri") {
     const file = result.files.find((entry) => entry.role === "environment");
-    if (!file) throw new Error("環境Texture用のHDRIファイルがありません");
+    if (!file) throw new Error("環境テクスチャ用のHDRIファイルがありません");
     if (file.format !== "hdr" && file.format !== "exr") {
-      throw new Error("環境Texture用のHDRまたはEXRファイルを確認できません");
+      throw new Error("環境テクスチャ用のHDRまたはEXRファイルを確認できません");
     }
     const id = `${baseId}-skybox`;
     const texture = createTextureAsset({
@@ -138,7 +138,7 @@ export function applyExternalStoreInstall(
         compression: { format: "source", quality: 80 },
       },
     });
-    if (!texture) throw new Error("環境Texture Assetを作成できませんでした");
+    if (!texture) throw new Error("環境テクスチャを作成できませんでした");
     const asset: TextureAsset = {
       ...texture,
       sourceHash: file.sha256,
@@ -200,7 +200,7 @@ export function applyExternalStoreInstall(
   if (result.assetKind === "model") {
     const file = result.files.find((entry) => entry.role === "model");
     if (!file || file.format !== "gltf") {
-      throw new Error("Model用の自己完結glTFファイルがありません");
+      throw new Error("3Dモデル用の自己完結glTFファイルがありません");
     }
     const id = `${baseId}-model`;
     const model: ModelAsset = {
@@ -241,7 +241,7 @@ export function applyExternalStoreInstall(
         flipY: false,
       },
     });
-    if (!texture) throw new Error("Texture Assetを作成できませんでした");
+    if (!texture) throw new Error("テクスチャを作成できませんでした");
     const imported: TextureAsset = {
       ...texture,
       sourceHash: file.sha256,
@@ -282,7 +282,7 @@ export function applyExternalStoreInstall(
         : {}),
     },
   });
-  if (!material) throw new Error("Material Assetを作成できませんでした");
+  if (!material) throw new Error("マテリアルを作成できませんでした");
   assets[materialId] = {
     ...material,
     order,
@@ -347,7 +347,7 @@ export function applySkyShaderCatalogInstall(
     name: `空 · ${entry.label}`,
     folderId: folder.id,
   });
-  if (!material) throw new Error("Skybox Shader Material Assetを作成できませんでした");
+  if (!material) throw new Error("Skybox Shaderのマテリアルを作成できませんでした");
   const order = alreadyInstalled
     ? (existing.order ?? nextOrder({ ...manifest, folders }, folder.id))
     : nextOrder({ ...manifest, folders }, folder.id);
@@ -359,7 +359,7 @@ export function applySkyShaderCatalogInstall(
       shader: applySkyShaderParameters(entry, parameterValues),
       attribution: {
         providerId: "xrift-sky-shaders",
-        providerName: "XRift公式 Skybox Shader",
+        providerName: "XRift公式Skybox Shader",
         externalId: entry.id,
         assetUrl: SKY_SHADER_CATALOG_SOURCE_URL,
         licenseName: "MIT",
@@ -402,7 +402,7 @@ export function applyTerrainSurfaceCatalogInstall(
     folderId: folder.id,
   });
   if (!material) {
-    throw new Error("Terrain表面のMaterial Assetを作成できませんでした");
+    throw new Error("地形表面のマテリアルを作成できませんでした");
   }
   const order = alreadyInstalled
     ? (existing.order ?? nextOrder({ ...manifest, folders }, folder.id))
@@ -415,7 +415,7 @@ export function applyTerrainSurfaceCatalogInstall(
       shader: applyTerrainSurfaceParameters(entry, parameterValues),
       attribution: {
         providerId: "xrift-terrain-surfaces",
-        providerName: "XRift公式 Terrain表面",
+        providerName: "XRift公式地形表面",
         externalId: entry.id,
         assetUrl: TERRAIN_SURFACE_CATALOG_SOURCE_URL,
         licenseName: "MIT",
@@ -454,7 +454,7 @@ export function applyWaterShaderCatalogInstall(
     name: `Water · ${entry.label}`,
     folderId: folder.id,
   });
-  if (!material) throw new Error("Water Material Assetを作成できませんでした");
+  if (!material) throw new Error("水面マテリアルを作成できませんでした");
   const order = alreadyInstalled
     ? (existing.order ?? nextOrder({ ...manifest, folders }, folder.id))
     : nextOrder({ ...manifest, folders }, folder.id);
@@ -466,7 +466,7 @@ export function applyWaterShaderCatalogInstall(
       shader: applyWaterShaderParameters(entry, parameterValues),
       attribution: {
         providerId: "xrift-water-shaders",
-        providerName: "XRift公式 Water Shader",
+        providerName: "XRift公式水面シェーダー",
         externalId: entry.id,
         assetUrl: WATER_SHADER_CATALOG_SOURCE_URL,
         licenseName: "MIT",
@@ -508,7 +508,7 @@ export function applyOpenBrushCatalogInstall(
     name: `Open Brush · ${entry.label}`,
     folderId: folder.id,
   });
-  if (!material) throw new Error("Open Brush Material Assetを作成できませんでした");
+  if (!material) throw new Error("Open Brush マテリアルを作成できませんでした");
   const order = nextOrder({ ...manifest, folders }, folder.id);
   const assets: Record<string, SceneAsset> = {
     ...manifest.assets,

@@ -988,8 +988,8 @@ export class InteractivityEngine {
     // The loop frame goes back underneath the body, so the body's whole chain
     // runs before the next iteration is considered.
     return [
-      { kind: "loop", node: nodeIndex },
       ...this.follow(node, state.bodySocket),
+      { kind: "loop", node: nodeIndex },
     ];
   }
 

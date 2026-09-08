@@ -75,8 +75,8 @@ const TERRAIN_BRUSH_SUCCESS_MESSAGE: Record<
   flatten: "地形をならしました",
   smooth: "地形を滑らかにしました",
   stamp: "地形スタンプを適用しました",
-  "hole-add": "Terrainに穴を開けました",
-  "hole-remove": "Terrainの穴を埋めました",
+  "hole-add": "地形に穴を開けました",
+  "hole-remove": "地形の穴を埋めました",
 };
 
 /** Keeps Terrain edits as one undoable, saved authoring transaction. */
@@ -140,11 +140,11 @@ export function useTerrainAuthoring({
           : { position },
       );
       if (!created) {
-        notify("現在のSceneに地形を作成できませんでした");
+        notify("現在のシーンに地形を作成できませんでした");
         return current;
       }
       markDirty();
-      notify("地形を作成しました。インスペクターで形を整えられます");
+      notify("地形を作成しました。Inspectorで形を調整できます");
       return commitEditorHistory(current, {
         ...current.present,
         bundle: touchProject({
@@ -298,7 +298,7 @@ export function useTerrainAuthoring({
         };
         bundleRef.current = committed.bundle;
         setSaveStatus("dirty");
-        notify("地形ブラシをSceneへ反映しました（Undo 1件）");
+        notify("地形ブラシをシーンへ反映しました（Undo 1件）");
         return commitEditorHistory(
           { ...current, present: transaction.before },
           committed,

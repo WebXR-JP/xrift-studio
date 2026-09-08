@@ -109,24 +109,24 @@ type AssetReferenceDocuments = {
 };
 
 const ASSET_REFERENCE_LABELS: Record<AssetReferenceKind, string> = {
-  "scene-geometry": "Mesh geometry",
-  "scene-material": "Mesh material slot",
-  "scene-particle": "Particle emitter",
-  "scene-audio": "Audio Source",
-  "scene-prefab": "Prefab instance",
-  "scene-text": "Text background",
-  "scene-xrift": "XRift component",
-  "material-texture": "Material texture slot",
-  "model-material": "Model default material slot",
-  "particle-material": "Particle material",
-  "particle-texture": "Particle texture",
-  "prefab-geometry": "Prefab mesh geometry",
-  "prefab-material": "Prefab mesh material slot",
-  "prefab-particle": "Prefab particle emitter",
-  "prefab-audio": "Prefab Audio Source",
-  "prefab-prefab": "Nested Prefab instance",
-  "prefab-text": "Prefab Text background",
-  "prefab-xrift": "Prefab XRift component",
+  "scene-geometry": "メッシュのGeometry",
+  "scene-material": "メッシュのマテリアルスロット",
+  "scene-particle": "パーティクルの放出",
+  "scene-audio": "音源",
+  "scene-prefab": "プレハブの配置",
+  "scene-text": "テキストの背景",
+  "scene-xrift": "XRiftのComponent",
+  "material-texture": "マテリアルのテクスチャ",
+  "model-material": "モデルの既定マテリアルスロット",
+  "particle-material": "パーティクルのマテリアル",
+  "particle-texture": "パーティクルのテクスチャ",
+  "prefab-geometry": "プレハブ内メッシュのGeometry",
+  "prefab-material": "プレハブ内メッシュのマテリアルスロット",
+  "prefab-particle": "プレハブ内のパーティクルの放出",
+  "prefab-audio": "プレハブ音源",
+  "prefab-prefab": "入れ子のプレハブ",
+  "prefab-text": "プレハブ内テキストの背景",
+  "prefab-xrift": "プレハブ内のXRiftのComponent",
 };
 
 export function assetReferenceKindLabel(kind: AssetReferenceKind): string {
@@ -573,7 +573,7 @@ function describeComponentReferences(
   assetId: string,
 ): ComponentReferenceMatch[] {
   if (component.type === "collider" && component.shape === "mesh" && component.collisionModelAssetId === assetId) {
-    return [{ suffix: "collision-model", detail: "当たり判定の軽量Mesh", detachEffect: "clear-slot",
+    return [{ suffix: "collision-model", detail: "当たり判定の軽量メッシュ", detachEffect: "clear-slot",
       detach: (current) => {
         if (current.type !== "collider" || current.shape !== "mesh") return current;
         const next = { ...current }; delete next.collisionModelAssetId; return next;

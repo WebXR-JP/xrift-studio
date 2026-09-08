@@ -552,7 +552,7 @@ async function createAssetImportPlanInternal(
     diagnostics.push({
       severity: "blocking",
       code: "reimport-kind-mismatch",
-      message: "Model AssetにはGLB、glTF、OBJまたはVRMを再取り込みしてください",
+      message: "3DモデルにはGLB、glTF、OBJまたはVRMを再取り込みしてください",
       fileName,
       assetId: reimportAsset.id,
       fieldPath: "fileName",
@@ -987,7 +987,7 @@ async function createModelImportPlan(
     diagnostics.push({
       severity: "blocking",
       code: "vrm-runtime-metadata-missing",
-      message: "VRMのhumanoid / expression metadataを解析できませんでした",
+      message: "VRMのHumanoid・Expressionの情報を読み取れませんでした",
       fileName,
       assetId: reimportAsset?.id,
     });
@@ -1049,7 +1049,7 @@ async function createModelImportPlan(
     diagnostics.push({
       severity: "blocking",
       code: "model-material-slots-invalid",
-      message: `Material slotを正規化できませんでした: ${errorMessage(error)}`,
+      message: `マテリアルスロットを整理できませんでした: ${errorMessage(error)}`,
       fileName,
       assetId,
       fieldPath: "materials",
@@ -1206,7 +1206,7 @@ async function createObjModelImportPlan(
     diagnostics.push({
       severity: "blocking",
       code: "obj-geometry-missing",
-      message: "OBJに頂点または面のgeometryが見つかりません",
+      message: "OBJに頂点または面のデータが見つかりません",
       fileName,
       assetId: reimportAsset?.id,
       fieldPath: "bytes",
@@ -1245,7 +1245,7 @@ async function createObjModelImportPlan(
     diagnostics.push({
       severity: "blocking",
       code: "obj-renderable-mesh-missing",
-      message: "OBJに表示できるMeshが見つかりません",
+      message: "OBJに表示できるメッシュが見つかりません",
       fileName,
       assetId: reimportAsset?.id,
     });
@@ -1262,7 +1262,7 @@ async function createObjModelImportPlan(
     diagnostics.push({
       severity: "warning",
       code: "obj-external-material-library",
-      message: "OBJの外部MTL / textureは自動取得しません。配置後にMaterial Slotへ割り当ててください",
+      message: "OBJが参照するMTLやテクスチャは自動取得しません。配置後にマテリアルスロットへ割り当ててください",
       fileName,
       assetId: reimportAsset?.id,
       fieldPath: "mtllib",
@@ -1297,7 +1297,7 @@ async function createObjModelImportPlan(
     diagnostics.push({
       severity: "blocking",
       code: "model-material-slots-invalid",
-      message: `Material slotを正規化できませんでした: ${errorMessage(error)}`,
+      message: `マテリアルスロットを整理できませんでした: ${errorMessage(error)}`,
       fileName,
       assetId,
       fieldPath: "materials",
@@ -1606,7 +1606,7 @@ function parseGltfJson(
       return {
         ok: false,
         code: "gltf-json-invalid",
-        message: "glTF JSON rootはobjectである必要があります",
+        message: "glTF JSONの最上位はオブジェクトである必要があります",
       };
     }
     return { ok: true, json: json as GltfJson };
@@ -1641,7 +1641,7 @@ function validateGltfImportStructure(
     if (entry.name !== undefined && typeof entry.name !== "string") {
       issues.push({
         code: "gltf-material-name-invalid",
-        message: "Material名は文字列である必要があります",
+        message: "マテリアル名は文字列である必要があります",
         fieldPath: `${path}.name`,
       });
     }
@@ -1650,7 +1650,7 @@ function validateGltfImportStructure(
     if (!Array.isArray(mesh.primitives) || mesh.primitives.length === 0) {
       issues.push({
         code: "gltf-mesh-primitives-invalid",
-        message: "Meshには1つ以上のprimitiveが必要です",
+        message: "メッシュには1つ以上のprimitiveが必要です",
         fieldPath: `${meshPath}.primitives`,
       });
       return;
@@ -1660,7 +1660,7 @@ function validateGltfImportStructure(
       if (!isRecord(primitive)) {
         issues.push({
           code: "gltf-primitive-invalid",
-          message: "Mesh primitiveはobjectである必要があります",
+          message: "メッシュのprimitiveはオブジェクトである必要があります",
           fieldPath: primitivePath,
         });
         return;
@@ -1674,7 +1674,7 @@ function validateGltfImportStructure(
       ) {
         issues.push({
           code: "gltf-material-index-invalid",
-          message: "Mesh primitiveのMaterial indexが不正です",
+          message: "メッシュのprimitiveが参照するマテリアルの番号が不正です",
           fieldPath: `${primitivePath}.material`,
         });
       }
@@ -1738,7 +1738,7 @@ function validateOptionalRecordArray(
     if (!isRecord(entry)) {
       issues.push({
         code: "gltf-entry-invalid",
-        message: `${entryPath}はobjectである必要があります`,
+        message: `${entryPath}はオブジェクトである必要があります`,
         fieldPath: entryPath,
       });
       return;
@@ -1762,7 +1762,7 @@ export function validateGltfNodeHierarchy(
   if (value.length > ASSET_IMPORT_MAX_MODEL_NODES) {
     issues.push({
       code: "gltf-node-count-too-large",
-      message: `モデルのnode数は${ASSET_IMPORT_MAX_MODEL_NODES}以下にしてください`,
+      message: `モデルのノード数は${ASSET_IMPORT_MAX_MODEL_NODES}以下にしてください`,
       fieldPath: "nodes",
     });
     return issues;
@@ -1775,7 +1775,7 @@ export function validateGltfNodeHierarchy(
     if (!Array.isArray(candidate.children)) {
       issues.push({
         code: "gltf-node-children-invalid",
-        message: "node.childrenはnode indexの配列である必要があります",
+        message: "nodes[].childrenには子ノードの番号を配列で指定してください",
         fieldPath: `nodes[${nodeIndex}].children`,
       });
       continue;
@@ -1791,7 +1791,7 @@ export function validateGltfNodeHierarchy(
       ) {
         issues.push({
           code: "gltf-node-child-index-invalid",
-          message: "node.childrenの参照先が見つかりません",
+          message: "nodes[].childrenの参照先が見つかりません",
           fieldPath,
         });
         continue;
@@ -1799,7 +1799,7 @@ export function validateGltfNodeHierarchy(
       if (localChildren.has(child)) {
         issues.push({
           code: "gltf-node-child-duplicated",
-          message: "同じnodeを複数回childrenへ追加できません",
+          message: "同じノードを複数回childrenへ追加できません",
           fieldPath,
         });
         continue;
@@ -1810,7 +1810,7 @@ export function validateGltfNodeHierarchy(
       if (parentCount[child] > 1) {
         issues.push({
           code: "gltf-node-multiple-parents",
-          message: "nodeは複数の親を持てません",
+          message: "ノードは複数の親を持てません",
           fieldPath,
         });
       }
@@ -1840,7 +1840,7 @@ export function validateGltfNodeHierarchy(
         if (!reportedCycle) {
           issues.push({
             code: "gltf-node-hierarchy-cycle",
-            message: "node hierarchyに循環があります",
+            message: "ノードの階層に循環があります",
             fieldPath: `nodes[${frame.nodeIndex}].children`,
           });
           reportedCycle = true;

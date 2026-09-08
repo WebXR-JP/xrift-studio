@@ -60,7 +60,7 @@ export function OfficialXriftComponentStaticPreview({
           <span className="truncate">{definition.label}</span>
         </span>
         <span className="ml-2 shrink-0 text-[9px] font-medium tracking-wide text-slate-200">
-          XRift Official
+          XRift公式
         </span>
       </div>
     </div>

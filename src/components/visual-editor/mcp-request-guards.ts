@@ -119,13 +119,13 @@ export function assertMcpExternalStoreWrite(
   if (context.editorMode !== "edit" && !options.allowPlay) {
     throw new XriftMcpEditorToolError(
       "EDITOR_READ_ONLY",
-      "Playを停止してから外部アセットを追加してください",
+      "動作確認を停止してから外部アセットを追加してください",
     );
   }
   if (context.importBusy) {
     throw new XriftMcpEditorToolError(
       "EDITOR_BUSY",
-      "Asset Importの完了後に再試行してください",
+      "素材読み込みの完了後に再試行してください",
     );
   }
   const projectId = mcpRequiredString(argumentsValue.projectId, "projectId");
@@ -141,15 +141,15 @@ export function assertMcpExternalStoreWrite(
     );
   }
   if (projectId !== context.bundle.project.projectId) {
-    throw new XriftMcpEditorToolError("PROJECT_MISMATCH", "現在のProjectと一致しません");
+    throw new XriftMcpEditorToolError("PROJECT_MISMATCH", "現在のプロジェクトと一致しません");
   }
   if (sceneId !== context.bundle.scene.sceneId) {
-    throw new XriftMcpEditorToolError("SCENE_MISMATCH", "現在のSceneと一致しません");
+    throw new XriftMcpEditorToolError("SCENE_MISMATCH", "現在のシーンと一致しません");
   }
   if (expectedRevision !== context.revision) {
     throw new XriftMcpEditorToolError(
       "STALE_REVISION",
-      "Sceneが更新されています。最新のEditor contextを取得してください",
+      "シーンが更新されています。最新のEditor contextを取得してください",
       { expectedRevision, currentRevision: context.revision },
     );
   }

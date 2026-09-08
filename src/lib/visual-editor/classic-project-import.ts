@@ -200,11 +200,11 @@ export async function pickClassicProjectVisualImportSource(
 ): Promise<ClassicProjectVisualImportSource | null> {
   if (!tauri.isAvailable()) {
     throw new Error(
-      "Classicプロジェクトのフォルダー読み込みはデスクトップ版で利用できます。",
+      "コード編集プロジェクトのフォルダー読み込みはデスクトップ版で利用できます。",
     );
   }
   const selected = await tauri.selectDirectory(
-    `XRift Classic ${expectedKind === "world" ? "World" : "Item"}プロジェクトを選択`,
+    `コード編集の${expectedKind === "world" ? "ワールド" : "アイテム"}プロジェクトを選択`,
   );
   const projectPath = Array.isArray(selected) ? selected[0] : selected;
   if (typeof projectPath !== "string" || !projectPath.trim()) return null;
@@ -217,12 +217,12 @@ export async function loadClassicProjectVisualImportSourceFromRepository(
 ): Promise<ClassicProjectVisualImportSource> {
   if (!tauri.isAvailable()) {
     throw new Error(
-      "Repository URLからの読み込みはデスクトップ版で利用できます。",
+      "リポジトリのURLからの読み込みはデスクトップ版で利用できます。",
     );
   }
   const normalizedUrl = repositoryUrl.trim();
   if (!normalizedUrl) {
-    throw new Error("HTTPSまたはgit SSHのRepository URLを入力してください。");
+    throw new Error("HTTPSまたはSSH形式のGit URLを入力してください。");
   }
   const projectPath = await tauri.cloneClassicProjectRepository(normalizedUrl);
   const source = await loadClassicProjectVisualImportSource(
@@ -405,7 +405,7 @@ export function createClassicProjectVisualImportPreview(input: {
       code: "classic-import-load-size-high",
       fileName: input.source.packageName,
       message:
-        "取り込むAsset原本が20 MBを超えます。モバイルの初回ロードを確認し、必要ならTexture圧縮、音声圧縮、Model最適化を行ってください。",
+        "取り込む素材原本が20 MBを超えます。モバイルの初回ロードを確認し、必要ならテクスチャ圧縮、音声圧縮、3Dモデル最適化を行ってください。",
     });
   }
   if (
@@ -425,7 +425,7 @@ export function createClassicProjectVisualImportPreview(input: {
       code: "classic-import-texture-memory-high",
       fileName: input.source.packageName,
       message:
-        "Textureの展開後メモリ概算が256 MBを超えます。Import後のVRAM診断で圧縮・縮小候補を確認してください。",
+        "テクスチャの展開後メモリ概算が256 MBを超えます。読み込み後のVRAM診断で圧縮・縮小候補を確認してください。",
     });
   }
   for (const material of input.source.inspection.customMaterials) {
@@ -439,7 +439,7 @@ export function createClassicProjectVisualImportPreview(input: {
       severity: "warning",
       code: "classic-component-scale-invalid",
       fileName: material.sourceModulePath,
-      message: `${material.componentName}.scaleが0または不正です。EntityとColliderが消失しないよう1へ正規化して取り込みます。`,
+      message: `${material.componentName}.scaleが0または不正です。Entityと衝突判定が消失しないよう1へ正規化して取り込みます。`,
     });
   }
   for (const model of models) {
@@ -451,14 +451,14 @@ export function createClassicProjectVisualImportPreview(input: {
         severity: "warning",
         code: "classic-import-model-size-high",
         fileName: model.fileName,
-        message: `配置後の最大寸法が${formatClassicDimension(maximumExtent)}です。Classic側のscale、Model import scale、単位系を確認してください。`,
+        message: `配置後の最大寸法が${formatClassicDimension(maximumExtent)}です。コード編集側のscale、3Dモデルの読み込み時の倍率、単位系を確認してください。`,
       });
     } else if (maximumExtent > 0 && maximumExtent < minimumExtent) {
       diagnostics.push({
         severity: "warning",
         code: "classic-import-model-size-low",
         fileName: model.fileName,
-        message: `配置後の最大寸法が${formatClassicDimension(maximumExtent)}です。Classic側のscaleとModelの単位系を確認してください。`,
+        message: `配置後の最大寸法が${formatClassicDimension(maximumExtent)}です。コード編集側のscaleと3Dモデルの単位系を確認してください。`,
       });
     }
   }
@@ -663,14 +663,14 @@ export function augmentClassicProjectVisualImportPlan(
             ? [{
                 severity: "info" as const,
                 code: "classic-project-assets-discovered",
-                message: `Component内部で参照される関連Assetを正規化し、${assetDependencies.length}件のインポート計画へ統合しました。`,
+                message: `Componentが参照する素材${assetDependencies.length}件を読み込み対象に追加しました。`,
               }]
             : []),
           ...(source.inspection.customShaderModulePaths.length > 0
             ? [{
                 severity: "info" as const,
                 code: "classic-project-custom-shader-discovered",
-                message: `カスタムShaderを${source.inspection.customShaderModulePaths.length} moduleで検出しました。Materialとして再構築します。`,
+                message: `${source.inspection.customShaderModulePaths.length}個のモジュールにカスタムシェーダーが見つかりました。マテリアルとして再構築します。`,
               }]
             : []),
         ]
@@ -719,7 +719,7 @@ function enhanceClassicProjectVisualDiagnostic(
       ...diagnostic,
       code: "classic-dynamic-collider-skipped",
       message:
-        "CuboidCollider.positionは動的計算のため、誤った原点Colliderを作らずスキップします。",
+        "CuboidCollider.positionは動的計算のため、誤った原点衝突判定を作らずスキップします。",
     };
   }
   if (diagnostic.code !== "dynamic-prop-skipped") return diagnostic;
@@ -823,7 +823,7 @@ export function applyClassicProjectVisualImportEnhancements(input: {
     diagnostics.push({
       severity: "info",
       code: "classic-skybox-materialized",
-      message: `${skybox.sourcePath}をScene Skyboxへ設定しました。`,
+      message: `${skybox.sourcePath}をシーンSkyboxへ設定しました。`,
       sourcePath: skybox.sourceModulePath,
     });
   }
@@ -874,7 +874,7 @@ export function applyClassicProjectVisualImportEnhancements(input: {
     diagnostics.push({
       severity: "info",
       code: "classic-audio-materialized",
-      message: `${audio.sourcePath}をAudio Sourceへ接続しました。`,
+      message: `${audio.sourcePath}を音源へ接続しました。`,
       sourcePath: audio.sourceModulePath,
     });
   }
@@ -905,7 +905,7 @@ export function applyClassicProjectVisualImportEnhancements(input: {
         diagnostics.push({
           severity: "warning",
           code: "classic-shader-texture-missing",
-          message: `${name}に必要な${uniform.sourcePath}をCustom Materialへ接続できませんでした。`,
+          message: `${name}に必要な${uniform.sourcePath}をCustom マテリアルへ接続できませんでした。`,
           sourcePath: materialInspection.sourceModulePath,
         });
         continue;
@@ -1114,7 +1114,7 @@ export function applyClassicProjectVisualImportEnhancements(input: {
     diagnostics.push({
       severity: "info",
       code: "classic-custom-material-materialized",
-      message: `${materialInspection.componentName}のShaderMaterialをMaterial Assetとして復元し、Modelへ適用しました。`,
+      message: `${materialInspection.componentName}のShaderMaterialをマテリアルとして復元し、3Dモデルへ適用しました。`,
       sourcePath: materialInspection.sourceModulePath,
     });
   }
@@ -1750,7 +1750,7 @@ async function prepareClassicDependency(
           severity: "warning",
           code: "classic-asset-format-unsupported",
           fileName: dependency.fileName,
-          message: `${dependency.sourcePath}はStudioで変換できないため、このAssetだけをスキップして残りの変換を続けます。`,
+          message: `${dependency.sourcePath}はStudioで変換できないため、この素材だけをスキップして残りの変換を続けます。`,
         },
       ],
     };
@@ -1780,7 +1780,7 @@ async function prepareClassicDependency(
           severity: "warning",
           code: "classic-asset-path-recovered",
           fileName: dependency.fileName,
-          message: `${dependency.sourcePath}が見つからなかったため、取得済みRepository内の${fallbackSourcePath}を使用します。`,
+          message: `${dependency.sourcePath}が見つからなかったため、取得したリポジトリ内の${fallbackSourcePath}を使用します。`,
         });
       } catch (fallbackError) {
         return {
@@ -1789,7 +1789,7 @@ async function prepareClassicDependency(
               severity: "warning",
               code: "classic-asset-read-failed",
               fileName: dependency.fileName,
-              message: `${dependency.sourcePath}と代替候補${fallbackSourcePath}を読み取れないため、このAssetだけをスキップして残りの変換を続けます: ${errorMessage(fallbackError)}`,
+              message: `${dependency.sourcePath}と代替候補${fallbackSourcePath}を読み取れないため、この素材だけをスキップして残りの変換を続けます: ${errorMessage(fallbackError)}`,
             },
           ],
         };
@@ -1801,7 +1801,7 @@ async function prepareClassicDependency(
             severity: "warning",
             code: "classic-asset-read-failed",
             fileName: dependency.fileName,
-            message: `${dependency.sourcePath}を読み取れないため、このAssetだけをスキップして残りの変換を続けます: ${errorMessage(error)}`,
+            message: `${dependency.sourcePath}を読み取れないため、この素材だけをスキップして残りの変換を続けます: ${errorMessage(error)}`,
           },
         ],
       };
@@ -1845,7 +1845,7 @@ async function prepareClassicDependency(
             ? {
                 ...diagnostic,
                 severity: "warning" as const,
-                message: `${diagnostic.message} このAssetだけをスキップして残りの変換を続けます。`,
+                message: `${diagnostic.message} この素材だけをスキップして残りの変換を続けます。`,
               }
             : diagnostic,
         ),
@@ -1859,7 +1859,7 @@ async function prepareClassicDependency(
           severity: "warning",
           code: "classic-asset-convert-failed",
           fileName: dependency.fileName,
-          message: `${resolvedSourcePath}をVisual Assetへ変換できないため、このAssetだけをスキップして残りの変換を続けます: ${errorMessage(error)}`,
+          message: `${resolvedSourcePath}をビジュアル編集用のアセットに変換できないため、この素材だけをスキップして残りの変換を続けます: ${errorMessage(error)}`,
         },
       ],
     };
@@ -1982,20 +1982,20 @@ async function readClassicSourceModules(
       const size = entry.size ?? 0;
       if (size > MAX_SOURCE_MODULE_BYTES) {
         throw new Error(
-          `${entry.rel}が大きすぎます。1 moduleあたり1 MB以下にしてください。`,
+          `${entry.rel}が大きすぎます。1モジュールあたり1 MB以下にしてください。`,
         );
       }
       sourceEntries.push({ path: entry.rel.replace(/\\/g, "/"), size });
       if (sourceEntries.length > MAX_SOURCE_MODULES) {
         throw new Error(
-          `src内のsource moduleが${MAX_SOURCE_MODULES}件を超えています。変換対象を分けてください。`,
+          `src内のソースコードのモジュールが${MAX_SOURCE_MODULES}件を超えています。変換対象を分けてください。`,
         );
       }
     }
   }
   const totalBytes = sourceEntries.reduce((total, entry) => total + entry.size, 0);
   if (totalBytes > MAX_SOURCE_GRAPH_BYTES) {
-    throw new Error("srcのsource module合計が4 MBを超えています。変換対象を分けてください。");
+    throw new Error("srcのソースコードのモジュール合計が4 MBを超えています。変換対象を分けてください。");
   }
   return Promise.all(
     sourceEntries.map(async (entry) => ({

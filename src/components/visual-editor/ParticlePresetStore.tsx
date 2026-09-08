@@ -91,7 +91,7 @@ export function ParticlePresetStore({
         config.shape.type === "box"
           ? `箱 ${config.shape.size[0]} × ${config.shape.size[2]} m`
           : config.shape.type === "sphere"
-            ? `球 半径 ${config.shape.radius} m`
+            ? `球半径 ${config.shape.radius} m`
             : config.shape.type === "cone"
               ? `円錐 ${config.shape.angle}度`
               : "一点",
@@ -107,14 +107,14 @@ export function ParticlePresetStore({
       const result = await onAdd(selected, placeInScene);
       setAddedMessage(
         result.placed
-          ? `「${result.assetName}」をSceneへ配置しました。放出量や色はAsset Inspectorで変えられます。`
-          : `「${result.assetName}」をAssetsへ追加しました。Scene ViewへドラッグするとEntityになります。`,
+          ? `「${result.assetName}」をシーンへ配置しました。放出量や色はInspectorで変えられます。`
+          : `「${result.assetName}」をAssetsに追加しました。シーンへドラッグして配置できます。`,
       );
     } catch (reason) {
       setError(
         reason instanceof Error && reason.message.trim()
           ? reason.message
-          : "Particleを追加できませんでした",
+          : "パーティクルを追加できませんでした",
       );
     } finally {
       setAdding(false);
@@ -125,18 +125,18 @@ export function ParticlePresetStore({
     <>
       <section
         className="flex min-w-0 flex-1 flex-col border-r border-slate-200"
-        aria-label="Particle preset一覧"
+        aria-label="パーティクルプリセット一覧"
       >
         <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-2.5">
           <div className="mb-2 flex items-start justify-between gap-3">
             <div>
-              <h3 className="text-xs font-semibold text-slate-900">Particle</h3>
+              <h3 className="text-xs font-semibold text-slate-900">パーティクル</h3>
               <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                炎、雪、桜などの粒です。追加後は普通のParticle Assetとして調整できます
+                炎、雪、桜などの粒です。追加後はパーティクルとして調整できます
               </p>
             </div>
             <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700">
-              {PARTICLE_AUTHORING_PRESETS.length} presets
+              {PARTICLE_AUTHORING_PRESETS.length} プリセット
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -145,7 +145,7 @@ export function ParticlePresetStore({
                 size={14}
                 className="pointer-events-none absolute left-2.5 top-2 text-slate-400"
               />
-              <span className="sr-only">Particleを検索</span>
+              <span className="sr-only">パーティクルを検索</span>
               <input
                 value={query}
                 onChange={(event) => setQuery(event.currentTarget.value)}
@@ -160,7 +160,7 @@ export function ParticlePresetStore({
                   event.currentTarget.value as "all" | ParticlePresetCategory,
                 )
               }
-              aria-label="Particleのカテゴリ"
+              aria-label="パーティクルのカテゴリ"
               className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700"
             >
               <option value="all">すべて</option>
@@ -176,7 +176,7 @@ export function ParticlePresetStore({
           {visible.length === 0 ? (
             <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center text-xs text-slate-500">
               <Search size={22} />
-              <p>条件に合うParticleがありません</p>
+              <p>条件に合うパーティクルがありません</p>
             </div>
           ) : (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-2.5">
@@ -216,14 +216,11 @@ export function ParticlePresetStore({
             </div>
           )}
         </div>
-        <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
-          カードは実際のParticleを同じrendererで描いた1フレームです。動きは右で確認できます。
-        </footer>
       </section>
 
       <aside
         className="scrollbar-thin w-[350px] shrink-0 overflow-auto bg-white p-4"
-        aria-label="選択したParticleの詳細"
+        aria-label="選択したパーティクルの詳細"
       >
         {selected && summary ? (
           <div className="space-y-4">
@@ -259,10 +256,10 @@ export function ParticlePresetStore({
               />
               <span className="text-[11px] leading-4 text-slate-600">
                 <span className="font-semibold text-slate-800">
-                  追加後にSceneへ配置
+                  追加後にシーンへ配置
                 </span>
                 <br />
-                Particle Emitterを持つEntityを1件作ります。外すとAssetsへ追加するだけです。
+                放出用のEntityも配置します。オフにするとAssetsへの追加のみになります。
               </span>
             </label>
 
@@ -299,11 +296,11 @@ export function ParticlePresetStore({
             ) : null}
 
             <p className="text-[11px] leading-4 text-slate-500">
-              粒の見た目はTexture Assetを割り当てると変わります。未指定のときは丸い光として描きます。
+              粒の見た目はテクスチャを割り当てると変わります。未指定のときは丸い光として描きます。
             </p>
           </div>
         ) : (
-          <p className="text-xs text-slate-500">Particleを選んでください</p>
+          <p className="text-xs text-slate-500">パーティクルを選んでください</p>
         )}
       </aside>
     </>

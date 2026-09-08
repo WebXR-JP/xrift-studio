@@ -120,11 +120,11 @@ export function SkyShaderStore({
       setAddedMessage(
         [
           result.alreadyInstalled
-            ? `「${selected.label}」のMaterialを今の設定で更新しました。`
-            : `「${selected.label}」をMaterialとして追加しました。`,
+            ? `「${selected.label}」のマテリアルを今の設定で更新しました。`
+            : `「${selected.label}」をマテリアルとして追加しました。`,
           result.appliedToSky
-            ? "Sceneの空に設定済みです。色・雲量・動きはInspectorのUniform valuesで調整できます。"
-            : "Scene設定の「Skybox Shader」から割り当てると空になります。",
+            ? "Skyboxに設定しました。色や動きはInspectorで調整できます。"
+            : "シーン設定の「Skybox Shader」に割り当ててください。",
         ].join(""),
       );
     } catch (reason) {
@@ -149,11 +149,11 @@ export function SkyShaderStore({
             <div>
               <h3 className="text-xs font-semibold text-slate-900">Skybox Shader</h3>
               <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                自然・天候・宇宙・幻想・抽象・水中の空を、画像なしで描くMaterialです
+                自然・天候・宇宙・幻想・抽象・水中の空を、画像なしで描くマテリアルです
               </p>
             </div>
             <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-[10px] font-semibold text-indigo-700">
-              {SKY_SHADER_CATALOG.length} presets
+              {SKY_SHADER_CATALOG.length} プリセット
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -234,9 +234,6 @@ export function SkyShaderStore({
             </div>
           )}
         </div>
-        <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
-          一覧はGLSLの描画サムネイルです。選択した空だけをライブ表示します。
-        </footer>
       </section>
 
       <aside
@@ -265,7 +262,7 @@ export function SkyShaderStore({
                 <button
                   type="button"
                   onClick={() => void tauri.openUrl(SKY_SHADER_CATALOG_SOURCE_URL)}
-                  title="Shaderのソースを開く"
+                  title="シェーダーのソースを開く"
                   className="rounded p-1.5 text-slate-500 hover:bg-slate-100"
                 >
                   <ExternalLink size={15} aria-hidden="true" />
@@ -296,13 +293,13 @@ export function SkyShaderStore({
               <p className="mt-2 text-[10px] leading-4 text-slate-500">
                 {SKY_SHADER_QUALITY_OPTIONS.find((option) => option.id === quality)?.description}
               </p>
-              <p className="mt-1 text-[10px] text-slate-500">{skyShaderCostLabel(selected)} · 追加したMaterialにも品質設定を保存します。単純な空では品質差がない場合があります。</p>
+              <p className="mt-1 text-[10px] text-slate-500">{skyShaderCostLabel(selected)} · 追加したマテリアルにも品質設定を保存します。単純な空では品質差がない場合があります。</p>
             </fieldset>
 
             <div className="rounded-md border border-slate-200 bg-slate-50 p-2.5">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="text-[11px] font-semibold text-slate-700">
-                  Uniform values
+                  シェーダーの調整値
                 </span>
                 <button
                   type="button"
@@ -341,14 +338,14 @@ export function SkyShaderStore({
                 className="mt-0.5"
               />
               <span>
-                <span className="block font-semibold">追加後にSceneの空へ設定</span>
+                <span className="block font-semibold">追加後にSkyboxへ設定</span>
                 <span className="mt-0.5 block text-[11px] text-slate-500">
-                  Skybox画像より優先して空を描きます。外すとMaterialだけを追加します。
+                  Skybox Textureより優先して背景を描きます。オフにするとマテリアルだけを追加します。
                 </span>
               </span>
             </label>
 
-            <Notice text="追加後はMaterial Assetとして残ります。色・雲量・光・動きはInspectorのUniform valuesから変更できます。背景だけの表現で、ワールドの照明や反射は自動では変更しません。" />
+            <Notice text="背景だけを変えます。照明や反射には、別途Skybox TextureとIBLを設定してください。" />
             {disabledReason ? (
               <Notice tone="warning" text={disabledReason} />
             ) : null}
@@ -382,9 +379,9 @@ export function SkyShaderStore({
                   追加中
                 </>
               ) : applyToSky ? (
-                "このSkyboxを空へ設定"
+                "Skyboxに設定"
               ) : (
-                "Materialとして追加"
+                "マテリアルとして追加"
               )}
             </button>
           </div>

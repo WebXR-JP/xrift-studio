@@ -168,4 +168,4 @@ XRift Studio が追加した依存ではありません。
 
 全点の出所・サイズ・SHA-256は `docs/asset-refresh/manifest.json` にあります。収録スタジオの編集用原本 `tools/recipe-models/sources/recording-studio.original.glb` は、従来の形状と元のCC0テクスチャを保持しています。配布GLBとはハッシュが異なります。
 
-今回のBlender実行状況と編集用データについては `MODEL_REFRESH_README.ja.md` を参照してください。
+今回のBlender実行状況と編集用データについては `docs/asset-refresh/README.md` を参照してください。

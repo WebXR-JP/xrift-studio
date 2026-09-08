@@ -21,7 +21,7 @@ async function openBlankWorld(page: Page) {
   await expect(page.getByText("ビジュアル編集")).toBeVisible();
 }
 
-test("しかけ付きの3Dセットは、音とグラフごとSceneへ入る", async ({ page }) => {
+test("しかけ付きの3Dセットは、音とグラフごとシーンへ入る", async ({ page }) => {
   test.setTimeout(180_000);
   await openBlankWorld(page);
 
@@ -39,20 +39,20 @@ test("しかけ付きの3Dセットは、音とグラフごとSceneへ入る", a
   // The lesson is the reason this set exists, and it has to be readable before
   // placing rather than only after.
   await expect(detail.getByText("このセットで分かること")).toBeVisible();
-  await detail.getByRole("button", { name: /音の出るボタンをSceneへ追加/ }).click();
+  await detail.getByRole("button", { name: /音の出るボタンをシーンへ追加/ }).click();
 
-  await expect(detail.getByText(/Sceneへ配置し/)).toBeVisible();
+  await expect(detail.getByText(/シーンへ配置し/)).toBeVisible();
   // The shelf stays open for a set with steps: the steps are on this panel.
   await expect(
-    detail.getByText("上の手順を見ながら、この画面を閉じてPlayを開始してください。"),
+    detail.getByText("上の手順を見ながら、この画面を閉じて動作確認を開始してください。"),
   ).toBeVisible();
-  await page.getByRole("button", { name: "外部リソースを閉じる" }).click();
+  await page.getByRole("button", { name: "「外部から追加」を閉じる" }).click();
 
-  const tree = page.getByRole("tree", { name: "SceneのEntity階層" });
+  const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
   await expect(tree.getByText("音の出るボタン", { exact: true })).toBeVisible();
   await tree.getByText("ボタン", { exact: true }).click();
 
-  for (const component of ["Interactable", "Audio Source", "Interaction Trigger"]) {
+  for (const component of ["操作を受け付ける", "音源", "グラフの実行"]) {
     await expect(
       page.getByText(component, { exact: true }).first(),
       `${component}が配置されたEntityに載っている`,
@@ -64,10 +64,10 @@ test("しかけ付きの3Dセットは、音とグラフごとSceneへ入る", a
   // reads back every action the set promised, including the one that only runs
   // after the timed change before it has finished.
   await expect(
-    page.getByText("ボタン / Audio Source の再生を 再生 にする", { exact: false }),
+    page.getByText("ボタン / 音源 の再生を 再生 にする", { exact: false }),
   ).toBeVisible();
   await expect(
-    page.getByText("の発光色を 指定した色 にする", { exact: false }),
+    page.getByText("のEmissiveを 指定した色 にする", { exact: false }),
   ).toHaveCount(2);
   await expect(assets.getByText("ボタンの音").first()).toBeVisible();
 });
@@ -87,20 +87,20 @@ for (const name of [
   "環境音のスピーカー",
   "画質のスイッチ",
 ]) {
-  test(`3Dセット「${name}」をSceneへ追加できる`, async ({ page }) => {
+  test(`3Dセット「${name}」をシーンへ追加できる`, async ({ page }) => {
     test.setTimeout(180_000);
     await openBlankWorld(page);
     const assets = page.getByRole("region", { name: "Assets" });
     const shelf = page.getByRole("region", { name: "3Dセット一覧" });
     const detail = page.getByRole("complementary", { name: "選択した3Dセットの詳細" });
-    const tree = page.getByRole("tree", { name: "SceneのEntity階層" });
+    const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
     await assets.getByRole("button", { name: "外部から追加" }).click();
     await page.getByRole("button", { name: /3Dセット/ }).click();
     await shelf.getByLabel("3Dセットを検索").fill(name);
     await shelf.getByRole("button", { name: new RegExp(name) }).click();
-    await detail.getByRole("button", { name: new RegExp(`${name}をSceneへ追加`) }).click();
-    await expect(detail.getByText(/Sceneへ配置し/)).toBeVisible();
-    await page.getByRole("button", { name: "外部リソースを閉じる" }).click();
+    await detail.getByRole("button", { name: new RegExp(`${name}をシーンへ追加`) }).click();
+    await expect(detail.getByText(/シーンへ配置し/)).toBeVisible();
+    await page.getByRole("button", { name: "「外部から追加」を閉じる" }).click();
     await expect(tree.getByText(name, { exact: true })).toBeVisible();
     if (name === "環境音のスピーカー") {
       await expect(assets.getByText("環境音のループ").first()).toBeVisible();

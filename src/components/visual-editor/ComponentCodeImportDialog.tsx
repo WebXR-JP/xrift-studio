@@ -206,17 +206,17 @@ export function ComponentCodeImportDialog({
         <header data-app-modal-header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-slate-50 px-5 py-4">
           <div>
             <h2 id="component-import-title" className="text-base font-semibold text-slate-950">
-              R3F / Classicからインポート
+              R3F / コード編集からインポート
             </h2>
             <p className="mt-1 text-xs leading-5 text-slate-600">
-              R3FのTSXまたはClassicプロジェクトをSceneへ変換します。
+              R3FのTSXまたはコード編集プロジェクトをシーンへ変換します。
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={classicLoading || previewLoading || importing}
-            aria-label="コンポーネント画面を閉じる"
+            aria-label="インポート画面を閉じる"
             title="閉じる"
             className="rounded-md p-2 text-slate-500 hover:bg-white hover:text-slate-900 disabled:cursor-wait disabled:opacity-40"
           >
@@ -275,11 +275,11 @@ export function ComponentCodeImportDialog({
                 disabled={importing}
                 className="size-3.5 accent-violet-600"
               />
-              インポート後、そのままPlayで確認
+              インポート後に動作確認を開始
             </label>
           ) : (
             <div className="text-[11px] leading-4 text-slate-500">
-              コードは実行せず、import graph、JSX構造、静的リテラルだけを変換します。
+              コードは実行せず、読み取れる構造と固定値を変換します。
             </div>
           )}
           <div className="flex items-center gap-2">
@@ -313,9 +313,9 @@ export function ComponentCodeImportDialog({
               className="rounded-md bg-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               {previewLoading
-                ? "Asset寸法と容量を検査中…"
+                ? "素材の大きさと容量を確認中…"
                 : importing
-                ? "AssetとSceneを変換中…"
+                ? "素材とシーンを変換中…"
                 : reviewing
                   ? "プレビュー内容をインポート"
                   : "インポート内容をプレビュー"}
@@ -354,7 +354,7 @@ function CodeConverter({
         <div>
           <h3 className="text-sm font-semibold text-slate-900">TSXを変換</h3>
           <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
-            標準Geometry、R3F Light、Rapier RigidBody、Billboard、Reflector、Skyと公式XRift Componentに対応します。
+            標準Geometry、R3F ライト、Rapier RigidBody、Billboard、Reflector、Skyと公式XRiftのComponentに対応します。
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -369,7 +369,7 @@ function CodeConverter({
             ) : (
               <FolderOpen size={13} aria-hidden="true" />
             )}
-            {loading ? "読み込み中…" : "Classicプロジェクトを選択"}
+            {loading ? "読み込み中…" : "コード編集プロジェクトを選択"}
           </button>
           <button
             type="button"
@@ -385,7 +385,7 @@ function CodeConverter({
         <div className="mb-2 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-[11px] leading-4 text-sky-900">
           <span className="font-semibold">{classicSource.packageName}</span>
           <span className="ml-2">{classicSource.entryFile}</span>
-          <span className="ml-2">{classicSource.modules.length} modules</span>
+          <span className="ml-2">{classicSource.modules.length} コードファイル</span>
           <span className="mt-0.5 block break-all text-sky-700">
             {classicSource.repositoryUrl ?? classicSource.path}
           </span>
@@ -403,7 +403,7 @@ function CodeConverter({
             }
           }}
           disabled={loading}
-          aria-label="Classic repository URL"
+          aria-label="リポジトリのURL"
           placeholder="https://github.com/owner/repository.git または git@github.com:owner/repository.git"
           className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2.5 py-1.5 font-mono text-[11px] text-slate-700 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
         />
@@ -430,7 +430,7 @@ function CodeConverter({
         className="min-h-72 w-full resize-y rounded-lg border border-slate-300 bg-slate-950 p-4 font-mono text-xs leading-5 text-slate-100 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
       />
       <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-4 text-amber-900">
-        Classicでは検証済みentryからsrc内のlocal importを再帰的に読み、group、wrapper、Component境界をHierarchyへ保持します。hookやruntime stateは実行せず、動的な分岐・繰り返し・外部Assetは診断に残します。
+        ファイル間の参照をたどり、構造をHierarchyに再現します。動的な処理は実行せず、変換できない箇所を診断に表示します。
       </p>
     </section>
   );
@@ -456,15 +456,15 @@ function ImportPreviewHeader({
           </span>
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-violet-950">
-              確定前プレビュー
+              インポート内容の確認
             </h3>
             <p className="mt-1 text-[11px] leading-5 text-violet-900">
-              まだSceneやAssetには書き込まれていません。変換件数、関連Asset、警告を確認してから確定できます。
+              まだシーンには追加していません。変換結果と注意事項を確認してください。
             </p>
             {classicSource ? (
               <>
                 <p className="mt-1 truncate font-mono text-[10px] text-violet-700">
-                  {classicSource.packageName} · {classicSource.modules.length} modules · {plan.assetDependencies.length} assets
+                  {classicSource.packageName} · {classicSource.modules.length} modules · {plan.assetDependencies.length} 素材
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {classicSource.inspection.skybox ? (
@@ -480,7 +480,7 @@ function ImportPreviewHeader({
                   ) : null}
                   {classicSource.inspection.customMaterials.length > 0 ? (
                     <PreviewChip
-                      label="Custom Material"
+                      label="カスタムマテリアル"
                       value={String(
                         classicSource.inspection.customMaterials.length,
                       )}
@@ -491,7 +491,7 @@ function ImportPreviewHeader({
                       material.colliderSourceNodeNames.length > 0,
                   ) ? (
                     <PreviewChip
-                      label="Collider部位"
+                      label="当たり判定"
                       value={String(
                         classicSource.inspection.customMaterials.reduce(
                           (count, material) =>
@@ -504,13 +504,13 @@ function ImportPreviewHeader({
                   ) : null}
                   {preview ? (
                     <PreviewChip
-                      label="原本容量"
+                      label="元ファイルの容量"
                       value={formatPreviewBytes(preview.totalSourceBytes)}
                     />
                   ) : null}
                   {preview && preview.estimatedTextureMemoryBytes > 0 ? (
                     <PreviewChip
-                      label="Texture展開"
+                      label="テクスチャ展開"
                       value={formatPreviewBytes(
                         preview.estimatedTextureMemoryBytes,
                       )}
@@ -564,40 +564,40 @@ function AnalysisResult({
           Entity {plan.summary.entityCount}
         </span>
         <span className="rounded bg-slate-100 px-2 py-1 text-slate-600">
-          Primitive {plan.summary.primitiveCount}
+          基本形状 {plan.summary.primitiveCount}
         </span>
         <span className="rounded bg-amber-50 px-2 py-1 text-amber-700">
-          Light {plan.summary.lightCount}
+          ライト {plan.summary.lightCount}
         </span>
         <span className="rounded bg-indigo-50 px-2 py-1 text-indigo-700">
-          Rigid Body {plan.summary.rigidBodyCount}
+          物理挙動 {plan.summary.rigidBodyCount}
         </span>
         <span className="rounded bg-sky-50 px-2 py-1 text-sky-700">
-          Collider {plan.summary.colliderCount}
+          衝突判定 {plan.summary.colliderCount}
         </span>
         {plan.summary.textCount > 0 ? (
           <span className="rounded bg-fuchsia-50 px-2 py-1 text-fuchsia-700">
-            Text / UI {plan.summary.textCount}
+            テキスト / UI {plan.summary.textCount}
           </span>
         ) : null}
         {plan.summary.modelAssetCount > 0 ? (
           <span className="rounded bg-emerald-50 px-2 py-1 text-emerald-700">
-            Model {plan.summary.modelAssetCount}
+            3Dモデル {plan.summary.modelAssetCount}
           </span>
         ) : null}
         {plan.summary.textureAssetCount > 0 ? (
           <span className="rounded bg-cyan-50 px-2 py-1 text-cyan-700">
-            Texture {plan.summary.textureAssetCount}
+            テクスチャ {plan.summary.textureAssetCount}
           </span>
         ) : null}
         {plan.summary.audioAssetCount > 0 ? (
           <span className="rounded bg-rose-50 px-2 py-1 text-rose-700">
-            Audio {plan.summary.audioAssetCount}
+            音声 {plan.summary.audioAssetCount}
           </span>
         ) : null}
         {plan.summary.unsupportedAssetCount > 0 ? (
           <span className="rounded bg-amber-50 px-2 py-1 text-amber-800">
-            変換Asset {plan.summary.unsupportedAssetCount}
+            変換素材 {plan.summary.unsupportedAssetCount}
           </span>
         ) : null}
         <span className="rounded bg-violet-50 px-2 py-1 text-violet-700">
@@ -605,12 +605,12 @@ function AnalysisResult({
         </span>
         {plan.summary.moduleCount > 1 ? (
           <span className="rounded bg-emerald-50 px-2 py-1 text-emerald-700">
-            Modules {plan.summary.moduleCount}
+            コードファイル {plan.summary.moduleCount}
           </span>
         ) : null}
         {plan.summary.localComponentCount > 0 ? (
           <span className="rounded bg-indigo-50 px-2 py-1 text-indigo-700">
-            Local {plan.summary.localComponentCount}
+            Entity基準 {plan.summary.localComponentCount}
           </span>
         ) : null}
       </div>
@@ -623,7 +623,7 @@ function AnalysisResult({
             aria-hidden="true"
           />
           <span>
-            Assetの寸法・容量を確定前に検査できませんでした。Sceneの静的変換結果は確認でき、確定時に再試行して読み取れないAssetだけをスキップします:{" "}
+            素材の大きさと容量を確認できませんでした。シーンの変換結果は確認できます。インポート時に再確認し、読み取れない素材は追加しません。詳細:{" "}
             {previewError}
           </span>
         </div>
@@ -666,12 +666,12 @@ function AnalysisResult({
       )}
       {plan.assetDependencies.length > 0 ? (
         <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-700">
-          <span className="font-semibold">同時に取り込むAsset</span>
+          <span className="font-semibold">同時に取り込む素材</span>
           <span className="ml-2">
             {plan.assetDependencies.map((dependency) => dependency.fileName).join(" / ")}
           </span>
           <span className="mt-0.5 block text-slate-500">
-            Repository全体の取得済みコピーから解決します。見つからないAssetだけをスキップし、読み込めるSceneとAssetは確定できます。
+            取得したリポジトリから読み込みます。見つからない素材を除いて追加できます。
           </span>
         </div>
       ) : null}
@@ -691,16 +691,16 @@ function ClassicAssetSizePreview({
     <div className="mt-3 space-y-2 rounded-md border border-violet-200 bg-violet-50/60 p-3">
       <div className="flex flex-wrap items-center gap-2 text-[11px]">
         <span className="font-semibold text-violet-950">
-          Asset・空間サイズ検査
+          素材の大きさと容量
         </span>
         <span className="rounded bg-white px-2 py-1 text-violet-800">
-          読込 {preview.availableAssetCount}
+          読み込み済み {preview.availableAssetCount}
         </span>
         <span className="rounded bg-white px-2 py-1 text-violet-800">
           原本 {formatPreviewBytes(preview.totalSourceBytes)}
         </span>
         <span className="rounded bg-white px-2 py-1 text-violet-800">
-          Texture展開 約
+          テクスチャ展開約
           {formatPreviewBytes(preview.estimatedTextureMemoryBytes)}
         </span>
         <span
@@ -734,12 +734,12 @@ function ClassicAssetSizePreview({
                 配置後 {formatDimensionVector(model.effectiveSize)}
               </span>
               <span className="ml-2 text-slate-500">
-                Model {formatScaleValue(model.modelImportScale)} × Scene{" "}
+                3Dモデル {formatScaleValue(model.modelImportScale)} × シーン{" "}
                 {formatScaleVector(model.placementScale)}
               </span>
               {model.colliderSourceNodeCount > 0 ? (
                 <span className="ml-2 text-sky-700">
-                  Collider {model.colliderSourceNodeCount}部位も同Scale
+                  衝突判定 {model.colliderSourceNodeCount}も同じ倍率
                 </span>
               ) : null}
               {model.centerModel ? (
@@ -794,7 +794,7 @@ function ClassicAssetSizePreview({
         </div>
       ) : null}
       <p className="text-[10px] leading-4 text-violet-800">
-        Texture展開量はRGBAとmipmap、配置後寸法はModel boundsと親Scaleからの概算です。非uniform Scaleと回転が重なる場合は軸方向の目安になります。確定後はWorld全体のVRAM診断で既存Asset、Material参照、描画負荷も含めて確認できます。
+        テクスチャの容量はRGBAとMipmapを基にした概算です。配置後の大きさには親EntityのScaleも含みます。軸ごとに異なるScaleと回転を組み合わせる場合は、目安として確認してください。インポート後は「VRAM概算」でワールド全体を確認できます。
       </p>
     </div>
   );

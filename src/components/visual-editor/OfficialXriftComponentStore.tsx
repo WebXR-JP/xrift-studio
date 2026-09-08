@@ -64,12 +64,9 @@ export function OfficialXriftComponentStore({
                 <h3 className="text-xs font-semibold text-slate-900">
                   XRift公式Component一覧
                 </h3>
-                <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                  @xrift/world-components {XRIFT_COMPONENT_API_VERSION} の公式rendererから作成した保存済み画像です
-                </p>
               </div>
               <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-semibold text-violet-700">
-                {definitions.length} components
+                {definitions.length} Component
               </span>
             </div>
           </div>
@@ -113,9 +110,6 @@ export function OfficialXriftComponentStore({
               })}
             </div>
           </div>
-          <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
-            公開package本体から作成した保存済みプレビューを表示しています。
-          </footer>
         </section>
 
         <aside
@@ -162,21 +156,21 @@ export function OfficialXriftComponentStore({
                 </p>
               </div>
               <dl className="grid grid-cols-[76px_1fr] gap-x-2 gap-y-1.5 text-xs">
-                <dt className="text-slate-400">Package</dt>
+                <dt className="text-slate-400">パッケージ</dt>
                 <dd className="font-medium text-slate-700">
                   @xrift/world-components
                 </dd>
-                <dt className="text-slate-400">Version</dt>
+                <dt className="text-slate-400">バージョン</dt>
                 <dd className="text-slate-700">{XRIFT_COMPONENT_API_VERSION}</dd>
-                <dt className="text-slate-400">Import</dt>
+                <dt className="text-slate-400">Component名</dt>
                 <dd className="font-mono text-[11px] text-slate-700">
                   {selected.importName}
                 </dd>
               </dl>
               {developerOnly ? (
-                <Notice text="DevEnvironmentは公式の開発用wrapperです。Sceneへ配置せず、XRiftのdev entryでStudioが管理します。" />
+                <Notice text="DevEnvironmentは開発用です。シーンには配置できません。" />
               ) : (
-                <Notice text="追加時はScene dataへ変換し、追加したEntityを選択してInspectorを開きます。" />
+                <Notice text="追加したEntityをInspectorで編集できます。" />
               )}
               {disabledReason ? <Notice warning text={disabledReason} /> : null}
               {error ? (
@@ -194,7 +188,7 @@ export function OfficialXriftComponentStore({
                   role="status"
                 >
                   <CheckCircle2 size={15} className="shrink-0" />
-                  <span>「{addedName}」をSceneへ追加しました。</span>
+                  <span>「{addedName}」をシーンへ追加しました。</span>
                 </div>
               ) : null}
               {!developerOnly ? (
@@ -210,7 +204,7 @@ export function OfficialXriftComponentStore({
                       追加中
                     </>
                   ) : (
-                    `${selected.label}をSceneへ追加`
+                    `${selected.label}をシーンへ追加`
                   )}
                 </button>
               ) : null}

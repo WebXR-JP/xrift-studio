@@ -258,7 +258,7 @@ export function VisualUploadDialog({
       id: "thumbnail",
       label: "サムネイル",
       detail: review.thumbnailReady
-        ? "public/thumbnail.pngを確認済み。開始時にステージングへコピーしてSHA-256を照合します"
+        ? "サムネイルを確認しました"
         : "公開用サムネイルを設定してください",
       ready: review.thumbnailReady,
       action: onEditThumbnail,
@@ -281,7 +281,7 @@ export function VisualUploadDialog({
         ? `既存の${projectKind === "world" ? "ワールド" : "アイテム"}を更新します: ${review.remoteId}`
         : review.previouslyPublished
           ? `以前の${projectKind === "world" ? "ワールド" : "アイテム"}の公開先IDを確認して更新します`
-          : "公開先IDを確認して、新規作成または既存更新を安全に決定します",
+          : "公開先を確認し、新規公開か更新かを判定します",
       ready: true,
     },
     {
@@ -300,7 +300,7 @@ export function VisualUploadDialog({
         review.checking
           ? "公開データを確認中…"
           : blockingDiagnostics.length === 0
-          ? "公開を止める問題はありません"
+          ? "公開を妨げる問題は見つかりませんでした"
           : `${blockingDiagnostics.length}件の問題を修正してください`,
       ready: !review.checking && blockingDiagnostics.length === 0,
     },
@@ -391,7 +391,7 @@ export function VisualUploadDialog({
       setDetailCopied(false);
       setFailure({
         message: aborted
-          ? "公開処理を始める前に取り消しました。制作データは保持されています。"
+          ? "公開を取り消しました。制作データは残っています。"
           : publishError instanceof Error
             ? publishError.message
             : String(publishError),
@@ -495,7 +495,7 @@ export function VisualUploadDialog({
               </h2>
             </div>
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              最新の編集内容を保存・変換し、公開前の確認からXRiftへの送信まで進めます。
+              編集内容を保存し、XRiftに公開します。
             </p>
           </div>
           <button
@@ -575,7 +575,7 @@ export function VisualUploadDialog({
                   </div>
                   <div>
                     <p className="text-xs leading-5 text-slate-600">
-                      現在の{projectLabel}のScene Viewをもとに、公開用画像を作成・更新できます。
+                      現在の{projectLabel}のシーンをもとに、公開用画像を作成・更新できます。
                       保存した画像は <code>public/thumbnail.png</code> に反映されます。
                     </p>
                     <input
@@ -619,7 +619,7 @@ export function VisualUploadDialog({
                       disabled={thumbnailBusy}
                       className="mt-2 text-xs font-semibold text-slate-500 underline decoration-slate-300 underline-offset-2 hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      Editorで詳細設定
+                      エディターで編集
                     </button>
                   </div>
                 </div>
@@ -677,10 +677,10 @@ export function VisualUploadDialog({
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-semibold text-slate-900">
-                      ロード容量・VRAMの目安
+                      読み込み容量・VRAMの目安
                     </span>
                     <span className="mt-0.5 block text-xs leading-5 text-slate-600">
-                      ロード 約
+                      読み込み 約
                       {formatVramBytes(review.vramEstimate.loadBytes)}
                       {" / "}
                       VRAM 約
@@ -707,13 +707,13 @@ export function VisualUploadDialog({
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-semibold text-slate-900">
                         {convertedTextures.length > 0
-                          ? `Texture ${convertedTextures.length}枚を公開用に変換します`
-                          : "Textureの設定を確認しました"}
+                          ? `テクスチャ${convertedTextures.length}枚を公開用に変換します`
+                          : "テクスチャの設定を確認しました"}
                       </div>
                       <div className="mt-0.5 text-xs leading-5 text-slate-500">
                         {convertedTextures.length > 0
-                          ? "Import設定の最大解像度・圧縮を送信する画像へ反映します。プロジェクトの原本は変換せず、そのまま残ります。"
-                          : "設定を反映できる画像がないため、原本をそのまま送信します。"}
+                          ? "画像を縮小・圧縮して送信します。元画像は変更しません。"
+                          : "変換対象の画像がないため、そのまま送信します。"}
                       </div>
                     </div>
                     {convertedTextures.length > 0 ? (
@@ -729,7 +729,7 @@ export function VisualUploadDialog({
                   {convertedTextures.length > 0 && onApplyTextureConversions ? (
                     <div className="mt-2.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
                       <p className="text-xs leading-5 text-slate-600">
-                        Editorの表示や他の書き出しでも同じ軽さにしたい場合は、制作データの原本にもこの設定を適用できます。元の画像ファイルは残るので、Texture Inspectorからいつでも戻せます。
+                        編集画面や書き出しにも適用できます。元画像は残り、テクスチャ設定から戻せます。
                       </p>
                       <button
                         type="button"
@@ -738,7 +738,7 @@ export function VisualUploadDialog({
                           setTextureConversionBusy(true);
                           setTextureConversionMessage({
                             tone: "progress",
-                            text: `${convertedTextures.length}枚の原本を変換しています`,
+                            text: `${convertedTextures.length}枚の画像を編集用に変換しています`,
                           });
                           void onApplyTextureConversions(
                             convertedTextures.map((entry) => entry.assetId),
@@ -751,7 +751,7 @@ export function VisualUploadDialog({
                             .then((outcome) => {
                               setTextureConversionMessage({
                                 tone: "success",
-                                text: `${outcome.convertedAssetCount}枚の原本を変換しました。${formatVramBytes(outcome.beforeBytes)} → ${formatVramBytes(outcome.afterBytes)}${
+                                text: `${outcome.convertedAssetCount}枚の画像を編集用に変換しました。${formatVramBytes(outcome.beforeBytes)} → ${formatVramBytes(outcome.afterBytes)}${
                                   outcome.skipped.length > 0
                                     ? `。${outcome.skipped.length}枚は対象外です`
                                     : ""
@@ -764,7 +764,7 @@ export function VisualUploadDialog({
                                 text:
                                   error instanceof Error
                                     ? error.message
-                                    : "原本を変換できませんでした。",
+                                    : "編集用の画像を変換できませんでした。",
                               });
                             })
                             .finally(() => setTextureConversionBusy(false));
@@ -774,7 +774,7 @@ export function VisualUploadDialog({
                         {textureConversionBusy ? (
                           <Loader2 size={13} className="animate-spin" aria-hidden="true" />
                         ) : null}
-                        {textureConversionBusy ? "変換中…" : "原本にもこの設定を適用する"}
+                        {textureConversionBusy ? "変換中…" : "編集にもこの設定を適用"}
                       </button>
                       {textureConversionMessage ? (
                         <p
@@ -824,7 +824,7 @@ export function VisualUploadDialog({
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">
                   <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800">
                     <FileCheck2 size={15} aria-hidden="true" />
-                    変換診断
+                    変換時の注意
                   </div>
                   <div className="space-y-1.5">
                     {review.diagnostics.slice(0, 8).map((diagnostic, index) => (
@@ -877,8 +877,8 @@ export function VisualUploadDialog({
               </div>
               <p className="mt-3 text-xs text-slate-400">
                 {progress.cancelSafe
-                  ? "この段階は安全に取り消せます。"
-                  : "XRiftへの送信開始後は結果を確認するまで閉じません。"}
+                  ? "公開の準備は取り消せます。"
+                  : "XRiftへの送信開始後は、結果を確認するまで閉じられません。"}
               </p>
             </div>
           ) : stage === "succeeded" ? (
@@ -890,20 +890,20 @@ export function VisualUploadDialog({
                 XRiftへの送信が完了しました
               </h3>
               <p className="mt-2 text-sm text-slate-500">
-                XRiftから返された結果をこのプロジェクトに保持します。
+                公開結果をプロジェクトに保存します。
               </p>
               <dl className="mx-auto mt-5 grid max-w-md grid-cols-[120px_minmax(0,1fr)] gap-x-3 gap-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4 text-left text-xs">
-                {projectKind === "world" && result?.worldId ? <><dt className="text-slate-500">World ID</dt><dd className="truncate font-mono text-slate-800">{result.worldId}</dd></> : null}
-                {projectKind === "item" && result?.itemId ? <><dt className="text-slate-500">Item ID</dt><dd className="truncate font-mono text-slate-800">{result.itemId}</dd></> : null}
+                {projectKind === "world" && result?.worldId ? <><dt className="text-slate-500">ワールド ID</dt><dd className="truncate font-mono text-slate-800">{result.worldId}</dd></> : null}
+                {projectKind === "item" && result?.itemId ? <><dt className="text-slate-500">アイテム ID</dt><dd className="truncate font-mono text-slate-800">{result.itemId}</dd></> : null}
                 {!result?.worldId && !result?.itemId && result?.contentId ? <><dt className="text-slate-500">Content ID</dt><dd className="truncate font-mono text-slate-800">{result.contentId}</dd></> : null}
                 {result?.versionId ? <><dt className="text-slate-500">Version ID</dt><dd className="truncate font-mono text-slate-800">{result.versionId}</dd></> : null}
-                {result?.versionNumber !== undefined ? <><dt className="text-slate-500">Version</dt><dd className="text-slate-800">{result.versionNumber}</dd></> : null}
+                {result?.versionNumber !== undefined ? <><dt className="text-slate-500">バージョン</dt><dd className="text-slate-800">{result.versionNumber}</dd></> : null}
                 {result?.contentHash ? <><dt className="text-slate-500">Content hash</dt><dd className="truncate font-mono text-slate-800">{result.contentHash}</dd></> : null}
-                {result?.status ? <><dt className="text-slate-500">Status</dt><dd className="text-slate-800">{result.status}</dd></> : null}
+                {result?.status ? <><dt className="text-slate-500">状態</dt><dd className="text-slate-800">{result.status}</dd></> : null}
               </dl>
               {result && Object.keys(result).length === 0 ? (
                 <p className="mx-auto mt-3 max-w-md rounded-lg bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500">
-                  XRift CLIは正常終了しました。識別子はCLIの出力に含まれていなかったため、推測せずに完了のみを記録します。
+                  公開処理は完了しましたが、公開先IDを取得できませんでした。
                 </p>
               ) : null}
               {result?.url ? (
@@ -942,8 +942,8 @@ export function VisualUploadDialog({
               </h3>
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
                 {unresolvedUploadAttempt
-                  ? "前回の送信がXRiftへ届いたかどうかを判断できないため、二重公開を避けて送信を止めています。"
-                  : error || "処理を再実行するか、Editorへ戻って診断を確認してください。"}
+                  ? "前回の公開結果が不明です。二重公開を防ぐため、送信を止めています。"
+                  : error || "やり直すか、エディターに戻って診断を確認してください。"}
               </p>
               {!unresolvedUploadAttempt && failure?.detail ? (
                 <div className="mx-auto mt-5 max-w-2xl text-left">
@@ -977,11 +977,11 @@ export function VisualUploadDialog({
                     XRiftで公開状況を確認してください
                   </p>
                   <p className="mt-1 text-xs leading-5 text-amber-800">
-                    すでに公開されている場合は、解除せずEditorへ戻ってください。公開されていなければ、前回の試行を解除して送信し直せます。
+                    すでに公開されている場合は、解除せず編集に戻ってください。公開されていないことを確認できた場合に限り、送信の保留を解除してやり直せます。
                   </p>
                   {attemptCleared ? (
                     <p className="mt-2 rounded border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-xs leading-5 text-emerald-800">
-                      前回の試行を解除しました。「準備を再確認」から送信し直せます。
+                      送信の保留を解除しました。「準備を再確認」からやり直せます。
                     </p>
                   ) : null}
                   {clearAttemptError ? (
@@ -1021,7 +1021,7 @@ export function VisualUploadDialog({
                           解除中
                         </>
                       ) : (
-                        "公開されていないので前回の試行を解除する"
+                        "未公開を確認して送信保留を解除"
                       )}
                     </button>
                   ) : null}
@@ -1042,10 +1042,10 @@ export function VisualUploadDialog({
               />
               <div className="min-w-0">
                 <div className="text-xs font-semibold text-emerald-900">
-                  公開用ステージングへコピー済み
+                  公開用サムネイルを準備しました
                 </div>
                 <div className="mt-0.5 text-xs leading-5 text-emerald-800">
-                  サムネイルのコピー元とコピー先のSHA-256が一致しました。
+                  元の画像と公開用の画像が一致することを確認しました。
                 </div>
                 <code className="mt-0.5 block truncate text-xs text-emerald-700">
                   {thumbnailStagingSha256}
@@ -1087,7 +1087,7 @@ export function VisualUploadDialog({
                 onClick={onClose}
                 className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
               >
-                Editorへ戻る
+                編集に戻る
               </button>
             ) : stage === "failed" || stage === "cancelled" ? (
               <>
@@ -1107,7 +1107,7 @@ export function VisualUploadDialog({
                   disabled={thumbnailBusy}
                   className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
                 >
-                  Editorへ戻る
+                  編集に戻る
                 </button>
                 <button
                   type="button"
@@ -1163,8 +1163,8 @@ export function VisualUploadDialog({
         errorDetail: failure?.detail,
         diagnostics: thumbnailStagingSha256
           ? [
-              "公開用ステージングへコピー済み",
-              "サムネイルのコピー元とコピー先のSHA-256が一致しました。",
+              "公開用サムネイルを準備しました",
+              "元の画像と公開用の画像が一致することを確認しました。",
               `SHA-256: ${thumbnailStagingSha256}`,
             ]
           : [],

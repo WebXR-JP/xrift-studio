@@ -58,9 +58,9 @@ export const RUNTIME_SUPPORT_BADGE: Partial<
   >
 > = {
   ignored: {
-    label: "Play未対応",
+    label: "実行未対応",
     title:
-      "Play の実行エンジンがこの operation を実行しません。詳細は右の Diagnostics を確認してください",
+      "このノードは実行できません。「問題の一覧」を確認してください。",
     className: "border-amber-500/50 bg-amber-500/15 text-amber-200",
   },
   conditional: {
@@ -69,9 +69,9 @@ export const RUNTIME_SUPPORT_BADGE: Partial<
     // required reads as an error the author cannot find. What it actually
     // depends on is the Entity the graph is attached to, which the banner
     // above the canvas already names.
-    label: "付け先しだい",
+    label: "対象の設定が必要",
     title:
-      "このノードは実行されます。実際に何が動くかは、このグラフを付けた Entity が持つ Model・Material・音源などで決まります",
+      "操作に対応するモデルや音源などを、対象のEntityに追加してください。",
     className: "border-slate-400/40 bg-slate-400/10 text-slate-300",
   },
 };
@@ -111,13 +111,13 @@ export const CATEGORY_MINIMAP_COLOR: Record<GraphNodeCategory, string> = {
 };
 
 export const CATEGORY_LABEL: Record<GraphNodeCategory, string> = {
-  event: "イベント",
-  flow: "フロー",
+  event: "きっかけ",
+  flow: "処理の流れ",
   animation: "アニメーション",
   variable: "変数",
   pointer: "glTFプロパティ",
-  math: "数値",
-  entity: "Entity操作",
+  math: "計算と条件",
+  entity: "Entityの操作",
   extension: "拡張",
 };
 
@@ -150,6 +150,8 @@ export const FIT_VIEW_OPTIONS = { padding: 0.25 } as const;
  * so the two never drift apart in the author's head.
  */
 export const SOCKET_LABELS: Readonly<Record<string, string>> = {
+  true: "成立",
+  false: "不成立",
   in: "入力",
   out: "出力",
   done: "完了後",
@@ -160,6 +162,9 @@ export const SOCKET_LABELS: Readonly<Record<string, string>> = {
   loopBody: "繰り返す先",
   default: "その他",
   condition: "条件",
+  isValid: "取得できたか",
+  p1: "変化の調整点1",
+  p2: "変化の調整点2",
   selection: "選ぶ番号",
   duration: "秒数",
   delay: "待機ID",
@@ -177,10 +182,10 @@ export const SOCKET_LABELS: Readonly<Record<string, string>> = {
   currentCount: "通った回数",
   remainingInputs: "残りの入力",
   lastRemainingTime: "残り秒数",
-  event: "イベント",
+  event: "きっかけ",
   timeSinceStart: "開始からの秒",
   timeSinceLastTick: "前フレームからの秒",
-  material: "Material",
+  material: "マテリアル",
   a: "A",
   b: "B",
   c: "C",
@@ -250,21 +255,23 @@ export const CANVAS_NAVIGATION = {
  * only says they are different.
  */
 const SOCKET_HINTS: Readonly<Record<string, string>> = {
-  in: "ここへ前のノードの流れをつなぎます",
+  true: "条件がtrueのときに進みます。",
+  false: "条件がfalseのときに進みます。",
+  in: "前の処理から線をつなぎます。",
   out: "この操作を始めた直後に、次のノードへ進みます",
   done: "この操作が終わってから、次のノードへ進みます",
-  err: "この操作ができなかったときに、次のノードへ進みます",
+  err: "処理に失敗したときに進みます",
   cancel: "ここへ流れが来ると、待機を取り消します",
   reset: "ここへ流れが来ると、数えた回数や状態を戻します",
-  completed: "必要な入力がすべて揃ってから進みます",
+  completed: "入力待ちや繰り返しが終わると進みます。",
   loopBody: "繰り返しの 1 回ごとに、ここから先が動きます",
   default: "どの番号にも当てはまらなかったときに進みます",
   condition: "true か false を出すノードをつなぎます",
   selection: "整数を出すノードをつなぎます。その番号の出力へ進みます",
-  duration: "秒数。0 ならその場で、正の値ならその時間をかけて変わります",
-  delay: "取り消したい待機の ID。「指定した秒だけ待つ」の待機ID からつなぎます",
+  duration: "変化にかける秒数。0なら即時に変わります",
+  delay: "取り消したい待機の ID。「指定時間待つ」の待機ID からつなぎます",
   lastDelay: "この待機の ID。「待機を取り消す」の待機ID へつなげます",
-  value: "書き込む値。数を出すノードをつないでも、直接入力してもかまいません",
+  value: "書き込む値。直接入力するか、値の出力をつなぎます",
   animation: "再生するクリップの番号",
   startTime: "クリップの何秒目から再生するか",
   endTime: "クリップの何秒目で止めるか",
@@ -272,16 +279,16 @@ const SOCKET_HINTS: Readonly<Record<string, string>> = {
   speed: "再生の速さ。1 が等速、2 で倍速",
   n: "何回まで通すか",
   startIndex: "繰り返しの開始番号",
-  endIndex: "繰り返しの終了番号",
-  index: "いま何回目かを出します。他のノードの値としてつなげます",
+  endIndex: "繰り返しを終える番号。この番号自体は実行しません。",
+  index: "現在の繰り返し番号です。開始番号から順に増えます。",
   currentCount: "ここまでに通した回数を出します",
   remainingInputs: "あと何本の入力を待っているかを出します",
   lastRemainingTime: "次に通せるようになるまでの残り秒数を出します",
   timeSinceStart: "ワールドが始まってからの秒数を出します",
   timeSinceLastTick:
-    "前のフレームからの秒数を出します。速さを掛けると、フレームレートに関わらず同じ速度で動きます",
+    "前のフレームからの秒数です。速さを掛けると移動量になります",
   isValid: "変数を読めたかどうかを出します",
-  material: "書き込む先の Material。下のピッカーで選びます",
+  material: "書き込む先のマテリアル。下の選択欄で選びます",
   p1: "補間の効き方を決める制御点。0〜1 の間で指定します",
   p2: "補間の効き方を決める制御点。0〜1 の間で指定します",
   event: "このノードが動いたことを値として出します",
@@ -298,17 +305,17 @@ function socketHint(socket: string, kind: "flow" | "value", side: "left" | "righ
     // say whether the author is looking at an order, a choice or a wait.
     (/^\d+$/.test(socket) && kind === "flow"
       ? side === "right"
-        ? "上から数えてこの位置の行き先です。ノードによって、順番に進むか、番号で選ばれます"
-        : "この位置の入力です。ここへ流れが来たことを、このノードが数えます"
+        ? "この番号の出力につないだ処理へ進みます"
+        : "この番号の入力が届いたことを記録します"
       : undefined);
   const role =
     kind === "flow"
       ? side === "left"
-        ? "flow の入力"
-        : "flow の出力"
+        ? "処理の入力"
+        : "処理の出力"
       : side === "left"
-        ? "value の入力"
-        : "value の出力";
+        ? "値の入力"
+        : "値の出力";
   return hint ? `${socket}（${role}）\n${hint}` : `${socket}（${role}）`;
 }
 
@@ -356,14 +363,14 @@ export function InteractivityNodeCard({ data, selected }: NodeProps<GraphFlowNod
           </p>
           {unreached ? (
             <span
-              title="タイムラインの範囲内では、このノードは一度も動きませんでした"
+              title="表示中の時間内では実行されていません"
               className="shrink-0 rounded border border-slate-400/40 bg-slate-400/10 px-1.5 py-px text-[9px] font-semibold text-slate-300"
             >
               未到達
             </span>
           ) : reachedSeconds === undefined ? null : (
             <span
-              title="タイムラインの実行で、このノードが最初に動いた時刻です"
+              title="最初に実行された時刻です"
               className="shrink-0 rounded border border-emerald-400/40 bg-emerald-400/10 px-1.5 py-px text-[9px] font-semibold tabular-nums text-emerald-200"
             >
               {Math.round(reachedSeconds * 100) / 100}s

@@ -122,7 +122,7 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
   },
   {
     id: "selection.select-all",
-    label: "SceneのEntityをすべて選択",
+    label: "シーンのEntityをすべて選択",
     category: "edit",
     bindings: [{ key: "a", primary: true }],
   },
@@ -140,7 +140,7 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
   },
   {
     id: "entity.create-primitive",
-    label: "Primitiveを作成",
+    label: "基本形状を追加",
     category: "edit",
     bindings: [],
   },
@@ -158,61 +158,61 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
   },
   {
     id: "prefab.create",
-    label: "Prefabを作成",
+    label: "プレハブを作成",
     category: "edit",
     bindings: [],
   },
   {
     id: "asset.create-folder",
-    label: "Asset Folderを作成",
+    label: "Assetsにフォルダーを作成",
     category: "edit",
     bindings: [],
   },
   {
     id: "asset.create-material",
-    label: "Materialを作成",
+    label: "マテリアルを作成",
     category: "edit",
     bindings: [],
   },
   {
     id: "asset.create-particle",
-    label: "Particleを作成",
+    label: "パーティクルを作成",
     category: "edit",
     bindings: [],
   },
   {
     id: "asset.create-interactivity",
-    label: "Interactivity Graphを作成",
+    label: "ノードグラフを作成",
     category: "edit",
     bindings: [],
   },
   {
     id: "asset.edit-interactivity",
-    label: "Interactivity Graphを編集",
+    label: "ノードグラフを編集",
     category: "edit",
     bindings: [],
   },
   {
     id: "asset.create-script",
-    label: "Scriptを作成",
+    label: "スクリプトを作成",
     category: "edit",
     bindings: [],
   },
   {
     id: "asset.edit-script",
-    label: "Scriptを編集",
+    label: "スクリプトを編集",
     category: "edit",
     bindings: [],
   },
   {
     id: "asset.edit-shader",
-    label: "GLSL Shaderを編集",
+    label: "GLSL シェーダーを編集",
     category: "edit",
     bindings: [],
   },
   {
     id: "asset.import",
-    label: "AssetをImport",
+    label: "素材を読み込み",
     category: "edit",
     bindings: [],
   },
@@ -296,7 +296,7 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
   },
   {
     id: "play.toggle",
-    label: "Play開始／停止",
+    label: "動作確認開始／停止",
     category: "play",
     // Ctrl/Cmd+Enter is the way out of a running World. The official player
     // claims every unmodified key while Play runs - that is what stops arrow

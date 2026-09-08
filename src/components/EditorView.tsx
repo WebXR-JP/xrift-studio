@@ -301,7 +301,7 @@ export function EditorView({
       });
       toast({
         kind: "error",
-        title: "公開準備を確認できませんでした",
+        title: "公開前の確認を完了できませんでした",
         description: "xrift.json とサムネイルを確認してください",
       });
     } finally {
@@ -320,7 +320,7 @@ export function EditorView({
       if (result.code === 0) {
         toast({
           kind: "success",
-          title: "アイテムのセキュリティチェックに通過しました",
+          title: "アイテムのセキュリティチェックが完了しました",
         });
       } else {
         toast({
@@ -429,7 +429,7 @@ export function EditorView({
             className="flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50"
           >
             <ArrowLeft size={12} strokeWidth={2} />
-            ライブラリ
+                            プロジェクト一覧
           </button>
           <span className="text-zinc-300">/</span>
           <div>
@@ -494,10 +494,10 @@ export function EditorView({
               onClick={handleStartDev}
               disabled={devStarting || busy}
               className="flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-              title="ローカルで起動してブラウザでプレビュー"
+              title="このPCで起動し、ブラウザで動作を確認します"
             >
               <Play size={11} fill="currentColor" strokeWidth={0} />
-              {devStarting ? "起動中…" : "実行"}
+              {devStarting ? "起動中…" : "動作確認"}
             </button>
           )}
           <button
@@ -513,7 +513,7 @@ export function EditorView({
             type="button"
             onClick={handleOpenTerminal}
             className="flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
-            title="このプロジェクトのフォルダでターミナルを開く"
+            title="このプロジェクトのフォルダーでターミナルを開く"
           >
             <TerminalSquare size={12} strokeWidth={2} />
             ターミナル
@@ -544,11 +544,11 @@ export function EditorView({
             type="button"
             onClick={handleUpload}
             disabled={busy || checkingPublish || !user}
-            title={!user ? "ログインしてください" : "XRift にアップロード"}
+            title={!user ? "公開するにはXRiftにログインしてください" : "XRiftに公開"}
             className="flex items-center gap-1.5 rounded-md bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-violet-500 disabled:opacity-50"
           >
             <Upload size={12} strokeWidth={2} />
-            {checkingPublish ? "公開情報を確認中…" : "アップロード"}
+            {checkingPublish ? "公開情報を確認中…" : "XRiftへ公開"}
           </button>
         </div>
       </header>
@@ -557,7 +557,7 @@ export function EditorView({
         <aside className="flex w-64 shrink-0 flex-col border-r border-zinc-200 bg-white">
           <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-              Files
+              ファイル
             </span>
             <button
               type="button"
@@ -700,7 +700,7 @@ export function EditorView({
       />
       <SupportReportModal
         open={showErrorSupport}
-        context={{ currentScreen: "ファイル読込のエラー画面", errorMessage: error }}
+        context={{ currentScreen: "ファイル読み込みのエラー画面", errorMessage: error }}
         onClose={() => setShowErrorSupport(false)}
       />
       <SupportReportModal

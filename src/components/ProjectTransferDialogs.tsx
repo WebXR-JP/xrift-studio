@@ -160,7 +160,7 @@ function NameField({
       />
       {value.length > 0 && !valid ? (
         <span className="mt-2 block text-xs text-amber-700">
-          先頭を小文字英数字にし、小文字英数字とハイフンだけを使ってください。
+          半角の英小文字・数字・ハイフンが使えます。先頭は英小文字か数字にしてください。
         </span>
       ) : null}
       {valid && taken ? (
@@ -234,8 +234,8 @@ export function DuplicateProjectDialog({
       }
     >
       <p className="mt-1 text-xs text-zinc-600">
-        「{project.title || project.name}」の全ファイルを同じ保存先に別名でコピーします。
-        コピーは未公開の独立したプロジェクトになり、公開しても元のワールドには影響しません。
+        「{project.title || project.name}」を別名のフォルダーにコピーします。
+        コピーは未公開の独立したプロジェクトになり、公開しても元のプロジェクトの公開先には影響しません。
       </p>
       <NameField
         value={name}
@@ -258,12 +258,12 @@ export function DuplicateProjectDialog({
             className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200 disabled:opacity-50"
           />
           <span className="mt-1 block text-[11px] text-zinc-500">
-            空のままなら元のタイトルを引き継ぎます。あとから公開情報で変更できます。
+            空のままなら元のタイトルを引き継ぎます。あとから公開画面で変更できます。
           </span>
         </label>
       ) : (
         <p className="mt-3 text-[11px] text-zinc-500">
-          Classicプロジェクトのタイトルは xrift.json をそのまま引き継ぎます。
+          コード編集プロジェクトのタイトルは xrift.json をそのまま引き継ぎます。
         </p>
       )}
       <ErrorNote error={error} />
@@ -314,7 +314,7 @@ export function ImportProjectArchiveDialog({
   return (
     <DialogFrame
       titleId="import-project-title"
-      title="zipからプロジェクトを取り込む"
+      title="ZIPからプロジェクトを取り込む"
       icon={<PackageOpen size={16} strokeWidth={2} />}
       busy={busy}
       onClose={onClose}
@@ -335,8 +335,8 @@ export function ImportProjectArchiveDialog({
       <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
         <dt className="text-zinc-500">内容</dt>
         <dd className="text-zinc-800">
-          {inspection.kind === "item" ? "Item" : "World"} /{" "}
-          {inspection.format === "visual" ? "Visual" : "Classic"}
+          {inspection.kind === "item" ? "アイテム" : "ワールド"} /{" "}
+          {inspection.format === "visual" ? "ビジュアル編集" : "コード編集"}
         </dd>
         <dt className="text-zinc-500">タイトル</dt>
         <dd className="truncate text-zinc-800">{inspection.title || "（未設定）"}</dd>
@@ -361,7 +361,7 @@ export function ImportProjectArchiveDialog({
       <p className="mt-3 text-[11px] text-zinc-500">
         取り込んだプロジェクトは未公開の状態から始まります。
         {inspection.format === "classic"
-          ? " Classicは node_modules を含まないので、初回の起動前にプロジェクトフォルダーで依存関係をインストールしてください。"
+          ? " コード編集プロジェクトにはnode_modulesが含まれません。最初の動作確認の前に、プロジェクトフォルダーで必要なパッケージをインストールしてください。"
           : ""}
       </p>
       <ErrorNote error={error} />
@@ -435,7 +435,7 @@ export function ImportProjectRepositoryDialog({
         自分の保存先に新しいプロジェクトとしてコピーします。Git の履歴は持ち込みません。
       </p>
       <label className="mt-4 block">
-        <span className="text-sm font-medium text-zinc-700">Repository URL</span>
+        <span className="text-sm font-medium text-zinc-700">リポジトリのURL</span>
         <input
           autoFocus
           type="url"
@@ -450,11 +450,11 @@ export function ImportProjectRepositoryDialog({
         />
         {url.length > 0 && !urlValid ? (
           <span className="mt-2 block text-xs text-amber-700">
-            HTTPS または git SSH の URL を入力してください。
+            HTTPSまたはSSH形式のGit URLを入力してください。
           </span>
         ) : (
           <span className="mt-1 block text-[11px] text-zinc-500">
-            非公開リポジトリは、この PC の git が認証できる場合だけ取得できます。
+            非公開リポジトリを取り込むには、このPCのGitで認証を済ませてください。
           </span>
         )}
       </label>
@@ -469,7 +469,7 @@ export function ImportProjectRepositoryDialog({
         existingNames={existingNames}
       />
       <p className="mt-3 text-[11px] text-zinc-500">
-        取り込んだプロジェクトは未公開の状態から始まります。Classic は node_modules を含まないので、初回の起動前に依存関係をインストールしてください。
+        取り込んだプロジェクトは未公開になります。コード編集プロジェクトでは、最初の動作確認の前に必要なパッケージをインストールしてください。
       </p>
       <ErrorNote error={error} />
     </DialogFrame>
@@ -510,8 +510,7 @@ export function ExportProjectResultDialog({ result, onOpenFolder, onClose }: Exp
       }
     >
       <p className="mt-1 text-xs text-zinc-600">
-        「{result.projectLabel}」を1つのzipにまとめました。このファイルを渡すと、相手のXRift
-        Studioで「zipから取り込む」からプロジェクトとして開けます。
+        「{result.projectLabel}」をZIPに書き出しました。別のXRift Studioで開くには、「ZIPから取り込む」を選んでください。
       </p>
       <p className="mt-3 truncate font-mono text-[11px] text-zinc-700" title={result.archivePath}>
         {fileName}

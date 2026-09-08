@@ -112,7 +112,7 @@ export const OPEN_BRUSH_RENDERER = OPEN_BRUSH_RUNTIME_PACKAGE;
 export const OPEN_BRUSH_PUBLISH_PERMISSION: PublishPermissionRequirement = {
   feature: "OpenBrush",
   reason:
-    "OpenBrushのブラシはthree-icosaの難読化されたコードを含み、ブラシごとのShaderとTextureを配布元から読み込みます",
+    "OpenBrushのブラシはthree-icosaの難読化されたコードを含み、ブラシごとのシェーダーとテクスチャを配布元から読み込みます",
   // Each brush names its own shader and texture files, so their URLs are built
   // per brush rather than written as literals. The analyzer reports that as
   // `no-network-without-permission` no matter which hosts are allowed, so the

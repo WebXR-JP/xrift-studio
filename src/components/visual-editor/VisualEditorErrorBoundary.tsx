@@ -113,7 +113,7 @@ export class VisualEditorErrorBoundary extends Component<
 
   render(): ReactNode {
     const {
-      backLabel = "プロジェクトライブラリへ戻る",
+      backLabel = "プロジェクト一覧に戻る",
       children,
       featureName = "ビジュアルエディター",
       onBack,
@@ -141,7 +141,7 @@ export class VisualEditorErrorBoundary extends Component<
             </span>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-600">
-                Visual Editor
+                ビジュアルエディター
               </p>
               <p className="mt-1 flex items-center gap-1.5 text-sm text-zinc-500">
                 <PanelsTopLeft size={15} strokeWidth={1.8} aria-hidden="true" />
@@ -168,7 +168,7 @@ export class VisualEditorErrorBoundary extends Component<
             制作データはそのまま保持されています。
             {requiresReload
               ? " 接続が戻った後にアプリを再読み込みしてください。"
-              : " Editorの表示を再試行するか、前の画面へ戻ってプロジェクトを開き直してください。"}
+              : " エディターを再表示するか、前の画面に戻ってプロジェクトを開き直してください。"}
           </p>
 
           <div className="mt-7 grid min-w-0 gap-3 sm:grid-cols-2">
@@ -178,7 +178,7 @@ export class VisualEditorErrorBoundary extends Component<
               className="inline-flex min-h-11 min-w-0 w-full items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-center text-sm font-semibold text-white transition-colors hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2"
             >
               <RotateCcw size={17} strokeWidth={1.9} aria-hidden="true" />
-              {requiresReload ? "アプリを再読み込み" : "Editorを再試行"}
+              {requiresReload ? "アプリを再読み込み" : "エディターを再表示"}
             </button>
             <button
               type="button"
@@ -194,14 +194,14 @@ export class VisualEditorErrorBoundary extends Component<
               className="inline-flex min-h-11 min-w-0 w-full items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-center text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 sm:col-span-2 sm:justify-self-start sm:px-6"
             >
               <LifeBuoy size={17} strokeWidth={1.9} aria-hidden="true" />
-              ヘルプセンターと報告
+              ヘルプと報告
             </button>
           </div>
 
           <p className="mt-6 border-t border-zinc-100 pt-5 text-xs leading-5 text-zinc-500">
             {requiresReload
               ? "再読み込み後も同じ状態が続く場合は、接続を確認してからもう一度お試しください。"
-              : "同じ状態が続く場合は、一度前の画面へ戻ってからEditorを開き直してください。"}
+              : "同じ状態が続く場合は、一度前の画面へ戻ってからエディターを開き直してください。"}
           </p>
         </section>
       </main>

@@ -35,14 +35,14 @@ test("water store supports filtering, live preview, install failure and retry", 
     (await import(/* @vite-ignore */ path)).mountWaterStore();
   });
   const search = page.getByRole("textbox", { name: "Water Shaderを検索" });
-  await search.fill("Rainy Harbor");
-  await expect(page.getByRole("heading", { name: "Rainy Harbor", exact: true })).toBeVisible();
+  await search.fill("雨の港");
+  await expect(page.getByRole("heading", { name: "雨の港", exact: true })).toBeVisible();
   await expect(page.locator("aside canvas")).toBeVisible();
-  await expect(page.getByRole("img", { name: "水面シェーダーの実描画プレビュー" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "Water Shaderの実描画プレビュー" })).toBeVisible();
   await search.fill("no-such-water");
   await expect(page.getByText("条件に合うWater Shaderがありません")).toBeVisible();
-  await search.fill("Ocean Waves");
-  const add = page.getByRole("button", { name: "Ocean WavesをMaterialへ追加", exact: true });
+  await search.fill("波のある海");
+  const add = page.getByRole("button", { name: "波のある海をマテリアルへ追加", exact: true });
   await add.click();
   await expect(search).toBeDisabled();
   await expect(page.getByRole("combobox", { name: "Water Shaderのカテゴリ" })).toBeDisabled();
@@ -54,7 +54,7 @@ test("water store supports filtering, live preview, install failure and retry", 
   await expect(page.getByRole("alert")).toContainText("Test install failed");
   await add.click();
   await settle(false);
-  await expect(page.getByText("「Ocean Waves」をMaterialとして追加しました。", { exact: false })).toBeVisible();
+  await expect(page.getByText("「波のある海」をマテリアルとして追加しました。", { exact: false })).toBeVisible();
   await expect(search).toBeEnabled();
   await page.screenshot({ path: "test-results/water-shaders.png" });
   expect(errors).toEqual([]);

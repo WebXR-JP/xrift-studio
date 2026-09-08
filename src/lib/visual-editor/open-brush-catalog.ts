@@ -95,7 +95,7 @@ export const OPEN_BRUSH_CATALOG: readonly OpenBrushCatalogEntry[] = BRUSHES.map(
       sourceMaterialIndex,
       sourceNodeName: `brush_${brushName}_g0_b0`,
       category,
-      description: `${openBrushCategoryLabel(category)}向けのOpen Brush公式ブラシです。専用shaderと実ストローク形状を保持します。`,
+      description: `${openBrushCategoryLabel(category)}向けのOpen Brush公式ブラシです。専用シェーダーと実ストローク形状を保持します。`,
       thumbnailUrl: openBrushCatalogThumbnailUrl(brushGuid),
       shader: {
         kind: "openbrush",

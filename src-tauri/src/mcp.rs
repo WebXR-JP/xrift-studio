@@ -286,13 +286,13 @@ pub fn start_broker(app: &AppHandle) -> Result<(), String> {
         return Ok(());
     };
     let listener = std::net::TcpListener::bind(("127.0.0.1", 0))
-        .map_err(|error| format!("AI editor bridgeを開始できません: {error}"))?;
+        .map_err(|error| format!("AI編集用の接続を開始できません: {error}"))?;
     listener
         .set_nonblocking(true)
-        .map_err(|error| format!("AI editor bridgeを初期化できません: {error}"))?;
+        .map_err(|error| format!("AI編集用の接続を初期化できません: {error}"))?;
     let port = listener
         .local_addr()
-        .map_err(|error| format!("AI editor bridgeのportを取得できません: {error}"))?
+        .map_err(|error| format!("AI編集用のポートを取得できません: {error}"))?
         .port();
     let rendezvous_path = rendezvous_path(app)?;
     let rendezvous = XriftMcpRendezvous {
@@ -347,10 +347,10 @@ pub async fn complete_xrift_mcp_request(
         .lock()
         .await
         .remove(&response.id)
-        .ok_or_else(|| "AI編集requestは完了済みか、時間切れです".to_string())?;
+        .ok_or_else(|| "AI編集の要求は完了済みか、時間切れです".to_string())?;
     sender
         .send(response)
-        .map_err(|_| "AI editor bridgeへ結果を返せませんでした".to_string())
+        .map_err(|_| "AI編集用の接続へ結果を返せませんでした".to_string())
 }
 
 #[tauri::command]
@@ -375,7 +375,7 @@ pub async fn detect_xrift_mcp_clients(app: AppHandle) -> Result<Vec<XriftMcpClie
             .collect()
     })
     .await
-    .map_err(|error| format!("AI clientの確認に失敗しました: {error}"))
+    .map_err(|error| format!("AIクライアントの確認に失敗しました: {error}"))
 }
 
 #[tauri::command]
@@ -384,19 +384,19 @@ pub async fn register_xrift_mcp_client(
     client_id: String,
 ) -> Result<XriftMcpClientStatus, String> {
     let client = SupportedMcpClient::parse(&client_id)
-        .ok_or_else(|| "対応していないAI clientです".to_string())?;
+        .ok_or_else(|| "対応していないAIクライアントです".to_string())?;
     let sidecar_source_path = resolve_sidecar_path()?;
     let sidecar_install_directory = app
         .path()
         .app_data_dir()
-        .map_err(|error| format!("app data pathを取得できません: {error}"))?
+        .map_err(|error| format!("アプリのデータ保存先を取得できません: {error}"))?
         .join("mcp")
         .join("bin");
     let rendezvous_path = rendezvous_path(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
         if is_managed_config_client(client) && !managed_config_client_installed(client) {
             return Err(format!(
-                "{}が見つかりません。先にclientをinstallしてください",
+                "{}が見つかりません。先にAIクライアントをインストールしてください",
                 client.label()
             ));
         }
@@ -423,7 +423,7 @@ pub async fn register_xrift_mcp_client(
         }
         let executable = find_client_executable(client).ok_or_else(|| {
             format!(
-                "{}が見つかりません。先にclientをinstallしてください",
+                "{}が見つかりません。先にAIクライアントをインストールしてください",
                 client.label()
             )
         })?;
@@ -454,12 +454,12 @@ pub async fn register_xrift_mcp_client(
             }
         }
         let arguments = registration_arguments(client, &sidecar_path, &rendezvous_path)
-            .ok_or_else(|| "このAI clientはCLI登録に対応していません".to_string())?;
+            .ok_or_else(|| "このAIクライアントはCLI登録に対応していません".to_string())?;
         let status = run_client_command(&executable, &arguments)
             .map_err(|error| format!("{}への登録を開始できません: {error}", client.label()))?;
         if !status.success() {
             return Err(format!(
-                "{}へ登録できませんでした。client側のMCP設定を確認してください",
+                "{}へ登録できませんでした。AIクライアント側のMCP設定を確認してください",
                 client.label()
             ));
         }
@@ -475,7 +475,7 @@ pub async fn register_xrift_mcp_client(
         ))
     })
     .await
-    .map_err(|error| format!("AI clientへの登録に失敗しました: {error}"))?
+    .map_err(|error| format!("AIクライアントへの登録に失敗しました: {error}"))?
 }
 
 #[tauri::command]
@@ -492,13 +492,13 @@ pub async fn configure_xrift_ollama(
     model: String,
 ) -> Result<XriftOllamaConfigurationResult, String> {
     let integration = SupportedOllamaIntegration::parse(&integration_id)
-        .ok_or_else(|| "Ollamaで構成できないAI clientです".to_string())?;
+        .ok_or_else(|| "このAIクライアントはOllamaの設定に対応していません".to_string())?;
     if state
         .ollama_configuration_active
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
         .is_err()
     {
-        return Err("別のOllama構成を実行中です。完了後に再試行してください".to_string());
+        return Err("Ollamaの設定を実行中です。完了後に再試行してください".to_string());
     }
 
     let task = tauri::async_runtime::spawn_blocking(move || {
@@ -509,7 +509,7 @@ pub async fn configure_xrift_ollama(
         .ollama_configuration_active
         .store(false, Ordering::Release);
 
-    task.map_err(|error| format!("Ollama構成の実行に失敗しました: {error}"))?
+    task.map_err(|error| format!("Ollamaの設定を完了できませんでした: {error}"))?
 }
 
 fn registration_arguments(
@@ -554,7 +554,7 @@ async fn handle_broker_connection(
     let _connection_permit = state
         .connections
         .try_acquire()
-        .map_err(|_| "AI editor bridgeの同時接続数が上限に達しました".to_string())?;
+        .map_err(|_| "AI編集の同時接続数が上限に達しました".to_string())?;
     let (reader, mut writer) = stream.into_split();
     let reader = tokio::io::BufReader::new(reader);
     let mut line = String::new();
@@ -565,19 +565,19 @@ async fn handle_broker_connection(
             .read_line(&mut line),
     )
     .await
-    .map_err(|_| "AI editor bridge requestの受信が時間切れです".to_string())?
+    .map_err(|_| "AI編集の要求を時間内に受信できませんでした".to_string())?
     .map_err(|error| error.to_string())?;
     if bytes == 0 || bytes > MCP_MAX_MESSAGE_BYTES {
-        return Err("AI editor bridge requestのsizeが不正です".to_string());
+        return Err("AI編集の要求データのサイズが不正です".to_string());
     }
     let envelope: XriftMcpBrokerEnvelope = serde_json::from_str(&line)
-        .map_err(|_| "AI editor bridge requestが不正です".to_string())?;
+        .map_err(|_| "AI編集の要求データが不正です".to_string())?;
     if envelope.token != expected_token {
         return write_broker_error(
             &mut writer,
             envelope.request.id,
             "UNAUTHORIZED",
-            "AI editor bridgeの認証に失敗しました",
+            "AI編集用の接続の認証に失敗しました",
         )
         .await;
     }
@@ -616,7 +616,7 @@ async fn handle_broker_connection(
                 &mut writer,
                 envelope.request.id,
                 "EDITOR_BUSY",
-                "別のAI編集を処理中です。少し待ってから最新contextを取得してください",
+                "別のAI編集を処理中です。少し待ってから最新の編集状態を取得してください",
             )
             .await;
         }
@@ -637,7 +637,7 @@ async fn handle_broker_connection(
     };
     let emit_result = app
         .get_webview_window("main")
-        .ok_or_else(|| "main Editor windowが見つかりません".to_string())?
+        .ok_or_else(|| "エディターのウィンドウが見つかりません".to_string())?
         .emit(MCP_EVENT_NAME, event);
     if let Err(error) = emit_result {
         state.pending.lock().await.remove(&request_id);
@@ -645,7 +645,7 @@ async fn handle_broker_connection(
             &mut writer,
             request_id,
             "EDITOR_UNAVAILABLE",
-            &format!("Editorへrequestを渡せません: {error}"),
+            &format!("エディターに要求を送れません: {error}"),
         )
         .await;
     }
@@ -662,7 +662,7 @@ async fn handle_broker_connection(
             result: None,
             error: Some(editor_error(
                 "EDITOR_UNAVAILABLE",
-                "Editorがrequestを完了できませんでした",
+                "エディターで処理を完了できませんでした",
             )),
         },
         Err(_) => {
@@ -674,7 +674,7 @@ async fn handle_broker_connection(
                 result: None,
                 error: Some(editor_error(
                     "EDITOR_TIMEOUT",
-                    "Editorの応答が時間内に完了しませんでした",
+                    "エディターの応答が時間内に完了しませんでした",
                 )),
             }
         }
@@ -685,7 +685,7 @@ async fn handle_broker_connection(
             &mut writer,
             response.id,
             "RESPONSE_TOO_LARGE",
-            "Editorの応答がsize上限を超えました",
+            "エディターの応答がサイズの上限を超えました",
         )
         .await;
     }
@@ -781,14 +781,14 @@ fn rendezvous_path(app: &AppHandle) -> Result<PathBuf, String> {
     let root = app
         .path()
         .app_data_dir()
-        .map_err(|error| format!("app data pathを取得できません: {error}"))?;
+        .map_err(|error| format!("アプリのデータ保存先を取得できません: {error}"))?;
     Ok(root.join("mcp").join("rendezvous.json"))
 }
 
 fn write_private_json(path: &Path, value: &impl Serialize) -> Result<(), String> {
     let parent = path
         .parent()
-        .ok_or_else(|| "AI editor bridgeの保存先が不正です".to_string())?;
+        .ok_or_else(|| "AI接続情報の保存先が不正です".to_string())?;
     std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     let payload = serde_json::to_vec(value).map_err(|error| error.to_string())?;
     write_private_bytes(path, &payload)
@@ -891,7 +891,7 @@ fn client_update_status(client: SupportedMcpClient) -> XriftMcpClientStatus {
         installed: true,
         registered: true,
         needs_update: true,
-        message: "MCP serverを更新できます".to_string(),
+        message: "MCPサーバーを更新できます".to_string(),
     }
 }
 
@@ -1187,7 +1187,7 @@ fn register_managed_config_client(
     let original = if config_path.is_file() {
         let metadata = std::fs::metadata(&config_path).map_err(|error| error.to_string())?;
         if metadata.len() > MCP_MAX_MESSAGE_BYTES as u64 {
-            return Err(format!("{}の設定fileが大きすぎます", client.label()));
+            return Err(format!("{}の設定ファイルが大きすぎます", client.label()));
         }
         Some(std::fs::read(&config_path).map_err(|error| error.to_string())?)
     } else {
@@ -1208,7 +1208,7 @@ fn register_managed_config_client(
             merge_opencode_config(config, sidecar_path, rendezvous_path)?
         }
         SupportedMcpClient::Codex | SupportedMcpClient::ClaudeCode => {
-            return Err("このAI clientは設定file登録に対応していません".to_string());
+            return Err("このAIクライアントは設定ファイル登録に対応していません".to_string());
         }
     };
 
@@ -1227,7 +1227,7 @@ fn read_json_file(path: &Path) -> Result<Option<Value>, String> {
     }
     let metadata = std::fs::metadata(path).map_err(|error| error.to_string())?;
     if metadata.len() > MCP_MAX_MESSAGE_BYTES as u64 {
-        return Err("MCP設定fileが大きすぎます".to_string());
+        return Err("MCP設定ファイルが大きすぎます".to_string());
     }
     let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
     if bytes.is_empty() {
@@ -1246,14 +1246,14 @@ fn merge_mcp_servers_config(
 ) -> Result<Value, String> {
     let root = config
         .as_object_mut()
-        .ok_or_else(|| format!("{client_label}のMCP設定rootがobjectではありません"))?;
+        .ok_or_else(|| format!("{client_label}のMCP設定の最上位がJSONオブジェクトではありません"))?;
     if !root.contains_key("mcpServers") {
         root.insert("mcpServers".to_string(), json!({}));
     }
     let servers = root
         .get_mut("mcpServers")
         .and_then(Value::as_object_mut)
-        .ok_or_else(|| format!("{client_label}のmcpServers設定がobjectではありません"))?;
+        .ok_or_else(|| format!("{client_label}のmcpServers設定がJSONオブジェクトではありません"))?;
     servers.insert(
         MCP_SERVER_NAME.to_string(),
         json!({
@@ -1271,14 +1271,14 @@ fn merge_opencode_config(
 ) -> Result<Value, String> {
     let root = config
         .as_object_mut()
-        .ok_or_else(|| "OpenCodeのMCP設定rootがobjectではありません".to_string())?;
+        .ok_or_else(|| "OpenCodeのMCP設定の最上位がJSONオブジェクトではありません".to_string())?;
     if !root.contains_key("mcp") {
         root.insert("mcp".to_string(), json!({}));
     }
     let servers = root
         .get_mut("mcp")
         .and_then(Value::as_object_mut)
-        .ok_or_else(|| "OpenCodeのmcp設定がobjectではありません".to_string())?;
+        .ok_or_else(|| "OpenCodeのmcp設定がJSONオブジェクトではありません".to_string())?;
     servers.insert(
         MCP_SERVER_NAME.to_string(),
         json!({
@@ -1297,19 +1297,19 @@ fn merge_opencode_config(
 fn merge_opencode_ollama_config(mut config: Value, model: &str) -> Result<Value, String> {
     let root = config
         .as_object_mut()
-        .ok_or_else(|| "OpenCodeの設定rootがobjectではありません".to_string())?;
+        .ok_or_else(|| "OpenCodeの設定の最上位がJSONオブジェクトではありません".to_string())?;
     root.insert("model".to_string(), json!(format!("ollama/{model}")));
 
     let provider = root
         .entry("provider")
         .or_insert_with(|| json!({}))
         .as_object_mut()
-        .ok_or_else(|| "OpenCodeのprovider設定がobjectではありません".to_string())?;
+        .ok_or_else(|| "OpenCodeのprovider設定がJSONオブジェクトではありません".to_string())?;
     let ollama = provider
         .entry("ollama")
         .or_insert_with(|| json!({}))
         .as_object_mut()
-        .ok_or_else(|| "OpenCodeのOllama provider設定がobjectではありません".to_string())?;
+        .ok_or_else(|| "OpenCodeのOllama provider設定がJSONオブジェクトではありません".to_string())?;
 
     ollama.insert("npm".to_string(), json!("@ai-sdk/openai-compatible"));
     ollama.insert("name".to_string(), json!("Ollama"));
@@ -1317,18 +1317,18 @@ fn merge_opencode_ollama_config(mut config: Value, model: &str) -> Result<Value,
         .entry("options")
         .or_insert_with(|| json!({}))
         .as_object_mut()
-        .ok_or_else(|| "OpenCodeのOllama options設定がobjectではありません".to_string())?;
+        .ok_or_else(|| "OpenCodeのOllama options設定がJSONオブジェクトではありません".to_string())?;
     options.insert("baseURL".to_string(), json!("http://127.0.0.1:11434/v1"));
     let models = ollama
         .entry("models")
         .or_insert_with(|| json!({}))
         .as_object_mut()
-        .ok_or_else(|| "OpenCodeのOllama models設定がobjectではありません".to_string())?;
+        .ok_or_else(|| "OpenCodeのOllamaのモデルs設定がJSONオブジェクトではありません".to_string())?;
     let model_config = models
         .entry(model.to_string())
         .or_insert_with(|| json!({}))
         .as_object_mut()
-        .ok_or_else(|| "OpenCodeのOllama model設定がobjectではありません".to_string())?;
+        .ok_or_else(|| "OpenCodeのOllamaのモデル設定がJSONオブジェクトではありません".to_string())?;
     model_config.insert("name".to_string(), json!(model));
 
     Ok(config)
@@ -1342,7 +1342,7 @@ fn write_config_backup(
     let file_name = config_path
         .file_name()
         .and_then(OsStr::to_str)
-        .ok_or_else(|| format!("{client_label}の設定file名が不正です"))?;
+        .ok_or_else(|| format!("{client_label}の設定ファイル名が不正です"))?;
     let backup_path = config_path.with_file_name(format!("{file_name}.xrift-studio.backup"));
     let mut options = std::fs::OpenOptions::new();
     options.create_new(true).write(true);
@@ -1356,21 +1356,21 @@ fn write_config_backup(
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
         Err(error) => Err(error.to_string()),
     }
-    .map_err(|_| format!("{client_label}設定のbackupを作成できませんでした"))
+    .map_err(|_| format!("{client_label}設定のバックアップを作成できませんでした"))
 }
 
 fn install_registration_sidecar(source: &Path, directory: &Path) -> Result<PathBuf, String> {
     let payload = std::fs::read(source)
-        .map_err(|_| "XRift Studio MCP serverを読み込めませんでした".to_string())?;
+        .map_err(|_| "XRift Studio MCPサーバーを読み込めませんでした".to_string())?;
     let destination = registration_sidecar_destination_for_payload(&payload, directory);
     std::fs::create_dir_all(directory)
-        .map_err(|_| "MCP serverのinstall先を作成できませんでした".to_string())?;
+        .map_err(|_| "MCPサーバーのインストール先を作成できませんでした".to_string())?;
 
     if destination.is_file() {
         let installed = std::fs::read(&destination)
-            .map_err(|_| "install済みMCP serverを確認できませんでした".to_string())?;
+            .map_err(|_| "インストール済みのMCPサーバーを確認できませんでした".to_string())?;
         if installed != payload {
-            return Err("install済みMCP serverの内容を確認できませんでした".to_string());
+            return Err("インストール済みのMCPサーバーの内容を確認できませんでした".to_string());
         }
     } else {
         let mut options = std::fs::OpenOptions::new();
@@ -1382,26 +1382,26 @@ fn install_registration_sidecar(source: &Path, directory: &Path) -> Result<PathB
         }
         let mut file = options
             .open(&destination)
-            .map_err(|_| "MCP serverをinstallできませんでした".to_string())?;
+            .map_err(|_| "MCPサーバーをインストールできませんでした".to_string())?;
         file.write_all(&payload)
-            .map_err(|_| "MCP serverをinstallできませんでした".to_string())?;
+            .map_err(|_| "MCPサーバーをインストールできませんでした".to_string())?;
     }
 
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&destination, std::fs::Permissions::from_mode(0o700))
-            .map_err(|_| "MCP serverの実行権限を設定できませんでした".to_string())?;
+            .map_err(|_| "MCPサーバーの実行権限を設定できませんでした".to_string())?;
     }
 
     destination
         .canonicalize()
-        .map_err(|_| "installしたMCP serverを確認できませんでした".to_string())
+        .map_err(|_| "インストールしたMCPサーバーを確認できませんでした".to_string())
 }
 
 fn registration_sidecar_destination(source: &Path, directory: &Path) -> Result<PathBuf, String> {
     let payload = std::fs::read(source)
-        .map_err(|_| "XRift Studio MCP serverを読み込めませんでした".to_string())?;
+        .map_err(|_| "XRift Studio MCPサーバーを読み込めませんでした".to_string())?;
     Ok(registration_sidecar_destination_for_payload(
         &payload, directory,
     ))
@@ -1443,13 +1443,13 @@ fn detect_ollama() -> XriftOllamaStatus {
         .map(|output| parse_ollama_models(&output.stdout))
         .unwrap_or_default();
     let message = if !launch_supported {
-        "更新するとAI clientを構成できます"
+        "更新するとAIクライアントを設定できます"
     } else if !server_reachable {
-        "Ollamaはinstall済みですが起動していません"
+        "Ollamaが起動していません"
     } else if models.is_empty() {
-        "Ollamaを起動し、modelを追加してください"
+        "Ollamaを起動し、モデルを追加してください"
     } else {
-        "ローカルmodelを利用できます"
+        "ローカルモデルを利用できます"
     };
 
     XriftOllamaStatus {
@@ -1470,10 +1470,10 @@ fn configure_ollama_integration(
     model: &str,
 ) -> Result<XriftOllamaConfigurationResult, String> {
     let executable = find_ollama_executable()
-        .ok_or_else(|| "Ollamaが見つかりません。先にOllamaをinstallしてください".to_string())?;
+        .ok_or_else(|| "Ollamaが見つかりません。先にOllamaをインストールしてください".to_string())?;
     if !ollama_integration_client_available(integration) {
         return Err(format!(
-            "{}が見つかりません。先にclientをinstallしてください",
+            "{}が見つかりません。先にAIクライアントをインストールしてください",
             integration.label()
         ));
     }
@@ -1489,19 +1489,19 @@ fn configure_ollama_integration(
     }
     let models = parse_ollama_models(&list_output.stdout);
     if model.is_empty() || !models.iter().any(|candidate| candidate == model) {
-        return Err("選択したOllama modelが見つかりません。再検出してください".to_string());
+        return Err("選択したOllamaのモデルが見つかりません。再検出してください".to_string());
     }
     let show_output = run_ollama_command_output(&executable, &["show".into(), model.into()])
-        .map_err(|error| format!("Ollama modelの機能を確認できませんでした: {error}"))?;
+        .map_err(|error| format!("Ollamaのモデルの機能を確認できませんでした: {error}"))?;
     if !show_output.status.success() {
         return Err(command_failure_message(
-            "Ollama modelの機能を確認できませんでした",
+            "Ollamaのモデルの機能を確認できませんでした",
             &show_output,
         ));
     }
     if !ollama_model_supports_tools(&show_output.stdout) {
         return Err(
-            "このOllama modelはtool callingに対応していません。別のmodelを選んでください"
+            "このOllamaのモデルはツール呼び出しに対応していません。別のモデルを選んでください"
                 .to_string(),
         );
     }
@@ -1516,11 +1516,11 @@ fn configure_ollama_integration(
 
     let arguments = ollama_configuration_arguments(integration, model);
     let output = run_ollama_command_output(&executable, &arguments)
-        .map_err(|error| format!("Ollamaのclient構成を完了できません: {error}"))?;
+        .map_err(|error| format!("Ollamaのクライアント設定を完了できません: {error}"))?;
     if !output.status.success() {
         return Err(command_failure_message(
             &format!(
-                "Ollamaで{}を構成できませんでした。client側のmodel設定を確認してください",
+                "Ollamaで{}を設定できませんでした。AIクライアント側のモデル設定を確認してください",
                 integration.label()
             ),
             &output,
@@ -1531,7 +1531,7 @@ fn configure_ollama_integration(
         integration_id: integration.id().to_string(),
         integration_label: integration.label().to_string(),
         model: model.to_string(),
-        message: "構成しました。clientを起動または再起動してください".to_string(),
+        message: "設定しました。AIクライアントを起動または再起動してください".to_string(),
     })
 }
 
@@ -1547,7 +1547,7 @@ fn configure_opencode_ollama(model: &str) -> Result<XriftOllamaConfigurationResu
     let original = if config_path.is_file() {
         let metadata = std::fs::metadata(&config_path).map_err(|error| error.to_string())?;
         if metadata.len() > MCP_MAX_MESSAGE_BYTES as u64 {
-            return Err("OpenCodeの設定fileが大きすぎます".to_string());
+            return Err("OpenCodeの設定ファイルが大きすぎます".to_string());
         }
         Some(std::fs::read(&config_path).map_err(|error| error.to_string())?)
     } else {
@@ -1568,7 +1568,7 @@ fn configure_opencode_ollama(model: &str) -> Result<XriftOllamaConfigurationResu
         integration_id: SupportedOllamaIntegration::OpenCode.id().to_string(),
         integration_label: SupportedOllamaIntegration::OpenCode.label().to_string(),
         model: model.to_string(),
-        message: "構成しました。OpenCodeを再起動してください".to_string(),
+        message: "設定しました。OpenCodeを再起動してください".to_string(),
     })
 }
 
@@ -1805,7 +1805,7 @@ fn wait_for_client_command_status(child: &mut Child) -> Result<ExitStatus, Strin
             None => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err("client commandが時間内に完了しませんでした".to_string());
+                return Err("AIクライアントのコマンドが時間内に完了しませんでした".to_string());
             }
         }
     }
@@ -1873,7 +1873,7 @@ fn resolve_sidecar_path() -> Result<PathBuf, String> {
         .find(|path| path.is_file())
         .and_then(|path| path.canonicalize().ok())
         .ok_or_else(|| {
-            "XRift Studio MCP serverが見つかりません。アプリを再installしてください".to_string()
+            "XRift Studio MCPサーバーが見つかりません。アプリを再インストールしてください".to_string()
         })
 }
 
@@ -1882,7 +1882,7 @@ pub fn run_stdio_server() -> Result<(), String> {
     let stdin = std::io::stdin();
     let mut stdin = BufReader::new(stdin.lock());
     let mut stdout = std::io::stdout().lock();
-    let mut client_name = "AI client".to_string();
+    let mut client_name = "AIクライアント".to_string();
     let request_counter = AtomicU64::new(1);
     loop {
         let line = match read_limited_line(&mut stdin, MCP_MAX_MESSAGE_BYTES)

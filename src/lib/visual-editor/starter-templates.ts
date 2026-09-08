@@ -325,7 +325,7 @@ export const STARTER_WORLD_TEMPLATES = [
   {
     id: "xrift-official",
     name: "XRift公式サンプル",
-    description: "公式ClassicテンプレートのR3F / JSXをVisualへ変換した作例",
+    description: "XRift公式のコード編集テンプレートを、画面上で編集できるようにした作例です。",
     bundledAssetIds: [
       "xrift-official-duck",
       "xrift-official-bunny",
@@ -335,7 +335,7 @@ export const STARTER_WORLD_TEMPLATES = [
   {
     id: "blank",
     name: "空のワールド",
-    description: "床、メインライト1灯、Spawn Pointだけの最小構成",
+    description: "床、ライト1灯、開始位置だけを配置したシーンです。",
     bundledAssetIds: [],
   },
 ] as const satisfies readonly StarterWorldTemplateDefinition[];

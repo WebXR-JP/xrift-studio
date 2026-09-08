@@ -711,7 +711,7 @@ fn texture_specs(root: &Value, resolution: &str) -> Vec<DownloadSpec> {
 
 fn model_bundle_path(value: &str) -> Result<String, String> {
     if value.is_empty() || value.len() > 512 || value.contains('\\') {
-        return Err("Model bundleのファイル名が不正です".to_string());
+        return Err("モデルに同梱するファイルの名前が不正です".to_string());
     }
     let path = Path::new(value);
     if path.is_absolute()
@@ -719,7 +719,7 @@ fn model_bundle_path(value: &str) -> Result<String, String> {
             .components()
             .any(|component| !matches!(component, std::path::Component::Normal(_)))
     {
-        return Err("Model bundleが安全でないパスを参照しています".to_string());
+        return Err("モデルの同梱ファイルが安全でないパスを参照しています".to_string());
     }
     Ok(value.to_string())
 }
@@ -834,7 +834,7 @@ pub async fn get_external_store_asset_options(
         let kind = ambient_cg_asset_kind(asset.get("type"));
         if !matches!(kind, "hdri" | "texture") {
             return Err(
-                "この種類はまだXRift Studioへインストールできません（glTF形式のModelのみ対応）"
+                "この種類はまだXRift Studioに追加できません（glTF形式のモデルのみ対応）"
                     .to_string(),
             );
         }
@@ -848,7 +848,7 @@ pub async fn get_external_store_asset_options(
     let catalog = fetch_poly_haven_json("/assets").await?;
     let kind = asset_kind(catalog.get(id).and_then(|entry| entry.get("type")));
     if !matches!(kind, "hdri" | "texture" | "model") {
-        return Err("この種類はまだXRift Studioへインストールできません".to_string());
+        return Err("この種類はまだXRift Studioに追加できません".to_string());
     }
     let files = fetch_poly_haven_json(&format!("/files/{}", id)).await?;
     Ok(ExternalStoreAssetOptions {
@@ -1130,12 +1130,12 @@ async fn install_ambient_cg_asset(
     let kind = ambient_cg_asset_kind(metadata.get("type"));
     if kind == "model" {
         return Err(
-            "ambientCGのModelはOBJなどの形式のため、現在はHDRIとMaterialのみインストールできます"
+            "ambientCGでは、現在HDRIとマテリアルのみ追加できます。モデルの形式には対応していません"
                 .to_string(),
         );
     }
     if !matches!(kind, "hdri" | "texture") {
-        return Err("この種類はまだXRift Studioへインストールできません".to_string());
+        return Err("この種類はまだXRift Studioに追加できません".to_string());
     }
     let downloads = ambient_cg_downloads(metadata);
     let download = if kind == "hdri" {
@@ -1163,7 +1163,7 @@ async fn install_ambient_cg_asset(
             .map(str::trim)
             .is_some_and(|value| !value.is_empty())
         {
-            return Err("MaterialではSkyboxのファイル形式を指定できません".to_string());
+            return Err("マテリアルにはSkyboxのファイル形式を指定できません".to_string());
         }
         String::new()
     };
@@ -1274,7 +1274,7 @@ fn make_model_self_contained(staged: &mut BTreeMap<String, StagedDownload>) -> R
         .and_then(Value::as_str)
         .unwrap_or_default();
     if !version.starts_with("2.") {
-        return Err("Poly Haven modelがglTF 2.xではありません".to_string());
+        return Err("Poly HavenのモデルがglTF 2.x形式ではありません".to_string());
     }
     let dependencies = staged
         .iter()
@@ -1333,7 +1333,7 @@ pub async fn install_external_store_asset(
         .ok_or_else(|| "Poly Havenにアセットが見つかりません".to_string())?;
     let kind = asset_kind(metadata.get("type"));
     if !matches!(kind, "hdri" | "texture" | "model") {
-        return Err("この種類はまだXRift Studioへインストールできません".to_string());
+        return Err("この種類はまだXRift Studioに追加できません".to_string());
     }
     let files = fetch_poly_haven_json(&format!("/files/{}", id)).await?;
     let specs = if kind == "hdri" {
@@ -1355,7 +1355,7 @@ pub async fn install_external_store_asset(
             .map(str::trim)
             .is_some_and(|value| !value.is_empty())
         {
-            return Err("MaterialではSkyboxのファイル形式を指定できません".to_string());
+            return Err("マテリアルにはSkyboxのファイル形式を指定できません".to_string());
         }
         texture_specs(&files, &resolution)
     } else {
@@ -1365,7 +1365,7 @@ pub async fn install_external_store_asset(
             .map(str::trim)
             .is_some_and(|value| !value.is_empty())
         {
-            return Err("Modelではファイル形式を指定できません".to_string());
+            return Err("モデルにはファイル形式を指定できません".to_string());
         }
         model_specs(&files, &resolution)
     };

@@ -277,7 +277,7 @@ export function ProjectLibrary({
             title="設定"
             aria-label={
               appUpdate.phase === "available"
-                ? "設定、新しいアップデートがあります"
+                ? "設定（アップデートあり）"
                 : "設定"
             }
           >
@@ -481,17 +481,17 @@ export function ProjectLibrary({
               disabled={busy || transferBusy}
               onClick={() => void startImport()}
               className="flex min-h-20 shrink-0 items-center gap-3 rounded-lg border border-dashed border-zinc-300 bg-white/70 px-4 text-left text-zinc-600 hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50 sm:w-64"
-              title="書き出したzipからプロジェクトを取り込む"
+              title="ZIPファイルからプロジェクトを取り込む"
             >
               <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-current">
                 <PackageOpen size={16} aria-hidden="true" />
               </span>
               <span>
                 <span className="block text-sm font-semibold">
-                  {inspectingArchive ? "zipを確認中…" : "zipから取り込む"}
+                  {inspectingArchive ? "ZIPを確認中…" : "ZIPから取り込む"}
                 </span>
                 <span className="mt-0.5 block text-[11px] text-zinc-500">
-                  書き出したプロジェクトを受け取る
+                  書き出したプロジェクトを開く
                 </span>
               </span>
             </button>
@@ -503,7 +503,7 @@ export function ProjectLibrary({
                 setShowRepositoryImport(true);
               }}
               className="flex min-h-20 shrink-0 items-center gap-3 rounded-lg border border-dashed border-zinc-300 bg-white/70 px-4 text-left text-zinc-600 hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50 sm:w-64"
-              title="Gitリポジトリのプロジェクトを自分の保存先へコピーする"
+              title="Gitリポジトリからプロジェクトをコピーする"
             >
               <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-current">
                 <GitBranch size={16} aria-hidden="true" />
@@ -513,7 +513,7 @@ export function ProjectLibrary({
                   {importingRepository ? "取得中…" : "Gitから取り込む"}
                 </span>
                 <span className="mt-0.5 block text-[11px] text-zinc-500">
-                  リポジトリを fork して始める
+                  リポジトリの内容をコピーして始める
                 </span>
               </span>
             </button>
@@ -524,7 +524,7 @@ export function ProjectLibrary({
               {PROJECT_SORT_LABELS[sort]}
             </h2>
             <span className="text-[10px] text-zinc-400">
-              上から順に表示
+              並び順
             </span>
           </div>
 
@@ -550,7 +550,7 @@ export function ProjectLibrary({
           {!loading && projects.length === 0 ? (
             <div className="mt-6 rounded-lg border border-dashed border-zinc-300 bg-white/60 px-4 py-5 text-center">
               <p className="text-sm font-medium text-zinc-700">まだプロジェクトがありません</p>
-              <p className="mt-1 text-xs text-zinc-500">上の「新規プロジェクト」から制作を始めるか、「zipから取り込む」「Gitから取り込む」で受け取ったプロジェクトを開けます。</p>
+              <p className="mt-1 text-xs text-zinc-500">「新規プロジェクト」から作り始めましょう。既存のプロジェクトはZIPやGitから取り込めます。</p>
             </div>
           ) : null}
 

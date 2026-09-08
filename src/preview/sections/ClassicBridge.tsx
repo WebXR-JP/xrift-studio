@@ -17,16 +17,16 @@ export function ClassicBridge() {
               画面で作ったシーンを、コードへ持ち出せる。
             </h2>
             <p className="mt-5 text-sm leading-7 text-zinc-400">
-              画面で作ったものをClassicプロジェクトへ書き出すことも、既存のR3F／XRiftコードをシーンへ取り込むこともできます。どちらから始めても、行き止まりになりません。
+              画面で作ったものをコード編集プロジェクトへ書き出すことも、既存のR3F／XRiftコードをシーンへ取り込むこともできます。どちらから始めても、行き止まりになりません。
             </p>
             <p className="mt-4 text-[11px] font-semibold text-zinc-500">
-              Classic変換はまだ開発版です
+              コード編集変換はまだ開発版です
             </p>
           </div>
           <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/30 font-mono text-xs shadow-inner">
             <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3 text-zinc-500">
               <span className="h-2 w-2 rounded-full bg-violet-400" />
-              World.tsx
+              ワールド.tsx
             </div>
             <div className="overflow-x-auto p-5 leading-7 text-zinc-300">
               <p>
@@ -35,7 +35,7 @@ export function ClassicBridge() {
                 <span className="text-amber-200">'./xrift-studio/twilight-lakeside'</span>
               </p>
               <p className="mt-3">
-                <span className="text-violet-300">export const</span> World = () =&gt; {"("}
+                <span className="text-violet-300">export const</span> ワールド = () =&gt; {"("}
               </p>
               <p className="pl-5 text-blue-200">&lt;XRiftStudioScene /&gt;</p>
               <p>{")"}</p>

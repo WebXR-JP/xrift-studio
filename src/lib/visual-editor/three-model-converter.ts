@@ -56,7 +56,7 @@ export async function convertThreeEditorModelToGlb(
     object.name ||= input.fileName;
     normalizeRenderableGeometry(object);
     if (!containsRenderableObject(object)) {
-      throw new Error("表示できるMesh、LineまたはPointが見つかりません");
+      throw new Error("表示できるメッシュ、LineまたはPointが見つかりません");
     }
 
     const { GLTFExporter } = await import(

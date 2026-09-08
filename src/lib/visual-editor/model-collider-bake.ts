@@ -63,12 +63,12 @@ export async function bakeNodeColliderModel(
   }
   const source = manifest.assets[input.modelAssetId];
   if (source?.kind !== "model") {
-    return { ok: false, message: "元になるModel Assetが見つかりませんでした。" };
+    return { ok: false, message: "元になる3Dモデルが見つかりませんでした。" };
   }
   if (source.source.kind !== "project") {
     return {
       ok: false,
-      message: "プロジェクト内に保存されたModelだけ当たり判定を焼き出せます。",
+      message: "プロジェクト内に保存された3Dモデルだけ当たり判定を焼き出せます。",
     };
   }
 
@@ -90,7 +90,7 @@ export async function bakeNodeColliderModel(
     if (!mesh) {
       return {
         ok: false,
-        message: "選んだNodeにMeshがないため、当たり判定を作れません。",
+        message: "選んだNodeにメッシュがないため、当たり判定を作れません。",
       };
     }
 
