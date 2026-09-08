@@ -82,5 +82,5 @@ Skybox Shaderは編集中も表示されます。背景が見えないときは�
 ## 次のステップ
 
 - [地形と衝突判定](./terrain-and-colliders.md)
-- [動作を確認する](./play-mode.md)
+- [Play / Stopで動作を確認する](./play-mode.md)
 - [外部の素材を追加する](./external-resources.md)

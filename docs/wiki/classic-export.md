@@ -68,4 +68,4 @@ npm run dev
 ## 次のステップ
 
 - [XRift への公開（アップロード）](./publishing.md)
-- [編集画面の使い方](./visual-editor.md)
+- [ビジュアルエディター](./visual-editor.md)

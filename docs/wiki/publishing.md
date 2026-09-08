@@ -49,5 +49,5 @@
 
 ## 次のステップ
 
-- [動作を確認する](./play-mode.md)
+- [Play / Stopで動作を確認する](./play-mode.md)
 - [トラブルシューティング](./troubleshooting.md)
