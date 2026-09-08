@@ -622,6 +622,9 @@ export function NewProjectDialog({
               <input
                 autoFocus
                 type="text"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={name}
                 aria-describedby="new-project-name-hint"
                 aria-invalid={name.length > 0 && !valid}
