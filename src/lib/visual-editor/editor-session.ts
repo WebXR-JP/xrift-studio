@@ -226,6 +226,8 @@ export function getEditorComponentMenuDefinitions(
   return EDITOR_COMPONENT_REGISTRY.filter(
     (definition) =>
       definition.componentType !== "official-xrift" &&
+      // Every Entity already owns its required Transform.
+      definition.componentType !== "transform" &&
       definition.projectKinds.includes(projectKind),
   );
 }
