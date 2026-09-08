@@ -44,7 +44,7 @@ test("しかけ付きの3Dセットは、音とグラフごとシーンへ入る
   await expect(detail.getByText(/シーンへ配置し/)).toBeVisible();
   // The shelf stays open for a set with steps: the steps are on this panel.
   await expect(
-    detail.getByText("上の手順を見ながら、この画面を閉じて動作確認を開始してください。"),
+    detail.getByText("上の手順を見ながら、この画面を閉じてPlayを開始してください。"),
   ).toBeVisible();
   await page.getByRole("button", { name: "「外部から追加」を閉じる" }).click();
 

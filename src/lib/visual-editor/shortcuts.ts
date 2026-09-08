@@ -296,7 +296,7 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
   },
   {
     id: "play.toggle",
-    label: "動作確認開始／停止",
+    label: "Play / Stop",
     category: "play",
     // Ctrl/Cmd+Enter is the way out of a running World. The official player
     // claims every unmodified key while Play runs - that is what stops arrow

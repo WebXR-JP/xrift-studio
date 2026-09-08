@@ -6144,7 +6144,7 @@ export function SceneViewport({
               id="scene-view-heading"
               title={
                 editorMode === "play"
-                  ? "動作確認 Window"
+                  ? "Play Window"
                   : recordingViewActive
                     ? "録画ビュー"
                     : "シーン"
@@ -6154,7 +6154,7 @@ export function SceneViewport({
               }`}
             >
               {editorMode === "play"
-                ? "動作確認 Window"
+                ? "Play Window"
                 : recordingViewActive
                   ? "録画ビュー"
                   : "シーン"}
@@ -6208,12 +6208,12 @@ export function SceneViewport({
             onClick={onTogglePlay}
             title={commandTitle(
               editorMode === "play"
-                ? "動作確認を停止"
+                ? "Stop: 動作確認を終了して編集に戻る"
                 : playPreparing
                   ? "スクリプトを変換しています"
                   : playDisabled
                     ? "アセットの読み込みが終わると動作確認できます"
-                    : "動作確認を開始",
+                    : "Play: シーンの動作を確認する",
               "play.toggle",
               playShortcut,
             )}
@@ -6225,10 +6225,10 @@ export function SceneViewport({
           >
             <PlayIcon size={13} aria-hidden="true" />
             {editorMode === "play"
-              ? "停止"
+              ? "Stop"
               : playPreparing
                 ? "準備中"
-                : "動作確認"}
+                : "Play"}
           </button>
         </div>
         <div className="flex flex-1 items-center justify-end gap-1.5" role="toolbar" aria-label="シーンの操作">

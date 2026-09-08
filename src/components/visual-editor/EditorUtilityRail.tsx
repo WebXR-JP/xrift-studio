@@ -303,7 +303,7 @@ export function EditorUtilityRail({
                 </li>
                 <li>
                   <span className="font-semibold text-slate-800">4. 確認する</span>
-                  <p>「動作確認」で試し、終わったら「停止」を押します。</p>
+                  <p>「Play」で試し、終わったら「Stop」を押します。</p>
                 </li>
               </ol>
               <div className="border-t border-slate-200 pt-3">

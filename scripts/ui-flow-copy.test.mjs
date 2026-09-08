@@ -97,10 +97,10 @@ test('local file addition and publishing are distinct, in both editor entry poin
   for (const file of ['src/components/EditorView.tsx', `${visual}VisualEditorPrototype.tsx`]) {
     const text = read(file);
     assert.match(text, /XRiftへ公開/);
-    assert.match(text, /動作確認/);
+    assert.match(text, /Play/);
     assert.match(text, /プロジェクト一覧/);
   }
-  assert.match(read('docs/wiki/classic-editor.md'), /動作確認 \/ XRiftへ公開/);
+  assert.match(read('docs/wiki/classic-editor.md'), /Play \/ XRiftへ公開/);
 });
 
 test('project-transfer labels do not promise a remote Git fork or retained publication ID', () => {

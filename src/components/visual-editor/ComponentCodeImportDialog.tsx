@@ -275,7 +275,7 @@ export function ComponentCodeImportDialog({
                 disabled={importing}
                 className="size-3.5 accent-violet-600"
               />
-              インポート後に動作確認を開始
+              インポート後にPlayを開始
             </label>
           ) : (
             <div className="text-[11px] leading-4 text-slate-500">

@@ -486,7 +486,7 @@ export function EditorView({
               className="flex items-center gap-1.5 rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
             >
               <Square size={10} fill="currentColor" strokeWidth={0} />
-              停止
+              Stop
             </button>
           ) : (
             <button
@@ -497,7 +497,7 @@ export function EditorView({
               title="このPCで起動し、ブラウザで動作を確認します"
             >
               <Play size={11} fill="currentColor" strokeWidth={0} />
-              {devStarting ? "起動中…" : "動作確認"}
+              {devStarting ? "起動中…" : "Play"}
             </button>
           )}
           <button

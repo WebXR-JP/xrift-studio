@@ -200,7 +200,7 @@ test("狭い画面でもエディターのツールバーが一行に収まり�
   for (const gizmo of ["移動", "回転", "拡縮"]) {
     await expect(sceneToolbar.getByRole("button", { name: gizmo })).toBeVisible();
   }
-  await expect(page.getByRole("button", { name: "動作確認", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Play", exact: true })).toBeVisible();
   expect(await editorHeaderLayoutProblems(page)).toEqual([]);
 
   // The view controls that no longer fit stay reachable instead of being cut off.
@@ -284,7 +284,7 @@ for (const creationCase of creationCases) {
       ).toBeVisible();
     } else {
       await expect(
-        page.getByRole("button", { name: "動作確認", exact: true }),
+        page.getByRole("button", { name: "Play", exact: true }),
       ).toBeVisible();
       await expect(
         page.getByRole("banner").getByText(creationCase.name, { exact: true }),
@@ -317,16 +317,16 @@ test("コードエディターのワールドを編集・保存・動作確認�
     .click();
   await expect(page.getByText("ワールド設定を保存しました")).toBeVisible();
 
-  await page.getByRole("button", { name: "動作確認", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "停止", exact: true }),
+    page.getByRole("button", { name: "Stop", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "http://localhost:4173/" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "停止", exact: true }).click();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "動作確認", exact: true }),
+    page.getByRole("button", { name: "Play", exact: true }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "XRiftへ公開" }).click();
@@ -392,13 +392,13 @@ test("ビジュアルワールドを編集・Playし、公開確認で送信前�
     })
     .toBeGreaterThan(0);
 
-  await page.getByRole("button", { name: "動作確認", exact: true }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "停止", exact: true }),
+    page.getByRole("button", { name: "Stop", exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "停止", exact: true }).click();
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "動作確認", exact: true }),
+    page.getByRole("button", { name: "Play", exact: true }),
   ).toBeVisible();
 
   await page

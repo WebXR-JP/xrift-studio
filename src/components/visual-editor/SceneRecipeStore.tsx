@@ -352,7 +352,7 @@ export function SceneRecipeStore({
                   // note in a drawer. The steps stay here, and the shelf stays
                   // open for a set that has them, until the author closes it.
                   <p className="mt-1 pl-[18px]">
-                    上の手順を見ながら、この画面を閉じて動作確認を開始してください。
+                    上の手順を見ながら、この画面を閉じてPlayを開始してください。
                   </p>
                 ) : (
                   <p className="mt-1 pl-[18px]">
