@@ -24,7 +24,7 @@ test("400スロットでも閉じている間は生成せず、検索・ペー�
     createRoot(host).render(React.createElement(Harness));
   });
   const host = page.locator("#slots-test");
-  const toggle = host.getByRole("button", { name: "Material Slots (400)" });
+  const toggle = host.getByRole("button", { name: "マテリアルスロット (400)" });
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await expect(host.locator("select, option")).toHaveCount(0);
   await toggle.click();

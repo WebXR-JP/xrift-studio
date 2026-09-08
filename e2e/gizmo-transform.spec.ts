@@ -115,12 +115,12 @@ test("親を動かした子Entityでもギズモが対象の上に描かれる",
   await page.getByRole("button", { name: "作成して開く" }).click();
   await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
 
-  const tree = page.getByRole("tree", { name: "SceneのEntity階層" });
+  const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
 
   // The starter Scene parents its content under Environment. Moving that
   // parent is what makes a doubly applied transform visible at all.
   await tree.getByText("Environment", { exact: true }).click();
-  const environmentX = page.getByRole("spinbutton", { name: "Position X" });
+  const environmentX = page.getByRole("spinbutton", { name: "位置 X" });
   await environmentX.fill("6");
   await environmentX.press("Enter");
 

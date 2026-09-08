@@ -32,11 +32,11 @@ test("Scriptタブの往復でコードとUndoを保持し、非表示中は保�
   expect((await state(page)).models).toContain("// draft");
   expect(await page.evaluate(async (url) => (await import(url) as Fixture).undo(), url)).toBe(true);
   await expect.poll(async () => (await state(page)).models).toContain("// original");
-  await page.getByLabel("Scriptを検索").fill("light");
-  await expect(page.getByRole("navigation", { name: "Scriptファイル" }).getByRole("button")).toHaveCount(1);
-  await page.getByLabel("Scriptを検索").fill("missing");
-  await expect(page.getByText("一致するScriptはありません。検索語を変えてください。")).toBeVisible();
-  await page.getByLabel("Scriptを検索").fill("");
+  await page.getByLabel("スクリプトを検索").fill("light");
+  await expect(page.getByRole("navigation", { name: "スクリプトファイル" }).getByRole("button")).toHaveCount(1);
+  await page.getByLabel("スクリプトを検索").fill("missing");
+  await expect(page.getByText("一致するスクリプトはありません。検索語を変えてください。")).toBeVisible();
+  await page.getByLabel("スクリプトを検索").fill("");
   await page.setViewportSize({ width: 850, height: 650 });
   await page.screenshot({ path: testInfo.outputPath("script-workspace.png") });
   expect(errors).toEqual([]);
@@ -50,8 +50,8 @@ test("Scriptの遅い読み込みとエラーが選択中のファイルを上�
   await read(page, "scripts/door.ts", "late error", true);
   await expect.poll(async () => (await state(page)).editor.source).toBe("// light");
   await expect(page.getByText("late error")).toHaveCount(0);
-  await page.getByRole("button", { name: "Script editorを閉じる" }).click();
-  await expect(page.getByRole("region", { name: "Script workspace" })).toHaveCount(0);
+  await page.getByRole("button", { name: "スクリプトエディターを閉じる" }).click();
+  await expect(page.getByRole("region", { name: "スクリプトエディター" })).toHaveCount(0);
 });
 
 test("Script保存の重複を防ぎ、失敗後に同じ下書きを再保存できる", async ({ page }) => {
@@ -66,8 +66,8 @@ test("Script保存の重複を防ぎ、失敗後に同じ下書きを再保存�
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true }));
   });
   expect((await state(page)).writes).toEqual(["// saved draft"]);
-  await expect(page.getByRole("button", { name: "Script editorを閉じる" })).toBeDisabled();
-  await expect(page.getByRole("navigation", { name: "Scriptファイル" }).getByRole("button").last()).toBeDisabled();
+  await expect(page.getByRole("button", { name: "スクリプトエディターを閉じる" })).toBeDisabled();
+  await expect(page.getByRole("navigation", { name: "スクリプトファイル" }).getByRole("button").last()).toBeDisabled();
   await page.evaluate(async (url) => (await import(url) as Fixture).settleWrite(true), url);
   await expect(page.getByText("Save failed; retry")).toBeVisible();
   await save.click();

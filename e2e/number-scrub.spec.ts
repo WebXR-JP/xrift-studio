@@ -45,10 +45,10 @@ async function dragHorizontally(
 test("Transformの数値は横へ引いて動かし、Escapeで戻せる", async ({ page }) => {
   await openBlankWorld(page, "number-scrub-transform");
 
-  const tree = page.getByRole("tree", { name: "SceneのEntity階層" });
+  const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
   await tree.getByText("床", { exact: true }).click();
 
-  const positionX = page.getByRole("spinbutton", { name: "Position X" });
+  const positionX = page.getByRole("spinbutton", { name: "位置 X" });
   await expect(positionX).toHaveValue("0");
 
   // 修飾キーなしのドラッグは微調整。Position は 1px あたり 0.005 なので、
@@ -81,10 +81,10 @@ test("Transformの数値は横へ引いて動かし、Escapeで戻せる", async
 test("Transformの数値は打った時点で反映する", async ({ page }) => {
   await openBlankWorld(page, "number-scrub-typing");
 
-  const tree = page.getByRole("tree", { name: "SceneのEntity階層" });
+  const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
   await tree.getByText("床", { exact: true }).click();
 
-  const positionY = page.getByRole("spinbutton", { name: "Position Y" });
+  const positionY = page.getByRole("spinbutton", { name: "位置 Y" });
   await positionY.click();
   await positionY.fill("2.5");
   // 打った値は入力欄の中に留まらず、この時点で Scene へ入っている。
@@ -93,7 +93,7 @@ test("Transformの数値は打った時点で反映する", async ({ page }) => 
   // 別の Entity を挟んで戻る。確定前なら 0 に戻ってしまう。
   await tree.getByText("Environment", { exact: true }).click();
   await tree.getByText("床", { exact: true }).click();
-  await expect(page.getByRole("spinbutton", { name: "Position Y" })).toHaveValue(
+  await expect(page.getByRole("spinbutton", { name: "位置 Y" })).toHaveValue(
     "2.5",
   );
 });
@@ -112,7 +112,7 @@ test("シーン設定の数値も入力欄を離れずに反映する", async ({
 
   // 入力欄を離れずに Undo すれば、反映済みだったことが分かる。
   await page.keyboard.press("Escape");
-  await page.getByRole("tree", { name: "SceneのEntity階層" }).click();
+  await page.getByRole("tree", { name: "シーンのEntity階層" }).click();
   await page.keyboard.press("Control+z");
   await expect(fov).toHaveValue(String(before));
 });

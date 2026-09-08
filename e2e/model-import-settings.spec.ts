@@ -96,11 +96,11 @@ test("再インポートの縮小・Dracoと公開前の圧縮が同じ結果に
   expect(result.sourceRetained).toBe(true);
   expect(result.dracoRemoved).toBe(true);
   const inspector = page.locator("#import-settings-test");
-  const size = inspector.getByRole("combobox", { name: "Model Textureの最大解像度" });
+  const size = inspector.getByRole("combobox", { name: "3Dモデルテクスチャの最大解像度" });
   await expect(size).toHaveValue("256");
   await size.selectOption("512");
   await expect(size).toHaveValue("512");
-  const draco = inspector.getByRole("checkbox", { name: /Draco圧縮をかける/ });
+  const draco = inspector.getByRole("checkbox", { name: /Dracoで圧縮/ });
   await expect(draco).toBeChecked();
   await draco.uncheck();
   await expect(draco).not.toBeChecked();

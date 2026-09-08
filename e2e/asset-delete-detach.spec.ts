@@ -84,9 +84,9 @@ test("参照されているAssetを、削除ダイアログから参照を外し
     .click();
 
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("heading", { name: "Assetを削除" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "アセットを削除" })).toBeVisible();
   await expect(dialog.getByText("2件の参照があります")).toBeVisible();
-  const references = dialog.getByRole("list", { name: "Assetの参照元" });
+  const references = dialog.getByRole("list", { name: "素材の参照元" });
   await expect(references.getByRole("listitem")).toHaveCount(2);
   await expect(references.getByText("参照を空にする").first()).toBeVisible();
 
@@ -128,7 +128,7 @@ test("Scene Viewの右クリックから、指しているEntityを削除でき�
   await page.getByRole("button", { name: "作成して開く" }).click();
   await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
 
-  const tree = page.getByRole("tree", { name: "SceneのEntity階層" });
+  const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
   await expect(tree.getByText("床", { exact: true })).toBeVisible();
 
   await waitForPickableEntity(page, "starter-floor");

@@ -32,7 +32,7 @@ test("Scene Viewを軽量にすると描画解像度が下がる", async ({ page
       return width > 0 ? node.width / width : 0;
     });
 
-  const quality = page.getByLabel("Scene View描画品質");
+  const quality = page.getByLabel("シーン描画品質");
   if (!(await quality.isVisible())) {
     await page.getByRole("button", { name: "表示と診断の設定" }).click();
   }
@@ -41,7 +41,7 @@ test("Scene Viewを軽量にすると描画解像度が下がる", async ({ page
   await quality.selectOption("low");
 
   await expect.poll(bufferScale, { timeout: 20_000 }).toBeCloseTo(0.75, 1);
-  await expect(page.getByRole("tree", { name: "SceneのEntity階層" })).toBeVisible();
+  await expect(page.getByRole("tree", { name: "シーンのEntity階層" })).toBeVisible();
 
   // The rest of the ladder means what it says on this display too.
   await quality.selectOption("half");

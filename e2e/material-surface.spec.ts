@@ -102,13 +102,13 @@ test("頂点カラーとOpacity Channelを編集しUndo・Redo・再読み込み
   const vertex = page.getByLabel("頂点カラーを使用");
   await vertex.click();
   await expect(vertex).toBeChecked();
-  const channel = page.getByLabel("Opacity Channel");
+  const channel = page.getByRole("combobox", { name: "Channel", exact: true });
   await channel.selectOption("r");
   await page.getByRole("button", { name: "元に戻す", exact: true }).click();
   await expect(channel).toHaveValue("a");
   await page.getByRole("button", { name: "やり直す", exact: true }).click();
   await expect(channel).toHaveValue("r");
-  await page.getByRole("button", { name: "ライブラリ", exact: true }).click();
+  await page.getByRole("button", { name: "プロジェクト一覧", exact: true }).click();
   await page.locator('button[title="material-surface-regressionを開く"]').click();
   await expect(vertex).toBeChecked();
   await expect(channel).toHaveValue("r");
