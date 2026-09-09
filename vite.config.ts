@@ -2,8 +2,8 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { env } from "node:process";
-import { localThreeVendorAssets } from "./scripts/vite-local-three-vendor";
-import { localTextFontAssets } from "./scripts/vite-local-text-fonts";
+import { localThreeVendorAssets } from "./scripts/vite-local-three-vendor.ts";
+import { localTextFontAssets } from "./scripts/vite-local-text-fonts.ts";
 import { staticGuide } from "./scripts/vite-guide.mjs";
 
 const host = env.TAURI_DEV_HOST;

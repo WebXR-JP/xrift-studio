@@ -9,7 +9,7 @@ import {
   TEXT_FONT_DIRECTORY,
   TEXT_FONT_PACKAGE_VERSION,
   textFontFileName,
-} from "../packages/xrift-studio-runtime/src/text-font-catalog";
+} from "../packages/xrift-studio-runtime/src/text-font-catalog.ts";
 
 /**
  * Serves and emits the Text component's font files from the pinned

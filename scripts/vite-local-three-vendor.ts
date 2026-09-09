@@ -5,7 +5,7 @@ import type { Plugin } from "vite";
 import {
   VENDOR_BUNDLES,
   type VendorBundleId,
-} from "../src/lib/visual-editor/vendor-assets";
+} from "../src/lib/visual-editor/vendor-assets.ts";
 
 /**
  * KTX2 と Draco は、読み込みに Three.js が配る JavaScript / WebAssembly を
