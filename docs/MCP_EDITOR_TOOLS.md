@@ -115,7 +115,11 @@ document tool の戻り値には `harness` が付くことがある。同じ種�
 ## document (93)
 
 **Editor context / Project**
-`get_editor_context`, `get_scripting_capabilities`, `update_project_metadata`
+`get_editor_context`, `get_project_health`, `analyze_performance`, `get_scripting_capabilities`, `update_project_metadata`
+
+`get_project_health` は既存のProject / Scene / Asset検証を実行し、件数とほぼ0のScaleを報告する。`scope: document` の `ready` はファイルの存在、Playの動作、公開可能な状態を保証しない。指摘を修正したら再診断し、既存のPlay・Compile・公開前チェックへ進む。
+
+`analyze_performance` は編集データのEntity / Light / Rigid Body / Texture / Model件数を目安と比較する。無効な要素・未使用素材も含み、Prefab内部やScriptによる実行時生成は展開しない。80%超は `warning`、100%超は `over-budget`。FPS・メモリー・三角形数の測定ではなく、公開を止める条件には使わない。両ツールともdocument surfaceの読み取りで、Scene・revision・保存状態を変更しない。
 
 **素材一覧と整理**
 `list_assets`, `create_asset_folder`, `rename_asset`, `rename_asset_folder`,

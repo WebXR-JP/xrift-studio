@@ -1,4 +1,6 @@
 import { catalogMaterialTextures } from "./catalog-material-dependencies";
+import { inspectProjectHealth } from "./value-up/project-health";
+import { analyzeProjectPerformance } from "./value-up/performance-budget";
 import { SKY_SHADER_QUALITY_OPTIONS, withSkyShaderQuality } from "./sky-shader-quality";
 import { setMeshCollision, collisionSources } from "./mesh-collision-actions";
 import { isPlainObjectRecord } from "../json-guards";
@@ -390,6 +392,8 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   XriftMcpDocumentToolHandler
 > = {
   get_editor_context: readEditorContext,
+  get_project_health: readProjectHealth,
+  analyze_performance: readPerformanceReport,
   get_scripting_capabilities: readScriptingCapabilities,
   analyze_component_code: analyzeComponentCodeTool,
   apply_component_code_import_plan: applyComponentCodeImportPlanTool,
@@ -492,6 +496,28 @@ export function executeXriftMcpEditorTool(
   return XRIFT_MCP_DOCUMENT_TOOL_HANDLERS[request.tool](
     context,
     request.arguments,
+  );
+}
+
+function readProjectHealth(
+  context: XriftMcpEditorContext,
+): XriftMcpEditorToolOutcome {
+  const health = inspectProjectHealth(context.bundle);
+  return unchanged(
+    context,
+    { health: health as unknown as Record<string, unknown> },
+    `Project Healthを確認しました（${health.status}）`,
+  );
+}
+
+function readPerformanceReport(
+  context: XriftMcpEditorContext,
+): XriftMcpEditorToolOutcome {
+  const performance = analyzeProjectPerformance(context.bundle);
+  return unchanged(
+    context,
+    { performance: performance as unknown as Record<string, unknown> },
+    `Performance Budgetを確認しました（${performance.tier}）`,
   );
 }
 

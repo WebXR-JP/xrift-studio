@@ -50,6 +50,8 @@ export const XRIFT_MCP_TOOLS = [
   { name: "get_publish_readiness", surface: "project" },
   { name: "publish_project", surface: "project" },
   { name: "get_editor_context", surface: "document" },
+  { name: "get_project_health", surface: "document" },
+  { name: "analyze_performance", surface: "document" },
   { name: "begin_world_authoring", surface: "debug" },
   { name: "get_world_authoring", surface: "debug" },
   { name: "review_world_authoring", surface: "debug" },

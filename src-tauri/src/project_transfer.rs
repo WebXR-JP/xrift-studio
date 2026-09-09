@@ -8,7 +8,24 @@
 //! of overwriting the original's world when it is published.
 
 use super::*;
-use std::io::Seek;
+use std::io::{Seek, Write};
+
+const PORTABLE_MANIFEST_PATH: &str = ".xrift-studio/package-manifest.json";
+
+/// Hash exactly the bytes written, without buffering a potentially large model.
+fn copy_archive_file<R: Read, W: Write>(input: &mut R, output: &mut W) -> std::io::Result<(u64, String)> {
+    let mut digest = Sha256::new();
+    let mut buffer = [0u8; 64 * 1024];
+    let mut size = 0u64;
+    loop {
+        let count = input.read(&mut buffer)?;
+        if count == 0 { break; }
+        output.write_all(&buffer[..count])?;
+        digest.update(&buffer[..count]);
+        size += count as u64;
+    }
+    Ok((size, format!("{:x}", digest.finalize())))
+}
 
 /// Directory names never carried into a copy or an archive, at any depth.
 const TRANSFER_SKIPPED_DIRECTORIES: [&str; 1] = [".cache"];
@@ -274,7 +291,9 @@ pub fn export_project_archive(
 
     // Only files are written: a directory is recreated from its files' paths
     // on import, and a directory left empty by an exclusion never appears.
-    let (_, files) = collect_transfer_entries(&source, true)?;
+    let (_, mut files) = collect_transfer_entries(&source, true)?;
+    // An imported inventory describes the old archive, not this export.
+    files.retain(|path| path != Path::new(PORTABLE_MANIFEST_PATH));
     let file = std::fs::File::create(&archive)
         .map_err(|e| format!("書き出し先に書き込めません: {}", e))?;
     let mut writer = zip::ZipWriter::new(file);
@@ -286,18 +305,37 @@ pub fn export_project_archive(
             .add_directory(format!("{}/", folder_name), options)
             .map_err(|e| e.to_string())?;
         let mut total_bytes = 0u64;
+        let mut portable_files = Vec::with_capacity(files.len());
         for relative in &files {
             let name = format!("{}/{}", folder_name, relative.to_string_lossy().replace('\\', "/"));
             writer.start_file(name, options).map_err(|e| e.to_string())?;
             let mut input = std::fs::File::open(source.join(relative))
                 .map_err(|e| format!("{}: {}", relative.display(), e))?;
-            total_bytes += std::io::copy(&mut input, &mut writer)
+            let (size, sha256) = copy_archive_file(&mut input, &mut writer)
                 .map_err(|e| format!("{}: {}", relative.display(), e))?;
+            total_bytes += size;
+            portable_files.push(serde_json::json!({
+                "path": relative.to_string_lossy().replace('\\', "/"),
+                "sha256": sha256,
+                "size": size,
+            }));
         }
+        // This is an archive inventory, not a trust signature or an import gate.
+        let manifest = serde_json::json!({
+            "format": "xrift-studio-package",
+            "formatVersion": 1,
+            "studioVersion": env!("CARGO_PKG_VERSION"),
+            "files": portable_files,
+        });
+        let manifest_bytes = serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?;
+        writer.start_file(format!("{}/{}", folder_name, PORTABLE_MANIFEST_PATH), options)
+            .map_err(|e| e.to_string())?;
+        writer.write_all(&manifest_bytes).map_err(|e| e.to_string())?;
+        total_bytes += manifest_bytes.len() as u64;
         writer.finish().map_err(|e| e.to_string())?;
         Ok(ProjectArchiveExport {
             archive_path: archive.to_string_lossy().to_string(),
-            file_count: files.len() as u64,
+            file_count: files.len() as u64 + 1,
             total_bytes,
         })
     })();
@@ -734,7 +772,7 @@ mod tests {
             archive.to_string_lossy().to_string(),
         )
         .unwrap();
-        assert_eq!(exported.file_count, 3);
+        assert_eq!(exported.file_count, 4);
 
         let inspection = inspect_project_archive(archive.to_string_lossy().to_string()).unwrap();
         assert_eq!(inspection.suggested_name, "demo");
@@ -754,6 +792,41 @@ mod tests {
         assert!(dest.join("scenes/main.json").is_file());
         assert!(!dest.join("node_modules").exists());
         assert!(!dest.join(".xrift").exists());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn archive_inventory_hashes_written_bytes_and_replaces_old_inventory() {
+        let root = temp_root("inventory");
+        let source = seed_visual_project(&root, "demo");
+        write(&source.join(PORTABLE_MANIFEST_PATH), "stale inventory");
+        let payload = vec![42u8; 150_000];
+        std::fs::write(source.join("large.glb"), &payload).unwrap();
+        let archive_path = root.join("out/demo.zip");
+        let exported = export_project_archive(
+            root.to_string_lossy().to_string(), source.to_string_lossy().to_string(),
+            archive_path.to_string_lossy().to_string(),
+        ).unwrap();
+        let mut archive = zip::ZipArchive::new(std::fs::File::open(&archive_path).unwrap()).unwrap();
+        let name = format!("demo/{}", PORTABLE_MANIFEST_PATH);
+        assert_eq!(archive.file_names().filter(|entry| *entry == name).count(), 1);
+        let manifest: serde_json::Value = serde_json::from_reader(archive.by_name(&name).unwrap()).unwrap();
+        assert_eq!(manifest["formatVersion"], 1);
+        let entries = manifest["files"].as_array().unwrap();
+        assert_eq!(entries.len(), 4);
+        assert_eq!(exported.file_count, 5);
+        let mut total = archive.by_name(&name).unwrap().size();
+        for entry in entries {
+            let path = entry["path"].as_str().unwrap();
+            assert_ne!(path, PORTABLE_MANIFEST_PATH);
+            let mut bytes = Vec::new();
+            archive.by_name(&format!("demo/{}", path)).unwrap().read_to_end(&mut bytes).unwrap();
+            assert_eq!(entry["size"].as_u64().unwrap(), bytes.len() as u64);
+            assert_eq!(entry["sha256"].as_str().unwrap(), format!("{:x}", Sha256::digest(&bytes)));
+            total += bytes.len() as u64;
+        }
+        assert_eq!(exported.total_bytes, total);
+        drop(archive);
         let _ = std::fs::remove_dir_all(&root);
     }
 

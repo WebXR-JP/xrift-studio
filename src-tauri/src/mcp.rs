@@ -2422,6 +2422,16 @@ fn tool_definitions() -> Value {
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         },
         {
+            "name": "get_project_health",
+            "description": "Read-only document checks before Play or Compile: runs existing Project, Scene and Asset schema validators, counts authoring data and flags near-zero Transform scales. Returns issues and available repair tool names. Fix reported issues and run again, then use Play/Compile and the normal Publish checks. A ready result does not verify asset files, runtime behavior or publication readiness. Use get_editor_context for revision and runtime diagnostics.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "analyze_performance",
+            "description": "Read-only authoring counts for Entity, Light, Rigid Body, Texture and Model, compared with heuristic budgets. Use to locate count growth, then inspect assets and test Play on target devices. Includes disabled and unused authoring data; does not expand Prefabs or Script-generated objects, measure triangles, memory or FPS, or guarantee performance. Use get_project_health for document validation. Never block Publish based on these estimates.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
             "name": "get_scripting_capabilities",
             "description": "Read the Script authoring workflow; xrift:script lifecycle, Asset, targeted Material, and Particle runtime APIs; persistent authoring tools; and the explicit sandboxed:false, content-hash trust gate boundary.",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
