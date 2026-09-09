@@ -149,6 +149,21 @@ export function SceneRecipeStore({
     }
   };
 
+  if (shelf === "gimmicks" && projectKind === "item") {
+    return (
+      <section className="min-w-0 flex-1 bg-white p-6" aria-label="ギミック一覧">
+        <h3 className="text-base font-semibold text-slate-900">ギミックはワールド専用です</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          アイテムには追加できません。プロジェクト一覧からワールドを開き、
+          「外部から追加」の「ギミック」を選んでください。
+        </p>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          アイテムの質感を選ぶ場合は、左の「glTFマテリアル」を利用できます。
+        </p>
+      </section>
+    );
+  }
+
   return (
     <>
       <section

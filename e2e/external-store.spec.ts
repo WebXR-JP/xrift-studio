@@ -1,5 +1,22 @@
 import { expect, test } from "@playwright/test";
 
+test("アイテムのギミック一覧はワールド専用と案内する", async ({ page }) => {
+  await page.goto("/e2e.html?scenario=ready");
+  await page.getByRole("button", { name: /新規プロジェクト/ }).click();
+  await page.getByRole("button", { name: /アイテムをビジュアルで作る/ }).click();
+  await page.getByLabel("プロジェクト名").fill("item-gimmick-catalog");
+  await page.getByRole("button", { name: "作成して開く" }).click();
+  await page.getByRole("button", { name: "外部から追加", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: /ギミック/ }).click();
+  const catalog = dialog.getByRole("region", { name: "ギミック一覧", exact: true });
+  await expect(catalog.getByText("ギミックはワールド専用です", { exact: true })).toBeVisible();
+  await expect(catalog.getByRole("textbox")).toHaveCount(0);
+  await expect(dialog.getByText(/条件に合うギミックがありません/)).toHaveCount(0);
+  await dialog.getByRole("button", { name: /glTFマテリアル/ }).click();
+  await expect(dialog.getByTestId("scene-recipe-card")).toHaveCount(50);
+});
+
 test("外部カタログを3D・マテリアル表現・ギミックで選べる", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto("/e2e.html?scenario=ready");
