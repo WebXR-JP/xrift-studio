@@ -25,4 +25,3 @@ export function trackInteractionLayer(root: Object3D, layer: number): () => void
   attach(root);
   return () => detach(root);
 }
-
