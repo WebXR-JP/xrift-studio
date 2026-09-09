@@ -1,3 +1,4 @@
+import { EXTENDED_MATERIAL_SHOWCASES } from "./material-showcase-extended";
 import {
   normalizeMaterialProperties,
   type Color3,
@@ -7,7 +8,7 @@ import {
 } from "./asset-manifest";
 
 /**
- * Materials that exist to show what one glTF material extension does.
+ * Materials that demonstrate glTF extensions and explicitly authored PBR map comparisons.
  *
  * The editor has authored `KHR_materials_*` since the Inspector gained the
  * sections, and the compiler emits every one of them, but nothing in the app
@@ -37,13 +38,12 @@ export type MaterialShowcaseDefinition = {
   name: string;
   /** The extension this entry exists to show, for the Inspector hint. */
   extensionLabel: string;
-  /** Core PBR the pair shares. Only `extensions` differs between the two. */
+  /** Core PBR shared by extension comparisons; explicit core-map comparisons use baselinePatch. */
   base: MaterialShowcaseBase;
   extensions: MaterialExtensionsPatch;
   /**
-   * Name of the derived comparison Material. Omitted for entries that are
-   * themselves a comparison (three IOR values, a second use of iridescence),
-   * where a fourth object with nothing on it would only add clutter.
+   * Name of the derived comparison Material. Extra legacy assets not used as
+   * a comparison pair may omit it; all 50 showcase recipes have a baseline.
    */
   baselineName?: string;
   /**
@@ -55,6 +55,11 @@ export type MaterialShowcaseDefinition = {
    * only one they carry.
    */
   baselineExtensions?: MaterialExtensionsPatch;
+  /** Core maps and alpha settings shared by the comparison pair. */
+  patch?: MaterialAssetPatch;
+  /** An explicitly authored core-property comparison, not an extension toggle. */
+  baselinePatch?: MaterialAssetPatch;
+  comparisonProperty?: boolean;
 };
 
 export type MaterialShowcaseBase = {
@@ -181,6 +186,8 @@ export const MATERIAL_SHOWCASE_DEFINITIONS: readonly MaterialShowcaseDefinition[
     },
     {
       key: "soap-bubble",
+      baselineName: "薄膜の虹色（Iridescenceなし）",
+      baselineExtensions: {KHR_materials_transmission: {transmissionFactor: 1}, KHR_materials_ior: {ior: 1.33}},
       name: "シャボン玉",
       extensionLabel: "KHR_materials_iridescence",
       base: { color: "#ffffff", metalness: 0, roughness: 0.02 },
@@ -190,9 +197,8 @@ export const MATERIAL_SHOWCASE_DEFINITIONS: readonly MaterialShowcaseDefinition[
         KHR_materials_iridescence: {
           iridescenceFactor: 1,
           iridescenceIor: 1.33,
-          // Nanometres. A soap film thins as it drains, so the range is wide
-          // and the colour bands sweep across the surface instead of sitting
-          // on one hue.
+          // Nanometres. Without a thickness texture, glTF uses the maximum.
+          // The visible hue still changes with viewing and reflection angle.
           iridescenceThicknessMinimum: 200,
           iridescenceThicknessMaximum: 800,
         },
@@ -221,6 +227,7 @@ export const MATERIAL_SHOWCASE_DEFINITIONS: readonly MaterialShowcaseDefinition[
     },
     {
       key: "velvet",
+      patch: {doubleSided: true},
       name: "ベルベット",
       extensionLabel: "KHR_materials_sheen",
       base: { color: "#3b1d4d", metalness: 0, roughness: 0.85 },
@@ -230,7 +237,7 @@ export const MATERIAL_SHOWCASE_DEFINITIONS: readonly MaterialShowcaseDefinition[
           sheenRoughnessFactor: 0.28,
         },
       },
-      baselineName: "ベルベット（シーンなし）",
+      baselineName: "ベルベット（Sheenなし）",
     },
     {
       key: "matte-coat",
@@ -320,6 +327,8 @@ export const MATERIAL_SHOWCASE_DEFINITIONS: readonly MaterialShowcaseDefinition[
     },
     {
       key: "diamond-ior",
+      baselineName: "屈折率の比較（IOR 1.5）",
+      baselineExtensions: {KHR_materials_transmission: {transmissionFactor: 1}, KHR_materials_volume: {thicknessFactor: 1, attenuationColor: [1,1,1]}},
       name: "ダイヤモンド（屈折率 2.42）",
       extensionLabel: "KHR_materials_ior",
       base: { color: "#ffffff", metalness: 0, roughness: 0.02 },
@@ -334,15 +343,16 @@ export const MATERIAL_SHOWCASE_DEFINITIONS: readonly MaterialShowcaseDefinition[
     },
     {
       key: "unlit-sign",
-      name: "アンリット看板",
+      name: "Unlit看板",
       extensionLabel: "KHR_materials_unlit",
       base: { color: "#e8ecf2", metalness: 0, roughness: 1 },
       // Unlit replaces the shading model, so it is the one extension that
       // cannot be combined with anything. The pair shows what that costs: the
       // lit half takes the scene's light and shadow, the unlit half does not.
       extensions: { KHR_materials_unlit: {} },
-      baselineName: "アンリット看板（ライティングあり）",
+      baselineName: "Unlit看板（ライティングあり）",
     },
+    ...EXTENDED_MATERIAL_SHOWCASES,
   ];
 
 function createShowcaseMaterial(
@@ -351,12 +361,14 @@ function createShowcaseMaterial(
   key: string,
   base: MaterialShowcaseBase,
   extensions: MaterialExtensionsPatch,
+  surface: MaterialAssetPatch = {},
 ): MaterialAsset {
   const patch: MaterialAssetPatch = {
     color: base.color,
     metalness: base.metalness,
     roughness: base.roughness,
     ...(base.emissiveFactor ? { emissiveFactor: base.emissiveFactor } : {}),
+    ...surface,
     extensions,
   };
   return {
@@ -383,6 +395,7 @@ export const MATERIAL_SHOWCASE_ASSETS: readonly MaterialAsset[] =
       definition.key,
       definition.base,
       definition.extensions,
+      definition.patch,
     );
     if (!definition.baselineName) return [primary];
     return [
@@ -393,6 +406,7 @@ export const MATERIAL_SHOWCASE_ASSETS: readonly MaterialAsset[] =
         `${definition.key}-plain`,
         definition.base,
         definition.baselineExtensions ?? {},
+        { ...definition.patch, ...definition.baselinePatch },
       ),
     ];
   });

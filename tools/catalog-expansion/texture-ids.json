@@ -1,0 +1,88 @@
+{
+  "carbon": {
+    "color": "texture-catalog-carbon-color-9aff8702d5f5",
+    "normal": "texture-catalog-carbon-normal-4eff5b29a9cd",
+    "orm": "texture-catalog-carbon-orm-d3734d68154e"
+  },
+  "fabric": {
+    "color": "texture-catalog-fabric-color-6d8f6579c789",
+    "normal": "texture-catalog-fabric-normal-acff263eac6e",
+    "orm": "texture-catalog-fabric-orm-c3e0394c8c8f"
+  },
+  "leather": {
+    "color": "texture-catalog-leather-color-539ab69276f4",
+    "normal": "texture-catalog-leather-normal-9a69afd13940",
+    "orm": "texture-catalog-leather-orm-b380949fd111"
+  },
+  "wood": {
+    "color": "texture-catalog-wood-color-ca0256698184",
+    "normal": "texture-catalog-wood-normal-d0e385fcf1ed",
+    "orm": "texture-catalog-wood-orm-f4abb7ebed61"
+  },
+  "marble": {
+    "color": "texture-catalog-marble-color-9be4bc687b2b",
+    "normal": "texture-catalog-marble-normal-11b2d6635f1a",
+    "orm": "texture-catalog-marble-orm-6c48aace6df0"
+  },
+  "concrete": {
+    "color": "texture-catalog-concrete-color-d29c63643331",
+    "normal": "texture-catalog-concrete-normal-99c66b9ad684",
+    "orm": "texture-catalog-concrete-orm-afcb9f3989b6"
+  },
+  "ceramic": {
+    "color": "texture-catalog-ceramic-color-b518fe66a374",
+    "normal": "texture-catalog-ceramic-normal-2c8b19249db5",
+    "orm": "texture-catalog-ceramic-orm-f77805a3cd4f"
+  },
+  "rust": {
+    "color": "texture-catalog-rust-color-d50dec675e4d",
+    "normal": "texture-catalog-rust-normal-eb15404593d4",
+    "orm": "texture-catalog-rust-orm-2c1f76d64544"
+  },
+  "hammered": {
+    "color": "texture-catalog-hammered-color-e0e64398951a",
+    "normal": "texture-catalog-hammered-normal-2f510faa5640",
+    "orm": "texture-catalog-hammered-orm-c253d1b1406e"
+  },
+  "frosted": {
+    "color": "texture-catalog-frosted-color-e5340f498b2e",
+    "normal": "texture-catalog-frosted-normal-8506b941385f",
+    "orm": "texture-catalog-frosted-orm-e839985febee"
+  },
+  "foil": {
+    "color": "texture-catalog-foil-color-b44c9fe88701",
+    "normal": "texture-catalog-foil-normal-4e72b1d70568",
+    "orm": "texture-catalog-foil-orm-d215d0cf0673"
+  },
+  "brushed": {
+    "color": "texture-catalog-brushed-color-197e140e4335",
+    "normal": "texture-catalog-brushed-normal-c83f7f1c3042",
+    "orm": "texture-catalog-brushed-orm-e7082bca35b1"
+  },
+  "brick": {
+    "color": "texture-catalog-brick-color-3ee46da4b6cd",
+    "normal": "texture-catalog-brick-normal-3d6af27e609e",
+    "orm": "texture-catalog-brick-orm-b008b62c3e11"
+  },
+  "circuit": {
+    "emission": "texture-catalog-circuit-emission-8a812080670a"
+  },
+  "grid": {
+    "emission": "texture-catalog-grid-emission-33c114cbc683"
+  },
+  "lava": {
+    "emission": "texture-catalog-lava-emission-4dc595741e58"
+  },
+  "stars": {
+    "emission": "texture-catalog-stars-emission-6ced43baff3b"
+  },
+  "rings": {
+    "emission": "texture-catalog-rings-emission-ce74ae0a2fc2"
+  },
+  "pixels": {
+    "emission": "texture-catalog-pixels-emission-d9251c5e58b3"
+  },
+  "grille": {
+    "color": "texture-catalog-grille-color-83d53b4e1e3e"
+  }
+}

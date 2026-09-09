@@ -1,0 +1,15 @@
+{
+  "materialRecipes": 50,
+  "itemMaterialRecipes": 50,
+  "gimmickRecipes": 50,
+  "behaviourGraphs": 62,
+  "activationsPerGraph": 3,
+  "fixtureSuites": [
+    "scene-recipe-catalog",
+    "material-showcase-catalog",
+    "scene-recipe-runtime"
+  ],
+  "result": "passed",
+  "scope": "Actual catalog, graph builder and runtime engine; property-recording host; filesystem boundary blocked.",
+  "otherChecks": "See README.ja.md for app typecheck, browser E2E and native verification; this script only runs graph/data fixtures."
+}

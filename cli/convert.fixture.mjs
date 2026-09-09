@@ -126,6 +126,7 @@ import {
   runInteractivityRuntimeAdapterFixtureAssertions,
   runModelAnimationGraphFixtureAssertions,
 } from "../src/lib/visual-editor/interactivity-recipes.fixture.ts";
+import { runSceneRecipeRuntimeFixtureAssertions } from "../src/lib/visual-editor/scene-recipe-runtime.fixture.ts";
 import { runSceneRecipeCatalogFixtureAssertions } from "../src/lib/visual-editor/scene-recipe-catalog.fixture.ts";
 import { runMaterialShowcaseCatalogFixtureAssertions } from "../src/lib/visual-editor/material-showcase-catalog.fixture.ts";
 import { runInteractionTriggerFixtureAssertions } from "../src/lib/visual-editor/interaction-trigger.fixture.ts";
@@ -405,6 +406,7 @@ try {
     ["material alpha", runMaterialAlphaFixtureAssertions],
     ["interactivity recipes", runInteractivityRecipeFixtureAssertions],
     ["scene recipe catalog", runSceneRecipeCatalogFixtureAssertions],
+    ["scene recipe runtime", runSceneRecipeRuntimeFixtureAssertions],
     ["material showcase catalog", runMaterialShowcaseCatalogFixtureAssertions],
     ["model animation graph", runModelAnimationGraphFixtureAssertions],
     ["interaction trigger", runInteractionTriggerFixtureAssertions],

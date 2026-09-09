@@ -1,3 +1,4 @@
+import { catalogMaterialTextures } from "./catalog-material-dependencies";
 import { SKY_SHADER_QUALITY_OPTIONS, withSkyShaderQuality } from "./sky-shader-quality";
 import { setMeshCollision, collisionSources } from "./mesh-collision-actions";
 import { isPlainObjectRecord } from "../json-guards";
@@ -2342,6 +2343,7 @@ function listMaterialPresets(
         label: definition.name,
         extension: definition.extensionLabel,
         materialAssetId: materialShowcaseAssetId(definition.key),
+        textureAssetIds: catalogMaterialTextures(getMaterialShowcaseAsset(materialShowcaseAssetId(definition.key))?.properties).map(texture => texture.assetId),
         comparisonMaterialAssetId: definition.baselineName
           ? materialShowcaseBaselineAssetId(definition.key)
           : undefined,
@@ -2647,6 +2649,9 @@ function listSceneRecipes(
         shelf: getSceneRecipeShelf(recipe),
         category: recipe.category,
         categoryLabel: SCENE_RECIPE_CATEGORY_LABELS[recipe.category],
+        group: recipe.group ?? SCENE_RECIPE_CATEGORY_LABELS[recipe.category],
+        tags: recipe.tags ?? [],
+        comparisonLabels: recipe.comparisonLabels,
         note: recipe.note,
         partCount: recipe.parts.length,
         partKinds: [...new Set(recipe.parts.map((part) => part.kind))],

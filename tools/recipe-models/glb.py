@@ -70,7 +70,7 @@ class GLB:
         if d.get('emissive'):mat['emissiveFactor']=d['emissive']
         if d.get('alphaMode'):mat['alphaMode']=d['alphaMode']
         self.j['materials'].append(mat);return len(self.j['materials'])-1
-    def primitive(self,parts,matid,has_texture=True):
+    def primitive(self,parts,matid,has_texture=True,generate_tangents=False):
         vs=[];ns=[];uvs=[];fs=[];offset=0
         # Export rotation Blender Z-up -> glTF Y-up; determinant = +1.
         R=np.array([[1,0,0],[0,0,1],[0,-1,0]],dtype=float)
@@ -83,7 +83,7 @@ class GLB:
         attrs={'POSITION':self.acc(v,'VEC3',position=True),'NORMAL':self.acc(n,'VEC3')}
         if has_texture:
             attrs['TEXCOORD_0']=self.acc(uv,'VEC2')
-            if 'normalTexture' in self.j['materials'][matid]:attrs['TANGENT']=self.acc(tangent_frame(v.astype(float),n.astype(float),uv.astype(float),f).astype('<f4'),'VEC4')
+            if generate_tangents or 'normalTexture' in self.j['materials'][matid]:attrs['TANGENT']=self.acc(tangent_frame(v.astype(float),n.astype(float),uv.astype(float),f).astype('<f4'),'VEC4')
         index=self.acc(f.ravel().astype('<u2' if len(v)<65536 else '<u4'),'SCALAR',34963)
         self.j['meshes'][0]['primitives'].append({'attributes':attrs,'indices':index,'material':matid,'mode':4})
     def write(self,path):

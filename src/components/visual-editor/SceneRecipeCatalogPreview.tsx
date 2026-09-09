@@ -1,3 +1,8 @@
+import { catalogPublicAssetUrl } from "../../lib/visual-editor/catalog-public-url";
+import { OrbitControls } from "@react-three/drei";
+import { useThree } from "@react-three/fiber";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { useCatalogMaterial } from "./useCatalogMaterial";
 import { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -5,23 +10,15 @@ import { XriftScriptParticleEmitter } from "../../../packages/xrift-studio-runti
 import { XriftTextPanel } from "../../../packages/xrift-studio-runtime/src/script/text-panel";
 import type { XriftTextPanelConfig } from "../../../packages/xrift-studio-runtime/src/text-panel-layout";
 import {
-  BUILTIN_MATERIAL_ASSETS,
   getBuiltinPrimitiveCreation,
   getBuiltinRecipeModel,
-  getMaterialShowcaseAsset,
   getParticleAuthoringPreset,
   normalizeParticleProperties,
-  type MaterialProperties,
   type SceneRecipe,
   type SceneRecipePart,
 } from "../../lib/visual-editor";
 import { CatalogPreviewFrame, useCatalogPreviewAssetLoad } from "./CatalogPreviewFrame";
 import { disposeCatalogModel } from "./dispose-catalog-model";
-import {
-  isUnlitMaterial,
-  physicalMaterialExtensionProps,
-  usesPhysicalMaterial,
-} from "./material-physical-props";
 
 /**
  * Builds the card from the recipe's own parts.
@@ -47,7 +44,8 @@ export function SceneRecipeCatalogPreview({
 
   return (
     <CatalogPreviewFrame
-      cacheKey={`recipe:${recipe.id}:${recipe.parts
+      key={recipe.id}
+      cacheKey={`recipe-studio-v2:${recipe.id}:${recipe.parts
         .filter((part) => part.kind === "model")
         .map((part) => getBuiltinRecipeModel(part.modelId)?.sha256.slice(0, 12) ?? part.modelId)
         .join(":")}`}
@@ -61,7 +59,14 @@ export function SceneRecipeCatalogPreview({
           point of a campfire. A set that brings none would otherwise be a dark
           smudge, so the card lights it neutrally. This is the card's lighting,
           not the scene's: what gets placed is unchanged either way. */}
-      {recipe.parts.some((part) => part.kind === "light" && !part.startsOff) ? (
+      {recipe.category === "material" || recipe.category === "tutorial" ? (
+        <>
+          <StudioEnvironment />
+          <ambientLight intensity={0.65} />
+          <directionalLight position={[0, 4, 3]} intensity={2.2} />
+          <directionalLight position={[0, 2, -3]} intensity={0.8} />
+        </>
+      ) : recipe.parts.some((part) => part.kind === "light" && !part.startsOff) ? (
         <ambientLight intensity={0.22} />
       ) : (
         <>
@@ -77,6 +82,8 @@ export function SceneRecipeCatalogPreview({
           <meshStandardMaterial color="#1e293b" metalness={0} roughness={0.95} />
         </mesh>
       )}
+      {live ? <OrbitControls target={[0, framing.lookAtY, 0]} enablePan={false}
+        minDistance={1.4} maxDistance={12} minPolarAngle={0.25} maxPolarAngle={Math.PI * 0.85} /> : null}
       {recipe.parts.map((part, index) => (
         <RecipePartVisual key={`${part.kind}-${index}`} part={part} />
       ))}
@@ -124,7 +131,7 @@ function RecipePartVisual({ part }: { part: SceneRecipePart }) {
   if (part.kind === "model") {
     return (
       <group position={[...part.position]} rotation={[...part.rotation]} scale={[...part.scale]}>
-        <RecipeModelVisual modelId={part.modelId} />
+        <RecipeModelVisual modelId={part.modelId} materialAssetId={part.materialAssetId} />
       </group>
     );
   }
@@ -177,7 +184,8 @@ function RecipeTextVisual({
  * same `GLTFLoader` class, same real-rendering rule (AGENT.md), different
  * source.
  */
-function RecipeModelVisual({ modelId }: { modelId: string }) {
+function RecipeModelVisual({ modelId, materialAssetId }: { modelId: string; materialAssetId?: string }) {
+  const override = useCatalogMaterial(materialAssetId);
   const [object, setObject] = useState<THREE.Object3D | null>(null);
   const trackAssetLoad = useCatalogPreviewAssetLoad();
 
@@ -187,16 +195,22 @@ function RecipeModelVisual({ modelId }: { modelId: string }) {
     if (!definition) return;
     let cancelled = false;
     let loaded: THREE.Object3D | null = null;
+    const originals = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
     const finishLoad = trackAssetLoad();
     const loader = new GLTFLoader();
     loader.load(
-      `${definition.publicPath}?v=${definition.sha256.slice(0, 12)}`,
+      `${catalogPublicAssetUrl(definition.publicPath)}?v=${definition.sha256.slice(0, 12)}`,
       (gltf) => {
         if (cancelled) {
           disposeCatalogModel(gltf.scene);
           return;
         }
         loaded = gltf.scene;
+        if (materialAssetId) loaded.traverse((object) => {
+          if (!(object instanceof THREE.Mesh)) return;
+          originals.set(object, object.material);
+          object.material = override;
+        });
         setObject(loaded);
         finishLoad();
       },
@@ -211,9 +225,11 @@ function RecipeModelVisual({ modelId }: { modelId: string }) {
     return () => {
       cancelled = true;
       finishLoad();
+      // The override hook owns its textures. Restore GLB materials before disposal.
+      for (const [mesh, material] of originals) mesh.material = material;
       if (loaded) disposeCatalogModel(loaded);
     };
-  }, [modelId, trackAssetLoad]);
+  }, [modelId, materialAssetId, override, trackAssetLoad]);
 
   if (!object) return null;
   // Ownership lives in the loader effect; R3F must not dispose these twice.
@@ -247,9 +263,9 @@ function RecipeParticleVisual({
  */
 function PrimitiveGeometry({ creationId }: { creationId: string }) {
   const primitive = getBuiltinPrimitiveCreation(creationId)?.primitive;
-  if (primitive === "sphere") return <sphereGeometry args={[1, 24, 18]} />;
-  if (primitive === "cylinder") return <cylinderGeometry args={[1, 1, 1, 20]} />;
-  if (primitive === "cone") return <coneGeometry args={[1, 1, 20]} />;
+  if (primitive === "sphere") return <sphereGeometry args={[1, 48, 32]} />;
+  if (primitive === "cylinder") return <cylinderGeometry args={[1, 1, 1, 48]} />;
+  if (primitive === "cone") return <coneGeometry args={[1, 1, 48]} />;
   if (primitive === "plane") return <planeGeometry args={[1, 1]} />;
   return <boxGeometry args={[1, 1, 1]} />;
 }
@@ -309,65 +325,23 @@ function recipeFraming(recipe: SceneRecipe): {
   };
 }
 
-/** The Material the placement will actually assign, read from one place. */
-function recipeMaterialProperties(
-  materialAssetId: string,
-): MaterialProperties | undefined {
-  const material =
-    BUILTIN_MATERIAL_ASSETS.find(
-      (candidate) => candidate.id === materialAssetId,
-    ) ?? getMaterialShowcaseAsset(materialAssetId);
-  return material?.properties;
+/** PMREM lights reflect in metal/glass without a network HDR dependency. */
+function StudioEnvironment() {
+  const { gl, scene } = useThree();
+  useEffect(() => {
+    const previous = scene.environment;
+    const room = new RoomEnvironment();
+    const generator = new THREE.PMREMGenerator(gl);
+    const target = generator.fromScene(room, 0.04);
+    scene.environment = target.texture;
+    room.dispose();
+    generator.dispose();
+    return () => { scene.environment = previous; target.dispose(); };
+  }, [gl, scene]);
+  return null;
 }
 
-function colorFactorToHex(
-  value: readonly [number, number, number] | undefined,
-): string {
-  if (!value) return "#000000";
-  const channel = (channelValue: number) =>
-    Math.round(Math.min(1, Math.max(0, channelValue)) * 255)
-      .toString(16)
-      .padStart(2, "0");
-  return `#${channel(value[0])}${channel(value[1])}${channel(value[2])}`;
-}
-
-/**
- * The card draws the Material rather than an approximation of it.
- *
- * A fixed grey `meshStandardMaterial` was enough while every set was made of
- * stone and wood, and it is exactly wrong for a set whose whole subject is a
- * Material: a glass 見本 card would show two identical white cylinders. The
- * shading model comes from the same helpers the viewport uses, so a card, the
- * Scene View and the published world agree.
- */
-function RecipePrimitiveMaterial({
-  materialAssetId,
-}: {
-  materialAssetId: string;
-}) {
-  const properties = useMemo(
-    () => recipeMaterialProperties(materialAssetId),
-    [materialAssetId],
-  );
-  const physical = useMemo(
-    () => physicalMaterialExtensionProps(properties),
-    [properties],
-  );
-  const color = properties?.color ?? "#94a3b8";
-  if (isUnlitMaterial(properties)) {
-    return <meshBasicMaterial color={color} />;
-  }
-  const lit = {
-    color,
-    metalness: properties?.pbrMetallicRoughness.metallicFactor ?? 0,
-    roughness: properties?.pbrMetallicRoughness.roughnessFactor ?? 0.9,
-    emissive: colorFactorToHex(properties?.emissiveFactor),
-    emissiveIntensity:
-      properties?.extensions.KHR_materials_emissive_strength
-        ?.emissiveStrength ?? 1,
-  };
-  if (usesPhysicalMaterial(properties)) {
-    return <meshPhysicalMaterial {...lit} {...physical} />;
-  }
-  return <meshStandardMaterial {...lit} />;
+function RecipePrimitiveMaterial({ materialAssetId }: { materialAssetId: string }) {
+  const material = useCatalogMaterial(materialAssetId);
+  return <primitive object={material} attach="material" dispose={null} />;
 }

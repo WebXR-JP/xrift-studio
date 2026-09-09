@@ -1,3 +1,5 @@
+import { ensureCatalogMaterialTextures } from "../../lib/visual-editor/asset-import-persistence";
+import { catalogMaterialTextures } from "../../lib/visual-editor/catalog-material-dependencies";
 import { getEditorEntityCreationDefinitions, getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
 import { applyModelReimportSettings } from "../../lib/visual-editor/model-reimport-impact";
 import { colliderModelNode, setMeshCollision } from "../../lib/visual-editor/mesh-collision-actions";
@@ -1636,6 +1638,7 @@ export function VisualEditorPrototype({
   const [componentImportOpen, setComponentImportOpen] = useState(false);
   const [componentImportBusy, setComponentImportBusy] = useState(false);
   const [mcpLocalAssetImportBusy, setMcpLocalAssetImportBusy] = useState(false);
+  const [sceneRecipeImportBusy, setSceneRecipeImportBusy] = useState(false);
   const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
   const [externalStoreOpen, setExternalStoreOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
@@ -2323,6 +2326,7 @@ export function VisualEditorPrototype({
   const importBusy =
     componentImportBusy ||
     mcpLocalAssetImportBusy ||
+    sceneRecipeImportBusy ||
     modelReimportBusy ||
     textureProcessingBusy ||
     modelOptimizationBusy ||
@@ -5283,6 +5287,37 @@ export function VisualEditorPrototype({
           },
         );
 
+        if (request.tool === "create_material_from_preset" && request.arguments.kind === "gltf") {
+          const id = outcome.result.materialAssetId;
+          const material = typeof id === "string" ? outcome.bundle.assets.assets[id] : undefined;
+          if (material?.kind === "material" && catalogMaterialTextures(material.properties).some(
+            texture => outcome.bundle.assets.assets[texture.assetId]?.kind !== "texture",
+          )) {
+            if (!currentProjectPath) throw new XriftMcpEditorToolError("PROJECT_NOT_SAVED", "テクスチャ付きMaterialを追加する前にプロジェクトを保存してください");
+            if (importRunningRef.current || assetOperationRef.current !== null) throw new XriftMcpEditorToolError("IMPORT_BUSY", "素材の処理が終わってから再試行してください");
+            const revisionBefore = mcpRevisionRef.current;
+            importRunningRef.current = true;
+            setMcpLocalAssetImportBusy(true);
+            try {
+              const assets = await ensureCatalogMaterialTextures(currentProjectPath, outcome.bundle.assets, material.properties);
+              if (!assets) throw new XriftMcpEditorToolError("CATALOG_TEXTURE_IMPORT_FAILED", "Materialのテクスチャを追加できませんでした。接続を確認して再試行してください");
+              const latest = bundleRef.current;
+              if (projectPathRef.current !== currentProjectPath || mcpRevisionRef.current !== revisionBefore ||
+                  latest.scene !== sourceBundle.scene || latest.project !== sourceBundle.project || latest.prefabs !== sourceBundle.prefabs) {
+                throw new XriftMcpEditorToolError("STALE_REVISION", "素材の追加中にプロジェクトが変更されました。最新の編集状態を取得して再試行してください");
+              }
+              const merged = latest.assets === sourceBundle.assets ? assets : mergeRecipeAssetsOntoLatest(sourceBundle.assets, assets, latest.assets);
+              outcome.bundle = touchProject({ ...outcome.bundle, assets: merged });
+              outcome.changed = true;
+              outcome.result.revisionAfter = revisionBefore + 1;
+              outcome.result.textureAssetIds = catalogMaterialTextures(material.properties).map(texture => texture.assetId);
+            } finally {
+              importRunningRef.current = false;
+              setMcpLocalAssetImportBusy(false);
+            }
+          }
+        }
+
         if (outcome.changed) {
           mcpRevisionRef.current += 1;
           mcpRevisionBundleRef.current = outcome.bundle;
@@ -7556,69 +7591,41 @@ export function VisualEditorPrototype({
 
   const handleAddSceneRecipe = useCallback(
     async (recipe: SceneRecipe): Promise<SceneRecipeInstallResult> => {
-      if (editorMode !== "edit") {
-        throw new Error("動作確認を停止してから3Dセットを追加してください");
+      if (editorModeRef.current !== "edit") throw new Error("Playを停止してから追加してください");
+      if (importBusyRef.current || importRunningRef.current || assetOperationRef.current !== null) {
+        throw new Error("素材の処理が終わってから追加してください");
       }
-      if (importBusy) {
-        throw new Error("アセットのインポート完了後に追加してください");
+      const path = projectPathRef.current;
+      if (!path) throw new Error("プロジェクトを保存してから追加してください");
+      const source = bundleRef.current;
+      importRunningRef.current = true;
+      setSceneRecipeImportBusy(true);
+      try {
+        const count = source.scene.rootEntityIds.length;
+        const result = await instantiateSceneRecipe(source.scene, source.assets, recipe.id,
+          source.project.projectKind, path,
+          [roundTo(((count % 5) - 2) * 1.35, 1), 0, roundTo((Math.floor(count / 5) - 0.5) * 1.35, 1)]);
+        if (!result) throw new Error("モデル・テクスチャ・音の追加に失敗しました。接続を確認して再試行してください");
+        const latest = bundleRef.current;
+        if (projectPathRef.current !== path || editorModeRef.current !== "edit" ||
+            latest.scene !== source.scene || latest.project !== source.project || latest.prefabs !== source.prefabs) {
+          throw new Error("追加中にプロジェクトが変更されました。現在の編集内容はそのままです。もう一度追加してください");
+        }
+        // Thumbnail updates are mergeable; user document edits are not.
+        const assets = latest.assets === source.assets ? result.assets : mergeRecipeAssetsOntoLatest(source.assets, result.assets, latest.assets);
+        setBundle(touchProject({ ...latest, assets, scene: result.scene }));
+        setSceneSelection({ kind: "entity", id: result.rootEntityId });
+        setAssetSelection(null);
+        if (!recipe.lesson) setExternalStoreOpen(false);
+        const entityName = result.scene.entities[result.rootEntityId]?.name ?? recipe.name;
+        setNotice(`「${entityName}」を追加しました。Hierarchyで各パーツを編集し、Playで動作を確認できます`);
+        return { entityName, createdAssetCount: Object.keys(result.assets.assets).filter(id => !source.assets.assets[id]).length };
+      } finally {
+        importRunningRef.current = false;
+        setSceneRecipeImportBusy(false);
       }
-      if (!projectPath) {
-        throw new Error("プロジェクトを保存してから3Dセットを追加してください");
-      }
-
-      const count = bundle.scene.rootEntityIds.length;
-      const result = await instantiateSceneRecipe(
-        bundle.scene,
-        bundle.assets,
-        recipe.id,
-        bundle.project.projectKind,
-        projectPath,
-        [
-          roundTo(((count % 5) - 2) * 1.35, 1),
-          0,
-          roundTo((Math.floor(count / 5) - 0.5) * 1.35, 1),
-        ],
-      );
-      if (!result) {
-        throw new Error("この3Dセットを現在のプロジェクトへ配置できませんでした");
-      }
-
-      // Subtree and its Particle Assets land as one history entry, so undoing
-      // the set does not leave its Assets behind.
-      setBundle(
-        touchProject({
-          ...bundle,
-          assets: result.assets,
-          scene: result.scene,
-        }),
-      );
-      setSceneSelection({ kind: "entity", id: result.rootEntityId });
-      setAssetSelection(null);
-      // A set that teaches something keeps its shelf open: the steps are on
-      // that panel, and closing it the moment the set lands would leave the
-      // author looking at a button with nothing telling them to press it.
-      if (!recipe.lesson) setExternalStoreOpen(false);
-      const entityName =
-        result.scene.entities[result.rootEntityId]?.name ?? recipe.name;
-      setNotice(
-        recipe.lesson
-          ? `「${entityName}」をシーンへ配置しました。動作確認を開始して、手順のとおりに試してください`
-          : `「${entityName}」を配置しました`,
-      );
-      return {
-        entityName,
-        createdAssetCount: result.createdAssetIds.length,
-      };
     },
-    [
-      bundle,
-      editorMode,
-      importBusy,
-      projectPath,
-      setAssetSelection,
-      setBundle,
-      setSceneSelection,
-    ],
+    [setAssetSelection, setBundle, setSceneSelection],
   );
 
   const handleOptimizeColliders = useCallback(

@@ -1,3 +1,4 @@
+import { catalogMaterialTextures } from "./catalog-material-dependencies";
 import {
   isMaterialExtensionName,
   MATERIAL_EXTENSION_DESCRIPTORS,
@@ -93,14 +94,18 @@ export function runMaterialShowcaseCatalogFixtureAssertions(): void {
     }
 
     assert(
-      isMaterialExtensionName(definition.extensionLabel),
+      isMaterialExtensionName(definition.extensionLabel) ||
+        (definition.extensionLabel === "glTF 2.0" && definition.comparisonProperty === true),
       `${definition.key} names ${definition.extensionLabel}, which is not a known extension`,
     );
     assert(
-      authored[definition.extensionLabel] !== undefined,
+      definition.comparisonProperty === true || authored[definition.extensionLabel] !== undefined,
       `${definition.key} is labelled ${definition.extensionLabel} but does not use it`,
     );
 
+    if (definition.comparisonProperty) {
+      assert(catalogMaterialTextures(primary.properties).length > 0, `${definition.key}: core PBR example needs an actual bundled texture`);
+    }
     if (!definition.baselineName) continue;
     const baseline = getMaterialShowcaseAsset(
       materialShowcaseBaselineAssetId(definition.key),
@@ -110,14 +115,15 @@ export function runMaterialShowcaseCatalogFixtureAssertions(): void {
       `${definition.key} names a comparison Material that was never built`,
     );
     if (!baseline) continue;
+    assert(JSON.stringify(primary.properties) !== JSON.stringify(baseline.properties), `${definition.key}: comparison surfaces are identical`);
     // The pair is a comparison, so everything except the extensions has to be
     // identical: a baseline with a different colour or roughness would show a
     // difference the extension did not cause.
     assert(
-      JSON.stringify(baseline.properties.pbrMetallicRoughness) ===
+      definition.comparisonProperty === true || (JSON.stringify(baseline.properties.pbrMetallicRoughness) ===
         JSON.stringify(primary.properties.pbrMetallicRoughness) &&
         JSON.stringify(baseline.properties.emissiveFactor) ===
-          JSON.stringify(primary.properties.emissiveFactor),
+          JSON.stringify(primary.properties.emissiveFactor)),
       `${definition.key} and its comparison differ in more than the extension`,
     );
     assert(

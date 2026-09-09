@@ -149,14 +149,11 @@ document tool の戻り値には `harness` が付くことがある。同じ種�
 ストアの見回し・再生停止は一時的なプレビュー操作なのでMCPには追加しない。
 地形の地面は形と一緒に選ぶ。`list_terrain_presets` の方にある。
 
-`kind: "gltf"` は glTF のマテリアル拡張ごとに 1 つずつ用意したマテリアルを返す。
-クリアコートの車塗装、ヘアライン金属、透過ガラス、色ガラス、分散する水晶、
-シャボン玉、玉虫塗装、ベルベット、マット塗装、金コーティング、ネオン管、
-屈折率違いのガラス、アンリット看板である。`comparisonMaterialAssetId` は
-同じマテリアルから拡張だけを外したものを指す。拡張は隣に「無い方」が無いと
-読めないので、効果を見せるのが目的なら `apply_scene_recipe` の
-「マテリアル見本」セットを置く。面として使うのが目的ならこの tool を使う。
-`parameters` は受け付けない。glow と同じく、値の決まった完成品だからである。
+`kind: "gltf"` はglTF拡張とPBRテクスチャのマテリアルを返す。50種類の見本セットに加え、互換性のために旧カタログの素材IDを保持している。Clearcoat、Transmission、Volume、Dispersion、Iridescence、Sheen、Anisotropy、Emissive、Specular、IOR、Unlitと、Normal Map・ORM・UV・Alphaの比較を含む。
+
+`comparisonMaterialAssetId` は比較用のマテリアルを指す。拡張を比較する見本は基本のPBR値を揃え、テクスチャを比較する見本は比較対象のマップやUV設定だけを変える。`textureAssetIds` は必要な同梱テクスチャを返す。効果を見比べるときは `list_scene_recipes` の `shelf: "materials"` から選び、`apply_scene_recipe` で見本一式を置く。既存のモデルへ質感だけを付けるときは `create_material_from_preset` を使う。テクスチャが必要なプリセットは、保存済みのプロジェクトへ画像も取り込んでからMaterialを作成する。`parameters` は受け付けず、調整には通常のMaterial更新を使う。
+
+`list_scene_recipes` は `group`、`tags`、`comparisonLabels` も返す。`shelf: "materials"` は50種類、ワールド用の `shelf: "gimmicks"` も50種類を返す。ギミックの操作確認はSceneへ追加してPlayで行う。カタログ内の回転・拡大・絞り込みは表示だけの操作なので、新しいMCP toolは追加しない。全項目と確認範囲は [カタログ拡充](./catalog-expansion/README.ja.md) に記載する。
 
 `create_texture_card` は透過テクスチャから遠景板・草カードを作る。手で組む場合は
 板ポリ、アルファブレンドの両面マテリアル、コライダー無し、円弧なら継ぎ目の

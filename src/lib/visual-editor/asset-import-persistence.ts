@@ -1,3 +1,5 @@
+import { catalogPublicAssetUrl } from "./catalog-public-url";
+import { catalogMaterialTextures } from "./catalog-material-dependencies";
 import { tauri } from "../tauri";
 import { applyModelOptimization, planModelOptimization } from "./model-optimization";
 import {
@@ -145,7 +147,7 @@ export async function ensureBuiltinModelAsset(
 
   let response: Response;
   try {
-    response = await fetch(definition.publicPath, { cache: "reload" });
+    response = await fetch(catalogPublicAssetUrl(definition.publicPath), { cache: "reload" });
   } catch {
     return null;
   }
@@ -183,7 +185,7 @@ export async function ensureBuiltinAudioAsset(
 
   let response: Response;
   try {
-    response = await fetch(definition.publicPath, { cache: "reload" });
+    response = await fetch(catalogPublicAssetUrl(definition.publicPath), { cache: "reload" });
   } catch {
     return null;
   }
@@ -203,6 +205,37 @@ export async function ensureBuiltinAudioAsset(
   });
   if (!plan.canCommit || !plan.asset) return null;
   return commitAssetImportPlanToDisk(projectPath, manifest, plan);
+}
+
+/** Persist every bundled map before publishing the referring Material to the editor.
+ * Hashes and deterministic ids follow the same boundary as GLB/audio imports. */
+export async function ensureCatalogMaterialTextures(
+  projectPath: string,
+  manifest: AssetManifest,
+  properties: unknown,
+): Promise<AssetManifest | null> {
+  let next = manifest;
+  try {
+    for (const definition of catalogMaterialTextures(properties)) {
+      if (next.assets[definition.assetId]?.kind === "texture") continue;
+      const response = await fetch(catalogPublicAssetUrl(definition.publicPath), { cache: "reload" });
+      if (!response.ok) return null;
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes.byteLength !== definition.byteLength ||
+          await sha256Bytes(bytes) !== definition.sha256) return null;
+      const plan = await createAssetImportPlan({
+        fileName: definition.fileName, bytes, mimeType: "image/png",
+        displayName: definition.displayName, folderId: null, existingManifest: next,
+        textureImportSettings: { colorSpace: definition.colorSpace, flipY: false },
+      });
+      if (!plan.canCommit || plan.asset?.id !== definition.assetId) return null;
+      next = await commitAssetImportPlanToDisk(projectPath, next, plan);
+      if (next.assets[definition.assetId]?.kind !== "texture") return null;
+    }
+    return next;
+  } catch {
+    return null;
+  }
 }
 
 async function sha256Bytes(bytes: Uint8Array): Promise<string> {

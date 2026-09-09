@@ -1,5 +1,8 @@
+import { EXTENDED_GIMMICK_RECIPES } from "./scene-recipe-gimmicks";
+import { EXTENDED_MATERIAL_RECIPES, enrichCatalogRecipe } from "./material-showcase-recipes";
 import {
   ensureBuiltinAudioAsset,
+  ensureCatalogMaterialTextures,
   ensureBuiltinModelAsset,
 } from "./asset-import-persistence";
 import { BUILTIN_ASSET_IDS } from "./builtin-asset-ids";
@@ -100,12 +103,14 @@ export type SceneRecipePart =
     }
   | {
       /**
-       * A bundled GLB (BUILTIN_RECIPE_MODELS), self-contained materials and
-       * all -- unlike "primitive", no materialAssetId to bind.
+       * A bundled GLB (BUILTIN_RECIPE_MODELS). Its embedded materials remain
+       * intact unless a sample explicitly overrides its material slots.
        */
       kind: "model";
       name: string;
       modelId: string;
+      /** Override all slots of a sample GLB with an ordinary editable Material. */
+      materialAssetId?: string;
       position: Vec3;
       rotation: Vec3;
       scale: Vec3;
@@ -295,6 +300,10 @@ export type SceneRecipe = {
   name: string;
   description: string;
   category: SceneRecipeCategory;
+  /** Search/filter labels; technical names deliberately remain recognizable. */
+  group?: string;
+  tags?: readonly string[];
+  comparisonLabels?: readonly [string, string];
   projectKinds: readonly VisualProjectKind[];
   /** Said before placing: what the author still has to do themselves. */
   note: string;
@@ -2740,7 +2749,9 @@ export const SCENE_RECIPES: readonly SceneRecipe[] = [
   MATERIAL_EMISSIVE_STRENGTH,
   MATERIAL_IOR,
   MATERIAL_UNLIT,
-];
+  ...EXTENDED_MATERIAL_RECIPES,
+  ...EXTENDED_GIMMICK_RECIPES,
+].map(enrichCatalogRecipe);
 
 export function getSceneRecipe(recipeId: string): SceneRecipe | undefined {
   return SCENE_RECIPES.find((recipe) => recipe.id === recipeId);
@@ -2824,6 +2835,16 @@ export async function instantiateSceneRecipe(
     ];
     const componentIds: Partial<Record<XriftInteractionTargetKind, string>> = {};
 
+    // The same material dependency path is used for primitives and GLB overrides.
+    if ((part.kind === "primitive" || part.kind === "model") && part.materialAssetId) {
+      nextAssets = ensureBuiltinMaterialAsset(nextAssets, part.materialAssetId);
+      const material = nextAssets.assets[part.materialAssetId];
+      if (material?.kind !== "material") return null;
+      const withTextures = await ensureCatalogMaterialTextures(projectPath, nextAssets, material.properties);
+      if (!withTextures) return null;
+      nextAssets = withTextures;
+    }
+
     if (part.kind === "primitive") {
       const definition = getBuiltinPrimitiveCreation(part.creationId);
       if (!definition) return null;
@@ -2850,8 +2871,14 @@ export async function instantiateSceneRecipe(
         return null;
       }
       nextAssets = withModel;
+      const importedModel = withModel.assets[definition.assetId];
+      if (importedModel.kind !== "model") return null;
+      const overrideMaterialId = part.materialAssetId;
       components.push(
-        createMeshComponent(createDocumentId("component-mesh"), definition.assetId, []),
+        createMeshComponent(createDocumentId("component-mesh"), definition.assetId,
+          overrideMaterialId ? importedModel.materialSlots.map((slot) => ({
+            slot: slot.slot, materialAssetId: overrideMaterialId,
+          })) : []),
       );
       if (part.collider === "trimesh") {
         components.push(

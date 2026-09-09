@@ -1,3 +1,5 @@
+import { catalogMaterialTextures } from "../../lib/visual-editor/catalog-material-dependencies";
+import { getMaterialShowcaseAsset } from "../../lib/visual-editor/material-showcase-catalog";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
@@ -10,22 +12,19 @@ import {
   SCENE_RECIPE_CATEGORY_LABELS,
   getSceneRecipesForProjectKind,
   type SceneRecipe,
-  type SceneRecipeCategory,
   type VisualProjectKind,
 } from "../../lib/visual-editor";
 import { SceneRecipeCatalogPreview } from "./SceneRecipeCatalogPreview";
 
-const CATEGORY_ORDER: readonly SceneRecipeCategory[] = [
-  "tutorial",
-  "material",
-  "light",
-  "nature",
-  "weather",
-  "water",
-  "structure",
-  "furniture",
-  "effect",
-];
+function recipeGroup(recipe: SceneRecipe): string {
+  return recipe.group ?? (recipe.category === "tutorial" ? "基本のギミック" : SCENE_RECIPE_CATEGORY_LABELS[recipe.category]);
+}
+function usesTextures(recipe: SceneRecipe): boolean {
+  return recipe.parts.some(part => {
+    if ((part.kind !== "primitive" && part.kind !== "model") || !part.materialAssetId) return false;
+    return catalogMaterialTextures(getMaterialShowcaseAsset(part.materialAssetId)?.properties).length > 0;
+  });
+}
 
 export type SceneRecipeInstallResult = {
   entityName: string;
@@ -57,33 +56,39 @@ export function SceneRecipeStore({
     [projectKind, shelf],
   );
   const title = shelf === "materials" ? "glTFマテリアル" : shelf === "gimmicks" ? "ギミック" : "3Dセット";
-  const description = shelf === "materials" ? "特殊な質感を比較できる見本です。配置後はマテリアルを編集できます" : shelf === "gimmicks" ? "操作できるしかけです。配置後はPlayで試し、ノードグラフで編集できます" : "家具や装飾など、組み立て済みの3Dを配置できます";
+  const description = shelf === "materials" ? "反射・透過・Emissive・テクスチャの違いを、同じモデルで比較します。" : shelf === "gimmicks" ? "扉・照明・音・演出。操作と編集の手順が付いた、動くサンプルです。" : "家具や装飾など、組み立て済みの3Dを配置できます。";
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<"all" | SceneRecipeCategory>("all");
+  const [category, setCategory] = useState("all");
+  const [texturesOnly, setTexturesOnly] = useState(false);
   const [selectedId, setSelectedId] = useState(recipes[0]?.id ?? "");
   const [adding, setAdding] = useState(false);
   const [addedMessage, setAddedMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const selected =
-    recipes.find((recipe) => recipe.id === selectedId) ?? recipes[0];
-
   const visible = useMemo(() => {
     const tokens = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
     return recipes
-      .filter((recipe) => category === "all" || recipe.category === category)
+      .filter((recipe) => !texturesOnly || usesTextures(recipe))
+      .filter((recipe) => category === "all" || recipeGroup(recipe) === category)
       .filter((recipe) => {
         const text = [
           recipe.id,
           recipe.name,
           recipe.description,
+          recipeGroup(recipe),
+          ...(recipe.tags ?? []),
+          usesTextures(recipe) ? "テクスチャ texture Normal Map ORM UV PBR" : "",
           SCENE_RECIPE_CATEGORY_LABELS[recipe.category],
         ]
           .join(" ")
           .toLocaleLowerCase();
         return tokens.every((token) => text.includes(token));
       });
-  }, [category, query, recipes]);
+  }, [category, query, recipes, texturesOnly]);
+  // Never show a hidden selection when filters remove it.
+  const selected = visible.find(recipe => recipe.id === selectedId) ?? visible[0];
+  const groups = useMemo(() => [...new Set(recipes.map(recipeGroup))], [recipes]);
+  useEffect(() => { setAddedMessage(null); setError(null); }, [selected?.id]);
 
   // What the author is about to get, counted from the recipe rather than
   // written by hand: a set that quietly grows a part should say so.
@@ -153,13 +158,13 @@ export function SceneRecipeStore({
         <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-2.5">
           <div className="mb-2 flex items-start justify-between gap-3">
             <div>
-              <h3 className="text-xs font-semibold text-slate-900">{title}</h3>
-              <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
+              <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+              <p className="mt-1 text-[13px] leading-6 text-slate-600">
                 {description}
               </p>
             </div>
-            <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-1 text-[10px] font-semibold text-orange-700">
-              {recipes.length} セット
+            <span className="rounded-full border border-orange-200 bg-orange-50 whitespace-nowrap px-2.5 py-1 text-xs font-semibold text-orange-700">
+              {recipes.length} 種類
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -171,28 +176,36 @@ export function SceneRecipeStore({
               <span className="sr-only">{title}を検索</span>
               <input
                 value={query}
+                disabled={adding}
                 onChange={(event) => setQuery(event.currentTarget.value)}
-                placeholder="名前または説明で検索"
-                className="h-8 w-full rounded-md border border-slate-300 bg-white pl-8 pr-3 text-xs outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                placeholder={shelf === "materials" ? "例：Emissive、布、ガラス、Normal Map" : "例：扉、音、カウントダウン"}
+                className="h-9 w-full rounded-md border border-slate-300 bg-white pl-8 pr-3 text-xs outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
               />
             </label>
             <select
               value={category}
-              onChange={(event) =>
-                setCategory(
-                  event.currentTarget.value as "all" | SceneRecipeCategory,
-                )
-              }
+              disabled={adding}
+              onChange={(event) => setCategory(event.currentTarget.value)}
               aria-label={`${title}のカテゴリ`}
-              className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700"
+              className="h-9 max-w-[180px] rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700"
             >
               <option value="all">すべて</option>
-              {CATEGORY_ORDER.filter((entry) => recipes.some((recipe) => recipe.category === entry)).map((entry) => (
-                <option key={entry} value={entry}>
-                  {SCENE_RECIPE_CATEGORY_LABELS[entry]}
-                </option>
+              {groups.map((entry) => (
+                <option key={entry} value={entry}>{entry} ({recipes.filter(r => recipeGroup(r) === entry).length})</option>
               ))}
             </select>
+          </div>
+          <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+            {shelf === "materials" ? <>
+              <button type="button" disabled={adding} aria-pressed={category === "Emissive"}
+                className="rounded-full border border-slate-300 px-2.5 py-1 hover:bg-slate-50 disabled:opacity-50"
+                onClick={() => setCategory(category === "Emissive" ? "all" : "Emissive")}>Emissive / 発光</button>
+              <label className="flex items-center gap-1.5"><input type="checkbox" checked={texturesOnly} disabled={adding}
+                onChange={e => setTexturesOnly(e.currentTarget.checked)} />テクスチャ付き</label>
+            </> : null}
+            <span className="ml-auto" role="status" aria-live="polite">{visible.length} / {recipes.length} 種類</span>
+            {query || category !== "all" || texturesOnly ? <button type="button" disabled={adding}
+              className="text-brand-700 underline underline-offset-2" onClick={() => {setQuery("");setCategory("all");setTexturesOnly(false);}}>条件をリセット</button> : null}
           </div>
         </div>
         <div className="scrollbar-thin min-h-0 flex-1 overflow-auto p-3">
@@ -202,20 +215,23 @@ export function SceneRecipeStore({
               <p>条件に合う{title}がありません</p>
             </div>
           ) : (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2.5">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-3">
               {visible.map((recipe) => {
                 const active = recipe.id === selected?.id;
                 return (
                   <button
                     key={recipe.id}
                     type="button"
+                    data-testid="scene-recipe-card"
+                    aria-label={recipe.name}
+                    disabled={adding}
                     aria-pressed={active}
                     onClick={() => {
                       setSelectedId(recipe.id);
                       setAddedMessage(null);
                       setError(null);
                     }}
-                    className={`overflow-hidden rounded-lg border bg-white text-left transition ${
+                    className={`overflow-hidden rounded-xl border bg-white text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-60 ${
                       active
                         ? "border-brand-400 ring-2 ring-brand-100"
                         : "border-slate-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm"
@@ -226,12 +242,16 @@ export function SceneRecipeStore({
                       className="aspect-[16/10] w-full"
                     />
                     <div className="p-2.5">
-                      <p className="truncate text-xs font-semibold text-slate-800">
+                      <p className="min-h-10 text-[13px] font-semibold leading-5 text-slate-900">
                         {recipe.name}
                       </p>
-                      <p className="mt-1 text-[10px] font-medium text-slate-500">
-                        {SCENE_RECIPE_CATEGORY_LABELS[recipe.category]}
-                      </p>
+                      <p className="mt-1 line-clamp-2 min-h-10 text-[13px] leading-6 text-slate-600">{recipe.description}</p>
+                      <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-medium text-slate-600">
+                        <span className="rounded bg-slate-100 px-2 py-0.5">{recipeGroup(recipe)}</span>
+                        {usesTextures(recipe) ? <span className="rounded bg-slate-100 px-2 py-0.5">テクスチャ付き</span> : null}
+                        {recipe.comparisonLabels ? <span className="rounded bg-slate-100 px-2 py-0.5">左右で比較</span> : null}
+                        {recipe.behaviours?.length ? <span className="rounded bg-slate-100 px-2 py-0.5">操作手順付き</span> : null}
+                      </div>
                     </div>
                   </button>
                 );
@@ -242,26 +262,34 @@ export function SceneRecipeStore({
       </section>
 
       <aside
-        className="scrollbar-thin w-[350px] shrink-0 overflow-auto bg-white p-4"
+        className="scrollbar-thin w-[38%] min-w-[300px] max-w-[440px] shrink-0 overflow-auto bg-white p-4"
         aria-label={`選択した${title}の詳細`}
       >
         {selected && contents ? (
           <div className="space-y-4">
             <SceneRecipeCatalogPreview
+              key={selected.id}
               recipe={selected}
               className="aspect-[16/10] w-full overflow-hidden rounded-lg"
               live
             />
             <div>
+              {selected.comparisonLabels ? <div className="mb-2 grid grid-cols-2 gap-2 text-center text-xs font-semibold text-slate-700">
+                <span className="rounded bg-slate-100 px-2 py-1.5">左：{selected.comparisonLabels[0]}</span>
+                <span className="rounded bg-slate-100 px-2 py-1.5">右：{selected.comparisonLabels[1]}</span>
+              </div> : null}
+              <p className="text-xs text-slate-500">ドラッグで回転・ホイールで拡大。操作ギミックはシーンに追加してPlayで確認します。</p>
+            </div>
+            <div>
               <h3 className="text-base font-semibold text-slate-900">
                 {selected.name}
               </h3>
-              <p className="mt-1 text-xs leading-5 text-slate-600">
+              <p className="mt-1 text-[13px] leading-6 text-slate-600">
                 {selected.description}
               </p>
             </div>
 
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-600">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-6 text-slate-600">
               <p className="font-semibold text-slate-800">中身</p>
               <ul className="mt-1 space-y-0.5">
                 {contents.primitive > 0 ? (
@@ -283,15 +311,16 @@ export function SceneRecipeStore({
                     しかけ {contents.graph} 本（ノードグラフ素材として追加します）
                   </li>
                 ) : null}
+                {usesTextures(selected) ? <li>使用するPBRテクスチャもAssetsに追加します</li> : null}
               </ul>
             </div>
 
             {selected.behaviours?.length ? (
-              <div className="rounded-lg border border-slate-200 bg-white p-3 text-[11px] leading-5 text-slate-600">
-                <p className="font-semibold text-slate-800">動き</p>
+              <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs leading-6 text-slate-600">
+                <p className="font-semibold text-slate-800">操作すると起きること</p>
                 <ul className="mt-1 space-y-1">
                   {selected.behaviours.map((behaviour) => (
-                    <li key={behaviour.graphName} className="flex gap-1.5">
+                    <li key={`${behaviour.host}-${behaviour.graphName}`} className="flex gap-1.5">
                       <MousePointerClick
                         size={13}
                         className="mt-0.5 shrink-0 text-slate-400"
@@ -305,7 +334,7 @@ export function SceneRecipeStore({
             ) : null}
 
             {selected.lesson ? (
-              <div className="rounded-lg border border-brand-200 bg-brand-50 p-3 text-[11px] leading-5 text-brand-900">
+              <div className="rounded-lg border border-brand-200 bg-brand-50 p-3 text-xs leading-6 text-brand-900">
                 <p className="font-semibold">このセットで分かること</p>
                 <p className="mt-1">{selected.lesson.goal}</p>
                 <ol className="mt-2 space-y-1.5">
@@ -321,10 +350,11 @@ export function SceneRecipeStore({
               </div>
             ) : null}
 
-            <p className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] leading-4 text-amber-800">
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs leading-5 text-amber-800">
               {selected.note}
             </p>
 
+            <div className="sticky bottom-0 z-10 space-y-2 border-t border-slate-200 bg-white/95 py-3">
             <button
               type="button"
               onClick={addSelected}
@@ -334,7 +364,7 @@ export function SceneRecipeStore({
               {adding ? (
                 <>
                   <LoaderCircle size={13} className="animate-spin" />
-                  追加中
+                  モデル・素材・グラフを追加中…
                 </>
               ) : (
                 `${selected.name}をシーンへ追加`
@@ -342,12 +372,13 @@ export function SceneRecipeStore({
             </button>
 
             {disabledReason ? (
-              <p className="text-[11px] text-slate-500">{disabledReason}</p>
+              <p className="text-xs text-slate-500">{disabledReason}</p>
             ) : null}
             {addedMessage ? (
               <div
                 ref={addedRef}
-                className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-[11px] leading-5 text-emerald-800">
+                role="status" aria-live="polite"
+                className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-xs leading-6 text-emerald-800">
                 <p className="flex items-start gap-1.5 font-semibold">
                   <CheckCircle2 size={13} className="mt-0.5 shrink-0" />
                   {addedMessage}
@@ -367,15 +398,16 @@ export function SceneRecipeStore({
               </div>
             ) : null}
             {error ? (
-              <p className="flex items-start gap-1.5 text-[11px] text-rose-700">
+              <p role="alert" className="flex items-start gap-1.5 text-xs text-rose-700">
                 <CircleAlert size={13} className="mt-0.5 shrink-0" />
                 {error}
               </p>
             ) : null}
+            </div>
           </div>
         ) : (
           <p className="text-xs text-slate-500">
-            このプロジェクト種別で使える{title}がありません
+            条件に合う{title}がありません。検索条件をリセットしてください
           </p>
         )}
       </aside>

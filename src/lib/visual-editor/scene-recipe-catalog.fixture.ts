@@ -1,3 +1,4 @@
+import { catalogPublicAssetUrl } from "./catalog-public-url";
 import { BUILTIN_RECIPE_AUDIO, getBuiltinRecipeAudio } from "./builtin-recipe-audio";
 import { getBuiltinRecipeModel } from "./builtin-recipe-models";
 import { getBuiltinPrimitiveCreation } from "./creation-catalog";
@@ -55,6 +56,10 @@ function placeParts(recipe: SceneRecipe): Map<string, SceneRecipePlacedPart> {
 
 /** Deterministic assertions for the 3D set catalog and its wired behaviours. */
 export function runSceneRecipeCatalogFixtureAssertions(): void {
+  assert(catalogPublicAssetUrl("/visual-editor/test.png", "/") === "/visual-editor/test.png", "Catalog root URL");
+  assert(catalogPublicAssetUrl("/visual-editor/test.png", "./") === "./visual-editor/test.png", "Catalog relative URL");
+  assert(catalogPublicAssetUrl("/visual-editor/test.png", "/xrift-studio/") === "/xrift-studio/visual-editor/test.png", "Catalog subpath URL");
+
   for (const projectKind of ["world", "item"] as const) {
     const all = getSceneRecipesForProjectKind(projectKind);
     const shelves = ["models", "materials", "gimmicks"] as const;
@@ -68,6 +73,9 @@ export function runSceneRecipeCatalogFixtureAssertions(): void {
     }
   }
 
+  assert(getSceneRecipesForProjectKind("world", "materials").length === 50, "Ship 50 material comparison sets");
+  assert(getSceneRecipesForProjectKind("item", "materials").length === 50, "Item projects retain the same 50 material sets");
+  assert(getSceneRecipesForProjectKind("world", "gimmicks").length === 50, "Ship 50 usable gimmicks");
   const ids = new Set<string>();
   for (const recipe of SCENE_RECIPES) {
     assert(!ids.has(recipe.id), `Duplicate scene recipe id: ${recipe.id}`);
@@ -112,6 +120,10 @@ export function runSceneRecipeCatalogFixtureAssertions(): void {
         );
       }
       if (part.kind === "model") {
+        if (part.materialAssetId) assert(
+          BUILTIN_MATERIAL_ASSETS.some(material => material.id === part.materialAssetId) || Boolean(getMaterialShowcaseAsset(part.materialAssetId)),
+          `${recipe.id} overrides its model with an unknown Material`,
+        );
         assert(
           Boolean(getBuiltinRecipeModel(part.modelId)),
           `${recipe.id} references an unknown model ${part.modelId}`,
