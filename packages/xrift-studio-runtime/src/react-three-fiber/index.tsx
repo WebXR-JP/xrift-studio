@@ -18,7 +18,6 @@ import {
 import {
   EntryLogBoard,
   Grabbable,
-  Interactable,
   LiveVideoPlayer,
   Portal,
   ScreenShareDisplay,
@@ -39,6 +38,7 @@ import {
   type VideoPlayerProps,
   type VideoScreenProps,
 } from "@xrift/world-components";
+import { XriftInteractable as Interactable } from "../script/interactable.js";
 import {
   CuboidCollider,
   MeshCollider,

@@ -118,6 +118,7 @@ import { collectRequiredScriptAssetIds } from "../scripting/script-schedule";
 import { createScriptAssetRuntimeDescriptorMap } from "../scripting/asset-runtime";
 import {
   createImageQuadOverlayFiles,
+  createInteractableOverlayFiles,
   createInteractionTriggerOverlayFiles,
   createRuntimeBridgeOverlayFiles,
   createScriptAudioSourceOverlayFile,
@@ -442,6 +443,9 @@ export function compileVisualProject(
     )
   ) {
     overlayFiles.push(...createImageQuadOverlayFiles());
+  }
+  if (outputMode === "classic-jsx" && generated.includes('from "./xrift-studio/interactable"')) {
+    overlayFiles.push(...createInteractableOverlayFiles());
   }
   if (
     outputMode === "classic-jsx" &&
@@ -5950,7 +5954,11 @@ function renderRegisteredXriftComponent(
       'import { emitXriftInteraction } from "./xrift-studio/interaction-trigger-runtime";',
     );
   }
-  if (compiled.importName) context.imports.add(compiled.importName);
+  if (compiled.importName === "Interactable") {
+    context.extraImports.add('import { XriftInteractable as Interactable } from "./xrift-studio/interactable";');
+  } else if (compiled.importName) {
+    context.imports.add(compiled.importName);
+  }
   compiled.reactValueImports.forEach((name) => context.reactValueImports.add(name));
   compiled.reactTypeImports.forEach((name) => context.reactTypeImports.add(name));
   compiled.supportDeclarations.forEach((declaration) =>

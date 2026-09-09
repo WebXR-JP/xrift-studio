@@ -3,7 +3,6 @@ import {
   BillboardY,
   EntryLogBoard,
   Grabbable,
-  Interactable,
   LiveVideoPlayer,
   Mirror,
   Portal,
@@ -34,6 +33,7 @@ import {
   type VideoPlayerProps,
   type VideoScreenProps,
 } from "@xrift/world-components";
+import { XriftInteractable as Interactable } from "../../../packages/xrift-studio-runtime/src/script/interactable";
 import {
   Suspense,
   useMemo,

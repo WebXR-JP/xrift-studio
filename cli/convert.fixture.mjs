@@ -127,6 +127,7 @@ import {
   runModelAnimationGraphFixtureAssertions,
 } from "../src/lib/visual-editor/interactivity-recipes.fixture.ts";
 import { runSceneRecipeRuntimeFixtureAssertions } from "../src/lib/visual-editor/scene-recipe-runtime.fixture.ts";
+import { runInteractableLayerFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/interactable.fixture.ts";
 import { runSceneRecipeCatalogFixtureAssertions } from "../src/lib/visual-editor/scene-recipe-catalog.fixture.ts";
 import { runMaterialShowcaseCatalogFixtureAssertions } from "../src/lib/visual-editor/material-showcase-catalog.fixture.ts";
 import { runInteractionTriggerFixtureAssertions } from "../src/lib/visual-editor/interaction-trigger.fixture.ts";
@@ -334,6 +335,7 @@ try {
 
   await convertRichWorld(fixtureRoot);
   await runFixtureSuites([
+    ["Interactable late model layers", runInteractableLayerFixtureAssertions],
     ["model download optimization", runModelDownloadFixtureAssertions],
     ["model instancing", runModelInstancingFixtureAssertions],
     ["visual compiler", runVisualCompilerFixtureAssertions],

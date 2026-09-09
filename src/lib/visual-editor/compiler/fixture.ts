@@ -3555,6 +3555,11 @@ export function runVisualCompilerFixtureAssertions(
       (file) => file.relativePath === "src/World.tsx",
     )?.content ?? "";
   assert(interactiveResult.canStage, "Managed Grabbable should be stageable");
+  assert(
+    interactiveSource.includes('XriftInteractable as Interactable') &&
+      interactiveResult.overlayFiles.some(file => file.relativePath === "src/xrift-studio/interactable.tsx"),
+    "Published Interactable must carry the late-loaded model layer bridge even without a graph",
+  );
   assert(interactiveSource.includes("useState"), "Managed runtime state was not generated");
   assert(interactiveSource.includes("onMove={(next)"), "Grabbable callback was not generated");
   assert(interactiveSource.includes("Skybox"), "Skybox import/output was not generated");

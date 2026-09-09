@@ -5,6 +5,8 @@ import scriptLightSource from "../../../../packages/xrift-studio-runtime/src/scr
 import scriptLifecycleSource from "../../../../packages/xrift-studio-runtime/src/script/lifecycle.ts?raw";
 import scriptInteractionTriggerSource from "../../../../packages/xrift-studio-runtime/src/script/interaction-trigger.ts?raw";
 import scriptInteractionTriggerRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/interaction-trigger-runtime.tsx?raw";
+import interactableSource from "../../../../packages/xrift-studio-runtime/src/script/interactable.tsx?raw";
+import interactionLayerSource from "../../../../packages/xrift-studio-runtime/src/script/interaction-layer.ts?raw";
 import scriptParticleSource from "../../../../packages/xrift-studio-runtime/src/script/particle.tsx?raw";
 import scriptAnimationSource from "../../../../packages/xrift-studio-runtime/src/script/animation.ts?raw";
 import scriptAnimationMixerSource from "../../../../packages/xrift-studio-runtime/src/script/animation-mixer.ts?raw";
@@ -321,6 +323,13 @@ export function createRuntimeBridgeOverlayFiles(): CompilerOverlayFile[] {
 
 function overlay(relativePath: string, content: string): CompilerOverlayFile {
   return { relativePath, content, kind: "source", owner: "xrift-studio-compiler" };
+}
+
+export function createInteractableOverlayFiles(): CompilerOverlayFile[] {
+  return [
+    overlay(`${SCRIPT_RUNTIME_DIRECTORY}/interactable.tsx`, interactableSource),
+    overlay(`${SCRIPT_RUNTIME_DIRECTORY}/interaction-layer.ts`, interactionLayerSource),
+  ];
 }
 
 function rewriteImageQuadImports(source: string): string {

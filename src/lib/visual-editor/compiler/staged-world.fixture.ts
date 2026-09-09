@@ -37,6 +37,7 @@ import {
 } from "../terrain-presets";
 import { WATER_SHADER_CATALOG } from "../water-shader-catalog";
 import { compileVisualProject } from "./compile";
+import { createXriftComponent, XRIFT_COMPONENT_SCHEMA_IDS } from "../component-registry";
 import type { VisualCompilerDocuments } from "./types";
 
 /**
@@ -245,13 +246,17 @@ export function createStagedTypecheckWorldDocuments(): VisualCompilerDocuments {
     },
   });
   if (!textComponent) throw new Error("staged fixture could not create Text");
+  const interactable = createXriftComponent(XRIFT_COMPONENT_SCHEMA_IDS.interactable, {
+    properties: { id: "staged-interactable" },
+  });
+  if (!interactable) throw new Error("staged fixture could not create Interactable");
   scene = {
     ...textTarget.scene,
     entities: {
       ...textTarget.scene.entities,
       [textEntity.id]: {
         ...textEntity,
-        components: [...textEntity.components, textComponent],
+        components: [...textEntity.components, textComponent, interactable],
       },
     },
   };
