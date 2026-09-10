@@ -3532,7 +3532,9 @@ function renderModelMesh(
     materialComponents,
     getGeometryMaterialSlots(model).length === 1,
     context,
+    !isObj,
   );
+  const needsMaterialIndices = !isObj && overrides.length > 0;
   const sourceNodeIndex =
     mesh.geometry?.kind === "asset"
       ? mesh.geometry.sourceNodeIndex
@@ -3562,6 +3564,7 @@ function renderModelMesh(
         }
       : undefined;
   const needsParser =
+    needsMaterialIndices ||
     sourceNodeIndex !== undefined ||
     // 結合はNodeの目印と、animationが触るNodeを知るためにparserを使う。
     Boolean(staticMerge) ||
@@ -4011,10 +4014,12 @@ function resolveModelMaterialOverrides(
     appendOverride(slot, binding.materialAssetId, binding.sourceNodeIndex);
   }
 
-  const bySourceName = new Map<string, string>();
+  // glTF names are display labels, not identifiers. Preserve distinct slots
+  // automatically for existing projects as well as newly imported models.
+  const bySourceKey = new Map<string, string>();
   for (const override of overrides) {
-    const sourceKey = `${override.sourceNodeIndex ?? "global"}:${override.slot.name}`;
-    const previous = bySourceName.get(sourceKey);
+    const sourceKey = `${override.sourceNodeIndex ?? "global"}:${modelMaterialKey(override.slot, model.importMetadata?.sourceFormat !== "obj")}`;
+    const previous = bySourceKey.get(sourceKey);
     if (previous && previous !== override.material.id) {
       addDiagnostic(context, {
         severity: "blocking",
@@ -4027,10 +4032,19 @@ function resolveModelMaterialOverrides(
         fieldPath: "materialBindings",
       });
     } else {
-      bySourceName.set(sourceKey, override.material.id);
+      bySourceKey.set(sourceKey, override.material.id);
     }
   }
   return overrides;
+}
+
+function modelMaterialKey(
+  slot: MaterialSlotDefinition,
+  useSourceIndices: boolean,
+): string {
+  return useSourceIndices && slot.sourceMaterialIndex !== undefined
+    ? `index:${slot.sourceMaterialIndex}`
+    : `name:${slot.name}`;
 }
 
 function renderModelMaterialInjection(
@@ -4039,6 +4053,7 @@ function renderModelMaterialInjection(
   >,
   allowWildcard: boolean,
   context: CompileContext,
+  useSourceIndices: boolean,
 ): string {
   if (overrides.length === 0) return "";
   const globalByName = new Map<
@@ -4051,10 +4066,10 @@ function renderModelMaterialInjection(
   >();
   overrides.forEach((override) => {
     if (override.sourceNodeIndex === undefined) {
-      globalByName.set(override.slot.name, override);
+      globalByName.set(modelMaterialKey(override.slot, useSourceIndices), override);
     } else {
       nodeByKey.set(
-        `${override.sourceNodeIndex}:${override.slot.name}`,
+        `${override.sourceNodeIndex}:${modelMaterialKey(override.slot, useSourceIndices)}`,
         override,
       );
     }
@@ -4079,7 +4094,7 @@ function renderModelMaterialInjection(
     .join("\n");
   const resolver = wildcard
     ? `      return <${wildcard.componentName} key={key} attach={attach} meshName={object.name} />;`
-    : `${nodeCases ? `      if (typeof sourceNodeIndex === "number") {\n        switch (\`\${sourceNodeIndex}:\${materialName}\`) {\n${nodeCases}\n        }\n      }\n` : ""}      switch (materialName) {\n${globalCases}\n        default:\n          return null;\n      }`;
+    : `${nodeCases ? `      if (typeof sourceNodeIndex === "number") {\n        for (const materialKey of materialKeys) {\n          switch (\`\${sourceNodeIndex}:\${materialKey}\`) {\n${nodeCases}\n          }\n        }\n      }\n` : ""}      for (const materialKey of materialKeys) {\n        switch (materialKey) {\n${globalCases}\n        }\n      }\n      return null;`;
   const sourceNodeLookup = nodeCases
     ? `          let sourceNodeObject: typeof object | null = object;
           let sourceNodeIndex: number | undefined;
@@ -4099,8 +4114,10 @@ function renderModelMaterialInjection(
               typeof material === "object" && material !== null && "name" in material
                 ? String(material.name)
                 : "";
+${useSourceIndices ? `            const materialIndex = sourceMaterialIndices.get(material)?.materials;
+` : ""}            const materialKeys = ${useSourceIndices ? 'typeof materialIndex === "number" ? [`index:${materialIndex}`, `name:${materialName}`] : ' : ""}[\`name:\${materialName}\`];
 `;
-  const source = `(object: Object3D) => {
+  const source = `${useSourceIndices ? `(${wildcard ? "_sourceMaterialIndices" : "sourceMaterialIndices"}: ReadonlyMap<unknown, { materials?: number }>) => ` : ""}(object: Object3D) => {
 ${sourceNodeLookup}
           if (!("material" in object)) return null;
           const renderOverride = (${wildcard ? "_material" : "material"}: unknown, attach: string, key: string) => {
@@ -4117,8 +4134,13 @@ ${resolver}
   // Expanded model nodes often share hundreds of material slots. Emitting
   // this resolver inside every Clone multiplies the TypeScript/Babel AST by
   // node count, even though the callback captures no per-node state.
+  const injection = (name: string) => {
+    if (!useSourceIndices) return `\n        inject={${name}}`;
+    context.reactValueImports.add("useMemo");
+    return `\n        inject={useMemo(() => ${name}(parser.associations), [parser])}`;
+  };
   const cachedName = context.materialInjectionNames.get(source);
-  if (cachedName) return `\n        inject={${cachedName}}`;
+  if (cachedName) return injection(cachedName);
   const name = `injectModelMaterials_${sha256Utf8(source)}`;
   context.materialInjectionNames.set(source, name);
   context.threeTypeImports.add("Object3D");
@@ -4126,7 +4148,7 @@ ${resolver}
     `model-material-injection:${name}`,
     `const ${name} = ${source};`,
   );
-  return `\n        inject={${name}}`;
+  return injection(name);
 }
 
 function resolveMeshMaterial(

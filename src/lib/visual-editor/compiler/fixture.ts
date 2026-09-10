@@ -79,6 +79,8 @@ export type VisualCompilerFixtureSources = {
   model: string;
   interactive: string;
   particle: string;
+  modelFiles: { relativePath: string; content: string }[];
+  wildcardModelFiles: { relativePath: string; content: string }[];
 };
 
 /** Lightweight fixture assertions that can run in a browser or a TS test runner. */
@@ -1986,13 +1988,13 @@ export function runVisualCompilerFixtureAssertions(
     materialSlots: [
       {
         slot: "body",
-        name: "Body",
+        name: "Shared Material",
         sourceMaterialIndex: 0,
         defaultMaterialAssetId: BUILTIN_ASSET_IDS.material.blue,
       },
       {
         slot: "detail",
-        name: "Detail",
+        name: "Shared Material",
         sourceMaterialIndex: 1,
         defaultMaterialAssetId: BUILTIN_ASSET_IDS.material.violet,
       },
@@ -2055,7 +2057,57 @@ export function runVisualCompilerFixtureAssertions(
     modelResult.overlayFiles.find(
       (file) => file.relativePath === "src/World.tsx",
     )?.content ?? "";
-  assert(modelResult.canStage, "Project GLB should be stageable");
+  assert(modelResult.canStage, "Same-name glTF materials with distinct source indices must be stageable");
+  assert(
+    modelSource.includes('case "index:0"') &&
+      modelSource.includes('case "index:1"') &&
+      modelSource.includes('case "0:index:1"') &&
+      modelSource.includes("sourceMaterialIndices.get(material)?.materials"),
+    "Same-name materials must retain global slots and the node-specific override",
+  );
+  const unposedModelScene = {
+    ...modelScene,
+    entities: {
+      ...modelScene.entities,
+      [modelEntity.id]: {
+        ...modelScene.entities[modelEntity.id],
+        components: modelScene.entities[modelEntity.id].components.map((component) =>
+          component.type === "mesh"
+            ? { ...component, modelPose: undefined, materialBindings: [] }
+            : component),
+      },
+    },
+  };
+  const unposedModelResult = compileVisualProject({
+    ...modelProject,
+    scenes: { [modelScene.sceneId]: unposedModelScene },
+  }, { generatedAt: fixedTime });
+  const unposedModelSource = unposedModelResult.overlayFiles.find(
+    (file) => file.relativePath === "src/World.tsx",
+  )?.content ?? "";
+  assert(unposedModelResult.canStage &&
+    unposedModelSource.includes("const { scene, parser } = useGLTF(modelUrl);") &&
+    unposedModelSource.includes("object={scene}") &&
+    unposedModelSource.includes("(parser.associations)"),
+  "Default same-name assignments need parser associations even without pose or node overrides");
+  const ambiguousLegacyResult = compileVisualProject({
+    ...modelProject,
+    assets: {
+      ...modelProject.assets,
+      assets: {
+        ...modelProject.assets.assets,
+        [projectModel.id]: {
+          ...projectModel,
+          materialSlots: projectModel.materialSlots.map((slot) => ({
+            ...slot, sourceMaterialIndex: undefined,
+          })),
+        },
+      },
+    },
+  }, { generatedAt: fixedTime });
+  assert(!ambiguousLegacyResult.canStage && ambiguousLegacyResult.diagnostics.some(
+    (diagnostic) => diagnostic.code === "model-material-name-ambiguous",
+  ), "An automatic resolution must not guess assignments when source indices are absent");
   // Expanded GLBs repeat the same slot table on hundreds of nodes. Its
   // emitted resolver must grow with distinct bindings, not placement count.
   const repeatedModelScene = {
@@ -2085,9 +2137,9 @@ export function runVisualCompilerFixtureAssertions(
   )?.content ?? "";
   assert(
     (repeatedSource.match(/const injectModelMaterials_/g) ?? []).length === 1 &&
-      (repeatedSource.match(/inject=\{injectModelMaterials_/g) ?? []).length === 25 &&
-      (repeatedSource.match(/case "Body"/g) ?? []).length === 1 &&
-      repeatedSource.includes('case "0:Detail"'),
+      (repeatedSource.match(/inject=\{useMemo\(\(\) => injectModelMaterials_/g) ?? []).length === 25 &&
+      (repeatedSource.match(/case "index:0"/g) ?? []).length === 1 &&
+      repeatedSource.includes('case "0:index:1"'),
     "Repeated model placements must share one resolver while preserving node-specific overrides",
   );
   for (const result of [audioResult, audioRuntimeResult]) {
@@ -2114,7 +2166,7 @@ export function runVisualCompilerFixtureAssertions(
   }, { generatedAt: fixedTime }).overlayFiles.find(
     (file) => file.relativePath === "src/World.tsx",
   )?.content ?? "";
-  const resolverUses = [...distinctSource.matchAll(/inject=\{(injectModelMaterials_\w+)\}/g)]
+  const resolverUses = [...distinctSource.matchAll(/inject=\{useMemo\(\(\) => (injectModelMaterials_\w+)\(/g)]
     .map((match) => match[1]);
   assert(
     (distinctSource.match(/const injectModelMaterials_/g) ?? []).length === 2 &&
@@ -2771,7 +2823,7 @@ export function runVisualCompilerFixtureAssertions(
   );
   assert(
     modelSource.includes("sourceNodeObject.parent") &&
-      modelSource.includes('"0:Detail"') &&
+      modelSource.includes('"0:index:1"') &&
       modelSource.includes('"0":{"position":[0.1,0,0]'),
     "Expanded Model node pose and Material override were not generated",
   );
@@ -2910,7 +2962,7 @@ export function runVisualCompilerFixtureAssertions(
     assert(animationResult.canStage, "Animated GLB should be stageable");
     [
       "useAnimations",
-      "const { scene, animations } = useGLTF(modelUrl);",
+      "const { scene, parser, animations } = useGLTF(modelUrl);",
       "const animationRoot = useRef<Group>(null);",
       "const { mixer, clips } = useAnimations(animations, animationRoot);",
       "createXriftAnimationRuntimeBridge",
@@ -3196,7 +3248,7 @@ export function runVisualCompilerFixtureAssertions(
       "Expanded GLB source must retain parser associations without reapplying import scale",
     );
   }
-  assert(modelSource.includes('case "Body"'), "Material slot mapping was not generated");
+  assert(modelSource.includes('case "index:0"'), "Material slot mapping was not generated");
   assert(
     modelResult.assetCopyPlan.some(
       (entry) =>
@@ -3609,6 +3661,8 @@ export function runVisualCompilerFixtureAssertions(
     model: modelSource,
     interactive: interactiveSource,
     particle: particleSource,
+    modelFiles: modelResult.overlayFiles,
+    wildcardModelFiles: wildcardResult.overlayFiles,
   });
 
   const prefabFixture = createPrefabCompilerFixture(world);

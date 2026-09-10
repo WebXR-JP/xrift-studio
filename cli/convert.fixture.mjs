@@ -339,6 +339,7 @@ try {
     ["model download optimization", runModelDownloadFixtureAssertions],
     ["model instancing", runModelInstancingFixtureAssertions],
     ["visual compiler", runVisualCompilerFixtureAssertions],
+    ["model material compiler", runModelMaterialCompilerFixtures],
     ["terrain", runTerrainFixtureAssertions],
     ["terrain grass", runTerrainGrassFixtureAssertions],
     ["terrain presets", runTerrainPresetFixtureAssertions],
@@ -589,6 +590,57 @@ function assertStagedWorldDeclaresItsNetworkUse(compiled) {
     offenders.length === 0 || declared,
     `staged world uses a network API without declaring it: ${offenders.join(", ")}`,
   );
+}
+
+async function runModelMaterialCompilerFixtures() {
+  let sources;
+  runVisualCompilerFixtureAssertions((value) => { sources = value; });
+  const ts = await import("typescript-test-api");
+  const source = sources.model;
+  const ast = ts.createSourceFile("World.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const statement = ast.statements.find((node) =>
+    ts.isVariableStatement(node) && node.declarationList.declarations.some((declaration) =>
+      ts.isIdentifier(declaration.name) && declaration.name.text.startsWith("injectModelMaterials_"),
+    ),
+  );
+  assert(statement, "Generated model material resolver is missing");
+  const declaration = statement.declarationList.declarations[0];
+  const components = [...statement.getText(ast).matchAll(/return <(\w+)/g)].map((match) => match[1]);
+  const names = [...new Set(components)];
+  const compiled = ts.transpileModule(statement.getText(ast), {
+    compilerOptions: { jsx: ts.JsxEmit.React, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const factory = new Function("React", ...names, `${compiled}\nreturn ${declaration.name.text};`)(
+    { createElement: (type, props) => ({ type, props }) }, ...names,
+  );
+  // GLTFLoader associations identify material objects even when their names
+  // are identical. Clone / SkeletonUtils retain these material references.
+  const first = { name: "Shared Material" };
+  const second = { name: "Shared Material" };
+  const inject = factory(new Map([[first, { materials: 0 }], [second, { materials: 1 }]]));
+  const object = { name: "mesh", material: [first, second], userData: {}, parent: null };
+  const global = inject(object);
+  assert(global.length === 2 && global[0].type !== global[1].type,
+    "Same-name materials must receive distinct global assignments");
+  assert(global[0].props.attach === "material-0" && global[1].props.attach === "material-1",
+    "Multi-material meshes must retain each attachment index");
+  const node = inject({ ...object, parent: { userData: { xriftSourceNodeIndex: 0 }, parent: null } });
+  assert(node[0].type === global[0].type && node[1].type !== global[1].type,
+    "The node-specific override must replace only its source material");
+  assert(inject({ ...object, material: { name: "unassigned" } }) === null,
+    "An unrelated material must not receive an override");
+  // A second model can share the emitted factory, but never the first
+  // model's parser associations or resulting resolver closure.
+  const other = factory(new Map([[first, { materials: 1 }], [second, { materials: 0 }]]));
+  assert(other(object)[0].type === global[1].type,
+    "Shared generated code must use the current model's associations");
+  for (const [label, files] of [
+    ["same-name-model-materials", sources.modelFiles],
+    ["single-model-material", sources.wildcardModelFiles],
+  ]) {
+    await typecheckWithTemplateOptions(label, files,
+      'export { World } from "./World";\nexport type { WorldProps } from "./World";\n');
+  }
 }
 
 /**

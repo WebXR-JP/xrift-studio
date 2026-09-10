@@ -43,6 +43,10 @@
 
 ## F-10 ビジュアル編集保存 / Compile / プレビュー / Upload の状態設計
 
+参照: MI-03, MI-04, MI-05
+
+同名のglTFマテリアルは、公開データの生成時に元モデル内のマテリアル番号で自動的に区別する。既存プロジェクトも同じ処理を通すため、名前の変更や再取り込みは不要。ノードごとの割り当てと各マテリアルの見た目を保つ。処理は通常の公開前検査に含め、成功後はそのまま公開へ進める。元の番号がない古いデータは名前で照合し、一意に決められない割り当てを勝手に統合しない。この処理は画面・MCP・コード書き出しで共通のcompilerを使うため、追加の修正操作は設けない。
+
 ### 操作前
 
 - authoring操作前は直前revisionを自動保存済みとして示す。compile / previewはtargetとinput freshnessを示す。Uploadはtitle、description、thumbnail、auth、diagnostic、既存remote IDを開始前に示す。
