@@ -1,6 +1,6 @@
 ---
 name: xrift-studio-error-recovery
-description: XRift Studio のエラーログや失敗報告を受けて、原因の再現、実装修正、回帰テストまで進める。「公開できない」「既存ワールドでエラー」「この失敗を減らしたい」などの不具合報告で使う。
+description: XRift Studio のエラーログや不具合報告から原因を再現し、修正と再発防止を行うときに使う。
 ---
 
 # エラー報告から再発防止まで

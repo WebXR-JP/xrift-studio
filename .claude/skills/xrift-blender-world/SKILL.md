@@ -1,6 +1,6 @@
 ---
 name: xrift-blender-world
-description: Blender MCP で XRIFT Studio 向けのワールド（部屋・建築・インテリア・スタジオ）を手続き的に制作し、GLB 経由で XRIFT Studio へ取り込むまでの一連の手順。Z-fighting の設計ルール、Poly Haven CC0 テクスチャの ARM→glTF 直結、ワールド座標ベース UV、XRIFT MCP の落とし穴（starter floor / spawn 位置 / ambient.enabled / 自動コライダー / Blender +Y → XRIFT −Z）を含む。Use whenever the user builds a room, interior, building, studio, or any 3D environment in Blender — especially for a metaverse / VR world — or imports a model into XRift Studio. 「Blenderで部屋を作って」「スタジオを作って」「ワールドを作って」「XRIFTに持ち込んで」「GLBをインポートして」「Z-fightingが起きた」「メタバース用のモデル」「軽量化して」などで発動。ユーザーが Blender と XRIFT のどちらか一方しか言及していなくても、もう一方に繋がる作業なら参照すること。
+description: Blender MCP で XRift Studio 向けの部屋・建築・インテリアを制作し、GLB で取り込むときに使う。
 metadata:
   version: "1.0.0"
 ---

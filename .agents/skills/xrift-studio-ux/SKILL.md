@@ -1,6 +1,6 @@
 ---
 name: xrift-studio-ux
-description: XRift Studio の制作体験を、更新、作成、起動、公開、一覧の各導線で途切れなく設計・実装・レビューする。XRift Studio に新機能や画面を追加するとき、既存フローを変更するとき、UI 文言や状態遷移をレビューするときに使う。
+description: XRift Studio の画面・操作導線・状態遷移を設計、変更、レビューするときに使う。
 ---
 
 # XRift Studio UX
@@ -9,7 +9,7 @@ description: XRift Studio の制作体験を、更新、作成、起動、公開
 
 制作の目的、画面の状態、主操作、完了後の到達点を一つの流れとして揃える。
 
-開始前に、リポジトリの [UX 原則](../../../docs/UX_PRINCIPLES.md)、[マイクロインタラクション Wiki](../../../docs/UX_INTERACTIONS.md)、`AGENT.md` を読む。実装中は既存の `UpdateDialog.tsx`、`ProjectLibrary.tsx`、`ProjectCard.tsx`、`EditorView.tsx` を再利用できる実例として参照する。
+導線を変える場合は [UX 原則](../../../docs/UX_PRINCIPLES.md) の該当箇所を読む。動きや状態遷移を変える場合は [マイクロインタラクション Wiki](../../../docs/UX_INTERACTIONS.md) を参照する。文言だけの修正に全体設計を要求しない。実装中は既存の `UpdateDialog.tsx`、`ProjectLibrary.tsx`、`ProjectCard.tsx`、`EditorView.tsx` を再利用できる実例として参照する。
 
 ## 設計手順
 
@@ -19,7 +19,7 @@ description: XRift Studio の制作体験を、更新、作成、起動、公開
 4. 成功時は通知だけで完結させず、作成物、URL、更新済み状態のいずれかに到達できるようにする。
 5. 一覧へ戻る機能なら、結果を識別でき、新規作成の入口も失われないことを確認する。
 6. 対応する `MI-xx` を Wiki から選び、動き、無効化、文言、復帰先を機能仕様に記録する。新しい動きは Wiki に追加する。
-7. 実画面の確認は xrift-studio-verify スキルの手順（typecheck → ブラウザプレビュー → Tauri MCP）で行う。
+7. 変更した表示・操作を xrift-studio-verify の該当する Tier で確認する。
 
 ## 実装上の判断
 
@@ -54,7 +54,7 @@ AssetsはAssets直下にフォルダー階層を表示し、その下に種類�
 - 状態、主操作、成功後の到達点、失敗時の復帰手段をすべて確認する。
 - 作成または更新後に一覧と選択状態が最新になっていることを確認する。
 - 主要導線をスクリーンショットまたは DOM で確認し、操作名に頼らず次の一手を理解できるかを確認する。
-- `pnpm typecheck` と検証目的の実機起動・MCP 読み取りは許可なしで行ってよい。`pnpm tauri:build` と書き込みを伴う実機 UI 操作はユーザーの許可後に実行する。
+- 検証とビルドの範囲は xrift-studio-verify、実行の判断は `AGENT.md` に従う。許可済みの操作を再確認しない。
 
 Assetsのカードは高さと補助情報を抑え、素材名とプレビューを見渡せる密度にする。プレビュー未生成・読込中・読込失敗時は種類のアイコンを中央に表示し、「プレビュー準備中」などの代替テキストを繰り返し並べない。素材自体の欠損や解析失敗の警告は区別して残す。
 
