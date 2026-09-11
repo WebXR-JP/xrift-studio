@@ -2,7 +2,7 @@ import type { SemanticPrefabCandidate } from "./semantic-prefab-resolver";
 
 export type SpatialSemanticSampleModel = SemanticPrefabCandidate & { modelId: string; assetId: string; publicPath: string; fileName: string; sha256: string; byteLength: number; displayName: string; approxRadius: number; bounds: { min: readonly [number, number, number]; max: readonly [number, number, number] }; provenance: string; };
 
-const provenance = "XRift Studio project-owned semantic sample GLB generated for Quest/WebXR Scene Understanding fallback. Captured scene geometry remains preferred when available.";
+const provenance = "XRift Studio project-owned semantic sample GLB generated for room geometry fallback. Captured scene geometry remains preferred when available.";
 
 export const SPATIAL_SEMANTIC_SAMPLE_MODELS: readonly SpatialSemanticSampleModel[] = [
   {

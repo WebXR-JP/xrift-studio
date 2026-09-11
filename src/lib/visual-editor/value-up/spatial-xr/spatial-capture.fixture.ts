@@ -18,7 +18,7 @@ export function runSpatialCaptureFixture(): void {
   const capture = createSpatialCapture({
     captureId: "fixture-room",
     createdAt: new Date(0).toISOString(),
-    source: { transport: "webxr", runtime: "fixture" },
+    source: { transport: "openxr", runtime: "fixture" },
     referenceSpace: "local-floor",
     surfaces: [
       {

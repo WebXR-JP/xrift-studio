@@ -425,11 +425,11 @@
     },
     {
       "slug": "xr-spatial",
-      "title": "XRと部屋の取り込み",
-      "description": "PCのVR PreviewとQuestの部屋の取り込みを確認します。実機検証中の機能です。",
+      "title": "OpenXRで部屋を取り込む",
+      "description": "PCに接続した端末から保存済みの部屋を取り込みます。実機未検証の機能です。",
       "group": "create",
       "file": "xr-spatial.md",
-      "keywords": "VR MR OpenXR WebXR Quest Room Scan GLB",
+      "keywords": "OpenXR Quest Air Link SteamVR 部屋 取り込み GLB",
       "related": [
         "play-mode",
         "assets"

@@ -370,9 +370,6 @@ export const tauri = {
   getOpenXrRoomCapabilities: () => invoke<import("./visual-editor/value-up/spatial-xr/native-room").NativeRoomCapabilities>("get_openxr_room_capabilities"),
   captureOpenXrRoom: () => invoke<import("./visual-editor/value-up/spatial-xr/native-room").NativeRoom>("capture_openxr_room"),
   cancelOpenXrRoomCapture: () => invoke<void>("cancel_openxr_room_capture"),
-  getOpenXrRuntimeStatus: () => invoke<import("./visual-editor/value-up/spatial-xr/openxr-client").OpenXrRuntimeStatus>("get_openxr_runtime_status"),
-  getXrHostDiagnostics: () => invoke<import("./visual-editor/value-up/spatial-xr/openxr-client").XrHostDiagnostics>("get_xr_host_diagnostics"),
-  openXrPreviewUrl: (url: string) => invoke<void>("open_xr_preview_url", { url }),
   isAvailable: () => isTauri(),
   selectDirectory: (title: string, defaultPath?: string) =>
     openDialog({

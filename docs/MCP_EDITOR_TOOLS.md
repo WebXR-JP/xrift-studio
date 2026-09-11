@@ -489,14 +489,10 @@ Editorの `import_model_asset` と、`importSettings` を省略した `import_te
 
 外部カタログの `list_scene_recipes` は `shelf` に `models`（3Dセット）、`materials`（マテリアル表現のglTF見本）、`gimmicks`（ギミック）を返す。目的に合う分類から選び、既存の配置ツールへ同じrecipe IDを渡す。配置後はInspectorで編集し、ギミックはPlayで動作を確認する。
 
-## Spatial CaptureとXR Preview
+## Spatial CaptureとOpenXR
 
-`plan_spatial_capture`、`apply_spatial_capture`、`plan_digital_twin`、`rank_spatial_prefabs`を追加。簡易形状の配置とGLB取り込みの違い、入力形式、用途は[Spatial Authoring](OPENXR_SPATIAL_AUTHORING.md)を参照。
+`plan_spatial_capture`、`apply_spatial_capture`、`plan_digital_twin`、`rank_spatial_prefabs`は取得済みの部屋データを扱う。入力形式と用途は[Spatial Authoring](OPENXR_SPATIAL_AUTHORING.md)を参照。
 
-### 意図的に公開していない操作: XR
+### 意図的に公開していない操作: OpenXRの部屋取得
 
-XR Previewの外部プロセス起動とCaptureファイルのGLB取り込みは現在デスクトップUIのみ。同期document surfaceから複数の永続Asset操作を実行しない。MCPのapply_spatial_captureは簡易形状を配置し、形状GLBの保存は行わない。将来project/local-asset surfaceへ接続する。
-
-### OpenXRの部屋取得
-
-`capture_openxr_room` / `cancel_openxr_room_capture` はTauri IPCの非同期Session操作で、現在の同期MCP document surfaceには公開していない。XRパネルで実行する。`apply_spatial_capture` は既に取得したデータの簡易配置であり、端末からの直接取得ではない。
+`capture_openxr_room` / `cancel_openxr_room_capture` はTauri IPCの非同期Session操作で、現在の同期MCP document surfaceには公開しない。Scene Viewの「OpenXR」から実行する。取得後のGLB保存もUIの取り込み処理が担当する。`apply_spatial_capture` は簡易形状の配置であり、端末からの取得やGLBの保存は行わない。

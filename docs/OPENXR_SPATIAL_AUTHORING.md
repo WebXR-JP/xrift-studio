@@ -1,6 +1,6 @@
-# OpenXR / WebXR Spatial Authoring
+# OpenXR Spatial Authoring
 
-Visual Projectを正本にし、既存のSceneDocument、Asset Import、Compilerへ接続する。PCのRuntime診断、外部ブラウザでのVR Preview、Quest BrowserでのRoom Captureは別の処理である。
+WindowsのStudioから保存済みの部屋を取得し、既存のSceneDocument・Asset Importへ渡す。利用者向け手順は[部屋の取り込み](guide/xr-spatial.md)。
 
 ## ネイティブOpenXRによる保存済み部屋の取得
 
@@ -17,36 +17,18 @@ Runtime指定GPUのD3D11 Deviceで一時Sessionを作り、STAGE座標系でLOCA
 
 ビルド時はOpenXR Loaderの同梱にCMakeとC++ツールチェーンが必要。利用者がLoader DLLを配置する手順は不要。Windows向けCIで同梱Loaderを含めて検証する。ネイティブ取得・取消はSessionをまたぐ非同期操作のため、現在の同期MCP document surfaceには公開していない。UIとTauri IPCに限定し、MCPの簡易形状配置を直接取得と呼ばない。
 
-## このPRの範囲
+## 対応範囲
 
-| 機能 | 実装・制約 |
+| 接続環境 | 実装・制約 |
 | --- | --- |
-| PC Runtime診断 | Windows Registry / Linux XDGと環境変数から登録を読む。HMDの利用可否や描画成功は保証しない |
-| XR Play | 保存→Compiler→専用staging→dev server→既定ブラウザ。VR対応Chrome/Edge等でEnter VRを押す。通常のPublishとは別staging |
-| VR入力 | 左右Controllerのselectを既存Interactableへ渡す。移動、手の見た目、全Controller Profileは未検証 |
-| Quest Room Capture | immersive-arでPlane / Meshを取得し、JSONとGLBをダウンロードする。端末の許可と対応ブラウザが必要 |
-| Capture読み込み | XRパネルからJSONを選び、取得形状をGLB Assetとして配置。形状がない場合のみ同梱サンプルを使う |
-| 簡易形状の配置 | MCP apply_spatial_capture。既存PrimitiveとColliderを使う。GLB読み込みとは別の操作 |
-| Prefab候補の比較 | 意味が一致する候補だけを寸法・styleTagsで並べる。候補の自動制作やStyle Packの生成はしない |
-| Digital Twin | 読み取り専用の変更計画。計画したMaterial / Prefabの適用は後続操作 |
-| Anchor | Binding用データ型と編集関数。永続Anchorの取得・復元・共有は未実装 |
-| Hit Test | 最初に取得できたposeをCaptureへ記録。任意位置へ継続配置するMR UIは未実装 |
-| Depth | CPU側から取得できる概要の記録。GPU Depth、Depth描画、遮蔽の適用は未実装 |
-| Occlusion | purposeとして保持する。用途ラベルだけで遮蔽描画が有効になるわけではない |
-| Hand / Layers / WebGPU | 入力源やAPIの診断。APIの存在とsessionで有効なfeatureを区別する |
+| Meta Air Link + Meta Runtime | FB系の部屋取得拡張を使う読取処理を実装。実機未検証 |
+| SteamVR Runtime | 同じ必須拡張がある場合だけ取得。接続できる端末すべてに対応するものではない |
+| PICO 4 Ultra + PICO Connect | 部屋取得は未対応。PCへの空間API公開も未確認 |
+| 新しいルームスキャン | 未実装。MetaではLink接続前にQuest本体でRoom Setupを済ませる |
 
-実機動作はこのPR作成環境では未確認。既存ZIPの「全部入り」「動作可能」という記述は保証として引き継がない。ネイティブOpenXR描画エンジン、Questへの自動転送、スキャンからの製品モデル識別は含まない。
+WebXR Preview、ブラウザのスキャンページ、ブラウザ機能診断、外部ブラウザ起動は削除した。HTTPSページやファイルの手動転送は使わない。Runtimeの選択をStudioから変更しない。
 
-## 操作とデータ
-
-利用者向け手順は [XRと部屋の取り込み](guide/xr-spatial.md)。Captureページは `public/xr-spatial/` に置く。公開前はURLが使えると断定せず、PRのプレビューまたはローカルで確認する。
-
-- PICO Connect対応端末はWindows PCへ接続し、SteamVRをOpenXR RuntimeとしてPCVR Previewを試す。実機未検証。PCVR表示はPICOのRoom Capture対応を意味しない。
-- PCVRは対応ブラウザとActive OpenXR Runtimeの組み合わせで検証する。既定ブラウザが非対応なら、起動URLを対応ブラウザへ貼り付ける。
-- Quest単体のlocalhostはQuest自身を指す。PCのlocalhost URLをそのままQuestで開いても接続できない。Quest側のCaptureページにはHTTPSを使う。
-- Runtimeの登録は読み取りのみ。アプリからRegistryやRuntime選択を変更しない。
-- APIの有無、requestSession成功、enabledFeatures、実際に取得できた形状をそれぞれ区別する。
-- 取得データはダウンロードまたはローカルプロジェクトに保存する。自動送信はしない。部屋の形状を公開する判断はユーザーが行う。
+取得した形状をGLB Assetとして配置し、形状がなく寸法がある場合に同梱サンプルを使う。実物の製品モデルを識別・生成する機能ではない。取得結果はローカルプロジェクトに保存し、自動送信しない。
 
 ## Capture Schema
 
@@ -54,7 +36,7 @@ Runtime指定GPUのD3D11 Deviceで一時Sessionを作り、STAGE座標系でLOCA
 
 右手系・Y-up・メートル。Surfaceの頂点とBoundsはSurfaceローカル、poseはreferenceSpace内。Plane polygonはplaneSpaceのX/Z面で+Yが法線。GLB化でposeを頂点へ二重適用しない。Three.jsのXYZ Eulerへ変換して配置する。
 
-Capture ID、sourceSurfaceId、元Semantic Labelを保存する。未知ラベルは文字列を保持する。Metaの大文字ラベルとWebXRのラベルを混同せず、分類エイリアスとして対応する。
+Capture ID、sourceSurfaceId、元Semantic Labelを保存する。未知ラベルは文字列を保持する。Metaの大文字ラベルは分類エイリアスとして対応する。
 
 JSON入力は64MBまで。Surface数・頂点数・index数を制限し、全体の構造を確認してからAssetを書き込む。読み込み中にSceneが変わった場合は、古いSceneで上書きせず再試行を案内する。途中のAsset書き込みが失敗した場合、Sceneは反映されないが未参照ファイルが残る可能性がある。
 
@@ -76,33 +58,32 @@ JSON入力は64MBまで。Surface数・頂点数・index数を制限し、全体
 | 品質確認 | Studio実レンダリングで接地・向き・Materialを確認し、Questの実測を別に記録する |
 | 将来の拡張 | 軸別Scale制限、LOD、thumbnail、50〜70種のStyle Pack。未実装をmetadataだけで対応済みとしない |
 
+保存形式の既存識別子 `webxr-right-handed-y-up-meters` と過去の `source.transport` 値は、既存データの互換性のため維持する。これらはブラウザ機能の有効化を意味しない。今回の直接取得は `source.transport: "openxr"` を記録する。
+
 ## MCP
 
-| Tool | 結果・次の操作 |
+| Tool | 結果 |
 | --- | --- |
-| plan_spatial_capture | 読み取り専用の簡易形状計画。元Captureと対象Materialを確認する |
-| apply_spatial_capture | revisionを検査し、簡易形状を配置。結果のEntityを確認する。GLB化はXRパネルの読み込みを使う |
-| rank_spatial_prefabs | 意味・寸法・styleTagsに合う候補。選択後の配置は既存Asset操作で行う |
-| plan_digital_twin | 読み取り専用。MaterialやPrefabの変更計画を返す |
+| plan_spatial_capture | 取得済みデータから簡易形状の配置計画を返す |
+| apply_spatial_capture | revisionを確認して簡易形状を配置する。GLB保存や端末取得は行わない |
+| rank_spatial_prefabs | 意味・寸法・styleTagsに合う候補を比較する |
+| plan_digital_twin | MaterialやPrefabの変更計画を返す。適用は後続操作 |
 
-XR PlayとCaptureファイル読込はデスクトップUIの操作。現時点でMCPの対応操作にしない理由は、前者が外部プロセスを起動し、後者が複数Assetの永続化を伴い、同期document surfaceに配置できないため。将来はproject/local-asset surfaceで既存revisionと保存の契約に接続する。Shapeの簡易配置だけをGLB保存済みと報告しない。
+端末取得は非同期Session操作と複数Assetの保存を伴うため、同期MCP document surfaceには公開しない。UIとTauri IPCから実行する。Anchorの復元・共有、Depthによる遮蔽、Style Packの一括適用は未実装。
 
-## 確認
+## 検証
 
-- pnpm typecheck
-- node scripts/generate-mcp-tool-names.mjs --check
-- node scripts/check-fixture-coverage.mjs
-- Spatial Capture fixture: 不正入力、Quaternion、Bounds補正、Semantic候補、凹PlaneのGLB面積
-- 19 GLB: parser再読み込み、manifestのSHA-256・byteLength
-- Rust変更: cargo checkとopenxrのテスト。利用可能なRust環境で行う
-- 実機: Windows + Meta Link、Windows + SteamVR、Quest Browser standaloneで別々に記録する
+- `pnpm typecheck`
+- `node --test scripts/native-room.test.mjs scripts/guide.test.mjs`
+- `node scripts/generate-mcp-tool-names.mjs --check`
+- `cargo check --manifest-path src-tauri/Cargo.toml`
+- `cargo test --locked --manifest-path src-tauri/crates/openxr-room/Cargo.toml`
+- Windows実機で読取、取消、切断、位置・向き、Scene変更時の拒否を確認する。
 
-実機ではVR開始・終了・再開、左右select、アプリ終了後のdev server停止、Capture取消、Plane/Mesh不対応、権限拒否、姿勢未取得、GLBの寸法と向きを確認する。検証したOS・ブラウザ・Runtime・端末をPRに残す。
+CIでのコンパイル・テスト成功と実機取得の成功を区別する。新規スキャンやPICO対応を検証済みと扱わない。
 
 ## 一次資料
 
-2026-09-11確認。仕様にAPIがあっても、すべての端末が実装しているとは限らない。
-
 - [OpenXR Loader](https://registry.khronos.org/OpenXR/specs/1.1/loader.html)
-- [WebXR Plane Detection](https://immersive-web.github.io/plane-detection/)
-- [Meta IWSDK Scene Understanding](https://developers.meta.com/horizon/documentation/iwsdk/guides/11-scene-understanding/)
+- [Meta LinkでのScene API](https://developers.meta.com/horizon/documentation/unreal/unreal-mr-utility-kit-gs/)
+- [Meta Air Linkサンプル](https://github.com/oculus-samples/Unity-TheWorldBeyond)

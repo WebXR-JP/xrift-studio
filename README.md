@@ -44,6 +44,6 @@ pnpm tauri:dev
 
 MIT。素材ごとの権利表記は[THIRD_PARTY_ASSETS.md](./THIRD_PARTY_ASSETS.md)を参照してください。
 
-### XR Previewと部屋の取り込み（実機検証中）
+### OpenXRで部屋を取り込む（実機未検証）
 
-Scene ViewのXRパネルからPCのRuntimeを診断し、外部ブラウザでVRを確認できます。Quest Browserで取得した部屋の形状はGLBとして取り込めます。[使い方](docs/guide/xr-spatial.md)と[実装・未対応範囲](docs/OPENXR_SPATIAL_AUTHORING.md)を参照してください。
+Scene Viewの「OpenXR」から、対応Runtimeが提供する保存済みの部屋を取得し、形状をGLBとして配置します。接続中の新規スキャンとPICO Connectの部屋取得は未対応です。[使い方](docs/guide/xr-spatial.md)と[実装範囲](docs/OPENXR_SPATIAL_AUTHORING.md)を参照してください。

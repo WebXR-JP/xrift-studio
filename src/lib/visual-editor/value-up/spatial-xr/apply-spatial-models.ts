@@ -38,7 +38,7 @@ async function importCapturedGeometry(projectPath: string, bundle: PrototypeVisu
 }
 
 /**
- * Applies Quest/WebXR scene understanding with a preserve-first policy:
+ * Applies captured room geometry with a preserve-first policy:
  * 1. Exact detected plane/mesh geometry -> imported GLB and used directly.
  * 2. No geometry but a known semantic -> bundled sample GLB, scaled to bounds.
  * 3. Otherwise leave it for the existing primitive proxy pass.

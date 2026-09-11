@@ -19,7 +19,7 @@ function triangulateSurface(surface: SpatialSurface): { vertices: number[]; indi
   const points = surface.boundary?.points ?? [];
   if (points.length < 3) return null;
   const vertices = points.flatMap((point) => [point[0], point[1], point[2]]);
-  // WebXR plane polygons use local X/Z; ear clipping preserves concave rooms.
+  // Capture plane polygons use local X/Z; ear clipping preserves concave rooms.
   const indices = ShapeUtils.triangulateShape(points.map(p => new Vector2(p[0], p[2])), []).flat();
   return { vertices, indices };
 }
@@ -37,8 +37,7 @@ function minMax(vertices: readonly number[]) {
 }
 
 /**
- * Serializes the exact local Plane/Mesh geometry returned by WebXR/Quest Scene
- * Understanding to a standard GLB 2.0 model. Pose is intentionally not baked
+ * Serializes the exact local Plane/Mesh geometry from a Spatial Capture document to a standard GLB 2.0 model. Pose is intentionally not baked
  * into vertices; XRift places the model Entity with the captured pose.
  */
 export function spatialSurfaceGeometryToGlb(surface: SpatialSurface, capture?: SpatialCaptureDocument): Uint8Array | null {

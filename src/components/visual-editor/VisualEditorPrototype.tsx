@@ -215,9 +215,6 @@ import {
   xriftMcpToolSurface,
 } from "../../lib/visual-editor";
 import {
-  startVisualXrPreview,
-} from "../../lib/visual-editor/value-up/spatial-xr/xr-preview";
-import {
   tauri,
   type XriftMcpClientId,
   type XriftMcpClientStatus,
@@ -10659,46 +10656,6 @@ export function VisualEditorPrototype({
     if (nativeRoomBusyRef.current) void tauri.cancelOpenXrRoomCapture().catch(() => undefined);
   }, []);
 
-  const [xrPreviewUrl, setXrPreviewUrl] = useState<string | null>(null);
-  const xrPreviewAbortRef = useRef<AbortController | null>(null);
-  const xrPreviewHandleRef = useRef<{ stop: () => Promise<void> } | null>(null);
-  const handleStartXrPreview = useCallback(async () => {
-    if (projectKind !== "world") {
-      throw new Error("XR Playはワールドで利用できます。");
-    }
-    xrPreviewAbortRef.current?.abort();
-    const abort = new AbortController();
-    xrPreviewAbortRef.current = abort;
-    const savedProjectPath = await runSave();
-    if (abort.signal.aborted) return;
-    if (!savedProjectPath) {
-      throw new Error("XR Playの前にプロジェクトを保存できませんでした。");
-    }
-    if (xrPreviewHandleRef.current) {
-      await xrPreviewHandleRef.current.stop().catch(() => undefined);
-      xrPreviewHandleRef.current = null;
-    }
-    setXrPreviewUrl(null);
-    setNotice("XR Play用のワールドを変換しています…");
-    const handle = await startVisualXrPreview({
-      documents: bundleRef.current,
-      authoringProjectPath: savedProjectPath,
-      signal: abort.signal,
-      onLog: (line) => {
-        if (line.kind === "stderr") console.warn("[XR Play]", line.text);
-      },
-      onUrl: (url) => { setXrPreviewUrl(url); setNotice(`XR Playを起動しました: ${url}`); },
-    });
-    xrPreviewHandleRef.current = handle;
-  }, [projectKind, runSave]);
-
-  useEffect(() => () => {
-    xrPreviewAbortRef.current?.abort();
-    const handle = xrPreviewHandleRef.current;
-    xrPreviewHandleRef.current = null;
-    if (handle) void handle.stop().catch(() => undefined);
-  }, []);
-
   const handleSaveBeforeImport = useCallback(async () => {
     const savedProjectPath = await runSave();
     if (savedProjectPath) await processImportQueue(savedProjectPath);
@@ -11564,10 +11521,6 @@ export function VisualEditorPrototype({
             nativeRoomAcquiring={nativeRoomAcquiring}
             onCaptureOpenXrRoom={handleCaptureOpenXrRoom}
             onCancelOpenXrRoom={handleCancelOpenXrRoom}
-            xrPreviewUrl={xrPreviewUrl}
-            onStartXrPreview={handleStartXrPreview}
-            onImportSpatialCapture={handleImportSpatialCapture}
-            onStopXrPreview={async () => { xrPreviewAbortRef.current?.abort(); const handle = xrPreviewHandleRef.current; xrPreviewHandleRef.current = null; await handle?.stop(); setXrPreviewUrl(null); }}
             tabs={viewportEditorTabs}
             activeTabId={
               viewportEditorTabs.some((tab) => tab.id === activeEditorTab)

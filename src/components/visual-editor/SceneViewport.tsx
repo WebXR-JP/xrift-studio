@@ -4744,10 +4744,6 @@ export function SceneViewport({
   nativeRoomAcquiring,
   onCaptureOpenXrRoom,
   onCancelOpenXrRoom,
-  xrPreviewUrl,
-  onStartXrPreview,
-  onImportSpatialCapture,
-  onStopXrPreview,
   onTransformModeChange,
   onToggleTransformSpace,
   onGizmoSettingsChange,
@@ -4828,10 +4824,6 @@ export function SceneViewport({
   nativeRoomAcquiring?: boolean;
   onCaptureOpenXrRoom?: () => Promise<void>;
   onCancelOpenXrRoom?: () => Promise<void>;
-  xrPreviewUrl?: string | null;
-  onStartXrPreview?: () => Promise<void>;
-  onImportSpatialCapture?: (file: File) => Promise<void>;
-  onStopXrPreview?: () => Promise<void>;
   onTransformModeChange: (mode: TransformMode) => void;
   onToggleTransformSpace: () => void;
   /** Snap is flipped often enough that the toolbar patches it without Undo. */
@@ -6202,7 +6194,7 @@ export function SceneViewport({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <SpatialXrPanel nativeRoomAcquiring={nativeRoomAcquiring} onCaptureRoom={onCaptureOpenXrRoom} onCancelCapture={onCancelOpenXrRoom} activePreviewUrl={xrPreviewUrl} onStartProjectPreview={onStartXrPreview} onImportCapture={onImportSpatialCapture} onStopPreview={onStopXrPreview} />
+          <SpatialXrPanel nativeRoomAcquiring={nativeRoomAcquiring} onCaptureRoom={onCaptureOpenXrRoom} onCancelCapture={onCancelOpenXrRoom} />
           {recordingViewActive && onExitRecordingView ? (
             <button
               type="button"

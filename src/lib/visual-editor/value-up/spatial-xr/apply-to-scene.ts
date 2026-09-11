@@ -51,7 +51,7 @@ export function applySpatialCaptureToScene(
       continue;
     }
 
-    // WebXR planeSpace uses +Y as the plane normal while Three PlaneGeometry uses
+    // Capture plane space uses +Y as the plane normal while Three PlaneGeometry uses
     // +Z. A thin box keeps the runtime pose exact without inserting an implicit
     // 90-degree conversion, and it is also a better collider proxy.
     const creationId = BUILTIN_PRIMITIVE_CREATION_IDS.box;

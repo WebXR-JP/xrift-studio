@@ -2433,7 +2433,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "plan_spatial_capture",
-            "description": "Analyze a .xrift-spatial.json capture from WebXR/OpenXR Scene Understanding. Returns semantic labels and a conversion plan without changing the Scene.",
+            "description": "Analyze a .xrift-spatial.json capture from OpenXR room acquisition. Returns semantic labels and a conversion plan without changing the Scene.",
             "inputSchema": { "type": "object", "properties": { "capture": { "type": "object" } }, "required": ["capture"], "additionalProperties": false }
         },
         {

@@ -13,7 +13,6 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_opener::OpenerExt;
 
 mod external_store;
-mod openxr;
 mod openxr_room;
 mod project_transfer;
 pub mod mcp;
@@ -5942,12 +5941,9 @@ pub fn run() {
     builder
         .invoke_handler(tauri::generate_handler![
             runtime_paths,
-            openxr::get_openxr_runtime_status,
-            openxr::get_xr_host_diagnostics,
             openxr_room::get_openxr_room_capabilities,
             openxr_room::capture_openxr_room,
             openxr_room::cancel_openxr_room_capture,
-            openxr::open_xr_preview_url,
             runtime_status,
             setup_runtime,
             sandbox_env,
