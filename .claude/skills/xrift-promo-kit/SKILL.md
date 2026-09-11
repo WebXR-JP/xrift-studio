@@ -1,6 +1,6 @@
 ---
 name: xrift-promo-kit
-description: XRift Studio のリリース動画を、共有キット dev/release-promo/_kit で組み立てる。プロジェクトの雛形作成、storyboard.json の書き方、シーン部品（タイトル・機能紹介・実画面デモ・前後比較・箇条書き・締め）、BGMの拍に合わせた尺、横型と縦型の書き出し、確認手順を提供する。「リリース動画を作る」「アップデート動画」「Remotion で動画」「新機能の紹介動画」「プロモ動画の雛形」などで使う。
+description: XRift Studioの紹介動画を共有Remotionキットとstoryboard.jsonで実装・書き出しする。
 ---
 
 # XRift Studio リリース動画キット

@@ -2432,6 +2432,26 @@ fn tool_definitions() -> Value {
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         },
         {
+            "name": "plan_spatial_capture",
+            "description": "Analyze a .xrift-spatial.json capture from WebXR/OpenXR Scene Understanding. Returns semantic labels and a conversion plan without changing the Scene.",
+            "inputSchema": { "type": "object", "properties": { "capture": { "type": "object" } }, "required": ["capture"], "additionalProperties": false }
+        },
+        {
+            "name": "apply_spatial_capture",
+            "description": "Place simple box proxies from a Spatial Capture in Edit mode. Read get_editor_context and plan_spatial_capture first; supply projectId, sceneId and expectedRevision. This does not import captured GLBs: use the XR panel for geometry-preserving import. Inspect the created entities before further edits.",
+            "inputSchema": { "type": "object", "properties": { "projectId": { "type": "string" }, "sceneId": { "type": "string" }, "expectedRevision": { "type": "integer" }, "capture": { "type": "object" }, "materialAssetId": { "type": "string" } }, "required": ["projectId", "sceneId", "expectedRevision", "capture", "materialAssetId"], "additionalProperties": false }
+        },
+        {
+            "name": "plan_digital_twin",
+            "description": "Create a non-destructive Digital Twin restyling plan from Spatial Capture semantics. Read-only; keeps source room geometry separate from visual replacement choices.",
+            "inputSchema": { "type": "object", "properties": { "capture": { "type": "object" }, "style": { "type": "object" } }, "required": ["capture", "style"], "additionalProperties": false }
+        },
+        {
+            "name": "rank_spatial_prefabs",
+            "description": "Rank Prefab candidates for a captured real-world surface using semantic label, physical dimensions and optional style tags. Read-only.",
+            "inputSchema": { "type": "object", "properties": { "surface": { "type": "object" }, "candidates": { "type": "array", "items": { "type": "object" } }, "styleTags": { "type": "array", "items": { "type": "string" } } }, "required": ["surface", "candidates"], "additionalProperties": false }
+        },
+        {
             "name": "get_scripting_capabilities",
             "description": "Read the Script authoring workflow; xrift:script lifecycle, Asset, targeted Material, and Particle runtime APIs; persistent authoring tools; and the explicit sandboxed:false, content-hash trust gate boundary.",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }

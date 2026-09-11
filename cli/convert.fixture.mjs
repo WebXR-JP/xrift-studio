@@ -1,3 +1,4 @@
+import { runSpatialCaptureFixture } from "../src/lib/visual-editor/value-up/spatial-xr/spatial-capture.fixture.ts";
 import { spawn } from "node:child_process";
 import { runModelDownloadFixtureAssertions } from "../src/lib/visual-editor/model-download.fixture.ts";
 import { runModelInstancingFixtureAssertions } from "../src/lib/visual-editor/model-instancing.fixture.ts";
@@ -335,6 +336,7 @@ try {
 
   await convertRichWorld(fixtureRoot);
   await runFixtureSuites([
+    ["Spatial Capture", runSpatialCaptureFixture],
     ["Interactable late model layers", runInteractableLayerFixtureAssertions],
     ["model download optimization", runModelDownloadFixtureAssertions],
     ["model instancing", runModelInstancingFixtureAssertions],

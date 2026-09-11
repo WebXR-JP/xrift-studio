@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#09090b" />
+<title>XRift Studio Spatial XR</title>
+<style>
+html,body{margin:0;background:#09090b;color:#fafafa;font-family:system-ui,-apple-system,sans-serif}main{max-width:900px;margin:auto;padding:28px 20px 60px}.card{border:1px solid #27272a;border-radius:14px;padding:18px;background:#18181b;margin:14px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.pill{display:inline-block;border:1px solid #3f3f46;border-radius:999px;padding:4px 8px;margin:3px;font-size:12px}.yes{border-color:#166534;color:#86efac}.no{border-color:#7f1d1d;color:#fca5a5}.maybe{border-color:#854d0e;color:#fde68a}button{appearance:none;border:0;border-radius:10px;padding:12px 16px;font-weight:700;font-size:14px;background:#7c3aed;color:#fff}button.secondary{background:#27272a}button:disabled{opacity:.45}pre{background:#09090b;border-radius:8px;padding:12px;white-space:pre-wrap;max-height:340px;overflow:auto;font-size:12px}.muted{color:#a1a1aa}.ok{color:#86efac}.warn{color:#fde68a}.row{display:flex;gap:10px;flex-wrap:wrap}canvas{position:fixed;inset:0;width:1px;height:1px;pointer-events:none}.hidden{display:none}h1{font-size:24px;margin-bottom:6px}h2{font-size:15px;margin:0 0 8px}</style>
+</head>
+<body><canvas id="xr-canvas"></canvas><main>
+<h1>XRift Studio Spatial XR</h1>
+<p class="muted">PC OpenXR/SteamVR/Meta LinkのWebXR動作確認と、Meta QuestのRoom Scan / Scene Understandingを行います。空間データはブラウザ内で処理し、明示的に保存したJSONだけが外へ出ます。</p>
+<div class="card">
+  <h2>WebXR / Device capabilities</h2>
+  <p id="support" class="muted">確認しています…</p>
+  <div id="caps"></div>
+  <div class="row" style="margin-top:12px">
+    <button id="vr-test" disabled>VRセッションを確認</button>
+    <button id="ar-test" class="secondary" disabled>MR/ARセッションを確認</button>
+  </div>
+  <pre id="session-report">まだXRセッションを開始していません。</pre>
+</div>
+<div class="card" id="capture-card">
+  <h2>Room Scan → .xrift-spatial.json</h2>
+  <p class="muted">Plane / Mesh / Semantic Label / Hit Test / Depthの利用可能情報を取り込みます。Space Setupが未作成でRuntimeが対応している場合、Room Captureを要求します。</p>
+  <div class="row"><button id="capture" disabled>部屋を取り込む</button><button id="download" class="secondary" disabled>JSONを保存</button><button id="download-glb" class="secondary" disabled>認識形状をGLB保存</button></div>
+  <pre id="result">まだ取り込んでいません。</pre>
+</div>
+<div class="card">
+  <h2>Quest Semantic GLB samples</h2>
+  <p class="muted">Metaの現在の標準Semantic Label一式に対応する軽量GLBを同梱しています。Scene Mesh/Planeが取れる場合はそちらを優先し、形状が無い場合だけサンプルを寸法合わせして使います。</p>
+  <div id="sample-links" class="row"></div>
+</div>
+<div class="card">
+  <h2>Semantic mapping</h2>
+  <p class="muted">MetaのWALL_FACE / DOOR_FRAME / WINDOW_FRAME / GLOBAL_MESH等はXRift Studio側でwall / door / window / global-meshへ正規化し、元ラベルも保持します。</p>
+</div>
+<script type="module" src="./capture.js"></script>
+</main></body></html>

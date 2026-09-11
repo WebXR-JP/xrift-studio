@@ -488,3 +488,11 @@ Editorの `import_model_asset` と、`importSettings` を省略した `import_te
 `bake_mesh_collider` は選んだ3Dモデルノードの当たり判定だけを間引くlocal-asset操作。`entityId`、メッシュの衝突判定の`componentId`、残す割合`ratio`を渡す。結果のポリゴン数を確認し、歩行を検証する。共有3Dモデルと通常の展開ノードに対応し、未展開3Dモデル全体と組み込みプリミティブは対象外。
 
 外部カタログの `list_scene_recipes` は `shelf` に `models`（3Dセット）、`materials`（マテリアル表現のglTF見本）、`gimmicks`（ギミック）を返す。目的に合う分類から選び、既存の配置ツールへ同じrecipe IDを渡す。配置後はInspectorで編集し、ギミックはPlayで動作を確認する。
+
+## Spatial CaptureとXR Preview
+
+`plan_spatial_capture`、`apply_spatial_capture`、`plan_digital_twin`、`rank_spatial_prefabs`を追加。簡易形状の配置とGLB取り込みの違い、入力形式、用途は[Spatial Authoring](OPENXR_SPATIAL_AUTHORING.md)を参照。
+
+### 意図的に公開していない操作: XR
+
+XR Previewの外部プロセス起動とCaptureファイルのGLB取り込みは現在デスクトップUIのみ。同期document surfaceから複数の永続Asset操作を実行しない。MCPのapply_spatial_captureは簡易形状を配置し、形状GLBの保存は行わない。将来project/local-asset surfaceへ接続する。

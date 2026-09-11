@@ -1,3 +1,4 @@
+import { SpatialXrPanel } from "./SpatialXrPanel";
 import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
 import { XriftModelInstancing } from "../../../packages/xrift-studio-runtime/src/script/model-instancing";
 import { collectModelInstancingEntities } from "../../lib/visual-editor/model-instancing";
@@ -4740,6 +4741,9 @@ export function SceneViewport({
   playShortcut,
   snapShortcut,
   onTogglePlay,
+  onStartXrPreview,
+  onImportSpatialCapture,
+  onStopXrPreview,
   onTransformModeChange,
   onToggleTransformSpace,
   onGizmoSettingsChange,
@@ -4817,6 +4821,9 @@ export function SceneViewport({
   playShortcut?: string;
   snapShortcut?: string;
   onTogglePlay: () => void;
+  onStartXrPreview?: () => Promise<void>;
+  onImportSpatialCapture?: (file: File) => Promise<void>;
+  onStopXrPreview?: () => Promise<void>;
   onTransformModeChange: (mode: TransformMode) => void;
   onToggleTransformSpace: () => void;
   /** Snap is flipped often enough that the toolbar patches it without Undo. */
@@ -6187,6 +6194,7 @@ export function SceneViewport({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          <SpatialXrPanel onStartProjectPreview={onStartXrPreview} onImportCapture={onImportSpatialCapture} onStopPreview={onStopXrPreview} />
           {recordingViewActive && onExitRecordingView ? (
             <button
               type="button"

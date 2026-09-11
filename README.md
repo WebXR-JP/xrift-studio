@@ -43,3 +43,7 @@ pnpm tauri:dev
 ## ライセンス
 
 MIT。素材ごとの権利表記は[THIRD_PARTY_ASSETS.md](./THIRD_PARTY_ASSETS.md)を参照してください。
+
+### XR Previewと部屋の取り込み（実機検証中）
+
+Scene ViewのXRパネルからPCのRuntimeを診断し、外部ブラウザでVRを確認できます。Quest Browserで取得した部屋の形状はGLBとして取り込めます。[使い方](docs/guide/xr-spatial.md)と[実装・未対応範囲](docs/OPENXR_SPATIAL_AUTHORING.md)を参照してください。

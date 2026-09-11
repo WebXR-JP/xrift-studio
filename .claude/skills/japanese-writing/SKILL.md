@@ -1,6 +1,6 @@
 ---
 name: japanese-writing
-description: README、技術文書、スキル、画面説明の日本語を作成・推敲するときに使う。直訳調、曖昧な比喩、内部用語の連続、冗長な説明を、意味を保って読みやすく直す。
+description: XRift Studioの日本語説明・用語・文章を作成または推敲するときに使う。
 ---
 
 # 日本語の作成と推敲

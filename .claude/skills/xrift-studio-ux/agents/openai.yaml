@@ -1,0 +1,4 @@
+interface:
+  display_name: "XRift Studio UX"
+  short_description: "XRift Studio の制作体験を一貫して設計するためのガイド"
+  default_prompt: "Use $xrift-studio-ux to design this XRift Studio feature with the project UX principles."

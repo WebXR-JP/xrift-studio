@@ -422,6 +422,18 @@
         "editor-basics",
         "play-mode"
       ]
+    },
+    {
+      "slug": "xr-spatial",
+      "title": "XRと部屋の取り込み",
+      "description": "PCのVR PreviewとQuestの部屋の取り込みを確認します。実機検証中の機能です。",
+      "group": "create",
+      "file": "xr-spatial.md",
+      "keywords": "VR MR OpenXR WebXR Quest Room Scan GLB",
+      "related": [
+        "play-mode",
+        "assets"
+      ]
     }
   ],
   "homeTopics": [

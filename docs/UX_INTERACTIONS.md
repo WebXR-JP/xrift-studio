@@ -66,3 +66,7 @@
 - [F-17 AI editor integration / MCP](./ux/tools.md#f-17)
 - [F-35 ビジュアル編集 QA診断と短時間録画](./ux/tools.md#f-35)
 - [F-42 ワールド制作の録画](./ux/tools.md#f-42)
+
+## XR Preview / Spatial Capture
+
+XRパネルは診断前・診断中・検出結果・失敗を分ける。Runtime登録はHMD動作成功と表示しない。XR PlayとCapture読み込みは処理中の二重操作を防ぎ、失敗理由をパネルに残す。Preview開始後はURLを通知し、停止操作を残す。Capture読込成功後は最初のEntityを選択し、配置件数とスキップ件数を示す。取得中に編集されたSceneを古い結果で上書きしない。

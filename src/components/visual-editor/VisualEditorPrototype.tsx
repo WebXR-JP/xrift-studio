@@ -1,3 +1,5 @@
+import { applySpatialCaptureModels } from "../../lib/visual-editor/value-up/spatial-xr/apply-spatial-models";
+import { migrateSpatialCapture } from "../../lib/visual-editor/value-up/spatial-xr/spatial-capture";
 import { ensureCatalogMaterialTextures } from "../../lib/visual-editor/asset-import-persistence";
 import { catalogMaterialTextures } from "../../lib/visual-editor/catalog-material-dependencies";
 import { getEditorEntityCreationDefinitions, getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
@@ -211,6 +213,9 @@ import {
   type MaterialAsset,
   xriftMcpToolSurface,
 } from "../../lib/visual-editor";
+import {
+  startVisualXrPreview,
+} from "../../lib/visual-editor/value-up/spatial-xr/xr-preview";
 import {
   tauri,
   type XriftMcpClientId,
@@ -10609,6 +10614,59 @@ export function VisualEditorPrototype({
     return requestAutosave(bundleRef.current);
   }, [requestAutosave]);
 
+  const handleImportSpatialCapture = useCallback(async (file: File) => {
+    if (file.size > 64 * 1024 * 1024) throw new Error("Spatial Captureは64MB以下で読み込んでください。");
+    if (editorMode !== "edit") throw new Error("Playを停止してから読み込んでください。");
+    const capture = migrateSpatialCapture(JSON.parse(await file.text()));
+    const path = await runSave();
+    if (!path) throw new Error("先にプロジェクトを保存してください。");
+    const before = bundleRef.current;
+    const result = await applySpatialCaptureModels(path, before, capture);
+    if (bundleRef.current !== before) throw new Error("読み込み中にシーンが変更されました。変更を保持しました。再度読み込んでください。");
+    setBundle(current => current === before ? touchProject(result.bundle) : current);
+    const first = result.applied[0]?.entityId;
+    if (first) { setSceneSelection({ kind: "entity", id: first }); setAssetSelection(null); }
+    setNotice(`Spatial Capture: ${result.applied.length}件を配置、${result.skipped.length}件をスキップしました。`);
+  }, [editorMode, runSave, setBundle, setSceneSelection, setAssetSelection]);
+
+  const xrPreviewAbortRef = useRef<AbortController | null>(null);
+  const xrPreviewHandleRef = useRef<{ stop: () => Promise<void> } | null>(null);
+  const handleStartXrPreview = useCallback(async () => {
+    if (projectKind !== "world") {
+      throw new Error("XR Playはワールドで利用できます。");
+    }
+    xrPreviewAbortRef.current?.abort();
+    const abort = new AbortController();
+    xrPreviewAbortRef.current = abort;
+    const savedProjectPath = await runSave();
+    if (abort.signal.aborted) return;
+    if (!savedProjectPath) {
+      throw new Error("XR Playの前にプロジェクトを保存できませんでした。");
+    }
+    if (xrPreviewHandleRef.current) {
+      await xrPreviewHandleRef.current.stop().catch(() => undefined);
+      xrPreviewHandleRef.current = null;
+    }
+    setNotice("XR Play用のワールドを変換しています…");
+    const handle = await startVisualXrPreview({
+      documents: bundleRef.current,
+      authoringProjectPath: savedProjectPath,
+      signal: abort.signal,
+      onLog: (line) => {
+        if (line.kind === "stderr") console.warn("[XR Play]", line.text);
+      },
+      onUrl: (url) => setNotice(`XR Playを起動しました: ${url}`),
+    });
+    xrPreviewHandleRef.current = handle;
+  }, [projectKind, runSave]);
+
+  useEffect(() => () => {
+    xrPreviewAbortRef.current?.abort();
+    const handle = xrPreviewHandleRef.current;
+    xrPreviewHandleRef.current = null;
+    if (handle) void handle.stop().catch(() => undefined);
+  }, []);
+
   const handleSaveBeforeImport = useCallback(async () => {
     const savedProjectPath = await runSave();
     if (savedProjectPath) await processImportQueue(savedProjectPath);
@@ -11471,6 +11529,9 @@ export function VisualEditorPrototype({
               setGraphTabActive(false);
               executeCommand("play.toggle");
             }}
+            onStartXrPreview={handleStartXrPreview}
+            onImportSpatialCapture={handleImportSpatialCapture}
+            onStopXrPreview={async () => { xrPreviewAbortRef.current?.abort(); const handle = xrPreviewHandleRef.current; xrPreviewHandleRef.current = null; await handle?.stop(); }}
             tabs={viewportEditorTabs}
             activeTabId={
               viewportEditorTabs.some((tab) => tab.id === activeEditorTab)

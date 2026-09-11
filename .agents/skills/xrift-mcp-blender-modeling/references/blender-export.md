@@ -25,8 +25,8 @@ bpy.context.view_layer.objects.active = targets[0]
 # 1) 変換（特にスケール）を適用
 bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
 
-# 2) 原点をジオメトリ中心へ（VR 配置で座標が狂うのを防ぐ）
-bpy.ops.object.origin_set(type="ORIGIN_CENTER_OF_VOLUME", center="BOUNDS")
+# 2) 原点は制作時に決めた設置面・ヒンジを保持する。
+# 家具は床面中央。メッシュ重心へ一律に変更しない。
 
 # 3) 非表示・モディファイアを確認
 for obj in targets:
@@ -60,8 +60,9 @@ bpy.ops.export_scene.gltf(
     export_format="GLB",
     use_selection=True,
     export_materials="EXPORT",
-    export_apply=True,          # 変換を自動適用（事前に済ませていれば二重適用は起きない）
+    export_apply=True,          # モディファイアを評価する
     export_yup=True,
+    export_extras=True,        # Semanticなどのカスタムプロパティを保持
 )
 ```
 
@@ -78,7 +79,7 @@ bpy.ops.export_scene.gltf(
 
 | 症状 | 対策 |
 |---|---|
-| 原点がずれて配置が浮く | `origin_set(type="ORIGIN_CENTER_OF_VOLUME")` |
+| 原点がずれて配置が浮く | GLBの実Boundsと設置面原点を確認し、認識Boundsの中心と底面の差を補正 |
 | スケールがバラバラ | `transform_apply(scale=True)` |
 | マテリアルが真っ白/黒 | `export_materials="EXPORT"` + Principled BSDF へ簡素化 |
 | モディファイアが反映されない | Apply（`object.convert` or 書き出し時に適用） |
