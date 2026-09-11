@@ -5,6 +5,7 @@ import { applySpatialCaptureToScene } from "./apply-to-scene";
 import { buildSpatialConversionPlan } from "./semantic-conversion";
 import { Euler, Quaternion } from "three";
 import { quaternionToEuler, localOffsetPosition } from "./spatial-transform";
+import { getTransform } from "../../scene-document";
 import { spatialSurfaceGeometryToGlb } from "./spatial-mesh-glb";
 import { rankSemanticPrefabs } from "./semantic-prefab-resolver";
 import { migrateSpatialCapture, createSpatialCapture } from "./spatial-capture";
@@ -90,4 +91,19 @@ export function runSpatialCaptureFixture(): void {
     rules: [],
   });
   assert(applied.createdEntityIds.length === 2, "capture should create two entities");
+  const proxyCapture = createSpatialCapture({
+    ...capture,
+    surfaces: [capture.surfaces[0]!, {
+      ...concave,
+      id: "offset-plane",
+      pose: { position: [3, 2, 1], rotation: [0, 0, 0, 1], scale: [2, 1, 3] },
+      bounds: undefined,
+    }],
+  });
+  const proxies = applySpatialCaptureToScene(bundle.scene, bundle.assets, proxyCapture, { materialAssetId: BUILTIN_ASSET_IDS.material.slate });
+  const wall = getTransform(proxies.scene.entities[proxies.createdEntityIds[0]!]!);
+  const polygon = getTransform(proxies.scene.entities[proxies.createdEntityIds[1]!]!);
+  assert(wall?.scale.join() === "4,2.5,0.01", "bounds-only wall height must not be flattened to the plane normal");
+  assert(polygon?.position.join() === "5,2,4", "polygon proxy must use its scaled local centre");
+  assert(polygon?.scale.join() === "4,0.01,6", "polygon proxy must retain both in-plane dimensions");
 }

@@ -1,3 +1,4 @@
+import type { OpenXrRoomImportPhase } from "./useOpenXrRoomImport";
 import { SpatialXrPanel } from "./SpatialXrPanel";
 import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
 import { XriftModelInstancing } from "../../../packages/xrift-studio-runtime/src/script/model-instancing";
@@ -4741,7 +4742,7 @@ export function SceneViewport({
   playShortcut,
   snapShortcut,
   onTogglePlay,
-  nativeRoomAcquiring,
+  roomImportPhase,
   onCaptureOpenXrRoom,
   onCancelOpenXrRoom,
   onTransformModeChange,
@@ -4821,8 +4822,8 @@ export function SceneViewport({
   playShortcut?: string;
   snapShortcut?: string;
   onTogglePlay: () => void;
-  nativeRoomAcquiring?: boolean;
-  onCaptureOpenXrRoom?: () => Promise<void>;
+  roomImportPhase?: OpenXrRoomImportPhase;
+  onCaptureOpenXrRoom?: () => Promise<string>;
   onCancelOpenXrRoom?: () => Promise<void>;
   onTransformModeChange: (mode: TransformMode) => void;
   onToggleTransformSpace: () => void;
@@ -6194,7 +6195,7 @@ export function SceneViewport({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <SpatialXrPanel nativeRoomAcquiring={nativeRoomAcquiring} onCaptureRoom={onCaptureOpenXrRoom} onCancelCapture={onCancelOpenXrRoom} />
+          <SpatialXrPanel phase={roomImportPhase} disabled={editorMode !== "edit" || playPreparing} onCaptureRoom={onCaptureOpenXrRoom} onCancelCapture={onCancelOpenXrRoom} />
           {recordingViewActive && onExitRecordingView ? (
             <button
               type="button"

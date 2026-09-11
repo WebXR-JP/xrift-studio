@@ -1,4 +1,5 @@
-import { normalizeSpatialSemanticLabel, type SpatialCaptureDocument, type SpatialSemanticLabel, type SpatialSurface, type SpatialSurfacePurpose } from "./spatial-capture";
+import { normalizeSpatialSemanticLabel, type SpatialCaptureDocument, type SpatialSemanticLabel, type SpatialSurfacePurpose } from "./spatial-capture";
+import { spatialSurfaceSize } from "./spatial-transform";
 
 export type SpatialPrimitiveShape = "box" | "plane";
 export type SpatialConversionAction = {
@@ -44,38 +45,15 @@ export const DEFAULT_SEMANTIC_PREFAB_RULES: SemanticPrefabRule[] = [
   { label: "global-mesh", fallback: "mesh", purposes: ["occlusion", "static-collider"] },
 ];
 
-function dimensions(surface: SpatialSurface): [number, number, number] {
-  if (surface.bounds) {
-    return [
-      Math.max(0.01, surface.bounds.max[0] - surface.bounds.min[0]),
-      Math.max(0.01, surface.bounds.max[1] - surface.bounds.min[1]),
-      Math.max(0.01, surface.bounds.max[2] - surface.bounds.min[2]),
-    ];
-  }
-  if (surface.boundary?.points.length) {
-    const xs = surface.boundary.points.map((p) => p[0]);
-    const ys = surface.boundary.points.map((p) => p[1]);
-    const zs = surface.boundary.points.map((p) => p[2]);
-    // Plane polygons are local to planeSpace and therefore usually have y=0.
-    // Keep a thin axis instead of collapsing the proxy to zero.
-    return [
-      Math.max(0.01, Math.max(...xs) - Math.min(...xs)),
-      Math.max(0.01, Math.max(...ys) - Math.min(...ys)),
-      Math.max(0.01, Math.max(...zs) - Math.min(...zs)),
-    ];
-  }
-  return [0.5, 0.5, 0.5];
-}
-
 export function buildSpatialConversionPlan(
   capture: SpatialCaptureDocument,
   rules: readonly SemanticPrefabRule[] = DEFAULT_SEMANTIC_PREFAB_RULES,
 ): SpatialConversionAction[] {
-  const byLabel = new Map(rules.map((rule) => [String(rule.label).toLowerCase(), rule]));
+  const byLabel = new Map(rules.map((rule) => [normalizeSpatialSemanticLabel(rule.label), rule]));
   return capture.surfaces.map((surface) => {
     const label = String(normalizeSpatialSemanticLabel(surface.semanticLabel)).toLowerCase();
     const rule = byLabel.get(label);
-    const scale = dimensions(surface);
+    const scale: [number, number, number] = spatialSurfaceSize(surface) ?? [0.5, 0.5, 0.5];
     const purposes = surface.purposes?.length ? surface.purposes : (rule?.purposes ?? ["authoring-reference"]);
     const tags = ["spatial-capture", `semantic:${label}`, `source:${capture.source.transport}`, ...purposes.map((v) => `purpose:${v}`)];
 

@@ -1,6 +1,4 @@
-import { nativeRoomToCapture } from "../../lib/visual-editor/value-up/spatial-xr/native-room";
-import { applySpatialCaptureModels } from "../../lib/visual-editor/value-up/spatial-xr/apply-spatial-models";
-import { migrateSpatialCapture } from "../../lib/visual-editor/value-up/spatial-xr/spatial-capture";
+import { useOpenXrRoomImport } from "./useOpenXrRoomImport";
 import { ensureCatalogMaterialTextures } from "../../lib/visual-editor/asset-import-persistence";
 import { catalogMaterialTextures } from "../../lib/visual-editor/catalog-material-dependencies";
 import { getEditorEntityCreationDefinitions, getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
@@ -10612,49 +10610,22 @@ export function VisualEditorPrototype({
     return requestAutosave(bundleRef.current);
   }, [requestAutosave]);
 
-  const handleImportSpatialCapture = useCallback(async (file: File) => {
-    if (file.size > 64 * 1024 * 1024) throw new Error("Spatial Captureは64MB以下で読み込んでください。");
-    if (editorMode !== "edit") throw new Error("Playを停止してから読み込んでください。");
-    const capture = migrateSpatialCapture(JSON.parse(await file.text()));
-    const path = await runSave();
-    if (!path) throw new Error("先にプロジェクトを保存してください。");
-    const before = bundleRef.current;
-    const result = await applySpatialCaptureModels(path, before, capture);
-    if (bundleRef.current !== before) throw new Error("読み込み中にシーンが変更されました。変更を保持しました。再度読み込んでください。");
-    setBundle(current => current === before ? touchProject(result.bundle) : current);
-    const first = result.applied[0]?.entityId;
-    if (first) { setSceneSelection({ kind: "entity", id: first }); setAssetSelection(null); }
-    setNotice(`Spatial Capture: ${result.applied.length}件を配置、${result.skipped.length}件をスキップしました。`);
-  }, [editorMode, runSave, setBundle, setSceneSelection, setAssetSelection]);
-
-  const [nativeRoomAcquiring, setNativeRoomAcquiring] = useState(false);
-  const nativeRoomGenerationRef = useRef(0);
-  const nativeRoomBusyRef = useRef(false);
-  const handleCaptureOpenXrRoom = useCallback(async () => {
-    if (playingRef.current) throw new Error("Playを停止してから部屋を取得してください。");
-    if (nativeRoomBusyRef.current) throw new Error("部屋の取得が進行中です。");
-    nativeRoomBusyRef.current = true;
-    setNativeRoomAcquiring(true);
-    const generation = ++nativeRoomGenerationRef.current;
-    const before = bundleRef.current;
-    try {
-      const room = await tauri.captureOpenXrRoom();
-      setNativeRoomAcquiring(false);
-      if (generation !== nativeRoomGenerationRef.current) throw new Error("部屋の取得を取り消しました。");
-      if (bundleRef.current !== before || playingRef.current) throw new Error("取得中にシーンが変わりました。編集を保持しました。再取得してください。");
-      const capture = nativeRoomToCapture(room);
-      await handleImportSpatialCapture(new File([JSON.stringify(capture)], "openxr-room.xrift-spatial.json", { type: "application/json" }));
-      if (room.warnings.length) setNotice(`部屋を取り込みました。${room.warnings.join(" / ")}`);
-    } finally { nativeRoomBusyRef.current = false; setNativeRoomAcquiring(false); }
-  }, [handleImportSpatialCapture]);
-  const handleCancelOpenXrRoom = useCallback(async () => {
-    ++nativeRoomGenerationRef.current;
-    await tauri.cancelOpenXrRoomCapture();
-  }, []);
-  useEffect(() => () => {
-    ++nativeRoomGenerationRef.current;
-    if (nativeRoomBusyRef.current) void tauri.cancelOpenXrRoomCapture().catch(() => undefined);
-  }, []);
+  const openXrRoomImport = useOpenXrRoomImport({
+    getBundle: () => bundleRef.current,
+    canImport: () => !playingRef.current && !playPreparationActiveRef.current
+      && !importBusyRef.current && !importRunningRef.current && assetOperationRef.current === null,
+    getPlayGeneration: () => playPreparationGenerationRef.current,
+    save: runSave,
+    commit: (result, message) => {
+      setBundle(touchProject(result.bundle));
+      const first = result.applied[0]?.entityId;
+      if (first) {
+        setSceneSelection({ kind: "entity", id: first });
+        setAssetSelection(null);
+      }
+      setNotice(message);
+    },
+  });
 
   const handleSaveBeforeImport = useCallback(async () => {
     const savedProjectPath = await runSave();
@@ -11518,9 +11489,9 @@ export function VisualEditorPrototype({
               setGraphTabActive(false);
               executeCommand("play.toggle");
             }}
-            nativeRoomAcquiring={nativeRoomAcquiring}
-            onCaptureOpenXrRoom={handleCaptureOpenXrRoom}
-            onCancelOpenXrRoom={handleCancelOpenXrRoom}
+            roomImportPhase={openXrRoomImport.phase}
+            onCaptureOpenXrRoom={openXrRoomImport.capture}
+            onCancelOpenXrRoom={openXrRoomImport.cancel}
             tabs={viewportEditorTabs}
             activeTabId={
               viewportEditorTabs.some((tab) => tab.id === activeEditorTab)

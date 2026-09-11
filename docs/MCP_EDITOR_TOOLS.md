@@ -495,4 +495,4 @@ Editorの `import_model_asset` と、`importSettings` を省略した `import_te
 
 ### 意図的に公開していない操作: OpenXRの部屋取得
 
-`capture_openxr_room` / `cancel_openxr_room_capture` はTauri IPCの非同期Session操作で、現在の同期MCP document surfaceには公開しない。Scene Viewの「OpenXR」から実行する。取得後のGLB保存もUIの取り込み処理が担当する。`apply_spatial_capture` は簡易形状の配置であり、端末からの取得やGLBの保存は行わない。
+`capture_openxr_room` / `cancel_openxr_room_capture` は同じ`requestId`を渡すTauri IPCの非同期Session操作で、現在の同期MCP document surfaceには公開しない。Scene Viewの「OpenXR」から実行する。取得後のGLB保存もUIの取り込み処理が担当する。`apply_spatial_capture` は簡易形状の配置であり、端末からの取得やGLBの保存は行わない。

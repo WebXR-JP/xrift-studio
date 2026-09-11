@@ -1,51 +1,59 @@
-import { useRef, useState } from "react";
+import type { OpenXrRoomImportPhase } from "./useOpenXrRoomImport";
+import { useEffect, useRef, useState } from "react";
 import { tauri } from "../../lib/tauri";
 import type { NativeRoomCapabilities } from "../../lib/visual-editor/value-up/spatial-xr/native-room";
 
-export function SpatialXrPanel({ nativeRoomAcquiring, onCaptureRoom, onCancelCapture }: {
-  nativeRoomAcquiring?: boolean;
-  onCaptureRoom?: () => Promise<void>;
+export function SpatialXrPanel({ phase = "idle", disabled = false, onCaptureRoom, onCancelCapture }: {
+  phase?: OpenXrRoomImportPhase;
+  disabled?: boolean;
+  onCaptureRoom?: () => Promise<string>;
   onCancelCapture?: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [capabilities, setCapabilities] = useState<NativeRoomCapabilities | null>(null);
   const [checking, setChecking] = useState(false);
-  const [roomBusy, setRoomBusy] = useState(false);
+  const roomBusy = phase !== "idle";
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const busyRef = useRef(false);
+  const lifetimeRef = useRef(0);
+  useEffect(() => {
+    ++lifetimeRef.current;
+    return () => { ++lifetimeRef.current; };
+  }, []);
 
   const detect = async () => {
-    if (busyRef.current) return;
+    if (busyRef.current || roomBusy) return;
     busyRef.current = true;
+    const lifetime = lifetimeRef.current;
     setChecking(true);
     setCapabilities(null);
     setError(null);
     setResult(null);
     try {
-      setCapabilities(await tauri.getOpenXrRoomCapabilities());
+      const next = await tauri.getOpenXrRoomCapabilities();
+      if (lifetime === lifetimeRef.current) setCapabilities(next);
     } catch (cause) {
-      setError(String(cause));
+      if (lifetime === lifetimeRef.current) setError(String(cause));
     } finally {
       busyRef.current = false;
-      setChecking(false);
+      if (lifetime === lifetimeRef.current) setChecking(false);
     }
   };
 
   const capture = async () => {
-    if (busyRef.current || !onCaptureRoom || !capabilities?.available) return;
+    if (busyRef.current || roomBusy || disabled || !onCaptureRoom || !capabilities?.available) return;
     busyRef.current = true;
-    setRoomBusy(true);
+    const lifetime = lifetimeRef.current;
     setError(null);
     setResult(null);
     try {
-      await onCaptureRoom();
-      setResult("部屋を取り込みました。Hierarchyで選択したEntityの寸法・向き・床位置を確認してください。");
+      const message = await onCaptureRoom();
+      if (lifetime === lifetimeRef.current) setResult(message);
     } catch (cause) {
-      setError(String(cause));
+      if (lifetime === lifetimeRef.current) setError(String(cause));
     } finally {
       busyRef.current = false;
-      setRoomBusy(false);
     }
   };
 
@@ -71,11 +79,11 @@ export function SpatialXrPanel({ nativeRoomAcquiring, onCaptureRoom, onCancelCap
             <p className="mt-2 text-slate-500">SteamVRは必要な部屋取得の拡張が使える場合のみ対象です。PICO 4 Ultra＋PICO Connectの部屋取得は未対応です。</p>
             {capabilities ? <p className="mt-2" role="status">{capabilities.runtime}: {capabilities.message}</p> : <p className="mt-2" role="status">{checking ? "接続環境を確認しています…" : "再診断で接続環境を確認してください。"}</p>}
             {capabilities?.missingExtensions.length ? <p className="mt-1 break-words text-amber-700">不足: {capabilities.missingExtensions.join(", ")}</p> : null}
-            <button type="button" disabled={checking || roomBusy || !onCaptureRoom || !capabilities?.available} onClick={() => void capture()} className="mt-3 rounded-md bg-slate-800 px-3 py-2 font-semibold text-white disabled:opacity-40">
-              {roomBusy ? (nativeRoomAcquiring ? "部屋を取得中…" : "素材を取り込み中…") : "保存済みの部屋を取り込む"}
+            <button type="button" disabled={checking || roomBusy || disabled || !onCaptureRoom || !capabilities?.available} onClick={() => void capture()} className="mt-3 rounded-md bg-slate-800 px-3 py-2 font-semibold text-white disabled:opacity-40">
+              {phase === "acquiring" ? "部屋を取得中…" : phase === "cancelling" ? "取得を取り消し中…" : phase === "saving" ? "素材を取り込み中…" : "保存済みの部屋を取り込む"}
             </button>
-            {roomBusy && nativeRoomAcquiring && onCancelCapture ? (
-              <button type="button" onClick={() => { void onCancelCapture().catch(cause => setError(String(cause))); }} className="ml-2 rounded-md border px-2 py-1">取得を取り消す</button>
+            {phase === "acquiring" && onCancelCapture ? (
+              <button type="button" onClick={() => { const lifetime = lifetimeRef.current; void onCancelCapture().catch(cause => { if (lifetime === lifetimeRef.current) setError(String(cause)); }); }} className="ml-2 rounded-md border px-2 py-1">取得を取り消す</button>
             ) : null}
             <p className="mt-2 text-slate-500">Playを停止してから取り込んでください。取得中はヘッドセットの表示が切り替わる場合があります。素材の保存が始まった後は完了を待ってください。</p>
             {result ? <p className="mt-2" role="status">{result}</p> : null}

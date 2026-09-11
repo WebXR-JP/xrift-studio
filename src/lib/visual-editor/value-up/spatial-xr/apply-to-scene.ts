@@ -1,4 +1,4 @@
-import { quaternionToEuler, localOffsetPosition } from "./spatial-transform";
+import { quaternionToEuler, localOffsetPosition, spatialSurfaceBounds } from "./spatial-transform";
 import type { AssetManifest } from "../../asset-manifest";
 import { BUILTIN_PRIMITIVE_CREATION_IDS } from "../../creation-catalog";
 import { createDocumentId } from "../../document-id";
@@ -10,7 +10,7 @@ import {
   type Vec3,
 } from "../../scene-document";
 import { buildSpatialConversionPlan, type SemanticPrefabRule } from "./semantic-conversion";
-import type { SpatialCaptureDocument } from "./spatial-capture";
+import { normalizeSpatialSemanticLabel, type SpatialCaptureDocument } from "./spatial-capture";
 
 export type ApplySpatialCaptureOptions = {
   materialAssetId: string;
@@ -35,8 +35,9 @@ export function applySpatialCaptureToScene(
   const createdEntityIds: string[] = [];
   const skippedSurfaceIds: string[] = [];
   const include = options.includeLabels?.length
-    ? new Set(options.includeLabels.map((v) => v.toLowerCase()))
+    ? new Set(options.includeLabels.map(normalizeSpatialSemanticLabel))
     : null;
+  const surfacesById = new Map(capture.surfaces.map(surface => [surface.id, surface]));
 
   for (const action of buildSpatialConversionPlan(capture, options.rules)) {
     if (include && !include.has(action.semanticLabel.toLowerCase())) {
@@ -72,14 +73,12 @@ export function applySpatialCaptureToScene(
     if (entity && transform) {
       entity.name = `Spatial ${action.semanticLabel}`;
       transform.rotation = quaternionToEuler(primitive.rotationQuaternion);
-      const surface = capture.surfaces.find(s => s.id === action.sourceSurfaceId)!;
-      if (surface.bounds) transform.position = localOffsetPosition(surface, surface.bounds.min.map((v, i) => (v + surface.bounds!.max[i]!) / 2) as Vec3);
-      // Plane polygon points are expressed in planeSpace's X/Z axes and +Y is
-      // the normal. Preserve that basis with a thin local-Y box.
-      transform.scale = primitive.shape === "plane"
-        ? [Math.max(0.01, primitive.scale[0]), 0.02, Math.max(0.01, primitive.scale[2] || primitive.scale[1])]
-        : primitive.scale;
-      transform.scale = transform.scale.map((v, i) => v * (surface.pose.scale?.[i] ?? 1)) as Vec3;
+      const surface = surfacesById.get(action.sourceSurfaceId)!;
+      const bounds = spatialSurfaceBounds(surface);
+      if (bounds) transform.position = localOffsetPosition(surface, bounds.min.map((v, i) => (v + bounds.max[i]!) / 2) as Vec3);
+      // Dimensions already give flat geometry a thin axis. Keep that local basis
+      // for both XZ polygons and bounds supplied in other local orientations.
+      transform.scale = primitive.scale.map((v, i) => v * (surface.pose.scale?.[i] ?? 1)) as Vec3;
       if (action.purposes.includes("static-collider") && !entity.components.some((component) => component.type === "collider")) {
         entity.components = [
           ...entity.components,

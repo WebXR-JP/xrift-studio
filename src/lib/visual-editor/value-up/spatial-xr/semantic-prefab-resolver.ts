@@ -1,4 +1,5 @@
 import { normalizeSpatialSemanticLabel, type SpatialSurface } from "./spatial-capture";
+import { spatialSurfaceSize } from "./spatial-transform";
 
 export type SemanticPrefabCandidate = {
   id: string;
@@ -13,15 +14,6 @@ export type RankedSemanticPrefab = SemanticPrefabCandidate & {
   reasons: string[];
 };
 
-function surfaceSize(surface: SpatialSurface): [number, number, number] | null {
-  if (!surface.bounds) return null;
-  return [
-    Math.max(0.01, surface.bounds.max[0] - surface.bounds.min[0]),
-    Math.max(0.01, surface.bounds.max[1] - surface.bounds.min[1]),
-    Math.max(0.01, surface.bounds.max[2] - surface.bounds.min[2]),
-  ];
-}
-
 function sizeSimilarity(left: [number, number, number], right: [number, number, number]): number {
   const ratios = left.map((value, index) => Math.min(value, right[index]!) / Math.max(value, right[index]!));
   return ratios.reduce((sum, value) => sum + value, 0) / ratios.length;
@@ -33,7 +25,7 @@ export function rankSemanticPrefabs(
   options: { styleTags?: readonly string[] } = {},
 ): RankedSemanticPrefab[] {
   const label = String(normalizeSpatialSemanticLabel(surface.semanticLabel));
-  const dimensions = surfaceSize(surface);
+  const dimensions = spatialSurfaceSize(surface);
   const requestedStyles = new Set((options.styleTags ?? []).map((tag) => tag.toLowerCase()));
 
   return candidates.filter(candidate => candidate.semanticLabels.some(value => normalizeSpatialSemanticLabel(value) === label)).map((candidate) => {

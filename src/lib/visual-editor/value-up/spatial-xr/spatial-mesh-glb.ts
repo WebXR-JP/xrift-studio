@@ -21,10 +21,10 @@ function triangulateSurface(surface: SpatialSurface): { vertices: number[]; indi
   const vertices = points.flatMap((point) => [point[0], point[1], point[2]]);
   // Capture plane polygons use local X/Z; ear clipping preserves concave rooms.
   const indices = ShapeUtils.triangulateShape(points.map(p => new Vector2(p[0], p[2])), []).flat();
-  return { vertices, indices };
+  return indices.length >= 3 ? { vertices, indices } : null;
 }
 
-function minMax(vertices: readonly number[]) {
+function minMax(vertices: ArrayLike<number>) {
   const min: [number, number, number] = [Infinity, Infinity, Infinity];
   const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
   for (let index = 0; index + 2 < vertices.length; index += 3) {
@@ -44,8 +44,10 @@ export function spatialSurfaceGeometryToGlb(surface: SpatialSurface, capture?: S
   const geometry = triangulateSurface(surface);
   if (!geometry) return null;
   const positions = new Float32Array(geometry.vertices);
+  const minIndex = geometry.indices.reduce((min, value) => Math.min(min, value), Infinity);
   const maxIndex = geometry.indices.reduce((max, value) => Math.max(max, value), 0);
-  const useU32 = maxIndex > 65535;
+  // The maximum unsigned value is reserved for primitive restart in glTF.
+  const useU32 = maxIndex >= 65535;
   const indices = useU32 ? new Uint32Array(geometry.indices) : new Uint16Array(geometry.indices);
   const positionBytes = new Uint8Array(positions.buffer, positions.byteOffset, positions.byteLength);
   const indexBytes = new Uint8Array(indices.buffer, indices.byteOffset, indices.byteLength);
@@ -54,7 +56,8 @@ export function spatialSurfaceGeometryToGlb(surface: SpatialSurface, capture?: S
   const binary = new Uint8Array(binaryLength);
   binary.set(positionBytes, 0);
   binary.set(indexBytes, indexOffset);
-  const bounds = minMax(geometry.vertices);
+  // Accessor bounds must describe the float32 bytes actually written to the GLB.
+  const bounds = minMax(positions);
   const semantic = String(surface.semanticLabel ?? "other");
   const gltf = {
     asset: {
@@ -81,7 +84,7 @@ export function spatialSurfaceGeometryToGlb(surface: SpatialSurface, capture?: S
     ],
     accessors: [
       { bufferView: 0, componentType: 5126, count: positions.length / 3, type: "VEC3", min: bounds.min, max: bounds.max },
-      { bufferView: 1, componentType: useU32 ? 5125 : 5123, count: indices.length, type: "SCALAR", min: [0], max: [maxIndex] },
+      { bufferView: 1, componentType: useU32 ? 5125 : 5123, count: indices.length, type: "SCALAR", min: [minIndex], max: [maxIndex] },
     ],
   };
   const jsonRaw = new TextEncoder().encode(JSON.stringify(gltf));

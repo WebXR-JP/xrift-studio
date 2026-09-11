@@ -1,4 +1,4 @@
-import { quaternionToEuler, localOffsetPosition } from "./spatial-transform";
+import { quaternionToEuler, localOffsetPosition, spatialSurfaceBounds, spatialSurfaceSize } from "./spatial-transform";
 import { instantiateSceneAsset } from "../../asset-placement";
 import { createAssetImportPlan } from "../../asset-import";
 import { commitAssetImportPlanToDisk, ensureBuiltinModelAsset } from "../../asset-import-persistence";
@@ -8,32 +8,23 @@ import { migrateSpatialCapture, normalizeSpatialSemanticLabel, type SpatialCaptu
 import { findSpatialSemanticSample } from "./semantic-sample-models";
 import { spatialSurfaceGeometryToGlb } from "./spatial-mesh-glb";
 
-export type SpatialModelSource = "captured-geometry" | "semantic-sample" | "proxy";
-export type AppliedSpatialModel = { surfaceId: string; semanticLabel: string; source: SpatialModelSource; assetId?: string; entityId?: string };
+export type SpatialModelSource = "captured-geometry" | "semantic-sample";
+export type AppliedSpatialModel = { surfaceId: string; semanticLabel: string; source: SpatialModelSource; assetId: string; entityId: string };
 export type ApplySpatialModelsResult = { bundle: PrototypeVisualProject; applied: AppliedSpatialModel[]; skipped: string[] };
+export type ApplySpatialModelsOptions = { assertCurrent?: () => void };
 
-
-function sizeOf(surface: SpatialSurface): [number, number, number] | null {
-  if (surface.bounds) return [
-    Math.max(0.01, surface.bounds.max[0] - surface.bounds.min[0]),
-    Math.max(0.01, surface.bounds.max[1] - surface.bounds.min[1]),
-    Math.max(0.01, surface.bounds.max[2] - surface.bounds.min[2]),
-  ];
-  const points = surface.boundary?.points;
-  if (!points?.length) return null;
-  const values = [0, 1, 2].map((axis) => points.map((point) => point[axis]!));
-  return values.map((axis) => Math.max(0.01, Math.max(...axis) - Math.min(...axis))) as [number, number, number];
-}
-
-async function importCapturedGeometry(projectPath: string, bundle: PrototypeVisualProject, capture: SpatialCaptureDocument, surface: SpatialSurface) {
+async function importCapturedGeometry(projectPath: string, bundle: PrototypeVisualProject, capture: SpatialCaptureDocument, surface: SpatialSurface, assertCurrent?: () => void) {
   const bytes = spatialSurfaceGeometryToGlb(surface, capture);
   if (!bytes) return null;
   const label = String(normalizeSpatialSemanticLabel(surface.semanticLabel));
   const safe = surface.id.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(0, 48);
   const fileName = `spatial-${label.replace(/[^a-zA-Z0-9-]/g, "-")}-${safe}.glb`;
   const plan = await createAssetImportPlan({ fileName, bytes, mimeType: "model/gltf-binary", displayName: `Spatial ${label}`, folderId: null, existingManifest: bundle.assets });
-  if (!plan.canCommit || !plan.asset) return null;
+  assertCurrent?.();
+  // An import failure must not silently replace captured geometry with a sample.
+  if (!plan.canCommit || !plan.asset) throw new Error(`部屋の形状をGLBとして取り込めませんでした: ${surface.id}`);
   const assets = await commitAssetImportPlanToDisk(projectPath, bundle.assets, plan);
+  assertCurrent?.();
   return { assets, assetId: plan.asset.id };
 }
 
@@ -41,23 +32,27 @@ async function importCapturedGeometry(projectPath: string, bundle: PrototypeVisu
  * Applies captured room geometry with a preserve-first policy:
  * 1. Exact detected plane/mesh geometry -> imported GLB and used directly.
  * 2. No geometry but a known semantic -> bundled sample GLB, scaled to bounds.
- * 3. Otherwise leave it for the existing primitive proxy pass.
+ * 3. Otherwise report the surface as skipped; this path does not place proxies.
  */
 export async function applySpatialCaptureModels(
   projectPath: string,
   initial: PrototypeVisualProject,
   capture: SpatialCaptureDocument,
+  options: ApplySpatialModelsOptions = {},
 ): Promise<ApplySpatialModelsResult> {
+  options.assertCurrent?.();
   capture = migrateSpatialCapture(capture);
   let bundle = initial;
   const applied: AppliedSpatialModel[] = [];
   const skipped: string[] = [];
 
   for (const surface of capture.surfaces) {
+    options.assertCurrent?.();
     const label = String(normalizeSpatialSemanticLabel(surface.semanticLabel));
     let assetId: string | undefined;
-    let source: SpatialModelSource = "proxy";
-    const direct = await importCapturedGeometry(projectPath, bundle, capture, surface);
+    let source: SpatialModelSource = "semantic-sample";
+    const direct = await importCapturedGeometry(projectPath, bundle, capture, surface, options.assertCurrent);
+    options.assertCurrent?.();
     if (direct) {
       bundle = { ...bundle, assets: direct.assets };
       assetId = direct.assetId;
@@ -66,6 +61,7 @@ export async function applySpatialCaptureModels(
       const sample = label === "global-mesh" ? undefined : findSpatialSemanticSample(label);
       if (sample) {
         const withModel = await ensureBuiltinModelAsset(projectPath, bundle.assets, sample);
+        options.assertCurrent?.();
         if (withModel) {
           bundle = { ...bundle, assets: withModel };
           assetId = sample.assetId;
@@ -85,13 +81,14 @@ export async function applySpatialCaptureModels(
       transform.scale = surface.pose.scale ?? [1, 1, 1];
       if (source === "semantic-sample") {
         const sample = findSpatialSemanticSample(label);
-        const detected = sizeOf(surface);
+        const detected = spatialSurfaceSize(surface);
         if (sample?.nominalSize && detected) {
           transform.scale = detected.map((value, axis) => value / Math.max(0.001, sample.nominalSize![axis]!) * (surface.pose.scale?.[axis] ?? 1)) as Vec3;
-          if (surface.bounds) transform.position = localOffsetPosition(surface, [
-            (surface.bounds.min[0] + surface.bounds.max[0]) / 2,
-            surface.bounds.min[1],
-            (surface.bounds.min[2] + surface.bounds.max[2]) / 2,
+          const bounds = spatialSurfaceBounds(surface);
+          if (bounds) transform.position = localOffsetPosition(surface, [
+            (bounds.min[0] + bounds.max[0]) / 2,
+            bounds.min[1],
+            (bounds.min[2] + bounds.max[2]) / 2,
           ]);
         }
       }

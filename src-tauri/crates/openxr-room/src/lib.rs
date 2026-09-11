@@ -20,9 +20,11 @@ pub struct Room {
     pub surfaces: Vec<Value>,
     pub warnings: Vec<String>,
 }
-pub const REQUIRED: [&str; 4] = [
+pub const REQUIRED: [&str; 5] = [
     "XR_KHR_D3D11_enable",
     "XR_FB_spatial_entity",
+    // Query depends on storage even though acquisition never saves or erases spaces.
+    "XR_FB_spatial_entity_storage",
     "XR_FB_spatial_entity_query",
     "XR_FB_scene",
 ];
@@ -60,7 +62,7 @@ mod tests {
     fn runtime_name_is_not_a_capability() {
         assert_eq!(
             missing_extensions(&["SteamVR", "Meta", "XR_KHR_D3D11_enable"]).len(),
-            3
+            4
         );
         assert!(missing_extensions(&REQUIRED).is_empty());
     }

@@ -37,6 +37,7 @@ fn extensions(e: &xr::Entry) -> Result<(xr::ExtensionSet, Vec<String>), String> 
     let flags = [
         x.khr_d3d11_enable,
         x.fb_spatial_entity,
+        x.fb_spatial_entity_storage,
         x.fb_spatial_entity_query,
         x.fb_scene,
     ];
@@ -130,6 +131,9 @@ struct Spaces<'a> {
 impl Drop for Spaces<'_> {
     fn drop(&mut self) {
         for space in &self.values {
+            if space.space == sys::Space::NULL {
+                continue;
+            }
             unsafe {
                 (self.instance.fp().destroy_space)(space.space);
             }
@@ -200,22 +204,35 @@ fn retrieve(
             "部屋件数の取得",
         )?;
         let count = bounded_count(out.result_count_output, 4096)?;
-        let mut values = vec![
-            sys::SpaceQueryResultFB {
-                space: sys::Space::NULL,
-                uuid: Default::default()
-            };
-            count
-        ];
+        if count == 0 {
+            return Ok(());
+        }
+        // Own the output buffer before retrieval so all returned handles are
+        // released even when the call or the subsequent count validation fails.
+        let mut batch = Spaces {
+            instance: i,
+            values: vec![
+                sys::SpaceQueryResultFB {
+                    space: sys::Space::NULL,
+                    uuid: Default::default()
+                };
+                count
+            ],
+        };
         out.result_capacity_input = count as u32;
-        out.results = values.as_mut_ptr();
+        out.results = batch.values.as_mut_ptr();
         ok(
             (api.retrieve_space_query_results)(session, id, &mut out),
             "部屋の取得",
         )?;
-        values.truncate(bounded_count(out.result_count_output, count as u32)?);
-        // Guard owns even excess handles, so an error cannot leak native spaces.
-        spaces.values.extend(values);
+        let returned = bounded_count(out.result_count_output, count as u32)?;
+        if batch.values[..returned]
+            .iter()
+            .any(|item| item.space == sys::Space::NULL)
+        {
+            return Err("INVALID_DATA: 部屋のSpaceがありません".into());
+        }
+        spaces.values.extend(batch.values.drain(..returned));
         bounded_count(spaces.values.len() as u32, 4096)?;
     }
     Ok(())
@@ -271,12 +288,14 @@ fn surface(
             (i.fp().locate_space)(item.space, base.as_raw(), time, location.as_mut_ptr()),
             "位置の取得",
         )?;
-        let location = location.assume_init();
-        if !location.location_flags.contains(
+        // Invalid pose fields may be uninitialized; inspect flags before reading them.
+        let flags = ptr::addr_of!((*location.as_ptr()).location_flags).read();
+        if !flags.contains(
             sys::SpaceLocationFlags::POSITION_VALID | sys::SpaceLocationFlags::ORIENTATION_VALID,
         ) {
             return Ok(None);
         }
+        let location = location.assume_init();
         let scene = i.exts().fb_scene.as_ref().unwrap();
         if !component(i, item.space, sys::SpaceComponentTypeFB::SEMANTIC_LABELS)? {
             return Ok(None);
@@ -299,6 +318,7 @@ fn surface(
             (scene.get_space_semantic_labels)(session, item.space, &mut labels),
             "分類の読取",
         )?;
+        bytes.truncate(bounded_count(labels.buffer_count_output, bytes.len() as u32)?);
         let label = String::from_utf8_lossy(&bytes)
             .trim_end_matches('\0')
             .to_string();
@@ -413,6 +433,7 @@ pub fn capture(cancel: &AtomicBool) -> Result<Room, String> {
     let mut enabled = xr::ExtensionSet::default();
     enabled.khr_d3d11_enable = true;
     enabled.fb_spatial_entity = true;
+    enabled.fb_spatial_entity_storage = true;
     enabled.fb_spatial_entity_query = true;
     enabled.fb_scene = true;
     enabled.meta_spatial_entity_mesh = supported.meta_spatial_entity_mesh;
@@ -424,8 +445,10 @@ pub fn capture(cancel: &AtomicBool) -> Result<Room, String> {
     let system = i
         .system(xr::FormFactor::HEAD_MOUNTED_DISPLAY)
         .map_err(|e| xr_error("端末の確認。接続・装着状態を確認してください", e))?;
+    check_cancel(cancel)?;
     // Device must outlive the session. Match the runtime's adapter, not the default GPU.
     let device = device(&i, system)?;
+    check_cancel(cancel)?;
     let (session, mut waiter, mut stream) = unsafe {
         i.create_session::<xr::D3D11>(
             system,
@@ -502,10 +525,14 @@ pub fn capture(cancel: &AtomicBool) -> Result<Room, String> {
                     query_done = true;
                     settle_deadline = Some(Instant::now() + Duration::from_secs(5));
                 }
-                xr::Event::ReferenceSpaceChangePending(_) => return Err(
-                    "REFERENCE_SPACE_CHANGED: 取得中に座標基準が変わりました。再取得してください"
-                        .into(),
-                ),
+                xr::Event::ReferenceSpaceChangePending(e)
+                    if e.reference_space_type() == xr::ReferenceSpaceType::STAGE =>
+                {
+                    return Err(
+                        "REFERENCE_SPACE_CHANGED: 取得中に座標基準が変わりました。再取得してください"
+                            .into(),
+                    )
+                }
                 _ => {}
             }
         }
@@ -515,10 +542,11 @@ pub fn capture(cancel: &AtomicBool) -> Result<Room, String> {
         }
         let frame = waiter.wait().map_err(|e| xr_error("Frame待機", e))?;
         stream.begin().map_err(|e| xr_error("Frame開始", e))?;
-        // No world rendering: zero layers keep acquisition independent from WebXR.
+        // Acquisition needs a running session, but submits no rendered layers.
         stream
             .end(frame.predicted_display_time, blend_mode, &[])
             .map_err(|e| xr_error("Frame終了", e))?;
+        check_cancel(cancel)?;
         if request.is_none() {
             let storage = sys::SpaceStorageLocationFilterInfoFB {
                 ty: sys::SpaceStorageLocationFilterInfoFB::TYPE,

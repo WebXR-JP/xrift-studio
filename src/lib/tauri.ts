@@ -368,8 +368,8 @@ export type ScriptTrustMutationResult = {
 
 export const tauri = {
   getOpenXrRoomCapabilities: () => invoke<import("./visual-editor/value-up/spatial-xr/native-room").NativeRoomCapabilities>("get_openxr_room_capabilities"),
-  captureOpenXrRoom: () => invoke<import("./visual-editor/value-up/spatial-xr/native-room").NativeRoom>("capture_openxr_room"),
-  cancelOpenXrRoomCapture: () => invoke<void>("cancel_openxr_room_capture"),
+  captureOpenXrRoom: (requestId: string) => invoke<import("./visual-editor/value-up/spatial-xr/native-room").NativeRoom>("capture_openxr_room", { requestId }),
+  cancelOpenXrRoomCapture: (requestId: string) => invoke<void>("cancel_openxr_room_capture", { requestId }),
   isAvailable: () => isTauri(),
   selectDirectory: (title: string, defaultPath?: string) =>
     openDialog({
