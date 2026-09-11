@@ -1,6 +1,6 @@
 ---
 name: xrift-blender-world
-description: BlenderでXRift向けの建築・室内をモデリングし、GLBとして取り込む。
+description: Blender MCP で XRIFT Studio 向けのワールド（部屋・建築・インテリア・スタジオ）を手続き的に制作し、GLB 経由で XRIFT Studio へ取り込むまでの一連の手順。Z-fighting の設計ルール、Poly Haven CC0 テクスチャの ARM→glTF 直結、ワールド座標ベース UV、XRIFT MCP の落とし穴（starter floor / spawn 位置 / ambient.enabled / 自動コライダー / Blender +Y → XRIFT −Z）を含む。Use whenever the user builds a room, interior, building, studio, or any 3D environment in Blender — especially for a metaverse / VR world — or imports a model into XRift Studio. 「Blenderで部屋を作って」「スタジオを作って」「ワールドを作って」「XRIFTに持ち込んで」「GLBをインポートして」「Z-fightingが起きた」「メタバース用のモデル」「軽量化して」などで発動。ユーザーが Blender と XRIFT のどちらか一方しか言及していなくても、もう一方に繋がる作業なら参照すること。
 metadata:
   version: "1.0.0"
 ---
@@ -47,7 +47,7 @@ exec(compile(open(path, encoding="utf-8").read(), path, "exec"), g)
 result = g["main"]()          # execute_blender_code は result が dict でないとエラーになる
 ```
 
-`main()` は専用の生成Collectionだけを更新する。シーン全体の削除は専用の使い捨てファイルでのみ行い、既存作品を消さない。こうすると寸法定数を
+`main()` は先頭で全オブジェクト・全データブロックを消してから作り直す。こうすると寸法定数を
 書き換えて再実行するだけで作り直せるので、試行回数を稼げる。
 
 `scripts/room_lib.py` に検証済みのヘルパー（`box` / `cyl` / `join` / `set_origin` / `box_uv` /
@@ -192,7 +192,7 @@ bpy.ops.export_scene.gltf(
     export_materials="EXPORT",
     export_image_format="AUTO",    # JPEG ソースを JPEG のまま保つ
     export_cameras=False, export_lights=False,   # 照明は XRIFT 側
-    export_yup=True, export_extras=True, export_animations=False)
+    export_yup=True, export_extras=False, export_animations=False)
 ```
 
 `_Preview` は `layer_collection.children[...].exclude = True` で外し、書き出し後に戻す。

@@ -1,17 +1,17 @@
 ---
 name: xrift-studio-feature
-description: XRift StudioのUI、MCP、Tauriをまたぐ機能追加・変更を実装するときに使う。
+description: XRift Studio に機能を追加・変更するときの標準手順と方針。新しい画面・ボタン・Tauri コマンド・CLI 連携の追加、既存フローの変更時に使う。「機能を追加」「新しい画面」「コマンドを追加」「〜できるようにして」で発動。
 ---
 
 # XRift Studio 機能追加の方針
 
-## 実装と完了
+## 進め方（この順番を守る）
 
 1. 設計: xrift-studio-ux スキルと docs/UX_PRINCIPLES.md に沿って「操作前・処理中・成功・失敗・戻り先」を決める。対応する動きを docs/UX_INTERACTIONS.md の MI-xx として記録する。
 2. ブラウザで動く部分から実装: React の状態と表示を先に作る。この段階では Tauri API を呼ばない。
 3. ネイティブが必要になったら IPC を分離: 下の「Tauri コマンドの追加手順」に従う。
-4. 検証: 変更対象に合う検証をxrift-studio-verifyから選び、差分に起因する失敗を直す。
-5. コミット: 作業単位ごとに意図が分かるメッセージでコミットする。PR依頼では作業ブランチへPushし、検証状況を添えてPRを作る。
+4. 検証: xrift-studio-verify スキルの Tier 0 → 1 → 2 の順で確認する。
+5. コミット: 作業単位ごとに意図が分かるメッセージでコミットする。Push はユーザーの指示があるときだけ。
 
 ## レイヤー構成
 
@@ -52,4 +52,4 @@ description: XRift StudioのUI、MCP、Tauriをまたぐ機能追加・変更を
 - UX 設計: .agents/skills/xrift-studio-ux/SKILL.md, docs/UX_PRINCIPLES.md, docs/UX_INTERACTIONS.md
 - 検証ループ: .agents/skills/xrift-studio-verify/SKILL.md
 - Blender × Studio モデリング: .agents/skills/xrift-mcp-blender-modeling/SKILL.md
-- xrift CLI の仕様: 利用可能なCLIのhelpと公式資料。個人用スキルの存在は前提にしない。
+- xrift CLI の仕様: xrift-cli スキル（ユーザーレベル）
