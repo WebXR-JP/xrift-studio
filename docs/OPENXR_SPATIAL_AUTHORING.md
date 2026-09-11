@@ -2,6 +2,21 @@
 
 Visual Projectを正本にし、既存のSceneDocument、Asset Import、Compilerへ接続する。PCのRuntime診断、外部ブラウザでのVR Preview、Quest BrowserでのRoom Captureは別の処理である。
 
+## ネイティブOpenXRによる保存済み部屋の取得
+
+実装: `src-tauri/crates/openxr-room`。Windowsで同梱のOpenXR Loaderを使い、現在のRuntimeの拡張を列挙する。`XR_KHR_D3D11_enable`、`XR_FB_spatial_entity`、`XR_FB_spatial_entity_query`、`XR_FB_scene` を必須とし、`XR_META_spatial_entity_mesh` は任意。Runtime名から対応を推定しない。SteamVRが必須拡張を公開しない場合は不足を返す。
+
+Runtime指定GPUのD3D11 Deviceで一時Sessionを作り、STAGE座標系でLOCALストレージのSemantic Entityを問い合わせる。取得対象Componentの有効化とLOCATABLEの位置確定を待ち、Plane・Bounds・分類・利用可能なMeshを返す。描画層は送らず、WebXRや外部ブラウザを使わない。新規Room Setup要求は行わない。
+
+- 45秒の取得期限、クエリ15秒、位置・Component確定に追加5秒。Runtime内のブロッキング呼び出し中は取消・期限の確認が遅れる可能性がある。
+- 件数4096、1Mesh20万頂点・60万index、返却データ32MBまで。参照ハンドル・Session・D3D11 Deviceは終了・失敗・取消で解放する。
+- FB平面のXY座標を共有importerのXZへ変換し、回転を合成して実空間位置を保つ。Meshと3D Boundsは元の座標系を保持する。
+- 位置不明のEntityを原点へ配置しない。除外件数を警告し、取得ゼロは空の成功にしない。複数の保存済み領域をRuntimeが返す場合、取得時に位置を確定できるEntityが対象になる。
+- PC上のTauri非同期コマンドから実行し、二重取得を拒否する。UIは取得と保存を分け、保存中に取り消せるようには見せない。取得中のScene変更・画面終了・取消では古い結果を適用しない。
+- 取得結果は共有Spatial Capture検証を通した後、既存のGLB Asset保存・Scene配置へ渡す。
+
+ビルド時はOpenXR Loaderの同梱にCMakeとC++ツールチェーンが必要。利用者がLoader DLLを配置する手順は不要。Windows向けCIで同梱Loaderを含めて検証する。ネイティブ取得・取消はSessionをまたぐ非同期操作のため、現在の同期MCP document surfaceには公開していない。UIとTauri IPCに限定し、MCPの簡易形状配置を直接取得と呼ばない。
+
 ## このPRの範囲
 
 | 機能 | 実装・制約 |

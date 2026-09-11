@@ -496,3 +496,7 @@ Editorの `import_model_asset` と、`importSettings` を省略した `import_te
 ### 意図的に公開していない操作: XR
 
 XR Previewの外部プロセス起動とCaptureファイルのGLB取り込みは現在デスクトップUIのみ。同期document surfaceから複数の永続Asset操作を実行しない。MCPのapply_spatial_captureは簡易形状を配置し、形状GLBの保存は行わない。将来project/local-asset surfaceへ接続する。
+
+### OpenXRの部屋取得
+
+`capture_openxr_room` / `cancel_openxr_room_capture` はTauri IPCの非同期Session操作で、現在の同期MCP document surfaceには公開していない。XRパネルで実行する。`apply_spatial_capture` は既に取得したデータの簡易配置であり、端末からの直接取得ではない。

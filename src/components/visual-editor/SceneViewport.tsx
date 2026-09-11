@@ -4741,6 +4741,9 @@ export function SceneViewport({
   playShortcut,
   snapShortcut,
   onTogglePlay,
+  nativeRoomAcquiring,
+  onCaptureOpenXrRoom,
+  onCancelOpenXrRoom,
   xrPreviewUrl,
   onStartXrPreview,
   onImportSpatialCapture,
@@ -4822,6 +4825,9 @@ export function SceneViewport({
   playShortcut?: string;
   snapShortcut?: string;
   onTogglePlay: () => void;
+  nativeRoomAcquiring?: boolean;
+  onCaptureOpenXrRoom?: () => Promise<void>;
+  onCancelOpenXrRoom?: () => Promise<void>;
   xrPreviewUrl?: string | null;
   onStartXrPreview?: () => Promise<void>;
   onImportSpatialCapture?: (file: File) => Promise<void>;
@@ -6196,7 +6202,7 @@ export function SceneViewport({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <SpatialXrPanel activePreviewUrl={xrPreviewUrl} onStartProjectPreview={onStartXrPreview} onImportCapture={onImportSpatialCapture} onStopPreview={onStopXrPreview} />
+          <SpatialXrPanel nativeRoomAcquiring={nativeRoomAcquiring} onCaptureRoom={onCaptureOpenXrRoom} onCancelCapture={onCancelOpenXrRoom} activePreviewUrl={xrPreviewUrl} onStartProjectPreview={onStartXrPreview} onImportCapture={onImportSpatialCapture} onStopPreview={onStopXrPreview} />
           {recordingViewActive && onExitRecordingView ? (
             <button
               type="button"

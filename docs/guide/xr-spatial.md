@@ -2,6 +2,21 @@
 
 XRパネルでは、PCのVR環境を診断し、編集したワールドを外部ブラウザで確認できます。Quest Browserで取得した部屋の形状も取り込めます。この機能は実機検証中です。
 
+## OpenXR接続中の端末から部屋を取り込む
+
+WindowsのStudioから保存済みの部屋を直接取得できます。ブラウザのHTTPSページやJSONの手動転送は不要です。実機動作は未検証です。
+
+1. Quest単体でRoom Setupを済ませ、Meta Air Link等でPCへ接続します。PC側で空間データの利用を許可してください。
+2. Scene Viewの「XR」を開き、「再診断」で現在のRuntimeを確認します。必要な拡張がない場合は不足項目を表示します。
+3. XR PreviewとPlayを停止し、「接続中の端末から部屋を取り込む」を押します。
+4. 取得後に選択されたEntityの寸法・向き・床位置を確認します。取り込みには既存の保存処理を使います。
+
+取得対象は床・壁の平面、家具などの寸法・分類、対応Runtimeが提供するMeshです。取得中にシーンが変更された場合は、その編集を上書きせず再取得を案内します。「取得を取り消す」はデータ取得中だけ使えます。素材の保存が始まった後は完了を待ってください。
+
+Meta Air Linkでは、既存の部屋の読み取りと新しいRoom Setupを区別します。部屋がなければLinkを切断し、QuestでRoom Setupを済ませて再接続してください。取得のために一時的なOpenXR Sessionを使うので、ヘッドセットの表示が切り替わる場合があります。
+
+SteamVRも接続先として確認しますが、必要なScene拡張を公開していないRuntimeからは部屋を取得できません。接続方式やRuntime名だけで対応を判定しません。未対応時にブラウザ方式へ自動で切り替えることはありません。
+
 ## PCでVRを確認する
 
 1. SteamVRまたはMeta Linkでヘッドセットを接続し、使用するOpenXR Runtimeを設定します。
@@ -24,7 +39,7 @@ PICO Connect対応のヘッドセットでは、Windows PCへ接続し、SteamVR
 
 SteamVR経由のVR表示から、PICOの部屋形状やSemantic情報も取得できるとは限りません。以下のRoom ScanはQuest向けで、PICOでの動作は未確認です。
 
-## Questで部屋を取り込む
+## 別の方法：Quest Browserから部屋を取り込む
 
 Quest Browserから、このバージョンの「Quest Room Scan」ページをHTTPSで開きます。PCのlocalhost URLはQuestから直接使えません。公開前のバージョンではページの準備が必要です。
 

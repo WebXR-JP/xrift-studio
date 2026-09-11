@@ -14,6 +14,7 @@ use tauri_plugin_opener::OpenerExt;
 
 mod external_store;
 mod openxr;
+mod openxr_room;
 mod project_transfer;
 pub mod mcp;
 mod script_trust;
@@ -5920,6 +5921,7 @@ pub fn run() {
     let builder = builder
         .manage(mcp::XriftMcpBrokerState::default())
         .manage(RecordingFileState::default())
+        .manage(openxr_room::RoomCaptureState::default())
         .setup(|app| {
             mcp::start_broker(app.handle())?;
             if let Ok(root) = app_root(app.handle()) {
@@ -5942,6 +5944,9 @@ pub fn run() {
             runtime_paths,
             openxr::get_openxr_runtime_status,
             openxr::get_xr_host_diagnostics,
+            openxr_room::get_openxr_room_capabilities,
+            openxr_room::capture_openxr_room,
+            openxr_room::cancel_openxr_room_capture,
             openxr::open_xr_preview_url,
             runtime_status,
             setup_runtime,

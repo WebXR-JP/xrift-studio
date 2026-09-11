@@ -1,3 +1,4 @@
+import { nativeRoomToCapture } from "../../lib/visual-editor/value-up/spatial-xr/native-room";
 import { applySpatialCaptureModels } from "../../lib/visual-editor/value-up/spatial-xr/apply-spatial-models";
 import { migrateSpatialCapture } from "../../lib/visual-editor/value-up/spatial-xr/spatial-capture";
 import { ensureCatalogMaterialTextures } from "../../lib/visual-editor/asset-import-persistence";
@@ -10629,6 +10630,35 @@ export function VisualEditorPrototype({
     setNotice(`Spatial Capture: ${result.applied.length}件を配置、${result.skipped.length}件をスキップしました。`);
   }, [editorMode, runSave, setBundle, setSceneSelection, setAssetSelection]);
 
+  const [nativeRoomAcquiring, setNativeRoomAcquiring] = useState(false);
+  const nativeRoomGenerationRef = useRef(0);
+  const nativeRoomBusyRef = useRef(false);
+  const handleCaptureOpenXrRoom = useCallback(async () => {
+    if (playingRef.current) throw new Error("Playを停止してから部屋を取得してください。");
+    if (nativeRoomBusyRef.current) throw new Error("部屋の取得が進行中です。");
+    nativeRoomBusyRef.current = true;
+    setNativeRoomAcquiring(true);
+    const generation = ++nativeRoomGenerationRef.current;
+    const before = bundleRef.current;
+    try {
+      const room = await tauri.captureOpenXrRoom();
+      setNativeRoomAcquiring(false);
+      if (generation !== nativeRoomGenerationRef.current) throw new Error("部屋の取得を取り消しました。");
+      if (bundleRef.current !== before || playingRef.current) throw new Error("取得中にシーンが変わりました。編集を保持しました。再取得してください。");
+      const capture = nativeRoomToCapture(room);
+      await handleImportSpatialCapture(new File([JSON.stringify(capture)], "openxr-room.xrift-spatial.json", { type: "application/json" }));
+      if (room.warnings.length) setNotice(`部屋を取り込みました。${room.warnings.join(" / ")}`);
+    } finally { nativeRoomBusyRef.current = false; setNativeRoomAcquiring(false); }
+  }, [handleImportSpatialCapture]);
+  const handleCancelOpenXrRoom = useCallback(async () => {
+    ++nativeRoomGenerationRef.current;
+    await tauri.cancelOpenXrRoomCapture();
+  }, []);
+  useEffect(() => () => {
+    ++nativeRoomGenerationRef.current;
+    if (nativeRoomBusyRef.current) void tauri.cancelOpenXrRoomCapture().catch(() => undefined);
+  }, []);
+
   const [xrPreviewUrl, setXrPreviewUrl] = useState<string | null>(null);
   const xrPreviewAbortRef = useRef<AbortController | null>(null);
   const xrPreviewHandleRef = useRef<{ stop: () => Promise<void> } | null>(null);
@@ -11531,6 +11561,9 @@ export function VisualEditorPrototype({
               setGraphTabActive(false);
               executeCommand("play.toggle");
             }}
+            nativeRoomAcquiring={nativeRoomAcquiring}
+            onCaptureOpenXrRoom={handleCaptureOpenXrRoom}
+            onCancelOpenXrRoom={handleCancelOpenXrRoom}
             xrPreviewUrl={xrPreviewUrl}
             onStartXrPreview={handleStartXrPreview}
             onImportSpatialCapture={handleImportSpatialCapture}
