@@ -41,4 +41,4 @@ Codex と Claude Code の共通ルール。現在の依頼に関係する資料�
 
 ## スキルの管理
 
-共通スキルの正本は `.agents/skills/`。`node scripts/sync-agent-skills.mjs` で`.claude/skills/` 互換コピーを同期し、`--check` で差分を検出する。Claude 専用スキルとクライアント別の `agents/` メタデータは同期対象外。詳細な手順や例は必要なときだけ参照し、description には適用条件を短く書く。
+共通スキルの正本は `.agents/skills/`。`node scripts/sync-agent-skills.mjs` で `.claude/skills/` 互換コピーを同期し、`--check` で差分を検出する。Claude 専用スキルとクライアント別の `agents/` メタデータは同期対象外。詳細な手順や例は必要なときだけ参照し、description には適用条件を短く書く。
