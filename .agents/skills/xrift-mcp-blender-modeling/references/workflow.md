@@ -113,7 +113,7 @@ Three.js / R3F で作ったコードを XRift に落とすときの変換ルー�
 - エージェント全体ルール: AGENT.md
 - UX 設計: .agents/skills/xrift-studio-ux/SKILL.md
 - 検証ループ: .agents/skills/xrift-studio-verify/SKILL.md
-- XRift Studio 機能追加: .agents/skills/xrift-studio-feature/SKILL.md
+- IPC・CLI 連携: docs/AGENT_IMPLEMENTATION.md
 - GLB 書き出し詳細: .agents/skills/xrift-mcp-blender-modeling/references/blender-export.md
 - R3F/Three.js → Script 変換: .agents/skills/xrift-mcp-blender-modeling/references/r3f-to-script.md
 - 動作例（R3F→Studio 変換と配置）: .agents/skills/xrift-mcp-blender-modeling/references/r3f-to-studio-example.md

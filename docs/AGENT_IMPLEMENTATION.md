@@ -38,3 +38,9 @@
 - MCP tool の description と server の `instructions` は、AI client が読む唯一の取扱説明書だ。tool を足す・直すときは「何をするか」に加えて「選ぶ基準」「使ったあと何をするか」「行き詰まりやすい点」を書く。代わりになる tool があれば名前を挙げる。説明文では防げない失敗は、戻り値の `harness` 警告のようにコードの側に書く。
 - Rust コマンドへ外部入力を渡すときは、既存のパス検証と権限制御を保ち、任意のパス実行や削除を追加しない。
 
+
+## IPC・CLI 連携
+
+Tauri コマンドを追加するときは、`src-tauri/src/lib.rs` の `#[tauri::command]` と `generate_handler!` の登録、`src/lib/tauri.ts` の型付きラッパーを揃える。Rust の snake_case と invoke の camelCase の引数対応を確認する。必要な権限だけを `src-tauri/capabilities/default.json` に追加する。
+
+CLI 連携は `src/lib/xrift-cli.ts` の既存経路を使い、`LogLine` を流す。処理中の busy/finally と二重操作防止は既存の `wrap` パターンを使う。依存追加は必要性を説明し、ロックファイルを更新する。フロントエンドと Rust の変更に合う検証は検証スキルから選ぶ。

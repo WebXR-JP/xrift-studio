@@ -28,7 +28,7 @@ Codex と Claude Code の共通ルール。現在の依頼に関係する資料�
 | Component・Graph・公開物 | `docs/AGENT_IMPLEMENTATION.md` の該当節、`docs/SCRIPTING.md` |
 | Scene 更新・描画性能 | `docs/AGENT_IMPLEMENTATION.md` の Scene 節 |
 | MCP・Rust コマンド | `docs/AGENT_IMPLEMENTATION.md` の MCP 節、`docs/MCP_EDITOR_TOOLS.md` |
-| 機能追加・IPC 連携 | `.agents/skills/xrift-studio-feature/SKILL.md` |
+| 機能追加・IPC 連携 | `docs/AGENT_IMPLEMENTATION.md` の IPC・CLI 節 |
 | 日本語の作成・推敲 | `.agents/skills/japanese-writing/SKILL.md`。誤字だけなら対象文と差分を確認 |
 | コード・画面の検証 | `.agents/skills/xrift-studio-verify/SKILL.md` |
 | Tauri MCP 接続 | `docs/AGENT_TAURI_MCP.md` |
