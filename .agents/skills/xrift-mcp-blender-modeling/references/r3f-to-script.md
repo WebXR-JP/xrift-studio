@@ -26,63 +26,11 @@ Studio に落とす変換ルールを示す。
 | `object.position.set(1, 2, 3)` | `ctx.object3d.position.set(1, 2, 3)` を `update` 内で |
 | `Math.random()` 初期化 | `start(ctx)` 内で1回だけ設定 |
 
-## Render の基本形
+## Render と配置
 
-```tsx
-import { defineScript } from "xrift:script";
-import { Clone } from "@react-three/drei";
-import { useGLTF } from "@react-three/drei";
-
-export default defineScript({
-  name: "Model を表示して回転",
-  start(ctx) {
-    // フレーム毎の処理。delta は秒。
-    return {
-      update(delta: number) {
-        ctx.object3d.rotation.y += 0.5 * delta;
-      },
-    };
-  },
-});
-
-// named export が R3F の描画
-export function Render({ ctx }: { ctx: unknown }) {
-  const url = ctx.assets.url(ctx.props.model); // 宣言済み model アセット
-  const gltf = useGLTF(url);
-  return <Clone object={gltf.scene} />;
-}
-```
-
-> 注: `Render` が受け取る props は `{ ctx }`。`ctx.props` は `update_script_component` で宣言した
-> プロパティ。実際の型は `ScriptRenderProps`（`xrift:script` から import 可能）。ここでは概念図。
-
-## 配置の基本（プリミティブでコード中心に組む例）
-
-```tsx
-import { defineScript } from "xrift:script";
-import { Box, Sphere } from "@react-three/drei";
-
-export default defineScript({ name: "机と椅子" });
-
-export function Render({ ctx }: { ctx: unknown }) {
-  return (
-    <>
-      {/* 天板 */}
-      <Box args={[1.2, 0.06, 0.6]} position={[0, 0.7, 0]}>
-        <meshStandardMaterial color="#8a6d3b" />
-      </Box>
-      {/* 脚 */}
-      {[0.55, -0.55].map((x, i) => (
-        <Box key={i} args={[0.06, 0.7, 0.06]} position={[x, 0.35, i === 0 ? 0.27 : -0.27]} />
-      ))}
-      {/* 椅子座面 */}
-      <Sphere args={[0.25]} position={[0.9, 0.3, 0]} />
-    </>
-  );
-}
-```
-
-> これは「R3F コードでシーンを組む」主軸の例。Studio は `Render` 内の JSX をそのまま描画する。
+型付きの Render とモデル表示は [変換例](r3f-to-studio-example.md) を参照する。
+`useGLTF` は条件分岐のない子コンポーネント内で呼び、URL がない場合は親で描画を分岐する。
+静的な配置は Entity にすると Editor で個別編集できる。動的・手続き的な描画に Render を使う。
 
 ## `update(delta)` を使ったアニメーション例
 

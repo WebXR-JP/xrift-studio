@@ -8,7 +8,8 @@ import {
 const XR_CAPABILITIES_URL = "https://webxr-jp.github.io/xrift-studio/xr-spatial/?mode=capabilities";
 const XR_CAPTURE_URL = "https://webxr-jp.github.io/xrift-studio/xr-spatial/?mode=capture";
 
-export function SpatialXrPanel({ onStartProjectPreview, onImportCapture, onStopPreview }: {
+export function SpatialXrPanel({ activePreviewUrl, onStartProjectPreview, onImportCapture, onStopPreview }: {
+  activePreviewUrl?: string | null;
   onStartProjectPreview?: () => Promise<void>;
   onImportCapture?: (file: File) => Promise<void>;
   onStopPreview?: () => Promise<void>;
@@ -16,7 +17,7 @@ export function SpatialXrPanel({ onStartProjectPreview, onImportCapture, onStopP
   const [open, setOpen] = useState(false);
   const [diagnostics, setDiagnostics] = useState<XrHostDiagnostics | null>(null);
   const [busy, setBusy] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState("http://localhost:5173");
+  const [previewUrl, setPreviewUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [projectPreviewBusy, setProjectPreviewBusy] = useState(false);
 
@@ -65,7 +66,7 @@ export function SpatialXrPanel({ onStartProjectPreview, onImportCapture, onStopP
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-sm font-bold">Spatial XR</div>
-              <p className="mt-1 text-xs text-slate-500">OpenXR PCVRとQuest単体WebXR/MRを同じVisual Projectへ接続します。</p>
+              <p className="mt-1 text-xs text-slate-500">ワールドのVR確認と、Questで取得した部屋データの読み込みができます。実機動作は未検証です。</p>
             </div>
             <button type="button" disabled={busy} onClick={() => void detect()} className="rounded-md border px-2 py-1 text-[11px] font-semibold">{busy ? "確認中…" : "再診断"}</button>
           </div>
@@ -100,8 +101,8 @@ export function SpatialXrPanel({ onStartProjectPreview, onImportCapture, onStopP
           <section className="mt-3">
             <label className="block text-[11px] font-semibold text-slate-600">現在のWorld Preview URL</label>
             <div className="mt-1 flex gap-2">
-              <input value={previewUrl} onChange={(event) => setPreviewUrl(event.target.value)} className="min-w-0 flex-1 rounded-md border px-2 py-1.5 text-xs" />
-              <button type="button" disabled={projectPreviewBusy || (!onStartProjectPreview && !runtime?.active)} onClick={() => {
+              <input aria-label="World Preview URL" readOnly={!!onStartProjectPreview} placeholder={onStartProjectPreview ? "XR Playの起動後に表示します" : "Preview URLを入力"} value={onStartProjectPreview ? activePreviewUrl ?? "" : previewUrl} onChange={(event) => setPreviewUrl(event.target.value)} className="min-w-0 flex-1 rounded-md border px-2 py-1.5 text-xs" />
+              <button type="button" disabled={projectPreviewBusy || (!onStartProjectPreview && (!runtime?.active || !previewUrl))} onClick={() => {
                 if (onStartProjectPreview) {
                   setProjectPreviewBusy(true);
                   setError(null);
@@ -111,7 +112,9 @@ export function SpatialXrPanel({ onStartProjectPreview, onImportCapture, onStopP
                 }
               }} className="rounded-md bg-slate-800 px-2 py-1.5 text-xs font-semibold text-white disabled:opacity-40">{projectPreviewBusy ? "準備中…" : "XR Play"}</button>
             </div>
-            <p className="mt-1 text-[11px] text-slate-500">XR Playは現在のVisual Worldを保存・XR用に変換し、ローカルPreviewを起動します。WindowsではChrome/EdgeのWebXRが有効なOpenXR Runtimeへ接続します。Quest Link/Air LinkならMeta Horizon LinkまたはSteamVRを先に起動します。</p>
+            {activePreviewUrl ? <button type="button" onClick={() => void openUrl(activePreviewUrl)} className="mt-2 rounded-md border px-2 py-1 text-xs">Previewを開き直す</button> : null}
+            <p className="mt-1 text-[11px] text-slate-500">XR Playで保存・変換後に外部ブラウザを開きます。VRに入るには対応ブラウザで「Enter VR」を押します。非対応なら上のURLを対応ブラウザへコピーしてください。</p>
+            <p className="mt-1 text-[11px] text-slate-500">PICOはPICO ConnectでWindows PCへ接続し、SteamVRでヘッドセットを認識させます。SteamVRを使用するOpenXR Runtimeに設定してください。接続だけではVR表示にならず、部屋のスキャン対応も別に確認が必要です。</p>
           </section>
 
           {onStopPreview ? <button type="button" disabled={projectPreviewBusy} onClick={() => { void onStopPreview().catch(cause => setError(String(cause))); }} className="mt-2 rounded-md border px-2 py-1 text-xs">XR Previewを停止</button> : null}

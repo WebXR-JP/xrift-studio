@@ -17,8 +17,7 @@
 
 - 毎回 **同じ GLB パスに上書き export** し、`reimport_model_asset` で反映する。
   これで `modelAssetId` と参照が維持され、再配置不要。
-- ジオメトリ以外（マテリアル・transform）は Blender を経由せず **Studio 側の MCP ツール**で
-  直接調整する。Blender は「形」だけに閉じる。
+- 配置固有のマテリアル・transform は Studio、元モデルに共通する変更は Blender で調整する。再取込で維持すべき設定を先に確認する。
 - 変更前後で `get_model_asset` の `importSettings` / `materialSlots` を比較し、ズレを検知。
 
 ## Blender 側の編集のコツ
@@ -38,7 +37,7 @@
 ## 確認のショートカット
 
 - 描画確認: `set_play_mode` + `get_editor_context` の scriptRuntime。
-- 見た目確認: Blender の `get_screenshot_of_window_as_image`。
+- 見た目確認: Studio の `capture_scene_view`。Blender の画像は制作中の補助に使う。
 - 差分検知: `get_model_asset` の返却値を直前と突き合わせる。
 
 ## 失敗パターン
@@ -46,6 +45,6 @@
 | 症状 | 原因と対処 |
 |---|---|
 | 再取込でマテリアルが消える | `update_model_asset` の `materialSlotBindings` を再設定 |
-| 再取込で位置がずれる | 原点が変動。`ORIGIN_CENTER_OF_VOLUME` + `transform_apply` を再実行 |
+| 再取込で位置がずれる | 元モデルと配置の変換を比較し、意図したピボット・座標を復元 |
 | Play で反映されない | Edit に戻って `reimport_model_asset` を実行 |
 | スクリプトの参照が壊れる | `assetReferences` / `entityReferences` を `update_script_component` で再宣言 |

@@ -12,6 +12,18 @@ XRパネルでは、PCのVR環境を診断し、編集したワールドを外�
 
 スクリプト等の変換でエラーになった場合は表示された問題を修正してください。VR確認でXRiftへの公開は行われません。PCでの性能とQuest単体の性能は異なります。
 
+## PICOをPCにつないで見る
+
+PICO Connect対応のヘッドセットでは、Windows PCへ接続し、SteamVR経由でVR Previewを試せます。この組み合わせでのXRift Studioの実機動作は未検証です。
+
+1. [PICO Connect](https://www.picoxr.com/global/software/pico-link)でPCとヘッドセットを接続します。
+2. SteamVRを起動し、ヘッドセットとコントローラーが認識されていることを確認します。OpenXR RuntimeはSteamVRを選びます。
+3. Studioの「XR Play」で開いたWebXR対応ブラウザから「Enter VR」を押します。
+
+「WebXR VR unavailable」と表示された場合はブラウザとRuntimeの組み合わせを確認してください。XRパネルに残る実際のPreview URLを別の対応ブラウザで開くこともできます。PC画面を平面スクリーンとして見る機能とは異なります。
+
+SteamVR経由のVR表示から、PICOの部屋形状やSemantic情報も取得できるとは限りません。以下のRoom ScanはQuest向けで、PICOでの動作は未確認です。
+
 ## Questで部屋を取り込む
 
 Quest Browserから、このバージョンの「Quest Room Scan」ページをHTTPSで開きます。PCのlocalhost URLはQuestから直接使えません。公開前のバージョンではページの準備が必要です。

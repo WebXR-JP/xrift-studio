@@ -50,7 +50,7 @@ pnpm tauri:dev
 4. 失敗後に、ログまたは再試行などの復帰手段が分かる。
 5. 一覧へ戻ったときに、変更結果と新規作成の入口が見つかる。
 
-日常の検証は AGENT.md の「高速フィードバックループ」に従います。`pnpm typecheck`、`cargo check`、ブラウザプレビュー（`.claude/launch.json` の `web` サーバーで `http://localhost:1420/preview.html`）、検証目的の `pnpm tauri:dev` と Tauri MCP による読み取りは、そのまま実行して構いません。`pnpm tauri:build`、インストーラ生成、実機での書き込みを伴う UI 操作は、成果物・アプリデータ・外部公開先に影響するため、実行前にユーザーへ目的と副作用を示して許可を得ます。Markdown の追加・編集時には絵文字を使いません。
+日常の検証は [検証スキル](./.agents/skills/xrift-studio-verify/SKILL.md) から変更に合う範囲を選びます。文書だけなら内容と参照を確認します。操作の許可と完了条件は [共通ガイド](./AGENT.md#意思決定と完了) に従い、依頼済みのローカルビルドを再確認しません。公開・配布とローカル生成は区別します。
 
 手動のRelease workflowでは、主要導線9件のE2EをOS別ビルドの前に実行します。個別機能の回帰テストは変更時に `pnpm e2e:test e2e/<対象>.spec.ts` で実行し、全件は `pnpm e2e:test` で確認できます。テスト範囲、アップロード禁止境界、失敗時の確認方法は [リリース前 E2E](./docs/RELEASE_E2E.md) を参照してください。
 
@@ -144,11 +144,9 @@ Rust の成果物は `src-tauri/target` と `src-tauri/target-mcp-sidecar` の�
 
 macOS は universal 版のために sidecar を aarch64 と x86_64 の 2 つ作ります。その後 `beforeBuildCommand` が host 向けに 3 つ目を作らないよう、build job だけが `XRIFT_MCP_SIDECAR_REUSE_PREBUILT` を設定します。この変数を立てると、`scripts/prepare-mcp-sidecar.mjs` は目的の実行ファイルがすでにある場合だけ cargo を省きます。無ければこれまでどおりビルドします。debug と release は同じファイル名へ書き出すので、日常の開発では設定しません。
 
-## ロードマップ
+## 対応状況
 
-- [ ] v0.2: AI チャットパネル（Anthropic SDK、World.tsx 編集アシスタント）
-- [ ] v0.3: ログイン状態のより良い検出 / 自動 sign-in
-- [x] v0.4: 署名済み成果物によるアプリ内自動更新
+[対応範囲](./docs/VISUAL_EDITOR_ROADMAP.md)を参照してください。過去の予定バージョンを現行の実装状況として扱わず、変更対象のソースと照合します。
 
 ## コントリビュート
 

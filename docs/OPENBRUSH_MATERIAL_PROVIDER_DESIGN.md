@@ -4,7 +4,7 @@
 
 - 対象機能: F-21 外部素材 Store / F-18 OpenBrush import
 - 参照: MI-03, MI-04, MI-05, MI-09, MI-15, MI-21, MI-49, MI-52
-- 状態: 設計済み、未実装
+- 状態: 設計記録。現在はカタログ・外部素材プロバイダーの実装あり。詳細な対応範囲は `src/lib/visual-editor/open-brush-catalog.ts`、`external-store-providers.ts`、`external-store.ts` と照合する。
 
 ## ユーザーが得たい結果
 

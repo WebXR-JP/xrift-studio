@@ -398,7 +398,7 @@ falseにすると解除する。静的GLBの同じ形状・マテリアルの不
 `list_script_templates`, `get_script_asset`, `create_script_asset`,
 `apply_script_template`, `update_script_asset`, `set_play_mode`
 
-スクリプトの実行境界と trust gate は [スクリプトの契約](./SCRIPTING.md) にある。
+追加承認のないスクリプト実行と隔離の限界は [スクリプトの契約](./SCRIPTING.md) にある。
 
 ## external-store (3)
 
@@ -460,7 +460,7 @@ project ではなく app data へ置く。
 | 録画の保存先の指定 | `recording_begin_file` が開けるのは既定の保存先と、フォルダーダイアログで選んだ場所だけだ。path を直接書けると Rust 側の path 検証を迂回する。保存先を変える場合は録画パネルを使う |
 | 公式コンポーネントの position / rotation / scale | `update_component` は XRiftのコンポーネントのこれらの prop を受け取らない。コンポーネント側に持たせるとオブジェクトの位置・回転・大きさと別の原点ができ、選択したときのギズモと回転の中心が描かれている場所からずれる。配置は `update_component` の `transform` patch でオブジェクトへ書く |
 | 任意 path の読み書き・削除 | Rust 側の path 検証と権限制御を迂回させないためだ |
-| 任意 JavaScript の実行 | スクリプトは trust gate 付きの素材としてだけ入る |
+| 任意 JavaScript の実行 | 汎用JavaScript評価toolは提供しない。Script AssetはPlayで追加承認なく実行され、sandboxではない（SCRIPTING.md参照） |
 | テクスチャの一括変換 | 複数選択したものをまとめて書き出すための導線だ。MCP からは `process_texture_asset` を素材ごとに呼ぶ。対象の選び方は設計図で決まる |
 | テクスチャの共通設定・サイズ確認 | 共通設定は `update_texture_asset` の `importSettings` と `process_texture_asset` で同じ処理を実行する。サイズ確認は既存画像の読み取りだけを行う設定の表示状態だ。再インポートで取得した寸法は素材のimportMetadataにも入る |
 | 取り込み時のテクスチャ最大解像度 | 読み込むメニューに残る Editor State だ。document には入らない。`import_local_texture` と `update_texture_asset` の `importSettings.resize` で同じ結果を素材ごとに指定する |

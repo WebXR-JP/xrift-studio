@@ -20,7 +20,7 @@
 
 ## 音を足す
 
-[xrift-promo-audio](../../xrift-promo-audio/SKILL.md) の手順に従う。効果音の ID を足すときは、`storyboard.ts` の `SfxId`、`PromoAudio.tsx` の `SFX_GAIN`、`gen-audio.mjs` の `SFX` の 3 か所を必ず揃える。
+[音](audio.md) の手順に従う。効果音の ID を足すときは、`storyboard.ts` の `SfxId`、`PromoAudio.tsx` の `SFX_GAIN`、`gen-audio.mjs` の `SFX` の 3 か所を必ず揃える。
 
 ## 縦型を強くする
 

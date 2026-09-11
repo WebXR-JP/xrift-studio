@@ -10629,6 +10629,7 @@ export function VisualEditorPrototype({
     setNotice(`Spatial Capture: ${result.applied.length}件を配置、${result.skipped.length}件をスキップしました。`);
   }, [editorMode, runSave, setBundle, setSceneSelection, setAssetSelection]);
 
+  const [xrPreviewUrl, setXrPreviewUrl] = useState<string | null>(null);
   const xrPreviewAbortRef = useRef<AbortController | null>(null);
   const xrPreviewHandleRef = useRef<{ stop: () => Promise<void> } | null>(null);
   const handleStartXrPreview = useCallback(async () => {
@@ -10647,6 +10648,7 @@ export function VisualEditorPrototype({
       await xrPreviewHandleRef.current.stop().catch(() => undefined);
       xrPreviewHandleRef.current = null;
     }
+    setXrPreviewUrl(null);
     setNotice("XR Play用のワールドを変換しています…");
     const handle = await startVisualXrPreview({
       documents: bundleRef.current,
@@ -10655,7 +10657,7 @@ export function VisualEditorPrototype({
       onLog: (line) => {
         if (line.kind === "stderr") console.warn("[XR Play]", line.text);
       },
-      onUrl: (url) => setNotice(`XR Playを起動しました: ${url}`),
+      onUrl: (url) => { setXrPreviewUrl(url); setNotice(`XR Playを起動しました: ${url}`); },
     });
     xrPreviewHandleRef.current = handle;
   }, [projectKind, runSave]);
@@ -11529,9 +11531,10 @@ export function VisualEditorPrototype({
               setGraphTabActive(false);
               executeCommand("play.toggle");
             }}
+            xrPreviewUrl={xrPreviewUrl}
             onStartXrPreview={handleStartXrPreview}
             onImportSpatialCapture={handleImportSpatialCapture}
-            onStopXrPreview={async () => { xrPreviewAbortRef.current?.abort(); const handle = xrPreviewHandleRef.current; xrPreviewHandleRef.current = null; await handle?.stop(); }}
+            onStopXrPreview={async () => { xrPreviewAbortRef.current?.abort(); const handle = xrPreviewHandleRef.current; xrPreviewHandleRef.current = null; await handle?.stop(); setXrPreviewUrl(null); }}
             tabs={viewportEditorTabs}
             activeTabId={
               viewportEditorTabs.some((tab) => tab.id === activeEditorTab)

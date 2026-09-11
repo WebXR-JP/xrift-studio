@@ -1,85 +1,44 @@
-# Blender → GLB 書き出し手順（XRift Studio 向け）
+# Blender → GLB 書き出し
 
-XRift Studio は glTF/GLB を取り込む。**自己完結した GLB** を書き出すための確実な手順。
+## 対象と前提
 
-## 0. 前提チェック
+Blender MCP の接続と出力先を確認し、対象オブジェクト・親子関係・実寸を調べる。
+Studio はメートル、glTF は Y-up を前提に確認する。自己完結した GLB を使う。
 
-- Blender MCP が接続済みか確認: `get_blendfile_summary_path_info`。
-- 対象オブジェクトだけを選択しておく（`use_selection=True` のため）。
-- 出力先の親ディレクトリが存在することを確認。
+- ドアのヒンジや設置面など、意図したピボットを保持する。原点を一律に中心へ移さない。
+- 位置・回転・スケールの適用は必要な対象だけに行う。リグ・アニメーション・親子変換への影響を確認する。
+- PBR マテリアルとテクスチャが書き出されるか確認する。複雑なノードは GLB と Studio の表示で検証する。
+- モディファイアの適用が必要なら保存済みの元データを残す。`export_apply` はモディファイアの評価用で、原点やオブジェクト変換の自動修正ではない。
 
-## 1. 書き出し前のクリーンアップ（必須）
+## 選択書き出しの例
 
-順番を守る。これを怠ると Studio でスケールや原点がずれる。
+オブジェクト名とパスは実在する対象に置き換える。階層・アニメーションを含む場合は必要な親・リグも対象に含める。
 
 ```python
 import bpy
+from pathlib import Path
 
-# 対象を明示（例: 名前で指定）
-targets = [obj for obj in bpy.data.objects if obj.name in {"Chair", "Table"}]
+names = {"Chair", "Table"}
+targets = [obj for obj in bpy.context.scene.objects if obj.name in names]
+assert {obj.name for obj in targets} == names, "書き出し対象を確認してください"
+output = Path("/absolute/path/output.glb")
+assert output.is_absolute() and output.parent.is_dir()
+
 bpy.ops.object.select_all(action="DESELECT")
 for obj in targets:
     obj.select_set(True)
 bpy.context.view_layer.objects.active = targets[0]
-
-# 1) 変換（特にスケール）を適用
-bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
-
-# 2) 原点をジオメトリ中心へ（VR 配置で座標が狂うのを防ぐ）
-bpy.ops.object.origin_set(type="ORIGIN_CENTER_OF_VOLUME", center="BOUNDS")
-
-# 3) 非表示・モディファイアを確認
-for obj in targets:
-    for mod in obj.modifiers:
-        print(obj.name, mod.type, "applied:", getattr(mod, "show_viewport", True))
-```
-
-モディファイアは Studio 側で評価できない場合がある。**デシメート・ベベル・サブサーフなどは
-必要なら Apply しておく**（非破壊で残したい場合は `show_viewport` を確認し、書き出し前に反映）。
-
-## 2. 単位とスケール
-
-- Blender のシーン単位（`scene.unit_settings.scale_length`）を確認。Studio はメートル前提。
-- `export_gltf` の `export_yup` は glTF の Y-up を維持（デフォルト有効）。
-- 必要なら全体スケールを `bpy.ops.object.transform_apply(scale=True)` で 1 に。
-
-## 3. マテリアルの簡素化
-
-- Studio は PBR を想定。`Principled BSDF` 以外の複雑なノードは落とされる可能性が高い。
-- 複数マテリアルはスロット単位で `set_material` できるので、名前を分かりやすく。
-- テクスチャは GLB に内包（`export_materials="EXPORT"`）。
-
-## 4. GLB 書き出し
-
-```python
-import bpy
-
-# 選択オブジェクトだけを書き出す
 bpy.ops.export_scene.gltf(
-    filepath=r"C:\path\to\output.glb",
+    filepath=str(output),
     export_format="GLB",
     use_selection=True,
     export_materials="EXPORT",
-    export_apply=True,          # 変換を自動適用（事前に済ませていれば二重適用は起きない）
     export_yup=True,
 )
+assert output.is_file()
 ```
 
-> 注意: `export_apply=True` は書き出し時にモディファイアを適用する。事前に手動 Apply していれば
-> 二重適用はしないが、確実を期すならどちらか一方にする（推奨: 手動 Apply のみ）。
+## Studio で確認
 
-## 5. 書き出し後チェック
-
-- 出力ファイルが存在するか `Test-Path` で確認。
-- `get_blendfile_summary_datablocks` で対象データブロックの状態を確認（任意）。
-- Studio へは `import_model_asset` で取り込む。
-
-## よくある失敗と対策
-
-| 症状 | 対策 |
-|---|---|
-| 原点がずれて配置が浮く | `origin_set(type="ORIGIN_CENTER_OF_VOLUME")` |
-| スケールがバラバラ | `transform_apply(scale=True)` |
-| マテリアルが真っ白/黒 | `export_materials="EXPORT"` + Principled BSDF へ簡素化 |
-| モディファイアが反映されない | Apply（`object.convert` or 書き出し時に適用） |
-| 非表示オブジェクトが混入 | `use_selection=True` + 対象を明示選択 |
+`import_model_asset` または既存 assetId への `reimport_model_asset` 後に、寸法・ピボット・階層・マテリアルを比較する。
+ずれた場合は書き出し前後の変換を調べ、意図した座標を復元する。原点の再計算を応急処置にしない。

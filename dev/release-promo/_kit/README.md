@@ -7,9 +7,9 @@
 | 内容 | スキル |
 |---|---|
 | 企画、差分、台本、承認、レビュー | `xrift-release-promo-video` |
-| キットの使い方、storyboard、シーン、書き出し | `xrift-promo-kit` |
-| BGM と効果音 | `xrift-promo-audio` |
-| 実画面の収録と座標 | `xrift-promo-capture` |
+| キットの使い方、storyboard、シーン、書き出し | `xrift-release-promo-video/references/kit.md` |
+| BGM と効果音 | `xrift-release-promo-video/references/audio.md` |
+| 実画面の収録と座標 | `xrift-release-promo-video/references/capture.md` |
 
 ## 使い方
 

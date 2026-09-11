@@ -21,7 +21,7 @@
 - **`useGLTF(url)`** → `ctx.assets.url(declaredModelId)`。アセットIDは `update_script_component` の
   `assetReferences` に必ず宣言。
 - **`@xrift/world-components` の Component**（`Portal`, `Mirror`, `SpawnPoint` 等）は
-  `place_builtin_prefab` か `add_component`(id: `xrift.portal` 等) で置く。
+  `place_builtin_prefab` か `add_component`（`definitionId` はコンポーネント一覧で確認） で置く。
 - **プリミティブ**（`<Box>`, `<mesh>`）は Entity + `core.mesh` になる。
 
 ## TSX Script サンプル（`model-display` テンプレート準拠）
@@ -58,15 +58,19 @@ export default defineScript({
   },
 });
 
+function DeclaredModel({ url, scale }: { url: string; scale: number }) {
+  const model = useGLTF(url);
+  return <Clone object={model.scene} scale={scale} />;
+}
+
 export function Render({ ctx }: ScriptRenderProps<Props>) {
   const url = ctx.assets.url(ctx.props.model);
-  return url ? <Clone object={useGLTF(url).scene} scale={ctx.props.scale} /> : null;
+  return url ? <DeclaredModel url={url} scale={ctx.props.scale} /> : null;
 }
 ```
 
 > これを `create_script_asset(language: "tsx")` で作り、`update_script_component` で
-> `assetReferences: [モデルアセットID]` を宣言する。モデルアセットは先に `import_model_asset` +
-> `place_asset` で用意しておく。
+> `assetReferences: [モデルアセットID]` を宣言する。モデルアセットは先に `import_model_asset` で用意する。Render がモデルを表示するので、同じモデルを別途配置すると二重表示になる。
 
 ## プリミティブだけのシーン例（コード中心の極み）
 
@@ -98,8 +102,8 @@ export function Scene() {
 
 ## 配置からアニメまでの最短ルート
 
-1. `import_model_asset`（GLB）→ `place_asset`。
+1. `import_model_asset`（GLB）でモデルを取り込み、Script を付ける Entity を用意する。
 2. `create_script_asset(language: "tsx")` で上記サンプルを作成。
-3. `add_component(id: "scripting.script", scriptAssetId)` で Entity に付与。
+3. `add_component(definitionId: "scripting.script", scriptAssetId)` で Entity に付与。
 4. `update_script_component` で `assetReferences` / プロパティを設定。
 5. `set_play_mode(mode: "play")` → 変換・実行結果を確認。

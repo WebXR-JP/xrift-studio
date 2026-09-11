@@ -41,6 +41,8 @@ export function XriftStudioXrBridge() {
     document.body.appendChild(button)
 
     let currentSession: any = null
+    let disposed = false
+    let starting = false
     const raycaster = new Raycaster()
     raycaster.far = XR_REACH
     raycaster.layers.set(LAYERS.INTERACTABLE)
@@ -85,6 +87,7 @@ export function XriftStudioXrBridge() {
     hands.forEach((hand) => scene.add(hand))
 
     const updateButton = (supported: boolean) => {
+      if (disposed) return
       button.disabled = !supported
       button.style.opacity = supported ? '1' : '.55'
       button.textContent = supported ? 'Enter VR' : 'WebXR VR unavailable'
@@ -101,16 +104,20 @@ export function XriftStudioXrBridge() {
     }
 
     button.onclick = async () => {
+      if (disposed || starting) return
       if (currentSession) {
         await endSession()
         return
       }
       if (!xr?.requestSession) return
+      starting = true
+      button.disabled = true
       try {
         const session = await xr.requestSession('immersive-vr', {
           requiredFeatures: ['local-floor'],
           optionalFeatures: ['bounded-floor', 'hand-tracking', 'layers']
         })
+        if (disposed) { await session.end(); return }
         currentSession = session
         button.textContent = 'Exit VR'
         session.addEventListener('end', () => {
@@ -120,15 +127,24 @@ export function XriftStudioXrBridge() {
         await gl.xr.setSession(session)
       } catch (error) {
         console.error('[XRift Studio XR Preview]', error)
-        button.textContent = 'VR start failed'
+        const failedSession = currentSession
+        currentSession = null
+        if (failedSession) await failedSession.end().catch(() => undefined)
+        if (!disposed) button.textContent = 'VR start failed — retry'
+      } finally {
+        starting = false
+        if (!disposed) button.disabled = false
       }
     }
 
     return () => {
+      disposed = true
       void endSession().catch(() => undefined)
       selectHandlers.forEach(({ controller, ray, onSelect }: any) => {
         controller.removeEventListener('select', onSelect)
         controller.remove(ray)
+        ray.geometry.dispose()
+        ray.material.dispose()
         scene.remove(controller)
       })
       hands.forEach((hand) => scene.remove(hand))

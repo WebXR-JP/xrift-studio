@@ -6,14 +6,14 @@
 
 ## F-17 AI editor integration / MCP の状態設計
 
-制作目標は Studio がワールド内に保存する。MCP の `get_world_authoring` は再接続後も設計図、画像、未確認条件、次の操作を返す。完了確認は最新の両画像と条件ごとの合格がそろうまで受け付けない。編集後は画像確認へ戻る。スクリプトの承認・ログイン・公開の扱いは変えない。外部の Node.js ランナーやリポジトリのクローンは不要。
+制作目標は Studio がワールド内に保存する。MCP の `get_world_authoring` は再接続後も設計図、画像、未確認条件、次の操作を返す。完了確認は最新の両画像と条件ごとの合格がそろうまで受け付けない。編集後は画像確認へ戻る。Scriptは追加承認なしで実行する。ログインと公開の判断は共通ガイドに従う。外部の Node.js ランナーやリポジトリのクローンは不要。
 
 ### 操作前
 
 - AI連携パネルは、対応clientをXRift Studio MCPへワンクリック登録できること、現在シーンを会話から読み取り・編集できること、AIの変更も通常の元に戻すと自動保存へ入ることを、登録前に読める位置で説明する。
 - EditorのAI連携panelはCodex、Claude Code、Claude Desktop / Cowork、OpenCode、Cursorの検出結果、登録scope、XRift Studio MCP serverの状態を表示する。Codexは現在の`PATH`に加えて、公式installer、Codex app同梱CLI、npm、pnpm、WinGet、Homebrew、standalone installerの標準配置を確認する。起動時の環境変数が古い場合も再起動なしで検出する。OllamaはMCP client一覧へ混在させない。ローカルmodel providerとしてinstall状態、version、model一覧、構成先clientを別sectionに表示する。native APIがないブラウザでは登録済みに見せない。「デスクトップ版で利用できます」と示す。Claude Desktop / Coworkはローカルsessionだけを対象にする。remote CoworkではローカルMCPを起動できないことを登録前に示す。
 - MCPは現在開いているvisual projectだけを候補にする。project ID、シーン ID、session revisionを接続clientへ返す。接続しただけではSceneDocument、AssetManifest、selection、historyを変更しない。
-- AI書き込みは認可済みprojectの編集と、差分同期に対応した動作確認中のtoolだけに許可する。読み込む、project切替中、または非対応の動作確認操作は理由付きで読み取り専用にする。ワールド / アイテムのUpload、project削除、形式を限定しない任意file read / write、任意shell操作は初期tool setへ含めない。素材削除は参照を検査する明示toolに限定する。例外となるlocal 音声 / テクスチャ / 3Dモデル / 空の背景 / シェーダー importは対応形式、通常file、symlink / reparse pointなし、容量上限、signatureまたはUTF-8を検査する。managed project storageへcopyするだけとする。オブジェクト削除はシーン構造の永続操作として扱う。
+- AI書き込みは認可済みprojectの編集と、差分同期に対応した動作確認中のtoolだけに許可する。読み込む、project切替中、または非対応の動作確認操作は理由付きで読み取り専用にする。公開は依頼がある場合に `publish_project` を使う。project削除、形式を限定しない任意file read / write、任意shell操作は提供しない。素材削除は参照を検査する明示toolに限定する。例外となるlocal 音声 / テクスチャ / 3Dモデル / 空の背景 / シェーダー importは対応形式、通常file、symlink / reparse pointなし、容量上限、signatureまたはUTF-8を検査する。managed project storageへcopyするだけとする。オブジェクト削除はシーン構造の永続操作として扱う。
 
 ### 操作中
 

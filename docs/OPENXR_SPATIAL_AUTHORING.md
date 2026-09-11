@@ -26,6 +26,7 @@ Visual Projectを正本にし、既存のSceneDocument、Asset Import、Compiler
 
 利用者向け手順は [XRと部屋の取り込み](guide/xr-spatial.md)。Captureページは `public/xr-spatial/` に置く。公開前はURLが使えると断定せず、PRのプレビューまたはローカルで確認する。
 
+- PICO Connect対応端末はWindows PCへ接続し、SteamVRをOpenXR RuntimeとしてPCVR Previewを試す。実機未検証。PCVR表示はPICOのRoom Capture対応を意味しない。
 - PCVRは対応ブラウザとActive OpenXR Runtimeの組み合わせで検証する。既定ブラウザが非対応なら、起動URLを対応ブラウザへ貼り付ける。
 - Quest単体のlocalhostはQuest自身を指す。PCのlocalhost URLをそのままQuestで開いても接続できない。Quest側のCaptureページにはHTTPSを使う。
 - Runtimeの登録は読み取りのみ。アプリからRegistryやRuntime選択を変更しない。
