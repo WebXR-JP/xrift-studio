@@ -112,7 +112,7 @@
 
 `pointer` `focus` `callouts` の座標は、すべて素材内の割合（0〜1）。左上が `{x:0, y:0}`、右下が `{x:1, y:1}`。出力解像度や縦横比を変えても同じ値が使える。
 
-取得方法は [xrift-promo-capture](../../xrift-promo-capture/SKILL.md) にある。
+取得方法は [収録](capture.md) にある。
 
 ## 例: 実画面デモ 1 シーン
 

@@ -648,7 +648,7 @@ authoring Registry が型付きで扱う XRiftのコンポーネントは `Inter
 
 - Editor の動作確認では、元データを Monaco と同梱した TypeScript service の `transpileModule` で変換し、生成した module を評価する。言語サービス worker はEditor補完と診断に限定し、動作確認開始時のmodel同期を挟まない。これが本節で認める唯一の動的評価であり、対象は project 内のスクリプト元データ file に限る。visual document 内の文字列を評価しない。
 - 許可した bare specifier は Studio が既に読み込んでいる同一 module インスタンスへ解決する。`three` を二重ロードしない。
-- `https://` から始まる module は動作確認でだけ opt-in で許し、**公開時は blocking 診断**とする。
+- remote module import は動作確認・公開とも拒否する。対応specifierは `SCRIPTING.md` と実装の許可リストを参照する。
 - 生成コードは静的 import だけを出力する。`eval`、`Function`、動的 import を生成物へ出さない（9.4）。
 
 #### 権限と残存リスク
@@ -656,8 +656,8 @@ authoring Registry が型付きで扱う XRiftのコンポーネントは `Inter
 動作確認は iframe や Worker を挟まないアプリと同一 realm で動き、`withGlobalTauri` により IPC bridge が `window` に露出している。したがってスクリプトは原理的にアプリと同じ権限を持つ。
 
 - module scope で `window`、`globalThis`、`__TAURI__`、`fetch`、`document`、`Function` などを遮蔽する。ES module は常に strict mode であり `eval` を lexical binding として宣言すると構文エラーになるため、`eval` は遮蔽一覧へ入れない。同一 realm である以上これは完全な sandbox ではなく、事故と素朴な悪用を止める緩和である。この限界を [スクリプト Contract](./SCRIPTING.md) に明記し、隔離済みと表示しない。
-- スクリプト元データは一度だけ読み、SHA-256、言語、contract version、module policy version、remote module禁止をfingerprintにする。canonical project pathとproject IDを合わせた承認をproject外のapp dataへ保存し、正確に一致したread-once snapshotだけを評価する。確認面はfile、来歴、完全なhash、元データ、同一realm警告を示す。来歴は表示専用で自己承認には使わない。
-- XRift Studio stdio MCP editor tools / serverは承認toolと承認権限を持たない。未承認時の`set_play_mode`は`SCRIPT_APPROVAL_REQUIRED`を返し、明示した`unapprovedPolicy: "skip"`だけがスクリプトを無効化した動作確認を許す。動作確認中に同serverまたはfilesystemから元データが変わった場合はlast-good moduleを維持する。
+- スクリプトのfingerprintは実行版の診断とhot reloadに使い、承認情報として保存・照会しない。
+- UIとMCPは保存済みScriptを追加承認なく変換・実行する。`unapprovedPolicy` は旧clientとの互換引数で実行可否に影響しない。変換失敗時はEditを保ち、hot reload失敗時はlast-good moduleを維持する。現行の契約は [SCRIPTING.md](./SCRIPTING.md) を参照する。
 - debug buildだけに登録するprivileged Tauri MCP bridgeは、webview JavaScript実行とTauri commandの`invoke`を許す開発者向けautomationであり、stdio MCP editor tools / serverのtrust boundaryには含めない。release buildには同bridgeを登録・搭載せず、スクリプト承認の公開APIとして扱わない。
 - 完全な隔離と、10 章が求める CSP の適用は未達である。Monaco は local 同梱済みだが、動作確認の blob module と共有 module bridge を許可しながら権限を狭める CSP 設計を要する。
 

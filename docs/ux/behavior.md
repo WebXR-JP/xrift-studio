@@ -60,7 +60,7 @@ Graphとスクリプトの連携には明示的な `ctx.graph.on` / `ctx.graph.e
 - XRift Studio stdio MCP editor tools / serverはスクリプトの作成・読取・更新、スクリプトのコンポーネント追加、動作確認切替、propertyと明示参照の更新に加え、動作確認中のオブジェクト / コンポーネント変更を同じrevision検査と差分同期経路で実行する。近接ライト recipeはsensor / target / receiverを解決し、`proximity-event`へtarget参照、receiverへ`core.light.*`と`event-light`、両スクリプトへ同じchannelを設定する。動作確認は追加承認なしで保存済みスクリプトを変換し、変換失敗時には開始しない。永続ライト編集は`core.light.*`のadd / update / remove、音声編集は`import_audio_asset`、`place_asset`、`core.audio-source`のadd / update / remove、ほかの素材編集も専用toolへ分離する。
 - `pnpm tauri:dev`のdebug buildだけに登録するprivileged Tauri MCP bridgeは、webview JavaScript実行とTauri commandの`invoke`を許す開発者向けautomationであり、上記stdio editor toolのtrust boundary外とする。release buildには同bridgeを登録・搭載せず、公開された承認経路として扱わない。
 - `https://`から始まるmoduleを読むスクリプトと、実行環境 JSON出力を選んだ場合はupload前にblockingとして示し、対象スクリプトと理由を挙げる。
-- 許可しなかった取り込み由来のスクリプトは実行せず動作確認へ入り、無効であることをConsoleへ残す。
+- 取り込み由来のScriptも追加承認なく変換・実行する。変換失敗時はPlayを開始せず、Consoleに対象と理由を示す。
 
 ### 戻り先
 
