@@ -1,3 +1,4 @@
+import { COMPILER_REACT_PACKAGE_SPECS } from "./compiler/runtime-packages";
 import { XriftClient } from "@xrift/sdk";
 import { optimizePublishedModel, describeModelDownload } from "./model-download";
 import type { CompilerPublicationMetadata, ProjectKind } from "../tauri";
@@ -535,6 +536,7 @@ export async function materializeVisualCompilation(
     [
       ...compilation.stagingPlan.runtimePackageSpecs,
       COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
+      ...COMPILER_REACT_PACKAGE_SPECS,
     ],
     onLog,
   );
@@ -1155,3 +1157,4 @@ export async function clearStaleXriftUploadAttempt(
     compilerStagingDirectoryName(projectId, projectKind),
   );
 }
+

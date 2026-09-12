@@ -17,7 +17,60 @@
  * (scripts/check-world-components-alignment.mjs).
  */
 export const COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC =
-  "@xrift/world-components@0.47.0";
+  "@xrift/world-components@0.50.0";
+
+// Resolve both packages in the same install, including for reused staging
+// projects. A ^19 range can select 19.3, outside the template R3F peer range.
+// Keep these exact versions aligned with the editor's installed React pair.
+export const COMPILER_REACT_PACKAGE_SPECS = [
+  "react@19.2.8",
+  "react-dom@19.2.8",
+] as const;
+
+export type CompilerPackageChange = {
+  name: string;
+  version: string;
+  previous?: string;
+};
+
+/** Record packages without leaving conflicting declarations in devDependencies. */
+export function recordCompilerPackageSpecs(
+  manifest: Record<string, unknown>,
+  specs: readonly string[],
+): CompilerPackageChange[] {
+  const asRecord = (value: unknown): Record<string, unknown> =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? { ...(value as Record<string, unknown>) }
+      : {};
+  const dependencies = asRecord(manifest.dependencies);
+  const devDependencies = asRecord(manifest.devDependencies);
+  const changes: CompilerPackageChange[] = [];
+  const worldComponentsName = parsePackageSpec(COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC).name;
+  for (const spec of specs) {
+    const { name, version } = parsePackageSpec(spec);
+    const inDependencies = Object.prototype.hasOwnProperty.call(dependencies, name);
+    const inDevDependencies = Object.prototype.hasOwnProperty.call(devDependencies, name);
+    const declared = inDependencies ? dependencies[name] : devDependencies[name];
+    const previous = typeof declared === "string" ? declared : undefined;
+    const satisfies = name === worldComponentsName
+      ? declaredVersionReaches(previous, version)
+      : previous === version;
+    if (satisfies && !(inDependencies && inDevDependencies)) continue;
+    const target = inDevDependencies && !inDependencies ? devDependencies : dependencies;
+    target[name] = satisfies ? declared : version;
+    if (inDependencies && inDevDependencies) delete devDependencies[name];
+    changes.push({ name, version, ...(previous ? { previous } : {}) });
+  }
+  if (changes.length > 0) {
+    if (Object.keys(dependencies).length > 0 || manifest.dependencies !== undefined) {
+      manifest.dependencies = dependencies;
+    }
+    if (Object.keys(devDependencies).length > 0 || manifest.devDependencies !== undefined) {
+      manifest.devDependencies = devDependencies;
+    }
+  }
+  return changes;
+}
 
 /** Splits an exact npm spec (`name@version`) into its two halves. */
 export function parsePackageSpec(spec: string): { name: string; version: string } {
