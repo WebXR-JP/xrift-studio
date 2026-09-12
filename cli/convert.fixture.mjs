@@ -345,6 +345,7 @@ try {
     ["model download optimization", runModelDownloadFixtureAssertions],
     ["model instancing", runModelInstancingFixtureAssertions],
     ["visual compiler", runVisualCompilerFixtureAssertions],
+    ["runtime package compatibility", runRuntimePackageFixtureAssertions],
     ["model material compiler", runModelMaterialCompilerFixtures],
     ["terrain", runTerrainFixtureAssertions],
     ["terrain grass", runTerrainGrassFixtureAssertions],
@@ -600,7 +601,6 @@ function assertStagedWorldDeclaresItsNetworkUse(compiled) {
 
 async function runModelMaterialCompilerFixtures() {
   let sources;
-  runRuntimePackageFixtureAssertions();
   runVisualCompilerFixtureAssertions((value) => { sources = value; });
   const ts = await import("typescript-test-api");
   const source = sources.model;
