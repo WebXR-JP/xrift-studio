@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import "./external-asset-store.css";
+import { useEditorDevice } from "./useEditorDevice";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Boxes,
   Brush,
@@ -139,6 +141,10 @@ export function ExternalAssetStoreDialog({
     definition: XriftComponentDefinition,
   ) => Promise<boolean>;
 }) {
+  const { viewportHeight } = useEditorDevice();
+  const [mobilePane, setMobilePane] = useState<"list" | "detail">("list");
+  const catalogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (open) setMobilePane("list"); }, [open]);
   const [providerId, setProviderId] = useState<string>(() => tauri.isAvailable() ? DEFAULT_EXTERNAL_STORE_PROVIDER_ID : "xrift-scene-recipes");
   const provider = getExternalStoreProvider(providerId);
   const [catalogRevision, setCatalogRevision] = useState(0);
@@ -258,6 +264,7 @@ export function ExternalAssetStoreDialog({
 
   const selectProvider = (nextProviderId: string) => {
     if (installing || nextProviderId === provider.id) return;
+    setMobilePane("list");
     setProviderId(nextProviderId);
     setQuery("");
     setKind("all");
@@ -317,11 +324,14 @@ export function ExternalAssetStoreDialog({
   return (
     <div
       data-app-modal-backdrop
+      data-responsive-asset-modal
+      onKeyDown={(event) => { event.stopPropagation(); if (event.key === "Escape" && !installing) { event.preventDefault(); onClose(); } }}
       className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/45 p-5"
       role="presentation"
     >
       <div
         data-app-modal-surface
+        style={viewportHeight ? { height: Math.min(760, viewportHeight - 24), maxHeight: viewportHeight - 24 } : undefined}
         role="dialog"
         aria-modal="true"
         aria-labelledby="external-store-title"
@@ -349,7 +359,21 @@ export function ExternalAssetStoreDialog({
           </button>
         </header>
 
-        <div data-app-modal-body className="flex min-h-0 flex-1 overflow-x-auto overscroll-contain">
+        <div className="external-catalog-navigation">
+          <label className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold text-slate-700">カテゴリ
+            <select aria-label="素材と機能のカテゴリ" value={provider.id} disabled={installing}
+              onChange={(event) => selectProvider(event.currentTarget.value)} className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 text-slate-800">
+              {EXTERNAL_STORE_PROVIDER_GROUPS.map((group) => <optgroup key={group.id} label={group.label}>
+                {EXTERNAL_STORE_PROVIDERS.filter((entry) => entry.group === group.id).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+              </optgroup>)}
+            </select>
+          </label>
+          {mobilePane === "detail" ? <button type="button" onClick={() => {
+            setMobilePane("list");
+            requestAnimationFrame(() => catalogRef.current?.querySelector<HTMLButtonElement>('[data-catalog-card][aria-pressed="true"]')?.focus());
+          }} className="shrink-0 rounded border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700">一覧へ戻る</button> : null}
+        </div>
+        <div data-app-modal-body className="external-catalog-body flex min-h-0 flex-1 overflow-hidden overscroll-contain">
           <nav
             className="flex w-52 shrink-0 flex-col border-r border-slate-200 bg-slate-50"
             aria-label="素材と機能"
@@ -410,10 +434,20 @@ export function ExternalAssetStoreDialog({
             </div>
           </nav>
 
+          <div ref={catalogRef} className="external-catalog-content" data-pane={mobilePane}
+            onClick={(event) => {
+              if ((event.target as HTMLElement).closest("[data-catalog-card]")) {
+                setMobilePane("detail");
+                if (window.matchMedia("(max-width: 1023px)").matches) requestAnimationFrame(() => {
+                  const detail = catalogRef.current?.querySelector("aside");
+                  if (detail) { detail.tabIndex = -1; detail.focus(); detail.scrollTop = 0; }
+                });
+              }
+            }}>
           {provider.kind === "remote-assets" && !tauri.isAvailable() ? (
             <section className="min-w-0 flex-1 overflow-y-auto p-6 text-sm text-editor-text">
               <h3 className="font-semibold">{provider.name}の素材</h3>
-              <p className="mt-3 leading-6">素材サイトからの直接追加はMac／Windows版で利用できます。iPadでは素材をファイルに保存し、Assetsの「インポート」から追加してください。</p>
+              <p className="mt-3 leading-6">素材サイトからの直接追加はMac／Windows版で利用できます。ブラウザでは素材をファイルに保存し、上部の「追加 → ファイルから素材を追加」で取り込めます。</p>
               <a href={provider.homepageUrl} target="_blank" rel="noopener noreferrer"
                 className="mt-4 inline-flex min-h-11 items-center rounded-md border border-editor-border px-3 font-semibold text-brand-700">素材サイトを開く</a>
               <p className="mt-4 text-xs leading-5 text-editor-muted">空・海・Terrain・3Dモデルなど、同梱のカタログはiPadでも追加できます。</p>
@@ -540,6 +574,7 @@ export function ExternalAssetStoreDialog({
                         setSelectedId(asset.externalId);
                         setInstalledName(null);
                       }}
+                      data-catalog-card
                       aria-pressed={selectedId === asset.externalId}
                       className={`overflow-hidden rounded-lg border bg-white text-left transition ${
                         selectedId === asset.externalId
@@ -767,6 +802,7 @@ export function ExternalAssetStoreDialog({
           </aside>
             </>
           )}
+          </div>
         </div>
       </div>
     </div>
@@ -902,6 +938,7 @@ function OpenBrushStore({
                   <button
                     key={entry.id}
                     type="button"
+                    data-catalog-card
                     aria-pressed={active}
                     onClick={() => {
                       setSelectedId(entry.id);

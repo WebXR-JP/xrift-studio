@@ -1,6 +1,7 @@
+import { useEditorDevice } from "./useEditorDevice";
 import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Mountain } from "lucide-react";
+import { Mountain, Store, Import } from "lucide-react";
 import type { BuiltinPrefabRecipe } from "../../lib/visual-editor/builtin-prefab-catalog";
 import type { VisualProjectKind } from "../../lib/visual-editor/project-document";
 import { TERRAIN_PRESETS } from "../../lib/visual-editor/terrain-presets";
@@ -14,6 +15,9 @@ type Props = {
   projectKind: VisualProjectKind;
   builtinPrefabRecipes: readonly BuiltinPrefabRecipe[];
   onClose: () => void;
+  onOpenExternalStore?: () => void;
+  onImportFile?: () => void;
+  importDisabledReason?: string | null;
   onCreateEmpty: () => void;
   onCreatePrimitive: (creationId: string) => void;
   onCreateTerrain: (presetId?: string, grassPresetId?: string | null) => void;
@@ -26,6 +30,7 @@ type Props = {
 };
 
 export function EditorCreateMenu(props: Props) {
+  const { touch, viewportHeight } = useEditorDevice();
   const { open, onClose, projectKind, builtinPrefabRecipes } = props;
   const anchorRef = useRef<HTMLSpanElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -38,15 +43,15 @@ export function EditorCreateMenu(props: Props) {
     if (!open) return;
     const anchor = anchorRef.current?.getBoundingClientRect();
     if (!anchor) return;
-    const below = Math.max(0, window.innerHeight - anchor.bottom - 16);
-    const maxHeight = Math.min(620, below >= 200 ? below : window.innerHeight - 24);
+    const below = Math.max(0, (viewportHeight ?? window.innerHeight) - anchor.bottom - 16);
+    const maxHeight = Math.min(620, below >= 200 ? below : (viewportHeight ?? window.innerHeight) - 24);
     setPosition({
       left: Math.max(12, Math.min(anchor.left, window.innerWidth - 352)),
       top: below >= 200 ? anchor.bottom + 4 : Math.max(12, anchor.top - maxHeight - 4),
       maxHeight,
     });
     menuRef.current?.focus();
-  }, [open]);
+  }, [open, viewportHeight]);
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
@@ -74,9 +79,13 @@ export function EditorCreateMenu(props: Props) {
     <span ref={anchorRef} className="absolute left-0 top-full" />
     {open ? createPortal(<>
       <button type="button" tabIndex={-1} aria-hidden="true" onPointerDown={onClose} className="fixed inset-0 z-[84] cursor-default bg-transparent" />
-      <div ref={menuRef} tabIndex={-1} style={position} role="menu" aria-label="Entityを追加" className="fixed z-[85] flex w-[340px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-xl">
-        <header className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-900">Entityを追加</header>
+      <div ref={menuRef} tabIndex={-1} style={position} role="menu" data-touch={touch || undefined} aria-label="追加" className="editor-add-menu fixed z-[85] flex w-[340px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-xl">
+        <header className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-900">追加</header>
         <div className="min-h-0 overflow-y-auto p-1.5">
+          {props.onOpenExternalStore || props.onImportFile ? <div className="mb-2 border-b border-slate-200 pb-2">
+            {props.onOpenExternalStore ? <button type="button" disabled={disabled} onClick={() => { onClose(); props.onOpenExternalStore?.(); }} className="flex min-h-11 w-full items-center gap-2 rounded px-2 text-left text-xs font-semibold text-slate-800 hover:bg-violet-50 disabled:opacity-45"><Store size={16} />外部から追加</button> : null}
+            {props.onImportFile ? <button type="button" disabled={disabled || Boolean(props.importDisabledReason)} title={props.importDisabledReason ?? undefined} onClick={() => { onClose(); props.onImportFile?.(); }} className="flex min-h-11 w-full items-center gap-2 rounded px-2 text-left text-xs font-semibold text-slate-800 hover:bg-violet-50 disabled:opacity-45"><Import size={16} />ファイルから素材を追加</button> : null}
+          </div> : null}
           <EntityCreationMenuContent entries={entries} disabled={disabled} onSelect={select} />
           <details className="mt-1 rounded border border-slate-200 text-xs">
             <summary className="cursor-pointer px-2 py-1.5 font-semibold text-slate-600">Terrain</summary>

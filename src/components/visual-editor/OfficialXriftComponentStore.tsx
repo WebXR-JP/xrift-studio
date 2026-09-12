@@ -53,7 +53,7 @@ export function OfficialXriftComponentStore({
   };
 
   return (
-      <div className="flex h-full min-h-0 min-w-0 flex-1">
+      <div className="catalog-panes flex h-full min-h-0 min-w-0 flex-1">
         <section
           className="flex min-w-0 flex-1 flex-col border-r border-slate-200"
           aria-label="XRift公式コンポーネント"
@@ -79,6 +79,7 @@ export function OfficialXriftComponentStore({
                   <button
                     key={definition.schemaId}
                     type="button"
+                    data-catalog-card
                     aria-pressed={active}
                     onClick={() => {
                       setSelectedSchemaId(definition.schemaId);

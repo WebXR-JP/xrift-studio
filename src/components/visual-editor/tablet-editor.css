@@ -222,3 +222,13 @@
     margin-left: auto;
   }
 }
+
+/* The Add menu is portalled outside the editor shell. */
+.editor-add-menu[data-touch] :is(button, summary) {
+  min-height: 44px;
+  touch-action: manipulation;
+}
+.editor-add-menu[data-touch] .truncate {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

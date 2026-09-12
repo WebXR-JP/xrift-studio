@@ -158,7 +158,7 @@ export function SceneRecipeStore({
           「外部から追加」の「ギミック」を選んでください。
         </p>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          アイテムの質感を選ぶ場合は、左の「glTFマテリアル」を利用できます。
+          アイテムの質感を選ぶ場合は、カテゴリの「glTFマテリアル」を利用できます。
         </p>
       </section>
     );
@@ -240,6 +240,7 @@ export function SceneRecipeStore({
                     data-testid="scene-recipe-card"
                     aria-label={recipe.name}
                     disabled={adding}
+                    data-catalog-card
                     aria-pressed={active}
                     onClick={() => {
                       setSelectedId(recipe.id);
@@ -293,7 +294,7 @@ export function SceneRecipeStore({
                 <span className="rounded bg-slate-100 px-2 py-1.5">左：{selected.comparisonLabels[0]}</span>
                 <span className="rounded bg-slate-100 px-2 py-1.5">右：{selected.comparisonLabels[1]}</span>
               </div> : null}
-              <p className="text-xs text-slate-500">ドラッグで回転・ホイールで拡大。操作ギミックはシーンに追加してPlayで確認します。</p>
+              <p className="text-xs text-slate-500">ドラッグで回転できます。操作ギミックはシーンに追加してPlayで確認します。</p>
             </div>
             <div>
               <h3 className="text-base font-semibold text-slate-900">

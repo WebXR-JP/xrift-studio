@@ -1342,7 +1342,7 @@ export function AssetsPanel({
    */
   externalOperationLockReason?: string | null;
 }) {
-  const { tablet: isTablet, phone, touch } = useEditorDevice();
+  const { tablet: isTablet, phone, touch, viewportHeight } = useEditorDevice();
   const tablet = isTablet || phone;
   const [fileDragOver, setFileDragOver] = useState(false);
   const [rootDropTarget, setRootDropTarget] = useState(false);
@@ -1595,7 +1595,7 @@ export function AssetsPanel({
         ? Math.max(12, Math.min(event.clientX, window.innerWidth - 300))
         : Math.min(event.clientX - bounds.left, Math.max(8, bounds.width - 232)),
       y: touch
-        ? Math.max(12, Math.min(event.clientY, window.innerHeight - Math.min(640, window.innerHeight - 24) - 12))
+        ? Math.max(12, Math.min(event.clientY, (viewportHeight ?? window.innerHeight) - Math.min(640, (viewportHeight ?? window.innerHeight) - 24) - 12))
         : Math.min(event.clientY - bounds.top, Math.max(8, bounds.height - 260)),
       ...target,
       creationFolderId: resolveAssetCreationFolderId(
@@ -2088,7 +2088,7 @@ export function AssetsPanel({
         <div
           ref={contextMenuRef}
           className={`overflow-y-auto overscroll-contain rounded-md border border-slate-300 bg-white p-1 shadow-xl ${touch ? "editor-touch-menu fixed z-[85] max-h-[min(640px,calc(100dvh-24px))] max-w-[calc(100vw-24px)] w-72" : "absolute z-30 max-h-[calc(100%-1rem)] w-56"}`}
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          style={{ left: contextMenu.x, top: contextMenu.y, maxHeight: touch && viewportHeight ? Math.max(44, viewportHeight - contextMenu.y - 12) : undefined }}
           role="menu"
           aria-label="Assetsのメニュー"
           tabIndex={-1}

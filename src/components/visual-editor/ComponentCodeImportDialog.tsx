@@ -1,3 +1,5 @@
+import "./external-asset-store.css";
+import { useEditorDevice } from "./useEditorDevice";
 import {
   AlertCircle,
   CheckCircle2,
@@ -44,6 +46,7 @@ export function ComponentCodeImportDialog({
   onPreparePreview,
   onImport,
 }: Props) {
+  const { viewportHeight } = useEditorDevice();
   const [code, setCode] = useState(DREI_R3F_IMPORT_SAMPLE);
   const [classicSource, setClassicSource] =
     useState<ClassicProjectVisualImportSource | null>(null);
@@ -193,11 +196,20 @@ export function ComponentCodeImportDialog({
   return (
     <div
       data-app-modal-backdrop
+      data-responsive-asset-modal
+      onKeyDown={(event) => {
+        event.stopPropagation();
+        if (event.key !== "Escape") return;
+        event.preventDefault();
+        if (classicLoading || previewLoading || importing) return;
+        if (reviewing) setReviewing(false); else onClose();
+      }}
       role="presentation"
       className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/45 p-5 backdrop-blur-[2px]"
     >
       <div
         data-app-modal-surface
+        style={viewportHeight ? { maxHeight: viewportHeight - 24 } : undefined}
         role="dialog"
         aria-modal="true"
         aria-labelledby="component-import-title"

@@ -79,7 +79,7 @@ export function EditorImportMenu({
             }}
           />
           <p className="mx-1 mt-2 border-t border-slate-100 px-2 pt-2 text-[10px] leading-4 text-slate-500">
-            公式ComponentとOpen Brushは、Assetsの「外部から追加」で選べます。
+            公式ComponentやOpen Brushは、上部の「追加 → 外部から追加」で選べます。
           </p>
         </div>
       ) : null}
