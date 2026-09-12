@@ -1,4 +1,6 @@
 import { GuideLink } from "../guide/GuideLink";
+import { createPortal } from "react-dom";
+import { useEditorDevice } from "./useEditorDevice";
 import {
   useRef,
   useEffect,
@@ -14,6 +16,7 @@ import {
   ChevronRight,
   CircleAlert,
   LoaderCircle,
+  MoreHorizontal,
   PanelBottomOpen,
   Store,
 } from "lucide-react";
@@ -157,9 +160,13 @@ function assetVramBytes(asset: SceneAsset): number | null {
 type AssetSortMode = "default" | "file-size" | "vram";
 
 function assetFolderPath(assets: AssetManifest, asset: SceneAsset): string {
+  return folderDisplayPath(assets, asset.folderId ?? null);
+}
+
+function folderDisplayPath(assets: AssetManifest, initialFolderId: string | null): string {
   const segments: string[] = [];
   const visited = new Set<string>();
-  let folderId = asset.folderId ?? null;
+  let folderId = initialFolderId;
   while (folderId && !visited.has(folderId)) {
     visited.add(folderId);
     const folder = assets.folders?.[folderId];
@@ -492,6 +499,7 @@ function AssetCard({
   onDelete,
   onOpenContext,
   folderPath,
+  tablet,
 }: {
   asset: SceneAsset;
   assets: AssetManifest;
@@ -504,6 +512,7 @@ function AssetCard({
   onDelete: () => void;
   onOpenContext: (event: MouseEvent<HTMLElement>) => void;
   folderPath?: string;
+  tablet: boolean;
 }) {
   const KindIcon = EDITOR_ICONS[assetIconName(asset)];
   const DeleteIcon = EDITOR_ICONS.delete;
@@ -556,7 +565,7 @@ function AssetCard({
     return (
       <div
         onContextMenu={onOpenContext}
-        className={`group relative grid min-w-0 grid-cols-[28px_minmax(110px,1fr)_82px_86px_24px_26px] items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-left ${
+        className={`group relative grid min-w-0 ${tablet ? "grid-cols-[28px_minmax(0,1fr)_70px_44px]" : "grid-cols-[28px_minmax(110px,1fr)_82px_86px_24px_26px]"} items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-left ${
           selected
             ? "border-brand-300 bg-brand-50"
             : "border-transparent bg-editor-surface hover:bg-editor-subtle"
@@ -571,7 +580,7 @@ function AssetCard({
           onClick={(event) => onSelect(asset.id, event)}
           onDoubleClick={() => onOpen()}
           title={commandTitle(`${asset.name}を選択／${dragDescription}`, "SelectAsset")}
-          className="col-span-5 grid cursor-grab grid-cols-[28px_minmax(110px,1fr)_82px_86px_24px] items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 active:cursor-grabbing"
+          className={`grid min-w-0 cursor-grab items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 active:cursor-grabbing ${tablet ? "col-span-3 grid-cols-[28px_minmax(0,1fr)_70px]" : "col-span-5 grid-cols-[28px_minmax(110px,1fr)_82px_86px_24px]"}`}
         >
           <span
             data-asset-drag-preview="true"
@@ -581,13 +590,15 @@ function AssetCard({
           </span>
           <span className="min-w-0">
             <span className="block truncate text-[11px] font-semibold leading-4 text-slate-800">{asset.name}</span>
+            {tablet && asset.status !== "ready" ? <EDITOR_ICONS.warning size={14} aria-label={asset.status} className="text-amber-700" /> : null}
           </span>
           {sizeSummary ?? <span />}
-          <span className="flex items-center gap-1 text-[11px] text-slate-500">
+          {!tablet ? <><span className="flex items-center gap-1 text-[11px] text-slate-500">
             <KindIcon size={11} aria-hidden="true" />
             <span className="truncate">{assetKindLabel(asset)}</span>
           </span>
           <span title={asset.status !== "ready" ? asset.status : undefined}>{asset.status !== "ready" ? <EDITOR_ICONS.warning size={14} aria-label={asset.status} className="text-amber-700" /> : null}</span>
+          </> : null}
         </button>
         <button
           type="button"
@@ -697,6 +708,7 @@ function FolderCard({
   onDropAsset,
   onDropFolder,
   onOpenContext,
+  touch,
 }: {
   folder: BrowserFolder;
   viewMode: ViewMode;
@@ -706,6 +718,7 @@ function FolderCard({
   onDropAsset: (assetId: string) => void;
   onDropFolder: (folderId: string) => void;
   onOpenContext: (event: MouseEvent<HTMLElement>) => void;
+  touch: boolean;
 }) {
   const [dropTarget, setDropTarget] = useState(false);
   const FolderIcon = EDITOR_ICONS.folder;
@@ -774,15 +787,15 @@ function FolderCard({
     return (
       <div
         {...sharedProps}
-        className={`group grid grid-cols-[40px_minmax(110px,1fr)_86px_26px] items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-left ${dropTarget ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200" : "border-transparent bg-editor-surface hover:bg-editor-subtle"}`}
+        className={`group grid ${touch ? "grid-cols-[40px_minmax(0,1fr)_44px]" : "grid-cols-[40px_minmax(110px,1fr)_86px_26px]"} items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-left ${dropTarget ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200" : "border-transparent bg-editor-surface hover:bg-editor-subtle"}`}
       >
-        <button type="button" draggable={Boolean(folder.custom) && !readOnly} data-editor-drag-source={folder.custom ? "asset-folder" : undefined} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onClick={onOpen} title={commandTitle(`${folder.name}を開く`, "OpenAssetFolder")} className="col-span-3 grid cursor-grab select-none grid-cols-[40px_minmax(110px,1fr)_86px] items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 active:cursor-grabbing">
+        <button type="button" draggable={Boolean(folder.custom) && !readOnly} data-editor-drag-source={folder.custom ? "asset-folder" : undefined} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onClick={onOpen} title={commandTitle(`${folder.name}を開く`, "OpenAssetFolder")} className={`grid min-w-0 cursor-grab select-none items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 active:cursor-grabbing ${touch ? "col-span-2 grid-cols-[40px_minmax(0,1fr)]" : "col-span-3 grid-cols-[40px_minmax(110px,1fr)_86px]"}`}>
           <span className="flex h-8 items-center justify-center rounded bg-editor-subtle text-slate-500"><FolderIcon size={18} aria-hidden="true" /></span>
           <span className="truncate text-[11px] font-semibold text-slate-800">{folder.name}</span>
-          <span className="flex items-center gap-1 text-[11px] text-slate-500"><KindIcon size={11} aria-hidden="true" /> <span className="truncate">{folder.custom ? "フォルダー" : "コレクション"}</span></span>
+          {!touch ? <span className="flex items-center gap-1 text-[11px] text-slate-500"><KindIcon size={11} aria-hidden="true" /> <span className="truncate">{folder.custom ? "フォルダー" : "コレクション"}</span></span> : null}
         </button>
         {folder.custom ? (
-          <button type="button" disabled={readOnly} onClick={(event) => { event.stopPropagation(); onDelete(); }} title={commandTitle(`${folder.name}を削除`, "DeleteAssetFolder")} aria-label={`${folder.name}を削除`} className="rounded p-1 text-slate-400 opacity-0 hover:bg-rose-50 hover:text-rose-700 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-30"><DeleteIcon size={14} aria-hidden="true" /></button>
+          <button type="button" disabled={readOnly} onClick={(event) => { event.stopPropagation(); if (touch) onOpenContext(event); else onDelete(); }} title={touch ? `${folder.name}の操作` : commandTitle(`${folder.name}を削除`, "DeleteAssetFolder")} aria-label={touch ? `${folder.name}の操作` : `${folder.name}を削除`} aria-haspopup={touch ? "menu" : undefined} className={`rounded p-1 text-slate-400 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-30 ${touch ? "min-h-11 min-w-11 opacity-100 hover:bg-slate-100" : "opacity-0 hover:bg-rose-50 hover:text-rose-700"}`}>{touch ? <MoreHorizontal size={16} aria-hidden="true" /> : <DeleteIcon size={14} aria-hidden="true" />}</button>
         ) : <span />}
       </div>
     );
@@ -790,9 +803,9 @@ function FolderCard({
   return (
     <div
       {...sharedProps}
-      className={`group relative flex min-h-10 min-w-0 flex-col items-center justify-center gap-1 rounded-lg border text-slate-600 ${dropTarget ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200" : "border-transparent bg-editor-surface hover:bg-editor-subtle"}`}
+      className={`group relative flex min-h-10 min-w-0 ${touch ? "flex-row" : "flex-col"} items-center justify-center gap-1 rounded-lg border text-slate-600 ${dropTarget ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200" : "border-transparent bg-editor-surface hover:bg-editor-subtle"}`}
     >
-      <button type="button" draggable={Boolean(folder.custom) && !readOnly} data-editor-drag-source={folder.custom ? "asset-folder" : undefined} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onClick={onOpen} title={commandTitle(`${folder.name}を開く`, "OpenAssetFolder")} className="flex h-full w-full cursor-grab select-none flex-col items-center justify-center gap-1 px-1.5 py-1.5 active:cursor-grabbing">
+      <button type="button" draggable={Boolean(folder.custom) && !readOnly} data-editor-drag-source={folder.custom ? "asset-folder" : undefined} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onClick={onOpen} title={commandTitle(`${folder.name}を開く`, "OpenAssetFolder")} className="flex h-full min-w-0 w-full cursor-grab select-none flex-col items-center justify-center gap-1 px-1.5 py-1.5 active:cursor-grabbing">
         <span className="relative">
           <FolderIcon size={18} strokeWidth={1.5} aria-hidden="true" />
           <KindIcon size={10} className="absolute -bottom-0.5 -right-1 rounded bg-white" aria-hidden="true" />
@@ -800,7 +813,7 @@ function FolderCard({
         <span className="max-w-full truncate text-[11px] font-semibold leading-4">{folder.name}</span>
       </button>
       {folder.custom ? (
-        <button type="button" disabled={readOnly} onClick={(event) => { event.stopPropagation(); onDelete(); }} title={commandTitle(`${folder.name}を削除`, "DeleteAssetFolder")} aria-label={`${folder.name}を削除`} className="absolute right-1.5 top-1.5 rounded bg-white p-1 text-slate-400 opacity-0 shadow hover:bg-rose-50 hover:text-rose-700 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-30"><DeleteIcon size={13} aria-hidden="true" /></button>
+        <button type="button" disabled={readOnly} onClick={(event) => { event.stopPropagation(); if (touch) onOpenContext(event); else onDelete(); }} title={touch ? `${folder.name}の操作` : commandTitle(`${folder.name}を削除`, "DeleteAssetFolder")} aria-label={touch ? `${folder.name}の操作` : `${folder.name}を削除`} aria-haspopup={touch ? "menu" : undefined} className={`rounded bg-white p-1 text-slate-400 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-30 ${touch ? "shrink-0 min-h-11 min-w-11 opacity-100 hover:bg-slate-100" : "absolute right-1.5 top-1.5 opacity-0 shadow hover:bg-rose-50 hover:text-rose-700"}`}>{touch ? <MoreHorizontal size={16} aria-hidden="true" /> : <DeleteIcon size={13} aria-hidden="true" />}</button>
       ) : null}
     </div>
   );
@@ -811,11 +824,13 @@ function BuiltinPrefabCard({
   viewMode,
   readOnly,
   onPlace,
+  tablet,
 }: {
   recipe: BuiltinPrefabRecipe;
   viewMode: ViewMode;
   readOnly: boolean;
   onPlace: () => void;
+  tablet: boolean;
 }) {
   const definition = getXriftComponentDefinition(recipe.schemaId);
   const Icon = definition
@@ -832,13 +847,13 @@ function BuiltinPrefabCard({
   };
   if (viewMode === "list") {
     return (
-      <div className="grid grid-cols-[54px_minmax(110px,1fr)_minmax(120px,1fr)_70px] items-center gap-2 rounded-md border border-sky-200 bg-white px-1.5 py-1">
+      <div className={`grid items-center gap-2 rounded-md border border-sky-200 bg-white px-1.5 py-1 ${tablet ? "grid-cols-[54px_minmax(0,1fr)_52px]" : "grid-cols-[54px_minmax(110px,1fr)_minmax(120px,1fr)_70px]"}`}>
         <div
           draggable={!readOnly}
           data-editor-drag-source="builtin-prefab"
           onDragStart={handleDragStart}
           onDragEnd={clearEditorDragData}
-          className="col-span-3 grid cursor-grab select-none grid-cols-[54px_minmax(110px,1fr)_minmax(120px,1fr)] items-center gap-2 active:cursor-grabbing"
+          className={`grid min-w-0 cursor-grab select-none items-center gap-2 active:cursor-grabbing ${tablet ? "col-span-2 grid-cols-[54px_minmax(0,1fr)]" : "col-span-3 grid-cols-[54px_minmax(110px,1fr)_minmax(120px,1fr)]"}`}
           title={`${recipe.name}をシーンへドラッグ`}
         >
           {thumbnailUrl ? (
@@ -852,9 +867,9 @@ function BuiltinPrefabCard({
             <span className="pointer-events-none flex h-10 items-center justify-center rounded border border-sky-100 bg-sky-50 text-sky-700"><Icon size={22} aria-hidden="true" /></span>
           )}
           <span className="pointer-events-none min-w-0"><span className="block truncate text-xs font-semibold text-slate-800">{recipe.name}</span><span className="block text-[11px] font-medium text-sky-700">XRift 組み込み{recipe.configuration?.requiredBeforeCompile ? "・配置後に設定" : ""}</span></span>
-          <span className="pointer-events-none line-clamp-2 text-xs leading-4 text-slate-500" title={recipe.configuration?.hint}>{recipe.description}</span>
+          {!tablet ? <span className="pointer-events-none line-clamp-2 text-xs leading-4 text-slate-500" title={recipe.configuration?.hint}>{recipe.description}</span> : null}
         </div>
-        <button type="button" disabled={readOnly} onClick={onPlace} className="rounded bg-sky-600 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-40">配置</button>
+        <button type="button" disabled={readOnly} onClick={onPlace} className={`rounded bg-sky-600 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-40 ${tablet ? "min-h-11" : ""}`}>配置</button>
       </div>
     );
   }
@@ -888,7 +903,7 @@ function BuiltinPrefabCard({
           </p>
         ) : null}
       </div>
-      <button type="button" disabled={readOnly} onClick={onPlace} title={commandTitle(`${recipe.name}をシーンへ配置`, "PlaceBuiltinPrefab")} className="mt-auto rounded bg-sky-600 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-40">配置</button>
+      <button type="button" disabled={readOnly} onClick={onPlace} title={commandTitle(`${recipe.name}をシーンへ配置`, "PlaceBuiltinPrefab")} className={`mt-auto rounded bg-sky-600 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-40 ${tablet ? "min-h-11" : ""}`}>配置</button>
     </article>
   );
 }
@@ -920,6 +935,62 @@ function ContextMenuItem({
       <Icon size={14} aria-hidden="true" />
       {label}
     </button>
+  );
+}
+
+function AssetMoveMenu({
+  assets,
+  assetId,
+  folderId,
+  disabled,
+  onMove,
+}: {
+  assets: AssetManifest;
+  assetId?: string;
+  folderId?: string;
+  disabled: boolean;
+  onMove: (destinationId: string | null) => void;
+}) {
+  const originalParentId = assetId
+    ? assets.assets[assetId]?.folderId ?? null
+    : assets.folders?.[folderId ?? ""]?.parentId ?? null;
+  const [destinationId, setDestinationId] = useState(originalParentId ?? "");
+  const destinations = Object.values(assets.folders ?? {}).filter((candidate) => {
+    // Folder moves share the existing command guard, but never offer their own
+    // descendants as destinations in the native picker.
+    const visited = new Set<string>();
+    let ancestorId: string | null = candidate.id;
+    while (ancestorId && !visited.has(ancestorId)) {
+      if (ancestorId === folderId) return false;
+      visited.add(ancestorId);
+      ancestorId = assets.folders?.[ancestorId]?.parentId ?? null;
+    }
+    return true;
+  });
+  return (
+    <details className="border-y border-slate-200 py-1">
+      <summary className="cursor-pointer rounded px-2 py-2 text-xs text-slate-700 hover:bg-violet-50">フォルダーへ移動</summary>
+      <div className="space-y-2 px-2 py-2">
+        <select
+          value={destinationId}
+          disabled={disabled}
+          aria-label="移動先フォルダー"
+          onChange={(event) => setDestinationId(event.currentTarget.value)}
+          className="min-h-11 w-full rounded border border-slate-300 bg-white px-2 text-sm"
+        >
+          <option value="">Assets直下</option>
+          {destinations.map((folder) => <option key={folder.id} value={folder.id}>{folderDisplayPath(assets, folder.id)}</option>)}
+        </select>
+        <button
+          type="button"
+          disabled={disabled || (destinationId || null) === originalParentId}
+          onClick={() => onMove(destinationId || null)}
+          className="min-h-11 w-full rounded border border-slate-300 px-2 text-xs text-slate-700 hover:bg-violet-50 disabled:opacity-45"
+        >
+          このフォルダーへ移動
+        </button>
+      </div>
+    </details>
   );
 }
 
@@ -1217,6 +1288,7 @@ export function AssetsPanel({
   onOpenExternalStore,
   onOpenInteractivity,
   onOpenAssetLocation,
+  canOpenAssetLocation = true,
   externalOperationLockReason = null,
 }: {
   assets: AssetManifest;
@@ -1260,6 +1332,7 @@ export function AssetsPanel({
   onOpenExternalStore: () => void;
   onOpenInteractivity: (assetId: string) => void;
   onOpenAssetLocation: (sourceRelativePath?: string) => void | Promise<void>;
+  canOpenAssetLocation?: boolean;
   /**
    * Reason supplied by an Asset operation owned outside this panel, such as
    * Model reimport. Selection/navigation stay available while mutations and
@@ -1267,6 +1340,7 @@ export function AssetsPanel({
    */
   externalOperationLockReason?: string | null;
 }) {
+  const { tablet, touch } = useEditorDevice();
   const [fileDragOver, setFileDragOver] = useState(false);
   const [rootDropTarget, setRootDropTarget] = useState(false);
   const [breadcrumbDropTargetId, setBreadcrumbDropTargetId] = useState<string | null>(null);
@@ -1275,10 +1349,12 @@ export function AssetsPanel({
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [tabletKindFilter, setTabletKindFilter] = useState<SceneAsset["kind"] | "">("");
   const [activityOpen, setActivityOpen] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
   const selectionAnchorRef = useRef<string | null>(selectedAssetId);
   const readOnly = editorMode === "play";
   const normalizedExternalLockReason =
@@ -1349,6 +1425,7 @@ export function AssetsPanel({
   const visibleAssets = searching
     ? applySortMode(
         allAssets
+          .filter((asset) => !tablet || !tabletKindFilter || asset.kind === tabletKindFilter)
           .filter((asset) =>
             matchesAssetSearch(asset, assetFolderPath(assets, asset), searchQuery),
           )
@@ -1359,7 +1436,7 @@ export function AssetsPanel({
               left.id.localeCompare(right.id),
           ),
       )
-    : applySortMode(folderAssets);
+    : applySortMode(tablet && tabletKindFilter ? folderAssets.filter((asset) => asset.kind === tabletKindFilter) : folderAssets);
   const handleAssetSelect = (
     assetId: string,
     event: MouseEvent<HTMLButtonElement>,
@@ -1435,6 +1512,21 @@ export function AssetsPanel({
     return () => window.cancelAnimationFrame(frame);
   }, [assets.assets, assets.folders, renameRequest]);
 
+  useEffect(() => {
+    if (!contextMenu) return;
+    contextMenuRef.current?.focus({ preventScroll: true });
+    const dismissOutside = (event: PointerEvent) => {
+      if (!contextMenuRef.current?.contains(event.target as Node)) setContextMenu(null);
+    };
+    const dismissOnResize = () => setContextMenu(null);
+    document.addEventListener("pointerdown", dismissOutside, true);
+    window.addEventListener("resize", dismissOnResize);
+    return () => {
+      document.removeEventListener("pointerdown", dismissOutside, true);
+      window.removeEventListener("resize", dismissOnResize);
+    };
+  }, [contextMenu]);
+
   const handleDragOver = (event: DragEvent<HTMLElement>) => {
     if (hasEditorDragData(event.dataTransfer, ENTITY_DRAG_MIME)) {
       event.preventDefault();
@@ -1493,12 +1585,14 @@ export function AssetsPanel({
   ) => {
     event.preventDefault();
     event.stopPropagation();
-    const bounds =
-      panelRef.current?.getBoundingClientRect() ??
-      event.currentTarget.getBoundingClientRect();
+    const bounds = panelRef.current?.getBoundingClientRect() ?? event.currentTarget.getBoundingClientRect();
     setContextMenu({
-      x: Math.min(event.clientX - bounds.left, Math.max(8, bounds.width - 232)),
-      y: Math.min(event.clientY - bounds.top, Math.max(8, bounds.height - 260)),
+      x: touch
+        ? Math.max(12, Math.min(event.clientX, window.innerWidth - 300))
+        : Math.min(event.clientX - bounds.left, Math.max(8, bounds.width - 232)),
+      y: touch
+        ? Math.max(12, Math.min(event.clientY, window.innerHeight - Math.min(640, window.innerHeight - 24) - 12))
+        : Math.min(event.clientY - bounds.top, Math.max(8, bounds.height - 260)),
       ...target,
       creationFolderId: resolveAssetCreationFolderId(
         assets,
@@ -1508,7 +1602,11 @@ export function AssetsPanel({
     });
   };
 
-  const openCreationMenu = () => {
+  const openCreationMenu = (event: MouseEvent<HTMLElement>) => {
+    if (touch) {
+      openContextMenu(event);
+      return;
+    }
     const bounds = panelRef.current?.getBoundingClientRect();
     setContextMenu({
       x: Math.max(8, (bounds?.width ?? 240) - 232),
@@ -1632,10 +1730,24 @@ export function AssetsPanel({
        * the only part allowed to shrink, and the actions drop their labels
        * through container queries instead of wrapping onto a second line.
        */}
-      <div className="@container/assets-header flex h-10 shrink-0 items-center justify-between gap-3 border-b border-editor-border bg-editor-surface px-3">
+      <div className={`@container/assets-header flex shrink-0 border-b border-editor-border bg-editor-surface ${tablet ? "flex-col gap-1 px-2 py-1 [&_button]:min-h-11 [&_button]:min-w-11" : "h-10 items-center justify-between gap-3 px-3"}`}>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <h2 id="assets-heading" className="shrink-0 text-[13px] font-semibold text-slate-800">Assets</h2>
-          <nav className="hidden min-w-0 items-center gap-1 overflow-hidden text-xs text-slate-500 @[460px]/assets-header:flex" aria-label="Assetsのフォルダー階層">
+          {tablet ? <span className="min-w-0 flex-1 truncate text-xs text-editor-muted">{selectedAssetId ? assets.assets[selectedAssetId]?.name : ""}</span> : null}
+          {touch && selectedAssetId && assets.assets[selectedAssetId] ? (
+            <button
+              type="button"
+              aria-label={`${assets.assets[selectedAssetId].name}の操作`}
+              aria-haspopup="menu"
+              aria-expanded={Boolean(contextMenu?.assetId === selectedAssetId)}
+              onClick={(event) => openContextMenu(event, { assetId: selectedAssetId })}
+              className="min-h-11 shrink-0 rounded border border-editor-border bg-editor-surface px-2 text-xs font-semibold text-editor-text"
+            >
+              操作
+            </button>
+          ) : null}
+          {tablet ? <GuideLink page="assets" label="Assetsの使い方" compact /> : null}
+          <nav className={`${tablet ? "hidden" : "hidden @[460px]/assets-header:flex"} min-w-0 items-center gap-1 overflow-hidden text-xs text-slate-500`} aria-label="Assetsのフォルダー階層">
             <button
               type="button"
               onClick={() => onActiveFolderChange(null)}
@@ -1668,18 +1780,18 @@ export function AssetsPanel({
             ))}
           </nav>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <GuideLink page="assets" label="Assetsの使い方" compact />
+        <div className={`flex min-w-0 shrink-0 items-center gap-1 ${tablet ? "flex-wrap" : ""}`}>
+          {!tablet ? <GuideLink page="assets" label="Assetsの使い方" compact /> : null}
           {normalizedExternalLockReason ? (
             <span
               role="status"
-              className="max-w-24 shrink truncate rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800 @[560px]/assets-header:max-w-44"
+              className={`truncate rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800 ${tablet ? "order-last w-full" : "max-w-24 shrink @[560px]/assets-header:max-w-44"}`}
               title={normalizedExternalLockReason}
             >
               {normalizedExternalLockReason}
             </span>
           ) : null}
-          <label className="relative flex h-7 w-32 items-center @[560px]/assets-header:w-40 @[700px]/assets-header:w-52">
+          <label className={`relative flex items-center ${tablet ? "min-w-0 flex-1" : "h-7 w-32 @[560px]/assets-header:w-40 @[700px]/assets-header:w-52"}`}>
             <span className="sr-only">アセットを検索</span>
             <input
               type="search"
@@ -1707,16 +1819,56 @@ export function AssetsPanel({
               </button>
             ) : null}
           </label>
-          <button type="button" onClick={() => setViewMode("grid")} aria-label="グリッド表示" aria-pressed={viewMode === "grid"} title={commandTitle("グリッド表示", "SetAssetView.Grid")} className={`shrink-0 rounded p-1 ${viewMode === "grid" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><GridIcon size={14} aria-hidden="true" /></button>
-          <button type="button" onClick={() => setViewMode("list")} aria-label="リスト表示" aria-pressed={viewMode === "list"} title={commandTitle("リスト表示", "SetAssetView.List")} className={`shrink-0 rounded p-1 ${viewMode === "list" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><ListIcon size={14} aria-hidden="true" /></button>
+          {tablet ? (
+            <button type="button" onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")} aria-label={viewMode === "grid" ? "リスト表示に切り替える" : "グリッド表示に切り替える"} title={viewMode === "grid" ? "リスト表示に切り替える" : "グリッド表示に切り替える"} className="shrink-0 rounded p-1 text-slate-500 hover:bg-slate-200">{viewMode === "grid" ? <ListIcon size={14} aria-hidden="true" /> : <GridIcon size={14} aria-hidden="true" />}</button>
+          ) : <>
+            <button type="button" onClick={() => setViewMode("grid")} aria-label="グリッド表示" aria-pressed={viewMode === "grid"} title={commandTitle("グリッド表示", "SetAssetView.Grid")} className={`shrink-0 rounded p-1 ${viewMode === "grid" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><GridIcon size={14} aria-hidden="true" /></button>
+            <button type="button" onClick={() => setViewMode("list")} aria-label="リスト表示" aria-pressed={viewMode === "list"} title={commandTitle("リスト表示", "SetAssetView.List")} className={`shrink-0 rounded p-1 ${viewMode === "list" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><ListIcon size={14} aria-hidden="true" /></button>
+          </>}
           <button type="button" disabled={assetMutationLocked} onClick={openCreationMenu} aria-label="新規アセットまたはフォルダー" title={assetMutationDisabledReason ?? "新規アセットまたはフォルダー"} className="ml-1 shrink-0 rounded border border-slate-300 bg-white p-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45"><CreateIcon size={14} aria-hidden="true" /></button>
           <button type="button" disabled={assetMutationLocked} onClick={onOpenExternalStore} title={assetMutationDisabledReason ?? "外部リソースから素材または公式Componentを追加"} aria-label="外部から追加" className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45 @[620px]/assets-header:px-2.5"><Store size={12} aria-hidden="true" /><span className="hidden @[620px]/assets-header:inline">外部から追加</span></button>
           <button type="button" disabled={importLocked} onClick={() => { if (onCommand("asset.import")) fileInputRef.current?.click(); }} title={importDisabledReason ?? commandTitle("アセットをインポート", "asset.import")} aria-label="アセットをインポート" className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md bg-brand-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45 @[520px]/assets-header:px-2.5"><ImportIcon size={12} aria-hidden="true" /><span className="hidden @[520px]/assets-header:inline">インポート</span></button>
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1">
-        <AssetFolderTree
+      <div className={`flex min-h-0 flex-1 ${tablet ? "flex-col" : ""}`}>
+        {tablet ? (
+          <nav className="grid shrink-0 grid-cols-2 gap-2 border-b border-editor-border bg-editor-surface p-2" aria-label="Assetsのフォルダーと種類">
+            <label className="min-w-0 text-xs text-editor-muted">フォルダー
+              <select
+                value={activeFolder?.id ?? ""}
+                onChange={(event) => {
+                  if (activeFolder?.kind) setTabletKindFilter(activeFolder.kind);
+                  onActiveFolderChange(event.currentTarget.value || null);
+                  if (event.currentTarget.value === XRIFT_PREFABS_FOLDER_ID) setTabletKindFilter("");
+                }}
+                className="mt-1 min-h-11 w-full min-w-0 rounded border border-editor-border bg-editor-surface px-1 text-xs text-editor-text"
+              >
+                <option value="">Assets直下</option>
+                {activeFolder?.kind ? <option value={activeFolder.id} disabled>すべてのフォルダー</option> : null}
+                {customFolders.map((folder) => <option key={folder.id} value={folder.id}>{folderDisplayPath(assets, folder.id)}</option>)}
+                <option value={XRIFT_PREFABS_FOLDER_ID}>XRift Prefabs</option>
+              </select>
+            </label>
+            <label className="min-w-0 text-xs text-editor-muted">種類
+              <select
+                value={tabletKindFilter || activeFolder?.kind || ""}
+                disabled={Boolean(activeFolder?.builtinPrefabs)}
+                onChange={(event) => {
+                  const kind = event.currentTarget.value as SceneAsset["kind"] | "";
+                  if (activeFolder?.kind) {
+                    setTabletKindFilter("");
+                    onActiveFolderChange(KIND_FOLDERS.find((folder) => folder.kind === kind)?.id ?? null);
+                  } else setTabletKindFilter(kind);
+                }}
+                className="mt-1 min-h-11 w-full min-w-0 rounded border border-editor-border bg-editor-surface px-1 text-xs text-editor-text"
+              >
+                <option value="">すべての種類</option>
+                {KIND_FOLDERS.filter((folder) => folder.kind).map((folder) => <option key={folder.id} value={folder.kind}>{folder.name}</option>)}
+              </select>
+            </label>
+          </nav>
+        ) : <AssetFolderTree
           assets={assets}
           customFolders={customFolders}
           kindFolders={KIND_FOLDERS}
@@ -1726,9 +1878,9 @@ export function AssetsPanel({
           onActiveFolderChange={onActiveFolderChange}
           onMoveAsset={onMoveAsset}
           onMoveFolder={onMoveFolder}
-        />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex h-8 shrink-0 items-center justify-between gap-2 border-b border-editor-border bg-editor-subtle px-3 text-xs">
+        />}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className={`flex shrink-0 items-center justify-between gap-2 border-b border-editor-border bg-editor-subtle px-3 text-xs ${tablet ? "min-h-11" : "h-8"}`}>
             <span className="truncate font-medium text-editor-text">
               {searching ? `「${searchQuery.trim()}」の検索結果` : activeFolder?.name ?? "Assets直下"}
             </span>
@@ -1752,7 +1904,7 @@ export function AssetsPanel({
               </span>
             </span>
           </div>
-          <div className={`scrollbar-thin min-w-0 flex-1 overflow-auto p-1.5 ${viewMode === "grid" ? "grid auto-rows-max grid-cols-[repeat(auto-fill,minmax(76px,1fr))] content-start gap-1" : "space-y-0.5"}`}>
+          <div className={`scrollbar-thin min-w-0 flex-1 overflow-auto p-1.5 ${viewMode === "grid" ? `grid auto-rows-max ${tablet ? "grid-cols-[repeat(auto-fill,minmax(112px,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(76px,1fr))]"} content-start gap-1` : "space-y-0.5"}`}>
         {!activeFolder?.builtinPrefabs
           ? visibleFolders.map((folder) => (
               renameRequest?.kind === "folder" && renameRequest.id === folder.id ? (
@@ -1783,6 +1935,7 @@ export function AssetsPanel({
                   onDropAsset={(assetId) => onMoveAsset(assetId, folder.id)}
                   onDropFolder={(folderId) => onMoveFolder(folderId, folder.id)}
                   onOpenContext={(event) => openContextMenu(event, { folderId: folder.id })}
+                  touch={touch}
                 />
               )
             ))
@@ -1795,6 +1948,7 @@ export function AssetsPanel({
                 viewMode={viewMode}
                 readOnly={assetMutationLocked}
                 onPlace={() => onPlaceBuiltinPrefab(recipe.id)}
+                tablet={tablet}
               />
             ))
           : null}
@@ -1825,6 +1979,7 @@ export function AssetsPanel({
               selected={selectedAssetIds.includes(asset.id)}
               viewMode={viewMode}
               readOnly={assetMutationLocked}
+              tablet={tablet}
               onSelect={handleAssetSelect}
 
               onOpen={() => {
@@ -1857,7 +2012,13 @@ export function AssetsPanel({
             </button>
           </div>
         ) : null}
-        {!searching && activeFolderId && visibleAssets.length === 0 && visibleFolders.length === 0 && (!activeFolder?.builtinPrefabs || builtinPrefabRecipes.length === 0) ? (
+        {!searching && tablet && tabletKindFilter && visibleAssets.length === 0 ? (
+          <div className="col-span-full rounded border border-dashed border-slate-300 bg-white p-3 text-center text-xs text-slate-600">
+            <p>このフォルダーに該当する種類の素材がありません。</p>
+            <button type="button" onClick={() => setTabletKindFilter("")} className="mt-2 min-h-11 rounded border border-slate-300 px-3 font-semibold">すべての種類を表示</button>
+          </div>
+        ) : null}
+        {!searching && !(tablet && tabletKindFilter) && activeFolderId && visibleAssets.length === 0 && visibleFolders.length === 0 && (!activeFolder?.builtinPrefabs || builtinPrefabRecipes.length === 0) ? (
           <button
             type="button"
             onClick={() => onActiveFolderChange(null)}
@@ -1867,7 +2028,7 @@ export function AssetsPanel({
             className={`col-span-full rounded border border-dashed bg-white px-4 py-3 text-xs ${rootDropTarget ? "border-violet-500 bg-violet-50 text-violet-800" : "border-slate-300 text-slate-500 hover:border-violet-300 hover:text-violet-700"}`}
           >
             このフォルダーには素材がありません。Assets直下へ戻る
-            <span className="mt-1 block text-[11px]">ここへドロップするとAssets直下へ移動します</span>
+            {!touch ? <span className="mt-1 block text-[11px]">ここへドロップするとAssets直下へ移動します</span> : null}
           </button>
         ) : null}
           </div>
@@ -1895,9 +2056,28 @@ export function AssetsPanel({
         onReveal={revealImportEntry}
       />
 
-      {contextMenu ? (
-        <div className="absolute z-30 max-h-[calc(100%-1rem)] w-56 overflow-y-auto rounded-md border border-slate-300 bg-white p-1 shadow-xl" style={{ left: contextMenu.x, top: contextMenu.y }} role="menu" onPointerDown={(event) => event.stopPropagation()}>
-          <ContextMenuItem
+      {contextMenu ? createPortal(
+        <div
+          ref={contextMenuRef}
+          className={`overflow-y-auto overscroll-contain rounded-md border border-slate-300 bg-white p-1 shadow-xl ${touch ? "editor-touch-menu fixed z-[85] max-h-[min(640px,calc(100dvh-24px))] max-w-[calc(100vw-24px)] w-72" : "absolute z-30 max-h-[calc(100%-1rem)] w-56"}`}
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          role="menu"
+          aria-label="Assetsのメニュー"
+          tabIndex={-1}
+          onPointerDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            event.stopPropagation();
+            setContextMenu(null);
+          }}
+        >
+          {touch && (contextMenu.assetId || contextMenu.folderId) ? (
+            <p className="truncate px-2 py-2 text-xs font-semibold text-slate-500">
+              {assets.assets[contextMenu.assetId ?? ""]?.name ?? assets.folders?.[contextMenu.folderId ?? ""]?.name}
+            </p>
+          ) : null}
+          {canOpenAssetLocation ? <ContextMenuItem
             icon="folder"
             label={
               contextMenu.assetId &&
@@ -1919,7 +2099,7 @@ export function AssetsPanel({
               setContextMenu(null);
               void onOpenAssetLocation(sourceRelativePath);
             }}
-          />
+          /> : null}
           {contextMenu.assetId &&
           isScenePlaceableAsset(assets.assets[contextMenu.assetId]) ? (
             <ContextMenuItem
@@ -1988,6 +2168,32 @@ export function AssetsPanel({
               }}
             />
           ) : null}
+          {touch && contextMenu.assetId && (assets.assets[contextMenu.assetId]?.kind === "script" || assets.assets[contextMenu.assetId]?.kind === "shader") ? (
+            <ContextMenuItem
+              icon="script"
+              label={assets.assets[contextMenu.assetId].kind === "shader" ? "シェーダーを編集" : "スクリプトを編集"}
+              command={assets.assets[contextMenu.assetId].kind === "shader" ? "asset.edit-shader" : "asset.edit-script"}
+              onClick={() => {
+                const assetId = contextMenu.assetId!;
+                setContextMenu(null);
+                onCommand(assets.assets[assetId].kind === "shader" ? "asset.edit-shader" : "asset.edit-script", { assetId });
+              }}
+            />
+          ) : null}
+          {touch && (contextMenu.assetId || assets.folders?.[contextMenu.folderId ?? ""]) ? (
+            <AssetMoveMenu
+              key={contextMenu.assetId ?? contextMenu.folderId}
+              assets={assets}
+              assetId={contextMenu.assetId}
+              folderId={contextMenu.folderId}
+              disabled={assetMutationLocked}
+              onMove={(destinationId) => {
+                if (contextMenu.assetId) onMoveAsset(contextMenu.assetId, destinationId);
+                else if (contextMenu.folderId) onMoveFolder(contextMenu.folderId, destinationId);
+                setContextMenu(null);
+              }}
+            />
+          ) : null}
           {contextMenu.assetId || assets.folders?.[contextMenu.folderId ?? ""] ? (
             <ContextMenuItem
               icon="delete"
@@ -2009,8 +2215,9 @@ export function AssetsPanel({
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="asset" label="新規ノードグラフ" command="asset.create-interactivity" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-interactivity", { folderId }); }} />
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="script" label="新規スクリプト" command="asset.create-script" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-script", { folderId }); }} />
           <ContextMenuItem disabled={importLocked} disabledReason={importDisabledReason} icon="texture" label="ファイルをインポート…" command="asset.import" onClick={() => { setContextMenu(null); if (onCommand("asset.import")) fileInputRef.current?.click(); }} />
-          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="prefab" label="Entityからプレハブを作成" command="prefab.create" onClick={() => { setContextMenu(null); onPhaseNotice("HierarchyのEntityをAssetsへドラッグしてください"); }} />
-        </div>
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="prefab" label="Entityからプレハブを作成" command="prefab.create" onClick={() => { setContextMenu(null); onPhaseNotice(touch ? "HierarchyでEntityを選び、操作メニューの「プレハブを作成」を押してください" : "HierarchyのEntityをAssetsへドラッグしてください"); }} />
+        </div>,
+        touch ? document.body : panelRef.current ?? document.body,
       ) : null}
 
       {fileDragOver ? (

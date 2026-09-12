@@ -106,7 +106,7 @@ test('local file addition and publishing are distinct, in both editor entry poin
 
 test('project-transfer labels do not promise a remote Git fork or retained publication ID', () => {
   const library = read('src/components/ProjectLibrary.tsx');
-  assert.match(library, /ZIPから取り込む/);
+  assert.match(library, /ファイルから取り込む/);
   assert.match(library, /リポジトリの内容をコピーして始める/);
   assert.doesNotMatch(library, /fork/);
   const transfer = read('src/components/ProjectTransferDialogs.tsx');

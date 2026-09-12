@@ -13,6 +13,7 @@ import { NewProjectDialog } from "./components/NewProjectDialog";
 import { SetupView } from "./components/SetupView";
 import { UpdateDialog } from "./components/UpdateDialog";
 import { suggestedNameForRepositoryUrl } from "./components/ProjectTransferDialogs";
+import { projectPackageFileName } from "./lib/project-package";
 import { AppUpdateDialog } from "./components/AppUpdateDialog";
 import {
   tauri,
@@ -636,7 +637,7 @@ function App() {
     setBusy(true);
     try {
       const destination = await tauri.selectProjectArchiveDestination(
-        `${project.name}.zip`,
+        projectPackageFileName(project.name),
       );
       if (!destination) return null;
       const result = await tauri.exportProjectArchive(
@@ -671,7 +672,7 @@ function App() {
       } catch (error) {
         toast({
           kind: "error",
-          title: "ZIPを読み込めませんでした",
+          title: "プロジェクトファイルを読み込めませんでした",
           description: String(error),
         });
         return null;
@@ -1190,7 +1191,9 @@ function App() {
         // The destination is fixed under the Library so a client can never
         // point the zip at a file outside it.
         const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-        const archivePath = `${root}/.cache/exports/${source.name}-${stamp}.zip`;
+        // Reserve room for the timestamp so long project names cannot make
+        // successive exports target the same truncated filename.
+        const archivePath = `${root}/.cache/exports/${projectPackageFileName(`${source.name.slice(0, 60)}-${stamp}`)}`;
         const result = await tauri.exportProjectArchive(root, source.path, archivePath);
         appendLog({
           kind: "info",
@@ -1204,7 +1207,7 @@ function App() {
           totalBytes: result.totalBytes,
           excluded: ["node_modules", ".git", "dist", ".cache", "publication record"],
           message:
-            "zipはLibraryの.cache/exportsに書きました。人に渡すときはこのファイルを移動または送信してください",
+            ".xriftstudioファイルはLibraryの.cache/exportsに書きました。人に渡すときはこのファイルを移動または送信してください",
           nextActions: ["import_project"],
         };
       }

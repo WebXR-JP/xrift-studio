@@ -414,7 +414,15 @@ export function WorldPlayPlayer({
     let lastY = 0;
 
     const onPointerDown = (event: PointerEvent) => {
-      if (event.button !== 0 || document.pointerLockElement) return;
+      if (
+        event.button !== 0 ||
+        document.pointerLockElement ||
+        draggingPointerId !== null
+      ) return;
+      // The finger looking around keeps ownership when a second finger lands.
+      // Suppress compatibility mouse events so looking never presses a world
+      // button; touch interaction has its own explicit control.
+      if (event.pointerType !== "mouse") event.preventDefault();
       draggingPointerId = event.pointerId;
       lastX = event.clientX;
       lastY = event.clientY;
@@ -446,17 +454,25 @@ export function WorldPlayPlayer({
     const onLockChange = () => {
       if (document.pointerLockElement) draggingPointerId = null;
     };
+    const cancelDrag = () => { draggingPointerId = null; };
+    const onVisibilityChange = () => {
+      if (document.hidden) cancelDrag();
+    };
 
     surface.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", endDrag);
     window.addEventListener("pointercancel", endDrag);
+    window.addEventListener("blur", cancelDrag);
+    document.addEventListener("visibilitychange", onVisibilityChange);
     document.addEventListener("pointerlockchange", onLockChange);
     return () => {
       surface.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", endDrag);
       window.removeEventListener("pointercancel", endDrag);
+      window.removeEventListener("blur", cancelDrag);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       document.removeEventListener("pointerlockchange", onLockChange);
     };
   }, [camera, surface]);

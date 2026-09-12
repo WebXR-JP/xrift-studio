@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -33,6 +34,7 @@ import {
   type ProjectModelMaterialRuntimeInfo,
 } from "./ProjectModelVisual";
 import { WebGlThumbnailCapture } from "./WebGlThumbnailCapture";
+import { EditorPanelVisibilityContext } from "./editor-panel-visibility";
 
 export type CustomMaterialPreviewSource = {
   renderer: "three-icosa";
@@ -168,6 +170,7 @@ export function CustomMaterialPreview({
   onCapture,
   onCaptureError,
 }: Props) {
+  const panelVisible = useContext(EditorPanelVisibilityContext);
   const resolution = useMemo(
     () => resolveCustomMaterialPreviewSource(asset, assets),
     [asset, assets],
@@ -235,6 +238,10 @@ export function CustomMaterialPreview({
     loadState,
     onCaptureError,
   ]);
+
+  // Tablet panels stay mounted to preserve edits. CSS display:none alone
+  // does not stop an always-running R3F canvas or release its GPU resources.
+  if (!panelVisible) return null;
 
   if (resolution.status === "standalone") {
     return (

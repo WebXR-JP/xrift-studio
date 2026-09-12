@@ -3,6 +3,20 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { PROJECT_PACKAGE_EXTENSION } from "./project-package";
+import {
+  commitBrowserAssetImport,
+  deleteBrowserPath,
+  isBrowserProjectPath,
+  listBrowserFiles,
+  readBrowserFile,
+  readBrowserFileDataUrl,
+  readBrowserTextFile,
+  readBrowserVisualProject,
+  saveBrowserVisualProject,
+  writeBrowserBinaryFile,
+  writeBrowserTextFile,
+} from "./browser-project-storage";
 
 export type ProjectKind = "world" | "item";
 export type ProjectFormat = "classic" | "visual";
@@ -377,7 +391,20 @@ export const tauri = {
       ...(defaultPath ? { defaultPath } : {}),
     }),
   openPath: (path: string) => openPath(path),
-  openUrl: (url: string) => openUrl(url),
+  openUrl: (url: string): Promise<void> => {
+    if (isTauri()) return openUrl(url);
+    try {
+      const target = new URL(url, window.location.href);
+      if (target.protocol !== "https:" && target.protocol !== "http:") {
+        return Promise.reject(new Error("Webページのリンクだけを開けます。"));
+      }
+      // Preserve Safari's user gesture: open the tab before returning a Promise.
+      window.open(target.href, "_blank", "noopener,noreferrer");
+      return Promise.resolve();
+    } catch {
+      return Promise.reject(new Error("リンクのURLを確認してください。"));
+    }
+  },
   saveScreenshot: async (dataUrl: string) => {
     if (!isTauri()) return null;
     const path = await saveDialog({
@@ -472,7 +499,7 @@ export const tauri = {
     const path = await saveDialog({
       title: "プロジェクトを書き出す",
       defaultPath: defaultFileName,
-      filters: [{ name: "XRift Studioプロジェクト (zip)", extensions: ["zip"] }],
+      filters: [{ name: "XRift Studioプロジェクト", extensions: [PROJECT_PACKAGE_EXTENSION] }],
     });
     return typeof path === "string" && path.trim() ? path : null;
   },
@@ -486,10 +513,10 @@ export const tauri = {
   selectProjectArchive: async () => {
     if (!isTauri()) return null;
     const selected = await openDialog({
-      title: "取り込むプロジェクトのzipを選択",
+      title: "取り込むXRift Studioプロジェクトを選択",
       multiple: false,
       directory: false,
-      filters: [{ name: "XRift Studioプロジェクト (zip)", extensions: ["zip"] }],
+      filters: [{ name: "XRift Studioプロジェクト", extensions: [PROJECT_PACKAGE_EXTENSION, "zip"] }],
     });
     const path = Array.isArray(selected) ? selected[0] : selected;
     return typeof path === "string" && path.trim() ? path : null;
@@ -511,7 +538,9 @@ export const tauri = {
       request,
     }),
   readVisualProject: (projectPath: string) =>
-    invoke<VisualProjectFiles>("read_visual_project", { projectPath }),
+    isBrowserProjectPath(projectPath)
+      ? readBrowserVisualProject(projectPath)
+      : invoke<VisualProjectFiles>("read_visual_project", { projectPath }),
   readWorldAuthoring: (projectPath: string, sceneId: string) =>
     invoke<unknown>("read_world_authoring", { projectPath, sceneId }),
   readWorldAuthoringImages: (projectPath: string, sceneId: string, fingerprint: string) =>
@@ -521,7 +550,9 @@ export const tauri = {
   saveVisualProject: (
     projectPath: string,
     request: VisualProjectWriteRequest,
-  ) => invoke<void>("save_visual_project", { projectPath, request }),
+  ) => isBrowserProjectPath(projectPath)
+    ? saveBrowserVisualProject(projectPath, request)
+    : invoke<void>("save_visual_project", { projectPath, request }),
   prepareCompilerStaging: (
     authoringProjectPath: string,
     directoryName: string,
@@ -575,7 +606,9 @@ export const tauri = {
     transactionId: string,
     writes: VisualAssetImportWrite[],
   ) =>
-    invoke<void>("commit_visual_asset_import", {
+    isBrowserProjectPath(projectPath)
+      ? commitBrowserAssetImport(projectPath, transactionId, writes)
+      : invoke<void>("commit_visual_asset_import", {
       projectPath,
       transactionId,
       writes,
@@ -630,12 +663,21 @@ export const tauri = {
   cloneClassicProjectRepository: (repositoryUrl: string) =>
     invoke<string>("clone_classic_project_repository", { repositoryUrl }),
   readTextFile: (projectPath: string, rel: string) =>
-    invoke<string>("read_text_file", { projectPath, rel }),
+    isBrowserProjectPath(projectPath)
+      ? readBrowserTextFile(projectPath, rel)
+      : invoke<string>("read_text_file", { projectPath, rel }),
   /** Reads a regular UTF-8 .ts/.tsx file with the native 8 MiB limit. */
-  readScriptSource: (projectPath: string, rel: string) =>
-    invoke<string>("read_script_source", { projectPath, rel }),
+  readScriptSource: async (projectPath: string, rel: string) => {
+    if (!isBrowserProjectPath(projectPath)) return invoke<string>("read_script_source", { projectPath, rel });
+    if (!/\.tsx?$/.test(rel)) throw new Error("スクリプトは.tsまたは.tsxファイルを選択してください。");
+    const bytes = await readBrowserFile(projectPath, rel);
+    if (bytes.byteLength > 8 * 1024 * 1024) throw new Error("スクリプトは8 MiB以下にしてください。");
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  },
   writeTextFile: (projectPath: string, rel: string, content: string) =>
-    invoke<void>("write_text_file", { projectPath, rel, content }),
+    isBrowserProjectPath(projectPath)
+      ? writeBrowserTextFile(projectPath, rel, content)
+      : invoke<void>("write_text_file", { projectPath, rel, content }),
   getScriptTrustStatus: (
     project: ScriptTrustProjectInput,
     fingerprints: readonly NativeScriptTrustFingerprint[],
@@ -661,19 +703,31 @@ export const tauri = {
       fingerprints,
     }),
   readThumbnail: (projectPath: string) =>
-    invoke<string | null>("read_thumbnail", { projectPath }),
+    isBrowserProjectPath(projectPath)
+      ? readBrowserFileDataUrl(projectPath, "public/thumbnail.png").catch(() => null)
+      : invoke<string | null>("read_thumbnail", { projectPath }),
   writeThumbnail: (projectPath: string, dataUrl: string) =>
-    invoke<void>("write_thumbnail", { projectPath, dataUrl }),
+    isBrowserProjectPath(projectPath)
+      ? writeBrowserBinaryFile(projectPath, "public/thumbnail.png", dataUrl)
+      : invoke<void>("write_thumbnail", { projectPath, dataUrl }),
   readImageDataUrl: (projectPath: string, rel: string) =>
-    invoke<string>("read_image_data_url", { projectPath, rel }),
+    isBrowserProjectPath(projectPath)
+      ? readBrowserFileDataUrl(projectPath, rel)
+      : invoke<string>("read_image_data_url", { projectPath, rel }),
   readAudioDataUrl: (projectPath: string, rel: string) =>
-    invoke<string>("read_audio_data_url", { projectPath, rel }),
+    isBrowserProjectPath(projectPath)
+      ? readBrowserFileDataUrl(projectPath, rel)
+      : invoke<string>("read_audio_data_url", { projectPath, rel }),
   /** Reads a validated project-relative binary as a data URL (models included). */
   readProjectFileDataUrl: (projectPath: string, rel: string) =>
-    invoke<string>("read_image_data_url", { projectPath, rel }),
+    isBrowserProjectPath(projectPath)
+      ? readBrowserFileDataUrl(projectPath, rel)
+      : invoke<string>("read_image_data_url", { projectPath, rel }),
   killPidTree: (pid: number) => invoke<void>("kill_pid_tree", { pid }),
   listFiles: (projectPath: string, rel: string) =>
-    invoke<FsEntry[]>("list_files", { projectPath, rel }),
+    isBrowserProjectPath(projectPath)
+      ? listBrowserFiles(projectPath, rel)
+      : invoke<FsEntry[]>("list_files", { projectPath, rel }),
   /**
    * Records a publication id reported by `@xrift/sdk` instead of by the CLI.
    * Applies the same owner and advancement checks as the CLI path.
@@ -691,9 +745,13 @@ export const tauri = {
       uploadedAt,
     }),
   writeBinaryFile: (projectPath: string, rel: string, dataUrl: string) =>
-    invoke<void>("write_binary_file", { projectPath, rel, dataUrl }),
+    isBrowserProjectPath(projectPath)
+      ? writeBrowserBinaryFile(projectPath, rel, dataUrl)
+      : invoke<void>("write_binary_file", { projectPath, rel, dataUrl }),
   deletePath: (projectPath: string, rel: string) =>
-    invoke<void>("delete_path", { projectPath, rel }),
+    isBrowserProjectPath(projectPath)
+      ? deleteBrowserPath(projectPath, rel)
+      : invoke<void>("delete_path", { projectPath, rel }),
   renamePath: (projectPath: string, oldRel: string, newRel: string) =>
     invoke<void>("rename_path", { projectPath, oldRel, newRel }),
   resetAppData: (scope: "runtime" | "projects" | "all") =>

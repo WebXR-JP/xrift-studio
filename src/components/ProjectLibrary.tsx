@@ -483,14 +483,14 @@ export function ProjectLibrary({
               disabled={busy || transferBusy}
               onClick={() => void startImport()}
               className="flex min-h-20 shrink-0 items-center gap-3 rounded-lg border border-dashed border-zinc-300 bg-white/70 px-4 text-left text-zinc-600 hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-50 sm:w-64"
-              title="ZIPファイルからプロジェクトを取り込む"
+              title=".xriftstudioまたは従来の.zipからプロジェクトを取り込む"
             >
               <span className="flex size-9 shrink-0 items-center justify-center rounded-full border border-current">
                 <PackageOpen size={16} aria-hidden="true" />
               </span>
               <span>
                 <span className="block text-sm font-semibold">
-                  {inspectingArchive ? "ZIPを確認中…" : "ZIPから取り込む"}
+                  {inspectingArchive ? "ファイルを確認中…" : "ファイルから取り込む"}
                 </span>
                 <span className="mt-0.5 block text-[11px] text-zinc-500">
                   書き出したプロジェクトを開く
@@ -552,7 +552,7 @@ export function ProjectLibrary({
           {!loading && projects.length === 0 ? (
             <div className="mt-6 rounded-lg border border-dashed border-zinc-300 bg-white/60 px-4 py-5 text-center">
               <p className="text-sm font-medium text-zinc-700">まだプロジェクトがありません</p>
-              <p className="mt-1 text-xs text-zinc-500">「新規プロジェクト」から作り始めましょう。既存のプロジェクトはZIPやGitから取り込めます。</p>
+              <p className="mt-1 text-xs text-zinc-500">「新規プロジェクト」から作り始めましょう。既存のプロジェクトは.xriftstudio・.zipやGitから取り込めます。</p>
             </div>
           ) : null}
 

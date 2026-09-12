@@ -94,10 +94,10 @@
     "@types/three": "0.185.1",
     "@vitejs/plugin-react": "^6.0.3",
     "draco3d": "1.5.7",
+    "fake-indexeddb": "^6.2.5",
     "tailwindcss": "4.3.3",
     "typescript": "~7.0.2",
     "typescript-test-api": "npm:typescript@5.9.3",
     "vite": "^8.1.5"
   }
 }
-

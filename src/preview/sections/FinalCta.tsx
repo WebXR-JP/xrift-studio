@@ -3,7 +3,7 @@ import { DownloadButton } from "../DownloadButton";
 import { repositoryUrl } from "../content";
 import { useDownloadCta } from "../lib/useLatestRelease";
 
-export function FinalCta() {
+export function FinalCta({ onOpenProjects }: { onOpenProjects?: () => void }) {
   const cta = useDownloadCta();
 
   return (
@@ -24,12 +24,12 @@ export function FinalCta() {
             手元の素材と、つくりたい景色を持ってきてください。XRiftへ届くところまで、一緒に進みます。
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <DownloadButton
+            {onOpenProjects ? <button type="button" onClick={onOpenProjects} className="preview-button preview-button-white preview-button-large w-full max-w-xs sm:w-auto">iPadで作品を開く</button> : <DownloadButton
               cta={cta}
               variant="white"
               large
               className="w-full max-w-xs sm:w-auto"
-            />
+            />}
             <a
               href={repositoryUrl}
               target="_blank"
@@ -42,7 +42,7 @@ export function FinalCta() {
             </a>
           </div>
           <p className="mt-5 text-xs font-semibold text-zinc-400">
-            {cta.meta}
+            {onOpenProjects ? "iPadで編集・保存。公開はパソコンで。" : cta.meta}
             <span className="mx-1.5 text-zinc-600">/</span>
             <a href="#download" className="underline underline-offset-4">
               他のOSとインストール手順
