@@ -550,11 +550,27 @@
 }
 .landing-editor-figure { margin-top: 2.5rem; }
 .landing-screenshot-link {
+  position: relative;
   display: block;
   overflow: hidden;
   border: 1px solid var(--preview-line);
   border-radius: 0.8rem;
   background: var(--preview-surface-soft);
+}
+.landing-screenshot-beta {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.42rem 0.65rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 92%);
+  color: var(--preview-ink);
+  font-size: 0.72rem;
+  font-weight: 750;
+  box-shadow: 0 0.15rem 0.6rem rgb(15 23 42 / 14%);
 }
 .landing-editor-figure img {
   display: block;
@@ -615,6 +631,19 @@
 }
 .landing-text-link:hover { text-decoration-color: currentColor; }
 .landing-text-link svg { flex-shrink: 0; }
+.landing-beta-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5em;
+  padding: 0.05em 0.38em;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.68em;
+  font-weight: 800;
+  line-height: 1.25;
+  vertical-align: middle;
+}
 .landing-feature-grid + .landing-text-link { margin-top: 1.5rem; }
 .landing-platform-grid {
   display: grid;

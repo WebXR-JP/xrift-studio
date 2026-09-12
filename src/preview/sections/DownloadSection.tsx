@@ -188,13 +188,13 @@ export function DownloadSection() {
               <div className="mt-4">
                 <p className="text-sm font-bold leading-7 text-zinc-800">
                   {cta.platform === "mobile"
-                    ? "この端末ではブラウザ版を使えます。デスクトップ版はWindows・macOS・Linux向けです。"
+                    ? "デスクトップ版はWindows・macOS・Linux向けです。この端末では、ブラウザ版βをインストール不要で試せます。"
                     : cta.platform === null
                       ? "少しお待ちください。"
                       : "このパソコンに合うファイルを判別できませんでした。下の一覧から選んでください。"}
                 </p>
                 <p className="mt-2 text-xs font-semibold text-zinc-500">
-                  <a href={editorUrl} className="landing-text-link">ブラウザでエディターを開く</a>
+                  <a href={editorUrl} className="landing-text-link">ブラウザ版を試す<span className="landing-beta-mark">β</span></a>
                 </p>
               </div>
             )}

@@ -12,10 +12,10 @@ export function Nav() {
         </a>
         <div className="landing-nav-links">
           <a href="#tools" className="preview-nav-link hidden md:inline-flex">機能</a>
-          <a href="#download" className="preview-nav-link hidden sm:inline-flex">ダウンロード</a>
+          <a href={editorUrl} className="preview-nav-link hidden sm:inline-flex">ブラウザ版を試す<span className="landing-beta-mark">β</span></a>
           <a href={XRIFT_STUDIO_GUIDE_URL} className="preview-nav-link inline-flex">使い方</a>
-          <a href={editorUrl} className="preview-button preview-button-primary">
-            エディターを開く<ArrowUpRight size={15} aria-hidden="true" />
+          <a href="#download" className="preview-button preview-button-primary">
+            ダウンロード<ArrowUpRight size={15} aria-hidden="true" />
           </a>
         </div>
       </nav>

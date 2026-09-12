@@ -477,7 +477,7 @@ export function NewProjectDialog({
                     </div>
                     <div className="p-3">
                       <div className="text-sm font-semibold text-zinc-900">
-                        コードプロジェクトから変換
+                        クラシックから変換
                       </div>
                       <p className="mt-1 text-xs leading-5 text-zinc-500">
                         コードで作ったシーンを、ビジュアルエディター用に変換します。

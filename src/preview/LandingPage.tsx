@@ -32,22 +32,22 @@ export default function LandingPage() {
         <section id="top" className="landing-hero landing-section">
           <div className="landing-container">
             <p className="landing-eyebrow">XRift Studio · 無料のワールド・アイテム制作ツール</p>
-            <h1>XRiftのワールドを<br />ブラウザでつくる。</h1>
+            <h1>XRiftのワールドを<br />手軽につくる。</h1>
             <p className="landing-lead">
               3Dモデルを並べて、質感や光を調整。Playで歩きながら、空間を仕上げられます。
               ワールドで使うアイテムも作れます。
             </p>
             <div className="landing-actions">
-              <a href={editorUrl} className="preview-button preview-button-primary preview-button-large">
-                ビジュアルエディターを開く<ArrowRight size={17} aria-hidden="true" />
-              </a>
-              <a href="#download" className="preview-button preview-button-light preview-button-large">
+              <a href="#download" className="preview-button preview-button-primary preview-button-large">
                 デスクトップ版をダウンロード
               </a>
+              <a href={editorUrl} className="preview-button preview-button-light preview-button-large">
+                ブラウザ版を試す<span className="landing-beta-mark">β</span><ArrowRight size={17} aria-hidden="true" />
+              </a>
             </div>
-            <p className="landing-caption">インストール不要。パソコン・iPad・スマートフォンで編集できます。XRiftへの公開はデスクトップ版から。</p>
+            <p className="landing-caption">本格的な制作とXRiftへの公開はデスクトップ版で。ブラウザ版βなら、パソコン・iPad・スマートフォンからインストール不要で試せます。</p>
             <figure className="landing-editor-figure">
-              <a href={editorUrl} aria-label="ビジュアルエディターを開く" className="landing-screenshot-link">
+              <a href={editorUrl} aria-label="ブラウザ版βを試す" className="landing-screenshot-link">
                 <img
                   src={assetUrl("visual-editor-screenshot.webp")}
                   alt="湖畔のワールドを開いたXRift Studio。Hierarchy、シーン、Assets、Inspectorで配置や質感を編集する画面"
@@ -55,6 +55,7 @@ export default function LandingPage() {
                   height={1400}
                   fetchPriority="high"
                 />
+                <span className="landing-screenshot-beta">ブラウザ版を試す <span className="landing-beta-mark">β</span></span>
               </a>
               <figcaption>デスクトップ版の編集・Play画面。タッチ端末ではパネルを切り替えて操作します。</figcaption>
             </figure>
@@ -87,24 +88,24 @@ export default function LandingPage() {
         <section id="create" className="landing-section landing-section-soft">
           <div className="landing-container">
             <div className="landing-section-heading">
-              <p className="landing-eyebrow">制作を始める</p>
-              <h2>ブラウザで編集。<br />パソコンで公開。</h2>
-              <p>ブラウザ版で作ったプロジェクトは、素材ごとデスクトップ版へ引き継げます。</p>
+              <p className="landing-eyebrow">XRift Studioを始める</p>
+              <h2>制作の中心はデスクトップ。<br />ブラウザなら、まず気軽に試せます。</h2>
+              <p>デスクトップ版では、制作からXRiftへの公開まで進められます。ブラウザ版βはインストール不要で試せて、プロジェクトを素材ごとデスクトップ版へ引き継げます。</p>
             </div>
             <div className="landing-platform-grid">
-              <article className="landing-platform">
-                <Globe2 size={24} aria-hidden="true" />
-                <h3>ブラウザ版</h3>
-                <p>すぐに編集を始めたいときに。変更は使っているブラウザへ自動保存され、次に開いたときは、続きから編集するか新しく作るかを選べます。</p>
-                <div className="landing-platform-links">
-                  <a href={editorUrl} className="landing-text-link">エディターを開く<ArrowRight size={16} aria-hidden="true" /></a>
-                </div>
-              </article>
               <article className="landing-platform">
                 <Monitor size={24} aria-hidden="true" />
                 <h3>デスクトップ版</h3>
                 <p>Windows・macOS・Linuxに対応。XRiftへの公開やAIとの連携、コードエディターを使った制作ができます。</p>
                 <a href="#download" className="landing-text-link">ダウンロードへ<ArrowRight size={16} aria-hidden="true" /></a>
+              </article>
+              <article className="landing-platform">
+                <Globe2 size={24} aria-hidden="true" />
+                <h3>ブラウザ版 <span className="landing-beta-mark">β</span></h3>
+                <p>インストールせずに操作を試したいときに。変更は使っているブラウザへ自動保存され、プロジェクトはデスクトップ版へ引き継げます。</p>
+                <div className="landing-platform-links">
+                  <a href={editorUrl} className="landing-text-link">ブラウザ版を試す<span className="landing-beta-mark">β</span><ArrowRight size={16} aria-hidden="true" /></a>
+                </div>
               </article>
             </div>
             <div className="landing-handoff">
