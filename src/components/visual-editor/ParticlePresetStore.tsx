@@ -186,6 +186,7 @@ export function ParticlePresetStore({
                   <button
                     key={preset.id}
                     type="button"
+                    data-catalog-card
                     aria-pressed={active}
                     onClick={() => {
                       setSelectedId(preset.id);

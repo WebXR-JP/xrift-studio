@@ -11466,6 +11466,9 @@ export function VisualEditorPrototype({
                 追加
               </button>
               <EditorCreateMenu
+                onOpenExternalStore={() => setExternalStoreOpen(true)}
+                onImportFile={() => globalModelImportInputRef.current?.click()}
+                importDisabledReason={renderedReadOnly ? "動作確認を停止してから素材を追加してください" : assetImportPanelAvailability.disabledReason}
                 open={createMenuOpen}
                 readOnly={false}
                 importBusy={importBusy}

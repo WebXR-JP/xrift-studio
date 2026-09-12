@@ -145,6 +145,7 @@ export function GlowMaterialStore({
                   <button
                     key={shape.id}
                     type="button"
+                    data-catalog-card
                     aria-pressed={active}
                     onClick={() => {
                       setSelectedId(shape.id);
