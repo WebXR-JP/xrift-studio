@@ -24,7 +24,7 @@ export function FinalCta({ onOpenProjects }: { onOpenProjects?: () => void }) {
             手元の素材と、つくりたい景色を持ってきてください。XRiftへ届くところまで、一緒に進みます。
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            {onOpenProjects ? <button type="button" onClick={onOpenProjects} className="preview-button preview-button-white preview-button-large w-full max-w-xs sm:w-auto">iPadで作品を開く</button> : <DownloadButton
+            {onOpenProjects ? <button type="button" onClick={onOpenProjects} className="preview-button preview-button-white preview-button-large w-full max-w-xs sm:w-auto">プロジェクトを開く</button> : <DownloadButton
               cta={cta}
               variant="white"
               large
