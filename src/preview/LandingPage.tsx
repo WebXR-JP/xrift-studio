@@ -32,7 +32,7 @@ export default function LandingPage() {
         <section id="top" className="landing-hero landing-section">
           <div className="landing-container">
             <p className="landing-eyebrow">XRift Studio · 無料のワールド・アイテム制作ツール</p>
-            <h1>XRiftのワールドを<br />ブラウザでつくる。</h1>
+            <h1>XRiftのワールドを<br />手軽につくる。</h1>
             <p className="landing-lead">
               3Dモデルを並べて、質感や光を調整。Playで歩きながら、空間を仕上げられます。
               ワールドで使うアイテムも作れます。
