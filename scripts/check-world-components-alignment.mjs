@@ -125,3 +125,11 @@ process.stdout.write(
   `World Play player parts resolved: ${PLAY_PLAYER_MODULES.length} modules\n`,
 );
 
+
+// Script templates must resolve their official API in Edit/Play and published shells.
+const officialTypes = read("node_modules/@xrift/world-components/dist/index.d.ts");
+for (const name of ["Vehicle", "Seat", "SeatControlInput", "VehiclePose"]) {
+  if (!new RegExp(`\\b${name}\\b`).test(officialTypes)) {
+    throw new Error(`Official authoring API is missing: ${name}`);
+  }
+}

@@ -1,3 +1,4 @@
+import { getScriptTemplate } from "../scripting/script-templates";
 import {
   ASSET_MANIFEST_SCHEMA_VERSION,
   SCRIPT_ASSET_CONTRACT_VERSION,
@@ -43,6 +44,7 @@ export function runScriptEmitFixtureAssertions(): void {
   const engine = overlays.find(file => file.relativePath === INTERACTIVITY_ENGINE_OVERLAY_PATH);
   assert(Boolean(engine?.content.includes('from "./interactivity-timer-queue"')), "published engine imports must resolve to the flattened timer queue overlay");
   assertEmitsStaticImports();
+  assertVehicleTemplatesEmit();
   assertAssetRuntimeDescriptors();
   assertVectorPropertiesAreExtracted();
   assertRenderDetectionIgnoresComments();
@@ -695,5 +697,24 @@ function assert(condition: boolean, message: string): void {
 function assertEqual<T>(actual: T, expected: T, message: string): void {
   if (actual !== expected) {
     throw new Error(`Script emit fixture failed: ${message}`);
+  }
+}
+
+function assertVehicleTemplatesEmit(): void {
+  for (const id of ["vehicle", "seat"]) {
+    const template = getScriptTemplate(id)!;
+    const documents = buildDocuments(template.source);
+    const asset = documents.assets.assets.asset_script_spinner;
+    if (asset.kind !== "script") throw new Error("Expected a Script Asset");
+    asset.language = "tsx";
+    asset.source.relativePath = "scripts/vehicle.tsx";
+    const result = compileVisualProject(documents, { generatedAt: "2026-09-13T00:00:00.000Z" });
+    assert(result.canStage, `${id} cannot be staged: ${result.diagnostics.map(d => d.message).join("; ")}`);
+    const emitted = result.overlayFiles.find(file => file.content.includes(template.source.split("\n")[1]));
+    assert(Boolean(emitted?.content.includes("@xrift/world-components")), `${id} lost the official import`);
+    assert(result.overlayFiles.some(file => file.relativePath === "src/World.tsx" && file.content.includes("Render as")), `${id} Render is not mounted in published World`);
+    if (id === "vehicle") {
+      assert(result.overlayFiles.some(file => file.content.includes("onDrive=") && file.content.includes("vehicle.translateZ") && file.content.includes(" driver ")), "Vehicle's drive callback or driver seat was lost");
+    }
   }
 }

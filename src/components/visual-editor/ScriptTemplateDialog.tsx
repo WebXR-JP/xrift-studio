@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Box,
+  Car,
+  Armchair,
   Code2,
   Eye,
   Image as ImageIcon,
@@ -40,6 +42,8 @@ const CATEGORY_LABELS = {
 
 const TEMPLATE_ICONS: Readonly<Record<string, LucideIcon>> = {
   blank: Code2,
+  vehicle: Car,
+  seat: Armchair,
   rotate: RotateCw,
   float: Waves,
   "follow-entity": LocateFixed,

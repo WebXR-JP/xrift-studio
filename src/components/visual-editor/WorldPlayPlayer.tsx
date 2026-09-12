@@ -1,3 +1,5 @@
+import { WorldPlaySeatController } from "./WorldPlaySeatController";
+import type { WorldPlaySeatStore } from "./world-play-seat-store";
 import { PointerLockControls } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import { useRapier, type RapierRigidBody } from "@react-three/rapier";
@@ -245,8 +247,10 @@ export function useWorldPlayTeleport(): WorldPlayTeleport {
  */
 function WorldPlayTeleportBinding({
   moverRef,
+  seatStore,
 }: {
   moverRef: RefObject<WorldPlayTeleportMover | null>;
+  seatStore: WorldPlaySeatStore;
 }) {
   const { world } = useRapier();
   const camera = useThree((state) => state.camera);
@@ -277,6 +281,7 @@ function WorldPlayTeleportBinding({
     };
 
     moverRef.current = (destination) => {
+      seatStore.leave();
       const body = findPlayerBody();
       if (!body) return false;
       // The destination names the floor, the way a SpawnPoint does, so it is
@@ -294,7 +299,7 @@ function WorldPlayTeleportBinding({
     return () => {
       moverRef.current = null;
     };
-  }, [camera, moverRef, world]);
+  }, [camera, moverRef, seatStore, world]);
 
   return null;
 }
@@ -311,6 +316,7 @@ export function WorldPlayPlayer({
   spawnYaw,
   allowInfiniteJump,
   grabStore,
+  seatStore,
   movementRef,
   teleportMoverRef,
   onLockRefused,
@@ -321,6 +327,7 @@ export function WorldPlayPlayer({
   spawnYaw: number;
   allowInfiniteJump: boolean;
   grabStore: DevGrabStore;
+  seatStore: WorldPlaySeatStore;
   movementRef: RefObject<PlayerMovement>;
   teleportMoverRef: RefObject<WorldPlayTeleportMover | null>;
   /** Called when the browser turns the pointer lock down, so Play can say so. */
@@ -511,8 +518,9 @@ export function WorldPlayPlayer({
         allowInfiniteJump={allowInfiniteJump}
         movementRef={movementRef}
       />
+      <WorldPlaySeatController store={seatStore} movementRef={movementRef} />
       <GrabSystem store={grabStore} />
-      <WorldPlayTeleportBinding moverRef={teleportMoverRef} />
+      <WorldPlayTeleportBinding moverRef={teleportMoverRef} seatStore={seatStore} />
     </>
   );
 }

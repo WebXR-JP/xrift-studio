@@ -15,6 +15,7 @@ import {
   VideoPlayer,
   VideoScreen,
   XRiftProvider,
+  type SeatContextValue,
   type EntryLogBoardProps,
   type GrabbableContextValue,
   type GrabbableProps,
@@ -84,6 +85,7 @@ export function OfficialXriftPreviewProvider({
   grabbableImplementation,
   teleportImplementation,
   usersImplementation,
+  seatImplementation,
 }: {
   children: ReactNode;
   withPhysics?: boolean;
@@ -106,6 +108,7 @@ export function OfficialXriftPreviewProvider({
    * one in Play instead of only after upload.
    */
   usersImplementation?: UsersContextValue;
+  seatImplementation?: SeatContextValue;
 }) {
   const content = (
     <XRiftProvider
@@ -114,6 +117,7 @@ export function OfficialXriftPreviewProvider({
       grabbableImplementation={grabbableImplementation}
       teleportImplementation={teleportImplementation}
       usersImplementation={usersImplementation}
+      seatImplementation={seatImplementation}
       placementMode="preview"
     >
       {children}

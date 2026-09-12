@@ -557,7 +557,7 @@ webview JavaScriptやTauri commandを扱う開発用機能であり、release bu
 
 ## 組み込み Template
 
-素材の追加 > スクリプトと MCP は同じ version 5 catalog を使う。作成画面では元データ preview を確認できる。
+素材の追加 > スクリプトと MCP は同じ version 6 catalog を使う。作成画面では元データ preview を確認できる。
 オブジェクトを選択している場合はスクリプトとスクリプトのコンポーネントを 1 回の履歴操作で作成できる。
 XRift公式shortcutと競合する。そのため version 5では`keyboard-move`と`audio-hotkey`を組み込み一覧から外した。
 既存スクリプト元データと低レベル`ctx.input`の互換性は維持する。新しい標準例はevent / propertyで接続する。
@@ -565,6 +565,8 @@ XRift公式shortcutと競合する。そのため version 5では`keyboard-move`
 | ID | 用途 | 追加設定 |
 | --- | --- | --- |
 | `blank` | 最小 lifecycle | なし |
+| `vehicle` | 公式Vehicleと運転席・同乗席（World向け） | 速度・旋回速度 |
+| `seat` | 公式Seat（World向け） | 座面の高さ |
 | `rotate` | 軸と速度を設定からリアルタイム変更 | なし |
 | `float` | 上下移動 | なし |
 | `follow-entity` | 明示参照したオブジェクトを追従 | オブジェクト参照 |
@@ -734,3 +736,42 @@ ES moduleのstrict modeでは `eval` をlexical bindingで遮蔽できない。
 
 - 例外範囲の定義: [ビジュアルエディター Architecture 4.8](./VISUAL_EDITOR_ARCHITECTURE.md#48-scripting-script-asset--script-component)
 - 状態設計: [UX Interactions F-28](./UX_INTERACTIONS.md)
+
+## Vehicle / Seat（world-components 0.52.0）
+
+Assets の追加から「新規スクリプト」を開き、`Vehicle` または `Seat` を選ぶ。
+選択中のEntityへ追加すると、Vehicleの速度・旋回速度、Seatの座面の高さをInspectorから変更できる。
+同じEntityに同じテンプレートを複数付ける場合は「同じEntity内の識別子」を別々にする。
+見た目はTSXの `Render` にあるmeshを編集する。Scriptの描画はPlay中だけで、Editには表示しない。
+
+Vehicleは車体と運転席・同乗席を一つの `Render` 内に置く。
+`Seat driver` の入力を公式 `Vehicle onDrive` へ渡し、車体の移動・旋回を行う。
+W/Sで前後、A/Dで旋回、StudioのWorld PlayではSpaceで降車する。
+Seat単体もSpaceで立てる。Play停止・座席削除・テレポートで着席を解除する。
+テンプレートはWorld向け。アイテムのPlayにはプレイヤーがいないため、着席・操縦確認はWorld Playで行う。
+Itemに転用する場合は、同じItemを複数置いてもIDが衝突しないよう、`useItem().id` を座席・車体IDへ含める。
+
+デスクトップ版の公開物でも同じTSXと公式Componentを使う。
+Scriptを扱わないブラウザ版のRuntime JSON公開は対象外。車体の姿勢・同乗席・後から入室した人への状態は
+XRiftプラットフォームのSeatContextに任せ、`useInstanceState` で重複同期しない。
+Studioの着席Providerは単一プレイヤーの確認用で、オンライン同期やアバターの着席アニメーションは再現しない。
+複数人からの見え方と再入室後の停車位置は、XRift上で別途確認する。
+
+テンプレートは移動と旋回の出発点であり、車体の衝突・重力・地形への接地判定は含まない。
+`translateZ` は車体の向きに沿って進む。地形に合わせて車体を傾ける処理は、作品側の `onDrive` に追加する。
+砲台など、車体同期を使わない操作では引き続き `Seat onControlInput` を使用できる。
+
+### 公式更新への追従
+
+Editor、Classic出力・公開ステージング、Runtimeの開発依存、Web upload shellを同じバージョンに揃える。
+`node scripts/check-world-components-alignment.mjs` はバージョンと必要な公式exportを検査する。
+依存の更新時は生成TSXの型検査と `e2e/vehicle-seat.spec.ts` で座席の登録・解除・運転を確認する。
+
+Vehicle/Seatは、コールバックとReact Contextの親子関係を保持できるTSXテンプレートとして提供する。
+Add Componentの公式registryへ静的なwrapperとして追加すると、RuntimeのEntity別portal間で
+VehicleのContextが引き継がれないため、現時点ではそこへ登録しない。
+速度・旋回速度・高さはScript propertyとしてInspectorから編集する。
+
+参照: [公式Component](https://github.com/WebXR-JP/xrift-world-components)、
+[World template](https://github.com/WebXR-JP/xrift-world-template)、
+[Item template](https://github.com/WebXR-JP/xrift-item-template)。

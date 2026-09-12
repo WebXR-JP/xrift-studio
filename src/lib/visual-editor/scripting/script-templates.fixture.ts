@@ -69,7 +69,7 @@ function assertTemplateLanguagePersistence(): void {
 
 function assertCatalogEntries(): void {
   assert(
-    SCRIPT_TEMPLATE_CATALOG_VERSION === 5,
+    SCRIPT_TEMPLATE_CATALOG_VERSION === 6,
     "template catalog version changed without a fixture update",
   );
   assert(SCRIPT_TEMPLATE_CATALOG.length > 0, "template catalog is empty");

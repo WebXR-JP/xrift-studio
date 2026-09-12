@@ -402,6 +402,11 @@ falseにすると解除する。静的GLBの同じ形状・マテリアルの不
 `list_script_templates`, `get_script_asset`, `create_script_asset`,
 `apply_script_template`, `update_script_asset`, `set_play_mode`
 
+`list_script_templates` は `vehicle` / `seat` のTSXテンプレートも返す。
+`create_script_asset` の `templateId` に指定し、既存のScript Component追加・property編集の経路を使う。
+操縦処理や車体の形状は `update_script_asset` で編集する。使用範囲は
+[Vehicle / Seat](./SCRIPTING.md#vehicle--seatworld-components-0520) を参照する。
+
 追加承認のないスクリプト実行と隔離の限界は [スクリプトの契約](./SCRIPTING.md) にある。
 
 ## external-store (3)

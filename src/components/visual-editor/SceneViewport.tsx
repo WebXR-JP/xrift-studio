@@ -1,3 +1,4 @@
+import { createWorldPlaySeatStore } from "./world-play-seat-store";
 import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
 import { XriftModelInstancing } from "../../../packages/xrift-studio-runtime/src/script/model-instancing";
 import { collectModelInstancingEntities } from "../../lib/visual-editor/model-instancing";
@@ -5032,6 +5033,7 @@ export function SceneViewport({
   // entering Play never races the Scene's models registering themselves.
   const [sceneModelLoads] = useState(createSceneModelLoadTracker);
   const playGrabStore = useWorldPlayGrabStore();
+  const [playSeatStore] = useState(createWorldPlaySeatStore);
   const playUsers = useWorldPlayUsers();
   const playTeleport = useWorldPlayTeleport();
   const [dragOverKind, setDragOverKind] = useState<
@@ -6098,7 +6100,7 @@ export function SceneViewport({
       ? tablet
         ? "方向ボタンで移動 · 画面をドラッグで視点 · ジャンプ / 操作ボタン"
         : playPointerLocked
-        ? "WASD / 矢印キーで移動 · マウスで視点 · Space / Eでジャンプ · Gで掴む · クリックでインタラクト · Escでマウス解放"
+        ? "WASD / 矢印キーで移動 · マウスで視点 · Space / Eでジャンプ（着席中はSpaceで降車） · Gで掴む · クリックでインタラクト · Escでマウス解放"
         : "クリックして操作を開始 · ドラッグでも視点を動かせます"
       : "ドラッグでアイテムをOrbit確認";
   const readyMaterialDropTarget =
@@ -6900,6 +6902,7 @@ export function SceneViewport({
             grabbableImplementation={playGrabStore.contextValue}
             teleportImplementation={playTeleport.implementation}
             usersImplementation={playUsers.implementation}
+            seatImplementation={playSeatStore.contextValue}
           >
             {/* A World player aims from the crosshair, exactly as a published
                 world does; an Item has no player, so its Play keeps the free
@@ -6952,6 +6955,7 @@ export function SceneViewport({
                   spawnYaw={runtimeSpawn.yaw}
                   allowInfiniteJump={sceneSettings.physics.allowInfiniteJump}
                   grabStore={playGrabStore}
+                  seatStore={playSeatStore}
                   movementRef={playUsers.movementRef}
                   teleportMoverRef={playTeleport.moverRef}
                   onLockRefused={handlePlayLockRefused}
