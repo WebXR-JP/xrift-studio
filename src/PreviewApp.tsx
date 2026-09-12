@@ -1,5 +1,4 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft } from "lucide-react";
 import { PROJECT_PACKAGE_ACCEPT } from "./lib/project-package";
 import { VisualEditorErrorBoundary } from "./components/visual-editor/VisualEditorErrorBoundary";
 import { CompactEditorGate } from "./preview/CompactEditorGate";
@@ -7,6 +6,7 @@ import { RevealObserver } from "./preview/RevealObserver";
 import { useCompactViewport } from "./preview/useCompactViewport";
 import { useEditorDevice } from "./components/visual-editor/useEditorDevice";
 import { BrowserProjectTransferDialog, type BrowserRecentProject, type BrowserTransferState } from "./preview/BrowserProjectTransferDialog";
+import { openBrowserProjectSession, type BrowserProjectSession } from "./preview/browser-project-session";
 import type { PrototypeVisualProject } from "./lib/visual-editor/prototype-project";
 import type { VisualProjectDocuments } from "./lib/visual-editor/persistence";
 import {
@@ -58,42 +58,41 @@ export default function PreviewApp() {
   const compactViewport = useCompactViewport();
   const { tablet } = useEditorDevice();
   const landingScrollPosition = useRef(0);
-  const [browserSession, setBrowserSession] = useState<{ path: string; initialBundle: PrototypeVisualProject } | null>(null);
-  const documentsRef = useRef<VisualProjectDocuments | null>(null);
-  const activeSessionPath = useRef<string | null>(null);
+  const [browserSession, setBrowserSession] = useState<BrowserProjectSession | null>(null);
+  const activeSession = useRef<BrowserProjectSession | null>(null);
+  const closingSession = useRef<Promise<void>>(Promise.resolve());
   const [transfer, setTransfer] = useState<BrowserTransferState | null>(null);
   const [recentProjects, setRecentProjects] = useState<BrowserRecentProject[]>([]);
+  const [recentProjectsLoading, setRecentProjectsLoading] = useState(false);
+  const chooserGeneration = useRef(0);
   const transferActive = useRef(false);
   const retryTransfer = useRef<() => void>(() => {});
   const importInput = useRef<HTMLInputElement>(null);
 
-  const adoptBrowserSession = (path: string, documents: VisualProjectDocuments) => {
-    activeSessionPath.current = path;
-    documentsRef.current = documents;
-    const initialBundle: PrototypeVisualProject = {
-      project: documents.project,
-      scene: documents.scenes[documents.project.entrySceneId],
-      assets: documents.assets,
-      prefabs: documents.prefabs,
-    };
-    setBrowserSession({ path, initialBundle });
-    setVisualEditorKind(documents.project.projectKind);
+  const adoptBrowserSession = (session: BrowserProjectSession) => {
+    const previous = activeSession.current;
+    activeSession.current = session;
+    if (previous && previous !== session) closingSession.current = previous.close();
+    setBrowserSession(session);
+    setVisualEditorKind(session.initialBundle.project.projectKind);
+    // Resizing an already-open editor must not unmount it and discard its drafts.
+    setCompactEditorConfirmed((confirmed) => confirmed || !compactViewport || tablet);
+  };
+
+  const openStoredBrowserProject = async (path: string) => {
+    await closingSession.current;
+    if (activeSession.current?.path === path) return;
+    const session = await openBrowserProjectSession(path);
+    try {
+      const { activateBrowserProject } = await import("./lib/browser-project-storage");
+      await activateBrowserProject(path);
+      adoptBrowserSession(session);
+    } catch (error) { await session.close(); throw error; }
   };
 
   const saveBrowserProject = useCallback(async (bundle: PrototypeVisualProject) => {
-    const sourceDocuments = documentsRef.current;
-    if (!browserSession || !sourceDocuments || activeSessionPath.current !== browserSession.path || sourceDocuments.project.projectId !== bundle.project.projectId) throw new Error("ブラウザの保存先を確認できません。現在のプロジェクトを開き直してください。");
-    const { saveVisualProjectToDisk } = await import("./lib/visual-editor/persistence");
-    const documents = {
-      ...sourceDocuments,
-      project: bundle.project,
-      scenes: { ...sourceDocuments.scenes, [bundle.scene.sceneId]: bundle.scene },
-      assets: bundle.assets,
-      prefabs: bundle.prefabs,
-    };
-    await saveVisualProjectToDisk(browserSession.path, documents);
-    if (activeSessionPath.current === browserSession.path && documentsRef.current?.project.projectId === documents.project.projectId) documentsRef.current = documents;
-    return browserSession.path;
+    if (!browserSession || activeSession.current !== browserSession) throw new Error("ブラウザの保存先を確認できません。現在のプロジェクトを開き直してください。");
+    return browserSession.save(bundle);
   }, [browserSession]);
 
   const exportBrowserProject = async (bundle: PrototypeVisualProject) => {
@@ -102,14 +101,8 @@ export default function PreviewApp() {
     setTransfer({ phase: "preparing", operation: "export" });
     retryTransfer.current = () => { void exportBrowserProject(bundle); };
     try {
-      await saveBrowserProject(bundle);
-      const documents = documentsRef.current;
-      if (!documents || activeSessionPath.current !== browserSession.path || documents.project.projectId !== bundle.project.projectId) throw new Error("編集中のプロジェクトが切り替わりました。現在のプロジェクトから書き出し直してください。");
-      const [{ getBrowserProjectFiles }, { createBrowserProjectArchive }] = await Promise.all([
-        import("./lib/browser-project-storage"),
-        import("./lib/visual-editor/browser-project-transfer"),
-      ]);
-      const archive = await createBrowserProjectArchive(documents, await getBrowserProjectFiles(browserSession.path));
+      if (activeSession.current !== browserSession) throw new Error("編集中のプロジェクトが切り替わりました。現在のプロジェクトから書き出し直してください。");
+      const archive = await browserSession.export(bundle);
       setTransfer({ phase: "ready", ...archive });
     } catch (error) {
       setTransfer({ phase: "failed", operation: "export", message: error instanceof Error ? error.message : "書き出せませんでした。編集内容を残したまま再試行できます。" });
@@ -127,8 +120,8 @@ export default function PreviewApp() {
         import("./lib/visual-editor/browser-project-transfer"),
       ]);
       const imported = await readBrowserProjectArchive(file);
-      const path = await createBrowserProject(imported.files);
-      adoptBrowserSession(path, imported.documents);
+      const path = await createBrowserProject(imported.files, { activate: false });
+      await openStoredBrowserProject(path);
       setTransfer(null);
     } catch (error) {
       setTransfer({ phase: "failed", operation: "import", message: error instanceof Error ? error.message : "プロジェクトファイルを読み取れませんでした。.xriftstudioまたは従来の.zipを選んでください。" });
@@ -136,15 +129,19 @@ export default function PreviewApp() {
   };
 
   const openProjectChooser = async () => {
+    if (transferActive.current) return;
+    const generation = ++chooserGeneration.current;
     retryTransfer.current = () => { void openProjectChooser(); };
     setTransfer({ phase: "select", operation: "import" });
     setRecentProjects([]);
+    setRecentProjectsLoading(true);
     try {
       const { listBrowserProjects } = await import("./lib/browser-project-storage");
-      setRecentProjects(await listBrowserProjects());
+      const projects = await listBrowserProjects();
+      if (chooserGeneration.current === generation) setRecentProjects(projects);
     } catch (error) {
-      setTransfer((current) => current?.phase === "select" ? { phase: "failed", operation: "open", message: error instanceof Error ? error.message : "保存済みのプロジェクトを読み込めませんでした。" } : current);
-    }
+      if (chooserGeneration.current === generation) setTransfer((current) => current?.phase === "select" ? { phase: "failed", operation: "open", message: error instanceof Error ? error.message : "保存済みのプロジェクトを読み込めませんでした。" } : current);
+    } finally { if (chooserGeneration.current === generation) setRecentProjectsLoading(false); }
   };
 
   const openBrowserRecent = async (path: string) => {
@@ -153,12 +150,7 @@ export default function PreviewApp() {
     setTransfer({ phase: "preparing", operation: "open" });
     retryTransfer.current = () => { void openBrowserRecent(path); };
     try {
-      const [{ readVisualProjectFromDisk }, { activateBrowserProject }] = await Promise.all([
-        import("./lib/visual-editor/persistence"), import("./lib/browser-project-storage"),
-      ]);
-      const documents = await readVisualProjectFromDisk(path);
-      await activateBrowserProject(path);
-      adoptBrowserSession(path, documents);
+      await openStoredBrowserProject(path);
       setTransfer(null);
     } catch (error) {
       setTransfer({ phase: "failed", operation: "open", message: error instanceof Error ? error.message : "プロジェクトを開けませんでした。" });
@@ -187,26 +179,22 @@ export default function PreviewApp() {
     setTransfer({ phase: "preparing", operation: "open" });
     retryTransfer.current = () => { void openDemo(projectKind, fresh); };
     try {
+      await closingSession.current;
       const [storage, transferTools, { createPrototypeProject }] = await Promise.all([
         import("./lib/browser-project-storage"),
         import("./lib/visual-editor/browser-project-transfer"),
         import("./lib/visual-editor/prototype-project"),
       ]);
       const previousPath = fresh ? null : await storage.restoreBrowserProject();
-      let resumed = false;
-      if (previousPath) {
-        const { readVisualProjectFromDisk } = await import("./lib/visual-editor/persistence");
-        const documents = await readVisualProjectFromDisk(previousPath);
-        if (documents.project.projectKind === projectKind) {
-          adoptBrowserSession(previousPath, documents);
-          resumed = true;
-        }
-      }
+      // Do not acquire a World's editing lease when the author asked for an Item.
+      const previous = previousPath ? (await storage.listBrowserProjects()).find((project) => project.path === previousPath && project.kind === projectKind) : null;
+      const resumed = Boolean(previous);
+      if (previous) await openStoredBrowserProject(previous.path);
       if (!resumed) {
         const bundle = createPrototypeProject(projectKind);
         const documents: VisualProjectDocuments = { project: bundle.project, scenes: { [bundle.scene.sceneId]: bundle.scene }, assets: bundle.assets, prefabs: bundle.prefabs };
-        const path = await storage.createBrowserProject(transferTools.browserProjectDocumentFiles(documents));
-        adoptBrowserSession(path, documents);
+        const path = await storage.createBrowserProject(transferTools.browserProjectDocumentFiles(documents), { activate: false });
+        await openStoredBrowserProject(path);
       }
       setTransfer(null);
       requestAnimationFrame(() => window.scrollTo({ top: 0 }));
@@ -224,7 +212,8 @@ export default function PreviewApp() {
     <BrowserProjectTransferDialog
       state={transfer}
       recentProjects={recentProjects}
-      onClose={() => setTransfer(null)}
+      recentProjectsLoading={recentProjectsLoading}
+      onClose={() => { chooserGeneration.current++; setTransfer(null); }}
       onRetry={() => retryTransfer.current()}
       onPickFile={() => importInput.current?.click()}
       onOpenRecent={(path) => { void openBrowserRecent(path); }}
@@ -235,7 +224,12 @@ export default function PreviewApp() {
 
   if (visualEditorKind) {
     const closeDemo = () => {
+      const session = activeSession.current;
+      activeSession.current = null;
+      if (session) closingSession.current = session.close();
+      setBrowserSession(null);
       setVisualEditorKind(null);
+      setWebUploadBundle(null);
       setCompactEditorConfirmed(false);
       requestAnimationFrame(() =>
         window.scrollTo({ top: landingScrollPosition.current }),
@@ -257,20 +251,10 @@ export default function PreviewApp() {
 
     return (
       <div className="relative h-[100dvh] overflow-hidden">
-        {compactViewport && !tablet ? (
-          <button
-            type="button"
-            onClick={closeDemo}
-            className="preview-mobile-editor-exit preview-button preview-button-light"
-          >
-            <ArrowLeft size={15} />
-            紹介ページへ戻る
-          </button>
-        ) : null}
         <VisualEditorErrorBoundary
-          key={visualEditorKind}
-          featureName="ビジュアルエディターのデモ"
-          projectName={`visual-${visualEditorKind}-demo`}
+          key={browserSession?.path ?? visualEditorKind}
+          featureName="ビジュアルエディター"
+          projectName={browserSession?.initialBundle.project.metadata.name}
           backLabel="紹介ページへ戻る"
           onBack={closeDemo}
         >

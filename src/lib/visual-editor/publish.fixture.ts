@@ -1,3 +1,4 @@
+import { COMPILER_REACT_PACKAGE_SPECS } from "./compiler/runtime-packages";
 import {
   BUILD_OUTPUT_SEPARATOR,
   didXriftUploadStopBeforeRemoteTransfer,
@@ -291,6 +292,7 @@ function assertStagingCanInstallEveryRequestablePackage(): void {
     OPEN_BRUSH_RUNTIME_PACKAGE,
     TEXT_PANEL_RUNTIME_PACKAGE,
     COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
+    ...COMPILER_REACT_PACKAGE_SPECS,
   ]) {
     assert(
       isAllowedCompilerRuntimePackage(spec),
@@ -343,3 +345,4 @@ function assertResult(
 function assert(condition: boolean, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
+

@@ -48,6 +48,9 @@ function database(): Promise<IDBDatabase> {
       if (settled) { db.close(); return; }
       settled = true;
       db.onversionchange = () => { db.close(); databasePromise = undefined; };
+      // Browsers can close IndexedDB connections independently of this tab.
+      // A later save must open a new connection instead of reusing a closed one.
+      db.onclose = () => { databasePromise = undefined; };
       resolve(db);
     };
     request.onerror = () => { settled = true; reject(request.error ?? new Error("ブラウザの保存領域を開けません。")); };
@@ -76,14 +79,17 @@ async function transaction<T>(
 }
 
 /** Creates a separate project. Failed imports leave the previous project and restore pointer intact. */
-export async function createBrowserProject(files: ReadonlyMap<string, Uint8Array> = new Map()): Promise<string> {
+export async function createBrowserProject(
+  files: ReadonlyMap<string, Uint8Array> = new Map(),
+  { activate = true }: { activate?: boolean } = {},
+): Promise<string> {
   const projectPath = `${PROJECT_PREFIX}${crypto.randomUUID()}`;
   const entries = [...files].map(([relativePath, bytes]) => ({
     projectPath, relativePath: validateBrowserRelativePath(relativePath), bytes: new Uint8Array(bytes),
   }));
   await transaction<void>("readwrite", (store, settings) => {
     for (const entry of entries) store.add(entry);
-    settings.put(projectPath, "last-project");
+    if (activate) settings.put(projectPath, "last-project");
   });
   return projectPath;
 }
@@ -323,12 +329,19 @@ export async function deleteBrowserPath(projectPath: string, relativePath: strin
   validateProjectPath(projectPath);
   validateBrowserRelativePath(relativePath);
   await transaction<void>("readwrite", (files) => {
-    const request = files.index("projectPath").openCursor(projectPath);
+    files.delete([projectPath, relativePath]);
+    // Bound the descendant keys by the character immediately after "/".
+    // Cleanup must not clone every imported model/texture just to inspect paths.
+    const request = files.openKeyCursor(IDBKeyRange.bound(
+      [projectPath, `${relativePath}/`],
+      [projectPath, `${relativePath}0`],
+      false,
+      true,
+    ));
     request.onsuccess = () => {
       const cursor = request.result;
       if (!cursor) return;
-      const path = (cursor.value as StoredFile).relativePath;
-      if (path === relativePath || path.startsWith(`${relativePath}/`)) cursor.delete();
+      files.delete(cursor.primaryKey);
       cursor.continue();
     };
   });

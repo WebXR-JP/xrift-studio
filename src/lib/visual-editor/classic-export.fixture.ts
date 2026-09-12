@@ -21,11 +21,14 @@ export async function runClassicExportFixtureAssertions(): Promise<void> {
   const authoringPath = "C:/fixture/visual-world";
   const originalEntry = "export const World = () => <group name=\"hand-written\" />;\n";
   const files = new Map<string, string>([
-    [key(targetPath, "package.json"), `${JSON.stringify({ name: "fixture-classic", private: true, dependencies: { react: "19.0.0", "@xrift/world-components": "^0.47.0" } }, null, 2)}\n`],
+    [key(targetPath, "package.json"), `${JSON.stringify({ name: "fixture-classic", private: true, dependencies: { react: "19.2.8", "react-dom": "19.2.8", "@xrift/world-components": "^0.50.0" } }, null, 2)}\n`],
     [key(targetPath, "xrift.json"), "{}\n"],
     [key(targetPath, "src/World.tsx"), originalEntry],
-    [key(targetPath, "node_modules/@xrift/world-components/package.json"), JSON.stringify({ version: "0.47.0" })],
+    [key(targetPath, "node_modules/@xrift/world-components/package.json"), JSON.stringify({ version: "0.50.0" })],
   ]);
+  for (const name of ["react", "react-dom"]) {
+    files.set(key(targetPath, `node_modules/${name}/package.json`), JSON.stringify({ version: "19.2.8" }));
+  }
   const rootEntries: FsEntry[] = [
     { name: "package.json", rel: "package.json", isDir: false, size: 1 },
     { name: "xrift.json", rel: "xrift.json", isDir: false, size: 1 },
@@ -139,7 +142,7 @@ export async function runClassicExportFixtureAssertions(): Promise<void> {
       "the export must not record the unpublished runtime package",
     );
     assert(
-      packageJson.dependencies?.["@xrift/world-components"] === "^0.47.0",
+      packageJson.dependencies?.["@xrift/world-components"] === "^0.50.0",
       "a world-components range that already reaches the compiler's version was rewritten",
     );
     assert(
@@ -229,7 +232,7 @@ export async function runClassicExportFixtureAssertions(): Promise<void> {
     Object.assign(xrift, { installClassicExportPackages: async () => {
       attempts += 1;
       if (attempts === 1) return { code: 1, stdout: "", stderr: "fixture offline" };
-      files.set(key(targetPath, "node_modules/@xrift/world-components/package.json"), JSON.stringify({ version: "0.47.0" }));
+      files.set(key(targetPath, "node_modules/@xrift/world-components/package.json"), JSON.stringify({ version: "0.50.0" }));
       return { code: 0, stdout: "installed", stderr: "" };
     } });
     let failed = false;
@@ -332,12 +335,17 @@ export async function runClassicExportFixtureAssertions(): Promise<void> {
       "the unpublished runtime package recorded by an earlier export was not removed",
     );
     assert(
-      richPackageJson.dependencies?.["@xrift/world-components"] === "0.47.0",
+      richPackageJson.dependencies?.["@xrift/world-components"] === "0.50.0",
       "a world-components range below the compiler's version was not pinned",
     );
     assert(
       typeof richPackageJson.dependencies?.["troika-three-text"] === "string",
       "the Text runtime's troika dependency was not recorded",
+    );
+    assert(
+      richPackageJson.dependencies?.react === "19.2.8" &&
+        richPackageJson.dependencies?.["react-dom"] === "19.2.8",
+      "existing Classic export did not upgrade the React pair",
     );
     const lastInstall = installRequests[installRequests.length - 1] ?? [];
     assert(
@@ -372,3 +380,4 @@ function safeSegment(value: string): string {
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
+

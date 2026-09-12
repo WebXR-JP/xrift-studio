@@ -11,12 +11,13 @@ export type BrowserTransferState =
   | { phase: "ready"; blob: Blob; fileName: string; fileCount: number };
 
 /** Keep preparation separate from the user's save tap for Safari activation. */
-export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFile, recentProjects, onOpenRecent, onNewProject, onChooseProject }: {
+export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFile, recentProjects, recentProjectsLoading, onOpenRecent, onNewProject, onChooseProject }: {
   state: BrowserTransferState | null;
   onClose: () => void;
   onRetry: () => void;
   onPickFile: () => void;
   recentProjects: BrowserRecentProject[];
+  recentProjectsLoading: boolean;
   onOpenRecent: (path: string) => void;
   onNewProject: (kind: "world" | "item") => void;
   onChooseProject: () => void;
@@ -67,6 +68,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
       aria-labelledby="browser-transfer-title"
       aria-busy={busy}
       className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-xl border border-zinc-200 bg-white p-5 text-zinc-900 shadow-2xl backdrop:bg-zinc-900/30"
+      onKeyDown={(event) => event.stopPropagation()}
       onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}
     >
       <h2 id="browser-transfer-title" className="text-base font-semibold">
@@ -84,7 +86,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
           <button type="button" onClick={() => onNewProject("world")} className="preview-button preview-button-light min-h-11">新規ワールド</button>
           <button type="button" onClick={() => onNewProject("item")} className="preview-button preview-button-light min-h-11">新規アイテム</button>
         </div>
-        {recentProjects.length ? <div>
+        {recentProjectsLoading ? <p role="status" className="text-xs">保存済みのプロジェクトを読み込んでいます…</p> : recentProjects.length ? <div>
           <h3 className="mb-2 text-xs font-semibold text-zinc-500">このブラウザに保存したプロジェクト</h3>
           <div className="max-h-52 space-y-1 overflow-y-auto rounded-lg border border-zinc-200 p-1">
             {recentProjects.map((project) => <button key={project.path} type="button" onClick={() => onOpenRecent(project.path)} className="flex min-h-11 w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left hover:bg-zinc-100 focus-visible:outline-brand-500">

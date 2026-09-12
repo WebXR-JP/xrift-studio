@@ -5743,7 +5743,7 @@ export function SceneViewport({
     if (
       isCanvasPointer &&
       event.button === 0 &&
-      !(event.pointerType === "touch" && touchNavigationActive) &&
+      !touchNavigationActive &&
       !transformDraggingRef.current
     ) {
       leftPointerGestureRef.current = {
@@ -5752,7 +5752,7 @@ export function SceneViewport({
         startY: event.clientY,
         moved: false,
         additive: event.shiftKey || event.ctrlKey || event.metaKey ||
-          (tablet && event.pointerType === "touch" && touchAdditiveSelection),
+          (tablet && touchAdditiveSelection),
         pressedEntityId:
           dropResolverRef.current?.(event.clientX, event.clientY, {
             includeEntityOriginFallback: true,
@@ -5937,12 +5937,14 @@ export function SceneViewport({
     gesture.suppressContextMenu = gesture.moved;
   };
 
-  const handleViewportPointerCancel = () => {
+  const handleViewportPointerCancel = (event: ReactPointerEvent<HTMLDivElement>) => {
     const terrainPointer = terrainPointerRef.current;
     terrainPointerRef.current = null;
     if (terrainPointer) onTerrainStrokeCancel?.(terrainPointer.entityId);
     terrainInvertedRef.current = false;
-    activeTouchPointersRef.current.clear();
+    // Cancelling one contact must not make a still-held finger disappear.
+    // Keep the whole multi-touch gesture suppressed until every contact ends.
+    activeTouchPointersRef.current.delete(event.pointerId);
     suppressTouchSelectionRef.current = true;
     leftPointerGestureRef.current = null;
     rightPointerGestureRef.current = null;
@@ -6040,6 +6042,11 @@ export function SceneViewport({
     }
     const gesture = rightPointerGestureRef.current;
     event.preventDefault();
+    // A long press or right click must also respect viewpoint-only mode.
+    if (touchNavigationActive) {
+      rightPointerGestureRef.current = null;
+      return;
+    }
     if (gesture?.suppressContextMenu || gesture?.moved) {
       rightPointerGestureRef.current = null;
       return;

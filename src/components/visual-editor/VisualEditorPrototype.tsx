@@ -262,6 +262,7 @@ import { ComponentCodeImportDialog } from "./ComponentCodeImportDialog";
 import { InteractivityGraphEditor } from "./InteractivityGraphEditor";
 import { EditorUtilityRail } from "./EditorUtilityRail";
 import { useEditorDevice } from "./useEditorDevice";
+import { EditorPanelVisibilityContext } from "./editor-panel-visibility";
 import { SupportReportModal } from "../SupportReportModal";
 import { ConfirmDialog } from "../ConfirmDialog";
 import type { XriftMcpActivity } from "./AiConnectionPanel";
@@ -11105,6 +11106,10 @@ export function VisualEditorPrototype({
   const handleBack = useCallback(async (): Promise<boolean> => {
     if (leaving || projectExportBusy || projectTransferBusy) return false;
     if (onProjectExport) {
+      if (importBusy) {
+        setNotice("素材の取り込みが終わってから、紹介ページへ戻ってください。");
+        return false;
+      }
       if (scriptEditorDirtyRef.current || scriptEditorSavingRef.current || shaderEditorDirtyRef.current) {
         setNotice("スクリプトとShaderの変更を保存してから、紹介ページへ戻ってください。");
         return false;
@@ -11132,7 +11137,7 @@ export function VisualEditorPrototype({
     setLeaving(false);
     onBack();
     return true;
-  }, [leaving, projectExportBusy, projectTransferBusy, onProjectExport, flushInteractivityDraft, onBack, requestAutosave]);
+  }, [leaving, projectExportBusy, projectTransferBusy, importBusy, onProjectExport, flushInteractivityDraft, onBack, requestAutosave]);
 
   mcpProjectBridgeActionsRef.current = { saveNow: runSave, leave: handleBack };
 
@@ -11660,6 +11665,7 @@ export function VisualEditorPrototype({
             }
           />
           <div id="editor-panel-inspector" className={sidePanelClass("inspector", true)}>
+          <EditorPanelVisibilityContext.Provider value={!panelsHidden && (!tablet || tabletPanel === "inspector")}>
           <InspectorPanel
             scene={bundle.scene}
             assets={renderedPlaySession?.runtimeAssets ?? bundle.assets}
@@ -11812,6 +11818,7 @@ export function VisualEditorPrototype({
             onSetLightShadow={handleSetSelectedLightShadow}
             onApplyMaterialPatch={handleApplySelectedMaterialPatch}
           />
+          </EditorPanelVisibilityContext.Provider>
           </div>
           <div id="editor-panel-assets" className={sidePanelClass("assets", false)}>
           <AssetsPanel
