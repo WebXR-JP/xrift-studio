@@ -49,7 +49,7 @@ export function Hero({ onOpenDemo, tablet = false, onOpenProjects }: { onOpenDem
             data-reveal
           >
             ビジュアルエディターで地形や水、空をつくり、モデルを配置。Playで歩いて確かめたら、Stopで編集へ戻れます。
-            {tablet ? "iPadで作った作品は.xriftstudioファイルに保存し、MacやWindowsで開いて公開できます。" : "書き出しもビルドも挟まず、XRiftへそのまま公開できます。"}
+            {tablet ? "iPadで編集したプロジェクトを.xriftstudioファイルに書き出し、MacやWindowsで開いて公開できます。" : "書き出しもビルドも挟まず、XRiftへそのまま公開できます。"}
           </p>
           <ul
             className="mx-auto mt-8 flex max-w-3xl flex-col items-stretch justify-center gap-2.5 sm:flex-row sm:flex-wrap"
@@ -84,7 +84,7 @@ export function Hero({ onOpenDemo, tablet = false, onOpenProjects }: { onOpenDem
               <Play size={16} fill="currentColor" />
               {tablet ? "iPadで制作を始める" : "ビジュアルエディターを試す"}
             </button>
-            {tablet && onOpenProjects ? <button type="button" onClick={onOpenProjects} className="preview-button preview-button-light preview-button-large w-full max-w-xs sm:w-auto">保存した作品を開く</button> : null}
+            {tablet && onOpenProjects ? <button type="button" onClick={onOpenProjects} className="preview-button preview-button-light preview-button-large w-full max-w-xs sm:w-auto">プロジェクトを開く</button> : null}
           </div>
           {/*
             The line under the button says what the button is about to do:
@@ -98,7 +98,7 @@ export function Hero({ onOpenDemo, tablet = false, onOpenProjects }: { onOpenDem
             data-reveal
             aria-live="polite"
           >
-            {tablet ? "インストール不要。同じSafariに前回の作品があれば、その続きから開きます。" : started ? (
+            {tablet ? "インストール不要。同じSafariに前回のプロジェクトがあれば、その続きから開きます。" : started ? (
               <>
                 ダウンロードを開始しました。
                 <a href="#download" className="preview-hero-download-link">

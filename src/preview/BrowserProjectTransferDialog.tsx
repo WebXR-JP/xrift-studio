@@ -67,7 +67,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
       await navigator.share({ files: [sharedFile], title: "XRift Studio プロジェクト" });
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
-        setShareMessage("共有を開けませんでした。「ファイルに保存」からプロジェクトファイルを保存してください。");
+        setShareMessage("共有を開けませんでした。「ダウンロード」からプロジェクトファイルを保存してください。");
       }
     } finally { setSharing(false); }
   };
@@ -77,7 +77,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
       ref={dialog}
       aria-labelledby="browser-transfer-title"
       aria-busy={busy}
-      className={`${tablet ? "fixed inset-x-0 top-4 bottom-auto mx-auto my-0" : "m-auto"} max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white p-0 text-zinc-900 shadow-2xl open:flex backdrop:bg-zinc-900/30`}
+      className={`preview-dialog-theme ${tablet ? "fixed inset-x-0 top-4 bottom-auto mx-auto my-0" : "m-auto"} max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white p-0 text-zinc-900 shadow-2xl open:flex backdrop:bg-zinc-900/30`}
       style={tablet && viewportHeight ? { maxHeight: Math.max(160, viewportHeight - 32) } : undefined}
       onKeyDown={(event) => event.stopPropagation()}
       onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}
@@ -90,10 +90,10 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
         event.preventDefault();
         if (projectName.trim()) onCreateProject(state.kind, projectName.trim());
       }}>
-        <label className="block text-sm font-medium text-zinc-700">作品の名前
+        <label className="block text-sm font-medium text-zinc-700">プロジェクト名
           <input type="text" required maxLength={96} autoComplete="off" enterKeyHint="done" value={projectName} onChange={(event) => setProjectName(event.currentTarget.value)} className="mt-2 min-h-11 w-full rounded-md border border-zinc-300 px-3 text-base" />
         </label>
-        <p className="text-xs leading-relaxed text-zinc-500">保存した作品を見分ける名前です。書き出すファイル名にも使います。</p>
+        <p className="text-xs leading-relaxed text-zinc-500">一覧に表示する名前です。書き出すファイル名にも使います。</p>
       </form> : null}
       {state?.phase === "preparing" ? (
         <p role="status" className="mt-5 flex items-center gap-3 text-sm text-zinc-600">
@@ -102,7 +102,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
         </p>
       ) : null}
       {state?.phase === "select" ? <div className="mt-4 space-y-4 text-sm text-zinc-600">
-        <p>保存した作品を選ぶか、.xriftstudioファイルを開きます。</p>
+        <p>このブラウザに保存したプロジェクトを選ぶか、書き出した.xriftstudioファイルを開きます。</p>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => onNewProject("world")} className="preview-button preview-button-light min-h-11">新規ワールド</button>
           <button type="button" onClick={() => onNewProject("item")} className="preview-button preview-button-light min-h-11">新規アイテム</button>
@@ -119,14 +119,14 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
       </div> : null}
       {ready ? (
         <div className="mt-4 space-y-4 text-sm leading-relaxed text-zinc-600">
-          <p>作品と素材を一つのファイルにまとめました。「ファイルに保存」で手元に残せます。</p>
+          <p>シーンと素材を.xriftstudioファイルにまとめました。「ダウンロード」で手元に残せます。</p>
           <p className="break-all rounded-lg border border-zinc-200 bg-zinc-50 p-3 font-medium text-zinc-800">
             {ready.fileName}<span className="ml-2 text-xs font-normal text-zinc-500">{(ready.blob.size / 1024 / 1024).toFixed(1)} MB / {ready.fileCount}ファイル</span>
           </p>
           <details className="rounded-lg border border-zinc-200 px-3">
           <summary className="flex min-h-11 cursor-pointer items-center font-medium text-zinc-700">パソコンへ引き継ぐには</summary>
           <ol className="list-decimal space-y-2 pb-3 pl-5">
-            <li>「ファイルに保存」で.xriftstudioファイルをダウンロードします。保存先はSafariのダウンロード一覧で確認できます。</li>
+            <li>「ダウンロード」を押します。保存先はSafariのダウンロード一覧で確認できます。</li>
             <li>iCloud DriveなどでMacまたはWindowsへ渡します。</li>
             <li>パソコン版のプロジェクト一覧で「ファイルから取り込む」を選びます。公開はパソコンから行います。</li>
           </ol>
@@ -140,11 +140,11 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
       <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-zinc-200 bg-white px-5 py-3">
         <button type="button" onClick={onClose} disabled={busy} className="preview-button preview-button-light min-h-11 disabled:opacity-50">閉じる</button>
         {state?.phase === "create" ? <><button type="button" onClick={onChooseProject} className="preview-button preview-button-light min-h-11">一覧へ戻る</button><button type="submit" form="browser-new-project" disabled={!projectName.trim()} className="preview-button preview-button-primary min-h-11 disabled:opacity-50">作成して開く</button></> : null}
-        {state?.phase === "select" ? <button type="button" onClick={onPickFile} className="preview-button preview-button-primary min-h-11">.xriftstudioを開く</button> : null}
+        {state?.phase === "select" ? <button type="button" onClick={onPickFile} className="preview-button preview-button-primary min-h-11">ファイルから開く</button> : null}
         {state?.phase === "failed" ? <button type="button" onClick={onRetry} className="preview-button preview-button-primary min-h-11">もう一度試す</button> : null}
         {state?.phase === "failed" && state.operation !== "export" ? <button type="button" onClick={onChooseProject} className="preview-button preview-button-light min-h-11">プロジェクトを選ぶ</button> : null}
         {ready && canShare ? <button type="button" onClick={() => void share()} disabled={busy} className="preview-button preview-button-light min-h-11"><Share2 size={16} />{sharing ? "共有中…" : "共有する"}</button> : null}
-        {ready && url ? <a href={url} download={ready.fileName} onClick={() => setDownloadStarted(true)} className="preview-button preview-button-primary min-h-11"><Download size={16} />ファイルに保存</a> : null}
+        {ready && url ? <a href={url} download={ready.fileName} onClick={() => setDownloadStarted(true)} className="preview-button preview-button-primary min-h-11"><Download size={16} />ダウンロード</a> : null}
       </div>
     </dialog>
   );

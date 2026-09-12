@@ -13,7 +13,8 @@
  * eyebrow, the icon chip, a link, and the primary button — and nowhere a
  * reader does not need to look.
  */
-.preview-shell {
+.preview-shell,
+.preview-dialog-theme {
   /* Ink */
   --preview-ink: #18181b;
   --preview-ink-soft: #52525b;
@@ -48,6 +49,9 @@
   --preview-shadow-lift: 0 2px 6px rgba(24, 24, 27, 0.05),
     0 22px 48px -20px rgba(24, 24, 27, 0.22);
 
+}
+
+.preview-shell {
   min-height: 100%;
   overflow-x: hidden;
   color: var(--preview-ink);

@@ -53,20 +53,6 @@
   min-width: 0;
 }
 
-/* Let the existing rail follow the Scene View instead of covering Assets. */
-.visual-editor-shell[data-tablet] nav[aria-label="エディターのヘルプと設定"] {
-  bottom: calc(var(--xrift-assets-track) + 8px);
-  left: 8px;
-  max-width: calc(100% - var(--xrift-inspector-track) - 16px);
-  flex-wrap: wrap;
-}
-
-.visual-editor-shell[data-tablet] nav[aria-label="エディターのヘルプと設定"] > section {
-  max-width: calc(100vw - 32px);
-  max-height: calc(100% + 50dvh);
-  overflow-y: auto;
-}
-
 /* The graph and code editors share the viewport tab strip, whose touch
    version is 44px high. Preserve their existing overlay track contract. */
 .visual-editor-shell[data-tablet] :is(section[aria-label="ノードエディター"], section[aria-label="スクリプトエディター"]) {
@@ -74,8 +60,7 @@
 }
 
 .visual-editor-shell[data-touch] :is(.editor-main-header, .editor-main-toolbar) button,
-.visual-editor-shell[data-touch] .editor-panel-switcher button,
-.visual-editor-shell[data-touch] nav[aria-label="エディターのヘルプと設定"] > :is(button, a) {
+.visual-editor-shell[data-touch] .editor-panel-switcher button {
   min-height: 44px;
   min-width: 44px;
   touch-action: manipulation;
@@ -152,46 +137,88 @@
 .visual-editor-shell[data-phone] [data-phone-tools="closed"] [aria-label="タッチ操作"] {
   display: none;
 }
-.visual-editor-shell[data-phone] .editor-main-header > div:first-child > div > p:last-child {
+
+/* The project menu takes one place in the header; file actions appear on demand. */
+.visual-editor-shell[data-tablet] .editor-main-header {
+  min-height: 56px;
+  flex-wrap: nowrap;
+  gap: 8px;
+  padding-block: 4px;
+}
+.visual-editor-shell[data-tablet] .editor-main-header > div:first-child {
+  min-width: 0;
+  flex: 1;
+}
+.visual-editor-shell[data-tablet] .editor-header-actions {
+  width: auto;
+  margin-left: 0;
+}
+.visual-editor-shell[data-tablet] .editor-header-actions > summary::-webkit-details-marker {
   display: none;
 }
-.visual-editor-shell[data-phone] .editor-header-actions {
-  gap: 4px;
+.visual-editor-shell[data-tablet] .editor-project-actions {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 80;
+  width: min(320px, calc(100vw - 24px));
+  max-height: calc(100dvh - 80px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--color-editor-border);
+  border-radius: 8px;
+  background: var(--color-editor-surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
 }
-.visual-editor-shell[data-phone] .editor-header-actions > [role="status"] {
-  flex-basis: 100%;
-}
-.visual-editor-shell[data-phone] .editor-header-actions > span[aria-hidden] {
+.visual-editor-shell[data-tablet] .editor-header-actions:not([open]) > .editor-project-actions {
   display: none;
 }
-.visual-editor-shell[data-phone] .editor-header-actions button {
-  padding-inline: 8px;
-  white-space: nowrap;
+.visual-editor-shell[data-tablet] .editor-project-actions > span[aria-hidden] {
+  display: none;
+}
+.visual-editor-shell[data-tablet] .editor-import-menu > button {
+  width: 100%;
+}
+.visual-editor-shell[data-tablet] .editor-import-menu > [role="menu"] {
+  position: static;
+  width: auto;
+  max-width: none;
+  max-height: none;
+  box-shadow: none;
+}
+.visual-editor-shell[data-phone] .editor-main-toolbar {
+  gap: 2px;
+  padding: 2px 8px;
+}
+.visual-editor-shell[data-phone] .editor-panel-switcher {
+  width: 100%;
+  justify-content: space-between;
+}
+.visual-editor-shell[data-phone] .editor-panel-switcher button {
+  flex: 1;
+  padding-inline: 6px;
+}
+/* A phone panel owns the working area so its content can actually be read.
+   All panels and the scene stay mounted to retain selection, drafts and view. */
+.visual-editor-shell[data-phone][data-panel-open] .editor-workspace {
+  grid-template-columns: 0 minmax(0, 1fr) 0 !important;
+  grid-template-rows: minmax(0, 1fr) 0 !important;
+}
+.visual-editor-shell[data-phone][data-panel-open] .editor-tablet-panel {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  border: 0;
+}
+.visual-editor-shell[data-phone][data-panel-open] .editor-workspace > section[aria-labelledby="scene-view-heading"] {
+  display: none;
 }
 @media (orientation: landscape) and (max-height: 599px) {
-  .visual-editor-shell[data-phone] {
-    --editor-tablet-side-track: min(340px, 44%);
-    --editor-tablet-bottom-track: 0px;
-  }
-  .visual-editor-shell[data-phone] .editor-tablet-panel {
-    grid-column: 3;
-    grid-row: 1 / 3;
-    border-top: 0;
-    border-left: 1px solid var(--color-editor-border);
-  }
-  .visual-editor-shell[data-phone] .editor-main-header {
-    flex-wrap: nowrap;
-    padding-block: 2px;
-  }
-  .visual-editor-shell[data-phone] .editor-main-header > div:first-child {
-    flex: 1;
-    overflow: hidden;
-  }
-  .visual-editor-shell[data-phone] .editor-header-actions > [role="status"] {
-    flex-basis: auto;
-  }
-  .visual-editor-shell[data-phone] .editor-header-actions {
+  .visual-editor-shell[data-phone] .editor-panel-switcher {
     width: auto;
-    flex-wrap: nowrap;
+    margin-left: auto;
   }
 }
