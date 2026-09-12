@@ -188,7 +188,7 @@ export function ScriptTemplateDialog({
               テンプレート
             </div>
             <div className="space-y-1.5">
-              {SCRIPT_TEMPLATE_CATALOG.map((candidate) => {
+              {SCRIPT_TEMPLATE_CATALOG.filter(candidate => candidate.id !== "vehicle" && candidate.id !== "seat").map((candidate) => {
                 const selected = candidate.id === template.id;
                 const TemplateIcon = TEMPLATE_ICONS[candidate.id] ?? Code2;
                 return (

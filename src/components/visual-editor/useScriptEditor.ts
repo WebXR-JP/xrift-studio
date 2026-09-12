@@ -138,7 +138,7 @@ export function useScriptEditor({
           openAssetId: assetId,
           source: "",
           loading: false,
-          error: "プロジェクトを保存するとスクリプトを編集できます",
+          error: "自動保存が完了するとスクリプトを編集できます",
         });
         return;
       }
@@ -203,7 +203,7 @@ export function useScriptEditor({
     async (source: string) => {
       const assetId = state.openAssetId;
       if (!assetId || !projectPath) {
-        throw new Error("プロジェクトを保存するとスクリプトを保存できます");
+        throw new Error("自動保存が完了するとスクリプトを保存できます");
       }
       const asset = assets.assets[assetId];
       if (!asset || asset.kind !== "script") {

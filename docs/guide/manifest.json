@@ -46,7 +46,7 @@
     {
       "slug": "installation",
       "title": "インストールして起動する",
-      "description": "アプリを入れてビジュアルエディターを開きます。コードや開発環境の準備は不要です。",
+      "description": "アプリを入れ、初回セットアップを完了してからビジュアルエディターを開きます。必要なツールはアプリが準備します。",
       "group": "start",
       "file": "installation.md",
       "keywords": "インストール ダウンロード 起動 Windows macOS Mac Linux セットアップ",

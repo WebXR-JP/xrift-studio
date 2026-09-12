@@ -372,7 +372,7 @@ export function getStarterItemTemplate(
 export function defaultVisualStarterTemplateId(
   kind: "world" | "item",
 ): VisualStarterTemplateId {
-  return kind === "world" ? "xrift-official" : "basic-item";
+  return kind === "world" ? "blank" : "basic-item";
 }
 
 export function isStarterTemplateForKind(

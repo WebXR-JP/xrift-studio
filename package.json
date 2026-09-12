@@ -1,7 +1,7 @@
 {
   "name": "xrift-studio",
   "private": true,
-  "version": "0.9.30",
+  "version": "0.9.31",
   "description": "Community-built desktop app for creating XRift worlds and items",
   "type": "module",
   "license": "MIT",
@@ -99,5 +99,6 @@
     "typescript": "~7.0.2",
     "typescript-test-api": "npm:typescript@5.9.3",
     "vite": "^8.1.5"
-  }
+  },
+  "packageManager": "pnpm@11.8.0"
 }

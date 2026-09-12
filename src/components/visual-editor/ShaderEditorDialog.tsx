@@ -17,6 +17,7 @@ export type ShaderEditorDialogProps = {
   onSave: (source: string) => Promise<void> | void;
   onDirtyChange?: (dirty: boolean) => void;
   onClose: () => void;
+  onAutosaveReady?: (save: (() => Promise<boolean>) | null) => void;
 };
 
 /** Docked GLSL editor shared by imported Shader Assets and Material sources. */
@@ -30,26 +31,23 @@ export function ShaderEditorDialog({
   onSave,
   onDirtyChange,
   onClose,
+  onAutosaveReady,
 }: ShaderEditorDialogProps) {
   const [draft, setDraft] = useState(source);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const loadedSourceRef = useRef(source);
+  const pendingSourceRef = useRef<string | null>(null);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null);
 
   useEffect(() => {
     if (loadedSourceRef.current === source) return;
     loadedSourceRef.current = source;
-    setDraft(source);
+    if (source !== pendingSourceRef.current) setDraft(source);
   }, [source]);
-
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (!loading && editor && editor.getValue() !== draft) {
-      editor.setValue(draft);
-      editor.layout();
-    }
-  }, [draft, loading]);
 
   const isDirty = draft !== loadedSourceRef.current;
 
@@ -58,31 +56,43 @@ export function ShaderEditorDialog({
     return () => onDirtyChange?.(false);
   }, [isDirty, onDirtyChange]);
 
-  const save = useCallback(async () => {
-    if (!isDirty || saving || loading) return;
+  const save = useCallback(async (): Promise<boolean> => {
+    if (!isDirty && !savingRef.current) return true;
+    if (savingRef.current || loading || error) return false;
+    const snapshot = draftRef.current;
+    savingRef.current = true;
+    pendingSourceRef.current = snapshot;
     setSaving(true);
     setSaveError(null);
     try {
-      await onSave(draft);
-      loadedSourceRef.current = draft;
+      await onSave(snapshot);
+      loadedSourceRef.current = snapshot;
+      const complete = draftRef.current === snapshot;
+      if (complete) onDirtyChange?.(false);
+      return complete;
     } catch (cause) {
-      setSaveError(
-        cause instanceof Error ? cause.message : "GLSLを保存できませんでした",
-      );
+      setSaveError(cause instanceof Error ? cause.message : "自動保存に失敗しました");
+      return false;
     } finally {
       setSaving(false);
+      savingRef.current = false;
     }
-  }, [draft, isDirty, loading, onSave, saving]);
+  }, [isDirty, loading, error, onSave, onDirtyChange]);
 
-  const requestClose = useCallback(() => {
-    if (!isDirty) {
-      onClose();
-      return;
-    }
-    if (window.confirm("GLSLに未保存の変更があります。破棄して閉じますか。")) {
-      onClose();
-    }
-  }, [isDirty, onClose]);
+  useEffect(() => {
+    if (!isDirty || saving || loading || error || saveError) return;
+    const timer = window.setTimeout(() => { void save(); }, 600);
+    return () => window.clearTimeout(timer);
+  }, [draft, isDirty, saving, loading, error, saveError, save]);
+
+  useEffect(() => {
+    onAutosaveReady?.(save);
+    return () => onAutosaveReady?.(null);
+  }, [save, onAutosaveReady]);
+
+  const requestClose = useCallback(async () => {
+    if (await save()) onClose();
+  }, [save, onClose]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -126,11 +136,11 @@ export function ShaderEditorDialog({
             className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-40"
           >
             <SaveIcon size={13} aria-hidden="true" />
-            {saving ? "保存中" : "保存 (⌘/Ctrl+S)"}
+            {saving ? "自動保存中" : saveError ? "自動保存を再試行" : isDirty ? "保存待ち" : "保存済み"}
           </button>
           <button
             type="button"
-            onClick={requestClose}
+            onClick={() => void requestClose()}
             aria-label="GLSLエディターを閉じる"
             className="rounded-md border border-slate-300 bg-white p-1 text-slate-600 hover:bg-slate-50"
           >
@@ -175,7 +185,7 @@ export function ShaderEditorDialog({
       </div>
 
       <footer className="shrink-0 border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
-        GLSLの保存後、参照しているマテリアルのプレビューとシーンへ反映されます。
+        GLSLは自動保存され、参照しているマテリアルのプレビューとシーンへ反映されます。
       </footer>
     </section>
   );

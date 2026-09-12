@@ -1045,7 +1045,7 @@ function ImportActivityDrawer({
       {!projectPersisted && waitingForSave ? (
         <div className="mb-2 rounded-md border border-brand-200 bg-brand-50 p-2.5">
           <p className="text-xs leading-4 text-slate-700">
-            先にプロジェクトを保存してください。選択したファイルはこの画面を開いている間、保持します。
+            初回の自動保存を待っています。選択したファイルはこの画面を開いている間、保持します。
           </p>
           <button
             type="button"
@@ -1053,7 +1053,7 @@ function ImportActivityDrawer({
             onClick={() => void onSaveBeforeImport()}
             className="mt-2 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-wait disabled:opacity-50"
           >
-            {projectSaving ? "保存中…" : "保存してインポートを続ける"}
+            {projectSaving ? "保存中…" : "自動保存を再試行"}
           </button>
         </div>
       ) : null}
@@ -2115,7 +2115,7 @@ export function AssetsPanel({
             }
             command="OpenAssetLocation"
             disabled={!projectPath}
-            disabledReason="保存先を開くには、先にプロジェクトを保存してください"
+            disabledReason="保存先は初回の自動保存が完了すると開けます"
             onClick={() => {
               const asset = contextMenu.assetId
                 ? assets.assets[contextMenu.assetId]
@@ -2160,7 +2160,7 @@ export function AssetsPanel({
                 assetMutationLocked
                   ? assetMutationDisabledReason
                   : !projectPath
-                    ? "プロジェクトを保存すると設定できます"
+                    ? "自動保存が完了すると設定できます"
                     : "このテクスチャには使用できる画像がありません"
               }
               onClick={() => {

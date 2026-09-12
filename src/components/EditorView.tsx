@@ -82,6 +82,9 @@ export function EditorView({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const contentRef = useRef(content);
+  contentRef.current = content;
   const fileLoadRunRef = useRef(0);
   const selectionIntentRef = useRef(0);
   const preloadedFileRef = useRef<{ key: string; text: string } | null>(null);
@@ -181,6 +184,7 @@ export function EditorView({
     setContent("");
     setSavedContent("");
     setError(null);
+    setSaveError(null);
     try {
       const preloaded = preloadedFileRef.current;
       preloadedFileRef.current = null;
@@ -207,10 +211,13 @@ export function EditorView({
   }, [loadFile]);
 
   const handleSave = useCallback(async () => {
-    if (!selectedRel || !fileKey || activeFileKeyRef.current !== fileKey || !isDirty || loading || savingRef.current) return;
+    if (loading || savingRef.current) return false;
+    if (!isDirty) return true;
+    if (!selectedRel || !fileKey || activeFileKeyRef.current !== fileKey) return false;
     // The ref closes the same-event gap before React disables the button.
     savingRef.current = true;
     setSaving(true);
+    setSaveError(null);
     const loadRun = fileLoadRunRef.current;
     try {
       await tauri.writeTextFile(project.path, selectedRel, content);
@@ -218,15 +225,32 @@ export function EditorView({
       if (activeFileKeyRef.current === fileKey && fileLoadRunRef.current === loadRun) {
         setSavedContent(content);
       }
-      toast({ kind: "success", title: "保存しました", description: selectedRel });
+      return contentRef.current === content;
     } catch (e) {
-      toast({ kind: "error", title: "保存に失敗しました", description: `${e}` });
+      setSaveError(`自動保存に失敗しました: ${e}`);
+      toast({ kind: "error", title: "自動保存に失敗しました", description: `${e}` });
       appendLog({ kind: "stderr", text: `save failed: ${e}`, ts: Date.now() });
+      return false;
     } finally {
       savingRef.current = false;
       setSaving(false);
     }
   }, [fileKey, isDirty, loading, project.path, selectedRel, content, appendLog, toast]);
+
+  useEffect(() => {
+    if (!isDirty || loading || saving || saveError) return;
+    const timer = window.setTimeout(() => { void handleSave(); }, 600);
+    return () => window.clearTimeout(timer);
+  }, [content, isDirty, loading, saving, saveError, handleSave]);
+
+  useEffect(() => {
+    const preventUnsavedClose = (event: BeforeUnloadEvent) => {
+      if (!isDirty) return;
+      event.preventDefault(); event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", preventUnsavedClose);
+    return () => window.removeEventListener("beforeunload", preventUnsavedClose);
+  }, [isDirty]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -335,7 +359,8 @@ export function EditorView({
     if (resumePublishAfterPreparation) void checkPublishReadiness();
   };
 
-  const handleEditPublishMetadata = () => {
+  const handleEditPublishMetadata = async () => {
+    if (!(await handleSave())) return;
     selectionIntentRef.current++;
     setPublishReadiness(null);
     setSelectedRel("xrift.json");
@@ -411,7 +436,8 @@ export function EditorView({
     }
   };
 
-  const handleOpenThumbnail = () => {
+  const handleOpenThumbnail = async () => {
+    if (!(await handleSave())) return;
     selectionIntentRef.current++;
     setSelectedRel("public/thumbnail.png");
     setSelectedKind("image");
@@ -425,7 +451,7 @@ export function EditorView({
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={onBack}
+            onClick={async () => { if (await handleSave()) onBack(); }}
             className="flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50"
           >
             <ArrowLeft size={12} strokeWidth={2} />
@@ -573,7 +599,8 @@ export function EditorView({
               projectPath={project.path}
               selected={selectedRel}
               refreshKey={fileTreeKey}
-              onSelect={(rel, kind) => {
+              onSelect={async (rel, kind) => {
+                if (!(await handleSave())) return;
                 selectionIntentRef.current++;
                 setSelectedRel(rel);
                 setSelectedKind(kind);
@@ -654,9 +681,9 @@ export function EditorView({
               isDirty={isDirty}
               loading={loading || !fileReady}
               saving={saving}
-              error={null}
+              error={saveError}
               onChange={setContent}
-              onSave={handleSave}
+              onSave={async () => { await handleSave(); }}
             />
           ) : isThumbnail ? (
             <ThumbnailEditor

@@ -5936,7 +5936,7 @@ dependencies = [
 
 [[package]]
 name = "xrift-studio"
-version = "0.9.30"
+version = "0.9.31"
 dependencies = [
  "base64 0.22.1",
  "dirs",
@@ -6229,4 +6229,3 @@ dependencies = [
  "syn 2.0.119",
  "winnow 1.0.4",
 ]
-

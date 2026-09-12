@@ -98,6 +98,7 @@ export function ExternalAssetStoreDialog({
   sceneBloomActive,
   sceneWind,
   onAddOfficialComponent,
+  onAddWorldAsset,
 }: {
   open: boolean;
   projectPath?: string;
@@ -137,6 +138,7 @@ export function ExternalAssetStoreDialog({
   sceneBloomActive: boolean;
   /** Scene wind, so Water previews move the way the scene will. */
   sceneWind: ResolvedWind;
+  onAddWorldAsset: (templateId: "vehicle" | "seat") => Promise<boolean>;
   onAddOfficialComponent: (
     definition: XriftComponentDefinition,
   ) => Promise<boolean>;
@@ -497,6 +499,7 @@ export function ExternalAssetStoreDialog({
               projectKind={projectKind}
               disabledReason={disabledReason}
               onAdd={onAddOfficialComponent}
+              onAddWorldAsset={onAddWorldAsset}
             />
           ) : (
             <>
@@ -748,7 +751,7 @@ export function ExternalAssetStoreDialog({
                   </>
                 )}
                 {!projectPath ? (
-                  <Notice tone="warning" text="追加するにはプロジェクトを保存してください。" />
+                  <Notice tone="warning" text="初回の自動保存が完了すると追加できます。保存エラーが出た場合は、編集画面で確認してください。" />
                 ) : null}
                 {disabledReason ? <Notice tone="warning" text={disabledReason} /> : null}
                 {detailError ? (

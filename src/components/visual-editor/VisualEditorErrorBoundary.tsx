@@ -7,7 +7,6 @@ import {
 import {
   Library,
   LifeBuoy,
-  PanelsTopLeft,
   RotateCcw,
   TriangleAlert,
 } from "lucide-react";
@@ -141,11 +140,7 @@ export class VisualEditorErrorBoundary extends Component<
             </span>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-600">
-                ビジュアルエディター
-              </p>
-              <p className="mt-1 flex items-center gap-1.5 text-sm text-zinc-500">
-                <PanelsTopLeft size={15} strokeWidth={1.8} aria-hidden="true" />
-                {featureName}
+                XRift Studio
               </p>
             </div>
           </div>
@@ -165,9 +160,9 @@ export class VisualEditorErrorBoundary extends Component<
             </p>
           ) : null}
           <p className="mt-4 text-sm leading-7 text-zinc-600">
-            制作データはそのまま保持されています。
+            保存済みの制作データは削除されていません。
             {requiresReload
-              ? " 接続が戻った後にアプリを再読み込みしてください。"
+              ? " 画面に必要なファイルを読み込めませんでした。アプリを再読み込みして、プロジェクトを開き直してください。未保存の変更は失われる場合があります。"
               : " エディターを再表示するか、前の画面に戻ってプロジェクトを開き直してください。"}
           </p>
 
@@ -200,7 +195,7 @@ export class VisualEditorErrorBoundary extends Component<
 
           <p className="mt-6 border-t border-zinc-100 pt-5 text-xs leading-5 text-zinc-500">
             {requiresReload
-              ? "再読み込み後も同じ状態が続く場合は、接続を確認してからもう一度お試しください。"
+              ? "同じ状態が続く場合は、ヘルプと報告からエラーの情報を確認してください。"
               : "同じ状態が続く場合は、一度前の画面へ戻ってからエディターを開き直してください。"}
           </p>
         </section>

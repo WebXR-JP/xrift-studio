@@ -2,15 +2,12 @@ import { GuideLink } from "./guide/GuideLink";
 import { useEffect, useRef, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
-  Box,
   CheckCircle2,
-  Globe2,
   LifeBuoy,
   Loader2,
-  PanelsTopLeft,
   Sparkles,
 } from "lucide-react";
-import { tauri, type ProjectKind, type RuntimeStatus } from "../lib/tauri";
+import { tauri, type RuntimeStatus } from "../lib/tauri";
 import { BrandMark } from "./Brand";
 import { setupProgressLabel } from "../lib/setup-progress";
 import { SupportReportModal } from "./SupportReportModal";
@@ -24,10 +21,9 @@ type SetupProgress = {
 type Props = {
   status: RuntimeStatus;
   onReady: (status: RuntimeStatus) => void;
-  onOpenVisualEditor: (kind: ProjectKind) => void;
 };
 
-export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
+export function SetupView({ status, onReady }: Props) {
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<SetupProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +38,8 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
       setProgress(event.payload);
       setLogs((prev) => [...prev, event.payload]);
     }).then((un) => {
-      unlistenRef.current = un;
+      if (mounted) unlistenRef.current = un;
+      else un();
     });
     return () => {
       mounted = false;
@@ -91,47 +88,14 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
         </div>
 
         <div className="rounded-2xl border border-white/60 bg-white/80 p-6 shadow-brand backdrop-blur-sm">
-          <div className="pb-5">
-            <div className="flex items-start gap-2.5">
-              <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-50 text-cyan-700">
-                <PanelsTopLeft size={16} strokeWidth={2} />
-              </span>
-              <div>
-                <div className="text-sm font-semibold text-zinc-800">
-                  セットアップせずに作り始める
-                </div>
-                <p className="mt-1 text-sm leading-6 text-zinc-600">
-                  ビジュアルエディターでの編集と保存には、セットアップは不要です。XRiftに公開するときに準備できます。
-                </p>
-              </div>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                disabled={running}
-                onClick={() => onOpenVisualEditor("world")}
-                className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50"
-              >
-                <Globe2 size={14} strokeWidth={2} />
-                ワールドを作る
-              </button>
-              <button
-                type="button"
-                disabled={running}
-                onClick={() => onOpenVisualEditor("item")}
-                className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-50"
-              >
-                <Box size={14} strokeWidth={2} />
-                アイテムを作る
-              </button>
-            </div>
-          </div>
-          <GuideLink page="first-world" label="最初のワールドの作り方" />
-          <details className="mt-4 border-t border-zinc-200 pt-4">
-            <summary className="cursor-pointer py-2 text-sm font-medium text-zinc-700">公開の準備（後からでもできます）</summary>
+          <section aria-labelledby="setup-title" aria-busy={running}>
+            <h2 id="setup-title" className="text-lg font-semibold text-zinc-900">最初にセットアップ</h2>
+            <p className="mt-2 mb-4 text-sm leading-6 text-zinc-600">
+              制作に使うツールを準備します。完了するとプロジェクト一覧が開き、新しいワールドやアイテムを作れます。
+            </p>
             <div className="flex items-center gap-2 text-xs text-zinc-500">
               <Sparkles size={14} className="text-brand-500" strokeWidth={2} />
-              <span>XRiftへの公開に必要なツールをインストールします。</span>
+              <span>必要なツールはアプリが自動でインストールします。</span>
             </div>
 
             <ul className="mt-4 space-y-2.5 text-sm">
@@ -139,15 +103,15 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
               <SetupItem done={status.xriftInstalled} label="@xrift/cli" hint="ワールドやアイテムの作成・公開に使う XRift 公式ツール" />
             </ul>
 
-            <div className="mt-4 rounded-lg bg-zinc-50 px-3 py-2 text-[11px] text-zinc-500">
-              <div>インストール先</div>
+            <details className="mt-4 rounded-lg bg-zinc-50 px-3 py-2 text-[11px] text-zinc-500">
+              <summary className="cursor-pointer py-1">インストール先を確認</summary>
               <div className="mt-0.5 truncate font-mono text-zinc-700" title={status.paths.appRoot}>
                 {status.paths.appRoot}
               </div>
-            </div>
+            </details>
 
             {running && (
-              <div className="mt-5 rounded-xl border border-brand-200 bg-brand-50 p-4 animate-fade-in">
+              <div role="status" aria-live="polite" className="mt-5 rounded-xl border border-brand-200 bg-brand-50 p-4 animate-fade-in">
                 <div className="mb-2 flex items-center justify-between text-xs">
                   <span className="flex items-center gap-1.5 font-medium text-brand-700">
                     <Loader2 size={12} className="animate-spin" strokeWidth={2.25} />
@@ -175,7 +139,7 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
             )}
 
             {error && (
-              <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 animate-fade-in">
+              <div role="alert" className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 animate-fade-in">
                 <div className="font-semibold">セットアップを完了できませんでした</div>
                 <div className="mt-1 whitespace-pre-wrap font-mono text-[11px]">{error}</div>
                 <button
@@ -203,11 +167,12 @@ export function SetupView({ status, onReady, onOpenVisualEditor }: Props) {
               ) : (
                 <>
                   <Sparkles size={14} strokeWidth={2.25} />
-                  セットアップを開始
+                  {error ? "セットアップを再試行" : "セットアップを開始"}
                 </>
               )}
             </button>
-          </details>
+          </section>
+          <div className="mt-4"><GuideLink page="installation" label="セットアップの手順" /></div>
         </div>
 
         <div className="mt-5 text-center text-[11px] text-zinc-400">

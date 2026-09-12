@@ -51,7 +51,7 @@ test("初回セットアップからプロジェクト一覧へ進める", { tag
   await expect(
     page.getByRole("heading", { name: /XRift Studio へようこそ/ }),
   ).toBeVisible();
-  await page.getByText("公開の準備（後からでもできます）", { exact: true }).click();
+  await expect(page.getByRole("button", { name: "ワールドを作る", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "セットアップを開始" }).click();
   await expect(
     page.getByRole("heading", { name: "プロジェクト" }),
@@ -67,10 +67,11 @@ test("セットアップエラーを伏字付きでヘルプ相談へ引き継�
   page,
 }) => {
   await openReleaseApp(page, "setup-error");
-  await page.getByText("公開の準備（後からでもできます）", { exact: true }).click();
+  await expect(page.getByRole("button", { name: "ワールドを作る", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "セットアップを開始" }).click();
 
   await expect(page.getByText("Runtime install failed", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "セットアップを再試行" })).toBeEnabled();
   await page.getByRole("button", { name: "ヘルプと報告" }).click();
 
   const supportDialog = page.getByRole("dialog", { name: "ヘルプと報告" });
@@ -119,13 +120,31 @@ test("モーダルは必要な時だけ開き、狭い画面でも操作を画�
 
 async function openVisualWorld(page: Page, name: string): Promise<void> {
   await openProjectLibrary(page);
+  await createVisualWorldFromLibrary(page, name);
+  await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
+}
+
+async function createVisualWorldFromLibrary(page: Page, name: string): Promise<void> {
   await page.getByRole("button", { name: /新規プロジェクト/ }).click();
   await page.getByRole("button", { name: /ワールドをビジュアルで作る/ }).click();
   await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
   await page.getByLabel("プロジェクト名").fill(name);
   await page.getByRole("button", { name: "作成して開く" }).click();
-  await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
 }
+
+test("エディターの読み込み失敗から再読み込みして制作へ戻れる", async ({ page }) => {
+  await page.route("**/src/components/visual-editor/VisualEditorPrototype.tsx*", (route) => route.abort(), { times: 1 });
+  await openProjectLibrary(page);
+  await createVisualWorldFromLibrary(page, "load-recovery");
+  await expect(page.getByRole("heading", { name: "ビジュアルエディターの読み込みを完了できませんでした" })).toBeVisible();
+  await expect(page.getByText("ビジュアルエディター", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "プロジェクト一覧に戻る" })).toBeVisible();
+  await page.getByRole("button", { name: "アプリを再読み込み" }).click();
+  await expect(page.getByRole("heading", { name: "プロジェクト", exact: true })).toBeVisible();
+  await createVisualWorldFromLibrary(page, "load-recovered");
+  await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Hierarchy", exact: true })).toBeVisible();
+});
 
 /**
  * Reports header rows that wrap, overflow, or cover one of their own controls.

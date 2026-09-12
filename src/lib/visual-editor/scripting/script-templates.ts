@@ -1,3 +1,4 @@
+import { VEHICLE_BODY, SEAT_BODY, worldAssetPartsSource } from "./world-asset-models";
 export type ScriptTemplateCategory =
   | "basic"
   | "movement"
@@ -98,21 +99,12 @@ export function Render({ ctx }: ScriptRenderProps<VehicleSettings>) {
       vehicle.translateZ(-input.forward * ctx.props.speed * delta);
       vehicle.rotateY(-input.right * ctx.props.turnRate * delta);
     }}>
-      <mesh position={[0, 0.2, 0]}>
-        <boxGeometry args={[1.6, 0.4, 2.4]} />
-        <meshStandardMaterial color="#64748b" />
-      </mesh>
-      <Seat id={id + "-driver"} driver position={[-0.4, 0.65, -0.35]} interactionText="運転する">
-        <mesh position={[0, -0.1, 0]}>
-          <boxGeometry args={[0.6, 0.2, 0.6]} />
-          <meshStandardMaterial color="#2563eb" />
-        </mesh>
+      ${worldAssetPartsSource(VEHICLE_BODY)}
+      <Seat id={id + "-driver"} driver position={[-0.4, 0.85, 0.05]} interactionText="運転する">
+        ${worldAssetPartsSource(SEAT_BODY)}
       </Seat>
-      <Seat id={id + "-passenger"} position={[0.4, 0.65, -0.35]} interactionText="同乗する">
-        <mesh position={[0, -0.1, 0]}>
-          <boxGeometry args={[0.6, 0.2, 0.6]} />
-          <meshStandardMaterial color="#475569" />
-        </mesh>
+      <Seat id={id + "-passenger"} position={[0.4, 0.85, 0.05]} interactionText="同乗する">
+        ${worldAssetPartsSource(SEAT_BODY)}
       </Seat>
     </Vehicle>
   );
@@ -144,14 +136,7 @@ export function Render({ ctx }: ScriptRenderProps<SeatSettings>) {
   return (
     <Seat id={"seat-" + ctx.entity.id + "-" + ctx.props.instanceId}
       position={[0, ctx.props.height, 0]} exitOffset={{ forward: 0.8 }}>
-      <mesh position={[0, -0.1, 0]}>
-        <boxGeometry args={[0.7, 0.2, 0.7]} />
-        <meshStandardMaterial color="#64748b" />
-      </mesh>
-      <mesh position={[0, 0.25, 0.3]}>
-        <boxGeometry args={[0.7, 0.6, 0.1]} />
-        <meshStandardMaterial color="#475569" />
-      </mesh>
+      ${worldAssetPartsSource(SEAT_BODY)}
     </Seat>
   );
 }

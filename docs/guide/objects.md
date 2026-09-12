@@ -2,9 +2,9 @@
 
 Entityを選んでから、移動・回転・大きさを調整します。Assetsの素材そのものを変更する操作とは分けて考えてください。
 
-![Entityを選択し、右のInspectorにTransformが表示された状態](./media/objects.png)
+![HierarchyでSphereを選び、InspectorにTransformが表示された状態](./media/objects.png "Transform")
 
-*Entityを選ぶとInspectorのTransformで位置・回転・大きさを確認できます。*
+*選択したSphereの位置はX 0、Y 1、Z 0です。移動する対象をHierarchyで確認してから調整します。*
 
 ## 物を配置する
 

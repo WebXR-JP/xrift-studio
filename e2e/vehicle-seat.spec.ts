@@ -48,9 +48,10 @@ test("official Vehicle drives only its occupied driver seat and releases occupan
   await page.goto("/e2e.html?scenario=ready");
   await page.evaluate(async url => {
     const fixture = await import(url) as typeof import("./vehicle-seat.fixture");
-    fixture.mountVehicleSeatFixture();
+    await fixture.mountVehicleSeatFixture();
   }, "/e2e/vehicle-seat.fixture.tsx");
   await expect(page.getByTestId("ready")).toHaveText("ready");
+  await page.screenshot({ path: testInfo.outputPath("vehicle-models.png") });
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.getByRole("button", { name: "Aim at driver" }).click();
@@ -115,4 +116,50 @@ test("Vehicle and Seat load through Studio's Script module bridge", async ({ pag
     return results;
   });
   expect(results).toEqual([{ id: "vehicle", render: "function" }, { id: "seat", render: "function" }]);
+});
+
+
+test("generated Seat model can be clicked to sit and Space stands up", async ({ page }) => {
+  await page.goto("/e2e.html?scenario=ready");
+  await page.evaluate(async () => {
+    const url = "/e2e/vehicle-seat.fixture.tsx";
+    const fixture = await import(url) as typeof import("./vehicle-seat.fixture");
+    await fixture.mountVehicleSeatFixture();
+  });
+  await expect(page.getByTestId("ready")).toHaveText("ready");
+  await page.getByRole("button", { name: "Aim at chair" }).click();
+  await expect(page.getByTestId("aim")).toHaveText("hit");
+  await page.locator("canvas").click();
+  await expect(page.getByTestId("occupied")).toHaveText("seated");
+  await page.keyboard.press("Space");
+  await expect(page.getByTestId("occupied")).toHaveText("none");
+});
+
+test("Vehicle and Seat catalog cards share readable responsive catalog layout", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/e2e.html?scenario=ready");
+  await page.evaluate(async () => {
+    const url = "/e2e/vehicle-seat.fixture.tsx";
+    const fixture = await import(url) as typeof import("./vehicle-seat.fixture");
+    await fixture.mountVehicleCatalogFixture();
+  });
+  const vehicle = page.locator("[data-catalog-card]").filter({ hasText: "Vehicle" });
+  const seat = page.locator("[data-catalog-card]").filter({ hasText: /^Seat/ });
+  await vehicle.click();
+  await expect(page.getByRole("button", { name: "Vehicleをシーンへ追加" })).toBeVisible();
+  await expect(vehicle.locator("canvas")).toBeVisible();
+  await expect(seat.locator("canvas")).toBeVisible();
+  await page.waitForTimeout(750); // Allow demand-rendered WebGL previews to present their first frame.
+  await page.screenshot({ path: testInfo.outputPath("catalog-desktop.png") });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seat.scrollIntoViewIfNeeded();
+  await seat.click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("catalog-mobile-list.png") });
+  // The production dialog owns the mobile list/detail switch. Exercise its CSS here.
+  await page.evaluate(() => document.querySelector(".external-catalog-content")!.setAttribute("data-pane", "detail"));
+  await expect(page.getByRole("button", { name: "Seatをシーンへ追加" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.waitForTimeout(750); // Let the selected preview and responsive canvas settle.
+  await page.screenshot({ path: testInfo.outputPath("catalog-mobile-detail.png") });
 });

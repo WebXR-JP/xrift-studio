@@ -1695,6 +1695,7 @@ function App() {
           projectDescription={visualSession.bundle.project.metadata.description}
           projectCount={projects.length}
           onBack={handleVisualEditorBack}
+          backLabel={runtime?.ready ? "プロジェクト一覧に戻る" : "セットアップに戻る"}
         >
           <Suspense
             fallback={
@@ -2021,7 +2022,6 @@ function App() {
         <SetupView
           status={runtime}
           onReady={(s) => setRuntime(s)}
-          onOpenVisualEditor={handleOpenVisualEditor}
         />
       )
     );

@@ -2,6 +2,10 @@
 
 空は**Skybox**、水面は**Water Shaderのマテリアル**を使って作ります。それぞれ割り当て先が違います。
 
+![背景に表示を有効にし、上空と地平線の色でSkyboxを表示した状態](./media/sky-and-water.png)
+
+*図は画像を使わず、上空の色と地平線の色で作った背景です。IBLは無効のままです。*
+
 ## Skybox Shaderを背景にする
 
 1. **Assets → 外部から追加 → Skybox Shader**を開きます。

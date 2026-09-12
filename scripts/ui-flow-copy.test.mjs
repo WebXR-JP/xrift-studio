@@ -50,10 +50,12 @@ test('setup progress IDs have readable labels, including safe unknown-ID fallbac
   assert.doesNotMatch(setup, /\{progress\?\.step\s*\?\?|\[\{l\.step\}\]/);
 });
 
-test('the first screen offers visual editing without implying publishing needs no setup', () => {
+test('the first screen completes setup before entering the project library', () => {
   const setup = read('src/components/SetupView.tsx');
-  assert.match(setup, /セットアップせずに作り始める/);
-  assert.match(setup, /XRiftに公開するときに準備できます/);
+  assert.match(setup, /最初にセットアップ/);
+  assert.match(setup, /完了するとプロジェクト一覧が開き/);
+  assert.match(setup, /セットアップを再試行/);
+  assert.doesNotMatch(setup, /onOpenVisualEditor|セットアップせず/);
   assert.match(setup, /アプリ専用のフォルダーにインストール/);
   assert.doesNotMatch(setup, /システムには影響しません|ワンクリックで始め/);
 });
