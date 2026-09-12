@@ -1,4 +1,5 @@
 import { runSpatialCaptureFixture } from "../src/lib/visual-editor/value-up/spatial-xr/spatial-capture.fixture.ts";
+import { runRuntimePackageFixtureAssertions } from "../src/lib/visual-editor/compiler/runtime-packages.fixture.ts";
 import { spawn } from "node:child_process";
 import { runModelDownloadFixtureAssertions } from "../src/lib/visual-editor/model-download.fixture.ts";
 import { runModelInstancingFixtureAssertions } from "../src/lib/visual-editor/model-instancing.fixture.ts";
@@ -279,8 +280,13 @@ try {
     "Classic package must not depend on the unpublished runtime package",
   );
   assert(
-    packageJson.dependencies?.["@xrift/world-components"] === "0.47.0",
+    packageJson.dependencies?.["@xrift/world-components"] === "0.50.0",
     "Classic package must pin @xrift/world-components to the compiler's version when the template has none",
+  );
+  assert(
+    packageJson.dependencies?.react === "19.2.8" &&
+      packageJson.dependencies?.["react-dom"] === "19.2.8",
+    "Classic export must constrain the React pair before npm resolves peers",
   );
   const xriftJson = JSON.parse(
     await readFile(path.join(classicRoot, "xrift.json"), "utf8"),
@@ -341,6 +347,7 @@ try {
     ["model download optimization", runModelDownloadFixtureAssertions],
     ["model instancing", runModelInstancingFixtureAssertions],
     ["visual compiler", runVisualCompilerFixtureAssertions],
+    ["runtime package compatibility", runRuntimePackageFixtureAssertions],
     ["model material compiler", runModelMaterialCompilerFixtures],
     ["terrain", runTerrainFixtureAssertions],
     ["terrain grass", runTerrainGrassFixtureAssertions],
@@ -904,3 +911,4 @@ async function runFixtureSuites(suites) {
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
+

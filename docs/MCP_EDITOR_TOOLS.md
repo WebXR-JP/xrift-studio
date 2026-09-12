@@ -100,7 +100,11 @@ document tool の戻り値には `harness` が付くことがある。同じ種�
 **複製と受け渡し**
 `duplicate_project`, `export_project`, `import_project`
 
-`duplicate_project` は Library のプロジェクトを同じ保存先へ別名でコピーする。`export_project` は 1 つの zip に書き出し、`import_project` はその zip、または Git リポジトリを Library へ展開する。三つともコード編集プロジェクトも対象にするが、結果を Editor では開かない。開くには返ってきた path で `open_project` を呼ぶ。複製と取り込みは `projectId` を新しくし、`lastPublication` と `.xrift/*.json` の公開記録を落とすので、公開しても元のワールドを上書きしない。zip には `node_modules`、`.git`、`dist`、キャッシュを含めない。同名のフォルダーは `PROJECT_EXISTS` で断り、上書きも統合もしない。`export_project` は保存先を受け取らず、Library の `.cache/exports` に書いた zip の path を返す。任意の path へ書けると Library の外のファイルを上書きできてしまうからだ。`import_project` は `archivePath`（zip）か `repositoryUrl`（Git の HTTPS / SSH URL、shallow clone して履歴は持ち込まない）のどちらか一つを受け取る。`archivePath` は読むだけで、zip の直下または 1 つのフォルダーの中にプロジェクトの定義がないと `inspect` の段階で断る。
+`duplicate_project` は Library のプロジェクトを同じ保存先へ別名でコピーする。`export_project` は一つの `.xriftstudio` ファイルに書き出し、`import_project` はそのファイル、従来の `.zip`、または Git リポジトリを Library へ展開する。三つともコード編集プロジェクトも対象にするが、結果を Editor では開かない。開くには返ってきた path で `open_project` を呼ぶ。複製と取り込みは `projectId` を新しくし、`lastPublication` と `.xrift/*.json` の公開記録を落とすので、公開しても元のワールドを上書きしない。
+
+パッケージには `node_modules`、`.git`、`dist`、キャッシュを含めない。同名のフォルダーは `PROJECT_EXISTS` で断り、上書きも統合もしない。`export_project` は保存先を受け取らず、Library の `.cache/exports` に書いた `.xriftstudio` の path を返す。任意の path へ書けると Library の外のファイルを上書きできてしまうからだ。
+
+`import_project` は `archivePath`（`.xriftstudio` / `.zip`）か `repositoryUrl`（Git の HTTPS / SSH URL、shallow clone して履歴は持ち込まない）のどちらか一つを受け取る。`archivePath` は読むだけで、内部のZIPの直下または一つのフォルダーの中にプロジェクトの定義がないと `inspect` の段階で断る。ZIPの構成とpackage manifestは従来どおりで、拡張子の変更によるdocumentの変換は行わない。詳細は[プロジェクトの受け渡し形式](./PROJECT_PACKAGE.md)を参照する。
 
 **アカウント**
 `get_account`, `login`
@@ -440,6 +444,8 @@ project ではなく app data へ置く。
 **ワールド制作の録画**（詳細は [ワールド制作の録画](./RECORDING.md)）
 
 ## 意図的に公開していない操作
+
+- iPadのパネル切り替え・視点だけ操作・複数選択・Playのタッチ入力は、端末側の表示または入力状態で、documentを変えないため専用toolを設けない。ブラウザの保存先選択、`.xriftstudio` のダウンロードと共有メニューはユーザー操作とSafariの権限に依存するため、MCPから起動しない。プロジェクトのデータ編集とデスクトップのファイル書き出し・取り込みは既存toolを使う。iPadブラウザ内でのMCP接続は提供しない。
 
 - スクリプト一覧の検索・折り畳み・シーン横のタブ切り替えは画面内の表示状態なので、専用toolは設けない。素材の取得・作成・更新は既存のスクリプト toolを使う。Graphとのイベント連携APIは `get_scripting_capabilities` に含め、スクリプト元データとGraphの既存編集toolで設定する。
 

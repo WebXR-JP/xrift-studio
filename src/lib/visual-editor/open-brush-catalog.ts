@@ -4,6 +4,7 @@ import {
   type OpenBrushMaterialShader,
 } from "./open-brush";
 import { openBrushCatalogThumbnailUrl } from "./catalog-thumbnails";
+import { catalogPublicAssetUrl } from "./catalog-public-url";
 
 export type OpenBrushCatalogCategory =
   | "paint"
@@ -29,7 +30,7 @@ export const OPEN_BRUSH_CATALOG_SOURCE_URL =
 export const OPEN_BRUSH_CATALOG_LICENSE_URL =
   "https://github.com/icosa-foundation/three-icosa/blob/1868251fbc9dbbfacf2230839d3d184fda8b4a63/LICENSE";
 export const OPEN_BRUSH_CATALOG_GALLERY_URL =
-  "/visual-editor/starter-assets/openbrush-all-brushes.glb";
+  catalogPublicAssetUrl("/visual-editor/starter-assets/openbrush-all-brushes.glb");
 export const OPEN_BRUSH_CATALOG_REVISION =
   "three-icosa@1868251fbc9dbbfacf2230839d3d184fda8b4a63";
 

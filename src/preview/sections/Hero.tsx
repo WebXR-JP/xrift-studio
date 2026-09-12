@@ -18,7 +18,7 @@ const pills = [
   { icon: MonitorPlay, text: "画面でも、コードでも" },
 ] as const;
 
-export function Hero({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => void }) {
+export function Hero({ onOpenDemo, tablet = false, onOpenProjects }: { onOpenDemo: (kind: ProjectKind) => void; tablet?: boolean; onOpenProjects?: () => void }) {
   const cta = useDownloadCta();
   const [started, setStarted] = useState(false);
 
@@ -35,21 +35,21 @@ export function Hero({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => void }
         <div className="mx-auto max-w-4xl text-center">
           <div className="preview-kicker mx-auto" data-reveal>
             <Sparkles size={14} />
-            XRiftのワールド・アイテムを、無料で作れるデスクトップアプリ
+            {tablet ? "iPadでワールド・アイテムを作る" : "XRiftのワールド・アイテムを、無料で作れるデスクトップアプリ"}
           </div>
           <h1
             className="preview-hero-title mt-6 text-balance font-black leading-[0.98] tracking-[-0.065em] text-zinc-950"
             data-reveal
           >
             置いて、動かして、
-            <span className="preview-title-accent block">そのままXRiftへ。</span>
+            <span className="preview-title-accent block">{tablet ? "仕上げは、パソコンで。" : "そのままXRiftへ。"}</span>
           </h1>
           <p
             className="mx-auto mt-7 max-w-2xl text-pretty text-base leading-8 text-zinc-600 sm:text-lg"
             data-reveal
           >
             ビジュアルエディターで地形や水、空をつくり、モデルを配置。Playで歩いて確かめたら、Stopで編集へ戻れます。
-            書き出しもビルドも挟まず、XRiftへそのまま公開できます。
+            {tablet ? "iPadで作った作品は.xriftstudioファイルに保存し、MacやWindowsで開いて公開できます。" : "書き出しもビルドも挟まず、XRiftへそのまま公開できます。"}
           </p>
           <ul
             className="mx-auto mt-8 flex max-w-3xl flex-col items-stretch justify-center gap-2.5 sm:flex-row sm:flex-wrap"
@@ -69,21 +69,22 @@ export function Hero({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => void }
             className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row"
             data-reveal
           >
-            <DownloadButton
+            {!tablet ? <DownloadButton
               cta={cta}
               variant="primary"
               large
               className="w-full max-w-xs sm:w-auto"
               onStarted={() => setStarted(true)}
-            />
+            /> : null}
             <button
               type="button"
               onClick={() => onOpenDemo("world")}
-              className="preview-button preview-button-light preview-button-large w-full max-w-xs sm:w-auto"
+              className={`preview-button ${tablet ? "preview-button-primary" : "preview-button-light"} preview-button-large w-full max-w-xs sm:w-auto`}
             >
               <Play size={16} fill="currentColor" />
-              ビジュアルエディターを試す
+              {tablet ? "iPadで制作を始める" : "ビジュアルエディターを試す"}
             </button>
+            {tablet && onOpenProjects ? <button type="button" onClick={onOpenProjects} className="preview-button preview-button-light preview-button-large w-full max-w-xs sm:w-auto">保存した作品を開く</button> : null}
           </div>
           {/*
             The line under the button says what the button is about to do:
@@ -97,7 +98,7 @@ export function Hero({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => void }
             data-reveal
             aria-live="polite"
           >
-            {started ? (
+            {tablet ? "インストール不要。同じSafariに前回の作品があれば、その続きから開きます。" : started ? (
               <>
                 ダウンロードを開始しました。
                 <a href="#download" className="preview-hero-download-link">
@@ -132,7 +133,7 @@ export function Hero({ onOpenDemo }: { onOpenDemo: (kind: ProjectKind) => void }
             type="button"
             onClick={() => onOpenDemo("world")}
             className="preview-hero-stage-button block w-full text-left"
-            aria-label="ビジュアルエディターのデモを開く"
+            aria-label={tablet ? "iPadでビジュアルエディターを開く" : "ビジュアルエディターのデモを開く"}
           >
             <ProductScreenshot interactive />
           </button>

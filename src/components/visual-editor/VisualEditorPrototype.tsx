@@ -262,6 +262,8 @@ import { EditorImportMenu } from "./EditorImportMenu";
 import { ComponentCodeImportDialog } from "./ComponentCodeImportDialog";
 import { InteractivityGraphEditor } from "./InteractivityGraphEditor";
 import { EditorUtilityRail } from "./EditorUtilityRail";
+import { useEditorDevice } from "./useEditorDevice";
+import { EditorPanelVisibilityContext } from "./editor-panel-visibility";
 import { SupportReportModal } from "../SupportReportModal";
 import { ConfirmDialog } from "../ConfirmDialog";
 import type { XriftMcpActivity } from "./AiConnectionPanel";
@@ -701,6 +703,10 @@ export type VisualEditorPrototypeProps = {
   ) => void | string | Promise<void | string>;
   /** Upload/export orchestration is injected by the shell when available. */
   onUpload?: (bundle: PrototypeVisualProject) => void | Promise<void>;
+  /** Portable project transfer is supplied by the browser shell. */
+  onProjectExport?: (bundle: PrototypeVisualProject) => void | Promise<void>;
+  onProjectImport?: () => void | Promise<void>;
+  projectTransferBusy?: boolean;
   /**
    * 公開ダイアログなど、Editorの外で作られたAsset Manifestの更新を、この
    * セッションの履歴へ取り込むための登録口。外の処理がディスクへ書いた変換を
@@ -941,6 +947,9 @@ export function VisualEditorPrototype({
   initialBundle: providedInitialBundle,
   onSave,
   onUpload,
+  onProjectExport,
+  onProjectImport,
+  projectTransferBusy = false,
   onRegisterExternalAssetsCommit,
   onRegisterMcpProjectBridge,
   onClassicExport,
@@ -952,6 +961,10 @@ export function VisualEditorPrototype({
   initialLayout,
   onLayoutChange,
 }: VisualEditorPrototypeProps) {
+  const { tablet, touch, viewportHeight } = useEditorDevice();
+  const [tabletPanel, setTabletPanel] = useState<"hierarchy" | "assets" | "inspector" | null>("hierarchy");
+  const projectExportLock = useRef(false);
+  const [projectExportBusy, setProjectExportBusy] = useState(false);
   const initialBundle = useMemo(
     () => preparePrototypeProject(projectKind, projectName, providedInitialBundle),
     [projectKind, projectName, providedInitialBundle],
@@ -9706,8 +9719,9 @@ export function VisualEditorPrototype({
   const handleSelectAsset = useCallback((assetId: string) => {
     setSceneSettingsOpen(false);
     setAssetSelection(assetId);
+    if (tablet) { setTabletPanel("inspector"); setViewportMaximized(false); }
     setNotice("Inspectorで素材を開きました。シーン内の選択は維持しています");
-  }, []);
+  }, [tablet]);
 
   const requestRename = useCallback(
     (kind: "entity" | "asset" | "folder", id: string) => {
@@ -10611,6 +10625,7 @@ export function VisualEditorPrototype({
   }, [requestAutosave]);
 
   const openXrRoomImport = useOpenXrRoomImport({
+    projectId: initialBundle.project.projectId,
     getBundle: () => bundleRef.current,
     canImport: () => !playingRef.current && !playPreparationActiveRef.current
       && !importBusyRef.current && !importRunningRef.current && assetOperationRef.current === null,
@@ -10621,11 +10636,50 @@ export function VisualEditorPrototype({
       const first = result.applied[0]?.entityId;
       if (first) {
         setSceneSelection({ kind: "entity", id: first });
+        setSelectedEntityIds(result.applied.map(({ entityId }) => entityId));
         setAssetSelection(null);
+        setSceneSettingsOpen(false);
+        setActiveEditorTab(SCENE_VIEW_TAB_ID);
       }
       setNotice(message);
     },
   });
+
+  const roomImportDisabledReason = editorMode !== "edit"
+    ? "Playを停止すると、部屋を取り込めます。"
+    : playPreparing
+      ? "Playの準備が終わり、Playを停止してから取り込んでください。"
+      : importBusy || importRunningRef.current || assetOperationRef.current !== null
+        ? "素材の処理が終わると、部屋を取り込めます。"
+        : undefined;
+  const importedRoomEntityIds = openXrRoomImport.outcome?.status === "success"
+    ? openXrRoomImport.outcome.entityIds.filter((id) => Boolean(bundle.scene.entities[id]))
+    : [];
+  const handleFocusImportedRoom = () => {
+    if (editorMode !== "edit" || playPreparing || !importedRoomEntityIds.length) return;
+    const first = importedRoomEntityIds[0]!;
+    handleEntitySelectionChange(importedRoomEntityIds, first);
+    setActiveEditorTab(SCENE_VIEW_TAB_ID);
+    void requestSceneCamera({ focusEntityIds: importedRoomEntityIds }).then((result) => {
+      if (!result.ok) setNotice(result.message ?? "取り込んだ部屋を表示できませんでした。");
+    });
+  };
+  useEffect(() => {
+    if (!onProjectExport) return;
+    const saveBeforeSuspending = () => {
+      flushInteractivityDraft();
+      void runSave();
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") saveBeforeSuspending();
+    };
+    window.addEventListener("pagehide", saveBeforeSuspending);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", saveBeforeSuspending);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [onProjectExport, flushInteractivityDraft, runSave]);
 
   const handleSaveBeforeImport = useCallback(async () => {
     const savedProjectPath = await runSave();
@@ -10690,6 +10744,46 @@ export function VisualEditorPrototype({
       );
     }
   }, [bundle, onClassicExport]);
+
+  const runProjectExport = async () => {
+    if (!onProjectExport || projectExportLock.current || projectTransferBusy || importBusy || editorMode !== "edit") return;
+    if (scriptEditorDirtyRef.current || scriptEditorSavingRef.current || shaderEditorDirtyRef.current) {
+      setNotice("スクリプトとShaderの変更を保存してから、プロジェクトを書き出してください。");
+      return;
+    }
+    projectExportLock.current = true;
+    setProjectExportBusy(true);
+    try {
+      flushInteractivityDraft();
+      if (onSaveRef.current && !(await runSave())) return;
+      await onProjectExport(bundleRef.current);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "プロジェクトを書き出せませんでした。もう一度お試しください。");
+    } finally {
+      projectExportLock.current = false;
+      setProjectExportBusy(false);
+    }
+  };
+
+  const runProjectImport = async () => {
+    if (!onProjectImport || projectExportLock.current || projectTransferBusy || importBusy || editorMode !== "edit") return;
+    if (scriptEditorDirtyRef.current || scriptEditorSavingRef.current || shaderEditorDirtyRef.current) {
+      setNotice("スクリプトとShaderの変更を保存してから、別のプロジェクトを開いてください。");
+      return;
+    }
+    projectExportLock.current = true;
+    setProjectExportBusy(true);
+    try {
+      flushInteractivityDraft();
+      if (onSaveRef.current && !(await runSave())) return;
+      await onProjectImport();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "プロジェクトを開けませんでした。もう一度お試しください。");
+    } finally {
+      projectExportLock.current = false;
+      setProjectExportBusy(false);
+    }
+  };
 
   const beginResize = (
     kind: "hierarchy" | "inspector" | "assets",
@@ -11051,7 +11145,18 @@ export function VisualEditorPrototype({
   const noticeRef = useRef<string | null>(null);
   noticeRef.current = notice;
   const handleBack = useCallback(async (): Promise<boolean> => {
-    if (leaving) return false;
+    if (leaving || projectExportBusy || projectTransferBusy) return false;
+    if (onProjectExport) {
+      if (importBusy) {
+        setNotice("素材の取り込みが終わってから、紹介ページへ戻ってください。");
+        return false;
+      }
+      if (scriptEditorDirtyRef.current || scriptEditorSavingRef.current || shaderEditorDirtyRef.current) {
+        setNotice("スクリプトとShaderの変更を保存してから、紹介ページへ戻ってください。");
+        return false;
+      }
+      flushInteractivityDraft();
+    }
     setPlaySession(null);
     setEditorMode("edit");
     if (!onSaveRef.current) {
@@ -11073,7 +11178,7 @@ export function VisualEditorPrototype({
     setLeaving(false);
     onBack();
     return true;
-  }, [leaving, onBack, requestAutosave]);
+  }, [leaving, projectExportBusy, projectTransferBusy, importBusy, onProjectExport, flushInteractivityDraft, onBack, requestAutosave]);
 
   mcpProjectBridgeActionsRef.current = { saveNow: runSave, leave: handleBack };
 
@@ -11086,7 +11191,7 @@ export function VisualEditorPrototype({
   const CreateIcon = EDITOR_ICONS.create;
   const saveStatusLabel =
     saveStatus === "saved"
-      ? "保存済み"
+      ? onProjectExport ? "ブラウザに保存済み" : "保存済み"
       : saveStatus === "saving"
         ? "保存中"
         : saveStatus === "error"
@@ -11191,15 +11296,15 @@ export function VisualEditorPrototype({
   const recordingUiHidden =
     recordingViewport.visible && !recordingViewport.showEditorUi;
   const panelsHidden = viewportMaximized || recordingUiHidden;
-  const hierarchyTrack = panelsHidden
+  const hierarchyTrack = panelsHidden || tablet
     ? "0px"
     : `min(${layout.hierarchyWidth}px, 22%)`;
-  const inspectorTrack = panelsHidden
+  const inspectorTrack = panelsHidden || (tablet && !tabletPanel)
     ? "0px"
-    : `min(${layout.inspectorWidth}px, 36%)`;
-  const assetsTrack = panelsHidden
+    : tablet ? "var(--editor-tablet-side-track)" : `min(${layout.inspectorWidth}px, 36%)`;
+  const assetsTrack = panelsHidden || (tablet && !tabletPanel)
     ? "0px"
-    : `min(${layout.assetsHeight}px, calc(100% - 240px))`;
+    : tablet ? "var(--editor-tablet-bottom-track)" : `min(${layout.assetsHeight}px, calc(100% - 240px))`;
   /*
    * `contents` while they are shown, so the wrapper is invisible to the grid
    * and placement is exactly as before. Maximized it becomes the grid item
@@ -11208,16 +11313,18 @@ export function VisualEditorPrototype({
    * auto-placement then walks the remaining panels one cell to the left —
    * putting the Scene View in the 0px column with its own header clipped away.
    */
-  const sidePanelClass = (spansBothRows: boolean) =>
-    panelsHidden
+  const sidePanelClass = (panel: "hierarchy" | "assets" | "inspector", spansBothRows: boolean) =>
+    tablet ? `editor-tablet-panel ${panelsHidden || tabletPanel !== panel ? "hidden" : "flex"}` : panelsHidden
       ? `overflow-hidden ${spansBothRows ? "row-span-2" : ""}`
       : "contents";
 
   return (
     <ValueScrubContext.Provider value={valueScrubTransaction}>
-    <div className="h-screen overflow-hidden bg-editor-canvas">
+    <div className="visual-editor-shell h-screen overflow-hidden bg-editor-canvas"
+      data-tablet={tablet || undefined} data-touch={touch || undefined}
+      style={tablet ? { height: viewportHeight ? `${viewportHeight}px` : "100dvh" } : undefined}>
       <div className="flex h-full min-h-0 min-w-0 flex-col bg-editor-canvas text-editor-text">
-        <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-editor-border bg-editor-surface px-3">
+        <header className="editor-main-header flex h-14 shrink-0 items-center justify-between gap-3 border-b border-editor-border bg-editor-surface px-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <button
               type="button"
@@ -11240,7 +11347,7 @@ export function VisualEditorPrototype({
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="editor-header-actions flex shrink-0 items-center gap-2">
             <span
               className={`flex items-center gap-1.5 text-xs font-medium ${
                 saveStatus === "error" ? "text-rose-700" : "text-editor-muted"
@@ -11277,6 +11384,19 @@ export function VisualEditorPrototype({
               onImportModel={() => globalModelImportInputRef.current?.click()}
               onImportR3f={() => setComponentImportOpen(true)}
             />
+            {onProjectImport ? <button
+              type="button"
+              disabled={projectTransferBusy || projectExportBusy || importBusy || leaving || renderedEditorMode !== "edit"}
+              onClick={() => void runProjectImport()}
+              className="rounded-md border border-editor-border bg-editor-surface px-3 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:opacity-45"
+            >開く</button> : null}
+            {onProjectExport ? <button
+              type="button"
+              disabled={projectTransferBusy || projectExportBusy || importBusy || leaving || renderedEditorMode !== "edit"}
+              onClick={() => void runProjectExport()}
+              title="素材を含むプロジェクトを保存して、Mac／Windows版へ引き継ぎます"
+              className="flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-45"
+            ><ExportIcon size={13} aria-hidden="true" />{projectExportBusy ? "書き出しを準備中…" : "プロジェクトを書き出す"}</button> : <>
             <button
               type="button"
               onClick={() => void runClassicExport()}
@@ -11301,11 +11421,12 @@ export function VisualEditorPrototype({
               <UploadIcon size={13} aria-hidden="true" />
               XRiftへ公開
             </button>
+            </>}
           </div>
         </header>
 
         <div
-          className={`${recordingUiHidden ? "hidden" : "flex"} h-10 shrink-0 items-center border-b border-editor-border bg-editor-surface px-2.5`}
+          className={`editor-main-toolbar ${recordingUiHidden ? "hidden" : "flex"} h-10 shrink-0 items-center border-b border-editor-border bg-editor-surface px-2.5`}
           role="toolbar"
           aria-label="ビジュアルエディターのツール"
         >
@@ -11367,7 +11488,19 @@ export function VisualEditorPrototype({
               />
             </div>
           </div>
-
+          {tablet && !recordingUiHidden ? <div className="editor-panel-switcher ml-auto flex items-center gap-1" aria-label="編集パネル">
+            {([['hierarchy', 'Hierarchy'], ['assets', 'Assets'], ['inspector', 'Inspector']] as const).map(([panel, label]) =>
+              <button key={panel} type="button"
+                aria-pressed={!panelsHidden && tabletPanel === panel}
+                aria-controls={`editor-panel-${panel}`}
+                onClick={() => {
+                  setViewportMaximized(false);
+                  setTabletPanel((current) => current === panel && !panelsHidden ? null : panel);
+                }}
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold ${!panelsHidden && tabletPanel === panel ? "bg-brand-100 text-brand-800" : "text-editor-muted hover:bg-editor-subtle"}`}
+              >{label}</button>,
+            )}
+          </div> : null}
         </div>
 
         <ComponentCodeImportDialog
@@ -11408,11 +11541,11 @@ export function VisualEditorPrototype({
 
         <main
           ref={mainRef}
-          className="relative grid min-h-0 flex-1 overflow-hidden"
+          className="editor-workspace relative grid min-h-0 flex-1 overflow-hidden"
           style={
             {
-              gridTemplateColumns: `${hierarchyTrack} minmax(360px, 1fr) ${inspectorTrack}`,
-              gridTemplateRows: `minmax(240px, 1fr) ${assetsTrack}`,
+              gridTemplateColumns: `${hierarchyTrack} minmax(${tablet ? "0px" : "360px"}, 1fr) ${inspectorTrack}`,
+              gridTemplateRows: `minmax(${tablet ? "0px" : "240px"}, 1fr) ${assetsTrack}`,
               // Published as custom properties so a panel that floats over the
               // Scene View can stop at the columns instead of guessing their
               // width. The tracks are draggable, so a hand-tuned inset drifts
@@ -11423,7 +11556,7 @@ export function VisualEditorPrototype({
             } as CSSProperties
           }
         >
-          <div className={sidePanelClass(true)}>
+          <div id="editor-panel-hierarchy" className={sidePanelClass("hierarchy", true)}>
           <HierarchyPanel
             scene={bundle.scene}
             selection={sceneSelection}
@@ -11490,8 +11623,11 @@ export function VisualEditorPrototype({
               executeCommand("play.toggle");
             }}
             roomImportPhase={openXrRoomImport.phase}
+            roomImportOutcome={openXrRoomImport.outcome}
+            roomImportDisabledReason={roomImportDisabledReason}
             onCaptureOpenXrRoom={openXrRoomImport.capture}
             onCancelOpenXrRoom={openXrRoomImport.cancel}
+            onFocusImportedRoom={importedRoomEntityIds.length ? handleFocusImportedRoom : undefined}
             tabs={viewportEditorTabs}
             activeTabId={
               viewportEditorTabs.some((tab) => tab.id === activeEditorTab)
@@ -11575,7 +11711,8 @@ export function VisualEditorPrototype({
               recordingSession.setViewport({ visible: false })
             }
           />
-          <div className={sidePanelClass(true)}>
+          <div id="editor-panel-inspector" className={sidePanelClass("inspector", true)}>
+          <EditorPanelVisibilityContext.Provider value={!panelsHidden && (!tablet || tabletPanel === "inspector")}>
           <InspectorPanel
             scene={bundle.scene}
             assets={renderedPlaySession?.runtimeAssets ?? bundle.assets}
@@ -11728,8 +11865,9 @@ export function VisualEditorPrototype({
             onSetLightShadow={handleSetSelectedLightShadow}
             onApplyMaterialPatch={handleApplySelectedMaterialPatch}
           />
+          </EditorPanelVisibilityContext.Provider>
           </div>
-          <div className={sidePanelClass(false)}>
+          <div id="editor-panel-assets" className={sidePanelClass("assets", false)}>
           <AssetsPanel
             assets={bundle.assets}
             projectPath={projectPath}
@@ -11774,6 +11912,10 @@ export function VisualEditorPrototype({
               executeCommand("asset.edit-interactivity", { assetId })
             }
             onOpenAssetLocation={async (sourceRelativePath) => {
+              if (onProjectExport) {
+                setNotice("ブラウザに保存した素材は、プロジェクトを書き出して確認できます。");
+                return;
+              }
               if (!projectPath) {
                 setNotice(
                   "プロジェクトを保存してから素材の保存先を開いてください",
@@ -11798,6 +11940,7 @@ export function VisualEditorPrototype({
                 );
               }
             }}
+            canOpenAssetLocation={!onProjectExport}
             externalOperationLockReason={
               assetImportPanelAvailability.disabledReason
             }
@@ -11806,30 +11949,31 @@ export function VisualEditorPrototype({
           <MaterialThumbnailGenerationQueue
             assets={bundle.assets}
             projectPath={projectPath}
-            enabled={renderedEditorMode === "edit" && !importBusy}
+            enabled={renderedEditorMode === "edit" && !importBusy && (!tablet || (!panelsHidden && tabletPanel === "assets"))}
             onGenerated={handleAssetThumbnailGenerated}
             onFailed={handleMaterialThumbnailFailure}
           />
           <EnvironmentTextureThumbnailGenerationQueue
             assets={bundle.assets}
             projectPath={projectPath}
-            enabled={renderedEditorMode === "edit" && !importBusy}
+            enabled={renderedEditorMode === "edit" && !importBusy && (!tablet || (!panelsHidden && tabletPanel === "assets"))}
             onGenerated={handleAssetThumbnailGenerated}
             onFailed={handleEnvironmentTextureThumbnailFailure}
           />
           <ModelThumbnailGenerationQueue
             assets={bundle.assets}
             projectPath={projectPath}
-            enabled={renderedEditorMode === "edit" && !importBusy}
+            enabled={renderedEditorMode === "edit" && !importBusy && (!tablet || (!panelsHidden && tabletPanel === "assets"))}
             onGenerated={handleAssetThumbnailGenerated}
             onFailed={handleModelThumbnailFailure}
           />
           <EditorUtilityRail
             commands={resolvedCommands}
             sceneSettingsOpen={sceneSettingsOpen}
-            onToggleSceneSettings={() =>
-              setSceneSettingsOpen((current) => !current)
-            }
+            onToggleSceneSettings={() => {
+              setSceneSettingsOpen((current) => !current);
+              if (tablet) { setTabletPanel("inspector"); setViewportMaximized(false); }
+            }}
             onResetLayout={() => executeCommand("layout.reset")}
             mcpNativeAvailable={mcpNativeAvailable}
             mcpClients={mcpClients}
@@ -12085,7 +12229,7 @@ export function VisualEditorPrototype({
             title={commandTitle("Hierarchyの幅を変更", "ResizePanel.Hierarchy")}
             onPointerDown={(event) => beginResize("hierarchy", event)}
             className={`absolute bottom-0 top-0 z-40 w-1 cursor-col-resize bg-transparent hover:bg-violet-400/70 focus:bg-violet-400/70 ${
-              viewportMaximized ? "hidden" : ""
+              panelsHidden || tablet ? "hidden" : ""
             }`}
             style={{ left: `calc(${hierarchyTrack} - 2px)` }}
           />
@@ -12128,7 +12272,7 @@ export function VisualEditorPrototype({
             title={commandTitle("Inspectorの幅を変更", "ResizePanel.Inspector")}
             onPointerDown={(event) => beginResize("inspector", event)}
             className={`absolute bottom-0 top-0 z-40 w-1 cursor-col-resize bg-transparent hover:bg-violet-400/70 focus:bg-violet-400/70 ${
-              viewportMaximized ? "hidden" : ""
+              panelsHidden || tablet ? "hidden" : ""
             }`}
             style={{ right: `calc(${inspectorTrack} - 2px)` }}
           />
@@ -12138,7 +12282,7 @@ export function VisualEditorPrototype({
             title={commandTitle("Assetsの高さを変更", "ResizePanel.Assets")}
             onPointerDown={(event) => beginResize("assets", event)}
             className={`absolute z-40 h-1 cursor-row-resize bg-transparent hover:bg-violet-400/70 focus:bg-violet-400/70 ${
-              viewportMaximized ? "hidden" : ""
+              panelsHidden || tablet ? "hidden" : ""
             }`}
             style={{
               bottom: `calc(${assetsTrack} - 2px)`,
@@ -12147,6 +12291,13 @@ export function VisualEditorPrototype({
             }}
           />
         </main>
+        {tablet && !recordingUiHidden && notice && (tabletPanel !== "assets" || panelsHidden) ? (
+          <div className="flex shrink-0 items-center gap-2 border-t border-editor-border bg-editor-surface px-3 py-1.5 text-xs text-editor-text">
+            <p role="status" className="min-w-0 flex-1 whitespace-pre-wrap break-words">{notice}</p>
+            <button type="button" aria-label="通知を閉じる" onClick={() => setNotice(null)}
+              className="min-h-11 shrink-0 rounded-md px-3 text-editor-muted hover:bg-editor-subtle">閉じる</button>
+          </div>
+        ) : null}
       </div>
     </div>
     </ValueScrubContext.Provider>

@@ -177,8 +177,8 @@ export function ProjectCard({
           disabled={busy}
           onClick={onExport}
           className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-40"
-          title="ZIPに書き出す"
-          aria-label={`${project.title || project.name}をZIPに書き出す`}
+          title=".xriftstudioファイルに書き出す"
+          aria-label={`${project.title || project.name}を.xriftstudioファイルに書き出す`}
         >
           <FileDown size={14} aria-hidden="true" />
         </button>

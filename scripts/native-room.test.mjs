@@ -6,7 +6,27 @@ const server = await createServer({ configFile: false, server: { middlewareMode:
 const { nativeRoomToCapture } = await server.ssrLoadModule('/src/lib/visual-editor/value-up/spatial-xr/native-room.ts');
 const { spatialSurfaceGeometryToGlb } = await server.ssrLoadModule('/src/lib/visual-editor/value-up/spatial-xr/spatial-mesh-glb.ts');
 const { migrateSpatialCapture } = await server.ssrLoadModule('/src/lib/visual-editor/value-up/spatial-xr/spatial-capture.ts');
+const { roomImportErrorFeedback, roomRuntimeGuidance } = await server.ssrLoadModule('/src/lib/visual-editor/value-up/spatial-xr/room-import-feedback.ts');
 await server.close();
+test('room guidance distinguishes extension availability from device connectivity', () => {
+  const capabilities = { runtime: 'SteamVR', available: true, missingExtensions: [], mesh: false, message: '' };
+  assert.match(roomRuntimeGuidance(capabilities, 'quest'), /接続・許可・保存済みの部屋は、取り込み時/);
+  assert.match(roomRuntimeGuidance(capabilities, 'pico'), /現在未対応/);
+  const unsupported = { ...capabilities, runtime: 'Meta', available: false, missingExtensions: ['XR_FB_scene'] };
+  assert.match(roomRuntimeGuidance(unsupported, 'other'), /必要な機能がありません/);
+});
+test('room recovery preserves diagnostic details and avoids guessing permissions', () => {
+  const raw = 'OPENXR_ERROR: 部屋の照会 (空間データの許可を確認): ERROR_RUNTIME_FAILURE';
+  const generic = roomImportErrorFeedback(new Error(raw), 'quest');
+  assert.equal(generic.details, raw);
+  assert.doesNotMatch(generic.title, /許可されていません/);
+  assert.match(roomImportErrorFeedback('OPENXR_ERROR: query: ERROR_PERMISSION_INSUFFICIENT', 'quest').title, /許可されていません/);
+  assert.match(roomImportErrorFeedback('NO_ROOM: no locatable surfaces', 'quest').title, /取得できませんでした/);
+  assert.match(roomImportErrorFeedback('NO_ROOM: no locatable surfaces', 'quest').action, /Quest本体でRoom Setup/);
+  assert.doesNotMatch(roomImportErrorFeedback('NO_ROOM: no locatable surfaces', 'other').action, /Quest|Meta/);
+  assert.match(roomImportErrorFeedback('SESSION_LOST: disconnected', 'quest').action, /接続し直し/);
+  assert.match(roomImportErrorFeedback('UNSUPPORTED_PLATFORM: Windows only', 'other').title, /Windows/);
+});
 const surface = { id: 'wall', labels: 'WALL_FACE', position: [2,1,3], rotation: [0,0,0,1], boundaryXY: [[0,0],[2,0],[2,3],[0,3]] };
 const room = s => ({ runtime: 'test', referenceSpace: 'bounded-floor', surfaces: [s], warnings: [] });
 test('FB XY boundary keeps world geometry when converted to importer XZ', () => {

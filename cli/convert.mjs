@@ -23,8 +23,8 @@ import {
 } from "../src/lib/visual-editor/compiler/index.ts";
 import {
   COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
-  declaredVersionReaches,
-  parsePackageSpec,
+  COMPILER_REACT_PACKAGE_SPECS,
+  recordCompilerPackageSpecs,
 } from "../src/lib/visual-editor/compiler/runtime-packages.ts";
 import { resolveBundledAssetSource } from "./bundled-assets.mjs";
 import {
@@ -376,6 +376,7 @@ function runtimePackagePlan(compilation) {
   return [
     ...compilation.stagingPlan.runtimePackageSpecs,
     COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
+    ...COMPILER_REACT_PACKAGE_SPECS,
   ];
 }
 
@@ -736,37 +737,14 @@ async function applyRuntimePackages(projectRoot, packageSpecs) {
       "xrift createが生成したpackage.jsonを読み込めません",
     );
   }
-  const dependencies = { ...(packageJson.dependencies ?? {}) };
-  const devDependencies = packageJson.devDependencies ?? {};
-  const worldComponentsName = parsePackageSpec(
-    COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
-  ).name;
-  for (const spec of packageSpecs) {
-    let parsed;
-    try {
-      parsed = parsePackageSpec(spec);
-    } catch {
-      throw new ConvertError(
-        "runtime-package-invalid",
-        `compiler runtime package指定が無効です: ${spec}`,
-      );
-    }
-    // The template's own world-components range is kept when it already
-    // reaches the version the source was compiled against.
-    if (
-      parsed.name === worldComponentsName &&
-      declaredVersionReaches(
-        dependencies[parsed.name] ?? devDependencies[parsed.name],
-        parsed.version,
-      )
-    ) {
-      continue;
-    }
-    dependencies[parsed.name] = parsed.version;
+  try {
+    recordCompilerPackageSpecs(packageJson, packageSpecs);
+  } catch (error) {
+    throw new ConvertError(
+      "runtime-package-invalid",
+      `compiler runtime package指定が無効です: ${error.message}`,
+    );
   }
-  packageJson.dependencies = Object.fromEntries(
-    Object.entries(dependencies).sort(([left], [right]) => left.localeCompare(right)),
-  );
   await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
 }
 
@@ -924,3 +902,4 @@ export function defaultOutputPathForSource(source) {
 export function platformTempRoot() {
   return os.tmpdir();
 }
+

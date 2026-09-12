@@ -3,7 +3,7 @@ import { platform } from "@tauri-apps/plugin-os";
 
 import runtimePackageManifest from "../../packages/xrift-studio-runtime/package.json";
 import { tauri, type ProjectKind, type RuntimePaths } from "./tauri";
-import { COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC } from "./visual-editor/compiler/runtime-packages";
+import { COMPILER_REACT_PACKAGE_SPECS, COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC } from "./visual-editor/compiler/runtime-packages";
 
 export type LogKind = "stdout" | "stderr" | "info" | "exit";
 export type LogLine = { kind: LogKind; text: string; ts: number };
@@ -58,6 +58,7 @@ const COMPILER_RUNTIME_PACKAGE_ALLOWLIST = new Set([
   `troika-three-text@${runtimePackageManifest.dependencies["troika-three-text"]}`,
   `${runtimePackageManifest.name}@${runtimePackageManifest.version}`,
   COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
+  ...COMPILER_REACT_PACKAGE_SPECS,
 ]);
 
 /**
@@ -561,3 +562,4 @@ export async function startDevServer(
 
   return { child, pid, stop };
 }
+

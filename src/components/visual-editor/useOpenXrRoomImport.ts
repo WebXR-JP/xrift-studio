@@ -6,6 +6,11 @@ import { nativeRoomToCapture } from "../../lib/visual-editor/value-up/spatial-xr
 
 export type OpenXrRoomImportPhase = "idle" | "acquiring" | "cancelling" | "saving";
 
+export type OpenXrRoomImportOutcome =
+  | { status: "success"; message: string; entityIds: string[]; skippedCount: number; warnings: string[] }
+  | { status: "cancelled"; message: string }
+  | { status: "error"; message: string };
+
 type OpenXrRoomImportJob = {
   requestId: string;
   cancelled: boolean;
@@ -13,6 +18,7 @@ type OpenXrRoomImportJob = {
 };
 
 type Options = {
+  projectId: string;
   getBundle: () => PrototypeVisualProject;
   canImport: () => boolean;
   getPlayGeneration: () => number;
@@ -27,9 +33,11 @@ export function useOpenXrRoomImport(options: Options) {
   const mounted = useRef(false);
   const active = useRef<OpenXrRoomImportJob | null>(null);
   const [phase, setPhase] = useState<OpenXrRoomImportPhase>("idle");
+  const [outcome, setOutcome] = useState<OpenXrRoomImportOutcome | null>(null);
 
   useEffect(() => {
     mounted.current = true;
+    setOutcome(null);
     return () => {
       mounted.current = false;
       const job = active.current;
@@ -39,13 +47,18 @@ export function useOpenXrRoomImport(options: Options) {
         void tauri.cancelOpenXrRoomCapture(job.requestId).catch(() => undefined);
       }
     };
-  }, []);
+  }, [options.projectId]);
 
-  const capture = useCallback(async (): Promise<string> => {
-    if (active.current) throw new Error("部屋の取り込みが進行中です。");
+  const capture = useCallback(async (): Promise<void> => {
+    if (active.current) return;
     if (!mounted.current || !optionsRef.current.canImport()) {
-      throw new Error("Playと素材の取り込みを停止してから部屋を取得してください。");
+      if (mounted.current) setOutcome({
+        status: "error",
+        message: "Playを停止し、素材の処理が終わってから部屋を取り込んでください。",
+      });
+      return;
     }
+    const projectId = optionsRef.current.projectId;
     const before = optionsRef.current.getBundle();
     const playGeneration = optionsRef.current.getPlayGeneration();
     const job: OpenXrRoomImportJob = {
@@ -54,9 +67,11 @@ export function useOpenXrRoomImport(options: Options) {
       phase: "acquiring",
     };
     active.current = job;
+    setOutcome(null);
     setPhase(job.phase);
     const assertCurrent = () => {
-      if (!mounted.current || job.cancelled || active.current !== job) {
+      if (!mounted.current || job.cancelled || active.current !== job
+        || optionsRef.current.projectId !== projectId) {
         throw new Error("部屋の取り込みを取り消しました。");
       }
       if (optionsRef.current.getBundle() !== before
@@ -77,10 +92,21 @@ export function useOpenXrRoomImport(options: Options) {
       const result = await applySpatialCaptureModels(path, before, document, { assertCurrent });
       assertCurrent();
       if (!result.applied.length) throw new Error("配置できる部屋の形状がありませんでした。");
-      const warnings = room.warnings.length ? ` ${room.warnings.join(" / ")}` : "";
-      const message = `部屋の${result.applied.length}件を配置、${result.skipped.length}件をスキップしました。Hierarchyで選択したEntityの寸法・向き・床位置を確認してください。${warnings}`;
+      const message = `部屋の形状を${result.applied.length}件追加しました。`;
       optionsRef.current.commit(result, message);
-      return message;
+      setOutcome({
+        status: "success",
+        message,
+        entityIds: result.applied.map(({ entityId }) => entityId),
+        skippedCount: result.skipped.length,
+        warnings: room.warnings,
+      });
+    } catch (cause) {
+      if (mounted.current && optionsRef.current.projectId === projectId) {
+        setOutcome(job.cancelled
+          ? { status: "cancelled", message: "取得を取り消しました。シーンへの追加はありません。" }
+          : { status: "error", message: cause instanceof Error ? cause.message : String(cause) });
+      }
     } finally {
       if (active.current === job) {
         active.current = null;
@@ -95,9 +121,10 @@ export function useOpenXrRoomImport(options: Options) {
     job.cancelled = true;
     job.phase = "cancelling";
     setPhase(job.phase);
-    // Even if the native cancellation fails, this job can no longer commit.
-    await tauri.cancelOpenXrRoomCapture(job.requestId);
+    // Local cancellation always prevents Scene commit. Keep the cancelling
+    // phase until acquisition settles, even if native cancellation is delayed.
+    await tauri.cancelOpenXrRoomCapture(job.requestId).catch(() => undefined);
   }, []);
 
-  return { phase, capture, cancel };
+  return { phase, outcome, capture, cancel };
 }

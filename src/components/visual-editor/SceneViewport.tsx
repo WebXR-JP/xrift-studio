@@ -1,4 +1,4 @@
-import type { OpenXrRoomImportPhase } from "./useOpenXrRoomImport";
+import type { OpenXrRoomImportOutcome, OpenXrRoomImportPhase } from "./useOpenXrRoomImport";
 import { SpatialXrPanel } from "./SpatialXrPanel";
 import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
 import { XriftModelInstancing } from "../../../packages/xrift-studio-runtime/src/script/model-instancing";
@@ -105,6 +105,7 @@ import {
   Sphere,
   SphereGeometry,
   TextureLoader,
+  TOUCH,
   Vector2,
   Vector3,
   type Group,
@@ -311,6 +312,10 @@ import {
   useWorldPlaySceneReady,
 } from "./scene-model-load-tracker";
 import { ScrubNumberInput } from "./ScrubNumberInput";
+import { useEditorDevice } from "./useEditorDevice";
+import { WorldPlayTouchControls } from "./WorldPlayTouchControls";
+
+const VIEWPORT_TOUCH_CONTROLS = { ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN };
 
 function ViewportLoadProtection({ onReduce }: { onReduce: () => void }) {
   const slowSeconds = useRef(0);
@@ -2542,9 +2547,71 @@ function EntityTransformGizmo({
   onDragEnd: () => void;
 }) {
   const sceneRoot = useThree((state) => state.scene);
+  const surface = useThree((state) => state.gl.domElement);
+  const localControlsRef = useRef<ElementRef<typeof TransformControls> | null>(null);
+  const lastTouchRef = useRef<PointerEvent | null>(null);
+  const draggingTouchRef = useRef<PointerEvent | null>(null);
+  const bindControls = useCallback((controls: ElementRef<typeof TransformControls> | null) => {
+    localControlsRef.current = controls;
+    controlsRef(controls);
+  }, [controlsRef]);
+
+  useEffect(() => {
+    const cancelTouchDrag = () => {
+      const pointer = draggingTouchRef.current;
+      if (!pointer) return;
+      draggingTouchRef.current = null;
+      // three-stdlib listens for pointerup but not pointercancel. Restore the
+      // starting pose, then feed its ordinary release path so its drag state,
+      // OrbitControls and the editor's transaction all finish together.
+      localControlsRef.current?.reset();
+      surface.dispatchEvent(new PointerEvent("pointerup", {
+        bubbles: true,
+        button: 0,
+        pointerId: pointer.pointerId,
+        pointerType: pointer.pointerType,
+        clientX: pointer.clientX,
+        clientY: pointer.clientY,
+      }));
+    };
+    const rememberTouch = (event: PointerEvent) => {
+      if (event.pointerType !== "touch" && event.pointerType !== "pen") {
+        if (event.target === surface) lastTouchRef.current = null;
+        return;
+      }
+      if (draggingTouchRef.current && draggingTouchRef.current.pointerId !== event.pointerId) {
+        cancelTouchDrag();
+        // A second finger must not move the object using the first finger's
+        // drag plane. Camera gestures remain available in view-only mode.
+        if (event.target === surface) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        return;
+      }
+      if (event.target === surface) lastTouchRef.current = event;
+    };
+    const onCancel = (event: PointerEvent) => {
+      if (draggingTouchRef.current?.pointerId === event.pointerId) cancelTouchDrag();
+    };
+    const onVisibilityChange = () => {
+      if (document.hidden) cancelTouchDrag();
+    };
+    window.addEventListener("pointerdown", rememberTouch, true);
+    window.addEventListener("pointercancel", onCancel, true);
+    window.addEventListener("blur", cancelTouchDrag);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pointerdown", rememberTouch, true);
+      window.removeEventListener("pointercancel", onCancel, true);
+      window.removeEventListener("blur", cancelTouchDrag);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [surface]);
+
   return createPortal(
     <TransformControls
-      ref={controlsRef}
+      ref={bindControls}
       object={objectRef}
       mode={transformMode}
       space={transformSpace}
@@ -2556,8 +2623,15 @@ function EntityTransformGizmo({
         gizmo.snapEnabled ? (gizmo.rotateSnapDegrees * Math.PI) / 180 : null
       }
       scaleSnap={gizmo.snapEnabled ? gizmo.scaleSnap : null}
-      onMouseDown={onDragStart}
-      onMouseUp={onDragEnd}
+      onMouseDown={() => {
+        draggingTouchRef.current = lastTouchRef.current;
+        lastTouchRef.current = null;
+        onDragStart();
+      }}
+      onMouseUp={() => {
+        draggingTouchRef.current = null;
+        onDragEnd();
+      }}
     />,
     sceneRoot,
   );
@@ -3083,6 +3157,8 @@ export type SceneViewCameraRequest = {
   preset?: SceneViewCameraPreset;
   /** Frames this Entity's real rendered bounds, as the F key does. */
   focusEntityId?: string;
+  /** Frames an imported room together without changing ordinary F-key focus. */
+  focusEntityIds?: readonly string[];
   /** Explicit placement. `target` alone keeps the current distance. */
   position?: Vec3;
   target?: Vec3;
@@ -3674,7 +3750,40 @@ function CameraControls({
 
     const target = new Vector3();
     let radius = 0;
-    if (request.focusEntityId) {
+    if (request.focusEntityIds?.length) {
+      const roomBounds = new Sphere().makeEmpty();
+      const requestedIds = new Set(request.focusEntityIds);
+      const roomObjects = new Map<string, Object3D>();
+      // Scan once: a room can contain thousands of Entities.
+      threeScene.traverse((object) => {
+        const id = object.userData.authoringEntityId;
+        if (requestedIds.has(id) && object.userData.renderedEntityId === id && !roomObjects.has(id)) {
+          roomObjects.set(id, object);
+        }
+      });
+      for (const entityId of request.focusEntityIds) {
+        const object = roomObjects.get(entityId);
+        if (!object) continue;
+        const bounds = computeEntityFocusBounds(object);
+        if (bounds) {
+          roomBounds.union(new Sphere(new Vector3(...bounds.center), bounds.radius));
+        } else {
+          object.updateWorldMatrix(true, true);
+          roomBounds.expandByPoint(object.getWorldPosition(new Vector3()));
+        }
+      }
+      if (roomBounds.isEmpty()) {
+        report({
+          ok: false,
+          position: currentPosition.toArray() as Vec3,
+          target: currentTarget.toArray() as Vec3,
+          message: "取り込んだ部屋の形状を読み込み中です。少し待ってからもう一度表示してください。",
+        });
+        return;
+      }
+      target.copy(roomBounds.center);
+      radius = roomBounds.radius;
+    } else if (request.focusEntityId) {
       const object = findSceneEntityObject(threeScene, request.focusEntityId);
       if (!object) {
         report({
@@ -3735,6 +3844,13 @@ function CameraControls({
     direction.setLength(Math.min(distance, camera.far * 0.8));
     camera.position.copy(target.clone().add(direction));
     controls.target.copy(target);
+    if (request.focusEntityIds?.length && camera instanceof OrthographicCamera && radius > 0) {
+      const span = Math.min(Math.abs(camera.right - camera.left), Math.abs(camera.top - camera.bottom));
+      if (span > 0) {
+        camera.zoom = span / (2 * radius * 1.25);
+        camera.updateProjectionMatrix();
+      }
+    }
     // Straight down has no yaw to keep, and the default up vector makes the
     // view roll to an arbitrary heading. Pinning it keeps -Z up on screen.
     camera.up.set(
@@ -3761,6 +3877,7 @@ function CameraControls({
       maxPolarAngle={Math.PI / 2 - 0.03}
       enableDamping
       dampingFactor={0.08}
+      touches={VIEWPORT_TOUCH_CONTROLS}
       onEnd={handleControlsEnd}
     />
   );
@@ -4743,8 +4860,11 @@ export function SceneViewport({
   snapShortcut,
   onTogglePlay,
   roomImportPhase,
+  roomImportOutcome,
+  roomImportDisabledReason,
   onCaptureOpenXrRoom,
   onCancelOpenXrRoom,
+  onFocusImportedRoom,
   onTransformModeChange,
   onToggleTransformSpace,
   onGizmoSettingsChange,
@@ -4823,8 +4943,11 @@ export function SceneViewport({
   snapShortcut?: string;
   onTogglePlay: () => void;
   roomImportPhase?: OpenXrRoomImportPhase;
-  onCaptureOpenXrRoom?: () => Promise<string>;
+  roomImportOutcome?: OpenXrRoomImportOutcome | null;
+  roomImportDisabledReason?: string;
+  onCaptureOpenXrRoom?: () => Promise<void>;
   onCancelOpenXrRoom?: () => Promise<void>;
+  onFocusImportedRoom?: () => void;
   onTransformModeChange: (mode: TransformMode) => void;
   onToggleTransformSpace: () => void;
   /** Snap is flipped often enough that the toolbar patches it without Undo. */
@@ -4891,6 +5014,16 @@ export function SceneViewport({
   onExitRecordingView?: () => void;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
+  const { tablet } = useEditorDevice();
+  const [touchNavigate, setTouchNavigate] = useState(false);
+  const [touchAdditiveSelection, setTouchAdditiveSelection] = useState(false);
+  const [touchFrameRequest, setTouchFrameRequest] = useState(0);
+  const touchNavigationActive = tablet && touchNavigate;
+  const terrainBrushActive = Boolean(terrainEditing) && !touchNavigationActive;
+  // A second finger cancels the entire tap, including the finger released
+  // last. Otherwise lifting a pinch can select an Entity or clear selection.
+  const activeTouchPointersRef = useRef(new Set<number>());
+  const suppressTouchSelectionRef = useRef(false);
   // The recording view: the same Canvas, letterboxed to the profile's aspect
   // ratio and drawn at its resolution. Reading the controller here rather than
   // threading props through the shell keeps the take's settings in one place.
@@ -5034,6 +5167,8 @@ export function SceneViewport({
     entityId: string;
     componentId: string;
   } | null>(null);
+  const terrainStrokeCancelRef = useRef(onTerrainStrokeCancel);
+  terrainStrokeCancelRef.current = onTerrainStrokeCancel;
   const rightPointerGestureRef = useRef<{
     pointerId: number;
     startX: number;
@@ -5049,6 +5184,43 @@ export function SceneViewport({
     additive: boolean;
     pressedEntityId: string | null;
   } | null>(null);
+
+  useEffect(() => {
+    const clearTouches = () => {
+      const stroke = terrainPointerRef.current;
+      terrainPointerRef.current = null;
+      terrainInvertedRef.current = false;
+      terrainHoverRef.current = null;
+      if (stroke) {
+        terrainStrokeCancelRef.current?.(stroke.entityId);
+        const viewport = viewportRef.current;
+        if (viewport?.hasPointerCapture(stroke.pointerId)) {
+          viewport.releasePointerCapture(stroke.pointerId);
+        }
+      }
+      activeTouchPointersRef.current.clear();
+      suppressTouchSelectionRef.current = true;
+      leftPointerGestureRef.current = null;
+    };
+    const releaseTouch = (event: PointerEvent) => {
+      if (event.pointerType !== "touch") return;
+      activeTouchPointersRef.current.delete(event.pointerId);
+    };
+    const onVisibilityChange = () => {
+      if (document.hidden) clearTouches();
+    };
+    window.addEventListener("pointerup", releaseTouch);
+    window.addEventListener("pointercancel", releaseTouch);
+    window.addEventListener("blur", clearTouches);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pointerup", releaseTouch);
+      window.removeEventListener("pointercancel", releaseTouch);
+      window.removeEventListener("blur", clearTouches);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      clearTouches();
+    };
+  }, [editorMode]);
   const preview = useMemo(
     () => createSceneViewportPreview(scene, assets, prefabs),
     [assets, prefabs, scene],
@@ -5420,6 +5592,7 @@ export function SceneViewport({
     const keys = pressedKeysRef.current;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!playInputActiveRef.current || event.isComposing) return;
+      if (event.target instanceof Element && event.target.closest("dialog[open]")) return;
       if (isEditableShortcutTarget(event.target)) return;
       keys.add(event.code);
     };
@@ -5551,10 +5724,31 @@ export function SceneViewport({
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
     const isCanvasPointer = event.target instanceof HTMLCanvasElement;
+    if (isCanvasPointer && event.pointerType === "touch") {
+      if (activeTouchPointersRef.current.size === 0) {
+        suppressTouchSelectionRef.current = false;
+      }
+      activeTouchPointersRef.current.add(event.pointerId);
+      if (activeTouchPointersRef.current.size > 1) {
+        suppressTouchSelectionRef.current = true;
+        leftPointerGestureRef.current = null;
+        const stroke = terrainPointerRef.current;
+        if (stroke) {
+          terrainPointerRef.current = null;
+          terrainInvertedRef.current = false;
+          onTerrainStrokeCancel?.(stroke.entityId);
+          if (event.currentTarget.hasPointerCapture(stroke.pointerId)) {
+            event.currentTarget.releasePointerCapture(stroke.pointerId);
+          }
+        }
+        return;
+      }
+    }
     if (
       isCanvasPointer &&
       event.button === 0 &&
       editorMode === "edit" &&
+      terrainBrushActive &&
       terrainEditing &&
       !transformDraggingRef.current
     ) {
@@ -5606,6 +5800,7 @@ export function SceneViewport({
     if (
       isCanvasPointer &&
       event.button === 0 &&
+      !touchNavigationActive &&
       !transformDraggingRef.current
     ) {
       leftPointerGestureRef.current = {
@@ -5613,7 +5808,8 @@ export function SceneViewport({
         startX: event.clientX,
         startY: event.clientY,
         moved: false,
-        additive: event.shiftKey || event.ctrlKey || event.metaKey,
+        additive: event.shiftKey || event.ctrlKey || event.metaKey ||
+          (tablet && touchAdditiveSelection),
         pressedEntityId:
           dropResolverRef.current?.(event.clientX, event.clientY, {
             includeEntityOriginFallback: true,
@@ -5648,7 +5844,7 @@ export function SceneViewport({
   }, [scene.entities, terrainEditing]);
 
   const trackTerrainHover = (clientX: number, clientY: number) => {
-    if (!terrainEditing) {
+    if (!terrainEditing || !terrainBrushActive) {
       terrainHoverRef.current = null;
       return;
     }
@@ -5713,6 +5909,13 @@ export function SceneViewport({
   const handleViewportPointerUp = (
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
+    if (event.pointerType === "touch") {
+      activeTouchPointersRef.current.delete(event.pointerId);
+      if (suppressTouchSelectionRef.current) {
+        leftPointerGestureRef.current = null;
+        return;
+      }
+    }
     const terrainPointer = terrainPointerRef.current;
     if (terrainPointer?.pointerId === event.pointerId) {
       const hit = dropResolverRef.current?.(event.clientX, event.clientY);
@@ -5791,10 +5994,15 @@ export function SceneViewport({
     gesture.suppressContextMenu = gesture.moved;
   };
 
-  const handleViewportPointerCancel = () => {
+  const handleViewportPointerCancel = (event: ReactPointerEvent<HTMLDivElement>) => {
     const terrainPointer = terrainPointerRef.current;
     terrainPointerRef.current = null;
     if (terrainPointer) onTerrainStrokeCancel?.(terrainPointer.entityId);
+    terrainInvertedRef.current = false;
+    // Cancelling one contact must not make a still-held finger disappear.
+    // Keep the whole multi-touch gesture suppressed until every contact ends.
+    activeTouchPointersRef.current.delete(event.pointerId);
+    suppressTouchSelectionRef.current = true;
     leftPointerGestureRef.current = null;
     rightPointerGestureRef.current = null;
   };
@@ -5891,6 +6099,11 @@ export function SceneViewport({
     }
     const gesture = rightPointerGestureRef.current;
     event.preventDefault();
+    // A long press or right click must also respect viewpoint-only mode.
+    if (touchNavigationActive) {
+      rightPointerGestureRef.current = null;
+      return;
+    }
     if (gesture?.suppressContextMenu || gesture?.moved) {
       rightPointerGestureRef.current = null;
       return;
@@ -5937,7 +6150,9 @@ export function SceneViewport({
     projectKind === "world" ? "World Play Mode" : "Item Play Mode";
   const profileGuide =
     projectKind === "world"
-      ? playPointerLocked
+      ? tablet
+        ? "方向ボタンで移動 · 画面をドラッグで視点 · ジャンプ / 操作ボタン"
+        : playPointerLocked
         ? "WASD / 矢印キーで移動 · マウスで視点 · Space / Eでジャンプ · Gで掴む · クリックでインタラクト · Escでマウス解放"
         : "クリックして操作を開始 · ドラッグでも視点を動かせます"
       : "ドラッグでアイテムをOrbit確認";
@@ -5978,6 +6193,7 @@ export function SceneViewport({
       editable:
         editorMode === "edit" &&
         !cleanRender &&
+        !touchNavigationActive &&
         // A brush is a gesture over the ground; leaving gizmos live lets a
         // stroke grab and drag an object instead of painting.
         !terrainEditing,
@@ -6007,6 +6223,7 @@ export function SceneViewport({
       projectPath,
       renderDisplayMode,
       terrainEditing,
+      touchNavigationActive,
       transformMode,
       transformSpace,
     ],
@@ -6044,7 +6261,7 @@ export function SceneViewport({
       aria-labelledby="scene-view-heading"
     >
       <div
-        className={`@container/scene-header relative flex h-9 shrink-0 items-center gap-2 border-b px-2.5 ${
+        className={`scene-viewport-header @container/scene-header relative flex shrink-0 items-center gap-x-2 border-b px-2.5 ${tablet ? "min-h-11 flex-wrap" : "h-9"} ${
           editorMode === "play"
             ? "border-violet-400/70 bg-violet-950"
             : "border-slate-200 bg-slate-50"
@@ -6056,7 +6273,7 @@ export function SceneViewport({
          * centred while the toolbar fits in its half and slides left instead of
          * covering the tools when it does not.
          */}
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className={`flex min-w-0 flex-1 items-center gap-2 ${tablet ? "min-h-11" : ""}`}>
           {onToggleMaximize ? (
             <button
               type="button"
@@ -6194,8 +6411,15 @@ export function SceneViewport({
             </span>
           ) : null}
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <SpatialXrPanel phase={roomImportPhase} disabled={editorMode !== "edit" || playPreparing} onCaptureRoom={onCaptureOpenXrRoom} onCancelCapture={onCancelOpenXrRoom} />
+        <div className={`flex shrink-0 items-center gap-1.5 ${tablet ? "min-h-11" : ""}`}>
+          <SpatialXrPanel
+            phase={roomImportPhase}
+            outcome={roomImportOutcome}
+            disabledReason={roomImportDisabledReason}
+            onCaptureRoom={onCaptureOpenXrRoom}
+            onCancelCapture={onCancelOpenXrRoom}
+            onFocusImportedRoom={onFocusImportedRoom}
+          />
           {recordingViewActive && onExitRecordingView ? (
             <button
               type="button"
@@ -6240,7 +6464,7 @@ export function SceneViewport({
                 : "Play"}
           </button>
         </div>
-        <div className="flex flex-1 items-center justify-end gap-1.5" role="toolbar" aria-label="シーンの操作">
+        <div className={`scene-viewport-tools flex items-center gap-1.5 ${tablet ? "min-h-11 w-full flex-none flex-wrap justify-start border-t border-slate-200/40 py-1" : "flex-1 justify-end"}`} role="toolbar" aria-label="シーンの操作">
           {(["translate", "rotate", "scale"] as const).map((mode) => {
             const Icon = EDITOR_ICONS[mode === "translate" ? "move" : mode];
             const label = mode === "translate" ? "移動" : mode === "rotate" ? "回転" : "拡縮";
@@ -6251,7 +6475,10 @@ export function SceneViewport({
                 aria-label={label}
                 aria-pressed={transformMode === mode}
                 disabled={editorMode !== "edit" || colliderOnlyEdit}
-                onClick={() => onTransformModeChange(mode)}
+                onClick={() => {
+                  setTouchNavigate(false);
+                  onTransformModeChange(mode);
+                }}
                 title={commandTitle(`${label}ギズモ`, `transform.${mode}`)}
                 className={`flex size-7 shrink-0 items-center justify-center rounded border transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
                   transformMode === mode
@@ -6476,6 +6703,63 @@ export function SceneViewport({
         </div>
       </div>
 
+      {tablet && editorMode === "edit" && !recordingViewActive ? (
+        <div
+          className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-2 py-1"
+          role="toolbar"
+          aria-label="タッチ操作"
+        >
+          <button
+            type="button"
+            aria-pressed={touchNavigate}
+            disabled={transformDragging}
+            onClick={() => setTouchNavigate((active) => !active)}
+            title="視点だけ操作する間はギズモと地形ブラシを止めます"
+            className={`min-h-11 rounded border px-3 text-xs font-semibold disabled:opacity-40 ${touchNavigate ? "border-violet-500 bg-violet-600 text-white" : "border-slate-300 bg-white text-slate-700"}`}
+          >
+            視点だけ操作
+          </button>
+          <button
+            type="button"
+            aria-pressed={touchAdditiveSelection}
+            disabled={Boolean(terrainEditing)}
+            onClick={() => {
+              setTouchNavigate(false);
+              setTouchAdditiveSelection((active) => !active);
+            }}
+            title="タップしたEntityを選択に追加・解除します"
+            className={`min-h-11 rounded border px-3 text-xs font-semibold disabled:opacity-40 ${touchAdditiveSelection ? "border-violet-500 bg-violet-600 text-white" : "border-slate-300 bg-white text-slate-700"}`}
+          >
+            複数選択
+          </button>
+          <button
+            type="button"
+            disabled={!selectedEntityId || transformDragging}
+            onClick={() => setTouchFrameRequest((request) => request + 1)}
+            title="選択中のEntityへ寄ります。もう一度押すと元の視点へ戻ります"
+            className="min-h-11 rounded border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 disabled:opacity-40"
+          >
+            選択へ寄る
+          </button>
+          {terrainEditing && onTerrainEditingExit ? (
+            <button
+              type="button"
+              onClick={onTerrainEditingExit}
+              className="min-h-11 rounded border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700"
+            >
+              ブラシ終了
+            </button>
+          ) : null}
+          <p className="text-[11px] text-slate-500">
+            {terrainBrushActive
+              ? "ドラッグでブラシ · 視点変更は「視点だけ操作」"
+              : touchNavigate
+                ? "1本指で回転 · 2本指で移動・ピンチでズーム"
+                : "タップで選択 · 1本指で回転 · 2本指で移動・ズーム"}
+          </p>
+        </div>
+      ) : null}
+
       <div
         ref={viewportRef}
         tabIndex={
@@ -6486,6 +6770,7 @@ export function SceneViewport({
             : -1
         }
         className="relative min-h-0 flex-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-400"
+        style={{ touchAction: "none" }}
         aria-label={
           editorMode === "play"
             ? `${profileLabel}。${profileGuide}`
@@ -6732,8 +7017,8 @@ export function SceneViewport({
             editorMode={editorMode}
             projectKind={projectKind}
             transformDragging={transformDragging}
-            terrainEditing={Boolean(terrainEditing)}
-            frameSelectionRequest={frameSelectionRequest}
+            terrainEditing={terrainBrushActive}
+            frameSelectionRequest={frameSelectionRequest + touchFrameRequest}
             exitFocusRequest={exitFocusRequest}
             frameEntityId={selectedEntityId}
             frameEntityName={
@@ -6850,6 +7135,9 @@ export function SceneViewport({
         {worldPlayActive && playSceneReady && !thumbnailCaptureActive ? (
           <WorldPlayCrosshair active={playAimHit} />
         ) : null}
+        {tablet && worldPlayActive && playSceneReady && !thumbnailCaptureActive ? (
+          <WorldPlayTouchControls viewportRef={viewportRef} canInteract={playAimHit} />
+        ) : null}
 
         {editorMode === "play" ? (
           <div className="pointer-events-none absolute left-2.5 top-2.5 z-10 max-w-[80%] rounded-md border border-violet-400/60 bg-violet-950/90 px-2.5 py-1.5 text-xs leading-4 text-violet-50 shadow-lg backdrop-blur">
@@ -6863,7 +7151,9 @@ export function SceneViewport({
               >
                 {!playSceneReady
                   ? "3Dモデルを読み込み中…"
-                  : playLockRefused === "unsupported"
+                  : tablet
+                    ? "中央の照準を合わせて「操作」を押すと、対象を操作できます"
+                    : playLockRefused === "unsupported"
                     ? "マウスを固定できません。ドラッグで視点を動かせます"
                     : playLockRefused === "retry"
                       ? "マウスを固定できません。少し待ってクリックするか、ドラッグで視点を動かしてください"
@@ -6888,7 +7178,9 @@ export function SceneViewport({
           >
             <p className="font-semibold">地形シーン編集 · {terrainEditing.kind}</p>
             <p className="text-violet-200">
-              左ドラッグでブラシを適用 · 半径 {terrainEditing.radius.toFixed(1)}m · Escで現在のストロークを取り消し
+              {tablet
+                ? `${touchNavigationActive ? "視点を操作中 · ブラシは停止中" : "ドラッグでブラシを適用"} · 半径 ${terrainEditing.radius.toFixed(1)}m`
+                : `左ドラッグでブラシを適用 · 半径 ${terrainEditing.radius.toFixed(1)}m · Escで現在のストロークを取り消し`}
             </p>
           </div>
         ) : null}
@@ -6914,7 +7206,9 @@ export function SceneViewport({
                 フォーカス中: {scene.entities[focusedEntity.entityId]?.name ?? focusedEntity.entityName}
               </p>
               <p className="mt-0.5 text-[11px] text-zinc-400">
-                {selection?.kind === "entity" &&
+                {tablet
+                  ? "「解除」で元の視点へ戻る"
+                  : selection?.kind === "entity" &&
                 selection.id !== focusedEntity.entityId
                   ? "Fで選択対象へ切替 / Escapeで解除"
                   : "FキーまたはEscapeで解除"}
