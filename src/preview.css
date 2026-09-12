@@ -1,18 +1,4 @@
-/*
- * One palette, named once.
- *
- * The page had grown three accent hues — violet, cyan and amber — and used
- * them to tint whole card surfaces, so colour marked "this is a card" rather
- * than "this matters". That is the opposite of the product's own rule (quiet
- * white and grey; brand colour reserved for meaningful emphasis), and it left
- * four different card treatments that had to be kept in sync by hand.
- *
- * So: one accent, and it stays in the violet family because the nav carries
- * the app's own violet brand mark and a second hue beside it would read as two
- * products. Cards are white with a hairline edge; the accent appears on the
- * eyebrow, the icon chip, a link, and the primary button — and nowhere a
- * reader does not need to look.
- */
+/* Shared palette and controls for the landing page and browser dialogs. */
 .preview-shell,
 .preview-dialog-theme {
   /* Ink */
@@ -28,22 +14,13 @@
   /* The same zinc-100, but where it fills rather than divides. */
   --preview-surface-sunken: #f4f4f5;
 
-  /*
-   * The accent is darker than the violet-600 the page used for text before.
-   * #7c3aed on white measures 5.70:1 and #6d28d9 measures 7.10:1, so the
-   * eyebrow, the links and the small print all clear 7:1 rather than sitting
-   * just over the 4.5:1 line.
-   */
+
   --preview-accent: #6d28d9;
   --preview-accent-strong: #5b21b6;
   --preview-accent-tint: #f5f3ff;
   --preview-accent-line: #ddd6fe;
 
-  /*
-   * Two shadows, both anchored by a hairline border rather than replacing one.
-   * The page previously reached for 70px blurs at 8-14% opacity, which reads as
-   * haze on a white ground instead of elevation.
-   */
+
   --preview-shadow-card: 0 1px 2px rgba(24, 24, 27, 0.04),
     0 12px 32px -14px rgba(24, 24, 27, 0.14);
   --preview-shadow-lift: 0 2px 6px rgba(24, 24, 27, 0.05),
@@ -53,61 +30,16 @@
 
 .preview-shell {
   min-height: 100%;
-  overflow-x: hidden;
   color: var(--preview-ink);
   background: var(--preview-surface);
 }
-
-/*
- * Japanese wraps at any character by default, so a heading could break inside
- * a word — the materials heading read "いつもの素材か / ら、すぐ始める。".
- * `auto-phrase` breaks at phrase boundaries instead. Browsers without it fall
- * back to today's behaviour, so it is safe to state unconditionally.
- */
-.preview-hero-title,
-.preview-section-title,
-.preview-shell h2,
-.preview-shell h3 {
-  word-break: auto-phrase;
-}
-
-.preview-compact-editor-gate {
-  background:
-    radial-gradient(circle at 50% 0%, rgba(221, 214, 254, 0.75), transparent 24rem),
-    linear-gradient(180deg, #faf9ff, #ffffff 62%);
-}
-
-.preview-mobile-editor-exit {
-  position: fixed;
-  z-index: 100;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 0.75rem);
-  left: 50%;
-  width: max-content;
-  max-width: calc(100vw - 2rem);
-  transform: translateX(-50%);
-  box-shadow: 0 12px 30px rgb(24 24 27 / 0.24);
-}
-
-.preview-shell * {
-  box-sizing: border-box;
-}
-
+.preview-shell * { box-sizing: border-box; }
 .preview-shell a:focus-visible,
 .preview-shell button:focus-visible,
 .preview-shell summary:focus-visible {
-  outline: 3px solid rgba(124, 58, 237, 0.35);
+  outline: 3px solid rgba(124, 58, 237, 0.5);
   outline-offset: 3px;
 }
-
-/*
- * The brand mark is deliberately not defined here.
- *
- * It comes from the application's own `gradient-brand` / `shadow-brand` in
- * index.css by way of `src/components/Brand.tsx`, which this page reuses. A
- * second definition in this file would let the site's logo drift away from the
- * app's without anything failing.
- */
-
 .preview-nav-link {
   align-items: center;
   min-height: 2.5rem;
@@ -171,12 +103,6 @@
   background: #27272a;
 }
 
-/*
- * Solid, not the app's three-stop gradient. The gradient ran violet to blue
- * across the button, so the label sat on a different colour at each end and the
- * button competed with the headline for the eye. One flat accent leaves the
- * headline first and the button unmistakably next.
- */
 .preview-button-primary {
   color: #ffffff;
   background: var(--preview-accent);
@@ -223,350 +149,6 @@
   border-color: rgba(255, 255, 255, 0.28);
   background: rgba(255, 255, 255, 0.1);
 }
-
-.preview-hero {
-  isolation: isolate;
-  background:
-    radial-gradient(circle at 50% -12%, rgba(221, 214, 254, 0.75), transparent 37rem),
-    linear-gradient(180deg, #faf9ff 0%, #ffffff 84%);
-}
-
-.preview-hero-grid {
-  position: absolute;
-  inset: 0;
-  z-index: -3;
-  opacity: 0.38;
-  background-image:
-    linear-gradient(rgba(113, 113, 122, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(113, 113, 122, 0.08) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: linear-gradient(to bottom, black, transparent 58%);
-}
-
-.preview-hero-glow {
-  position: absolute;
-  z-index: -2;
-  border-radius: 999px;
-  pointer-events: none;
-  filter: blur(4px);
-}
-
-.preview-hero-glow-one {
-  top: 8rem;
-  left: -8rem;
-  width: 22rem;
-  height: 22rem;
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.14), transparent 68%);
-}
-
-.preview-hero-glow-two {
-  top: 5rem;
-  right: -10rem;
-  width: 28rem;
-  height: 28rem;
-  background: radial-gradient(circle, rgba(167, 139, 250, 0.2), transparent 68%);
-}
-
-.preview-kicker,
-.preview-dark-kicker {
-  display: inline-flex;
-  width: fit-content;
-  align-items: center;
-  gap: 0.5rem;
-  border: 1px solid var(--preview-accent-line);
-  border-radius: 999px;
-  padding: 0.45rem 0.85rem;
-  color: var(--preview-accent);
-  background: rgba(255, 255, 255, 0.86);
-  font-size: 0.7rem;
-  font-weight: 800;
-}
-
-/*
- * The emphasised half of a headline. It was a violet-to-blue gradient clipped
- * to the text, which loses contrast wherever the light end lands and is the
- * one thing on the page that cannot be read at a glance in a screenshot.
- * A single accent says the same thing and stays legible.
- */
-.preview-title-accent {
-  color: var(--preview-accent-strong);
-}
-
-/*
- * Three facts about the product, so they look like three of the same thing.
- * They used to be violet, cyan and amber, which invited the reader to work out
- * what the colours meant. They meant nothing.
- */
-.preview-hero-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.6rem 1rem;
-  border-radius: 999px;
-  border: 1px solid var(--preview-line);
-  color: var(--preview-ink-soft);
-  background: rgba(255, 255, 255, 0.9);
-  font-size: 0.78rem;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.preview-hero-pill svg {
-  color: var(--preview-accent);
-}
-
-@media (max-width: 767px) {
-  .preview-hero-pill {
-    width: 100%;
-  }
-}
-
-.preview-hero-title {
-  font-size: clamp(2.55rem, 8vw, 5.75rem);
-}
-
-.preview-hero-stage {
-  perspective: 1200px;
-}
-
-.preview-hero-stage-button {
-  cursor: pointer;
-}
-
-.preview-product-frame {
-  transform: translateZ(0);
-}
-
-.preview-product-frame-interactive {
-  transition:
-    transform 220ms ease,
-    box-shadow 220ms ease;
-}
-
-.preview-hero-stage-button:hover .preview-product-frame-interactive,
-.preview-hero-stage-button:focus-visible .preview-product-frame-interactive {
-  transform: translateY(-6px) scale(1.01);
-  box-shadow: 0 34px 80px rgba(91, 33, 182, 0.22);
-}
-
-.preview-screenshot-cta {
-  position: absolute;
-  right: 1rem;
-  bottom: 1rem;
-  z-index: 5;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.55rem 0.9rem;
-  border-radius: 999px;
-  color: #ffffff;
-  background: rgba(24, 24, 27, 0.82);
-  box-shadow: 0 10px 25px rgba(24, 24, 27, 0.25);
-  backdrop-filter: blur(10px);
-  font-size: 0.72rem;
-  font-weight: 800;
-  opacity: 0;
-  transform: translateY(6px);
-  transition:
-    opacity 220ms ease,
-    transform 220ms ease;
-}
-
-.preview-hero-stage-button:hover .preview-screenshot-cta,
-.preview-hero-stage-button:focus-visible .preview-screenshot-cta {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.preview-product-frame-compact img {
-  min-width: 45rem;
-}
-
-.preview-section {
-  padding-top: 7rem;
-  padding-bottom: 7rem;
-}
-
-/*
- * The alternating band. It carried a violet wash in one corner, which put a
- * third value behind the white cards that sit on it and made the section edge
- * read as a gradient rather than a change of ground. Flat grey separates the
- * bands on its own.
- */
-.preview-section-soft {
-  background: var(--preview-surface-soft);
-}
-
-.preview-eyebrow {
-  color: var(--preview-accent);
-  font-size: 0.7rem;
-  font-weight: 900;
-  letter-spacing: 0.16em;
-}
-
-.preview-section-title {
-  text-wrap: balance;
-  color: var(--preview-ink);
-  font-size: clamp(2.25rem, 4vw, 4rem);
-  font-weight: 900;
-  line-height: 1.06;
-  letter-spacing: -0.055em;
-}
-
-.preview-section-copy {
-  color: var(--preview-ink-soft);
-  font-size: 1rem;
-  line-height: 1.9;
-}
-
-/*
- * World and Item are two of the same kind of thing, so they get the same card.
- * They used to be a violet fill and a cyan fill with body text tinted to match,
- * which made the pair look like a comparison — one preferred, one not — and put
- * coloured text on a coloured ground. The difference between them is what they
- * say, and the icon.
- */
-.preview-kind-card {
-  padding: 2rem;
-  border-radius: 1.5rem;
-  border: 1px solid var(--preview-line);
-  color: var(--preview-ink);
-  background: var(--preview-surface);
-  box-shadow: var(--preview-shadow-card);
-  transition:
-    transform 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease;
-}
-
-.preview-kind-card:hover {
-  transform: translateY(-3px);
-  border-color: var(--preview-accent-line);
-  box-shadow: var(--preview-shadow-lift);
-}
-
-.preview-import-card {
-  min-height: 12.5rem;
-  padding: 1.5rem;
-  border: 1px solid var(--preview-line);
-  border-radius: 1.5rem;
-  color: var(--preview-ink);
-  background: var(--preview-surface);
-  box-shadow: var(--preview-shadow-card);
-  transition:
-    transform 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease;
-}
-
-.preview-import-card:hover {
-  transform: translateY(-3px);
-  border-color: var(--preview-accent-line);
-  box-shadow: var(--preview-shadow-lift);
-}
-
-/* The icon is where the accent is allowed; the formats below it are data. */
-.preview-import-card > svg {
-  color: var(--preview-accent);
-}
-
-.preview-import-formats {
-  color: var(--preview-ink-soft);
-}
-
-.preview-source-strip {
-  padding: 1.5rem;
-  border: 1px solid var(--preview-line);
-  border-radius: 1.5rem;
-  background: rgba(255, 255, 255, 0.72);
-}
-
-.preview-source-strip > div {
-  min-width: 0;
-}
-
-.preview-source-mark {
-  display: grid;
-  width: 2.2rem;
-  height: 2.2rem;
-  place-items: center;
-  border: 1px solid var(--preview-line);
-  border-radius: 0.75rem;
-  color: var(--preview-ink-soft);
-  background: #ffffff;
-  box-shadow: 0 6px 15px rgba(39, 39, 42, 0.06);
-  font-size: 0.72rem;
-  font-weight: 900;
-}
-
-.preview-screenshot-backdrop {
-  position: absolute;
-  inset: -2rem 12% -2rem -2rem;
-  z-index: -1;
-  border-radius: 2.5rem;
-  background:
-    radial-gradient(circle at 20% 25%, rgba(167, 139, 250, 0.28), transparent 34%),
-    var(--preview-surface-sunken);
-}
-
-.preview-dark-section {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 18% 12%, rgba(124, 58, 237, 0.22), transparent 28rem),
-    #09090b;
-}
-
-.preview-dark-grid {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  opacity: 0.12;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.2) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.2) 1px, transparent 1px);
-  background-size: 56px 56px;
-  mask-image: radial-gradient(circle at center, black, transparent 78%);
-}
-
-.preview-dark-kicker {
-  color: #c4b5fd;
-  border-color: rgba(196, 181, 253, 0.18);
-  background: rgba(139, 92, 246, 0.08);
-  box-shadow: none;
-}
-
-.preview-publish-panel {
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 1.5rem;
-  background: rgba(24, 24, 27, 0.82);
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.38);
-  backdrop-filter: blur(16px);
-}
-
-.preview-demo-callout {
-  isolation: isolate;
-}
-
-.preview-guide-callout {
-  isolation: isolate;
-}
-
-.preview-demo-glow {
-  position: absolute;
-  z-index: -1;
-  top: -9rem;
-  right: -4rem;
-  width: 26rem;
-  height: 26rem;
-  border-radius: 999px;
-  background: radial-gradient(circle, rgba(167, 139, 250, 0.28), transparent 68%);
-  pointer-events: none;
-}
-
 .preview-faq summary {
   display: flex;
   cursor: pointer;
@@ -592,10 +174,6 @@
   line-height: 1.8;
 }
 
-/* Download section.
-   Same card language as the rest of the page — white surface, 1.5rem radius,
-   zinc border — so the place that hands over an installer does not look like a
-   different site from the one that described the app. */
 .preview-download-card {
   padding: 1.65rem;
   border: 1px solid var(--preview-line);
@@ -707,8 +285,6 @@
   background: #faf5ff;
 }
 
-/* On a narrow screen the format name and the size fight for the same line and
-   both wrap mid-word. Stacked, each keeps its own line. */
 @media (max-width: 520px) {
   .preview-download-option {
     flex-direction: column;
@@ -761,186 +337,6 @@
   text-decoration: underline;
   text-underline-offset: 4px;
 }
-
-.preview-hero-download-link {
-  color: var(--preview-accent);
-  font-weight: 700;
-  text-decoration: underline;
-  text-underline-offset: 4px;
-}
-
-.preview-final-cta {
-  isolation: isolate;
-  background:
-    radial-gradient(circle at 20% 0%, rgba(139, 92, 246, 0.45), transparent 30rem),
-    var(--preview-ink);
-  box-shadow: 0 35px 90px rgba(49, 46, 129, 0.2);
-}
-
-.preview-final-grid {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  opacity: 0.11;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.25) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.25) 1px, transparent 1px);
-  background-size: 44px 44px;
-  mask-image: radial-gradient(circle at center, black, transparent 78%);
-}
-
-[data-reveal] {
-  opacity: 0;
-  transform: translateY(12px);
-  transition:
-    opacity 500ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-[data-reveal][data-revealed="true"] {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-@media (max-width: 767px) {
-  .preview-section {
-    padding-top: 5rem;
-    padding-bottom: 5rem;
-  }
-
-  .preview-kind-card {
-    padding: 1.5rem;
-  }
-
-  .preview-product-frame {
-    border-radius: 1rem;
-  }
-
-  .preview-product-frame img {
-    min-width: 52rem;
-    transform: translateX(-7%);
-  }
-
-  .preview-product-frame-compact img {
-    min-width: 46rem;
-    transform: translateX(-12%);
-  }
-
-  .preview-kicker {
-    max-width: 100%;
-    justify-content: center;
-    text-align: center;
-  }
-}
-
-@media (max-width: 420px) {
-  .preview-hero-title {
-    font-size: clamp(2.3rem, 11.5vw, 3rem);
-  }
-
-  .preview-section-title {
-    font-size: 2.15rem;
-  }
-
-}
-
-/* Showcase capture for the "世界を作る道具" section. The image is the proof the
-   section exists to give, so the frame stays quiet around it. */
-.preview-showcase {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--preview-line);
-  border-radius: 1.5rem;
-  background: var(--preview-surface);
-  box-shadow: var(--preview-shadow-lift);
-}
-
-.preview-showcase img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.preview-showcase-caption {
-  padding: 1rem 1.35rem 1.15rem;
-  border-top: 1px solid var(--preview-line-soft);
-  color: var(--preview-ink-faint);
-  font-size: 0.75rem;
-  font-weight: 600;
-  line-height: 1.7;
-}
-
-.preview-tool-card {
-  padding: 1.65rem;
-  border: 1px solid var(--preview-line);
-  border-radius: 1.5rem;
-  background: var(--preview-surface);
-  box-shadow: var(--preview-shadow-card);
-  transition:
-    transform 180ms ease,
-    border-color 180ms ease,
-    box-shadow 180ms ease;
-}
-
-.preview-tool-card:hover {
-  transform: translateY(-3px);
-  border-color: var(--preview-accent-line);
-  box-shadow: var(--preview-shadow-lift);
-}
-
-.preview-flow-list {
-  border-top: 1px solid var(--preview-line);
-  border-bottom: 1px solid var(--preview-line);
-}
-
-.preview-flow-row {
-  display: grid;
-  grid-template-columns: 2.75rem minmax(0, 1fr);
-  gap: 1rem;
-  padding: 1.5rem 0;
-  border-bottom: 1px solid var(--preview-line);
-}
-
-.preview-flow-row:last-child {
-  border-bottom: 0;
-}
-
-.preview-ai-figure {
-  overflow: hidden;
-  border: 1px solid var(--preview-line);
-  border-radius: 1.5rem;
-  background: var(--preview-surface);
-  box-shadow: var(--preview-shadow-lift);
-}
-
-/* The publish dialog sits on the dark band, so its frame is a light edge
-   rather than a border that would disappear into the background. */
-.preview-publish-figure {
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 1.5rem;
-  background: #ffffff;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .preview-shell *,
-  .preview-shell *::before,
-  .preview-shell *::after {
-    scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-
-  [data-reveal] {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/* Web upload dialog. Reuses the page's button and radius language; the only
-   new structure is the modal shell itself. */
 .preview-web-upload-backdrop {
   position: fixed;
   inset: 0;
@@ -1051,11 +447,6 @@
   margin-top: 0.85rem;
 }
 
-/*
- * The one hue on the page that is not the accent, and it earns it: this is the
- * upload failing, which is exactly what colour is for. Decoration lost its
- * colours; states kept theirs.
- */
 .preview-web-upload-error {
   margin-top: 1rem;
   border: 1px solid #fde68a;
@@ -1072,4 +463,271 @@
   justify-content: flex-end;
   gap: 0.6rem;
   margin-top: 1.25rem;
+}
+
+/* The LP scrolls independently of the editor and uses real navigation links. */
+.landing-page {
+  --landing-space: clamp(3.5rem, 7vw, 6.5rem);
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+.landing-page :is(h1, h2, h3) {
+  color: var(--preview-ink);
+  font-weight: 750;
+  word-break: auto-phrase;
+  text-wrap: balance;
+  letter-spacing: -0.035em;
+}
+.landing-page h1 {
+  margin-top: 1rem;
+  font-size: clamp(2rem, 5.1vw, 4.3rem);
+  line-height: 1.32;
+}
+.landing-page h2 {
+  margin-top: 0.65rem;
+  font-size: clamp(1.65rem, 3vw, 2.65rem);
+  line-height: 1.45;
+}
+.landing-page h3 {
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+.landing-container {
+  width: min(100% - 3rem, 72rem);
+  margin-inline: auto;
+  min-width: 0;
+}
+.landing-section {
+  padding-block: var(--landing-space);
+  scroll-margin-top: 5rem;
+}
+.landing-section-soft { background: var(--preview-surface-soft); }
+.landing-section-bordered { border-top: 1px solid var(--preview-line); }
+.landing-eyebrow {
+  color: var(--preview-ink-soft);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+.landing-hero { padding-top: clamp(2.5rem, 6vw, 5.5rem); }
+.landing-lead {
+  max-width: 43rem;
+  margin-top: 1.4rem;
+  color: var(--preview-ink-soft);
+  font-size: clamp(1rem, 1.3vw, 1.12rem);
+  line-height: 1.9;
+}
+.landing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.75rem;
+}
+.landing-page .preview-button {
+  min-height: 2.75rem;
+  max-width: 100%;
+  padding: 0.65rem 1rem;
+  border-radius: 0.65rem;
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1.5;
+  white-space: normal;
+  text-align: center;
+  box-shadow: none;
+}
+.landing-page .preview-button:hover { transform: none; }
+.landing-page .preview-button-large {
+  min-height: 3rem;
+  padding-inline: 1.25rem;
+  font-size: 0.92rem;
+}
+.landing-page .preview-button svg { flex-shrink: 0; }
+.landing-caption {
+  max-width: 45rem;
+  margin-top: 0.85rem;
+  color: var(--preview-ink-faint);
+  font-size: 0.8rem;
+  line-height: 1.8;
+}
+.landing-editor-figure { margin-top: 2.5rem; }
+.landing-screenshot-link {
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--preview-line);
+  border-radius: 0.8rem;
+  background: var(--preview-surface-soft);
+}
+.landing-editor-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.landing-editor-figure figcaption {
+  margin-top: 0.75rem;
+  color: var(--preview-ink-faint);
+  font-size: 0.75rem;
+  line-height: 1.8;
+}
+.landing-section-heading { min-width: 0; }
+.landing-section-heading > p:not(.landing-eyebrow) {
+  max-width: 44rem;
+  margin-top: 1rem;
+  color: var(--preview-ink-soft);
+  font-size: 0.96rem;
+  line-height: 1.9;
+}
+.landing-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2rem;
+  margin-top: 2.5rem;
+}
+.landing-feature {
+  min-width: 0;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--preview-line);
+}
+.landing-feature > svg { margin-bottom: 0.9rem; color: var(--preview-ink-soft); }
+.landing-feature > p,
+.landing-platform > p,
+.landing-handoff p {
+  margin-top: 0.7rem;
+  color: var(--preview-ink-soft);
+  font-size: 0.92rem;
+  line-height: 1.9;
+}
+.landing-feature .landing-feature-meta {
+  margin-top: 0.9rem;
+  font-size: 0.75rem;
+  color: var(--preview-ink-faint);
+}
+.landing-text-link {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--preview-accent);
+  font-size: 0.88rem;
+  font-weight: 650;
+  line-height: 1.6;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 0.25em;
+}
+.landing-text-link:hover { text-decoration-color: currentColor; }
+.landing-text-link svg { flex-shrink: 0; }
+.landing-feature-grid + .landing-text-link { margin-top: 1.5rem; }
+.landing-platform-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+  margin-top: 2rem;
+}
+.landing-platform {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: 1px solid var(--preview-line);
+  border-radius: 0.8rem;
+  background: var(--preview-surface);
+}
+.landing-platform > svg { color: var(--preview-ink-soft); margin-bottom: 0.8rem; }
+.landing-platform > p { flex: 1; margin-bottom: 0.75rem; }
+.landing-platform-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1rem;
+}
+.landing-handoff {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+.landing-handoff > svg { flex-shrink: 0; margin-top: 0.3rem; color: var(--preview-ink-soft); }
+.landing-handoff > div { min-width: 0; }
+.landing-handoff p { max-width: 48rem; }
+.landing-handoff .landing-text-link { margin-top: 0.3rem; }
+.landing-ai-grid,
+.landing-download-grid,
+.landing-faq-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: clamp(2rem, 5vw, 4rem);
+  align-items: start;
+}
+.landing-ai-grid { align-items: center; }
+.landing-ai-grid .landing-text-link { margin-top: 1rem; }
+.landing-ai-figure {
+  overflow: hidden;
+  min-width: 0;
+  border: 1px solid var(--preview-line);
+  border-radius: 0.8rem;
+}
+.landing-ai-figure img { display: block; width: 100%; height: auto; }
+.landing-page .preview-download-card { padding: 1.25rem; border-radius: 0.8rem; box-shadow: none; }
+.landing-page .preview-download-option { min-height: 3rem; }
+.landing-page .preview-download-details summary { min-height: 2.75rem; font-size: 0.85rem; }
+.landing-page .preview-download-group-title { font-size: 0.78rem; letter-spacing: 0; }
+.landing-page .preview-download-recheck { min-height: 2.75rem; }
+.landing-page .preview-download-step-list li { font-size: 0.88rem; }
+.landing-page .preview-download-note { font-size: 0.8rem; }
+.landing-page .preview-faq summary { font-size: 0.95rem; line-height: 1.7; }
+.landing-page .preview-faq p { font-size: 0.92rem; padding-right: 1rem; line-height: 1.9; }
+.landing-nav {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  border-bottom: 1px solid var(--preview-line);
+  background: var(--preview-surface);
+}
+.landing-nav-inner { display: flex; min-height: 4.25rem; align-items: center; justify-content: space-between; gap: 1rem; }
+.landing-nav-brand { flex-shrink: 0; }
+.landing-nav-links { display: flex; align-items: center; gap: 0.35rem; }
+.landing-nav .preview-nav-link { min-height: 2.75rem; padding-inline: 0.7rem; border-radius: 0.5rem; font-size: 0.8rem; }
+.landing-nav .preview-button { flex-shrink: 0; }
+.landing-footer { padding-block: 2rem; border-top: 1px solid var(--preview-line); }
+.landing-footer a { display: inline-flex; align-items: center; min-height: 2.75rem; font-size: 0.8rem; }
+.landing-skip-link {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 50;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--preview-surface);
+  color: var(--preview-accent);
+  transform: translateY(-200%);
+}
+.landing-skip-link:focus { transform: none; }
+
+@media (max-width: 767px) {
+  .landing-container { width: calc(100% - 2rem); }
+  .landing-nav-inner { min-height: 3.75rem; gap: 0.5rem; }
+  .landing-nav-links { gap: 0.1rem; }
+  .landing-nav .preview-button { padding-inline: 0.65rem; }
+  .landing-section { scroll-margin-top: 4.5rem; }
+  .landing-feature-grid { grid-template-columns: minmax(0, 1fr); gap: 1.3rem; margin-top: 1.75rem; }
+  .landing-feature { padding-top: 1.25rem; }
+  .landing-feature > svg { margin-bottom: 0.5rem; }
+  .landing-platform-grid,
+  .landing-ai-grid,
+  .landing-download-grid,
+  .landing-faq-grid { grid-template-columns: minmax(0, 1fr); }
+  .landing-platform-grid { gap: 1rem; }
+  .landing-ai-figure { max-width: 32rem; }
+  .landing-faq-grid { gap: 1.5rem; }
+  .landing-editor-figure { margin-top: 1.75rem; }
+}
+@media (max-width: 479px) {
+  .landing-nav-brand > span > span:last-child { display: none; }
+  .landing-actions { flex-direction: column; align-items: stretch; gap: 0.6rem; }
+  .landing-actions .preview-button { width: 100%; }
+  .landing-handoff { gap: 0.65rem; }
+  .landing-handoff h3 { font-size: 1rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .preview-shell *,
+  .preview-dialog-theme * { transition: none !important; }
 }

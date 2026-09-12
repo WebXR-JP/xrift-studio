@@ -17,6 +17,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         preview: fileURLToPath(new URL("./preview.html", import.meta.url)),
+        editor: fileURLToPath(new URL("./editor.html", import.meta.url)),
         // The guide is emitted as static HTML by staticGuide, without the app bundle.
       },
     },
