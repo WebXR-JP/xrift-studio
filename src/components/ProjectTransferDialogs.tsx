@@ -314,7 +314,7 @@ export function ImportProjectArchiveDialog({
   return (
     <DialogFrame
       titleId="import-project-title"
-      title="ZIPからプロジェクトを取り込む"
+      title="ファイルからプロジェクトを取り込む"
       icon={<PackageOpen size={16} strokeWidth={2} />}
       busy={busy}
       onClose={onClose}
@@ -510,7 +510,7 @@ export function ExportProjectResultDialog({ result, onOpenFolder, onClose }: Exp
       }
     >
       <p className="mt-1 text-xs text-zinc-600">
-        「{result.projectLabel}」をZIPに書き出しました。別のXRift Studioで開くには、「ZIPから取り込む」を選んでください。
+        「{result.projectLabel}」をプロジェクトファイルに書き出しました。別のXRift Studioで開くには、「ファイルから取り込む」を選んでください。
       </p>
       <p className="mt-3 truncate font-mono text-[11px] text-zinc-700" title={result.archivePath}>
         {fileName}

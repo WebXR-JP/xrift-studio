@@ -12,6 +12,7 @@ const server = await createServer({
 });
 after(async () => { await server.close(); });
 const transfer = await server.ssrLoadModule("/src/lib/visual-editor/browser-project-transfer.ts");
+const { projectPackageFileName } = await server.ssrLoadModule("/src/lib/project-package.ts");
 const { createPrototypeProject } = await server.ssrLoadModule("/src/lib/visual-editor/prototype-project.ts");
 const { createPrefabDocument, addPrefabAsset } = await server.ssrLoadModule("/src/lib/visual-editor/prefab-document.ts");
 
@@ -20,7 +21,7 @@ function projectDocuments() {
   return { project: bundle.project, scenes: { [bundle.scene.sceneId]: bundle.scene }, assets: bundle.assets, prefabs: bundle.prefabs };
 }
 
-test("ZIP preserves all scenes, Prefabs and exact source bytes in the desktop layout", async () => {
+test(".xriftstudio preserves all scenes, Prefabs and source bytes, and remains readable as legacy ZIP", async () => {
   const documents = projectDocuments();
   const scene = documents.scenes[documents.project.entrySceneId];
   documents.scenes["scene-second"] = { ...scene, sceneId: "scene-second", name: "別のシーン" };
@@ -42,22 +43,44 @@ test("ZIP preserves all scenes, Prefabs and exact source bytes in the desktop la
     [".xrift/world.json", new TextEncoder().encode('{"id":"old-world"}')],
   ]);
   const result = await transfer.createBrowserProjectArchive(documents, files);
-  assert.equal(result.fileName, "tablet-world.zip");
+  assert.equal(result.fileName, "tablet-world.xriftstudio");
+  assert.equal(result.blob.type, "application/octet-stream");
   const entries = unzipSync(new Uint8Array(await result.blob.arrayBuffer()));
   assert.ok(entries["tablet-world/xrift-studio.project.json"]);
   assert.ok(entries["tablet-world/.xrift-studio/package-manifest.json"]);
   assert.equal(entries["tablet-world/.xrift/world.json"], undefined);
   assert.deepEqual(entries["tablet-world/assets/imported/model.glb"], bytes);
-  const restored = await transfer.readBrowserProjectArchive(new File([result.blob], result.fileName));
-  assert.deepEqual(Object.keys(restored.documents.scenes).sort(), Object.keys(documents.scenes).sort());
-  assert.deepEqual(restored.documents.prefabs, documents.prefabs);
-  assert.deepEqual(restored.files.get("assets/imported/model.glb"), bytes);
-  assert.deepEqual(restored.files.get("public/thumbnail.png"), bytes);
-  assert.notEqual(restored.documents.project.projectId, documents.project.projectId);
-  assert.equal(restored.documents.project.lastPublication, undefined);
+  for (const fileName of [result.fileName, "legacy.zip"]) {
+    const restored = await transfer.readBrowserProjectArchive(new File([result.blob], fileName));
+    assert.deepEqual(restored.documents.scenes, JSON.parse(JSON.stringify(documents.scenes)));
+    assert.deepEqual(restored.documents.prefabs, documents.prefabs);
+    assert.deepEqual(restored.files.get("assets/imported/model.glb"), bytes);
+    assert.deepEqual(restored.files.get("public/thumbnail.png"), bytes);
+    assert.notEqual(restored.documents.project.projectId, documents.project.projectId);
+    assert.equal(restored.documents.project.lastPublication, undefined);
+  }
   assert.equal(files.has(".xrift/world.json"), true, "Export does not mutate stored files");
   files.delete("assets/imported/fragment.json");
   await assert.rejects(() => transfer.createBrowserProjectArchive(documents, files), /素材.*ファイルがありません/);
+});
+
+test("project package names replace existing suffixes and are safe download filenames", () => {
+  for (const [name, expected] of [
+    ["tablet-world", "tablet-world.xriftstudio"],
+    ["tablet-world.zip", "tablet-world.xriftstudio"],
+    ["tablet-world.XriftStudio", "tablet-world.xriftstudio"],
+    [" 湖:夜?.ZIP ", "湖-夜-.xriftstudio"],
+    [".xriftstudio", "xrift-project.xriftstudio"],
+    [" ... ", "xrift-project.xriftstudio"],
+  ]) assert.equal(projectPackageFileName(name), expected);
+});
+
+test("both extensions reject corrupt archives and archives without project documents", async () => {
+  const unrelatedArchive = zipSync({ "readme.txt": new TextEncoder().encode("No project here") });
+  for (const fileName of ["invalid.xriftstudio", "invalid.zip"]) {
+    await assert.rejects(() => transfer.readBrowserProjectArchive(new File(["not an archive"], fileName)));
+    await assert.rejects(() => transfer.readBrowserProjectArchive(new File([unrelatedArchive], fileName)), /XRift Studio/);
+  }
 });
 
 test("missing scene files and unsafe paths are rejected before opening another project", async () => {

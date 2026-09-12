@@ -3,6 +3,7 @@ import { assetManifestCodec, visualProjectDocumentCodec } from "./serialization"
 import { parseVisualProjectFiles, serializeVisualProjectDocuments, type VisualProjectDocuments } from "./persistence";
 import { createDocumentId } from "./document-id";
 import { validateBrowserRelativePath } from "../browser-project-storage";
+import { PROJECT_PACKAGE_MIME_TYPE, projectPackageFileName } from "../project-package";
 
 export const BROWSER_PROJECT_ARCHIVE_MAX_BYTES = 256 * 1024 * 1024;
 const MAX_ENTRIES = 20_000;
@@ -106,13 +107,13 @@ export async function createBrowserProjectArchive(documents: VisualProjectDocume
   // compression buffer and worker startup on memory-constrained tablets.
   const archive = zipSync(zipFiles, { level: 0 });
   if (archive.byteLength > BROWSER_PROJECT_ARCHIVE_MAX_BYTES) {
-    throw new Error("ZIPが256 MBを超えました。大きな素材を減らしてから書き出してください。");
+    throw new Error("プロジェクトファイルが256 MBを超えました。大きな素材を減らしてから書き出してください。");
   }
-  return { blob: new Blob([new Uint8Array(archive)], { type: "application/zip" }), fileName: `${folderName}.zip`, fileCount: files.size };
+  return { blob: new Blob([new Uint8Array(archive)], { type: PROJECT_PACKAGE_MIME_TYPE }), fileName: projectPackageFileName(documents.project.metadata.name), fileCount: files.size };
 }
 
 export async function readBrowserProjectArchive(file: File): Promise<{ documents: VisualProjectDocuments; files: Map<string, Uint8Array> }> {
-  if (file.size > BROWSER_PROJECT_ARCHIVE_MAX_BYTES) throw new Error("ブラウザ版で開けるZIPは256 MBまでです。大きなプロジェクトはデスクトップ版で開いてください。");
+  if (file.size > BROWSER_PROJECT_ARCHIVE_MAX_BYTES) throw new Error("ブラウザ版で開けるプロジェクトファイルは256 MBまでです。大きなプロジェクトはデスクトップ版で開いてください。");
   const names = new Set<string>();
   let unpackedBytes = 0;
   const entries = unzipSync(new Uint8Array(await file.arrayBuffer()), {
@@ -129,7 +130,7 @@ export async function readBrowserProjectArchive(file: File): Promise<{ documents
     },
   });
   const manifests = Object.keys(entries).filter((path) => path === PROJECT_MANIFEST || (path.endsWith(`/${PROJECT_MANIFEST}`) && path.split("/").length === 2));
-  if (manifests.length !== 1) throw new Error("XRift Studioで書き出したビジュアルプロジェクトのZIPを選んでください。");
+  if (manifests.length !== 1) throw new Error("XRift Studioで書き出したビジュアルプロジェクト（.xriftstudioまたは.zip）を選んでください。");
   const prefix = manifests[0].slice(0, -PROJECT_MANIFEST.length);
   const files = new Map<string, Uint8Array>();
   for (const [path, bytes] of Object.entries(entries)) {

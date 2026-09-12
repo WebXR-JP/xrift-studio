@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Download, LoaderCircle, Share2 } from "lucide-react";
+import { PROJECT_PACKAGE_MIME_TYPE } from "../lib/project-package";
 
 export type BrowserRecentProject = { path: string; name: string; title: string; kind: "world" | "item"; modifiedAt: string };
 
@@ -43,7 +44,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
     return () => { window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000); };
   }, [ready]);
 
-  const sharedFile = ready ? new File([ready.blob], ready.fileName, { type: "application/zip" }) : null;
+  const sharedFile = ready ? new File([ready.blob], ready.fileName, { type: PROJECT_PACKAGE_MIME_TYPE }) : null;
   let canShare = false;
   try { canShare = Boolean(sharedFile && navigator.canShare?.({ files: [sharedFile] })); } catch { /* File sharing is optional. */ }
 
@@ -55,7 +56,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
       await navigator.share({ files: [sharedFile], title: "XRift Studio プロジェクト" });
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
-        setShareMessage("共有を開けませんでした。「ファイルに保存」からZIPを保存してください。");
+        setShareMessage("共有を開けませんでした。「ファイルに保存」からプロジェクトファイルを保存してください。");
       }
     } finally { setSharing(false); }
   };
@@ -74,11 +75,11 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
       {state?.phase === "preparing" ? (
         <p role="status" className="mt-5 flex items-center gap-3 text-sm text-zinc-600">
           <LoaderCircle size={18} className="animate-spin motion-reduce:animate-none" />
-          {state.operation === "export" ? "シーンと素材をZIPにまとめています…" : "プロジェクトを読み込んでいます…"}
+          {state.operation === "export" ? "シーンと素材をプロジェクトファイルにまとめています…" : "プロジェクトを読み込んでいます…"}
         </p>
       ) : null}
       {state?.phase === "select" ? <div className="mt-4 space-y-4 text-sm text-zinc-600">
-        <p>このブラウザのプロジェクトを開くか、XRift Studioで書き出したZIPを選びます。</p>
+        <p>このブラウザのプロジェクトを開くか、XRift Studioで書き出した.xriftstudioファイルを選びます。従来の.zipも開けます。</p>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => onNewProject("world")} className="preview-button preview-button-light min-h-11">新規ワールド</button>
           <button type="button" onClick={() => onNewProject("item")} className="preview-button preview-button-light min-h-11">新規アイテム</button>
@@ -91,27 +92,27 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
               <span className="shrink-0 text-xs text-zinc-500">{project.kind === "world" ? "ワールド" : "アイテム"}</span>
             </button>)}
           </div>
-        </div> : <p className="text-xs">保存済みのプロジェクトがない場合は、新規作成かZIPの取り込みから始めます。</p>}
+        </div> : <p className="text-xs">保存済みのプロジェクトがない場合は、新規作成かファイルの取り込みから始めます。</p>}
       </div> : null}
       {ready ? (
         <div className="mt-4 space-y-4 text-sm leading-relaxed text-zinc-600">
-          <p>編集データと取り込んだ素材をまとめました。ZIPを保存して、パソコンのXRift Studioで制作を続けられます。</p>
+          <p>編集データと取り込んだ素材をまとめた.xriftstudioファイルです。保存して、パソコンのXRift Studioで制作を続けられます。</p>
           <p className="break-all rounded-lg border border-zinc-200 bg-zinc-50 p-3 font-medium text-zinc-800">
             {ready.fileName}<span className="ml-2 text-xs font-normal text-zinc-500">{(ready.blob.size / 1024 / 1024).toFixed(1)} MB / {ready.fileCount}ファイル</span>
           </p>
           <ol className="list-decimal space-y-2 pl-5">
-            <li>「ファイルに保存」でZIPをダウンロードします。保存先はSafariのダウンロード一覧で確認できます。</li>
+            <li>「ファイルに保存」で.xriftstudioファイルをダウンロードします。保存先はSafariのダウンロード一覧で確認できます。</li>
             <li>iCloud DriveなどでMacまたはWindowsへ渡します。</li>
-            <li>パソコン版のプロジェクト一覧で「ZIPから取り込む」を選びます。公開はパソコンから行います。</li>
+            <li>パソコン版のプロジェクト一覧で「ファイルから取り込む」を選びます。公開はパソコンから行います。</li>
           </ol>
-          <p className="text-xs">ZIPは新しい未公開のプロジェクトとして取り込まれます。同じiPadでも「開く」から制作を再開できます。</p>
+          <p className="text-xs">ファイルは新しい未公開のプロジェクトとして取り込まれます。同じiPadでも「開く」から制作を再開できます。</p>
         </div>
       ) : null}
       {state?.phase === "failed" ? <p role="alert" className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{state.message}</p> : null}
       {shareMessage ? <p role="status" className="mt-3 text-sm text-zinc-600">{shareMessage}</p> : null}
       <div className="mt-5 flex flex-wrap justify-end gap-2">
         <button type="button" onClick={onClose} disabled={busy} className="preview-button preview-button-light min-h-11 disabled:opacity-50">閉じる</button>
-        {state?.phase === "select" ? <button type="button" onClick={onPickFile} className="preview-button preview-button-primary min-h-11">ZIPを選ぶ</button> : null}
+        {state?.phase === "select" ? <button type="button" onClick={onPickFile} className="preview-button preview-button-primary min-h-11">ファイルを選ぶ</button> : null}
         {state?.phase === "failed" ? <button type="button" onClick={onRetry} className="preview-button preview-button-primary min-h-11">もう一度試す</button> : null}
         {state?.phase === "failed" && state.operation !== "export" ? <button type="button" onClick={onChooseProject} className="preview-button preview-button-light min-h-11">プロジェクトを選ぶ</button> : null}
         {ready && canShare ? <button type="button" onClick={() => void share()} disabled={busy} className="preview-button preview-button-light min-h-11"><Share2 size={16} />{sharing ? "共有中…" : "共有する"}</button> : null}

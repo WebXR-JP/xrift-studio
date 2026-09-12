@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { PROJECT_PACKAGE_EXTENSION } from "./project-package";
 import {
   commitBrowserAssetImport,
   deleteBrowserPath,
@@ -498,7 +499,7 @@ export const tauri = {
     const path = await saveDialog({
       title: "プロジェクトを書き出す",
       defaultPath: defaultFileName,
-      filters: [{ name: "XRift Studioプロジェクト (zip)", extensions: ["zip"] }],
+      filters: [{ name: "XRift Studioプロジェクト", extensions: [PROJECT_PACKAGE_EXTENSION] }],
     });
     return typeof path === "string" && path.trim() ? path : null;
   },
@@ -512,10 +513,10 @@ export const tauri = {
   selectProjectArchive: async () => {
     if (!isTauri()) return null;
     const selected = await openDialog({
-      title: "取り込むプロジェクトのzipを選択",
+      title: "取り込むXRift Studioプロジェクトを選択",
       multiple: false,
       directory: false,
-      filters: [{ name: "XRift Studioプロジェクト (zip)", extensions: ["zip"] }],
+      filters: [{ name: "XRift Studioプロジェクト", extensions: [PROJECT_PACKAGE_EXTENSION, "zip"] }],
     });
     const path = Array.isArray(selected) ? selected[0] : selected;
     return typeof path === "string" && path.trim() ? path : null;

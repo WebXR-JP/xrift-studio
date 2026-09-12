@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
+import { PROJECT_PACKAGE_ACCEPT } from "./lib/project-package";
 import { VisualEditorErrorBoundary } from "./components/visual-editor/VisualEditorErrorBoundary";
 import { CompactEditorGate } from "./preview/CompactEditorGate";
 import { RevealObserver } from "./preview/RevealObserver";
@@ -130,7 +131,7 @@ export default function PreviewApp() {
       adoptBrowserSession(path, imported.documents);
       setTransfer(null);
     } catch (error) {
-      setTransfer({ phase: "failed", operation: "import", message: error instanceof Error ? error.message : "ZIPを読み取れませんでした。別のファイルを選んでください。" });
+      setTransfer({ phase: "failed", operation: "import", message: error instanceof Error ? error.message : "プロジェクトファイルを読み取れませんでした。.xriftstudioまたは従来の.zipを選んでください。" });
     } finally { transferActive.current = false; }
   };
 
@@ -215,7 +216,7 @@ export default function PreviewApp() {
   };
 
   const transferControls = <>
-    <input ref={importInput} type="file" accept=".zip,application/zip,application/x-zip-compressed" hidden onChange={(event) => {
+    <input ref={importInput} type="file" accept={PROJECT_PACKAGE_ACCEPT} hidden onChange={(event) => {
       const file = event.currentTarget.files?.[0];
       event.currentTarget.value = "";
       if (file) void importBrowserProject(file);
