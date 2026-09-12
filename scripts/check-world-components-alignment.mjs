@@ -63,6 +63,23 @@ if (mismatches.length > 0) {
   );
 }
 
+// The compiler and editor must resolve the same React pair. A caret range
+// admits 19.3 even while the official template's R3F peers reject it.
+const editorManifest = JSON.parse(read("package.json"));
+const compilerPackages = read("src/lib/visual-editor/compiler/runtime-packages.ts");
+const runtimeManifest = JSON.parse(read("packages/xrift-studio-runtime/package.json"));
+for (const name of ["react", "react-dom"]) {
+  const version = editorManifest.dependencies[name];
+  if (!/^19\.2\.\d+$/.test(version) || !compilerPackages.includes(`"${name}@${version}"`)) {
+    throw new Error(`${name} must pin the same React 19.2 patch in editor and compiler`);
+  }
+}
+if (editorManifest.dependencies.react !== editorManifest.dependencies["react-dom"] ||
+    runtimeManifest.devDependencies.react !== editorManifest.dependencies.react ||
+    runtimeManifest.devDependencies["@xrift/world-components"] !== packageVersion) {
+  throw new Error("Editor and runtime dependency versions drifted");
+}
+
 // World Play mounts the parts DevEnvironment composes rather than a Studio
 // rewrite of them, so Play walks, jumps, grabs and aims by the same numbers a
 // world author gets from `npm run dev`. Those parts are reached by path because
@@ -107,3 +124,4 @@ process.stdout.write(
 process.stdout.write(
   `World Play player parts resolved: ${PLAY_PLAYER_MODULES.length} modules\n`,
 );
+

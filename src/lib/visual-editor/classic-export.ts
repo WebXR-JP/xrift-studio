@@ -12,6 +12,8 @@ import {
 } from "./compiler";
 import {
   COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
+  COMPILER_REACT_PACKAGE_SPECS,
+  recordCompilerPackageSpecs,
   declaredVersionReaches,
   parsePackageSpec,
 } from "./compiler/runtime-packages";
@@ -248,6 +250,7 @@ export function planClassicExportFiles(
     packageSpecs: [
       ...compilation.stagingPlan.runtimePackageSpecs,
       COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
+      ...COMPILER_REACT_PACKAGE_SPECS,
     ],
     ...(Object.keys(permissions).length > 0
       ? { xriftJsonPermissions: JSON.stringify(permissions, null, 2) }
@@ -584,7 +587,7 @@ async function listExistingPublicNames(targetPath: string): Promise<Set<string>>
  *
  * `@xrift/world-components` is only pinned when the declared range cannot
  * reach the version the source was compiled against; a template that already
- * declares `^0.47.0` is left as the author wrote it. The other specs are exact
+ * declares `^0.50.0` is left as the author wrote it. The other specs are exact
  * requirements of the emitted modules and are written as such.
  */
 async function recordPackageDependencies(
@@ -598,32 +601,11 @@ async function recordPackageDependencies(
     packageSource,
     "書き出し中にpackage.jsonを読み直せませんでした。",
   );
+  const changes = recordCompilerPackageSpecs(packageJson, packageSpecs);
   const dependencies = isRecord(packageJson.dependencies)
     ? { ...packageJson.dependencies }
     : {};
-  const devDependencies = isRecord(packageJson.devDependencies)
-    ? packageJson.devDependencies
-    : {};
-  const changes: ClassicExportPackageChange[] = [];
-  let dirty = false;
-
-  for (const spec of packageSpecs) {
-    const { name, version } = parsePackageSpec(spec);
-    const declared = dependencies[name] ?? devDependencies[name];
-    const declaredText = typeof declared === "string" ? declared : undefined;
-    if (name === COMPILER_WORLD_COMPONENTS_NAME) {
-      if (declaredVersionReaches(declaredText, version)) continue;
-    } else if (declaredText === version) {
-      continue;
-    }
-    dependencies[name] = version;
-    dirty = true;
-    changes.push({
-      name,
-      version,
-      ...(declaredText ? { previous: declaredText } : {}),
-    });
-  }
+  let dirty = changes.length > 0;
 
   // An earlier build of this export recorded the unpublished runtime package.
   // Leaving it makes every `npm install` in the project fail with E404, so it
@@ -749,3 +731,4 @@ function assertSeparateProjects(authoringPath: string, targetPath: string): void
     );
   }
 }
+

@@ -42,7 +42,7 @@ const RUNTIME_PACKAGE_DIR = path.join(repoRoot, "packages", "xrift-studio-runtim
  * src/lib/xrift-cli.ts — `pnpm cli:test` fails when they drift
  * (scripts/check-world-components-alignment.mjs).
  */
-const WORLD_COMPONENTS_SPEC = "@xrift/world-components@0.47.0";
+const WORLD_COMPONENTS_SPEC = "@xrift/world-components@0.50.0";
 const SHELL_ENTRY = "remoteEntry.js";
 const RUNTIME_CONTRACT_SOURCE = path.join(
   RUNTIME_PACKAGE_DIR,
@@ -167,7 +167,9 @@ async function main() {
     if (!tarball) throw new Error("xrift-studio-runtime のtarballを作成できませんでした");
 
     process.stdout.write("4/6 依存関係をインストールしています\n");
-    await run("npm", ["install", "--no-audit", "--no-fund"], projectDir);
+    const studioPackage = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
+    // Constrain React before the first resolution; installing the old template
+    // first can already fail with ERESOLVE.
     await run(
       "npm",
       [
@@ -176,6 +178,8 @@ async function main() {
         "--no-fund",
         "--save-exact",
         WORLD_COMPONENTS_SPEC,
+        `react@${studioPackage.dependencies.react}`,
+        `react-dom@${studioPackage.dependencies["react-dom"]}`,
         path.join(tempRoot, tarball),
       ],
       projectDir,
@@ -280,3 +284,4 @@ main().then(
     process.exit(1);
   },
 );
+

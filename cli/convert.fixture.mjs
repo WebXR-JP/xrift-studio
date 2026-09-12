@@ -1,3 +1,4 @@
+import { runRuntimePackageFixtureAssertions } from "../src/lib/visual-editor/compiler/runtime-packages.fixture.ts";
 import { spawn } from "node:child_process";
 import { runModelDownloadFixtureAssertions } from "../src/lib/visual-editor/model-download.fixture.ts";
 import { runModelInstancingFixtureAssertions } from "../src/lib/visual-editor/model-instancing.fixture.ts";
@@ -278,8 +279,13 @@ try {
     "Classic package must not depend on the unpublished runtime package",
   );
   assert(
-    packageJson.dependencies?.["@xrift/world-components"] === "0.47.0",
+    packageJson.dependencies?.["@xrift/world-components"] === "0.50.0",
     "Classic package must pin @xrift/world-components to the compiler's version when the template has none",
+  );
+  assert(
+    packageJson.dependencies?.react === "19.2.8" &&
+      packageJson.dependencies?.["react-dom"] === "19.2.8",
+    "Classic export must constrain the React pair before npm resolves peers",
   );
   const xriftJson = JSON.parse(
     await readFile(path.join(classicRoot, "xrift.json"), "utf8"),
@@ -594,6 +600,7 @@ function assertStagedWorldDeclaresItsNetworkUse(compiled) {
 
 async function runModelMaterialCompilerFixtures() {
   let sources;
+  runRuntimePackageFixtureAssertions();
   runVisualCompilerFixtureAssertions((value) => { sources = value; });
   const ts = await import("typescript-test-api");
   const source = sources.model;
@@ -902,3 +909,4 @@ async function runFixtureSuites(suites) {
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
+
