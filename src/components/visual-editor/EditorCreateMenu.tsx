@@ -79,7 +79,7 @@ export function EditorCreateMenu(props: Props) {
     <span ref={anchorRef} className="absolute left-0 top-full" />
     {open ? createPortal(<>
       <button type="button" tabIndex={-1} aria-hidden="true" onPointerDown={onClose} className="fixed inset-0 z-[84] cursor-default bg-transparent" />
-      <div ref={menuRef} tabIndex={-1} style={position} role="menu" data-touch={touch || undefined} aria-label="追加" className="editor-add-menu fixed z-[85] flex w-[340px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-xl">
+      <div ref={menuRef} tabIndex={-1} style={position} role="menu" data-touch={touch || undefined} aria-label="Entityを追加" className="editor-add-menu fixed z-[85] flex w-[340px] max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-lg border border-slate-300 bg-white shadow-xl">
         <header className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-900">追加</header>
         <div className="min-h-0 overflow-y-auto p-1.5">
           {props.onOpenExternalStore || props.onImportFile ? <div className="mb-2 border-b border-slate-200 pb-2">
