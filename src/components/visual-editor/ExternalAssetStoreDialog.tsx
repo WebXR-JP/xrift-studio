@@ -139,7 +139,7 @@ export function ExternalAssetStoreDialog({
     definition: XriftComponentDefinition,
   ) => Promise<boolean>;
 }) {
-  const [providerId, setProviderId] = useState<string>(DEFAULT_EXTERNAL_STORE_PROVIDER_ID);
+  const [providerId, setProviderId] = useState<string>(() => tauri.isAvailable() ? DEFAULT_EXTERNAL_STORE_PROVIDER_ID : "xrift-scene-recipes");
   const provider = getExternalStoreProvider(providerId);
   const [catalogRevision, setCatalogRevision] = useState(0);
   const [assets, setAssets] = useState<ExternalStoreAsset[]>([]);
@@ -158,7 +158,7 @@ export function ExternalAssetStoreDialog({
   const [installedName, setInstalledName] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open || provider.kind !== "remote-assets") {
+    if (!open || provider.kind !== "remote-assets" || !tauri.isAvailable()) {
       setLoading(false);
       setAssets([]);
       setSelectedId(null);
@@ -202,6 +202,7 @@ export function ExternalAssetStoreDialog({
   useEffect(() => {
     if (
       !open ||
+      !tauri.isAvailable() ||
       provider.kind !== "remote-assets" ||
       !selected ||
       !selectedIsInstallable
@@ -409,7 +410,15 @@ export function ExternalAssetStoreDialog({
             </div>
           </nav>
 
-          {provider.kind === "open-brush" ? (
+          {provider.kind === "remote-assets" && !tauri.isAvailable() ? (
+            <section className="min-w-0 flex-1 overflow-y-auto p-6 text-sm text-editor-text">
+              <h3 className="font-semibold">{provider.name}の素材</h3>
+              <p className="mt-3 leading-6">素材サイトからの直接追加はMac／Windows版で利用できます。iPadでは素材をファイルに保存し、Assetsの「読み込む」から追加してください。</p>
+              <a href={provider.homepageUrl} target="_blank" rel="noopener noreferrer"
+                className="mt-4 inline-flex min-h-11 items-center rounded-md border border-editor-border px-3 font-semibold text-brand-700">素材サイトを開く</a>
+              <p className="mt-4 text-xs leading-5 text-editor-muted">空・海・Terrain・3Dモデルなど、同梱のカタログはiPadでも追加できます。</p>
+            </section>
+          ) : provider.kind === "open-brush" ? (
             <OpenBrushStore
               disabledReason={disabledReason}
               onAdd={onAddOpenBrush}

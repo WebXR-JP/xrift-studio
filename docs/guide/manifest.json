@@ -57,6 +57,16 @@
       "next": "first-world"
     },
     {
+      "slug": "ipad",
+      "title": "iPadで作り、パソコンへ引き継ぐ",
+      "description": "タッチで編集し、素材を含むプロジェクトをZIPにまとめてMacまたはWindowsへ渡します。",
+      "group": "start",
+      "file": "ipad.md",
+      "keywords": "iPad タブレット Safari タッチ ZIP 書き出し エクスポート ブラウザ パソコン 保存 引き継ぎ",
+      "related": ["editor-basics", "save-and-open", "publishing"],
+      "next": "first-world"
+    },
+    {
       "slug": "first-world",
       "title": "最初のワールドを作る",
       "description": "床の上に球を置き、色を変えて保存し、Playで見て回ります。外部素材やAI接続は使いません。",

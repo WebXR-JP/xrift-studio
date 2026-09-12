@@ -1,5 +1,6 @@
 import { getEditorComponentDisabledReason, getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
 import { MeshCollisionControls } from "./MeshCollisionControls";
+import { useEditorDevice } from "./useEditorDevice";
 import { colliderModelNode, type MeshCollisionAction } from "../../lib/visual-editor/mesh-collision-actions";
 import { normalizeTextureImportSettings, type TextureImportSettingsPatch } from "../../lib/visual-editor/asset-manifest";
 import { TEXTURE_MAX_SIZE_CHOICES } from "../../lib/visual-editor/texture-conversion";
@@ -443,6 +444,8 @@ function VectorEditor({
   onScrubCancel?: () => void;
 }) {
   const axes = ["X", "Y", "Z"] as const;
+  const { touch } = useEditorDevice();
+  const [draft, setDraft] = useState<{ axisIndex: number; value: string } | null>(null);
   const transaction = useValueScrubTransaction();
   const hasScrubHandlers = Boolean(
     onScrubStart && onScrubChange && onScrubEnd && onScrubCancel,
@@ -506,6 +509,7 @@ function VectorEditor({
     immediate: boolean,
   ) => {
     if (!scrubEnabled || disabled || event.button !== 0 || scrubRef.current) return;
+    if (event.pointerType === "touch" || event.pointerType === "pen") return;
     // 編集中でも引ける。数値欄はクリックで全選択して打ち直す前提なので、
     // 欄の中で文字を範囲選択できるより、いつでも引けることを優先する。
     event.preventDefault();
@@ -524,6 +528,7 @@ function VectorEditor({
     };
     scrubRef.current = nextScrub;
     setScrub(nextScrub);
+    setDraft(null);
     if (immediate) emitScrubStart();
   };
 
@@ -587,9 +592,9 @@ function VectorEditor({
 
   return (
     <div className="relative">
-      <fieldset className="grid grid-cols-[54px_repeat(3,minmax(0,1fr))] items-center gap-1.5">
+      <fieldset className={`grid items-center gap-1.5 ${touch ? "grid-cols-3" : "grid-cols-[54px_repeat(3,minmax(0,1fr))]"}`}>
         <legend className="sr-only">{label}</legend>
-        <span className="flex min-w-0 items-center gap-1 text-xs text-slate-600">
+        <span className={`flex min-w-0 items-center gap-1 text-xs text-slate-600 ${touch ? "col-span-3" : ""}`}>
           <span>{label}</span>
           {valueKind === "scale" && onScaleLinkedChange ? (
             <button
@@ -611,7 +616,7 @@ function VectorEditor({
         </span>
         {axes.map((axis, index) => (
           <div key={axis} className="relative block min-w-0">
-            {scrubEnabled ? (
+            {scrubEnabled && !touch ? (
               <button
                 type="button"
                 disabled={disabled}
@@ -648,13 +653,16 @@ function VectorEditor({
                 inputRefs.current[index] = element;
               }}
               type="number"
-              value={displayedValues[index]}
+              inputMode={touch ? "text" : "decimal"}
+              value={draft?.axisIndex === index ? draft.value : displayedValues[index]}
               disabled={disabled}
               step={valueKind === "rotation" ? 1 : 0.1}
               aria-label={`${label} ${axis}`}
               title={
                 scrubEnabled && !disabled
-                  ? `${label} ${axis}: 左右にドラッグして調整。Shift: 微調整、Ctrl/Alt: 大きく調整。クリックで数値を入力`
+                  ? touch
+                    ? `${label} ${axis}: タップして数値を入力`
+                    : `${label} ${axis}: 左右にドラッグして調整。Shift: 微調整、Ctrl/Alt: 大きく調整。クリックで数値を入力`
                   : undefined
               }
               onPointerDown={(event) =>
@@ -663,8 +671,15 @@ function VectorEditor({
               onPointerMove={handleAxisPointerMove}
               onPointerUp={handleAxisPointerUp}
               onPointerCancel={(event) => cancelScrub(event.pointerId)}
+              onBlur={() => setDraft(null)}
               onKeyDown={(event) => {
-                if (!scrubRef.current) return;
+                if (!scrubRef.current) {
+                  if (event.key === "Enter" || event.key === "Escape") {
+                    setDraft(null);
+                    event.currentTarget.blur();
+                  }
+                  return;
+                }
                 event.stopPropagation();
                 if (event.key === "Escape") {
                   event.preventDefault();
@@ -672,6 +687,7 @@ function VectorEditor({
                 }
               }}
               onChange={(event) => {
+                setDraft({ axisIndex: index, value: event.currentTarget.value });
                 const nextValue = event.currentTarget.valueAsNumber;
                 if (!Number.isFinite(nextValue)) return;
                 const normalizedValue =
@@ -692,7 +708,7 @@ function VectorEditor({
                   ),
                 );
               }}
-              className={`h-7 w-full touch-none rounded border border-slate-300 bg-white py-1 pl-5 pr-1 text-right text-xs tabular-nums text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${NO_NUMBER_SPINNER_CLASS} ${
+              className={`h-7 w-full ${touch ? "touch-pan-y" : "touch-none"} rounded border border-slate-300 bg-white py-1 pl-5 pr-1 text-right text-xs tabular-nums text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 ${NO_NUMBER_SPINNER_CLASS} ${
                 scrubEnabled && !disabled ? "cursor-ew-resize focus:cursor-text" : ""
               }`}
             />

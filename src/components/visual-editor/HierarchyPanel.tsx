@@ -1,5 +1,6 @@
 import { createPortal } from "react-dom";
 import { EntityCreationMenuContent } from "./EntityCreationMenuContent";
+import { useEditorDevice } from "./useEditorDevice";
 import { getEntityCreationMenuEntries } from "../../lib/visual-editor/entity-creation-menu";
 import { getEditorComponentDisabledReason, getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
 import {
@@ -748,6 +749,88 @@ const HierarchyEntityRow = memo(function HierarchyEntityRow({
   );
 });
 
+/** Native destination picker is the touch equivalent of a Hierarchy drop. */
+function EntityMoveMenu({
+  scene,
+  entityId,
+  readOnly,
+  onMove,
+}: {
+  scene: SceneDocument;
+  entityId: string;
+  readOnly: boolean;
+  onMove: (parentEntityId: string | null, siblingIndex: number) => void;
+}) {
+  const entity = scene.entities[entityId];
+  const [parentId, setParentId] = useState(entity?.parentId ?? "");
+  const destinations = useMemo(
+    () => flattenHierarchy(scene, new Set(), null),
+    [scene],
+  );
+  if (!entity) return null;
+  const parentEntityId = parentId || null;
+  const siblingIndex = (
+    parentEntityId ? scene.entities[parentEntityId]?.children ?? [] : scene.rootEntityIds
+  ).filter((id) => id !== entityId).length;
+  const decision = getEntityReparentDecision(scene, entityId, parentEntityId, siblingIndex);
+  const siblings = entity.parentId
+    ? scene.entities[entity.parentId]?.children ?? []
+    : scene.rootEntityIds;
+  const currentIndex = siblings.indexOf(entityId);
+  const moveReason = decision.allowed
+    ? undefined
+    : reparentBlockedMessage(decision.reason, entity.name, scene.entities[parentId]?.name ?? null);
+  return (
+    <details className="border-t border-slate-200 py-1">
+      <summary className="cursor-pointer rounded px-2 py-2 text-xs text-slate-700 hover:bg-violet-50">
+        階層を移動
+      </summary>
+      <div className="space-y-2 px-2 py-2">
+        <label className="block text-xs text-slate-600">
+          移動先の親Entity
+          <select
+            aria-label="移動先の親Entity"
+            value={parentId}
+            disabled={readOnly}
+            onChange={(event) => setParentId(event.currentTarget.value)}
+            className="mt-1 min-h-11 w-full rounded border border-slate-300 bg-white px-2 text-sm"
+          >
+            <option value="">シーン直下</option>
+            {destinations.map(({ entity: target, depth }) => {
+              const allowed = getEntityReparentDecision(scene, entityId, target.id).allowed;
+              if (!allowed && target.id !== entity.parentId) return null;
+              return <option key={target.id} value={target.id}>{`${"　".repeat(depth)}${target.name}`}</option>;
+            })}
+          </select>
+        </label>
+        <button
+          type="button"
+          disabled={readOnly || !decision.allowed}
+          title={moveReason}
+          onClick={() => onMove(parentEntityId, siblingIndex)}
+          className="min-h-11 w-full rounded border border-slate-300 px-2 text-xs text-slate-700 hover:bg-violet-50 disabled:opacity-45"
+        >
+          この階層の末尾へ移動
+        </button>
+        {moveReason ? <p className="text-xs text-slate-500">{moveReason}</p> : null}
+        <div className="flex gap-1">
+          {([-1, 1] as const).map((offset) => (
+            <button
+              key={offset}
+              type="button"
+              disabled={readOnly || currentIndex < 0 || currentIndex + offset < 0 || currentIndex + offset >= siblings.length || !getEntityReparentDecision(scene, entityId, entity.parentId, currentIndex + offset).allowed}
+              onClick={() => onMove(entity.parentId, currentIndex + offset)}
+              className="min-h-11 flex-1 rounded border border-slate-300 px-2 text-xs text-slate-700 hover:bg-violet-50 disabled:opacity-45"
+            >
+              {offset < 0 ? "同じ階層で上へ" : "同じ階層で下へ"}
+            </button>
+          ))}
+        </div>
+      </div>
+    </details>
+  );
+}
+
 export function HierarchyPanel({
   scene,
   selection,
@@ -794,6 +877,7 @@ export function HierarchyPanel({
   renameRequest: { id: string; requestId: number } | null;
   onRename: (entityId: string, name: string) => void;
 }) {
+  const { touch } = useEditorDevice();
   const [collapsedEntityIds, setCollapsedEntityIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -1372,6 +1456,18 @@ export function HierarchyPanel({
           Hierarchy
         </h2>
         <div className="flex items-center gap-1.5">
+          {touch ? (
+            <button
+              type="button"
+              aria-label={selectedEntityId ? "選択したEntityの操作" : "Entityの作成メニュー"}
+              aria-haspopup="menu"
+              aria-expanded={Boolean(contextMenu)}
+              onClick={(event) => openContextMenu(event, selectedEntityId)}
+              className="min-h-11 rounded border border-editor-border bg-editor-surface px-2 text-xs font-semibold text-editor-text"
+            >
+              {selectedEntityId ? "操作" : "追加"}
+            </button>
+          ) : null}
           {selectedEntityIds.length > 0 ? (
             <button
               type="button"
@@ -1616,7 +1712,7 @@ export function HierarchyPanel({
       {contextMenu ? createPortal(
         <div
           ref={contextMenuRef}
-          className="fixed z-[85] max-h-[min(640px,calc(100vh-24px))] w-72 max-w-[calc(100vw-24px)] overflow-y-auto rounded-md border border-slate-300 bg-white p-1 shadow-xl"
+          className={`fixed z-[85] max-h-[min(640px,calc(100dvh-24px))] w-72 max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain rounded-md border border-slate-300 bg-white p-1 shadow-xl ${touch ? "editor-touch-menu" : ""}`}
           style={{ left: contextMenu.x, top: contextMenu.y }}
           role="menu"
           aria-label="Hierarchyのメニュー"
@@ -1668,6 +1764,30 @@ export function HierarchyPanel({
                   </button>
                 );
               })}
+              {touch && !contextMultiple ? (
+                <EntityMoveMenu
+                  key={contextEntityId}
+                  scene={scene}
+                  entityId={contextEntityId}
+                  readOnly={readOnly}
+                  onMove={(parentEntityId, siblingIndex) => {
+                    if (onCommand("entity.reparent", { entityId: contextEntityId, parentEntityId, siblingIndex })) {
+                      setCollapsedEntityIds((current) => {
+                        const next = new Set(current);
+                        const visited = new Set<string>();
+                        let ancestorId = parentEntityId;
+                        while (ancestorId && !visited.has(ancestorId)) {
+                          visited.add(ancestorId);
+                          next.delete(ancestorId);
+                          ancestorId = scene.entities[ancestorId]?.parentId ?? null;
+                        }
+                        return next.size === current.size ? current : next;
+                      });
+                      setContextMenu(null);
+                    }
+                  }}
+                />
+              ) : null}
               <div className="my-1 border-t border-slate-200" />
           </> : null}
           {!contextMultiple ? (

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { LAYERS, useXRift } from "@xrift/world-components";
 import { Raycaster, Vector2, type Object3D } from "three";
+import { WORLD_PLAY_TOUCH_INTERACT_EVENT } from "./WorldPlayTouchControls";
 
 /**
  * How far a player can reach an Interactable, in metres.
@@ -122,14 +123,25 @@ export function PlayInteractionHost({
   // a broken world.
   useEffect(() => {
     if (!active || mode !== "crosshair") return;
-    const onMouseDown = (event: MouseEvent) => {
-      if (event.button !== 0) return;
+    const onPointerDown = (event: PointerEvent) => {
+      // Touch/pen drags turn the camera. Only the explicit touch control may
+      // activate the centred target, including on browsers synthesizing mouse
+      // events after a touch gesture.
+      if (event.button !== 0 || event.pointerType !== "mouse") return;
       if (!document.pointerLockElement && event.target !== domElement) return;
       const target = aimedRef.current;
       if (target) interact(target);
     };
-    window.addEventListener("mousedown", onMouseDown);
-    return () => window.removeEventListener("mousedown", onMouseDown);
+    const onTouchInteract = () => {
+      const target = aimedRef.current;
+      if (target) interact(target);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    domElement.addEventListener(WORLD_PLAY_TOUCH_INTERACT_EVENT, onTouchInteract);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      domElement.removeEventListener(WORLD_PLAY_TOUCH_INTERACT_EVENT, onTouchInteract);
+    };
   }, [active, domElement, interact, mode]);
 
   useEffect(() => {
@@ -148,15 +160,20 @@ export function PlayInteractionHost({
     };
 
     // A click that ends an orbit drag is a camera move, not an interaction.
-    let pressedAt: { x: number; y: number } | null = null;
+    const activePointers = new Set<number>();
+    let pressedAt: { pointerId: number; x: number; y: number; dragged: boolean } | null = null;
     const onPointerDown = (event: PointerEvent) => {
-      pressedAt =
-        event.button === 0 ? { x: event.clientX, y: event.clientY } : null;
+      activePointers.add(event.pointerId);
+      pressedAt = event.button === 0 && activePointers.size === 1
+        ? { pointerId: event.pointerId, x: event.clientX, y: event.clientY, dragged: false }
+        : null;
     };
     const onPointerUp = (event: PointerEvent) => {
+      activePointers.delete(event.pointerId);
       const origin = pressedAt;
+      if (origin && origin.pointerId !== event.pointerId) return;
       pressedAt = null;
-      if (!origin || event.button !== 0) return;
+      if (!origin || origin.dragged || event.button !== 0 || event.target !== domElement) return;
       if (
         Math.abs(event.clientX - origin.x) > 4 ||
         Math.abs(event.clientY - origin.y) > 4
@@ -166,10 +183,26 @@ export function PlayInteractionHost({
       const target = findInteractable(event);
       if (target) interact(target);
     };
+    const onPointerCancel = (event: PointerEvent) => {
+      activePointers.delete(event.pointerId);
+      if (pressedAt?.pointerId === event.pointerId) pressedAt = null;
+    };
+    const cancelPointers = () => {
+      activePointers.clear();
+      pressedAt = null;
+      domElement.style.cursor = "";
+    };
 
     let lastMove = 0;
     const onPointerMove = (event: PointerEvent) => {
-      if (pressedAt) return;
+      if (pressedAt) {
+        if (pressedAt.pointerId === event.pointerId && (
+          Math.abs(event.clientX - pressedAt.x) > 4 ||
+          Math.abs(event.clientY - pressedAt.y) > 4
+        )) pressedAt.dragged = true;
+        return;
+      }
+      if (event.pointerType !== "mouse" || event.target !== domElement) return;
       const now = event.timeStamp;
       if (now - lastMove < 60) return;
       lastMove = now;
@@ -177,12 +210,16 @@ export function PlayInteractionHost({
     };
 
     domElement.addEventListener("pointerdown", onPointerDown);
-    domElement.addEventListener("pointerup", onPointerUp);
-    domElement.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerCancel);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("blur", cancelPointers);
     return () => {
       domElement.removeEventListener("pointerdown", onPointerDown);
-      domElement.removeEventListener("pointerup", onPointerUp);
-      domElement.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerCancel);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("blur", cancelPointers);
       domElement.style.cursor = "";
     };
   }, [active, camera, domElement, interact, mode, resolveInteractable]);

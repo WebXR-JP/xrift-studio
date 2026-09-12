@@ -54,6 +54,7 @@
 - [F-10 Visual Save / Compile / Preview / Upload](./ux/publishing.md#f-10)
 - [F-19 ビジュアル編集からコード編集への書き出し](./ux/publishing.md#f-19)
 - [F-27 公開前パフォーマンス概算と素材最適化](./ux/publishing.md#f-27)
+- [F-45 iPad編集とブラウザプロジェクトの受け渡し](./ux/publishing.md#f-45)
 
 ## アニメーション・スクリプト
 

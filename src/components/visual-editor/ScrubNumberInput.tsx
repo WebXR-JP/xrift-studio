@@ -8,6 +8,7 @@ import {
 
 import { roundTo } from "./editor-utils";
 import { useValueScrubTransaction } from "./value-scrub-transaction";
+import { useEditorDevice } from "./useEditorDevice";
 
 const DRAG_THRESHOLD_PX = 3;
 const DISPLAY_DECIMALS = 4;
@@ -157,6 +158,7 @@ export function ScrubNumberInput({
   unstyled = false,
   tone = "light",
 }: ScrubNumberInputProps) {
+  const { touch } = useEditorDevice();
   const transaction = useValueScrubTransaction();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const scrubRef = useRef<ScrubState | null>(null);
@@ -202,6 +204,9 @@ export function ScrubNumberInput({
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLInputElement>) => {
     if (!interactive || event.button !== 0 || scrubRef.current) return;
+    // Let Safari focus the native field and show its keyboard on a finger or
+    // Pencil tap. Capturing that pointer also prevents scrolling Inspector.
+    if (event.pointerType === "touch" || event.pointerType === "pen") return;
     // 編集中でも引ける。数値欄はクリックで全選択して打ち直す前提なので、
     // 欄の中で文字を範囲選択できるより、いつでも引けることを優先する。
     event.preventDefault();
@@ -282,7 +287,7 @@ export function ScrubNumberInput({
         id={id}
         name={name}
         type="number"
-        inputMode="decimal"
+        inputMode={touch && (min === undefined || min < 0) ? "text" : "decimal"}
         value={displayValue}
         min={min}
         max={max}
@@ -293,7 +298,9 @@ export function ScrubNumberInput({
         aria-label={ariaLabel}
         title={
           interactive
-            ? `${scrubLabel ? `${scrubLabel}: ` : ""}左右にドラッグして調整。Shift: 微調整、Ctrl/Alt: 大きく調整。クリックで数値を入力`
+            ? touch
+              ? `${scrubLabel ? `${scrubLabel}: ` : ""}タップして数値を入力`
+              : `${scrubLabel ? `${scrubLabel}: ` : ""}左右にドラッグして調整。Shift: 微調整、Ctrl/Alt: 大きく調整。クリックで数値を入力`
             : undefined
         }
         onPointerDown={handlePointerDown}
@@ -324,7 +331,7 @@ export function ScrubNumberInput({
             event.currentTarget.blur();
           }
         }}
-        className={`min-w-0 touch-none ${NO_NUMBER_SPINNER_CLASS} ${
+        className={`min-w-0 ${touch ? "touch-pan-y" : "touch-none"} ${NO_NUMBER_SPINNER_CLASS} ${
           interactive ? "cursor-ew-resize focus:cursor-text" : ""
         } ${
           unstyled
