@@ -48,7 +48,7 @@ export function EditorImportMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        title={disabledReason ?? "編集中の作品にモデルやコードを追加"}
+        title={disabledReason ?? "編集中のプロジェクトにモデルやコードを追加"}
         className="flex items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-3 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-not-allowed disabled:opacity-45"
       >
         <Import size={13} aria-hidden="true" />

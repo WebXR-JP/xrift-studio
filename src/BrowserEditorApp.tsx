@@ -12,7 +12,6 @@ import {
   type WebUploadBundle,
 } from "./preview/WebUploadDialog";
 import type { ProjectKind } from "./preview/content";
-import { resolveBrowserEditorStart } from "./preview/browser-editor-start";
 
 const VisualEditorPrototype = lazy(() =>
   import("./components/visual-editor/VisualEditorPrototype").then((module) => ({
@@ -54,8 +53,7 @@ export default function BrowserEditorApp() {
     setBrowserSession(session);
     setVisualEditorKind(session.initialBundle.project.projectKind);
     document.title = `${session.initialBundle.project.metadata.name} | XRift Studio`;
-    // A kind query only chooses the initial project. Reloads resume whichever
-    // project the author subsequently opens, including an imported project.
+    // Drop legacy startup hints; every visit now begins with project selection.
     const url = new URL(window.location.href);
     if (url.searchParams.has("kind")) {
       url.searchParams.delete("kind");
@@ -141,11 +139,11 @@ export default function BrowserEditorApp() {
     } finally { transferActive.current = false; }
   };
 
-  const openProject = async (projectKind?: ProjectKind, fresh = false, name?: string) => {
+  const createProject = async (projectKind: ProjectKind, name: string) => {
     if (transferActive.current) return;
     transferActive.current = true;
     setTransfer({ phase: "preparing", operation: "open" });
-    retryTransfer.current = () => { void openProject(projectKind, fresh, name); };
+    retryTransfer.current = () => { void createProject(projectKind, name); };
     try {
       await closingSession.current;
       const [storage, transferTools, { createPrototypeProject }] = await Promise.all([
@@ -153,17 +151,10 @@ export default function BrowserEditorApp() {
         import("./lib/visual-editor/browser-project-transfer"),
         import("./lib/visual-editor/prototype-project"),
       ]);
-      const target = fresh
-        ? { kind: projectKind ?? "world" as const }
-        : resolveBrowserEditorStart(projectKind, await storage.restoreBrowserProject(), await storage.listBrowserProjects());
-      if ("path" in target) {
-        await openStoredBrowserProject(target.path);
-      } else {
-        const bundle = createPrototypeProject(target.kind, name);
-        const documents: VisualProjectDocuments = { project: bundle.project, scenes: { [bundle.scene.sceneId]: bundle.scene }, assets: bundle.assets, prefabs: bundle.prefabs };
-        const path = await storage.createBrowserProject(transferTools.browserProjectDocumentFiles(documents), { activate: false });
-        await openStoredBrowserProject(path);
-      }
+      const bundle = createPrototypeProject(projectKind, name);
+      const documents: VisualProjectDocuments = { project: bundle.project, scenes: { [bundle.scene.sceneId]: bundle.scene }, assets: bundle.assets, prefabs: bundle.prefabs };
+      const path = await storage.createBrowserProject(transferTools.browserProjectDocumentFiles(documents), { activate: false });
+      await openStoredBrowserProject(path);
       setTransfer(null);
       requestAnimationFrame(() => window.scrollTo({ top: 0 }));
     } catch (error) {
@@ -172,12 +163,11 @@ export default function BrowserEditorApp() {
   };
 
   useEffect(() => {
-    // StrictMode repeats setup in development. Keep one startup operation so a
-    // fresh visit cannot create two projects or compete for its own lease.
+    // Only list metadata at startup. A broken project must not trap the author
+    // in an automatic restore loop; opening and creating require a choice.
     if (startupStarted.current) return;
     startupStarted.current = true;
-    const requested = new URLSearchParams(window.location.search).get("kind");
-    void openProject(requested === "world" || requested === "item" ? requested : undefined);
+    void openProjectChooser();
   }, []);
 
   useEffect(() => {
@@ -220,7 +210,7 @@ export default function BrowserEditorApp() {
       onPickFile={() => importInput.current?.click()}
       onOpenRecent={(path) => { void openBrowserRecent(path); }}
       onNewProject={(kind) => setTransfer({ phase: "create", operation: "open", kind })}
-      onCreateProject={(kind, name) => { void openProject(kind, true, name); }}
+      onCreateProject={(kind, name) => { void createProject(kind, name); }}
       onChooseProject={() => { void openProjectChooser(); }}
     />
   </>;
