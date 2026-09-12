@@ -11302,6 +11302,69 @@ export function VisualEditorPrototype({
               />
               {saveStatusLabel}
             </span>);
+  const editActions = (
+    <div className="editor-edit-actions flex items-center gap-1.5">
+      <button
+        type="button"
+        disabled={
+          renderedReadOnly || importBusy || history.past.length === 0
+        }
+        onClick={() => executeCommand("edit.undo")}
+        aria-label="元に戻す"
+        title={commandTitle("元に戻す", "edit.undo", shortcutLabel("edit.undo"))}
+        className="flex h-7 items-center gap-1 rounded border border-editor-border bg-editor-surface px-1.5 text-xs text-editor-muted hover:bg-editor-subtle hover:text-editor-text disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <EDITOR_ICONS.undo size={13} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        disabled={
+          renderedReadOnly || importBusy || history.future.length === 0
+        }
+        onClick={() => executeCommand("edit.redo")}
+        aria-label="やり直す"
+        title={commandTitle("やり直す", "edit.redo", shortcutLabel("edit.redo"))}
+        className="flex h-7 items-center gap-1 rounded border border-editor-border bg-editor-surface px-1.5 text-xs text-editor-muted hover:bg-editor-subtle hover:text-editor-text disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <EDITOR_ICONS.redo size={13} aria-hidden="true" />
+      </button>
+      <div className="relative">
+        <button
+          type="button"
+          disabled={importBusy}
+          aria-haspopup="menu"
+          aria-expanded={createMenuOpen}
+          onClick={() => setCreateMenuOpen((open) => !open)}
+          title={commandTitle("シーンEntityを作成", "OpenCreateMenu", "Ctrl+Shift+A")}
+          className="flex h-7 items-center gap-1.5 rounded border border-editor-border bg-editor-surface px-2 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          <CreateIcon size={13} aria-hidden="true" />
+          追加
+        </button>
+        <EditorCreateMenu
+          onOpenExternalStore={() => setExternalStoreOpen(true)}
+          onImportFile={() => globalModelImportInputRef.current?.click()}
+          importDisabledReason={renderedReadOnly ? "動作確認を停止してから素材を追加してください" : assetImportPanelAvailability.disabledReason}
+          open={createMenuOpen}
+          readOnly={false}
+          importBusy={importBusy}
+          projectKind={projectKind}
+          builtinPrefabRecipes={builtinPrefabRecipes}
+          onClose={() => setCreateMenuOpen(false)}
+          onCreateEmpty={() => executeCommand("entity.create-empty")}
+          onCreatePrimitive={(creationId) =>
+            executeCommand("entity.create-primitive", { creationId })
+          }
+          onCreateTerrain={handleCreateTerrain}
+      terrainOverlapCount={terrainOverlapCount}
+      onArrangeTerrains={handleArrangeTerrains}
+          onPlaceBuiltinPrefab={handlePlaceBuiltinPrefab}
+          onCreateXriftObject={handleCreateXriftObject}
+          onCreateComponentObject={handleCreateComponentObject}
+        />
+      </div>
+    </div>
+  );
   const HeaderActions = tablet ? "details" : "div";
   const sidePanelClass = (panel: "hierarchy" | "assets" | "inspector", spansBothRows: boolean) =>
     tablet ? `editor-tablet-panel ${panelsHidden || tabletPanel !== panel ? "hidden" : "flex"}` : panelsHidden
@@ -11320,13 +11383,14 @@ export function VisualEditorPrototype({
               type="button"
               disabled={leaving}
               onClick={() => void handleBack()}
+              aria-label={leaving ? "保存中…" : `${backLabel}へ戻る`}
               title={commandTitle(`${backLabel}へ戻る`, "CloseVisualEditor")}
               className="flex shrink-0 items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-2.5 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-wait disabled:opacity-50"
             >
               <BackIcon size={13} aria-hidden="true" />
-              {leaving ? "保存中…" : tablet ? "戻る" : backLabel}
+              {phone ? null : leaving ? "保存中…" : tablet ? "戻る" : backLabel}
             </button>
-            <div className="min-w-0 border-l border-editor-border pl-2.5">
+            <div className="editor-project-heading min-w-0 border-l border-editor-border pl-2.5">
               <p className="truncate text-sm font-semibold text-editor-text">
                 {bundle.project.metadata.title}
               </p>
@@ -11336,6 +11400,8 @@ export function VisualEditorPrototype({
               </p>}
             </div>
           </div>
+
+          {phone && !recordingUiHidden ? editActions : null}
 
           <HeaderActions ref={(element: HTMLDetailsElement | HTMLDivElement | null) => { headerActionsRef.current = element; }} className="editor-header-actions relative shrink-0"
             onKeyDown={(event) => {
@@ -11350,9 +11416,12 @@ export function VisualEditorPrototype({
               const target = event.target as HTMLElement;
               if (tablet && target.closest("button, a") && (!target.closest(".editor-import-menu") || target.closest('[role="menuitem"]'))) headerActionsRef.current?.removeAttribute("open");
             }}>
-            {tablet ? <summary className="flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center gap-1 rounded-md border border-editor-border bg-editor-surface px-3 text-xs font-semibold text-editor-text">ファイル <span aria-hidden="true">⌄</span></summary> : null}
+            {tablet ? <summary className="flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center gap-1 rounded-md border border-editor-border bg-editor-surface px-3 text-xs font-semibold text-editor-text">ファイル {phone && saveStatus === "error" ? <span className="text-rose-700" role="status" aria-label={saveStatusLabel}>!</span> : null}<span aria-hidden="true">⌄</span></summary> : null}
             <div className="editor-project-actions flex items-center gap-2">
-            {!tablet ? saveStatusIndicator : null}
+            {phone ? <div className="min-w-0 border-b border-editor-border px-3 py-2">
+              <p className="truncate text-sm font-semibold">{bundle.project.metadata.title}</p>
+              {saveStatusIndicator}
+            </div> : !tablet ? saveStatusIndicator : null}
             {saveStatus === "error" ? (
               <button
                 type="button"
@@ -11427,67 +11496,7 @@ export function VisualEditorPrototype({
           role="toolbar"
           aria-label="ビジュアルエディターのツール"
         >
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              disabled={
-                renderedReadOnly || importBusy || history.past.length === 0
-              }
-              onClick={() => executeCommand("edit.undo")}
-              aria-label="元に戻す"
-              title={commandTitle("元に戻す", "edit.undo", shortcutLabel("edit.undo"))}
-              className="flex h-7 items-center gap-1 rounded border border-editor-border bg-editor-surface px-1.5 text-xs text-editor-muted hover:bg-editor-subtle hover:text-editor-text disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <EDITOR_ICONS.undo size={13} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              disabled={
-                renderedReadOnly || importBusy || history.future.length === 0
-              }
-              onClick={() => executeCommand("edit.redo")}
-              aria-label="やり直す"
-              title={commandTitle("やり直す", "edit.redo", shortcutLabel("edit.redo"))}
-              className="flex h-7 items-center gap-1 rounded border border-editor-border bg-editor-surface px-1.5 text-xs text-editor-muted hover:bg-editor-subtle hover:text-editor-text disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <EDITOR_ICONS.redo size={13} aria-hidden="true" />
-            </button>
-            <div className="relative">
-              <button
-                type="button"
-                disabled={importBusy}
-                aria-haspopup="menu"
-                aria-expanded={createMenuOpen}
-                onClick={() => setCreateMenuOpen((open) => !open)}
-                title={commandTitle("シーンEntityを作成", "OpenCreateMenu", "Ctrl+Shift+A")}
-                className="flex h-7 items-center gap-1.5 rounded border border-editor-border bg-editor-surface px-2 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                <CreateIcon size={13} aria-hidden="true" />
-                追加
-              </button>
-              <EditorCreateMenu
-                onOpenExternalStore={() => setExternalStoreOpen(true)}
-                onImportFile={() => globalModelImportInputRef.current?.click()}
-                importDisabledReason={renderedReadOnly ? "動作確認を停止してから素材を追加してください" : assetImportPanelAvailability.disabledReason}
-                open={createMenuOpen}
-                readOnly={false}
-                importBusy={importBusy}
-                projectKind={projectKind}
-                builtinPrefabRecipes={builtinPrefabRecipes}
-                onClose={() => setCreateMenuOpen(false)}
-                onCreateEmpty={() => executeCommand("entity.create-empty")}
-                onCreatePrimitive={(creationId) =>
-                  executeCommand("entity.create-primitive", { creationId })
-                }
-                onCreateTerrain={handleCreateTerrain}
-            terrainOverlapCount={terrainOverlapCount}
-            onArrangeTerrains={handleArrangeTerrains}
-                onPlaceBuiltinPrefab={handlePlaceBuiltinPrefab}
-                onCreateXriftObject={handleCreateXriftObject}
-                onCreateComponentObject={handleCreateComponentObject}
-              />
-            </div>
-          </div>
+          {!phone ? editActions : null}
           {tablet && !recordingUiHidden ? <div className="editor-panel-switcher ml-auto flex items-center gap-1" aria-label="編集パネル">
             {phone ? <button type="button" aria-pressed={panelsHidden || !tabletPanel}
               onClick={() => { setTabletPanel(null); setViewportMaximized(false); setActiveEditorTab(SCENE_VIEW_TAB_ID); }}
