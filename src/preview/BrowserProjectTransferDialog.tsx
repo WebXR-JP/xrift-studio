@@ -31,6 +31,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
   const [shareMessage, setShareMessage] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
   const [projectName, setProjectName] = useState("");
+  const [newProjectKind, setNewProjectKind] = useState<"world" | "item" | null>(null);
   const [downloadStarted, setDownloadStarted] = useState(false);
   const { tablet: isTablet, phone, viewportHeight } = useEditorDevice();
   const tablet = isTablet || phone;
@@ -39,6 +40,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
 
   useEffect(() => {
     if (state?.phase === "create") setProjectName("");
+    if (state?.phase === "select") setNewProjectKind(null);
     if (state && !dialog.current?.open) dialog.current?.showModal();
     if (!state) dialog.current?.close();
   }, [state]);
@@ -83,7 +85,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
       onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}
     >
       <h2 id="browser-transfer-title" className="shrink-0 border-b border-zinc-200 px-5 py-4 text-base font-semibold">
-        {state?.phase === "create" ? `新しい${state.kind === "world" ? "ワールド" : "アイテム"}` : state?.phase === "ready" || (state && state.operation === "export") ? "プロジェクトを書き出す" : "プロジェクトを開く"}
+        {state?.phase === "select" ? "プロジェクトを選ぶ" : state?.phase === "create" ? `新しい${state.kind === "world" ? "ワールド" : "アイテム"}` : state?.phase === "ready" || (state && state.operation === "export") ? "プロジェクトを書き出す" : "プロジェクトを開く"}
       </h2>
       <div className="min-h-0 overflow-y-auto overscroll-contain px-5 pb-5">
       {state?.phase === "create" ? <form id="browser-new-project" className="mt-4 space-y-3" onSubmit={(event) => {
@@ -102,11 +104,23 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
         </p>
       ) : null}
       {state?.phase === "select" ? <div className="mt-4 space-y-4 text-sm text-zinc-600">
-        <p>このブラウザに保存したプロジェクトを選ぶか、書き出した.xriftstudioファイルを開きます。</p>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => onNewProject("world")} className="preview-button preview-button-light min-h-11">新規ワールド</button>
-          <button type="button" onClick={() => onNewProject("item")} className="preview-button preview-button-light min-h-11">新規アイテム</button>
-        </div>
+        <p>新しく作るか、保存したプロジェクトを開きます。</p>
+        <fieldset className="rounded-lg border border-zinc-200 p-3">
+          <legend className="px-1 font-semibold text-zinc-800">新規作成</legend>
+          <p id="new-project-kind-help" className="mb-3 text-xs text-zinc-500">作りたいものを選んでください。</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {([
+              { kind: "world", label: "ワールド", description: "人が集まる空間を作る" },
+              { kind: "item", label: "アイテム", description: "ワールドで使う道具や飾りを作る" },
+            ] as const).map(({ kind, label, description }) => (
+              <label key={kind} className={`flex min-h-11 cursor-pointer items-start gap-2 rounded-md border p-3 ${newProjectKind === kind ? "border-violet-500 bg-violet-50" : "border-zinc-200 bg-white"}`}>
+                <input type="radio" name="new-project-kind" value={kind} checked={newProjectKind === kind} onChange={() => setNewProjectKind(kind)} aria-describedby="new-project-kind-help" className="mt-1 size-4 shrink-0 accent-violet-600" />
+                <span className="min-w-0"><span className="block font-medium text-zinc-800">{label}</span><span className="mt-1 block text-xs leading-relaxed text-zinc-500">{description}</span></span>
+              </label>
+            ))}
+          </div>
+          <button type="button" disabled={!newProjectKind} onClick={() => { if (newProjectKind) onNewProject(newProjectKind); }} className="preview-button preview-button-primary mt-3 min-h-11 w-full disabled:cursor-not-allowed disabled:opacity-50">新規作成</button>
+        </fieldset>
         {recentProjectsLoading ? <p role="status" className="text-xs">保存済みのプロジェクトを読み込んでいます…</p> : recentProjects.length ? <div>
           <h3 className="mb-2 text-xs font-semibold text-zinc-500">このブラウザに保存したプロジェクト</h3>
           <div className="space-y-1 rounded-lg border border-zinc-200 p-1">
@@ -115,7 +129,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
               <span className="shrink-0 text-xs text-zinc-500">{project.path === activeProjectPath ? "編集中" : project.kind === "world" ? "ワールド" : "アイテム"}</span>
             </button>)}
           </div>
-        </div> : <p className="text-xs">保存済みのプロジェクトがない場合は、新規作成か .xriftstudioファイルを開いて始めます。</p>}
+        </div> : <p className="text-xs">このブラウザには、保存済みのプロジェクトがありません。</p>}
       </div> : null}
       {ready ? (
         <div className="mt-4 space-y-4 text-sm leading-relaxed text-zinc-600">
@@ -140,7 +154,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
       <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-zinc-200 bg-white px-5 py-3">
         <button type="button" onClick={onClose} disabled={busy} className="preview-button preview-button-light min-h-11 disabled:opacity-50">閉じる</button>
         {state?.phase === "create" ? <><button type="button" onClick={onChooseProject} className="preview-button preview-button-light min-h-11">一覧へ戻る</button><button type="submit" form="browser-new-project" disabled={!projectName.trim()} className="preview-button preview-button-primary min-h-11 disabled:opacity-50">作成して開く</button></> : null}
-        {state?.phase === "select" ? <button type="button" onClick={onPickFile} className="preview-button preview-button-primary min-h-11">ファイルから開く</button> : null}
+        {state?.phase === "select" ? <button type="button" onClick={onPickFile} title="書き出した.xriftstudioファイルを開きます" className="preview-button preview-button-light min-h-11">ファイルから開く</button> : null}
         {state?.phase === "failed" ? <button type="button" onClick={onRetry} className="preview-button preview-button-primary min-h-11">もう一度試す</button> : null}
         {state?.phase === "failed" && state.operation !== "export" ? <button type="button" onClick={onChooseProject} className="preview-button preview-button-light min-h-11">プロジェクトを選ぶ</button> : null}
         {ready && canShare ? <button type="button" onClick={() => void share()} disabled={busy} className="preview-button preview-button-light min-h-11"><Share2 size={16} />{sharing ? "共有中…" : "共有する"}</button> : null}
