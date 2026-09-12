@@ -284,6 +284,28 @@
   }
 }
 
+/* Phones share one row for navigation and editing actions. */
+.visual-editor-shell[data-phone] .editor-project-heading {
+  display: none;
+}
+.visual-editor-shell[data-phone] .editor-main-header {
+  min-height: 52px;
+  gap: 4px;
+  padding-inline: 8px;
+}
+.visual-editor-shell[data-phone] .editor-main-header > div:first-child {
+  flex: 0 0 auto;
+}
+.visual-editor-shell[data-phone] .editor-edit-actions {
+  gap: 4px;
+}
+.visual-editor-shell[data-phone] .editor-header-actions {
+  margin-left: auto;
+}
+.visual-editor-shell[data-phone] .editor-header-actions > summary {
+  padding-inline: 8px;
+}
+
 /* The Add menu is portalled outside the editor shell. */
 .editor-add-menu[data-touch] :is(button, summary) {
   min-height: 44px;
