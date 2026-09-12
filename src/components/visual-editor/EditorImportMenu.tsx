@@ -41,17 +41,17 @@ export function EditorImportMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        title={disabledReason ?? "モデルやコードをインポート"}
+        title={disabledReason ?? "編集中の作品にモデルやコードを追加"}
         className="flex items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-3 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-not-allowed disabled:opacity-45"
       >
         <Import size={13} aria-hidden="true" />
-        読み込む
+        素材を追加
         <ChevronDown size={12} aria-hidden="true" />
       </button>
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 top-full z-[70] mt-1.5 w-72 overflow-hidden rounded-lg border border-slate-200 bg-white p-1.5 shadow-xl"
+          className="absolute left-0 top-full z-[70] mt-1.5 w-72 max-w-[calc(100vw-24px)] max-h-[60dvh] overflow-y-auto rounded-lg border border-slate-200 bg-white p-1.5 shadow-xl"
         >
           <MenuItem
             icon={FileBox}

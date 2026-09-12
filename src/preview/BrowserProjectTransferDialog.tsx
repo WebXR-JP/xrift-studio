@@ -32,7 +32,8 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
   const [sharing, setSharing] = useState(false);
   const [projectName, setProjectName] = useState("");
   const [downloadStarted, setDownloadStarted] = useState(false);
-  const { tablet, viewportHeight } = useEditorDevice();
+  const { tablet: isTablet, phone, viewportHeight } = useEditorDevice();
+  const tablet = isTablet || phone;
   const ready = state?.phase === "ready" ? state : null;
   const busy = state?.phase === "preparing" || sharing;
 
@@ -114,7 +115,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
               <span className="shrink-0 text-xs text-zinc-500">{project.path === activeProjectPath ? "編集中" : project.kind === "world" ? "ワールド" : "アイテム"}</span>
             </button>)}
           </div>
-        </div> : <p className="text-xs">保存済みのプロジェクトがない場合は、新規作成かファイルの取り込みから始めます。</p>}
+        </div> : <p className="text-xs">保存済みのプロジェクトがない場合は、新規作成か .xriftstudioファイルを開いて始めます。</p>}
       </div> : null}
       {ready ? (
         <div className="mt-4 space-y-4 text-sm leading-relaxed text-zinc-600">
@@ -139,7 +140,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
       <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-zinc-200 bg-white px-5 py-3">
         <button type="button" onClick={onClose} disabled={busy} className="preview-button preview-button-light min-h-11 disabled:opacity-50">閉じる</button>
         {state?.phase === "create" ? <><button type="button" onClick={onChooseProject} className="preview-button preview-button-light min-h-11">一覧へ戻る</button><button type="submit" form="browser-new-project" disabled={!projectName.trim()} className="preview-button preview-button-primary min-h-11 disabled:opacity-50">作成して開く</button></> : null}
-        {state?.phase === "select" ? <button type="button" onClick={onPickFile} className="preview-button preview-button-primary min-h-11">ファイルを選ぶ</button> : null}
+        {state?.phase === "select" ? <button type="button" onClick={onPickFile} className="preview-button preview-button-primary min-h-11">.xriftstudioを開く</button> : null}
         {state?.phase === "failed" ? <button type="button" onClick={onRetry} className="preview-button preview-button-primary min-h-11">もう一度試す</button> : null}
         {state?.phase === "failed" && state.operation !== "export" ? <button type="button" onClick={onChooseProject} className="preview-button preview-button-light min-h-11">プロジェクトを選ぶ</button> : null}
         {ready && canShare ? <button type="button" onClick={() => void share()} disabled={busy} className="preview-button preview-button-light min-h-11"><Share2 size={16} />{sharing ? "共有中…" : "共有する"}</button> : null}

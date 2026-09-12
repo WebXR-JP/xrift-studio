@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 
 export type EditorDevice = {
   tablet: boolean;
+  phone: boolean;
   touch: boolean;
   viewportHeight: number | undefined;
 };
@@ -10,7 +11,7 @@ export type EditorDevice = {
  * must not turn off the iPad layout. No authoring data depends on this choice. */
 function readEditorDevice(): EditorDevice {
   if (typeof window === "undefined") {
-    return { tablet: false, touch: false, viewportHeight: undefined };
+    return { tablet: false, phone: false, touch: false, viewportHeight: undefined };
   }
   const iPad = /iPad/.test(navigator.userAgent) ||
     (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -20,6 +21,7 @@ function readEditorDevice(): EditorDevice {
   const viewport = window.visualViewport;
   return {
     tablet,
+    phone: !tablet && (/iPhone|iPod/.test(navigator.userAgent) || primaryTouch),
     touch,
     // Safari's keyboard resizes the visual viewport, not always 100dvh.
     // Pinch zoom should magnify the UI rather than cause a layout reflow.
@@ -27,7 +29,7 @@ function readEditorDevice(): EditorDevice {
   };
 }
 
-const serverDevice: EditorDevice = { tablet: false, touch: false, viewportHeight: undefined };
+const serverDevice: EditorDevice = { tablet: false, phone: false, touch: false, viewportHeight: undefined };
 let snapshot: EditorDevice | undefined;
 const listeners = new Set<() => void>();
 let stopListening: (() => void) | undefined;
@@ -46,7 +48,7 @@ function subscribe(listener: () => void): () => void {
       if (viewport && viewport.scale !== 1) return;
       const next = readEditorDevice();
       const current = getSnapshot();
-      if (current.tablet === next.tablet && current.touch === next.touch && current.viewportHeight === next.viewportHeight) return;
+      if (current.tablet === next.tablet && current.phone === next.phone && current.touch === next.touch && current.viewportHeight === next.viewportHeight) return;
       snapshot = next;
       for (const notify of listeners) notify();
     };

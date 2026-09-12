@@ -1,9 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { PROJECT_PACKAGE_ACCEPT } from "./lib/project-package";
 import { VisualEditorErrorBoundary } from "./components/visual-editor/VisualEditorErrorBoundary";
-import { CompactEditorGate } from "./preview/CompactEditorGate";
+import { MobileEditorHelp } from "./preview/MobileEditorHelp";
 import { RevealObserver } from "./preview/RevealObserver";
-import { useCompactViewport } from "./preview/useCompactViewport";
 import { useEditorDevice } from "./components/visual-editor/useEditorDevice";
 import { BrowserProjectTransferDialog, type BrowserRecentProject, type BrowserTransferState } from "./preview/BrowserProjectTransferDialog";
 import { openBrowserProjectSession, type BrowserProjectSession } from "./preview/browser-project-session";
@@ -54,9 +53,8 @@ function DemoFallback() {
 export default function PreviewApp() {
   const [visualEditorKind, setVisualEditorKind] = useState<ProjectKind | null>(null);
   const [webUploadBundle, setWebUploadBundle] = useState<WebUploadBundle | null>(null);
-  const [compactEditorConfirmed, setCompactEditorConfirmed] = useState(false);
-  const compactViewport = useCompactViewport();
-  const { tablet } = useEditorDevice();
+  const [mobileHelpDismissed, setMobileHelpDismissed] = useState(false);
+  const { tablet, phone } = useEditorDevice();
   const landingScrollPosition = useRef(0);
   const [browserSession, setBrowserSession] = useState<BrowserProjectSession | null>(null);
   const activeSession = useRef<BrowserProjectSession | null>(null);
@@ -75,8 +73,6 @@ export default function PreviewApp() {
     if (previous && previous !== session) closingSession.current = previous.close();
     setBrowserSession(session);
     setVisualEditorKind(session.initialBundle.project.projectKind);
-    // Resizing an already-open editor must not unmount it and discard its drafts.
-    setCompactEditorConfirmed((confirmed) => confirmed || !compactViewport || tablet);
   };
 
   const openStoredBrowserProject = async (path: string) => {
@@ -233,24 +229,10 @@ export default function PreviewApp() {
       setBrowserSession(null);
       setVisualEditorKind(null);
       setWebUploadBundle(null);
-      setCompactEditorConfirmed(false);
       requestAnimationFrame(() =>
         window.scrollTo({ top: landingScrollPosition.current }),
       );
     };
-
-    if (compactViewport && !tablet && !compactEditorConfirmed) {
-      return (
-        <CompactEditorGate
-          projectKind={visualEditorKind}
-          onBack={closeDemo}
-          onContinue={() => {
-            setCompactEditorConfirmed(true);
-            requestAnimationFrame(() => window.scrollTo({ top: 0 }));
-          }}
-        />
-      );
-    }
 
     return (
       <div className="relative h-[100dvh] overflow-hidden">
@@ -274,8 +256,9 @@ export default function PreviewApp() {
               projectTransferBusy={transfer?.phase === "preparing"}
               backLabel="紹介ページ"
               onBack={closeDemo}
-              onUpload={(bundle) => tablet ? exportBrowserProject(bundle) : setWebUploadBundle(bundle)}
+              onUpload={(bundle) => (tablet || phone) ? exportBrowserProject(bundle) : setWebUploadBundle(bundle)}
             /> : <DemoFallback />}
+            {phone && !mobileHelpDismissed && !transfer && browserSession ? <MobileEditorHelp onClose={() => setMobileHelpDismissed(true)} /> : null}
           </Suspense>
         </VisualEditorErrorBoundary>
         <WebUploadDialog

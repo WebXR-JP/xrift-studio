@@ -960,8 +960,9 @@ export function VisualEditorPrototype({
   initialLayout,
   onLayoutChange,
 }: VisualEditorPrototypeProps) {
-  const { tablet, touch, viewportHeight } = useEditorDevice();
-  const [tabletPanel, setTabletPanel] = useState<"hierarchy" | "assets" | "inspector" | null>("hierarchy");
+  const { tablet: isTablet, phone, touch, viewportHeight } = useEditorDevice();
+  const tablet = isTablet || phone;
+  const [tabletPanel, setTabletPanel] = useState<"hierarchy" | "assets" | "inspector" | null>(phone ? null : "hierarchy");
   const projectExportLock = useRef(false);
   const [projectExportBusy, setProjectExportBusy] = useState(false);
   const initialBundle = useMemo(
@@ -11280,7 +11281,7 @@ export function VisualEditorPrototype({
   return (
     <ValueScrubContext.Provider value={valueScrubTransaction}>
     <div className="visual-editor-shell h-screen overflow-hidden bg-editor-canvas"
-      data-tablet={tablet || undefined} data-touch={touch || undefined}
+      data-tablet={tablet || undefined} data-phone={phone || undefined} data-touch={touch || undefined}
       style={tablet ? { height: viewportHeight ? `${viewportHeight}px` : "100dvh" } : undefined}>
       <div className="flex h-full min-h-0 min-w-0 flex-col bg-editor-canvas text-editor-text">
         <header className="editor-main-header flex h-14 shrink-0 items-center justify-between gap-3 border-b border-editor-border bg-editor-surface px-3">
@@ -11348,14 +11349,15 @@ export function VisualEditorPrototype({
               disabled={projectTransferBusy || projectExportBusy || importBusy || leaving || renderedEditorMode !== "edit"}
               onClick={() => void runProjectImport()}
               className="rounded-md border border-editor-border bg-editor-surface px-3 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:opacity-45"
-            >開く</button> : null}
+              title="このブラウザの作品や.xriftstudioファイルを開きます"
+            >作品を開く</button> : null}
             {onProjectExport ? <button
               type="button"
               disabled={projectTransferBusy || projectExportBusy || importBusy || leaving || renderedEditorMode !== "edit"}
               onClick={() => void runProjectExport()}
               title="素材を含むプロジェクトを保存して、Mac／Windows版へ引き継ぎます"
               className="flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-45"
-            ><ExportIcon size={13} aria-hidden="true" />{projectExportBusy ? "書き出しを準備中…" : "プロジェクトを書き出す"}</button> : <>
+            ><ExportIcon size={13} aria-hidden="true" />{projectExportBusy ? "書き出しを準備中…" : ".xriftstudioで保存"}</button> : <>
             <button
               type="button"
               onClick={() => void runClassicExport()}
