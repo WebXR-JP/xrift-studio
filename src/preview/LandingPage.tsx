@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { ArrowRight, BookOpen, Bot, Box, Globe2, Monitor, PackageOpen } from "lucide-react";
+import { ArrowRight, BookOpen, Bot, Globe2, Monitor, PackageOpen } from "lucide-react";
 import { XRIFT_STUDIO_GUIDE_URL } from "../lib/support-links";
 import { editorFeatures, editorUrl } from "./content";
 import { Nav } from "./sections/Nav";
@@ -95,10 +95,9 @@ export default function LandingPage() {
               <article className="landing-platform">
                 <Globe2 size={24} aria-hidden="true" />
                 <h3>ブラウザ版</h3>
-                <p>すぐに編集を始めたいときに。変更は使っているブラウザへ自動保存され、次に開いたときも続きを編集できます。</p>
+                <p>すぐに編集を始めたいときに。変更は使っているブラウザへ自動保存され、次に開いたときは、続きから編集するか新しく作るかを選べます。</p>
                 <div className="landing-platform-links">
                   <a href={editorUrl} className="landing-text-link">エディターを開く<ArrowRight size={16} aria-hidden="true" /></a>
-                  <a href={`${editorUrl}?kind=item`} className="landing-text-link"><Box size={16} aria-hidden="true" />アイテムを編集する</a>
                 </div>
               </article>
               <article className="landing-platform">

@@ -162,13 +162,13 @@
   top: calc(100% + 6px);
   z-index: 80;
   width: min(320px, calc(100vw - 24px));
-  max-height: calc(100dvh - 80px);
+  max-height: calc(100dvh - 80px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   overflow-y: auto;
   overscroll-behavior: contain;
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
-  padding: 8px;
+  gap: 2px;
+  padding: 6px;
   border: 1px solid var(--color-editor-border);
   border-radius: 8px;
   background: var(--color-editor-surface);
@@ -179,6 +179,48 @@
 }
 .visual-editor-shell[data-tablet] .editor-project-actions > span[aria-hidden] {
   display: none;
+}
+/* Keep rows at their touch size when the menu scrolls. Flex shrinking used
+   to squeeze the labels in landscape, and mixed button styles misaligned them. */
+.visual-editor-shell[data-tablet] .editor-project-actions > * {
+  flex-shrink: 0;
+  min-width: 0;
+}
+.visual-editor-shell[data-tablet] .editor-project-actions > button,
+.visual-editor-shell[data-tablet] .editor-import-menu > button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 44px;
+  height: auto;
+  padding: 10px 12px;
+  gap: 8px;
+  border: 0;
+  box-shadow: none;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.5;
+}
+/* Reserve the same icon column for text-only actions. */
+.visual-editor-shell[data-tablet] .editor-project-actions > button:not(:has(> svg)) {
+  padding-left: 34px;
+}
+.visual-editor-shell[data-tablet] .editor-project-actions button > svg {
+  flex-shrink: 0;
+}
+.visual-editor-shell[data-tablet] .editor-import-menu > button > svg:last-child {
+  margin-left: auto;
+}
+.visual-editor-shell[data-tablet] .editor-project-actions > [data-guide-trigger] {
+  margin-top: 4px;
+  border-top: 1px solid var(--color-editor-border);
+  border-radius: 0;
+}
+.visual-editor-shell[data-phone] .editor-project-actions {
+  width: min(360px, calc(100vw - 24px - env(safe-area-inset-left) - env(safe-area-inset-right)));
 }
 .visual-editor-shell[data-tablet] .editor-import-menu > button {
   width: 100%;
