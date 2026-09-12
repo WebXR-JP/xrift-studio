@@ -1288,6 +1288,7 @@ export function AssetsPanel({
   onOpenExternalStore,
   onOpenInteractivity,
   onOpenAssetLocation,
+  canOpenAssetLocation = true,
   externalOperationLockReason = null,
 }: {
   assets: AssetManifest;
@@ -1331,6 +1332,7 @@ export function AssetsPanel({
   onOpenExternalStore: () => void;
   onOpenInteractivity: (assetId: string) => void;
   onOpenAssetLocation: (sourceRelativePath?: string) => void | Promise<void>;
+  canOpenAssetLocation?: boolean;
   /**
    * Reason supplied by an Asset operation owned outside this panel, such as
    * Model reimport. Selection/navigation stay available while mutations and
@@ -1347,6 +1349,7 @@ export function AssetsPanel({
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [tabletKindFilter, setTabletKindFilter] = useState<SceneAsset["kind"] | "">("");
   const [activityOpen, setActivityOpen] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1422,6 +1425,7 @@ export function AssetsPanel({
   const visibleAssets = searching
     ? applySortMode(
         allAssets
+          .filter((asset) => !tablet || !tabletKindFilter || asset.kind === tabletKindFilter)
           .filter((asset) =>
             matchesAssetSearch(asset, assetFolderPath(assets, asset), searchQuery),
           )
@@ -1432,7 +1436,7 @@ export function AssetsPanel({
               left.id.localeCompare(right.id),
           ),
       )
-    : applySortMode(folderAssets);
+    : applySortMode(tablet && tabletKindFilter ? folderAssets.filter((asset) => asset.kind === tabletKindFilter) : folderAssets);
   const handleAssetSelect = (
     assetId: string,
     event: MouseEvent<HTMLButtonElement>,
@@ -1833,22 +1837,34 @@ export function AssetsPanel({
             <label className="min-w-0 text-xs text-editor-muted">フォルダー
               <select
                 value={activeFolder?.id ?? ""}
-                onChange={(event) => onActiveFolderChange(event.currentTarget.value || null)}
+                onChange={(event) => {
+                  if (activeFolder?.kind) setTabletKindFilter(activeFolder.kind);
+                  onActiveFolderChange(event.currentTarget.value || null);
+                  if (event.currentTarget.value === XRIFT_PREFABS_FOLDER_ID) setTabletKindFilter("");
+                }}
                 className="mt-1 min-h-11 w-full min-w-0 rounded border border-editor-border bg-editor-surface px-1 text-xs text-editor-text"
               >
                 <option value="">Assets直下</option>
-                {activeFolder && !activeFolder.custom ? <option value={activeFolder.id} disabled>すべてのフォルダー</option> : null}
+                {activeFolder?.kind ? <option value={activeFolder.id} disabled>すべてのフォルダー</option> : null}
                 {customFolders.map((folder) => <option key={folder.id} value={folder.id}>{folderDisplayPath(assets, folder.id)}</option>)}
+                <option value={XRIFT_PREFABS_FOLDER_ID}>XRift Prefabs</option>
               </select>
             </label>
             <label className="min-w-0 text-xs text-editor-muted">種類
               <select
-                value={activeFolder && !activeFolder.custom ? activeFolder.id : ""}
-                onChange={(event) => onActiveFolderChange(event.currentTarget.value || null)}
+                value={tabletKindFilter || activeFolder?.kind || ""}
+                disabled={Boolean(activeFolder?.builtinPrefabs)}
+                onChange={(event) => {
+                  const kind = event.currentTarget.value as SceneAsset["kind"] | "";
+                  if (activeFolder?.kind) {
+                    setTabletKindFilter("");
+                    onActiveFolderChange(KIND_FOLDERS.find((folder) => folder.kind === kind)?.id ?? null);
+                  } else setTabletKindFilter(kind);
+                }}
                 className="mt-1 min-h-11 w-full min-w-0 rounded border border-editor-border bg-editor-surface px-1 text-xs text-editor-text"
               >
                 <option value="">すべての種類</option>
-                {KIND_FOLDERS.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
+                {KIND_FOLDERS.filter((folder) => folder.kind).map((folder) => <option key={folder.id} value={folder.kind}>{folder.name}</option>)}
               </select>
             </label>
           </nav>
@@ -1996,7 +2012,13 @@ export function AssetsPanel({
             </button>
           </div>
         ) : null}
-        {!searching && activeFolderId && visibleAssets.length === 0 && visibleFolders.length === 0 && (!activeFolder?.builtinPrefabs || builtinPrefabRecipes.length === 0) ? (
+        {!searching && tablet && tabletKindFilter && visibleAssets.length === 0 ? (
+          <div className="col-span-full rounded border border-dashed border-slate-300 bg-white p-3 text-center text-xs text-slate-600">
+            <p>このフォルダーに該当する種類の素材がありません。</p>
+            <button type="button" onClick={() => setTabletKindFilter("")} className="mt-2 min-h-11 rounded border border-slate-300 px-3 font-semibold">すべての種類を表示</button>
+          </div>
+        ) : null}
+        {!searching && !(tablet && tabletKindFilter) && activeFolderId && visibleAssets.length === 0 && visibleFolders.length === 0 && (!activeFolder?.builtinPrefabs || builtinPrefabRecipes.length === 0) ? (
           <button
             type="button"
             onClick={() => onActiveFolderChange(null)}
@@ -2006,7 +2028,7 @@ export function AssetsPanel({
             className={`col-span-full rounded border border-dashed bg-white px-4 py-3 text-xs ${rootDropTarget ? "border-violet-500 bg-violet-50 text-violet-800" : "border-slate-300 text-slate-500 hover:border-violet-300 hover:text-violet-700"}`}
           >
             このフォルダーには素材がありません。Assets直下へ戻る
-            <span className="mt-1 block text-[11px]">ここへドロップするとAssets直下へ移動します</span>
+            {!touch ? <span className="mt-1 block text-[11px]">ここへドロップするとAssets直下へ移動します</span> : null}
           </button>
         ) : null}
           </div>
@@ -2055,7 +2077,7 @@ export function AssetsPanel({
               {assets.assets[contextMenu.assetId ?? ""]?.name ?? assets.folders?.[contextMenu.folderId ?? ""]?.name}
             </p>
           ) : null}
-          <ContextMenuItem
+          {canOpenAssetLocation ? <ContextMenuItem
             icon="folder"
             label={
               contextMenu.assetId &&
@@ -2077,7 +2099,7 @@ export function AssetsPanel({
               setContextMenu(null);
               void onOpenAssetLocation(sourceRelativePath);
             }}
-          />
+          /> : null}
           {contextMenu.assetId &&
           isScenePlaceableAsset(assets.assets[contextMenu.assetId]) ? (
             <ContextMenuItem

@@ -8,7 +8,7 @@ import {
 
 import { roundTo } from "./editor-utils";
 import { useValueScrubTransaction } from "./value-scrub-transaction";
-import { useEditorDevice } from "./useEditorDevice";
+import { useEditorTouch } from "./useEditorDevice";
 
 const DRAG_THRESHOLD_PX = 3;
 const DISPLAY_DECIMALS = 4;
@@ -158,7 +158,7 @@ export function ScrubNumberInput({
   unstyled = false,
   tone = "light",
 }: ScrubNumberInputProps) {
-  const { touch } = useEditorDevice();
+  const touch = useEditorTouch();
   const transaction = useValueScrubTransaction();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const scrubRef = useRef<ScrubState | null>(null);
@@ -286,8 +286,9 @@ export function ScrubNumberInput({
         ref={inputRef}
         id={id}
         name={name}
-        type="number"
+        type={touch ? "text" : "number"}
         inputMode={touch && (min === undefined || min < 0) ? "text" : "decimal"}
+        enterKeyHint="done"
         value={displayValue}
         min={min}
         max={max}
@@ -304,6 +305,7 @@ export function ScrubNumberInput({
             : undefined
         }
         onPointerDown={handlePointerDown}
+        onFocus={(event) => { if (touch) event.currentTarget.select(); }}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={() => finishScrub("cancel")}

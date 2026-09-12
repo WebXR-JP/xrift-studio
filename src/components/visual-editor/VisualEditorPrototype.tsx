@@ -11893,6 +11893,7 @@ export function VisualEditorPrototype({
                 );
               }
             }}
+            canOpenAssetLocation={!onProjectExport}
             externalOperationLockReason={
               assetImportPanelAvailability.disabledReason
             }

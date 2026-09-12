@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 export type EditorDevice = {
   tablet: boolean;
@@ -27,29 +27,57 @@ function readEditorDevice(): EditorDevice {
   };
 }
 
-export function useEditorDevice(): EditorDevice {
-  const [device, setDevice] = useState(readEditorDevice);
-  useEffect(() => {
+const serverDevice: EditorDevice = { tablet: false, touch: false, viewportHeight: undefined };
+let snapshot: EditorDevice | undefined;
+const listeners = new Set<() => void>();
+let stopListening: (() => void) | undefined;
+
+function getSnapshot(): EditorDevice {
+  return snapshot ??= readEditorDevice();
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  if (!stopListening) {
     const pointer = window.matchMedia("(any-pointer: coarse)");
     const primaryPointer = window.matchMedia("(pointer: coarse) and (hover: none)");
+    const viewport = window.visualViewport;
     const update = () => {
-      if (window.visualViewport && window.visualViewport.scale !== 1) return;
+      if (viewport && viewport.scale !== 1) return;
       const next = readEditorDevice();
-      setDevice((current) => current.tablet === next.tablet &&
-        current.touch === next.touch && current.viewportHeight === next.viewportHeight
-        ? current : next);
+      const current = getSnapshot();
+      if (current.tablet === next.tablet && current.touch === next.touch && current.viewportHeight === next.viewportHeight) return;
+      snapshot = next;
+      for (const notify of listeners) notify();
     };
-    update();
     pointer.addEventListener("change", update);
     primaryPointer.addEventListener("change", update);
     window.addEventListener("resize", update);
-    window.visualViewport?.addEventListener("resize", update);
-    return () => {
+    viewport?.addEventListener("resize", update);
+    stopListening = () => {
       pointer.removeEventListener("change", update);
       primaryPointer.removeEventListener("change", update);
       window.removeEventListener("resize", update);
-      window.visualViewport?.removeEventListener("resize", update);
+      viewport?.removeEventListener("resize", update);
     };
-  }, []);
-  return device;
+    update();
+  }
+  return () => {
+    listeners.delete(listener);
+    if (!listeners.size) {
+      stopListening?.();
+      stopListening = undefined;
+      snapshot = undefined;
+    }
+  };
+}
+
+/** All panels share one viewport subscription instead of one per input. */
+export function useEditorDevice(): EditorDevice {
+  return useSyncExternalStore(subscribe, getSnapshot, () => serverDevice);
+}
+
+/** Numeric fields do not need to render again whenever the keyboard resizes. */
+export function useEditorTouch(): boolean {
+  return useSyncExternalStore(subscribe, () => getSnapshot().touch, () => false);
 }

@@ -1,6 +1,6 @@
 import { getEditorComponentDisabledReason, getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
 import { MeshCollisionControls } from "./MeshCollisionControls";
-import { useEditorDevice } from "./useEditorDevice";
+import { useEditorTouch } from "./useEditorDevice";
 import { colliderModelNode, type MeshCollisionAction } from "../../lib/visual-editor/mesh-collision-actions";
 import { normalizeTextureImportSettings, type TextureImportSettingsPatch } from "../../lib/visual-editor/asset-manifest";
 import { TEXTURE_MAX_SIZE_CHOICES } from "../../lib/visual-editor/texture-conversion";
@@ -444,7 +444,7 @@ function VectorEditor({
   onScrubCancel?: () => void;
 }) {
   const axes = ["X", "Y", "Z"] as const;
-  const { touch } = useEditorDevice();
+  const touch = useEditorTouch();
   const [draft, setDraft] = useState<{ axisIndex: number; value: string } | null>(null);
   const transaction = useValueScrubTransaction();
   const hasScrubHandlers = Boolean(
@@ -652,8 +652,9 @@ function VectorEditor({
               ref={(element) => {
                 inputRefs.current[index] = element;
               }}
-              type="number"
+              type={touch ? "text" : "number"}
               inputMode={touch ? "text" : "decimal"}
+              enterKeyHint="done"
               value={draft?.axisIndex === index ? draft.value : displayedValues[index]}
               disabled={disabled}
               step={valueKind === "rotation" ? 1 : 0.1}
@@ -669,6 +670,7 @@ function VectorEditor({
                 handleAxisPointerDown(event, axis, index, false)
               }
               onPointerMove={handleAxisPointerMove}
+              onFocus={(event) => { if (touch) event.currentTarget.select(); }}
               onPointerUp={handleAxisPointerUp}
               onPointerCancel={(event) => cancelScrub(event.pointerId)}
               onBlur={() => setDraft(null)}
@@ -688,7 +690,9 @@ function VectorEditor({
               }}
               onChange={(event) => {
                 setDraft({ axisIndex: index, value: event.currentTarget.value });
-                const nextValue = event.currentTarget.valueAsNumber;
+                const raw = event.currentTarget.value;
+                if (!raw.trim()) return;
+                const nextValue = Number(raw);
                 if (!Number.isFinite(nextValue)) return;
                 const normalizedValue =
                   valueKind === "rotation" ? (nextValue * Math.PI) / 180 : nextValue;

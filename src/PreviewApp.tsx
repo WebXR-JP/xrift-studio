@@ -130,6 +130,7 @@ export default function PreviewApp() {
 
   const openProjectChooser = async () => {
     if (transferActive.current) return;
+    if (!visualEditorKind) landingScrollPosition.current = window.scrollY;
     const generation = ++chooserGeneration.current;
     retryTransfer.current = () => { void openProjectChooser(); };
     setTransfer({ phase: "select", operation: "import" });
@@ -172,12 +173,12 @@ export default function PreviewApp() {
     return () => cancelAnimationFrame(frame);
   }, []);
 
-  const openDemo = async (projectKind: ProjectKind, fresh = false) => {
+  const openDemo = async (projectKind: ProjectKind, fresh = false, name?: string) => {
     if (transferActive.current) return;
     transferActive.current = true;
     if (!visualEditorKind) landingScrollPosition.current = window.scrollY;
     setTransfer({ phase: "preparing", operation: "open" });
-    retryTransfer.current = () => { void openDemo(projectKind, fresh); };
+    retryTransfer.current = () => { void openDemo(projectKind, fresh, name); };
     try {
       await closingSession.current;
       const [storage, transferTools, { createPrototypeProject }] = await Promise.all([
@@ -191,7 +192,7 @@ export default function PreviewApp() {
       const resumed = Boolean(previous);
       if (previous) await openStoredBrowserProject(previous.path);
       if (!resumed) {
-        const bundle = createPrototypeProject(projectKind);
+        const bundle = createPrototypeProject(projectKind, name);
         const documents: VisualProjectDocuments = { project: bundle.project, scenes: { [bundle.scene.sceneId]: bundle.scene }, assets: bundle.assets, prefabs: bundle.prefabs };
         const path = await storage.createBrowserProject(transferTools.browserProjectDocumentFiles(documents), { activate: false });
         await openStoredBrowserProject(path);
@@ -213,11 +214,13 @@ export default function PreviewApp() {
       state={transfer}
       recentProjects={recentProjects}
       recentProjectsLoading={recentProjectsLoading}
+      activeProjectPath={browserSession?.path}
       onClose={() => { chooserGeneration.current++; setTransfer(null); }}
       onRetry={() => retryTransfer.current()}
       onPickFile={() => importInput.current?.click()}
       onOpenRecent={(path) => { void openBrowserRecent(path); }}
-      onNewProject={(kind) => { void openDemo(kind, true); }}
+      onNewProject={(kind) => setTransfer({ phase: "create", operation: "open", kind })}
+      onCreateProject={(kind, name) => { void openDemo(kind, true, name); }}
       onChooseProject={() => { void openProjectChooser(); }}
     />
   </>;
@@ -287,20 +290,20 @@ export default function PreviewApp() {
   return (
     <><main className="preview-shell">
       <RevealObserver />
-      <Nav />
-      <Hero onOpenDemo={openDemo} />
+      <Nav onOpenProjects={tablet ? openProjectChooser : undefined} />
+      <Hero onOpenDemo={openDemo} tablet={tablet} onOpenProjects={openProjectChooser} />
       <ProductKinds />
       <WorldTools />
       <CreationFlow />
       <Materials />
       <AiCollaboration />
       <PublishCheck />
-      <TryDemo onOpenDemo={openDemo} />
+      <TryDemo onOpenDemo={openDemo} tablet={tablet} />
       <ClassicBridge />
       <DownloadSection />
       <Faq />
       <GuideCallout />
-      <FinalCta />
+      <FinalCta onOpenProjects={tablet ? openProjectChooser : undefined} />
       <Footer />
     </main>{transferControls}</>
   );
