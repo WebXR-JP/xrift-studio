@@ -13,8 +13,9 @@ export type BrowserTransferState =
   | { phase: "ready"; blob: Blob; fileName: string; fileCount: number };
 
 /** Keep preparation separate from the user's save tap for Safari activation. */
-export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFile, recentProjects, recentProjectsLoading, activeProjectPath, onOpenRecent, onNewProject, onCreateProject, onChooseProject }: {
+export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFile, recentProjects, recentProjectsLoading, activeProjectPath, onOpenRecent, onNewProject, onCreateProject, onChooseProject, inline = false }: {
   state: BrowserTransferState | null;
+  inline?: boolean;
   onClose: () => void;
   onRetry: () => void;
   onPickFile: () => void;
@@ -41,9 +42,9 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
   useEffect(() => {
     if (state?.phase === "create") setProjectName("");
     if (state?.phase === "select") setNewProjectKind(null);
-    if (state && !dialog.current?.open) dialog.current?.showModal();
+    if (!inline && state && !dialog.current?.open) dialog.current?.showModal();
     if (!state) dialog.current?.close();
-  }, [state]);
+  }, [state, inline]);
 
   useEffect(() => {
     setShareMessage(null);
@@ -74,16 +75,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
     } finally { setSharing(false); }
   };
 
-  return (
-    <dialog
-      ref={dialog}
-      aria-labelledby="browser-transfer-title"
-      aria-busy={busy}
-      className={`preview-dialog-theme ${tablet ? "fixed inset-x-0 top-4 bottom-auto mx-auto my-0" : "m-auto"} max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white p-0 text-zinc-900 shadow-2xl open:flex backdrop:bg-zinc-900/30`}
-      style={tablet && viewportHeight ? { maxHeight: Math.max(160, viewportHeight - 32) } : undefined}
-      onKeyDown={(event) => event.stopPropagation()}
-      onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}
-    >
+  const content = <>
       <h2 id="browser-transfer-title" className="shrink-0 border-b border-zinc-200 px-5 py-4 text-base font-semibold">
         {state?.phase === "select" ? "プロジェクトを選ぶ" : state?.phase === "create" ? `新しい${state.kind === "world" ? "ワールド" : "アイテム"}` : state?.phase === "ready" || (state && state.operation === "export") ? "プロジェクトを書き出す" : "プロジェクトを開く"}
       </h2>
@@ -152,7 +144,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
       {shareMessage ? <p role="status" className="mt-3 text-sm text-zinc-600">{shareMessage}</p> : null}
       </div>
       <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-zinc-200 bg-white px-5 py-3">
-        <button type="button" onClick={onClose} disabled={busy} className="preview-button preview-button-light min-h-11 disabled:opacity-50">閉じる</button>
+        {(!inline || state?.phase !== "create") ? <button type="button" onClick={onClose} disabled={busy} className="preview-button preview-button-light min-h-11 disabled:opacity-50">{inline ? "紹介ページへ戻る" : "閉じる"}</button> : null}
         {state?.phase === "create" ? <><button type="button" onClick={onChooseProject} className="preview-button preview-button-light min-h-11">一覧へ戻る</button><button type="submit" form="browser-new-project" disabled={!projectName.trim()} className="preview-button preview-button-primary min-h-11 disabled:opacity-50">作成して開く</button></> : null}
         {state?.phase === "select" ? <button type="button" onClick={onPickFile} title="書き出した.xriftstudioファイルを開きます" className="preview-button preview-button-light min-h-11">ファイルから開く</button> : null}
         {state?.phase === "failed" ? <button type="button" onClick={onRetry} className="preview-button preview-button-primary min-h-11">もう一度試す</button> : null}
@@ -160,6 +152,27 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
         {ready && canShare ? <button type="button" onClick={() => void share()} disabled={busy} className="preview-button preview-button-light min-h-11"><Share2 size={16} />{sharing ? "共有中…" : "共有する"}</button> : null}
         {ready && url ? <a href={url} download={ready.fileName} onClick={() => setDownloadStarted(true)} className="preview-button preview-button-primary min-h-11"><Download size={16} />ダウンロード</a> : null}
       </div>
+    </>;
+
+  if (inline) {
+    return state ? <section aria-labelledby="browser-transfer-title" aria-busy={busy}
+      className="preview-dialog-theme flex max-h-[calc(100dvh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white text-zinc-900"
+      style={viewportHeight ? { maxHeight: Math.max(160, viewportHeight - 32) } : undefined}>
+      {content}
+    </section> : null;
+  }
+
+  return (
+    <dialog
+      ref={dialog}
+      aria-labelledby="browser-transfer-title"
+      aria-busy={busy}
+      className={`preview-dialog-theme ${tablet ? "fixed inset-x-0 top-4 bottom-auto mx-auto my-0" : "m-auto"} max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white p-0 text-zinc-900 shadow-2xl open:flex backdrop:bg-zinc-900/30`}
+      style={tablet && viewportHeight ? { maxHeight: Math.max(160, viewportHeight - 32) } : undefined}
+      onKeyDown={(event) => event.stopPropagation()}
+      onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}
+    >
+      {content}
     </dialog>
   );
 }

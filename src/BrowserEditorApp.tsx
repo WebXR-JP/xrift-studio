@@ -38,7 +38,7 @@ export default function BrowserEditorApp() {
   const [browserSession, setBrowserSession] = useState<BrowserProjectSession | null>(null);
   const activeSession = useRef<BrowserProjectSession | null>(null);
   const closingSession = useRef<Promise<void>>(Promise.resolve());
-  const [transfer, setTransfer] = useState<BrowserTransferState | null>(null);
+  const [transfer, setTransfer] = useState<BrowserTransferState | null>({ phase: "select", operation: "import" });
   const [recentProjects, setRecentProjects] = useState<BrowserRecentProject[]>([]);
   const [recentProjectsLoading, setRecentProjectsLoading] = useState(false);
   const chooserGeneration = useRef(0);
@@ -201,11 +201,12 @@ export default function BrowserEditorApp() {
       if (file) void importBrowserProject(file);
     }} />
     <BrowserProjectTransferDialog
+      inline={!browserSession}
       state={transfer}
       recentProjects={recentProjects}
       recentProjectsLoading={recentProjectsLoading}
       activeProjectPath={browserSession?.path}
-      onClose={() => { chooserGeneration.current++; setTransfer(null); }}
+      onClose={() => { chooserGeneration.current++; if (browserSession) setTransfer(null); else setLeaving(true); }}
       onRetry={() => retryTransfer.current()}
       onPickFile={() => importInput.current?.click()}
       onOpenRecent={(path) => { void openBrowserRecent(path); }}
@@ -257,16 +258,8 @@ export default function BrowserEditorApp() {
   }
 
   return (
-    <div className="preview-dialog-theme flex min-h-[100dvh] items-center justify-center bg-zinc-50 px-5 text-zinc-900">
-      {transfer?.phase === "preparing" ? <EditorFallback /> : (
-        <main className="my-8 w-full max-w-md rounded-xl border border-zinc-200 bg-white p-6">
-          <h1 className="text-xl font-semibold">ビジュアルエディター</h1>
-          <p className="mt-3 text-sm leading-relaxed text-zinc-600">このブラウザに保存したプロジェクトや、.xriftstudioファイルを開いて編集できます。</p>
-          <button type="button" className="preview-button preview-button-primary mt-5 min-h-11 w-full" onClick={() => { void openProjectChooser(); }}>プロジェクトを開く</button>
-          <a className="preview-button preview-button-light mt-3 min-h-11 w-full" href={import.meta.env.DEV ? "preview.html" : "./"}>紹介ページへ戻る</a>
-        </main>
-      )}
+    <main className="preview-dialog-theme flex min-h-[100dvh] items-center justify-center bg-zinc-50 px-4 py-4 text-zinc-900">
       {transferControls}
-    </div>
+    </main>
   );
 }
