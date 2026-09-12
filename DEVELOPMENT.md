@@ -52,8 +52,6 @@ pnpm tauri:dev
 
 日常の検証は [検証スキル](./.agents/skills/xrift-studio-verify/SKILL.md) から変更に合う範囲を選びます。文書だけなら内容と参照を確認します。操作の許可と完了条件は [共通ガイド](./AGENT.md#意思決定と完了) に従い、依頼済みのローカルビルドを再確認しません。公開・配布とローカル生成は区別します。
 
-main 向けの PR では、[Pull request checks](./.github/workflows/pull-request.yml) がアプリ・E2Eの型検査、CLIのコンパイラfixture、ブラウザ版のプロジェクト保存・受け渡し、画面文言・ガイドの回帰テストを実行します。ブラウザ版のテストは `node --test scripts/browser-*.test.mjs scripts/ui-flow-copy.test.mjs scripts/guide.test.mjs` で実行でき、ブラウザの起動は不要です。
-
 手動のRelease workflowでは、主要導線9件のE2EをOS別ビルドの前に実行します。個別機能の回帰テストは変更時に `pnpm e2e:test e2e/<対象>.spec.ts` で実行し、全件は `pnpm e2e:test` で確認できます。テスト範囲、アップロード禁止境界、失敗時の確認方法は [リリース前 E2E](./docs/RELEASE_E2E.md) を参照してください。
 
 ## 紹介ページのダウンロード導線
@@ -97,7 +95,6 @@ src-tauri/                 Rust バックエンド (Tauri v2)
   Cargo.toml
 
 .github/workflows/
-  pull-request.yml         PR の型検査・コンパイラfixture・回帰テスト
   release.yml              Windows / macOS / Linux の自動リリースワークフロー
 ```
 
