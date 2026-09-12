@@ -1340,7 +1340,8 @@ export function AssetsPanel({
    */
   externalOperationLockReason?: string | null;
 }) {
-  const { tablet, touch } = useEditorDevice();
+  const { tablet: isTablet, phone, touch } = useEditorDevice();
+  const tablet = isTablet || phone;
   const [fileDragOver, setFileDragOver] = useState(false);
   const [rootDropTarget, setRootDropTarget] = useState(false);
   const [breadcrumbDropTargetId, setBreadcrumbDropTargetId] = useState<string | null>(null);

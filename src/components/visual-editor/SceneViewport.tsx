@@ -4958,7 +4958,9 @@ export function SceneViewport({
   onExitRecordingView?: () => void;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
-  const { tablet } = useEditorDevice();
+  const { tablet: isTablet, phone } = useEditorDevice();
+  const tablet = isTablet || phone;
+  const [phoneToolsOpen, setPhoneToolsOpen] = useState(false);
   const [touchNavigate, setTouchNavigate] = useState(false);
   const [touchAdditiveSelection, setTouchAdditiveSelection] = useState(false);
   const [touchFrameRequest, setTouchFrameRequest] = useState(0);
@@ -6201,6 +6203,7 @@ export function SceneViewport({
           ? "z-10 bg-zinc-950 ring-4 ring-inset ring-violet-400/90 shadow-[0_0_0_1px_rgba(139,92,246,0.9),0_0_28px_rgba(124,58,237,0.28)]"
           : "bg-slate-100"
       }`}
+      data-phone-tools={phone && !phoneToolsOpen ? "closed" : undefined}
       aria-labelledby="scene-view-heading"
     >
       <div
@@ -6399,6 +6402,17 @@ export function SceneViewport({
                 : "Play"}
           </button>
         </div>
+        {phone && editorMode === "edit" ? <button type="button" aria-expanded={phoneToolsOpen}
+          onClick={() => {
+            if (phoneToolsOpen) {
+              setTouchNavigate(false);
+              setTouchAdditiveSelection(false);
+            }
+            setPhoneToolsOpen((open) => !open);
+          }}
+          className="min-h-11 shrink-0 rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700">
+          {phoneToolsOpen ? "操作を閉じる" : "シーン操作"}
+        </button> : null}
         <div className={`scene-viewport-tools flex items-center gap-1.5 ${tablet ? "min-h-11 w-full flex-none flex-wrap justify-start border-t border-slate-200/40 py-1" : "flex-1 justify-end"}`} role="toolbar" aria-label="シーンの操作">
           {(["translate", "rotate", "scale"] as const).map((mode) => {
             const Icon = EDITOR_ICONS[mode === "translate" ? "move" : mode];

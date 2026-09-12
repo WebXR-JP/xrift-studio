@@ -146,3 +146,52 @@
     margin-left: 0;
   }
 }
+
+/* Phones start with the scene; editing tools remain one tap away. */
+.visual-editor-shell[data-phone] [data-phone-tools="closed"] .scene-viewport-tools,
+.visual-editor-shell[data-phone] [data-phone-tools="closed"] [aria-label="タッチ操作"] {
+  display: none;
+}
+.visual-editor-shell[data-phone] .editor-main-header > div:first-child > div > p:last-child {
+  display: none;
+}
+.visual-editor-shell[data-phone] .editor-header-actions {
+  gap: 4px;
+}
+.visual-editor-shell[data-phone] .editor-header-actions > [role="status"] {
+  flex-basis: 100%;
+}
+.visual-editor-shell[data-phone] .editor-header-actions > span[aria-hidden] {
+  display: none;
+}
+.visual-editor-shell[data-phone] .editor-header-actions button {
+  padding-inline: 8px;
+  white-space: nowrap;
+}
+@media (orientation: landscape) and (max-height: 599px) {
+  .visual-editor-shell[data-phone] {
+    --editor-tablet-side-track: min(340px, 44%);
+    --editor-tablet-bottom-track: 0px;
+  }
+  .visual-editor-shell[data-phone] .editor-tablet-panel {
+    grid-column: 3;
+    grid-row: 1 / 3;
+    border-top: 0;
+    border-left: 1px solid var(--color-editor-border);
+  }
+  .visual-editor-shell[data-phone] .editor-main-header {
+    flex-wrap: nowrap;
+    padding-block: 2px;
+  }
+  .visual-editor-shell[data-phone] .editor-main-header > div:first-child {
+    flex: 1;
+    overflow: hidden;
+  }
+  .visual-editor-shell[data-phone] .editor-header-actions > [role="status"] {
+    flex-basis: auto;
+  }
+  .visual-editor-shell[data-phone] .editor-header-actions {
+    width: auto;
+    flex-wrap: nowrap;
+  }
+}
