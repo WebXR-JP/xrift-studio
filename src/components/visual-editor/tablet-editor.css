@@ -1,3 +1,22 @@
+/* Touch drags must not start Safari's native text selection over the scene
+   or toolbar. Portal menus opt in separately from the editor shell. */
+.visual-editor-shell[data-touch],
+.editor-touch-menu,
+.editor-add-menu[data-touch] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Keep native editing and copying available, including Monaco's editable
+   content and explicitly selectable output inside the editor. */
+:is(.visual-editor-shell[data-touch], .editor-touch-menu, .editor-add-menu[data-touch])
+  :is(input, textarea, [contenteditable="true"], [contenteditable=""], [contenteditable="plaintext-only"], .monaco-editor, .select-text) {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
 /* Tablet geometry reuses the desktop panels and their state. Hidden panels
    stay mounted so drafts, folder navigation and inspector edits survive. */
 .visual-editor-shell[data-tablet] {
