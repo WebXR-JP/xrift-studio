@@ -9,8 +9,8 @@ import {
 
 export function Footer() {
   return (
-    <footer className="border-t border-zinc-200/80 px-5 py-8 lg:px-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+    <footer className="landing-footer">
+      <div className="landing-container flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
         <BrandLockup />
         <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs font-medium text-zinc-500">
           <a
@@ -29,7 +29,7 @@ export function Footer() {
               className="inline-flex items-center gap-1 transition-colors duration-200 hover:text-violet-700"
             >
               <Bug size={13} aria-hidden="true" />
-              Issue相談GPT
+              不具合を相談
             </a>
           ) : (
             <a
@@ -39,7 +39,7 @@ export function Footer() {
               className="inline-flex items-center gap-1 transition-colors duration-200 hover:text-violet-700"
             >
               <Bug size={13} aria-hidden="true" />
-              Issueを相談
+              不具合を報告
             </a>
           )}
           <a

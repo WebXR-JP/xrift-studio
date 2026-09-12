@@ -10,7 +10,7 @@ import {
   Smartphone,
 } from "lucide-react";
 import { DownloadButton } from "../DownloadButton";
-import { downloadSteps } from "../content";
+import { downloadSteps, editorUrl } from "../content";
 import {
   formatPublishedDate,
   formatSize,
@@ -61,15 +61,6 @@ function StepList({ platform }: { platform: PlatformId }) {
   );
 }
 
-/**
- * The download, explained on the page instead of on the release page.
- *
- * Everything a first-time visitor needed the repository for is here: which
- * file is theirs, how big it is, what it is called once saved, what the OS is
- * going to say about it, and what the other systems get. The releases page is
- * still one link away for anyone who wants to look — it is just no longer the
- * first thing a download asks of them.
- */
 export function DownloadSection() {
   const cta = useDownloadCta();
   const [started, setStarted] = useState(false);
@@ -89,23 +80,15 @@ export function DownloadSection() {
   return (
     <section
       id="download"
-      className="preview-section preview-section-soft px-5 lg:px-8"
+      className="landing-section landing-section-soft"
     >
-      <div className="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-14">
-        <div data-reveal>
-          <p className="preview-eyebrow">ダウンロード</p>
-          <h2 className="preview-section-title mt-4">
-            このパソコンに、
-            <br />
-            そのまま入ります。
-          </h2>
-          <p className="preview-section-copy mt-6">
-            ボタンを押すと、お使いのOSに合うインストーラーがその場で保存されます。
-            どのファイルを選ぶか迷う必要はありません。配布元はGitHubのリリースで、
-            ファイル名とサイズ、SHA-256はここに表示しています。
-          </p>
-          <a href={`${XRIFT_STUDIO_GUIDE_URL}installation.html`} className="mt-5 inline-flex min-h-11 items-center text-sm font-semibold text-violet-700 underline underline-offset-4">
-            入手したら：インストールと最初の操作 →
+      <div className="landing-container landing-download-grid">
+        <div className="landing-section-heading">
+          <p className="landing-eyebrow">ダウンロード</p>
+          <h2>デスクトップ版を<br />ダウンロード</h2>
+          <p>XRiftへの公開やAIとの連携には、デスクトップ版を使います。お使いのOSに合うファイルを選んでください。</p>
+          <a href={`${XRIFT_STUDIO_GUIDE_URL}installation.html`} className="landing-text-link">
+            インストール手順を見る
           </a>
           <dl className="mt-7 space-y-2 text-xs font-semibold text-zinc-600">
             <div className="flex gap-2">
@@ -126,8 +109,7 @@ export function DownloadSection() {
           <p className="mt-6 text-xs font-semibold" aria-live="polite">
             {cta.error ? (
               <span className="text-amber-700">
-                最新版の確認ができませんでした。表示しているのは、このページを作った時点の
-                v{cta.release.version}です。
+                最新版を確認できませんでした。現在はv{cta.release.version}のファイルを表示しています。
                 <button
                   type="button"
                   onClick={recheckLatestRelease}
@@ -151,7 +133,7 @@ export function DownloadSection() {
           </p>
         </div>
 
-        <div className="space-y-4" data-reveal>
+        <div className="min-w-0 space-y-4">
           <div className="preview-download-card">
             <div className="flex items-center gap-2 text-xs font-bold text-zinc-500">
               {cta.platform === "mobile" ? (
@@ -160,11 +142,11 @@ export function DownloadSection() {
                 <Monitor size={15} />
               )}
               {cta.platform === null
-                ? "お使いのOSを確認しています"
+                ? "OSを確認中…"
                 : cta.option
-                  ? `${PLATFORM_LABELS[cta.option.platform]}で見ています`
+                  ? `${PLATFORM_LABELS[cta.option.platform]}向けのダウンロード`
                   : cta.platform === "mobile"
-                    ? "スマートフォンで見ています"
+                    ? "パソコン向けのアプリ"
                     : "OSを判別できませんでした"}
             </div>
 
@@ -186,13 +168,13 @@ export function DownloadSection() {
                 {started ? (
                   <p className="preview-download-started" aria-live="polite">
                     <CheckCircle2 size={15} className="shrink-0" />
-                    ダウンロードを開始しました。保存が終わったら、下の手順どおりに進めてください。
+                    ダウンロードを開始しました。完了後にファイルを開いてください。
                   </p>
                 ) : null}
                 {cta.option.sha256 ? (
                   <details className="preview-download-details">
                     <summary>
-                      <span>このファイルを確認する（SHA-256）</span>
+                      <span>ファイルの照合用ハッシュ（SHA-256）</span>
                       <ChevronDown size={16} className="shrink-0 text-zinc-400" />
                     </summary>
                     <p className="preview-download-hash">{cta.option.sha256}</p>
@@ -206,13 +188,13 @@ export function DownloadSection() {
               <div className="mt-4">
                 <p className="text-sm font-bold leading-7 text-zinc-800">
                   {cta.platform === "mobile"
-                    ? "XRift Studioはパソコン用のアプリです。Windows・macOS・Linuxのパソコンでこのページを開いてください。"
+                    ? "この端末ではブラウザ版を使えます。デスクトップ版はWindows・macOS・Linux向けです。"
                     : cta.platform === null
                       ? "少しお待ちください。"
                       : "このパソコンに合うファイルを判別できませんでした。下の一覧から選んでください。"}
                 </p>
                 <p className="mt-2 text-xs font-semibold text-zinc-500">
-                  このページのデモは、いま見ている画面でも試せます。
+                  <a href={editorUrl} className="landing-text-link">ブラウザでエディターを開く</a>
                 </p>
               </div>
             )}
@@ -268,7 +250,7 @@ export function DownloadSection() {
 
           <div className="preview-download-card">
             <p className="text-xs font-black tracking-[0.14em] text-zinc-500">
-              ダウンロードのあと
+              インストールと起動
             </p>
             {knownPlatform ? (
               <div className="mt-4">
@@ -289,6 +271,9 @@ export function DownloadSection() {
                 ))}
               </div>
             )}
+            <a href={`${XRIFT_STUDIO_GUIDE_URL}installation-problems.html`} className="landing-text-link mt-4">
+              警告が表示される・起動できないとき
+            </a>
           </div>
         </div>
       </div>

@@ -2,7 +2,7 @@
 
 [XRift](https://xrift.net/)のワールドとアイテムを作る、非公式のデスクトップアプリです。素材の配置、見た目や動きの調整、動作確認、公開までを行えます。コードを書いて制作することもできます。
 
-**[ダウンロード](https://github.com/WebXR-JP/xrift-studio/releases/latest)** · **[使い方](./docs/guide/index.md)** · **[ブラウザで試す](https://webxr-jp.github.io/xrift-studio/)**
+**[ダウンロード](https://github.com/WebXR-JP/xrift-studio/releases/latest)** · **[使い方](./docs/guide/index.md)** · **[ビジュアルエディターを開く](https://webxr-jp.github.io/xrift-studio/editor.html)**
 
 > XRift公式とは無関係の有志製ツールです。開発中のため、大切なプロジェクトは別の場所にも保存してください。
 
@@ -12,7 +12,7 @@
 2. [最初のワールドを作る](./docs/guide/first-world.md)に沿って、物を配置し、マテリアルで色を変えます。
 3. 保存し、**Play**で歩いて確かめます。公開の準備ができたら**XRiftへ公開**へ進みます。
 
-OS別の導入手順は[インストールガイド](./docs/guide/installation.md)を参照してください。ブラウザ版は操作を試すためのデモです。ログイン、ローカルファイルの操作、CLIの実行、公開にはデスクトップ版を使います。
+OS別の導入手順は[インストールガイド](./docs/guide/installation.md)を参照してください。ブラウザ版では、パソコンやiPadからビジュアルエディターで制作できます。プロジェクトはブラウザに自動保存され、`.xriftstudio`ファイルでデスクトップ版へ引き継げます。XRiftへの公開やMCPでのAI接続はデスクトップ版を使います。
 
 ## 作りたいものから探す
 
@@ -36,7 +36,7 @@ pnpm install
 pnpm tauri:dev
 ```
 
-ブラウザ版のみの起動は`pnpm dev`、型の確認は`pnpm typecheck`です。
+ブラウザ版のみの起動は`pnpm dev`、型の確認は`pnpm typecheck`です。開発サーバーの`/preview.html`が紹介ページ、`/editor.html`がビジュアルエディターです。
 
 設計・API・検証手順は[開発文書の一覧](./docs/README.md)、日本語の表記は[文章と用語のルール](./docs/JAPANESE_WRITING.md)を参照してください。
 
