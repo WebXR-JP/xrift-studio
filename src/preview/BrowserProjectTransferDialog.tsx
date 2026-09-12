@@ -77,7 +77,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
       ref={dialog}
       aria-labelledby="browser-transfer-title"
       aria-busy={busy}
-      className={`${tablet ? "fixed inset-x-0 top-4 bottom-auto mx-auto my-0" : "m-auto"} max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white p-0 text-zinc-900 shadow-2xl open:flex backdrop:bg-zinc-900/30`}
+      className={`preview-dialog-theme ${tablet ? "fixed inset-x-0 top-4 bottom-auto mx-auto my-0" : "m-auto"} max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white p-0 text-zinc-900 shadow-2xl open:flex backdrop:bg-zinc-900/30`}
       style={tablet && viewportHeight ? { maxHeight: Math.max(160, viewportHeight - 32) } : undefined}
       onKeyDown={(event) => event.stopPropagation()}
       onCancel={(event) => { event.preventDefault(); if (!busy) onClose(); }}

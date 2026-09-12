@@ -18,6 +18,13 @@ export function EditorImportMenu({
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const projectMenu = rootRef.current?.closest("details");
+    const resetWhenClosed = () => { if (!projectMenu?.open) setOpen(false); };
+    projectMenu?.addEventListener("toggle", resetWhenClosed);
+    return () => projectMenu?.removeEventListener("toggle", resetWhenClosed);
+  }, []);
+
+  useEffect(() => {
     if (!open) return;
     const handlePointerDown = (event: PointerEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
@@ -34,7 +41,7 @@ export function EditorImportMenu({
   }, [open]);
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="editor-import-menu relative">
       <button
         type="button"
         disabled={Boolean(disabledReason)}

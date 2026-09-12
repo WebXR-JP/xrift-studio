@@ -260,6 +260,7 @@ import { TextureImportSettingsPanel } from "./TextureImportSettingsPanel";
 import { EditorImportMenu } from "./EditorImportMenu";
 import { ComponentCodeImportDialog } from "./ComponentCodeImportDialog";
 import { InteractivityGraphEditor } from "./InteractivityGraphEditor";
+import { GuideLink } from "../guide/GuideLink";
 import { EditorUtilityRail } from "./EditorUtilityRail";
 import { useEditorDevice } from "./useEditorDevice";
 import { EditorPanelVisibilityContext } from "./editor-panel-visibility";
@@ -962,6 +963,15 @@ export function VisualEditorPrototype({
 }: VisualEditorPrototypeProps) {
   const { tablet: isTablet, phone, touch, viewportHeight } = useEditorDevice();
   const tablet = isTablet || phone;
+  const headerActionsRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!tablet) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!headerActionsRef.current?.contains(event.target as Node)) headerActionsRef.current?.removeAttribute("open");
+    };
+    window.addEventListener("pointerdown", closeOutside);
+    return () => window.removeEventListener("pointerdown", closeOutside);
+  }, [tablet]);
   const [tabletPanel, setTabletPanel] = useState<"hierarchy" | "assets" | "inspector" | null>(phone ? null : "hierarchy");
   const projectExportLock = useRef(false);
   const [projectExportBusy, setProjectExportBusy] = useState(false);
@@ -1402,7 +1412,8 @@ export function VisualEditorPrototype({
   const scriptTabActive = activeEditorTab === SCRIPT_TAB_ID;
   const setGraphTabActive = useCallback((active: boolean) => {
     setActiveEditorTab(active ? INTERACTIVITY_GRAPH_TAB_ID : SCENE_VIEW_TAB_ID);
-  }, []);
+    if (phone && active) setTabletPanel(null);
+  }, [phone]);
   const scriptEditorSavingRef = useRef(false);
   const handleScriptEditorSavingChange = useCallback((saving: boolean) => {
     scriptEditorSavingRef.current = saving;
@@ -1423,6 +1434,7 @@ export function VisualEditorPrototype({
       const currentAssetId = scriptEditorOpenAssetIdRef.current;
       if (currentAssetId === assetId) {
         setActiveEditorTab(SCRIPT_TAB_ID);
+        if (phone) setTabletPanel(null);
         return true;
       }
       if (
@@ -1437,10 +1449,11 @@ export function VisualEditorPrototype({
         scriptEditorDirtyRef.current = false;
       }
       setActiveEditorTab(SCRIPT_TAB_ID);
+      if (phone) setTabletPanel(null);
       await scriptEditor.open(assetId, createdAsset);
       return true;
     },
-    [scriptEditor.open],
+    [scriptEditor.open, phone],
   );
   const closeScriptEditor = useCallback(() => {
     if (scriptEditorSavingRef.current) return;
@@ -11256,6 +11269,7 @@ export function VisualEditorPrototype({
   const recordingUiHidden =
     recordingViewport.visible && !recordingViewport.showEditorUi;
   const panelsHidden = viewportMaximized || recordingUiHidden;
+  const sceneContentVisible = !phone || panelsHidden || !tabletPanel;
   const hierarchyTrack = panelsHidden || tablet
     ? "0px"
     : `min(${layout.hierarchyWidth}px, 22%)`;
@@ -11273,42 +11287,7 @@ export function VisualEditorPrototype({
    * auto-placement then walks the remaining panels one cell to the left —
    * putting the Scene View in the 0px column with its own header clipped away.
    */
-  const sidePanelClass = (panel: "hierarchy" | "assets" | "inspector", spansBothRows: boolean) =>
-    tablet ? `editor-tablet-panel ${panelsHidden || tabletPanel !== panel ? "hidden" : "flex"}` : panelsHidden
-      ? `overflow-hidden ${spansBothRows ? "row-span-2" : ""}`
-      : "contents";
-
-  return (
-    <ValueScrubContext.Provider value={valueScrubTransaction}>
-    <div className="visual-editor-shell h-screen overflow-hidden bg-editor-canvas"
-      data-tablet={tablet || undefined} data-phone={phone || undefined} data-touch={touch || undefined}
-      style={tablet ? { height: viewportHeight ? `${viewportHeight}px` : "100dvh" } : undefined}>
-      <div className="flex h-full min-h-0 min-w-0 flex-col bg-editor-canvas text-editor-text">
-        <header className="editor-main-header flex h-14 shrink-0 items-center justify-between gap-3 border-b border-editor-border bg-editor-surface px-3">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <button
-              type="button"
-              disabled={leaving}
-              onClick={() => void handleBack()}
-              title={commandTitle(`${backLabel}へ戻る`, "CloseVisualEditor")}
-              className="flex shrink-0 items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-2.5 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-wait disabled:opacity-50"
-            >
-              <BackIcon size={13} aria-hidden="true" />
-              {leaving ? "保存して戻っています" : backLabel}
-            </button>
-            <div className="min-w-0 border-l border-editor-border pl-2.5">
-              <p className="truncate text-sm font-semibold text-editor-text">
-                {bundle.project.metadata.title}
-              </p>
-              <p className="flex items-center gap-1 text-xs text-editor-muted">
-                <KindIcon size={11} aria-hidden="true" />
-                {kindLabel} · ビジュアルエディター
-              </p>
-            </div>
-          </div>
-
-          <div className="editor-header-actions flex shrink-0 items-center gap-2">
-            <span
+  const saveStatusIndicator = (<span
               className={`flex items-center gap-1.5 text-xs font-medium ${
                 saveStatus === "error" ? "text-rose-700" : "text-editor-muted"
               }`}
@@ -11322,7 +11301,58 @@ export function VisualEditorPrototype({
                 aria-hidden="true"
               />
               {saveStatusLabel}
-            </span>
+            </span>);
+  const HeaderActions = tablet ? "details" : "div";
+  const sidePanelClass = (panel: "hierarchy" | "assets" | "inspector", spansBothRows: boolean) =>
+    tablet ? `editor-tablet-panel ${panelsHidden || tabletPanel !== panel ? "hidden" : "flex"}` : panelsHidden
+      ? `overflow-hidden ${spansBothRows ? "row-span-2" : ""}`
+      : "contents";
+
+  return (
+    <ValueScrubContext.Provider value={valueScrubTransaction}>
+    <div className="visual-editor-shell h-screen overflow-hidden bg-editor-canvas"
+      data-tablet={tablet || undefined} data-phone={phone || undefined} data-panel-open={phone && !panelsHidden && tabletPanel ? tabletPanel : undefined} data-touch={touch || undefined}
+      style={tablet ? { height: viewportHeight ? `${viewportHeight}px` : "100dvh" } : undefined}>
+      <div className="flex h-full min-h-0 min-w-0 flex-col bg-editor-canvas text-editor-text">
+        <header className="editor-main-header flex h-14 shrink-0 items-center justify-between gap-3 border-b border-editor-border bg-editor-surface px-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <button
+              type="button"
+              disabled={leaving}
+              onClick={() => void handleBack()}
+              title={commandTitle(`${backLabel}へ戻る`, "CloseVisualEditor")}
+              className="flex shrink-0 items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-2.5 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-wait disabled:opacity-50"
+            >
+              <BackIcon size={13} aria-hidden="true" />
+              {leaving ? "保存中…" : tablet ? "戻る" : backLabel}
+            </button>
+            <div className="min-w-0 border-l border-editor-border pl-2.5">
+              <p className="truncate text-sm font-semibold text-editor-text">
+                {bundle.project.metadata.title}
+              </p>
+              {tablet ? saveStatusIndicator : <p className="flex items-center gap-1 text-xs text-editor-muted">
+                <KindIcon size={11} aria-hidden="true" />
+                {kindLabel} · ビジュアルエディター
+              </p>}
+            </div>
+          </div>
+
+          <HeaderActions ref={(element: HTMLDetailsElement | HTMLDivElement | null) => { headerActionsRef.current = element; }} className="editor-header-actions relative shrink-0"
+            onKeyDown={(event) => {
+              if (!tablet) return;
+              event.stopPropagation();
+              if (event.key === "Escape") {
+                headerActionsRef.current?.removeAttribute("open");
+                headerActionsRef.current?.querySelector("summary")?.focus();
+              }
+            }}
+            onClick={(event) => {
+              const target = event.target as HTMLElement;
+              if (tablet && target.closest("button, a") && (!target.closest(".editor-import-menu") || target.closest('[role="menuitem"]'))) headerActionsRef.current?.removeAttribute("open");
+            }}>
+            {tablet ? <summary className="flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center gap-1 rounded-md border border-editor-border bg-editor-surface px-3 text-xs font-semibold text-editor-text">作品 <span aria-hidden="true">⌄</span></summary> : null}
+            <div className="editor-project-actions flex items-center gap-2">
+            {!tablet ? saveStatusIndicator : null}
             {saveStatus === "error" ? (
               <button
                 type="button"
@@ -11383,7 +11413,13 @@ export function VisualEditorPrototype({
               XRiftへ公開
             </button>
             </>}
-          </div>
+            {tablet ? <>
+              <button type="button" onClick={() => { setSceneSettingsOpen(true); setTabletPanel("inspector"); setViewportMaximized(false); }}
+                className="min-h-11 rounded-md border border-editor-border bg-editor-surface px-3 text-left text-xs font-semibold text-editor-text">シーン設定</button>
+              <GuideLink page="ipad" label="タッチ操作の使い方" />
+            </> : null}
+            </div>
+          </HeaderActions>
         </header>
 
         <div
@@ -11450,6 +11486,9 @@ export function VisualEditorPrototype({
             </div>
           </div>
           {tablet && !recordingUiHidden ? <div className="editor-panel-switcher ml-auto flex items-center gap-1" aria-label="編集パネル">
+            {phone ? <button type="button" aria-pressed={panelsHidden || !tabletPanel}
+              onClick={() => { setTabletPanel(null); setViewportMaximized(false); setActiveEditorTab(SCENE_VIEW_TAB_ID); }}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold ${panelsHidden || !tabletPanel ? "bg-brand-100 text-brand-800" : "text-editor-muted hover:bg-editor-subtle"}`}>シーン</button> : null}
             {([['hierarchy', 'Hierarchy'], ['assets', 'Assets'], ['inspector', 'Inspector']] as const).map(([panel, label]) =>
               <button key={panel} type="button"
                 aria-pressed={!panelsHidden && tabletPanel === panel}
@@ -11922,7 +11961,7 @@ export function VisualEditorPrototype({
             onGenerated={handleAssetThumbnailGenerated}
             onFailed={handleModelThumbnailFailure}
           />
-          <EditorUtilityRail
+          {!tablet ? <EditorUtilityRail
             commands={resolvedCommands}
             sceneSettingsOpen={sceneSettingsOpen}
             onToggleSceneSettings={() => {
@@ -12021,7 +12060,7 @@ export function VisualEditorPrototype({
                 });
               },
             }}
-          />
+          /> : null}
           <ExternalAssetStoreDialog
             open={externalStoreOpen}
             projectPath={projectPath}
@@ -12077,9 +12116,9 @@ export function VisualEditorPrototype({
             what the graph you are half way through writing is pointing at.
           */}
           {interactivityEditorAsset ? (
-            <div className={graphTabActive ? "contents" : "hidden"}>
+            <div className={graphTabActive && sceneContentVisible ? "contents" : "hidden"}>
             <InteractivityGraphEditor
-              active={graphTabActive}
+              active={graphTabActive && sceneContentVisible}
               key={interactivityEditorAsset.id}
               asset={interactivityEditorAsset}
               materials={Object.values(bundle.assets.assets).filter(
@@ -12129,7 +12168,7 @@ export function VisualEditorPrototype({
           {scriptEditorAsset ? (
             <ScriptEditorWorkspace
               assets={bundle.assets}
-              active={scriptTabActive}
+              active={scriptTabActive && sceneContentVisible}
               onOpen={(assetId) => { void openScriptEditor(assetId); }}
               onCreate={() => setScriptTemplateFolderId(null)}
               createDisabled={renderedEditorMode === "play" || !projectPath}

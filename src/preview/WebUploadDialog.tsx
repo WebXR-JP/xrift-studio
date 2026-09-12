@@ -97,7 +97,7 @@ export function WebUploadDialog({
   };
 
   return (
-    <div className="preview-web-upload-backdrop" role="dialog" aria-modal="true">
+    <div className="preview-dialog-theme preview-web-upload-backdrop" role="dialog" aria-modal="true">
       <div className="preview-web-upload">
         <h2 className="preview-web-upload-title">XRiftへ公開</h2>
 

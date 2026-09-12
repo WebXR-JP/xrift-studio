@@ -254,6 +254,7 @@ function ComponentCard({
   };
   children?: ReactNode;
 }) {
+  const touch = useEditorTouch();
   return (
     <section className="overflow-hidden rounded border border-slate-200 bg-white">
       <div className="flex min-h-8 items-center justify-between bg-slate-50/80 px-2.5 py-1.5">
@@ -269,7 +270,7 @@ function ComponentCard({
               className="h-3.5 w-3.5 shrink-0 accent-violet-600 disabled:cursor-not-allowed disabled:opacity-50"
             />
           ) : null}
-          <h3 className="truncate text-[13px] font-semibold text-slate-800">{title}</h3>
+          <h3 className={`${touch ? "break-words [overflow-wrap:anywhere]" : "truncate"} text-[13px] font-semibold text-slate-800`}>{title}</h3>
         </span>
         <span className="flex items-center gap-1.5">
           {subtitle ? <span className="text-xs text-slate-400">{subtitle}</span> : null}
@@ -6015,6 +6016,7 @@ export function InspectorPanel({
   onSetLightShadow: (castShadow: boolean) => void;
   onApplyMaterialPatch: (patch: MaterialAssetPatch) => void;
 }) {
+  const touch = useEditorTouch();
   const entity = selectedEntityId ? scene.entities[selectedEntityId] : undefined;
   const asset = selectedAssetId ? assets.assets[selectedAssetId] : undefined;
   const prefabSource = entity
@@ -6069,7 +6071,7 @@ export function InspectorPanel({
         : null;
 
   return (
-    <aside className="row-span-2 flex min-h-0 flex-col border-l border-editor-border bg-editor-canvas" aria-labelledby="inspector-heading">
+    <aside className="row-span-2 flex min-h-0 min-w-0 flex-col border-l border-editor-border bg-editor-canvas" aria-labelledby="inspector-heading">
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-editor-border bg-editor-surface px-3">
         <div className="flex items-center gap-2">
           <InspectorIcon size={14} className="text-editor-muted" aria-hidden="true" />
@@ -6084,7 +6086,7 @@ export function InspectorPanel({
         ) : null}
       </div>
       {inspectorBackTarget ? (
-        <div className="flex h-8 shrink-0 items-center gap-1 border-b border-editor-border bg-editor-subtle px-2">
+        <div className={`flex shrink-0 items-center gap-1 border-b border-editor-border bg-editor-subtle px-2 ${touch ? "min-h-11 py-1" : "h-8"}`}>
           <button
             type="button"
             onClick={inspectorBackTarget.onBack}
@@ -6100,7 +6102,7 @@ export function InspectorPanel({
           </button>
           <ChevronRight size={12} className="shrink-0 text-slate-400" aria-hidden="true" />
           <span
-            className="min-w-0 truncate text-[11px] font-medium text-slate-600"
+            className={`min-w-0 text-[11px] font-medium text-slate-600 ${touch ? "break-words [overflow-wrap:anywhere]" : "truncate"}`}
             title={inspectorBackTarget.current}
             aria-current="page"
           >
@@ -6115,7 +6117,7 @@ export function InspectorPanel({
             : "閲覧のみです。"}
         </div>
       ) : null}
-      <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto p-3">
+      <div className={`scrollbar-thin min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain ${touch ? "p-2" : "p-3"}`}>
         {sceneSettingsOpen ? (
           <>
           {assetImportSettings}

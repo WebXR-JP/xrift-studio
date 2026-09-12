@@ -22,9 +22,9 @@ export function MobileEditorHelp({ onClose }: { onClose: () => void }) {
     onKeyDown={(event) => event.stopPropagation()}
     onCancel={(event) => { event.preventDefault(); onClose(); }}>
     <h2 id="mobile-editor-help-title" className="text-base font-semibold">スマホでの編集操作</h2>
-    <p className="mt-3 text-sm leading-6">シーンをタップして選択し、Inspectorで位置や色を変えられます。Hierarchy・Assets・Inspectorは切り替えて使います。同じボタンを押すとシーンを広く表示できます。</p>
+    <p className="mt-3 text-sm leading-6">シーンをタップして選択し、Inspectorで位置や色を変えられます。Hierarchy・Assets・Inspectorは画面を切り替えて使います。「シーン」で3D表示へ戻れます。</p>
     <p className="mt-2 text-sm leading-6">1本指で視点を回し、2本指で移動・拡大縮小できます。</p>
-    <p className="mt-2 text-sm leading-6">作品はブラウザに自動保存されます。「.xriftstudioで保存」でファイルにして、iPadやパソコンでも続きを編集できます。</p>
+    <p className="mt-2 text-sm leading-6">作品はブラウザに自動保存されます。「作品 → .xriftstudioで保存」でファイルにして、iPadやパソコンでも続きを編集できます。</p>
     <button type="button" autoFocus onClick={onClose} className="mt-4 min-h-11 w-full rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white">編集を始める</button>
   </dialog>;
 }
