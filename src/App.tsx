@@ -207,6 +207,9 @@ function App() {
   const [logs, setLogs] = useState<LogLine[]>([]);
   const [busy, setBusy] = useState(false);
   const [projectsLoading, setProjectsLoading] = useState(false);
+  const [openedArchivePaths, setOpenedArchivePaths] = useState<string[]>([]);
+  const [openedArchiveInspection, setOpenedArchiveInspection] =
+    useState<ProjectArchiveInspection | null>(null);
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [newProjectError, setNewProjectError] = useState<{
     title: string;
@@ -458,6 +461,76 @@ function App() {
       )
       .finally(() => setRuntimeLoading(false));
   }, [appendLog]);
+
+  useEffect(() => {
+    if (!tauri.isAvailable()) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    const collectOpenedArchives = () => {
+      void tauri.takeOpenedProjectArchives().then((paths) => {
+        if (!disposed && paths.length > 0) {
+          setOpenedArchivePaths((current) => [...current, ...paths]);
+        }
+      });
+    };
+    void tauri.onOpenProjectArchives(collectOpenedArchives).then((dispose) => {
+      if (disposed) {
+        dispose();
+        return;
+      }
+      unlisten = dispose;
+      collectOpenedArchives();
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      !runtime?.ready ||
+      selected ||
+      visualSession ||
+      openedArchiveInspection ||
+      openedArchivePaths.length === 0
+    ) {
+      return;
+    }
+    const archivePath = openedArchivePaths[0];
+    let cancelled = false;
+    void tauri
+      .inspectProjectArchive(archivePath)
+      .then((inspection) => {
+        if (!cancelled) setOpenedArchiveInspection(inspection);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          toast({
+            kind: "error",
+            title: "プロジェクトファイルを読み込めませんでした",
+            description: String(error),
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setOpenedArchivePaths((current) => current.slice(1));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    openedArchiveInspection,
+    openedArchivePaths,
+    runtime?.ready,
+    selected,
+    toast,
+    visualSession,
+  ]);
+
+  const handleOpenedArchiveInspectionHandled = useCallback(() => {
+    setOpenedArchiveInspection(null);
+  }, []);
 
   const refreshUser = useCallback(async () => {
     setUserLoading(true);
@@ -2090,6 +2163,8 @@ function App() {
         onDuplicate={handleDuplicateProject}
         onExport={handleExportProject}
         onInspectArchive={handleInspectProjectArchive}
+        requestedImportInspection={openedArchiveInspection}
+        onRequestedImportInspectionHandled={handleOpenedArchiveInspectionHandled}
         onImportArchive={handleImportProjectArchive}
         onImportRepository={handleImportProjectRepository}
         onOpenPath={(path) => void tauri.openPath(path).catch(() => undefined)}

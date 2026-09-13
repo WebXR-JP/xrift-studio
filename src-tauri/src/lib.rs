@@ -34,6 +34,53 @@ const SCRIPT_SOURCE_MAX_BYTES: u64 = 8 * 1024 * 1024;
 static VISUAL_PROJECT_IO_LOCK: Mutex<()> = Mutex::new(());
 static COMPILER_STAGING_IO_LOCK: Mutex<()> = Mutex::new(());
 static VISUAL_ASSET_IMPORT_IO_LOCK: Mutex<()> = Mutex::new(());
+const OPEN_PROJECT_ARCHIVES_EVENT: &str = "open-project-archives";
+
+#[derive(Default)]
+struct OpenProjectArchivesState(Mutex<Vec<String>>);
+
+fn project_archives_from_args<I, S>(args: I, cwd: &Path) -> Vec<String>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    args.into_iter()
+        .filter_map(|arg| {
+            let path = PathBuf::from(arg.as_ref());
+            let is_package = path
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("xriftstudio"));
+            if !is_package {
+                return None;
+            }
+            let path = if path.is_absolute() {
+                path
+            } else {
+                cwd.join(path)
+            };
+            Some(path.to_string_lossy().to_string())
+        })
+        .collect()
+}
+
+fn queue_project_archives(app: &AppHandle, paths: Vec<String>) {
+    if paths.is_empty() {
+        return;
+    }
+    if let Ok(mut pending) = app.state::<OpenProjectArchivesState>().0.lock() {
+        pending.extend(paths.iter().cloned());
+    }
+    let _ = app.emit(OPEN_PROJECT_ARCHIVES_EVENT, paths);
+}
+
+#[tauri::command]
+fn take_opened_project_archives(
+    state: tauri::State<'_, OpenProjectArchivesState>,
+) -> Result<Vec<String>, String> {
+    let mut pending = state.0.lock().map_err(|error| error.to_string())?;
+    Ok(std::mem::take(&mut *pending))
+}
 
 #[cfg(target_os = "windows")]
 const NODE_DIST: &str = "node-v24.15.0-win-x64";
@@ -5925,12 +5972,17 @@ fn recording_abort_file(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
+    let initial_archives = project_archives_from_args(
+        std::env::args().skip(1),
+        &std::env::current_dir().unwrap_or_default(),
+    );
 
     // Publication staging uses process-local mutexes, so desktop launches are
     // single-instance. A second launch focuses the existing authoring window.
     #[cfg(desktop)]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+            queue_project_archives(app, project_archives_from_args(args, Path::new(&cwd)));
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.set_focus();
@@ -5941,6 +5993,7 @@ pub fn run() {
     let builder = builder
         .manage(mcp::XriftMcpBrokerState::default())
         .manage(RecordingFileState::default())
+        .manage(OpenProjectArchivesState(Mutex::new(initial_archives)))
         .setup(|app| {
             mcp::start_broker(app.handle())?;
             if let Ok(root) = app_root(app.handle()) {
@@ -5958,10 +6011,11 @@ pub fn run() {
     #[cfg(debug_assertions)]
     let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
 
-    builder
+    let app = builder
         .invoke_handler(tauri::generate_handler![
             runtime_paths,
             runtime_status,
+            take_opened_project_archives,
             setup_runtime,
             sandbox_env,
             ensure_dir,
@@ -6036,13 +6090,47 @@ pub fn run() {
             mcp::detect_xrift_ollama,
             mcp::configure_xrift_ollama,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle, event| {
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Opened { urls } = event {
+            let paths = urls
+                .into_iter()
+                .filter_map(|url| url.to_file_path().ok())
+                .filter(|path| {
+                    path.extension()
+                        .and_then(|extension| extension.to_str())
+                        .is_some_and(|extension| extension.eq_ignore_ascii_case("xriftstudio"))
+                })
+                .map(|path| path.to_string_lossy().to_string())
+                .collect();
+            queue_project_archives(app_handle, paths);
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = (app_handle, event);
+    });
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn project_archive_arguments_accept_only_xriftstudio_files() {
+        let cwd = Path::new("/tmp/shared");
+        assert_eq!(
+            project_archives_from_args(
+                ["gift.xriftstudio", "notes.txt", "OTHER.XRIFTSTUDIO"],
+                cwd,
+            ),
+            vec![
+                "/tmp/shared/gift.xriftstudio".to_string(),
+                "/tmp/shared/OTHER.XRIFTSTUDIO".to_string()
+            ]
+        );
+    }
 
     fn reset_fixture_root(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
