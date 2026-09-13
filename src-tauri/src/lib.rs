@@ -13,6 +13,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_opener::OpenerExt;
 
 mod external_store;
+mod openxr_room;
 mod project_transfer;
 pub mod mcp;
 mod script_trust;
@@ -5994,6 +5995,7 @@ pub fn run() {
         .manage(mcp::XriftMcpBrokerState::default())
         .manage(RecordingFileState::default())
         .manage(OpenProjectArchivesState(Mutex::new(initial_archives)))
+        .manage(openxr_room::RoomCaptureState::default())
         .setup(|app| {
             mcp::start_broker(app.handle())?;
             if let Ok(root) = app_root(app.handle()) {
@@ -6014,6 +6016,9 @@ pub fn run() {
     let app = builder
         .invoke_handler(tauri::generate_handler![
             runtime_paths,
+            openxr_room::get_openxr_room_capabilities,
+            openxr_room::capture_openxr_room,
+            openxr_room::cancel_openxr_room_capture,
             runtime_status,
             take_opened_project_archives,
             setup_runtime,

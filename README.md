@@ -43,3 +43,7 @@ pnpm tauri:dev
 ## ライセンス
 
 MIT。素材ごとの権利表記は[THIRD_PARTY_ASSETS.md](./THIRD_PARTY_ASSETS.md)を参照してください。
+
+### OpenXRで部屋を取り込む（実機未検証）
+
+Windows版のScene Viewにある「部屋を取り込む」から、端末ごとの準備と必要な機能を確認し、対応Runtimeが提供する保存済みの部屋をGLBとして配置します。完了後は取り込んだEntityをまとめて表示し、寸法や位置を確認できます。新規スキャンとPICO Connectの部屋取得は未対応です。[使い方](docs/guide/xr-spatial.md)と[実装範囲](docs/OPENXR_SPATIAL_AUTHORING.md)を参照してください。

@@ -1,0 +1,311 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedBy": "XRift Studio",
+  "models": [
+    {
+      "id": "spatial-sample.ceiling",
+      "semanticLabel": "CEILING",
+      "normalizedLabel": "ceiling",
+      "fileName": "ceiling.glb",
+      "publicPath": "/visual-editor/spatial-samples/ceiling.glb",
+      "sha256": "1950951f00873005e113cbcca8eca64b380cca39797cfa19d187eff138f388ac",
+      "byteLength": 1492,
+      "nominalSize": [
+        4.0,
+        0.03,
+        4.0
+      ],
+      "license": "project-owned",
+      "purpose": "semantic-sample"
+    },
+    {
+      "id": "spatial-sample.door-frame",
+      "semanticLabel": "DOOR_FRAME",
+      "normalizedLabel": "door-frame",
+      "fileName": "door-frame.glb",
+      "publicPath": "/visual-editor/spatial-samples/door-frame.glb",
+      "sha256": "1a3563725cefd39584d82a2a6810fca65b8c74083d5b140123e3b9fe2be4e170",
+      "byteLength": 2380,
+      "nominalSize": [
+        1.0,
+        2.1,
+        0.12
+      ],
+      "license": "project-owned",
+      "purpose": "semantic-sample"
+    },
+    {
+      "id": "spatial-sample.floor",
+      "semanticLabel": "FLOOR",
+      "normalizedLabel": "floor",
+      "fileName": "floor.glb",
+      "publicPath": "/visual-editor/spatial-samples/floor.glb",
+      "sha256": "52beb7a940742463af002d0c685ef25f7931d713b7d4ac386ca2651ac6b41ce4",
+      "byteLength": 1484,
+      "nominalSize": [
+        4.0,
+        0.03,
+        4.0
+      ],
+      "license": "project-owned",
+      "purpose": "semantic-sample"
+    },
+    {
+      "id": "spatial-sample.invisible-wall-face",
+      "semanticLabel": "INVISIBLE_WALL_FACE",
+      "normalizedLabel": "invisible-wall-face",
+      "fileName": "invisible-wall-face.glb",
+      "publicPath": "/visual-editor/spatial-samples/invisible-wall-face.glb",
+      "sha256": "85fbf45d0d25f6b11218145c20e2050ed91799e94a1f1435645e26b30f856476",
+      "byteLength": 1552,
+      "nominalSize": [
+        4.0,
+        2.5,
+        0.03
+      ],
+      "license": "project-owned",
+      "purpose": "semantic-sample"
+    },
+    {
+      "id": "spatial-sample.wall-art",
+      "semanticLabel": "WALL_ART",
+      "normalizedLabel": "wall-art",
+      "fileName": "wall-art.glb",
+      "publicPath": "/visual-editor/spatial-samples/wall-art.glb",
+      "sha256": "0c8335448d7669a566e9f367922e3653411963d0a049b676cb8c4a4ac616e305",
+      "byteLength": 1552,
+      "nominalSize": [
+        1.2,
+        0.8,
+        0.05
+      ],
+      "license": "project-owned",
+      "purpose": "semantic-sample"
+    },
+    {
+      "id": "spatial-sample.wall-face",
+      "semanticLabel": "WALL_FACE",
+      "normalizedLabel": "wall-face",
+      "fileName": "wall-face.glb",
+      "publicPath": "/visual-editor/spatial-samples/wall-face.glb",
+      "sha256": "adcec0f5974232976f644b53fcf5e924ae0605ca10363405a5b609a411bb8b3a",
+      "byteLength": 1504,
+      "nominalSize": [
+        4.0,
+        2.5,
+        0.03
+      ],
+      "license": "project-owned",
+      "purpose": "semantic-sample"
+    },
+    {
+      "id": "spatial-sample.window-frame",
+      "semanticLabel": "WINDOW_FRAME",
+      "normalizedLabel": "window-frame",
+      "fileName": "window-frame.glb",
+      "publicPath": "/visual-editor/spatial-samples/window-frame.glb",
+      "sha256": "dfada3bbdfc807f72a7ace796d77f367231ab5b2f5ba97fd08b67fad2558dbd4",
+      "byteLength": 2688,
+      "nominalSize": [
+        1.4,
+        1.2,
+        0.1
+      ],
+      "license": "project-owned",
+      "purpose": "semantic-sample"
+    },
+    {
+      "id": "spatial-sample.couch",
+      "semanticLabel": "COUCH",
+      "normalizedLabel": "couch",
+      "fileName": "couch.glb",
+      "publicPath": "/visual-editor/spatial-samples/couch.glb",
+      "sha256": "787acedb8e37e960d2c87e67b71d0ff1860dd0bbc16d269ea11b18ccf696de80",
+      "byteLength": 2956,
+      "nominalSize": [
+        2.0,
+        0.9,
+        0.85
+      ],
+      "license": "project-owned",
+      "purpose": "semantic-sample"
+    },
+    {
+      "id": "spatial-sample.table",
+      "semanticLabel": "TABLE",
+      "normalizedLabel": "table",
+      "fileName": "table.glb",
+      "publicPath": "/visual-editor/spatial-samples/table.glb",
+      "sha256": "fad417ecae38afce149dd1123f137c3cb4132f7d18eb74c43ca8f8f33abd2a04",
+      "byteLength": 2992,
+      "nominalSize": [
+        1.4,
+        0.75,
+        0.8
+      ],
+      "license": "project-owned",
+      "purpose": "semantic-sample"
+    },
+    {
+      "id": "spatial-sample.bed",
+      "semanticLabel": "BED",
+      "normalizedLabel": "bed",
+      "fileName": "bed.glb",
+      "publicPath": "/visual-editor/spatial-samples/bed.glb",
+      "sha256": "cf43958591e965e8619a5f678fb355b6b05073adc8afc06d64bc1d8ab8e396dd",
+      "byteLength": 2284,
+      "nominalSize": [
+        2.0,
+        0.55,
+        1.4
+      ],
+      "license": "project-owned",
+      "purpose": "semantic-sample"
+    },
+    {
+      "id": "spatial-sample.lamp",
+      "semanticLabel": "LAMP",
+      "normalizedLabel": "lamp",
+      "fileName": "lamp.glb",
+      "publicPath": "/visual-editor/spatial-samples/lamp.glb",
+      "sha256": "24d3e80310e033409519a897da983040b9a75a790a3c56b55ee0b3a105af1c41",
+      "byteLength": 6252,
+      "nominalSize": [
+        0.45,
+        1.6,
+        0.45
+      ],
+      "license": "project-owned",
+      "purpose": "semantic-sample"
+    },
+    {
+      "id": "spatial-sample.plant",
+      "semanticLabel": "PLANT",
+      "normalizedLabel": "plant",
+      "fileName": "plant.glb",
+      "publicPath": "/visual-editor/spatial-samples/plant.glb",
+      "sha256": "495649c620fa5b9ed6746a902a9cd9802cf8b4287c7e01ba42daf7c9cb4e31b6",
+      "byteLength": 17100,
+      "nominalSize": [
+        0.65,
+        1.2,
+        0.65
+      ],
+      "license": "project-owned",
+      "purpose": "semantic-sample"
+    },
+    {
+      "id": "spatial-sample.screen",
+      "semanticLabel": "SCREEN",
+      "normalizedLabel": "screen",
+      "fileName": "screen.glb",
+      "publicPath": "/visual-editor/spatial-samples/screen.glb",
+      "sha256": "f08c48fa306a4aecf9d7eb83b8e9304e43e37a5da95eda792963f338e7c87f52",
+      "byteLength": 1544,
+      "nominalSize": [
+        1.4,
+        0.85,
+        0.08
+      ],
+      "license": "project-owned",
+      "purpose": "semantic-sample"
+    },
+    {
+      "id": "spatial-sample.storage",
+      "semanticLabel": "STORAGE",
+      "normalizedLabel": "storage",
+      "fileName": "storage.glb",
+      "publicPath": "/visual-editor/spatial-samples/storage.glb",
+      "sha256": "b0d05abf8dbbbf50719b054070c832f0a889af0b1608153e2a43c7119a351987",
+      "byteLength": 2836,
+      "nominalSize": [
+        1.2,
+        1.8,
+        0.5
+      ],
+      "license": "project-owned",
+      "purpose": "semantic-sample"
+    },
+    {
+      "id": "spatial-sample.global-mesh",
+      "semanticLabel": "GLOBAL_MESH",
+      "normalizedLabel": "global-mesh",
+      "fileName": "global-mesh.glb",
+      "publicPath": "/visual-editor/spatial-samples/global-mesh.glb",
+      "sha256": "abe1c69c65c01b94c903c0733c22dc7c6f60c4638d2585b02197819be36b1baa",
+      "byteLength": 3104,
+      "nominalSize": [
+        4.0,
+        2.5,
+        4.0
+      ],
+      "license": "project-owned",
+      "purpose": "semantic-sample"
+    },
+    {
+      "id": "spatial-sample.other",
+      "semanticLabel": "OTHER",
+      "normalizedLabel": "other",
+      "fileName": "other.glb",
+      "publicPath": "/visual-editor/spatial-samples/other.glb",
+      "sha256": "4dacde59962b792bc730c637e1a9e846a9bffcb0a53e3d9c053bd2ff797b053a",
+      "byteLength": 1532,
+      "nominalSize": [
+        0.8,
+        0.8,
+        0.8
+      ],
+      "license": "project-owned",
+      "purpose": "semantic-sample"
+    },
+    {
+      "id": "spatial-sample.desk",
+      "semanticLabel": "DESK",
+      "normalizedLabel": "desk",
+      "fileName": "desk.glb",
+      "publicPath": "/visual-editor/spatial-samples/desk.glb",
+      "sha256": "9739eec13b91b1a8dd5315d0a94f9a6a3fcef41a542fa98f84a6a2a6258281b3",
+      "byteLength": 3044,
+      "nominalSize": [
+        1.4,
+        0.75,
+        0.7
+      ],
+      "license": "project-owned",
+      "purpose": "semantic-sample-compatibility"
+    },
+    {
+      "id": "spatial-sample.chair",
+      "semanticLabel": "CHAIR",
+      "normalizedLabel": "chair",
+      "fileName": "chair.glb",
+      "publicPath": "/visual-editor/spatial-samples/chair.glb",
+      "sha256": "62cc696f80adc4a5102a1e90d0e834ae5b45ecd37b68f8538406f33370b931f9",
+      "byteLength": 3616,
+      "nominalSize": [
+        0.55,
+        0.9,
+        0.55
+      ],
+      "license": "project-owned",
+      "purpose": "semantic-sample-compatibility"
+    },
+    {
+      "id": "spatial-sample.opening",
+      "semanticLabel": "OPENING",
+      "normalizedLabel": "opening",
+      "fileName": "opening.glb",
+      "publicPath": "/visual-editor/spatial-samples/opening.glb",
+      "sha256": "f5720608c3d20777bc90804d1cc1b610f4968d889e8ba946dc2be63359d75b97",
+      "byteLength": 1508,
+      "nominalSize": [
+        1.2,
+        2.1,
+        0.03
+      ],
+      "license": "project-owned",
+      "purpose": "semantic-sample-compatibility"
+    }
+  ],
+  "notes": "16 labels are in the current Meta supported semantic table; DESK, CHAIR and OPENING are compatibility aliases used by XRift/IWSDK/MRUK surfaces."
+}

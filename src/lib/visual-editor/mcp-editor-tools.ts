@@ -1,3 +1,8 @@
+import { applySpatialCaptureToScene } from "./value-up/spatial-xr/apply-to-scene";
+import { buildSpatialConversionPlan } from "./value-up/spatial-xr/semantic-conversion";
+import { createDigitalTwinPlan } from "./value-up/spatial-xr/digital-twin";
+import { migrateSpatialCapture, type SpatialCaptureDocument } from "./value-up/spatial-xr/spatial-capture";
+import { rankSemanticPrefabs } from "./value-up/spatial-xr/semantic-prefab-resolver";
 import { catalogMaterialTextures } from "./catalog-material-dependencies";
 import { inspectProjectHealth } from "./value-up/project-health";
 import { analyzeProjectPerformance } from "./value-up/performance-budget";
@@ -394,6 +399,10 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   get_editor_context: readEditorContext,
   get_project_health: readProjectHealth,
   analyze_performance: readPerformanceReport,
+  plan_spatial_capture: planSpatialCapture,
+  apply_spatial_capture: applySpatialCapture,
+  plan_digital_twin: planDigitalTwin,
+  rank_spatial_prefabs: rankSpatialPrefabs,
   get_scripting_capabilities: readScriptingCapabilities,
   analyze_component_code: analyzeComponentCodeTool,
   apply_component_code_import_plan: applyComponentCodeImportPlanTool,
@@ -519,6 +528,104 @@ function readPerformanceReport(
     { performance: performance as unknown as Record<string, unknown> },
     `Performance Budgetを確認しました（${performance.tier}）`,
   );
+}
+
+function spatialCaptureArgument(value: unknown): SpatialCaptureDocument {
+  if (!isPlainObjectRecord(value)) {
+    throw new XriftMcpEditorToolError("INVALID_ARGUMENT", "captureはSpatial Capture objectで指定してください");
+  }
+  if (!Array.isArray(value.surfaces)) {
+    throw new XriftMcpEditorToolError("INVALID_ARGUMENT", "Spatial Captureにsurfacesがありません");
+  }
+  try {
+    return migrateSpatialCapture(value);
+  } catch (error) {
+    throw new XriftMcpEditorToolError("INVALID_ARGUMENT", `Spatial Captureを読み込めません: ${String(error)}`);
+  }
+}
+
+function planSpatialCapture(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const capture = spatialCaptureArgument(argumentsValue.capture);
+  const plan = buildSpatialConversionPlan(capture);
+  const labels = [...new Set(plan.map((entry) => entry.semanticLabel))].sort();
+  return unchanged(
+    context,
+    { captureId: capture.captureId, surfaceCount: capture.surfaces.length, labels, plan },
+    `Spatial Captureを解析しました（${capture.surfaces.length} surfaces）`,
+  );
+}
+
+function applySpatialCapture(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const capture = spatialCaptureArgument(argumentsValue.capture);
+  const materialAssetId = requiredString(argumentsValue.materialAssetId, "materialAssetId");
+  const applied = applySpatialCaptureToScene(context.bundle.scene, context.bundle.assets, capture, {
+    materialAssetId,
+  });
+  if (applied.createdEntityIds.length === 0) {
+    throw new XriftMcpEditorToolError(
+      "SPATIAL_CAPTURE_EMPTY",
+      "Spatial Captureから配置できるSurfaceがありませんでした",
+      { skippedSurfaceIds: applied.skippedSurfaceIds },
+    );
+  }
+  const bundle = touchProject(context, { ...context.bundle, scene: applied.scene });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: applied.createdEntityIds[0]! },
+    assetSelection: null,
+    result: {
+      captureId: capture.captureId,
+      createdEntityIds: applied.createdEntityIds,
+      skippedSurfaceIds: applied.skippedSurfaceIds,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+    },
+    activity: `Spatial Captureから${applied.createdEntityIds.length}件のEntityを作成しました`,
+  };
+}
+
+function planDigitalTwin(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  const capture = spatialCaptureArgument(argumentsValue.capture);
+  const style = isPlainObjectRecord(argumentsValue.style) ? argumentsValue.style : {};
+  const plan = createDigitalTwinPlan(capture, {
+    id: typeof style.id === "string" ? style.id : "mcp-style",
+    name: typeof style.name === "string" ? style.name : "MCP Style",
+    materialBySemantic: isPlainObjectRecord(style.materialBySemantic) ? style.materialBySemantic as Record<string, string> : undefined,
+    prefabStyleTags: Array.isArray(style.prefabStyleTags) ? style.prefabStyleTags.filter((value): value is string => typeof value === "string") : undefined,
+    hideSemantics: Array.isArray(style.hideSemantics) ? style.hideSemantics.filter((value): value is string => typeof value === "string") : undefined,
+    keepRoomGeometry: typeof style.keepRoomGeometry === "boolean" ? style.keepRoomGeometry : true,
+  });
+  return unchanged(context, { plan }, `Digital Twin変換計画を作成しました（${plan.sourceSurfaceCount} surfaces）`);
+}
+
+function rankSpatialPrefabs(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  if (!isPlainObjectRecord(argumentsValue.surface)) {
+    throw new XriftMcpEditorToolError("INVALID_ARGUMENT", "surfaceを指定してください");
+  }
+  const candidates = Array.isArray(argumentsValue.candidates) ? argumentsValue.candidates.filter(isPlainObjectRecord).map((candidate) => ({
+    id: requiredString(candidate.id, "candidate.id"),
+    name: requiredString(candidate.name, "candidate.name"),
+    semanticLabels: Array.isArray(candidate.semanticLabels) ? candidate.semanticLabels.filter((value): value is string => typeof value === "string") : [],
+    nominalSize: Array.isArray(candidate.nominalSize) && candidate.nominalSize.length === 3 ? candidate.nominalSize.every(v => typeof v === "number" && Number.isFinite(v) && v > 0) ? candidate.nominalSize as [number, number, number] : undefined : undefined,
+    styleTags: Array.isArray(candidate.styleTags) ? candidate.styleTags.filter((value): value is string => typeof value === "string") : undefined,
+  })) : [];
+  const styleTags = Array.isArray(argumentsValue.styleTags) ? argumentsValue.styleTags.filter((value): value is string => typeof value === "string") : undefined;
+  const ranked = rankSemanticPrefabs(migrateSpatialCapture({ surfaces: [argumentsValue.surface] }).surfaces[0]!, candidates, { styleTags });
+  return unchanged(context, { ranked }, `Semantic Prefab候補を${ranked.length}件順位付けしました`);
 }
 
 function readScriptingCapabilities(

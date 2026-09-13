@@ -1,5 +1,6 @@
 import { createWorldAssetHierarchy } from "../../lib/visual-editor/scripting/world-asset-hierarchy";
 import { ensureWorldAssetModels, mergeWorldAssetModels } from "../../lib/visual-editor/scripting/world-asset-import";
+import { useOpenXrRoomImport } from "./useOpenXrRoomImport";
 import { ensureCatalogMaterialTextures } from "../../lib/visual-editor/asset-import-persistence";
 import { catalogMaterialTextures } from "../../lib/visual-editor/catalog-material-dependencies";
 import { getEditorEntityCreationDefinitions, getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
@@ -10691,6 +10692,46 @@ export function VisualEditorPrototype({
     return requestAutosave(bundleRef.current);
   }, [requestAutosave]);
 
+  const openXrRoomImport = useOpenXrRoomImport({
+    projectId: initialBundle.project.projectId,
+    getBundle: () => bundleRef.current,
+    canImport: () => !playingRef.current && !playPreparationActiveRef.current
+      && !importBusyRef.current && !importRunningRef.current && assetOperationRef.current === null,
+    getPlayGeneration: () => playPreparationGenerationRef.current,
+    save: runSave,
+    commit: (result, message) => {
+      setBundle(touchProject(result.bundle));
+      const first = result.applied[0]?.entityId;
+      if (first) {
+        setSceneSelection({ kind: "entity", id: first });
+        setSelectedEntityIds(result.applied.map(({ entityId }) => entityId));
+        setAssetSelection(null);
+        setSceneSettingsOpen(false);
+        setActiveEditorTab(SCENE_VIEW_TAB_ID);
+      }
+      setNotice(message);
+    },
+  });
+
+  const roomImportDisabledReason = editorMode !== "edit"
+    ? "Playを停止すると、部屋を取り込めます。"
+    : playPreparing
+      ? "Playの準備が終わり、Playを停止してから取り込んでください。"
+      : importBusy || importRunningRef.current || assetOperationRef.current !== null
+        ? "素材の処理が終わると、部屋を取り込めます。"
+        : undefined;
+  const importedRoomEntityIds = openXrRoomImport.outcome?.status === "success"
+    ? openXrRoomImport.outcome.entityIds.filter((id) => Boolean(bundle.scene.entities[id]))
+    : [];
+  const handleFocusImportedRoom = () => {
+    if (editorMode !== "edit" || playPreparing || !importedRoomEntityIds.length) return;
+    const first = importedRoomEntityIds[0]!;
+    handleEntitySelectionChange(importedRoomEntityIds, first);
+    setActiveEditorTab(SCENE_VIEW_TAB_ID);
+    void requestSceneCamera({ focusEntityIds: importedRoomEntityIds }).then((result) => {
+      if (!result.ok) setNotice(result.message ?? "取り込んだ部屋を表示できませんでした。");
+    });
+  };
   useEffect(() => {
     if (!onProjectExport) return;
     const saveBeforeSuspending = () => {
@@ -11683,6 +11724,12 @@ export function VisualEditorPrototype({
               setGraphTabActive(false);
               executeCommand("play.toggle");
             }}
+            roomImportPhase={openXrRoomImport.phase}
+            roomImportOutcome={openXrRoomImport.outcome}
+            roomImportDisabledReason={roomImportDisabledReason}
+            onCaptureOpenXrRoom={openXrRoomImport.capture}
+            onCancelOpenXrRoom={openXrRoomImport.cancel}
+            onFocusImportedRoom={importedRoomEntityIds.length ? handleFocusImportedRoom : undefined}
             tabs={viewportEditorTabs}
             activeTabId={
               viewportEditorTabs.some((tab) => tab.id === activeEditorTab)

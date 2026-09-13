@@ -529,3 +529,11 @@ UIでは「外部から追加 → ギミック → カスタム車」と「XRift
 Playでは運転席をクリックして乗り、W/Sで前後移動、A/Dで旋回、Spaceで降りる。同乗席も着席できる。タイヤと煙は、各参加者側で公式Vehicleの同期済み移動量から表示を更新する。停止中は回転と新しい煙の放出を止める。粒子ごとの位置やタイヤの角度を個別送信する方式ではないため、粒子の形や位置が参加者間で完全に一致する保証はない。公開XRiftでの複数人表示は別途確認する。
 
 追加後は `get_entity_components` で構成、`capture_scene_view` でEdit中の見た目を確認し、`set_play_mode` で乗降と走行を確認する。既存の車は新規配置と別の編集対象であり、この操作だけでは差し替わらない。
+
+## Spatial CaptureとOpenXR
+
+`plan_spatial_capture`、`apply_spatial_capture`、`plan_digital_twin`、`rank_spatial_prefabs`は取得済みの部屋データを扱う。入力形式と用途は[Spatial Authoring](OPENXR_SPATIAL_AUTHORING.md)を参照。
+
+### 意図的に公開していない操作: OpenXRの部屋取得
+
+`capture_openxr_room` / `cancel_openxr_room_capture` は同じ`requestId`を渡すTauri IPCの非同期Session操作で、現在の同期MCP document surfaceには公開しない。Scene Viewの「部屋を取り込む」から実行する。取得後のGLB保存もUIの取り込み処理が担当する。`apply_spatial_capture` は簡易形状の配置であり、端末からの取得やGLBの保存は行わない。

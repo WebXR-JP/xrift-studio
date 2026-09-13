@@ -432,6 +432,18 @@
         "editor-basics",
         "play-mode"
       ]
+    },
+    {
+      "slug": "xr-spatial",
+      "title": "OpenXRで部屋を取り込む",
+      "description": "PCに接続した端末から保存済みの部屋を取り込みます。実機未検証の機能です。",
+      "group": "create",
+      "file": "xr-spatial.md",
+      "keywords": "OpenXR Meta Quest Air Link SteamVR PICO PICO Connect Room Setup 部屋 取り込み 必要な機能を確認 GLB",
+      "related": [
+        "play-mode",
+        "assets"
+      ]
     }
   ],
   "homeTopics": [

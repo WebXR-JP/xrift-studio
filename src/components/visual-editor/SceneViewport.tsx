@@ -1,4 +1,6 @@
 import { createWorldPlaySeatStore } from "./world-play-seat-store";
+import type { OpenXrRoomImportOutcome, OpenXrRoomImportPhase } from "./useOpenXrRoomImport";
+import { SpatialXrPanel } from "./SpatialXrPanel";
 import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
 import { XriftModelInstancing } from "../../../packages/xrift-studio-runtime/src/script/model-instancing";
 import { collectModelInstancingEntities } from "../../lib/visual-editor/model-instancing";
@@ -3160,6 +3162,8 @@ export type SceneViewCameraRequest = {
   preset?: SceneViewCameraPreset;
   /** Frames this Entity's real rendered bounds, as the F key does. */
   focusEntityId?: string;
+  /** Frames an imported room together without changing ordinary F-key focus. */
+  focusEntityIds?: readonly string[];
   /** Explicit placement. `target` alone keeps the current distance. */
   position?: Vec3;
   target?: Vec3;
@@ -3751,7 +3755,40 @@ function CameraControls({
 
     const target = new Vector3();
     let radius = 0;
-    if (request.focusEntityId) {
+    if (request.focusEntityIds?.length) {
+      const roomBounds = new Sphere().makeEmpty();
+      const requestedIds = new Set(request.focusEntityIds);
+      const roomObjects = new Map<string, Object3D>();
+      // Scan once: a room can contain thousands of Entities.
+      threeScene.traverse((object) => {
+        const id = object.userData.authoringEntityId;
+        if (requestedIds.has(id) && object.userData.renderedEntityId === id && !roomObjects.has(id)) {
+          roomObjects.set(id, object);
+        }
+      });
+      for (const entityId of request.focusEntityIds) {
+        const object = roomObjects.get(entityId);
+        if (!object) continue;
+        const bounds = computeEntityFocusBounds(object);
+        if (bounds) {
+          roomBounds.union(new Sphere(new Vector3(...bounds.center), bounds.radius));
+        } else {
+          object.updateWorldMatrix(true, true);
+          roomBounds.expandByPoint(object.getWorldPosition(new Vector3()));
+        }
+      }
+      if (roomBounds.isEmpty()) {
+        report({
+          ok: false,
+          position: currentPosition.toArray() as Vec3,
+          target: currentTarget.toArray() as Vec3,
+          message: "取り込んだ部屋の形状を読み込み中です。少し待ってからもう一度表示してください。",
+        });
+        return;
+      }
+      target.copy(roomBounds.center);
+      radius = roomBounds.radius;
+    } else if (request.focusEntityId) {
       const object = findSceneEntityObject(threeScene, request.focusEntityId);
       if (!object) {
         report({
@@ -3812,6 +3849,13 @@ function CameraControls({
     direction.setLength(Math.min(distance, camera.far * 0.8));
     camera.position.copy(target.clone().add(direction));
     controls.target.copy(target);
+    if (request.focusEntityIds?.length && camera instanceof OrthographicCamera && radius > 0) {
+      const span = Math.min(Math.abs(camera.right - camera.left), Math.abs(camera.top - camera.bottom));
+      if (span > 0) {
+        camera.zoom = span / (2 * radius * 1.25);
+        camera.updateProjectionMatrix();
+      }
+    }
     // Straight down has no yaw to keep, and the default up vector makes the
     // view roll to an arbitrary heading. Pinning it keeps -Z up on screen.
     camera.up.set(
@@ -4820,6 +4864,12 @@ export function SceneViewport({
   playShortcut,
   snapShortcut,
   onTogglePlay,
+  roomImportPhase,
+  roomImportOutcome,
+  roomImportDisabledReason,
+  onCaptureOpenXrRoom,
+  onCancelOpenXrRoom,
+  onFocusImportedRoom,
   onTransformModeChange,
   onToggleTransformSpace,
   onGizmoSettingsChange,
@@ -4897,6 +4947,12 @@ export function SceneViewport({
   playShortcut?: string;
   snapShortcut?: string;
   onTogglePlay: () => void;
+  roomImportPhase?: OpenXrRoomImportPhase;
+  roomImportOutcome?: OpenXrRoomImportOutcome | null;
+  roomImportDisabledReason?: string;
+  onCaptureOpenXrRoom?: () => Promise<void>;
+  onCancelOpenXrRoom?: () => Promise<void>;
+  onFocusImportedRoom?: () => void;
   onTransformModeChange: (mode: TransformMode) => void;
   onToggleTransformSpace: () => void;
   /** Snap is flipped often enough that the toolbar patches it without Undo. */
@@ -5544,6 +5600,7 @@ export function SceneViewport({
     const keys = pressedKeysRef.current;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!playInputActiveRef.current || event.isComposing) return;
+      if (event.target instanceof Element && event.target.closest("dialog[open]")) return;
       if (isEditableShortcutTarget(event.target)) return;
       keys.add(event.code);
     };
@@ -6364,6 +6421,14 @@ export function SceneViewport({
           ) : null}
         </div>
         <div className={`flex shrink-0 items-center gap-1.5 ${tablet ? "min-h-11" : ""}`}>
+          <SpatialXrPanel
+            phase={roomImportPhase}
+            outcome={roomImportOutcome}
+            disabledReason={roomImportDisabledReason}
+            onCaptureRoom={onCaptureOpenXrRoom}
+            onCancelCapture={onCancelOpenXrRoom}
+            onFocusImportedRoom={onFocusImportedRoom}
+          />
           {recordingViewActive && onExitRecordingView ? (
             <button
               type="button"
