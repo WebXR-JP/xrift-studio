@@ -33,6 +33,19 @@
     "active": true,
     "createUpdaterArtifacts": true,
     "targets": "all",
+    "fileAssociations": [
+      {
+        "ext": ["xriftstudio"],
+        "name": "XRift Studio Project",
+        "description": "XRift Studio project package",
+        "role": "Editor",
+        "mimeType": "application/x-xriftstudio",
+        "exportedType": {
+          "identifier": "net.xrift.studio.project",
+          "conformsTo": ["public.data"]
+        }
+      }
+    ],
     "externalBin": ["binaries/xrift-studio-mcp-sidecar"],
     "icon": [
       "icons/32x32.png",

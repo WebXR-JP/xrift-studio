@@ -523,6 +523,10 @@ export const tauri = {
   },
   inspectProjectArchive: (archivePath: string) =>
     invoke<ProjectArchiveInspection>("inspect_project_archive", { archivePath }),
+  takeOpenedProjectArchives: () =>
+    invoke<string[]>("take_opened_project_archives"),
+  onOpenProjectArchives: (handler: (archivePaths: string[]) => void): Promise<UnlistenFn> =>
+    listen<string[]>("open-project-archives", (event) => handler(event.payload)),
   importProjectArchive: (root: string, archivePath: string, directoryName: string) =>
     invoke<Project>("import_project_archive", { root, archivePath, directoryName }),
   importProjectFromRepository: (root: string, repositoryUrl: string, directoryName: string) =>
