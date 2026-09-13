@@ -1,6 +1,20 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { createWorldPlaySeatStore } from "../src/components/visual-editor/world-play-seat-store";
 import type { SeatEntry } from "@xrift/world-components";
+
+async function exitSeat(page: Page, code = "Space") {
+  // The official player samples key state per frame, including an initial
+  // seated frame that ignores already-held exit keys.
+  await page.evaluate(() => new Promise<void>(resolve => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  }));
+  await page.keyboard.down(code);
+  try {
+    await expect(page.getByTestId("occupied")).toHaveText("none");
+  } finally {
+    await page.keyboard.up(code);
+  }
+}
 
 const entry = (): SeatEntry => ({
   getSeatSurface: () => ({ position: { x: 0, y: 1, z: 0 }, quaternion: { x: 0, y: 0, z: 0, w: 1 } }),
@@ -65,7 +79,7 @@ test("official Vehicle drives only its occupied driver seat and releases occupan
   await page.keyboard.up("KeyW");
   await expect(page.getByTestId("smoke-visible")).toHaveText("false");
   await page.screenshot({ path: testInfo.outputPath("vehicle-play.png") });
-  await page.keyboard.press("Space");
+  await exitSeat(page);
   await page.evaluate(() => document.exitPointerLock());
   await expect.poll(() => page.evaluate(() => document.pointerLockElement === null)).toBe(true);
   await expect(page.getByTestId("occupied")).toHaveText("none");
@@ -139,7 +153,7 @@ test("generated Seat model can be clicked to sit and Space stands up", async ({ 
   await expect(page.getByTestId("aim")).toHaveText("hit");
   await page.locator("canvas").click();
   await expect(page.getByTestId("occupied")).toHaveText("seated");
-  await page.keyboard.press("Space");
+  await exitSeat(page);
   await expect(page.getByTestId("occupied")).toHaveText("none");
 });
 
@@ -202,4 +216,55 @@ test("vehicle cosmetics follow synchronized poses on both viewers, including rev
   expect(result[0]!.teleport).toBeCloseTo(0);
   expect(result[0]!.restored).toBe(0);
   expect(result[0]!.rates).toEqual([0, 8, 0, 8, 0]);
+});
+
+
+test("official seated player releases drive input on blur and teleports out of the seat", async ({ page }) => {
+  await page.goto("/e2e.html?scenario=ready");
+  await page.evaluate(async () => {
+    const url = "/e2e/vehicle-seat.fixture.tsx";
+    const fixture = await import(url) as typeof import("./vehicle-seat.fixture");
+    await fixture.mountVehicleSeatFixture();
+  });
+  await expect(page.getByTestId("ready")).toHaveText("ready");
+  await page.getByRole("button", { name: "Aim at driver" }).click();
+  await expect(page.getByTestId("aim")).toHaveText("hit");
+  await page.locator("canvas").click();
+  await expect(page.getByTestId("occupied")).toHaveText("seated");
+  await page.keyboard.down("KeyW");
+  await expect.poll(() => page.getByTestId("distance").textContent().then(Number)).toBeLessThan(-0.1);
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+  await expect(page.getByTestId("smoke-visible")).toHaveText("false");
+  const distance = Number(await page.getByTestId("distance").textContent());
+  await page.waitForTimeout(250);
+  expect(Number(await page.getByTestId("distance").textContent())).toBeCloseTo(distance, 2);
+  await page.keyboard.up("KeyW");
+  await page.evaluate(() => document.exitPointerLock());
+  await expect.poll(() => page.evaluate(() => document.pointerLockElement === null)).toBe(true);
+  await page.getByRole("button", { name: "Teleport", exact: true }).click();
+  await expect(page.getByTestId("occupied")).toHaveText("none");
+  await expect.poll(async () => {
+    const position = JSON.parse(await page.getByTestId("player-position").textContent() || "{}");
+    return Math.hypot(position.x - 8, position.z - 8);
+  }).toBeLessThan(0.05);
+  await page.getByRole("button", { name: "Sit passenger" }).click();
+  await expect(page.getByTestId("occupied")).toHaveText("seated");
+  await exitSeat(page, "KeyE");
+  await expect(page.getByTestId("occupied")).toHaveText("none");
+});
+
+
+test("Classic exports and generated scripts stay aligned with world-components 0.53", async ({ page }) => {
+  await page.goto("/e2e.html?scenario=ready");
+  await page.evaluate(async () => {
+    const runtimeUrl = "/src/lib/visual-editor/compiler/runtime-packages.fixture.ts";
+    const classicUrl = "/src/lib/visual-editor/classic-export.fixture.ts";
+    const scriptsUrl = "/src/lib/visual-editor/compiler/script-emit.fixture.ts";
+    const runtime = await import(runtimeUrl);
+    runtime.runRuntimePackageFixtureAssertions();
+    const classic = await import(classicUrl);
+    await classic.runClassicExportFixtureAssertions();
+    const scripts = await import(scriptsUrl);
+    scripts.runScriptEmitFixtureAssertions();
+  });
 });

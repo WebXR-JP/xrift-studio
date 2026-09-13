@@ -42,7 +42,7 @@ const RUNTIME_PACKAGE_DIR = path.join(repoRoot, "packages", "xrift-studio-runtim
  * src/lib/xrift-cli.ts — `pnpm cli:test` fails when they drift
  * (scripts/check-world-components-alignment.mjs).
  */
-const WORLD_COMPONENTS_SPEC = "@xrift/world-components@0.52.0";
+const WORLD_COMPONENTS_SPEC = "@xrift/world-components@0.53.0";
 const SHELL_ENTRY = "remoteEntry.js";
 const RUNTIME_CONTRACT_SOURCE = path.join(
   RUNTIME_PACKAGE_DIR,

@@ -90,6 +90,7 @@ if (editorManifest.dependencies.react !== editorManifest.dependencies["react-dom
 const PLAY_PLAYER_MODULES = [
   "components/DevEnvironment/constants",
   "components/DevEnvironment/components/PhysicsPlayer",
+  "components/DevEnvironment/components/DevSeat/store",
   "components/DevEnvironment/components/Crosshair",
   "components/DevEnvironment/components/GrabSystem/index",
   "components/DevEnvironment/components/GrabSystem/store",

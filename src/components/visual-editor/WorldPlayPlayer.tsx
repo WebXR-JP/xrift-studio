@@ -1,4 +1,3 @@
-import { WorldPlaySeatController } from "./WorldPlaySeatController";
 import type { WorldPlaySeatStore } from "./world-play-seat-store";
 import { PointerLockControls } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
@@ -237,10 +236,9 @@ export function useWorldPlayTeleport(): WorldPlayTeleport {
  * Finds the running player's RigidBody and teleports it.
  *
  * `PhysicsPlayer` keeps its body to itself, so the player is identified the
- * way it identifies itself every frame: the camera it drives sits exactly
- * `CAMERA_Y_OFFSET` above the capsule's centre. That is a property of the
- * component being used, not a guess about the Scene, and the alignment check
- * fails the build if the constant moves.
+ * way it identifies itself every frame: while walking, the camera sits
+ * `CAMERA_Y_OFFSET` above the capsule centre; while seated, movementRef
+ * reports the feet beneath that centre.
  *
  * The alternative - routing teleport through `setSpawnPoint`, which the player
  * does watch - was rejected because it would also move where a fall respawns.
@@ -248,18 +246,23 @@ export function useWorldPlayTeleport(): WorldPlayTeleport {
 function WorldPlayTeleportBinding({
   moverRef,
   seatStore,
+  movementRef,
 }: {
   moverRef: RefObject<WorldPlayTeleportMover | null>;
   seatStore: WorldPlaySeatStore;
+  movementRef: RefObject<PlayerMovement>;
 }) {
   const { world } = useRapier();
   const camera = useThree((state) => state.camera);
 
   useEffect(() => {
     const findPlayerBody = (): RapierRigidBody | null => {
-      const x = camera.position.x;
-      const y = camera.position.y - CAMERA_Y_OFFSET;
-      const z = camera.position.z;
+      // Seated eyes have a forward offset and no longer sit above the capsule.
+      // PhysicsPlayer reports seated feet through movementRef.
+      const feet = seatStore.getEntry() ? movementRef.current.position : null;
+      const [x, y, z] = feet
+        ? resolveWorldPlayCapsuleSpawn([feet.x, feet.y, feet.z])
+        : [camera.position.x, camera.position.y - CAMERA_Y_OFFSET, camera.position.z];
       let nearest: RapierRigidBody | null = null;
       // Tight enough that no other body can be mistaken for the capsule the
       // camera is riding, loose enough to survive a frame of physics drift.
@@ -281,8 +284,8 @@ function WorldPlayTeleportBinding({
     };
 
     moverRef.current = (destination) => {
-      seatStore.leave();
       const body = findPlayerBody();
+      seatStore.leave();
       if (!body) return false;
       // The destination names the floor, the way a SpawnPoint does, so it is
       // lifted onto the capsule's centre by the same rule.
@@ -299,7 +302,7 @@ function WorldPlayTeleportBinding({
     return () => {
       moverRef.current = null;
     };
-  }, [camera, moverRef, seatStore, world]);
+  }, [camera, movementRef, moverRef, seatStore, world]);
 
   return null;
 }
@@ -484,6 +487,43 @@ export function WorldPlayPlayer({
     };
   }, [camera, surface]);
 
+  // PhysicsPlayer keeps pressed keys internally. Release them through its own
+  // input path when focus/lock is lost, including keys released over an input.
+  useLayoutEffect(() => {
+    const held = new Map<string, string>();
+    const down = (event: KeyboardEvent) => {
+      if (/^(Key[WASDE]|Arrow(Up|Down|Left|Right)|Space|Shift(Left|Right))$/.test(event.code)) {
+        held.set(event.code, event.key);
+      }
+    };
+    const up = (event: KeyboardEvent) => { held.delete(event.code); };
+    const clear = () => {
+      const keys = [...held];
+      held.clear();
+      for (const [code, key] of keys) {
+        window.dispatchEvent(new KeyboardEvent("keyup", { code, key }));
+      }
+    };
+    const lock = () => { if (document.pointerLockElement !== surface) clear(); };
+    window.addEventListener("keydown", down, true);
+    window.addEventListener("keyup", up, true);
+    window.addEventListener("blur", clear);
+    document.addEventListener("focusin", clear);
+    document.addEventListener("pointerlockchange", lock);
+    return () => {
+      clear();
+      window.removeEventListener("keydown", down, true);
+      window.removeEventListener("keyup", up, true);
+      window.removeEventListener("blur", clear);
+      document.removeEventListener("focusin", clear);
+      document.removeEventListener("pointerlockchange", lock);
+    };
+  }, [surface]);
+
+  // The official PhysicsPlayer owns seated movement. Studio only gates occupancy
+  // to a mounted player and releases it on Stop.
+  useLayoutEffect(() => seatStore.bindPlayer(() => true), [seatStore]);
+
   // Once, on entering Play. `PhysicsPlayer` sets the heading itself when an
   // official SpawnPoint registers, but a Scene whose spawn comes from the
   // Studio SpawnPoint Component has nothing to register, and every Scene starts
@@ -517,10 +557,10 @@ export function WorldPlayPlayer({
         respawnThreshold={RESPAWN_Y_THRESHOLD}
         allowInfiniteJump={allowInfiniteJump}
         movementRef={movementRef}
+        seatStore={seatStore}
       />
-      <WorldPlaySeatController store={seatStore} movementRef={movementRef} />
       <GrabSystem store={grabStore} />
-      <WorldPlayTeleportBinding moverRef={teleportMoverRef} seatStore={seatStore} />
+      <WorldPlayTeleportBinding moverRef={teleportMoverRef} seatStore={seatStore} movementRef={movementRef} />
     </>
   );
 }
