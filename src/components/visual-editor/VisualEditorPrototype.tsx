@@ -1,3 +1,5 @@
+import { createWorldAssetHierarchy } from "../../lib/visual-editor/scripting/world-asset-hierarchy";
+import { ensureWorldAssetModels, mergeWorldAssetModels } from "../../lib/visual-editor/scripting/world-asset-import";
 import { ensureCatalogMaterialTextures } from "../../lib/visual-editor/asset-import-persistence";
 import { catalogMaterialTextures } from "../../lib/visual-editor/catalog-material-dependencies";
 import { getEditorEntityCreationDefinitions, getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
@@ -4672,7 +4674,8 @@ export function VisualEditorPrototype({
               folderId,
               template.language,
             );
-            const nextAssets = addScriptAsset(sourceBundle.assets, asset);
+            const importedModels = await ensureWorldAssetModels(currentProjectPath, sourceBundle.assets, template.id);
+            const nextAssets = addScriptAsset(importedModels, asset);
             const scriptContract = extractScriptContract(source);
             const componentResult = addEditorComponent(
               sourceBundle.scene,
@@ -4721,7 +4724,7 @@ export function VisualEditorPrototype({
               (!folderId || Boolean(latestBundle.assets.folders?.[folderId])) &&
               !latestBundle.assets.assets[asset.id];
             const latestAssets = targetStillValid
-              ? addScriptAsset(latestBundle.assets, asset)
+              ? addScriptAsset(mergeWorldAssetModels(latestBundle.assets, sourceBundle.assets, importedModels), asset)
               : latestBundle.assets;
             const latestComponentResult = targetStillValid
               ? addEditorComponent(
@@ -4760,7 +4763,7 @@ export function VisualEditorPrototype({
             const nextBundle = touchProject({
               ...latestBundle,
               assets: latestAssets,
-              scene: latestComponentResult.scene,
+              scene: createWorldAssetHierarchy(latestComponentResult.scene, latestAssets, entityId, template.id),
             });
             scriptProvenanceRef.current.set(
               asset.id,
@@ -4814,6 +4817,7 @@ export function VisualEditorPrototype({
           let writtenSource: string;
           let createdRelativePath: string | undefined;
           let requestedFolderId: string | null | undefined;
+          let importedModels = sourceBundle.assets;
           let previousSource: string | undefined;
           if (request.tool === "create_script_asset") {
             const scriptCount = Object.values(sourceBundle.assets.assets).filter(
@@ -4896,6 +4900,7 @@ export function VisualEditorPrototype({
                 ? args.source
                 : createScriptTemplateSource(templateId!, name) ??
                   createScriptSampleSource(name);
+            importedModels = await ensureWorldAssetModels(currentProjectPath, sourceBundle.assets, templateId ?? "");
             writtenSource = source;
             asset = createScriptAsset(
               createDocumentId("asset"),
@@ -5040,7 +5045,7 @@ export function VisualEditorPrototype({
           }
           const nextAssets =
             request.tool === "create_script_asset"
-              ? addScriptAsset(latestBundle.assets, asset)
+              ? addScriptAsset(mergeWorldAssetModels(latestBundle.assets, sourceBundle.assets, importedModels), asset)
               : {
                   ...latestBundle.assets,
                   assets: { ...latestBundle.assets.assets },
@@ -9192,8 +9197,10 @@ export function VisualEditorPrototype({
         return false;
       }
     }
+    let importedModels = currentAssets;
     pendingScriptPathsRef.current.add(relativePath);
     try {
+      importedModels = await ensureWorldAssetModels(savedPath, currentAssets, template.id);
       await tauri.writeTextFile(
         savedPath,
         relativePath,
@@ -9222,19 +9229,20 @@ export function VisualEditorPrototype({
     setScriptContractRef.current(asset.id, scriptContract);
     if (fromExternalStore) {
       const current = bundleRef.current;
-      const mergedAssets = addScriptAsset(current.assets, asset);
+      const mergedAssets = addScriptAsset(mergeWorldAssetModels(current.assets, currentAssets, importedModels), asset);
       const created = createEmptyEntity(current.scene, null, name);
       if (!created) throw new Error("配置先を作成できませんでした");
       const placedCount = Object.values(current.scene.entities).filter(entity =>
         entity.components.some(component => component.type === "script" || component.type === "prefab-instance")).length;
       const namedScene = updateModelNodeEntityTransform(created.scene, created.entityId, {
-        position: [placedCount * 2.8, 0, 0],
+        position: [placedCount * 2.8, template.id === "seat" ? 0.5 : 0, 0],
       });
       const withScript = addEditorComponent(namedScene, mergedAssets, created.entityId,
         "scripting.script", projectKind, asset.id, { [asset.id]: scriptContract });
       if (!withScript.added) throw new Error(withScript.reason ?? "スクリプトを追加できませんでした");
+      const hierarchyScene = createWorldAssetHierarchy(withScript.scene, mergedAssets, created.entityId, template.id);
       const prefabId = createDocumentId("prefab");
-      const prefab = createPrefabDocument(withScript.scene, mergedAssets, {
+      const prefab = createPrefabDocument(hierarchyScene, mergedAssets, {
         prefabId, name, sourceRootEntityIds: [created.entityId],
       });
       if (!prefab) throw new Error("プレハブを作成できませんでした");
@@ -9242,7 +9250,7 @@ export function VisualEditorPrototype({
         prefabPath: `prefabs/${prefabId}.prefab.json` });
       if (!added.added) throw new Error("素材を追加できませんでした");
       const prefabs = { ...current.prefabs, [prefabId]: prefab.document };
-      setBundle(touchProject({ ...current, assets: added.manifest, prefabs, scene: withScript.scene }));
+      setBundle(touchProject({ ...current, assets: added.manifest, prefabs, scene: hierarchyScene }));
       setAssetSelection(null);
       setSceneSelection({ kind: "entity", id: created.entityId });
       setExternalStoreOpen(false);
@@ -9259,7 +9267,7 @@ export function VisualEditorPrototype({
           ? asset
           : { ...asset, folderId: latestFolderId };
       const mergedAssets = addScriptAsset(
-        latestBundle.assets,
+        mergeWorldAssetModels(latestBundle.assets, currentAssets, importedModels),
         committedAsset,
       );
       let mergedScene = latestBundle.scene;
@@ -9275,7 +9283,7 @@ export function VisualEditorPrototype({
           { [committedAsset.id]: scriptContract },
         );
         if (componentResult.added) {
-          mergedScene = componentResult.scene;
+          mergedScene = createWorldAssetHierarchy(componentResult.scene, mergedAssets, entityId, template.id);
           attachedEntityName = latestBundle.scene.entities[entityId]?.name;
         }
       }

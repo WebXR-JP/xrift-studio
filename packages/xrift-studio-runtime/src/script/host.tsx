@@ -311,6 +311,7 @@ export type XriftScriptHostProps<
    * `start(ctx)` succeeds and supplied with that same live context.
    */
   render?: ComponentType<ScriptRenderProps<Declaration>>;
+  children?: ReactNode;
   onLog?: (entry: ScriptLogEntry) => void;
   onFailure?: (failure: ScriptFailure) => void;
 };
@@ -331,6 +332,7 @@ export function XriftScriptHost<
   assetResolutionKey = "",
   resolveEntity,
   render: Render,
+  children,
   onLog,
   onFailure,
 }: XriftScriptHostProps<Declaration>) {
@@ -645,9 +647,9 @@ export function XriftScriptHost<
           resetKey={Render}
           onError={handleRenderError}
         >
-          <Render ctx={renderContext} />
+          <Render ctx={renderContext}>{children}</Render>
         </ScriptRenderBoundary>
-      ) : null}
+      ) : children ?? null}
     </>
   );
 }

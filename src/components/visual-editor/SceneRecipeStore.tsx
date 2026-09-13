@@ -96,8 +96,8 @@ export function SceneRecipeStore({
     if (!selected) return null;
     const counts = {
       primitive: 0,
-      model: 0,
-      particle: 0,
+      model: selected.assembly === "vehicle" ? 7 : 0,
+      particle: selected.assembly === "vehicle" ? 1 : 0,
       light: 0,
       audio: 0,
       text: 0,
@@ -223,14 +223,14 @@ export function SceneRecipeStore({
               className="text-brand-700 underline underline-offset-2" onClick={() => {setQuery("");setCategory("all");setTexturesOnly(false);}}>条件をリセット</button> : null}
           </div>
         </div>
-        <div className="scrollbar-thin min-h-0 flex-1 overflow-auto p-3">
+        <div className="scene-recipe-list scrollbar-thin min-h-0 flex-1 overflow-auto p-3">
           {visible.length === 0 ? (
             <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center text-xs text-slate-500">
               <Search size={22} />
               <p>条件に合う{title}がありません</p>
             </div>
           ) : (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-3">
+            <div className="scene-recipe-grid grid gap-3">
               {visible.map((recipe) => {
                 const active = recipe.id === selected?.id;
                 return (
@@ -308,6 +308,7 @@ export function SceneRecipeStore({
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-6 text-slate-600">
               <p className="font-semibold text-slate-800">中身</p>
               <ul className="mt-1 space-y-0.5">
+                {selected.assembly ? <li>乗車・走行・タイヤ・煙の設定済みScript</li> : null}
                 {contents.primitive > 0 ? (
                   <li>形状 {contents.primitive} 個</li>
                 ) : null}

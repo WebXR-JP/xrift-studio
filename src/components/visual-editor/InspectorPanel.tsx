@@ -106,6 +106,8 @@ import {
   type TerrainGrassType,
   TERRAIN_GRASS_PRESETS,
   TERRAIN_SURFACE_CATALOG,
+  TERRAIN_SURFACE_CATEGORY_LABELS,
+  TERRAIN_SURFACE_CATEGORY_ORDER,
   fitTerrainSurfaceToRange,
   getTerrainSurfacePreset,
   type TerrainSurfaceCatalogEntry,
@@ -1910,6 +1912,19 @@ function TerrainSurfaceSection({
     () => (preset ? fitTerrainSurfaceToRange(preset, range) : null),
     [preset, range.max, range.min],
   );
+  // Ten surfaces in one flat list is a wall of names; the classification is the
+  // only thing that makes "the ground I want" findable. Presets arrive in
+  // catalog order, so the groups read the same here as they do in the MCP list.
+  const groups = useMemo(
+    () =>
+      TERRAIN_SURFACE_CATEGORY_ORDER.map((category) => ({
+        category,
+        entries: TERRAIN_SURFACE_CATALOG.filter(
+          (entry) => entry.category === category,
+        ),
+      })).filter((group) => group.entries.length > 0),
+    [],
+  );
 
   return (
     <section className="space-y-2" aria-label="地形の表面">
@@ -1925,10 +1940,17 @@ function TerrainSurfaceSection({
           aria-label="表面のプリセット"
           className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
         >
-          {TERRAIN_SURFACE_CATALOG.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.label}
-            </option>
+          {groups.map((group) => (
+            <optgroup
+              key={group.category}
+              label={TERRAIN_SURFACE_CATEGORY_LABELS[group.category]}
+            >
+              {group.entries.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.label}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
         <button
@@ -1946,6 +1968,9 @@ function TerrainSurfaceSection({
 
       {preset ? (
         <div className="space-y-1.5 rounded border border-slate-200 bg-slate-50 p-2">
+          <span className="inline-block rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+            {TERRAIN_SURFACE_CATEGORY_LABELS[preset.category]}
+          </span>
           <p className="text-[11px] leading-4 text-slate-600">
             {preset.description}
           </p>

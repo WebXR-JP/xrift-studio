@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo } from "react";
+import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
 import { useThree } from "@react-three/fiber";
 import type { Object3D } from "three";
 
@@ -46,10 +46,16 @@ export function EntityScriptVisual({
   component,
   entityId,
   entityName,
+  playing,
+  children,
+  asWrapper = false,
 }: {
   component: ScriptComponent;
   entityId: string;
   entityName: string;
+  playing: boolean;
+  children?: ReactNode;
+  asWrapper?: boolean;
 }) {
   const runtime = useContext(ScriptViewportContext);
   const scene = useThree((state) => state.scene);
@@ -83,9 +89,12 @@ export function EntityScriptVisual({
     },
     [component.entityReferences, scene],
   );
+  if (entry?.script.renderMode === "wrap" && !asWrapper) return null;
+  if (!playing) return children ?? null;
   if (!runtime || !entry) return null;
   return (
     <XriftScriptHost
+      children={children}
       script={entry.script}
       {...(entry.render ? { render: entry.render } : {})}
       properties={properties}
@@ -103,4 +112,12 @@ export function EntityScriptVisual({
       onFailure={runtime.onFailure}
     />
   );
+}
+
+/** Compose authored child Entities inside behavior-only Script providers in Play. */
+export function EntityScriptChildren({ components, children, ...props }: Omit<Parameters<typeof EntityScriptVisual>[0], "component" | "asWrapper"> & { components: ScriptComponent[]; children: ReactNode }) {
+  const runtime = useContext(ScriptViewportContext);
+  if (!props.playing) return children;
+  return components.filter(component => runtime?.scripts.get(component.scriptAssetId)?.script.renderMode === "wrap")
+    .reduceRight<ReactNode>((content, component) => <EntityScriptVisual key={component.id} {...props} component={component} asWrapper>{content}</EntityScriptVisual>, children);
 }

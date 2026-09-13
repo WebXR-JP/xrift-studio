@@ -9,6 +9,8 @@
  * docs/VISUAL_EDITOR_ARCHITECTURE.md 4.6.
  */
 
+import type { ReactNode } from "react";
+
 export type ScriptVec2 = [number, number];
 export type ScriptVec3 = [number, number, number];
 
@@ -595,6 +597,8 @@ export type ScriptRenderProps<
   Declaration extends ScriptPropsDeclaration = ScriptPropsDeclaration,
 > = {
   ctx: ScriptContext<Declaration>;
+  /** Authored Entity visuals and descendants for renderMode: "wrap". */
+  children?: ReactNode;
 };
 
 /** Returned by `start`. Every member is optional. */
@@ -608,6 +612,7 @@ export type ScriptDefinition<
   Declaration extends ScriptPropsDeclaration = ScriptPropsDeclaration,
 > = {
   name: string;
+  renderMode?: "append" | "wrap";
   props?: Declaration;
   start?(context: ScriptContext<Declaration>): ScriptInstance | void;
 };

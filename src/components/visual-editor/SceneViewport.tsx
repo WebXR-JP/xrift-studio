@@ -59,6 +59,7 @@ import {
 } from "../../../packages/xrift-studio-runtime/src/shader-time";
 import {
   EntityScriptVisual,
+  EntityScriptChildren,
   ScriptViewportProvider,
   type ScriptViewportRuntime,
 } from "./EntityScriptVisual";
@@ -2356,6 +2357,7 @@ function EntityObject({
       {scriptComponents.map((component) => (
         <EntityScriptVisual
           key={component.id}
+          playing={playing}
           component={component}
           entityId={entity.id}
           entityName={entity.name}
@@ -2464,6 +2466,7 @@ function EntityObject({
           components={xriftWrapperComponents}
           {...(playing ? { onInteract: handleInteract } : {})}
         >
+          <EntityScriptChildren components={scriptComponents} playing={playing} entityId={entity.id} entityName={entity.name}>
           {physicsEnabled ? (
             ownRigidBody ? (
               <RuntimeOwnedRigidBody component={ownRigidBody}>
@@ -2490,6 +2493,7 @@ function EntityObject({
               {children}
             </>
           )}
+          </EntityScriptChildren>
         </OfficialXriftEntityWrappers>
       </group>
       {primary &&

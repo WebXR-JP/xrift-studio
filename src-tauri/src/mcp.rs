@@ -3961,12 +3961,12 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "list_scene_recipes",
-            "description": "List the ready-made 3D sets available for this project kind — campfire, torch, tree, rocks, snowfall, fountain, column, stairs, well, bench, recording studio, and the マテリアル見本 stands that show one glTF material extension each — with their category, part count and the note saying what the author still has to do after placing. Each set is a subtree whose lights, particles and materials already agree with one another; building the same thing from primitives takes a dozen calls and comes out worse.",
+            "description": "List assembled 3D sets, glTF material examples and gimmicks for the current project kind. Returns shelf, category, part count, part kinds, operating notes, Graph behaviours and, where present, Script behaviours. For a ready-to-drive car, select scene-recipe.custom-vehicle on the gimmicks shelf and use apply_scene_recipe; it contains editable GLB body, two seats, four wheels and exhaust, with behavior Scripts. It is world-only and needs a fixed ground Collider. Use the returned notes to plan placement and verify in Play; listing or placement is not multiplayer verification.",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         },
         {
             "name": "apply_scene_recipe",
-            "description": "Place one ready-made 3D set into the scene as a single subtree, creating the Particle Assets and writing the bundled Models it needs. Returns the root Entity, its children and any Assets created, so each part can be adjusted afterwards. Omit position and it lands on the same grid the catalog uses rather than stacking at the origin. Requires a saved project; Edit mode only.",
+            "description": "Place a set from list_scene_recipes as an editable Entity subtree, importing its normal Models and creating the required Particle, Script or Graph Assets. scene-recipe.custom-vehicle adds the configured car hierarchy, with ground following enabled (45-degree slope limit); it does not implement wall collision, suspension or falling physics. Wheels and exhaust use received Vehicle movement on each viewer, not an interact Graph or per-particle network messages. Inspect the returned children with get_entity_components and adjust update_transform; confirm driving in Play and shared behavior in XRift separately. Omit position to use the catalog placement grid. Requires a saved project in Edit mode.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

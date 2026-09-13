@@ -60,6 +60,7 @@ export type ScriptContractIssue = {
 };
 
 export type ScriptContract = {
+  wrapsChildren?: boolean;
   name: string;
   props: ScriptPropDescriptor[];
   /** True when every declaration was readable. */
@@ -101,6 +102,7 @@ export function extractScriptContract(source: string): ScriptContract {
     };
   }
 
+  const wrapsChildren = readStringField(body, "renderMode") === "wrap";
   const name = readStringField(body, "name") ?? "";
   if (!name) {
     issues.push({
@@ -118,7 +120,7 @@ export function extractScriptContract(source: string): ScriptContract {
           "props は prop.<kind>(...) を並べたObject literalで宣言してください。",
       });
     }
-    return { name, props: [], complete: issues.length === 0, issues };
+    return { name, wrapsChildren, props: [], complete: issues.length === 0, issues };
   }
 
   const props: ScriptPropDescriptor[] = [];
@@ -141,6 +143,7 @@ export function extractScriptContract(source: string): ScriptContract {
   return {
     name,
     props,
+    wrapsChildren,
     complete: issues.length === 0,
     issues,
   };
@@ -560,12 +563,17 @@ export function stripCommentsAndStrings(source: string): string {
 }
 
 function isRegexLiteralStart(source: string, slashIndex: number): boolean {
-  const prefix = source.slice(0, slashIndex);
-  const previousIndex = prefix.search(/\S(?=\s*$)/);
+  // Inspect only the preceding token. Searching the whole prefix with an
+  // end-anchored word regex can backtrack across long strings for every
+  // JSX closing slash, blocking the editor while loading a Script.
+  let previousIndex = slashIndex - 1;
+  while (previousIndex >= 0 && /\s/.test(source[previousIndex]!)) previousIndex -= 1;
   if (previousIndex < 0) return true;
-  const previous = prefix[previousIndex]!;
+  const previous = source[previousIndex]!;
   if ("([{,:;=!?&|+-*%^~<>".includes(previous)) return true;
-  const word = prefix.slice(0, previousIndex + 1).match(/[A-Za-z_$][\w$]*$/)?.[0];
+  let wordStart = previousIndex;
+  while (wordStart >= 0 && /[\w$]/.test(source[wordStart]!)) wordStart -= 1;
+  const word = source.slice(wordStart + 1, previousIndex + 1).match(/[A-Za-z_$][\w$]*$/)?.[0];
   return Boolean(
     word &&
       [

@@ -30,7 +30,7 @@ export function OfficialXriftComponentStore({
   const catalogEntries = useMemo(() => [
     ...definitions,
     ...(projectKind === "world" ? [
-      { schemaId: "studio.vehicle", label: "Vehicle", importName: "Vehicle", category: "world", icon: "world" as const, description: "運転席と同乗席のある車。Playで運転席をクリックすると乗れます。W/Sで前後、A/Dで旋回し、Spaceで降ります。", templateId: "vehicle" as const },
+      { schemaId: "studio.vehicle", label: "Vehicle", importName: "Vehicle", category: "world", icon: "world" as const, description: "公式Vehicleを使う車の配置サンプル。車体・座席・タイヤ・煙を設定済みのHierarchyで追加します。ギミックのカスタム車からも同じ車を追加できます。W/Sで前後、A/Dで旋回、Spaceで降車します。", templateId: "vehicle" as const },
       { schemaId: "studio.seat", label: "Seat", importName: "Seat", category: "world", icon: "world" as const, description: "座れる椅子。Playでクリックすると座り、Spaceで立ち上がります。座面の高さはInspectorで調整できます。", templateId: "seat" as const },
     ] : []),
   ], [definitions, projectKind]);

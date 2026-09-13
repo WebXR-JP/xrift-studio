@@ -739,12 +739,29 @@ ES moduleのstrict modeでは `eval` をlexical bindingで遮蔽できない。
 
 ## Vehicle / Seat（world-components 0.52.0）
 
-Assets の追加から「新規スクリプト」を開き、`Vehicle` または `Seat` を選ぶ。
-選択中のEntityへ追加すると、Vehicleの速度・旋回速度、Seatの座面の高さをInspectorから変更できる。
-同じEntityに同じテンプレートを複数付ける場合は「同じEntity内の識別子」を別々にする。
-見た目はTSXの `Render` にあるmeshを編集する。Scriptの描画はPlay中だけで、Editには表示しない。
+車は「外部から追加 → ギミック → カスタム車」または「XRift公式コンポーネント → Vehicle」、椅子単体は「外部から追加 → XRift公式コンポーネント → Seat」から追加する。
+カスタム車を追加すると、親Entityに操縦用Script、その子に「車体」「運転席」「同乗席」、タイヤ4個と「排気煙」を作る。
+車体と座席は通常のMesh ComponentでModel Assetを参照し、各座席にSeat用Scriptを付ける。
+Hierarchyでモデルを選び、Transform・Mesh・Materialを編集できる。Seat単体も同じ構成を使う。
+車体とシートはBlenderで作成したGLBを使い、追加時に通常のModel Assetとしてプロジェクトへ取り込む。
+同じモデルの再追加では既存Assetを再利用し、Prefab・公開用出力にも参照先のGLBを含める。
+Scriptにはモデル本体・Base64 URL・見た目を生成するコードを入れない。
 
-Vehicleは車体と運転席・同乗席を一つの `Render` 内に置く。
+Vehicle/SeatのScriptは `renderMode: "wrap"` を宣言し、`Render({ ctx, children })` で
+EntityのMeshと子Entityを公式Componentの中へ渡す。EditではScriptを実行せず通常のHierarchyを表示する。
+Playと公開先は同じScript hostで階層を包むため、車体の移動に子Entityと着席位置が追従する。
+SeatとInteractableのScript importは共通adapterを通し、遅れて読み込まれたモデルも
+公式raycasterの対象へ追加する。公式の座席登録・占有・操縦入力は維持する。
+公開用adapterではVehicleも公式パッケージから明示的にimportしてexportする。`export *`だけで転送するとModule FederationがVehicleをワールド側へ取り込み、XRift本体のSeatと内部Contextが分かれる場合がある。両者は同じ共有パッケージから解決し、運転席の登録を維持する。
+同じEntityに同じテンプレートを複数付ける場合は「同じEntity内の識別子」を別々にする。
+モデルの再生成は `scripts/generate-world-asset-models.py` と `assets/world-models/parts.json` を使う。
+
+新規Vehicleの「地面に追従」は初期値がオン。運転者の `onDrive` で4輪付近の固定Colliderを下向きに調べ、
+車体の高さ・傾きを合わせる。「登れる坂の角度」は初期値45度。地面の欠損、急斜面、大きな段差では移動を止める。
+Sensorと動くRigid Bodyは地面判定に使わない。地面にはColliderが必要で、壁への車体衝突・サスペンション・落下の物理演算は含まない。
+オフにすると地面を判定せず直接移動する。
+
+VehicleはHierarchyの車体・座席・タイヤ・排気煙を一つの公式 `Vehicle` で包む。
 `Seat driver` の入力を公式 `Vehicle onDrive` へ渡し、車体の移動・旋回を行う。
 W/Sで前後、A/Dで旋回、StudioのWorld PlayではSpaceで降車する。
 Seat単体もSpaceで立てる。Play停止・座席削除・テレポートで着席を解除する。
@@ -757,8 +774,6 @@ XRiftプラットフォームのSeatContextに任せ、`useInstanceState` で重
 Studioの着席Providerは単一プレイヤーの確認用で、オンライン同期やアバターの着席アニメーションは再現しない。
 複数人からの見え方と再入室後の停車位置は、XRift上で別途確認する。
 
-テンプレートは移動と旋回の出発点であり、車体の衝突・重力・地形への接地判定は含まない。
-`translateZ` は車体の向きに沿って進む。地形に合わせて車体を傾ける処理は、作品側の `onDrive` に追加する。
 砲台など、車体同期を使わない操作では引き続き `Seat onControlInput` を使用できる。
 
 ### 公式更新への追従
@@ -770,8 +785,16 @@ Editor、Classic出力・公開ステージング、Runtimeの開発依存、Web
 Vehicle/Seatは、コールバックとReact Contextの親子関係を保持できるTSXテンプレートとして提供する。
 Add Componentの公式registryへ静的なwrapperとして追加すると、RuntimeのEntity別portal間で
 VehicleのContextが引き継がれないため、現時点ではそこへ登録しない。
-速度・旋回速度・高さはScript propertyとしてInspectorから編集する。
+速度・旋回速度・地面追従・最大傾斜角は親EntityのScript propertyとしてInspectorから編集する。座面の高さは座席EntityのTransformで変更する。
 
 参照: [公式Component](https://github.com/WebXR-JP/xrift-world-components)、
 [World template](https://github.com/WebXR-JP/xrift-world-template)、
 [Item template](https://github.com/WebXR-JP/xrift-item-template)。
+
+### タイヤと煙の演出
+
+モデルは通常のglTF PBRカラーを使用し、車体は3、Seatは1、共通タイヤは2マテリアルです。頂点カラーやScript内のBase64は使いません。
+
+タイヤと煙のScriptは、各参加者が受信した公式Vehicleの位置変化から演出を更新します。走行中はタイヤを回して煙を放出し、停止中は止めます。Graphのinteractイベントは乗車継続や移動の状態を表さないため、このギミックでは移動量を使用します。粒子の個別座標は同期せず、各端末で描画します。
+
+MCPからの配置は `list_scene_recipes` → `apply_scene_recipe`（`recipeId: "scene-recipe.custom-vehicle"`）を使います。具体的な引数と確認手順は [MCP Editor Tools](./MCP_EDITOR_TOOLS.md) を参照してください。

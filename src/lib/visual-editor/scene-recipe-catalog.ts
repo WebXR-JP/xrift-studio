@@ -1,3 +1,4 @@
+import { CUSTOM_VEHICLE_RECIPE, instantiateCustomVehicle } from "./scripting/custom-vehicle-recipe";
 import { EXTENDED_GIMMICK_RECIPES } from "./scene-recipe-gimmicks";
 import { EXTENDED_MATERIAL_RECIPES, enrichCatalogRecipe } from "./material-showcase-recipes";
 import {
@@ -296,6 +297,8 @@ export const SCENE_RECIPE_CATEGORY_LABELS: Readonly<
 };
 
 export type SceneRecipe = {
+  /** A configured model hierarchy with behavior Scripts. */
+  assembly?: "vehicle";
   id: string;
   name: string;
   description: string;
@@ -2751,6 +2754,7 @@ export const SCENE_RECIPES: readonly SceneRecipe[] = [
   MATERIAL_UNLIT,
   ...EXTENDED_MATERIAL_RECIPES,
   ...EXTENDED_GIMMICK_RECIPES,
+  CUSTOM_VEHICLE_RECIPE,
 ].map(enrichCatalogRecipe);
 
 export function getSceneRecipe(recipeId: string): SceneRecipe | undefined {
@@ -2761,7 +2765,7 @@ export type SceneRecipeShelf = "models" | "materials" | "gimmicks";
 
 export function getSceneRecipeShelf(recipe: SceneRecipe): SceneRecipeShelf {
   if (recipe.category === "material") return "materials";
-  if (recipe.category === "tutorial" || recipe.behaviours?.length) return "gimmicks";
+  if (recipe.assembly || recipe.category === "tutorial" || recipe.behaviours?.length) return "gimmicks";
   return "models";
 }
 
@@ -2805,6 +2809,8 @@ export async function instantiateSceneRecipe(
 ): Promise<SceneRecipeInstantiation | null> {
   const recipe = getSceneRecipe(recipeId);
   if (!recipe || !recipe.projectKinds.includes(projectKind)) return null;
+
+  if (recipe.assembly === "vehicle") return instantiateCustomVehicle(scene, assets, projectPath, position);
 
   let nextAssets = assets;
   const createdAssetIds: string[] = [];

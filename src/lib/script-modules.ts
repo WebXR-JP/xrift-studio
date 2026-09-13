@@ -4,7 +4,7 @@ import * as ReactJsxRuntime from "react/jsx-runtime";
 import * as Fiber from "@react-three/fiber";
 import * as Drei from "@react-three/drei";
 import * as Rapier from "@react-three/rapier";
-import * as XriftWorldComponents from "@xrift/world-components";
+import * as XriftWorldComponents from "../../packages/xrift-studio-runtime/src/script/world-components";
 import * as XriftScript from "../../packages/xrift-studio-runtime/src/script/api";
 
 import { transpileTypeScriptModule } from "./monaco";

@@ -13,7 +13,41 @@ import type { ClassicR3fMaterialShader } from "./custom-shader-contract";
  * edits uniform values, and an installed preset is an ordinary Material Asset
  * that the compiler emits through the existing Custom Shader path.
  */
-export type TerrainSurfaceCategory = "grassland" | "arid" | "alpine";
+export type TerrainSurfaceCategory =
+  | "grassland"
+  | "woodland"
+  | "wetland"
+  | "arid"
+  | "rocky"
+  | "alpine"
+  | "tundra"
+  | "volcanic";
+
+/** The order the Inspector groups the surfaces in. */
+export const TERRAIN_SURFACE_CATEGORY_ORDER: readonly TerrainSurfaceCategory[] = [
+  "grassland",
+  "woodland",
+  "wetland",
+  "arid",
+  "rocky",
+  "alpine",
+  "tundra",
+  "volcanic",
+];
+
+export const TERRAIN_SURFACE_CATEGORY_LABELS: Record<
+  TerrainSurfaceCategory,
+  string
+> = {
+  grassland: "草原",
+  woodland: "森林",
+  wetland: "湿地",
+  arid: "乾燥地",
+  rocky: "岩場",
+  alpine: "高山",
+  tundra: "寒冷地",
+  volcanic: "火山",
+};
 
 export type TerrainSurfaceParameter = {
   uniform: string;
@@ -34,7 +68,7 @@ export type TerrainSurfaceCatalogEntry = {
 };
 
 export const TERRAIN_SURFACE_CATALOG_REVISION =
-  "xrift-studio-terrain-surfaces@1";
+  "xrift-studio-terrain-surfaces@3";
 export const TERRAIN_SURFACE_CATALOG_SOURCE_URL =
   "https://github.com/WebXR-JP/xrift-studio";
 export const TERRAIN_SURFACE_CATALOG_AUTHOR = "XRift Studio contributors";
@@ -128,10 +162,12 @@ vec3 xriftTerrainSurfaceColor() {
   vec2 detailUv = vWorldPosition.xz * max(uDetailScale, 0.0001);
   float detail = (xriftDetail(detailUv) - 0.5) * uDetailStrength;
 
-  // The detail perturbs the height the bands are measured against rather than
-  // the final colour, so the boundaries themselves break up instead of staying
-  // as clean arcs with noise laid over them.
-  float bandedHeight = height + detail * max(uHighHeight - uLowHeight, 0.001);
+  // The detail shifts the height the bands are measured against rather than the
+  // final colour, so the boundary meanders instead of staying a clean arc with
+  // noise laid over it. The shift is scaled by the transition width, not by the
+  // whole elevation range: a fixed fraction of the range moved the edge by
+  // metres on a tall Terrain and smeared a ridge into blotches.
+  float bandedHeight = height + detail * max(uBlendSoftness, 0.001);
 
   float lowEdge = min(uLowHeight, uHighHeight);
   float highEdge = max(uLowHeight, uHighHeight);
@@ -326,8 +362,54 @@ export const TERRAIN_SURFACE_CATALOG: readonly TerrainSurfaceCatalogEntry[] = [
       uSlopeStart: 0.42,
       uSlopeBlend: 0.28,
       uDetailScale: 0.08,
-      uDetailStrength: 0.5,
+      uDetailStrength: 0.3,
       uAmbient: 0.55,
+    }),
+  },
+  {
+    id: "forest-floor",
+    label: "森の土",
+    category: "woodland",
+    description:
+      "日陰の苔、落ち葉、むき出しの土。暗く落ち着いた色なので、木を多く置いた森の地面に向く。",
+    parameters: SHARED_PARAMETERS,
+    shader: surfaceShader({
+      id: "forest-floor",
+      uLowColor: "#2f3a26",
+      uMidColor: "#4a6132",
+      uHighColor: "#6d5738",
+      uSlopeColor: "#45382a",
+      uLowHeight: 0.5,
+      uHighHeight: 7,
+      uBlendSoftness: 3,
+      uSlopeStart: 0.44,
+      uSlopeBlend: 0.26,
+      uDetailScale: 0.16,
+      uDetailStrength: 0.35,
+      uAmbient: 0.46,
+    }),
+  },
+  {
+    id: "marshland",
+    label: "湿地の葦",
+    category: "wetland",
+    description:
+      "水際は湿った泥、低い所は葦の緑、乾いた高みは黄ばんだ草。緩い傾斜まで泥になるので沼地らしくなる。",
+    parameters: SHARED_PARAMETERS,
+    shader: surfaceShader({
+      id: "marshland",
+      uLowColor: "#3b452b",
+      uMidColor: "#5d7136",
+      uHighColor: "#8a8f52",
+      uSlopeColor: "#4b3f2b",
+      uLowHeight: -0.5,
+      uHighHeight: 3,
+      uBlendSoftness: 2,
+      uSlopeStart: 0.34,
+      uSlopeBlend: 0.3,
+      uDetailScale: 0.14,
+      uDetailStrength: 0.3,
+      uAmbient: 0.5,
     }),
   },
   {
@@ -349,8 +431,77 @@ export const TERRAIN_SURFACE_CATALOG: readonly TerrainSurfaceCatalogEntry[] = [
       uSlopeStart: 0.5,
       uSlopeBlend: 0.22,
       uDetailScale: 0.12,
-      uDetailStrength: 0.4,
+      uDetailStrength: 0.25,
       uAmbient: 0.62,
+    }),
+  },
+  {
+    id: "clay-badlands",
+    label: "粘土の荒地",
+    category: "arid",
+    description:
+      "灰褐色の粘土が積もり、高い所ほど明るい黄土になる。急斜面には暗い地層が走る。侵食地形向け。",
+    parameters: SHARED_PARAMETERS,
+    shader: surfaceShader({
+      id: "clay-badlands",
+      uLowColor: "#8b7a5e",
+      uMidColor: "#b08f5c",
+      uHighColor: "#d8c08a",
+      uSlopeColor: "#5c4a36",
+      uLowHeight: 0,
+      uHighHeight: 9,
+      uBlendSoftness: 4,
+      uSlopeStart: 0.38,
+      uSlopeBlend: 0.2,
+      uDetailScale: 0.13,
+      uDetailStrength: 0.35,
+      uAmbient: 0.6,
+    }),
+  },
+  {
+    id: "red-canyon",
+    label: "赤い峡谷",
+    category: "rocky",
+    description:
+      "低地は影の濃い赤、中腹はテラコッタ、稜線は乾いた橙。急斜面は黒ずんだ岩。渓谷や荒野に向く。",
+    parameters: SHARED_PARAMETERS,
+    shader: surfaceShader({
+      id: "red-canyon",
+      uLowColor: "#7a3b25",
+      uMidColor: "#a5522f",
+      uHighColor: "#cf8a55",
+      uSlopeColor: "#5e2f22",
+      uLowHeight: 0,
+      uHighHeight: 14,
+      uBlendSoftness: 5,
+      uSlopeStart: 0.4,
+      uSlopeBlend: 0.2,
+      uDetailScale: 0.1,
+      uDetailStrength: 0.3,
+      uAmbient: 0.55,
+    }),
+  },
+  {
+    id: "granite-highland",
+    label: "岩の高地",
+    category: "rocky",
+    description:
+      "ふもとは暗い草地、中腹から灰の花崗岩、頂は明るい岩肌。急斜面には常に岩が覗く。高原や渓谷の岩場向け。",
+    parameters: SHARED_PARAMETERS,
+    shader: surfaceShader({
+      id: "granite-highland",
+      uLowColor: "#4f5a46",
+      uMidColor: "#7a7d75",
+      uHighColor: "#a9ada4",
+      uSlopeColor: "#5b5e58",
+      uLowHeight: 1,
+      uHighHeight: 16,
+      uBlendSoftness: 5,
+      uSlopeStart: 0.43,
+      uSlopeBlend: 0.22,
+      uDetailScale: 0.1,
+      uDetailStrength: 0.3,
+      uAmbient: 0.58,
     }),
   },
   {
@@ -372,8 +523,54 @@ export const TERRAIN_SURFACE_CATALOG: readonly TerrainSurfaceCatalogEntry[] = [
       uSlopeStart: 0.46,
       uSlopeBlend: 0.2,
       uDetailScale: 0.07,
-      uDetailStrength: 0.55,
+      uDetailStrength: 0.3,
       uAmbient: 0.58,
+    }),
+  },
+  {
+    id: "tundra-moss",
+    label: "ツンドラ",
+    category: "tundra",
+    description:
+      "凍えた苔と灰緑の地面、高い所には雪が斑に残る。急斜面は砂礫。寒色でまとめた北国の地面向け。",
+    parameters: SHARED_PARAMETERS,
+    shader: surfaceShader({
+      id: "tundra-moss",
+      uLowColor: "#49584a",
+      uMidColor: "#7b8378",
+      uHighColor: "#dfe6ea",
+      uSlopeColor: "#686a65",
+      uLowHeight: 1,
+      uHighHeight: 22,
+      uBlendSoftness: 6,
+      uSlopeStart: 0.48,
+      uSlopeBlend: 0.2,
+      uDetailScale: 0.06,
+      uDetailStrength: 0.3,
+      uAmbient: 0.62,
+    }),
+  },
+  {
+    id: "basalt-flow",
+    label: "火山岩",
+    category: "volcanic",
+    description:
+      "黒に近い玄武岩と灰。高い所ほど灰が明るくなる。急斜面は真っ黒な溶岩。火口や溶岩台地向け。",
+    parameters: SHARED_PARAMETERS,
+    shader: surfaceShader({
+      id: "basalt-flow",
+      uLowColor: "#2b2a2e",
+      uMidColor: "#43414a",
+      uHighColor: "#6f6a72",
+      uSlopeColor: "#1c1b1f",
+      uLowHeight: 0,
+      uHighHeight: 10,
+      uBlendSoftness: 4,
+      uSlopeStart: 0.3,
+      uSlopeBlend: 0.22,
+      uDetailScale: 0.09,
+      uDetailStrength: 0.35,
+      uAmbient: 0.33,
     }),
   },
 ];
@@ -447,8 +644,11 @@ export function fitTerrainSurfaceToRange(
   if (presetSpan <= 0.001) return values;
 
   // Keep the preset's proportions, but express them in this Terrain's range.
-  const lowFraction = 0.25;
-  const highFraction = 0.72;
+  // The high band starts near the summit on purpose: at three quarters of the
+  // span it covered the whole rounded top of a ridge and read as a bald patch
+  // rather than as a summit.
+  const lowFraction = 0.3;
+  const highFraction = 0.85;
   values.uLowHeight = Number((range.min + span * lowFraction).toFixed(3));
   values.uHighHeight = Number((range.min + span * highFraction).toFixed(3));
 

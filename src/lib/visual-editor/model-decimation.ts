@@ -134,7 +134,7 @@ export async function decimatePrimitive(
     if (!sourceArray) continue;
     const ArrayConstructor = sourceArray.constructor as new (
       length: number,
-    ) => typeof sourceArray;
+    ) => NonNullable<typeof sourceArray>;
     const packed = new ArrayConstructor(keptCount * elementSize);
     const element: number[] = new Array(elementSize).fill(0);
     for (let index = 0; index < keptCount; index += 1) {
@@ -157,7 +157,9 @@ export async function decimatePrimitive(
     .createAccessor("indices_decimated")
     .setType("SCALAR")
     .setArray(
-      keptCount > 65535 ? finalIndices : Uint16Array.from(finalIndices),
+      keptCount > 65535
+        ? Uint32Array.from(finalIndices)
+        : Uint16Array.from(finalIndices),
     );
   if (buffer) indices.setBuffer(buffer);
   primitive.setIndices(indices);

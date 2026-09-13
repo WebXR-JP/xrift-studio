@@ -60,7 +60,10 @@ test("official Vehicle drives only its occupied driver seat and releases occupan
   await expect(page.getByTestId("occupied")).toHaveText("seated");
   await page.keyboard.down("KeyW");
   await expect.poll(() => page.getByTestId("distance").textContent().then(Number)).toBeLessThan(-0.1);
+  await expect.poll(() => page.getByTestId("wheel-rotation").textContent().then(Number)).not.toBe(0);
+  await expect(page.getByTestId("smoke-visible")).toHaveText("true");
   await page.keyboard.up("KeyW");
+  await expect(page.getByTestId("smoke-visible")).toHaveText("false");
   await page.screenshot({ path: testInfo.outputPath("vehicle-play.png") });
   await page.keyboard.press("Space");
   await page.evaluate(() => document.exitPointerLock());
@@ -77,12 +80,17 @@ test("official Vehicle drives only its occupied driver seat and releases occupan
   expect(errors).toEqual([]);
 });
 
-test("generated Vehicle and Seat TSX typecheck against the installed official API", async () => {
+test("generated Vehicle and Seat TSX typecheck against the installed official API", async ({ page }) => {
   const ts = await import("typescript-test-api");
   const path = await import("node:path");
-  const { getScriptTemplate } = await import("../src/lib/visual-editor/scripting/script-templates");
+  await page.goto("/e2e.html?scenario=ready");
+  const sources = await page.evaluate(async () => {
+    const url = "/src/lib/visual-editor/scripting/script-templates.ts";
+    const { getScriptTemplate } = await import(url) as typeof import("../src/lib/visual-editor/scripting/script-templates");
+    return ["vehicle", "seat"].map(id => [id, getScriptTemplate(id)!.source] as const);
+  });
   const root = process.cwd();
-  const files = ["vehicle", "seat"].map(id => [path.join(root, `.vehicle-check-${id}.tsx`), getScriptTemplate(id)!.source] as const);
+  const files = sources.map(([id, source]) => [path.join(root, `.vehicle-check-${id}.tsx`), source] as const);
   const options = {
     strict: true, noEmit: true, skipLibCheck: true,
     jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022,
@@ -135,7 +143,7 @@ test("generated Seat model can be clicked to sit and Space stands up", async ({ 
   await expect(page.getByTestId("occupied")).toHaveText("none");
 });
 
-test("Vehicle and Seat catalog cards share readable responsive catalog layout", async ({ page }, testInfo) => {
+test("custom vehicle gimmick has a readable responsive catalog layout", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/e2e.html?scenario=ready");
   await page.evaluate(async () => {
@@ -143,23 +151,55 @@ test("Vehicle and Seat catalog cards share readable responsive catalog layout", 
     const fixture = await import(url) as typeof import("./vehicle-seat.fixture");
     await fixture.mountVehicleCatalogFixture();
   });
-  const vehicle = page.locator("[data-catalog-card]").filter({ hasText: "Vehicle" });
-  const seat = page.locator("[data-catalog-card]").filter({ hasText: /^Seat/ });
+  const vehicle = page.locator("[data-catalog-card]").filter({ hasText: "カスタム車" });
   await vehicle.click();
-  await expect(page.getByRole("button", { name: "Vehicleをシーンへ追加" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "カスタム車をシーンへ追加" })).toBeVisible();
   await expect(vehicle.locator("canvas")).toBeVisible();
-  await expect(seat.locator("canvas")).toBeVisible();
-  await page.waitForTimeout(750); // Allow demand-rendered WebGL previews to present their first frame.
   await page.screenshot({ path: testInfo.outputPath("catalog-desktop.png") });
   await page.setViewportSize({ width: 390, height: 844 });
-  await seat.scrollIntoViewIfNeeded();
-  await seat.click();
+  await vehicle.scrollIntoViewIfNeeded();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath("catalog-mobile-list.png") });
-  // The production dialog owns the mobile list/detail switch. Exercise its CSS here.
   await page.evaluate(() => document.querySelector(".external-catalog-content")!.setAttribute("data-pane", "detail"));
-  await expect(page.getByRole("button", { name: "Seatをシーンへ追加" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "カスタム車をシーンへ追加" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.waitForTimeout(750); // Let the selected preview and responsive canvas settle.
   await page.screenshot({ path: testInfo.outputPath("catalog-mobile-detail.png") });
+});
+
+test("vehicle cosmetics follow synchronized poses on both viewers, including reverse, stop and teleport", async ({ page }) => {
+  await page.goto("/e2e.html?scenario=ready");
+  const result = await page.evaluate(async () => {
+    const effectsUrl = "/src/lib/visual-editor/scripting/vehicle-effects-scripts.ts";
+    const moduleUrl = "/src/lib/script-modules.ts";
+    const threeUrl = "/node_modules/.vite/deps/three.js";
+    const { VEHICLE_WHEEL_SOURCE, VEHICLE_SMOKE_SOURCE } = await import(effectsUrl);
+    const { loadScriptModule } = await import(moduleUrl);
+    const { Group } = await import(threeUrl);
+    const wheel = await loadScriptModule(VEHICLE_WHEEL_SOURCE, "wheel.ts");
+    const smoke = await loadScriptModule(VEHICLE_SMOKE_SOURCE, "smoke.ts");
+    if (!wheel.ok || !smoke.ok) throw new Error("Effect Script failed to load");
+    const viewers = [0, 1].map(() => {
+      const parent = new Group();
+      const object3d = new Group(); parent.add(object3d);
+      const rates: number[] = [];
+      const context = { object3d, particles: { setEmissionRate: (rate: number) => rates.push(rate) } };
+      const wheelInstance = wheel.module.default.start(context);
+      const smokeInstance = smoke.module.default.start(context);
+      const tick = () => { parent.updateMatrixWorld(true); wheelInstance.update(1 / 60); smokeInstance.update(1 / 60); };
+      tick(); parent.position.z = -0.62; tick();
+      const forward = object3d.rotation.x;
+      tick(); const stopped = object3d.rotation.x;
+      parent.position.z = 0; tick(); const reverse = object3d.rotation.x;
+      parent.position.z = 100; tick(); const teleport = object3d.rotation.x;
+      wheelInstance.stop();
+      return { forward, stopped, reverse, teleport, restored: object3d.rotation.x, rates };
+    });
+    return viewers;
+  });
+  expect(result[0]).toEqual(result[1]);
+  expect(result[0]!.forward).toBeCloseTo(-2);
+  expect(result[0]!.stopped).toBe(result[0]!.forward);
+  expect(result[0]!.reverse).toBeCloseTo(0);
+  expect(result[0]!.teleport).toBeCloseTo(0);
+  expect(result[0]!.restored).toBe(0);
+  expect(result[0]!.rates).toEqual([0, 8, 0, 8, 0]);
 });

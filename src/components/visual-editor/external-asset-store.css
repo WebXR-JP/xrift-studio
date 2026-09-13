@@ -35,3 +35,13 @@
   }
   .external-catalog-content aside button { overflow-wrap: anywhere; }
 }
+
+/* Use the available list width, after the navigation and detail panes. */
+.scene-recipe-list { container: recipe-list / inline-size; }
+.scene-recipe-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@container recipe-list (min-width: 400px) {
+  .scene-recipe-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container recipe-list (min-width: 520px) {
+  .scene-recipe-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}

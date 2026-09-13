@@ -2837,6 +2837,26 @@ fn write_compiler_publication_metadata(
     write_file_synced(&target, loaded.raw.as_bytes())
 }
 
+/// A freshly downloaded template is not evidence of this author's publication.
+/// Seed only the verified authoring target; discard a template's sample sidecar.
+/// Call only while materializing a fresh template, before stamping its owner.
+fn seed_compiler_publication_metadata(
+    project_root: &Path,
+    project_kind: &str,
+    publication: Option<&LoadedCompilerPublicationMetadata>,
+) -> Result<(), String> {
+    if let Some(loaded) = publication {
+        return write_compiler_publication_metadata(project_root, project_kind, loaded);
+    }
+    let relative_path = xrift_publication_metadata_relative_path(project_kind)?;
+    let target = safe_join_managed_publication_path(project_root, &relative_path)?;
+    match std::fs::remove_file(target) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("template publication metadata cannot be cleared: {}", error)),
+    }
+}
+
 fn persist_authoring_publication_metadata(
     project_root: &Path,
     project_kind: &str,
@@ -3446,9 +3466,11 @@ fn apply_compiler_staging(
         )?);
     }
 
-    if let Some(loaded) = publication_metadata.as_ref() {
-        write_compiler_publication_metadata(&resolved_project, &manifest.project_kind, loaded)?;
-    }
+    seed_compiler_publication_metadata(
+        &resolved_project,
+        &manifest.project_kind,
+        publication_metadata.as_ref(),
+    )?;
     // Written last: only fully materialized staging is eligible for upload
     // and for crash recovery of a CLI-created publication sidecar.
     write_compiler_staging_owner(&resolved_project, &manifest, publication_metadata.as_ref())?;
@@ -6622,6 +6644,37 @@ mod tests {
         .is_err());
 
         std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
+    }
+
+    #[test]
+    fn fresh_compiler_template_never_inherits_sample_publication_target() {
+        let root = std::env::temp_dir().join(format!(
+            "xrift-template-publication-{}-{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let root = root.canonicalize().unwrap();
+        let sample = parse_compiler_publication_metadata(
+            r#"{"id":"template-sample","createdAt":"2025-01-01","lastUploadedAt":"2025-02-01"}"#.to_string()
+        ).unwrap();
+        let own = parse_compiler_publication_metadata(
+            r#"{"id":"author-target","createdAt":"2026-01-01","lastUploadedAt":"2026-02-01"}"#.to_string()
+        ).unwrap();
+        for kind in ["world", "item"] {
+            write_compiler_publication_metadata(&root, kind, &sample).unwrap();
+            seed_compiler_publication_metadata(&root, kind, None).unwrap();
+            let actual = read_compiler_publication_metadata(&root, kind).unwrap();
+            let owner = compiler_staging_owner_for_manifest(&visual_manifest(kind, None), None);
+            assert!(publication_matches_owner_baseline(&owner, actual.as_ref()));
+            // A second preparation remains valid with no previous target.
+            seed_compiler_publication_metadata(&root, kind, None).unwrap();
+            write_compiler_publication_metadata(&root, kind, &sample).unwrap();
+            seed_compiler_publication_metadata(&root, kind, Some(&own)).unwrap();
+            let actual = read_compiler_publication_metadata(&root, kind).unwrap().unwrap();
+            assert_eq!(actual.metadata.id, "author-target");
+            assert_eq!(actual.raw, own.raw);
+        }
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

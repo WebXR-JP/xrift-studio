@@ -1,4 +1,4 @@
-import { VEHICLE_BODY, SEAT_BODY, worldAssetPartsSource } from "./world-asset-models";
+import vehicleGroundDriveSource from "./vehicle-ground-drive.ts?raw";
 export type ScriptTemplateCategory =
   | "basic"
   | "movement"
@@ -28,7 +28,7 @@ export type ScriptTemplateDefinition = {
 };
 
 const NAME_TOKEN = "__XRIFT_SCRIPT_NAME__";
-export const SCRIPT_TEMPLATE_CATALOG_VERSION = 6 as const;
+export const SCRIPT_TEMPLATE_CATALOG_VERSION = 8 as const;
 
 /**
  * Built-in Script examples shared by the Assets creation flow and MCP.
@@ -65,17 +65,21 @@ export default defineScript({
   {
     id: "vehicle",
     name: "Vehicle",
-    description: "World向け。公式Vehicleで車体・運転席・同乗席を作ります。W/Sで前後、A/Dで旋回、Spaceで降車します。",
+    description: "World向け。Hierarchyに車体・運転席・同乗席を配置し、公式Vehicleで動かします。W/Sで前後、A/Dで旋回、Spaceで降車します。",
     category: "movement",
     suggestedName: "Vehicle",
     language: "tsx",
-    requiredAssetKinds: [],
+    requiredAssetKinds: ["model"],
     requiredComponents: [],
     entityReferenceCount: 0,
     source: `import { defineScript, prop, type ScriptRenderProps } from "xrift:script";
-import { Vehicle, Seat } from "@xrift/world-components";
+import { Vehicle } from "@xrift/world-components";
+import { useMemo } from "react";
+import { useRapier } from "@react-three/rapier";
 
 type VehicleSettings = {
+  followGround: { kind: "boolean" };
+  maxSlope: { kind: "number" };
   speed: { kind: "number" };
   turnRate: { kind: "number" };
   instanceId: { kind: "string" };
@@ -83,62 +87,73 @@ type VehicleSettings = {
 
 export default defineScript({
   name: "${NAME_TOKEN}",
+  renderMode: "wrap",
   props: {
     instanceId: prop.string({ label: "同じEntity内の識別子", default: "cart" }),
+    followGround: prop.boolean({ label: "地面に追従", default: true }),
+    maxSlope: prop.number({ label: "登れる坂の角度（度）", default: 45, min: 0, max: 70 }),
     speed: prop.number({ label: "速度（m/s）", default: 3, min: 0, max: 30 }),
     turnRate: prop.number({ label: "旋回速度（rad/s）", default: 1.5, min: 0, max: 6 }),
   },
   start() {},
 });
 
-export function Render({ ctx }: ScriptRenderProps<VehicleSettings>) {
+export function Render({ ctx, children }: ScriptRenderProps<VehicleSettings>) {
+  const { world, rapier } = useRapier();
+  const drive = useMemo(() => createVehicleGroundDrive((origin, distance) => {
+    const ray = new rapier.Ray(origin, { x: 0, y: -1, z: 0 });
+    const hit = world.castRayAndGetNormal(ray, distance, true,
+      rapier.QueryFilterFlags.EXCLUDE_SENSORS | rapier.QueryFilterFlags.EXCLUDE_DYNAMIC | rapier.QueryFilterFlags.EXCLUDE_KINEMATIC);
+    if (!hit) return null;
+    return {
+      point: new Vector3(origin.x, origin.y - hit.timeOfImpact, origin.z),
+      normal: new Vector3(hit.normal.x, hit.normal.y, hit.normal.z),
+    };
+  }), [world, rapier]);
   // EntityごとにIDを分けます。同じEntityに複数付けるときは識別子を変えてください。
   const id = "vehicle-" + ctx.entity.id + "-" + ctx.props.instanceId;
   return (
     <Vehicle id={id} onDrive={(input, delta, vehicle) => {
-      vehicle.translateZ(-input.forward * ctx.props.speed * delta);
-      vehicle.rotateY(-input.right * ctx.props.turnRate * delta);
+      drive(input, delta, vehicle, ctx.props);
     }}>
-      ${worldAssetPartsSource(VEHICLE_BODY)}
-      <Seat id={id + "-driver"} driver position={[-0.4, 0.85, 0.05]} interactionText="運転する">
-        ${worldAssetPartsSource(SEAT_BODY)}
-      </Seat>
-      <Seat id={id + "-passenger"} position={[0.4, 0.85, 0.05]} interactionText="同乗する">
-        ${worldAssetPartsSource(SEAT_BODY)}
-      </Seat>
+      {children}
     </Vehicle>
   );
 }
+
+${vehicleGroundDriveSource}
+
 `,
   },
   {
     id: "seat",
     name: "Seat",
-    description: "World向け。公式Seatで座れる椅子を作ります。座面の高さを変更できます。PlayではSpaceで立ちます。",
+    description: "World向け。座れる椅子のModelをHierarchyに配置します。高さはTransformで変更できます。PlayではSpaceで立ちます。",
     category: "interaction",
     suggestedName: "Seat",
     language: "tsx",
-    requiredAssetKinds: [],
+    requiredAssetKinds: ["model"],
     requiredComponents: [],
     entityReferenceCount: 0,
     source: `import { defineScript, prop, type ScriptRenderProps } from "xrift:script";
 import { Seat } from "@xrift/world-components";
 
-type SeatSettings = { height: { kind: "number" }; instanceId: { kind: "string" } };
+type SeatSettings = { driver: { kind: "boolean" }; instanceId: { kind: "string" } };
 
 export default defineScript({
   name: "${NAME_TOKEN}",
-  props: { instanceId: prop.string({ label: "同じEntity内の識別子", default: "seat" }), height: prop.number({ label: "座面の高さ（m）", default: 0.5, min: 0, max: 3 }) },
+  renderMode: "wrap",
+  props: {
+    instanceId: prop.string({ label: "同じEntity内の識別子", default: "seat" }),
+    driver: prop.boolean({ label: "運転席", default: false }),
+  },
   start() {},
 });
 
-export function Render({ ctx }: ScriptRenderProps<SeatSettings>) {
-  return (
-    <Seat id={"seat-" + ctx.entity.id + "-" + ctx.props.instanceId}
-      position={[0, ctx.props.height, 0]} exitOffset={{ forward: 0.8 }}>
-      ${worldAssetPartsSource(SEAT_BODY)}
-    </Seat>
-  );
+export function Render({ ctx, children }: ScriptRenderProps<SeatSettings>) {
+  return <Seat id={"seat-" + ctx.entity.id + "-" + ctx.props.instanceId}
+    driver={ctx.props.driver} interactionText={ctx.props.driver ? "運転する" : "座る"}
+    exitOffset={{ forward: 0.8 }}>{children}</Seat>;
 }
 `,
   },
