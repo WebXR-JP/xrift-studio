@@ -737,7 +737,7 @@ ES moduleのstrict modeでは `eval` をlexical bindingで遮蔽できない。
 - 例外範囲の定義: [ビジュアルエディター Architecture 4.8](./VISUAL_EDITOR_ARCHITECTURE.md#48-scripting-script-asset--script-component)
 - 状態設計: [UX Interactions F-28](./UX_INTERACTIONS.md)
 
-## Vehicle / Seat（world-components 0.52.0）
+## Vehicle / Seat（world-components 0.53.0）
 
 車は「外部から追加 → ギミック → カスタム車」または「XRift公式コンポーネント → Vehicle」、椅子単体は「外部から追加 → XRift公式コンポーネント → Seat」から追加する。
 カスタム車を追加すると、親Entityに操縦用Script、その子に「車体」「運転席」「同乗席」、タイヤ4個と「排気煙」を作る。
@@ -763,15 +763,18 @@ Sensorと動くRigid Bodyは地面判定に使わない。地面にはCollider�
 
 VehicleはHierarchyの車体・座席・タイヤ・排気煙を一つの公式 `Vehicle` で包む。
 `Seat driver` の入力を公式 `Vehicle onDrive` へ渡し、車体の移動・旋回を行う。
-W/Sで前後、A/Dで旋回、StudioのWorld PlayではSpaceで降車する。
-Seat単体もSpaceで立てる。Play停止・座席削除・テレポートで着席を解除する。
+W/Sで前後、A/Dで旋回、StudioのWorld PlayではSpaceまたはEで降車する。
+Seat単体もSpaceまたはEで立てる。Play停止・座席削除・テレポートで着席を解除する。
 テンプレートはWorld向け。アイテムのPlayにはプレイヤーがいないため、着席・操縦確認はWorld Playで行う。
 Itemに転用する場合は、同じItemを複数置いてもIDが衝突しないよう、`useItem().id` を座席・車体IDへ含める。
 
 デスクトップ版の公開物でも同じTSXと公式Componentを使う。
 Scriptを扱わないブラウザ版のRuntime JSON公開は対象外。車体の姿勢・同乗席・後から入室した人への状態は
 XRiftプラットフォームのSeatContextに任せ、`useInstanceState` で重複同期しない。
-Studioの着席Providerは単一プレイヤーの確認用で、オンライン同期やアバターの着席アニメーションは再現しない。
+World Playの着席位置・視点追従・操縦入力・降車は、0.53.0の公式 `PhysicsPlayer` で処理する。
+Studioの着席Providerは座席の登録と占有を同じプレイヤーへ渡し、Stop・座席削除・テレポートで解除する。
+フォーカスやポインターロックが外れたときは、押下中のキーを解除して操縦が続かないようにする。
+単一プレイヤーの確認用で、オンライン同期やアバターの着席アニメーションは再現しない。
 複数人からの見え方と再入室後の停車位置は、XRift上で別途確認する。
 
 砲台など、車体同期を使わない操作では引き続き `Seat onControlInput` を使用できる。

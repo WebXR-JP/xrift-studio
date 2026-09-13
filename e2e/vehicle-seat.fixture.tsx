@@ -52,6 +52,8 @@ function Fixture({ vehicle, seat }: { vehicle: TemplateModule; seat: TemplateMod
   function Ready() {
     const scene = useThree(state => state.scene);
     useFrame(() => {
+      const playerOutput = document.querySelector('[data-testid="player-position"]');
+      if (playerOutput) playerOutput.textContent = JSON.stringify(users.movementRef.current.position);
       const wheel = scene.getObjectByName("wheel-0");
       const wheelOutput = document.querySelector('[data-testid="wheel-rotation"]');
       if (wheelOutput && wheel) wheelOutput.textContent = String(wheel.rotation.x);
@@ -73,6 +75,8 @@ function Fixture({ vehicle, seat }: { vehicle: TemplateModule; seat: TemplateMod
     <button onClick={() => setChairAim(value => value + 1)}>Aim at chair</button>
     <button onClick={() => store.contextValue.sit("seat-passenger-seat")}>Sit passenger</button>
     <button onClick={() => setPlaying(false)}>Stop</button>
+    <button onClick={() => teleport.implementation.teleport({ position: [8, 0, 8], yaw: 0 })}>Teleport</button>
+    <output data-testid="player-position" />
     <output data-testid="wheel-rotation">0</output><output data-testid="smoke-visible">false</output>
     <output data-testid="ready">{ready ? "ready" : "loading"}</output>
     <output data-testid="aim">{aimHit ? "hit" : "none"}</output>

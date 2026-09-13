@@ -43,6 +43,13 @@ export function createWorldPlaySeatStore() {
   };
   return {
     contextValue,
+    // PhysicsPlayer 0.53+ reads the same registry and occupancy as Seat/Vehicle.
+    getSeat: (id: string) => seats.get(id),
+    getSeatId: () => occupied,
+    getOccupantId: contextValue.getOccupantId,
+    subscribeOccupancy: contextValue.subscribeOccupancy,
+    sit: contextValue.sit,
+    standUp: leave,
     leave,
     getEntry: () => occupied === null ? null : seats.get(occupied) ?? null,
     bindPlayer(handler: (entry: SeatEntry | null) => boolean) {
