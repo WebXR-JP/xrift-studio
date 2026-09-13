@@ -1,0 +1,35 @@
+{
+  "vehicle": {
+    "modelId": "vehicle",
+    "assetId": "model-vehicle-0f7e08d23c9a",
+    "publicPath": "/visual-editor/world-assets/vehicle.glb",
+    "fileName": "vehicle.glb",
+    "sha256": "0f7e08d23c9a302054402cbdd10b802548911f2cccb58298205862df28890e79",
+    "byteLength": 9512,
+    "displayName": "Vehicle 車体",
+    "approxRadius": 1.5,
+    "provenance": "Original model generated with Blender MCP; scripts/generate-world-asset-models.py"
+  },
+  "seat": {
+    "modelId": "seat",
+    "assetId": "model-seat-0ad75527303c",
+    "publicPath": "/visual-editor/world-assets/seat.glb",
+    "fileName": "seat.glb",
+    "sha256": "0ad75527303c2759d194c18b7640af8607eda930619db247964fb140d4e46ebd",
+    "byteLength": 7988,
+    "displayName": "Seat 座席",
+    "approxRadius": 0.6,
+    "provenance": "Original model generated with Blender MCP; scripts/generate-world-asset-models.py"
+  },
+  "wheel": {
+    "modelId": "wheel",
+    "assetId": "model-wheel-21c3337a1aac",
+    "publicPath": "/visual-editor/world-assets/wheel.glb",
+    "fileName": "wheel.glb",
+    "sha256": "21c3337a1aac28ff5541f387c7feae559f35b48eaa9fbf5cca6bdb7c7f012be6",
+    "byteLength": 9892,
+    "displayName": "Wheel タイヤ",
+    "approxRadius": 0.6,
+    "provenance": "Original model generated with Blender MCP; scripts/generate-world-asset-models.py"
+  }
+}

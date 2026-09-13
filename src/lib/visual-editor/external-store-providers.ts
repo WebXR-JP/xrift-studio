@@ -200,7 +200,7 @@ export const EXTERNAL_STORE_PROVIDERS = [
     group: "world-features",
     name: "ギミック",
     badge: "公式",
-    summary: "扉・照明・音・演出。操作と編集の手順が付いた50種類のしかけを追加",
+    summary: "カスタム車・扉・照明・音・演出。設定済みのしかけを追加",
     homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
     catalogKinds: [],
     installableKinds: [],

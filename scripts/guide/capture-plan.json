@@ -5,7 +5,7 @@
     "height": 900
   },
   "maxWidth": 1280,
-  "notes": "全ショットは Tauri デバッグ版の WebView を pnpm mcp:cli webview_screenshot で撮影する。OS のファイル選択ダイアログなどネイティブ UI は写らない。個人情報やトークンが映らないサンプルプロジェクトで撮影する。撮影中は docs/guide/ へ書き込まない。Vite が変更を検知して再読み込みし、編集中のプロジェクトが一覧へ戻るため、画像の配置は全ショットの確認後にまとめて行う。セットアップ画面は初回起動時にしか出ないため撮影対象に含めない。インストールで困ったときの記事は OS 側の画面が中心のため画像を付けない。",
+  "notes": "全ショットは Tauri デバッグ版の WebView を pnpm mcp:cli webview_screenshot で撮影する。OS のファイル選択ダイアログなどネイティブ UI は写らない。個人情報やトークンが映らないサンプルプロジェクトで撮影する。撮影中は docs/guide/ へ書き込まない。Vite が変更を検知して再読み込みし、編集中のプロジェクトが一覧へ戻るため、画像の配置は全ショットの確認後にまとめて行う。初回セットアップは未セットアップ環境で撮影し、インストール先の詳細を閉じて個人のパスを写さない。インストールで困ったときの記事は OS 側の画面が中心のため画像を付けない。",
   "omitted": [
     {
       "page": "installation-problems",
@@ -16,78 +16,84 @@
     {
       "file": "index.png",
       "page": "index",
-      "alt": "床と球が置かれたビジュアルエディターの全体",
-      "caption": "このビジュアルエディターで配置・色変更・保存・Playを行います。",
+      "alt": "床と青い球を配置したビジュアルエディター",
+      "caption": "左のHierarchyで球を選び、右のInspectorで調整します。下のAssetsには球に使うマテリアルがあります。",
       "setup": [
-        "サンプルプロジェクトをビジュアルエディターで開く",
-        "床と球が中央のシーンに見える視点にする"
+        "撮影専用の空ワールドにSphereを位置0,1,0・大きさ1,1,1で配置する",
+        "Sphere Blue（Base Color #388bea、Metallic 0、Roughness 0.5）を割り当て、Ambient Lightを有効にする",
+        "視点を位置4,3.2,5・注視点0,0.6,0にし、ウィンドウ1440×900を幅1280pxで撮影する",
+        "HierarchyでSphereを選び、Inspectorの先頭を表示する"
       ],
       "review": {
-        "date": "2026-09-08",
-        "status": "retake-required",
-        "note": "床と球という説明に対し、球のない複雑な会場。床と球だけの練習用シーンを撮る。"
+        "date": "2026-09-13",
+        "status": "approved",
+        "note": "Tauriデバッグ版の撮影専用ワールドで再撮影。設定欄と説明を目視照合。拡大表示は元画像を変えずガイド側で行う。"
       }
     },
     {
       "file": "installation.png",
       "page": "installation",
-      "alt": "プロジェクト一覧の新規プロジェクトボタン",
-      "caption": "プロジェクト一覧が出ている場合は、新規プロジェクトからビジュアルエディターを選びます。",
+      "alt": "初回画面のセットアップ開始ボタンと準備するツール",
+      "caption": "セットアップを開始すると、必要なツールを順に準備します。完了後はプロジェクト一覧へ進みます。",
       "setup": [
-        "アプリを起動し、プロジェクト一覧を表示する",
-        "新規プロジェクトのボタンが見える状態にする"
+        "未セットアップの撮影用環境で初回画面を表示する",
+        "インストール先の詳細を閉じ、1440×900で撮影する"
       ],
       "review": {
-        "date": "2026-09-08",
-        "status": "retake-required",
-        "note": "ローカルのユーザーパス、アカウント表示、無関係な試作名が写る。撮影用の一覧で新規プロジェクトを大きく写す。"
+        "date": "2026-09-13",
+        "status": "approved",
+        "note": "セットアップを先に行う現在の実画面をTauri MCPで撮影。個人のパスは非表示。"
       }
     },
     {
       "file": "first-world.png",
       "page": "first-world",
-      "alt": "中央のシーンに置いた球が選ばれた状態",
-      "caption": "追加 → Primitive → Sphereで球を置くと、Hierarchyに項目が増え、中央のシーンに現れます。",
+      "alt": "SphereのTransform。位置はX 0、Y 1、Z 0、大きさは各軸1",
+      "caption": "HierarchyでSphereを選ぶと、右のTransformに位置と大きさが表示されます。",
       "setup": [
-        "空のワールドを開く",
-        "追加 → Primitive → Sphere で球を置く",
-        "撮影後に元に戻すで球を消す"
+        "撮影専用の空ワールドにSphereを位置0,1,0・大きさ1,1,1で配置する",
+        "Sphere Blue（Base Color #388bea、Metallic 0、Roughness 0.5）を割り当て、Ambient Lightを有効にする",
+        "視点を位置4,3.2,5・注視点0,0.6,0にし、ウィンドウ1440×900を幅1280pxで撮影する",
+        "HierarchyでSphereを選び、TransformとMesh Rendererのマテリアル欄を表示する"
       ],
       "review": {
-        "date": "2026-09-08",
-        "status": "retake-required",
-        "note": "空のワールドの手順と会場の画像が一致しない。手順の位置 X:0 / Y:1 / Z:0 に置いた球を撮る。"
+        "date": "2026-09-13",
+        "status": "approved",
+        "note": "Tauriデバッグ版の撮影専用ワールドで再撮影。設定欄と説明を目視照合。拡大表示は元画像を変えずガイド側で行う。"
       }
     },
     {
       "file": "editor-layout.png",
       "page": "editor-basics",
       "alt": "左にHierarchy、中央にシーン、右にInspector、下にAssetsが並ぶ編集画面",
-      "caption": "左で選び、中央で見て、右で調整し、下から素材を使います。画像を開くと拡大して確認できます。",
+      "caption": "左：Hierarchy／中央：シーン／右：Inspector／下：Assets。画像ではSphereを選び、位置とマテリアルを表示しています。",
       "setup": [
-        "サンプルプロジェクトをビジュアルエディターで開く",
-        "Hierarchy・シーン・Inspector・Assetsの四つが見える配置にする"
+        "撮影専用の空ワールドにSphereを位置0,1,0・大きさ1,1,1で配置する",
+        "Sphere Blue（Base Color #388bea、Metallic 0、Roughness 0.5）を割り当て、Ambient Lightを有効にする",
+        "視点を位置4,3.2,5・注視点0,0.6,0にし、ウィンドウ1440×900を幅1280pxで撮影する",
+        "HierarchyでSphereを選び、Inspectorの先頭とAssetsを表示する"
       ],
       "review": {
-        "date": "2026-09-08",
-        "status": "improve-framing",
-        "note": "四つのパネルは見えるが文字が小さく、未接続の画面共有表示が目立つ。簡単なシーンで四領域を撮る。"
+        "date": "2026-09-13",
+        "status": "approved",
+        "note": "Tauriデバッグ版の撮影専用ワールドで再撮影。設定欄と説明を目視照合。拡大表示は元画像を変えずガイド側で行う。"
       }
     },
     {
       "file": "objects.png",
       "page": "objects",
-      "alt": "Entityを選択し、右のInspectorにTransformが表示された状態",
-      "caption": "Entityを選ぶとInspectorのTransformで位置・回転・大きさを確認できます。",
+      "alt": "HierarchyでSphereを選び、InspectorにTransformが表示された状態",
+      "caption": "選択したSphereの位置はX 0、Y 1、Z 0です。移動する対象をHierarchyで確認してから調整します。",
       "setup": [
-        "サンプルプロジェクトを開く",
-        "シーンまたはHierarchyで球などのEntityを選ぶ",
-        "InspectorのTransformが見える状態にする"
+        "撮影専用の空ワールドにSphereを位置0,1,0・大きさ1,1,1で配置する",
+        "Sphere Blue（Base Color #388bea、Metallic 0、Roughness 0.5）を割り当て、Ambient Lightを有効にする",
+        "視点を位置4,3.2,5・注視点0,0.6,0にし、ウィンドウ1440×900を幅1280pxで撮影する",
+        "HierarchyでSphereを選び、InspectorのTransformを表示する"
       ],
       "review": {
-        "date": "2026-09-08",
-        "status": "improve-framing",
-        "note": "Transformは写るが選択したテーブルが小さい。Fで対象に寄せて位置・回転・大きさを見せる。"
+        "date": "2026-09-13",
+        "status": "approved",
+        "note": "Tauriデバッグ版の撮影専用ワールドで再撮影。設定欄と説明を目視照合。拡大表示は元画像を変えずガイド側で行う。"
       }
     },
     {
@@ -109,17 +115,18 @@
     {
       "file": "materials.png",
       "page": "materials",
-      "alt": "Assetsでマテリアルを選び、InspectorにBase Color・Metallic・Roughnessが表示された状態",
-      "caption": "マテリアルを選ぶとInspectorに色と質感の設定が表示されます。最初は三つの項目だけ使います。",
+      "alt": "Sphere Blueを選択し、Base Colorに青色を設定した状態",
+      "caption": "Assetsでマテリアルを選ぶと、右のInspectorにBase Colorが表示されます。",
       "setup": [
-        "サンプルプロジェクトを開く",
-        "Assetsで新規マテリアルを作って選ぶ",
-        "InspectorにBase Color・Metallic・Roughnessが見える状態にする"
+        "撮影専用の空ワールドにSphereを位置0,1,0・大きさ1,1,1で配置する",
+        "Sphere Blue（Base Color #388bea、Metallic 0、Roughness 0.5）を割り当て、Ambient Lightを有効にする",
+        "視点を位置4,3.2,5・注視点0,0.6,0にし、ウィンドウ1440×900を幅1280pxで撮影する",
+        "AssetsでSphere Blueを選び、Base Color欄をInspector中央にスクロールする"
       ],
       "review": {
-        "date": "2026-09-08",
-        "status": "improve-framing",
-        "note": "Base Color・Metallic・Roughnessは写る。Inspectorを広げ、対象物と設定の関係を見せる。"
+        "date": "2026-09-13",
+        "status": "approved",
+        "note": "Tauriデバッグ版の撮影専用ワールドで再撮影。設定欄と説明を目視照合。拡大表示は元画像を変えずガイド側で行う。"
       }
     },
     {
@@ -156,17 +163,19 @@
     {
       "file": "play-mode.png",
       "page": "play-mode",
-      "alt": "Play中に中央のPlay Windowでワールドを見回している状態",
-      "caption": "Playを押してPlay Windowをクリックすると、プレイヤー視点で歩けます。戻るときはStopです。",
+      "alt": "Play Windowで青い球を表示し、上部にStopがある状態",
+      "caption": "実行中は中央がPlay Windowに変わります。上部のStopで編集へ戻れます。",
       "setup": [
-        "サンプルプロジェクトを開く",
-        "Playを押し、読み込み完了後にPlay Windowをクリックする",
-        "プレイヤー視点で球が見える位置へ進む"
+        "撮影専用の空ワールドにSphereを位置0,1,0・大きさ1,1,1で配置する",
+        "Sphere Blue（Base Color #388bea、Metallic 0、Roughness 0.5）を割り当て、Ambient Lightを有効にする",
+        "視点を位置4,3.2,5・注視点0,0.6,0にし、ウィンドウ1440×900を幅1280pxで撮影する",
+        "Playを押し、床と青い球が表示されるまで待つ",
+        "Play WindowのStopボタンと操作開始の案内を含めて撮影する"
       ],
       "review": {
-        "date": "2026-09-08",
-        "status": "retake-required",
-        "note": "未接続の画面共有が主役で、手順の球もStopボタンも確認できない。球のある練習用シーンをPlayし、Stopを含める。"
+        "date": "2026-09-13",
+        "status": "approved",
+        "note": "Tauriデバッグ版の撮影専用ワールドで再撮影。設定欄と説明を目視照合。拡大表示は元画像を変えずガイド側で行う。"
       }
     },
     {
@@ -188,33 +197,36 @@
     {
       "file": "lighting.png",
       "page": "lighting",
-      "alt": "シーン設定のInspectorにAmbient Lightが表示された状態",
-      "caption": "右のInspectorのAmbient Lightで環境光を設定します。画像では無効になっています。",
+      "alt": "Ambient Lightを有効にし、Intensityを0.55にした状態",
+      "caption": "チェックを入れると全体を均一に照らします。図ではIntensityを0.55にしています。",
       "setup": [
-        "サンプルプロジェクトを開く",
-        "エディター左下からシーン設定を開く",
-        "Ambient Light・Exposureが見える状態にする"
+        "撮影専用の空ワールドにSphereを位置0,1,0・大きさ1,1,1で配置する",
+        "Sphere Blue（Base Color #388bea、Metallic 0、Roughness 0.5）を割り当て、Ambient Lightを有効にする",
+        "視点を位置4,3.2,5・注視点0,0.6,0にし、ウィンドウ1440×900を幅1280pxで撮影する",
+        "シーン設定を開き、Ambient Light（有効、Intensity 0.55）の欄をInspector中央に表示する"
       ],
       "review": {
-        "date": "2026-09-08",
-        "status": "caption-corrected",
-        "note": "Ambient Lightは写るがExposureは画面外。代替テキストからExposureを外す。撮り直しでは有効な設定と明るさの変化を見せる。"
+        "date": "2026-09-13",
+        "status": "approved",
+        "note": "Tauriデバッグ版の撮影専用ワールドで再撮影。設定欄と説明を目視照合。拡大表示は元画像を変えずガイド側で行う。"
       }
     },
     {
       "file": "sky-and-water.png",
       "page": "sky-and-water",
-      "alt": "Skyboxが設定され、空が変わったシーン",
-      "caption": "Skyboxを設定すると背景が変わります。照明に使う場合はIBLを別に設定します。",
+      "alt": "背景に表示を有効にし、上空と地平線の色でSkyboxを表示した状態",
+      "caption": "図は画像を使わず、上空の色と地平線の色で作った背景です。IBLは無効のままです。",
       "setup": [
-        "サンプルプロジェクトを開く",
-        "外部から追加 → Skybox Shaderでプリセットを追加後にSkyboxへ設定する",
-        "背景が変わったシーンが見える視点にする"
+        "撮影専用の空ワールドにSphereを位置0,1,0・大きさ1,1,1で配置する",
+        "Sphere Blue（Base Color #388bea、Metallic 0、Roughness 0.5）を割り当て、Ambient Lightを有効にする",
+        "視点を位置4,3.2,5・注視点0,0.6,0にし、ウィンドウ1440×900を幅1280pxで撮影する",
+        "シーン設定でSkyboxの背景に表示を有効にする。Skybox TextureとShaderは使用せず、IBLは無効にする",
+        "上空の色#87ceebと地平線の色#ffffffを設定し、Skyboxの各項目と背景を写す"
       ],
       "review": {
-        "date": "2026-09-08",
-        "status": "retake-required",
-        "note": "空の変化が分からず、Skybox設定も下端で切れている。空と設定欄を同時に写す。"
+        "date": "2026-09-13",
+        "status": "approved",
+        "note": "Tauriデバッグ版の撮影専用ワールドで再撮影。設定欄と説明を目視照合。拡大表示は元画像を変えずガイド側で行う。"
       }
     },
     {
@@ -236,17 +248,19 @@
     {
       "file": "collision.png",
       "page": "collision",
-      "alt": "床のEntityを選び、InspectorにColliderが表示された状態",
-      "caption": "床を選んでColliderが有効か確認します。開始位置は床の上に置きます。",
+      "alt": "床を選択し、Box Colliderの有効状態と固定のRigid Bodyを表示した状態",
+      "caption": "左のHierarchyで床を選び、右のBox Colliderが有効で、Rigid Bodyが固定になっていることを確認します。",
       "setup": [
-        "サンプルプロジェクトを開く",
-        "Hierarchyで床のEntityを選ぶ",
-        "InspectorにColliderが見える状態にする"
+        "撮影専用の空ワールドにSphereを位置0,1,0・大きさ1,1,1で配置する",
+        "Sphere Blue（Base Color #388bea、Metallic 0、Roughness 0.5）を割り当て、Ambient Lightを有効にする",
+        "視点を位置4,3.2,5・注視点0,0.6,0にし、ウィンドウ1440×900を幅1280pxで撮影する",
+        "Skyboxを有効にした状態でHierarchyの床を選ぶ",
+        "InspectorをBox Colliderまでスクロールし、有効チェックと固定のRigid Bodyを表示する"
       ],
       "review": {
-        "date": "2026-09-08",
-        "status": "improve-framing",
-        "note": "Box Colliderは写る。床と開始位置の関係が分かる構図にし、Collider欄を広げる。"
+        "date": "2026-09-13",
+        "status": "approved",
+        "note": "Tauriデバッグ版の撮影専用ワールドで再撮影。設定欄と説明を目視照合。拡大表示は元画像を変えずガイド側で行う。"
       }
     },
     {
@@ -447,13 +461,15 @@
       "alt": "Hierarchy・シーン・Inspector・Assetsが見える編集画面",
       "caption": "用語は画面の表示名そのままです。分からない名前はこの配置と照らして探します。",
       "setup": [
-        "サンプルプロジェクトをビジュアルエディターで開く",
-        "Hierarchy・シーン・Inspector・Assetsの四つが見える配置にする"
+        "撮影専用の空ワールドにSphereを位置0,1,0・大きさ1,1,1で配置する",
+        "Sphere Blue（Base Color #388bea、Metallic 0、Roughness 0.5）を割り当て、Ambient Lightを有効にする",
+        "視点を位置4,3.2,5・注視点0,0.6,0にし、ウィンドウ1440×900を幅1280pxで撮影する",
+        "HierarchyでSphereを選び、Inspectorの先頭とAssetsを表示する"
       ],
       "review": {
-        "date": "2026-09-08",
-        "status": "improve-framing",
-        "note": "四領域は写るが文字が小さい。簡単なシーンでHierarchy・Inspector・Assetsを読みやすく撮る。"
+        "date": "2026-09-13",
+        "status": "approved",
+        "note": "Tauriデバッグ版の撮影専用ワールドで再撮影。設定欄と説明を目視照合。拡大表示は元画像を変えずガイド側で行う。"
       }
     },
     {
@@ -469,6 +485,66 @@
         "date": "2026-09-08",
         "status": "improve-framing",
         "note": "一覧は写るが小さく下が切れている。説明対象のキーが読める範囲を大きく撮る。"
+      }
+    },
+    {
+      "file": "add-sphere.png",
+      "page": "first-world",
+      "alt": "PrimitiveにあるSphere",
+      "caption": "PrimitiveにあるSphereを確認します。",
+      "setup": [
+        "撮影用の空ワールドを開き、追加メニューを表示する"
+      ],
+      "review": {
+        "date": "2026-09-13",
+        "status": "approved",
+        "note": "Tauri実画面の撮影と目視照合済み。"
+      }
+    },
+    {
+      "file": "material-values.png",
+      "page": "materials",
+      "alt": "Metallic 0とRoughness 0.5の設定欄",
+      "caption": "Metallic 0とRoughness 0.5の設定欄を確認します。",
+      "setup": [
+        "撮影用の空ワールドを開き、Metallic / Roughnessを表示する"
+      ],
+      "review": {
+        "date": "2026-09-13",
+        "status": "approved",
+        "note": "Tauri実画面の撮影と目視照合済み。"
+      }
+    },
+    {
+      "file": "new-project.png",
+      "page": "first-world",
+      "alt": "新規プロジェクトの制作方法を選ぶ画面",
+      "caption": "新規プロジェクトの制作方法を選ぶ画面",
+      "setup": [
+        "セットアップ完了後に新規プロジェクトを開く",
+        "ワールドをビジュアルで作るを選び、空のワールドの初期選択を確認する",
+        "1040×600のウィンドウで撮影。個人の保存先パスはダイアログの背面に収める。"
+      ],
+      "review": {
+        "date": "2026-09-13",
+        "status": "approved",
+        "note": "実機でセットアップを完了後に撮影。おすすめ表示なし、空のワールドが初期選択。"
+      }
+    },
+    {
+      "file": "blank-world.png",
+      "page": "first-world",
+      "alt": "空のワールドが初期選択された作成画面",
+      "caption": "空のワールドが初期選択された作成画面",
+      "setup": [
+        "セットアップ完了後に新規プロジェクトを開く",
+        "ワールドをビジュアルで作るを選び、空のワールドの初期選択を確認する",
+        "1040×850のウィンドウで撮影。個人の保存先パスはダイアログの背面に収める。"
+      ],
+      "review": {
+        "date": "2026-09-13",
+        "status": "approved",
+        "note": "実機でセットアップを完了後に撮影。おすすめ表示なし、空のワールドが初期選択。"
       }
     }
   ]

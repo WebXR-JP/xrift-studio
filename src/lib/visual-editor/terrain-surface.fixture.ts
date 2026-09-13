@@ -1,5 +1,7 @@
 import {
   TERRAIN_SURFACE_CATALOG,
+  TERRAIN_SURFACE_CATEGORY_LABELS,
+  TERRAIN_SURFACE_CATEGORY_ORDER,
   fitTerrainSurfaceToRange,
   getTerrainSurfacePreset,
 } from "./terrain-surface-catalog";
@@ -67,11 +69,21 @@ function assertRangeFitting(): void {
 }
 
 function assertCatalogShape(): void {
-  assert(TERRAIN_SURFACE_CATALOG.length >= 3, "表面プリセットが不足しています");
+  assert(
+    TERRAIN_SURFACE_CATALOG.length >= 10,
+    "表面プリセットが10種類未満です",
+  );
   const ids = new Set<string>();
   for (const entry of TERRAIN_SURFACE_CATALOG) {
     assert(!ids.has(entry.id), `表面プリセットのidが重複しています: ${entry.id}`);
     ids.add(entry.id);
+    // A category missing from the order or the labels would make the Inspector
+    // group drop the preset out of the select entirely.
+    assert(
+      TERRAIN_SURFACE_CATEGORY_ORDER.includes(entry.category) &&
+        entry.category in TERRAIN_SURFACE_CATEGORY_LABELS,
+      `表面プリセット ${entry.id} の分類 ${entry.category} が表示用の定義にありません`,
+    );
 
     const errors = validateClassicR3fMaterialShader(entry.shader);
     assert(

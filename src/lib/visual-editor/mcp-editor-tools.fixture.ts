@@ -1530,6 +1530,8 @@ export function runXriftMcpEditorToolFixtures(): void {
     id: string;
     note: string;
     partCount: number;
+    assembly?: string;
+    scriptBehaviours?: string[];
     categoryLabel: string;
   }>;
   assert(
@@ -1543,6 +1545,10 @@ export function runXriftMcpEditorToolFixtures(): void {
     listedRecipes.some((recipe) => recipe.note.length > 0),
     "list_scene_recipes should carry the note about what the author still does",
   );
+
+  const customVehicle = listedRecipes.find(recipe => recipe.id === "scene-recipe.custom-vehicle");
+  assert(customVehicle?.assembly === "vehicle" && customVehicle.partCount === 8 && customVehicle.scriptBehaviours?.length === 4,
+    "The custom vehicle catalog must describe its authored parts and Script behaviours");
 
   // create_terrain makes a flat plate, which is the right primitive and the
   // wrong starting point: everything the Create menu offers arrives shaped.

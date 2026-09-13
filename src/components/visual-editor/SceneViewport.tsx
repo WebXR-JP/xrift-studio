@@ -1,3 +1,4 @@
+import { createWorldPlaySeatStore } from "./world-play-seat-store";
 import type { OpenXrRoomImportOutcome, OpenXrRoomImportPhase } from "./useOpenXrRoomImport";
 import { SpatialXrPanel } from "./SpatialXrPanel";
 import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
@@ -60,6 +61,7 @@ import {
 } from "../../../packages/xrift-studio-runtime/src/shader-time";
 import {
   EntityScriptVisual,
+  EntityScriptChildren,
   ScriptViewportProvider,
   type ScriptViewportRuntime,
 } from "./EntityScriptVisual";
@@ -2357,6 +2359,7 @@ function EntityObject({
       {scriptComponents.map((component) => (
         <EntityScriptVisual
           key={component.id}
+          playing={playing}
           component={component}
           entityId={entity.id}
           entityName={entity.name}
@@ -2465,6 +2468,7 @@ function EntityObject({
           components={xriftWrapperComponents}
           {...(playing ? { onInteract: handleInteract } : {})}
         >
+          <EntityScriptChildren components={scriptComponents} playing={playing} entityId={entity.id} entityName={entity.name}>
           {physicsEnabled ? (
             ownRigidBody ? (
               <RuntimeOwnedRigidBody component={ownRigidBody}>
@@ -2491,6 +2495,7 @@ function EntityObject({
               {children}
             </>
           )}
+          </EntityScriptChildren>
         </OfficialXriftEntityWrappers>
       </group>
       {primary &&
@@ -5014,7 +5019,9 @@ export function SceneViewport({
   onExitRecordingView?: () => void;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
-  const { tablet } = useEditorDevice();
+  const { tablet: isTablet, phone } = useEditorDevice();
+  const tablet = isTablet || phone;
+  const [phoneToolsOpen, setPhoneToolsOpen] = useState(false);
   const [touchNavigate, setTouchNavigate] = useState(false);
   const [touchAdditiveSelection, setTouchAdditiveSelection] = useState(false);
   const [touchFrameRequest, setTouchFrameRequest] = useState(0);
@@ -5086,6 +5093,7 @@ export function SceneViewport({
   // entering Play never races the Scene's models registering themselves.
   const [sceneModelLoads] = useState(createSceneModelLoadTracker);
   const playGrabStore = useWorldPlayGrabStore();
+  const [playSeatStore] = useState(createWorldPlaySeatStore);
   const playUsers = useWorldPlayUsers();
   const playTeleport = useWorldPlayTeleport();
   const [dragOverKind, setDragOverKind] = useState<
@@ -6153,7 +6161,7 @@ export function SceneViewport({
       ? tablet
         ? "方向ボタンで移動 · 画面をドラッグで視点 · ジャンプ / 操作ボタン"
         : playPointerLocked
-        ? "WASD / 矢印キーで移動 · マウスで視点 · Space / Eでジャンプ · Gで掴む · クリックでインタラクト · Escでマウス解放"
+        ? "WASD / 矢印キーで移動 · マウスで視点 · Space / Eでジャンプ（着席中はSpaceで降車） · Gで掴む · クリックでインタラクト · Escでマウス解放"
         : "クリックして操作を開始 · ドラッグでも視点を動かせます"
       : "ドラッグでアイテムをOrbit確認";
   const readyMaterialDropTarget =
@@ -6258,6 +6266,7 @@ export function SceneViewport({
           ? "z-10 bg-zinc-950 ring-4 ring-inset ring-violet-400/90 shadow-[0_0_0_1px_rgba(139,92,246,0.9),0_0_28px_rgba(124,58,237,0.28)]"
           : "bg-slate-100"
       }`}
+      data-phone-tools={phone && !phoneToolsOpen ? "closed" : undefined}
       aria-labelledby="scene-view-heading"
     >
       <div
@@ -6464,6 +6473,17 @@ export function SceneViewport({
                 : "Play"}
           </button>
         </div>
+        {phone && editorMode === "edit" ? <button type="button" aria-expanded={phoneToolsOpen}
+          onClick={() => {
+            if (phoneToolsOpen) {
+              setTouchNavigate(false);
+              setTouchAdditiveSelection(false);
+            }
+            setPhoneToolsOpen((open) => !open);
+          }}
+          className="min-h-11 shrink-0 rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700">
+          {phoneToolsOpen ? "操作を閉じる" : "シーン操作"}
+        </button> : null}
         <div className={`scene-viewport-tools flex items-center gap-1.5 ${tablet ? "min-h-11 w-full flex-none flex-wrap justify-start border-t border-slate-200/40 py-1" : "flex-1 justify-end"}`} role="toolbar" aria-label="シーンの操作">
           {(["translate", "rotate", "scale"] as const).map((mode) => {
             const Icon = EDITOR_ICONS[mode === "translate" ? "move" : mode];
@@ -6951,6 +6971,7 @@ export function SceneViewport({
             grabbableImplementation={playGrabStore.contextValue}
             teleportImplementation={playTeleport.implementation}
             usersImplementation={playUsers.implementation}
+            seatImplementation={playSeatStore.contextValue}
           >
             {/* A World player aims from the crosshair, exactly as a published
                 world does; an Item has no player, so its Play keeps the free
@@ -7003,6 +7024,7 @@ export function SceneViewport({
                   spawnYaw={runtimeSpawn.yaw}
                   allowInfiniteJump={sceneSettings.physics.allowInfiniteJump}
                   grabStore={playGrabStore}
+                  seatStore={playSeatStore}
                   movementRef={playUsers.movementRef}
                   teleportMoverRef={playTeleport.moverRef}
                   onLockRefused={handlePlayLockRefused}

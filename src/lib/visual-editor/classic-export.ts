@@ -587,7 +587,7 @@ async function listExistingPublicNames(targetPath: string): Promise<Set<string>>
  *
  * `@xrift/world-components` is only pinned when the declared range cannot
  * reach the version the source was compiled against; a template that already
- * declares `^0.50.0` is left as the author wrote it. The other specs are exact
+ * declares `^0.53.0` is left as the author wrote it. The other specs are exact
  * requirements of the emitted modules and are written as such.
  */
 async function recordPackageDependencies(

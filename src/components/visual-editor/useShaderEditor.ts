@@ -26,11 +26,13 @@ export function useShaderEditor({
     error: null,
   });
   const openAssetIdRef = useRef<string | null>(null);
+  const readRevisionRef = useRef(0);
 
   const open = useCallback(
     async (assetId: string) => {
       const asset = assets.assets[assetId];
       if (!asset || asset.kind !== "shader") return;
+      const readRevision = ++readRevisionRef.current;
       openAssetIdRef.current = assetId;
       setState({ openAssetId: assetId, source: "", loading: true, error: null });
       if (!projectPath) {
@@ -38,7 +40,7 @@ export function useShaderEditor({
           openAssetId: assetId,
           source: "",
           loading: false,
-          error: "プロジェクトを保存するとGLSLを編集できます",
+          error: "自動保存が完了するとGLSLを編集できます",
         });
         return;
       }
@@ -47,7 +49,7 @@ export function useShaderEditor({
           projectPath,
           asset.source.relativePath,
         );
-        if (openAssetIdRef.current !== assetId) return;
+        if (readRevisionRef.current !== readRevision) return;
         setState({
           openAssetId: assetId,
           source,
@@ -55,6 +57,7 @@ export function useShaderEditor({
           error: null,
         });
       } catch (cause) {
+        if (readRevisionRef.current !== readRevision) return;
         setState({
           openAssetId: assetId,
           source: "",
@@ -70,6 +73,7 @@ export function useShaderEditor({
   );
 
   const close = useCallback(() => {
+    ++readRevisionRef.current;
     openAssetIdRef.current = null;
     setState({ openAssetId: null, source: "", loading: false, error: null });
   }, []);
@@ -78,14 +82,16 @@ export function useShaderEditor({
     async (source: string) => {
       const assetId = state.openAssetId;
       if (!assetId || !projectPath) {
-        throw new Error("プロジェクトを保存するとGLSLを保存できます");
+        throw new Error("自動保存が完了するとGLSLを保存できます");
       }
       const asset = assets.assets[assetId];
       if (!asset || asset.kind !== "shader") {
         throw new Error("シェーダー素材が見つかりません");
       }
       await tauri.writeTextFile(projectPath, asset.source.relativePath, source);
-      setState((previous) => ({ ...previous, source, error: null }));
+      setState((previous) => previous.openAssetId === assetId
+        ? { ...previous, source, error: null }
+        : previous);
       await onSaved?.(assetId, source);
     },
     [assets, onSaved, projectPath, state.openAssetId],

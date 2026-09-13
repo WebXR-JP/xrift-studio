@@ -2786,8 +2786,12 @@ function listSceneRecipes(
         tags: recipe.tags ?? [],
         comparisonLabels: recipe.comparisonLabels,
         note: recipe.note,
-        partCount: recipe.parts.length,
-        partKinds: [...new Set(recipe.parts.map((part) => part.kind))],
+        partCount: recipe.assembly === "vehicle" ? 8 : recipe.parts.length,
+        partKinds: recipe.assembly === "vehicle" ? ["model", "particle"] : [...new Set(recipe.parts.map((part) => part.kind))],
+        ...(recipe.assembly === "vehicle" ? {
+          assembly: recipe.assembly,
+          scriptBehaviours: ["公式Vehicleによる操縦と地面追従", "運転席・同乗席への着席", "移動量に応じたタイヤ回転", "走行中の煙放出"],
+        } : {}),
         // What the set does once it is placed. A caller that can only see
         // shapes would keep hand-wiring the graph a tutorial set already has.
         behaviours: (recipe.behaviours ?? []).map((behaviour) => ({

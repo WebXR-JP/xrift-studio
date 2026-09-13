@@ -1,3 +1,4 @@
+import { runWorldAssetImportFixtureAssertions as assertWorldAssetImports } from "../src/lib/visual-editor/scripting/world-asset-import.fixture.ts";
 import { runSpatialCaptureFixture } from "../src/lib/visual-editor/value-up/spatial-xr/spatial-capture.fixture.ts";
 import { runRuntimePackageFixtureAssertions } from "../src/lib/visual-editor/compiler/runtime-packages.fixture.ts";
 import { spawn } from "node:child_process";
@@ -280,7 +281,7 @@ try {
     "Classic package must not depend on the unpublished runtime package",
   );
   assert(
-    packageJson.dependencies?.["@xrift/world-components"] === "0.50.0",
+    packageJson.dependencies?.["@xrift/world-components"] === "0.53.0",
     "Classic package must pin @xrift/world-components to the compiler's version when the template has none",
   );
   assert(
@@ -376,6 +377,7 @@ try {
     ["play session", runPlaySessionFixtureAssertions],
     ["script specifiers", runScriptSpecifierFixtureAssertions],
     ["script templates", runScriptTemplateFixtureAssertions],
+    ["world asset imports", runWorldAssetImportFixtureAssertions],
     ["script props", runScriptPropsFixtureAssertions],
     ["particle runtime", runParticleRuntimeFixtureAssertions],
     ["script lifecycle", runScriptLifecycleFixtureAssertions],
@@ -912,3 +914,9 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+
+async function runWorldAssetImportFixtureAssertions() {
+  const bytes = Object.fromEntries(await Promise.all(["vehicle", "seat", "wheel"].map(async kind =>
+    [kind, new Uint8Array(await readFile(path.resolve("public/visual-editor/world-assets", `${kind}.glb`)))])));
+  await assertWorldAssetImports(bytes);
+}

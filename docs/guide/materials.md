@@ -4,9 +4,9 @@
 
 **始める前に：** シーンに球などを一つ配置し、Play中なら**Stop**で編集に戻ってください。
 
-![Assetsでマテリアルを選び、InspectorにBase Color・Metallic・Roughnessが表示された状態](./media/materials.png)
+![Sphere Blueを選択し、Base Colorに青色を設定した状態](./media/materials.png)
 
-*マテリアルを選ぶとInspectorに色と質感の設定が表示されます。最初は三つの項目だけ使います。*
+*Assetsでマテリアルを選ぶと、右のInspectorにBase Colorが表示されます。*
 
 ## 作って割り当てる
 
@@ -23,11 +23,19 @@ Base Color（ベースカラー）は、非金属では表面の色、金属で�
 
 まずはMetallicを0にして、Base Colorを変えてみてください。画像も割り当てられている場合は、画像の色とBase Colorが掛け合わされます。画像の色をそのまま使う出発点は白です。
 
+![Base Colorの色欄とRGB値](./media/materials.png "Base Color")
+
+*RGBの右にある色の欄から変更します。*
+
 ## Metallic：金属かどうかを決める
 
 Metallic（メタリック）は、**0で非金属、1で金属**です。プラスチックや塗装面ならまず0、金属の露出した面ならまず1を試します。
 
 値を上げれば何でもきれいになる設定ではありません。金属が暗く見える場合は、値だけでなく[照明とIBL](./lighting.md#金属が暗い反射が見えない)を確認してください。
+
+![Metallic 0、Roughness 0.5の数値とスライダー](./media/material-values.png "Metallic / Roughness")
+
+*左の説明と右の数値を確認して、一つずつ調整します。*
 
 ## Roughness：反射のぼけ方を決める
 

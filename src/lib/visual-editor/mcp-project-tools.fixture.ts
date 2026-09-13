@@ -77,11 +77,11 @@ export function runXriftMcpProjectToolFixtures(): void {
 
   const created = parseCreateProjectArguments({ name: "plaza" });
   assert(
-    created.kind === "world" && created.templateId === "xrift-official",
+    created.kind === "world" && created.templateId === "blank",
     "create_project defaults to a world on the default starter",
   );
   assert(
-    parseCreateProjectArguments({ name: "x", kind: "world", templateId: "blank" }).templateId === "blank",
+    parseCreateProjectArguments({ name: "x", kind: "world", templateId: "xrift-official" }).templateId === "xrift-official",
     "an explicit world template is accepted",
   );
   expectToolError(

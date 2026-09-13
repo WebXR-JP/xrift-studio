@@ -129,8 +129,8 @@ function assertOfficialTemplateIsWired(): void {
 export function runStarterTemplateFixtureAssertions(): void {
   assertOfficialTemplateIsWired();
   assert(
-    defaultVisualStarterTemplateId("world") === "xrift-official",
-    "The official XRift sample must be the default World starter",
+    defaultVisualStarterTemplateId("world") === "blank",
+    "The blank World must be the default World starter",
   );
 
   const availableStarterTemplateIds: readonly StarterWorldTemplateId[] =

@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import { GUIDE_MANIFEST, guidePage } from "../../lib/guide-config";
 import { headingSlug, markdownHeadings, remarkGuideHeadings, resolveGuideLink } from "../../lib/guide-utils.mjs";
 import { tauri } from "../../lib/tauri";
+import { guideImageFraming } from "../../lib/guide-image-framing.mjs";
 import { GuideExternalLink } from "./GuideLink";
 
 const documents = import.meta.glob<string>("/docs/guide/*.md", {query:"?raw",import:"default"});
@@ -79,7 +80,7 @@ export function GuidePanel({ initialPage, onClose }: GuidePanelProps) {
             if(target.kind === "external") return <a href={target.href} target="_blank" rel="noopener noreferrer" onClick={(event) => {if(tauri.isAvailable()){event.preventDefault();void tauri.openUrl(target.href).catch(() => setLinkError("ブラウザーでリンクを開けませんでした。接続や設定を確認してください。"));}}}>{children}</a>;
             return <a href={target.href} onClick={(event) => {event.preventDefault();if(target.kind === "page")navigate(target.slug!,target.fragment);else if(target.kind === "heading")setRoute({...route,fragment:target.href.slice(1)});}}>{children}</a>;
           },
-          img: ({src,alt}) => {const url=media[`/docs/guide/${(src ?? "").replace(/^\.\//,"")}`];return url ? <img src={url} alt={alt} loading="lazy" /> : <p>画像はブラウザー版で確認してください。</p>;},
+          img: ({src,alt,title}) => {const url=media[`/docs/guide/${(src ?? "").replace(/^\.\//,"")}`];const framing=guideImageFraming(title);return url ? <span style={framing.frame}><img src={url} alt={alt} style={framing.image} loading="lazy" /></span> : <span>画像はブラウザー版で確認してください。</span>;},
           table: ({children}) => <div className="embedded-guide-table" tabIndex={0} role="region" aria-label="表。横にスクロールできます"><table>{children}</table></div>,
         }}>{text}</ReactMarkdown></article>
         {page.next && <button type="button" className="embedded-guide-next" onClick={() => navigate(page.next!)}>次へ：{guidePage(page.next).title} →</button>}

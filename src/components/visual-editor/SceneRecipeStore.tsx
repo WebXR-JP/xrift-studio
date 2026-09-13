@@ -96,8 +96,8 @@ export function SceneRecipeStore({
     if (!selected) return null;
     const counts = {
       primitive: 0,
-      model: 0,
-      particle: 0,
+      model: selected.assembly === "vehicle" ? 7 : 0,
+      particle: selected.assembly === "vehicle" ? 1 : 0,
       light: 0,
       audio: 0,
       text: 0,
@@ -158,7 +158,7 @@ export function SceneRecipeStore({
           「外部から追加」の「ギミック」を選んでください。
         </p>
         <p className="mt-2 text-sm leading-6 text-slate-600">
-          アイテムの質感を選ぶ場合は、左の「glTFマテリアル」を利用できます。
+          アイテムの質感を選ぶ場合は、カテゴリの「glTFマテリアル」を利用できます。
         </p>
       </section>
     );
@@ -223,14 +223,14 @@ export function SceneRecipeStore({
               className="text-brand-700 underline underline-offset-2" onClick={() => {setQuery("");setCategory("all");setTexturesOnly(false);}}>条件をリセット</button> : null}
           </div>
         </div>
-        <div className="scrollbar-thin min-h-0 flex-1 overflow-auto p-3">
+        <div className="scene-recipe-list scrollbar-thin min-h-0 flex-1 overflow-auto p-3">
           {visible.length === 0 ? (
             <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center text-xs text-slate-500">
               <Search size={22} />
               <p>条件に合う{title}がありません</p>
             </div>
           ) : (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-3">
+            <div className="scene-recipe-grid grid gap-3">
               {visible.map((recipe) => {
                 const active = recipe.id === selected?.id;
                 return (
@@ -240,6 +240,7 @@ export function SceneRecipeStore({
                     data-testid="scene-recipe-card"
                     aria-label={recipe.name}
                     disabled={adding}
+                    data-catalog-card
                     aria-pressed={active}
                     onClick={() => {
                       setSelectedId(recipe.id);
@@ -293,7 +294,7 @@ export function SceneRecipeStore({
                 <span className="rounded bg-slate-100 px-2 py-1.5">左：{selected.comparisonLabels[0]}</span>
                 <span className="rounded bg-slate-100 px-2 py-1.5">右：{selected.comparisonLabels[1]}</span>
               </div> : null}
-              <p className="text-xs text-slate-500">ドラッグで回転・ホイールで拡大。操作ギミックはシーンに追加してPlayで確認します。</p>
+              <p className="text-xs text-slate-500">ドラッグで回転できます。操作ギミックはシーンに追加してPlayで確認します。</p>
             </div>
             <div>
               <h3 className="text-base font-semibold text-slate-900">
@@ -307,6 +308,7 @@ export function SceneRecipeStore({
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs leading-6 text-slate-600">
               <p className="font-semibold text-slate-800">中身</p>
               <ul className="mt-1 space-y-0.5">
+                {selected.assembly ? <li>乗車・走行・タイヤ・煙の設定済みScript</li> : null}
                 {contents.primitive > 0 ? (
                   <li>形状 {contents.primitive} 個</li>
                 ) : null}

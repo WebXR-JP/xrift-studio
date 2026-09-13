@@ -1,0 +1,47 @@
+.external-catalog-navigation { display: none; }
+.external-catalog-content { display: contents; }
+
+@media (max-width: 1023px) {
+  [data-responsive-asset-modal] { padding: 12px; }
+  [data-responsive-asset-modal] [data-app-modal-surface] { min-width: 0; width: 100%; }
+  [data-responsive-asset-modal] [data-app-modal-header],
+  [data-responsive-asset-modal] [data-app-modal-footer] { gap: 8px; padding: 8px 12px; }
+  [data-responsive-asset-modal] [data-app-modal-header] > div { min-width: 0; }
+  [data-responsive-asset-modal] :is(button, summary, select) { min-height: 44px; }
+  [data-responsive-asset-modal] button { white-space: normal; height: auto; }
+  [data-responsive-asset-modal] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select) {
+    min-width: 0; max-width: 100%; font-size: 16px;
+  }
+  [data-responsive-asset-modal] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) { min-height: 44px; }
+  [data-responsive-asset-modal] textarea { min-height: 144px; }
+  .external-catalog-navigation { display: flex; flex-wrap: wrap; flex-shrink: 0; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #e2e8f0; background: white; }
+  .external-catalog-body > nav { display: none; }
+  .external-catalog-content { display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
+  .external-catalog-content > .catalog-panes { display: contents; }
+  .external-catalog-content > :is(section, aside),
+  .external-catalog-content > .catalog-panes > :is(section, aside) {
+    width: 100%; min-width: 0; min-height: 0; flex: 1; border: 0;
+  }
+  .external-catalog-content[data-pane="list"] > aside,
+  .external-catalog-content[data-pane="list"] > .catalog-panes > aside,
+  .external-catalog-content[data-pane="detail"] > section,
+  .external-catalog-content[data-pane="detail"] > .catalog-panes > section { display: none; }
+  .external-catalog-content aside { overscroll-behavior: contain; padding: 12px; }
+  .external-catalog-content section > div:first-child { padding: 10px 12px; }
+  .external-catalog-content section > div:first-child > div { flex-wrap: wrap; }
+  .external-catalog-content [data-catalog-card] { min-width: 0; }
+  .external-catalog-content :is([data-catalog-card] .truncate, h3) {
+    white-space: normal; overflow-wrap: anywhere; text-overflow: clip;
+  }
+  .external-catalog-content aside button { overflow-wrap: anywhere; }
+}
+
+/* Use the available list width, after the navigation and detail panes. */
+.scene-recipe-list { container: recipe-list / inline-size; }
+.scene-recipe-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@container recipe-list (min-width: 400px) {
+  .scene-recipe-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container recipe-list (min-width: 520px) {
+  .scene-recipe-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}

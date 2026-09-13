@@ -8,6 +8,8 @@
 
 ### 操作前
 
+- スマホでは戻る・Undo・Redo・追加・ファイルを1行にまとめる。ファイル名と保存状況はファイルメニュー内に表示し、保存エラーはメニューを閉じていても示す。編集パネルの切り替えは次の行に残す。
+
 - 新規作成では item classic、world classic、item visual、world visual の四カードを同じ画面で選ぶ。内部では成果物と project type の二軸で扱う。二段階 UI にしない。
 - コード編集は `package.json` / `xrift.json` / `src/` を編集する code project、ビジュアルは専用 manifest / シーン / 素材 document を編集する project と説明する。同じ project の表示切替や自動相互変換とは表示しない。
 - ビジュアルを選ぶ前に専用 format を作成する。保存、動作確認、変換、check、upload まで同じ Editor flow で扱うことを示す。

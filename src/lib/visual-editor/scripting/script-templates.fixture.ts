@@ -24,6 +24,8 @@ import {
   isAllowedScriptSpecifier,
   isRemoteScriptSpecifier,
 } from "./specifiers";
+import { Group, Vector3 } from "three";
+import { createVehicleGroundDrive, type VehicleGroundSettings } from "./vehicle-ground-drive";
 
 /** Filesystem-free assertions for the built-in Script template catalog. */
 export function runScriptTemplateFixtureAssertions(): void {
@@ -37,6 +39,54 @@ export function runScriptTemplateFixtureAssertions(): void {
   assertTemplateLanguagePersistence();
   assertSummaries();
   assertEnumDefaults();
+  assertWorldAssetPreviews();
+  assertVehicleGroundDrive();
+}
+
+function assertVehicleGroundDrive(): void {
+  const settings: VehicleGroundSettings = { speed: 3, turnRate: 1.5, followGround: true, maxSlope: 45 };
+  const defaults = createDefaultScriptComponentState(extractScriptContract(getScriptTemplate("vehicle")!.source));
+  assert(defaults.properties.followGround === true, "Vehicle must follow ground by default");
+  for (const [sx, sz] of [[0, 0], [0, -0.4], [0, 0.4], [0.25, -0.2]]) {
+    const vehicle = new Group();
+    const parent = new Group();
+    parent.position.set(2, 0, 1);
+    parent.rotation.y = 0.3;
+    parent.add(vehicle);
+    // Start on the plane and follow it uphill, downhill, and across a bank.
+    parent.position.y = sx! * parent.position.x + sz! * parent.position.z;
+    const normal = new Vector3(-sx!, 1, -sz!).normalize();
+    const drive = createVehicleGroundDrive((origin, distance) => {
+      const y = sx! * origin.x + sz! * origin.z;
+      return origin.y >= y && origin.y - y <= distance
+        ? { point: new Vector3(origin.x, y, origin.z), normal: normal.clone() } : null;
+    });
+    for (let frame = 0; frame < 60; frame++) drive({ forward: 1, right: 0 }, 1 / 60, vehicle, settings);
+    vehicle.updateWorldMatrix(true, false);
+    for (const [x, z] of [[-0.8732, -0.83], [0.8732, -0.83], [-0.8732, 0.83], [0.8732, 0.83]]) {
+      const contact = vehicle.localToWorld(new Vector3(x, 0.01, z));
+      assert(Math.abs(contact.y - sx! * contact.x - sz! * contact.z) < 1e-5,
+        "Vehicle wheels must stay on the ground plane under a transformed parent");
+    }
+    const position = vehicle.getWorldPosition(new Vector3());
+    assert(position.distanceTo(parent.position) > 2.5, "Vehicle did not travel along the ramp");
+  }
+  for (const query of [() => null, (origin: Vector3) => ({point: new Vector3(origin.x, 0, origin.z), normal: new Vector3(0, 0.5, 0.866)})]) {
+    const vehicle = new Group();
+    createVehicleGroundDrive(query)({forward:1,right:1}, 0.1, vehicle, settings);
+    assert(vehicle.position.length() === 0 && vehicle.quaternion.w === 1, "Missing ground or excessive slope must stop motion");
+    createVehicleGroundDrive(query)({forward:1,right:0}, 0.1, vehicle, {...settings, followGround:false});
+    assert(Math.abs(vehicle.position.z + 0.3) < 1e-6, "Ground following must be optional");
+  }
+}
+
+function assertWorldAssetPreviews(): void {
+  for (const kind of ["vehicle", "seat"]) {
+    const source = createScriptTemplateSource(kind, "Behavior")!;
+    assert(extractScriptContract(source).wrapsChildren === true, `${kind} must wrap authored children`);
+    assert(source.includes("{children}") && !source.includes("useGLTF") && !source.includes("data:model/"),
+      `${kind}: behavior must not create hidden models`);
+  }
 }
 
 function assertTemplateLanguagePersistence(): void {
@@ -69,7 +119,7 @@ function assertTemplateLanguagePersistence(): void {
 
 function assertCatalogEntries(): void {
   assert(
-    SCRIPT_TEMPLATE_CATALOG_VERSION === 5,
+    SCRIPT_TEMPLATE_CATALOG_VERSION === 8,
     "template catalog version changed without a fixture update",
   );
   assert(SCRIPT_TEMPLATE_CATALOG.length > 0, "template catalog is empty");

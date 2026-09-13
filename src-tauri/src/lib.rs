@@ -35,6 +35,53 @@ const SCRIPT_SOURCE_MAX_BYTES: u64 = 8 * 1024 * 1024;
 static VISUAL_PROJECT_IO_LOCK: Mutex<()> = Mutex::new(());
 static COMPILER_STAGING_IO_LOCK: Mutex<()> = Mutex::new(());
 static VISUAL_ASSET_IMPORT_IO_LOCK: Mutex<()> = Mutex::new(());
+const OPEN_PROJECT_ARCHIVES_EVENT: &str = "open-project-archives";
+
+#[derive(Default)]
+struct OpenProjectArchivesState(Mutex<Vec<String>>);
+
+fn project_archives_from_args<I, S>(args: I, cwd: &Path) -> Vec<String>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    args.into_iter()
+        .filter_map(|arg| {
+            let path = PathBuf::from(arg.as_ref());
+            let is_package = path
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("xriftstudio"));
+            if !is_package {
+                return None;
+            }
+            let path = if path.is_absolute() {
+                path
+            } else {
+                cwd.join(path)
+            };
+            Some(path.to_string_lossy().to_string())
+        })
+        .collect()
+}
+
+fn queue_project_archives(app: &AppHandle, paths: Vec<String>) {
+    if paths.is_empty() {
+        return;
+    }
+    if let Ok(mut pending) = app.state::<OpenProjectArchivesState>().0.lock() {
+        pending.extend(paths.iter().cloned());
+    }
+    let _ = app.emit(OPEN_PROJECT_ARCHIVES_EVENT, paths);
+}
+
+#[tauri::command]
+fn take_opened_project_archives(
+    state: tauri::State<'_, OpenProjectArchivesState>,
+) -> Result<Vec<String>, String> {
+    let mut pending = state.0.lock().map_err(|error| error.to_string())?;
+    Ok(std::mem::take(&mut *pending))
+}
 
 #[cfg(target_os = "windows")]
 const NODE_DIST: &str = "node-v24.15.0-win-x64";
@@ -2838,6 +2885,26 @@ fn write_compiler_publication_metadata(
     write_file_synced(&target, loaded.raw.as_bytes())
 }
 
+/// A freshly downloaded template is not evidence of this author's publication.
+/// Seed only the verified authoring target; discard a template's sample sidecar.
+/// Call only while materializing a fresh template, before stamping its owner.
+fn seed_compiler_publication_metadata(
+    project_root: &Path,
+    project_kind: &str,
+    publication: Option<&LoadedCompilerPublicationMetadata>,
+) -> Result<(), String> {
+    if let Some(loaded) = publication {
+        return write_compiler_publication_metadata(project_root, project_kind, loaded);
+    }
+    let relative_path = xrift_publication_metadata_relative_path(project_kind)?;
+    let target = safe_join_managed_publication_path(project_root, &relative_path)?;
+    match std::fs::remove_file(target) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!("template publication metadata cannot be cleared: {}", error)),
+    }
+}
+
 fn persist_authoring_publication_metadata(
     project_root: &Path,
     project_kind: &str,
@@ -3447,9 +3514,11 @@ fn apply_compiler_staging(
         )?);
     }
 
-    if let Some(loaded) = publication_metadata.as_ref() {
-        write_compiler_publication_metadata(&resolved_project, &manifest.project_kind, loaded)?;
-    }
+    seed_compiler_publication_metadata(
+        &resolved_project,
+        &manifest.project_kind,
+        publication_metadata.as_ref(),
+    )?;
     // Written last: only fully materialized staging is eligible for upload
     // and for crash recovery of a CLI-created publication sidecar.
     write_compiler_staging_owner(&resolved_project, &manifest, publication_metadata.as_ref())?;
@@ -5904,12 +5973,17 @@ fn recording_abort_file(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
+    let initial_archives = project_archives_from_args(
+        std::env::args().skip(1),
+        &std::env::current_dir().unwrap_or_default(),
+    );
 
     // Publication staging uses process-local mutexes, so desktop launches are
     // single-instance. A second launch focuses the existing authoring window.
     #[cfg(desktop)]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+            queue_project_archives(app, project_archives_from_args(args, Path::new(&cwd)));
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.set_focus();
@@ -5920,6 +5994,7 @@ pub fn run() {
     let builder = builder
         .manage(mcp::XriftMcpBrokerState::default())
         .manage(RecordingFileState::default())
+        .manage(OpenProjectArchivesState(Mutex::new(initial_archives)))
         .manage(openxr_room::RoomCaptureState::default())
         .setup(|app| {
             mcp::start_broker(app.handle())?;
@@ -5938,13 +6013,14 @@ pub fn run() {
     #[cfg(debug_assertions)]
     let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
 
-    builder
+    let app = builder
         .invoke_handler(tauri::generate_handler![
             runtime_paths,
             openxr_room::get_openxr_room_capabilities,
             openxr_room::capture_openxr_room,
             openxr_room::cancel_openxr_room_capture,
             runtime_status,
+            take_opened_project_archives,
             setup_runtime,
             sandbox_env,
             ensure_dir,
@@ -6019,13 +6095,47 @@ pub fn run() {
             mcp::detect_xrift_ollama,
             mcp::configure_xrift_ollama,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle, event| {
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Opened { urls } = event {
+            let paths = urls
+                .into_iter()
+                .filter_map(|url| url.to_file_path().ok())
+                .filter(|path| {
+                    path.extension()
+                        .and_then(|extension| extension.to_str())
+                        .is_some_and(|extension| extension.eq_ignore_ascii_case("xriftstudio"))
+                })
+                .map(|path| path.to_string_lossy().to_string())
+                .collect();
+            queue_project_archives(app_handle, paths);
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = (app_handle, event);
+    });
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn project_archive_arguments_accept_only_xriftstudio_files() {
+        let cwd = Path::new("/tmp/shared");
+        assert_eq!(
+            project_archives_from_args(
+                ["gift.xriftstudio", "notes.txt", "OTHER.XRIFTSTUDIO"],
+                cwd,
+            ),
+            vec![
+                "/tmp/shared/gift.xriftstudio".to_string(),
+                "/tmp/shared/OTHER.XRIFTSTUDIO".to_string()
+            ]
+        );
+    }
 
     fn reset_fixture_root(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
@@ -6627,6 +6737,37 @@ mod tests {
         .is_err());
 
         std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
+    }
+
+    #[test]
+    fn fresh_compiler_template_never_inherits_sample_publication_target() {
+        let root = std::env::temp_dir().join(format!(
+            "xrift-template-publication-{}-{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let root = root.canonicalize().unwrap();
+        let sample = parse_compiler_publication_metadata(
+            r#"{"id":"template-sample","createdAt":"2025-01-01","lastUploadedAt":"2025-02-01"}"#.to_string()
+        ).unwrap();
+        let own = parse_compiler_publication_metadata(
+            r#"{"id":"author-target","createdAt":"2026-01-01","lastUploadedAt":"2026-02-01"}"#.to_string()
+        ).unwrap();
+        for kind in ["world", "item"] {
+            write_compiler_publication_metadata(&root, kind, &sample).unwrap();
+            seed_compiler_publication_metadata(&root, kind, None).unwrap();
+            let actual = read_compiler_publication_metadata(&root, kind).unwrap();
+            let owner = compiler_staging_owner_for_manifest(&visual_manifest(kind, None), None);
+            assert!(publication_matches_owner_baseline(&owner, actual.as_ref()));
+            // A second preparation remains valid with no previous target.
+            seed_compiler_publication_metadata(&root, kind, None).unwrap();
+            write_compiler_publication_metadata(&root, kind, &sample).unwrap();
+            seed_compiler_publication_metadata(&root, kind, Some(&own)).unwrap();
+            let actual = read_compiler_publication_metadata(&root, kind).unwrap().unwrap();
+            assert_eq!(actual.metadata.id, "author-target");
+            assert_eq!(actual.raw, own.raw);
+        }
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

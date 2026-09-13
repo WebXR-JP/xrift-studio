@@ -161,7 +161,7 @@ document tool の戻り値には `harness` が付くことがある。同じ種�
 
 `comparisonMaterialAssetId` は比較用のマテリアルを指す。拡張を比較する見本は基本のPBR値を揃え、テクスチャを比較する見本は比較対象のマップやUV設定だけを変える。`textureAssetIds` は必要な同梱テクスチャを返す。効果を見比べるときは `list_scene_recipes` の `shelf: "materials"` から選び、`apply_scene_recipe` で見本一式を置く。既存のモデルへ質感だけを付けるときは `create_material_from_preset` を使う。テクスチャが必要なプリセットは、保存済みのプロジェクトへ画像も取り込んでからMaterialを作成する。`parameters` は受け付けず、調整には通常のMaterial更新を使う。
 
-`list_scene_recipes` は `group`、`tags`、`comparisonLabels` も返す。`shelf: "materials"` は50種類、ワールド用の `shelf: "gimmicks"` も50種類を返す。ギミックの操作確認はSceneへ追加してPlayで行う。カタログ内の回転・拡大・絞り込みは表示だけの操作なので、新しいMCP toolは追加しない。全項目と確認範囲は [カタログ拡充](./catalog-expansion/README.ja.md) に記載する。
+`list_scene_recipes` は `group`、`tags`、`comparisonLabels` も返す。`shelf: "materials"` は50種類、ワールド用の `shelf: "gimmicks"` は50種類の見本にカスタム車を加えて返す。ギミックの操作確認はSceneへ追加してPlayで行う。カタログ内の回転・拡大・絞り込みは表示だけの操作なので、新しいMCP toolは追加しない。全項目と確認範囲は [カタログ拡充](./catalog-expansion/README.ja.md) に記載する。
 
 `create_texture_card` は透過テクスチャから遠景板・草カードを作る。手で組む場合は
 板ポリ、アルファブレンドの両面マテリアル、コライダー無し、円弧なら継ぎ目の
@@ -246,8 +246,8 @@ Bone / 空ノードは `DEPENDENCY_MISSING` で断る。pose で非表示にし�
 `update_terrain`, `apply_terrain_surface`
 
 `create_terrain` が作るのは平らな板だ。primitive としては正しいが、出発点として
-は向いていない。追加メニューは形のプリセットを 8 種と表面カタログを出す。
-primitive だけでは谷をブラシで一打ずつ彫ることになる。
+は向いていない。追加メニューは形のプリセットを 8 種と、高さと傾斜で塗り分ける表面プリセットを
+10 種出す。primitive だけでは谷をブラシで一打ずつ彫ることになる。
 `create_terrain_from_preset` は彫って草まで載った状態で置く。`position` を
 省くと既存の地形の隣へ置く。同じ地面に 2 枚重なるとモアレになるためだ。
 重なりは阻止しない。`overlappingTerrainCount` で報告する。
@@ -402,6 +402,12 @@ falseにすると解除する。静的GLBの同じ形状・マテリアルの不
 `list_script_templates`, `get_script_asset`, `create_script_asset`,
 `apply_script_template`, `update_script_asset`, `set_play_mode`
 
+`list_script_templates` は `vehicle` / `seat` のTSXテンプレートも返す。
+設定済みの車を置く場合は、ギミックの `scene-recipe.custom-vehicle` を `apply_scene_recipe` で配置する。
+Scriptだけを作る場合は `create_script_asset` の `templateId` に指定する。
+操縦処理は `update_script_asset`、車体・座席・タイヤの配置や見た目は通常のEntity・Model・Materialの操作で編集する。使用範囲は
+[Vehicle / Seat](./SCRIPTING.md#vehicle--seatworld-components-0520) を参照する。
+
 追加承認のないスクリプト実行と隔離の限界は [スクリプトの契約](./SCRIPTING.md) にある。
 
 ## external-store (3)
@@ -493,7 +499,36 @@ Editorの `import_model_asset` と、`importSettings` を省略した `import_te
 
 `bake_mesh_collider` は選んだ3Dモデルノードの当たり判定だけを間引くlocal-asset操作。`entityId`、メッシュの衝突判定の`componentId`、残す割合`ratio`を渡す。結果のポリゴン数を確認し、歩行を検証する。共有3Dモデルと通常の展開ノードに対応し、未展開3Dモデル全体と組み込みプリミティブは対象外。
 
-外部カタログの `list_scene_recipes` は `shelf` に `models`（3Dセット）、`materials`（マテリアル表現のglTF見本）、`gimmicks`（ギミック）を返す。目的に合う分類から選び、既存の配置ツールへ同じrecipe IDを渡す。配置後はInspectorで編集し、ギミックはPlayで動作を確認する。
+外部カタログの `list_scene_recipes` は `shelf` に `models`（3Dセット）、`materials`（マテリアル表現のglTF見本）、`gimmicks`（ギミック）を返す。目的に合う分類から選び、既存の配置ツールへ同じrecipe IDを渡す。配置後はInspectorで編集し、ギミックはPlayで動作を確認する。 UIの3Dセット・マテリアル・ギミック一覧は基本4列で、狭い表示領域では3列・2列になる。列数は表示だけの状態なので専用MCP toolは設けない。
+
+
+### ギミックのカスタム車を配置する
+
+UIでは「外部から追加 → ギミック → カスタム車」と「XRift公式コンポーネント → Vehicle」の両方から、同じ設定済みの車を配置できる。MCPではWorld向けの `scene-recipe.custom-vehicle` を `apply_scene_recipe` で配置する。`place_builtin_prefab` にVehicleは登録されていないため、公式カードの表示名をそのまま渡さない。配置される車は通常のEntity・Model・Scriptを組み合わせた編集可能なセットである。
+
+1. `get_editor_context` で編集中の `projectId`、`sceneId`、revisionとEditモードを確認する。保存済みのWorldプロジェクトが必要。
+2. `list_scene_recipes` を引数 `{}` で呼び、返された `recipes` から `shelf: "gimmicks"`、`id: "scene-recipe.custom-vehicle"` を選ぶ。`shelf` は戻り値であり、このtoolの入力引数ではない。
+3. `apply_scene_recipe` へ次の引数を渡す。IDとrevisionは直前に取得した値へ置き換える。`position` を省略するとカタログと同じグリッドへ配置する。
+
+```json
+{
+  "projectId": "取得したprojectId",
+  "sceneId": "取得したsceneId",
+  "expectedRevision": 12,
+  "recipeId": "scene-recipe.custom-vehicle",
+  "position": [0, 0, 0]
+}
+```
+
+結果の `entityId` は車の親Entity、`childEntityIds` は車体・運転席・同乗席・4輪・排気煙の8個、`createdAssetIds` は今回追加したAssetsを示す。次の更新には `revisionAfter` を使う。一覧の `assembly: "vehicle"` と `scriptBehaviours` は、ノードグラフではなくScriptで動くセットであることを示す。
+
+車体・座席・タイヤは通常のGLBを参照するMesh Rendererを持ち、Edit中もHierarchyから選択して配置を調整できる。ScriptへのBase64埋め込みや、Play開始時だけのモデル生成は行わない。モデルは通常のglTF PBRカラーを使い、座席は1マテリアル。排気煙にはParticle EmitterとParticle Assetが付き、タイヤの回転と煙の放出にはそれぞれScriptが付く。形状を変えるときはGLBやModel Asset、配置を変えるときは子EntityのTransformを編集する。
+
+親EntityのScriptは地面追従を既定で有効にし、登れる坂の上限を45度にする。追従には固定Colliderのある地面が必要で、標準車体の4輪位置を基準に接地を判定する。タイヤの配置を大きく変える場合は操縦Scriptの接地点も合わせて調整する。壁との車体衝突やサスペンションを再現する車両物理ではない。
+
+Playでは運転席をクリックして乗り、W/Sで前後移動、A/Dで旋回、Spaceで降りる。同乗席も着席できる。タイヤと煙は、各参加者側で公式Vehicleの同期済み移動量から表示を更新する。停止中は回転と新しい煙の放出を止める。粒子ごとの位置やタイヤの角度を個別送信する方式ではないため、粒子の形や位置が参加者間で完全に一致する保証はない。公開XRiftでの複数人表示は別途確認する。
+
+追加後は `get_entity_components` で構成、`capture_scene_view` でEdit中の見た目を確認し、`set_play_mode` で乗降と走行を確認する。既存の車は新規配置と別の編集対象であり、この操作だけでは差し替わらない。
 
 ## Spatial CaptureとOpenXR
 
@@ -501,4 +536,4 @@ Editorの `import_model_asset` と、`importSettings` を省略した `import_te
 
 ### 意図的に公開していない操作: OpenXRの部屋取得
 
-`capture_openxr_room` / `cancel_openxr_room_capture` は同じ`requestId`を渡すTauri IPCの非同期Session操作で、現在の同期MCP document surfaceには公開しない。Scene Viewの「OpenXR」から実行する。取得後のGLB保存もUIの取り込み処理が担当する。`apply_spatial_capture` は簡易形状の配置であり、端末からの取得やGLBの保存は行わない。
+`capture_openxr_room` / `cancel_openxr_room_capture` は同じ`requestId`を渡すTauri IPCの非同期Session操作で、現在の同期MCP document surfaceには公開しない。Scene Viewの「部屋を取り込む」から実行する。取得後のGLB保存もUIの取り込み処理が担当する。`apply_spatial_capture` は簡易形状の配置であり、端末からの取得やGLBの保存は行わない。

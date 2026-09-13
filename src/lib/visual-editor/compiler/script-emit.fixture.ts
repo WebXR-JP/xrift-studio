@@ -1,7 +1,12 @@
+import { VEHICLE_WHEEL_SCRIPT_ID, VEHICLE_SMOKE_SCRIPT_ID, VEHICLE_SMOKE_ASSET_ID, VEHICLE_WHEEL_SOURCE, VEHICLE_SMOKE_SOURCE } from "../scripting/vehicle-effects-scripts";
+import { addDefaultParticleAsset } from "../particle-system";
+import { createWorldAssetHierarchy, WORLD_SEAT_SCRIPT_ID } from "../scripting/world-asset-hierarchy";
+import { getScriptTemplate } from "../scripting/script-templates";
 import {
   ASSET_MANIFEST_SCHEMA_VERSION,
   SCRIPT_ASSET_CONTRACT_VERSION,
   normalizeTextureImportSettings,
+  normalizeModelImportSettings,
   type AssetManifest,
 } from "../asset-manifest";
 import {
@@ -16,7 +21,8 @@ import {
   type ScriptComponent,
 } from "../scene-document";
 import { VISUAL_PROJECT_SCHEMA_VERSION } from "../project-document";
-import { extractScriptContract } from "../scripting/script-contract";
+import models from "../scripting/world-asset-model-definitions.json";
+import { createDefaultScriptComponentState, extractScriptContract } from "../scripting/script-contract";
 import {
   advanceScriptAssetRuntimeDescriptorVersions,
   createScriptAssetResolutionKey,
@@ -43,6 +49,7 @@ export function runScriptEmitFixtureAssertions(): void {
   const engine = overlays.find(file => file.relativePath === INTERACTIVITY_ENGINE_OVERLAY_PATH);
   assert(Boolean(engine?.content.includes('from "./interactivity-timer-queue"')), "published engine imports must resolve to the flattened timer queue overlay");
   assertEmitsStaticImports();
+  assertVehicleTemplatesEmit();
   assertAssetRuntimeDescriptors();
   assertVectorPropertiesAreExtracted();
   assertRenderDetectionIgnoresComments();
@@ -384,7 +391,7 @@ function assertEmitsStaticImports(): void {
   );
   assert(
     Boolean(
-      host?.content.includes("<Render ctx={renderContext} />") &&
+      host?.content.includes("<Render ctx={renderContext}>{children}</Render>") &&
         host.content.includes("loadAudio(assetId, options = {})") &&
         api?.content.includes("export type ScriptRenderProps") &&
         api.content.includes("loadAudio("),
@@ -695,5 +702,59 @@ function assert(condition: boolean, message: string): void {
 function assertEqual<T>(actual: T, expected: T, message: string): void {
   if (actual !== expected) {
     throw new Error(`Script emit fixture failed: ${message}`);
+  }
+}
+
+function assertVehicleTemplatesEmit(): void {
+  for (const id of ["vehicle", "seat"]) {
+    const template = getScriptTemplate(id)!;
+    const documents = buildDocuments(template.source);
+    const asset = documents.assets.assets.asset_script_spinner;
+    if (asset.kind !== "script") throw new Error("Expected a Script Asset");
+    asset.language = "tsx";
+    asset.source.relativePath = "scripts/vehicle.tsx";
+    const modelDefinitions = id === "vehicle" ? [models.vehicle, models.seat, models.wheel] : [models.seat];
+    for (const model of modelDefinitions) {
+      documents.assets.assets[model.assetId] = {
+        id: model.assetId, kind: "model", name: model.displayName, status: "ready",
+        source: { kind: "project", relativePath: `assets/models/${model.fileName}` },
+        importSettings: normalizeModelImportSettings(), materialSlots: [],
+      };
+    }
+    documents.assets.assets[WORLD_SEAT_SCRIPT_ID] = { ...asset, id: WORLD_SEAT_SCRIPT_ID, name: "Seat Behavior", source: { kind: "project", relativePath: "scripts/seat.tsx" } };
+    documents.scriptSources[WORLD_SEAT_SCRIPT_ID] = getScriptTemplate("seat")!.source;
+    for (const [effectId, source] of [[VEHICLE_WHEEL_SCRIPT_ID, VEHICLE_WHEEL_SOURCE], [VEHICLE_SMOKE_SCRIPT_ID, VEHICLE_SMOKE_SOURCE]]) {
+      documents.assets.assets[effectId!] = { ...asset, id: effectId!, source: { kind: "project", relativePath: `scripts/${effectId}.ts` } };
+      documents.scriptSources[effectId!] = source!;
+    }
+    documents.assets = addDefaultParticleAsset(documents.assets, { id: VEHICLE_SMOKE_ASSET_ID, name: "Smoke" }).manifest;
+    documents.scenes.scene_main = createWorldAssetHierarchy(documents.scenes.scene_main, documents.assets, "entity_a", id);
+    const component = documents.scenes.scene_main.entities.entity_a.components.find(c => c.type === "script")!;
+    Object.assign(component, createDefaultScriptComponentState(extractScriptContract(template.source)));
+    const result = compileVisualProject(documents, { generatedAt: "2026-09-13T00:00:00.000Z" });
+    for (const model of modelDefinitions) {
+      assert(result.assetCopyPlan.some(copy => copy.assetId === model.assetId && copy.sourceRelativePath.endsWith(model.fileName)),
+        `${id} must publish the referenced GLB file`);
+    }
+    assert(result.canStage, `${id} cannot be staged: ${result.diagnostics.map(d => d.message).join("; ")}`);
+    assert(result.overlayFiles.some(file => file.relativePath.includes("/scripts/") && file.content.includes('../xrift-studio/world-components')),
+      `${id} must use the same Seat adapter in Play and publication`);
+    const adapter = result.overlayFiles.find(file => file.relativePath.endsWith("/world-components.ts"));
+    assert(Boolean(adapter?.content.includes('export * from "@xrift/world-components"')) && Boolean(adapter?.content.includes('XriftSeat as Seat')),
+      `${id} must preserve official APIs and adapt lazy-loaded seats`);
+    assert(Boolean(adapter?.content.includes('import { Vehicle as SharedVehicle } from "@xrift/world-components"')) && Boolean(adapter?.content.includes('export { SharedVehicle as Vehicle }')),
+      "Vehicle and Seat must both resolve through the federation host, rather than mixing a bundled Vehicle with the host Seat");
+    assert(result.overlayFiles.some(file => file.relativePath.endsWith("/seat.tsx") && file.content.includes("trackInteractionLayer")),
+      `${id} must include late-loaded seat mesh tracking`);
+    assert(new Set(result.overlayFiles.map(file => file.relativePath)).size === result.overlayFiles.length,
+      `${id} generated duplicate runtime files`);
+    const world = result.overlayFiles.find(file => file.relativePath === "src/World.tsx")!.content;
+    assert(world.includes('name="' + (id === "vehicle" ? "車体" : "座席モデル") + '"'), `${id} lost its explicit model Entity`);
+    assert(world.includes('</XriftScriptHost>'), `${id} must wrap authored models`);
+    assert(!template.source.includes("useGLTF"), `${id} Script must only supply behavior`);
+    assert(result.overlayFiles.some(file => file.relativePath === "src/World.tsx" && file.content.includes("Render as")), `${id} Render is not mounted in published World`);
+    if (id === "vehicle") {
+      assert(result.overlayFiles.some(file => file.content.includes("onDrive=") && file.content.includes("vehicle.translateZ")), "Vehicle's drive callback was lost");
+    }
   }
 }

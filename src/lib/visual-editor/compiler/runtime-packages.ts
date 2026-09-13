@@ -17,7 +17,7 @@
  * (scripts/check-world-components-alignment.mjs).
  */
 export const COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC =
-  "@xrift/world-components@0.50.0";
+  "@xrift/world-components@0.53.0";
 
 // Resolve both packages in the same install, including for reused staging
 // projects. A ^19 range can select 19.3, outside the template R3F peer range.

@@ -106,6 +106,8 @@ import {
   type TerrainGrassType,
   TERRAIN_GRASS_PRESETS,
   TERRAIN_SURFACE_CATALOG,
+  TERRAIN_SURFACE_CATEGORY_LABELS,
+  TERRAIN_SURFACE_CATEGORY_ORDER,
   fitTerrainSurfaceToRange,
   getTerrainSurfacePreset,
   type TerrainSurfaceCatalogEntry,
@@ -254,6 +256,7 @@ function ComponentCard({
   };
   children?: ReactNode;
 }) {
+  const touch = useEditorTouch();
   return (
     <section className="overflow-hidden rounded border border-slate-200 bg-white">
       <div className="flex min-h-8 items-center justify-between bg-slate-50/80 px-2.5 py-1.5">
@@ -269,7 +272,7 @@ function ComponentCard({
               className="h-3.5 w-3.5 shrink-0 accent-violet-600 disabled:cursor-not-allowed disabled:opacity-50"
             />
           ) : null}
-          <h3 className="truncate text-[13px] font-semibold text-slate-800">{title}</h3>
+          <h3 className={`${touch ? "break-words [overflow-wrap:anywhere]" : "truncate"} text-[13px] font-semibold text-slate-800`}>{title}</h3>
         </span>
         <span className="flex items-center gap-1.5">
           {subtitle ? <span className="text-xs text-slate-400">{subtitle}</span> : null}
@@ -1909,6 +1912,19 @@ function TerrainSurfaceSection({
     () => (preset ? fitTerrainSurfaceToRange(preset, range) : null),
     [preset, range.max, range.min],
   );
+  // Ten surfaces in one flat list is a wall of names; the classification is the
+  // only thing that makes "the ground I want" findable. Presets arrive in
+  // catalog order, so the groups read the same here as they do in the MCP list.
+  const groups = useMemo(
+    () =>
+      TERRAIN_SURFACE_CATEGORY_ORDER.map((category) => ({
+        category,
+        entries: TERRAIN_SURFACE_CATALOG.filter(
+          (entry) => entry.category === category,
+        ),
+      })).filter((group) => group.entries.length > 0),
+    [],
+  );
 
   return (
     <section className="space-y-2" aria-label="地形の表面">
@@ -1924,10 +1940,17 @@ function TerrainSurfaceSection({
           aria-label="表面のプリセット"
           className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
         >
-          {TERRAIN_SURFACE_CATALOG.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.label}
-            </option>
+          {groups.map((group) => (
+            <optgroup
+              key={group.category}
+              label={TERRAIN_SURFACE_CATEGORY_LABELS[group.category]}
+            >
+              {group.entries.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.label}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
         <button
@@ -1945,6 +1968,9 @@ function TerrainSurfaceSection({
 
       {preset ? (
         <div className="space-y-1.5 rounded border border-slate-200 bg-slate-50 p-2">
+          <span className="inline-block rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+            {TERRAIN_SURFACE_CATEGORY_LABELS[preset.category]}
+          </span>
           <p className="text-[11px] leading-4 text-slate-600">
             {preset.description}
           </p>
@@ -6015,6 +6041,7 @@ export function InspectorPanel({
   onSetLightShadow: (castShadow: boolean) => void;
   onApplyMaterialPatch: (patch: MaterialAssetPatch) => void;
 }) {
+  const touch = useEditorTouch();
   const entity = selectedEntityId ? scene.entities[selectedEntityId] : undefined;
   const asset = selectedAssetId ? assets.assets[selectedAssetId] : undefined;
   const prefabSource = entity
@@ -6069,7 +6096,7 @@ export function InspectorPanel({
         : null;
 
   return (
-    <aside className="row-span-2 flex min-h-0 flex-col border-l border-editor-border bg-editor-canvas" aria-labelledby="inspector-heading">
+    <aside className="row-span-2 flex min-h-0 min-w-0 flex-col border-l border-editor-border bg-editor-canvas" aria-labelledby="inspector-heading">
       <div className="flex h-10 shrink-0 items-center justify-between border-b border-editor-border bg-editor-surface px-3">
         <div className="flex items-center gap-2">
           <InspectorIcon size={14} className="text-editor-muted" aria-hidden="true" />
@@ -6084,7 +6111,7 @@ export function InspectorPanel({
         ) : null}
       </div>
       {inspectorBackTarget ? (
-        <div className="flex h-8 shrink-0 items-center gap-1 border-b border-editor-border bg-editor-subtle px-2">
+        <div className={`flex shrink-0 items-center gap-1 border-b border-editor-border bg-editor-subtle px-2 ${touch ? "min-h-11 py-1" : "h-8"}`}>
           <button
             type="button"
             onClick={inspectorBackTarget.onBack}
@@ -6100,7 +6127,7 @@ export function InspectorPanel({
           </button>
           <ChevronRight size={12} className="shrink-0 text-slate-400" aria-hidden="true" />
           <span
-            className="min-w-0 truncate text-[11px] font-medium text-slate-600"
+            className={`min-w-0 text-[11px] font-medium text-slate-600 ${touch ? "break-words [overflow-wrap:anywhere]" : "truncate"}`}
             title={inspectorBackTarget.current}
             aria-current="page"
           >
@@ -6115,7 +6142,7 @@ export function InspectorPanel({
             : "閲覧のみです。"}
         </div>
       ) : null}
-      <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto p-3">
+      <div className={`scrollbar-thin min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain ${touch ? "p-2" : "p-3"}`}>
         {sceneSettingsOpen ? (
           <>
           {assetImportSettings}

@@ -372,9 +372,6 @@ export function NewProjectDialog({
                 >
                   {starterTemplates.map((template) => {
                     const selected = template.id === starterTemplateId;
-                    const recommended =
-                      template.id ===
-                      defaultVisualStarterTemplateId(choice.kind);
                     return (
                       <button
                         key={template.id}
@@ -404,11 +401,6 @@ export function NewProjectDialog({
                             templateId={template.id as VisualStarterTemplateId}
                             selected={selected}
                           />
-                          {recommended && (
-                            <span className="absolute left-2 top-2 rounded-full border border-white/80 bg-white/95 px-2 py-1 text-[10px] font-semibold text-brand-700 shadow-sm">
-                              おすすめ
-                            </span>
-                          )}
                           {selected && (
                             <span className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-white shadow-sm">
                               <Check size={14} strokeWidth={2.5} aria-hidden="true" />
@@ -477,7 +469,7 @@ export function NewProjectDialog({
                     </div>
                     <div className="p-3">
                       <div className="text-sm font-semibold text-zinc-900">
-                        コードプロジェクトから変換
+                        クラシックから変換
                       </div>
                       <p className="mt-1 text-xs leading-5 text-zinc-500">
                         コードで作ったシーンを、ビジュアルエディター用に変換します。

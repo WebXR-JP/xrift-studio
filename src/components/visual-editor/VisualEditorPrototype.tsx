@@ -1,3 +1,5 @@
+import { createWorldAssetHierarchy } from "../../lib/visual-editor/scripting/world-asset-hierarchy";
+import { ensureWorldAssetModels, mergeWorldAssetModels } from "../../lib/visual-editor/scripting/world-asset-import";
 import { useOpenXrRoomImport } from "./useOpenXrRoomImport";
 import { ensureCatalogMaterialTextures } from "../../lib/visual-editor/asset-import-persistence";
 import { catalogMaterialTextures } from "../../lib/visual-editor/catalog-material-dependencies";
@@ -261,6 +263,7 @@ import { TextureImportSettingsPanel } from "./TextureImportSettingsPanel";
 import { EditorImportMenu } from "./EditorImportMenu";
 import { ComponentCodeImportDialog } from "./ComponentCodeImportDialog";
 import { InteractivityGraphEditor } from "./InteractivityGraphEditor";
+import { GuideLink } from "../guide/GuideLink";
 import { EditorUtilityRail } from "./EditorUtilityRail";
 import { useEditorDevice } from "./useEditorDevice";
 import { EditorPanelVisibilityContext } from "./editor-panel-visibility";
@@ -961,8 +964,18 @@ export function VisualEditorPrototype({
   initialLayout,
   onLayoutChange,
 }: VisualEditorPrototypeProps) {
-  const { tablet, touch, viewportHeight } = useEditorDevice();
-  const [tabletPanel, setTabletPanel] = useState<"hierarchy" | "assets" | "inspector" | null>("hierarchy");
+  const { tablet: isTablet, phone, touch, viewportHeight } = useEditorDevice();
+  const tablet = isTablet || phone;
+  const headerActionsRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!tablet) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!headerActionsRef.current?.contains(event.target as Node)) headerActionsRef.current?.removeAttribute("open");
+    };
+    window.addEventListener("pointerdown", closeOutside);
+    return () => window.removeEventListener("pointerdown", closeOutside);
+  }, [tablet]);
+  const [tabletPanel, setTabletPanel] = useState<"hierarchy" | "assets" | "inspector" | null>(phone ? null : "hierarchy");
   const projectExportLock = useRef(false);
   const [projectExportBusy, setProjectExportBusy] = useState(false);
   const initialBundle = useMemo(
@@ -1402,12 +1415,23 @@ export function VisualEditorPrototype({
   const scriptTabActive = activeEditorTab === SCRIPT_TAB_ID;
   const setGraphTabActive = useCallback((active: boolean) => {
     setActiveEditorTab(active ? INTERACTIVITY_GRAPH_TAB_ID : SCENE_VIEW_TAB_ID);
-  }, []);
+    if (phone && active) setTabletPanel(null);
+  }, [phone]);
   const scriptEditorSavingRef = useRef(false);
   const handleScriptEditorSavingChange = useCallback((saving: boolean) => {
     scriptEditorSavingRef.current = saving;
   }, []);
   const scriptEditorDirtyRef = useRef(false);
+  const scriptAutosaveRef = useRef<(() => Promise<boolean>) | null>(null);
+  const shaderAutosaveRef = useRef<(() => Promise<boolean>) | null>(null);
+  const registerScriptAutosave = useCallback((save: (() => Promise<boolean>) | null) => { scriptAutosaveRef.current = save; }, []);
+  const registerShaderAutosave = useCallback((save: (() => Promise<boolean>) | null) => { shaderAutosaveRef.current = save; }, []);
+  const flushCodeAutosaves = useCallback(async () => {
+    if (scriptAutosaveRef.current && !(await scriptAutosaveRef.current())) return false;
+    if (shaderAutosaveRef.current && !(await shaderAutosaveRef.current())) return false;
+    return !scriptEditorDirtyRef.current && !scriptEditorSavingRef.current && !shaderEditorDirtyRef.current;
+  }, []);
+
   const [scriptEditorDirty, setScriptEditorDirty] = useState(false);
   const handleScriptEditorDirtyChange = useCallback((dirty: boolean) => {
     scriptEditorDirtyRef.current = dirty;
@@ -1423,6 +1447,7 @@ export function VisualEditorPrototype({
       const currentAssetId = scriptEditorOpenAssetIdRef.current;
       if (currentAssetId === assetId) {
         setActiveEditorTab(SCRIPT_TAB_ID);
+        if (phone) setTabletPanel(null);
         return true;
       }
       if (
@@ -1430,21 +1455,18 @@ export function VisualEditorPrototype({
         currentAssetId !== null &&
         currentAssetId !== assetId
       ) {
-        const discard = window.confirm(
-          "編集中のスクリプトに保存していない変更があります。破棄して別のスクリプトを開きますか。",
-        );
-        if (!discard) return false;
-        scriptEditorDirtyRef.current = false;
+        if (!(await scriptAutosaveRef.current?.())) return false;
       }
       setActiveEditorTab(SCRIPT_TAB_ID);
+      if (phone) setTabletPanel(null);
       await scriptEditor.open(assetId, createdAsset);
       return true;
     },
-    [scriptEditor.open],
+    [scriptEditor.open, phone],
   );
-  const closeScriptEditor = useCallback(() => {
+  const closeScriptEditor = useCallback(async () => {
     if (scriptEditorSavingRef.current) return;
-    if (scriptEditorDirtyRef.current && !window.confirm("保存していない変更があります。破棄して閉じますか。")) return;
+    if (scriptEditorDirtyRef.current && !(await scriptAutosaveRef.current?.())) return;
     scriptEditor.close();
     setActiveEditorTab((current) => current === SCRIPT_TAB_ID ? SCENE_VIEW_TAB_ID : current);
   }, [scriptEditor.close]);
@@ -2043,18 +2065,14 @@ export function VisualEditorPrototype({
     shaderEditorDirtyRef.current = false;
   }, [shaderEditor.close]);
 
-  const confirmShaderEditorSwitch = useCallback(() => {
+  const confirmShaderEditorSwitch = useCallback(async () => {
     if (!shaderEditorDirtyRef.current) return true;
-    const discard = window.confirm(
-      "編集中のGLSLに保存していない変更があります。破棄して別のコードを開きますか。",
-    );
-    if (discard) shaderEditorDirtyRef.current = false;
-    return discard;
+    return await shaderAutosaveRef.current?.() ?? false;
   }, []);
 
   const openShaderAssetEditor = useCallback(
     async (assetId: string) => {
-      if (!confirmShaderEditorSwitch()) return false;
+      if (!(await confirmShaderEditorSwitch())) return false;
       shaderEditor.close();
       setShaderEditorRequest({ kind: "asset", assetId });
       await shaderEditor.open(assetId);
@@ -2064,8 +2082,8 @@ export function VisualEditorPrototype({
   );
 
   const openMaterialShaderEditor = useCallback(
-    (assetId: string, stage: ShaderAssetStage) => {
-      if (!confirmShaderEditorSwitch()) return false;
+    async (assetId: string, stage: ShaderAssetStage) => {
+      if (!(await confirmShaderEditorSwitch())) return false;
       shaderEditor.close();
       setShaderEditorRequest({ kind: "material", assetId, stage });
       return true;
@@ -2728,7 +2746,7 @@ export function VisualEditorPrototype({
           }
           if (["begin_world_authoring", "get_world_authoring", "review_world_authoring", "complete_world_authoring"].includes(request.tool)) {
             const root = projectPathRef.current;
-            if (!root) throw new Error("プロジェクトを保存してから制作を開始してください。");
+            if (!root) throw new Error("自動保存の完了後に制作を開始してください。");
             const worldComponents = getWorldComponentAuthoring(bundleRef.current.scene, bundleRef.current.project.projectKind);
             const fingerprint = await authoringFingerprint(bundleRef.current);
             let state = readAuthoringState(await tauri.readWorldAuthoring(root, sceneId));
@@ -2859,7 +2877,7 @@ export function VisualEditorPrototype({
             let authoring = undefined;
             if (args.authoringView !== undefined) {
               const root = projectPathRef.current;
-              if (!root) throw new Error("プロジェクトを保存してください。");
+              if (!root) throw new Error("自動保存が完了していません。保存状態を確認してください。");
               if (fingerprint !== await authoringFingerprint(bundleRef.current)) throw new Error("撮影中にシーンが変更されました。撮り直してください。");
               const state = readAuthoringState(await tauri.readWorldAuthoring(root, sceneId));
               const next = changeAuthoringState(state, request.tool, { ...args, path }, fingerprint);
@@ -2940,7 +2958,7 @@ export function VisualEditorPrototype({
           if (!currentProjectPath) {
             throw new XriftMcpEditorToolError(
               "PROJECT_NOT_SAVED",
-              "シェーダーを追加する前にプロジェクトを保存してください",
+              "シェーダーを追加する前に自動保存の完了を確認してください",
             );
           }
           if (importRunningRef.current || assetOperationRef.current !== null) {
@@ -3127,7 +3145,7 @@ export function VisualEditorPrototype({
             if (!currentProjectPath) {
               throw new XriftMcpEditorToolError(
                 "PROJECT_NOT_SAVED",
-                "シェーダーを読み取る前にプロジェクトを保存してください",
+                "シェーダーを読み取る前に自動保存の完了を確認してください",
               );
             }
             const source = await tauri.readTextFile(
@@ -3161,7 +3179,7 @@ export function VisualEditorPrototype({
           if (!currentProjectPath) {
             throw new XriftMcpEditorToolError(
               "PROJECT_NOT_SAVED",
-              "このMCP操作の前にプロジェクトを保存してください",
+              "このMCP操作の前に自動保存の完了を確認してください",
             );
           }
           if (request.tool === "set_project_thumbnail") {
@@ -3199,7 +3217,7 @@ export function VisualEditorPrototype({
             if (!currentProjectPath) {
               throw new XriftMcpEditorToolError(
                 "PROJECT_NOT_SAVED",
-                "3Dモデルを再インポートする前にプロジェクトを保存してください",
+                "3Dモデルを再インポートする前に自動保存の完了を確認してください",
               );
             }
             const model = sourceBundle.assets.assets[modelAssetId];
@@ -4125,7 +4143,7 @@ export function VisualEditorPrototype({
           if (!currentProjectPath) {
             throw new XriftMcpEditorToolError(
               "PROJECT_NOT_SAVED",
-              `${assetLabel}を追加する前にプロジェクトを保存してください`,
+              `${assetLabel}を追加する前に自動保存の完了を確認してください`,
             );
           }
           const sourcePath = mcpRequiredString(args.sourcePath, "sourcePath");
@@ -4475,7 +4493,7 @@ export function VisualEditorPrototype({
           if (!currentProjectPath) {
             throw new XriftMcpEditorToolError(
               "PROJECT_NOT_SAVED",
-              "スクリプトを操作する前にプロジェクトを保存してください",
+              "スクリプトを操作する前に自動保存の完了を確認してください",
             );
           }
           if (request.tool === "get_script_asset") {
@@ -4657,7 +4675,8 @@ export function VisualEditorPrototype({
               folderId,
               template.language,
             );
-            const nextAssets = addScriptAsset(sourceBundle.assets, asset);
+            const importedModels = await ensureWorldAssetModels(currentProjectPath, sourceBundle.assets, template.id);
+            const nextAssets = addScriptAsset(importedModels, asset);
             const scriptContract = extractScriptContract(source);
             const componentResult = addEditorComponent(
               sourceBundle.scene,
@@ -4706,7 +4725,7 @@ export function VisualEditorPrototype({
               (!folderId || Boolean(latestBundle.assets.folders?.[folderId])) &&
               !latestBundle.assets.assets[asset.id];
             const latestAssets = targetStillValid
-              ? addScriptAsset(latestBundle.assets, asset)
+              ? addScriptAsset(mergeWorldAssetModels(latestBundle.assets, sourceBundle.assets, importedModels), asset)
               : latestBundle.assets;
             const latestComponentResult = targetStillValid
               ? addEditorComponent(
@@ -4745,7 +4764,7 @@ export function VisualEditorPrototype({
             const nextBundle = touchProject({
               ...latestBundle,
               assets: latestAssets,
-              scene: latestComponentResult.scene,
+              scene: createWorldAssetHierarchy(latestComponentResult.scene, latestAssets, entityId, template.id),
             });
             scriptProvenanceRef.current.set(
               asset.id,
@@ -4799,6 +4818,7 @@ export function VisualEditorPrototype({
           let writtenSource: string;
           let createdRelativePath: string | undefined;
           let requestedFolderId: string | null | undefined;
+          let importedModels = sourceBundle.assets;
           let previousSource: string | undefined;
           if (request.tool === "create_script_asset") {
             const scriptCount = Object.values(sourceBundle.assets.assets).filter(
@@ -4881,6 +4901,7 @@ export function VisualEditorPrototype({
                 ? args.source
                 : createScriptTemplateSource(templateId!, name) ??
                   createScriptSampleSource(name);
+            importedModels = await ensureWorldAssetModels(currentProjectPath, sourceBundle.assets, templateId ?? "");
             writtenSource = source;
             asset = createScriptAsset(
               createDocumentId("asset"),
@@ -5025,7 +5046,7 @@ export function VisualEditorPrototype({
           }
           const nextAssets =
             request.tool === "create_script_asset"
-              ? addScriptAsset(latestBundle.assets, asset)
+              ? addScriptAsset(mergeWorldAssetModels(latestBundle.assets, sourceBundle.assets, importedModels), asset)
               : {
                   ...latestBundle.assets,
                   assets: { ...latestBundle.assets.assets },
@@ -5177,7 +5198,7 @@ export function VisualEditorPrototype({
           if (!currentProjectPath) {
             throw new XriftMcpEditorToolError(
               "PROJECT_NOT_SAVED",
-              "外部アセットを追加する前にプロジェクトを保存してください",
+              "外部アセットを追加する前に自動保存の完了を確認してください",
             );
           }
           const resolution = mcpRequiredString(args.resolution, "resolution");
@@ -5307,7 +5328,7 @@ export function VisualEditorPrototype({
           if (material?.kind === "material" && catalogMaterialTextures(material.properties).some(
             texture => outcome.bundle.assets.assets[texture.assetId]?.kind !== "texture",
           )) {
-            if (!currentProjectPath) throw new XriftMcpEditorToolError("PROJECT_NOT_SAVED", "テクスチャ付きMaterialを追加する前にプロジェクトを保存してください");
+            if (!currentProjectPath) throw new XriftMcpEditorToolError("PROJECT_NOT_SAVED", "テクスチャ付きMaterialを追加する前に自動保存の完了を確認してください");
             if (importRunningRef.current || assetOperationRef.current !== null) throw new XriftMcpEditorToolError("IMPORT_BUSY", "素材の処理が終わってから再試行してください");
             const revisionBefore = mcpRevisionRef.current;
             importRunningRef.current = true;
@@ -6464,7 +6485,7 @@ export function VisualEditorPrototype({
         if (classicSource && plan.assetDependencies.length > 0) {
           if (!projectPath) {
             setNotice(
-              "コード素材の保存先が必要です。先にビジュアルエディターのプロジェクトを保存してから変換してください",
+              "コード素材の保存先を準備しています。自動保存の完了後に変換してください",
             );
             return false;
           }
@@ -7610,7 +7631,7 @@ export function VisualEditorPrototype({
         throw new Error("素材の処理が終わってから追加してください");
       }
       const path = projectPathRef.current;
-      if (!path) throw new Error("プロジェクトを保存してから追加してください");
+      if (!path) throw new Error("自動保存の完了後に追加してください");
       const source = bundleRef.current;
       importRunningRef.current = true;
       setSceneRecipeImportBusy(true);
@@ -7957,7 +7978,7 @@ export function VisualEditorPrototype({
         return;
       }
       if (shaderAsset?.kind !== "shader" || !projectPath) {
-        setNotice("GLSL 素材を読み込むにはプロジェクトを保存してください");
+        setNotice("初回の自動保存が完了するとGLSL素材を読み込めます");
         return;
       }
       try {
@@ -9107,12 +9128,15 @@ export function VisualEditorPrototype({
 
   const handleCreateScriptFromTemplate = useCallback(async (
     request: ScriptTemplateCreateRequest,
+    fromExternalStore = false,
   ): Promise<boolean> => {
-    if (editorMode !== "edit" || scriptTemplateFolderId === undefined) {
+    if (editorMode !== "edit" || (!fromExternalStore && scriptTemplateFolderId === undefined)) {
       return false;
     }
-    if (!projectPathRef.current) {
-      setNotice("プロジェクトを保存するとスクリプトを作成できます");
+    const openingProjectId = bundleRef.current.project.projectId;
+    const savedPath = projectPathRef.current ?? await requestAutosave(bundleRef.current);
+    if (!savedPath) {
+      setNotice("自動保存を完了できませんでした。保存エラーを確認して再試行してください");
       return false;
     }
     const template = getScriptTemplate(request.templateId);
@@ -9122,7 +9146,7 @@ export function VisualEditorPrototype({
       return false;
     }
     const currentAssets = bundleRef.current.assets;
-    const folderId = scriptTemplateFolderId;
+    const folderId = fromExternalStore ? activeAssetFolderId : scriptTemplateFolderId;
     if (folderId && !currentAssets.folders?.[folderId]) {
       setNotice("作成先のフォルダーが見つかりません。フォルダーを開き直してください");
       return false;
@@ -9174,10 +9198,12 @@ export function VisualEditorPrototype({
         return false;
       }
     }
+    let importedModels = currentAssets;
     pendingScriptPathsRef.current.add(relativePath);
     try {
+      importedModels = await ensureWorldAssetModels(savedPath, currentAssets, template.id);
       await tauri.writeTextFile(
-        projectPathRef.current,
+        savedPath,
         relativePath,
         source,
       );
@@ -9192,12 +9218,47 @@ export function VisualEditorPrototype({
     } finally {
       pendingScriptPathsRef.current.delete(relativePath);
     }
+    if (bundleRef.current.project.projectId !== openingProjectId || editorModeRef.current !== "edit") {
+      setNotice("追加中にプロジェクトが切り替わりました。元のプロジェクトで再試行してください。");
+      return false;
+    }
     const templateProvenance = normalizeScriptProvenance({
       kind: "studio-template",
       detail: template.name,
     });
     scriptProvenanceRef.current.set(asset.id, templateProvenance);
     setScriptContractRef.current(asset.id, scriptContract);
+    if (fromExternalStore) {
+      const current = bundleRef.current;
+      const mergedAssets = addScriptAsset(mergeWorldAssetModels(current.assets, currentAssets, importedModels), asset);
+      const created = createEmptyEntity(current.scene, null, name);
+      if (!created) throw new Error("配置先を作成できませんでした");
+      const placedCount = Object.values(current.scene.entities).filter(entity =>
+        entity.components.some(component => component.type === "script" || component.type === "prefab-instance")).length;
+      const namedScene = updateModelNodeEntityTransform(created.scene, created.entityId, {
+        position: [placedCount * 2.8, template.id === "seat" ? 0.5 : 0, 0],
+      });
+      const withScript = addEditorComponent(namedScene, mergedAssets, created.entityId,
+        "scripting.script", projectKind, asset.id, { [asset.id]: scriptContract });
+      if (!withScript.added) throw new Error(withScript.reason ?? "スクリプトを追加できませんでした");
+      const hierarchyScene = createWorldAssetHierarchy(withScript.scene, mergedAssets, created.entityId, template.id);
+      const prefabId = createDocumentId("prefab");
+      const prefab = createPrefabDocument(hierarchyScene, mergedAssets, {
+        prefabId, name, sourceRootEntityIds: [created.entityId],
+      });
+      if (!prefab) throw new Error("プレハブを作成できませんでした");
+      const added = addPrefabAsset(mergedAssets, { id: createDocumentId("asset-prefab"), name,
+        prefabPath: `prefabs/${prefabId}.prefab.json` });
+      if (!added.added) throw new Error("素材を追加できませんでした");
+      const prefabs = { ...current.prefabs, [prefabId]: prefab.document };
+      setBundle(touchProject({ ...current, assets: added.manifest, prefabs, scene: hierarchyScene }));
+      setAssetSelection(null);
+      setSceneSelection({ kind: "entity", id: created.entityId });
+      setExternalStoreOpen(false);
+      setFrameSelectionRequest(value => value + 1);
+      setNotice(`「${name}」をシーンへ追加しました。Playで乗る・座る操作を試せます。`);
+      return true;
+    }
     setHistory((current) => {
       const latestBundle = current.present.bundle;
       const latestFolderId =
@@ -9207,7 +9268,7 @@ export function VisualEditorPrototype({
           ? asset
           : { ...asset, folderId: latestFolderId };
       const mergedAssets = addScriptAsset(
-        latestBundle.assets,
+        mergeWorldAssetModels(latestBundle.assets, currentAssets, importedModels),
         committedAsset,
       );
       let mergedScene = latestBundle.scene;
@@ -9223,7 +9284,7 @@ export function VisualEditorPrototype({
           { [committedAsset.id]: scriptContract },
         );
         if (componentResult.added) {
-          mergedScene = componentResult.scene;
+          mergedScene = createWorldAssetHierarchy(componentResult.scene, mergedAssets, entityId, template.id);
           attachedEntityName = latestBundle.scene.entities[entityId]?.name;
         }
       }
@@ -9250,13 +9311,18 @@ export function VisualEditorPrototype({
       });
     });
     setSaveStatus("dirty");
-    void scriptOpenRef.current(asset.id, asset);
+    if (!fromExternalStore) void scriptOpenRef.current(asset.id, asset);
     return true;
   }, [
     editorMode,
     projectKind,
     scriptEditor,
     scriptTemplateFolderId,
+    activeAssetFolderId,
+    requestAutosave,
+    setBundle,
+    setSceneSelection,
+    setAssetSelection,
   ]);
 
   /**
@@ -9353,7 +9419,7 @@ export function VisualEditorPrototype({
     async (assetId: string) => {
       if (projectThumbnailBusyRef.current) return;
       if (!projectPath) {
-        setNotice("プロジェクトを保存するとサムネイルを設定できます");
+        setNotice("初回の自動保存が完了するとサムネイルを設定できます");
         return;
       }
       const asset = bundleRef.current.assets.assets[assetId];
@@ -10458,6 +10524,7 @@ export function VisualEditorPrototype({
       setNotice("アセットのインポート完了後に動作確認を開始できます");
       return stopped();
     }
+    if (!(await flushCodeAutosaves())) return stopped();
     if (playPreparationActiveRef.current) return stopped();
     playPreparationActiveRef.current = true;
     const preparationGeneration =
@@ -10593,6 +10660,7 @@ export function VisualEditorPrototype({
       }
     }
   }, [
+    flushCodeAutosaves,
     flushInteractivityDraft,
     importBusy,
     projectKind,
@@ -10747,10 +10815,7 @@ export function VisualEditorPrototype({
 
   const runProjectExport = async () => {
     if (!onProjectExport || projectExportLock.current || projectTransferBusy || importBusy || editorMode !== "edit") return;
-    if (scriptEditorDirtyRef.current || scriptEditorSavingRef.current || shaderEditorDirtyRef.current) {
-      setNotice("スクリプトとShaderの変更を保存してから、プロジェクトを書き出してください。");
-      return;
-    }
+    if (!(await flushCodeAutosaves())) return;
     projectExportLock.current = true;
     setProjectExportBusy(true);
     try {
@@ -10767,10 +10832,7 @@ export function VisualEditorPrototype({
 
   const runProjectImport = async () => {
     if (!onProjectImport || projectExportLock.current || projectTransferBusy || importBusy || editorMode !== "edit") return;
-    if (scriptEditorDirtyRef.current || scriptEditorSavingRef.current || shaderEditorDirtyRef.current) {
-      setNotice("スクリプトとShaderの変更を保存してから、別のプロジェクトを開いてください。");
-      return;
-    }
+    if (!(await flushCodeAutosaves())) return;
     projectExportLock.current = true;
     setProjectExportBusy(true);
     try {
@@ -11004,7 +11066,7 @@ export function VisualEditorPrototype({
         case "asset.create-script":
           if (editorMode !== "edit" || importBusy) return false;
           if (!projectPathRef.current) {
-            setNotice("プロジェクトを保存するとスクリプトを作成できます");
+            setNotice("自動保存が完了するとスクリプトを作成できます");
             return false;
           }
           if (
@@ -11146,13 +11208,14 @@ export function VisualEditorPrototype({
   noticeRef.current = notice;
   const handleBack = useCallback(async (): Promise<boolean> => {
     if (leaving || projectExportBusy || projectTransferBusy) return false;
+    if (!(await flushCodeAutosaves())) return false;
     if (onProjectExport) {
       if (importBusy) {
         setNotice("素材の取り込みが終わってから、紹介ページへ戻ってください。");
         return false;
       }
       if (scriptEditorDirtyRef.current || scriptEditorSavingRef.current || shaderEditorDirtyRef.current) {
-        setNotice("スクリプトとShaderの変更を保存してから、紹介ページへ戻ってください。");
+        setNotice("スクリプトとShaderの自動保存が完了してから、紹介ページへ戻ってください。");
         return false;
       }
       flushInteractivityDraft();
@@ -11178,7 +11241,7 @@ export function VisualEditorPrototype({
     setLeaving(false);
     onBack();
     return true;
-  }, [leaving, projectExportBusy, projectTransferBusy, importBusy, onProjectExport, flushInteractivityDraft, onBack, requestAutosave]);
+  }, [leaving, projectExportBusy, projectTransferBusy, importBusy, onProjectExport, flushInteractivityDraft, onBack, requestAutosave, flushCodeAutosaves]);
 
   mcpProjectBridgeActionsRef.current = { saveNow: runSave, leave: handleBack };
 
@@ -11296,6 +11359,7 @@ export function VisualEditorPrototype({
   const recordingUiHidden =
     recordingViewport.visible && !recordingViewport.showEditorUi;
   const panelsHidden = viewportMaximized || recordingUiHidden;
+  const sceneContentVisible = !phone || panelsHidden || !tabletPanel;
   const hierarchyTrack = panelsHidden || tablet
     ? "0px"
     : `min(${layout.hierarchyWidth}px, 22%)`;
@@ -11313,42 +11377,7 @@ export function VisualEditorPrototype({
    * auto-placement then walks the remaining panels one cell to the left —
    * putting the Scene View in the 0px column with its own header clipped away.
    */
-  const sidePanelClass = (panel: "hierarchy" | "assets" | "inspector", spansBothRows: boolean) =>
-    tablet ? `editor-tablet-panel ${panelsHidden || tabletPanel !== panel ? "hidden" : "flex"}` : panelsHidden
-      ? `overflow-hidden ${spansBothRows ? "row-span-2" : ""}`
-      : "contents";
-
-  return (
-    <ValueScrubContext.Provider value={valueScrubTransaction}>
-    <div className="visual-editor-shell h-screen overflow-hidden bg-editor-canvas"
-      data-tablet={tablet || undefined} data-touch={touch || undefined}
-      style={tablet ? { height: viewportHeight ? `${viewportHeight}px` : "100dvh" } : undefined}>
-      <div className="flex h-full min-h-0 min-w-0 flex-col bg-editor-canvas text-editor-text">
-        <header className="editor-main-header flex h-14 shrink-0 items-center justify-between gap-3 border-b border-editor-border bg-editor-surface px-3">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <button
-              type="button"
-              disabled={leaving}
-              onClick={() => void handleBack()}
-              title={commandTitle(`${backLabel}へ戻る`, "CloseVisualEditor")}
-              className="flex shrink-0 items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-2.5 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-wait disabled:opacity-50"
-            >
-              <BackIcon size={13} aria-hidden="true" />
-              {leaving ? "保存して戻っています" : backLabel}
-            </button>
-            <div className="min-w-0 border-l border-editor-border pl-2.5">
-              <p className="truncate text-sm font-semibold text-editor-text">
-                {bundle.project.metadata.title}
-              </p>
-              <p className="flex items-center gap-1 text-xs text-editor-muted">
-                <KindIcon size={11} aria-hidden="true" />
-                {kindLabel} · ビジュアルエディター
-              </p>
-            </div>
-          </div>
-
-          <div className="editor-header-actions flex shrink-0 items-center gap-2">
-            <span
+  const saveStatusIndicator = (<span
               className={`flex items-center gap-1.5 text-xs font-medium ${
                 saveStatus === "error" ? "text-rose-700" : "text-editor-muted"
               }`}
@@ -11362,7 +11391,127 @@ export function VisualEditorPrototype({
                 aria-hidden="true"
               />
               {saveStatusLabel}
-            </span>
+            </span>);
+  const editActions = (
+    <div className="editor-edit-actions flex items-center gap-1.5">
+      <button
+        type="button"
+        disabled={
+          renderedReadOnly || importBusy || history.past.length === 0
+        }
+        onClick={() => executeCommand("edit.undo")}
+        aria-label="元に戻す"
+        title={commandTitle("元に戻す", "edit.undo", shortcutLabel("edit.undo"))}
+        className="flex h-7 items-center gap-1 rounded border border-editor-border bg-editor-surface px-1.5 text-xs text-editor-muted hover:bg-editor-subtle hover:text-editor-text disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <EDITOR_ICONS.undo size={13} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        disabled={
+          renderedReadOnly || importBusy || history.future.length === 0
+        }
+        onClick={() => executeCommand("edit.redo")}
+        aria-label="やり直す"
+        title={commandTitle("やり直す", "edit.redo", shortcutLabel("edit.redo"))}
+        className="flex h-7 items-center gap-1 rounded border border-editor-border bg-editor-surface px-1.5 text-xs text-editor-muted hover:bg-editor-subtle hover:text-editor-text disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <EDITOR_ICONS.redo size={13} aria-hidden="true" />
+      </button>
+      <div className="relative">
+        <button
+          type="button"
+          disabled={importBusy}
+          aria-haspopup="menu"
+          aria-expanded={createMenuOpen}
+          onClick={() => setCreateMenuOpen((open) => !open)}
+          title={commandTitle("シーンEntityを作成", "OpenCreateMenu", "Ctrl+Shift+A")}
+          className="flex h-7 items-center gap-1.5 rounded border border-editor-border bg-editor-surface px-2 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          <CreateIcon size={13} aria-hidden="true" />
+          追加
+        </button>
+        <EditorCreateMenu
+          onOpenExternalStore={() => setExternalStoreOpen(true)}
+          onImportFile={() => globalModelImportInputRef.current?.click()}
+          importDisabledReason={renderedReadOnly ? "動作確認を停止してから素材を追加してください" : assetImportPanelAvailability.disabledReason}
+          open={createMenuOpen}
+          readOnly={false}
+          importBusy={importBusy}
+          projectKind={projectKind}
+          builtinPrefabRecipes={builtinPrefabRecipes}
+          onClose={() => setCreateMenuOpen(false)}
+          onCreateEmpty={() => executeCommand("entity.create-empty")}
+          onCreatePrimitive={(creationId) =>
+            executeCommand("entity.create-primitive", { creationId })
+          }
+          onCreateTerrain={handleCreateTerrain}
+      terrainOverlapCount={terrainOverlapCount}
+      onArrangeTerrains={handleArrangeTerrains}
+          onPlaceBuiltinPrefab={handlePlaceBuiltinPrefab}
+          onCreateXriftObject={handleCreateXriftObject}
+          onCreateComponentObject={handleCreateComponentObject}
+        />
+      </div>
+    </div>
+  );
+  const HeaderActions = tablet ? "details" : "div";
+  const sidePanelClass = (panel: "hierarchy" | "assets" | "inspector", spansBothRows: boolean) =>
+    tablet ? `editor-tablet-panel ${panelsHidden || tabletPanel !== panel ? "hidden" : "flex"}` : panelsHidden
+      ? `overflow-hidden ${spansBothRows ? "row-span-2" : ""}`
+      : "contents";
+
+  return (
+    <ValueScrubContext.Provider value={valueScrubTransaction}>
+    <div className="visual-editor-shell h-screen overflow-hidden bg-editor-canvas"
+      data-tablet={tablet || undefined} data-phone={phone || undefined} data-panel-open={phone && !panelsHidden && tabletPanel ? tabletPanel : undefined} data-touch={touch || undefined}
+      style={tablet ? { height: viewportHeight ? `${viewportHeight}px` : "100dvh" } : undefined}>
+      <div className="flex h-full min-h-0 min-w-0 flex-col bg-editor-canvas text-editor-text">
+        <header className="editor-main-header flex h-14 shrink-0 items-center justify-between gap-3 border-b border-editor-border bg-editor-surface px-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <button
+              type="button"
+              disabled={leaving}
+              onClick={() => void handleBack()}
+              aria-label={leaving ? "保存中…" : `${backLabel}へ戻る`}
+              title={commandTitle(`${backLabel}へ戻る`, "CloseVisualEditor")}
+              className="flex shrink-0 items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-2.5 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-wait disabled:opacity-50"
+            >
+              <BackIcon size={13} aria-hidden="true" />
+              {phone ? null : leaving ? "保存中…" : tablet ? "戻る" : backLabel}
+            </button>
+            <div className="editor-project-heading min-w-0 border-l border-editor-border pl-2.5">
+              <p className="truncate text-sm font-semibold text-editor-text">
+                {bundle.project.metadata.title}
+              </p>
+              {tablet ? saveStatusIndicator : <p className="flex items-center gap-1 text-xs text-editor-muted">
+                <KindIcon size={11} aria-hidden="true" />
+                {kindLabel} · ビジュアルエディター
+              </p>}
+            </div>
+          </div>
+
+          {phone && !recordingUiHidden ? editActions : null}
+
+          <HeaderActions ref={(element: HTMLDetailsElement | HTMLDivElement | null) => { headerActionsRef.current = element; }} className="editor-header-actions relative shrink-0"
+            onKeyDown={(event) => {
+              if (!tablet) return;
+              event.stopPropagation();
+              if (event.key === "Escape") {
+                headerActionsRef.current?.removeAttribute("open");
+                headerActionsRef.current?.querySelector("summary")?.focus();
+              }
+            }}
+            onClick={(event) => {
+              const target = event.target as HTMLElement;
+              if (tablet && target.closest("button, a") && (!target.closest(".editor-import-menu") || target.closest('[role="menuitem"]'))) headerActionsRef.current?.removeAttribute("open");
+            }}>
+            {tablet ? <summary className="flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center gap-1 rounded-md border border-editor-border bg-editor-surface px-3 text-xs font-semibold text-editor-text">ファイル {phone && saveStatus === "error" ? <span className="text-rose-700" role="status" aria-label={saveStatusLabel}>!</span> : null}<span aria-hidden="true">⌄</span></summary> : null}
+            <div className="editor-project-actions flex items-center gap-2">
+            {phone ? <div className="min-w-0 border-b border-editor-border px-3 py-2">
+              <p className="truncate text-sm font-semibold">{bundle.project.metadata.title}</p>
+              {saveStatusIndicator}
+            </div> : !tablet ? saveStatusIndicator : null}
             {saveStatus === "error" ? (
               <button
                 type="button"
@@ -11389,12 +11538,13 @@ export function VisualEditorPrototype({
               disabled={projectTransferBusy || projectExportBusy || importBusy || leaving || renderedEditorMode !== "edit"}
               onClick={() => void runProjectImport()}
               className="rounded-md border border-editor-border bg-editor-surface px-3 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:opacity-45"
-            >開く</button> : null}
+              title="このブラウザに保存したプロジェクトや.xriftstudioファイルを開きます"
+            >プロジェクトを開く</button> : null}
             {onProjectExport ? <button
               type="button"
               disabled={projectTransferBusy || projectExportBusy || importBusy || leaving || renderedEditorMode !== "edit"}
               onClick={() => void runProjectExport()}
-              title="素材を含むプロジェクトを保存して、Mac／Windows版へ引き継ぎます"
+              title="シーンと素材を.xriftstudioファイルにまとめます"
               className="flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-45"
             ><ExportIcon size={13} aria-hidden="true" />{projectExportBusy ? "書き出しを準備中…" : "プロジェクトを書き出す"}</button> : <>
             <button
@@ -11422,7 +11572,13 @@ export function VisualEditorPrototype({
               XRiftへ公開
             </button>
             </>}
-          </div>
+            {tablet ? <>
+              <button type="button" onClick={() => { setSceneSettingsOpen(true); setTabletPanel("inspector"); setViewportMaximized(false); }}
+                className="min-h-11 rounded-md border border-editor-border bg-editor-surface px-3 text-left text-xs font-semibold text-editor-text">シーン設定</button>
+              <GuideLink page="ipad" label="タッチ操作の使い方" />
+            </> : null}
+            </div>
+          </HeaderActions>
         </header>
 
         <div
@@ -11430,65 +11586,11 @@ export function VisualEditorPrototype({
           role="toolbar"
           aria-label="ビジュアルエディターのツール"
         >
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              disabled={
-                renderedReadOnly || importBusy || history.past.length === 0
-              }
-              onClick={() => executeCommand("edit.undo")}
-              aria-label="元に戻す"
-              title={commandTitle("元に戻す", "edit.undo", shortcutLabel("edit.undo"))}
-              className="flex h-7 items-center gap-1 rounded border border-editor-border bg-editor-surface px-1.5 text-xs text-editor-muted hover:bg-editor-subtle hover:text-editor-text disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <EDITOR_ICONS.undo size={13} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              disabled={
-                renderedReadOnly || importBusy || history.future.length === 0
-              }
-              onClick={() => executeCommand("edit.redo")}
-              aria-label="やり直す"
-              title={commandTitle("やり直す", "edit.redo", shortcutLabel("edit.redo"))}
-              className="flex h-7 items-center gap-1 rounded border border-editor-border bg-editor-surface px-1.5 text-xs text-editor-muted hover:bg-editor-subtle hover:text-editor-text disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <EDITOR_ICONS.redo size={13} aria-hidden="true" />
-            </button>
-            <div className="relative">
-              <button
-                type="button"
-                disabled={importBusy}
-                aria-haspopup="menu"
-                aria-expanded={createMenuOpen}
-                onClick={() => setCreateMenuOpen((open) => !open)}
-                title={commandTitle("シーンEntityを作成", "OpenCreateMenu", "Ctrl+Shift+A")}
-                className="flex h-7 items-center gap-1.5 rounded border border-editor-border bg-editor-surface px-2 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                <CreateIcon size={13} aria-hidden="true" />
-                追加
-              </button>
-              <EditorCreateMenu
-                open={createMenuOpen}
-                readOnly={false}
-                importBusy={importBusy}
-                projectKind={projectKind}
-                builtinPrefabRecipes={builtinPrefabRecipes}
-                onClose={() => setCreateMenuOpen(false)}
-                onCreateEmpty={() => executeCommand("entity.create-empty")}
-                onCreatePrimitive={(creationId) =>
-                  executeCommand("entity.create-primitive", { creationId })
-                }
-                onCreateTerrain={handleCreateTerrain}
-            terrainOverlapCount={terrainOverlapCount}
-            onArrangeTerrains={handleArrangeTerrains}
-                onPlaceBuiltinPrefab={handlePlaceBuiltinPrefab}
-                onCreateXriftObject={handleCreateXriftObject}
-                onCreateComponentObject={handleCreateComponentObject}
-              />
-            </div>
-          </div>
+          {!phone ? editActions : null}
           {tablet && !recordingUiHidden ? <div className="editor-panel-switcher ml-auto flex items-center gap-1" aria-label="編集パネル">
+            {phone ? <button type="button" aria-pressed={panelsHidden || !tabletPanel}
+              onClick={() => { setTabletPanel(null); setViewportMaximized(false); setActiveEditorTab(SCENE_VIEW_TAB_ID); }}
+              className={`rounded-md px-3 py-1.5 text-xs font-semibold ${panelsHidden || !tabletPanel ? "bg-brand-100 text-brand-800" : "text-editor-muted hover:bg-editor-subtle"}`}>シーン</button> : null}
             {([['hierarchy', 'Hierarchy'], ['assets', 'Assets'], ['inspector', 'Inspector']] as const).map(([panel, label]) =>
               <button key={panel} type="button"
                 aria-pressed={!panelsHidden && tabletPanel === panel}
@@ -11918,7 +12020,7 @@ export function VisualEditorPrototype({
               }
               if (!projectPath) {
                 setNotice(
-                  "プロジェクトを保存してから素材の保存先を開いてください",
+                  "初回の自動保存が完了すると素材の保存先を開けます",
                 );
                 return;
               }
@@ -11967,7 +12069,7 @@ export function VisualEditorPrototype({
             onGenerated={handleAssetThumbnailGenerated}
             onFailed={handleModelThumbnailFailure}
           />
-          <EditorUtilityRail
+          {!tablet ? <EditorUtilityRail
             commands={resolvedCommands}
             sceneSettingsOpen={sceneSettingsOpen}
             onToggleSceneSettings={() => {
@@ -12066,7 +12168,7 @@ export function VisualEditorPrototype({
                 });
               },
             }}
-          />
+          /> : null}
           <ExternalAssetStoreDialog
             open={externalStoreOpen}
             projectPath={projectPath}
@@ -12090,6 +12192,13 @@ export function VisualEditorPrototype({
               resolveSceneSettings(bundle.scene.settings).vegetation,
             )}
             onAddOfficialComponent={handleAddOfficialComponent}
+            onAddWorldAsset={async (templateId) => {
+              if (projectKind !== "world" || editorModeRef.current !== "edit") return false;
+              return handleCreateScriptFromTemplate({
+                templateId, name: templateId === "vehicle" ? "Vehicle" : "Seat",
+                attachToSelectedEntity: false,
+              }, true);
+            }}
           />
           <ConfirmDialog
             open={leaveWithoutSaveError !== null}
@@ -12122,9 +12231,9 @@ export function VisualEditorPrototype({
             what the graph you are half way through writing is pointing at.
           */}
           {interactivityEditorAsset ? (
-            <div className={graphTabActive ? "contents" : "hidden"}>
+            <div className={graphTabActive && sceneContentVisible ? "contents" : "hidden"}>
             <InteractivityGraphEditor
-              active={graphTabActive}
+              active={graphTabActive && sceneContentVisible}
               key={interactivityEditorAsset.id}
               asset={interactivityEditorAsset}
               materials={Object.values(bundle.assets.assets).filter(
@@ -12174,7 +12283,7 @@ export function VisualEditorPrototype({
           {scriptEditorAsset ? (
             <ScriptEditorWorkspace
               assets={bundle.assets}
-              active={scriptTabActive}
+              active={scriptTabActive && sceneContentVisible}
               onOpen={(assetId) => { void openScriptEditor(assetId); }}
               onCreate={() => setScriptTemplateFolderId(null)}
               createDisabled={renderedEditorMode === "play" || !projectPath}
@@ -12188,6 +12297,7 @@ export function VisualEditorPrototype({
               runtime={scriptRuntimeReport}
               onSave={scriptEditor.save}
               onDirtyChange={handleScriptEditorDirtyChange}
+              onAutosaveReady={registerScriptAutosave}
               onClose={closeScriptEditor}
             />
           ) : null}
@@ -12202,6 +12312,7 @@ export function VisualEditorPrototype({
               error={shaderEditor.state.error}
               onSave={shaderEditor.save}
               onDirtyChange={handleShaderEditorDirtyChange}
+              onAutosaveReady={registerShaderAutosave}
               onClose={closeShaderEditor}
             />
           ) : shaderEditorMaterialShader && shaderEditorRequest?.kind === "material" ? (
@@ -12220,6 +12331,7 @@ export function VisualEditorPrototype({
                 )
               }
               onDirtyChange={handleShaderEditorDirtyChange}
+              onAutosaveReady={registerShaderAutosave}
               onClose={closeShaderEditor}
             />
           ) : null}

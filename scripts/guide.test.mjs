@@ -51,11 +51,23 @@ test("escaping and search result rendering cannot turn queries into markup",asyn
 });
 test("one app help host, lazy content and direct context links are wired",async()=>{
  assert.equal(((await read("src/main.tsx")).match(/<GuideHost\s*\/>/g)||[]).length,1);
- for(const [file,target]of [["SetupView.tsx","first-world"],["ProjectLibrary.tsx","first-world"],["visual-editor/AssetsPanel.tsx","assets"],["visual-editor/AssetQuickEditor.tsx","materials"],["visual-editor/SceneSettingsPanel.tsx","lighting"]])assert.ok((await read(`src/components/${file}`)).includes(`page="${target}"`));
+ for(const [file,target]of [["SetupView.tsx","installation"],["ProjectLibrary.tsx","first-world"],["visual-editor/AssetsPanel.tsx","assets"],["visual-editor/AssetQuickEditor.tsx","materials"],["visual-editor/SceneSettingsPanel.tsx","lighting"]])assert.ok((await read(`src/components/${file}`)).includes(`page="${target}"`));
  const panel=await read("src/components/guide/GuidePanel.tsx");assert.ok(panel.includes('import.meta.glob<string>("/docs/guide/*.md"'));assert.ok(panel.includes("event.stopPropagation()"));assert.doesNotMatch(panel,/aria-modal="true"|saveVisualProject|publishVisualProject/);
 });
-test("the creative start precedes optional setup and LP help is not desktop-only",async()=>{
- const setup=await read("src/components/SetupView.tsx");assert.ok(setup.indexOf("ワールドを作る")<setup.indexOf("公開の準備（後からでもできます）"));
+test("setup comes before creating a desktop project and LP help is not desktop-only",async()=>{
+ const setup=await read("src/components/SetupView.tsx");assert.ok(setup.includes("最初にセットアップ"));assert.ok(data.sources.installation.includes("セットアップを開始"));assert.doesNotMatch(setup,/onOpenVisualEditor/);
  assert.ok(setup.includes("<details"));
  const nav=await read("src/preview/sections/Nav.tsx");const link=nav.match(/href=\{XRIFT_STUDIO_GUIDE_URL\}[\s\S]*?<\/a>/)?.[0];assert.ok(link);assert.doesNotMatch(link,/className="[^"]*hidden xl:/);
+});
+
+test("home screen links reach real editor headings and detail images keep their originals", async () => {
+ const {renderMarkdown}=await import('./guide/render.mjs');
+ const home=pageTemplate(manifest.pages.find(p=>p.slug==='index'),manifest,'',checked.headings.index);
+ for(const match of home.matchAll(/href="\.\/editor-basics\.html#([^"]+)"/g))assert.ok(checked.headings['editor-basics'].some(h=>h.id===match[1]),match[1]);
+ const page=manifest.pages.find(p=>p.slug==='first-world');
+ const html=renderMarkdown(data.sources['first-world'],page,manifest);
+ assert.ok(html.includes('aspect-ratio:254 / 180'));
+ assert.ok(html.includes('href="./media/first-world.png"'));
+ const fallback=renderMarkdown('![見本](./media/first-world.png "unknown")',page,manifest);
+ assert.doesNotMatch(fallback,/position:absolute/);
 });

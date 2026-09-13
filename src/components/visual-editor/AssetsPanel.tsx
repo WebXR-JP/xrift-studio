@@ -589,7 +589,7 @@ function AssetCard({
             <AssetThumbnail asset={asset} assets={assets} projectPath={projectPath} />
           </span>
           <span className="min-w-0">
-            <span className="block truncate text-[11px] font-semibold leading-4 text-slate-800">{asset.name}</span>
+            <span className={`block text-[11px] font-semibold leading-4 text-slate-800 ${tablet ? "whitespace-normal break-words [overflow-wrap:anywhere]" : "truncate"}`}>{asset.name}</span>
             {tablet && asset.status !== "ready" ? <EDITOR_ICONS.warning size={14} aria-label={asset.status} className="text-amber-700" /> : null}
           </span>
           {sizeSummary ?? <span />}
@@ -655,7 +655,7 @@ function AssetCard({
           ) : null}
         </span>
         <span className="min-w-0 px-1.5 py-1">
-          <span className="block truncate text-[11px] font-semibold leading-4 text-slate-800">{asset.name}</span>
+          <span className={`block text-[11px] font-semibold leading-4 text-slate-800 ${tablet ? "whitespace-normal break-words [overflow-wrap:anywhere]" : "truncate"}`}>{asset.name}</span>
           {folderPath ? (
             <span className="block truncate text-[10px] leading-4 text-slate-400" title={folderPath}>
               {folderPath}
@@ -791,7 +791,7 @@ function FolderCard({
       >
         <button type="button" draggable={Boolean(folder.custom) && !readOnly} data-editor-drag-source={folder.custom ? "asset-folder" : undefined} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onClick={onOpen} title={commandTitle(`${folder.name}を開く`, "OpenAssetFolder")} className={`grid min-w-0 cursor-grab select-none items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 active:cursor-grabbing ${touch ? "col-span-2 grid-cols-[40px_minmax(0,1fr)]" : "col-span-3 grid-cols-[40px_minmax(110px,1fr)_86px]"}`}>
           <span className="flex h-8 items-center justify-center rounded bg-editor-subtle text-slate-500"><FolderIcon size={18} aria-hidden="true" /></span>
-          <span className="truncate text-[11px] font-semibold text-slate-800">{folder.name}</span>
+          <span className={`text-[11px] font-semibold text-slate-800 ${touch ? "whitespace-normal break-words [overflow-wrap:anywhere]" : "truncate"}`}>{folder.name}</span>
           {!touch ? <span className="flex items-center gap-1 text-[11px] text-slate-500"><KindIcon size={11} aria-hidden="true" /> <span className="truncate">{folder.custom ? "フォルダー" : "コレクション"}</span></span> : null}
         </button>
         {folder.custom ? (
@@ -810,7 +810,7 @@ function FolderCard({
           <FolderIcon size={18} strokeWidth={1.5} aria-hidden="true" />
           <KindIcon size={10} className="absolute -bottom-0.5 -right-1 rounded bg-white" aria-hidden="true" />
         </span>
-        <span className="max-w-full truncate text-[11px] font-semibold leading-4">{folder.name}</span>
+        <span className={`max-w-full text-[11px] font-semibold leading-4 ${touch ? "whitespace-normal break-words [overflow-wrap:anywhere]" : "truncate"}`}>{folder.name}</span>
       </button>
       {folder.custom ? (
         <button type="button" disabled={readOnly} onClick={(event) => { event.stopPropagation(); if (touch) onOpenContext(event); else onDelete(); }} title={touch ? `${folder.name}の操作` : commandTitle(`${folder.name}を削除`, "DeleteAssetFolder")} aria-label={touch ? `${folder.name}の操作` : `${folder.name}を削除`} aria-haspopup={touch ? "menu" : undefined} className={`rounded bg-white p-1 text-slate-400 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-30 ${touch ? "shrink-0 min-h-11 min-w-11 opacity-100 hover:bg-slate-100" : "absolute right-1.5 top-1.5 opacity-0 shadow hover:bg-rose-50 hover:text-rose-700"}`}>{touch ? <MoreHorizontal size={16} aria-hidden="true" /> : <DeleteIcon size={13} aria-hidden="true" />}</button>
@@ -1045,7 +1045,7 @@ function ImportActivityDrawer({
       {!projectPersisted && waitingForSave ? (
         <div className="mb-2 rounded-md border border-brand-200 bg-brand-50 p-2.5">
           <p className="text-xs leading-4 text-slate-700">
-            先にプロジェクトを保存してください。選択したファイルはこの画面を開いている間、保持します。
+            初回の自動保存を待っています。選択したファイルはこの画面を開いている間、保持します。
           </p>
           <button
             type="button"
@@ -1053,7 +1053,7 @@ function ImportActivityDrawer({
             onClick={() => void onSaveBeforeImport()}
             className="mt-2 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-wait disabled:opacity-50"
           >
-            {projectSaving ? "保存中…" : "保存してインポートを続ける"}
+            {projectSaving ? "保存中…" : "自動保存を再試行"}
           </button>
         </div>
       ) : null}
@@ -1178,6 +1178,7 @@ function ImportQueueEntry({
 }
 
 function AssetStatusBar({
+  touch = false,
   entries,
   error,
   statusMessage,
@@ -1185,6 +1186,7 @@ function AssetStatusBar({
   onToggleActivity,
   onReveal,
 }: {
+  touch?: boolean;
   entries: PendingImport[];
   error: string | null;
   statusMessage: string | null;
@@ -1214,7 +1216,7 @@ function AssetStatusBar({
           : "アセット操作の準備ができています");
 
   return (
-    <footer className="flex h-8 shrink-0 items-center gap-2 border-t border-editor-border bg-editor-surface px-3 text-[11px] text-editor-muted">
+    <footer className={`flex shrink-0 items-center gap-2 border-t border-editor-border bg-editor-surface px-3 text-[11px] text-editor-muted ${touch ? "min-h-11 py-1 [&_button]:min-h-11" : "h-8"}`}>
       <div className="flex min-w-0 flex-1 items-center gap-2" role="status" aria-live="polite">
         {activeEntry ? (
           <LoaderCircle size={13} className="shrink-0 animate-spin text-brand-600 motion-reduce:animate-none" aria-hidden="true" />
@@ -1225,7 +1227,7 @@ function AssetStatusBar({
         ) : (
           <EDITOR_ICONS.asset size={13} className="shrink-0 text-slate-400" aria-hidden="true" />
         )}
-        <span className="truncate">{summary}</span>
+        <span className={touch ? "min-w-0 break-words [overflow-wrap:anywhere]" : "truncate"}>{summary}</span>
         {activeEntry ? (
           <span className="shrink-0 tabular-nums text-brand-700">{activeEntry.progress}%</span>
         ) : null}
@@ -1340,7 +1342,8 @@ export function AssetsPanel({
    */
   externalOperationLockReason?: string | null;
 }) {
-  const { tablet, touch } = useEditorDevice();
+  const { tablet: isTablet, phone, touch, viewportHeight } = useEditorDevice();
+  const tablet = isTablet || phone;
   const [fileDragOver, setFileDragOver] = useState(false);
   const [rootDropTarget, setRootDropTarget] = useState(false);
   const [breadcrumbDropTargetId, setBreadcrumbDropTargetId] = useState<string | null>(null);
@@ -1350,6 +1353,7 @@ export function AssetsPanel({
   const [renameDraft, setRenameDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [tabletKindFilter, setTabletKindFilter] = useState<SceneAsset["kind"] | "">("");
+  const [phoneFiltersOpen, setPhoneFiltersOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1591,7 +1595,7 @@ export function AssetsPanel({
         ? Math.max(12, Math.min(event.clientX, window.innerWidth - 300))
         : Math.min(event.clientX - bounds.left, Math.max(8, bounds.width - 232)),
       y: touch
-        ? Math.max(12, Math.min(event.clientY, window.innerHeight - Math.min(640, window.innerHeight - 24) - 12))
+        ? Math.max(12, Math.min(event.clientY, (viewportHeight ?? window.innerHeight) - Math.min(640, (viewportHeight ?? window.innerHeight) - 24) - 12))
         : Math.min(event.clientY - bounds.top, Math.max(8, bounds.height - 260)),
       ...target,
       creationFolderId: resolveAssetCreationFolderId(
@@ -1702,10 +1706,22 @@ export function AssetsPanel({
   const ImportIcon = EDITOR_ICONS.import;
   const CreateIcon = EDITOR_ICONS.create;
 
+  const statusBar = !tablet || pendingImports.length > 0 || importError || statusMessage?.trim() ? (
+    <AssetStatusBar
+      touch={touch}
+      entries={pendingImports}
+      error={importError}
+      statusMessage={statusMessage}
+      activityOpen={activityOpen}
+      onToggleActivity={() => setActivityOpen((open) => !open)}
+      onReveal={revealImportEntry}
+    />
+  ) : null;
+
   return (
     <section
       ref={panelRef}
-      className={`relative flex min-h-0 flex-col border-t border-editor-border bg-editor-canvas ${fileDragOver ? "ring-2 ring-inset ring-brand-500" : ""}`}
+      className={`relative flex min-h-0 flex-col border-t border-editor-border bg-editor-canvas ${phone ? "overflow-y-auto overscroll-contain" : ""} ${fileDragOver ? "ring-2 ring-inset ring-brand-500" : ""}`}
       aria-labelledby="assets-heading"
       onDragOver={handleDragOver}
       onDragLeave={(event) => {
@@ -1827,13 +1843,32 @@ export function AssetsPanel({
           </>}
           <button type="button" disabled={assetMutationLocked} onClick={openCreationMenu} aria-label="新規アセットまたはフォルダー" title={assetMutationDisabledReason ?? "新規アセットまたはフォルダー"} className="ml-1 shrink-0 rounded border border-slate-300 bg-white p-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45"><CreateIcon size={14} aria-hidden="true" /></button>
           <button type="button" disabled={assetMutationLocked} onClick={onOpenExternalStore} title={assetMutationDisabledReason ?? "外部リソースから素材または公式Componentを追加"} aria-label="外部から追加" className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45 @[620px]/assets-header:px-2.5"><Store size={12} aria-hidden="true" /><span className="hidden @[620px]/assets-header:inline">外部から追加</span></button>
-          <button type="button" disabled={importLocked} onClick={() => { if (onCommand("asset.import")) fileInputRef.current?.click(); }} title={importDisabledReason ?? commandTitle("アセットをインポート", "asset.import")} aria-label="アセットをインポート" className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md bg-brand-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45 @[520px]/assets-header:px-2.5"><ImportIcon size={12} aria-hidden="true" /><span className="hidden @[520px]/assets-header:inline">インポート</span></button>
+          <button type="button" disabled={importLocked} onClick={() => { if (onCommand("asset.import")) fileInputRef.current?.click(); }} title={importDisabledReason ?? commandTitle("ファイルから素材を追加", "asset.import")} aria-label="ファイルから素材を追加" className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45 @[520px]/assets-header:px-2.5"><ImportIcon size={12} aria-hidden="true" /><span className="hidden @[520px]/assets-header:inline">素材を追加</span></button>
         </div>
       </div>
 
-      <div className={`flex min-h-0 flex-1 ${tablet ? "flex-col" : ""}`}>
-        {tablet ? (
-          <nav className="grid shrink-0 grid-cols-2 gap-2 border-b border-editor-border bg-editor-surface p-2" aria-label="Assetsのフォルダーと種類">
+      {phone ? statusBar : null}
+      {phone ? (
+        <button
+          type="button"
+          aria-expanded={phoneFiltersOpen}
+          aria-controls="assets-phone-filters"
+          onClick={() => setPhoneFiltersOpen((open) => !open)}
+          className="flex min-h-11 shrink-0 items-center gap-2 border-b border-editor-border bg-editor-subtle px-3 py-2 text-left text-xs text-editor-text"
+        >
+          <span className="min-w-0 flex-1 break-words">
+            <span className="font-semibold">絞り込み・並び順</span>
+            {activeFolder || tabletKindFilter || sortMode !== "default" ? (
+              <span className="ml-2 text-editor-muted">条件あり</span>
+            ) : null}
+          </span>
+          <span className="shrink-0 tabular-nums text-editor-muted" aria-live="polite">{visibleItemCount}件</span>
+          <ChevronDown size={14} className={`shrink-0 ${phoneFiltersOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+        </button>
+      ) : null}
+      <div className={`flex ${phone ? "shrink-0 flex-col" : `min-h-0 flex-1 ${tablet ? "flex-col" : ""}`}`}>
+        {tablet && (!phone || phoneFiltersOpen) ? (
+          <nav id={phone ? "assets-phone-filters" : undefined} className="grid shrink-0 grid-cols-2 gap-2 border-b border-editor-border bg-editor-surface p-2" aria-label="Assetsのフォルダーと種類">
             <label className="min-w-0 text-xs text-editor-muted">フォルダー
               <select
                 value={activeFolder?.id ?? ""}
@@ -1868,7 +1903,7 @@ export function AssetsPanel({
               </select>
             </label>
           </nav>
-        ) : <AssetFolderTree
+        ) : !tablet ? <AssetFolderTree
           assets={assets}
           customFolders={customFolders}
           kindFolders={KIND_FOLDERS}
@@ -1878,21 +1913,21 @@ export function AssetsPanel({
           onActiveFolderChange={onActiveFolderChange}
           onMoveAsset={onMoveAsset}
           onMoveFolder={onMoveFolder}
-        />}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className={`flex shrink-0 items-center justify-between gap-2 border-b border-editor-border bg-editor-subtle px-3 text-xs ${tablet ? "min-h-11" : "h-8"}`}>
-            <span className="truncate font-medium text-editor-text">
+        /> : null}
+        <div className={`flex min-w-0 flex-col ${phone ? "shrink-0" : "min-h-0 flex-1"}`}>
+          {!phone || phoneFiltersOpen ? <div className={`flex min-w-0 shrink-0 items-center justify-between gap-2 border-b border-editor-border bg-editor-subtle px-3 text-xs ${tablet ? "min-h-11" : "h-8"}`}>
+            <span className={`${tablet ? "min-w-0 flex-1 break-words" : "truncate"} font-medium text-editor-text`}>
               {searching ? `「${searchQuery.trim()}」の検索結果` : activeFolder?.name ?? "Assets直下"}
             </span>
-            <span className="flex shrink-0 items-center gap-2">
-              <label className="flex items-center gap-1 text-[11px] text-editor-muted">
-                <span>並び順</span>
+            <span className={`flex items-center gap-2 ${tablet ? "min-w-0 max-w-[65%]" : "shrink-0"}`}>
+              <label className="flex min-w-0 items-center gap-1 text-[11px] text-editor-muted">
+                <span className={tablet ? "sr-only" : undefined}>並び順</span>
                 <select
                   value={sortMode}
                   onChange={(event) =>
                     setSortMode(event.currentTarget.value as AssetSortMode)
                   }
-                  className="h-6 rounded border border-editor-border bg-editor-surface px-1 text-[11px] text-editor-text focus-visible:border-brand-400 focus-visible:outline-none"
+                  className="h-6 min-w-0 rounded border border-editor-border bg-editor-surface px-1 text-[11px] text-editor-text focus-visible:border-brand-400 focus-visible:outline-none"
                 >
                   <option value="default">標準</option>
                   <option value="file-size">ファイルサイズが大きい順</option>
@@ -1903,8 +1938,8 @@ export function AssetsPanel({
                 {searching ? `${visibleAssets.length} / ${allAssets.length}件` : `${visibleItemCount}件`}
               </span>
             </span>
-          </div>
-          <div className={`scrollbar-thin min-w-0 flex-1 overflow-auto p-1.5 ${viewMode === "grid" ? `grid auto-rows-max ${tablet ? "grid-cols-[repeat(auto-fill,minmax(112px,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(76px,1fr))]"} content-start gap-1` : "space-y-0.5"}`}>
+          </div> : null}
+          <div className={`min-w-0 p-1.5 ${phone ? "shrink-0" : "scrollbar-thin min-h-0 flex-1 overflow-auto"} ${viewMode === "grid" ? `grid auto-rows-max ${tablet ? "grid-cols-[repeat(auto-fill,minmax(112px,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(76px,1fr))]"} content-start gap-1` : "space-y-0.5"}`}>
         {!activeFolder?.builtinPrefabs
           ? visibleFolders.map((folder) => (
               renameRequest?.kind === "folder" && renameRequest.id === folder.id ? (
@@ -2047,20 +2082,13 @@ export function AssetsPanel({
           onReveal={revealImportEntry}
         />
       ) : null}
-      <AssetStatusBar
-        entries={pendingImports}
-        error={importError}
-        statusMessage={statusMessage}
-        activityOpen={activityOpen}
-        onToggleActivity={() => setActivityOpen((open) => !open)}
-        onReveal={revealImportEntry}
-      />
+      {!phone ? statusBar : null}
 
       {contextMenu ? createPortal(
         <div
           ref={contextMenuRef}
           className={`overflow-y-auto overscroll-contain rounded-md border border-slate-300 bg-white p-1 shadow-xl ${touch ? "editor-touch-menu fixed z-[85] max-h-[min(640px,calc(100dvh-24px))] max-w-[calc(100vw-24px)] w-72" : "absolute z-30 max-h-[calc(100%-1rem)] w-56"}`}
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          style={{ left: contextMenu.x, top: contextMenu.y, maxHeight: touch && viewportHeight ? Math.max(44, viewportHeight - contextMenu.y - 12) : undefined }}
           role="menu"
           aria-label="Assetsのメニュー"
           tabIndex={-1}
@@ -2087,7 +2115,7 @@ export function AssetsPanel({
             }
             command="OpenAssetLocation"
             disabled={!projectPath}
-            disabledReason="保存先を開くには、先にプロジェクトを保存してください"
+            disabledReason="保存先は初回の自動保存が完了すると開けます"
             onClick={() => {
               const asset = contextMenu.assetId
                 ? assets.assets[contextMenu.assetId]
@@ -2132,7 +2160,7 @@ export function AssetsPanel({
                 assetMutationLocked
                   ? assetMutationDisabledReason
                   : !projectPath
-                    ? "プロジェクトを保存すると設定できます"
+                    ? "自動保存が完了すると設定できます"
                     : "このテクスチャには使用できる画像がありません"
               }
               onClick={() => {

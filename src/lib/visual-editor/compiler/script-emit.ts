@@ -1,3 +1,6 @@
+import { extractScriptContract } from "../scripting/script-contract";
+import scriptWorldComponentsSource from "../../../../packages/xrift-studio-runtime/src/script/world-components.ts?raw";
+import seatSource from "../../../../packages/xrift-studio-runtime/src/script/seat.tsx?raw";
 import scriptApiSource from "../../../../packages/xrift-studio-runtime/src/script/api.ts?raw";
 import scriptAudioSource from "../../../../packages/xrift-studio-runtime/src/script/audio-source.tsx?raw";
 import scriptHostSource from "../../../../packages/xrift-studio-runtime/src/script/host.tsx?raw";
@@ -107,6 +110,7 @@ export const TEXT_PANEL_RUNTIME_PACKAGE = `troika-three-text@${runtimePackageMan
 
 export type EmittedScriptModule = {
   assetId: string;
+  wrapsChildren?: boolean;
   /** Identifier used in the generated entry file. */
   importName: string;
   /** Identifier for an optional named `Render` export. */
@@ -198,6 +202,7 @@ export function planScriptEmission(
     const relativePath = `${SCRIPT_MODULE_DIRECTORY}/${fileStem}.${extension}`;
     modules.set(assetId, {
       assetId,
+      wrapsChildren: extractScriptContract(source).wrapsChildren,
       importName,
       ...(renderImportName ? { renderImportName } : {}),
       relativePath,
@@ -213,6 +218,9 @@ export function planScriptEmission(
 
   if (modules.size > 0) {
     overlayFiles.push(
+      ...createInteractableOverlayFiles(),
+      overlay(`${SCRIPT_RUNTIME_DIRECTORY}/seat.tsx`, seatSource),
+      overlay(`${SCRIPT_RUNTIME_DIRECTORY}/world-components.ts`, scriptWorldComponentsSource),
       {
         relativePath: SCRIPT_API_OVERLAY_PATH,
         content: scriptApiSource,
@@ -420,7 +428,9 @@ function rewriteScriptApiImports(source: string): string {
     url:
       specifier === "xrift:script"
         ? "../xrift-studio/script-api"
-        : specifier,
+        : specifier === "@xrift/world-components"
+          ? "../xrift-studio/world-components"
+          : specifier,
   })).source;
 }
 

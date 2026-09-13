@@ -204,6 +204,7 @@ export function WaterShaderStore({
                   <button
                     key={entry.id}
                     type="button"
+                    data-catalog-card
                     aria-pressed={active}
                     disabled={adding}
                     onClick={() => selectEntry(entry)}

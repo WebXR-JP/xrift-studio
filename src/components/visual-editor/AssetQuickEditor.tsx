@@ -1,4 +1,5 @@
 import { GuideLink } from "../guide/GuideLink";
+import { useEditorDevice, useEditorTouch } from "./useEditorDevice";
 import {
   MATERIAL_EXTENSION_DESCRIPTORS,
   type MaterialExtensionName,
@@ -97,7 +98,7 @@ import {
 import { WebGlThumbnailCapture } from "./WebGlThumbnailCapture";
 
 const INPUT_CLASS =
-  "h-7 w-full rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-200 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400";
+  "h-7 min-w-0 w-full rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-200 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400";
 
 const EMPTY_ASSET_MANIFEST: AssetManifest = {
   schemaVersion: "0.1.0",
@@ -794,7 +795,7 @@ function EditorSection({
   return (
     <section className="rounded-md border border-slate-200 bg-white p-2 shadow-sm">
       <h4 className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13px] font-semibold text-slate-800">
-        <span lang={reading ? "en" : undefined}>{title}</span>
+        <span lang={reading ? "en" : undefined} className="min-w-0 break-words [overflow-wrap:anywhere]">{title}</span>
         {reading ? <span lang="ja" className="text-[11px] font-normal text-slate-500">{reading}</span> : null}
       </h4>
       <div className="space-y-2">{children}</div>
@@ -825,7 +826,7 @@ function RangeControl({
   return (
     <label className="block text-xs text-slate-600">
       <span className="mb-1 flex items-center justify-between gap-2">
-        <span>{label}</span>
+        <span className="min-w-0 break-words [overflow-wrap:anywhere]">{label}</span>
         <ScrubNumberInput
           ariaLabel={`${label}の数値`}
           scrubLabel={label}
@@ -1000,7 +1001,7 @@ function MaterialExtensionSection({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h4 title={extensionName} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13px] font-semibold text-slate-800">
-            <span lang="en">{title}</span>
+            <span lang="en" className="min-w-0 break-words [overflow-wrap:anywhere]">{title}</span>
             <span lang="ja" className="text-[11px] font-normal text-slate-500">{reading}</span>
           </h4>
           <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{description}</p>
@@ -1093,6 +1094,7 @@ function TextureSlot({
   onChange: (value: TextureSlotPatch) => void;
   onOpenTexture: (assetId: string) => void;
 }) {
+  const touch = useEditorTouch();
   const [dropActive, setDropActive] = useState(false);
   const [showTransform, setShowTransform] = useState(true);
   const helpId = useId();
@@ -1163,8 +1165,8 @@ function TextureSlot({
             : "border-slate-200 bg-slate-50/70"
       }`}
     >
-      <div className="mb-2 flex items-start justify-between gap-2">
-        <div className="min-w-0">
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold text-slate-800">{label}</p>
           <p id={helpId} className="mt-0.5 text-[11px] leading-4 text-slate-500">{description}</p>
           {inputHint ? <p id={`${helpId}-format`} className="mt-1 text-[11px] leading-4 text-slate-500">{inputHint}</p> : null}
@@ -1270,7 +1272,7 @@ function TextureSlot({
             </label>
             <div className="min-w-0 text-[11px] text-slate-500">
               <span className="block">テクスチャの読み取り設定</span>
-              <p className="mt-1 truncate rounded border border-slate-200 bg-white px-2 py-1.5 text-slate-700" title={selectedTexture ? `${selectedTexture.importSettings.sampler.wrapS} / ${selectedTexture.importSettings.sampler.wrapT} / ${selectedTexture.importSettings.sampler.minFilter}` : "参照先なし"}>
+              <p className={`mt-1 rounded border border-slate-200 bg-white px-2 py-1.5 text-slate-700 ${touch ? "break-words [overflow-wrap:anywhere]" : "truncate"}`} title={selectedTexture ? `${selectedTexture.importSettings.sampler.wrapS} / ${selectedTexture.importSettings.sampler.wrapT} / ${selectedTexture.importSettings.sampler.minFilter}` : "参照先なし"}>
                 {selectedTexture
                   ? `${selectedTexture.importSettings.sampler.wrapS} · ${selectedTexture.importSettings.sampler.wrapT} · ${selectedTexture.importSettings.sampler.minFilter}`
                   : "参照先なし"}
@@ -1319,7 +1321,7 @@ function TextureSlot({
                   初期値へ戻す
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className={`grid gap-2 ${touch ? "grid-cols-1" : "grid-cols-2"}`}>
                 <TextureVectorControl
                   label="ずらす量"
                   value={transform.offset}
@@ -1783,6 +1785,7 @@ function CustomShaderQuickEditor({
   onOpenMaterialShader,
   onAssignShaderAsset,
 }: MaterialQuickEditorProps) {
+  const touch = useEditorTouch();
   const shader =
     asset.shader?.kind === "classic-r3f" ? asset.shader : undefined;
   const textures = Object.values(assets.assets).filter(
@@ -1941,9 +1944,9 @@ function CustomShaderQuickEditor({
                 const driven = isDrivenShaderUniform(name);
                 return (
                   <div key={name} className="space-y-0.5">
-                    <div className="grid grid-cols-[minmax(0,1fr)_7.5rem] items-center gap-2">
+                    <div className={`grid items-center gap-2 ${touch ? "grid-cols-1" : "grid-cols-[minmax(0,1fr)_7.5rem]"}`}>
                       <span
-                        className="truncate text-[11px] text-slate-700"
+                        className={`${touch ? "break-words [overflow-wrap:anywhere]" : "truncate"} text-[11px] text-slate-700`}
                         title={meta.hint ? `${name} — ${meta.hint}` : name}
                       >
                         {meta.label}
@@ -2162,6 +2165,7 @@ function StandardMaterialQuickEditor({
   onOpenMaterialShader,
   onAssignShaderAsset,
 }: MaterialQuickEditorProps) {
+  const { phone } = useEditorDevice();
   const pbr = asset.properties.pbrMetallicRoughness;
   const openBrush = asset.shader?.kind === "openbrush" ? asset.shader : undefined;
   const customShader = asset.shader?.kind === "classic-r3f" ? asset.shader : undefined;
@@ -2200,11 +2204,25 @@ function StandardMaterialQuickEditor({
   const updateLitExtension = (patch: MaterialExtensionsPatch) =>
     updateExtensions({ KHR_materials_unlit: null, ...patch });
 
+  const customShaderEditor = !openBrush ? (
+    <CustomShaderQuickEditor
+      asset={asset}
+      assets={assets}
+      projectPath={projectPath}
+      readOnly={readOnly}
+      onChange={onChange}
+      onOpenTexture={onOpenTexture}
+      onOpenShader={onOpenShader}
+      onOpenMaterialShader={onOpenMaterialShader}
+      onAssignShaderAsset={onAssignShaderAsset}
+    />
+  ) : null;
+
   return (
-    <div className="space-y-3">
-      <GuideLink page="materials" label="色と質感の使い方" />
-      <div className="grid grid-cols-[80px_minmax(0,1fr)] gap-2 rounded-md border border-slate-200 bg-white p-2 shadow-sm">
-        <div className="h-20 overflow-hidden rounded-md border border-slate-300">
+    <div className="min-w-0 space-y-3">
+      {!phone ? <GuideLink page="materials" label="色と質感の使い方" /> : null}
+      <div className={`grid gap-2 rounded-md border border-slate-200 bg-white p-2 ${phone ? "grid-cols-[48px_minmax(0,1fr)_44px]" : "grid-cols-[80px_minmax(0,1fr)] shadow-sm"}`}>
+        <div className={`${phone ? "h-12" : "h-20"} overflow-hidden rounded-md border border-slate-300`}>
           <MaterialThumbnail
             asset={asset}
             assets={assets}
@@ -2213,7 +2231,7 @@ function StandardMaterialQuickEditor({
           />
         </div>
         <div className="min-w-0 self-center">
-          <h3 className="truncate text-[13px] font-semibold text-slate-900">{asset.name}</h3>
+          <h3 className={`${phone ? "break-words [overflow-wrap:anywhere]" : "truncate"} text-[13px] font-semibold text-slate-900`}>{asset.name}</h3>
           <p className="text-xs text-slate-500">
             {openBrush
               ? `OpenBrush ブラシ · ${openBrush.brushName}`
@@ -2228,15 +2246,23 @@ function StandardMaterialQuickEditor({
                 : "モデル由来・再インポートで同期"}
             </p>
           ) : null}
-          <p className="mt-2 text-xs leading-4 text-slate-600">
-            変更は、このマテリアルの使用箇所すべてに反映します。
-          </p>
-          <p className="mt-2 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600">
-            {referenceSummary && referenceSummary.slotCount > 0
-              ? `使用箇所: ${referenceSummary.entityCount} Entity / ${referenceSummary.slotCount}スロット`
-              : "シーン内の参照はありません"}
-          </p>
+          {!phone ? <>
+            <p className="mt-2 text-xs leading-4 text-slate-600">
+              変更は、このマテリアルの使用箇所すべてに反映します。
+            </p>
+            <p className="mt-2 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600">
+              {referenceSummary && referenceSummary.slotCount > 0
+                ? `使用箇所: ${referenceSummary.entityCount} Entity / ${referenceSummary.slotCount}スロット`
+                : "シーン内の参照はありません"}
+            </p>
+          </> : null}
         </div>
+        {phone ? <GuideLink page="materials" label="色と質感の使い方" compact /> : null}
+        {phone ? <p className="col-span-full text-[11px] leading-4 text-slate-600">
+          {referenceSummary && referenceSummary.slotCount > 0
+            ? `${referenceSummary.entityCount} Entity / ${referenceSummary.slotCount}スロットで使用中。変更はすべてに反映します。`
+            : "シーン内の参照はありません"}
+        </p> : null}
       </div>
 
       {openBrush ? (
@@ -2262,19 +2288,12 @@ function StandardMaterialQuickEditor({
         </EditorSection>
       ) : null}
 
-      {!openBrush ? (
-        <CustomShaderQuickEditor
-          asset={asset}
-          assets={assets}
-          projectPath={projectPath}
-          readOnly={readOnly}
-          onChange={onChange}
-          onOpenTexture={onOpenTexture}
-          onOpenShader={onOpenShader}
-          onOpenMaterialShader={onOpenMaterialShader}
-          onAssignShaderAsset={onAssignShaderAsset}
-        />
-      ) : null}
+      {customShaderEditor && phone && !customShader ? (
+        <details className="rounded border border-slate-200 bg-white">
+          <summary className="cursor-pointer px-2 py-3 text-xs font-semibold text-slate-700">カスタムシェーダー</summary>
+          {customShaderEditor}
+        </details>
+      ) : customShaderEditor}
 
       <MaterialExtensionSection
         extensionName="KHR_materials_unlit"

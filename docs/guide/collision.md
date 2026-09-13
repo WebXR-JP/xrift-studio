@@ -2,9 +2,9 @@
 
 床が見えることと、プレイヤーが床に立てることは別です。床の**Collider（衝突判定）**と、プレイヤーが現れる**開始位置**を確認します。
 
-![床のEntityを選び、InspectorにColliderが表示された状態](./media/collision.png)
+![床を選択し、Box Colliderの有効状態と固定のRigid Bodyを表示した状態](./media/collision.png)
 
-*床を選んでColliderが有効か確認します。開始位置は床の上に置きます。*
+*左のHierarchyで床を選び、右のBox Colliderが有効で、Rigid Bodyが固定になっていることを確認します。*
 
 ## 床の衝突判定を確認する
 

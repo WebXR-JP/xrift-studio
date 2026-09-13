@@ -1,5 +1,5 @@
 import { GuideLink } from "./guide/GuideLink";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowUpDown,
   ExternalLink,
@@ -66,6 +66,8 @@ type Props = {
   onExport: (project: Project) => Promise<ProjectArchiveExport | null>;
   /** Reads a zip picked by the person; null when the picker was cancelled. */
   onInspectArchive: () => Promise<ProjectArchiveInspection | null>;
+  requestedImportInspection: ProjectArchiveInspection | null;
+  onRequestedImportInspectionHandled: () => void;
   onImportArchive: (
     inspection: ProjectArchiveInspection,
     directoryName: string,
@@ -116,6 +118,8 @@ export function ProjectLibrary({
   onDuplicate,
   onExport,
   onInspectArchive,
+  requestedImportInspection,
+  onRequestedImportInspectionHandled,
   onImportArchive,
   onImportRepository,
   onOpenPath,
@@ -151,6 +155,14 @@ export function ProjectLibrary({
   const [sort, setSort] = useState<ProjectSort>("updated-desc");
   const [publishFilter, setPublishFilter] = useState<PublishFilter>("all");
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (requestedImportInspection) {
+      setImportError(null);
+      setImportInspection(requestedImportInspection);
+      onRequestedImportInspectionHandled();
+    }
+  }, [onRequestedImportInspectionHandled, requestedImportInspection]);
 
   const visibleProjects = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("ja");

@@ -32,6 +32,7 @@ export type ScriptEditorDialogProps = {
   onSave: (source: string) => Promise<void> | void;
   onDirtyChange?: (dirty: boolean) => void;
   onClose: () => void;
+  onAutosaveReady?: (save: (() => Promise<boolean>) | null) => void;
 };
 
 export function ScriptEditorDialog({
@@ -47,6 +48,7 @@ export function ScriptEditorDialog({
   onSave,
   onDirtyChange,
   onClose,
+  onAutosaveReady,
 }: ScriptEditorDialogProps) {
   const [draft, setDraft] = useState(source);
   const [saving, setSaving] = useState(false);
@@ -56,22 +58,17 @@ export function ScriptEditorDialog({
   const [consoleOpen, setConsoleOpen] = useState(false);
   const observedFailureRevisionRef = useRef(runtime.failureRevision);
   const loadedSourceRef = useRef(source);
+  const pendingSourceRef = useRef<string | null>(null);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   const monacoEditorRef =
     useRef<MonacoEditor.IStandaloneCodeEditor | null>(null);
 
   useEffect(() => {
     if (loadedSourceRef.current === source) return;
     loadedSourceRef.current = source;
-    setDraft(source);
+    if (source !== pendingSourceRef.current) setDraft(source);
   }, [source]);
-
-  useEffect(() => {
-    const editor = monacoEditorRef.current;
-    if (!loading && editor && editor.getValue() !== draft) {
-      editor.setValue(draft);
-      layoutMonacoWhenVisible(editor);
-    }
-  }, [draft, loading]);
 
   useEffect(() => {
     const editor = monacoEditorRef.current;
@@ -93,25 +90,45 @@ export function ScriptEditorDialog({
     return () => onDirtyChange?.(false);
   }, [isDirty, onDirtyChange]);
 
-  const save = useCallback(async () => {
-    if (!isDirty || savingRef.current || loading || error) return;
+  const save = useCallback(async (): Promise<boolean> => {
+    if (!isDirty && !savingRef.current) return true;
+    if (savingRef.current || loading || error) return false;
+    const snapshot = draftRef.current;
     savingRef.current = true;
+    pendingSourceRef.current = snapshot;
     setSaving(true);
     onSavingChange?.(true);
     setSaveError(null);
     try {
-      await onSave(draft);
-      loadedSourceRef.current = draft;
+      await onSave(snapshot);
+      loadedSourceRef.current = snapshot;
+      const complete = draftRef.current === snapshot;
+      if (complete) onDirtyChange?.(false);
+      return complete;
     } catch (cause) {
-      setSaveError(
-        cause instanceof Error ? cause.message : "スクリプトを保存できませんでした",
-      );
+      setSaveError(cause instanceof Error ? cause.message : "自動保存に失敗しました");
+      return false;
     } finally {
       setSaving(false);
       savingRef.current = false;
       onSavingChange?.(false);
     }
-  }, [draft, isDirty, onSave, saving, loading, error, onSavingChange]);
+  }, [isDirty, loading, error, onSave, onDirtyChange, onSavingChange]);
+
+  useEffect(() => {
+    if (!isDirty || saving || loading || error || saveError) return;
+    const timer = window.setTimeout(() => { void save(); }, 600);
+    return () => window.clearTimeout(timer);
+  }, [draft, isDirty, saving, loading, error, saveError, save]);
+
+  useEffect(() => {
+    onAutosaveReady?.(save);
+    return () => onAutosaveReady?.(null);
+  }, [save, onAutosaveReady]);
+
+  const requestClose = useCallback(async () => {
+    if (await save()) onClose();
+  }, [save, onClose]);
 
   useEffect(() => {
     if (!active) return;
@@ -190,11 +207,11 @@ export function ScriptEditorDialog({
             className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-40"
           >
             <SaveIcon size={13} aria-hidden="true" />
-            {saving ? "保存中" : "保存 (⌘/Ctrl+S)"}
+            {saving ? "自動保存中" : saveError ? "自動保存を再試行" : isDirty ? "保存待ち" : "保存済み"}
           </button>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => void requestClose()}
             disabled={saving}
             aria-label="スクリプトエディターを閉じる"
             className="rounded-md border border-slate-300 bg-white p-1 text-slate-600 hover:bg-slate-50"
@@ -232,7 +249,6 @@ export function ScriptEditorDialog({
               }}
               onChange={(value) => setDraft(value ?? "")}
               options={{
-                readOnly: saving,
                 fontSize: 13,
                 minimap: { enabled: false },
                 automaticLayout: true,

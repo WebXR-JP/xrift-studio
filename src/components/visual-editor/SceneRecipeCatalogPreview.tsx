@@ -1,3 +1,4 @@
+import { WorldAssetCatalogPreview } from "./WorldAssetCatalogPreview";
 import { catalogPublicAssetUrl } from "../../lib/visual-editor/catalog-public-url";
 import { OrbitControls } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
@@ -41,6 +42,8 @@ export function SceneRecipeCatalogPreview({
   // Framing both from a fixed camera shows a speck or a cropped pole, so the
   // camera is derived from the parts the recipe actually places.
   const framing = useMemo(() => recipeFraming(recipe), [recipe]);
+
+  if (recipe.assembly === "vehicle") return <WorldAssetCatalogPreview kind="vehicle" className={className} />;
 
   return (
     <CatalogPreviewFrame

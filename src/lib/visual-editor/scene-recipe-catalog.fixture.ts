@@ -75,7 +75,7 @@ export function runSceneRecipeCatalogFixtureAssertions(): void {
 
   assert(getSceneRecipesForProjectKind("world", "materials").length === 50, "Ship 50 material comparison sets");
   assert(getSceneRecipesForProjectKind("item", "materials").length === 50, "Item projects retain the same 50 material sets");
-  assert(getSceneRecipesForProjectKind("world", "gimmicks").length === 50, "Ship 50 usable gimmicks");
+  assert(getSceneRecipesForProjectKind("world", "gimmicks").length === 51, "Ship custom vehicle alongside the 50 usable gimmicks");
   const ids = new Set<string>();
   for (const recipe of SCENE_RECIPES) {
     assert(!ids.has(recipe.id), `Duplicate scene recipe id: ${recipe.id}`);
@@ -84,7 +84,7 @@ export function runSceneRecipeCatalogFixtureAssertions(): void {
       Boolean(SCENE_RECIPE_CATEGORY_LABELS[recipe.category]),
       `${recipe.id} uses an unlabelled category`,
     );
-    assert(recipe.parts.length > 0, `${recipe.id} has no parts`);
+    assert(recipe.assembly === "vehicle" || recipe.parts.length > 0, `${recipe.id} has no parts`);
 
     // Two parts with one name would make a behaviour's target ambiguous, and
     // the placement resolves targets by name.

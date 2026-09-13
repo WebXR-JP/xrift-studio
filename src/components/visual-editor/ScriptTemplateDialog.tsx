@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Box,
+  Car,
+  Armchair,
   Code2,
   Eye,
   Image as ImageIcon,
@@ -40,6 +42,8 @@ const CATEGORY_LABELS = {
 
 const TEMPLATE_ICONS: Readonly<Record<string, LucideIcon>> = {
   blank: Code2,
+  vehicle: Car,
+  seat: Armchair,
   rotate: RotateCw,
   float: Waves,
   "follow-entity": LocateFixed,
@@ -184,7 +188,7 @@ export function ScriptTemplateDialog({
               テンプレート
             </div>
             <div className="space-y-1.5">
-              {SCRIPT_TEMPLATE_CATALOG.map((candidate) => {
+              {SCRIPT_TEMPLATE_CATALOG.filter(candidate => candidate.id !== "vehicle" && candidate.id !== "seat").map((candidate) => {
                 const selected = candidate.id === template.id;
                 const TemplateIcon = TEMPLATE_ICONS[candidate.id] ?? Code2;
                 return (

@@ -4,7 +4,7 @@
 
 ![左にHierarchy、中央にシーン、右にInspector、下にAssetsが並ぶ編集画面](./media/editor-layout.png)
 
-*画像を開くと拡大して確認できます。*
+*左：Hierarchy／中央：シーン／右：Inspector／下：Assets。画像ではSphereを選び、位置とマテリアルを表示しています。*
 
 ## Hierarchy：配置したものを選ぶ
 

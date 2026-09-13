@@ -9,32 +9,42 @@ import {
   type XriftComponentDefinition,
 } from "../../lib/visual-editor";
 import { CatalogThumbnailImage } from "./CatalogThumbnailImage";
+import { WorldAssetCatalogPreview } from "./WorldAssetCatalogPreview";
 import { EDITOR_ICONS } from "./editor-icons";
 
 export function OfficialXriftComponentStore({
   projectKind,
   disabledReason,
   onAdd,
+  onAddWorldAsset,
 }: {
   projectKind: VisualProjectKind;
   disabledReason?: string | null;
+  onAddWorldAsset: (templateId: "vehicle" | "seat") => Promise<boolean>;
   onAdd: (definition: XriftComponentDefinition) => Promise<boolean>;
 }) {
   const definitions = useMemo(
     () => listXriftComponentDefinitions(projectKind),
     [projectKind],
   );
+  const catalogEntries = useMemo(() => [
+    ...definitions,
+    ...(projectKind === "world" ? [
+      { schemaId: "studio.vehicle", label: "Vehicle", importName: "Vehicle", category: "world", icon: "world" as const, description: "公式Vehicleを使う車の配置サンプル。車体・座席・タイヤ・煙を設定済みのHierarchyで追加します。ギミックのカスタム車からも同じ車を追加できます。W/Sで前後、A/Dで旋回、Spaceで降車します。", templateId: "vehicle" as const },
+      { schemaId: "studio.seat", label: "Seat", importName: "Seat", category: "world", icon: "world" as const, description: "座れる椅子。Playでクリックすると座り、Spaceで立ち上がります。座面の高さはInspectorで調整できます。", templateId: "seat" as const },
+    ] : []),
+  ], [definitions, projectKind]);
   const initial =
     definitions.find((definition) => definition.importName === "Portal") ??
     definitions[0];
-  const [selectedSchemaId, setSelectedSchemaId] = useState(
+  const [selectedSchemaId, setSelectedSchemaId] = useState<string>(
     initial?.schemaId ?? "",
   );
   const [adding, setAdding] = useState(false);
   const [addedName, setAddedName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const selected =
-    definitions.find((definition) => definition.schemaId === selectedSchemaId) ??
+    catalogEntries.find((definition) => definition.schemaId === selectedSchemaId) ??
     initial;
   const developerOnly = selected?.importName === "DevEnvironment";
 
@@ -44,7 +54,11 @@ export function OfficialXriftComponentStore({
     setAddedName(null);
     setError(null);
     try {
-      if (await onAdd(selected)) setAddedName(selected.label);
+      const added = "templateId" in selected
+        ? await onAddWorldAsset(selected.templateId)
+        : await onAdd(selected);
+      if (added) setAddedName(selected.label);
+      else setError("追加できませんでした。編集画面の保存状態を確認してください。");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
@@ -53,7 +67,7 @@ export function OfficialXriftComponentStore({
   };
 
   return (
-      <div className="flex h-full min-h-0 min-w-0 flex-1">
+      <div className="catalog-panes flex h-full min-h-0 min-w-0 flex-1">
         <section
           className="flex min-w-0 flex-1 flex-col border-r border-slate-200"
           aria-label="XRift公式コンポーネント"
@@ -66,19 +80,20 @@ export function OfficialXriftComponentStore({
                 </h3>
               </div>
               <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-semibold text-violet-700">
-                {definitions.length} Component
+                {catalogEntries.length} Component
               </span>
             </div>
           </div>
           <div className="scrollbar-thin min-h-0 flex-1 overflow-auto p-3">
             <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3">
-              {definitions.map((definition) => {
+              {catalogEntries.map((definition) => {
                 const active = definition.schemaId === selected?.schemaId;
                 const Icon = EDITOR_ICONS[definition.icon];
                 return (
                   <button
                     key={definition.schemaId}
                     type="button"
+                    data-catalog-card
                     aria-pressed={active}
                     onClick={() => {
                       setSelectedSchemaId(definition.schemaId);
@@ -91,14 +106,14 @@ export function OfficialXriftComponentStore({
                         : "border-slate-200 bg-white hover:border-violet-300 hover:bg-slate-50"
                     }`}
                   >
-                    <CatalogThumbnailImage
+                    {"templateId" in definition ? <WorldAssetCatalogPreview kind={definition.templateId} className="h-28 w-full overflow-hidden rounded-md" /> : <CatalogThumbnailImage
                       src={xriftComponentCatalogThumbnailUrl(
                         definition.importName,
                       )}
                       alt={`${definition.label}の公式プレビュー`}
                       className="h-28 w-full rounded-md"
                       fallback={<Icon size={22} aria-hidden="true" />}
-                    />
+                    />}
                     <span className="mt-2 block truncate text-xs font-semibold text-slate-800">
                       {definition.label}
                     </span>
@@ -120,7 +135,7 @@ export function OfficialXriftComponentStore({
             <div className="space-y-4">
               {(() => {
                 const Icon = EDITOR_ICONS[selected.icon];
-                return (
+                return "templateId" in selected ? <WorldAssetCatalogPreview kind={selected.templateId} className="h-44 w-full overflow-hidden rounded-lg" /> : (
                   <CatalogThumbnailImage
                     src={xriftComponentCatalogThumbnailUrl(
                       selected.importName,
@@ -155,7 +170,7 @@ export function OfficialXriftComponentStore({
                   {selected.description}
                 </p>
               </div>
-              <dl className="grid grid-cols-[76px_1fr] gap-x-2 gap-y-1.5 text-xs">
+              {!("templateId" in selected) && <dl className="grid grid-cols-[76px_1fr] gap-x-2 gap-y-1.5 text-xs">
                 <dt className="text-slate-400">パッケージ</dt>
                 <dd className="font-medium text-slate-700">
                   @xrift/world-components
@@ -166,7 +181,7 @@ export function OfficialXriftComponentStore({
                 <dd className="font-mono text-[11px] text-slate-700">
                   {selected.importName}
                 </dd>
-              </dl>
+              </dl>}
               {developerOnly ? (
                 <Notice text="DevEnvironmentは開発用です。シーンには配置できません。" />
               ) : (

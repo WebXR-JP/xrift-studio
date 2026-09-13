@@ -445,7 +445,7 @@ export function compileVisualProject(
     overlayFiles.push(...createImageQuadOverlayFiles());
   }
   if (outputMode === "classic-jsx" && generated.includes('from "./xrift-studio/interactable"')) {
-    overlayFiles.push(...createInteractableOverlayFiles());
+    overlayFiles.push(...createInteractableOverlayFiles().filter(file => !overlayFiles.some(existing => existing.relativePath === file.relativePath)));
   }
   if (
     outputMode === "classic-jsx" &&
@@ -2334,6 +2334,7 @@ function renderEntity(
   const rigidBodyOwner = ownRigidBody ?? inheritedRigidBody;
   const localContent: string[] = [];
   const wrappers: RenderedXriftWrapper[] = [];
+  const scriptWrappers: string[] = [];
   const interactionTriggers = resolveInteractionTriggers(entity, context);
   const interactionBindings: Record<string, string> =
     interactionTriggers.length > 0
@@ -2397,7 +2398,10 @@ function renderEntity(
       );
     } else if (component.type === "script") {
       const rendered = renderScript(entity, component, context);
-      if (rendered) localContent.push(rendered);
+      if (rendered) {
+        if (context.scriptModules.get(component.scriptAssetId)?.wrapsChildren) scriptWrappers.push(rendered);
+        else localContent.push(rendered);
+      }
     } else if (component.type === "interaction-trigger") {
       const resolved = interactionTriggers.find(
         (candidate) => candidate.component.id === component.id,
@@ -2459,6 +2463,9 @@ function renderEntity(
   }
 
   let children = localContent.join("\n");
+  for (const wrapper of scriptWrappers.reverse()) {
+    children = wrapper.replace(/\/>$/, `>\n${indent(children, 1)}\n</XriftScriptHost>`);
+  }
   for (const wrapper of wrappers) {
     if (wrapper.childrenRequired && !children.trim()) {
       addDiagnostic(context, {
