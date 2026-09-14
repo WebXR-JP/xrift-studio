@@ -3095,6 +3095,14 @@ function registerTerrainDataTypes(context: CompileContext): void {
   heightRange: readonly number[];
   slopeLimitDegrees: number;
   seed: number;
+  appearance?: {
+    baseColor?: string;
+    tipColor?: string;
+    colorVariation?: number;
+    heightScale?: number;
+    widthScale?: number;
+    fill?: number;
+  };
   mask?: readonly number[];
 };
 

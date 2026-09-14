@@ -564,6 +564,40 @@ export function runTerrainGrassPublishFixtureAssertions(): void {
   assertGrassStrokeNeverSculpts();
 }
 
+/** Minimal publish regression: tuned, partially tuned, and default layers. */
+export function compileGrassAppearanceTypecheckWorld() {
+  const prototype = createPrototypeProject("world", "grass-appearance");
+  const placed = addTerrainEntity(
+    prototype.scene,
+    prototype.assets,
+    BUILTIN_ASSET_IDS.material.green,
+    {
+      ...createTerrainGeometry({ width: 10, depth: 10, resolution: 9 }),
+      grass: [
+        layer({
+          appearance: {
+            baseColor: "#325c21", tipColor: "#a4c761",
+            colorVariation: 0.3, heightScale: 1.5, widthScale: 0.8, fill: 0.6,
+          },
+        }),
+        layer({ id: "partial-layer", seed: 42, appearance: { heightScale: 2 } }),
+        layer({ id: "default-layer", seed: 43 }),
+      ],
+    },
+  );
+  if (!placed) throw new Error("Could not place grass appearance regression Terrain");
+  const compiled = compileVisualProject({
+    project: prototype.project,
+    scenes: { [placed.scene.sceneId]: placed.scene },
+    assets: prototype.assets,
+    prefabs: prototype.prefabs,
+  });
+  assert(compiled.canStage, "Grass appearance regression must be stageable");
+  const source = compiled.overlayFiles.find((file) => file.relativePath === "src/World.tsx")?.content ?? "";
+  assert(source.includes('"appearance":{'), "Regression must retain serialized appearance");
+  return compiled;
+}
+
 /**
  * A grass stroke must never reach the height field.
  *
