@@ -393,8 +393,8 @@ test("ビジュアルワールドを編集・Playし、公開確認で送信前�
   await page.getByRole("button", { name: "作成して開く" }).click();
 
   await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
-  await page.getByRole("button", { name: "追加", exact: true }).click();
-  const menu = page.getByRole("menu", { name: "Entityを追加" });
+  await page.getByRole("button", { name: "操作", exact: true }).click();
+  const menu = page.getByRole("menu", { name: "選択したEntityの操作" });
   await menu.getByRole("button", { name: /^Entity [0-9]+$/ }).click();
   await menu.getByRole("button", { name: /空のEntity/ }).click();
   await expect(
@@ -451,8 +451,8 @@ test("ビジュアルエディターでテキスト看板を置き、書体と�
   await page.getByLabel("プロジェクト名").fill("release-text-flow");
   await page.getByRole("button", { name: "作成して開く" }).click();
 
-  await page.getByRole("button", { name: "追加", exact: true }).click();
-  const menu = page.getByRole("menu", { name: "Entityを追加" });
+  await page.getByRole("button", { name: "操作", exact: true }).click();
+  const menu = page.getByRole("menu", { name: "選択したEntityの操作" });
   await menu.getByRole("button", { name: /^Entity [0-9]+$/ }).click();
   await menu.getByRole("button", { name: /空のEntity/ }).click();
   await page.getByRole("button", { name: "Add Component", exact: true }).click();
@@ -512,8 +512,8 @@ test("ビジュアルエディターで地形を作成・整形できる", async
   await page.getByLabel("プロジェクト名").fill("release-terrain-flow");
   await page.getByRole("button", { name: "作成して開く" }).click();
 
-  await page.getByRole("button", { name: "追加", exact: true }).click();
-  const menu = page.getByRole("menu", { name: "Entityを追加" });
+  await page.getByRole("button", { name: "操作", exact: true }).click();
+  const menu = page.getByRole("menu", { name: "選択したEntityの操作" });
   await menu.locator("summary").filter({ hasText: /^Terrain$/ }).click();
   await menu.getByRole("button", { name: "Terrain", exact: true }).click();
   await expect(
@@ -568,8 +568,8 @@ test("ビジュアルエディターの一時保存失敗は自動再試行で�
   await page.getByLabel("プロジェクト名").fill("release-save-retry");
   await page.getByRole("button", { name: "作成して開く" }).click();
 
-  await page.getByRole("button", { name: "追加", exact: true }).click();
-  const menu = page.getByRole("menu", { name: "Entityを追加" });
+  await page.getByRole("button", { name: "操作", exact: true }).click();
+  const menu = page.getByRole("menu", { name: "選択したEntityの操作" });
   await menu.getByRole("button", { name: /^Entity [0-9]+$/ }).click();
   await menu.getByRole("button", { name: /空のEntity/ }).click();
 

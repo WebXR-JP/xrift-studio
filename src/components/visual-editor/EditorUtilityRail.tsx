@@ -298,7 +298,7 @@ export function EditorUtilityRail({
               <ol className="space-y-2.5">
                 <li>
                   <span className="font-semibold text-slate-800">1. 作る</span>
-                  <p>「追加」からEntityや図形を配置します。</p>
+                  <p>Hierarchyの「追加 / 操作」からEntityや図形を配置します。</p>
                 </li>
                 <li>
                   <span className="font-semibold text-slate-800">2. 選ぶ</span>

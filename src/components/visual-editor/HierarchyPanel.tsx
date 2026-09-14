@@ -1,8 +1,10 @@
 import { createPortal } from "react-dom";
+import { Import, Mountain, Store } from "lucide-react";
 import { EntityCreationMenuContent } from "./EntityCreationMenuContent";
 import { useEditorDevice } from "./useEditorDevice";
 import { getEntityCreationMenuEntries } from "../../lib/visual-editor/entity-creation-menu";
 import { getEditorComponentDisabledReason, getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
+import { TERRAIN_PRESETS } from "../../lib/visual-editor/terrain-presets";
 import {
   memo,
   useEffect,
@@ -846,6 +848,13 @@ export function HierarchyPanel({
   onEntityEnabledChange,
   onCreateXriftObject,
   onCreateComponentObject,
+  onOpenExternalStore,
+  onImportFile,
+  importDisabledReason,
+  importBusy = false,
+  onCreateTerrain,
+  terrainOverlapCount = 0,
+  onArrangeTerrains,
   onCommand,
   renameRequest,
   onRename,
@@ -864,6 +873,13 @@ export function HierarchyPanel({
   onEntityEnabledChange: (entityId: string, enabled: boolean) => void;
   onCreateXriftObject: (definitionId: string) => void;
   onCreateComponentObject: (definitionId: string) => void;
+  onOpenExternalStore?: () => void;
+  onImportFile?: () => void;
+  importDisabledReason?: string | null;
+  importBusy?: boolean;
+  onCreateTerrain?: (presetId?: string, grassPresetId?: string | null) => void;
+  terrainOverlapCount?: number;
+  onArrangeTerrains?: () => void;
   onCommand: (
     commandId: EditorCommandId,
     payload?: {
@@ -897,11 +913,14 @@ export function HierarchyPanel({
     x: number;
     y: number;
     entityId: string | null;
+    origin: "header" | "context";
   } | null>(null);
   const contextEntityId = contextMenu?.entityId
     ?? (selectedEntityIds.length > 1 ? selectedEntityIds[0] : null);
   const contextMultiple = selectedEntityIds.length > 1
     && Boolean(contextEntityId && selectedEntityIds.includes(contextEntityId));
+  const contextCreationAvailable =
+    !contextMultiple || contextMenu?.origin === "header";
   const creationEntries = useMemo(
     () => getEntityCreationMenuEntries(projectKind, builtinPrefabRecipes),
     [projectKind, builtinPrefabRecipes],
@@ -1199,6 +1218,7 @@ export function HierarchyPanel({
   const openContextMenu = (
     event: MouseEvent<HTMLElement>,
     entityId: string | null = null,
+    origin: "header" | "context" = "context",
   ) => {
     event.preventDefault();
     const menuHeight = Math.min(640, window.innerHeight - 24);
@@ -1206,6 +1226,7 @@ export function HierarchyPanel({
       x: Math.max(12, Math.min(event.clientX, window.innerWidth - 300)),
       y: Math.max(12, Math.min(event.clientY, window.innerHeight - menuHeight - 12)),
       entityId,
+      origin,
     });
   };
 
@@ -1456,18 +1477,19 @@ export function HierarchyPanel({
           Hierarchy
         </h2>
         <div className="flex items-center gap-1.5">
-          {touch ? (
-            <button
-              type="button"
-              aria-label={selectedEntityId ? "選択したEntityの操作" : "Entityの作成メニュー"}
-              aria-haspopup="menu"
-              aria-expanded={Boolean(contextMenu)}
-              onClick={(event) => openContextMenu(event, selectedEntityId)}
-              className="min-h-11 rounded border border-editor-border bg-editor-surface px-2 text-xs font-semibold text-editor-text"
-            >
-              {selectedEntityId ? "操作" : "追加"}
-            </button>
-          ) : null}
+          <button
+            type="button"
+            aria-label={selectedEntityId ? "操作" : "追加"}
+            aria-haspopup="menu"
+            aria-expanded={Boolean(contextMenu)}
+            onClick={(event) => openContextMenu(event, selectedEntityId, "header")}
+            title={selectedEntityId ? "選択したEntityの操作と追加" : "Entityを追加"}
+            className={`rounded border border-editor-border bg-editor-surface px-2 text-xs font-semibold text-editor-text hover:bg-editor-subtle ${
+              touch ? "min-h-11" : "h-7"
+            }`}
+          >
+            {selectedEntityId ? "操作" : "追加"}
+          </button>
           {selectedEntityIds.length > 0 ? (
             <button
               type="button"
@@ -1715,7 +1737,7 @@ export function HierarchyPanel({
           className={`fixed z-[85] max-h-[min(640px,calc(100dvh-24px))] w-72 max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain rounded-md border border-slate-300 bg-white p-1 shadow-xl ${touch ? "editor-touch-menu" : ""}`}
           style={{ left: contextMenu.x, top: contextMenu.y }}
           role="menu"
-          aria-label="Hierarchyのメニュー"
+          aria-label={contextMenu.entityId ? "選択したEntityの操作" : "Entityを追加"}
           tabIndex={-1}
           onPointerDown={(event) => event.stopPropagation()}
           onKeyDown={(event) => {
@@ -1726,7 +1748,11 @@ export function HierarchyPanel({
               }}
         >
           <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            {contextMultiple ? `${selectedEntityIds.length}件のEntity` : "Entity"}
+            {contextMultiple
+              ? `${selectedEntityIds.length}件のEntity`
+              : contextMenu.entityId
+                ? "Entity"
+                : "追加"}
           </p>
           {contextEntityId ? <>
               {([
@@ -1790,12 +1816,46 @@ export function HierarchyPanel({
               ) : null}
               <div className="my-1 border-t border-slate-200" />
           </> : null}
-          {!contextMultiple ? (
+          {contextCreationAvailable && (onOpenExternalStore || onImportFile) ? (
+            <div className="mb-1 border-b border-slate-200 pb-1">
+              {onOpenExternalStore ? (
+                <button
+                  type="button"
+                  disabled={readOnly || importBusy}
+                  onClick={() => {
+                    setContextMenu(null);
+                    onOpenExternalStore();
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-semibold text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <Store size={14} aria-hidden="true" />
+                  外部から追加
+                </button>
+              ) : null}
+              {onImportFile ? (
+                <button
+                  type="button"
+                  disabled={readOnly || importBusy || Boolean(importDisabledReason)}
+                  title={importDisabledReason ?? undefined}
+                  onClick={() => {
+                    setContextMenu(null);
+                    onImportFile();
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-semibold text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <Import size={14} aria-hidden="true" />
+                  ファイルから素材を追加
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {contextCreationAvailable ? (
           <EntityCreationMenuContent
             entries={creationEntries}
-            disabled={readOnly}
+            disabled={readOnly || importBusy}
             onSelect={(entry) => {
-              const parentEntityId = contextMenu.entityId;
+              const parentEntityId =
+                contextMenu.origin === "header" ? null : contextMenu.entityId;
               setContextMenu(null);
               if (entry.kind === "empty") onCommand("entity.create-empty", { parentEntityId });
               else if (entry.kind === "primitive") onCommand("entity.create-primitive", { creationId: entry.actionId });
@@ -1804,6 +1864,50 @@ export function HierarchyPanel({
               else onCreateXriftObject(entry.actionId);
             }}
           />
+          ) : null}
+          {contextCreationAvailable && projectKind === "world" && onCreateTerrain ? (
+            <details className="mt-1 overflow-hidden rounded border border-slate-200 text-xs">
+              <summary className="flex cursor-pointer list-none items-center gap-2 bg-slate-50 px-2 py-1.5 font-semibold text-slate-600 hover:bg-slate-100">
+                <Mountain size={14} aria-hidden="true" />
+                Terrain
+              </summary>
+              <div className="border-t border-slate-100 p-1">
+                {[
+                  { id: undefined, label: "Terrain" },
+                  ...TERRAIN_PRESETS.map((preset) => ({
+                    id: preset.id,
+                    label: `Terrain · ${preset.label}`,
+                  })),
+                ].map((preset) => (
+                  <button
+                    key={preset.id ?? "flat"}
+                    type="button"
+                    disabled={readOnly || importBusy}
+                    onClick={() => {
+                      setContextMenu(null);
+                      onCreateTerrain(preset.id);
+                    }}
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    <Mountain size={14} aria-hidden="true" />
+                    {preset.label}
+                  </button>
+                ))}
+                {terrainOverlapCount > 0 && onArrangeTerrains ? (
+                  <button
+                    type="button"
+                    disabled={readOnly || importBusy}
+                    onClick={() => {
+                      setContextMenu(null);
+                      onArrangeTerrains();
+                    }}
+                    className="mt-1 w-full rounded px-2 py-1.5 text-left text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    重なったTerrainを横へ並べ直す
+                  </button>
+                ) : null}
+              </div>
+            </details>
           ) : null}
           {contextMenu.entityId ? (
             <>

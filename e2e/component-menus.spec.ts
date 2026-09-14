@@ -166,6 +166,8 @@ test("Inspector adds to the selection while Create adds a new Entity", async ({ 
   await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
   await page.getByLabel("プロジェクト名").fill("component-menu-flow");
   await page.getByRole("button", { name: "作成して開く" }).click();
+  await expect(page.getByRole("toolbar", { name: "ビジュアルエディターのツール" })).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "編集履歴" })).toBeVisible();
   const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
   await tree.getByText("床", { exact: true }).click();
   const initialCount = await tree.getByRole("treeitem").count();
@@ -179,8 +181,8 @@ test("Inspector adds to the selection while Create adds a new Entity", async ({ 
   await search.fill("Rigid Body");
   await expect(page.getByRole("button", { name: /Rigid Body.*追加済み/ })).toBeDisabled();
   await page.getByRole("button", { name: "Add Component", exact: true }).click();
-  await page.getByRole("button", { name: "追加", exact: true }).click();
-  const menu = page.getByRole("menu", { name: "Entityを追加" });
+  await page.getByRole("button", { name: "操作", exact: true }).click();
+  const menu = page.getByRole("menu", { name: "選択したEntityの操作" });
   await menu.getByRole("button", { name: /^Primitive/ }).click();
   await menu.getByRole("button", { name: /^Cube.*作成/ }).click();
   await expect(tree.getByRole("treeitem")).toHaveCount(initialCount + 1);

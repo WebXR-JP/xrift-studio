@@ -257,7 +257,6 @@ import {
   AssetDeleteDialog,
   type AssetDeleteDialogTarget,
 } from "./AssetDeleteDialog";
-import { EditorCreateMenu } from "./EditorCreateMenu";
 import { TextureImportSettingsPanel } from "./TextureImportSettingsPanel";
 import { EditorImportMenu } from "./EditorImportMenu";
 import { ComponentCodeImportDialog } from "./ComponentCodeImportDialog";
@@ -1666,7 +1665,6 @@ export function VisualEditorPrototype({
   const renderedReadOnly = renderedEditorMode === "play";
   /** Play waits for Script compilation; the button reflects it. */
   const [playPreparing, setPlayPreparing] = useState(false);
-  const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [scriptTemplateFolderId, setScriptTemplateFolderId] = useState<
     string | null | undefined
   >(undefined);
@@ -7500,7 +7498,7 @@ export function VisualEditorPrototype({
     // Overlapping Terrains tear into moire bands, and the cause is invisible:
     // the author sees broken ground, not two surfaces. Naming it is the fix.
     setNotice(
-      `地形が${terrainOverlapCount}組重なっています。同じ場所に2つの地面があると表示が縞状に乱れます。「追加」メニューの「地形を横へ並べ直す」で解消できます`,
+      `地形が${terrainOverlapCount}組重なっています。同じ場所に2つの地面があると表示が縞状に乱れます。Hierarchyのメニューから「地形を横へ並べ直す」を選ぶと解消できます`,
     );
   }, [terrainOverlapCount]);
 
@@ -10549,7 +10547,6 @@ export function VisualEditorPrototype({
       );
       return stopped();
     };
-    setCreateMenuOpen(false);
     setRenameTarget(null);
     // Play reads the saved Assets. A graph edited in the last few hundred
     // milliseconds is still a draft, and running its previous version is
@@ -11210,7 +11207,6 @@ export function VisualEditorPrototype({
   const SaveIcon = EDITOR_ICONS.save;
   const UploadIcon = EDITOR_ICONS.upload;
   const ExportIcon = EDITOR_ICONS.export;
-  const CreateIcon = EDITOR_ICONS.create;
   const saveStatusLabel =
     saveStatus === "saved"
       ? onProjectExport ? "ブラウザに保存済み" : "保存済み"
@@ -11351,8 +11347,8 @@ export function VisualEditorPrototype({
               />
               {saveStatusLabel}
             </span>);
-  const editActions = (
-    <div className="editor-edit-actions flex items-center gap-1.5">
+  const historyActions = (
+    <>
       <button
         type="button"
         disabled={
@@ -11377,41 +11373,11 @@ export function VisualEditorPrototype({
       >
         <EDITOR_ICONS.redo size={13} aria-hidden="true" />
       </button>
-      <div className="relative">
-        <button
-          type="button"
-          disabled={importBusy}
-          aria-haspopup="menu"
-          aria-expanded={createMenuOpen}
-          onClick={() => setCreateMenuOpen((open) => !open)}
-          title={commandTitle("シーンEntityを作成", "OpenCreateMenu", "Ctrl+Shift+A")}
-          className="flex h-7 items-center gap-1.5 rounded border border-editor-border bg-editor-surface px-2 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-not-allowed disabled:opacity-45"
-        >
-          <CreateIcon size={13} aria-hidden="true" />
-          追加
-        </button>
-        <EditorCreateMenu
-          onOpenExternalStore={() => setExternalStoreOpen(true)}
-          onImportFile={() => globalModelImportInputRef.current?.click()}
-          importDisabledReason={renderedReadOnly ? "動作確認を停止してから素材を追加してください" : assetImportPanelAvailability.disabledReason}
-          open={createMenuOpen}
-          readOnly={false}
-          importBusy={importBusy}
-          projectKind={projectKind}
-          builtinPrefabRecipes={builtinPrefabRecipes}
-          onClose={() => setCreateMenuOpen(false)}
-          onCreateEmpty={() => executeCommand("entity.create-empty")}
-          onCreatePrimitive={(creationId) =>
-            executeCommand("entity.create-primitive", { creationId })
-          }
-          onCreateTerrain={handleCreateTerrain}
-      terrainOverlapCount={terrainOverlapCount}
-      onArrangeTerrains={handleArrangeTerrains}
-          onPlaceBuiltinPrefab={handlePlaceBuiltinPrefab}
-          onCreateXriftObject={handleCreateXriftObject}
-          onCreateComponentObject={handleCreateComponentObject}
-        />
-      </div>
+    </>
+  );
+  const editActions = (
+    <div className="editor-edit-actions flex items-center gap-1.5">
+      {historyActions}
     </div>
   );
   const HeaderActions = tablet ? "details" : "div";
@@ -11448,6 +11414,15 @@ export function VisualEditorPrototype({
                 {kindLabel} · ビジュアルエディター
               </p>}
             </div>
+            {!tablet && !recordingUiHidden ? (
+              <div
+                className="editor-history-actions flex shrink-0 items-center gap-1.5 border-l border-editor-border pl-2.5"
+                role="group"
+                aria-label="編集履歴"
+              >
+                {historyActions}
+              </div>
+            ) : null}
           </div>
 
           {phone && !recordingUiHidden ? editActions : null}
@@ -11540,13 +11515,13 @@ export function VisualEditorPrototype({
           </HeaderActions>
         </header>
 
-        <div
+        {tablet ? <div
           className={`editor-main-toolbar ${recordingUiHidden ? "hidden" : "flex"} h-10 shrink-0 items-center border-b border-editor-border bg-editor-surface px-2.5`}
           role="toolbar"
           aria-label="ビジュアルエディターのツール"
         >
           {!phone ? editActions : null}
-          {tablet && !recordingUiHidden ? <div className="editor-panel-switcher ml-auto flex items-center gap-1" aria-label="編集パネル">
+          {!recordingUiHidden ? <div className="editor-panel-switcher ml-auto flex items-center gap-1" aria-label="編集パネル">
             {phone ? <button type="button" aria-pressed={panelsHidden || !tabletPanel}
               onClick={() => { setTabletPanel(null); setViewportMaximized(false); setActiveEditorTab(SCENE_VIEW_TAB_ID); }}
               className={`rounded-md px-3 py-1.5 text-xs font-semibold ${panelsHidden || !tabletPanel ? "bg-brand-100 text-brand-800" : "text-editor-muted hover:bg-editor-subtle"}`}>シーン</button> : null}
@@ -11562,7 +11537,7 @@ export function VisualEditorPrototype({
               >{label}</button>,
             )}
           </div> : null}
-        </div>
+        </div> : null}
 
         <ComponentCodeImportDialog
           open={componentImportOpen}
@@ -11637,6 +11612,13 @@ export function VisualEditorPrototype({
             onEntityEnabledChange={handleEntityEnabledChange}
             onCreateXriftObject={handleCreateXriftObject}
             onCreateComponentObject={handleCreateComponentObject}
+            onOpenExternalStore={() => setExternalStoreOpen(true)}
+            onImportFile={() => globalModelImportInputRef.current?.click()}
+            importDisabledReason={renderedReadOnly ? "動作確認を停止してから素材を追加してください" : assetImportPanelAvailability.disabledReason}
+            importBusy={importBusy}
+            onCreateTerrain={handleCreateTerrain}
+            terrainOverlapCount={terrainOverlapCount}
+            onArrangeTerrains={handleArrangeTerrains}
             onCommand={executeCommand}
             renameRequest={
               renameTarget?.kind === "entity"
@@ -11737,7 +11719,7 @@ export function VisualEditorPrototype({
             onFocusChange={setFocusedEntity}
             onExitFocus={() => executeCommand("view.exit-focus")}
             onViewportFileDrop={() => setNotice("外部の素材はAssetsへドロップしてください")}
-            onPlayDropAttempt={() => setNotice("動作確認中もHierarchyまたは追加メニューからEntityを配置できます")}
+            onPlayDropAttempt={() => setNotice("動作確認中もHierarchyのメニューからEntityを配置できます")}
             onDropRejected={setNotice}
             onOptimizeColliders={handleOptimizeColliders}
             terrainEditing={terrainEditing}

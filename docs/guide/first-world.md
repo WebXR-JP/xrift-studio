@@ -28,11 +28,11 @@
 
 ## 2. 球を置く
 
-画面上部の**追加 → Primitive → Sphere**を選びます。左の**Hierarchy**に項目が増え、中央のシーンに球が現れます。
+左の**Hierarchy**見出しにある**追加 / 操作 → Primitive → Sphere**を選びます。Hierarchyに項目が増え、中央のシーンに球が現れます。
 
 ![追加メニューのPrimitiveを開くとSphereが選べる](./media/add-sphere.png "追加メニュー")
 
-*追加を開き、Primitiveの中のSphereを選びます。*
+*Hierarchyの追加 / 操作メニューを開き、Primitiveの中のSphereを選びます。*
 
 球を選び、右の**Inspector → Transform**で位置を調整します。練習用の値は、位置を**X: 0 / Y: 1 / Z: 0**、大きさを**X: 1 / Y: 1 / Z: 1**です。床と重なる場合はYを少し上げてください。
 

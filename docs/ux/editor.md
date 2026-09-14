@@ -232,8 +232,9 @@
 - Entity作成メニューは、選択中のEntityの有無にかかわらず、新しいEntityを作る。すべての配置候補をカテゴリにまとめる。先頭のEntityには空のEntity、続くPrimitiveにはCube、Plane、Sphere、Cylinder、Cone、WorldにはSpawnPointを入れる。「床」のような用途名を基本形状の名前にしない。光るCubeなどの装飾プリセットは追加候補から外す。
 - Light、Text、Image、Audio Source、Particle Emitterは配置候補として残す。Rigid Body、Collider、Script、Interaction Trigger、Windなど、既存Entityへ付ける機能はInspectorと対象Entityの右クリックから追加する。「Component付きEntity」という分類を作らない。
 - Skybox、TagBoard、EntryLogBoard、PortalはEntityの配置候補に含めない。既存のEntityとInspectorのComponent設定は維持する。
-- 複数選択で右クリックした場合は名前変更、コピー、複製、削除などの操作だけを先頭に出し、Entity作成とComponent追加は表示しない。削除は選択全体に適用する。選択外のEntityを右クリックすると、そのEntityを選択して単体用メニューへ切り替える。
-- XRiftの配置候補は一つの一覧にし、同じschemaのPrefabがある場合は設定済みのPrefabを使う。Prefabと生のComponentを二つの配置候補として並べない。配置前に必要な設定がある場合は案内を残す。Hierarchyと上部メニューは同じ配置リストを使う。
+- 複数選択で右クリックした場合は名前変更、コピー、複製、削除などの操作だけを先頭に出し、Entity作成とComponent追加は表示しない。削除は選択全体に適用する。選択外のEntityを右クリックすると、そのEntityを選択して単体用メニューへ切り替える。Hierarchy見出しの「操作」から開いた場合は、複数選択中でもシーン直下へ新しいEntityを追加できる。
+- XRiftの配置候補は一つの一覧にし、同じschemaのPrefabがある場合は設定済みのPrefabを使う。Prefabと生のComponentを二つの配置候補として並べない。配置前に必要な設定がある場合は案内を残す。Entityの作成入口はHierarchy見出しの「追加 / 操作」へ集約する。
+- デスクトップではUndo / Redo / 追加だけの独立したツール行を置かない。Undo / Redoはプロジェクト見出しと同じ上部ヘッダーへ置き、Entityの追加と選択Entityの操作はHierarchy見出しの一つのメニューへまとめる。シーン表示の縦幅をこのためだけに消費しない。
 - InspectorのAdd ComponentとHierarchyのEntity右クリックは、対象Entityへの追加操作とする。右クリックの見出しに追加先を明示する。Transformは必須なので候補に出さず、Spawn Pointの旧追加口も出さない。SpawnPointは公式の一つに揃える。
 - Hierarchyの右クリックメニューは他パネルの上へ表示し、画面内に収まる位置と最大高さを使う。Entity追加には検索欄を置かず、Entity、Primitive、World、Light、UI、Audio、Effect、XRiftを折りたたんで選ぶ。外側のクリックまたはEscapeで閉じる（MI-11）。Script Editorより上、モーダルダイアログより下に表示する。
 - 名前、カテゴリ順、重複規則、Mesh Colliderの前提条件は共通定義を参照する。候補に追加できない理由を表示する。Inspectorの検索中は一致するカテゴリを開き、空のカテゴリを表示しない。基本Componentと公式XRift Componentは英語名を使う。
