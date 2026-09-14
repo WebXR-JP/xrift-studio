@@ -75,6 +75,7 @@ import { runScriptEmitFixtureAssertions } from "../src/lib/visual-editor/compile
 import { runBasisTranscoderFixtureAssertions } from "../src/lib/visual-editor/basis-transcoder.fixture.ts";
 import { runTerrainFixtureAssertions } from "../src/lib/visual-editor/terrain.fixture.ts";
 import {
+  compileGrassAppearanceTypecheckWorld,
   runTerrainGrassFixtureAssertions,
   runTerrainGrassPublishFixtureAssertions,
   runTerrainPresetFixtureAssertions,
@@ -663,6 +664,11 @@ async function runModelMaterialCompilerFixtures() {
  * author's publish dialog.
  */
 async function runStagedWorldTypecheck() {
+  await typecheckWithTemplateOptions(
+    "grass-appearance-only",
+    compileGrassAppearanceTypecheckWorld().overlayFiles,
+    'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
+  );
   // Keep independent feature outputs separate: combining them can conceal a
   // missing dependency supplied accidentally by another feature.
   for (const [label, files] of [
