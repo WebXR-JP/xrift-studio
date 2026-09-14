@@ -27,10 +27,10 @@ type Props = {
   project: Project;
   busy: boolean;
   onOpen: () => void;
-  onEditThumbnail: () => void;
-  onDuplicate: () => void;
-  onExport: () => void;
-  onDelete: () => void;
+  onEditThumbnail?: () => void;
+  onDuplicate?: () => void;
+  onExport?: () => void;
+  onDelete?: () => void;
   refreshKey?: number;
 };
 
@@ -152,46 +152,54 @@ export function ProjectCard({
       </button>
 
       <div className="flex w-10 shrink-0 flex-col items-center justify-start gap-1 border-l border-zinc-100 py-2">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onEditThumbnail}
-          className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-40"
-          title="サムネイルを編集"
-          aria-label={`${project.title || project.name}のサムネイルを編集`}
-        >
-          <Camera size={14} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onDuplicate}
-          className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-40"
-          title="プロジェクトを複製"
-          aria-label={`${project.title || project.name}を複製`}
-        >
-          <Copy size={14} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onExport}
-          className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-40"
-          title=".xriftstudioファイルに書き出す"
-          aria-label={`${project.title || project.name}を.xriftstudioファイルに書き出す`}
-        >
-          <FileDown size={14} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onDelete}
-          className="rounded-md p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:opacity-40"
-          title="プロジェクトを削除"
-          aria-label={`${project.title || project.name}を削除`}
-        >
-          <Trash2 size={14} aria-hidden="true" />
-        </button>
+        {onEditThumbnail ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onEditThumbnail}
+            className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-40"
+            title="サムネイルを編集"
+            aria-label={`${project.title || project.name}のサムネイルを編集`}
+          >
+            <Camera size={14} aria-hidden="true" />
+          </button>
+        ) : null}
+        {onDuplicate ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onDuplicate}
+            className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-40"
+            title="プロジェクトを複製"
+            aria-label={`${project.title || project.name}を複製`}
+          >
+            <Copy size={14} aria-hidden="true" />
+          </button>
+        ) : null}
+        {onExport ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onExport}
+            className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-40"
+            title=".xriftstudioファイルに書き出す"
+            aria-label={`${project.title || project.name}を.xriftstudioファイルに書き出す`}
+          >
+            <FileDown size={14} aria-hidden="true" />
+          </button>
+        ) : null}
+        {onDelete ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onDelete}
+            className="rounded-md p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 disabled:opacity-40"
+            title="プロジェクトを削除"
+            aria-label={`${project.title || project.name}を削除`}
+          >
+            <Trash2 size={14} aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
     </article>
   );

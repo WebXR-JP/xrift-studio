@@ -7,6 +7,7 @@ export type BrowserRecentProject = { path: string; name: string; title: string; 
 
 export type BrowserTransferState =
   | { phase: "select"; operation: "import" }
+  | { phase: "new"; operation: "open" }
   | { phase: "create"; operation: "open"; kind: "world" | "item" }
   | { phase: "preparing"; operation: "export" | "import" | "open" }
   | { phase: "failed"; operation: "export" | "import" | "open"; message: string }
@@ -77,7 +78,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
 
   const content = <>
       <h2 id="browser-transfer-title" className="shrink-0 border-b border-zinc-200 px-5 py-4 text-base font-semibold">
-        {state?.phase === "select" ? "プロジェクトを選ぶ" : state?.phase === "create" ? `新しい${state.kind === "world" ? "ワールド" : "アイテム"}` : state?.phase === "ready" || (state && state.operation === "export") ? "プロジェクトを書き出す" : "プロジェクトを開く"}
+        {state?.phase === "select" ? "プロジェクトを選ぶ" : state?.phase === "new" ? "新規プロジェクト" : state?.phase === "create" ? `新しい${state.kind === "world" ? "ワールド" : "アイテム"}` : state?.phase === "ready" || (state && state.operation === "export") ? "プロジェクトを書き出す" : "プロジェクトを開く"}
       </h2>
       <div className="min-h-0 overflow-y-auto overscroll-contain px-5 pb-5">
       {state?.phase === "create" ? <form id="browser-new-project" className="mt-4 space-y-3" onSubmit={(event) => {
@@ -95,6 +96,19 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
           {state.operation === "export" ? "シーンと素材をプロジェクトファイルにまとめています…" : "プロジェクトを読み込んでいます…"}
         </p>
       ) : null}
+      {state?.phase === "new" ? <div className="mt-4 space-y-3 text-sm text-zinc-600">
+        <p>作るものを選びます。</p>
+        <div className="space-y-2">
+          {([
+            { kind: "world", label: "ワールドを作る", description: "人が集まる空間" },
+            { kind: "item", label: "アイテムを作る", description: "ワールドで使う道具や飾り" },
+          ] as const).map(({ kind, label, description }) => (
+            <button key={kind} type="button" onClick={() => onNewProject(kind)} className={projectChoiceClassName}>
+              <span className="min-w-0"><span className="block font-medium text-zinc-800">{label}</span><span className="mt-1 block text-xs leading-relaxed text-zinc-500">{description}</span></span>
+            </button>
+          ))}
+        </div>
+      </div> : null}
       {state?.phase === "select" ? <div className="mt-4 space-y-4 text-sm text-zinc-600">
         <p>新しく作るか、保存したプロジェクトを開きます。</p>
         <section aria-labelledby="new-project-heading" className="space-y-2">

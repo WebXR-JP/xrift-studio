@@ -137,6 +137,24 @@ export async function activateBrowserProject(projectPath: string): Promise<void>
   await transaction<void>("readwrite", (_files, settings) => { settings.put(projectPath, "last-project"); });
 }
 
+/** Removes one browser project without touching any other project records. */
+export async function deleteBrowserProject(projectPath: string): Promise<void> {
+  validateProjectPath(projectPath);
+  await transaction<void>("readwrite", (files, settings) => {
+    const cursorRequest = files.index("projectPath").openCursor(projectPath);
+    cursorRequest.onsuccess = () => {
+      const cursor = cursorRequest.result;
+      if (!cursor) return;
+      cursor.delete();
+      cursor.continue();
+    };
+    const lastProject = settings.get("last-project");
+    lastProject.onsuccess = () => {
+      if (lastProject.result === projectPath) settings.delete("last-project");
+    };
+  });
+}
+
 /** Reads one coherent snapshot, including imported binaries, for the desktop archive. */
 export async function getBrowserProjectFiles(projectPath: string): Promise<Map<string, Uint8Array>> {
   validateProjectPath(projectPath);

@@ -11170,11 +11170,11 @@ export function VisualEditorPrototype({
     if (!(await flushCodeAutosaves())) return false;
     if (onProjectExport) {
       if (importBusy) {
-        setNotice("素材の取り込みが終わってから、紹介ページへ戻ってください。");
+        setNotice(`素材の取り込みが終わってから、${backLabel}へ戻ってください。`);
         return false;
       }
       if (scriptEditorDirtyRef.current || scriptEditorSavingRef.current || shaderEditorDirtyRef.current) {
-        setNotice("スクリプトとShaderの自動保存が完了してから、紹介ページへ戻ってください。");
+        setNotice(`スクリプトとShaderの自動保存が完了してから、${backLabel}へ戻ってください。`);
         return false;
       }
       flushInteractivityDraft();
@@ -11200,7 +11200,7 @@ export function VisualEditorPrototype({
     setLeaving(false);
     onBack();
     return true;
-  }, [leaving, projectExportBusy, projectTransferBusy, importBusy, onProjectExport, flushInteractivityDraft, onBack, requestAutosave, flushCodeAutosaves]);
+  }, [leaving, projectExportBusy, projectTransferBusy, importBusy, onProjectExport, flushInteractivityDraft, backLabel, onBack, requestAutosave, flushCodeAutosaves]);
 
   mcpProjectBridgeActionsRef.current = { saveNow: runSave, leave: handleBack };
 
