@@ -239,7 +239,7 @@ test("狭い画面でもエディターのツールバーが一行に収まり�
 
   const assets = page.getByRole("region", { name: "Assets" });
   await expect(
-    assets.getByRole("button", { name: "アセットをインポート" }),
+    assets.getByRole("button", { name: "ファイルから素材を追加" }),
   ).toBeVisible();
   await expect(
     assets.getByRole("button", { name: "外部から追加" }),

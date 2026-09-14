@@ -246,7 +246,7 @@ Bone / 空ノードは `DEPENDENCY_MISSING` で断る。pose で非表示にし�
 `update_terrain`, `apply_terrain_surface`
 
 `create_terrain` が作るのは平らな板だ。primitive としては正しいが、出発点として
-は向いていない。追加メニューは形のプリセットを 8 種と、高さと傾斜で塗り分ける表面プリセットを
+は向いていない。Hierarchyの「追加 / 操作」は形のプリセットを 8 種と、高さと傾斜で塗り分ける表面プリセットを
 10 種出す。primitive だけでは谷をブラシで一打ずつ彫ることになる。
 `create_terrain_from_preset` は彫って草まで載った状態で置く。`position` を
 省くと既存の地形の隣へ置く。同じ地面に 2 枚重なるとモアレになるためだ。

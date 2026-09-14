@@ -126,7 +126,7 @@ test("Hierarchy distinguishes root creation from adding to a target Entity", asy
   });
   const panel = page.getByRole("complementary", { name: "Hierarchy" });
   await panel.getByRole("heading", { name: "Hierarchy" }).click({ button: "right" });
-  const contextMenu = page.getByRole("menu", { name: "Hierarchyのメニュー" });
+  const contextMenu = page.getByRole("menu", { name: /Entityを追加|選択したEntityの操作/ });
   await expect(contextMenu.getByRole("searchbox")).toHaveCount(0);
   await expect(contextMenu.getByRole("button", { name: /^Mesh Collider/ })).toHaveCount(0);
   await page.keyboard.press("Escape");
@@ -196,7 +196,7 @@ test("Inspector adds to the selection while Create adds a new Entity", async ({ 
   await tree.getByText("Cube", { exact: true }).click({ modifiers: ["Control"] });
   await expect(tree.getByRole("treeitem", { selected: true })).toHaveCount(2);
   await tree.getByText("Cube", { exact: true }).click({ button: "right" });
-  const multiMenu = page.getByRole("menu", { name: "Hierarchyのメニュー" });
+  const multiMenu = page.getByRole("menu", { name: "選択したEntityの操作" });
   await expect(multiMenu.getByRole("button").first()).toHaveText("名前を変更");
   await expect(multiMenu.getByRole("button", { name: /^Primitive/ })).toHaveCount(0);
   await expect(multiMenu.getByRole("button", { name: /^World/ })).toHaveCount(0);
