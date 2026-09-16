@@ -151,10 +151,9 @@ test("Scene Viewの右クリックから、指しているEntityを削除でき�
     { button: "right" },
   );
 
-  // "床" is also the name of the plane in Create Mesh, so the row that proves
-  // the menu is acting on the pointed Entity is the delete button itself.
-  const menu = page.getByRole("menu");
-  const deleteEntity = menu.getByRole("button", { name: "削除", exact: true });
+  // The edit menu and its tooltip identify the object under the pointer.
+  const menu = page.getByRole("menu", { name: "シーンの編集", exact: true });
+  const deleteEntity = menu.getByRole("menuitem", { name: "削除", exact: true });
   await expect(deleteEntity).toHaveAttribute("title", /床/);
   await expect(selected).toContainText("床");
   await deleteEntity.click();

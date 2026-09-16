@@ -106,6 +106,7 @@ import { runClassicProjectImportFixtureAssertions } from "../src/lib/visual-edit
 import { runMaterialExtensionFixtureAssertions } from "../src/lib/visual-editor/compiler/material-extensions.fixture.ts";
 import { runXriftComponentRegistryFixtureAssertions } from "../src/lib/visual-editor/compiler/xrift-component-registry.fixture.ts";
 import { runDocumentAssetCreationFixtureAssertions } from "../src/lib/visual-editor/document-asset-creation.fixture.ts";
+import { runEntityClipboardFixtureAssertions } from "../src/lib/visual-editor/entity-clipboard.fixture.ts";
 import { runEditorSessionHierarchyFixtureAssertions } from "../src/lib/visual-editor/editor-session.fixture.ts";
 import { runSceneEntityTreeStoreFixtureAssertions } from "../src/components/visual-editor/scene-entity-tree-store.fixture.ts";
 import { runSceneClickSelectionFixtureAssertions } from "../src/lib/visual-editor/scene-click-selection.fixture.ts";
@@ -399,6 +400,7 @@ try {
     ["builtin prefab catalog", runBuiltinPrefabCatalogFixtureAssertions],
     ["document asset creation", runDocumentAssetCreationFixtureAssertions],
     ["editor session hierarchy", runEditorSessionHierarchyFixtureAssertions],
+    ["entity clipboard and mirror paste", runEntityClipboardFixtureAssertions],
     ["scene entity tree store", runSceneEntityTreeStoreFixtureAssertions],
     ["scene click selection", runSceneClickSelectionFixtureAssertions],
     ["editor layout", runEditorLayoutFixtureAssertions],

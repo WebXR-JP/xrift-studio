@@ -1,3 +1,4 @@
+import { getEntityCopyDisabledReason } from "../../lib/visual-editor/entity-clipboard";
 import { createWorldAssetHierarchy } from "../../lib/visual-editor/scripting/world-asset-hierarchy";
 import { ensureWorldAssetModels, mergeWorldAssetModels } from "../../lib/visual-editor/scripting/world-asset-import";
 import { ensureCatalogMaterialTextures } from "../../lib/visual-editor/asset-import-persistence";
@@ -78,7 +79,6 @@ import {
   commandForKeyboardEvent,
   copyEntityHierarchy,
   deleteEntityHierarchy,
-  duplicateEntityHierarchy,
   deleteAssetIfUnreferenced,
   deleteEmptyAssetFolder,
   getEntityReparentDecision,
@@ -182,6 +182,7 @@ import {
   type TerrainPreset,
   type EditorCommandId,
   type EntityClipboard,
+  type EntityMirrorAxis,
   type ParticlePropertiesPatch,
   type PlaySession,
   type PrototypeVisualProject,
@@ -517,6 +518,7 @@ function describeAssetDeleteTarget(
 type EditorSessionSnapshot = {
   bundle: PrototypeVisualProject;
   sceneSelection: SceneSelection;
+  entitySelectionIds?: string[];
   assetSelection: string | null;
 };
 
@@ -659,6 +661,8 @@ type ShaderEditorRequest =
   | null;
 
 type EditorCommandPayload = {
+  source?: "scene" | "hierarchy";
+  mirrorAxis?: EntityMirrorAxis;
   creationId?: string;
   entityId?: string;
   assetId?: string;
@@ -983,6 +987,7 @@ export function VisualEditorPrototype({
   const createInitialSnapshot = useCallback(
     (): EditorSessionSnapshot => ({
       bundle: initialBundle,
+      entitySelectionIds: initialBundle.scene.rootEntityIds.slice(0, 1),
       sceneSelection: initialBundle.scene.rootEntityIds[0]
         ? { kind: "entity", id: initialBundle.scene.rootEntityIds[0] }
         : null,
@@ -1618,6 +1623,7 @@ export function VisualEditorPrototype({
     onSave ? (projectPath ? "saved" : "dirty") : "unavailable",
   );
   const clipboardRef = useRef<EntityClipboard | null>(null);
+  const [clipboardAvailable, setClipboardAvailable] = useState(false);
   const transformScrubRef = useRef<TransformScrubTransaction | null>(null);
   const [renameTarget, setRenameTarget] = useState<RenameTarget>(null);
   const [deleteDialog, setDeleteDialog] = useState<AssetDeleteDialogTarget | null>(null);
@@ -2118,6 +2124,7 @@ export function VisualEditorPrototype({
       replaceEditorHistoryPresent(current, {
         ...current.present,
         sceneSelection: selection,
+        entitySelectionIds: selection?.id ? [selection.id] : [],
       }),
     );
   }, []);
@@ -2154,6 +2161,7 @@ export function VisualEditorPrototype({
     setHistory((current) =>
       replaceEditorHistoryPresent(current, {
         ...current.present,
+        entitySelectionIds: validIds,
         sceneSelection: primaryEntityId && validIds.includes(primaryEntityId)
           ? { kind: "entity", id: primaryEntityId }
           : validIds[0]
@@ -2218,6 +2226,7 @@ export function VisualEditorPrototype({
     setPlaySession(null);
     scriptProvenanceRef.current.clear();
     clipboardRef.current = null;
+    setClipboardAvailable(false);
     transformScrubRef.current = null;
     setRenameTarget(null);
     setDeleteDialog(null);
@@ -5638,8 +5647,14 @@ export function VisualEditorPrototype({
 
   const handleUndo = useCallback(() => {
     setHistory((current) => {
-      const transition = undoEditorHistory(current);
+      const transition = undoEditorHistory<EditorSessionSnapshot>(current);
       if (!transition.changed) return transition.history;
+      const snapshot = transition.history.present;
+      sceneSelectionRef.current = snapshot.sceneSelection;
+      assetSelectionRef.current = snapshot.assetSelection;
+      setSelectedEntityIds((snapshot.entitySelectionIds ?? (snapshot.sceneSelection?.id ? [snapshot.sceneSelection.id] : []))
+        .filter((id) => Boolean(snapshot.bundle.scene.entities[id])));
+      setSelectedAssetIds(snapshot.assetSelection ? [snapshot.assetSelection] : []);
       setSaveStatus("dirty");
       setNotice("元に戻しました");
       return withLiveGizmoSettings(transition.history, current.present.bundle);
@@ -5648,65 +5663,105 @@ export function VisualEditorPrototype({
 
   const handleRedo = useCallback(() => {
     setHistory((current) => {
-      const transition = redoEditorHistory(current);
+      const transition = redoEditorHistory<EditorSessionSnapshot>(current);
       if (!transition.changed) return transition.history;
+      const snapshot = transition.history.present;
+      sceneSelectionRef.current = snapshot.sceneSelection;
+      assetSelectionRef.current = snapshot.assetSelection;
+      setSelectedEntityIds((snapshot.entitySelectionIds ?? (snapshot.sceneSelection?.id ? [snapshot.sceneSelection.id] : []))
+        .filter((id) => Boolean(snapshot.bundle.scene.entities[id])));
+      setSelectedAssetIds(snapshot.assetSelection ? [snapshot.assetSelection] : []);
       setSaveStatus("dirty");
       setNotice("やり直しました");
       return withLiveGizmoSettings(transition.history, current.present.bundle);
     });
   }, []);
 
-  const handleCopy = useCallback((requestedEntityId?: string) => {
-    const entityId = requestedEntityId ?? sceneSelection?.id;
-    if (!entityId) return;
-    clipboardRef.current = copyEntityHierarchy(bundle.scene, [entityId]);
-    if (clipboardRef.current) setNotice(`「${bundle.scene.entities[entityId]?.name}」をコピーしました`);
-  }, [bundle.scene, sceneSelection?.id]);
+  const commandEntityIds = useCallback((requestedEntityId?: string): string[] => {
+    if (requestedEntityId && !selectedEntityIds.includes(requestedEntityId)) return [requestedEntityId];
+    if (selectedEntityIds.length > 0) return selectedEntityIds;
+    const id = requestedEntityId ?? sceneSelectionRef.current?.id;
+    return id ? [id] : [];
+  }, [selectedEntityIds]);
 
-  const handlePaste = useCallback(() => {
-    if (!clipboardRef.current) return;
-    const selected = sceneSelection?.id
-      ? bundle.scene.entities[sceneSelection.id]
-      : undefined;
-    const parentId = selected?.parentId ?? null;
-    const result = pasteEntityHierarchy(bundle.scene, clipboardRef.current, parentId);
-    if (!result) return;
-    setBundle(touchProject({ ...bundle, scene: result.scene }));
-    setSceneSelection(
-      result.rootEntityIds[0]
-        ? { kind: "entity", id: result.rootEntityIds[0] }
-        : sceneSelection,
-    );
-    setAssetSelection(null);
-    setNotice("コピーしたEntityを貼り付けました");
-  }, [bundle, editorMode, sceneSelection, setAssetSelection, setBundle, setSceneSelection]);
+  const handleCopy = useCallback((requestedEntityId?: string): boolean => {
+    const scene = bundleRef.current.scene;
+    const entityIds = commandEntityIds(requestedEntityId);
+    const disabledReason = getEntityCopyDisabledReason(scene, entityIds);
+    if (disabledReason) { setNotice(disabledReason); return false; }
+    const clipboard = copyEntityHierarchy(scene, entityIds);
+    if (!clipboard) return false;
+    clipboardRef.current = clipboard;
+    setClipboardAvailable(true);
+    setNotice(clipboard.rootEntityIds.length === 1
+      ? `「${scene.entities[clipboard.rootEntityIds[0]].name}」をコピーしました`
+      : `${clipboard.rootEntityIds.length}件のEntityをコピーしました`);
+    return true;
+  }, [commandEntityIds]);
 
-  const handleDuplicate = useCallback((requestedEntityId?: string) => {
-    const entityId = requestedEntityId ?? sceneSelection?.id;
-    if (!entityId) return;
-    const source = bundle.scene.entities[entityId];
-    if (!source) return;
-    const result = duplicateEntityHierarchy(
-      bundle.scene,
-      [source.id],
-      (kind) => createDocumentId(kind),
-      source.parentId,
-    );
-    if (!result) return;
-    setBundle(touchProject({ ...bundle, scene: result.scene }));
-    setSceneSelection({ kind: "entity", id: result.clone.rootEntityIds[0] });
-    setAssetSelection(null);
-    setNotice(`「${source.name}」を複製しました`);
-  }, [bundle, editorMode, sceneSelection?.id, setAssetSelection, setBundle, setSceneSelection]);
+  /** Insert, select and save as a single Undo step; never mutate the copy source. */
+  const commitEntityInsertion = useCallback((result: { scene: SceneDocument; rootEntityIds: string[] }, message: string) => {
+    const nextBundle = touchProject({ ...bundleRef.current, scene: result.scene });
+    const selection: SceneSelection = result.rootEntityIds[0]
+      ? { kind: "entity", id: result.rootEntityIds[0] }
+      : null;
+    bundleRef.current = nextBundle;
+    sceneSelectionRef.current = selection;
+    assetSelectionRef.current = null;
+    setHistory((current) => commitEditorHistory(current, {
+      ...current.present,
+      bundle: nextBundle,
+      sceneSelection: selection,
+      entitySelectionIds: result.rootEntityIds,
+      assetSelection: null,
+    }));
+    setSelectedEntityIds(result.rootEntityIds);
+    setSelectedAssetIds([]);
+    setSceneSettingsOpen(false);
+    setSaveStatus("dirty");
+    setNotice(message);
+  }, []);
+
+  const handlePaste = useCallback((payload: EditorCommandPayload = {}): boolean => {
+    if (!clipboardRef.current) {
+      setNotice("先にEntityをコピーしてください");
+      return false;
+    }
+    const scene = bundleRef.current.scene;
+    const selectedId = payload.entityId ?? sceneSelectionRef.current?.id;
+    const selected = selectedId ? scene.entities[selectedId] : undefined;
+    const parentId = payload.parentEntityId !== undefined
+      ? payload.parentEntityId
+      : selected?.parentId ?? null;
+    const result = pasteEntityHierarchy(scene, clipboardRef.current, parentId, { mirrorAxis: payload.mirrorAxis });
+    if (!result) {
+      setNotice("貼り付けられませんでした。貼り付け先を選び直してください");
+      return false;
+    }
+    commitEntityInsertion(result, payload.mirrorAxis
+      ? `${payload.mirrorAxis.toUpperCase()}軸に反転して貼り付けました`
+      : "コピーしたEntityを貼り付けました");
+    return true;
+  }, [commitEntityInsertion]);
+
+  const handleDuplicate = useCallback((requestedEntityId?: string): boolean => {
+    const scene = bundleRef.current.scene;
+    const entityIds = commandEntityIds(requestedEntityId);
+    const disabledReason = getEntityCopyDisabledReason(scene, entityIds);
+    if (disabledReason) { setNotice(disabledReason); return false; }
+    const copied = copyEntityHierarchy(scene, entityIds);
+    if (!copied) return false;
+    // Preserve different parents when the selection spans several branches.
+    const result = pasteEntityHierarchy(scene, copied, undefined);
+    if (!result) return false;
+    commitEntityInsertion(result, copied.rootEntityIds.length === 1
+      ? `「${scene.entities[copied.rootEntityIds[0]].name}」を複製しました`
+      : `${copied.rootEntityIds.length}件のEntityを複製しました`);
+    return true;
+  }, [commandEntityIds, commitEntityInsertion]);
 
   const handleDelete = useCallback((requestedEntityId?: string) => {
-    const entityIds = requestedEntityId
-      ? [requestedEntityId]
-      : selectedEntityIds.length > 0
-        ? selectedEntityIds
-        : sceneSelection?.id
-          ? [sceneSelection.id]
-          : [];
+    const entityIds = commandEntityIds(requestedEntityId);
     if (entityIds.length === 0) return;
     // A shared-source Model node is part of the Model: deleting its Entity
     // would keep the geometry on screen and orphan its pose, so Delete hides
@@ -5752,7 +5807,7 @@ export function VisualEditorPrototype({
       );
     }
     if (messages.length > 0) setNotice(messages.join("。"));
-  }, [bundle, editorMode, sceneSelection?.id, selectedEntityIds, setAssetSelection, setBundle, setSceneSelection]);
+  }, [bundle, commandEntityIds, setAssetSelection, setBundle, setSceneSelection]);
 
   const requestDeleteAsset = useCallback(
     (assetId: string) => {
@@ -10844,6 +10899,7 @@ export function VisualEditorPrototype({
 
   const executeCommand = useCallback(
     (commandId: EditorCommandId, payload: EditorCommandPayload = {}): boolean => {
+      if (payload.source === "scene" && editorMode !== "edit") return false;
       switch (commandId) {
         case "project.save":
           if (!onSaveRef.current || saveStatus === "saving") return false;
@@ -10862,17 +10918,19 @@ export function VisualEditorPrototype({
           return history.future.length > 0;
         case "edit.copy":
           if (!payload.entityId && assetSelection) return false;
-          handleCopy(payload.entityId);
-          return Boolean(payload.entityId ?? sceneSelection?.id);
+          return handleCopy(payload.entityId);
         case "edit.paste":
-          if (assetSelection) return false;
-          handlePaste();
-          return Boolean(clipboardRef.current);
+          // The context menu is an explicit Scene action, even when Assets
+          // was the last focused panel. Keyboard paste still respects Assets.
+          if (assetSelection && !payload.source) return false;
+          if (importBusy) return false;
+          return handlePaste(payload);
         case "edit.duplicate":
           if (!payload.entityId && assetSelection) return false;
-          handleDuplicate(payload.entityId);
-          return Boolean(payload.entityId ?? sceneSelection?.id);
+          if (importBusy) return false;
+          return handleDuplicate(payload.entityId);
         case "edit.delete":
+          if (importBusy) return false;
           if (!payload.entityId && (payload.assetId ?? assetSelection)) {
             requestDeleteAsset(payload.assetId ?? assetSelection ?? "");
             return editorMode === "edit";
@@ -10906,14 +10964,16 @@ export function VisualEditorPrototype({
           else return false;
           return true;
         }
-        case "view.frame-selection":
-          if (
-            editorMode !== "edit" ||
-            assetSelection ||
-            !sceneSelection?.id
-          ) return false;
+        case "view.frame-selection": {
+          const entityId = payload.entityId ?? sceneSelection?.id;
+          if (editorMode !== "edit" || (!payload.entityId && assetSelection) || !entityId || !bundle.scene.entities[entityId]) return false;
+          if (payload.entityId) {
+            setAssetSelection(null);
+            if (entityId !== sceneSelection?.id) setSceneSelection({ kind: "entity", id: entityId });
+          }
           setFrameSelectionRequest((current) => current + 1);
           return true;
+        }
         case "view.exit-focus":
           if (editorMode !== "edit" || !focusedEntity) return false;
           setExitFocusRequest((current) => current + 1);
@@ -11108,6 +11168,7 @@ export function VisualEditorPrototype({
       runUpload,
       saveStatus,
       setAssetSelection,
+      setSceneSelection,
       bundle.scene,
       sceneSelection?.id,
       stopPlayMode,
@@ -11620,6 +11681,8 @@ export function VisualEditorPrototype({
             terrainOverlapCount={terrainOverlapCount}
             onArrangeTerrains={handleArrangeTerrains}
             onCommand={executeCommand}
+            clipboardAvailable={clipboardAvailable}
+            pasteShortcut={shortcutLabel("edit.paste")}
             renameRequest={
               renameTarget?.kind === "entity"
                 ? { id: renameTarget.id, requestId: renameTarget.requestId }
@@ -11704,14 +11767,10 @@ export function VisualEditorPrototype({
             onDropSceneAsset={(assetId, position) =>
               handlePlaceSceneAsset(assetId, { position })
             }
-            onCreatePrimitive={(creationId) =>
-              executeCommand("entity.create-primitive", {
-                creationId,
-              })
-            }
-            onDeleteEntity={(entityId) =>
-              executeCommand("edit.delete", { entityId })
-            }
+            onEditCommand={executeCommand}
+            clipboardAvailable={clipboardAvailable}
+            editDisabledReason={importBusy ? "素材の取り込みが終わるまでお待ちください" : null}
+            shortcutLabel={shortcutLabel}
             scriptRuntime={scriptViewportRuntime}
             frameSelectionRequest={frameSelectionRequest}
             exitFocusRequest={exitFocusRequest}

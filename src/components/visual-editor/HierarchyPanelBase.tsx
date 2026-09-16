@@ -1,3 +1,5 @@
+import { EntityPasteMenuItems } from "./EntityPasteMenuItems";
+import type { EntityMirrorAxis } from "../../lib/visual-editor/entity-clipboard";
 import { createPortal } from "react-dom";
 import { Import, Mountain, Store } from "lucide-react";
 import { EntityCreationMenuContent } from "./EntityCreationMenuContent";
@@ -856,6 +858,8 @@ export function HierarchyPanel({
   terrainOverlapCount = 0,
   onArrangeTerrains,
   onCommand,
+  clipboardAvailable = false,
+  pasteShortcut,
   renameRequest,
   onRename,
 }: {
@@ -880,9 +884,13 @@ export function HierarchyPanel({
   onCreateTerrain?: (presetId?: string, grassPresetId?: string | null) => void;
   terrainOverlapCount?: number;
   onArrangeTerrains?: () => void;
+  clipboardAvailable?: boolean;
+  pasteShortcut?: string;
   onCommand: (
     commandId: EditorCommandId,
     payload?: {
+      source?: "scene" | "hierarchy";
+      mirrorAxis?: EntityMirrorAxis;
       creationId?: string;
       entityId?: string;
       parentEntityId?: string | null;
@@ -1816,6 +1824,16 @@ export function HierarchyPanel({
               ) : null}
               <div className="my-1 border-t border-slate-200" />
           </> : null}
+          <EntityPasteMenuItems
+            disabledReason={readOnly ? "動作確認を停止すると編集できます" : importBusy ? "素材の取り込みが終わるまでお待ちください" : clipboardAvailable ? null : "先にEntityをコピーしてください"}
+            shortcut={pasteShortcut}
+            onPaste={(mirrorAxis) => {
+              const entityId = contextMenu.entityId ?? undefined;
+              setContextMenu(null);
+              onCommand("edit.paste", { source: "hierarchy", entityId, mirrorAxis });
+            }}
+          />
+          <div role="separator" className="my-1 border-t border-slate-200" />
           {contextCreationAvailable && (onOpenExternalStore || onImportFile) ? (
             <div className="mb-1 border-b border-slate-200 pb-1">
               {onOpenExternalStore ? (
