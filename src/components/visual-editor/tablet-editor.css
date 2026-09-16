@@ -311,7 +311,3 @@
   min-height: 44px;
   touch-action: manipulation;
 }
-.editor-add-menu[data-touch] .truncate {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
