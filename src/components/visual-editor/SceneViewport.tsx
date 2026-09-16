@@ -276,6 +276,7 @@ import {
 } from "./OfficialXriftComponentRenderer";
 import {
   SCENE_VIEWPORT_DISPLAY_OPTIONS,
+  getDefaultSceneViewportDisplayMode,
   getEntityMeshMaterialStyle,
   getSceneViewportDisplayProfile,
   type SceneViewportDisplayProfile,
@@ -5067,8 +5068,15 @@ export function SceneViewport({
   const cleanRender =
     thumbnailCaptureActive ||
     (recordingViewActive && !recordingViewport.showEditorHelpers);
-  const [displayMode, setDisplayMode] =
-    useState<SceneViewportDisplayMode>("scene");
+  const defaultDisplayMode = getDefaultSceneViewportDisplayMode(projectKind);
+  const [displayMode, setDisplayMode] = useState<SceneViewportDisplayMode>(
+    () => defaultDisplayMode,
+  );
+  // A new project gets its own default; edits, Undo and Play/Stop retain the
+  // author's display choice. Display mode is not part of saved scene data.
+  useEffect(() => {
+    setDisplayMode(getDefaultSceneViewportDisplayMode(projectKind));
+  }, [projectKind, scene.sceneId]);
   const [qualityMode, setQualityMode] = useState<SceneViewportQualityMode>(
     loadSceneViewportQualityMode,
   );
@@ -6508,7 +6516,7 @@ export function SceneViewport({
                     ? editorMode === "play"
                       ? "border-cyan-300/70 bg-cyan-400/15 text-cyan-100"
                       : "border-cyan-400 bg-cyan-50 text-cyan-700"
-                    : displayMode !== "scene" || qualityMode !== "high"
+                    : displayMode !== defaultDisplayMode || qualityMode !== "high"
                       ? "border-violet-300 bg-violet-50 text-violet-700"
                       : editorMode === "play"
                         ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
@@ -6566,7 +6574,7 @@ export function SceneViewport({
                   className={`h-7 shrink-0 rounded border px-1.5 text-[11px] font-semibold outline-none focus:border-violet-400 disabled:cursor-not-allowed disabled:opacity-50 ${
                     editorMode === "play"
                       ? "border-zinc-700 bg-zinc-800 text-zinc-300"
-                      : displayMode === "scene"
+                      : displayMode === defaultDisplayMode
                         ? "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
                         : "border-violet-300 bg-violet-50 text-violet-700 hover:border-violet-400"
                   }`}

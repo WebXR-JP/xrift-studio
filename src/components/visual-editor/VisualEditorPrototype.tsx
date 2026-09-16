@@ -260,6 +260,8 @@ import {
 } from "./AssetDeleteDialog";
 import { TextureImportSettingsPanel } from "./TextureImportSettingsPanel";
 import { EditorImportMenu } from "./EditorImportMenu";
+import { EditorCreationMenuSections } from "./EditorCreationMenuSections";
+import { getEntityCreationMenuEntries } from "../../lib/visual-editor/entity-creation-menu";
 import { ComponentCodeImportDialog } from "./ComponentCodeImportDialog";
 import { InteractivityGraphEditor } from "./InteractivityGraphEditor";
 import { GuideLink } from "../guide/GuideLink";
@@ -1644,6 +1646,7 @@ export function VisualEditorPrototype({
     useState<SceneFocusState | null>(null);
   const resolvedCommands = useMemo(() => resolveEditorCommands(), []);
   const mainRef = useRef<HTMLElement>(null);
+  const [assetStatusHost, setAssetStatusHost] = useState<HTMLDivElement | null>(null);
   const globalModelImportInputRef = useRef<HTMLInputElement>(null);
   const [layout, setLayout] = useState<VisualEditorLayout>({
     ...loadEditorLayout(initialLayout),
@@ -5524,6 +5527,10 @@ export function VisualEditorPrototype({
   const builtinPrefabRecipes = useMemo(
     () => listBuiltinPrefabRecipes(projectKind),
     [projectKind],
+  );
+  const entityCreationEntries = useMemo(
+    () => getEntityCreationMenuEntries(projectKind, builtinPrefabRecipes),
+    [projectKind, builtinPrefabRecipes],
   );
 
   const updateScene = useCallback(
@@ -11418,9 +11425,9 @@ export function VisualEditorPrototype({
         onClick={() => executeCommand("edit.undo")}
         aria-label="元に戻す"
         title={commandTitle("元に戻す", "edit.undo", shortcutLabel("edit.undo"))}
-        className="flex h-7 items-center gap-1 rounded border border-editor-border bg-editor-surface px-1.5 text-xs text-editor-muted hover:bg-editor-subtle hover:text-editor-text disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex size-8 shrink-0 items-center justify-center rounded-md border border-editor-border bg-editor-surface text-xs text-editor-muted hover:bg-editor-subtle hover:text-editor-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:cursor-not-allowed disabled:opacity-40"
       >
-        <EDITOR_ICONS.undo size={13} aria-hidden="true" />
+        <EDITOR_ICONS.undo size={16} aria-hidden="true" />
       </button>
       <button
         type="button"
@@ -11430,9 +11437,9 @@ export function VisualEditorPrototype({
         onClick={() => executeCommand("edit.redo")}
         aria-label="やり直す"
         title={commandTitle("やり直す", "edit.redo", shortcutLabel("edit.redo"))}
-        className="flex h-7 items-center gap-1 rounded border border-editor-border bg-editor-surface px-1.5 text-xs text-editor-muted hover:bg-editor-subtle hover:text-editor-text disabled:cursor-not-allowed disabled:opacity-40"
+        className="flex size-8 shrink-0 items-center justify-center rounded-md border border-editor-border bg-editor-surface text-xs text-editor-muted hover:bg-editor-subtle hover:text-editor-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:cursor-not-allowed disabled:opacity-40"
       >
-        <EDITOR_ICONS.redo size={13} aria-hidden="true" />
+        <EDITOR_ICONS.redo size={16} aria-hidden="true" />
       </button>
     </>
   );
@@ -11461,7 +11468,7 @@ export function VisualEditorPrototype({
               onClick={() => void handleBack()}
               aria-label={leaving ? "保存中…" : `${backLabel}へ戻る`}
               title={commandTitle(`${backLabel}へ戻る`, "CloseVisualEditor")}
-              className="flex shrink-0 items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-2.5 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-wait disabled:opacity-50"
+              className="flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-2.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-wait disabled:opacity-50"
             >
               <BackIcon size={13} aria-hidden="true" />
               {phone ? null : leaving ? "保存中…" : tablet ? "戻る" : backLabel}
@@ -11475,15 +11482,6 @@ export function VisualEditorPrototype({
                 {kindLabel} · ビジュアルエディター
               </p>}
             </div>
-            {!tablet && !recordingUiHidden ? (
-              <div
-                className="editor-history-actions flex shrink-0 items-center gap-1.5 border-l border-editor-border pl-2.5"
-                role="group"
-                aria-label="編集履歴"
-              >
-                {historyActions}
-              </div>
-            ) : null}
           </div>
 
           {phone && !recordingUiHidden ? editActions : null}
@@ -11503,6 +11501,15 @@ export function VisualEditorPrototype({
             }}>
             {tablet ? <summary className="flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center gap-1 rounded-md border border-editor-border bg-editor-surface px-3 text-xs font-semibold text-editor-text">ファイル {phone && saveStatus === "error" ? <span className="text-rose-700" role="status" aria-label={saveStatusLabel}>!</span> : null}<span aria-hidden="true">⌄</span></summary> : null}
             <div className="editor-project-actions flex items-center gap-2">
+            {!tablet && !recordingUiHidden ? (
+              <div
+                className="editor-history-actions flex shrink-0 items-center gap-1.5 border-r border-editor-border pr-2.5"
+                role="group"
+                aria-label="編集履歴"
+              >
+                {historyActions}
+              </div>
+            ) : null}
             {phone ? <div className="min-w-0 border-b border-editor-border px-3 py-2">
               <p className="truncate text-sm font-semibold">{bundle.project.metadata.title}</p>
               {saveStatusIndicator}
@@ -11512,7 +11519,7 @@ export function VisualEditorPrototype({
                 type="button"
                 onClick={() => executeCommand("project.save")}
                 title={commandTitle("自動保存を再試行", "project.save", shortcutLabel("project.save"))}
-                className="flex items-center gap-1 rounded border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                className="flex h-8 shrink-0 items-center gap-1 rounded-md border border-rose-200 bg-white px-2.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
               >
                 <SaveIcon size={13} aria-hidden="true" />
                 再試行
@@ -11527,12 +11534,30 @@ export function VisualEditorPrototype({
               }
               onImportModel={() => globalModelImportInputRef.current?.click()}
               onImportR3f={() => setComponentImportOpen(true)}
+              onOpenExternalStore={() => setExternalStoreOpen(true)}
+              renderCreation={(close) => (
+                <EditorCreationMenuSections
+                  entries={entityCreationEntries}
+                  disabled={renderedReadOnly || importBusy}
+                  onSelect={(entry) => {
+                    close();
+                    if (entry.kind === "empty") handleCreateEmpty(null);
+                    else if (entry.kind === "primitive") handlePlacePrimitive(entry.actionId);
+                    else if (entry.kind === "prefab") handlePlaceBuiltinPrefab(entry.actionId);
+                    else if (entry.kind === "component") handleCreateComponentObject(entry.actionId);
+                    else handleCreateXriftObject(entry.actionId);
+                  }}
+                  onCreateTerrain={projectKind === "world" ? (presetId) => { close(); handleCreateTerrain(presetId); } : undefined}
+                  terrainOverlapCount={terrainOverlapCount}
+                  onArrangeTerrains={() => { close(); handleArrangeTerrains(); }}
+                />
+              )}
             />
             {onProjectImport ? <button
               type="button"
               disabled={projectTransferBusy || projectExportBusy || importBusy || leaving || renderedEditorMode !== "edit"}
               onClick={() => void runProjectImport()}
-              className="rounded-md border border-editor-border bg-editor-surface px-3 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:opacity-45"
+              className="h-8 shrink-0 rounded-md border border-editor-border bg-editor-surface px-3 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:opacity-45"
               title="このブラウザに保存したプロジェクトや.xriftstudioファイルを開きます"
             >プロジェクトを開く</button> : null}
             {onProjectExport ? <button
@@ -11540,13 +11565,13 @@ export function VisualEditorPrototype({
               disabled={projectTransferBusy || projectExportBusy || importBusy || leaving || renderedEditorMode !== "edit"}
               onClick={() => void runProjectExport()}
               title="シーンと素材を.xriftstudioファイルにまとめます"
-              className="flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-45"
+              className="flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-brand-600 px-3 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-45"
             ><ExportIcon size={13} aria-hidden="true" />{projectExportBusy ? "書き出しを準備中…" : "プロジェクトを書き出す"}</button> : <>
             <button
               type="button"
               onClick={() => void runClassicExport()}
               title="制作データと素材を、コードで編集できるXRiftプロジェクトへ書き出します。"
-              className="flex items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-3 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle"
+              className="flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-3 text-xs font-semibold text-editor-text hover:bg-editor-subtle"
             >
               <ExportIcon size={13} aria-hidden="true" />
               コードエディターへ書き出す
@@ -11561,7 +11586,7 @@ export function VisualEditorPrototype({
                 "project.publish",
                 shortcutLabel("project.publish"),
               )}
-              className="flex items-center gap-1.5 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-brand-200/60 hover:bg-brand-700"
+              className="flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-brand-600 px-3 text-xs font-semibold text-white shadow-sm shadow-brand-200/60 hover:bg-brand-700"
             >
               <UploadIcon size={13} aria-hidden="true" />
               XRiftへ公開
@@ -11974,6 +11999,7 @@ export function VisualEditorPrototype({
             pendingImports={pendingImports}
             importError={importError}
             statusMessage={notice}
+            statusBarHost={!tablet && !recordingUiHidden ? assetStatusHost : null}
             onSelectAsset={handleSelectAsset}
             onAssetSelectionChange={handleAssetSelectionChange}
             onQueueFiles={handleQueueFiles}
@@ -12063,106 +12089,7 @@ export function VisualEditorPrototype({
             onGenerated={handleAssetThumbnailGenerated}
             onFailed={handleModelThumbnailFailure}
           />
-          {!tablet ? <EditorUtilityRail
-            commands={resolvedCommands}
-            sceneSettingsOpen={sceneSettingsOpen}
-            onToggleSceneSettings={() => {
-              setSceneSettingsOpen((current) => !current);
-              if (tablet) { setTabletPanel("inspector"); setViewportMaximized(false); }
-            }}
-            onResetLayout={() => executeCommand("layout.reset")}
-            mcpNativeAvailable={mcpNativeAvailable}
-            mcpClients={mcpClients}
-            mcpLoading={mcpLoading}
-            mcpRegisteringClientId={mcpRegisteringClientId}
-            mcpError={mcpError}
-            ollamaStatus={ollamaStatus}
-            ollamaConfiguring={ollamaConfiguring}
-            ollamaError={ollamaError}
-            ollamaResult={ollamaResult}
-            mcpLastActivity={mcpLastActivity}
-            canUndo={
-              !renderedReadOnly &&
-              !importBusy &&
-              history.past.length > 0 &&
-              mcpLastActivity?.revision === mcpRevisionRef.current
-            }
-            onOpenMcp={() => {
-              if (
-                (mcpClients.length === 0 || ollamaStatus === null) &&
-                !mcpLoading
-              ) {
-                void refreshMcpClients();
-              }
-            }}
-            onRefreshMcp={() => void refreshMcpClients()}
-            onRegisterMcpClient={(clientId) => void registerMcpClient(clientId)}
-            onConfigureOllama={(integrationId, model) =>
-              void configureOllama(integrationId, model)
-            }
-            onUndo={handleUndo}
-            onOpenSupport={() => setSupportOpen(true)}
-            recording={{
-              busy: recordingBusy,
-              nativeAvailable: tauri.isAvailable(),
-              onStart: () => {
-                void startRecordingTake({}).then((result) => {
-                  if (!result.started && result.message) setNotice(result.message);
-                });
-              },
-              onStop: () => {
-                void stopRecordingTake().then((result) => {
-                  if (!result.stopped) return;
-                  setNotice(
-                    result.snapshot.status === "completed" && result.snapshot.path
-                      ? `録画を保存しました: ${result.snapshot.path}`
-                      : result.snapshot.message ?? "録画を停止しました",
-                  );
-                });
-              },
-              onProfileChange: (patch) => {
-                recordingSession.setProfile(patch);
-              },
-              onViewportChange: (patch) => {
-                recordingSession.setViewport(patch);
-              },
-              projectRecordingDirectory: projectPath ? `${projectPath}/Recording` : undefined,
-              onChooseDirectory: () => {
-                void tauri
-                  .selectDirectory(
-                    "録画の保存先を選ぶ",
-                    recordingSession.getState().outputDirectory ?? undefined,
-                  )
-                  .then((directory) => {
-                    if (typeof directory === "string" && directory) {
-                      recordingSession.setOutputDirectory(directory);
-                    }
-                  })
-                  .catch(() => setNotice("保存先を選べませんでした"));
-              },
-              onResetDirectory: () => recordingSession.setOutputDirectory(null),
-              onRevealRecording: (path) => {
-                const folder = path.replace(/[\\/][^\\/]+$/, "");
-                void tauri.openPath(folder || path).catch(() => {
-                  setNotice("録画の保存先を開けませんでした");
-                });
-              },
-              onFitCamera: () => {
-                void moveRecordingCamera({ fitScene: true }).catch((error) => {
-                  setNotice(
-                    error instanceof Error ? error.message : "録画用カメラを動かせませんでした",
-                  );
-                });
-              },
-              onCameraPreset: (preset) => {
-                void moveRecordingCamera({ preset }).catch((error) => {
-                  setNotice(
-                    error instanceof Error ? error.message : "録画用カメラを動かせませんでした",
-                  );
-                });
-              },
-            }}
-          /> : null}
+
           <ExternalAssetStoreDialog
             open={externalStoreOpen}
             projectPath={projectPath}
@@ -12187,7 +12114,7 @@ export function VisualEditorPrototype({
             )}
             onAddOfficialComponent={handleAddOfficialComponent}
             onAddWorldAsset={async (templateId) => {
-              if (projectKind !== "world" || editorModeRef.current !== "edit") return false;
+              if (editorModeRef.current !== "edit" || assetImportPanelAvailability.disabledReason) return false;
               return handleCreateScriptFromTemplate({
                 templateId, name: templateId === "vehicle" ? "Vehicle" : "Seat",
                 attachToSelectedEntity: false,
@@ -12397,6 +12324,112 @@ export function VisualEditorPrototype({
             }}
           />
         </main>
+        {!tablet && !recordingUiHidden ? (
+          <footer className="editor-status-dock relative z-40 flex min-h-10 shrink-0 items-center border-t border-editor-border bg-editor-surface px-1"
+            aria-label="エディターのステータスバー">
+          <EditorUtilityRail
+            commands={resolvedCommands}
+            sceneSettingsOpen={sceneSettingsOpen}
+            onToggleSceneSettings={() => {
+              setSceneSettingsOpen((current) => !current);
+              if (tablet) { setTabletPanel("inspector"); setViewportMaximized(false); }
+            }}
+            onResetLayout={() => executeCommand("layout.reset")}
+            mcpNativeAvailable={mcpNativeAvailable}
+            mcpClients={mcpClients}
+            mcpLoading={mcpLoading}
+            mcpRegisteringClientId={mcpRegisteringClientId}
+            mcpError={mcpError}
+            ollamaStatus={ollamaStatus}
+            ollamaConfiguring={ollamaConfiguring}
+            ollamaError={ollamaError}
+            ollamaResult={ollamaResult}
+            mcpLastActivity={mcpLastActivity}
+            canUndo={
+              !renderedReadOnly &&
+              !importBusy &&
+              history.past.length > 0 &&
+              mcpLastActivity?.revision === mcpRevisionRef.current
+            }
+            onOpenMcp={() => {
+              if (
+                (mcpClients.length === 0 || ollamaStatus === null) &&
+                !mcpLoading
+              ) {
+                void refreshMcpClients();
+              }
+            }}
+            onRefreshMcp={() => void refreshMcpClients()}
+            onRegisterMcpClient={(clientId) => void registerMcpClient(clientId)}
+            onConfigureOllama={(integrationId, model) =>
+              void configureOllama(integrationId, model)
+            }
+            onUndo={handleUndo}
+            onOpenSupport={() => setSupportOpen(true)}
+            recording={{
+              busy: recordingBusy,
+              nativeAvailable: tauri.isAvailable(),
+              onStart: () => {
+                void startRecordingTake({}).then((result) => {
+                  if (!result.started && result.message) setNotice(result.message);
+                });
+              },
+              onStop: () => {
+                void stopRecordingTake().then((result) => {
+                  if (!result.stopped) return;
+                  setNotice(
+                    result.snapshot.status === "completed" && result.snapshot.path
+                      ? `録画を保存しました: ${result.snapshot.path}`
+                      : result.snapshot.message ?? "録画を停止しました",
+                  );
+                });
+              },
+              onProfileChange: (patch) => {
+                recordingSession.setProfile(patch);
+              },
+              onViewportChange: (patch) => {
+                recordingSession.setViewport(patch);
+              },
+              projectRecordingDirectory: projectPath ? `${projectPath}/Recording` : undefined,
+              onChooseDirectory: () => {
+                void tauri
+                  .selectDirectory(
+                    "録画の保存先を選ぶ",
+                    recordingSession.getState().outputDirectory ?? undefined,
+                  )
+                  .then((directory) => {
+                    if (typeof directory === "string" && directory) {
+                      recordingSession.setOutputDirectory(directory);
+                    }
+                  })
+                  .catch(() => setNotice("保存先を選べませんでした"));
+              },
+              onResetDirectory: () => recordingSession.setOutputDirectory(null),
+              onRevealRecording: (path) => {
+                const folder = path.replace(/[\\/][^\\/]+$/, "");
+                void tauri.openPath(folder || path).catch(() => {
+                  setNotice("録画の保存先を開けませんでした");
+                });
+              },
+              onFitCamera: () => {
+                void moveRecordingCamera({ fitScene: true }).catch((error) => {
+                  setNotice(
+                    error instanceof Error ? error.message : "録画用カメラを動かせませんでした",
+                  );
+                });
+              },
+              onCameraPreset: (preset) => {
+                void moveRecordingCamera({ preset }).catch((error) => {
+                  setNotice(
+                    error instanceof Error ? error.message : "録画用カメラを動かせませんでした",
+                  );
+                });
+              },
+            }}
+          />
+            <div ref={setAssetStatusHost} className="relative min-w-0 flex-1 self-stretch border-l border-editor-border" />
+          </footer>
+        ) : null}
         {tablet && !recordingUiHidden && notice && (tabletPanel !== "assets" || panelsHidden) ? (
           <div className="flex shrink-0 items-center gap-2 border-t border-editor-border bg-editor-surface px-3 py-1.5 text-xs text-editor-text">
             <p role="status" className="min-w-0 flex-1 whitespace-pre-wrap break-words">{notice}</p>

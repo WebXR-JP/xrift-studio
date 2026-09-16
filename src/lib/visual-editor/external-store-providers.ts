@@ -10,7 +10,7 @@ export const EXTERNAL_STORE_PROVIDER_GROUPS = [
   { id: "sky-nature", label: "空と自然" },
   { id: "light-decoration", label: "3Dと演出" },
   { id: "special-materials", label: "マテリアル表現" },
-  { id: "world-features", label: "ワールド機能" },
+  { id: "world-features", label: "ギミック・機能" },
 ] as const;
 
 export type ExternalStoreProviderGroupId =

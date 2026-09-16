@@ -1,7 +1,7 @@
 import { EntityPasteMenuItems } from "./EntityPasteMenuItems";
 import type { EntityMirrorAxis } from "../../lib/visual-editor/entity-clipboard";
 import { createPortal } from "react-dom";
-import { Import, Mountain, Store } from "lucide-react";
+import { Import, MoreHorizontal, Mountain, Store } from "lucide-react";
 import { EntityCreationMenuContent } from "./EntityCreationMenuContent";
 import { useEditorDevice } from "./useEditorDevice";
 import { getEntityCreationMenuEntries } from "../../lib/visual-editor/entity-creation-menu";
@@ -434,6 +434,7 @@ const HierarchyEntityRow = memo(function HierarchyEntityRow({
   matchesFilter,
   highlightMatches,
   selected,
+  touch,
   readOnly,
   renaming,
   renameDraft,
@@ -453,6 +454,7 @@ const HierarchyEntityRow = memo(function HierarchyEntityRow({
   /** Whether a filter is active, so a match is worth emphasising. */
   highlightMatches: boolean;
   selected: boolean;
+  touch: boolean;
   readOnly: boolean;
   renaming: boolean;
   /** Null unless this row is the one being renamed, so typing wakes one row. */
@@ -725,6 +727,22 @@ const HierarchyEntityRow = memo(function HierarchyEntityRow({
           <EDITOR_ICONS.hidden size={14} aria-hidden="true" />
         )}
       </button>
+      {touch && selected ? (
+        <button
+          type="button"
+          data-no-entity-drag="true"
+          aria-label={`${entity.name}のメニュー`}
+          aria-haspopup="menu"
+          title="コピー・貼り付け・複製など"
+          onClick={(event) => {
+            event.stopPropagation();
+            handlersRef.current.openContextMenu(event, entity.id);
+          }}
+          className="my-0.5 flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded text-slate-600 hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+        >
+          <MoreHorizontal size={16} aria-hidden="true" />
+        </button>
+      ) : null}
       <button
         type="button"
         data-no-entity-drag="true"
@@ -921,14 +939,12 @@ export function HierarchyPanel({
     x: number;
     y: number;
     entityId: string | null;
-    origin: "header" | "context";
   } | null>(null);
   const contextEntityId = contextMenu?.entityId
     ?? (selectedEntityIds.length > 1 ? selectedEntityIds[0] : null);
   const contextMultiple = selectedEntityIds.length > 1
     && Boolean(contextEntityId && selectedEntityIds.includes(contextEntityId));
-  const contextCreationAvailable =
-    !contextMultiple || contextMenu?.origin === "header";
+  const contextCreationAvailable = !contextMultiple;
   const creationEntries = useMemo(
     () => getEntityCreationMenuEntries(projectKind, builtinPrefabRecipes),
     [projectKind, builtinPrefabRecipes],
@@ -1226,7 +1242,6 @@ export function HierarchyPanel({
   const openContextMenu = (
     event: MouseEvent<HTMLElement>,
     entityId: string | null = null,
-    origin: "header" | "context" = "context",
   ) => {
     event.preventDefault();
     const menuHeight = Math.min(640, window.innerHeight - 24);
@@ -1234,7 +1249,6 @@ export function HierarchyPanel({
       x: Math.max(12, Math.min(event.clientX, window.innerWidth - 300)),
       y: Math.max(12, Math.min(event.clientY, window.innerHeight - menuHeight - 12)),
       entityId,
-      origin,
     });
   };
 
@@ -1485,19 +1499,6 @@ export function HierarchyPanel({
           Hierarchy
         </h2>
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            aria-label={selectedEntityId ? "操作" : "追加"}
-            aria-haspopup="menu"
-            aria-expanded={Boolean(contextMenu)}
-            onClick={(event) => openContextMenu(event, selectedEntityId, "header")}
-            title={selectedEntityId ? "選択したEntityの操作と追加" : "Entityを追加"}
-            className={`rounded border border-editor-border bg-editor-surface px-2 text-xs font-semibold text-editor-text hover:bg-editor-subtle ${
-              touch ? "min-h-11" : "h-7"
-            }`}
-          >
-            {selectedEntityId ? "操作" : "追加"}
-          </button>
           {selectedEntityIds.length > 0 ? (
             <button
               type="button"
@@ -1718,6 +1719,7 @@ export function HierarchyPanel({
             matchesFilter={row.matchesFilter}
             highlightMatches={Boolean(filterResult)}
             selected={selectedEntityIdSet.has(row.entity.id)}
+            touch={touch}
             readOnly={readOnly}
             renaming={renameRequest?.id === row.entity.id}
             renameDraft={
@@ -1872,8 +1874,7 @@ export function HierarchyPanel({
             entries={creationEntries}
             disabled={readOnly || importBusy}
             onSelect={(entry) => {
-              const parentEntityId =
-                contextMenu.origin === "header" ? null : contextMenu.entityId;
+              const parentEntityId = contextMenu.entityId;
               setContextMenu(null);
               if (entry.kind === "empty") onCommand("entity.create-empty", { parentEntityId });
               else if (entry.kind === "primitive") onCommand("entity.create-primitive", { creationId: entry.actionId });
