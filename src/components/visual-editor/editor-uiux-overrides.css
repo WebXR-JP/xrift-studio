@@ -1,0 +1,75 @@
+.xrift-assets-ux [class*="minmax(76px,1fr)"] {
+  grid-template-columns: repeat(auto-fill, minmax(min(104px, 100%), 1fr)) !important;
+}
+
+.xrift-assets-ux [class*="minmax(76px,1fr)"] > .group {
+  position: relative;
+  min-width: 0;
+}
+
+.xrift-assets-ux [class*="minmax(76px,1fr)"] > .group > button:first-child {
+  width: 100%;
+  min-width: 0;
+  padding-right: 1.75rem;
+}
+
+.xrift-assets-ux [class*="minmax(76px,1fr)"] > .group > button:last-child:not(:first-child) {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  z-index: 1;
+}
+
+.xrift-assets-ux [class*="minmax(76px,1fr)"] > .group [class~="font-semibold"] {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-height: 1rem;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.xrift-hierarchy-context-menu {
+  width: min(18rem, calc(100vw - 24px)) !important;
+  max-height: min(70vh, 36rem) !important;
+  overflow-y: auto !important;
+  padding: 0.25rem !important;
+}
+
+.xrift-hierarchy-context-menu :is(button, summary) {
+  min-height: 28px !important;
+  padding: 0.25rem 0.5rem !important;
+  font-size: 12px !important;
+  line-height: 20px !important;
+}
+
+.xrift-hierarchy-context-menu details {
+  margin: 0 !important;
+  overflow: visible !important;
+  border: 0 !important;
+  border-radius: 0.25rem !important;
+}
+
+.xrift-hierarchy-context-menu details > summary {
+  background: transparent !important;
+  font-weight: 500 !important;
+}
+
+.xrift-hierarchy-context-menu details[open] > summary {
+  background: rgb(248 250 252) !important;
+}
+
+.xrift-hierarchy-context-menu details > div {
+  margin-left: 0.5rem;
+  padding-left: 0.25rem;
+  border-left: 1px solid rgb(226 232 240);
+}
+
+@media (pointer: coarse) and (hover: none) {
+  .xrift-hierarchy-context-menu :is(button, summary) {
+    min-height: 44px !important;
+    padding-block: 0.625rem !important;
+  }
+}

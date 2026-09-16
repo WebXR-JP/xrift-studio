@@ -3,3 +3,4 @@ export { React };
 export { createRoot } from "react-dom/client";
 export { EditorCreateMenu } from "../src/components/visual-editor/EditorCreateMenu";
 export { HierarchyPanel } from "../src/components/visual-editor/HierarchyPanel";
+export { AssetsPanel } from "../src/components/visual-editor/AssetsPanel";
