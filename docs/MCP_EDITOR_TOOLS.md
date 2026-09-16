@@ -246,7 +246,7 @@ Bone / 空ノードは `DEPENDENCY_MISSING` で断る。pose で非表示にし�
 `update_terrain`, `apply_terrain_surface`
 
 `create_terrain` が作るのは平らな板だ。primitive としては正しいが、出発点として
-は向いていない。Hierarchyの「追加 / 操作」は形のプリセットを 8 種と、高さと傾斜で塗り分ける表面プリセットを
+は向いていない。上部の「素材を追加 → Entityを作成 → World → Terrain」は形のプリセットを 8 種と、高さと傾斜で塗り分ける表面プリセットを
 10 種出す。primitive だけでは谷をブラシで一打ずつ彫ることになる。
 `create_terrain_from_preset` は彫って草まで載った状態で置く。`position` を
 省くと既存の地形の隣へ置く。同じ地面に 2 枚重なるとモアレになるためだ。
@@ -450,6 +450,8 @@ project ではなく app data へ置く。
 **ワールド制作の録画**（詳細は [ワールド制作の録画](./RECORDING.md)）
 
 ## 意図的に公開していない操作
+
+- ヘッダー・ステータスバーの配置、Scale比率固定の初期値、アイテムの初期Unlit表示はUIだけの設定で、専用toolは設けない。Entity作成・Scale更新・ギミック追加は既存の操作を使う。ギミックのprojectKindsはワールド・アイテムで共通化し、通常のproject kind・revision・Asset操作ロックは維持する。
 
 - シーン / Hierarchyの「反転して貼り付け」はエディター内のクリップボードを使うため、専用toolは設けない。MCPでは既存の`duplicate_entity`で作ったEntityに`update_transform`を適用し、local Scaleの指定軸だけ符号を反転する。元のEntityを変更しない。メニューの開閉や軸選択はUIだけの状態として扱う。
 

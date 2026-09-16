@@ -1614,7 +1614,7 @@ const SOUND_BUTTON: SceneRecipe = {
   description:
     "押すと沈んで光り、音が鳴って戻るボタンです。操作の受け付け、音源、ノードグラフの組み合わせを確認できます。",
   category: "tutorial",
-  projectKinds: ["world"],
+  projectKinds: ["world", "item"],
   note: "動作確認を開始して、ボタンにカーソルを合わせてクリックしてください。音はボタンの音源から鳴ります。設定の「音源」で素材を差し替えると、そのまま自分の音になります。",
   lesson: {
     goal: "押したら何かが起きる、をひと通り自分で作れるようになります",
@@ -1657,7 +1657,7 @@ const LIGHT_SWITCH: SceneRecipe = {
   description:
     "ボタンを押すと、離れた場所に立つランプが点いたり消えたりします。押したものとは違うEntityを書き換える、いちばん短い例です。",
   category: "tutorial",
-  projectKinds: ["world"],
+  projectKinds: ["world", "item"],
   note: "灯りは消えた状態で置かれます。動作確認を開始してボタンを押すと点きます。ライトは「灯り」Entityにあるので、色や強さはそこの設定で変えられます。",
   lesson: {
     goal: "押したEntityとは別のEntityを、グラフから動かせるようになります",
@@ -1711,7 +1711,7 @@ const AMBIENT_SPEAKER: SceneRecipe = {
   description:
     "つなぎ目のない4秒のループを流し続けるスピーカーです。近づくと大きく、離れると聞こえなくなる距離の設定が、そのまま入っています。",
   category: "tutorial",
-  projectKinds: ["world"],
+  projectKinds: ["world", "item"],
   note: "動作確認を開始した時点から鳴り続けます。ブラウザの仕様で、最初のクリックまで音が出ないことがあります。無音のまま置きたいときは、音源のAutoplayをオフにしてください。",
   lesson: {
     goal: "空間に置く音の、聞こえる範囲を自分で決められるようになります",
@@ -1753,7 +1753,7 @@ const SLIDING_DOOR: SceneRecipe = {
   description:
     "押すと1秒かけて開き、2.5秒待って、また閉じます。時間をかけた変化と、変化が終わってからの続きを、1つのグラフで見せます。",
   category: "tutorial",
-  projectKinds: ["world"],
+  projectKinds: ["world", "item"],
   note: "扉は横へスライドするだけで、コライダーは入れていません。通り抜けさせたくない壁として使うときは、扉と枠にメッシュ衝突判定を足してください。",
   lesson: {
     goal: "「動かす」「待つ」「戻す」を1本のグラフでつなげられるようになります",
@@ -1826,7 +1826,7 @@ const CONFETTI_BUTTON: SceneRecipe = {
   description:
     "押すたびに紙吹雪が吹き上がります。粒は開始時に止めておき、押したときだけ出し直す、という2本のグラフの組み合わせです。",
   category: "tutorial",
-  projectKinds: ["world"],
+  projectKinds: ["world", "item"],
   note: "紙吹雪はパーティクルとして追加されます。色・量・広がりは素材の設定で変えられます。1回の量を増やすなら、パーティクルの寿命と放出量を上げてください。",
   lesson: {
     goal: "押したときだけ出るエフェクトの作り方が分かります",
@@ -1897,7 +1897,7 @@ const TELEPORT_PAD: SceneRecipe = {
   description:
     "押すと画面が白くなり、決めた座標へ移動して、また明るくなります。移動と暗転を1本につないだ、行き来のある世界の基本形です。",
   category: "tutorial",
-  projectKinds: ["world"],
+  projectKinds: ["world", "item"],
   note: "行き先の初期値はワールド原点です。「テレポート」アクションの値を、飛ばしたい場所の座標へ変えてから使ってください。移動するのも画面が変わるのも、押した人だけです。",
   lesson: {
     goal: "押した人だけを動かす移動と、暗転の作り方が分かります",
@@ -1974,7 +1974,7 @@ const LIGHT_COLOR_PANEL: SceneRecipe = {
   description:
     "3つのボタンが、同じランプの色をそれぞれの色に変えます。1つのセットに3本のグラフが入った、いちばん分かりやすい形です。",
   category: "tutorial",
-  projectKinds: ["world"],
+  projectKinds: ["world", "item"],
   note: "色はライトの色です。押した人だけでなく全員に見えます。ボタンを増やすときは、どれか1つのグラフの実行を複製し、色の値だけ変えてください。",
   lesson: {
     goal: "同じ対象を、複数のボタンから別々に変えられるようになります",
@@ -2083,7 +2083,7 @@ const DAY_NIGHT_PANEL: SceneRecipe = {
   description:
     "2つのボタンが、シーンの明るさと環境光を2秒かけて切り替えます。ワールド全体の見え方をグラフから変える例です。",
   category: "tutorial",
-  projectKinds: ["world"],
+  projectKinds: ["world", "item"],
   note: "変わるのは押した人の画面だけで、ほかのビューアーには影響しません。動作確認を止めるとシーンの設定へ戻ります。",
   lesson: {
     goal: "ワールド全体の見え方を、押した人の画面だけで変えられるようになります",
@@ -2176,7 +2176,7 @@ const QUALITY_SWITCH: SceneRecipe = {
   description:
     "押すとPost Processingが切れて、重い端末でも動くようになります。ワールドの品質を下げずに、見る人が自分で選べるようにする置き方です。",
   category: "tutorial",
-  projectKinds: ["world"],
+  projectKinds: ["world", "item"],
   note: "切り替わるのは押した人の画面だけです。入口の近くに置くと、重くて入れなかった人が自分で軽くできます。",
   lesson: {
     goal: "見る人が自分の端末に合わせて負荷を下げられる仕掛けを作れます",
@@ -2225,7 +2225,7 @@ const HIDDEN_DOOR_SWITCH: SceneRecipe = {
   description:
     "押すと、見えていなかった箱が現れます。最初から置いてあるけれど消してあるものを、グラフから出す仕掛けです。",
   category: "tutorial",
-  projectKinds: ["world"],
+  projectKinds: ["world", "item"],
   note: "隠してあるEntityはHierarchyでは表示OFFで見えます。シーンには存在しているので、位置や中身は普通に編集できます。",
   lesson: {
     goal: "隠しておいたものを、押したときに出せるようになります",
@@ -2286,7 +2286,7 @@ const SIGN_TEXT_BUTTONS: SceneRecipe = {
   description:
     "2つのボタンが、看板の文字を書き換えます。案内や注意書きを、その場で切り替えられるようにする形です。",
   category: "tutorial",
-  projectKinds: ["world"],
+  projectKinds: ["world", "item"],
   note: "文字は書き換えるだけなので、時間をかけた変化はできません。書体や大きさはテキストの設定で変えられます。",
   lesson: {
     goal: "看板の文言を、押したときに差し替えられるようになります",

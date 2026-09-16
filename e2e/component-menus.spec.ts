@@ -181,7 +181,7 @@ test("Inspector adds to the selection while Create adds a new Entity", async ({ 
   await search.fill("Rigid Body");
   await expect(page.getByRole("button", { name: /Rigid Body.*追加済み/ })).toBeDisabled();
   await page.getByRole("button", { name: "Add Component", exact: true }).click();
-  await page.getByRole("button", { name: "操作", exact: true }).click();
+  await tree.getByRole("treeitem", { selected: true }).click({ button: "right" });
   const menu = page.getByRole("menu", { name: "選択したEntityの操作" });
   await menu.getByRole("button", { name: /^Primitive/ }).click();
   await menu.getByRole("button", { name: /^Cube.*作成/ }).click();

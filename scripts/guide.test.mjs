@@ -51,7 +51,7 @@ test("escaping and search result rendering cannot turn queries into markup",asyn
 });
 test("one app help host, lazy content and direct context links are wired",async()=>{
  assert.equal(((await read("src/main.tsx")).match(/<GuideHost\s*\/>/g)||[]).length,1);
- for(const [file,target]of [["SetupView.tsx","installation"],["ProjectLibrary.tsx","first-world"],["visual-editor/AssetsPanel.tsx","assets"],["visual-editor/AssetQuickEditor.tsx","materials"],["visual-editor/SceneSettingsPanel.tsx","lighting"]])assert.ok((await read(`src/components/${file}`)).includes(`page="${target}"`));
+ for(const [file,target]of [["SetupView.tsx","installation"],["ProjectLibrary.tsx","first-world"],["visual-editor/AssetsPanelBase.tsx","assets"],["visual-editor/AssetQuickEditor.tsx","materials"],["visual-editor/SceneSettingsPanel.tsx","lighting"]])assert.ok((await read(`src/components/${file}`)).includes(`page="${target}"`));
  const panel=await read("src/components/guide/GuidePanel.tsx");assert.ok(panel.includes('import.meta.glob<string>("/docs/guide/*.md"'));assert.ok(panel.includes("event.stopPropagation()"));assert.doesNotMatch(panel,/aria-modal="true"|saveVisualProject|publishVisualProject/);
 });
 test("setup comes before creating a desktop project and LP help is not desktop-only",async()=>{

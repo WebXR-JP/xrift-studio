@@ -149,21 +149,6 @@ export function SceneRecipeStore({
     }
   };
 
-  if (shelf === "gimmicks" && projectKind === "item") {
-    return (
-      <section className="min-w-0 flex-1 bg-white p-6" aria-label="ギミック一覧">
-        <h3 className="text-base font-semibold text-slate-900">ギミックはワールド専用です</h3>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          アイテムには追加できません。プロジェクト一覧からワールドを開き、
-          「外部から追加」の「ギミック」を選んでください。
-        </p>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          アイテムの質感を選ぶ場合は、カテゴリの「glTFマテリアル」を利用できます。
-        </p>
-      </section>
-    );
-  }
-
   return (
     <>
       <section
@@ -177,6 +162,11 @@ export function SceneRecipeStore({
               <p className="mt-1 text-[13px] leading-6 text-slate-600">
                 {description}
               </p>
+              {shelf === "gimmicks" && projectKind === "item" ? (
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  アイテムにも追加できます。移動・乗車・同期など、プレイヤーやルームが必要な動作は配置先のワールドで確認してください。
+                </p>
+              ) : null}
             </div>
             <span className="rounded-full border border-orange-200 bg-orange-50 whitespace-nowrap px-2.5 py-1 text-xs font-semibold text-orange-700">
               {recipes.length} 種類

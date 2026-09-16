@@ -119,6 +119,11 @@ export function EditorUtilityRail({
     isRecordingActive(state.snapshot),
   );
   const railRef = useRef<HTMLElement>(null);
+  const panelTriggerRef = useRef<HTMLElement | null>(null);
+  const closePanel = () => {
+    setOpenPanel(null);
+    panelTriggerRef.current?.focus();
+  };
   const shortcutGroups = useMemo(
     () =>
       Object.entries(CATEGORY_LABELS).flatMap(([category, label]) => {
@@ -134,21 +139,18 @@ export function EditorUtilityRail({
 
   useEffect(() => {
     if (!openPanel) return;
+    railRef.current?.querySelector<HTMLButtonElement>('[aria-label="パネルを閉じる"]')?.focus();
     const handlePointerDown = (event: PointerEvent) => {
       if (!railRef.current?.contains(event.target as Node)) setOpenPanel(null);
     };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpenPanel(null);
-    };
     window.addEventListener("pointerdown", handlePointerDown, true);
-    window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("pointerdown", handlePointerDown, true);
-      window.removeEventListener("keydown", handleKeyDown);
     };
   }, [openPanel]);
 
   const togglePanel = (panel: Exclude<UtilityPanel, null>) => {
+    panelTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setOpenPanel((current) => (current === panel ? null : panel));
   };
 
@@ -156,7 +158,16 @@ export function EditorUtilityRail({
     <nav
       ref={railRef}
       aria-label="エディターのヘルプと設定"
-      className="absolute bottom-3 left-3 z-50 flex gap-0.5 rounded-lg border border-editor-border bg-editor-surface/95 p-1 shadow-sm backdrop-blur"
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || !openPanel) return;
+        event.preventDefault();
+        event.stopPropagation();
+        closePanel();
+      }}
+      onBlur={(event) => {
+        if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) setOpenPanel(null);
+      }}
+      className="editor-utility-rail relative flex shrink-0 items-center gap-0.5 bg-editor-surface p-1"
     >
       <GuideLink page="first-world" label="使い方" />
       <UtilityButton
@@ -214,9 +225,9 @@ export function EditorUtilityRail({
         <section
           role="dialog"
           aria-labelledby={`editor-${openPanel}-heading`}
-          className="absolute bottom-[calc(100%+0.5rem)] left-0 w-80 overflow-hidden rounded-lg border border-editor-border bg-editor-surface text-editor-text shadow-xl"
+          className="absolute bottom-[calc(100%+0.5rem)] left-0 max-h-[calc(100dvh-5rem)] w-80 max-w-[calc(100vw-1rem)] overflow-y-auto overscroll-contain rounded-lg border border-editor-border bg-editor-surface text-editor-text shadow-xl"
         >
-          <div className="flex h-11 items-center justify-between border-b border-slate-200 px-3.5">
+          <div className="sticky top-0 z-10 flex h-11 shrink-0 items-center justify-between border-b border-slate-200 bg-editor-surface px-3.5">
             <h2
               id={`editor-${openPanel}-heading`}
               className="text-sm font-semibold text-slate-900"
@@ -233,7 +244,7 @@ export function EditorUtilityRail({
               type="button"
               aria-label="パネルを閉じる"
               title="閉じる"
-              onClick={() => setOpenPanel(null)}
+              onClick={closePanel}
               className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
             >
               <EDITOR_ICONS.close size={16} aria-hidden="true" />
@@ -298,7 +309,7 @@ export function EditorUtilityRail({
               <ol className="space-y-2.5">
                 <li>
                   <span className="font-semibold text-slate-800">1. 作る</span>
-                  <p>Hierarchyの「追加 / 操作」からEntityや図形を配置します。</p>
+                  <p>上部の「素材を追加 → Entityを作成」からEntityや図形を配置します。</p>
                 </li>
                 <li>
                   <span className="font-semibold text-slate-800">2. 選ぶ</span>

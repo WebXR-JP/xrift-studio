@@ -1,3 +1,4 @@
+import { DEFAULT_SCALE_LINKED, MIN_SCALE_MAGNITUDE, updateVectorAxis, type TransformValueKind } from "./inspector-transform";
 import { getEditorComponentDisabledReason, getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
 import { MeshCollisionControls } from "./MeshCollisionControls";
 import { useEditorTouch } from "./useEditorDevice";
@@ -358,10 +359,6 @@ function EntityNameField({
   );
 }
 
-const MIN_SCALE_MAGNITUDE = 0.0001;
-
-type TransformValueKind = "position" | "rotation" | "scale";
-
 type AxisScrubState = {
   pointerId: number;
   axis: "X" | "Y" | "Z";
@@ -375,36 +372,6 @@ type AxisScrubState = {
   active: boolean;
 };
 
-function normalizeScaleAxis(value: number, fallback: number): number {
-  if (Math.abs(value) >= MIN_SCALE_MAGNITUDE) return value;
-  const sign = value < 0 ? -1 : value > 0 ? 1 : fallback < 0 ? -1 : 1;
-  return sign * MIN_SCALE_MAGNITUDE;
-}
-
-function updateVectorAxis(
-  value: Vec3,
-  axisIndex: number,
-  axisValue: number,
-  valueKind: TransformValueKind,
-  scaleLinked: boolean,
-): Vec3 {
-  const next: Vec3 = [value[0], value[1], value[2]];
-  if (valueKind !== "scale") {
-    next[axisIndex] = axisValue;
-    return next;
-  }
-
-  const normalizedAxisValue = normalizeScaleAxis(axisValue, value[axisIndex]);
-  if (!scaleLinked) {
-    next[axisIndex] = normalizedAxisValue;
-    return next;
-  }
-
-  const ratio = normalizedAxisValue / value[axisIndex];
-  return value.map((entry) =>
-    normalizeScaleAxis(entry * ratio, entry),
-  ) as Vec3;
-}
 
 const AXIS_DRAG_THRESHOLD_PX = 3;
 
@@ -605,7 +572,7 @@ function VectorEditor({
               disabled={disabled}
               aria-label={scaleLinked ? "Scale比率の固定を解除" : "Scale比率を固定"}
               aria-pressed={scaleLinked}
-              title={scaleLinked ? "Scale比率を固定中" : "Scaleを軸ごとに変更"}
+              title={scaleLinked ? "X・Y・Zの比率を固定中。クリックで軸ごとの変更に切り替えます" : "軸ごとに変更中。クリックでX・Y・Zの比率を固定します"}
               onClick={() => onScaleLinkedChange?.(!scaleLinked)}
               className={`grid h-5 w-5 shrink-0 place-items-center rounded border transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
                 scaleLinked
@@ -5168,7 +5135,7 @@ function EntityInspector({
   const [addComponentOpen, setAddComponentOpen] = useState(false);
   const [addComponentSearchQuery, setAddComponentSearchQuery] = useState("");
   const addComponentSearchInputRef = useRef<HTMLInputElement>(null);
-  const [scaleLinked, setScaleLinked] = useState(true);
+  const [scaleLinked, setScaleLinked] = useState<boolean>(DEFAULT_SCALE_LINKED);
   const registeredComponents = entity.components as RegisteredSceneComponent[];
   const liveRuntimeTuning = readOnly && playMode;
   const addComponentSearchTerms = addComponentSearchQuery

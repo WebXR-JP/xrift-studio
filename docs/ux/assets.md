@@ -206,7 +206,7 @@
 
 ### 操作前
 
-- 公式カタログは素材の「外部から追加」で「ワールド機能」区分の「XRift公式コンポーネント」providerから開く。project kindで配置可能なコンポーネントを全件表示し、各カードにコンポーネント名、category、package本体を事前描画した保存済みthumbnailを置く。一覧と詳細を開くだけではWebGL Contextを作らない。`DevEnvironment`はシーンコンポーネントではなくdev 開始ファイル用wrapperとして別注記する。
+- 公式カタログは素材の「外部から追加」で「ギミック・機能」区分の「XRift公式コンポーネント」providerから開く。project kindで配置可能なコンポーネントを全件表示し、各カードにコンポーネント名、category、package本体を事前描画した保存済みthumbnailを置く。一覧と詳細を開くだけではWebGL Contextを作らない。`DevEnvironment`はシーンコンポーネントではなくdev 開始ファイル用wrapperとして別注記する。
 - 選択中コンポーネントには公開package version、公式元データ、実際に生成するnamed importとJSX sampleを表示する。
 - 右上の「読み込む」には3Dモデル / 3D 素材とR3F / コード編集変換を置く。R3F / コード編集変換には貼り付け欄、「コード編集プロジェクトを選択」、HTTPS / git SSHのリポジトリのURL入力を並べ、folder / repository読込がデスクトップ機能であること、選択後のpackage名、開始ファイル、pathまたはURL、読み込んだmodule数を表示する。確定前にシーンへ追加するオブジェクト、3Dモデル、テクスチャ、音声、空の背景、Custom マテリアル、衝突判定部位と診断をreviewする。コード編集素材はこのreviewへ入る時点で書き込みなしの通常読み込む transactionまで準備し、原本容量、テクスチャ解像度とRGBA / mipmap展開量、3Dモデル原寸、3Dモデル import scale、親を含む配置大きさ、配置後寸法、中心補正、反転、同大きさで復元するnamed 衝突判定を表示する。この段階ではシーン、AssetManifest、project fileを変更しない。
 
@@ -505,4 +505,4 @@
 
 スタジオ照明は比較用であり、配置先へは追加しない。Emissiveの発光とLightによる照明、Bloomによるにじみは区別して説明する。実装と検証の範囲は [カタログ拡充](../catalog-expansion/README.ja.md) を参照。
 
-アイテムでギミックを開いた場合は、ワールド専用であることと、プロジェクト一覧からワールドを開く手順を表示する。検索条件では解消できないため、検索欄・0件表示・条件リセットの案内を出さない。他の棚へはそのまま切り替えられる。
+ワールドとアイテムは同じギミック一覧・検索・追加処理を使う。アイテムで選べるレシピは、配置時のprojectKinds検査も通す。Vehicle・Seatも追加できるが、プレイヤーやルームを必要とする動作は配置先ワールドでの確認を案内する。SpawnPointなど、個別Componentに設定された本来のproject kind制約は解除しない。読み込み中・失敗・Undoは既存のAsset操作と履歴を維持する。

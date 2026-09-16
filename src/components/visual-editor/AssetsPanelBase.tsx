@@ -1179,6 +1179,7 @@ function ImportQueueEntry({
 
 function AssetStatusBar({
   touch = false,
+  docked = false,
   entries,
   error,
   statusMessage,
@@ -1187,6 +1188,7 @@ function AssetStatusBar({
   onReveal,
 }: {
   touch?: boolean;
+  docked?: boolean;
   entries: PendingImport[];
   error: string | null;
   statusMessage: string | null;
@@ -1216,7 +1218,7 @@ function AssetStatusBar({
           : "アセット操作の準備ができています");
 
   return (
-    <footer className={`flex shrink-0 items-center gap-2 border-t border-editor-border bg-editor-surface px-3 text-[11px] text-editor-muted ${touch ? "min-h-11 py-1 [&_button]:min-h-11" : "h-8"}`}>
+    <div className={`flex min-w-0 shrink-0 items-center gap-2 bg-editor-surface px-3 text-[11px] text-editor-muted ${docked ? "h-full min-h-10" : "border-t border-editor-border"} ${touch ? "min-h-11 py-1 [&_button]:min-h-11" : docked ? "" : "h-8"}`}>
       <div className="flex min-w-0 flex-1 items-center gap-2" role="status" aria-live="polite">
         {activeEntry ? (
           <LoaderCircle size={13} className="shrink-0 animate-spin text-brand-600 motion-reduce:animate-none" aria-hidden="true" />
@@ -1227,7 +1229,7 @@ function AssetStatusBar({
         ) : (
           <EDITOR_ICONS.asset size={13} className="shrink-0 text-slate-400" aria-hidden="true" />
         )}
-        <span className={touch ? "min-w-0 break-words [overflow-wrap:anywhere]" : "truncate"}>{summary}</span>
+        <span title={summary} className={touch && !docked ? "min-w-0 break-words [overflow-wrap:anywhere]" : "truncate"}>{summary}</span>
         {activeEntry ? (
           <span className="shrink-0 tabular-nums text-brand-700">{activeEntry.progress}%</span>
         ) : null}
@@ -1245,6 +1247,7 @@ function AssetStatusBar({
         <button
           type="button"
           onClick={onToggleActivity}
+          aria-label="インポート履歴の詳細"
           aria-expanded={activityOpen}
           className={`flex items-center gap-1 rounded px-2 py-1 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 ${activityOpen ? "bg-editor-subtle text-editor-text" : "hover:bg-editor-subtle hover:text-editor-text"}`}
         >
@@ -1253,7 +1256,7 @@ function AssetStatusBar({
           <ChevronDown size={12} className={`transition-transform ${activityOpen ? "rotate-180" : ""}`} aria-hidden="true" />
         </button>
       ) : null}
-    </footer>
+    </div>
   );
 }
 
@@ -1267,6 +1270,7 @@ export function AssetsPanel({
   pendingImports,
   importError,
   statusMessage,
+  statusBarHost = null,
   onSelectAsset,
   onAssetSelectionChange,
   onQueueFiles,
@@ -1302,6 +1306,8 @@ export function AssetsPanel({
   pendingImports: PendingImport[];
   importError: string | null;
   statusMessage: string | null;
+  /** Desktop footer destination. Omit to keep the panel's inline status bar. */
+  statusBarHost?: HTMLElement | null;
   onSelectAsset: (assetId: string) => void;
   onAssetSelectionChange: (assetIds: string[], primaryAssetId: string | null) => void;
   onQueueFiles: (files: File[]) => void;
@@ -1355,6 +1361,27 @@ export function AssetsPanel({
   const [tabletKindFilter, setTabletKindFilter] = useState<SceneAsset["kind"] | "">("");
   const [phoneFiltersOpen, setPhoneFiltersOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
+  const dockedActivityRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!activityOpen || !statusBarHost) return;
+    dockedActivityRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!statusBarHost.contains(event.target as Node)) setActivityOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !statusBarHost.contains(document.activeElement)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setActivityOpen(false);
+      statusBarHost.querySelector<HTMLButtonElement>('[aria-label="インポート履歴の詳細"]')?.focus();
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape, true);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape, true);
+    };
+  }, [activityOpen, statusBarHost]);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLElement>(null);
@@ -1709,11 +1736,25 @@ export function AssetsPanel({
   const statusBar = !tablet || pendingImports.length > 0 || importError || statusMessage?.trim() ? (
     <AssetStatusBar
       touch={touch}
+      docked={Boolean(statusBarHost)}
       entries={pendingImports}
       error={importError}
       statusMessage={statusMessage}
       activityOpen={activityOpen}
       onToggleActivity={() => setActivityOpen((open) => !open)}
+      onReveal={revealImportEntry}
+    />
+  ) : null;
+
+  const activityDrawer = activityOpen && (pendingImports.length > 0 || importError) ? (
+    <ImportActivityDrawer
+      entries={pendingImports}
+      error={importError}
+      projectPersisted={Boolean(projectPath)}
+      projectSaving={projectSaving}
+      onSaveBeforeImport={onSaveBeforeImport}
+      onRemove={onRemovePending}
+      onClearError={onClearImportError}
       onReveal={revealImportEntry}
     />
   ) : null;
@@ -1847,7 +1888,7 @@ export function AssetsPanel({
         </div>
       </div>
 
-      {phone ? statusBar : null}
+      {phone && !statusBarHost ? statusBar : null}
       {phone ? (
         <button
           type="button"
@@ -2070,19 +2111,30 @@ export function AssetsPanel({
         </div>
       </div>
 
-      {activityOpen && (pendingImports.length > 0 || importError) ? (
-        <ImportActivityDrawer
-          entries={pendingImports}
-          error={importError}
-          projectPersisted={Boolean(projectPath)}
-          projectSaving={projectSaving}
-          onSaveBeforeImport={onSaveBeforeImport}
-          onRemove={onRemovePending}
-          onClearError={onClearImportError}
-          onReveal={revealImportEntry}
-        />
-      ) : null}
-      {!phone ? statusBar : null}
+      {statusBarHost ? createPortal(
+        <>
+          {activityDrawer ? (
+            <div ref={dockedActivityRef}
+              className="absolute bottom-full right-0 mb-px max-h-[calc(100dvh-6rem)] w-[min(48rem,calc(100vw-1rem))] overflow-y-auto overscroll-contain rounded-t-lg border border-editor-border bg-editor-surface shadow-xl"
+              role="dialog" aria-label="インポート履歴"
+            >
+              <div className="flex justify-end border-b border-editor-border px-2 py-1">
+                <button type="button" aria-label="インポート履歴を閉じる"
+                  onClick={() => {
+                    setActivityOpen(false);
+                    statusBarHost.querySelector<HTMLButtonElement>('[aria-label="インポート履歴の詳細"]')?.focus();
+                  }}
+                  className="rounded p-1 text-editor-muted hover:bg-editor-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">
+                  <EDITOR_ICONS.close size={14} aria-hidden="true" />
+                </button>
+              </div>
+              {activityDrawer}
+            </div>
+          ) : null}
+          {statusBar}
+        </>, statusBarHost,
+      ) : <>{activityDrawer}{!phone ? statusBar : null}</>}
+
 
       {contextMenu ? createPortal(
         <div
@@ -2243,7 +2295,7 @@ export function AssetsPanel({
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="asset" label="新規ノードグラフ" command="asset.create-interactivity" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-interactivity", { folderId }); }} />
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="script" label="新規スクリプト" command="asset.create-script" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-script", { folderId }); }} />
           <ContextMenuItem disabled={importLocked} disabledReason={importDisabledReason} icon="texture" label="ファイルをインポート…" command="asset.import" onClick={() => { setContextMenu(null); if (onCommand("asset.import")) fileInputRef.current?.click(); }} />
-          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="prefab" label="Entityからプレハブを作成" command="prefab.create" onClick={() => { setContextMenu(null); onPhaseNotice(touch ? "HierarchyでEntityを選び、操作メニューの「プレハブを作成」を押してください" : "HierarchyのEntityをAssetsへドラッグしてください"); }} />
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="prefab" label="Entityからプレハブを作成" command="prefab.create" onClick={() => { setContextMenu(null); onPhaseNotice(touch ? "HierarchyでEntityを選び、行の「… → プレハブを作成」を押してください" : "HierarchyのEntityをAssetsへドラッグしてください"); }} />
         </div>,
         touch ? document.body : panelRef.current ?? document.body,
       ) : null}

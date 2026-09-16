@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("アイテムのギミック一覧はワールド専用と案内する", async ({ page }) => {
+test("アイテムでも共通のギミック一覧を検索して追加を選べる", async ({ page }) => {
   await page.goto("/e2e.html?scenario=ready");
   await page.getByRole("button", { name: /新規プロジェクト/ }).click();
   await page.getByRole("button", { name: /アイテムをビジュアルで作る/ }).click();
@@ -10,8 +10,14 @@ test("アイテムのギミック一覧はワールド専用と案内する", as
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: /ギミック/ }).click();
   const catalog = dialog.getByRole("region", { name: "ギミック一覧", exact: true });
-  await expect(catalog.getByText("ギミックはワールド専用です", { exact: true })).toBeVisible();
-  await expect(catalog.getByRole("textbox")).toHaveCount(0);
+  await expect(catalog.getByText("ギミックはワールド専用です", { exact: true })).toHaveCount(0);
+  await expect(catalog.getByRole("textbox")).toBeVisible();
+  await expect(catalog.getByTestId("scene-recipe-card")).toHaveCount(51);
+  await expect(catalog).toContainText("アイテムにも追加できます");
+  await catalog.getByRole("textbox").fill("スライド");
+  await expect(catalog.getByTestId("scene-recipe-card").first()).toBeVisible();
+  await catalog.getByTestId("scene-recipe-card").first().click();
+  await expect(dialog.getByRole("button", { name: /をシーンへ追加$/ })).toBeEnabled();
   await expect(dialog.getByText(/条件に合うギミックがありません/)).toHaveCount(0);
   await dialog.getByRole("button", { name: /glTFマテリアル/ }).click();
   await expect(dialog.getByTestId("scene-recipe-card")).toHaveCount(50);
@@ -41,7 +47,7 @@ test("外部カタログを3D・マテリアル表現・ギミックで選べる
   await dialog.getByRole("button", { name: /ギミック/ }).click();
   const gimmicks = dialog.getByRole("region", { name: "ギミック一覧", exact: true });
   await expect(gimmicks.getByRole("textbox")).toHaveValue("");
-  await expect(gimmicks.getByTestId("scene-recipe-card")).toHaveCount(50);
+  await expect(gimmicks.getByTestId("scene-recipe-card")).toHaveCount(51);
   await expect(gimmicks.getByRole("combobox")).not.toContainText("マテリアル見本");
   await dialog.getByRole("button", { name: /3Dセット/ }).click();
   const models = dialog.getByRole("region", { name: "3Dセット一覧", exact: true });

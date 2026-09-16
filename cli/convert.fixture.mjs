@@ -1,3 +1,4 @@
+import { runEditorUiDefaultsFixtureAssertions } from "../src/components/visual-editor/editor-ui-defaults.fixture.ts";
 import { runWorldAssetImportFixtureAssertions as assertWorldAssetImports } from "../src/lib/visual-editor/scripting/world-asset-import.fixture.ts";
 import { runRuntimePackageFixtureAssertions } from "../src/lib/visual-editor/compiler/runtime-packages.fixture.ts";
 import { spawn } from "node:child_process";
@@ -401,6 +402,7 @@ try {
     ["document asset creation", runDocumentAssetCreationFixtureAssertions],
     ["editor session hierarchy", runEditorSessionHierarchyFixtureAssertions],
     ["entity clipboard and mirror paste", runEntityClipboardFixtureAssertions],
+    ["editor UI defaults", runEditorUiDefaultsFixtureAssertions],
     ["scene entity tree store", runSceneEntityTreeStoreFixtureAssertions],
     ["scene click selection", runSceneClickSelectionFixtureAssertions],
     ["editor layout", runEditorLayoutFixtureAssertions],

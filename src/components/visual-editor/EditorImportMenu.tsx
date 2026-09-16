@@ -1,21 +1,30 @@
-import {
-  ChevronDown,
-  Code2,
-  FileBox,
-  Import,
-} from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ChevronDown, Code2, FileBox, Import, Store } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { EDITOR_MENU_ROW_CLASS, EditorMenuGroup, handleEditorMenuKeyDown } from "./EditorMenu";
+
 export function EditorImportMenu({
   disabledReason,
   onImportModel,
   onImportR3f,
+  onOpenExternalStore,
+  renderCreation,
 }: {
   disabledReason?: string | null;
   onImportModel: () => void;
   onImportR3f: () => void;
+  onOpenExternalStore?: () => void;
+  /** Reuses the same Entity catalog as the Hierarchy context menu. */
+  renderCreation?: (close: () => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const closeAfterAction = () => {
+    setOpen(false);
+    rootRef.current?.closest("details")?.removeAttribute("open");
+  };
 
   useEffect(() => {
     const projectMenu = rootRef.current?.closest("details");
@@ -26,96 +35,86 @@ export function EditorImportMenu({
 
   useEffect(() => {
     if (!open) return;
+    menuRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
     const handlePointerDown = (event: PointerEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
     document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [open]);
 
   return (
-    <div ref={rootRef} className="editor-import-menu relative">
+    <div ref={rootRef} className="editor-import-menu relative"
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || !open) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+        triggerRef.current?.focus();
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+      }}
+    >
       <button
+        ref={triggerRef}
         type="button"
         disabled={Boolean(disabledReason)}
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        title={disabledReason ?? "編集中のプロジェクトにモデルやコードを追加"}
-        className="flex items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-3 py-1.5 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:cursor-not-allowed disabled:opacity-45"
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowDown") return;
+          event.preventDefault();
+          event.stopPropagation();
+          setOpen(true);
+        }}
+        title={disabledReason ?? "Entityの作成、ファイルの読み込み、外部の素材やギミックの追加"}
+        className="flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-3 text-xs font-semibold text-editor-text hover:bg-editor-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:cursor-not-allowed disabled:opacity-45"
       >
-        <Import size={13} aria-hidden="true" />
+        <Import size={16} aria-hidden="true" />
         素材を追加
         <ChevronDown size={12} aria-hidden="true" />
       </button>
       {open ? (
         <div
+          ref={menuRef}
           role="menu"
-          className="absolute left-0 top-full z-[70] mt-1.5 w-72 max-w-[calc(100vw-24px)] max-h-[60dvh] overflow-y-auto rounded-lg border border-slate-200 bg-white p-1.5 shadow-xl"
+          aria-label="素材を追加"
+          onKeyDown={handleEditorMenuKeyDown}
+          className="absolute left-0 top-full z-[70] mt-1.5 max-h-[60dvh] w-72 max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain rounded-lg border border-slate-200 bg-white p-1.5 shadow-xl"
         >
-          <MenuItem
-            icon={FileBox}
-            label="3Dモデル / 3Dアセット"
-            description="GLB、glTF、OBJ、VRM、UnityPackageなど"
-            onClick={() => {
-              setOpen(false);
-              onImportModel();
-            }}
-          />
-          <MenuItem
-            icon={Code2}
-            label="R3F / コードプロジェクトから変換"
-            description="TSXを貼り付けるか、コードプロジェクトを選びます。"
-            onClick={() => {
-              setOpen(false);
-              onImportR3f();
-            }}
-          />
-          <p className="mx-1 mt-2 border-t border-slate-100 px-2 pt-2 text-[10px] leading-4 text-slate-500">
-            公式ComponentやOpen Brushは、Hierarchy見出しの「追加 / 操作 → 素材を追加 → 外部から追加」で選べます。
-          </p>
+          <EditorMenuGroup>
+            {renderCreation?.(closeAfterAction)}
+            {renderCreation ? <div className="my-1 border-t border-slate-200" role="separator" /> : null}
+            <MenuItem icon={FileBox} label="3Dモデル / 3Dアセット"
+              description="GLB、glTF、OBJ、VRM、UnityPackageなど"
+              onClick={() => { closeAfterAction(); onImportModel(); }} />
+            <MenuItem icon={Code2} label="R3F / コードプロジェクトから変換"
+              description="TSXを貼り付けるか、コードプロジェクトを選びます。"
+              onClick={() => { closeAfterAction(); onImportR3f(); }} />
+            {onOpenExternalStore ? (
+              <MenuItem icon={Store} label="外部から追加"
+                description="3Dセット、マテリアル、ギミック、公式Componentなど"
+                onClick={() => { closeAfterAction(); onOpenExternalStore(); }} />
+            ) : null}
+          </EditorMenuGroup>
         </div>
       ) : null}
     </div>
   );
 }
 
-function MenuItem({
-  icon: Icon,
-  label,
-  description,
-  onClick,
-}: {
+function MenuItem({ icon: Icon, label, description, onClick }: {
   icon: typeof FileBox;
   label: string;
   description: string;
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      role="menuitem"
-      onClick={onClick}
-      className="flex w-full items-start gap-3 rounded-md px-2.5 py-2.5 text-left hover:bg-violet-50"
-    >
-      <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md bg-violet-100 text-violet-700">
-        <Icon size={16} aria-hidden="true" />
-      </span>
-      <span className="min-w-0">
-        <span className="block text-xs font-semibold text-slate-800">
-          {label}
-        </span>
-        <span className="mt-0.5 block text-[10px] leading-4 text-slate-500">
-          {description}
-        </span>
-      </span>
+    <button type="button" role="menuitem" title={description} onClick={onClick} className={EDITOR_MENU_ROW_CLASS}>
+      <Icon size={14} className="shrink-0" aria-hidden="true" />
+      <span className="min-w-0 truncate">{label}</span>
     </button>
   );
 }

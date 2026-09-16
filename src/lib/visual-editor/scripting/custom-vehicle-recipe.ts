@@ -13,7 +13,7 @@ import { createScriptTemplateSource } from "./script-templates";
 export const CUSTOM_VEHICLE_RECIPE: SceneRecipe = {
   id: "scene-recipe.custom-vehicle", name: "カスタム車", assembly: "vehicle",
   description: "2人乗りのオープンカー。地面や坂に追従し、走行中はタイヤが回って後方から煙が出ます。",
-  category: "effect", group: "乗り物", tags: ["Vehicle", "車", "座席", "運転"], projectKinds: ["world"],
+  category: "effect", group: "乗り物", tags: ["Vehicle", "車", "座席", "運転"], projectKinds: ["world", "item"],
   note: "Playで運転席をクリックして乗車。W/Sで前後、A/Dで旋回、Spaceで降車します。車体・座席・タイヤ・煙はHierarchyで編集できます。",
   parts: [],
 };

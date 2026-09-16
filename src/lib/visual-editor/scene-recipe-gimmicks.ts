@@ -6,7 +6,7 @@ import type { Vec3 } from './scene-document';
 const recipes:SceneRecipe[]=[];
 const note='操作はPlayで確認してください。各パーツ・音源・Interactivityグラフは追加後に編集できます。衝突判定やネットワーク同期は含みません。必要な対象へ別途設定してください。';
 function add(key:string,name:string,group:string,description:string,parts:SceneRecipePart[],behaviours:SceneRecipeBehaviour[],customNote=note) {
- recipes.push({id:`scene-recipe.${key}`,name,group,description,category:'tutorial',projectKinds:['world'],tags:[group,...new Set(behaviours.flatMap(b=>b.actions.map(a=>a.targetKind)))],
+ recipes.push({id:`scene-recipe.${key}`,name,group,description,category:'tutorial',projectKinds:['world', 'item'],tags:[group,...new Set(behaviours.flatMap(b=>b.actions.map(a=>a.targetKind)))],
  note:customNote,parts:[box('展示ベース',[0,0.015,0.25],[2.3,0.03,2],M.charcoal),...parts],behaviours,
  preview:{cameraPosition:[1.8,1.7,3.5],lookAtY:.65},
  lesson:{goal:description,steps:[`Playを開始し、${behaviours.filter(b=>b.start==='interact').map(b=>`「${b.host}」`).join('・')}を操作します。`,'動作確認を止めて、Hierarchyで操作部分を選び、Interactivityグラフを開きます。','各アクションの対象・値・かける時間を変更します。複製して使うときは、複製先の参照先も確認してください。']}});

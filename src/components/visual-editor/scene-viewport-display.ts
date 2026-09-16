@@ -1,8 +1,17 @@
+import type { VisualProjectKind } from "../../lib/visual-editor/project-document";
+
 export type SceneViewportDisplayMode =
   | "scene"
   | "unlit"
   | "wireframe"
   | "colliders";
+
+/** Editor-only: never changes material properties or the published scene. */
+export function getDefaultSceneViewportDisplayMode(
+  projectKind: VisualProjectKind,
+): SceneViewportDisplayMode {
+  return projectKind === "item" ? "unlit" : "scene";
+}
 
 export type SceneViewportMaterialStyle =
   | "scene"

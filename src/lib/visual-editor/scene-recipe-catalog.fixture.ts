@@ -76,6 +76,12 @@ export function runSceneRecipeCatalogFixtureAssertions(): void {
   assert(getSceneRecipesForProjectKind("world", "materials").length === 50, "Ship 50 material comparison sets");
   assert(getSceneRecipesForProjectKind("item", "materials").length === 50, "Item projects retain the same 50 material sets");
   assert(getSceneRecipesForProjectKind("world", "gimmicks").length === 51, "Ship custom vehicle alongside the 50 usable gimmicks");
+  const worldGimmicks = getSceneRecipesForProjectKind("world", "gimmicks");
+  const itemGimmicks = getSceneRecipesForProjectKind("item", "gimmicks");
+  assert(JSON.stringify(itemGimmicks.map((recipe) => recipe.id)) === JSON.stringify(worldGimmicks.map((recipe) => recipe.id)),
+    "Worlds and items must share the same gimmick catalog and order");
+  assert(itemGimmicks.every((recipe) => recipe.projectKinds.includes("item")),
+    "The placement guard must accept every gimmick shown in item projects");
   const ids = new Set<string>();
   for (const recipe of SCENE_RECIPES) {
     assert(!ids.has(recipe.id), `Duplicate scene recipe id: ${recipe.id}`);
