@@ -29,35 +29,18 @@ test("Entity creation menu creates a new host and omits attach-only components",
     }));
   });
   const menu = page.getByRole("menu", { name: "Entityを追加" });
-  await expect(menu.getByRole("searchbox")).toHaveCount(0);
-  await expect(menu.getByRole("button").nth(0)).toContainText("Entity");
-  await expect(menu.getByRole("button").nth(1)).toContainText("Primitive");
-  await expect(menu.getByRole("button", { name: /^Cube/ })).toHaveCount(0);
-  await expect(menu.getByRole("button", { name: /^SpawnPoint/ })).toHaveCount(0);
-  await page.screenshot({ path: testInfo.outputPath("entity-creation-menu.png") });
-  await page.evaluate(() => {
-    const scriptPanel = document.createElement("div");
-    scriptPanel.style.cssText = "position:fixed;inset:100px 0 0;z-index:75;background:#eee";
-    document.body.append(scriptPanel);
-  });
-  for (const group of ["Entity", "Primitive", "World", "Light", "UI", "Audio", "Effect", "XRift"]) {
-    const toggle = menu.getByRole("button", { name: new RegExp(`^${group} [0-9]+$`) });
-    await expect(toggle).toHaveAttribute("aria-expanded", "false");
-    await toggle.click();
-    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await menu.getByRole("button", { name: "Entityを作成", exact: true }).click();
+  await expect(menu.getByRole("menuitem", { name: /^Cube/ })).toHaveCount(0);
+  await menu.getByRole("button", { name: /^基本形状/ }).click();
+  await expect(menu.getByRole("menuitem", { name: /^Cube/ })).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: /^Plane/ })).toBeVisible();
+  for (const name of ["Mesh Collider", "Transform", "Interactable", "Rigid Body", "光るキューブ"]) {
+    await expect(menu.getByRole("menuitem", { name: new RegExp(`^${name}`) })).toHaveCount(0);
   }
-  await expect(menu.getByRole("button").nth(3)).toContainText("Cube");
-  await expect(menu.getByRole("button").nth(4)).toContainText("Plane");
-  for (const name of ["Mesh Collider", "Transform", "Interactable", "Rigid Body", "光るキューブ", "Skybox", "TagBoard", "EntryLogBoard", "Portal"]) {
-    await expect(menu.getByRole("button", { name: new RegExp(`^${name}`) })).toHaveCount(0);
-  }
-  await expect(menu.getByRole("button", { name: /^Mirror/ })).toHaveCount(1);
-  await menu.getByRole("button", { name: /Audio Source.*作成/ }).click();
+  await menu.getByRole("button", { name: /^音声/ }).click();
+  await menu.getByRole("menuitem", { name: /^Audio Source/ }).click();
   await expect(page.locator("#component-menu-fixture")).toHaveAttribute("data-created", "core.audio-source");
-  await menu.getByRole("button", { name: /^UI\b/ }).click();
-  await expect(menu.getByRole("button", { name: /^Text.*作成/ })).toHaveCount(0);
-  await menu.getByRole("button", { name: /SpawnPoint.*作成/ }).click();
-  await expect(page.locator("#component-menu-fixture")).toHaveAttribute("data-created", "xrift-prefab.spawn-point");
+  await page.screenshot({ path: testInfo.outputPath("entity-creation-menu.png") });
 });
 
 test("component menus share duplicate and mesh dependency rules", async ({ page }) => {
@@ -99,7 +82,7 @@ test("component menus share duplicate and mesh dependency rules", async ({ page 
   expect(result.itemXriftIds).not.toContain("xrift.spawn-point");
 });
 
-test("Hierarchy distinguishes root creation from adding to a target Entity", async ({ page }, testInfo) => {
+test("Hierarchy offers editing only and keeps its menu within the viewport", async ({ page }, testInfo) => {
   await page.goto("/e2e.html?scenario=ready");
   await page.evaluate(async () => {
     const load = (path: string) => import(/* @vite-ignore */ path);
@@ -118,44 +101,30 @@ test("Hierarchy distinguishes root creation from adding to a target Entity", asy
       readOnly: false, projectKind: "world", builtinPrefabRecipes: [], renameRequest: null,
       onSelectionChange() {}, onAssignMaterial() {}, onDropSceneAsset() {}, onDropBuiltinPrefab() {},
       onEntityEnabledChange() {}, onCreateXriftObject() {}, onCreateComponentObject() {}, onRename() {},
-      onCommand(_command: string, payload: { componentDefinitionId?: string }) {
-        host.dataset.added = payload.componentDefinitionId;
+      onCommand(command: string) {
+        host.dataset.added = command;
         return true;
       },
     }));
   });
   const panel = page.getByRole("complementary", { name: "Hierarchy" });
   await panel.getByRole("heading", { name: "Hierarchy" }).click({ button: "right" });
-  const contextMenu = page.getByRole("menu", { name: /Entityを追加|選択したEntityの操作/ });
-  await expect(contextMenu.getByRole("searchbox")).toHaveCount(0);
-  await expect(contextMenu.getByRole("button", { name: /^Mesh Collider/ })).toHaveCount(0);
+  const contextMenu = page.getByRole("menu", { name: "Hierarchyの編集", exact: true });
+  await expect(contextMenu.getByRole("menuitem")).toHaveCount(2);
+  await expect(contextMenu.getByRole("menuitem", { name: "貼り付け", exact: true })).toBeDisabled();
   await page.keyboard.press("Escape");
-  await expect(contextMenu).toHaveCount(0);
   await panel.getByRole("treeitem").click({ button: "right" });
-  await contextMenu.locator("summary").filter({ hasText: /^選択したEntityにComponentを追加/ }).click();
-  await contextMenu.locator("summary").filter({ hasText: /^physics/i }).click();
-  await expect(contextMenu.getByRole("button", { name: /^Mesh Collider/ })).toBeDisabled();
-  await expect(contextMenu.getByText("Mesh Rendererまたはモデルのメッシュが必要", { exact: true })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath("hierarchy-component-menu.png") });
-  await contextMenu.getByRole("button", { name: /^Rigid Body/ }).click();
-  await expect(page.locator("#hierarchy-menu-fixture")).toHaveAttribute("data-added", "physics.rigid-body");
-  const panelBox = await panel.boundingBox();
-  if (!panelBox) throw new Error("Hierarchy has no bounds");
-  await page.mouse.click(panelBox.x + 10, panelBox.y + panelBox.height - 10, { button: "right" });
-  await expect(contextMenu).toBeVisible();
-  const menuBox = await contextMenu.boundingBox();
-  if (!menuBox) throw new Error("Context menu has no bounds");
-  expect(menuBox.y).toBeGreaterThanOrEqual(0);
-  expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(page.viewportSize()!.height);
-  await page.evaluate(() => {
-    const overlay = document.createElement("div");
-    overlay.id = "neighboring-panel";
-    overlay.style.cssText = "position:fixed;inset:200px 0 0;z-index:75;background:#eee";
-    document.body.append(overlay);
-  });
-  await contextMenu.getByRole("button", { name: /^Primitive/ }).click();
-  await expect(contextMenu.getByRole("button", { name: /^Plane/ })).toBeVisible();
-  await contextMenu.getByRole("button", { name: /^Plane/ }).click();
+  for (const label of ["コピー", "貼り付け", "反転して貼り付け", "複製", "名前を変更", "フォーカス", "削除"]) {
+    await expect(contextMenu.getByRole("menuitem", { name: label, exact: true })).toBeVisible();
+  }
+  await expect(contextMenu).not.toContainText(/Create|光るキューブ|Componentを追加/);
+  const box = await contextMenu.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+  await page.screenshot({ path: testInfo.outputPath("hierarchy-edit-menu.png") });
+  await contextMenu.getByRole("menuitem", { name: "複製", exact: true }).click();
+  await expect(page.locator("#hierarchy-menu-fixture")).toHaveAttribute("data-added", "edit.duplicate");
   await expect(contextMenu).toHaveCount(0);
 });
 
@@ -171,20 +140,20 @@ test("Inspector adds to the selection while Create adds a new Entity", async ({ 
   const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
   await tree.getByText("床", { exact: true }).click();
   const initialCount = await tree.getByRole("treeitem").count();
-  await page.getByRole("button", { name: "Add Component", exact: true }).click();
+  await page.getByRole("button", { name: "Componentを追加", exact: true }).click();
   const search = page.getByPlaceholder("Componentを検索…");
   await search.fill("Rigid Body");
   await page.getByRole("button", { name: "Rigid Body", exact: true }).click();
   await expect(tree.getByRole("treeitem")).toHaveCount(initialCount);
   await expect(page.getByRole("button", { name: "Rigid Bodyを削除", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Add Component", exact: true }).click();
+  await page.getByRole("button", { name: "Componentを追加", exact: true }).click();
   await search.fill("Rigid Body");
   await expect(page.getByRole("button", { name: /Rigid Body.*追加済み/ })).toBeDisabled();
-  await page.getByRole("button", { name: "Add Component", exact: true }).click();
-  await tree.getByRole("treeitem", { selected: true }).click({ button: "right" });
-  const menu = page.getByRole("menu", { name: "選択したEntityの操作" });
-  await menu.getByRole("button", { name: /^Primitive/ }).click();
-  await menu.getByRole("button", { name: /^Cube.*作成/ }).click();
+  await page.getByRole("button", { name: "Componentを追加", exact: true }).click();
+  await page.getByRole("banner").getByRole("button", { name: "素材を追加", exact: true }).click();
+  const menu = page.getByRole("menu", { name: "素材を追加", exact: true });
+  await menu.getByRole("searchbox", { name: "追加する素材を検索" }).fill("Cube");
+  await menu.getByRole("menuitem", { name: /^Cube/ }).click();
   await expect(tree.getByRole("treeitem")).toHaveCount(initialCount + 1);
   await expect(tree.getByRole("treeitem", { selected: true })).toContainText("Cube");
   await page.screenshot({ path: testInfo.outputPath("editor-component-flow.png") });
@@ -196,12 +165,12 @@ test("Inspector adds to the selection while Create adds a new Entity", async ({ 
   await tree.getByText("Cube", { exact: true }).click({ modifiers: ["Control"] });
   await expect(tree.getByRole("treeitem", { selected: true })).toHaveCount(2);
   await tree.getByText("Cube", { exact: true }).click({ button: "right" });
-  const multiMenu = page.getByRole("menu", { name: "選択したEntityの操作" });
-  await expect(multiMenu.getByRole("button").first()).toHaveText("名前を変更");
+  const multiMenu = page.getByRole("menu", { name: "Hierarchyの編集" });
+  await expect(multiMenu.getByRole("menuitem", { name: "名前を変更", exact: true })).toBeDisabled();
   await expect(multiMenu.getByRole("button", { name: /^Primitive/ })).toHaveCount(0);
   await expect(multiMenu.getByRole("button", { name: /^World/ })).toHaveCount(0);
   await expect(multiMenu.locator("summary")).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath("hierarchy-multiple-selection.png") });
-  await multiMenu.getByRole("button", { name: "削除", exact: true }).click();
+  await multiMenu.getByRole("menuitem", { name: "削除", exact: true }).click();
   await expect(tree.getByRole("treeitem")).toHaveCount(initialCount - 1);
 });

@@ -724,7 +724,7 @@ export type XriftComponentMenuGroup = {
 };
 
 export function getXriftComponentMenuGroups(
-  projectKind: VisualProjectKind,
+  projectKind?: VisualProjectKind,
 ): readonly XriftComponentMenuGroup[] {
   const definitions = listXriftComponentDefinitions(projectKind);
   const order: readonly XriftComponentCategory[] = [

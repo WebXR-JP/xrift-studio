@@ -1,3 +1,8 @@
+import { HierarchyTransferDialog } from "./HierarchyTransferDialog";
+import { useHierarchyTransfer } from "./useHierarchyTransfer";
+import { getHierarchyClipboard } from "../../lib/visual-editor/hierarchy-transfer";
+import { AuthoringDiagnosticsDialog } from "./AuthoringDiagnosticsDialog";
+import type { EntityReuseActions } from "./EntityReuseMenuItems";
 import { getEntityCopyDisabledReason } from "../../lib/visual-editor/entity-clipboard";
 import { createWorldAssetHierarchy } from "../../lib/visual-editor/scripting/world-asset-hierarchy";
 import { ensureWorldAssetModels, mergeWorldAssetModels } from "../../lib/visual-editor/scripting/world-asset-import";
@@ -1626,6 +1631,10 @@ export function VisualEditorPrototype({
   );
   const clipboardRef = useRef<EntityClipboard | null>(null);
   const [clipboardAvailable, setClipboardAvailable] = useState(false);
+  const [hierarchyTransferBusy, setHierarchyTransferBusy] = useState(false);
+  const [diagnosticsMode, setDiagnosticsMode] = useState<"inspect" | "publish" | null>(null);
+  const [colliderDisplayRequest, setColliderDisplayRequest] = useState<{ id: number; sceneId: string } | null>(null);
+  useEffect(() => { setDiagnosticsMode(null); setColliderDisplayRequest(null); }, [initialBundle.project.projectId]);
   const transformScrubRef = useRef<TransformScrubTransaction | null>(null);
   const [renameTarget, setRenameTarget] = useState<RenameTarget>(null);
   const [deleteDialog, setDeleteDialog] = useState<AssetDeleteDialogTarget | null>(null);
@@ -2365,6 +2374,7 @@ export function VisualEditorPrototype({
     textureBatchFeedback.phase === "encoding" ||
     textureBatchFeedback.phase === "saving";
   const importBusy =
+    hierarchyTransferBusy ||
     componentImportBusy ||
     mcpLocalAssetImportBusy ||
     sceneRecipeImportBusy ||
@@ -10767,6 +10777,45 @@ export function VisualEditorPrototype({
     };
   }, [onProjectExport, flushInteractivityDraft, runSave]);
 
+  const hierarchyTransfer = useHierarchyTransfer({
+    projectId: bundle.project.projectId,
+    getCurrent: () => ({ bundle: bundleRef.current, projectPath: projectPathRef.current ?? projectPath,
+      selectedIds: commandEntityIds(), editable: editorMode === "edit" }),
+    canStart: () => editorMode === "edit" && !importBusy && !projectExportBusy && !projectTransferBusy,
+    beforeRead: async () => {
+      if (!(await flushCodeAutosaves())) throw new Error("ScriptやShaderの保存を完了してから操作してください。");
+      flushInteractivityDraft();
+      if (onSaveRef.current && !(await runSave())) throw new Error("プロジェクトを保存できませんでした。保存状態を確認してください。");
+    },
+    setBusy: setHierarchyTransferBusy,
+    onCommit: (expected, plan) => {
+      if (bundleRef.current !== expected) throw new Error("編集中のシーンが更新されました。追加内容を確認し直してください。");
+      const nextBundle = touchProject(plan.bundle);
+      const selection: SceneSelection = plan.rootEntityIds[0] ? { kind: "entity", id: plan.rootEntityIds[0] } : null;
+      bundleRef.current = nextBundle;
+      sceneSelectionRef.current = selection;
+      assetSelectionRef.current = null;
+      setHistory((current) => commitEditorHistory(current, {
+        ...current.present, bundle: nextBundle, sceneSelection: selection,
+        entitySelectionIds: plan.rootEntityIds, assetSelection: null,
+      }));
+      setSelectedEntityIds(plan.rootEntityIds);
+      setSelectedAssetIds([]);
+      setSceneSettingsOpen(false);
+      setSaveStatus("dirty");
+    },
+    onNotice: setNotice,
+  });
+  const reuseActions: EntityReuseActions = {
+    disabledReason: editorMode !== "edit" ? "動作確認を停止してから操作してください"
+      : importBusy || projectExportBusy || projectTransferBusy ? "保存・取り込みが終わるまでお待ちください" : null,
+    pasteAvailable: Boolean(getHierarchyClipboard()),
+    onCreatePrefab: handleCreatePrefab,
+    onExport: hierarchyTransfer.openExport,
+    onCopy: hierarchyTransfer.copy,
+    onPaste: hierarchyTransfer.paste,
+  };
+
   const handleSaveBeforeImport = useCallback(async () => {
     const savedProjectPath = await runSave();
     if (savedProjectPath) await processImportQueue(savedProjectPath);
@@ -10795,7 +10844,7 @@ export function VisualEditorPrototype({
     }
   }, [editorMode, processImportQueue, projectPath]);
 
-  const runUpload = useCallback(async () => {
+  const openUploadDialog = useCallback(async () => {
     if (!onUpload) {
       // The host injects the upload path, so a missing callback means this
       // environment has none wired rather than a programming mistake. Say
@@ -10814,6 +10863,16 @@ export function VisualEditorPrototype({
       setNotice(error instanceof Error ? error.message : "アップロードに失敗しました");
     }
   }, [bundle, onUpload]);
+
+  const runUpload = useCallback(async () => {
+    if (editorMode !== "edit" || importBusy || projectExportBusy || projectTransferBusy) {
+      setNotice("動作確認や取り込みを終えてから公開してください。");
+      return;
+    }
+    if (!(await flushCodeAutosaves())) return;
+    flushInteractivityDraft();
+    setDiagnosticsMode("publish");
+  }, [editorMode, importBusy, projectExportBusy, projectTransferBusy, flushCodeAutosaves, flushInteractivityDraft]);
 
   const runClassicExport = useCallback(async () => {
     if (!onClassicExport) {
@@ -11187,6 +11246,8 @@ export function VisualEditorPrototype({
       if (
         deleteDialog ||
         pendingMaterialAssignment ||
+        hierarchyTransferBusy ||
+        diagnosticsMode !== null ||
         scriptTemplateFolderId !== undefined ||
         // The graph editor has its own Delete, Undo and Redo. Left unguarded,
         // cutting a wire also deleted the selected Entity and undo stepped
@@ -11212,6 +11273,8 @@ export function VisualEditorPrototype({
     interactivityEditorAssetId,
     executeCommand,
     pendingMaterialAssignment,
+    hierarchyTransferBusy,
+    diagnosticsMode,
     resolvedCommands,
     scriptTemplateFolderId,
   ]);
@@ -11535,8 +11598,10 @@ export function VisualEditorPrototype({
               onImportModel={() => globalModelImportInputRef.current?.click()}
               onImportR3f={() => setComponentImportOpen(true)}
               onOpenExternalStore={() => setExternalStoreOpen(true)}
-              renderCreation={(close) => (
+              onImportHierarchy={hierarchyTransfer.openImport}
+              renderCreation={(close, query) => (
                 <EditorCreationMenuSections
+                  query={query}
                   entries={entityCreationEntries}
                   disabled={renderedReadOnly || importBusy}
                   onSelect={(entry) => {
@@ -11707,7 +11772,9 @@ export function VisualEditorPrototype({
             onArrangeTerrains={handleArrangeTerrains}
             onCommand={executeCommand}
             clipboardAvailable={clipboardAvailable}
+            reuseActions={reuseActions}
             pasteShortcut={shortcutLabel("edit.paste")}
+            shortcutLabel={shortcutLabel}
             renameRequest={
               renameTarget?.kind === "entity"
                 ? { id: renameTarget.id, requestId: renameTarget.requestId }
@@ -11794,9 +11861,11 @@ export function VisualEditorPrototype({
             }
             onEditCommand={executeCommand}
             clipboardAvailable={clipboardAvailable}
+            reuseActions={reuseActions}
             editDisabledReason={importBusy ? "素材の取り込みが終わるまでお待ちください" : null}
             shortcutLabel={shortcutLabel}
             scriptRuntime={scriptViewportRuntime}
+            colliderDisplayRequest={colliderDisplayRequest}
             frameSelectionRequest={frameSelectionRequest}
             exitFocusRequest={exitFocusRequest}
             focusedEntity={focusedEntity}
@@ -12328,6 +12397,7 @@ export function VisualEditorPrototype({
           <footer className="editor-status-dock relative z-40 flex min-h-10 shrink-0 items-center border-t border-editor-border bg-editor-surface px-1"
             aria-label="エディターのステータスバー">
           <EditorUtilityRail
+            onInspectDocument={() => setDiagnosticsMode("inspect")}
             commands={resolvedCommands}
             sceneSettingsOpen={sceneSettingsOpen}
             onToggleSceneSettings={() => {
@@ -12430,6 +12500,10 @@ export function VisualEditorPrototype({
             <div ref={setAssetStatusHost} className="relative min-w-0 flex-1 self-stretch border-l border-editor-border" />
           </footer>
         ) : null}
+        {tablet && !recordingUiHidden ? <div className="flex shrink-0 items-center border-t border-editor-border bg-editor-surface px-2">
+          <button type="button" onClick={() => setDiagnosticsMode("inspect")} title="シーンとAssetsの参照・設定を確認します"
+            className="min-h-11 rounded px-3 text-xs font-semibold text-editor-text hover:bg-editor-subtle">制作データの確認</button>
+        </div> : null}
         {tablet && !recordingUiHidden && notice && (tabletPanel !== "assets" || panelsHidden) ? (
           <div className="flex shrink-0 items-center gap-2 border-t border-editor-border bg-editor-surface px-3 py-1.5 text-xs text-editor-text">
             <p role="status" className="min-w-0 flex-1 whitespace-pre-wrap break-words">{notice}</p>
@@ -12439,6 +12513,26 @@ export function VisualEditorPrototype({
         ) : null}
       </div>
     </div>
+    {hierarchyTransfer.session ? <HierarchyTransferDialog
+      session={hierarchyTransfer.session} getCurrent={hierarchyTransfer.getCurrent}
+      onCommit={hierarchyTransfer.commit} onClose={hierarchyTransfer.close} onNotice={setNotice}
+    /> : null}
+    {diagnosticsMode ? <AuthoringDiagnosticsDialog bundle={bundle}
+      onClose={() => setDiagnosticsMode(null)}
+      onSelect={(issue) => {
+        setDiagnosticsMode(null);
+        if (issue.entityId) handleEntitySelectionChange([issue.entityId], issue.entityId);
+        else if (issue.assetId) handleSelectAsset(issue.assetId);
+        if (tablet) { setTabletPanel("inspector"); setViewportMaximized(false); }
+      }}
+      onShowColliders={() => {
+        if (editorMode !== "edit") { setNotice("動作確認を停止してからColliderを確認してください。"); return; }
+        setDiagnosticsMode(null);
+        setColliderDisplayRequest({ id: Date.now(), sceneId: bundle.scene.sceneId });
+        if (tablet) { setTabletPanel(null); setViewportMaximized(false); }
+      }}
+      onContinuePublish={diagnosticsMode === "publish" ? () => { setDiagnosticsMode(null); void openUploadDialog(); } : undefined}
+    /> : null}
     </ValueScrubContext.Provider>
   );
 }

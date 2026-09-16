@@ -14,6 +14,7 @@ use tauri_plugin_opener::OpenerExt;
 
 mod external_store;
 mod project_transfer;
+mod hierarchy_transfer;
 pub mod mcp;
 mod script_trust;
 
@@ -5390,6 +5391,34 @@ fn write_thumbnail(project_path: String, data_url: String) -> Result<(), String>
 }
 
 #[tauri::command]
+fn save_hierarchy_package(path: String, data_url: String) -> Result<(), String> {
+    const HEADER: &str = "data:application/octet-stream;base64,";
+    if !data_url.starts_with(HEADER)
+        || data_url.len() > HEADER.len() + 4 * ((hierarchy_transfer::MAX_PACKAGE_BYTES + 2) / 3)
+    {
+        return Err(".xriftstudioファイルのデータまたはサイズが不正です。".into());
+    }
+    let bytes = decode_base64_data_url(&data_url, ".xriftstudioファイルを読み込めません。")?;
+    // Validate the container before touching the chosen destination. No member
+    // paths are extracted here; normal imports validate their paths and CRCs.
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(&bytes))
+        .map_err(|error| format!(".xriftstudioファイルを確認できません: {error}"))?;
+    if archive.len() > 20_000 { return Err("ファイル数が上限を超えています。".into()); }
+    let mut has_project = false;
+    let mut has_hierarchy = false;
+    let mut unpacked = 0u64;
+    for index in 0..archive.len() {
+        let file = archive.by_index(index).map_err(|error| format!("ファイルを確認できません: {error}"))?;
+        unpacked = unpacked.checked_add(file.size()).ok_or("ファイルサイズが不正です。")?;
+        if unpacked > hierarchy_transfer::MAX_PACKAGE_BYTES as u64 { return Err("展開後のサイズが256 MBを超えています。".into()); }
+        has_project |= file.name().ends_with("/xrift-studio.project.json");
+        has_hierarchy |= file.name().ends_with("/.xrift-studio/hierarchy-transfer.json");
+    }
+    if !has_project || !has_hierarchy { return Err("Hierarchyの書き出しデータを確認できません。".into()); }
+    hierarchy_transfer::save_package_bytes(Path::new(&path), &bytes)
+}
+
+#[tauri::command]
 fn save_screenshot(path: String, data_url: String) -> Result<(), String> {
     let target = PathBuf::from(&path);
     let is_png = target
@@ -6053,6 +6082,7 @@ pub fn run() {
             write_text_file,
             read_thumbnail,
             write_thumbnail,
+            save_hierarchy_package,
             save_screenshot,
             save_video,
             save_debug_video,

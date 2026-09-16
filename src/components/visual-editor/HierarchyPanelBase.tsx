@@ -1,12 +1,9 @@
-import { EntityPasteMenuItems } from "./EntityPasteMenuItems";
+import { SceneContextMenu } from "./SceneContextMenu";
+import type { EntityReuseActions } from "./EntityReuseMenuItems";
 import type { EntityMirrorAxis } from "../../lib/visual-editor/entity-clipboard";
-import { createPortal } from "react-dom";
-import { Import, MoreHorizontal, Mountain, Store } from "lucide-react";
-import { EntityCreationMenuContent } from "./EntityCreationMenuContent";
+import { MoreHorizontal } from "lucide-react";
 import { useEditorDevice } from "./useEditorDevice";
-import { getEntityCreationMenuEntries } from "../../lib/visual-editor/entity-creation-menu";
-import { getEditorComponentDisabledReason, getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
-import { TERRAIN_PRESETS } from "../../lib/visual-editor/terrain-presets";
+import { getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
 import {
   memo,
   useEffect,
@@ -22,9 +19,6 @@ import {
 import {
   BUILTIN_PREFAB_DRAG_MIME,
   getEntityReparentDecision,
-  EDITOR_COMPONENT_CATEGORY_ORDER,
-  getEditorComponentMenuDefinitions,
-  getXriftComponentMenuGroups,
   getXriftComponentDefinition,
   type BuiltinPrefabRecipe,
   type EntityReparentBlockReason,
@@ -36,7 +30,6 @@ import {
 import {
   commandTitle,
   EDITOR_ICONS,
-  getEditorComponentIcon,
 } from "./editor-icons";
 import {
   clearEditorDragData,
@@ -859,25 +852,17 @@ export function HierarchyPanel({
   selectedEntityIds,
   readOnly,
   playMode = false,
-  projectKind,
   onSelectionChange,
   onAssignMaterial,
   onDropSceneAsset,
   onDropBuiltinPrefab,
-  builtinPrefabRecipes,
   onEntityEnabledChange,
-  onCreateXriftObject,
-  onCreateComponentObject,
-  onOpenExternalStore,
-  onImportFile,
-  importDisabledReason,
   importBusy = false,
-  onCreateTerrain,
-  terrainOverlapCount = 0,
-  onArrangeTerrains,
   onCommand,
   clipboardAvailable = false,
   pasteShortcut,
+  shortcutLabel,
+  reuseActions,
   renameRequest,
   onRename,
 }: {
@@ -904,6 +889,8 @@ export function HierarchyPanel({
   onArrangeTerrains?: () => void;
   clipboardAvailable?: boolean;
   pasteShortcut?: string;
+  shortcutLabel?: (command: EditorCommandId) => string;
+  reuseActions?: EntityReuseActions;
   onCommand: (
     commandId: EditorCommandId,
     payload?: {
@@ -940,20 +927,9 @@ export function HierarchyPanel({
     y: number;
     entityId: string | null;
   } | null>(null);
-  const contextEntityId = contextMenu?.entityId
-    ?? (selectedEntityIds.length > 1 ? selectedEntityIds[0] : null);
+  const contextEntityId = contextMenu?.entityId ?? null;
   const contextMultiple = selectedEntityIds.length > 1
     && Boolean(contextEntityId && selectedEntityIds.includes(contextEntityId));
-  const contextCreationAvailable = !contextMultiple;
-  const creationEntries = useMemo(
-    () => getEntityCreationMenuEntries(projectKind, builtinPrefabRecipes),
-    [projectKind, builtinPrefabRecipes],
-  );
-  const contextComponentDefinitions = contextMenu?.entityId && !contextMultiple
-    ? getEditorComponentMenuDefinitions(projectKind) : [];
-  const contextXriftGroups = contextMenu?.entityId && !contextMultiple
-    ? getXriftComponentMenuGroups(projectKind) : [];
-  const contextMenuRef = useRef<HTMLDivElement>(null);
   const entityButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const [renameDraft, setRenameDraft] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
@@ -1221,33 +1197,14 @@ export function HierarchyPanel({
     setAssetDropTarget(null);
   }, [readOnly]);
 
-  useEffect(() => {
-    if (contextMenu) contextMenuRef.current?.focus();
-  }, [contextMenu]);
-
-  useEffect(() => {
-    if (!contextMenu) return;
-    const dismissOutside = (event: PointerEvent) => {
-      if (!contextMenuRef.current?.contains(event.target as Node)) setContextMenu(null);
-    };
-    const dismissOnResize = () => setContextMenu(null);
-    document.addEventListener("pointerdown", dismissOutside, true);
-    window.addEventListener("resize", dismissOnResize);
-    return () => {
-      document.removeEventListener("pointerdown", dismissOutside, true);
-      window.removeEventListener("resize", dismissOnResize);
-    };
-  }, [contextMenu]);
-
   const openContextMenu = (
     event: MouseEvent<HTMLElement>,
     entityId: string | null = null,
   ) => {
     event.preventDefault();
-    const menuHeight = Math.min(640, window.innerHeight - 24);
     setContextMenu({
-      x: Math.max(12, Math.min(event.clientX, window.innerWidth - 300)),
-      y: Math.max(12, Math.min(event.clientY, window.innerHeight - menuHeight - 12)),
+      x: event.clientX,
+      y: event.clientY,
       entityId,
     });
   };
@@ -1741,326 +1698,25 @@ export function HierarchyPanel({
           />
         ))}
       </div>
-      {contextMenu ? createPortal(
-        <div
-          ref={contextMenuRef}
-          className={`fixed z-[85] max-h-[min(640px,calc(100dvh-24px))] w-72 max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain rounded-md border border-slate-300 bg-white p-1 shadow-xl ${touch ? "editor-touch-menu" : ""}`}
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-          role="menu"
-          aria-label={contextMenu.entityId ? "選択したEntityの操作" : "Entityを追加"}
-          tabIndex={-1}
-          onPointerDown={(event) => event.stopPropagation()}
-          onKeyDown={(event) => {
-                if (event.key !== "Escape") return;
-                event.preventDefault();
-                event.stopPropagation();
-                setContextMenu(null);
-              }}
-        >
-          <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            {contextMultiple
-              ? `${selectedEntityIds.length}件のEntity`
-              : contextMenu.entityId
-                ? "Entity"
-                : "追加"}
-          </p>
-          {contextEntityId ? <>
-              {([
-                ["selection.rename", "名前を変更", "settings"],
-                ["edit.copy", "コピー", "copy"],
-                ["edit.duplicate", "複製", "duplicate"],
-                ["edit.delete", "削除", "delete"],
-                ["prefab.create", "プレハブを作成", "prefab"],
-              ] as const).map(([commandId, label, icon]) => {
-                const Icon = EDITOR_ICONS[icon];
-                return (
-                  <button
-                    key={commandId}
-                    type="button"
-                    disabled={readOnly}
-                    onClick={() => {
-                      const entityId = contextEntityId ?? undefined;
-                      setContextMenu(null);
-                      onCommand(
-                        commandId,
-                        commandId === "edit.delete" && entityId && selectedEntityIds.includes(entityId)
-                          ? undefined
-                          : { entityId },
-                      );
-                    }}
-                    title={
-                      readOnly
-                        ? "動作確認を停止すると編集できます"
-                        : commandTitle(label, commandId)
-                    }
-                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    <Icon size={14} aria-hidden="true" />
-                    {label}
-                  </button>
-                );
-              })}
-              {touch && !contextMultiple ? (
-                <EntityMoveMenu
-                  key={contextEntityId}
-                  scene={scene}
-                  entityId={contextEntityId}
-                  readOnly={readOnly}
-                  onMove={(parentEntityId, siblingIndex) => {
-                    if (onCommand("entity.reparent", { entityId: contextEntityId, parentEntityId, siblingIndex })) {
-                      setCollapsedEntityIds((current) => {
-                        const next = new Set(current);
-                        const visited = new Set<string>();
-                        let ancestorId = parentEntityId;
-                        while (ancestorId && !visited.has(ancestorId)) {
-                          visited.add(ancestorId);
-                          next.delete(ancestorId);
-                          ancestorId = scene.entities[ancestorId]?.parentId ?? null;
-                        }
-                        return next.size === current.size ? current : next;
-                      });
-                      setContextMenu(null);
-                    }
-                  }}
-                />
-              ) : null}
-              <div className="my-1 border-t border-slate-200" />
-          </> : null}
-          <EntityPasteMenuItems
-            disabledReason={readOnly ? "動作確認を停止すると編集できます" : importBusy ? "素材の取り込みが終わるまでお待ちください" : clipboardAvailable ? null : "先にEntityをコピーしてください"}
-            shortcut={pasteShortcut}
-            onPaste={(mirrorAxis) => {
-              const entityId = contextMenu.entityId ?? undefined;
-              setContextMenu(null);
-              onCommand("edit.paste", { source: "hierarchy", entityId, mirrorAxis });
-            }}
-          />
-          <div role="separator" className="my-1 border-t border-slate-200" />
-          {contextCreationAvailable && (onOpenExternalStore || onImportFile) ? (
-            <div className="mb-1 border-b border-slate-200 pb-1">
-              {onOpenExternalStore ? (
-                <button
-                  type="button"
-                  disabled={readOnly || importBusy}
-                  onClick={() => {
-                    setContextMenu(null);
-                    onOpenExternalStore();
-                  }}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-semibold text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  <Store size={14} aria-hidden="true" />
-                  外部から追加
-                </button>
-              ) : null}
-              {onImportFile ? (
-                <button
-                  type="button"
-                  disabled={readOnly || importBusy || Boolean(importDisabledReason)}
-                  title={importDisabledReason ?? undefined}
-                  onClick={() => {
-                    setContextMenu(null);
-                    onImportFile();
-                  }}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-semibold text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  <Import size={14} aria-hidden="true" />
-                  ファイルから素材を追加
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-          {contextCreationAvailable ? (
-          <EntityCreationMenuContent
-            entries={creationEntries}
-            disabled={readOnly || importBusy}
-            onSelect={(entry) => {
-              const parentEntityId = contextMenu.entityId;
-              setContextMenu(null);
-              if (entry.kind === "empty") onCommand("entity.create-empty", { parentEntityId });
-              else if (entry.kind === "primitive") onCommand("entity.create-primitive", { creationId: entry.actionId });
-              else if (entry.kind === "prefab") onDropBuiltinPrefab(entry.actionId, parentEntityId);
-              else if (entry.kind === "component") onCreateComponentObject(entry.actionId);
-              else onCreateXriftObject(entry.actionId);
-            }}
-          />
-          ) : null}
-          {contextCreationAvailable && projectKind === "world" && onCreateTerrain ? (
-            <details className="mt-1 overflow-hidden rounded border border-slate-200 text-xs">
-              <summary className="flex cursor-pointer list-none items-center gap-2 bg-slate-50 px-2 py-1.5 font-semibold text-slate-600 hover:bg-slate-100">
-                <Mountain size={14} aria-hidden="true" />
-                Terrain
-              </summary>
-              <div className="border-t border-slate-100 p-1">
-                {[
-                  { id: undefined, label: "Terrain" },
-                  ...TERRAIN_PRESETS.map((preset) => ({
-                    id: preset.id,
-                    label: `Terrain · ${preset.label}`,
-                  })),
-                ].map((preset) => (
-                  <button
-                    key={preset.id ?? "flat"}
-                    type="button"
-                    disabled={readOnly || importBusy}
-                    onClick={() => {
-                      setContextMenu(null);
-                      onCreateTerrain(preset.id);
-                    }}
-                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    <Mountain size={14} aria-hidden="true" />
-                    {preset.label}
-                  </button>
-                ))}
-                {terrainOverlapCount > 0 && onArrangeTerrains ? (
-                  <button
-                    type="button"
-                    disabled={readOnly || importBusy}
-                    onClick={() => {
-                      setContextMenu(null);
-                      onArrangeTerrains();
-                    }}
-                    className="mt-1 w-full rounded px-2 py-1.5 text-left text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    重なったTerrainを横へ並べ直す
-                  </button>
-                ) : null}
-              </div>
-            </details>
-          ) : null}
-          {contextMenu.entityId ? (
-            <>
-              {contextComponentDefinitions.length > 0 ? (
-              <details className="overflow-hidden rounded border border-slate-200">
-                <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-                  選択したEntityにComponentを追加 ({contextComponentDefinitions.length})
-                </summary>
-                <div className="space-y-1 border-t border-slate-100 p-1">
-                  {EDITOR_COMPONENT_CATEGORY_ORDER.map(
-                    (category) => {
-                      const definitions = contextComponentDefinitions.filter(
-                        (definition) =>
-                          definition.category === category,
-                      );
-                      if (definitions.length === 0) return null;
-                      return (
-                        <details
-                          key={category}
-                        >
-                          <summary className="cursor-pointer select-none rounded px-1.5 py-1 text-xs font-medium capitalize text-slate-500 hover:bg-slate-50">
-                            {category} ({definitions.length})
-                          </summary>
-                          <div className="space-y-0.5 pl-1">
-                            {definitions.map((definition) => {
-                              const DefinitionIcon = getEditorComponentIcon(definition);
-                              const entity = contextMenu.entityId
-                                ? scene.entities[contextMenu.entityId]
-                                : undefined;
-                              const disabledReason = getEditorComponentDisabledReason(entity, definition.id);
-                              return (
-                                <button
-                                  key={definition.id}
-                                  type="button"
-                                  disabled={readOnly || Boolean(disabledReason)}
-                                  title={disabledReason}
-                                  onClick={() => {
-                                    const entityId = contextMenu.entityId ?? undefined;
-                                    setContextMenu(null);
-                                    onCommand("entity.add-component", {
-                                      entityId,
-                                      componentDefinitionId: definition.id,
-                                    });
-                                  }}
-                                  className="flex w-full flex-wrap items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
-                                >
-                                  <span className="flex min-w-0 items-center gap-2">
-                                    <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
-                                    <span className="truncate">{definition.label}</span>
-                                  </span>
-                                  {disabledReason ? (
-                                    <span className="mt-1 w-full text-left text-xs text-slate-400">{disabledReason}</span>
-                                  ) : null}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </details>
-                      );
-                    },
-                  )}
-                </div>
-              </details>
-              ) : null}
-            </>
-          ) : null}
-          {contextMenu.entityId && contextXriftGroups.length > 0 ? (
-          <details className="overflow-hidden rounded border border-slate-200">
-            <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100">
-              選択したEntityにXRift Componentを追加 ({contextXriftGroups.reduce(
-                (count, group) => count + group.components.length,
-                0,
-              )})
-            </summary>
-            <div className="space-y-1 border-t border-slate-100 p-1">
-              {contextXriftGroups.map((group) => {
-                const definitions = group.components;
-                if (definitions.length === 0) return null;
-                return (
-                <details key={group.category}>
-                  <summary className="cursor-pointer select-none rounded px-1.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-50">
-                    {group.label} ({definitions.length})
-                  </summary>
-                  <div className="space-y-0.5 pl-1">
-                    {definitions.map((definition) => {
-                      const DefinitionIcon = EDITOR_ICONS[definition.icon];
-                      const entity = contextMenu.entityId
-                        ? scene.entities[contextMenu.entityId]
-                        : undefined;
-                      const disabledReason = entity
-                        ? getEditorComponentDisabledReason(entity, definition.schemaId)
-                        : undefined;
-                      return (
-                        <button
-                          key={definition.schemaId}
-                          type="button"
-                          disabled={
-                            readOnly || Boolean(disabledReason)
-                          }
-                          onClick={() => {
-                            const entityId = contextMenu.entityId;
-                            setContextMenu(null);
-                            if (entityId) {
-                              onCommand("entity.add-component", {
-                                entityId,
-                                componentDefinitionId: definition.schemaId,
-                              });
-                            } else {
-                              onCreateXriftObject(definition.schemaId);
-                            }
-                          }}
-                          className="flex w-full flex-wrap items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:opacity-45"
-                        >
-                          <span className="flex min-w-0 items-center gap-2">
-                            <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
-                            <span className="truncate">{definition.label}</span>
-                          </span>
-                          <span className="text-xs text-slate-400">
-                            {disabledReason ?? (contextMenu.entityId ? "追加" : "作成")}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </details>
-                );
-              })}
-            </div>
-          </details>
-          ) : null}
-
-        </div>,
-        document.body,
-      ) : null}
+      {contextMenu ? <SceneContextMenu
+        source="hierarchy" x={contextMenu.x} y={contextMenu.y}
+        entityId={contextEntityId} entityName={contextEntityId ? scene.entities[contextEntityId]?.name ?? null : null}
+        selectionCount={contextMultiple ? selectedEntityIds.length : contextEntityId ? 1 : 0}
+        clipboardAvailable={clipboardAvailable} touch={touch}
+        disabledReason={readOnly ? "動作確認を停止してから編集してください" : importBusy ? "取り込みが終わるまでお待ちください" : null}
+        shortcutLabel={shortcutLabel ?? ((command) => command === "edit.paste" ? pasteShortcut ?? "" : "")}
+        onCommand={onCommand} reuseActions={reuseActions}
+        onClose={(restoreFocus) => {
+          setContextMenu(null);
+          if (restoreFocus && contextEntityId) entityButtonRefs.current.get(contextEntityId)?.focus();
+        }}
+        extraActions={contextEntityId && !contextMultiple ? <EntityMoveMenu
+          scene={scene} entityId={contextEntityId} readOnly={readOnly || importBusy}
+          onMove={(parentEntityId, siblingIndex) => {
+            setContextMenu(null);
+            onCommand("entity.reparent", { entityId: contextEntityId, parentEntityId, siblingIndex, source: "hierarchy" });
+          }} /> : null}
+      /> : null}
     </aside>
   );
 }

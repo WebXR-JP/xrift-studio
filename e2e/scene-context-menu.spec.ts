@@ -118,7 +118,7 @@ test("Real editor: copy, mirror paste, Undo and Redo keep the source and selecte
   const original = await Promise.all(scales.map((field) => field.inputValue()));
   const initialCount = await tree.getByRole("treeitem").count();
   await tree.getByText("床", { exact: true }).click({ button: "right" });
-  await page.getByRole("menu", { name: "選択したEntityの操作", exact: true }).getByRole("button", { name: "コピー", exact: true }).click();
+  await page.getByRole("menu", { name: "Hierarchyの編集", exact: true }).getByRole("menuitem", { name: "コピー", exact: true }).click();
   const viewport = page.getByLabel("編集可能な3Dシーン", { exact: true });
   await expect(viewport.locator("canvas").first()).toBeVisible();
   // A blank upper corner keeps the Scene menu independent of ray-hit geometry.

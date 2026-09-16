@@ -40,3 +40,9 @@ XRift Studioのプロジェクトは、`.xriftstudio` ファイルにまとめ�
 取り込みはデスクトップ版のZIP64エントリにも対応し、CRC、実際の展開サイズ、参照素材の存在を確認する。ブラウザの編集セッションはWeb Locksで同じ作品の複数タブ編集を防ぎ、自動保存と書き出しを順番に処理する。読み込みに成功してから次回の復帰先を更新し、閉じる際は受け付けた保存の完了後にロックを解放する。
 
 利用手順は[iPadの案内](./guide/ipad.md)、画面の状態遷移は[F-44](./ux/app.md#f-44)と[F-45](./ux/publishing.md#f-45)、MCPの契約は[編集ツール](./MCP_EDITOR_TOOLS.md#project-12)を参照する。
+
+## Hierarchyの一部を受け渡す
+
+選択したEntityと子孫、必要なAssetだけを通常のビジュアルプロジェクトとして書き出す。拡張子は同じ `.xriftstudio`。package manifestとdocumentのバージョンは変更せず、任意の補助情報 `.xrift-studio/hierarchy-transfer.json`（`format: "xrift-studio-hierarchy"`、`formatVersion: 1`）を加える。補助情報のない従来の全体パッケージからも、シーンとEntityを選んで追加できる。
+
+「Hierarchyへ追加」では、上記の新規プロジェクトとして開く処理と異なり、追加先のprojectId・projectKind・公開情報を保つ。受け渡すEntity・Component・AssetのIDとファイル格納先は追加ごとに新しくする。シーン設定は移さない。詳しくは[Hierarchyの受け渡し契約](./HIERARCHY_TRANSFER.md)と[操作ガイド](./guide/hierarchy-transfer.md)を参照する。

@@ -162,6 +162,20 @@
       "next": "play-mode"
     },
     {
+      "slug": "hierarchy-transfer",
+      "title": "Entityを別のワールド・アイテムへ渡す",
+      "description": "選択したHierarchyを.xriftstudioで書き出し、ワールド・アイテムへ必要な部分だけ追加します。",
+      "group": "basics",
+      "file": "hierarchy-transfer.md",
+      "keywords": "Hierarchy Entity .xriftstudio コピー 貼り付け インポート エクスポート 部分 選択 ワールド アイテム",
+      "related": [
+        "save-and-open",
+        "assets",
+        "editor-basics"
+      ],
+      "next": "save-and-open"
+    },
+    {
       "slug": "play-mode",
       "title": "Playで動作を確かめる",
       "description": "ワールドを歩き、仕掛けを試し、Stopで編集に戻ります。保存データと実行中の変化を区別します。",
