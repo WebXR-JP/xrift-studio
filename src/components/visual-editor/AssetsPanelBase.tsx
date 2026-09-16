@@ -1,0 +1,2258 @@
+import { GuideLink } from "../guide/GuideLink";
+import { createPortal } from "react-dom";
+import { useEditorDevice } from "./useEditorDevice";
+import {
+  useRef,
+  useEffect,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type MouseEvent,
+  type ReactElement,
+} from "react";
+import {
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  CircleAlert,
+  LoaderCircle,
+  MoreHorizontal,
+  PanelBottomOpen,
+  Store,
+} from "lucide-react";
+import type {
+  AssetManifest,
+  BuiltinPrefabRecipe,
+  EditorCommandId,
+  SceneAsset,
+  VisualProjectKind,
+} from "../../lib/visual-editor";
+import {
+  BUILTIN_PREFAB_DRAG_MIME,
+  ASSET_IMPORT_ACCEPT,
+  ASSET_KIND_UI,
+  estimateTextureBytes,
+  formatVramBytes,
+  getXriftComponentDefinition,
+  isEnvironmentTextureAsset,
+  isPublishedAsKtx2,
+  isScenePlaceableAsset,
+  listBuiltinPrefabRecipes,
+  resolveAssetCreationFolderId,
+  xriftComponentCatalogThumbnailUrl,
+} from "../../lib/visual-editor";
+import { AssetThumbnail } from "./AssetQuickEditor";
+import { CatalogThumbnailImage } from "./CatalogThumbnailImage";
+import { resolveProjectThumbnailAssetPath } from "../../lib/project-thumbnail";
+import { commandTitle, EDITOR_ICONS, type EditorIconName } from "./editor-icons";
+import { formatFileSize, getDragKind } from "./editor-utils";
+import {
+  ASSET_LIBRARY_FOLDER_DRAG_MIME,
+  ASSET_LIBRARY_ITEM_DRAG_MIME,
+  ENTITY_DRAG_MIME,
+  type EditorMode,
+  type PendingImport,
+} from "./types";
+import {
+  clearEditorDragData,
+  hasEditorDragData,
+  readEditorDragData,
+  writeEditorDragData,
+} from "./editor-drag-data";
+import {
+  clearAssetCardDragData,
+  writeAssetCardDragData,
+} from "./asset-card-drag";
+import { hasActiveAssetImport } from "./asset-operation-lock";
+
+type ViewMode = "grid" | "list";
+type ContextMenuState = {
+  x: number;
+  y: number;
+  assetId?: string;
+  folderId?: string;
+  creationFolderId: string | null;
+} | null;
+type BrowserFolder = {
+  id: string;
+  name: string;
+  icon: EditorIconName;
+  kind?: SceneAsset["kind"];
+  custom?: boolean;
+  builtinPrefabs?: boolean;
+};
+
+type AssetFolderTreeProps = {
+  assets: AssetManifest;
+  customFolders: BrowserFolder[];
+  kindFolders: BrowserFolder[];
+  activeFolderId: string | null;
+  folderItemCount: (folder: BrowserFolder) => number;
+  assetMutationLocked: boolean;
+  onActiveFolderChange: (folderId: string | null) => void;
+  onMoveAsset: (assetId: string, folderId: string | null) => void;
+  onMoveFolder: (folderId: string, parentId: string | null) => void;
+};
+
+const XRIFT_PREFABS_FOLDER_ID = "virtual-xrift-prefabs";
+
+const KIND_FOLDERS: BrowserFolder[] = [
+  {
+    id: XRIFT_PREFABS_FOLDER_ID,
+    name: "XRift Prefabs",
+    icon: "prefab",
+    builtinPrefabs: true,
+  },
+  { id: "folder-models", name: "Models", icon: "model", kind: "model" },
+  { id: "folder-materials", name: "Materials", icon: "material", kind: "material" },
+  { id: "folder-textures", name: "Textures", icon: "texture", kind: "texture" },
+  { id: "folder-audio", name: "Audio", icon: "audio", kind: "audio" },
+  { id: "folder-fonts", name: "Fonts", icon: "font", kind: "font" },
+  { id: "folder-particles", name: "Particles", icon: "particle", kind: "particle" },
+  { id: "folder-interactivity", name: "Interactivity", icon: "asset", kind: "interactivity" },
+  { id: "folder-scripts", name: "Scripts", icon: "script", kind: "script" },
+  { id: "folder-shaders", name: "Shaders", icon: "script", kind: "shader" },
+  { id: "folder-prefabs", name: "Prefabs", icon: "prefab", kind: "template" },
+];
+
+function assetKindLabel(asset: SceneAsset): string {
+  // HDRI Textures share the Texture kind but read as a different asset class.
+  if (asset.kind === "texture" && isEnvironmentTextureAsset(asset)) {
+    return ASSET_KIND_UI.skybox.label;
+  }
+  return ASSET_KIND_UI[asset.kind].label;
+}
+
+function assetIconName(asset: SceneAsset): EditorIconName {
+  return ASSET_KIND_UI[asset.kind].icon;
+}
+
+function assetSourceLabel(asset: SceneAsset): string {
+  if (asset.attribution) {
+    return `${asset.attribution.providerName} · ${asset.attribution.licenseName}`;
+  }
+  // 変換済みAssetの参照先はassets/.optimized/のハッシュ名ファイルになるが、
+  // 一覧に出すソースは取り込んだ元画像のままにする。別ファイルが増えたように
+  // 見せない。
+  const origin =
+    "optimizedFrom" in asset ? asset.optimizedFrom?.source : undefined;
+  if (origin?.kind === "project") return origin.relativePath;
+  if (asset.source.kind === "project") return asset.source.relativePath;
+  if (asset.source.kind === "builtin") return asset.source.key;
+  return "document";
+}
+
+/** 一覧で並び順に使う、いま使っているファイルの容量。 */
+function assetFileBytes(asset: SceneAsset): number | null {
+  if (!("importMetadata" in asset) || !asset.importMetadata) return null;
+  const byteLength = (asset.importMetadata as { byteLength?: unknown }).byteLength;
+  return typeof byteLength === "number" && Number.isFinite(byteLength)
+    ? byteLength
+    : null;
+}
+
+/** TextureだけVRAMの概算を持つ。VRAM診断と同じ計算を使う。 */
+function assetVramBytes(asset: SceneAsset): number | null {
+  if (asset.kind !== "texture" || asset.status !== "ready") return null;
+  return estimateTextureBytes(asset).bytes;
+}
+
+type AssetSortMode = "default" | "file-size" | "vram";
+
+function assetFolderPath(assets: AssetManifest, asset: SceneAsset): string {
+  return folderDisplayPath(assets, asset.folderId ?? null);
+}
+
+function folderDisplayPath(assets: AssetManifest, initialFolderId: string | null): string {
+  const segments: string[] = [];
+  const visited = new Set<string>();
+  let folderId = initialFolderId;
+  while (folderId && !visited.has(folderId)) {
+    visited.add(folderId);
+    const folder = assets.folders?.[folderId];
+    if (!folder) {
+      segments.unshift("不明なフォルダー");
+      break;
+    }
+    segments.unshift(folder.name);
+    folderId = folder.parentId;
+  }
+  return ["Assets", ...segments].join(" / ");
+}
+
+function importedModelFolderIds(assets: AssetManifest): Set<string> {
+  const folders = assets.folders ?? {};
+  return new Set(
+    Object.values(assets.assets)
+      .filter(
+        (asset) =>
+          asset.kind === "model" &&
+          asset.folderId &&
+          folders[asset.folderId]?.name.toLocaleLowerCase() ===
+            asset.name.toLocaleLowerCase() &&
+          Object.values(folders).some(
+            (folder) =>
+              folder.parentId === asset.folderId &&
+              folder.name === "Materials",
+          ) &&
+          Object.values(folders).some(
+            (folder) =>
+              folder.parentId === asset.folderId && folder.name === "Textures",
+          ),
+      )
+      .map((asset) => asset.folderId as string),
+  );
+}
+
+function AssetFolderTree({
+  assets,
+  customFolders,
+  kindFolders,
+  activeFolderId,
+  folderItemCount,
+  assetMutationLocked,
+  onActiveFolderChange,
+  onMoveAsset,
+  onMoveFolder,
+}: AssetFolderTreeProps) {
+  const FolderIcon = EDITOR_ICONS.folder;
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
+    () => new Set(customFolders.map((folder) => folder.id)),
+  );
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!activeFolderId || !assets.folders?.[activeFolderId]) return;
+    setExpandedFolders((current) => {
+      const next = new Set(current);
+      let folderId: string | null = activeFolderId;
+      const visited = new Set<string>();
+      while (folderId && !visited.has(folderId)) {
+        visited.add(folderId);
+        next.add(folderId);
+        folderId = assets.folders?.[folderId]?.parentId ?? null;
+      }
+      return next;
+    });
+  }, [activeFolderId, assets.folders]);
+
+  const childrenOf = (parentId: string | null) =>
+    customFolders.filter(
+      (folder) => (assets.folders?.[folder.id]?.parentId ?? null) === parentId,
+    );
+
+  const toggleFolder = (folderId: string) => {
+    setExpandedFolders((current) => {
+      const next = new Set(current);
+      if (next.has(folderId)) next.delete(folderId);
+      else next.add(folderId);
+      return next;
+    });
+  };
+
+  const handleDrop = (event: DragEvent<HTMLElement>, folderId: string | null) => {
+    const assetId = readEditorDragData(
+      event.dataTransfer,
+      ASSET_LIBRARY_ITEM_DRAG_MIME,
+    ).trim();
+    const sourceFolderId = readEditorDragData(
+      event.dataTransfer,
+      ASSET_LIBRARY_FOLDER_DRAG_MIME,
+    ).trim();
+    if (!assetId && !sourceFolderId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    clearEditorDragData();
+    setDropTargetId(null);
+    if (assetMutationLocked) return;
+    if (assetId) onMoveAsset(assetId, folderId);
+    else if (sourceFolderId) onMoveFolder(sourceFolderId, folderId);
+  };
+
+  const handleDragOver = (event: DragEvent<HTMLElement>, folderId: string | null) => {
+    const hasLibraryPayload =
+      hasEditorDragData(event.dataTransfer, ASSET_LIBRARY_ITEM_DRAG_MIME) ||
+      hasEditorDragData(event.dataTransfer, ASSET_LIBRARY_FOLDER_DRAG_MIME);
+    if (!hasLibraryPayload) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = assetMutationLocked ? "none" : "move";
+    setDropTargetId(assetMutationLocked ? null : folderId ?? "__root__");
+  };
+
+  const handleDragLeave = (event: DragEvent<HTMLElement>) => {
+    const target = event.relatedTarget;
+    if (!(target instanceof Node && event.currentTarget.contains(target))) {
+      setDropTargetId(null);
+    }
+  };
+
+  const renderCustomFolder = (folder: BrowserFolder, depth: number): ReactElement => {
+    const children = childrenOf(folder.id);
+    const expanded = expandedFolders.has(folder.id);
+    const FolderIcon = EDITOR_ICONS.folder;
+    const ChevronIcon = expanded ? ChevronDown : ChevronRight;
+    const isActive = activeFolderId === folder.id;
+    const isDropTarget = dropTargetId === folder.id;
+
+    return (
+      <div key={folder.id}>
+        <div
+          className={`group flex min-w-0 items-center gap-1 rounded-md pr-1 text-xs ${
+            isDropTarget
+              ? "bg-brand-100 text-brand-900 ring-1 ring-brand-300"
+              : isActive
+                ? "bg-brand-50 font-medium text-brand-900"
+                : "text-editor-muted hover:bg-editor-subtle hover:text-editor-text"
+          }`}
+          style={{ paddingLeft: `${6 + depth * 12}px` }}
+          onDragOver={(event) => handleDragOver(event, folder.id)}
+          onDragLeave={handleDragLeave}
+          onDrop={(event) => handleDrop(event, folder.id)}
+        >
+          {children.length > 0 ? (
+            <button
+              type="button"
+              className="flex size-5 shrink-0 items-center justify-center rounded text-slate-400 hover:bg-white hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+              aria-label={expanded ? `${folder.name}を折りたたむ` : `${folder.name}を展開する`}
+              onClick={() => toggleFolder(folder.id)}
+            >
+              <ChevronIcon size={12} aria-hidden="true" />
+            </button>
+          ) : (
+            <span className="w-5" aria-hidden="true" />
+          )}
+          <button
+            type="button"
+            draggable={!assetMutationLocked}
+            data-editor-drag-source="asset-folder"
+            onDragStart={(event) => {
+              if (assetMutationLocked) return;
+              writeEditorDragData(event.dataTransfer, {
+                [ASSET_LIBRARY_FOLDER_DRAG_MIME]: folder.id,
+              });
+              event.dataTransfer.effectAllowed = "move";
+            }}
+            onDragEnd={() => {
+              clearEditorDragData();
+              setDropTargetId(null);
+            }}
+            onClick={() => onActiveFolderChange(folder.id)}
+            className="flex min-h-6 min-w-0 flex-1 cursor-grab items-center gap-1.5 py-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 active:cursor-grabbing"
+            title={`${folder.name}を開く`}
+          >
+            {expanded ? (
+              <FolderIcon size={14} className="shrink-0 text-brand-500" aria-hidden="true" />
+            ) : (
+              <FolderIcon size={13} className="shrink-0 text-slate-400" aria-hidden="true" />
+            )}
+            <span className="min-w-0 flex-1 truncate">{folder.name}</span>
+          </button>
+        </div>
+        {expanded
+          ? children.map((child) => renderCustomFolder(child, depth + 1))
+          : null}
+      </div>
+    );
+  };
+
+  const renderCollection = (folder: BrowserFolder) => {
+    const isActive = activeFolderId === folder.id;
+    const KindIcon = EDITOR_ICONS[folder.icon];
+    return (
+      <button
+        key={folder.id}
+        type="button"
+        onClick={() => onActiveFolderChange(folder.id)}
+        className={`flex min-h-6 w-full items-center gap-1.5 rounded-md px-2 py-0.5 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 ${
+          isActive
+            ? "bg-brand-50 font-medium text-brand-900"
+            : "text-editor-muted hover:bg-editor-subtle hover:text-editor-text"
+        }`}
+        title={`${folder.name}のアセットを表示`}
+      >
+        <KindIcon size={13} className="shrink-0 text-slate-500" aria-hidden="true" />
+        <span className="min-w-0 flex-1 truncate">{folder.name}</span>
+        <span className="tabular-nums text-[10px] text-slate-400">
+          {folderItemCount(folder)}
+        </span>
+      </button>
+    );
+  };
+
+  return (
+    <aside className="flex w-44 shrink-0 flex-col border-r border-editor-border bg-editor-surface" aria-label="Assetsのフォルダー">
+      <div className="scrollbar-thin min-h-0 flex-1 overflow-auto px-1.5 py-2">
+        <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+          ライブラリ
+        </p>
+        <div
+          onDragOver={(event) => handleDragOver(event, null)}
+          onDragLeave={handleDragLeave}
+          onDrop={(event) => handleDrop(event, null)}
+          className={`rounded-md ${dropTargetId === "__root__" ? "bg-brand-100 ring-1 ring-brand-300" : ""}`}
+        >
+          <button
+            type="button"
+            onClick={() => onActiveFolderChange(null)}
+            className={`flex min-h-7 w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 ${
+              activeFolderId === null
+                ? "bg-editor-subtle font-medium text-editor-text"
+                : "text-editor-text hover:bg-editor-subtle"
+            }`}
+            title="Assets直下を表示"
+          >
+            <FolderIcon size={14} className="text-slate-500" aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate">Assets</span>
+          </button>
+        </div>
+
+        <div className="space-y-0.5">
+          {childrenOf(null).map((folder) => renderCustomFolder(folder, 1))}
+          {customFolders.length === 0 ? (
+            <p className="px-2 py-2 text-[11px] leading-4 text-slate-400">
+              右クリックでフォルダーを作成します。
+            </p>
+          ) : null}
+        </div>
+        <p className="mb-1 mt-3 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+          種類で絞り込み
+        </p>
+        <div className="space-y-0.5">{kindFolders.map(renderCollection)}</div>
+      </div>
+    </aside>
+  );
+}
+
+function matchesAssetSearch(
+  asset: SceneAsset,
+  folderPath: string,
+  query: string,
+): boolean {
+  const tokens = query
+    .trim()
+    .toLocaleLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (tokens.length === 0) return true;
+  const searchable = [
+    asset.name,
+    asset.kind,
+    assetKindLabel(asset),
+    assetSourceLabel(asset),
+    folderPath,
+  ]
+    .join(" ")
+    .toLocaleLowerCase();
+  return tokens.every((token) => searchable.includes(token));
+}
+
+function importStatusLabel(status: PendingImport["status"]): string {
+  switch (status) {
+    case "waiting-save":
+      return "保存待ち";
+    case "queued":
+      return "待機中";
+    case "reading":
+      return "読み込み中";
+    case "processing":
+      return "解析・生成中";
+    case "committing":
+      return "追加中";
+    case "succeeded":
+      return "完了";
+    case "updated":
+      return "既存素材を更新";
+    case "duplicate":
+      return "既存素材を再利用";
+    case "failed":
+      return "失敗";
+  }
+}
+
+function importStatusClass(status: PendingImport["status"]): string {
+  if (status === "failed") return "text-rose-700";
+  if (status === "succeeded" || status === "updated") return "text-emerald-700";
+  if (status === "duplicate") return "text-sky-700";
+  return "text-amber-800";
+}
+
+function canRemoveImport(status: PendingImport["status"]): boolean {
+  return (
+    status === "waiting-save" ||
+    status === "succeeded" ||
+    status === "updated" ||
+    status === "duplicate" ||
+    status === "failed"
+  );
+}
+
+function AssetCard({
+  asset,
+  assets,
+  projectPath,
+  selected,
+  viewMode,
+  readOnly,
+  onSelect,
+  onOpen,
+  onDelete,
+  onOpenContext,
+  folderPath,
+  tablet,
+}: {
+  asset: SceneAsset;
+  assets: AssetManifest;
+  projectPath?: string;
+  selected: boolean;
+  viewMode: ViewMode;
+  readOnly: boolean;
+  onSelect: (assetId: string, event: MouseEvent<HTMLButtonElement>) => void;
+  onOpen: () => void;
+  onDelete: () => void;
+  onOpenContext: (event: MouseEvent<HTMLElement>) => void;
+  folderPath?: string;
+  tablet: boolean;
+}) {
+  const KindIcon = EDITOR_ICONS[assetIconName(asset)];
+  const DeleteIcon = EDITOR_ICONS.delete;
+  const placeable = isScenePlaceableAsset(asset);
+  const fileBytes = assetFileBytes(asset);
+  const vramBytes = assetVramBytes(asset);
+  // KTX2にすればVRAMを下げられるTextureは、概算を強調して変換待ちだと分かるようにする。
+  const vramReducible =
+    vramBytes !== null && asset.kind === "texture" && !isPublishedAsKtx2(asset);
+  const sizeSummary =
+    fileBytes !== null || vramBytes !== null ? (
+      <span className="pointer-events-none block text-right text-[11px] leading-4 tabular-nums">
+        <span className="block text-slate-600" aria-label={fileBytes !== null ? `ファイルサイズ: ${formatFileSize(fileBytes)}` : undefined}>
+          {fileBytes !== null ? formatFileSize(fileBytes) : "—"}
+        </span>
+        {vramBytes !== null ? (
+          <span
+            className={`block ${vramReducible ? "font-medium text-amber-700" : "text-slate-400"}`}
+            title={
+              vramReducible
+                ? `VRAM概算 ${formatVramBytes(vramBytes)}。KTX2に変換するとVRAM使用量を減らせます`
+                : `VRAM概算 ${formatVramBytes(vramBytes)}`
+            }
+          >
+            VRAM {formatVramBytes(vramBytes)}
+          </span>
+        ) : null}
+      </span>
+    ) : null;
+  const dragDescription =
+    asset.kind === "material"
+      ? "メッシュへ適用、またはフォルダーへ移動"
+      : placeable
+        ? "シーンへ配置、またはフォルダーへ移動"
+        : "フォルダーへ移動";
+  const handleDragStart = (event: DragEvent<HTMLElement>) => {
+    const origin = event.target;
+    if (
+      origin instanceof HTMLElement &&
+      origin.closest("[data-no-asset-drag='true']")
+    ) {
+      event.preventDefault();
+      return;
+    }
+    writeAssetCardDragData(event.dataTransfer, asset);
+    event.dataTransfer.effectAllowed = "copyMove";
+  };
+
+  if (viewMode === "list") {
+    return (
+      <div
+        onContextMenu={onOpenContext}
+        className={`group relative grid min-w-0 ${tablet ? "grid-cols-[28px_minmax(0,1fr)_70px_44px]" : "grid-cols-[28px_minmax(110px,1fr)_82px_86px_24px_26px]"} items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-left ${
+          selected
+            ? "border-brand-300 bg-brand-50"
+            : "border-transparent bg-editor-surface hover:bg-editor-subtle"
+        }`}
+      >
+        <button
+          type="button"
+          draggable={!readOnly}
+          onDragStart={handleDragStart}
+          onDragEnd={clearAssetCardDragData}
+          aria-pressed={selected}
+          onClick={(event) => onSelect(asset.id, event)}
+          onDoubleClick={() => onOpen()}
+          title={commandTitle(`${asset.name}を選択／${dragDescription}`, "SelectAsset")}
+          className={`grid min-w-0 cursor-grab items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 active:cursor-grabbing ${tablet ? "col-span-3 grid-cols-[28px_minmax(0,1fr)_70px]" : "col-span-5 grid-cols-[28px_minmax(110px,1fr)_82px_86px_24px]"}`}
+        >
+          <span
+            data-asset-drag-preview="true"
+            className="pointer-events-none h-7 overflow-hidden rounded bg-editor-subtle"
+          >
+            <AssetThumbnail asset={asset} assets={assets} projectPath={projectPath} />
+          </span>
+          <span className="min-w-0">
+            <span className={`block text-[11px] font-semibold leading-4 text-slate-800 ${tablet ? "whitespace-normal break-words [overflow-wrap:anywhere]" : "truncate"}`}>{asset.name}</span>
+            {tablet && asset.status !== "ready" ? <EDITOR_ICONS.warning size={14} aria-label={asset.status} className="text-amber-700" /> : null}
+          </span>
+          {sizeSummary ?? <span />}
+          {!tablet ? <><span className="flex items-center gap-1 text-[11px] text-slate-500">
+            <KindIcon size={11} aria-hidden="true" />
+            <span className="truncate">{assetKindLabel(asset)}</span>
+          </span>
+          <span title={asset.status !== "ready" ? asset.status : undefined}>{asset.status !== "ready" ? <EDITOR_ICONS.warning size={14} aria-label={asset.status} className="text-amber-700" /> : null}</span>
+          </> : null}
+        </button>
+        <button
+          type="button"
+          data-no-asset-drag="true"
+          disabled={readOnly}
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete();
+          }}
+          title={commandTitle(`${asset.name}を削除`, "DeleteAsset")}
+          aria-label={`${asset.name}を削除`}
+          className={`rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30 ${selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}
+        >
+          <DeleteIcon size={14} aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onContextMenu={onOpenContext}
+      className={`group relative flex min-w-0 flex-col overflow-hidden rounded-lg border bg-editor-surface text-left transition-colors ${
+        selected
+          ? "border-brand-400 bg-brand-50/40 ring-1 ring-brand-200"
+          : "border-editor-border/70 hover:border-slate-300 hover:bg-editor-subtle"
+      }`}
+    >
+      <button
+        type="button"
+        draggable={!readOnly}
+        onDragStart={handleDragStart}
+        onDragEnd={clearAssetCardDragData}
+        aria-pressed={selected}
+        onClick={(event) => onSelect(asset.id, event)}
+        onDoubleClick={() => onOpen()}
+        title={commandTitle(`${asset.name}を選択／${dragDescription}`, "SelectAsset")}
+        className="flex min-w-0 flex-1 cursor-grab flex-col text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 active:cursor-grabbing"
+      >
+        <span
+          data-asset-drag-preview="true"
+          className="pointer-events-none relative block h-9 w-full shrink-0 overflow-hidden border-b border-editor-border/70 bg-editor-subtle"
+        >
+          <AssetThumbnail asset={asset} assets={assets} projectPath={projectPath} />
+          {asset.status !== "ready" ? (
+            <span
+              title={asset.status}
+              aria-label={`状態: ${asset.status}`}
+              className="absolute bottom-1.5 right-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800"
+            >
+              <EDITOR_ICONS.warning size={11} aria-hidden="true" />
+              <span className="sr-only">{asset.status}</span>
+            </span>
+          ) : null}
+        </span>
+        <span className="min-w-0 px-1.5 py-1">
+          <span className={`block text-[11px] font-semibold leading-4 text-slate-800 ${tablet ? "whitespace-normal break-words [overflow-wrap:anywhere]" : "truncate"}`}>{asset.name}</span>
+          {folderPath ? (
+            <span className="block truncate text-[10px] leading-4 text-slate-400" title={folderPath}>
+              {folderPath}
+            </span>
+          ) : null}
+          {fileBytes !== null || vramBytes !== null ? (
+            <span
+              className="block truncate text-[10px] leading-4 tabular-nums text-slate-500"
+              title={
+                vramBytes !== null && vramReducible
+                  ? "KTX2に変換するとVRAM使用量を減らせます"
+                  : undefined
+              }
+            >
+              {fileBytes !== null ? formatFileSize(fileBytes) : ""}
+              {fileBytes !== null && vramBytes !== null ? " · " : ""}
+              {vramBytes !== null ? (
+                <span className={vramReducible ? "font-medium text-amber-700" : undefined}>
+                  VRAM {formatVramBytes(vramBytes)}
+                </span>
+              ) : null}
+            </span>
+          ) : null}
+        </span>
+      </button>
+      <button
+        type="button"
+        data-no-asset-drag="true"
+        disabled={readOnly}
+        onClick={(event) => {
+          event.stopPropagation();
+          onDelete();
+        }}
+        title={commandTitle(`${asset.name}を削除`, "DeleteAsset")}
+        aria-label={`${asset.name}を削除`}
+        className={`absolute right-1.5 top-1.5 z-10 rounded bg-white/95 p-1 text-slate-500 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-30 ${selected ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}
+      >
+        <DeleteIcon size={13} aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+function FolderCard({
+  folder,
+  viewMode,
+  readOnly,
+  onOpen,
+  onDelete,
+  onDropAsset,
+  onDropFolder,
+  onOpenContext,
+  touch,
+}: {
+  folder: BrowserFolder;
+  viewMode: ViewMode;
+  readOnly: boolean;
+  onOpen: () => void;
+  onDelete: () => void;
+  onDropAsset: (assetId: string) => void;
+  onDropFolder: (folderId: string) => void;
+  onOpenContext: (event: MouseEvent<HTMLElement>) => void;
+  touch: boolean;
+}) {
+  const [dropTarget, setDropTarget] = useState(false);
+  const FolderIcon = EDITOR_ICONS.folder;
+  const KindIcon = EDITOR_ICONS[folder.icon];
+  const DeleteIcon = EDITOR_ICONS.delete;
+  const acceptsLibraryDrop = Boolean(folder.custom) && !readOnly;
+  const handleDragStart = (event: DragEvent<HTMLElement>) => {
+    if (!folder.custom || readOnly) return;
+    writeEditorDragData(event.dataTransfer, {
+      [ASSET_LIBRARY_FOLDER_DRAG_MIME]: folder.id,
+    });
+    event.dataTransfer.effectAllowed = "move";
+  };
+  const handleDragOver = (event: DragEvent<HTMLElement>) => {
+    const hasLibraryPayload =
+      hasEditorDragData(event.dataTransfer, ASSET_LIBRARY_ITEM_DRAG_MIME) ||
+      hasEditorDragData(event.dataTransfer, ASSET_LIBRARY_FOLDER_DRAG_MIME);
+    if (
+      !acceptsLibraryDrop ||
+      !hasLibraryPayload
+    ) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "move";
+    setDropTarget(true);
+  };
+  const handleDrop = (event: DragEvent<HTMLElement>) => {
+    const hasAsset = hasEditorDragData(
+      event.dataTransfer,
+      ASSET_LIBRARY_ITEM_DRAG_MIME,
+    );
+    const hasFolder = hasEditorDragData(
+      event.dataTransfer,
+      ASSET_LIBRARY_FOLDER_DRAG_MIME,
+    );
+    if (!hasAsset && !hasFolder) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const assetId = readEditorDragData(
+      event.dataTransfer,
+      ASSET_LIBRARY_ITEM_DRAG_MIME,
+    ).trim();
+    const folderId = readEditorDragData(
+      event.dataTransfer,
+      ASSET_LIBRARY_FOLDER_DRAG_MIME,
+    ).trim();
+    clearEditorDragData();
+    setDropTarget(false);
+    if (!acceptsLibraryDrop || (!assetId && !folderId)) return;
+    if (assetId) onDropAsset(assetId);
+    else if (folderId) onDropFolder(folderId);
+  };
+  const handleDragEnd = () => {
+    clearEditorDragData();
+    setDropTarget(false);
+  };
+  const sharedProps = {
+    onDragOver: handleDragOver,
+    onDragLeave: () => setDropTarget(false),
+    onDrop: handleDrop,
+    onContextMenu: onOpenContext,
+  };
+  if (viewMode === "list") {
+    return (
+      <div
+        {...sharedProps}
+        className={`group grid ${touch ? "grid-cols-[40px_minmax(0,1fr)_44px]" : "grid-cols-[40px_minmax(110px,1fr)_86px_26px]"} items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-left ${dropTarget ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200" : "border-transparent bg-editor-surface hover:bg-editor-subtle"}`}
+      >
+        <button type="button" draggable={Boolean(folder.custom) && !readOnly} data-editor-drag-source={folder.custom ? "asset-folder" : undefined} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onClick={onOpen} title={commandTitle(`${folder.name}を開く`, "OpenAssetFolder")} className={`grid min-w-0 cursor-grab select-none items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 active:cursor-grabbing ${touch ? "col-span-2 grid-cols-[40px_minmax(0,1fr)]" : "col-span-3 grid-cols-[40px_minmax(110px,1fr)_86px]"}`}>
+          <span className="flex h-8 items-center justify-center rounded bg-editor-subtle text-slate-500"><FolderIcon size={18} aria-hidden="true" /></span>
+          <span className={`text-[11px] font-semibold text-slate-800 ${touch ? "whitespace-normal break-words [overflow-wrap:anywhere]" : "truncate"}`}>{folder.name}</span>
+          {!touch ? <span className="flex items-center gap-1 text-[11px] text-slate-500"><KindIcon size={11} aria-hidden="true" /> <span className="truncate">{folder.custom ? "フォルダー" : "コレクション"}</span></span> : null}
+        </button>
+        {folder.custom ? (
+          <button type="button" disabled={readOnly} onClick={(event) => { event.stopPropagation(); if (touch) onOpenContext(event); else onDelete(); }} title={touch ? `${folder.name}の操作` : commandTitle(`${folder.name}を削除`, "DeleteAssetFolder")} aria-label={touch ? `${folder.name}の操作` : `${folder.name}を削除`} aria-haspopup={touch ? "menu" : undefined} className={`rounded p-1 text-slate-400 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-30 ${touch ? "min-h-11 min-w-11 opacity-100 hover:bg-slate-100" : "opacity-0 hover:bg-rose-50 hover:text-rose-700"}`}>{touch ? <MoreHorizontal size={16} aria-hidden="true" /> : <DeleteIcon size={14} aria-hidden="true" />}</button>
+        ) : <span />}
+      </div>
+    );
+  }
+  return (
+    <div
+      {...sharedProps}
+      className={`group relative flex min-h-10 min-w-0 ${touch ? "flex-row" : "flex-col"} items-center justify-center gap-1 rounded-lg border text-slate-600 ${dropTarget ? "border-brand-400 bg-brand-50 ring-1 ring-brand-200" : "border-transparent bg-editor-surface hover:bg-editor-subtle"}`}
+    >
+      <button type="button" draggable={Boolean(folder.custom) && !readOnly} data-editor-drag-source={folder.custom ? "asset-folder" : undefined} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onClick={onOpen} title={commandTitle(`${folder.name}を開く`, "OpenAssetFolder")} className="flex h-full min-w-0 w-full cursor-grab select-none flex-col items-center justify-center gap-1 px-1.5 py-1.5 active:cursor-grabbing">
+        <span className="relative">
+          <FolderIcon size={18} strokeWidth={1.5} aria-hidden="true" />
+          <KindIcon size={10} className="absolute -bottom-0.5 -right-1 rounded bg-white" aria-hidden="true" />
+        </span>
+        <span className={`max-w-full text-[11px] font-semibold leading-4 ${touch ? "whitespace-normal break-words [overflow-wrap:anywhere]" : "truncate"}`}>{folder.name}</span>
+      </button>
+      {folder.custom ? (
+        <button type="button" disabled={readOnly} onClick={(event) => { event.stopPropagation(); if (touch) onOpenContext(event); else onDelete(); }} title={touch ? `${folder.name}の操作` : commandTitle(`${folder.name}を削除`, "DeleteAssetFolder")} aria-label={touch ? `${folder.name}の操作` : `${folder.name}を削除`} aria-haspopup={touch ? "menu" : undefined} className={`rounded bg-white p-1 text-slate-400 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-30 ${touch ? "shrink-0 min-h-11 min-w-11 opacity-100 hover:bg-slate-100" : "absolute right-1.5 top-1.5 opacity-0 shadow hover:bg-rose-50 hover:text-rose-700"}`}>{touch ? <MoreHorizontal size={16} aria-hidden="true" /> : <DeleteIcon size={13} aria-hidden="true" />}</button>
+      ) : null}
+    </div>
+  );
+}
+
+function BuiltinPrefabCard({
+  recipe,
+  viewMode,
+  readOnly,
+  onPlace,
+  tablet,
+}: {
+  recipe: BuiltinPrefabRecipe;
+  viewMode: ViewMode;
+  readOnly: boolean;
+  onPlace: () => void;
+  tablet: boolean;
+}) {
+  const definition = getXriftComponentDefinition(recipe.schemaId);
+  const Icon = definition
+    ? EDITOR_ICONS[definition.icon]
+    : EDITOR_ICONS.prefab;
+  const thumbnailUrl = definition
+    ? xriftComponentCatalogThumbnailUrl(definition.importName)
+    : null;
+  const handleDragStart = (event: DragEvent<HTMLElement>) => {
+    writeEditorDragData(event.dataTransfer, {
+      [BUILTIN_PREFAB_DRAG_MIME]: recipe.id,
+    });
+    event.dataTransfer.effectAllowed = "copy";
+  };
+  if (viewMode === "list") {
+    return (
+      <div className={`grid items-center gap-2 rounded-md border border-sky-200 bg-white px-1.5 py-1 ${tablet ? "grid-cols-[54px_minmax(0,1fr)_52px]" : "grid-cols-[54px_minmax(110px,1fr)_minmax(120px,1fr)_70px]"}`}>
+        <div
+          draggable={!readOnly}
+          data-editor-drag-source="builtin-prefab"
+          onDragStart={handleDragStart}
+          onDragEnd={clearEditorDragData}
+          className={`grid min-w-0 cursor-grab select-none items-center gap-2 active:cursor-grabbing ${tablet ? "col-span-2 grid-cols-[54px_minmax(0,1fr)]" : "col-span-3 grid-cols-[54px_minmax(110px,1fr)_minmax(120px,1fr)]"}`}
+          title={`${recipe.name}をシーンへドラッグ`}
+        >
+          {thumbnailUrl ? (
+            <CatalogThumbnailImage
+              src={thumbnailUrl}
+              alt={`${recipe.name}の公式プレビュー`}
+              className="pointer-events-none h-10 w-[54px] rounded border border-sky-100"
+              fallback={<Icon size={22} aria-hidden="true" />}
+            />
+          ) : (
+            <span className="pointer-events-none flex h-10 items-center justify-center rounded border border-sky-100 bg-sky-50 text-sky-700"><Icon size={22} aria-hidden="true" /></span>
+          )}
+          <span className="pointer-events-none min-w-0"><span className="block truncate text-xs font-semibold text-slate-800">{recipe.name}</span><span className="block text-[11px] font-medium text-sky-700">XRift 組み込み{recipe.configuration?.requiredBeforeCompile ? "・配置後に設定" : ""}</span></span>
+          {!tablet ? <span className="pointer-events-none line-clamp-2 text-xs leading-4 text-slate-500" title={recipe.configuration?.hint}>{recipe.description}</span> : null}
+        </div>
+        <button type="button" disabled={readOnly} onClick={onPlace} className={`rounded bg-sky-600 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-40 ${tablet ? "min-h-11" : ""}`}>配置</button>
+      </div>
+    );
+  }
+  return (
+    <article className="flex min-h-[184px] min-w-0 flex-col rounded-md border border-sky-200 bg-white p-2 shadow-sm">
+      <div
+        draggable={!readOnly}
+        data-editor-drag-source="builtin-prefab"
+        onDragStart={handleDragStart}
+        onDragEnd={clearEditorDragData}
+        className="min-w-0 flex-1 cursor-grab select-none active:cursor-grabbing"
+        title={`${recipe.name}をシーンへドラッグ`}
+      >
+        {thumbnailUrl ? (
+          <CatalogThumbnailImage
+            src={thumbnailUrl}
+            alt={`${recipe.name}の公式プレビュー`}
+            className="pointer-events-none aspect-video w-full rounded border border-sky-100"
+            fallback={<Icon size={22} aria-hidden="true" />}
+          />
+        ) : (
+          <div className="pointer-events-none flex aspect-video w-full items-center justify-center rounded border border-sky-100 bg-sky-50 text-sky-700">
+            <Icon size={22} aria-hidden="true" />
+          </div>
+        )}
+        <div className="pointer-events-none mt-2 flex min-w-0 items-start gap-1.5"><Icon size={15} className="mt-0.5 shrink-0 text-sky-700" aria-hidden="true" /><div className="min-w-0"><h3 className="truncate text-[13px] font-semibold text-slate-800">{recipe.name}</h3><p className="text-[11px] font-medium text-sky-700">XRift 組み込み</p></div></div>
+        <p className="pointer-events-none mt-1.5 line-clamp-2 text-xs leading-4 text-slate-500">{recipe.description}</p>
+        {recipe.configuration?.requiredBeforeCompile ? (
+          <p className="pointer-events-none mt-1 line-clamp-2 text-[11px] font-medium leading-4 text-amber-700" title={recipe.configuration.hint}>
+            配置後にInspectorで設定
+          </p>
+        ) : null}
+      </div>
+      <button type="button" disabled={readOnly} onClick={onPlace} title={commandTitle(`${recipe.name}をシーンへ配置`, "PlaceBuiltinPrefab")} className={`mt-auto rounded bg-sky-600 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-40 ${tablet ? "min-h-11" : ""}`}>配置</button>
+    </article>
+  );
+}
+
+function ContextMenuItem({
+  icon,
+  label,
+  command,
+  disabled = false,
+  disabledReason,
+  onClick,
+}: {
+  icon: EditorIconName;
+  label: string;
+  command: string;
+  disabled?: boolean;
+  disabledReason?: string | null;
+  onClick: () => void;
+}) {
+  const Icon = EDITOR_ICONS[icon];
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      title={disabled && disabledReason ? disabledReason : commandTitle(label, command)}
+      className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-violet-50 hover:text-violet-800 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-700"
+    >
+      <Icon size={14} aria-hidden="true" />
+      {label}
+    </button>
+  );
+}
+
+function AssetMoveMenu({
+  assets,
+  assetId,
+  folderId,
+  disabled,
+  onMove,
+}: {
+  assets: AssetManifest;
+  assetId?: string;
+  folderId?: string;
+  disabled: boolean;
+  onMove: (destinationId: string | null) => void;
+}) {
+  const originalParentId = assetId
+    ? assets.assets[assetId]?.folderId ?? null
+    : assets.folders?.[folderId ?? ""]?.parentId ?? null;
+  const [destinationId, setDestinationId] = useState(originalParentId ?? "");
+  const destinations = Object.values(assets.folders ?? {}).filter((candidate) => {
+    // Folder moves share the existing command guard, but never offer their own
+    // descendants as destinations in the native picker.
+    const visited = new Set<string>();
+    let ancestorId: string | null = candidate.id;
+    while (ancestorId && !visited.has(ancestorId)) {
+      if (ancestorId === folderId) return false;
+      visited.add(ancestorId);
+      ancestorId = assets.folders?.[ancestorId]?.parentId ?? null;
+    }
+    return true;
+  });
+  return (
+    <details className="border-y border-slate-200 py-1">
+      <summary className="cursor-pointer rounded px-2 py-2 text-xs text-slate-700 hover:bg-violet-50">フォルダーへ移動</summary>
+      <div className="space-y-2 px-2 py-2">
+        <select
+          value={destinationId}
+          disabled={disabled}
+          aria-label="移動先フォルダー"
+          onChange={(event) => setDestinationId(event.currentTarget.value)}
+          className="min-h-11 w-full rounded border border-slate-300 bg-white px-2 text-sm"
+        >
+          <option value="">Assets直下</option>
+          {destinations.map((folder) => <option key={folder.id} value={folder.id}>{folderDisplayPath(assets, folder.id)}</option>)}
+        </select>
+        <button
+          type="button"
+          disabled={disabled || (destinationId || null) === originalParentId}
+          onClick={() => onMove(destinationId || null)}
+          className="min-h-11 w-full rounded border border-slate-300 px-2 text-xs text-slate-700 hover:bg-violet-50 disabled:opacity-45"
+        >
+          このフォルダーへ移動
+        </button>
+      </div>
+    </details>
+  );
+}
+
+function importInProgress(status: PendingImport["status"]): boolean {
+  return (
+    status === "waiting-save" ||
+    status === "queued" ||
+    status === "reading" ||
+    status === "processing" ||
+    status === "committing"
+  );
+}
+
+function ImportActivityDrawer({
+  entries,
+  error,
+  projectPersisted,
+  projectSaving,
+  onSaveBeforeImport,
+  onRemove,
+  onClearError,
+  onReveal,
+}: {
+  entries: PendingImport[];
+  error: string | null;
+  projectPersisted: boolean;
+  projectSaving: boolean;
+  onSaveBeforeImport: () => void | Promise<void>;
+  onRemove: (id: string) => void;
+  onClearError: () => void;
+  onReveal: (entry: PendingImport) => void;
+}) {
+  const waitingForSave = entries.some((entry) => entry.status === "waiting-save");
+  return (
+    <section
+      className="max-h-52 shrink-0 overflow-auto border-t border-editor-border bg-editor-surface px-3 py-2"
+      aria-labelledby="asset-activity-heading"
+    >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div>
+          <h3 id="asset-activity-heading" className="text-xs font-semibold text-editor-text">
+            インポート履歴
+          </h3>
+        </div>
+        {error ? (
+          <button type="button" onClick={onClearError} className="rounded px-2 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300">
+            エラーを確認済みにする
+          </button>
+        ) : null}
+      </div>
+      {error ? <p className="mb-2 rounded-md bg-rose-50 px-2.5 py-2 text-xs leading-4 text-rose-700">{error}</p> : null}
+      {!projectPersisted && waitingForSave ? (
+        <div className="mb-2 rounded-md border border-brand-200 bg-brand-50 p-2.5">
+          <p className="text-xs leading-4 text-slate-700">
+            初回の自動保存を待っています。選択したファイルはこの画面を開いている間、保持します。
+          </p>
+          <button
+            type="button"
+            disabled={projectSaving}
+            onClick={() => void onSaveBeforeImport()}
+            className="mt-2 rounded-md bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-wait disabled:opacity-50"
+          >
+            {projectSaving ? "保存中…" : "自動保存を再試行"}
+          </button>
+        </div>
+      ) : null}
+      <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+        {entries.map((entry) => (
+          <ImportQueueEntry
+            key={entry.id}
+            entry={entry}
+            onRemove={onRemove}
+            onReveal={onReveal}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ImportQueueEntry({
+  entry,
+  onRemove,
+  onReveal,
+}: {
+  entry: PendingImport;
+  onRemove: (id: string) => void;
+  onReveal: (entry: PendingImport) => void;
+}) {
+  const Icon =
+    entry.resourceKind === "texture"
+      ? EDITOR_ICONS.texture
+      : entry.resourceKind === "skybox"
+        ? EDITOR_ICONS.texture
+          : entry.resourceKind === "audio"
+            ? EDITOR_ICONS.audio
+          : entry.resourceKind === "font"
+            ? EDITOR_ICONS.font
+          : entry.resourceKind === "unity-package"
+            ? EDITOR_ICONS.prefab
+          : entry.resourceKind === "shader"
+            ? EDITOR_ICONS.script
+            : EDITOR_ICONS.model;
+  const diagnostic = entry.diagnostics[0];
+  const removable = canRemoveImport(entry.status);
+  return (
+    <article className="rounded-md bg-editor-subtle px-2.5 py-2 text-xs text-editor-text">
+      <div className="flex items-center gap-1.5">
+        <Icon size={12} aria-hidden="true" />
+        <span className="min-w-0 flex-1 truncate font-medium">{entry.name}</span>
+        <span className="shrink-0 text-slate-400">{formatFileSize(entry.size)}</span>
+      </div>
+      <div className="mt-1 flex items-center justify-between gap-2">
+        <span className={`font-semibold ${importStatusClass(entry.status)}`}>
+          {importStatusLabel(entry.status)}
+        </span>
+        {entry.sourceHash ? (
+          <span className="font-mono text-[11px] text-slate-400" title={entry.sourceHash}>
+            SHA {entry.sourceHash.slice(0, 8)}
+          </span>
+        ) : null}
+      </div>
+      <div
+        className="mt-1.5 h-1 overflow-hidden rounded bg-slate-200"
+        role="progressbar"
+        aria-label={`${entry.name}の進捗`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={entry.progress}
+      >
+        <div
+          className={`h-full transition-[width] ${entry.status === "failed" ? "bg-rose-500" : entry.status === "duplicate" ? "bg-sky-500" : entry.status === "succeeded" || entry.status === "updated" ? "bg-emerald-500" : "bg-brand-500"}`}
+          style={{ width: `${entry.progress}%` }}
+        />
+      </div>
+      {diagnostic ? (
+        <p
+          className={`mt-1 line-clamp-2 leading-4 ${diagnostic.severity === "blocking" ? "text-rose-700" : "text-amber-700"}`}
+          title={`${diagnostic.code}: ${diagnostic.message}`}
+        >
+          {diagnostic.message}
+        </p>
+      ) : null}
+      {entry.result ? (
+        <p className="mt-1 text-[11px] text-editor-muted">
+          {entry.resourceKind === "unity-package"
+            ? `Prefab ${entry.result.prefabCount ?? 0}件・Entity ${entry.result.entityCount ?? 0}件・素材 ${entry.result.assetCount ?? 0}件${entry.result.warningCount ? `・要確認 ${entry.result.warningCount}件` : ""}`
+            : entry.resourceKind === "skybox"
+              ? "HDRI テクスチャ 1件・Skyboxへ設定済み"
+              : entry.resourceKind === "audio"
+                ? "音声素材 1件"
+              : entry.resourceKind === "font"
+                ? "フォント 1件"
+              : entry.resourceKind === "shader"
+                ? "GLSL シェーダー素材 1件"
+                : `マテリアル ${entry.result.materialCount}件・テクスチャ ${entry.result.textureCount}件`}
+        </p>
+      ) : null}
+      {entry.assetId || removable ? (
+        <div className="mt-1.5 flex items-center justify-end gap-1">
+          {entry.assetId ? (
+            <button
+              type="button"
+              onClick={() => onReveal(entry)}
+              className="rounded px-2 py-1 text-[11px] font-semibold text-brand-700 hover:bg-brand-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+            >
+              アセットを表示
+            </button>
+          ) : null}
+          {removable ? (
+            <button
+              type="button"
+              onClick={() => onRemove(entry.id)}
+              title={entry.status === "waiting-save" ? "待機中のファイルを外す" : "履歴から削除"}
+              aria-label={entry.status === "waiting-save" ? `${entry.name}を待機中のファイルから外す` : `${entry.name}を履歴から削除`}
+              className="rounded p-1 text-slate-400 hover:bg-white hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+            >
+              <EDITOR_ICONS.close size={13} aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
+function AssetStatusBar({
+  touch = false,
+  entries,
+  error,
+  statusMessage,
+  activityOpen,
+  onToggleActivity,
+  onReveal,
+}: {
+  touch?: boolean;
+  entries: PendingImport[];
+  error: string | null;
+  statusMessage: string | null;
+  activityOpen: boolean;
+  onToggleActivity: () => void;
+  onReveal: (entry: PendingImport) => void;
+}) {
+  const activeEntry = entries.find((entry) => importInProgress(entry.status));
+  const latestEntry = entries[entries.length - 1];
+  const visibleEntry = activeEntry ?? latestEntry;
+  const failed = Boolean(error) || visibleEntry?.status === "failed";
+  const succeeded =
+    visibleEntry?.status === "succeeded" ||
+    visibleEntry?.status === "updated" ||
+    visibleEntry?.status === "duplicate";
+  const canRevealVisibleEntry =
+    !activeEntry &&
+    Boolean(visibleEntry?.assetId) &&
+    (!statusMessage?.trim() || statusMessage.includes(visibleEntry?.name ?? ""));
+  const summary = activeEntry
+    ? `${activeEntry.name}・${importStatusLabel(activeEntry.status)}`
+    : error
+      ? "アセット操作でエラーが発生しました"
+      : statusMessage?.trim() ||
+        (visibleEntry
+          ? `${visibleEntry.name}・${importStatusLabel(visibleEntry.status)}`
+          : "アセット操作の準備ができています");
+
+  return (
+    <footer className={`flex shrink-0 items-center gap-2 border-t border-editor-border bg-editor-surface px-3 text-[11px] text-editor-muted ${touch ? "min-h-11 py-1 [&_button]:min-h-11" : "h-8"}`}>
+      <div className="flex min-w-0 flex-1 items-center gap-2" role="status" aria-live="polite">
+        {activeEntry ? (
+          <LoaderCircle size={13} className="shrink-0 animate-spin text-brand-600 motion-reduce:animate-none" aria-hidden="true" />
+        ) : failed ? (
+          <CircleAlert size={13} className="shrink-0 text-rose-600" aria-hidden="true" />
+        ) : succeeded ? (
+          <CheckCircle2 size={13} className="shrink-0 text-emerald-600" aria-hidden="true" />
+        ) : (
+          <EDITOR_ICONS.asset size={13} className="shrink-0 text-slate-400" aria-hidden="true" />
+        )}
+        <span className={touch ? "min-w-0 break-words [overflow-wrap:anywhere]" : "truncate"}>{summary}</span>
+        {activeEntry ? (
+          <span className="shrink-0 tabular-nums text-brand-700">{activeEntry.progress}%</span>
+        ) : null}
+      </div>
+      {canRevealVisibleEntry && visibleEntry ? (
+        <button
+          type="button"
+          onClick={() => onReveal(visibleEntry)}
+          className="rounded px-2 py-1 font-semibold text-brand-700 hover:bg-brand-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+        >
+          表示
+        </button>
+      ) : null}
+      {entries.length > 0 || error ? (
+        <button
+          type="button"
+          onClick={onToggleActivity}
+          aria-expanded={activityOpen}
+          className={`flex items-center gap-1 rounded px-2 py-1 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 ${activityOpen ? "bg-editor-subtle text-editor-text" : "hover:bg-editor-subtle hover:text-editor-text"}`}
+        >
+          <PanelBottomOpen size={13} aria-hidden="true" />
+          詳細
+          <ChevronDown size={12} className={`transition-transform ${activityOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+        </button>
+      ) : null}
+    </footer>
+  );
+}
+
+export function AssetsPanel({
+  assets,
+  projectPath,
+  projectKind,
+  editorMode,
+  selectedAssetId,
+  selectedAssetIds,
+  pendingImports,
+  importError,
+  statusMessage,
+  onSelectAsset,
+  onAssetSelectionChange,
+  onQueueFiles,
+  onRemovePending,
+  onClearImportError,
+  projectSaving,
+  onSaveBeforeImport,
+  onPhaseNotice,
+  activeFolderId,
+  onActiveFolderChange,
+  onCommand,
+  renameRequest,
+  onRename,
+  onRequestDeleteAsset,
+  onSetProjectThumbnail,
+  onRequestDeleteFolder,
+  onMoveAsset,
+  onMoveFolder,
+  onPlaceBuiltinPrefab,
+  onPlaceSceneAsset,
+  onOpenExternalStore,
+  onOpenInteractivity,
+  onOpenAssetLocation,
+  canOpenAssetLocation = true,
+  externalOperationLockReason = null,
+}: {
+  assets: AssetManifest;
+  projectPath?: string;
+  projectKind: VisualProjectKind;
+  editorMode: EditorMode;
+  selectedAssetId: string | null;
+  selectedAssetIds: readonly string[];
+  pendingImports: PendingImport[];
+  importError: string | null;
+  statusMessage: string | null;
+  onSelectAsset: (assetId: string) => void;
+  onAssetSelectionChange: (assetIds: string[], primaryAssetId: string | null) => void;
+  onQueueFiles: (files: File[]) => void;
+  onRemovePending: (id: string) => void;
+  onClearImportError: () => void;
+  projectSaving: boolean;
+  onSaveBeforeImport: () => void | Promise<void>;
+  onPhaseNotice: (message: string) => void;
+  activeFolderId: string | null;
+  onActiveFolderChange: (folderId: string | null) => void;
+  onCommand: (
+    commandId: EditorCommandId,
+    payload?: {
+      assetId?: string;
+      folderId?: string | null;
+      entityId?: string;
+    },
+  ) => boolean;
+  renameRequest:
+    | { kind: "asset" | "folder"; id: string; requestId: number }
+    | null;
+  onRename: (target: { kind: "asset" | "folder"; id: string }, name: string) => void;
+  onRequestDeleteAsset: (assetId: string) => void;
+  onSetProjectThumbnail: (assetId: string) => void | Promise<void>;
+  onRequestDeleteFolder: (folderId: string) => void;
+  onMoveAsset: (assetId: string, folderId: string | null) => void;
+  onMoveFolder: (folderId: string, parentId: string | null) => void;
+  onPlaceBuiltinPrefab: (recipeId: string) => void;
+  onPlaceSceneAsset: (assetId: string) => void;
+  onOpenExternalStore: () => void;
+  onOpenInteractivity: (assetId: string) => void;
+  onOpenAssetLocation: (sourceRelativePath?: string) => void | Promise<void>;
+  canOpenAssetLocation?: boolean;
+  /**
+   * Reason supplied by an Asset operation owned outside this panel, such as
+   * Model reimport. Selection/navigation stay available while mutations and
+   * new file queue entries are rejected at every panel entry point.
+   */
+  externalOperationLockReason?: string | null;
+}) {
+  const { tablet: isTablet, phone, touch, viewportHeight } = useEditorDevice();
+  const tablet = isTablet || phone;
+  const [fileDragOver, setFileDragOver] = useState(false);
+  const [rootDropTarget, setRootDropTarget] = useState(false);
+  const [breadcrumbDropTargetId, setBreadcrumbDropTargetId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [sortMode, setSortMode] = useState<AssetSortMode>("default");
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [tabletKindFilter, setTabletKindFilter] = useState<SceneAsset["kind"] | "">("");
+  const [phoneFiltersOpen, setPhoneFiltersOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+  const selectionAnchorRef = useRef<string | null>(selectedAssetId);
+  const readOnly = editorMode === "play";
+  const normalizedExternalLockReason =
+    externalOperationLockReason?.trim() || null;
+  const activeAssetImport = hasActiveAssetImport(pendingImports);
+  const importDisabledReason = readOnly
+    ? "動作確認を停止してからアセットをインポートしてください"
+    : normalizedExternalLockReason;
+  const importLocked = Boolean(importDisabledReason);
+  const assetMutationLocked =
+    readOnly ||
+    Boolean(normalizedExternalLockReason) ||
+    activeAssetImport;
+  const assetMutationDisabledReason = readOnly
+    ? "動作確認を停止してからアセットを編集してください"
+    : normalizedExternalLockReason ??
+      (activeAssetImport
+        ? "アセットのインポート完了後に編集できます"
+        : null);
+  const customFolders: BrowserFolder[] = Object.values(assets.folders ?? {})
+    .sort((left, right) => left.order - right.order || left.name.localeCompare(right.name))
+    .map((folder) => ({
+      id: folder.id,
+      name: folder.name,
+      icon: "folder",
+      custom: true,
+    }));
+  const allFolders = [...KIND_FOLDERS, ...customFolders];
+  const activeFolder = allFolders.find((folder) => folder.id === activeFolderId);
+  const allAssets = Object.values(assets.assets).filter((asset) => asset.kind !== "primitive");
+  const modelFolderIds = importedModelFolderIds(assets);
+  const searching = searchQuery.trim().length > 0;
+  const visibleFolders = searching
+    ? []
+    : !activeFolderId
+      ? customFolders.filter(
+            (folder) => assets.folders?.[folder.id]?.parentId === null,
+          )
+      : activeFolder?.custom
+        ? customFolders.filter(
+            (folder) => assets.folders?.[folder.id]?.parentId === activeFolder.id,
+          )
+        : [];
+  const folderAssets = activeFolder?.kind
+    ? allAssets.filter((asset) => asset.kind === activeFolder.kind)
+    : activeFolder?.custom
+      ? allAssets.filter((asset) => (asset.folderId ?? null) === activeFolder.id)
+      : activeFolder?.builtinPrefabs
+        ? []
+        : allAssets.filter((asset) => (asset.folderId ?? null) === null);
+  // 容量・VRAMの並び順は大きい順。未変換の重いTextureを上へ集めて、
+  // そのままInspectorの変換へつなげるための並びなので、値が無いAssetは後ろへ。
+  const sortAssetsByMetric = (
+    list: readonly SceneAsset[],
+    metric: (asset: SceneAsset) => number | null,
+  ): SceneAsset[] =>
+    [...list].sort(
+      (left, right) =>
+        (metric(right) ?? -1) - (metric(left) ?? -1) ||
+        left.name.localeCompare(right.name) ||
+        left.id.localeCompare(right.id),
+    );
+  const applySortMode = (list: readonly SceneAsset[]): SceneAsset[] => {
+    if (sortMode === "file-size") return sortAssetsByMetric(list, assetFileBytes);
+    if (sortMode === "vram") return sortAssetsByMetric(list, assetVramBytes);
+    return [...list];
+  };
+  const visibleAssets = searching
+    ? applySortMode(
+        allAssets
+          .filter((asset) => !tablet || !tabletKindFilter || asset.kind === tabletKindFilter)
+          .filter((asset) =>
+            matchesAssetSearch(asset, assetFolderPath(assets, asset), searchQuery),
+          )
+          .sort(
+            (left, right) =>
+              left.name.localeCompare(right.name) ||
+              left.kind.localeCompare(right.kind) ||
+              left.id.localeCompare(right.id),
+          ),
+      )
+    : applySortMode(tablet && tabletKindFilter ? folderAssets.filter((asset) => asset.kind === tabletKindFilter) : folderAssets);
+  const handleAssetSelect = (
+    assetId: string,
+    event: MouseEvent<HTMLButtonElement>,
+  ) => {
+    const currentIds = selectedAssetIds.filter((id) => Boolean(assets.assets[id]));
+    if (event.shiftKey && selectionAnchorRef.current) {
+      const anchorIndex = visibleAssets.findIndex((asset) => asset.id === selectionAnchorRef.current);
+      const targetIndex = visibleAssets.findIndex((asset) => asset.id === assetId);
+      if (anchorIndex >= 0 && targetIndex >= 0) {
+        const start = Math.min(anchorIndex, targetIndex);
+        const end = Math.max(anchorIndex, targetIndex);
+        onAssetSelectionChange(visibleAssets.slice(start, end + 1).map((asset) => asset.id), assetId);
+        return;
+      }
+    }
+    if (event.ctrlKey || event.metaKey) {
+      const nextIds = currentIds.includes(assetId)
+        ? currentIds.filter((id) => id !== assetId)
+        : [...currentIds, assetId];
+      onAssetSelectionChange(nextIds, nextIds.includes(assetId) ? assetId : nextIds[nextIds.length - 1] ?? null);
+      selectionAnchorRef.current = assetId;
+      return;
+    }
+    selectionAnchorRef.current = assetId;
+    onAssetSelectionChange([assetId], assetId);
+  };
+  const builtinPrefabRecipes = listBuiltinPrefabRecipes(projectKind);
+  const visibleItemCount =
+    activeFolder?.builtinPrefabs && !searching
+      ? builtinPrefabRecipes.length
+      : visibleFolders.length + visibleAssets.length;
+  const activeBreadcrumb = (() => {
+    if (!activeFolder) return [] as BrowserFolder[];
+    if (!activeFolder.custom) return [activeFolder];
+    const chain: BrowserFolder[] = [];
+    const visited = new Set<string>();
+    let currentId: string | null = activeFolder.id;
+    while (currentId && !visited.has(currentId)) {
+      visited.add(currentId);
+      const current = customFolders.find((folder) => folder.id === currentId);
+      if (!current) break;
+      chain.unshift(current);
+      currentId = assets.folders?.[currentId]?.parentId ?? null;
+    }
+    if (chain.some((folder) => modelFolderIds.has(folder.id))) {
+      chain.unshift(KIND_FOLDERS.find((folder) => folder.kind === "model")!);
+    }
+    return chain;
+  })();
+
+  useEffect(() => {
+    if (
+      importError ||
+      pendingImports.some(
+        (entry) => entry.status === "waiting-save" || entry.status === "failed",
+      )
+    ) {
+      setActivityOpen(true);
+    }
+  }, [importError, pendingImports]);
+
+  useEffect(() => {
+    if (!renameRequest) return;
+    const name =
+      renameRequest.kind === "asset"
+        ? assets.assets[renameRequest.id]?.name
+        : assets.folders?.[renameRequest.id]?.name;
+    setRenameDraft(name ?? "");
+    const frame = window.requestAnimationFrame(() => {
+      renameInputRef.current?.focus();
+      renameInputRef.current?.select();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [assets.assets, assets.folders, renameRequest]);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    contextMenuRef.current?.focus({ preventScroll: true });
+    const dismissOutside = (event: PointerEvent) => {
+      if (!contextMenuRef.current?.contains(event.target as Node)) setContextMenu(null);
+    };
+    const dismissOnResize = () => setContextMenu(null);
+    document.addEventListener("pointerdown", dismissOutside, true);
+    window.addEventListener("resize", dismissOnResize);
+    return () => {
+      document.removeEventListener("pointerdown", dismissOutside, true);
+      window.removeEventListener("resize", dismissOnResize);
+    };
+  }, [contextMenu]);
+
+  const handleDragOver = (event: DragEvent<HTMLElement>) => {
+    if (hasEditorDragData(event.dataTransfer, ENTITY_DRAG_MIME)) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = assetMutationLocked ? "none" : "copy";
+      return;
+    }
+    if (getDragKind(event.dataTransfer) !== "files") return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = importLocked ? "none" : "copy";
+    setFileDragOver(true);
+  };
+
+  const handleDrop = (event: DragEvent<HTMLElement>) => {
+    if (hasEditorDragData(event.dataTransfer, ENTITY_DRAG_MIME)) {
+      event.preventDefault();
+      event.stopPropagation();
+      const entityId = readEditorDragData(
+        event.dataTransfer,
+        ENTITY_DRAG_MIME,
+      ).trim();
+      clearEditorDragData();
+      setFileDragOver(false);
+      if (assetMutationLocked) {
+        if (assetMutationDisabledReason) onPhaseNotice(assetMutationDisabledReason);
+      } else if (entityId) onCommand("prefab.create", { entityId });
+      else {
+        onPhaseNotice("プレハブ化するEntityを読み取れませんでした");
+      }
+      return;
+    }
+    if (getDragKind(event.dataTransfer) !== "files") return;
+    event.preventDefault();
+    setFileDragOver(false);
+    if (importDisabledReason) {
+      onPhaseNotice(importDisabledReason);
+      return;
+    }
+    onQueueFiles(Array.from(event.dataTransfer.files));
+  };
+
+  const handleFileInput = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = "";
+    if (files.length === 0) return;
+    if (importDisabledReason) {
+      onPhaseNotice(importDisabledReason);
+      return;
+    }
+    onQueueFiles(files);
+  };
+
+  const openContextMenu = (
+    event: MouseEvent<HTMLElement>,
+    target: { assetId?: string; folderId?: string } = {},
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const bounds = panelRef.current?.getBoundingClientRect() ?? event.currentTarget.getBoundingClientRect();
+    setContextMenu({
+      x: touch
+        ? Math.max(12, Math.min(event.clientX, window.innerWidth - 300))
+        : Math.min(event.clientX - bounds.left, Math.max(8, bounds.width - 232)),
+      y: touch
+        ? Math.max(12, Math.min(event.clientY, (viewportHeight ?? window.innerHeight) - Math.min(640, (viewportHeight ?? window.innerHeight) - 24) - 12))
+        : Math.min(event.clientY - bounds.top, Math.max(8, bounds.height - 260)),
+      ...target,
+      creationFolderId: resolveAssetCreationFolderId(
+        assets,
+        activeFolderId,
+        target,
+      ),
+    });
+  };
+
+  const openCreationMenu = (event: MouseEvent<HTMLElement>) => {
+    if (touch) {
+      openContextMenu(event);
+      return;
+    }
+    const bounds = panelRef.current?.getBoundingClientRect();
+    setContextMenu({
+      x: Math.max(8, (bounds?.width ?? 240) - 232),
+      y: 42,
+      creationFolderId: resolveAssetCreationFolderId(assets, activeFolderId, {}),
+    });
+  };
+
+  const handleLibraryMove = (
+    event: DragEvent<HTMLElement>,
+    folderId: string | null,
+  ) => {
+    const hasAsset = hasEditorDragData(
+      event.dataTransfer,
+      ASSET_LIBRARY_ITEM_DRAG_MIME,
+    );
+    const hasFolder = hasEditorDragData(
+      event.dataTransfer,
+      ASSET_LIBRARY_FOLDER_DRAG_MIME,
+    );
+    if (!hasAsset && !hasFolder) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    const assetId = readEditorDragData(
+      event.dataTransfer,
+      ASSET_LIBRARY_ITEM_DRAG_MIME,
+    ).trim();
+    const sourceFolderId = readEditorDragData(
+      event.dataTransfer,
+      ASSET_LIBRARY_FOLDER_DRAG_MIME,
+    ).trim();
+    clearEditorDragData();
+    setRootDropTarget(false);
+    if (assetMutationLocked) return true;
+    if (!assetId && !sourceFolderId) {
+      onPhaseNotice("移動する素材またはフォルダーを読み取れませんでした");
+      return true;
+    }
+    if (assetId) onMoveAsset(assetId, folderId);
+    else if (sourceFolderId) onMoveFolder(sourceFolderId, folderId);
+    return true;
+  };
+
+  const handleRootDragOver = (event: DragEvent<HTMLElement>) => {
+    const hasLibraryPayload =
+      hasEditorDragData(event.dataTransfer, ASSET_LIBRARY_ITEM_DRAG_MIME) ||
+      hasEditorDragData(event.dataTransfer, ASSET_LIBRARY_FOLDER_DRAG_MIME);
+    if (!hasLibraryPayload) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = assetMutationLocked ? "none" : "move";
+    setRootDropTarget(!assetMutationLocked);
+  };
+
+  const handleBreadcrumbDragOver = (
+    event: DragEvent<HTMLElement>,
+    folderId: string,
+  ) => {
+    const hasLibraryPayload =
+      hasEditorDragData(event.dataTransfer, ASSET_LIBRARY_ITEM_DRAG_MIME) ||
+      hasEditorDragData(event.dataTransfer, ASSET_LIBRARY_FOLDER_DRAG_MIME);
+    if (!hasLibraryPayload) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = assetMutationLocked ? "none" : "move";
+    setBreadcrumbDropTargetId(assetMutationLocked ? null : folderId);
+  };
+
+  const revealImportEntry = (entry: PendingImport) => {
+    if (!entry.assetId) return;
+    const asset = assets.assets[entry.assetId];
+    if (!asset) {
+      onPhaseNotice("インポートしたアセットが見つかりませんでした");
+      return;
+    }
+    onActiveFolderChange(asset.folderId ?? null);
+    onSelectAsset(asset.id);
+  };
+
+  const folderItemCount = (folder: BrowserFolder): number => {
+    if (folder.kind) return allAssets.filter((asset) => asset.kind === folder.kind).length;
+    if (folder.builtinPrefabs) return builtinPrefabRecipes.length;
+    return (
+      allAssets.filter((asset) => (asset.folderId ?? null) === folder.id).length +
+      customFolders.filter(
+        (candidate) => assets.folders?.[candidate.id]?.parentId === folder.id,
+      ).length
+    );
+  };
+
+  const GridIcon = EDITOR_ICONS.grid;
+  const ListIcon = EDITOR_ICONS.list;
+  const ImportIcon = EDITOR_ICONS.import;
+  const CreateIcon = EDITOR_ICONS.create;
+
+  const statusBar = !tablet || pendingImports.length > 0 || importError || statusMessage?.trim() ? (
+    <AssetStatusBar
+      touch={touch}
+      entries={pendingImports}
+      error={importError}
+      statusMessage={statusMessage}
+      activityOpen={activityOpen}
+      onToggleActivity={() => setActivityOpen((open) => !open)}
+      onReveal={revealImportEntry}
+    />
+  ) : null;
+
+  return (
+    <section
+      ref={panelRef}
+      className={`relative flex min-h-0 flex-col border-t border-editor-border bg-editor-canvas ${phone ? "overflow-y-auto overscroll-contain" : ""} ${fileDragOver ? "ring-2 ring-inset ring-brand-500" : ""}`}
+      aria-labelledby="assets-heading"
+      onDragOver={handleDragOver}
+      onDragLeave={(event) => {
+        const target = event.relatedTarget;
+        if (!(target instanceof Node && event.currentTarget.contains(target))) setFileDragOver(false);
+      }}
+      onDrop={handleDrop}
+      onContextMenu={openContextMenu}
+      onPointerDown={() => contextMenu && setContextMenu(null)}
+    >
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        disabled={importLocked}
+        accept={ASSET_IMPORT_ACCEPT}
+        onChange={handleFileInput}
+        className="sr-only"
+      />
+      {/*
+       * The header keeps its single row at every panel width: the breadcrumb is
+       * the only part allowed to shrink, and the actions drop their labels
+       * through container queries instead of wrapping onto a second line.
+       */}
+      <div className={`@container/assets-header flex shrink-0 border-b border-editor-border bg-editor-surface ${tablet ? "flex-col gap-1 px-2 py-1 [&_button]:min-h-11 [&_button]:min-w-11" : "h-10 items-center justify-between gap-3 px-3"}`}>
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <h2 id="assets-heading" className="shrink-0 text-[13px] font-semibold text-slate-800">Assets</h2>
+          {tablet ? <span className="min-w-0 flex-1 truncate text-xs text-editor-muted">{selectedAssetId ? assets.assets[selectedAssetId]?.name : ""}</span> : null}
+          {touch && selectedAssetId && assets.assets[selectedAssetId] ? (
+            <button
+              type="button"
+              aria-label={`${assets.assets[selectedAssetId].name}の操作`}
+              aria-haspopup="menu"
+              aria-expanded={Boolean(contextMenu?.assetId === selectedAssetId)}
+              onClick={(event) => openContextMenu(event, { assetId: selectedAssetId })}
+              className="min-h-11 shrink-0 rounded border border-editor-border bg-editor-surface px-2 text-xs font-semibold text-editor-text"
+            >
+              操作
+            </button>
+          ) : null}
+          {tablet ? <GuideLink page="assets" label="Assetsの使い方" compact /> : null}
+          <nav className={`${tablet ? "hidden" : "hidden @[460px]/assets-header:flex"} min-w-0 items-center gap-1 overflow-hidden text-xs text-slate-500`} aria-label="Assetsのフォルダー階層">
+            <button
+              type="button"
+              onClick={() => onActiveFolderChange(null)}
+              onDragOver={handleRootDragOver}
+              onDragLeave={() => setRootDropTarget(false)}
+              onDrop={(event) => handleLibraryMove(event, null)}
+              className={`shrink-0 rounded-md px-1.5 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 ${rootDropTarget ? "bg-brand-100 text-brand-800" : "hover:bg-editor-subtle hover:text-editor-text"}`}
+              title="Assets直下へ移動（素材やフォルダーをドロップ）"
+            >
+              Assets
+            </button>
+            {activeBreadcrumb.map((folder, index) => (
+              <span key={folder.id} className="contents">
+                <span>/</span>
+                <button
+                  type="button"
+                  aria-current={index === activeBreadcrumb.length - 1 ? "page" : undefined}
+                  onClick={() => onActiveFolderChange(folder.id)}
+                  onDragOver={(event) => handleBreadcrumbDragOver(event, folder.id)}
+                  onDragLeave={() => setBreadcrumbDropTargetId(null)}
+                  onDrop={(event) => {
+                    setBreadcrumbDropTargetId(null);
+                    handleLibraryMove(event, folder.id);
+                  }}
+                  className={`truncate rounded-md px-1 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 ${breadcrumbDropTargetId === folder.id ? "bg-brand-100 text-brand-800" : index === activeBreadcrumb.length - 1 ? "font-medium text-editor-text" : "hover:bg-editor-subtle hover:text-editor-text"}`}
+                >
+                  {folder.name}
+                </button>
+              </span>
+            ))}
+          </nav>
+        </div>
+        <div className={`flex min-w-0 shrink-0 items-center gap-1 ${tablet ? "flex-wrap" : ""}`}>
+          {!tablet ? <GuideLink page="assets" label="Assetsの使い方" compact /> : null}
+          {normalizedExternalLockReason ? (
+            <span
+              role="status"
+              className={`truncate rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800 ${tablet ? "order-last w-full" : "max-w-24 shrink @[560px]/assets-header:max-w-44"}`}
+              title={normalizedExternalLockReason}
+            >
+              {normalizedExternalLockReason}
+            </span>
+          ) : null}
+          <label className={`relative flex items-center ${tablet ? "min-w-0 flex-1" : "h-7 w-32 @[560px]/assets-header:w-40 @[700px]/assets-header:w-52"}`}>
+            <span className="sr-only">アセットを検索</span>
+            <input
+              type="search"
+              name="asset-search"
+              autoComplete="off"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && searchQuery) {
+                  event.preventDefault();
+                  setSearchQuery("");
+                }
+              }}
+              placeholder="アセットを検索…"
+              className="h-7 w-full rounded-md border border-editor-border bg-editor-surface pl-2.5 pr-12 text-xs text-editor-text placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-brand-400 focus-visible:ring-2 focus-visible:ring-brand-100"
+            />
+            {searching ? (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-1 rounded px-1.5 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                aria-label="検索をクリア"
+              >
+                クリア
+              </button>
+            ) : null}
+          </label>
+          {tablet ? (
+            <button type="button" onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")} aria-label={viewMode === "grid" ? "リスト表示に切り替える" : "グリッド表示に切り替える"} title={viewMode === "grid" ? "リスト表示に切り替える" : "グリッド表示に切り替える"} className="shrink-0 rounded p-1 text-slate-500 hover:bg-slate-200">{viewMode === "grid" ? <ListIcon size={14} aria-hidden="true" /> : <GridIcon size={14} aria-hidden="true" />}</button>
+          ) : <>
+            <button type="button" onClick={() => setViewMode("grid")} aria-label="グリッド表示" aria-pressed={viewMode === "grid"} title={commandTitle("グリッド表示", "SetAssetView.Grid")} className={`shrink-0 rounded p-1 ${viewMode === "grid" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><GridIcon size={14} aria-hidden="true" /></button>
+            <button type="button" onClick={() => setViewMode("list")} aria-label="リスト表示" aria-pressed={viewMode === "list"} title={commandTitle("リスト表示", "SetAssetView.List")} className={`shrink-0 rounded p-1 ${viewMode === "list" ? "bg-slate-200 text-slate-800" : "text-slate-500 hover:bg-slate-200"}`}><ListIcon size={14} aria-hidden="true" /></button>
+          </>}
+          <button type="button" disabled={assetMutationLocked} onClick={openCreationMenu} aria-label="新規アセットまたはフォルダー" title={assetMutationDisabledReason ?? "新規アセットまたはフォルダー"} className="ml-1 shrink-0 rounded border border-slate-300 bg-white p-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45"><CreateIcon size={14} aria-hidden="true" /></button>
+          <button type="button" disabled={assetMutationLocked} onClick={onOpenExternalStore} title={assetMutationDisabledReason ?? "外部リソースから素材または公式Componentを追加"} aria-label="外部から追加" className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45 @[620px]/assets-header:px-2.5"><Store size={12} aria-hidden="true" /><span className="hidden @[620px]/assets-header:inline">外部から追加</span></button>
+          <button type="button" disabled={importLocked} onClick={() => { if (onCommand("asset.import")) fileInputRef.current?.click(); }} title={importDisabledReason ?? commandTitle("ファイルから素材を追加", "asset.import")} aria-label="ファイルから素材を追加" className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:opacity-45 @[520px]/assets-header:px-2.5"><ImportIcon size={12} aria-hidden="true" /><span className="hidden @[520px]/assets-header:inline">素材を追加</span></button>
+        </div>
+      </div>
+
+      {phone ? statusBar : null}
+      {phone ? (
+        <button
+          type="button"
+          aria-expanded={phoneFiltersOpen}
+          aria-controls="assets-phone-filters"
+          onClick={() => setPhoneFiltersOpen((open) => !open)}
+          className="flex min-h-11 shrink-0 items-center gap-2 border-b border-editor-border bg-editor-subtle px-3 py-2 text-left text-xs text-editor-text"
+        >
+          <span className="min-w-0 flex-1 break-words">
+            <span className="font-semibold">絞り込み・並び順</span>
+            {activeFolder || tabletKindFilter || sortMode !== "default" ? (
+              <span className="ml-2 text-editor-muted">条件あり</span>
+            ) : null}
+          </span>
+          <span className="shrink-0 tabular-nums text-editor-muted" aria-live="polite">{visibleItemCount}件</span>
+          <ChevronDown size={14} className={`shrink-0 ${phoneFiltersOpen ? "rotate-180" : ""}`} aria-hidden="true" />
+        </button>
+      ) : null}
+      <div className={`flex ${phone ? "shrink-0 flex-col" : `min-h-0 flex-1 ${tablet ? "flex-col" : ""}`}`}>
+        {tablet && (!phone || phoneFiltersOpen) ? (
+          <nav id={phone ? "assets-phone-filters" : undefined} className="grid shrink-0 grid-cols-2 gap-2 border-b border-editor-border bg-editor-surface p-2" aria-label="Assetsのフォルダーと種類">
+            <label className="min-w-0 text-xs text-editor-muted">フォルダー
+              <select
+                value={activeFolder?.id ?? ""}
+                onChange={(event) => {
+                  if (activeFolder?.kind) setTabletKindFilter(activeFolder.kind);
+                  onActiveFolderChange(event.currentTarget.value || null);
+                  if (event.currentTarget.value === XRIFT_PREFABS_FOLDER_ID) setTabletKindFilter("");
+                }}
+                className="mt-1 min-h-11 w-full min-w-0 rounded border border-editor-border bg-editor-surface px-1 text-xs text-editor-text"
+              >
+                <option value="">Assets直下</option>
+                {activeFolder?.kind ? <option value={activeFolder.id} disabled>すべてのフォルダー</option> : null}
+                {customFolders.map((folder) => <option key={folder.id} value={folder.id}>{folderDisplayPath(assets, folder.id)}</option>)}
+                <option value={XRIFT_PREFABS_FOLDER_ID}>XRift Prefabs</option>
+              </select>
+            </label>
+            <label className="min-w-0 text-xs text-editor-muted">種類
+              <select
+                value={tabletKindFilter || activeFolder?.kind || ""}
+                disabled={Boolean(activeFolder?.builtinPrefabs)}
+                onChange={(event) => {
+                  const kind = event.currentTarget.value as SceneAsset["kind"] | "";
+                  if (activeFolder?.kind) {
+                    setTabletKindFilter("");
+                    onActiveFolderChange(KIND_FOLDERS.find((folder) => folder.kind === kind)?.id ?? null);
+                  } else setTabletKindFilter(kind);
+                }}
+                className="mt-1 min-h-11 w-full min-w-0 rounded border border-editor-border bg-editor-surface px-1 text-xs text-editor-text"
+              >
+                <option value="">すべての種類</option>
+                {KIND_FOLDERS.filter((folder) => folder.kind).map((folder) => <option key={folder.id} value={folder.kind}>{folder.name}</option>)}
+              </select>
+            </label>
+          </nav>
+        ) : !tablet ? <AssetFolderTree
+          assets={assets}
+          customFolders={customFolders}
+          kindFolders={KIND_FOLDERS}
+          activeFolderId={activeFolderId}
+          folderItemCount={folderItemCount}
+          assetMutationLocked={assetMutationLocked}
+          onActiveFolderChange={onActiveFolderChange}
+          onMoveAsset={onMoveAsset}
+          onMoveFolder={onMoveFolder}
+        /> : null}
+        <div className={`flex min-w-0 flex-col ${phone ? "shrink-0" : "min-h-0 flex-1"}`}>
+          {!phone || phoneFiltersOpen ? <div className={`flex min-w-0 shrink-0 items-center justify-between gap-2 border-b border-editor-border bg-editor-subtle px-3 text-xs ${tablet ? "min-h-11" : "h-8"}`}>
+            <span className={`${tablet ? "min-w-0 flex-1 break-words" : "truncate"} font-medium text-editor-text`}>
+              {searching ? `「${searchQuery.trim()}」の検索結果` : activeFolder?.name ?? "Assets直下"}
+            </span>
+            <span className={`flex items-center gap-2 ${tablet ? "min-w-0 max-w-[65%]" : "shrink-0"}`}>
+              <label className="flex min-w-0 items-center gap-1 text-[11px] text-editor-muted">
+                <span className={tablet ? "sr-only" : undefined}>並び順</span>
+                <select
+                  value={sortMode}
+                  onChange={(event) =>
+                    setSortMode(event.currentTarget.value as AssetSortMode)
+                  }
+                  className="h-6 min-w-0 rounded border border-editor-border bg-editor-surface px-1 text-[11px] text-editor-text focus-visible:border-brand-400 focus-visible:outline-none"
+                >
+                  <option value="default">標準</option>
+                  <option value="file-size">ファイルサイズが大きい順</option>
+                  <option value="vram">VRAM概算が大きい順</option>
+                </select>
+              </label>
+              <span className="tabular-nums text-[11px] text-editor-muted" aria-live="polite">
+                {searching ? `${visibleAssets.length} / ${allAssets.length}件` : `${visibleItemCount}件`}
+              </span>
+            </span>
+          </div> : null}
+          <div className={`min-w-0 p-1.5 ${phone ? "shrink-0" : "scrollbar-thin min-h-0 flex-1 overflow-auto"} ${viewMode === "grid" ? `grid auto-rows-max ${tablet ? "grid-cols-[repeat(auto-fill,minmax(112px,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(76px,1fr))]"} content-start gap-1` : "space-y-0.5"}`}>
+        {!activeFolder?.builtinPrefabs
+          ? visibleFolders.map((folder) => (
+              renameRequest?.kind === "folder" && renameRequest.id === folder.id ? (
+                <div key={folder.id} className="flex min-h-[92px] items-center rounded-md border border-violet-400 bg-white p-1.5">
+                  <input
+                    ref={renameInputRef}
+                    value={renameDraft}
+                    onChange={(event) => setRenameDraft(event.currentTarget.value)}
+                    onBlur={() => onRename({ kind: "folder", id: folder.id }, renameDraft)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") event.currentTarget.blur();
+                      if (event.key === "Escape") {
+                        event.preventDefault();
+                        onRename({ kind: "folder", id: folder.id }, folder.name);
+                      }
+                    }}
+                    className="h-7 min-w-0 w-full rounded border border-violet-400 px-1.5 text-[11px] outline-none ring-2 ring-violet-100"
+                  />
+                </div>
+              ) : (
+                <FolderCard
+                  key={folder.id}
+                  folder={folder}
+                  viewMode={viewMode}
+                  readOnly={assetMutationLocked}
+                  onOpen={() => onActiveFolderChange(folder.id)}
+                  onDelete={() => onRequestDeleteFolder(folder.id)}
+                  onDropAsset={(assetId) => onMoveAsset(assetId, folder.id)}
+                  onDropFolder={(folderId) => onMoveFolder(folderId, folder.id)}
+                  onOpenContext={(event) => openContextMenu(event, { folderId: folder.id })}
+                  touch={touch}
+                />
+              )
+            ))
+          : null}
+        {activeFolder?.builtinPrefabs && !searching
+          ? builtinPrefabRecipes.map((recipe) => (
+              <BuiltinPrefabCard
+                key={recipe.id}
+                recipe={recipe}
+                viewMode={viewMode}
+                readOnly={assetMutationLocked}
+                onPlace={() => onPlaceBuiltinPrefab(recipe.id)}
+                tablet={tablet}
+              />
+            ))
+          : null}
+        {visibleAssets.map((asset) => (
+          renameRequest?.kind === "asset" && renameRequest.id === asset.id ? (
+            <div key={asset.id} className="flex min-h-[92px] items-center rounded-md border border-violet-400 bg-white p-1.5">
+              <input
+                ref={renameInputRef}
+                value={renameDraft}
+                onChange={(event) => setRenameDraft(event.currentTarget.value)}
+                onBlur={() => onRename({ kind: "asset", id: asset.id }, renameDraft)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    onRename({ kind: "asset", id: asset.id }, asset.name);
+                  }
+                }}
+                className="h-7 min-w-0 w-full rounded border border-violet-400 px-1.5 text-[11px] outline-none ring-2 ring-violet-100"
+              />
+            </div>
+          ) : (
+            <AssetCard
+              key={asset.id}
+              asset={asset}
+              assets={assets}
+              projectPath={projectPath}
+              selected={selectedAssetIds.includes(asset.id)}
+              viewMode={viewMode}
+              readOnly={assetMutationLocked}
+              tablet={tablet}
+              onSelect={handleAssetSelect}
+
+              onOpen={() => {
+                if (asset.kind === "interactivity") onOpenInteractivity(asset.id);
+                if (asset.kind === "script") {
+                  onCommand("asset.edit-script", { assetId: asset.id });
+                }
+                if (asset.kind === "shader") {
+                  onCommand("asset.edit-shader", { assetId: asset.id });
+                }
+              }}
+              onDelete={() => onRequestDeleteAsset(asset.id)}
+              onOpenContext={(event) => openContextMenu(event, { assetId: asset.id })}
+              folderPath={searching ? assetFolderPath(assets, asset) : undefined}
+            />
+          )
+        ))}
+        {searching && visibleAssets.length === 0 ? (
+          <div className="col-span-full rounded border border-dashed border-slate-300 bg-white px-4 py-4 text-center text-xs text-slate-600">
+            <p className="font-semibold text-slate-700">一致するアセットがありません</p>
+            <p className="mt-1 text-[11px] text-slate-500">
+              名前・種類・パスで検索します。
+            </p>
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="mt-2 rounded border border-slate-300 bg-slate-50 px-2 py-1 font-semibold text-slate-700 hover:bg-slate-100"
+            >
+              検索をクリア
+            </button>
+          </div>
+        ) : null}
+        {!searching && tablet && tabletKindFilter && visibleAssets.length === 0 ? (
+          <div className="col-span-full rounded border border-dashed border-slate-300 bg-white p-3 text-center text-xs text-slate-600">
+            <p>このフォルダーに該当する種類の素材がありません。</p>
+            <button type="button" onClick={() => setTabletKindFilter("")} className="mt-2 min-h-11 rounded border border-slate-300 px-3 font-semibold">すべての種類を表示</button>
+          </div>
+        ) : null}
+        {!searching && !(tablet && tabletKindFilter) && activeFolderId && visibleAssets.length === 0 && visibleFolders.length === 0 && (!activeFolder?.builtinPrefabs || builtinPrefabRecipes.length === 0) ? (
+          <button
+            type="button"
+            onClick={() => onActiveFolderChange(null)}
+            onDragOver={handleRootDragOver}
+            onDragLeave={() => setRootDropTarget(false)}
+            onDrop={(event) => handleLibraryMove(event, null)}
+            className={`col-span-full rounded border border-dashed bg-white px-4 py-3 text-xs ${rootDropTarget ? "border-violet-500 bg-violet-50 text-violet-800" : "border-slate-300 text-slate-500 hover:border-violet-300 hover:text-violet-700"}`}
+          >
+            このフォルダーには素材がありません。Assets直下へ戻る
+            {!touch ? <span className="mt-1 block text-[11px]">ここへドロップするとAssets直下へ移動します</span> : null}
+          </button>
+        ) : null}
+          </div>
+        </div>
+      </div>
+
+      {activityOpen && (pendingImports.length > 0 || importError) ? (
+        <ImportActivityDrawer
+          entries={pendingImports}
+          error={importError}
+          projectPersisted={Boolean(projectPath)}
+          projectSaving={projectSaving}
+          onSaveBeforeImport={onSaveBeforeImport}
+          onRemove={onRemovePending}
+          onClearError={onClearImportError}
+          onReveal={revealImportEntry}
+        />
+      ) : null}
+      {!phone ? statusBar : null}
+
+      {contextMenu ? createPortal(
+        <div
+          ref={contextMenuRef}
+          className={`overflow-y-auto overscroll-contain rounded-md border border-slate-300 bg-white p-1 shadow-xl ${touch ? "editor-touch-menu fixed z-[85] max-h-[min(640px,calc(100dvh-24px))] max-w-[calc(100vw-24px)] w-72" : "absolute z-30 max-h-[calc(100%-1rem)] w-56"}`}
+          style={{ left: contextMenu.x, top: contextMenu.y, maxHeight: touch && viewportHeight ? Math.max(44, viewportHeight - contextMenu.y - 12) : undefined }}
+          role="menu"
+          aria-label="Assetsのメニュー"
+          tabIndex={-1}
+          onPointerDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            event.stopPropagation();
+            setContextMenu(null);
+          }}
+        >
+          {touch && (contextMenu.assetId || contextMenu.folderId) ? (
+            <p className="truncate px-2 py-2 text-xs font-semibold text-slate-500">
+              {assets.assets[contextMenu.assetId ?? ""]?.name ?? assets.folders?.[contextMenu.folderId ?? ""]?.name}
+            </p>
+          ) : null}
+          {canOpenAssetLocation ? <ContextMenuItem
+            icon="folder"
+            label={
+              contextMenu.assetId &&
+              assets.assets[contextMenu.assetId]?.source.kind === "project"
+                ? "保存先を開く"
+                : "素材の保存先を開く"
+            }
+            command="OpenAssetLocation"
+            disabled={!projectPath}
+            disabledReason="保存先は初回の自動保存が完了すると開けます"
+            onClick={() => {
+              const asset = contextMenu.assetId
+                ? assets.assets[contextMenu.assetId]
+                : undefined;
+              const sourceRelativePath =
+                asset?.source.kind === "project"
+                  ? asset.source.relativePath
+                  : undefined;
+              setContextMenu(null);
+              void onOpenAssetLocation(sourceRelativePath);
+            }}
+          /> : null}
+          {contextMenu.assetId &&
+          isScenePlaceableAsset(assets.assets[contextMenu.assetId]) ? (
+            <ContextMenuItem
+              icon="move"
+              label="シーンへ配置"
+              command="PlaceSceneAsset"
+              disabled={assetMutationLocked}
+              onClick={() => {
+                const assetId = contextMenu.assetId;
+                setContextMenu(null);
+                if (assetId) onPlaceSceneAsset(assetId);
+              }}
+            />
+          ) : null}
+          {contextMenu.assetId &&
+          (assets.assets[contextMenu.assetId]?.kind === "texture" ||
+            assets.assets[contextMenu.assetId]?.kind === "skybox") ? (
+            <ContextMenuItem
+              icon="camera"
+              label="サムネイルに設定"
+              command="asset.set-project-thumbnail"
+              disabled={
+                assetMutationLocked ||
+                !projectPath ||
+                !resolveProjectThumbnailAssetPath(
+                  assets.assets[contextMenu.assetId],
+                )
+              }
+              disabledReason={
+                assetMutationLocked
+                  ? assetMutationDisabledReason
+                  : !projectPath
+                    ? "自動保存が完了すると設定できます"
+                    : "このテクスチャには使用できる画像がありません"
+              }
+              onClick={() => {
+                const assetId = contextMenu.assetId;
+                setContextMenu(null);
+                if (assetId) void onSetProjectThumbnail(assetId);
+              }}
+            />
+          ) : null}
+          {contextMenu.assetId || assets.folders?.[contextMenu.folderId ?? ""] ? (
+            <ContextMenuItem
+              icon="settings"
+              label="名前を変更"
+              command="selection.rename"
+              disabled={assetMutationLocked}
+              onClick={() => {
+                const assetId = contextMenu.assetId;
+                const folderId = contextMenu.folderId;
+                setContextMenu(null);
+                onCommand("selection.rename", { assetId, folderId });
+              }}
+            />
+          ) : null}
+          {contextMenu.assetId && assets.assets[contextMenu.assetId]?.kind === "interactivity" ? (
+            <ContextMenuItem
+              icon="settings"
+              label="ノードグラフを編集"
+              command="asset.edit-interactivity"
+              onClick={() => {
+                const assetId = contextMenu.assetId;
+                setContextMenu(null);
+                if (assetId) onOpenInteractivity(assetId);
+              }}
+            />
+          ) : null}
+          {touch && contextMenu.assetId && (assets.assets[contextMenu.assetId]?.kind === "script" || assets.assets[contextMenu.assetId]?.kind === "shader") ? (
+            <ContextMenuItem
+              icon="script"
+              label={assets.assets[contextMenu.assetId].kind === "shader" ? "シェーダーを編集" : "スクリプトを編集"}
+              command={assets.assets[contextMenu.assetId].kind === "shader" ? "asset.edit-shader" : "asset.edit-script"}
+              onClick={() => {
+                const assetId = contextMenu.assetId!;
+                setContextMenu(null);
+                onCommand(assets.assets[assetId].kind === "shader" ? "asset.edit-shader" : "asset.edit-script", { assetId });
+              }}
+            />
+          ) : null}
+          {touch && (contextMenu.assetId || assets.folders?.[contextMenu.folderId ?? ""]) ? (
+            <AssetMoveMenu
+              key={contextMenu.assetId ?? contextMenu.folderId}
+              assets={assets}
+              assetId={contextMenu.assetId}
+              folderId={contextMenu.folderId}
+              disabled={assetMutationLocked}
+              onMove={(destinationId) => {
+                if (contextMenu.assetId) onMoveAsset(contextMenu.assetId, destinationId);
+                else if (contextMenu.folderId) onMoveFolder(contextMenu.folderId, destinationId);
+                setContextMenu(null);
+              }}
+            />
+          ) : null}
+          {contextMenu.assetId || assets.folders?.[contextMenu.folderId ?? ""] ? (
+            <ContextMenuItem
+              icon="delete"
+              label="削除"
+              command={contextMenu.assetId ? "DeleteAsset" : "DeleteAssetFolder"}
+              disabled={assetMutationLocked}
+              onClick={() => {
+                const assetId = contextMenu.assetId;
+                const folderId = contextMenu.folderId;
+                setContextMenu(null);
+                if (assetId) onRequestDeleteAsset(assetId);
+                else if (folderId) onRequestDeleteFolder(folderId);
+              }}
+            />
+          ) : null}
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="folder" label="新規フォルダー" command="asset.create-folder" onClick={() => { setContextMenu(null); onCommand("asset.create-folder"); }} />
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="material" label="新規マテリアル" command="asset.create-material" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-material", { folderId }); }} />
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="particle" label="新規パーティクル" command="asset.create-particle" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-particle", { folderId }); }} />
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="asset" label="新規ノードグラフ" command="asset.create-interactivity" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-interactivity", { folderId }); }} />
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="script" label="新規スクリプト" command="asset.create-script" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-script", { folderId }); }} />
+          <ContextMenuItem disabled={importLocked} disabledReason={importDisabledReason} icon="texture" label="ファイルをインポート…" command="asset.import" onClick={() => { setContextMenu(null); if (onCommand("asset.import")) fileInputRef.current?.click(); }} />
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="prefab" label="Entityからプレハブを作成" command="prefab.create" onClick={() => { setContextMenu(null); onPhaseNotice(touch ? "HierarchyでEntityを選び、操作メニューの「プレハブを作成」を押してください" : "HierarchyのEntityをAssetsへドラッグしてください"); }} />
+        </div>,
+        touch ? document.body : panelRef.current ?? document.body,
+      ) : null}
+
+      {fileDragOver ? (
+        <div className="pointer-events-none absolute inset-2 z-40 flex items-center justify-center rounded-md border-2 border-dashed border-violet-500 bg-white/95 px-4 text-center text-[12px] font-semibold leading-5 text-violet-900 shadow-lg">
+          {importDisabledReason ?? "UnityPackage / シーン / プレハブ / 3Dモデル / テクスチャ / GLSL を解析してインポート"}
+        </div>
+      ) : null}
+    </section>
+  );
+}
