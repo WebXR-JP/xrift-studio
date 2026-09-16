@@ -451,6 +451,11 @@ project ではなく app data へ置く。
 
 ## 意図的に公開していない操作
 
+- 素材検索、Inspectorの選択文脈、メニューの開閉はUI状態のみ。既存のcreate／update／selection toolを再利用し、検索やdisabled表示用の新toolは増やさない。
+- .xriftstudioの部分書き出し・追加は、ネイティブ保存先選択とブラウザのファイル選択／ダウンロードを含むため、この版ではUI操作のみ。MCPでは既存のEntity／Prefab操作を利用する。素材ごとのセッションクリップボードもOS clipboardや外部送信には公開しない。
+- 「制作データの確認」は既存の検証ロジックへの画面内の入口。サーバー診断・集計基盤ではない。MCPの公開・変換側の既存検証を置き換えず、画面表示のための専用toolは設けない。
+
+
 - ヘッダー・ステータスバーの配置、Scale比率固定の初期値、アイテムの初期Unlit表示はUIだけの設定で、専用toolは設けない。Entity作成・Scale更新・ギミック追加は既存の操作を使う。ギミックのprojectKindsはワールド・アイテムで共通化し、通常のproject kind・revision・Asset操作ロックは維持する。
 
 - シーン / Hierarchyの「反転して貼り付け」はエディター内のクリップボードを使うため、専用toolは設けない。MCPでは既存の`duplicate_entity`で作ったEntityに`update_transform`を適用し、local Scaleの指定軸だけ符号を反転する。元のEntityを変更しない。メニューの開閉や軸選択はUIだけの状態として扱う。

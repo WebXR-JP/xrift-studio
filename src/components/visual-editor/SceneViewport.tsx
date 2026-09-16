@@ -1,3 +1,4 @@
+import type { EntityReuseActions } from "./EntityReuseMenuItems";
 import { SceneContextMenu, type SceneContextMenuProps } from "./SceneContextMenu";
 import { createWorldPlaySeatStore } from "./world-play-seat-store";
 import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
@@ -4834,6 +4835,8 @@ export function SceneViewport({
   onDropSceneAsset,
   onEditCommand,
   clipboardAvailable,
+  reuseActions,
+  colliderDisplayRequest,
   editDisabledReason,
   shortcutLabel,
   frameSelectionRequest,
@@ -4921,6 +4924,8 @@ export function SceneViewport({
   onDropSceneAsset: (assetId: string, position: Vec3) => void;
   onEditCommand: SceneContextMenuProps["onCommand"];
   clipboardAvailable: boolean;
+  reuseActions?: EntityReuseActions;
+  colliderDisplayRequest?: { id: number; sceneId: string } | null;
   editDisabledReason?: string | null;
   shortcutLabel: SceneContextMenuProps["shortcutLabel"];
   frameSelectionRequest: number;
@@ -5077,6 +5082,9 @@ export function SceneViewport({
   useEffect(() => {
     setDisplayMode(getDefaultSceneViewportDisplayMode(projectKind));
   }, [projectKind, scene.sceneId]);
+  useEffect(() => {
+    if (colliderDisplayRequest?.sceneId === scene.sceneId && editorMode === "edit") setDisplayMode("colliders");
+  }, [colliderDisplayRequest, scene.sceneId]);
   const [qualityMode, setQualityMode] = useState<SceneViewportQualityMode>(
     loadSceneViewportQualityMode,
   );
@@ -7200,7 +7208,7 @@ export function SceneViewport({
             key={`${contextMenu.x}:${contextMenu.y}:${contextMenu.entityId}`}
             {...contextMenu}
             selectionCount={contextMenu.entityId && selectedEntityIds.includes(contextMenu.entityId) ? selectedEntityIds.length : 1}
-            clipboardAvailable={clipboardAvailable}
+            clipboardAvailable={clipboardAvailable} reuseActions={reuseActions}
             touch={touch}
             disabledReason={editDisabledReason}
             shortcutLabel={shortcutLabel}

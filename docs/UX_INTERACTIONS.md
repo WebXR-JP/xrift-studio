@@ -32,6 +32,9 @@
 - [F-39 テキストコンポーネント（書体・背景）](./ux/editor.md#f-39)
 - [F-44 画像コンポーネント（画像の板）](./ux/editor.md#f-44)
 
+- [F-46 Hierarchyの部分書き出し・追加・コピー](./ux/editor.md#f-46)
+- [F-47 素材検索・選択文脈・制作データの確認](./ux/editor.md#f-47)
+
 ## 素材の取り込み・編集
 
 - [F-08 Visual Asset authoring / import](./ux/assets.md#f-08)

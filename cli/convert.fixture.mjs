@@ -1,3 +1,4 @@
+import { runEditorComponentCatalogFixtureAssertions } from "../src/lib/visual-editor/editor-component-catalog.fixture.ts";
 import { runEditorUiDefaultsFixtureAssertions } from "../src/components/visual-editor/editor-ui-defaults.fixture.ts";
 import { runWorldAssetImportFixtureAssertions as assertWorldAssetImports } from "../src/lib/visual-editor/scripting/world-asset-import.fixture.ts";
 import { runRuntimePackageFixtureAssertions } from "../src/lib/visual-editor/compiler/runtime-packages.fixture.ts";
@@ -107,6 +108,8 @@ import { runClassicProjectImportFixtureAssertions } from "../src/lib/visual-edit
 import { runMaterialExtensionFixtureAssertions } from "../src/lib/visual-editor/compiler/material-extensions.fixture.ts";
 import { runXriftComponentRegistryFixtureAssertions } from "../src/lib/visual-editor/compiler/xrift-component-registry.fixture.ts";
 import { runDocumentAssetCreationFixtureAssertions } from "../src/lib/visual-editor/document-asset-creation.fixture.ts";
+import { runHierarchyTransferFixtureAssertions } from "../src/lib/visual-editor/hierarchy-transfer.fixture.ts";
+import { runEditorUxCleanupFixtureAssertions } from "../src/lib/visual-editor/editor-ux-cleanup.fixture.ts";
 import { runEntityClipboardFixtureAssertions } from "../src/lib/visual-editor/entity-clipboard.fixture.ts";
 import { runEditorSessionHierarchyFixtureAssertions } from "../src/lib/visual-editor/editor-session.fixture.ts";
 import { runSceneEntityTreeStoreFixtureAssertions } from "../src/components/visual-editor/scene-entity-tree-store.fixture.ts";
@@ -402,6 +405,9 @@ try {
     ["document asset creation", runDocumentAssetCreationFixtureAssertions],
     ["editor session hierarchy", runEditorSessionHierarchyFixtureAssertions],
     ["entity clipboard and mirror paste", runEntityClipboardFixtureAssertions],
+    ["hierarchy transfer", runHierarchyTransferFixtureAssertions],
+    ["editor UX cleanup", runEditorUxCleanupFixtureAssertions],
+    ["editor component catalog", runEditorComponentCatalogFixtureAssertions],
     ["editor UI defaults", runEditorUiDefaultsFixtureAssertions],
     ["scene entity tree store", runSceneEntityTreeStoreFixtureAssertions],
     ["scene click selection", runSceneClickSelectionFixtureAssertions],

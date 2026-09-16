@@ -24,7 +24,7 @@ Add Componentのレジストリを正とし、Inspector、削除・有効化、�
 
 - Entity作成は新規作成のままにし、選択状態で既存EntityへのComponent追加に切り替えない。Component追加はInspectorか対象の右クリックから行う。
 - 候補・順序・重複・依存条件は共通定義から選ぶ。必須Transform、旧追加口、単独で成立しない項目はEntity作成候補に出さず、追加不可の理由を選択前に示す。
-- Entity、Primitive、World、Light、UI、Audio、Effect、XRiftの折りたたみで選ぶ。検索欄は置かない。空Entityを先頭、Cube・PlaneはPrimitive、SpawnPointはWorldに置く。
+- 作成は上部の「素材を追加」へ集約し、カテゴリと検索で選ぶ。内部category IDは保持し、基本形状・ライト・音声などの表示名を使う。検索はデータを変更せず、一致した項目を展開する。シーン／Hierarchyの右クリックには作成一覧を混ぜない。
 - 形状名を「床」などの用途名に変えない。Rigid Bodyなど既存Entityへの機能は新規配置候補に混ぜない。XRiftのPrefabとComponentは同じ機能を二重に並べない。分類名に内部構成を使わない。
 - 複数選択の右クリックでは名前変更・削除などを上に出し、追加候補を混ぜない。選択状態を保持する。
 

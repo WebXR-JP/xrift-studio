@@ -43,3 +43,5 @@ pnpm tauri:dev
 ## ライセンス
 
 MIT。素材ごとの権利表記は[THIRD_PARTY_ASSETS.md](./THIRD_PARTY_ASSETS.md)を参照してください。
+
+Hierarchyの一部を `.xriftstudio` で書き出して別のワールド・アイテムへ追加する手順は、[Entityを別のワールド・アイテムへ渡す](./docs/guide/hierarchy-transfer.md)を参照してください。

@@ -1,3 +1,4 @@
+import { COMPONENT_CATEGORY_LABELS, matchesEditorMenuQuery } from "../../lib/visual-editor/editor-menu-search";
 import { DEFAULT_SCALE_LINKED, MIN_SCALE_MAGNITUDE, updateVectorAxis, type TransformValueKind } from "./inspector-transform";
 import { getEditorComponentDisabledReason, getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
 import { MeshCollisionControls } from "./MeshCollisionControls";
@@ -5138,30 +5139,20 @@ function EntityInspector({
   const [scaleLinked, setScaleLinked] = useState<boolean>(DEFAULT_SCALE_LINKED);
   const registeredComponents = entity.components as RegisteredSceneComponent[];
   const liveRuntimeTuning = readOnly && playMode;
-  const addComponentSearchTerms = addComponentSearchQuery
-    .trim()
-    .toLocaleLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
-  const searchingComponents = addComponentSearchTerms.length > 0;
-  const matchesComponentSearch = (...values: Array<string | undefined>) => {
-    if (!searchingComponents) return true;
-    const text = values
-      .filter((value): value is string => Boolean(value))
-      .join(" ")
-      .toLocaleLowerCase();
-    return addComponentSearchTerms.every((term) => text.includes(term));
-  };
+  const searchingComponents = Boolean(addComponentSearchQuery.trim());
+  const matchesComponentSearch = (...values: Array<string | undefined>) =>
+    matchesEditorMenuQuery(addComponentSearchQuery, ...values.filter((value): value is string => typeof value === "string"));
   const componentSearchResultCount =
-    getEditorComponentMenuDefinitions(projectKind).filter((definition) =>
+    getEditorComponentMenuDefinitions().filter((definition) =>
       matchesComponentSearch(
         definition.label,
         definition.id,
         definition.category,
+        COMPONENT_CATEGORY_LABELS[definition.category],
         "component",
       ),
     ).length +
-    getXriftComponentMenuGroups(projectKind).flatMap((group) =>
+    getXriftComponentMenuGroups().flatMap((group) =>
       group.components.filter((definition) =>
         matchesComponentSearch(
           definition.label,
@@ -5627,7 +5618,7 @@ function EntityInspector({
           }}
           className="w-full rounded-md border border-violet-300 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-45"
         >
-          Add Component
+          Componentを追加
         </button>
         {addComponentOpen ? (
           <div className="mt-2 max-h-80 space-y-1 overflow-y-auto rounded-md border border-slate-300 bg-white p-1 shadow-lg">
@@ -5665,15 +5656,14 @@ function EntityInspector({
             ) : null}
             {EDITOR_COMPONENT_CATEGORY_ORDER.map(
               (category) => {
-                const definitions = getEditorComponentMenuDefinitions(
-                  projectKind,
-                ).filter(
+                const definitions = getEditorComponentMenuDefinitions().filter(
                   (definition) =>
                     definition.category === category &&
                     matchesComponentSearch(
                       definition.label,
                       definition.id,
                       definition.category,
+                      COMPONENT_CATEGORY_LABELS[definition.category],
                       "component",
                     ),
                 );
@@ -5685,18 +5675,18 @@ function EntityInspector({
                     className="overflow-hidden rounded border border-slate-200"
                   >
                     <summary className="cursor-pointer select-none bg-slate-50 px-2 py-1.5 text-xs font-semibold capitalize text-slate-600 hover:bg-slate-100">
-                      {category} <span className="text-slate-400">({definitions.length})</span>
+                      {COMPONENT_CATEGORY_LABELS[category]} <span className="text-slate-400">({definitions.length})</span>
                     </summary>
                     <div className="space-y-0.5 border-t border-slate-100 p-1">
                     {definitions.map((definition) => {
                       const DefinitionIcon = getEditorComponentIcon(definition);
-                      const disabledReason = getEditorComponentDisabledReason(entity, definition.id);
+                      const disabledReason = getEditorComponentDisabledReason(entity, definition.id, projectKind);
                       return (
                         <button
                           key={definition.id}
                           type="button"
                           disabled={Boolean(disabledReason)}
-                        title={disabledReason}
+                        title={disabledReason ?? `Componentを追加：${definition.label}`}
                           onClick={() => {
                             onAddComponent(definition.id);
                             setAddComponentOpen(false);
@@ -5717,7 +5707,7 @@ function EntityInspector({
                 );
               },
             )}
-            {getXriftComponentMenuGroups(projectKind).map((group) => {
+            {getXriftComponentMenuGroups().map((group) => {
               const definitions = group.components.filter((definition) =>
                 matchesComponentSearch(
                   definition.label,
@@ -5741,13 +5731,13 @@ function EntityInspector({
                   <div className="space-y-0.5 border-t border-slate-100 p-1">
                   {definitions.map((definition) => {
                     const DefinitionIcon = EDITOR_ICONS[definition.icon];
-                    const disabledReason = getEditorComponentDisabledReason(entity, definition.schemaId);
+                    const disabledReason = getEditorComponentDisabledReason(entity, definition.schemaId, projectKind);
                     return (
                       <button
                         key={definition.schemaId}
                         type="button"
                         disabled={Boolean(disabledReason)}
-                        title={disabledReason}
+                        title={disabledReason ?? `Componentを追加：${definition.label}`}
                         onClick={() => {
                           onAddComponent(definition.schemaId);
                           setAddComponentOpen(false);
@@ -6033,12 +6023,12 @@ export function InspectorPanel({
         : EDITOR_ICONS.sceneEntity;
   const InspectorIcon = sceneSettingsOpen ? EDITOR_ICONS.settings : EntityIcon;
   const multiSelectionActive =
-    !sceneSettingsOpen && (selectedEntityIds.length > 1 || selectedAssetIds.length > 1);
+    !sceneSettingsOpen && (asset ? selectedAssetIds.length > 1 : selectedEntityIds.length > 1);
   const inspectorContextLabel = sceneSettingsOpen
-    ? scene.name
-    : multiSelectionActive
-      ? `${Math.max(selectedEntityIds.length, selectedAssetIds.length)}件を選択`
-      : asset?.name ?? (entity ? null : "未選択");
+    ? `Scene · ${scene.name}`
+    : asset
+      ? `Asset · ${selectedAssetIds.length > 1 ? `${selectedAssetIds.length}件` : asset.name}`
+      : entity ? `Entity · ${selectedEntityIds.length > 1 ? `${selectedEntityIds.length}件` : entity.name}` : "未選択";
   /**
    * The Inspector stacks layers: an Entity or Asset can be covered by the Asset
    * it points at, or by Scene settings. An icon alone did not say that a layer
@@ -6130,8 +6120,8 @@ export function InspectorPanel({
           <MultiSelectionInspector
             scene={scene}
             assets={assets}
-            selectedEntityIds={selectedEntityIds}
-            selectedAssetIds={selectedAssetIds}
+            selectedEntityIds={asset ? [] : selectedEntityIds}
+            selectedAssetIds={asset ? selectedAssetIds : []}
             readOnly={readOnly}
             textureBatchState={textureBatchState}
             onSetEntitiesEnabled={onSetEntitiesEnabled}

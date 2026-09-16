@@ -16,16 +16,17 @@ export function EditorMenuGroup({ children }: { children: ReactNode }) {
 
 export const EDITOR_MENU_ROW_CLASS = "flex min-h-7 w-full min-w-0 items-center gap-2 rounded px-2 py-1 text-left text-xs leading-5 text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-300 disabled:cursor-not-allowed disabled:opacity-45";
 
-export function EditorMenuSection({ label, icon: Icon, count, children }: {
+export function EditorMenuSection({ label, icon: Icon, count, children, forceOpen = false }: {
   label: string;
   icon?: LucideIcon;
   count?: number;
   children: ReactNode;
+  forceOpen?: boolean;
 }) {
   const id = useId();
   const group = useContext(MenuGroupContext);
   const [localOpen, setLocalOpen] = useState(false);
-  const open = group ? group.openSection === id : localOpen;
+  const open = forceOpen || (group ? group.openSection === id : localOpen);
   return <section data-editor-menu-section={label}>
     <button
       type="button"
@@ -55,7 +56,7 @@ export function EditorMenuItem({ icon: Icon, label, detail, title, disabled = fa
   disabled?: boolean;
   onClick: () => void;
 }) {
-  return <button type="button" disabled={disabled} title={title ?? detail ?? label} onClick={onClick} className={EDITOR_MENU_ROW_CLASS}>
+  return <button type="button" role="menuitem" disabled={disabled} title={title ?? detail ?? label} onClick={onClick} className={EDITOR_MENU_ROW_CLASS}>
     {Icon ? <Icon size={14} className="shrink-0" aria-hidden="true" /> : null}
     <span className="min-w-0 flex-1">
       <span className="block truncate">{label}</span>

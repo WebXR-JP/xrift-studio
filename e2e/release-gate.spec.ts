@@ -397,7 +397,7 @@ test("ビジュアルワールドを編集・Playし、公開確認で送信前�
   const menu = page.getByRole("menu", { name: "素材を追加", exact: true });
   await menu.getByRole("button", { name: "Entityを作成", exact: true }).click();
   await menu.getByRole("button", { name: /^Entity [0-9]+$/ }).click();
-  await menu.getByRole("button", { name: /空のEntity/ }).click();
+  await menu.getByRole("menuitem", { name: /空のEntity/ }).click();
   await expect(
     page
       .getByRole("tree", { name: "シーンのEntity階層" })
@@ -456,8 +456,8 @@ test("ビジュアルエディターでテキスト看板を置き、書体と�
   const menu = page.getByRole("menu", { name: "素材を追加", exact: true });
   await menu.getByRole("button", { name: "Entityを作成", exact: true }).click();
   await menu.getByRole("button", { name: /^Entity [0-9]+$/ }).click();
-  await menu.getByRole("button", { name: /空のEntity/ }).click();
-  await page.getByRole("button", { name: "Add Component", exact: true }).click();
+  await menu.getByRole("menuitem", { name: /空のEntity/ }).click();
+  await page.getByRole("button", { name: "Componentを追加", exact: true }).click();
   await page.getByPlaceholder("Componentを検索…").fill("Text (Panel)");
   await page.getByRole("button", { name: "Text (Panel)", exact: true }).click();
   await expect(page.getByText("Componentを追加しました")).toBeVisible();
@@ -576,7 +576,7 @@ test("ビジュアルエディターの一時保存失敗は自動再試行で�
   const menu = page.getByRole("menu", { name: "素材を追加", exact: true });
   await menu.getByRole("button", { name: "Entityを作成", exact: true }).click();
   await menu.getByRole("button", { name: /^Entity [0-9]+$/ }).click();
-  await menu.getByRole("button", { name: /空のEntity/ }).click();
+  await menu.getByRole("menuitem", { name: /空のEntity/ }).click();
 
   const header = page.locator("header");
   await expect(header.getByText("保存エラー", { exact: true })).toHaveCount(0);

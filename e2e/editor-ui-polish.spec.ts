@@ -66,7 +66,7 @@ test("Creation remains discoverable without a Hierarchy header action", async ({
   const before = await tree.getByRole("treeitem").count();
   const menu = await openCreateMenu(page);
   await menu.getByRole("button", { name: /^Entity [0-9]+$/ }).click();
-  await menu.getByRole("button", { name: /空のEntity/ }).click();
+  await menu.getByRole("menuitem", { name: /空のEntity/ }).click();
   await expect(menu).toHaveCount(0);
   await expect(tree.getByRole("treeitem")).toHaveCount(before + 1);
   await expect(tree.getByRole("treeitem", { selected: true })).toContainText("Empty Entity");
@@ -106,7 +106,7 @@ for (const kind of ["world", "item"] as const) {
     await mode.selectOption("wireframe");
     const menu = await openCreateMenu(page);
     await menu.getByRole("button", { name: /^Entity [0-9]+$/ }).click();
-    await menu.getByRole("button", { name: /空のEntity/ }).click();
+    await menu.getByRole("menuitem", { name: /空のEntity/ }).click();
     await expect(mode).toHaveValue("wireframe");
     await page.getByRole("banner").getByRole("button", { name: "元に戻す", exact: true }).click();
     await expect(mode).toHaveValue("wireframe");
@@ -123,13 +123,13 @@ test.describe("Touch entry points", () => {
     const before = await tree.getByRole("treeitem").count();
     await tree.getByText("床", { exact: true }).tap();
     await tree.getByRole("button", { name: "床のメニュー", exact: true }).tap();
-    const menu = page.getByRole("menu", { name: "選択したEntityの操作", exact: true });
+    const menu = page.getByRole("menu", { name: "Hierarchyの編集", exact: true });
     await expect(menu).toBeVisible();
-    await menu.getByRole("button", { name: "複製", exact: true }).tap();
+    await menu.getByRole("menuitem", { name: "複製", exact: true }).tap();
     await expect(tree.getByRole("treeitem")).toHaveCount(before + 1);
     const create = await openCreateMenu(page);
     await create.getByRole("button", { name: /^Entity [0-9]+$/ }).tap();
-    await create.getByRole("button", { name: /空のEntity/ }).tap();
+    await create.getByRole("menuitem", { name: /空のEntity/ }).tap();
     await expect(create).toHaveCount(0);
     await expect(page.locator(".editor-header-actions")).not.toHaveAttribute("open", "");
     await expect(tree.getByRole("treeitem")).toHaveCount(before + 2);

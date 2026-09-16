@@ -405,6 +405,18 @@ export const tauri = {
       return Promise.reject(new Error("リンクのURLを確認してください。"));
     }
   },
+  /** Explicit save dialog: never infer a filesystem destination from archive data. */
+  saveHierarchyPackage: async (fileName: string, dataUrl: string): Promise<string | null> => {
+    if (!isTauri()) return null;
+    const path = await saveDialog({
+      title: "選択したEntityを.xriftstudioで保存",
+      defaultPath: fileName,
+      filters: [{ name: "XRift Studio", extensions: ["xriftstudio"] }],
+    });
+    if (!path) return null;
+    await invoke<void>("save_hierarchy_package", { path, dataUrl });
+    return path;
+  },
   saveScreenshot: async (dataUrl: string) => {
     if (!isTauri()) return null;
     const path = await saveDialog({
