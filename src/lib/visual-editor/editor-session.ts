@@ -19,7 +19,6 @@ import {
   isModelNodeGeometryEntity,
 } from "./model-hierarchy";
 import {
-  cloneEntityHierarchy,
   createAudioSourceComponent,
   createBoxColliderComponent,
   createBuiltinPrimitiveMeshComponent,
@@ -406,58 +405,14 @@ export function createEmptyEntity(
   };
 }
 
-export type EntityClipboard = {
-  scene: SceneDocument;
-  rootEntityIds: string[];
-};
-
-export function copyEntityHierarchy(
-  scene: SceneDocument,
-  rootEntityIds: string[],
-): EntityClipboard | null {
-  const validRoots = rootEntityIds.filter((id) => Boolean(scene.entities[id]));
-  return validRoots.length > 0 ? { scene, rootEntityIds: validRoots } : null;
-}
-
-export function pasteEntityHierarchy(
-  scene: SceneDocument,
-  clipboard: EntityClipboard,
-  parentId: string | null,
-): { scene: SceneDocument; rootEntityIds: string[] } | null {
-  if (parentId !== null && !scene.entities[parentId]) return null;
-  const clone = cloneEntityHierarchy(
-    clipboard.scene,
-    clipboard.rootEntityIds,
-    (kind) => createDocumentId(kind),
-  );
-  if (!clone) return null;
-  const rootSet = new Set(clone.rootEntityIds);
-  const clonedEntities = Object.fromEntries(
-    Object.entries(clone.entities).map(([id, entity]) => [
-      id,
-      rootSet.has(id) ? { ...entity, parentId } : entity,
-    ]),
-  );
-  const entities = { ...scene.entities, ...clonedEntities };
-  if (parentId) {
-    const parent = entities[parentId];
-    entities[parentId] = {
-      ...parent,
-      children: [...parent.children, ...clone.rootEntityIds],
-    };
-  }
-  return {
-    rootEntityIds: clone.rootEntityIds,
-    scene: {
-      ...scene,
-      rootEntityIds:
-        parentId === null
-          ? [...scene.rootEntityIds, ...clone.rootEntityIds]
-          : scene.rootEntityIds,
-      entities,
-    },
-  };
-}
+// Keep the public editor-session API while clipboard operations remain pure.
+export {
+  copyEntityHierarchy,
+  pasteEntityHierarchy,
+  type EntityClipboard,
+  type EntityMirrorAxis,
+  type EntityPasteOptions,
+} from "./entity-clipboard";
 
 export function deleteEntityHierarchy(
   scene: SceneDocument,

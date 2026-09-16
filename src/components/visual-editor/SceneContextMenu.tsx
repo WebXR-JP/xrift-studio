@@ -1,0 +1,144 @@
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
+import type { EntityMirrorAxis } from "../../lib/visual-editor/entity-clipboard";
+import type { EditorCommandId } from "../../lib/visual-editor/shortcuts";
+import { EDITOR_ICONS, type EditorIconName } from "./editor-icons";
+import { ENTITY_CONTEXT_ITEM_CLASS, EntityPasteMenuItems } from "./EntityPasteMenuItems";
+
+export type SceneContextMenuProps = {
+  x: number;
+  y: number;
+  entityId: string | null;
+  entityName: string | null;
+  selectionCount: number;
+  clipboardAvailable: boolean;
+  touch?: boolean;
+  disabledReason?: string | null;
+  shortcutLabel: (command: EditorCommandId) => string;
+  onCommand: (command: EditorCommandId, payload?: {
+    source?: "scene" | "hierarchy";
+    entityId?: string;
+    parentEntityId?: string | null;
+    mirrorAxis?: EntityMirrorAxis;
+  }) => boolean;
+  /** Outside clicks keep focus on their own target; Escape restores the canvas. */
+  onClose: (restoreFocus: boolean) => void;
+};
+
+/** Editing only. Object creation belongs to the existing Add/Assets surfaces. */
+export function SceneContextMenu(props: SceneContextMenuProps) {
+  const { x, y, entityId, entityName, selectionCount, clipboardAvailable, disabledReason, shortcutLabel } = props;
+  const menuRef = useRef<HTMLDivElement>(null);
+  const actionsRef = useRef(props);
+  actionsRef.current = props;
+  const [position, setPosition] = useState({ left: x, top: y });
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    if (!menu) return;
+    const place = () => {
+      const { width, height } = menu.getBoundingClientRect();
+      const next = {
+        left: Math.max(8, Math.min(x, window.innerWidth - width - 8)),
+        top: Math.max(8, Math.min(y, window.innerHeight - height - 8)),
+      };
+      setPosition((current) => current.left === next.left && current.top === next.top ? current : next);
+    };
+    place();
+    // Expansion stays inside the window, even beside a short Scene panel.
+    const observer = new ResizeObserver(place);
+    observer.observe(menu);
+    return () => observer.disconnect();
+  }, [x, y]);
+  useEffect(() => {
+    const menu = menuRef.current;
+    (menu?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)') ?? menu)?.focus();
+    const outside = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) actionsRef.current.onClose(false);
+    };
+    const dismiss = () => actionsRef.current.onClose(false);
+    document.addEventListener("pointerdown", outside, true);
+    window.addEventListener("resize", dismiss);
+    window.addEventListener("blur", dismiss);
+    return () => {
+      document.removeEventListener("pointerdown", outside, true);
+      window.removeEventListener("resize", dismiss);
+      window.removeEventListener("blur", dismiss);
+    };
+  }, []);
+
+  const run = (command: EditorCommandId, payload?: Parameters<SceneContextMenuProps["onCommand"]>[1]) => {
+    actionsRef.current.onClose(true);
+    actionsRef.current.onCommand(command, { ...payload, source: "scene" });
+  };
+  const keyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    // The menu owns its keystrokes, not the canvas gizmo or editor shortcuts.
+    event.stopPropagation();
+    if (event.key === "Escape" || event.key === "Tab") {
+      event.preventDefault();
+      actionsRef.current.onClose(true);
+      return;
+    }
+    if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ?? [])
+      .filter((item) => item.closest('[role="menu"]') === menuRef.current);
+    if (!items.length) return;
+    const current = items.indexOf(document.activeElement as HTMLButtonElement);
+    const index = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1
+      : current < 0 ? (event.key === "ArrowUp" ? items.length - 1 : 0)
+      : (current + (event.key === "ArrowUp" ? -1 : 1) + items.length) % items.length;
+    items[index]?.focus();
+  };
+  const item = (command: EditorCommandId, label: string, iconName: EditorIconName, reason?: string | null) => {
+    const Icon = EDITOR_ICONS[iconName];
+    const shortcut = shortcutLabel(command);
+    return (
+      <button
+        type="button"
+        role="menuitem"
+        disabled={Boolean(reason)}
+        title={reason ?? (entityId ? `${label}：${selectionCount > 1 ? `${selectionCount}件のEntity` : entityName ?? "Entity"}` : label)}
+        className={`${ENTITY_CONTEXT_ITEM_CLASS} ${command === "edit.delete" ? "hover:bg-rose-50 hover:text-rose-700" : ""}`}
+        onClick={() => run(command, entityId ? { entityId } : undefined)}
+      >
+        <Icon size={14} aria-hidden="true" />
+        <span className="flex-1">{label}</span>
+        {shortcut ? <span className="text-[10px] text-slate-400" aria-hidden="true">{shortcut}</span> : null}
+      </button>
+    );
+  };
+  return createPortal(
+    <div
+      ref={menuRef}
+      role="menu"
+      aria-label="シーンの編集"
+      tabIndex={-1}
+      className={`fixed z-[85] max-h-[calc(100dvh-16px)] w-56 max-w-[calc(100vw-16px)] overflow-y-auto overscroll-contain rounded-md border border-slate-300 bg-white p-1 text-slate-800 shadow-xl select-none ${props.touch ? "editor-touch-menu" : ""}`}
+      style={position}
+      onPointerDown={(event) => event.stopPropagation()}
+      onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}
+      onKeyDown={keyDown}
+    >
+      {entityId ? <>
+        <p className="truncate px-2 py-1 text-[11px] font-semibold text-slate-500" title={entityName ?? undefined}>
+          {selectionCount > 1 ? `${selectionCount}件のEntity` : entityName ?? "Entity"}
+        </p>
+        {item("edit.copy", "コピー", "copy")}
+      </> : null}
+      <EntityPasteMenuItems
+        disabledReason={disabledReason ?? (clipboardAvailable ? null : "先にEntityをコピーしてください")}
+        shortcut={shortcutLabel("edit.paste")}
+        onPaste={(mirrorAxis) => run("edit.paste", { mirrorAxis, entityId: entityId ?? undefined })}
+      />
+      {entityId ? <>
+        <div role="separator" className="my-1 border-t border-slate-200" />
+        {item("edit.duplicate", "複製", "duplicate", disabledReason)}
+        {item("selection.rename", "名前を変更", "textInput", disabledReason ?? (selectionCount > 1 ? "名前を変更するEntityを1件選んでください" : null))}
+        {item("view.frame-selection", "フォーカス", "maximize")}
+        <div role="separator" className="my-1 border-t border-slate-200" />
+        {item("edit.delete", "削除", "delete", disabledReason)}
+      </> : null}
+    </div>,
+    document.body,
+  );
+}

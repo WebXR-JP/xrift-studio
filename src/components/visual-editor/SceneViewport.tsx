@@ -1,3 +1,4 @@
+import { SceneContextMenu, type SceneContextMenuProps } from "./SceneContextMenu";
 import { createWorldPlaySeatStore } from "./world-play-seat-store";
 import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
 import { XriftModelInstancing } from "../../../packages/xrift-studio-runtime/src/script/model-instancing";
@@ -119,7 +120,6 @@ import {
 import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";
 import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
 import {
-  BUILTIN_PRIMITIVE_CREATION_CATALOG,
   getBuiltinPrefabRecipe,
   getBuiltinPrimitiveCreation,
   applyCustomShaderSourceOverrides,
@@ -4831,8 +4831,10 @@ export function SceneViewport({
   onDropSkybox,
   onDropBuiltinPrefab,
   onDropSceneAsset,
-  onCreatePrimitive,
-  onDeleteEntity,
+  onEditCommand,
+  clipboardAvailable,
+  editDisabledReason,
+  shortcutLabel,
   frameSelectionRequest,
   exitFocusRequest,
   focusedEntity,
@@ -4916,9 +4918,10 @@ export function SceneViewport({
   onDropSkybox: (assetId: string) => void;
   onDropBuiltinPrefab: (recipeId: string, position: Vec3) => void;
   onDropSceneAsset: (assetId: string, position: Vec3) => void;
-  onCreatePrimitive: (creationId: string) => void;
-  /** Deletes the Entity the viewport's context menu was opened on. */
-  onDeleteEntity: (entityId: string) => void;
+  onEditCommand: SceneContextMenuProps["onCommand"];
+  clipboardAvailable: boolean;
+  editDisabledReason?: string | null;
+  shortcutLabel: SceneContextMenuProps["shortcutLabel"];
   frameSelectionRequest: number;
   exitFocusRequest: number;
   focusedEntity: SceneFocusState | null;
@@ -4963,7 +4966,7 @@ export function SceneViewport({
   onExitRecordingView?: () => void;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
-  const { tablet: isTablet, phone } = useEditorDevice();
+  const { tablet: isTablet, phone, touch } = useEditorDevice();
   const tablet = isTablet || phone;
   const [phoneToolsOpen, setPhoneToolsOpen] = useState(false);
   const [touchNavigate, setTouchNavigate] = useState(false);
@@ -5112,6 +5115,9 @@ export function SceneViewport({
     entityId: string | null;
     entityName: string | null;
   } | null>(null);
+  useEffect(() => {
+    if (editorMode !== "edit" || cleanRender || (activeTabId && activeTabId !== SCENE_VIEW_TAB_ID)) setContextMenu(null);
+  }, [editorMode, cleanRender, activeTabId]);
   const [transformDragging, setTransformDragging] = useState(false);
   const transformDraggingRef = useRef(false);
   const terrainPointerRef = useRef<{
@@ -6060,7 +6066,6 @@ export function SceneViewport({
       return;
     }
     rightPointerGestureRef.current = null;
-    const bounds = event.currentTarget.getBoundingClientRect();
     // Right-clicking an object acts on that object, the way the Hierarchy's own
     // context menu does: the Entity under the pointer is selected first, so the
     // menu's delete and the gizmo never disagree about the target. A selection
@@ -6083,13 +6088,13 @@ export function SceneViewport({
     );
     if (
       pointedEntityId &&
-      !(selection?.kind === "entity" && selection.id === pointedEntityId)
+      !selectedEntityIds.includes(pointedEntityId)
     ) {
       onSelect({ kind: "entity", id: pointedEntityId }, { additive: false });
     }
     setContextMenu({
-      x: Math.min(event.clientX - bounds.left, Math.max(8, bounds.width - 190)),
-      y: Math.min(event.clientY - bounds.top, Math.max(8, bounds.height - 206)),
+      x: event.clientX,
+      y: event.clientY,
       entityId: pointedEntityId,
       entityName: pointedEntityId
         ? scene.entities[pointedEntityId]?.name ?? null
@@ -7182,60 +7187,21 @@ export function SceneViewport({
           </div>
         ) : null}
 
-        {contextMenu ? (
-          <div
-            className="absolute z-40 w-48 rounded-md border border-slate-300 bg-white p-1 text-slate-800 shadow-xl"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-            role="menu"
-            onPointerDown={(event) => event.stopPropagation()}
-            onContextMenu={(event) => event.stopPropagation()}
-          >
-            {contextMenu.entityId ? (
-              <>
-                <p
-                  className="truncate px-2 py-1 text-xs font-semibold text-slate-500"
-                  title={contextMenu.entityName ?? contextMenu.entityId}
-                >
-                  {contextMenu.entityName ?? contextMenu.entityId}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const entityId = contextMenu.entityId;
-                    setContextMenu(null);
-                    if (entityId) onDeleteEntity(entityId);
-                  }}
-                  title={commandTitle(
-                    `${contextMenu.entityName ?? "Entity"}を削除`,
-                    "edit.delete",
-                  )}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-rose-50 hover:text-rose-700"
-                >
-                  <EDITOR_ICONS.delete size={14} aria-hidden="true" />
-                  削除
-                </button>
-                <div className="my-1 border-t border-slate-200" />
-              </>
-            ) : null}
-            <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Create メッシュ
-            </p>
-            {BUILTIN_PRIMITIVE_CREATION_CATALOG.map((entry) => (
-              <button
-                key={entry.creationId}
-                type="button"
-                onClick={() => {
-                  setContextMenu(null);
-                  onCreatePrimitive(entry.creationId);
-                }}
-                title={commandTitle(`${entry.name}をシーンへ作成`, `CreatePrimitive.${entry.name}`)}
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-violet-50 hover:text-violet-800"
-              >
-                <EDITOR_ICONS.primitive size={14} aria-hidden="true" />
-                {entry.name}
-              </button>
-            ))}
-          </div>
+        {contextMenu && editorMode === "edit" && !cleanRender && (!activeTabId || activeTabId === SCENE_VIEW_TAB_ID) ? (
+          <SceneContextMenu
+            key={`${contextMenu.x}:${contextMenu.y}:${contextMenu.entityId}`}
+            {...contextMenu}
+            selectionCount={contextMenu.entityId && selectedEntityIds.includes(contextMenu.entityId) ? selectedEntityIds.length : 1}
+            clipboardAvailable={clipboardAvailable}
+            touch={touch}
+            disabledReason={editDisabledReason}
+            shortcutLabel={shortcutLabel}
+            onCommand={onEditCommand}
+            onClose={(restoreFocus) => {
+              setContextMenu(null);
+              if (restoreFocus) viewportRef.current?.focus();
+            }}
+          />
         ) : null}
 
         {notice ?? debugNotice ? (
