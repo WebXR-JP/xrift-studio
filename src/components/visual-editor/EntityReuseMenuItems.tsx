@@ -5,7 +5,7 @@ import { ENTITY_CONTEXT_ITEM_CLASS } from "./EntityPasteMenuItems";
 export type EntityReuseActions = {
   disabledReason?: string | null;
   pasteAvailable: boolean;
-  onCreatePrefab?: (entityId?: string) => void;
+  onCreatePrefab?: (entityId: string) => void;
   onExport: (entityId?: string) => void;
   onCopy: (entityId?: string) => void;
   onPaste: () => void;
