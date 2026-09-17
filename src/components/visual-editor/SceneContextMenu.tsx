@@ -1,4 +1,3 @@
-import { EntityReuseMenuItems, type EntityReuseActions } from "./EntityReuseMenuItems";
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { EntityMirrorAxis } from "../../lib/visual-editor/entity-clipboard";
@@ -7,9 +6,6 @@ import { EDITOR_ICONS, type EditorIconName } from "./editor-icons";
 import { ENTITY_CONTEXT_ITEM_CLASS, EntityPasteMenuItems } from "./EntityPasteMenuItems";
 
 export type SceneContextMenuProps = {
-  source?: "scene" | "hierarchy";
-  reuseActions?: EntityReuseActions;
-  extraActions?: ReactNode;
   x: number;
   y: number;
   entityId: string | null;
@@ -17,6 +13,9 @@ export type SceneContextMenuProps = {
   selectionCount: number;
   clipboardAvailable: boolean;
   touch?: boolean;
+  source?: "scene" | "hierarchy";
+  onExportHierarchy?: (entityId: string) => void;
+  extraContent?: ReactNode;
   disabledReason?: string | null;
   shortcutLabel: (command: EditorCommandId) => string;
   onCommand: (command: EditorCommandId, payload?: {
@@ -72,21 +71,21 @@ export function SceneContextMenu(props: SceneContextMenuProps) {
 
   const run = (command: EditorCommandId, payload?: Parameters<SceneContextMenuProps["onCommand"]>[1]) => {
     actionsRef.current.onClose(true);
-    actionsRef.current.onCommand(command, { ...payload, source: actionsRef.current.source ?? "scene" });
+    actionsRef.current.onCommand(command, { ...payload, source: props.source ?? "scene" });
   };
   const keyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     // The menu owns its keystrokes, not the canvas gizmo or editor shortcuts.
     event.stopPropagation();
-    if ((event.target as HTMLElement).closest("input, select, textarea") && event.key !== "Escape") return;
     if (event.key === "Escape" || event.key === "Tab") {
       event.preventDefault();
       actionsRef.current.onClose(true);
       return;
     }
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement) return;
     if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
     const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ?? [])
-      .filter((item) => item.closest('[role="menu"]') === menuRef.current && item.getClientRects().length > 0);
+      .filter((item) => item.closest('[role="menu"]') === menuRef.current);
     if (!items.length) return;
     const current = items.indexOf(document.activeElement as HTMLButtonElement);
     const index = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1
@@ -118,22 +117,23 @@ export function SceneContextMenu(props: SceneContextMenuProps) {
       role="menu"
       aria-label={props.source === "hierarchy" ? "Hierarchyの編集" : "シーンの編集"}
       tabIndex={-1}
-      className={`fixed z-[85] max-h-[calc(100dvh-16px)] w-56 max-w-[calc(100vw-16px)] overflow-y-auto overscroll-contain rounded-md border border-slate-300 bg-white p-1 text-slate-800 shadow-xl select-none ${props.touch ? "editor-touch-menu" : ""}`}
+      className={`fixed z-[85] max-h-[calc(100dvh-16px)] w-64 max-w-[calc(100vw-16px)] overflow-y-auto overscroll-contain rounded-md border border-slate-300 bg-white p-1 text-slate-800 shadow-xl select-none ${props.touch ? "editor-touch-menu" : ""}`}
       style={position}
       onPointerDown={(event) => event.stopPropagation()}
       onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}
       onKeyDown={keyDown}
     >
+      {disabledReason ? <p className="px-2 py-1 text-[11px] leading-4 text-slate-500">{disabledReason}</p> : null}
       {entityId ? <>
         <p className="truncate px-2 py-1 text-[11px] font-semibold text-slate-500" title={entityName ?? undefined}>
           {selectionCount > 1 ? `${selectionCount}件のEntity` : entityName ?? "Entity"}
         </p>
-        {item("edit.copy", "コピー", "copy")}
+        {item("edit.copy", "コピー", "copy", disabledReason)}
       </> : null}
       <EntityPasteMenuItems
         disabledReason={disabledReason ?? (clipboardAvailable ? null : "先にEntityをコピーしてください")}
         shortcut={shortcutLabel("edit.paste")}
-        onPaste={(mirrorAxis) => run("edit.paste", { mirrorAxis, entityId: entityId ?? undefined, parentEntityId: entityId ? undefined : null })}
+        onPaste={(mirrorAxis) => run("edit.paste", { mirrorAxis, entityId: entityId ?? undefined })}
       />
       {entityId ? <>
         <div role="separator" className="my-1 border-t border-slate-200" />
@@ -141,10 +141,16 @@ export function SceneContextMenu(props: SceneContextMenuProps) {
         {item("selection.rename", "名前を変更", "textInput", disabledReason ?? (selectionCount > 1 ? "名前を変更するEntityを1件選んでください" : null))}
         {item("view.frame-selection", "フォーカス", "maximize")}
         <div role="separator" className="my-1 border-t border-slate-200" />
+        {item("prefab.create", "再利用素材（Prefab）を作成", "prefab", disabledReason ?? (selectionCount > 1 ? "Prefabにする親Entityを1件選んでください" : null))}
+        {props.onExportHierarchy ? <button type="button" role="menuitem" disabled={Boolean(disabledReason)}
+          className={ENTITY_CONTEXT_ITEM_CLASS} title={disabledReason ?? "選択したEntityと子・素材を.xriftstudioで書き出します"}
+          onClick={() => { props.onClose(true); props.onExportHierarchy?.(entityId); }}>
+          <EDITOR_ICONS.export size={14} aria-hidden="true" /><span className="flex-1">選択範囲を書き出す</span>
+        </button> : null}
+        {props.extraContent}
+        <div role="separator" className="my-1 border-t border-slate-200" />
         {item("edit.delete", "削除", "delete", disabledReason)}
       </> : null}
-      {props.reuseActions ? <EntityReuseMenuItems actions={props.reuseActions} entityId={entityId} selectionCount={selectionCount} onClose={() => props.onClose(true)} /> : null}
-      {props.extraActions}
     </div>,
     document.body,
   );

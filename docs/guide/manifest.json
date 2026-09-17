@@ -63,7 +63,11 @@
       "group": "start",
       "file": "ipad.md",
       "keywords": "iPad タブレット Safari タッチ .xriftstudio ZIP 書き出し エクスポート ブラウザ パソコン 保存 引き継ぎ",
-      "related": ["editor-basics", "save-and-open", "publishing"],
+      "related": [
+        "editor-basics",
+        "save-and-open",
+        "publishing"
+      ],
       "next": "first-world"
     },
     {

@@ -1,7 +1,7 @@
 import { BUILTIN_PRIMITIVE_CREATION_CATALOG } from "./creation-catalog";
 import { getEditorEntityCreationDefinitions, type EditorComponentDefinition } from "./editor-session";
 import { getXriftComponentDefinition, getXriftEntityCreationMenuGroups, type XriftComponentDefinition } from "./component-registry";
-import type { BuiltinPrefabRecipe } from "./builtin-prefab-catalog";
+import { listBuiltinPrefabRecipes, type BuiltinPrefabRecipe } from "./builtin-prefab-catalog";
 import type { VisualProjectKind } from "./project-document";
 
 export type EntityCreationMenuEntry = {
@@ -12,6 +12,7 @@ export type EntityCreationMenuEntry = {
   kind: "empty" | "primitive" | "component" | "xrift" | "prefab";
   actionId: string;
   hint?: string;
+  disabledReason?: string;
   component?: EditorComponentDefinition;
   xrift?: XriftComponentDefinition;
 };
@@ -72,4 +73,15 @@ export function getEntityCreationMenuEntries(
   }
   entries.push(...[...xrift.values()].filter((entry) => entry.group === "XRift"));
   return entries;
+}
+
+/** World and Item use one discovery catalog; restrictions stay explicit. */
+export function getDiscoverableEntityCreationEntries(projectKind: VisualProjectKind, recipes: readonly BuiltinPrefabRecipe[]): EntityCreationMenuEntry[] {
+  const allRecipes = [...new Map([...listBuiltinPrefabRecipes("world"), ...listBuiltinPrefabRecipes("item"), ...recipes].map((recipe) => [recipe.id, recipe])).values()];
+  const allowed = new Set(getEntityCreationMenuEntries(projectKind, allRecipes).map((entry) => entry.id));
+  const entries = new Map<string, EntityCreationMenuEntry>();
+  for (const kind of ["world", "item"] as const) for (const entry of getEntityCreationMenuEntries(kind, allRecipes)) {
+    if (!entries.has(entry.id)) entries.set(entry.id, { ...entry, disabledReason: allowed.has(entry.id) ? undefined : kind === "world" ? "ワールドでのみ使用できます" : "アイテムでのみ使用できます" });
+  }
+  return [...entries.values()];
 }

@@ -20,13 +20,17 @@ export function EditorMenuSection({ label, icon: Icon, count, children, forceOpe
   label: string;
   icon?: LucideIcon;
   count?: number;
-  children: ReactNode;
   forceOpen?: boolean;
+  children: ReactNode;
 }) {
   const id = useId();
   const group = useContext(MenuGroupContext);
   const [localOpen, setLocalOpen] = useState(false);
   const open = forceOpen || (group ? group.openSection === id : localOpen);
+  if (forceOpen) return <section data-editor-menu-section={label}>
+    <p className="px-2 py-1 text-[11px] font-semibold text-slate-500">{label}{typeof count === "number" ? ` (${count})` : ""}</p>
+    <div className="ml-2 border-l border-slate-200 pl-1"><EditorMenuGroup>{children}</EditorMenuGroup></div>
+  </section>;
   return <section data-editor-menu-section={label}>
     <button
       type="button"
@@ -56,7 +60,7 @@ export function EditorMenuItem({ icon: Icon, label, detail, title, disabled = fa
   disabled?: boolean;
   onClick: () => void;
 }) {
-  return <button type="button" role="menuitem" disabled={disabled} title={title ?? detail ?? label} onClick={onClick} className={EDITOR_MENU_ROW_CLASS}>
+  return <button type="button" role="menuitem" aria-disabled={disabled || undefined} title={title ?? detail ?? label} onClick={() => { if (!disabled) onClick(); }} className={`${EDITOR_MENU_ROW_CLASS} ${disabled ? "cursor-not-allowed opacity-45" : ""}`}>
     {Icon ? <Icon size={14} className="shrink-0" aria-hidden="true" /> : null}
     <span className="min-w-0 flex-1">
       <span className="block truncate">{label}</span>

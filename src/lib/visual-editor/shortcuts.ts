@@ -158,7 +158,7 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
   },
   {
     id: "prefab.create",
-    label: "再利用素材（Prefab）を作成",
+    label: "プレハブを作成",
     category: "edit",
     bindings: [],
   },

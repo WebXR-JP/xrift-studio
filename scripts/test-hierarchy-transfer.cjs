@@ -8,10 +8,10 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const Module = require("node:module");
+const { pathToFileURL } = require("node:url");
 let ts;
 try {
-  if (process.env.XRIFT_TYPESCRIPT_PATH) ts = require(process.env.XRIFT_TYPESCRIPT_PATH);
-  else { try { ts = require("typescript-test-api"); } catch { ts = require("typescript"); } }
+  ts = require(process.env.XRIFT_TYPESCRIPT_PATH || "typescript");
 } catch (error) {
   console.error("TypeScript is required. Install the project dependencies, or set XRIFT_TYPESCRIPT_PATH to an installed TypeScript package.");
   console.error(error.message);
@@ -19,7 +19,9 @@ try {
 }
 const previous = Module._extensions[".ts"];
 Module._extensions[".ts"] = (module, fileName) => {
-  const result = ts.transpileModule(fs.readFileSync(fileName, "utf8"), {
+  const result = ts.transpileModule(
+    // Preserve the source module URL when executing ESM authoring helpers as CJS.
+    fs.readFileSync(fileName, "utf8").replace(/\bimport\.meta\.url/g, JSON.stringify(pathToFileURL(fileName).href)), {
     fileName,
     compilerOptions: {
       target: ts.ScriptTarget.ES2020,
@@ -43,8 +45,6 @@ Module._extensions[".ts"] = (module, fileName) => {
     const fixture = require(path.resolve(__dirname, "../src/lib/visual-editor/hierarchy-transfer.fixture.ts"));
     const result = await fixture.runHierarchyTransferFixtureAssertions();
     console.log(JSON.stringify({ status: "passed", suite: "Hierarchy transfer", typescript: ts.version, ...result }, null, 2));
-    const ux = require(path.resolve(__dirname, "../src/lib/visual-editor/editor-ux-cleanup.fixture.ts"));
-    console.log(JSON.stringify({ status: "passed", suite: "Editor UX cleanup", ...ux.runEditorUxCleanupFixtureAssertions() }, null, 2));
   } finally {
     if (previous) Module._extensions[".ts"] = previous;
     else delete Module._extensions[".ts"];

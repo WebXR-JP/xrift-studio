@@ -517,9 +517,9 @@ test("ビジュアルエディターで地形を作成・整形できる", async
   await page.getByRole("banner").getByRole("button", { name: "素材を追加", exact: true }).click();
   const menu = page.getByRole("menu", { name: "素材を追加", exact: true });
   await menu.getByRole("button", { name: "Entityを作成", exact: true }).click();
-  await menu.getByRole("button", { name: /^World/ }).click();
+  await menu.getByRole("button", { name: /^ワールド/ }).click();
   await menu.getByRole("button", { name: "Terrain", exact: true }).click();
-  await menu.getByRole("button", { name: "平らなTerrain", exact: true }).click();
+  await menu.getByRole("menuitem", { name: "平らなTerrain", exact: true }).click();
   await expect(
     page
       .getByRole("tree", { name: "シーンのEntity階層" })

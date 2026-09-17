@@ -451,9 +451,8 @@ project ではなく app data へ置く。
 
 ## 意図的に公開していない操作
 
-- 素材検索、Inspectorの選択文脈、メニューの開閉はUI状態のみ。既存のcreate／update／selection toolを再利用し、検索やdisabled表示用の新toolは増やさない。
-- .xriftstudioの部分書き出し・追加は、ネイティブ保存先選択とブラウザのファイル選択／ダウンロードを含むため、この版ではUI操作のみ。MCPでは既存のEntity／Prefab操作を利用する。素材ごとのセッションクリップボードもOS clipboardや外部送信には公開しない。
-- 「制作データの確認」は既存の検証ロジックへの画面内の入口。サーバー診断・集計基盤ではない。MCPの公開・変換側の既存検証を置き換えず、画面表示のための専用toolは設けない。
+- 部分.xriftstudio書き出し・追加Importのファイル選択、保存先、セッションクリップボードは本人のローカル操作として扱い、今回専用MCP toolは追加しない。UIは既存のdocument/Asset/Undo処理を共用する。ファイル受け渡しの制約は[Hierarchyの受け渡し契約](./HIERARCHY_TRANSFER.md)を参照する。
+- 素材・Component検索、Inspector見出し、制作データ確認dialogはUI上の導線であり、新規toolやネットワーク計測にしない。既存のproject health toolが実行時やファイルの存在まで確認したとは扱わない。
 
 
 - ヘッダー・ステータスバーの配置、Scale比率固定の初期値、アイテムの初期Unlit表示はUIだけの設定で、専用toolは設けない。Entity作成・Scale更新・ギミック追加は既存の操作を使う。ギミックのprojectKindsはワールド・アイテムで共通化し、通常のproject kind・revision・Asset操作ロックは維持する。

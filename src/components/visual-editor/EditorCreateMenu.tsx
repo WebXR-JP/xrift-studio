@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import type { BuiltinPrefabRecipe } from "../../lib/visual-editor/builtin-prefab-catalog";
 import type { VisualProjectKind } from "../../lib/visual-editor/project-document";
-import { getEntityCreationMenuEntries, type EntityCreationMenuEntry } from "../../lib/visual-editor/entity-creation-menu";
+import { getDiscoverableEntityCreationEntries, type EntityCreationMenuEntry } from "../../lib/visual-editor/entity-creation-menu";
 import { EditorCreationMenuSections } from "./EditorCreationMenuSections";
 import { EditorMenuGroup, handleEditorMenuKeyDown } from "./EditorMenu";
 
@@ -35,7 +35,7 @@ export function EditorCreateMenu(props: Props) {
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
   const entries = useMemo(
-    () => getEntityCreationMenuEntries(projectKind, builtinPrefabRecipes),
+    () => getDiscoverableEntityCreationEntries(projectKind, builtinPrefabRecipes),
     [projectKind, builtinPrefabRecipes],
   );
   useLayoutEffect(() => {

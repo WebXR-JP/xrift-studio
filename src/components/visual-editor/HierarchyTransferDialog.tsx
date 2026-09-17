@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { tauri } from "../../lib/tauri";
+import { matchesEditorSearch } from "../../lib/visual-editor/editor-menu-search";
 import { readBrowserProjectArchive } from "../../lib/visual-editor/browser-project-transfer";
-import { createHierarchyTransfer, planHierarchyImport, prepareHierarchyTransferFiles, readHierarchyTransferWarnings, type HierarchyImportPlan, type HierarchyPlacement, type PreparedHierarchyTransfer } from "../../lib/visual-editor/hierarchy-transfer";
+import { createHierarchyTransfer, withHierarchyProjectKind, planHierarchyImport, prepareHierarchyTransferFiles, readHierarchyTransferWarnings, type HierarchyImportPlan, type HierarchyPlacement, type PreparedHierarchyTransfer } from "../../lib/visual-editor/hierarchy-transfer";
 import { applyHierarchyImportPlan } from "../../lib/visual-editor/hierarchy-transfer-commit";
 import { createHierarchyArchive, hierarchyBlobDataUrl, prepareStoredHierarchy, validateHierarchyBundle, writeHierarchyFiles } from "../../lib/visual-editor/hierarchy-transfer-io";
 import type { PrototypeVisualProject } from "../../lib/visual-editor/prototype-project";
 import type { SceneDocument } from "../../lib/visual-editor/scene-document";
 
 export type HierarchyTransferCurrent = { bundle: PrototypeVisualProject; projectPath?: string; selectedIds: string[]; editable: boolean };
-export type HierarchyTransferSession = { mode: "import" | "export" | "paste"; current: HierarchyTransferCurrent; clipboard?: PreparedHierarchyTransfer };
+export type HierarchyTransferSession = { mode: "import" | "export" | "paste"; current: HierarchyTransferCurrent; clipboard?: PreparedHierarchyTransfer; mirrorAxis?: "x" | "y" | "z" };
 type Source = { bundles: PrototypeVisualProject[]; files?: ReadonlyMap<string, Uint8Array>; warnings: string[] };
 type Ready =
   | { kind: "export"; prepared: PreparedHierarchyTransfer; blob: Blob; fileName: string; dataUrl?: string }
@@ -46,7 +47,7 @@ function SelectionTree({ scene, selected, disabled, onChange }: {
     }
     // Invalid orphaned data is still visible; export validation reports it.
     for (const id of Object.keys(scene.entities)) if (!seen.has(id)) all.push({ id, depth: 0 });
-    return all.filter(({ id }) => scene.entities[id].name.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+    return all.filter(({ id }) => matchesEditorSearch(query, scene.entities[id].name));
   }, [scene, query]);
   const start = Math.max(0, Math.min(Math.floor(scrollTop / 40) - 4, Math.max(0, rows.length - 16)));
   const toggle = (id: string, checked: boolean) => {
@@ -95,6 +96,7 @@ export function HierarchyTransferDialog({ session, getCurrent, onCommit, onClose
   const [source, setSource] = useState<Source | null>(session.mode === "import" ? null : { bundles: [initialBundle], files: session.clipboard?.files, warnings: session.clipboard?.warnings ?? [] });
   const [sceneIndex, setSceneIndex] = useState(0);
   const [selected, setSelected] = useState(() => descendants(initialBundle.scene, session.mode === "export" ? session.current.selectedIds : initialBundle.scene.rootEntityIds));
+  const [exportKind, setExportKind] = useState(initialBundle.project.projectKind);
   const [placement, setPlacement] = useState<HierarchyPlacement>(session.mode === "import" && session.current.bundle.project.projectKind === "item" ? "origin" : "world");
   const selectedEntity = session.current.bundle.scene.entities[session.current.selectedIds[0]];
   const siblingParent = selectedEntity?.parentId ?? null;
@@ -144,13 +146,21 @@ export function HierarchyTransferDialog({ session, getCurrent, onCommit, onClose
     if (!current.editable || current.bundle.project.projectId !== session.current.bundle.project.projectId) throw new Error("プロジェクトが切り替わりました。閉じてから操作し直してください。");
     const sourceBundle = session.mode === "export" ? current.bundle : bundle;
     const transfer = createHierarchyTransfer(sourceBundle, [...selected], placement);
+    if (session.mirrorAxis) {
+      const axis = { x: 0, y: 1, z: 2 }[session.mirrorAxis];
+      for (const id of transfer.bundle.scene.rootEntityIds) {
+        const transform = transfer.bundle.scene.entities[id].components.find((c) => c.type === "transform");
+        if (transform?.type === "transform") transform.scale[axis] *= -1;
+      }
+    }
     transfer.warnings = [...new Set([...source.warnings, ...transfer.warnings])];
-    const prepared = source.files
+    let prepared = source.files
       ? await prepareHierarchyTransferFiles(transfer, async (path) => { const bytes = source.files!.get(path); if (!bytes) throw new Error(path); return bytes; })
       : await prepareStoredHierarchy(transfer, current.projectPath);
     if (!active.current) return;
     if (getCurrent().bundle !== current.bundle) throw new Error("編集中のシーンが更新されました。内容を確認し直してください。");
     if (session.mode === "export") {
+      prepared = withHierarchyProjectKind(prepared, exportKind);
       const archive = await createHierarchyArchive(prepared);
       const dataUrl = tauri.isAvailable() ? await hierarchyBlobDataUrl(archive.blob) : undefined;
       if (active.current) setReady({ kind: "export", prepared, ...archive, dataUrl });
@@ -193,6 +203,7 @@ export function HierarchyTransferDialog({ session, getCurrent, onCommit, onClose
         </div>
         <button type="button" aria-label="閉じる" disabled={busy} onClick={onClose} className="min-h-10 shrink-0 rounded border px-3 text-sm disabled:opacity-40">閉じる</button>
       </header>
+      {session.mirrorAxis ? <p className="text-xs text-violet-700">{session.mirrorAxis.toUpperCase()}軸に反転したコピーを追加します。コピー元は変更しません。</p> : null}
       {session.mode === "import" ? <label className="block rounded-lg border border-dashed p-3 text-xs leading-6">.xriftstudio / .zipを選択
         <input type="file" accept=".xriftstudio,.zip" disabled={busy} className="block w-full min-w-0 text-xs file:mr-2 file:min-h-10 file:rounded file:border file:px-3" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) loadFile(file); }} />
       </label> : null}
@@ -201,6 +212,7 @@ export function HierarchyTransferDialog({ session, getCurrent, onCommit, onClose
         {source.bundles.length > 1 ? <label className="block text-xs">シーン<select className="mt-1 min-h-10 w-full rounded border px-2 text-sm" value={sceneIndex} disabled={busy} onChange={(event) => { const index = Number(event.target.value); setSceneIndex(index); setSelected(descendants(source.bundles[index].scene, source.bundles[index].scene.rootEntityIds)); invalidate(); }}>{source.bundles.map((entry, index) => <option key={entry.scene.sceneId} value={index}>{entry.scene.name}</option>)}</select></label> : null}
         <SelectionTree key={bundle.scene.sceneId} scene={bundle.scene} selected={selected} disabled={busy} onChange={(ids) => { setSelected(ids); invalidate(); }} />
         <div className="grid gap-3 sm:grid-cols-2">
+          {session.mode === "export" ? <label className="text-xs">書き出すプロジェクトの種類<select value={exportKind} disabled={busy} onChange={(event) => { setExportKind(event.target.value as "world" | "item"); invalidate(); }} className="mt-1 min-h-10 w-full rounded border px-2 text-sm"><option value="world">ワールド</option><option value="item">アイテム</option></select></label> : null}
           {session.mode !== "export" ? <label className="text-xs">追加先<select value={parentId ?? ""} disabled={busy} onChange={(event) => { setParentId(event.target.value || null); invalidate(); }} className="mt-1 min-h-10 w-full min-w-0 rounded border px-2 text-sm"><option value="">Scene直下</option>{[...parentOptions].map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label> : null}
           <label className="text-xs">配置<select value={placement} disabled={busy} onChange={(event) => { setPlacement(event.target.value as HierarchyPlacement); invalidate(); }} className="mt-1 min-h-10 w-full rounded border px-2 text-sm"><option value="world">元のワールド座標を保つ</option><option value="origin">先頭のEntityを原点へ移す</option><option value="local">元のローカル座標を使う</option></select></label>
         </div>

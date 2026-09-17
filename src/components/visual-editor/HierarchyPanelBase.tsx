@@ -1,5 +1,4 @@
 import { SceneContextMenu } from "./SceneContextMenu";
-import type { EntityReuseActions } from "./EntityReuseMenuItems";
 import type { EntityMirrorAxis } from "../../lib/visual-editor/entity-clipboard";
 import { MoreHorizontal } from "lucide-react";
 import { useEditorDevice } from "./useEditorDevice";
@@ -862,7 +861,7 @@ export function HierarchyPanel({
   clipboardAvailable = false,
   pasteShortcut,
   shortcutLabel,
-  reuseActions,
+  onExportHierarchy,
   renameRequest,
   onRename,
 }: {
@@ -890,7 +889,7 @@ export function HierarchyPanel({
   clipboardAvailable?: boolean;
   pasteShortcut?: string;
   shortcutLabel?: (command: EditorCommandId) => string;
-  reuseActions?: EntityReuseActions;
+  onExportHierarchy?: (entityId: string) => void;
   onCommand: (
     commandId: EditorCommandId,
     payload?: {
@@ -1202,9 +1201,10 @@ export function HierarchyPanel({
     entityId: string | null = null,
   ) => {
     event.preventDefault();
+    const menuHeight = Math.min(640, window.innerHeight - 24);
     setContextMenu({
-      x: event.clientX,
-      y: event.clientY,
+      x: Math.max(12, Math.min(event.clientX, window.innerWidth - 300)),
+      y: Math.max(12, Math.min(event.clientY, window.innerHeight - menuHeight - 12)),
       entityId,
     });
   };
@@ -1699,23 +1699,34 @@ export function HierarchyPanel({
         ))}
       </div>
       {contextMenu ? <SceneContextMenu
-        source="hierarchy" x={contextMenu.x} y={contextMenu.y}
-        entityId={contextEntityId} entityName={contextEntityId ? scene.entities[contextEntityId]?.name ?? null : null}
+        key={`${contextMenu.x}:${contextMenu.y}:${contextMenu.entityId}`}
+        {...contextMenu}
+        source="hierarchy"
+        entityName={contextEntityId ? scene.entities[contextEntityId]?.name ?? null : null}
         selectionCount={contextMultiple ? selectedEntityIds.length : contextEntityId ? 1 : 0}
-        clipboardAvailable={clipboardAvailable} touch={touch}
-        disabledReason={readOnly ? "動作確認を停止してから編集してください" : importBusy ? "取り込みが終わるまでお待ちください" : null}
+        touch={touch}
+        clipboardAvailable={clipboardAvailable}
+        disabledReason={readOnly || playMode ? "動作確認を停止すると編集できます" : importBusy ? "素材の取り込みが終わるまでお待ちください" : null}
         shortcutLabel={shortcutLabel ?? ((command) => command === "edit.paste" ? pasteShortcut ?? "" : "")}
-        onCommand={onCommand} reuseActions={reuseActions}
+        onCommand={onCommand}
+        onExportHierarchy={onExportHierarchy}
         onClose={(restoreFocus) => {
           setContextMenu(null);
           if (restoreFocus && contextEntityId) entityButtonRefs.current.get(contextEntityId)?.focus();
         }}
-        extraActions={contextEntityId && !contextMultiple ? <EntityMoveMenu
-          scene={scene} entityId={contextEntityId} readOnly={readOnly || importBusy}
+        extraContent={touch && contextEntityId && !contextMultiple ? <EntityMoveMenu
+          scene={scene} entityId={contextEntityId} readOnly={readOnly || playMode || importBusy}
           onMove={(parentEntityId, siblingIndex) => {
-            setContextMenu(null);
-            onCommand("entity.reparent", { entityId: contextEntityId, parentEntityId, siblingIndex, source: "hierarchy" });
-          }} /> : null}
+            if (onCommand("entity.reparent", { entityId: contextEntityId, parentEntityId, siblingIndex })) {
+              setCollapsedEntityIds((current) => {
+                const next = new Set(current); const visited = new Set<string>();
+                let id = parentEntityId;
+                while (id && !visited.has(id)) { visited.add(id); next.delete(id); id = scene.entities[id]?.parentId ?? null; }
+                return next;
+              });
+              setContextMenu(null);
+            }
+          }} /> : undefined}
       /> : null}
     </aside>
   );

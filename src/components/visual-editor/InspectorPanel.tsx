@@ -1,6 +1,7 @@
-import { COMPONENT_CATEGORY_LABELS, matchesEditorMenuQuery } from "../../lib/visual-editor/editor-menu-search";
 import { DEFAULT_SCALE_LINKED, MIN_SCALE_MAGNITUDE, updateVectorAxis, type TransformValueKind } from "./inspector-transform";
-import { getEditorComponentDisabledReason, getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
+import { COMPONENT_CATEGORY_LABELS, matchesEditorSearch } from "../../lib/visual-editor/editor-menu-search";
+import { getDiscoverableXriftGroups } from "../../lib/visual-editor/component-discovery";
+import { getDiscoverableEditorComponents, getEditorComponentDisabledReason, getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
 import { MeshCollisionControls } from "./MeshCollisionControls";
 import { useEditorTouch } from "./useEditorDevice";
 import { colliderModelNode, type MeshCollisionAction } from "../../lib/visual-editor/mesh-collision-actions";
@@ -62,9 +63,7 @@ import {
   getMeshMaterialSlots,
   getTransform,
   EDITOR_COMPONENT_CATEGORY_ORDER,
-  getEditorComponentMenuDefinitions,
   getXriftComponentDefinition,
-  getXriftComponentMenuGroups,
   type AudioSourceComponent,
   type AudioSourcePatch,
   type AssetManifest,
@@ -5139,20 +5138,19 @@ function EntityInspector({
   const [scaleLinked, setScaleLinked] = useState<boolean>(DEFAULT_SCALE_LINKED);
   const registeredComponents = entity.components as RegisteredSceneComponent[];
   const liveRuntimeTuning = readOnly && playMode;
-  const searchingComponents = Boolean(addComponentSearchQuery.trim());
+  const searchingComponents = addComponentSearchQuery.trim().length > 0;
   const matchesComponentSearch = (...values: Array<string | undefined>) =>
-    matchesEditorMenuQuery(addComponentSearchQuery, ...values.filter((value): value is string => typeof value === "string"));
+    matchesEditorSearch(addComponentSearchQuery, ...values);
   const componentSearchResultCount =
-    getEditorComponentMenuDefinitions().filter((definition) =>
+    getDiscoverableEditorComponents().filter((definition) =>
       matchesComponentSearch(
         definition.label,
         definition.id,
-        definition.category,
-        COMPONENT_CATEGORY_LABELS[definition.category],
+        definition.category, COMPONENT_CATEGORY_LABELS[definition.category],
         "component",
       ),
     ).length +
-    getXriftComponentMenuGroups().flatMap((group) =>
+    getDiscoverableXriftGroups().flatMap((group) =>
       group.components.filter((definition) =>
         matchesComponentSearch(
           definition.label,
@@ -5656,14 +5654,13 @@ function EntityInspector({
             ) : null}
             {EDITOR_COMPONENT_CATEGORY_ORDER.map(
               (category) => {
-                const definitions = getEditorComponentMenuDefinitions().filter(
+                const definitions = getDiscoverableEditorComponents().filter(
                   (definition) =>
                     definition.category === category &&
                     matchesComponentSearch(
                       definition.label,
                       definition.id,
-                      definition.category,
-                      COMPONENT_CATEGORY_LABELS[definition.category],
+                      definition.category, COMPONENT_CATEGORY_LABELS[definition.category],
                       "component",
                     ),
                 );
@@ -5685,8 +5682,8 @@ function EntityInspector({
                         <button
                           key={definition.id}
                           type="button"
-                          disabled={Boolean(disabledReason)}
-                        title={disabledReason ?? `Componentを追加：${definition.label}`}
+                          disabled={Boolean(disabledReason) || liveRuntimeTuning}
+                        title={liveRuntimeTuning ? "動作確認を停止してから追加してください" : disabledReason}
                           onClick={() => {
                             onAddComponent(definition.id);
                             setAddComponentOpen(false);
@@ -5698,7 +5695,7 @@ function EntityInspector({
                             <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
                             <span className="truncate">{definition.label}</span>
                           </span>
-                          {disabledReason ? <span className="mt-1 w-full text-left text-xs">{disabledReason}</span> : null}
+                          {disabledReason || liveRuntimeTuning ? <span className="mt-1 w-full text-left text-xs">{liveRuntimeTuning ? "動作確認を停止してから追加してください" : disabledReason}</span> : null}
                         </button>
                       );
                     })}
@@ -5707,7 +5704,7 @@ function EntityInspector({
                 );
               },
             )}
-            {getXriftComponentMenuGroups().map((group) => {
+            {getDiscoverableXriftGroups().map((group) => {
               const definitions = group.components.filter((definition) =>
                 matchesComponentSearch(
                   definition.label,
@@ -5736,8 +5733,8 @@ function EntityInspector({
                       <button
                         key={definition.schemaId}
                         type="button"
-                        disabled={Boolean(disabledReason)}
-                        title={disabledReason ?? `Componentを追加：${definition.label}`}
+                        disabled={Boolean(disabledReason) || liveRuntimeTuning}
+                        title={liveRuntimeTuning ? "動作確認を停止してから追加してください" : disabledReason}
                         onClick={() => {
                           onAddComponent(definition.schemaId);
                           setAddComponentOpen(false);
@@ -5749,7 +5746,7 @@ function EntityInspector({
                           <DefinitionIcon size={14} className="shrink-0" aria-hidden="true" />
                           <span className="truncate">{definition.label}</span>
                         </span>
-                        {disabledReason ? <span className="mt-1 w-full text-left text-xs">{disabledReason}</span> : null}
+                        {disabledReason || liveRuntimeTuning ? <span className="mt-1 w-full text-left text-xs">{liveRuntimeTuning ? "動作確認を停止してから追加してください" : disabledReason}</span> : null}
                       </button>
                     );
                   })}
@@ -6025,10 +6022,12 @@ export function InspectorPanel({
   const multiSelectionActive =
     !sceneSettingsOpen && (asset ? selectedAssetIds.length > 1 : selectedEntityIds.length > 1);
   const inspectorContextLabel = sceneSettingsOpen
-    ? `Scene · ${scene.name}`
-    : asset
-      ? `Asset · ${selectedAssetIds.length > 1 ? `${selectedAssetIds.length}件` : asset.name}`
-      : entity ? `Entity · ${selectedEntityIds.length > 1 ? `${selectedEntityIds.length}件` : entity.name}` : "未選択";
+    ? `シーン設定 · ${scene.name}`
+    : asset && selectedAssetIds.length > 1
+      ? `Assets · ${selectedAssetIds.length}件`
+      : asset ? `Asset · ${asset.name}`
+      : multiSelectionActive ? `Entity · ${selectedEntityIds.length}件`
+      : entity ? `Entity · ${entity.name}` : "未選択";
   /**
    * The Inspector stacks layers: an Entity or Asset can be covered by the Asset
    * it points at, or by Scene settings. An icon alone did not say that a layer
@@ -6061,7 +6060,7 @@ export function InspectorPanel({
             Inspector
           </h2>
         </div>
-        {inspectorContextLabel && !inspectorBackTarget ? (
+        {inspectorContextLabel ? (
           <span className="max-w-32 truncate text-xs text-slate-500" title={inspectorContextLabel}>
             {inspectorContextLabel}
           </span>
@@ -6120,8 +6119,8 @@ export function InspectorPanel({
           <MultiSelectionInspector
             scene={scene}
             assets={assets}
-            selectedEntityIds={asset ? [] : selectedEntityIds}
-            selectedAssetIds={asset ? selectedAssetIds : []}
+            selectedEntityIds={selectedEntityIds}
+            selectedAssetIds={selectedAssetIds}
             readOnly={readOnly}
             textureBatchState={textureBatchState}
             onSetEntitiesEnabled={onSetEntitiesEnabled}

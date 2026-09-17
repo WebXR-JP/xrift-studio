@@ -20,6 +20,7 @@
 | マテリアル・地形 | [素材カタログ](./MATERIAL_CATALOG_SPEC.md) · [地形編集](./TERRAIN_EDITOR_SPEC.md) · [Open Brush](./OPENBRUSH_MATERIAL_PROVIDER_DESIGN.md) |
 | 空・水面 | [空のシェーダー](./SKY_SHADERS.md) · [水面のシェーダー](./WATER_SHADER_V2.md) |
 | 動き | [ノードグラフ](./KHR_INTERACTIVITY_EDITOR.md) · [スクリプトAPI](./SCRIPTING.md) |
+| Hierarchyの受け渡し | [選択範囲の書き出し・追加](./HIERARCHY_TRANSFER.md) · [実装・検証記録](./AUTHORING_WORKFLOW_VERIFICATION.md) |
 | 書き出し・公開 | [コード編集への書き出し](./VISUAL_PROJECT_MIGRATION_CLI.md) · [ブラウザ公開の試験実装](./WEB_UPLOAD.md) · [容量の最適化](./PUBLISH_DOWNLOAD_OPTIMIZATION.md) |
 | 録画 | [録画機能](./RECORDING.md) |
 

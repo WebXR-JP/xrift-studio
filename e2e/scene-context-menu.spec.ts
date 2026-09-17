@@ -98,7 +98,7 @@ test("Import lock prevents mutation and a multi-selection cannot be renamed as o
   for (const label of ["貼り付け", "反転して貼り付け", "複製", "名前を変更", "削除"]) {
     await expect(menu.getByRole("menuitem", { name: label, exact: true })).toBeDisabled();
   }
-  await expect(menu.getByRole("menuitem", { name: "コピー", exact: true })).toBeEnabled();
+  await expect(menu.getByRole("menuitem", { name: "コピー", exact: true })).toBeDisabled();
   await expect(menu.getByRole("menuitem", { name: "フォーカス", exact: true })).toBeEnabled();
   await page.mouse.click(4, 4);
   await expect(menu).toHaveCount(0);
@@ -119,6 +119,8 @@ test("Real editor: copy, mirror paste, Undo and Redo keep the source and selecte
   const initialCount = await tree.getByRole("treeitem").count();
   await tree.getByText("床", { exact: true }).click({ button: "right" });
   await page.getByRole("menu", { name: "Hierarchyの編集", exact: true }).getByRole("menuitem", { name: "コピー", exact: true }).click();
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect.poll(async () => page.getByRole("status").allTextContents()).toContainEqual(expect.stringContaining("コピーしました"));
   const viewport = page.getByLabel("編集可能な3Dシーン", { exact: true });
   await expect(viewport.locator("canvas").first()).toBeVisible();
   // A blank upper corner keeps the Scene menu independent of ray-hit geometry.

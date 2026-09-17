@@ -220,7 +220,7 @@ export function getEditorComponentLabel(component: SceneComponent): string {
 
 /** Components shown by both the Create menu and Hierarchy context menu. */
 export function getEditorComponentMenuDefinitions(
-  projectKind?: VisualProjectKind,
+  projectKind: VisualProjectKind,
 ): readonly EditorComponentDefinition[] {
   return EDITOR_COMPONENT_REGISTRY.filter(
     (definition) =>
@@ -229,8 +229,14 @@ export function getEditorComponentMenuDefinitions(
       definition.componentType !== "transform" &&
       // Offer the official XRift SpawnPoint instead of a second spawn entry.
       definition.componentType !== "spawn-point" &&
-      (!projectKind || definition.projectKinds.includes(projectKind)),
+      definition.projectKinds.includes(projectKind),
   );
+}
+
+/** Discovery includes unavailable entries so the reason can be shown before selection. */
+export function getDiscoverableEditorComponents(): readonly EditorComponentDefinition[] {
+  return EDITOR_COMPONENT_REGISTRY.filter((entry) => entry.componentType !== "official-xrift"
+    && entry.componentType !== "transform" && entry.componentType !== "spawn-point");
 }
 
 /** Components that can start a new Entity without existing geometry or children. */
@@ -251,9 +257,7 @@ export function getEditorComponentDisabledReason(
   if (!entity) return "Entityを選択";
   const definition = EDITOR_COMPONENT_REGISTRY.find((entry) => entry.id === definitionId);
   if (!definition) return "未対応のComponent";
-  if (projectKind && !definition.projectKinds.includes(projectKind)) {
-    return projectKind === "item" ? "ワールドでのみ使用できます" : "アイテムでのみ使用できます";
-  }
+  if (projectKind && !definition.projectKinds.includes(projectKind)) return definition.projectKinds.includes("world") ? "ワールドでのみ使用できます" : "アイテムでのみ使用できます";
   if (!definition.allowMultiple && hasRegisteredComponent(entity, definition)) {
     return "追加済み";
   }

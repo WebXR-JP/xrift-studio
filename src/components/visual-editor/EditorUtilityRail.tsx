@@ -85,7 +85,6 @@ export function EditorUtilityRail({
   onConfigureOllama,
   onUndo,
   onOpenSupport,
-  onInspectDocument,
   recording,
 }: {
   commands: readonly EditorCommandDefinition[];
@@ -112,7 +111,6 @@ export function EditorUtilityRail({
   ) => void;
   onUndo: () => void;
   onOpenSupport: () => void;
-  onInspectDocument?: () => void;
   /** The recording controls; omitted where recording is unavailable. */
   recording?: RecordingPanelProps;
 }) {
@@ -171,8 +169,6 @@ export function EditorUtilityRail({
       }}
       className="editor-utility-rail relative flex shrink-0 items-center gap-0.5 bg-editor-surface p-1"
     >
-      {onInspectDocument ? <button type="button" onClick={() => { setOpenPanel(null); onInspectDocument(); }}
-        title="シーンとAssetsの参照・設定を確認します" className="h-8 shrink-0 rounded px-2 text-xs font-semibold text-editor-text hover:bg-editor-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400">制作データの確認</button> : null}
       <GuideLink page="first-world" label="使い方" />
       <UtilityButton
         label="AI接続"

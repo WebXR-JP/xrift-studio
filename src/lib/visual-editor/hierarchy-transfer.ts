@@ -92,11 +92,12 @@ function visit(value: unknown, visitor: (key: string, value: unknown, owner: Rec
   }
 }
 
-function assetReferences(value: unknown): Set<string> {
+export function collectHierarchyAssetReferences(value: unknown): Set<string> {
   const ids = new Set<string>();
   visit(value, (key, child, owner) => {
     // Ignore this provenance field only; do not remove a real dependency that
     // another field already added to the same set.
+    if (key === "geometryAssetId" && owner.type === "mesh" && isRecord(owner.geometry) && owner.geometry.kind !== "asset") return;
     if (key === "sourceModelAssetId" && owner.kind === "classic-r3f") return;
     if ((ID_FIELDS.test(key) || key === "assetId") && typeof child === "string" && child) ids.add(child);
     if (key === "assetReferences" && Array.isArray(child)) for (const id of child) if (typeof id === "string" && id) ids.add(id);
@@ -204,7 +205,7 @@ export function createHierarchyTransfer(source: PrototypeVisualProject, ids: rea
     throw new Error("無効なPrefab、または無効な親の中のPrefabが含まれています。有効にするか展開してから書き出してください。");
   }
   const assetIds = new Set<string>();
-  const pending = [...assetReferences(Object.values(resolved.scene.entities))];
+  const pending = [...collectHierarchyAssetReferences(Object.values(resolved.scene.entities))];
   const assets: AssetManifest = { schemaVersion: source.assets.schemaVersion, assets: Object.create(null) };
   while (pending.length) {
     const id = pending.pop()!;
@@ -216,7 +217,7 @@ export function createHierarchyTransfer(source: PrototypeVisualProject, ids: rea
     assetIds.add(id);
     assets.assets[id] = structuredClone(asset);
     if (assets.assets[id].thumbnail) assets.assets[id].thumbnail = { status: "missing" };
-    for (const reference of assetReferences(asset)) pending.push(reference);
+    for (const reference of collectHierarchyAssetReferences(asset)) pending.push(reference);
   }
   const folders = source.assets.folders ?? {};
   const folderIds = new Set<string>();
@@ -423,5 +424,15 @@ let clipboard: PreparedHierarchyTransfer | null = null;
 export function getHierarchyClipboard(): PreparedHierarchyTransfer | null { return clipboard; }
 export function setHierarchyClipboard(value: PreparedHierarchyTransfer | null): void { clipboard = value; }
 
-/** Typed reference traversal shared with the local document inspector. */
-export { assetReferences as collectHierarchyAssetReferences };
+/** Explicit Item/World export conversion, with the same compatibility rules as import. */
+export function withHierarchyProjectKind(prepared: PreparedHierarchyTransfer, projectKind: "world" | "item"): PreparedHierarchyTransfer {
+  if (prepared.bundle.project.projectKind === projectKind) return prepared;
+  const source = prepared.bundle;
+  const target: PrototypeVisualProject = {
+    ...source, project: { ...source.project, projectKind },
+    scene: { ...source.scene, rootEntityIds: [], entities: {} },
+    assets: { schemaVersion: source.assets.schemaVersion, assets: {} }, prefabs: {},
+  };
+  const plan = planHierarchyImport(target, prepared, { placement: "local" });
+  return { bundle: plan.bundle, files: plan.files, warnings: plan.warnings };
+}

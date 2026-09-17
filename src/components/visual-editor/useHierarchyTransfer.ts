@@ -34,13 +34,14 @@ export function useHierarchyTransfer(options: Options) {
     setSession(null);
     latest.current.setBusy(false);
   }, []);
-  const begin = useCallback(async (mode: "copy" | "import" | "export" | "paste", requestedEntityId?: string) => {
+  const begin = useCallback(async (mode: "copy" | "import" | "export" | "paste", requestedEntityId?: string, mirrorAxis?: "x" | "y" | "z") => {
     if (locked.current || !latest.current.canStart()) {
       latest.current.onNotice("動作確認や取り込みを終えてから操作してください。");
       return;
     }
     const clipboard = mode === "paste" ? getHierarchyClipboard() : null;
     if (mode === "paste" && !clipboard) { latest.current.onNotice("先にHierarchyのEntityをコピーしてください。別のウィンドウでは.xriftstudioを使って受け渡せます。"); return; }
+    if (mode === "copy") setHierarchyClipboard(null);
     locked.current = true;
     latest.current.setBusy(true);
     const token = ++generation.current;
@@ -60,7 +61,7 @@ export function useHierarchyTransfer(options: Options) {
         setHierarchyClipboard(prepared);
         latest.current.onNotice(`${Object.keys(prepared.bundle.scene.entities).length}件のEntityと素材をコピーしました。別のワールド・アイテムにも貼り付けられます。${prepared.warnings.length ? "貼り付け時に注意事項を表示します。" : ""}`);
       } else {
-        setSession({ mode, current, ...(clipboard ? { clipboard } : {}) });
+        setSession({ mode, current, mirrorAxis, ...(clipboard ? { clipboard } : {}) });
         opened = true;
       }
     } catch (error) {
@@ -72,7 +73,7 @@ export function useHierarchyTransfer(options: Options) {
   return {
     session, close,
     copy: useCallback((id?: string) => { void begin("copy", id); }, [begin]),
-    paste: useCallback(() => { void begin("paste"); }, [begin]),
+    paste: useCallback((axis?: "x" | "y" | "z") => { void begin("paste", undefined, axis); }, [begin]),
     openImport: useCallback(() => { void begin("import"); }, [begin]),
     openExport: useCallback((id?: string) => { void begin("export", id); }, [begin]),
     getCurrent: useCallback(() => latest.current.getCurrent(), []),
