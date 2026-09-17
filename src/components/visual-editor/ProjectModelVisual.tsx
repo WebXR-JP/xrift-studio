@@ -677,6 +677,7 @@ function ProjectModelRender({
       castShadow={false}
       receiveShadow={false}
       userData={{
+        xriftColliderExclude: true,
         loadError: state.status === "error" ? state.message : undefined,
       }}
     >

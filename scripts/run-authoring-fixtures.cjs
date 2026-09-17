@@ -13,13 +13,16 @@ const hooks = registerHooks({
     if ((specifier.startsWith(".") || specifier.startsWith("/")) && context.parentURL?.startsWith("file:")) {
       const url = new URL(specifier, context.parentURL);
       const file = fileURLToPath(url);
-      for (const candidate of [file, `${file}.ts`, `${file}.tsx`, `${file}.js`, path.join(file, "index.ts")]) {
+      if (url.search === "?raw" && fs.existsSync(file)) return { url: url.href, shortCircuit: true };
+      for (const candidate of [file, `${file}.ts`, `${file}.tsx`, `${file}.js`, file.replace(/\.js$/, ".ts"), file.replace(/\.js$/, ".tsx"), path.join(file, "index.ts")]) {
         if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return nextResolve(pathToFileURL(candidate).href, context);
       }
     }
     return nextResolve(specifier, context);
   },
   load(url, context, nextLoad) {
+    if (url.startsWith("file:") && url.endsWith("?raw")) return { format: "module", source: `export default ${JSON.stringify(fs.readFileSync(fileURLToPath(url), "utf8"))};`, shortCircuit: true };
+    if (url.startsWith("file:") && url.endsWith(".json")) return { format: "module", source: `export default ${fs.readFileSync(fileURLToPath(url), "utf8")};`, shortCircuit: true };
     if (url.startsWith("file:") && /\.tsx?$/.test(url)) {
       const fileName = fileURLToPath(url);
       const result = ts.transpileModule(fs.readFileSync(fileName, "utf8"), {
@@ -34,12 +37,17 @@ const hooks = registerHooks({
   },
 });
 const suites = {
+  playReadiness: ["../../components/visual-editor/scene-load-state.fixture.ts", "runSceneLoadStateFixtureAssertions"],
+  playSession: ["play-session.fixture.ts", "runPlaySessionFixtureAssertions"],
+  geometry: ["mesh-collider-geometry.fixture.ts", "runMeshColliderGeometryFixtureAssertions"],
+  compiler: ["compiler/fixture.ts", "runVisualCompilerFixtureAssertions"],
+  collision: ["mesh-collision-actions.fixture.ts", "runMeshCollisionActionsFixtureAssertions"],
   hierarchy: ["hierarchy-transfer.fixture.ts", "runHierarchyTransferFixtureAssertions"],
   authoring: ["authoring-workflow.fixture.ts", "runAuthoringWorkflowFixtureAssertions"],
 };
 (async () => {
   try {
-    for (const key of process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(suites)) {
+    for (const key of process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(suites).filter((key) => key !== "compiler")) {
       if (!suites[key]) throw new Error(`Unknown suite: ${key}`);
       const [file, entry] = suites[key];
       const fixture = await import(pathToFileURL(path.resolve(__dirname, "../src/lib/visual-editor", file)).href);

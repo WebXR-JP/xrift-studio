@@ -81,6 +81,8 @@ const PREVIEW_INSTANCE_IMPLEMENTATION: InstanceContextValue = {
 export function OfficialXriftPreviewProvider({
   children,
   withPhysics = false,
+  physicsPaused = false,
+  physicsSessionKey,
   gravity = [0, 0, 0],
   grabbableImplementation,
   teleportImplementation,
@@ -89,6 +91,8 @@ export function OfficialXriftPreviewProvider({
 }: {
   children: ReactNode;
   withPhysics?: boolean;
+  physicsPaused?: boolean;
+  physicsSessionKey?: string;
   gravity?: [number, number, number];
   /**
    * Where `<Grabbable>` registers. World Play passes the official grab store so
@@ -126,7 +130,7 @@ export function OfficialXriftPreviewProvider({
   if (!withPhysics) return content;
   return (
     <Suspense fallback={null}>
-      <Physics gravity={gravity} timeStep="vary">
+      <Physics key={physicsSessionKey} gravity={gravity} timeStep="vary" paused={physicsPaused}>
         {content}
       </Physics>
     </Suspense>

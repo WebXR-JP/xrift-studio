@@ -1,0 +1,130 @@
+XRift Studio / Play Collider final source validation
+Date: 2026-09-17
+Node 22.16.0; TypeScript 5.8.3. Project requires TypeScript ~7.0.2; not installed.
+No React/Tauri GUI E2E or full successful project build.
+
+=== run-authoring-fixtures ===
+{
+  "status": "passed",
+  "suite": "playReadiness",
+  "typescript": "5.8.3",
+  "assertions": 27
+}
+{
+  "status": "passed",
+  "suite": "playSession",
+  "typescript": "5.8.3"
+}
+{
+  "status": "passed",
+  "suite": "geometry",
+  "typescript": "5.8.3",
+  "assertions": 24
+}
+{
+  "status": "passed",
+  "suite": "collision",
+  "typescript": "5.8.3",
+  "assertions": 46
+}
+{
+  "status": "passed",
+  "suite": "hierarchy",
+  "typescript": "5.8.3",
+  "cases": 20,
+  "assertions": 290
+}
+{
+  "status": "passed",
+  "suite": "authoring",
+  "typescript": "5.8.3",
+  "assertions": 42
+}
+
+=== check-mesh-collider-sources ===
+{
+  "status": "passed",
+  "kind": "syntax-and-wiring-only",
+  "typescript": "5.8.3",
+  "files": 18,
+  "assertions": 52
+}
+
+=== test-mesh-collider-physics ===
+using deprecated parameters for the initialization function; pass a single object instead
+{
+  "status": "passed",
+  "engine": "Rapier 0.19.2 (bundled WASM)",
+  "typescript": "5.8.3",
+  "cases": [
+    "solid-trimesh-landing-and-removal",
+    "trigger-is-not-a-walkable-floor",
+    "trigger-reenabled-as-solid",
+    "translated-scaled-imported-floor",
+    "mirrored-floor",
+    "concave-floor-keeps-hole",
+    "late-load-and-shape-replacement",
+    "wall-contact",
+    "kinematic-character-controller-grounded"
+  ],
+  "assertions": 22
+}
+
+=== test-play-collider-startup ===
+using deprecated parameters for the initialization function; pass a single object instead
+{
+  "status": "passed",
+  "engine": "Rapier 0.19.2 (bundled WASM)",
+  "typescript": "5.8.3",
+  "scope": "Production readiness core + real physics; simulated lifecycle, not React/Tauri E2E",
+  "cases": [
+    "play-1:delayed-mount-to-grounded-to-removed",
+    "play-2:delayed-mount-to-grounded-to-removed",
+    "play-3:no-ghost-floor-after-stop",
+    "failed-collision-model-and-late-completion-blocked"
+  ],
+  "assertions": 33
+}
+
+=== check-fixture-coverage ===
+fixture coverage checked: 116 suites registered
+
+=== readiness-typecheck ===
+Exit: 0 (TypeScript 5.8.3; readiness core and fixture only)
+
+=== Full project typecheck: FAILED (exit 2) ===
+Dependencies missing. The following is the first 24 lines, not a complete diagnostic log.
+packages/xrift-studio-runtime/src/image-quad.ts(24,8): error TS2307: Cannot find module 'three' or its corresponding type declarations.
+packages/xrift-studio-runtime/src/image-quad.ts(68,10): error TS2339: Property 'add' does not exist on type 'XriftImageQuadObject'.
+packages/xrift-studio-runtime/src/mesh-collider-geometry.ts(1,77): error TS2307: Cannot find module 'three' or its corresponding type declarations.
+packages/xrift-studio-runtime/src/mesh-colliders.tsx(1,30): error TS2307: Cannot find module '@react-three/fiber' or its corresponding type declarations.
+packages/xrift-studio-runtime/src/mesh-colliders.tsx(2,118): error TS2307: Cannot find module 'react' or its corresponding type declarations.
+packages/xrift-studio-runtime/src/mesh-colliders.tsx(3,115): error TS2307: Cannot find module '@react-three/rapier' or its corresponding type declarations.
+packages/xrift-studio-runtime/src/mesh-colliders.tsx(4,38): error TS2307: Cannot find module 'three' or its corresponding type declarations.
+packages/xrift-studio-runtime/src/mesh-colliders.tsx(38,10): error TS2875: This JSX tag requires the module path 'react/jsx-runtime' to exist, but none could be found. Make sure you have types for the appropriate package installed.
+packages/xrift-studio-runtime/src/mesh-colliders.tsx(98,36): error TS2322: Type '{ key: any; projection: any; type: XriftMeshColliderType; surface: { sensor?: boolean | undefined; friction?: number | undefined; restitution?: number | undefined; }; report: any; }' is not assignable to type '{ projection: XriftColliderProjection; type: XriftMeshColliderType; surface: Pick<XriftMeshCollidersProps, "friction" | ... 1 more ... | "sensor">; report(revision: number, state: XriftColliderLoadState): void; }'.
+  Property 'key' does not exist on type '{ projection: XriftColliderProjection; type: XriftMeshColliderType; surface: Pick<XriftMeshCollidersProps, "friction" | ... 1 more ... | "sensor">; report(revision: number, state: XriftColliderLoadState): void; }'.
+packages/xrift-studio-runtime/src/mesh-colliders.tsx(101,5): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+packages/xrift-studio-runtime/src/mesh-colliders.tsx(102,7): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+packages/xrift-studio-runtime/src/mesh-colliders.tsx(102,37): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+packages/xrift-studio-runtime/src/mesh-colliders.tsx(104,5): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+packages/xrift-studio-runtime/src/model-instancing.ts(1,71): error TS2307: Cannot find module 'three' or its corresponding type declarations.
+packages/xrift-studio-runtime/src/model-instancing.ts(31,22): error TS7006: Parameter 'object' implicitly has an 'any' type.
+packages/xrift-studio-runtime/src/model-instancing.ts(45,29): error TS7006: Parameter 'm' implicitly has an 'any' type.
+packages/xrift-studio-runtime/src/model-instancing.ts(81,26): error TS7006: Parameter 'raycaster' implicitly has an 'any' type.
+packages/xrift-studio-runtime/src/model-instancing.ts(81,37): error TS7006: Parameter 'intersections' implicitly has an 'any' type.
+packages/xrift-studio-runtime/src/open-brush/material-extension.ts(13,8): error TS2307: Cannot find module 'three' or its corresponding type declarations.
+packages/xrift-studio-runtime/src/scene/postprocessing.tsx(1,36): error TS2307: Cannot find module '@react-three/fiber' or its corresponding type declarations.
+packages/xrift-studio-runtime/src/scene/postprocessing.tsx(2,44): error TS2307: Cannot find module 'react' or its corresponding type declarations.
+packages/xrift-studio-runtime/src/scene/postprocessing.tsx(11,8): error TS2307: Cannot find module 'three' or its corresponding type declarations.
+packages/xrift-studio-runtime/src/scene/postprocessing.tsx(12,32): error TS2307: Cannot find module 'three/examples/jsm/postprocessing/EffectComposer.js' or its corresponding type declarations.
+
+=== Not executed successfully ===
+Full app build, full compiler fixture suite, browser/Tauri startup/interactive Play, official PhysicsPlayer renderer integration, and runtime shell rebuild.
+The prebuilt public/xrift-runtime-shell is unchanged; see PLAY_COLLIDER_FIX_NOTES.md for rebuild commands.
+
+The Rapier init deprecation warning is from the shipped WASM wrapper and did not fail either physics test.
+
+=== Changed-file whitespace check ===
+PASS: git diff --no-index --check emitted no whitespace errors.
+Dependency manifests/lockfiles and shipped runtime shell byte-for-byte unchanged.

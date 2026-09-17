@@ -66,6 +66,7 @@ export function createModelInstancing(root: Object3D, entityIds: readonly string
         if (group.length < 2) continue;
         const sample = group[0]!.mesh;
         const batch = new InstancedMesh(sample.geometry, sample.material, group.length);
+        batch.userData.xriftColliderExclude = true; // Render-only copies; original meshes own collision.
         batch.name = "xrift-model-instances";
         batch.castShadow = sample.castShadow; batch.receiveShadow = sample.receiveShadow;
         batch.renderOrder = sample.renderOrder; batch.layers.mask = sample.layers.mask;

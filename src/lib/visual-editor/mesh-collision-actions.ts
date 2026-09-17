@@ -1,7 +1,7 @@
 import {
   createMeshColliderComponent, createRigidBodyComponent,
   type SceneDocument, type SceneEntity, type ColliderComponent,
-  type RigidBodyComponent,
+  type RigidBodyComponent, type MeshComponent,
 } from "./scene-document";
 import { createDocumentId } from "./document-id";
 type SceneEntityModelNode = NonNullable<SceneEntity["modelNode"]>;
@@ -11,7 +11,7 @@ export type MeshCollisionAction = "add" | "remove" | "exclusive";
 /** Both shared Model nodes and independently rendered imported nodes have a source mesh. */
 export function colliderModelNode(entity: SceneEntity): SceneEntityModelNode | undefined {
   if (entity.modelNode) return entity.modelNode;
-  const mesh = entity.components.find((c) => c.type === "mesh");
+  const mesh = entity.components.find((c): c is MeshComponent => c.type === "mesh" && c.enabled);
   if (mesh?.geometry?.kind !== "asset" || mesh.geometry.sourceNodeIndex === undefined) return;
   return {
     modelEntityId: entity.id, modelAssetId: mesh.geometry.assetId,
@@ -43,7 +43,7 @@ export function collisionSources(scene: SceneDocument) {
       if (!component.enabled || (component.type !== "collider" &&
         !(component.type === "rigid-body" && component.autoColliders !== "none"))) return [];
       return [{ entityId: entity.id, entityName: entity.name, componentId: component.id,
-        active, label: component.type === "collider"
+        active, isTrigger: component.isTrigger, label: component.type === "collider"
           ? `${component.shape === "mesh" ? "Mesh" : "Box"} Collider${component.isTrigger ? "（Trigger）" : ""}`
           : `自動生成: ${component.autoColliders}${component.isTrigger ? "（Trigger）" : ""}` }];
     });
@@ -57,6 +57,14 @@ export function setMeshCollision(scene: SceneDocument, entityId: string, action:
   if (!collisionAncestors(scene, entityId).every((e) => e.enabled)) {
     throw new Error("このEntityと親を有効にしてから当たり判定を設定してください。");
   }
+  const preferredBody = selected.components.find((c) => c.type === "rigid-body" && c.enabled) ?? selected.components.find((c) => c.type === "rigid-body");
+  const preferredMesh = selected.components.find((c) => c.type === "collider" && c.shape === "mesh" && c.enabled) ?? selected.components.find((c) => c.type === "collider" && c.shape === "mesh");
+  const allEntities = Object.values(scene.entities);
+  // The visible shared Model lives at its root; its proxy nodes are NOT separate
+  // visible meshes. Changing that whole Model must also clear node-level shapes.
+  const sharedModelNodes = allEntities.filter((e) => e.modelNode?.modelEntityId === selected.id);
+  const selectedScope = new Set([selected.id, ...sharedModelNodes.map((e) => e.id)]);
+  const sharedRoots = new Set(allEntities.flatMap((e) => e.modelNode ? [e.modelNode.modelEntityId] : []));
   const entities = { ...scene.entities };
   const edit = (id: string, fn: (components: SceneEntity["components"]) => SceneEntity["components"]) => {
     const entity = entities[id];
@@ -74,20 +82,25 @@ export function setMeshCollision(scene: SceneDocument, entityId: string, action:
     // Cuboid/Ball have different geometry; do not silently replace their shapes with hulls.
     const chain = collisionAncestors(scene, entityId);
     const sharedRootId = selected.modelNode?.modelEntityId;
+    const sharedVisualBodyOwner = sharedRootId ? collisionAncestors(scene, sharedRootId).find((e) => e.components.some((c) => c.type === "rigid-body" && c.enabled)) : undefined;
     const bodyOwner = chain.find((e) => e.components.some((c) => c.type === "rigid-body" && c.enabled));
     const sources: Array<{ entity: SceneEntity; component: ColliderComponent | RigidBodyComponent }> = [];
     for (const entity of chain) {
       for (const c of entity.components) {
         if (!c.enabled) continue;
-        if (c.type === "rigid-body" && entity === bodyOwner && c.autoColliders !== "none") {
+        if (c.type === "rigid-body" && (entity === bodyOwner || entity === sharedVisualBodyOwner) && c.autoColliders !== "none") {
           if (c.autoColliders === "ball" || c.autoColliders === "cuboid") {
+            if (entity.id === entityId && entity.children.length === 0) {
+              edit(entity.id, (cs) => cs.map((entry) => entry.id === c.id ? { ...c, autoColliders: "none" } : entry));
+              continue;
+            }
             throw new Error(`「${entity.name}」の自動${c.autoColliders}を使っています。物理挙動の自動生成を解除し、必要なメッシュを一覧へ追加してください。`);
           }
           sources.push({ entity, component: c });
         }
         if (c.type === "collider" && c.shape === "mesh" &&
           (entity.id === sharedRootId || (!bodyOwner && (entity.id !== entityId || entity.children.length > 0)))) {
-          if (c.bodyType && c.bodyType !== "fixed") throw new Error(`「${entity.name}」は動く衝突判定です。物理挙動の設定元で範囲を分けてください。`);
+          if (!bodyOwner && c.bodyType && c.bodyType !== "fixed") throw new Error(`「${entity.name}」は動く衝突判定です。物理挙動の設定元で範囲を分けてください。`);
           sources.push({ entity, component: c });
         }
       }
@@ -112,7 +125,7 @@ export function setMeshCollision(scene: SceneDocument, entityId: string, action:
       }
       edit(source.entity.id, (cs) => cs.map((entry) => entry.id !== c.id ? entry :
         entry.type === "rigid-body" ? { ...entry, autoColliders: "none" } : { ...entry, enabled: false }));
-      for (const candidate of Object.values(scene.entities)) {
+      for (const candidate of allEntities) {
         if (!hasCollisionMesh(candidate)) continue;
         if (c.type === "collider" && bodyOwner && candidate.modelNode?.modelEntityId !== source.entity.id) continue;
         const ancestry = collisionAncestors(scene, candidate.id);
@@ -120,8 +133,9 @@ export function setMeshCollision(scene: SceneDocument, entityId: string, action:
         if (sourceIndex < 0) continue;
         if (ancestry.slice(0, sourceIndex).some((e) => e.components.some((entry) => entry.type === "rigid-body" && entry.enabled))) continue;
         // Shared Models render at the root, but collision must live on their individual nodes.
-        if (Object.values(scene.entities).some((e) => e.modelNode?.modelEntityId === candidate.id)) continue;
-        if (entities[candidate.id].components.some((entry) => entry.type === "collider" && entry.enabled)) continue;
+        if (sharedRoots.has(candidate.id)) continue;
+        if (selectedScope.has(candidate.id)) continue;
+        if (entities[candidate.id].components.some((entry) => entry.type === "collider" && entry.shape === "mesh" && entry.enabled)) continue;
         edit(candidate.id, (cs) => [...cs, createMeshColliderComponent(createDocumentId("component-collider"), {
           meshMode: c.type === "rigid-body" ? c.autoColliders === "hull" ? "convex" : "trimesh" : c.shape === "mesh" ? c.meshMode : "trimesh",
           isTrigger: c.isTrigger, friction: c.friction, restitution: c.restitution,
@@ -129,14 +143,19 @@ export function setMeshCollision(scene: SceneDocument, entityId: string, action:
       }
     }
   }
-  edit(entityId, (cs) => cs.map((c) => c.type === "collider" && c.enabled ? { ...c, enabled: false } : c));
+  for (const id of selectedScope) {
+    edit(id, (cs) => cs.map((c) =>
+      c.type === "collider" && c.enabled ? { ...c, enabled: false } :
+      c.type === "rigid-body" && c.autoColliders !== "none" ? { ...c, autoColliders: "none" } : c));
+  }
   if (action !== "remove") {
     edit(entityId, (cs) => {
-      const body = cs.find((c) => c.type === "rigid-body");
-      const collider = cs.find((c) => c.type === "collider" && c.shape === "mesh");
+      const body = cs.find((c): c is RigidBodyComponent => c.type === "rigid-body" && c.id === preferredBody?.id) ?? cs.find((c) => c.type === "rigid-body");
+      const collider = cs.find((c): c is Extract<ColliderComponent, { shape: "mesh" }> => c.type === "collider" && c.shape === "mesh" && c.id === preferredMesh?.id) ?? cs.find((c) => c.type === "collider" && c.shape === "mesh");
       return [
         ...cs.map((c) => c === body ? { ...body, enabled: true, bodyType: "fixed" as const, autoColliders: "none" as const, isTrigger: false } :
-          c === collider ? { ...collider, enabled: true, meshMode: "trimesh" as const, isTrigger: false, bodyType: "fixed" as const } : c),
+          c === collider ? { ...collider, enabled: true, meshMode: "trimesh" as const, isTrigger: false, bodyType: "fixed" as const } :
+          c.type === "rigid-body" && c.enabled ? { ...c, enabled: false } : c),
         ...(!body ? [createRigidBodyComponent(createDocumentId("component-rigid-body"), { bodyType: "fixed" })] : []),
         ...(!collider ? [createMeshColliderComponent(createDocumentId("component-collider"), { meshMode: "trimesh" })] : []),
       ];

@@ -1,3 +1,4 @@
+import { XRiftStudioMeshColliders } from "../mesh-colliders.js";
 import { XriftModelInstancing } from "../script/model-instancing.js";
 const EMPTY_INSTANCING_ENTITIES: readonly string[] = [];
 import {
@@ -41,7 +42,6 @@ import {
 import { XriftInteractable as Interactable } from "../script/interactable.js";
 import {
   CuboidCollider,
-  MeshCollider,
   Physics,
   RigidBody,
 } from "@react-three/rapier";
@@ -178,12 +178,12 @@ function XriftRuntimeScene({
     };
   }, [expectedKind, loader, manifest, onError, onLoad]);
 
-  if (!result) return fallback;
   const physicsEnabled = physics ?? expectedKind === "world";
   const dynamicBodies = useMemo(
-    () => (physicsEnabled ? collectRuntimeDynamicBodyEntries(result) : []),
+    () => (physicsEnabled && result ? collectRuntimeDynamicBodyEntries(result) : []),
     [physicsEnabled, result],
   );
+  if (!result) return fallback;
   const content = (
     <>
       <primitive object={result.root} />
@@ -1308,6 +1308,7 @@ function XriftRuntimePhysicsBodies({
           key={entry.id}
           type="fixed"
           colliders={false}
+          userData={{ xriftRigidBodyBoundary: true }}
           position={entry.position}
           rotation={entry.rotation}
           sensor={entry.mesh ? entry.meshSensor : false}
@@ -1316,9 +1317,9 @@ function XriftRuntimePhysicsBodies({
         >
           {entry.mesh ? (
             <group scale={entry.scale}>
-              <MeshCollider type={entry.meshType}>
+              <XRiftStudioMeshColliders type={entry.meshType} sensor={entry.meshSensor} friction={entry.meshFriction} restitution={entry.meshRestitution}>
                 <primitive object={entry.mesh} />
-              </MeshCollider>
+              </XRiftStudioMeshColliders>
             </group>
           ) : null}
           {entry.boxes.map((box, index) => (
@@ -1356,7 +1357,8 @@ function XriftRuntimeDynamicBody({
   return (
     <RigidBody
       type={entry.bodyType}
-      colliders={autoCollider}
+      colliders={false}
+      userData={{ xriftRigidBodyBoundary: true }}
       position={entry.position}
       rotation={entry.rotation}
       sensor={entry.sensor}
@@ -1370,12 +1372,12 @@ function XriftRuntimeDynamicBody({
       lockTranslations={entry.lockTranslations}
       lockRotations={entry.lockRotations}
     >
-      <primitive object={entry.visual} />
+      {autoCollider ? <XRiftStudioMeshColliders type={autoCollider}><primitive object={entry.visual} /></XRiftStudioMeshColliders> : <primitive object={entry.visual} />}
       {entry.mesh ? (
         <group scale={entry.scale}>
-          <MeshCollider type={entry.meshType}>
+          <XRiftStudioMeshColliders type={entry.meshType} sensor={entry.meshSensor} friction={entry.meshFriction} restitution={entry.meshRestitution}>
             <primitive object={entry.mesh} />
-          </MeshCollider>
+          </XRiftStudioMeshColliders>
         </group>
       ) : null}
       {entry.boxes.map((box, index) => (

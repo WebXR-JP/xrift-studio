@@ -351,7 +351,7 @@ export function runVisualCompilerFixtureAssertions(
       // and the grass reference one copy of the height field.
       /<XriftTerrainGeometry terrain=\{XRIFT_TERRAIN_DATA_\w+\}/.test(terrainSource) &&
       /const XRIFT_TERRAIN_DATA_\w+: XriftTerrainGeometryData = \{"width"/.test(terrainSource) &&
-      terrainSource.includes('colliders="trimesh"'),
+      terrainSource.includes('type="trimesh"'),
     "Terrain must compile with its generated geometry and fixed Trimesh Collider",
   );
   const publicationOnlyWorld: VisualCompilerDocuments = {
@@ -948,7 +948,7 @@ export function runVisualCompilerFixtureAssertions(
     "Rapier import was not generated",
   );
   assert(
-    /<RigidBody type="fixed"[^>]*colliders=\{false\}>/.test(colliderSource),
+    /<RigidBody type="fixed"[^>]*colliders=\{false\}[^>]*>/.test(colliderSource),
     "Fixed RigidBody with disabled auto colliders was not generated",
   );
   assert(
@@ -1229,7 +1229,7 @@ export function runVisualCompilerFixtureAssertions(
     "Parent Rigid Body",
   );
   assert(
-    autoParentSource.includes('<MeshCollider type="cuboid">') &&
+    autoParentSource.includes('<XRiftStudioMeshColliders type="cuboid">') &&
       !autoParentSource.includes("<CuboidCollider"),
     "Parent auto-collider mode must generate descendant mesh colliders without a fake origin Box",
   );
@@ -1280,8 +1280,8 @@ export function runVisualCompilerFixtureAssertions(
   );
   assert(
     (nestedParentSource.match(/<RigidBody\b/g) ?? []).length === 2 &&
-      nestedParentSource.includes('<MeshCollider type="hull">') &&
-      !nestedParentSource.includes('<MeshCollider type="cuboid">'),
+      nestedParentSource.includes('<XRiftStudioMeshColliders type="hull">') &&
+      !nestedParentSource.includes('<XRiftStudioMeshColliders type="cuboid">'),
     "A nested Rigid Body must start a new collider ownership boundary",
   );
   const nestedBodyRuntimeResult = compileVisualProject(
@@ -1321,7 +1321,7 @@ export function runVisualCompilerFixtureAssertions(
     )?.content ?? "";
   assert(meshColliderResult.canStage, "Mesh Collider fixture should be stageable");
   assert(
-    /<RigidBody type="fixed"[^>]*colliders="trimesh" sensor=\{false\} friction=\{0\.8\} restitution=\{0\.1\}>/.test(
+    /<RigidBody type="fixed"[^>]*colliders=\{false\}[^>]*sensor=\{false\} friction=\{0\.8\} restitution=\{0\.1\}>/.test(
       meshColliderSource,
     ),
     "Mesh Collider did not generate one fixed trimesh RigidBody",
@@ -1363,7 +1363,7 @@ export function runVisualCompilerFixtureAssertions(
   assert(
     (mixedColliderEntitySource.match(/<RigidBody\b/g) ?? []).length === 1 &&
       (mixedColliderEntitySource.match(/<CuboidCollider\b/g) ?? []).length === 2 &&
-      mixedColliderEntitySource.includes('colliders="trimesh"'),
+      mixedColliderEntitySource.includes('type="trimesh"'),
     "Box and Mesh Colliders must share one trimesh RigidBody",
   );
 
@@ -2296,7 +2296,7 @@ export function runVisualCompilerFixtureAssertions(
     "A Model node inside a parent Rigid Body must still emit its collision geometry",
   );
   assert(
-    !/<MeshCollider[^>]*>\s*<\/MeshCollider>/.test(ownedNodeColliderSource),
+    !/<XRiftStudioMeshColliders[^>]*>\s*<\/MeshCollider>/.test(ownedNodeColliderSource),
     "MeshCollider must never be emitted without the children it wraps",
   );
   // Text fonts: the file is copied for both output modes, and the world must be

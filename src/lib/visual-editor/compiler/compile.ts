@@ -1,3 +1,6 @@
+import meshColliderStatusSource from "../../../../packages/xrift-studio-runtime/src/mesh-collider-status.ts?raw";
+import meshColliderGeometrySource from "../../../../packages/xrift-studio-runtime/src/mesh-collider-geometry.ts?raw";
+import meshCollidersSource from "../../../../packages/xrift-studio-runtime/src/mesh-colliders.tsx?raw";
 import { opacityShaderChunk } from "../material-surface";
 import { createRigidBodyComponent } from "../scene-document";
 import { collectModelInstancingEntities } from "../model-instancing";
@@ -2512,6 +2515,7 @@ function renderOwnedRigidBody(
   const props = [
     `type=${JSON.stringify(component.bodyType)}`,
     "colliders={false}",
+    "userData={{ xriftRigidBodyBoundary: true }}",
     `sensor={${component.isTrigger}}`,
     `friction={${formatNumber(component.friction)}}`,
     `restitution={${formatNumber(component.restitution)}}`,
@@ -2535,6 +2539,17 @@ function renderOwnedRigidBody(
     });
   }
   return `<RigidBody ${props.join(" ")}>\n${indent(children, 1)}\n</RigidBody>`;
+}
+
+/** One implementation for editor Play and exported JSX, including late model loads. */
+function includeReactiveMeshColliders(context: CompileContext): void {
+  context.fiberImports.add("createPortal");
+  for (const name of ["createContext", "useCallback", "useContext", "useEffect", "useLayoutEffect", "useRef", "useState"]) context.reactValueImports.add(name);
+  context.reactTypeImports.add("ReactNode");
+  for (const name of ["BufferGeometry", "InstancedMesh", "Matrix4", "Mesh", "Object3D", "Group"]) context.threeTypeImports.add(name);
+  for (const name of ["BallCollider", "ConvexHullCollider", "CuboidCollider", "TrimeshCollider", "useRapier", "type RapierCollider"]) context.rapierImports.add(name);
+  context.supportDeclarations.set("mesh-colliders", [meshColliderStatusSource, meshColliderGeometrySource, meshCollidersSource]
+    .map((source) => source.replace(/^import.*$/gm, "").replace(/^export /gm, "")).join("\n"));
 }
 
 function renderOwnedColliderContent(
@@ -2600,7 +2615,7 @@ function renderOwnedColliderContent(
   // children are what it wraps, and React's typing requires them. Whatever
   // left this Entity without geometry has already been reported.
   if (meshCollider && renderedChildren) {
-    context.rapierImports.add("MeshCollider");
+    includeReactiveMeshColliders(context);
     const type =
       meshCollider.meshMode === "convex" || bodyType !== "fixed"
         ? "hull"
@@ -2616,10 +2631,10 @@ function renderOwnedColliderContent(
         componentId: meshCollider.id,
       });
     }
-    renderedChildren = `<MeshCollider type=${JSON.stringify(type)}>\n${indent(renderedChildren, 1)}\n</MeshCollider>`;
+    renderedChildren = `<XRiftStudioMeshColliders type=${JSON.stringify(type)} sensor={${meshCollider.isTrigger}} friction={${formatNumber(meshCollider.friction)}} restitution={${formatNumber(meshCollider.restitution)}}>\n${indent(renderedChildren, 1)}\n</XRiftStudioMeshColliders>`;
   }
-  if (autoColliders !== "none" && renderedChildren) {
-    context.rapierImports.add("MeshCollider");
+  if (!meshCollider && autoColliders !== "none" && renderedChildren) {
+    includeReactiveMeshColliders(context);
     const autoColliderType =
       autoColliders === "trimesh" && bodyType !== "fixed"
         ? "hull"
@@ -2634,7 +2649,7 @@ function renderOwnedColliderContent(
         entityId: entity.id,
       });
     }
-    renderedChildren = `<MeshCollider type=${JSON.stringify(autoColliderType)}>\n${indent(renderedChildren, 1)}\n</MeshCollider>`;
+    renderedChildren = `<XRiftStudioMeshColliders type=${JSON.stringify(autoColliderType)}>\n${indent(renderedChildren, 1)}\n</XRiftStudioMeshColliders>`;
   }
   if (boxes.length > 0) context.rapierImports.add("CuboidCollider");
   return [
@@ -2877,27 +2892,23 @@ function renderColliderBody(
     `lockTranslations={${primaryCollider.lockTranslations ?? false}}`,
     `lockRotations={${primaryCollider.lockRotations ?? false}}`,
   ];
-  const rigidBodyProps = meshCollider
-    ? [
-        ...rigidBodySettings,
-        `colliders=${JSON.stringify(
-          meshCollider.meshMode === "convex" || bodyType !== "fixed"
-            ? "hull"
-            : "trimesh",
-        )}`,
-        `sensor={${meshCollider.isTrigger}}`,
-        `friction={${formatNumber(meshCollider.friction)}}`,
-        `restitution={${formatNumber(meshCollider.restitution)}}`,
-      ]
-    : [...rigidBodySettings, "colliders={false}"];
+  const rigidBodyProps = [
+    ...rigidBodySettings, "colliders={false}", "userData={{ xriftRigidBodyBoundary: true }}",
+    `sensor={${primaryCollider.isTrigger}}`,
+    `friction={${formatNumber(primaryCollider.friction)}}`,
+    `restitution={${formatNumber(primaryCollider.restitution)}}`,
+  ];
+  let visualContent = [nodeColliderGeometry, children].filter(Boolean).join("\n");
+  if (meshCollider && visualContent) {
+    includeReactiveMeshColliders(context);
+    const type = meshCollider.meshMode === "convex" || bodyType !== "fixed" ? "hull" : "trimesh";
+    visualContent = `<XRiftStudioMeshColliders type=${JSON.stringify(type)} sensor={${meshCollider.isTrigger}} friction={${formatNumber(meshCollider.friction)}} restitution={${formatNumber(meshCollider.restitution)}}>\n${indent(visualContent, 1)}\n</XRiftStudioMeshColliders>`;
+  }
   const content = [
-    ...boxes.map(
-      (collider) =>
-        `<CuboidCollider args={${vectorProp(collider.halfExtents)}} position={${vectorProp(collider.center)}} sensor={${collider.isTrigger}} friction={${formatNumber(collider.friction)}} restitution={${formatNumber(collider.restitution)}} />`,
-    ),
-    ...(nodeColliderGeometry ? [nodeColliderGeometry] : []),
-    ...(children ? [children] : []),
-  ].join("\n");
+    visualContent,
+    ...boxes.map((collider) =>
+      `<CuboidCollider args={${vectorProp(collider.halfExtents)}} position={${vectorProp(collider.center)}} sensor={${collider.isTrigger}} friction={${formatNumber(collider.friction)}} restitution={${formatNumber(collider.restitution)}} />`),
+  ].filter(Boolean).join("\n");
   return `<RigidBody ${rigidBodyProps.join(" ")}>\n${indent(content, 1)}\n</RigidBody>`;
 }
 

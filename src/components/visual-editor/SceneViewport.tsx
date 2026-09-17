@@ -1,3 +1,5 @@
+import { XRiftStudioMeshColliders, XriftColliderLoadContext } from "../../../packages/xrift-studio-runtime/src/mesh-colliders";
+import { bakeXriftColliderGeometry } from "../../../packages/xrift-studio-runtime/src/mesh-collider-geometry";
 import { SceneContextMenu, type SceneContextMenuProps } from "./SceneContextMenu";
 import { createWorldPlaySeatStore } from "./world-play-seat-store";
 import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
@@ -26,11 +28,8 @@ import {
   TransformControls,
 } from "@react-three/drei";
 import {
-  ConvexHullCollider,
   CuboidCollider,
-  MeshCollider,
   RigidBody,
-  TrimeshCollider,
 } from "@react-three/rapier";
 import { SpawnPoint } from "@xrift/world-components";
 import { TextPanelVisual } from "./TextPanelVisual";
@@ -305,12 +304,15 @@ import {
   useWorldPlayUsers,
   type WorldPlayLockFailure,
 } from "./WorldPlayPlayer";
+import { WorldPlayPhysicsWarmup } from "./WorldPlayPhysicsWarmup";
 import { resolveWorldPlayCapsuleSpawn } from "./world-play-spawn";
 import {
   SceneModelLoadTrackerContext,
+  SceneModelLoadCommit,
   createSceneModelLoadTracker,
   useSceneModelLoadReport,
   useWorldPlaySceneReady,
+  useSceneModelLoadErrors,
 } from "./scene-model-load-tracker";
 import { ScrubNumberInput } from "./ScrubNumberInput";
 import { useEditorDevice } from "./useEditorDevice";
@@ -635,7 +637,6 @@ function MeshVisual({
   // Play waits for this: a model that is still loading has no Collider yet, and
   // a player dropped into a floorless Scene starts the session inside the
   // ground the model was about to bring with it.
-  const reportModelLoad = useSceneModelLoadReport();
   const geometryAssetId =
     component.geometry?.kind === "asset"
       ? component.geometry.assetId
@@ -659,6 +660,19 @@ function MeshVisual({
     geometry?.kind === "model"
       ? resolveProjectModelSource(geometry, projectPath)
       : undefined;
+  // Register async models as pending in the layout phase; do not rely on
+  // their first passive load-state callback arriving before the quiet timer.
+  const reportModelLoad = useSceneModelLoadReport({
+    status: !component.enabled || primitive || terrain ? "ready" : "loading",
+  });
+  useEffect(() => {
+    if (!component.enabled || primitive || terrain) {
+      reportModelLoad({ status: "ready" });
+    } else if (!projectModelSource || !projectPath) {
+      reportModelLoad({ status: "error", message: "描画と当たり判定に使うModelを読み込めません" });
+    }
+    // Valid project models report their asynchronous load through the child.
+  }, [component.enabled, primitive, terrain, projectModelSource, projectPath, reportModelLoad]);
   const assignedModelMaterials = useMemo(
     () => {
       if (geometry?.kind !== "model") return [];
@@ -790,7 +804,7 @@ function MeshVisual({
 
   return (
     <RenderDistanceGate maxDistance={component.maxDistance} renderOrder={component.renderOrder}>
-      <mesh castShadow={false} receiveShadow={false}>
+      <mesh castShadow={false} receiveShadow={false} userData={{ xriftColliderExclude: true }}>
         <boxGeometry args={[1, 1, 1]} />
         <meshBasicMaterial
           color={geometry?.kind === "model" ? "#71717a" : "#fb7185"}
@@ -1845,7 +1859,6 @@ function extractModelNodeColliderGeometry(
   const nodeInverse = new Matrix4().copy(node.matrixWorld).invert();
   const positions: number[] = [];
   const indices: number[] = [];
-  const vertex = new Vector3();
   const visit = (object: Object3D, isNodeRoot: boolean) => {
     if (!isNodeRoot) {
       const candidateIndex =
@@ -1861,19 +1874,10 @@ function extractModelNodeColliderGeometry(
         object.matrixWorld,
       );
       const offset = positions.length / 3;
-      for (let index = 0; index < position.count; index += 1) {
-        vertex.fromBufferAttribute(position, index).applyMatrix4(toNodeLocal);
-        positions.push(vertex.x, vertex.y, vertex.z);
-      }
-      const meshIndex = geometry.getIndex();
-      if (meshIndex) {
-        for (let index = 0; index < meshIndex.count; index += 1) {
-          indices.push(offset + meshIndex.getX(index));
-        }
-      } else {
-        for (let index = 0; index < position.count; index += 1) {
-          indices.push(offset + index);
-        }
+      const baked = bakeXriftColliderGeometry(position, geometry.getIndex(), toNodeLocal.elements, toNodeLocal.determinant() < 0);
+      if (baked) {
+        for (const value of baked.vertices) positions.push(value);
+        for (const index of baked.indices) indices.push(offset + index);
       }
     }
     for (const child of object.children) visit(child, false);
@@ -1901,38 +1905,43 @@ function useModelNodeColliderGeometry(
     collisionAsset?.kind === "model" ? collisionAsset : undefined;
   const asset = assets.assets[modelNode.modelAssetId];
   const modelAsset =
-    collisionModel ?? (asset?.kind === "model" ? asset : undefined);
+    collisionModelAssetId ? collisionModel : (asset?.kind === "model" ? asset : undefined);
   // 焼き出したModelはNodeが1つだけなので、常に先頭を使う。
   const sourceNodeIndex = collisionModel ? 0 : modelNode.sourceNodeIndex;
   const sourceRelativePath = modelAsset
     ? resolveProjectModelSource(modelAsset, projectPath)
     : undefined;
   const sourceHash = modelAsset?.sourceHash;
-  const [modelObject, setModelObject] = useState<Object3D | null>(null);
+  const sourceKey = `${projectPath ?? ""}\n${sourceRelativePath ?? ""}\n${sourceHash ?? ""}\n${sourceNodeIndex}`;
+  const [loaded, setLoaded] = useState<{ key: string; geometry: ModelNodeColliderGeometryData } | null>(null);
+  const reportCollisionLoad = useSceneModelLoadReport({ status: "loading" });
   useEffect(() => {
+    setLoaded(null);
     if (!projectPath || !sourceRelativePath) {
-      setModelObject(null);
+      reportCollisionLoad({ status: "error", message: "当たり判定のModelが見つかりません" });
       return;
     }
     let active = true;
+    reportCollisionLoad({ status: "loading" });
     void loadProjectModelData(projectPath, sourceRelativePath, sourceHash)
       .then((data) => {
-        if (active) setModelObject(data.object);
+        if (!active) return;
+        const geometry = extractModelNodeColliderGeometry(data.object, sourceNodeIndex);
+        if (!geometry) throw new Error("当たり判定に使えるメッシュがModel内に見つかりません");
+        setLoaded({ key: sourceKey, geometry });
+        reportCollisionLoad({ status: "ready" });
       })
-      .catch(() => {
-        if (active) setModelObject(null);
+      .catch((error: unknown) => {
+        if (!active) return;
+        setLoaded(null);
+        const message = error instanceof Error ? error.message : String(error);
+        reportCollisionLoad({ status: "error", message });
+        console.error("当たり判定のModelを読み込めませんでした:", error);
       });
-    return () => {
-      active = false;
-    };
-  }, [projectPath, sourceHash, sourceRelativePath]);
-  return useMemo(
-    () =>
-      modelObject
-        ? extractModelNodeColliderGeometry(modelObject, sourceNodeIndex)
-        : null,
-    [modelObject, sourceNodeIndex],
-  );
+    return () => { active = false; };
+  }, [projectPath, sourceHash, sourceRelativePath, sourceNodeIndex, sourceKey, reportCollisionLoad]);
+  // Never render the previous node's shape while the next node is loading.
+  return loaded?.key === sourceKey ? loaded.geometry : null;
 }
 
 /**
@@ -1942,6 +1951,7 @@ function useModelNodeColliderGeometry(
  * triangles instead; Rapier applies the Entity's world scale to the args.
  */
 function ModelNodeMeshColliderShapes({
+  bodyType,
   modelNode,
   collider,
   assets,
@@ -1949,6 +1959,7 @@ function ModelNodeMeshColliderShapes({
 }: {
   modelNode: SceneEntityModelNode;
   collider: Extract<ColliderComponent, { shape: "mesh" }>;
+  bodyType?: RigidBodyComponent["bodyType"];
   assets: AssetManifest;
   projectPath?: string;
 }) {
@@ -1959,21 +1970,22 @@ function ModelNodeMeshColliderShapes({
     collider.collisionModelAssetId,
   );
   if (!geometry) return null;
-  const bodyIsFixed = (collider.bodyType ?? "fixed") === "fixed";
-  return collider.meshMode === "convex" || !bodyIsFixed ? (
-    <ConvexHullCollider
-      args={[geometry.vertices]}
+  const bodyIsFixed = (bodyType ?? collider.bodyType ?? "fixed") === "fixed";
+  return (
+    <XRiftStudioMeshColliders
+      type={collider.meshMode === "convex" || !bodyIsFixed ? "hull" : "trimesh"}
       friction={collider.friction}
       restitution={collider.restitution}
       sensor={collider.isTrigger}
-    />
-  ) : (
-    <TrimeshCollider
-      args={[geometry.vertices, geometry.indices]}
-      friction={collider.friction}
-      restitution={collider.restitution}
-      sensor={collider.isTrigger}
-    />
+    >
+      <mesh>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[geometry.vertices, 3]} />
+          <bufferAttribute attach="index" args={[geometry.indices, 1]} />
+        </bufferGeometry>
+        <meshBasicMaterial visible={false} />
+      </mesh>
+    </XRiftStudioMeshColliders>
   );
 }
 
@@ -2084,20 +2096,15 @@ function RuntimePhysicsEntity({
   );
   // A shared-Model node has no meshes of its own for Rapier to sweep; its
   // Mesh Collider arrives as explicit baked shapes through children instead.
-  const autoMeshCollider = entity.modelNode || meshCollider?.collisionModelAssetId ? undefined : meshCollider;
+  const autoMeshCollider = entity.modelNode || (meshCollider?.collisionModelAssetId && colliderModelNode(entity)) ? undefined : meshCollider;
   const primaryCollider = meshCollider ?? colliders[0]!;
   const bodyType = primaryCollider.bodyType ?? "fixed";
 
   return (
     <RigidBody
       type={bodyType}
-      colliders={
-        autoMeshCollider
-          ? autoMeshCollider.meshMode === "convex" || bodyType !== "fixed"
-            ? "hull"
-            : "trimesh"
-          : false
-      }
+      colliders={false}
+      userData={{ xriftRigidBodyBoundary: true }}
       gravityScale={primaryCollider.gravityScale ?? 1}
       linearDamping={primaryCollider.linearDamping ?? 0}
       angularDamping={primaryCollider.angularDamping ?? 0}
@@ -2109,7 +2116,14 @@ function RuntimePhysicsEntity({
       restitution={primaryCollider.restitution}
       sensor={primaryCollider.isTrigger}
     >
-      {children}
+      {autoMeshCollider ? (
+        <XRiftStudioMeshColliders
+          type={autoMeshCollider.meshMode === "convex" || bodyType !== "fixed" ? "hull" : "trimesh"}
+          sensor={autoMeshCollider.isTrigger}
+          friction={autoMeshCollider.friction}
+          restitution={autoMeshCollider.restitution}
+        >{children}</XRiftStudioMeshColliders>
+      ) : children}
       {colliders.map((collider) =>
         collider.shape === "box" ? (
           <CuboidCollider
@@ -2147,9 +2161,12 @@ function RuntimeOwnedColliderContent({
   let renderedChildren = children;
   // A shared-Model node's Mesh Collider ships explicit baked shapes through
   // children; wrapping its empty subtree here would generate nothing.
-  if (meshCollider && !entity.modelNode && !meshCollider.collisionModelAssetId) {
+  if (meshCollider && !entity.modelNode && !(meshCollider.collisionModelAssetId && colliderModelNode(entity))) {
     renderedChildren = (
-      <MeshCollider
+      <XRiftStudioMeshColliders
+        sensor={meshCollider.isTrigger}
+        friction={meshCollider.friction}
+        restitution={meshCollider.restitution}
         type={
           meshCollider.meshMode === "convex" || bodyType !== "fixed"
             ? "hull"
@@ -2157,16 +2174,16 @@ function RuntimeOwnedColliderContent({
         }
       >
         {renderedChildren}
-      </MeshCollider>
+      </XRiftStudioMeshColliders>
     );
   }
-  if (autoColliders !== "none") {
+  if (!meshCollider && autoColliders !== "none") {
     const autoColliderType =
       autoColliders === "trimesh" && bodyType !== "fixed"
         ? "hull"
         : autoColliders;
     renderedChildren = (
-      <MeshCollider type={autoColliderType}>{renderedChildren}</MeshCollider>
+      <XRiftStudioMeshColliders type={autoColliderType}>{renderedChildren}</XRiftStudioMeshColliders>
     );
   }
 
@@ -2199,6 +2216,7 @@ function RuntimeOwnedRigidBody({
   return (
     <RigidBody
       type={component.bodyType}
+      userData={{ xriftRigidBodyBoundary: true }}
       colliders={false}
       sensor={component.isTrigger}
       friction={component.friction}
@@ -2423,6 +2441,7 @@ function EntityObject({
     physicsEnabled && collisionNode && modelNodeMeshCollider ? (
       <ModelNodeMeshColliderShapes
         modelNode={collisionNode!}
+        bodyType={rigidBodyOwner?.bodyType}
         collider={modelNodeMeshCollider}
         assets={assets}
         projectPath={projectPath}
@@ -2461,7 +2480,7 @@ function EntityObject({
         position={transform?.position ?? [0, 0, 0]}
         rotation={transform?.rotation ?? [0, 0, 0]}
         scale={transform?.scale ?? [1, 1, 1]}
-        userData={{ authoringEntityId, renderedEntityId: entity.id }}
+        userData={{ authoringEntityId, renderedEntityId: entity.id, xriftCollisionDisabled: !effectivelyEnabled }}
       >
         <OfficialXriftEntityWrappers
           components={xriftWrapperComponents}
@@ -5039,9 +5058,12 @@ export function SceneViewport({
   const [playAimHit, setPlayAimHit] = useState(false);
   const [playLockRefused, setPlayLockRefused] =
     useState<WorldPlayLockFailure | null>(null);
-  // Created once for the viewport: the tracker outlives a Play session so
-  // entering Play never races the Scene's models registering themselves.
-  const [sceneModelLoads] = useState(createSceneModelLoadTracker);
+  // A new tracker per mode rejects late callbacks from the previous session.
+  // Its mount barrier also waits for the Physics/Suspense subtree to commit.
+  const sceneModelLoads = useMemo(() => createSceneModelLoadTracker({ waitForSceneMount: true }), [editorMode]);
+  const playLoadErrors = useSceneModelLoadErrors(sceneModelLoads);
+  const [warmPhysicsTracker, setWarmPhysicsTracker] = useState<typeof sceneModelLoads | null>(null);
+  const handlePhysicsReady = useCallback(() => setWarmPhysicsTracker(sceneModelLoads), [sceneModelLoads]);
   const playGrabStore = useWorldPlayGrabStore();
   const [playSeatStore] = useState(createWorldPlaySeatStore);
   const playUsers = useWorldPlayUsers();
@@ -5306,6 +5328,7 @@ export function SceneViewport({
     sceneModelLoads,
     worldPlayActive,
   );
+  const playRuntimeReady = playSceneReady && warmPhysicsTracker === sceneModelLoads;
   const modelProxyVisible = useMemo(
     () => hasModelProxy(preview.scene, assets, projectPath),
     [assets, preview.scene, projectPath],
@@ -6906,6 +6929,8 @@ export function SceneViewport({
 
           <OfficialXriftPreviewProvider
             withPhysics
+            physicsSessionKey={editorMode}
+            physicsPaused={editorMode !== "play" || (worldPlayActive && !playSceneReady)}
             gravity={
               // Scene settings hold gravity as a positive magnitude, matching
               // xrift.json, so Play applies the same number the published
@@ -6923,6 +6948,7 @@ export function SceneViewport({
             usersImplementation={playUsers.implementation}
             seatImplementation={playSeatStore.contextValue}
           >
+            <WorldPlayPhysicsWarmup active={worldPlayActive && playSceneReady} onReady={handlePhysicsReady} />
             {/* A World player aims from the crosshair, exactly as a published
                 world does; an Item has no player, so its Play keeps the free
                 pointer. */}
@@ -6947,6 +6973,7 @@ export function SceneViewport({
               {/* Inside the Canvas, because the Scene's models are: the
                   renderer keeps its own React root, so a provider outside it
                   never reaches them. */}
+              <XriftColliderLoadContext.Provider value={sceneModelLoads}>
               <SceneModelLoadTrackerContext.Provider value={sceneModelLoads}>
                 <SceneEntityTreeProvider
                   input={entityTreeInput}
@@ -6957,7 +6984,9 @@ export function SceneViewport({
                     <SceneEntityHierarchy key={entityId} entityId={entityId} />
                   ))}
                 </SceneEntityTreeProvider>
+                <SceneModelLoadCommit tracker={sceneModelLoads} />
               </SceneModelLoadTrackerContext.Provider>
+              </XriftColliderLoadContext.Provider>
               {terrainEditing && terrainBrushTarget ? (
                 <TerrainBrushCursorBinding
                   terrain={terrainBrushTarget.terrain}
@@ -6968,7 +6997,7 @@ export function SceneViewport({
                   hoverRef={terrainHoverRef}
                 />
               ) : null}
-              {worldPlayActive && playSceneReady ? (
+              {worldPlayActive && playRuntimeReady ? (
                 <WorldPlayPlayer
                   spawnPosition={playCapsuleSpawn}
                   spawnYaw={runtimeSpawn.yaw}
@@ -7104,10 +7133,10 @@ export function SceneViewport({
 
         {/* The player's aim, drawn by the same component a published world
             shows, so what is in reach here is what is in reach after upload. */}
-        {worldPlayActive && playSceneReady && !thumbnailCaptureActive ? (
+        {worldPlayActive && playRuntimeReady && !thumbnailCaptureActive ? (
           <WorldPlayCrosshair active={playAimHit} />
         ) : null}
-        {tablet && worldPlayActive && playSceneReady && !thumbnailCaptureActive ? (
+        {tablet && worldPlayActive && playRuntimeReady && !thumbnailCaptureActive ? (
           <WorldPlayTouchControls viewportRef={viewportRef} canInteract={playAimHit} />
         ) : null}
 
@@ -7121,8 +7150,10 @@ export function SceneViewport({
                 role="status"
                 aria-live="polite"
               >
-                {!playSceneReady
-                  ? "3Dモデルを読み込み中…"
+                {!playRuntimeReady
+                  ? playLoadErrors.length > 0
+                    ? `Playを開始できません: ${playLoadErrors[0]}。停止して対象のModel・Colliderを確認してください`
+                    : "モデルと当たり判定を準備中…"
                   : tablet
                     ? "中央の照準を合わせて「操作」を押すと、対象を操作できます"
                     : playLockRefused === "unsupported"

@@ -1,0 +1,59 @@
+前回段階の実行記録です。最終版の実行結果は PLAY_COLLIDER_TEST_RESULTS.txt を参照してください。
+
+## unit-tests.log
+{
+  "status": "passed",
+  "suite": "geometry",
+  "typescript": "5.8.3",
+  "assertions": 24
+}
+{
+  "status": "passed",
+  "suite": "collision",
+  "typescript": "5.8.3",
+  "assertions": 46
+}
+{
+  "status": "passed",
+  "suite": "hierarchy",
+  "typescript": "5.8.3",
+  "cases": 20,
+  "assertions": 290
+}
+{
+  "status": "passed",
+  "suite": "authoring",
+  "typescript": "5.8.3",
+  "assertions": 42
+}
+
+
+## physics-tests.log
+using deprecated parameters for the initialization function; pass a single object instead
+{
+  "status": "passed",
+  "engine": "Rapier 0.19.2 (bundled WASM)",
+  "typescript": "5.8.3",
+  "cases": [
+    "solid-trimesh-landing-and-removal",
+    "trigger-is-not-a-walkable-floor",
+    "trigger-reenabled-as-solid",
+    "translated-scaled-imported-floor",
+    "mirrored-floor",
+    "concave-floor-keeps-hole",
+    "late-load-and-shape-replacement",
+    "wall-contact",
+    "kinematic-character-controller-grounded"
+  ],
+  "assertions": 22
+}
+
+
+## source-checks.log
+{
+  "status": "passed",
+  "kind": "syntax-and-wiring-only",
+  "typescript": "5.8.3",
+  "files": 13,
+  "assertions": 21
+}

@@ -1,3 +1,6 @@
+import { runSceneLoadStateFixtureAssertions } from "../src/components/visual-editor/scene-load-state.fixture.ts";
+import { runMeshColliderGeometryFixtureAssertions } from "../src/lib/visual-editor/mesh-collider-geometry.fixture.ts";
+import { runMeshCollisionActionsFixtureAssertions } from "../src/lib/visual-editor/mesh-collision-actions.fixture.ts";
 import { runAuthoringWorkflowFixtureAssertions } from "../src/lib/visual-editor/authoring-workflow.fixture.ts";
 import { runHierarchyTransferFixtureAssertions } from "../src/lib/visual-editor/hierarchy-transfer.fixture.ts";
 import { runEditorUiDefaultsFixtureAssertions } from "../src/components/visual-editor/editor-ui-defaults.fixture.ts";
@@ -347,6 +350,9 @@ try {
 
   await convertRichWorld(fixtureRoot);
   await runFixtureSuites([
+    ["Play scene readiness", runSceneLoadStateFixtureAssertions],
+    ["Mesh collider geometry", runMeshColliderGeometryFixtureAssertions],
+    ["Mesh collision actions", runMeshCollisionActionsFixtureAssertions],
     ["Authoring workflow", runAuthoringWorkflowFixtureAssertions],
     ["Hierarchy transfer", runHierarchyTransferFixtureAssertions],
     ["Interactable late model layers", runInteractableLayerFixtureAssertions],
