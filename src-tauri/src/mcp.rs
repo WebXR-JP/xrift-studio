@@ -3357,6 +3357,19 @@ fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "decide_fast_authoring",
+            "description": "Use the user's configured TypeSafe Jev API to make fast bounded choices for a world: Terrain preset, mood, density, and up to three existing XRift Scene Recipes plus placement slots. Jev only selects from candidates XRift Studio supplies; it cannot invent tool names, recipe IDs, coordinates, code, or delete anything. This tool does not mutate the Scene. It returns a decisionTrace and an ordered MCP action plan built only from existing XRift tools. Execute returned actions in order, adding the latest projectId, sceneId and expectedRevision before each write. If Jev is not configured, ask the person to enter their TypeSafe API key in Studio's AI connection panel.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "prompt": { "type": "string", "description": "Short description of the world to build." },
+                    "maxGimmicks": { "type": "integer", "minimum": 1, "maximum": 3, "description": "Maximum Scene Recipes to select; defaults to 3." }
+                },
+                "required": ["prompt"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "search_external_assets",
             "description": "Search the Poly Haven or ambientCG catalog for CC0 models (furniture, seating, props, plants, shrubs, flowers, rocks, lighting fixtures, modular building parts, industrial equipment), PBR textures/materials, and HDRIs. Matches the query against name, description, category and tags. Model results carry polycount and dimensionsMm (width, depth, height in millimetres): compare polycount with the budget set for the world and dimensionsMm with the space the model goes into. Poly Haven trees are photogrammetry in the millions of triangles; make trees in Blender or from lighter parts instead. Returns external IDs for get_external_asset_options and install_external_asset.",
             "inputSchema": {
