@@ -59,6 +59,53 @@ export function runJevFastAuthoringFixtureAssertions(): void {
     "official xrift.spawn-point should resolve to the same Transform",
   );
 
+  const rotatedScene = {
+    ...project.scene,
+    entities: {
+      ...project.scene.entities,
+      [legacySpawnEntity.id]: {
+        ...legacySpawnEntity,
+        components: legacySpawnEntity.components.map((component) =>
+          component.type === "transform"
+            ? {
+                ...component,
+                rotation: [0, Math.PI / 2, 0] as [number, number, number],
+              }
+            : component,
+        ),
+      },
+    },
+  };
+  const rotatedPlanned = buildFastAuthoringRequest({
+    prompt: "Spawnの前に操作ボタンを置く",
+    scene: rotatedScene,
+    projectName: project.project.metadata.name,
+    sceneName: rotatedScene.name,
+  });
+  const rotatedDecision = resolveFastAuthoringDecision({
+    response: {
+      answers: {
+        editScope: { choice: "append" },
+        detail: { choice: "focused" },
+        interaction1: { choice: SCENE_RECIPE_IDS.soundButton },
+        interaction1Count: { choice: "one" },
+        interaction1Placement: { choice: "near-spawn" },
+        interaction1Zone: { choice: "entrance" },
+      },
+    },
+    scene: rotatedScene,
+    catalog: rotatedPlanned.catalog,
+  });
+  const rotatedNearSpawn = rotatedDecision.recipes.find(
+    (recipe) => recipe.recipeId === SCENE_RECIPE_IDS.soundButton,
+  );
+  assert(rotatedNearSpawn, "rotated Spawn fixture should place the requested recipe");
+  const rotatedSpawn = findFastAuthoringSpawnPosition(rotatedScene);
+  assert(
+    rotatedSpawn[0] - rotatedNearSpawn.position[0] > 0.5,
+    "near-spawn placement should follow Spawn yaw instead of fixed world -Z",
+  );
+
   const planned = buildFastAuthoringRequest({
     prompt:
       "広い霧の庭園。竹林、岩、木、ベンチ、街灯、温泉、しかけを大量に使って作り込む",
