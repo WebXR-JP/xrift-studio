@@ -5317,6 +5317,12 @@ export function VisualEditorPrototype({
                   "を" +
                   selected.placement +
                   "へ配置",
+                postPlacement: {
+                  rotation: selected.rotation,
+                  scale: selected.scale,
+                  instructions:
+                    "apply_scene_recipeのrootEntityIdへupdate_transformで適用",
+                },
               });
             }
             for (const facility of decision.facilities) {
@@ -5357,6 +5363,7 @@ export function VisualEditorPrototype({
                   skybox: decision.skybox,
                   finish: decision.finish,
                   wind: decision.wind,
+                  humanize: decision.humanize,
                   recipes: decision.recipes,
                   facilities: decision.facilities,
                   primitives: decision.primitives,
@@ -5397,7 +5404,7 @@ export function VisualEditorPrototype({
                   avoidExistingEntities: true,
                   groundToTerrain: true,
                   instructions:
-                    "actionPlanを上から順に実行してください。各書き込み前にget_editor_contextで最新projectId、sceneId、expectedRevisionを補ってください。Terrainを作成または既存Terrainを使う場合、terrainSurfacePlanとgrassPlanを同じTerrainへ適用してください。skyboxPlan.modeがshaderならcreate_material_from_preset(kind=sky)の結果materialAssetIdを、続くupdate_scene_settings.skybox.materialAssetIdへ指定してください。Scene Recipe・公式設備・Primitiveの配置前にsample_terrain_pointでXZ地点のworldPosition.yを取得して接地してください。primitivePlanの各要素はcreate_primitiveの結果entityIdへupdate_transformでscaleを反映してください。facilityPlanのconfigurationHintがある設備は配置後に設定を確認してください。最後にcapture_scene_viewでScene全体を確認してください。",
+                    "actionPlanを上から順に実行してください。各書き込み前にget_editor_contextで最新projectId、sceneId、expectedRevisionを補ってください。Terrainを作成または既存Terrainを使う場合、terrainSurfacePlanとgrassPlanを同じTerrainへ適用してください。skyboxPlan.modeがshaderならcreate_material_from_preset(kind=sky)の結果materialAssetIdを、続くupdate_scene_settings.skybox.materialAssetIdへ指定してください。Scene Recipe・公式設備・Primitiveの配置前にsample_terrain_pointでXZ地点のworldPosition.yを取得して接地してください。primitivePlanの各要素はcreate_primitiveの結果entityIdへupdate_transformでscaleを反映してください。各apply_scene_recipeのpostPlacementにrotationまたはscaleの差がある場合は、返されたrootEntityIdへupdate_transformで適用してください。facilityPlanのconfigurationHintがある設備は配置後に設定を確認してください。最後にcapture_scene_viewでScene全体を確認してください。",
                 },
               },
             });
@@ -8395,6 +8402,27 @@ export function VisualEditorPrototype({
             setSelectedEntityIds([placed.rootEntityId]);
             setSelectedAssetIds([]);
             setSaveStatus("dirty");
+
+            const hasHumanizedRotation = selected.rotation.some(
+              (value) => Math.abs(value) > 0.0001,
+            );
+            const hasHumanizedScale = selected.scale.some(
+              (value) => Math.abs(value - 1) > 0.0001,
+            );
+            if (hasHumanizedRotation || hasHumanizedScale) {
+              commitToolOutcome(
+                "update_transform",
+                {
+                  entityId: placed.rootEntityId,
+                  ...(hasHumanizedRotation
+                    ? { rotation: selected.rotation }
+                    : {}),
+                  ...(hasHumanizedScale ? { scale: selected.scale } : {}),
+                },
+                true,
+              );
+            }
+
             generatedPlacements.push({
               entityId: placed.rootEntityId,
               groundOffset: 0,
