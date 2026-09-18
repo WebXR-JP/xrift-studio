@@ -5323,7 +5323,9 @@ export function VisualEditorPrototype({
             const spawnEntity = Object.values(currentBundle.scene.entities).find(
               (entity) =>
                 entity.components.some(
-                  (component) => component.type === "spawn-point",
+                  (component) =>
+                    component.type === "xrift-component" &&
+                    component.schemaId === "xrift.spawn-point",
                 ),
             );
             const spawnPosition = spawnEntity
