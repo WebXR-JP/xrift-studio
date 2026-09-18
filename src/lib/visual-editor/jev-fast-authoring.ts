@@ -1,6 +1,12 @@
 import {
+  BUILTIN_PREFAB_RECIPE_IDS,
+  listBuiltinPrefabRecipes,
+} from "./builtin-prefab-catalog";
+import {
   getSceneRecipeShelf,
   getSceneRecipesForProjectKind,
+  type SceneRecipe,
+  type SceneRecipeCategory,
 } from "./scene-recipe-catalog";
 import { TERRAIN_PRESETS } from "./terrain-presets";
 import {
@@ -9,25 +15,54 @@ import {
   type Vec3,
 } from "./scene-document";
 
+export const FAST_AUTHORING_MAX_RECIPES = 6;
+export const FAST_AUTHORING_MAX_FACILITIES = 2;
+export const FAST_AUTHORING_MAX_PRIMITIVES = 2;
+
 export type FastAuthoringPlacement =
   | "center"
   | "near-spawn"
+  | "front-left"
+  | "front-right"
   | "left"
   | "right"
+  | "back-left"
+  | "back-right"
   | "far"
-  | "perimeter";
+  | "perimeter-left"
+  | "perimeter-right";
 export type FastAuthoringMood = "daylight" | "sunset" | "night" | "foggy";
 export type FastAuthoringDensity = "sparse" | "balanced" | "lively";
+export type FastAuthoringScale = "compact" | "balanced" | "wide";
+export type FastAuthoringComposition =
+  | "focal-center"
+  | "open-center"
+  | "path"
+  | "ring"
+  | "layered"
+  | "natural";
 export type FastAuthoringPrimitiveHelper =
   | "none"
   | "platform"
   | "path-marker"
-  | "rest-step";
+  | "rest-step"
+  | "low-wall"
+  | "pedestal";
+
 export type FastAuthoringTraceItem = { label: string; value: string };
 export type FastAuthoringRecipeDecision = {
+  role: string;
   recipeId: string;
   placement: FastAuthoringPlacement;
   position: Vec3;
+};
+export type FastAuthoringFacilityDecision = {
+  recipeId: string;
+  name: string;
+  placement: FastAuthoringPlacement;
+  position: Vec3;
+  heightOffset: number;
+  configurationHint: string | null;
 };
 export type FastAuthoringPrimitiveDecision = {
   kind: Exclude<FastAuthoringPrimitiveHelper, "none">;
@@ -40,21 +75,83 @@ export type FastAuthoringDecision = {
   terrain: string;
   mood: FastAuthoringMood;
   density: FastAuthoringDensity;
+  scale: FastAuthoringScale;
+  composition: FastAuthoringComposition;
   recipes: FastAuthoringRecipeDecision[];
-  primitive: FastAuthoringPrimitiveDecision | null;
+  facilities: FastAuthoringFacilityDecision[];
+  primitives: FastAuthoringPrimitiveDecision[];
   decisionTrace: FastAuthoringTraceItem[];
 };
+
+type FastAuthoringRecipeRole = {
+  id: string;
+  label: string;
+  instruction: string;
+  categories?: readonly SceneRecipeCategory[];
+  tutorialGroups?: readonly string[];
+};
+
+export const FAST_AUTHORING_RECIPE_ROLES: readonly FastAuthoringRecipeRole[] = [
+  {
+    id: "signature",
+    label: "主役",
+    instruction:
+      "このワールドを一目で説明できる主役を1つ選んでください。不要ならnone。",
+  },
+  {
+    id: "landscape",
+    label: "景観",
+    instruction:
+      "自然・水・建物など、場所らしさを作る景観要素を1つ選んでください。不要ならnone。",
+    categories: ["nature", "water", "structure", "weather"],
+  },
+  {
+    id: "furniture",
+    label: "家具・設備",
+    instruction:
+      "人が使う家具、休憩、建築部品など、空間を成立させる要素を1つ選んでください。不要ならnone。",
+    categories: ["furniture", "structure"],
+  },
+  {
+    id: "lighting",
+    label: "照明",
+    instruction:
+      "時間帯と主役を補う灯りや発光表現を1つ選んでください。明るい昼など不要ならnone。",
+    categories: ["light"],
+    tutorialGroups: ["照明・発光"],
+  },
+  {
+    id: "atmosphere",
+    label: "天気・演出",
+    instruction:
+      "雪、雨、霧、花びら、魔法など、空気感を強める演出を1つ選んでください。不要ならnone。",
+    categories: ["weather", "effect", "nature"],
+    tutorialGroups: ["パーティクル"],
+  },
+  {
+    id: "interaction",
+    label: "しかけ",
+    instruction:
+      "操作、音、表示、動きなど、依頼に必要なしかけを1つ選んでください。景観だけならnone。",
+    categories: ["tutorial"],
+  },
+] as const;
 
 export const FAST_AUTHORING_PLACEMENT_CRITERIA: Record<
   FastAuthoringPlacement,
   string
 > = {
-  center: "ワールドの中心。主役になるもの向け",
-  "near-spawn": "開始位置の近く。最初に目に入るもの向け",
-  left: "中心から左側",
-  right: "中心から右側",
-  far: "中心から奥側",
-  perimeter: "中心を空けた外周側",
+  center: "ワールドの中心。主役向け",
+  "near-spawn": "Spawnから少し進んだ入口側",
+  "front-left": "入口側の左。手前の添景や案内向け",
+  "front-right": "入口側の右。手前の添景や案内向け",
+  left: "中心の左側",
+  right: "中心の右側",
+  "back-left": "中心より奥の左側",
+  "back-right": "中心より奥の右側",
+  far: "中心よりさらに奥。遠景や背景向け",
+  "perimeter-left": "中央を空けた左外周",
+  "perimeter-right": "中央を空けた右外周",
 };
 export const FAST_AUTHORING_MOOD_CRITERIA: Record<
   FastAuthoringMood,
@@ -69,22 +166,41 @@ export const FAST_AUTHORING_DENSITY_CRITERIA: Record<
   FastAuthoringDensity,
   string
 > = {
-  sparse: "広く余白を取り、少数の要素を離して置く",
-  balanced: "余白と要素数を均衡させる",
-  lively: "比較的近くに置いて賑やかにする",
+  sparse: "要素数を抑え、広い余白を取る",
+  balanced: "主役と余白を両立する標準的な密度",
+  lively: "複数要素を比較的近くに置き、情報量を増やす",
+};
+export const FAST_AUTHORING_SCALE_CRITERIA: Record<
+  FastAuthoringScale,
+  string
+> = {
+  compact: "小さな一角。移動距離を短くまとめる",
+  balanced: "一般的なワールド規模",
+  wide: "景観や遠景を含む広い空間",
+};
+export const FAST_AUTHORING_COMPOSITION_CRITERIA: Record<
+  FastAuthoringComposition,
+  string
+> = {
+  "focal-center": "中央に主役を置き、周囲へ補助要素を展開する",
+  "open-center": "中央を歩ける余白として空け、要素を外周へ置く",
+  path: "Spawnから奥へ進む流れに沿って要素を配置する",
+  ring: "中心の周囲を囲むように要素を分散する",
+  layered: "手前・中央・奥の3層で奥行きを作る",
+  natural: "左右対称を避け、自然なばらつきで配置する",
 };
 export const FAST_AUTHORING_PRIMITIVE_CRITERIA: Record<
   FastAuthoringPrimitiveHelper,
   string
 > = {
   none: "Primitiveによる補助レイアウトは追加しない",
-  platform:
-    "主役の近くに低いBoxの足場を置く。平らな場所が役立つ場合だけ使う",
-  "path-marker":
-    "Spawn付近に細いCylinderの目印を置く。主役までの導線が分かりにくい場合だけ使う",
-  "rest-step":
-    "主役の少し手前に低いBoxの段を置く。腰掛けや小さな境界があると構図が良くなる場合だけ使う",
+  platform: "低いBoxの足場や広場を追加する",
+  "path-marker": "Spawn付近へ細いCylinderの目印を追加する",
+  "rest-step": "主役の手前へ低いBoxの段を追加する",
+  "low-wall": "外周や境界へ低いBoxの壁を追加する",
+  pedestal: "展示物や主役を載せる低いCylinder台座を追加する",
 };
+
 export const FAST_AUTHORING_MOOD_SETTINGS: Record<
   FastAuthoringMood,
   Record<string, unknown>
@@ -131,39 +247,101 @@ export const FAST_AUTHORING_MOOD_SETTINGS: Record<
   },
 };
 
+function recipeMatchesRole(
+  recipe: SceneRecipe,
+  role: FastAuthoringRecipeRole,
+): boolean {
+  if (!role.categories && !role.tutorialGroups) return true;
+  if (role.categories?.includes(recipe.category)) return true;
+  return Boolean(
+    recipe.category === "tutorial" &&
+      recipe.group &&
+      role.tutorialGroups?.some((group) => recipe.group === group),
+  );
+}
+
+function recipeCriteria(
+  recipes: readonly SceneRecipe[],
+  role: FastAuthoringRecipeRole,
+): Record<string, string> {
+  return Object.fromEntries([
+    ["none", role.label + "は追加しない"],
+    ...recipes.filter((recipe) => recipeMatchesRole(recipe, role)).map((recipe) => [
+      recipe.id,
+      [recipe.name, recipe.description, recipe.group, ...(recipe.tags ?? [])]
+        .filter(Boolean)
+        .join(" / ")
+        .slice(0, 240),
+    ]),
+  ]);
+}
+
 function createFastAuthoringCatalog() {
   const recipes = getSceneRecipesForProjectKind("world").filter(
     (recipe) => getSceneRecipeShelf(recipe) !== "materials",
   );
-  const recipeCriteria = Object.fromEntries([
-    ["none", "ギミックや3Dセットをこの枠には置かない"],
-    ...recipes.map((recipe) => [
-      recipe.id,
-      [recipe.name, recipe.description, recipe.note]
-        .filter(Boolean)
-        .join(" / ")
-        .slice(0, 220),
+  const roleCriteria = Object.fromEntries(
+    FAST_AUTHORING_RECIPE_ROLES.map((role) => [
+      role.id,
+      recipeCriteria(recipes, role),
     ]),
-  ]);
+  ) as Record<string, Record<string, string>>;
   const terrainCriteria = Object.fromEntries([
     ["none", "新しいTerrainを追加しない"],
     ...TERRAIN_PRESETS.map((preset) => [
       preset.id,
-      `${preset.label}: ${preset.description}`,
+      preset.label + ": " + preset.description,
     ]),
   ]);
-  return { recipes, recipeCriteria, terrainCriteria };
+  const facilities = listBuiltinPrefabRecipes("world").filter(
+    (recipe) => recipe.id !== BUILTIN_PREFAB_RECIPE_IDS.spawnPoint,
+  );
+  const facilityCriteria = Object.fromEntries([
+    ["none", "XRift公式設備は追加しない"],
+    ...facilities.map((recipe) => [
+      recipe.id,
+      [
+        recipe.name,
+        recipe.description,
+        recipe.configuration?.hint,
+        recipe.configuration?.requiredBeforeCompile
+          ? "利用前に設定が必要"
+          : "そのまま配置可能",
+      ]
+        .filter(Boolean)
+        .join(" / "),
+    ]),
+  ]);
+  return {
+    recipes,
+    roleCriteria,
+    terrainCriteria,
+    facilities,
+    facilityCriteria,
+  };
 }
 export type FastAuthoringCatalog = ReturnType<
   typeof createFastAuthoringCatalog
 >;
+
+export function findTerrainEntityId(scene: SceneDocument): string | null {
+  return (
+    scene.rootEntityIds.find((entityId) =>
+      scene.entities[entityId]?.components.some(
+        (component) =>
+          component.type === "mesh" &&
+          component.geometry?.kind === "terrain",
+      ),
+    ) ?? null
+  );
+}
 
 export function buildFastAuthoringRequest({
   prompt,
   scene,
   projectName,
   sceneName,
-  maxGimmicks = 3,
+  maxGimmicks = FAST_AUTHORING_MAX_RECIPES,
 }: {
   prompt: string;
   scene: SceneDocument;
@@ -179,12 +357,15 @@ export function buildFastAuthoringRequest({
       }
     : baseCatalog.terrainCriteria;
   const catalog = { ...baseCatalog, terrainCriteria };
-  const boundedMaxGimmicks = Math.min(3, Math.max(1, maxGimmicks));
+  const boundedMaxGimmicks = Math.min(
+    FAST_AUTHORING_MAX_RECIPES,
+    Math.max(1, maxGimmicks),
+  );
   const questions: Record<string, unknown> = {
     terrain: {
       type: "choice",
       instructions:
-        "依頼に最も合う地形を1つ選んでください。既存Terrainがある場合やTerrainが不要ならnone。",
+        "依頼に合う地形を選んでください。既存Terrainがある場合やTerrainが不要ならnone。",
       criteria: catalog.terrainCriteria,
     },
     mood: {
@@ -194,32 +375,68 @@ export function buildFastAuthoringRequest({
     },
     density: {
       type: "choice",
-      instructions: "オブジェクト同士の間隔と情報量を選んでください。",
+      instructions:
+        "依頼の情報量と余白から、オブジェクト密度を選んでください。",
       criteria: FAST_AUTHORING_DENSITY_CRITERIA,
     },
-    primitive: {
+    scale: {
+      type: "choice",
+      instructions: "依頼から空間全体の広さを選んでください。",
+      criteria: FAST_AUTHORING_SCALE_CRITERIA,
+    },
+    composition: {
       type: "choice",
       instructions:
-        "既存Scene Recipeだけでは土台や導線が不足する場合に限り補助Primitiveを1つ選んでください。不要ならnone。",
-      criteria: FAST_AUTHORING_PRIMITIVE_CRITERIA,
+        "Spawnから見た主役、歩ける余白、奥行きを考えて構図を選んでください。",
+      criteria: FAST_AUTHORING_COMPOSITION_CRITERIA,
     },
   };
-  for (let index = 0; index < boundedMaxGimmicks; index += 1) {
-    questions[`gimmick${index + 1}`] = {
+
+  FAST_AUTHORING_RECIPE_ROLES.slice(0, boundedMaxGimmicks).forEach(
+    (role, index) => {
+      questions["gimmick" + (index + 1)] = {
+        type: "choice",
+        instructions: role.instruction,
+        criteria: catalog.roleCriteria[role.id],
+      };
+      questions["placement" + (index + 1)] = {
+        type: "choice",
+        instructions:
+          role.label +
+          "を構図に合う場所へ置いてください。主役の視界や歩ける中央を不必要に塞がないでください。",
+        criteria: FAST_AUTHORING_PLACEMENT_CRITERIA,
+      };
+    },
+  );
+
+  for (let index = 0; index < FAST_AUTHORING_MAX_FACILITIES; index += 1) {
+    questions["facility" + (index + 1)] = {
       type: "choice",
       instructions:
         index === 0
-          ? "依頼の主役になる既存のXRiftギミックまたは3Dセットを選んでください。"
-          : "追加すると依頼が良くなる既存のXRiftギミックまたは3Dセットを選んでください。不要ならnone。",
-      criteria: catalog.recipeCriteria,
+          ? "Mirror、TagBoard、VideoScreenなどXRift公式設備が依頼に必要なら1つ選んでください。景観だけならnone。"
+          : "追加でもう1つXRift公式設備が必要なら選んでください。不要ならnone。",
+      criteria: catalog.facilityCriteria,
     };
-    questions[`placement${index + 1}`] = {
+    questions["facilityPlacement" + (index + 1)] = {
       type: "choice",
       instructions:
-        "同じ番号で選んだギミックを置く場所を選んでください。",
+        "公式設備を利用しやすく、主役を邪魔しない場所へ置いてください。",
       criteria: FAST_AUTHORING_PLACEMENT_CRITERIA,
     };
   }
+
+  for (let index = 0; index < FAST_AUTHORING_MAX_PRIMITIVES; index += 1) {
+    questions["helper" + (index + 1)] = {
+      type: "choice",
+      instructions:
+        index === 0
+          ? "Scene Recipeや公式設備だけでは足りない足場・台座・導線がある場合に補助Primitiveを選んでください。不要ならnone。"
+          : "さらにもう1つだけ補助Primitiveが必要なら選んでください。不要ならnone。",
+      criteria: FAST_AUTHORING_PRIMITIVE_CRITERIA,
+    };
+  }
+
   return {
     catalog,
     maxGimmicks: boundedMaxGimmicks,
@@ -231,16 +448,20 @@ export function buildFastAuthoringRequest({
           scene: sceneName,
           entityCount: Object.keys(scene.entities).length,
           existingEntities: Object.values(scene.entities)
-            .slice(0, 40)
+            .slice(0, 60)
             .map((entity) => entity.name),
         },
-        availableRecipes: catalog.recipes.map((recipe) => ({
+        availableRecipeRoles: FAST_AUTHORING_RECIPE_ROLES.map((role) => ({
+          id: role.id,
+          label: role.label,
+          candidateCount:
+            Object.keys(catalog.roleCriteria[role.id] ?? {}).length - 1,
+        })),
+        availableFacilities: catalog.facilities.map((recipe) => ({
           id: recipe.id,
           name: recipe.name,
-          description: recipe.description.slice(0, 160),
-          shelf: getSceneRecipeShelf(recipe),
-          category: recipe.category,
-          tags: recipe.tags ?? [],
+          description: recipe.description,
+          configurationHint: recipe.configuration?.hint ?? null,
         })),
         placementSlots: Object.keys(FAST_AUTHORING_PLACEMENT_CRITERIA),
       },
@@ -265,6 +486,7 @@ function selectedChoice(
     ? selected
     : fallback;
 }
+
 function isGroundLikeEntity(scene: SceneDocument, entityId: string): boolean {
   const entity = scene.entities[entityId];
   if (!entity) return false;
@@ -277,6 +499,7 @@ function isGroundLikeEntity(scene: SceneDocument, entityId: string): boolean {
     );
   });
 }
+
 export function findFastAuthoringSpawnPosition(scene: SceneDocument): Vec3 {
   const spawn = Object.values(scene.entities).find((entity) =>
     entity.components.some(
@@ -290,6 +513,7 @@ export function findFastAuthoringSpawnPosition(scene: SceneDocument): Vec3 {
     ? getTransform(scene, spawn.id)?.position ?? [0, 0, 0]
     : [0, 0, 0];
 }
+
 function isPlacementObstacle(
   scene: SceneDocument,
   entityId: string,
@@ -314,9 +538,11 @@ function occupiedRootPositions(scene: SceneDocument): Vec3[] {
     return position ? [[...position] as Vec3] : [];
   });
 }
+
 function horizontalDistance(a: Vec3, b: Vec3): number {
   return Math.hypot(a[0] - b[0], a[2] - b[2]);
 }
+
 function safePosition(
   nominal: Vec3,
   occupied: readonly Vec3[],
@@ -351,11 +577,102 @@ function safePosition(
     Math.round(candidate[2] * 10) / 10,
   ];
 }
+
+function spreadForScale(scale: FastAuthoringScale): number {
+  if (scale === "compact") return 6;
+  if (scale === "wide") return 16;
+  return 10;
+}
+
+function minimumDistanceForDensity(
+  density: FastAuthoringDensity,
+): number {
+  if (density === "sparse") return 5;
+  if (density === "lively") return 2.4;
+  return 3.5;
+}
+
+function nominalPosition(
+  placement: FastAuthoringPlacement,
+  composition: FastAuthoringComposition,
+  spread: number,
+  spawn: Vec3,
+  roleIndex: number,
+): Vec3 {
+  if (placement === "near-spawn") {
+    return [spawn[0], 0, spawn[2] - 2];
+  }
+
+  let position: Vec3;
+  switch (placement) {
+    case "front-left":
+      position = [-spread * 0.65, 0, spread * 0.55];
+      break;
+    case "front-right":
+      position = [spread * 0.65, 0, spread * 0.55];
+      break;
+    case "left":
+      position = [-spread, 0, 0];
+      break;
+    case "right":
+      position = [spread, 0, 0];
+      break;
+    case "back-left":
+      position = [-spread * 0.68, 0, -spread * 0.68];
+      break;
+    case "back-right":
+      position = [spread * 0.68, 0, -spread * 0.68];
+      break;
+    case "far":
+      position = [0, 0, -spread];
+      break;
+    case "perimeter-left":
+      position = [-spread, 0, -spread * 0.35];
+      break;
+    case "perimeter-right":
+      position = [spread, 0, -spread * 0.35];
+      break;
+    default:
+      position = [0, 0, 0];
+  }
+
+  if (placement === "center" && roleIndex > 0) {
+    if (composition === "open-center") {
+      return roleIndex % 2 === 0
+        ? [-spread * 0.7, 0, -spread * 0.45]
+        : [spread * 0.7, 0, -spread * 0.45];
+    }
+    if (composition === "ring") {
+      const angle = ((roleIndex - 1) / 5) * Math.PI * 2;
+      return [
+        Math.cos(angle) * spread * 0.7,
+        0,
+        Math.sin(angle) * spread * 0.7,
+      ];
+    }
+    if (composition === "path") {
+      return [0, 0, -spread * Math.min(0.85, 0.2 + roleIndex * 0.13)];
+    }
+  }
+
+  if (composition === "natural" && placement !== "center") {
+    const offset = roleIndex % 2 === 0 ? 0.12 : -0.12;
+    return [
+      position[0] + spread * offset,
+      position[1],
+      position[2] - spread * offset * 0.65,
+    ];
+  }
+
+  return position;
+}
+
 function primitiveDecision(
   kind: FastAuthoringPrimitiveHelper,
   spawn: Vec3,
   occupied: readonly Vec3[],
   minimumDistance: number,
+  index: number,
 ): FastAuthoringPrimitiveDecision | null {
   if (kind === "none") return null;
   if (kind === "path-marker") {
@@ -363,9 +680,9 @@ function primitiveDecision(
       kind,
       shape: "cylinder",
       position: safePosition(
-        [spawn[0] + 1.5, 0, spawn[2] + 1.5],
+        [spawn[0] + (index === 0 ? -1.2 : 1.2), 0, spawn[2] - 1.5],
         occupied,
-        Math.max(1.5, minimumDistance * 0.55),
+        Math.max(1.2, minimumDistance * 0.5),
       ),
       scale: [0.28, 1.6, 0.28],
       name: "入口の目印",
@@ -378,6 +695,28 @@ function primitiveDecision(
       position: safePosition([0, 0, 3.5], occupied, minimumDistance),
       scale: [3.2, 0.45, 1.2],
       name: "休憩スペースの段",
+    };
+  }
+  if (kind === "low-wall") {
+    return {
+      kind,
+      shape: "box",
+      position: safePosition(
+        [index === 0 ? -4.5 : 4.5, 0, -2],
+        occupied,
+        minimumDistance,
+      ),
+      scale: [3.8, 0.8, 0.3],
+      name: "低い境界壁",
+    };
+  }
+  if (kind === "pedestal") {
+    return {
+      kind,
+      shape: "cylinder",
+      position: safePosition([0, 0, -2.5], occupied, minimumDistance),
+      scale: [1.8, 0.7, 1.8],
+      name: "展示台座",
     };
   }
   return {
@@ -422,105 +761,167 @@ export function resolveFastAuthoringDecision({
     FAST_AUTHORING_DENSITY_CRITERIA,
     "balanced",
   ) as FastAuthoringDensity;
-  const primitiveKind = selectedChoice(
+  const scale = selectedChoice(
     answers,
-    "primitive",
-    FAST_AUTHORING_PRIMITIVE_CRITERIA,
-    "none",
-  ) as FastAuthoringPrimitiveHelper;
-  const spread =
-    density === "sparse" ? 16 : density === "lively" ? 6 : 10;
-  const minimumDistance =
-    density === "sparse" ? 5 : density === "lively" ? 2.5 : 3.5;
+    "scale",
+    FAST_AUTHORING_SCALE_CRITERIA,
+    "balanced",
+  ) as FastAuthoringScale;
+  const composition = selectedChoice(
+    answers,
+    "composition",
+    FAST_AUTHORING_COMPOSITION_CRITERIA,
+    "focal-center",
+  ) as FastAuthoringComposition;
+
+  const spread = spreadForScale(scale);
+  const minimumDistance = minimumDistanceForDensity(density);
   const spawn = findFastAuthoringSpawnPosition(scene);
   const occupied = occupiedRootPositions(scene);
-  const nominalForPlacement = (placement: FastAuthoringPlacement): Vec3 => {
-    switch (placement) {
-      case "near-spawn":
-        return [spawn[0] + 3, 0, spawn[2] + 3];
-      case "left":
-        return [-spread, 0, 0];
-      case "right":
-        return [spread, 0, 0];
-      case "far":
-        return [0, 0, spread];
-      case "perimeter":
-        return [spread, 0, spread];
-      default:
-        return [0, 0, 0];
-    }
-  };
+  const placed = [...occupied];
+
   const recipes: FastAuthoringRecipeDecision[] = [];
   const usedRecipeIds = new Set<string>();
-  const placed = [...occupied];
-  for (let index = 0; index < maxGimmicks; index += 1) {
+  FAST_AUTHORING_RECIPE_ROLES.slice(0, maxGimmicks).forEach(
+    (role, index) => {
+      const criteria = catalog.roleCriteria[role.id] ?? { none: "" };
+      const recipeId = selectedChoice(
+        answers,
+        "gimmick" + (index + 1),
+        criteria,
+        "none",
+      );
+      if (recipeId === "none" || usedRecipeIds.has(recipeId)) return;
+      const placement = selectedChoice(
+        answers,
+        "placement" + (index + 1),
+        FAST_AUTHORING_PLACEMENT_CRITERIA,
+        index === 0 ? "center" : index % 2 === 0 ? "left" : "right",
+      ) as FastAuthoringPlacement;
+      const position = safePosition(
+        nominalPosition(placement, composition, spread, spawn, index),
+        placed,
+        minimumDistance,
+      );
+      usedRecipeIds.add(recipeId);
+      placed.push(position);
+      recipes.push({
+        role: role.label,
+        recipeId,
+        placement,
+        position,
+      });
+    },
+  );
+
+  const facilities: FastAuthoringFacilityDecision[] = [];
+  const usedFacilityIds = new Set<string>();
+  for (let index = 0; index < FAST_AUTHORING_MAX_FACILITIES; index += 1) {
     const recipeId = selectedChoice(
       answers,
-      `gimmick${index + 1}`,
-      catalog.recipeCriteria,
+      "facility" + (index + 1),
+      catalog.facilityCriteria,
       "none",
     );
-    if (recipeId === "none" || usedRecipeIds.has(recipeId)) continue;
+    if (recipeId === "none" || usedFacilityIds.has(recipeId)) continue;
+    const recipe = catalog.facilities.find(
+      (candidate) => candidate.id === recipeId,
+    );
+    if (!recipe) continue;
     const placement = selectedChoice(
       answers,
-      `placement${index + 1}`,
+      "facilityPlacement" + (index + 1),
       FAST_AUTHORING_PLACEMENT_CRITERIA,
-      index === 0 ? "center" : "perimeter",
+      index === 0 ? "right" : "left",
     ) as FastAuthoringPlacement;
     const position = safePosition(
-      nominalForPlacement(placement),
+      nominalPosition(
+        placement,
+        composition,
+        spread,
+        spawn,
+        FAST_AUTHORING_MAX_RECIPES + index,
+      ),
       placed,
       minimumDistance,
     );
-    usedRecipeIds.add(recipeId);
+    usedFacilityIds.add(recipeId);
     placed.push(position);
-    recipes.push({ recipeId, placement, position });
+    facilities.push({
+      recipeId,
+      name: recipe.name,
+      placement,
+      position,
+      heightOffset: recipe.defaultTransform.position[1],
+      configurationHint: recipe.configuration?.hint ?? null,
+    });
   }
-  const primitive = primitiveDecision(
-    primitiveKind,
-    spawn,
-    placed,
-    minimumDistance,
-  );
+
+  const primitives: FastAuthoringPrimitiveDecision[] = [];
+  const usedHelperKinds = new Set<string>();
+  for (let index = 0; index < FAST_AUTHORING_MAX_PRIMITIVES; index += 1) {
+    const kind = selectedChoice(
+      answers,
+      "helper" + (index + 1),
+      FAST_AUTHORING_PRIMITIVE_CRITERIA,
+      "none",
+    ) as FastAuthoringPrimitiveHelper;
+    if (kind === "none" || usedHelperKinds.has(kind)) continue;
+    const helper = primitiveDecision(
+      kind,
+      spawn,
+      placed,
+      minimumDistance,
+      index,
+    );
+    if (!helper) continue;
+    usedHelperKinds.add(kind);
+    placed.push(helper.position);
+    primitives.push(helper);
+  }
+
   const decisionTrace: FastAuthoringTraceItem[] = [
     {
       label: "地形",
       value:
         terrain === "none"
-          ? "追加しない"
+          ? findTerrainEntityId(scene)
+            ? "既存Terrainを使う"
+            : "追加しない"
           : TERRAIN_PRESETS.find((preset) => preset.id === terrain)?.label ??
             terrain,
     },
     { label: "雰囲気", value: mood },
+    { label: "構図", value: composition },
+    { label: "広さ", value: scale },
     { label: "密度", value: density },
-    ...recipes.map((selected, index) => ({
-      label: `ギミック${index + 1}`,
-      value: `${
-        catalog.recipes.find((recipe) => recipe.id === selected.recipeId)
-          ?.name ?? selected.recipeId
-      } → ${selected.placement}`,
+    ...recipes.map((selected) => ({
+      label: selected.role,
+      value:
+        (catalog.recipes.find((recipe) => recipe.id === selected.recipeId)
+          ?.name ?? selected.recipeId) +
+        " → " +
+        selected.placement,
     })),
-    ...(primitive
-      ? [{ label: "補助レイアウト", value: primitive.name }]
-      : []),
+    ...facilities.map((facility, index) => ({
+      label: "公式設備" + (index + 1),
+      value: facility.name + " → " + facility.placement,
+    })),
+    ...primitives.map((primitive, index) => ({
+      label: "補助" + (index + 1),
+      value: primitive.name,
+    })),
   ];
+
   return {
     terrain,
     mood,
     density,
+    scale,
+    composition,
     recipes,
-    primitive,
+    facilities,
+    primitives,
     decisionTrace,
   };
-}
-export function findTerrainEntityId(scene: SceneDocument): string | null {
-  return (
-    scene.rootEntityIds.find((entityId) =>
-      scene.entities[entityId]?.components.some(
-        (component) =>
-          component.type === "mesh" &&
-          component.geometry?.kind === "terrain",
-      ),
-    ) ?? null
-  );
 }
