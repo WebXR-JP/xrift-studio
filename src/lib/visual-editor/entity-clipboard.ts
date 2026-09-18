@@ -65,6 +65,17 @@ export function copyEntityHierarchy(
   return validRoots.length > 0 ? { scene, rootEntityIds: validRoots } : null;
 }
 
+function detachFastAuthoringProvenance(entity: SceneEntity): SceneEntity {
+  if (!entity.authoring?.fastAuthoring) return entity;
+  const { fastAuthoring: _fastAuthoring, ...remainingAuthoring } = entity.authoring;
+  return {
+    ...entity,
+    ...(Object.keys(remainingAuthoring).length > 0
+      ? { authoring: remainingAuthoring }
+      : { authoring: undefined }),
+  };
+}
+
 /** An undefined parent preserves each source root's parent (used by Duplicate). */
 export function pasteEntityHierarchy(
   scene: SceneDocument,
@@ -90,15 +101,16 @@ export function pasteEntityHierarchy(
   const clonedEntities: Record<string, SceneEntity> = {};
   for (const [id, entity] of Object.entries(clone.entities)) {
     if (scene.entities[id]) return null;
+    const detachedEntity = detachFastAuthoringProvenance(entity);
     if (!rootSet.has(id)) {
-      clonedEntities[id] = entity;
+      clonedEntities[id] = detachedEntity;
       continue;
     }
     const sourceParent = sourceParents.get(id) ?? null;
     const targetParent = parentId === undefined
       ? sourceParent && scene.entities[sourceParent] ? sourceParent : null
       : parentId;
-    const root = { ...entity, parentId: targetParent };
+    const root = { ...detachedEntity, parentId: targetParent };
     if (axisIndex >= 0) {
       // Only the root changes. Its descendants inherit the reflection, and
       // animation, materials, prefab links and component references stay intact.
