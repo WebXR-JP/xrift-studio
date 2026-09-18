@@ -72,6 +72,7 @@ const READ_ONLY_PREFIXES = [
   "simulate_",
   "analyze_",
   "search_",
+  "decide_",
 ] as const;
 
 const CATEGORY_LABEL: Readonly<Record<McpHarnessCategory, string>> = {
