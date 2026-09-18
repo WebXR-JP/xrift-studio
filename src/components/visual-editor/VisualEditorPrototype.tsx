@@ -291,6 +291,7 @@ import {
   type FastAuthoringValidationCheck,
   type FastAuthoringZoneId,
 } from "../../lib/visual-editor/jev-fast-authoring";
+import { SCENE_RECIPE_IDS } from "../../lib/visual-editor/scene-recipe-catalog";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { HierarchyPanel } from "./HierarchyPanel";
 import {
@@ -8831,6 +8832,7 @@ export function VisualEditorPrototype({
             generatedEntityIds: generatedPlacements.map(
               (generated) => generated.entityId,
             ),
+            focalEntityId,
           });
         checks.push({
           id: "terrain-flatness",
@@ -8916,18 +8918,137 @@ export function VisualEditorPrototype({
         }
 
         if (normalizedPrompt.includes("焚き火")) {
-          const hasCampfire = applied.some(
-            (item) =>
-              item.includes("焚き火") || /campfire|fire pit/i.test(item),
+          const scene = bundleRef.current.scene;
+          const generatedEntries =
+            listFastAuthoringGeneratedEntities(scene);
+          const campfires = generatedEntries.filter(
+            (entry) =>
+              entry.metadata.recipeId === SCENE_RECIPE_IDS.campfire,
           );
           checks.push({
             id: "campfire",
             label: "焚き火",
-            status: hasCampfire ? "ok" : "warning",
-            message: hasCampfire
-              ? "焚き火に該当する生成物を確認しました"
-              : "依頼に焚き火がありますが、生成結果名から焚き火を確認できませんでした",
+            status: campfires.length > 0 ? "ok" : "warning",
+            message:
+              campfires.length > 0
+                ? `焚き火 ${campfires.length}件を確認しました`
+                : "依頼に焚き火がありますが、焚き火Recipeが生成されませんでした",
           });
+
+          const hasEnabledLightInSubtree = (rootId: string) => {
+            const pending = [rootId];
+            const visited = new Set<string>();
+            while (pending.length > 0) {
+              const entityId = pending.pop();
+              if (!entityId || visited.has(entityId)) continue;
+              visited.add(entityId);
+              const entity = scene.entities[entityId];
+              if (!entity) continue;
+              if (
+                entity.components.some(
+                  (component) =>
+                    component.type === "light" &&
+                    component.enabled &&
+                    component.lightType !== "ambient" &&
+                    component.lightType !== "directional" &&
+                    component.lightType !== "hemisphere",
+                )
+              ) {
+                return true;
+              }
+              pending.push(...entity.children);
+            }
+            return false;
+          };
+
+          if (campfires.length > 0) {
+            const campfirePosition = getTransform(
+              scene,
+              campfires[0].entityId,
+            )?.position;
+            const campfireHasLight = campfires.some((entry) =>
+              hasEnabledLightInSubtree(entry.entityId),
+            );
+            checks.push({
+              id: "campfire-light",
+              label: "焚き火の灯り",
+              status: campfireHasLight ? "ok" : "warning",
+              message: campfireHasLight
+                ? "焚き火のsubtreeに局所Lightがあります"
+                : "焚き火のsubtreeに局所Lightがありません",
+            });
+
+            if (campfirePosition) {
+              const benches = generatedEntries
+                .filter(
+                  (entry) =>
+                    entry.metadata.recipeId === SCENE_RECIPE_IDS.bench &&
+                    entry.metadata.zoneId === "rest",
+                )
+                .flatMap((entry) => {
+                  const position = getTransform(
+                    scene,
+                    entry.entityId,
+                  )?.position;
+                  return position ? [position] : [];
+                });
+              const benchDistances = benches.map((position) =>
+                Math.hypot(
+                  position[0] - campfirePosition[0],
+                  position[2] - campfirePosition[2],
+                ),
+              );
+              const wellPlacedBenches = benchDistances.filter(
+                (distance) => distance >= 1.8 && distance <= 4.5,
+              ).length;
+              const wantsRestArea =
+                /休憩|休める|休む|ベンチ/.test(normalizedPrompt);
+              if (wantsRestArea) {
+                checks.push({
+                  id: "campfire-rest-layout",
+                  label: "休憩所のまとまり",
+                  status:
+                    wellPlacedBenches > 0 ? "ok" : "warning",
+                  message:
+                    wellPlacedBenches > 0
+                      ? `焚き火から1.8〜4.5mのベンチ ${wellPlacedBenches}件`
+                      : benches.length > 0
+                        ? "ベンチはありますが焚き火との距離を確認してください"
+                        : "休憩所の依頼ですがrest Zoneにベンチがありません",
+                });
+              }
+
+              const closeLandscape = generatedEntries.filter((entry) => {
+                if (
+                  entry.metadata.role !== "景観" ||
+                  entry.metadata.zoneId !== "rest"
+                ) {
+                  return false;
+                }
+                const position = getTransform(
+                  scene,
+                  entry.entityId,
+                )?.position;
+                return (
+                  position !== undefined &&
+                  Math.hypot(
+                    position[0] - campfirePosition[0],
+                    position[2] - campfirePosition[2],
+                  ) < 1.5
+                );
+              });
+              checks.push({
+                id: "campfire-clearance",
+                label: "焚き火まわり",
+                status:
+                  closeLandscape.length === 0 ? "ok" : "warning",
+                message:
+                  closeLandscape.length === 0
+                    ? "焚き火1.5m以内に景観Entityはありません"
+                    : `焚き火1.5m以内に景観Entityが${closeLandscape.length}件あります`,
+              });
+            }
+          }
         }
 
         setJevFastAuthoringState((current) => ({
