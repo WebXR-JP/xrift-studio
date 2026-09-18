@@ -9,6 +9,7 @@ import {
 } from "./scene-recipe-catalog";
 import { TERRAIN_PRESETS } from "./terrain-presets";
 import { TERRAIN_SURFACE_CATALOG } from "./terrain-surface-catalog";
+import { TERRAIN_GRASS_PRESETS } from "./terrain-grass";
 import {
   getTransform,
   type SceneDocument,
@@ -101,6 +102,7 @@ export type FastAuthoringDecision = {
   composition: FastAuthoringComposition;
   detail: FastAuthoringDetail;
   terrainSurface: string;
+  grassPreset: string;
   finish: FastAuthoringFinish;
   wind: FastAuthoringWind;
   elementBudget: number;
@@ -542,6 +544,13 @@ function createFastAuthoringCatalog() {
       surface.label + ": " + surface.description,
     ]),
   ]);
+  const grassPresetCriteria = Object.fromEntries([
+    ["keep", "Terrain presetの既定または現在の草設定をそのまま使う"],
+    ...TERRAIN_GRASS_PRESETS.map((preset) => [
+      preset.id,
+      preset.label + ": " + preset.description,
+    ]),
+  ]);
   const facilities = listBuiltinPrefabRecipes("world").filter(
     (recipe) => recipe.id !== BUILTIN_PREFAB_RECIPE_IDS.spawnPoint,
   );
@@ -560,6 +569,7 @@ function createFastAuthoringCatalog() {
     roleCriteria,
     terrainCriteria,
     terrainSurfaceCriteria,
+    grassPresetCriteria,
     facilities,
     facilityCriteria,
   };
@@ -638,6 +648,12 @@ export function buildFastAuthoringRequest({
       instructions:
         "Terrainがある、または作る場合、依頼に合う地表表現を選んでください。不要ならnone。",
       criteria: catalog.terrainSurfaceCriteria,
+    },
+    grassPreset: {
+      type: "choice",
+      instructions:
+        "Terrainの草表現を選んでください。既定のままでよければkeep。",
+      criteria: catalog.grassPresetCriteria,
     },
     finish: {
       type: "choice",
@@ -1123,6 +1139,12 @@ export function resolveFastAuthoringDecision({
     catalog.terrainSurfaceCriteria,
     "none",
   );
+  const grassPreset = selectedChoice(
+    answers,
+    "grassPreset",
+    catalog.grassPresetCriteria,
+    "keep",
+  );
   const finish = selectedChoice(
     answers,
     "finish",
@@ -1342,6 +1364,15 @@ export function resolveFastAuthoringDecision({
               (surface) => surface.id === terrainSurface,
             )?.label ?? terrainSurface,
     },
+    {
+      label: "草",
+      value:
+        grassPreset === "keep"
+          ? "既定を使う"
+          : TERRAIN_GRASS_PRESETS.find(
+              (preset) => preset.id === grassPreset,
+            )?.label ?? grassPreset,
+    },
     { label: "仕上げ", value: finish },
     { label: "風", value: wind },
     ...recipeTrace,
@@ -1363,6 +1394,7 @@ export function resolveFastAuthoringDecision({
     composition,
     detail,
     terrainSurface,
+    grassPreset,
     finish,
     wind,
     elementBudget,
