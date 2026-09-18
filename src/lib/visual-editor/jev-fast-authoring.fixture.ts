@@ -70,6 +70,7 @@ export function runJevFastAuthoringFixtureAssertions(): void {
     "skybox",
     "finish",
     "wind",
+    "humanize",
     "landscape1",
     "landscape1Count",
     "landscape3Placement",
@@ -123,6 +124,7 @@ export function runJevFastAuthoringFixtureAssertions(): void {
         skybox: { choice: "alpine-cumulus" },
         finish: { choice: "cinematic" },
         wind: { choice: "breeze" },
+        humanize: { choice: "natural" },
 
         signature1: { choice: SCENE_RECIPE_IDS.stoneLantern },
         signature1Count: { choice: "one" },
@@ -223,6 +225,10 @@ export function runJevFastAuthoringFixtureAssertions(): void {
   );
   assert(decision.finish === "cinematic", "finish choice should survive");
   assert(decision.wind === "breeze", "wind choice should survive");
+  assert(
+    decision.humanize === "natural",
+    "humanize choice should survive",
+  );
   const totalPlacements =
     decision.recipes.length +
     decision.facilities.length +
@@ -236,6 +242,17 @@ export function runJevFastAuthoringFixtureAssertions(): void {
       (recipe) => recipe.recipeId === SCENE_RECIPE_IDS.bamboo,
     ).length === 12,
     "one bamboo archetype should expand into twelve placements",
+  );
+  const bambooPlacements = decision.recipes.filter(
+    (recipe) => recipe.recipeId === SCENE_RECIPE_IDS.bamboo,
+  );
+  assert(
+    bambooPlacements.some(
+      (recipe) =>
+        Math.abs(recipe.rotation[1]) > 0.001 ||
+        recipe.scale.some((value) => Math.abs(value - 1) > 0.001),
+    ),
+    "natural placement should vary bamboo yaw or scale",
   );
   assert(
     decision.recipes.filter(
@@ -273,6 +290,11 @@ export function runJevFastAuthoringFixtureAssertions(): void {
       ) &&
       decision.decisionTrace.some(
         (item) => item.label === "風" && item.value === "breeze",
+      ) &&
+      decision.decisionTrace.some(
+        (item) =>
+          item.label === "配置の自然さ" &&
+          item.value === "natural",
       ),
     "decision trace should expose Terrain Surface, finish, and wind",
   );
