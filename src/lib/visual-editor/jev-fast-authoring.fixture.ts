@@ -66,6 +66,9 @@ export function runJevFastAuthoringFixtureAssertions(): void {
 
   for (const question of [
     "detail",
+    "terrainSurface",
+    "finish",
+    "wind",
     "landscape1",
     "landscape1Count",
     "landscape3Placement",
@@ -114,6 +117,9 @@ export function runJevFastAuthoringFixtureAssertions(): void {
         scale: { choice: "wide" },
         composition: { choice: "natural" },
         detail: { choice: "maximal" },
+        terrainSurface: { choice: "forest-floor" },
+        finish: { choice: "cinematic" },
+        wind: { choice: "breeze" },
 
         signature1: { choice: SCENE_RECIPE_IDS.stoneLantern },
         signature1Count: { choice: "one" },
@@ -204,6 +210,12 @@ export function runJevFastAuthoringFixtureAssertions(): void {
   assert(decision.composition === "natural", "composition choice should survive");
   assert(decision.detail === "maximal", "maximal detail choice should survive");
   assert(
+    decision.terrainSurface === "forest-floor",
+    "Terrain Surface choice should survive",
+  );
+  assert(decision.finish === "cinematic", "finish choice should survive");
+  assert(decision.wind === "breeze", "wind choice should survive");
+  assert(
     decision.elementBudget === FAST_AUTHORING_MAX_ELEMENTS &&
       decision.elementBudget === 50,
     "maximal detail should expose a fifty-placement budget",
@@ -241,5 +253,17 @@ export function runJevFastAuthoringFixtureAssertions(): void {
         item.value.includes("× 12"),
     ),
     "decision trace should summarize repeated placement counts",
+  );
+  assert(
+    decision.decisionTrace.some(
+      (item) => item.label === "地表" && item.value.includes("森林"),
+    ) &&
+      decision.decisionTrace.some(
+        (item) => item.label === "仕上げ" && item.value === "cinematic",
+      ) &&
+      decision.decisionTrace.some(
+        (item) => item.label === "風" && item.value === "breeze",
+      ),
+    "decision trace should expose Terrain Surface, finish, and wind",
   );
 }
