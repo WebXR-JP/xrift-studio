@@ -170,7 +170,10 @@ import {
   type AssetReferenceLocation,
   type ParticleAuthoringPreset,
   type SceneRecipe,
+  getSceneRecipesForProjectKind,
+  getSceneRecipeShelf,
   instantiateSceneRecipe,
+  TERRAIN_PRESETS,
   type AudioSourcePatch,
   type InteractionTriggerPatch,
   type VegetationWindPatch,
@@ -5164,6 +5167,348 @@ export function VisualEditorPrototype({
         }
         if (externalStoreTool) {
           const args = request.arguments;
+          if (request.tool === "decide_fast_authoring") {
+            const prompt = mcpRequiredString(args.prompt, "prompt");
+            if (prompt.length > 1_000) {
+              throw new XriftMcpEditorToolError(
+                "INVALID_ARGUMENT",
+                "promptは1000文字以内で指定してください",
+              );
+            }
+            const currentBundle = bundleRef.current;
+            if (currentBundle.project.projectKind !== "world") {
+              throw new XriftMcpEditorToolError(
+                "WORLD_REQUIRED",
+                "爆速ワールド生成はワールドプロジェクトで利用してください",
+              );
+            }
+            const maxGimmicks = Math.min(
+              3,
+              Math.max(1, mcpOptionalInteger(args.maxGimmicks, "maxGimmicks") ?? 3),
+            );
+            const recipes = getSceneRecipesForProjectKind("world").filter(
+              (recipe) => getSceneRecipeShelf(recipe) !== "materials",
+            );
+            const recipeCriteria = Object.fromEntries([
+              ["none", "ギミックや3Dセットをこの枠には置かない"],
+              ...recipes.map((recipe) => [
+                recipe.id,
+                [recipe.name, recipe.description, recipe.note]
+                  .filter(Boolean)
+                  .join(" / "),
+              ]),
+            ]);
+            const terrainCriteria = Object.fromEntries([
+              ["none", "新しいTerrainを追加しない"],
+              ...TERRAIN_PRESETS.map((preset) => [
+                preset.id,
+                `${preset.label}: ${preset.description}`,
+              ]),
+            ]);
+            const placementCriteria = {
+              center: "ワールドの中心。主役になるもの向け",
+              "near-spawn": "開始位置の近く。最初に目に入るもの向け",
+              left: "中心から左側",
+              right: "中心から右側",
+              far: "中心から奥側",
+              perimeter: "中心を空けた外周側",
+            };
+            const questions: Record<string, unknown> = {
+              terrain: {
+                type: "choice",
+                instructions:
+                  "依頼に最も合う地形を1つ選んでください。建物中心などTerrainが不要ならnone。",
+                criteria: terrainCriteria,
+              },
+              mood: {
+                type: "choice",
+                instructions: "ワールド全体の時間帯・空気感を選んでください。",
+                criteria: {
+                  daylight: "明るい昼。見通しがよく自然な色",
+                  sunset: "暖色の夕方。柔らかくドラマチック",
+                  night: "暗い夜。低い環境光で光源が映える",
+                  foggy: "霧のある空気感。奥行きを霧で包む",
+                },
+              },
+              density: {
+                type: "choice",
+                instructions:
+                  "オブジェクト同士の間隔と情報量を選んでください。",
+                criteria: {
+                  sparse: "広く余白を取り、少数の要素を離して置く",
+                  balanced: "余白と要素数を均衡させる",
+                  lively: "比較的近くに置いて賑やかにする",
+                },
+              },
+            };
+            for (let index = 0; index < maxGimmicks; index += 1) {
+              questions[`gimmick${index + 1}`] = {
+                type: "choice",
+                instructions:
+                  index === 0
+                    ? "依頼の主役になる既存のXRiftギミックまたは3Dセットを選んでください。"
+                    : "追加すると依頼が良くなる既存のXRiftギミックまたは3Dセットを選んでください。不要ならnone。",
+                criteria: recipeCriteria,
+              };
+              questions[`placement${index + 1}`] = {
+                type: "choice",
+                instructions:
+                  "同じ番号で選んだギミックを置く場所を選んでください。",
+                criteria: placementCriteria,
+              };
+            }
+
+            const jev = await tauri.jevSystemOne({
+              state: {
+                request: prompt,
+                project: {
+                  name: currentBundle.project.metadata.name,
+                  scene: currentBundle.scene.name,
+                  entityCount: Object.keys(currentBundle.scene.entities).length,
+                  existingEntities: Object.values(currentBundle.scene.entities)
+                    .slice(0, 40)
+                    .map((entity) => entity.name),
+                },
+                availableRecipes: recipes.map((recipe) => ({
+                  id: recipe.id,
+                  name: recipe.name,
+                  description: recipe.description,
+                  shelf: getSceneRecipeShelf(recipe),
+                  category: recipe.category,
+                  tags: recipe.tags ?? [],
+                  note: recipe.note,
+                })),
+                placementSlots: Object.keys(placementCriteria),
+              },
+              questions,
+            });
+            const answers =
+              jev.answers && typeof jev.answers === "object"
+                ? (jev.answers as Record<string, unknown>)
+                : {};
+            const choice = (
+              name: string,
+              allowed: Record<string, unknown>,
+              fallback: string,
+            ) => {
+              const answer = answers[name];
+              const selected =
+                answer && typeof answer === "object"
+                  ? (answer as { choice?: unknown }).choice
+                  : undefined;
+              return typeof selected === "string" &&
+                Object.prototype.hasOwnProperty.call(allowed, selected)
+                ? selected
+                : fallback;
+            };
+
+            const terrain = choice("terrain", terrainCriteria, "none");
+            const mood = choice(
+              "mood",
+              {
+                daylight: true,
+                sunset: true,
+                night: true,
+                foggy: true,
+              },
+              "daylight",
+            );
+            const density = choice(
+              "density",
+              { sparse: true, balanced: true, lively: true },
+              "balanced",
+            );
+            const spread =
+              density === "sparse" ? 16 : density === "lively" ? 6 : 10;
+            const spawnEntity = Object.values(currentBundle.scene.entities).find(
+              (entity) =>
+                entity.components.some(
+                  (component) => component.type === "spawn-point",
+                ),
+            );
+            const spawnPosition = spawnEntity
+              ? getTransform(currentBundle.scene, spawnEntity.id)?.position ??
+                ([0, 0, 0] as Vec3)
+              : ([0, 0, 0] as Vec3);
+            const positionForSlot = (slot: string): Vec3 => {
+              switch (slot) {
+                case "near-spawn":
+                  return [
+                    roundTo(spawnPosition[0] + 3, 1),
+                    0,
+                    roundTo(spawnPosition[2] + 3, 1),
+                  ];
+                case "left":
+                  return [-spread, 0, 0];
+                case "right":
+                  return [spread, 0, 0];
+                case "far":
+                  return [0, 0, spread];
+                case "perimeter":
+                  return [spread, 0, spread];
+                default:
+                  return [0, 0, 0];
+              }
+            };
+
+            const selectedRecipes: Array<{
+              recipeId: string;
+              placement: string;
+              position: Vec3;
+            }> = [];
+            const usedRecipeIds = new Set<string>();
+            for (let index = 0; index < maxGimmicks; index += 1) {
+              const recipeId = choice(
+                `gimmick${index + 1}`,
+                recipeCriteria,
+                "none",
+              );
+              if (recipeId === "none" || usedRecipeIds.has(recipeId)) continue;
+              const placement = choice(
+                `placement${index + 1}`,
+                placementCriteria,
+                index === 0 ? "center" : "perimeter",
+              );
+              usedRecipeIds.add(recipeId);
+              selectedRecipes.push({
+                recipeId,
+                placement,
+                position: positionForSlot(placement),
+              });
+            }
+
+            const moodSettings: Record<
+              string,
+              Record<string, unknown>
+            > = {
+              daylight: {
+                skybox: {
+                  enabled: true,
+                  topColor: "#72b9f2",
+                  bottomColor: "#e7f3fb",
+                  exposure: 1,
+                },
+                ambient: { color: "#ffffff", intensity: 0.82 },
+                fog: { enabled: false },
+              },
+              sunset: {
+                skybox: {
+                  enabled: true,
+                  topColor: "#68508a",
+                  bottomColor: "#f0a06b",
+                  exposure: 0.9,
+                },
+                ambient: { color: "#ffd2b8", intensity: 0.62 },
+                fog: {
+                  enabled: true,
+                  color: "#c98f82",
+                  near: 28,
+                  far: 150,
+                },
+              },
+              night: {
+                skybox: {
+                  enabled: true,
+                  topColor: "#071326",
+                  bottomColor: "#17213a",
+                  exposure: 0.55,
+                },
+                ambient: { color: "#8296c8", intensity: 0.32 },
+                fog: { enabled: false },
+              },
+              foggy: {
+                skybox: {
+                  enabled: true,
+                  topColor: "#8e9aa4",
+                  bottomColor: "#c9d0d4",
+                  exposure: 0.8,
+                },
+                ambient: { color: "#d5dadd", intensity: 0.58 },
+                fog: {
+                  enabled: true,
+                  color: "#aeb8bf",
+                  near: 12,
+                  far: 80,
+                },
+              },
+            };
+
+            const actionPlan: Array<{
+              tool: string;
+              arguments: Record<string, unknown>;
+              reason: string;
+            }> = [];
+            if (terrain !== "none") {
+              actionPlan.push({
+                tool: "create_terrain_from_preset",
+                arguments: { presetId: terrain, position: [0, 0, 0] },
+                reason: "Jevが選んだ地形を土台として配置",
+              });
+            }
+            actionPlan.push({
+              tool: "update_scene_settings",
+              arguments: moodSettings[mood] ?? moodSettings.daylight!,
+              reason: "空・環境光・Fogを同じ雰囲気へまとめて設定",
+            });
+            for (const selected of selectedRecipes) {
+              const recipe = recipes.find(
+                (candidate) => candidate.id === selected.recipeId,
+              );
+              actionPlan.push({
+                tool: "apply_scene_recipe",
+                arguments: {
+                  recipeId: selected.recipeId,
+                  position: selected.position,
+                },
+                reason: `${recipe?.name ?? selected.recipeId}を${selected.placement}へ配置`,
+              });
+            }
+
+            const decisionTrace = [
+              {
+                label: "地形",
+                value:
+                  terrain === "none"
+                    ? "追加しない"
+                    : TERRAIN_PRESETS.find((preset) => preset.id === terrain)
+                        ?.label ?? terrain,
+              },
+              { label: "雰囲気", value: mood },
+              { label: "密度", value: density },
+              ...selectedRecipes.map((selected, index) => ({
+                label: `ギミック${index + 1}`,
+                value: `${
+                  recipes.find((recipe) => recipe.id === selected.recipeId)
+                    ?.name ?? selected.recipeId
+                } → ${selected.placement}`,
+              })),
+            ];
+            await completeResponse({
+              id: request.id,
+              ok: true,
+              result: {
+                prompt,
+                model:
+                  typeof jev.model === "string" ? jev.model : "jev-latest",
+                usage: jev.usage ?? null,
+                decisions: {
+                  terrain,
+                  mood,
+                  density,
+                  recipes: selectedRecipes,
+                },
+                decisionTrace,
+                actionPlan,
+                execution: {
+                  mutatesScene: false,
+                  revision: mcpRevisionRef.current,
+                  instructions:
+                    "actionPlanを上から順に実行してください。各書き込み前にget_editor_contextで最新projectId、sceneId、expectedRevisionを補ってください。最後にcapture_scene_viewで確認してください。",
+                },
+              },
+            });
+            return;
+          }
           const providerId = mcpOptionalString(args.providerId) ?? "poly-haven";
           if (request.tool === "search_external_assets") {
             const query = (mcpOptionalString(args.query) ?? "").toLocaleLowerCase();
