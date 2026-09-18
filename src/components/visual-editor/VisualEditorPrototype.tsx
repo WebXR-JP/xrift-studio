@@ -7990,6 +7990,7 @@ export function VisualEditorPrototype({
           ).result;
           const worldPosition = sample.worldPosition;
           if (
+            sample.insideFootprint === true &&
             Array.isArray(worldPosition) &&
             worldPosition.length === 3 &&
             worldPosition.every((value) => typeof value === "number")
@@ -8220,11 +8221,7 @@ export function VisualEditorPrototype({
         await new Promise<void>((resolve) =>
           window.requestAnimationFrame(() => resolve()),
         );
-        if (primaryRecipeEntityId) {
-          await requestSceneCamera({ focusEntityId: primaryRecipeEntityId });
-        } else {
-          await requestSceneCamera({ preset: "iso" });
-        }
+        await requestSceneCamera({ preset: "iso" });
         const screenshot = await requestSceneScreenshot();
         const previewDataUrl = screenshot.ok ? screenshot.dataUrl : null;
         setJevFastAuthoringState({
