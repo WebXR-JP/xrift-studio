@@ -8,6 +8,7 @@ import {
   type SceneRecipeCategory,
 } from "./scene-recipe-catalog";
 import { TERRAIN_PRESETS } from "./terrain-presets";
+import { TERRAIN_SURFACE_CATALOG } from "./terrain-surface-catalog";
 import {
   getTransform,
   type SceneDocument,
@@ -52,6 +53,14 @@ export type FastAuthoringCount =
   | "group"
   | "many"
   | "mass";
+export type FastAuthoringFinish =
+  | "clean"
+  | "natural-depth"
+  | "cinematic"
+  | "night-glow"
+  | "soft-dream";
+export type FastAuthoringWind = "still" | "breeze" | "windy";
+
 export type FastAuthoringPrimitiveHelper =
   | "none"
   | "platform"
@@ -91,6 +100,9 @@ export type FastAuthoringDecision = {
   scale: FastAuthoringScale;
   composition: FastAuthoringComposition;
   detail: FastAuthoringDetail;
+  terrainSurface: string;
+  finish: FastAuthoringFinish;
+  wind: FastAuthoringWind;
   elementBudget: number;
   recipes: FastAuthoringRecipeDecision[];
   facilities: FastAuthoringFacilityDecision[];
@@ -256,6 +268,145 @@ export const FAST_AUTHORING_COUNT_CRITERIA: Record<
   many: "8個程度を繰り返して配置する",
   mass: "12個程度を群生・列・まとまりとして配置する",
 };
+export const FAST_AUTHORING_FINISH_CRITERIA: Record<
+  FastAuthoringFinish,
+  string
+> = {
+  clean: "Post Effectを使わず軽く自然に見せる",
+  "natural-depth": "AOを中心に立体感を足し、Bloomは抑える",
+  cinematic: "HDR・AO・控えめなBloom・色味調整で映画的に仕上げる",
+  "night-glow": "夜景やEmissiveが映えるようBloomとコントラストを強める",
+  "soft-dream": "柔らかいBloomと穏やかな色味で幻想的に仕上げる",
+};
+export const FAST_AUTHORING_WIND_CRITERIA: Record<
+  FastAuthoringWind,
+  string
+> = {
+  still: "風をほぼ感じない静かな空間",
+  breeze: "草や水面が少し揺れる自然な風",
+  windy: "山・海辺・荒天など、はっきり動きを感じる風",
+};
+
+export const FAST_AUTHORING_FINISH_SETTINGS: Record<
+  FastAuthoringFinish,
+  Record<string, unknown>
+> = {
+  clean: { enabled: false },
+  "natural-depth": {
+    enabled: true,
+    hdr: { enabled: true, toneMapping: "aces" },
+    bloom: { enabled: false },
+    ao: {
+      enabled: true,
+      radius: 8,
+      minDistance: 0.005,
+      maxDistance: 0.1,
+    },
+    grading: {
+      enabled: true,
+      contrast: 1.06,
+      saturation: 1.02,
+      temperature: 0,
+      tint: 0,
+    },
+    exposure: 1,
+  },
+  cinematic: {
+    enabled: true,
+    hdr: { enabled: true, toneMapping: "aces" },
+    bloom: {
+      enabled: true,
+      threshold: 4,
+      strength: 0.18,
+      radius: 0.24,
+    },
+    ao: {
+      enabled: true,
+      radius: 8,
+      minDistance: 0.005,
+      maxDistance: 0.1,
+    },
+    grading: {
+      enabled: true,
+      contrast: 1.1,
+      saturation: 1.04,
+      temperature: 0.06,
+      tint: 0,
+    },
+    exposure: 1,
+  },
+  "night-glow": {
+    enabled: true,
+    hdr: { enabled: true, toneMapping: "aces" },
+    bloom: {
+      enabled: true,
+      threshold: 1.5,
+      strength: 0.34,
+      radius: 0.3,
+    },
+    ao: {
+      enabled: true,
+      radius: 7,
+      minDistance: 0.005,
+      maxDistance: 0.1,
+    },
+    grading: {
+      enabled: true,
+      contrast: 1.12,
+      saturation: 1.08,
+      temperature: -0.04,
+      tint: 0.02,
+    },
+    exposure: 0.92,
+  },
+  "soft-dream": {
+    enabled: true,
+    hdr: { enabled: true, toneMapping: "aces" },
+    bloom: {
+      enabled: true,
+      threshold: 2.5,
+      strength: 0.24,
+      radius: 0.34,
+    },
+    ao: { enabled: false },
+    grading: {
+      enabled: true,
+      contrast: 0.98,
+      saturation: 0.96,
+      temperature: 0.08,
+      tint: 0.02,
+    },
+    exposure: 1.02,
+  },
+};
+
+export const FAST_AUTHORING_WIND_SETTINGS: Record<
+  FastAuthoringWind,
+  Record<string, unknown>
+> = {
+  still: {
+    enabled: false,
+    windStrength: 0,
+    windSpeed: 0,
+    gustStrength: 0,
+    windDirectionDegrees: 0,
+  },
+  breeze: {
+    enabled: true,
+    windStrength: 0.35,
+    windSpeed: 0.7,
+    gustStrength: 0.18,
+    windDirectionDegrees: 35,
+  },
+  windy: {
+    enabled: true,
+    windStrength: 0.85,
+    windSpeed: 1.35,
+    gustStrength: 0.5,
+    windDirectionDegrees: 55,
+  },
+};
+
 export const FAST_AUTHORING_PRIMITIVE_CRITERIA: Record<
   FastAuthoringPrimitiveHelper,
   string
@@ -384,6 +535,13 @@ function createFastAuthoringCatalog() {
       preset.label + ": " + preset.description,
     ]),
   ]);
+  const terrainSurfaceCriteria = Object.fromEntries([
+    ["none", "Terrain Surfaceを追加しない"],
+    ...TERRAIN_SURFACE_CATALOG.map((surface) => [
+      surface.id,
+      surface.label + ": " + surface.description,
+    ]),
+  ]);
   const facilities = listBuiltinPrefabRecipes("world").filter(
     (recipe) => recipe.id !== BUILTIN_PREFAB_RECIPE_IDS.spawnPoint,
   );
@@ -401,6 +559,7 @@ function createFastAuthoringCatalog() {
     recipes,
     roleCriteria,
     terrainCriteria,
+    terrainSurfaceCriteria,
     facilities,
     facilityCriteria,
   };
@@ -473,6 +632,24 @@ export function buildFastAuthoringRequest({
       instructions:
         "依頼の作り込み量を選んでください。大量配置を求める依頼ではmaximalを使えます。",
       criteria: FAST_AUTHORING_DETAIL_CRITERIA,
+    },
+    terrainSurface: {
+      type: "choice",
+      instructions:
+        "Terrainがある、または作る場合、依頼に合う地表表現を選んでください。不要ならnone。",
+      criteria: catalog.terrainSurfaceCriteria,
+    },
+    finish: {
+      type: "choice",
+      instructions:
+        "World全体の仕上げとしてPost Effectの方向を選んでください。軽さ優先ならclean。",
+      criteria: FAST_AUTHORING_FINISH_CRITERIA,
+    },
+    wind: {
+      type: "choice",
+      instructions:
+        "草・水面・植生へ与えるWorld全体の風を選んでください。",
+      criteria: FAST_AUTHORING_WIND_CRITERIA,
     },
   };
 
@@ -940,6 +1117,24 @@ export function resolveFastAuthoringDecision({
     FAST_AUTHORING_DETAIL_CRITERIA,
     "rich",
   ) as FastAuthoringDetail;
+  const terrainSurface = selectedChoice(
+    answers,
+    "terrainSurface",
+    catalog.terrainSurfaceCriteria,
+    "none",
+  );
+  const finish = selectedChoice(
+    answers,
+    "finish",
+    FAST_AUTHORING_FINISH_CRITERIA,
+    "clean",
+  ) as FastAuthoringFinish;
+  const wind = selectedChoice(
+    answers,
+    "wind",
+    FAST_AUTHORING_WIND_CRITERIA,
+    "breeze",
+  ) as FastAuthoringWind;
   const elementBudget = Math.min(
     FAST_AUTHORING_MAX_ELEMENTS,
     Math.max(1, Math.min(maxElements, DETAIL_BUDGET[detail])),
@@ -1138,6 +1333,17 @@ export function resolveFastAuthoringDecision({
       label: "作り込み",
       value: detail + " / 最大" + elementBudget + "配置",
     },
+    {
+      label: "地表",
+      value:
+        terrainSurface === "none"
+          ? "変更しない"
+          : TERRAIN_SURFACE_CATALOG.find(
+              (surface) => surface.id === terrainSurface,
+            )?.label ?? terrainSurface,
+    },
+    { label: "仕上げ", value: finish },
+    { label: "風", value: wind },
     ...recipeTrace,
     ...facilities.map((facility, index) => ({
       label: "公式設備" + (index + 1),
@@ -1156,6 +1362,9 @@ export function resolveFastAuthoringDecision({
     scale,
     composition,
     detail,
+    terrainSurface,
+    finish,
+    wind,
     elementBudget,
     recipes,
     facilities,
