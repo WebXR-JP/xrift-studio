@@ -18,6 +18,42 @@ export function runJevFastAuthoringFixtureAssertions(): void {
     "starter SpawnPoint should be detected from the legacy spawn component",
   );
 
+  const legacySpawnEntity = Object.values(project.scene.entities).find(
+    (entity) =>
+      entity.components.some((component) => component.type === "spawn-point"),
+  );
+  assert(legacySpawnEntity, "fixture needs a legacy SpawnPoint");
+  const modernScene = {
+    ...project.scene,
+    entities: {
+      ...project.scene.entities,
+      [legacySpawnEntity.id]: {
+        ...legacySpawnEntity,
+        components: legacySpawnEntity.components.map((component) =>
+          component.type === "spawn-point"
+            ? {
+                id: component.id,
+                type: "xrift-component" as const,
+                enabled: component.enabled,
+                schemaId: "xrift.spawn-point",
+                schemaVersion: "1.0.0",
+                properties: { position: [0, 0, 0], yaw: 0 },
+                assetReferences: [],
+                entityReferences: [],
+              }
+            : component,
+        ),
+      },
+    },
+  };
+  const modernSpawn = findFastAuthoringSpawnPosition(modernScene);
+  assert(
+    modernSpawn[0] === spawn[0] &&
+      modernSpawn[1] === spawn[1] &&
+      modernSpawn[2] === spawn[2],
+    "official xrift.spawn-point should resolve to the same Transform",
+  );
+
   const planned = buildFastAuthoringRequest({
     prompt: "夜の山に焚き火がある休憩所",
     scene: project.scene,
