@@ -13,6 +13,7 @@ import { TERRAIN_GRASS_PRESETS } from "./terrain-grass";
 import { SKY_SHADER_CATALOG } from "./sky-shader-catalog";
 import {
   getTransform,
+  type FastAuthoringEntityMetadata,
   type SceneDocument,
   type Vec3,
 } from "./scene-document";
@@ -63,6 +64,59 @@ export type FastAuthoringFinish =
 export type FastAuthoringWind = "still" | "breeze" | "windy";
 export type FastAuthoringHumanize = "off" | "subtle" | "natural" | "handmade";
 
+export type FastAuthoringZoneId =
+  | "entrance"
+  | "main"
+  | "rest"
+  | "view"
+  | "perimeter";
+
+export type FastAuthoringEditScope =
+  | "append"
+  | "replace-generated"
+  | "replace-entrance"
+  | "replace-main"
+  | "replace-rest"
+  | "replace-view"
+  | "replace-perimeter";
+
+export type FastAuthoringValidationCheck = {
+  id: string;
+  label: string;
+  status: "ok" | "warning";
+  message: string;
+};
+
+export type FastAuthoringSceneFeatures = {
+  spawn: {
+    position: Vec3;
+    yawRadians: number;
+    forward: Vec3;
+    clearForwardMeters: number;
+  };
+  terrain: {
+    present: boolean;
+  };
+  occupancy: Record<
+    FastAuthoringZoneId,
+    {
+      obstacleCount: number;
+      clearanceMeters: number;
+    }
+  >;
+  performance: {
+    rootEntityCount: number;
+    meshCount: number;
+    lightCount: number;
+    particleCount: number;
+    colliderCount: number;
+  };
+  generated: {
+    count: number;
+    zones: Record<FastAuthoringZoneId, number>;
+  };
+};
+
 export type FastAuthoringPrimitiveHelper =
   | "none"
   | "platform"
@@ -75,6 +129,7 @@ export type FastAuthoringTraceItem = { label: string; value: string };
 export type FastAuthoringRecipeDecision = {
   role: string;
   recipeId: string;
+  zoneId: FastAuthoringZoneId;
   placement: FastAuthoringPlacement;
   position: Vec3;
   instanceIndex: number;
@@ -85,6 +140,7 @@ export type FastAuthoringRecipeDecision = {
 export type FastAuthoringFacilityDecision = {
   recipeId: string;
   name: string;
+  zoneId: FastAuthoringZoneId;
   placement: FastAuthoringPlacement;
   position: Vec3;
   heightOffset: number;
@@ -92,12 +148,14 @@ export type FastAuthoringFacilityDecision = {
 };
 export type FastAuthoringPrimitiveDecision = {
   kind: Exclude<FastAuthoringPrimitiveHelper, "none">;
+  zoneId: FastAuthoringZoneId;
   shape: "box" | "cylinder";
   position: Vec3;
   scale: Vec3;
   name: string;
 };
 export type FastAuthoringDecision = {
+  editScope: FastAuthoringEditScope;
   terrain: string;
   mood: FastAuthoringMood;
   density: FastAuthoringDensity;
@@ -217,6 +275,31 @@ export const FAST_AUTHORING_PLACEMENT_CRITERIA: Record<
   far: "中心よりさらに奥。遠景向け",
   "perimeter-left": "中央を空けた左外周",
   "perimeter-right": "中央を空けた右外周",
+};
+
+export const FAST_AUTHORING_ZONE_CRITERIA: Record<
+  FastAuthoringZoneId,
+  string
+> = {
+  entrance: "Spawn直後の入口・案内・導線のZone",
+  main: "Worldの主役を置くメインZone",
+  rest: "座る・集まる・焚き火などの休憩Zone",
+  view: "奥行きや景色を見せる展望・遠景Zone",
+  perimeter: "木・岩・境界など中央を囲む外周Zone",
+};
+
+export const FAST_AUTHORING_EDIT_SCOPE_CRITERIA: Record<
+  FastAuthoringEditScope,
+  string
+> = {
+  append: "既存の生成物は残し、今回の内容を追加する",
+  "replace-generated":
+    "Fast Authoringで以前生成したEntityだけを全て置き換える。手作業や既存Entityは消さない",
+  "replace-entrance": "以前生成した入口Zoneだけを置き換える",
+  "replace-main": "以前生成したメインZoneだけを置き換える",
+  "replace-rest": "以前生成した休憩Zoneだけを置き換える",
+  "replace-view": "以前生成した展望Zoneだけを置き換える",
+  "replace-perimeter": "以前生成した外周Zoneだけを置き換える",
 };
 export const FAST_AUTHORING_MOOD_CRITERIA: Record<
   FastAuthoringMood,
@@ -708,6 +791,15 @@ export function buildFastAuthoringRequest({
         "配置の人間らしい不揃いさを選んでください。自然物や大量配置はnaturalかhandmade、展示・建築・UI中心ならoffかsubtleを優先してください。",
       criteria: FAST_AUTHORING_HUMANIZE_CRITERIA,
     },
+    editScope: {
+      type: "choice",
+      instructions:
+        "以前のFast Authoring生成物を直す依頼なら対象Zoneだけを置き換えてください。新規追加ならappend。Fast Authoring以外のEntityは削除対象にしません。",
+      criteria:
+        createFastAuthoringSceneFeatures(scene).generated.count > 0
+          ? FAST_AUTHORING_EDIT_SCOPE_CRITERIA
+          : { append: FAST_AUTHORING_EDIT_SCOPE_CRITERIA.append },
+    },
   };
 
   for (const role of FAST_AUTHORING_RECIPE_ROLES) {
@@ -735,6 +827,13 @@ export function buildFastAuthoringRequest({
           role.label +
           "のまとまりの基準位置を選んでください。複数個はこの周辺へ分散されます。",
         criteria: FAST_AUTHORING_PLACEMENT_CRITERIA,
+      };
+      questions[suffix + "Zone"] = {
+        type: "choice",
+        instructions:
+          role.label +
+          "をどの意味的Zoneへ所属させるか選んでください。後からZone単位で安全に再生成できます。",
+        criteria: FAST_AUTHORING_ZONE_CRITERIA,
       };
     }
   }
@@ -782,6 +881,7 @@ export function buildFastAuthoringRequest({
             .slice(0, 80)
             .map((entity) => entity.name),
         },
+        sceneFeatures: createFastAuthoringSceneFeatures(scene),
         roles: FAST_AUTHORING_RECIPE_ROLES.map((role) => ({
           id: role.id,
           label: role.label,
@@ -832,7 +932,21 @@ function isGroundLikeEntity(scene: SceneDocument, entityId: string): boolean {
   });
 }
 
-export function findFastAuthoringSpawnPosition(scene: SceneDocument): Vec3 {
+type FastAuthoringSpawnFrame = {
+  entityId: string | null;
+  position: Vec3;
+  yawRadians: number;
+  forward: Vec3;
+  right: Vec3;
+};
+
+type OccupiedFootprint = {
+  entityId?: string;
+  position: Vec3;
+  radius: number;
+};
+
+function findFastAuthoringSpawnFrame(scene: SceneDocument): FastAuthoringSpawnFrame {
   const spawn = Object.values(scene.entities).find((entity) =>
     entity.components.some(
       (component) =>
@@ -841,9 +955,47 @@ export function findFastAuthoringSpawnPosition(scene: SceneDocument): Vec3 {
           component.schemaId === "xrift.spawn-point"),
     ),
   );
-  return spawn
-    ? getTransform(scene, spawn.id)?.position ?? [0, 0, 0]
-    : [0, 0, 0];
+  const transform = spawn ? getTransform(scene, spawn.id) : undefined;
+  const position: Vec3 = transform?.position ?? [0, 0, 0];
+  const yawRadians = transform?.rotation?.[1] ?? 0;
+  const forward: Vec3 = [
+    -Math.sin(yawRadians),
+    0,
+    -Math.cos(yawRadians),
+  ];
+  const right: Vec3 = [
+    Math.cos(yawRadians),
+    0,
+    -Math.sin(yawRadians),
+  ];
+  return {
+    entityId: spawn?.id ?? null,
+    position,
+    yawRadians,
+    forward,
+    right,
+  };
+}
+
+export function findFastAuthoringSpawnPosition(scene: SceneDocument): Vec3 {
+  return findFastAuthoringSpawnFrame(scene).position;
+}
+
+function relativePosition(
+  frame: FastAuthoringSpawnFrame,
+  rightMeters: number,
+  forwardMeters: number,
+  y = 0,
+): Vec3 {
+  return [
+    frame.position[0] +
+      frame.right[0] * rightMeters +
+      frame.forward[0] * forwardMeters,
+    y,
+    frame.position[2] +
+      frame.right[2] * rightMeters +
+      frame.forward[2] * forwardMeters,
+  ];
 }
 
 function isPlacementObstacle(
@@ -863,11 +1015,52 @@ function isPlacementObstacle(
   );
 }
 
-function occupiedRootPositions(scene: SceneDocument): Vec3[] {
+function placementObstacleRadius(scene: SceneDocument, entityId: string): number {
+  const entity = scene.entities[entityId];
+  if (!entity) return 0.75;
+  const transform = getTransform(scene, entityId);
+  const scale = transform?.scale ?? [1, 1, 1];
+  const scaleXZ = Math.max(Math.abs(scale[0]), Math.abs(scale[2]), 0.01);
+  const box = entity.components.find(
+    (component) => component.type === "collider" && component.shape === "box",
+  );
+  if (box && box.type === "collider" && box.shape === "box") {
+    return Math.max(
+      0.5,
+      Math.hypot(
+        box.halfExtents[0] * Math.abs(scale[0]),
+        box.halfExtents[2] * Math.abs(scale[2]),
+      ),
+    );
+  }
+  if (entity.children.length > 0) return Math.max(2, scaleXZ * 1.5);
+  if (
+    entity.components.some(
+      (component) =>
+        component.type === "spawn-point" ||
+        (component.type === "xrift-component" &&
+          component.schemaId === "xrift.spawn-point"),
+    )
+  ) {
+    return 0.8;
+  }
+  if (entity.components.some((component) => component.type === "mesh")) {
+    return Math.max(0.9, scaleXZ * 1.25);
+  }
+  return Math.max(0.65, scaleXZ * 0.75);
+}
+
+function occupiedRootFootprints(scene: SceneDocument): OccupiedFootprint[] {
   return scene.rootEntityIds.flatMap((entityId) => {
     if (!isPlacementObstacle(scene, entityId)) return [];
     const position = getTransform(scene, entityId)?.position;
-    return position ? [[...position] as Vec3] : [];
+    return position
+      ? [{
+          entityId,
+          position: [...position] as Vec3,
+          radius: placementObstacleRadius(scene, entityId),
+        }]
+      : [];
   });
 }
 
@@ -875,38 +1068,275 @@ function horizontalDistance(a: Vec3, b: Vec3): number {
   return Math.hypot(a[0] - b[0], a[2] - b[2]);
 }
 
+function positionClearOfFootprints(
+  position: Vec3,
+  occupied: readonly OccupiedFootprint[],
+  radius: number,
+  minimumDistance: number,
+): boolean {
+  return occupied.every((existing) => {
+    const required = Math.max(
+      minimumDistance,
+      radius + existing.radius + 0.25,
+    );
+    return horizontalDistance(position, existing.position) >= required;
+  });
+}
+
 function safePosition(
   nominal: Vec3,
-  occupied: readonly Vec3[],
+  occupied: readonly OccupiedFootprint[],
   minimumDistance: number,
+  radius = 0.75,
 ): Vec3 {
-  const offsets: readonly [number, number][] = [
-    [0, 0],
-    [minimumDistance, 0],
-    [-minimumDistance, 0],
-    [0, minimumDistance],
-    [0, -minimumDistance],
-    [minimumDistance, minimumDistance],
-    [-minimumDistance, minimumDistance],
-    [minimumDistance, -minimumDistance],
-    [-minimumDistance, -minimumDistance],
-  ];
+  const candidates: Vec3[] = [[nominal[0], nominal[1], nominal[2]]];
+  const ringStep = Math.max(1.2, minimumDistance);
+  for (let ring = 1; ring <= 8; ring += 1) {
+    const ringRadius = ring * ringStep;
+    const points = Math.max(8, ring * 8);
+    for (let index = 0; index < points; index += 1) {
+      const angle = (index / points) * Math.PI * 2;
+      candidates.push([
+        nominal[0] + Math.cos(angle) * ringRadius,
+        nominal[1],
+        nominal[2] + Math.sin(angle) * ringRadius,
+      ]);
+    }
+  }
   const candidate =
-    offsets
-      .map(
-        ([x, z]) =>
-          [nominal[0] + x, nominal[1], nominal[2] + z] as Vec3,
-      )
-      .find((position) =>
-        occupied.every(
-          (existing) =>
-            horizontalDistance(position, existing) >= minimumDistance,
-        ),
-      ) ?? nominal;
+    candidates.find((position) =>
+      positionClearOfFootprints(position, occupied, radius, minimumDistance),
+    ) ?? candidates[candidates.length - 1];
   return [
     Math.round(candidate[0] * 10) / 10,
     candidate[1],
     Math.round(candidate[2] * 10) / 10,
+  ];
+}
+
+function zoneOrigin(
+  zoneId: FastAuthoringZoneId,
+  spread: number,
+  frame: FastAuthoringSpawnFrame,
+): Vec3 {
+  switch (zoneId) {
+    case "entrance":
+      return relativePosition(frame, 0, Math.max(2.5, spread * 0.18));
+    case "rest":
+      return relativePosition(frame, spread * 0.22, Math.max(4.5, spread * 0.42));
+    case "view":
+      return relativePosition(frame, 0, Math.max(8, spread * 0.9));
+    case "perimeter":
+      return relativePosition(frame, -spread * 0.72, Math.max(5, spread * 0.55));
+    case "main":
+    default:
+      return relativePosition(frame, 0, Math.max(4.5, spread * 0.48));
+  }
+}
+
+function defaultZoneForRole(
+  roleId: string,
+  placement: FastAuthoringPlacement,
+): FastAuthoringZoneId {
+  if (placement === "near-spawn") return "entrance";
+  if (placement === "far") return "view";
+  if (placement === "perimeter-left" || placement === "perimeter-right") {
+    return "perimeter";
+  }
+  if (roleId === "furniture" || roleId === "lighting" || roleId === "interaction") {
+    return "rest";
+  }
+  if (roleId === "atmosphere") return "view";
+  return "main";
+}
+
+function placementRadiusForRecipe(recipe: SceneRecipe): number {
+  if (recipe.category === "structure" || recipe.category === "water") return 2.2;
+  if (recipe.category === "furniture") return 1.25;
+  if (recipe.category === "nature") return 1.1;
+  if (recipe.category === "light") return 0.85;
+  if (recipe.category === "weather" || recipe.category === "effect") return 0.5;
+  return 0.8;
+}
+
+export function listFastAuthoringGeneratedEntities(scene: SceneDocument): Array<{
+  entityId: string;
+  metadata: FastAuthoringEntityMetadata;
+}> {
+  return Object.values(scene.entities).flatMap((entity) => {
+    const metadata = entity.authoring?.fastAuthoring;
+    return metadata ? [{ entityId: entity.id, metadata }] : [];
+  });
+}
+
+export function applyFastAuthoringEntityMetadata(
+  scene: SceneDocument,
+  entityId: string,
+  metadata: FastAuthoringEntityMetadata,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  if (!entity) return scene;
+  return {
+    ...scene,
+    entities: {
+      ...scene.entities,
+      [entityId]: {
+        ...entity,
+        authoring: {
+          ...entity.authoring,
+          fastAuthoring: metadata,
+        },
+      },
+    },
+  };
+}
+
+export function createFastAuthoringSceneFeatures(
+  scene: SceneDocument,
+): FastAuthoringSceneFeatures {
+  const spawn = findFastAuthoringSpawnFrame(scene);
+  const occupied = occupiedRootFootprints(scene).filter(
+    (entry) => entry.entityId !== spawn.entityId,
+  );
+  let clearForwardMeters = 20;
+  for (let distance = 0.5; distance <= 20; distance += 0.5) {
+    const point = relativePosition(spawn, 0, distance);
+    if (
+      occupied.some(
+        (entry) =>
+          horizontalDistance(point, entry.position) < entry.radius + 0.8,
+      )
+    ) {
+      clearForwardMeters = Math.max(0, distance - 0.5);
+      break;
+    }
+  }
+
+  const zoneCenters: Record<FastAuthoringZoneId, Vec3> = {
+    entrance: zoneOrigin("entrance", 11, spawn),
+    main: zoneOrigin("main", 11, spawn),
+    rest: zoneOrigin("rest", 11, spawn),
+    view: zoneOrigin("view", 11, spawn),
+    perimeter: zoneOrigin("perimeter", 11, spawn),
+  };
+  const occupancy = Object.fromEntries(
+    (Object.keys(zoneCenters) as FastAuthoringZoneId[]).map((zoneId) => {
+      const center = zoneCenters[zoneId];
+      const distances = occupied.map(
+        (entry) => horizontalDistance(center, entry.position) - entry.radius,
+      );
+      return [
+        zoneId,
+        {
+          obstacleCount: occupied.filter(
+            (entry) => horizontalDistance(center, entry.position) <= 6 + entry.radius,
+          ).length,
+          clearanceMeters:
+            distances.length > 0
+              ? Math.max(0, Math.round(Math.min(...distances) * 10) / 10)
+              : 20,
+        },
+      ];
+    }),
+  ) as FastAuthoringSceneFeatures["occupancy"];
+
+  const allComponents = Object.values(scene.entities).flatMap(
+    (entity) => entity.components,
+  );
+  const generatedEntities = listFastAuthoringGeneratedEntities(scene);
+  const generatedZones = {
+    entrance: 0,
+    main: 0,
+    rest: 0,
+    view: 0,
+    perimeter: 0,
+  } satisfies Record<FastAuthoringZoneId, number>;
+  for (const entry of generatedEntities) {
+    generatedZones[entry.metadata.zoneId] += 1;
+  }
+
+  return {
+    spawn: {
+      position: spawn.position,
+      yawRadians: spawn.yawRadians,
+      forward: spawn.forward,
+      clearForwardMeters: Math.round(clearForwardMeters * 10) / 10,
+    },
+    terrain: {
+      present: Boolean(findTerrainEntityId(scene)),
+    },
+    occupancy,
+    performance: {
+      rootEntityCount: scene.rootEntityIds.length,
+      meshCount: allComponents.filter((component) => component.type === "mesh").length,
+      lightCount: allComponents.filter((component) => component.type === "light").length,
+      particleCount: allComponents.filter(
+        (component) => component.type === "particle-emitter",
+      ).length,
+      colliderCount: allComponents.filter(
+        (component) => component.type === "collider",
+      ).length,
+    },
+    generated: {
+      count: generatedEntities.length,
+      zones: generatedZones,
+    },
+  };
+}
+
+export function validateFastAuthoringScene({
+  scene,
+  generatedEntityIds,
+}: {
+  scene: SceneDocument;
+  generatedEntityIds: readonly string[];
+}): FastAuthoringValidationCheck[] {
+  const generated = new Set(generatedEntityIds);
+  const footprints = occupiedRootFootprints(scene);
+  let overlaps = 0;
+  for (let left = 0; left < footprints.length; left += 1) {
+    for (let right = left + 1; right < footprints.length; right += 1) {
+      const a = footprints[left];
+      const b = footprints[right];
+      if (!generated.has(a.entityId ?? "") && !generated.has(b.entityId ?? "")) {
+        continue;
+      }
+      if (
+        horizontalDistance(a.position, b.position) <
+        (a.radius + b.radius) * 0.72
+      ) {
+        overlaps += 1;
+      }
+    }
+  }
+  const features = createFastAuthoringSceneFeatures(scene);
+  const performanceWarnings =
+    features.performance.lightCount > 24 ||
+    features.performance.particleCount > 18 ||
+    features.performance.rootEntityCount > 450;
+
+  return [
+    {
+      id: "overlap",
+      label: "重なり",
+      status: overlaps === 0 ? "ok" : "warning",
+      message:
+        overlaps === 0
+          ? "生成物と既存Entityの大きな重なりは見つかりませんでした"
+          : `${overlaps}件の近接・重なり候補があります。Scene Viewで確認してください`,
+    },
+    {
+      id: "spawn-clearance",
+      label: "Spawn前方",
+      status: features.spawn.clearForwardMeters >= 2 ? "ok" : "warning",
+      message: `前方クリア距離 ${features.spawn.clearForwardMeters}m`,
+    },
+    {
+      id: "performance",
+      label: "負荷目安",
+      status: performanceWarnings ? "warning" : "ok",
+      message: `Root ${features.performance.rootEntityCount} / Light ${features.performance.lightCount} / Particle ${features.performance.particleCount}`,
+    },
   ];
 }
 
@@ -928,68 +1358,87 @@ function nominalPosition(
   placement: FastAuthoringPlacement,
   composition: FastAuthoringComposition,
   spread: number,
-  spawn: Vec3,
+  spawn: FastAuthoringSpawnFrame,
+  zoneId: FastAuthoringZoneId,
   index: number,
 ): Vec3 {
+  const origin = zoneOrigin(zoneId, spread, spawn);
+  const localSpread = Math.max(2.5, spread * 0.38);
   if (placement === "near-spawn") {
-    return [spawn[0], 0, spawn[2] - 2];
+    return zoneOrigin("entrance", spread, spawn);
   }
+
+  const at = (rightMeters: number, forwardMeters: number): Vec3 => [
+    origin[0] +
+      spawn.right[0] * rightMeters +
+      spawn.forward[0] * forwardMeters,
+    0,
+    origin[2] +
+      spawn.right[2] * rightMeters +
+      spawn.forward[2] * forwardMeters,
+  ];
+
   let position: Vec3;
   switch (placement) {
     case "front-left":
-      position = [-spread * 0.65, 0, spread * 0.55];
+      position = at(-localSpread * 0.65, -localSpread * 0.5);
       break;
     case "front-right":
-      position = [spread * 0.65, 0, spread * 0.55];
+      position = at(localSpread * 0.65, -localSpread * 0.5);
       break;
     case "left":
-      position = [-spread, 0, 0];
+      position = at(-localSpread, 0);
       break;
     case "right":
-      position = [spread, 0, 0];
+      position = at(localSpread, 0);
       break;
     case "back-left":
-      position = [-spread * 0.68, 0, -spread * 0.68];
+      position = at(-localSpread * 0.68, localSpread * 0.68);
       break;
     case "back-right":
-      position = [spread * 0.68, 0, -spread * 0.68];
+      position = at(localSpread * 0.68, localSpread * 0.68);
       break;
     case "far":
-      position = [0, 0, -spread];
+      position = at(0, localSpread);
       break;
     case "perimeter-left":
-      position = [-spread, 0, -spread * 0.35];
+      position = at(-localSpread, localSpread * 0.35);
       break;
     case "perimeter-right":
-      position = [spread, 0, -spread * 0.35];
+      position = at(localSpread, localSpread * 0.35);
       break;
     default:
-      position = [0, 0, 0];
+      position = origin;
   }
+
   if (placement === "center" && index > 0) {
     if (composition === "open-center") {
       return index % 2 === 0
-        ? [-spread * 0.7, 0, -spread * 0.45]
-        : [spread * 0.7, 0, -spread * 0.45];
+        ? at(-localSpread * 0.7, localSpread * 0.45)
+        : at(localSpread * 0.7, localSpread * 0.45);
     }
     if (composition === "path") {
-      return [0, 0, -spread * Math.min(0.9, 0.2 + index * 0.1)];
+      return at(0, localSpread * Math.min(0.9, 0.2 + index * 0.1));
     }
     if (composition === "ring") {
       const angle = ((index - 1) / 7) * Math.PI * 2;
-      return [
-        Math.cos(angle) * spread * 0.7,
-        0,
-        Math.sin(angle) * spread * 0.7,
-      ];
+      return at(
+        Math.cos(angle) * localSpread * 0.7,
+        Math.sin(angle) * localSpread * 0.7,
+      );
     }
   }
+
   if (composition === "natural" && placement !== "center") {
     const offset = index % 2 === 0 ? 0.1 : -0.1;
     return [
-      position[0] + spread * offset,
+      position[0] +
+        spawn.right[0] * spread * offset +
+        spawn.forward[0] * spread * offset * 0.65,
       0,
-      position[2] - spread * offset * 0.65,
+      position[2] +
+        spawn.right[2] * spread * offset +
+        spawn.forward[2] * spread * offset * 0.65,
     ];
   }
   return position;
@@ -1140,71 +1589,90 @@ function maxInstancesForRecipe(
 
 function primitiveDecision(
   kind: FastAuthoringPrimitiveHelper,
-  spawn: Vec3,
-  occupied: readonly Vec3[],
+  spawn: FastAuthoringSpawnFrame,
+  occupied: readonly OccupiedFootprint[],
   minimumDistance: number,
   index: number,
 ): FastAuthoringPrimitiveDecision | null {
   if (kind === "none") return null;
   if (kind === "path-marker") {
+    const zoneId: FastAuthoringZoneId = "entrance";
     return {
       kind,
+      zoneId,
       shape: "cylinder",
       position: safePosition(
-        [spawn[0] + ((index % 3) - 1) * 1.4, 0, spawn[2] - 1.5],
+        relativePosition(
+          spawn,
+          ((index % 3) - 1) * 1.4,
+          1.5,
+        ),
         occupied,
         Math.max(1.1, minimumDistance * 0.45),
+        0.35,
       ),
       scale: [0.28, 1.6, 0.28],
       name: "入口の目印",
     };
   }
   if (kind === "rest-step") {
+    const zoneId: FastAuthoringZoneId = "rest";
     return {
       kind,
+      zoneId,
       shape: "box",
       position: safePosition(
-        [((index % 3) - 1) * 3.4, 0, 3.5],
+        relativePosition(spawn, ((index % 3) - 1) * 3.4, 5),
         occupied,
         minimumDistance,
+        2.2,
       ),
       scale: [3.2, 0.45, 1.2],
       name: "休憩スペースの段",
     };
   }
   if (kind === "low-wall") {
+    const zoneId: FastAuthoringZoneId = "perimeter";
     return {
       kind,
+      zoneId,
       shape: "box",
       position: safePosition(
-        [index % 2 === 0 ? -5 : 5, 0, -2 - index],
+        relativePosition(spawn, index % 2 === 0 ? -5 : 5, 5 + index),
         occupied,
         minimumDistance,
+        2.1,
       ),
       scale: [3.8, 0.8, 0.3],
       name: "低い境界壁",
     };
   }
   if (kind === "pedestal") {
+    const zoneId: FastAuthoringZoneId = "main";
     return {
       kind,
+      zoneId,
       shape: "cylinder",
       position: safePosition(
-        [((index % 3) - 1) * 3, 0, -2.5],
+        relativePosition(spawn, ((index % 3) - 1) * 3, 6),
         occupied,
         minimumDistance,
+        1.2,
       ),
       scale: [1.8, 0.7, 1.8],
       name: "展示台座",
     };
   }
+  const zoneId: FastAuthoringZoneId = "rest";
   return {
     kind: "platform",
+    zoneId,
     shape: "box",
     position: safePosition(
-      [((index % 3) - 1) * 5, 0, -3 - index],
+      relativePosition(spawn, ((index % 3) - 1) * 5, 6 + index),
       occupied,
       minimumDistance,
+      2.8,
     ),
     scale: [4.5, 0.4, 3.5],
     name: "補助プラットフォーム",
@@ -1224,6 +1692,12 @@ export function resolveFastAuthoringDecision({
     response.answers && typeof response.answers === "object"
       ? (response.answers as Record<string, unknown>)
       : {};
+  const editScope = selectedChoice(
+    answers,
+    "editScope",
+    FAST_AUTHORING_EDIT_SCOPE_CRITERIA,
+    "append",
+  ) as FastAuthoringEditScope;
   const terrain = selectedChoice(
     answers,
     "terrain",
@@ -1298,9 +1772,9 @@ export function resolveFastAuthoringDecision({
   ) as FastAuthoringHumanize;
   const spread = spreadForScale(scale);
   const minimumDistance = minimumDistanceForDensity(density);
-  const spawn = findFastAuthoringSpawnPosition(scene);
-  const occupied = occupiedRootPositions(scene);
-  const placed = [...occupied];
+  const spawn = findFastAuthoringSpawnFrame(scene);
+  const occupied = occupiedRootFootprints(scene);
+  const placed: OccupiedFootprint[] = [...occupied];
 
   const facilities: FastAuthoringFacilityDecision[] = [];
   const usedFacilityIds = new Set<string>();
@@ -1325,6 +1799,7 @@ export function resolveFastAuthoringDecision({
     facilities.push({
       recipeId,
       name: recipe.name,
+      zoneId: defaultZoneForRole("facility", placement),
       placement,
       position: [0, 0, 0],
       heightOffset: recipe.defaultTransform.position[1],
@@ -1392,11 +1867,18 @@ export function resolveFastAuthoringDecision({
             ? "left"
             : "right",
       ) as FastAuthoringPlacement;
+      const zoneId = selectedChoice(
+        answers,
+        suffix + "Zone",
+        FAST_AUTHORING_ZONE_CRITERIA,
+        defaultZoneForRole(role.id, placement),
+      ) as FastAuthoringZoneId;
       const anchor = nominalPosition(
         placement,
         composition,
         spread,
         spawn,
+        zoneId,
         archetypeIndex,
       );
       let placedCount = 0;
@@ -1413,6 +1895,7 @@ export function resolveFastAuthoringDecision({
           minimumDistance,
           role.id,
         );
+        const placementRadius = placementRadiusForRecipe(recipe);
         const position = safePosition(
           [
             basePosition[0] + variation.positionOffset[0],
@@ -1421,11 +1904,13 @@ export function resolveFastAuthoringDecision({
           ],
           placed,
           minimumDistance,
+          placementRadius,
         );
-        placed.push(position);
+        placed.push({ position, radius: placementRadius });
         recipes.push({
           role: role.label,
           recipeId,
+          zoneId,
           placement,
           position,
           instanceIndex,
@@ -1443,6 +1928,8 @@ export function resolveFastAuthoringDecision({
           " × " +
           placedCount +
           " → " +
+          zoneId +
+          " / " +
           placement,
       });
       archetypeIndex += 1;
@@ -1456,10 +1943,11 @@ export function resolveFastAuthoringDecision({
       composition,
       spread,
       spawn,
+      facility.zoneId,
       archetypeIndex + index,
     );
-    const position = safePosition(anchor, placed, minimumDistance);
-    placed.push(position);
+    const position = safePosition(anchor, placed, minimumDistance, 1.4);
+    placed.push({ position, radius: 1.4 });
     facilities[index] = { ...facility, position };
   }
 
@@ -1473,11 +1961,29 @@ export function resolveFastAuthoringDecision({
       index,
     );
     if (!helper) continue;
-    placed.push(helper.position);
+    placed.push({
+      position: helper.position,
+      radius: Math.max(helper.scale[0], helper.scale[2]) * 0.6,
+    });
     primitives.push(helper);
   }
 
+  const sceneFeatures = createFastAuthoringSceneFeatures(scene);
   const decisionTrace: FastAuthoringTraceItem[] = [
+    {
+      label: "編集範囲",
+      value: editScope,
+    },
+    {
+      label: "Scene",
+      value:
+        "Spawn前方 " +
+        sceneFeatures.spawn.clearForwardMeters +
+        "m / Root " +
+        sceneFeatures.performance.rootEntityCount +
+        " / Light " +
+        sceneFeatures.performance.lightCount,
+    },
     {
       label: "地形",
       value:
@@ -1534,7 +2040,12 @@ export function resolveFastAuthoringDecision({
     ...recipeTrace,
     ...facilities.map((facility, index) => ({
       label: "公式設備" + (index + 1),
-      value: facility.name + " → " + facility.placement,
+      value:
+        facility.name +
+        " → " +
+        facility.zoneId +
+        " / " +
+        facility.placement,
     })),
     ...primitives.map((primitive, index) => ({
       label: "補助" + (index + 1),
@@ -1543,6 +2054,7 @@ export function resolveFastAuthoringDecision({
   ];
 
   return {
+    editScope,
     terrain,
     mood,
     density,
