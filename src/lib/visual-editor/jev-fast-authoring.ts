@@ -96,6 +96,10 @@ export type FastAuthoringSceneFeatures = {
   };
   terrain: {
     present: boolean;
+    size: [number, number] | null;
+    heightRange: [number, number] | null;
+    flatCellRatio: number | null;
+    walkableCellRatio: number | null;
   };
   occupancy: Record<
     FastAuthoringZoneId,
@@ -702,6 +706,79 @@ export function findTerrainEntityId(scene: SceneDocument): string | null {
   );
 }
 
+function summarizeFastAuthoringTerrain(
+  scene: SceneDocument,
+): FastAuthoringSceneFeatures["terrain"] {
+  const terrainEntityId = findTerrainEntityId(scene);
+  const terrainEntity = terrainEntityId
+    ? scene.entities[terrainEntityId]
+    : undefined;
+  const terrain = terrainEntity?.components.find(
+    (component) =>
+      component.type === "mesh" &&
+      component.geometry?.kind === "terrain",
+  );
+  if (
+    !terrain ||
+    terrain.type !== "mesh" ||
+    terrain.geometry?.kind !== "terrain"
+  ) {
+    return {
+      present: false,
+      size: null,
+      heightRange: null,
+      flatCellRatio: null,
+      walkableCellRatio: null,
+    };
+  }
+
+  const geometry = terrain.geometry.terrain;
+  const minimum = Math.min(...geometry.heights);
+  const maximum = Math.max(...geometry.heights);
+  const cells = geometry.resolution - 1;
+  const xStep = geometry.width / cells;
+  const zStep = geometry.depth / cells;
+  const horizontalStep = Math.max(0.001, Math.min(xStep, zStep));
+  let sampledCells = 0;
+  let flatCells = 0;
+  let walkableCells = 0;
+
+  for (let z = 0; z < cells; z += 1) {
+    for (let x = 0; x < cells; x += 1) {
+      const cellIndex = z * cells + x;
+      if (geometry.holes?.[cellIndex] === true) continue;
+      const topLeft = z * geometry.resolution + x;
+      const heights = [
+        geometry.heights[topLeft],
+        geometry.heights[topLeft + 1],
+        geometry.heights[topLeft + geometry.resolution],
+        geometry.heights[topLeft + geometry.resolution + 1],
+      ];
+      const localRange = Math.max(...heights) - Math.min(...heights);
+      const slopeDegrees =
+        (Math.atan2(localRange, horizontalStep) * 180) / Math.PI;
+      sampledCells += 1;
+      if (slopeDegrees <= 10) flatCells += 1;
+      if (slopeDegrees <= 30) walkableCells += 1;
+    }
+  }
+
+  const ratio = (count: number) =>
+    sampledCells > 0
+      ? Math.round((count / sampledCells) * 1000) / 1000
+      : 0;
+  return {
+    present: true,
+    size: [geometry.width, geometry.depth],
+    heightRange: [
+      Math.round(minimum * 100) / 100,
+      Math.round(maximum * 100) / 100,
+    ],
+    flatCellRatio: ratio(flatCells),
+    walkableCellRatio: ratio(walkableCells),
+  };
+}
+
 export function buildFastAuthoringRequest({
   prompt,
   scene,
@@ -1286,9 +1363,7 @@ export function createFastAuthoringSceneFeatures(
       forward: spawn.forward,
       clearForwardMeters: Math.round(clearForwardMeters * 10) / 10,
     },
-    terrain: {
-      present: Boolean(findTerrainEntityId(scene)),
-    },
+    terrain: summarizeFastAuthoringTerrain(scene),
     occupancy,
     performance: {
       rootEntityCount: scene.rootEntityIds.length,
@@ -2011,7 +2086,12 @@ export function resolveFastAuthoringDecision({
         "m / Root " +
         sceneFeatures.performance.rootEntityCount +
         " / Light " +
-        sceneFeatures.performance.lightCount,
+        sceneFeatures.performance.lightCount +
+        (sceneFeatures.terrain.walkableCellRatio === null
+          ? ""
+          : " / Terrain歩行目安 " +
+            Math.round(sceneFeatures.terrain.walkableCellRatio * 100) +
+            "%"),
     },
     {
       label: "地形",
