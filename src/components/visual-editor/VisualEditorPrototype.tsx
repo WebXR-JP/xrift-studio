@@ -5197,10 +5197,10 @@ export function VisualEditorPrototype({
               );
             }
             const maxGimmicks = Math.min(
-              3,
+              6,
               Math.max(
                 1,
-                mcpOptionalInteger(args.maxGimmicks, "maxGimmicks") ?? 3,
+                mcpOptionalInteger(args.maxGimmicks, "maxGimmicks") ?? 6,
               ),
             );
             const planned = buildFastAuthoringRequest({
@@ -5254,6 +5254,24 @@ export function VisualEditorPrototype({
                   "へ配置",
               });
             }
+            for (const facility of decision.facilities) {
+              actionPlan.push({
+                tool: "place_builtin_prefab",
+                arguments: {
+                  recipeId: facility.recipeId,
+                  position: [
+                    facility.position[0],
+                    facility.position[1] + facility.heightOffset,
+                    facility.position[2],
+                  ],
+                },
+                reason:
+                  facility.name +
+                  "を" +
+                  facility.placement +
+                  "へ配置",
+              });
+            }
             await completeResponse({
               id: request.id,
               ok: true,
@@ -5266,19 +5284,23 @@ export function VisualEditorPrototype({
                   terrain: decision.terrain,
                   mood: decision.mood,
                   density: decision.density,
+                  scale: decision.scale,
+                  composition: decision.composition,
                   recipes: decision.recipes,
-                  primitive: decision.primitive,
+                  facilities: decision.facilities,
+                  primitives: decision.primitives,
                 },
                 decisionTrace: decision.decisionTrace,
                 actionPlan,
-                primitivePlan: decision.primitive,
+                primitivePlan: decision.primitives,
+                facilityPlan: decision.facilities,
                 execution: {
                   mutatesScene: false,
                   revision: mcpRevisionRef.current,
                   avoidExistingEntities: true,
                   groundToTerrain: true,
                   instructions:
-                    "actionPlanを上から順に実行してください。各書き込み前にget_editor_contextで最新projectId、sceneId、expectedRevisionを補ってください。Terrainを作成した場合、Scene RecipeやPrimitiveの配置前にsample_terrain_pointでXZ地点のworldPosition.yを取得して接地してください。primitivePlanがある場合はcreate_primitiveの結果entityIdへupdate_transformでscaleを反映してください。最後にcapture_scene_viewで確認してください。",
+                    "actionPlanを上から順に実行してください。各書き込み前にget_editor_contextで最新projectId、sceneId、expectedRevisionを補ってください。Terrainを作成または既存Terrainを使う場合、Scene Recipe・公式設備・Primitiveの配置前にsample_terrain_pointでXZ地点のworldPosition.yを取得して接地してください。primitivePlanの各要素はcreate_primitiveの結果entityIdへupdate_transformでscaleを反映してください。facilityPlanのconfigurationHintがある設備は配置後に設定を確認してください。最後にcapture_scene_viewでScene全体を確認してください。",
                 },
               },
             });
