@@ -4,6 +4,7 @@ import {
 } from "./builtin-prefab-catalog";
 import {
   getSceneRecipesForProjectKind,
+  SCENE_RECIPE_IDS,
   type SceneRecipe,
   type SceneRecipeCategory,
 } from "./scene-recipe-catalog";
@@ -1583,6 +1584,57 @@ function instancePosition(
   );
 }
 
+function semanticClusterPosition({
+  recipeId,
+  zoneId,
+  instanceIndex,
+  instanceCount,
+  spread,
+  frame,
+}: {
+  recipeId: string;
+  zoneId: FastAuthoringZoneId;
+  instanceIndex: number;
+  instanceCount: number;
+  spread: number;
+  frame: FastAuthoringSpawnFrame;
+}): Vec3 | null {
+  if (zoneId !== "rest") return null;
+  const center = zoneOrigin("rest", spread, frame);
+
+  if (recipeId === SCENE_RECIPE_IDS.campfire) {
+    return center;
+  }
+
+  if (recipeId === SCENE_RECIPE_IDS.bench) {
+    const count = Math.max(1, instanceCount);
+    const angle =
+      Math.PI * 0.2 + (instanceIndex / count) * Math.PI * 1.6;
+    const radius = Math.max(2.4, Math.min(3.4, spread * 0.22));
+    const right = Math.cos(angle) * radius;
+    const forward = Math.sin(angle) * radius;
+    return [
+      center[0] +
+        frame.right[0] * right +
+        frame.forward[0] * forward,
+      0,
+      center[2] +
+        frame.right[2] * right +
+        frame.forward[2] * forward,
+    ];
+  }
+
+  if (recipeId === SCENE_RECIPE_IDS.firewood) {
+    return [
+      center[0] + frame.right[0] * 1.9 + frame.forward[0] * 0.8,
+      0,
+      center[2] + frame.right[2] * 1.9 + frame.forward[2] * 0.8,
+    ];
+  }
+
+  return null;
+}
+
 function humanizeHash(seed: string): number {
   let hash = 2166136261;
   for (let index = 0; index < seed.length; index += 1) {
@@ -1976,14 +2028,24 @@ export function resolveFastAuthoringDecision({
         FAST_AUTHORING_ZONE_CRITERIA,
         defaultZoneForRole(role.id, placement),
       ) as FastAuthoringZoneId;
-      const anchor = nominalPosition(
-        placement,
-        composition,
-        spread,
-        spawn,
+      const semanticAnchor = semanticClusterPosition({
+        recipeId,
         zoneId,
-        archetypeIndex,
-      );
+        instanceIndex: 0,
+        instanceCount: count,
+        spread,
+        frame: spawn,
+      });
+      const anchor =
+        semanticAnchor ??
+        nominalPosition(
+          placement,
+          composition,
+          spread,
+          spawn,
+          zoneId,
+          archetypeIndex,
+        );
       let placedCount = 0;
       for (let instanceIndex = 0; instanceIndex < count; instanceIndex += 1) {
         const variation = humanizedRecipeTransform(
@@ -1992,13 +2054,23 @@ export function resolveFastAuthoringDecision({
           instanceIndex,
           humanize,
         );
-        const basePosition = instancePosition(
-          anchor,
+        const semanticPosition = semanticClusterPosition({
+          recipeId,
+          zoneId,
           instanceIndex,
-          minimumDistance,
-          role.id,
-          spawn,
-        );
+          instanceCount: count,
+          spread,
+          frame: spawn,
+        });
+        const basePosition =
+          semanticPosition ??
+          instancePosition(
+            anchor,
+            instanceIndex,
+            minimumDistance,
+            role.id,
+            spawn,
+          );
         const placementRadius = placementRadiusForRecipe(recipe);
         const position = safePosition(
           [
