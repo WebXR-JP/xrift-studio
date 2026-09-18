@@ -8227,7 +8227,11 @@ export function VisualEditorPrototype({
             if (!transform) continue;
             const currentPosition = transform.position;
             const ground = groundPositionFor(
-              currentPosition,
+              [
+                currentPosition[0],
+                currentPosition[1] - generated.groundOffset,
+                currentPosition[2],
+              ],
               terrainEntityId,
             );
             const nextY = ground[1] + generated.groundOffset;
