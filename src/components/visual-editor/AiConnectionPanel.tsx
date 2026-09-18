@@ -237,7 +237,7 @@ export function AiConnectionPanel({
             <div>
               <p className="font-semibold text-slate-900">Jev Fast Authoring</p>
               <p className="mt-0.5 text-[11px] leading-4 text-slate-600">
-                主役・景観・家具・照明・天気・しかけ・マテリアル・公式設備から種類と個数を選び、最大50配置まで構図と地形に合わせてまとめて作ります。
+                Terrain・地表・草・Post Effect・Windまで含めて、主役・景観・家具・照明・天気・しかけ・マテリアル・公式設備を最大50配置までまとめて作ります。
               </p>
             </div>
             <span
