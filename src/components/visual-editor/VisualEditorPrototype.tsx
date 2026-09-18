@@ -170,10 +170,7 @@ import {
   type AssetReferenceLocation,
   type ParticleAuthoringPreset,
   type SceneRecipe,
-  getSceneRecipesForProjectKind,
-  getSceneRecipeShelf,
   instantiateSceneRecipe,
-  TERRAIN_PRESETS,
   type AudioSourcePatch,
   type InteractionTriggerPatch,
   type VegetationWindPatch,
@@ -8216,9 +8213,7 @@ export function VisualEditorPrototype({
         }));
         setActiveEditorTab(SCENE_VIEW_TAB_ID);
         setGraphTabActive(false);
-        await new Promise<void>((resolve) =>
-          window.requestAnimationFrame(() => resolve()),
-        );
+        await waitForEditorCommit();
         await requestSceneCamera({ preset: "iso" });
         const screenshot = await requestSceneScreenshot();
         const previewDataUrl = screenshot.ok ? screenshot.dataUrl : null;
