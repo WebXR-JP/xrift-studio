@@ -61,6 +61,7 @@ export type FastAuthoringFinish =
   | "night-glow"
   | "soft-dream";
 export type FastAuthoringWind = "still" | "breeze" | "windy";
+export type FastAuthoringHumanize = "off" | "subtle" | "natural" | "handmade";
 
 export type FastAuthoringPrimitiveHelper =
   | "none"
@@ -78,6 +79,8 @@ export type FastAuthoringRecipeDecision = {
   position: Vec3;
   instanceIndex: number;
   instanceCount: number;
+  rotation: Vec3;
+  scale: Vec3;
 };
 export type FastAuthoringFacilityDecision = {
   recipeId: string;
@@ -106,6 +109,7 @@ export type FastAuthoringDecision = {
   skybox: string;
   finish: FastAuthoringFinish;
   wind: FastAuthoringWind;
+  humanize: FastAuthoringHumanize;
   recipes: FastAuthoringRecipeDecision[];
   facilities: FastAuthoringFacilityDecision[];
   primitives: FastAuthoringPrimitiveDecision[];
@@ -287,6 +291,19 @@ export const FAST_AUTHORING_WIND_CRITERIA: Record<
   still: "風をほぼ感じない静かな空間",
   breeze: "草や水面が少し揺れる自然な風",
   windy: "山・海辺・荒天など、はっきり動きを感じる風",
+};
+
+export const FAST_AUTHORING_HUMANIZE_CRITERIA: Record<
+  FastAuthoringHumanize,
+  string
+> = {
+  off: "規則どおりに整列する。展示、建築、機能優先の空間向け",
+  subtle:
+    "位置を数cm〜十数cm、Yawを数度、Scaleを数%だけ変えて少し手作業感を出す",
+  natural:
+    "自然物や家具を少し不揃いにして、人が置いたような位置・向き・大きさの差を出す",
+  handmade:
+    "自然物や小物をより大胆に不揃いにする。建物やUIには強いズレを掛けない",
 };
 
 export const FAST_AUTHORING_FINISH_SETTINGS: Record<
@@ -685,6 +702,12 @@ export function buildFastAuthoringRequest({
         "草・水面・植生へ与えるWorld全体の風を選んでください。",
       criteria: FAST_AUTHORING_WIND_CRITERIA,
     },
+    humanize: {
+      type: "choice",
+      instructions:
+        "配置の人間らしい不揃いさを選んでください。自然物や大量配置はnaturalかhandmade、展示・建築・UI中心ならoffかsubtleを優先してください。",
+      criteria: FAST_AUTHORING_HUMANIZE_CRITERIA,
+    },
   };
 
   for (const role of FAST_AUTHORING_RECIPE_ROLES) {
@@ -1008,6 +1031,93 @@ function instancePosition(
   ];
 }
 
+function humanizeHash(seed: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return ((hash >>> 0) % 100000) / 99999;
+}
+
+function humanizeSigned(seed: string): number {
+  return humanizeHash(seed) * 2 - 1;
+}
+
+function humanizeStrength(humanize: FastAuthoringHumanize): {
+  position: number;
+  yawDegrees: number;
+  scale: number;
+} {
+  if (humanize === "subtle") {
+    return { position: 0.14, yawDegrees: 3, scale: 0.018 };
+  }
+  if (humanize === "natural") {
+    return { position: 0.42, yawDegrees: 10, scale: 0.055 };
+  }
+  if (humanize === "handmade") {
+    return { position: 0.85, yawDegrees: 22, scale: 0.11 };
+  }
+  return { position: 0, yawDegrees: 0, scale: 0 };
+}
+
+function humanizeRoleFactor(
+  recipe: SceneRecipe,
+  roleId: string,
+  instanceIndex: number,
+): number {
+  if (roleId === "signature" && instanceIndex === 0) return 0.08;
+  if (recipe.assembly) return 0;
+  if (recipe.category === "nature") return 1;
+  if (recipe.category === "furniture") return 0.5;
+  if (recipe.category === "light") return 0.42;
+  if (recipe.category === "water") return 0.16;
+  if (recipe.category === "structure") return 0.12;
+  if (recipe.category === "tutorial") return 0.08;
+  if (recipe.category === "material") return 0.08;
+  if (recipe.category === "weather" || recipe.category === "effect") return 0.04;
+  return 0.1;
+}
+
+function humanizedRecipeTransform(
+  recipe: SceneRecipe,
+  roleId: string,
+  instanceIndex: number,
+  humanize: FastAuthoringHumanize,
+): {
+  positionOffset: Vec3;
+  rotation: Vec3;
+  scale: Vec3;
+} {
+  const strength = humanizeStrength(humanize);
+  const factor = humanizeRoleFactor(recipe, roleId, instanceIndex);
+  if (factor === 0 || humanize === "off") {
+    return {
+      positionOffset: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    };
+  }
+
+  const seed = recipe.id + ":" + roleId + ":" + instanceIndex;
+  const x = humanizeSigned(seed + ":x") * strength.position * factor;
+  const z = humanizeSigned(seed + ":z") * strength.position * factor;
+  const yawDegrees =
+    humanizeSigned(seed + ":yaw") * strength.yawDegrees * factor;
+  const scaleDelta =
+    humanizeSigned(seed + ":scale") * strength.scale * factor;
+  const uniformScale = Math.max(0.78, 1 + scaleDelta);
+  return {
+    positionOffset: [
+      Math.round(x * 100) / 100,
+      0,
+      Math.round(z * 100) / 100,
+    ],
+    rotation: [0, (yawDegrees * Math.PI) / 180, 0],
+    scale: [uniformScale, uniformScale, uniformScale],
+  };
+}
+
 function maxInstancesForRecipe(
   recipe: SceneRecipe,
   role: FastAuthoringRecipeRole,
@@ -1180,6 +1290,12 @@ export function resolveFastAuthoringDecision({
     FAST_AUTHORING_WIND_CRITERIA,
     "breeze",
   ) as FastAuthoringWind;
+  const humanize = selectedChoice(
+    answers,
+    "humanize",
+    FAST_AUTHORING_HUMANIZE_CRITERIA,
+    "natural",
+  ) as FastAuthoringHumanize;
   const spread = spreadForScale(scale);
   const minimumDistance = minimumDistanceForDensity(density);
   const spawn = findFastAuthoringSpawnPosition(scene);
@@ -1285,13 +1401,24 @@ export function resolveFastAuthoringDecision({
       );
       let placedCount = 0;
       for (let instanceIndex = 0; instanceIndex < count; instanceIndex += 1) {
+        const variation = humanizedRecipeTransform(
+          recipe,
+          role.id,
+          instanceIndex,
+          humanize,
+        );
+        const basePosition = instancePosition(
+          anchor,
+          instanceIndex,
+          minimumDistance,
+          role.id,
+        );
         const position = safePosition(
-          instancePosition(
-            anchor,
-            instanceIndex,
-            minimumDistance,
-            role.id,
-          ),
+          [
+            basePosition[0] + variation.positionOffset[0],
+            basePosition[1],
+            basePosition[2] + variation.positionOffset[2],
+          ],
           placed,
           minimumDistance,
         );
@@ -1303,6 +1430,8 @@ export function resolveFastAuthoringDecision({
           position,
           instanceIndex,
           instanceCount: count,
+          rotation: variation.rotation,
+          scale: variation.scale,
         });
         placedCount += 1;
       }
@@ -1401,6 +1530,7 @@ export function resolveFastAuthoringDecision({
     },
     { label: "仕上げ", value: finish },
     { label: "風", value: wind },
+    { label: "配置の自然さ", value: humanize },
     ...recipeTrace,
     ...facilities.map((facility, index) => ({
       label: "公式設備" + (index + 1),
@@ -1424,6 +1554,7 @@ export function resolveFastAuthoringDecision({
     skybox,
     finish,
     wind,
+    humanize,
     recipes,
     facilities,
     primitives,
