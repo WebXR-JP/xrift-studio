@@ -10,13 +10,13 @@ import {
 import { TERRAIN_PRESETS } from "./terrain-presets";
 import { TERRAIN_SURFACE_CATALOG } from "./terrain-surface-catalog";
 import { TERRAIN_GRASS_PRESETS } from "./terrain-grass";
+import { SKY_SHADER_CATALOG } from "./sky-shader-catalog";
 import {
   getTransform,
   type SceneDocument,
   type Vec3,
 } from "./scene-document";
 
-export const FAST_AUTHORING_MAX_ELEMENTS = 50;
 export const FAST_AUTHORING_MAX_FACILITIES = 6;
 export const FAST_AUTHORING_MAX_PRIMITIVES = 6;
 
@@ -103,9 +103,9 @@ export type FastAuthoringDecision = {
   detail: FastAuthoringDetail;
   terrainSurface: string;
   grassPreset: string;
+  skybox: string;
   finish: FastAuthoringFinish;
   wind: FastAuthoringWind;
-  elementBudget: number;
   recipes: FastAuthoringRecipeDecision[];
   facilities: FastAuthoringFacilityDecision[];
   primitives: FastAuthoringPrimitiveDecision[];
@@ -254,10 +254,10 @@ export const FAST_AUTHORING_DETAIL_CRITERIA: Record<
   FastAuthoringDetail,
   string
 > = {
-  focused: "主役中心。全体でおよそ12配置まで",
-  rich: "十分に作り込む。全体でおよそ24配置まで",
-  dense: "情報量の多いWorld。全体でおよそ36配置まで",
-  maximal: "大型Worldや大量配置。最大50配置まで",
+  focused: "主役中心。種類と個数をかなり絞る",
+  rich: "十分に作り込み、複数のまとまりを置く",
+  dense: "情報量の多いWorld。群生や列を積極的に使う",
+  maximal: "大型World向け。全体数を固定せず、必要な種類と個数をすべて使う",
 };
 export const FAST_AUTHORING_COUNT_CRITERIA: Record<
   FastAuthoringCount,
@@ -421,11 +421,11 @@ export const FAST_AUTHORING_PRIMITIVE_CRITERIA: Record<
   pedestal: "展示物や主役を載せる低いCylinder台座を追加する",
 };
 
-const DETAIL_BUDGET: Record<FastAuthoringDetail, number> = {
-  focused: 12,
-  rich: 24,
-  dense: 36,
-  maximal: FAST_AUTHORING_MAX_ELEMENTS,
+const DETAIL_ROLE_VARIANTS: Record<FastAuthoringDetail, number> = {
+  focused: 1,
+  rich: 2,
+  dense: 3,
+  maximal: 3,
 };
 const COUNT_VALUE: Record<FastAuthoringCount, number> = {
   one: 1,
@@ -551,6 +551,17 @@ function createFastAuthoringCatalog() {
       preset.label + ": " + preset.description,
     ]),
   ]);
+  const skyboxCriteria = Object.fromEntries([
+    ["gradient", "Moodに合わせた軽量なグラデーションSkyboxを使う"],
+    ["off", "Skyboxを表示しない"],
+    ...SKY_SHADER_CATALOG.map((entry) => [
+      entry.id,
+      [entry.label, entry.description, ...(entry.tags ?? [])]
+        .filter(Boolean)
+        .join(" / ")
+        .slice(0, 180),
+    ]),
+  ]);
   const facilities = listBuiltinPrefabRecipes("world").filter(
     (recipe) => recipe.id !== BUILTIN_PREFAB_RECIPE_IDS.spawnPoint,
   );
@@ -570,6 +581,7 @@ function createFastAuthoringCatalog() {
     terrainCriteria,
     terrainSurfaceCriteria,
     grassPresetCriteria,
+    skyboxCriteria,
     facilities,
     facilityCriteria,
   };
@@ -655,6 +667,12 @@ export function buildFastAuthoringRequest({
         "Terrainの草表現を選んでください。既定のままでよければkeep。",
       criteria: catalog.grassPresetCriteria,
     },
+    skybox: {
+      type: "choice",
+      instructions:
+        "Worldの空を選んでください。軽量な色空ならgradient、空を出さないならoff、表現が必要ならSkybox Shader presetを選んでください。",
+      criteria: catalog.skyboxCriteria,
+    },
     finish: {
       type: "choice",
       instructions:
@@ -728,9 +746,10 @@ export function buildFastAuthoringRequest({
       state: {
         request: prompt,
         limits: {
-          maxElements: FAST_AUTHORING_MAX_ELEMENTS,
           maxFacilities: FAST_AUTHORING_MAX_FACILITIES,
           maxPrimitiveHelpers: FAST_AUTHORING_MAX_PRIMITIVES,
+          note:
+            "全体配置数の固定上限はありません。各Recipe種類ごとの複製上限だけを守ります。",
         },
         project: {
           name: projectName,
@@ -1086,12 +1105,10 @@ export function resolveFastAuthoringDecision({
   response,
   scene,
   catalog,
-  maxElements = FAST_AUTHORING_MAX_ELEMENTS,
 }: {
   response: Record<string, unknown>;
   scene: SceneDocument;
   catalog: FastAuthoringCatalog;
-  maxElements?: number;
 }): FastAuthoringDecision {
   const answers =
     response.answers && typeof response.answers === "object"
@@ -1145,6 +1162,12 @@ export function resolveFastAuthoringDecision({
     catalog.grassPresetCriteria,
     "keep",
   );
+  const skybox = selectedChoice(
+    answers,
+    "skybox",
+    catalog.skyboxCriteria,
+    "gradient",
+  );
   const finish = selectedChoice(
     answers,
     "finish",
@@ -1157,11 +1180,6 @@ export function resolveFastAuthoringDecision({
     FAST_AUTHORING_WIND_CRITERIA,
     "breeze",
   ) as FastAuthoringWind;
-  const elementBudget = Math.min(
-    FAST_AUTHORING_MAX_ELEMENTS,
-    Math.max(1, Math.min(maxElements, DETAIL_BUDGET[detail])),
-  );
-
   const spread = spreadForScale(scale);
   const minimumDistance = minimumDistanceForDensity(density);
   const spawn = findFastAuthoringSpawnPosition(scene);
@@ -1214,19 +1232,15 @@ export function resolveFastAuthoringDecision({
     primitiveKinds.push(kind);
   }
 
-  const reserved = Math.min(
-    elementBudget,
-    facilities.length + primitiveKinds.length,
-  );
-  let remainingRecipeBudget = Math.max(0, elementBudget - reserved);
+  const selectedVariantLimit = DETAIL_ROLE_VARIANTS[detail];
   const recipes: FastAuthoringRecipeDecision[] = [];
   const recipeTrace: FastAuthoringTraceItem[] = [];
   const usedArchetypeIds = new Set<string>();
   let archetypeIndex = 0;
 
   for (const role of FAST_AUTHORING_RECIPE_ROLES) {
-    for (let variant = 0; variant < role.variants; variant += 1) {
-      if (remainingRecipeBudget <= 0) break;
+    const variantsForDetail = Math.min(role.variants, selectedVariantLimit);
+    for (let variant = 0; variant < variantsForDetail; variant += 1) {
       const suffix = role.id + (variant + 1);
       const criteria = catalog.roleCriteria[role.id] ?? { none: "" };
       const recipeId = selectedChoice(
@@ -1250,7 +1264,6 @@ export function resolveFastAuthoringDecision({
       const count = Math.min(
         requestedCount,
         maxInstancesForRecipe(recipe, role),
-        remainingRecipeBudget,
       );
       if (count <= 0) continue;
       const placement = selectedChoice(
@@ -1294,7 +1307,6 @@ export function resolveFastAuthoringDecision({
         placedCount += 1;
       }
       usedArchetypeIds.add(recipeId);
-      remainingRecipeBudget -= placedCount;
       recipeTrace.push({
         label: role.label,
         value:
@@ -1353,7 +1365,11 @@ export function resolveFastAuthoringDecision({
     { label: "密度", value: density },
     {
       label: "作り込み",
-      value: detail + " / 最大" + elementBudget + "配置",
+      value:
+        detail +
+        " / " +
+        (recipes.length + facilities.length + primitives.length) +
+        "配置",
     },
     {
       label: "地表",
@@ -1372,6 +1388,16 @@ export function resolveFastAuthoringDecision({
           : TERRAIN_GRASS_PRESETS.find(
               (preset) => preset.id === grassPreset,
             )?.label ?? grassPreset,
+    },
+    {
+      label: "Skybox",
+      value:
+        skybox === "gradient"
+          ? "Gradient"
+          : skybox === "off"
+            ? "Off"
+            : SKY_SHADER_CATALOG.find((entry) => entry.id === skybox)?.label ??
+              skybox,
     },
     { label: "仕上げ", value: finish },
     { label: "風", value: wind },
@@ -1395,9 +1421,9 @@ export function resolveFastAuthoringDecision({
     detail,
     terrainSurface,
     grassPreset,
+    skybox,
     finish,
     wind,
-    elementBudget,
     recipes,
     facilities,
     primitives,
