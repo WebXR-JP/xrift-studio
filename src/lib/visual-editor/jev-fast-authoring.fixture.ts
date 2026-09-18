@@ -1,7 +1,6 @@
 import { BUILTIN_PREFAB_RECIPE_IDS } from "./builtin-prefab-catalog";
 import {
   buildFastAuthoringRequest,
-  FAST_AUTHORING_MAX_ELEMENTS,
   findFastAuthoringSpawnPosition,
   resolveFastAuthoringDecision,
 } from "./jev-fast-authoring";
@@ -68,6 +67,7 @@ export function runJevFastAuthoringFixtureAssertions(): void {
     "detail",
     "terrainSurface",
     "grassPreset",
+    "skybox",
     "finish",
     "wind",
     "landscape1",
@@ -120,6 +120,7 @@ export function runJevFastAuthoringFixtureAssertions(): void {
         detail: { choice: "maximal" },
         terrainSurface: { choice: "forest-floor" },
         grassPreset: { choice: "meadow" },
+        skybox: { choice: "alpine-cumulus" },
         finish: { choice: "cinematic" },
         wind: { choice: "breeze" },
 
@@ -216,21 +217,19 @@ export function runJevFastAuthoringFixtureAssertions(): void {
     "Terrain Surface choice should survive",
   );
   assert(decision.grassPreset === "meadow", "grass preset choice should survive");
+  assert(
+    decision.skybox === "alpine-cumulus",
+    "Skybox Shader choice should survive",
+  );
   assert(decision.finish === "cinematic", "finish choice should survive");
   assert(decision.wind === "breeze", "wind choice should survive");
-  assert(
-    decision.elementBudget === FAST_AUTHORING_MAX_ELEMENTS &&
-      decision.elementBudget === 50,
-    "maximal detail should expose a fifty-placement budget",
-  );
-
   const totalPlacements =
     decision.recipes.length +
     decision.facilities.length +
     decision.primitives.length;
   assert(
-    totalPlacements === FAST_AUTHORING_MAX_ELEMENTS,
-    "rich repeated selections should fill but never exceed the fifty-placement cap",
+    totalPlacements > 50,
+    "maximal detail should be able to exceed fifty placements without a global cap",
   );
   assert(
     decision.recipes.filter(
@@ -263,6 +262,11 @@ export function runJevFastAuthoringFixtureAssertions(): void {
     ) &&
       decision.decisionTrace.some(
         (item) => item.label === "草" && item.value.includes("草原"),
+      ) &&
+      decision.decisionTrace.some(
+        (item) =>
+          item.label === "Skybox" &&
+          item.value.includes("Alpine Cumulus"),
       ) &&
       decision.decisionTrace.some(
         (item) => item.label === "仕上げ" && item.value === "cinematic",
