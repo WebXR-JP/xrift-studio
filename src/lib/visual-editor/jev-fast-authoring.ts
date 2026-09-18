@@ -734,8 +734,12 @@ function summarizeFastAuthoringTerrain(
   }
 
   const geometry = terrain.geometry.terrain;
-  const minimum = Math.min(...geometry.heights);
-  const maximum = Math.max(...geometry.heights);
+  let minimum = 0;
+  let maximum = 0;
+  for (const height of geometry.heights) {
+    minimum = Math.min(minimum, height);
+    maximum = Math.max(maximum, height);
+  }
   const cells = geometry.resolution - 1;
   const xStep = geometry.width / cells;
   const zStep = geometry.depth / cells;
