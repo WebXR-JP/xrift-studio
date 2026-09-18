@@ -5214,6 +5214,11 @@ export function VisualEditorPrototype({
               tool: string;
               arguments: Record<string, unknown>;
               reason: string;
+              postPlacement?: {
+                rotation: Vec3;
+                scale: Vec3;
+                instructions: string;
+              };
             }> = [];
             if (decision.terrain !== "none") {
               actionPlan.push({
