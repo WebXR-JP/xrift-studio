@@ -283,9 +283,26 @@ export function findFastAuthoringSpawnPosition(scene: SceneDocument): Vec3 {
     ? getTransform(scene, spawn.id)?.position ?? [0, 0, 0]
     : [0, 0, 0];
 }
+function isPlacementObstacle(
+  scene: SceneDocument,
+  entityId: string,
+): boolean {
+  const entity = scene.entities[entityId];
+  if (!entity || isGroundLikeEntity(scene, entityId)) return false;
+  if (entity.children.length > 0) return true;
+  return entity.components.some(
+    (component) =>
+      component.type === "mesh" ||
+      component.type === "collider" ||
+      component.type === "spawn-point" ||
+      (component.type === "xrift-component" &&
+        component.schemaId === "xrift.spawn-point"),
+  );
+}
+
 function occupiedRootPositions(scene: SceneDocument): Vec3[] {
   return scene.rootEntityIds.flatMap((entityId) => {
-    if (isGroundLikeEntity(scene, entityId)) return [];
+    if (!isPlacementObstacle(scene, entityId)) return [];
     const position = getTransform(scene, entityId)?.position;
     return position ? [[...position] as Vec3] : [];
   });
