@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import type {
-  XriftMcpClientId,
-  XriftMcpClientStatus,
-  XriftOllamaConfigurationResult,
-  XriftOllamaIntegrationId,
-  XriftOllamaStatus,
+import {
+  tauri,
+  type JevStatus,
+  type XriftMcpClientId,
+  type XriftMcpClientStatus,
+  type XriftOllamaConfigurationResult,
+  type XriftOllamaIntegrationId,
+  type XriftOllamaStatus,
 } from "../../lib/tauri";
 import { EDITOR_ICONS } from "./editor-icons";
 
@@ -68,6 +70,11 @@ export function AiConnectionPanel({
   const [selectedOllamaModel, setSelectedOllamaModel] = useState("");
   const [selectedOllamaIntegration, setSelectedOllamaIntegration] =
     useState<XriftOllamaIntegrationId>("opencode");
+  const [jevStatus, setJevStatus] = useState<JevStatus | null>(null);
+  const [jevApiKey, setJevApiKey] = useState("");
+  const [jevBusy, setJevBusy] = useState(false);
+  const [jevMessage, setJevMessage] = useState<string | null>(null);
+  const [jevError, setJevError] = useState<string | null>(null);
   const ollamaTargets = useMemo(
     () =>
       clients.filter(
@@ -96,6 +103,68 @@ export function AiConnectionPanel({
       setSelectedOllamaIntegration(ollamaTargets[0].id);
     }
   }, [ollamaTargets, selectedOllamaIntegration]);
+
+  useEffect(() => {
+    if (!nativeAvailable) return;
+    let active = true;
+    void tauri
+      .getJevStatus()
+      .then((status) => {
+        if (active) setJevStatus(status);
+      })
+      .catch((cause) => {
+        if (active) setJevError(String(cause));
+      });
+    return () => {
+      active = false;
+    };
+  }, [nativeAvailable]);
+
+  const saveJevApiKey = async () => {
+    if (!jevApiKey.trim()) return;
+    setJevBusy(true);
+    setJevError(null);
+    setJevMessage(null);
+    try {
+      const status = await tauri.setJevApiKey(jevApiKey);
+      setJevStatus(status);
+      setJevApiKey("");
+      setJevMessage("APIキーを保存しました");
+    } catch (cause) {
+      setJevError(String(cause));
+    } finally {
+      setJevBusy(false);
+    }
+  };
+
+  const testJevConnection = async () => {
+    setJevBusy(true);
+    setJevError(null);
+    setJevMessage(null);
+    try {
+      const result = await tauri.testJevConnection();
+      setJevMessage(result.message);
+    } catch (cause) {
+      setJevError(String(cause));
+    } finally {
+      setJevBusy(false);
+    }
+  };
+
+  const clearJevApiKey = async () => {
+    setJevBusy(true);
+    setJevError(null);
+    setJevMessage(null);
+    try {
+      const status = await tauri.clearJevApiKey();
+      setJevStatus(status);
+      setJevMessage("APIキーを削除しました");
+    } catch (cause) {
+      setJevError(String(cause));
+    } finally {
+      setJevBusy(false);
+    }
+  };
 
   if (!nativeAvailable) {
     return (
@@ -370,6 +439,93 @@ export function AiConnectionPanel({
         <p className="mt-2 text-[11px] leading-4 text-slate-500">
           シーンを操作するには、設定したAIクライアントで指示してください。
         </p>
+      </section>
+
+      <section aria-labelledby="jev-heading">
+        <h3
+          id="jev-heading"
+          className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+        >
+          Jev 爆速ワールド
+        </h3>
+        <div className="space-y-2.5 rounded-md border border-slate-200 p-2.5">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="font-semibold text-slate-800">
+                TypeSafe Jev
+              </p>
+              <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
+                ワールドの地形・雰囲気・ギミック・配置を高速に選ぶための実験機能です。
+              </p>
+            </div>
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+              jevStatus?.configured
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-slate-100 text-slate-600"
+            }`}>
+              {jevStatus?.configured ? "接続設定済み" : "未設定"}
+            </span>
+          </div>
+
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-semibold text-slate-600">
+              TypeSafe APIキー
+            </span>
+            <input
+              type="password"
+              value={jevApiKey}
+              autoComplete="off"
+              disabled={jevBusy}
+              onChange={(event) => setJevApiKey(event.target.value)}
+              placeholder={jevStatus?.configured ? "新しいキーに変更" : "APIキーを入力"}
+              className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none disabled:bg-slate-100"
+            />
+          </label>
+
+          <button
+            type="button"
+            disabled={jevBusy || !jevApiKey.trim()}
+            onClick={() => void saveJevApiKey()}
+            className="w-full rounded-md bg-brand-600 px-3 py-2 font-semibold text-white hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-500"
+          >
+            {jevBusy ? "処理中" : jevStatus?.configured ? "APIキーを更新" : "APIキーを保存"}
+          </button>
+
+          {jevStatus?.configured ? (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={jevBusy}
+                onClick={() => void testJevConnection()}
+                className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                接続確認
+              </button>
+              <button
+                type="button"
+                disabled={jevBusy}
+                onClick={() => void clearJevApiKey()}
+                className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 font-semibold text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+              >
+                キーを削除
+              </button>
+            </div>
+          ) : null}
+
+          <p className="text-[10px] leading-4 text-slate-500">
+            APIキーはデスクトップ版のローカル設定に保存し、WebViewやMCP応答には返しません。モデルは {jevStatus?.model ?? "jev-latest"} を使います。
+          </p>
+          {jevMessage ? (
+            <p className="rounded border border-emerald-200 bg-emerald-50 p-2 text-[11px] text-emerald-800">
+              {jevMessage}
+            </p>
+          ) : null}
+          {jevError ? (
+            <p role="alert" className="rounded border border-rose-200 bg-rose-50 p-2 text-[11px] text-rose-700">
+              {jevError}
+            </p>
+          ) : null}
+        </div>
       </section>
 
       {error ? (
