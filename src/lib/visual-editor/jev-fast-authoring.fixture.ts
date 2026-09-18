@@ -311,6 +311,49 @@ export function runJevFastAuthoringFixtureAssertions(): void {
     ),
     "semantic zones should survive into placement decisions",
   );
+  const campfireRestDecision = resolveFastAuthoringDecision({
+    response: {
+      answers: {
+        editScope: { choice: "append" },
+        mood: { choice: "night" },
+        detail: { choice: "rich" },
+        density: { choice: "balanced" },
+        scale: { choice: "balanced" },
+        signature1: { choice: SCENE_RECIPE_IDS.campfire },
+        signature1Count: { choice: "one" },
+        signature1Placement: { choice: "center" },
+        signature1Zone: { choice: "rest" },
+        furniture1: { choice: SCENE_RECIPE_IDS.bench },
+        furniture1Count: { choice: "few" },
+        furniture1Placement: { choice: "center" },
+        furniture1Zone: { choice: "rest" },
+      },
+    },
+    scene: project.scene,
+    catalog: planned.catalog,
+  });
+  const campfirePlacement = campfireRestDecision.recipes.find(
+    (recipe) => recipe.recipeId === SCENE_RECIPE_IDS.campfire,
+  );
+  const benchPlacements = campfireRestDecision.recipes.filter(
+    (recipe) => recipe.recipeId === SCENE_RECIPE_IDS.bench,
+  );
+  assert(campfirePlacement, "campfire should be placeable as the rest Zone focal");
+  assert(
+    benchPlacements.length === 3,
+    "rest Zone should expand a bench recipe into the requested group",
+  );
+  assert(
+    benchPlacements.some((bench) => {
+      const distance = Math.hypot(
+        bench.position[0] - campfirePlacement.position[0],
+        bench.position[2] - campfirePlacement.position[2],
+      );
+      return distance >= 1.8 && distance <= 4.5;
+    }),
+    "rest Zone benches should stay spatially related to the campfire",
+  );
+
   const totalPlacements =
     decision.recipes.length +
     decision.facilities.length +
