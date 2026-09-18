@@ -1146,6 +1146,31 @@ function horizontalDistance(a: Vec3, b: Vec3): number {
   return Math.hypot(a[0] - b[0], a[2] - b[2]);
 }
 
+function horizontalDistanceToSegment(
+  point: Vec3,
+  start: Vec3,
+  end: Vec3,
+): number {
+  const dx = end[0] - start[0];
+  const dz = end[2] - start[2];
+  const lengthSquared = dx * dx + dz * dz;
+  if (lengthSquared <= 0.000001) {
+    return horizontalDistance(point, start);
+  }
+  const t = Math.max(
+    0,
+    Math.min(
+      1,
+      ((point[0] - start[0]) * dx + (point[2] - start[2]) * dz) /
+        lengthSquared,
+    ),
+  );
+  return Math.hypot(
+    point[0] - (start[0] + dx * t),
+    point[2] - (start[2] + dz * t),
+  );
+}
+
 function positionClearOfFootprints(
   position: Vec3,
   occupied: readonly OccupiedFootprint[],
@@ -1387,9 +1412,11 @@ export function createFastAuthoringSceneFeatures(
 export function validateFastAuthoringScene({
   scene,
   generatedEntityIds,
+  focalEntityId,
 }: {
   scene: SceneDocument;
   generatedEntityIds: readonly string[];
+  focalEntityId?: string | null;
 }): FastAuthoringValidationCheck[] {
   const generated = new Set(generatedEntityIds);
   const footprints = occupiedRootFootprints(scene);
@@ -1415,7 +1442,7 @@ export function validateFastAuthoringScene({
     features.performance.particleCount > 18 ||
     features.performance.rootEntityCount > 450;
 
-  return [
+  const checks: FastAuthoringValidationCheck[] = [
     {
       id: "overlap",
       label: "重なり",
@@ -1438,6 +1465,45 @@ export function validateFastAuthoringScene({
       message: `Root ${features.performance.rootEntityCount} / Light ${features.performance.lightCount} / Particle ${features.performance.particleCount}`,
     },
   ];
+
+  if (focalEntityId) {
+    const focal = getTransform(scene, focalEntityId)?.position;
+    if (focal) {
+      const spawn = findFastAuthoringSpawnFrame(scene);
+      const distance = horizontalDistance(spawn.position, focal);
+      const blockers = footprints.filter((entry) => {
+        if (
+          entry.entityId === focalEntityId ||
+          entry.entityId === spawn.entityId
+        ) {
+          return false;
+        }
+        const toStart = horizontalDistance(entry.position, spawn.position);
+        const toEnd = horizontalDistance(entry.position, focal);
+        if (toStart >= distance + entry.radius || toEnd >= distance + entry.radius) {
+          return false;
+        }
+        return (
+          horizontalDistanceToSegment(
+            entry.position,
+            spawn.position,
+            focal,
+          ) < entry.radius + 0.35
+        );
+      });
+      checks.push({
+        id: "focal-visibility",
+        label: "Spawnから主役",
+        status: blockers.length === 0 ? "ok" : "warning",
+        message:
+          blockers.length === 0
+            ? `主役まで ${distance.toFixed(1)}m / 大きな遮蔽物候補なし`
+            : `主役まで ${distance.toFixed(1)}m / 遮蔽物候補 ${blockers.length}件`,
+      });
+    }
+  }
+
+  return checks;
 }
 
 function spreadForScale(scale: FastAuthoringScale): number {
