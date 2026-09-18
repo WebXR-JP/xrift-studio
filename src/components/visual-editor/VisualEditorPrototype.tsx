@@ -5250,6 +5250,20 @@ export function VisualEditorPrototype({
                 reason: "既存TerrainへJevが選んだ地表表現を適用",
               });
             }
+            if (
+              decision.grassPreset !== "keep" &&
+              decision.terrain === "none" &&
+              existingTerrainEntityId
+            ) {
+              actionPlan.push({
+                tool: "apply_terrain_grass_preset",
+                arguments: {
+                  entityId: existingTerrainEntityId,
+                  presetId: decision.grassPreset,
+                },
+                reason: "既存TerrainへJevが選んだ草セットを適用",
+              });
+            }
             actionPlan.push({
               tool: "update_scene_settings",
               arguments: {
@@ -5312,6 +5326,7 @@ export function VisualEditorPrototype({
                   composition: decision.composition,
                   detail: decision.detail,
                   terrainSurface: decision.terrainSurface,
+                  grassPreset: decision.grassPreset,
                   finish: decision.finish,
                   wind: decision.wind,
                   elementBudget: decision.elementBudget,
@@ -5331,13 +5346,21 @@ export function VisualEditorPrototype({
                         useCreatedTerrain:
                           decision.terrain !== "none",
                       },
+                grassPlan:
+                  decision.grassPreset === "keep"
+                    ? null
+                    : {
+                        presetId: decision.grassPreset,
+                        useCreatedTerrain:
+                          decision.terrain !== "none",
+                      },
                 execution: {
                   mutatesScene: false,
                   revision: mcpRevisionRef.current,
                   avoidExistingEntities: true,
                   groundToTerrain: true,
                   instructions:
-                    "actionPlanを上から順に実行してください。各書き込み前にget_editor_contextで最新projectId、sceneId、expectedRevisionを補ってください。Terrainを作成または既存Terrainを使う場合、Scene Recipe・公式設備・Primitiveの配置前にsample_terrain_pointでXZ地点のworldPosition.yを取得して接地してください。primitivePlanの各要素はcreate_primitiveの結果entityIdへupdate_transformでscaleを反映してください。facilityPlanのconfigurationHintがある設備は配置後に設定を確認してください。最後にcapture_scene_viewでScene全体を確認してください。",
+                    "actionPlanを上から順に実行してください。各書き込み前にget_editor_contextで最新projectId、sceneId、expectedRevisionを補ってください。Terrainを作成または既存Terrainを使う場合、terrainSurfacePlanとgrassPlanを同じTerrainへ適用し、Scene Recipe・公式設備・Primitiveの配置前にsample_terrain_pointでXZ地点のworldPosition.yを取得して接地してください。primitivePlanの各要素はcreate_primitiveの結果entityIdへupdate_transformでscaleを反映してください。facilityPlanのconfigurationHintがある設備は配置後に設定を確認してください。最後にcapture_scene_viewでScene全体を確認してください。",
                 },
               },
             });
@@ -8130,6 +8153,25 @@ export function VisualEditorPrototype({
             true,
           );
           applied.push("Terrain Surface");
+          setJevFastAuthoringState((current) => ({
+            ...current,
+            applied: [...applied],
+          }));
+        }
+
+        if (
+          terrainEntityId &&
+          decision.grassPreset !== "keep"
+        ) {
+          commitToolOutcome(
+            "apply_terrain_grass_preset",
+            {
+              entityId: terrainEntityId,
+              presetId: decision.grassPreset,
+            },
+            true,
+          );
+          applied.push("Terrain Grass");
           setJevFastAuthoringState((current) => ({
             ...current,
             applied: [...applied],
