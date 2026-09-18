@@ -1449,35 +1449,39 @@ function instancePosition(
   instanceIndex: number,
   minimumDistance: number,
   roleId: string,
+  frame: FastAuthoringSpawnFrame,
 ): Vec3 {
   if (instanceIndex === 0) return anchor;
+  const offset = (rightMeters: number, forwardMeters: number): Vec3 => [
+    anchor[0] +
+      frame.right[0] * rightMeters +
+      frame.forward[0] * forwardMeters,
+    anchor[1],
+    anchor[2] +
+      frame.right[2] * rightMeters +
+      frame.forward[2] * forwardMeters,
+  ];
   if (roleId === "lighting") {
     const side = instanceIndex % 2 === 0 ? 1 : -1;
     const step = Math.ceil(instanceIndex / 2);
-    return [
-      anchor[0] + side * step * minimumDistance * 1.25,
-      anchor[1],
-      anchor[2],
-    ];
+    return offset(side * step * minimumDistance * 1.25, 0);
   }
   if (roleId === "furniture" || roleId === "interaction") {
     const columns = 3;
     const row = Math.floor((instanceIndex - 1) / columns);
     const column = (instanceIndex - 1) % columns;
-    return [
-      anchor[0] + (column - 1) * minimumDistance * 1.3,
-      anchor[1],
-      anchor[2] - (row + 1) * minimumDistance * 1.3,
-    ];
+    return offset(
+      (column - 1) * minimumDistance * 1.3,
+      (row + 1) * minimumDistance * 1.3,
+    );
   }
   const angle = instanceIndex * 2.399963229728653;
   const radius =
     minimumDistance * (1.2 + Math.sqrt(instanceIndex) * 1.15);
-  return [
-    anchor[0] + Math.cos(angle) * radius,
-    anchor[1],
-    anchor[2] + Math.sin(angle) * radius,
-  ];
+  return offset(
+    Math.cos(angle) * radius,
+    Math.sin(angle) * radius,
+  );
 }
 
 function humanizeHash(seed: string): number {
@@ -1894,6 +1898,7 @@ export function resolveFastAuthoringDecision({
           instanceIndex,
           minimumDistance,
           role.id,
+          spawn,
         );
         const placementRadius = placementRadiusForRecipe(recipe);
         const position = safePosition(
