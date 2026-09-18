@@ -1103,10 +1103,34 @@ function safePosition(
       ]);
     }
   }
+  const clearCandidate = candidates.find((position) =>
+    positionClearOfFootprints(position, occupied, radius, minimumDistance),
+  );
   const candidate =
-    candidates.find((position) =>
-      positionClearOfFootprints(position, occupied, radius, minimumDistance),
-    ) ?? candidates[candidates.length - 1];
+    clearCandidate ??
+    candidates.reduce((best, position) => {
+      const margin = occupied.reduce((minimum, existing) => {
+        const required = Math.max(
+          minimumDistance,
+          radius + existing.radius + 0.25,
+        );
+        return Math.min(
+          minimum,
+          horizontalDistance(position, existing.position) - required,
+        );
+      }, Number.POSITIVE_INFINITY);
+      const bestMargin = occupied.reduce((minimum, existing) => {
+        const required = Math.max(
+          minimumDistance,
+          radius + existing.radius + 0.25,
+        );
+        return Math.min(
+          minimum,
+          horizontalDistance(best, existing.position) - required,
+        );
+      }, Number.POSITIVE_INFINITY);
+      return margin > bestMargin ? position : best;
+    }, candidates[0]);
   return [
     Math.round(candidate[0] * 10) / 10,
     candidate[1],
