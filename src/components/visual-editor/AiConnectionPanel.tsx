@@ -186,6 +186,7 @@ export function AiConnectionPanel({
     (client) => client.registered && !client.needsUpdate,
   ).length;
   const updateCount = clients.filter((client) => client.needsUpdate).length;
+  const openCodeClient = clients.find((client) => client.id === "opencode");
   const connectionState =
     registeredCount > 0
       ? {
@@ -466,6 +467,45 @@ export function AiConnectionPanel({
               {jevStatus?.configured ? "接続設定済み" : "未設定"}
             </span>
           </div>
+
+          {jevStatus?.configured && openCodeClient?.needsUpdate ? (
+            <div className="rounded border border-amber-200 bg-amber-50 p-2 text-[11px] leading-4 text-amber-800">
+              <p className="font-semibold">OpenCodeのMCP更新が必要です</p>
+              <p className="mt-1">
+                Jevの新しいtoolをOpenCodeへ公開するため、MCPを更新してからOpenCodeを完全に再起動してください。
+              </p>
+              <button
+                type="button"
+                disabled={registeringClientId !== null || ollamaConfiguring}
+                onClick={() => onRegister("opencode")}
+                className="mt-2 rounded-md border border-amber-300 bg-white px-2.5 py-1.5 font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+              >
+                {registeringClientId === "opencode"
+                  ? "更新中"
+                  : "OpenCode MCPを更新"}
+              </button>
+            </div>
+          ) : jevStatus?.configured &&
+            openCodeClient?.registered &&
+            !openCodeClient.needsUpdate ? (
+            <p className="rounded border border-emerald-200 bg-emerald-50 p-2 text-[11px] leading-4 text-emerald-800">
+              OpenCode MCPは最新です。decide_fast_authoring が見えない場合は、OpenCodeを完全に終了して新しいセッションで起動し直してください。
+            </p>
+          ) : jevStatus?.configured && openCodeClient?.installed ? (
+            <div className="rounded border border-slate-200 bg-slate-50 p-2 text-[11px] leading-4 text-slate-600">
+              <p>OpenCodeから使うにはXRift Studio MCPの登録が必要です。</p>
+              <button
+                type="button"
+                disabled={registeringClientId !== null || ollamaConfiguring}
+                onClick={() => onRegister("opencode")}
+                className="mt-2 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+              >
+                {registeringClientId === "opencode"
+                  ? "登録中"
+                  : "OpenCodeへMCPを登録"}
+              </button>
+            </div>
+          ) : null}
 
           <label className="block">
             <span className="mb-1 block text-[11px] font-semibold text-slate-600">
