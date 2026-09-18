@@ -278,12 +278,18 @@ import type {
   XriftMcpActivity,
 } from "./AiConnectionPanel";
 import {
+  applyFastAuthoringEntityMetadata,
   buildFastAuthoringRequest,
   FAST_AUTHORING_FINISH_SETTINGS,
   FAST_AUTHORING_MOOD_SETTINGS,
   FAST_AUTHORING_WIND_SETTINGS,
+  findFastAuthoringSpawnPosition,
   findTerrainEntityId,
+  listFastAuthoringGeneratedEntities,
   resolveFastAuthoringDecision,
+  validateFastAuthoringScene,
+  type FastAuthoringValidationCheck,
+  type FastAuthoringZoneId,
 } from "../../lib/visual-editor/jev-fast-authoring";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { HierarchyPanel } from "./HierarchyPanel";
@@ -8040,10 +8046,19 @@ export function VisualEditorPrototype({
       }
 
       const applied: string[] = [];
+      const generationId = `fast-${Date.now().toString(36)}`;
       const generatedPlacements: Array<{
         entityId: string;
         groundOffset: number;
+        zoneId: FastAuthoringZoneId;
+        role: string;
+        recipeId?: string;
+        instanceIndex?: number;
+        groupId: string;
+        maxSlopeDegrees: number;
+        flatRadius: number;
       }> = [];
+      let focalEntityId: string | null = null;
       const commitToolOutcome = (
         tool: XriftMcpEditorToolName,
         argumentsValue: Record<string, unknown>,
@@ -8103,8 +8118,13 @@ export function VisualEditorPrototype({
         return outcome;
       };
 
-      const groundPositionFor = (position: Vec3, terrainEntityId: string | null) => {
-        if (!terrainEntityId) return position;
+      const sampleTerrainFor = (
+        position: Vec3,
+        terrainEntityId: string | null,
+      ): { inside: boolean; position: Vec3 } => {
+        if (!terrainEntityId) {
+          return { inside: true, position };
+        }
         const scene = bundleRef.current.scene;
         const terrainTransform = getTransform(scene, terrainEntityId);
         const terrainOrigin = terrainTransform?.position ?? [0, 0, 0];
@@ -8127,17 +8147,163 @@ export function VisualEditorPrototype({
             worldPosition.length === 3 &&
             worldPosition.every((value) => typeof value === "number")
           ) {
-            return [
-              position[0],
-              worldPosition[1] as number,
-              position[2],
-            ] as Vec3;
+            return {
+              inside: true,
+              position: [
+                position[0],
+                worldPosition[1] as number,
+                position[2],
+              ],
+            };
           }
         } catch {
-          // A helper outside the Terrain footprint keeps its requested height.
+          // Terrain sampling failure is handled as outside/unknown below.
         }
-        return position;
+        return { inside: false, position };
       };
+
+      const groundPositionFor = (
+        position: Vec3,
+        terrainEntityId: string | null,
+      ): Vec3 => sampleTerrainFor(position, terrainEntityId).position;
+
+      const terrainMetricsFor = (
+        position: Vec3,
+        terrainEntityId: string | null,
+        radius: number,
+      ) => {
+        if (!terrainEntityId) {
+          return {
+            inside: true,
+            center: position,
+            slopeDegrees: 0,
+            heightRange: 0,
+          };
+        }
+        const sampleRadius = Math.max(0.75, radius);
+        const offsets: readonly [number, number][] = [
+          [0, 0],
+          [sampleRadius, 0],
+          [-sampleRadius, 0],
+          [0, sampleRadius],
+          [0, -sampleRadius],
+        ];
+        const samples = offsets.map(([x, z]) =>
+          sampleTerrainFor(
+            [position[0] + x, position[1], position[2] + z],
+            terrainEntityId,
+          ),
+        );
+        const center = samples[0].position;
+        if (samples.some((sample) => !sample.inside)) {
+          return {
+            inside: false,
+            center,
+            slopeDegrees: 90,
+            heightRange: Number.POSITIVE_INFINITY,
+          };
+        }
+        const heights = samples.map((sample) => sample.position[1]);
+        const heightRange = Math.max(...heights) - Math.min(...heights);
+        const slopeDegrees =
+          (Math.atan2(heightRange, sampleRadius * 2) * 180) / Math.PI;
+        return {
+          inside: true,
+          center,
+          slopeDegrees,
+          heightRange,
+        };
+      };
+
+      const terrainSafePositionFor = (
+        position: Vec3,
+        terrainEntityId: string | null,
+        maxSlopeDegrees: number,
+        flatRadius: number,
+      ) => {
+        if (!terrainEntityId) {
+          return {
+            position,
+            adjusted: false,
+            metrics: terrainMetricsFor(
+              position,
+              terrainEntityId,
+              flatRadius,
+            ),
+          };
+        }
+        const candidates: Vec3[] = [position];
+        const step = Math.max(1.5, flatRadius * 1.25);
+        for (let ring = 1; ring <= 3; ring += 1) {
+          for (let index = 0; index < 8; index += 1) {
+            const angle = (index / 8) * Math.PI * 2;
+            candidates.push([
+              position[0] + Math.cos(angle) * step * ring,
+              position[1],
+              position[2] + Math.sin(angle) * step * ring,
+            ]);
+          }
+        }
+        let best:
+          | {
+              candidate: Vec3;
+              metrics: ReturnType<typeof terrainMetricsFor>;
+              score: number;
+            }
+          | undefined;
+        for (const candidate of candidates) {
+          const metrics = terrainMetricsFor(
+            candidate,
+            terrainEntityId,
+            flatRadius,
+          );
+          if (!metrics.inside) continue;
+          const distance = Math.hypot(
+            candidate[0] - position[0],
+            candidate[2] - position[2],
+          );
+          const score = metrics.slopeDegrees + distance * 0.12;
+          if (!best || score < best.score) {
+            best = { candidate, metrics, score };
+          }
+          if (metrics.slopeDegrees <= maxSlopeDegrees) {
+            return {
+              position: [
+                candidate[0],
+                metrics.center[1],
+                candidate[2],
+              ] as Vec3,
+              adjusted: distance > 0.01,
+              metrics,
+            };
+          }
+        }
+        if (best) {
+          return {
+            position: [
+              best.candidate[0],
+              best.metrics.center[1],
+              best.candidate[2],
+            ] as Vec3,
+            adjusted:
+              Math.hypot(
+                best.candidate[0] - position[0],
+                best.candidate[2] - position[2],
+              ) > 0.01,
+            metrics: best.metrics,
+          };
+        }
+        return {
+          position: groundPositionFor(position, terrainEntityId),
+          adjusted: false,
+          metrics: terrainMetricsFor(
+            position,
+            terrainEntityId,
+            flatRadius,
+          ),
+        };
+      };
+
 
       setJevFastAuthoringState({
         status: "deciding",
@@ -8160,6 +8326,36 @@ export function VisualEditorPrototype({
           scene: initialBundle.scene,
           catalog: planned.catalog,
         });
+        if (decision.editScope !== "append") {
+          const targetZone =
+            decision.editScope === "replace-generated"
+              ? null
+              : (decision.editScope.replace(
+                  "replace-",
+                  "",
+                ) as FastAuthoringZoneId);
+          const previousGenerated = listFastAuthoringGeneratedEntities(
+            bundleRef.current.scene,
+          ).filter(
+            (entry) =>
+              targetZone === null ||
+              entry.metadata.zoneId === targetZone,
+          );
+          for (const entry of previousGenerated) {
+            commitToolOutcome(
+              "delete_entity",
+              { entityId: entry.entityId },
+              true,
+            );
+          }
+          if (previousGenerated.length > 0) {
+            applied.push(
+              targetZone === null
+                ? `以前の生成物を置換 ${previousGenerated.length}件`
+                : `${targetZone} Zoneを置換 ${previousGenerated.length}件`,
+            );
+          }
+        }
         setJevFastAuthoringState({
           status: "applying",
           message: "Jevの決定をSceneへ反映しています",
@@ -8282,10 +8478,19 @@ export function VisualEditorPrototype({
         }));
 
         for (const primitive of decision.primitives) {
-          const helperGround = groundPositionFor(
+          const maxSlopeDegrees =
+            primitive.zoneId === "rest" ? 10 : 18;
+          const flatRadius = Math.max(
+            1,
+            Math.max(primitive.scale[0], primitive.scale[2]) * 0.55,
+          );
+          const safePlacement = terrainSafePositionFor(
             primitive.position,
             terrainEntityId,
+            maxSlopeDegrees,
+            flatRadius,
           );
+          const helperGround = safePlacement.position;
           const baseOffset = primitive.scale[1] / 2;
           const created = commitToolOutcome(
             "create_primitive",
@@ -8325,6 +8530,13 @@ export function VisualEditorPrototype({
           generatedPlacements.push({
             entityId,
             groundOffset: baseOffset,
+            zoneId: primitive.zoneId,
+            role: "補助",
+            recipeId: `helper:${primitive.kind}`,
+            instanceIndex: 0,
+            groupId: `${generationId}:${primitive.zoneId}:helper:${primitive.kind}`,
+            maxSlopeDegrees,
+            flatRadius,
           });
           applied.push(primitive.name);
           setJevFastAuthoringState((current) => ({
@@ -8339,10 +8551,21 @@ export function VisualEditorPrototype({
           );
           if (!recipe) continue;
           const source = bundleRef.current;
-          const position = groundPositionFor(
+          const maxSlopeDegrees =
+            selected.zoneId === "rest"
+              ? 10
+              : selected.role === "景観"
+                ? 28
+                : 16;
+          const flatRadius =
+            selected.zoneId === "rest" ? 2.4 : 1.35;
+          const safePlacement = terrainSafePositionFor(
             selected.position,
             terrainEntityId,
+            maxSlopeDegrees,
+            flatRadius,
           );
+          const position = safePlacement.position;
           importRunningRef.current = true;
           setSceneRecipeImportBusy(true);
           try {
@@ -8431,7 +8654,22 @@ export function VisualEditorPrototype({
             generatedPlacements.push({
               entityId: placed.rootEntityId,
               groundOffset: 0,
+              zoneId: selected.zoneId,
+              role: selected.role,
+              recipeId: selected.recipeId,
+              instanceIndex: selected.instanceIndex,
+              groupId: `${generationId}:${selected.zoneId}:${selected.recipeId}`,
+              maxSlopeDegrees,
+              flatRadius,
             });
+            if (
+              !focalEntityId &&
+              (selected.role === "主役" ||
+                selected.zoneId === "main" ||
+                selected.zoneId === "rest")
+            ) {
+              focalEntityId = placed.rootEntityId;
+            }
             applied.push(recipe.name);
             setJevFastAuthoringState((current) => ({
               ...current,
@@ -8444,10 +8682,16 @@ export function VisualEditorPrototype({
         }
 
         for (const facility of decision.facilities) {
-          const ground = groundPositionFor(
+          const maxSlopeDegrees =
+            facility.zoneId === "rest" ? 10 : 14;
+          const flatRadius = facility.zoneId === "rest" ? 2.2 : 1.5;
+          const safePlacement = terrainSafePositionFor(
             facility.position,
             terrainEntityId,
+            maxSlopeDegrees,
+            flatRadius,
           );
+          const ground = safePlacement.position;
           const position: Vec3 = [
             ground[0],
             ground[1] + facility.heightOffset,
@@ -8469,6 +8713,13 @@ export function VisualEditorPrototype({
           generatedPlacements.push({
             entityId,
             groundOffset: facility.heightOffset,
+            zoneId: facility.zoneId,
+            role: "公式設備",
+            recipeId: facility.recipeId,
+            instanceIndex: 0,
+            groupId: `${generationId}:${facility.zoneId}:${facility.recipeId}`,
+            maxSlopeDegrees,
+            flatRadius,
           });
           applied.push(
             facility.configurationHint
@@ -8481,7 +8732,49 @@ export function VisualEditorPrototype({
           }));
         }
 
+        if (generatedPlacements.length > 0) {
+          const latest = bundleRef.current;
+          let taggedScene = latest.scene;
+          for (const generated of generatedPlacements) {
+            taggedScene = applyFastAuthoringEntityMetadata(
+              taggedScene,
+              generated.entityId,
+              {
+                generationId,
+                zoneId: generated.zoneId,
+                groupId: generated.groupId,
+                role: generated.role,
+                ...(generated.recipeId
+                  ? { recipeId: generated.recipeId }
+                  : {}),
+                ...(generated.instanceIndex !== undefined
+                  ? { instanceIndex: generated.instanceIndex }
+                  : {}),
+              },
+            );
+          }
+          if (taggedScene !== latest.scene) {
+            const nextBundle = touchProject({
+              ...latest,
+              scene: taggedScene,
+            });
+            mcpRevisionRef.current += 1;
+            mcpRevisionBundleRef.current = nextBundle;
+            bundleRef.current = nextBundle;
+            saveStatusRef.current = "dirty";
+            setHistory((current) =>
+              commitEditorHistory(current, {
+                ...current.present,
+                bundle: nextBundle,
+              }),
+            );
+            setSaveStatus("dirty");
+            applied.push("生成Zoneを記録");
+          }
+        }
+
         let readjusted = 0;
+        let slopeWarningCount = 0;
         if (terrainEntityId) {
           for (const generated of generatedPlacements) {
             const transform = getTransform(
@@ -8490,25 +8783,38 @@ export function VisualEditorPrototype({
             );
             if (!transform) continue;
             const currentPosition = transform.position;
-            const ground = groundPositionFor(
-              [
-                currentPosition[0],
-                currentPosition[1] - generated.groundOffset,
-                currentPosition[2],
-              ],
+            const basePosition: Vec3 = [
+              currentPosition[0],
+              currentPosition[1] - generated.groundOffset,
+              currentPosition[2],
+            ];
+            const resolved = terrainSafePositionFor(
+              basePosition,
               terrainEntityId,
+              generated.maxSlopeDegrees,
+              generated.flatRadius,
             );
-            const nextY = ground[1] + generated.groundOffset;
-            if (Math.abs(currentPosition[1] - nextY) <= 0.01) continue;
+            if (
+              !resolved.metrics.inside ||
+              resolved.metrics.slopeDegrees > generated.maxSlopeDegrees
+            ) {
+              slopeWarningCount += 1;
+            }
+            const nextPosition: Vec3 = [
+              resolved.position[0],
+              resolved.position[1] + generated.groundOffset,
+              resolved.position[2],
+            ];
+            const moved =
+              Math.abs(currentPosition[0] - nextPosition[0]) > 0.01 ||
+              Math.abs(currentPosition[1] - nextPosition[1]) > 0.01 ||
+              Math.abs(currentPosition[2] - nextPosition[2]) > 0.01;
+            if (!moved) continue;
             commitToolOutcome(
               "update_transform",
               {
                 entityId: generated.entityId,
-                position: [
-                  currentPosition[0],
-                  nextY,
-                  currentPosition[2],
-                ],
+                position: nextPosition,
               },
               true,
             );
@@ -8516,14 +8822,120 @@ export function VisualEditorPrototype({
           }
         }
         if (readjusted > 0) {
-          applied.push(`接地を再調整 ${readjusted}件`);
+          applied.push(`接地・平坦面を再調整 ${readjusted}件`);
+        }
+
+        const checks: FastAuthoringValidationCheck[] =
+          validateFastAuthoringScene({
+            scene: bundleRef.current.scene,
+            generatedEntityIds: generatedPlacements.map(
+              (generated) => generated.entityId,
+            ),
+          });
+        checks.push({
+          id: "terrain-flatness",
+          label: "Terrain適合",
+          status: slopeWarningCount === 0 ? "ok" : "warning",
+          message:
+            slopeWarningCount === 0
+              ? "生成物は用途に応じた傾斜・平坦面の範囲に収まっています"
+              : `${slopeWarningCount}件は十分に平坦な候補を見つけられませんでした`,
+        });
+
+        if (terrainEntityId && focalEntityId) {
+          const spawnPosition = findFastAuthoringSpawnPosition(
+            bundleRef.current.scene,
+          );
+          const focalTransform = getTransform(
+            bundleRef.current.scene,
+            focalEntityId,
+          );
+          if (focalTransform) {
+            const samples: Vec3[] = [];
+            let pathInside = true;
+            for (let index = 0; index <= 8; index += 1) {
+              const ratio = index / 8;
+              const candidate: Vec3 = [
+                spawnPosition[0] +
+                  (focalTransform.position[0] - spawnPosition[0]) *
+                    ratio,
+                0,
+                spawnPosition[2] +
+                  (focalTransform.position[2] - spawnPosition[2]) *
+                    ratio,
+              ];
+              const sample = sampleTerrainFor(
+                candidate,
+                terrainEntityId,
+              );
+              if (!sample.inside) {
+                pathInside = false;
+                break;
+              }
+              samples.push(sample.position);
+            }
+            let maxStep = 0;
+            for (let index = 1; index < samples.length; index += 1) {
+              maxStep = Math.max(
+                maxStep,
+                Math.abs(samples[index][1] - samples[index - 1][1]),
+              );
+            }
+            checks.push({
+              id: "spawn-path",
+              label: "Spawnから主役",
+              status:
+                pathInside && maxStep <= 1.5 ? "ok" : "warning",
+              message: pathInside
+                ? `Terrain上の簡易導線 最大高低差 ${maxStep.toFixed(2)}m / 区間`
+                : "Spawnから主役への直線導線がTerrain外へ出ています",
+            });
+          }
+        }
+
+        if (decision.mood === "night") {
+          const localLights = Object.values(
+            bundleRef.current.scene.entities,
+          ).flatMap((entity) => entity.components).filter(
+            (component) =>
+              component.type === "light" &&
+              component.enabled &&
+              component.lightType !== "ambient" &&
+              component.lightType !== "directional" &&
+              component.lightType !== "hemisphere",
+          ).length;
+          checks.push({
+            id: "night-lighting",
+            label: "夜の視認性",
+            status: localLights > 0 ? "ok" : "warning",
+            message:
+              localLights > 0
+                ? `局所Light ${localLights}個を確認しました`
+                : "夜ですが局所Lightがありません。主役周辺の明るさを確認してください",
+          });
+        }
+
+        if (normalizedPrompt.includes("焚き火")) {
+          const hasCampfire = applied.some(
+            (item) =>
+              item.includes("焚き火") || /campfire|fire pit/i.test(item),
+          );
+          checks.push({
+            id: "campfire",
+            label: "焚き火",
+            status: hasCampfire ? "ok" : "warning",
+            message: hasCampfire
+              ? "焚き火に該当する生成物を確認しました"
+              : "依頼に焚き火がありますが、生成結果名から焚き火を確認できませんでした",
+          });
         }
 
         setJevFastAuthoringState((current) => ({
           ...current,
           status: "checking",
-          message: "配置と接地を再調整し、Scene Viewを確認しています",
+          message: "配置・傾斜・導線を再確認し、Scene Viewを確認しています",
           applied: [...applied],
+          checks,
         }));
         setActiveEditorTab(SCENE_VIEW_TAB_ID);
         setGraphTabActive(false);
@@ -8531,13 +8943,19 @@ export function VisualEditorPrototype({
         await requestSceneCamera({ preset: "iso" });
         const screenshot = await requestSceneScreenshot();
         const previewDataUrl = screenshot.ok ? screenshot.dataUrl : null;
+        const warningCount = checks.filter(
+          (check) => check.status === "warning",
+        ).length;
         setJevFastAuthoringState({
           status: "done",
           message: screenshot.ok
-            ? "完成しました。Scene Viewで結果を確認できます"
+            ? warningCount > 0
+              ? `生成しました。自動チェックで${warningCount}件の確認項目があります`
+              : "完成しました。自動チェックも問題ありません"
             : "生成は完了しました。Scene Viewの画像だけ取得できませんでした",
           trace: decision.decisionTrace,
           applied: [...applied],
+          checks,
           previewDataUrl,
         });
         setNotice(
