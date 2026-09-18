@@ -274,8 +274,9 @@ export function findFastAuthoringSpawnPosition(scene: SceneDocument): Vec3 {
   const spawn = Object.values(scene.entities).find((entity) =>
     entity.components.some(
       (component) =>
-        component.type === "xrift-component" &&
-        component.schemaId === "xrift.spawn-point",
+        component.type === "spawn-point" ||
+        (component.type === "xrift-component" &&
+          component.schemaId === "xrift.spawn-point"),
     ),
   );
   return spawn
