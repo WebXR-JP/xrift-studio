@@ -7,6 +7,7 @@ import {
 import { EDITOR_ICONS } from "./editor-icons";
 import {
   AiConnectionPanel,
+  type JevFastAuthoringUiState,
   type XriftMcpActivity,
 } from "./AiConnectionPanel";
 import { RecordingPanel, type RecordingPanelProps } from "./RecordingPanel";
@@ -79,6 +80,9 @@ export function EditorUtilityRail({
   ollamaResult,
   mcpLastActivity,
   canUndo,
+  fastAuthoringState,
+  fastAuthoringDisabledReason,
+  onRunFastAuthoring,
   onOpenMcp,
   onRefreshMcp,
   onRegisterMcpClient,
@@ -102,6 +106,9 @@ export function EditorUtilityRail({
   ollamaResult: XriftOllamaConfigurationResult | null;
   mcpLastActivity: XriftMcpActivity;
   canUndo: boolean;
+  fastAuthoringState: JevFastAuthoringUiState;
+  fastAuthoringDisabledReason: string | null;
+  onRunFastAuthoring: (prompt: string) => void | Promise<void>;
   onOpenMcp: () => void;
   onRefreshMcp: () => void;
   onRegisterMcpClient: (clientId: XriftMcpClientId) => void;
@@ -264,6 +271,9 @@ export function EditorUtilityRail({
               ollamaResult={ollamaResult}
               lastActivity={mcpLastActivity}
               canUndo={canUndo}
+              fastAuthoringState={fastAuthoringState}
+              fastAuthoringDisabledReason={fastAuthoringDisabledReason}
+              onRunFastAuthoring={onRunFastAuthoring}
               onRefresh={onRefreshMcp}
               onRegister={onRegisterMcpClient}
               onConfigureOllama={onConfigureOllama}
