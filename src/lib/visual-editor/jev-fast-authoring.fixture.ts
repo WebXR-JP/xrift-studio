@@ -67,6 +67,7 @@ export function runJevFastAuthoringFixtureAssertions(): void {
   for (const question of [
     "detail",
     "terrainSurface",
+    "grassPreset",
     "finish",
     "wind",
     "landscape1",
@@ -118,6 +119,7 @@ export function runJevFastAuthoringFixtureAssertions(): void {
         composition: { choice: "natural" },
         detail: { choice: "maximal" },
         terrainSurface: { choice: "forest-floor" },
+        grassPreset: { choice: "meadow" },
         finish: { choice: "cinematic" },
         wind: { choice: "breeze" },
 
@@ -213,6 +215,7 @@ export function runJevFastAuthoringFixtureAssertions(): void {
     decision.terrainSurface === "forest-floor",
     "Terrain Surface choice should survive",
   );
+  assert(decision.grassPreset === "meadow", "grass preset choice should survive");
   assert(decision.finish === "cinematic", "finish choice should survive");
   assert(decision.wind === "breeze", "wind choice should survive");
   assert(
@@ -258,6 +261,9 @@ export function runJevFastAuthoringFixtureAssertions(): void {
     decision.decisionTrace.some(
       (item) => item.label === "地表" && item.value.includes("森林"),
     ) &&
+      decision.decisionTrace.some(
+        (item) => item.label === "草" && item.value.includes("草原"),
+      ) &&
       decision.decisionTrace.some(
         (item) => item.label === "仕上げ" && item.value === "cinematic",
       ) &&
