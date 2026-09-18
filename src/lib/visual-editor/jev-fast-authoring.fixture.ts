@@ -1,8 +1,12 @@
 import { BUILTIN_PREFAB_RECIPE_IDS } from "./builtin-prefab-catalog";
 import {
+  applyFastAuthoringEntityMetadata,
   buildFastAuthoringRequest,
+  createFastAuthoringSceneFeatures,
   findFastAuthoringSpawnPosition,
+  listFastAuthoringGeneratedEntities,
   resolveFastAuthoringDecision,
+  validateFastAuthoringScene,
 } from "./jev-fast-authoring";
 import { createPrototypeProject } from "./prototype-project";
 import { SCENE_RECIPE_IDS } from "./scene-recipe-catalog";
@@ -64,6 +68,7 @@ export function runJevFastAuthoringFixtureAssertions(): void {
   });
 
   for (const question of [
+    "editScope",
     "detail",
     "terrainSurface",
     "grassPreset",
@@ -73,6 +78,7 @@ export function runJevFastAuthoringFixtureAssertions(): void {
     "humanize",
     "landscape1",
     "landscape1Count",
+    "landscape1Zone",
     "landscape3Placement",
     "furniture3",
     "lighting3",
@@ -87,6 +93,18 @@ export function runJevFastAuthoringFixtureAssertions(): void {
       question + " should be included in the bounded Jev request",
     );
   }
+
+  const features = createFastAuthoringSceneFeatures(project.scene);
+  assert(
+    features.spawn.clearForwardMeters >= 0 &&
+      Number.isFinite(features.spawn.clearForwardMeters),
+    "scene snapshot should summarize Spawn forward clearance numerically",
+  );
+  assert(
+    planned.request.state.sceneFeatures.performance.rootEntityCount ===
+      project.scene.rootEntityIds.length,
+    "Jev request should carry a numeric Scene snapshot instead of only names",
+  );
 
   assert(
     Object.prototype.hasOwnProperty.call(
@@ -113,6 +131,7 @@ export function runJevFastAuthoringFixtureAssertions(): void {
   const decision = resolveFastAuthoringDecision({
     response: {
       answers: {
+        editScope: { choice: "append" },
         terrain: { choice: "rolling-hills" },
         mood: { choice: "foggy" },
         density: { choice: "lively" },
@@ -129,20 +148,25 @@ export function runJevFastAuthoringFixtureAssertions(): void {
         signature1: { choice: SCENE_RECIPE_IDS.stoneLantern },
         signature1Count: { choice: "one" },
         signature1Placement: { choice: "center" },
+        signature1Zone: { choice: "main" },
 
         landscape1: { choice: SCENE_RECIPE_IDS.bamboo },
         landscape1Count: { choice: "mass" },
         landscape1Placement: { choice: "back-left" },
+        landscape1Zone: { choice: "perimeter" },
         landscape2: { choice: SCENE_RECIPE_IDS.rocks },
         landscape2Count: { choice: "many" },
         landscape2Placement: { choice: "perimeter-right" },
+        landscape2Zone: { choice: "perimeter" },
         landscape3: { choice: SCENE_RECIPE_IDS.tree },
         landscape3Count: { choice: "many" },
         landscape3Placement: { choice: "far" },
+        landscape3Zone: { choice: "view" },
 
         furniture1: { choice: SCENE_RECIPE_IDS.bench },
         furniture1Count: { choice: "group" },
         furniture1Placement: { choice: "left" },
+        furniture1Zone: { choice: "rest" },
         furniture2: { choice: SCENE_RECIPE_IDS.tableSet },
         furniture2Count: { choice: "few" },
         furniture2Placement: { choice: "right" },
@@ -153,6 +177,7 @@ export function runJevFastAuthoringFixtureAssertions(): void {
         lighting1: { choice: SCENE_RECIPE_IDS.streetLight },
         lighting1Count: { choice: "group" },
         lighting1Placement: { choice: "front-left" },
+        lighting1Zone: { choice: "rest" },
         lighting2: { choice: SCENE_RECIPE_IDS.lanterns },
         lighting2Count: { choice: "pair" },
         lighting2Placement: { choice: "front-right" },
@@ -170,6 +195,7 @@ export function runJevFastAuthoringFixtureAssertions(): void {
         interaction1: { choice: SCENE_RECIPE_IDS.soundButton },
         interaction1Count: { choice: "one" },
         interaction1Placement: { choice: "near-spawn" },
+        interaction1Zone: { choice: "entrance" },
         interaction2: { choice: "none" },
         interaction2Count: { choice: "one" },
         interaction2Placement: { choice: "left" },
@@ -228,6 +254,15 @@ export function runJevFastAuthoringFixtureAssertions(): void {
   assert(
     decision.humanize === "natural",
     "humanize choice should survive",
+  );
+  assert(decision.editScope === "append", "edit scope should survive");
+  assert(
+    decision.recipes.some(
+      (recipe) =>
+        recipe.recipeId === SCENE_RECIPE_IDS.bench &&
+        recipe.zoneId === "rest",
+    ),
+    "semantic zones should survive into placement decisions",
   );
   const totalPlacements =
     decision.recipes.length +
@@ -297,5 +332,45 @@ export function runJevFastAuthoringFixtureAssertions(): void {
           item.value === "natural",
       ),
     "decision trace should expose Terrain Surface, finish, and wind",
+  );
+
+  const taggedEntityId = project.scene.rootEntityIds[0];
+  const taggedScene = applyFastAuthoringEntityMetadata(
+    project.scene,
+    taggedEntityId,
+    {
+      generationId: "fixture-generation",
+      zoneId: "rest",
+      groupId: "fixture-rest",
+      role: "家具・設備",
+      recipeId: SCENE_RECIPE_IDS.bench,
+      instanceIndex: 0,
+    },
+  );
+  const generated = listFastAuthoringGeneratedEntities(taggedScene);
+  assert(
+    generated.length === 1 &&
+      generated[0].metadata.zoneId === "rest",
+    "generated Entity provenance should persist semantic Zone metadata",
+  );
+  const taggedRequest = buildFastAuthoringRequest({
+    prompt: "休憩所だけ作り直して",
+    scene: taggedScene,
+    projectName: project.project.metadata.name,
+    sceneName: taggedScene.name,
+  });
+  assert(
+    taggedRequest.request.state.sceneFeatures.generated.zones.rest === 1,
+    "numeric snapshot should tell Jev which generated Zones already exist",
+  );
+
+  const validation = validateFastAuthoringScene({
+    scene: taggedScene,
+    generatedEntityIds: [taggedEntityId],
+  });
+  assert(
+    validation.some((check) => check.id === "overlap") &&
+      validation.some((check) => check.id === "performance"),
+    "post-generation validator should report geometry and performance checks",
   );
 }
