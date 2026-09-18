@@ -202,7 +202,6 @@ export function AiConnectionPanel({
     (client) => client.registered && !client.needsUpdate,
   ).length;
   const updateCount = clients.filter((client) => client.needsUpdate).length;
-  const openCodeClient = clients.find((client) => client.id === "opencode");
   const connectionState =
     registeredCount > 0
       ? {
@@ -224,8 +223,198 @@ export function AiConnectionPanel({
   return (
     <div className="scrollbar-thin max-h-[min(32rem,calc(100vh-10rem))] space-y-3 overflow-y-auto p-3.5 text-xs text-slate-600">
       <p className="rounded-md border border-violet-100 bg-violet-50/70 p-3 leading-5 text-slate-700">
-        CodexなどのAIクライアントをXRift StudioのMCPに接続できます。開いているシーンを会話から読み取り・編集し、変更は自動保存され、「元に戻す」で取り消せます。
+        作りたいワールドを文章で入力すると、Terrain・景観・家具・照明・天気・しかけ・XRift公式設備から必要なものを選び、Sceneへまとめて配置します。
       </p>
+      <section aria-labelledby="jev-heading">
+        <h3
+          id="jev-heading"
+          className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+        >
+          こんなワールドを作る
+        </h3>
+        <div className="space-y-2.5 rounded-md border border-violet-200 bg-violet-50/40 p-2.5">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="font-semibold text-slate-900">Jev Fast Authoring</p>
+              <p className="mt-0.5 text-[11px] leading-4 text-slate-600">
+                主役だけでなく、景観・家具・照明・天気・しかけ・公式設備まで役割ごとに選び、構図と地形に合わせて配置します。
+              </p>
+            </div>
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                jevStatus?.configured
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-slate-100 text-slate-600"
+              }`}
+            >
+              {jevStatus?.configured ? "利用できます" : "接続設定が必要"}
+            </span>
+          </div>
+
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-semibold text-violet-950">
+              作りたいワールド
+            </span>
+            <textarea
+              value={fastAuthoringPrompt}
+              disabled={
+                fastAuthoringState.status === "deciding" ||
+                fastAuthoringState.status === "applying" ||
+                fastAuthoringState.status === "checking"
+              }
+              onChange={(event) => setFastAuthoringPrompt(event.target.value)}
+              placeholder="例: 霧の山中に小さな和風庭園。石灯籠を主役に、竹や岩、温泉を奥へ配置して静かな空間にしたい"
+              rows={4}
+              className="w-full resize-none rounded-md border border-violet-200 bg-white px-2.5 py-2 text-xs leading-5 text-slate-800 focus:border-brand-500 focus:outline-none disabled:bg-slate-100"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={
+              !jevStatus?.configured ||
+              !fastAuthoringPrompt.trim() ||
+              Boolean(fastAuthoringDisabledReason) ||
+              fastAuthoringState.status === "deciding" ||
+              fastAuthoringState.status === "applying" ||
+              fastAuthoringState.status === "checking"
+            }
+            onClick={() => void onRunFastAuthoring(fastAuthoringPrompt.trim())}
+            className="w-full rounded-md bg-brand-600 px-3 py-2 font-semibold text-white hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-500"
+          >
+            {fastAuthoringState.status === "deciding"
+              ? "構成を決めています"
+              : fastAuthoringState.status === "applying"
+                ? "ワールドを作成中"
+                : fastAuthoringState.status === "checking"
+                  ? "仕上がりを確認中"
+                  : "爆速で作る"}
+          </button>
+          {!jevStatus?.configured ? (
+            <p className="text-[11px] leading-4 text-amber-700">
+              下の「Jev接続設定」でTypeSafe APIキーを設定すると使えます。
+            </p>
+          ) : null}
+          {fastAuthoringDisabledReason ? (
+            <p className="text-[11px] leading-4 text-amber-700">
+              {fastAuthoringDisabledReason}
+            </p>
+          ) : null}
+
+          {fastAuthoringState.status !== "idle" ? (
+            <div
+              className={
+                fastAuthoringState.status === "error"
+                  ? "rounded border border-rose-200 bg-rose-50 p-2"
+                  : "rounded border border-violet-200 bg-white p-2"
+              }
+            >
+              <p className="text-[11px] font-semibold text-slate-800">
+                {fastAuthoringState.message}
+              </p>
+              {fastAuthoringState.trace.length > 0 ? (
+                <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[10px] leading-4">
+                  {fastAuthoringState.trace.map((item) => (
+                    <div key={item.label} className="contents">
+                      <dt className="font-semibold text-slate-500">
+                        {item.label}
+                      </dt>
+                      <dd className="min-w-0 truncate text-slate-700">
+                        {item.value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
+              {fastAuthoringState.applied.length > 0 ? (
+                <p className="mt-2 text-[10px] leading-4 text-slate-500">
+                  {fastAuthoringState.applied.join(" → ")}
+                </p>
+              ) : null}
+              {fastAuthoringState.previewDataUrl ? (
+                <img
+                  src={fastAuthoringState.previewDataUrl}
+                  alt="生成後のScene View"
+                  className="mt-2 w-full rounded border border-slate-200 bg-slate-950 object-cover"
+                />
+              ) : null}
+            </div>
+          ) : null}
+
+          <details
+            open={!jevStatus?.configured}
+            className="rounded-md border border-slate-200 bg-white p-2"
+          >
+            <summary className="cursor-pointer select-none text-[11px] font-semibold text-slate-700">
+              Jev接続設定
+            </summary>
+            <div className="mt-2 space-y-2">
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold text-slate-600">
+                  TypeSafe APIキー
+                </span>
+                <input
+                  type="password"
+                  value={jevApiKey}
+                  autoComplete="off"
+                  disabled={jevBusy}
+                  onChange={(event) => setJevApiKey(event.target.value)}
+                  placeholder={jevStatus?.configured ? "新しいキーに変更" : "APIキーを入力"}
+                  className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none disabled:bg-slate-100"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={jevBusy || !jevApiKey.trim()}
+                onClick={() => void saveJevApiKey()}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-400"
+              >
+                {jevBusy
+                  ? "処理中"
+                  : jevStatus?.configured
+                    ? "APIキーを更新"
+                    : "APIキーを保存"}
+              </button>
+              {jevStatus?.configured ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={jevBusy}
+                    onClick={() => void testJevConnection()}
+                    className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    接続確認
+                  </button>
+                  <button
+                    type="button"
+                    disabled={jevBusy}
+                    onClick={() => void clearJevApiKey()}
+                    className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 font-semibold text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    キーを削除
+                  </button>
+                </div>
+              ) : null}
+              <p className="text-[10px] leading-4 text-slate-500">
+                APIキーはデスクトップ版のローカル設定に保存し、WebViewやMCP応答には返しません。モデルは {jevStatus?.model ?? "jev-latest"} を使います。
+              </p>
+              {jevMessage ? (
+                <p className="rounded border border-emerald-200 bg-emerald-50 p-2 text-[11px] text-emerald-800">
+                  {jevMessage}
+                </p>
+              ) : null}
+              {jevError ? (
+                <p
+                  role="alert"
+                  className="rounded border border-rose-200 bg-rose-50 p-2 text-[11px] text-rose-700"
+                >
+                  {jevError}
+                </p>
+              ) : null}
+            </div>
+          </details>
+        </div>
+      </section>
+
       <div className="flex items-start justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
         <div>
           <div className="flex items-center gap-2 font-semibold text-slate-800">
@@ -458,217 +647,7 @@ export function AiConnectionPanel({
         </p>
       </section>
 
-      <section aria-labelledby="jev-heading">
-        <h3
-          id="jev-heading"
-          className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-        >
-          Jev 爆速ワールド
-        </h3>
-        <div className="space-y-2.5 rounded-md border border-slate-200 p-2.5">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="font-semibold text-slate-800">
-                TypeSafe Jev
-              </p>
-              <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
-                ワールドの地形・雰囲気・ギミック・配置を高速に選ぶための実験機能です。
-              </p>
-            </div>
-            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-              jevStatus?.configured
-                ? "bg-emerald-100 text-emerald-700"
-                : "bg-slate-100 text-slate-600"
-            }`}>
-              {jevStatus?.configured ? "接続設定済み" : "未設定"}
-            </span>
-          </div>
 
-          {jevStatus?.configured && openCodeClient?.needsUpdate ? (
-            <div className="rounded border border-amber-200 bg-amber-50 p-2 text-[11px] leading-4 text-amber-800">
-              <p className="font-semibold">OpenCodeから使う場合はMCP更新が必要です</p>
-              <p className="mt-1">
-                Studio内の「爆速で作る」はそのまま利用できます。OpenCodeからJevのtoolを使う場合だけ、MCPを更新してOpenCodeを完全に再起動してください。
-              </p>
-              <button
-                type="button"
-                disabled={registeringClientId !== null || ollamaConfiguring}
-                onClick={() => onRegister("opencode")}
-                className="mt-2 rounded-md border border-amber-300 bg-white px-2.5 py-1.5 font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
-              >
-                {registeringClientId === "opencode"
-                  ? "更新中"
-                  : "OpenCode MCPを更新"}
-              </button>
-            </div>
-          ) : jevStatus?.configured &&
-            openCodeClient?.registered &&
-            !openCodeClient.needsUpdate ? (
-            <p className="rounded border border-emerald-200 bg-emerald-50 p-2 text-[11px] leading-4 text-emerald-800">
-              OpenCode MCPは最新です。decide_fast_authoring が見えない場合は、OpenCodeを完全に終了して新しいセッションで起動し直してください。
-            </p>
-          ) : jevStatus?.configured && openCodeClient?.installed ? (
-            <div className="rounded border border-slate-200 bg-slate-50 p-2 text-[11px] leading-4 text-slate-600">
-              <p>OpenCodeから使うにはXRift Studio MCPの登録が必要です。</p>
-              <button
-                type="button"
-                disabled={registeringClientId !== null || ollamaConfiguring}
-                onClick={() => onRegister("opencode")}
-                className="mt-2 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-              >
-                {registeringClientId === "opencode"
-                  ? "登録中"
-                  : "OpenCodeへMCPを登録"}
-              </button>
-            </div>
-          ) : null}
-
-          {jevStatus?.configured ? (
-            <div className="space-y-2 rounded-md border border-violet-200 bg-violet-50/60 p-2.5">
-              <label className="block">
-                <span className="mb-1 block text-[11px] font-semibold text-violet-900">
-                  こんなワールドを作る
-                </span>
-                <textarea
-                  value={fastAuthoringPrompt}
-                  disabled={
-                    fastAuthoringState.status === "deciding" ||
-                    fastAuthoringState.status === "applying" ||
-                    fastAuthoringState.status === "checking"
-                  }
-                  onChange={(event) => setFastAuthoringPrompt(event.target.value)}
-                  placeholder="夜の山に焚き火がある休憩所"
-                  rows={3}
-                  className="w-full resize-none rounded-md border border-violet-200 bg-white px-2.5 py-2 text-xs leading-5 text-slate-800 focus:border-brand-500 focus:outline-none disabled:bg-slate-100"
-                />
-              </label>
-              <button
-                type="button"
-                disabled={
-                  !fastAuthoringPrompt.trim() ||
-                  Boolean(fastAuthoringDisabledReason) ||
-                  fastAuthoringState.status === "deciding" ||
-                  fastAuthoringState.status === "applying" ||
-                  fastAuthoringState.status === "checking"
-                }
-                onClick={() => void onRunFastAuthoring(fastAuthoringPrompt.trim())}
-                className="w-full rounded-md bg-brand-600 px-3 py-2 font-semibold text-white hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-500"
-              >
-                {fastAuthoringState.status === "deciding"
-                  ? "Jevが判断中"
-                  : fastAuthoringState.status === "applying"
-                    ? "シーンを作成中"
-                    : fastAuthoringState.status === "checking"
-                      ? "Scene Viewを確認中"
-                      : "爆速で作る"}
-              </button>
-              {fastAuthoringDisabledReason ? (
-                <p className="text-[11px] leading-4 text-amber-700">
-                  {fastAuthoringDisabledReason}
-                </p>
-              ) : null}
-              {fastAuthoringState.status !== "idle" ? (
-                <div
-                  className={
-                    fastAuthoringState.status === "error"
-                      ? "rounded border border-rose-200 bg-rose-50 p-2"
-                      : "rounded border border-violet-200 bg-white p-2"
-                  }
-                >
-                  <p className="text-[11px] font-semibold text-slate-800">
-                    {fastAuthoringState.message}
-                  </p>
-                  {fastAuthoringState.trace.length > 0 ? (
-                    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[10px] leading-4">
-                      {fastAuthoringState.trace.map((item) => (
-                        <div key={item.label} className="contents">
-                          <dt className="font-semibold text-slate-500">
-                            {item.label}
-                          </dt>
-                          <dd className="min-w-0 truncate text-slate-700">
-                            {item.value}
-                          </dd>
-                        </div>
-                      ))}
-                    </dl>
-                  ) : null}
-                  {fastAuthoringState.applied.length > 0 ? (
-                    <p className="mt-2 text-[10px] leading-4 text-slate-500">
-                      {fastAuthoringState.applied.join(" → ")}
-                    </p>
-                  ) : null}
-                  {fastAuthoringState.previewDataUrl ? (
-                    <img
-                      src={fastAuthoringState.previewDataUrl}
-                      alt="生成後のScene View"
-                      className="mt-2 w-full rounded border border-slate-200 bg-slate-950 object-cover"
-                    />
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-semibold text-slate-600">
-              TypeSafe APIキー
-            </span>
-            <input
-              type="password"
-              value={jevApiKey}
-              autoComplete="off"
-              disabled={jevBusy}
-              onChange={(event) => setJevApiKey(event.target.value)}
-              placeholder={jevStatus?.configured ? "新しいキーに変更" : "APIキーを入力"}
-              className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none disabled:bg-slate-100"
-            />
-          </label>
-
-          <button
-            type="button"
-            disabled={jevBusy || !jevApiKey.trim()}
-            onClick={() => void saveJevApiKey()}
-            className="w-full rounded-md bg-brand-600 px-3 py-2 font-semibold text-white hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-500"
-          >
-            {jevBusy ? "処理中" : jevStatus?.configured ? "APIキーを更新" : "APIキーを保存"}
-          </button>
-
-          {jevStatus?.configured ? (
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                disabled={jevBusy}
-                onClick={() => void testJevConnection()}
-                className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                接続確認
-              </button>
-              <button
-                type="button"
-                disabled={jevBusy}
-                onClick={() => void clearJevApiKey()}
-                className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 font-semibold text-slate-500 hover:bg-slate-50 disabled:opacity-50"
-              >
-                キーを削除
-              </button>
-            </div>
-          ) : null}
-
-          <p className="text-[10px] leading-4 text-slate-500">
-            APIキーはデスクトップ版のローカル設定に保存し、WebViewやMCP応答には返しません。モデルは {jevStatus?.model ?? "jev-latest"} を使います。
-          </p>
-          {jevMessage ? (
-            <p className="rounded border border-emerald-200 bg-emerald-50 p-2 text-[11px] text-emerald-800">
-              {jevMessage}
-            </p>
-          ) : null}
-          {jevError ? (
-            <p role="alert" className="rounded border border-rose-200 bg-rose-50 p-2 text-[11px] text-rose-700">
-              {jevError}
-            </p>
-          ) : null}
-        </div>
-      </section>
 
       {error ? (
         <div role="alert" className="rounded-md border border-rose-200 bg-rose-50 p-2.5 text-rose-700">
