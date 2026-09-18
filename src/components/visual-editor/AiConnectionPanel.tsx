@@ -223,7 +223,7 @@ export function AiConnectionPanel({
   return (
     <div className="scrollbar-thin max-h-[min(32rem,calc(100vh-10rem))] space-y-3 overflow-y-auto p-3.5 text-xs text-slate-600">
       <p className="rounded-md border border-violet-100 bg-violet-50/70 p-3 leading-5 text-slate-700">
-        作りたいワールドを文章で入力すると、Terrain・景観・家具・照明・天気・しかけ・XRift公式設備から必要なものを選び、Sceneへまとめて配置します。
+        作りたいワールドを文章で入力すると、Terrain・Skybox・景観・家具・照明・天気・しかけ・XRift公式設備から必要なものを選び、Scene全体をまとめて作ります。
       </p>
       <section aria-labelledby="jev-heading">
         <h3
@@ -237,7 +237,7 @@ export function AiConnectionPanel({
             <div>
               <p className="font-semibold text-slate-900">Jev Fast Authoring</p>
               <p className="mt-0.5 text-[11px] leading-4 text-slate-600">
-                Terrain・地表・草・Post Effect・Windまで含めて、主役・景観・家具・照明・天気・しかけ・マテリアル・公式設備を最大50配置までまとめて作ります。
+                Terrain・地表・草・Skybox・必要ならPost Effect・Windまで含めて、主役・景観・家具・照明・天気・しかけ・マテリアル・公式設備を必要な数だけまとめて作ります。
               </p>
             </div>
             <span
