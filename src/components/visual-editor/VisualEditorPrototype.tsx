@@ -7909,6 +7909,10 @@ export function VisualEditorPrototype({
       }
 
       const applied: string[] = [];
+      const generatedPlacements: Array<{
+        entityId: string;
+        groundOffset: number;
+      }> = [];
       const commitToolOutcome = (
         tool: XriftMcpEditorToolName,
         argumentsValue: Record<string, unknown>,
@@ -8112,6 +8116,10 @@ export function VisualEditorPrototype({
               { entityId, name: decision.primitive.name },
               true,
             );
+            generatedPlacements.push({
+              entityId,
+              groundOffset: baseOffset,
+            });
             applied.push(decision.primitive.name);
             setJevFastAuthoringState((current) => ({
               ...current,
@@ -8194,6 +8202,10 @@ export function VisualEditorPrototype({
             setSelectedEntityIds([placed.rootEntityId]);
             setSelectedAssetIds([]);
             setSaveStatus("dirty");
+            generatedPlacements.push({
+              entityId: placed.rootEntityId,
+              groundOffset: 0,
+            });
             applied.push(recipe.name);
             setJevFastAuthoringState((current) => ({
               ...current,
@@ -8205,10 +8217,44 @@ export function VisualEditorPrototype({
           }
         }
 
+        let readjusted = 0;
+        if (terrainEntityId) {
+          for (const generated of generatedPlacements) {
+            const transform = getTransform(
+              bundleRef.current.scene,
+              generated.entityId,
+            );
+            if (!transform) continue;
+            const currentPosition = transform.position;
+            const ground = groundPositionFor(
+              currentPosition,
+              terrainEntityId,
+            );
+            const nextY = ground[1] + generated.groundOffset;
+            if (Math.abs(currentPosition[1] - nextY) <= 0.01) continue;
+            commitToolOutcome(
+              "update_transform",
+              {
+                entityId: generated.entityId,
+                position: [
+                  currentPosition[0],
+                  nextY,
+                  currentPosition[2],
+                ],
+              },
+              true,
+            );
+            readjusted += 1;
+          }
+        }
+        if (readjusted > 0) {
+          applied.push(`接地を再調整 ${readjusted}件`);
+        }
+
         setJevFastAuthoringState((current) => ({
           ...current,
           status: "checking",
-          message: "配置と接地を補正し、Scene Viewを確認しています",
+          message: "配置と接地を再調整し、Scene Viewを確認しています",
           applied: [...applied],
         }));
         setActiveEditorTab(SCENE_VIEW_TAB_ID);
