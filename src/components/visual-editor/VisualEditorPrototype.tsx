@@ -5276,7 +5276,7 @@ export function VisualEditorPrototype({
                 skybox:
                   decision.skybox === "off"
                     ? {
-                        ...FAST_AUTHORING_MOOD_SETTINGS[decision.mood].skybox,
+                        ...(FAST_AUTHORING_MOOD_SETTINGS[decision.mood].skybox as Record<string, unknown>),
                         enabled: false,
                         iblEnabled: false,
                         imageAssetId: null,
@@ -5284,13 +5284,13 @@ export function VisualEditorPrototype({
                       }
                     : decision.skybox === "gradient"
                       ? {
-                          ...FAST_AUTHORING_MOOD_SETTINGS[decision.mood].skybox,
+                          ...(FAST_AUTHORING_MOOD_SETTINGS[decision.mood].skybox as Record<string, unknown>),
                           iblEnabled: false,
                           imageAssetId: null,
                           materialAssetId: null,
                         }
                       : {
-                          ...FAST_AUTHORING_MOOD_SETTINGS[decision.mood].skybox,
+                          ...(FAST_AUTHORING_MOOD_SETTINGS[decision.mood].skybox as Record<string, unknown>),
                           enabled: true,
                           iblEnabled: false,
                           imageAssetId: null,
@@ -8216,7 +8216,7 @@ export function VisualEditorPrototype({
         }
 
         let skyboxSettings: Record<string, unknown> = {
-          ...FAST_AUTHORING_MOOD_SETTINGS[decision.mood].skybox,
+          ...(FAST_AUTHORING_MOOD_SETTINGS[decision.mood].skybox as Record<string, unknown>),
           iblEnabled: false,
           imageAssetId: null,
           materialAssetId: null,
