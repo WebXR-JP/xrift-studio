@@ -8022,7 +8022,6 @@ export function VisualEditorPrototype({
           scene: initialBundle.scene,
           projectName: initialBundle.project.metadata.name,
           sceneName: initialBundle.scene.name,
-          maxGimmicks: 3,
         });
         const jev = await tauri.jevSystemOne(planned.request);
         const decision = resolveFastAuthoringDecision({
@@ -8071,20 +8070,16 @@ export function VisualEditorPrototype({
           applied: [...applied],
         }));
 
-        if (decision.primitive) {
+        for (const primitive of decision.primitives) {
           const helperGround = groundPositionFor(
-            decision.primitive.position,
+            primitive.position,
             terrainEntityId,
           );
-          const baseOffset =
-            decision.primitive.shape === "box" ||
-            decision.primitive.shape === "cylinder"
-              ? decision.primitive.scale[1] / 2
-              : 0;
+          const baseOffset = primitive.scale[1] / 2;
           const created = commitToolOutcome(
             "create_primitive",
             {
-              shape: decision.primitive.shape,
+              shape: primitive.shape,
               position: [
                 helperGround[0],
                 helperGround[1] + baseOffset,
@@ -8097,35 +8092,34 @@ export function VisualEditorPrototype({
             typeof created.result.entityId === "string"
               ? created.result.entityId
               : null;
-          if (entityId) {
-            commitToolOutcome(
-              "update_transform",
-              {
-                entityId,
-                position: [
-                  helperGround[0],
-                  helperGround[1] + baseOffset,
-                  helperGround[2],
-                ],
-                scale: decision.primitive.scale,
-              },
-              true,
-            );
-            commitToolOutcome(
-              "rename_entity",
-              { entityId, name: decision.primitive.name },
-              true,
-            );
-            generatedPlacements.push({
+          if (!entityId) continue;
+          commitToolOutcome(
+            "update_transform",
+            {
               entityId,
-              groundOffset: baseOffset,
-            });
-            applied.push(decision.primitive.name);
-            setJevFastAuthoringState((current) => ({
-              ...current,
-              applied: [...applied],
-            }));
-          }
+              position: [
+                helperGround[0],
+                helperGround[1] + baseOffset,
+                helperGround[2],
+              ],
+              scale: primitive.scale,
+            },
+            true,
+          );
+          commitToolOutcome(
+            "rename_entity",
+            { entityId, name: primitive.name },
+            true,
+          );
+          generatedPlacements.push({
+            entityId,
+            groundOffset: baseOffset,
+          });
+          applied.push(primitive.name);
+          setJevFastAuthoringState((current) => ({
+            ...current,
+            applied: [...applied],
+          }));
         }
 
         for (const selected of decision.recipes) {
@@ -8215,6 +8209,44 @@ export function VisualEditorPrototype({
             importRunningRef.current = false;
             setSceneRecipeImportBusy(false);
           }
+        }
+
+        for (const facility of decision.facilities) {
+          const ground = groundPositionFor(
+            facility.position,
+            terrainEntityId,
+          );
+          const position: Vec3 = [
+            ground[0],
+            ground[1] + facility.heightOffset,
+            ground[2],
+          ];
+          const placed = commitToolOutcome(
+            "place_builtin_prefab",
+            {
+              recipeId: facility.recipeId,
+              position,
+            },
+            true,
+          );
+          const entityId =
+            typeof placed.result.entityId === "string"
+              ? placed.result.entityId
+              : null;
+          if (!entityId) continue;
+          generatedPlacements.push({
+            entityId,
+            groundOffset: facility.heightOffset,
+          });
+          applied.push(
+            facility.configurationHint
+              ? facility.name + "（設定を確認）"
+              : facility.name,
+          );
+          setJevFastAuthoringState((current) => ({
+            ...current,
+            applied: [...applied],
+          }));
         }
 
         let readjusted = 0;
