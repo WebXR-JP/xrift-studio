@@ -8,7 +8,10 @@ import {
   type XriftOllamaIntegrationId,
   type XriftOllamaStatus,
 } from "../../lib/tauri";
-import type { FastAuthoringTraceItem } from "../../lib/visual-editor/jev-fast-authoring";
+import type {
+  FastAuthoringTraceItem,
+  FastAuthoringValidationCheck,
+} from "../../lib/visual-editor/jev-fast-authoring";
 import { EDITOR_ICONS } from "./editor-icons";
 
 const OLLAMA_INTEGRATION_IDS: readonly XriftOllamaIntegrationId[] = [
@@ -37,6 +40,7 @@ export type JevFastAuthoringUiState = {
   message: string;
   trace: FastAuthoringTraceItem[];
   applied: string[];
+  checks?: FastAuthoringValidationCheck[];
   previewDataUrl?: string | null;
 };
 
@@ -329,6 +333,33 @@ export function AiConnectionPanel({
                 <p className="mt-2 text-[10px] leading-4 text-slate-500">
                   {fastAuthoringState.applied.join(" → ")}
                 </p>
+              ) : null}
+              {fastAuthoringState.checks &&
+              fastAuthoringState.checks.length > 0 ? (
+                <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2">
+                  <p className="text-[10px] font-semibold text-slate-600">
+                    自動チェック
+                  </p>
+                  <ul className="mt-1 space-y-1 text-[10px] leading-4">
+                    {fastAuthoringState.checks.map((check) => (
+                      <li key={check.id} className="flex items-start gap-1.5">
+                        <span
+                          className={
+                            check.status === "ok"
+                              ? "font-semibold text-emerald-700"
+                              : "font-semibold text-amber-700"
+                          }
+                        >
+                          {check.status === "ok" ? "OK" : "確認"}
+                        </span>
+                        <span className="min-w-0 text-slate-600">
+                          <span className="font-semibold">{check.label}: </span>
+                          {check.message}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ) : null}
               {fastAuthoringState.previewDataUrl ? (
                 <img
