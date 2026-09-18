@@ -171,13 +171,20 @@ export function buildFastAuthoringRequest({
   sceneName: string;
   maxGimmicks?: number;
 }) {
-  const catalog = createFastAuthoringCatalog();
+  const baseCatalog = createFastAuthoringCatalog();
+  const terrainCriteria = findTerrainEntityId(scene)
+    ? {
+        none:
+          "Sceneに既存Terrainがあります。重ねて追加せず、既存Terrainを使ってください",
+      }
+    : baseCatalog.terrainCriteria;
+  const catalog = { ...baseCatalog, terrainCriteria };
   const boundedMaxGimmicks = Math.min(3, Math.max(1, maxGimmicks));
   const questions: Record<string, unknown> = {
     terrain: {
       type: "choice",
       instructions:
-        "依頼に最も合う地形を1つ選んでください。建物中心などTerrainが不要ならnone。",
+        "依頼に最も合う地形を1つ選んでください。既存Terrainがある場合やTerrainが不要ならnone。",
       criteria: catalog.terrainCriteria,
     },
     mood: {
