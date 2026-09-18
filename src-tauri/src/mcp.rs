@@ -3358,12 +3358,12 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "decide_fast_authoring",
-            "description": "Use the user's configured TypeSafe Jev API to make fast bounded choices for a world: Terrain preset, mood, density, up to three existing XRift Scene Recipes, placement slots, and at most one optional Primitive helper. Jev only selects from candidates XRift Studio supplies; it cannot invent tool names, recipe IDs, coordinates, code, or delete anything. Existing Entity positions are considered when resolving slots. This tool does not mutate the Scene. It returns decisionTrace, an ordered MCP action plan, optional primitivePlan, and grounding instructions. Execute returned actions in order, adding the latest projectId, sceneId and expectedRevision before each write. After Terrain creation, sample the ground before placing Scene Recipes or Primitive helpers, then capture_scene_view. If Jev is not configured, ask the person to enter their TypeSafe API key in Studio's AI connection panel.",
+            "description": "Use the user's configured TypeSafe Jev API to make bounded world-composition choices from XRift Studio's real catalogs: Terrain, mood, density, scale, composition, up to six role-specific Scene Recipes, up to two official XRift facilities, placement slots, and up to two optional Primitive helpers. Roles cover the signature element, landscape, furniture/structure, lighting, weather/effects, and interactions so the result can use more of Studio than one focal gimmick. Jev only selects from candidates XRift Studio supplies; it cannot invent tool names, recipe IDs, coordinates, code, or delete anything. Existing Entity positions are considered when resolving slots. This tool does not mutate the Scene. It returns decisionTrace, actionPlan, facilityPlan, primitivePlan, and grounding instructions. After Terrain creation or when an existing Terrain is present, sample the ground before placements, then capture_scene_view. If Jev is not configured, ask the person to enter their TypeSafe API key in Studio's AI connection panel.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "prompt": { "type": "string", "description": "Short description of the world to build." },
-                    "maxGimmicks": { "type": "integer", "minimum": 1, "maximum": 3, "description": "Maximum Scene Recipes to select; defaults to 3." }
+                    "maxGimmicks": { "type": "integer", "minimum": 1, "maximum": 6, "description": "Maximum role-based Scene Recipes to select; defaults to 6." }
                 },
                 "required": ["prompt"],
                 "additionalProperties": false
