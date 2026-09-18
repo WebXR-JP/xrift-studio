@@ -8123,7 +8123,6 @@ export function VisualEditorPrototype({
           }
         }
 
-        let primaryRecipeEntityId: string | null = null;
         for (const selected of decision.recipes) {
           const recipe = planned.catalog.recipes.find(
             (candidate) => candidate.id === selected.recipeId,
@@ -8198,7 +8197,6 @@ export function VisualEditorPrototype({
             setSelectedEntityIds([placed.rootEntityId]);
             setSelectedAssetIds([]);
             setSaveStatus("dirty");
-            primaryRecipeEntityId ??= placed.rootEntityId;
             applied.push(recipe.name);
             setJevFastAuthoringState((current) => ({
               ...current,
