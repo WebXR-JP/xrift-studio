@@ -15,7 +15,7 @@ export function runJevFastAuthoringFixtureAssertions(): void {
   const spawn = findFastAuthoringSpawnPosition(project.scene);
   assert(
     spawn[2] !== 0 || spawn[0] !== 0,
-    "starter SpawnPoint should be detected from xrift.spawn-point",
+    "starter SpawnPoint should be detected from the legacy spawn component",
   );
 
   const planned = buildFastAuthoringRequest({
@@ -67,9 +67,9 @@ export function runJevFastAuthoringFixtureAssertions(): void {
     "campfire should be selected",
   );
   assert(
-    decision.recipes[0]?.position[0] === 0 &&
-      decision.recipes[0]?.position[2] === 0,
-    "the starter ground plane must not push the main recipe away from center",
+    decision.recipes[0]?.position[0] !== 0 ||
+      decision.recipes[0]?.position[2] !== 0,
+    "an occupied center must move the main recipe away from the existing Entity",
   );
   assert(decision.primitive?.kind === "platform", "platform helper should resolve");
   assert(
