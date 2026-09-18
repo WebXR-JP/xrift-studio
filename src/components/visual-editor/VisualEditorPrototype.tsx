@@ -276,7 +276,16 @@ import { useEditorDevice } from "./useEditorDevice";
 import { EditorPanelVisibilityContext } from "./editor-panel-visibility";
 import { SupportReportModal } from "../SupportReportModal";
 import { ConfirmDialog } from "../ConfirmDialog";
-import type { XriftMcpActivity } from "./AiConnectionPanel";
+import type {
+  JevFastAuthoringUiState,
+  XriftMcpActivity,
+} from "./AiConnectionPanel";
+import {
+  buildFastAuthoringRequest,
+  FAST_AUTHORING_MOOD_SETTINGS,
+  findTerrainEntityId,
+  resolveFastAuthoringDecision,
+} from "../../lib/visual-editor/jev-fast-authoring";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
 import { HierarchyPanel } from "./HierarchyPanel";
 import {
@@ -1758,6 +1767,14 @@ export function VisualEditorPrototype({
     useState<XriftOllamaConfigurationResult | null>(null);
   const [mcpLastActivity, setMcpLastActivity] =
     useState<XriftMcpActivity>(null);
+  const [jevFastAuthoringState, setJevFastAuthoringState] =
+    useState<JevFastAuthoringUiState>({
+      status: "idle",
+      message: "",
+      trace: [],
+      applied: [],
+      previewDataUrl: null,
+    });
 
   useEffect(() => {
     if (editorMode !== "play") {
@@ -8074,6 +8091,413 @@ export function VisualEditorPrototype({
     [setAssetSelection, setBundle, setSceneSelection],
   );
 
+  const handleRunJevFastAuthoring = useCallback(
+    async (prompt: string) => {
+      const normalizedPrompt = prompt.trim();
+      if (!normalizedPrompt) return;
+      if (!tauri.isAvailable()) {
+        setJevFastAuthoringState({
+          status: "error",
+          message: "Jev Fast Authoringはデスクトップ版で利用してください",
+          trace: [],
+          applied: [],
+          previewDataUrl: null,
+        });
+        return;
+      }
+      if (editorModeRef.current !== "edit") {
+        setJevFastAuthoringState({
+          status: "error",
+          message: "Playを停止してから爆速ワールド生成を実行してください",
+          trace: [],
+          applied: [],
+          previewDataUrl: null,
+        });
+        return;
+      }
+      const initialBundle = bundleRef.current;
+      if (initialBundle.project.projectKind !== "world") {
+        setJevFastAuthoringState({
+          status: "error",
+          message: "爆速ワールド生成はWorldプロジェクトで利用してください",
+          trace: [],
+          applied: [],
+          previewDataUrl: null,
+        });
+        return;
+      }
+      const path = projectPathRef.current;
+      if (!path) {
+        setJevFastAuthoringState({
+          status: "error",
+          message: "自動保存の完了後に実行してください",
+          trace: [],
+          applied: [],
+          previewDataUrl: null,
+        });
+        return;
+      }
+      if (
+        importBusyRef.current ||
+        importRunningRef.current ||
+        assetOperationRef.current !== null
+      ) {
+        setJevFastAuthoringState({
+          status: "error",
+          message: "素材の処理が終わってから実行してください",
+          trace: [],
+          applied: [],
+          previewDataUrl: null,
+        });
+        return;
+      }
+
+      const applied: string[] = [];
+      const commitToolOutcome = (
+        tool: XriftMcpEditorToolName,
+        argumentsValue: Record<string, unknown>,
+        writable: boolean,
+      ) => {
+        const source = bundleRef.current;
+        const revision = mcpRevisionRef.current;
+        const argumentsWithContext = writable
+          ? {
+              ...argumentsValue,
+              projectId: source.project.projectId,
+              sceneId: source.scene.sceneId,
+              expectedRevision: revision,
+            }
+          : argumentsValue;
+        const outcome = executeXriftMcpEditorTool(
+          {
+            bundle: source,
+            sceneSelection: sceneSelectionRef.current,
+            assetSelection: assetSelectionRef.current,
+            editorMode: editorModeRef.current,
+            importBusy: importBusyRef.current,
+            revision,
+            saveStatus: saveStatusRef.current,
+            scriptContracts: scriptContractsRef.current,
+            scriptRuntime: scriptRuntimeReportRef.current,
+          },
+          {
+            id: `jev-studio-${Date.now()}-${tool}`,
+            tool,
+            arguments: argumentsWithContext,
+          },
+        );
+        if (outcome.changed) {
+          mcpRevisionRef.current += 1;
+          mcpRevisionBundleRef.current = outcome.bundle;
+          bundleRef.current = outcome.bundle;
+          sceneSelectionRef.current = outcome.sceneSelection;
+          assetSelectionRef.current = outcome.assetSelection;
+          saveStatusRef.current = "dirty";
+          setHistory((current) =>
+            commitEditorHistory(current, {
+              ...current.present,
+              bundle: outcome.bundle,
+              sceneSelection: outcome.sceneSelection,
+              assetSelection: outcome.assetSelection,
+            }),
+          );
+          setSelectedEntityIds(
+            outcome.sceneSelection?.id ? [outcome.sceneSelection.id] : [],
+          );
+          setSelectedAssetIds(
+            outcome.assetSelection ? [outcome.assetSelection] : [],
+          );
+          setSaveStatus("dirty");
+        }
+        return outcome;
+      };
+
+      const groundPositionFor = (position: Vec3, terrainEntityId: string | null) => {
+        if (!terrainEntityId) return position;
+        const scene = bundleRef.current.scene;
+        const terrainTransform = getTransform(scene, terrainEntityId);
+        const terrainOrigin = terrainTransform?.position ?? [0, 0, 0];
+        try {
+          const sample = commitToolOutcome(
+            "sample_terrain_point",
+            {
+              entityId: terrainEntityId,
+              point: [
+                position[0] - terrainOrigin[0],
+                position[2] - terrainOrigin[2],
+              ],
+            },
+            false,
+          ).result;
+          const worldPosition = sample.worldPosition;
+          if (
+            Array.isArray(worldPosition) &&
+            worldPosition.length === 3 &&
+            worldPosition.every((value) => typeof value === "number")
+          ) {
+            return [
+              position[0],
+              worldPosition[1] as number,
+              position[2],
+            ] as Vec3;
+          }
+        } catch {
+          // A helper outside the Terrain footprint keeps its requested height.
+        }
+        return position;
+      };
+
+      setJevFastAuthoringState({
+        status: "deciding",
+        message: "JevがTerrain・雰囲気・ギミック・配置を選んでいます",
+        trace: [],
+        applied: [],
+        previewDataUrl: null,
+      });
+
+      try {
+        const planned = buildFastAuthoringRequest({
+          prompt: normalizedPrompt,
+          scene: initialBundle.scene,
+          projectName: initialBundle.project.metadata.name,
+          sceneName: initialBundle.scene.name,
+          maxGimmicks: 3,
+        });
+        const jev = await tauri.jevSystemOne(planned.request);
+        const decision = resolveFastAuthoringDecision({
+          response: jev,
+          scene: initialBundle.scene,
+          catalog: planned.catalog,
+          maxGimmicks: planned.maxGimmicks,
+        });
+        setJevFastAuthoringState({
+          status: "applying",
+          message: "Jevの決定をSceneへ反映しています",
+          trace: decision.decisionTrace,
+          applied: [],
+          previewDataUrl: null,
+        });
+
+        let terrainEntityId = findTerrainEntityId(bundleRef.current.scene);
+        if (decision.terrain !== "none") {
+          const terrainOutcome = commitToolOutcome(
+            "create_terrain_from_preset",
+            {
+              presetId: decision.terrain,
+              position: [0, 0, 0],
+            },
+            true,
+          );
+          terrainEntityId =
+            typeof terrainOutcome.result.entityId === "string"
+              ? terrainOutcome.result.entityId
+              : terrainEntityId;
+          applied.push("Terrain");
+          setJevFastAuthoringState((current) => ({
+            ...current,
+            applied: [...applied],
+          }));
+        }
+
+        commitToolOutcome(
+          "update_scene_settings",
+          FAST_AUTHORING_MOOD_SETTINGS[decision.mood],
+          true,
+        );
+        applied.push("雰囲気");
+        setJevFastAuthoringState((current) => ({
+          ...current,
+          applied: [...applied],
+        }));
+
+        if (decision.primitive) {
+          const helperGround = groundPositionFor(
+            decision.primitive.position,
+            terrainEntityId,
+          );
+          const baseOffset =
+            decision.primitive.shape === "box" ||
+            decision.primitive.shape === "cylinder"
+              ? decision.primitive.scale[1] / 2
+              : 0;
+          const created = commitToolOutcome(
+            "create_primitive",
+            {
+              shape: decision.primitive.shape,
+              position: [
+                helperGround[0],
+                helperGround[1] + baseOffset,
+                helperGround[2],
+              ],
+            },
+            true,
+          );
+          const entityId =
+            typeof created.result.entityId === "string"
+              ? created.result.entityId
+              : null;
+          if (entityId) {
+            commitToolOutcome(
+              "update_transform",
+              {
+                entityId,
+                position: [
+                  helperGround[0],
+                  helperGround[1] + baseOffset,
+                  helperGround[2],
+                ],
+                scale: decision.primitive.scale,
+              },
+              true,
+            );
+            commitToolOutcome(
+              "rename_entity",
+              { entityId, name: decision.primitive.name },
+              true,
+            );
+            applied.push(decision.primitive.name);
+            setJevFastAuthoringState((current) => ({
+              ...current,
+              applied: [...applied],
+            }));
+          }
+        }
+
+        let primaryRecipeEntityId: string | null = null;
+        for (const selected of decision.recipes) {
+          const recipe = planned.catalog.recipes.find(
+            (candidate) => candidate.id === selected.recipeId,
+          );
+          if (!recipe) continue;
+          const source = bundleRef.current;
+          const position = groundPositionFor(
+            selected.position,
+            terrainEntityId,
+          );
+          importRunningRef.current = true;
+          setSceneRecipeImportBusy(true);
+          try {
+            const placed = await instantiateSceneRecipe(
+              source.scene,
+              source.assets,
+              selected.recipeId,
+              source.project.projectKind,
+              path,
+              position,
+            );
+            if (!placed) {
+              throw new Error(
+                `「${recipe.name}」を現在のプロジェクトへ配置できませんでした`,
+              );
+            }
+            const latest = bundleRef.current;
+            if (
+              projectPathRef.current !== path ||
+              editorModeRef.current !== "edit" ||
+              latest.scene !== source.scene ||
+              latest.project !== source.project ||
+              latest.prefabs !== source.prefabs
+            ) {
+              throw new Error(
+                "Jev Fast Authoring中にSceneが変更されました。現在の編集内容はそのままです",
+              );
+            }
+            const assets =
+              latest.assets === source.assets
+                ? placed.assets
+                : mergeRecipeAssetsOntoLatest(
+                    source.assets,
+                    placed.assets,
+                    latest.assets,
+                  );
+            const nextBundle = touchProject({
+              ...latest,
+              assets,
+              scene: placed.scene,
+            });
+            mcpRevisionRef.current += 1;
+            mcpRevisionBundleRef.current = nextBundle;
+            bundleRef.current = nextBundle;
+            sceneSelectionRef.current = {
+              kind: "entity",
+              id: placed.rootEntityId,
+            };
+            assetSelectionRef.current = null;
+            saveStatusRef.current = "dirty";
+            setHistory((current) =>
+              commitEditorHistory(current, {
+                ...current.present,
+                bundle: nextBundle,
+                sceneSelection: {
+                  kind: "entity",
+                  id: placed.rootEntityId,
+                },
+                assetSelection: null,
+              }),
+            );
+            setSelectedEntityIds([placed.rootEntityId]);
+            setSelectedAssetIds([]);
+            setSaveStatus("dirty");
+            primaryRecipeEntityId ??= placed.rootEntityId;
+            applied.push(recipe.name);
+            setJevFastAuthoringState((current) => ({
+              ...current,
+              applied: [...applied],
+            }));
+          } finally {
+            importRunningRef.current = false;
+            setSceneRecipeImportBusy(false);
+          }
+        }
+
+        setJevFastAuthoringState((current) => ({
+          ...current,
+          status: "checking",
+          message: "配置と接地を補正し、Scene Viewを確認しています",
+          applied: [...applied],
+        }));
+        setActiveEditorTab(SCENE_VIEW_TAB_ID);
+        setGraphTabActive(false);
+        await new Promise<void>((resolve) =>
+          window.requestAnimationFrame(() => resolve()),
+        );
+        if (primaryRecipeEntityId) {
+          await requestSceneCamera({ focusEntityId: primaryRecipeEntityId });
+        } else {
+          await requestSceneCamera({ preset: "iso" });
+        }
+        const screenshot = await requestSceneScreenshot();
+        const previewDataUrl = screenshot.ok ? screenshot.dataUrl : null;
+        setJevFastAuthoringState({
+          status: "done",
+          message: screenshot.ok
+            ? "完成しました。Scene Viewで結果を確認できます"
+            : "生成は完了しました。Scene Viewの画像だけ取得できませんでした",
+          trace: decision.decisionTrace,
+          applied: [...applied],
+          previewDataUrl,
+        });
+        setNotice(
+          "Jev Fast Authoringでワールドを生成しました。変更を自動保存します",
+        );
+      } catch (error) {
+        setJevFastAuthoringState((current) => ({
+          ...current,
+          status: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : typeof error === "string"
+                ? error
+                : "Jev Fast Authoringを完了できませんでした",
+          applied: [...applied],
+          previewDataUrl: null,
+        }));
+      }
+    },
+    [requestSceneCamera, requestSceneScreenshot],
+  );
+
   const handleOptimizeColliders = useCallback(
     (entityIds?: readonly string[]) => {
       if (editorMode !== "edit" && !playSession) return;
@@ -12754,6 +13178,21 @@ export function VisualEditorPrototype({
             ollamaError={ollamaError}
             ollamaResult={ollamaResult}
             mcpLastActivity={mcpLastActivity}
+            fastAuthoringState={jevFastAuthoringState}
+            fastAuthoringDisabledReason={
+              !mcpNativeAvailable
+                ? "デスクトップ版で利用してください"
+                : projectKind !== "world"
+                  ? "Worldプロジェクトで利用してください"
+                  : renderedEditorMode !== "edit"
+                    ? "Playを停止してから利用してください"
+                    : !projectPath
+                      ? "自動保存の完了後に利用してください"
+                      : importBusy
+                        ? "素材の処理が終わるまで利用できません"
+                        : null
+            }
+            onRunFastAuthoring={handleRunJevFastAuthoring}
             canUndo={
               !renderedReadOnly &&
               !importBusy &&
