@@ -5196,11 +5196,11 @@ export function VisualEditorPrototype({
                 "爆速ワールド生成はワールドプロジェクトで利用してください",
               );
             }
-            const maxGimmicks = Math.min(
-              6,
+            const maxElements = Math.min(
+              50,
               Math.max(
                 1,
-                mcpOptionalInteger(args.maxGimmicks, "maxGimmicks") ?? 6,
+                mcpOptionalInteger(args.maxElements, "maxElements") ?? 50,
               ),
             );
             const planned = buildFastAuthoringRequest({
@@ -5208,14 +5208,13 @@ export function VisualEditorPrototype({
               scene: currentBundle.scene,
               projectName: currentBundle.project.metadata.name,
               sceneName: currentBundle.scene.name,
-              maxGimmicks,
             });
             const jev = await tauri.jevSystemOne(planned.request);
             const decision = resolveFastAuthoringDecision({
               response: jev,
               scene: currentBundle.scene,
               catalog: planned.catalog,
-              maxGimmicks: planned.maxGimmicks,
+              maxElements,
             });
             const actionPlan: Array<{
               tool: string;
@@ -5286,6 +5285,8 @@ export function VisualEditorPrototype({
                   density: decision.density,
                   scale: decision.scale,
                   composition: decision.composition,
+                  detail: decision.detail,
+                  elementBudget: decision.elementBudget,
                   recipes: decision.recipes,
                   facilities: decision.facilities,
                   primitives: decision.primitives,
@@ -8050,7 +8051,6 @@ export function VisualEditorPrototype({
           response: jev,
           scene: initialBundle.scene,
           catalog: planned.catalog,
-          maxGimmicks: planned.maxGimmicks,
         });
         setJevFastAuthoringState({
           status: "applying",
