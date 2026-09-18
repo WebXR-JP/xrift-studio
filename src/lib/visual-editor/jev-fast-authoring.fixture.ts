@@ -1,7 +1,7 @@
 import { BUILTIN_PREFAB_RECIPE_IDS } from "./builtin-prefab-catalog";
 import {
   buildFastAuthoringRequest,
-  FAST_AUTHORING_MAX_RECIPES,
+  FAST_AUTHORING_MAX_ELEMENTS,
   findFastAuthoringSpawnPosition,
   resolveFastAuthoringDecision,
 } from "./jev-fast-authoring";
@@ -57,50 +57,46 @@ export function runJevFastAuthoringFixtureAssertions(): void {
   );
 
   const planned = buildFastAuthoringRequest({
-    prompt: "霧の山中に、小さな和風庭園と温泉、石灯籠、竹を配置する",
+    prompt:
+      "広い霧の庭園。竹林、岩、木、ベンチ、街灯、温泉、しかけを大量に使って作り込む",
     scene: project.scene,
     projectName: project.project.metadata.name,
     sceneName: project.scene.name,
   });
-  assert(
-    planned.maxGimmicks === FAST_AUTHORING_MAX_RECIPES &&
-      planned.maxGimmicks === 6,
-    "default Fast Authoring should expose all six recipe roles",
-  );
-  assert(
-    Object.prototype.hasOwnProperty.call(
-      planned.catalog.roleCriteria.signature,
-      SCENE_RECIPE_IDS.campfire,
-    ),
-    "signature role should be able to choose from the broad recipe catalog",
-  );
-  assert(
-    Object.prototype.hasOwnProperty.call(
-      planned.catalog.roleCriteria.landscape,
-      SCENE_RECIPE_IDS.bamboo,
-    ),
-    "landscape role should include nature recipes",
-  );
-  assert(
-    Object.prototype.hasOwnProperty.call(
-      planned.catalog.roleCriteria.lighting,
-      SCENE_RECIPE_IDS.streetLight,
-    ),
-    "lighting role should include light recipes",
-  );
+
   for (const question of [
-    "composition",
-    "scale",
-    "facility1",
-    "facility2",
-    "helper1",
-    "helper2",
+    "detail",
+    "landscape1",
+    "landscape1Count",
+    "landscape3Placement",
+    "furniture3",
+    "lighting3",
+    "atmosphere2",
+    "interaction3",
+    "material2",
+    "facility6",
+    "helper6",
   ]) {
     assert(
       Object.prototype.hasOwnProperty.call(planned.request.questions, question),
       question + " should be included in the bounded Jev request",
     );
   }
+
+  assert(
+    Object.prototype.hasOwnProperty.call(
+      planned.catalog.roleCriteria.landscape,
+      SCENE_RECIPE_IDS.bamboo,
+    ),
+    "landscape role should include bamboo",
+  );
+  assert(
+    Object.prototype.hasOwnProperty.call(
+      planned.catalog.roleCriteria.material,
+      SCENE_RECIPE_IDS.materialIridescence,
+    ),
+    "material role should include material showcase recipes",
+  );
   assert(
     Object.prototype.hasOwnProperty.call(
       planned.catalog.facilityCriteria,
@@ -114,71 +110,136 @@ export function runJevFastAuthoringFixtureAssertions(): void {
       answers: {
         terrain: { choice: "rolling-hills" },
         mood: { choice: "foggy" },
-        density: { choice: "balanced" },
+        density: { choice: "lively" },
         scale: { choice: "wide" },
         composition: { choice: "natural" },
+        detail: { choice: "maximal" },
 
-        gimmick1: { choice: SCENE_RECIPE_IDS.stoneLantern },
-        placement1: { choice: "center" },
-        gimmick2: { choice: SCENE_RECIPE_IDS.bamboo },
-        placement2: { choice: "back-left" },
-        gimmick3: { choice: SCENE_RECIPE_IDS.bench },
-        placement3: { choice: "front-right" },
-        gimmick4: { choice: SCENE_RECIPE_IDS.streetLight },
-        placement4: { choice: "right" },
-        gimmick5: { choice: SCENE_RECIPE_IDS.hotSpring },
-        placement5: { choice: "far" },
-        gimmick6: { choice: SCENE_RECIPE_IDS.soundButton },
-        placement6: { choice: "near-spawn" },
+        signature1: { choice: SCENE_RECIPE_IDS.stoneLantern },
+        signature1Count: { choice: "one" },
+        signature1Placement: { choice: "center" },
+
+        landscape1: { choice: SCENE_RECIPE_IDS.bamboo },
+        landscape1Count: { choice: "mass" },
+        landscape1Placement: { choice: "back-left" },
+        landscape2: { choice: SCENE_RECIPE_IDS.rocks },
+        landscape2Count: { choice: "many" },
+        landscape2Placement: { choice: "perimeter-right" },
+        landscape3: { choice: SCENE_RECIPE_IDS.tree },
+        landscape3Count: { choice: "many" },
+        landscape3Placement: { choice: "far" },
+
+        furniture1: { choice: SCENE_RECIPE_IDS.bench },
+        furniture1Count: { choice: "group" },
+        furniture1Placement: { choice: "left" },
+        furniture2: { choice: SCENE_RECIPE_IDS.tableSet },
+        furniture2Count: { choice: "few" },
+        furniture2Placement: { choice: "right" },
+        furniture3: { choice: SCENE_RECIPE_IDS.well },
+        furniture3Count: { choice: "pair" },
+        furniture3Placement: { choice: "back-right" },
+
+        lighting1: { choice: SCENE_RECIPE_IDS.streetLight },
+        lighting1Count: { choice: "group" },
+        lighting1Placement: { choice: "front-left" },
+        lighting2: { choice: SCENE_RECIPE_IDS.lanterns },
+        lighting2Count: { choice: "pair" },
+        lighting2Placement: { choice: "front-right" },
+        lighting3: { choice: "none" },
+        lighting3Count: { choice: "one" },
+        lighting3Placement: { choice: "right" },
+
+        atmosphere1: { choice: SCENE_RECIPE_IDS.groundFog },
+        atmosphere1Count: { choice: "one" },
+        atmosphere1Placement: { choice: "center" },
+        atmosphere2: { choice: "none" },
+        atmosphere2Count: { choice: "one" },
+        atmosphere2Placement: { choice: "far" },
+
+        interaction1: { choice: SCENE_RECIPE_IDS.soundButton },
+        interaction1Count: { choice: "one" },
+        interaction1Placement: { choice: "near-spawn" },
+        interaction2: { choice: "none" },
+        interaction2Count: { choice: "one" },
+        interaction2Placement: { choice: "left" },
+        interaction3: { choice: "none" },
+        interaction3Count: { choice: "one" },
+        interaction3Placement: { choice: "right" },
+
+        material1: { choice: SCENE_RECIPE_IDS.materialIridescence },
+        material1Count: { choice: "one" },
+        material1Placement: { choice: "perimeter-left" },
+        material2: { choice: "none" },
+        material2Count: { choice: "one" },
+        material2Placement: { choice: "perimeter-right" },
 
         facility1: { choice: BUILTIN_PREFAB_RECIPE_IDS.mirror },
         facilityPlacement1: { choice: "perimeter-right" },
         facility2: { choice: BUILTIN_PREFAB_RECIPE_IDS.tagBoard },
         facilityPlacement2: { choice: "near-spawn" },
+        facility3: { choice: "none" },
+        facilityPlacement3: { choice: "left" },
+        facility4: { choice: "none" },
+        facilityPlacement4: { choice: "right" },
+        facility5: { choice: "none" },
+        facilityPlacement5: { choice: "far" },
+        facility6: { choice: "none" },
+        facilityPlacement6: { choice: "far" },
 
         helper1: { choice: "platform" },
         helper2: { choice: "path-marker" },
+        helper3: { choice: "none" },
+        helper4: { choice: "none" },
+        helper5: { choice: "none" },
+        helper6: { choice: "none" },
       },
     },
     scene: project.scene,
     catalog: planned.catalog,
-    maxGimmicks: planned.maxGimmicks,
   });
 
   assert(decision.terrain === "rolling-hills", "terrain choice should survive");
   assert(decision.mood === "foggy", "mood choice should survive");
   assert(decision.scale === "wide", "scale choice should survive");
   assert(decision.composition === "natural", "composition choice should survive");
+  assert(decision.detail === "maximal", "maximal detail choice should survive");
   assert(
-    decision.recipes.length >= 5,
-    "role-based planning should be able to select a richer set of recipes",
+    decision.elementBudget === FAST_AUTHORING_MAX_ELEMENTS &&
+      decision.elementBudget === 50,
+    "maximal detail should expose a fifty-placement budget",
+  );
+
+  const totalPlacements =
+    decision.recipes.length +
+    decision.facilities.length +
+    decision.primitives.length;
+  assert(
+    totalPlacements === FAST_AUTHORING_MAX_ELEMENTS,
+    "rich repeated selections should fill but never exceed the fifty-placement cap",
   );
   assert(
-    decision.recipes[0]?.recipeId === SCENE_RECIPE_IDS.stoneLantern,
-    "signature choice should survive",
+    decision.recipes.filter(
+      (recipe) => recipe.recipeId === SCENE_RECIPE_IDS.bamboo,
+    ).length === 12,
+    "one bamboo archetype should expand into twelve placements",
   );
   assert(
-    decision.recipes[0]?.position[0] !== 0 ||
-      decision.recipes[0]?.position[2] !== 0,
-    "an occupied center must move the signature away from the starter object",
+    decision.recipes.filter(
+      (recipe) => recipe.recipeId === SCENE_RECIPE_IDS.rocks,
+    ).length === 8,
+    "one rocks archetype should expand into eight placements",
   );
   assert(
     decision.facilities.length === 2 &&
-      decision.facilities.some(
-        (facility) => facility.recipeId === BUILTIN_PREFAB_RECIPE_IDS.mirror,
-      ),
-    "two official facilities should resolve when requested",
+      decision.primitives.length === 2,
+    "selected official facilities and Primitive helpers should reserve part of the budget",
   );
   assert(
-    decision.primitives.length === 2 &&
-      decision.primitives.some((helper) => helper.kind === "platform") &&
-      decision.primitives.some((helper) => helper.kind === "path-marker"),
-    "two distinct Primitive helpers should resolve",
-  );
-  assert(
-    decision.decisionTrace.some((item) => item.label === "構図") &&
-      decision.decisionTrace.some((item) => item.label === "公式設備1") &&
-      decision.decisionTrace.some((item) => item.label === "補助1"),
-    "decision trace should expose composition, facilities, and helpers",
+    decision.decisionTrace.some(
+      (item) =>
+        item.label === "景観" &&
+        item.value.includes("× 12"),
+    ),
+    "decision trace should summarize repeated placement counts",
   );
 }
