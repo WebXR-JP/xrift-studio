@@ -5198,13 +5198,6 @@ export function VisualEditorPrototype({
                 "爆速ワールド生成はワールドプロジェクトで利用してください",
               );
             }
-            const maxElements = Math.min(
-              50,
-              Math.max(
-                1,
-                mcpOptionalInteger(args.maxElements, "maxElements") ?? 50,
-              ),
-            );
             const planned = buildFastAuthoringRequest({
               prompt,
               scene: currentBundle.scene,
@@ -5216,7 +5209,6 @@ export function VisualEditorPrototype({
               response: jev,
               scene: currentBundle.scene,
               catalog: planned.catalog,
-              maxElements,
             });
             const actionPlan: Array<{
               tool: string;
@@ -5264,16 +5256,51 @@ export function VisualEditorPrototype({
                 reason: "既存TerrainへJevが選んだ草セットを適用",
               });
             }
+            if (
+              decision.skybox !== "gradient" &&
+              decision.skybox !== "off"
+            ) {
+              actionPlan.push({
+                tool: "create_material_from_preset",
+                arguments: {
+                  kind: "sky",
+                  presetId: decision.skybox,
+                },
+                reason: "Jevが選んだSkybox Shader Materialを追加",
+              });
+            }
             actionPlan.push({
               tool: "update_scene_settings",
               arguments: {
                 ...FAST_AUTHORING_MOOD_SETTINGS[decision.mood],
+                skybox:
+                  decision.skybox === "off"
+                    ? {
+                        ...FAST_AUTHORING_MOOD_SETTINGS[decision.mood].skybox,
+                        enabled: false,
+                        iblEnabled: false,
+                        imageAssetId: null,
+                        materialAssetId: null,
+                      }
+                    : decision.skybox === "gradient"
+                      ? {
+                          ...FAST_AUTHORING_MOOD_SETTINGS[decision.mood].skybox,
+                          iblEnabled: false,
+                          imageAssetId: null,
+                          materialAssetId: null,
+                        }
+                      : {
+                          ...FAST_AUTHORING_MOOD_SETTINGS[decision.mood].skybox,
+                          enabled: true,
+                          iblEnabled: false,
+                          imageAssetId: null,
+                        },
                 postprocessing:
                   FAST_AUTHORING_FINISH_SETTINGS[decision.finish],
                 vegetation: FAST_AUTHORING_WIND_SETTINGS[decision.wind],
               },
               reason:
-                "空・環境光・Fog・Post Effect・Vegetation Windをまとめて設定",
+                "Skybox・環境光・Fog・Post Effect・Vegetation Windをまとめて設定",
             });
             for (const selected of decision.recipes) {
               const recipe = planned.catalog.recipes.find(
@@ -5327,9 +5354,9 @@ export function VisualEditorPrototype({
                   detail: decision.detail,
                   terrainSurface: decision.terrainSurface,
                   grassPreset: decision.grassPreset,
+                  skybox: decision.skybox,
                   finish: decision.finish,
                   wind: decision.wind,
-                  elementBudget: decision.elementBudget,
                   recipes: decision.recipes,
                   facilities: decision.facilities,
                   primitives: decision.primitives,
@@ -5354,13 +5381,23 @@ export function VisualEditorPrototype({
                         useCreatedTerrain:
                           decision.terrain !== "none",
                       },
+                skyboxPlan:
+                  decision.skybox === "gradient" ||
+                  decision.skybox === "off"
+                    ? { mode: decision.skybox }
+                    : {
+                        mode: "shader",
+                        presetId: decision.skybox,
+                        nextStep:
+                          "create_material_from_preset(kind=sky)のmaterialAssetIdをupdate_scene_settings.skybox.materialAssetIdへ指定",
+                      },
                 execution: {
                   mutatesScene: false,
                   revision: mcpRevisionRef.current,
                   avoidExistingEntities: true,
                   groundToTerrain: true,
                   instructions:
-                    "actionPlanを上から順に実行してください。各書き込み前にget_editor_contextで最新projectId、sceneId、expectedRevisionを補ってください。Terrainを作成または既存Terrainを使う場合、terrainSurfacePlanとgrassPlanを同じTerrainへ適用し、Scene Recipe・公式設備・Primitiveの配置前にsample_terrain_pointでXZ地点のworldPosition.yを取得して接地してください。primitivePlanの各要素はcreate_primitiveの結果entityIdへupdate_transformでscaleを反映してください。facilityPlanのconfigurationHintがある設備は配置後に設定を確認してください。最後にcapture_scene_viewでScene全体を確認してください。",
+                    "actionPlanを上から順に実行してください。各書き込み前にget_editor_contextで最新projectId、sceneId、expectedRevisionを補ってください。Terrainを作成または既存Terrainを使う場合、terrainSurfacePlanとgrassPlanを同じTerrainへ適用してください。skyboxPlan.modeがshaderならcreate_material_from_preset(kind=sky)の結果materialAssetIdを、続くupdate_scene_settings.skybox.materialAssetIdへ指定してください。Scene Recipe・公式設備・Primitiveの配置前にsample_terrain_pointでXZ地点のworldPosition.yを取得して接地してください。primitivePlanの各要素はcreate_primitiveの結果entityIdへupdate_transformでscaleを反映してください。facilityPlanのconfigurationHintがある設備は配置後に設定を確認してください。最後にcapture_scene_viewでScene全体を確認してください。",
                 },
               },
             });
@@ -8178,10 +8215,49 @@ export function VisualEditorPrototype({
           }));
         }
 
+        let skyboxSettings: Record<string, unknown> = {
+          ...FAST_AUTHORING_MOOD_SETTINGS[decision.mood].skybox,
+          iblEnabled: false,
+          imageAssetId: null,
+          materialAssetId: null,
+        };
+        if (decision.skybox === "off") {
+          skyboxSettings = {
+            ...skyboxSettings,
+            enabled: false,
+          };
+        } else if (decision.skybox !== "gradient") {
+          const skyMaterial = commitToolOutcome(
+            "create_material_from_preset",
+            {
+              kind: "sky",
+              presetId: decision.skybox,
+            },
+            true,
+          );
+          const materialAssetId =
+            typeof skyMaterial.result.materialAssetId === "string"
+              ? skyMaterial.result.materialAssetId
+              : null;
+          if (materialAssetId) {
+            skyboxSettings = {
+              ...skyboxSettings,
+              enabled: true,
+              materialAssetId,
+            };
+            applied.push("Skybox Shader");
+            setJevFastAuthoringState((current) => ({
+              ...current,
+              applied: [...applied],
+            }));
+          }
+        }
+
         commitToolOutcome(
           "update_scene_settings",
           {
             ...FAST_AUTHORING_MOOD_SETTINGS[decision.mood],
+            skybox: skyboxSettings,
             postprocessing: FAST_AUTHORING_FINISH_SETTINGS[decision.finish],
             vegetation: FAST_AUTHORING_WIND_SETTINGS[decision.wind],
           },
