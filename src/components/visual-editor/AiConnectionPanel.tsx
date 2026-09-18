@@ -8,6 +8,7 @@ import {
   type XriftOllamaIntegrationId,
   type XriftOllamaStatus,
 } from "../../lib/tauri";
+import type { FastAuthoringTraceItem } from "../../lib/visual-editor/jev-fast-authoring";
 import { EDITOR_ICONS } from "./editor-icons";
 
 const OLLAMA_INTEGRATION_IDS: readonly XriftOllamaIntegrationId[] = [
@@ -31,6 +32,14 @@ export type XriftMcpActivity = {
   revision: number;
 } | null;
 
+export type JevFastAuthoringUiState = {
+  status: "idle" | "deciding" | "applying" | "checking" | "done" | "error";
+  message: string;
+  trace: FastAuthoringTraceItem[];
+  applied: string[];
+  previewDataUrl?: string | null;
+};
+
 export function AiConnectionPanel({
   nativeAvailable,
   clients,
@@ -43,6 +52,9 @@ export function AiConnectionPanel({
   ollamaResult,
   lastActivity,
   canUndo,
+  fastAuthoringState,
+  fastAuthoringDisabledReason,
+  onRunFastAuthoring,
   onRefresh,
   onRegister,
   onConfigureOllama,
@@ -59,6 +71,9 @@ export function AiConnectionPanel({
   ollamaResult: XriftOllamaConfigurationResult | null;
   lastActivity: XriftMcpActivity;
   canUndo: boolean;
+  fastAuthoringState: JevFastAuthoringUiState;
+  fastAuthoringDisabledReason: string | null;
+  onRunFastAuthoring: (prompt: string) => void | Promise<void>;
   onRefresh: () => void;
   onRegister: (clientId: XriftMcpClientId) => void;
   onConfigureOllama: (
@@ -72,6 +87,7 @@ export function AiConnectionPanel({
     useState<XriftOllamaIntegrationId>("opencode");
   const [jevStatus, setJevStatus] = useState<JevStatus | null>(null);
   const [jevApiKey, setJevApiKey] = useState("");
+  const [fastAuthoringPrompt, setFastAuthoringPrompt] = useState("");
   const [jevBusy, setJevBusy] = useState(false);
   const [jevMessage, setJevMessage] = useState<string | null>(null);
   const [jevError, setJevError] = useState<string | null>(null);
@@ -504,6 +520,92 @@ export function AiConnectionPanel({
                   ? "登録中"
                   : "OpenCodeへMCPを登録"}
               </button>
+            </div>
+          ) : null}
+
+          {jevStatus?.configured ? (
+            <div className="space-y-2 rounded-md border border-violet-200 bg-violet-50/60 p-2.5">
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold text-violet-900">
+                  こんなワールドを作る
+                </span>
+                <textarea
+                  value={fastAuthoringPrompt}
+                  disabled={
+                    fastAuthoringState.status === "deciding" ||
+                    fastAuthoringState.status === "applying" ||
+                    fastAuthoringState.status === "checking"
+                  }
+                  onChange={(event) => setFastAuthoringPrompt(event.target.value)}
+                  placeholder="夜の山に焚き火がある休憩所"
+                  rows={3}
+                  className="w-full resize-none rounded-md border border-violet-200 bg-white px-2.5 py-2 text-xs leading-5 text-slate-800 focus:border-brand-500 focus:outline-none disabled:bg-slate-100"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={
+                  !fastAuthoringPrompt.trim() ||
+                  Boolean(fastAuthoringDisabledReason) ||
+                  fastAuthoringState.status === "deciding" ||
+                  fastAuthoringState.status === "applying" ||
+                  fastAuthoringState.status === "checking"
+                }
+                onClick={() => void onRunFastAuthoring(fastAuthoringPrompt.trim())}
+                className="w-full rounded-md bg-brand-600 px-3 py-2 font-semibold text-white hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-500"
+              >
+                {fastAuthoringState.status === "deciding"
+                  ? "Jevが判断中"
+                  : fastAuthoringState.status === "applying"
+                    ? "シーンを作成中"
+                    : fastAuthoringState.status === "checking"
+                      ? "Scene Viewを確認中"
+                      : "爆速で作る"}
+              </button>
+              {fastAuthoringDisabledReason ? (
+                <p className="text-[11px] leading-4 text-amber-700">
+                  {fastAuthoringDisabledReason}
+                </p>
+              ) : null}
+              {fastAuthoringState.status !== "idle" ? (
+                <div
+                  className={
+                    fastAuthoringState.status === "error"
+                      ? "rounded border border-rose-200 bg-rose-50 p-2"
+                      : "rounded border border-violet-200 bg-white p-2"
+                  }
+                >
+                  <p className="text-[11px] font-semibold text-slate-800">
+                    {fastAuthoringState.message}
+                  </p>
+                  {fastAuthoringState.trace.length > 0 ? (
+                    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[10px] leading-4">
+                      {fastAuthoringState.trace.map((item) => (
+                        <div key={item.label} className="contents">
+                          <dt className="font-semibold text-slate-500">
+                            {item.label}
+                          </dt>
+                          <dd className="min-w-0 truncate text-slate-700">
+                            {item.value}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : null}
+                  {fastAuthoringState.applied.length > 0 ? (
+                    <p className="mt-2 text-[10px] leading-4 text-slate-500">
+                      {fastAuthoringState.applied.join(" → ")}
+                    </p>
+                  ) : null}
+                  {fastAuthoringState.previewDataUrl ? (
+                    <img
+                      src={fastAuthoringState.previewDataUrl}
+                      alt="生成後のScene View"
+                      className="mt-2 w-full rounded border border-slate-200 bg-slate-950 object-cover"
+                    />
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : null}
 
