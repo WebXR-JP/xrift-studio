@@ -279,7 +279,9 @@ import type {
 } from "./AiConnectionPanel";
 import {
   buildFastAuthoringRequest,
+  FAST_AUTHORING_FINISH_SETTINGS,
   FAST_AUTHORING_MOOD_SETTINGS,
+  FAST_AUTHORING_WIND_SETTINGS,
   findTerrainEntityId,
   resolveFastAuthoringDecision,
 } from "../../lib/visual-editor/jev-fast-authoring";
@@ -5231,10 +5233,33 @@ export function VisualEditorPrototype({
                 reason: "Jevが選んだ地形を土台として配置",
               });
             }
+            const existingTerrainEntityId = findTerrainEntityId(
+              currentBundle.scene,
+            );
+            if (
+              decision.terrainSurface !== "none" &&
+              decision.terrain === "none" &&
+              existingTerrainEntityId
+            ) {
+              actionPlan.push({
+                tool: "apply_terrain_surface",
+                arguments: {
+                  entityId: existingTerrainEntityId,
+                  surfaceId: decision.terrainSurface,
+                },
+                reason: "既存TerrainへJevが選んだ地表表現を適用",
+              });
+            }
             actionPlan.push({
               tool: "update_scene_settings",
-              arguments: FAST_AUTHORING_MOOD_SETTINGS[decision.mood],
-              reason: "空・環境光・Fogを同じ雰囲気へまとめて設定",
+              arguments: {
+                ...FAST_AUTHORING_MOOD_SETTINGS[decision.mood],
+                postprocessing:
+                  FAST_AUTHORING_FINISH_SETTINGS[decision.finish],
+                vegetation: FAST_AUTHORING_WIND_SETTINGS[decision.wind],
+              },
+              reason:
+                "空・環境光・Fog・Post Effect・Vegetation Windをまとめて設定",
             });
             for (const selected of decision.recipes) {
               const recipe = planned.catalog.recipes.find(
@@ -5286,6 +5311,9 @@ export function VisualEditorPrototype({
                   scale: decision.scale,
                   composition: decision.composition,
                   detail: decision.detail,
+                  terrainSurface: decision.terrainSurface,
+                  finish: decision.finish,
+                  wind: decision.wind,
                   elementBudget: decision.elementBudget,
                   recipes: decision.recipes,
                   facilities: decision.facilities,
@@ -5295,6 +5323,14 @@ export function VisualEditorPrototype({
                 actionPlan,
                 primitivePlan: decision.primitives,
                 facilityPlan: decision.facilities,
+                terrainSurfacePlan:
+                  decision.terrainSurface === "none"
+                    ? null
+                    : {
+                        surfaceId: decision.terrainSurface,
+                        useCreatedTerrain:
+                          decision.terrain !== "none",
+                      },
                 execution: {
                   mutatesScene: false,
                   revision: mcpRevisionRef.current,
@@ -8081,9 +8117,32 @@ export function VisualEditorPrototype({
           }));
         }
 
+        if (
+          terrainEntityId &&
+          decision.terrainSurface !== "none"
+        ) {
+          commitToolOutcome(
+            "apply_terrain_surface",
+            {
+              entityId: terrainEntityId,
+              surfaceId: decision.terrainSurface,
+            },
+            true,
+          );
+          applied.push("Terrain Surface");
+          setJevFastAuthoringState((current) => ({
+            ...current,
+            applied: [...applied],
+          }));
+        }
+
         commitToolOutcome(
           "update_scene_settings",
-          FAST_AUTHORING_MOOD_SETTINGS[decision.mood],
+          {
+            ...FAST_AUTHORING_MOOD_SETTINGS[decision.mood],
+            postprocessing: FAST_AUTHORING_FINISH_SETTINGS[decision.finish],
+            vegetation: FAST_AUTHORING_WIND_SETTINGS[decision.wind],
+          },
           true,
         );
         applied.push("雰囲気");
