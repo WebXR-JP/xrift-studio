@@ -486,9 +486,9 @@ export function AiConnectionPanel({
 
           {jevStatus?.configured && openCodeClient?.needsUpdate ? (
             <div className="rounded border border-amber-200 bg-amber-50 p-2 text-[11px] leading-4 text-amber-800">
-              <p className="font-semibold">OpenCodeのMCP更新が必要です</p>
+              <p className="font-semibold">OpenCodeから使う場合はMCP更新が必要です</p>
               <p className="mt-1">
-                Jevの新しいtoolをOpenCodeへ公開するため、MCPを更新してからOpenCodeを完全に再起動してください。
+                Studio内の「爆速で作る」はそのまま利用できます。OpenCodeからJevのtoolを使う場合だけ、MCPを更新してOpenCodeを完全に再起動してください。
               </p>
               <button
                 type="button"
