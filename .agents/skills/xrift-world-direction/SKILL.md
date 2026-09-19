@@ -17,6 +17,22 @@ description: XRift Studio MCP でワールドを新規制作、配置変更、�
 
 新規制作や大きな変更では `references/blueprint-template.md` を使い、現状を確認してから書き込み前に設計図を作る。配置・色・雰囲気だけの小さな調整では、変更対象と完成条件の短い記録でよい。制作セッションを使う場合は既存の begin/update/finish tool の契約を守る。
 
+### Fast Authoring を使う場合
+
+ユーザーがWorld全体や大きな一角を文章で作る依頼をした場合、公開toolに `decide_fast_authoring` があるなら、個別の `create_primitive` や `update_transform` を先に連打せず最初に使う。これは書き込みtoolではなく、現在のSceneを数値化した状態と有限カタログから、Terrain、雰囲気、Zone、Recipe、個数、基準Placementを一度に決めるplannerだ。
+
+判断結果の confidence が低い、または主役・規模・置換範囲・負荷優先度が曖昧と返った場合は、書き込みを始めず不足している1点だけをユーザーへ確認する。十分に明確なら、plannerのZoneと役割を保ったまま既存のtyped toolでSceneへ適用する。任意座標や存在しないRecipeを推測しない。
+
+生成後は「見た目が出た」だけで完了にしない。最低でも以下を確認する。
+
+1. Spawn視点と俯瞰の `capture_scene_view`
+2. `get_entity_bounds` / `sample_terrain_point` による接地・傾斜・遮蔽物
+3. `capture_scene_debug { action: "metrics" }` による負荷
+4. しかけがある場合はPlayで実行結果
+5. 修正はWorld全体を作り直さず、Fast Authoringが記録したZone単位を優先する
+
+同じ依頼で大きな再生成を繰り返さない。「plan → apply → verify → 必要なZoneだけrepair」を基本ループにする。
+
 依頼されていない体験や設備を必須にしない。ツールの数や過去の作例ではなく、依頼と必要な品質から手段を選ぶ。前提を変えた場合は理由を記録する。
 
 ### 体験と設備
