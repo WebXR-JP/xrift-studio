@@ -48,6 +48,7 @@ export type JevFastAuthoringUiState = {
   trace: FastAuthoringTraceItem[];
   applied: string[];
   checks?: FastAuthoringValidationCheck[];
+  handoffPrompt?: string | null;
   spawnPreviewDataUrl?: string | null;
   previewDataUrl?: string | null;
 };
@@ -103,6 +104,7 @@ export function AiConnectionPanel({
   const [jevBusy, setJevBusy] = useState(false);
   const [jevMessage, setJevMessage] = useState<string | null>(null);
   const [jevError, setJevError] = useState<string | null>(null);
+  const [handoffCopied, setHandoffCopied] = useState(false);
   const ollamaTargets = useMemo(
     () =>
       clients.filter(
@@ -133,6 +135,10 @@ export function AiConnectionPanel({
   }, [ollamaTargets, selectedOllamaIntegration]);
 
   useEffect(() => {
+    setHandoffCopied(false);
+  }, [fastAuthoringState.handoffPrompt]);
+
+  useEffect(() => {
     if (!nativeAvailable) return;
     let active = true;
     void tauri
@@ -147,6 +153,27 @@ export function AiConnectionPanel({
       active = false;
     };
   }, [nativeAvailable]);
+
+  const copyFastAuthoringHandoff = async () => {
+    const text = fastAuthoringState.handoffPrompt;
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setHandoffCopied(true);
+      return;
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      const copied = document.execCommand("copy");
+      document.body.removeChild(textarea);
+      setHandoffCopied(copied);
+    }
+  };
 
   const saveJevApiKey = async () => {
     if (!jevApiKey.trim()) return;
@@ -343,6 +370,35 @@ export function AiConnectionPanel({
                 <p className="mt-2 text-[10px] leading-4 text-slate-500">
                   {fastAuthoringState.applied.join(" → ")}
                 </p>
+              ) : null}
+              {fastAuthoringState.handoffPrompt ? (
+                <div className="mt-2 rounded border border-violet-200 bg-violet-50/60 p-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-[10px] font-semibold text-violet-900">
+                        MCPで続ける
+                      </p>
+                      <p className="mt-0.5 text-[10px] leading-4 text-slate-600">
+                        Codex・Claude Code・OpenCodeなど、XRift Studio MCPを登録したAIへそのまま貼れます。
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void copyFastAuthoringHandoff()}
+                      className="shrink-0 rounded border border-violet-300 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-violet-800 hover:bg-violet-50"
+                    >
+                      {handoffCopied ? "コピーしました" : "MCP指示をコピー"}
+                    </button>
+                  </div>
+                  <details className="mt-2">
+                    <summary className="cursor-pointer select-none text-[10px] font-semibold text-slate-500">
+                      指示内容を見る
+                    </summary>
+                    <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-white p-2 text-[9px] leading-4 text-slate-600">
+                      {fastAuthoringState.handoffPrompt}
+                    </pre>
+                  </details>
+                </div>
               ) : null}
               {fastAuthoringState.checks &&
               fastAuthoringState.checks.length > 0 ? (
