@@ -36,7 +36,14 @@ export type XriftMcpActivity = {
 } | null;
 
 export type JevFastAuthoringUiState = {
-  status: "idle" | "deciding" | "applying" | "checking" | "done" | "error";
+  status:
+    | "idle"
+    | "deciding"
+    | "clarify"
+    | "applying"
+    | "checking"
+    | "done"
+    | "error";
   message: string;
   trace: FastAuthoringTraceItem[];
   applied: string[];
@@ -309,7 +316,9 @@ export function AiConnectionPanel({
               className={
                 fastAuthoringState.status === "error"
                   ? "rounded border border-rose-200 bg-rose-50 p-2"
-                  : "rounded border border-violet-200 bg-white p-2"
+                  : fastAuthoringState.status === "clarify"
+                    ? "rounded border border-amber-200 bg-amber-50 p-2"
+                    : "rounded border border-violet-200 bg-white p-2"
               }
             >
               <p className="text-[11px] font-semibold text-slate-800">
