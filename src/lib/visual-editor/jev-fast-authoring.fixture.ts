@@ -1,6 +1,7 @@
 import { BUILTIN_PREFAB_RECIPE_IDS } from "./builtin-prefab-catalog";
 import {
   applyFastAuthoringEntityMetadata,
+  buildFastAuthoringMcpHandoffPrompt,
   buildFastAuthoringRequest,
   createFastAuthoringSceneFeatures,
   findFastAuthoringSpawnPosition,
@@ -437,6 +438,20 @@ export function runJevFastAuthoringFixtureAssertions(): void {
   assert(
     visualRepairDecision.executionPath === "visual-review",
     "appearance complaints should route to visual review before any mutation",
+  );
+  const handoffPrompt = buildFastAuthoringMcpHandoffPrompt({
+    prompt: "この建物のマテリアルが剥がれて見える",
+    decision: visualRepairDecision,
+    selectedEntityId: project.scene.rootEntityIds[0],
+    selectedEntityName:
+      project.scene.entities[project.scene.rootEntityIds[0]]?.name ?? null,
+  });
+  assert(
+    handoffPrompt.includes("この建物のマテリアルが剥がれて見える") &&
+      handoffPrompt.includes("executionPath: visual-review") &&
+      handoffPrompt.includes("selectedEntityId:") &&
+      handoffPrompt.includes("World全体を作り直さない"),
+    "non-generator decisions should produce a copyable MCP handoff with the original request and target",
   );
 
   const ambiguousDecision = resolveFastAuthoringDecision({
