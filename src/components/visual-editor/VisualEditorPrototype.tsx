@@ -8428,7 +8428,19 @@ export function VisualEditorPrototype({
           });
           return;
         }
-        if (decision.executionPath !== "generator") {
+        const hasExecutableGeneration =
+          decision.recipes.length > 0 ||
+          decision.facilities.length > 0 ||
+          decision.primitives.length > 0 ||
+          decision.terrain !== "none" ||
+          decision.terrainSurface !== "none" ||
+          decision.grassPreset !== "keep" ||
+          decision.mutationScope === "world";
+
+        if (
+          decision.executionPath !== "generator" &&
+          !hasExecutableGeneration
+        ) {
           const message =
             decision.executionPath === "visual-review"
               ? "見た目の確認が必要な局所修正です。Worldを作り直さず、対象をScene Viewで確認してからAI編集クライアントで直してください"
