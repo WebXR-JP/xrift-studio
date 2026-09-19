@@ -399,6 +399,26 @@ export function runJevFastAuthoringFixtureAssertions(): void {
     "local material repair should route to typed editing instead of generating a new World",
   );
 
+  const createEvenWithReviewSignals = resolveFastAuthoringDecision({
+    response: {
+      answers: {
+        operation: { choice: "create", confidence: 0.95 },
+        mutationScope: { choice: "world", confidence: 0.94 },
+        focusDomain: { choice: "scene", confidence: 0.93 },
+        needsVisualReview: { type: "noul", noul: 0.96 },
+        needsSystemTwo: { type: "noul", noul: 0.91 },
+        intentClarity: { choice: "clear", confidence: 0.92 },
+        editScope: { choice: "append", confidence: 0.91 },
+      },
+    },
+    scene: project.scene,
+    catalog: planned.catalog,
+  });
+  assert(
+    createEvenWithReviewSignals.executionPath === "generator",
+    "create should stay executable even when visual/system-two signals are high",
+  );
+
   const visualRepairDecision = resolveFastAuthoringDecision({
     response: {
       answers: {
