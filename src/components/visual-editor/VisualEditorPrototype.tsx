@@ -8327,6 +8327,18 @@ export function VisualEditorPrototype({
           scene: initialBundle.scene,
           catalog: planned.catalog,
         });
+        if (decision.requiresClarification) {
+          setJevFastAuthoringState({
+            status: "clarify",
+            message:
+              decision.clarificationMessage ??
+              "もう少し具体的に指示してください",
+            trace: decision.decisionTrace,
+            applied: [],
+            previewDataUrl: null,
+          });
+          return;
+        }
         if (decision.editScope !== "append") {
           const targetZone =
             decision.editScope === "replace-generated"
