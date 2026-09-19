@@ -65,6 +65,15 @@ export type FastAuthoringFinish =
 export type FastAuthoringWind = "still" | "breeze" | "windy";
 export type FastAuthoringHumanize = "off" | "subtle" | "natural" | "handmade";
 
+export type FastAuthoringOperation =
+  | "create"
+  | "extend"
+  | "repair"
+  | "polish"
+  | "optimize";
+
+export type FastAuthoringMutationScope = "local" | "zone" | "world";
+
 export type FastAuthoringZoneId =
   | "entrance"
   | "main"
@@ -196,6 +205,8 @@ export type FastAuthoringDecision = {
   confidence: FastAuthoringDecisionConfidence;
   requiresClarification: boolean;
   clarificationMessage: string | null;
+  operation: FastAuthoringOperation;
+  mutationScope: FastAuthoringMutationScope;
   editScope: FastAuthoringEditScope;
   terrain: string;
   mood: FastAuthoringMood;
@@ -363,6 +374,34 @@ export const FAST_AUTHORING_INTENT_CLARITY_CRITERIA: Record<
 };
 
 export const FAST_AUTHORING_AUTONOMY_CONFIDENCE_THRESHOLD = 0.62;
+
+export const FAST_AUTHORING_OPERATION_CRITERIA: Record<
+  FastAuthoringOperation,
+  string
+> = {
+  create:
+    "空に近いWorldや新しい大きな領域を作る。土台・雰囲気・構図まで決めてよい",
+  extend:
+    "今あるWorldを残して、新しい一角・設備・景観・体験を足す",
+  repair:
+    "壊れた見た目、配置、接地、欠けた要素など具体的な問題だけ直す",
+  polish:
+    "構成は残して、見た目・光・密度・マテリアル・まとまりを仕上げる",
+  optimize:
+    "見た目と体験をなるべく保ちながら負荷・過密・重い演出を整理する",
+};
+
+export const FAST_AUTHORING_MUTATION_SCOPE_CRITERIA: Record<
+  FastAuthoringMutationScope,
+  string
+> = {
+  local:
+    "選択中または指示で特定されたEntity/小さなまとまりだけ変更する。World全体の設定は触らない",
+  zone:
+    "指定されたZoneだけ変更する。別ZoneとWorld全体の雰囲気は保持する",
+  world:
+    "Terrain、空、環境光、Post Effectを含むWorld全体を変更してよい",
+};
 export const FAST_AUTHORING_MOOD_CRITERIA: Record<
   FastAuthoringMood,
   string
@@ -846,11 +885,13 @@ export function buildFastAuthoringRequest({
   scene,
   projectName,
   sceneName,
+  selectedEntityIds = [],
 }: {
   prompt: string;
   scene: SceneDocument;
   projectName: string;
   sceneName: string;
+  selectedEntityIds?: readonly string[];
 }) {
   const baseCatalog = createFastAuthoringCatalog();
   const terrainCriteria = findTerrainEntityId(scene)
@@ -860,7 +901,30 @@ export function buildFastAuthoringRequest({
       }
     : baseCatalog.terrainCriteria;
   const catalog = { ...baseCatalog, terrainCriteria };
+  const selectedEntities = selectedEntityIds
+    .map((entityId) => scene.entities[entityId])
+    .filter((entity): entity is NonNullable<typeof entity> => Boolean(entity))
+    .slice(0, 12)
+    .map((entity) => ({
+      id: entity.id,
+      name: entity.name,
+      componentTypes: entity.components.map((component) => component.type),
+      generated: Boolean(entity.authoring?.fastAuthoring),
+      zoneId: entity.authoring?.fastAuthoring?.zoneId ?? null,
+    }));
   const questions: Record<string, unknown> = {
+    operation: {
+      type: "choice",
+      instructions:
+        "今回の依頼が新規作成・追加・修復・仕上げ・最適化のどれかを選んでください。Worldは一度で完成させる前提にせず、具体的な改善依頼はrepairかpolishを優先してください。",
+      criteria: FAST_AUTHORING_OPERATION_CRITERIA,
+    },
+    mutationScope: {
+      type: "choice",
+      instructions:
+        "今回触る範囲を選んでください。選択Entityや具体的な不具合だけならlocal、既存の一角だけならzone、地形・空・環境まで変える場合だけworld。",
+      criteria: FAST_AUTHORING_MUTATION_SCOPE_CRITERIA,
+    },
     intentClarity: {
       type: "choice",
       instructions:
@@ -1027,6 +1091,14 @@ export function buildFastAuthoringRequest({
             .map((entity) => entity.name),
         },
         sceneFeatures: createFastAuthoringSceneFeatures(scene),
+        selection: {
+          count: selectedEntities.length,
+          entities: selectedEntities,
+        },
+        workflow: {
+          principle:
+            "Worldを一度で完成させず、create/extend/repair/polish/optimizeを繰り返す。local/zone変更ではWorld全体の設定を保持する。",
+        },
         roles: FAST_AUTHORING_RECIPE_ROLES.map((role) => ({
           id: role.id,
           label: role.label,
@@ -1117,6 +1189,8 @@ function fastAuthoringDecisionConfidence(
 ): FastAuthoringDecisionConfidence {
   const criticalQuestions = [
     "intentClarity",
+    "operation",
+    "mutationScope",
     "editScope",
     "terrain",
     "mood",
@@ -2259,6 +2333,18 @@ export function resolveFastAuthoringDecision({
     confidence,
   );
   const requiresClarification = clarificationMessage !== null;
+  const operation = selectedChoice(
+    answers,
+    "operation",
+    FAST_AUTHORING_OPERATION_CRITERIA,
+    "extend",
+  ) as FastAuthoringOperation;
+  const mutationScope = selectedChoice(
+    answers,
+    "mutationScope",
+    FAST_AUTHORING_MUTATION_SCOPE_CRITERIA,
+    operation === "create" ? "world" : "zone",
+  ) as FastAuthoringMutationScope;
   const editScope = selectedChoice(
     answers,
     "editScope",
@@ -2609,6 +2695,10 @@ export function resolveFastAuthoringDecision({
             confidence.minimumCritical.toFixed(2)),
     },
     {
+      label: "工程",
+      value: operation + " / " + mutationScope,
+    },
+    {
       label: "編集範囲",
       value: editScope,
     },
@@ -2721,6 +2811,8 @@ export function resolveFastAuthoringDecision({
     confidence,
     requiresClarification,
     clarificationMessage,
+    operation,
+    mutationScope,
     editScope,
     terrain,
     mood,
