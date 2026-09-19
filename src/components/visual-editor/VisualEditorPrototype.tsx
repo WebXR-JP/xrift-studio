@@ -279,6 +279,7 @@ import type {
 } from "./AiConnectionPanel";
 import {
   applyFastAuthoringEntityMetadata,
+  buildFastAuthoringMcpHandoffPrompt,
   buildFastAuthoringRequest,
   FAST_AUTHORING_FINISH_SETTINGS,
   FAST_AUTHORING_MOOD_SETTINGS,
@@ -8443,17 +8444,28 @@ export function VisualEditorPrototype({
         ) {
           const message =
             decision.executionPath === "visual-review"
-              ? "見た目の確認が必要な局所修正です。Worldを作り直さず、対象をScene Viewで確認してからAI編集クライアントで直してください"
+              ? "見た目の確認が必要な局所修正です。MCPで解消する指示をコピーできます"
               : decision.executionPath === "system-two"
-                ? "複雑な設計・原因分析が必要なため、Worldを自動生成せず大きいAIモデルへ回す判断になりました"
+                ? "複雑な設計・原因分析が必要です。大きいAIモデルへ渡すMCP指示をコピーできます"
                 : decision.executionPath === "verify"
-                  ? "変更ではなく確認が適切と判断しました。Worldは変更していません"
-                  : "局所的なtyped編集が適切と判断しました。World全体を作り直さず、選択中EntityをAI編集クライアントから修正できます";
+                  ? "変更ではなく確認が適切です。MCPで確認する指示をコピーできます"
+                  : "局所的なtyped編集が適切です。MCPで修正する指示をコピーできます";
+          const selectedEntityId = sceneSelectionRef.current?.id ?? null;
+          const selectedEntityName = selectedEntityId
+            ? bundleRef.current.scene.entities[selectedEntityId]?.name ?? null
+            : null;
+          const handoffPrompt = buildFastAuthoringMcpHandoffPrompt({
+            prompt: normalizedPrompt,
+            decision,
+            selectedEntityId,
+            selectedEntityName,
+          });
           setJevFastAuthoringState({
             status: "done",
             message,
             trace: decision.decisionTrace,
             applied: [],
+            handoffPrompt,
             previewDataUrl: null,
           });
           return;
