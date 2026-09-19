@@ -148,6 +148,21 @@ export function runJevFastAuthoringFixtureAssertions(): void {
       Number.isFinite(features.spawn.clearForwardMeters),
     "scene snapshot should summarize Spawn forward clearance numerically",
   );
+  const initialBudgetDecision = resolveFastAuthoringDecision({
+    response: {
+      answers: {
+        intentClarity: { choice: "clear", confidence: 0.96 },
+        editScope: { choice: "append", confidence: 0.95 },
+      },
+    },
+    scene: project.scene,
+    catalog: planned.catalog,
+  });
+  assert(
+    initialBudgetDecision.performancePlan.existing.entityEquivalent ===
+      Object.keys(project.scene.entities).length,
+    "performance budget should account for the whole Scene hierarchy, not only root Entity count",
+  );
   assert(
     planned.request.state.sceneFeatures.performance.rootEntityCount ===
       project.scene.rootEntityIds.length,
@@ -541,6 +556,11 @@ export function runJevFastAuthoringFixtureAssertions(): void {
       role: "家具・設備",
       recipeId: SCENE_RECIPE_IDS.bench,
       instanceIndex: 0,
+      placement: {
+        requestedPosition: [2, 0, -4],
+        maxSlopeDegrees: 10,
+        flatRadius: 2.4,
+      },
     },
   );
   const generated = listFastAuthoringGeneratedEntities(taggedScene);
@@ -548,6 +568,11 @@ export function runJevFastAuthoringFixtureAssertions(): void {
     generated.length === 1 &&
       generated[0].metadata.zoneId === "rest",
     "generated Entity provenance should persist semantic Zone metadata",
+  );
+  assert(
+    generated[0].metadata.placement?.maxSlopeDegrees === 10 &&
+      generated[0].metadata.placement?.flatRadius === 2.4,
+    "generated Entity provenance should retain local terrain repair constraints",
   );
   const taggedRequest = buildFastAuthoringRequest({
     prompt: "休憩所だけ作り直して",
@@ -558,6 +583,22 @@ export function runJevFastAuthoringFixtureAssertions(): void {
   assert(
     taggedRequest.request.state.sceneFeatures.generated.zones.rest === 1,
     "numeric snapshot should tell Jev which generated Zones already exist",
+  );
+
+  const replacementDecision = resolveFastAuthoringDecision({
+    response: {
+      answers: {
+        intentClarity: { choice: "clear", confidence: 0.96 },
+        editScope: { choice: "replace-generated", confidence: 0.95 },
+      },
+    },
+    scene: taggedScene,
+    catalog: taggedRequest.catalog,
+  });
+  assert(
+    replacementDecision.performancePlan.existing.entityEquivalent <
+      Object.keys(taggedScene.entities).length,
+    "replace-generated should reclaim the outgoing generated hierarchy before budgeting the replacement",
   );
 
   const validation = validateFastAuthoringScene({
