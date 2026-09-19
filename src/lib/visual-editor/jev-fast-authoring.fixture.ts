@@ -357,6 +357,66 @@ export function runJevFastAuthoringFixtureAssertions(): void {
     "low confidence on a critical decision should require clarification before writes",
   );
 
+  const budgetDecision = resolveFastAuthoringDecision({
+    response: {
+      answers: {
+        intentClarity: { choice: "clear", confidence: 0.95 },
+        editScope: { choice: "append", confidence: 0.94 },
+        detail: { choice: "rich" },
+        lighting1: { choice: SCENE_RECIPE_IDS.campfire },
+        lighting1Count: { choice: "many" },
+        lighting1Placement: { choice: "right" },
+        lighting1Zone: { choice: "rest" },
+      },
+    },
+    scene: project.scene,
+    catalog: planned.catalog,
+  });
+  const budgetCampfires = budgetDecision.recipes.filter(
+    (recipe) => recipe.recipeId === SCENE_RECIPE_IDS.campfire,
+  );
+  assert(
+    budgetCampfires.length < 8 &&
+      budgetDecision.performancePlan.projected.particles <=
+        budgetDecision.performancePlan.budget.particleMax,
+    "realtime-heavy recipes should be clamped by projected particle budget instead of a blind global placement cap",
+  );
+  assert(
+    budgetDecision.performancePlan.clampedSelections.some((entry) =>
+      entry.includes("焚き火"),
+    ),
+    "decision trace should explain when a heavy recipe count was automatically reduced",
+  );
+
+  const corridorDecision = resolveFastAuthoringDecision({
+    response: {
+      answers: {
+        intentClarity: { choice: "clear", confidence: 0.95 },
+        editScope: { choice: "append", confidence: 0.94 },
+        detail: { choice: "focused" },
+        landscape1: { choice: SCENE_RECIPE_IDS.tree },
+        landscape1Count: { choice: "one" },
+        landscape1Placement: { choice: "center" },
+        landscape1Zone: { choice: "main" },
+      },
+    },
+    scene: project.scene,
+    catalog: planned.catalog,
+  });
+  const corridorTree = corridorDecision.recipes.find(
+    (recipe) => recipe.recipeId === SCENE_RECIPE_IDS.tree,
+  );
+  assert(corridorTree, "corridor fixture should place a landscape tree");
+  const corridorSpawn = findFastAuthoringSpawnPosition(project.scene);
+  const treeDistanceFromSpawn = Math.hypot(
+    corridorTree.position[0] - corridorSpawn[0],
+    corridorTree.position[2] - corridorSpawn[2],
+  );
+  assert(
+    treeDistanceFromSpawn > 1.5,
+    "landscape placement should reserve a usable corridor away from Spawn",
+  );
+
   const campfireRestDecision = resolveFastAuthoringDecision({
     response: {
       answers: {
