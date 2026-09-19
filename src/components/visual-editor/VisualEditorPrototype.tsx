@@ -5221,9 +5221,6 @@ export function VisualEditorPrototype({
               catalog: planned.catalog,
             });
             const actionPlan: Array<{
-            const allowWorldMutation =
-              decision.operation === "create" ||
-              decision.mutationScope === "world";
               tool: string;
               arguments: Record<string, unknown>;
               reason: string;
@@ -5233,6 +5230,38 @@ export function VisualEditorPrototype({
                 instructions: string;
               };
             }> = [];
+            const allowWorldMutation =
+              decision.operation === "create" ||
+              decision.mutationScope === "world";
+            if (decision.requiresClarification) {
+              await completeResponse({
+                id: request.id,
+                ok: true,
+                result: {
+                  prompt,
+                  model:
+                    typeof jev.model === "string" ? jev.model : "jev-latest",
+                  usage: jev.usage ?? null,
+                  decisions: {
+                    operation: decision.operation,
+                    mutationScope: decision.mutationScope,
+                    intentClarity: decision.intentClarity,
+                    confidence: decision.confidence,
+                  },
+                  decisionTrace: decision.decisionTrace,
+                  actionPlan: [],
+                  execution: {
+                    mutatesScene: false,
+                    revision: mcpRevisionRef.current,
+                    requiresClarification: true,
+                    clarificationMessage: decision.clarificationMessage,
+                    instructions:
+                      "Sceneを書き換えず、clarificationMessageの1点だけをユーザーへ確認してください。",
+                  },
+                },
+              });
+              return;
+            }
             if (allowWorldMutation && decision.terrain !== "none") {
               actionPlan.push({
                 tool: "create_terrain_from_preset",
