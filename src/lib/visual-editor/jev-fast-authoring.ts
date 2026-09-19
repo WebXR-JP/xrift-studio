@@ -1372,6 +1372,19 @@ function fastAuthoringExecutionPath({
   mutationScope: FastAuthoringMutationScope;
   judgement: FastAuthoringJudgementSignals;
 }): FastAuthoringExecutionPath {
+  // Creation and scene extension already have a complete deterministic
+  // executor in Studio. Visual/System Two signals are useful for review, but
+  // must not turn the primary "作る・直す" button into a decision-only mode.
+  if (
+    operation === "create" ||
+    (operation === "extend" &&
+      (judgement.focusDomain === "scene" ||
+        judgement.focusDomain === "terrain" ||
+        judgement.focusDomain === "lighting"))
+  ) {
+    return "generator";
+  }
+  if (judgement.focusDomain === "verification") return "verify";
   if (judgement.needsSystemTwo !== null && judgement.needsSystemTwo >= 0.72) {
     return "system-two";
   }
@@ -1381,10 +1394,8 @@ function fastAuthoringExecutionPath({
   ) {
     return "visual-review";
   }
-  if (judgement.focusDomain === "verification") return "verify";
   if (
     mutationScope === "local" &&
-    operation !== "create" &&
     judgement.focusDomain !== "scene" &&
     judgement.focusDomain !== "terrain"
   ) {
