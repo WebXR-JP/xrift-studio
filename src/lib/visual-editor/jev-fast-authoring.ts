@@ -81,6 +81,19 @@ export type FastAuthoringEditScope =
   | "replace-view"
   | "replace-perimeter";
 
+export type FastAuthoringIntentClarity =
+  | "clear"
+  | "ambiguous-goal"
+  | "ambiguous-scale"
+  | "ambiguous-focal"
+  | "ambiguous-edit-scope"
+  | "ambiguous-performance";
+
+export type FastAuthoringDecisionConfidence = {
+  minimumCritical: number | null;
+  lowConfidenceQuestions: string[];
+};
+
 export type FastAuthoringValidationCheck = {
   id: string;
   label: string;
@@ -160,6 +173,10 @@ export type FastAuthoringPrimitiveDecision = {
   name: string;
 };
 export type FastAuthoringDecision = {
+  intentClarity: FastAuthoringIntentClarity;
+  confidence: FastAuthoringDecisionConfidence;
+  requiresClarification: boolean;
+  clarificationMessage: string | null;
   editScope: FastAuthoringEditScope;
   terrain: string;
   mood: FastAuthoringMood;
@@ -306,6 +323,26 @@ export const FAST_AUTHORING_EDIT_SCOPE_CRITERIA: Record<
   "replace-view": "以前生成した展望Zoneだけを置き換える",
   "replace-perimeter": "以前生成した外周Zoneだけを置き換える",
 };
+
+export const FAST_AUTHORING_INTENT_CLARITY_CRITERIA: Record<
+  FastAuthoringIntentClarity,
+  string
+> = {
+  clear:
+    "依頼だけで、安全にWorldの構成・主役・規模・編集範囲を決められる",
+  "ambiguous-goal":
+    "何を体験するWorldなのか、完成形の目的が複数解釈できる",
+  "ambiguous-scale":
+    "小さな一角か広いWorldかで結果が大きく変わるが依頼から決めにくい",
+  "ambiguous-focal":
+    "何を主役にするかで構図が大きく変わるが依頼から決めにくい",
+  "ambiguous-edit-scope":
+    "既存の生成物を残す・置き換える範囲が依頼から安全に決められない",
+  "ambiguous-performance":
+    "大量配置・重い演出の要求があり、軽さと見た目のどちらを優先するか決めにくい",
+};
+
+export const FAST_AUTHORING_AUTONOMY_CONFIDENCE_THRESHOLD = 0.62;
 export const FAST_AUTHORING_MOOD_CRITERIA: Record<
   FastAuthoringMood,
   string
@@ -804,6 +841,12 @@ export function buildFastAuthoringRequest({
     : baseCatalog.terrainCriteria;
   const catalog = { ...baseCatalog, terrainCriteria };
   const questions: Record<string, unknown> = {
+    intentClarity: {
+      type: "choice",
+      instructions:
+        "実行前に、依頼だけで安全にWorldを作れるか判定してください。主役・規模・既存生成物の扱い・負荷方針のどれかが結果を大きく左右し、依頼から決められない場合は対応するambiguousを選んでください。些細な曖昧さはclearで構いません。",
+      criteria: FAST_AUTHORING_INTENT_CLARITY_CRITERIA,
+    },
     terrain: {
       type: "choice",
       instructions:
@@ -999,6 +1042,111 @@ function selectedChoice(
     Object.prototype.hasOwnProperty.call(allowed, selected)
     ? selected
     : fallback;
+}
+
+function answerConfidence(
+  answers: Record<string, unknown>,
+  name: string,
+): number | null {
+  const answer = answers[name];
+  if (!answer || typeof answer !== "object") return null;
+  const record = answer as Record<string, unknown>;
+  for (const key of [
+    "confidence",
+    "probability",
+    "selectedProbability",
+    "selected_probability",
+  ]) {
+    const value = record[key];
+    if (
+      typeof value === "number" &&
+      Number.isFinite(value) &&
+      value >= 0 &&
+      value <= 1
+    ) {
+      return value;
+    }
+  }
+
+  const selected =
+    typeof record.choice === "string" ? record.choice : null;
+  for (const key of ["probabilities", "distribution", "probs"]) {
+    const value = record[key];
+    if (
+      selected &&
+      value &&
+      typeof value === "object" &&
+      !Array.isArray(value)
+    ) {
+      const probability = (value as Record<string, unknown>)[selected];
+      if (
+        typeof probability === "number" &&
+        Number.isFinite(probability) &&
+        probability >= 0 &&
+        probability <= 1
+      ) {
+        return probability;
+      }
+    }
+  }
+  return null;
+}
+
+function fastAuthoringDecisionConfidence(
+  answers: Record<string, unknown>,
+): FastAuthoringDecisionConfidence {
+  const criticalQuestions = [
+    "intentClarity",
+    "editScope",
+    "terrain",
+    "mood",
+    "scale",
+    "composition",
+    "detail",
+    "signature1",
+    "signature1Zone",
+  ];
+  const observed = criticalQuestions.flatMap((name) => {
+    const confidence = answerConfidence(answers, name);
+    return confidence === null ? [] : [{ name, confidence }];
+  });
+  return {
+    minimumCritical:
+      observed.length > 0
+        ? Math.min(...observed.map((entry) => entry.confidence))
+        : null,
+    lowConfidenceQuestions: observed
+      .filter(
+        (entry) =>
+          entry.confidence < FAST_AUTHORING_AUTONOMY_CONFIDENCE_THRESHOLD,
+      )
+      .map((entry) => entry.name),
+  };
+}
+
+function clarificationMessageFor(
+  clarity: FastAuthoringIntentClarity,
+  confidence: FastAuthoringDecisionConfidence,
+): string | null {
+  if (clarity === "ambiguous-goal") {
+    return "どんな体験をするWorldにしたいか、主な目的を1つだけ教えてください";
+  }
+  if (clarity === "ambiguous-scale") {
+    return "小さな一角・通常規模・広いWorldのどれにしたいか教えてください";
+  }
+  if (clarity === "ambiguous-focal") {
+    return "このWorldで一番見せたい主役を1つ教えてください";
+  }
+  if (clarity === "ambiguous-edit-scope") {
+    return "既存の生成物を残すか、どのZoneだけ作り直すか教えてください";
+  }
+  if (clarity === "ambiguous-performance") {
+    return "見た目の作り込みと軽さのどちらを優先するか教えてください";
+  }
+  if (confidence.lowConfidenceQuestions.length > 0) {
+    return "Jevの重要判断の確度が低いため、主役・広さ・残したい既存物をもう少し具体的にしてください";
+  }
+  return null;
 }
 
 function isGroundLikeEntity(scene: SceneDocument, entityId: string): boolean {
@@ -1917,6 +2065,18 @@ export function resolveFastAuthoringDecision({
     response.answers && typeof response.answers === "object"
       ? (response.answers as Record<string, unknown>)
       : {};
+  const intentClarity = selectedChoice(
+    answers,
+    "intentClarity",
+    FAST_AUTHORING_INTENT_CLARITY_CRITERIA,
+    "clear",
+  ) as FastAuthoringIntentClarity;
+  const confidence = fastAuthoringDecisionConfidence(answers);
+  const clarificationMessage = clarificationMessageFor(
+    intentClarity,
+    confidence,
+  );
+  const requiresClarification = clarificationMessage !== null;
   const editScope = selectedChoice(
     answers,
     "editScope",
@@ -2217,6 +2377,15 @@ export function resolveFastAuthoringDecision({
   const sceneFeatures = createFastAuthoringSceneFeatures(scene);
   const decisionTrace: FastAuthoringTraceItem[] = [
     {
+      label: "実行判断",
+      value:
+        intentClarity +
+        (confidence.minimumCritical === null
+          ? ""
+          : " / confidence " +
+            confidence.minimumCritical.toFixed(2)),
+    },
+    {
       label: "編集範囲",
       value: editScope,
     },
@@ -2305,6 +2474,10 @@ export function resolveFastAuthoringDecision({
   ];
 
   return {
+    intentClarity,
+    confidence,
+    requiresClarification,
+    clarificationMessage,
     editScope,
     terrain,
     mood,
