@@ -112,9 +112,12 @@ export function runJevFastAuthoringFixtureAssertions(): void {
     scene: project.scene,
     projectName: project.project.metadata.name,
     sceneName: project.scene.name,
+    selectedEntityIds: [project.scene.rootEntityIds[0]],
   });
 
   for (const question of [
+    "operation",
+    "mutationScope",
     "intentClarity",
     "editScope",
     "detail",
@@ -168,6 +171,12 @@ export function runJevFastAuthoringFixtureAssertions(): void {
       project.scene.rootEntityIds.length,
     "Jev request should carry a numeric Scene snapshot instead of only names",
   );
+  assert(
+    planned.request.state.selection.count === 1 &&
+      planned.request.state.selection.entities[0]?.id ===
+        project.scene.rootEntityIds[0],
+    "Jev request should include the selected Entity as local iterative context",
+  );
 
   assert(
     Object.prototype.hasOwnProperty.call(
@@ -194,6 +203,8 @@ export function runJevFastAuthoringFixtureAssertions(): void {
   const decision = resolveFastAuthoringDecision({
     response: {
       answers: {
+        operation: { choice: "create", confidence: 0.96 },
+        mutationScope: { choice: "world", confidence: 0.96 },
         intentClarity: { choice: "clear", confidence: 0.95 },
         editScope: { choice: "append", confidence: 0.94 },
         terrain: { choice: "rolling-hills", confidence: 0.93 },
@@ -321,6 +332,11 @@ export function runJevFastAuthoringFixtureAssertions(): void {
   );
   assert(decision.editScope === "append", "edit scope should survive");
   assert(
+    decision.operation === "create" &&
+      decision.mutationScope === "world",
+    "operation and mutation scope should survive into the decision",
+  );
+  assert(
     decision.intentClarity === "clear" &&
       decision.requiresClarification === false &&
       decision.confidence.minimumCritical !== null,
@@ -334,6 +350,24 @@ export function runJevFastAuthoringFixtureAssertions(): void {
     ),
     "semantic zones should survive into placement decisions",
   );
+  const iterativeRepairDecision = resolveFastAuthoringDecision({
+    response: {
+      answers: {
+        operation: { choice: "repair", confidence: 0.94 },
+        mutationScope: { choice: "local", confidence: 0.93 },
+        intentClarity: { choice: "clear", confidence: 0.92 },
+        editScope: { choice: "append", confidence: 0.91 },
+      },
+    },
+    scene: project.scene,
+    catalog: planned.catalog,
+  });
+  assert(
+    iterativeRepairDecision.operation === "repair" &&
+      iterativeRepairDecision.mutationScope === "local",
+    "a concrete follow-up should be planned as a local repair instead of recreating the World",
+  );
+
   const ambiguousDecision = resolveFastAuthoringDecision({
     response: {
       answers: {
