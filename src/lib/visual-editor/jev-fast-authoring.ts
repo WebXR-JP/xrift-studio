@@ -256,6 +256,91 @@ export type FastAuthoringDecision = {
   decisionTrace: FastAuthoringTraceItem[];
 };
 
+export function buildFastAuthoringMcpHandoffPrompt({
+  prompt,
+  decision,
+  selectedEntityId,
+  selectedEntityName,
+}: {
+  prompt: string;
+  decision: FastAuthoringDecision;
+  selectedEntityId?: string | null;
+  selectedEntityName?: string | null;
+}): string {
+  const target =
+    selectedEntityId || selectedEntityName
+      ? [
+          "対象:",
+          selectedEntityId ? "- selectedEntityId: " + selectedEntityId : null,
+          selectedEntityName ? "- selectedEntityName: " + selectedEntityName : null,
+        ]
+          .filter(Boolean)
+          .join("\n")
+      : "対象:\n- 現在のScene文脈から問題箇所を特定してください";
+
+  const focusGuidance: Record<FastAuthoringFocusDomain, string> = {
+    scene:
+      "Scene構成と配置を確認し、必要なZoneまたはEntityだけを変更してください。",
+    material:
+      "対象EntityのMaterial/Texture割当と描画状態を確認し、見た目の問題だけを修正してください。",
+    transform:
+      "Transform、Bounds、Terrain接地を確認し、位置・回転・Scaleだけを必要最小限修正してください。",
+    lighting:
+      "Lightと対象の見え方を確認し、必要なLight設定だけを調整してください。",
+    terrain:
+      "Terrainの高さ・傾斜・地表・草を確認し、必要なTerrain範囲だけを修正してください。",
+    collider:
+      "Collider構成とPlay時の当たり判定を確認し、Colliderだけを修正してください。",
+    interaction:
+      "Script/Interactivity/公式Componentを確認し、Playで再現してから該当機能だけを修正してください。",
+    performance:
+      "capture_scene_debugのmetricsを確認し、見た目をなるべく維持して重い要素だけを最適化してください。",
+    verification:
+      "Sceneを書き換えず、Scene View・debug metrics・必要ならPlayで状態だけ確認してください。",
+  };
+
+  const pathGuidance: Record<FastAuthoringExecutionPath, string> = {
+    generator:
+      "Fast Authoringで実行可能な生成内容です。必要ならdecide_fast_authoringのactionPlanを使って適用してください。",
+    "typed-edit":
+      "既存のtyped MCP toolで局所修正してください。新しいWorld生成は行わないでください。",
+    "visual-review":
+      "最初に対象をScene Viewで撮影して見た目を診断し、その後typed MCP toolで局所修正してください。",
+    "system-two":
+      "複雑な原因分析・設計は大きいモデル側で行い、実際の変更はXRift Studioのtyped MCP toolだけで適用してください。",
+    verify:
+      "変更せずに検証だけ行い、問題が確認できた場合だけ次のrepairを提案してください。",
+  };
+
+  return [
+    "XRift Studio MCPで、現在開いているWorldに対して次の依頼を解決してください。",
+    "",
+    "ユーザー依頼:",
+    prompt,
+    "",
+    "Jevの実行判断:",
+    "- operation: " + decision.operation,
+    "- mutationScope: " + decision.mutationScope,
+    "- focusDomain: " + decision.judgement.focusDomain,
+    "- executionPath: " + decision.executionPath,
+    target,
+    "",
+    "進め方:",
+    "1. get_editor_contextで現在のprojectId / sceneId / revisionを確認してください。",
+    "2. " + pathGuidance[decision.executionPath],
+    "3. " + focusGuidance[decision.judgement.focusDomain],
+    "4. local / zoneの場合、依頼されていないTerrain・Skybox・環境光・Post Effect・Windは変更しないでください。",
+    "5. 既存Entityを優先して調べ、World全体を作り直さないでください。",
+    "6. 変更後はcapture_scene_viewで確認し、Collider/InteractionならPlayでも確認してください。",
+    "",
+    "制約:",
+    "- 公開されているMCP toolだけを使い、存在しないtool名を推測しない",
+    "- 指定toolが公開一覧に無い場合は代替実行せず、XRift StudioのAI接続からMCP更新を案内する",
+    "- 既存作品と手作業Entityを必要なく削除しない",
+    "- 問題を解消したら、変更内容と未検証項目を短く報告する",
+  ].join("\n");
+}
+
 type FastAuthoringRecipeRole = {
   id: string;
   label: string;
