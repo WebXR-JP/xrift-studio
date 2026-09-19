@@ -235,21 +235,21 @@ export function AiConnectionPanel({
   return (
     <div className="scrollbar-thin max-h-[min(32rem,calc(100vh-10rem))] space-y-3 overflow-y-auto p-3.5 text-xs text-slate-600">
       <p className="rounded-md border border-violet-100 bg-violet-50/70 p-3 leading-5 text-slate-700">
-        作りたいワールドを文章で入力すると、Terrain・Skybox・景観・家具・照明・天気・しかけ・XRift公式設備から必要なものを選び、Scene全体をまとめて作ります。
+        ワールドは一度で完成させなくて大丈夫です。新しく作る・一角を足す・壊れたところを直す・見た目を仕上げる・軽くする、を同じ入力欄から繰り返せます。
       </p>
       <section aria-labelledby="jev-heading">
         <h3
           id="jev-heading"
           className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500"
         >
-          こんなワールドを作る
+          ワールドを作る・直す
         </h3>
         <div className="space-y-2.5 rounded-md border border-violet-200 bg-violet-50/40 p-2.5">
           <div className="flex items-start justify-between gap-2">
             <div>
               <p className="font-semibold text-slate-900">Jev Fast Authoring</p>
               <p className="mt-0.5 text-[11px] leading-4 text-slate-600">
-                Terrain・地表・草・Skybox・必要ならPost Effect・Windまで含めて、主役・景観・家具・照明・天気・しかけ・マテリアル・公式設備を必要な数だけまとめて作ります。
+                Jevが「新規作成・追加・修復・仕上げ・最適化」と変更範囲を判断します。局所修正ではTerrainや空などWorld全体の設定を保持します。
               </p>
             </div>
             <span
@@ -265,7 +265,7 @@ export function AiConnectionPanel({
 
           <label className="block">
             <span className="mb-1 block text-[11px] font-semibold text-violet-950">
-              作りたいワールド
+              やりたいこと
             </span>
             <textarea
               value={fastAuthoringPrompt}
@@ -275,7 +275,7 @@ export function AiConnectionPanel({
                 fastAuthoringState.status === "checking"
               }
               onChange={(event) => setFastAuthoringPrompt(event.target.value)}
-              placeholder="例: 霧の山中に小さな和風庭園。石灯籠を主役に、竹や岩、温泉を奥へ配置して静かな空間にしたい"
+              placeholder="例: 夜の山に焚き火の休憩所を足して / 選択中の建物の見た目が浮いているので直して / 木が多すぎるので軽くして"
               rows={4}
               className="w-full resize-none rounded-md border border-violet-200 bg-white px-2.5 py-2 text-xs leading-5 text-slate-800 focus:border-brand-500 focus:outline-none disabled:bg-slate-100"
             />
@@ -299,7 +299,7 @@ export function AiConnectionPanel({
                 ? "ワールドを作成中"
                 : fastAuthoringState.status === "checking"
                   ? "仕上がりを確認中"
-                  : "爆速で作る"}
+                  : "作る・直す"}
           </button>
           {!jevStatus?.configured ? (
             <p className="text-[11px] leading-4 text-amber-700">
