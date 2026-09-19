@@ -16,6 +16,7 @@ import {
   getTransform,
   type FastAuthoringEntityMetadata,
   type SceneDocument,
+  type SceneEntity,
   type Vec3,
 } from "./scene-document";
 
@@ -903,7 +904,7 @@ export function buildFastAuthoringRequest({
   const catalog = { ...baseCatalog, terrainCriteria };
   const selectedEntities = selectedEntityIds
     .map((entityId) => scene.entities[entityId])
-    .filter((entity): entity is NonNullable<typeof entity> => Boolean(entity))
+    .filter((entity): entity is SceneEntity => Boolean(entity))
     .slice(0, 12)
     .map((entity) => ({
       id: entity.id,
