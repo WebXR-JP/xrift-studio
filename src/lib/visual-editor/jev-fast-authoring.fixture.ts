@@ -118,6 +118,10 @@ export function runJevFastAuthoringFixtureAssertions(): void {
   for (const question of [
     "operation",
     "mutationScope",
+    "focusDomain",
+    "needsVisualReview",
+    "needsSystemTwo",
+    "issueSeverity",
     "intentClarity",
     "editScope",
     "detail",
@@ -205,6 +209,14 @@ export function runJevFastAuthoringFixtureAssertions(): void {
       answers: {
         operation: { choice: "create", confidence: 0.96 },
         mutationScope: { choice: "world", confidence: 0.96 },
+        focusDomain: { choice: "scene", confidence: 0.97 },
+        needsVisualReview: { type: "noul", noul: 0.18 },
+        needsSystemTwo: { type: "noul", noul: 0.12 },
+        issueSeverity: {
+          type: "score",
+          score: 1.0,
+          confidence: 0.88,
+        },
         intentClarity: { choice: "clear", confidence: 0.95 },
         editScope: { choice: "append", confidence: 0.94 },
         terrain: { choice: "rolling-hills", confidence: 0.93 },
@@ -337,6 +349,13 @@ export function runJevFastAuthoringFixtureAssertions(): void {
     "operation and mutation scope should survive into the decision",
   );
   assert(
+    decision.judgement.focusDomain === "scene" &&
+      decision.judgement.needsVisualReview === 0.18 &&
+      decision.judgement.issueSeverity === 1 &&
+      decision.executionPath === "generator",
+    "atomic Choice/Noul/Score answers should be composed by code into the execution path",
+  );
+  assert(
     decision.intentClarity === "clear" &&
       decision.requiresClarification === false &&
       decision.confidence.minimumCritical !== null,
@@ -355,6 +374,14 @@ export function runJevFastAuthoringFixtureAssertions(): void {
       answers: {
         operation: { choice: "repair", confidence: 0.94 },
         mutationScope: { choice: "local", confidence: 0.93 },
+        focusDomain: { choice: "material", confidence: 0.92 },
+        needsVisualReview: { type: "noul", noul: 0.22 },
+        needsSystemTwo: { type: "noul", noul: 0.14 },
+        issueSeverity: {
+          type: "score",
+          score: 0.7,
+          confidence: 0.84,
+        },
         intentClarity: { choice: "clear", confidence: 0.92 },
         editScope: { choice: "append", confidence: 0.91 },
       },
@@ -366,6 +393,30 @@ export function runJevFastAuthoringFixtureAssertions(): void {
     iterativeRepairDecision.operation === "repair" &&
       iterativeRepairDecision.mutationScope === "local",
     "a concrete follow-up should be planned as a local repair instead of recreating the World",
+  );
+  assert(
+    iterativeRepairDecision.executionPath === "typed-edit",
+    "local material repair should route to typed editing instead of generating a new World",
+  );
+
+  const visualRepairDecision = resolveFastAuthoringDecision({
+    response: {
+      answers: {
+        operation: { choice: "repair", confidence: 0.94 },
+        mutationScope: { choice: "local", confidence: 0.93 },
+        focusDomain: { choice: "material", confidence: 0.92 },
+        needsVisualReview: { type: "noul", noul: 0.91 },
+        needsSystemTwo: { type: "noul", noul: 0.18 },
+        intentClarity: { choice: "clear", confidence: 0.92 },
+        editScope: { choice: "append", confidence: 0.91 },
+      },
+    },
+    scene: project.scene,
+    catalog: planned.catalog,
+  });
+  assert(
+    visualRepairDecision.executionPath === "visual-review",
+    "appearance complaints should route to visual review before any mutation",
   );
 
   const ambiguousDecision = resolveFastAuthoringDecision({
