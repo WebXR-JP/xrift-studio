@@ -2587,6 +2587,17 @@ export function resolveFastAuthoringDecision({
     primitives.push(helper);
   }
 
+  performancePlan.projected.entityEquivalent +=
+    facilities.length * 4 + primitives.length;
+  if (
+    performancePlan.projected.entityEquivalent >
+    performancePlan.budget.entityEquivalentMax
+  ) {
+    performancePlan.clampedSelections.push(
+      "公式設備/補助でEntityEq予算を超える可能性",
+    );
+  }
+
   const decisionTrace: FastAuthoringTraceItem[] = [
     {
       label: "実行判断",
