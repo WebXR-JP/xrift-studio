@@ -94,6 +94,25 @@ export type FastAuthoringDecisionConfidence = {
   lowConfidenceQuestions: string[];
 };
 
+export type FastAuthoringPerformancePlan = {
+  budget: {
+    entityEquivalentMax: number;
+    lightMax: number;
+    particleMax: number;
+  };
+  existing: {
+    entityEquivalent: number;
+    lights: number;
+    particles: number;
+  };
+  projected: {
+    entityEquivalent: number;
+    lights: number;
+    particles: number;
+  };
+  clampedSelections: string[];
+};
+
 export type FastAuthoringValidationCheck = {
   id: string;
   label: string;
@@ -190,6 +209,7 @@ export type FastAuthoringDecision = {
   finish: FastAuthoringFinish;
   wind: FastAuthoringWind;
   humanize: FastAuthoringHumanize;
+  performancePlan: FastAuthoringPerformancePlan;
   recipes: FastAuthoringRecipeDecision[];
   facilities: FastAuthoringFacilityDecision[];
   primitives: FastAuthoringPrimitiveDecision[];
@@ -1960,6 +1980,115 @@ function maxInstancesForRecipe(
   return role.maxCount;
 }
 
+const FAST_AUTHORING_PERFORMANCE_BUDGET = {
+  entityEquivalentMax: 900,
+  lightMax: 24,
+  particleMax: 18,
+} as const;
+
+function recipePerformanceCost(recipe: SceneRecipe): {
+  entityEquivalent: number;
+  lights: number;
+  particles: number;
+} {
+  return {
+    entityEquivalent: Math.max(1, recipe.parts.length + 1),
+    lights: recipe.parts.filter((part) => part.kind === "light").length,
+    particles: recipe.parts.filter((part) => part.kind === "particle").length,
+  };
+}
+
+function maxInstancesWithinPerformanceBudget({
+  requested,
+  recipe,
+  projected,
+}: {
+  requested: number;
+  recipe: SceneRecipe;
+  projected: FastAuthoringPerformancePlan["projected"];
+}): number {
+  const cost = recipePerformanceCost(recipe);
+  let allowed = requested;
+  if (cost.entityEquivalent > 0) {
+    allowed = Math.min(
+      allowed,
+      Math.max(
+        0,
+        Math.floor(
+          (FAST_AUTHORING_PERFORMANCE_BUDGET.entityEquivalentMax -
+            projected.entityEquivalent) /
+            cost.entityEquivalent,
+        ),
+      ),
+    );
+  }
+  if (cost.lights > 0) {
+    allowed = Math.min(
+      allowed,
+      Math.max(
+        0,
+        Math.floor(
+          (FAST_AUTHORING_PERFORMANCE_BUDGET.lightMax -
+            projected.lights) /
+            cost.lights,
+        ),
+      ),
+    );
+  }
+  if (cost.particles > 0) {
+    allowed = Math.min(
+      allowed,
+      Math.max(
+        0,
+        Math.floor(
+          (FAST_AUTHORING_PERFORMANCE_BUDGET.particleMax -
+            projected.particles) /
+            cost.particles,
+        ),
+      ),
+    );
+  }
+  return Math.max(0, allowed);
+}
+
+function addRecipePerformanceCost(
+  projected: FastAuthoringPerformancePlan["projected"],
+  recipe: SceneRecipe,
+  count: number,
+): void {
+  const cost = recipePerformanceCost(recipe);
+  projected.entityEquivalent += cost.entityEquivalent * count;
+  projected.lights += cost.lights * count;
+  projected.particles += cost.particles * count;
+}
+
+function navigationCorridorFootprints(
+  frame: FastAuthoringSpawnFrame,
+  spread: number,
+): OccupiedFootprint[] {
+  const targets = [
+    zoneOrigin("main", spread, frame),
+    zoneOrigin("rest", spread, frame),
+  ];
+  const footprints: OccupiedFootprint[] = [];
+  for (const target of targets) {
+    const distance = horizontalDistance(frame.position, target);
+    const steps = Math.max(1, Math.floor(distance / 1.8));
+    for (let index = 1; index < steps; index += 1) {
+      const t = index / steps;
+      footprints.push({
+        position: [
+          frame.position[0] + (target[0] - frame.position[0]) * t,
+          0,
+          frame.position[2] + (target[2] - frame.position[2]) * t,
+        ],
+        radius: 0.85,
+      });
+    }
+  }
+  return footprints;
+}
+
 function primitiveDecision(
   kind: FastAuthoringPrimitiveHelper,
   spawn: FastAuthoringSpawnFrame,
@@ -2160,6 +2289,22 @@ export function resolveFastAuthoringDecision({
   const spawn = findFastAuthoringSpawnFrame(scene);
   const occupied = occupiedRootFootprints(scene);
   const placed: OccupiedFootprint[] = [...occupied];
+  const navigationCorridors = navigationCorridorFootprints(spawn, spread);
+  const sceneFeatures = createFastAuthoringSceneFeatures(scene);
+  const performancePlan: FastAuthoringPerformancePlan = {
+    budget: { ...FAST_AUTHORING_PERFORMANCE_BUDGET },
+    existing: {
+      entityEquivalent: sceneFeatures.performance.rootEntityCount,
+      lights: sceneFeatures.performance.lightCount,
+      particles: sceneFeatures.performance.particleCount,
+    },
+    projected: {
+      entityEquivalent: sceneFeatures.performance.rootEntityCount,
+      lights: sceneFeatures.performance.lightCount,
+      particles: sceneFeatures.performance.particleCount,
+    },
+    clampedSelections: [],
+  };
 
   const facilities: FastAuthoringFacilityDecision[] = [];
   const usedFacilityIds = new Set<string>();
@@ -2237,11 +2382,26 @@ export function resolveFastAuthoringDecision({
         "one",
       ) as FastAuthoringCount;
       const requestedCount = COUNT_VALUE[countChoice] ?? 1;
-      const count = Math.min(
+      const roleLimitedCount = Math.min(
         requestedCount,
         maxInstancesForRecipe(recipe, role),
       );
+      const count = maxInstancesWithinPerformanceBudget({
+        requested: roleLimitedCount,
+        recipe,
+        projected: performancePlan.projected,
+      });
+      if (count < roleLimitedCount) {
+        performancePlan.clampedSelections.push(
+          recipe.name + " " + roleLimitedCount + "→" + count,
+        );
+      }
       if (count <= 0) continue;
+      addRecipePerformanceCost(
+        performancePlan.projected,
+        recipe,
+        count,
+      );
       const placement = selectedChoice(
         answers,
         suffix + "Placement",
@@ -2302,13 +2462,17 @@ export function resolveFastAuthoringDecision({
             spawn,
           );
         const placementRadius = placementRadiusForRecipe(recipe);
+        const placementObstacles =
+          role.id === "landscape" || zoneId === "perimeter"
+            ? [...placed, ...navigationCorridors]
+            : placed;
         const position = safePosition(
           [
             basePosition[0] + variation.positionOffset[0],
             basePosition[1],
             basePosition[2] + variation.positionOffset[2],
           ],
-          placed,
+          placementObstacles,
           minimumDistance,
           placementRadius,
         );
@@ -2374,7 +2538,6 @@ export function resolveFastAuthoringDecision({
     primitives.push(helper);
   }
 
-  const sceneFeatures = createFastAuthoringSceneFeatures(scene);
   const decisionTrace: FastAuthoringTraceItem[] = [
     {
       label: "実行判断",
@@ -2403,6 +2566,26 @@ export function resolveFastAuthoringDecision({
           : " / Terrain歩行目安 " +
             Math.round(sceneFeatures.terrain.walkableCellRatio * 100) +
             "%"),
+    },
+    {
+      label: "負荷予算",
+      value:
+        "EntityEq " +
+        performancePlan.projected.entityEquivalent +
+        "/" +
+        performancePlan.budget.entityEquivalentMax +
+        " / Light " +
+        performancePlan.projected.lights +
+        "/" +
+        performancePlan.budget.lightMax +
+        " / Particle " +
+        performancePlan.projected.particles +
+        "/" +
+        performancePlan.budget.particleMax +
+        (performancePlan.clampedSelections.length > 0
+          ? " / 自動調整 " +
+            performancePlan.clampedSelections.join(", ")
+          : ""),
     },
     {
       label: "地形",
@@ -2491,6 +2674,7 @@ export function resolveFastAuthoringDecision({
     finish,
     wind,
     humanize,
+    performancePlan,
     recipes,
     facilities,
     primitives,
