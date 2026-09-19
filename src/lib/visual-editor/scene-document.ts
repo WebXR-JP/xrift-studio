@@ -651,6 +651,16 @@ export type FastAuthoringEntityMetadata = {
   role: string;
   recipeId?: string;
   instanceIndex?: number;
+  /**
+   * Editor-only placement intent retained for later local repair.
+   * The runtime ignores it; reopening Studio can still explain why an object
+   * was moved and re-run the same terrain constraints without asking Jev.
+   */
+  placement?: {
+    requestedPosition: Vec3;
+    maxSlopeDegrees: number;
+    flatRadius: number;
+  };
 };
 
 export type SceneEntityAuthoringMetadata = {
