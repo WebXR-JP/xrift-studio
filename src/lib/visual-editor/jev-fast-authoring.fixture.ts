@@ -115,6 +115,7 @@ export function runJevFastAuthoringFixtureAssertions(): void {
   });
 
   for (const question of [
+    "intentClarity",
     "editScope",
     "detail",
     "terrainSurface",
@@ -178,8 +179,9 @@ export function runJevFastAuthoringFixtureAssertions(): void {
   const decision = resolveFastAuthoringDecision({
     response: {
       answers: {
-        editScope: { choice: "append" },
-        terrain: { choice: "rolling-hills" },
+        intentClarity: { choice: "clear", confidence: 0.95 },
+        editScope: { choice: "append", confidence: 0.94 },
+        terrain: { choice: "rolling-hills", confidence: 0.93 },
         mood: { choice: "foggy" },
         density: { choice: "lively" },
         scale: { choice: "wide" },
@@ -304,6 +306,12 @@ export function runJevFastAuthoringFixtureAssertions(): void {
   );
   assert(decision.editScope === "append", "edit scope should survive");
   assert(
+    decision.intentClarity === "clear" &&
+      decision.requiresClarification === false &&
+      decision.confidence.minimumCritical !== null,
+    "high-confidence clear intent should be eligible for automatic application",
+  );
+  assert(
     decision.recipes.some(
       (recipe) =>
         recipe.recipeId === SCENE_RECIPE_IDS.bench &&
@@ -311,6 +319,44 @@ export function runJevFastAuthoringFixtureAssertions(): void {
     ),
     "semantic zones should survive into placement decisions",
   );
+  const ambiguousDecision = resolveFastAuthoringDecision({
+    response: {
+      answers: {
+        intentClarity: {
+          choice: "ambiguous-edit-scope",
+          confidence: 0.91,
+        },
+        editScope: { choice: "append", confidence: 0.88 },
+      },
+    },
+    scene: project.scene,
+    catalog: planned.catalog,
+  });
+  assert(
+    ambiguousDecision.requiresClarification &&
+      ambiguousDecision.clarificationMessage?.includes("Zone"),
+    "ambiguous edit scope should stop automatic mutation and ask a bounded clarification",
+  );
+
+  const lowConfidenceDecision = resolveFastAuthoringDecision({
+    response: {
+      answers: {
+        intentClarity: { choice: "clear", confidence: 0.92 },
+        editScope: { choice: "append", confidence: 0.91 },
+        terrain: { choice: "none", confidence: 0.41 },
+      },
+    },
+    scene: project.scene,
+    catalog: planned.catalog,
+  });
+  assert(
+    lowConfidenceDecision.requiresClarification &&
+      lowConfidenceDecision.confidence.lowConfidenceQuestions.includes(
+        "terrain",
+      ),
+    "low confidence on a critical decision should require clarification before writes",
+  );
+
   const campfireRestDecision = resolveFastAuthoringDecision({
     response: {
       answers: {
