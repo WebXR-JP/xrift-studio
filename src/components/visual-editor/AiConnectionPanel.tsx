@@ -48,6 +48,7 @@ export type JevFastAuthoringUiState = {
   trace: FastAuthoringTraceItem[];
   applied: string[];
   checks?: FastAuthoringValidationCheck[];
+  spawnPreviewDataUrl?: string | null;
   previewDataUrl?: string | null;
 };
 
@@ -370,12 +371,29 @@ export function AiConnectionPanel({
                   </ul>
                 </div>
               ) : null}
+              {fastAuthoringState.spawnPreviewDataUrl ? (
+                <div className="mt-2">
+                  <p className="mb-1 text-[10px] font-semibold text-slate-500">
+                    Spawnから
+                  </p>
+                  <img
+                    src={fastAuthoringState.spawnPreviewDataUrl}
+                    alt="Spawnから見た生成後のScene View"
+                    className="w-full rounded border border-slate-200 bg-slate-950 object-cover"
+                  />
+                </div>
+              ) : null}
               {fastAuthoringState.previewDataUrl ? (
-                <img
-                  src={fastAuthoringState.previewDataUrl}
-                  alt="生成後のScene View"
-                  className="mt-2 w-full rounded border border-slate-200 bg-slate-950 object-cover"
-                />
+                <div className="mt-2">
+                  <p className="mb-1 text-[10px] font-semibold text-slate-500">
+                    俯瞰
+                  </p>
+                  <img
+                    src={fastAuthoringState.previewDataUrl}
+                    alt="俯瞰で見た生成後のScene View"
+                    className="w-full rounded border border-slate-200 bg-slate-950 object-cover"
+                  />
+                </div>
               ) : null}
             </div>
           ) : null}
