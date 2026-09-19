@@ -1610,9 +1610,12 @@ export function validateFastAuthoringScene({
   }
   const features = createFastAuthoringSceneFeatures(scene);
   const performanceWarnings =
-    features.performance.lightCount > 24 ||
-    features.performance.particleCount > 18 ||
-    features.performance.rootEntityCount > 450;
+    features.performance.lightCount >
+      FAST_AUTHORING_PERFORMANCE_BUDGET.lightMax ||
+    features.performance.particleCount >
+      FAST_AUTHORING_PERFORMANCE_BUDGET.particleMax ||
+    features.performance.rootEntityCount >
+      FAST_AUTHORING_PERFORMANCE_BUDGET.entityEquivalentMax;
 
   const checks: FastAuthoringValidationCheck[] = [
     {
