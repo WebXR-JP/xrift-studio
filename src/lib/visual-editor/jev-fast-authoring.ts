@@ -1468,6 +1468,56 @@ export function listFastAuthoringGeneratedEntities(scene: SceneDocument): Array<
   });
 }
 
+function fastAuthoringReplacementEntityIds(
+  scene: SceneDocument,
+  editScope: FastAuthoringEditScope,
+): Set<string> {
+  if (editScope === "append") return new Set();
+  const targetZone =
+    editScope === "replace-generated"
+      ? null
+      : (editScope.replace("replace-", "") as FastAuthoringZoneId);
+  const roots = listFastAuthoringGeneratedEntities(scene)
+    .filter(
+      (entry) =>
+        targetZone === null || entry.metadata.zoneId === targetZone,
+    )
+    .map((entry) => entry.entityId);
+  const removed = new Set<string>();
+  const visit = (entityId: string) => {
+    if (removed.has(entityId)) return;
+    const entity = scene.entities[entityId];
+    if (!entity) return;
+    removed.add(entityId);
+    entity.children.forEach(visit);
+  };
+  roots.forEach(visit);
+  return removed;
+}
+
+function performanceAfterEditScope(
+  scene: SceneDocument,
+  editScope: FastAuthoringEditScope,
+): {
+  entityEquivalent: number;
+  lights: number;
+  particles: number;
+} {
+  const removed = fastAuthoringReplacementEntityIds(scene, editScope);
+  let entityEquivalent = 0;
+  let lights = 0;
+  let particles = 0;
+  for (const entity of Object.values(scene.entities)) {
+    if (removed.has(entity.id)) continue;
+    entityEquivalent += 1;
+    for (const component of entity.components) {
+      if (component.type === "light") lights += 1;
+      if (component.type === "particle-emitter") particles += 1;
+    }
+  }
+  return { entityEquivalent, lights, particles };
+}
+
 export function applyFastAuthoringEntityMetadata(
   scene: SceneDocument,
   entityId: string,
@@ -2294,18 +2344,14 @@ export function resolveFastAuthoringDecision({
   const placed: OccupiedFootprint[] = [...occupied];
   const navigationCorridors = navigationCorridorFootprints(spawn, spread);
   const sceneFeatures = createFastAuthoringSceneFeatures(scene);
+  const postReplacementPerformance = performanceAfterEditScope(
+    scene,
+    editScope,
+  );
   const performancePlan: FastAuthoringPerformancePlan = {
     budget: { ...FAST_AUTHORING_PERFORMANCE_BUDGET },
-    existing: {
-      entityEquivalent: sceneFeatures.performance.rootEntityCount,
-      lights: sceneFeatures.performance.lightCount,
-      particles: sceneFeatures.performance.particleCount,
-    },
-    projected: {
-      entityEquivalent: sceneFeatures.performance.rootEntityCount,
-      lights: sceneFeatures.performance.lightCount,
-      particles: sceneFeatures.performance.particleCount,
-    },
+    existing: postReplacementPerformance,
+    projected: { ...postReplacementPerformance },
     clampedSelections: [],
   };
 
