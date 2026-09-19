@@ -5262,6 +5262,46 @@ export function VisualEditorPrototype({
               });
               return;
             }
+            if (decision.executionPath !== "generator") {
+              const selectedEntityId = sceneSelectionRef.current?.id ?? null;
+              const instructions =
+                decision.executionPath === "visual-review"
+                  ? "まず選択Entityまたは問題箇所へScene Viewを向けてcapture_scene_viewで画像を取得し、大きいモデルで見た目を診断してください。診断後は既存のtyped toolだけで局所修正し、World全体を再生成しないでください。"
+                  : decision.executionPath === "system-two"
+                    ? "この依頼は複雑な設計・原因分析が必要です。Codex/Claude等の大きいモデルへ現在のScene文脈を渡し、実装や原因分析を行った後、XRiftのtyped toolで適用してください。"
+                    : decision.executionPath === "verify"
+                      ? "Sceneを書き換えず、capture_scene_view / capture_scene_debug / Play結果で確認してください。問題が確認できた場合だけ次のrepairを計画してください。"
+                      : "選択中Entityをget_entity_components / get_entity_bounds等で調べ、focusDomainに対応する既存typed toolで必要最小限だけ修正してください。新しいRecipeやWorld全体設定を先に変更しないでください。";
+              await completeResponse({
+                id: request.id,
+                ok: true,
+                result: {
+                  prompt,
+                  model:
+                    typeof jev.model === "string" ? jev.model : "jev-latest",
+                  usage: jev.usage ?? null,
+                  decisions: {
+                    operation: decision.operation,
+                    mutationScope: decision.mutationScope,
+                    judgement: decision.judgement,
+                    executionPath: decision.executionPath,
+                    intentClarity: decision.intentClarity,
+                    confidence: decision.confidence,
+                  },
+                  decisionTrace: decision.decisionTrace,
+                  actionPlan: [],
+                  execution: {
+                    mutatesScene: false,
+                    revision: mcpRevisionRef.current,
+                    requiresClarification: false,
+                    selectedEntityId,
+                    nextPath: decision.executionPath,
+                    instructions,
+                  },
+                },
+              });
+              return;
+            }
             if (allowWorldMutation && decision.terrain !== "none") {
               actionPlan.push({
                 tool: "create_terrain_from_preset",
@@ -5407,6 +5447,8 @@ export function VisualEditorPrototype({
                 decisions: {
                   operation: decision.operation,
                   mutationScope: decision.mutationScope,
+                  judgement: decision.judgement,
+                  executionPath: decision.executionPath,
                   terrain: decision.terrain,
                   mood: decision.mood,
                   density: decision.density,
@@ -8380,6 +8422,24 @@ export function VisualEditorPrototype({
             message:
               decision.clarificationMessage ??
               "もう少し具体的に指示してください",
+            trace: decision.decisionTrace,
+            applied: [],
+            previewDataUrl: null,
+          });
+          return;
+        }
+        if (decision.executionPath !== "generator") {
+          const message =
+            decision.executionPath === "visual-review"
+              ? "見た目の確認が必要な局所修正です。Worldを作り直さず、対象をScene Viewで確認してからAI編集クライアントで直してください"
+              : decision.executionPath === "system-two"
+                ? "複雑な設計・原因分析が必要なため、Worldを自動生成せず大きいAIモデルへ回す判断になりました"
+                : decision.executionPath === "verify"
+                  ? "変更ではなく確認が適切と判断しました。Worldは変更していません"
+                  : "局所的なtyped編集が適切と判断しました。World全体を作り直さず、選択中EntityをAI編集クライアントから修正できます";
+          setJevFastAuthoringState({
+            status: "done",
+            message,
             trace: decision.decisionTrace,
             applied: [],
             previewDataUrl: null,
