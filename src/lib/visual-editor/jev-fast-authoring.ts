@@ -94,6 +94,13 @@ export type FastAuthoringJudgementSignals = {
   issueSeverityConfidence: number | null;
 };
 
+export type FastAuthoringExecutionPath =
+  | "generator"
+  | "typed-edit"
+  | "visual-review"
+  | "system-two"
+  | "verify";
+
 export type FastAuthoringZoneId =
   | "entrance"
   | "main"
@@ -228,6 +235,7 @@ export type FastAuthoringDecision = {
   operation: FastAuthoringOperation;
   mutationScope: FastAuthoringMutationScope;
   judgement: FastAuthoringJudgementSignals;
+  executionPath: FastAuthoringExecutionPath;
   editScope: FastAuthoringEditScope;
   terrain: string;
   mood: FastAuthoringMood;
@@ -1355,6 +1363,37 @@ function clarificationMessageFor(
   return null;
 }
 
+function fastAuthoringExecutionPath({
+  operation,
+  mutationScope,
+  judgement,
+}: {
+  operation: FastAuthoringOperation;
+  mutationScope: FastAuthoringMutationScope;
+  judgement: FastAuthoringJudgementSignals;
+}): FastAuthoringExecutionPath {
+  if (judgement.needsSystemTwo !== null && judgement.needsSystemTwo >= 0.72) {
+    return "system-two";
+  }
+  if (
+    judgement.needsVisualReview !== null &&
+    judgement.needsVisualReview >= 0.68
+  ) {
+    return "visual-review";
+  }
+  if (judgement.focusDomain === "verification") return "verify";
+  if (
+    mutationScope === "local" &&
+    operation !== "create" &&
+    judgement.focusDomain !== "scene" &&
+    judgement.focusDomain !== "terrain"
+  ) {
+    return "typed-edit";
+  }
+  return "generator";
+}
+
+
 function isGroundLikeEntity(scene: SceneDocument, entityId: string): boolean {
   const entity = scene.entities[entityId];
   if (!entity) return false;
@@ -2471,6 +2510,11 @@ export function resolveFastAuthoringDecision({
     issueSeverity: severity.score,
     issueSeverityConfidence: severity.confidence,
   };
+  const executionPath = fastAuthoringExecutionPath({
+    operation,
+    mutationScope,
+    judgement,
+  });
   const editScope = selectedChoice(
     answers,
     "editScope",
@@ -2830,6 +2874,10 @@ export function resolveFastAuthoringDecision({
         judgement.focusDomain,
     },
     {
+      label: "実行経路",
+      value: executionPath,
+    },
+    {
       label: "判定シグナル",
       value:
         "visual " +
@@ -2961,6 +3009,7 @@ export function resolveFastAuthoringDecision({
     operation,
     mutationScope,
     judgement,
+    executionPath,
     editScope,
     terrain,
     mood,
