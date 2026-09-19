@@ -170,6 +170,8 @@ Worldは一度で完成させる前提にしない。Fast Authoringは同じProj
 
 Fast Authoringの主操作文言も「爆速で作る」だけにせず、「作る・直す」として継続編集を前提にする。修復依頼では、問題が曖昧なら書き込み前に対象または完成状態を1点だけ確認する。局所修正で新しいRecipeを足す必要がない場合は、既存Entityを編集する通常のtyped toolを優先する。
 
+Fast Authoring自身にexecutorがない局所修正では、判断だけ表示して終わらせない。元の依頼、operation / mutationScope / focusDomain / executionPath、選択中Entity、検証手順、変更禁止範囲を含むMCP handoff指示を決定論的に組み立て、「MCP指示をコピー」からCodex・Claude Code・OpenCodeなどへそのまま渡せるようにする。visual-reviewなら撮影→診断→typed tool修正、typed-editなら対象Component確認→局所修正、verifyなら変更せず確認、system-twoなら大きいモデルで原因分析して実変更はtyped toolに限定する。
+
 ## 実装制約
 
 - 動きは `opacity` と `transform` を中心にし、レイアウトを押し広げたり、操作対象を移動させたりしない。
