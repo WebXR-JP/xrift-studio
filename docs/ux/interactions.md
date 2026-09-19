@@ -147,6 +147,29 @@ F-06 アイテム検査
 
 | MI-124 | AI接続の「こんなワールドを作る」で指示を入力して「爆速で作る」を押す。生成後に「休憩所だけ作り直して」など部分修正する場合も同じ扱いにする | 待機中は文章入力と主操作を最上部に置く。実行中は「構成を決めています」→「ワールドを作成中」→「仕上がりを確認中」の順に同じ場所で状態を更新し、二重実行を無効にする。JevへScene View画像や生の画面情報は渡さない。StudioがSceneDocumentからSpawn位置・Yaw・前方ベクトル・前方クリア距離、Terrain有無・幅・奥行き・高さ範囲・平坦セル比率・歩行可能セル比率、entrance / main / rest / view / perimeter各Zoneの障害物数と空き距離、Root / Mesh / Light / Particle / Collider数、過去にFast Authoringで生成したZone別件数を数値へ要約して渡す。Jevはこの状態と有限カタログから、まず依頼が自動実行できるほど明確かを判定し、Terrain・Terrain Surface・草・Skybox・雰囲気・Post Effect・風・広さ・密度・構図・作り込み量、役割、個数、Zone、基準Placementを決める。重要判断のcalibrated confidenceが閾値未満、または主役・規模・編集範囲・負荷優先度が曖昧ならSceneを書き換えず、AI接続に具体的な確認事項を1つ表示する。十分に明確な場合だけStudioはSpawnの向きを基準に群生・列・まとまりへ展開し、Collider寸法やEntity規模から推定した占有半径で既存Entityと生成物を避ける。Spawnからmain / rest Zoneへの中央導線は景観配置用の予約領域として扱い、木・岩・外周物で塞がない。配置個数には一律の固定上限を置かず、現在Sceneを含むEntity相当数 / realtime Light / Particleの予算を投影し、重いRecipeだけを自動的に減らす。Zone置換では削除予定の生成物ぶんの予算を先に返却してから次の構成を計算する。Terrain上では高さだけでなく用途別の傾斜と平坦半径を確認し、休憩所・家具・公式設備は近傍のより平坦な候補へ補正する。生成rootには元の要求位置・許容傾斜・必要平坦半径を残し、再オープン後の局所repairへ使えるようにする。生成後は再接地・平坦面再探索・重なり候補・Spawn前方・Spawnから主役への簡易導線・主役までの遮蔽物候補・負荷目安を再計測する。夜なら局所Light、指示に「焚き火」があれば焚き火Recipe・焚き火subtreeの局所Light・休憩所のベンチ距離・焚き火周囲の景観侵入も確認する。結果は「自動チェック」のOK / 確認項目とScene Viewプレビューとして同じ欄に残す。主役を特定できた場合はSpawnの目線高さから主役を見るプレビューと俯瞰プレビューの2枚を残し、導線と全体構成を別々に確認できるようにする。 | JevはXRift Studioが渡した有限候補だけから選び、座標やMCP tool名を自由生成しない。不要な役割はnoneにできる。Studio内実行とMCPのdecide_fast_authoringは同じplannerを使う。生成したroot Entityにはeditor-onlyのgenerationId / zoneId / groupId / role / recipeId / instanceIndexを残す。部分修正ではeditScopeをappend / replace-generated / replace-entrance / replace-main / replace-rest / replace-view / replace-perimeterから選び、削除対象はFast Authoringのmetadataを持つEntityだけに限定する。手作業や既存Entityは消さない。生成物をユーザーが手動コピーした場合はFast Authoring provenanceを外し、そのコピーも後のZone置換から保護する。大量配置でも個別座標をJevへ選ばせず、種類・個数・Zone・基準位置からStudio側で展開する。配置の自然さはoff / subtle / natural / handmadeから選び、ズレは決定論的にする。Post Effectは必須にせずcleanでは完全OFFにする。Scene更新は既存のUndo・autosave・revision経路を通し、Scene Recipeだけは既存のAsset書き出し境界を通す。空き場所や十分な平坦面を確保できない場合は黙って成功扱いにせず、自動チェックへ確認項目を残す。「夜の山に焚き火がある休憩所」は、Spawnを回転したScene、急斜面、既存大型Entity、密集Scene、Terrain端、局所Lightなし、焚き火候補なしをマージ前の実機確認ケースに含める。 |
 
+
+### 継続的なワールド制作
+
+Worldは一度で完成させる前提にしない。Fast Authoringは同じProjectへ何度でも使い、各入力を次の5種類として扱う。
+
+- create: 新しいWorldまたは大きな土台を作る
+- extend: 今あるWorldへ一角・設備・景観を足す
+- repair: 具体的に壊れているところだけ直す
+- polish: 構成を保って見た目・光・密度・マテリアルを仕上げる
+- optimize: 見た目と体験を保ちながら負荷や過密を整理する
+
+変更範囲は local / zone / world に分ける。local と zone では、依頼に含まれていないTerrain・Skybox・環境光・Post Effect・Windを変更しない。選択中Entityがある場合は、そのEntity名、Component種類、Fast Authoring由来か、所属ZoneをJevへ渡し、「ここ」「これ」「この建物」のような続きの指示を解釈する材料にする。
+
+例:
+
+- 「この建物、マテリアルが剥がれて見える」→ repair / local。選択Entityを調べ、World全体を作り直さない
+- 「焚き火の周りが寂しい」→ extend または polish / rest Zone
+- 「木が多すぎる」→ optimize / 該当Zone。景観だけ減らす
+- 「夜をもう少し暗く」→ polish / world。必要なWorld設定だけ変える
+- 「休憩所だけ別の雰囲気に」→ polish / rest Zone。別Zoneは保持する
+
+Fast Authoringの主操作文言も「爆速で作る」だけにせず、「作る・直す」として継続編集を前提にする。修復依頼では、問題が曖昧なら書き込み前に対象または完成状態を1点だけ確認する。局所修正で新しいRecipeを足す必要がない場合は、既存Entityを編集する通常のtyped toolを優先する。
+
 ## 実装制約
 
 - 動きは `opacity` と `transform` を中心にし、レイアウトを押し広げたり、操作対象を移動させたりしない。
