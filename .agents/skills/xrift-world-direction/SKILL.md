@@ -37,6 +37,20 @@ Fast Authoringのplannerは「個数の固定上限」ではなく、現在Scene
 
 同じ依頼で大きな再生成を繰り返さない。「plan → apply → verify → 必要なZoneだけrepair」を基本ループにする。
 
+### Jevの役割
+
+Jevへ文章、コード、tool callを生成させない。Jevは「何をするか」を自由に決めるagentではなく、現在stateに対する独立した小さな判定を返すjudge/routerとして使う。副作用と実行順序はXRift StudioまたはAIクライアント側のコードが持つ。
+
+一つの大きな質問へ詰め込まず、同じstateへ独立したtyped questionを並列で聞く。
+
+- Choice: create / extend / repair / polish / optimize、local / zone / world、主な編集領域
+- Noul: Scene View画像が必要か、大きいモデルへ回す価値があるか
+- Score: 問題の深刻度など、順序のある1次元評価
+
+確率とconfidenceはコード側で閾値処理する。例えばMaterialの違和感が repair / local / material で、画像確認が不要なら既存typed toolへルーティングする。画像確認の確率が高ければ先に対象を撮影する。複雑な原因分析や新規表現が必要な確率が高ければSystem TwoのAIクライアントへ回す。
+
+「次のtool名」をJevに生成させない。Jevの判定を受けて、コード側の有限なルーティング表から generator / typed-edit / visual-review / system-two / verify を選ぶ。
+
 依頼されていない体験や設備を必須にしない。ツールの数や過去の作例ではなく、依頼と必要な品質から手段を選ぶ。前提を変えた場合は理由を記録する。
 
 ### 体験と設備
