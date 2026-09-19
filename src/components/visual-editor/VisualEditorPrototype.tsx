@@ -9082,6 +9082,35 @@ export function VisualEditorPrototype({
         setActiveEditorTab(SCENE_VIEW_TAB_ID);
         setGraphTabActive(false);
         await waitForEditorCommit();
+
+        let spawnPreviewDataUrl: string | null = null;
+        if (focalEntityId) {
+          const scene = bundleRef.current.scene;
+          const spawnPosition = findFastAuthoringSpawnPosition(scene);
+          const focalPosition = getTransform(
+            scene,
+            focalEntityId,
+          )?.position;
+          if (focalPosition) {
+            await requestSceneCamera({
+              position: [
+                spawnPosition[0],
+                spawnPosition[1] + 1.65,
+                spawnPosition[2],
+              ],
+              target: [
+                focalPosition[0],
+                focalPosition[1] + 0.9,
+                focalPosition[2],
+              ],
+            });
+            const spawnScreenshot = await requestSceneScreenshot();
+            spawnPreviewDataUrl = spawnScreenshot.ok
+              ? spawnScreenshot.dataUrl
+              : null;
+          }
+        }
+
         await requestSceneCamera({ preset: "iso" });
         const screenshot = await requestSceneScreenshot();
         const previewDataUrl = screenshot.ok ? screenshot.dataUrl : null;
@@ -9090,14 +9119,16 @@ export function VisualEditorPrototype({
         ).length;
         setJevFastAuthoringState({
           status: "done",
-          message: screenshot.ok
-            ? warningCount > 0
-              ? `生成しました。自動チェックで${warningCount}件の確認項目があります`
-              : "完成しました。自動チェックも問題ありません"
-            : "生成は完了しました。Scene Viewの画像だけ取得できませんでした",
+          message:
+            screenshot.ok || spawnPreviewDataUrl
+              ? warningCount > 0
+                ? `生成しました。自動チェックで${warningCount}件の確認項目があります`
+                : "完成しました。Spawn視点と俯瞰でも確認できます"
+              : "生成は完了しました。Scene Viewの画像だけ取得できませんでした",
           trace: decision.decisionTrace,
           applied: [...applied],
           checks,
+          spawnPreviewDataUrl,
           previewDataUrl,
         });
         setNotice(
