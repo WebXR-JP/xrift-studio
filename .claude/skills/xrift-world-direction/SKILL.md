@@ -31,6 +31,10 @@ description: XRift Studio MCP でワールドを新規制作、配置変更、�
 4. しかけがある場合はPlayで実行結果
 5. 修正はWorld全体を作り直さず、Fast Authoringが記録したZone単位を優先する
 
+Fast Authoringのplannerは「個数の固定上限」ではなく、現在Sceneを含めた Entity相当数 / Light / Particle の予算で重いRecipeだけを自動的に減らす。大量配置の依頼でも木や岩まで一律に減らさず、リアルタイムLightやParticleを先に予算へ収める。Spawnからmain / rest Zoneへの中央通路は景観Entityの占有領域として予約し、木・岩・外周物が導線を塞ぐ配置を避ける。
+
+生成rootには元の要求位置・許容傾斜・必要平坦半径もauthoring metadataとして残る。再オープン後の局所repairではこの制約を使い、Jevへ同じ判断をもう一度させる前にStudio側だけで直せるか確認する。
+
 同じ依頼で大きな再生成を繰り返さない。「plan → apply → verify → 必要なZoneだけrepair」を基本ループにする。
 
 依頼されていない体験や設備を必須にしない。ツールの数や過去の作例ではなく、依頼と必要な品質から手段を選ぶ。前提を変えた場合は理由を記録する。
