@@ -303,6 +303,18 @@ export type XriftOllamaConfigurationResult = {
   message: string;
 };
 
+export type JevStatus = {
+  configured: boolean;
+  model: string;
+  baseUrl: string;
+};
+
+export type JevConnectionResult = {
+  ok: boolean;
+  model: string;
+  message: string;
+};
+
 export type RecordingEncoderSupport = {
   ffmpeg: boolean;
   ffmpegVersion: string | null;
@@ -789,6 +801,14 @@ export const tauri = {
       integrationId,
       model,
     }),
+  getJevStatus: () => invoke<JevStatus>("get_jev_status"),
+  setJevApiKey: (apiKey: string) =>
+    invoke<JevStatus>("set_jev_api_key", { apiKey }),
+  clearJevApiKey: () => invoke<JevStatus>("clear_jev_api_key"),
+  testJevConnection: () =>
+    invoke<JevConnectionResult>("test_jev_connection"),
+  jevSystemOne: (request: Record<string, unknown>) =>
+    invoke<Record<string, unknown>>("jev_system_one", { request }),
   completeXriftMcpRequest: (response: XriftMcpEditorResponse) =>
     invoke<void>("complete_xrift_mcp_request", { response }),
   setXriftMcpEditorReady: (ready: boolean) =>

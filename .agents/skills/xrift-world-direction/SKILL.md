@@ -17,6 +17,40 @@ description: XRift Studio MCP でワールドを新規制作、配置変更、�
 
 新規制作や大きな変更では `references/blueprint-template.md` を使い、現状を確認してから書き込み前に設計図を作る。配置・色・雰囲気だけの小さな調整では、変更対象と完成条件の短い記録でよい。制作セッションを使う場合は既存の begin/update/finish tool の契約を守る。
 
+### Fast Authoring を使う場合
+
+ユーザーがWorld全体や大きな一角を文章で作る依頼をした場合、公開toolに `decide_fast_authoring` があるなら、個別の `create_primitive` や `update_transform` を先に連打せず最初に使う。これは書き込みtoolではなく、現在のSceneを数値化した状態と有限カタログから、Terrain、雰囲気、Zone、Recipe、個数、基準Placementを一度に決めるplannerだ。
+
+判断結果の confidence が低い、または主役・規模・置換範囲・負荷優先度が曖昧と返った場合は、書き込みを始めず不足している1点だけをユーザーへ確認する。十分に明確なら、plannerのZoneと役割を保ったまま既存のtyped toolでSceneへ適用する。任意座標や存在しないRecipeを推測しない。
+
+生成後は「見た目が出た」だけで完了にしない。最低でも以下を確認する。
+
+1. Spawn視点と俯瞰の `capture_scene_view`
+2. `get_entity_bounds` / `sample_terrain_point` による接地・傾斜・遮蔽物
+3. `capture_scene_debug { action: "metrics" }` による負荷
+4. しかけがある場合はPlayで実行結果
+5. 修正はWorld全体を作り直さず、Fast Authoringが記録したZone単位を優先する
+
+Fast Authoringのplannerは「個数の固定上限」ではなく、現在Sceneを含めた Entity相当数 / Light / Particle の予算で重いRecipeだけを自動的に減らす。大量配置の依頼でも木や岩まで一律に減らさず、リアルタイムLightやParticleを先に予算へ収める。Spawnからmain / rest Zoneへの中央通路は景観Entityの占有領域として予約し、木・岩・外周物が導線を塞ぐ配置を避ける。
+
+生成rootには元の要求位置・許容傾斜・必要平坦半径もauthoring metadataとして残る。再オープン後の局所repairではこの制約を使い、Jevへ同じ判断をもう一度させる前にStudio側だけで直せるか確認する。
+
+同じ依頼で大きな再生成を繰り返さない。「plan → apply → verify → 必要なZoneだけrepair」を基本ループにする。
+
+### Jevの役割
+
+Jevへ文章、コード、tool callを生成させない。Jevは「何をするか」を自由に決めるagentではなく、現在stateに対する独立した小さな判定を返すjudge/routerとして使う。副作用と実行順序はXRift StudioまたはAIクライアント側のコードが持つ。
+
+一つの大きな質問へ詰め込まず、同じstateへ独立したtyped questionを並列で聞く。
+
+- Choice: create / extend / repair / polish / optimize、local / zone / world、主な編集領域
+- Noul: Scene View画像が必要か、大きいモデルへ回す価値があるか
+- Score: 問題の深刻度など、順序のある1次元評価
+
+確率とconfidenceはコード側で閾値処理する。例えばMaterialの違和感が repair / local / material で、画像確認が不要なら既存typed toolへルーティングする。画像確認の確率が高ければ先に対象を撮影する。複雑な原因分析や新規表現が必要な確率が高ければSystem TwoのAIクライアントへ回す。
+
+「次のtool名」をJevに生成させない。Jevの判定を受けて、コード側の有限なルーティング表から generator / typed-edit / visual-review / system-two / verify を選ぶ。
+
 依頼されていない体験や設備を必須にしない。ツールの数や過去の作例ではなく、依頼と必要な品質から手段を選ぶ。前提を変えた場合は理由を記録する。
 
 ### 体験と設備

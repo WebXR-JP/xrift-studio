@@ -173,6 +173,7 @@ export const XRIFT_MCP_TOOLS = [
   { name: "update_script_asset", surface: "script" },
   { name: "set_play_mode", surface: "script" },
 
+  { name: "decide_fast_authoring", surface: "external-store" },
   { name: "search_external_assets", surface: "external-store" },
   { name: "get_external_asset_options", surface: "external-store" },
   { name: "install_external_asset", surface: "external-store" },

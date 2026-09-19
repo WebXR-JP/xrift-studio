@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import type {
-  XriftMcpClientId,
-  XriftMcpClientStatus,
-  XriftOllamaConfigurationResult,
-  XriftOllamaIntegrationId,
-  XriftOllamaStatus,
+import {
+  tauri,
+  type JevStatus,
+  type XriftMcpClientId,
+  type XriftMcpClientStatus,
+  type XriftOllamaConfigurationResult,
+  type XriftOllamaIntegrationId,
+  type XriftOllamaStatus,
 } from "../../lib/tauri";
+import type {
+  FastAuthoringTraceItem,
+  FastAuthoringValidationCheck,
+} from "../../lib/visual-editor/jev-fast-authoring";
 import { EDITOR_ICONS } from "./editor-icons";
 
 const OLLAMA_INTEGRATION_IDS: readonly XriftOllamaIntegrationId[] = [
@@ -29,6 +35,24 @@ export type XriftMcpActivity = {
   revision: number;
 } | null;
 
+export type JevFastAuthoringUiState = {
+  status:
+    | "idle"
+    | "deciding"
+    | "clarify"
+    | "applying"
+    | "checking"
+    | "done"
+    | "error";
+  message: string;
+  trace: FastAuthoringTraceItem[];
+  applied: string[];
+  checks?: FastAuthoringValidationCheck[];
+  handoffPrompt?: string | null;
+  spawnPreviewDataUrl?: string | null;
+  previewDataUrl?: string | null;
+};
+
 export function AiConnectionPanel({
   nativeAvailable,
   clients,
@@ -41,6 +65,9 @@ export function AiConnectionPanel({
   ollamaResult,
   lastActivity,
   canUndo,
+  fastAuthoringState,
+  fastAuthoringDisabledReason,
+  onRunFastAuthoring,
   onRefresh,
   onRegister,
   onConfigureOllama,
@@ -57,6 +84,9 @@ export function AiConnectionPanel({
   ollamaResult: XriftOllamaConfigurationResult | null;
   lastActivity: XriftMcpActivity;
   canUndo: boolean;
+  fastAuthoringState: JevFastAuthoringUiState;
+  fastAuthoringDisabledReason: string | null;
+  onRunFastAuthoring: (prompt: string) => void | Promise<void>;
   onRefresh: () => void;
   onRegister: (clientId: XriftMcpClientId) => void;
   onConfigureOllama: (
@@ -68,6 +98,13 @@ export function AiConnectionPanel({
   const [selectedOllamaModel, setSelectedOllamaModel] = useState("");
   const [selectedOllamaIntegration, setSelectedOllamaIntegration] =
     useState<XriftOllamaIntegrationId>("opencode");
+  const [jevStatus, setJevStatus] = useState<JevStatus | null>(null);
+  const [jevApiKey, setJevApiKey] = useState("");
+  const [fastAuthoringPrompt, setFastAuthoringPrompt] = useState("");
+  const [jevBusy, setJevBusy] = useState(false);
+  const [jevMessage, setJevMessage] = useState<string | null>(null);
+  const [jevError, setJevError] = useState<string | null>(null);
+  const [handoffCopied, setHandoffCopied] = useState(false);
   const ollamaTargets = useMemo(
     () =>
       clients.filter(
@@ -96,6 +133,93 @@ export function AiConnectionPanel({
       setSelectedOllamaIntegration(ollamaTargets[0].id);
     }
   }, [ollamaTargets, selectedOllamaIntegration]);
+
+  useEffect(() => {
+    setHandoffCopied(false);
+  }, [fastAuthoringState.handoffPrompt]);
+
+  useEffect(() => {
+    if (!nativeAvailable) return;
+    let active = true;
+    void tauri
+      .getJevStatus()
+      .then((status) => {
+        if (active) setJevStatus(status);
+      })
+      .catch((cause) => {
+        if (active) setJevError(String(cause));
+      });
+    return () => {
+      active = false;
+    };
+  }, [nativeAvailable]);
+
+  const copyFastAuthoringHandoff = async () => {
+    const text = fastAuthoringState.handoffPrompt;
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setHandoffCopied(true);
+      return;
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      const copied = document.execCommand("copy");
+      document.body.removeChild(textarea);
+      setHandoffCopied(copied);
+    }
+  };
+
+  const saveJevApiKey = async () => {
+    if (!jevApiKey.trim()) return;
+    setJevBusy(true);
+    setJevError(null);
+    setJevMessage(null);
+    try {
+      const status = await tauri.setJevApiKey(jevApiKey);
+      setJevStatus(status);
+      setJevApiKey("");
+      setJevMessage("APIキーを保存しました");
+    } catch (cause) {
+      setJevError(String(cause));
+    } finally {
+      setJevBusy(false);
+    }
+  };
+
+  const testJevConnection = async () => {
+    setJevBusy(true);
+    setJevError(null);
+    setJevMessage(null);
+    try {
+      const result = await tauri.testJevConnection();
+      setJevMessage(result.message);
+    } catch (cause) {
+      setJevError(String(cause));
+    } finally {
+      setJevBusy(false);
+    }
+  };
+
+  const clearJevApiKey = async () => {
+    setJevBusy(true);
+    setJevError(null);
+    setJevMessage(null);
+    try {
+      const status = await tauri.clearJevApiKey();
+      setJevStatus(status);
+      setJevMessage("APIキーを削除しました");
+    } catch (cause) {
+      setJevError(String(cause));
+    } finally {
+      setJevBusy(false);
+    }
+  };
 
   if (!nativeAvailable) {
     return (
@@ -138,8 +262,273 @@ export function AiConnectionPanel({
   return (
     <div className="scrollbar-thin max-h-[min(32rem,calc(100vh-10rem))] space-y-3 overflow-y-auto p-3.5 text-xs text-slate-600">
       <p className="rounded-md border border-violet-100 bg-violet-50/70 p-3 leading-5 text-slate-700">
-        CodexなどのAIクライアントをXRift StudioのMCPに接続できます。開いているシーンを会話から読み取り・編集し、変更は自動保存され、「元に戻す」で取り消せます。
+        ワールドは一度で完成させなくて大丈夫です。新しく作る・一角を足す・壊れたところを直す・見た目を仕上げる・軽くする、を同じ入力欄から繰り返せます。
       </p>
+      <section aria-labelledby="jev-heading">
+        <h3
+          id="jev-heading"
+          className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500"
+        >
+          ワールドを作る・直す
+        </h3>
+        <div className="space-y-2.5 rounded-md border border-violet-200 bg-violet-50/40 p-2.5">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="font-semibold text-slate-900">Jev Fast Authoring</p>
+              <p className="mt-0.5 text-[11px] leading-4 text-slate-600">
+                Jevが「新規作成・追加・修復・仕上げ・最適化」と変更範囲を判断します。局所修正ではTerrainや空などWorld全体の設定を保持します。
+              </p>
+            </div>
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                jevStatus?.configured
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-slate-100 text-slate-600"
+              }`}
+            >
+              {jevStatus?.configured ? "利用できます" : "接続設定が必要"}
+            </span>
+          </div>
+
+          <label className="block">
+            <span className="mb-1 block text-[11px] font-semibold text-violet-950">
+              やりたいこと
+            </span>
+            <textarea
+              value={fastAuthoringPrompt}
+              disabled={
+                fastAuthoringState.status === "deciding" ||
+                fastAuthoringState.status === "applying" ||
+                fastAuthoringState.status === "checking"
+              }
+              onChange={(event) => setFastAuthoringPrompt(event.target.value)}
+              placeholder="例: 夜の山に焚き火の休憩所を足して / 選択中の建物の見た目が浮いているので直して / 木が多すぎるので軽くして"
+              rows={4}
+              className="w-full resize-none rounded-md border border-violet-200 bg-white px-2.5 py-2 text-xs leading-5 text-slate-800 focus:border-brand-500 focus:outline-none disabled:bg-slate-100"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={
+              !jevStatus?.configured ||
+              !fastAuthoringPrompt.trim() ||
+              Boolean(fastAuthoringDisabledReason) ||
+              fastAuthoringState.status === "deciding" ||
+              fastAuthoringState.status === "applying" ||
+              fastAuthoringState.status === "checking"
+            }
+            onClick={() => void onRunFastAuthoring(fastAuthoringPrompt.trim())}
+            className="w-full rounded-md bg-brand-600 px-3 py-2 font-semibold text-white hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-500"
+          >
+            {fastAuthoringState.status === "deciding"
+              ? "構成を決めています"
+              : fastAuthoringState.status === "applying"
+                ? "ワールドを作成中"
+                : fastAuthoringState.status === "checking"
+                  ? "仕上がりを確認中"
+                  : "作る・直す"}
+          </button>
+          {!jevStatus?.configured ? (
+            <p className="text-[11px] leading-4 text-amber-700">
+              下の「Jev接続設定」でTypeSafe APIキーを設定すると使えます。
+            </p>
+          ) : null}
+          {fastAuthoringDisabledReason ? (
+            <p className="text-[11px] leading-4 text-amber-700">
+              {fastAuthoringDisabledReason}
+            </p>
+          ) : null}
+
+          {fastAuthoringState.status !== "idle" ? (
+            <div
+              className={
+                fastAuthoringState.status === "error"
+                  ? "rounded border border-rose-200 bg-rose-50 p-2"
+                  : fastAuthoringState.status === "clarify"
+                    ? "rounded border border-amber-200 bg-amber-50 p-2"
+                    : "rounded border border-violet-200 bg-white p-2"
+              }
+            >
+              <p className="text-[11px] font-semibold text-slate-800">
+                {fastAuthoringState.message}
+              </p>
+              {fastAuthoringState.trace.length > 0 ? (
+                <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[10px] leading-4">
+                  {fastAuthoringState.trace.map((item) => (
+                    <div key={item.label} className="contents">
+                      <dt className="font-semibold text-slate-500">
+                        {item.label}
+                      </dt>
+                      <dd className="min-w-0 truncate text-slate-700">
+                        {item.value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
+              {fastAuthoringState.applied.length > 0 ? (
+                <p className="mt-2 text-[10px] leading-4 text-slate-500">
+                  {fastAuthoringState.applied.join(" → ")}
+                </p>
+              ) : null}
+              {fastAuthoringState.handoffPrompt ? (
+                <div className="mt-2 rounded border border-violet-200 bg-violet-50/60 p-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-[10px] font-semibold text-violet-900">
+                        MCPで続ける
+                      </p>
+                      <p className="mt-0.5 text-[10px] leading-4 text-slate-600">
+                        Codex・Claude Code・OpenCodeなど、XRift Studio MCPを登録したAIへそのまま貼れます。
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void copyFastAuthoringHandoff()}
+                      className="shrink-0 rounded border border-violet-300 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-violet-800 hover:bg-violet-50"
+                    >
+                      {handoffCopied ? "コピーしました" : "MCP指示をコピー"}
+                    </button>
+                  </div>
+                  <details className="mt-2">
+                    <summary className="cursor-pointer select-none text-[10px] font-semibold text-slate-500">
+                      指示内容を見る
+                    </summary>
+                    <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-white p-2 text-[9px] leading-4 text-slate-600">
+                      {fastAuthoringState.handoffPrompt}
+                    </pre>
+                  </details>
+                </div>
+              ) : null}
+              {fastAuthoringState.checks &&
+              fastAuthoringState.checks.length > 0 ? (
+                <div className="mt-2 rounded border border-slate-200 bg-slate-50 p-2">
+                  <p className="text-[10px] font-semibold text-slate-600">
+                    自動チェック
+                  </p>
+                  <ul className="mt-1 space-y-1 text-[10px] leading-4">
+                    {fastAuthoringState.checks.map((check) => (
+                      <li key={check.id} className="flex items-start gap-1.5">
+                        <span
+                          className={
+                            check.status === "ok"
+                              ? "font-semibold text-emerald-700"
+                              : "font-semibold text-amber-700"
+                          }
+                        >
+                          {check.status === "ok" ? "OK" : "確認"}
+                        </span>
+                        <span className="min-w-0 text-slate-600">
+                          <span className="font-semibold">{check.label}: </span>
+                          {check.message}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {fastAuthoringState.spawnPreviewDataUrl ? (
+                <div className="mt-2">
+                  <p className="mb-1 text-[10px] font-semibold text-slate-500">
+                    Spawnから
+                  </p>
+                  <img
+                    src={fastAuthoringState.spawnPreviewDataUrl}
+                    alt="Spawnから見た生成後のScene View"
+                    className="w-full rounded border border-slate-200 bg-slate-950 object-cover"
+                  />
+                </div>
+              ) : null}
+              {fastAuthoringState.previewDataUrl ? (
+                <div className="mt-2">
+                  <p className="mb-1 text-[10px] font-semibold text-slate-500">
+                    俯瞰
+                  </p>
+                  <img
+                    src={fastAuthoringState.previewDataUrl}
+                    alt="俯瞰で見た生成後のScene View"
+                    className="w-full rounded border border-slate-200 bg-slate-950 object-cover"
+                  />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <details
+            open={!jevStatus?.configured}
+            className="rounded-md border border-slate-200 bg-white p-2"
+          >
+            <summary className="cursor-pointer select-none text-[11px] font-semibold text-slate-700">
+              Jev接続設定
+            </summary>
+            <div className="mt-2 space-y-2">
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold text-slate-600">
+                  TypeSafe APIキー
+                </span>
+                <input
+                  type="password"
+                  value={jevApiKey}
+                  autoComplete="off"
+                  disabled={jevBusy}
+                  onChange={(event) => setJevApiKey(event.target.value)}
+                  placeholder={jevStatus?.configured ? "新しいキーに変更" : "APIキーを入力"}
+                  className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none disabled:bg-slate-100"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={jevBusy || !jevApiKey.trim()}
+                onClick={() => void saveJevApiKey()}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50 disabled:bg-slate-100 disabled:text-slate-400"
+              >
+                {jevBusy
+                  ? "処理中"
+                  : jevStatus?.configured
+                    ? "APIキーを更新"
+                    : "APIキーを保存"}
+              </button>
+              {jevStatus?.configured ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={jevBusy}
+                    onClick={() => void testJevConnection()}
+                    className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    接続確認
+                  </button>
+                  <button
+                    type="button"
+                    disabled={jevBusy}
+                    onClick={() => void clearJevApiKey()}
+                    className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 font-semibold text-slate-500 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    キーを削除
+                  </button>
+                </div>
+              ) : null}
+              <p className="text-[10px] leading-4 text-slate-500">
+                APIキーはデスクトップ版のローカル設定に保存し、WebViewやMCP応答には返しません。モデルは {jevStatus?.model ?? "jev-latest"} を使います。
+              </p>
+              {jevMessage ? (
+                <p className="rounded border border-emerald-200 bg-emerald-50 p-2 text-[11px] text-emerald-800">
+                  {jevMessage}
+                </p>
+              ) : null}
+              {jevError ? (
+                <p
+                  role="alert"
+                  className="rounded border border-rose-200 bg-rose-50 p-2 text-[11px] text-rose-700"
+                >
+                  {jevError}
+                </p>
+              ) : null}
+            </div>
+          </details>
+        </div>
+      </section>
+
       <div className="flex items-start justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
         <div>
           <div className="flex items-center gap-2 font-semibold text-slate-800">
@@ -371,6 +760,8 @@ export function AiConnectionPanel({
           シーンを操作するには、設定したAIクライアントで指示してください。
         </p>
       </section>
+
+
 
       {error ? (
         <div role="alert" className="rounded-md border border-rose-200 bg-rose-50 p-2.5 text-rose-700">

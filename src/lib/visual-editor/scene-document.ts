@@ -640,6 +640,34 @@ export type RegisteredSceneComponent =
  */
 export type SceneComponent = RegisteredSceneComponent;
 
+export type FastAuthoringEntityMetadata = {
+  /** Stable marker for one Fast Authoring run. */
+  generationId: string;
+  /** Semantic area used for safe partial regeneration. */
+  zoneId: "entrance" | "main" | "rest" | "view" | "perimeter";
+  /** Elements created from the same recipe/helper share a group. */
+  groupId: string;
+  /** Human-readable role such as 主役 / 景観 / 家具・設備. */
+  role: string;
+  recipeId?: string;
+  instanceIndex?: number;
+  /**
+   * Editor-only placement intent retained for later local repair.
+   * The runtime ignores it; reopening Studio can still explain why an object
+   * was moved and re-run the same terrain constraints without asking Jev.
+   */
+  placement?: {
+    requestedPosition: Vec3;
+    maxSlopeDegrees: number;
+    flatRadius: number;
+  };
+};
+
+export type SceneEntityAuthoringMetadata = {
+  /** Editor-only provenance for entities created by Fast Authoring. */
+  fastAuthoring?: FastAuthoringEntityMetadata;
+};
+
 export type SceneEntity = {
   id: string;
   name: string;
@@ -647,6 +675,8 @@ export type SceneEntity = {
   children: string[];
   enabled: boolean;
   components: RegisteredSceneComponent[];
+  /** Editor-only metadata. The runtime compiler intentionally ignores it. */
+  authoring?: SceneEntityAuthoringMetadata;
   /** Editor-only link for a node exposed from one shared skinned/animated Model. */
   modelNode?: ModelNodeAuthoringMetadata;
 };

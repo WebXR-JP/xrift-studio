@@ -39,6 +39,31 @@ export function runEntityClipboardFixtureAssertions(): void {
   assert(plainId !== "tree", "a new root ID is allocated");
   const insertedIds = new Set(plain.rootEntityIds);
 
+  const generatedScene = fixtureScene();
+  generatedScene.entities.tree.authoring = {
+    fastAuthoring: {
+      generationId: "fast-fixture",
+      zoneId: "rest",
+      groupId: "fast-fixture:rest:bench",
+      role: "家具・設備",
+      recipeId: "bench",
+      instanceIndex: 0,
+    },
+  };
+  const generatedClipboard = copyEntityHierarchy(generatedScene, ["tree"]);
+  assert(generatedClipboard, "Fast Authoring Entity can be copied manually");
+  const manualCopy = pasteEntityHierarchy(
+    generatedScene,
+    generatedClipboard,
+    null,
+  );
+  assert(manualCopy, "manual copy of a generated Entity succeeds");
+  assert(
+    !manualCopy.scene.entities[manualCopy.rootEntityIds[0]].authoring
+      ?.fastAuthoring,
+    "manual copy detaches Fast Authoring provenance so later Zone replacement cannot delete it",
+  );
+
   for (const [index, axis] of ENTITY_MIRROR_AXES.entries()) {
     const result = pasteEntityHierarchy(scene, clipboard, null, { mirrorAxis: axis });
     assert(result, `${axis} mirror succeeds`);

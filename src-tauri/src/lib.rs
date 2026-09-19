@@ -13,6 +13,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_opener::OpenerExt;
 
 mod external_store;
+mod jev;
 mod project_transfer;
 mod hierarchy_transfer;
 pub mod mcp;
@@ -6074,6 +6075,11 @@ pub fn run() {
             external_store::list_external_store_assets,
             external_store::get_external_store_asset_options,
             external_store::install_external_store_asset,
+            jev::get_jev_status,
+            jev::set_jev_api_key,
+            jev::clear_jev_api_key,
+            jev::test_jev_connection,
+            jev::jev_system_one,
             read_world_file,
             write_world_file,
             clone_classic_project_repository,

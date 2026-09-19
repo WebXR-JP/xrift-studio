@@ -72,6 +72,18 @@ export function runMcpHarnessGuardFixtureAssertions(): void {
     "Looking at the frame resets the streak, because that is exactly what the guard asks for",
   );
 
+  const decisionReadKeepsStreak = run([
+    ["sculpt_terrain", { entityId: "t1" }],
+    ["sculpt_terrain", { entityId: "t1" }],
+    ["decide_fast_authoring", { prompt: "山" }],
+    ["sculpt_terrain", { entityId: "t1" }],
+  ]);
+  assert(
+    decisionReadKeepsStreak.warnings === 1 &&
+      decisionReadKeepsStreak.state.count === 3,
+    "Jev decisions are read-only and must not reset an edit streak",
+  );
+
   const unrelatedWriteBreaksStreak = run([
     ["sculpt_terrain", { entityId: "t1" }],
     ["sculpt_terrain", { entityId: "t1" }],
