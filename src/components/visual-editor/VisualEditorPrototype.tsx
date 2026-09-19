@@ -8056,6 +8056,7 @@ export function VisualEditorPrototype({
         recipeId?: string;
         instanceIndex?: number;
         groupId: string;
+        requestedPosition: Vec3;
         maxSlopeDegrees: number;
         flatRadius: number;
       }> = [];
@@ -8548,6 +8549,7 @@ export function VisualEditorPrototype({
             recipeId: `helper:${primitive.kind}`,
             instanceIndex: 0,
             groupId: `${generationId}:${primitive.zoneId}:helper:${primitive.kind}`,
+            requestedPosition: primitive.position,
             maxSlopeDegrees,
             flatRadius,
           });
@@ -8672,6 +8674,7 @@ export function VisualEditorPrototype({
               recipeId: selected.recipeId,
               instanceIndex: selected.instanceIndex,
               groupId: `${generationId}:${selected.zoneId}:${selected.recipeId}`,
+              requestedPosition: selected.position,
               maxSlopeDegrees,
               flatRadius,
             });
@@ -8731,6 +8734,7 @@ export function VisualEditorPrototype({
             recipeId: facility.recipeId,
             instanceIndex: 0,
             groupId: `${generationId}:${facility.zoneId}:${facility.recipeId}`,
+            requestedPosition: facility.position,
             maxSlopeDegrees,
             flatRadius,
           });
@@ -8763,6 +8767,11 @@ export function VisualEditorPrototype({
                 ...(generated.instanceIndex !== undefined
                   ? { instanceIndex: generated.instanceIndex }
                   : {}),
+                placement: {
+                  requestedPosition: generated.requestedPosition,
+                  maxSlopeDegrees: generated.maxSlopeDegrees,
+                  flatRadius: generated.flatRadius,
+                },
               },
             );
           }
