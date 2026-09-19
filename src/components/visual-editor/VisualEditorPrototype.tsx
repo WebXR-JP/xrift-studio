@@ -5210,6 +5210,9 @@ export function VisualEditorPrototype({
               scene: currentBundle.scene,
               projectName: currentBundle.project.metadata.name,
               sceneName: currentBundle.scene.name,
+              selectedEntityIds: sceneSelectionRef.current?.id
+                ? [sceneSelectionRef.current.id]
+                : [],
             });
             const jev = await tauri.jevSystemOne(planned.request);
             const decision = resolveFastAuthoringDecision({
@@ -5218,6 +5221,9 @@ export function VisualEditorPrototype({
               catalog: planned.catalog,
             });
             const actionPlan: Array<{
+            const allowWorldMutation =
+              decision.operation === "create" ||
+              decision.mutationScope === "world";
               tool: string;
               arguments: Record<string, unknown>;
               reason: string;
@@ -5227,7 +5233,7 @@ export function VisualEditorPrototype({
                 instructions: string;
               };
             }> = [];
-            if (decision.terrain !== "none") {
+            if (allowWorldMutation && decision.terrain !== "none") {
               actionPlan.push({
                 tool: "create_terrain_from_preset",
                 arguments: {
@@ -5241,6 +5247,7 @@ export function VisualEditorPrototype({
               currentBundle.scene,
             );
             if (
+              allowWorldMutation &&
               decision.terrainSurface !== "none" &&
               decision.terrain === "none" &&
               existingTerrainEntityId
@@ -5255,6 +5262,7 @@ export function VisualEditorPrototype({
               });
             }
             if (
+              allowWorldMutation &&
               decision.grassPreset !== "keep" &&
               decision.terrain === "none" &&
               existingTerrainEntityId
@@ -5269,6 +5277,7 @@ export function VisualEditorPrototype({
               });
             }
             if (
+              allowWorldMutation &&
               decision.skybox !== "gradient" &&
               decision.skybox !== "off"
             ) {
@@ -5281,39 +5290,42 @@ export function VisualEditorPrototype({
                 reason: "Jevが選んだSkybox Shader Materialを追加",
               });
             }
-            actionPlan.push({
-              tool: "update_scene_settings",
-              arguments: {
-                ...FAST_AUTHORING_MOOD_SETTINGS[decision.mood],
-                skybox:
-                  decision.skybox === "off"
-                    ? {
-                        ...(FAST_AUTHORING_MOOD_SETTINGS[decision.mood].skybox as Record<string, unknown>),
-                        enabled: false,
-                        iblEnabled: false,
-                        imageAssetId: null,
-                        materialAssetId: null,
-                      }
-                    : decision.skybox === "gradient"
+            if (allowWorldMutation) {
+              actionPlan.push({
+                tool: "update_scene_settings",
+                arguments: {
+                  ...FAST_AUTHORING_MOOD_SETTINGS[decision.mood],
+                  skybox:
+                    decision.skybox === "off"
                       ? {
                           ...(FAST_AUTHORING_MOOD_SETTINGS[decision.mood].skybox as Record<string, unknown>),
+                          enabled: false,
                           iblEnabled: false,
                           imageAssetId: null,
                           materialAssetId: null,
                         }
-                      : {
-                          ...(FAST_AUTHORING_MOOD_SETTINGS[decision.mood].skybox as Record<string, unknown>),
-                          enabled: true,
-                          iblEnabled: false,
-                          imageAssetId: null,
-                        },
-                postprocessing:
-                  FAST_AUTHORING_FINISH_SETTINGS[decision.finish],
-                vegetation: FAST_AUTHORING_WIND_SETTINGS[decision.wind],
-              },
-              reason:
-                "Skybox・環境光・Fog・Post Effect・Vegetation Windをまとめて設定",
-            });
+                      : decision.skybox === "gradient"
+                        ? {
+                            ...(FAST_AUTHORING_MOOD_SETTINGS[decision.mood].skybox as Record<string, unknown>),
+                            iblEnabled: false,
+                            imageAssetId: null,
+                            materialAssetId: null,
+                          }
+                        : {
+                            ...(FAST_AUTHORING_MOOD_SETTINGS[decision.mood].skybox as Record<string, unknown>),
+                            enabled: true,
+                            iblEnabled: false,
+                            imageAssetId: null,
+                          },
+                  postprocessing:
+                    FAST_AUTHORING_FINISH_SETTINGS[decision.finish],
+                  vegetation: FAST_AUTHORING_WIND_SETTINGS[decision.wind],
+                },
+                reason:
+                  "Skybox・環境光・Fog・Post Effect・Vegetation Windをまとめて設定",
+              });
+  
+            }
             for (const selected of decision.recipes) {
               const recipe = planned.catalog.recipes.find(
                 (candidate) => candidate.id === selected.recipeId,
@@ -5364,6 +5376,8 @@ export function VisualEditorPrototype({
                   typeof jev.model === "string" ? jev.model : "jev-latest",
                 usage: jev.usage ?? null,
                 decisions: {
+                  operation: decision.operation,
+                  mutationScope: decision.mutationScope,
                   terrain: decision.terrain,
                   mood: decision.mood,
                   density: decision.density,
@@ -8321,6 +8335,9 @@ export function VisualEditorPrototype({
           scene: initialBundle.scene,
           projectName: initialBundle.project.metadata.name,
           sceneName: initialBundle.scene.name,
+          selectedEntityIds: sceneSelectionRef.current?.id
+            ? [sceneSelectionRef.current.id]
+            : [],
         });
         const jev = await tauri.jevSystemOne(planned.request);
         const decision = resolveFastAuthoringDecision({
@@ -8378,8 +8395,11 @@ export function VisualEditorPrototype({
           previewDataUrl: null,
         });
 
+        const allowWorldMutation =
+          decision.operation === "create" ||
+          decision.mutationScope === "world";
         let terrainEntityId = findTerrainEntityId(bundleRef.current.scene);
-        if (decision.terrain !== "none") {
+        if (allowWorldMutation && decision.terrain !== "none") {
           const terrainOutcome = commitToolOutcome(
             "create_terrain_from_preset",
             {
@@ -8400,6 +8420,7 @@ export function VisualEditorPrototype({
         }
 
         if (
+          allowWorldMutation &&
           terrainEntityId &&
           decision.terrainSurface !== "none"
         ) {
@@ -8419,6 +8440,7 @@ export function VisualEditorPrototype({
         }
 
         if (
+          allowWorldMutation &&
           terrainEntityId &&
           decision.grassPreset !== "keep"
         ) {
@@ -8437,59 +8459,71 @@ export function VisualEditorPrototype({
           }));
         }
 
-        let skyboxSettings: Record<string, unknown> = {
-          ...(FAST_AUTHORING_MOOD_SETTINGS[decision.mood].skybox as Record<string, unknown>),
-          iblEnabled: false,
-          imageAssetId: null,
-          materialAssetId: null,
-        };
-        if (decision.skybox === "off") {
-          skyboxSettings = {
-            ...skyboxSettings,
-            enabled: false,
+        if (allowWorldMutation) {
+          let skyboxSettings: Record<string, unknown> = {
+            ...(FAST_AUTHORING_MOOD_SETTINGS[decision.mood].skybox as Record<string, unknown>),
+            iblEnabled: false,
+            imageAssetId: null,
+            materialAssetId: null,
           };
-        } else if (decision.skybox !== "gradient") {
-          const skyMaterial = commitToolOutcome(
-            "create_material_from_preset",
+          if (decision.skybox === "off") {
+            skyboxSettings = {
+              ...skyboxSettings,
+              enabled: false,
+            };
+          } else if (decision.skybox !== "gradient") {
+            const skyMaterial = commitToolOutcome(
+              "create_material_from_preset",
+              {
+                kind: "sky",
+                presetId: decision.skybox,
+              },
+              true,
+            );
+            const materialAssetId =
+              typeof skyMaterial.result.materialAssetId === "string"
+                ? skyMaterial.result.materialAssetId
+                : null;
+            if (materialAssetId) {
+              skyboxSettings = {
+                ...skyboxSettings,
+                enabled: true,
+                materialAssetId,
+              };
+              applied.push("Skybox Shader");
+              setJevFastAuthoringState((current) => ({
+                ...current,
+                applied: [...applied],
+              }));
+            }
+          }
+  
+          commitToolOutcome(
+            "update_scene_settings",
             {
-              kind: "sky",
-              presetId: decision.skybox,
+              ...FAST_AUTHORING_MOOD_SETTINGS[decision.mood],
+              skybox: skyboxSettings,
+              postprocessing: FAST_AUTHORING_FINISH_SETTINGS[decision.finish],
+              vegetation: FAST_AUTHORING_WIND_SETTINGS[decision.wind],
             },
             true,
           );
-          const materialAssetId =
-            typeof skyMaterial.result.materialAssetId === "string"
-              ? skyMaterial.result.materialAssetId
-              : null;
-          if (materialAssetId) {
-            skyboxSettings = {
-              ...skyboxSettings,
-              enabled: true,
-              materialAssetId,
-            };
-            applied.push("Skybox Shader");
-            setJevFastAuthoringState((current) => ({
-              ...current,
-              applied: [...applied],
-            }));
-          }
+          applied.push("雰囲気");
+          setJevFastAuthoringState((current) => ({
+            ...current,
+            applied: [...applied],
+          }));
+  
+  
+        } else {
+          applied.push(
+            decision.operation === "repair"
+              ? "World全体設定は保持して局所修復"
+              : decision.operation === "polish"
+                ? "World全体設定は保持して局所仕上げ"
+                : "World全体設定は保持",
+          );
         }
-
-        commitToolOutcome(
-          "update_scene_settings",
-          {
-            ...FAST_AUTHORING_MOOD_SETTINGS[decision.mood],
-            skybox: skyboxSettings,
-            postprocessing: FAST_AUTHORING_FINISH_SETTINGS[decision.finish],
-            vegetation: FAST_AUTHORING_WIND_SETTINGS[decision.wind],
-          },
-          true,
-        );
-        applied.push("雰囲気");
-        setJevFastAuthoringState((current) => ({
-          ...current,
-          applied: [...applied],
-        }));
 
         for (const primitive of decision.primitives) {
           const maxSlopeDegrees =
