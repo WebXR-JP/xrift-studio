@@ -75,6 +75,25 @@ export type FastAuthoringOperation =
 
 export type FastAuthoringMutationScope = "local" | "zone" | "world";
 
+export type FastAuthoringFocusDomain =
+  | "scene"
+  | "material"
+  | "transform"
+  | "lighting"
+  | "terrain"
+  | "collider"
+  | "interaction"
+  | "performance"
+  | "verification";
+
+export type FastAuthoringJudgementSignals = {
+  focusDomain: FastAuthoringFocusDomain;
+  needsVisualReview: number | null;
+  needsSystemTwo: number | null;
+  issueSeverity: number | null;
+  issueSeverityConfidence: number | null;
+};
+
 export type FastAuthoringZoneId =
   | "entrance"
   | "main"
@@ -208,6 +227,7 @@ export type FastAuthoringDecision = {
   clarificationMessage: string | null;
   operation: FastAuthoringOperation;
   mutationScope: FastAuthoringMutationScope;
+  judgement: FastAuthoringJudgementSignals;
   editScope: FastAuthoringEditScope;
   terrain: string;
   mood: FastAuthoringMood;
@@ -402,6 +422,21 @@ export const FAST_AUTHORING_MUTATION_SCOPE_CRITERIA: Record<
     "指定されたZoneだけ変更する。別ZoneとWorld全体の雰囲気は保持する",
   world:
     "Terrain、空、環境光、Post Effectを含むWorld全体を変更してよい",
+};
+
+export const FAST_AUTHORING_FOCUS_DOMAIN_CRITERIA: Record<
+  FastAuthoringFocusDomain,
+  string
+> = {
+  scene: "World構成、配置、Recipe追加、Zone構成そのもの",
+  material: "Material、Texture、見た目の貼り・質感・色・透明など",
+  transform: "位置、回転、大きさ、接地、向き、間隔",
+  lighting: "Light、明るさ、光源、夜の視認性、影",
+  terrain: "Terrain、地表、草、高さ、傾斜、歩ける面",
+  collider: "Collider、当たり判定、歩行、Trigger",
+  interaction: "Script、Interactivity、公式設備の動作",
+  performance: "重さ、Entity数、Light、Particle、描画負荷",
+  verification: "変更せず、状態・見た目・動作を確認する",
 };
 export const FAST_AUTHORING_MOOD_CRITERIA: Record<
   FastAuthoringMood,
@@ -926,6 +961,44 @@ export function buildFastAuthoringRequest({
         "今回触る範囲を選んでください。選択Entityや具体的な不具合だけならlocal、既存の一角だけならzone、地形・空・環境まで変える場合だけworld。",
       criteria: FAST_AUTHORING_MUTATION_SCOPE_CRITERIA,
     },
+    focusDomain: {
+      type: "choice",
+      instructions:
+        "今回の依頼で中心となる1つの編集領域を選んでください。複数に見えても、最初に調べるべき主領域を1つだけ選びます。",
+      criteria: FAST_AUTHORING_FOCUS_DOMAIN_CRITERIA,
+    },
+    needsVisualReview: {
+      type: "noul",
+      instructions:
+        "この依頼を正しく判断するには、Scene Viewや対象Entityの見た目を画像で確認する必要がありますか？",
+      criteria: {
+        true:
+          "見た目の違和感、Materialの剥がれ、色、構図、遮蔽など画像確認が重要",
+        false:
+          "SceneDocumentの構造化状態と数値だけで十分に判断できる",
+      },
+    },
+    needsSystemTwo: {
+      type: "noul",
+      instructions:
+        "この依頼は、有限候補からの高速判断だけではなく、創造的な設計・新しい文章やコード・複雑な原因分析を行う大きいモデルへ回す価値がありますか？",
+      criteria: {
+        true:
+          "新規設計、複雑な原因分析、未知の解決策、コードや表現の生成が必要",
+        false:
+          "既存のtyped tool、既存Recipe、数値検証、局所修正だけで処理できる",
+      },
+    },
+    issueSeverity: {
+      type: "score",
+      instructions:
+        "今回の問題や改善要求が制作をどの程度妨げているかを評価してください。",
+      criteria: [
+        "見た目の微調整。制作や利用を妨げない",
+        "品質または使いやすさが明確に落ちるが、制作は続けられる",
+        "移動・表示・操作・制作の主要部分が成立しない",
+      ],
+    },
     intentClarity: {
       type: "choice",
       instructions:
@@ -1136,6 +1209,44 @@ function selectedChoice(
     ? selected
     : fallback;
 }
+function answerNoul(
+  answers: Record<string, unknown>,
+  name: string,
+): number | null {
+  const answer = answers[name];
+  if (!answer || typeof answer !== "object") return null;
+  const value = (answer as Record<string, unknown>).noul;
+  return typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= 1
+    ? value
+    : null;
+}
+
+function answerScore(
+  answers: Record<string, unknown>,
+  name: string,
+): { score: number | null; confidence: number | null } {
+  const answer = answers[name];
+  if (!answer || typeof answer !== "object") {
+    return { score: null, confidence: null };
+  }
+  const record = answer as Record<string, unknown>;
+  const score =
+    typeof record.score === "number" && Number.isFinite(record.score)
+      ? record.score
+      : null;
+  const confidence =
+    typeof record.confidence === "number" &&
+    Number.isFinite(record.confidence) &&
+    record.confidence >= 0 &&
+    record.confidence <= 1
+      ? record.confidence
+      : null;
+  return { score, confidence };
+}
+
 
 function answerConfidence(
   answers: Record<string, unknown>,
@@ -2346,6 +2457,20 @@ export function resolveFastAuthoringDecision({
     FAST_AUTHORING_MUTATION_SCOPE_CRITERIA,
     operation === "create" ? "world" : "zone",
   ) as FastAuthoringMutationScope;
+  const focusDomain = selectedChoice(
+    answers,
+    "focusDomain",
+    FAST_AUTHORING_FOCUS_DOMAIN_CRITERIA,
+    operation === "create" ? "scene" : "verification",
+  ) as FastAuthoringFocusDomain;
+  const severity = answerScore(answers, "issueSeverity");
+  const judgement: FastAuthoringJudgementSignals = {
+    focusDomain,
+    needsVisualReview: answerNoul(answers, "needsVisualReview"),
+    needsSystemTwo: answerNoul(answers, "needsSystemTwo"),
+    issueSeverity: severity.score,
+    issueSeverityConfidence: severity.confidence,
+  };
   const editScope = selectedChoice(
     answers,
     "editScope",
@@ -2697,7 +2822,28 @@ export function resolveFastAuthoringDecision({
     },
     {
       label: "工程",
-      value: operation + " / " + mutationScope,
+      value:
+        operation +
+        " / " +
+        mutationScope +
+        " / " +
+        judgement.focusDomain,
+    },
+    {
+      label: "判定シグナル",
+      value:
+        "visual " +
+        (judgement.needsVisualReview === null
+          ? "-"
+          : judgement.needsVisualReview.toFixed(2)) +
+        " / system2 " +
+        (judgement.needsSystemTwo === null
+          ? "-"
+          : judgement.needsSystemTwo.toFixed(2)) +
+        " / severity " +
+        (judgement.issueSeverity === null
+          ? "-"
+          : judgement.issueSeverity.toFixed(2)),
     },
     {
       label: "編集範囲",
@@ -2814,6 +2960,7 @@ export function resolveFastAuthoringDecision({
     clarificationMessage,
     operation,
     mutationScope,
+    judgement,
     editScope,
     terrain,
     mood,
