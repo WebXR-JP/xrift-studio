@@ -819,6 +819,13 @@ async function uploadStagedProjectWithSdk(input: {
 
   const client = new XriftClient({ token: input.token });
   const uploaded = await client.worlds.upload(collected.files, {
+    // Re-publishing must target the already verified remote. Omitting worldId
+    // makes the SDK create a new world before the Rust advancement guard can
+    // notice the mismatch, leaving an orphan duplicate on XRift.
+    worldId: resolveExistingPublicationId(
+      input.documents.project.lastPublication,
+      input.kind,
+    ),
     name: config.title,
     description: config.description,
     thumbnailPath: config.thumbnailPath,
@@ -874,6 +881,18 @@ async function uploadStagedProjectWithSdk(input: {
  * The upload has to send the same name, ignore rules and physics the CLI would
  * have sent, and those live in this file rather than in the Studio documents.
  */
+export function resolveExistingPublicationId(
+  publication: VisualCompilerDocuments["project"]["lastPublication"],
+  kind: ProjectKind,
+): string | undefined {
+  const value =
+    kind === "world"
+      ? publication?.worldId ?? publication?.contentId
+      : publication?.itemId ?? publication?.contentId;
+  const normalized = value?.trim();
+  return normalized || undefined;
+}
+
 export type StagedXriftConfig = {
   distDir: string;
   title: string;

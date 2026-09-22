@@ -3,6 +3,7 @@ import { DEFAULT_IGNORE_PATTERNS } from "@xrift/sdk";
 import {
   assertCompiledModuleEntry,
   parseStagedXriftConfig,
+  resolveExistingPublicationId,
 } from "./publish";
 import { describeVisualUploadCapabilities } from "./upload";
 import {
@@ -90,6 +91,24 @@ function assertStagedConfigParsing(): void {
   assertThrows(
     () => assertCompiledModuleEntry([{ remotePath: "index-abc.js" }]),
     "a built dist without remoteEntry.js was accepted",
+  );
+  assert(
+    resolveExistingPublicationId(
+      { uploadedAt: "2026-09-22T00:00:00.000Z", worldId: "world-existing" },
+      "world",
+    ) === "world-existing",
+    "SDK re-publish lost the existing World ID",
+  );
+  assert(
+    resolveExistingPublicationId(
+      { uploadedAt: "2026-09-22T00:00:00.000Z", contentId: "legacy-world-id" },
+      "world",
+    ) === "legacy-world-id",
+    "legacy publication contentId was not reused",
+  );
+  assert(
+    resolveExistingPublicationId(undefined, "world") === undefined,
+    "an unpublished project invented a remote World ID",
   );
   assertThrows(
     () => parseStagedXriftConfig("{ not json", "world"),
