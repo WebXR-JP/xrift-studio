@@ -2473,6 +2473,18 @@ function renderEntity(
     );
     localContent.length = 0;
     if (ownedContent) localContent.push(ownedContent);
+  } else if (colliders.length > 0) {
+    // A collider-only Entity gets an implicit body for its own content only.
+    // Child Entities keep their own physics bodies; wrapping them here would
+    // produce RigidBody -> RigidBody nesting after publication.
+    const localPhysicsContent = renderColliderBody(
+      entity,
+      colliders,
+      localContent.join("\n"),
+      context,
+    );
+    localContent.length = 0;
+    if (localPhysicsContent) localContent.push(localPhysicsContent);
   }
   for (const childId of entity.children) {
     const child = context.scene.entities[childId];
@@ -2516,9 +2528,7 @@ function renderEntity(
   }
   children = ownRigidBody
     ? renderOwnedRigidBody(entity, ownRigidBody, children, context)
-    : inheritedRigidBody
-      ? children
-      : renderColliderBody(entity, colliders, children, context);
+    : children;
   context.activeEntityIds.delete(entityId);
   const position = vectorProp(transform?.position ?? [0, 0, 0]);
   const rotation = vectorProp(transform?.rotation ?? [0, 0, 0]);
