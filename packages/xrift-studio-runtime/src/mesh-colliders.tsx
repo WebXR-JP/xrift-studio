@@ -1,5 +1,5 @@
 import { createPortal } from "@react-three/fiber";
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Component, createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { BallCollider, ConvexHullCollider, CuboidCollider, TrimeshCollider, useRapier, type RapierCollider } from "@react-three/rapier";
 import type { Group, Object3D } from "three";
 import type { XriftColliderLoadRegistration, XriftColliderLoadState, XriftColliderLoadTracker } from "./mesh-collider-status.js";
@@ -15,6 +15,31 @@ export type XriftMeshCollidersProps = {
   restitution?: number;
 };
 type XriftColliderProjection = { shapes: readonly XriftMeshColliderShape[]; body: Object3D | null; revision: number };
+
+type XriftMeshColliderErrorBoundaryProps = {
+  children: ReactNode;
+  onError(error: Error): void;
+};
+
+class XriftMeshColliderErrorBoundary extends Component<
+  XriftMeshColliderErrorBoundaryProps,
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error): void {
+    this.props.onError(error);
+  }
+
+  render(): ReactNode {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
 
 /** Child effects have created the actual Rapier shapes before this reports ready. */
 function XriftCommittedMeshColliders({ projection, type, surface, report }: {
@@ -95,7 +120,21 @@ export function XRiftStudioMeshColliders({ type, children, ...surface }: XriftMe
     return () => { active = false; revision.current += 1; stop(); };
   }, [children, type, tracker]);
   const colliders = projection.revision > 0
-    ? <XriftCommittedMeshColliders key={projection.revision} projection={projection} type={type} surface={surface} report={report} />
+    ? (
+      <XriftMeshColliderErrorBoundary
+        key={projection.revision}
+        onError={(error) => {
+          const message = error instanceof Error ? error.message : String(error);
+          registration.current?.update({
+            status: "error",
+            message: `Mesh Colliderを物理空間に登録できませんでした: ${message}`,
+          });
+          console.error("Mesh Colliderを物理空間に登録できませんでした:", error);
+        }}
+      >
+        <XriftCommittedMeshColliders projection={projection} type={type} surface={surface} report={report} />
+      </XriftMeshColliderErrorBoundary>
+    )
     : null;
   return (
     <group userData={{ r3RapierType: "MeshCollider" }}>
