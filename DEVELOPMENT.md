@@ -61,7 +61,7 @@ GitHub Pages の紹介ページは、最新リリースのインストーラー�
 - ビルド時: `pnpm release:snapshot` が公開済みの最新リリースを読み、`src/preview/generated/release-snapshot.ts` を書き換えます。生成物はコミットします。取得に失敗した場合は既存のスナップショットを保ったまま終了し、ビルドを止めません。
 - 表示後: ページが GitHub の公開 API へ問い合わせ、返ってきたリリースでスナップショットを置き換えます。1 ページの読み込みにつき 1 回だけ問い合わせます。
 
-`.github/workflows/pages.yml` はビルド前にスナップショットを更新し、リリースの公開時にも再デプロイします。リリースの作り方 (`.github/workflows/release.yml`) は変更していません。アセット名の規則 (`[name]_[version]_[platform]_[arch]_[mode][setup][ext]`) を変える場合は、`src/preview/lib/release-download.ts` の判定も合わせて更新してください。状態設計は [マイクロインタラクション Wiki](./docs/UX_INTERACTIONS.md) の F-41 にあります。
+`.github/workflows/pages.yml` はビルド前にスナップショットを更新し、リリースの公開時にも再デプロイします。アセット名の規則 (`[name]_[version]_[platform]_[arch]_[mode][setup][ext]`) を変える場合は、`src/preview/lib/release-download.ts` とパッケージ定義の生成処理も合わせて更新してください。状態設計は [マイクロインタラクション Wiki](./docs/UX_INTERACTIONS.md) の F-41 にあります。
 
 ## 配布ビルド
 
@@ -135,6 +135,18 @@ GitHub Actions のリポジトリ Secrets に次を登録してください。
 | Linux | `.deb` / `.rpm` / `.AppImage` |
 
 **プレリリース／ドラフト** として公開するオプションもあります（workflow 実行時のフォーム参照）。
+
+### HomebrewとWinGetの更新
+
+通常リリースの公開後、**Update package managers** が配布ファイルのURLとSHA-256から定義を更新し、このリポジトリに更新PRを作ります。HomebrewはPRのマージ後に配布版が切り替わります。WinGetの公式一覧への登録・更新は、生成した定義を別途提出します。
+
+```bash
+node scripts/update-package-managers.mjs
+node scripts/update-package-managers.mjs --check
+node --test scripts/update-package-managers.test.mjs scripts/winget-manifest.test.mjs
+```
+
+最初のコマンドは公開済みの最新リリースを取得し、`--check`は保存済みの情報と生成物の整合をネット接続なしで確認します。初回のActions設定、生成物の回収、WinGetへの提出、OS別の動作確認は[パッケージ配布の管理](./docs/PACKAGE_MANAGERS.md#配布定義を更新する)を参照してください。
 
 ### 所要時間の作り
 

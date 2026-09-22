@@ -14,6 +14,8 @@
 
 OS別の導入手順は[インストールガイド](./docs/guide/installation.md)を参照してください。ブラウザ版では、パソコンやiPadからビジュアルエディターで制作できます。プロジェクトはブラウザに自動保存され、`.xriftstudio`ファイルでデスクトップ版へ引き継げます。XRiftへの公開やMCPでのAI接続はデスクトップ版を使います。
 
+macOSはHomebrewでもインストールできます。Windows向けのWinGetは登録準備中で、ローカルの定義ファイルから先に試せます。手順は[HomebrewとWinGet](./docs/PACKAGE_MANAGERS.md)を参照してください。
+
 ## 作りたいものから探す
 
 | やりたいこと | ガイド |

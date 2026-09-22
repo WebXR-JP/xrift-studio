@@ -30,6 +30,7 @@
 | --- | --- |
 | AIからの操作 | [MCPツール](./MCP_EDITOR_TOOLS.md) · [制作状態と実行制御](./WORLD_AUTHORING_HARNESS.md) |
 | 動作の検証 | [画面デバッグ](./MCP_DEBUGGING.md) · [リリース前の検証](./RELEASE_E2E.md) |
+| Homebrew・WinGetでの配布 | [導入・定義の更新・初回登録](./PACKAGE_MANAGERS.md) |
 | 内蔵モデルの更新記録 | [モデルの作成・再生成](./asset-refresh/README.md) · [提供元の検証記録](./asset-refresh/REPORT.ja.md) |
 | 不具合の報告 | [報告支援の設定](./BUG_REPORT_GPT.md) |
 | AI向けの作業ルール | [AGENT.md](../AGENT.md) |
