@@ -2060,6 +2060,9 @@ export function runVisualCompilerFixtureAssertions(
   // Visual Editor desktop Publish uses classic-jsx. Keep the visible GLB in
   // the same Rigid Body when one Mesh Collider and multiple Box Colliders are
   // authored; only ambiguous duplicate physics components are rejected.
+  // The prototype object already carries an auto-fit Box Collider. Exclude
+  // pre-existing physics so this scene authors exactly one Mesh Collider and
+  // two Box Colliders; the compiler must keep every authored collider.
   const modelPhysicsScene: SceneDocument = {
     ...modelScene,
     entities: {
@@ -2067,7 +2070,10 @@ export function runVisualCompilerFixtureAssertions(
       [modelEntity.id]: {
         ...modelScene.entities[modelEntity.id],
         components: [
-          ...modelScene.entities[modelEntity.id].components,
+          ...modelScene.entities[modelEntity.id].components.filter(
+            (component) =>
+              component.type !== "collider" && component.type !== "rigid-body",
+          ),
           createRigidBodyComponent("fixture-model-body", {
             bodyType: "fixed",
             autoColliders: "none",
@@ -2114,26 +2120,6 @@ export function runVisualCompilerFixtureAssertions(
     modelBodyStart >= 0 && modelBodyEnd > modelBodyStart
       ? modelPhysicsSource.slice(modelBodyStart, modelBodyEnd + "</RigidBody>".length)
       : "";
-  console.log("DEBUG modelPhysics canStage:", modelPhysicsResult.canStage);
-  console.log(
-    "DEBUG modelPhysics diagnostics:",
-    JSON.stringify(modelPhysicsResult.diagnostics, null, 2),
-  );
-  console.log("DEBUG modelPhysics source:\n" + modelPhysicsSource.slice(0, 4000));
-  for (const needle of ["CompiledModel", "<RigidBody", "MeshCollider", "CuboidCollider", "mesh-collider"]) {
-    const idx = modelPhysicsSource.indexOf(needle);
-    console.log(
-      `DEBUG needle ${needle}:`,
-      idx >= 0 ? JSON.stringify(modelPhysicsSource.slice(Math.max(0, idx - 200), idx + 600)) : "NOT FOUND",
-    );
-  }
-  for (const needle of ["dea00e58 />", "dea00e58>", "<XRiftStudioMeshColliders"]) {
-    const idx = modelPhysicsSource.indexOf(needle);
-    console.log(
-      `DEBUG needle2 ${needle}:`,
-      idx >= 0 ? JSON.stringify(modelPhysicsSource.slice(Math.max(0, idx - 1500), idx + 1500)) : "NOT FOUND",
-    );
-  }
   assert(
     modelPhysicsResult.canStage &&
       Boolean(modelInvocation) &&
