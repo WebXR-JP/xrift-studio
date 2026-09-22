@@ -1,5 +1,13 @@
 import { COMPILER_REACT_PACKAGE_SPECS } from "./compiler/runtime-packages";
-import { XriftClient } from "@xrift/sdk";
+import {
+  XriftClient,
+  parseItemConfig,
+  parseWorldConfig,
+  type CameraConfig,
+  type OutputBufferType,
+  type PhysicsConfig,
+  type WorldPermissions,
+} from "@xrift/sdk";
 import { optimizePublishedModel, describeModelDownload } from "./model-download";
 import type { CompilerPublicationMetadata, ProjectKind } from "../tauri";
 import { tauri } from "../tauri";
@@ -637,6 +645,16 @@ export async function publishVisualProject({
       );
     }
 
+    // The Studio compiler always stages an official Module Federation template.
+    // A non-empty dist without remoteEntry.js can still pass the CLI's generic
+    // directory check, but XRift cannot load that build. Refuse before any
+    // remote upload is marked as started.
+    const stagedConfig = parseStagedXriftConfig(
+      await tauri.readTextFile(stagingPath, "xrift.json"),
+      kind,
+    );
+    await assertStagedModuleEntry(stagingPath, stagedConfig.distDir);
+
     throwIfAborted(signal);
     report({
       stage: "uploading",
@@ -792,6 +810,7 @@ async function uploadStagedProjectWithSdk(input: {
     config.ignore,
     input.signal,
   );
+  assertCompiledModuleEntry(collected.files);
   input.onLog({
     kind: "info",
     text: `dist: ${collected.files.length} files, ${(collected.totalBytes / 1024 / 1024).toFixed(2)} MB (ignored ${collected.ignoredPaths.length})`,
@@ -805,6 +824,8 @@ async function uploadStagedProjectWithSdk(input: {
     thumbnailPath: config.thumbnailPath,
     physics: config.physics,
     camera: config.camera,
+    permissions: config.permissions,
+    outputBufferType: config.outputBufferType,
     onProgress: (progress) =>
       input.report({
         stage: "uploading",
@@ -853,51 +874,94 @@ async function uploadStagedProjectWithSdk(input: {
  * The upload has to send the same name, ignore rules and physics the CLI would
  * have sent, and those live in this file rather than in the Studio documents.
  */
-export function parseStagedXriftConfig(
-  source: string,
-  kind: ProjectKind,
-): {
+export type StagedXriftConfig = {
   distDir: string;
   title: string;
   description?: string;
   thumbnailPath?: string;
   ignore: string[];
-  physics?: { gravity?: number; allowInfiniteJump?: boolean };
-  camera?: { near?: number; far?: number };
-} {
-  let parsed: unknown;
+  physics?: PhysicsConfig;
+  camera?: CameraConfig;
+  permissions?: WorldPermissions;
+  outputBufferType?: OutputBufferType;
+};
+
+/**
+ * Parse staging config with the SDK itself, not a Studio-side approximation.
+ *
+ * CLI 0.24.4 delegates distDir/ignore/config parsing to @xrift/sdk 0.1.3. Using
+ * those same parsers here makes the direct SDK upload path select the exact
+ * same files and hash-affecting options as the CLI path.
+ */
+export function parseStagedXriftConfig(
+  source: string,
+  kind: ProjectKind,
+): StagedXriftConfig {
   try {
-    parsed = JSON.parse(source);
-  } catch {
-    throw new Error("公開用の一時プロジェクトのxrift.jsonを解析できませんでした。");
-  }
-  const root = parsed as Record<string, unknown> | null;
-  const section = root?.[kind];
-  if (!section || typeof section !== "object") {
+    if (kind === "world") {
+      const config = parseWorldConfig(source);
+      return {
+        distDir: config.distDir,
+        title: config.name,
+        description: config.description,
+        thumbnailPath: config.thumbnailPath,
+        ignore: config.ignore,
+        physics: config.physics,
+        camera: config.camera,
+        permissions: config.permissions,
+        outputBufferType: config.outputBufferType,
+      };
+    }
+
+    const config = parseItemConfig(source);
+    return {
+      distDir: config.distDir,
+      title: config.name,
+      description: config.description,
+      thumbnailPath: config.thumbnailPath,
+      ignore: config.ignore,
+      permissions: config.permissions,
+    };
+  } catch (error) {
+    const detail = error instanceof Error ? `: ${error.message}` : "";
     throw new Error(
-      `公開用の一時プロジェクトのxrift.jsonに"${kind}"の設定がありません。`,
+      `公開用の一時プロジェクトのxrift.jsonをCLIと同じ規則で解析できませんでした${detail}`,
     );
   }
-  const record = section as Record<string, unknown>;
-  const rawDist = typeof record.distDir === "string" ? record.distDir : "./dist";
-  return {
-    // "./dist" and "dist/" both mean the same directory to the CLI.
-    distDir: rawDist.replace(/^\.\//, "").replace(/\/+$/, "") || "dist",
-    title: typeof record.title === "string" && record.title ? record.title : "Untitled",
-    description:
-      typeof record.description === "string" ? record.description : undefined,
-    thumbnailPath:
-      typeof record.thumbnailPath === "string" ? record.thumbnailPath : undefined,
-    ignore: Array.isArray(record.ignore)
-      ? record.ignore.filter((entry): entry is string => typeof entry === "string")
-      : [],
-    physics: isPlainRecord(record.physics)
-      ? (record.physics as { gravity?: number; allowInfiniteJump?: boolean })
-      : undefined,
-    camera: isPlainRecord(record.camera)
-      ? (record.camera as { near?: number; far?: number })
-      : undefined,
-  };
+}
+
+export function assertCompiledModuleEntry(
+  files: readonly { remotePath: string }[],
+): void {
+  const hasEntry = files.some(
+    (file) =>
+      file.remotePath.replace(/\\/g, "/").replace(/^\.\//, "") ===
+      "remoteEntry.js",
+  );
+  if (!hasEntry) {
+    throw new Error(
+      "公開用ビルドにremoteEntry.jsがありません。XRiftが読み込むModule Federationの生成物を確認してください。",
+    );
+  }
+}
+
+async function assertStagedModuleEntry(
+  stagingPath: string,
+  distDir: string,
+): Promise<void> {
+  let entries: Awaited<ReturnType<typeof tauri.listFiles>>;
+  try {
+    entries = await tauri.listFiles(stagingPath, distDir);
+  } catch (error) {
+    throw new Error(
+      `公開用ビルドの${distDir}を確認できませんでした: ${error}`,
+    );
+  }
+  assertCompiledModuleEntry(
+    entries
+      .filter((entry) => !entry.isDir)
+      .map((entry) => ({ remotePath: entry.name })),
+  );
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
