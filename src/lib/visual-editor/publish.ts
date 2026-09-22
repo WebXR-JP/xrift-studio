@@ -1,6 +1,7 @@
 import { COMPILER_REACT_PACKAGE_SPECS } from "./compiler/runtime-packages";
 import {
   XriftClient,
+  filterFiles,
   parseItemConfig,
   parseWorldConfig,
   type CameraConfig,
@@ -653,7 +654,11 @@ export async function publishVisualProject({
       await tauri.readTextFile(stagingPath, "xrift.json"),
       kind,
     );
-    await assertStagedModuleEntry(stagingPath, stagedConfig.distDir);
+    await assertStagedModuleEntry(
+      stagingPath,
+      stagedConfig.distDir,
+      stagedConfig.ignore,
+    );
 
     throwIfAborted(signal);
     report({
@@ -967,6 +972,7 @@ export function assertCompiledModuleEntry(
 async function assertStagedModuleEntry(
   stagingPath: string,
   distDir: string,
+  ignorePatterns: readonly string[],
 ): Promise<void> {
   let entries: Awaited<ReturnType<typeof tauri.listFiles>>;
   try {
@@ -976,10 +982,12 @@ async function assertStagedModuleEntry(
       `公開用ビルドの${distDir}を確認できませんでした: ${error}`,
     );
   }
+  const rootFiles = entries
+    .filter((entry) => !entry.isDir)
+    .map((entry) => entry.name);
+  const uploadableRootFiles = filterFiles(rootFiles, [...ignorePatterns]);
   assertCompiledModuleEntry(
-    entries
-      .filter((entry) => !entry.isDir)
-      .map((entry) => ({ remotePath: entry.name })),
+    uploadableRootFiles.map((remotePath) => ({ remotePath })),
   );
 }
 
