@@ -2473,18 +2473,6 @@ function renderEntity(
     );
     localContent.length = 0;
     if (ownedContent) localContent.push(ownedContent);
-  } else if (colliders.length > 0) {
-    // A collider-only Entity gets an implicit body for its own content only.
-    // Child Entities keep their own physics bodies; wrapping them here would
-    // produce RigidBody -> RigidBody nesting after publication.
-    const localPhysicsContent = renderColliderBody(
-      entity,
-      colliders,
-      localContent.join("\n"),
-      context,
-    );
-    localContent.length = 0;
-    if (localPhysicsContent) localContent.push(localPhysicsContent);
   }
   for (const childId of entity.children) {
     const child = context.scene.entities[childId];
@@ -2528,7 +2516,9 @@ function renderEntity(
   }
   children = ownRigidBody
     ? renderOwnedRigidBody(entity, ownRigidBody, children, context)
-    : children;
+    : inheritedRigidBody
+      ? children
+      : renderColliderBody(entity, colliders, children, context);
   context.activeEntityIds.delete(entityId);
   const position = vectorProp(transform?.position ?? [0, 0, 0]);
   const rotation = vectorProp(transform?.rotation ?? [0, 0, 0]);
@@ -2583,7 +2573,7 @@ function renderOwnedRigidBody(
 /** One implementation for editor Play and exported JSX, including late model loads. */
 function includeReactiveMeshColliders(context: CompileContext): void {
   context.fiberImports.add("createPortal");
-  for (const name of ["Component", "createContext", "useCallback", "useContext", "useEffect", "useLayoutEffect", "useRef", "useState"]) context.reactValueImports.add(name);
+  for (const name of ["createContext", "useCallback", "useContext", "useEffect", "useLayoutEffect", "useRef", "useState"]) context.reactValueImports.add(name);
   context.reactTypeImports.add("ReactNode");
   for (const name of ["BufferGeometry", "InstancedMesh", "Matrix4", "Mesh", "Object3D", "Group"]) context.threeTypeImports.add(name);
   for (const name of ["BallCollider", "ConvexHullCollider", "CuboidCollider", "TrimeshCollider", "useRapier", "type RapierCollider"]) context.rapierImports.add(name);

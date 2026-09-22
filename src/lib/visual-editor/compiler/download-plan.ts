@@ -1,7 +1,7 @@
 import type { AssetManifest, ModelAsset } from "../asset-manifest";
-import type { MeshComponent, SceneDocument } from "../scene-document";
+import type { SceneDocument } from "../scene-document";
 
-/** Indices and names are both checked against the actual GLB before rewriting. */
+/** Kept for existing callers; normal publication no longer creates this plan. */
 export type ModelDownloadPlan = {
   replacedMaterials: Array<{ index: number; name: string }>;
 };
@@ -35,44 +35,33 @@ export function collectPublishedAssetIds(scene: SceneDocument | null, manifest: 
   return ids;
 }
 
-/** Strip a slot only when every visible use replaces it globally. */
+/** A known publication limitation, not a generic compiler failure. */
+export class PublishModelTransformError extends Error {
+  readonly assetId: string;
+
+  constructor(model: ModelAsset) {
+    super(`3Dモデル「${model.name}」の公開時だけのメッシュ結合は停止しています。Assetsのモデル設定で「公開時に静的メッシュをまとめる」をオフにしてください。`);
+    this.name = "PublishModelTransformError";
+    this.assetId = model.id;
+  }
+}
+
+/**
+ * Publish the stored model bytes, not another interpretation of the model.
+ * Returning no plan keeps desktop staging and browser uploads on their normal
+ * file-copy path, without stripping images, repacking buffers or using cached
+ * conversions. Explicit reimports/optimizations remain authoring operations.
+ *
+ * Legacy publish-only mesh merging is rejected before either output backend
+ * runs. Do not silently ignore or change a saved setting in the user's project.
+ */
 export function planModelDownload(
   model: ModelAsset,
-  scene: SceneDocument | null,
-  manifest: AssetManifest,
+  _scene: SceneDocument | null,
+  _manifest: AssetManifest,
 ): ModelDownloadPlan | undefined {
-  if (!scene || model.importMetadata?.sourceFormat !== "glb" || model.importMetadata.openBrush) return;
-  if ([...(model.importMetadata.extensionsUsed ?? []), ...(model.importMetadata.extensionsRequired ?? [])]
-    .some((name) => /^(VRM|VRMC_)/.test(name))) return;
-  const uses: MeshComponent[] = [];
-  for (const entity of Object.values(scene.entities)) {
-    for (const component of entity.components) {
-      if (component.type === "mesh") {
-        const id = component.geometry?.kind === "asset" ? component.geometry.assetId : component.geometryAssetId;
-        if (id === model.id) uses.push(component);
-      } else if (JSON.stringify(component).includes(JSON.stringify(model.id))) {
-        // A script, custom component, collider, or graph may load the source
-        // without the mesh material injection. Retain its original materials.
-        return;
-      }
-    }
+  if (model.importSettings.mergeStaticMeshes === true) {
+    throw new PublishModelTransformError(model);
   }
-  if (uses.length === 0) return;
-  const replacedMaterials = model.materialSlots.flatMap((slot) => {
-    if (!Number.isInteger(slot.sourceMaterialIndex) || slot.sourceMaterialIndex! < 0) return [];
-    const replaced = uses.every((mesh) => {
-      const binding = mesh.materialBindings.find((candidate) => candidate.slot === slot.slot && candidate.sourceNodeIndex === undefined);
-      const id = binding?.materialAssetId ?? slot.defaultMaterialAssetId;
-      const material = id ? manifest.assets[id] : undefined;
-      // OpenBrush presets reuse the source material rather than replacing it.
-      if (material?.kind !== "material" || material.shader) return false;
-      return mesh.materialBindings.filter((candidate) => candidate.slot === slot.slot).every((candidate) => {
-        const override = manifest.assets[candidate.materialAssetId];
-        return override?.kind === "material" && !override.shader;
-      });
-    });
-    return replaced ? [{ index: slot.sourceMaterialIndex!, name: slot.name }] : [];
-  });
-  // Even without replacements, the byte pass can remove unreferenced images.
-  return { replacedMaterials };
+  return undefined;
 }

@@ -50,8 +50,6 @@ assert(viewport.includes("waitForSceneMount: true"), "Play waits for the real sc
 assert(viewport.indexOf("<SceneModelLoadCommit") > viewport.indexOf("<OfficialXriftPreviewProvider"), "scene commit marker must be inside Physics, not the outer Canvas");
 assert(viewport.includes("<XriftColliderLoadContext.Provider value={sceneModelLoads}>"), "actual colliders report to the same tracker as the models");
 assert(host.includes("world.getCollider(collider.handle)"), "ready requires live Rapier handles rather than a generated vertex array");
-assert(host.includes("class XriftMeshColliderErrorBoundary"), "one invalid Rapier collider must not unmount the published world");
-assert(host.includes("Mesh Colliderを物理空間に登録できませんでした"), "collider registration failures must stay local and diagnosable");
 assert(host.includes("forRevision === revision.current"), "stale collider effects cannot complete a newer generation");
 assert(gate.includes("tracker.getErrors().length !== 0"), "a failed model/collider blocks startup");
 assert(provider.includes("paused={physicsPaused}"), "preparation pauses the simulation, not just gravity");
@@ -77,7 +75,7 @@ const sources = ["mesh-collider-status.ts", "mesh-collider-geometry.ts", "mesh-c
 const include = new Function("meshColliderStatusSource", "meshColliderGeometrySource", "meshCollidersSource", `${generated}; return includeReactiveMeshColliders;`)(...sources);
 const context = { fiberImports: new Set(), reactValueImports: new Set(), reactTypeImports: new Set(), threeTypeImports: new Set(), rapierImports: new Set(), supportDeclarations: new Map() };
 include(context);
-for (const name of ["Component", "createContext", "useCallback", "useContext", "useEffect", "useLayoutEffect", "useRef", "useState"]) assert(context.reactValueImports.has(name), `generated JSX imports ${name}`);
+for (const name of ["createContext", "useCallback", "useContext", "useEffect", "useLayoutEffect", "useRef", "useState"]) assert(context.reactValueImports.has(name), `generated JSX imports ${name}`);
 assert(context.rapierImports.has("useRapier") && context.rapierImports.has("type RapierCollider"), "generated JSX imports its Rapier verifier and type");
 const support = context.supportDeclarations.get("mesh-colliders");
 assert(support.includes("type XriftColliderLoadState") && support.includes("function XriftCommittedMeshColliders"), "export embeds both readiness types and the live-shape verifier");
