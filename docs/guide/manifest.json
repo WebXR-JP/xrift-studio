@@ -324,6 +324,15 @@
       ]
     },
     {
+      "slug": "jev-world-builder",
+      "title": "文章や音声からワールドを作る",
+      "description": "Jevに作りたい場所を伝え、地形や素材を組み合わせたワールドを作ります。",
+      "group": "behavior",
+      "file": "jev-world-builder.md",
+      "keywords": "Jev TypeSafe 音声入力 ワールド作成 ワールド生成 APIキー Windows",
+      "related": ["first-world", "save-and-open", "play-mode", "ai-connection"]
+    },
+    {
       "slug": "ai-connection",
       "title": "AIに編集を手伝ってもらう",
       "description": "基本操作を覚えたあとで、AI接続から制作を手伝ってもらいます。",

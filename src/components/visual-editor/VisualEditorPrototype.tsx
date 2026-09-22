@@ -269,6 +269,7 @@ import { ComponentCodeImportDialog } from "./ComponentCodeImportDialog";
 import { InteractivityGraphEditor } from "./InteractivityGraphEditor";
 import { GuideLink } from "../guide/GuideLink";
 import { EditorUtilityRail } from "./EditorUtilityRail";
+import { useJevWorldBuilder } from "./useJevWorldBuilder";
 import { useEditorDevice } from "./useEditorDevice";
 import { EditorPanelVisibilityContext } from "./editor-panel-visibility";
 import { SupportReportModal } from "../SupportReportModal";
@@ -1685,6 +1686,8 @@ export function VisualEditorPrototype({
   const [componentImportBusy, setComponentImportBusy] = useState(false);
   const [mcpLocalAssetImportBusy, setMcpLocalAssetImportBusy] = useState(false);
   const [sceneRecipeImportBusy, setSceneRecipeImportBusy] = useState(false);
+  const [jevWorldBuilderBusy, setJevWorldBuilderBusy] = useState(false);
+  const jevWorldUndoHistoryRef = useRef<(typeof history)["past"] | null>(null);
   const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
   const [externalStoreOpen, setExternalStoreOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
@@ -2254,6 +2257,7 @@ export function VisualEditorPrototype({
     setImportError(null);
     setNotice(null);
     setMcpLastActivity(null);
+    jevWorldUndoHistoryRef.current = null;
     setLeaving(false);
     // Saving can replace the shell bundle object without changing the open
     // project. Reset only when the actual project identity changes so queued
@@ -2276,6 +2280,12 @@ export function VisualEditorPrototype({
         past.some((snapshot, index) => snapshot !== current.past[index]) ||
         future.some((snapshot, index) => snapshot !== current.future[index]);
 
+      // Saving synchronizes project metadata across the same history entries.
+      // Preserve the generation Undo marker through this non-editing refresh;
+      // a later commit, Undo or Redo still changes the marker identity.
+      if (changed && jevWorldUndoHistoryRef.current === current.past) {
+        jevWorldUndoHistoryRef.current = past;
+      }
       return changed ? { ...current, past, present, future } : current;
     });
   }, [
@@ -2369,6 +2379,7 @@ export function VisualEditorPrototype({
     textureBatchFeedback.phase === "encoding" ||
     textureBatchFeedback.phase === "saving";
   const importBusy =
+    jevWorldBuilderBusy ||
     hierarchyTransferBusy ||
     componentImportBusy ||
     mcpLocalAssetImportBusy ||
@@ -10772,6 +10783,90 @@ export function VisualEditorPrototype({
     };
   }, [onProjectExport, flushInteractivityDraft, runSave]);
 
+  const jevWorldDisabledReason = !mcpNativeAvailable
+    ? "ワールド作成はデスクトップ版で利用できます。"
+    : projectKind !== "world"
+      ? "ワールドのプロジェクトを開いてください。"
+      : renderedEditorMode !== "edit" || playPreparing
+        ? "動作確認を停止してから作成してください。"
+        : projectTransferBusy || projectExportBusy || leaving
+          ? "プロジェクトの処理が終わってから作成してください。"
+          : importBusy
+            ? jevWorldBuilderBusy
+              ? "ワールドを作成しています。"
+              : "素材の処理が終わってから作成してください。"
+            : !projectPath
+              ? "初回の自動保存が終わると作成できます。"
+              : null;
+  const jevWorldBuilder = useJevWorldBuilder({
+    // Use the incoming identity as well as bundle refs: a project switch can
+    // render before the effect that replaces the editor's previous history.
+    projectId: initialBundle.project.projectId,
+    disabledReason: jevWorldDisabledReason,
+    getCurrent: () => ({
+      bundle: bundleRef.current,
+      projectPath: projectPathRef.current,
+      editable: mcpNativeAvailable && projectKind === "world" &&
+        scriptExecutionScopeRenderCurrent && editorModeRef.current === "edit" &&
+        !playPreparationActiveRef.current && !projectExportLock.current &&
+        !projectTransferBusy && !leaving,
+    }),
+    acquire: () => {
+      if (importBusyRef.current || importRunningRef.current || assetOperationRef.current ||
+          valueScrubRef.current || transformScrubRef.current || terrainStrokeActiveRef.current) {
+        throw new Error("進行中の編集や素材の処理が終わってから作成してください。");
+      }
+      const token = Symbol("jev-world-assets");
+      // Reuse the synchronous asset-import lock so drag/drop, recipes, MCP
+      // imports and model processing cannot race the staged construction.
+      assetOperationRef.current = { kind: "asset-import", token };
+      importRunningRef.current = true;
+      importBusyRef.current = true;
+      setJevWorldBuilderBusy(true);
+      return () => {
+        if (assetOperationRef.current?.token !== token) return;
+        assetOperationRef.current = null;
+        importRunningRef.current = false;
+        setJevWorldBuilderBusy(false);
+      };
+    },
+    onCommit: (source, prepared) => {
+      const currentBundle = bundleRef.current;
+      const assets = currentBundle.assets === source.assets
+        ? prepared.bundle.assets
+        : mergeRecipeAssetsOntoLatest(source.assets, prepared.bundle.assets, currentBundle.assets);
+      const nextBundle = touchProject({ ...prepared.bundle, assets });
+      const selection: SceneSelection = { kind: "entity", id: prepared.rootEntityId };
+      setHistory((current) => {
+        if (current.present.bundle !== currentBundle || editorModeRef.current !== "edit") {
+          throw new Error("作成中にシーンが変更されました。現在の編集内容を確認して、もう一度作成してください。");
+        }
+        const next = commitEditorHistory(current, {
+          ...current.present,
+          bundle: nextBundle,
+          sceneSelection: selection,
+          entitySelectionIds: [prepared.rootEntityId],
+          assetSelection: null,
+        });
+        bundleRef.current = nextBundle;
+        mcpRevisionBundleRef.current = nextBundle;
+        mcpRevisionRef.current += 1;
+        saveStatusRef.current = "dirty";
+        jevWorldUndoHistoryRef.current = next.past;
+        return next;
+      });
+      sceneSelectionRef.current = selection;
+      assetSelectionRef.current = null;
+      setSelectedEntityIds([prepared.rootEntityId]);
+      setSelectedAssetIds([]);
+      setSceneSettingsOpen(false);
+      setActiveEditorTab(SCENE_VIEW_TAB_ID);
+      setFrameSelectionRequest((request) => request + 1);
+      setSaveStatus("dirty");
+      setNotice("ワールドを作成しました。Hierarchyで選択したグループを編集できます。");
+    },
+  });
+
   const hierarchyTransfer = useHierarchyTransfer({
     projectId: bundle.project.projectId,
     canStart: () => editorModeRef.current === "edit" && !importBusyRef.current && !projectExportLock.current && !projectTransferBusy && !leaving,
@@ -12391,6 +12486,17 @@ export function VisualEditorPrototype({
             aria-label="エディターのステータスバー">
           <EditorUtilityRail
             commands={resolvedCommands}
+            worldBuilder={{
+              nativeAvailable: mcpNativeAvailable,
+              prompt: jevWorldBuilder.prompt,
+              onPromptChange: jevWorldBuilder.setPrompt,
+              state: jevWorldBuilder.state,
+              disabledReason: jevWorldDisabledReason,
+              onGenerate: jevWorldBuilder.generate,
+              canUndo: !renderedReadOnly && !importBusy && history.past.length > 0 &&
+                history.past === jevWorldUndoHistoryRef.current,
+              onUndo: handleUndo,
+            }}
             sceneSettingsOpen={sceneSettingsOpen}
             onToggleSceneSettings={() => {
               setSceneSettingsOpen((current) => !current);

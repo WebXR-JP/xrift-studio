@@ -10,6 +10,7 @@ import {
   type XriftMcpActivity,
 } from "./AiConnectionPanel";
 import { RecordingPanel, type RecordingPanelProps } from "./RecordingPanel";
+import { JevWorldBuilderPanel, type JevWorldBuilderPanelProps } from "./JevWorldBuilderPanel";
 import { isRecordingActive } from "../../lib/recording/recording-state";
 import { useRecordingSelector } from "./useRecordingSession";
 import type {
@@ -20,7 +21,7 @@ import type {
   XriftOllamaStatus,
 } from "../../lib/tauri";
 
-type UtilityPanel = "ai" | "recording" | "shortcuts" | "help" | null;
+type UtilityPanel = "world" | "ai" | "recording" | "shortcuts" | "help" | null;
 
 const CATEGORY_LABELS: Record<EditorCommandDefinition["category"], string> = {
   project: "プロジェクト",
@@ -65,6 +66,7 @@ function UtilityButton({
 
 export function EditorUtilityRail({
   commands,
+  worldBuilder,
   sceneSettingsOpen,
   onToggleSceneSettings,
   onResetLayout,
@@ -88,6 +90,7 @@ export function EditorUtilityRail({
   recording,
 }: {
   commands: readonly EditorCommandDefinition[];
+  worldBuilder?: JevWorldBuilderPanelProps;
   sceneSettingsOpen: boolean;
   onToggleSceneSettings: () => void;
   onResetLayout: () => void;
@@ -115,6 +118,7 @@ export function EditorUtilityRail({
   recording?: RecordingPanelProps;
 }) {
   const [openPanel, setOpenPanel] = useState<UtilityPanel>(null);
+  const [worldBuilderOpened, setWorldBuilderOpened] = useState(false);
   const recordingActive = useRecordingSelector((state) =>
     isRecordingActive(state.snapshot),
   );
@@ -139,7 +143,7 @@ export function EditorUtilityRail({
 
   useEffect(() => {
     if (!openPanel) return;
-    railRef.current?.querySelector<HTMLButtonElement>('[aria-label="パネルを閉じる"]')?.focus();
+    railRef.current?.querySelector<HTMLButtonElement>('[role="dialog"]:not([hidden]) [aria-label="パネルを閉じる"]')?.focus();
     const handlePointerDown = (event: PointerEvent) => {
       if (!railRef.current?.contains(event.target as Node)) setOpenPanel(null);
     };
@@ -170,6 +174,25 @@ export function EditorUtilityRail({
       className="editor-utility-rail relative flex shrink-0 items-center gap-0.5 bg-editor-surface p-1"
     >
       <GuideLink page="first-world" label="使い方" />
+      {worldBuilder ? (
+        <button
+          type="button"
+          aria-expanded={openPanel === "world"}
+          aria-controls="editor-world-panel"
+          onClick={() => {
+            setWorldBuilderOpened(true);
+            togglePanel("world");
+          }}
+          className={`flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+            openPanel === "world"
+              ? "bg-brand-600 text-white"
+              : "text-editor-text hover:bg-editor-subtle"
+          }`}
+        >
+          <EDITOR_ICONS.world size={16} aria-hidden="true" />
+          ワールド作成
+        </button>
+      ) : null}
       <UtilityButton
         label="AI接続"
         icon="ai"
@@ -221,7 +244,35 @@ export function EditorUtilityRail({
         }}
       />
 
-      {openPanel ? (
+      {worldBuilderOpened && worldBuilder ? (
+        <section
+          id="editor-world-panel"
+          role="dialog"
+          aria-labelledby="editor-world-heading"
+          hidden={openPanel !== "world"}
+          className="absolute bottom-[calc(100%+0.5rem)] left-0 max-h-[calc(100dvh-5rem)] w-96 max-w-[calc(100vw-1rem)] overflow-y-auto overscroll-contain rounded-lg border border-editor-border bg-editor-surface text-editor-text shadow-xl"
+        >
+          <div className="sticky top-0 z-10 flex h-11 shrink-0 items-center justify-between border-b border-slate-200 bg-editor-surface px-3.5">
+            <h2 id="editor-world-heading" className="text-sm font-semibold text-slate-900">
+              ワールド作成
+            </h2>
+            <button
+              type="button"
+              aria-label="パネルを閉じる"
+              title="閉じる"
+              onClick={closePanel}
+              className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            >
+              <EDITOR_ICONS.close size={16} aria-hidden="true" />
+            </button>
+          </div>
+          {/* Keep pending key/voice operations owned by the same mounted panel.
+              The editor owns the draft and the world construction independently. */}
+          <JevWorldBuilderPanel {...worldBuilder} />
+        </section>
+      ) : null}
+
+      {openPanel && openPanel !== "world" ? (
         <section
           role="dialog"
           aria-labelledby={`editor-${openPanel}-heading`}

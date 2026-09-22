@@ -303,6 +303,38 @@ export type XriftOllamaConfigurationResult = {
   message: string;
 };
 
+export type JevStatus = {
+  configured: boolean;
+  model: string;
+  baseUrl: string;
+};
+
+export type JevConnectionResult = {
+  ok: boolean;
+  model: string;
+  message: string;
+};
+
+export type SystemDictationPlatform = "windows" | "macos" | "linux" | "other" | "browser";
+
+export type SystemDictationStatus = {
+  platform: SystemDictationPlatform;
+  /** Whether Studio can request the OS shortcut, not microphone readiness. */
+  canStart: boolean;
+  shortcut: string | null;
+  instructions: string;
+};
+
+export type SystemDictationStartResult = {
+  platform: SystemDictationPlatform;
+  /** The OS owns microphone state; this does not report active recording. */
+  activation: "shortcutSent" | "manual";
+  instructions: string;
+};
+
+const BROWSER_DICTATION_INSTRUCTIONS =
+  "入力欄を選び、OSやキーボードの音声入力を使ってください。利用できない場合は文章を入力してください。";
+
 export type RecordingEncoderSupport = {
   ffmpeg: boolean;
   ffmpegVersion: string | null;
@@ -789,6 +821,32 @@ export const tauri = {
       integrationId,
       model,
     }),
+  getJevStatus: () => invoke<JevStatus>("get_jev_status"),
+  setJevApiKey: (apiKey: string) =>
+    invoke<JevStatus>("set_jev_api_key", { apiKey }),
+  clearJevApiKey: () => invoke<JevStatus>("clear_jev_api_key"),
+  testJevConnection: () =>
+    invoke<JevConnectionResult>("test_jev_connection"),
+  jevSystemOne: (request: Record<string, unknown>) =>
+    invoke<Record<string, unknown>>("jev_system_one", { request }),
+  getSystemDictationStatus: (): Promise<SystemDictationStatus> =>
+    isTauri()
+      ? invoke<SystemDictationStatus>("get_system_dictation_status")
+      : Promise.resolve({
+          platform: "browser",
+          canStart: false,
+          shortcut: null,
+          instructions: BROWSER_DICTATION_INSTRUCTIONS,
+        }),
+  /** Focus an editable field before calling; the OS inserts recognized text there. */
+  startSystemDictation: (): Promise<SystemDictationStartResult> =>
+    isTauri()
+      ? invoke<SystemDictationStartResult>("start_system_dictation")
+      : Promise.resolve({
+          platform: "browser",
+          activation: "manual",
+          instructions: BROWSER_DICTATION_INSTRUCTIONS,
+        }),
   completeXriftMcpRequest: (response: XriftMcpEditorResponse) =>
     invoke<void>("complete_xrift_mcp_request", { response }),
   setXriftMcpEditorReady: (ready: boolean) =>

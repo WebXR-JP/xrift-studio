@@ -137,6 +137,7 @@ import {
   runModelAnimationGraphFixtureAssertions,
 } from "../src/lib/visual-editor/interactivity-recipes.fixture.ts";
 import { runSceneRecipeRuntimeFixtureAssertions } from "../src/lib/visual-editor/scene-recipe-runtime.fixture.ts";
+import { runJevWorldBuilderFixtureAssertions } from "../src/lib/visual-editor/jev-world-builder.fixture.ts";
 import { runInteractableLayerFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/interactable.fixture.ts";
 import { runSceneRecipeCatalogFixtureAssertions } from "../src/lib/visual-editor/scene-recipe-catalog.fixture.ts";
 import { runMaterialShowcaseCatalogFixtureAssertions } from "../src/lib/visual-editor/material-showcase-catalog.fixture.ts";
@@ -434,6 +435,7 @@ try {
     ["interactivity recipes", runInteractivityRecipeFixtureAssertions],
     ["scene recipe catalog", runSceneRecipeCatalogFixtureAssertions],
     ["scene recipe runtime", runSceneRecipeRuntimeFixtureAssertions],
+    ["jev world builder", runJevWorldBuilderFixtureAssertions],
     ["material showcase catalog", runMaterialShowcaseCatalogFixtureAssertions],
     ["model animation graph", runModelAnimationGraphFixtureAssertions],
     ["interaction trigger", runInteractionTriggerFixtureAssertions],

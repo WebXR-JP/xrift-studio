@@ -12,9 +12,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_opener::OpenerExt;
 
+mod dictation;
 mod external_store;
 mod project_transfer;
 mod hierarchy_transfer;
+mod jev;
 pub mod mcp;
 mod script_trust;
 
@@ -6074,6 +6076,13 @@ pub fn run() {
             external_store::list_external_store_assets,
             external_store::get_external_store_asset_options,
             external_store::install_external_store_asset,
+            dictation::get_system_dictation_status,
+            dictation::start_system_dictation,
+            jev::get_jev_status,
+            jev::set_jev_api_key,
+            jev::clear_jev_api_key,
+            jev::test_jev_connection,
+            jev::jev_system_one,
             read_world_file,
             write_world_file,
             clone_classic_project_repository,

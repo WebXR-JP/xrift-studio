@@ -66,6 +66,7 @@
 
 ## AI 接続・診断・録画
 
+- [F-47 文章・音声からワールドを作る](./ux/tools.md#f-47)
 - [F-17 AI editor integration / MCP](./ux/tools.md#f-17)
 - [F-35 ビジュアル編集 QA診断と短時間録画](./ux/tools.md#f-35)
 - [F-42 ワールド制作の録画](./ux/tools.md#f-42)

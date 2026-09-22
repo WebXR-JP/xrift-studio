@@ -451,6 +451,7 @@ project ではなく app data へ置く。
 
 ## 意図的に公開していない操作
 
+- 「ワールド作成」のJev APIキー設定とOSの音声入力は、本人のローカル操作として扱う。キーをMCPへ渡さず、音声入力は本人がフォーカスした文章欄から開始する。Jevの呼び出しと完成したSceneの反映はアプリ内で完結するため、判断結果を外部MCPへ引き継ぐ専用toolは追加しない。通常のScene・素材・設定の操作は既存toolを使う。
 - 部分.xriftstudio書き出し・追加Importのファイル選択、保存先、セッションクリップボードは本人のローカル操作として扱い、今回専用MCP toolは追加しない。UIは既存のdocument/Asset/Undo処理を共用する。ファイル受け渡しの制約は[Hierarchyの受け渡し契約](./HIERARCHY_TRANSFER.md)を参照する。
 - 素材・Component検索、Inspector見出し、制作データ確認dialogはUI上の導線であり、新規toolやネットワーク計測にしない。既存のproject health toolが実行時やファイルの存在まで確認したとは扱わない。
 
