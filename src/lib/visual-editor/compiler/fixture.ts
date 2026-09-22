@@ -2057,6 +2057,138 @@ export function runVisualCompilerFixtureAssertions(
     modelResult.overlayFiles.find(
       (file) => file.relativePath === "src/World.tsx",
     )?.content ?? "";
+  // Visual Editor desktop Publish uses classic-jsx. Keep the visible GLB in
+  // the same Rigid Body when one Mesh Collider and multiple Box Colliders are
+  // authored; only ambiguous duplicate physics components are rejected.
+  const modelPhysicsScene: SceneDocument = {
+    ...modelScene,
+    entities: {
+      ...modelScene.entities,
+      [modelEntity.id]: {
+        ...modelScene.entities[modelEntity.id],
+        components: [
+          ...modelScene.entities[modelEntity.id].components,
+          createRigidBodyComponent("fixture-model-body", {
+            bodyType: "fixed",
+            autoColliders: "none",
+          }),
+          createMeshColliderComponent("fixture-model-mesh-collider", {
+            meshMode: "trimesh",
+          }),
+          createBoxColliderComponent("fixture-model-box-a", {
+            center: [-0.25, 0.5, 0],
+            halfExtents: [0.25, 0.5, 0.5],
+          }),
+          createBoxColliderComponent("fixture-model-box-b", {
+            center: [0.25, 0.5, 0],
+            halfExtents: [0.25, 0.5, 0.5],
+          }),
+        ],
+      },
+    },
+  };
+  const modelPhysicsResult = compileVisualProject(
+    {
+      ...modelProject,
+      scenes: { [modelPhysicsScene.sceneId]: modelPhysicsScene },
+    },
+    { generatedAt: fixedTime, outputMode: "classic-jsx" },
+  );
+  const modelPhysicsSource =
+    modelPhysicsResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  const modelInvocation = modelPhysicsSource.match(/<CompiledModel_[A-Za-z0-9_]+\s*\/>/)?.[0];
+  const modelInvocationIndex = modelInvocation
+    ? modelPhysicsSource.indexOf(modelInvocation)
+    : -1;
+  const modelBodyStart =
+    modelInvocationIndex >= 0
+      ? modelPhysicsSource.lastIndexOf("<RigidBody", modelInvocationIndex)
+      : -1;
+  const modelBodyEnd =
+    modelInvocationIndex >= 0
+      ? modelPhysicsSource.indexOf("</RigidBody>", modelInvocationIndex)
+      : -1;
+  const modelBodySource =
+    modelBodyStart >= 0 && modelBodyEnd > modelBodyStart
+      ? modelPhysicsSource.slice(modelBodyStart, modelBodyEnd + "</RigidBody>".length)
+      : "";
+  assert(
+    modelPhysicsResult.canStage &&
+      Boolean(modelInvocation) &&
+      modelBodySource.includes(modelInvocation ?? "") &&
+      modelBodySource.includes('<XRiftStudioMeshColliders type="trimesh"') &&
+      (modelBodySource.match(/<CuboidCollider\b/g) ?? []).length === 2,
+    "Visual Editor Publish must keep the visible GLB inside one body with one Mesh Collider and multiple Box Colliders",
+  );
+
+  const duplicateMeshScene: SceneDocument = {
+    ...modelPhysicsScene,
+    entities: {
+      ...modelPhysicsScene.entities,
+      [modelEntity.id]: {
+        ...modelPhysicsScene.entities[modelEntity.id],
+        components: [
+          ...modelPhysicsScene.entities[modelEntity.id].components,
+          createMeshColliderComponent("fixture-model-mesh-collider-duplicate", {
+            meshMode: "convex",
+          }),
+        ],
+      },
+    },
+  };
+  for (const outputMode of ["classic-jsx", "classic-runtime"] as const) {
+    const duplicateMeshResult = compileVisualProject(
+      {
+        ...modelProject,
+        scenes: { [duplicateMeshScene.sceneId]: duplicateMeshScene },
+      },
+      { generatedAt: fixedTime, outputMode },
+    );
+    assert(
+      !duplicateMeshResult.canStage &&
+        duplicateMeshResult.diagnostics.some(
+          (diagnostic) =>
+            diagnostic.severity === "blocking" &&
+            diagnostic.code === "multiple-mesh-colliders-unsupported",
+        ),
+      `Duplicate Mesh Colliders must block ${outputMode} publication instead of changing physics after upload`,
+    );
+  }
+
+  const duplicateBodyScene: SceneDocument = {
+    ...modelScene,
+    entities: {
+      ...modelScene.entities,
+      [modelEntity.id]: {
+        ...modelScene.entities[modelEntity.id],
+        components: [
+          ...modelScene.entities[modelEntity.id].components,
+          createRigidBodyComponent("fixture-model-body-a", { bodyType: "fixed" }),
+          createRigidBodyComponent("fixture-model-body-b", { bodyType: "fixed" }),
+        ],
+      },
+    },
+  };
+  for (const outputMode of ["classic-jsx", "classic-runtime"] as const) {
+    const duplicateBodyResult = compileVisualProject(
+      {
+        ...modelProject,
+        scenes: { [duplicateBodyScene.sceneId]: duplicateBodyScene },
+      },
+      { generatedAt: fixedTime, outputMode },
+    );
+    assert(
+      !duplicateBodyResult.canStage &&
+        duplicateBodyResult.diagnostics.some(
+          (diagnostic) =>
+            diagnostic.severity === "blocking" &&
+            diagnostic.code === "multiple-rigid-bodies",
+        ),
+      `Duplicate Rigid Bodies must block ${outputMode} publication instead of silently using the first body`,
+    );
+  }
   assert(modelResult.canStage, "Same-name glTF materials with distinct source indices must be stageable");
   assert(
     modelSource.includes('case "index:0"') &&

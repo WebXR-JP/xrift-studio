@@ -3,7 +3,7 @@ import { createModelInstancing } from "../../../packages/xrift-studio-runtime/sr
 import { createPrototypeProject } from "./prototype-project";
 import { collectModelInstancingEntities, countRepeatedModelMeshes } from "./model-instancing";
 import { type ModelAsset, updateModelAsset } from "./asset-manifest";
-import { createTransformComponent, createScriptComponent, createRigidBodyComponent, type MeshComponent } from "./scene-document";
+import { createTransformComponent, createScriptComponent, createRigidBodyComponent, createMeshColliderComponent, type MeshComponent } from "./scene-document";
 import { compileVisualProject } from "./compiler/compile";
 import { applyAssetOptimizations } from "./asset-optimization";
 
@@ -69,6 +69,9 @@ export async function runModelInstancingFixtureAssertions(): Promise<void> {
   const first = bundle.scene.entities[eligible[0]];
   first.components.push(createRigidBodyComponent("dynamic"));
   assert(!collectModelInstancingEntities(bundle.scene, bundle.assets).includes(first.id), "Dynamic entity was instanced");
+  first.components.pop();
+  first.components.push(createMeshColliderComponent("collider"));
+  assert(!collectModelInstancingEntities(bundle.scene, bundle.assets).includes(first.id), "Collider entity was instanced and could lose its visible source mesh");
   first.components.pop();
   first.components.push(createScriptComponent("script", "script-asset")!);
   assert(collectModelInstancingEntities(bundle.scene, bundle.assets).length === 0, "Script could lose arbitrary entity rendering behavior");
