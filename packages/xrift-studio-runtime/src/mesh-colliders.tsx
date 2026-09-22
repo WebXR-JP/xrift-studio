@@ -18,6 +18,7 @@ type XriftColliderProjection = { shapes: readonly XriftMeshColliderShape[]; body
 
 type XriftMeshColliderErrorBoundaryProps = {
   children: ReactNode;
+  fallback: ReactNode;
   onError(error: Error): void;
 };
 
@@ -36,7 +37,7 @@ class XriftMeshColliderErrorBoundary extends Component<
   }
 
   render(): ReactNode {
-    return this.state.failed ? null : this.props.children;
+    return this.state.failed ? this.props.fallback : this.props.children;
   }
 }
 
@@ -123,13 +124,30 @@ export function XRiftStudioMeshColliders({ type, children, ...surface }: XriftMe
     ? (
       <XriftMeshColliderErrorBoundary
         key={projection.revision}
+        fallback={
+          <>
+            {projection.shapes.map((shape) => (
+              <CuboidCollider
+                key={`fallback:${shape.key}`}
+                args={[
+                  Math.max(shape.halfExtents[0], 0.001),
+                  Math.max(shape.halfExtents[1], 0.001),
+                  Math.max(shape.halfExtents[2], 0.001),
+                ]}
+                position={shape.position}
+                quaternion={shape.quaternion}
+                {...surface}
+              />
+            ))}
+          </>
+        }
         onError={(error) => {
           const message = error instanceof Error ? error.message : String(error);
           registration.current?.update({
             status: "error",
-            message: `Mesh Colliderを物理空間に登録できませんでした: ${message}`,
+            message: `Mesh Colliderを物理空間に登録できませんでした。Box Colliderへ切り替えました: ${message}`,
           });
-          console.error("Mesh Colliderを物理空間に登録できませんでした:", error);
+          console.error("Mesh Colliderを物理空間に登録できなかったためBox Colliderへ切り替えました:", error);
         }}
       >
         <XriftCommittedMeshColliders projection={projection} type={type} surface={surface} report={report} />
