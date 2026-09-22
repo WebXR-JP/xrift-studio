@@ -139,4 +139,6 @@ PR作成には、リポジトリの**Settings → Actions → General → Workfl
 
 定義の整合検査とNode.jsのテストは、生成処理の確認です。macOS・Windowsでのインストール成功を保証するものではありません。
 
-今回の追加時点では、Homebrew・WinGetを使った実機のインストール、起動、更新、アンインストールは未検証です。配布を案内する前に、検証用のMacとWindowsで各操作を確認してください。Windowsではアプリ内更新後も同じアプリとして認識されること、macOSではGatekeeperと既存のアプリ内更新が動くことも確認します。
+HomebrewはmacOSのGitHub Actionsで、Caskの形式、DMGの取得とSHA-256、インストール、アプリの配置、アンインストールを確認しています。GUIの起動、Gatekeeper、既存のアプリ内更新との組み合わせは別途確認が必要です。
+
+Windowsでの`winget validate`と実インストール、旧版からの更新、アンインストールは未検証です。WinGetへ提出する前に、検証環境で各操作を確認してください。アプリ内更新後も同じアプリとして認識されることも確認します。
