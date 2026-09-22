@@ -281,3 +281,14 @@ jobs:
           includeUpdaterJson: true
           assetNamePattern: '[name]_[version]_[platform]_[arch]_[mode][setup][ext]'
           args: ${{ matrix.args }}
+
+  package-managers:
+    name: Update package managers
+    needs: build
+    if: ${{ !inputs.draft && !inputs.prerelease }}
+    permissions:
+      contents: write
+      pull-requests: write
+    # GITHUB_TOKENで公開したReleaseはreleaseイベントのworkflowを起動しない。
+    # 全OSのアップロード完了後に直接呼ぶ。ドラフトの手動公開はreleasedで拾う。
+    uses: ./.github/workflows/package-managers.yml

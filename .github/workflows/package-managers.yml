@@ -1,0 +1,133 @@
+name: Update package managers
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  release:
+    # Includes promotion of an existing prerelease to a stable release.
+    types: [released]
+  pull_request:
+    paths:
+      - 'Casks/**'
+      - 'packaging/**'
+      - 'scripts/update-package-managers*'
+      - 'scripts/lib/winget-manifest.mjs'
+      - 'scripts/winget-manifest.test.mjs'
+      - '.github/workflows/package-managers.yml'
+      - '.github/workflows/release.yml'
+
+permissions:
+  contents: read
+
+# Releases and manual runs update one automation branch in order. PR validation
+# has a separate group so it cannot block the release that creates the PR.
+concurrency:
+  group: package-managers-${{ github.event.pull_request.number || 'update' }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Validate package definitions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test release validation and manifest generation
+        run: node --test scripts/update-package-managers.test.mjs scripts/winget-manifest.test.mjs
+      - name: Check committed package definitions
+        run: node scripts/update-package-managers.mjs --check
+
+  cask:
+    name: Validate Homebrew Cask
+    if: github.event_name == 'pull_request'
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Load this checkout as a tap and verify the DMG
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_ANALYTICS: '1'
+        run: |
+          brew tap webxr-jp/xrift-studio "$GITHUB_WORKSPACE"
+          # Homebrew 6 requires trust before commands other than an explicitly
+          # named install load a third-party Cask. Older runners have no trust.
+          if brew command trust >/dev/null 2>&1; then
+            brew trust --cask webxr-jp/xrift-studio/xrift-studio
+          fi
+          brew style --cask webxr-jp/xrift-studio/xrift-studio
+          brew fetch --cask webxr-jp/xrift-studio/xrift-studio
+          brew install --cask webxr-jp/xrift-studio/xrift-studio
+          test -d '/Applications/XRift Studio.app'
+          brew uninstall --cask webxr-jp/xrift-studio/xrift-studio
+
+  update:
+    name: Prepare package update PR
+    needs: verify
+    if: >-
+      github.repository == 'WebXR-JP/xrift-studio' &&
+      github.event_name != 'pull_request' &&
+      (github.event_name != 'release' || !github.event.release.prerelease)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Generate definitions from the latest complete stable release
+        id: packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/update-package-managers.mjs
+      # Validate the newly generated content here too. GITHUB_TOKEN-created PRs
+      # may need a maintainer to approve their workflow runs.
+      - name: Verify generated definitions
+        run: |
+          node --test scripts/update-package-managers.test.mjs scripts/winget-manifest.test.mjs
+          node scripts/update-package-managers.mjs --check
+          git diff --check
+      - name: Save definitions for review and WinGet submission
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-managers-${{ steps.packages.outputs.version }}
+          path: |
+            Casks/xrift-studio.rb
+            packaging/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Open or update the package definition PR
+        id: pull-request
+        continue-on-error: true
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: automation/package-managers
+          base: main
+          add-paths: |
+            Casks/xrift-studio.rb
+            packaging/
+          commit-message: 'chore: パッケージ定義を v${{ steps.packages.outputs.version }} に更新'
+          title: 'chore: Homebrew・wingetの配布定義を v${{ steps.packages.outputs.version }} に更新'
+          body: |
+            公開済みの最新安定版から、Homebrew Caskとwinget定義を更新しました。
+            GitHubが返したSHA-256を使用し、必要なインストーラーの存在・アップロード完了・URLを確認しています。
+
+            生成処理のテストと、生成物の整合チェックはこのworkflow内で実行済みです。
+            マージ前にmacOS/Windowsでインストール・更新・削除を確認してください。
+            Homebrewの更新はこのPRのマージ後に利用できます。
+            wingetの検索対象へ反映するには、別途microsoft/winget-pkgsへの提出が必要です。
+
+            操作手順: docs/PACKAGE_MANAGERS.md
+      - name: Explain how to recover if PR creation is unavailable
+        if: steps.pull-request.outcome == 'failure'
+        run: |
+          echo '::error::Package definitions were saved as a workflow artifact, but the update PR could not be created. Check the preceding error and Settings > Actions > General > Allow GitHub Actions to create and approve pull requests. See docs/PACKAGE_MANAGERS.md for manual recovery.'
+          exit 1
