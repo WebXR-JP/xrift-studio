@@ -68,7 +68,11 @@ export type RuntimePaths = {
 export type RuntimeStatus = {
   ready: boolean;
   nodeInstalled: boolean;
+  nodeVersion: string;
   xriftInstalled: boolean;
+  xriftVersion: string | null;
+  recommendedXriftVersion: string;
+  xriftUpdateRequired: boolean;
   paths: RuntimePaths;
 };
 

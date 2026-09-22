@@ -16,7 +16,7 @@
  *
  * Requires network and npm. Release-time tooling, not part of `pnpm dev`.
  *
- * Verified against @xrift/cli's world template on 2026-08-15. Two things in
+ * Verified against @xrift/cli's world template on 2026-09-22. Two things in
  * here are not obvious and were found by building it:
  *
  * 1. The manifest URL must derive from `import.meta.url`. The runtime resolves
@@ -39,10 +39,10 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const RUNTIME_PACKAGE_DIR = path.join(repoRoot, "packages", "xrift-studio-runtime");
 /**
  * Keep in step with COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC in
- * src/lib/xrift-cli.ts — `pnpm cli:test` fails when they drift
+ * src/lib/visual-editor/compiler/runtime-packages.ts — `pnpm cli:test` fails when they drift
  * (scripts/check-world-components-alignment.mjs).
  */
-const WORLD_COMPONENTS_SPEC = "@xrift/world-components@0.53.0";
+const WORLD_COMPONENTS_SPEC = "@xrift/world-components@0.55.0";
 const SHELL_ENTRY = "remoteEntry.js";
 const RUNTIME_CONTRACT_SOURCE = path.join(
   RUNTIME_PACKAGE_DIR,
@@ -83,10 +83,14 @@ export const World: FC<WorldProps> = ({ position = [0, 0, 0], scale = 1 }) => (
 `;
 
 function parseArguments(argv) {
-  const options = { out: path.join("public", "xrift-runtime-shell"), keepTemp: false };
+  const options = { out: path.join("public", "xrift-runtime-shell"), keepTemp: false, templateDir: null };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--out") options.out = argv[++index] ?? options.out;
+    else if (argument === "--template-dir") {
+      if (!argv[index + 1] || argv[index + 1].startsWith("--")) throw new Error("--template-dir requires a directory");
+      options.templateDir = path.resolve(argv[++index]);
+    }
     else if (argument === "--keep-temp") options.keepTemp = true;
     else if (argument === "--help" || argument === "-h") options.help = true;
     else throw new Error(`Unknown argument: ${argument}`);
@@ -124,24 +128,42 @@ async function main() {
   const options = parseArguments(process.argv.slice(2));
   if (options.help) {
     process.stdout.write(
-      "Usage: node scripts/build-world-runtime-shell.mjs [--out <dir>] [--keep-temp]\n",
+      "Usage: node scripts/build-world-runtime-shell.mjs [--out <dir>] [--keep-temp] [--template-dir <official-template-checkout>]\n",
     );
     return 0;
   }
 
   const outputDir = path.resolve(repoRoot, options.out);
   const runtimeContract = await readRuntimeContractVersion();
+  const cliVersion = await readBundledCliVersion();
+  const npmrc = await fs.readFile(path.join(repoRoot, ".npmrc"), "utf8");
+  const registry = npmrc.match(/^registry\s*=\s*(\S+)\s*$/m)?.[1];
+  if (!registry) throw new Error("The repository .npmrc must configure the package registry");
+  const studioPackage = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "xrift-shell-"));
   const projectName = "xrift-studio-runtime-shell";
   const projectDir = path.join(tempRoot, projectName);
 
   try {
+    // Temporary projects must use the same screened registry as Studio.
+    await fs.writeFile(path.join(tempRoot, ".npmrc"), npmrc, "utf8");
     process.stdout.write("1/6 XRift公式テンプレートを取得しています\n");
-    await run(
-      "npx",
-      ["--yes", "@xrift/cli", "create", "world", projectName, "--skip-install", "-y"],
-      tempRoot,
-    );
+    if (options.templateDir) {
+      // A checked-out official template also supports repeatable builds when
+      // this environment cannot fetch GitHub's source archive directly.
+      await fs.cp(options.templateDir, projectDir, {
+        recursive: true,
+        filter: (source) => ![".git", "node_modules", "dist"].includes(path.basename(source)),
+      });
+    } else {
+      await run(
+        "npx",
+        ["--registry", registry, "--yes", `@xrift/cli@${cliVersion}`, "create", "world", projectName,
+          "--template", "WebXR-JP/xrift-world-template", "--skip-install", "--no-interactive"],
+        tempRoot,
+      );
+    }
+    await fs.writeFile(path.join(projectDir, ".npmrc"), npmrc, "utf8");
 
     process.stdout.write("2/6 テンプレートをシェル用に置き換えています\n");
     await fs.writeFile(
@@ -162,24 +184,28 @@ async function main() {
     await removeDtsPlugin(path.join(projectDir, "vite.config.ts"));
 
     process.stdout.write("3/6 xrift-studio-runtime をパックしています\n");
+    await run("pnpm", ["runtime:build"], repoRoot);
     await run("npm", ["pack", "--pack-destination", tempRoot], RUNTIME_PACKAGE_DIR);
     const tarball = (await fs.readdir(tempRoot)).find((name) => name.endsWith(".tgz"));
     if (!tarball) throw new Error("xrift-studio-runtime のtarballを作成できませんでした");
 
     process.stdout.write("4/6 依存関係をインストールしています\n");
-    const studioPackage = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
     // Constrain React before the first resolution; installing the old template
     // first can already fail with ERESOLVE.
+    const sharedPackages = ["react", "react-dom", "three", "@react-three/fiber",
+      "@react-three/drei", "@react-three/rapier", "@react-three/uikit", "hls.js"];
+    const typePackages = ["@types/react", "@types/react-dom", "@types/three"];
     await run(
       "npm",
       [
+        "--registry", registry,
         "install",
         "--no-audit",
         "--no-fund",
         "--save-exact",
         WORLD_COMPONENTS_SPEC,
-        `react@${studioPackage.dependencies.react}`,
-        `react-dom@${studioPackage.dependencies["react-dom"]}`,
+        ...sharedPackages.map((name) => `${name}@${studioPackage.dependencies[name]}`),
+        ...typePackages.map((name) => `${name}@${studioPackage.devDependencies[name]}`),
         path.join(tempRoot, tarball),
       ],
       projectDir,
@@ -233,6 +259,8 @@ async function main() {
         {
           version,
           runtimeContract,
+          cliVersion,
+          worldComponentsVersion: WORLD_COMPONENTS_SPEC.slice(WORLD_COMPONENTS_SPEC.lastIndexOf("@") + 1),
           entry: SHELL_ENTRY,
           files: shellFiles.sort(),
         },
@@ -253,6 +281,13 @@ async function main() {
       await fs.rm(tempRoot, { recursive: true, force: true });
     }
   }
+}
+
+async function readBundledCliVersion() {
+  const source = await fs.readFile(path.join(repoRoot, "src-tauri/src/runtime_installation.rs"), "utf8");
+  const version = source.match(/pub const XRIFT_CLI_VERSION:\s*&str\s*=\s*"(\d+\.\d+\.\d+)"/)?.[1];
+  if (!version) throw new Error("The bundled XRift CLI version could not be read");
+  return version;
 }
 
 async function readRuntimeContractVersion() {
@@ -284,4 +319,3 @@ main().then(
     process.exit(1);
   },
 );
-

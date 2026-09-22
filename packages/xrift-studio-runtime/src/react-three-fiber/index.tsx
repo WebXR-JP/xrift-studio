@@ -672,6 +672,7 @@ function XriftRuntimeOfficialComponentAdapters({
         | { visible: boolean }
         | undefined;
       if (!reflector || !fallback) continue;
+      mirrorGroup.userData.xriftRuntimeMirrorAdvanceFrame?.();
       mirrorGroup.getWorldPosition(mirrorWorldPosition);
       const distance = cameraWorldPosition.distanceTo(mirrorWorldPosition);
       const lodDistance =

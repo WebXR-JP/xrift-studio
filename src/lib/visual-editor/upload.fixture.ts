@@ -123,10 +123,10 @@ function assertShellManifestRules(): void {
     () =>
       parseShellManifest({
         version: "1",
-        runtimeContract: "stale",
+        runtimeContract: "2026-09-06-model-instancing-v1",
         files: [SHELL_ENTRY_PATH],
       }),
-    "a stale runtime shell contract was accepted",
+    "a runtime shell without Mirror reflection intervals was accepted",
   );
   assertThrows(
     () => parseShellManifest(null),

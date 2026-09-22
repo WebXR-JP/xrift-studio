@@ -59,6 +59,7 @@ import {
 } from "../image-quad.js";
 
 import { detectTimeUniforms, stampObjectTimeUniforms } from "../shader-time.js";
+import { installMirrorReflectionInterval } from "../mirror-reflection.js";
 import {
   getKhrInteractivityOnStartAnimationCues,
   type InteractivityAnimationCue,
@@ -854,6 +855,10 @@ function createRuntimeMirrorComponent(
   group.userData.xriftStudioComponentId = component.id;
   group.userData.xriftRuntimeMirror = reflector;
   group.userData.xriftRuntimeMirrorFallback = fallback;
+  group.userData.xriftRuntimeMirrorAdvanceFrame = installMirrorReflectionInterval(
+    reflector,
+    runtimeNumberOr(properties.reflectionInterval, 2, 1),
+  );
   group.userData.xriftRuntimeMirrorLodDistance = runtimeNumberOr(
     properties.lodDistance,
     10,

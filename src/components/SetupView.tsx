@@ -30,6 +30,8 @@ export function SetupView({ status, onReady }: Props) {
   const [logs, setLogs] = useState<SetupProgress[]>([]);
   const [showSupport, setShowSupport] = useState(false);
   const unlistenRef = useRef<UnlistenFn | null>(null);
+  const runningRef = useRef(false);
+  const isUpdate = status.xriftInstalled || status.xriftUpdateRequired;
 
   useEffect(() => {
     let mounted = true;
@@ -48,6 +50,8 @@ export function SetupView({ status, onReady }: Props) {
   }, []);
 
   const start = async () => {
+    if (runningRef.current) return;
+    runningRef.current = true;
     setRunning(true);
     setError(null);
     setLogs([]);
@@ -55,10 +59,11 @@ export function SetupView({ status, onReady }: Props) {
     try {
       const next = await tauri.setupRuntime();
       if (next.ready) onReady(next);
-      else setError("セットアップを完了できませんでした。もう一度お試しください。");
+      else setError("必要なツールの準備が完了していません。もう一度お試しください。");
     } catch (e) {
       setError(`${e}`);
     } finally {
+      runningRef.current = false;
       setRunning(false);
     }
   };
@@ -77,7 +82,7 @@ export function SetupView({ status, onReady }: Props) {
         <div className="mb-8 flex flex-col items-center text-center">
           <BrandMark size={72} animate />
           <h1 className="mt-5 text-[28px] font-semibold tracking-tight text-zinc-900">
-            <span className="text-gradient-brand">XRift Studio</span> へようこそ
+            <span className="text-gradient-brand">XRift Studio</span>{!isUpdate && " へようこそ"}
           </h1>
           <p className="mt-2 text-sm text-zinc-500">
             ワールドやアイテムを作成して、XRiftに公開できます。
@@ -89,9 +94,13 @@ export function SetupView({ status, onReady }: Props) {
 
         <div className="rounded-2xl border border-white/60 bg-white/80 p-6 shadow-brand backdrop-blur-sm">
           <section aria-labelledby="setup-title" aria-busy={running}>
-            <h2 id="setup-title" className="text-lg font-semibold text-zinc-900">最初にセットアップ</h2>
+            <h2 id="setup-title" className="text-lg font-semibold text-zinc-900">
+              {isUpdate ? "制作ツールの更新が必要です" : "最初にセットアップ"}
+            </h2>
             <p className="mt-2 mb-4 text-sm leading-6 text-zinc-600">
-              制作に使うツールを準備します。完了するとプロジェクト一覧が開き、新しいワールドやアイテムを作れます。
+              {isUpdate
+                ? "このバージョンのXRift Studioに必要なツールを準備します。完了するとプロジェクト一覧が開きます。"
+                : "制作に使うツールを準備します。完了するとプロジェクト一覧が開き、新しいワールドやアイテムを作れます。"}
             </p>
             <div className="flex items-center gap-2 text-xs text-zinc-500">
               <Sparkles size={14} className="text-brand-500" strokeWidth={2} />
@@ -99,8 +108,22 @@ export function SetupView({ status, onReady }: Props) {
             </div>
 
             <ul className="mt-4 space-y-2.5 text-sm">
-              <SetupItem done={status.nodeInstalled} label="Node.js v24 LTS" hint="アプリ専用のNode.jsとnpm" />
-              <SetupItem done={status.xriftInstalled} label="@xrift/cli" hint="ワールドやアイテムの作成・公開に使う XRift 公式ツール" />
+              <SetupItem
+                done={status.nodeInstalled}
+                label={`Node.js v${status.nodeVersion} LTS`}
+                hint="アプリ専用のNode.jsとnpm"
+              />
+              <SetupItem
+                done={status.xriftInstalled && !status.xriftUpdateRequired}
+                label="@xrift/cli"
+                hint="ワールドやアイテムの作成・公開に使う XRift 公式ツール"
+                version={status.xriftUpdateRequired && status.xriftVersion
+                  ? `現在 v${status.xriftVersion} → 推奨 v${status.recommendedXriftVersion}`
+                  : status.xriftVersion
+                    ? `v${status.xriftVersion}`
+                    : `インストールするバージョン: v${status.recommendedXriftVersion}`}
+                needsUpdate={status.xriftUpdateRequired}
+              />
             </ul>
 
             <details className="mt-4 rounded-lg bg-zinc-50 px-3 py-2 text-[11px] text-zinc-500">
@@ -140,7 +163,9 @@ export function SetupView({ status, onReady }: Props) {
 
             {error && (
               <div role="alert" className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 animate-fade-in">
-                <div className="font-semibold">セットアップを完了できませんでした</div>
+                <div className="font-semibold">
+                  {isUpdate ? "制作ツールを更新できませんでした" : "セットアップを完了できませんでした"}
+                </div>
                 <div className="mt-1 whitespace-pre-wrap font-mono text-[11px]">{error}</div>
                 <button
                   type="button"
@@ -162,12 +187,14 @@ export function SetupView({ status, onReady }: Props) {
               {running ? (
                 <>
                   <Loader2 size={14} className="animate-spin" strokeWidth={2.25} />
-                  セットアップ中…
+                  {isUpdate ? "制作ツールを更新中…" : "セットアップ中…"}
                 </>
               ) : (
                 <>
                   <Sparkles size={14} strokeWidth={2.25} />
-                  {error ? "セットアップを再試行" : "セットアップを開始"}
+                  {isUpdate
+                    ? error ? "更新を再試行" : "制作ツールを更新"
+                    : error ? "セットアップを再試行" : "セットアップを開始"}
                 </>
               )}
             </button>
@@ -181,14 +208,20 @@ export function SetupView({ status, onReady }: Props) {
       </div>
       <SupportReportModal
         open={showSupport}
-        context={{ currentScreen: "初期セットアップのエラー画面", errorMessage: error }}
+        context={{ currentScreen: isUpdate ? "制作ツール更新のエラー画面" : "初期セットアップのエラー画面", errorMessage: error }}
         onClose={() => setShowSupport(false)}
       />
     </div>
   );
 }
 
-function SetupItem({ done, label, hint }: { done: boolean; label: string; hint: string }) {
+function SetupItem({ done, label, hint, version, needsUpdate }: {
+  done: boolean;
+  label: string;
+  hint: string;
+  version?: string;
+  needsUpdate?: boolean;
+}) {
   return (
     <li className="flex items-center gap-3">
       <span className="shrink-0">
@@ -201,8 +234,10 @@ function SetupItem({ done, label, hint }: { done: boolean; label: string; hint: 
       <span className="flex-1 min-w-0">
         <span className="block text-zinc-800">{label}</span>
         <span className="block text-[11px] text-zinc-500">{hint}</span>
+        {version && <span className="mt-0.5 block text-[11px] text-zinc-700">{version}</span>}
       </span>
       {done && <span className="text-[11px] font-medium text-emerald-600">導入済み</span>}
+      {needsUpdate && <span className="shrink-0 text-[11px] font-medium text-brand-700">更新が必要</span>}
     </li>
   );
 }

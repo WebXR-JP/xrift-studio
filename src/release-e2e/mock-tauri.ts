@@ -36,6 +36,8 @@ declare global {
 const PROJECTS_ROOT = "C:\\XRiftE2E\\projects";
 const CLASSIC_WORLD_PATH = `${PROJECTS_ROOT}\\classic-world`;
 const CLASSIC_ITEM_PATH = `${PROJECTS_ROOT}\\classic-item`;
+const RECOMMENDED_XRIFT_VERSION = "0.24.4";
+const NODE_VERSION = "24.21.0";
 
 const runtimePaths: RuntimePaths = {
   appRoot: "C:\\XRiftE2E",
@@ -213,7 +215,29 @@ export function installReleaseE2EMock(): void {
     0,
     Number.parseInt(searchParams.get("saveFailures") ?? "0", 10) || 0,
   );
-  let runtimeReady = scenario !== "setup" && scenario !== "setup-error";
+  const firstSetup = scenario === "setup" || scenario === "setup-error";
+  const cliUpdate = scenario?.startsWith("cli-update") ?? false;
+  let nodeInstalled = !firstSetup && scenario !== "runtime-node-update";
+  let xriftUpdateRequired = scenario?.startsWith("runtime-update") ?? false;
+  let xriftVersion = firstSetup
+    ? null
+    : xriftUpdateRequired
+      ? "0.24.3"
+      : scenario === "runtime-newer" || scenario === "runtime-node-update"
+        ? "0.25.0"
+        : RECOMMENDED_XRIFT_VERSION;
+  let setupFailuresRemaining = scenario === "runtime-update-error" ? 1 : 0;
+  let updateFailuresRemaining = scenario === "cli-update-error" ? 1 : 0;
+  const runtimeStatus = (): RuntimeStatus => ({
+    ready: nodeInstalled && xriftVersion !== null && !xriftUpdateRequired,
+    nodeInstalled,
+    nodeVersion: NODE_VERSION,
+    xriftInstalled: xriftVersion !== null,
+    xriftVersion,
+    recommendedXriftVersion: RECOMMENDED_XRIFT_VERSION,
+    xriftUpdateRequired,
+    paths: { ...runtimePaths },
+  });
   let nextPid = 4100;
 
   const state: ReleaseE2EState = {
@@ -251,30 +275,30 @@ export function installReleaseE2EMock(): void {
         case "get_versions":
           return {
             appVersion: "0.5.6",
-            nodeVersion: runtimeReady ? "v24.0.0" : "",
+            nodeVersion: nodeInstalled ? `v${NODE_VERSION}` : "",
           };
         case "runtime_paths":
           return { ...runtimePaths };
         case "runtime_status":
-          return {
-            ready: runtimeReady,
-            nodeInstalled: runtimeReady,
-            xriftInstalled: runtimeReady,
-            paths: { ...runtimePaths },
-          } satisfies RuntimeStatus;
+          return runtimeStatus();
         case "setup_runtime":
+          await new Promise((resolve) => window.setTimeout(resolve, 500));
           if (scenario === "setup-error") {
             throw new Error(
               "Runtime install failed at C:\\Users\\release-e2e\\runtime; password=do-not-copy",
             );
           }
-          runtimeReady = true;
-          return {
-            ready: true,
-            nodeInstalled: true,
-            xriftInstalled: true,
-            paths: { ...runtimePaths },
-          } satisfies RuntimeStatus;
+          if (setupFailuresRemaining > 0) {
+            setupFailuresRemaining -= 1;
+            throw new Error("CLIのダウンロードに失敗しました");
+          }
+          if (scenario === "runtime-update-incomplete") return runtimeStatus();
+          nodeInstalled = true;
+          if (xriftUpdateRequired || !xriftVersion) {
+            xriftVersion = RECOMMENDED_XRIFT_VERSION;
+          }
+          xriftUpdateRequired = false;
+          return runtimeStatus();
         case "sandbox_env":
           return {
             XRIFT_E2E: "1",
@@ -386,8 +410,14 @@ export function installReleaseE2EMock(): void {
         case "read_image_data_url":
           throw new Error("Release E2E fixture does not contain binary files");
         case "check_xrift_latest":
-          return "0.43.0";
+          return cliUpdate ? "0.24.5" : RECOMMENDED_XRIFT_VERSION;
         case "update_xrift":
+          await new Promise((resolve) => window.setTimeout(resolve, 500));
+          if (updateFailuresRemaining > 0) {
+            updateFailuresRemaining -= 1;
+            throw new Error("CLIのダウンロードに失敗しました");
+          }
+          if (scenario !== "cli-update-incomplete") xriftVersion = "0.24.6";
           return null;
         case "detect_xrift_mcp_clients":
           return [];
@@ -483,7 +513,7 @@ export function installReleaseE2EMock(): void {
 
           let stdout = "Command completed";
           if (args.includes("--version")) {
-            stdout = "0.43.0";
+            stdout = xriftVersion ?? "";
           } else if (args.includes("whoami")) {
             stdout =
               "User: Release Tester\nID: 11111111-2222-4333-8444-555555555555";

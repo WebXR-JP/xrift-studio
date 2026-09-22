@@ -17,8 +17,13 @@ mod project_transfer;
 mod hierarchy_transfer;
 pub mod mcp;
 mod script_trust;
+mod runtime_installation;
+use runtime_installation::{
+    cli_manifest_version, cli_version_output_matches, cli_version_supported, installed_cli_version,
+    node_distribution, NODE_VERSION, XRIFT_CLI_VERSION,
+};
 
-const NODE_VERSION: &str = "v24.15.0";
+static RUNTIME_INSTALL_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 const VISUAL_PROJECT_MANIFEST: &str = "xrift-studio.project.json";
 const VISUAL_PROJECT_SCHEMA_VERSION: &str = "0.1.0";
 const SCENE_DOCUMENT_SCHEMA_VERSION: &str = "0.1.0";
@@ -84,9 +89,7 @@ fn take_opened_project_archives(
 }
 
 #[cfg(target_os = "windows")]
-const NODE_DIST: &str = "node-v24.15.0-win-x64";
-#[cfg(target_os = "windows")]
-const NODE_ARCHIVE_NAME: &str = "node-v24.15.0-win-x64.zip";
+const NODE_PLATFORM: &str = "win-x64";
 #[cfg(target_os = "windows")]
 const NODE_EXE_NAME: &str = "node.exe";
 #[cfg(target_os = "windows")]
@@ -95,14 +98,10 @@ const NODE_BIN_REL: &str = "";
 const NPM_CLI_REL: &str = "node_modules/npm/bin/npm-cli.js";
 
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-const NODE_DIST: &str = "node-v24.15.0-darwin-arm64";
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-const NODE_ARCHIVE_NAME: &str = "node-v24.15.0-darwin-arm64.tar.gz";
+const NODE_PLATFORM: &str = "darwin-arm64";
 
 #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-const NODE_DIST: &str = "node-v24.15.0-darwin-x64";
-#[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-const NODE_ARCHIVE_NAME: &str = "node-v24.15.0-darwin-x64.tar.gz";
+const NODE_PLATFORM: &str = "darwin-x64";
 
 #[cfg(target_os = "macos")]
 const NODE_EXE_NAME: &str = "node";
@@ -112,14 +111,10 @@ const NODE_BIN_REL: &str = "bin";
 const NPM_CLI_REL: &str = "lib/node_modules/npm/bin/npm-cli.js";
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-const NODE_DIST: &str = "node-v24.15.0-linux-x64";
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-const NODE_ARCHIVE_NAME: &str = "node-v24.15.0-linux-x64.tar.gz";
+const NODE_PLATFORM: &str = "linux-x64";
 
 #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-const NODE_DIST: &str = "node-v24.15.0-linux-arm64";
-#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-const NODE_ARCHIVE_NAME: &str = "node-v24.15.0-linux-arm64.tar.gz";
+const NODE_PLATFORM: &str = "linux-arm64";
 
 #[cfg(target_os = "linux")]
 const NODE_EXE_NAME: &str = "node";
@@ -127,11 +122,16 @@ const NODE_EXE_NAME: &str = "node";
 const NODE_BIN_REL: &str = "bin";
 #[cfg(target_os = "linux")]
 const NPM_CLI_REL: &str = "lib/node_modules/npm/bin/npm-cli.js";
+
+fn node_archive_name() -> String {
+    let extension = if cfg!(target_os = "windows") { "zip" } else { "tar.gz" };
+    format!("{}.{extension}", node_distribution(NODE_PLATFORM))
+}
 
 fn node_url() -> String {
     format!(
-        "https://nodejs.org/dist/{}/{}",
-        NODE_VERSION, NODE_ARCHIVE_NAME
+        "https://nodejs.org/dist/v{}/{}",
+        NODE_VERSION, node_archive_name()
     )
 }
 
@@ -158,6 +158,10 @@ pub struct RuntimeStatus {
     pub ready: bool,
     pub node_installed: bool,
     pub xrift_installed: bool,
+    pub node_version: String,
+    pub xrift_version: Option<String>,
+    pub recommended_xrift_version: String,
+    pub xrift_update_required: bool,
     pub paths: RuntimePaths,
 }
 
@@ -424,7 +428,7 @@ fn app_root(app: &AppHandle) -> Result<PathBuf, String> {
 
 fn derive_paths(root: &Path) -> RuntimePaths {
     let runtime_dir = root.join("runtime");
-    let node_dist_dir = runtime_dir.join(NODE_DIST);
+    let node_dist_dir = runtime_dir.join(node_distribution(NODE_PLATFORM));
     let node_bin_dir = if NODE_BIN_REL.is_empty() {
         node_dist_dir.clone()
     } else {
@@ -448,7 +452,7 @@ fn derive_paths(root: &Path) -> RuntimePaths {
             .join("@xrift")
             .join("cli")
             .join("dist")
-            .join("cli.js")
+            .join("index.js")
     } else {
         npm_prefix
             .join("lib")
@@ -456,7 +460,7 @@ fn derive_paths(root: &Path) -> RuntimePaths {
             .join("@xrift")
             .join("cli")
             .join("dist")
-            .join("cli.js")
+            .join("index.js")
     };
 
     RuntimePaths {
@@ -484,14 +488,26 @@ fn runtime_paths(app: AppHandle) -> Result<RuntimePaths, String> {
 #[tauri::command]
 fn runtime_status(app: AppHandle) -> Result<RuntimeStatus, String> {
     let paths = runtime_paths(app)?;
+    Ok(runtime_status_for_paths(paths))
+}
+
+fn runtime_status_for_paths(paths: RuntimePaths) -> RuntimeStatus {
     let node_installed = node_runtime_installed(&paths);
-    let xrift_installed = Path::new(&paths.xrift_cmd).exists();
-    Ok(RuntimeStatus {
-        ready: node_installed && xrift_installed,
+    let xrift_version = installed_cli_version(Path::new(&paths.xrift_js));
+    let xrift_installed = xrift_version.is_some();
+    let xrift_update_required = xrift_version
+        .as_deref()
+        .is_some_and(|version| !cli_version_supported(version));
+    RuntimeStatus {
+        ready: node_installed && xrift_installed && !xrift_update_required,
         node_installed,
         xrift_installed,
+        node_version: NODE_VERSION.to_string(),
+        xrift_version,
+        recommended_xrift_version: XRIFT_CLI_VERSION.to_string(),
+        xrift_update_required,
         paths,
-    })
+    }
 }
 
 fn node_runtime_installed(paths: &RuntimePaths) -> bool {
@@ -510,11 +526,15 @@ fn emit_progress(app: &AppHandle, step: &str, percent: f64, message: &str) {
 }
 
 async fn download_node(app: &AppHandle, paths: &RuntimePaths) -> Result<PathBuf, String> {
-    let archive_path = PathBuf::from(&paths.runtime_dir).join(NODE_ARCHIVE_NAME);
+    let archive_path = PathBuf::from(&paths.runtime_dir).join(node_archive_name());
     let url = node_url();
     emit_progress(app, "download", 0.0, &format!("ダウンロード中: {}", url));
 
-    let response = reqwest::get(&url).await.map_err(|e| e.to_string())?;
+    let response = reqwest::get(&url)
+        .await
+        .map_err(|e| e.to_string())?
+        .error_for_status()
+        .map_err(|e| e.to_string())?;
     let total = response.content_length().unwrap_or(0);
     let mut downloaded: u64 = 0;
     let mut file = tokio::fs::File::create(&archive_path)
@@ -575,6 +595,21 @@ async fn run_npm_install_global(paths: &RuntimePaths, package_spec: &str) -> Res
         .arg("--no-fund")
         .arg(package_spec);
 
+    configure_runtime_command(&mut cmd, paths);
+    let output = cmd.output().await.map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(format!(
+            "npm install failed:\nstdout: {}\nstderr: {}",
+            stdout, stderr
+        ));
+    }
+    Ok(())
+}
+
+fn configure_runtime_command(cmd: &mut tokio::process::Command, paths: &RuntimePaths) {
+    cmd.current_dir(&paths.home);
     cmd.env_clear();
     cmd.env(
         "PATH",
@@ -605,21 +640,34 @@ async fn run_npm_install_global(paths: &RuntimePaths, package_spec: &str) -> Res
         cmd.env("TMP", v);
     }
 
-    let output = cmd.output().await.map_err(|e| e.to_string())?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        return Err(format!(
-            "npm install failed:\nstdout: {}\nstderr: {}",
-            stdout, stderr
-        ));
-    }
-    Ok(())
 }
 
-async fn install_xrift(app: &AppHandle, paths: &RuntimePaths) -> Result<(), String> {
-    emit_progress(app, "npm-install", 0.0, "@xrift/cliをインストール中…");
-    run_npm_install_global(paths, "@xrift/cli").await
+async fn install_xrift(app: &AppHandle, paths: &RuntimePaths, version: &str) -> Result<(), String> {
+    emit_progress(
+        app, "npm-install", 0.0,
+        &format!("@xrift/cli {version}をインストール中…"),
+    );
+    run_npm_install_global(paths, &format!("@xrift/cli@{version}")).await
+}
+
+async fn verify_xrift_runtime(paths: &RuntimePaths) -> Result<String, String> {
+    let version = installed_cli_version(Path::new(&paths.xrift_js))
+        .filter(|version| cli_version_supported(version))
+        .ok_or("XRift CLIのファイルまたはバージョンを確認できません。セットアップを再試行してください。")?;
+    let mut cmd = tokio::process::Command::new(&paths.node_exe);
+    cmd.arg(&paths.xrift_js).arg("--version").kill_on_drop(true);
+    configure_runtime_command(&mut cmd, paths);
+    let output = tokio::time::timeout(std::time::Duration::from_secs(20), cmd.output())
+        .await
+        .map_err(|_| "XRift CLIの起動確認がタイムアウトしました。再試行してください。".to_string())?
+        .map_err(|error| format!("XRift CLIを起動できません: {error}"))?;
+    if !output.status.success() || !cli_version_output_matches(&String::from_utf8_lossy(&output.stdout), &version) {
+        return Err(format!(
+            "XRift CLIの起動確認に失敗しました。セットアップを再試行してください。\n{}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(version)
 }
 
 #[tauri::command]
@@ -638,21 +686,47 @@ async fn check_xrift_latest() -> Result<Option<String>, String> {
     let version = json
         .get("version")
         .and_then(|v| v.as_str())
+        .filter(|version| cli_version_supported(version))
         .map(|s| s.to_string());
     Ok(version)
 }
 
 #[tauri::command]
 async fn update_xrift(app: AppHandle) -> Result<(), String> {
+    let _guard = RUNTIME_INSTALL_LOCK
+        .try_lock()
+        .map_err(|_| "ツールの準備または更新を実行中です。完了を待ってください。".to_string())?;
     let paths = runtime_paths(app.clone())?;
+    if !node_runtime_installed(&paths) {
+        return Err("Node.jsのセットアップを先に完了してください。".to_string());
+    }
+    let latest = check_xrift_latest().await?
+        .ok_or("更新可能なXRift CLIのバージョンを取得できませんでした。")?;
+    let current = cli_manifest_version(Path::new(&paths.xrift_js));
+    // Fetch latest once and install that exact release. A changed dist-tag or
+    // an older registry response must not downgrade a newer local install.
+    let already_current = current.as_deref().is_some_and(|current| {
+        cli_version_supported(current)
+            && semver::Version::parse(current).ok() >= semver::Version::parse(&latest).ok()
+    });
     emit_progress(&app, "xrift-update", 0.0, "@xrift/cliをアップデート中…");
-    run_npm_install_global(&paths, "@xrift/cli@latest").await?;
-    emit_progress(&app, "xrift-update", 100.0, "アップデート完了");
+    if !already_current || verify_xrift_runtime(&paths).await.is_err() {
+        let target = if already_current { current.as_deref().unwrap_or(&latest) } else { &latest };
+        run_npm_install_global(&paths, &format!("@xrift/cli@{target}")).await?;
+    }
+    let installed = verify_xrift_runtime(&paths).await?;
+    if semver::Version::parse(&installed).ok() < semver::Version::parse(&latest).ok() {
+        return Err(format!("XRift CLI {latest}への更新を確認できませんでした。再試行してください。"));
+    }
+    emit_progress(&app, "xrift-update", 100.0, &format!("@xrift/cli {installed}への更新を確認しました"));
     Ok(())
 }
 
 #[tauri::command]
 async fn setup_runtime(app: AppHandle) -> Result<RuntimeStatus, String> {
+    let _guard = RUNTIME_INSTALL_LOCK
+        .try_lock()
+        .map_err(|_| "ツールの準備または更新を実行中です。完了を待ってください。".to_string())?;
     let paths = runtime_paths(app.clone())?;
 
     for d in [
@@ -675,14 +749,28 @@ async fn setup_runtime(app: AppHandle) -> Result<RuntimeStatus, String> {
         emit_progress(&app, "node-cached", 100.0, "Node.jsはインストール済みです");
     }
 
-    if !Path::new(&paths.xrift_cmd).exists() {
-        install_xrift(&app, &paths).await?;
-    } else {
-        emit_progress(&app, "xrift-cached", 100.0, "@xrift/cliはインストール済みです");
+    let installed = match verify_xrift_runtime(&paths).await {
+        Ok(version) => {
+            emit_progress(&app, "xrift-cached", 100.0, "@xrift/cliはインストール済みです");
+            version
+        }
+        Err(_) => {
+            // Repair a broken newer install at its existing version. A
+            // Studio upgrade must never silently downgrade a user's CLI.
+            let current = cli_manifest_version(Path::new(&paths.xrift_js));
+            let target = current.as_deref()
+                .filter(|version| cli_version_supported(version))
+                .unwrap_or(XRIFT_CLI_VERSION);
+            install_xrift(&app, &paths, target).await?;
+            verify_xrift_runtime(&paths).await?
+        }
+    };
+    let status = runtime_status_for_paths(paths);
+    if !status.ready {
+        return Err("ツールの準備を完了できませんでした。セットアップを再試行してください。".to_string());
     }
-
-    emit_progress(&app, "done", 100.0, "セットアップ完了");
-    runtime_status(app)
+    emit_progress(&app, "done", 100.0, &format!("セットアップ完了（XRift CLI {installed}）"));
+    Ok(status)
 }
 
 #[tauri::command]
@@ -6172,6 +6260,59 @@ mod tests {
                 .expect("clock must be after epoch")
                 .as_nanos()
         ))
+    }
+
+    #[test]
+    fn runtime_status_checks_cli_version_and_entry_instead_of_a_stale_shim() {
+        let root = reset_fixture_root("cli-version");
+        let paths = derive_paths(&root);
+        for file in [&paths.node_exe, &paths.npm_cli_js, &paths.xrift_cmd] {
+            let path = Path::new(file);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, b"").unwrap();
+        }
+        let status = runtime_status_for_paths(paths.clone());
+        assert!(status.node_installed);
+        assert!(!status.xrift_installed);
+        assert!(!status.ready, "a leftover shim cannot complete setup");
+
+        let entry = Path::new(&paths.xrift_js);
+        assert!(entry.ends_with("dist/index.js"));
+        std::fs::create_dir_all(entry.parent().unwrap()).unwrap();
+        std::fs::write(entry, b"").unwrap();
+        let manifest = entry.parent().unwrap().parent().unwrap().join("package.json");
+        for (version, ready) in [("0.24.3", false), (XRIFT_CLI_VERSION, true), ("0.25.0", true)] {
+            std::fs::write(&manifest, serde_json::json!({
+                "name": "@xrift/cli", "version": version,
+                "bin": { "xrift": "dist/index.js" }
+            }).to_string()).unwrap();
+            let status = runtime_status_for_paths(paths.clone());
+            assert_eq!(status.xrift_version.as_deref(), Some(version));
+            assert_eq!(status.ready, ready, "{version}");
+            assert_eq!(status.xrift_update_required, !ready, "{version}");
+        }
+        // Studio executes the entry with its own Node; a shim is not required.
+        std::fs::remove_file(&paths.xrift_cmd).unwrap();
+        assert!(runtime_status_for_paths(paths.clone()).ready);
+        std::fs::remove_file(entry).unwrap();
+        assert!(!runtime_status_for_paths(paths).ready);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn node_upgrade_keeps_project_auth_and_cli_directories() {
+        let root = reset_fixture_root("node-upgrade");
+        let paths = derive_paths(&root);
+        assert_eq!(Path::new(&paths.home), root.join("home"));
+        assert_eq!(Path::new(&paths.projects_root), root.join("projects"));
+        assert_eq!(Path::new(&paths.npm_prefix), root.join("npm-prefix"));
+        let old_node = root.join("runtime").join(format!("node-v24.15.0-{NODE_PLATFORM}"));
+        std::fs::create_dir_all(&old_node).unwrap();
+        std::fs::write(old_node.join("author-data-marker"), "preserved").unwrap();
+        assert!(!node_runtime_installed(&paths));
+        assert!(old_node.join("author-data-marker").is_file());
+        assert!(node_url().contains(&format!("/v{NODE_VERSION}/node-v{NODE_VERSION}-")));
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

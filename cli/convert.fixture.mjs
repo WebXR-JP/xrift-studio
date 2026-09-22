@@ -56,6 +56,7 @@ import { runScriptLifecycleFixtureAssertions } from "../src/lib/visual-editor/sc
 import { runScriptAudioFixtureAssertions } from "../src/lib/visual-editor/scripting/audio-runtime.fixture.ts";
 import { runAudioSourceRuntimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/audio-source.fixture.ts";
 import { runRuntimeSchemaFixtureAssertions } from "../packages/xrift-studio-runtime/src/schema.fixture.ts";
+import { runMirrorReflectionFixtureAssertions } from "../packages/xrift-studio-runtime/src/mirror-reflection.fixture.ts";
 import { runInteractivityEngineFixtureAssertions } from "../packages/xrift-studio-runtime/src/interactivity/engine.fixture.ts";
 import { runTimerQueueFixtureAssertions } from "../packages/xrift-studio-runtime/src/interactivity/timer-queue.fixture.ts";
 import {
@@ -126,6 +127,7 @@ import { runModelReimportImpactFixtureAssertions } from "../src/lib/visual-edito
 import { runOpenBrushFixtureAssertions } from "../src/lib/visual-editor/open-brush.fixture.ts";
 import { runVisualPublishFixtureAssertions } from "../src/lib/visual-editor/publish.fixture.ts";
 import { runSupportReportFixtureAssertions } from "../src/lib/support-report.fixture.ts";
+import { runXriftCliFixtureAssertions } from "../src/lib/xrift-cli.fixture.ts";
 import { runGlowMaterialCatalogFixtureAssertions } from "../src/lib/visual-editor/glow-material-catalog.fixture.ts";
 import { runPrefabSourceDetachFixtureAssertions } from "../src/lib/visual-editor/prefab-source-detach.fixture.ts";
 import { runAssetReferenceDetachFixtureAssertions } from "../src/lib/visual-editor/asset-reference-detach.fixture.ts";
@@ -288,7 +290,7 @@ try {
     "Classic package must not depend on the unpublished runtime package",
   );
   assert(
-    packageJson.dependencies?.["@xrift/world-components"] === "0.53.0",
+    packageJson.dependencies?.["@xrift/world-components"] === "0.55.0",
     "Classic package must pin @xrift/world-components to the compiler's version when the template has none",
   );
   assert(
@@ -369,6 +371,7 @@ try {
     ["entity bounds", runEntityBoundsFixtureAssertions],
     ["mcp harness guard", runMcpHarnessGuardFixtureAssertions],
     ["runtime schema", runRuntimeSchemaFixtureAssertions],
+    ["mirror reflection interval", runMirrorReflectionFixtureAssertions],
     ["interactivity engine", runInteractivityEngineFixtureAssertions],
     ["interactivity timer queue", runTimerQueueFixtureAssertions],
     ["animation runtime bridge", runAnimationRuntimeBridgeFixtureAssertions],
@@ -426,6 +429,7 @@ try {
     ["runtime spawn", runRuntimeSpawnFixtureAssertions],
     ["visual publish", runVisualPublishFixtureAssertions],
     ["support report", runSupportReportFixtureAssertions],
+    ["XRift CLI account", runXriftCliFixtureAssertions],
     ["glow material catalog", runGlowMaterialCatalogFixtureAssertions],
     ["prefab source detach", runPrefabSourceDetachFixtureAssertions],
     ["asset reference detach", runAssetReferenceDetachFixtureAssertions],

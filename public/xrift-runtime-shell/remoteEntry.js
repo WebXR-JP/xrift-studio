@@ -3,7 +3,7 @@ const exportSet = /* @__PURE__ */ new Set(["Module", "__esModule", "default", "_
 let moduleMap = {
   "./World": () => {
     dynamicLoadingCss([], false, "./World");
-    return __federation_import("./__federation_expose_World-CRjgqVBE.js").then((module) => Object.keys(module).every((item) => exportSet.has(item)) ? () => module.default : () => module);
+    return __federation_import("./__federation_expose_World-DOtcbFP4.js").then((module) => Object.keys(module).every((item) => exportSet.has(item)) ? () => module.default : () => module);
   }
 };
 const seen = {};
@@ -41,7 +41,7 @@ const dynamicLoadingCss = (cssFilePaths, dontAppendStylesToHead, exposeItemName)
       href = cssPath;
     }
     if (dontAppendStylesToHead) {
-      const key = "css__xrift_xrift_studio_runtime_shell__" + exposeItemName;
+      const key = "css__xrift_world_template__" + exposeItemName;
       window[key] = window[key] || [];
       window[key].push(href);
       return;

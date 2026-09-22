@@ -263,6 +263,7 @@ function App() {
     latest: string;
   } | null>(null);
   const [updating, setUpdating] = useState(false);
+  const updatingRef = useRef(false);
   const [updateChecked, setUpdateChecked] = useState(false);
   const [appUpdate, setAppUpdate] = useState<AppUpdateState>(
     INITIAL_APP_UPDATE_STATE,
@@ -593,16 +594,24 @@ function App() {
   }, [runtime?.ready, updateChecked, silentLog]);
 
   const handleUpdateXrift = async () => {
+    if (updatingRef.current) return;
+    updatingRef.current = true;
     setUpdating(true);
     try {
       await tauri.updateXrift();
       clearCaches();
+      const next = await tauri.runtimeStatus();
+      if (!next.ready || !next.xriftVersion) {
+        throw new Error("更新後のCLIを確認できませんでした。もう一度お試しください。");
+      }
+      if (updateInfo?.latest && isNewer(updateInfo.latest, next.xriftVersion)) {
+        throw new Error(`CLIはv${next.xriftVersion}です。v${updateInfo.latest}への更新をもう一度お試しください。`);
+      }
+      setRuntime(next);
       toast({
         kind: "success",
         title: "@xrift/cli をアップデートしました",
-        description: updateInfo?.latest
-          ? `v${updateInfo.latest}`
-          : undefined,
+        description: `v${next.xriftVersion}`,
       });
       setUpdateInfo(null);
     } catch (e) {
@@ -612,6 +621,7 @@ function App() {
         description: String(e),
       });
     } finally {
+      updatingRef.current = false;
       setUpdating(false);
     }
   };

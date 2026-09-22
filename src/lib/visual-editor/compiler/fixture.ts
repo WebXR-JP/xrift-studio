@@ -3501,6 +3501,7 @@ export function runVisualCompilerFixtureAssertions(
       rotation: [0, 0, 0],
       size: [4, 2],
       textureResolution: 256,
+      reflectionInterval: 3,
       lodDistance: 12,
     },
   });
@@ -3616,6 +3617,10 @@ export function runVisualCompilerFixtureAssertions(
   assert(interactiveSource.includes("onMove={(next)"), "Grabbable callback was not generated");
   assert(interactiveSource.includes("Skybox"), "Skybox import/output was not generated");
   assert(
+    interactiveSource.includes("reflectionInterval={3}"),
+    "Authored Mirror reflection interval was lost from Classic output",
+  );
+  assert(
     interactiveSource.includes("Video180Sphere"),
     "Video180Sphere import/output was not generated",
   );
@@ -3635,6 +3640,18 @@ export function runVisualCompilerFixtureAssertions(
   const officialRuntimeResult = compileVisualProject(
     { ...modelProject, scenes: { [interactiveScene.sceneId]: interactiveScene } },
     { generatedAt: fixedTime, outputMode: "classic-runtime" },
+  );
+  const officialRuntimeManifest = JSON.parse(
+    officialRuntimeResult.runtimeManifestFile?.content ?? "{}",
+  );
+  assert(
+    officialRuntimeManifest.scenes?.[interactiveScene.sceneId]?.entities?.[
+      interactiveEntity.id
+    ]?.components?.some(
+      (component: { id: string; properties?: { reflectionInterval?: number } }) =>
+        component.id === mirror.id && component.properties?.reflectionInterval === 3,
+    ),
+    "Authored Mirror reflection interval was lost from runtime output",
   );
   assert(
     officialRuntimeResult.canStage &&
