@@ -2501,11 +2501,13 @@ function EntityObject({
                 {children}
               </>
             ) : (
-              <RuntimePhysicsEntity entity={entity}>
-                {entityVisuals}
-                {modelNodeColliderShapes}
+              <>
+                <RuntimePhysicsEntity entity={entity}>
+                  {ownedColliderVisuals}
+                  {modelNodeColliderShapes}
+                </RuntimePhysicsEntity>
                 {children}
-              </RuntimePhysicsEntity>
+              </>
             )
           ) : (
             <>
