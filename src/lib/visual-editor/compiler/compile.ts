@@ -2573,7 +2573,7 @@ function renderOwnedRigidBody(
 /** One implementation for editor Play and exported JSX, including late model loads. */
 function includeReactiveMeshColliders(context: CompileContext): void {
   context.fiberImports.add("createPortal");
-  for (const name of ["createContext", "useCallback", "useContext", "useEffect", "useLayoutEffect", "useRef", "useState"]) context.reactValueImports.add(name);
+  for (const name of ["Component", "createContext", "useCallback", "useContext", "useEffect", "useLayoutEffect", "useRef", "useState"]) context.reactValueImports.add(name);
   context.reactTypeImports.add("ReactNode");
   for (const name of ["BufferGeometry", "InstancedMesh", "Matrix4", "Mesh", "Object3D", "Group"]) context.threeTypeImports.add(name);
   for (const name of ["BallCollider", "ConvexHullCollider", "CuboidCollider", "TrimeshCollider", "useRapier", "type RapierCollider"]) context.rapierImports.add(name);
