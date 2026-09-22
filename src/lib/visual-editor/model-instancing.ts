@@ -16,7 +16,12 @@ export function collectModelInstancingEntities(scene: SceneDocument, assets: Ass
     while (current) {
       if (seen.has(current.id) || !current.enabled) return false;
       seen.add(current.id);
-      if (current.components.some((c) => c.enabled && !["transform", "mesh", "collider"].includes(c.type))) return false;
+      // Physics-bearing entities keep their authored render tree. Instancing
+      // hides the source meshes and moves rendering to a root-level batch;
+      // doing that for a Collider decouples its visible mesh from the body and
+      // can leave a live collider behind when the replacement batch is culled
+      // or fails to build in the published world.
+      if (current.components.some((c) => c.enabled && !["transform", "mesh"].includes(c.type))) return false;
       current = current.parentId ? scene.entities[current.parentId] : undefined;
     }
     return true;
