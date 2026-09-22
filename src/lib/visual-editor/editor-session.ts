@@ -118,7 +118,7 @@ export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
     "physics.mesh-collider",
     "Mesh Collider",
     "physics",
-    true,
+    false,
     "collider",
   ),
   definition("core.light.ambient", "Ambient Light", "rendering", true, "light", {
