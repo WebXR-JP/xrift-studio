@@ -61,7 +61,7 @@ GitHub Pages の紹介ページは、最新リリースのインストーラー�
 - ビルド時: `pnpm release:snapshot` が公開済みの最新リリースを読み、`src/preview/generated/release-snapshot.ts` を書き換えます。生成物はコミットします。取得に失敗した場合は既存のスナップショットを保ったまま終了し、ビルドを止めません。
 - 表示後: ページが GitHub の公開 API へ問い合わせ、返ってきたリリースでスナップショットを置き換えます。1 ページの読み込みにつき 1 回だけ問い合わせます。
 
-`.github/workflows/pages.yml` はビルド前にスナップショットを更新し、リリースの公開時にも再デプロイします。リリースの作り方 (`.github/workflows/release.yml`) は変更していません。アセット名の規則 (`[name]_[version]_[platform]_[arch]_[mode][setup][ext]`) を変える場合は、`src/preview/lib/release-download.ts` の判定も合わせて更新してください。状態設計は [マイクロインタラクション Wiki](./docs/UX_INTERACTIONS.md) の F-41 にあります。
+`.github/workflows/pages.yml` はビルド前にスナップショットを更新し、リリースの公開時にも再デプロイします。アセット名の規則 (`[name]_[version]_[platform]_[arch]_[mode][setup][ext]`) を変える場合は、`src/preview/lib/release-download.ts` の判定も合わせて更新してください。状態設計は [マイクロインタラクション Wiki](./docs/UX_INTERACTIONS.md) の F-41 にあります。
 
 ## 配布ビルド
 
@@ -121,10 +121,12 @@ GitHub Actions のリポジトリ Secrets に次を登録してください。
 
 公開鍵は `src-tauri/tauri.conf.json` の updater 設定に含まれます。秘密鍵ファイルとパスワードはリポジトリへ追加しないでください。
 
-1. バージョン更新時に `docs/releases/<version>.md` を作成します。先頭は `# XRift Studio v<version>` とし、前回のリリースから利用者に関わる変更点を箇条書きで記載します。空の更新文やバージョンの不一致はリリース前の検証で止まります。
+1. アプリの版番号を揃え、`docs/releases/<version>.md` を作成します。先頭は `# XRift Studio v<version>` とし、前回のリリースから利用者に関わる変更点を箇条書きで記載します。空の更新文やタグとTauri設定の版番号の不一致はリリース前の検証で止まります。
 2. GitHub Actions タブ → **Release** → **Run workflow**
 3. タグ名（例: `v0.1.0`）を入力して実行
-4. 完了後、更新文がGitHub Releaseと自動更新用の説明に入り、GitHub Release に全 OS のインストーラ、署名、`latest.json` が自動添付されます
+4. 検査成功後にReleaseの下書きを1つ作り、全OSのインストーラーと署名を並列で添付します。すべて成功すると、最後のjobが必要ファイルと署名を確認し、全OS分の `latest.json` を1回だけ生成・添付してから公開します。更新文はGitHub Releaseと自動更新用の説明に入ります。
+
+版番号は `package.json`、`package-lock.json` のトップレベルと `packages[""]`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock` の `xrift-studio` エントリーを揃えます。依存パッケージの版番号は変更しません。
 
 公開済みの通常リリースだけがアプリの `releases/latest/download/latest.json` から取得されます。ドラフトは公開するまで、プレリリースは通常リリースになるまで自動更新の対象になりません。
 
@@ -134,7 +136,18 @@ GitHub Actions のリポジトリ Secrets に次を登録してください。
 | macOS | `.dmg`（universal — Apple Silicon + Intel） |
 | Linux | `.deb` / `.rpm` / `.AppImage` |
 
-**プレリリース／ドラフト** として公開するオプションもあります（workflow 実行時のフォーム参照）。
+**プレリリース／下書き** のオプションもあります（workflow 実行時のフォーム参照）。`draft` を選んだ場合も全ファイルと更新情報を添付し、公開せずに下書きに残します。OS別ビルド、添付、更新情報の生成のどこかで失敗した場合も下書きのまま停止します。
+
+### 添付に失敗した場合
+
+[GitHubのImmutable releases](https://docs.github.com/en/code-security/concepts/supply-chain-security/immutable-releases)では、公開すると添付ファイルとタグが固定されます。公開前に全ファイルを添付する必要があり、公開済みReleaseへの追加や差し替えはできません。ワークフローはビルド前に既存Releaseの状態を確認し、公開済みなら新しい版番号とタグを使うよう案内して停止します。
+
+- **下書きのまま失敗した場合**: 同じcommit・同じタグの実行を再実行できます。添付済みファイルを再利用・更新し、最後に全ファイルから `latest.json` を作り直します。別commitを同じ下書きへ混ぜる操作は停止します。
+- **公開済みの版にファイルが不足する場合**: 新しい版番号とタグで配布し直します。Immutable releaseを削除しても、同じタグ名は再利用できません。
+
+2026年9月22日の `v0.10.2` は、`releaseDraft: false` により添付前に公開され、全OSのファイルが未添付のまま固定されました。修正を含むブランチをマージ後、**Release → Run workflow → `v0.10.3`** で実行します。通常公開なら `draft` と `prerelease` は選びません。古い `v0.10.2` の失敗した実行を再実行しても、固定済みReleaseの修復にはなりません。[対象の実行](https://github.com/WebXR-JP/xrift-studio/actions/runs/35712907566)
+
+公開処理の回帰確認は `node --test scripts/prepare-release-notes.test.mjs scripts/github-release.test.mjs` で実行します。実際のReleaseを作らず、公開済みタグの拒否、下書きからの再実行、全OSの更新情報、添付失敗時に公開しないことを確認します。
 
 ### 所要時間の作り
 
