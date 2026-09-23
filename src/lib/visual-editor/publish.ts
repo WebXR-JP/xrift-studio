@@ -991,10 +991,6 @@ async function assertStagedModuleEntry(
   );
 }
 
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 export function didXriftUploadStopBeforeRemoteTransfer(output: string): boolean {
   const clean = output.replace(/\u001b\[[0-9;]*m/g, "");
   return (
@@ -1248,4 +1244,3 @@ export async function clearStaleXriftUploadAttempt(
     compilerStagingDirectoryName(projectId, projectKind),
   );
 }
-

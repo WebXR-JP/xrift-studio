@@ -62,6 +62,9 @@ assert(viewport.includes('const reportCollisionLoad = useSceneModelLoadReport({ 
 assert(viewport.includes('status: !component.enabled || primitive || terrain ? "ready" : "loading"'), "only already-synchronous visual sources begin ready");
 const runtimeScene = read("packages/xrift-studio-runtime/src/react-three-fiber/index.tsx");
 assert(runtimeScene.indexOf("const dynamicBodies = useMemo") < runtimeScene.indexOf("if (!result) return fallback"), "runtime load must not change React hook order");
+assert(!runtimeScene.includes("visual.scale.copy(scale);\n    source.visible = false;"), "runtime collection must not hide a loaded GLB during render");
+assert(runtimeScene.includes("Keep the source visible until the replacement body has actually committed."), "runtime must defer source visibility swap until the body commits");
+assert(runtimeScene.includes("useLayoutEffect(() => {") && runtimeScene.includes("entry.source.visible = false;"), "mounted runtime body owns the visibility swap");
 // Execute the real support-declaration generator in isolation. This checks its
 // own import sets and embedded text without pretending the app was typechecked.
 const compilerAst = ts.createSourceFile("compile.ts", compiler, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);

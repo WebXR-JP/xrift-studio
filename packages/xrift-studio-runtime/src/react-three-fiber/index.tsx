@@ -4,6 +4,7 @@ const EMPTY_INSTANCING_ENTITIES: readonly string[] = [];
 import {
   Fragment,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -1294,8 +1295,6 @@ function XriftRuntimePhysicsBodies({
   useEffect(
     () => () => {
       for (const entry of dynamicBodies) {
-        entry.source.visible = true;
-        entry.visual.visible = true;
         disposeRuntimePhysicsClone(entry.mesh);
         entry.visual.removeFromParent();
       }
@@ -1348,6 +1347,21 @@ function XriftRuntimeDynamicBody({
 }: {
   entry: RuntimeDynamicBodyEntry;
 }) {
+  // Keep the source visible until the replacement body has actually committed.
+  // Hiding it while collecting render data is a render-time side effect: if
+  // Rapier/React throws before this component mounts, XRift is left with a
+  // successfully loaded GLB whose source object is permanently invisible.
+  useLayoutEffect(() => {
+    const sourceVisible = entry.source.visible;
+    const visualVisible = entry.visual.visible;
+    entry.visual.visible = sourceVisible;
+    entry.source.visible = false;
+    return () => {
+      entry.source.visible = sourceVisible;
+      entry.visual.visible = visualVisible;
+    };
+  }, [entry]);
+
   const hasExplicitCollider = entry.mesh !== null || entry.boxes.length > 0;
   const autoCollider =
     hasExplicitCollider || entry.autoColliders === "none"
@@ -1507,7 +1521,6 @@ function collectRuntimeDynamicBodyEntries(
     visual.position.set(0, 0, 0);
     visual.quaternion.identity();
     visual.scale.copy(scale);
-    source.visible = false;
     entries.push({
       id: entity.id,
       position: [position.x, position.y, position.z],

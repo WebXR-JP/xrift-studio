@@ -5997,7 +5997,7 @@ dependencies = [
 
 [[package]]
 name = "xrift-studio"
-version = "0.10.1"
+version = "0.10.3"
 dependencies = [
  "base64 0.22.1",
  "dirs",

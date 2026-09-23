@@ -955,6 +955,7 @@ function validateCompilerDocuments(
       });
     }
     if (scene) {
+      validatePhysicsComponentMultiplicity(scene, diagnostics);
       validateXriftComponents(scene, documents.project.projectKind).forEach(
         (componentIssue) => {
           const compileBlockingWarning = [
@@ -1022,6 +1023,45 @@ function validateCompilerDocuments(
         fieldPath: issue.path,
       }),
     );
+  }
+}
+
+function validatePhysicsComponentMultiplicity(
+  scene: SceneDocument,
+  diagnostics: CompilerDiagnostic[],
+): void {
+  for (const entity of Object.values(scene.entities)) {
+    const rigidBodies = entity.components.filter(
+      (component): component is RigidBodyComponent =>
+        component.type === "rigid-body" && component.enabled,
+    );
+    for (const duplicate of rigidBodies.slice(1)) {
+      diagnostics.push({
+        severity: "blocking",
+        code: "multiple-rigid-bodies",
+        message: "同じEntityに有効なRigid Bodyを複数設定できません。1つにまとめてください",
+        sceneId: scene.sceneId,
+        entityId: entity.id,
+        componentId: duplicate.id,
+      });
+    }
+
+    const meshColliders = entity.components.filter(
+      (component): component is MeshColliderComponent =>
+        component.type === "collider" &&
+        component.shape === "mesh" &&
+        component.enabled,
+    );
+    for (const duplicate of meshColliders.slice(1)) {
+      diagnostics.push({
+        severity: "blocking",
+        code: "multiple-mesh-colliders-unsupported",
+        message: "同じEntityに有効なMesh Colliderを複数設定できません。必要な判定は子Entityへ分けてください",
+        sceneId: scene.sceneId,
+        entityId: entity.id,
+        componentId: duplicate.id,
+      });
+    }
   }
 }
 
@@ -2322,17 +2362,6 @@ function renderEntity(
     (component): component is RigidBodyComponent =>
       component.type === "rigid-body" && component.enabled,
   );
-  if (rigidBodies.length > 1) {
-    addDiagnostic(
-      context,
-      entityDiagnostic(
-        entity,
-        "multiple-rigid-bodies",
-        "複数の物理挙動のうち先頭だけを使用します",
-        "warning",
-      ),
-    );
-  }
   const ownRigidBody = rigidBodies[0];
   const rigidBodyOwner = ownRigidBody ?? inheritedRigidBody;
   const localContent: string[] = [];
@@ -2567,14 +2596,15 @@ function renderOwnedColliderContent(
       isFiniteVector(collider.center) &&
       isPositiveVector(collider.halfExtents),
   );
-  const meshCollider = colliders.find(
+  const meshColliders = colliders.filter(
     (collider): collider is MeshColliderComponent =>
       collider.shape === "mesh" && isColliderSurfaceValid(collider),
   );
+  const meshCollider = meshColliders[0];
   for (const collider of colliders) {
     const accepted =
       boxes.some((candidate) => candidate.id === collider.id) ||
-      meshCollider?.id === collider.id;
+      meshColliders.some((candidate) => candidate.id === collider.id);
     if (!accepted) {
       addDiagnostic(context, {
         ...componentDiagnostic(
@@ -2832,17 +2862,6 @@ function renderColliderBody(
   }
 
   const meshCollider = meshes[0];
-  for (const duplicate of meshes.slice(1)) {
-    addDiagnostic(context, {
-      severity: "warning",
-      code: "multiple-mesh-colliders-collapsed",
-      message:
-        "同じEntityのメッシュ衝突判定は先頭の設定を一つのRigidBodyへ統合します",
-      sceneId: context.scene.sceneId,
-      entityId: entity.id,
-      componentId: duplicate.id,
-    });
-  }
   let nodeColliderGeometry: string | null = null;
   if (meshCollider && !entityHasEnabledMesh(entity)) {
     nodeColliderGeometry = renderModelNodeColliderGeometry(

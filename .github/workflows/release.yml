@@ -1,7 +1,7 @@
 name: Release
 
-# 手動実行でタグを打ち、各 OS 向けの Release 版を GitHub Release に
-# 添付するワークフロー（Windows / macOS / Linux 対応）。
+# 手動実行で下書きを作り、各 OS 向けの Release 版を添付してから公開する。
+# Immutable releases では公開した時点で添付ファイルが変更できなくなる。
 #
 # 配信するのは Release 版だけにしている。以前は同じ実行で Debug 版も
 # 作って添付していたが、OS ごとに Rust を二度ビルドするため所要時間が
@@ -34,7 +34,7 @@ on:
         type: boolean
         default: false
       draft:
-        description: 'ドラフトとして公開する (手動で publish)'
+        description: '全ファイル添付後も下書きに残す (手動で公開)'
         required: false
         type: boolean
         default: false
@@ -42,8 +42,8 @@ on:
 permissions:
   contents: write
 
-# 同じタグの実行が重なると、3 つの build job が同じ Release の資産と
-# latest.json を同時に書き換える。前の実行は止めずに、順番に流す。
+# 同じタグの実行が重なると添付ファイルを上書きするため、順番に流す。
+# latest.json は全 OS の添付完了後、finalize-release だけが生成する。
 concurrency:
   group: release-${{ inputs.tag }}
   cancel-in-progress: false
@@ -56,6 +56,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -78,6 +80,9 @@ jobs:
         env:
           RELEASE_TAG: ${{ inputs.tag }}
         run: node scripts/prepare-release-notes.mjs
+
+      - name: Test release lifecycle
+        run: node --test scripts/prepare-release-notes.test.mjs scripts/github-release.test.mjs
       # 型検査はここで1回だけ行い、E2E jobでは繰り返さない。
       - name: Typecheck app and E2E
         run: pnpm typecheck && pnpm e2e:typecheck
@@ -95,6 +100,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -130,10 +137,47 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  prepare-release:
+    name: Prepare draft release
+    runs-on: ubuntu-22.04
+    needs: [verify, release-e2e]
+    outputs:
+      release_id: ${{ steps.release.outputs.release_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Create or resume draft release
+        id: release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_PRERELEASE: ${{ inputs.prerelease }}
+        with:
+          script: |
+            const { pathToFileURL } = require('node:url');
+            const root = process.env.GITHUB_WORKSPACE;
+            const { readReleaseNotes } = await import(pathToFileURL(`${root}/scripts/prepare-release-notes.mjs`).href);
+            const { prepareDraftRelease } = await import(pathToFileURL(`${root}/scripts/github-release.mjs`).href);
+            const tag = process.env.RELEASE_TAG;
+            const release = await prepareDraftRelease({
+              github,
+              ...context.repo,
+              tag,
+              commit: context.sha,
+              notes: readReleaseNotes(tag, root),
+              prerelease: process.env.RELEASE_PRERELEASE === 'true',
+            });
+            core.setOutput('release_id', release.id);
+            core.info(`Draft release: ${release.html_url}`);
+
   build:
     name: Build ${{ matrix.label }}
     runs-on: ${{ matrix.platform }}
-    needs: [verify, release-e2e]
+    needs: [prepare-release]
 
     strategy:
       fail-fast: false
@@ -161,6 +205,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -255,13 +301,7 @@ jobs:
             src-tauri/target-mcp-sidecar/x86_64-apple-darwin/release/xrift-studio-mcp \
             -output src-tauri/target/universal-apple-darwin/release/xrift-studio-mcp
 
-      - name: Prepare release notes
-        id: release-notes
-        env:
-          RELEASE_TAG: ${{ inputs.tag }}
-        run: node scripts/prepare-release-notes.mjs
-
-      - name: Build & upload Release bundles
+      - name: Build & upload bundles to draft
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -269,15 +309,59 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           XRIFT_MCP_SIDECAR_REUSE_PREBUILT: ${{ matrix.sidecar-reuse }}
         with:
+          releaseId: ${{ needs.prepare-release.outputs.release_id }}
           tagName: ${{ inputs.tag }}
-          releaseName: 'XRift Studio ${{ inputs.tag }}'
-          releaseBody: ${{ steps.release-notes.outputs.body }}
-          releaseDraft: ${{ inputs.draft }}
+          releaseDraft: true
           prerelease: ${{ inputs.prerelease }}
           includeRelease: true
           # Debug 版は配信しない。同じ実行で Rust をもう一度ビルドするため
           # 所要時間がほぼ倍になり、リリースが遅くなっていた。
           includeDebug: false
-          includeUpdaterJson: true
+          includeUpdaterJson: false
           assetNamePattern: '[name]_[version]_[platform]_[arch]_[mode][setup][ext]'
           args: ${{ matrix.args }}
+
+  finalize-release:
+    name: Verify assets and finalize release
+    runs-on: ubuntu-22.04
+    needs: [prepare-release, build]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Generate updater manifest and finalize release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ needs.prepare-release.outputs.release_id }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_DRAFT: ${{ inputs.draft }}
+          RELEASE_PRERELEASE: ${{ inputs.prerelease }}
+        with:
+          script: |
+            const { readFileSync } = require('node:fs');
+            const { pathToFileURL } = require('node:url');
+            const root = process.env.GITHUB_WORKSPACE;
+            const { readReleaseNotes } = await import(pathToFileURL(`${root}/scripts/prepare-release-notes.mjs`).href);
+            const { finalizeDraftRelease } = await import(pathToFileURL(`${root}/scripts/github-release.mjs`).href);
+            const { version, productName } = JSON.parse(readFileSync(`${root}/src-tauri/tauri.conf.json`, 'utf8'));
+            const tag = process.env.RELEASE_TAG;
+            const { release } = await finalizeDraftRelease({
+              github,
+              ...context.repo,
+              releaseId: Number(process.env.RELEASE_ID),
+              tag,
+              commit: context.sha,
+              version,
+              productName,
+              notes: readReleaseNotes(tag, root),
+              draft: process.env.RELEASE_DRAFT === 'true',
+              prerelease: process.env.RELEASE_PRERELEASE === 'true',
+            });
+            const status = release.draft ? '下書きの準備完了' : '公開完了';
+            await core.summary.addHeading(`XRift Studio ${tag}`)
+              .addRaw(`${status}: ${release.html_url}\n`)
+              .addRaw('全 OS のインストーラー、署名、latest.json を確認しました。\n')
+              .write();

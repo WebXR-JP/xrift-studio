@@ -6,10 +6,12 @@ import { collectPublishedAssetIds, planModelDownload } from "./compiler/download
 import { compileVisualProject } from "./compiler/compile";
 import { createPrototypeProject } from "./prototype-project";
 import { normalizeMaterialProperties, type ModelAsset } from "./asset-manifest";
-import { createScriptComponent, createTransformComponent, type MeshComponent } from "./scene-document";
+import { createScriptComponent, createTransformComponent, createRigidBodyComponent, createMeshColliderComponent, createBoxColliderComponent, type MeshComponent } from "./scene-document";
 import { assembleWebUploadFiles, parseShellManifest, SHELL_ENTRY_PATH } from "./web-upload";
 
 export async function runModelDownloadFixtureAssertions(): Promise<void> {
+  // The low-level byte utility remains tested for existing callers. Normal
+  // publication must never select it; assertPublicationPaths tests that below.
   const { bytes, json } = glbFixture();
   const original = bytes.slice();
   const plan = { replacedMaterials: [{ index: 0, name: "Paint" }] };
@@ -121,18 +123,17 @@ async function assertPublicationPaths(bytes: Uint8Array): Promise<void> {
   bundle.scene.rootEntityIds = ["entity"];
   const ids = collectPublishedAssetIds(bundle.scene, bundle.assets);
   assert(ids.has(model.id) && ids.has("download-material") && !ids.has("unused-model"), "Authoring provenance pulled unused models into the download");
-  assert(planModelDownload(model, bundle.scene, bundle.assets)?.replacedMaterials.length === 1, "Default material was not recognized");
+  assert(planModelDownload(model, bundle.scene, bundle.assets) === undefined, "Normal publication must not rewrite the GLB even when every material is overridden");
   const documents = { project: bundle.project, assets: bundle.assets, scenes: { [bundle.scene.sceneId]: bundle.scene }, prefabs: {} };
   for (const outputMode of ["classic-jsx", "classic-runtime"] as const) {
     const compilation = compileVisualProject(documents, { outputMode });
     assert(compilation.canStage, `Fixture cannot be published: ${JSON.stringify(compilation.diagnostics)}`);
-    assert(compilation.assetCopyPlan.length === 1 && compilation.assetCopyPlan[0].modelDownload?.replacedMaterials.length === 1, "Copy plan did not exclude unused assets or plan image removal");
+    assert(compilation.assetCopyPlan.length === 1 && compilation.assetCopyPlan[0].modelDownload === undefined, "Publication must copy the stored model without creating an image-removal plan");
     if (compilation.runtimeManifestFile) {
       const runtime = JSON.parse(compilation.runtimeManifestFile.content);
       const component = runtime.scenes[bundle.scene.sceneId].entities.entity.components.find((entry: any) => entry.type === "mesh");
       assert(component.materialBindings[0].materialAssetId === "download-material", "Runtime output would lose the default replacement");
-      // Material 1 is the first (local index 0) material on this Mesh. The
-      // original global index must win over the unrelated slot 0 fallback.
+      // Original global material indices still select the authored override.
       runtime.assets[model.id].materialSlots = [
         { slot: "source", name: "Other", sourceMaterialIndex: 0 },
         { slot: "paint", name: "Paint", sourceMaterialIndex: 1 },
@@ -150,20 +151,52 @@ async function assertPublicationPaths(bytes: Uint8Array): Promise<void> {
       assert(correctMaterial, "Runtime confused a global glTF material index with a local mesh index");
     }
   }
+
+  // The same byte-preserving path is required for the reported collider case.
+  const components = bundle.scene.entities.entity.components;
+  components.push(
+    createRigidBodyComponent("body", { bodyType: "fixed", autoColliders: "none" }),
+    createMeshColliderComponent("mesh-collider"),
+    createBoxColliderComponent("box-a"),
+    createBoxColliderComponent("box-b"),
+  );
+  const physicsSnapshot = JSON.stringify(documents);
+  for (const outputMode of ["classic-jsx", "classic-runtime"] as const) {
+    const compilation = compileVisualProject(documents, { outputMode });
+    assert(compilation.canStage, `Collider fixture cannot be published: ${JSON.stringify(compilation.diagnostics)}`);
+    assert(compilation.assetCopyPlan.length === 1 && compilation.assetCopyPlan[0].modelDownload === undefined, "Collider models must not select another GLB conversion path");
+    const source = compilation.overlayFiles.find((file) => file.relativePath === "src/World.tsx")?.content ?? "";
+    assert(!source.includes("XriftMeshColliderErrorBoundary") && !source.includes("Box Colliderへ切り替え"), "Publication must not silently replace a failed Mesh Collider with a box");
+  }
+  assert(JSON.stringify(documents) === physicsSnapshot, "Compiling modified the author's physics or model settings");
   const reads: string[] = [];
   const uploaded = await assembleWebUploadFiles({ documents, signal: new AbortController().signal, shellFiles: [{ path: SHELL_ENTRY_PATH, data: new Uint8Array([0]) }], readAssetBytes: async (path) => { reads.push(path); return bytes; } });
   const modelFile = uploaded.find((file) => file.remotePath.endsWith(".glb"));
-  assert(reads.length === 1 && !!modelFile && modelFile.size < bytes.byteLength, "Upload still contains the original model or unused assets");
-  assert(!readJson(modelFile!.data as Uint8Array).images, "Upload contains source images");
-  // Disabled components are retained because scripts can make them visible.
+  assert(reads.length === 1 && !!modelFile && modelFile.size === bytes.byteLength, "Upload must contain the original model, not a repacked model or unused assets");
+  assert(equal(modelFile!.data as Uint8Array, bytes), "Uploaded GLB bytes differ from the stored source");
+
+  const settings = model.importSettings;
+  model.importSettings = { ...settings, mergeStaticMeshes: true };
+  const mergeSnapshot = JSON.stringify(documents);
+  for (const outputMode of ["classic-jsx", "classic-runtime"] as const) {
+    let rejected = false;
+    try { compileVisualProject(documents, { outputMode }); }
+    catch (error) { rejected = error instanceof Error && error.message.includes("公開時だけのメッシュ結合は停止"); }
+    assert(rejected, `${outputMode} must reject legacy publish-only merging before code generation`);
+  }
+  assert(JSON.stringify(documents) === mergeSnapshot, "Rejected publication changed the saved merge setting");
+  model.importSettings = settings;
+  components.splice(2);
+
+  // Disabled components and explicit runtime references remain dependencies.
   mesh.enabled = false;
   assert(collectPublishedAssetIds(bundle.scene, bundle.assets).has(model.id), "Disabled runtime dependency was removed");
   model.materialSlots[0].defaultMaterialAssetId = undefined;
-  assert(planModelDownload(model, bundle.scene, bundle.assets)?.replacedMaterials.length === 0, "An unreplaced model material was stripped");
+  assert(planModelDownload(model, bundle.scene, bundle.assets) === undefined, "An unreplaced model material was stripped");
   mesh.materialBindings = [{ slot: "paint", materialAssetId: "download-material" }];
   const otherUse = { ...mesh, id: "other-mesh", materialBindings: [] };
   bundle.scene.entities.entity.components.push(otherUse);
-  assert(planModelDownload(model, bundle.scene, bundle.assets)?.replacedMaterials.length === 0, "A shared model lost a material needed by its other instance");
+  assert(planModelDownload(model, bundle.scene, bundle.assets) === undefined, "A shared model was rewritten during publication");
   const script = createScriptComponent("script", "script-asset")!;
   script.assetReferences = ["unused-model"];
   bundle.scene.entities.entity.components.push(script);
@@ -202,4 +235,3 @@ function glbFixture(change?: (json: any) => void): { bytes: Uint8Array; json: an
 function readJson(bytes: Uint8Array): any { return JSON.parse(new TextDecoder().decode(bytes.subarray(20, 20 + new DataView(bytes.buffer, bytes.byteOffset).getUint32(12, true)))); }
 function equal(left: Uint8Array, right: Uint8Array): boolean { return left.length === right.length && left.every((value, index) => value === right[index]); }
 function assert(value: boolean, message: string): void { if (!value) throw new Error(message); }
-
