@@ -203,6 +203,7 @@ export type SceneGizmoSettings = {
   size: number;
   gridVisible: boolean;
   gridSize: number;
+  /** Auto-aligned to translateSnap when gridSize or translateSnap changes. */
   gridDivisions: number;
   snapEnabled: boolean;
   /**
@@ -336,7 +337,7 @@ export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
       size: 0.82,
       gridVisible: true,
       gridSize: 40,
-      gridDivisions: 40,
+      gridDivisions: 80,
       snapEnabled: false,
       snapHoldShift: true,
       translateSnap: 0.5,
