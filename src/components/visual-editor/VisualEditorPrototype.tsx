@@ -97,6 +97,7 @@ import {
   resolveAssetCreationFolderId,
   resolveSceneSettings,
   resolveSceneWind,
+  alignGridToTranslationSnap,
   formatSnapStep,
   nudgeTransformPatch,
   snapStepForMode,
@@ -5562,6 +5563,15 @@ export function VisualEditorPrototype({
         const currentBundle = current.present.bundle;
         const settings = resolveSceneSettings(currentBundle.scene.settings);
         const gizmo = { ...settings.editor.gizmo, ...patch };
+        if (
+          gizmo.translateSnap !== settings.editor.gizmo.translateSnap ||
+          gizmo.gridSize !== settings.editor.gizmo.gridSize
+        ) {
+          Object.assign(
+            gizmo,
+            alignGridToTranslationSnap(gizmo.gridSize, gizmo.translateSnap),
+          );
+        }
         if (JSON.stringify(gizmo) === JSON.stringify(settings.editor.gizmo)) {
           return current;
         }

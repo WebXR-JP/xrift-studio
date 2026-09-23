@@ -190,6 +190,7 @@ import {
   type SceneSettings,
   type SceneSkyboxSettings,
 } from "./scene-settings";
+import { alignGridToTranslationSnap } from "./gizmo-snap";
 import {
   getScriptPropValueValidationError,
   type ScriptContract,
@@ -7876,6 +7877,16 @@ function applyGizmoPatch(
       invalidArgument("editor.gizmo.gridDivisions", "integer >= 1");
     }
     next.gridDivisions = patch.gridDivisions;
+  }
+  if (
+    (next.translateSnap !== current.translateSnap ||
+      next.gridSize !== current.gridSize) &&
+    patch.gridDivisions === undefined
+  ) {
+    Object.assign(
+      next,
+      alignGridToTranslationSnap(next.gridSize, next.translateSnap),
+    );
   }
   return next;
 }

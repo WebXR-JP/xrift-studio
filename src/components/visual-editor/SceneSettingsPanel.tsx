@@ -1313,7 +1313,7 @@ export function SceneSettingsInspector({
           <NumberField label="視野角" value={settings.camera.fov} min={1} max={179} step={1} disabled={readOnly} onChange={(fov) => update({ ...settings, camera: { ...settings.camera, fov } })} />
         </Section>
 
-        <Section title="ギズモとグリッド" description="編集時だけ使う表示・スナップ設定です。">
+        <Section title="ギズモとグリッド" description="移動スナップを変えると、グリッドサイズと分割数も間隔に合わせて調整します。分割数は手動で変更できます。">
           <Toggle label="グリッドを表示" checked={settings.editor.gizmo.gridVisible} disabled={readOnly} onChange={(gridVisible) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, gridVisible } } })} />
           <NumberField label="グリッドサイズ" value={settings.editor.gizmo.gridSize} min={1} step={1} disabled={readOnly || !settings.editor.gizmo.gridVisible} onChange={(gridSize) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, gridSize } } })} />
           <NumberField label="分割数" value={settings.editor.gizmo.gridDivisions} min={1} step={1} disabled={readOnly || !settings.editor.gizmo.gridVisible} onChange={(gridDivisions) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, gridDivisions: Math.round(gridDivisions) } } })} />
