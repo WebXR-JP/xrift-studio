@@ -9,6 +9,7 @@ import { colliderModelNode } from "../../lib/visual-editor/mesh-collision-action
 import { TerrainBrushCursor } from "./TerrainBrushCursor";
 import { getModelNodeMaterialSlots } from "./model-node-materials";
 import { SceneVramMetrics } from "./SceneDebugCapture";
+import { RecordingPanel, type RecordingPanelProps } from "./RecordingPanel";
 import {
   SceneEntityTreeProvider,
   useSceneEntityNode,
@@ -4885,6 +4886,7 @@ export function SceneViewport({
   boundsRequest = null,
   onBoundsResult,
   onExitRecordingView,
+  recordingPanel,
 }: {
   scene: SceneDocument;
   assets: AssetManifest;
@@ -4986,6 +4988,8 @@ export function SceneViewport({
   onBoundsResult?: (result: SceneBoundsResult) => void;
   /** Shown as a button while the recording view is up. */
   onExitRecordingView?: () => void;
+  /** Recording controls opened from the Scene View toolbar. */
+  recordingPanel?: RecordingPanelProps;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const { tablet: isTablet, phone, touch } = useEditorDevice();
@@ -5085,6 +5089,7 @@ export function SceneViewport({
   // React; which of the two forms is shown is a container query on the header,
   // so the controls exist once in the DOM either way.
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const [recordingPanelOpen, setRecordingPanelOpen] = useState(false);
   const [thumbnailCaptureActive, setThumbnailCaptureActive] = useState(false);
   // A clean frame: no grid, gizmo, selection or helper icons. Thumbnails always
   // want one; the recording view wants one unless the author asked to keep
@@ -5123,6 +5128,36 @@ export function SceneViewport({
   const debugResultRef = useRef(onDebugCaptureResult);
   debugResultRef.current = onDebugCaptureResult;
   const viewMenuRef = useRef<HTMLDivElement>(null);
+  const recordingPanelRef = useRef<HTMLElement>(null);
+  const recordingTriggerRef = useRef<HTMLButtonElement>(null);
+  const closeRecordingPanel = useCallback(() => {
+    setRecordingPanelOpen(false);
+    const trigger = recordingTriggerRef.current;
+    if (trigger?.getClientRects().length) trigger.focus();
+    else viewMenuRef.current?.querySelector<HTMLButtonElement>('[aria-label="表示と診断の設定"]')?.focus();
+  }, []);
+  useEffect(() => {
+    if (!recordingPanelOpen) return;
+    recordingPanelRef.current?.querySelector<HTMLButtonElement>('[aria-label="録画パネルを閉じる"]')?.focus();
+    const closeOnOutside = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!recordingPanelRef.current?.contains(target) && !recordingTriggerRef.current?.contains(target)) {
+        setRecordingPanelOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        closeRecordingPanel();
+      }
+    };
+    window.addEventListener("pointerdown", closeOnOutside, true);
+    window.addEventListener("keydown", closeOnEscape, true);
+    return () => {
+      window.removeEventListener("pointerdown", closeOnOutside, true);
+      window.removeEventListener("keydown", closeOnEscape, true);
+    };
+  }, [closeRecordingPanel, recordingPanelOpen]);
   useEffect(() => {
     if (!viewMenuOpen) return;
     const closeOnOutside = (event: PointerEvent) => {
@@ -5446,18 +5481,6 @@ export function SceneViewport({
       });
     }
   }, []);
-
-  const toggleVideoRecording = useCallback(() => {
-    if (videoSaving) return;
-    if (videoRecording) {
-      setVideoRecording(false);
-      setDebugNotice("診断動画を保存中…");
-      return;
-    }
-    setDebugOverlayEnabled(true);
-    setVideoRecording(true);
-    setDebugNotice("診断動画を録画中… 最大15秒");
-  }, [videoRecording, videoSaving]);
 
   const handleVideoAutoStop = useCallback(() => {
     setVideoRecording(false);
@@ -6550,7 +6573,7 @@ export function SceneViewport({
             >
               <EDITOR_ICONS.settings size={13} aria-hidden="true" />
               <span className="hidden @[420px]/scene-header:inline">
-                {videoRecording ? "録画中" : "表示"}
+                {videoRecording ? "診断中" : "表示"}
               </span>
             </button>
             <div
@@ -6674,27 +6697,61 @@ export function SceneViewport({
                 <EDITOR_ICONS.diagnostics size={13} aria-hidden="true" />
                 診断
               </button>
-              <button
-                type="button"
-                aria-label={videoRecording ? "診断動画を停止" : "診断動画を録画"}
-                onClick={toggleVideoRecording}
-                disabled={videoSaving}
-                title={videoRecording ? "診断動画を停止して保存" : "シーンを最大15秒録画"}
-                className={`flex h-7 min-w-[68px] shrink-0 items-center justify-center gap-1 rounded border px-2 text-[11px] font-semibold transition-colors disabled:cursor-wait disabled:opacity-50 ${
-                  videoRecording
-                    ? "border-rose-300 bg-rose-500/15 text-rose-700 hover:bg-rose-500/25"
-                    : editorMode === "play"
-                      ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
-                      : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100"
-                }`}
-              >
-                <EDITOR_ICONS.record size={13} aria-hidden="true" />
-                {videoSaving ? "保存中" : videoRecording ? "停止" : "録画"}
-              </button>
+              {recordingPanel ? (
+                <button
+                  ref={recordingTriggerRef}
+                  type="button"
+                  aria-label={recordingTakeActive ? "録画（録画中）" : "録画"}
+                  aria-expanded={recordingPanelOpen}
+                  aria-haspopup="dialog"
+                  onClick={() => {
+                    setViewMenuOpen(false);
+                    setRecordingPanelOpen((open) => !open);
+                  }}
+                  title="録画の設定と開始・停止"
+                  className={`flex h-7 min-w-[68px] shrink-0 items-center justify-center gap-1 rounded border px-2 text-[11px] font-semibold transition-colors ${
+                    recordingTakeActive || recordingPanelOpen
+                      ? "border-rose-300 bg-rose-500/15 text-rose-700 hover:bg-rose-500/25"
+                      : editorMode === "play"
+                        ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
+                        : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100"
+                  }`}
+                >
+                  <EDITOR_ICONS.record size={13} aria-hidden="true" />
+                  {recordingTakeActive ? "録画中" : "録画"}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
       </div>
+
+      {recordingPanelOpen && recordingPanel ? (
+        <section
+          ref={recordingPanelRef}
+          role="dialog"
+          aria-labelledby="scene-recording-panel-heading"
+          className="absolute bottom-2 right-2 top-10 z-50 flex w-80 max-w-[calc(100%-1rem)] flex-col overflow-hidden rounded-lg border border-editor-border bg-editor-surface text-editor-text shadow-xl"
+        >
+          <div className="flex h-11 shrink-0 items-center justify-between border-b border-slate-200 px-3.5">
+            <h2 id="scene-recording-panel-heading" className="text-sm font-semibold text-slate-900">
+              録画
+            </h2>
+            <button
+              type="button"
+              aria-label="録画パネルを閉じる"
+              title="閉じる"
+              onClick={closeRecordingPanel}
+              className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            >
+              <EDITOR_ICONS.close size={16} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="min-h-0 overflow-y-auto overscroll-contain">
+            <RecordingPanel {...recordingPanel} />
+          </div>
+        </section>
+      ) : null}
 
       {tablet && editorMode === "edit" && !recordingViewActive ? (
         <div

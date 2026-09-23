@@ -223,9 +223,6 @@ import {
   type XriftMcpClientId,
   type XriftMcpClientStatus,
   type XriftMcpEditorRequestEvent,
-  type XriftOllamaConfigurationResult,
-  type XriftOllamaIntegrationId,
-  type XriftOllamaStatus,
 } from "../../lib/tauri";
 import {
   EMPTY_MCP_HARNESS_STATE,
@@ -1749,11 +1746,6 @@ export function VisualEditorPrototype({
   const [mcpRegisteringClientId, setMcpRegisteringClientId] =
     useState<XriftMcpClientId | null>(null);
   const [mcpError, setMcpError] = useState<string | null>(null);
-  const [ollamaStatus, setOllamaStatus] = useState<XriftOllamaStatus | null>(null);
-  const [ollamaConfiguring, setOllamaConfiguring] = useState(false);
-  const [ollamaError, setOllamaError] = useState<string | null>(null);
-  const [ollamaResult, setOllamaResult] =
-    useState<XriftOllamaConfigurationResult | null>(null);
   const [mcpLastActivity, setMcpLastActivity] =
     useState<XriftMcpActivity>(null);
 
@@ -1789,18 +1781,11 @@ export function VisualEditorPrototype({
     if (!mcpNativeAvailable) return;
     setMcpLoading(true);
     setMcpError(null);
-    setOllamaError(null);
-    setOllamaResult(null);
     try {
-      const [clients, ollama] = await Promise.all([
-        tauri.detectXriftMcpClients(),
-        tauri.detectXriftOllama(),
-      ]);
-      setMcpClients(clients);
-      setOllamaStatus(ollama);
+      setMcpClients(await tauri.detectXriftMcpClients());
     } catch {
       setMcpError(
-        "AIクライアントまたはOllamaを確認できませんでした。XRift Studioを再起動して再試行してください",
+        "AIクライアントを確認できませんでした。XRift Studioを再起動して再試行してください",
       );
     } finally {
       setMcpLoading(false);
@@ -1809,11 +1794,7 @@ export function VisualEditorPrototype({
 
   const registerMcpClient = useCallback(
     async (clientId: XriftMcpClientId) => {
-      if (
-        !mcpNativeAvailable ||
-        mcpRegisteringClientId ||
-        ollamaConfiguring
-      ) {
+      if (!mcpNativeAvailable || mcpRegisteringClientId) {
         return;
       }
       setMcpRegisteringClientId(clientId);
@@ -1836,64 +1817,7 @@ export function VisualEditorPrototype({
         setMcpRegisteringClientId(null);
       }
     },
-    [mcpNativeAvailable, mcpRegisteringClientId, ollamaConfiguring],
-  );
-
-  const configureOllama = useCallback(
-    async (integrationId: XriftOllamaIntegrationId, model: string) => {
-      if (
-        !mcpNativeAvailable ||
-        ollamaConfiguring ||
-        mcpRegisteringClientId
-      ) {
-        return;
-      }
-      const target = mcpClients.find((client) => client.id === integrationId);
-      if (!target?.installed) {
-        setOllamaError(
-          "AIクライアントをインストールしてください",
-        );
-        return;
-      }
-
-      setOllamaConfiguring(true);
-      setOllamaError(null);
-      setOllamaResult(null);
-      try {
-        if (!target.registered || target.needsUpdate) {
-          setMcpRegisteringClientId(integrationId);
-          const status = await tauri.registerXriftMcpClient(integrationId);
-          setMcpClients((current) =>
-            current.map((client) =>
-              client.id === status.id ? status : client,
-            ),
-          );
-        }
-        const result = await tauri.configureXriftOllama(
-          integrationId,
-          model,
-        );
-        setOllamaResult(result);
-        setNotice(
-          `${result.integrationLabel}にOllamaの${result.model}を設定しました。AIクライアントを起動し直してください`,
-        );
-      } catch (error) {
-        setOllamaError(
-          typeof error === "string" && error.trim()
-            ? error
-            : "設定できません。OllamaとAIクライアントの状態を確認してください",
-        );
-      } finally {
-        setMcpRegisteringClientId(null);
-        setOllamaConfiguring(false);
-      }
-    },
-    [
-      mcpClients,
-      mcpNativeAvailable,
-      mcpRegisteringClientId,
-      ollamaConfiguring,
-    ],
+    [mcpNativeAvailable, mcpRegisteringClientId],
   );
 
   const requestAutosave = useCallback(
@@ -11896,6 +11820,66 @@ export function VisualEditorPrototype({
             onExitRecordingView={() =>
               recordingSession.setViewport({ visible: false })
             }
+            recordingPanel={{
+              busy: recordingBusy,
+              nativeAvailable: tauri.isAvailable(),
+              onStart: () => {
+                void startRecordingTake({}).then((result) => {
+                  if (!result.started && result.message) setNotice(result.message);
+                });
+              },
+              onStop: () => {
+                void stopRecordingTake().then((result) => {
+                  if (!result.stopped) return;
+                  setNotice(
+                    result.snapshot.status === "completed" && result.snapshot.path
+                      ? `録画を保存しました: ${result.snapshot.path}`
+                      : result.snapshot.message ?? "録画を停止しました",
+                  );
+                });
+              },
+              onProfileChange: (patch) => {
+                recordingSession.setProfile(patch);
+              },
+              onViewportChange: (patch) => {
+                recordingSession.setViewport(patch);
+              },
+              projectRecordingDirectory: projectPath ? `${projectPath}/Recording` : undefined,
+              onChooseDirectory: () => {
+                void tauri
+                  .selectDirectory(
+                    "録画の保存先を選ぶ",
+                    recordingSession.getState().outputDirectory ?? undefined,
+                  )
+                  .then((directory) => {
+                    if (typeof directory === "string" && directory) {
+                      recordingSession.setOutputDirectory(directory);
+                    }
+                  })
+                  .catch(() => setNotice("保存先を選べませんでした"));
+              },
+              onResetDirectory: () => recordingSession.setOutputDirectory(null),
+              onRevealRecording: (path) => {
+                const folder = path.replace(/[\\/][^\\/]+$/, "");
+                void tauri.openPath(folder || path).catch(() => {
+                  setNotice("録画の保存先を開けませんでした");
+                });
+              },
+              onFitCamera: () => {
+                void moveRecordingCamera({ fitScene: true }).catch((error) => {
+                  setNotice(
+                    error instanceof Error ? error.message : "録画用カメラを動かせませんでした",
+                  );
+                });
+              },
+              onCameraPreset: (preset) => {
+                void moveRecordingCamera({ preset }).catch((error) => {
+                  setNotice(
+                    error instanceof Error ? error.message : "録画用カメラを動かせませんでした",
+                  );
+                });
+              },
+            }}
           />
           <div id="editor-panel-inspector" className={sidePanelClass("inspector", true)}>
           <EditorPanelVisibilityContext.Provider value={!panelsHidden && (!tablet || tabletPanel === "inspector")}>
@@ -12029,6 +12013,8 @@ export function VisualEditorPrototype({
             />}
             sceneSettingsOpen={sceneSettingsOpen}
             onCloseSceneSettings={() => setSceneSettingsOpen(false)}
+            onResetLayout={() => executeCommand("layout.reset")}
+            onOpenSupport={() => setSupportOpen(true)}
             onSceneSettingsChange={handleSceneSettingsChange}
             onProjectMetadataChange={handleProjectMetadataChange}
             onThumbnailChanged={() => {
@@ -12400,22 +12386,16 @@ export function VisualEditorPrototype({
           <footer className="editor-status-dock relative z-40 flex min-h-10 shrink-0 items-center border-t border-editor-border bg-editor-surface px-1"
             aria-label="エディターのステータスバー">
           <EditorUtilityRail
-            commands={resolvedCommands}
             sceneSettingsOpen={sceneSettingsOpen}
             onToggleSceneSettings={() => {
               setSceneSettingsOpen((current) => !current);
               if (tablet) { setTabletPanel("inspector"); setViewportMaximized(false); }
             }}
-            onResetLayout={() => executeCommand("layout.reset")}
             mcpNativeAvailable={mcpNativeAvailable}
             mcpClients={mcpClients}
             mcpLoading={mcpLoading}
             mcpRegisteringClientId={mcpRegisteringClientId}
             mcpError={mcpError}
-            ollamaStatus={ollamaStatus}
-            ollamaConfiguring={ollamaConfiguring}
-            ollamaError={ollamaError}
-            ollamaResult={ollamaResult}
             mcpLastActivity={mcpLastActivity}
             canUndo={
               !renderedReadOnly &&
@@ -12425,79 +12405,14 @@ export function VisualEditorPrototype({
             }
             onOpenMcp={() => {
               if (
-                (mcpClients.length === 0 || ollamaStatus === null) &&
-                !mcpLoading
+                mcpClients.length === 0 && !mcpLoading
               ) {
                 void refreshMcpClients();
               }
             }}
             onRefreshMcp={() => void refreshMcpClients()}
             onRegisterMcpClient={(clientId) => void registerMcpClient(clientId)}
-            onConfigureOllama={(integrationId, model) =>
-              void configureOllama(integrationId, model)
-            }
             onUndo={handleUndo}
-            onOpenSupport={() => setSupportOpen(true)}
-            recording={{
-              busy: recordingBusy,
-              nativeAvailable: tauri.isAvailable(),
-              onStart: () => {
-                void startRecordingTake({}).then((result) => {
-                  if (!result.started && result.message) setNotice(result.message);
-                });
-              },
-              onStop: () => {
-                void stopRecordingTake().then((result) => {
-                  if (!result.stopped) return;
-                  setNotice(
-                    result.snapshot.status === "completed" && result.snapshot.path
-                      ? `録画を保存しました: ${result.snapshot.path}`
-                      : result.snapshot.message ?? "録画を停止しました",
-                  );
-                });
-              },
-              onProfileChange: (patch) => {
-                recordingSession.setProfile(patch);
-              },
-              onViewportChange: (patch) => {
-                recordingSession.setViewport(patch);
-              },
-              projectRecordingDirectory: projectPath ? `${projectPath}/Recording` : undefined,
-              onChooseDirectory: () => {
-                void tauri
-                  .selectDirectory(
-                    "録画の保存先を選ぶ",
-                    recordingSession.getState().outputDirectory ?? undefined,
-                  )
-                  .then((directory) => {
-                    if (typeof directory === "string" && directory) {
-                      recordingSession.setOutputDirectory(directory);
-                    }
-                  })
-                  .catch(() => setNotice("保存先を選べませんでした"));
-              },
-              onResetDirectory: () => recordingSession.setOutputDirectory(null),
-              onRevealRecording: (path) => {
-                const folder = path.replace(/[\\/][^\\/]+$/, "");
-                void tauri.openPath(folder || path).catch(() => {
-                  setNotice("録画の保存先を開けませんでした");
-                });
-              },
-              onFitCamera: () => {
-                void moveRecordingCamera({ fitScene: true }).catch((error) => {
-                  setNotice(
-                    error instanceof Error ? error.message : "録画用カメラを動かせませんでした",
-                  );
-                });
-              },
-              onCameraPreset: (preset) => {
-                void moveRecordingCamera({ preset }).catch((error) => {
-                  setNotice(
-                    error instanceof Error ? error.message : "録画用カメラを動かせませんでした",
-                  );
-                });
-              },
-            }}
           />
             <div ref={setAssetStatusHost} className="relative min-w-0 flex-1 self-stretch border-l border-editor-border" />
           </footer>

@@ -282,31 +282,6 @@ export type XriftMcpClientStatus = {
   message: string;
 };
 
-export type XriftOllamaIntegrationId = Extract<
-  XriftMcpClientId,
-  "codex" | "claude-code" | "opencode"
->;
-
-export type XriftOllamaModelStatus = {
-  name: string;
-};
-
-export type XriftOllamaStatus = {
-  installed: boolean;
-  serverReachable: boolean;
-  version: string | null;
-  launchSupported: boolean;
-  models: XriftOllamaModelStatus[];
-  message: string;
-};
-
-export type XriftOllamaConfigurationResult = {
-  integrationId: XriftOllamaIntegrationId;
-  integrationLabel: string;
-  model: string;
-  message: string;
-};
-
 export type RecordingEncoderSupport = {
   ffmpeg: boolean;
   ffmpegVersion: string | null;
@@ -783,16 +758,6 @@ export const tauri = {
     invoke<XriftMcpClientStatus[]>("detect_xrift_mcp_clients"),
   registerXriftMcpClient: (clientId: XriftMcpClientId) =>
     invoke<XriftMcpClientStatus>("register_xrift_mcp_client", { clientId }),
-  detectXriftOllama: () =>
-    invoke<XriftOllamaStatus>("detect_xrift_ollama"),
-  configureXriftOllama: (
-    integrationId: XriftOllamaIntegrationId,
-    model: string,
-  ) =>
-    invoke<XriftOllamaConfigurationResult>("configure_xrift_ollama", {
-      integrationId,
-      model,
-    }),
   completeXriftMcpRequest: (response: XriftMcpEditorResponse) =>
     invoke<void>("complete_xrift_mcp_request", { response }),
   setXriftMcpEditorReady: (ready: boolean) =>

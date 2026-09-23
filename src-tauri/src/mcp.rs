@@ -6,7 +6,7 @@ use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Output, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -45,7 +45,6 @@ pub struct XriftMcpBrokerState {
     pending: Mutex<HashMap<String, oneshot::Sender<XriftMcpEditorResponse>>>,
     request_lock: Mutex<()>,
     editor_heartbeat: AtomicU64,
-    ollama_configuration_active: AtomicBool,
     connections: Semaphore,
 }
 
@@ -55,7 +54,6 @@ impl Default for XriftMcpBrokerState {
             pending: Mutex::new(HashMap::new()),
             request_lock: Mutex::new(()),
             editor_heartbeat: AtomicU64::new(0),
-            ollama_configuration_active: AtomicBool::new(false),
             connections: Semaphore::new(MCP_MAX_CONCURRENT_CONNECTIONS),
         }
     }
@@ -134,32 +132,6 @@ pub struct XriftMcpClientStatus {
     pub message: String,
 }
 
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct XriftOllamaModelStatus {
-    pub name: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct XriftOllamaStatus {
-    pub installed: bool,
-    pub server_reachable: bool,
-    pub version: Option<String>,
-    pub launch_supported: bool,
-    pub models: Vec<XriftOllamaModelStatus>,
-    pub message: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct XriftOllamaConfigurationResult {
-    pub integration_id: String,
-    pub integration_label: String,
-    pub model: String,
-    pub message: String,
-}
-
 struct ClientRegistration {
     registered: bool,
     command: Option<PathBuf>,
@@ -222,57 +194,6 @@ impl SupportedMcpClient {
 
     fn parse(value: &str) -> Option<Self> {
         Self::all().into_iter().find(|client| client.id() == value)
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-enum SupportedOllamaIntegration {
-    Codex,
-    ClaudeCode,
-    OpenCode,
-}
-
-impl SupportedOllamaIntegration {
-    fn all() -> [Self; 3] {
-        [Self::Codex, Self::ClaudeCode, Self::OpenCode]
-    }
-
-    fn id(self) -> &'static str {
-        match self {
-            Self::Codex => "codex",
-            Self::ClaudeCode => "claude-code",
-            Self::OpenCode => "opencode",
-        }
-    }
-
-    fn label(self) -> &'static str {
-        match self {
-            Self::Codex => "Codex",
-            Self::ClaudeCode => "Claude Code",
-            Self::OpenCode => "OpenCode",
-        }
-    }
-
-    fn launch_id(self) -> &'static str {
-        match self {
-            Self::Codex => "codex",
-            Self::ClaudeCode => "claude",
-            Self::OpenCode => "opencode",
-        }
-    }
-
-    fn mcp_client(self) -> SupportedMcpClient {
-        match self {
-            Self::Codex => SupportedMcpClient::Codex,
-            Self::ClaudeCode => SupportedMcpClient::ClaudeCode,
-            Self::OpenCode => SupportedMcpClient::OpenCode,
-        }
-    }
-
-    fn parse(value: &str) -> Option<Self> {
-        Self::all()
-            .into_iter()
-            .find(|integration| integration.id() == value)
     }
 }
 
@@ -476,40 +397,6 @@ pub async fn register_xrift_mcp_client(
     })
     .await
     .map_err(|error| format!("AIクライアントへの登録に失敗しました: {error}"))?
-}
-
-#[tauri::command]
-pub async fn detect_xrift_ollama() -> Result<XriftOllamaStatus, String> {
-    tauri::async_runtime::spawn_blocking(detect_ollama)
-        .await
-        .map_err(|error| format!("Ollamaの確認に失敗しました: {error}"))
-}
-
-#[tauri::command]
-pub async fn configure_xrift_ollama(
-    state: State<'_, XriftMcpBrokerState>,
-    integration_id: String,
-    model: String,
-) -> Result<XriftOllamaConfigurationResult, String> {
-    let integration = SupportedOllamaIntegration::parse(&integration_id)
-        .ok_or_else(|| "このAIクライアントはOllamaの設定に対応していません".to_string())?;
-    if state
-        .ollama_configuration_active
-        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-        .is_err()
-    {
-        return Err("Ollamaの設定を実行中です。完了後に再試行してください".to_string());
-    }
-
-    let task = tauri::async_runtime::spawn_blocking(move || {
-        configure_ollama_integration(integration, &model)
-    })
-    .await;
-    state
-        .ollama_configuration_active
-        .store(false, Ordering::Release);
-
-    task.map_err(|error| format!("Ollamaの設定を完了できませんでした: {error}"))?
 }
 
 fn registration_arguments(
@@ -1294,46 +1181,6 @@ fn merge_opencode_config(
     Ok(config)
 }
 
-fn merge_opencode_ollama_config(mut config: Value, model: &str) -> Result<Value, String> {
-    let root = config
-        .as_object_mut()
-        .ok_or_else(|| "OpenCodeの設定の最上位がJSONオブジェクトではありません".to_string())?;
-    root.insert("model".to_string(), json!(format!("ollama/{model}")));
-
-    let provider = root
-        .entry("provider")
-        .or_insert_with(|| json!({}))
-        .as_object_mut()
-        .ok_or_else(|| "OpenCodeのprovider設定がJSONオブジェクトではありません".to_string())?;
-    let ollama = provider
-        .entry("ollama")
-        .or_insert_with(|| json!({}))
-        .as_object_mut()
-        .ok_or_else(|| "OpenCodeのOllama provider設定がJSONオブジェクトではありません".to_string())?;
-
-    ollama.insert("npm".to_string(), json!("@ai-sdk/openai-compatible"));
-    ollama.insert("name".to_string(), json!("Ollama"));
-    let options = ollama
-        .entry("options")
-        .or_insert_with(|| json!({}))
-        .as_object_mut()
-        .ok_or_else(|| "OpenCodeのOllama options設定がJSONオブジェクトではありません".to_string())?;
-    options.insert("baseURL".to_string(), json!("http://127.0.0.1:11434/v1"));
-    let models = ollama
-        .entry("models")
-        .or_insert_with(|| json!({}))
-        .as_object_mut()
-        .ok_or_else(|| "OpenCodeのOllamaのモデルs設定がJSONオブジェクトではありません".to_string())?;
-    let model_config = models
-        .entry(model.to_string())
-        .or_insert_with(|| json!({}))
-        .as_object_mut()
-        .ok_or_else(|| "OpenCodeのOllamaのモデル設定がJSONオブジェクトではありません".to_string())?;
-    model_config.insert("name".to_string(), json!(model));
-
-    Ok(config)
-}
-
 fn write_config_backup(
     config_path: &Path,
     payload: &[u8],
@@ -1412,309 +1259,6 @@ fn registration_sidecar_destination_for_payload(payload: &[u8], directory: &Path
     let digest = format!("{digest:x}");
     let suffix = if cfg!(windows) { ".exe" } else { "" };
     directory.join(format!("xrift-studio-mcp-{}{suffix}", &digest[..12]))
-}
-
-fn detect_ollama() -> XriftOllamaStatus {
-    let Some(executable) = find_ollama_executable() else {
-        return XriftOllamaStatus {
-            installed: false,
-            server_reachable: false,
-            version: None,
-            launch_supported: false,
-            models: Vec::new(),
-            message: "未検出".to_string(),
-        };
-    };
-
-    let version = run_ollama_command_output(&executable, &["--version".into()])
-        .ok()
-        .filter(|output| output.status.success())
-        .and_then(|output| parse_ollama_version(&output.stdout));
-    let launch_supported =
-        run_ollama_command_output(&executable, &["launch".into(), "--help".into()])
-            .is_ok_and(|output| output.status.success());
-    let list_output = run_ollama_command_output(&executable, &["list".into()]).ok();
-    let server_reachable = list_output
-        .as_ref()
-        .is_some_and(|output| output.status.success());
-    let models = list_output
-        .as_ref()
-        .filter(|output| output.status.success())
-        .map(|output| parse_ollama_models(&output.stdout))
-        .unwrap_or_default();
-    let message = if !launch_supported {
-        "更新するとAIクライアントを設定できます"
-    } else if !server_reachable {
-        "Ollamaが起動していません"
-    } else if models.is_empty() {
-        "Ollamaを起動し、モデルを追加してください"
-    } else {
-        "ローカルモデルを利用できます"
-    };
-
-    XriftOllamaStatus {
-        installed: true,
-        server_reachable,
-        version,
-        launch_supported,
-        models: models
-            .into_iter()
-            .map(|name| XriftOllamaModelStatus { name })
-            .collect(),
-        message: message.to_string(),
-    }
-}
-
-fn configure_ollama_integration(
-    integration: SupportedOllamaIntegration,
-    model: &str,
-) -> Result<XriftOllamaConfigurationResult, String> {
-    let executable = find_ollama_executable()
-        .ok_or_else(|| "Ollamaが見つかりません。先にOllamaをインストールしてください".to_string())?;
-    if !ollama_integration_client_available(integration) {
-        return Err(format!(
-            "{}が見つかりません。先にAIクライアントをインストールしてください",
-            integration.label()
-        ));
-    }
-    let list_output =
-        run_ollama_command_output(&executable, &["list".into()]).map_err(|error| {
-            format!("Ollamaへ接続できません。Ollamaを起動して再試行してください: {error}")
-        })?;
-    if !list_output.status.success() {
-        return Err(command_failure_message(
-            "Ollamaへ接続できません。Ollamaを起動して再試行してください",
-            &list_output,
-        ));
-    }
-    let models = parse_ollama_models(&list_output.stdout);
-    if model.is_empty() || !models.iter().any(|candidate| candidate == model) {
-        return Err("選択したOllamaのモデルが見つかりません。再検出してください".to_string());
-    }
-    let show_output = run_ollama_command_output(&executable, &["show".into(), model.into()])
-        .map_err(|error| format!("Ollamaのモデルの機能を確認できませんでした: {error}"))?;
-    if !show_output.status.success() {
-        return Err(command_failure_message(
-            "Ollamaのモデルの機能を確認できませんでした",
-            &show_output,
-        ));
-    }
-    if !ollama_model_supports_tools(&show_output.stdout) {
-        return Err(
-            "このOllamaのモデルはツール呼び出しに対応していません。別のモデルを選んでください"
-                .to_string(),
-        );
-    }
-
-    // `ollama launch <integration> --config` enters Ollama's interactive model
-    // selector even when `--model` and `--yes` are supplied. The Tauri command
-    // has no interactive terminal, so configure OpenCode through its documented
-    // JSON provider format instead of starting the client or invoking the TUI.
-    if matches!(integration, SupportedOllamaIntegration::OpenCode) {
-        return configure_opencode_ollama(model);
-    }
-
-    let arguments = ollama_configuration_arguments(integration, model);
-    let output = run_ollama_command_output(&executable, &arguments)
-        .map_err(|error| format!("Ollamaのクライアント設定を完了できません: {error}"))?;
-    if !output.status.success() {
-        return Err(command_failure_message(
-            &format!(
-                "Ollamaで{}を設定できませんでした。AIクライアント側のモデル設定を確認してください",
-                integration.label()
-            ),
-            &output,
-        ));
-    }
-
-    Ok(XriftOllamaConfigurationResult {
-        integration_id: integration.id().to_string(),
-        integration_label: integration.label().to_string(),
-        model: model.to_string(),
-        message: "設定しました。AIクライアントを起動または再起動してください".to_string(),
-    })
-}
-
-fn configure_opencode_ollama(model: &str) -> Result<XriftOllamaConfigurationResult, String> {
-    let config_path =
-        opencode_config_path().ok_or_else(|| "OpenCodeの設定先を取得できません".to_string())?;
-    let config_directory = config_path
-        .parent()
-        .ok_or_else(|| "OpenCodeの設定先が不正です".to_string())?;
-    std::fs::create_dir_all(config_directory)
-        .map_err(|_| "OpenCodeの設定先を作成できません".to_string())?;
-
-    let original = if config_path.is_file() {
-        let metadata = std::fs::metadata(&config_path).map_err(|error| error.to_string())?;
-        if metadata.len() > MCP_MAX_MESSAGE_BYTES as u64 {
-            return Err("OpenCodeの設定ファイルが大きすぎます".to_string());
-        }
-        Some(std::fs::read(&config_path).map_err(|error| error.to_string())?)
-    } else {
-        None
-    };
-    let config = read_json_file(&config_path)?.unwrap_or_else(|| json!({}));
-    let config = merge_opencode_ollama_config(config, model)?;
-
-    if let Some(bytes) = original.as_deref() {
-        write_config_backup(&config_path, bytes, "OpenCode")?;
-    }
-    let mut payload = serde_json::to_vec_pretty(&config).map_err(|error| error.to_string())?;
-    payload.push(b'\n');
-    write_private_bytes(&config_path, &payload)
-        .map_err(|_| "OpenCodeのOllama設定を保存できませんでした".to_string())?;
-
-    Ok(XriftOllamaConfigurationResult {
-        integration_id: SupportedOllamaIntegration::OpenCode.id().to_string(),
-        integration_label: SupportedOllamaIntegration::OpenCode.label().to_string(),
-        model: model.to_string(),
-        message: "設定しました。OpenCodeを再起動してください".to_string(),
-    })
-}
-
-fn ollama_integration_client_available(integration: SupportedOllamaIntegration) -> bool {
-    let client = integration.mcp_client();
-    if is_managed_config_client(client) {
-        managed_config_client_installed(client)
-    } else {
-        find_client_executable(client).is_some()
-    }
-}
-
-fn command_failure_message(prefix: &str, output: &Output) -> String {
-    match command_output_detail(output) {
-        Some(detail) => format!("{prefix}: {detail}"),
-        None => prefix.to_string(),
-    }
-}
-
-fn command_output_detail(output: &Output) -> Option<String> {
-    let mut lines = Vec::new();
-    for bytes in [output.stderr.as_slice(), output.stdout.as_slice()] {
-        for line in String::from_utf8_lossy(bytes).lines() {
-            let line = line.trim();
-            if !line.is_empty() {
-                lines.push(line.to_string());
-            }
-            if lines.len() == 2 {
-                break;
-            }
-        }
-        if lines.len() == 2 {
-            break;
-        }
-    }
-    if lines.is_empty() {
-        return None;
-    }
-    Some(lines.join(" ").chars().take(240).collect::<String>())
-}
-
-fn ollama_configuration_arguments(
-    integration: SupportedOllamaIntegration,
-    model: &str,
-) -> Vec<String> {
-    vec![
-        "launch".into(),
-        integration.launch_id().into(),
-        "--model".into(),
-        model.into(),
-        "--config".into(),
-        "--yes".into(),
-    ]
-}
-
-fn parse_ollama_version(stdout: &[u8]) -> Option<String> {
-    String::from_utf8_lossy(stdout)
-        .split_whitespace()
-        .rev()
-        .find(|value| {
-            value
-                .chars()
-                .next()
-                .is_some_and(|first| first.is_ascii_digit())
-        })
-        .map(|value| value.trim_start_matches('v').to_string())
-}
-
-fn parse_ollama_models(stdout: &[u8]) -> Vec<String> {
-    String::from_utf8_lossy(stdout)
-        .lines()
-        .filter_map(|line| line.split_whitespace().next())
-        .filter(|name| !name.eq_ignore_ascii_case("name"))
-        .map(str::to_string)
-        .collect()
-}
-
-fn ollama_model_supports_tools(stdout: &[u8]) -> bool {
-    let output = String::from_utf8_lossy(stdout);
-    let mut capabilities = false;
-    for line in output.lines() {
-        let value = line.trim();
-        if value.eq_ignore_ascii_case("Capabilities") {
-            capabilities = true;
-            continue;
-        }
-        if capabilities && value.is_empty() {
-            break;
-        }
-        if capabilities && value.eq_ignore_ascii_case("tools") {
-            return true;
-        }
-    }
-    false
-}
-
-fn find_ollama_executable() -> Option<PathBuf> {
-    if let Some(executable) = find_command_on_path("ollama") {
-        return Some(executable);
-    }
-    #[cfg(windows)]
-    if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
-        let executable = PathBuf::from(local_app_data)
-            .join("Programs")
-            .join("Ollama")
-            .join("ollama.exe");
-        if executable.is_file() {
-            return Some(executable);
-        }
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let executable = PathBuf::from("/Applications/Ollama.app/Contents/Resources/ollama");
-        if executable.is_file() {
-            return Some(executable);
-        }
-    }
-    None
-}
-
-fn run_ollama_command_output(executable: &Path, arguments: &[String]) -> Result<Output, String> {
-    let mut command = ollama_command(executable, arguments);
-    command.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let mut child = command.spawn().map_err(|error| error.to_string())?;
-    let status = wait_for_client_command_status(&mut child)?;
-    let mut stdout = Vec::new();
-    if let Some(mut pipe) = child.stdout.take() {
-        pipe.read_to_end(&mut stdout)
-            .map_err(|error| error.to_string())?;
-    }
-    let mut stderr = Vec::new();
-    if let Some(mut pipe) = child.stderr.take() {
-        pipe.read_to_end(&mut stderr)
-            .map_err(|error| error.to_string())?;
-    }
-    Ok(Output {
-        status,
-        stdout,
-        stderr,
-    })
-}
-
-fn ollama_command(executable: &Path, arguments: &[String]) -> Command {
-    let mut command = client_command(executable, arguments);
-    command.env("OLLAMA_HOST", "127.0.0.1:11434");
-    command
 }
 
 fn find_command_on_path(command_name: &str) -> Option<PathBuf> {
@@ -5129,106 +4673,6 @@ mod tests {
         assert_eq!(
             select_codex_candidate([broken, working.clone()], |candidate| candidate == working),
             Some(working)
-        );
-    }
-
-    #[test]
-    fn ollama_integrations_are_allowlisted() {
-        assert!(matches!(
-            SupportedOllamaIntegration::parse("codex"),
-            Some(SupportedOllamaIntegration::Codex)
-        ));
-        assert!(matches!(
-            SupportedOllamaIntegration::parse("claude-code"),
-            Some(SupportedOllamaIntegration::ClaudeCode)
-        ));
-        assert!(matches!(
-            SupportedOllamaIntegration::parse("opencode"),
-            Some(SupportedOllamaIntegration::OpenCode)
-        ));
-        assert!(SupportedOllamaIntegration::parse("cursor").is_none());
-        assert!(SupportedOllamaIntegration::parse("unknown").is_none());
-    }
-
-    #[test]
-    fn ollama_list_parser_only_returns_model_names() {
-        let output = b"NAME          ID              SIZE      MODIFIED\nqwen3:14b     abcdef123456    9.3 GB    3 weeks ago\ngemma4:e2b    fedcba654321    7.2 GB    2 months ago\n";
-
-        assert_eq!(
-            parse_ollama_models(output),
-            vec!["qwen3:14b".to_string(), "gemma4:e2b".to_string()]
-        );
-    }
-
-    #[test]
-    fn ollama_tool_capability_is_required() {
-        let supported =
-            b"  Capabilities\n    completion\n    tools\n    thinking\n\n  Parameters\n";
-        let unsupported = b"  Capabilities\n    completion\n    vision\n\n  Parameters\n";
-
-        assert!(ollama_model_supports_tools(supported));
-        assert!(!ollama_model_supports_tools(unsupported));
-    }
-
-    #[test]
-    fn opencode_ollama_config_preserves_mcp_and_selects_model() {
-        let config = json!({
-            "mcp": {
-                MCP_SERVER_NAME: {
-                    "type": "local",
-                    "enabled": true
-                }
-            },
-            "permission": {
-                "bash": "ask"
-            }
-        });
-
-        let merged = merge_opencode_ollama_config(config, "gemma4:e2b").expect("merge config");
-
-        assert_eq!(
-            merged.pointer("/mcp/xrift-studio/enabled"),
-            Some(&json!(true))
-        );
-        assert_eq!(merged.pointer("/permission/bash"), Some(&json!("ask")));
-        assert_eq!(merged.pointer("/model"), Some(&json!("ollama/gemma4:e2b")));
-        assert_eq!(
-            merged.pointer("/provider/ollama/options/baseURL"),
-            Some(&json!("http://127.0.0.1:11434/v1"))
-        );
-        assert_eq!(
-            merged.pointer("/provider/ollama/models/gemma4:e2b/name"),
-            Some(&json!("gemma4:e2b"))
-        );
-    }
-
-    #[test]
-    fn command_failure_prefers_stderr_and_limits_detail() {
-        let output = Output {
-            status: ExitStatus::default(),
-            stdout: b"stdout detail".to_vec(),
-            stderr: b"Error: Ollama is not running\nsecond line\nthird line".to_vec(),
-        };
-
-        let message = command_failure_message("構成に失敗しました", &output);
-        assert_eq!(
-            message,
-            "構成に失敗しました: Error: Ollama is not running second line"
-        );
-    }
-
-    #[test]
-    fn ollama_configuration_uses_fixed_non_launching_arguments() {
-        assert_eq!(
-            ollama_configuration_arguments(SupportedOllamaIntegration::ClaudeCode, "qwen3:14b"),
-            vec![
-                "launch",
-                "claude",
-                "--model",
-                "qwen3:14b",
-                "--config",
-                "--yes",
-            ]
         );
     }
 

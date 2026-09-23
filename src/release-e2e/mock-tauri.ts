@@ -421,15 +421,6 @@ export function installReleaseE2EMock(): void {
           return null;
         case "detect_xrift_mcp_clients":
           return [];
-        case "detect_xrift_ollama":
-          return {
-            installed: false,
-            serverReachable: false,
-            version: null,
-            launchSupported: false,
-            models: [],
-            message: "Release E2EではOllamaを起動しません",
-          };
         case "list_external_store_assets":
           return [];
         case "plugin:updater|check":

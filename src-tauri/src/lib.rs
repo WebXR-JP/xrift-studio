@@ -6205,8 +6205,6 @@ pub fn run() {
             mcp::set_xrift_mcp_editor_ready,
             mcp::detect_xrift_mcp_clients,
             mcp::register_xrift_mcp_client,
-            mcp::detect_xrift_ollama,
-            mcp::configure_xrift_ollama,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

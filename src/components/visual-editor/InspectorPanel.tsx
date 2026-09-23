@@ -5839,6 +5839,8 @@ export function InspectorPanel({
   sceneSettingsOpen,
   assetImportSettings,
   onCloseSceneSettings,
+  onResetLayout,
+  onOpenSupport,
   onSceneSettingsChange,
   onProjectMetadataChange,
   onThumbnailChanged,
@@ -5982,6 +5984,8 @@ export function InspectorPanel({
   sceneSettingsOpen: boolean;
   assetImportSettings?: ReactNode;
   onCloseSceneSettings: () => void;
+  onResetLayout: () => void;
+  onOpenSupport: () => void;
   onSceneSettingsChange: (settings: SceneSettings) => void;
   onProjectMetadataChange: (
     metadata: Pick<VisualProjectMetadata, "title" | "description">,
@@ -6101,6 +6105,24 @@ export function InspectorPanel({
       <div className={`scrollbar-thin min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain ${touch ? "p-2" : "p-3"}`}>
         {sceneSettingsOpen ? (
           <>
+          <section className="mb-3 rounded-md border border-slate-200 bg-white p-2.5" aria-label="エディターの操作">
+            <button
+              type="button"
+              onClick={onResetLayout}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+            >
+              <EDITOR_ICONS.layout size={14} aria-hidden="true" />
+              パネル配置を初期化
+            </button>
+            <button
+              type="button"
+              onClick={onOpenSupport}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+            >
+              <EDITOR_ICONS.help size={14} aria-hidden="true" />
+              ヘルプと報告
+            </button>
+          </section>
           {assetImportSettings}
           <SceneSettingsInspector
             scene={scene}
