@@ -6,7 +6,6 @@ import type { SceneDocument } from "../scene-document";
 import type { CompilationProvenance } from "../serialization";
 import type { ResolvedPublishPermissions } from "./publish-permissions";
 import type { TextureConversion } from "../texture-conversion";
-import type { ModelDownloadPlan } from "./download-plan";
 
 export const VISUAL_COMPILER_VERSION = "0.7.2" as const;
 
@@ -72,8 +71,6 @@ export type AssetCopyPlanEntry = {
    * 作り直した画像を `targetRelativePath` へ書く。
    */
   textureConversion?: TextureConversion;
-  /** Lossless cleanup of the published copy; never changes authoring files. */
-  modelDownload?: ModelDownloadPlan;
 };
 
 export type RequiredPublicationFileCopy = {

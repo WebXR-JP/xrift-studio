@@ -1,4 +1,3 @@
-import { optimizePublishedModel } from "./model-download";
 import {
   XriftApiError,
   XriftAuthError,
@@ -191,9 +190,7 @@ export async function assembleWebUploadFiles(
     // 未反映のTexture Import設定は、ここで配るバイト列にだけ適用する。
     // プロジェクトの原本は読むだけで書き換えない。
     const sourceBytes = await request.readAssetBytes(entry.sourceRelativePath);
-    const bytes = entry.modelDownload
-      ? (await optimizePublishedModel(sourceBytes, entry.modelDownload)).bytes
-      : await convertPublishedTextureBytes(sourceBytes, entry.textureConversion);
+    const bytes = await convertPublishedTextureBytes(sourceBytes, entry.textureConversion);
     throwIfAborted(request.signal);
     files.set(targetPath, bytes);
   }

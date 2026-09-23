@@ -128,7 +128,7 @@ async function assertPublicationPaths(bytes: Uint8Array): Promise<void> {
   for (const outputMode of ["classic-jsx", "classic-runtime"] as const) {
     const compilation = compileVisualProject(documents, { outputMode });
     assert(compilation.canStage, `Fixture cannot be published: ${JSON.stringify(compilation.diagnostics)}`);
-    assert(compilation.assetCopyPlan.length === 1 && compilation.assetCopyPlan[0].modelDownload === undefined, "Publication must copy the stored model without creating an image-removal plan");
+    assert(compilation.assetCopyPlan.length === 1 && !("modelDownload" in compilation.assetCopyPlan[0]), "Publication must copy the stored model without creating an image-removal plan");
     if (compilation.runtimeManifestFile) {
       const runtime = JSON.parse(compilation.runtimeManifestFile.content);
       const component = runtime.scenes[bundle.scene.sceneId].entities.entity.components.find((entry: any) => entry.type === "mesh");
@@ -164,7 +164,7 @@ async function assertPublicationPaths(bytes: Uint8Array): Promise<void> {
   for (const outputMode of ["classic-jsx", "classic-runtime"] as const) {
     const compilation = compileVisualProject(documents, { outputMode });
     assert(compilation.canStage, `Collider fixture cannot be published: ${JSON.stringify(compilation.diagnostics)}`);
-    assert(compilation.assetCopyPlan.length === 1 && compilation.assetCopyPlan[0].modelDownload === undefined, "Collider models must not select another GLB conversion path");
+    assert(compilation.assetCopyPlan.length === 1 && !("modelDownload" in compilation.assetCopyPlan[0]), "Collider models must not select another GLB conversion path");
     const source = compilation.overlayFiles.find((file) => file.relativePath === "src/World.tsx")?.content ?? "";
     assert(!source.includes("XriftMeshColliderErrorBoundary") && !source.includes("Box Colliderへ切り替え"), "Publication must not silently replace a failed Mesh Collider with a box");
   }

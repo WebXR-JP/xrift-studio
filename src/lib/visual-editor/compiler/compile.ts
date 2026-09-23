@@ -268,7 +268,7 @@ export function compileVisualProject(
   const assetCopyPlan = createAssetCopyPlan(publishedAssets, diagnostics, outputMode);
   for (const entry of assetCopyPlan) {
     const asset = documents.assets.assets[entry.assetId];
-    if (asset.kind === "model") entry.modelDownload = planModelDownload(asset, resolvedEntryScene?.scene ?? null, documents.assets);
+    if (asset.kind === "model") planModelDownload(asset, resolvedEntryScene?.scene ?? null, documents.assets);
   }
   if (resolvedEntryScene) {
     diagnostics.push(...resolvedEntryScene.diagnostics);
@@ -2751,17 +2751,25 @@ function renderModelNodeColliderGeometry(
     "CompiledModelNodeCollider",
     `${model.id}:${sourceNodeIndex}`,
   );
-  context.dreiImports.add("useGLTF");
+  context.fiberImports.add("useLoader");
+  context.extraImports.add(
+    'import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";',
+  );
   context.reactValueImports.add("useMemo");
   context.threeTypeImports.add("Material");
   context.extraImports.add(
     'import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";',
   );
   const usesDraco = modelRequiresDracoDecoder(model);
-  if (usesDraco) registerCompiledDracoRuntime(context);
+  if (usesDraco) {
+    registerCompiledDracoRuntime(context);
+    context.extraImports.add(
+      'import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";',
+    );
+  }
   const source = `const ${componentName}: FC = () => {
 ${usesDraco ? "  const dracoDecoderPath = useCompiledDracoDecoderPath();\n" : ""}  const modelUrl = useCompiledAssetUrl(${urlConstant});
-  const { scene, parser } = useGLTF(modelUrl${usesDraco ? ", dracoDecoderPath" : ""});
+  const { scene, parser } = useLoader(GLTFLoader, modelUrl${usesDraco ? ", (loader) => loader.setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath))" : ""});
   const colliderNode = useMemo(() => {
     const cloned = cloneSkeleton(scene);
     const originals: typeof scene.children = [];
@@ -3543,7 +3551,10 @@ function renderModelMesh(
       'import { createOpenBrushMaterialExtension } from "./xrift-studio/open-brush-runtime";',
     );
   } else {
-    context.dreiImports.add("useGLTF");
+    context.fiberImports.add("useLoader");
+    context.extraImports.add(
+      'import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";',
+    );
   }
   if (animationLoaded) {
     context.dreiImports.add("useAnimations");
@@ -3646,11 +3657,9 @@ function renderModelMesh(
   const usesDraco = !isObj && modelRequiresDracoDecoder(model);
   if (usesDraco) {
     registerCompiledDracoRuntime(context);
-    if (isOpenBrush) {
-      context.extraImports.add(
-        'import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";',
-      );
-    }
+    context.extraImports.add(
+      'import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";',
+    );
   }
   const dracoBinding = usesDraco
     ? "  const dracoDecoderPath = useCompiledDracoDecoderPath();\n"
@@ -3670,8 +3679,10 @@ function renderModelMesh(
         : ""
     }
   });`
-        : `const { scene${needsParser ? ", parser" : ""}${animationLoaded ? ", animations" : ""} } = useGLTF(modelUrl${
-            usesDraco ? ", dracoDecoderPath" : ""
+        : `const { scene${needsParser ? ", parser" : ""}${animationLoaded ? ", animations" : ""} } = useLoader(GLTFLoader, modelUrl${
+            usesDraco
+              ? ", (loader) => loader.setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath))"
+              : ""
           });`);
   const animationBindings = (animationBridgeable ? ["mixer", "clips"] : []).join(", ");
   const graphCuePlans = planInteractivityAnimationCues(graphAnimationCues);
@@ -3850,10 +3861,29 @@ function renderCompiledModelPose(
   const morphTargets = JSON.stringify(pose?.morphTargets ?? {});
   const nodeTransforms = JSON.stringify(pose?.nodes ?? {});
   const collectSourceNodes = needsSourceNodeTags || sourceNodeName !== undefined;
+  if (collectSourceNodes) context.threeTypeImports.add("Object3D");
+  // Expanded Model nodes are separate Entities. Clone the selected subtree,
+  // as Play does, instead of cloning the entire GLB once for every node.
+  // A skinned subtree still needs the whole scene to remap its skeleton.
+  const sourceRoot = sourceNodeIndex !== undefined || sourceNodeName !== undefined
+    ? `    const sourceNodes: Object3D[] = [];
+    scene.traverse((object) => sourceNodes.push(object));
+    const sourceRoot = sourceNodes.find((object) =>
+      ${sourceNodeIndex !== undefined
+        ? `parser.associations.get(object)?.nodes === ${sourceNodeIndex}`
+        : `object.name === ${JSON.stringify(sourceNodeName)}`},
+    );
+    let hasSkinnedMesh = false;
+    sourceRoot?.traverse((object) => {
+      if ((object as Object3D & { isSkinnedMesh?: boolean }).isSkinnedMesh) hasSkinnedMesh = true;
+    });
+    const cloneRoot: Object3D = sourceRoot && !hasSkinnedMesh ? sourceRoot : scene;
+`
+    : "    const cloneRoot = scene;\n";
   const tagSourceNodes = collectSourceNodes
-    ? `    const originals: typeof scene.children = [];
-    const copies: typeof scene.children = [];
-    scene.traverse((object) => originals.push(object));
+    ? `    const originals: Object3D[] = [];
+    const copies: Object3D[] = [];
+    cloneRoot.traverse((object) => originals.push(object));
     cloned.traverse((object) => copies.push(object));
 ${needsSourceNodeTags ? `    originals.forEach((original, index) => {
       const nodeIndex = parser.associations.get(original)?.nodes;
@@ -3898,7 +3928,7 @@ ${needsSourceNodeTags ? `    originals.forEach((original, index) => {
   return {
     objectName: "compiledScene",
     declaration: `  const compiledScene = useMemo(() => {
-    const cloned = cloneSkeleton(scene);
+${sourceRoot}    const cloned = cloneSkeleton(cloneRoot);
 ${tagSourceNodes}${selectSourceNode}    const output = ${sourceNodeIndex === undefined && sourceNodeName === undefined ? "cloned" : "selected"};
     const boneRotations = ${boneRotations} as Record<string, [number, number, number]>;
     const morphTargetWeights = ${morphTargets} as Record<string, number>;

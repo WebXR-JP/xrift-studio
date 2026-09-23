@@ -1,5 +1,4 @@
 import { isRecord } from "../json-guards";
-import { optimizePublishedModel, describeModelDownload } from "./model-download";
 import { tauri, type ProjectKind } from "../tauri";
 import { xrift, type LogLine } from "../xrift-cli";
 import {
@@ -363,11 +362,7 @@ export async function exportVisualProjectToClassic(input: {
       // 未反映のTexture Import設定は書き出す画像にだけ適用する。制作データの
       // 原本は読むだけで、書き換えない。
       const conversion = entry.textureConversion;
-      const model = entry.modelDownload
-        ? await optimizePublishedModel(await readProjectAssetBytes(authoringPath, entry.sourceRelativePath), entry.modelDownload)
-        : undefined;
-      if (model) notes.push(describeModelDownload(entry.assetId, model));
-      const dataUrl = model ? await assetBytesToDataUrl(model.bytes, "model/gltf-binary") : conversion
+      const dataUrl = conversion
         ? await assetBytesToDataUrl(
             await convertPublishedTextureBytes(
               await readProjectAssetBytes(authoringPath, entry.sourceRelativePath),
@@ -731,4 +726,3 @@ function assertSeparateProjects(authoringPath: string, targetPath: string): void
     );
   }
 }
-

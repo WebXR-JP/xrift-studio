@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { optimizePublishedModel } from "../src/lib/visual-editor/model-download.ts";
 import { spawn } from "node:child_process";
 import {
   copyFile,
@@ -571,12 +570,7 @@ async function materializeClassicProject({
       );
       const target = resolveOutputPath(projectRoot, entry.targetRelativePath);
       await mkdir(path.dirname(target), { recursive: true });
-      if (entry.modelDownload) {
-        const optimized = await optimizePublishedModel(new Uint8Array(await readFile(from)), entry.modelDownload);
-        await writeFile(target, optimized.bytes);
-      } else {
-        await copyFile(from, target);
-      }
+      await copyFile(from, target);
     }
     for (const entry of compilation.stagingPlan.requiredPublicationFiles) {
       const from = await resolveContainedFile(
@@ -902,4 +896,3 @@ export function defaultOutputPathForSource(source) {
 export function platformTempRoot() {
   return os.tmpdir();
 }
-

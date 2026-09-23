@@ -2224,7 +2224,7 @@ export function runVisualCompilerFixtureAssertions(
     (file) => file.relativePath === "src/World.tsx",
   )?.content ?? "";
   assert(unposedModelResult.canStage &&
-    unposedModelSource.includes("const { scene, parser } = useGLTF(modelUrl);") &&
+    unposedModelSource.includes("const { scene, parser } = useLoader(GLTFLoader, modelUrl);") &&
     unposedModelSource.includes("object={scene}") &&
     unposedModelSource.includes("(parser.associations)"),
   "Default same-name assignments need parser associations even without pose or node overrides");
@@ -2311,13 +2311,17 @@ export function runVisualCompilerFixtureAssertions(
       resolverUses.length === 25 && new Set(resolverUses).size === 2,
     "Different material bindings must retain distinct resolvers",
   );
-  assert(modelSource.includes("useGLTF"), "GLTF loader was not generated");
+  assert(
+    modelSource.includes('import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";') &&
+      !modelSource.includes("useGLTF("),
+    "Published GLB must use the same GLTFLoader as the editor",
+  );
   assert(
     /import \{[^}]*\buseXRift\b[^}]*\} from "@xrift\/world-components";/.test(
       modelSource,
     ) &&
       modelSource.includes("const modelUrl = useCompiledAssetUrl(") &&
-      modelSource.includes("useGLTF(modelUrl)"),
+      modelSource.includes("useLoader(GLTFLoader, modelUrl)"),
     "Project GLB loader did not use the XRift base URL",
   );
 
@@ -2737,7 +2741,7 @@ export function runVisualCompilerFixtureAssertions(
       dracoSource.includes(
         "const dracoDecoderPath = useCompiledDracoDecoderPath();",
       ) &&
-      dracoSource.includes("useGLTF(modelUrl, dracoDecoderPath)") &&
+      dracoSource.includes("useLoader(GLTFLoader, modelUrl, (loader) => loader.setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath)))") &&
       !dracoSource.includes("gstatic.com"),
     "A Draco Model must load through the world's own decoder, never a CDN",
   );
@@ -3100,7 +3104,7 @@ export function runVisualCompilerFixtureAssertions(
     assert(animationResult.canStage, "Animated GLB should be stageable");
     [
       "useAnimations",
-      "const { scene, parser, animations } = useGLTF(modelUrl);",
+      "const { scene, parser, animations } = useLoader(GLTFLoader, modelUrl);",
       "const animationRoot = useRef<Group>(null);",
       "const { mixer, clips } = useAnimations(animations, animationRoot);",
       "createXriftAnimationRuntimeBridge",
@@ -3381,8 +3385,10 @@ export function runVisualCompilerFixtureAssertions(
     assert(hierarchyResult.canStage, "Static hierarchy GLB should be stageable");
     assert(
       hierarchySource.includes(
-        "const { scene, parser } = useGLTF(modelUrl);",
-      ) && hierarchySource.includes("<group scale={1}>"),
+        "const { scene, parser } = useLoader(GLTFLoader, modelUrl);",
+      ) && hierarchySource.includes("<group scale={1}>") &&
+        hierarchySource.includes("const cloneRoot: Object3D = sourceRoot && !hasSkinnedMesh ? sourceRoot : scene;") &&
+        hierarchySource.includes("cloneSkeleton(cloneRoot)"),
       "Expanded GLB source must retain parser associations without reapplying import scale",
     );
   }
@@ -3465,7 +3471,7 @@ export function runVisualCompilerFixtureAssertions(
   [
     'OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js"',
     "useLoader(OBJLoader, modelUrl)",
-    "cloneSkeleton(scene)",
+    "cloneSkeleton(cloneRoot)",
     '"Head":[0.1,0.2,0.3]',
     '"Smile":0.75',
   ].forEach((fragment) =>
