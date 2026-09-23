@@ -865,22 +865,18 @@ async function verifyPreparedOfficialStarter() {
     const assets = Object.values(prepared.plan.assets.assets);
     const models = assets.filter((asset) => asset.kind === "model");
     const textures = assets.filter((asset) => asset.kind === "texture");
-    assert(models.length === 2, "prepared official starter must retain both Model Assets");
+    assert(models.length === 0, "prepared official starter must omit removed upstream Models");
     assert(
-      textures.length >= 2,
-      "prepared official starter must contain the panorama and Duck embedded Texture",
+      textures.length === 1,
+      "prepared official starter must contain only the panorama Texture",
     );
     assert(
       prepared.binaryDocuments.some((document) =>
-        document.relativePath.endsWith("xrift-official/duck.glb"),
-      ) &&
-        prepared.binaryDocuments.some((document) =>
-          document.relativePath.endsWith("xrift-official/bunny.glb"),
-        ) &&
-        prepared.binaryDocuments.some((document) =>
-          document.relativePath.endsWith("xrift-official/tokyo-station.png"),
-        ),
-      "prepared official starter must persist every referenced official binary",
+        document.relativePath.endsWith("xrift-official/tokyo-station.png"),
+      ) && !prepared.binaryDocuments.some((document) =>
+        /xrift-official\/(duck|bunny)\.glb$/.test(document.relativePath),
+      ),
+      "prepared official starter must persist the panorama without removed Models",
     );
   } finally {
     globalThis.fetch = originalFetch;

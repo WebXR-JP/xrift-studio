@@ -171,16 +171,14 @@ async function main() {
       SHELL_WORLD_SOURCE,
       "utf8",
     );
-    // The sample world's components and assets would otherwise be built into
-    // every published world.
+    // The template's Skybox and panorama would otherwise be built into every
+    // published world.
     await fs.rm(path.join(projectDir, "src", "components"), {
       recursive: true,
       force: true,
     });
     await fs.rm(path.join(projectDir, "src", "constants.ts"), { force: true });
-    for (const sample of ["duck.glb", "bunny.drc", "tokyo-station.jpg"]) {
-      await fs.rm(path.join(projectDir, "public", sample), { force: true });
-    }
+    await fs.rm(path.join(projectDir, "public", "tokyo-station.jpg"), { force: true });
     await removeDtsPlugin(path.join(projectDir, "vite.config.ts"));
 
     process.stdout.write("3/6 xrift-studio-runtime をパックしています\n");
