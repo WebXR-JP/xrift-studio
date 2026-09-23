@@ -22,6 +22,12 @@
 *.wav    binary
 *.mp3    binary
 *.drc    binary
+*.wasm   binary
+
+# Keep generated runtime chunks byte-for-byte: shader strings can contain CRLF,
+# and shell-manifest.json records a digest of the original build output.
+# Review the source and manifest instead of minified dependency bundles.
+public/xrift-runtime-shell/*.js binary
 
 # Lockfiles are generated; keep them out of diffs by default.
 pnpm-lock.yaml   -diff

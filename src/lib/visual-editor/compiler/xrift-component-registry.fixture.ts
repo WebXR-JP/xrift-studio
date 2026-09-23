@@ -24,6 +24,20 @@ export function runXriftComponentRegistryFixtureAssertions(): void {
     "Skybox defaults do not match the official component",
   );
 
+  const mirror = requiredComponent(XRIFT_COMPONENT_SCHEMA_IDS.mirror);
+  const compiledMirror = compileXriftComponent(mirror, "world", FIXTURE_SOURCE);
+  assert(
+    compiledMirror.mode === "leaf" &&
+      compiledMirror.jsx?.includes("reflectionInterval={2}") === true,
+    "Mirror must emit the official default reflection update interval",
+  );
+  const legacyMirror = { ...mirror, properties: { ...mirror.properties } };
+  delete legacyMirror.properties.reflectionInterval;
+  assert(
+    compileXriftComponent(legacyMirror, "world", FIXTURE_SOURCE).mode === "leaf",
+    "Existing Mirrors without reflectionInterval must still compile",
+  );
+
   const videoScreen = requiredComponent(XRIFT_COMPONENT_SCHEMA_IDS.videoScreen, {
     id: "fixture-video-screen",
     url: "/videos/intro.mp4",

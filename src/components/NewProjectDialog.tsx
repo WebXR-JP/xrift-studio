@@ -23,7 +23,6 @@ import {
   defaultVisualStarterTemplateId,
   type VisualStarterTemplateId,
 } from "../lib/visual-editor/starter-templates";
-import { OFFICIAL_XRIFT_WORLD_TEMPLATE_THUMBNAIL } from "../lib/visual-editor/official-world-template-import";
 import type { ClassicProjectCreationSource } from "../lib/visual-editor/classic-project-creation";
 import { SupportReportModal } from "./SupportReportModal";
 
@@ -138,18 +137,13 @@ function StarterScenePreview({
 
   if (templateId === "xrift-official") {
     return (
-      <div className="relative h-full overflow-hidden bg-zinc-950" aria-hidden="true">
-        <img
-          src={OFFICIAL_XRIFT_WORLD_TEMPLATE_THUMBNAIL}
-          alt=""
-          width={640}
-          height={360}
-          loading="eager"
-          className="h-full w-full object-cover"
-        />
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-zinc-950/80 to-transparent px-3 pb-2.5 pt-8 text-[10px] font-semibold tracking-wide text-white">
-          XRift公式テンプレートから変換
-        </div>
+      <div className="flex h-full flex-col items-center justify-center gap-2.5 px-5" aria-hidden="true">
+        <span className={`flex h-12 w-12 items-center justify-center rounded-lg border ${surfaceClass}`}>
+          <LayoutGrid size={24} className={iconClass} />
+        </span>
+        <span className="text-[10px] font-medium tracking-wide text-zinc-500">
+          床・壁・Skybox・開始位置
+        </span>
       </div>
     );
   }
@@ -413,7 +407,7 @@ export function NewProjectDialog({
                           </div>
                           {choice.kind === "world" && (
                             <div className="mt-1 text-[10px] font-semibold tracking-wide text-brand-700">
-                              {template.id === "blank" ? "最小構成" : "作例"}
+                              {template.id === "blank" ? "最小構成" : "公式テンプレート"}
                             </div>
                           )}
                           <p className="mt-1 text-xs leading-5 text-zinc-500">

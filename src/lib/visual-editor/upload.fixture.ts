@@ -1,5 +1,10 @@
 import { decodeBase64DataUrl } from "./dist-upload-files";
-import { parseStagedXriftConfig } from "./publish";
+import { DEFAULT_IGNORE_PATTERNS } from "@xrift/sdk";
+import {
+  assertCompiledModuleEntry,
+  parseStagedXriftConfig,
+  resolveExistingPublicationId,
+} from "./publish";
 import { describeVisualUploadCapabilities } from "./upload";
 import {
   SHELL_ENTRY_PATH,
@@ -40,6 +45,11 @@ function assertStagedConfigParsing(): void {
         ignore: ["**/*.map", "**/index.html"],
         physics: { gravity: 9.81, allowInfiniteJump: true },
         camera: { near: 0.1, far: 1000 },
+        permissions: {
+          allowedDomains: ["api.example.com"],
+          allowedCodeRules: ["no-network-without-permission"],
+        },
+        outputBufferType: "HalfFloatType",
       },
     }),
     "world",
@@ -48,14 +58,57 @@ function assertStagedConfigParsing(): void {
   // directly, so a surviving "./" would produce "./dist/index.js".
   assert(config.distDir === "dist", "distDir must be normalized");
   assert(config.title === "My World", "title was not read");
-  assert(config.ignore.length === 2, "ignore rules were not read");
+  assert(
+    config.ignore.length === 2 + DEFAULT_IGNORE_PATTERNS.length &&
+      DEFAULT_IGNORE_PATTERNS.every((pattern) => config.ignore.includes(pattern)),
+    "SDK default ignore rules were not merged",
+  );
   assert(config.physics?.gravity === 9.81, "physics was not read");
   assert(config.camera?.far === 1000, "camera was not read");
-
   assert(
-    parseStagedXriftConfig(JSON.stringify({ world: {} }), "world").distDir ===
-      "dist",
-    "a missing distDir must fall back to dist",
+    config.permissions?.allowedDomains?.[0] === "api.example.com",
+    "permissions were not read",
+  );
+  assert(
+    config.outputBufferType === "HalfFloatType",
+    "outputBufferType was not read",
+  );
+
+  // The CLI/SDK require distDir. The direct SDK path must not silently accept a
+  // staging config that the CLI would reject.
+  assertThrows(
+    () => parseStagedXriftConfig(JSON.stringify({ world: {} }), "world"),
+    "a missing distDir was accepted",
+  );
+
+  // Studio's official World/Item templates are Module Federation remotes.
+  // A non-empty dist without this entry would upload successfully but render
+  // nothing on XRift.
+  assertCompiledModuleEntry([
+    { remotePath: "remoteEntry.js" },
+    { remotePath: "index-abc.js" },
+  ]);
+  assertThrows(
+    () => assertCompiledModuleEntry([{ remotePath: "index-abc.js" }]),
+    "a built dist without remoteEntry.js was accepted",
+  );
+  assert(
+    resolveExistingPublicationId(
+      { uploadedAt: "2026-09-22T00:00:00.000Z", worldId: "world-existing" },
+      "world",
+    ) === "world-existing",
+    "SDK re-publish lost the existing World ID",
+  );
+  assert(
+    resolveExistingPublicationId(
+      { uploadedAt: "2026-09-22T00:00:00.000Z", contentId: "legacy-world-id" },
+      "world",
+    ) === "legacy-world-id",
+    "legacy publication contentId was not reused",
+  );
+  assert(
+    resolveExistingPublicationId(undefined, "world") === undefined,
+    "an unpublished project invented a remote World ID",
   );
   assertThrows(
     () => parseStagedXriftConfig("{ not json", "world"),
@@ -123,10 +176,10 @@ function assertShellManifestRules(): void {
     () =>
       parseShellManifest({
         version: "1",
-        runtimeContract: "stale",
+        runtimeContract: "2026-09-06-model-instancing-v1",
         files: [SHELL_ENTRY_PATH],
       }),
-    "a stale runtime shell contract was accepted",
+    "a runtime shell without Mirror reflection intervals was accepted",
   );
   assertThrows(
     () => parseShellManifest(null),

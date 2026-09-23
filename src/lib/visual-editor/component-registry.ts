@@ -12,7 +12,7 @@ import type {
 
 export const XRIFT_COMPONENT_MODULE = "@xrift/world-components" as const;
 /** npm package version used to verify the authoring registry. */
-export const XRIFT_COMPONENT_API_VERSION = "0.43.0" as const;
+export const XRIFT_COMPONENT_API_VERSION = "0.55.0" as const;
 export const XRIFT_COMPONENT_API_SOURCE =
   "https://github.com/WebXR-JP/xrift-world-components" as const;
 export const XRIFT_COMPONENT_SCHEMA_VERSION = "1.0.0" as const;
@@ -319,6 +319,10 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
       field("size", "Size", "反射面の幅と高さ。", "vec2"),
       field("color", "Color", "数値形式の反射面カラー。", "color-number"),
       field("textureResolution", "Texture resolution", "反射テクスチャの解像度。", "number"),
+      field("reflectionInterval", "反射の更新間隔", "反射を何フレームごとに更新するか。1で毎フレーム、2で2フレームに1回更新します。", "number", false, {
+        defaultValue: 2,
+        range: { min: 1, step: 1 },
+      }),
       field("lodDistance", "LOD distance", "低解像度へ切り替える距離。", "number", false, {
         defaultValue: 10,
       }),
@@ -623,7 +627,7 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
       }),
     ],
     runtimeBindings: [
-      runtimeBinding("formatTimestamp", "callback", false, "時刻の表示形式を変更するコールバック。", "none"),
+      runtimeBinding("formatTimestamp", "callback", false, "入退室時刻（epochミリ秒）を受け取り、表示文字列を返すコールバック。", "none"),
       runtimeBinding("onJoin", "callback", false, "入室時のコールバック。", "none"),
       runtimeBinding("onLeave", "callback", false, "退室時のコールバック。", "none"),
     ],

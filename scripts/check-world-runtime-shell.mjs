@@ -54,6 +54,18 @@ if (manifest.runtimeContract !== expected) {
     `Runtime shell is stale. expected=${expected} detected=${manifest.runtimeContract ?? "missing"}. Run node scripts/build-world-runtime-shell.mjs before release.`,
   );
 }
+const studioPackage = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
+const worldComponentsVersion = studioPackage.dependencies["@xrift/world-components"];
+if (manifest.worldComponentsVersion !== worldComponentsVersion) {
+  throw new Error(
+    `Runtime shell Components differ from the editor. expected=${worldComponentsVersion} detected=${manifest.worldComponentsVersion ?? "missing"}. Rebuild the runtime shell.`,
+  );
+}
+const runtimeInstallation = await fs.readFile(path.join(repoRoot, "src-tauri/src/runtime_installation.rs"), "utf8");
+const cliVersion = runtimeInstallation.match(/pub const XRIFT_CLI_VERSION:\s*&str\s*=\s*"(\d+\.\d+\.\d+)"/)?.[1];
+if (!cliVersion || manifest.cliVersion !== cliVersion) {
+  throw new Error(`Runtime shell CLI differs from setup. expected=${cliVersion ?? "missing"} detected=${manifest.cliVersion ?? "missing"}`);
+}
 if (manifest.entry !== "remoteEntry.js") {
   throw new Error(`Runtime shell entry must be remoteEntry.js (detected ${manifest.entry ?? "missing"})`);
 }

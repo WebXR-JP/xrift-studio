@@ -19,14 +19,9 @@ The repository-level `THIRD_PARTY_ASSETS.md` records the fixed SHA-256 hashes us
 
 ## XRift official World template
 
-`xrift-world-template-thumbnail.png`, `xrift-world-template-duck.glb`,
 `xrift-world-template-tokyo-station.png` (the upstream `.jpg` contains PNG bytes), `xrift-world-template-World.tsx.txt`,
 and `xrift-world-template-LICENSE.txt` are verbatim copies from
 [`WebXR-JP/xrift-world-template`](https://github.com/WebXR-JP/xrift-world-template)
-at revision `abbce026ea1f1066726f385089d5f28b2ef5a890`. WebXR-JP distributes the
-repository under the MIT License. The source and license are copied into
-projects created from the XRift official World Starter; the thumbnail is used
-only to identify that Starter in XRift Studio. `xrift-world-template-bunny.glb`
-is generated from the same revision's `public/bunny.drc` by
-`pnpm starter:sync:xrift-official`, so the standalone Draco geometry can use
-the normal Studio Model Asset pipeline.
+at revision `05abcf6a11844f9108363dc6823a1908569452ac`. WebXR-JP distributes the
+repository under the MIT License. The panorama, source, and license are copied
+into projects created from the XRift official World Starter.

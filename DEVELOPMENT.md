@@ -4,7 +4,7 @@ XRift Studio はソースから自分でビルド・改変できます。この�
 
 ## 必要な環境
 
-- **Node.js** 20 以上
+- **Node.js** 22.13.0 以上（開発用pnpmの要件。同梱する制作ツールは24系LTS）
 - **Rust** (stable) — https://www.rust-lang.org/learn/get-started
 - OS: Windows 10/11 / macOS 12+ / Linux
 
@@ -39,6 +39,8 @@ sudo apt install \
 pnpm install
 pnpm tauri:dev
 ```
+
+依存管理にはpnpmを使います。`pnpm-lock.yaml`を唯一のロックファイルとして更新し、CIでは `pnpm install --frozen-lockfile` で再現性を確認します。`.npmrc` のTakumi Guard設定を、依存の導入と公開用shellの生成で引き継ぎます。
 
 ## UX の確認
 
@@ -102,13 +104,25 @@ src-tauri/                 Rust バックエンド (Tauri v2)
 
 | コマンド | 役割 |
 |---|---|
-| `runtime_status` | Node.js と @xrift/cli がインストール済みか確認 |
-| `setup_runtime` | Node.js ダウンロード → 展開 → @xrift/cli インストール |
+| `runtime_status` | Node.js / npm、CLIの実ファイルとバージョンを確認。推奨版未満ならセットアップへ案内 |
+| `setup_runtime` | Node.js ダウンロード → 展開 → 推奨CLIのインストール → 実行確認 |
 | `check_xrift_latest` | npm registry から @xrift/cli の最新版を取得 |
-| `update_xrift` | `npm i -g @xrift/cli@latest` を実行 |
+| `update_xrift` | 最新の安定版を取得し、版を指定してインストール。実行とバージョンを確認 |
 | `reset_app_data` | scope に応じてアプリデータを削除（runtime / projects / all） |
 | `list_projects` | `projects/` 配下のプロジェクトを列挙 |
 | `read_text_file` / `write_text_file` | 任意のファイルを読み書き |
+
+### 制作ツールのバージョン
+
+初回セットアップの基準は `src-tauri/src/runtime_installation.rs` にまとめています。現在は Node.js **24.21.0** と `@xrift/cli` **0.24.4** です。CLIは初回導入時にこの版を指定し、既存の古い版もセットアップ画面から更新します。推奨版以上の安定版は保持します。Node.jsの保存先は版ごとに分かれますが、CLIの保存先、ログイン情報、作品フォルダーは引き継ぎます。
+
+CLIはアプリ専用Node.jsから公式の `dist/index.js` を直接実行します。`sh -c` を使い、ログインシェルによる `PATH` やアプリ専用ホームの書き換えを避けます。セットアップ・更新は同時に実行できず、完了表示の前に `--version` の実行を確認します。
+
+CLI 0.24.4ではアップロード対象の除外判定がSDKに統一されています。StudioもSDKを **0.1.3** に揃えます。`xrift.json` のあるプロジェクトルートで実行し、タイトルと既存の除外設定を引き続き渡します。`check world --build` / `check item --build` ではビルドが実行されないため、種類を自動判定する **`check --build`** を維持します。コンパイラと公開用shellの生成には、想定する構成を持つ公式テンプレートを明示します。
+
+公式Componentsの更新では、エディター・Play・コンパイラ・公開用shell・runtime packageの版を揃えます。更新後は `scripts/check-world-components-alignment.mjs` と `pnpm runtime:shell:check` で整合を確認します。
+
+Components 0.55.0のMirrorでは `reflectionInterval` に対応し、既定の反射更新を2フレームに1回へ揃えています。毎フレーム更新したい場合は1を指定します。EntryLogBoardの `formatTimestamp` は0.54.0以降、epochミリ秒の数値を受け取ります。自作の表示処理でDateのメソッドを使っている場合は、先に `new Date(timestampMs)` へ変換してください。旧形式の文字列で共有されている入退室履歴は公式側で表示対象外になるため、この依存更新で過去の履歴が復元されることはありません。
 
 ## リリース
 
