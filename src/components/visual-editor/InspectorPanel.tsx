@@ -120,7 +120,6 @@ import {
   getTerrainGrassType,
   resolveTerrainGrassAppearance,
   type TextureAssetPatch,
-  type TextureCardProfile,
   type FontAsset,
   type TextComponent,
   type TextBackgroundFit,
@@ -3789,11 +3788,13 @@ function RigidBodyInspector({
 
 function LightInspector({
   component,
+  assets,
   readOnly,
   onChange,
   onRemove,
 }: {
   component: LightComponent;
+  assets: AssetManifest;
   readOnly: boolean;
   onChange: (patch: LightPatch) => void;
   onRemove?: () => void;
@@ -3810,13 +3811,13 @@ function LightInspector({
       }
     >
       <ToggleRow
-        label="有効"
+        label="Enabled（有効）"
         checked={component.enabled}
         disabled={readOnly}
         onChange={(enabled) => onChange({ enabled })}
       />
       <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
-        種類
+        Light Type（ライトの種類）
         <select
           value={component.lightType}
           disabled={readOnly}
@@ -3842,7 +3843,7 @@ function LightInspector({
         </select>
       </label>
       <div className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
-        <span>色</span>
+        <span>Color（色）</span>
         <input
           type="color"
           value={component.color}
@@ -3852,17 +3853,46 @@ function LightInspector({
         />
       </div>
       <ColliderNumberField
-        label="強さ"
+        label="Intensity（強さ）"
         value={component.intensity}
         min={0}
         step={0.1}
         disabled={readOnly}
         onChange={(intensity) => onChange({ intensity })}
       />
+      {component.lightType === "directional" || component.lightType === "spot" ? (
+        <div className="space-y-2 border-t border-slate-100 pt-2">
+          <div className="grid grid-cols-[minmax(80px,1fr)_180px] items-center gap-2 text-xs text-slate-600">
+            <span>照らす方向</span>
+            <div className="grid grid-cols-3 gap-1">
+              {(component.targetPosition ?? [0, 0, -1]).map((entry, index) => (
+                <label key={index} className="block">
+                  <span className="mb-0.5 block text-center text-[9px] font-semibold uppercase leading-3 text-slate-400">{"xyz"[index]}</span>
+                  <ScrubNumberInput
+                    value={entry}
+                    min={-100000}
+                    step={0.1}
+                    disabled={readOnly}
+                    ariaLabel={`照らす方向 ${"XYZ"[index]}`}
+                    scrubLabel={`照らす方向 ${"XYZ"[index]}`}
+                    onChange={(next) => {
+                      const targetPosition: Vec3 = [...(component.targetPosition ?? [0, 0, -1])];
+                      targetPosition[index] = next;
+                      onChange({ targetPosition });
+                    }}
+                    className="px-1"
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-500">ライトを基準に照らす向きを指定します。Spot Lightの新規作成時は下向き（0, -1, 0）です。</p>
+        </div>
+      ) : null}
 
       {component.lightType === "hemisphere" ? (
         <div className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 border-t border-slate-100 pt-2 text-xs text-slate-700">
-          <span>地面側の色</span>
+          <span>Ground Color（地面側の色）</span>
           <input
             type="color"
             value={component.groundColor ?? "#334155"}
@@ -3876,7 +3906,7 @@ function LightInspector({
       {component.lightType === "point" || component.lightType === "spot" ? (
         <div className="space-y-2 border-t border-slate-100 pt-2">
           <ColliderNumberField
-            label="届く距離"
+            label="Distance（届く距離）"
             value={component.distance ?? 0}
             min={0}
             step={0.1}
@@ -3884,7 +3914,7 @@ function LightInspector({
             onChange={(distance) => onChange({ distance })}
           />
           <ColliderNumberField
-            label="距離による減衰"
+            label="Decay（距離による減衰）"
             value={component.decay ?? 2}
             min={0}
             step={0.1}
@@ -3896,8 +3926,16 @@ function LightInspector({
 
       {component.lightType === "spot" ? (
         <div className="space-y-2 border-t border-slate-100 pt-2">
+          <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+            Map（投影テクスチャ）
+            <select value={component.mapAssetId ?? ""} disabled={readOnly} onChange={(event) => onChange({ mapAssetId: event.currentTarget.value })} className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100">
+              <option value="">なし</option>
+              {Object.values(assets.assets).filter((asset) => asset.kind === "texture" && (asset.source.kind === "project" || asset.source.kind === "builtin") && !isEnvironmentTextureAsset(asset)).map((asset) => <option key={asset.id} value={asset.id}>{asset.name}</option>)}
+            </select>
+          </label>
+          {component.mapAssetId && !component.castShadow ? <p className="text-[11px] text-slate-500">投影テクスチャを表示するには、Cast Shadowを有効にします。</p> : null}
           <ColliderNumberField
-            label="広がる角度（度）"
+            label="Angle（広がり・度）"
             value={((component.angle ?? Math.PI / 3) * 180) / Math.PI}
             min={1}
             max={90}
@@ -3906,7 +3944,7 @@ function LightInspector({
             onChange={(degrees) => onChange({ angle: (degrees * Math.PI) / 180 })}
           />
           <ColliderNumberField
-            label="光の縁のぼかし"
+            label="Penumbra（縁のぼかし）"
             value={component.penumbra ?? 0.5}
             min={0}
             max={1}
@@ -3920,7 +3958,7 @@ function LightInspector({
       {component.lightType === "rectArea" ? (
         <div className="space-y-2 border-t border-slate-100 pt-2">
           <ColliderNumberField
-            label="幅"
+            label="Width（幅）"
             value={component.width ?? 1}
             min={0.01}
             step={0.1}
@@ -3928,7 +3966,7 @@ function LightInspector({
             onChange={(width) => onChange({ width })}
           />
           <ColliderNumberField
-            label="高さ"
+            label="Height（高さ）"
             value={component.height ?? 1}
             min={0.01}
             step={0.1}
@@ -3938,14 +3976,64 @@ function LightInspector({
         </div>
       ) : null}
 
+      {component.lightType === "point" || component.lightType === "spot" || component.lightType === "rectArea" ? (
+        <ColliderNumberField
+          label="Power（光量・lm）"
+          value={component.intensity * (component.lightType === "point" ? 4 * Math.PI : component.lightType === "spot" ? Math.PI : (component.width ?? 1) * (component.height ?? 1) * Math.PI)}
+          min={0}
+          step={1}
+          disabled={readOnly}
+          onChange={(power) => onChange({ intensity: power / (component.lightType === "point" ? 4 * Math.PI : component.lightType === "spot" ? Math.PI : (component.width ?? 1) * (component.height ?? 1) * Math.PI) })}
+        />
+      ) : null}
+
       {supportsShadow ? (
-        <div className="border-t border-slate-100 pt-2">
+        <div className="space-y-2 border-t border-slate-100 pt-2">
           <ToggleRow
-            label="影を落とす"
+            label="Cast Shadow（影を落とす）"
             checked={component.castShadow}
             disabled={readOnly}
             onChange={(castShadow) => onChange({ castShadow })}
           />
+          <>
+              <ColliderNumberField label="Shadow Intensity（影の濃さ）" value={component.shadowIntensity ?? 1} min={0} max={1} step={0.05} disabled={readOnly} onChange={(shadowIntensity) => onChange({ shadowIntensity })} />
+              <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+                Map Width（影の解像度・横）
+                <select value={component.shadowMapWidth ?? component.shadowMapSize ?? 256} disabled={readOnly} onChange={(event) => onChange({ shadowMapWidth: Number(event.currentTarget.value) })} className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100">
+                  {[256, 512, 1024, 2048, 4096].map((size) => <option key={size} value={size}>{size} px</option>)}
+                </select>
+              </label>
+              <label className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3 text-xs text-slate-700">
+                Map Height（影の解像度・縦）
+                <select value={component.shadowMapHeight ?? component.shadowMapSize ?? 256} disabled={readOnly} onChange={(event) => onChange({ shadowMapHeight: Number(event.currentTarget.value) })} className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100">
+                  {[256, 512, 1024, 2048, 4096].map((size) => <option key={size} value={size}>{size} px</option>)}
+                </select>
+              </label>
+              <ColliderNumberField label="Radius（影のぼかし）" value={component.shadowStyle === "hard" ? 0 : (component.shadowRadius ?? 2)} min={0} step={0.25} disabled={readOnly} onChange={(shadowRadius) => onChange({ shadowRadius, shadowStyle: "soft" })} />
+              <ColliderNumberField label="Bias（奥行き補正）" value={component.shadowBias ?? -0.0002} min={-0.1} max={0.1} step={0.0001} disabled={readOnly} onChange={(shadowBias) => onChange({ shadowBias })} />
+              <ColliderNumberField label="Normal Bias（表面補正）" value={component.shadowNormalBias ?? 0.35} min={0} max={10} step={0.01} disabled={readOnly} onChange={(shadowNormalBias) => onChange({ shadowNormalBias })} />
+              <div className="space-y-2 border-t border-slate-100 pt-2 text-xs text-slate-700">
+                <p className="font-medium">影を描く範囲</p>
+                <p className="text-[11px] text-slate-500">ライトから影を計算する距離と範囲です。</p>
+                <div className="space-y-2">
+                  <ColliderNumberField label="Near（影の開始距離）" value={component.shadowCameraNear ?? (component.lightType === "directional" ? 1 : 0.5)} min={0.001} max={(component.shadowCameraFar ?? (component.lightType === "directional" ? 400 : 500)) - 0.001} step={0.1} disabled={readOnly} onChange={(shadowCameraNear) => onChange({ shadowCameraNear })} />
+                  <ColliderNumberField label="Far（影の終了距離）" value={component.lightType === "spot" && (component.distance ?? 0) > 0 ? component.distance! : (component.shadowCameraFar ?? (component.lightType === "directional" ? 400 : 500))} min={(component.shadowCameraNear ?? (component.lightType === "directional" ? 1 : 0.5)) + 0.001} step={1} disabled={readOnly || (component.lightType === "spot" && (component.distance ?? 0) > 0)} onChange={(shadowCameraFar) => onChange({ shadowCameraFar })} />
+                  {component.lightType === "spot" && (component.distance ?? 0) > 0 ? <p className="text-[11px] text-slate-500">Distance（届く距離）を設定すると、影の終了距離も同じ値になります。</p> : null}
+                  {component.lightType === "directional" ? <>
+                    <ColliderNumberField label="Left（左端）" value={component.shadowCameraLeft ?? -120} min={-100000} step={1} disabled={readOnly} onChange={(shadowCameraLeft) => onChange({ shadowCameraLeft })} />
+                    <ColliderNumberField label="Right（右端）" value={component.shadowCameraRight ?? 120} min={-100000} step={1} disabled={readOnly} onChange={(shadowCameraRight) => onChange({ shadowCameraRight })} />
+                    <ColliderNumberField label="Top（上端）" value={component.shadowCameraTop ?? 120} min={-100000} step={1} disabled={readOnly} onChange={(shadowCameraTop) => onChange({ shadowCameraTop })} />
+                    <ColliderNumberField label="Bottom（下端）" value={component.shadowCameraBottom ?? -120} min={-100000} step={1} disabled={readOnly} onChange={(shadowCameraBottom) => onChange({ shadowCameraBottom })} />
+                  </> : null}
+                  {component.lightType === "spot" ? <>
+                    <ColliderNumberField label="Focus（影の視野倍率）" value={component.shadowFocus ?? 1} min={0} max={1} step={0.05} disabled={readOnly} onChange={(shadowFocus) => onChange({ shadowFocus })} />
+                    <ColliderNumberField label="Aspect（影の縦横比）" value={component.shadowAspect ?? 1} min={0.01} step={0.05} disabled={readOnly} onChange={(shadowAspect) => onChange({ shadowAspect })} />
+                  </> : null}
+                  <ColliderNumberField label="Blur Samples（VSMのぼかし回数）" value={component.shadowBlurSamples ?? 8} min={1} max={32} step={1} disabled={readOnly} onChange={(shadowBlurSamples) => onChange({ shadowBlurSamples: Math.round(shadowBlurSamples) })} />
+                  <ToggleRow label="Auto Update（影を自動更新）" checked={component.shadowAutoUpdate ?? true} disabled={readOnly} onChange={(shadowAutoUpdate) => onChange({ shadowAutoUpdate })} />
+                </div>
+              </div>
+          </>
         </div>
       ) : null}
     </ComponentCard>
@@ -5379,6 +5467,7 @@ function EntityInspector({
             <LightInspector
               key={component.id}
               component={component}
+              assets={assets}
               readOnly={readOnly && !liveRuntimeTuning}
               onChange={(patch) => onLightChange(component.id, patch)}
               onRemove={() => onRemoveComponent(component.id)}
@@ -5819,7 +5908,6 @@ export function InspectorPanel({
   onApplyModelOptimization,
   onParticleChange,
   onTextureChange,
-  onCreateTextureCard,
   textureProcessingState,
   onApplyTextureProcessing,
   onRevertTextureProcessing,
@@ -5952,10 +6040,6 @@ export function InspectorPanel({
   ) => void;
   onParticleChange: (assetId: string, patch: ParticlePropertiesPatch) => void;
   onTextureChange: (assetId: string, patch: TextureAssetPatch) => void;
-  onCreateTextureCard: (
-    textureAssetId: string,
-    profile: TextureCardProfile,
-  ) => void;
   textureProcessingState?: TextureProcessingState;
   onApplyTextureProcessing?: (assetId: string) => void;
   onRevertTextureProcessing?: (assetId: string) => void;
@@ -6191,7 +6275,6 @@ export function InspectorPanel({
               onApplyModelOptimization={onApplyModelOptimization}
               onParticleChange={onParticleChange}
               onTextureChange={onTextureChange}
-              onCreateTextureCard={onCreateTextureCard}
               textureProcessingState={textureProcessingState}
               onApplyTextureProcessing={onApplyTextureProcessing}
               onRevertTextureProcessing={onRevertTextureProcessing}

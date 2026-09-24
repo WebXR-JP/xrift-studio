@@ -299,7 +299,7 @@ function ScriptRuntimeConsole({ runtime }: { runtime: ScriptRuntimeReport }) {
     <section
       id="script-runtime-console"
       aria-label="スクリプト Console"
-      className="h-36 shrink-0 overflow-y-auto border-t border-slate-700 bg-slate-950 px-3 py-2 font-mono text-[10px] text-slate-200"
+      className="h-36 shrink-0 overflow-y-auto border-t border-slate-700 bg-slate-950 px-3 py-2 font-mono text-[10px] text-slate-200 select-text"
     >
       <div className="mb-1 flex items-center gap-2 text-slate-400">
         <span>runtime: {runtime.status}</span>
@@ -314,7 +314,7 @@ function ScriptRuntimeConsole({ runtime }: { runtime: ScriptRuntimeReport }) {
       {runtime.compileErrors.map((entry, index) => (
         <p
           key={`compile:${entry.assetId}:${index}`}
-          className="whitespace-pre-wrap text-amber-300"
+          className="whitespace-pre-wrap text-amber-300 select-text"
         >
           [compile] {entry.assetName}: {entry.message}
         </p>
@@ -322,7 +322,7 @@ function ScriptRuntimeConsole({ runtime }: { runtime: ScriptRuntimeReport }) {
       {runtime.trust.pending.map((entry) => (
         <p
           key={`trust-pending:${entry.assetId}:${entry.sourceSha256}`}
-          className="whitespace-pre-wrap text-amber-300"
+          className="whitespace-pre-wrap text-amber-300 select-text"
         >
           [approval-required] {entry.name}: {entry.sourceSha256}
         </p>
@@ -330,7 +330,7 @@ function ScriptRuntimeConsole({ runtime }: { runtime: ScriptRuntimeReport }) {
       {runtime.trust.disabled.map((entry) => (
         <p
           key={`trust-skipped:${entry.assetId}:${entry.sourceSha256}`}
-          className="whitespace-pre-wrap text-slate-400"
+          className="whitespace-pre-wrap text-slate-400 select-text"
         >
           [skipped] {entry.name}: 動作確認中は実行しません
         </p>
@@ -338,7 +338,7 @@ function ScriptRuntimeConsole({ runtime }: { runtime: ScriptRuntimeReport }) {
       {runtime.failures.map((entry, index) => (
         <p
           key={`failure:${entry.componentId}:${index}`}
-          className="whitespace-pre-wrap text-rose-300"
+          className="whitespace-pre-wrap text-rose-300 select-text"
         >
           [{entry.phase}] {entry.scriptName} / {entry.entityId}: {entry.message}
           {entry.stopped ? " (stopped)" : ""}
@@ -347,7 +347,7 @@ function ScriptRuntimeConsole({ runtime }: { runtime: ScriptRuntimeReport }) {
       {runtime.logs.map((entry, index) => (
         <p
           key={`log:${entry.componentId}:${index}`}
-          className="whitespace-pre-wrap text-slate-200"
+          className="whitespace-pre-wrap text-slate-200 select-text"
         >
           [log] {entry.scriptName}: {entry.values.join(" ")}
         </p>

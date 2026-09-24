@@ -1,6 +1,6 @@
 [package]
 name = "xrift-studio"
-version = "0.10.3"
+version = "0.10.4"
 description = "Community-built desktop app for creating XRift worlds and items"
 authors = ["xrift-studio contributors"]
 license = "MIT"
@@ -55,4 +55,3 @@ same-file = "1"
 opt-level = "s"
 panic = "abort"
 strip = true
-

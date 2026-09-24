@@ -428,6 +428,7 @@ export function runVisualCompilerFixtureAssertions(
     )?.content ?? "";
   assert(worldSource.includes("<SpawnPoint"), "World SpawnPoint was not generated");
   assert(worldSource.includes("castShadow={true}"), "Mesh shadow settings were not generated");
+  assert(worldSource.includes('<XriftShadowMapSettings type="pcf" />') && worldSource.includes("shadowMapWidth={256}") && worldSource.includes("shadowMapHeight={256}"), "Scene shadow algorithm and default light resolution were not generated");
   assert(
     worldSource.includes(
       'import { XriftScriptLight } from "./xrift-studio/light-runtime";',

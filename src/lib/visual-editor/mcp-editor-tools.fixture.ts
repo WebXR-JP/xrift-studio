@@ -1387,57 +1387,6 @@ export function runXriftMcpEditorToolFixtures(): void {
     "list_entities should include the previously placed Entity",
   );
 
-  // A grass card by hand is a plane, an alpha-blended two-sided Material and no
-  // collider: four calls whose settings have to agree with each other.
-  const textureCard = executeXriftMcpEditorTool(current, {
-    id: "fixture-create-texture-card",
-    tool: "create_texture_card",
-    arguments: {
-      projectId: bundle.project.projectId,
-      sceneId: bundle.scene.sceneId,
-      expectedRevision: current.revision,
-      textureAssetId: texture.id,
-      profile: "grass-cross",
-    },
-  });
-  const cardEntityId = textureCard.result.entityId as string;
-  const cardEntity = textureCard.bundle.scene.entities[cardEntityId];
-  assert(
-    textureCard.changed &&
-      cardEntity !== undefined &&
-      !cardEntity.components.some((component) => component.type === "collider"),
-    "create_texture_card should create the card Entity without a collider",
-  );
-  assert(
-    textureCard.bundle.assets.assets[
-      textureCard.result.materialAssetId as string
-    ]?.kind === "material",
-    "create_texture_card should create the card's Material in the same call",
-  );
-  current = { ...current, bundle: textureCard.bundle, revision: current.revision + 1 };
-
-  let environmentCardCode: string | undefined;
-  try {
-    executeXriftMcpEditorTool(current, {
-      id: "fixture-create-texture-card-environment",
-      tool: "create_texture_card",
-      arguments: {
-        projectId: bundle.project.projectId,
-        sceneId: bundle.scene.sceneId,
-        expectedRevision: current.revision,
-        textureAssetId: environmentTexture.id,
-        profile: "backdrop-flat",
-      },
-    });
-  } catch (error) {
-    environmentCardCode =
-      error instanceof XriftMcpEditorToolError ? error.code : undefined;
-  }
-  assert(
-    environmentCardCode === "ASSET_KIND_MISMATCH",
-    "An environment Texture belongs on the skybox, not on a card",
-  );
-
   // create_custom_shader takes arbitrary GLSL, so a caller without the catalog
   // invents numbers for "a sky" that the catalog already has.
   const materialPresets = executeXriftMcpEditorTool(current, {
@@ -2492,6 +2441,68 @@ export function runXriftMcpEditorToolFixtures(): void {
     bundle: materialTextureUpdated.bundle,
     revision: current.revision + 1,
   };
+
+  const allPbrParametersUpdated = executeXriftMcpEditorTool(current, {
+    id: "fixture-update-all-pbr-parameters",
+    tool: "update_material_asset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      materialAssetId: BUILTIN_ASSET_IDS.material.orange,
+      patch: {
+        pbrMetallicRoughness: {
+          baseColorFactor: [0.2, 0.3, 0.4, 0.8],
+          metallicFactor: 0.7,
+          roughnessFactor: 0.2,
+          metallicRoughnessTexture: texture.id,
+        },
+        normalTexture: { textureAssetId: texture.id, scale: 0.6 },
+        occlusionTexture: { textureAssetId: texture.id, strength: 0.5 },
+        emissiveFactor: [0.1, 0.2, 0.3],
+        emissiveTexture: texture.id,
+        alphaMode: "BLEND",
+        alphaCutoff: 0.4,
+        doubleSided: true,
+        blending: "additive",
+        depthWrite: "off",
+        alphaToCoverage: true,
+        vertexColors: true,
+        opacityTexture: texture.id,
+        opacityChannel: "r",
+        extensions: {
+          KHR_materials_anisotropy: { anisotropyStrength: 0.3, anisotropyRotation: 0.5, anisotropyTexture: texture.id },
+          KHR_materials_clearcoat: { clearcoatFactor: 0.7, clearcoatTexture: texture.id, clearcoatRoughnessFactor: 0.2, clearcoatRoughnessTexture: texture.id, clearcoatNormalTexture: { textureAssetId: texture.id, scale: 0.8 } },
+          KHR_materials_dispersion: { dispersion: 0.4 },
+          KHR_materials_emissive_strength: { emissiveStrength: 2 },
+          KHR_materials_ior: { ior: 1.4 },
+          KHR_materials_iridescence: { iridescenceFactor: 0.5, iridescenceTexture: texture.id, iridescenceIor: 1.3, iridescenceThicknessMinimum: 100, iridescenceThicknessMaximum: 300, iridescenceThicknessTexture: texture.id },
+          KHR_materials_sheen: { sheenColorFactor: [0.2, 0.3, 0.4], sheenColorTexture: texture.id, sheenRoughnessFactor: 0.6, sheenRoughnessTexture: texture.id },
+          KHR_materials_specular: { specularFactor: 0.7, specularTexture: texture.id, specularColorFactor: [1.2, 1.1, 1], specularColorTexture: texture.id },
+          KHR_materials_transmission: { transmissionFactor: 0.5, transmissionTexture: texture.id },
+          KHR_materials_volume: { thicknessFactor: 0.2, thicknessTexture: texture.id, attenuationDistance: 2, attenuationColor: [0.8, 0.9, 1] },
+        },
+      },
+    },
+  });
+  const pbrProperties = allPbrParametersUpdated.result.properties as {
+    pbrMetallicRoughness: { baseColorFactor: number[]; metallicFactor: number; roughnessFactor: number };
+    blending: string;
+    depthWrite: string;
+    extensions: { KHR_materials_clearcoat?: { clearcoatFactor: number }; KHR_materials_volume?: { attenuationDistance: number } };
+  };
+  assert(
+    allPbrParametersUpdated.changed &&
+      pbrProperties.pbrMetallicRoughness.baseColorFactor[3] === 0.8 &&
+      pbrProperties.pbrMetallicRoughness.metallicFactor === 0.7 &&
+      pbrProperties.pbrMetallicRoughness.roughnessFactor === 0.2 &&
+      pbrProperties.blending === "additive" &&
+      pbrProperties.depthWrite === "off" &&
+      pbrProperties.extensions.KHR_materials_clearcoat?.clearcoatFactor === 0.7 &&
+      pbrProperties.extensions.KHR_materials_volume?.attenuationDistance === 2,
+    "update_material_asset should persist core and extension PBR parameters",
+  );
+  current = { ...current, bundle: allPbrParametersUpdated.bundle, revision: current.revision + 1 };
 
   const customShaderCreated = executeXriftMcpEditorTool(current, {
     id: "fixture-create-custom-shader",

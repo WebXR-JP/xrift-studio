@@ -44,7 +44,6 @@
 - [F-23 公式XRiftのコンポーネントカタログとコード編集 / TSX変換](./ux/assets.md#f-23)
 - [F-24 glTF マテリアル制御とBehavior連携](./ux/assets.md#f-24)
 - [F-29 カスタムシェーダー authoringとマテリアル適用](./ux/assets.md#f-29)
-- [F-30 テクスチャから遠景 / 草カードを作成](./ux/assets.md#f-30)
 - [F-36 音声素材試聴](./ux/assets.md#f-36)
 - [F-37 テクスチャ解像度変更・圧縮の適用](./ux/assets.md#f-37)
 - [F-40 公開時のテクスチャ変換と取り込み時の最大解像度](./ux/assets.md#f-40)

@@ -823,8 +823,11 @@ function createRegisteredComponent(
       enabled: true,
       lightType,
       color: "#ffffff",
-      intensity: lightType === "ambient" || lightType === "hemisphere" ? 0.6 : 1,
+      intensity: lightType === "ambient" || lightType === "hemisphere" ? 0.6 : lightType === "spot" ? 100 : 1,
       castShadow: lightType === "directional" || lightType === "point" || lightType === "spot",
+      shadowMapSize: 256,
+      shadowRadius: 2,
+      ...(lightType === "spot" ? { targetPosition: [0, -1, 0] as [number, number, number] } : {}),
       ...(lightType === "hemisphere" ? { groundColor: "#334155" } : {}),
       ...(lightType === "point" || lightType === "spot"
         ? { distance: 0, decay: 2 }

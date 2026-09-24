@@ -251,6 +251,26 @@ export type LightComponent = ComponentBase & {
   color: string;
   intensity: number;
   castShadow: boolean;
+  targetPosition?: [number, number, number];
+  mapAssetId?: string;
+  shadowIntensity?: number;
+  shadowStyle?: "hard" | "soft";
+  shadowMapSize?: number;
+  shadowMapWidth?: number;
+  shadowMapHeight?: number;
+  shadowRadius?: number;
+  shadowBias?: number;
+  shadowNormalBias?: number;
+  shadowBlurSamples?: number;
+  shadowAutoUpdate?: boolean;
+  shadowCameraNear?: number;
+  shadowCameraFar?: number;
+  shadowCameraLeft?: number;
+  shadowCameraRight?: number;
+  shadowCameraTop?: number;
+  shadowCameraBottom?: number;
+  shadowFocus?: number;
+  shadowAspect?: number;
   groundColor?: string;
   distance?: number;
   decay?: number;
@@ -268,6 +288,26 @@ export type LightPatch = Partial<
     | "color"
     | "intensity"
     | "castShadow"
+    | "targetPosition"
+    | "mapAssetId"
+    | "shadowIntensity"
+    | "shadowStyle"
+    | "shadowMapSize"
+    | "shadowMapWidth"
+    | "shadowMapHeight"
+    | "shadowRadius"
+    | "shadowBias"
+    | "shadowNormalBias"
+    | "shadowBlurSamples"
+    | "shadowAutoUpdate"
+    | "shadowCameraNear"
+    | "shadowCameraFar"
+    | "shadowCameraLeft"
+    | "shadowCameraRight"
+    | "shadowCameraTop"
+    | "shadowCameraBottom"
+    | "shadowFocus"
+    | "shadowAspect"
     | "groundColor"
     | "distance"
     | "decay"
@@ -350,11 +390,9 @@ export { DEFAULT_IMAGE_QUAD_CONFIG };
 /**
  * A picture on a flat quad.
  *
- * The first Component that points at a Texture Asset directly: a gallery
- * wall, a poster or a clock face is one image at one size, and asking for a
- * Material Asset per picture is what made `create_texture_card` heavy for
- * that. The shape is shared with the runtime so the compiler hands the
- * authored value straight to the manifest.
+ * A gallery wall, a poster or a clock face is one image at one size. The
+ * shape is shared with the runtime so the compiler hands the authored value
+ * straight to the manifest.
  */
 export type ImageComponent = ComponentBase & {
   type: "image";
@@ -2056,6 +2094,29 @@ export function updateLightComponent(
     return scene;
   }
   if (patch.castShadow !== undefined && typeof patch.castShadow !== "boolean") return scene;
+  if (patch.targetPosition !== undefined && (!Array.isArray(patch.targetPosition) || patch.targetPosition.length !== 3 || !patch.targetPosition.every(Number.isFinite) || patch.targetPosition.every((value) => value === 0))) return scene;
+  if (patch.mapAssetId !== undefined && typeof patch.mapAssetId !== "string") return scene;
+  if (patch.shadowIntensity !== undefined && (!Number.isFinite(patch.shadowIntensity) || patch.shadowIntensity < 0 || patch.shadowIntensity > 1)) return scene;
+  if (patch.shadowStyle !== undefined && patch.shadowStyle !== "hard" && patch.shadowStyle !== "soft") return scene;
+  if (patch.shadowMapSize !== undefined && ![256, 512, 1024, 2048, 4096].includes(patch.shadowMapSize)) return scene;
+  if (patch.shadowMapWidth !== undefined && ![256, 512, 1024, 2048, 4096].includes(patch.shadowMapWidth)) return scene;
+  if (patch.shadowMapHeight !== undefined && ![256, 512, 1024, 2048, 4096].includes(patch.shadowMapHeight)) return scene;
+  if (patch.shadowRadius !== undefined && (!Number.isFinite(patch.shadowRadius) || patch.shadowRadius < 0)) return scene;
+  if (patch.shadowBias !== undefined && (!Number.isFinite(patch.shadowBias) || Math.abs(patch.shadowBias) > 0.1)) return scene;
+  if (patch.shadowNormalBias !== undefined && (!Number.isFinite(patch.shadowNormalBias) || patch.shadowNormalBias < 0 || patch.shadowNormalBias > 10)) return scene;
+  if (patch.shadowBlurSamples !== undefined && (!Number.isInteger(patch.shadowBlurSamples) || patch.shadowBlurSamples < 1 || patch.shadowBlurSamples > 32)) return scene;
+  if (patch.shadowAutoUpdate !== undefined && typeof patch.shadowAutoUpdate !== "boolean") return scene;
+  if (patch.shadowCameraNear !== undefined && (!Number.isFinite(patch.shadowCameraNear) || patch.shadowCameraNear <= 0)) return scene;
+  if (patch.shadowCameraFar !== undefined && (!Number.isFinite(patch.shadowCameraFar) || patch.shadowCameraFar <= 0)) return scene;
+  for (const value of [patch.shadowCameraLeft, patch.shadowCameraRight, patch.shadowCameraTop, patch.shadowCameraBottom]) {
+    if (value !== undefined && !Number.isFinite(value)) return scene;
+  }
+  if (patch.shadowFocus !== undefined && (!Number.isFinite(patch.shadowFocus) || patch.shadowFocus < 0 || patch.shadowFocus > 1)) return scene;
+  if (patch.shadowAspect !== undefined && (!Number.isFinite(patch.shadowAspect) || patch.shadowAspect <= 0)) return scene;
+  const directionalShadow = patch.lightType === "directional" || (patch.lightType === undefined && current.lightType === "directional");
+  if ((patch.shadowCameraNear ?? current.shadowCameraNear ?? (directionalShadow ? 1 : 0.5)) >= (patch.shadowCameraFar ?? current.shadowCameraFar ?? (directionalShadow ? 400 : 500))) return scene;
+  if (directionalShadow && (patch.shadowCameraLeft ?? current.shadowCameraLeft ?? -120) >= (patch.shadowCameraRight ?? current.shadowCameraRight ?? 120)) return scene;
+  if (directionalShadow && (patch.shadowCameraBottom ?? current.shadowCameraBottom ?? -120) >= (patch.shadowCameraTop ?? current.shadowCameraTop ?? 120)) return scene;
   if (
     patch.distance !== undefined &&
     (!Number.isFinite(patch.distance) || patch.distance < 0)

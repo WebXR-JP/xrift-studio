@@ -15,7 +15,7 @@ export function EditorImportMenu({
   onImportModel: () => void;
   onImportR3f: () => void;
   onOpenExternalStore?: () => void;
-  /** Uses the shared creation catalog; context menus only edit existing objects. */
+  /** Uses the creation catalog shared with Hierarchy's blank-space menu. */
   renderCreation?: (close: () => void, searchQuery: string) => ReactNode;
   onImportHierarchy?: () => void;
 }) {

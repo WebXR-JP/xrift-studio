@@ -1,19 +1,50 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import {
   AmbientLight,
+  BasicShadowMap,
   DirectionalLight,
   HemisphereLight,
   Object3D,
+  PCFShadowMap,
+  PCFSoftShadowMap,
   PointLight,
   RectAreaLight,
   SpotLight,
+  VSMShadowMap,
   type ColorRepresentation,
   type Light,
+  type Material,
+  type Texture,
 } from "three";
 
 export const XRIFT_LIGHT_RUNTIME_USER_DATA_KEY =
   "xriftLightRuntime" as const;
+
+export type XriftShadowMapType = "basic" | "pcf" | "pcfSoft" | "vsm";
+
+export function XriftShadowMapSettings({ type }: { type: XriftShadowMapType }) {
+  const gl = useThree((state) => state.gl);
+  const scene = useThree((state) => state.scene);
+  const invalidate = useThree((state) => state.invalidate);
+  useLayoutEffect(() => {
+    const previous = gl.shadowMap.type;
+    gl.shadowMap.type = type === "basic" ? BasicShadowMap : type === "pcfSoft" ? PCFSoftShadowMap : type === "vsm" ? VSMShadowMap : PCFShadowMap;
+    gl.shadowMap.needsUpdate = true;
+    if (previous !== gl.shadowMap.type) {
+      scene.traverse((object) => {
+        const material = (object as Object3D & { material?: Material | Material[] }).material;
+        for (const entry of Array.isArray(material) ? material : material ? [material] : []) entry.needsUpdate = true;
+      });
+    }
+    invalidate();
+    return () => {
+      gl.shadowMap.type = previous;
+      gl.shadowMap.needsUpdate = true;
+    };
+  }, [gl, invalidate, scene, type]);
+  return null;
+}
 
 export const XRIFT_LIGHT_TYPES = [
   "ambient",
@@ -359,6 +390,26 @@ export type XriftScriptLightProps = {
   color: ColorRepresentation;
   intensity: number;
   castShadow: boolean;
+  targetPosition?: [number, number, number];
+  map?: Texture | null;
+  shadowIntensity?: number;
+  shadowStyle?: "hard" | "soft";
+  shadowMapSize?: number;
+  shadowMapWidth?: number;
+  shadowMapHeight?: number;
+  shadowRadius?: number;
+  shadowBias?: number;
+  shadowNormalBias?: number;
+  shadowBlurSamples?: number;
+  shadowAutoUpdate?: boolean;
+  shadowCameraNear?: number;
+  shadowCameraFar?: number;
+  shadowCameraLeft?: number;
+  shadowCameraRight?: number;
+  shadowCameraTop?: number;
+  shadowCameraBottom?: number;
+  shadowFocus?: number;
+  shadowAspect?: number;
   groundColor?: ColorRepresentation;
   distance?: number;
   decay?: number;
@@ -379,6 +430,26 @@ export function XriftScriptLight({
   color,
   intensity,
   castShadow,
+  targetPosition = [0, 0, -1],
+  map = null,
+  shadowIntensity = 1,
+  shadowStyle = "soft",
+  shadowMapSize = 256,
+  shadowMapWidth = shadowMapSize,
+  shadowMapHeight = shadowMapSize,
+  shadowRadius = 2,
+  shadowBias = -0.0002,
+  shadowNormalBias = 0.35,
+  shadowBlurSamples = 8,
+  shadowAutoUpdate = true,
+  shadowCameraNear,
+  shadowCameraFar,
+  shadowCameraLeft = -120,
+  shadowCameraRight = 120,
+  shadowCameraTop = 120,
+  shadowCameraBottom = -120,
+  shadowFocus = 1,
+  shadowAspect = 1,
   groundColor = "#334155",
   distance = 0,
   decay = 2,
@@ -447,6 +518,25 @@ export function XriftScriptLight({
       target,
       {
         castShadow,
+        shadowIntensity,
+        shadowStyle,
+        shadowMapSize,
+        shadowMapWidth,
+        shadowMapHeight,
+        shadowRadius,
+        shadowBias,
+        shadowNormalBias,
+        shadowBlurSamples,
+        shadowAutoUpdate,
+        shadowCameraNear,
+        shadowCameraFar,
+        shadowCameraLeft,
+        shadowCameraRight,
+        shadowCameraTop,
+        shadowCameraBottom,
+        shadowFocus,
+        shadowAspect,
+        map,
         groundColor,
         distance,
         decay,
@@ -463,6 +553,25 @@ export function XriftScriptLight({
     angle,
     bridge,
     castShadow,
+    shadowIntensity,
+    shadowStyle,
+    shadowMapSize,
+    shadowMapWidth,
+    shadowMapHeight,
+    shadowRadius,
+    shadowBias,
+    shadowNormalBias,
+    shadowBlurSamples,
+    shadowAutoUpdate,
+    shadowCameraNear,
+    shadowCameraFar,
+    shadowCameraLeft,
+    shadowCameraRight,
+    shadowCameraTop,
+    shadowCameraBottom,
+    shadowFocus,
+    shadowAspect,
+    map,
     color,
     decay,
     distance,
@@ -487,7 +596,7 @@ export function XriftScriptLight({
   return (
     <>
       <primitive object={light} />
-      {target ? <primitive object={target} position={[0, 0, -1]} /> : null}
+      {target ? <primitive object={target} position={targetPosition} /> : null}
     </>
   );
 }
@@ -514,6 +623,25 @@ function configureThreeLight(
   target: Object3D | null,
   authored: {
     castShadow: boolean;
+    shadowIntensity: number;
+    shadowStyle: "hard" | "soft";
+    shadowMapSize: number;
+    shadowMapWidth: number;
+    shadowMapHeight: number;
+    shadowRadius: number;
+    shadowBias: number;
+    shadowNormalBias: number;
+    shadowBlurSamples: number;
+    shadowAutoUpdate: boolean;
+    shadowCameraNear?: number;
+    shadowCameraFar?: number;
+    shadowCameraLeft: number;
+    shadowCameraRight: number;
+    shadowCameraTop: number;
+    shadowCameraBottom: number;
+    shadowFocus: number;
+    shadowAspect: number;
+    map: Texture | null;
     groundColor: ColorRepresentation;
     distance: number;
     decay: number;
@@ -535,21 +663,33 @@ function configureThreeLight(
       // square where shadows exist inside and vanish outside, torn into moire
       // stripes of self-shadowing acne. The normal bias removes the acne; the
       // wide frustum removes the square.
-      light.shadow.mapSize.set(2048, 2048);
-      light.shadow.bias = -0.0002;
-      light.shadow.normalBias = 0.35;
+      light.shadow.intensity = authored.shadowIntensity;
+      const mapSizeChanged = light.shadow.mapSize.x !== authored.shadowMapWidth || light.shadow.mapSize.y !== authored.shadowMapHeight;
+      light.shadow.mapSize.set(authored.shadowMapWidth, authored.shadowMapHeight);
+      light.shadow.radius = authored.shadowStyle === "hard" ? 0 : authored.shadowRadius;
+      light.shadow.bias = authored.shadowBias;
+      light.shadow.normalBias = authored.shadowNormalBias;
+      light.shadow.blurSamples = authored.shadowBlurSamples;
+      light.shadow.autoUpdate = authored.shadowAutoUpdate;
+      light.shadow.needsUpdate = true;
       if (light instanceof DirectionalLight) {
-        light.shadow.camera.left = -120;
-        light.shadow.camera.right = 120;
-        light.shadow.camera.top = 120;
-        light.shadow.camera.bottom = -120;
-        light.shadow.camera.near = 1;
-        light.shadow.camera.far = 400;
+        light.shadow.camera.left = authored.shadowCameraLeft;
+        light.shadow.camera.right = authored.shadowCameraRight;
+        light.shadow.camera.top = authored.shadowCameraTop;
+        light.shadow.camera.bottom = authored.shadowCameraBottom;
       }
+      if (light instanceof SpotLight) {
+        light.shadow.focus = authored.shadowFocus;
+        light.shadow.aspect = authored.shadowAspect;
+      }
+      light.shadow.camera.near = authored.shadowCameraNear ?? (light instanceof DirectionalLight ? 1 : 0.5);
+      light.shadow.camera.far = authored.shadowCameraFar ?? (light instanceof DirectionalLight ? 400 : 500);
       light.shadow.camera.updateProjectionMatrix();
       // The map may already exist at the old size when a light toggles.
-      light.shadow.map?.dispose();
-      light.shadow.map = null;
+      if (mapSizeChanged) {
+        light.shadow.map?.dispose();
+        light.shadow.map = null;
+      }
     }
   }
   if (light instanceof HemisphereLight) {
@@ -562,6 +702,7 @@ function configureThreeLight(
   if (light instanceof SpotLight) {
     light.angle = clamp(authored.angle, Number.EPSILON, Math.PI / 2);
     light.penumbra = clamp(authored.penumbra, 0, 1);
+    light.map = authored.map;
   }
   if (light instanceof RectAreaLight) {
     light.width = clampNonNegative(authored.width);

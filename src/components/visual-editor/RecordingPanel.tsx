@@ -113,7 +113,7 @@ export function RecordingPanel({
           ) : null}
           {(snapshot.status === "completed" || snapshot.status === "failed") && snapshot.path ? (
             <div className="mt-1.5 flex items-center justify-between gap-2">
-              <span className="min-w-0 truncate font-mono text-[10px]" title={snapshot.path}>
+              <span className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap select-text cursor-text font-mono text-[10px]" title={snapshot.path}>
                 {snapshot.path}
               </span>
               {nativeAvailable ? (
@@ -305,7 +305,7 @@ export function RecordingPanel({
           <h3 id="recording-directory-heading" className={sectionHeading}>
             保存先
           </h3>
-          <p className="truncate font-mono text-[10px] text-slate-600" title={projectRecordingDirectory ?? state.outputDirectory ?? "既定の保存先"}>
+          <p className="overflow-x-auto whitespace-nowrap select-text cursor-text font-mono text-[10px] text-slate-600" title={projectRecordingDirectory ?? state.outputDirectory ?? "既定の保存先"}>
             {projectRecordingDirectory ?? state.outputDirectory ?? "既定（ビデオ / XRift Studio）"}
           </p>
           {projectRecordingDirectory ? <p className="mt-1 text-[11px] text-slate-500">プロジェクトフォルダーに保存します。</p> : <div className="mt-1.5 grid grid-cols-2 gap-1.5">

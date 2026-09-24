@@ -2029,6 +2029,10 @@ function renderSceneEnvironment(
   context: CompileContext,
 ): string[] {
   const content: string[] = [];
+  if (sceneUsesLightRuntime(context.scene)) {
+    context.extraImports.add('import { XriftShadowMapSettings } from "./xrift-studio/light-runtime";');
+    content.push(`<XriftShadowMapSettings type=${JSON.stringify(settings.shadowMapType)} />`);
+  }
   // Only when the Scene asks for it: a flat fill lifts every surface with no
   // direction, which is what made an unlit floor read as its own colour.
   if (settings.ambient.enabled) {
@@ -5572,7 +5576,24 @@ function renderLight(
   context.extraImports.add(
     'import { XriftScriptLight } from "./xrift-studio/light-runtime";',
   );
-  return `<XriftScriptLight componentId=${JSON.stringify(light.id)} lightType=${JSON.stringify(light.lightType)} enabled={${light.enabled}} color=${JSON.stringify(light.color)} intensity={${formatNumber(light.intensity)}} castShadow={${light.castShadow}} groundColor=${JSON.stringify(light.groundColor ?? "#334155")} distance={${formatNumber(light.distance ?? 0)}} decay={${formatNumber(light.decay ?? 2)}} angle={${formatNumber(light.angle ?? Math.PI / 3)}} penumbra={${formatNumber(light.penumbra ?? 0.5)}} width={${formatNumber(light.width ?? 1)}} height={${formatNumber(light.height ?? 1)}} />`;
+  const lightJsx = `<XriftScriptLight componentId=${JSON.stringify(light.id)} lightType=${JSON.stringify(light.lightType)} enabled={${light.enabled}} color=${JSON.stringify(light.color)} intensity={${formatNumber(light.intensity)}} castShadow={${light.castShadow}} targetPosition={${JSON.stringify(light.targetPosition ?? [0, 0, -1])}} shadowIntensity={${formatNumber(light.shadowIntensity ?? 1)}} shadowStyle=${JSON.stringify(light.shadowStyle ?? "soft")} shadowMapSize={${formatNumber(light.shadowMapSize ?? 256)}} shadowMapWidth={${formatNumber(light.shadowMapWidth ?? light.shadowMapSize ?? 256)}} shadowMapHeight={${formatNumber(light.shadowMapHeight ?? light.shadowMapSize ?? 256)}} shadowRadius={${formatNumber(light.shadowRadius ?? 2)}} shadowBias={${formatNumber(light.shadowBias ?? -0.0002)}} shadowNormalBias={${formatNumber(light.shadowNormalBias ?? 0.35)}} shadowBlurSamples={${formatNumber(light.shadowBlurSamples ?? 8)}} shadowAutoUpdate={${light.shadowAutoUpdate ?? true}} shadowCameraNear={${formatNumber(light.shadowCameraNear ?? (light.lightType === "directional" ? 1 : 0.5))}} shadowCameraFar={${formatNumber(light.shadowCameraFar ?? (light.lightType === "directional" ? 400 : 500))}} shadowCameraLeft={${formatNumber(light.shadowCameraLeft ?? -120)}} shadowCameraRight={${formatNumber(light.shadowCameraRight ?? 120)}} shadowCameraTop={${formatNumber(light.shadowCameraTop ?? 120)}} shadowCameraBottom={${formatNumber(light.shadowCameraBottom ?? -120)}} shadowFocus={${formatNumber(light.shadowFocus ?? 1)}} shadowAspect={${formatNumber(light.shadowAspect ?? 1)}} groundColor=${JSON.stringify(light.groundColor ?? "#334155")} distance={${formatNumber(light.distance ?? 0)}} decay={${formatNumber(light.decay ?? 2)}} angle={${formatNumber(light.angle ?? Math.PI / 3)}} penumbra={${formatNumber(light.penumbra ?? 0.5)}} width={${formatNumber(light.width ?? 1)}} height={${formatNumber(light.height ?? 1)}}${light.lightType === "spot" && light.mapAssetId ? " map={spotMap}" : ""} />`;
+  if (light.lightType !== "spot" || !light.mapAssetId) return lightJsx;
+  const texture = getTextureAsset(context.assets, light.mapAssetId);
+  const runtimeUrl = texture ? context.assetRuntimeUrls.get(texture.id) : undefined;
+  if (!texture || !runtimeUrl) return lightJsx.replace(" map={spotMap}", "");
+  context.referencedAssetIds.add(texture.id);
+  const usesKtx2 = isPublishedAsKtx2(texture);
+  if (usesKtx2) registerCompiledKtx2Runtime(context);
+  else context.dreiImports.add("useTexture");
+  context.reactTypeImports.add("FC");
+  const urlConstant = registerAssetUrl(texture, runtimeUrl, context);
+  const componentName = generatedIdentifier("CompiledSpotLight", light.id);
+  context.supportDeclarations.set(`spot-map:${componentName}`, `const ${componentName}: FC = () => {
+  const spotMapUrl = useCompiledAssetUrl(${urlConstant});
+  const spotMap = ${usesKtx2 ? "useCompiledKtx2" : "useTexture"}(spotMapUrl);
+  return ${lightJsx};
+};`);
+  return `<${componentName} />`;
 }
 
 /**

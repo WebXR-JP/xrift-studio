@@ -62,7 +62,6 @@ import {
   createEditorHistory,
   type EditorHistory,
   createDocumentId,
-  createTextureCard,
   createOfficialXriftComponentSample,
   createEmptyEntity,
   createPrefabDocument,
@@ -196,7 +195,6 @@ import {
   type ShaderAssetStage,
   type SceneDocument,
   type TextureAssetPatch,
-  type TextureCardProfile,
   type TerrainViewportEditing,
   type TextPatch,
   type ImagePatch,
@@ -5765,14 +5763,27 @@ export function VisualEditorPrototype({
         );
         return;
       }
-      const target = describeAssetDeleteTarget(bundle, assetId);
+      const ids = selectedAssetIds.includes(assetId) && selectedAssetIds.length > 1
+        ? selectedAssetIds.filter((id) => Boolean(bundle.assets.assets[id]))
+        : [assetId];
+      const analyses = ids.map((id) => describeAssetDeleteTarget(bundle, id));
+      const target = ids.length > 1
+        ? {
+            kind: "assets" as const,
+            ids,
+            name: `${ids.length}件のアセット`,
+            canDelete: analyses.every((item) => item?.kind === "asset" && item.canDelete),
+            referencedNames: analyses.flatMap((item) => item?.kind === "asset" && item.references.length > 0 ? [item.name] : []),
+            referenceCount: analyses.reduce((count, item) => count + (item?.kind === "asset" ? item.references.length : 0), 0),
+          }
+        : analyses[0];
       if (!target) {
         setNotice("削除する素材が見つかりませんでした");
         return;
       }
       setDeleteDialog(target);
     },
-    [bundle, editorMode, importBusy],
+    [bundle, editorMode, importBusy, selectedAssetIds],
   );
 
   const requestDeleteAssetFolder = useCallback(
@@ -5811,6 +5822,32 @@ export function VisualEditorPrototype({
     ) return;
     const target = deleteDialog;
     setHistory((current) => {
+      if (target.kind === "assets") {
+        let documents = {
+          assets: current.present.bundle.assets,
+          scene: current.present.bundle.scene,
+          prefabs: current.present.bundle.prefabs,
+        };
+        for (const id of target.ids) {
+          const result = deleteAssetIfUnreferenced(documents, id);
+          if (!result.changed) {
+            setNotice(result.reason === "referenced" ? "参照が追加されたため削除を中止しました" : "素材は削除されませんでした");
+            return current;
+          }
+          documents = { ...documents, assets: result.assets, prefabs: result.prefabs };
+        }
+        const assetSelection = target.ids.includes(current.present.assetSelection ?? "")
+          ? Object.values(documents.assets.assets).find((asset) => asset.kind !== "primitive")?.id ?? null
+          : current.present.assetSelection;
+        setSelectedAssetIds(assetSelection ? [assetSelection] : []);
+        setSaveStatus("dirty");
+        setNotice(`${target.ids.length}件のアセットをAssetsから削除しました`);
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle: touchProject({ ...current.present.bundle, assets: documents.assets, prefabs: documents.prefabs }),
+          assetSelection,
+        });
+      }
       if (target.kind === "asset") {
         const result = deleteAssetIfUnreferenced(
           {
@@ -5926,7 +5963,7 @@ export function VisualEditorPrototype({
   /** Unlinks everything the dialog lists, then deletes, as one undo step. */
   const detachReferencesAndDeleteAsset = useCallback(() => {
     const target = deleteDialog;
-    if (!target || target.kind !== "asset") return;
+    if (!target || target.kind === "folder") return;
     if (editorMode !== "edit" || importBusy) {
       setNotice(
         editorMode !== "edit"
@@ -5936,6 +5973,36 @@ export function VisualEditorPrototype({
       return;
     }
     setHistory((current) => {
+      if (target.kind === "assets") {
+        let documents = {
+          assets: current.present.bundle.assets,
+          scene: current.present.bundle.scene,
+          prefabs: current.present.bundle.prefabs,
+        };
+        let detachedCount = 0;
+        for (const id of target.ids) {
+          const detached = detachAssetReferences(documents, id);
+          detachedCount += detached.detached.length;
+          const result = deleteAssetIfUnreferenced(detached, id);
+          if (!result.changed) {
+            setNotice("外せない参照が残っているため削除を中止しました");
+            return current;
+          }
+          documents = { assets: result.assets, scene: detached.scene, prefabs: result.prefabs };
+        }
+        const assetSelection = target.ids.includes(current.present.assetSelection ?? "")
+          ? Object.values(documents.assets.assets).find((asset) => asset.kind !== "primitive")?.id ?? null
+          : current.present.assetSelection;
+        setSelectedAssetIds(assetSelection ? [assetSelection] : []);
+        setSaveStatus("dirty");
+        setNotice(`参照${detachedCount}件を外して${target.ids.length}件のアセットを削除しました`);
+        setDeleteDialog(null);
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle: touchProject({ ...current.present.bundle, ...documents }),
+          assetSelection,
+        });
+      }
       const detached = detachAssetReferences(
         {
           assets: current.present.bundle.assets,
@@ -6026,37 +6093,49 @@ export function VisualEditorPrototype({
         );
         return;
       }
+      const ids = selectedAssetIds.includes(assetId) && selectedAssetIds.length > 1
+        ? selectedAssetIds
+        : [assetId];
       setHistory((current) => {
-        const result = moveLibraryAsset(
-          current.present.bundle.assets,
-          assetId,
-          folderId,
-        );
-        if (!result.changed) {
+        let nextAssets = current.present.bundle.assets;
+        let movedCount = 0;
+        for (const id of ids) {
+          const result = moveLibraryAsset(nextAssets, id, folderId);
+          if (result.reason === "same-parent") continue;
+          if (!result.changed) {
+            setNotice("選択した素材をこの場所へ移動できませんでした");
+            return current;
+          }
+          nextAssets = result.assets;
+          movedCount++;
+        }
+        if (movedCount === 0) {
           setNotice(
-            result.reason === "same-parent"
-              ? "素材はすでにこのフォルダーにあります"
-              : "この場所へ素材を移動できませんでした",
+            ids.length > 1
+              ? "選択した素材はすでにこのフォルダーにあります"
+              : "素材はすでにこのフォルダーにあります",
           );
           return current;
         }
         const assetName = current.present.bundle.assets.assets[assetId]?.name ?? "アセット";
         const folderName = folderId
           ? current.present.bundle.assets.folders?.[folderId]?.name ?? "フォルダー"
-          : "Assets直下";
+          : "Assets/";
         setSaveStatus("dirty");
-        setNotice(`「${assetName}」を${folderName}へ移動しました`);
+        setNotice(ids.length > 1
+          ? `${movedCount}件のアセットを${folderName}へ移動しました`
+          : `「${assetName}」を${folderName}へ移動しました`);
         return commitEditorHistory(current, {
           ...current.present,
           bundle: touchProject({
             ...current.present.bundle,
-            assets: result.assets,
+            assets: nextAssets,
           }),
-          assetSelection: assetId,
+          assetSelection: ids.length > 1 ? current.present.assetSelection : assetId,
         });
       });
     },
-    [editorMode, importBusy],
+    [editorMode, importBusy, selectedAssetIds],
   );
 
   const handleMoveAssetFolder = useCallback(
@@ -6091,7 +6170,7 @@ export function VisualEditorPrototype({
           current.present.bundle.assets.folders?.[folderId]?.name ?? "フォルダー";
         const parentName = parentId
           ? current.present.bundle.assets.folders?.[parentId]?.name ?? "フォルダー"
-          : "Assets直下";
+          : "Assets/";
         setSaveStatus("dirty");
         setNotice(`「${folderName}」を${parentName}へ移動しました`);
         return commitEditorHistory(current, {
@@ -6744,14 +6823,44 @@ export function VisualEditorPrototype({
   }, []);
 
   const handleGizmoCommit = useCallback(
-    (entityId: string, patch: TransformPatch) => {
+    (entityId: string, patch: TransformPatch, peers?: readonly { entityId: string; patch: TransformPatch }[]) => {
       if (editorMode !== "edit") return;
-      updateScene((scene) =>
-        updateModelNodeEntityTransform(scene, entityId, patch),
-      );
-      setNotice("ギズモの変更をシーンへ反映しました");
+      updateScene((scene) => {
+        const primary = getTransform(scene, entityId);
+        if (!primary) return scene;
+        const delta = patch.position?.map((value, index) => value - primary.position[index]);
+        let next = updateModelNodeEntityTransform(scene, entityId, patch);
+        if (peers) {
+          for (const peer of peers) {
+            next = updateModelNodeEntityTransform(next, peer.entityId, peer.patch);
+          }
+          return next;
+        }
+        if (transformMode !== "translate" || !delta || !selectedEntityIds.includes(entityId)) return next;
+        const selected = new Set(selectedEntityIds);
+        for (const id of selectedEntityIds) {
+          if (id === entityId) continue;
+          // Moving a selected parent already carries its descendants in world space.
+          let ancestorId = scene.entities[id]?.parentId;
+          let hasSelectedAncestor = false;
+          while (ancestorId) {
+            if (selected.has(ancestorId)) { hasSelectedAncestor = true; break; }
+            ancestorId = scene.entities[ancestorId]?.parentId ?? null;
+          }
+          if (hasSelectedAncestor) continue;
+          const transform = getTransform(next, id);
+          if (!transform) continue;
+          next = updateModelNodeEntityTransform(next, id, {
+            position: transform.position.map((value, index) => value + delta[index]) as [number, number, number],
+          });
+        }
+        return next;
+      });
+      setNotice(selectedEntityIds.length > 1
+        ? `${selectedEntityIds.length}件のEntityを${transformMode === "rotate" ? "回転" : transformMode === "scale" ? "拡大縮小" : "移動"}しました`
+        : "ギズモの変更をシーンへ反映しました");
     },
-    [editorMode, updateScene],
+    [editorMode, selectedEntityIds, transformMode, updateScene],
   );
 
   const handleRenameEntity = useCallback(
@@ -7226,8 +7335,11 @@ export function VisualEditorPrototype({
           definition.label,
         );
         if (!created) return current;
+        const placedScene = componentDefinitionId === "core.light.spot"
+          ? updateModelNodeEntityTransform(created.scene, created.entityId, { position: [0, 3, 0] })
+          : created.scene;
         const added = addEditorComponent(
-          created.scene,
+          placedScene,
           assets,
           created.entityId,
           componentDefinitionId,
@@ -8756,52 +8868,6 @@ export function VisualEditorPrototype({
     [editorMode, projectPath],
   );
 
-  const handleCreateTextureCard = useCallback(
-    (textureAssetId: string, profile: TextureCardProfile) => {
-      if (editorMode !== "edit" || importBusy) {
-        setNotice(
-          editorMode !== "edit"
-            ? "動作確認を停止してからカードを作成してください"
-            : "アセットのインポート完了後にカードを作成してください",
-        );
-        return;
-      }
-      const materialId = createDocumentId("material-card");
-      setHistory((current) => {
-        const created = createTextureCard(
-          current.present.bundle.scene,
-          current.present.bundle.assets,
-          { textureAssetId, materialId, profile },
-        );
-        if (!created.created) {
-          setNotice(
-            created.reason === "environment-texture"
-              ? "環境テクスチャは遠景・草カードに使用できません"
-              : created.reason === "texture-missing"
-                ? "テクスチャが見つかりません。素材を開き直してください"
-                : "カードを作成できませんでした。テクスチャと素材の状態を確認してください",
-          );
-          return current;
-        }
-        setSaveStatus("dirty");
-        setNotice(
-          `「${created.entityName}」を配置しました。選択中のEntityを移動し、マテリアルのAlphaで透明度を調整できます`,
-        );
-        return commitEditorHistory(current, {
-          ...current.present,
-          bundle: touchProject({
-            ...current.present.bundle,
-            assets: created.assets,
-            scene: created.scene,
-          }),
-          sceneSelection: { kind: "entity", id: created.entityId },
-          assetSelection: null,
-        });
-      });
-    },
-    [editorMode, importBusy],
-  );
-
   const handleParticleChange = useCallback(
     (assetId: string, patch: ParticlePropertiesPatch) => {
       if (editorMode !== "edit" && !playSession) return;
@@ -8858,7 +8924,7 @@ export function VisualEditorPrototype({
         }
         const destination = folderId
           ? `「${assets.folders?.[folderId]?.name ?? "Folder"}」`
-          : "Assets直下";
+          : "Assets/";
         setSaveStatus("dirty");
         setNotice(
           kind === "material"
@@ -9294,7 +9360,7 @@ export function VisualEditorPrototype({
       bundleRef.current = nextBundle;
       const destination = latestFolderId
         ? `「${latestBundle.assets.folders?.[latestFolderId]?.name ?? "Folder"}」`
-        : "Assets直下";
+        : "Assets/";
       setNotice(
         attachedEntityName
           ? `${template.name}から「${name}」を${destination}に作成し、「${attachedEntityName}」へ追加しました`
@@ -11346,11 +11412,12 @@ export function VisualEditorPrototype({
     return entity ? { entityId: entity.id, name: entity.name } : null;
   })();
 
-  const viewportEditorTabs = interactivityEditorAsset
+  const viewportEditorTabs: { id: string; label: string; icon: "graph" | "script"; closable: boolean }[] = interactivityEditorAsset
     ? [
         {
           id: INTERACTIVITY_GRAPH_TAB_ID,
           label: interactivityEditorAsset.name,
+          icon: "graph",
           closable: true,
         },
       ]
@@ -11358,6 +11425,7 @@ export function VisualEditorPrototype({
   if (scriptEditorAsset) viewportEditorTabs.push({
     id: SCRIPT_TAB_ID,
     label: `${scriptEditorAsset.name}${scriptEditorDirty ? " · 未保存" : ""}`,
+    icon: "script",
     closable: true,
   });
 
@@ -11624,7 +11692,7 @@ export function VisualEditorPrototype({
             scriptTemplateFolderId
               ? bundle.assets.folders?.[scriptTemplateFolderId]?.name ??
                 "選択中のフォルダー"
-              : "Assets直下"
+              : "Assets/"
           }
           selectedEntityName={
             sceneSelection?.id
@@ -11960,7 +12028,6 @@ export function VisualEditorPrototype({
             }}
             onParticleChange={handleParticleChange}
             onTextureChange={handleTextureChange}
-            onCreateTextureCard={handleCreateTextureCard}
             textureProcessingState={
               textureProcessingFeedback?.assetId === assetSelection
                 ? textureProcessingFeedback.state
@@ -12419,7 +12486,7 @@ export function VisualEditorPrototype({
         ) : null}
         {tablet && !recordingUiHidden && notice && (tabletPanel !== "assets" || panelsHidden) ? (
           <div className="flex shrink-0 items-center gap-2 border-t border-editor-border bg-editor-surface px-3 py-1.5 text-xs text-editor-text">
-            <p role="status" className="min-w-0 flex-1 whitespace-pre-wrap break-words">{notice}</p>
+            <p role="status" className="min-w-0 flex-1 whitespace-pre-wrap break-words select-text cursor-text">{notice}</p>
             <button type="button" aria-label="通知を閉じる" onClick={() => setNotice(null)}
               className="min-h-11 shrink-0 rounded-md px-3 text-editor-muted hover:bg-editor-subtle">閉じる</button>
           </div>

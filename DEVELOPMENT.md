@@ -140,7 +140,7 @@ GitHub Actions のリポジトリ Secrets に次を登録してください。
 3. タグ名（例: `v0.1.0`）を入力して実行
 4. 検査成功後にReleaseの下書きを1つ作り、全OSのインストーラーと署名を並列で添付します。すべて成功すると、最後のjobが必要ファイルと署名を確認し、全OS分の `latest.json` を1回だけ生成・添付してから公開します。更新文はGitHub Releaseと自動更新用の説明に入ります。
 
-版番号は `package.json`、`package-lock.json` のトップレベルと `packages[""]`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock` の `xrift-studio` エントリーを揃えます。依存パッケージの版番号は変更しません。
+版番号は `package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock` の `xrift-studio` エントリーを揃えます。依存パッケージの版番号は変更しません。
 
 公開済みの通常リリースだけがアプリの `releases/latest/download/latest.json` から取得されます。ドラフトは公開するまで、プレリリースは通常リリースになるまで自動更新の対象になりません。
 

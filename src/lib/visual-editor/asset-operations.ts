@@ -450,6 +450,7 @@ type ComponentReferenceSuffix =
   | "prefab"
   | "text"
   | "image"
+  | "spot-map"
   | "xrift";
 
 type ComponentReferenceMatch = {
@@ -683,6 +684,19 @@ function describeComponentReferences(
         },
       },
     ];
+  }
+
+  if (component.type === "light" && component.mapAssetId === assetId) {
+    return [{
+      suffix: "spot-map",
+      detail: "Spot Light map",
+      detachEffect: "clear-slot",
+      detach: (current) => {
+        if (current.type !== "light") return current;
+        const { mapAssetId: _removed, ...rest } = current;
+        return rest;
+      },
+    }];
   }
 
   if (

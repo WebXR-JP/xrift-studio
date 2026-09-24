@@ -605,7 +605,7 @@ export class XriftThreeLoader {
     // Entity-scoped behavior component and does not create a standalone
     // Three.js object or diagnostic marker.
     if (component.type === "vegetation-wind") return null;
-    if (component.type === "light") return createLight(component);
+    if (component.type === "light") return createLight(component, input.textures);
     if (component.type === "text") {
       const background = component.background ?? DEFAULT_TEXT_BACKGROUND;
       const backgroundTexture =
@@ -1386,6 +1386,7 @@ function runtimeImageQuadConfig(
 
 function createLight(
   component: Extract<XriftRuntimeComponent, { type: "light" }>,
+  textures: ReadonlyMap<string, Texture>,
 ): Light {
   let light: Light;
   if (component.lightType === "ambient") {
@@ -1397,12 +1398,14 @@ function createLight(
       component.intensity,
     );
   } else if (component.lightType === "point") {
-    light = new PointLight(
+    const point = new PointLight(
       component.color,
       component.intensity,
       component.distance ?? 0,
       component.decay ?? 2,
     );
+    point.castShadow = component.castShadow;
+    light = point;
   } else if (component.lightType === "spot") {
     const spot = new SpotLight(
       component.color,
@@ -1413,6 +1416,7 @@ function createLight(
       component.decay ?? 2,
     );
     spot.castShadow = component.castShadow;
+    spot.map = component.mapAssetId ? textures.get(component.mapAssetId) ?? null : null;
     light = spot;
   } else if (component.lightType === "rectArea") {
     light = new RectAreaLight(
@@ -1425,6 +1429,33 @@ function createLight(
     const directional = new DirectionalLight(component.color, component.intensity);
     directional.castShadow = component.castShadow;
     light = directional;
+  }
+  if (light instanceof DirectionalLight || light instanceof PointLight || light instanceof SpotLight) {
+    light.shadow.intensity = component.shadowIntensity ?? 1;
+    light.shadow.mapSize.set(component.shadowMapWidth ?? component.shadowMapSize ?? 256, component.shadowMapHeight ?? component.shadowMapSize ?? 256);
+    light.shadow.radius = component.shadowStyle === "hard" ? 0 : (component.shadowRadius ?? 2);
+    light.shadow.bias = component.shadowBias ?? -0.0002;
+    light.shadow.normalBias = component.shadowNormalBias ?? 0.35;
+    light.shadow.blurSamples = component.shadowBlurSamples ?? 8;
+    light.shadow.autoUpdate = component.shadowAutoUpdate ?? true;
+    light.shadow.needsUpdate = true;
+    light.shadow.camera.near = component.shadowCameraNear ?? (light instanceof DirectionalLight ? 1 : 0.5);
+    light.shadow.camera.far = component.shadowCameraFar ?? (light instanceof DirectionalLight ? 400 : 500);
+    if (light instanceof DirectionalLight) {
+      light.shadow.camera.left = component.shadowCameraLeft ?? -120;
+      light.shadow.camera.right = component.shadowCameraRight ?? 120;
+      light.shadow.camera.top = component.shadowCameraTop ?? 120;
+      light.shadow.camera.bottom = component.shadowCameraBottom ?? -120;
+    }
+    if (light instanceof SpotLight) {
+      light.shadow.focus = component.shadowFocus ?? 1;
+      light.shadow.aspect = component.shadowAspect ?? 1;
+    }
+    light.shadow.camera.updateProjectionMatrix();
+  }
+  if (light instanceof DirectionalLight || light instanceof SpotLight) {
+    light.target.position.fromArray(component.targetPosition ?? [0, 0, -1]);
+    light.add(light.target);
   }
   light.userData.xriftStudioComponentId = component.id;
   return light;

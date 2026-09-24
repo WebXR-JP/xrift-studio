@@ -1813,7 +1813,15 @@ fn material_texture_slot_schema() -> Value {
                 "properties": {
                     "textureAssetId": { "type": "string", "minLength": 1 },
                     "texCoord": { "type": "integer", "minimum": 0 },
-                    "transform": { "type": ["object", "null"] },
+                    "transform": {
+                        "type": ["object", "null"],
+                        "properties": {
+                            "offset": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+                            "rotation": { "type": "number", "description": "Counter-clockwise radians." },
+                            "scale": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }
+                        },
+                        "additionalProperties": false
+                    },
                     "scale": { "type": "number" },
                     "strength": { "type": "number", "minimum": 0, "maximum": 1 }
                 },
@@ -1822,6 +1830,62 @@ fn material_texture_slot_schema() -> Value {
             },
             { "type": "null" }
         ]
+    })
+}
+
+fn material_color3_schema(hdr: bool) -> Value {
+    let mut items = json!({ "type": "number", "minimum": 0 });
+    if !hdr {
+        items["maximum"] = json!(1);
+    }
+    json!({ "type": "array", "items": items, "minItems": 3, "maxItems": 3 })
+}
+
+fn material_extensions_schema() -> Value {
+    let unit = json!({ "type": "number", "minimum": 0, "maximum": 1 });
+    let non_negative = json!({ "type": "number", "minimum": 0 });
+    let texture = material_texture_slot_schema();
+    json!({
+        "type": "object",
+        "description": "Set one supported KHR_materials extension to an object; null removes it. Volume requires Transmission, and Dispersion requires Volume.",
+        "properties": {
+            "KHR_materials_anisotropy": { "type": ["object", "null"], "properties": {
+                "anisotropyStrength": unit, "anisotropyRotation": { "type": "number", "description": "Radians." }, "anisotropyTexture": texture
+            }, "additionalProperties": false },
+            "KHR_materials_clearcoat": { "type": ["object", "null"], "properties": {
+                "clearcoatFactor": unit, "clearcoatTexture": texture,
+                "clearcoatRoughnessFactor": unit, "clearcoatRoughnessTexture": texture,
+                "clearcoatNormalTexture": texture
+            }, "additionalProperties": false },
+            "KHR_materials_dispersion": { "type": ["object", "null"], "properties": { "dispersion": non_negative }, "additionalProperties": false },
+            "KHR_materials_emissive_strength": { "type": ["object", "null"], "properties": { "emissiveStrength": non_negative }, "additionalProperties": false },
+            "KHR_materials_ior": { "type": ["object", "null"], "properties": { "ior": { "anyOf": [{ "const": 0 }, { "type": "number", "minimum": 1 }], "description": "0 for legacy dielectric mode, otherwise at least 1." } }, "additionalProperties": false },
+            "KHR_materials_iridescence": { "type": ["object", "null"], "properties": {
+                "iridescenceFactor": unit, "iridescenceTexture": texture,
+                "iridescenceIor": { "type": "number", "minimum": 1 },
+                "iridescenceThicknessMinimum": non_negative,
+                "iridescenceThicknessMaximum": non_negative,
+                "iridescenceThicknessTexture": texture
+            }, "additionalProperties": false },
+            "KHR_materials_sheen": { "type": ["object", "null"], "properties": {
+                "sheenColorFactor": material_color3_schema(false), "sheenColorTexture": texture,
+                "sheenRoughnessFactor": unit, "sheenRoughnessTexture": texture
+            }, "additionalProperties": false },
+            "KHR_materials_specular": { "type": ["object", "null"], "properties": {
+                "specularFactor": unit, "specularTexture": texture,
+                "specularColorFactor": material_color3_schema(true), "specularColorTexture": texture
+            }, "additionalProperties": false },
+            "KHR_materials_transmission": { "type": ["object", "null"], "properties": {
+                "transmissionFactor": unit, "transmissionTexture": texture
+            }, "additionalProperties": false },
+            "KHR_materials_unlit": { "type": ["object", "null"], "properties": {}, "additionalProperties": false },
+            "KHR_materials_volume": { "type": ["object", "null"], "properties": {
+                "thicknessFactor": non_negative, "thicknessTexture": texture,
+                "attenuationDistance": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+                "attenuationColor": material_color3_schema(false)
+            }, "additionalProperties": false }
+        },
+        "additionalProperties": false
     })
 }
 
@@ -3773,7 +3837,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "update_material_asset",
-            "description": "Persist canonical glTF Material Asset properties in Edit or Play mode, including PBR factors, texture slots, alpha settings, and supported KHR_materials extensions. Texture slots accept MCP-friendly baseColor, metallicRoughness, normal, occlusion, and emissive aliases. During Play only consuming Entities restart. Unlike Script ctx.materials overrides, this changes saved authoring data.",
+            "description": "Persist all supported PBR Material Asset parameters in Edit or Play mode: core glTF factors and textures, alpha and rendering settings, UV transforms, and KHR_materials extension factors and textures. Use patch.pbrMetallicRoughness.baseColorFactor ([red, green, blue, alpha], each 0..1), metallicFactor, or roughnessFactor for PBR values; color, opacity, metalness, and roughness are simpler aliases. Texture slots accept baseColor, metallicRoughness, normal, occlusion, and emissive aliases. For a Classic R3F shader uniform use get_custom_shader then update_custom_shader instead. Read back with get_material_asset and inspect an assigned mesh. During Play only consuming Entities restart.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3795,16 +3859,30 @@ fn tool_definitions() -> Value {
                             "normal": material_texture_slot_schema(),
                             "occlusion": material_texture_slot_schema(),
                             "emissive": material_texture_slot_schema(),
-                            "pbrMetallicRoughness": { "type": "object" },
+                            "pbrMetallicRoughness": {
+                                "type": "object",
+                                "properties": {
+                                    "baseColorFactor": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 1 }, "minItems": 4, "maxItems": 4 },
+                                    "metallicFactor": { "type": "number", "minimum": 0, "maximum": 1 },
+                                    "roughnessFactor": { "type": "number", "minimum": 0, "maximum": 1 },
+                                    "baseColorTexture": material_texture_slot_schema(),
+                                    "metallicRoughnessTexture": material_texture_slot_schema()
+                                },
+                                "minProperties": 1,
+                                "additionalProperties": false
+                            },
                             "normalTexture": material_texture_slot_schema(),
                             "occlusionTexture": material_texture_slot_schema(),
                             "emissiveTexture": material_texture_slot_schema(),
-                            "emissiveFactor": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+                            "emissiveFactor": material_color3_schema(false),
                             "alphaMode": { "type": "string", "enum": ["OPAQUE", "MASK", "BLEND"] },
                             "alphaCutoff": { "type": "number", "minimum": 0 },
                             "doubleSided": { "type": "boolean" },
-                            "extensions": { "type": "object" },
-                            "color": { "type": "string" },
+                            "blending": { "type": "string", "enum": ["normal", "additive", "multiply", "subtractive"] },
+                            "depthWrite": { "type": "string", "enum": ["auto", "on", "off"] },
+                            "alphaToCoverage": { "type": "boolean" },
+                            "extensions": material_extensions_schema(),
+                            "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
                             "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
                             "metalness": { "type": "number", "minimum": 0, "maximum": 1 },
                             "roughness": { "type": "number", "minimum": 0, "maximum": 1 },
@@ -3845,25 +3923,6 @@ fn tool_definitions() -> Value {
                     }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "kind", "presetId"],
-                "additionalProperties": false
-            }
-        },
-        {
-            "name": "create_texture_card",
-            "description": "Turn a transparent Texture into a cut-out card Entity: a flat or curved distant backdrop, or a single or crossed grass card. Creates the alpha-blended two-sided Material and the collider-free Entity in one transaction, so undoing the card does not leave its Material behind. Environment Textures are rejected — they belong on the skybox. For an ordinary picture (a photo, a poster, a painting on a gallery wall) use place_asset with the Texture instead: that makes an Image Entity sized to the picture with no Material Asset to manage.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "projectId": { "type": "string" },
-                    "sceneId": { "type": "string" },
-                    "expectedRevision": { "type": "integer", "minimum": 0 },
-                    "textureAssetId": { "type": "string", "minLength": 1 },
-                    "profile": {
-                        "type": "string",
-                        "enum": ["backdrop-flat", "backdrop-arc-180", "backdrop-arc-270", "grass-single", "grass-cross"]
-                    }
-                },
-                "required": ["projectId", "sceneId", "expectedRevision", "textureAssetId", "profile"],
                 "additionalProperties": false
             }
         },
@@ -4419,6 +4478,25 @@ fn tool_definitions() -> Value {
 mod tests {
     use super::*;
     use std::io::Cursor;
+
+    #[test]
+    fn pbr_material_tool_exposes_all_supported_extensions_and_core_settings() {
+        let tools = tool_definitions();
+        let material = tools.as_array().expect("tool list").iter()
+            .find(|tool| tool.get("name").and_then(Value::as_str) == Some("update_material_asset"))
+            .expect("material tool");
+        let patch = material.pointer("/inputSchema/properties/patch/properties").expect("patch");
+        for field in ["pbrMetallicRoughness", "normalTexture", "occlusionTexture", "emissiveFactor",
+            "emissiveTexture", "alphaMode", "alphaCutoff", "doubleSided", "blending", "depthWrite",
+            "alphaToCoverage", "vertexColors", "opacityTexture", "opacityChannel", "extensions"] {
+            assert!(patch.get(field).is_some(), "missing PBR field: {field}");
+        }
+        let extensions = patch.pointer("/extensions/properties").expect("extensions");
+        for name in ["anisotropy", "clearcoat", "dispersion", "emissive_strength", "ior",
+            "iridescence", "sheen", "specular", "transmission", "unlit", "volume"] {
+            assert!(extensions.get(format!("KHR_materials_{name}")).is_some(), "missing extension: {name}");
+        }
+    }
 
     /// The allow-list is generated from the TypeScript registry, so its order
     /// follows that table rather than the order schemas happen to be written in

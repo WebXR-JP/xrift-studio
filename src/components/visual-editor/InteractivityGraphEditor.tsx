@@ -1201,6 +1201,7 @@ function InteractivityGraphEditorBody({
   const CloseIcon = EDITOR_ICONS.close;
   const CreateIcon = EDITOR_ICONS.create;
   const DeleteIcon = EDITOR_ICONS.delete;
+  const GraphIcon = EDITOR_ICONS.graph;
   const UndoIcon = EDITOR_ICONS.undo;
   const RedoIcon = EDITOR_ICONS.redo;
 
@@ -1256,6 +1257,7 @@ function InteractivityGraphEditorBody({
         <div className="flex h-9 items-center gap-1 overflow-x-auto overflow-y-hidden px-2">
           <div className="relative shrink-0">
             <div className="flex items-center gap-1">
+              <GraphIcon size={15} className="shrink-0 text-violet-300" aria-hidden="true" />
               <select
                 value={graphIndex}
                 onChange={(event) => {

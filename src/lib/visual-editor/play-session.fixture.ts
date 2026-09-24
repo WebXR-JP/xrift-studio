@@ -233,6 +233,26 @@ export function runPlaySessionFixtureAssertions(): void {
     "Changing Light type must restart only the owning Entity",
   );
 
+  const tunedSpotScene = fixtureScene();
+  tunedSpotScene.entities["entity-a"]?.components.push({
+    ...light("light-a", "spot"),
+    intensity: 100,
+    targetPosition: [0, -1, 0],
+    castShadow: true,
+    shadowMapWidth: 256,
+    shadowMapHeight: 256,
+    shadowRadius: 2,
+  });
+  const tunedSpotUpdate = synchronizePlaySession(structuralLightUpdate, tunedSpotScene, assets);
+  assert(
+    tunedSpotUpdate.runtimeScene.entities["entity-a"]?.components.some(
+      (component) => component.type === "light" && component.lightType === "spot" &&
+        component.intensity === 100 && component.targetPosition?.[1] === -1 &&
+        component.shadowMapWidth === 256 && component.shadowRadius === 2,
+    ),
+    "Spot Light direction and shadow edits must reach the Play Scene",
+  );
+
   const structurallyChanged = fixtureScene();
   structurallyChanged.entities["entity-c"] = entity("entity-c");
   structurallyChanged.rootEntityIds.push("entity-c");

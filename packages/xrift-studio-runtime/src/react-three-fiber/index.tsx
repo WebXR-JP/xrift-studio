@@ -1,5 +1,6 @@
 import { XRiftStudioMeshColliders } from "../mesh-colliders.js";
 import { XriftModelInstancing } from "../script/model-instancing.js";
+import { XriftShadowMapSettings, type XriftShadowMapType } from "../script/light.js";
 const EMPTY_INSTANCING_ENTITIES: readonly string[] = [];
 import {
   Fragment,
@@ -190,6 +191,7 @@ function XriftRuntimeScene({
       <primitive object={result.root} />
       <XriftModelInstancing root={result.root} entityKey="xriftStudioEntityId" entityIds={result.manifest.scenes[result.manifest.entryScene]?.modelInstancingEntityIds ?? EMPTY_INSTANCING_ENTITIES} />
       <XriftRuntimeSceneEnvironment result={result} />
+      <XriftShadowMapSettings type={runtimeShadowMapType(result.manifest.scenes[result.manifest.entryScene]?.settings)} />
       <XriftRuntimeOfficialComponentAdapters result={result} />
       <XriftRuntimeMeshVisibility result={result} />
       <XriftRuntimePostprocessing result={result} />
@@ -210,6 +212,11 @@ function XriftRuntimeScene({
   ) : (
     content
   );
+}
+
+function runtimeShadowMapType(settings: unknown): XriftShadowMapType {
+  const type = settings && typeof settings === "object" && "shadowMapType" in settings ? settings.shadowMapType : undefined;
+  return type === "basic" || type === "pcfSoft" || type === "vsm" ? type : "pcf";
 }
 
 type RuntimeSceneEnvironmentSettings = {

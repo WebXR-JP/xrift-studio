@@ -140,3 +140,106 @@ test("親を動かした子Entityでもギズモが対象の上に描かれる",
     report.object,
   );
 });
+
+test("複数選択の回転と拡縮はドラッグ中に全Entityへ反映される", async ({ page }) => {
+  await installSceneProbe(page);
+  await page.goto("/e2e.html?scenario=ready");
+  await page.getByRole("button", { name: /新規プロジェクト/ }).click();
+  await page.getByRole("button", { name: /ワールドをビジュアルで作る/ }).click();
+  await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
+  await page.getByLabel("プロジェクト名").fill("gizmo-multi-transform");
+  await page.getByRole("button", { name: "作成して開く" }).click();
+  await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
+
+  const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
+  await tree.getByText("床", { exact: true }).click();
+  await tree.getByText("Spawn Point", { exact: true }).click({ modifiers: ["Control"] });
+  await expect(tree.getByRole("treeitem", { selected: true })).toHaveCount(2);
+
+  const transform = async (mode: "rotate" | "scale") => page.evaluate((mode) => {
+    const scene = window.__THREE_SCENES__?.find((candidate) => {
+      let found = false;
+      candidate.traverse((object) => { if (object.isTransformControls) found = true; });
+      return found;
+    });
+    if (!scene) throw new Error("Scene was not observed");
+    let controls: MinimalObject3D | null = null;
+    const entities = new Map<string, MinimalObject3D>();
+    scene.traverse((object) => {
+      if (object.isTransformControls) controls = object;
+      const id = (object as MinimalObject3D & { userData?: { authoringEntityId?: string } }).userData?.authoringEntityId;
+      if (id === "starter-floor" || id === "starter-spawn") entities.set(id, object);
+    });
+    if (!controls || entities.size !== 2) throw new Error("Selected Entity groups were not found");
+    const control = controls as unknown as {
+      object: {
+        rotation: { y: number };
+        scale: { x: number; y: number; z: number };
+      };
+      dispatchEvent: (event: { type: string }) => void;
+    };
+    const pose = (id: string) => {
+      const object = entities.get(id)! as MinimalObject3D & {
+        rotation: { x: number; y: number; z: number };
+        scale: { x: number; y: number; z: number };
+      };
+      object.updateWorldMatrix(true, false);
+      const rounded = (values: number[]) => values.map((value) => Number(value.toFixed(4)));
+      return {
+        position: rounded(object.matrixWorld.elements.slice(12, 15)),
+        rotation: rounded([object.rotation.x, object.rotation.y, object.rotation.z]),
+        scale: rounded([object.scale.x, object.scale.y, object.scale.z]),
+      };
+    };
+    const before = [pose("starter-floor"), pose("starter-spawn")];
+    control.dispatchEvent({ type: "mouseDown" });
+    if (mode === "rotate") control.object.rotation.y += Math.PI / 2;
+    else {
+      control.object.scale.x *= 2;
+      control.object.scale.y *= 2;
+      control.object.scale.z *= 2;
+    }
+    control.dispatchEvent({ type: "objectChange" });
+    const during = [pose("starter-floor"), pose("starter-spawn")];
+    control.dispatchEvent({ type: "mouseUp" });
+    return { before, during };
+  }, mode);
+  const readCommittedPoses = () => page.evaluate(() => {
+    const entities = new Map<string, MinimalObject3D>();
+    for (const scene of window.__THREE_SCENES__ ?? []) {
+      scene.traverse((object) => {
+        const id = (object as MinimalObject3D & { userData?: { authoringEntityId?: string } }).userData?.authoringEntityId;
+        if (id === "starter-floor" || id === "starter-spawn") entities.set(id, object);
+      });
+    }
+    return ["starter-floor", "starter-spawn"].map((id) => {
+      const object = entities.get(id) as MinimalObject3D & {
+        rotation: { x: number; y: number; z: number };
+        scale: { x: number; y: number; z: number };
+      };
+      object.updateWorldMatrix(true, false);
+      const rounded = (values: number[]) => values.map((value) => Number(value.toFixed(4)));
+      return {
+        position: rounded(object.matrixWorld.elements.slice(12, 15)),
+        rotation: rounded([object.rotation.x, object.rotation.y, object.rotation.z]),
+        scale: rounded([object.scale.x, object.scale.y, object.scale.z]),
+      };
+    });
+  });
+
+  await page.getByRole("button", { name: "回転", exact: true }).click();
+  const rotated = await transform("rotate");
+  for (let index = 0; index < 2; index++) {
+    expect(rotated.during[index].position).not.toEqual(rotated.before[index].position);
+    expect(rotated.during[index].rotation).not.toEqual(rotated.before[index].rotation);
+  }
+  await expect.poll(readCommittedPoses).toEqual(rotated.during);
+
+  await page.getByRole("button", { name: "拡縮", exact: true }).click();
+  const scaled = await transform("scale");
+  for (let index = 0; index < 2; index++) {
+    expect(scaled.during[index].position).not.toEqual(scaled.before[index].position);
+    expect(scaled.during[index].scale).not.toEqual(scaled.before[index].scale);
+  }
+  await expect.poll(readCommittedPoses).toEqual(scaled.during);
+});

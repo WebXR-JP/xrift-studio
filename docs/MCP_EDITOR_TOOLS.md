@@ -1,6 +1,8 @@
 # MCP editor tool の全体像
 
-マテリアルの頂点カラーと不透明度マップは`update_material_asset`で設定する。`patch.vertexColors`はboolean、`patch.opacityTexture`は既存テクスチャのIDまたはTextureInfo（nullで解除）、`patch.opacityChannel`は`r`・`g`・`b`・`a`（既定は`a`）。透過には`alphaMode: "BLEND"`または`"MASK"`を併せて指定し、裏面も表示するなら`doubleSided: true`にする。更新後は割当先モデルで色と透過を確認する。Unityの独自シェーダーをそのまま実行する設定ではない。
+マテリアルのPBR値は`update_material_asset`の`patch.pbrMetallicRoughness`で変更する。`baseColorFactor`は0〜1のRGBA配列、`metallicFactor`と`roughnessFactor`は0〜1の数値。簡易指定には`patch.color`（#rrggbb）、`opacity`、`metalness`、`roughness`も使える。描画方式は`patch.blending`、深度書き込みは`patch.depthWrite`、アルファトゥカバレッジは`patch.alphaToCoverage`で変更する。Classic R3Fシェーダーのuniformは`get_custom_shader`で現在値を読み、`update_custom_shader`の`patch.uniforms`で更新する。マテリアルの頂点カラーと不透明度マップも`update_material_asset`で設定する。`patch.vertexColors`はboolean、`patch.opacityTexture`は既存テクスチャのIDまたはTextureInfo（nullで解除）、`patch.opacityChannel`は`r`・`g`・`b`・`a`（既定は`a`）。透過には`alphaMode: "BLEND"`または`"MASK"`を併せて指定し、裏面も表示するなら`doubleSided: true`にする。更新後は`get_material_asset`で保存値を読み、割当先モデルで色と透過を確認する。Unityの独自シェーダーをそのまま実行する設定ではない。
+
+テクスチャ枠にはTexture Asset IDか`{ "textureAssetId": "...", "texCoord": 0, "transform": { "offset": [0, 0], "rotation": 0, "scale": [1, 1] } }`を渡す。`null`で割当を解除する。Normal Mapの`scale`、Occlusion Mapの`strength`も同じオブジェクトで指定する。`patch.extensions`には対応する`KHR_materials_*`名をキーにし、拡張ごとの係数・色・テクスチャを部分更新する。拡張自体を削除するときはそのキーへ`null`を渡す。VolumeにはTransmission、DispersionにはVolumeを併せて設定する。`KHR_materials_unlit`は空オブジェクトで有効化する。
 
 XRift Studio は、開いている Editor をそのまま AIクライアントへ開放する MCP server を
 同梱している。この文書は「どの Editor 操作が MCP から動くのか」を一覧で示す。
@@ -142,7 +144,7 @@ document tool の戻り値には `harness` が付くことがある。同じ種�
 `get_texture_asset`, `update_texture_asset`, `get_particle_asset`,
 `update_particle_asset`, `get_material_asset`, `update_material_asset`,
 `set_material`, `set_material_texture_transform`, `list_material_presets`,
-`create_material_from_preset`, `create_texture_card`, `create_custom_shader`,
+`create_material_from_preset`, `create_custom_shader`,
 `get_custom_shader`, `update_custom_shader`
 
 `create_custom_shader` は任意の GLSL を受ける。「空っぽく見せる」用途には使わず、カタログから選ぶ。
@@ -162,12 +164,6 @@ document tool の戻り値には `harness` が付くことがある。同じ種�
 `comparisonMaterialAssetId` は比較用のマテリアルを指す。拡張を比較する見本は基本のPBR値を揃え、テクスチャを比較する見本は比較対象のマップやUV設定だけを変える。`textureAssetIds` は必要な同梱テクスチャを返す。効果を見比べるときは `list_scene_recipes` の `shelf: "materials"` から選び、`apply_scene_recipe` で見本一式を置く。既存のモデルへ質感だけを付けるときは `create_material_from_preset` を使う。テクスチャが必要なプリセットは、保存済みのプロジェクトへ画像も取り込んでからMaterialを作成する。`parameters` は受け付けず、調整には通常のMaterial更新を使う。
 
 `list_scene_recipes` は `group`、`tags`、`comparisonLabels` も返す。`shelf: "materials"` は50種類、ワールド用の `shelf: "gimmicks"` は50種類の見本にカスタム車を加えて返す。ギミックの操作確認はSceneへ追加してPlayで行う。カタログ内の回転・拡大・絞り込みは表示だけの操作なので、新しいMCP toolは追加しない。全項目と確認範囲は [カタログ拡充](./catalog-expansion/README.ja.md) に記載する。
-
-`create_texture_card` は透過テクスチャから遠景板・草カードを作る。手で組む場合は
-板ポリ、アルファブレンドの両面マテリアル、コライダー無し、円弧なら継ぎ目の
-出ないセグメントの扇を、設定を互いに合わせて 4〜5 回呼び出すことになる。
-マテリアルとオブジェクトを一件にまとめる。元に戻すでカードだけ消えてマテリアルが
-残ることはない。
 
 写真・ポスター・展示画のように「画像そのものを貼る」ときはカードではなく
 画像コンポーネントを使う。`place_asset` へ画像のテクスチャを渡すと、幅 1 m で

@@ -975,6 +975,19 @@ export function SceneSettingsInspector({
           <NumberField label="Intensity（強さ）" value={settings.ambient.intensity} min={0} step={0.05} disabled={readOnly || !settings.ambient.enabled} onChange={(intensity) => update({ ...settings, ambient: { ...settings.ambient, intensity } })} />
         </Section>
 
+        <Section title="Shadow Map" reading="影の種類" description="Scene内のライトすべてに適用します。初期値はソフトなPCFShadowMapです。">
+          <label className="grid grid-cols-[minmax(0,1fr)_160px] items-center gap-3 text-xs text-slate-700">
+            Type（影の描き方）
+            <select value={settings.shadowMapType} disabled={readOnly} onChange={(event) => update({ ...settings, shadowMapType: event.currentTarget.value as SceneSettings["shadowMapType"] })} className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100">
+              <option value="basic">BasicShadowMap（くっきり）</option>
+              <option value="pcf">PCFShadowMap（ソフト・初期値）</option>
+              <option value="pcfSoft">PCFSoftShadowMap（旧方式）</option>
+              <option value="vsm">VSMShadowMap（なめらか）</option>
+            </select>
+          </label>
+          {settings.shadowMapType === "pcfSoft" ? <p className="text-[11px] text-slate-500">現在のThree.jsではPCFShadowMapへ変換されます。</p> : null}
+        </Section>
+
         <Section
           title="Post Processing"
           reading="ポストプロセス"
