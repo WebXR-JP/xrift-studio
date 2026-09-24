@@ -9,7 +9,7 @@
  *
  * The shell is world-agnostic. Its `World` renders nothing but
  * `<XriftWorld manifest=... />`, so the scene lives entirely in
- * `xrift/runtime.json` and one shell can host any Studio scene — swap the JSON
+ * `xrift-runtime.json` and one shell can host any Studio scene — swap the JSON
  * and the assets, keep the same code.
  *
  *   node scripts/build-world-runtime-shell.mjs --out public/xrift-runtime-shell
@@ -34,6 +34,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { directRelativeModuleImports } from "./world-runtime-shell-imports.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const RUNTIME_PACKAGE_DIR = path.join(repoRoot, "packages", "xrift-studio-runtime");
@@ -56,7 +57,7 @@ const RUNTIME_CONTRACT_SOURCE = path.join(
  * real ones at upload time.
  */
 const EXCLUDED_FROM_SHELL = new Set([
-  "xrift/runtime.json",
+  "xrift-runtime.json",
   "thumbnail.png",
   "index.html",
 ]);
@@ -73,11 +74,11 @@ export interface WorldProps {
 // The runtime resolves a relative manifest against document.baseURI, which
 // inside XRift is the player page, not this world's storage path. Deriving the
 // URL from import.meta.url pins it to wherever this chunk was uploaded.
-const MANIFEST_URL = new URL("./xrift/runtime.json", import.meta.url).href;
+const MANIFEST_URL = new URL("./xrift-runtime.json", import.meta.url).href;
 
 export const World: FC<WorldProps> = ({ position = [0, 0, 0], scale = 1 }) => (
   <group position={position} scale={scale}>
-    <XriftWorld manifest={MANIFEST_URL} />
+    <XriftWorld manifest={MANIFEST_URL} physics="inherit" />
   </group>
 );
 `;
@@ -215,19 +216,44 @@ async function main() {
     process.stdout.write("6/6 シェル成果物を書き出しています\n");
     const distDir = path.join(projectDir, "dist");
     const built = await collectFiles(distDir);
-    // Apply the template's own ignore rules with the SDK's matcher so the
-    // shell holds exactly what an upload would send. That drops the
-    // __federation_shared_* chunks (~5 MB), which XRift's player supplies as
-    // shared singletons rather than reading from the world.
+    // Drop federation fallback packages that XRift's player supplies as
+    // shared singletons. A few loader subpaths are imported directly by the
+    // generated World chunk, so add those and their direct dependencies back.
     const { filterFiles, DEFAULT_IGNORE_PATTERNS } = await import("@xrift/sdk");
     const templateConfig = JSON.parse(
       await fs.readFile(path.join(projectDir, "xrift.json"), "utf8"),
     );
-    const shellFiles = filterFiles(
+    const initialShellFiles = filterFiles(
       built.filter(
         (file) => !EXCLUDED_FROM_SHELL.has(file) && !file.endsWith(".map"),
       ),
       [...DEFAULT_IGNORE_PATTERNS, ...(templateConfig.world?.ignore ?? [])],
+    );
+    const builtFiles = new Set(built);
+    const selectedFiles = new Set(initialShellFiles);
+    const queue = initialShellFiles.filter((file) => file.endsWith(".js"));
+    const directDependencies = new Map();
+    for (let index = 0; index < queue.length; index += 1) {
+      const sourceFile = queue[index];
+      const source = await fs.readFile(path.join(distDir, sourceFile), "utf8");
+      const dependencies = directRelativeModuleImports(sourceFile, source);
+      directDependencies.set(sourceFile, dependencies);
+      for (const dependency of dependencies) {
+        if (!builtFiles.has(dependency)) {
+          throw new Error(`シェルの ${sourceFile} が参照する ${dependency} がビルド結果にありません。`);
+        }
+        if (selectedFiles.has(dependency)) continue;
+        selectedFiles.add(dependency);
+        if (dependency.endsWith(".js")) queue.push(dependency);
+      }
+    }
+    const shellFiles = [...selectedFiles].sort();
+    const dependencies = Object.fromEntries(
+      shellFiles.filter((file) => file.endsWith(".js")).map((file) => {
+        const imports = directDependencies.get(file);
+        if (!imports) throw new Error(`シェルの ${file} の依存関係を解析できませんでした。`);
+        return [file, imports];
+      }),
     );
     if (!shellFiles.includes(SHELL_ENTRY)) {
       throw new Error(
@@ -261,6 +287,7 @@ async function main() {
           worldComponentsVersion: WORLD_COMPONENTS_SPEC.slice(WORLD_COMPONENTS_SPEC.lastIndexOf("@") + 1),
           entry: SHELL_ENTRY,
           files: shellFiles.sort(),
+          dependencies,
         },
         null,
         2,

@@ -6597,6 +6597,7 @@ function assetPurpose(asset: SceneAsset): AssetCopyPlanEntry["purpose"] {
 function generateRuntimeAdapterSource(kind: VisualProjectKind): string {
   const component = kind === "world" ? "World" : "Item";
   const runtimeComponent = kind === "world" ? "XriftWorld" : "XriftItem";
+  const physicsProp = kind === "world" ? ' physics="inherit"' : "";
   const defaultExport = kind === "item" ? `\nexport default ${component};\n` : "";
   // Pin the manifest to the same module version, just like Classic JSX assets.
   return `import type { FC } from "react";
@@ -6614,7 +6615,7 @@ export const ${component}: FC<${component}Props> = ({ position = [0, 0, 0], scal
   const baseUrl = useCompiledAssetBaseUrl();
   return (
     <group position={position} scale={scale}>
-      <${runtimeComponent} manifest={\`\${baseUrl}${PUBLISHED_RUNTIME_MANIFEST_FILE}\`} />
+      <${runtimeComponent} manifest={\`\${baseUrl}${PUBLISHED_RUNTIME_MANIFEST_FILE}\`}${physicsProp} />
     </group>
   );
 };${defaultExport}`;

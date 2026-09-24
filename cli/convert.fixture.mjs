@@ -56,6 +56,7 @@ import { runScriptLifecycleFixtureAssertions } from "../src/lib/visual-editor/sc
 import { runScriptAudioFixtureAssertions } from "../src/lib/visual-editor/scripting/audio-runtime.fixture.ts";
 import { runAudioSourceRuntimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/audio-source.fixture.ts";
 import { runRuntimeSchemaFixtureAssertions } from "../packages/xrift-studio-runtime/src/schema.fixture.ts";
+import { runRuntimePhysicsModeFixtureAssertions } from "../packages/xrift-studio-runtime/src/physics-mode.fixture.ts";
 import { runMirrorReflectionFixtureAssertions } from "../packages/xrift-studio-runtime/src/mirror-reflection.fixture.ts";
 import { runInteractivityEngineFixtureAssertions } from "../packages/xrift-studio-runtime/src/interactivity/engine.fixture.ts";
 import { runTimerQueueFixtureAssertions } from "../packages/xrift-studio-runtime/src/interactivity/timer-queue.fixture.ts";
@@ -145,6 +146,7 @@ import { runMaterialShowcaseCatalogFixtureAssertions } from "../src/lib/visual-e
 import { runInteractionTriggerFixtureAssertions } from "../src/lib/visual-editor/interaction-trigger.fixture.ts";
 import { runInteractionTriggerApplierFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/interaction-trigger-applier.fixture.ts";
 import { runVisualUploadFixtureAssertions } from "../src/lib/visual-editor/upload.fixture.ts";
+import { runBrowserPublicationFixtureAssertions } from "../src/preview/browser-project-session.fixture.ts";
 import { runRuntimeSpawnFixtureAssertions } from "../src/lib/visual-editor/runtime-spawn.fixture.ts";
 import { runSkyboxImportFixtureAssertions } from "../src/lib/visual-editor/skybox-import.fixture.ts";
 import { runSkyShaderFixtureAssertions } from "../src/lib/visual-editor/sky-shader.fixture.ts";
@@ -371,6 +373,7 @@ try {
     ["entity bounds", runEntityBoundsFixtureAssertions],
     ["mcp harness guard", runMcpHarnessGuardFixtureAssertions],
     ["runtime schema", runRuntimeSchemaFixtureAssertions],
+    ["runtime Physics placement", runRuntimePhysicsModeFixtureAssertions],
     ["mirror reflection interval", runMirrorReflectionFixtureAssertions],
     ["interactivity engine", runInteractivityEngineFixtureAssertions],
     ["interactivity timer queue", runTimerQueueFixtureAssertions],
@@ -444,6 +447,7 @@ try {
     ["interaction trigger applier", runInteractionTriggerApplierFixtureAssertions],
     ["interactivity runtime adapter", runInteractivityRuntimeAdapterFixtureAssertions],
     ["visual upload branch", runVisualUploadFixtureAssertions],
+    ["browser publication persistence", runBrowserPublicationFixtureAssertions],
     ["classic project import", runClassicProjectImportFixtureAssertions],
     ["texture processing", runTextureProcessingFixtureAssertions],
     ["texture import defaults", runTextureImportDefaultsFixtureAssertions],

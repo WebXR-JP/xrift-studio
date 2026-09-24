@@ -86,7 +86,7 @@ export function DownloadSection() {
         <div className="landing-section-heading">
           <p className="landing-eyebrow">ダウンロード</p>
           <h2>デスクトップ版を<br />ダウンロード</h2>
-          <p>XRiftへの公開やAIとの連携には、デスクトップ版を使います。お使いのOSに合うファイルを選んでください。</p>
+          <p>アイテムやスクリプトを含むワールドの公開、AIとの連携にはデスクトップ版を使います。お使いのOSに合うファイルを選んでください。</p>
           <a href={`${XRIFT_STUDIO_GUIDE_URL}installation.html`} className="landing-text-link">
             インストール手順を見る
           </a>

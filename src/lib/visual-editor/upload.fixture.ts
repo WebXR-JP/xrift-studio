@@ -1,5 +1,7 @@
 import { decodeBase64DataUrl } from "./dist-upload-files";
-import { DEFAULT_IGNORE_PATTERNS } from "@xrift/sdk";
+import { DEFAULT_IGNORE_PATTERNS, XriftClient, type UploadFile, type WorldUploadOptions } from "@xrift/sdk";
+import { createPrototypeProject } from "./prototype-project";
+import { createTextComponent } from "./scene-document";
 import {
   assertCompiledModuleEntry,
   parseStagedXriftConfig,
@@ -11,27 +13,222 @@ import {
   REQUIRED_RUNTIME_SHELL_CONTRACT,
   WebUploadUnsupportedError,
   assertUploadableToken,
+  assertRuntimeShellDependencies,
   describeSdkError,
+  loadRuntimeShell,
   parseShellManifest,
   redactToken,
+  resolveWebRuntimePermissions,
+  uploadVisualProjectFromWeb,
 } from "./web-upload";
 
 /**
  * Assertions for the native/web upload branch. Performs no network request and
  * never touches Tauri IPC.
  *
- * The token rules are the load-bearing part: XRift's Public API v1 has no write
- * scope, so an `xrift_sk_` API key authenticates but cannot publish. Catching
- * that before a bundle is assembled is the difference between an immediate
- * explanation and a 401 after a long upload.
+ * Token shape is not a scope check: XRift decides whether a key can publish.
+ * The fixture also verifies that the browser sends the same bundled files and
+ * compiled world options as the desktop staging path.
  */
-export function runVisualUploadFixtureAssertions(): void {
+export async function runVisualUploadFixtureAssertions(): Promise<void> {
   assertCapabilities();
   assertTokenRules();
   assertSecretRedaction();
   assertShellManifestRules();
+  await assertRuntimeShellPayloadValidation();
   assertStagedConfigParsing();
   assertDataUrlDecoding();
+  await assertBrowserUploadParity();
+}
+
+async function assertRuntimeShellPayloadValidation(): Promise<void> {
+  const originalFetch = globalThis.fetch;
+  const entry = "export const World = 1;";
+  const manifest = {
+    version: "ee2fbde7f8ed", // SHA-256("remoteEntry.js" + entry), first 12 hex chars.
+    runtimeContract: REQUIRED_RUNTIME_SHELL_CONTRACT,
+    entry: SHELL_ENTRY_PATH,
+    files: [SHELL_ENTRY_PATH],
+    dependencies: { [SHELL_ENTRY_PATH]: [] },
+  };
+  async function fetchFixtureFile(body: string, contentType: string) {
+    const requests: RequestCache[] = [];
+    try {
+      globalThis.fetch = async (input, init) => {
+        requests.push(init?.cache ?? "default");
+        return String(input).endsWith("shell-manifest.json")
+          ? new Response(JSON.stringify(manifest), { status: 200, headers: { "content-type": "application/json" } })
+          : new Response(body, { status: 200, headers: { "content-type": contentType } });
+      };
+      const files = await loadRuntimeShell("https://fixture.invalid/shell");
+      return { files, requests };
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  }
+
+  const valid = await fetchFixtureFile(entry, "application/javascript");
+  assert(
+    valid.files.length === 1 && valid.files[0]?.path === SHELL_ENTRY_PATH &&
+      valid.requests.join(",") === "no-store,no-store",
+    "a valid shell must pass its digest check and bypass the browser cache",
+  );
+
+  for (const contentType of ["text/html", "application/javascript"]) {
+    let rejected: unknown;
+    try {
+      await fetchFixtureFile("<!doctype html><html><body>Vite fallback</body></html>", contentType);
+    } catch (error) {
+      rejected = error;
+    }
+    assert(
+      rejected instanceof WebUploadUnsupportedError &&
+        rejected.message.includes("HTML"),
+      `a 200 HTML fallback labeled ${contentType} was accepted as JavaScript`,
+    );
+  }
+
+  let corrupted: unknown;
+  try {
+    await fetchFixtureFile("export const World = 2;", "application/javascript");
+  } catch (error) {
+    corrupted = error;
+  }
+  assert(
+    corrupted instanceof WebUploadUnsupportedError &&
+      corrupted.message.includes("バージョンと一致しません"),
+    "a changed JavaScript payload with HTTP 200 was accepted despite the manifest digest",
+  );
+}
+
+async function assertBrowserUploadParity(): Promise<void> {
+  const preserved = resolveWebRuntimePermissions({
+    allowedDomains: ["assets.example.com"],
+    allowedCodeRules: ["no-obfuscation", "no-network-without-permission"],
+  });
+  assert(
+    preserved.allowedDomains?.[0] === "assets.example.com" &&
+      preserved.allowedCodeRules?.join(",") ===
+        "no-network-without-permission,no-obfuscation",
+    "the shell permission must preserve compiler rules and domains without duplicates",
+  );
+
+  const prototype = createPrototypeProject("world", "web-upload-parity");
+  const entityId = prototype.scene.rootEntityIds[0];
+  const entity = prototype.scene.entities[entityId];
+  const textComponent = createTextComponent("component-web-upload-font", {
+    text: "公開用フォント",
+    fontId: "noto-sans-jp",
+  });
+  assert(Boolean(entity && textComponent), "the fixture world needs a Text Entity");
+  const scene = {
+    ...prototype.scene,
+    entities: {
+      ...prototype.scene.entities,
+      [entityId]: {
+        ...entity,
+        components: [...entity.components, textComponent!],
+      },
+    },
+  };
+  const documents = {
+    project: prototype.project,
+    scenes: { [scene.sceneId]: scene },
+    assets: prototype.assets,
+    prefabs: prototype.prefabs,
+  };
+  const originalFetch = globalThis.fetch;
+  const worldApiPrototype = Object.getPrototypeOf(
+    new XriftClient({ token: "xrf_fixture" }).worlds,
+  ) as { upload: (files: UploadFile[], options: WorldUploadOptions) => Promise<{
+    worldId: string; versionId: string; versionNumber: number; contentHash: string;
+    files: UploadFile[];
+  }> };
+  const originalUpload = worldApiPrototype.upload;
+  const fetched: string[] = [];
+  let sentFiles: UploadFile[] = [];
+  let sentOptions: WorldUploadOptions | undefined;
+  try {
+    globalThis.fetch = async (input) => {
+      fetched.push(String(input));
+      return new Response(new Blob(["font-bytes"]), { status: 200 });
+    };
+    worldApiPrototype.upload = async (files, options) => {
+      sentFiles = files;
+      sentOptions = options;
+      return {
+        worldId: "fixture-world-id",
+        versionId: "fixture-version-id",
+        versionNumber: 1,
+        contentHash: "fixture-content-hash",
+        files,
+      };
+    };
+
+    await uploadVisualProjectFromWeb({
+      kind: "world",
+      documents,
+      token: "xrf_fixture",
+      readAssetBytes: async (path) => {
+        throw new Error(`Unexpected authored Asset read: ${path}`);
+      },
+      shellFiles: [
+        { path: "remoteEntry.js", data: new Uint8Array([1, 2, 3]) },
+        {
+          path: "__federation_shared_three/addons/loaders/DRACOLoader.js-fixture.js",
+          data: new Uint8Array([4]),
+        },
+        {
+          path: "__federation_shared_three/addons/loaders/KTX2Loader.js-fixture.js",
+          data: new Uint8Array([5]),
+        },
+      ],
+      thumbnail: new Uint8Array([137, 80, 78, 71]),
+      report: () => {},
+      signal: new AbortController().signal,
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    worldApiPrototype.upload = originalUpload;
+  }
+
+  assert(
+    fetched.some((url) => url.endsWith("noto-sans-jp-japanese-400-normal.woff")),
+    "the browser path did not fetch the Text font that desktop staging copies",
+  );
+  assert(
+    sentFiles.some((file) =>
+      file.remotePath === "noto-sans-jp-japanese-400-normal.woff" &&
+      file.size === "font-bytes".length,
+    ),
+    "the browser upload omitted the bundled Text font",
+  );
+  assert(
+    sentFiles.some((file) => file.remotePath === "xrift-runtime.json") &&
+      sentFiles.some((file) => file.remotePath === "remoteEntry.js") &&
+      sentFiles.some((file) => file.remotePath === "thumbnail.png"),
+    "the browser upload must include the manifest, federation entry and thumbnail",
+  );
+  assert(
+    sentFiles.some((file) =>
+      file.remotePath ===
+      "__federation_shared_three/addons/loaders/DRACOLoader.js-fixture.js",
+    ) &&
+      sentFiles.some((file) =>
+        file.remotePath ===
+        "__federation_shared_three/addons/loaders/KTX2Loader.js-fixture.js",
+      ),
+    "the SDK's generic ignore rule removed a shell module imported by World",
+  );
+  assert(
+    sentOptions?.permissions?.allowedCodeRules?.includes(
+      "no-network-without-permission",
+    ) &&
+      typeof sentOptions.physics?.gravity === "number" &&
+      typeof sentOptions.camera?.near === "number" &&
+      sentOptions.thumbnailPath === "thumbnail.png",
+    "the browser upload lost security, physics, camera or thumbnail options",
+  );
 }
 
 function assertStagedConfigParsing(): void {
@@ -150,6 +347,7 @@ function assertShellManifestRules(): void {
     runtimeContract: REQUIRED_RUNTIME_SHELL_CONTRACT,
     entry: SHELL_ENTRY_PATH,
     files: [SHELL_ENTRY_PATH, "index-abc.js", "../escape.js", ""],
+    dependencies: { [SHELL_ENTRY_PATH]: [], "index-abc.js": [] },
   });
   assert(
     manifest.files.join(",") === `${SHELL_ENTRY_PATH},index-abc.js`,
@@ -184,6 +382,28 @@ function assertShellManifestRules(): void {
   assertThrows(
     () => parseShellManifest(null),
     "a non-object shell listing was accepted",
+  );
+
+  const dependencyPath =
+    "__federation_shared_three/addons/loaders/DRACOLoader.js-fixture.js";
+  const importingChunk = "__federation_expose_World-fixture.js";
+  assertThrows(
+    () => assertRuntimeShellDependencies({
+      files: [importingChunk],
+      dependencies: { [importingChunk]: [dependencyPath] },
+    }),
+    "a shell with a missing declared federation import was accepted",
+  );
+  assertRuntimeShellDependencies({
+    files: [importingChunk, dependencyPath],
+    dependencies: { [importingChunk]: [dependencyPath], [dependencyPath]: [] },
+  });
+  assertThrows(
+    () => assertRuntimeShellDependencies({
+      files: [importingChunk, dependencyPath],
+      dependencies: { [importingChunk]: [dependencyPath] },
+    }),
+    "a JS file without a dependency declaration was accepted",
   );
 }
 

@@ -3,15 +3,19 @@ import {
   XriftAuthError,
   XriftNetworkError,
   XriftClient,
+  filterFiles,
   getMimeType,
+  parseWorldConfig,
   type UploadFile,
+  type WorldPermissions,
+  type XriftWorldConfig,
 } from "@xrift/sdk";
 import type { ProjectKind } from "../tauri";
 import { compileVisualProject } from "./compiler";
 import type { VisualCompilerDocuments } from "./compiler";
+import { loadCompilerBundledAssetBytes } from "./compiler-bundled-assets";
 import { VisualCompilationError, type XriftUploadResult } from "./publish";
 import type { VisualPublishPipelineProgress } from "./publish";
-import { resolveSceneSettings } from "./scene-settings";
 import { convertPublishedTextureBytes } from "./texture-codec";
 
 /**
@@ -37,6 +41,8 @@ import { convertPublishedTextureBytes } from "./texture-codec";
  */
 const RUNTIME_MANIFEST_PATH = "xrift-runtime.json";
 const THUMBNAIL_PATH = "thumbnail.png";
+/** The shell fetches its manifest and Assets from its own published origin. */
+const SHELL_NETWORK_RULE = "no-network-without-permission";
 /** Module Federation entry the XRift player loads. */
 export const SHELL_ENTRY_PATH = "remoteEntry.js";
 /** Where `build-world-runtime-shell.mjs` publishes the shell. */
@@ -67,7 +73,7 @@ export type RuntimeShellFile = {
 export type WebUploadRequest = {
   kind: ProjectKind;
   documents: VisualCompilerDocuments;
-  /** XRift CLI token. Only `xrf_` tokens may publish. */
+  /** XRift API key or compatible bearer token. Never persist it. */
   token: string;
   /**
    * Reads one Asset's bytes.
@@ -146,12 +152,67 @@ export async function assembleWebUploadFiles(
     "documents" | "readAssetBytes" | "shellFiles" | "thumbnail" | "signal"
   >,
 ): Promise<UploadFile[]> {
+  return (await prepareWebUpload(request)).files;
+}
+
+/** Keep compiler permissions and declare the shell's same-origin runtime fetches. */
+export function resolveWebRuntimePermissions(
+  permissions: WorldPermissions | undefined,
+): WorldPermissions {
+  return {
+    ...permissions,
+    allowedCodeRules: [
+      ...new Set([...(permissions?.allowedCodeRules ?? []), SHELL_NETWORK_RULE]),
+    ].sort(),
+  };
+}
+
+/** Validate the dependency graph extracted from the shell at build time. */
+export function assertRuntimeShellDependencies(
+  manifest: Pick<ShellManifest, "files" | "dependencies">,
+): void {
+  const paths = new Set(manifest.files);
+  const jsPaths = manifest.files.filter((path) => path.endsWith(".js")).sort();
+  const declaredPaths = Object.keys(manifest.dependencies).sort();
+  if (jsPaths.join("\0") !== declaredPaths.join("\0")) {
+    throw new Error("ランタイムシェルの依存一覧と JS ファイルが一致しません。");
+  }
+  for (const [source, dependencies] of Object.entries(manifest.dependencies)) {
+    if (!Array.isArray(dependencies) ||
+      dependencies.some((dependency) => typeof dependency !== "string")) {
+      throw new Error(`ランタイムシェルの依存一覧が不正です: ${source}`);
+    }
+    for (const dependency of dependencies) {
+      if (!paths.has(dependency)) {
+        throw new Error(
+          `ランタイムシェルに依存ファイルがありません: ${source} → ${dependency}`,
+        );
+      }
+    }
+  }
+}
+
+async function prepareWebUpload(
+  request: Pick<
+    WebUploadRequest,
+    "documents" | "readAssetBytes" | "shellFiles" | "thumbnail" | "signal"
+  >,
+): Promise<{ files: UploadFile[]; config: XriftWorldConfig }> {
   const compilation = compileVisualProject(request.documents, {
     outputMode: "classic-runtime",
   });
   if (!compilation.canStage || !compilation.runtimeManifestFile) {
     throw new VisualCompilationError(compilation);
   }
+  const configSource = compilation.overlayFiles.find(
+    (file) => file.relativePath === "xrift.json",
+  )?.content;
+  if (!configSource) {
+    throw new Error("公開用の xrift.json を生成できませんでした。");
+  }
+  // The desktop SDK path parses this same generated config. Keep its metadata,
+  // security permissions and hash-affecting options aligned with that path.
+  const config = parseWorldConfig(configSource);
 
   if (request.shellFiles.length === 0) {
     throw new WebUploadUnsupportedError(
@@ -170,8 +231,11 @@ export async function assembleWebUploadFiles(
   }
 
   const files = new Map<string, Uint8Array>();
-  for (const file of request.shellFiles) files.set(file.path, file.data);
-
+  const shellPaths = new Set<string>();
+  for (const file of request.shellFiles) {
+    shellPaths.add(file.path);
+    files.set(file.path, file.data);
+  }
   files.set(
     RUNTIME_MANIFEST_PATH,
     new TextEncoder().encode(compilation.runtimeManifestFile.content),
@@ -195,16 +259,35 @@ export async function assembleWebUploadFiles(
     files.set(targetPath, bytes);
   }
 
+  // The desktop staging path copies these from Studio's own bundle before
+  // building. The runtime manifest names them at the world root, so omitting
+  // even one font or decoder would leave an apparently uploaded world broken.
+  const bundledFiles = await loadCompilerBundledAssetBytes(
+    compilation.stagingPlan.bundledAssetCopyPlan,
+    request.signal,
+  );
+  for (const file of bundledFiles) {
+    throwIfAborted(request.signal);
+    files.set(file.targetRelativePath.replace(/^public\//, ""), file.bytes);
+  }
+
   if (request.thumbnail) files.set(THUMBNAIL_PATH, request.thumbnail);
 
-  return [...files.entries()]
+  // The shell builder chooses the files needed by its federation graph. The
+  // SDK's generic default ignore pattern matches every `__federation_shared_*`
+  // path, including loader subpaths that the built World imports directly.
+  // Applying it a second time here would silently remove those JS modules.
+  const generatedPaths = [...files.keys()].filter((path) => !shellPaths.has(path));
+  const keptGenerated = new Set(filterFiles(generatedPaths, config.ignore));
+  return { config, files: [...files.entries()]
+    .filter(([remotePath]) => shellPaths.has(remotePath) || keptGenerated.has(remotePath))
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([remotePath, data]) => ({
       remotePath,
       size: data.byteLength,
       contentType: getMimeType(remotePath),
       data,
-    }));
+    })) };
 }
 
 export type ShellManifest = {
@@ -212,6 +295,7 @@ export type ShellManifest = {
   runtimeContract: typeof REQUIRED_RUNTIME_SHELL_CONTRACT;
   entry: string;
   files: string[];
+  dependencies: Record<string, string[]>;
 };
 
 /**
@@ -225,7 +309,10 @@ export async function loadRuntimeShell(
   signal?: AbortSignal,
 ): Promise<RuntimeShellFile[]> {
   const root = baseUrl.replace(/\/+$/, "");
-  const response = await fetch(`${root}/${SHELL_MANIFEST_FILE}`, { signal });
+  const response = await fetch(`${root}/${SHELL_MANIFEST_FILE}`, {
+    signal,
+    cache: "no-store",
+  });
   if (!response.ok) {
     throw new WebUploadUnsupportedError(
       "shell-missing",
@@ -249,16 +336,81 @@ export async function loadRuntimeShell(
     if (signal?.aborted) {
       throw new DOMException("The operation was aborted", "AbortError");
     }
-    const file = await fetch(`${root}/${path}`, { signal });
+    // A release can update bytes while retaining a template-generated chunk
+    // name. Pin the source fetch to the manifest version so browser caches do
+    // not silently assemble a world from mixed shell revisions.
+    const file = await fetch(
+      `${root}/${path}?v=${encodeURIComponent(manifest.version)}`,
+      { signal, cache: "no-store" },
+    );
     if (!file.ok) {
       throw new WebUploadUnsupportedError(
         "shell-missing",
         `ランタイムシェルのファイルを取得できませんでした: ${path} (${file.status})`,
       );
     }
-    files.push({ path, data: new Uint8Array(await file.arrayBuffer()) });
+    const data = new Uint8Array(await file.arrayBuffer());
+    assertRuntimeShellFileResponse(path, file, data);
+    files.push({ path, data });
   }
+  await assertRuntimeShellIntegrity(manifest, files);
   return files;
+}
+
+function assertRuntimeShellFileResponse(
+  path: string,
+  response: Response,
+  data: Uint8Array,
+): void {
+  // Vite can return its SPA fallback with HTTP 200 for files created after the
+  // dev server indexed public/. A CDN may then label those HTML bytes as JS.
+  const prefix = new TextDecoder().decode(data.subarray(0, 256)).replace(/^\uFEFF/, "").trimStart();
+  if (response.headers.get("content-type")?.toLowerCase().includes("text/html") ||
+    /^<(?:!doctype\s+html|html\b|head\b|body\b)/i.test(prefix)) {
+    throw new WebUploadUnsupportedError(
+      "shell-missing",
+      `ランタイムシェルのファイルが HTML として返されました: ${path}。開発サーバーを再起動するか、配信先のファイルを確認してください。`,
+    );
+  }
+}
+
+async function assertRuntimeShellIntegrity(
+  manifest: ShellManifest,
+  files: readonly RuntimeShellFile[],
+): Promise<void> {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) {
+    throw new WebUploadUnsupportedError(
+      "shell-missing",
+      "ランタイムシェルの整合性を確認できません。HTTPS または localhost から開いてください。",
+    );
+  }
+  const encoder = new TextEncoder();
+  const parts = [...files]
+    .sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0)
+    .map((file) => ({ path: encoder.encode(file.path), data: file.data }));
+  const totalLength = parts.reduce(
+    (length, part) => length + part.path.byteLength + part.data.byteLength,
+    0,
+  );
+  const contents = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const part of parts) {
+    contents.set(part.path, offset);
+    offset += part.path.byteLength;
+    contents.set(part.data, offset);
+    offset += part.data.byteLength;
+  }
+  const digest = new Uint8Array(await subtle.digest("SHA-256", contents));
+  const version = [...digest.subarray(0, 6)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  if (version !== manifest.version) {
+    throw new WebUploadUnsupportedError(
+      "shell-missing",
+      `ランタイムシェルのファイルが一覧のバージョンと一致しません。開発サーバーを再起動するか、配信先のファイルを確認してください。(${manifest.version} / ${version})`,
+    );
+  }
 }
 
 export function parseShellManifest(value: unknown): ShellManifest {
@@ -283,12 +435,19 @@ export function parseShellManifest(value: unknown): ShellManifest {
       `ランタイムシェルが古いため公開できません。要求契約 ${REQUIRED_RUNTIME_SHELL_CONTRACT}、検出値 ${typeof record.runtimeContract === "string" ? record.runtimeContract : "なし"}。node scripts/build-world-runtime-shell.mjs で再生成してください。`,
     );
   }
-  return {
+  if (!record.dependencies || typeof record.dependencies !== "object" ||
+    Array.isArray(record.dependencies)) {
+    throw new Error("ランタイムシェルの依存一覧がありません。");
+  }
+  const manifest: ShellManifest = {
     version: typeof record.version === "string" ? record.version : "unknown",
     runtimeContract: REQUIRED_RUNTIME_SHELL_CONTRACT,
     entry: SHELL_ENTRY_PATH,
     files,
+    dependencies: record.dependencies as Record<string, string[]>,
   };
+  assertRuntimeShellDependencies(manifest);
+  return manifest;
 }
 
 /**
@@ -321,9 +480,9 @@ export async function uploadVisualProjectFromWeb(
     cancelSafe: true,
   });
 
-  let files: UploadFile[];
+  let prepared: Awaited<ReturnType<typeof prepareWebUpload>>;
   try {
-    files = await assembleWebUploadFiles(request);
+    prepared = await prepareWebUpload(request);
   } catch (error) {
     // A Script-bearing project fails compilation with a dedicated diagnostic;
     // translating it here keeps the reason actionable in the dialog.
@@ -345,31 +504,23 @@ export async function uploadVisualProjectFromWeb(
   request.report({
     stage: "uploading",
     label: "XRiftへワールドを送信しています",
-    detail: `${files.length}個のファイルを送信します。`,
+    detail: `${prepared.files.length}個のファイルを送信します。`,
     percent: 40,
     cancelSafe: false,
   });
 
   const client = new XriftClient({ token: request.token });
 
-  // Physics and camera participate in contentHash, so they must be sent here
-  // as well as written into the staged xrift.json — omitting them would make
-  // a web upload hash differently from the identical world published from the
-  // desktop path.
-  const entryScene = Object.values(request.documents.scenes)[0];
-  const settings = resolveSceneSettings(entryScene?.settings);
-
   try {
-    const result = await client.worlds.upload(files, {
+    const result = await client.worlds.upload(prepared.files, {
       worldId: request.worldId,
-      name: request.documents.project.metadata.title,
-      description: request.documents.project.metadata.description,
-      thumbnailPath: request.thumbnail ? THUMBNAIL_PATH : undefined,
-      physics: {
-        gravity: settings.physics.gravity,
-        allowInfiniteJump: settings.physics.allowInfiniteJump,
-      },
-      camera: { near: settings.camera.near, far: settings.camera.far },
+      name: prepared.config.name,
+      description: prepared.config.description,
+      thumbnailPath: request.thumbnail ? prepared.config.thumbnailPath : undefined,
+      physics: prepared.config.physics,
+      camera: prepared.config.camera,
+      permissions: resolveWebRuntimePermissions(prepared.config.permissions),
+      outputBufferType: prepared.config.outputBufferType,
       onProgress: (progress) => {
         request.report({
           stage: "uploading",
@@ -399,14 +550,27 @@ export async function uploadVisualProjectFromWeb(
       uploadedAt: new Date().toISOString(),
     };
   } catch (error) {
+    if (error instanceof XriftAuthError ||
+      (error instanceof XriftApiError && (error.statusCode === 401 || error.statusCode === 403))) {
+      throw new WebUploadRejectedError(describeSdkError(error));
+    }
     throw new Error(describeSdkError(error));
+  }
+}
+
+/** A definitive 401/403 rejection has no remote publication to reconcile. */
+export class WebUploadRejectedError extends Error {
+  readonly retrySafe = true;
+  constructor(message: string) {
+    super(message);
+    this.name = "WebUploadRejectedError";
   }
 }
 
 /** Turns an SDK error into a message that says what to do next. */
 export function describeSdkError(error: unknown): string {
   if (error instanceof XriftAuthError) {
-    return "トークンが受け付けられませんでした。失効しているか、公開権限がない可能性があります。xrift login で取得し直してください。";
+    return "APIキーが受け付けられませんでした。設定画面で有効なキーと write:worlds 権限を確認してください。";
   }
   if (error instanceof XriftApiError) {
     // 403 from a scoped API key means the key was issued without the write

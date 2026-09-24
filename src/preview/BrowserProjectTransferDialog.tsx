@@ -151,7 +151,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
           <ol className="list-decimal space-y-2 pb-3 pl-5">
             <li>「ダウンロード」を押します。保存先はSafariのダウンロード一覧で確認できます。</li>
             <li>iCloud DriveなどでMacまたはWindowsへ渡します。</li>
-            <li>パソコン版のプロジェクト一覧で「ファイルから取り込む」を選びます。公開はパソコンから行います。</li>
+            <li>パソコン版のプロジェクト一覧で「ファイルから取り込む」を選びます。アイテムやスクリプトを含むワールドはパソコン版から公開します。</li>
           </ol>
           </details>
           {downloadStarted ? <p role="status">ダウンロードを開始しました。Safariのダウンロード一覧で確認できます。</p> : null}

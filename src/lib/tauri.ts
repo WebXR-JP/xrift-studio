@@ -5,6 +5,11 @@ import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { PROJECT_PACKAGE_EXTENSION } from "./project-package";
 import {
+  getBrowserOtoguraAssetOptions,
+  installBrowserOtoguraAsset,
+  listBrowserOtoguraAssets,
+} from "./browser-otogura-store";
+import {
   commitBrowserAssetImport,
   deleteBrowserPath,
   isBrowserProjectPath,
@@ -637,9 +642,13 @@ export const tauri = {
       sourceRelativePath: sourceRelativePath ?? null,
     }),
   listExternalStoreAssets: (providerId: string) =>
-    invoke<ExternalStoreAsset[]>("list_external_store_assets", { providerId }),
+    !isTauri() && providerId === "otogura"
+      ? listBrowserOtoguraAssets()
+      : invoke<ExternalStoreAsset[]>("list_external_store_assets", { providerId }),
   getExternalStoreAssetOptions: (providerId: string, externalId: string) =>
-    invoke<ExternalStoreAssetOptions>("get_external_store_asset_options", {
+    !isTauri() && providerId === "otogura"
+      ? getBrowserOtoguraAssetOptions(externalId)
+      : invoke<ExternalStoreAssetOptions>("get_external_store_asset_options", {
       providerId,
       externalId,
     }),
@@ -647,7 +656,9 @@ export const tauri = {
     projectPath: string,
     request: ExternalStoreInstallRequest,
   ) =>
-    invoke<ExternalStoreInstallResult>("install_external_store_asset", {
+    isBrowserProjectPath(projectPath) && request.providerId === "otogura"
+      ? installBrowserOtoguraAsset(projectPath, request)
+      : invoke<ExternalStoreInstallResult>("install_external_store_asset", {
       projectPath,
       request,
     }),

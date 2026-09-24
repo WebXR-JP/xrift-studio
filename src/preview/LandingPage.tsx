@@ -45,7 +45,7 @@ export default function LandingPage() {
                 ブラウザ版を試す<span className="landing-beta-mark">β</span><ArrowRight size={17} aria-hidden="true" />
               </a>
             </div>
-            <p className="landing-caption">本格的な制作とXRiftへの公開はデスクトップ版で。ブラウザ版βなら、パソコン・iPad・スマートフォンからインストール不要で試せます。</p>
+            <p className="landing-caption">ブラウザ版βではAPIキーによるワールド送信を試せます。アイテムやスクリプトを含むワールドの公開にはデスクトップ版を使います。</p>
             <figure className="landing-editor-figure">
               <a href={editorUrl} aria-label="ブラウザ版βを試す" className="landing-screenshot-link">
                 <img
@@ -89,8 +89,8 @@ export default function LandingPage() {
           <div className="landing-container">
             <div className="landing-section-heading">
               <p className="landing-eyebrow">XRift Studioを始める</p>
-              <h2>制作の中心はデスクトップ。<br />ブラウザなら、まず気軽に試せます。</h2>
-              <p>デスクトップ版では、制作からXRiftへの公開まで進められます。ブラウザ版βはインストール不要で試せて、プロジェクトを素材ごとデスクトップ版へ引き継げます。</p>
+              <h2>使う端末に合わせて、<br />制作を始められます。</h2>
+              <p>デスクトップ版はワールドとアイテムの制作・公開に対応。ブラウザ版βはパソコン・iPad・スマートフォンから使え、APIキーによるワールド送信を試せます。</p>
             </div>
             <div className="landing-platform-grid">
               <article className="landing-platform">
@@ -102,7 +102,7 @@ export default function LandingPage() {
               <article className="landing-platform">
                 <Globe2 size={24} aria-hidden="true" />
                 <h3>ブラウザ版 <span className="landing-beta-mark">β</span></h3>
-                <p>インストールせずに操作を試したいときに。変更は使っているブラウザへ自動保存され、プロジェクトはデスクトップ版へ引き継げます。</p>
+                <p>インストールせずに制作でき、APIキーによるワールド送信も試せます。変更は使っているブラウザへ自動保存され、プロジェクトはデスクトップ版へ引き継げます。</p>
                 <div className="landing-platform-links">
                   <a href={editorUrl} className="landing-text-link">ブラウザ版を試す<span className="landing-beta-mark">β</span><ArrowRight size={16} aria-hidden="true" /></a>
                 </div>

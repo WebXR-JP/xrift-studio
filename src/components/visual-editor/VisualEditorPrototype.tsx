@@ -11619,8 +11619,8 @@ export function VisualEditorPrototype({
               disabled={projectTransferBusy || projectExportBusy || importBusy || leaving || renderedEditorMode !== "edit"}
               onClick={() => void runProjectExport()}
               title="シーンと素材を.xriftstudioファイルにまとめます"
-              className="flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-brand-600 px-3 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-45"
-            ><ExportIcon size={13} aria-hidden="true" />{projectExportBusy ? "書き出しを準備中…" : "プロジェクトを書き出す"}</button> : <>
+              className="flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-3 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:opacity-45"
+            ><ExportIcon size={13} aria-hidden="true" />{projectExportBusy ? "書き出しを準備中…" : "プロジェクトを書き出す"}</button> :
             <button
               type="button"
               onClick={() => void runClassicExport()}
@@ -11629,23 +11629,25 @@ export function VisualEditorPrototype({
             >
               <ExportIcon size={13} aria-hidden="true" />
               コードエディターへ書き出す
-            </button>
+            </button>}
             <button
               type="button"
+              disabled={Boolean(onProjectExport) && (projectTransferBusy || projectExportBusy || importBusy || leaving || renderedEditorMode !== "edit")}
               onClick={() => executeCommand("project.publish")}
               title={commandTitle(
-                compilationFresh
+                onProjectExport
+                  ? "公開情報とサムネイルを確認してXRiftへ送信"
+                  : compilationFresh
                   ? "公開内容を確認してXRiftへ送信"
                   : "最新の編集内容は公開画面で自動的に保存・変換されます",
                 "project.publish",
                 shortcutLabel("project.publish"),
               )}
-              className="flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-brand-600 px-3 text-xs font-semibold text-white shadow-sm shadow-brand-200/60 hover:bg-brand-700"
+              className="flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-brand-600 px-3 text-xs font-semibold text-white shadow-sm shadow-brand-200/60 hover:bg-brand-700 disabled:opacity-45"
             >
               <UploadIcon size={13} aria-hidden="true" />
               XRiftへ公開
             </button>
-            </>}
             {tablet ? <>
               <button type="button" onClick={() => { setSceneSettingsOpen(true); setTabletPanel("inspector"); setViewportMaximized(false); }}
                 className="min-h-11 rounded-md border border-editor-border bg-editor-surface px-3 text-left text-xs font-semibold text-editor-text">シーン設定</button>

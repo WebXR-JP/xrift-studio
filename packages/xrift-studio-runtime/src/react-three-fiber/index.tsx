@@ -1,4 +1,5 @@
 import { XRiftStudioMeshColliders } from "../mesh-colliders.js";
+import { resolveXriftRuntimePhysicsMode, type XriftRuntimePhysicsSetting } from "../physics-mode.js";
 import { XriftModelInstancing } from "../script/model-instancing.js";
 import { XriftShadowMapSettings, type XriftShadowMapType } from "../script/light.js";
 const EMPTY_INSTANCING_ENTITIES: readonly string[] = [];
@@ -123,8 +124,8 @@ export type XriftRuntimeSceneProps = {
   fallback?: ReactNode;
   onLoad?: (result: XriftLoadResult) => void;
   onError?: (error: Error) => void;
-  /** Enables the Rapier adapter for Collider and direct Rigid Body components. */
-  physics?: boolean;
+  /** "inherit" mounts Colliders in an outer Physics world, as XRift's player requires. */
+  physics?: XriftRuntimePhysicsSetting;
 };
 
 export function XriftWorld(props: XriftRuntimeSceneProps) {
@@ -180,7 +181,8 @@ function XriftRuntimeScene({
     };
   }, [expectedKind, loader, manifest, onError, onLoad]);
 
-  const physicsEnabled = physics ?? expectedKind === "world";
+  const physicsMode = resolveXriftRuntimePhysicsMode(physics, expectedKind);
+  const physicsEnabled = physicsMode !== "off";
   const dynamicBodies = useMemo(
     () => (physicsEnabled && result ? collectRuntimeDynamicBodyEntries(result) : []),
     [physicsEnabled, result],
@@ -204,13 +206,17 @@ function XriftRuntimeScene({
       <XriftRuntimeInteractionTriggers result={result} />
     </>
   );
-  return physicsEnabled ? (
-    <Physics gravity={runtimeGravity(result)} timeStep="vary">
+  if (!physicsEnabled) return content;
+  const physicsContent = (
+    <>
       {content}
       <XriftRuntimePhysicsBodies result={result} dynamicBodies={dynamicBodies} />
+    </>
+  );
+  return physicsMode === "inherit" ? physicsContent : (
+    <Physics gravity={runtimeGravity(result)} timeStep="vary">
+      {physicsContent}
     </Physics>
-  ) : (
-    content
   );
 }
 

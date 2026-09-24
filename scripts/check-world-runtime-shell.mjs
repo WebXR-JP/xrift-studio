@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { directRelativeModuleImports } from "./world-runtime-shell-imports.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const schemaPath = path.join(
@@ -17,6 +19,15 @@ const webUploadPath = path.join(
   "visual-editor",
   "web-upload.ts",
 );
+const compilerPath = path.join(
+  repoRoot,
+  "src",
+  "lib",
+  "visual-editor",
+  "compiler",
+  "compile.ts",
+);
+const shellBuilderPath = path.join(repoRoot, "scripts", "build-world-runtime-shell.mjs");
 const manifestPath = path.join(
   repoRoot,
   "public",
@@ -32,6 +43,8 @@ if (!expected) {
   throw new Error(`Runtime contract version is missing from ${schemaPath}`);
 }
 const webUpload = await fs.readFile(webUploadPath, "utf8");
+const compiler = await fs.readFile(compilerPath, "utf8");
+const shellBuilder = await fs.readFile(shellBuilderPath, "utf8");
 const required = webUpload.match(
   /REQUIRED_RUNTIME_SHELL_CONTRACT\s*=\s*[\r\n\s]*"([^"]+)"/,
 )?.[1];
@@ -39,6 +52,20 @@ if (required !== expected) {
   throw new Error(
     `Runtime contract constants disagree. schema=${expected} web-upload=${required ?? "missing"}`,
   );
+}
+const uploadedManifest = webUpload.match(/const RUNTIME_MANIFEST_PATH = "([^"]+)"/)?.[1];
+const compiledManifest = compiler.match(/const PUBLISHED_RUNTIME_MANIFEST_FILE = "([^"]+)"/)?.[1];
+if (!uploadedManifest || uploadedManifest !== compiledManifest) {
+  throw new Error(
+    `Web upload and compiler manifest paths differ. upload=${uploadedManifest ?? "missing"} compiler=${compiledManifest ?? "missing"}`,
+  );
+}
+const shellManifestUrl = `new URL("./${uploadedManifest}", import.meta.url)`;
+if (!shellBuilder.includes(shellManifestUrl)) {
+  throw new Error(`Runtime shell source must load the uploaded ${uploadedManifest} from the world root`);
+}
+if (!shellBuilder.includes('<XriftWorld manifest={MANIFEST_URL} physics="inherit" />')) {
+  throw new Error("Runtime shell source must inherit the XRift player Physics provider");
 }
 
 let manifest;
@@ -71,5 +98,49 @@ if (manifest.entry !== "remoteEntry.js") {
 }
 if (!Array.isArray(manifest.files) || !manifest.files.includes("remoteEntry.js")) {
   throw new Error("Runtime shell manifest does not list remoteEntry.js");
+}
+const exposedWorldFiles = manifest.files.filter((file) => /^__federation_expose_World-[^/]+\.js$/.test(file));
+if (exposedWorldFiles.length !== 1) {
+  throw new Error(`Runtime shell must contain one exposed World chunk (detected ${exposedWorldFiles.length})`);
+}
+const exposedWorld = await fs.readFile(
+  path.join(repoRoot, "public", "xrift-runtime-shell", exposedWorldFiles[0]),
+  "utf8",
+);
+if (!exposedWorld.includes(shellManifestUrl)) {
+  throw new Error(`Bundled Runtime shell must load the uploaded ${uploadedManifest} from the world root`);
+}
+const mountProps = exposedWorld.match(/\bjsx\w*\(XriftWorld,\s*\{([^}]+)\}\)/)?.[1];
+if (!mountProps || !/\bmanifest:\s*MANIFEST_URL\b/.test(mountProps) || !/\bphysics:\s*["']inherit["']/.test(mountProps)) {
+  throw new Error("Bundled Runtime shell must mount XriftWorld in the XRift player Physics provider");
+}
+const shellFiles = new Set(manifest.files);
+const modules = manifest.files.filter((entry) => entry.endsWith(".js")).sort();
+if (!manifest.dependencies || typeof manifest.dependencies !== "object" || Array.isArray(manifest.dependencies)) {
+  throw new Error("Runtime shell manifest must declare direct module dependencies");
+}
+if (JSON.stringify(Object.keys(manifest.dependencies).sort()) !== JSON.stringify(modules)) {
+  throw new Error("Runtime shell dependency map must contain every listed JS file exactly once");
+}
+for (const file of modules) {
+  const source = await fs.readFile(path.join(repoRoot, "public", "xrift-runtime-shell", file), "utf8");
+  const directImports = directRelativeModuleImports(file, source);
+  if (JSON.stringify(manifest.dependencies[file]) !== JSON.stringify(directImports)) {
+    throw new Error(`Runtime shell dependency map differs from compiled imports: ${file}`);
+  }
+  for (const dependency of directImports) {
+    if (!shellFiles.has(dependency)) {
+      throw new Error(`Runtime shell is missing a direct module dependency: ${file} -> ${dependency}`);
+    }
+  }
+}
+const digest = createHash("sha256");
+for (const file of [...manifest.files].sort()) {
+  digest.update(file);
+  digest.update(await fs.readFile(path.join(repoRoot, "public", "xrift-runtime-shell", file)));
+}
+const version = digest.digest("hex").slice(0, 12);
+if (manifest.version !== version) {
+  throw new Error(`Runtime shell content differs from its manifest version. expected=${version} detected=${manifest.version ?? "missing"}`);
 }
 process.stdout.write(`Runtime shell contract ready: ${expected}\n`);

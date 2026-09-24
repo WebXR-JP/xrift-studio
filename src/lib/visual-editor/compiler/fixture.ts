@@ -1001,6 +1001,28 @@ export function runVisualCompilerFixtureAssertions(
       ),
     "Static Collider and Spawn Point must be supported by the runtime manifest adapter",
   );
+  const colliderRuntimeAdapter = colliderRuntimeResult.overlayFiles.find(
+    (file) => file.relativePath === "src/World.tsx",
+  )?.content ?? "";
+  const colliderRuntimeManifest = JSON.parse(
+    colliderRuntimeResult.runtimeManifestFile?.content ?? "{}",
+  ) as {
+    scenes?: Record<string, {
+      entities?: Record<string, { components?: Array<{ id: string; type: string }> }>;
+    }>;
+  };
+  assert(
+    colliderRuntimeAdapter.includes('physics="inherit"'),
+    "Published runtime Colliders must join the XRift player's Physics world",
+  );
+  assert(
+    colliderRuntimeManifest.scenes?.[colliderAndSpawnScene.sceneId]?.entities?.[
+      colliderEntity.id
+    ]?.components?.some((component) =>
+      component.id === "fixture-box-collider" && component.type === "collider",
+    ),
+    "Published runtime manifest lost the authored Collider",
+  );
 
   const xriftSpawnScene: SceneDocument = {
     ...colliderScene,
