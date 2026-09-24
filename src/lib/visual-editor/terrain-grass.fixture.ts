@@ -916,6 +916,10 @@ function assertCompiledWorldGrass(): void {
     source.includes("XRiftStudioTerrainGrass"),
     "The compiled world does not render the Terrain grass",
   );
+  assert(
+    source.includes("userData={{ xriftColliderExclude: true }}"),
+    "The compiled grass must stay out of the terrain collider",
+  );
   // The embedded algorithm must be the exact typed rendering of the shared
   // template, so the equivalence proven above covers what actually ships.
   assert(

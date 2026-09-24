@@ -1,5 +1,5 @@
-import { bakeXriftColliderGeometry, findXriftColliderBody, observeXriftColliderChildren } from "../../../packages/xrift-studio-runtime/src/mesh-collider-geometry.js";
-import type { Object3D } from "three";
+import { bakeXriftColliderGeometry, collectXriftMeshColliderShapes, findXriftColliderBody, observeXriftColliderChildren } from "../../../packages/xrift-studio-runtime/src/mesh-collider-geometry.js";
+import { Group, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, PlaneGeometry, type Object3D } from "three";
 
 /** Pure buffer/accessor and child-event contract tests; not a renderer simulation. */
 export function runMeshColliderGeometryFixtureAssertions() {
@@ -33,6 +33,30 @@ export function runMeshColliderGeometryFixtureAssertions() {
   const many = new Array<number>(65_538*3).fill(0); many[65_536*3+2] = 1; many[65_537*3] = 1;
   const big = bakeXriftColliderGeometry(position(many), index([0,65_536,65_537]), identity)!;
   assert(big.indices[2] === 65_537, "large glTF vertex indices are not truncated to Uint16");
+
+  // A terrain's grass is a render-only InstancedMesh inside the ground Mesh.
+  // Without its exclusion marker the collector makes one Rapier collider for
+  // every blade, even though the ground needs just one trimesh.
+  const terrainRoot = new Group();
+  const groundGeometry = new PlaneGeometry(100, 100, 112, 112); // 113 x 113 height samples
+  const ground = new Mesh(groundGeometry, new MeshBasicMaterial());
+  terrainRoot.add(ground);
+  const bladeGeometry = new PlaneGeometry(0.1, 0.3);
+  const grass = new InstancedMesh(bladeGeometry, new MeshBasicMaterial(), 64);
+  const instanceMatrix = new Matrix4();
+  for (let blade = 0; blade < grass.count; blade += 1) {
+    grass.setMatrixAt(blade, instanceMatrix.makeTranslation(blade % 8, 0, Math.floor(blade / 8)));
+  }
+  ground.add(grass);
+  assert(collectXriftMeshColliderShapes(terrainRoot).length === 65, "without exclusion, each grass instance becomes a collider");
+  grass.userData.xriftColliderExclude = true;
+  const terrainShapes = collectXriftMeshColliderShapes(terrainRoot);
+  assert(terrainShapes.length === 1, "grass instances are excluded from the terrain collider");
+  assert(terrainShapes[0]!.geometry.indices.length === 112 * 112 * 6, "ground triangles remain in the terrain collider");
+  groundGeometry.dispose();
+  bladeGeometry.dispose();
+  (ground.material as MeshBasicMaterial).dispose();
+  (grass.material as MeshBasicMaterial).dispose();
 
   // Deliberately only the Object3D event protocol is represented here. No fake
   // physics or WebGL is used to claim an end-to-end result.

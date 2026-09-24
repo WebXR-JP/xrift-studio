@@ -3453,6 +3453,7 @@ const XRiftStudioTerrainGrass: FC<{
     <instancedMesh
       ref={meshRef}
       args={[geometry, material, placement.placed]}
+      userData={{ xriftColliderExclude: true }}
       frustumCulled={false}
     />
   );
