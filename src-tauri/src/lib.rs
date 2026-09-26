@@ -238,12 +238,19 @@ struct CompilerStagingOwner {
     schema_version: String,
     project_id: String,
     project_kind: String,
+    // Older owner records were written only after all output was applied.
+    #[serde(default = "completed_compiler_staging_default")]
+    materialized: bool,
     #[serde(default)]
     pre_upload_id: Option<String>,
     #[serde(default)]
     pre_upload_last_uploaded_at: Option<String>,
     #[serde(default)]
     upload_attempt_started_unix_ms: Option<u64>,
+}
+
+fn completed_compiler_staging_default() -> bool {
+    true
 }
 
 #[derive(Deserialize)]
@@ -2758,6 +2765,7 @@ fn compiler_staging_owner_for_manifest(
         schema_version: COMPILER_STAGING_OWNER_SCHEMA_VERSION.to_string(),
         project_id: manifest.project_id.clone(),
         project_kind: manifest.project_kind.clone(),
+        materialized: true,
         pre_upload_id: publication.map(|loaded| loaded.metadata.id.clone()),
         pre_upload_last_uploaded_at: publication
             .map(|loaded| loaded.metadata.last_uploaded_at.clone()),
@@ -2774,6 +2782,9 @@ fn validate_compiler_staging_owner(owner: &CompilerStagingOwner) -> Result<(), S
     }
     if !matches!(owner.project_kind.as_str(), "world" | "item") {
         return Err("compiler staging owner has an invalid project kind".to_string());
+    }
+    if !owner.materialized && owner.upload_attempt_started_unix_ms.is_some() {
+        return Err("incomplete compiler staging cannot have an upload attempt".to_string());
     }
     match (
         owner.pre_upload_id.as_deref(),
@@ -2843,6 +2854,13 @@ fn write_compiler_staging_owner_record(
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     write_file_synced(&path, format!("{}\n", raw).as_bytes())
+}
+
+fn require_materialized_compiler_staging(owner: &CompilerStagingOwner) -> Result<(), String> {
+    if !owner.materialized {
+        return Err("compiler staging output is incomplete; upload cannot begin".to_string());
+    }
+    Ok(())
 }
 
 /// Marks the one publish failure the author can resolve themselves.
@@ -3239,8 +3257,7 @@ fn recover_legacy_compiler_publication_metadata(
     select_unique_publication_candidate(exact_matches)
 }
 
-fn resolve_authoring_publication_metadata(
-    app: &AppHandle,
+fn saved_authoring_publication_metadata(
     authoring_root: &Path,
     manifest: &VisualProjectManifest,
 ) -> Result<(Option<LoadedCompilerPublicationMetadata>, bool), String> {
@@ -3260,6 +3277,19 @@ fn resolve_authoring_publication_metadata(
 
     if let Some(loaded) = metadata_from_manifest(manifest)? {
         return Ok((Some(loaded), true));
+    }
+
+    Ok((None, false))
+}
+
+fn resolve_authoring_publication_metadata(
+    app: &AppHandle,
+    authoring_root: &Path,
+    manifest: &VisualProjectManifest,
+) -> Result<(Option<LoadedCompilerPublicationMetadata>, bool), String> {
+    let saved = saved_authoring_publication_metadata(authoring_root, manifest)?;
+    if saved.0.is_some() {
+        return Ok(saved);
     }
 
     if manifest.last_publication.is_some() {
@@ -3298,6 +3328,19 @@ fn prepare_compiler_staging(
     let manifest = parse_visual_project_manifest(&manifest_content)?;
 
     let (root, project) = compiler_staging_project(&app, &directory_name)?;
+    prepare_existing_compiler_staging(&root, &project, &authoring_root, &manifest)?;
+    Ok(CompilerStagingPaths {
+        root_path: root.to_string_lossy().to_string(),
+        project_path: project.to_string_lossy().to_string(),
+    })
+}
+
+fn prepare_existing_compiler_staging(
+    root: &Path,
+    project: &Path,
+    authoring_root: &Path,
+    manifest: &VisualProjectManifest,
+) -> Result<(), String> {
     if project.exists() {
         let metadata = std::fs::symlink_metadata(&project).map_err(|e| e.to_string())?;
         if metadata.file_type().is_symlink() || !metadata.is_dir() {
@@ -3306,7 +3349,7 @@ fn prepare_compiler_staging(
         let resolved_project = project
             .canonicalize()
             .map_err(|e| format!("compiler staging project cannot be resolved: {}", e))?;
-        if !resolved_project.starts_with(&root) {
+        if resolved_project.parent() != Some(root) {
             return Err("compiler staging project escapes the app-owned root".to_string());
         }
         let owner = read_compiler_staging_owner(&resolved_project)?;
@@ -3322,10 +3365,17 @@ fn prepare_compiler_staging(
             read_compiler_publication_metadata(&resolved_project, &manifest.project_kind)?;
         match (owner.as_ref(), staged_publication.as_ref()) {
             (None, Some(_)) => {
-                return Err(
-                    "unowned compiler staging contains an XRift publication id; it was not removed"
-                        .to_string(),
-                )
+                // A template can include its own sample publication sidecar.
+                // An interrupted scaffold/materialization has no owner yet.
+                // Keep that entire directory; only an independently saved
+                // authoring target makes rebuilding safe from duplicate IDs.
+                if saved_authoring_publication_metadata(authoring_root, manifest)?.0.is_none() {
+                    return Err(
+                        "unowned compiler staging contains an XRift publication id; it was not removed"
+                            .to_string(),
+                    );
+                }
+                return preserve_unowned_compiler_staging(root, &resolved_project);
             }
             (Some(owner), Some(loaded)) if owner.upload_attempt_started_unix_ms.is_some() => {
                 // Only a sidecar advanced beyond the recorded pre-upload
@@ -3361,10 +3411,26 @@ fn prepare_compiler_staging(
         std::fs::remove_dir_all(&project)
             .map_err(|e| format!("old compiler staging cannot be removed: {}", e))?;
     }
-    Ok(CompilerStagingPaths {
-        root_path: root.to_string_lossy().to_string(),
-        project_path: project.to_string_lossy().to_string(),
-    })
+    Ok(())
+}
+
+fn preserve_unowned_compiler_staging(root: &Path, project: &Path) -> Result<(), String> {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| "system time is before the Unix epoch".to_string())?
+        .as_nanos();
+    // This name deliberately cannot be mistaken for a legacy compiler stage
+    // during publication-ID recovery. Reserving a new directory also prevents
+    // an earlier preservation from being overwritten by rename.
+    let preserved = root.join(format!("preserved-unowned-{}-{}", std::process::id(), nonce));
+    std::fs::create_dir(&preserved)
+        .map_err(|e| format!("unowned compiler staging cannot be preserved: {}", e))?;
+    let preserved = preserved.canonicalize().map_err(|e| e.to_string())?;
+    if preserved.parent() != Some(root) || project.parent() != Some(root) {
+        return Err("compiler staging preservation escapes the app-owned root".to_string());
+    }
+    std::fs::rename(project, preserved.join("project"))
+        .map_err(|e| format!("unowned compiler staging cannot be preserved: {}", e))
 }
 
 fn required_thumbnail_copy() -> CompilerRequiredPublicationFileCopy {
@@ -3492,6 +3558,60 @@ fn copy_required_publication_file(
     verify_required_publication_file_copy(authoring_root, staging_root, copy)
 }
 
+fn initialize_compiler_staging_template(
+    staging_root: &Path,
+    manifest: &VisualProjectManifest,
+    publication: Option<&LoadedCompilerPublicationMetadata>,
+) -> Result<(), String> {
+    // Never replace a previous owner or clear an unresolved upload attempt.
+    if read_compiler_staging_owner(staging_root)?.is_some() {
+        return Err("compiler staging template is already initialized".to_string());
+    }
+    seed_compiler_publication_metadata(staging_root, &manifest.project_kind, publication)?;
+    let mut owner = compiler_staging_owner_for_manifest(manifest, publication);
+    owner.materialized = false;
+    write_compiler_staging_owner_record(staging_root, &owner)
+}
+
+/// Claim a fresh CLI scaffold before loading or converting any assets. If that
+/// work fails, its owner and publication baseline still make retry possible.
+/// Completion remains a separate step and is required before remote upload.
+#[tauri::command]
+fn initialize_compiler_staging(
+    app: AppHandle,
+    authoring_project_path: String,
+    directory_name: String,
+) -> Result<(), String> {
+    let _compiler_guard = COMPILER_STAGING_IO_LOCK
+        .lock()
+        .map_err(|_| "compiler staging I/O lock is unavailable".to_string())?;
+    let _visual_guard = VISUAL_PROJECT_IO_LOCK
+        .lock()
+        .map_err(|_| "visual project I/O lock is unavailable".to_string())?;
+    let authoring_root = canonical_project_root(&authoring_project_path)?;
+    recover_visual_save_transactions(&authoring_root)?;
+    let manifest_content = std::fs::read_to_string(authoring_root.join(VISUAL_PROJECT_MANIFEST))
+        .map_err(|e| format!("visual project manifest cannot be read: {}", e))?;
+    let manifest = parse_visual_project_manifest(&manifest_content)?;
+    let (root, project) = compiler_staging_project(&app, &directory_name)?;
+    let metadata = std::fs::symlink_metadata(&project).map_err(|e| e.to_string())?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err("compiler staging target is not a regular directory".to_string());
+    }
+    let staging_root = project.canonicalize().map_err(|e| e.to_string())?;
+    if staging_root.parent() != Some(root.as_path()) {
+        return Err("compiler staging project escapes the app-owned root".to_string());
+    }
+    let (publication, persist_recovered) =
+        resolve_authoring_publication_metadata(&app, &authoring_root, &manifest)?;
+    if persist_recovered {
+        let loaded = publication.as_ref()
+            .ok_or_else(|| "recovered XRift publication metadata is missing".to_string())?;
+        persist_authoring_publication_metadata(&authoring_root, &manifest.project_kind, loaded)?;
+    }
+    initialize_compiler_staging_template(&staging_root, &manifest, publication.as_ref())
+}
+
 /// Applies compiler output after `xrift create` has produced the template.
 /// All source files are copied from the visual project through validated,
 /// project-relative paths; arbitrary absolute copy targets are not accepted.
@@ -3529,6 +3649,19 @@ fn apply_compiler_staging(
     validate_required_publication_files(&required_publication_files)?;
     let (publication_metadata, persist_recovered_metadata) =
         resolve_authoring_publication_metadata(&app, &authoring_root, &manifest)?;
+    if let Some(owner) = read_compiler_staging_owner(&resolved_project)? {
+        if !compiler_staging_owner_matches_manifest(&owner, &manifest)
+            || owner.upload_attempt_started_unix_ms.is_some()
+        {
+            return Err("compiler staging cannot be overwritten for this project".to_string());
+        }
+        let staged = read_compiler_publication_metadata(&resolved_project, &manifest.project_kind)?;
+        if !publication_matches_owner_baseline(&owner, publication_metadata.as_ref())
+            || !publication_matches_owner_baseline(&owner, staged.as_ref())
+        {
+            return Err("publication metadata changed while compiler staging was prepared".to_string());
+        }
+    }
     if persist_recovered_metadata {
         let loaded = publication_metadata
             .as_ref()
@@ -3607,8 +3740,8 @@ fn apply_compiler_staging(
         &manifest.project_kind,
         publication_metadata.as_ref(),
     )?;
-    // Written last: only fully materialized staging is eligible for upload
-    // and for crash recovery of a CLI-created publication sidecar.
+    // Mark completion last: an initialized but partial stage can be retried,
+    // but only fully materialized output is eligible for remote upload.
     write_compiler_staging_owner(&resolved_project, &manifest, publication_metadata.as_ref())?;
 
     Ok(CompilerStagingResult {
@@ -3648,6 +3781,7 @@ fn mark_compiler_upload_started(
     }
     let mut owner = read_compiler_staging_owner(&staging_root)?
         .ok_or_else(|| "compiler staging owner is missing before upload".to_string())?;
+    require_materialized_compiler_staging(&owner)?;
     if !compiler_staging_owner_matches_manifest(&owner, &manifest) {
         return Err("compiler staging owner does not match the visual project".to_string());
     }
@@ -6147,6 +6281,7 @@ pub fn run() {
             read_visual_project,
             save_visual_project,
             prepare_compiler_staging,
+            initialize_compiler_staging,
             apply_compiler_staging,
             mark_compiler_upload_started,
             clear_compiler_upload_attempt,
@@ -6901,6 +7036,155 @@ mod tests {
         .is_err());
 
         std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
+    }
+
+    #[test]
+    fn interrupted_new_staging_can_retry_but_cannot_upload() {
+        let fixture_root = std::env::temp_dir().join(format!(
+            "xrift-incomplete-staging-{}-{}", std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(&fixture_root).unwrap();
+        let fixture_root = fixture_root.canonicalize().unwrap();
+        let authoring_root = fixture_root.join("authoring");
+        std::fs::create_dir(&authoring_root).unwrap();
+        let sample = publication_metadata("template-sample", "2025-02-01T00:00:00.000Z");
+        for kind in ["world", "item"] {
+            let stage = fixture_root.join(format!("xrift-studio-{}", kind));
+            let manifest = visual_manifest(kind, None);
+            std::fs::create_dir(&stage).unwrap();
+            write_compiler_publication_metadata(&stage, kind, &sample).unwrap();
+            initialize_compiler_staging_template(&stage, &manifest, None).unwrap();
+            let owner = read_compiler_staging_owner(&stage).unwrap().unwrap();
+            assert!(!owner.materialized);
+            assert!(owner.pre_upload_id.is_none());
+            assert!(read_compiler_publication_metadata(&stage, kind).unwrap().is_none());
+            assert!(require_materialized_compiler_staging(&owner).is_err());
+            assert!(initialize_compiler_staging_template(&stage, &manifest, None).is_err());
+            // Simulate asset processing stopping after initialization. No
+            // publication occurred and the next preparation can safely retry.
+            std::fs::write(stage.join("partial.bin"), b"unfinished asset").unwrap();
+            prepare_existing_compiler_staging(&fixture_root, &stage, &authoring_root, &manifest).unwrap();
+            assert!(!stage.exists());
+            assert!(!authoring_root.join(".xrift").exists());
+            std::fs::create_dir(&stage).unwrap();
+            initialize_compiler_staging_template(&stage, &manifest, None).unwrap();
+            write_compiler_staging_owner(&stage, &manifest, None).unwrap();
+            let completed = read_compiler_staging_owner(&stage).unwrap().unwrap();
+            assert!(require_materialized_compiler_staging(&completed).is_ok());
+
+            let mut legacy = serde_json::to_value(&completed).unwrap();
+            legacy.as_object_mut().unwrap().remove("materialized");
+            let legacy: CompilerStagingOwner = serde_json::from_value(legacy).unwrap();
+            assert!(legacy.materialized);
+            assert!(validate_compiler_staging_owner(&legacy).is_ok());
+            let mut impossible = owner;
+            impossible.upload_attempt_started_unix_ms = Some(123);
+            assert!(validate_compiler_staging_owner(&impossible).is_err());
+        }
+        std::fs::remove_dir_all(fixture_root).unwrap();
+    }
+
+    #[test]
+    fn staging_recovery_keeps_unknown_targets_other_owners_and_unresolved_uploads() {
+        let fixture_root = std::env::temp_dir().join(format!(
+            "xrift-protected-staging-{}-{}", std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(&fixture_root).unwrap();
+        let fixture_root = fixture_root.canonicalize().unwrap();
+        let authoring_root = fixture_root.join("authoring");
+        let stage = fixture_root.join("xrift-studio-world");
+        std::fs::create_dir(&authoring_root).unwrap();
+        std::fs::create_dir(&stage).unwrap();
+        let saved = publication_metadata("author-target", "2026-07-20T00:00:00.000Z");
+        let other = publication_metadata("unknown-target", "2026-07-20T00:00:00.000Z");
+        write_compiler_publication_metadata(&stage, "world", &other).unwrap();
+        let unpublished = visual_manifest("world", None);
+        let error = prepare_existing_compiler_staging(&fixture_root, &stage, &authoring_root, &unpublished)
+            .unwrap_err();
+        assert!(error.contains("unowned compiler staging"));
+        assert_eq!(read_compiler_publication_metadata(&stage, "world").unwrap().unwrap().raw, other.raw);
+        let published = visual_manifest("world", Some(VisualPublicationRecord {
+            uploaded_at: saved.metadata.last_uploaded_at.clone(),
+            world_id: Some(saved.metadata.id.clone()), item_id: None,
+            content_id: Some(saved.metadata.id.clone()),
+        }));
+        write_compiler_publication_metadata(&authoring_root, "world", &other).unwrap();
+        assert!(prepare_existing_compiler_staging(&fixture_root, &stage, &authoring_root, &published).is_err());
+        assert!(stage.exists());
+        write_compiler_publication_metadata(&authoring_root, "world", &saved).unwrap();
+        let mut owner = compiler_staging_owner_for_manifest(&published, Some(&saved));
+        owner.project_id = "other-project".to_string();
+        write_compiler_staging_owner_record(&stage, &owner).unwrap();
+        assert!(prepare_existing_compiler_staging(&fixture_root, &stage, &authoring_root, &published)
+            .unwrap_err().contains("different visual project"));
+        write_compiler_publication_metadata(&stage, "world", &saved).unwrap();
+        owner.project_id = published.project_id.clone();
+        owner.upload_attempt_started_unix_ms = Some(123);
+        write_compiler_staging_owner_record(&stage, &owner).unwrap();
+        assert!(prepare_existing_compiler_staging(&fixture_root, &stage, &authoring_root, &published)
+            .unwrap_err().contains(XRIFT_UPLOAD_ATTEMPT_UNRESOLVED));
+        assert_eq!(read_compiler_staging_owner(&stage).unwrap().unwrap(), owner);
+        assert_eq!(std::fs::read_dir(&fixture_root).unwrap().count(), 2);
+        assert_eq!(read_compiler_publication_metadata(&authoring_root, "world").unwrap().unwrap().raw, saved.raw);
+        std::fs::remove_dir_all(fixture_root).unwrap();
+    }
+
+    #[test]
+    fn retries_unowned_template_staging_without_losing_the_saved_publication() {
+        let fixture_root = std::env::temp_dir().join(format!(
+            "xrift-unowned-template-{}-{}", std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(&fixture_root).unwrap();
+        let fixture_root = fixture_root.canonicalize().unwrap();
+        let sample = publication_metadata("template-sample", "2025-02-01T00:00:00.000Z");
+        for kind in ["world", "item"] {
+            let root = fixture_root.join(kind);
+            let authoring_root = fixture_root.join(format!("authoring-{}", kind));
+            let stage = root.join("xrift-studio-incomplete-template");
+            std::fs::create_dir_all(&stage).unwrap();
+            std::fs::create_dir_all(&authoring_root).unwrap();
+            std::fs::write(authoring_root.join("scene.json"), "original artwork").unwrap();
+            std::fs::write(stage.join("unfinished.txt"), "preserve this output").unwrap();
+            write_compiler_publication_metadata(&stage, kind, &sample).unwrap();
+            let manifest = visual_manifest(kind, Some(VisualPublicationRecord {
+                uploaded_at: "2026-07-20T00:00:00.000Z".to_string(),
+                world_id: (kind == "world").then(|| "author-target".to_string()),
+                item_id: (kind == "item").then(|| "author-target".to_string()),
+                content_id: Some("author-target".to_string()),
+            }));
+
+            prepare_existing_compiler_staging(&root, &stage, &authoring_root, &manifest)
+                .expect("an authoritative saved target permits a fresh staging attempt");
+            assert!(!stage.exists());
+            let preserved = std::fs::read_dir(&root).unwrap().map(|entry| entry.unwrap().path())
+                .collect::<Vec<_>>();
+            assert_eq!(preserved.len(), 1);
+            assert!(!preserved[0].file_name().unwrap().to_string_lossy().starts_with("xrift-studio-"));
+            let preserved_stage = preserved[0].join("project");
+            assert_eq!(std::fs::read_to_string(preserved_stage.join("unfinished.txt")).unwrap(),
+                "preserve this output");
+            assert_eq!(read_compiler_publication_metadata(&preserved_stage, kind).unwrap().unwrap().raw,
+                sample.raw);
+            assert_eq!(std::fs::read_to_string(authoring_root.join("scene.json")).unwrap(),
+                "original artwork");
+            assert!(!authoring_root.join(".xrift").exists());
+
+            // The next scaffold still brings sample metadata. Only the saved
+            // authoring target may seed the completed output and its owner.
+            std::fs::create_dir_all(&stage).unwrap();
+            write_compiler_publication_metadata(&stage, kind, &sample).unwrap();
+            let saved = metadata_from_manifest(&manifest).unwrap().unwrap();
+            seed_compiler_publication_metadata(&stage, kind, Some(&saved)).unwrap();
+            write_compiler_staging_owner(&stage, &manifest, Some(&saved)).unwrap();
+            assert_eq!(read_compiler_publication_metadata(&stage, kind).unwrap().unwrap().metadata.id,
+                "author-target");
+            assert_eq!(read_compiler_staging_owner(&stage).unwrap().unwrap().pre_upload_id.as_deref(),
+                Some("author-target"));
+        }
+        std::fs::remove_dir_all(fixture_root).unwrap();
     }
 
     #[test]

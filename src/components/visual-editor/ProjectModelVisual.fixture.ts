@@ -1,6 +1,7 @@
 import {
   Box3,
   BoxGeometry,
+  CompressedTexture,
   Bone,
   DoubleSide,
   Group,
@@ -87,6 +88,16 @@ export async function runProjectModelMaterialPreviewFixtureAssertions(): Promise
     textureAssetId: fixtureTextureAsset.id,
     texCoord: 0,
   };
+  const compressed = new CompressedTexture([], 4, 4);
+  const encodedMipmaps = compressed.mipmaps;
+  configureMaterialPreviewTexture(compressed, fixtureTextureAsset, textureInfo, "srgb");
+  assert(!compressed.generateMipmaps, "A compressed texture must retain its encoded mipmaps instead of asking WebGL to generate them");
+  assert(compressed.mipmaps === encodedMipmaps, "Configuring a compressed texture must preserve its encoded mipmaps");
+  const uncompressed = new Texture();
+  configureMaterialPreviewTexture(uncompressed, fixtureTextureAsset, textureInfo, "srgb");
+  assert(uncompressed.generateMipmaps === fixtureTextureAsset.importSettings.generateMipmaps, "An ordinary texture must retain its mipmap setting");
+  compressed.dispose();
+  uncompressed.dispose();
   const assets = updateMaterialAsset(
     {
       ...project.assets,

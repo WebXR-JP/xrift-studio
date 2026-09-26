@@ -3759,6 +3759,7 @@ function describeResizePreview(asset: TextureAsset): {
     height,
     maxSize,
     asset.importSettings.resize.powerOfTwo === true,
+    plan.supported ? plan.outputFormat : undefined,
   );
   return {
     from: `${width} × ${height}`,
@@ -3908,7 +3909,7 @@ function TextureProcessingPanel({
         <p className="text-[11px] leading-4 text-slate-500">{blockedReason}</p>
       ) : plan.pending ? (
         <p className="rounded border border-amber-200 bg-amber-50 p-1.5 text-xs leading-4 text-amber-800">
-          変換後の画像を編集・公開に使います。元画像は残り、元に戻せます。未変換の画像にも公開時にこの設定を適用します。
+          「この設定で画像を書き出す」を押すと、変換後の画像を編集・公開に使います。元画像は残り、元に戻せます。
         </p>
       ) : (
         <p className="text-[11px] leading-4 text-slate-500">{plan.settledReason}</p>

@@ -23,11 +23,6 @@ import {
 } from "./compiler-bundled-assets";
 import { stableSerializeJson } from "./serialization";
 import { sha256Utf8 } from "./compiler/hash";
-import {
-  assetBytesToDataUrl,
-  convertPublishedTextureBytes,
-  readProjectAssetBytes,
-} from "./texture-processing";
 
 /**
  * Adds a Visual project to an existing XRift Classic project.
@@ -199,9 +194,9 @@ export function planClassicExportFiles(
   const metadataFiles: ClassicExportTextFile[] = [];
   for (const file of compilation.stagingPlan.overlayFiles) {
     const relativePath = file.relativePath.replace(/\\/g, "/");
-    if (relativePath === "xrift.json") {
-      // The target project's own xrift.json is the author's; only the
-      // permissions the world needs are surfaced, below.
+    if (relativePath === "xrift.json" || relativePath === "vite.config.ts") {
+      // Existing code projects keep the author's build and publication
+      // configuration. Only the required permissions are surfaced below.
       continue;
     }
     if (relativePath.startsWith("src/")) {
@@ -359,18 +354,7 @@ export async function exportVisualProjectToClassic(input: {
 
   await Promise.all(
     plan.assetFiles.map(async (entry) => {
-      // 未反映のTexture Import設定は書き出す画像にだけ適用する。制作データの
-      // 原本は読むだけで、書き換えない。
-      const conversion = entry.textureConversion;
-      const dataUrl = conversion
-        ? await assetBytesToDataUrl(
-            await convertPublishedTextureBytes(
-              await readProjectAssetBytes(authoringPath, entry.sourceRelativePath),
-              conversion,
-            ),
-            conversion.mimeType,
-          )
-        : await tauri.readProjectFileDataUrl(authoringPath, entry.sourceRelativePath);
+      const dataUrl = await tauri.readProjectFileDataUrl(authoringPath, entry.sourceRelativePath);
       await tauri.writeBinaryFile(input.target.path, entry.targetRelativePath, dataUrl);
       generatedFiles.add(entry.targetRelativePath);
     }),

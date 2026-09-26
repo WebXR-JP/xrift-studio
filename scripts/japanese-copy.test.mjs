@@ -266,7 +266,7 @@ test('shorter help retains shared changes, numerical conditions and publication 
   assert.match(material, /併用できない反射・透過の設定を解除/);
   const publishing = read('src/components/visual-editor/VisualUploadDialog.tsx');
   assert.match(publishing, /二重公開を防ぐ/);
-  assert.match(publishing, /元画像は変更しません/);
+  assert.match(publishing, /編集画面で使用中の画像をそのまま公開します/);
   assert.match(read('src/components/visual-editor/ScriptEditorDialog.tsx'), /隔離環境で実行されるわけではありません/);
 });
 

@@ -328,17 +328,13 @@ export function estimateTextureBytes(asset: TextureAsset): TextureByteEstimate {
   const metadata = asset.importMetadata;
   const sourceWidth = metadata?.width;
   const sourceHeight = metadata?.height;
-  const maxSize =
-    asset.importSettings.resize.mode === "max-size"
-      ? asset.importSettings.resize.maxSize
-      : undefined;
   const dimensions =
     sourceWidth && sourceHeight
-      ? fitWithin(sourceWidth, sourceHeight, maxSize)
+      ? { width: sourceWidth, height: sourceHeight }
       : null;
-  const compressed =
-    asset.importSettings.compression.format === "ktx2" ||
-    metadata?.sourceFormat === "ktx2";
+  // Resize/compression settings are a pending recipe until explicitly applied.
+  // Both the editor and publication use the current source image.
+  const compressed = metadata?.sourceFormat === "ktx2";
   const bytesPerPixel =
     metadata?.sourceFormat === "hdr" || metadata?.sourceFormat === "exr"
       ? 8
@@ -407,20 +403,11 @@ function textureRecommendations(
       ),
     });
   }
-  const isKtx2 =
-    asset.importSettings.compression.format === "ktx2" ||
-    asset.importMetadata?.sourceFormat === "ktx2";
+  const isKtx2 = asset.importMetadata?.sourceFormat === "ktx2";
   if (!isKtx2 && width && height) {
-    const dimensions = fitWithin(
-      width,
-      height,
-      asset.importSettings.resize.mode === "max-size"
-        ? asset.importSettings.resize.maxSize
-        : undefined,
-    );
     const ktx2Bytes =
-      dimensions.width *
-      dimensions.height *
+      width *
+      height *
       (asset.importSettings.generateMipmaps ? 4 / 3 : 1);
     recommendations.push({
       id: `ktx2:${asset.id}`,
@@ -520,15 +507,9 @@ function estimateTextureLoadBytes(asset: TextureAsset): {
   if (!metadata) {
     return { bytes: 256 * 1024, detail: "ファイル容量不明 / 256 KBの仮値" };
   }
-  const recipe =
-    asset.importSettings.resize.mode !== "original" ||
-    asset.importSettings.resize.powerOfTwo === true ||
-    asset.importSettings.compression.format !== "source";
   return {
     bytes: metadata.byteLength,
-    detail: `${metadata.sourceFormat.toUpperCase()}原本${
-      recipe ? " / 公開時に変換するため実際の配信容量はこれより小さくなります" : ""
-    }`,
+    detail: `${metadata.sourceFormat.toUpperCase()} / 使用中の画像`,
   };
 }
 

@@ -619,12 +619,9 @@ async function materializeClassicProject({
 /**
  * The template's own upload ignore rules.
  *
- * The official template lists the Module Federation shared chunks, the dev
- * `index.html` and a few vendor bundles that XRift's player supplies itself.
- * The compiler's `xrift.json` only knows the generic rules, so writing it over
- * the template's would make every later `xrift upload` from the converted
- * project send several megabytes the world never reads. The two lists are
- * merged; the compiler's title, description and settings still win.
+ * Preserve exclusions for metadata such as the dev `index.html`. Executable
+ * module exclusions are filtered when merging: compiler-owned builds retain
+ * their full dependency graph even when the player supplies shared packages.
  */
 async function readTemplateIgnorePatterns(projectRoot) {
   let parsed;
@@ -640,12 +637,19 @@ async function readTemplateIgnorePatterns(projectRoot) {
 }
 
 export function mergeXriftJsonIgnore(compiledXriftJson, templateIgnore) {
-  if (templateIgnore.length === 0) return compiledXriftJson;
+  // The compiler emits a complete module graph, including fallback shared
+  // packages. Template rules that omit executable files can also remove
+  // dependencies imported by retained chunks (for example hls from drei).
+  const retainedTemplateIgnore = templateIgnore.filter((pattern) =>
+    !pattern.includes("__federation_shared_") &&
+    !/\.(?:[cm]?js|css|wasm)(?:[*/?]|$)/i.test(pattern),
+  );
+  if (retainedTemplateIgnore.length === 0) return compiledXriftJson;
   const parsed = JSON.parse(compiledXriftJson);
   const kind = parsed.world ? "world" : parsed.item ? "item" : null;
   if (!kind) return compiledXriftJson;
   const current = Array.isArray(parsed[kind].ignore) ? parsed[kind].ignore : [];
-  parsed[kind].ignore = [...new Set([...current, ...templateIgnore])];
+  parsed[kind].ignore = [...new Set([...current, ...retainedTemplateIgnore])];
   return stableSerializeJson(parsed);
 }
 

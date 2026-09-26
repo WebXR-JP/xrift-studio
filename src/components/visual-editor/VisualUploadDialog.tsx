@@ -28,7 +28,6 @@ import {
   formatVramBytes,
   type WorldVramEstimate,
 } from "../../lib/visual-editor/vram-estimate";
-import type { TexturePublishConversionSummary } from "../../lib/visual-editor/texture-conversion";
 import { VramEstimateDialog } from "./VramEstimateDialog";
 import { SupportReportModal } from "../SupportReportModal";
 
@@ -99,13 +98,6 @@ export type VisualPublishReview = {
   /** The current snapshot is still being checked; an older result cannot unlock publication. */
   checking?: boolean;
   vramEstimate?: WorldVramEstimate;
-  /**
-   * 公開時にだけ適用するTexture変換の内容。
-   *
-   * 最大解像度・圧縮の設定は制作データの原本を書き換えずに公開結果へ反映される。
-   * 「設定したのに反映されていない」ではなく「公開すればこうなる」を先に見せる。
-   */
-  textureConversions?: TexturePublishConversionSummary;
 };
 
 type Props = {
@@ -120,21 +112,6 @@ type Props = {
   onSaveThumbnail?: (dataUrl: string) => Promise<void>;
   onLogin: () => void;
   onLocateDiagnostic?: (diagnostic: VisualPublishDiagnostic) => void;
-  /**
-   * 公開時に変換されるTextureを、制作データの原本にも適用する。
-   *
-   * 公開だけが目的なら不要だが、Editorの表示や他の書き出しでも同じ軽さにしたい
-   * 作者のための操作。原本ファイルは残るので、Inspectorからいつでも戻せる。
-   */
-  onApplyTextureConversions?: (
-    assetIds: string[],
-    report: (progress: { message: string; completed: number; total: number }) => void,
-  ) => Promise<{
-    convertedAssetCount: number;
-    beforeBytes: number;
-    afterBytes: number;
-    skipped: { assetName: string; reason: string }[];
-  }>;
   onApplyOptimizations?: (
     recommendationIds: string[],
     report: (progress: AssetOptimizationProgress) => void,
@@ -184,7 +161,6 @@ export function VisualUploadDialog({
   onSaveThumbnail,
   onLogin,
   onLocateDiagnostic,
-  onApplyTextureConversions,
   onApplyOptimizations,
   onPublish,
   onClearStaleUploadAttempt,
@@ -210,13 +186,6 @@ export function VisualUploadDialog({
   const [thumbnailBusy, setThumbnailBusy] = useState(false);
   const [thumbnailError, setThumbnailError] = useState<string | null>(null);
   const [vramDetailsOpen, setVramDetailsOpen] = useState(false);
-  const [textureConversionsOpen, setTextureConversionsOpen] = useState(false);
-  const convertedTextures = review.textureConversions?.converted ?? [];
-  const ignoredTextures = review.textureConversions?.ignored ?? [];
-  const [textureConversionBusy, setTextureConversionBusy] = useState(false);
-  const [textureConversionMessage, setTextureConversionMessage] = useState<
-    { tone: "progress" | "success" | "error"; text: string } | null
-  >(null);
   const [supportOpen, setSupportOpen] = useState(false);
   const [clearingAttempt, setClearingAttempt] = useState(false);
   const [clearAttemptError, setClearAttemptError] = useState<string | null>(null);
@@ -291,7 +260,7 @@ export function VisualUploadDialog({
       detail:
         review.saved && review.compilationFresh
           ? "最新の編集内容を使用できます"
-          : "公開時に最新の編集内容を自動で保存・変換します",
+          : "最新の編集内容を保存して公開データを作成します",
       ready: true,
     },
     {
@@ -700,127 +669,9 @@ export function VisualUploadDialog({
                 </button>
               ) : null}
 
-              {convertedTextures.length > 0 || ignoredTextures.length > 0 ? (
-                <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-                  <div className="flex items-start gap-3">
-                    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-                      <Check size={14} strokeWidth={2.5} aria-hidden="true" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-semibold text-slate-900">
-                        {convertedTextures.length > 0
-                          ? `テクスチャ${convertedTextures.length}枚を公開用に変換します`
-                          : "テクスチャの設定を確認しました"}
-                      </div>
-                      <div className="mt-0.5 text-xs leading-5 text-slate-500">
-                        {convertedTextures.length > 0
-                          ? "画像を縮小・圧縮して送信します。元画像は変更しません。"
-                          : "変換対象の画像がないため、そのまま送信します。"}
-                      </div>
-                    </div>
-                    {convertedTextures.length > 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => setTextureConversionsOpen((current) => !current)}
-                        className="shrink-0 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                      >
-                        {textureConversionsOpen ? "内訳を閉じる" : "内訳を見る"}
-                      </button>
-                    ) : null}
-                  </div>
-                  {convertedTextures.length > 0 && onApplyTextureConversions ? (
-                    <div className="mt-2.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
-                      <p className="text-xs leading-5 text-slate-600">
-                        編集画面や書き出しにも適用できます。元画像は残り、テクスチャ設定から戻せます。
-                      </p>
-                      <button
-                        type="button"
-                        disabled={textureConversionBusy}
-                        onClick={() => {
-                          setTextureConversionBusy(true);
-                          setTextureConversionMessage({
-                            tone: "progress",
-                            text: `${convertedTextures.length}枚の画像を編集用に変換しています`,
-                          });
-                          void onApplyTextureConversions(
-                            convertedTextures.map((entry) => entry.assetId),
-                            (progressUpdate) =>
-                              setTextureConversionMessage({
-                                tone: "progress",
-                                text: `${progressUpdate.message}（${progressUpdate.completed + 1} / ${progressUpdate.total}）`,
-                              }),
-                          )
-                            .then((outcome) => {
-                              setTextureConversionMessage({
-                                tone: "success",
-                                text: `${outcome.convertedAssetCount}枚の画像を編集用に変換しました。${formatVramBytes(outcome.beforeBytes)} → ${formatVramBytes(outcome.afterBytes)}${
-                                  outcome.skipped.length > 0
-                                    ? `。${outcome.skipped.length}枚は対象外です`
-                                    : ""
-                                }`,
-                              });
-                            })
-                            .catch((error: unknown) => {
-                              setTextureConversionMessage({
-                                tone: "error",
-                                text:
-                                  error instanceof Error
-                                    ? error.message
-                                    : "編集用の画像を変換できませんでした。",
-                              });
-                            })
-                            .finally(() => setTextureConversionBusy(false));
-                        }}
-                        className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-45"
-                      >
-                        {textureConversionBusy ? (
-                          <Loader2 size={13} className="animate-spin" aria-hidden="true" />
-                        ) : null}
-                        {textureConversionBusy ? "変換中…" : "編集にもこの設定を適用"}
-                      </button>
-                      {textureConversionMessage ? (
-                        <p
-                          role="status"
-                          className={`mt-2 rounded-md px-2 py-1.5 text-xs leading-5 ${
-                            textureConversionMessage.tone === "error"
-                              ? "bg-rose-50 text-rose-700"
-                              : textureConversionMessage.tone === "success"
-                                ? "bg-emerald-50 text-emerald-800"
-                                : "bg-sky-50 text-sky-800"
-                          }`}
-                        >
-                          {textureConversionMessage.text}
-                        </p>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {textureConversionsOpen && convertedTextures.length > 0 ? (
-                    <ul className="mt-2.5 space-y-1.5">
-                      {convertedTextures.map((entry) => (
-                        <li
-                          key={entry.assetId}
-                          className="rounded-md bg-slate-50 px-2.5 py-2 text-xs"
-                        >
-                          <span className="block truncate font-medium text-slate-800">
-                            {entry.assetName}
-                          </span>
-                          <span className="mt-0.5 block tabular-nums text-slate-500">
-                            {entry.from}
-                            {" → "}
-                            <span className="font-semibold text-violet-700">{entry.to}</span>
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  {ignoredTextures.length > 0 ? (
-                    <p className="mt-2.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs leading-5 text-amber-800">
-                      {ignoredTextures.map((entry) => entry.assetName).join("、")}
-                      は原本の形式が解像度変更・圧縮に対応していないため、原本のまま公開します。軽くしたい場合は、PNG / JPEG / WEBPで読み込み直してください。
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
+              <p className="px-1 text-xs leading-5 text-slate-500">
+                テクスチャは編集画面で使用中の画像をそのまま公開します。
+              </p>
 
               {review.diagnostics.length > 0 ? (
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5">

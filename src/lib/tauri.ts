@@ -561,6 +561,14 @@ export const tauri = {
       authoringProjectPath,
       directoryName,
     }),
+  initializeCompilerStaging: (
+    authoringProjectPath: string,
+    directoryName: string,
+  ) =>
+    invoke<void>("initialize_compiler_staging", {
+      authoringProjectPath,
+      directoryName,
+    }),
   applyCompilerStaging: (
     authoringProjectPath: string,
     directoryName: string,

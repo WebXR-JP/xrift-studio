@@ -1,6 +1,7 @@
 import { decodeBase64DataUrl } from "./dist-upload-files";
 import { DEFAULT_IGNORE_PATTERNS, XriftClient, type UploadFile, type WorldUploadOptions } from "@xrift/sdk";
 import { createPrototypeProject } from "./prototype-project";
+import { normalizeTextureImportSettings, type TextureAsset } from "./asset-manifest";
 import { createTextComponent } from "./scene-document";
 import {
   assertCompiledModuleEntry,
@@ -114,6 +115,19 @@ async function assertBrowserUploadParity(): Promise<void> {
   );
 
   const prototype = createPrototypeProject("world", "web-upload-parity");
+  const textureBytes = new Uint8Array([137, 80, 78, 71, 0, 255]);
+  const pendingTexture: TextureAsset = {
+    id: "fixture-pending-texture", name: "Pending Texture", kind: "texture", status: "ready",
+    source: { kind: "project", relativePath: "assets/pending.png" },
+    importSettings: normalizeTextureImportSettings({
+      resize: { mode: "max-size", maxSize: 256 }, compression: { format: "ktx2" },
+    }),
+    importMetadata: { sourceFormat: "png", mimeType: "image/png", width: 2048, height: 2048, byteLength: textureBytes.byteLength },
+  };
+  prototype.assets.assets[pendingTexture.id] = pendingTexture;
+  for (const asset of Object.values(prototype.assets.assets)) {
+    if (asset.kind === "material") asset.properties.baseColorTextureId = pendingTexture.id;
+  }
   const entityId = prototype.scene.rootEntityIds[0];
   const entity = prototype.scene.entities[entityId];
   const textComponent = createTextComponent("component-web-upload-font", {
@@ -170,6 +184,7 @@ async function assertBrowserUploadParity(): Promise<void> {
       documents,
       token: "xrf_fixture",
       readAssetBytes: async (path) => {
+        if (path === "assets/pending.png") return textureBytes;
         throw new Error(`Unexpected authored Asset read: ${path}`);
       },
       shellFiles: [
@@ -192,6 +207,11 @@ async function assertBrowserUploadParity(): Promise<void> {
     worldApiPrototype.upload = originalUpload;
   }
 
+  assert(
+    sentFiles.some((file) => file.remotePath.endsWith("pending.png") && file.data === textureBytes) &&
+      !sentFiles.some((file) => file.remotePath.endsWith("pending.ktx2")),
+    "browser publication must preserve PNG bytes and extension despite a pending KTX2 recipe",
+  );
   assert(
     fetched.some((url) => url.endsWith("noto-sans-jp-japanese-400-normal.woff")),
     "the browser path did not fetch the Text font that desktop staging copies",
@@ -289,6 +309,23 @@ function assertStagedConfigParsing(): void {
     () => assertCompiledModuleEntry([{ remotePath: "index-abc.js" }]),
     "a built dist without remoteEntry.js was accepted",
   );
+  for (const remotePath of [
+    "__federation_shared_@pmndrs/uikit-abc.js",
+    "__federation_shared_@pmndrs\\uikit-abc.js",
+    "textures/nested.png",
+  ]) {
+    assertThrows(
+      () => assertCompiledModuleEntry([
+        { remotePath: "remoteEntry.js" },
+        { remotePath },
+      ]),
+      `a nested file that XRift cannot serve was accepted: ${remotePath}`,
+    );
+  }
+  assertCompiledModuleEntry([
+    { remotePath: "./remoteEntry.js" },
+    { remotePath: "__federation_shared_@pmndrs_uikit-abc.js" },
+  ]);
   assert(
     resolveExistingPublicationId(
       { uploadedAt: "2026-09-22T00:00:00.000Z", worldId: "world-existing" },

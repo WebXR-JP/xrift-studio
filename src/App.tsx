@@ -60,7 +60,6 @@ import {
   applyAssetOptimizations,
   exportVisualProjectToClassic,
   estimateWorldVram,
-  applyTextureProcessingBatch,
   inspectClassicExportTarget,
   createVisualProjectFromClassicSource,
   createStarterVisualProject,
@@ -1872,7 +1871,6 @@ function App() {
               ? [PUBLISH_REVIEW_FAILURE]
               : visualPublishReview.result?.diagnostics ?? [],
             vramEstimate: visualPublishReview.result?.vramEstimate,
-            textureConversions: visualPublishReview.result?.textureConversions,
           }}
           onClose={() => setVisualPublishBundle(null)}
           onMetadataChange={(title, description) => {
@@ -1926,48 +1924,6 @@ function App() {
               description:
                 diagnostic.entityId ?? diagnostic.assetId ?? diagnostic.fieldPath,
             });
-          }}
-          onApplyTextureConversions={async (assetIds, report) => {
-            if (!publishBundle) {
-              throw new Error("変換する制作データがありません。");
-            }
-            const projectPath = await handleSaveVisualProject(
-              publishBundle,
-              false,
-              false,
-            );
-            const result = await applyTextureProcessingBatch(
-              projectPath,
-              publishBundle.assets,
-              assetIds,
-              (progress) =>
-                report({
-                  message: progress.message,
-                  completed: progress.completed,
-                  total: progress.total,
-                }),
-            );
-            if (!result.ok) throw new Error(result.message);
-            const nextBundle = { ...publishBundle, assets: result.manifest };
-            await handleSaveVisualProject(nextBundle, false, false);
-            setVisualPublishBundle(nextBundle);
-            setVisualCompilationFresh(false);
-            // シーンと公開物は同じ画像を使う。変換はダイアログ側で走るので、
-            // 開いたままのEditor履歴へも同じManifestを取り込む。
-            visualExternalAssetsCommitRef.current?.({
-              expectedAssets: publishBundle.assets,
-              nextAssets: result.manifest,
-              notice: `${result.convertedAssetNames.length}件のテクスチャを変換しました。シーンも変換後の画像を使います`,
-            });
-            return {
-              convertedAssetCount: result.convertedAssetNames.length,
-              beforeBytes: result.beforeBytes,
-              afterBytes: result.afterBytes,
-              skipped: result.skipped.map((entry) => ({
-                assetName: entry.assetName,
-                reason: entry.reason,
-              })),
-            };
           }}
           onApplyOptimizations={async (recommendationIds, report) => {
             if (!publishBundle) {

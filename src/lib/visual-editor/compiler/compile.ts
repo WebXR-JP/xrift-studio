@@ -29,12 +29,7 @@ import {
   type PrimitiveGeometry,
   type SceneAsset,
 } from "../asset-manifest";
-import {
-  isConvertibleTextureSourceFormat,
-  isPublishedAsKtx2,
-  planTextureConversion,
-  textureOutputExtension,
-} from "../texture-conversion";
+import { isPublishedAsKtx2 } from "../texture-conversion";
 import { getBuiltinPrimitiveCreation } from "../creation-catalog";
 import { PHYSICAL_MATERIAL_EXTENSION_NAMES } from "../material-extension-registry";
 import {
@@ -117,6 +112,7 @@ import {
   type SourceDocumentHash,
 } from "../serialization";
 import { sha256Utf8 } from "./hash";
+import { generatePublicationViteConfig } from "./publication-vite-config";
 import { collectRequiredScriptAssetIds } from "../scripting/script-schedule";
 import { createScriptAssetRuntimeDescriptorMap } from "../scripting/asset-runtime";
 import {
@@ -396,6 +392,7 @@ export function compileVisualProject(
   const overlayFiles: CompilerOverlayFile[] = [
     compilerFile(sourcePath, generated),
     compilerFile("xrift.json", xriftJson, "metadata"),
+    compilerFile("vite.config.ts", generatePublicationViteConfig(documents.project.projectKind)),
   ];
   if (runtimeManifestFile) overlayFiles.push(runtimeManifestFile);
   overlayFiles.push(...scriptPlan.overlayFiles);
@@ -533,7 +530,6 @@ export function compileVisualProject(
     diagnoseUnbundledTextFonts(resolvedEntryScene.scene, diagnostics);
   }
   diagnoseUnsupportedAssets(documents.assets, diagnostics);
-  diagnoseIgnoredTextureRecipes(documents.assets, assetCopyPlan, diagnostics);
   diagnoseInteractivityRuntimeSupport(documents.assets, diagnostics);
   const uniqueDiagnostics = deduplicateDiagnostics(diagnostics);
   const provenanceFile = compilerFile(
@@ -3555,6 +3551,18 @@ function renderModelMesh(
     context.extraImports.add(
       'import { createOpenBrushMaterialExtension } from "./xrift-studio/open-brush-runtime";',
     );
+    // useLoader caches loader instances by constructor. Registering this plugin
+    // on GLTFLoader itself also sends later ordinary models through three-icosa,
+    // whose beforeRoot assumes a materials array that valid glTF may omit.
+    context.supportDeclarations.set(
+      "model-open-brush-loader",
+      `class CompiledOpenBrushGLTFLoader extends GLTFLoader {
+  constructor() {
+    super();
+    this.register((parser) => createOpenBrushMaterialExtension(parser, ${JSON.stringify(OPEN_BRUSH_BRUSH_BASE_URL)}));
+  }
+}`,
+    );
   } else {
     context.fiberImports.add("useLoader");
     context.extraImports.add(
@@ -3674,16 +3682,11 @@ function renderModelMesh(
     (isObj
       ? "const scene = useLoader(OBJLoader, modelUrl);"
       : isOpenBrush
-        ? `const { scene, parser${animationLoaded ? ", animations" : ""} } = useLoader(GLTFLoader, modelUrl, (loader) => {
-    loader.register(
-      (parser) => createOpenBrushMaterialExtension(parser, ${JSON.stringify(OPEN_BRUSH_BRUSH_BASE_URL)}),
-    );${
-      usesDraco
-        ? `
-    loader.setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath));`
-        : ""
-    }
-  });`
+        ? `const { scene, parser${animationLoaded ? ", animations" : ""} } = useLoader(CompiledOpenBrushGLTFLoader, modelUrl${
+            usesDraco
+              ? ", (loader) => loader.setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath))"
+              : ""
+          });`
         : `const { scene${needsParser ? ", parser" : ""}${animationLoaded ? ", animations" : ""} } = useLoader(GLTFLoader, modelUrl${
             usesDraco
               ? ", (loader) => loader.setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath))"
@@ -5013,7 +5016,8 @@ function useCompiledTexture(source: Texture, options: CompiledTextureOptions): T
     clone.channel = options.channel;
     clone.colorSpace = options.colorSpace === "srgb" ? SRGBColorSpace : NoColorSpace;
     clone.flipY = options.flipY;
-    clone.generateMipmaps = options.generateMipmaps;
+    // Compressed textures carry encoded mip levels; WebGL cannot generate them.
+    clone.generateMipmaps = !("isCompressedTexture" in clone && clone.isCompressedTexture === true) && options.generateMipmaps;
     clone.magFilter = COMPILED_TEXTURE_MAG_FILTER[options.magFilter];
     clone.minFilter = COMPILED_TEXTURE_MIN_FILTER[options.minFilter];
     clone.wrapS = COMPILED_TEXTURE_WRAP[options.wrapS];
@@ -5466,7 +5470,7 @@ function renderParticleEmitter(
     const value = particleMapSource.clone();
     value.colorSpace = ${colorSpace};
     value.flipY = ${settings.flipY};
-    value.generateMipmaps = ${settings.generateMipmaps};
+    value.generateMipmaps = ${usesKtx2 ? false : settings.generateMipmaps};
     value.wrapS = ${wrapS};
     value.wrapT = ${wrapT};
     value.magFilter = ${magFilter};
@@ -6218,52 +6222,6 @@ function diagnoseUnsupportedAssets(
   }
 }
 
-/**
- * 公開時に適用できないTexture Import設定を、警告として一度だけ知らせる。
- *
- * 最大解像度と圧縮は公開時に自動で適用されるので、通常は何も出ない。SVG、KTX2、
- * HDRIのようにCanvasで描き直せない原本だけは設定を反映できず、原本がそのまま
- * 配られる。黙って無視すると「設定したのに軽くならない」原因が追えなくなるため、
- * 公開は止めずに理由だけを残す。
- */
-function diagnoseIgnoredTextureRecipes(
-  assets: AssetManifest,
-  assetCopyPlan: readonly AssetCopyPlanEntry[],
-  diagnostics: CompilerDiagnostic[],
-): void {
-  const converted = new Set(
-    assetCopyPlan
-      .filter((entry) => entry.textureConversion)
-      .map((entry) => entry.assetId),
-  );
-  for (const asset of Object.values(assets.assets).sort((left, right) =>
-    left.id.localeCompare(right.id),
-  )) {
-    if (asset.kind !== "texture") continue;
-    if (converted.has(asset.id)) continue;
-    if (!isAssetSupportedByCompiler(asset)) continue;
-    if (
-      asset.importSettings.compression.format === "source" &&
-      asset.importSettings.resize.mode === "original" &&
-      asset.importSettings.resize.powerOfTwo !== true
-    ) {
-      continue;
-    }
-    // 原本がすでに設定を満たしている場合も変換は起きない。それは正常なので、
-    // 「そもそも適用できない形式」だけを残す。環境Texture（HDRI）へ解像度設定を
-    // 反映できないことはTexture Inspectorが説明するので、ここでは繰り返さない。
-    if (isEnvironmentTextureAsset(asset)) continue;
-    if (isConvertibleTextureSourceFormat(getTextureSourceFormat(asset))) continue;
-    diagnostics.push({
-      severity: "warning",
-      code: "texture-recipe-not-applicable",
-      message: `${asset.name}は原本の形式が解像度変更・圧縮に対応していないため、原本のまま公開します`,
-      assetId: asset.id,
-      fieldPath: "importSettings",
-    });
-  }
-}
-
 function createAssetCopyPlan(
   assets: AssetManifest,
   diagnostics: CompilerDiagnostic[],
@@ -6299,15 +6257,9 @@ function createAssetCopyPlan(
       });
       continue;
     }
-    // 未反映のImport設定は、原本を書き換えずに出力側で適用する。公開されるのは
-    // 変換後の画像なので、コピー先のファイル名も変換後の拡張子で決める。
-    const textureConversion =
-      asset.kind === "texture" ? (planTextureConversion(asset) ?? undefined) : undefined;
-    const sourceFileName =
+    // Copy the asset currently rendered by the editor without resizing or encoding.
+    const fileName =
       asset.source.relativePath.split("/").filter(Boolean).pop() ?? "asset.bin";
-    const fileName = textureConversion
-      ? `${stripFileExtension(sourceFileName)}.${textureOutputExtension(textureConversion.outputFormat)}`
-      : sourceFileName;
     const targetRelativePath =
       outputMode === "classic-runtime"
         ? `public/${PUBLISHED_RUNTIME_ASSET_PREFIX}${safeFileSegment(asset.id)}-${safeFileSegment(fileName)}`
@@ -6329,7 +6281,6 @@ function createAssetCopyPlan(
       targetRelativePath,
       purpose: assetPurpose(asset),
       supportedByCompiler: isAssetSupportedByCompiler(asset),
-      ...(textureConversion ? { textureConversion } : {}),
     });
   }
   return plan;
@@ -6429,7 +6380,7 @@ function generateXriftJson(
       description,
       thumbnailPath: "thumbnail.png",
       buildCommand: "npm run build",
-      ignore: ["**/.DS_Store", "**/Thumbs.db", "**/*.js.map", "**/.gitkeep"],
+      ignore: ["**/.DS_Store", "**/Thumbs.db", "**/*.js.map", "**/*.d.ts", "**/*.d.ts.map", "**/.gitkeep"],
       ...worldSettings,
       // `permissions` applies to both kinds, unlike physics and camera above.
       ...publishPermissionsJson(permissions),
@@ -6563,15 +6514,8 @@ function isAssetSupportedByCompiler(asset: SceneAsset): boolean {
   if (asset.kind === "audio") return true;
   if (asset.kind === "font") return true;
   if (asset.kind === "skybox") return ["hdr", "exr", "png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg"].includes(fileExtension(asset.source.relativePath));
-  // Textureの最大解像度・圧縮設定は、原本を書き換えなくても公開時に適用できる。
-  // 未反映であることは公開を止める理由にならない。適用できない形式（SVG / KTX2 /
-  // HDRI）は原本のまま配られ、`diagnoseIgnoredTextureRecipes` が警告で知らせる。
+  // Pending image-processing settings do not alter publication assets.
   return asset.kind === "texture";
-}
-
-function stripFileExtension(fileName: string): string {
-  const index = fileName.lastIndexOf(".");
-  return index > 0 ? fileName.slice(0, index) : fileName;
 }
 
 function fileExtension(relativePath: string): string {

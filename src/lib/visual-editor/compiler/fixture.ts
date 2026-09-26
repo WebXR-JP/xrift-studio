@@ -1,3 +1,4 @@
+import { filterFiles, parseWorldConfig } from "@xrift/sdk";
 import {
   normalizeTextureImportSettings,
   updateMaterialAsset,
@@ -173,6 +174,32 @@ export function runVisualCompilerFixtureAssertions(
   const second = compileVisualProject(world, { generatedAt: fixedTime });
   assert(JSON.stringify(first) === JSON.stringify(second), "Compiler output is not deterministic");
   assert(first.canStage, "Default world fixture should be stageable");
+  const publicationConfig = first.overlayFiles.find((file) => file.relativePath === "vite.config.ts")?.content ?? "";
+  assert(
+    publicationConfig.includes("base: './'") &&
+      publicationConfig.includes("'xrift-studio-shared-'") &&
+      publicationConfig.includes("entryFileNames: flatChunkFileName") &&
+      publicationConfig.includes("chunkFileNames: flatChunkFileName") &&
+      publicationConfig.includes("'./World': './src/index.tsx'"),
+    "Compiler-owned builds must emit flat federation entries and chunks",
+  );
+  const publicationMetadata = first.overlayFiles.find((file) => file.relativePath === "xrift.json");
+  assert(publicationMetadata, "Compiler publication metadata was not emitted");
+  const publicationIgnores = parseWorldConfig(publicationMetadata.content).ignore;
+  const moduleNames = [
+    "remoteEntry.js",
+    "xrift-studio-shared-@pmndrs_uikit-fixture.js",
+    "xrift-studio-shared-react-fixture.js",
+    "hls-fixture.js",
+  ];
+  assert(
+    filterFiles(moduleNames, publicationIgnores).length === moduleNames.length,
+    "SDK default exclusions must retain the compiler's complete runtime module set",
+  );
+  assert(
+    filterFiles(["__federation_shared_@pmndrs_uikit-fixture.js"], publicationIgnores).length === 0,
+    "The regression must exercise the SDK's reserved shared-module exclusion",
+  );
   const defaultWorldSource =
     first.overlayFiles.find((file) => file.relativePath === "src/World.tsx")
       ?.content ?? "";
@@ -801,6 +828,7 @@ export function runVisualCompilerFixtureAssertions(
       (file) => file.relativePath === "src/World.tsx",
     )?.content ?? "";
   assert(ktx2ParticleResult.canStage, "KTX2 Particle fixture should be stageable");
+  assert(ktx2ParticleSource.includes("value.generateMipmaps = false"), "KTX2 particles must use encoded mip levels without WebGL mipmap generation");
   assert(
     ktx2ParticleSource.includes("return useKTX2(assetUrl, baseUrl);") &&
       ktx2ParticleSource.includes(
@@ -1546,25 +1574,27 @@ export function runVisualCompilerFixtureAssertions(
     unappliedRecipeCopy?.supportedByCompiler === true &&
       unappliedRecipeCopy.sourceRelativePath === "assets/textures/albedo.png" &&
       unappliedRecipeCopy.targetRelativePath ===
-        "public/xrift-studio-fixture-texture-unapplied-recipe-albedo.ktx2",
-    "Publish-time Texture conversion must retarget the copy to the converted format",
+        "public/xrift-studio-fixture-texture-unapplied-recipe-albedo.png",
+    "Publishing must keep the editor's current PNG asset and extension",
   );
   assert(
-    unappliedRecipeCopy?.textureConversion?.outputFormat === "ktx2" &&
-      unappliedRecipeCopy.textureConversion.maxSize === 1024 &&
-      unappliedRecipeCopy.textureConversion.srgb === true,
-    "Publish-time Texture conversion plan is incorrect",
+    unappliedRecipeCopy !== undefined && !("textureConversion" in unappliedRecipeCopy),
+    "Publishing must not schedule an unapplied resize or compression recipe",
   );
   const unappliedRecipeSource =
     unappliedRecipeResult.overlayFiles.find(
       (file) => file.relativePath === "src/World.tsx",
     )?.content ?? "";
   assert(
-    unappliedRecipeSource.includes("useCompiledKtx2(baseColorMapUrl)"),
-    "A Texture converted to KTX2 at publish time must load through the KTX2 runtime",
+    unappliedRecipeSource.includes("useTexture(baseColorMapUrl)"),
+    "A PNG with an unapplied KTX2 recipe must use the ordinary image loader",
+  );
+  assert(
+    unappliedRecipeSource.includes('clone.generateMipmaps = !("isCompressedTexture" in clone && clone.isCompressedTexture === true) && options.generateMipmaps'),
+    "Material KTX2 textures must retain encoded mip levels without WebGL mipmap generation",
   );
 
-  // 変換できない原本（SVG）は設定を反映できない。公開は止めず、理由だけを残す。
+  // SVGも現在の画像をそのまま配る。未適用の加工設定は公開診断の対象にしない。
   const unconvertibleRecipeTexture: TextureAsset = {
     ...projectTexture,
     id: "fixture-texture-unconvertible-recipe",
@@ -1602,19 +1632,19 @@ export function runVisualCompilerFixtureAssertions(
     "A Texture recipe that cannot be applied must not block publishing",
   );
   assert(
-    unconvertibleRecipeResult.diagnostics.some(
+    !unconvertibleRecipeResult.diagnostics.some(
       (diagnostic) =>
         diagnostic.code === "texture-recipe-not-applicable" &&
         diagnostic.severity === "warning" &&
         diagnostic.assetId === unconvertibleRecipeTexture.id,
     ),
-    "An unapplicable Texture recipe must be reported as a warning",
+    "Publishing must not warn about an image-processing recipe it does not apply",
   );
   assert(
     unconvertibleRecipeResult.assetCopyPlan.find(
       (entry) => entry.assetId === unconvertibleRecipeTexture.id,
-    )?.textureConversion === undefined,
-    "An unapplicable Texture recipe must not schedule a conversion",
+    )?.targetRelativePath.endsWith("logo.svg"),
+    "Publishing must preserve an SVG source",
   );
 
   const sourceScene = world.scenes[world.project.entrySceneId];
@@ -2890,6 +2920,17 @@ export function runVisualCompilerFixtureAssertions(
   assert(
     openBrushSource.includes("createOpenBrushMaterialExtension"),
     "Open Brush model did not register the shared brush material extension",
+  );
+  assert(
+    openBrushSource.includes("class CompiledOpenBrushGLTFLoader extends GLTFLoader") &&
+      openBrushSource.includes("useLoader(CompiledOpenBrushGLTFLoader, modelUrl") &&
+      !openBrushSource.includes("useLoader(GLTFLoader, modelUrl, (loader) => {"),
+    "Open Brush must have its own loader constructor so useLoader cannot apply its plugin to ordinary glTF",
+  );
+  assert(
+    modelSource.includes("useLoader(GLTFLoader, modelUrl") &&
+      !modelSource.includes("CompiledOpenBrushGLTFLoader"),
+    "Ordinary glTF, including files without materials, must keep the standard loader",
   );
   assert(
     !openBrushSource.includes("new GLTFGoogleTiltBrushMaterialExtension"),

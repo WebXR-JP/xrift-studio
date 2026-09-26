@@ -29,17 +29,15 @@ import {
 /**
  * Texture Import設定（最大解像度・圧縮）を、原本の画像ファイルへ実際に反映する。
  *
- * 設定はAsset Manifestに保持されるだけで原本は書き換わらない。公開だけが目的なら
- * 出力側の変換（texture-conversion.ts）で足りるため、ここは「プロジェクトの原本
- * そのものを軽くしたい」ときの操作になる。書き出した画像を新しい原本にすると、
- * 設定は「原寸 / source」へ戻り、変換前の原本は `optimizedFrom` に残る。
+ * 設定は明示的な適用操作で画像へ反映し、エディターで結果を確認する。
+ * 公開・書き出しは、現在表示している画像をそのまま使う。
+ * 変換前の原本は `optimizedFrom` に残る。
  */
 
 // 既存の呼び出し元が texture-processing から読み続けられるよう、変換の計算は
 // texture-conversion.ts に移したうえでここから再輸出する。
 export {
   assetBytesToDataUrl,
-  convertPublishedTextureBytes,
   convertTextureBytes,
   copyAssetBytes,
   encodeKtx2,
@@ -61,15 +59,12 @@ export {
   resolveOutputFormat,
   resolvePublishedTextureFormat,
   resolveTargetSize,
-  summarizeTexturePublishConversions,
   textureOutputExtension,
 } from "./texture-conversion";
 export type {
   TextureConversion,
   TextureMaxSizeChoice,
   TextureOutputFormat,
-  TexturePublishConversionEntry,
-  TexturePublishConversionSummary,
 } from "./texture-conversion";
 
 export type TextureProcessingPlan =
@@ -191,11 +186,11 @@ export function planTextureProcessing(input: TextureAsset): TextureProcessingPla
   const powerOfTwo = settings.resize.powerOfTwo === true;
   const sourceWidth = metadata.width ?? null;
   const sourceHeight = metadata.height ?? null;
+  const outputFormat = resolveOutputFormat(sourceFormat, settings.compression.format);
   const fitted =
     sourceWidth && sourceHeight
-      ? resolveTargetSize(sourceWidth, sourceHeight, maxSize, powerOfTwo)
+      ? resolveTargetSize(sourceWidth, sourceHeight, maxSize, powerOfTwo, outputFormat)
       : null;
-  const outputFormat = resolveOutputFormat(sourceFormat, settings.compression.format);
   // 解像度が分からない原本は、指定がある限り実際に描き直して確かめるしかない。
   const sizeUnknown = sourceWidth === null || sourceHeight === null;
   const resizePending =
