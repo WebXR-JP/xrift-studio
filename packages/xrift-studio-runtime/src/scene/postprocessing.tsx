@@ -202,8 +202,11 @@ function mergeSceneOverrides(
 
 export function ScenePostprocessing({
   settings,
+  effectsEnabled = true,
 }: {
   settings: XriftScenePostprocessingSettings;
+  /** Editor quality may omit passes, while authored colour handling stays. */
+  effectsEnabled?: boolean;
 }) {
   const { camera, gl, scene, size } = useThree();
   const hdrEnabled = settings.hdr.enabled;
@@ -273,14 +276,14 @@ export function ScenePostprocessing({
    */
   const appliedRef = useRef<XriftScenePostprocessingSettings | null>(null);
 
-  // A rebuilt factory means the renderer, camera, scene or HDR target changed,
-  // so whatever was built for the old one no longer belongs to this Canvas.
+  // A rebuilt factory means the renderer, camera, scene or HDR target changed.
+  // Dropping editor quality also releases any previously allocated buffers.
   useEffect(() => {
     const previous = pipelineRef.current;
     pipelineRef.current = null;
     appliedRef.current = null;
     previous?.composer.dispose();
-  }, [buildPipeline]);
+  }, [buildPipeline, effectsEnabled]);
 
   useEffect(() => {
     pipelineRef.current?.composer.setSize(size.width, size.height);
@@ -372,7 +375,7 @@ export function ScenePostprocessing({
     // state, so nothing re-renders when a viewer turns the passes on.
     const bridge = findXriftSceneRuntimeBridge(scene);
     const active = mergeSceneOverrides(settings, bridge?.read() ?? null);
-    if (active.enabled && !pipelineRef.current) {
+    if (effectsEnabled && active.enabled && !pipelineRef.current) {
       pipelineRef.current = buildPipeline();
       pipelineRef.current.composer.setSize(size.width, size.height);
       appliedRef.current = null;
@@ -382,7 +385,7 @@ export function ScenePostprocessing({
       appliedRef.current = active;
       configure(pipeline, active);
     }
-    if (active.enabled && pipeline) {
+    if (effectsEnabled && active.enabled && pipeline) {
       pipeline.composer.render();
     } else {
       // A positive-priority frame callback takes over R3F's default render

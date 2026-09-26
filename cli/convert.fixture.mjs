@@ -127,6 +127,7 @@ import { runModelHierarchyFixtureAssertions } from "../src/lib/visual-editor/mod
 import { runModelImportContractFixtureAssertions } from "../src/lib/visual-editor/model-import-contract.fixture.ts";
 import { runModelReimportImpactFixtureAssertions } from "../src/lib/visual-editor/model-reimport-impact.fixture.ts";
 import { runOpenBrushFixtureAssertions } from "../src/lib/visual-editor/open-brush.fixture.ts";
+import { runOpenBrushMaterialCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/open-brush-material.fixture.ts";
 import { runVisualPublishFixtureAssertions } from "../src/lib/visual-editor/publish.fixture.ts";
 import { runSupportReportFixtureAssertions } from "../src/lib/support-report.fixture.ts";
 import { runXriftCliFixtureAssertions } from "../src/lib/xrift-cli.fixture.ts";
@@ -692,6 +693,13 @@ async function runModelMaterialCompilerFixtures() {
  * author's publish dialog.
  */
 async function runStagedWorldTypecheck() {
+  for (const mode of ["primitive", "model"]) {
+    await typecheckWithTemplateOptions(
+      `open-brush-${mode}-only`,
+      runOpenBrushMaterialCompilerFixtureAssertions(mode).overlayFiles,
+      'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
+    );
+  }
   await typecheckWithTemplateOptions(
     "grass-appearance-only",
     compileGrassAppearanceTypecheckWorld().overlayFiles,

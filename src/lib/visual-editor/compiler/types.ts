@@ -6,7 +6,7 @@ import type { SceneDocument } from "../scene-document";
 import type { CompilationProvenance } from "../serialization";
 import type { ResolvedPublishPermissions } from "./publish-permissions";
 
-export const VISUAL_COMPILER_VERSION = "0.7.3" as const;
+export const VISUAL_COMPILER_VERSION = "0.7.4" as const;
 
 export type VisualCompilerDocuments = {
   project: VisualProjectDocument;

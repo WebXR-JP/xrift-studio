@@ -1863,7 +1863,6 @@ function ComponentVisual({
             materialAsset?.kind === "material" ? materialAsset : undefined
           }
           projectPath={projectPath}
-          selected={selected}
         />
       ) : null;
     }
@@ -7086,9 +7085,10 @@ export function SceneViewport({
           ) : null}
           <ViewportShadowQuality enabled={qualityProfile.shadows} />
           <XriftShadowMapSettings type={sceneSettings.shadowMapType} />
-          {qualityProfile.postprocessing ? (
-            <ScenePostprocessing settings={sceneSettings.postprocessing} />
-          ) : null}
+          <ScenePostprocessing
+            settings={sceneSettings.postprocessing}
+            effectsEnabled={qualityProfile.postprocessing}
+          />
           {/* Scene-wide graph writes: the compositor, fog, ambient light, the
               sky, the camera and the screen fade. Mounted only while Play runs,
               so a graph never changes the editing view out from under the
