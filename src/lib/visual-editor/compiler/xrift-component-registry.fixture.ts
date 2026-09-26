@@ -1,8 +1,13 @@
 import {
   XRIFT_COMPONENT_SCHEMA_IDS,
   createXriftComponent,
+  validateXriftComponents,
 } from "../component-registry";
+import { ASSET_MANIFEST_SCHEMA_VERSION, type AssetManifest } from "../asset-manifest";
+import { createPrefabAsset, createPrefabDocument } from "../prefab-document";
+import { SCENE_DOCUMENT_SCHEMA_VERSION, type SceneDocument } from "../scene-document";
 import { compileXriftComponent } from "./xrift-component-registry";
+import { resolvePrefabInstances } from "./prefab-resolver";
 
 const FIXTURE_SOURCE = {
   sceneId: "fixture-scene",
@@ -13,6 +18,7 @@ const FIXTURE_SOURCE = {
 /** Focused, dependency-free assertions for the official XRift component adapters. */
 export function runXriftComponentRegistryFixtureAssertions(): void {
   assertRequiredAuthoringIds();
+  assertPrefabRuntimeIdentifiers();
 
   const skybox = requiredComponent(XRIFT_COMPONENT_SCHEMA_IDS.skybox);
   const compiledSkybox = compileXriftComponent(skybox, "world", FIXTURE_SOURCE);
@@ -187,6 +193,63 @@ export function runXriftComponentRegistryFixtureAssertions(): void {
       compiledPortal.jsx.includes("disabled={false}"),
     "Portal must emit its required destination and documented defaults",
   );
+}
+
+function assertPrefabRuntimeIdentifiers(): void {
+  const component = createXriftComponent(XRIFT_COMPONENT_SCHEMA_IDS.interactable, {
+    componentId: "shared-component-suffix",
+    properties: { id: "authored-button", interactionText: "Press me" },
+  });
+  assert(component, "Prefab Interactable fixture is present");
+  const scene: SceneDocument = {
+    schemaVersion: SCENE_DOCUMENT_SCHEMA_VERSION,
+    sceneId: "prefab-identifier-scene",
+    name: "Prefab identifiers",
+    rootEntityIds: ["source"],
+    entities: {
+      source: {
+        id: "source", name: "Source", parentId: null, children: [], enabled: true,
+        components: [component],
+      },
+    },
+  };
+  const asset = createPrefabAsset("prefab-asset", "Button", "prefabs/button.prefab.json");
+  assert(asset, "Prefab Asset fixture is present");
+  const assets: AssetManifest = {
+    schemaVersion: ASSET_MANIFEST_SCHEMA_VERSION,
+    assets: { [asset.id]: asset },
+  };
+  const created = createPrefabDocument(scene, assets, {
+    prefabId: "button", name: "Button", sourceRootEntityIds: ["source"],
+  });
+  assert(created, "Interactive Prefab can be created");
+  const prefabs = { button: created.document };
+  for (const id of ["instance-a", "instance-b"]) {
+    scene.rootEntityIds.push(id);
+    scene.entities[id] = {
+      id, name: id, parentId: null, children: [], enabled: true,
+      components: [{ id: `${id}-prefab`, type: "prefab-instance", enabled: true, prefabAssetId: asset.id, sourceEntityId: created.document.rootEntityIds[0] }],
+    };
+  }
+  const before = JSON.stringify({ scene, prefabs });
+  const resolved = resolvePrefabInstances(scene, assets, prefabs);
+  assert(resolved.diagnostics.length === 0, "Interactive Prefab expansion succeeds");
+  const identifiers = Object.values(resolved.scene.entities).flatMap((entity) =>
+    entity.components.flatMap((entry) => entry.type === "xrift-component" ? [entry.properties.id] : []),
+  );
+  assert(identifiers.length === 3 && new Set(identifiers).size === 3, "source and two Prefab placements each have distinct Interactable IDs");
+  assert(!validateXriftComponents(resolved.scene, "world").some((entry) => entry.code === "duplicate-xrift-identifier"), "repeated Prefab placements pass identifier validation");
+  assert(resolved.scene.entities.source === scene.entities.source, "Prefab expansion preserves the original Entity identity");
+  assert(JSON.stringify(resolvePrefabInstances(scene, assets, prefabs).scene) === JSON.stringify(resolved.scene), "Prefab identifiers stay stable across Play and publish resolutions");
+  for (const entity of Object.values(resolved.scene.entities)) {
+    for (const entry of entity.components) {
+      if (entry.type !== "xrift-component") continue;
+      assert(entry.properties.interactionText === "Press me", "Prefab interaction label is preserved");
+      const compiled = compileXriftComponent(entry, "world", { sceneId: scene.sceneId, entityId: entity.id, componentId: entry.id });
+      assert(compiled.jsx?.includes(`id={${JSON.stringify(entry.properties.id)}}`), "publish emits the same unique identifier used by Play");
+    }
+  }
+  assert(JSON.stringify({ scene, prefabs }) === before, "resolving and compiling never edit source or Prefab documents");
 }
 
 function assertRequiredAuthoringIds(): void {
