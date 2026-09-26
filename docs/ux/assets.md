@@ -138,6 +138,7 @@
 - OpenBrush マテリアルも通常のマテリアルと同じメッシュの描画 slotへ割り当て可能とする。builtin primitiveでは元GLBに依存しない。brush プリセット、uniform、textureを独立ロードする。
 - editor preview用の公式GLSL / brush textureはprojectへ固定snapshotとして埋め込む。network状態や外部CDN更新に依存せず解決する。安定版templateのresourceを優先する。three-icosa本体にだけ存在する追加resourceを補完する。
 - three-icosaが知らないbrush プリセット、公開resourceがないプリセット、GLSL / texture読込失敗は、該当primitiveだけGLTFLoaderが作成したPBR マテリアルを保持する。他のbrushを含む3Dモデル全体のimportを失敗させない。preview badgeとマテリアル設定へfallback種別・brush名・失敗理由を示す。
+- このPBR fallbackは既存の互換挙動であり、制作時の見た目を再現できた状態とは扱わない。今後の修正では[編集・Play・公開の描画契約](../AGENT_IMPLEMENTATION.md#rendering-parity)に従い、元の素材と描画処理を共有して原因を解消する。
 - 公開変換ではcompiler-owned stagingに固定versionのthree-icosaだけをallowlist付きで追加する。authoring projectのpackage manifestや任意pathへpackageを追加しない。
 
 ### 成功時

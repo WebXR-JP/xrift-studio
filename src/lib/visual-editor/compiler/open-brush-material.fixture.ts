@@ -57,8 +57,8 @@ export function runOpenBrushMaterialCompilerFixtureAssertions(mode: "primitive" 
   assert(result.canStage, `Standalone OpenBrush material must compile: ${JSON.stringify(result.diagnostics)}`);
   const source = result.overlayFiles.find((file) => file.relativePath === "src/World.tsx")?.content ?? "";
   assert(source.includes("<XriftOpenBrushPresetMaterial"), "A catalog brush assigned to a sphere must retain its shader rather than become PBR");
-  if (mode === "primitive") assert(source.includes("<sphereGeometry args={[0.5, 32, 20]} />"),
-    "Publishing must retain the editor sphere's radius and tessellation, which determine its size and shader interpolation");
+  if (mode === "primitive") assert(source.includes('<XriftPrimitiveGeometry primitive="sphere" />'),
+    "Publishing must use the editor's shared primitive geometry for size and shader interpolation");
   else assert(source.includes("sourceMaterial={findOpenBrushSourceMaterial(sourceMaterialIndices, 0, material as Material)}"),
     "Model assignments must select a source material from that model, even in the wildcard resolver");
   assert(source.includes("<XriftOpenBrushModelMaterial") && source.includes("fallback={<CompiledMaterial"), "Primitive and model assignments need separate source semantics and a PBR fallback");

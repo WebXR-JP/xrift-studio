@@ -1,6 +1,7 @@
 import meshColliderStatusSource from "../../../../packages/xrift-studio-runtime/src/mesh-collider-status.ts?raw";
 import meshColliderGeometrySource from "../../../../packages/xrift-studio-runtime/src/mesh-collider-geometry.ts?raw";
 import meshCollidersSource from "../../../../packages/xrift-studio-runtime/src/mesh-colliders.tsx?raw";
+import primitiveGeometrySource from "../../../../packages/xrift-studio-runtime/src/primitive-geometry.tsx?raw";
 import { opacityShaderChunk } from "../material-surface";
 import { createRigidBodyComponent } from "../scene-document";
 import { collectModelInstancingEntities } from "../model-instancing";
@@ -203,6 +204,7 @@ type CompileContext = {
   threeValueImports: Set<string>;
   threeTypeImports: Set<string>;
   supportDeclarations: Map<string, string>;
+  runtimeOverlayFiles: Map<string, CompilerOverlayFile>;
   /** Per compilation: expanded nodes share the same material IDs and resolvers. */
   materialComponentNames: Map<string, string>;
   materialInjectionNames: Map<string, string>;
@@ -326,6 +328,7 @@ export function compileVisualProject(
     ? sceneUsesImageQuadRuntime(resolvedEntryScene.scene)
     : false;
   let runtimeManifestFile: CompilerOverlayFile | undefined;
+  const componentRuntimeFiles = new Map<string, CompilerOverlayFile>();
   let generated: string;
   if (outputMode === "classic-runtime") {
     // Keep the JSX pass as a diagnostic oracle while runtime adapters reach
@@ -366,6 +369,7 @@ export function compileVisualProject(
           assetCopyPlan,
           diagnostics,
           scriptPlan.modules,
+          componentRuntimeFiles,
         )
       : emptySource(documents.project.projectKind);
   }
@@ -396,6 +400,7 @@ export function compileVisualProject(
   ];
   if (runtimeManifestFile) overlayFiles.push(runtimeManifestFile);
   overlayFiles.push(...scriptPlan.overlayFiles);
+  overlayFiles.push(...componentRuntimeFiles.values());
   if (
     outputMode === "classic-jsx" &&
     resolvedEntryScene &&
@@ -1309,6 +1314,7 @@ function generateComponentSource(
   assetCopyPlan: readonly AssetCopyPlanEntry[],
   diagnostics: CompilerDiagnostic[],
   scriptModules: ReadonlyMap<string, EmittedScriptModule> = new Map(),
+  runtimeOverlayFiles: Map<string, CompilerOverlayFile> = new Map(),
 ): string {
   const context: CompileContext = {
     projectKind,
@@ -1326,6 +1332,7 @@ function generateComponentSource(
     threeValueImports: new Set(),
     threeTypeImports: new Set(),
     supportDeclarations: new Map(),
+    runtimeOverlayFiles,
     materialComponentNames: new Map(),
     materialInjectionNames: new Map(),
     assetRuntimeUrls: new Map(
@@ -2981,7 +2988,7 @@ function renderMesh(
   const geometryJsxContent = terrainConstant
     ? renderTerrainGeometry(terrainConstant, context)
     : geometry.kind === "primitive"
-      ? geometryJsx(geometry.primitive)
+      ? geometryJsx(geometry.primitive, context)
       : "";
   const grassJsx =
     geometry.kind === "terrain" && terrainConstant
@@ -6436,14 +6443,11 @@ function unsupportedAssetDiagnostic(
   return { severity, code, message, assetId: asset.id };
 }
 
-function geometryJsx(geometry: PrimitiveGeometry): string {
-  // Three's defaults differ from PrimitiveGeometryView (notably radius 1
-  // instead of 0.5). Preserve size, topology and UV interpolation on publish.
-  if (geometry === "box") return "<boxGeometry args={[1, 1, 1]} />";
-  if (geometry === "sphere") return "<sphereGeometry args={[0.5, 32, 20]} />";
-  if (geometry === "cylinder") return "<cylinderGeometry args={[0.5, 0.5, 1, 32]} />";
-  if (geometry === "cone") return "<coneGeometry args={[0.5, 1, 32]} />";
-  return "<planeGeometry args={[1, 1]} />";
+function geometryJsx(geometry: PrimitiveGeometry, context: CompileContext): string {
+  context.extraImports.add('import { XriftPrimitiveGeometry } from "./xrift-studio/primitive-geometry";');
+  const path = "src/xrift-studio/primitive-geometry.tsx";
+  context.runtimeOverlayFiles.set(path, compilerFile(path, primitiveGeometrySource));
+  return `<XriftPrimitiveGeometry primitive=${JSON.stringify(geometry)} />`;
 }
 
 function generateXriftJson(
