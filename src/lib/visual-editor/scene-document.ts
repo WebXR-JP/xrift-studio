@@ -12,6 +12,7 @@ import {
   type BuiltinPrimitiveCreationDefinition,
 } from "./creation-catalog";
 import { createDocumentId } from "./document-id";
+import { cloneXriftComponentIdentifiers } from "./xrift-component-identity";
 import type { SceneSettings } from "./scene-settings";
 import {
   applyTerrainBrush,
@@ -3260,7 +3261,7 @@ export function cloneEntityHierarchy(
       if (!nextId || componentIds.has(nextId)) return null;
       componentIds.add(nextId);
       componentIdMap[`${sourceId}/${component.id}`] = nextId;
-      components.push(cloneSceneComponent(component, nextId, entityIdMap));
+      components.push(cloneSceneComponent(component, nextId, entityId, entityIdMap));
     }
     entities[entityId] = {
       ...source,
@@ -3359,6 +3360,7 @@ function collectHierarchyEntityIds(
 function cloneSceneComponent(
   component: RegisteredSceneComponent,
   id: string,
+  entityId: string,
   entityIdMap: Readonly<Record<string, string>>,
 ): RegisteredSceneComponent {
   if (component.type === "transform") {
@@ -3426,7 +3428,7 @@ function cloneSceneComponent(
     return {
       ...component,
       id,
-      properties: cloneJsonObject(component.properties),
+      properties: cloneJsonObject(cloneXriftComponentIdentifiers(component, entityId, id)),
       assetReferences: [...component.assetReferences],
       entityReferences: component.entityReferences.map(
         (entityId) => entityIdMap[entityId] ?? entityId,

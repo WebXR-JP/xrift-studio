@@ -19,6 +19,8 @@ export type AssetReferenceKind =
   | "scene-particle"
   | "scene-audio"
   | "scene-prefab"
+  | "scene-script"
+  | "scene-script-asset"
   | "scene-text"
   | "scene-xrift"
   | "material-texture"
@@ -30,6 +32,8 @@ export type AssetReferenceKind =
   | "prefab-particle"
   | "prefab-audio"
   | "prefab-prefab"
+  | "prefab-script"
+  | "prefab-script-asset"
   | "prefab-text"
   | "prefab-xrift";
 
@@ -114,6 +118,8 @@ const ASSET_REFERENCE_LABELS: Record<AssetReferenceKind, string> = {
   "scene-particle": "パーティクルの放出",
   "scene-audio": "音源",
   "scene-prefab": "プレハブの配置",
+  "scene-script": "Script Component",
+  "scene-script-asset": "Scriptの素材参照",
   "scene-text": "テキストの背景",
   "scene-xrift": "XRiftのComponent",
   "material-texture": "マテリアルのテクスチャ",
@@ -125,6 +131,8 @@ const ASSET_REFERENCE_LABELS: Record<AssetReferenceKind, string> = {
   "prefab-particle": "プレハブ内のパーティクルの放出",
   "prefab-audio": "プレハブ音源",
   "prefab-prefab": "入れ子のプレハブ",
+  "prefab-script": "プレハブ内のScript Component",
+  "prefab-script-asset": "プレハブ内のScriptの素材参照",
   "prefab-text": "プレハブ内テキストの背景",
   "prefab-xrift": "プレハブ内のXRiftのComponent",
 };
@@ -448,6 +456,8 @@ type ComponentReferenceSuffix =
   | "particle"
   | "audio"
   | "prefab"
+  | "script"
+  | "script-asset"
   | "text"
   | "image"
   | "spot-map"
@@ -573,6 +583,31 @@ function describeComponentReferences(
   component: RegisteredSceneComponent,
   assetId: string,
 ): ComponentReferenceMatch[] {
+  if (component.type === "script") {
+    // A Script cannot run without its source Asset, even when its Component or
+    // Entity is currently disabled. Include the Component ID so two Scripts on
+    // the same Entity remain separately selectable in the delete dialog.
+    if (component.scriptAssetId === assetId) {
+      return [{
+        suffix: "script",
+        detail: `Script: ${component.id}`,
+        detachEffect: "remove-component",
+        detach: () => null,
+      }];
+    }
+    if (component.assetReferences.includes(assetId)) {
+      return [{
+        suffix: "script-asset",
+        detail: `Script Asset: ${component.id}`,
+        detachEffect: "clear-slot",
+        detach: (current) => current.type === "script"
+          ? { ...current, assetReferences: current.assetReferences.filter((id) => id !== assetId) }
+          : current,
+      }];
+    }
+    return [];
+  }
+
   if (component.type === "collider" && component.shape === "mesh" && component.collisionModelAssetId === assetId) {
     return [{ suffix: "collision-model", detail: "当たり判定の軽量メッシュ", detachEffect: "clear-slot",
       detach: (current) => {
