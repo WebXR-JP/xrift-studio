@@ -1,5 +1,4 @@
 import {
-  ASSET_MANIFEST_SCHEMA_VERSION,
   normalizeTextureImportSettings,
   type TextureAsset,
   type TextureImportSettingsPatch,
@@ -19,7 +18,6 @@ import {
   resolveOutputFormat,
   resolveTargetSize,
   revertTextureOptimization,
-  summarizeTexturePublishConversions,
 } from "./texture-processing";
 
 /** Canvasを触らずに、変換の可否と変換後の見積もりだけを確かめる。 */
@@ -31,9 +29,33 @@ export function runTextureProcessingFixtureAssertions(): void {
   assertProcessedPath();
   assertKtx2Quality();
   assertPowerOfTwo();
+  assertKtx2BlockDimensions();
   assertNonDestructiveRevert();
   assertPublishConversion();
   assertOptimizedReprocessing();
+}
+
+function assertKtx2BlockDimensions(): void {
+  const aligned = resolveTargetSize(725, 1024, 1024, false, "ktx2");
+  assert(aligned.width === 724 && aligned.height === 1024,
+    "KTX2 base dimensions must cover complete 4x4 GPU blocks");
+  const raster = resolveTargetSize(725, 1024, 1024, false, "png");
+  assert(raster.width === 725 && raster.height === 1024,
+    "Block alignment must not resize ordinary raster output");
+  const tiny = resolveTargetSize(1, 2, null, false, "ktx2");
+  assert(tiny.width === 4 && tiny.height === 4, "A tiny KTX2 must still fill one GPU block");
+  const bounded = resolveTargetSize(1030, 1030, 1023, false, "ktx2");
+  assert(bounded.width === 1020 && bounded.height === 1020,
+    "KTX2 rounding must not exceed the requested maximum size");
+  const asset = textureAsset(
+    { sourceFormat: "png", width: 725, height: 1024 },
+    { resize: { mode: "max-size", maxSize: 1024 }, compression: { format: "ktx2" } },
+  );
+  const source = JSON.stringify(asset);
+  const plan = planTextureProcessing(asset);
+  assert(plan.supported && plan.targetWidth === 724 && plan.targetHeight === 1024,
+    "Inspector processing plan must match the encoded KTX2 dimensions");
+  assert(JSON.stringify(asset) === source, "Planning KTX2 alignment must preserve the source asset");
 }
 
 function assertOptimizedReprocessing(): void {
@@ -58,8 +80,7 @@ function assertOptimizedReprocessing(): void {
 }
 
 /**
- * 未反映のImport設定は、原本を書き換えずに公開時へ持ち越せる必要がある。
- * ここが壊れると、作者は公開のたびに原本の書き出しを強いられる。
+ * 加工設定は明示的に適用できるが、公開形式は現在の画像に一致する。
  */
 function assertPublishConversion(): void {
   const settled = textureAsset(
@@ -68,7 +89,7 @@ function assertPublishConversion(): void {
   );
   assert(
     planTextureConversion(settled) === null,
-    "A settled Texture recipe must not schedule a publish-time conversion",
+    "A settled Texture recipe must not schedule a conversion",
   );
   assert(
     !isPublishedAsKtx2(settled),
@@ -91,12 +112,18 @@ function assertPublishConversion(): void {
       conversion.maxSize === 1024 &&
       conversion.quality === 80 &&
       conversion.srgb,
-    "An unapplied Texture recipe did not produce a publish-time conversion",
+    "An unapplied Texture recipe must remain available for explicit processing",
   );
   assert(
-    isPublishedAsKtx2(pending),
-    "A Texture converted to KTX2 at publish time was not reported as KTX2",
+    !isPublishedAsKtx2(pending),
+    "An unapplied KTX2 recipe must not change a published PNG's loader",
   );
+  const applied = textureAsset(
+    { sourceFormat: "ktx2", width: 1024, height: 1024 },
+    { compression: { format: "source" } },
+    { source: { kind: "project", relativePath: "assets/textures/applied.ktx2" } },
+  );
+  assert(isPublishedAsKtx2(applied), "An existing KTX2 must keep its KTX2 loader");
 
   // すでに最大解像度へ収まっている原本は、作り直しても同じ絵にしかならない。
   const alreadyFitting = textureAsset(
@@ -119,29 +146,6 @@ function assertPublishConversion(): void {
     "An SVG source must not be scheduled for conversion",
   );
 
-  const summary = summarizeTexturePublishConversions({
-    schemaVersion: ASSET_MANIFEST_SCHEMA_VERSION,
-    assets: {
-      [settled.id]: settled,
-      "texture-pending": { ...pending, id: "texture-pending", name: "Pending" },
-      "texture-unconvertible": {
-        ...unconvertible,
-        id: "texture-unconvertible",
-        name: "Logo",
-      },
-    },
-  });
-  assert(
-    summary.converted.length === 1 &&
-      summary.converted[0].assetId === "texture-pending" &&
-      summary.converted[0].from === "4096 × 4096・PNG" &&
-      summary.converted[0].to === "1024 × 1024・KTX2",
-    "The publish conversion summary did not describe the converted Texture",
-  );
-  assert(
-    summary.ignored.length === 1 && summary.ignored[0].assetId === "texture-unconvertible",
-    "The publish conversion summary did not report the unapplicable recipe",
-  );
 }
 
 /**

@@ -103,6 +103,7 @@ import { runEditorDragDataFixture } from "../src/components/visual-editor/editor
 import { runEditorLayoutFixtureAssertions } from "../src/components/visual-editor/editor-layout.fixture.ts";
 import { runSceneViewportQualityFixtureAssertions } from "../src/components/visual-editor/scene-viewport-quality.fixture.ts";
 import { runSceneVramEstimateFixtureAssertions } from "../src/components/visual-editor/scene-vram-estimate.fixture.ts";
+import { runVramEstimateFixtureAssertions } from "../src/lib/visual-editor/vram-estimate.fixture.ts";
 import { runWorldPlaySpawnFixtureAssertions } from "../src/components/visual-editor/world-play-spawn.fixture.ts";
 import { runEditorLibraryDragFixture } from "../src/components/visual-editor/editor-library-drag.fixture.ts";
 import { runMaterialDragFixtureAssertions } from "../src/components/visual-editor/material-drag.fixture.ts";
@@ -126,6 +127,8 @@ import { runModelHierarchyFixtureAssertions } from "../src/lib/visual-editor/mod
 import { runModelImportContractFixtureAssertions } from "../src/lib/visual-editor/model-import-contract.fixture.ts";
 import { runModelReimportImpactFixtureAssertions } from "../src/lib/visual-editor/model-reimport-impact.fixture.ts";
 import { runOpenBrushFixtureAssertions } from "../src/lib/visual-editor/open-brush.fixture.ts";
+import { runOpenBrushMaterialCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/open-brush-material.fixture.ts";
+import { runPrimitiveGeometryCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/primitive-geometry.fixture.ts";
 import { runVisualPublishFixtureAssertions } from "../src/lib/visual-editor/publish.fixture.ts";
 import { runSupportReportFixtureAssertions } from "../src/lib/support-report.fixture.ts";
 import { runXriftCliFixtureAssertions } from "../src/lib/xrift-cli.fixture.ts";
@@ -306,9 +309,13 @@ try {
   assert(
     xriftJson.world?.title === prototype.project.metadata.title &&
       xriftJson.world.ignore.includes("**/index.html") &&
-      xriftJson.world.ignore.includes("**/__federation_shared_@react-three/drei-*.js") &&
+      !xriftJson.world.ignore.includes("**/__federation_shared_@react-three/drei-*.js") &&
+      !xriftJson.world.ignore.includes("**/__federation_shared_three/addons/**") &&
+      !xriftJson.world.ignore.includes("**/hls-*.js") &&
+      xriftJson.world.ignore.includes("**/*.d.ts") &&
+      xriftJson.world.ignore.includes("**/*.d.ts.map") &&
       xriftJson.world.ignore.includes("**/.DS_Store"),
-    `xrift.json must keep the template's upload ignore rules beside the compiler's, got ${JSON.stringify(xriftJson.world?.ignore)}`,
+    `xrift.json must preserve metadata exclusions without dropping executable module dependencies, got ${JSON.stringify(xriftJson.world?.ignore)}`,
   );
 
   // The Runtime JSON output still exists for the browser upload's prebuilt
@@ -363,6 +370,8 @@ try {
     ["model download optimization", runModelDownloadFixtureAssertions],
     ["model instancing", runModelInstancingFixtureAssertions],
     ["visual compiler", runVisualCompilerFixtureAssertions],
+    ["primitive geometry compiler", runPrimitiveGeometryCompilerFixtureAssertions],
+    ["OpenBrush assigned material compiler", runOpenBrushMaterialCompilerFixtureAssertions],
     ["runtime package compatibility", runRuntimePackageFixtureAssertions],
     ["model material compiler", runModelMaterialCompilerFixtures],
     ["terrain", runTerrainFixtureAssertions],
@@ -450,6 +459,7 @@ try {
     ["browser publication persistence", runBrowserPublicationFixtureAssertions],
     ["classic project import", runClassicProjectImportFixtureAssertions],
     ["texture processing", runTextureProcessingFixtureAssertions],
+    ["current texture VRAM estimate", runVramEstimateFixtureAssertions],
     ["texture import defaults", runTextureImportDefaultsFixtureAssertions],
     ["asset import transaction", runAssetImportTransactionFixtureAssertions],
     ["model optimization", runModelOptimizationFixtureAssertions],
@@ -687,6 +697,18 @@ async function runModelMaterialCompilerFixtures() {
  */
 async function runStagedWorldTypecheck() {
   await typecheckWithTemplateOptions(
+    "primitive-geometry-only",
+    runPrimitiveGeometryCompilerFixtureAssertions().overlayFiles,
+    'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
+  );
+  for (const mode of ["primitive", "model"]) {
+    await typecheckWithTemplateOptions(
+      `open-brush-${mode}-only`,
+      runOpenBrushMaterialCompilerFixtureAssertions(mode).overlayFiles,
+      'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
+    );
+  }
+  await typecheckWithTemplateOptions(
     "grass-appearance-only",
     compileGrassAppearanceTypecheckWorld().overlayFiles,
     'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
@@ -899,7 +921,7 @@ const root = path.join(process.cwd(), name);
 await mkdir(path.join(root, "src"), { recursive: true });
 await mkdir(path.join(root, "public"), { recursive: true });
 await writeFile(path.join(root, "package.json"), JSON.stringify({ name, private: true, type: "module", scripts: { build: "vite build" }, dependencies: { react: "^19.0.0", three: "^0.185.0" } }, null, 2) + "\\n");
-await writeFile(path.join(root, "xrift.json"), JSON.stringify({ [kind]: { ignore: ["**/index.html", "**/__federation_shared_@react-three/drei-*.js"] } }) + "\\n");
+await writeFile(path.join(root, "xrift.json"), JSON.stringify({ [kind]: { ignore: ["**/index.html", "**/__federation_shared_@react-three/drei-*.js", "**/__federation_shared_three/addons/**", "**/hls-*.js"] } }) + "\\n");
 await writeFile(path.join(root, "src", kind === "world" ? "World.tsx" : "Item.tsx"), "export {};\\n");
 await writeFile(path.join(root, "README.md"), "# Fixture\\n");
 `,

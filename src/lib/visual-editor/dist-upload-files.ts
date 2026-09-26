@@ -44,29 +44,16 @@ export async function collectDistUploadFiles(
   ignorePatterns: readonly string[],
   signal?: AbortSignal,
 ): Promise<DistCollectionResult> {
-  const paths = await listFilesRecursively(projectPath, distRelativePath, signal);
-  if (paths.length === 0) {
-    throw new DistCollectionError(
-      `${distRelativePath} にファイルがありません。ビルドが完了しているか確認してください。`,
-    );
-  }
-
-  // Paths are matched relative to dist, matching how the CLI reads them.
-  const relative = paths.map((path) => path.slice(distRelativePath.length + 1));
-  const kept = new Set(filterFiles(relative, [...ignorePatterns]));
-  const ignoredPaths = relative.filter((path) => !kept.has(path));
-
-  if (kept.size > MAX_FILE_COUNT) {
-    throw new DistCollectionError(
-      `アップロード対象が${kept.size}件あり、上限の${MAX_FILE_COUNT}件を超えています。`,
-    );
-  }
+  const { paths, ignoredPaths } = await listDistUploadPaths(
+    projectPath,
+    distRelativePath,
+    ignorePatterns,
+    signal,
+  );
 
   const files: UploadFile[] = [];
   let totalBytes = 0;
-  for (const remotePath of [...kept].sort((left, right) =>
-    left.localeCompare(right),
-  )) {
+  for (const remotePath of paths) {
     if (signal?.aborted) {
       throw new DOMException("The operation was aborted", "AbortError");
     }
@@ -89,6 +76,37 @@ export async function collectDistUploadFiles(
   }
 
   return { files, totalBytes, ignoredPaths };
+}
+
+/** Inspect the same filtered file set before either CLI or SDK transfer. */
+export async function listDistUploadPaths(
+  projectPath: string,
+  distRelativePath: string,
+  ignorePatterns: readonly string[],
+  signal?: AbortSignal,
+): Promise<{ paths: string[]; ignoredPaths: string[] }> {
+  const paths = await listFilesRecursively(projectPath, distRelativePath, signal);
+  if (paths.length === 0) {
+    throw new DistCollectionError(
+      `${distRelativePath} にファイルがありません。ビルドが完了しているか確認してください。`,
+    );
+  }
+
+  // Paths are matched relative to dist, matching how the CLI reads them.
+  const relative = paths.map((path) => path.slice(distRelativePath.length + 1));
+  const kept = new Set(filterFiles(relative, [...ignorePatterns]));
+  const ignoredPaths = relative.filter((path) => !kept.has(path));
+
+  if (kept.size > MAX_FILE_COUNT) {
+    throw new DistCollectionError(
+      `アップロード対象が${kept.size}件あり、上限の${MAX_FILE_COUNT}件を超えています。`,
+    );
+  }
+
+  return {
+    paths: [...kept].sort((left, right) => left.localeCompare(right)),
+    ignoredPaths,
+  };
 }
 
 async function listFilesRecursively(

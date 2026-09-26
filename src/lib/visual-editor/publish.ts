@@ -1,7 +1,6 @@
 import { COMPILER_REACT_PACKAGE_SPECS } from "./compiler/runtime-packages";
 import {
   XriftClient,
-  filterFiles,
   parseItemConfig,
   parseWorldConfig,
   type CameraConfig,
@@ -11,7 +10,7 @@ import {
 } from "@xrift/sdk";
 import type { CompilerPublicationMetadata, ProjectKind } from "../tauri";
 import { tauri } from "../tauri";
-import { collectDistUploadFiles } from "./dist-upload-files";
+import { collectDistUploadFiles, listDistUploadPaths } from "./dist-upload-files";
 import {
   COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
   CommandSpawnError,
@@ -20,17 +19,11 @@ import {
   type RunResult,
 } from "../xrift-cli";
 import type {
-  AssetCopyPlanEntry,
   VisualCompileResult,
   VisualCompilerDocuments,
 } from "./compiler";
 import { compileVisualProject, compilerStagingDirectoryName } from "./compiler";
 import { loadCompilerBundledAssetFiles } from "./compiler-bundled-assets";
-import {
-  assetBytesToDataUrl,
-  convertPublishedTextureBytes,
-  readProjectAssetBytes,
-} from "./texture-processing";
 
 export type VisualPublishPipelineStage =
   | "saving"
@@ -370,54 +363,6 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/**
- * 未反映のTexture Import設定を、公開用のコピーにだけ適用する。
- *
- * 制作データのファイルは読むだけで、書き換えない。変換した画像はコピー計画から
- * 外してステージングへ直接書き込むので、原本を軽くしていなくても公開結果は
- * 設定どおりの解像度・形式になる。
- */
-async function convertStagedTextures(
-  authoringProjectPath: string,
-  assetCopyPlan: readonly AssetCopyPlanEntry[],
-  signal: AbortSignal,
-  report: (progress: VisualPublishPipelineProgress) => void,
-): Promise<{ files: { targetRelativePath: string; dataUrl: string }[] }> {
-  const targets = assetCopyPlan.filter((entry) => entry.textureConversion);
-  if (targets.length === 0) return { files: [] };
-
-  const files: { targetRelativePath: string; dataUrl: string }[] = [];
-  for (const [index, entry] of targets.entries()) {
-    throwIfAborted(signal);
-    const conversion = entry.textureConversion;
-    if (!conversion) continue;
-    report({
-      stage: "compiling",
-      label: "テクスチャを公開用に変換しています",
-      detail: `${index + 1} / ${targets.length}枚目。制作データの原本はそのまま残ります。`,
-      percent: 29 + Math.round((index / targets.length) * 10),
-      cancelSafe: true,
-    });
-    let bytes: Uint8Array;
-    try {
-      bytes = await convertPublishedTextureBytes(
-        await readProjectAssetBytes(authoringProjectPath, entry.sourceRelativePath),
-        conversion,
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(
-        `テクスチャ「${entry.assetId}」を公開用に変換できませんでした。${message}`,
-      );
-    }
-    files.push({
-      targetRelativePath: entry.targetRelativePath,
-      dataUrl: await assetBytesToDataUrl(bytes, conversion.mimeType),
-    });
-  }
-  return { files };
-}
-
 export async function materializeVisualCompilation(
   authoringProjectPath: string,
   compilation: VisualCompileResult,
@@ -468,18 +413,15 @@ export async function materializeVisualCompilation(
     authoringProjectPath,
     paths.rootPath,
   ]);
+  await tauri.initializeCompilerStaging(
+    authoringProjectPath,
+    compilation.stagingPlan.stagingDirectoryName,
+  );
 
   const bundledOverlayFiles = await loadCompilerBundledAssetFiles(
     compilation.stagingPlan.bundledAssetCopyPlan,
     signal,
   );
-  const convertedTextures = await convertStagedTextures(
-    authoringProjectPath,
-    compilation.stagingPlan.assetCopyPlan,
-    signal,
-    report,
-  );
-  const binaryOverlayFiles = [...bundledOverlayFiles, ...convertedTextures.files];
   let staged: Awaited<ReturnType<typeof tauri.applyCompilerStaging>>;
   try {
     staged = await tauri.applyCompilerStaging(
@@ -489,9 +431,8 @@ export async function materializeVisualCompilation(
         relativePath: file.relativePath,
         content: file.content,
       })),
-      binaryOverlayFiles,
+      bundledOverlayFiles,
       compilation.stagingPlan.assetCopyPlan
-        .filter((entry) => !entry.textureConversion)
         .map((entry) => ({
           sourceRelativePath: entry.sourceRelativePath,
           targetRelativePath: entry.targetRelativePath,
@@ -647,6 +588,7 @@ export async function publishVisualProject({
       stagingPath,
       stagedConfig.distDir,
       stagedConfig.ignore,
+      signal,
     );
 
     throwIfAborted(signal);
@@ -946,14 +888,21 @@ export function parseStagedXriftConfig(
 export function assertCompiledModuleEntry(
   files: readonly { remotePath: string }[],
 ): void {
-  const hasEntry = files.some(
-    (file) =>
-      file.remotePath.replace(/\\/g, "/").replace(/^\.\//, "") ===
-      "remoteEntry.js",
+  const paths = files.map((file) =>
+    file.remotePath.replace(/\\/g, "/").replace(/^\.\//, ""),
   );
-  if (!hasEntry) {
+  if (!paths.includes("remoteEntry.js")) {
     throw new Error(
       "公開用ビルドにremoteEntry.jsがありません。XRiftが読み込むModule Federationの生成物を確認してください。",
+    );
+  }
+  // XRift serves files directly under the publication version. A scoped
+  // federation chunk such as @scope/library.js builds successfully but its
+  // subdirectory cannot be served after upload.
+  const nestedPath = paths.find((path) => path.includes("/"));
+  if (nestedPath) {
+    throw new Error(
+      `公開用ビルドにサブフォルダー内のファイル「${nestedPath}」があります。XRiftで読み込めるよう、すべての公開用ファイルをdist直下に生成してください。`,
     );
   }
 }
@@ -962,21 +911,11 @@ async function assertStagedModuleEntry(
   stagingPath: string,
   distDir: string,
   ignorePatterns: readonly string[],
+  signal?: AbortSignal,
 ): Promise<void> {
-  let entries: Awaited<ReturnType<typeof tauri.listFiles>>;
-  try {
-    entries = await tauri.listFiles(stagingPath, distDir);
-  } catch (error) {
-    throw new Error(
-      `公開用ビルドの${distDir}を確認できませんでした: ${error}`,
-    );
-  }
-  const rootFiles = entries
-    .filter((entry) => !entry.isDir)
-    .map((entry) => entry.name);
-  const uploadableRootFiles = filterFiles(rootFiles, [...ignorePatterns]);
+  const { paths } = await listDistUploadPaths(stagingPath, distDir, ignorePatterns, signal);
   assertCompiledModuleEntry(
-    uploadableRootFiles.map((remotePath) => ({ remotePath })),
+    paths.map((remotePath) => ({ remotePath })),
   );
 }
 

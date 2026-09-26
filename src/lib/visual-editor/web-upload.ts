@@ -16,7 +16,6 @@ import type { VisualCompilerDocuments } from "./compiler";
 import { loadCompilerBundledAssetBytes } from "./compiler-bundled-assets";
 import { VisualCompilationError, type XriftUploadResult } from "./publish";
 import type { VisualPublishPipelineProgress } from "./publish";
-import { convertPublishedTextureBytes } from "./texture-codec";
 
 /**
  * Browser upload path.
@@ -251,12 +250,10 @@ async function prepareWebUpload(
     // Compiler targets are rooted at `public/`, which the template's build
     // would normally flatten into the bundle root.
     const targetPath = entry.targetRelativePath.replace(/^public\//, "");
-    // 未反映のTexture Import設定は、ここで配るバイト列にだけ適用する。
-    // プロジェクトの原本は読むだけで書き換えない。
+    // Publish the same asset bytes the editor renders, without applying recipes.
     const sourceBytes = await request.readAssetBytes(entry.sourceRelativePath);
-    const bytes = await convertPublishedTextureBytes(sourceBytes, entry.textureConversion);
     throwIfAborted(request.signal);
-    files.set(targetPath, bytes);
+    files.set(targetPath, sourceBytes);
   }
 
   // The desktop staging path copies these from Studio's own bundle before

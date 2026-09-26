@@ -20,10 +20,12 @@ export async function runClassicExportFixtureAssertions(): Promise<void> {
   const targetPath = "C:/fixture/classic-world";
   const authoringPath = "C:/fixture/visual-world";
   const originalEntry = "export const World = () => <group name=\"hand-written\" />;\n";
+  const originalViteConfig = "export default { build: { target: 'es2022' } };\n";
   const files = new Map<string, string>([
     [key(targetPath, "package.json"), `${JSON.stringify({ name: "fixture-classic", private: true, dependencies: { react: "19.2.8", "react-dom": "19.2.8", "@xrift/world-components": "^0.55.0" } }, null, 2)}\n`],
     [key(targetPath, "xrift.json"), "{}\n"],
     [key(targetPath, "src/World.tsx"), originalEntry],
+    [key(targetPath, "vite.config.ts"), originalViteConfig],
     [key(targetPath, "node_modules/@xrift/world-components/package.json"), JSON.stringify({ version: "0.55.0" })],
   ]);
   for (const name of ["react", "react-dom"]) {
@@ -108,6 +110,10 @@ export async function runClassicExportFixtureAssertions(): Promise<void> {
     assert(
       files.get(key(targetPath, "src/World.tsx")) === originalEntry,
       "component mode modified the hand-written World entry",
+    );
+    assert(
+      files.get(key(targetPath, "vite.config.ts")) === originalViteConfig,
+      "exporting into an existing code project must preserve its Vite configuration",
     );
     assert(
       componentResult.importSnippet?.includes("<XriftStudioScene />"),
@@ -254,6 +260,13 @@ export async function runClassicExportFixtureAssertions(): Promise<void> {
     // emits its own module under scripts/, and a texture is copied to the
     // world root. Everything the Scene imports has to land beside it.
     const richDocuments = createStagedTypecheckWorldDocuments();
+    const pendingTexture = Object.values(richDocuments.assets.assets).find(
+      (asset) => asset.kind === "texture" && asset.source.kind === "project" &&
+        asset.source.relativePath.endsWith(".png"),
+    );
+    assert(pendingTexture?.kind === "texture", "the fixture needs a PNG texture");
+    pendingTexture.importSettings.resize = { mode: "max-size", maxSize: 256, powerOfTwo: true };
+    pendingTexture.importSettings.compression = { format: "ktx2", quality: 80 };
     const richExportId = safeSegment(richDocuments.project.projectId);
     files.set(
       key(targetPath, "package.json"),
@@ -316,9 +329,10 @@ export async function runClassicExportFixtureAssertions(): Promise<void> {
     );
     assert(
       [...files.keys()].some((path) =>
-        path.startsWith(`${key(targetPath, "public/xrift-studio-")}`) && path.endsWith(".png"),
+        path.startsWith(`${key(targetPath, "public/xrift-studio-")}`) && path.endsWith(".png") &&
+          files.get(path) === "data:application/octet-stream;base64,AA==",
       ),
-      "the texture was not copied to the world root",
+      "export must copy the original PNG bytes even with a pending KTX2 recipe",
     );
     assert(
       !files.has(key(targetPath, `public/xrift-studio/${richExportId}/runtime.json`)) &&

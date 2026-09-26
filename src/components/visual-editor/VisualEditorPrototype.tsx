@@ -674,7 +674,7 @@ type EditorCommandPayload = {
 };
 
 /**
- * Editorの外（公開ダイアログの一括変換・最適化）で更新されたAsset Manifestを
+ * Editorの外（公開ダイアログの最適化）で更新されたAsset Manifestを
  * Editorの履歴へ取り込む。`expectedAssets` が現在のManifestと参照ごと一致する
  * ときだけ適用し、途中で編集が入っていた場合は何もせずfalseを返す。
  */
@@ -8298,7 +8298,7 @@ export function VisualEditorPrototype({
           feedback?.assetId === assetId ? null : feedback,
         );
         setNotice(
-          "テクスチャ読み込み設定を更新しました。公開時にこの設定で変換します。編集画面の表示にも適用するには「この設定で画像を書き出す」を使います",
+          "テクスチャ読み込み設定を更新しました。「この設定で画像を書き出す」で適用し、見た目を確認してください",
         );
         return touchProject({ ...current, assets });
       });
@@ -8559,7 +8559,7 @@ export function VisualEditorPrototype({
     [editorMode, projectPath],
   );
 
-  // 公開ダイアログの一括変換・最適化はEditorの外（App）で走り、ディスクと
+  // 公開ダイアログの最適化はEditorの外（App）で走り、ディスクと
   // 公開バンドルだけを更新していた。ここで受け口を登録して、変換後のManifestを
   // 同じ操作の中で履歴へ取り込む。これが無いと、シーンは変換前の画像を見せ
   // 続け、次の保存が変換をManifestごと巻き戻してしまう。
@@ -11639,7 +11639,7 @@ export function VisualEditorPrototype({
                   ? "公開情報とサムネイルを確認してXRiftへ送信"
                   : compilationFresh
                   ? "公開内容を確認してXRiftへ送信"
-                  : "最新の編集内容は公開画面で自動的に保存・変換されます",
+                  : "公開画面で最新の編集内容を保存し、公開データを作成します",
                 "project.publish",
                 shortcutLabel("project.publish"),
               )}

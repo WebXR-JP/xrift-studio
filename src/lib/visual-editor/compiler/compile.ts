@@ -1,6 +1,7 @@
 import meshColliderStatusSource from "../../../../packages/xrift-studio-runtime/src/mesh-collider-status.ts?raw";
 import meshColliderGeometrySource from "../../../../packages/xrift-studio-runtime/src/mesh-collider-geometry.ts?raw";
 import meshCollidersSource from "../../../../packages/xrift-studio-runtime/src/mesh-colliders.tsx?raw";
+import primitiveGeometrySource from "../../../../packages/xrift-studio-runtime/src/primitive-geometry.tsx?raw";
 import { opacityShaderChunk } from "../material-surface";
 import { createRigidBodyComponent } from "../scene-document";
 import { collectModelInstancingEntities } from "../model-instancing";
@@ -29,12 +30,7 @@ import {
   type PrimitiveGeometry,
   type SceneAsset,
 } from "../asset-manifest";
-import {
-  isConvertibleTextureSourceFormat,
-  isPublishedAsKtx2,
-  planTextureConversion,
-  textureOutputExtension,
-} from "../texture-conversion";
+import { isPublishedAsKtx2 } from "../texture-conversion";
 import { getBuiltinPrimitiveCreation } from "../creation-catalog";
 import { PHYSICAL_MATERIAL_EXTENSION_NAMES } from "../material-extension-registry";
 import {
@@ -117,6 +113,7 @@ import {
   type SourceDocumentHash,
 } from "../serialization";
 import { sha256Utf8 } from "./hash";
+import { generatePublicationViteConfig } from "./publication-vite-config";
 import { collectRequiredScriptAssetIds } from "../scripting/script-schedule";
 import { createScriptAssetRuntimeDescriptorMap } from "../scripting/asset-runtime";
 import {
@@ -144,7 +141,7 @@ import {
   OPEN_BRUSH_PUBLISH_PERMISSION,
   OPEN_BRUSH_RUNTIME_PACKAGE,
 } from "../open-brush";
-import { createOpenBrushRuntimeOverlayFile } from "./open-brush-emit";
+import { createOpenBrushRuntimeOverlayFile, createOpenBrushPresetOverlayFiles } from "./open-brush-emit";
 import {
   createScenePostprocessingBridgeOverlayFiles,
   createScenePostprocessingOverlayFile,
@@ -207,6 +204,7 @@ type CompileContext = {
   threeValueImports: Set<string>;
   threeTypeImports: Set<string>;
   supportDeclarations: Map<string, string>;
+  runtimeOverlayFiles: Map<string, CompilerOverlayFile>;
   /** Per compilation: expanded nodes share the same material IDs and resolvers. */
   materialComponentNames: Map<string, string>;
   materialInjectionNames: Map<string, string>;
@@ -330,6 +328,7 @@ export function compileVisualProject(
     ? sceneUsesImageQuadRuntime(resolvedEntryScene.scene)
     : false;
   let runtimeManifestFile: CompilerOverlayFile | undefined;
+  const componentRuntimeFiles = new Map<string, CompilerOverlayFile>();
   let generated: string;
   if (outputMode === "classic-runtime") {
     // Keep the JSX pass as a diagnostic oracle while runtime adapters reach
@@ -370,6 +369,7 @@ export function compileVisualProject(
           assetCopyPlan,
           diagnostics,
           scriptPlan.modules,
+          componentRuntimeFiles,
         )
       : emptySource(documents.project.projectKind);
   }
@@ -396,9 +396,11 @@ export function compileVisualProject(
   const overlayFiles: CompilerOverlayFile[] = [
     compilerFile(sourcePath, generated),
     compilerFile("xrift.json", xriftJson, "metadata"),
+    compilerFile("vite.config.ts", generatePublicationViteConfig(documents.project.projectKind)),
   ];
   if (runtimeManifestFile) overlayFiles.push(runtimeManifestFile);
   overlayFiles.push(...scriptPlan.overlayFiles);
+  overlayFiles.push(...componentRuntimeFiles.values());
   if (
     outputMode === "classic-jsx" &&
     resolvedEntryScene &&
@@ -503,6 +505,9 @@ export function compileVisualProject(
   // published world never depends on which runtime shape it was built with.
   if (usesOpenBrushModels) {
     overlayFiles.push(createOpenBrushRuntimeOverlayFile());
+    if (Object.values(publishedAssets.assets).some((asset) => asset.kind === "material" && asset.shader?.kind === "openbrush")) {
+      overlayFiles.push(...createOpenBrushPresetOverlayFiles());
+    }
   }
   // The compositor module ships whenever the Scene composites at all.
   // The compositor ships when the Scene asks for it, and also when a graph can
@@ -533,7 +538,6 @@ export function compileVisualProject(
     diagnoseUnbundledTextFonts(resolvedEntryScene.scene, diagnostics);
   }
   diagnoseUnsupportedAssets(documents.assets, diagnostics);
-  diagnoseIgnoredTextureRecipes(documents.assets, assetCopyPlan, diagnostics);
   diagnoseInteractivityRuntimeSupport(documents.assets, diagnostics);
   const uniqueDiagnostics = deduplicateDiagnostics(diagnostics);
   const provenanceFile = compilerFile(
@@ -720,8 +724,8 @@ function createPublishedVendorAssetCopyPlan(
 function projectUsesOpenBrushModels(assets: AssetManifest): boolean {
   return Object.values(assets.assets).some(
     (asset) =>
-      asset.kind === "model" &&
-      isOpenBrushModelMetadata(asset.importMetadata?.openBrush),
+      (asset.kind === "model" && isOpenBrushModelMetadata(asset.importMetadata?.openBrush)) ||
+      (asset.kind === "material" && asset.shader?.kind === "openbrush"),
   );
 }
 
@@ -1310,6 +1314,7 @@ function generateComponentSource(
   assetCopyPlan: readonly AssetCopyPlanEntry[],
   diagnostics: CompilerDiagnostic[],
   scriptModules: ReadonlyMap<string, EmittedScriptModule> = new Map(),
+  runtimeOverlayFiles: Map<string, CompilerOverlayFile> = new Map(),
 ): string {
   const context: CompileContext = {
     projectKind,
@@ -1327,6 +1332,7 @@ function generateComponentSource(
     threeValueImports: new Set(),
     threeTypeImports: new Set(),
     supportDeclarations: new Map(),
+    runtimeOverlayFiles,
     materialComponentNames: new Map(),
     materialInjectionNames: new Map(),
     assetRuntimeUrls: new Map(
@@ -2982,7 +2988,7 @@ function renderMesh(
   const geometryJsxContent = terrainConstant
     ? renderTerrainGeometry(terrainConstant, context)
     : geometry.kind === "primitive"
-      ? geometryJsx(geometry.primitive)
+      ? geometryJsx(geometry.primitive, context)
       : "";
   const grassJsx =
     geometry.kind === "terrain" && terrainConstant
@@ -3555,6 +3561,18 @@ function renderModelMesh(
     context.extraImports.add(
       'import { createOpenBrushMaterialExtension } from "./xrift-studio/open-brush-runtime";',
     );
+    // useLoader caches loader instances by constructor. Registering this plugin
+    // on GLTFLoader itself also sends later ordinary models through three-icosa,
+    // whose beforeRoot assumes a materials array that valid glTF may omit.
+    context.supportDeclarations.set(
+      "model-open-brush-loader",
+      `class CompiledOpenBrushGLTFLoader extends GLTFLoader {
+  constructor() {
+    super();
+    this.register((parser) => createOpenBrushMaterialExtension(parser, ${JSON.stringify(OPEN_BRUSH_BRUSH_BASE_URL)}));
+  }
+}`,
+    );
   } else {
     context.fiberImports.add("useLoader");
     context.extraImports.add(
@@ -3674,16 +3692,11 @@ function renderModelMesh(
     (isObj
       ? "const scene = useLoader(OBJLoader, modelUrl);"
       : isOpenBrush
-        ? `const { scene, parser${animationLoaded ? ", animations" : ""} } = useLoader(GLTFLoader, modelUrl, (loader) => {
-    loader.register(
-      (parser) => createOpenBrushMaterialExtension(parser, ${JSON.stringify(OPEN_BRUSH_BRUSH_BASE_URL)}),
-    );${
-      usesDraco
-        ? `
-    loader.setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath));`
-        : ""
-    }
-  });`
+        ? `const { scene, parser${animationLoaded ? ", animations" : ""} } = useLoader(CompiledOpenBrushGLTFLoader, modelUrl${
+            usesDraco
+              ? ", (loader) => loader.setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath))"
+              : ""
+          });`
         : `const { scene${needsParser ? ", parser" : ""}${animationLoaded ? ", animations" : ""} } = useLoader(GLTFLoader, modelUrl${
             usesDraco
               ? ", (loader) => loader.setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath))"
@@ -3763,14 +3776,17 @@ function renderModelMesh(
   // Materials come out of three-icosa already compiled, so no Material
   // component drives them. Walk the loaded strokes each frame instead, using
   // the same Unity-style `_Time` vector the brushes were authored against.
-  if (isOpenBrush) {
+  const usesBrushTime = isOpenBrush || overrides.some(
+    ({ material }) => material.shader?.kind === "openbrush",
+  );
+  if (usesBrushTime) {
     context.reactValueImports.add("useRef");
     context.fiberImports.add("useFrame");
     context.threeTypeImports.add("Group");
     context.threeTypeImports.add("Mesh");
     context.threeTypeImports.add("ShaderMaterial");
   }
-  const brushTimeSource = isOpenBrush
+  const brushTimeSource = usesBrushTime
     ? `  const brushTimeRoot = useRef<Group>(null);
   useFrame(({ clock }) => {
     const root = brushTimeRoot.current;
@@ -3800,7 +3816,7 @@ function renderModelMesh(
         receiveShadow={${mesh.receiveShadow}}${inject}
       />
     </group>`;
-  const modelContent = isOpenBrush
+  const modelContent = usesBrushTime
     ? `<group ref={brushTimeRoot}>
       ${clonedModel}
     </group>`
@@ -4158,22 +4174,31 @@ function renderModelMaterialInjection(
     allowWildcard && nodeByKey.size === 0 && globalByName.size === 1
       ? [...globalByName.values()][0]
       : undefined;
+  const hasOpenBrushAssignments = overrides.some((override) => override.material.shader?.kind === "openbrush");
+  const brushSourceProp = (override: typeof overrides[number]) => {
+    const shader = override.material.shader;
+    if (shader?.kind !== "openbrush") return "";
+    context.threeTypeImports.add("Material");
+    if (!useSourceIndices) return " sourceMaterial={material as Material}";
+    context.extraImports.add('import { findOpenBrushSourceMaterial } from "./xrift-studio/open-brush-preset-material";');
+    return ` sourceMaterial={findOpenBrushSourceMaterial(sourceMaterialIndices, ${shader.sourceMaterialIndex}, material as Material)}`;
+  };
   const nodeCases = [...nodeByKey.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(
       ([sourceKey, override]) =>
-        `        case ${JSON.stringify(sourceKey)}:\n          return <${override.componentName} key={key} attach={attach} meshName={object.name} />;`,
+        `        case ${JSON.stringify(sourceKey)}:\n          return <${override.componentName} key={key} attach={attach} meshName={object.name}${brushSourceProp(override)} />;`,
     )
     .join("\n");
   const globalCases = [...globalByName.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(
       ([sourceName, override]) =>
-        `        case ${JSON.stringify(sourceName)}:\n          return <${override.componentName} key={key} attach={attach} meshName={object.name} />;`,
+        `        case ${JSON.stringify(sourceName)}:\n          return <${override.componentName} key={key} attach={attach} meshName={object.name}${brushSourceProp(override)} />;`,
     )
     .join("\n");
   const resolver = wildcard
-    ? `      return <${wildcard.componentName} key={key} attach={attach} meshName={object.name} />;`
+    ? `      return <${wildcard.componentName} key={key} attach={attach} meshName={object.name}${brushSourceProp(wildcard)} />;`
     : `${nodeCases ? `      if (typeof sourceNodeIndex === "number") {\n        for (const materialKey of materialKeys) {\n          switch (\`\${sourceNodeIndex}:\${materialKey}\`) {\n${nodeCases}\n          }\n        }\n      }\n` : ""}      for (const materialKey of materialKeys) {\n        switch (materialKey) {\n${globalCases}\n        }\n      }\n      return null;`;
   const sourceNodeLookup = nodeCases
     ? `          let sourceNodeObject: typeof object | null = object;
@@ -4197,10 +4222,10 @@ function renderModelMaterialInjection(
 ${useSourceIndices ? `            const materialIndex = sourceMaterialIndices.get(material)?.materials;
 ` : ""}            const materialKeys = ${useSourceIndices ? 'typeof materialIndex === "number" ? [`index:${materialIndex}`, `name:${materialName}`] : ' : ""}[\`name:\${materialName}\`];
 `;
-  const source = `${useSourceIndices ? `(${wildcard ? "_sourceMaterialIndices" : "sourceMaterialIndices"}: ReadonlyMap<unknown, { materials?: number }>) => ` : ""}(object: Object3D) => {
+  const source = `${useSourceIndices ? `(${wildcard && !hasOpenBrushAssignments ? "_sourceMaterialIndices" : "sourceMaterialIndices"}: ReadonlyMap<unknown, { materials?: number }>) => ` : ""}(object: Object3D) => {
 ${sourceNodeLookup}
           if (!("material" in object)) return null;
-          const renderOverride = (${wildcard ? "_material" : "material"}: unknown, attach: string, key: string) => {
+          const renderOverride = (${wildcard && !hasOpenBrushAssignments ? "_material" : "material"}: unknown, attach: string, key: string) => {
 ${materialNameLookup}
 ${resolver}
           };
@@ -4331,6 +4356,9 @@ function renderMaterial(
   const properties = normalizeMaterialProperties(
     asset.properties as unknown as Parameters<typeof normalizeMaterialProperties>[0],
   );
+  if (asset.shader?.kind === "openbrush") {
+    return `<${registerMaterialComponent(entity, mesh, asset, context)} />`;
+  }
   if (asset.shader?.kind === "classic-r3f") {
     const shaderDiagnostics = validateClassicR3fMaterialShader(asset.shader);
     if (shaderDiagnostics.length > 0) {
@@ -4363,6 +4391,7 @@ function renderMaterial(
       mesh,
       asset,
       context,
+      false,
     );
     return `<${componentName} />`;
   }
@@ -4374,14 +4403,24 @@ function registerMaterialComponent(
   mesh: MeshComponent,
   asset: MaterialAsset,
   context: CompileContext,
+  colorFactorsAreLinear = true,
 ): string {
-  let componentName = context.materialComponentNames.get(asset.id);
+  // Model previews apply glTF factors directly in linear space. Primitives
+  // retain their authored display colour; keep both paths identical to the
+  // viewport even when the same Material is used by both kinds of mesh.
+  const materialKey = !asset.shader && !colorFactorsAreLinear
+    ? `${asset.id}:display-color`
+    : asset.id;
+  let componentName = context.materialComponentNames.get(materialKey);
   if (!componentName) {
-    componentName = generatedIdentifier("CompiledMaterial", asset.id);
-    context.materialComponentNames.set(asset.id, componentName);
+    componentName = generatedIdentifier("CompiledMaterial", materialKey);
+    context.materialComponentNames.set(materialKey, componentName);
   }
   const declarationKey = `material:${componentName}`;
   if (context.supportDeclarations.has(declarationKey)) return componentName;
+  if (asset.shader?.kind === "openbrush") {
+    return registerOpenBrushMaterialComponent(entity, mesh, asset, componentName, declarationKey, context);
+  }
   if (asset.shader?.kind === "classic-r3f") {
     return registerClassicR3fMaterialComponent(
       entity,
@@ -4401,7 +4440,7 @@ function registerMaterialComponent(
   const materialKind = getMaterialShaderModel(properties);
   context.supportDeclarations.set(
     "material:00-props-type",
-    "type CompiledMaterialProps = { attach?: string; meshName?: string };",
+    "type CompiledMaterialProps = { attach?: string; meshName?: string; sourceMaterial?: import(\"three\").Material };",
   );
 
   const textureLines: string[] = [];
@@ -4498,13 +4537,61 @@ function registerMaterialComponent(
 
   const materialProps = [
     "attach={attach}",
-    ...renderMaterialProps(properties, materialKind, context),
+    ...renderMaterialProps(properties, materialKind, context, colorFactorsAreLinear),
     ...textureProps,
   ];
   const source = `const ${componentName}: FC<CompiledMaterialProps> = ({ attach = "material" }) => {
 ${textureLines.length > 0 ? `${textureLines.map((line) => `  ${line}`).join("\n")}\n` : ""}  return <${materialElementName(materialKind)} ${materialProps.join(" ")} />;
 };`;
   context.supportDeclarations.set(declarationKey, source);
+  return componentName;
+}
+
+function registerOpenBrushMaterialComponent(
+  entity: SceneEntity,
+  mesh: MeshComponent,
+  asset: MaterialAsset,
+  componentName: string,
+  declarationKey: string,
+  context: CompileContext,
+): string {
+  const shader = asset.shader;
+  if (!shader || shader.kind !== "openbrush") return componentName;
+  context.extraImports.add('import { XriftOpenBrushPresetMaterial, XriftOpenBrushModelMaterial, type OpenBrushPresetSettings } from "./xrift-studio/open-brush-preset-material";');
+  context.supportDeclarations.set("material:00-props-type", "type CompiledMaterialProps = { attach?: string; meshName?: string; sourceMaterial?: import(\"three\").Material };");
+  const properties = normalizeMaterialProperties(asset.properties);
+  const settingsName = generatedIdentifier("OPEN_BRUSH_SETTINGS", asset.id);
+  context.supportDeclarations.set(`material-settings:${settingsName}`, `const ${settingsName}: OpenBrushPresetSettings = ${JSON.stringify({
+    brushName: shader.brushName,
+    brushBaseUrl: OPEN_BRUSH_BRUSH_BASE_URL,
+    properties: {
+      pbrMetallicRoughness: {
+        baseColorFactor: properties.pbrMetallicRoughness.baseColorFactor,
+        roughnessFactor: properties.pbrMetallicRoughness.roughnessFactor,
+      },
+      alphaMode: properties.alphaMode,
+      alphaCutoff: properties.alphaCutoff,
+    },
+    sourceOverrides: shader.sourceOverrides,
+    attributeBindings: shader.attributeBindings,
+  })};`);
+  const textureLines: string[] = [];
+  const textureEntries: string[] = [];
+  const textureVariables: string[] = [];
+  for (const [uniformName, binding] of Object.entries(shader.textureBindings ?? {})) {
+    const variableName = generatedIdentifier("brushTexture", `${asset.id}:${uniformName}`);
+    if (addCompiledTexture(variableName, uniformName, { textureAssetId: binding.textureAssetId, texCoord: 0 }, "linear", entity, mesh, asset, context, textureLines, [])) {
+      textureEntries.push(`${JSON.stringify(uniformName)}: ${variableName}`);
+      textureVariables.push(variableName);
+    }
+  }
+  if (textureEntries.length) context.reactValueImports.add("useMemo");
+  const fallbackComponent = registerMaterialComponent(entity, mesh, { ...asset, shader: undefined }, context, false);
+  context.supportDeclarations.set(declarationKey, `const ${componentName}: FC<CompiledMaterialProps> = ({ attach = "material", sourceMaterial }) => {
+${textureLines.map((line) => `  ${line}\n`).join("")}${textureEntries.length ? `  const textures = useMemo(() => ({ ${textureEntries.join(", ")} }), [${textureVariables.join(", ")}]);\n` : ""}  return sourceMaterial
+    ? <XriftOpenBrushModelMaterial settings={${settingsName}} attach={attach} sourceMaterial={sourceMaterial}${textureEntries.length ? " textures={textures}" : ""} />
+    : <XriftOpenBrushPresetMaterial settings={${settingsName}} attach={attach}${textureEntries.length ? " textures={textures}" : ""} fallback={<${fallbackComponent} attach={attach} />} />;
+};`);
   return componentName;
 }
 
@@ -4520,7 +4607,7 @@ function registerClassicR3fMaterialComponent(
   if (!shader || shader.kind !== "classic-r3f") return componentName;
   context.supportDeclarations.set(
     "material:00-props-type",
-    "type CompiledMaterialProps = { attach?: string; meshName?: string };",
+    "type CompiledMaterialProps = { attach?: string; meshName?: string; sourceMaterial?: import(\"three\").Material };",
   );
   context.supportDeclarations.set(
     "material:00-classic-variant-type",
@@ -5013,7 +5100,8 @@ function useCompiledTexture(source: Texture, options: CompiledTextureOptions): T
     clone.channel = options.channel;
     clone.colorSpace = options.colorSpace === "srgb" ? SRGBColorSpace : NoColorSpace;
     clone.flipY = options.flipY;
-    clone.generateMipmaps = options.generateMipmaps;
+    // Compressed textures carry encoded mip levels; WebGL cannot generate them.
+    clone.generateMipmaps = !("isCompressedTexture" in clone && clone.isCompressedTexture === true) && options.generateMipmaps;
     clone.magFilter = COMPILED_TEXTURE_MAG_FILTER[options.magFilter];
     clone.minFilter = COMPILED_TEXTURE_MIN_FILTER[options.minFilter];
     clone.wrapS = COMPILED_TEXTURE_WRAP[options.wrapS];
@@ -5035,17 +5123,24 @@ function useCompiledTexture(source: Texture, options: CompiledTextureOptions): T
 function registerCompiledKtx2Runtime(context: CompileContext): void {
   const key = "texture-runtime:use-compiled-ktx2";
   if (context.supportDeclarations.has(key)) return;
-  context.dreiImports.add("useKTX2");
+  context.fiberImports.add("useLoader");
+  context.fiberImports.add("useThree");
+  context.extraImports.add('import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";');
   registerCompiledAssetBase(context);
   context.threeTypeImports.add("Texture");
   context.supportDeclarations.set(
     key,
+    // Use the same Three loader as the viewport: drei's three-stdlib loader
+    // can select a different GPU format and change decoded texture colours.
     // The transcoder files sit next to the world's own files: a published world
     // serves nothing below its root, so the directory handed to the loader is
     // the world's base URL itself.
     `function useCompiledKtx2(assetUrl: string): Texture {
   const baseUrl = useCompiledAssetBaseUrl();
-  return useKTX2(assetUrl, baseUrl);
+  const gl = useThree((state) => state.gl);
+  return useLoader(KTX2Loader, assetUrl, (loader) => {
+    loader.setTranscoderPath(baseUrl).detectSupport(gl);
+  });
 }`,
   );
 }
@@ -5076,16 +5171,19 @@ function renderMaterialProps(
   properties: MaterialProperties,
   materialKind: MaterialShaderModel,
   context: CompileContext,
+  colorFactorsAreLinear = false,
 ): string[] {
   const pbr = properties.pbrMetallicRoughness;
-  const color = colorToHex(pbr.baseColorFactor);
+  const color = colorFactorsAreLinear
+    ? `{${renderThreeColor(pbr.baseColorFactor.slice(0, 3) as [number, number, number], context)}}`
+    : JSON.stringify(properties.color);
   const opacity = properties.alphaMode === "OPAQUE" ? 1 : pbr.baseColorFactor[3];
   // Resolved by the same function the editor viewport uses, so a published
   // Material blends, clips and sorts the way it did while being authored.
   const alpha = materialAlphaRenderProps(properties);
   const props = [
     `vertexColors={${properties.vertexColors}}`,
-    `color=${JSON.stringify(color)}`,
+    `color=${color}`,
     `opacity={${formatNumber(opacity)}}`,
     `transparent={${alpha.transparent}}`,
   ];
@@ -5102,7 +5200,9 @@ function renderMaterialProps(
     props.push(
       `metalness={${formatNumber(pbr.metallicFactor)}}`,
       `roughness={${formatNumber(pbr.roughnessFactor)}}`,
-      `emissive=${JSON.stringify(colorToHex(properties.emissiveFactor))}`,
+      `emissive=${colorFactorsAreLinear
+        ? `{${renderThreeColor(properties.emissiveFactor, context)}}`
+        : JSON.stringify(colorToHex(properties.emissiveFactor))}`,
     );
     const emissiveStrength =
       properties.extensions.KHR_materials_emissive_strength;
@@ -5466,7 +5566,7 @@ function renderParticleEmitter(
     const value = particleMapSource.clone();
     value.colorSpace = ${colorSpace};
     value.flipY = ${settings.flipY};
-    value.generateMipmaps = ${settings.generateMipmaps};
+    value.generateMipmaps = ${usesKtx2 ? false : settings.generateMipmaps};
     value.wrapS = ${wrapS};
     value.wrapT = ${wrapT};
     value.magFilter = ${magFilter};
@@ -5487,14 +5587,18 @@ function renderParticleEmitter(
         >[0],
       )
     : undefined;
-  const color = materialProperties
-    ? colorToHex(materialProperties.pbrMetallicRoughness.baseColorFactor)
-    : "#ffffff";
+  let colorProp = 'color="#ffffff"';
+  if (materialProperties) {
+    context.threeValueImports.add("Color");
+    context.threeValueImports.add("SRGBColorSpace");
+    const factors = materialProperties.pbrMetallicRoughness.baseColorFactor;
+    colorProp = `color={new Color().setRGB(${factors.slice(0, 3).join(", ")}, SRGBColorSpace)}`;
+  }
   const opacity = materialProperties
     ? materialProperties.pbrMetallicRoughness.baseColorFactor[3]
     : 1;
   const source = `const ${componentName}: FC = () => {
-${textureLine}  return <XriftScriptParticleEmitter componentId=${JSON.stringify(component.id)} config={${configName}} color=${JSON.stringify(color)} opacity={${formatNumber(opacity)}}${textureProp} />;
+${textureLine}  return <XriftScriptParticleEmitter componentId=${JSON.stringify(component.id)} config={${configName}} ${colorProp} opacity={${formatNumber(opacity)}}${textureProp} />;
 };`;
   context.supportDeclarations.set(`particle:${componentName}`, source);
   return `<${componentName} />`;
@@ -6218,52 +6322,6 @@ function diagnoseUnsupportedAssets(
   }
 }
 
-/**
- * 公開時に適用できないTexture Import設定を、警告として一度だけ知らせる。
- *
- * 最大解像度と圧縮は公開時に自動で適用されるので、通常は何も出ない。SVG、KTX2、
- * HDRIのようにCanvasで描き直せない原本だけは設定を反映できず、原本がそのまま
- * 配られる。黙って無視すると「設定したのに軽くならない」原因が追えなくなるため、
- * 公開は止めずに理由だけを残す。
- */
-function diagnoseIgnoredTextureRecipes(
-  assets: AssetManifest,
-  assetCopyPlan: readonly AssetCopyPlanEntry[],
-  diagnostics: CompilerDiagnostic[],
-): void {
-  const converted = new Set(
-    assetCopyPlan
-      .filter((entry) => entry.textureConversion)
-      .map((entry) => entry.assetId),
-  );
-  for (const asset of Object.values(assets.assets).sort((left, right) =>
-    left.id.localeCompare(right.id),
-  )) {
-    if (asset.kind !== "texture") continue;
-    if (converted.has(asset.id)) continue;
-    if (!isAssetSupportedByCompiler(asset)) continue;
-    if (
-      asset.importSettings.compression.format === "source" &&
-      asset.importSettings.resize.mode === "original" &&
-      asset.importSettings.resize.powerOfTwo !== true
-    ) {
-      continue;
-    }
-    // 原本がすでに設定を満たしている場合も変換は起きない。それは正常なので、
-    // 「そもそも適用できない形式」だけを残す。環境Texture（HDRI）へ解像度設定を
-    // 反映できないことはTexture Inspectorが説明するので、ここでは繰り返さない。
-    if (isEnvironmentTextureAsset(asset)) continue;
-    if (isConvertibleTextureSourceFormat(getTextureSourceFormat(asset))) continue;
-    diagnostics.push({
-      severity: "warning",
-      code: "texture-recipe-not-applicable",
-      message: `${asset.name}は原本の形式が解像度変更・圧縮に対応していないため、原本のまま公開します`,
-      assetId: asset.id,
-      fieldPath: "importSettings",
-    });
-  }
-}
-
 function createAssetCopyPlan(
   assets: AssetManifest,
   diagnostics: CompilerDiagnostic[],
@@ -6299,15 +6357,9 @@ function createAssetCopyPlan(
       });
       continue;
     }
-    // 未反映のImport設定は、原本を書き換えずに出力側で適用する。公開されるのは
-    // 変換後の画像なので、コピー先のファイル名も変換後の拡張子で決める。
-    const textureConversion =
-      asset.kind === "texture" ? (planTextureConversion(asset) ?? undefined) : undefined;
-    const sourceFileName =
+    // Copy the asset currently rendered by the editor without resizing or encoding.
+    const fileName =
       asset.source.relativePath.split("/").filter(Boolean).pop() ?? "asset.bin";
-    const fileName = textureConversion
-      ? `${stripFileExtension(sourceFileName)}.${textureOutputExtension(textureConversion.outputFormat)}`
-      : sourceFileName;
     const targetRelativePath =
       outputMode === "classic-runtime"
         ? `public/${PUBLISHED_RUNTIME_ASSET_PREFIX}${safeFileSegment(asset.id)}-${safeFileSegment(fileName)}`
@@ -6329,7 +6381,6 @@ function createAssetCopyPlan(
       targetRelativePath,
       purpose: assetPurpose(asset),
       supportedByCompiler: isAssetSupportedByCompiler(asset),
-      ...(textureConversion ? { textureConversion } : {}),
     });
   }
   return plan;
@@ -6392,12 +6443,11 @@ function unsupportedAssetDiagnostic(
   return { severity, code, message, assetId: asset.id };
 }
 
-function geometryJsx(geometry: PrimitiveGeometry): string {
-  if (geometry === "box") return "<boxGeometry />";
-  if (geometry === "sphere") return "<sphereGeometry />";
-  if (geometry === "cylinder") return "<cylinderGeometry />";
-  if (geometry === "cone") return "<coneGeometry />";
-  return "<planeGeometry />";
+function geometryJsx(geometry: PrimitiveGeometry, context: CompileContext): string {
+  context.extraImports.add('import { XriftPrimitiveGeometry } from "./xrift-studio/primitive-geometry";');
+  const path = "src/xrift-studio/primitive-geometry.tsx";
+  context.runtimeOverlayFiles.set(path, compilerFile(path, primitiveGeometrySource));
+  return `<XriftPrimitiveGeometry primitive=${JSON.stringify(geometry)} />`;
 }
 
 function generateXriftJson(
@@ -6429,7 +6479,7 @@ function generateXriftJson(
       description,
       thumbnailPath: "thumbnail.png",
       buildCommand: "npm run build",
-      ignore: ["**/.DS_Store", "**/Thumbs.db", "**/*.js.map", "**/.gitkeep"],
+      ignore: ["**/.DS_Store", "**/Thumbs.db", "**/*.js.map", "**/*.d.ts", "**/*.d.ts.map", "**/.gitkeep"],
       ...worldSettings,
       // `permissions` applies to both kinds, unlike physics and camera above.
       ...publishPermissionsJson(permissions),
@@ -6452,7 +6502,9 @@ function vectorProp(value: Vec3): string {
 function formatNumber(value: number): string {
   if (!Number.isFinite(value)) return "0";
   if (Object.is(value, -0)) return "0";
-  return Number(value.toFixed(8)).toString();
+  // Preserve the viewport's values; decimal rounding changes transforms and
+  // translucent material output even when the original assets are unchanged.
+  return String(value);
 }
 
 function colorToHex(value: readonly number[]): string {
@@ -6563,15 +6615,8 @@ function isAssetSupportedByCompiler(asset: SceneAsset): boolean {
   if (asset.kind === "audio") return true;
   if (asset.kind === "font") return true;
   if (asset.kind === "skybox") return ["hdr", "exr", "png", "jpg", "jpeg", "webp", "avif", "gif", "bmp", "svg"].includes(fileExtension(asset.source.relativePath));
-  // Textureの最大解像度・圧縮設定は、原本を書き換えなくても公開時に適用できる。
-  // 未反映であることは公開を止める理由にならない。適用できない形式（SVG / KTX2 /
-  // HDRI）は原本のまま配られ、`diagnoseIgnoredTextureRecipes` が警告で知らせる。
+  // Pending image-processing settings do not alter publication assets.
   return asset.kind === "texture";
-}
-
-function stripFileExtension(fileName: string): string {
-  const index = fileName.lastIndexOf(".");
-  return index > 0 ? fileName.slice(0, index) : fileName;
 }
 
 function fileExtension(relativePath: string): string {

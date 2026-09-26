@@ -2,7 +2,6 @@ import { compileVisualProject } from "./compiler/compile";
 import { PublishModelTransformError } from "./compiler/download-plan";
 import type { CompilerDiagnostic } from "./compiler/types";
 import type { PrototypeVisualProject } from "./prototype-project";
-import { summarizeTexturePublishConversions } from "./texture-conversion";
 import { estimateWorldVram } from "./vram-estimate";
 
 export type PublishReviewRequest = {
@@ -35,7 +34,6 @@ export function analyzePublishReview({ bundle, scriptSources }: PublishReviewReq
   return {
     diagnostics,
     vramEstimate: estimateWorldVram(bundle),
-    textureConversions: summarizeTexturePublishConversions(bundle.assets),
   };
 }
 

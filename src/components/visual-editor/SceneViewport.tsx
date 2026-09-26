@@ -1,5 +1,6 @@
 import { XRiftStudioMeshColliders, XriftColliderLoadContext } from "../../../packages/xrift-studio-runtime/src/mesh-colliders";
 import { bakeXriftColliderGeometry } from "../../../packages/xrift-studio-runtime/src/mesh-collider-geometry";
+import { XriftPrimitiveGeometry } from "../../../packages/xrift-studio-runtime/src/primitive-geometry";
 import { SceneContextMenu, type SceneContextMenuProps } from "./SceneContextMenu";
 import { createWorldPlaySeatStore } from "./world-play-seat-store";
 import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
@@ -565,21 +566,6 @@ function colorFactorToHex(value: [number, number, number] | undefined): string {
         .padStart(2, "0"),
     )
     .join("")}`;
-}
-
-function PrimitiveGeometryView({ primitive }: { primitive: PrimitiveGeometry }) {
-  switch (primitive) {
-    case "box":
-      return <boxGeometry args={[1, 1, 1]} />;
-    case "sphere":
-      return <sphereGeometry args={[0.5, 32, 20]} />;
-    case "cylinder":
-      return <cylinderGeometry args={[0.5, 0.5, 1, 32]} />;
-    case "cone":
-      return <coneGeometry args={[0.5, 1, 32]} />;
-    case "plane":
-      return <planeGeometry args={[1, 1]} />;
-  }
 }
 
 const KHR_INTERACTIVITY_ON_START_ANIMATION_INDICES = [0] as const;
@@ -1225,7 +1211,7 @@ function PrimitiveMeshVisual({
       castShadow={component.castShadow}
       receiveShadow={component.receiveShadow}
     >
-      <PrimitiveGeometryView primitive={primitive} />
+      <XriftPrimitiveGeometry primitive={primitive} />
       {viewportMaterialStyle === "unlit" ? (
         <meshBasicMaterial
           color={material?.properties.color ?? "#f43f5e"}
@@ -1863,7 +1849,6 @@ function ComponentVisual({
             materialAsset?.kind === "material" ? materialAsset : undefined
           }
           projectPath={projectPath}
-          selected={selected}
         />
       ) : null;
     }
@@ -7086,9 +7071,10 @@ export function SceneViewport({
           ) : null}
           <ViewportShadowQuality enabled={qualityProfile.shadows} />
           <XriftShadowMapSettings type={sceneSettings.shadowMapType} />
-          {qualityProfile.postprocessing ? (
-            <ScenePostprocessing settings={sceneSettings.postprocessing} />
-          ) : null}
+          <ScenePostprocessing
+            settings={sceneSettings.postprocessing}
+            effectsEnabled={qualityProfile.postprocessing}
+          />
           {/* Scene-wide graph writes: the compositor, fog, ambient light, the
               sky, the camera and the screen fade. Mounted only while Play runs,
               so a graph never changes the editing view out from under the
