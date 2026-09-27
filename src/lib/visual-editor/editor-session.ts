@@ -149,14 +149,6 @@ export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
     "vegetation-wind",
   ),
   definition("core.audio-source", "Audio Source", "media", true, "audio-source"),
-  definition(
-    "core.audio-source.global",
-    "Global Audio (BGM)",
-    "media",
-    true,
-    "audio-source",
-    { audioSpatial: false },
-  ),
   definition("core.text", "Text", "rendering", true, "text"),
   definition("core.text.panel", "Text (Panel)", "rendering", true, "text", {
     textPreset: "panel",
@@ -191,6 +183,15 @@ export const EDITOR_COMPONENT_REGISTRY: readonly EditorComponentDefinition[] = [
   ),
 ] as const;
 
+// Older MCP clients can still request the BGM preset. Discovery exposes only
+// Audio Source; existing projects already store the same audio-source component.
+function findEditorComponentDefinition(id: string): EditorComponentDefinition | undefined {
+  const definition = EDITOR_COMPONENT_REGISTRY.find((entry) => entry.id === id);
+  if (definition || id !== "core.audio-source.global") return definition;
+  const audio = EDITOR_COMPONENT_REGISTRY.find((entry) => entry.id === "core.audio-source");
+  return audio ? { ...audio, id, audioSpatial: false } : undefined;
+}
+
 /** Use the Add Component registry for component names on every editor surface. */
 export function getEditorComponentLabel(component: SceneComponent): string {
   if (component.type === "xrift-component") {
@@ -207,9 +208,6 @@ export function getEditorComponentLabel(component: SceneComponent): string {
         : "physics.mesh-collider");
     }
     if (component.type === "light") return entry.lightType === component.lightType;
-    if (component.type === "audio-source") {
-      return entry.audioSpatial === (component.spatial === false ? false : undefined);
-    }
     return true;
   });
   if (definition) return definition.label;
@@ -255,7 +253,7 @@ export function getEditorComponentDisabledReason(
   projectKind?: VisualProjectKind,
 ): string | undefined {
   if (!entity) return "Entityを選択";
-  const definition = EDITOR_COMPONENT_REGISTRY.find((entry) => entry.id === definitionId);
+  const definition = findEditorComponentDefinition(definitionId);
   if (!definition) return "未対応のComponent";
   if (projectKind && !definition.projectKinds.includes(projectKind)) return definition.projectKinds.includes("world") ? "ワールドでのみ使用できます" : "アイテムでのみ使用できます";
   if (!definition.allowMultiple && hasRegisteredComponent(entity, definition)) {
@@ -287,9 +285,7 @@ export function addEditorComponent(
   if (!entity) return { scene, added: false, reason: "entity-missing" };
   const normalizedDefinitionId =
     definitionId === "core.vegetation-wind" ? "core.wind" : definitionId;
-  const definition = EDITOR_COMPONENT_REGISTRY.find(
-    (candidate) => candidate.id === normalizedDefinitionId,
-  );
+  const definition = findEditorComponentDefinition(normalizedDefinitionId);
   if (!definition) return { scene, added: false, reason: "definition-missing" };
   if (!definition.projectKinds.includes(projectKind)) {
     return { scene, added: false, reason: "project-kind" };

@@ -79,6 +79,45 @@ test("component menus share duplicate and mesh dependency rules", async ({ page 
   expect(result.itemXriftIds).not.toContain("xrift.spawn-point");
 });
 
+test("Audio Sourceの空間音響を切り替えても同じ音源として編集できる", async ({ page }) => {
+  await page.goto("/e2e.html?scenario=ready");
+  const legacy = await page.evaluate(async () => {
+    const load = (path: string) => import(/* @vite-ignore */ path);
+    const editor = await load("/src/lib/visual-editor/editor-session.ts");
+    const { createPrototypeProject } = await load("/src/lib/visual-editor/prototype-project.ts");
+    const bundle = createPrototypeProject("world", "audio-compatibility");
+    const created = editor.createEmptyEntity(bundle.scene);
+    const added = editor.addEditorComponent(created.scene, bundle.assets, created.entityId, "core.audio-source.global", "world");
+    const component = added.scene.entities[created.entityId].components.find((entry: any) => entry.id === added.componentId);
+    return {
+      addAudioIds: editor.getDiscoverableEditorComponents().filter((entry: any) => entry.componentType === "audio-source").map((entry: any) => entry.id),
+      createAudioIds: editor.getEditorEntityCreationDefinitions("world").filter((entry: any) => entry.componentType === "audio-source").map((entry: any) => entry.id),
+      label: editor.getEditorComponentLabel(component),
+      spatial: component.spatial, loop: component.loop, autoplay: component.autoplay,
+    };
+  });
+  expect(legacy).toEqual({ addAudioIds: ["core.audio-source"], createAudioIds: ["core.audio-source"], label: "Audio Source", spatial: false, loop: true, autoplay: true });
+  await page.getByRole("button", { name: /新規プロジェクト/ }).click();
+  await page.getByRole("button", { name: /ワールドをビジュアルで作る/ }).click();
+  await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
+  await page.getByLabel("プロジェクト名").fill("audio-source-settings");
+  await page.getByRole("button", { name: "作成して開く" }).click();
+  await page.getByRole("tree", { name: "シーンのEntity階層" }).getByText("床", { exact: true }).click();
+  await page.getByRole("button", { name: "Add Component", exact: true }).click();
+  await page.getByPlaceholder("Componentを検索…").fill("Audio");
+  await expect(page.getByRole("button", { name: /Global Audio/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "Audio Source", exact: true }).click();
+  const spatial = page.getByRole("checkbox", { name: "空間音響", exact: true });
+  await expect(spatial).toBeChecked();
+  await expect(page.getByText("減衰が始まる距離", { exact: true })).toBeVisible();
+  await spatial.uncheck();
+  await expect(page.getByText("音源との距離や向きに関係なく、一定の音量で再生します。BGMなどに使います。", { exact: true })).toBeVisible();
+  await expect(page.getByText("減衰が始まる距離", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Audio Sourceを削除", exact: true })).toBeVisible();
+  await spatial.check();
+  await expect(page.getByText("減衰が始まる距離", { exact: true })).toBeVisible();
+});
+
 
 test("Hierarchy context menu is editing-only and preserves the clicked target", async ({ page }) => {
   await page.goto("/e2e.html?scenario=ready");
