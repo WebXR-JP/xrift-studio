@@ -79,7 +79,7 @@ test("component menus share duplicate and mesh dependency rules", async ({ page 
   expect(result.itemXriftIds).not.toContain("xrift.spawn-point");
 });
 
-test("Audio Sourceのグローバル適用を切り替えても同じ音源として編集できる", async ({ page }) => {
+test("Audio Sourceのグローバルを切り替えても同じ音源として編集できる", async ({ page }) => {
   await page.goto("/e2e.html?scenario=ready");
   const legacy = await page.evaluate(async () => {
     const load = (path: string) => import(/* @vite-ignore */ path);
@@ -107,7 +107,7 @@ test("Audio Sourceのグローバル適用を切り替えても同じ音源と�
   await page.getByPlaceholder("Componentを検索…").fill("Audio");
   await expect(page.getByRole("button", { name: /Global Audio/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Audio Source", exact: true }).click();
-  const globalAudio = page.getByRole("checkbox", { name: "グローバルに適用", exact: true });
+  const globalAudio = page.getByRole("checkbox", { name: "グローバル", exact: true });
   await expect(globalAudio).not.toBeChecked();
   await expect(page.getByText("音量が下がり始める距離", { exact: true })).toBeVisible();
   await expect(page.getByText("音量の下がり方", { exact: true })).toBeVisible();

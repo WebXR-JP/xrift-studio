@@ -4841,7 +4841,7 @@ function AudioSourceInspector({
           onChange={(autoplay) => onChange({ autoplay })}
         />
         <ToggleRow
-          label="グローバルに適用"
+          label="グローバル"
           checked={!component.spatial}
           disabled={readOnly}
           onChange={(global) => onChange({ spatial: !global })}
