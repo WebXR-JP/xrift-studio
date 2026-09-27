@@ -230,6 +230,10 @@ export async function finalizeDraftRelease({
     owner,
     repo,
     release_id,
+    // Preserve the intended tag when saving an unpublished release. GitHub can
+    // otherwise replace an uncreated tag with an untagged-* draft identifier.
+    tag_name: tag,
+    target_commitish: commit,
     name: `${productName} ${tag}`,
     body: notes,
     draft,

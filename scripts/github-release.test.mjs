@@ -207,6 +207,22 @@ test("finalize assembles all 11 updater keys and publishes only after uploading 
   assert.equal(fake.writes[1].args.make_latest, "false");
 });
 
+test("finalize explicitly retains the tag and source commit when saving a draft", async () => {
+  const fake = fakeGithub();
+  const expectedTag = fake.state.release.tag_name;
+  const expectedCommit = fake.state.release.target_commitish;
+  fake.hooks.updateRelease = (args) => ({
+    ...fake.state.release,
+    ...args,
+    tag_name: args.tag_name ?? "untagged-draft",
+    target_commitish: args.target_commitish ?? "main",
+  });
+  const { release } = await finalize(fake, { draft: true });
+  assert.equal(release.tag_name, expectedTag);
+  assert.equal(release.target_commitish, expectedCommit);
+  assert.equal(release.draft, true);
+});
+
 test("finalize preserves draft mode, custom product names, and encoded version tags", async () => {
   const fake = fakeGithub();
   const version = "1.2.3+build.1";
