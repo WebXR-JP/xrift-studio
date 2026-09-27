@@ -1321,8 +1321,8 @@ export function SceneSettingsInspector({
           title="カメラ"
           description="カメラに映す距離と画角です。公開後も同じ設定を使います。"
         >
-          <NumberField label="手前" value={settings.camera.near} min={0.01} max={settings.camera.far - 0.0001} step={0.01} disabled={readOnly} onChange={(near) => update({ ...settings, camera: { ...settings.camera, near } })} />
-          <NumberField label="奥" value={settings.camera.far} min={1} step={1} disabled={readOnly} onChange={(far) => update({ ...settings, camera: { ...settings.camera, far: Math.max(far, settings.camera.near + 0.0001) } })} />
+          <NumberField label="Near Clip" value={settings.camera.near} min={0.01} max={settings.camera.far - 0.0001} step={0.01} disabled={readOnly} onChange={(near) => update({ ...settings, camera: { ...settings.camera, near } })} />
+          <NumberField label="Far Clip" value={settings.camera.far} min={1} step={1} disabled={readOnly} onChange={(far) => update({ ...settings, camera: { ...settings.camera, far: Math.max(far, settings.camera.near + 0.0001) } })} />
           <NumberField label="視野角" value={settings.camera.fov} min={1} max={179} step={1} disabled={readOnly} onChange={(fov) => update({ ...settings, camera: { ...settings.camera, fov } })} />
         </Section>
 
