@@ -4841,21 +4841,21 @@ function AudioSourceInspector({
           onChange={(autoplay) => onChange({ autoplay })}
         />
         <ToggleRow
-          label="空間音響"
-          checked={component.spatial}
+          label="グローバルに適用"
+          checked={!component.spatial}
           disabled={readOnly}
-          onChange={(spatial) => onChange({ spatial })}
+          onChange={(global) => onChange({ spatial: !global })}
         />
       </div>
       <p className="border-t border-slate-100 pt-2 text-[11px] leading-4 text-slate-500">
         {component.spatial
-          ? "音源の位置に応じて、音の方向と距離による減衰を反映します。"
+          ? "音源の方向と、距離に応じた音量で再生します。"
           : "音源との距離や向きに関係なく、一定の音量で再生します。BGMなどに使います。"}
       </p>
       {component.spatial ? (
         <div className="space-y-2 border-t border-slate-100 pt-2">
           <ColliderNumberField
-            label="減衰が始まる距離"
+            label="音量が下がり始める距離"
             value={component.refDistance}
             min={0.01}
             step={0.1}
@@ -4868,7 +4868,7 @@ function AudioSourceInspector({
             }
           />
           <ColliderNumberField
-            label="音の減衰率"
+            label="音量の下がり方"
             value={component.rolloffFactor}
             min={0}
             step={0.1}

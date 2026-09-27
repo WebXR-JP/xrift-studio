@@ -79,7 +79,7 @@ test("component menus share duplicate and mesh dependency rules", async ({ page 
   expect(result.itemXriftIds).not.toContain("xrift.spawn-point");
 });
 
-test("Audio Sourceの空間音響を切り替えても同じ音源として編集できる", async ({ page }) => {
+test("Audio Sourceのグローバル適用を切り替えても同じ音源として編集できる", async ({ page }) => {
   await page.goto("/e2e.html?scenario=ready");
   const legacy = await page.evaluate(async () => {
     const load = (path: string) => import(/* @vite-ignore */ path);
@@ -107,15 +107,16 @@ test("Audio Sourceの空間音響を切り替えても同じ音源として編�
   await page.getByPlaceholder("Componentを検索…").fill("Audio");
   await expect(page.getByRole("button", { name: /Global Audio/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Audio Source", exact: true }).click();
-  const spatial = page.getByRole("checkbox", { name: "空間音響", exact: true });
-  await expect(spatial).toBeChecked();
-  await expect(page.getByText("減衰が始まる距離", { exact: true })).toBeVisible();
-  await spatial.uncheck();
+  const globalAudio = page.getByRole("checkbox", { name: "グローバルに適用", exact: true });
+  await expect(globalAudio).not.toBeChecked();
+  await expect(page.getByText("音量が下がり始める距離", { exact: true })).toBeVisible();
+  await expect(page.getByText("音量の下がり方", { exact: true })).toBeVisible();
+  await globalAudio.check();
   await expect(page.getByText("音源との距離や向きに関係なく、一定の音量で再生します。BGMなどに使います。", { exact: true })).toBeVisible();
-  await expect(page.getByText("減衰が始まる距離", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("音量が下がり始める距離", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Audio Sourceを削除", exact: true })).toBeVisible();
-  await spatial.check();
-  await expect(page.getByText("減衰が始まる距離", { exact: true })).toBeVisible();
+  await globalAudio.uncheck();
+  await expect(page.getByText("音量が下がり始める距離", { exact: true })).toBeVisible();
 });
 
 
