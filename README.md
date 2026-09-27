@@ -6,15 +6,39 @@
 
 > XRift公式とは無関係の有志製ツールです。編集内容は自動保存されます。開発中のため、大切なプロジェクトはファイルに書き出してバックアップも残してください。
 
+## インストールする
+
+Windows・macOS・Linux用のインストーラーは[ダウンロードページ](https://github.com/WebXR-JP/xrift-studio/releases/latest)から取得できます。OS別の手順は[インストールガイド](./docs/guide/installation.md)を参照してください。
+
+### macOSでHomebrewを使う
+
+[Homebrew](https://brew.sh/)を導入済みなら、ターミナルで次のコマンドを実行します。Apple Silicon・Intelの両方で使えるUniversal版がインストールされます。
+
+```bash
+brew tap webxr-jp/xrift-studio https://github.com/WebXR-JP/xrift-studio.git
+brew install --cask webxr-jp/xrift-studio/xrift-studio
+```
+
+`tap`は、Homebrewがアプリを探すときに参照する追加の配布元です。XRift Studioでは、WebXR-JPが管理するこのリポジトリを専用の配布元（独自tap）として使います。最初の`brew tap`は初回だけ必要で、配布元を登録した後はHomebrewのコマンドでインストール・更新できます。
+
+インストールが終わったら、アプリケーションフォルダーからXRift Studioを開きます。開発元の確認で止まった場合は、[macOSで開けないとき](./docs/guide/installation-problems.md#macosで開けない)を参照してください。
+
+更新するときはアプリを終了し、次のコマンドを実行します。
+
+```bash
+brew update
+brew upgrade --cask --greedy webxr-jp/xrift-studio/xrift-studio
+```
+
+`--greedy`は、アプリ内更新にも対応するXRift StudioをHomebrewの更新対象に含めるために指定します。削除の手順や配布定義の管理については[Homebrewでの配布](./docs/PACKAGE_MANAGERS.md)を参照してください。
+
 ## はじめて使う
 
 1. アプリを起動して**セットアップを開始**を押します。完了したら、プロジェクト一覧の**新規プロジェクト**からビジュアルエディターを開きます。
 2. [最初のワールドを作る](./docs/guide/first-world.md)に沿って、物を配置し、マテリアルで色を変えます。
 3. 保存し、**Play**で歩いて確かめます。公開の準備ができたら**XRiftへ公開**へ進みます。
 
-OS別の導入手順は[インストールガイド](./docs/guide/installation.md)を参照してください。ブラウザ版βでは、パソコン・iPad・スマートフォンからビジュアルエディターで制作し、APIキーによるワールド送信を試せます。プロジェクトはブラウザに自動保存され、`.xriftstudio`ファイルでデスクトップ版へ引き継げます。アイテムやスクリプトを含むワールドの公開、MCPでのAI接続にはデスクトップ版を使います。
-
-macOSはHomebrewでもインストールできます。手順は[Homebrewでの配布](./docs/PACKAGE_MANAGERS.md)を参照してください。
+ブラウザ版βでは、パソコン・iPad・スマートフォンからビジュアルエディターで制作し、APIキーによるワールド送信を試せます。プロジェクトはブラウザに自動保存され、`.xriftstudio`ファイルでデスクトップ版へ引き継げます。アイテムやスクリプトを含むワールドの公開、MCPでのAI接続にはデスクトップ版を使います。
 
 ## 作りたいものから探す
 
