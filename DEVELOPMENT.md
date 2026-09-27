@@ -163,17 +163,17 @@ GitHub Actions のリポジトリ Secrets に次を登録してください。
 
 公開処理の回帰確認は `node --test scripts/prepare-release-notes.test.mjs scripts/github-release.test.mjs` で実行します。実際のReleaseを作らず、公開済みタグの拒否、下書きからの再実行、全OSの更新情報、添付失敗時に公開しないことを確認します。
 
-### HomebrewとWinGetの更新
+### Homebrewの更新
 
-通常リリースの公開後、**Update package managers** が配布ファイルのURLとSHA-256から定義を更新し、このリポジトリに更新PRを作ります。HomebrewはPRのマージ後に配布版が切り替わります。WinGetの公式一覧への登録・更新は、生成した定義を別途提出します。
+通常リリースの公開後、**Update Homebrew** が配布ファイルのURLとSHA-256から定義を更新し、このリポジトリに更新PRを作ります。HomebrewはPRのマージ後に配布版が切り替わります。
 
 ```bash
 node scripts/update-package-managers.mjs
 node scripts/update-package-managers.mjs --check
-node --test scripts/update-package-managers.test.mjs scripts/winget-manifest.test.mjs
+node --test scripts/update-package-managers.test.mjs
 ```
 
-最初のコマンドは公開済みの最新リリースを取得し、`--check`は保存済みの情報と生成物の整合をネット接続なしで確認します。初回のActions設定、生成物の回収、WinGetへの提出、OS別の動作確認は[パッケージ配布の管理](./docs/PACKAGE_MANAGERS.md#配布定義を更新する)を参照してください。
+最初のコマンドは公開済みの最新リリースを取得し、`--check`は保存済みの情報と生成物の整合をネット接続なしで確認します。初回のActions設定、生成物の回収、macOSでの動作確認は[Homebrewでの配布](./docs/PACKAGE_MANAGERS.md#配布定義を更新する)を参照してください。
 
 ### 所要時間の作り
 

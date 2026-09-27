@@ -10,8 +10,6 @@
 
 Windows用のインストーラー（`.msi`または`.exe`）を開き、案内に沿ってインストールします。終わったら、スタートメニューからXRift Studioを開きます。
 
-WinGetは登録準備中です。ローカルの定義ファイルから先に試す場合は、[WinGetの導入手順](https://github.com/WebXR-JP/xrift-studio/blob/main/docs/PACKAGE_MANAGERS.md#winget)を参照してください。
-
 ### macOS
 
 `.dmg`を開き、XRift Studioをアプリケーションフォルダーへ移します。現在の配布ファイルは、Apple SiliconとIntelの両方で使えるuniversal版です。

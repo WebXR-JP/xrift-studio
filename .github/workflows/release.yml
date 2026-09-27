@@ -322,7 +322,7 @@ jobs:
           args: ${{ matrix.args }}
 
   package-managers:
-    name: Update package managers
+    name: Update Homebrew
     needs: finalize-release
     if: ${{ !inputs.draft && !inputs.prerelease }}
     permissions:

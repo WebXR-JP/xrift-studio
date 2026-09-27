@@ -1,4 +1,4 @@
-name: Update package managers
+name: Update Homebrew
 
 on:
   workflow_dispatch:
@@ -11,8 +11,6 @@ on:
       - 'Casks/**'
       - 'packaging/**'
       - 'scripts/update-package-managers*'
-      - 'scripts/lib/winget-manifest.mjs'
-      - 'scripts/winget-manifest.test.mjs'
       - '.github/workflows/package-managers.yml'
       - '.github/workflows/release.yml'
 
@@ -35,7 +33,7 @@ jobs:
         with:
           node-version: '22'
       - name: Test release validation and manifest generation
-        run: node --test scripts/update-package-managers.test.mjs scripts/winget-manifest.test.mjs
+        run: node --test scripts/update-package-managers.test.mjs
       - name: Check committed package definitions
         run: node scripts/update-package-managers.mjs --check
 
@@ -91,10 +89,10 @@ jobs:
       # may need a maintainer to approve their workflow runs.
       - name: Verify generated definitions
         run: |
-          node --test scripts/update-package-managers.test.mjs scripts/winget-manifest.test.mjs
+          node --test scripts/update-package-managers.test.mjs
           node scripts/update-package-managers.mjs --check
           git diff --check
-      - name: Save definitions for review and WinGet submission
+      - name: Save Homebrew definition for review
         uses: actions/upload-artifact@v4
         with:
           name: package-managers-${{ steps.packages.outputs.version }}
@@ -115,15 +113,14 @@ jobs:
             Casks/xrift-studio.rb
             packaging/
           commit-message: 'chore: パッケージ定義を v${{ steps.packages.outputs.version }} に更新'
-          title: 'chore: Homebrew・wingetの配布定義を v${{ steps.packages.outputs.version }} に更新'
+          title: 'chore: Homebrewの配布定義を v${{ steps.packages.outputs.version }} に更新'
           body: |
-            公開済みの最新安定版から、Homebrew Caskとwinget定義を更新しました。
+            公開済みの最新安定版から、Homebrew Caskを更新しました。
             GitHubが返したSHA-256を使用し、必要なインストーラーの存在・アップロード完了・URLを確認しています。
 
             生成処理のテストと、生成物の整合チェックはこのworkflow内で実行済みです。
-            マージ前にmacOS/Windowsでインストール・更新・削除を確認してください。
+            マージ前にmacOSでインストール・更新・削除を確認してください。
             Homebrewの更新はこのPRのマージ後に利用できます。
-            wingetの検索対象へ反映するには、別途microsoft/winget-pkgsへの提出が必要です。
 
             操作手順: docs/PACKAGE_MANAGERS.md
       - name: Explain how to recover if PR creation is unavailable

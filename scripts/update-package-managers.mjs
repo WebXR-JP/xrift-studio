@@ -2,7 +2,6 @@ import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { renderWingetManifests } from "./lib/winget-manifest.mjs";
 
 const repository = "WebXR-JP/xrift-studio";
 const repositoryUrl = `https://github.com/${repository}`;
@@ -25,7 +24,6 @@ export function readPackageRelease(release) {
   }
   const assetNames = [
     `XRift.Studio_${version}_darwin_universal_release.dmg`,
-    `XRift.Studio_${version}_windows_x64_release-setup.exe`,
   ];
   const assets = assetNames.map((name) => {
     const matches = release.assets.filter((asset) => asset.name === name);
@@ -63,7 +61,7 @@ export function readPackageRelease(release) {
 
 export function renderPackageManifests(release) {
   const { version, snapshot } = readPackageRelease(release);
-  const [mac, windows] = snapshot.assets;
+  const [mac] = snapshot.assets;
   return {
     [snapshotPath]: `${JSON.stringify(snapshot, null, 2)}\n`,
     "Casks/xrift-studio.rb": `cask "xrift-studio" do
@@ -81,12 +79,6 @@ export function renderPackageManifests(release) {
   app "XRift Studio.app"
 end
 `,
-    ...renderWingetManifests({
-      version,
-      installerUrl: windows.browser_download_url,
-      sha256: windows.digest.slice(7),
-      releaseUrl: snapshot.html_url,
-    }),
   };
 }
 

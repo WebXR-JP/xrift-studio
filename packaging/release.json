@@ -11,13 +11,6 @@
       "size": 91610312,
       "digest": "sha256:3f9950d23c3155bbab8e575e6ed622f3dacfb279d57d67585f1be4f119ccf146",
       "browser_download_url": "https://github.com/WebXR-JP/xrift-studio/releases/download/v0.10.6/XRift.Studio_0.10.6_darwin_universal_release.dmg"
-    },
-    {
-      "name": "XRift.Studio_0.10.6_windows_x64_release-setup.exe",
-      "state": "uploaded",
-      "size": 42628162,
-      "digest": "sha256:72e7b79430bbb6f61e7a398e3c564ab0b3734aeaf6bb6abdab7a0e9126147afe",
-      "browser_download_url": "https://github.com/WebXR-JP/xrift-studio/releases/download/v0.10.6/XRift.Studio_0.10.6_windows_x64_release-setup.exe"
     }
   ]
 }

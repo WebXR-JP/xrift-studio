@@ -69,7 +69,7 @@ test("rejects releases and installers outside the expected repository and versio
   }
 });
 
-test("requires exactly one complete installer for both supported platforms", () => {
+test("requires exactly one complete universal macOS installer", () => {
   for (let index = 0; index < checkedRelease.assets.length; index++) {
     const missing = release();
     missing.assets.splice(index, 1);
@@ -104,7 +104,7 @@ test("invalid new input leaves every existing definition untouched", (t) => {
   const before = renderPackageManifests(checkedRelease);
   writePackageManifests(checkedRelease, directory);
   const broken = withVersion(release(), "100.0.0");
-  broken.assets[1].digest = null;
+  broken.assets[0].digest = null;
   assert.throws(() => writePackageManifests(broken, directory), /missing its SHA-256/);
   for (const [path, content] of Object.entries(before)) {
     assert.equal(readFileSync(join(directory, path), "utf8"), content);
