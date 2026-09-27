@@ -165,10 +165,12 @@ export function TerrainGrassVisual({
   });
 
   if (!type || !material || placement.placed === 0) return null;
+  // Terrain owns the ground collider. Individual grass blades are visual only.
   return (
     <instancedMesh
       ref={meshRef}
       args={[geometry, material, placement.placed]}
+      userData={{ xriftColliderExclude: true }}
       frustumCulled={false}
       castShadow={false}
       receiveShadow={false}

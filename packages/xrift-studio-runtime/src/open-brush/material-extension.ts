@@ -11,6 +11,7 @@ import {
   type IUniform,
   type LoadingManager,
 } from "three";
+import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 // three-icosa publishes no TypeScript declarations. Studio supplies its own
 // ambient declaration, a published world does not, so this file has to compile
 // in both places — `@ts-ignore` rather than `@ts-expect-error`, which would
@@ -22,7 +23,7 @@ import { GLTFGoogleTiltBrushMaterialExtension } from "three-icosa/dist/three-ico
  * Open Brush brush presets, loaded the way both the Studio viewport and a
  * published world need them.
  *
- * `three-icosa@0.4.2-alpha.18` cannot be used as shipped for two reasons:
+ * `three-icosa@0.4.2-alpha.18` needs these compatibility fixes:
  *
  * 1. It mutates its module-level brush presets while loading, so the second
  *    brush in a scene reads the first brush's already-resolved GLSL and Texture
@@ -30,8 +31,10 @@ import { GLTFGoogleTiltBrushMaterialExtension } from "three-icosa/dist/three-ico
  * 2. Its brush GLSL starts with `#version 300 es` while the material it builds
  *    leaves `glslVersion` unset, so three prepends its own prefix ahead of the
  *    `#version` directive and the shader fails to compile.
+ * 3. Its parser hooks assume every glTF has a materials array and names,
+ *    although glTF allows both to be omitted.
  *
- * Both are fixed here, once, so the published world renders what the editor
+ * They are fixed here, once, so the published world renders what the editor
  * previewed instead of falling back to a broken shader.
  */
 
@@ -95,7 +98,54 @@ export function createOpenBrushMaterialExtension(
   const internal = extension as unknown as OpenBrushMaterialExtension;
   installIsolatedLoader(internal.tiltShaderLoader);
   installOpenBrushPbrFallback(internal);
+  installOpenBrushDocumentGuard(extension, parser);
   return extension;
+}
+
+/** glTF permits both the materials array and material names to be omitted. */
+function installOpenBrushDocumentGuard(
+  extension: {
+    beforeRoot: () => unknown;
+    afterRoot: (gltf: GLTF) => unknown;
+  },
+  parser: unknown,
+): void {
+  const beforeRoot = extension.beforeRoot.bind(extension);
+  const afterRoot = extension.afterRoot.bind(extension);
+  const brushMaterials = () => {
+    const json = (parser as { json?: Record<string, unknown> } | undefined)?.json;
+    if (!json || !Array.isArray(json.materials)) return undefined;
+    const materials = json.materials as Array<{
+      name?: string;
+      extensions?: Record<string, unknown>;
+    }>;
+    const extensionNames = ["GOOGLE_tilt_brush_material", "GOOGLE_tilt_brush_techniques"];
+    const hasBrushExtension = (value: unknown) =>
+      value !== null && typeof value === "object" &&
+      extensionNames.some((name) => name in value);
+    const generator = (json.asset as { generator?: unknown } | undefined)?.generator;
+    const isBrushDocument =
+      [json.extensionsUsed, json.extensionsRequired].some((names) =>
+        Array.isArray(names) && extensionNames.some((name) => names.includes(name)),
+      ) || hasBrushExtension(json.extensions) ||
+      (typeof generator === "string" && /(?:open|tilt)\s*brush/i.test(generator)) ||
+      materials.some((material) =>
+        hasBrushExtension(material.extensions) || /^ob-/i.test(material.name ?? ""),
+      );
+    return isBrushDocument ? materials : undefined;
+  };
+  extension.beforeRoot = () => {
+    const materials = brushMaterials();
+    if (!materials) return;
+    // Only the in-memory parser document is normalized. The original GLB and
+    // its optional names stay untouched, and extension GUIDs still select brushes.
+    materials.forEach((material) => { material.name ??= ""; });
+    return beforeRoot();
+  };
+  extension.afterRoot = (gltf) => {
+    if (!brushMaterials()) return;
+    return afterRoot(gltf);
+  };
 }
 
 /**

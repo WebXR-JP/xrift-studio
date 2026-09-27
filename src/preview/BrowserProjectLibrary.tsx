@@ -45,8 +45,8 @@ function asProject(project: BrowserStoredProject): Project {
     title: project.title || null,
     description: null,
     modifiedAtMs: Number.isFinite(modifiedAt) ? modifiedAt : null,
-    uploadedAt: null,
-    publicationId: null,
+    uploadedAt: project.uploadedAt ?? null,
+    publicationId: project.publicationId ?? null,
   };
 }
 

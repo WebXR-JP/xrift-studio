@@ -5,6 +5,11 @@ import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { PROJECT_PACKAGE_EXTENSION } from "./project-package";
 import {
+  getBrowserOtoguraAssetOptions,
+  installBrowserOtoguraAsset,
+  listBrowserOtoguraAssets,
+} from "./browser-otogura-store";
+import {
   commitBrowserAssetImport,
   deleteBrowserPath,
   isBrowserProjectPath,
@@ -68,7 +73,11 @@ export type RuntimePaths = {
 export type RuntimeStatus = {
   ready: boolean;
   nodeInstalled: boolean;
+  nodeVersion: string;
   xriftInstalled: boolean;
+  xriftVersion: string | null;
+  recommendedXriftVersion: string;
+  xriftUpdateRequired: boolean;
   paths: RuntimePaths;
 };
 
@@ -275,31 +284,6 @@ export type XriftMcpClientStatus = {
   installed: boolean;
   registered: boolean;
   needsUpdate: boolean;
-  message: string;
-};
-
-export type XriftOllamaIntegrationId = Extract<
-  XriftMcpClientId,
-  "codex" | "claude-code" | "opencode"
->;
-
-export type XriftOllamaModelStatus = {
-  name: string;
-};
-
-export type XriftOllamaStatus = {
-  installed: boolean;
-  serverReachable: boolean;
-  version: string | null;
-  launchSupported: boolean;
-  models: XriftOllamaModelStatus[];
-  message: string;
-};
-
-export type XriftOllamaConfigurationResult = {
-  integrationId: XriftOllamaIntegrationId;
-  integrationLabel: string;
-  model: string;
   message: string;
 };
 
@@ -577,6 +561,14 @@ export const tauri = {
       authoringProjectPath,
       directoryName,
     }),
+  initializeCompilerStaging: (
+    authoringProjectPath: string,
+    directoryName: string,
+  ) =>
+    invoke<void>("initialize_compiler_staging", {
+      authoringProjectPath,
+      directoryName,
+    }),
   applyCompilerStaging: (
     authoringProjectPath: string,
     directoryName: string,
@@ -658,9 +650,13 @@ export const tauri = {
       sourceRelativePath: sourceRelativePath ?? null,
     }),
   listExternalStoreAssets: (providerId: string) =>
-    invoke<ExternalStoreAsset[]>("list_external_store_assets", { providerId }),
+    !isTauri() && providerId === "otogura"
+      ? listBrowserOtoguraAssets()
+      : invoke<ExternalStoreAsset[]>("list_external_store_assets", { providerId }),
   getExternalStoreAssetOptions: (providerId: string, externalId: string) =>
-    invoke<ExternalStoreAssetOptions>("get_external_store_asset_options", {
+    !isTauri() && providerId === "otogura"
+      ? getBrowserOtoguraAssetOptions(externalId)
+      : invoke<ExternalStoreAssetOptions>("get_external_store_asset_options", {
       providerId,
       externalId,
     }),
@@ -668,7 +664,9 @@ export const tauri = {
     projectPath: string,
     request: ExternalStoreInstallRequest,
   ) =>
-    invoke<ExternalStoreInstallResult>("install_external_store_asset", {
+    isBrowserProjectPath(projectPath) && request.providerId === "otogura"
+      ? installBrowserOtoguraAsset(projectPath, request)
+      : invoke<ExternalStoreInstallResult>("install_external_store_asset", {
       projectPath,
       request,
     }),
@@ -779,16 +777,6 @@ export const tauri = {
     invoke<XriftMcpClientStatus[]>("detect_xrift_mcp_clients"),
   registerXriftMcpClient: (clientId: XriftMcpClientId) =>
     invoke<XriftMcpClientStatus>("register_xrift_mcp_client", { clientId }),
-  detectXriftOllama: () =>
-    invoke<XriftOllamaStatus>("detect_xrift_ollama"),
-  configureXriftOllama: (
-    integrationId: XriftOllamaIntegrationId,
-    model: string,
-  ) =>
-    invoke<XriftOllamaConfigurationResult>("configure_xrift_ollama", {
-      integrationId,
-      model,
-    }),
   completeXriftMcpRequest: (response: XriftMcpEditorResponse) =>
     invoke<void>("complete_xrift_mcp_request", { response }),
   setXriftMcpEditorReady: (ready: boolean) =>

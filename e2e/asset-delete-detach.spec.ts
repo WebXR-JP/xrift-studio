@@ -78,10 +78,8 @@ test("参照されているAssetを、削除ダイアログから参照を外し
   // The blank starter's floor Material is used by the Scene, so the delete is
   // refused with a row that lets the author unlink that owner in place.
   await page.getByPlaceholder("アセットを検索…").fill("Neutral Ground");
-  await page
-    .getByRole("button", { name: "Neutral Groundを削除" })
-    .first()
-    .click();
+  await page.getByRole("region", { name: "Assets" }).getByRole("button", { name: /Neutral Ground/ }).first().click({ button: "right" });
+  await page.getByRole("menu", { name: "Assetsのメニュー" }).getByRole("button", { name: "削除", exact: true }).click();
 
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("heading", { name: "アセットを削除" })).toBeVisible();
@@ -104,8 +102,38 @@ test("参照されているAssetを、削除ダイアログから参照を外し
     page.getByText("「Neutral Ground」をAssetsから削除しました"),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Neutral Groundを削除" }),
+    page.getByRole("region", { name: "Assets" }).getByRole("button", { name: /Neutral Ground/ }),
   ).toHaveCount(0);
+});
+
+test("複数選択したAssetを一度に削除できる", async ({ page }) => {
+  await page.goto("/e2e.html?scenario=ready");
+  await page.getByRole("button", { name: /新規プロジェクト/ }).click();
+  await page.getByRole("button", { name: /ワールドをビジュアルで作る/ }).click();
+  await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
+  await page.getByLabel("プロジェクト名").fill("asset-multi-delete");
+  await page.getByRole("button", { name: "作成して開く" }).click();
+  await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
+
+  for (let index = 0; index < 2; index++) {
+    await page.getByRole("button", { name: "新規アセットまたはフォルダー" }).click();
+    await page.getByRole("button", { name: "新規マテリアル", exact: true }).click();
+  }
+  const materials = page.getByRole("button", { name: /マテリアル 新規マテリアル \d+/ });
+  await expect(materials).toHaveCount(2);
+  const first = materials.nth(0);
+  const second = materials.nth(1);
+  await first.click();
+  await second.click({ modifiers: ["Control"] });
+  await expect(first).toHaveAttribute("aria-pressed", "true");
+  await expect(second).toHaveAttribute("aria-pressed", "true");
+
+  await second.click({ button: "right" });
+  await page.getByRole("menu", { name: "Assetsのメニュー" }).getByRole("button", { name: "削除", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("2件のアセット")).toBeVisible();
+  await dialog.getByRole("button", { name: "削除", exact: true }).click();
+  await expect(materials).toHaveCount(0);
 });
 
 /**

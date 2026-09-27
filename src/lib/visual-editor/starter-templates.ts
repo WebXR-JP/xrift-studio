@@ -23,7 +23,6 @@ import {
 } from "./prototype-project";
 import { applyComponentCodeImportPlan } from "./component-code-import";
 import { analyzeOfficialXriftWorldTemplate } from "./official-world-template-import";
-import { wireOfficialTemplateBehaviour } from "./official-template-behaviour";
 import {
   createPrefabAsset,
   createPrefabDocument,
@@ -47,8 +46,6 @@ export type VisualStarterTemplateId =
   | StarterItemTemplateId;
 
 export type BundledStarterModelId =
-  | "xrift-official-duck"
-  | "xrift-official-bunny"
   | "log-bench"
   | "torii-gate"
   | "mug"
@@ -134,38 +131,6 @@ export type StarterItemTemplateDefinition = {
 };
 
 export const BUNDLED_STARTER_ASSETS = {
-  "xrift-official-duck": {
-    id: "xrift-official-duck",
-    kind: "model",
-    publicPath: "/visual-editor/starter-assets/xrift-world-template-duck.glb",
-    projectRelativePath: "assets/starter/xrift-official/duck.glb",
-    byteLength: 119808,
-    sha256:
-      "154d3d5f025f9a0a614b5ea27b5e816120e0d286077b05ba67281e4b2823684d",
-    mediaType: "model/gltf-binary",
-    provenance: {
-      ownership: "third-party",
-      sourceName: "WebXR-JP/xrift-world-template public/duck.glb",
-      sourceUrl: "https://github.com/WebXR-JP/xrift-world-template",
-      license: "MIT",
-    },
-  },
-  "xrift-official-bunny": {
-    id: "xrift-official-bunny",
-    kind: "model",
-    publicPath: "/visual-editor/starter-assets/xrift-world-template-bunny.glb",
-    projectRelativePath: "assets/starter/xrift-official/bunny.glb",
-    byteLength: 1670664,
-    sha256:
-      "7f903e35e249f399e440a3bce6bf694e72dc80ce9dfd33df7f4fd83d4e960fff",
-    mediaType: "model/gltf-binary",
-    provenance: {
-      ownership: "third-party",
-      sourceName: "WebXR-JP/xrift-world-template public/bunny.drc (Studio GLB conversion)",
-      sourceUrl: "https://github.com/WebXR-JP/xrift-world-template",
-      license: "MIT",
-    },
-  },
   "xrift-official-tokyo-station": {
     id: "xrift-official-tokyo-station",
     kind: "texture",
@@ -276,8 +241,6 @@ export const BUNDLED_STARTER_ASSETS = {
 } as const satisfies Record<string, BundledStarterAssetDefinition>;
 
 export const BUNDLED_STARTER_ASSET_IDS = [
-  "xrift-official-duck",
-  "xrift-official-bunny",
   "xrift-official-tokyo-station",
   "log-bench",
   "torii-gate",
@@ -292,9 +255,9 @@ const XRIFT_OFFICIAL_SOURCE_COPY: StarterAssetCopyPlanEntry = {
   bundledPublicPath:
     "/visual-editor/starter-assets/xrift-world-template-World.tsx.txt",
   targetRelativePath: "assets/starter/xrift-world-template-World.tsx.txt",
-  expectedByteLength: 8567,
+  expectedByteLength: 2908,
   expectedSha256:
-    "2e2c82ebf840c954c8a0ce049357106b4162b14996b8de47a5d5647fd984b46a",
+    "511e0698a6ad05bd54218fd05867f63f91a1da97b5218db5544c6ab0c12c80fa",
   mediaType: "text/plain",
   integrity: "strict",
 };
@@ -325,12 +288,8 @@ export const STARTER_WORLD_TEMPLATES = [
   {
     id: "xrift-official",
     name: "XRift公式サンプル",
-    description: "XRift公式のコード用テンプレートを、画面上で編集できるようにした作例です。",
-    bundledAssetIds: [
-      "xrift-official-duck",
-      "xrift-official-bunny",
-      "xrift-official-tokyo-station",
-    ],
+    description: "XRift公式テンプレートの床、壁、Skybox、開始位置を編集できます。",
+    bundledAssetIds: ["xrift-official-tokyo-station"],
   },
   {
     id: "blank",
@@ -549,8 +508,6 @@ function createOfficialTemplateDocuments(
     projectKind: "world",
     plan,
     assetIdBySourcePath: {
-      "public/duck.glb": STARTER_MODEL_IDS.xriftDuck,
-      "public/bunny.drc": STARTER_MODEL_IDS.xriftBunny,
       "public/tokyo-station.jpg": STARTER_TEXTURE_IDS.xriftTokyoStation,
     },
   });
@@ -567,14 +524,7 @@ function createOfficialTemplateDocuments(
   const named = applied.scene.rootEntityIds[0]
     ? renameEntity(applied.scene, applied.scene.rootEntityIds[0], "World")
     : applied.scene;
-  // The conversion is faithful, and the sample it is faithful to has no
-  // behaviour: its button and its portal look pressable and do nothing. That is
-  // the first thing anyone tries in a new project, so the graphs the Editor can
-  // express are wired here, after the import.
-  return wireOfficialTemplateBehaviour(
-    named,
-    rehomeOfficialImportedMaterials(applied.assets),
-  );
+  return { scene: named, assets: rehomeOfficialImportedMaterials(applied.assets) };
 }
 
 function rehomeOfficialImportedMaterials(
@@ -744,8 +694,6 @@ function organizeStarterHierarchy(entities: SceneEntity[]): SceneEntity[] {
 
 
 const STARTER_MODEL_IDS = {
-  xriftDuck: "starter-model-xrift-official-duck",
-  xriftBunny: "starter-model-xrift-official-bunny",
   logBench: "starter-model-log-bench",
   toriiGate: "starter-model-torii-gate",
   mug: "starter-model-mug",
@@ -753,8 +701,6 @@ const STARTER_MODEL_IDS = {
 } as const;
 
 const STARTER_MODEL_ORDER: Record<BundledStarterModelId, number> = {
-  "xrift-official-duck": 0,
-  "xrift-official-bunny": 1,
   "log-bench": 0,
   "torii-gate": 1,
   mug: 2,
@@ -829,30 +775,6 @@ type StarterModelMetadata = {
 };
 
 const STARTER_MODEL_METADATA = {
-  "xrift-official-duck": {
-    assetId: STARTER_MODEL_IDS.xriftDuck,
-    name: "Duck",
-    materialName: "Duck Material",
-    importMetadata: modelMetadata(2, 1, 1, {
-      min: [-0.692985, 0.099294, -0.613282],
-      max: [0.961799, 1.6397, 0.539252],
-      center: [0.134407, 0.869497, -0.037015],
-      size: [1.654784, 1.540406, 1.152534],
-      boundingSphereRadius: 1.268,
-    }),
-  },
-  "xrift-official-bunny": {
-    assetId: STARTER_MODEL_IDS.xriftBunny,
-    name: "Draco Bunny",
-    materialName: "Draco Material",
-    importMetadata: modelMetadata(2, 1, 1, {
-      min: [-0.09469, 0.032987, -0.061874],
-      max: [0.061009, 0.187317, 0.058836],
-      center: [-0.016841, 0.110152, -0.001519],
-      size: [0.155699, 0.15433, 0.12071],
-      boundingSphereRadius: 0.125,
-    }),
-  },
   "log-bench": {
     assetId: STARTER_MODEL_IDS.logBench,
     name: "丸太ベンチ",
@@ -957,8 +879,6 @@ function isBundledStarterModelId(
   id: BundledStarterAssetId,
 ): id is BundledStarterModelId {
   return (
-    id === "xrift-official-duck" ||
-    id === "xrift-official-bunny" ||
     id === "log-bench" ||
     id === "torii-gate" ||
     id === "mug" ||
@@ -1061,7 +981,7 @@ function createFloorEntity(): SceneEntity {
     BUILTIN_PRIMITIVE_CREATION_IDS.plane,
   );
   if (!definition) throw new Error("Builtin plane is unavailable");
-  const floorScale: Vec3 = [8, 8, 8];
+  const floorScale: Vec3 = [8, 8, 1];
   const floorPosition: Vec3 = [0, 0, 0];
   const floorMaterialAssetId = STARTER_MATERIAL_IDS.ground;
   return {

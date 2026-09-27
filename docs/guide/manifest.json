@@ -329,7 +329,7 @@
       "description": "基本操作を覚えたあとで、AI接続から制作を手伝ってもらいます。",
       "group": "behavior",
       "file": "ai-connection.md",
-      "keywords": "AI MCP 接続 Claude Codex Ollama 登録",
+      "keywords": "AI MCP 接続 Claude Codex 登録",
       "related": [
         "save-and-open",
         "first-world",

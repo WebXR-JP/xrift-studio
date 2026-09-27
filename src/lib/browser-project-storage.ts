@@ -1,5 +1,6 @@
 import type { FsEntry, ProjectKind, VisualAssetImportWrite, VisualProjectFiles, VisualProjectWriteRequest } from "./tauri";
 import { isValidAssetImportPath, isValidAssetImportTransactionId } from "./visual-editor/asset-import-transaction";
+import type { VisualPublicationRecord } from "./visual-editor/project-document";
 
 const PROJECT_PREFIX = "browser-project://";
 const PROJECT_MANIFEST = "xrift-studio.project.json";
@@ -9,8 +10,48 @@ const SETTINGS = "settings";
 const MAX_FILE_BYTES = 128 * 1024 * 1024;
 const MAX_TRANSACTION_BYTES = 320 * 1024 * 1024;
 type StoredFile = { projectPath: string; relativePath: string; bytes: Uint8Array };
-export type BrowserStoredProject = { path: string; name: string; title: string; kind: ProjectKind; modifiedAt: string };
+export type BrowserStoredProject = {
+  path: string;
+  name: string;
+  title: string;
+  kind: ProjectKind;
+  modifiedAt: string;
+  uploadedAt?: string | null;
+  publicationId?: string | null;
+};
 let databasePromise: Promise<IDBDatabase> | undefined;
+
+function publicationId(kind: ProjectKind, publication: VisualPublicationRecord | undefined): string | undefined {
+  if (!publication) return undefined;
+  const specific = kind === "world" ? publication.worldId : publication.itemId;
+  if (specific && publication.contentId && specific !== publication.contentId) {
+    throw new Error("公開記録のIDが一致しません。XRiftの公開先を確認してください。");
+  }
+  return specific ?? publication.contentId;
+}
+
+/** Preserve the newest successful upload when an older editor snapshot is saved later. */
+export function latestBrowserPublication(
+  kind: ProjectKind,
+  previous: VisualPublicationRecord | undefined,
+  incoming: VisualPublicationRecord | undefined,
+): VisualPublicationRecord | undefined {
+  const previousId = publicationId(kind, previous);
+  const incomingId = publicationId(kind, incoming);
+  if (previousId && incomingId && previousId !== incomingId) {
+    throw new Error("公開先IDが保存済みの記録と一致しません。更新を中止しました。");
+  }
+  if (!previous) return incoming;
+  if (!incoming) return previous;
+  if (previousId && !incomingId) return previous;
+  if (!previousId && incomingId) return incoming;
+  if (previous.versionId && previous.versionId === incoming.versionId) return previous;
+  if (previous.versionNumber !== undefined && incoming.versionNumber !== undefined) {
+    if (previous.versionNumber >= incoming.versionNumber) return previous;
+    return incoming;
+  }
+  return Date.parse(previous.uploadedAt) >= Date.parse(incoming.uploadedAt) ? previous : incoming;
+}
 
 /** Browser paths are explicit; they never make native IPC or authentication available. */
 export function isBrowserProjectPath(path: string | undefined): boolean {
@@ -121,8 +162,18 @@ export async function listBrowserProjects(): Promise<BrowserStoredProject[]> {
             const file = request.result as StoredFile;
             const parsed = visualProjectDocumentCodec.parse(new TextDecoder("utf-8", { fatal: true }).decode(file.bytes));
             if (parsed.ok) {
-              const { metadata, projectKind } = parsed.document;
-              projects.push({ path: file.projectPath, name: metadata.name, title: metadata.title, kind: projectKind, modifiedAt: metadata.updatedAt });
+              const { metadata, projectKind, lastPublication } = parsed.document;
+              projects.push({
+                path: file.projectPath,
+                name: metadata.name,
+                title: metadata.title,
+                kind: projectKind,
+                modifiedAt: metadata.updatedAt,
+                uploadedAt: lastPublication?.uploadedAt ?? null,
+                publicationId: lastPublication
+                  ? (projectKind === "world" ? lastPublication.worldId : lastPublication.itemId) ?? lastPublication.contentId ?? null
+                  : null,
+              });
             }
           } catch { /* An unreadable manifest must not hide the other saved projects. */ }
         };
@@ -255,6 +306,7 @@ export async function commitBrowserAssetImport(projectPath: string, transactionI
 export async function saveBrowserVisualProject(projectPath: string, request: VisualProjectWriteRequest): Promise<void> {
   validateProjectPath(projectPath);
   const { parseVisualProjectFiles } = await import("./visual-editor/persistence");
+  const { visualProjectDocumentCodec } = await import("./visual-editor/serialization");
   const documents = parseVisualProjectFiles(request);
   const writes = new Map<string, Uint8Array>();
   const add = (relativePath: string, bytes: Uint8Array) => {
@@ -273,8 +325,19 @@ export async function saveBrowserVisualProject(projectPath: string, request: Vis
     previous.onsuccess = () => {
       try {
         if (previous.result) {
-          const manifest = JSON.parse(new TextDecoder().decode((previous.result as StoredFile).bytes));
-          if (manifest.projectId !== documents.project.projectId) throw new Error("保存中にプロジェクトIDを変更することはできません。");
+          const parsed = visualProjectDocumentCodec.parse(new TextDecoder("utf-8", { fatal: true }).decode((previous.result as StoredFile).bytes));
+          if (!parsed.ok) throw new Error("保存済みのプロジェクト情報を確認できません。");
+          if (parsed.document.projectId !== documents.project.projectId) throw new Error("保存中にプロジェクトIDを変更することはできません。");
+          if (parsed.document.projectKind !== documents.project.projectKind) throw new Error("保存中にプロジェクトの種類を変更することはできません。");
+          const lastPublication = latestBrowserPublication(
+            documents.project.projectKind,
+            parsed.document.lastPublication,
+            documents.project.lastPublication,
+          );
+          if (lastPublication !== documents.project.lastPublication) {
+            const project = { ...documents.project, lastPublication };
+            writes.set(PROJECT_MANIFEST, new TextEncoder().encode(visualProjectDocumentCodec.serialize(project)));
+          }
         }
         for (const [relativePath, bytes] of writes) files.put({ projectPath, relativePath, bytes } satisfies StoredFile);
         settings.put(projectPath, "last-project");

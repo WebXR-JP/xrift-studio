@@ -10,8 +10,10 @@ import type { PrototypeVisualProject } from "./lib/visual-editor/prototype-proje
 import type { VisualProjectDocuments } from "./lib/visual-editor/persistence";
 import {
   WebUploadDialog,
-  type WebUploadBundle,
 } from "./preview/WebUploadDialog";
+import type { XriftUploadResult } from "./lib/visual-editor/publish";
+import { imageDataUrlToPng } from "./lib/project-thumbnail";
+import { tauri } from "./lib/tauri";
 import type { ProjectKind } from "./preview/content";
 
 const VisualEditorPrototype = lazy(() =>
@@ -31,10 +33,15 @@ function EditorFallback() {
 /** The browser editor has its own HTML entry, so its URL survives navigation. */
 export default function BrowserEditorApp() {
   const [visualEditorKind, setVisualEditorKind] = useState<ProjectKind | null>(null);
-  const [webUploadBundle, setWebUploadBundle] = useState<WebUploadBundle | null>(null);
+  const [webUploadBundle, setWebUploadBundle] = useState<PrototypeVisualProject | null>(null);
+  const [editorInitialBundle, setEditorInitialBundle] = useState<PrototypeVisualProject | null>(null);
+  const [thumbnailCaptureRequest, setThumbnailCaptureRequest] = useState(0);
+  const [thumbnailCaptureBusy, setThumbnailCaptureBusy] = useState(false);
+  const [thumbnailCaptureError, setThumbnailCaptureError] = useState<string | null>(null);
+  const [thumbnailRefreshKey, setThumbnailRefreshKey] = useState(0);
   const [mobileHelpDismissed, setMobileHelpDismissed] = useState(false);
   const [leaving, setLeaving] = useState(false);
-  const { tablet, phone } = useEditorDevice();
+  const { phone } = useEditorDevice();
   const startupStarted = useRef(false);
   const [browserSession, setBrowserSession] = useState<BrowserProjectSession | null>(null);
   const activeSession = useRef<BrowserProjectSession | null>(null);
@@ -52,6 +59,9 @@ export default function BrowserEditorApp() {
     activeSession.current = session;
     if (previous && previous !== session) closingSession.current = previous.close();
     setBrowserSession(session);
+    setEditorInitialBundle(session.initialBundle);
+    setThumbnailCaptureBusy(false);
+    setThumbnailCaptureError(null);
     setVisualEditorKind(session.initialBundle.project.projectKind);
     document.title = `${session.initialBundle.project.metadata.name} | XRift Studio`;
     // Drop legacy startup hints; every visit now begins in the project library.
@@ -235,10 +245,45 @@ export default function BrowserEditorApp() {
     setBrowserSession(null);
     setVisualEditorKind(null);
     setWebUploadBundle(null);
+    setEditorInitialBundle(null);
+    setThumbnailCaptureBusy(false);
+    setThumbnailCaptureError(null);
     document.title = "XRift Studio";
     if (session) await session.close();
     await closingSession.current;
     await refreshBrowserProjects();
+  };
+
+  const recordBrowserPublication = async (
+    bundle: PrototypeVisualProject,
+    result: XriftUploadResult,
+  ) => {
+    const session = browserSession;
+    if (!session || activeSession.current !== session) {
+      throw new Error("編集中のプロジェクトが切り替わりました。XRiftの公開結果を確認してください。");
+    }
+    const published = await session.recordPublication(bundle, result);
+    setEditorInitialBundle(published);
+    setWebUploadBundle(published);
+    await refreshBrowserProjects();
+  };
+
+  const captureBrowserThumbnail = async (dataUrl: string) => {
+    const session = activeSession.current;
+    if (!session) {
+      setThumbnailCaptureError("プロジェクトを確認できません。開き直してから撮影してください。");
+      setThumbnailCaptureBusy(false);
+      return;
+    }
+    try {
+      await tauri.writeThumbnail(session.path, await imageDataUrlToPng(dataUrl));
+      setThumbnailRefreshKey((current) => current + 1);
+      setThumbnailCaptureError(null);
+    } catch (error) {
+      setThumbnailCaptureError(error instanceof Error ? error.message : "シーンを撮影できませんでした。");
+    } finally {
+      setThumbnailCaptureBusy(false);
+    }
   };
 
   useEffect(() => {
@@ -293,22 +338,43 @@ export default function BrowserEditorApp() {
               projectKind={visualEditorKind}
               projectName={browserSession.initialBundle.project.metadata.name}
               projectPath={browserSession.path}
-              initialBundle={browserSession.initialBundle}
+              initialBundle={editorInitialBundle ?? browserSession.initialBundle}
               onSave={saveBrowserProject}
               onProjectExport={exportBrowserProject}
               onProjectImport={openProjectChooser}
               projectTransferBusy={transfer?.phase === "preparing"}
               backLabel="プロジェクト"
               onBack={() => { void returnToProjectLibrary(); }}
-              onUpload={(bundle) => (tablet || phone) ? exportBrowserProject(bundle) : setWebUploadBundle(bundle)}
+              onUpload={async (bundle) => {
+                await saveBrowserProject(bundle);
+                setWebUploadBundle(bundle);
+              }}
+              thumbnailCaptureRequest={thumbnailCaptureRequest}
+              onThumbnailCaptured={(dataUrl) => { void captureBrowserThumbnail(dataUrl); }}
+              onThumbnailCaptureError={(message) => { setThumbnailCaptureError(message); setThumbnailCaptureBusy(false); }}
             /> : <EditorFallback />}
             {phone && !mobileHelpDismissed && !transfer && browserSession ? <MobileEditorHelp onClose={() => setMobileHelpDismissed(true)} /> : null}
           </Suspense>
         </VisualEditorErrorBoundary>
-        <WebUploadDialog
+        {webUploadBundle && browserSession ? <WebUploadDialog
           bundle={webUploadBundle}
+          projectPath={browserSession.path}
+          thumbnailRefreshKey={thumbnailRefreshKey}
+          thumbnailCaptureBusy={thumbnailCaptureBusy}
+          thumbnailCaptureError={thumbnailCaptureError}
+          onCaptureThumbnail={() => {
+            setThumbnailCaptureError(null);
+            setThumbnailCaptureBusy(true);
+            setThumbnailCaptureRequest((current) => current + 1);
+          }}
           onClose={() => setWebUploadBundle(null)}
-        />
+          onExport={() => {
+            const bundle = webUploadBundle;
+            setWebUploadBundle(null);
+            void exportBrowserProject(bundle);
+          }}
+          onUploaded={recordBrowserPublication}
+        /> : null}
         {transferControls}
       </div>
     );

@@ -20,7 +20,7 @@ async function releaseE2EState(
 
 async function openReleaseApp(
   page: Page,
-  scenario: "ready" | "setup" | "setup-error" = "ready",
+  scenario: "ready" | "setup" | "setup-error" | "runtime-update" = "ready",
 ): Promise<void> {
   await page.goto(`/e2e.html?scenario=${scenario}`);
 }
@@ -51,6 +51,8 @@ test("初回セットアップからプロジェクト一覧へ進める", { tag
   await expect(
     page.getByRole("heading", { name: /XRift Studio へようこそ/ }),
   ).toBeVisible();
+  await expect(page.getByText("Node.js v24.21.0 LTS", { exact: true })).toBeVisible();
+  await expect(page.getByText("インストールするバージョン: v0.24.4", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "ワールドを作る", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "セットアップを開始" }).click();
   await expect(
@@ -61,6 +63,24 @@ test("初回セットアップからプロジェクト一覧へ進める", { tag
   expect(state?.calls.some((call) => call.command === "setup_runtime")).toBe(
     true,
   );
+});
+
+test("旧CLIは推奨版への更新を示し、利用者の操作後に一度だけ準備する", { tag: "@release-smoke" }, async ({ page }) => {
+  await openReleaseApp(page, "runtime-update");
+  await expect(page.getByRole("heading", { name: "制作ツールの更新が必要です" })).toBeVisible();
+  await expect(page.getByText("現在 v0.24.3 → 推奨 v0.24.4", { exact: true })).toBeVisible();
+  await expect(page.getByText("Node.js v24.21.0 LTS", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /へようこそ/ })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "プロジェクト", exact: true })).toHaveCount(0);
+  expect((await releaseE2EState(page))?.calls.filter((call) => call.command === "setup_runtime")).toHaveLength(0);
+
+  await page.getByRole("button", { name: "制作ツールを更新", exact: true }).evaluate((button: HTMLButtonElement) => {
+    button.click();
+    button.click();
+  });
+  await expect(page.getByRole("button", { name: "制作ツールを更新中…", exact: true })).toBeDisabled();
+  await expect(page.getByRole("heading", { name: "プロジェクト", exact: true })).toBeVisible();
+  expect((await releaseE2EState(page))?.calls.filter((call) => call.command === "setup_runtime")).toHaveLength(1);
 });
 
 test("セットアップエラーを伏字付きでヘルプ相談へ引き継げる", async ({

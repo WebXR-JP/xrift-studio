@@ -1,6 +1,7 @@
 import {
   resolveTargetSize,
   type TextureConversion,
+  type TextureOutputFormat,
 } from "./texture-conversion";
 import type { TextureEncodeRequest } from "./texture-encoder.worker";
 
@@ -10,8 +11,7 @@ let encodingQueue: Promise<unknown> = Promise.resolve();
 /**
  * Textureのバイト列を実際に作り直す処理をまとめる。
  *
- * Canvasとktx2-encoderしか使わないため、デスクトップの公開でもブラウザの
- * アップロードでも同じコードが動く。Tauri IPCへは依存させない。
+ * 明示的な画像加工で使う。Canvasとktx2-encoderを使い、Tauri IPCへは依存させない。
  */
 
 export function copyAssetBytes(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
@@ -51,6 +51,7 @@ export async function renderImageBytes(
     mimeType: string;
     quality?: number;
     powerOfTwo?: boolean;
+    outputFormat?: TextureOutputFormat;
   },
 ): Promise<{ bytes: Uint8Array; width: number; height: number }> {
   const bitmap = await createImageBitmap(new Blob([copyAssetBytes(bytes)]));
@@ -60,6 +61,7 @@ export async function renderImageBytes(
       bitmap.height,
       options.maxSize,
       options.powerOfTwo === true,
+      options.outputFormat,
     );
     const canvas = document.createElement("canvas");
     canvas.width = width;
@@ -117,8 +119,8 @@ export function encodeKtx2(
 /**
  * 計画した変換を、原本のバイト列へそのまま適用する。
  *
- * 原本ファイルには触れないので、公開・アップロード・書き出しのどの経路からでも
- * 「制作データはそのまま、配るものだけ軽くする」形で呼べる。
+ * Inspectorなどの明示的な加工操作で使い、結果は別ファイルへ保存する。
+ * 公開・書き出しは、エディターで使用中の画像をそのままコピーする。
  */
 export async function convertTextureBytes(
   sourceBytes: Uint8Array,
@@ -128,6 +130,7 @@ export async function convertTextureBytes(
   const rendered = await renderImageBytes(sourceBytes, {
     maxSize: conversion.maxSize,
     powerOfTwo: conversion.powerOfTwo,
+    outputFormat: conversion.outputFormat,
     mimeType: conversion.outputFormat === "ktx2" ? "image/png" : conversion.mimeType,
     quality:
       conversion.qualityApplies && conversion.outputFormat !== "ktx2"
@@ -144,18 +147,4 @@ export async function convertTextureBytes(
     width: rendered.width,
     height: rendered.height,
   };
-}
-
-/**
- * 出力側でだけ効くTexture変換を、原本のバイト列へ適用する。
- *
- * `conversion` が無いコピーは原本をそのまま配る。公開・アップロード・Classic
- * 書き出しのどれもこの1か所を通すので、経路によって配られる画像が変わらない。
- */
-export async function convertPublishedTextureBytes(
-  sourceBytes: Uint8Array,
-  conversion: TextureConversion | undefined,
-): Promise<Uint8Array> {
-  if (!conversion) return sourceBytes;
-  return (await convertTextureBytes(sourceBytes, conversion)).bytes;
 }

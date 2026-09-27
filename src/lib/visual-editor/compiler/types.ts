@@ -5,10 +5,8 @@ import type { VisualProjectDocument, VisualProjectKind } from "../project-docume
 import type { SceneDocument } from "../scene-document";
 import type { CompilationProvenance } from "../serialization";
 import type { ResolvedPublishPermissions } from "./publish-permissions";
-import type { TextureConversion } from "../texture-conversion";
-import type { ModelDownloadPlan } from "./download-plan";
 
-export const VISUAL_COMPILER_VERSION = "0.7.2" as const;
+export const VISUAL_COMPILER_VERSION = "0.7.4" as const;
 
 export type VisualCompilerDocuments = {
   project: VisualProjectDocument;
@@ -64,16 +62,6 @@ export type AssetCopyPlanEntry = {
     | "prefab"
     | "other";
   supportedByCompiler: boolean;
-  /**
-   * 出力時にだけ適用するTextureの変換。
-   *
-   * 最大解像度・圧縮のImport設定は、制作データの原本を書き換えずに公開結果へ
-   * 反映する。ここに値があるコピーは、原本をそのまま複製せず、この内容で
-   * 作り直した画像を `targetRelativePath` へ書く。
-   */
-  textureConversion?: TextureConversion;
-  /** Lossless cleanup of the published copy; never changes authoring files. */
-  modelDownload?: ModelDownloadPlan;
 };
 
 export type RequiredPublicationFileCopy = {

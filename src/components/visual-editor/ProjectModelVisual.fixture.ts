@@ -1,6 +1,7 @@
 import {
   Box3,
   BoxGeometry,
+  CompressedTexture,
   Bone,
   DoubleSide,
   Group,
@@ -13,6 +14,7 @@ import {
   Texture,
   Vector3,
   type Material,
+  type BufferGeometry,
 } from "three";
 import {
   BUILTIN_ASSET_IDS,
@@ -87,6 +89,16 @@ export async function runProjectModelMaterialPreviewFixtureAssertions(): Promise
     textureAssetId: fixtureTextureAsset.id,
     texCoord: 0,
   };
+  const compressed = new CompressedTexture([], 4, 4);
+  const encodedMipmaps = compressed.mipmaps;
+  configureMaterialPreviewTexture(compressed, fixtureTextureAsset, textureInfo, "srgb");
+  assert(!compressed.generateMipmaps, "A compressed texture must retain its encoded mipmaps instead of asking WebGL to generate them");
+  assert(compressed.mipmaps === encodedMipmaps, "Configuring a compressed texture must preserve its encoded mipmaps");
+  const uncompressed = new Texture();
+  configureMaterialPreviewTexture(uncompressed, fixtureTextureAsset, textureInfo, "srgb");
+  assert(uncompressed.generateMipmaps === fixtureTextureAsset.importSettings.generateMipmaps, "An ordinary texture must retain its mipmap setting");
+  compressed.dispose();
+  uncompressed.dispose();
   const assets = updateMaterialAsset(
     {
       ...project.assets,
@@ -235,6 +247,7 @@ export async function runProjectModelMaterialPreviewFixtureAssertions(): Promise
   assertModelMaterialAssignmentsStayInTheirGltfSlots(assets);
   assertModelNodeMaterialOverridesStayIsolated(assets);
   assertOpenBrushMaterialKeepsCustomShader(assigned);
+  assertOpenBrushGeometryBindingsStayOnTheirMesh(assigned);
   assertOpenBrushBaseColorFactorPreservesShaderInterface(assigned);
   assertAsyncTextureCompletionRequestsMaterialRender();
   assertTextureLoadStatusOnlyReportsSupportedReadyAssets(fixtureTextureAsset);
@@ -505,6 +518,54 @@ function assertOpenBrushMaterialKeepsCustomShader(
   preview.dispose();
   source.dispose();
   brushPreset.dispose();
+}
+
+function assertOpenBrushGeometryBindingsStayOnTheirMesh(fallback: MaterialAsset): void {
+  const geometry = new BoxGeometry();
+  const sources = [new MeshBasicMaterial(), new MeshBasicMaterial()];
+  sources.forEach((source, index) => {
+    source.userData[PROJECT_MODEL_SOURCE_MATERIAL_INDEX_USER_DATA_KEY] = index;
+  });
+  const first = new Mesh(geometry, sources);
+  const second = new Mesh(geometry, sources);
+  first.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY] = 3;
+  second.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY] = 4;
+  const root = new Group();
+  root.add(first, second);
+  const preset = new RawShaderMaterial({
+    vertexShader: "in vec3 a_position;\nin vec4 a_color;\nvoid main() {}",
+    fragmentShader: "in vec4 v_color;\nvoid main() { gl_FragColor = v_color; }",
+  });
+  const material: MaterialAsset = {
+    ...fallback,
+    shader: {
+      kind: "openbrush", renderer: "three-icosa", rendererVersion: "three-icosa@fixture",
+      brushName: "Light", brushBaseUrl: "https://example.invalid/brushes/", sourceMaterialIndex: 0,
+      attributeBindings: { a_color: { defaultValue: [1, 0.25, 1, 1] } },
+    },
+  };
+  const ownedGeometries: BufferGeometry[] = [];
+  const ownedMaterials = applyAssignedMaterialPreviews(root, sources.map((_, sourceMaterialIndex) => ({
+    sourceMaterialIndex, sourceNodeIndex: 3, material, customShaderMaterial: preset,
+  })), new Map(), ownedGeometries);
+  assert(first.geometry !== geometry && second.geometry === geometry && !geometry.hasAttribute("a_color"),
+    "OpenBrush preview bindings must not mutate the cached geometry or another mesh sharing it");
+  assert(ownedGeometries.length === 1 && ownedGeometries[0] === first.geometry &&
+    first.geometry.getAttribute("a_color").getY(0) === 0.25 &&
+    first.geometry.getAttribute("a_position") === first.geometry.getAttribute("position"),
+    "Multiple OpenBrush slots must share one owned geometry with their shader bindings intact");
+  assert(second.material[0] === sources[0] && second.material[1] === sources[1],
+    "An unassigned sibling must keep its source materials");
+  ownedMaterials.forEach((value) => value.dispose());
+  ownedGeometries.forEach((value) => value.dispose());
+  const pbrGeometries: BufferGeometry[] = [];
+  const pbrMaterials = applyAssignedMaterialPreviews(second, [{ sourceMaterialIndex: 0, material: { ...fallback, shader: undefined } }], new Map(), pbrGeometries);
+  assert(second.geometry === geometry && pbrGeometries.length === 0,
+    "PBR assignments must keep using the source geometry without unnecessary copies");
+  pbrMaterials.forEach((value) => value.dispose());
+  geometry.dispose();
+  sources.forEach((value) => value.dispose());
+  preset.dispose();
 }
 
 function assertSourceNodeSelectionDoesNotDuplicateTheWholeModel(): void {

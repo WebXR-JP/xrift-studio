@@ -236,18 +236,18 @@ export function PhysicsTree() {
     "The official XRift World snapshot must convert without errors",
   );
   assert(
-    officialPlan.summary.entityCount === 97 &&
-      officialPlan.summary.primitiveCount === 26 &&
-      officialPlan.summary.lightCount === 5 &&
-      officialPlan.summary.textCount === 6 &&
-      officialPlan.summary.rigidBodyCount === 23 &&
+    officialPlan.summary.entityCount === 17 &&
+      officialPlan.summary.primitiveCount === 6 &&
+      officialPlan.summary.lightCount === 2 &&
+      officialPlan.summary.textCount === 0 &&
+      officialPlan.summary.rigidBodyCount === 5 &&
       officialPlan.summary.colliderCount === 0 &&
-      officialPlan.summary.modelAssetCount === 2 &&
+      officialPlan.summary.modelAssetCount === 0 &&
       officialPlan.summary.textureAssetCount === 1 &&
       officialPlan.summary.unsupportedAssetCount === 0 &&
-      officialPlan.summary.xriftComponentCount === 9 &&
-      officialPlan.summary.moduleCount === 9 &&
-      officialPlan.summary.localComponentCount === 10,
+      officialPlan.summary.xriftComponentCount === 1 &&
+      officialPlan.summary.moduleCount === 2 &&
+      officialPlan.summary.localComponentCount === 1,
     `The official World conversion coverage changed unexpectedly: ${JSON.stringify(officialPlan.summary)}`,
   );
   const officialRoot = officialPlan.nodes.find(
@@ -262,14 +262,9 @@ export function PhysicsTree() {
   );
   assert(
     officialPlan.assetDependencies.map((dependency) => dependency.sourcePath).join(",") ===
-      "public/bunny.drc,public/duck.glb,public/tokyo-station.jpg" &&
-      officialPlan.nodes.some(
-        (node) => node.kind === "model" && node.model?.sourcePath === "public/duck.glb",
-      ) &&
-      officialPlan.nodes.filter((node) => node.kind === "text").every(
-        (node) => node.text?.text.trim(),
-      ),
-    "Multi-module official Model, panorama, Draco, and Text dependencies must remain attached to their Scene nodes",
+      "public/tokyo-station.jpg" &&
+      !officialPlan.nodes.some((node) => node.kind === "model" || node.kind === "text"),
+    "The official starter must retain the panorama and omit removed showcase assets",
   );
   const officialApplied = applyComponentCodeImportPlan({
     scene: project.scene,
@@ -283,23 +278,14 @@ export function PhysicsTree() {
   assert(
     officialEntities.filter((entity) =>
       entity.components.some((component) => component.type === "light"),
-    ).length === 5,
+    ).length === 2,
     "R3F lights were not materialized as Visual Light components",
   );
   assert(
     officialEntities.filter((entity) =>
       entity.components.some((component) => component.type === "rigid-body"),
-    ).length === 23,
+    ).length === 5,
     "Rapier bodies were not materialized as parent Rigid Body components",
-  );
-  assert(
-    officialEntities.filter((entity) =>
-      entity.components.some(
-        (component) =>
-          component.type === "rigid-body" && component.bodyType === "dynamic",
-      ),
-    ).length >= 2,
-    "Dynamic Rapier body types were not retained by the Visual conversion",
   );
 }
 

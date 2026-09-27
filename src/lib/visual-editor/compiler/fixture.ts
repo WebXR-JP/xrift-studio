@@ -1,3 +1,5 @@
+import { filterFiles, parseWorldConfig } from "@xrift/sdk";
+import { Color, SRGBColorSpace } from "three";
 import {
   normalizeTextureImportSettings,
   updateMaterialAsset,
@@ -173,6 +175,32 @@ export function runVisualCompilerFixtureAssertions(
   const second = compileVisualProject(world, { generatedAt: fixedTime });
   assert(JSON.stringify(first) === JSON.stringify(second), "Compiler output is not deterministic");
   assert(first.canStage, "Default world fixture should be stageable");
+  const publicationConfig = first.overlayFiles.find((file) => file.relativePath === "vite.config.ts")?.content ?? "";
+  assert(
+    publicationConfig.includes("base: './'") &&
+      publicationConfig.includes("'xrift-studio-shared-'") &&
+      publicationConfig.includes("entryFileNames: flatChunkFileName") &&
+      publicationConfig.includes("chunkFileNames: flatChunkFileName") &&
+      publicationConfig.includes("'./World': './src/index.tsx'"),
+    "Compiler-owned builds must emit flat federation entries and chunks",
+  );
+  const publicationMetadata = first.overlayFiles.find((file) => file.relativePath === "xrift.json");
+  assert(publicationMetadata, "Compiler publication metadata was not emitted");
+  const publicationIgnores = parseWorldConfig(publicationMetadata.content).ignore;
+  const moduleNames = [
+    "remoteEntry.js",
+    "xrift-studio-shared-@pmndrs_uikit-fixture.js",
+    "xrift-studio-shared-react-fixture.js",
+    "hls-fixture.js",
+  ];
+  assert(
+    filterFiles(moduleNames, publicationIgnores).length === moduleNames.length,
+    "SDK default exclusions must retain the compiler's complete runtime module set",
+  );
+  assert(
+    filterFiles(["__federation_shared_@pmndrs_uikit-fixture.js"], publicationIgnores).length === 0,
+    "The regression must exercise the SDK's reserved shared-module exclusion",
+  );
   const defaultWorldSource =
     first.overlayFiles.find((file) => file.relativePath === "src/World.tsx")
       ?.content ?? "";
@@ -428,6 +456,7 @@ export function runVisualCompilerFixtureAssertions(
     )?.content ?? "";
   assert(worldSource.includes("<SpawnPoint"), "World SpawnPoint was not generated");
   assert(worldSource.includes("castShadow={true}"), "Mesh shadow settings were not generated");
+  assert(worldSource.includes('<XriftShadowMapSettings type="pcf" />') && worldSource.includes("shadowMapWidth={256}") && worldSource.includes("shadowMapHeight={256}"), "Scene shadow algorithm and default light resolution were not generated");
   assert(
     worldSource.includes(
       'import { XriftScriptLight } from "./xrift-studio/light-runtime";',
@@ -612,13 +641,16 @@ export function runVisualCompilerFixtureAssertions(
       height: 32,
     },
   };
-  const particleManifest: AssetManifest = {
+  const particleTint: [number, number, number, number] = [0.123456789123, 0.5, 0.876543210987, 0.625];
+  const particleManifest: AssetManifest = updateMaterialAsset({
     ...world.assets,
     assets: {
       ...world.assets.assets,
       [particleTexture.id]: particleTexture,
     },
-  };
+  }, BUILTIN_ASSET_IDS.material.blue, {
+    pbrMetallicRoughness: { baseColorFactor: particleTint },
+  });
   const particleAssetResult = addDefaultParticleAsset(particleManifest, {
     id: "fixture-particle-fireflies",
     name: "Fixture Fireflies",
@@ -702,14 +734,18 @@ export function runVisualCompilerFixtureAssertions(
       `Particle Texture setting was not generated: ${fragment}`,
     ),
   );
-  [
-    'color="#',
-    "opacity={",
-  ].forEach((fragment) =>
-    assert(
-      particleSource.includes(fragment),
-      `Particle Color/Alpha setting was not generated: ${fragment}`,
-    ),
+  const particleColorMatch = particleSource.match(
+    /<XriftScriptParticleEmitter[^>]* color=\{new Color\(\)\.setRGB\(([^,]+), ([^,]+), ([^,]+), SRGBColorSpace\)\}/,
+  );
+  assert(particleColorMatch, "Particle material colour must retain the viewport's unrounded sRGB factors");
+  const emittedParticleColor = new Color().setRGB(
+    Number(particleColorMatch[1]), Number(particleColorMatch[2]), Number(particleColorMatch[3]), SRGBColorSpace,
+  );
+  const previewParticleColor = new Color().setRGB(particleTint[0], particleTint[1], particleTint[2], SRGBColorSpace);
+  assert(emittedParticleColor.equals(previewParticleColor), "Particle tint changed between editor and generated output");
+  assert(
+    particleSource.includes(`opacity={${particleTint[3]}}`),
+    "Particle material alpha was lost while preserving colour precision",
   );
   [
     "new Float32Array(count * 4)",
@@ -800,13 +836,18 @@ export function runVisualCompilerFixtureAssertions(
       (file) => file.relativePath === "src/World.tsx",
     )?.content ?? "";
   assert(ktx2ParticleResult.canStage, "KTX2 Particle fixture should be stageable");
+  assert(ktx2ParticleSource.includes("value.generateMipmaps = false"), "KTX2 particles must use encoded mip levels without WebGL mipmap generation");
   assert(
-    ktx2ParticleSource.includes("return useKTX2(assetUrl, baseUrl);") &&
+    ktx2ParticleSource.includes('import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";') &&
+      ktx2ParticleSource.includes("const gl = useThree((state) => state.gl);") &&
+      ktx2ParticleSource.includes("return useLoader(KTX2Loader, assetUrl, (loader) => {") &&
+      ktx2ParticleSource.includes("loader.setTranscoderPath(baseUrl).detectSupport(gl);") &&
       ktx2ParticleSource.includes(
         "const particleMapSource = useCompiledKtx2(particleMapUrl);",
       ) &&
+      !ktx2ParticleSource.includes("useKTX2") &&
       !ktx2ParticleSource.includes("cdn.jsdelivr.net"),
-    "KTX2 Particle output must pass an XRift baseUrl-local Basis path to useKTX2",
+    "KTX2 output must use the editor's Three loader and device format selection with a world-local Basis path",
   );
   assert(
     JSON.stringify(ktx2ParticleResult.stagingPlan.bundledAssetCopyPlan) ===
@@ -999,6 +1040,28 @@ export function runVisualCompilerFixtureAssertions(
           diagnostic.code === "runtime-component-adapter-missing",
       ),
     "Static Collider and Spawn Point must be supported by the runtime manifest adapter",
+  );
+  const colliderRuntimeAdapter = colliderRuntimeResult.overlayFiles.find(
+    (file) => file.relativePath === "src/World.tsx",
+  )?.content ?? "";
+  const colliderRuntimeManifest = JSON.parse(
+    colliderRuntimeResult.runtimeManifestFile?.content ?? "{}",
+  ) as {
+    scenes?: Record<string, {
+      entities?: Record<string, { components?: Array<{ id: string; type: string }> }>;
+    }>;
+  };
+  assert(
+    colliderRuntimeAdapter.includes('physics="inherit"'),
+    "Published runtime Colliders must join the XRift player's Physics world",
+  );
+  assert(
+    colliderRuntimeManifest.scenes?.[colliderAndSpawnScene.sceneId]?.entities?.[
+      colliderEntity.id
+    ]?.components?.some((component) =>
+      component.id === "fixture-box-collider" && component.type === "collider",
+    ),
+    "Published runtime manifest lost the authored Collider",
   );
 
   const xriftSpawnScene: SceneDocument = {
@@ -1523,25 +1586,27 @@ export function runVisualCompilerFixtureAssertions(
     unappliedRecipeCopy?.supportedByCompiler === true &&
       unappliedRecipeCopy.sourceRelativePath === "assets/textures/albedo.png" &&
       unappliedRecipeCopy.targetRelativePath ===
-        "public/xrift-studio-fixture-texture-unapplied-recipe-albedo.ktx2",
-    "Publish-time Texture conversion must retarget the copy to the converted format",
+        "public/xrift-studio-fixture-texture-unapplied-recipe-albedo.png",
+    "Publishing must keep the editor's current PNG asset and extension",
   );
   assert(
-    unappliedRecipeCopy?.textureConversion?.outputFormat === "ktx2" &&
-      unappliedRecipeCopy.textureConversion.maxSize === 1024 &&
-      unappliedRecipeCopy.textureConversion.srgb === true,
-    "Publish-time Texture conversion plan is incorrect",
+    unappliedRecipeCopy !== undefined && !("textureConversion" in unappliedRecipeCopy),
+    "Publishing must not schedule an unapplied resize or compression recipe",
   );
   const unappliedRecipeSource =
     unappliedRecipeResult.overlayFiles.find(
       (file) => file.relativePath === "src/World.tsx",
     )?.content ?? "";
   assert(
-    unappliedRecipeSource.includes("useCompiledKtx2(baseColorMapUrl)"),
-    "A Texture converted to KTX2 at publish time must load through the KTX2 runtime",
+    unappliedRecipeSource.includes("useTexture(baseColorMapUrl)"),
+    "A PNG with an unapplied KTX2 recipe must use the ordinary image loader",
+  );
+  assert(
+    unappliedRecipeSource.includes('clone.generateMipmaps = !("isCompressedTexture" in clone && clone.isCompressedTexture === true) && options.generateMipmaps'),
+    "Material KTX2 textures must retain encoded mip levels without WebGL mipmap generation",
   );
 
-  // 変換できない原本（SVG）は設定を反映できない。公開は止めず、理由だけを残す。
+  // SVGも現在の画像をそのまま配る。未適用の加工設定は公開診断の対象にしない。
   const unconvertibleRecipeTexture: TextureAsset = {
     ...projectTexture,
     id: "fixture-texture-unconvertible-recipe",
@@ -1579,19 +1644,19 @@ export function runVisualCompilerFixtureAssertions(
     "A Texture recipe that cannot be applied must not block publishing",
   );
   assert(
-    unconvertibleRecipeResult.diagnostics.some(
+    !unconvertibleRecipeResult.diagnostics.some(
       (diagnostic) =>
         diagnostic.code === "texture-recipe-not-applicable" &&
         diagnostic.severity === "warning" &&
         diagnostic.assetId === unconvertibleRecipeTexture.id,
     ),
-    "An unapplicable Texture recipe must be reported as a warning",
+    "Publishing must not warn about an image-processing recipe it does not apply",
   );
   assert(
     unconvertibleRecipeResult.assetCopyPlan.find(
       (entry) => entry.assetId === unconvertibleRecipeTexture.id,
-    )?.textureConversion === undefined,
-    "An unapplicable Texture recipe must not schedule a conversion",
+    )?.targetRelativePath.endsWith("logo.svg"),
+    "Publishing must preserve an SVG source",
   );
 
   const sourceScene = world.scenes[world.project.entrySceneId];
@@ -1628,7 +1693,7 @@ export function runVisualCompilerFixtureAssertions(
     "EquirectangularReflectionMapping",
     "TextureLoader",
     '"xrift-studio-fixture-texture-project-albedo.png"',
-    "rotation={0.78539816}",
+    `rotation={${(45 * Math.PI) / 180}}`,
     "flipY={true}",
     "exposure={1.25}",
     "const src = useCompiledAssetUrl(assetPath);",
@@ -1741,10 +1806,10 @@ export function runVisualCompilerFixtureAssertions(
     "new BoxGeometry(1, 1, 1)",
     "next.translate(0, 0.5, 0)",
     "position={[1, 2, 3]}",
-    "rotation={[0, 1.57079633, 0]}",
+    `rotation={[0, ${Math.PI / 2}, 0]}`,
     "scale={[40, 12, 30]}",
     "new Vector3(0, 0.1, 0)",
-    "uRotation: { value: 0.52359878 }",
+    `uRotation: { value: ${(30 * Math.PI) / 180} }`,
     "<XRiftStudioImageSkybox assetPath={",
     "flipY={false} />",
   ].forEach((fragment) =>
@@ -2057,6 +2122,216 @@ export function runVisualCompilerFixtureAssertions(
     modelResult.overlayFiles.find(
       (file) => file.relativePath === "src/World.tsx",
     )?.content ?? "";
+  // GLTFLoader and the model preview consume glTF colour factors in linear
+  // space. Passing an 8-bit hex string to R3F decodes them as sRGB a second
+  // time, making warm translucent/emissive models turn dark red on publish.
+  const linearColorWorld = {
+    ...modelProject,
+    assets: updateMaterialAsset(modelProject.assets, BUILTIN_ASSET_IDS.material.blue, {
+      pbrMetallicRoughness: {
+        baseColorFactor: [0.87, 0.091234567891, 0.002, 1 / 3],
+        roughnessFactor: 0.7123456789123,
+      },
+      emissiveFactor: [0.75, 0.092345678912, 0.005],
+      alphaMode: "BLEND",
+    }),
+  };
+  const linearColorSource = compileVisualProject(linearColorWorld).overlayFiles.find(
+    (file) => file.relativePath === "src/World.tsx",
+  )?.content ?? "";
+  for (const [property, expected] of [
+    ["color", [0.87, 0.091234567891, 0.002]],
+    ["emissive", [0.75, 0.092345678912, 0.005]],
+  ] as const) {
+    const generatedColors = [...linearColorSource.matchAll(
+      new RegExp(`\\b${property}=\\{new Color\\(([^)]+)\\)\\}`, "g"),
+    )].map((match) => {
+      const [r, g, b] = match[1].split(",").map(Number);
+      return new Color(r, g, b).toArray();
+    });
+    assert(generatedColors.some((actual) => actual.every((value, index) => value === expected[index])),
+      `Published model ${property} must preserve every authored linear channel without sRGB decoding or quantization`);
+  }
+  for (const [property, expected] of [["opacity", 1 / 3], ["roughness", 0.7123456789123]] as const) {
+    const emittedValues = [...linearColorSource.matchAll(new RegExp(`\\b${property}=\\{([^}]+)\\}`, "g"))].map((match) => Number(match[1]));
+    assert(emittedValues.includes(expected), `Published ${property} must preserve the viewport's full numeric precision`);
+  }
+  const primitiveColorSource = compileVisualProject({
+    ...world,
+    assets: linearColorWorld.assets,
+  }).overlayFiles.find((file) => file.relativePath === "src/World.tsx")?.content ?? "";
+  assert(primitiveColorSource.includes(`color=${JSON.stringify(
+    (linearColorWorld.assets.assets[BUILTIN_ASSET_IDS.material.blue] as MaterialAsset).properties.color,
+  )}`), "The existing primitive display colour must remain unchanged");
+  const sharedColorScene = linearColorWorld.scenes[linearColorWorld.project.entrySceneId];
+  const primitiveEntity = {
+    ...world.scenes[world.project.entrySceneId].entities[modelEntity.id],
+    id: "fixture-shared-color-primitive",
+  };
+  primitiveEntity.components = primitiveEntity.components.map((component) => ({
+    ...component, id: `${component.id}-shared-color`,
+  }));
+  const sharedColorAssets = updateMaterialAsset({
+    ...linearColorWorld.assets,
+    assets: { ...linearColorWorld.assets.assets, [particleTexture.id]: particleTexture },
+  }, BUILTIN_ASSET_IDS.material.blue, {
+    pbrMetallicRoughness: { baseColorTexture: { textureAssetId: particleTexture.id, texCoord: 0 } },
+  });
+  for (const rootEntityIds of [
+    [...sharedColorScene.rootEntityIds, primitiveEntity.id],
+    [primitiveEntity.id, ...sharedColorScene.rootEntityIds],
+  ]) {
+    const mixedColorSource = compileVisualProject({
+      ...linearColorWorld,
+      assets: sharedColorAssets,
+      scenes: { [sharedColorScene.sceneId]: {
+        ...sharedColorScene, rootEntityIds,
+        entities: { ...sharedColorScene.entities, [primitiveEntity.id]: primitiveEntity },
+      } },
+    }).overlayFiles.find((file) => file.relativePath === "src/World.tsx")?.content ?? "";
+    assert(mixedColorSource.includes("color={new Color(0.87, 0.091234567891, 0.002)}") &&
+      mixedColorSource.includes(`color=${JSON.stringify(
+        (sharedColorAssets.assets[BUILTIN_ASSET_IDS.material.blue] as MaterialAsset).properties.color,
+      )}`), "Shared textured Materials must preserve model and primitive colours regardless of compilation order");
+  }
+  // Visual Editor desktop Publish uses classic-jsx. Keep the visible GLB in
+  // the same Rigid Body when one Mesh Collider and multiple Box Colliders are
+  // authored; only ambiguous duplicate physics components are rejected.
+  // The prototype object already carries an auto-fit Box Collider. Exclude
+  // pre-existing physics so this scene authors exactly one Mesh Collider and
+  // two Box Colliders; the compiler must keep every authored collider.
+  const modelPhysicsScene: SceneDocument = {
+    ...modelScene,
+    entities: {
+      ...modelScene.entities,
+      [modelEntity.id]: {
+        ...modelScene.entities[modelEntity.id],
+        components: [
+          ...modelScene.entities[modelEntity.id].components.filter(
+            (component) =>
+              component.type !== "collider" && component.type !== "rigid-body",
+          ),
+          createRigidBodyComponent("fixture-model-body", {
+            bodyType: "fixed",
+            autoColliders: "none",
+          }),
+          createMeshColliderComponent("fixture-model-mesh-collider", {
+            meshMode: "trimesh",
+          }),
+          createBoxColliderComponent("fixture-model-box-a", {
+            center: [-0.25, 0.5, 0],
+            halfExtents: [0.25, 0.5, 0.5],
+          }),
+          createBoxColliderComponent("fixture-model-box-b", {
+            center: [0.25, 0.5, 0],
+            halfExtents: [0.25, 0.5, 0.5],
+          }),
+        ],
+      },
+    },
+  };
+  const modelPhysicsResult = compileVisualProject(
+    {
+      ...modelProject,
+      scenes: { [modelPhysicsScene.sceneId]: modelPhysicsScene },
+    },
+    { generatedAt: fixedTime, outputMode: "classic-jsx" },
+  );
+  const modelPhysicsSource =
+    modelPhysicsResult.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  const modelInvocation = modelPhysicsSource.match(/<CompiledModel_[A-Za-z0-9_]+\s*\/>/)?.[0];
+  const modelInvocationIndex = modelInvocation
+    ? modelPhysicsSource.indexOf(modelInvocation)
+    : -1;
+  const modelBodyStart =
+    modelInvocationIndex >= 0
+      ? modelPhysicsSource.lastIndexOf("<RigidBody", modelInvocationIndex)
+      : -1;
+  const modelBodyEnd =
+    modelInvocationIndex >= 0
+      ? modelPhysicsSource.indexOf("</RigidBody>", modelInvocationIndex)
+      : -1;
+  const modelBodySource =
+    modelBodyStart >= 0 && modelBodyEnd > modelBodyStart
+      ? modelPhysicsSource.slice(modelBodyStart, modelBodyEnd + "</RigidBody>".length)
+      : "";
+  assert(
+    modelPhysicsResult.canStage &&
+      Boolean(modelInvocation) &&
+      modelBodySource.includes(modelInvocation ?? "") &&
+      modelBodySource.includes('<XRiftStudioMeshColliders type="trimesh"') &&
+      (modelBodySource.match(/<CuboidCollider\b/g) ?? []).length === 2,
+    "Visual Editor Publish must keep the visible GLB inside one body with one Mesh Collider and multiple Box Colliders",
+  );
+
+  const duplicateMeshScene: SceneDocument = {
+    ...modelPhysicsScene,
+    entities: {
+      ...modelPhysicsScene.entities,
+      [modelEntity.id]: {
+        ...modelPhysicsScene.entities[modelEntity.id],
+        components: [
+          ...modelPhysicsScene.entities[modelEntity.id].components,
+          createMeshColliderComponent("fixture-model-mesh-collider-duplicate", {
+            meshMode: "convex",
+          }),
+        ],
+      },
+    },
+  };
+  for (const outputMode of ["classic-jsx", "classic-runtime"] as const) {
+    const duplicateMeshResult = compileVisualProject(
+      {
+        ...modelProject,
+        scenes: { [duplicateMeshScene.sceneId]: duplicateMeshScene },
+      },
+      { generatedAt: fixedTime, outputMode },
+    );
+    assert(
+      !duplicateMeshResult.canStage &&
+        duplicateMeshResult.diagnostics.some(
+          (diagnostic) =>
+            diagnostic.severity === "blocking" &&
+            diagnostic.code === "multiple-mesh-colliders-unsupported",
+        ),
+      `Duplicate Mesh Colliders must block ${outputMode} publication instead of changing physics after upload`,
+    );
+  }
+
+  const duplicateBodyScene: SceneDocument = {
+    ...modelScene,
+    entities: {
+      ...modelScene.entities,
+      [modelEntity.id]: {
+        ...modelScene.entities[modelEntity.id],
+        components: [
+          ...modelScene.entities[modelEntity.id].components,
+          createRigidBodyComponent("fixture-model-body-a", { bodyType: "fixed" }),
+          createRigidBodyComponent("fixture-model-body-b", { bodyType: "fixed" }),
+        ],
+      },
+    },
+  };
+  for (const outputMode of ["classic-jsx", "classic-runtime"] as const) {
+    const duplicateBodyResult = compileVisualProject(
+      {
+        ...modelProject,
+        scenes: { [duplicateBodyScene.sceneId]: duplicateBodyScene },
+      },
+      { generatedAt: fixedTime, outputMode },
+    );
+    assert(
+      !duplicateBodyResult.canStage &&
+        duplicateBodyResult.diagnostics.some(
+          (diagnostic) =>
+            diagnostic.severity === "blocking" &&
+            diagnostic.code === "multiple-rigid-bodies",
+        ),
+      `Duplicate Rigid Bodies must block ${outputMode} publication instead of silently using the first body`,
+    );
+  }
   assert(modelResult.canStage, "Same-name glTF materials with distinct source indices must be stageable");
   assert(
     modelSource.includes('case "index:0"') &&
@@ -2086,7 +2361,7 @@ export function runVisualCompilerFixtureAssertions(
     (file) => file.relativePath === "src/World.tsx",
   )?.content ?? "";
   assert(unposedModelResult.canStage &&
-    unposedModelSource.includes("const { scene, parser } = useGLTF(modelUrl);") &&
+    unposedModelSource.includes("const { scene, parser } = useLoader(GLTFLoader, modelUrl);") &&
     unposedModelSource.includes("object={scene}") &&
     unposedModelSource.includes("(parser.associations)"),
   "Default same-name assignments need parser associations even without pose or node overrides");
@@ -2173,13 +2448,17 @@ export function runVisualCompilerFixtureAssertions(
       resolverUses.length === 25 && new Set(resolverUses).size === 2,
     "Different material bindings must retain distinct resolvers",
   );
-  assert(modelSource.includes("useGLTF"), "GLTF loader was not generated");
+  assert(
+    modelSource.includes('import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";') &&
+      !modelSource.includes("useGLTF("),
+    "Published GLB must use the same GLTFLoader as the editor",
+  );
   assert(
     /import \{[^}]*\buseXRift\b[^}]*\} from "@xrift\/world-components";/.test(
       modelSource,
     ) &&
       modelSource.includes("const modelUrl = useCompiledAssetUrl(") &&
-      modelSource.includes("useGLTF(modelUrl)"),
+      modelSource.includes("useLoader(GLTFLoader, modelUrl)"),
     "Project GLB loader did not use the XRift base URL",
   );
 
@@ -2599,7 +2878,7 @@ export function runVisualCompilerFixtureAssertions(
       dracoSource.includes(
         "const dracoDecoderPath = useCompiledDracoDecoderPath();",
       ) &&
-      dracoSource.includes("useGLTF(modelUrl, dracoDecoderPath)") &&
+      dracoSource.includes("useLoader(GLTFLoader, modelUrl, (loader) => loader.setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath)))") &&
       !dracoSource.includes("gstatic.com"),
     "A Draco Model must load through the world's own decoder, never a CDN",
   );
@@ -2725,6 +3004,17 @@ export function runVisualCompilerFixtureAssertions(
   assert(
     openBrushSource.includes("createOpenBrushMaterialExtension"),
     "Open Brush model did not register the shared brush material extension",
+  );
+  assert(
+    openBrushSource.includes("class CompiledOpenBrushGLTFLoader extends GLTFLoader") &&
+      openBrushSource.includes("useLoader(CompiledOpenBrushGLTFLoader, modelUrl") &&
+      !openBrushSource.includes("useLoader(GLTFLoader, modelUrl, (loader) => {"),
+    "Open Brush must have its own loader constructor so useLoader cannot apply its plugin to ordinary glTF",
+  );
+  assert(
+    modelSource.includes("useLoader(GLTFLoader, modelUrl") &&
+      !modelSource.includes("CompiledOpenBrushGLTFLoader"),
+    "Ordinary glTF, including files without materials, must keep the standard loader",
   );
   assert(
     !openBrushSource.includes("new GLTFGoogleTiltBrushMaterialExtension"),
@@ -2962,7 +3252,7 @@ export function runVisualCompilerFixtureAssertions(
     assert(animationResult.canStage, "Animated GLB should be stageable");
     [
       "useAnimations",
-      "const { scene, parser, animations } = useGLTF(modelUrl);",
+      "const { scene, parser, animations } = useLoader(GLTFLoader, modelUrl);",
       "const animationRoot = useRef<Group>(null);",
       "const { mixer, clips } = useAnimations(animations, animationRoot);",
       "createXriftAnimationRuntimeBridge",
@@ -3243,8 +3533,10 @@ export function runVisualCompilerFixtureAssertions(
     assert(hierarchyResult.canStage, "Static hierarchy GLB should be stageable");
     assert(
       hierarchySource.includes(
-        "const { scene, parser } = useGLTF(modelUrl);",
-      ) && hierarchySource.includes("<group scale={1}>"),
+        "const { scene, parser } = useLoader(GLTFLoader, modelUrl);",
+      ) && hierarchySource.includes("<group scale={1}>") &&
+        hierarchySource.includes("const cloneRoot: Object3D = sourceRoot && !hasSkinnedMesh ? sourceRoot : scene;") &&
+        hierarchySource.includes("cloneSkeleton(cloneRoot)"),
       "Expanded GLB source must retain parser associations without reapplying import scale",
     );
   }
@@ -3327,7 +3619,7 @@ export function runVisualCompilerFixtureAssertions(
   [
     'OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js"',
     "useLoader(OBJLoader, modelUrl)",
-    "cloneSkeleton(scene)",
+    "cloneSkeleton(cloneRoot)",
     '"Head":[0.1,0.2,0.3]',
     '"Smile":0.75',
   ].forEach((fragment) =>
@@ -3501,6 +3793,7 @@ export function runVisualCompilerFixtureAssertions(
       rotation: [0, 0, 0],
       size: [4, 2],
       textureResolution: 256,
+      reflectionInterval: 3,
       lodDistance: 12,
     },
   });
@@ -3616,6 +3909,10 @@ export function runVisualCompilerFixtureAssertions(
   assert(interactiveSource.includes("onMove={(next)"), "Grabbable callback was not generated");
   assert(interactiveSource.includes("Skybox"), "Skybox import/output was not generated");
   assert(
+    interactiveSource.includes("reflectionInterval={3}"),
+    "Authored Mirror reflection interval was lost from Classic output",
+  );
+  assert(
     interactiveSource.includes("Video180Sphere"),
     "Video180Sphere import/output was not generated",
   );
@@ -3635,6 +3932,18 @@ export function runVisualCompilerFixtureAssertions(
   const officialRuntimeResult = compileVisualProject(
     { ...modelProject, scenes: { [interactiveScene.sceneId]: interactiveScene } },
     { generatedAt: fixedTime, outputMode: "classic-runtime" },
+  );
+  const officialRuntimeManifest = JSON.parse(
+    officialRuntimeResult.runtimeManifestFile?.content ?? "{}",
+  );
+  assert(
+    officialRuntimeManifest.scenes?.[interactiveScene.sceneId]?.entities?.[
+      interactiveEntity.id
+    ]?.components?.some(
+      (component: { id: string; properties?: { reflectionInterval?: number } }) =>
+        component.id === mirror.id && component.properties?.reflectionInterval === 3,
+    ),
+    "Authored Mirror reflection interval was lost from runtime output",
   );
   assert(
     officialRuntimeResult.canStage &&

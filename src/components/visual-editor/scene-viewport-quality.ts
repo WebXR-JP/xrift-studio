@@ -25,7 +25,7 @@ export const SCENE_VIEWPORT_QUALITY_OPTIONS: readonly {
   {
     value: "auto",
     label: "自動",
-    description: "編集中の描画解像度を75%から自動で下げます。必要に応じて高品質へ切り替えてください。",
+    description: "編集中は影を含む高品質から始め、処理が重い場合は描画品質を自動で下げます。",
   },
   {
     value: "high",

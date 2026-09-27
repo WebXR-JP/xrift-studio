@@ -43,6 +43,9 @@ const compilerSpec = read(
 const shellSpec = read("scripts/build-world-runtime-shell.mjs").match(
   specPattern,
 )?.[1];
+const catalogVersion = read("src/lib/visual-editor/component-registry.ts").match(
+  /XRIFT_COMPONENT_API_VERSION\s*=\s*"([^"]+)"/,
+)?.[1];
 
 const mismatches = [
   [
@@ -50,6 +53,7 @@ const mismatches = [
     compilerSpec,
   ],
   ["scripts/build-world-runtime-shell.mjs WORLD_COMPONENTS_SPEC", shellSpec],
+  ["src/lib/visual-editor/component-registry.ts XRIFT_COMPONENT_API_VERSION", catalogVersion],
 ].filter(([, version]) => version !== packageVersion);
 
 if (mismatches.length > 0) {

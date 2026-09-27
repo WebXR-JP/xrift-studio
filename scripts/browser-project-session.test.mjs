@@ -116,3 +116,42 @@ test("failed saves can be retried and cannot switch the project identity", async
   await session.close();
   assert.equal(f.events.filter((event) => event === "release").length, 1);
 });
+
+test("a successful upload target survives an older autosave and a later version", async () => {
+  const f = fixture();
+  const session = await openBrowserProjectSession("project", f.backend);
+  const first = {
+    worldId: "world-1", contentId: "world-1", versionId: "version-1",
+    versionNumber: 1, contentHash: "hash-1", uploadedAt: "2026-09-24T12:00:00.000Z",
+  };
+  const published = await session.recordPublication(f.bundle, first);
+  assert.equal(published.project.lastPublication?.worldId, "world-1");
+  assert.equal(f.saved().project.lastPublication?.versionId, "version-1");
+  await session.save(f.edit("edited after upload"));
+  assert.equal(f.saved().project.metadata.title, "edited after upload");
+  assert.equal(f.saved().project.lastPublication?.versionId, "version-1");
+
+  const second = { ...first, versionId: "version-2", versionNumber: 2, contentHash: "hash-2", uploadedAt: "2026-09-24T13:00:00.000Z" };
+  await session.recordPublication(f.bundle, second);
+  await session.save(f.edit("stale snapshot"));
+  assert.equal(f.saved().project.lastPublication?.versionId, "version-2");
+  await session.close();
+});
+
+test("an upload result can be saved after the first local write fails", async () => {
+  const f = fixture();
+  let fail = true;
+  const session = await openBrowserProjectSession("project", { ...f.backend, save: async (...args) => {
+    if (fail) { fail = false; throw new Error("quota exceeded"); }
+    await f.backend.save(...args);
+  } });
+  const result = {
+    worldId: "world-1", contentId: "world-1", versionId: "version-1",
+    versionNumber: 1, contentHash: "hash-1", uploadedAt: "2026-09-24T12:00:00.000Z",
+  };
+  await assert.rejects(session.recordPublication(f.bundle, result), /quota exceeded/);
+  assert.equal(f.saved().project.lastPublication, undefined);
+  await session.recordPublication(f.bundle, result);
+  assert.equal(f.saved().project.lastPublication?.worldId, "world-1");
+  await session.close();
+});

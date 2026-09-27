@@ -10,6 +10,7 @@ import type {
   InteractionTriggerComponent,
   SceneEntity,
 } from "../../lib/visual-editor/scene-document";
+import { EDITOR_ICONS } from "./editor-icons";
 
 /**
  * Inspector fields for an Interaction Trigger Component.
@@ -65,6 +66,7 @@ export function InteractionTriggerInspector({
       candidate.enabled,
   );
   const disabled = readOnly || !component.enabled;
+  const GraphIcon = EDITOR_ICONS.graph;
 
   return (
     <div className="space-y-2">
@@ -92,9 +94,13 @@ export function InteractionTriggerInspector({
             type="button"
             onClick={() => onOpenGraph(component.interactivityAssetId)}
             disabled={!graph}
-            className="shrink-0 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+            title={graph
+              ? "選択したノードグラフをノードエディターで開く"
+              : "ノードグラフを選択すると開けます"}
+            className="flex shrink-0 items-center gap-1 rounded border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-40"
           >
-            開く
+            <GraphIcon size={13} aria-hidden="true" />
+            グラフを開く
           </button>
         </div>
       </label>

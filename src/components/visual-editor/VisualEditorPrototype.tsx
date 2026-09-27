@@ -62,7 +62,6 @@ import {
   createEditorHistory,
   type EditorHistory,
   createDocumentId,
-  createTextureCard,
   createOfficialXriftComponentSample,
   createEmptyEntity,
   createPrefabDocument,
@@ -97,6 +96,7 @@ import {
   resolveAssetCreationFolderId,
   resolveSceneSettings,
   resolveSceneWind,
+  alignGridToTranslationSnap,
   formatSnapStep,
   nudgeTransformPatch,
   snapStepForMode,
@@ -195,7 +195,6 @@ import {
   type ShaderAssetStage,
   type SceneDocument,
   type TextureAssetPatch,
-  type TextureCardProfile,
   type TerrainViewportEditing,
   type TextPatch,
   type ImagePatch,
@@ -222,9 +221,6 @@ import {
   type XriftMcpClientId,
   type XriftMcpClientStatus,
   type XriftMcpEditorRequestEvent,
-  type XriftOllamaConfigurationResult,
-  type XriftOllamaIntegrationId,
-  type XriftOllamaStatus,
 } from "../../lib/tauri";
 import {
   EMPTY_MCP_HARNESS_STATE,
@@ -678,7 +674,7 @@ type EditorCommandPayload = {
 };
 
 /**
- * Editorの外（公開ダイアログの一括変換・最適化）で更新されたAsset Manifestを
+ * Editorの外（公開ダイアログの最適化）で更新されたAsset Manifestを
  * Editorの履歴へ取り込む。`expectedAssets` が現在のManifestと参照ごと一致する
  * ときだけ適用し、途中で編集が入っていた場合は何もせずfalseを返す。
  */
@@ -1748,11 +1744,6 @@ export function VisualEditorPrototype({
   const [mcpRegisteringClientId, setMcpRegisteringClientId] =
     useState<XriftMcpClientId | null>(null);
   const [mcpError, setMcpError] = useState<string | null>(null);
-  const [ollamaStatus, setOllamaStatus] = useState<XriftOllamaStatus | null>(null);
-  const [ollamaConfiguring, setOllamaConfiguring] = useState(false);
-  const [ollamaError, setOllamaError] = useState<string | null>(null);
-  const [ollamaResult, setOllamaResult] =
-    useState<XriftOllamaConfigurationResult | null>(null);
   const [mcpLastActivity, setMcpLastActivity] =
     useState<XriftMcpActivity>(null);
 
@@ -1788,18 +1779,11 @@ export function VisualEditorPrototype({
     if (!mcpNativeAvailable) return;
     setMcpLoading(true);
     setMcpError(null);
-    setOllamaError(null);
-    setOllamaResult(null);
     try {
-      const [clients, ollama] = await Promise.all([
-        tauri.detectXriftMcpClients(),
-        tauri.detectXriftOllama(),
-      ]);
-      setMcpClients(clients);
-      setOllamaStatus(ollama);
+      setMcpClients(await tauri.detectXriftMcpClients());
     } catch {
       setMcpError(
-        "AIクライアントまたはOllamaを確認できませんでした。XRift Studioを再起動して再試行してください",
+        "AIクライアントを確認できませんでした。XRift Studioを再起動して再試行してください",
       );
     } finally {
       setMcpLoading(false);
@@ -1808,11 +1792,7 @@ export function VisualEditorPrototype({
 
   const registerMcpClient = useCallback(
     async (clientId: XriftMcpClientId) => {
-      if (
-        !mcpNativeAvailable ||
-        mcpRegisteringClientId ||
-        ollamaConfiguring
-      ) {
+      if (!mcpNativeAvailable || mcpRegisteringClientId) {
         return;
       }
       setMcpRegisteringClientId(clientId);
@@ -1835,64 +1815,7 @@ export function VisualEditorPrototype({
         setMcpRegisteringClientId(null);
       }
     },
-    [mcpNativeAvailable, mcpRegisteringClientId, ollamaConfiguring],
-  );
-
-  const configureOllama = useCallback(
-    async (integrationId: XriftOllamaIntegrationId, model: string) => {
-      if (
-        !mcpNativeAvailable ||
-        ollamaConfiguring ||
-        mcpRegisteringClientId
-      ) {
-        return;
-      }
-      const target = mcpClients.find((client) => client.id === integrationId);
-      if (!target?.installed) {
-        setOllamaError(
-          "AIクライアントをインストールしてください",
-        );
-        return;
-      }
-
-      setOllamaConfiguring(true);
-      setOllamaError(null);
-      setOllamaResult(null);
-      try {
-        if (!target.registered || target.needsUpdate) {
-          setMcpRegisteringClientId(integrationId);
-          const status = await tauri.registerXriftMcpClient(integrationId);
-          setMcpClients((current) =>
-            current.map((client) =>
-              client.id === status.id ? status : client,
-            ),
-          );
-        }
-        const result = await tauri.configureXriftOllama(
-          integrationId,
-          model,
-        );
-        setOllamaResult(result);
-        setNotice(
-          `${result.integrationLabel}にOllamaの${result.model}を設定しました。AIクライアントを起動し直してください`,
-        );
-      } catch (error) {
-        setOllamaError(
-          typeof error === "string" && error.trim()
-            ? error
-            : "設定できません。OllamaとAIクライアントの状態を確認してください",
-        );
-      } finally {
-        setMcpRegisteringClientId(null);
-        setOllamaConfiguring(false);
-      }
-    },
-    [
-      mcpClients,
-      mcpNativeAvailable,
-      mcpRegisteringClientId,
-      ollamaConfiguring,
-    ],
+    [mcpNativeAvailable, mcpRegisteringClientId],
   );
 
   const requestAutosave = useCallback(
@@ -5562,6 +5485,15 @@ export function VisualEditorPrototype({
         const currentBundle = current.present.bundle;
         const settings = resolveSceneSettings(currentBundle.scene.settings);
         const gizmo = { ...settings.editor.gizmo, ...patch };
+        if (
+          gizmo.translateSnap !== settings.editor.gizmo.translateSnap ||
+          gizmo.gridSize !== settings.editor.gizmo.gridSize
+        ) {
+          Object.assign(
+            gizmo,
+            alignGridToTranslationSnap(gizmo.gridSize, gizmo.translateSnap),
+          );
+        }
         if (JSON.stringify(gizmo) === JSON.stringify(settings.editor.gizmo)) {
           return current;
         }
@@ -5831,14 +5763,27 @@ export function VisualEditorPrototype({
         );
         return;
       }
-      const target = describeAssetDeleteTarget(bundle, assetId);
+      const ids = selectedAssetIds.includes(assetId) && selectedAssetIds.length > 1
+        ? selectedAssetIds.filter((id) => Boolean(bundle.assets.assets[id]))
+        : [assetId];
+      const analyses = ids.map((id) => describeAssetDeleteTarget(bundle, id));
+      const target = ids.length > 1
+        ? {
+            kind: "assets" as const,
+            ids,
+            name: `${ids.length}件のアセット`,
+            canDelete: analyses.every((item) => item?.kind === "asset" && item.canDelete),
+            referencedNames: analyses.flatMap((item) => item?.kind === "asset" && item.references.length > 0 ? [item.name] : []),
+            referenceCount: analyses.reduce((count, item) => count + (item?.kind === "asset" ? item.references.length : 0), 0),
+          }
+        : analyses[0];
       if (!target) {
         setNotice("削除する素材が見つかりませんでした");
         return;
       }
       setDeleteDialog(target);
     },
-    [bundle, editorMode, importBusy],
+    [bundle, editorMode, importBusy, selectedAssetIds],
   );
 
   const requestDeleteAssetFolder = useCallback(
@@ -5877,6 +5822,32 @@ export function VisualEditorPrototype({
     ) return;
     const target = deleteDialog;
     setHistory((current) => {
+      if (target.kind === "assets") {
+        let documents = {
+          assets: current.present.bundle.assets,
+          scene: current.present.bundle.scene,
+          prefabs: current.present.bundle.prefabs,
+        };
+        for (const id of target.ids) {
+          const result = deleteAssetIfUnreferenced(documents, id);
+          if (!result.changed) {
+            setNotice(result.reason === "referenced" ? "参照が追加されたため削除を中止しました" : "素材は削除されませんでした");
+            return current;
+          }
+          documents = { ...documents, assets: result.assets, prefabs: result.prefabs };
+        }
+        const assetSelection = target.ids.includes(current.present.assetSelection ?? "")
+          ? Object.values(documents.assets.assets).find((asset) => asset.kind !== "primitive")?.id ?? null
+          : current.present.assetSelection;
+        setSelectedAssetIds(assetSelection ? [assetSelection] : []);
+        setSaveStatus("dirty");
+        setNotice(`${target.ids.length}件のアセットをAssetsから削除しました`);
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle: touchProject({ ...current.present.bundle, assets: documents.assets, prefabs: documents.prefabs }),
+          assetSelection,
+        });
+      }
       if (target.kind === "asset") {
         const result = deleteAssetIfUnreferenced(
           {
@@ -5992,7 +5963,7 @@ export function VisualEditorPrototype({
   /** Unlinks everything the dialog lists, then deletes, as one undo step. */
   const detachReferencesAndDeleteAsset = useCallback(() => {
     const target = deleteDialog;
-    if (!target || target.kind !== "asset") return;
+    if (!target || target.kind === "folder") return;
     if (editorMode !== "edit" || importBusy) {
       setNotice(
         editorMode !== "edit"
@@ -6002,6 +5973,36 @@ export function VisualEditorPrototype({
       return;
     }
     setHistory((current) => {
+      if (target.kind === "assets") {
+        let documents = {
+          assets: current.present.bundle.assets,
+          scene: current.present.bundle.scene,
+          prefabs: current.present.bundle.prefabs,
+        };
+        let detachedCount = 0;
+        for (const id of target.ids) {
+          const detached = detachAssetReferences(documents, id);
+          detachedCount += detached.detached.length;
+          const result = deleteAssetIfUnreferenced(detached, id);
+          if (!result.changed) {
+            setNotice("外せない参照が残っているため削除を中止しました");
+            return current;
+          }
+          documents = { assets: result.assets, scene: detached.scene, prefabs: result.prefabs };
+        }
+        const assetSelection = target.ids.includes(current.present.assetSelection ?? "")
+          ? Object.values(documents.assets.assets).find((asset) => asset.kind !== "primitive")?.id ?? null
+          : current.present.assetSelection;
+        setSelectedAssetIds(assetSelection ? [assetSelection] : []);
+        setSaveStatus("dirty");
+        setNotice(`参照${detachedCount}件を外して${target.ids.length}件のアセットを削除しました`);
+        setDeleteDialog(null);
+        return commitEditorHistory(current, {
+          ...current.present,
+          bundle: touchProject({ ...current.present.bundle, ...documents }),
+          assetSelection,
+        });
+      }
       const detached = detachAssetReferences(
         {
           assets: current.present.bundle.assets,
@@ -6092,37 +6093,49 @@ export function VisualEditorPrototype({
         );
         return;
       }
+      const ids = selectedAssetIds.includes(assetId) && selectedAssetIds.length > 1
+        ? selectedAssetIds
+        : [assetId];
       setHistory((current) => {
-        const result = moveLibraryAsset(
-          current.present.bundle.assets,
-          assetId,
-          folderId,
-        );
-        if (!result.changed) {
+        let nextAssets = current.present.bundle.assets;
+        let movedCount = 0;
+        for (const id of ids) {
+          const result = moveLibraryAsset(nextAssets, id, folderId);
+          if (result.reason === "same-parent") continue;
+          if (!result.changed) {
+            setNotice("選択した素材をこの場所へ移動できませんでした");
+            return current;
+          }
+          nextAssets = result.assets;
+          movedCount++;
+        }
+        if (movedCount === 0) {
           setNotice(
-            result.reason === "same-parent"
-              ? "素材はすでにこのフォルダーにあります"
-              : "この場所へ素材を移動できませんでした",
+            ids.length > 1
+              ? "選択した素材はすでにこのフォルダーにあります"
+              : "素材はすでにこのフォルダーにあります",
           );
           return current;
         }
         const assetName = current.present.bundle.assets.assets[assetId]?.name ?? "アセット";
         const folderName = folderId
           ? current.present.bundle.assets.folders?.[folderId]?.name ?? "フォルダー"
-          : "Assets直下";
+          : "Assets/";
         setSaveStatus("dirty");
-        setNotice(`「${assetName}」を${folderName}へ移動しました`);
+        setNotice(ids.length > 1
+          ? `${movedCount}件のアセットを${folderName}へ移動しました`
+          : `「${assetName}」を${folderName}へ移動しました`);
         return commitEditorHistory(current, {
           ...current.present,
           bundle: touchProject({
             ...current.present.bundle,
-            assets: result.assets,
+            assets: nextAssets,
           }),
-          assetSelection: assetId,
+          assetSelection: ids.length > 1 ? current.present.assetSelection : assetId,
         });
       });
     },
-    [editorMode, importBusy],
+    [editorMode, importBusy, selectedAssetIds],
   );
 
   const handleMoveAssetFolder = useCallback(
@@ -6157,7 +6170,7 @@ export function VisualEditorPrototype({
           current.present.bundle.assets.folders?.[folderId]?.name ?? "フォルダー";
         const parentName = parentId
           ? current.present.bundle.assets.folders?.[parentId]?.name ?? "フォルダー"
-          : "Assets直下";
+          : "Assets/";
         setSaveStatus("dirty");
         setNotice(`「${folderName}」を${parentName}へ移動しました`);
         return commitEditorHistory(current, {
@@ -6810,14 +6823,44 @@ export function VisualEditorPrototype({
   }, []);
 
   const handleGizmoCommit = useCallback(
-    (entityId: string, patch: TransformPatch) => {
+    (entityId: string, patch: TransformPatch, peers?: readonly { entityId: string; patch: TransformPatch }[]) => {
       if (editorMode !== "edit") return;
-      updateScene((scene) =>
-        updateModelNodeEntityTransform(scene, entityId, patch),
-      );
-      setNotice("ギズモの変更をシーンへ反映しました");
+      updateScene((scene) => {
+        const primary = getTransform(scene, entityId);
+        if (!primary) return scene;
+        const delta = patch.position?.map((value, index) => value - primary.position[index]);
+        let next = updateModelNodeEntityTransform(scene, entityId, patch);
+        if (peers) {
+          for (const peer of peers) {
+            next = updateModelNodeEntityTransform(next, peer.entityId, peer.patch);
+          }
+          return next;
+        }
+        if (transformMode !== "translate" || !delta || !selectedEntityIds.includes(entityId)) return next;
+        const selected = new Set(selectedEntityIds);
+        for (const id of selectedEntityIds) {
+          if (id === entityId) continue;
+          // Moving a selected parent already carries its descendants in world space.
+          let ancestorId = scene.entities[id]?.parentId;
+          let hasSelectedAncestor = false;
+          while (ancestorId) {
+            if (selected.has(ancestorId)) { hasSelectedAncestor = true; break; }
+            ancestorId = scene.entities[ancestorId]?.parentId ?? null;
+          }
+          if (hasSelectedAncestor) continue;
+          const transform = getTransform(next, id);
+          if (!transform) continue;
+          next = updateModelNodeEntityTransform(next, id, {
+            position: transform.position.map((value, index) => value + delta[index]) as [number, number, number],
+          });
+        }
+        return next;
+      });
+      setNotice(selectedEntityIds.length > 1
+        ? `${selectedEntityIds.length}件のEntityを${transformMode === "rotate" ? "回転" : transformMode === "scale" ? "拡大縮小" : "移動"}しました`
+        : "ギズモの変更をシーンへ反映しました");
     },
-    [editorMode, updateScene],
+    [editorMode, selectedEntityIds, transformMode, updateScene],
   );
 
   const handleRenameEntity = useCallback(
@@ -7292,8 +7335,11 @@ export function VisualEditorPrototype({
           definition.label,
         );
         if (!created) return current;
+        const placedScene = componentDefinitionId === "core.light.spot"
+          ? updateModelNodeEntityTransform(created.scene, created.entityId, { position: [0, 3, 0] })
+          : created.scene;
         const added = addEditorComponent(
-          created.scene,
+          placedScene,
           assets,
           created.entityId,
           componentDefinitionId,
@@ -8252,7 +8298,7 @@ export function VisualEditorPrototype({
           feedback?.assetId === assetId ? null : feedback,
         );
         setNotice(
-          "テクスチャ読み込み設定を更新しました。公開時にこの設定で変換します。編集画面の表示にも適用するには「この設定で画像を書き出す」を使います",
+          "テクスチャ読み込み設定を更新しました。「この設定で画像を書き出す」で適用し、見た目を確認してください",
         );
         return touchProject({ ...current, assets });
       });
@@ -8513,7 +8559,7 @@ export function VisualEditorPrototype({
     [editorMode, projectPath],
   );
 
-  // 公開ダイアログの一括変換・最適化はEditorの外（App）で走り、ディスクと
+  // 公開ダイアログの最適化はEditorの外（App）で走り、ディスクと
   // 公開バンドルだけを更新していた。ここで受け口を登録して、変換後のManifestを
   // 同じ操作の中で履歴へ取り込む。これが無いと、シーンは変換前の画像を見せ
   // 続け、次の保存が変換をManifestごと巻き戻してしまう。
@@ -8822,52 +8868,6 @@ export function VisualEditorPrototype({
     [editorMode, projectPath],
   );
 
-  const handleCreateTextureCard = useCallback(
-    (textureAssetId: string, profile: TextureCardProfile) => {
-      if (editorMode !== "edit" || importBusy) {
-        setNotice(
-          editorMode !== "edit"
-            ? "動作確認を停止してからカードを作成してください"
-            : "アセットのインポート完了後にカードを作成してください",
-        );
-        return;
-      }
-      const materialId = createDocumentId("material-card");
-      setHistory((current) => {
-        const created = createTextureCard(
-          current.present.bundle.scene,
-          current.present.bundle.assets,
-          { textureAssetId, materialId, profile },
-        );
-        if (!created.created) {
-          setNotice(
-            created.reason === "environment-texture"
-              ? "環境テクスチャは遠景・草カードに使用できません"
-              : created.reason === "texture-missing"
-                ? "テクスチャが見つかりません。素材を開き直してください"
-                : "カードを作成できませんでした。テクスチャと素材の状態を確認してください",
-          );
-          return current;
-        }
-        setSaveStatus("dirty");
-        setNotice(
-          `「${created.entityName}」を配置しました。選択中のEntityを移動し、マテリアルのAlphaで透明度を調整できます`,
-        );
-        return commitEditorHistory(current, {
-          ...current.present,
-          bundle: touchProject({
-            ...current.present.bundle,
-            assets: created.assets,
-            scene: created.scene,
-          }),
-          sceneSelection: { kind: "entity", id: created.entityId },
-          assetSelection: null,
-        });
-      });
-    },
-    [editorMode, importBusy],
-  );
-
   const handleParticleChange = useCallback(
     (assetId: string, patch: ParticlePropertiesPatch) => {
       if (editorMode !== "edit" && !playSession) return;
@@ -8924,7 +8924,7 @@ export function VisualEditorPrototype({
         }
         const destination = folderId
           ? `「${assets.folders?.[folderId]?.name ?? "Folder"}」`
-          : "Assets直下";
+          : "Assets/";
         setSaveStatus("dirty");
         setNotice(
           kind === "material"
@@ -9360,7 +9360,7 @@ export function VisualEditorPrototype({
       bundleRef.current = nextBundle;
       const destination = latestFolderId
         ? `「${latestBundle.assets.folders?.[latestFolderId]?.name ?? "Folder"}」`
-        : "Assets直下";
+        : "Assets/";
       setNotice(
         attachedEntityName
           ? `${template.name}から「${name}」を${destination}に作成し、「${attachedEntityName}」へ追加しました`
@@ -11412,11 +11412,12 @@ export function VisualEditorPrototype({
     return entity ? { entityId: entity.id, name: entity.name } : null;
   })();
 
-  const viewportEditorTabs = interactivityEditorAsset
+  const viewportEditorTabs: { id: string; label: string; icon: "graph" | "script"; closable: boolean }[] = interactivityEditorAsset
     ? [
         {
           id: INTERACTIVITY_GRAPH_TAB_ID,
           label: interactivityEditorAsset.name,
+          icon: "graph",
           closable: true,
         },
       ]
@@ -11424,6 +11425,7 @@ export function VisualEditorPrototype({
   if (scriptEditorAsset) viewportEditorTabs.push({
     id: SCRIPT_TAB_ID,
     label: `${scriptEditorAsset.name}${scriptEditorDirty ? " · 未保存" : ""}`,
+    icon: "script",
     closable: true,
   });
 
@@ -11617,8 +11619,8 @@ export function VisualEditorPrototype({
               disabled={projectTransferBusy || projectExportBusy || importBusy || leaving || renderedEditorMode !== "edit"}
               onClick={() => void runProjectExport()}
               title="シーンと素材を.xriftstudioファイルにまとめます"
-              className="flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-brand-600 px-3 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-45"
-            ><ExportIcon size={13} aria-hidden="true" />{projectExportBusy ? "書き出しを準備中…" : "プロジェクトを書き出す"}</button> : <>
+              className="flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-editor-border bg-editor-surface px-3 text-xs font-semibold text-editor-text hover:bg-editor-subtle disabled:opacity-45"
+            ><ExportIcon size={13} aria-hidden="true" />{projectExportBusy ? "書き出しを準備中…" : "プロジェクトを書き出す"}</button> :
             <button
               type="button"
               onClick={() => void runClassicExport()}
@@ -11627,23 +11629,25 @@ export function VisualEditorPrototype({
             >
               <ExportIcon size={13} aria-hidden="true" />
               コードエディターへ書き出す
-            </button>
+            </button>}
             <button
               type="button"
+              disabled={Boolean(onProjectExport) && (projectTransferBusy || projectExportBusy || importBusy || leaving || renderedEditorMode !== "edit")}
               onClick={() => executeCommand("project.publish")}
               title={commandTitle(
-                compilationFresh
+                onProjectExport
+                  ? "公開情報とサムネイルを確認してXRiftへ送信"
+                  : compilationFresh
                   ? "公開内容を確認してXRiftへ送信"
-                  : "最新の編集内容は公開画面で自動的に保存・変換されます",
+                  : "公開画面で最新の編集内容を保存し、公開データを作成します",
                 "project.publish",
                 shortcutLabel("project.publish"),
               )}
-              className="flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-brand-600 px-3 text-xs font-semibold text-white shadow-sm shadow-brand-200/60 hover:bg-brand-700"
+              className="flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-brand-600 px-3 text-xs font-semibold text-white shadow-sm shadow-brand-200/60 hover:bg-brand-700 disabled:opacity-45"
             >
               <UploadIcon size={13} aria-hidden="true" />
               XRiftへ公開
             </button>
-            </>}
             {tablet ? <>
               <button type="button" onClick={() => { setSceneSettingsOpen(true); setTabletPanel("inspector"); setViewportMaximized(false); }}
                 className="min-h-11 rounded-md border border-editor-border bg-editor-surface px-3 text-left text-xs font-semibold text-editor-text">シーン設定</button>
@@ -11690,7 +11694,7 @@ export function VisualEditorPrototype({
             scriptTemplateFolderId
               ? bundle.assets.folders?.[scriptTemplateFolderId]?.name ??
                 "選択中のフォルダー"
-              : "Assets直下"
+              : "Assets/"
           }
           selectedEntityName={
             sceneSelection?.id
@@ -11886,6 +11890,66 @@ export function VisualEditorPrototype({
             onExitRecordingView={() =>
               recordingSession.setViewport({ visible: false })
             }
+            recordingPanel={{
+              busy: recordingBusy,
+              nativeAvailable: tauri.isAvailable(),
+              onStart: () => {
+                void startRecordingTake({}).then((result) => {
+                  if (!result.started && result.message) setNotice(result.message);
+                });
+              },
+              onStop: () => {
+                void stopRecordingTake().then((result) => {
+                  if (!result.stopped) return;
+                  setNotice(
+                    result.snapshot.status === "completed" && result.snapshot.path
+                      ? `録画を保存しました: ${result.snapshot.path}`
+                      : result.snapshot.message ?? "録画を停止しました",
+                  );
+                });
+              },
+              onProfileChange: (patch) => {
+                recordingSession.setProfile(patch);
+              },
+              onViewportChange: (patch) => {
+                recordingSession.setViewport(patch);
+              },
+              projectRecordingDirectory: projectPath ? `${projectPath}/Recording` : undefined,
+              onChooseDirectory: () => {
+                void tauri
+                  .selectDirectory(
+                    "録画の保存先を選ぶ",
+                    recordingSession.getState().outputDirectory ?? undefined,
+                  )
+                  .then((directory) => {
+                    if (typeof directory === "string" && directory) {
+                      recordingSession.setOutputDirectory(directory);
+                    }
+                  })
+                  .catch(() => setNotice("保存先を選べませんでした"));
+              },
+              onResetDirectory: () => recordingSession.setOutputDirectory(null),
+              onRevealRecording: (path) => {
+                const folder = path.replace(/[\\/][^\\/]+$/, "");
+                void tauri.openPath(folder || path).catch(() => {
+                  setNotice("録画の保存先を開けませんでした");
+                });
+              },
+              onFitCamera: () => {
+                void moveRecordingCamera({ fitScene: true }).catch((error) => {
+                  setNotice(
+                    error instanceof Error ? error.message : "録画用カメラを動かせませんでした",
+                  );
+                });
+              },
+              onCameraPreset: (preset) => {
+                void moveRecordingCamera({ preset }).catch((error) => {
+                  setNotice(
+                    error instanceof Error ? error.message : "録画用カメラを動かせませんでした",
+                  );
+                });
+              },
+            }}
           />
           <div id="editor-panel-inspector" className={sidePanelClass("inspector", true)}>
           <EditorPanelVisibilityContext.Provider value={!panelsHidden && (!tablet || tabletPanel === "inspector")}>
@@ -11966,7 +12030,6 @@ export function VisualEditorPrototype({
             }}
             onParticleChange={handleParticleChange}
             onTextureChange={handleTextureChange}
-            onCreateTextureCard={handleCreateTextureCard}
             textureProcessingState={
               textureProcessingFeedback?.assetId === assetSelection
                 ? textureProcessingFeedback.state
@@ -12019,6 +12082,8 @@ export function VisualEditorPrototype({
             />}
             sceneSettingsOpen={sceneSettingsOpen}
             onCloseSceneSettings={() => setSceneSettingsOpen(false)}
+            onResetLayout={() => executeCommand("layout.reset")}
+            onOpenSupport={() => setSupportOpen(true)}
             onSceneSettingsChange={handleSceneSettingsChange}
             onProjectMetadataChange={handleProjectMetadataChange}
             onThumbnailChanged={() => {
@@ -12390,22 +12455,16 @@ export function VisualEditorPrototype({
           <footer className="editor-status-dock relative z-40 flex min-h-10 shrink-0 items-center border-t border-editor-border bg-editor-surface px-1"
             aria-label="エディターのステータスバー">
           <EditorUtilityRail
-            commands={resolvedCommands}
             sceneSettingsOpen={sceneSettingsOpen}
             onToggleSceneSettings={() => {
               setSceneSettingsOpen((current) => !current);
               if (tablet) { setTabletPanel("inspector"); setViewportMaximized(false); }
             }}
-            onResetLayout={() => executeCommand("layout.reset")}
             mcpNativeAvailable={mcpNativeAvailable}
             mcpClients={mcpClients}
             mcpLoading={mcpLoading}
             mcpRegisteringClientId={mcpRegisteringClientId}
             mcpError={mcpError}
-            ollamaStatus={ollamaStatus}
-            ollamaConfiguring={ollamaConfiguring}
-            ollamaError={ollamaError}
-            ollamaResult={ollamaResult}
             mcpLastActivity={mcpLastActivity}
             canUndo={
               !renderedReadOnly &&
@@ -12415,86 +12474,21 @@ export function VisualEditorPrototype({
             }
             onOpenMcp={() => {
               if (
-                (mcpClients.length === 0 || ollamaStatus === null) &&
-                !mcpLoading
+                mcpClients.length === 0 && !mcpLoading
               ) {
                 void refreshMcpClients();
               }
             }}
             onRefreshMcp={() => void refreshMcpClients()}
             onRegisterMcpClient={(clientId) => void registerMcpClient(clientId)}
-            onConfigureOllama={(integrationId, model) =>
-              void configureOllama(integrationId, model)
-            }
             onUndo={handleUndo}
-            onOpenSupport={() => setSupportOpen(true)}
-            recording={{
-              busy: recordingBusy,
-              nativeAvailable: tauri.isAvailable(),
-              onStart: () => {
-                void startRecordingTake({}).then((result) => {
-                  if (!result.started && result.message) setNotice(result.message);
-                });
-              },
-              onStop: () => {
-                void stopRecordingTake().then((result) => {
-                  if (!result.stopped) return;
-                  setNotice(
-                    result.snapshot.status === "completed" && result.snapshot.path
-                      ? `録画を保存しました: ${result.snapshot.path}`
-                      : result.snapshot.message ?? "録画を停止しました",
-                  );
-                });
-              },
-              onProfileChange: (patch) => {
-                recordingSession.setProfile(patch);
-              },
-              onViewportChange: (patch) => {
-                recordingSession.setViewport(patch);
-              },
-              projectRecordingDirectory: projectPath ? `${projectPath}/Recording` : undefined,
-              onChooseDirectory: () => {
-                void tauri
-                  .selectDirectory(
-                    "録画の保存先を選ぶ",
-                    recordingSession.getState().outputDirectory ?? undefined,
-                  )
-                  .then((directory) => {
-                    if (typeof directory === "string" && directory) {
-                      recordingSession.setOutputDirectory(directory);
-                    }
-                  })
-                  .catch(() => setNotice("保存先を選べませんでした"));
-              },
-              onResetDirectory: () => recordingSession.setOutputDirectory(null),
-              onRevealRecording: (path) => {
-                const folder = path.replace(/[\\/][^\\/]+$/, "");
-                void tauri.openPath(folder || path).catch(() => {
-                  setNotice("録画の保存先を開けませんでした");
-                });
-              },
-              onFitCamera: () => {
-                void moveRecordingCamera({ fitScene: true }).catch((error) => {
-                  setNotice(
-                    error instanceof Error ? error.message : "録画用カメラを動かせませんでした",
-                  );
-                });
-              },
-              onCameraPreset: (preset) => {
-                void moveRecordingCamera({ preset }).catch((error) => {
-                  setNotice(
-                    error instanceof Error ? error.message : "録画用カメラを動かせませんでした",
-                  );
-                });
-              },
-            }}
           />
             <div ref={setAssetStatusHost} className="relative min-w-0 flex-1 self-stretch border-l border-editor-border" />
           </footer>
         ) : null}
         {tablet && !recordingUiHidden && notice && (tabletPanel !== "assets" || panelsHidden) ? (
           <div className="flex shrink-0 items-center gap-2 border-t border-editor-border bg-editor-surface px-3 py-1.5 text-xs text-editor-text">
-            <p role="status" className="min-w-0 flex-1 whitespace-pre-wrap break-words">{notice}</p>
+            <p role="status" className="min-w-0 flex-1 whitespace-pre-wrap break-words select-text cursor-text">{notice}</p>
             <button type="button" aria-label="通知を閉じる" onClick={() => setNotice(null)}
               className="min-h-11 shrink-0 rounded-md px-3 text-editor-muted hover:bg-editor-subtle">閉じる</button>
           </div>

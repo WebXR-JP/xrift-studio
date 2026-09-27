@@ -493,7 +493,11 @@ export function configureMaterialPreviewTexture(
   texture.colorSpace =
     colorSpace === "srgb" ? SRGBColorSpace : NoColorSpace;
   texture.flipY = settings.flipY;
-  texture.generateMipmaps = settings.generateMipmaps;
+  // KTX2 already contains its encoded mip levels. WebGL cannot generate new
+  // mip levels for compressed textures, in either Edit or Play.
+  texture.generateMipmaps =
+    !("isCompressedTexture" in texture && texture.isCompressedTexture === true) &&
+    settings.generateMipmaps;
   texture.wrapS = {
     "clamp-to-edge": ClampToEdgeWrapping,
     "mirrored-repeat": MirroredRepeatWrapping,

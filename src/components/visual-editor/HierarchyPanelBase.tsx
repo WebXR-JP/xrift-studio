@@ -1,6 +1,8 @@
 import { SceneContextMenu } from "./SceneContextMenu";
+import { EditorCreationMenuSections } from "./EditorCreationMenuSections";
+import { getDiscoverableEntityCreationEntries } from "../../lib/visual-editor/entity-creation-menu";
 import type { EntityMirrorAxis } from "../../lib/visual-editor/entity-clipboard";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, Plus } from "lucide-react";
 import { useEditorDevice } from "./useEditorDevice";
 import { getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
 import {
@@ -597,7 +599,7 @@ const HierarchyEntityRow = memo(function HierarchyEntityRow({
           handlers.entityDropPlacement(event),
         );
       }}
-      className={`group flex w-full items-stretch border-l-2 text-left text-xs transition-[background-color,border-color,box-shadow,opacity] ${
+      className={`group flex w-full items-stretch border-l-2 text-left text-xs font-normal transition-[background-color,border-color,box-shadow,opacity] ${touch ? "min-h-11" : "h-6"} ${
         assetDropActive
           ? "border-sky-600 bg-sky-100 text-sky-900 ring-1 ring-inset ring-sky-400"
           : activeEntityDrop
@@ -674,10 +676,10 @@ const HierarchyEntityRow = memo(function HierarchyEntityRow({
           handlers.setDragEntityId(null);
           handlers.setDropTarget(null);
         }}
-        className="flex min-w-0 flex-1 cursor-grab select-none items-center gap-1.5 py-1 pr-1 text-left active:cursor-grabbing disabled:cursor-default"
+        className="flex min-w-0 flex-1 cursor-grab select-none items-center gap-1.5 py-0.5 pr-1 text-left active:cursor-grabbing disabled:cursor-default"
       >
         <span
-          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ${
+          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded ${
             selected ? "bg-violet-700 text-white" : "text-slate-500"
           }`}
           title={getEntityTypeLabel(entity)}
@@ -686,9 +688,7 @@ const HierarchyEntityRow = memo(function HierarchyEntityRow({
         </span>
         <span
           className={`min-w-0 flex-1 truncate ${
-            highlightMatches && matchesFilter
-              ? "font-semibold text-violet-800"
-              : ""
+            highlightMatches && matchesFilter ? "text-violet-800" : ""
           }`}
         >
           {entity.name}
@@ -730,7 +730,7 @@ const HierarchyEntityRow = memo(function HierarchyEntityRow({
             event.stopPropagation();
             handlersRef.current.openContextMenu(event, entity.id);
           }}
-          className="my-0.5 flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded text-slate-600 hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-slate-600 hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
         >
           <MoreHorizontal size={16} aria-hidden="true" />
         </button>
@@ -851,12 +851,22 @@ export function HierarchyPanel({
   selectedEntityIds,
   readOnly,
   playMode = false,
+  projectKind,
   onSelectionChange,
   onAssignMaterial,
   onDropSceneAsset,
   onDropBuiltinPrefab,
+  builtinPrefabRecipes,
   onEntityEnabledChange,
+  onCreateXriftObject,
+  onCreateComponentObject,
+  onOpenExternalStore,
+  onImportFile,
+  importDisabledReason,
   importBusy = false,
+  onCreateTerrain,
+  terrainOverlapCount,
+  onArrangeTerrains,
   onCommand,
   clipboardAvailable = false,
   pasteShortcut,
@@ -905,7 +915,7 @@ export function HierarchyPanel({
   renameRequest: { id: string; requestId: number } | null;
   onRename: (entityId: string, name: string) => void;
 }) {
-  const { touch } = useEditorDevice();
+  const { touch, primaryTouch } = useEditorDevice();
   const [collapsedEntityIds, setCollapsedEntityIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -921,6 +931,10 @@ export function HierarchyPanel({
     () => flattenHierarchy(scene, collapsedEntityIds, filterResult),
     [collapsedEntityIds, filterResult, scene],
   );
+  const creationEntries = useMemo(
+    () => getDiscoverableEntityCreationEntries(projectKind, builtinPrefabRecipes),
+    [projectKind, builtinPrefabRecipes],
+  );
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -930,6 +944,7 @@ export function HierarchyPanel({
   const contextMultiple = selectedEntityIds.length > 1
     && Boolean(contextEntityId && selectedEntityIds.includes(contextEntityId));
   const entityButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const addButtonRef = useRef<HTMLButtonElement>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
   const [dragEntityId, setDragEntityId] = useState<string | null>(null);
@@ -1201,10 +1216,9 @@ export function HierarchyPanel({
     entityId: string | null = null,
   ) => {
     event.preventDefault();
-    const menuHeight = Math.min(640, window.innerHeight - 24);
     setContextMenu({
-      x: Math.max(12, Math.min(event.clientX, window.innerWidth - 300)),
-      y: Math.max(12, Math.min(event.clientY, window.innerHeight - menuHeight - 12)),
+      x: event.clientX,
+      y: event.clientY,
       entityId,
     });
   };
@@ -1456,6 +1470,24 @@ export function HierarchyPanel({
           Hierarchy
         </h2>
         <div className="flex items-center gap-1.5">
+          {primaryTouch ? (
+            <button
+              ref={addButtonRef}
+              type="button"
+              aria-label="Entityを追加"
+              aria-haspopup="menu"
+              aria-expanded={Boolean(contextMenu && !contextEntityId)}
+              title="Entityを追加"
+              onClick={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                setContextMenu({ x: rect.left, y: rect.bottom, entityId: null });
+              }}
+              className="flex h-10 shrink-0 items-center gap-1 rounded border border-editor-border bg-editor-surface px-2 text-xs font-semibold text-editor-text hover:bg-editor-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400"
+            >
+              <Plus size={14} aria-hidden="true" />
+              追加
+            </button>
+          ) : null}
           {selectedEntityIds.length > 0 ? (
             <button
               type="button"
@@ -1676,7 +1708,7 @@ export function HierarchyPanel({
             matchesFilter={row.matchesFilter}
             highlightMatches={Boolean(filterResult)}
             selected={selectedEntityIdSet.has(row.entity.id)}
-            touch={touch}
+            touch={primaryTouch}
             readOnly={readOnly}
             renaming={renameRequest?.id === row.entity.id}
             renameDraft={
@@ -1704,15 +1736,36 @@ export function HierarchyPanel({
         source="hierarchy"
         entityName={contextEntityId ? scene.entities[contextEntityId]?.name ?? null : null}
         selectionCount={contextMultiple ? selectedEntityIds.length : contextEntityId ? 1 : 0}
-        touch={touch}
+        touch={primaryTouch}
         clipboardAvailable={clipboardAvailable}
         disabledReason={readOnly || playMode ? "動作確認を停止すると編集できます" : importBusy ? "素材の取り込みが終わるまでお待ちください" : null}
         shortcutLabel={shortcutLabel ?? ((command) => command === "edit.paste" ? pasteShortcut ?? "" : "")}
         onCommand={onCommand}
         onExportHierarchy={onExportHierarchy}
+        renderCreation={!contextEntityId ? (close) => <EditorCreationMenuSections
+          entries={creationEntries}
+          disabled={readOnly || playMode || importBusy}
+          onSelect={(entry) => {
+            close();
+            if (entry.kind === "empty") onCommand("entity.create-empty", { parentEntityId: null });
+            else if (entry.kind === "primitive") onCommand("entity.create-primitive", { creationId: entry.actionId });
+            else if (entry.kind === "prefab") onDropBuiltinPrefab(entry.actionId, null);
+            else if (entry.kind === "component") onCreateComponentObject(entry.actionId);
+            else onCreateXriftObject(entry.actionId);
+          }}
+          onCreateTerrain={onCreateTerrain ? (presetId) => { close(); onCreateTerrain(presetId); } : undefined}
+          terrainOverlapCount={terrainOverlapCount}
+          onArrangeTerrains={onArrangeTerrains ? () => { close(); onArrangeTerrains(); } : undefined}
+          onOpenExternalStore={onOpenExternalStore ? () => { close(); onOpenExternalStore(); } : undefined}
+          onImportFile={onImportFile ? () => { close(); onImportFile(); } : undefined}
+          importDisabledReason={importDisabledReason}
+        /> : undefined}
         onClose={(restoreFocus) => {
           setContextMenu(null);
-          if (restoreFocus && contextEntityId) entityButtonRefs.current.get(contextEntityId)?.focus();
+          if (restoreFocus) {
+            if (contextEntityId) entityButtonRefs.current.get(contextEntityId)?.focus();
+            else if (primaryTouch) addButtonRef.current?.focus();
+          }
         }}
         extraContent={touch && contextEntityId && !contextMultiple ? <EntityMoveMenu
           scene={scene} entityId={contextEntityId} readOnly={readOnly || playMode || importBusy}

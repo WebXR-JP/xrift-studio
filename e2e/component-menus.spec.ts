@@ -52,9 +52,11 @@ test("component menus share duplicate and mesh dependency rules", async ({ page 
     const mesh = editor.addEditorComponent(created.scene, bundle.assets, entity.id, "core.mesh", "world");
     const after = editor.getEditorComponentDisabledReason(mesh.scene.entities[entity.id], "physics.mesh-collider");
     const collider = editor.addEditorComponent(mesh.scene, bundle.assets, entity.id, "physics.mesh-collider", "world");
+    const duplicateMesh = editor.getEditorComponentDisabledReason(collider.scene.entities[entity.id], "physics.mesh-collider");
     const body = editor.addEditorComponent(collider.scene, bundle.assets, entity.id, "physics.rigid-body", "world");
     return {
       before, failed: failed.added, mesh: mesh.added, after: after ?? null, collider: collider.added,
+      duplicateMesh,
       duplicate: editor.getEditorComponentDisabledReason(body.scene.entities[entity.id], "physics.rigid-body"),
       addIds: editor.getEditorComponentMenuDefinitions("world").map((entry: { id: string }) => entry.id),
       createIds: editor.getEditorEntityCreationDefinitions("world").map((entry: { id: string }) => entry.id),
@@ -66,6 +68,7 @@ test("component menus share duplicate and mesh dependency rules", async ({ page 
   expect(result.mesh).toBe(true);
   expect(result.after).toBeNull();
   expect(result.collider).toBe(true);
+  expect(result.duplicateMesh).toBe("追加済み");
   expect(result.duplicate).toBe("追加済み");
   expect(result.addIds).not.toContain("core.transform");
   expect(result.addIds).not.toContain("core.spawn");

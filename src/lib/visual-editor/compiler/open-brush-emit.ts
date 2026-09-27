@@ -1,4 +1,8 @@
 import openBrushRuntimeSource from "../../../../packages/xrift-studio-runtime/src/open-brush/material-extension.ts?raw";
+import openBrushPresetLoaderSource from "../../../../packages/xrift-studio-runtime/src/open-brush/preset-loader.ts?raw";
+import openBrushPresetMaterialSource from "../../../../packages/xrift-studio-runtime/src/open-brush/preset-material.tsx?raw";
+import openBrushMaterialPropertiesSource from "../../../../packages/xrift-studio-runtime/src/open-brush/material-properties.ts?raw";
+import customShaderAttributesSource from "../../../../packages/xrift-studio-runtime/src/custom-shader-attributes.ts?raw";
 import type { CompilerOverlayFile } from "./types";
 import { SCRIPT_RUNTIME_DIRECTORY } from "./script-emit";
 
@@ -20,4 +24,23 @@ export function createOpenBrushRuntimeOverlayFile(): CompilerOverlayFile {
     kind: "source",
     owner: "xrift-studio-compiler",
   };
+}
+
+/** Standalone brushes use the same preset, tint and geometry inputs as Edit. */
+export function createOpenBrushPresetOverlayFiles(): CompilerOverlayFile[] {
+  return [
+    ["open-brush-preset-loader.ts", openBrushPresetLoaderSource],
+    ["open-brush-preset-material.tsx", openBrushPresetMaterialSource],
+    ["open-brush-material-properties.ts", openBrushMaterialPropertiesSource],
+    ["custom-shader-attributes.ts", customShaderAttributesSource],
+  ].map(([name, source]) => ({
+    relativePath: `${SCRIPT_RUNTIME_DIRECTORY}/${name}`,
+    content: source
+      .replace(/"\.\/material-extension(?:\.js)?"/g, '"./open-brush-runtime"')
+      .replace(/"\.\/material-properties(?:\.js)?"/g, '"./open-brush-material-properties"')
+      .replace(/"\.\/preset-loader(?:\.js)?"/g, '"./open-brush-preset-loader"')
+      .replace(/"\.\.\/custom-shader-attributes(?:\.js)?"/g, '"./custom-shader-attributes"'),
+    kind: "source",
+    owner: "xrift-studio-compiler",
+  }));
 }

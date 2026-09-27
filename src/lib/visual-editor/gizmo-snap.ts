@@ -20,11 +20,43 @@ export type NudgeDirection = 1 | -1;
 export const SNAP_TRANSLATE_MIN = 0.001;
 export const SNAP_ROTATE_DEGREES_MIN = 0.1;
 export const SNAP_SCALE_MIN = 0.001;
+/** GridHelper stays legible and cheap even for very fine movement snaps. */
+export const GRID_DIVISIONS_MAX = 2048;
 
 /** Offered as one-click chips so the common grids never need typing. */
 export const SNAP_TRANSLATE_PRESETS = [0.1, 0.25, 0.5, 1] as const;
 export const SNAP_ROTATE_DEGREES_PRESETS = [5, 15, 45, 90] as const;
 export const SNAP_SCALE_PRESETS = [0.05, 0.1, 0.25, 0.5] as const;
+
+/**
+ * Keep one visible grid cell equal to a whole number of movement steps. The
+ * grid extent is rounded to the nearest such cell, with a bounded line count
+ * so a 0.001m snap does not create tens of thousands of lines.
+ */
+export function alignGridToTranslationSnap(
+  gridSize: number,
+  translateSnap: number,
+): { gridSize: number; gridDivisions: number } {
+  const requestedSize = Number.isFinite(gridSize) ? Math.max(1, gridSize) : 40;
+  const step = Number.isFinite(translateSnap)
+    ? Math.max(SNAP_TRANSLATE_MIN, translateSnap)
+    : 0.5;
+  const extent = Math.max(requestedSize, step);
+  const stepsPerCell = Math.max(
+    1,
+    Math.ceil(extent / (step * GRID_DIVISIONS_MAX)),
+  );
+  const cellSize = step * stepsPerCell;
+  const gridDivisions = Math.max(
+    1,
+    Math.min(GRID_DIVISIONS_MAX, Math.round(extent / cellSize)),
+  );
+
+  return {
+    gridSize: Number((cellSize * gridDivisions).toPrecision(12)),
+    gridDivisions,
+  };
+}
 
 /** Float noise from earlier drags must not read as "already off the lattice". */
 const LATTICE_EPSILON = 1e-6;

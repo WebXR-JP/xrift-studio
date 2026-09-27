@@ -203,6 +203,7 @@ export type SceneGizmoSettings = {
   size: number;
   gridVisible: boolean;
   gridSize: number;
+  /** Auto-aligned to translateSnap when gridSize or translateSnap changes. */
   gridDivisions: number;
   snapEnabled: boolean;
   /**
@@ -217,6 +218,7 @@ export type SceneGizmoSettings = {
 };
 
 export type SceneSettings = {
+  shadowMapType: "basic" | "pcf" | "pcfSoft" | "vsm";
   skybox: SceneSkyboxSettings;
   fog: SceneFogSettings;
   ambient: SceneAmbientSettings;
@@ -231,6 +233,7 @@ export type SceneSettings = {
 };
 
 export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
+  shadowMapType: "pcf",
   skybox: {
     // Off for a new Scene. A gradient sky fills the frame with light-coloured
     // pixels before the author has lit anything, which reads as though the
@@ -336,7 +339,7 @@ export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
       size: 0.82,
       gridVisible: true,
       gridSize: 40,
-      gridDivisions: 40,
+      gridDivisions: 80,
       snapEnabled: false,
       snapHoldShift: true,
       translateSnap: 0.5,
@@ -454,6 +457,10 @@ export function resolveSceneSettings(value: unknown): SceneSettings {
   );
 
   return {
+    shadowMapType:
+      settings.shadowMapType === "basic" || settings.shadowMapType === "pcfSoft" || settings.shadowMapType === "vsm"
+        ? settings.shadowMapType
+        : "pcf",
     skybox: {
       enabled: resolvedSkyboxEnabled,
       // Image skyboxes authored before this option existed drove both the

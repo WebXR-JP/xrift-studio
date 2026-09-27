@@ -26,18 +26,14 @@ loading state.
 
 | Bundled file | Upstream source | Revision | License | SHA-256 |
 | --- | --- | --- | --- | --- |
-| `xrift-world-template-thumbnail.png` | [`WebXR-JP/xrift-world-template/public/thumbnail.png`](https://github.com/WebXR-JP/xrift-world-template/blob/abbce026ea1f1066726f385089d5f28b2ef5a890/public/thumbnail.png) | `abbce026ea1f1066726f385089d5f28b2ef5a890` | MIT | `bd0e67abf075b0f0b8e5c41fcdc06289e4e8fc189babdf625556ad4c1b3596ea` |
-| `xrift-world-template-duck.glb` | [`WebXR-JP/xrift-world-template/public/duck.glb`](https://github.com/WebXR-JP/xrift-world-template/blob/abbce026ea1f1066726f385089d5f28b2ef5a890/public/duck.glb) | `abbce026ea1f1066726f385089d5f28b2ef5a890` | MIT | `154d3d5f025f9a0a614b5ea27b5e816120e0d286077b05ba67281e4b2823684d` |
-| `xrift-world-template-tokyo-station.png` (upstream is named `.jpg`, but its pinned bytes are PNG) | [`WebXR-JP/xrift-world-template/public/tokyo-station.jpg`](https://github.com/WebXR-JP/xrift-world-template/blob/abbce026ea1f1066726f385089d5f28b2ef5a890/public/tokyo-station.jpg) | `abbce026ea1f1066726f385089d5f28b2ef5a890` | MIT | `613c5e5af594cf273bc14076cc86761a74826e9c57fbcec1e45c42a988fd3265` |
-| `xrift-world-template-bunny.glb` | Generated from [`WebXR-JP/xrift-world-template/public/bunny.drc`](https://github.com/WebXR-JP/xrift-world-template/blob/abbce026ea1f1066726f385089d5f28b2ef5a890/public/bunny.drc) (`3bb08f257d873f69ded447e07c2dd4e9d7a264d58a686c88978c38430c5f6eb4`) by `pnpm starter:sync:xrift-official` | `abbce026ea1f1066726f385089d5f28b2ef5a890` | MIT | `7f903e35e249f399e440a3bce6bf694e72dc80ce9dfd33df7f4fd83d4e960fff` |
-| `xrift-world-template-World.tsx.txt` | [`WebXR-JP/xrift-world-template/src/World.tsx`](https://github.com/WebXR-JP/xrift-world-template/blob/abbce026ea1f1066726f385089d5f28b2ef5a890/src/World.tsx) | `abbce026ea1f1066726f385089d5f28b2ef5a890` | MIT | `2e2c82ebf840c954c8a0ce049357106b4162b14996b8de47a5d5647fd984b46a` |
-| `xrift-world-template-LICENSE.txt` | [`WebXR-JP/xrift-world-template/LICENSE`](https://github.com/WebXR-JP/xrift-world-template/blob/abbce026ea1f1066726f385089d5f28b2ef5a890/LICENSE) | `abbce026ea1f1066726f385089d5f28b2ef5a890` | MIT license text | `73dec738d6d49a07e506b0d4014ec6a6247c1b50ca6bf8aee62763e81f65f176` |
+| `xrift-world-template-tokyo-station.png` (upstream is named `.jpg`, but its bytes are PNG) | [`WebXR-JP/xrift-world-template/public/tokyo-station.jpg`](https://github.com/WebXR-JP/xrift-world-template/blob/05abcf6a11844f9108363dc6823a1908569452ac/public/tokyo-station.jpg) | `05abcf6a11844f9108363dc6823a1908569452ac` | MIT | `613c5e5af594cf273bc14076cc86761a74826e9c57fbcec1e45c42a988fd3265` |
+| `xrift-world-template-World.tsx.txt` | [`WebXR-JP/xrift-world-template/src/World.tsx`](https://github.com/WebXR-JP/xrift-world-template/blob/05abcf6a11844f9108363dc6823a1908569452ac/src/World.tsx) | `05abcf6a11844f9108363dc6823a1908569452ac` | MIT | `511e0698a6ad05bd54218fd05867f63f91a1da97b5218db5544c6ab0c12c80fa` |
+| `xrift-world-template-LICENSE.txt` | [`WebXR-JP/xrift-world-template/LICENSE`](https://github.com/WebXR-JP/xrift-world-template/blob/05abcf6a11844f9108363dc6823a1908569452ac/LICENSE) | `05abcf6a11844f9108363dc6823a1908569452ac` | MIT license text | `73dec738d6d49a07e506b0d4014ec6a6247c1b50ca6bf8aee62763e81f65f176` |
 
 The Starter scene is produced from the static R3F/Rapier subset of this fixed
-source graph. XRift Studio copies the Duck, a Studio-generated GLB conversion
-of the Draco bunny, the panorama, source, and license into the created Visual
-project. Each model/texture is registered in the Asset manifest and linked to
-the converted Scene by its Studio Asset ID.
+source graph. XRift Studio copies the panorama, source, and license into the
+created Visual project. The panorama is registered in the Asset manifest and
+linked to the converted Scene by its Studio Asset ID.
 
 ## Project-owned Starter Assets
 

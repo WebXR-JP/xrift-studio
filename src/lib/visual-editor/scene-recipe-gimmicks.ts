@@ -86,7 +86,13 @@ one('color-transition','色が移る展示ランプ','照明・発光','青か�
 const speaker=[model('スピーカー面','catalog-ring',[0,.35,0],M.slate),box('スピーカー箱',[0,.67,-.1],[.85,1.15,.35],M.charcoal)];
 add('audio-transport','音の再生・停止パネル','音','同じAudio Sourceを再生・一時停止・停止する、基本の音声操作です。',
  [...speaker,sound('音源'),...button('再生','再生',-.7),...button('一時停止','一時停止',0),...button('停止','停止',.7)],
- ['play','pause','stop'].map((v,i)=>behaviour(['再生','一時停止','停止'][i],'音源を操作',[w('音源','audio-source','playback',v)])));
+ ['play','pause','stop'].map((v,i)=>{
+  const label=['再生','一時停止','停止'][i];
+  return {
+   ...behaviour(label,`${label}を押す → 音源を${label}する`,[w('音源','audio-source','playback',v)]),
+   graphName: label,
+  };
+ }));
 one('audio-fade','フェードイン・アウトする音','音','ループ音を小さく始めて大きくし、フェードアウトして止めます。',
  [...speaker,sound('音源')], [w('音源','audio-source','volume',0),w('音源','audio-source','playback','play'),w('音源','audio-source','volume',.6,{duration:2}),w('音源','audio-source','volume',0,{duration:2,after:'done',delay:1}),w('音源','audio-source','playback','stop',{after:'done'})],'音量を変える');
 add('sound-palette','2種類の効果音を聴く','音','チャイムとクリックを別々のAudio Sourceで鳴らします。',

@@ -4,6 +4,7 @@ import type { EntityMirrorAxis } from "../../lib/visual-editor/entity-clipboard"
 import type { EditorCommandId } from "../../lib/visual-editor/shortcuts";
 import { EDITOR_ICONS, type EditorIconName } from "./editor-icons";
 import { ENTITY_CONTEXT_ITEM_CLASS, EntityPasteMenuItems } from "./EntityPasteMenuItems";
+import { EditorMenuGroup, handleEditorMenuKeyDown } from "./EditorMenu";
 
 export type SceneContextMenuProps = {
   x: number;
@@ -16,6 +17,7 @@ export type SceneContextMenuProps = {
   source?: "scene" | "hierarchy";
   onExportHierarchy?: (entityId: string) => void;
   extraContent?: ReactNode;
+  renderCreation?: (close: () => void) => ReactNode;
   disabledReason?: string | null;
   shortcutLabel: (command: EditorCommandId) => string;
   onCommand: (command: EditorCommandId, payload?: {
@@ -28,23 +30,40 @@ export type SceneContextMenuProps = {
   onClose: (restoreFocus: boolean) => void;
 };
 
-/** Editing only. Object creation belongs to the existing Add/Assets surfaces. */
+/** Shared editor menu; Hierarchy blank space also exposes the creation catalog. */
 export function SceneContextMenu(props: SceneContextMenuProps) {
   const { x, y, entityId, entityName, selectionCount, clipboardAvailable, disabledReason, shortcutLabel } = props;
   const menuRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef(props);
   actionsRef.current = props;
-  const [position, setPosition] = useState({ left: x, top: y });
+  const [position, setPosition] = useState<{
+    left: number;
+    top?: number;
+    bottom?: number;
+    maxHeight: number;
+  }>({ left: x, top: y, maxHeight: 640 });
   useLayoutEffect(() => {
     const menu = menuRef.current;
     if (!menu) return;
     const place = () => {
-      const { width, height } = menu.getBoundingClientRect();
+      const { width } = menu.getBoundingClientRect();
+      const margin = 8;
+      const anchorX = Math.max(margin, Math.min(x, window.innerWidth - margin));
+      const anchorY = Math.max(margin, Math.min(y, window.innerHeight - margin));
+      const below = window.innerHeight - anchorY - margin;
+      const above = anchorY - margin;
+      const openUp = below < 240 && above > below;
+      const left = anchorX + width + margin <= window.innerWidth
+        ? anchorX
+        : anchorX - width >= margin ? anchorX - width : margin;
       const next = {
-        left: Math.max(8, Math.min(x, window.innerWidth - width - 8)),
-        top: Math.max(8, Math.min(y, window.innerHeight - height - 8)),
+        left,
+        top: openUp ? undefined : anchorY,
+        bottom: openUp ? window.innerHeight - anchorY : undefined,
+        maxHeight: Math.max(32, openUp ? above : below),
       };
-      setPosition((current) => current.left === next.left && current.top === next.top ? current : next);
+      setPosition((current) => current.left === next.left && current.top === next.top &&
+        current.bottom === next.bottom && current.maxHeight === next.maxHeight ? current : next);
     };
     place();
     // Expansion stays inside the window, even beside a short Scene panel.
@@ -54,7 +73,7 @@ export function SceneContextMenu(props: SceneContextMenuProps) {
   }, [x, y]);
   useEffect(() => {
     const menu = menuRef.current;
-    (menu?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)') ?? menu)?.focus();
+    (props.renderCreation ? menu?.querySelector<HTMLElement>("button") : menu?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)') ?? menu)?.focus();
     const outside = (event: PointerEvent) => {
       if (!menuRef.current?.contains(event.target as Node)) actionsRef.current.onClose(false);
     };
@@ -82,6 +101,10 @@ export function SceneContextMenu(props: SceneContextMenuProps) {
       return;
     }
     if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLTextAreaElement) return;
+    if (props.renderCreation) {
+      handleEditorMenuKeyDown(event);
+      return;
+    }
     if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
     const items = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ?? [])
@@ -115,9 +138,9 @@ export function SceneContextMenu(props: SceneContextMenuProps) {
     <div
       ref={menuRef}
       role="menu"
-      aria-label={props.source === "hierarchy" ? "Hierarchyの編集" : "シーンの編集"}
+      aria-label={props.renderCreation ? "Hierarchyの追加と編集" : props.source === "hierarchy" ? "Hierarchyの編集" : "シーンの編集"}
       tabIndex={-1}
-      className={`fixed z-[85] max-h-[calc(100dvh-16px)] w-64 max-w-[calc(100vw-16px)] overflow-y-auto overscroll-contain rounded-md border border-slate-300 bg-white p-1 text-slate-800 shadow-xl select-none ${props.touch ? "editor-touch-menu" : ""}`}
+      className={`fixed z-[85] ${props.renderCreation ? "w-56" : "w-64"} max-w-[calc(100vw-16px)] overflow-y-auto overscroll-contain rounded-md border border-slate-300 bg-white p-1 text-slate-800 shadow-xl select-none ${props.source === "hierarchy" ? "[&_button]:min-h-6 [&_button]:py-0.5 [&_button]:text-[11px] [&_button]:leading-4 [&_button]:font-medium [&_button]:tracking-tight" : ""} ${props.touch ? "editor-touch-menu" : ""}`}
       style={position}
       onPointerDown={(event) => event.stopPropagation()}
       onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}
@@ -130,6 +153,10 @@ export function SceneContextMenu(props: SceneContextMenuProps) {
         </p>
         {item("edit.copy", "コピー", "copy", disabledReason)}
       </> : null}
+      {props.renderCreation ? <>
+        <EditorMenuGroup>{props.renderCreation(() => actionsRef.current.onClose(false))}</EditorMenuGroup>
+        <div role="separator" className="my-1 border-t border-slate-200" />
+      </> : null}
       <EntityPasteMenuItems
         disabledReason={disabledReason ?? (clipboardAvailable ? null : "先にEntityをコピーしてください")}
         shortcut={shortcutLabel("edit.paste")}
@@ -138,7 +165,7 @@ export function SceneContextMenu(props: SceneContextMenuProps) {
       {entityId ? <>
         <div role="separator" className="my-1 border-t border-slate-200" />
         {item("edit.duplicate", "複製", "duplicate", disabledReason)}
-        {item("selection.rename", "名前を変更", "textInput", disabledReason ?? (selectionCount > 1 ? "名前を変更するEntityを1件選んでください" : null))}
+        {item("selection.rename", "名前を変更", "rename", disabledReason ?? (selectionCount > 1 ? "名前を変更するEntityを1件選んでください" : null))}
         {item("view.frame-selection", "フォーカス", "maximize")}
         <div role="separator" className="my-1 border-t border-slate-200" />
         {item("prefab.create", "再利用素材（Prefab）を作成", "prefab", disabledReason ?? (selectionCount > 1 ? "Prefabにする親Entityを1件選んでください" : null))}

@@ -43,8 +43,9 @@ export type SceneEntityTreeShared = {
   physicsEnabled: boolean;
   transformMode: TransformMode;
   transformSpace: TransformSpace;
+  selectedEntityIds: readonly string[];
   gizmo: SceneGizmoSettings;
-  onTransformCommit: (entityId: string, patch: TransformPatch) => void;
+  onTransformCommit: (entityId: string, patch: TransformPatch, peers?: readonly { entityId: string; patch: TransformPatch }[]) => void;
   onDraggingChange: (dragging: boolean) => void;
   transformDraggingRef: { current: boolean };
   materialDragActive: boolean;

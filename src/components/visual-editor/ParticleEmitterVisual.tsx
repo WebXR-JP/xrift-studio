@@ -30,7 +30,6 @@ export function ParticleEmitterVisual({
   textureAsset,
   materialAsset,
   projectPath,
-  selected,
 }: {
   /** Particle Component being rendered, so a graph can address this emitter. */
   componentId?: string;
@@ -38,7 +37,6 @@ export function ParticleEmitterVisual({
   textureAsset?: TextureAsset;
   materialAsset?: MaterialAsset;
   projectPath?: string;
-  selected: boolean;
 }) {
   const properties = useMemo(
     () => normalizeParticleProperties(asset.properties),
@@ -71,7 +69,6 @@ export function ParticleEmitterVisual({
       color={materialColor}
       opacity={materialBaseColor[3]}
       map={particleMap}
-      displayOpacityScale={selected ? 1 : 0.9}
     />
   );
 }

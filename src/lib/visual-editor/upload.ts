@@ -76,7 +76,7 @@ export type VisualUploadCapabilities = {
   supportsScripts: boolean;
   /** The web path has no local build, so nothing to check first. */
   runsPrePublishCheck: boolean;
-  /** The web path needs an `xrf_` token supplied by the user. */
+  /** The web path needs a user supplied XRift API key or bearer token. */
   requiresToken: boolean;
 };
 

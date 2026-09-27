@@ -1069,6 +1069,7 @@ function validateSceneSettings(
   validateKnownKeys(
     value,
     [
+      "shadowMapType",
       "skybox",
       "fog",
       "ambient",
@@ -1081,6 +1082,13 @@ function validateSceneSettings(
     path,
     issues,
   );
+  if (value.shadowMapType !== undefined &&
+      value.shadowMapType !== "basic" &&
+      value.shadowMapType !== "pcf" &&
+      value.shadowMapType !== "pcfSoft" &&
+      value.shadowMapType !== "vsm") {
+    issues.push(issue(`${path}.shadowMapType`, "value", "shadowMapType must be basic, pcf, pcfSoft, or vsm"));
+  }
   validateSceneSettingsObject(
     value.skybox,
     [

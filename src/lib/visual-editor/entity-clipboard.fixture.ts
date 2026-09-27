@@ -7,6 +7,7 @@ import {
   type EntityMirrorAxis,
 } from "./entity-clipboard";
 import {
+  duplicateEntityHierarchy,
   createTransformComponent,
   createBoxColliderComponent,
   createScriptComponent,
@@ -17,9 +18,16 @@ import {
   type Vec3,
 } from "./scene-document";
 import { createEditorHistory, commitEditorHistory, undoEditorHistory, redoEditorHistory } from "./editor-history";
+import {
+  createXriftComponent,
+  validateXriftComponents,
+  XRIFT_COMPONENT_REGISTRY,
+  XRIFT_COMPONENT_SCHEMA_IDS,
+} from "./component-registry";
 
 /** Actual document operations, with no renderer, OS clipboard or test-only model. */
 export function runEntityClipboardFixtureAssertions(): void {
+  assertCopiedRuntimeIdentifiers();
   const scene = fixtureScene();
   const before = JSON.stringify(scene);
   const clipboard = copyEntityHierarchy(scene, ["tree"]);
@@ -139,6 +147,58 @@ export function runEntityClipboardFixtureAssertions(): void {
   assert(redone.changed && redone.history.present.scene === mirrored.scene, "Redo restores the same copied entity IDs");
   assertEqual(redone.history.present.selection, mirrored.rootEntityIds, "Redo restores the copy selection");
   assertEqual(transform(redone.history.present.scene, mirrored.rootEntityIds[0]).scale, [-0.7, 0.8, 0.9], "Redo retains the reflection");
+}
+
+function assertCopiedRuntimeIdentifiers(): void {
+  const scene = fixtureScene();
+  const definitions = XRIFT_COMPONENT_REGISTRY.filter((definition) =>
+    definition.fields.some((field) => field.uniqueWithinScene),
+  );
+  for (const definition of definitions) {
+    const component = createXriftComponent(definition.schemaId, {
+      componentId: definition.schemaId,
+    });
+    assert(component, "identifier fixture component can be created");
+    scene.entities.tree.components.push(component);
+  }
+  const childInteractable = createXriftComponent(XRIFT_COMPONENT_SCHEMA_IDS.interactable, {
+    // Component IDs need only be unique within the Entity.
+    componentId: XRIFT_COMPONENT_SCHEMA_IDS.interactable,
+    properties: { id: "leaf-button", interactionText: "Leaf button" },
+  });
+  assert(childInteractable, "child Interactable can be created");
+  scene.entities.leaf.components.push(childInteractable);
+  const before = JSON.stringify(scene);
+  const clipboard = copyEntityHierarchy(scene, ["tree"]);
+  assert(clipboard, "interactive hierarchy can be copied");
+  let resultScene = scene;
+  for (const mirrorAxis of [undefined, "x"] as const) {
+    const pasted = pasteEntityHierarchy(resultScene, clipboard, null, { mirrorAxis });
+    assert(pasted, "interactive hierarchy can be pasted repeatedly");
+    resultScene = pasted.scene;
+    const copied = resultScene.entities[pasted.rootEntityIds[0]];
+    for (const definition of definitions) {
+      const originalComponent = scene.entities.tree.components.find((component) =>
+        component.type === "xrift-component" && component.schemaId === definition.schemaId,
+      );
+      const copiedComponent = copied.components.find((component) =>
+        component.type === "xrift-component" && component.schemaId === definition.schemaId,
+      );
+      assert(originalComponent?.type === "xrift-component" && copiedComponent?.type === "xrift-component", "official components survive paste");
+      for (const field of definition.fields) {
+        if (field.uniqueWithinScene) {
+          assert(copiedComponent.properties[field.name] !== originalComponent.properties[field.name], `${definition.schemaId}.${field.name} must receive a fresh identifier`);
+        } else {
+          assertEqual(copiedComponent.properties[field.name], originalComponent.properties[field.name], `${definition.schemaId}.${field.name} is preserved`);
+        }
+      }
+    }
+    assert(!validateXriftComponents(resultScene, "world").some((entry) => entry.code === "duplicate-xrift-identifier"), "paste and mirror must not add duplicate official runtime identifiers");
+  }
+  const duplicate = duplicateEntityHierarchy(scene, ["tree"], (kind, id) => `copy-${kind}-${id}`);
+  assert(duplicate, "MCP hierarchy duplication succeeds");
+  assert(!validateXriftComponents(duplicate.scene, "world").some((entry) => entry.code === "duplicate-xrift-identifier"), "MCP duplication also gives identifiers scoped to their owning Entity");
+  assertEqual(JSON.stringify(scene), before, "identifier allocation never edits the original hierarchy");
 }
 
 function fixtureScene(): SceneDocument {

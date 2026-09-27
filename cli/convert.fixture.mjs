@@ -56,6 +56,8 @@ import { runScriptLifecycleFixtureAssertions } from "../src/lib/visual-editor/sc
 import { runScriptAudioFixtureAssertions } from "../src/lib/visual-editor/scripting/audio-runtime.fixture.ts";
 import { runAudioSourceRuntimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/audio-source.fixture.ts";
 import { runRuntimeSchemaFixtureAssertions } from "../packages/xrift-studio-runtime/src/schema.fixture.ts";
+import { runRuntimePhysicsModeFixtureAssertions } from "../packages/xrift-studio-runtime/src/physics-mode.fixture.ts";
+import { runMirrorReflectionFixtureAssertions } from "../packages/xrift-studio-runtime/src/mirror-reflection.fixture.ts";
 import { runInteractivityEngineFixtureAssertions } from "../packages/xrift-studio-runtime/src/interactivity/engine.fixture.ts";
 import { runTimerQueueFixtureAssertions } from "../packages/xrift-studio-runtime/src/interactivity/timer-queue.fixture.ts";
 import {
@@ -101,6 +103,7 @@ import { runEditorDragDataFixture } from "../src/components/visual-editor/editor
 import { runEditorLayoutFixtureAssertions } from "../src/components/visual-editor/editor-layout.fixture.ts";
 import { runSceneViewportQualityFixtureAssertions } from "../src/components/visual-editor/scene-viewport-quality.fixture.ts";
 import { runSceneVramEstimateFixtureAssertions } from "../src/components/visual-editor/scene-vram-estimate.fixture.ts";
+import { runVramEstimateFixtureAssertions } from "../src/lib/visual-editor/vram-estimate.fixture.ts";
 import { runWorldPlaySpawnFixtureAssertions } from "../src/components/visual-editor/world-play-spawn.fixture.ts";
 import { runEditorLibraryDragFixture } from "../src/components/visual-editor/editor-library-drag.fixture.ts";
 import { runMaterialDragFixtureAssertions } from "../src/components/visual-editor/material-drag.fixture.ts";
@@ -124,8 +127,11 @@ import { runModelHierarchyFixtureAssertions } from "../src/lib/visual-editor/mod
 import { runModelImportContractFixtureAssertions } from "../src/lib/visual-editor/model-import-contract.fixture.ts";
 import { runModelReimportImpactFixtureAssertions } from "../src/lib/visual-editor/model-reimport-impact.fixture.ts";
 import { runOpenBrushFixtureAssertions } from "../src/lib/visual-editor/open-brush.fixture.ts";
+import { runOpenBrushMaterialCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/open-brush-material.fixture.ts";
+import { runPrimitiveGeometryCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/primitive-geometry.fixture.ts";
 import { runVisualPublishFixtureAssertions } from "../src/lib/visual-editor/publish.fixture.ts";
 import { runSupportReportFixtureAssertions } from "../src/lib/support-report.fixture.ts";
+import { runXriftCliFixtureAssertions } from "../src/lib/xrift-cli.fixture.ts";
 import { runGlowMaterialCatalogFixtureAssertions } from "../src/lib/visual-editor/glow-material-catalog.fixture.ts";
 import { runPrefabSourceDetachFixtureAssertions } from "../src/lib/visual-editor/prefab-source-detach.fixture.ts";
 import { runAssetReferenceDetachFixtureAssertions } from "../src/lib/visual-editor/asset-reference-detach.fixture.ts";
@@ -143,6 +149,7 @@ import { runMaterialShowcaseCatalogFixtureAssertions } from "../src/lib/visual-e
 import { runInteractionTriggerFixtureAssertions } from "../src/lib/visual-editor/interaction-trigger.fixture.ts";
 import { runInteractionTriggerApplierFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/interaction-trigger-applier.fixture.ts";
 import { runVisualUploadFixtureAssertions } from "../src/lib/visual-editor/upload.fixture.ts";
+import { runBrowserPublicationFixtureAssertions } from "../src/preview/browser-project-session.fixture.ts";
 import { runRuntimeSpawnFixtureAssertions } from "../src/lib/visual-editor/runtime-spawn.fixture.ts";
 import { runSkyboxImportFixtureAssertions } from "../src/lib/visual-editor/skybox-import.fixture.ts";
 import { runSkyShaderFixtureAssertions } from "../src/lib/visual-editor/sky-shader.fixture.ts";
@@ -288,7 +295,7 @@ try {
     "Classic package must not depend on the unpublished runtime package",
   );
   assert(
-    packageJson.dependencies?.["@xrift/world-components"] === "0.53.0",
+    packageJson.dependencies?.["@xrift/world-components"] === "0.55.0",
     "Classic package must pin @xrift/world-components to the compiler's version when the template has none",
   );
   assert(
@@ -302,9 +309,13 @@ try {
   assert(
     xriftJson.world?.title === prototype.project.metadata.title &&
       xriftJson.world.ignore.includes("**/index.html") &&
-      xriftJson.world.ignore.includes("**/__federation_shared_@react-three/drei-*.js") &&
+      !xriftJson.world.ignore.includes("**/__federation_shared_@react-three/drei-*.js") &&
+      !xriftJson.world.ignore.includes("**/__federation_shared_three/addons/**") &&
+      !xriftJson.world.ignore.includes("**/hls-*.js") &&
+      xriftJson.world.ignore.includes("**/*.d.ts") &&
+      xriftJson.world.ignore.includes("**/*.d.ts.map") &&
       xriftJson.world.ignore.includes("**/.DS_Store"),
-    `xrift.json must keep the template's upload ignore rules beside the compiler's, got ${JSON.stringify(xriftJson.world?.ignore)}`,
+    `xrift.json must preserve metadata exclusions without dropping executable module dependencies, got ${JSON.stringify(xriftJson.world?.ignore)}`,
   );
 
   // The Runtime JSON output still exists for the browser upload's prebuilt
@@ -359,6 +370,8 @@ try {
     ["model download optimization", runModelDownloadFixtureAssertions],
     ["model instancing", runModelInstancingFixtureAssertions],
     ["visual compiler", runVisualCompilerFixtureAssertions],
+    ["primitive geometry compiler", runPrimitiveGeometryCompilerFixtureAssertions],
+    ["OpenBrush assigned material compiler", runOpenBrushMaterialCompilerFixtureAssertions],
     ["runtime package compatibility", runRuntimePackageFixtureAssertions],
     ["model material compiler", runModelMaterialCompilerFixtures],
     ["terrain", runTerrainFixtureAssertions],
@@ -369,6 +382,8 @@ try {
     ["entity bounds", runEntityBoundsFixtureAssertions],
     ["mcp harness guard", runMcpHarnessGuardFixtureAssertions],
     ["runtime schema", runRuntimeSchemaFixtureAssertions],
+    ["runtime Physics placement", runRuntimePhysicsModeFixtureAssertions],
+    ["mirror reflection interval", runMirrorReflectionFixtureAssertions],
     ["interactivity engine", runInteractivityEngineFixtureAssertions],
     ["interactivity timer queue", runTimerQueueFixtureAssertions],
     ["animation runtime bridge", runAnimationRuntimeBridgeFixtureAssertions],
@@ -426,6 +441,7 @@ try {
     ["runtime spawn", runRuntimeSpawnFixtureAssertions],
     ["visual publish", runVisualPublishFixtureAssertions],
     ["support report", runSupportReportFixtureAssertions],
+    ["XRift CLI account", runXriftCliFixtureAssertions],
     ["glow material catalog", runGlowMaterialCatalogFixtureAssertions],
     ["prefab source detach", runPrefabSourceDetachFixtureAssertions],
     ["asset reference detach", runAssetReferenceDetachFixtureAssertions],
@@ -440,8 +456,10 @@ try {
     ["interaction trigger applier", runInteractionTriggerApplierFixtureAssertions],
     ["interactivity runtime adapter", runInteractivityRuntimeAdapterFixtureAssertions],
     ["visual upload branch", runVisualUploadFixtureAssertions],
+    ["browser publication persistence", runBrowserPublicationFixtureAssertions],
     ["classic project import", runClassicProjectImportFixtureAssertions],
     ["texture processing", runTextureProcessingFixtureAssertions],
+    ["current texture VRAM estimate", runVramEstimateFixtureAssertions],
     ["texture import defaults", runTextureImportDefaultsFixtureAssertions],
     ["asset import transaction", runAssetImportTransactionFixtureAssertions],
     ["model optimization", runModelOptimizationFixtureAssertions],
@@ -679,6 +697,18 @@ async function runModelMaterialCompilerFixtures() {
  */
 async function runStagedWorldTypecheck() {
   await typecheckWithTemplateOptions(
+    "primitive-geometry-only",
+    runPrimitiveGeometryCompilerFixtureAssertions().overlayFiles,
+    'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
+  );
+  for (const mode of ["primitive", "model"]) {
+    await typecheckWithTemplateOptions(
+      `open-brush-${mode}-only`,
+      runOpenBrushMaterialCompilerFixtureAssertions(mode).overlayFiles,
+      'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
+    );
+  }
+  await typecheckWithTemplateOptions(
     "grass-appearance-only",
     compileGrassAppearanceTypecheckWorld().overlayFiles,
     'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
@@ -861,22 +891,18 @@ async function verifyPreparedOfficialStarter() {
     const assets = Object.values(prepared.plan.assets.assets);
     const models = assets.filter((asset) => asset.kind === "model");
     const textures = assets.filter((asset) => asset.kind === "texture");
-    assert(models.length === 2, "prepared official starter must retain both Model Assets");
+    assert(models.length === 0, "prepared official starter must omit removed upstream Models");
     assert(
-      textures.length >= 2,
-      "prepared official starter must contain the panorama and Duck embedded Texture",
+      textures.length === 1,
+      "prepared official starter must contain only the panorama Texture",
     );
     assert(
       prepared.binaryDocuments.some((document) =>
-        document.relativePath.endsWith("xrift-official/duck.glb"),
-      ) &&
-        prepared.binaryDocuments.some((document) =>
-          document.relativePath.endsWith("xrift-official/bunny.glb"),
-        ) &&
-        prepared.binaryDocuments.some((document) =>
-          document.relativePath.endsWith("xrift-official/tokyo-station.png"),
-        ),
-      "prepared official starter must persist every referenced official binary",
+        document.relativePath.endsWith("xrift-official/tokyo-station.png"),
+      ) && !prepared.binaryDocuments.some((document) =>
+        /xrift-official\/(duck|bunny)\.glb$/.test(document.relativePath),
+      ),
+      "prepared official starter must persist the panorama without removed Models",
     );
   } finally {
     globalThis.fetch = originalFetch;
@@ -895,7 +921,7 @@ const root = path.join(process.cwd(), name);
 await mkdir(path.join(root, "src"), { recursive: true });
 await mkdir(path.join(root, "public"), { recursive: true });
 await writeFile(path.join(root, "package.json"), JSON.stringify({ name, private: true, type: "module", scripts: { build: "vite build" }, dependencies: { react: "^19.0.0", three: "^0.185.0" } }, null, 2) + "\\n");
-await writeFile(path.join(root, "xrift.json"), JSON.stringify({ [kind]: { ignore: ["**/index.html", "**/__federation_shared_@react-three/drei-*.js"] } }) + "\\n");
+await writeFile(path.join(root, "xrift.json"), JSON.stringify({ [kind]: { ignore: ["**/index.html", "**/__federation_shared_@react-three/drei-*.js", "**/__federation_shared_three/addons/**", "**/hls-*.js"] } }) + "\\n");
 await writeFile(path.join(root, "src", kind === "world" ? "World.tsx" : "Item.tsx"), "export {};\\n");
 await writeFile(path.join(root, "README.md"), "# Fixture\\n");
 `,

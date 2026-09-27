@@ -12,6 +12,14 @@ import { EditorDialog } from "./EditorDialog";
 
 export type AssetDeleteDialogTarget =
   | {
+      kind: "assets";
+      ids: string[];
+      name: string;
+      canDelete: boolean;
+      referencedNames: string[];
+      referenceCount: number;
+    }
+  | {
       kind: "asset";
       id: string;
       name: string;
@@ -47,7 +55,7 @@ export function AssetDeleteDialog({
   const DeleteIcon = EDITOR_ICONS.delete;
   const DetachIcon = EDITOR_ICONS.close;
 
-  const title = target.kind === "asset" ? "アセットを削除" : "フォルダーを削除";
+  const title = target.kind === "folder" ? "フォルダーを削除" : "アセットを削除";
   const referenceCount = target.kind === "asset" ? target.references.length : 0;
   // Only an Asset held by other documents can be unlinked from here. A Folder
   // is blocked by its own contents, which the author moves or deletes instead.
@@ -55,6 +63,8 @@ export function AssetDeleteDialog({
   const blockedMessage =
     target.kind === "asset"
       ? `${referenceCount}件の参照があります。参照を外すと削除できます。`
+      : target.kind === "assets"
+        ? `${target.referencedNames.join("、")}に${target.referenceCount}件の参照があります。参照を外すと削除できます。`
       : target.analysis.assetCount > 0
         ? `${target.analysis.assetCount}件の素材が入っています。中身を移動してから削除してください。`
         : `${target.analysis.childFolderCount}件のサブフォルダーがあります。サブフォルダーを移動または削除してから操作してください。`;
@@ -83,7 +93,7 @@ export function AssetDeleteDialog({
               ? `Assetsから削除します。この操作は「元に戻す」で復元できます。`
               : blockedMessage}
           </p>
-          {detachable ? (
+          {detachable || (target.kind === "assets" && target.referenceCount > 0) ? (
             <p className="mt-1 text-xs leading-5 text-slate-500">
               参照を外すと、マテリアルの割り当てが解除されます。Geometryなど、参照が必要なComponentも削除されます。Entityは残ります。「元に戻す」で復元できます。
             </p>
@@ -149,11 +159,11 @@ export function AssetDeleteDialog({
               <DeleteIcon size={13} aria-hidden="true" />
               削除
             </button>
-          ) : detachable ? (
+          ) : detachable || (target.kind === "assets" && target.referenceCount > 0) ? (
             <button
               type="button"
               onClick={onDetachAllReferences}
-              title={`${referenceCount}件の参照をすべて外してから削除`}
+              title={`${target.kind === "assets" ? target.referenceCount : referenceCount}件の参照をすべて外してから削除`}
               className="flex items-center gap-1.5 rounded bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700"
             >
               <DeleteIcon size={13} aria-hidden="true" />

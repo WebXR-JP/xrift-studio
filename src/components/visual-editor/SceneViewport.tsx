@@ -1,5 +1,6 @@
 import { XRiftStudioMeshColliders, XriftColliderLoadContext } from "../../../packages/xrift-studio-runtime/src/mesh-colliders";
 import { bakeXriftColliderGeometry } from "../../../packages/xrift-studio-runtime/src/mesh-collider-geometry";
+import { XriftPrimitiveGeometry } from "../../../packages/xrift-studio-runtime/src/primitive-geometry";
 import { SceneContextMenu, type SceneContextMenuProps } from "./SceneContextMenu";
 import { createWorldPlaySeatStore } from "./world-play-seat-store";
 import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
@@ -9,6 +10,7 @@ import { colliderModelNode } from "../../lib/visual-editor/mesh-collision-action
 import { TerrainBrushCursor } from "./TerrainBrushCursor";
 import { getModelNodeMaterialSlots } from "./model-node-materials";
 import { SceneVramMetrics } from "./SceneDebugCapture";
+import { RecordingPanel, type RecordingPanelProps } from "./RecordingPanel";
 import {
   SceneEntityTreeProvider,
   useSceneEntityNode,
@@ -39,7 +41,7 @@ import {
   XriftAudioSource,
   type XriftAudioSourceSourceStatus,
 } from "../../../packages/xrift-studio-runtime/src/script/audio-source";
-import { XriftScriptLight } from "../../../packages/xrift-studio-runtime/src/script/light";
+import { XriftScriptLight, XriftShadowMapSettings } from "../../../packages/xrift-studio-runtime/src/script/light";
 import { PlayInteractionHost } from "./PlayInteractionHost";
 import { XriftPlayerRuntime } from "../../../packages/xrift-studio-runtime/src/script/player-runtime-host";
 import { XriftInstanceStateRuntime } from "../../../packages/xrift-studio-runtime/src/script/instance-state-runtime-host";
@@ -214,7 +216,7 @@ import {
   snapStepLabel,
   snapStepUnit,
 } from "../../lib/visual-editor/gizmo-snap";
-import { commandTitle, EDITOR_ICONS } from "./editor-icons";
+import { commandTitle, EDITOR_ICONS, type EditorIconName } from "./editor-icons";
 import { ParticleEmitterVisual } from "./ParticleEmitterVisual";
 import { SceneThumbnailCapture } from "./SceneThumbnailCapture";
 import { TerrainGrassVisual } from "./TerrainGrassVisual";
@@ -462,6 +464,7 @@ const SCENE_VIEW_ENTITY_ORIGIN_HIT_RADIUS_PX = 18;
 const EDIT_CAMERA_TARGET: [number, number, number] = [0, 0.7, 0];
 const EDITOR_SELECTION_COLOR = "#7c3aed";
 const MUTED_GIZMO_COLOR = new Color("#64748b");
+const gizmoMaterialDefaults = new WeakMap<TransformGizmoMaterial, { color: Color; opacity: number }>();
 
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -511,9 +514,8 @@ type TransformGizmoMaterial = {
 };
 
 /**
- * Three's default transform controls use fully saturated RGB handles. Keep the
- * same hit areas and active-axis feedback, but make the resting controls a
- * quiet neutral so the authored scene remains the visual focus.
+ * Keep axis colors readable over the scene while softening Three's fully
+ * saturated defaults. Preserve the originals so repeated styling is stable.
  */
 function muteTransformGizmo(controls: Object3D | null): void {
   const transformControls = controls as (Object3D & { gizmo?: Object3D }) | null;
@@ -535,12 +537,18 @@ function muteTransformGizmo(controls: Object3D | null): void {
     for (const material of materials) {
       if (styledMaterials.has(material) || !material.color) continue;
       styledMaterials.add(material);
-      const opacity = Math.min(
-        material.tempOpacity ?? material.opacity,
-        0.55,
-      );
-      material.color.copy(MUTED_GIZMO_COLOR);
-      material.tempColor = MUTED_GIZMO_COLOR.clone();
+      let defaults = gizmoMaterialDefaults.get(material);
+      if (!defaults) {
+        defaults = {
+          color: material.tempColor?.clone() ?? material.color.clone(),
+          opacity: material.tempOpacity ?? material.opacity,
+        };
+        gizmoMaterialDefaults.set(material, defaults);
+      }
+      const color = defaults.color.clone().lerp(MUTED_GIZMO_COLOR, 0.4);
+      const opacity = Math.min(defaults.opacity, 0.82);
+      material.color.copy(color);
+      material.tempColor = color.clone();
       material.opacity = opacity;
       material.tempOpacity = opacity;
       material.transparent = true;
@@ -558,21 +566,6 @@ function colorFactorToHex(value: [number, number, number] | undefined): string {
         .padStart(2, "0"),
     )
     .join("")}`;
-}
-
-function PrimitiveGeometryView({ primitive }: { primitive: PrimitiveGeometry }) {
-  switch (primitive) {
-    case "box":
-      return <boxGeometry args={[1, 1, 1]} />;
-    case "sphere":
-      return <sphereGeometry args={[0.5, 32, 20]} />;
-    case "cylinder":
-      return <cylinderGeometry args={[0.5, 0.5, 1, 32]} />;
-    case "cone":
-      return <coneGeometry args={[0.5, 1, 32]} />;
-    case "plane":
-      return <planeGeometry args={[1, 1]} />;
-  }
 }
 
 const KHR_INTERACTIVITY_ON_START_ANIMATION_INDICES = [0] as const;
@@ -1218,7 +1211,7 @@ function PrimitiveMeshVisual({
       castShadow={component.castShadow}
       receiveShadow={component.receiveShadow}
     >
-      <PrimitiveGeometryView primitive={primitive} />
+      <XriftPrimitiveGeometry primitive={primitive} />
       {viewportMaterialStyle === "unlit" ? (
         <meshBasicMaterial
           color={material?.properties.color ?? "#f43f5e"}
@@ -1306,15 +1299,43 @@ function PrimitiveMeshVisual({
 
 function LightVisual({
   component,
+  assets,
+  projectPath,
   selected,
   showSceneLighting,
   showHelperVisual,
 }: {
   component: Extract<SceneComponent, { type: "light" }>;
+  assets: AssetManifest;
+  projectPath?: string;
   selected: boolean;
   showSceneLighting: boolean;
   showHelperVisual: boolean;
 }) {
+  const mapAsset = component.mapAssetId ? assets.assets[component.mapAssetId] : undefined;
+  const [map, setMap] = useState<Texture | null>(null);
+  useEffect(() => {
+    let active = true;
+    let loaded: Texture | null = null;
+    setMap(null);
+    if (component.lightType === "spot" && mapAsset?.kind === "texture" && (mapAsset.source.kind === "project" || mapAsset.source.kind === "builtin") && projectPath) {
+      void readProjectTextureDataUrl(projectPath, mapAsset as Parameters<typeof readProjectTextureDataUrl>[1])
+        .then((url) => new TextureLoader().loadAsync(url))
+        .then((texture) => {
+          texture.colorSpace = SRGBColorSpace;
+          texture.needsUpdate = true;
+          if (active) {
+            loaded = texture;
+            setMap(texture);
+          } else texture.dispose();
+        })
+        .catch(() => { if (active) setMap(null); });
+    }
+    return () => {
+      active = false;
+      loaded?.dispose();
+    };
+  }, [component.lightType, mapAsset, projectPath]);
   return (
     <>
       {showSceneLighting ? (
@@ -1325,6 +1346,26 @@ function LightVisual({
           color={component.color}
           intensity={component.intensity}
           castShadow={component.castShadow}
+          targetPosition={component.targetPosition}
+          map={map}
+          shadowIntensity={component.shadowIntensity}
+          shadowStyle={component.shadowStyle}
+          shadowMapSize={component.shadowMapSize}
+          shadowMapWidth={component.shadowMapWidth}
+          shadowMapHeight={component.shadowMapHeight}
+          shadowRadius={component.shadowRadius}
+          shadowBias={component.shadowBias}
+          shadowNormalBias={component.shadowNormalBias}
+          shadowBlurSamples={component.shadowBlurSamples}
+          shadowAutoUpdate={component.shadowAutoUpdate}
+          shadowCameraNear={component.shadowCameraNear}
+          shadowCameraFar={component.shadowCameraFar}
+          shadowCameraLeft={component.shadowCameraLeft}
+          shadowCameraRight={component.shadowCameraRight}
+          shadowCameraTop={component.shadowCameraTop}
+          shadowCameraBottom={component.shadowCameraBottom}
+          shadowFocus={component.shadowFocus}
+          shadowAspect={component.shadowAspect}
           groundColor={component.groundColor ?? "#334155"}
           distance={component.distance ?? 0}
           decay={component.decay ?? 2}
@@ -1341,6 +1382,7 @@ function LightVisual({
           component.lightType === "spot" ? (
             <DirectionArrow
               direction={-1}
+              targetPosition={component.targetPosition}
               color={selected ? EDITOR_SELECTION_COLOR : component.color}
               position={[0, -0.18, 0]}
             />
@@ -1590,16 +1632,22 @@ function StudioAudioSourceRuntime({
 
 function DirectionArrow({
   direction,
+  targetPosition,
   color,
   position,
 }: {
   direction: -1 | 1;
+  targetPosition?: Vec3;
   color: string;
   position: Vec3;
 }) {
   const rotationX = direction < 0 ? -Math.PI / 2 : Math.PI / 2;
+  const targetRotation = useMemo(() => {
+    if (!targetPosition || new Vector3(...targetPosition).lengthSq() === 0) return undefined;
+    return new Quaternion().setFromUnitVectors(new Vector3(0, 0, -1), new Vector3(...targetPosition).normalize());
+  }, [targetPosition]);
   return (
-    <group position={position} userData={EDITOR_HELPER_USER_DATA}>
+    <group position={position} quaternion={targetRotation} userData={EDITOR_HELPER_USER_DATA}>
       <mesh
         position={[0, 0, direction * 0.34]}
         rotation={[rotationX, 0, 0]}
@@ -1730,6 +1778,8 @@ function ComponentVisual({
       return showHelpers || renderThumbnail || showSceneLighting ? (
         <LightVisual
           component={component}
+          assets={assets}
+          projectPath={projectPath}
           selected={selected}
           showSceneLighting={showSceneLighting}
           showHelperVisual={showHelpers}
@@ -1799,7 +1849,6 @@ function ComponentVisual({
             materialAsset?.kind === "material" ? materialAsset : undefined
           }
           projectPath={projectPath}
-          selected={selected}
         />
       ) : null;
     }
@@ -2249,6 +2298,7 @@ function EntityObject({
   runtimeRevision,
   transformMode,
   transformSpace,
+  selectedEntityIds,
   gizmo,
   projectPath,
   onTransformCommit,
@@ -2277,9 +2327,10 @@ function EntityObject({
   runtimeRevision: number;
   transformMode: TransformMode;
   transformSpace: TransformSpace;
+  selectedEntityIds: readonly string[];
   gizmo: SceneSettings["editor"]["gizmo"];
   projectPath?: string;
-  onTransformCommit: (entityId: string, patch: TransformPatch) => void;
+  onTransformCommit: (entityId: string, patch: TransformPatch, peers?: readonly { entityId: string; patch: TransformPatch }[]) => void;
   onDraggingChange: (dragging: boolean) => void;
   transformDraggingRef: { current: boolean };
   materialDragActive: boolean;
@@ -2461,14 +2512,14 @@ function EntityObject({
     muteTransformGizmo(transformControlsRef.current);
   }, [editable, primary, transform]);
 
-  const commitTransform = () => {
+  const commitTransform = (peers?: readonly { entityId: string; patch: TransformPatch }[]) => {
     const object = objectRef.current;
     if (!object || !transform) return;
     onTransformCommit(authoringEntityId, {
       position: [object.position.x, object.position.y, object.position.z],
       rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
       scale: [object.scale.x, object.scale.y, object.scale.z],
-    });
+    }, peers);
   };
 
   return (
@@ -2526,13 +2577,14 @@ function EntityObject({
           objectRef={objectRef}
           transformMode={transformMode}
           transformSpace={transformSpace}
+          selectedEntityIds={selectedEntityIds}
           gizmo={gizmo}
           onDragStart={() => {
             transformDraggingRef.current = true;
             onDraggingChange(true);
           }}
-          onDragEnd={() => {
-            commitTransform();
+          onDragEnd={(peers) => {
+            commitTransform(peers);
             transformDraggingRef.current = false;
             onDraggingChange(false);
           }}
@@ -2557,6 +2609,7 @@ function EntityTransformGizmo({
   objectRef,
   transformMode,
   transformSpace,
+  selectedEntityIds,
   gizmo,
   onDragStart,
   onDragEnd,
@@ -2565,15 +2618,81 @@ function EntityTransformGizmo({
   objectRef: MutableRefObject<Group>;
   transformMode: TransformMode;
   transformSpace: TransformSpace;
+  selectedEntityIds: readonly string[];
   gizmo: SceneSettings["editor"]["gizmo"];
   onDragStart: () => void;
-  onDragEnd: () => void;
+  onDragEnd: (peers?: readonly { entityId: string; patch: TransformPatch }[]) => void;
 }) {
   const sceneRoot = useThree((state) => state.scene);
   const surface = useThree((state) => state.gl.domElement);
   const localControlsRef = useRef<ElementRef<typeof TransformControls> | null>(null);
+  const pivotRef = useRef<Group>(null!);
+  const multiple = selectedEntityIds.length > 1;
   const lastTouchRef = useRef<PointerEvent | null>(null);
   const draggingTouchRef = useRef<PointerEvent | null>(null);
+  const dragPositionsRef = useRef<{
+    pivotWorldMatrix: Matrix4;
+    targets: { id: string; object: Group; worldMatrix: Matrix4 }[];
+  } | null>(null);
+  const previewSelection = () => {
+    const drag = dragPositionsRef.current;
+    if (!drag) return;
+    pivotRef.current.updateWorldMatrix(true, false);
+    const delta = new Matrix4().multiplyMatrices(
+      pivotRef.current.matrixWorld,
+      drag.pivotWorldMatrix.clone().invert(),
+    );
+    for (const { object, worldMatrix } of drag.targets) {
+      const parent = object.parent;
+      if (!parent) continue;
+      parent.updateWorldMatrix(true, false);
+      const local = parent.matrixWorld.clone().invert().multiply(delta).multiply(worldMatrix);
+      const rotation = new Quaternion();
+      local.decompose(object.position, rotation, object.scale);
+      object.rotation.setFromQuaternion(rotation, object.rotation.order);
+      object.updateMatrixWorld(true);
+    }
+  };
+  const captureSelection = () => {
+    if (!multiple) return;
+    const selected = new Set(selectedEntityIds);
+    const targets: { id: string; object: Group; worldMatrix: Matrix4 }[] = [];
+    sceneRoot.traverse((object) => {
+      if (object.type !== "Group") return;
+      const id = object.userData.authoringEntityId;
+      if (typeof id !== "string" || !selected.has(id)) return;
+      let ancestor = object.parent;
+      while (ancestor && !selected.has(ancestor.userData.authoringEntityId)) ancestor = ancestor.parent;
+      if (ancestor) return;
+      object.updateWorldMatrix(true, false);
+      targets.push({ id, object: object as Group, worldMatrix: object.matrixWorld.clone() });
+    });
+    pivotRef.current.updateWorldMatrix(true, false);
+    dragPositionsRef.current = {
+      pivotWorldMatrix: pivotRef.current.matrixWorld.clone(),
+      targets,
+    };
+  };
+  useFrame(() => {
+    if (!multiple || dragPositionsRef.current || !pivotRef.current) return;
+    const selected = new Set(selectedEntityIds);
+    const center = new Vector3();
+    const worldPosition = new Vector3();
+    let count = 0;
+    sceneRoot.traverse((object) => {
+      if (object.type !== "Group" || !selected.has(object.userData.authoringEntityId)) return;
+      object.getWorldPosition(worldPosition);
+      center.add(worldPosition);
+      count++;
+    });
+    if (count > 0) pivotRef.current.position.copy(center.divideScalar(count));
+    if (transformSpace === "local") {
+      pivotRef.current.quaternion.copy(objectRef.current.getWorldQuaternion(new Quaternion()));
+    } else {
+      pivotRef.current.quaternion.identity();
+    }
+    pivotRef.current.scale.set(1, 1, 1);
+  });
   const bindControls = useCallback((controls: ElementRef<typeof TransformControls> | null) => {
     localControlsRef.current = controls;
     controlsRef(controls);
@@ -2633,9 +2752,11 @@ function EntityTransformGizmo({
   }, [surface]);
 
   return createPortal(
+    <>
+    <group ref={pivotRef} />
     <TransformControls
       ref={bindControls}
-      object={objectRef}
+      object={multiple ? pivotRef : objectRef}
       mode={transformMode}
       space={transformSpace}
       size={gizmo.size}
@@ -2646,16 +2767,31 @@ function EntityTransformGizmo({
         gizmo.snapEnabled ? (gizmo.rotateSnapDegrees * Math.PI) / 180 : null
       }
       scaleSnap={gizmo.snapEnabled ? gizmo.scaleSnap : null}
+      onObjectChange={previewSelection}
       onMouseDown={() => {
+        captureSelection();
         draggingTouchRef.current = lastTouchRef.current;
         lastTouchRef.current = null;
         onDragStart();
       }}
       onMouseUp={() => {
+        previewSelection();
+        const peers = dragPositionsRef.current?.targets
+          .filter(({ object }) => object !== objectRef.current)
+          .map(({ id, object }) => ({
+          entityId: id,
+          patch: {
+            position: [object.position.x, object.position.y, object.position.z] as [number, number, number],
+            rotation: [object.rotation.x, object.rotation.y, object.rotation.z] as [number, number, number],
+            scale: [object.scale.x, object.scale.y, object.scale.z] as [number, number, number],
+          },
+        }));
+        dragPositionsRef.current = null;
         draggingTouchRef.current = null;
-        onDragEnd();
+        onDragEnd(peers);
       }}
-    />,
+    />
+    </>,
     sceneRoot,
   );
 }
@@ -3091,6 +3227,7 @@ const SceneEntityHierarchy = memo(function SceneEntityHierarchy({
       runtimeRevision={node.runtimeRevision}
       transformMode={shared.transformMode}
       transformSpace={shared.transformSpace}
+      selectedEntityIds={shared.selectedEntityIds}
       gizmo={shared.gizmo}
       onTransformCommit={shared.onTransformCommit}
       onDraggingChange={shared.onDraggingChange}
@@ -4885,6 +5022,7 @@ export function SceneViewport({
   boundsRequest = null,
   onBoundsResult,
   onExitRecordingView,
+  recordingPanel,
 }: {
   scene: SceneDocument;
   assets: AssetManifest;
@@ -4910,7 +5048,7 @@ export function SceneViewport({
    * and ends up fighting them for width. As a tab it gets the whole cell, and
    * the two are one place rather than one covering the other.
    */
-  tabs?: readonly { id: string; label: string; closable?: boolean }[];
+  tabs?: readonly { id: string; label: string; icon: EditorIconName; closable?: boolean }[];
   activeTabId?: string;
   onSelectTab?: (id: string) => void;
   onCloseTab?: (id: string) => void;
@@ -4929,7 +5067,7 @@ export function SceneViewport({
     selection: SceneViewportEntitySelection,
     modifiers: SceneViewportSelectionModifiers,
   ) => void;
-  onTransformCommit: (entityId: string, patch: TransformPatch) => void;
+  onTransformCommit: (entityId: string, patch: TransformPatch, peers?: readonly { entityId: string; patch: TransformPatch }[]) => void;
   onDropPrimitive: (creationId: string, position: Vec3) => void;
   onDropMaterial: (
     entityId: string,
@@ -4986,6 +5124,8 @@ export function SceneViewport({
   onBoundsResult?: (result: SceneBoundsResult) => void;
   /** Shown as a button while the recording view is up. */
   onExitRecordingView?: () => void;
+  /** Recording controls opened from the Scene View toolbar. */
+  recordingPanel?: RecordingPanelProps;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const { tablet: isTablet, phone, touch } = useEditorDevice();
@@ -5085,6 +5225,7 @@ export function SceneViewport({
   // React; which of the two forms is shown is a container query on the header,
   // so the controls exist once in the DOM either way.
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const [recordingPanelOpen, setRecordingPanelOpen] = useState(false);
   const [thumbnailCaptureActive, setThumbnailCaptureActive] = useState(false);
   // A clean frame: no grid, gizmo, selection or helper icons. Thumbnails always
   // want one; the recording view wants one unless the author asked to keep
@@ -5104,7 +5245,7 @@ export function SceneViewport({
   const [qualityMode, setQualityMode] = useState<SceneViewportQualityMode>(
     loadSceneViewportQualityMode,
   );
-  const [automaticQuality, setAutomaticQuality] = useState<SceneViewportFixedQuality>("low");
+  const [automaticQuality, setAutomaticQuality] = useState<SceneViewportFixedQuality>("high");
   const effectiveQuality = qualityMode === "auto" ? automaticQuality : qualityMode;
   const reduceAutomaticQuality = useCallback(() => {
     setAutomaticQuality(lowerSceneViewportQuality);
@@ -5123,6 +5264,36 @@ export function SceneViewport({
   const debugResultRef = useRef(onDebugCaptureResult);
   debugResultRef.current = onDebugCaptureResult;
   const viewMenuRef = useRef<HTMLDivElement>(null);
+  const recordingPanelRef = useRef<HTMLElement>(null);
+  const recordingTriggerRef = useRef<HTMLButtonElement>(null);
+  const closeRecordingPanel = useCallback(() => {
+    setRecordingPanelOpen(false);
+    const trigger = recordingTriggerRef.current;
+    if (trigger?.getClientRects().length) trigger.focus();
+    else viewMenuRef.current?.querySelector<HTMLButtonElement>('[aria-label="表示と診断の設定"]')?.focus();
+  }, []);
+  useEffect(() => {
+    if (!recordingPanelOpen) return;
+    recordingPanelRef.current?.querySelector<HTMLButtonElement>('[aria-label="録画パネルを閉じる"]')?.focus();
+    const closeOnOutside = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!recordingPanelRef.current?.contains(target) && !recordingTriggerRef.current?.contains(target)) {
+        setRecordingPanelOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        closeRecordingPanel();
+      }
+    };
+    window.addEventListener("pointerdown", closeOnOutside, true);
+    window.addEventListener("keydown", closeOnEscape, true);
+    return () => {
+      window.removeEventListener("pointerdown", closeOnOutside, true);
+      window.removeEventListener("keydown", closeOnEscape, true);
+    };
+  }, [closeRecordingPanel, recordingPanelOpen]);
   useEffect(() => {
     if (!viewMenuOpen) return;
     const closeOnOutside = (event: PointerEvent) => {
@@ -5446,18 +5617,6 @@ export function SceneViewport({
       });
     }
   }, []);
-
-  const toggleVideoRecording = useCallback(() => {
-    if (videoSaving) return;
-    if (videoRecording) {
-      setVideoRecording(false);
-      setDebugNotice("診断動画を保存中…");
-      return;
-    }
-    setDebugOverlayEnabled(true);
-    setVideoRecording(true);
-    setDebugNotice("診断動画を録画中… 最大15秒");
-  }, [videoRecording, videoSaving]);
 
   const handleVideoAutoStop = useCallback(() => {
     setVideoRecording(false);
@@ -6190,6 +6349,7 @@ export function SceneViewport({
       physicsEnabled: editorMode === "play" && projectKind === "world",
       transformMode,
       transformSpace,
+      selectedEntityIds,
       gizmo: activeGizmo,
       onTransformCommit,
       onDraggingChange: handleTransformDraggingChange,
@@ -6211,6 +6371,7 @@ export function SceneViewport({
       projectKind,
       projectPath,
       renderDisplayMode,
+      selectedEntityIds,
       terrainEditing,
       touchNavigationActive,
       transformMode,
@@ -6300,11 +6461,18 @@ export function SceneViewport({
                 {
                   id: SCENE_VIEW_TAB_ID,
                   label: editorMode === "play" ? "Play Window" : "Scene View",
+                  icon: editorMode === "play" ? "play" : "world",
                 },
                 ...tabs,
               ].map((tab) => {
                 const active = (activeTabId ?? SCENE_VIEW_TAB_ID) === tab.id;
                 const closable = "closable" in tab && tab.closable;
+                const TabIcon = EDITOR_ICONS[tab.icon as EditorIconName];
+                const tabTitle = tab.id === SCENE_VIEW_TAB_ID
+                  ? editorMode === "play" ? "Play Windowを表示" : "Scene Viewを表示"
+                  : tab.icon === "graph"
+                    ? `${tab.label}のノードエディターを表示`
+                    : `${tab.label}のスクリプトエディターを表示`;
                 return (
                   <div
                     key={tab.id}
@@ -6320,10 +6488,11 @@ export function SceneViewport({
                       type="button"
                       role="tab"
                       aria-selected={active}
+                      aria-label={tabTitle}
                       id={tab.id === SCENE_VIEW_TAB_ID ? "scene-view-heading" : undefined}
-                      title={tab.label}
+                      title={tabTitle}
                       onClick={() => onSelectTab?.(tab.id)}
-                      className={`max-w-[11rem] truncate px-2 py-0.5 text-[11px] font-semibold ${
+                      className={`flex max-w-[11rem] items-center gap-1 truncate px-2 py-0.5 text-[11px] font-semibold ${
                         active
                           ? editorMode === "play"
                             ? "text-zinc-100"
@@ -6333,7 +6502,8 @@ export function SceneViewport({
                             : "text-slate-500 hover:text-slate-800"
                       }`}
                     >
-                      {tab.label}
+                      <TabIcon size={13} className="shrink-0" aria-hidden="true" />
+                      <span className="truncate">{tab.label}</span>
                     </button>
                     {closable ? (
                       <button
@@ -6341,13 +6511,13 @@ export function SceneViewport({
                         onClick={() => onCloseTab?.(tab.id)}
                         aria-label={`${tab.label}を閉じる`}
                         title={`${tab.label}を閉じる`}
-                        className={`mr-0.5 rounded px-0.5 text-[12px] leading-none ${
+                        className={`mr-0.5 flex size-4 items-center justify-center rounded ${
                           editorMode === "play"
                             ? "text-zinc-400 hover:bg-violet-800 hover:text-zinc-100"
                             : "text-slate-400 hover:bg-slate-200 hover:text-slate-800"
                         }`}
                       >
-                        ×
+                        <EDITOR_ICONS.close size={12} aria-hidden="true" />
                       </button>
                     ) : null}
                   </div>
@@ -6550,7 +6720,7 @@ export function SceneViewport({
             >
               <EDITOR_ICONS.settings size={13} aria-hidden="true" />
               <span className="hidden @[420px]/scene-header:inline">
-                {videoRecording ? "録画中" : "表示"}
+                {videoRecording ? "診断中" : "表示"}
               </span>
             </button>
             <div
@@ -6674,27 +6844,61 @@ export function SceneViewport({
                 <EDITOR_ICONS.diagnostics size={13} aria-hidden="true" />
                 診断
               </button>
-              <button
-                type="button"
-                aria-label={videoRecording ? "診断動画を停止" : "診断動画を録画"}
-                onClick={toggleVideoRecording}
-                disabled={videoSaving}
-                title={videoRecording ? "診断動画を停止して保存" : "シーンを最大15秒録画"}
-                className={`flex h-7 min-w-[68px] shrink-0 items-center justify-center gap-1 rounded border px-2 text-[11px] font-semibold transition-colors disabled:cursor-wait disabled:opacity-50 ${
-                  videoRecording
-                    ? "border-rose-300 bg-rose-500/15 text-rose-700 hover:bg-rose-500/25"
-                    : editorMode === "play"
-                      ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
-                      : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100"
-                }`}
-              >
-                <EDITOR_ICONS.record size={13} aria-hidden="true" />
-                {videoSaving ? "保存中" : videoRecording ? "停止" : "録画"}
-              </button>
+              {recordingPanel ? (
+                <button
+                  ref={recordingTriggerRef}
+                  type="button"
+                  aria-label={recordingTakeActive ? "録画（録画中）" : "録画"}
+                  aria-expanded={recordingPanelOpen}
+                  aria-haspopup="dialog"
+                  onClick={() => {
+                    setViewMenuOpen(false);
+                    setRecordingPanelOpen((open) => !open);
+                  }}
+                  title="録画の設定と開始・停止"
+                  className={`flex h-7 min-w-[68px] shrink-0 items-center justify-center gap-1 rounded border px-2 text-[11px] font-semibold transition-colors ${
+                    recordingTakeActive || recordingPanelOpen
+                      ? "border-rose-300 bg-rose-500/15 text-rose-700 hover:bg-rose-500/25"
+                      : editorMode === "play"
+                        ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700"
+                        : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-100"
+                  }`}
+                >
+                  <EDITOR_ICONS.record size={13} aria-hidden="true" />
+                  {recordingTakeActive ? "録画中" : "録画"}
+                </button>
+              ) : null}
             </div>
           </div>
         </div>
       </div>
+
+      {recordingPanelOpen && recordingPanel ? (
+        <section
+          ref={recordingPanelRef}
+          role="dialog"
+          aria-labelledby="scene-recording-panel-heading"
+          className="absolute bottom-2 right-2 top-10 z-50 flex w-80 max-w-[calc(100%-1rem)] flex-col overflow-hidden rounded-lg border border-editor-border bg-editor-surface text-editor-text shadow-xl"
+        >
+          <div className="flex h-11 shrink-0 items-center justify-between border-b border-slate-200 px-3.5">
+            <h2 id="scene-recording-panel-heading" className="text-sm font-semibold text-slate-900">
+              録画
+            </h2>
+            <button
+              type="button"
+              aria-label="録画パネルを閉じる"
+              title="閉じる"
+              onClick={closeRecordingPanel}
+              className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+            >
+              <EDITOR_ICONS.close size={16} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="min-h-0 overflow-y-auto overscroll-contain">
+            <RecordingPanel {...recordingPanel} />
+          </div>
+        </section>
+      ) : null}
 
       {tablet && editorMode === "edit" && !recordingViewActive ? (
         <div
@@ -6818,7 +7022,7 @@ export function SceneViewport({
         <Canvas
           key={projection}
           orthographic={projection === "orthographic"}
-          shadows={qualityProfile.shadows ? "basic" : false}
+          shadows={qualityProfile.shadows ? "percentage" : false}
           dpr={recordingViewActive ? recordingDpr : qualityProfile.dpr}
           camera={{
             position: [7, 5, 7],
@@ -6866,9 +7070,11 @@ export function SceneViewport({
             />
           ) : null}
           <ViewportShadowQuality enabled={qualityProfile.shadows} />
-          {qualityProfile.postprocessing ? (
-            <ScenePostprocessing settings={sceneSettings.postprocessing} />
-          ) : null}
+          <XriftShadowMapSettings type={sceneSettings.shadowMapType} />
+          <ScenePostprocessing
+            settings={sceneSettings.postprocessing}
+            effectsEnabled={qualityProfile.postprocessing}
+          />
           {/* Scene-wide graph writes: the compositor, fog, ambient light, the
               sky, the camera and the screen fade. Mounted only while Play runs,
               so a graph never changes the editing view out from under the

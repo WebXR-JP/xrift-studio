@@ -81,7 +81,7 @@ export function RecordingPanel({
           : "border-slate-200 bg-slate-50 text-slate-700";
 
   return (
-    <div className="scrollbar-thin max-h-[min(32rem,calc(100vh-10rem))] space-y-4 overflow-y-auto p-3.5 text-xs text-slate-600">
+    <div className="space-y-4 p-3.5 text-xs text-slate-600">
       <section aria-label="録画の状態">
         <div className={`rounded-md border px-3 py-2 ${statusTone}`} role="status" aria-live="polite">
           <div className="flex items-center justify-between gap-2">
@@ -113,7 +113,7 @@ export function RecordingPanel({
           ) : null}
           {(snapshot.status === "completed" || snapshot.status === "failed") && snapshot.path ? (
             <div className="mt-1.5 flex items-center justify-between gap-2">
-              <span className="min-w-0 truncate font-mono text-[10px]" title={snapshot.path}>
+              <span className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap select-text cursor-text font-mono text-[10px]" title={snapshot.path}>
                 {snapshot.path}
               </span>
               {nativeAvailable ? (
@@ -305,7 +305,7 @@ export function RecordingPanel({
           <h3 id="recording-directory-heading" className={sectionHeading}>
             保存先
           </h3>
-          <p className="truncate font-mono text-[10px] text-slate-600" title={projectRecordingDirectory ?? state.outputDirectory ?? "既定の保存先"}>
+          <p className="overflow-x-auto whitespace-nowrap select-text cursor-text font-mono text-[10px] text-slate-600" title={projectRecordingDirectory ?? state.outputDirectory ?? "既定の保存先"}>
             {projectRecordingDirectory ?? state.outputDirectory ?? "既定（ビデオ / XRift Studio）"}
           </p>
           {projectRecordingDirectory ? <p className="mt-1 text-[11px] text-slate-500">プロジェクトフォルダーに保存します。</p> : <div className="mt-1.5 grid grid-cols-2 gap-1.5">

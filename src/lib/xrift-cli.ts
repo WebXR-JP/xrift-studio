@@ -36,6 +36,13 @@ export type CompilerStagingTemplateRequest = {
  */
 export { COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC };
 
+// The compiler overlays src/World.tsx or src/Item.tsx. Select the matching
+// official template explicitly; CLI 0.24.4 defaults worlds to xrift-test-world.
+const XRIFT_PROJECT_TEMPLATES: Record<ProjectKind, string> = {
+  world: "WebXR-JP/xrift-world-template",
+  item: "WebXR-JP/xrift-item-template",
+};
+
 /**
  * The npm specs publish staging and Classic export are allowed to install.
  *
@@ -122,8 +129,10 @@ async function run({ bin, args, cwd, onLog }: RunOptions): Promise<RunResult> {
   let actualArgs: string[];
 
   if (bin === "xrift") {
-    target = paths.xriftCmd;
-    actualArgs = args;
+    // Use Studio's Node explicitly; the npm shim can resolve a different Node
+    // from PATH even when the CLI package itself belongs to Studio.
+    target = paths.nodeExe;
+    actualArgs = [paths.xriftJs, ...args];
   } else if (bin === "node") {
     target = paths.nodeExe;
     actualArgs = args;
@@ -140,7 +149,7 @@ async function run({ bin, args, cwd, onLog }: RunOptions): Promise<RunResult> {
   const shellArgs = win
     ? ["/c", target, ...actualArgs]
     : [
-        "-lc",
+        bin === "code" ? "-lc" : "-c",
         [target, ...actualArgs]
           .map((a) => `'${a.replace(/'/g, "'\\''")}'`)
           .join(" "),
@@ -194,49 +203,34 @@ export type Whoami = {
   id: string | null;
 };
 
-function parseWhoami(text: string): Whoami | null {
+export function parseWhoami(text: string): Whoami | null {
   const stripped = text.replace(/\u001b\[[0-9;]*m/g, "").trim();
   if (!stripped) return null;
 
-  // Detect "not logged in" states
+  // CLI 0.24.4 exits successfully for an invalid token as well as for a
+  // missing token. Status text, not just the exit code, determines the state.
+  // Exclude labelled fields so a user's display name is never a status.
+  const status = stripped
+    .split("\n")
+    .filter((line) => !/^\s*(?:Display Name|User ID|Email)\s*[:：]/i.test(line))
+    .join("\n");
   if (
-    /not\s+logged\s*in|not\s+authenticated|please\s+(log|sign)\s*in|ログインして|ログインされていません|認証されていません|未ログイン|no\s+session|no\s+token/i.test(
-      stripped,
+    /not\s+logged\s*in|not\s+authenticated|please\s+(log|sign)\s*in|token\s+(?:is\s+)?invalid|invalid\s+token|ログインして|ログインされていません|認証されていません|未ログイン|no\s+session|no\s+token/i.test(
+      status,
     )
   ) {
     return null;
   }
 
-  const idMatch = stripped.match(
-    /\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/i,
+  const idMatch =
+    stripped.match(/^\s*User ID\s*[:：]\s*(\S+)\s*$/im) ??
+    stripped.match(/\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/i);
+  const nameMatch = stripped.match(
+    /^\s*(?:Display Name|Name|User(?:name)?|Logged in as|ユーザー名|ユーザ名)\s*[:：]\s*(\S[^\r\n]*)$/im,
   );
+  const displayName = nameMatch?.[1].trim() || null;
 
-  let displayName: string | null = null;
-  const nameLine = stripped
-    .split("\n")
-    .map((l) => l.trim())
-    .find((l) => /(name|user|logged|ログイン|ユーザ)/i.test(l));
-  if (nameLine) {
-    const m = nameLine.match(/[:：]\s*(\S[^\(]*?)(?:\s*\(|\s*$)/);
-    if (m) {
-      const candidate = m[1].trim();
-      if (!/^(not|no|未|none)$/i.test(candidate)) {
-        displayName = candidate;
-      }
-    }
-  }
-  if (!displayName) {
-    const words = stripped.split(/\s+/).filter((w) => w.length > 2);
-    for (const w of words) {
-      if (/^(not|null|none|undefined|error|please|you|must|first)$/i.test(w))
-        continue;
-      if (/^[a-zA-Z][\w\-_.]+$/.test(w)) {
-        displayName = w;
-        break;
-      }
-    }
-  }
-
+  // Version notices and spinner messages are not account information.
   if (!displayName && !idMatch) return null;
 
   return { raw: stripped, displayName, id: idMatch?.[1] ?? null };
@@ -271,7 +265,7 @@ export const xrift = {
   ) =>
     run({
       bin: "xrift",
-      args: ["create", kind, name, "-y"],
+      args: ["create", kind, name, "--template", XRIFT_PROJECT_TEMPLATES[kind], "-y"],
       cwd: root,
       onLog,
     }),
@@ -294,6 +288,8 @@ export const xrift = {
         "create",
         request.kind,
         request.directoryName,
+        "--template",
+        XRIFT_PROJECT_TEMPLATES[request.kind],
         "--skip-install",
         "-y",
       ],
@@ -378,7 +374,7 @@ export const xrift = {
   checkItem: (projectPath: string, onLog: (l: LogLine) => void) =>
     run({
       bin: "xrift",
-      // XRift CLI 0.24.2 defines --build on both the parent and subcommands.
+      // XRift CLI through 0.24.4 defines --build on both parent and subcommands.
       // Supplying a subcommand leaves the action's build option unset, so let
       // the CLI detect the single project kind from xrift.json instead.
       args: ["check", "--build"],
@@ -502,7 +498,7 @@ export async function startDevServer(
   const shellArgs = win
     ? ["/c", paths.nodeExe, ...targetArgs]
     : [
-        "-lc",
+        "-c",
         [paths.nodeExe, ...targetArgs]
           .map((a) => `'${a.replace(/'/g, "'\\''")}'`)
           .join(" "),
@@ -562,4 +558,3 @@ export async function startDevServer(
 
   return { child, pid, stop };
 }
-

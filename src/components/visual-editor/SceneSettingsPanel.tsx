@@ -975,6 +975,19 @@ export function SceneSettingsInspector({
           <NumberField label="Intensity（強さ）" value={settings.ambient.intensity} min={0} step={0.05} disabled={readOnly || !settings.ambient.enabled} onChange={(intensity) => update({ ...settings, ambient: { ...settings.ambient, intensity } })} />
         </Section>
 
+        <Section title="Shadow Map" reading="影の種類" description="Scene内のライトすべてに適用します。初期値はソフトなPCFShadowMapです。">
+          <label className="grid grid-cols-[minmax(0,1fr)_160px] items-center gap-3 text-xs text-slate-700">
+            Type（影の描き方）
+            <select value={settings.shadowMapType} disabled={readOnly} onChange={(event) => update({ ...settings, shadowMapType: event.currentTarget.value as SceneSettings["shadowMapType"] })} className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100">
+              <option value="basic">BasicShadowMap（くっきり）</option>
+              <option value="pcf">PCFShadowMap（ソフト・初期値）</option>
+              <option value="pcfSoft">PCFSoftShadowMap（旧方式）</option>
+              <option value="vsm">VSMShadowMap（なめらか）</option>
+            </select>
+          </label>
+          {settings.shadowMapType === "pcfSoft" ? <p className="text-[11px] text-slate-500">現在のThree.jsではPCFShadowMapへ変換されます。</p> : null}
+        </Section>
+
         <Section
           title="Post Processing"
           reading="ポストプロセス"
@@ -1313,7 +1326,7 @@ export function SceneSettingsInspector({
           <NumberField label="視野角" value={settings.camera.fov} min={1} max={179} step={1} disabled={readOnly} onChange={(fov) => update({ ...settings, camera: { ...settings.camera, fov } })} />
         </Section>
 
-        <Section title="ギズモとグリッド" description="編集時だけ使う表示・スナップ設定です。">
+        <Section title="ギズモとグリッド" description="移動スナップを変えると、グリッドサイズと分割数も間隔に合わせて調整します。分割数は手動で変更できます。">
           <Toggle label="グリッドを表示" checked={settings.editor.gizmo.gridVisible} disabled={readOnly} onChange={(gridVisible) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, gridVisible } } })} />
           <NumberField label="グリッドサイズ" value={settings.editor.gizmo.gridSize} min={1} step={1} disabled={readOnly || !settings.editor.gizmo.gridVisible} onChange={(gridSize) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, gridSize } } })} />
           <NumberField label="分割数" value={settings.editor.gizmo.gridDivisions} min={1} step={1} disabled={readOnly || !settings.editor.gizmo.gridVisible} onChange={(gridDivisions) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, gridDivisions: Math.round(gridDivisions) } } })} />

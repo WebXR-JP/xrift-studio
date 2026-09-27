@@ -131,9 +131,11 @@ test('the publish flow keeps uncertainty, duplicate-publication safeguards and n
     '公開されていないことを確認できた場合に限り',
     '未公開を確認して送信保留を解除',
     'XRiftへの送信開始後は、結果を確認するまで閉じられません。',
-    '編集にもこの設定を適用', '元画像は変更しません。',
+    'テクスチャは編集画面で使用中の画像をそのまま公開します。',
   ]) assert.ok(dialog.includes(text), text);
   assert.doesNotMatch(dialog, /ステージング|原本にもこの設定/);
+  assert.doesNotMatch(dialog, /onApplyTextureConversions|textureConversions|公開用に変換します/);
+  assert.match(read(`${visual}AssetQuickEditor.tsx`), /「この設定で画像を書き出す」を押すと、変換後の画像を編集・公開に使います/);
   assert.match(read('src-tauri/src/lib.rs'), /公開されていないことを確認できた場合に限り/);
   const guide = read('docs/guide/publishing.md');
   assert.match(guide, /公開されていないことを確認できた場合に限り/);

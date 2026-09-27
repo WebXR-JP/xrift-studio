@@ -8,8 +8,12 @@ import {
 import { OPEN_BRUSH_CATALOG } from "./open-brush-catalog";
 import { applyOpenBrushCatalogInstall } from "./external-store";
 import type { AssetManifest } from "./asset-manifest";
+import { Mesh, MeshStandardMaterial } from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { createOpenBrushMaterialExtension } from "../../../packages/xrift-studio-runtime/src/open-brush/material-extension";
 
-export function runOpenBrushFixtureAssertions(): void {
+export async function runOpenBrushFixtureAssertions(): Promise<void> {
+  await assertOpenBrushLoaderAcceptsOptionalGltfMaterials();
   const document = {
     asset: { version: "2.0", generator: "Open Brush 2.8" },
     extensionsUsed: ["GOOGLE_tilt_brush_material"],
@@ -104,10 +108,60 @@ export function runOpenBrushFixtureAssertions(): void {
     "OpenBrush catalog duplicated an installed Material");
 }
 
-function createFixtureGlb(document: unknown): Uint8Array {
+async function assertOpenBrushLoaderAcceptsOptionalGltfMaterials(): Promise<void> {
+  const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+  const document = {
+    asset: { version: "2.0" },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [{ mesh: 0 }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
+    accessors: [{ bufferView: 0, componentType: 5126, count: 3, type: "VEC3", min: [0, 0, 0], max: [1, 1, 0] }],
+    bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: positions.byteLength }],
+    buffers: [{ byteLength: positions.byteLength }],
+  };
+  const loader = new GLTFLoader();
+  // This also exercises legacy generated worlds where useLoader reused one
+  // GLTFLoader after registering the brush plugin for an earlier model.
+  loader.register((parser) => createOpenBrushMaterialExtension(parser, "https://example.invalid/brushes/"));
+  for (const [label, candidate] of [
+    ["ordinary material-less glTF", document],
+    ["Open Brush material-less glTF", { ...document, extensionsUsed: ["GOOGLE_tilt_brush_material"] }],
+    ["ordinary unnamed material", {
+      ...document,
+      meshes: [{ primitives: [{ attributes: { POSITION: 0 }, material: 0 }] }],
+      materials: [{}],
+    }],
+  ] as const) {
+    const bytes = createFixtureGlb(candidate, new Uint8Array(positions.buffer));
+    const gltf = await loader.parseAsync(bytes.buffer as ArrayBuffer, "");
+    const mesh = gltf.scene.children[0];
+    assert(mesh instanceof Mesh, `${label} must load its mesh`);
+    assert(mesh.material instanceof MeshStandardMaterial, `${label} must retain the standard glTF material`);
+    assert(mesh.geometry.getAttribute("position").count === 3, `${label} must retain all vertices`);
+  }
+
+  // Extension GUIDs are sufficient to identify a brush; a name is optional in
+  // glTF. Keep the real library's hooks active without fetching shader resources.
+  const brushDocument = {
+    asset: { version: "2.0" },
+    extensionsUsed: ["GOOGLE_tilt_brush_material"],
+    materials: [{ extensions: { GOOGLE_tilt_brush_material: { guid: "Light" } } }],
+    scene: 0,
+    scenes: [{ nodes: [] }],
+    nodes: [],
+  };
+  const source = JSON.stringify(brushDocument);
+  const brush = await loader.parseAsync(source, "");
+  assert(brush.parser.json.materials[0].name === "", "Brush hooks must accept an unnamed extension material");
+  assert(JSON.stringify(brushDocument) === source, "Loading must not change the source glTF document");
+}
+
+function createFixtureGlb(document: unknown, binary?: Uint8Array): Uint8Array {
   const json = new TextEncoder().encode(JSON.stringify(document));
   const jsonLength = Math.ceil(json.byteLength / 4) * 4;
-  const bytes = new Uint8Array(20 + jsonLength);
+  const binaryLength = binary ? Math.ceil(binary.byteLength / 4) * 4 : 0;
+  const bytes = new Uint8Array(20 + jsonLength + (binary ? 8 + binaryLength : 0));
   const view = new DataView(bytes.buffer);
   view.setUint32(0, 0x46546c67, true);
   view.setUint32(4, 2, true);
@@ -115,7 +169,12 @@ function createFixtureGlb(document: unknown): Uint8Array {
   view.setUint32(12, jsonLength, true);
   view.setUint32(16, 0x4e4f534a, true);
   bytes.set(json, 20);
-  bytes.fill(0x20, 20 + json.byteLength);
+  bytes.fill(0x20, 20 + json.byteLength, 20 + jsonLength);
+  if (binary) {
+    view.setUint32(20 + jsonLength, binaryLength, true);
+    view.setUint32(24 + jsonLength, 0x004e4942, true);
+    bytes.set(binary, 28 + jsonLength);
+  }
   return bytes;
 }
 

@@ -14,7 +14,12 @@ test("アイテムでも共通のギミック一覧を検索して追加を選�
   await expect(catalog.getByRole("textbox")).toBeVisible();
   await expect(catalog.getByTestId("scene-recipe-card")).toHaveCount(51);
   await expect(catalog).toContainText("アイテムにも追加できます");
-  await catalog.getByRole("textbox").fill("スライド");
+  await catalog.getByRole("textbox").fill("音の再生・停止パネル");
+  await catalog.getByTestId("scene-recipe-card").click();
+  await expect(dialog.getByText("再生を押す → 音源を再生する", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("一時停止を押す → 音源を一時停止する", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("停止を押す → 音源を停止する", { exact: true })).toBeVisible();
+  await catalog.getByRole("textbox").fill("扉");
   await expect(catalog.getByTestId("scene-recipe-card").first()).toBeVisible();
   await catalog.getByTestId("scene-recipe-card").first().click();
   await expect(dialog.getByRole("button", { name: /をシーンへ追加$/ })).toBeEnabled();

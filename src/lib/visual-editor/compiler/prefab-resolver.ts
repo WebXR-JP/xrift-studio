@@ -4,6 +4,7 @@ import {
   type SceneAsset,
 } from "../asset-manifest";
 import type { PrefabDocument } from "../prefab-document";
+import { cloneXriftComponentIdentifiers } from "../xrift-component-identity";
 import {
   type JsonValue,
   type PrefabInstanceComponent,
@@ -577,7 +578,11 @@ function clonePrefabComponent(
     return {
       ...component,
       id: generatedId,
-      properties: { ...component.properties },
+      properties: cloneXriftComponentIdentifiers(
+        component,
+        entityIdMap.get(sourceEntityId)!,
+        generatedId,
+      ),
       assetReferences: [...component.assetReferences],
       entityReferences,
       ...(component.authoring

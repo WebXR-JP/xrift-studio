@@ -1,6 +1,6 @@
 # ライトと画面の明るさを調整する
 
-物を照らす設定と、画面全体の見え方を変える設定を分けて調整します。Play中なら**Stop**で編集に戻ってください。
+物を照らす設定と、画面全体の見え方を変える設定を分けて調整します。ライトの設定はPlay中もInspectorから変更でき、表示に反映されます。
 
 ![Ambient Lightを有効にし、Intensityを0.55にした状態](./media/lighting.png "Ambient Light")
 
@@ -11,6 +11,14 @@
 **追加**からライトを置き、Entityを選んでInspectorで位置、色、強さを調整します。すでにライトがある場合は、Hierarchyで選んで変更してください。
 
 まず一つのライトで、どこが照らされるかを確認します。暗いからといってライトを次々に増やす前に、位置や向きも見直してください。
+
+Directional LightとSpot Lightの向きは、Inspectorの**照らす方向**で調整します。Point Light、Spot Light、Rect Area Lightでは、**Power（光量）**も入力できます。PowerとIntensityは連動します。
+
+## 影を調整する
+
+Directional Light、Point Light、Spot Lightでは`castShadow`を有効にし、`shadow.intensity`、`shadow.mapSize.x/y`、`shadow.radius`をライトごとに調整します。影の解像度は初期値が256 pxです。`shadow.bias`と`shadow.normalBias`は、表面に縞が出る場合や影が物体から離れる場合に調整します。
+
+**シーン設定 → Shadow Map**では、Scene全体で使うThree.jsの影アルゴリズムを選びます。初期値の`PCFShadowMap`はソフトな影です。各ライトの影の解像度は256 px、ぼかし量は`Radius`の初期値2です。`BasicShadowMap`では`Radius`によるぼかしは効きません。`PCFSoftShadowMap`は現在のThree.jsでは`PCFShadowMap`へ変換されます。VSMのぼかし回数は各ライトの`Blur Samples`で調整します。
 
 ## 全体の明るさを調整する
 

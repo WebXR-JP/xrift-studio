@@ -17,8 +17,13 @@ mod project_transfer;
 mod hierarchy_transfer;
 pub mod mcp;
 mod script_trust;
+mod runtime_installation;
+use runtime_installation::{
+    cli_manifest_version, cli_version_output_matches, cli_version_supported, installed_cli_version,
+    node_distribution, NODE_VERSION, XRIFT_CLI_VERSION,
+};
 
-const NODE_VERSION: &str = "v24.15.0";
+static RUNTIME_INSTALL_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 const VISUAL_PROJECT_MANIFEST: &str = "xrift-studio.project.json";
 const VISUAL_PROJECT_SCHEMA_VERSION: &str = "0.1.0";
 const SCENE_DOCUMENT_SCHEMA_VERSION: &str = "0.1.0";
@@ -84,9 +89,7 @@ fn take_opened_project_archives(
 }
 
 #[cfg(target_os = "windows")]
-const NODE_DIST: &str = "node-v24.15.0-win-x64";
-#[cfg(target_os = "windows")]
-const NODE_ARCHIVE_NAME: &str = "node-v24.15.0-win-x64.zip";
+const NODE_PLATFORM: &str = "win-x64";
 #[cfg(target_os = "windows")]
 const NODE_EXE_NAME: &str = "node.exe";
 #[cfg(target_os = "windows")]
@@ -95,14 +98,10 @@ const NODE_BIN_REL: &str = "";
 const NPM_CLI_REL: &str = "node_modules/npm/bin/npm-cli.js";
 
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-const NODE_DIST: &str = "node-v24.15.0-darwin-arm64";
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-const NODE_ARCHIVE_NAME: &str = "node-v24.15.0-darwin-arm64.tar.gz";
+const NODE_PLATFORM: &str = "darwin-arm64";
 
 #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-const NODE_DIST: &str = "node-v24.15.0-darwin-x64";
-#[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-const NODE_ARCHIVE_NAME: &str = "node-v24.15.0-darwin-x64.tar.gz";
+const NODE_PLATFORM: &str = "darwin-x64";
 
 #[cfg(target_os = "macos")]
 const NODE_EXE_NAME: &str = "node";
@@ -112,14 +111,10 @@ const NODE_BIN_REL: &str = "bin";
 const NPM_CLI_REL: &str = "lib/node_modules/npm/bin/npm-cli.js";
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-const NODE_DIST: &str = "node-v24.15.0-linux-x64";
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-const NODE_ARCHIVE_NAME: &str = "node-v24.15.0-linux-x64.tar.gz";
+const NODE_PLATFORM: &str = "linux-x64";
 
 #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-const NODE_DIST: &str = "node-v24.15.0-linux-arm64";
-#[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-const NODE_ARCHIVE_NAME: &str = "node-v24.15.0-linux-arm64.tar.gz";
+const NODE_PLATFORM: &str = "linux-arm64";
 
 #[cfg(target_os = "linux")]
 const NODE_EXE_NAME: &str = "node";
@@ -127,11 +122,16 @@ const NODE_EXE_NAME: &str = "node";
 const NODE_BIN_REL: &str = "bin";
 #[cfg(target_os = "linux")]
 const NPM_CLI_REL: &str = "lib/node_modules/npm/bin/npm-cli.js";
+
+fn node_archive_name() -> String {
+    let extension = if cfg!(target_os = "windows") { "zip" } else { "tar.gz" };
+    format!("{}.{extension}", node_distribution(NODE_PLATFORM))
+}
 
 fn node_url() -> String {
     format!(
-        "https://nodejs.org/dist/{}/{}",
-        NODE_VERSION, NODE_ARCHIVE_NAME
+        "https://nodejs.org/dist/v{}/{}",
+        NODE_VERSION, node_archive_name()
     )
 }
 
@@ -158,6 +158,10 @@ pub struct RuntimeStatus {
     pub ready: bool,
     pub node_installed: bool,
     pub xrift_installed: bool,
+    pub node_version: String,
+    pub xrift_version: Option<String>,
+    pub recommended_xrift_version: String,
+    pub xrift_update_required: bool,
     pub paths: RuntimePaths,
 }
 
@@ -234,12 +238,19 @@ struct CompilerStagingOwner {
     schema_version: String,
     project_id: String,
     project_kind: String,
+    // Older owner records were written only after all output was applied.
+    #[serde(default = "completed_compiler_staging_default")]
+    materialized: bool,
     #[serde(default)]
     pre_upload_id: Option<String>,
     #[serde(default)]
     pre_upload_last_uploaded_at: Option<String>,
     #[serde(default)]
     upload_attempt_started_unix_ms: Option<u64>,
+}
+
+fn completed_compiler_staging_default() -> bool {
+    true
 }
 
 #[derive(Deserialize)]
@@ -424,7 +435,7 @@ fn app_root(app: &AppHandle) -> Result<PathBuf, String> {
 
 fn derive_paths(root: &Path) -> RuntimePaths {
     let runtime_dir = root.join("runtime");
-    let node_dist_dir = runtime_dir.join(NODE_DIST);
+    let node_dist_dir = runtime_dir.join(node_distribution(NODE_PLATFORM));
     let node_bin_dir = if NODE_BIN_REL.is_empty() {
         node_dist_dir.clone()
     } else {
@@ -448,7 +459,7 @@ fn derive_paths(root: &Path) -> RuntimePaths {
             .join("@xrift")
             .join("cli")
             .join("dist")
-            .join("cli.js")
+            .join("index.js")
     } else {
         npm_prefix
             .join("lib")
@@ -456,7 +467,7 @@ fn derive_paths(root: &Path) -> RuntimePaths {
             .join("@xrift")
             .join("cli")
             .join("dist")
-            .join("cli.js")
+            .join("index.js")
     };
 
     RuntimePaths {
@@ -484,14 +495,26 @@ fn runtime_paths(app: AppHandle) -> Result<RuntimePaths, String> {
 #[tauri::command]
 fn runtime_status(app: AppHandle) -> Result<RuntimeStatus, String> {
     let paths = runtime_paths(app)?;
+    Ok(runtime_status_for_paths(paths))
+}
+
+fn runtime_status_for_paths(paths: RuntimePaths) -> RuntimeStatus {
     let node_installed = node_runtime_installed(&paths);
-    let xrift_installed = Path::new(&paths.xrift_cmd).exists();
-    Ok(RuntimeStatus {
-        ready: node_installed && xrift_installed,
+    let xrift_version = installed_cli_version(Path::new(&paths.xrift_js));
+    let xrift_installed = xrift_version.is_some();
+    let xrift_update_required = xrift_version
+        .as_deref()
+        .is_some_and(|version| !cli_version_supported(version));
+    RuntimeStatus {
+        ready: node_installed && xrift_installed && !xrift_update_required,
         node_installed,
         xrift_installed,
+        node_version: NODE_VERSION.to_string(),
+        xrift_version,
+        recommended_xrift_version: XRIFT_CLI_VERSION.to_string(),
+        xrift_update_required,
         paths,
-    })
+    }
 }
 
 fn node_runtime_installed(paths: &RuntimePaths) -> bool {
@@ -510,11 +533,15 @@ fn emit_progress(app: &AppHandle, step: &str, percent: f64, message: &str) {
 }
 
 async fn download_node(app: &AppHandle, paths: &RuntimePaths) -> Result<PathBuf, String> {
-    let archive_path = PathBuf::from(&paths.runtime_dir).join(NODE_ARCHIVE_NAME);
+    let archive_path = PathBuf::from(&paths.runtime_dir).join(node_archive_name());
     let url = node_url();
     emit_progress(app, "download", 0.0, &format!("ダウンロード中: {}", url));
 
-    let response = reqwest::get(&url).await.map_err(|e| e.to_string())?;
+    let response = reqwest::get(&url)
+        .await
+        .map_err(|e| e.to_string())?
+        .error_for_status()
+        .map_err(|e| e.to_string())?;
     let total = response.content_length().unwrap_or(0);
     let mut downloaded: u64 = 0;
     let mut file = tokio::fs::File::create(&archive_path)
@@ -575,6 +602,21 @@ async fn run_npm_install_global(paths: &RuntimePaths, package_spec: &str) -> Res
         .arg("--no-fund")
         .arg(package_spec);
 
+    configure_runtime_command(&mut cmd, paths);
+    let output = cmd.output().await.map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(format!(
+            "npm install failed:\nstdout: {}\nstderr: {}",
+            stdout, stderr
+        ));
+    }
+    Ok(())
+}
+
+fn configure_runtime_command(cmd: &mut tokio::process::Command, paths: &RuntimePaths) {
+    cmd.current_dir(&paths.home);
     cmd.env_clear();
     cmd.env(
         "PATH",
@@ -605,21 +647,34 @@ async fn run_npm_install_global(paths: &RuntimePaths, package_spec: &str) -> Res
         cmd.env("TMP", v);
     }
 
-    let output = cmd.output().await.map_err(|e| e.to_string())?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        return Err(format!(
-            "npm install failed:\nstdout: {}\nstderr: {}",
-            stdout, stderr
-        ));
-    }
-    Ok(())
 }
 
-async fn install_xrift(app: &AppHandle, paths: &RuntimePaths) -> Result<(), String> {
-    emit_progress(app, "npm-install", 0.0, "@xrift/cliをインストール中…");
-    run_npm_install_global(paths, "@xrift/cli").await
+async fn install_xrift(app: &AppHandle, paths: &RuntimePaths, version: &str) -> Result<(), String> {
+    emit_progress(
+        app, "npm-install", 0.0,
+        &format!("@xrift/cli {version}をインストール中…"),
+    );
+    run_npm_install_global(paths, &format!("@xrift/cli@{version}")).await
+}
+
+async fn verify_xrift_runtime(paths: &RuntimePaths) -> Result<String, String> {
+    let version = installed_cli_version(Path::new(&paths.xrift_js))
+        .filter(|version| cli_version_supported(version))
+        .ok_or("XRift CLIのファイルまたはバージョンを確認できません。セットアップを再試行してください。")?;
+    let mut cmd = tokio::process::Command::new(&paths.node_exe);
+    cmd.arg(&paths.xrift_js).arg("--version").kill_on_drop(true);
+    configure_runtime_command(&mut cmd, paths);
+    let output = tokio::time::timeout(std::time::Duration::from_secs(20), cmd.output())
+        .await
+        .map_err(|_| "XRift CLIの起動確認がタイムアウトしました。再試行してください。".to_string())?
+        .map_err(|error| format!("XRift CLIを起動できません: {error}"))?;
+    if !output.status.success() || !cli_version_output_matches(&String::from_utf8_lossy(&output.stdout), &version) {
+        return Err(format!(
+            "XRift CLIの起動確認に失敗しました。セットアップを再試行してください。\n{}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(version)
 }
 
 #[tauri::command]
@@ -638,21 +693,47 @@ async fn check_xrift_latest() -> Result<Option<String>, String> {
     let version = json
         .get("version")
         .and_then(|v| v.as_str())
+        .filter(|version| cli_version_supported(version))
         .map(|s| s.to_string());
     Ok(version)
 }
 
 #[tauri::command]
 async fn update_xrift(app: AppHandle) -> Result<(), String> {
+    let _guard = RUNTIME_INSTALL_LOCK
+        .try_lock()
+        .map_err(|_| "ツールの準備または更新を実行中です。完了を待ってください。".to_string())?;
     let paths = runtime_paths(app.clone())?;
+    if !node_runtime_installed(&paths) {
+        return Err("Node.jsのセットアップを先に完了してください。".to_string());
+    }
+    let latest = check_xrift_latest().await?
+        .ok_or("更新可能なXRift CLIのバージョンを取得できませんでした。")?;
+    let current = cli_manifest_version(Path::new(&paths.xrift_js));
+    // Fetch latest once and install that exact release. A changed dist-tag or
+    // an older registry response must not downgrade a newer local install.
+    let already_current = current.as_deref().is_some_and(|current| {
+        cli_version_supported(current)
+            && semver::Version::parse(current).ok() >= semver::Version::parse(&latest).ok()
+    });
     emit_progress(&app, "xrift-update", 0.0, "@xrift/cliをアップデート中…");
-    run_npm_install_global(&paths, "@xrift/cli@latest").await?;
-    emit_progress(&app, "xrift-update", 100.0, "アップデート完了");
+    if !already_current || verify_xrift_runtime(&paths).await.is_err() {
+        let target = if already_current { current.as_deref().unwrap_or(&latest) } else { &latest };
+        run_npm_install_global(&paths, &format!("@xrift/cli@{target}")).await?;
+    }
+    let installed = verify_xrift_runtime(&paths).await?;
+    if semver::Version::parse(&installed).ok() < semver::Version::parse(&latest).ok() {
+        return Err(format!("XRift CLI {latest}への更新を確認できませんでした。再試行してください。"));
+    }
+    emit_progress(&app, "xrift-update", 100.0, &format!("@xrift/cli {installed}への更新を確認しました"));
     Ok(())
 }
 
 #[tauri::command]
 async fn setup_runtime(app: AppHandle) -> Result<RuntimeStatus, String> {
+    let _guard = RUNTIME_INSTALL_LOCK
+        .try_lock()
+        .map_err(|_| "ツールの準備または更新を実行中です。完了を待ってください。".to_string())?;
     let paths = runtime_paths(app.clone())?;
 
     for d in [
@@ -675,14 +756,28 @@ async fn setup_runtime(app: AppHandle) -> Result<RuntimeStatus, String> {
         emit_progress(&app, "node-cached", 100.0, "Node.jsはインストール済みです");
     }
 
-    if !Path::new(&paths.xrift_cmd).exists() {
-        install_xrift(&app, &paths).await?;
-    } else {
-        emit_progress(&app, "xrift-cached", 100.0, "@xrift/cliはインストール済みです");
+    let installed = match verify_xrift_runtime(&paths).await {
+        Ok(version) => {
+            emit_progress(&app, "xrift-cached", 100.0, "@xrift/cliはインストール済みです");
+            version
+        }
+        Err(_) => {
+            // Repair a broken newer install at its existing version. A
+            // Studio upgrade must never silently downgrade a user's CLI.
+            let current = cli_manifest_version(Path::new(&paths.xrift_js));
+            let target = current.as_deref()
+                .filter(|version| cli_version_supported(version))
+                .unwrap_or(XRIFT_CLI_VERSION);
+            install_xrift(&app, &paths, target).await?;
+            verify_xrift_runtime(&paths).await?
+        }
+    };
+    let status = runtime_status_for_paths(paths);
+    if !status.ready {
+        return Err("ツールの準備を完了できませんでした。セットアップを再試行してください。".to_string());
     }
-
-    emit_progress(&app, "done", 100.0, "セットアップ完了");
-    runtime_status(app)
+    emit_progress(&app, "done", 100.0, &format!("セットアップ完了（XRift CLI {installed}）"));
+    Ok(status)
 }
 
 #[tauri::command]
@@ -2670,6 +2765,7 @@ fn compiler_staging_owner_for_manifest(
         schema_version: COMPILER_STAGING_OWNER_SCHEMA_VERSION.to_string(),
         project_id: manifest.project_id.clone(),
         project_kind: manifest.project_kind.clone(),
+        materialized: true,
         pre_upload_id: publication.map(|loaded| loaded.metadata.id.clone()),
         pre_upload_last_uploaded_at: publication
             .map(|loaded| loaded.metadata.last_uploaded_at.clone()),
@@ -2686,6 +2782,9 @@ fn validate_compiler_staging_owner(owner: &CompilerStagingOwner) -> Result<(), S
     }
     if !matches!(owner.project_kind.as_str(), "world" | "item") {
         return Err("compiler staging owner has an invalid project kind".to_string());
+    }
+    if !owner.materialized && owner.upload_attempt_started_unix_ms.is_some() {
+        return Err("incomplete compiler staging cannot have an upload attempt".to_string());
     }
     match (
         owner.pre_upload_id.as_deref(),
@@ -2755,6 +2854,13 @@ fn write_compiler_staging_owner_record(
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     write_file_synced(&path, format!("{}\n", raw).as_bytes())
+}
+
+fn require_materialized_compiler_staging(owner: &CompilerStagingOwner) -> Result<(), String> {
+    if !owner.materialized {
+        return Err("compiler staging output is incomplete; upload cannot begin".to_string());
+    }
+    Ok(())
 }
 
 /// Marks the one publish failure the author can resolve themselves.
@@ -3151,8 +3257,7 @@ fn recover_legacy_compiler_publication_metadata(
     select_unique_publication_candidate(exact_matches)
 }
 
-fn resolve_authoring_publication_metadata(
-    app: &AppHandle,
+fn saved_authoring_publication_metadata(
     authoring_root: &Path,
     manifest: &VisualProjectManifest,
 ) -> Result<(Option<LoadedCompilerPublicationMetadata>, bool), String> {
@@ -3172,6 +3277,19 @@ fn resolve_authoring_publication_metadata(
 
     if let Some(loaded) = metadata_from_manifest(manifest)? {
         return Ok((Some(loaded), true));
+    }
+
+    Ok((None, false))
+}
+
+fn resolve_authoring_publication_metadata(
+    app: &AppHandle,
+    authoring_root: &Path,
+    manifest: &VisualProjectManifest,
+) -> Result<(Option<LoadedCompilerPublicationMetadata>, bool), String> {
+    let saved = saved_authoring_publication_metadata(authoring_root, manifest)?;
+    if saved.0.is_some() {
+        return Ok(saved);
     }
 
     if manifest.last_publication.is_some() {
@@ -3210,6 +3328,19 @@ fn prepare_compiler_staging(
     let manifest = parse_visual_project_manifest(&manifest_content)?;
 
     let (root, project) = compiler_staging_project(&app, &directory_name)?;
+    prepare_existing_compiler_staging(&root, &project, &authoring_root, &manifest)?;
+    Ok(CompilerStagingPaths {
+        root_path: root.to_string_lossy().to_string(),
+        project_path: project.to_string_lossy().to_string(),
+    })
+}
+
+fn prepare_existing_compiler_staging(
+    root: &Path,
+    project: &Path,
+    authoring_root: &Path,
+    manifest: &VisualProjectManifest,
+) -> Result<(), String> {
     if project.exists() {
         let metadata = std::fs::symlink_metadata(&project).map_err(|e| e.to_string())?;
         if metadata.file_type().is_symlink() || !metadata.is_dir() {
@@ -3218,7 +3349,7 @@ fn prepare_compiler_staging(
         let resolved_project = project
             .canonicalize()
             .map_err(|e| format!("compiler staging project cannot be resolved: {}", e))?;
-        if !resolved_project.starts_with(&root) {
+        if resolved_project.parent() != Some(root) {
             return Err("compiler staging project escapes the app-owned root".to_string());
         }
         let owner = read_compiler_staging_owner(&resolved_project)?;
@@ -3234,10 +3365,17 @@ fn prepare_compiler_staging(
             read_compiler_publication_metadata(&resolved_project, &manifest.project_kind)?;
         match (owner.as_ref(), staged_publication.as_ref()) {
             (None, Some(_)) => {
-                return Err(
-                    "unowned compiler staging contains an XRift publication id; it was not removed"
-                        .to_string(),
-                )
+                // A template can include its own sample publication sidecar.
+                // An interrupted scaffold/materialization has no owner yet.
+                // Keep that entire directory; only an independently saved
+                // authoring target makes rebuilding safe from duplicate IDs.
+                if saved_authoring_publication_metadata(authoring_root, manifest)?.0.is_none() {
+                    return Err(
+                        "unowned compiler staging contains an XRift publication id; it was not removed"
+                            .to_string(),
+                    );
+                }
+                return preserve_unowned_compiler_staging(root, &resolved_project);
             }
             (Some(owner), Some(loaded)) if owner.upload_attempt_started_unix_ms.is_some() => {
                 // Only a sidecar advanced beyond the recorded pre-upload
@@ -3273,10 +3411,26 @@ fn prepare_compiler_staging(
         std::fs::remove_dir_all(&project)
             .map_err(|e| format!("old compiler staging cannot be removed: {}", e))?;
     }
-    Ok(CompilerStagingPaths {
-        root_path: root.to_string_lossy().to_string(),
-        project_path: project.to_string_lossy().to_string(),
-    })
+    Ok(())
+}
+
+fn preserve_unowned_compiler_staging(root: &Path, project: &Path) -> Result<(), String> {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| "system time is before the Unix epoch".to_string())?
+        .as_nanos();
+    // This name deliberately cannot be mistaken for a legacy compiler stage
+    // during publication-ID recovery. Reserving a new directory also prevents
+    // an earlier preservation from being overwritten by rename.
+    let preserved = root.join(format!("preserved-unowned-{}-{}", std::process::id(), nonce));
+    std::fs::create_dir(&preserved)
+        .map_err(|e| format!("unowned compiler staging cannot be preserved: {}", e))?;
+    let preserved = preserved.canonicalize().map_err(|e| e.to_string())?;
+    if preserved.parent() != Some(root) || project.parent() != Some(root) {
+        return Err("compiler staging preservation escapes the app-owned root".to_string());
+    }
+    std::fs::rename(project, preserved.join("project"))
+        .map_err(|e| format!("unowned compiler staging cannot be preserved: {}", e))
 }
 
 fn required_thumbnail_copy() -> CompilerRequiredPublicationFileCopy {
@@ -3404,6 +3558,60 @@ fn copy_required_publication_file(
     verify_required_publication_file_copy(authoring_root, staging_root, copy)
 }
 
+fn initialize_compiler_staging_template(
+    staging_root: &Path,
+    manifest: &VisualProjectManifest,
+    publication: Option<&LoadedCompilerPublicationMetadata>,
+) -> Result<(), String> {
+    // Never replace a previous owner or clear an unresolved upload attempt.
+    if read_compiler_staging_owner(staging_root)?.is_some() {
+        return Err("compiler staging template is already initialized".to_string());
+    }
+    seed_compiler_publication_metadata(staging_root, &manifest.project_kind, publication)?;
+    let mut owner = compiler_staging_owner_for_manifest(manifest, publication);
+    owner.materialized = false;
+    write_compiler_staging_owner_record(staging_root, &owner)
+}
+
+/// Claim a fresh CLI scaffold before loading or converting any assets. If that
+/// work fails, its owner and publication baseline still make retry possible.
+/// Completion remains a separate step and is required before remote upload.
+#[tauri::command]
+fn initialize_compiler_staging(
+    app: AppHandle,
+    authoring_project_path: String,
+    directory_name: String,
+) -> Result<(), String> {
+    let _compiler_guard = COMPILER_STAGING_IO_LOCK
+        .lock()
+        .map_err(|_| "compiler staging I/O lock is unavailable".to_string())?;
+    let _visual_guard = VISUAL_PROJECT_IO_LOCK
+        .lock()
+        .map_err(|_| "visual project I/O lock is unavailable".to_string())?;
+    let authoring_root = canonical_project_root(&authoring_project_path)?;
+    recover_visual_save_transactions(&authoring_root)?;
+    let manifest_content = std::fs::read_to_string(authoring_root.join(VISUAL_PROJECT_MANIFEST))
+        .map_err(|e| format!("visual project manifest cannot be read: {}", e))?;
+    let manifest = parse_visual_project_manifest(&manifest_content)?;
+    let (root, project) = compiler_staging_project(&app, &directory_name)?;
+    let metadata = std::fs::symlink_metadata(&project).map_err(|e| e.to_string())?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err("compiler staging target is not a regular directory".to_string());
+    }
+    let staging_root = project.canonicalize().map_err(|e| e.to_string())?;
+    if staging_root.parent() != Some(root.as_path()) {
+        return Err("compiler staging project escapes the app-owned root".to_string());
+    }
+    let (publication, persist_recovered) =
+        resolve_authoring_publication_metadata(&app, &authoring_root, &manifest)?;
+    if persist_recovered {
+        let loaded = publication.as_ref()
+            .ok_or_else(|| "recovered XRift publication metadata is missing".to_string())?;
+        persist_authoring_publication_metadata(&authoring_root, &manifest.project_kind, loaded)?;
+    }
+    initialize_compiler_staging_template(&staging_root, &manifest, publication.as_ref())
+}
+
 /// Applies compiler output after `xrift create` has produced the template.
 /// All source files are copied from the visual project through validated,
 /// project-relative paths; arbitrary absolute copy targets are not accepted.
@@ -3441,6 +3649,19 @@ fn apply_compiler_staging(
     validate_required_publication_files(&required_publication_files)?;
     let (publication_metadata, persist_recovered_metadata) =
         resolve_authoring_publication_metadata(&app, &authoring_root, &manifest)?;
+    if let Some(owner) = read_compiler_staging_owner(&resolved_project)? {
+        if !compiler_staging_owner_matches_manifest(&owner, &manifest)
+            || owner.upload_attempt_started_unix_ms.is_some()
+        {
+            return Err("compiler staging cannot be overwritten for this project".to_string());
+        }
+        let staged = read_compiler_publication_metadata(&resolved_project, &manifest.project_kind)?;
+        if !publication_matches_owner_baseline(&owner, publication_metadata.as_ref())
+            || !publication_matches_owner_baseline(&owner, staged.as_ref())
+        {
+            return Err("publication metadata changed while compiler staging was prepared".to_string());
+        }
+    }
     if persist_recovered_metadata {
         let loaded = publication_metadata
             .as_ref()
@@ -3519,8 +3740,8 @@ fn apply_compiler_staging(
         &manifest.project_kind,
         publication_metadata.as_ref(),
     )?;
-    // Written last: only fully materialized staging is eligible for upload
-    // and for crash recovery of a CLI-created publication sidecar.
+    // Mark completion last: an initialized but partial stage can be retried,
+    // but only fully materialized output is eligible for remote upload.
     write_compiler_staging_owner(&resolved_project, &manifest, publication_metadata.as_ref())?;
 
     Ok(CompilerStagingResult {
@@ -3560,6 +3781,7 @@ fn mark_compiler_upload_started(
     }
     let mut owner = read_compiler_staging_owner(&staging_root)?
         .ok_or_else(|| "compiler staging owner is missing before upload".to_string())?;
+    require_materialized_compiler_staging(&owner)?;
     if !compiler_staging_owner_matches_manifest(&owner, &manifest) {
         return Err("compiler staging owner does not match the visual project".to_string());
     }
@@ -6059,6 +6281,7 @@ pub fn run() {
             read_visual_project,
             save_visual_project,
             prepare_compiler_staging,
+            initialize_compiler_staging,
             apply_compiler_staging,
             mark_compiler_upload_started,
             clear_compiler_upload_attempt,
@@ -6117,8 +6340,6 @@ pub fn run() {
             mcp::set_xrift_mcp_editor_ready,
             mcp::detect_xrift_mcp_clients,
             mcp::register_xrift_mcp_client,
-            mcp::detect_xrift_ollama,
-            mcp::configure_xrift_ollama,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
@@ -6172,6 +6393,59 @@ mod tests {
                 .expect("clock must be after epoch")
                 .as_nanos()
         ))
+    }
+
+    #[test]
+    fn runtime_status_checks_cli_version_and_entry_instead_of_a_stale_shim() {
+        let root = reset_fixture_root("cli-version");
+        let paths = derive_paths(&root);
+        for file in [&paths.node_exe, &paths.npm_cli_js, &paths.xrift_cmd] {
+            let path = Path::new(file);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, b"").unwrap();
+        }
+        let status = runtime_status_for_paths(paths.clone());
+        assert!(status.node_installed);
+        assert!(!status.xrift_installed);
+        assert!(!status.ready, "a leftover shim cannot complete setup");
+
+        let entry = Path::new(&paths.xrift_js);
+        assert!(entry.ends_with("dist/index.js"));
+        std::fs::create_dir_all(entry.parent().unwrap()).unwrap();
+        std::fs::write(entry, b"").unwrap();
+        let manifest = entry.parent().unwrap().parent().unwrap().join("package.json");
+        for (version, ready) in [("0.24.3", false), (XRIFT_CLI_VERSION, true), ("0.25.0", true)] {
+            std::fs::write(&manifest, serde_json::json!({
+                "name": "@xrift/cli", "version": version,
+                "bin": { "xrift": "dist/index.js" }
+            }).to_string()).unwrap();
+            let status = runtime_status_for_paths(paths.clone());
+            assert_eq!(status.xrift_version.as_deref(), Some(version));
+            assert_eq!(status.ready, ready, "{version}");
+            assert_eq!(status.xrift_update_required, !ready, "{version}");
+        }
+        // Studio executes the entry with its own Node; a shim is not required.
+        std::fs::remove_file(&paths.xrift_cmd).unwrap();
+        assert!(runtime_status_for_paths(paths.clone()).ready);
+        std::fs::remove_file(entry).unwrap();
+        assert!(!runtime_status_for_paths(paths).ready);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn node_upgrade_keeps_project_auth_and_cli_directories() {
+        let root = reset_fixture_root("node-upgrade");
+        let paths = derive_paths(&root);
+        assert_eq!(Path::new(&paths.home), root.join("home"));
+        assert_eq!(Path::new(&paths.projects_root), root.join("projects"));
+        assert_eq!(Path::new(&paths.npm_prefix), root.join("npm-prefix"));
+        let old_node = root.join("runtime").join(format!("node-v24.15.0-{NODE_PLATFORM}"));
+        std::fs::create_dir_all(&old_node).unwrap();
+        std::fs::write(old_node.join("author-data-marker"), "preserved").unwrap();
+        assert!(!node_runtime_installed(&paths));
+        assert!(old_node.join("author-data-marker").is_file());
+        assert!(node_url().contains(&format!("/v{NODE_VERSION}/node-v{NODE_VERSION}-")));
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -6762,6 +7036,155 @@ mod tests {
         .is_err());
 
         std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
+    }
+
+    #[test]
+    fn interrupted_new_staging_can_retry_but_cannot_upload() {
+        let fixture_root = std::env::temp_dir().join(format!(
+            "xrift-incomplete-staging-{}-{}", std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(&fixture_root).unwrap();
+        let fixture_root = fixture_root.canonicalize().unwrap();
+        let authoring_root = fixture_root.join("authoring");
+        std::fs::create_dir(&authoring_root).unwrap();
+        let sample = publication_metadata("template-sample", "2025-02-01T00:00:00.000Z");
+        for kind in ["world", "item"] {
+            let stage = fixture_root.join(format!("xrift-studio-{}", kind));
+            let manifest = visual_manifest(kind, None);
+            std::fs::create_dir(&stage).unwrap();
+            write_compiler_publication_metadata(&stage, kind, &sample).unwrap();
+            initialize_compiler_staging_template(&stage, &manifest, None).unwrap();
+            let owner = read_compiler_staging_owner(&stage).unwrap().unwrap();
+            assert!(!owner.materialized);
+            assert!(owner.pre_upload_id.is_none());
+            assert!(read_compiler_publication_metadata(&stage, kind).unwrap().is_none());
+            assert!(require_materialized_compiler_staging(&owner).is_err());
+            assert!(initialize_compiler_staging_template(&stage, &manifest, None).is_err());
+            // Simulate asset processing stopping after initialization. No
+            // publication occurred and the next preparation can safely retry.
+            std::fs::write(stage.join("partial.bin"), b"unfinished asset").unwrap();
+            prepare_existing_compiler_staging(&fixture_root, &stage, &authoring_root, &manifest).unwrap();
+            assert!(!stage.exists());
+            assert!(!authoring_root.join(".xrift").exists());
+            std::fs::create_dir(&stage).unwrap();
+            initialize_compiler_staging_template(&stage, &manifest, None).unwrap();
+            write_compiler_staging_owner(&stage, &manifest, None).unwrap();
+            let completed = read_compiler_staging_owner(&stage).unwrap().unwrap();
+            assert!(require_materialized_compiler_staging(&completed).is_ok());
+
+            let mut legacy = serde_json::to_value(&completed).unwrap();
+            legacy.as_object_mut().unwrap().remove("materialized");
+            let legacy: CompilerStagingOwner = serde_json::from_value(legacy).unwrap();
+            assert!(legacy.materialized);
+            assert!(validate_compiler_staging_owner(&legacy).is_ok());
+            let mut impossible = owner;
+            impossible.upload_attempt_started_unix_ms = Some(123);
+            assert!(validate_compiler_staging_owner(&impossible).is_err());
+        }
+        std::fs::remove_dir_all(fixture_root).unwrap();
+    }
+
+    #[test]
+    fn staging_recovery_keeps_unknown_targets_other_owners_and_unresolved_uploads() {
+        let fixture_root = std::env::temp_dir().join(format!(
+            "xrift-protected-staging-{}-{}", std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(&fixture_root).unwrap();
+        let fixture_root = fixture_root.canonicalize().unwrap();
+        let authoring_root = fixture_root.join("authoring");
+        let stage = fixture_root.join("xrift-studio-world");
+        std::fs::create_dir(&authoring_root).unwrap();
+        std::fs::create_dir(&stage).unwrap();
+        let saved = publication_metadata("author-target", "2026-07-20T00:00:00.000Z");
+        let other = publication_metadata("unknown-target", "2026-07-20T00:00:00.000Z");
+        write_compiler_publication_metadata(&stage, "world", &other).unwrap();
+        let unpublished = visual_manifest("world", None);
+        let error = prepare_existing_compiler_staging(&fixture_root, &stage, &authoring_root, &unpublished)
+            .unwrap_err();
+        assert!(error.contains("unowned compiler staging"));
+        assert_eq!(read_compiler_publication_metadata(&stage, "world").unwrap().unwrap().raw, other.raw);
+        let published = visual_manifest("world", Some(VisualPublicationRecord {
+            uploaded_at: saved.metadata.last_uploaded_at.clone(),
+            world_id: Some(saved.metadata.id.clone()), item_id: None,
+            content_id: Some(saved.metadata.id.clone()),
+        }));
+        write_compiler_publication_metadata(&authoring_root, "world", &other).unwrap();
+        assert!(prepare_existing_compiler_staging(&fixture_root, &stage, &authoring_root, &published).is_err());
+        assert!(stage.exists());
+        write_compiler_publication_metadata(&authoring_root, "world", &saved).unwrap();
+        let mut owner = compiler_staging_owner_for_manifest(&published, Some(&saved));
+        owner.project_id = "other-project".to_string();
+        write_compiler_staging_owner_record(&stage, &owner).unwrap();
+        assert!(prepare_existing_compiler_staging(&fixture_root, &stage, &authoring_root, &published)
+            .unwrap_err().contains("different visual project"));
+        write_compiler_publication_metadata(&stage, "world", &saved).unwrap();
+        owner.project_id = published.project_id.clone();
+        owner.upload_attempt_started_unix_ms = Some(123);
+        write_compiler_staging_owner_record(&stage, &owner).unwrap();
+        assert!(prepare_existing_compiler_staging(&fixture_root, &stage, &authoring_root, &published)
+            .unwrap_err().contains(XRIFT_UPLOAD_ATTEMPT_UNRESOLVED));
+        assert_eq!(read_compiler_staging_owner(&stage).unwrap().unwrap(), owner);
+        assert_eq!(std::fs::read_dir(&fixture_root).unwrap().count(), 2);
+        assert_eq!(read_compiler_publication_metadata(&authoring_root, "world").unwrap().unwrap().raw, saved.raw);
+        std::fs::remove_dir_all(fixture_root).unwrap();
+    }
+
+    #[test]
+    fn retries_unowned_template_staging_without_losing_the_saved_publication() {
+        let fixture_root = std::env::temp_dir().join(format!(
+            "xrift-unowned-template-{}-{}", std::process::id(),
+            SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(&fixture_root).unwrap();
+        let fixture_root = fixture_root.canonicalize().unwrap();
+        let sample = publication_metadata("template-sample", "2025-02-01T00:00:00.000Z");
+        for kind in ["world", "item"] {
+            let root = fixture_root.join(kind);
+            let authoring_root = fixture_root.join(format!("authoring-{}", kind));
+            let stage = root.join("xrift-studio-incomplete-template");
+            std::fs::create_dir_all(&stage).unwrap();
+            std::fs::create_dir_all(&authoring_root).unwrap();
+            std::fs::write(authoring_root.join("scene.json"), "original artwork").unwrap();
+            std::fs::write(stage.join("unfinished.txt"), "preserve this output").unwrap();
+            write_compiler_publication_metadata(&stage, kind, &sample).unwrap();
+            let manifest = visual_manifest(kind, Some(VisualPublicationRecord {
+                uploaded_at: "2026-07-20T00:00:00.000Z".to_string(),
+                world_id: (kind == "world").then(|| "author-target".to_string()),
+                item_id: (kind == "item").then(|| "author-target".to_string()),
+                content_id: Some("author-target".to_string()),
+            }));
+
+            prepare_existing_compiler_staging(&root, &stage, &authoring_root, &manifest)
+                .expect("an authoritative saved target permits a fresh staging attempt");
+            assert!(!stage.exists());
+            let preserved = std::fs::read_dir(&root).unwrap().map(|entry| entry.unwrap().path())
+                .collect::<Vec<_>>();
+            assert_eq!(preserved.len(), 1);
+            assert!(!preserved[0].file_name().unwrap().to_string_lossy().starts_with("xrift-studio-"));
+            let preserved_stage = preserved[0].join("project");
+            assert_eq!(std::fs::read_to_string(preserved_stage.join("unfinished.txt")).unwrap(),
+                "preserve this output");
+            assert_eq!(read_compiler_publication_metadata(&preserved_stage, kind).unwrap().unwrap().raw,
+                sample.raw);
+            assert_eq!(std::fs::read_to_string(authoring_root.join("scene.json")).unwrap(),
+                "original artwork");
+            assert!(!authoring_root.join(".xrift").exists());
+
+            // The next scaffold still brings sample metadata. Only the saved
+            // authoring target may seed the completed output and its owner.
+            std::fs::create_dir_all(&stage).unwrap();
+            write_compiler_publication_metadata(&stage, kind, &sample).unwrap();
+            let saved = metadata_from_manifest(&manifest).unwrap().unwrap();
+            seed_compiler_publication_metadata(&stage, kind, Some(&saved)).unwrap();
+            write_compiler_staging_owner(&stage, &manifest, Some(&saved)).unwrap();
+            assert_eq!(read_compiler_publication_metadata(&stage, kind).unwrap().unwrap().metadata.id,
+                "author-target");
+            assert_eq!(read_compiler_staging_owner(&stage).unwrap().unwrap().pre_upload_id.as_deref(),
+                Some("author-target"));
+        }
+        std::fs::remove_dir_all(fixture_root).unwrap();
     }
 
     #[test]

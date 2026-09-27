@@ -1,9 +1,16 @@
 import { COMPILER_REACT_PACKAGE_SPECS } from "./compiler/runtime-packages";
-import { XriftClient } from "@xrift/sdk";
-import { optimizePublishedModel, describeModelDownload } from "./model-download";
+import {
+  XriftClient,
+  parseItemConfig,
+  parseWorldConfig,
+  type CameraConfig,
+  type OutputBufferType,
+  type PhysicsConfig,
+  type WorldPermissions,
+} from "@xrift/sdk";
 import type { CompilerPublicationMetadata, ProjectKind } from "../tauri";
 import { tauri } from "../tauri";
-import { collectDistUploadFiles } from "./dist-upload-files";
+import { collectDistUploadFiles, listDistUploadPaths } from "./dist-upload-files";
 import {
   COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
   CommandSpawnError,
@@ -12,17 +19,11 @@ import {
   type RunResult,
 } from "../xrift-cli";
 import type {
-  AssetCopyPlanEntry,
   VisualCompileResult,
   VisualCompilerDocuments,
 } from "./compiler";
 import { compileVisualProject, compilerStagingDirectoryName } from "./compiler";
 import { loadCompilerBundledAssetFiles } from "./compiler-bundled-assets";
-import {
-  assetBytesToDataUrl,
-  convertPublishedTextureBytes,
-  readProjectAssetBytes,
-} from "./texture-processing";
 
 export type VisualPublishPipelineStage =
   | "saving"
@@ -362,54 +363,6 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/**
- * 未反映のTexture Import設定を、公開用のコピーにだけ適用する。
- *
- * 制作データのファイルは読むだけで、書き換えない。変換した画像はコピー計画から
- * 外してステージングへ直接書き込むので、原本を軽くしていなくても公開結果は
- * 設定どおりの解像度・形式になる。
- */
-async function convertStagedTextures(
-  authoringProjectPath: string,
-  assetCopyPlan: readonly AssetCopyPlanEntry[],
-  signal: AbortSignal,
-  report: (progress: VisualPublishPipelineProgress) => void,
-): Promise<{ files: { targetRelativePath: string; dataUrl: string }[] }> {
-  const targets = assetCopyPlan.filter((entry) => entry.textureConversion);
-  if (targets.length === 0) return { files: [] };
-
-  const files: { targetRelativePath: string; dataUrl: string }[] = [];
-  for (const [index, entry] of targets.entries()) {
-    throwIfAborted(signal);
-    const conversion = entry.textureConversion;
-    if (!conversion) continue;
-    report({
-      stage: "compiling",
-      label: "テクスチャを公開用に変換しています",
-      detail: `${index + 1} / ${targets.length}枚目。制作データの原本はそのまま残ります。`,
-      percent: 29 + Math.round((index / targets.length) * 10),
-      cancelSafe: true,
-    });
-    let bytes: Uint8Array;
-    try {
-      bytes = await convertPublishedTextureBytes(
-        await readProjectAssetBytes(authoringProjectPath, entry.sourceRelativePath),
-        conversion,
-      );
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new Error(
-        `テクスチャ「${entry.assetId}」を公開用に変換できませんでした。${message}`,
-      );
-    }
-    files.push({
-      targetRelativePath: entry.targetRelativePath,
-      dataUrl: await assetBytesToDataUrl(bytes, conversion.mimeType),
-    });
-  }
-  return { files };
-}
-
 export async function materializeVisualCompilation(
   authoringProjectPath: string,
   compilation: VisualCompileResult,
@@ -460,28 +413,15 @@ export async function materializeVisualCompilation(
     authoringProjectPath,
     paths.rootPath,
   ]);
+  await tauri.initializeCompilerStaging(
+    authoringProjectPath,
+    compilation.stagingPlan.stagingDirectoryName,
+  );
 
   const bundledOverlayFiles = await loadCompilerBundledAssetFiles(
     compilation.stagingPlan.bundledAssetCopyPlan,
     signal,
   );
-  const convertedTextures = await convertStagedTextures(
-    authoringProjectPath,
-    compilation.stagingPlan.assetCopyPlan,
-    signal,
-    report,
-  );
-  const modelFiles: Array<{ targetRelativePath: string; dataUrl: string }> = [];
-  const modelTargets = compilation.stagingPlan.assetCopyPlan.filter((entry) => entry.modelDownload);
-  for (const [index, entry] of modelTargets.entries()) {
-    throwIfAborted(signal);
-    report({ stage: "compiling", label: "3Dモデルのダウンロード容量を減らしています", detail: `${index + 1} / ${modelTargets.length}件目。${entry.assetId}`, percent: 40, cancelSafe: true });
-    const result = await optimizePublishedModel(await readProjectAssetBytes(authoringProjectPath, entry.sourceRelativePath), entry.modelDownload!);
-    throwIfAborted(signal);
-    onLog({ kind: "stdout", text: describeModelDownload(entry.assetId, result), ts: Date.now() });
-    modelFiles.push({ targetRelativePath: entry.targetRelativePath, dataUrl: await assetBytesToDataUrl(result.bytes, "model/gltf-binary") });
-  }
-  const binaryOverlayFiles = [...bundledOverlayFiles, ...convertedTextures.files, ...modelFiles];
   let staged: Awaited<ReturnType<typeof tauri.applyCompilerStaging>>;
   try {
     staged = await tauri.applyCompilerStaging(
@@ -491,9 +431,8 @@ export async function materializeVisualCompilation(
         relativePath: file.relativePath,
         content: file.content,
       })),
-      binaryOverlayFiles,
+      bundledOverlayFiles,
       compilation.stagingPlan.assetCopyPlan
-        .filter((entry) => !entry.textureConversion && !entry.modelDownload)
         .map((entry) => ({
           sourceRelativePath: entry.sourceRelativePath,
           targetRelativePath: entry.targetRelativePath,
@@ -636,6 +575,21 @@ export async function publishVisualProject({
         ),
       );
     }
+
+    // The Studio compiler always stages an official Module Federation template.
+    // A non-empty dist without remoteEntry.js can still pass the CLI's generic
+    // directory check, but XRift cannot load that build. Refuse before any
+    // remote upload is marked as started.
+    const stagedConfig = parseStagedXriftConfig(
+      await tauri.readTextFile(stagingPath, "xrift.json"),
+      kind,
+    );
+    await assertStagedModuleEntry(
+      stagingPath,
+      stagedConfig.distDir,
+      stagedConfig.ignore,
+      signal,
+    );
 
     throwIfAborted(signal);
     report({
@@ -792,6 +746,7 @@ async function uploadStagedProjectWithSdk(input: {
     config.ignore,
     input.signal,
   );
+  assertCompiledModuleEntry(collected.files);
   input.onLog({
     kind: "info",
     text: `dist: ${collected.files.length} files, ${(collected.totalBytes / 1024 / 1024).toFixed(2)} MB (ignored ${collected.ignoredPaths.length})`,
@@ -800,11 +755,20 @@ async function uploadStagedProjectWithSdk(input: {
 
   const client = new XriftClient({ token: input.token });
   const uploaded = await client.worlds.upload(collected.files, {
+    // Re-publishing must target the already verified remote. Omitting worldId
+    // makes the SDK create a new world before the Rust advancement guard can
+    // notice the mismatch, leaving an orphan duplicate on XRift.
+    worldId: resolveExistingPublicationId(
+      input.documents.project.lastPublication,
+      input.kind,
+    ),
     name: config.title,
     description: config.description,
     thumbnailPath: config.thumbnailPath,
     physics: config.physics,
     camera: config.camera,
+    permissions: config.permissions,
+    outputBufferType: config.outputBufferType,
     onProgress: (progress) =>
       input.report({
         stage: "uploading",
@@ -853,55 +817,106 @@ async function uploadStagedProjectWithSdk(input: {
  * The upload has to send the same name, ignore rules and physics the CLI would
  * have sent, and those live in this file rather than in the Studio documents.
  */
-export function parseStagedXriftConfig(
-  source: string,
+export function resolveExistingPublicationId(
+  publication: VisualCompilerDocuments["project"]["lastPublication"],
   kind: ProjectKind,
-): {
+): string | undefined {
+  const value =
+    kind === "world"
+      ? publication?.worldId ?? publication?.contentId
+      : publication?.itemId ?? publication?.contentId;
+  const normalized = value?.trim();
+  return normalized || undefined;
+}
+
+export type StagedXriftConfig = {
   distDir: string;
   title: string;
   description?: string;
   thumbnailPath?: string;
   ignore: string[];
-  physics?: { gravity?: number; allowInfiniteJump?: boolean };
-  camera?: { near?: number; far?: number };
-} {
-  let parsed: unknown;
+  physics?: PhysicsConfig;
+  camera?: CameraConfig;
+  permissions?: WorldPermissions;
+  outputBufferType?: OutputBufferType;
+};
+
+/**
+ * Parse staging config with the SDK itself, not a Studio-side approximation.
+ *
+ * CLI 0.24.4 delegates distDir/ignore/config parsing to @xrift/sdk 0.1.3. Using
+ * those same parsers here makes the direct SDK upload path select the exact
+ * same files and hash-affecting options as the CLI path.
+ */
+export function parseStagedXriftConfig(
+  source: string,
+  kind: ProjectKind,
+): StagedXriftConfig {
   try {
-    parsed = JSON.parse(source);
-  } catch {
-    throw new Error("公開用の一時プロジェクトのxrift.jsonを解析できませんでした。");
-  }
-  const root = parsed as Record<string, unknown> | null;
-  const section = root?.[kind];
-  if (!section || typeof section !== "object") {
+    if (kind === "world") {
+      const config = parseWorldConfig(source);
+      return {
+        distDir: config.distDir,
+        title: config.name,
+        description: config.description,
+        thumbnailPath: config.thumbnailPath,
+        ignore: config.ignore,
+        physics: config.physics,
+        camera: config.camera,
+        permissions: config.permissions,
+        outputBufferType: config.outputBufferType,
+      };
+    }
+
+    const config = parseItemConfig(source);
+    return {
+      distDir: config.distDir,
+      title: config.name,
+      description: config.description,
+      thumbnailPath: config.thumbnailPath,
+      ignore: config.ignore,
+      permissions: config.permissions,
+    };
+  } catch (error) {
+    const detail = error instanceof Error ? `: ${error.message}` : "";
     throw new Error(
-      `公開用の一時プロジェクトのxrift.jsonに"${kind}"の設定がありません。`,
+      `公開用の一時プロジェクトのxrift.jsonをCLIと同じ規則で解析できませんでした${detail}`,
     );
   }
-  const record = section as Record<string, unknown>;
-  const rawDist = typeof record.distDir === "string" ? record.distDir : "./dist";
-  return {
-    // "./dist" and "dist/" both mean the same directory to the CLI.
-    distDir: rawDist.replace(/^\.\//, "").replace(/\/+$/, "") || "dist",
-    title: typeof record.title === "string" && record.title ? record.title : "Untitled",
-    description:
-      typeof record.description === "string" ? record.description : undefined,
-    thumbnailPath:
-      typeof record.thumbnailPath === "string" ? record.thumbnailPath : undefined,
-    ignore: Array.isArray(record.ignore)
-      ? record.ignore.filter((entry): entry is string => typeof entry === "string")
-      : [],
-    physics: isPlainRecord(record.physics)
-      ? (record.physics as { gravity?: number; allowInfiniteJump?: boolean })
-      : undefined,
-    camera: isPlainRecord(record.camera)
-      ? (record.camera as { near?: number; far?: number })
-      : undefined,
-  };
 }
 
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+export function assertCompiledModuleEntry(
+  files: readonly { remotePath: string }[],
+): void {
+  const paths = files.map((file) =>
+    file.remotePath.replace(/\\/g, "/").replace(/^\.\//, ""),
+  );
+  if (!paths.includes("remoteEntry.js")) {
+    throw new Error(
+      "公開用ビルドにremoteEntry.jsがありません。XRiftが読み込むModule Federationの生成物を確認してください。",
+    );
+  }
+  // XRift serves files directly under the publication version. A scoped
+  // federation chunk such as @scope/library.js builds successfully but its
+  // subdirectory cannot be served after upload.
+  const nestedPath = paths.find((path) => path.includes("/"));
+  if (nestedPath) {
+    throw new Error(
+      `公開用ビルドにサブフォルダー内のファイル「${nestedPath}」があります。XRiftで読み込めるよう、すべての公開用ファイルをdist直下に生成してください。`,
+    );
+  }
+}
+
+async function assertStagedModuleEntry(
+  stagingPath: string,
+  distDir: string,
+  ignorePatterns: readonly string[],
+  signal?: AbortSignal,
+): Promise<void> {
+  const { paths } = await listDistUploadPaths(stagingPath, distDir, ignorePatterns, signal);
+  assertCompiledModuleEntry(
+    paths.map((remotePath) => ({ remotePath })),
+  );
 }
 
 export function didXriftUploadStopBeforeRemoteTransfer(output: string): boolean {
@@ -1157,4 +1172,3 @@ export async function clearStaleXriftUploadAttempt(
     compilerStagingDirectoryName(projectId, projectKind),
   );
 }
-

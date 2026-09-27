@@ -1,9 +1,12 @@
 import { XRiftStudioMeshColliders } from "../mesh-colliders.js";
+import { resolveXriftRuntimePhysicsMode, type XriftRuntimePhysicsSetting } from "../physics-mode.js";
 import { XriftModelInstancing } from "../script/model-instancing.js";
+import { XriftShadowMapSettings, type XriftShadowMapType } from "../script/light.js";
 const EMPTY_INSTANCING_ENTITIES: readonly string[] = [];
 import {
   Fragment,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -121,8 +124,8 @@ export type XriftRuntimeSceneProps = {
   fallback?: ReactNode;
   onLoad?: (result: XriftLoadResult) => void;
   onError?: (error: Error) => void;
-  /** Enables the Rapier adapter for Collider and direct Rigid Body components. */
-  physics?: boolean;
+  /** "inherit" mounts Colliders in an outer Physics world, as XRift's player requires. */
+  physics?: XriftRuntimePhysicsSetting;
 };
 
 export function XriftWorld(props: XriftRuntimeSceneProps) {
@@ -178,7 +181,8 @@ function XriftRuntimeScene({
     };
   }, [expectedKind, loader, manifest, onError, onLoad]);
 
-  const physicsEnabled = physics ?? expectedKind === "world";
+  const physicsMode = resolveXriftRuntimePhysicsMode(physics, expectedKind);
+  const physicsEnabled = physicsMode !== "off";
   const dynamicBodies = useMemo(
     () => (physicsEnabled && result ? collectRuntimeDynamicBodyEntries(result) : []),
     [physicsEnabled, result],
@@ -189,6 +193,7 @@ function XriftRuntimeScene({
       <primitive object={result.root} />
       <XriftModelInstancing root={result.root} entityKey="xriftStudioEntityId" entityIds={result.manifest.scenes[result.manifest.entryScene]?.modelInstancingEntityIds ?? EMPTY_INSTANCING_ENTITIES} />
       <XriftRuntimeSceneEnvironment result={result} />
+      <XriftShadowMapSettings type={runtimeShadowMapType(result.manifest.scenes[result.manifest.entryScene]?.settings)} />
       <XriftRuntimeOfficialComponentAdapters result={result} />
       <XriftRuntimeMeshVisibility result={result} />
       <XriftRuntimePostprocessing result={result} />
@@ -201,14 +206,23 @@ function XriftRuntimeScene({
       <XriftRuntimeInteractionTriggers result={result} />
     </>
   );
-  return physicsEnabled ? (
-    <Physics gravity={runtimeGravity(result)} timeStep="vary">
+  if (!physicsEnabled) return content;
+  const physicsContent = (
+    <>
       {content}
       <XriftRuntimePhysicsBodies result={result} dynamicBodies={dynamicBodies} />
-    </Physics>
-  ) : (
-    content
+    </>
   );
+  return physicsMode === "inherit" ? physicsContent : (
+    <Physics gravity={runtimeGravity(result)} timeStep="vary">
+      {physicsContent}
+    </Physics>
+  );
+}
+
+function runtimeShadowMapType(settings: unknown): XriftShadowMapType {
+  const type = settings && typeof settings === "object" && "shadowMapType" in settings ? settings.shadowMapType : undefined;
+  return type === "basic" || type === "pcfSoft" || type === "vsm" ? type : "pcf";
 }
 
 type RuntimeSceneEnvironmentSettings = {
@@ -672,6 +686,7 @@ function XriftRuntimeOfficialComponentAdapters({
         | { visible: boolean }
         | undefined;
       if (!reflector || !fallback) continue;
+      mirrorGroup.userData.xriftRuntimeMirrorAdvanceFrame?.();
       mirrorGroup.getWorldPosition(mirrorWorldPosition);
       const distance = cameraWorldPosition.distanceTo(mirrorWorldPosition);
       const lodDistance =
@@ -1293,8 +1308,6 @@ function XriftRuntimePhysicsBodies({
   useEffect(
     () => () => {
       for (const entry of dynamicBodies) {
-        entry.source.visible = true;
-        entry.visual.visible = true;
         disposeRuntimePhysicsClone(entry.mesh);
         entry.visual.removeFromParent();
       }
@@ -1347,6 +1360,21 @@ function XriftRuntimeDynamicBody({
 }: {
   entry: RuntimeDynamicBodyEntry;
 }) {
+  // Keep the source visible until the replacement body has actually committed.
+  // Hiding it while collecting render data is a render-time side effect: if
+  // Rapier/React throws before this component mounts, XRift is left with a
+  // successfully loaded GLB whose source object is permanently invisible.
+  useLayoutEffect(() => {
+    const sourceVisible = entry.source.visible;
+    const visualVisible = entry.visual.visible;
+    entry.visual.visible = sourceVisible;
+    entry.source.visible = false;
+    return () => {
+      entry.source.visible = sourceVisible;
+      entry.visual.visible = visualVisible;
+    };
+  }, [entry]);
+
   const hasExplicitCollider = entry.mesh !== null || entry.boxes.length > 0;
   const autoCollider =
     hasExplicitCollider || entry.autoColliders === "none"
@@ -1506,7 +1534,6 @@ function collectRuntimeDynamicBodyEntries(
     visual.position.set(0, 0, 0);
     visual.quaternion.identity();
     visual.scale.copy(scale);
-    source.visible = false;
     entries.push({
       id: entity.id,
       position: [position.x, position.y, position.z],

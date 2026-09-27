@@ -149,6 +149,7 @@ export function ExternalAssetStoreDialog({
   useEffect(() => { if (open) setMobilePane("list"); }, [open]);
   const [providerId, setProviderId] = useState<string>(() => tauri.isAvailable() ? DEFAULT_EXTERNAL_STORE_PROVIDER_ID : "xrift-scene-recipes");
   const provider = getExternalStoreProvider(providerId);
+  const remoteAssetsAvailable = tauri.isAvailable() || provider.id === "otogura";
   const [catalogRevision, setCatalogRevision] = useState(0);
   const [assets, setAssets] = useState<ExternalStoreAsset[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -166,7 +167,7 @@ export function ExternalAssetStoreDialog({
   const [installedName, setInstalledName] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open || provider.kind !== "remote-assets" || !tauri.isAvailable()) {
+    if (!open || provider.kind !== "remote-assets" || !remoteAssetsAvailable) {
       setLoading(false);
       setAssets([]);
       setSelectedId(null);
@@ -200,7 +201,7 @@ export function ExternalAssetStoreDialog({
     return () => {
       active = false;
     };
-  }, [catalogRevision, open, provider]);
+  }, [catalogRevision, open, provider, remoteAssetsAvailable]);
 
   const selected = assets.find((asset) => asset.externalId === selectedId);
   const selectedIsInstallable = selected
@@ -210,7 +211,7 @@ export function ExternalAssetStoreDialog({
   useEffect(() => {
     if (
       !open ||
-      !tauri.isAvailable() ||
+      !remoteAssetsAvailable ||
       provider.kind !== "remote-assets" ||
       !selected ||
       !selectedIsInstallable
@@ -247,7 +248,7 @@ export function ExternalAssetStoreDialog({
     return () => {
       active = false;
     };
-  }, [open, provider.kind, selected, selectedIsInstallable]);
+  }, [open, provider.kind, remoteAssetsAvailable, selected, selectedIsInstallable]);
 
   const visibleAssets = useMemo(() => {
     const tokens = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
@@ -446,10 +447,10 @@ export function ExternalAssetStoreDialog({
                 });
               }
             }}>
-          {provider.kind === "remote-assets" && !tauri.isAvailable() ? (
+          {provider.kind === "remote-assets" && !remoteAssetsAvailable ? (
             <section className="min-w-0 flex-1 overflow-y-auto p-6 text-sm text-editor-text">
               <h3 className="font-semibold">{provider.name}の素材</h3>
-              <p className="mt-3 leading-6">素材サイトからの直接追加はMac／Windows版で利用できます。ブラウザでは素材をファイルに保存し、上部の「素材を追加 → 3Dモデル / 3Dアセット」で取り込めます。</p>
+              <p className="mt-3 leading-6">{provider.name}からの直接追加はデスクトップ版で利用できます。ブラウザでは素材をファイルに保存し、上部の「素材を追加」から取り込めます。音蔵の音声はブラウザでも直接追加できます。</p>
               <a href={provider.homepageUrl} target="_blank" rel="noopener noreferrer"
                 className="mt-4 inline-flex min-h-11 items-center rounded-md border border-editor-border px-3 font-semibold text-brand-700">素材サイトを開く</a>
               <p className="mt-4 text-xs leading-5 text-editor-muted">空・海・Terrain・3Dモデルなど、同梱のカタログはiPadでも追加できます。</p>
@@ -674,7 +675,7 @@ export function ExternalAssetStoreDialog({
                 ) : (
                   <>
                     <label className="block">
-                      <span className="mb-1 block text-xs font-semibold text-slate-700">解像度</span>
+                      <span className="mb-1 block text-xs font-semibold text-slate-700">{selected.assetKind === "audio" ? "音声ファイル" : "解像度"}</span>
                       <select
                         value={resolution}
                         disabled={optionsLoading || installing}
@@ -739,6 +740,13 @@ export function ExternalAssetStoreDialog({
                           ダウンロード目安 {selectedResolution ? formatFileSize(selectedResolution.byteLength) : "—"}
                         </p>
                         <Notice text="必要なテクスチャもまとめて保存します。" />
+                      </>
+                    ) : selected.assetKind === "audio" ? (
+                      <>
+                        <p className="text-[11px] text-slate-500">
+                          ダウンロード目安 {selectedResolution ? formatFileSize(selectedResolution.byteLength) : "—"}
+                        </p>
+                        <Notice text="OGG音源をAssetsに追加します。追加後はAudio Sourceに設定できます。" />
                       </>
                     ) : (
                       <>

@@ -26,8 +26,6 @@ import {
   Lightbulb,
   List,
   LayoutGrid,
-  Keyboard,
-  LifeBuoy,
   Magnet,
   MapPin,
   MonitorPlay,
@@ -36,6 +34,7 @@ import {
   Palette,
   PanelsTopLeft,
   Play,
+  Pencil,
   Plus,
   Puzzle,
   Redo2,
@@ -55,6 +54,7 @@ import {
   Undo2,
   UploadCloud,
   Volume2,
+  Workflow,
   X,
   Globe,
   Hand,
@@ -83,6 +83,7 @@ export const EDITOR_ICONS = {
   sceneEntity: FileBox,
   light: Lightbulb,
   audio: Volume2,
+  graph: Workflow,
   font: Type,
   script: Code,
   animation: CirclePlay,
@@ -97,14 +98,13 @@ export const EDITOR_ICONS = {
   paste: ClipboardPaste,
   duplicate: CopyPlus,
   delete: Trash2,
+  rename: Pencil,
   create: Plus,
   component: Puzzle,
   import: Import,
   export: Package,
   settings: Settings,
-  keyboard: Keyboard,
   help: CircleHelp,
-  report: LifeBuoy,
   close: X,
   layout: PanelsTopLeft,
   maximize: Maximize2,
@@ -178,6 +178,8 @@ export function getEditorComponentIcon(
       return EDITOR_ICONS.animation;
     case "audio-source":
       return EDITOR_ICONS.audio;
+    case "interaction-trigger":
+      return EDITOR_ICONS.graph;
     case "script":
       return EDITOR_ICONS.script;
     case "text":

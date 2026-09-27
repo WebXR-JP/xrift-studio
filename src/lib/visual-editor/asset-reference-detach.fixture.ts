@@ -19,6 +19,7 @@ import {
   createTransformComponent,
   type MeshComponent,
   type SceneDocument,
+  type ScriptComponent,
   type TextComponent,
   type XRiftComponent,
 } from "./scene-document";
@@ -199,6 +200,7 @@ function meshOf(scene: SceneDocument, entityId: string): MeshComponent | undefin
  * nothing left and the Asset must delete.
  */
 export function runAssetReferenceDetachFixtureAssertions(): void {
+  assertScriptDeletionProtection();
   const documents = fixtureDocuments();
 
   // The Material is referenced from a Scene Mesh, a Prefab Mesh and a Model's
@@ -327,4 +329,72 @@ export function runAssetReferenceDetachFixtureAssertions(): void {
       JSON.stringify(textureAnalysis.references.map(assetReferenceKey)),
     "Re-analyzing the same documents produced different reference rows",
   );
+}
+
+function assertScriptDeletionProtection(): void {
+  const documents = fixtureDocuments();
+  const scriptId = "script-source-asset";
+  documents.assets.assets[scriptId] = {
+    id: scriptId,
+    name: "Reusable behavior",
+    kind: "script",
+    source: { kind: "project", relativePath: "scripts/behavior.ts" },
+    status: "ready",
+    language: "ts",
+    contractVersion: "1.0.0",
+  };
+  const script = (id: string): ScriptComponent => ({
+    id,
+    type: "script",
+    enabled: false,
+    scriptAssetId: scriptId,
+    contractVersion: "1.0.0",
+    properties: { speed: 2 },
+    assetReferences: [MODEL_ID, TEXTURE_ID],
+    entityReferences: [],
+    runIn: "play",
+  });
+  documents.scene.entities["mesh-entity"].enabled = false;
+  documents.scene.entities["mesh-entity"].components.push(script("script-first"), script("script-second"));
+  documents.prefabs["prefab-1"].entities["prefab-entity"].components.push(script("prefab-script"));
+  const before = JSON.stringify(documents);
+
+  const analysis = analyzeAssetDeletion(documents, scriptId);
+  assert(!analysis.canDelete && analysis.references.length === 3,
+    "Script deletion must detect every Component, including disabled and Prefab uses");
+  assert(analysis.references.every((reference) => reference.detachEffect === "remove-component"),
+    "Removing a Script source must explain that its Component is removed");
+  const blocked = deleteAssetIfUnreferenced(documents, scriptId);
+  assert(!blocked.changed && blocked.assets === documents.assets,
+    "A referenced Script source was removed from the manifest");
+
+  const one = detachAssetReferences(documents, scriptId,
+    analysis.references.find((reference) => reference.kind === "scene-script"));
+  assert(one.detached.length === 1 && collectAssetReferences(one, scriptId).length === 2,
+    "Detaching one Script row must preserve the other Component and Prefab");
+  const sceneDetached = detachAssetReferences(one, scriptId,
+    collectAssetReferences(one, scriptId).find((reference) => reference.kind === "scene-script"));
+  assert(!deleteAssetIfUnreferenced(sceneDetached, scriptId).changed,
+    "A Script referenced only by a Prefab must remain protected");
+  const detached = detachAssetReferences(sceneDetached, scriptId);
+  assert(deleteAssetIfUnreferenced(detached, scriptId).changed,
+    "A Script source must be deletable after all Components are explicitly detached");
+  assert(detached.scene.entities["mesh-entity"].components.length === 2 &&
+    detached.prefabs["prefab-1"].entities["prefab-entity"].components.length === 2,
+    "Detaching Script sources must preserve Entities and their other Components");
+
+  const dependencyReferences = collectAssetReferences(documents, MODEL_ID).filter(
+    (reference) => reference.kind === "scene-script-asset" || reference.kind === "prefab-script-asset");
+  assert(dependencyReferences.length === 3 && dependencyReferences.every((reference) => reference.detachEffect === "clear-slot"),
+    "Script Asset dependencies must be protected in the Scene and Prefabs");
+  let dependenciesDetached = { ...documents };
+  for (const reference of dependencyReferences) {
+    dependenciesDetached = detachAssetReferences(dependenciesDetached, MODEL_ID, reference);
+  }
+  const remainingScript = dependenciesDetached.scene.entities["mesh-entity"].components.find(
+    (component): component is ScriptComponent => component.id === "script-first" && component.type === "script");
+  assert(remainingScript?.scriptAssetId === scriptId && remainingScript.properties.speed === 2 &&
+    JSON.stringify(remainingScript.assetReferences) === JSON.stringify([TEXTURE_ID]),
+    "Detaching a Script Asset dependency must preserve the source, properties and other references");
+  assert(JSON.stringify(documents) === before, "Script reference operations mutated their source documents");
 }

@@ -7,6 +7,11 @@ export type CompilerBundledAssetFile = {
   dataUrl: string;
 };
 
+export type CompilerBundledAssetBytes = {
+  targetRelativePath: string;
+  bytes: Uint8Array;
+};
+
 /**
  * Reads the files Studio ships that a compiled world has to carry: the KTX2
  * transcoder, the Draco decoder and the Text fonts.
@@ -20,6 +25,18 @@ export async function loadCompilerBundledAssetFiles(
   plan: readonly CompilerBundledAssetCopy[],
   signal?: AbortSignal,
 ): Promise<CompilerBundledAssetFile[]> {
+  const files = await loadCompilerBundledAssetBytes(plan, signal);
+  return Promise.all(files.map(async (file) => ({
+    targetRelativePath: file.targetRelativePath,
+    dataUrl: await blobToDataUrl(new Blob([file.bytes as BlobPart])),
+  })));
+}
+
+/** The browser uploader needs the same bundled files without base64 encoding. */
+export async function loadCompilerBundledAssetBytes(
+  plan: readonly CompilerBundledAssetCopy[],
+  signal?: AbortSignal,
+): Promise<CompilerBundledAssetBytes[]> {
   return Promise.all(
     plan.map(async (entry) => {
       if (signal?.aborted) {
@@ -42,7 +59,7 @@ export async function loadCompilerBundledAssetFiles(
       }
       return {
         targetRelativePath: entry.targetRelativePath,
-        dataUrl: await blobToDataUrl(await response.blob()),
+        bytes: new Uint8Array(await response.arrayBuffer()),
       };
     }),
   );

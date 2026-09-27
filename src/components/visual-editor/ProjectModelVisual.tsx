@@ -1,3 +1,4 @@
+import { applyOpenBrushMaterialProperties } from "../../../packages/xrift-studio-runtime/src/open-brush/material-properties";
 import {
   useEffect,
   useLayoutEffect,
@@ -53,6 +54,7 @@ import {
   Vector4,
   Vector3,
   type Material,
+  type BufferGeometry,
   type AnimationClip,
   type Object3D,
   type Texture,
@@ -436,15 +438,17 @@ function ProjectModelRender({
     );
     applyStaticModelPose(object, pose);
     const selectionBounds = getModelSelectionBounds(object);
+    const ownedGeometries: BufferGeometry[] = [];
     const ownedMaterials = applyAssignedMaterialPreviews(
       object,
       assignedMaterials,
       sourceMaterials,
+      ownedGeometries,
     );
     ownedMaterials.push(
       ...applySceneViewportMaterialStyle(object, viewportMaterialStyle),
     );
-    return { object, ownedMaterials, selectionBounds };
+    return { object, ownedMaterials, ownedGeometries, selectionBounds };
   }, [
     assignedMaterials,
     pose,
@@ -509,6 +513,7 @@ function ProjectModelRender({
   useEffect(
     () => () => {
       renderedModel?.ownedMaterials.forEach((material) => material.dispose());
+      renderedModel?.ownedGeometries.forEach((geometry) => geometry.dispose());
     },
     [renderedModel],
   );
@@ -790,6 +795,7 @@ export function applyAssignedMaterialPreviews(
     customShaderMaterial?: Material;
   }[],
   sourceMaterials: ReadonlyMap<number, Material> = collectSourceMaterials(object),
+  ownedGeometries: BufferGeometry[] = [],
 ): Material[] {
   const globalAssignmentBySourceIndex = new Map(
     assignments
@@ -812,8 +818,10 @@ export function applyAssignedMaterialPreviews(
     const mesh = child as Object3D & {
       isMesh?: boolean;
       material?: Material | Material[];
+      geometry?: BufferGeometry;
     };
     if (!mesh.isMesh || !mesh.material) return;
+    let ownedGeometry: BufferGeometry | undefined;
     const createPreview = (source: Material): Material => {
       const sourceMaterialIndex = getSourceMaterialIndex(source);
       const sourceNodeIndex = findSourceNodeIndex(child);
@@ -835,7 +843,7 @@ export function applyAssignedMaterialPreviews(
         child.name,
       );
       if (assignment.material.shader?.kind === "openbrush") {
-        const geometry = (mesh as typeof mesh & { geometry?: import("three").BufferGeometry }).geometry;
+        const geometry = mesh.geometry;
         if (geometry && (preview as { isShaderMaterial?: boolean }).isShaderMaterial) {
           if (!hasCustomShaderEntrypoints(preview)) {
             preview.dispose();
@@ -851,8 +859,15 @@ export function applyAssignedMaterialPreviews(
             ownedMaterials.push(fallback);
             return fallback;
           }
+          if (!ownedGeometry) {
+            // Cloned model nodes still share their cached geometry. Bind only
+            // on this mesh's copy, including when it has multiple shader slots.
+            ownedGeometry = geometry.clone();
+            mesh.geometry = ownedGeometry;
+            ownedGeometries.push(ownedGeometry);
+          }
           const bindings = bindCustomShaderGeometryAttributes(
-            geometry,
+            ownedGeometry,
             preview,
             assignment.material.shader.attributeBindings,
           );
@@ -1355,49 +1370,11 @@ export function applyOpenBrushMaterialAssetProperties(
   textures: CoreMaterialPreviewTextures,
 ): void {
   if (assignedMaterial.shader?.kind !== "openbrush") return;
-  const shader = material as Material & {
-    uniforms?: Record<string, { value: unknown }>;
-    fragmentShader?: string;
-    needsUpdate?: boolean;
-  };
-  const properties = normalizeMaterialProperties(
-    assignedMaterial.properties as unknown as Parameters<
-      typeof normalizeMaterialProperties
-    >[0],
+  applyOpenBrushMaterialProperties(
+    material,
+    normalizeMaterialProperties(assignedMaterial.properties),
+    textures.shaderUniforms,
   );
-  const uniforms = shader.uniforms;
-  if (!uniforms) return;
-  for (const [uniformName, texture] of Object.entries(
-    textures.shaderUniforms ?? {},
-  )) {
-    if (uniforms[uniformName]) uniforms[uniformName].value = texture;
-  }
-  if (uniforms.u_Shininess) {
-    uniforms.u_Shininess.value = 1 - properties.pbrMetallicRoughness.roughnessFactor;
-  }
-  if (uniforms.u_Cutoff && properties.alphaMode === "MASK") {
-    uniforms.u_Cutoff.value = properties.alphaCutoff;
-  }
-  const factor = properties.pbrMetallicRoughness.baseColorFactor;
-  const varyingDeclaration = "in vec4 v_color;";
-  const varyingIndex = shader.fragmentShader?.indexOf(varyingDeclaration) ?? -1;
-  if (varyingIndex < 0 || !shader.fragmentShader) return;
-  if (!uniforms.xriftBaseColorFactor) {
-    uniforms.xriftBaseColorFactor = { value: new Vector4(...factor) };
-    const bodyStart = varyingIndex + varyingDeclaration.length;
-    const shaderHeader = shader.fragmentShader.slice(0, bodyStart);
-    const shaderBody = shader.fragmentShader
-      .slice(bodyStart)
-      .replace(/\bv_color\b/g, "(v_color * xriftBaseColorFactor)");
-    // Keep the vertex/fragment varying name identical. Renaming only the
-    // fragment input makes WebGL reject the linked shader program.
-    shader.fragmentShader = `${shaderHeader}\nuniform vec4 xriftBaseColorFactor;${shaderBody}`;
-  } else if (uniforms.xriftBaseColorFactor.value instanceof Vector4) {
-    uniforms.xriftBaseColorFactor.value.set(...factor);
-  } else {
-    uniforms.xriftBaseColorFactor.value = new Vector4(...factor);
-  }
-  shader.needsUpdate = true;
 }
 
 function collectSourceMaterials(object: Object3D): Map<number, Material> {

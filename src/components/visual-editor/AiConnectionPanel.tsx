@@ -1,26 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
 import type {
   XriftMcpClientId,
   XriftMcpClientStatus,
-  XriftOllamaConfigurationResult,
-  XriftOllamaIntegrationId,
-  XriftOllamaStatus,
 } from "../../lib/tauri";
 import { EDITOR_ICONS } from "./editor-icons";
-
-const OLLAMA_INTEGRATION_IDS: readonly XriftOllamaIntegrationId[] = [
-  "codex",
-  "claude-code",
-  "opencode",
-];
-
-function isOllamaIntegrationId(
-  value: XriftMcpClientId,
-): value is XriftOllamaIntegrationId {
-  return OLLAMA_INTEGRATION_IDS.includes(
-    value as XriftOllamaIntegrationId,
-  );
-}
 
 export type XriftMcpActivity = {
   clientName: string;
@@ -35,15 +17,10 @@ export function AiConnectionPanel({
   loading,
   registeringClientId,
   error,
-  ollama,
-  ollamaConfiguring,
-  ollamaError,
-  ollamaResult,
   lastActivity,
   canUndo,
   onRefresh,
   onRegister,
-  onConfigureOllama,
   onUndo,
 }: {
   nativeAvailable: boolean;
@@ -51,52 +28,12 @@ export function AiConnectionPanel({
   loading: boolean;
   registeringClientId: XriftMcpClientId | null;
   error: string | null;
-  ollama: XriftOllamaStatus | null;
-  ollamaConfiguring: boolean;
-  ollamaError: string | null;
-  ollamaResult: XriftOllamaConfigurationResult | null;
   lastActivity: XriftMcpActivity;
   canUndo: boolean;
   onRefresh: () => void;
   onRegister: (clientId: XriftMcpClientId) => void;
-  onConfigureOllama: (
-    integrationId: XriftOllamaIntegrationId,
-    model: string,
-  ) => void;
   onUndo: () => void;
 }) {
-  const [selectedOllamaModel, setSelectedOllamaModel] = useState("");
-  const [selectedOllamaIntegration, setSelectedOllamaIntegration] =
-    useState<XriftOllamaIntegrationId>("opencode");
-  const ollamaTargets = useMemo(
-    () =>
-      clients.filter(
-        (client): client is XriftMcpClientStatus & {
-          id: XriftOllamaIntegrationId;
-        } => client.installed && isOllamaIntegrationId(client.id),
-      ),
-    [clients],
-  );
-
-  useEffect(() => {
-    if (
-      !ollama?.models.some((model) => model.name === selectedOllamaModel)
-    ) {
-      setSelectedOllamaModel(ollama?.models[0]?.name ?? "");
-    }
-  }, [ollama, selectedOllamaModel]);
-
-  useEffect(() => {
-    if (
-      !ollamaTargets.some(
-        (client) => client.id === selectedOllamaIntegration,
-      ) &&
-      ollamaTargets[0]
-    ) {
-      setSelectedOllamaIntegration(ollamaTargets[0].id);
-    }
-  }, [ollamaTargets, selectedOllamaIntegration]);
-
   if (!nativeAvailable) {
     return (
       <div className="space-y-3 p-3.5 text-xs leading-5 text-slate-600">
@@ -156,7 +93,7 @@ export function AiConnectionPanel({
           title="AIクライアントを再検出"
           aria-label="AIクライアントを再検出"
           disabled={
-            loading || registeringClientId !== null || ollamaConfiguring
+            loading || registeringClientId !== null
           }
           onClick={onRefresh}
           className="rounded p-1.5 text-slate-500 hover:bg-white hover:text-slate-800 disabled:opacity-50"
@@ -198,8 +135,7 @@ export function AiConnectionPanel({
                   disabled={
                     !client.installed ||
                     (client.registered && !client.needsUpdate) ||
-                    registeringClientId !== null ||
-                    ollamaConfiguring
+                    registeringClientId !== null
                   }
                   onClick={() => onRegister(client.id)}
                   className="shrink-0 rounded-md bg-brand-600 px-2.5 py-1.5 font-semibold text-white hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-500"
@@ -230,148 +166,6 @@ export function AiConnectionPanel({
         </p>
       </section>
 
-      <section aria-labelledby="ollama-heading">
-        <h3
-          id="ollama-heading"
-          className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500"
-        >
-          Ollamaローカルモデル
-        </h3>
-        <div className="rounded-md border border-slate-200 p-2.5">
-          {loading && ollama === null ? (
-            <p className="text-slate-500">Ollamaを確認しています</p>
-          ) : !ollama?.installed ? (
-            <div>
-              <p className="font-semibold text-slate-800">Ollamaは未検出です</p>
-              <p className="mt-1 text-[11px] leading-4 text-slate-500">
-                Ollamaをインストールして再検出すると、対応するAIクライアントでローカルモデルを使えます。
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="font-semibold text-slate-800">
-                    Ollama{ollama.version ? ` ${ollama.version}` : ""}
-                  </p>
-                  <p className="mt-0.5 text-[11px] text-slate-500">
-                    {ollama.message}
-                  </p>
-                </div>
-                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-                  {ollama.models.length}モデル
-                </span>
-              </div>
-
-              {!ollama.serverReachable ? (
-                <p className="rounded border border-amber-200 bg-amber-50 p-2 text-[11px] leading-4 text-amber-800">
-                  Ollamaが起動していません。Ollamaアプリを起動してから再検出してください。
-                </p>
-              ) : !ollama.launchSupported ? (
-                <p className="rounded border border-amber-200 bg-amber-50 p-2 text-[11px] leading-4 text-amber-800">
-                  このバージョンは自動設定に対応していません。Ollamaを更新して再検出してください。
-                </p>
-              ) : ollama.models.length === 0 ? (
-                <p className="rounded border border-slate-200 bg-slate-50 p-2 text-[11px] leading-4 text-slate-600">
-                  Ollamaを起動し、先に使うモデルを追加してから再検出してください。
-                </p>
-              ) : (
-                <>
-                  <label className="block">
-                    <span className="mb-1 block text-[11px] font-semibold text-slate-600">
-                      ローカルモデル
-                    </span>
-                    <select
-                      value={selectedOllamaModel}
-                      disabled={ollamaConfiguring}
-                      onChange={(event) =>
-                        setSelectedOllamaModel(event.target.value)
-                      }
-                      className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none"
-                    >
-                      {ollama.models.map((model) => (
-                        <option key={model.name} value={model.name}>
-                          {model.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="block">
-                    <span className="mb-1 block text-[11px] font-semibold text-slate-600">
-                      設定するAIクライアント
-                    </span>
-                    <select
-                      value={selectedOllamaIntegration}
-                      disabled={ollamaConfiguring || ollamaTargets.length === 0}
-                      onChange={(event) =>
-                        setSelectedOllamaIntegration(
-                          event.target.value as XriftOllamaIntegrationId,
-                        )
-                      }
-                      className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-2 text-xs text-slate-800 focus:border-brand-500 focus:outline-none disabled:bg-slate-100"
-                    >
-                      {ollamaTargets.map((client) => (
-                        <option key={client.id} value={client.id}>
-                          {client.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  {ollamaTargets.length === 0 ? (
-                    <p className="text-[11px] leading-4 text-amber-700">
-                      Codex、Claude Code、OpenCodeのいずれかを先にインストールしてください。
-                    </p>
-                  ) : null}
-
-                  <button
-                    type="button"
-                    disabled={
-                      ollamaConfiguring ||
-                      registeringClientId !== null ||
-                      !selectedOllamaModel ||
-                      ollamaTargets.length === 0
-                    }
-                    onClick={() =>
-                      onConfigureOllama(
-                        selectedOllamaIntegration,
-                        selectedOllamaModel,
-                      )
-                    }
-                    className="w-full rounded-md bg-brand-600 px-3 py-2 font-semibold text-white hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-500"
-                  >
-                    {ollamaConfiguring
-                      ? "MCPとモデルを設定中"
-                      : "XRift MCPとOllamaを設定"}
-                  </button>
-                  <p className="text-[10px] leading-4 text-slate-500">
-                    選んだモデルがツール呼び出しに対応しているか確認し、MCPとモデルを設定します。モデルのダウンロードやAIクライアントの起動は行いません。
-                  </p>
-                </>
-              )}
-
-              {ollamaError ? (
-                <p
-                  role="alert"
-                  className="rounded border border-rose-200 bg-rose-50 p-2 text-[11px] leading-4 text-rose-700"
-                >
-                  {ollamaError}
-                </p>
-              ) : null}
-              {ollamaResult ? (
-                <p className="rounded border border-emerald-200 bg-emerald-50 p-2 text-[11px] leading-4 text-emerald-800">
-                  {ollamaResult.integrationLabel}を{ollamaResult.model}で使うように設定しました。AIクライアントを起動または再起動してください。
-                </p>
-              ) : null}
-            </div>
-          )}
-        </div>
-        <p className="mt-2 text-[11px] leading-4 text-slate-500">
-          シーンを操作するには、設定したAIクライアントで指示してください。
-        </p>
-      </section>
-
       {error ? (
         <div role="alert" className="rounded-md border border-rose-200 bg-rose-50 p-2.5 text-rose-700">
           <p>{error}</p>
@@ -380,7 +174,7 @@ export function AiConnectionPanel({
           </p>
           <button
             type="button"
-            disabled={loading || ollamaConfiguring}
+            disabled={loading}
             onClick={onRefresh}
             className="mt-1.5 font-semibold underline underline-offset-2 disabled:opacity-50"
           >
