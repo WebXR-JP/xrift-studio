@@ -63,7 +63,7 @@ GitHub Pages の紹介ページは、最新リリースのインストーラー�
 - ビルド時: `pnpm release:snapshot` が公開済みの最新リリースを読み、`src/preview/generated/release-snapshot.ts` を書き換えます。生成物はコミットします。取得に失敗した場合は既存のスナップショットを保ったまま終了し、ビルドを止めません。
 - 表示後: ページが GitHub の公開 API へ問い合わせ、返ってきたリリースでスナップショットを置き換えます。1 ページの読み込みにつき 1 回だけ問い合わせます。
 
-`.github/workflows/pages.yml` はビルド前にスナップショットを更新し、リリースの公開時にも再デプロイします。アセット名の規則 (`[name]_[version]_[platform]_[arch]_[mode][setup][ext]`) を変える場合は、`src/preview/lib/release-download.ts` の判定も合わせて更新してください。状態設計は [マイクロインタラクション Wiki](./docs/UX_INTERACTIONS.md) の F-41 にあります。
+`.github/workflows/pages.yml` はビルド前にスナップショットを更新し、リリースの公開時にも再デプロイします。アセット名の規則 (`[name]_[version]_[platform]_[arch]_[mode][setup][ext]`) を変える場合は、`src/preview/lib/release-download.ts` とパッケージ定義の生成処理も合わせて更新してください。状態設計は [マイクロインタラクション Wiki](./docs/UX_INTERACTIONS.md) の F-41 にあります。
 
 ## 配布ビルド
 
@@ -162,6 +162,18 @@ GitHub Actions のリポジトリ Secrets に次を登録してください。
 2026年9月22日の `v0.10.2` は、`releaseDraft: false` により添付前に公開され、全OSのファイルが未添付のまま固定されました。修正を含むブランチをマージ後、**Release → Run workflow → `v0.10.3`** で実行します。通常公開なら `draft` と `prerelease` は選びません。古い `v0.10.2` の失敗した実行を再実行しても、固定済みReleaseの修復にはなりません。[対象の実行](https://github.com/WebXR-JP/xrift-studio/actions/runs/35712907566)
 
 公開処理の回帰確認は `node --test scripts/prepare-release-notes.test.mjs scripts/github-release.test.mjs` で実行します。実際のReleaseを作らず、公開済みタグの拒否、下書きからの再実行、全OSの更新情報、添付失敗時に公開しないことを確認します。
+
+### Homebrewの更新
+
+通常リリースの公開後、**Update Homebrew** が配布ファイルのURLとSHA-256から定義を更新し、このリポジトリに更新PRを作ります。HomebrewはPRのマージ後に配布版が切り替わります。
+
+```bash
+node scripts/update-package-managers.mjs
+node scripts/update-package-managers.mjs --check
+node --test scripts/update-package-managers.test.mjs
+```
+
+最初のコマンドは公開済みの最新リリースを取得し、`--check`は保存済みの情報と生成物の整合をネット接続なしで確認します。初回のActions設定、生成物の回収、macOSでの動作確認は[Homebrewでの配布](./docs/PACKAGE_MANAGERS.md#配布定義を更新する)を参照してください。
 
 ### 所要時間の作り
 

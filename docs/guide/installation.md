@@ -1,6 +1,6 @@
 # インストールして起動する
 
-まずアプリをインストールし、初回セットアップを完了します。必要なツールはアプリが準備するので、コードやコマンドを入力する必要はありません。
+まずアプリをインストールし、初回セットアップを完了します。必要なツールはアプリが準備します。インストーラーを使えば、コードやコマンドを入力せずに始められます。
 
 ## 1. アプリをダウンロードする
 
@@ -12,7 +12,16 @@ Windows用のインストーラー（`.msi`または`.exe`）を開き、案内�
 
 ### macOS
 
-お使いのMacに合う`.dmg`を開き、XRift Studioをアプリケーションフォルダーへ移します。Apple Silicon用とIntel用を取り違えないようにしてください。
+`.dmg`を開き、XRift Studioをアプリケーションフォルダーへ移します。現在の配布ファイルは、Apple SiliconとIntelの両方で使えるuniversal版です。
+
+Homebrewを導入済みなら、ターミナルからもインストールできます。
+
+```bash
+brew tap webxr-jp/xrift-studio https://github.com/WebXR-JP/xrift-studio.git
+brew install --cask webxr-jp/xrift-studio/xrift-studio
+```
+
+終わったら、アプリケーションフォルダーからXRift Studioを開きます。Homebrewでの更新・削除は[Homebrewの導入手順](https://github.com/WebXR-JP/xrift-studio/blob/main/docs/PACKAGE_MANAGERS.md#homebrew)を参照してください。
 
 開発元の確認で止まった場合は、[アプリを開けないとき](./installation-problems.md#macosで開けない)へ進みます。警告の意味を確認せず、保護機能をまとめて無効にしないでください。
 

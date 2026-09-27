@@ -1,0 +1,16 @@
+{
+  "tag_name": "v0.10.6",
+  "html_url": "https://github.com/WebXR-JP/xrift-studio/releases/tag/v0.10.6",
+  "published_at": "2026-09-26T11:09:09Z",
+  "draft": false,
+  "prerelease": false,
+  "assets": [
+    {
+      "name": "XRift.Studio_0.10.6_darwin_universal_release.dmg",
+      "state": "uploaded",
+      "size": 91610312,
+      "digest": "sha256:3f9950d23c3155bbab8e575e6ed622f3dacfb279d57d67585f1be4f119ccf146",
+      "browser_download_url": "https://github.com/WebXR-JP/xrift-studio/releases/download/v0.10.6/XRift.Studio_0.10.6_darwin_universal_release.dmg"
+    }
+  ]
+}
