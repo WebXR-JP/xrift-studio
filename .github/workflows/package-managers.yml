@@ -11,6 +11,7 @@ on:
       - 'Casks/**'
       - 'packaging/**'
       - 'scripts/update-package-managers*'
+      - 'scripts/github-release*'
       - '.github/workflows/package-managers.yml'
       - '.github/workflows/release.yml'
 
@@ -33,7 +34,7 @@ jobs:
         with:
           node-version: '22'
       - name: Test release validation and manifest generation
-        run: node --test scripts/update-package-managers.test.mjs
+        run: node --test scripts/update-package-managers.test.mjs scripts/github-release.test.mjs scripts/prepare-release-notes.test.mjs
       - name: Check committed package definitions
         run: node scripts/update-package-managers.mjs --check
 
@@ -60,6 +61,9 @@ jobs:
           brew fetch --cask webxr-jp/xrift-studio/xrift-studio
           brew install --cask webxr-jp/xrift-studio/xrift-studio
           test -d '/Applications/XRift Studio.app'
+          actual_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' '/Applications/XRift Studio.app/Contents/Info.plist')"
+          expected_version="$(ruby -rjson -e 'puts JSON.parse(File.read("packaging/release.json")).fetch("tag_name").delete_prefix("v")')"
+          test "$actual_version" = "$expected_version"
           brew uninstall --cask webxr-jp/xrift-studio/xrift-studio
 
   update:
