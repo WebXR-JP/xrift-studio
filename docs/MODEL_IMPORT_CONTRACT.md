@@ -2,7 +2,7 @@
 
 ## 目的
 
-GLB / glTF を素材 Manifest へ取り込む。シーン、設定、衝突判定、Compiler が同じ派生情報を参照できるようにする。元ファイルの読み込みやサムネイル生成に失敗しても、最後に保存できた Manifest を保つ。
+GLB / glTF を素材 Manifest へ取り込む。シーン、設定、Collider、Compiler が同じ派生情報を参照できるようにする。元ファイルの読み込みやサムネイル生成に失敗しても、最後に保存できた Manifest を保つ。
 
 ## 永続化する情報
 
@@ -10,12 +10,12 @@ GLB / glTF を素材 Manifest へ取り込む。シーン、設定、衝突判�
 
 - `id`: シーンとプレハブが参照する安定した素材 ID
 - `source` / `sourceHash`: project-relative 元データと SHA-256
-- `importSettings`: scale、衝突判定生成と、将来の processor 用に保持するメッシュ最適化・Animation 取り込み設定
+- `importSettings`: scale、Collider生成と、将来の processor 用に保持するメッシュ最適化・Animation 取り込み設定
 - `materialSlots`: 安定した `slot`、表示名、元データマテリアル index、任意の既定マテリアル binding
 - `importMetadata`: 元データ format、byte length、ノード / メッシュ / primitive count、モデルローカル bounds、Animation 名・長さ・track 数・元データ index、glTF extensions
 - `thumbnail`: 元データ hash と renderer version を持つ派生画像。再取り込み後に生成できなければ旧画像を `stale` として明示する
 
-`bounds` は素材 import scale とオブジェクト位置・回転・大きさを適用する前のモデルローカル座標である。衝突判定の自動 fit はこの値へ import scale だけを適用する。
+`bounds` は素材 import scale とオブジェクト位置・回転・大きさを適用する前のモデルローカル座標である。Colliderの自動 fit はこの値へ import scale だけを適用する。
 
 ## 新規取り込み
 
@@ -93,7 +93,7 @@ companion は `createAssetImportPlan` の `companionFiles` へ渡す。`three-mo
 
 メッシュ最適化とDraco圧縮の選択は素材に保存され、再インポートにも適用されます。設定の最適化と公開前のDraco圧縮は共通の変換処理を使います。公開前にDraco圧縮を選んだ場合は、Dracoを有効にし、メッシュ最適化はモデルに保存した選択を使います。原本は残るので、圧縮のチェックを外して再インポートすると原本から読み直せます。原本自体がDraco圧縮済みの場合は、その圧縮は残ります。
 
-「配置時にメッシュの衝突判定を追加」を外して再インポートすると、そのモデルを参照するシーンとプレハブのメッシュの衝突判定を取り除きます。手動で付けたメッシュの衝突判定も対象です。直方体の衝突判定など他の形状、他のモデル、編集済みの階層や位置・回転・大きさは保持します。再インポートが失敗した場合は、現在の素材と衝突判定を保持します。
+「配置時にMesh Colliderを追加」を外して再インポートすると、そのモデルを参照するシーンとプレハブのMesh Colliderを取り除きます。手動で付けたMesh Colliderも対象です。Box Colliderなど他の形状、他のモデル、編集済みの階層や位置・回転・大きさは保持します。再インポートが失敗した場合は、現在の素材とColliderを保持します。
 
 MCPでは`update_model_asset`の`patch.importSettings`に`compressWithDraco`と`textureMaxSize`を指定できます。`textureMaxSize`は`"default"`、`"original"`、または256、512、1024、2048、4096、8192です。設定を保存した後、`reimport_model_asset`で適用します。
 

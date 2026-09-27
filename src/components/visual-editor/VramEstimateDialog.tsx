@@ -9,7 +9,6 @@ import {
   Loader2,
   Monitor,
   Music,
-  Sparkles,
   Smartphone,
   X,
 } from "lucide-react";
@@ -459,7 +458,7 @@ export function VramEstimateDialog({
                     </p>
                     {actionable ? (
                       <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-violet-700">
-                        <Sparkles size={13} aria-hidden="true" />
+                        <Info size={13} aria-hidden="true" />
                         {recommendation.operation === "instance-model" ? "選択して適用すると有効になります。モデルの設定から解除できます" : "選択するとStudio内で変換して同じ素材へ反映します"}
                       </p>
                     ) : null}
@@ -578,7 +577,7 @@ export function VramEstimateDialog({
               {applying ? (
                 <Loader2 size={15} className="animate-spin" aria-hidden="true" />
               ) : (
-                <Sparkles size={15} aria-hidden="true" />
+                <Gauge size={15} aria-hidden="true" />
               )}
               {applying ? "最適化しています" : "選択した最適化を適用"}
             </button>

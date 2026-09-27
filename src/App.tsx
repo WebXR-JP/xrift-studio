@@ -601,10 +601,10 @@ function App() {
       clearCaches();
       const next = await tauri.runtimeStatus();
       if (!next.ready || !next.xriftVersion) {
-        throw new Error("更新後のCLIを確認できませんでした。もう一度お試しください。");
+        throw new Error("更新後のCLIを確認できませんでした。");
       }
       if (updateInfo?.latest && isNewer(updateInfo.latest, next.xriftVersion)) {
-        throw new Error(`CLIはv${next.xriftVersion}です。v${updateInfo.latest}への更新をもう一度お試しください。`);
+        throw new Error(`CLIはv${next.xriftVersion}です。v${updateInfo.latest}へ更新してください。`);
       }
       setRuntime(next);
       toast({
@@ -1548,7 +1548,7 @@ function App() {
           description:
             error instanceof Error
               ? error.message
-              : "コードプロジェクトとプロジェクト種別を確認して、もう一度お試しください。",
+              : "コードプロジェクトとプロジェクト種別を確認してください。",
         });
       }
     });
@@ -2176,16 +2176,16 @@ function describeStarterPreparationError(error: unknown): string {
   switch (reason) {
     case "load":
       return details.responseStatus === undefined
-        ? `${label}を読み込めませんでした。アプリを再起動して、もう一度お試しください。`
-        : `${label}を読み込めませんでした（HTTP ${details.responseStatus}）。アプリを再起動して、もう一度お試しください。`;
+        ? `${label}を読み込めませんでした。アプリを再起動してください。`
+        : `${label}を読み込めませんでした（HTTP ${details.responseStatus}）。アプリを再起動してください。`;
     case "empty":
-      return `${label}が空です。アプリを再起動して、もう一度お試しください。`;
+      return `${label}が空です。アプリを再起動してください。`;
     case "size":
-      return `${label}のサイズが一致しません。取得値: ${formatBytes(receivedSize ?? 0)}、期待値: ${formatBytes(copy.expectedByteLength)}。アプリを再起動して、もう一度お試しください。`;
+      return `${label}のサイズが一致しません。取得値: ${formatBytes(receivedSize ?? 0)}、期待値: ${formatBytes(copy.expectedByteLength)}。アプリを再起動してください。`;
     case "hash":
-      return `${label}のSHA-256が一致しません。取得値: ${formatBytes(receivedSize ?? 0)}。アプリを再起動して、もう一度お試しください。`;
+      return `${label}のSHA-256が一致しません。取得値: ${formatBytes(receivedSize ?? 0)}。アプリを再起動してください。`;
     case "license-content":
-      return `${label}の内容を確認できませんでした。アプリを再起動して、もう一度お試しください。`;
+      return `${label}の内容を確認できませんでした。アプリを再起動してください。`;
   }
 }
 

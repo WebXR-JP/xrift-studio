@@ -503,7 +503,7 @@ function ImportPreviewHeader({
                       material.colliderSourceNodeNames.length > 0,
                   ) ? (
                     <PreviewChip
-                      label="当たり判定"
+                      label="Collider"
                       value={String(
                         classicSource.inspection.customMaterials.reduce(
                           (count, material) =>
@@ -582,10 +582,10 @@ function AnalysisResult({
           ライト {plan.summary.lightCount}
         </span>
         <span className="rounded bg-indigo-50 px-2 py-1 text-indigo-700">
-          物理挙動 {plan.summary.rigidBodyCount}
+          Rigid Body {plan.summary.rigidBodyCount}
         </span>
         <span className="rounded bg-sky-50 px-2 py-1 text-sky-700">
-          衝突判定 {plan.summary.colliderCount}
+          Collider {plan.summary.colliderCount}
         </span>
         {plan.summary.textCount > 0 ? (
           <span className="rounded bg-fuchsia-50 px-2 py-1 text-fuchsia-700">
@@ -635,7 +635,7 @@ function AnalysisResult({
             aria-hidden="true"
           />
           <span>
-            素材の大きさと容量を確認できませんでした。シーンの変換結果は確認できます。インポート時に再確認し、読み取れない素材は追加しません。詳細:{" "}
+            素材の大きさと容量を確認できませんでした。インポート時に再確認し、読み取れない素材は追加しません。詳細:{" "}
             {previewError}
           </span>
         </div>
@@ -673,7 +673,7 @@ function AnalysisResult({
       ) : (
         <p className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-700">
           <CheckCircle2 size={13} aria-hidden="true" />
-          公式Componentとしてシーンへ追加できます。
+          公式Componentとしてシーンへ追加します。
         </p>
       )}
       {plan.assetDependencies.length > 0 ? (
@@ -683,7 +683,7 @@ function AnalysisResult({
             {plan.assetDependencies.map((dependency) => dependency.fileName).join(" / ")}
           </span>
           <span className="mt-0.5 block text-slate-500">
-            取得したリポジトリから読み込みます。見つからない素材を除いて追加できます。
+            取得したリポジトリから読み込みます。見つからない素材は除いて追加します。
           </span>
         </div>
       ) : null}
@@ -751,7 +751,7 @@ function ClassicAssetSizePreview({
               </span>
               {model.colliderSourceNodeCount > 0 ? (
                 <span className="ml-2 text-sky-700">
-                  衝突判定 {model.colliderSourceNodeCount}も同じ倍率
+                  Collider {model.colliderSourceNodeCount}も同じ倍率
                 </span>
               ) : null}
               {model.centerModel ? (
@@ -806,7 +806,7 @@ function ClassicAssetSizePreview({
         </div>
       ) : null}
       <p className="text-[10px] leading-4 text-violet-800">
-        テクスチャの容量はRGBAとMipmapを基にした概算です。配置後の大きさには親EntityのScaleも含みます。軸ごとに異なるScaleと回転を組み合わせる場合は、目安として確認してください。インポート後は「VRAM概算」でワールド全体を確認できます。
+        テクスチャの容量はRGBAとMipmapを基にした概算です。配置後の大きさには親EntityのScaleも含みます。軸ごとに異なるScaleと回転を組み合わせる場合は目安としてください。ワールド全体は「VRAM概算」で確認できます。
       </p>
     </div>
   );

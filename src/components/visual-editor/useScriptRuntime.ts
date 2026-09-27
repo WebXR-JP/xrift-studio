@@ -264,7 +264,7 @@ export function useScriptRuntime({
           message:
             error instanceof Error
               ? error.message
-              : "スクリプト fileを読み込めませんでした",
+              : "スクリプトのファイルを読み込めませんでした",
         });
       }
     }

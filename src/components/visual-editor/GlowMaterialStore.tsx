@@ -81,7 +81,7 @@ export function GlowMaterialStore({
     try {
       const result = await onAdd(selected, tint);
       setAddedMessage(
-        `「${result.entityName}」をシーンへ追加しました。大きさや発光色はInspectorで調整できます。`,
+        `「${result.entityName}」をシーンへ追加しました`,
       );
     } catch (reason) {
       setError(

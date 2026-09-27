@@ -45,7 +45,7 @@ export function collisionSources(scene: SceneDocument) {
       return [{ entityId: entity.id, entityName: entity.name, componentId: component.id,
         active, isTrigger: component.isTrigger, label: component.type === "collider"
           ? `${component.shape === "mesh" ? "Mesh" : "Box"} Collider${component.isTrigger ? "（Trigger）" : ""}`
-          : `自動生成: ${component.autoColliders}${component.isTrigger ? "（Trigger）" : ""}` }];
+          : `Auto Collider: ${component.autoColliders}${component.isTrigger ? "（Trigger）" : ""}` }];
     });
   });
 }
@@ -55,7 +55,7 @@ export function setMeshCollision(scene: SceneDocument, entityId: string, action:
   const selected = scene.entities[entityId];
   if (!selected || !hasCollisionMesh(selected)) throw new Error("有効なMesh Rendererを選んでください。");
   if (!collisionAncestors(scene, entityId).every((e) => e.enabled)) {
-    throw new Error("このEntityと親を有効にしてから当たり判定を設定してください。");
+    throw new Error("このEntityと親を有効にしてからColliderを設定してください。");
   }
   const preferredBody = selected.components.find((c) => c.type === "rigid-body" && c.enabled) ?? selected.components.find((c) => c.type === "rigid-body");
   const preferredMesh = selected.components.find((c) => c.type === "collider" && c.shape === "mesh" && c.enabled) ?? selected.components.find((c) => c.type === "collider" && c.shape === "mesh");
@@ -94,13 +94,13 @@ export function setMeshCollision(scene: SceneDocument, entityId: string, action:
               edit(entity.id, (cs) => cs.map((entry) => entry.id === c.id ? { ...c, autoColliders: "none" } : entry));
               continue;
             }
-            throw new Error(`「${entity.name}」の自動${c.autoColliders}を使っています。物理挙動の自動生成を解除し、必要なメッシュを一覧へ追加してください。`);
+            throw new Error(`「${entity.name}」はAuto Collider（${c.autoColliders}）を使っています。Auto Colliderをなしにして、必要なMeshを一覧へ追加してください。`);
           }
           sources.push({ entity, component: c });
         }
         if (c.type === "collider" && c.shape === "mesh" &&
           (entity.id === sharedRootId || (!bodyOwner && (entity.id !== entityId || entity.children.length > 0)))) {
-          if (!bodyOwner && c.bodyType && c.bodyType !== "fixed") throw new Error(`「${entity.name}」は動く衝突判定です。物理挙動の設定元で範囲を分けてください。`);
+          if (!bodyOwner && c.bodyType && c.bodyType !== "fixed") throw new Error(`「${entity.name}」は可動（dynamic/kinematic）のColliderです。所有するRigid Bodyで範囲を分けてください。`);
           sources.push({ entity, component: c });
         }
       }
@@ -114,7 +114,7 @@ export function setMeshCollision(scene: SceneDocument, entityId: string, action:
           collisionAncestors(scene, candidate.id).some((e) => e.id === source.entity.id) &&
           candidate.components.some((entry) => entry.type === "collider" && entry.enabled && entry.bodyType && entry.bodyType !== "fixed") &&
           !candidate.components.some((entry) => entry.type === "rigid-body" && entry.enabled));
-        if (movingChild) throw new Error(`「${movingChild.name}」の動く衝突判定を物理挙動で分けてから実行してください。`);
+        if (movingChild) throw new Error(`「${movingChild.name}」の可動（dynamic/kinematic）のColliderを別のRigid Bodyに分けてから実行してください。`);
         edit(source.entity.id, (cs) => {
           const previous = cs.find((entry) => entry.type === "rigid-body");
           const body = createRigidBodyComponent(previous?.id ?? createDocumentId("component-rigid-body"), {

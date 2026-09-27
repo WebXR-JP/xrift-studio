@@ -295,7 +295,7 @@ export function XriftJsonEditor({
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 rows={3}
-                placeholder={`どんな${projectLabel}か簡単に説明しましょう`}
+                placeholder={`どんな${projectLabel}か`}
                 className="w-full resize-none rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
               />
             </Field>
@@ -422,7 +422,7 @@ export function XriftJsonEditor({
           <div className="flex items-start gap-2 rounded-lg bg-brand-50 px-3 py-2.5 text-[11px] text-brand-900">
             <Info size={13} className="mt-0.5 shrink-0 text-brand-600" strokeWidth={2} />
             <div>
-              ignoreなどの詳細設定は「JSON」から編集できます。この画面にない設定も、保存時に保持されます。
+              ignoreなどの詳細設定は「JSON」で編集します。この画面にない設定も、保存時に保持されます。
             </div>
           </div>
         </div>

@@ -847,7 +847,7 @@ function convertUnityDocument(
     diagnostics.push({
       severity: "warning",
       code: "unity-collider-approximated",
-      message: `Sphere / Capsule Collider ${approximatedColliderCount}件をBox 衝突判定で近似しました`,
+      message: `Sphere / Capsule Collider ${approximatedColliderCount}件をBox Colliderで近似しました`,
       sourcePath,
     });
   }

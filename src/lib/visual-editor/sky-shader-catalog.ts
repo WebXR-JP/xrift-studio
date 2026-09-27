@@ -1373,7 +1373,7 @@ export const SKY_SHADER_CATALOG: readonly SkyShaderCatalogEntry[] = [
     label: "星雲の宇宙",
     category: "space",
     description:
-      "地平線を持たない宇宙空間です。星雲がゆっくり流れ、星は全天に広がります。屋内や宇宙ステーションのワールドに向きます。",
+      "地平線を持たない宇宙空間です。星雲が流れ、星は全天に広がります。屋内や宇宙ステーションのワールドに向きます。",
     parameters: [
       ...STAR_PARAMETERS,
       {

@@ -323,7 +323,7 @@ export function ClassicExportDialog({
                 <h3 className="text-sm font-semibold text-slate-900">3. 必要なパッケージ</h3>
                 <label className="mt-3 flex items-start gap-3 rounded-xl border border-slate-200 p-4">
                   <input type="checkbox" checked={installDependencies} disabled={!target?.canInstallAutomatically} onChange={(event) => setInstallDependencies(event.target.checked)} className="mt-1" />
-                  <span><span className="flex items-center gap-2 text-sm font-semibold text-slate-900"><PackageCheck size={16} aria-hidden="true" />不足しているパッケージをインストール</span><span className="mt-1 block text-xs leading-5 text-slate-600">{target?.canInstallAutomatically ? "書き出すシーンに必要なパッケージが不足している場合、対応するバージョンをnpmでインストールします。" : target ? `${target.packageManager}のプロジェクトでは、package.jsonへの記録のみ行います。書き出し後に${target.packageManager}でインストールしてください。` : "書き出し先を選ぶと、必要なパッケージを確認できます。"}</span></span>
+                  <span><span className="flex items-center gap-2 text-sm font-semibold text-slate-900"><PackageCheck size={16} aria-hidden="true" />不足しているパッケージをインストール</span><span className="mt-1 block text-xs leading-5 text-slate-600">{target?.canInstallAutomatically ? "書き出すシーンに必要なパッケージが不足している場合、対応するバージョンをnpmでインストールします。" : target ? `${target.packageManager}のプロジェクトでは、package.jsonへの記録のみ行います。書き出し後に${target.packageManager}でインストールしてください。` : "書き出し先ごとに必要なパッケージが変わります。"}</span></span>
                 </label>
               </section>
 

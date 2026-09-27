@@ -439,7 +439,7 @@ export function createClassicProjectVisualImportPreview(input: {
       severity: "warning",
       code: "classic-component-scale-invalid",
       fileName: material.sourceModulePath,
-      message: `${material.componentName}.scaleが0または不正です。Entityと衝突判定が消失しないよう1へ正規化して取り込みます。`,
+      message: `${material.componentName}.scaleが0または不正です。EntityとColliderが消失しないよう1へ正規化して取り込みます。`,
     });
   }
   for (const model of models) {
@@ -719,7 +719,7 @@ function enhanceClassicProjectVisualDiagnostic(
       ...diagnostic,
       code: "classic-dynamic-collider-skipped",
       message:
-        "CuboidCollider.positionは動的計算のため、誤った原点衝突判定を作らずスキップします。",
+        "CuboidCollider.positionは動的計算のため、誤った原点Colliderを作らずスキップします。",
     };
   }
   if (diagnostic.code !== "dynamic-prop-skipped") return diagnostic;

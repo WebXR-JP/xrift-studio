@@ -6,14 +6,14 @@
 
 *左のHierarchyで床を選び、右のBox Colliderが有効で、Rigid Bodyが固定になっていることを確認します。*
 
-## 床の衝突判定を確認する
+## 床のColliderを確認する
 
 1. **Stop**して編集へ戻ります。
 2. Hierarchyで床のEntityを選びます。
 3. InspectorにColliderのComponentがあり、有効になっていることを確認します。
-4. 衝突判定の大きさや形が、歩く場所に合っているか確認します。
+4. Colliderの大きさや形が、歩く場所に合っているか確認します。
 
-ない場合は、**Add Component**から**Box Collider**や**Mesh Collider**など対象に合う衝突判定を追加します。床や壁のように動かさないものは、物理設定も動かないものとして扱います。薄い床や複雑なモデルでは、描画される形と判定の形が同じとは限りません。
+ない場合は、**Add Component**から**Box Collider**や**Mesh Collider**など対象に合うColliderを追加します。床や壁のように動かさないものは、Rigid Bodyもfixed（動かさない設定）として扱います。薄い床や複雑なモデルでは、描画メッシュとColliderの形が同じとは限りません。
 
 ## 開始位置を確認する
 
@@ -29,6 +29,6 @@ Hierarchyで**Spawn Point**など開始位置のEntityを選び、歩ける床�
 
 プレイヤーが仕掛けを押すための**Interactable**は、歩いてぶつかるColliderとは別です。押せない問題をColliderだけで直そうとせず、[仕掛けの設定](./interactivity.md)を確認してください。
 
-## 見た目を変えたら判定も確認する
+## 見た目を変えたらColliderも確認する
 
 モデルを差し替えたり、大きさや親子関係を変えたりした後は、もう一度Playで確認します。見た目が正しくても、通路が通れない・床が抜ける状態が残ることがあります。

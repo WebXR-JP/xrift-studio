@@ -144,7 +144,7 @@ export function useTerrainAuthoring({
         return current;
       }
       markDirty();
-      notify("地形を作成しました。Inspectorで形を調整できます");
+      notify("地形を作成しました");
       return commitEditorHistory(current, {
         ...current.present,
         bundle: touchProject({

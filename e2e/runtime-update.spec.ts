@@ -99,7 +99,7 @@ test("更新コマンドが成功してもCLIが古いままなら成功を通�
   const dialog = updateDialog(page);
   await dialog.getByRole("button", { name: "アップデート", exact: true }).click();
   await expect(page.getByText("アップデートに失敗しました", { exact: true })).toBeVisible();
-  await expect(page.getByText("CLIはv0.24.4です。v0.24.5への更新をもう一度お試しください。", { exact: false })).toBeVisible();
+  await expect(page.getByText("CLIはv0.24.4です。v0.24.5へ更新してください。", { exact: false })).toBeVisible();
   await expect(page.getByText("@xrift/cli をアップデートしました", { exact: true })).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "アップデート", exact: true })).toBeEnabled();
 });

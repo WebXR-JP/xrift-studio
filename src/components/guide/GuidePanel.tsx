@@ -31,7 +31,7 @@ export function GuidePanel({ initialPage, onClose }: GuidePanelProps) {
     if (!load) {setError("このページを読み込めませんでした。");return;}
     void load().then((content) => {
       if(active) setLoaded({slug:page.slug,text:content});
-    }).catch(() => {if(active)setError("本文を読み込めませんでした。もう一度お試しください。");});
+    }).catch(() => {if(active)setError("本文を読み込めませんでした。");});
     return () => {active=false;};
   }, [page.slug, page.file, attempt]);
   useEffect(() => {

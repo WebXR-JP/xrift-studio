@@ -24,7 +24,7 @@
 
 ## Component・Components
 
-Entityに追加する個別の機能がComponent、追加メニューはAdd Componentです。音源、ライト、衝突判定などがあります。
+Entityに追加する個別の機能がComponent、追加メニューはAdd Componentです。音源、ライト、Colliderなどがあります。
 
 ## マテリアル・テクスチャ
 
@@ -36,7 +36,7 @@ Base Colorは色、Metallicは金属かどうか、Roughnessは反射のぼけ�
 
 ## Normal Map
 
-陰影で細かな凹凸を表す画像です。形状の輪郭や衝突判定は変えません。[テクスチャの説明](./textures.md#normal-mapで細かな凹凸を表す)へ進みます。
+陰影で細かな凹凸を表す画像です。形状の輪郭やColliderは変えません。[テクスチャの説明](./textures.md#normal-mapで細かな凹凸を表す)へ進みます。
 
 ## Skybox・IBL
 
@@ -48,7 +48,7 @@ Emissiveは表面自体の明るさ、Bloomは明るい部分をにじませる�
 
 ## Collider・Spawn Point
 
-Colliderは衝突判定、Spawn Pointはプレイヤーの開始位置です。[歩ける床](./collision.md)へ進みます。
+Colliderは衝突や接触を検知する形状、Spawn Pointはプレイヤーの開始位置です。[歩ける床](./collision.md)へ進みます。
 
 ## プレハブ・ノードグラフ
 

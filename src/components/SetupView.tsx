@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   CheckCircle2,
+  Download,
+  Info,
   LifeBuoy,
   Loader2,
-  Sparkles,
 } from "lucide-react";
 import { tauri, type RuntimeStatus } from "../lib/tauri";
 import { BrandMark } from "./Brand";
@@ -59,7 +60,7 @@ export function SetupView({ status, onReady }: Props) {
     try {
       const next = await tauri.setupRuntime();
       if (next.ready) onReady(next);
-      else setError("必要なツールの準備が完了していません。もう一度お試しください。");
+      else setError("必要なツールの準備が完了していません。");
     } catch (e) {
       setError(`${e}`);
     } finally {
@@ -82,7 +83,7 @@ export function SetupView({ status, onReady }: Props) {
         <div className="mb-8 flex flex-col items-center text-center">
           <BrandMark size={72} animate />
           <h1 className="mt-5 text-[28px] font-semibold tracking-tight text-zinc-900">
-            <span className="text-gradient-brand">XRift Studio</span>{!isUpdate && " へようこそ"}
+            <span className="text-gradient-brand">XRift Studio</span>
           </h1>
           <p className="mt-2 text-sm text-zinc-500">
             ワールドやアイテムを作成して、XRiftに公開できます。
@@ -103,7 +104,7 @@ export function SetupView({ status, onReady }: Props) {
                 : "制作に使うツールを準備します。完了するとプロジェクト一覧が開き、新しいワールドやアイテムを作れます。"}
             </p>
             <div className="flex items-center gap-2 text-xs text-zinc-500">
-              <Sparkles size={14} className="text-brand-500" strokeWidth={2} />
+              <Info size={14} className="text-brand-500" strokeWidth={2} />
               <span>必要なツールはアプリが自動でインストールします。</span>
             </div>
 
@@ -191,7 +192,7 @@ export function SetupView({ status, onReady }: Props) {
                 </>
               ) : (
                 <>
-                  <Sparkles size={14} strokeWidth={2.25} />
+                  <Download size={14} strokeWidth={2.25} />
                   {isUpdate
                     ? error ? "更新を再試行" : "制作ツールを更新"
                     : error ? "セットアップを再試行" : "セットアップを開始"}

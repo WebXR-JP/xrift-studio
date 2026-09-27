@@ -15,13 +15,13 @@ export const editorFeatures = [
   {
     icon: Box,
     title: "3Dモデルと質感",
-    text: "モデルを配置し、色やRoughness、透明感を調整。テクスチャやHDRIも追加できます。",
+    text: "モデルを配置し、色やRoughness、透明感を調整します。テクスチャやHDRIも追加します。",
     formats: "GLB / glTF / VRM / 画像 / HDRI",
   },
   {
     icon: Workflow,
     title: "動きと音",
-    text: "スイッチで動くしかけや音を組み込み、Playで確認。BGMや、距離に応じて聞こえ方が変わる音も設定できます。",
+    text: "スイッチで動くしかけや音を組み込み、Playで確認します。BGMや、距離に応じて聞こえ方が変わる音も設定します。",
     formats: "Components / Interactivity / Audio Source",
   },
 ] as const;
@@ -33,7 +33,7 @@ export const faqs = [
   },
   {
     question: "iPadやスマートフォンでも編集できますか？",
-    answer: "ブラウザ版βをインストール不要で試せます。Hierarchy、Assets、Inspectorを切り替えながらタッチで操作できますが、本格的な制作には画面が広く、すべての機能を使えるデスクトップ版をおすすめします。",
+    answer: "ブラウザ版βをインストール不要で試せます。Hierarchy、Assets、Inspectorを切り替えながらタッチで操作します。本格的な制作には画面が広く、すべての機能を使えるデスクトップ版をおすすめします。",
   },
   {
     question: "ブラウザで編集したプロジェクトはどこに保存されますか？",
@@ -49,7 +49,7 @@ export const faqs = [
   },
   {
     question: "コードを書かずに作れますか？",
-    answer: "モデルの配置、質感や照明の調整は画面上で操作できます。動きや音を付けるにはComponentsやInteractivityを使います。デスクトップ版では、コードエディターやAIとの連携も利用できます。",
+    answer: "モデルの配置、質感や照明の調整は画面上で操作します。動きや音を付けるにはComponentsやInteractivityを使います。デスクトップ版では、コードエディターやAIとの連携も利用できます。",
   },
 ] as const;
 

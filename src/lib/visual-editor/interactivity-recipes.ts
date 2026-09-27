@@ -388,7 +388,7 @@ export const INTERACTIVITY_RECIPES: readonly InteractivityRecipe[] = [
   },
   {
     id: "start-fade-color",
-    label: "開始時に色をゆっくり変える",
+    label: "開始時に色を変える",
     description: "開始から基本色を1秒かけて変えます。「かける時間」で速さを変えられます",
     focusOffset: 1,
     build: (graph, origin) => {

@@ -609,7 +609,7 @@ function describeComponentReferences(
   }
 
   if (component.type === "collider" && component.shape === "mesh" && component.collisionModelAssetId === assetId) {
-    return [{ suffix: "collision-model", detail: "当たり判定の軽量メッシュ", detachEffect: "clear-slot",
+    return [{ suffix: "collision-model", detail: "Collider用の軽量Mesh", detachEffect: "clear-slot",
       detach: (current) => {
         if (current.type !== "collider" || current.shape !== "mesh") return current;
         const next = { ...current }; delete next.collisionModelAssetId; return next;

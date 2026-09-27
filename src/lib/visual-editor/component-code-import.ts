@@ -921,7 +921,7 @@ function convertJsxNode(
         severity: "warning",
         code: "rapier-cuboid-collider-dynamic",
         message:
-          "CuboidColliderのargs/positionを静的に確定できないため、誤った衝突判定を作らず構造だけ保持します。",
+          "CuboidColliderのargs/positionを静的に確定できないため、誤ったColliderを作らず構造だけ保持します。",
         line: node.line,
         sourcePath: context.sourcePath,
       });
@@ -1543,7 +1543,7 @@ function convertLocalComponent(
     diagnostics.push({
       severity: "warning",
       code: "local-module-missing",
-      message: `${node.name}のlocal moduleを読み取れないため、Component境界だけを保持します。`,
+      message: `${node.name}のローカルモジュールを読み取れないため、Component境界だけを保持します。`,
       line: node.line,
       sourcePath: context.sourcePath,
     });
@@ -2035,7 +2035,7 @@ function filterXriftProperties(
     diagnostics.push({
       severity: "warning",
       code: "video-screen-src-alias",
-      message: "VideoScreenのsrcを公開型で使用されるurlへ変換しました。",
+      message: "VideoScreenのsrcを公開型のurlプロパティへ変換しました。",
       line: node.line,
     });
   }

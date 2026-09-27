@@ -123,7 +123,7 @@ export function WaterShaderStore({
           result.alreadyInstalled
             ? `「${selected.label}」のマテリアルを今の設定で更新しました。`
             : `「${selected.label}」をマテリアルとして追加しました。`,
-          "板や地形に割り当ててください。波の高さや色はInspectorで調整できます。",
+          "板や地形に割り当ててください。",
         ].join(""),
       );
     } catch (reason) {
@@ -361,7 +361,7 @@ export function WaterShaderStore({
             </div>
 
 
-            <Notice text="板や地形に割り当てて使います。波の高さや色はInspectorで調整できます。" />
+            <Notice text="板や地形に割り当てて使います。" />
             <Notice text={selected.notes} />
             {selected.shader.variants[0]?.defines.WATER_SHORE ? <Notice tone="warning" text="寄せ波は「演出」で岸の位置・方角・幅を調整します。岩や地形には自動で合わせません。" /> : null}
             <Notice text="Gerstner波の基礎部分はMochie's Unity Shaders (MIT, (c) 2020 MochiesCode) を移植しています。" />

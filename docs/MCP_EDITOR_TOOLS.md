@@ -227,13 +227,13 @@ Animation を持つ GLB / VRM の展開ノード）はオブジェクト単体�
 `set_mesh_collision`, `inspect_colliders`, `optimize_colliders`
 
 共有ソースの 3Dモデルノード（`modelNode` 付きオブジェクト）には `add_component` で
-`physics.mesh-collider` / `physics.box-collider` を付けられる。メッシュの衝突判定は
-そのノード自身のジオメトリを焼いた当たりだ。子ノードは各自のオブジェクトで扱う。
-Box は import 時に記録したノード bounds へ自動フィットする。bounds は新規
-import / reimport で付く。旧素材は既定サイズになる。メッシュの衝突判定を
+`physics.mesh-collider` / `physics.box-collider` を付けられる。Mesh Colliderは
+そのノード自身のジオメトリだけを使う。子ノードは各自のオブジェクトで扱う。
+Box Colliderはimport時に記録したノードboundsへ自動フィットする。boundsは新規
+import / reimportで付く。旧素材は既定サイズになる。Mesh Colliderを
 付けられるのはジオメトリを持つノード（nodeType メッシュ / skinned-mesh）だけだ。
-Bone / 空ノードは `DEPENDENCY_MISSING` で断る。pose で非表示にしたノードは
-描画と同時に当たりからも外れる。`get_entity_bounds` は bounds を持つノードを
+Bone / 空ノードは `DEPENDENCY_MISSING` で断る。poseで非表示にしたノードは
+描画と同時にColliderからも外れる。`get_entity_bounds` はboundsを持つノードを
 実測に含める。
 
 **Terrain**
@@ -499,9 +499,9 @@ project ではなく app data へ置く。
 
 Editorの `import_model_asset` と、`importSettings` を省略した `import_texture_asset` は歯車から開く設定パネルの共通設定を使う。未設定時は最大1024px・KTX2。対応する単体画像とモデル内蔵画像を変換してからManifestを採用するため、変換前の画像を先にシーンへ配置しない。元画像と元モデルは保持する。既存素材には遡って適用しない。圧縮に失敗した場合は配置へ進まず、設定を変えて再試行できる。
 
-`set_mesh_collision` はメッシュの描画の追加・解除・シーン全体の置換を一件のrevisionで実行する。`exclusive`はTriggerを含む全衝突判定と自動生成を解除する。`inspect_colliders`の`sources`から設定元のオブジェクト、形状、階層の有効状態を読める。
+`set_mesh_collision` はMeshのColliderの追加・解除・シーン全体の置換を一件のrevisionで実行する。`exclusive`はTriggerを含む全ColliderとAuto Colliderを解除する。`inspect_colliders`の`sources`から設定元のオブジェクト、形状、階層の有効状態を読める。
 
-`bake_mesh_collider` は選んだ3Dモデルノードの当たり判定だけを間引くlocal-asset操作。`entityId`、メッシュの衝突判定の`componentId`、残す割合`ratio`を渡す。結果のポリゴン数を確認し、歩行を検証する。共有3Dモデルと通常の展開ノードに対応し、未展開3Dモデル全体と組み込みプリミティブは対象外。
+`bake_mesh_collider` は選んだ3DモデルノードのCollider用軽量Modelを作るlocal-asset操作。`entityId`、Mesh Colliderの`componentId`、残す割合`ratio`を渡す。結果のポリゴン数を確認し、歩行を検証する。共有3Dモデルと通常の展開ノードに対応し、未展開3Dモデル全体と組み込みプリミティブは対象外。
 
 外部カタログの `list_scene_recipes` は `shelf` に `models`（3Dセット）、`materials`（マテリアル表現のglTF見本）、`gimmicks`（ギミック）を返す。目的に合う分類から選び、既存の配置ツールへ同じrecipe IDを渡す。配置後はInspectorで編集し、ギミックはPlayで動作を確認する。 UIの3Dセット・マテリアル・ギミック一覧は基本4列で、狭い表示領域では3列・2列になる。列数は表示だけの状態なので専用MCP toolは設けない。
 

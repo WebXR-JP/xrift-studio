@@ -49,7 +49,7 @@ test("初回セットアップからプロジェクト一覧へ進める", { tag
   await openReleaseApp(page, "setup");
 
   await expect(
-    page.getByRole("heading", { name: /XRift Studio へようこそ/ }),
+    page.getByRole("heading", { name: "XRift Studio", exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Node.js v24.21.0 LTS", { exact: true })).toBeVisible();
   await expect(page.getByText("インストールするバージョン: v0.24.4", { exact: true })).toBeVisible();
@@ -70,7 +70,8 @@ test("旧CLIは推奨版への更新を示し、利用者の操作後に一度�
   await expect(page.getByRole("heading", { name: "制作ツールの更新が必要です" })).toBeVisible();
   await expect(page.getByText("現在 v0.24.3 → 推奨 v0.24.4", { exact: true })).toBeVisible();
   await expect(page.getByText("Node.js v24.21.0 LTS", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /へようこそ/ })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "XRift Studio", exact: true })).toBeVisible();
+  await expect(page.getByText("ようこそ", { exact: false })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "プロジェクト", exact: true })).toHaveCount(0);
   expect((await releaseE2EState(page))?.calls.filter((call) => call.command === "setup_runtime")).toHaveLength(0);
 
@@ -347,9 +348,7 @@ test("コードエディターのワールドを編集・保存・動作確認�
 
   await page.getByTitle("E2E Classic Worldを開く").click();
   const titleInput = page.getByPlaceholder("ワールドのタイトル");
-  const descriptionInput = page.getByPlaceholder(
-    "どんなワールドか簡単に説明しましょう",
-  );
+  const descriptionInput = page.getByPlaceholder("どんなワールドか");
   await expect(titleInput).toBeVisible();
   await titleInput.fill("Release Ready World");
   await descriptionInput.fill("リリース前E2Eで編集したワールドです");
@@ -477,7 +476,7 @@ test("ビジュアルエディターでテキスト看板を置き、書体と�
   await menu.getByRole("button", { name: "Entityを作成", exact: true }).click();
   await menu.getByRole("button", { name: /^Entity [0-9]+$/ }).click();
   await menu.getByRole("menuitem", { name: /空のEntity/ }).click();
-  await page.getByRole("button", { name: "Componentを追加", exact: true }).click();
+  await page.getByRole("button", { name: "Add Component", exact: true }).click();
   await page.getByPlaceholder("Componentを検索…").fill("Text (Panel)");
   await page.getByRole("button", { name: "Text (Panel)", exact: true }).click();
   await expect(page.getByText("Componentを追加しました")).toBeVisible();
@@ -545,7 +544,7 @@ test("ビジュアルエディターで地形を作成・整形できる", async
       .getByRole("tree", { name: "シーンのEntity階層" })
       .getByText("地形", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("高さマップ・固定コライダー")).toBeVisible();
+  await expect(page.getByText("高さマップ・固定Collider")).toBeVisible();
 
   // The editor opens in the sculpt mode with the raise brush selected, so the
   // toolbar is what tells the author which tool is live.

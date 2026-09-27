@@ -66,7 +66,6 @@ export function WaterShaderCatalogPreview({ shader, wind, className = "h-full w-
           <span className="text-[11px] font-semibold">Water Shaderを表示できません</span>
           <span className="line-clamp-2 text-[10px]">{problem}</span>
           {!diagnostics.length && animated ? <span className="text-[10px]">別のプリセットを選び直してください。</span> : null}
-          {!diagnostics.length && !animated ? <span className="text-[10px]">カードを選ぶと詳細で確認できます。</span> : null}
         </div>
       ) : animated ? (
         <Canvas frameloop={running ? "always" : "demand"} dpr={1}

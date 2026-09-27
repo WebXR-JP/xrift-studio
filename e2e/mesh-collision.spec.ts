@@ -37,7 +37,7 @@ test("メッシュの追加・解除は親の自動生成を分け、全体置�
   expect(result).toEqual({ immutable: true, untouched: true, removed: [0, 1], added: 1, sources: ["b"], rejected: true, shared: [0, 0, 1], descriptor: 0 });
 });
 
-test("Mesh Rendererで当たり判定を追加・解除してUndoで戻せる", async ({ page }) => {
+test("Mesh Rendererで当たり判定を追加・解除してUndoで戻せる", async ({ page }, testInfo) => {
   const errors: string[] = []; page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/e2e.html?scenario=ready");
   await page.getByRole("button", { name: /新規プロジェクト/ }).click();
@@ -46,13 +46,13 @@ test("Mesh Rendererで当たり判定を追加・解除してUndoで戻せる", 
   await page.getByLabel("プロジェクト名").fill("mesh-collision");
   await page.getByRole("button", { name: "作成して開く" }).click();
   await page.getByRole("tree", { name: "シーンのEntity階層" }).getByText("床", { exact: true }).click();
-  await page.getByRole("button", { name: "これだけを歩けるようにする", exact: true }).click();
-  await expect(page.getByText("当たり判定の設定一覧（1）", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "これを外す", exact: true }).click();
-  await expect(page.getByText("当たり判定の設定一覧（0）", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "これだけにする", exact: true }).click();
+  await expect(page.getByText("Colliderの一覧（1）", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "外す", exact: true }).click();
+  await expect(page.getByText("Colliderの一覧（0）", { exact: true })).toBeVisible();
   await page.keyboard.press("Control+z");
-  await expect(page.getByText("当たり判定の設定一覧（1）", { exact: true })).toBeVisible();
-  await page.screenshot({ path: "C:/Users/hagar/.codex/mesh-collision-inspector.png" });
+  await expect(page.getByText("Colliderの一覧（1）", { exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("mesh-collision-inspector.png") });
   expect(errors).toEqual([]);
 });
 

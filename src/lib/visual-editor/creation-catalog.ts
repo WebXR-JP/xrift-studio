@@ -156,7 +156,7 @@ export const BUILTIN_PRIMITIVE_CREATION_CATALOG = [
   createDefinition(
     BUILTIN_PRIMITIVE_CREATION_IDS.glowBulb,
     "光る球",
-    "電球のような点の光。ランプや吊り下げ照明の芯に",
+    "電球のような点の光。ランプや吊り下げ照明の芯に使います",
     "sphere",
     "#ffedd5",
     BUILTIN_ASSET_IDS.material.glow,

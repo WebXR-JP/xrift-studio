@@ -274,7 +274,7 @@ export function CustomMaterialPreview({
       ? resolution.status === "unavailable"
         ? resolution.reason
         : ""
-      : "デスクトップ版でprojectを開くと描画できます";
+      : "デスクトップ版でプロジェクトを開くと描画します";
     return (
       <PreviewMessage className={className}>
         <span className="font-semibold text-slate-700">プレビューできません</span>

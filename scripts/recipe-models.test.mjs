@@ -14,7 +14,16 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const manifest = JSON.parse(read('docs/asset-refresh/manifest.json'));
 const catalog = read('src/lib/visual-editor/builtin-recipe-models.ts');
-const definitions = vm.runInNewContext(catalog.match(/BUILTIN_RECIPE_MODELS[^=]*= (\[[\s\S]*?\n\]);/)[1]);
+const sampleSource = read('src/lib/visual-editor/catalog-sample-models.ts');
+const samples = vm.runInNewContext(sampleSource.match(/CATALOG_SAMPLE_MODELS[^=]*= (\[[\s\S]*?\n\]);/)[1]);
+const sampleModelIds = new Set(samples.map((entry) => entry.modelId));
+const definitions = vm.runInNewContext(
+  catalog.match(/BUILTIN_RECIPE_MODELS[^=]*= (\[[\s\S]*?\n\]);/)[1],
+  { CATALOG_SAMPLE_MODELS: samples },
+);
+// Catalog samples ride along in the catalog for material-showcase recipes; the
+// pinned 32-file manifest only covers the recipe-owned models.
+const recipeDefinitions = definitions.filter((entry) => !sampleModelIds.has(entry.modelId));
 const recipes = read('src/lib/visual-editor/scene-recipe-catalog.ts');
 
 function recipe(name) {
@@ -24,9 +33,9 @@ function recipe(name) {
 
 test('all 32 actual GLBs match pinned metadata and content-derived asset IDs', () => {
   assert.equal(manifest.length, 32);
-  assert.equal(definitions.length, 32);
-  assert.equal(new Set(definitions.map((d) => d.modelId)).size, 32);
-  for (const definition of definitions) {
+  assert.equal(recipeDefinitions.length, 32);
+  assert.equal(new Set(recipeDefinitions.map((d) => d.modelId)).size, 32);
+  for (const definition of recipeDefinitions) {
     const buffer = fs.readFileSync(path.join(root, 'public', definition.publicPath));
     const hash = createHash('sha256').update(buffer).digest('hex');
     assert.equal(hash, definition.sha256, definition.fileName);

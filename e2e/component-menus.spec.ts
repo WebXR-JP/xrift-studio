@@ -127,15 +127,15 @@ test("Inspector adds to the selection; the header creates a new Entity", async (
   const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
   await tree.getByText("床", { exact: true }).click();
   const initialCount = await tree.getByRole("treeitem").count();
-  await page.getByRole("button", { name: "Componentを追加", exact: true }).click();
+  await page.getByRole("button", { name: "Add Component", exact: true }).click();
   const search = page.getByPlaceholder("Componentを検索…");
   await search.fill("Rigid Body");
   await page.getByRole("button", { name: "Rigid Body", exact: true }).click();
   await expect(tree.getByRole("treeitem")).toHaveCount(initialCount);
-  await page.getByRole("button", { name: "Componentを追加", exact: true }).click();
+  await page.getByRole("button", { name: "Add Component", exact: true }).click();
   await search.fill("Rigid Body");
   await expect(page.getByRole("button", { name: /Rigid Body.*追加済み/ })).toBeDisabled();
-  await page.getByRole("button", { name: "Componentを追加", exact: true }).click();
+  await page.getByRole("button", { name: "Add Component", exact: true }).click();
   await page.getByRole("banner").getByRole("button", { name: "素材を追加", exact: true }).click();
   const menu = page.getByRole("menu", { name: "素材を追加", exact: true });
   await menu.getByRole("searchbox").fill("Cube");

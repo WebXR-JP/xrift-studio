@@ -31,7 +31,7 @@ export function OfficialXriftComponentStore({
     ...definitions,
     ...[
       { schemaId: "studio.vehicle", label: "Vehicle", importName: "Vehicle", category: "world", icon: "world" as const, description: "公式Vehicleを使う車の配置サンプル。車体・座席・タイヤ・煙を設定済みのHierarchyで追加します。ギミックのカスタム車からも同じ車を追加できます。W/Sで前後、A/Dで旋回、Spaceで降車します。", templateId: "vehicle" as const },
-      { schemaId: "studio.seat", label: "Seat", importName: "Seat", category: "world", icon: "world" as const, description: "座れる椅子。Playでクリックすると座り、Spaceで立ち上がります。座面の高さはInspectorで調整できます。", templateId: "seat" as const },
+      { schemaId: "studio.seat", label: "Seat", importName: "Seat", category: "world", icon: "world" as const, description: "座れる椅子。Playでクリックすると座り、Spaceで立ち上がります。", templateId: "seat" as const },
     ],
   ], [definitions]);
   const initial =
@@ -184,9 +184,7 @@ export function OfficialXriftComponentStore({
               </dl>}
               {developerOnly ? (
                 <Notice text="DevEnvironmentは開発用です。シーンには配置できません。" />
-              ) : (
-                <Notice text="追加したEntityをInspectorで編集できます。" />
-              )}
+              ) : null}
               {projectKind === "item" && "templateId" in selected ? (
                 <Notice text="アイテムにも追加できます。乗車・着席はプレイヤーが必要なため、配置先のワールドで確認してください。" />
               ) : null}

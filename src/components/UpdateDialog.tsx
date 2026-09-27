@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Sparkles, Download, ArrowRight, X } from "lucide-react";
+import { Download, ArrowRight, X } from "lucide-react";
 
 type Props = {
   open: boolean;
@@ -55,7 +55,7 @@ export function UpdateDialog({
           </button>
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/70 text-brand-700 shadow-sm">
-              <Sparkles size={20} strokeWidth={2} />
+              <Download size={20} strokeWidth={2} />
             </div>
             <div>
               <h2 id="cli-update-title" className="text-lg font-semibold tracking-tight text-zinc-900">

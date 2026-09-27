@@ -149,12 +149,12 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
           <details className="rounded-lg border border-zinc-200 px-3">
           <summary className="flex min-h-11 cursor-pointer items-center font-medium text-zinc-700">パソコンへ引き継ぐには</summary>
           <ol className="list-decimal space-y-2 pb-3 pl-5">
-            <li>「ダウンロード」を押します。保存先はSafariのダウンロード一覧で確認できます。</li>
+            <li>「ダウンロード」を押します。保存先はSafariのダウンロード一覧で確認してください。</li>
             <li>iCloud DriveなどでMacまたはWindowsへ渡します。</li>
             <li>パソコン版のプロジェクト一覧で「ファイルから取り込む」を選びます。アイテムやスクリプトを含むワールドはパソコン版から公開します。</li>
           </ol>
           </details>
-          {downloadStarted ? <p role="status">ダウンロードを開始しました。Safariのダウンロード一覧で確認できます。</p> : null}
+          {downloadStarted ? <p role="status">ダウンロードを開始しました。</p> : null}
         </div>
       ) : null}
       {state?.phase === "failed" ? <p role="alert" className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{state.message}</p> : null}

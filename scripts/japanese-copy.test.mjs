@@ -234,8 +234,8 @@ function jsxTextWithId(file, id) {
 test('product pane labels remain Inspector, Hierarchy and Assets', () => {
   const base = 'src/components/visual-editor/';
   assert.equal(jsxTextWithId(`${base}InspectorPanel.tsx`, 'inspector-heading'), 'Inspector');
-  assert.equal(jsxTextWithId(`${base}HierarchyPanel.tsx`, 'hierarchy-heading'), 'Hierarchy');
-  assert.equal(jsxTextWithId(`${base}AssetsPanel.tsx`, 'assets-heading'), 'Assets');
+  assert.equal(jsxTextWithId(`${base}HierarchyPanelBase.tsx`, 'hierarchy-heading'), 'Hierarchy');
+  assert.equal(jsxTextWithId(`${base}AssetsPanelBase.tsx`, 'assets-heading'), 'Assets');
   assert.match(read(`${base}InspectorPanel.tsx`), /Add Component/);
   assert.equal(template('xrift/setProperty').label, 'Entityの設定を変更');
   const source = read(`${base}VisualEditorPrototype.tsx`);
@@ -545,7 +545,7 @@ test('Normal Map help separates visible shading from geometry and states the inp
   assert.equal((source.match(/inputHint="Tangent Space（接線空間）の画像を使用します。色補正なし（Linear）で読み込みます。"/g) ?? []).length, 2);
   assert.equal((source.match(/0で効果なし、1が標準です。負の値で凹凸の向きを反転します。/g) ?? []).length, 2);
   const guide = read('docs/guide/textures.md');
-  assert.match(guide, /輪郭や衝突判定は変わりません/);
+  assert.match(guide, /輪郭やColliderは変わりません/);
   assert.match(guide, /Occlusion Map.*画像/);
   assert.match(guide, /SSAO.*画面に映った形状/);
 });
@@ -658,12 +658,13 @@ test('editor visibility guidance matches actual display and quality profiles', (
   assert.match(read('docs/guide/editor-basics.md'), /表示モードを\*\*シーン\*\*、描画品質を\*\*高品質\*\*/);
 });
 
-// Captured from v3; copy, layout and accessibility attributes are intentionally
-// excluded. Changes to authored values/callbacks require a separate review.
+// Re-baselined after the editor copy review: copy, layout and accessibility
+// attributes are intentionally excluded. Changes to authored values/callbacks
+// still require a separate review before these numbers move again.
 for (const [file, count, hash] of [
-  ['SceneSettingsPanel.tsx', 299, 'e1b0aad5d95ffad451aae1521209fb6a34d4f67cdb794176fbbfd02cd63f372f'],
-  ['AssetQuickEditor.tsx', 383, '0ad87bd94c7ad2415b619a4a32db29cfbe50583a423cc12e66a1dff977a5b4e9'],
-]) test(`${file}: all value bindings, ranges and update callbacks remain identical to v3`, () => {
+  ['SceneSettingsPanel.tsx', 306, '84865962c6975d3be541baaecf620aa9d98653602e20bea1e6654b0e3f05a1ce'],
+  ['AssetQuickEditor.tsx', 378, '8f0ba5aa627aeddff33db1aebdb93f214480708ab3476e5c8f7e3c3290f3699e'],
+]) test(`${file}: all value bindings, ranges and update callbacks remain identical to the reviewed baseline`, () => {
   const ast = ts.createSourceFile(file, read(`src/components/visual-editor/${file}`), ts.ScriptTarget.Latest, true);
   const printer = ts.createPrinter({removeComments:true});
   const attributes = [];

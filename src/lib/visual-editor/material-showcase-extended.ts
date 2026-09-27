@@ -1,7 +1,7 @@
 import type { MaterialShowcaseDefinition } from "./material-showcase-catalog";
 /** Authored comparisons. Not color-only variants: each has a surface/parameter lesson. */
 export type ExtendedMaterialShowcase = MaterialShowcaseDefinition & {
- sampleModel: string; group: string; description: string; note: string;
+ sampleModel: string; group: string; description: string; note?: string;
  labels: readonly [string, string]; tags: readonly string[];
 };
 export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = [
@@ -35,7 +35,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-shaderball",
     "group": "Clearcoat",
     "description": "織り模様の上に、鋭いコーティングの反射を重ねます。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Clearcoat 1",
       "Clearcoat 0"
@@ -75,7 +74,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-vase",
     "group": "Clearcoat",
     "description": "木目とNormal Mapを残したまま、ニスの光沢を比較します。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Clearcoat 1",
       "Clearcoat 0"
@@ -115,7 +113,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-vase",
     "group": "Clearcoat",
     "description": "タイル模様の陶器に、滑らかな釉薬の層を重ねます。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Clearcoat 1",
       "Clearcoat 0"
@@ -155,7 +152,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-knob",
     "group": "Clearcoat",
     "description": "粗いコーティングで、広く柔らかいハイライトを作ります。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Clearcoat 1",
       "Clearcoat 0"
@@ -194,7 +190,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-vase",
     "group": "Transmission",
     "description": "Roughnessと細かな凹凸で、透けた背景をぼかします。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Transmission 1",
       "Transmission 0"
@@ -234,7 +229,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-bottle",
     "group": "Transmission",
     "description": "Normal Mapの筋が、透けた背景と反射を歪めます。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Transmission 1",
       "Transmission 0"
@@ -274,7 +268,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-vase",
     "group": "Transmission",
     "description": "槌目のNormal Mapを使った、凹凸のある透過表現です。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Transmission 1",
       "Transmission 0"
@@ -308,7 +301,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-tile",
     "group": "Transmission",
     "description": "AlphaではなくTransmissionで、背景を透かす板を作ります。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Transmission 1",
       "Transmission 0"
@@ -357,7 +349,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-bottle",
     "group": "Volume",
     "description": "厚みを通過する光に色が付きます。基本色を同じにして、吸収の有無を比べます。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Volume ON",
       "Volume OFF"
@@ -406,7 +397,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-vase",
     "group": "Volume",
     "description": "厚みを通過する光に色が付きます。基本色を同じにして、吸収の有無を比べます。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Volume ON",
       "Volume OFF"
@@ -455,7 +445,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-shaderball",
     "group": "Volume",
     "description": "厚みを通過する光に色が付きます。基本色を同じにして、吸収の有無を比べます。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Volume ON",
       "Volume OFF"
@@ -516,7 +505,7 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-gem",
     "group": "Dispersion",
     "description": "カットされた面を通した背景で、色の分かれ方を比較します。",
-    "note": "TransmissionとVolumeを保った比較です。分散は屈折した背景に現れます。プレビューは実際のMeshPhysicalMaterialを使います。",
+    "note": "TransmissionとVolumeを保った比較です。分散は屈折した背景に現れます。",
     "labels": [
       "Dispersion 0.6",
       "Dispersion 0"
@@ -577,7 +566,7 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-gem",
     "group": "Dispersion",
     "description": "カットされた面を通した背景で、色の分かれ方を比較します。",
-    "note": "TransmissionとVolumeを保った比較です。分散は屈折した背景に現れます。プレビューは実際のMeshPhysicalMaterialを使います。",
+    "note": "TransmissionとVolumeを保った比較です。分散は屈折した背景に現れます。",
     "labels": [
       "Dispersion 1.1",
       "Dispersion 0"
@@ -751,7 +740,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-drape",
     "group": "Sheen",
     "description": "折り目と織り目に当たる光で、布の縁の柔らかい光沢を比べます。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Sheen ON",
       "Sheen OFF"
@@ -797,7 +785,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-drape",
     "group": "Sheen",
     "description": "折り目と織り目に当たる光で、布の縁の柔らかい光沢を比べます。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Sheen ON",
       "Sheen OFF"
@@ -843,7 +830,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-drape",
     "group": "Sheen",
     "description": "折り目と織り目に当たる光で、布の縁の柔らかい光沢を比べます。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Sheen ON",
       "Sheen OFF"
@@ -884,7 +870,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-knob",
     "group": "Anisotropy",
     "description": "UVの方向に沿って伸びる反射を、等方的な反射と比べます。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Anisotropy .85",
       "Anisotropy 0"
@@ -925,7 +910,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-knob",
     "group": "Anisotropy",
     "description": "UVの方向に沿って伸びる反射を、等方的な反射と比べます。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Anisotropy .85",
       "Anisotropy 0"
@@ -1195,7 +1179,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-vase",
     "group": "テクスチャ / PBR",
     "description": "画像・凹凸・粗さ・金属度を役割別に設定する、テクスチャ付きの比較見本です。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Normal Map ON",
       "Normal Map OFF"
@@ -1235,7 +1218,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-shaderball",
     "group": "テクスチャ / PBR",
     "description": "画像・凹凸・粗さ・金属度を役割別に設定する、テクスチャ付きの比較見本です。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Normal Map ON",
       "Normal Map OFF"
@@ -1275,7 +1257,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-tile",
     "group": "テクスチャ / PBR",
     "description": "画像・凹凸・粗さ・金属度を役割別に設定する、テクスチャ付きの比較見本です。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Normal Map ON",
       "Normal Map OFF"
@@ -1315,7 +1296,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-tile",
     "group": "テクスチャ / PBR",
     "description": "画像・凹凸・粗さ・金属度を役割別に設定する、テクスチャ付きの比較見本です。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Normal Map ON",
       "Normal Map OFF"
@@ -1356,7 +1336,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-drape",
     "group": "テクスチャ / PBR",
     "description": "画像・凹凸・粗さ・金属度を役割別に設定する、テクスチャ付きの比較見本です。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Normal Map ON",
       "Normal Map OFF"
@@ -1396,7 +1375,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-tile",
     "group": "テクスチャ / PBR",
     "description": "画像・凹凸・粗さ・金属度を役割別に設定する、テクスチャ付きの比較見本です。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Normal Map ON",
       "Normal Map OFF"
@@ -1436,7 +1414,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-knob",
     "group": "テクスチャ / PBR",
     "description": "画像・凹凸・粗さ・金属度を役割別に設定する、テクスチャ付きの比較見本です。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "ORM Map ON",
       "ORM Map OFF"
@@ -1485,7 +1462,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-tile",
     "group": "テクスチャ / PBR",
     "description": "画像・凹凸・粗さ・金属度を役割別に設定する、テクスチャ付きの比較見本です。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "UV 3 × 3",
       "UV 1 × 1"
@@ -1526,7 +1502,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-tile",
     "group": "テクスチャ / PBR",
     "description": "画像・凹凸・粗さ・金属度を役割別に設定する、テクスチャ付きの比較見本です。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Alpha MASK",
       "Alpha OPAQUE"
@@ -1561,7 +1536,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-tile",
     "group": "Unlit",
     "description": "同じテクスチャで、照明を受ける表示と受けない表示を比べます。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Unlit",
       "Lit"
@@ -1606,7 +1580,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-drape",
     "group": "Specular",
     "description": "レザーの凹凸を残し、非金属の反射を抑えた表面と比べます。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "Specular .18",
       "Specular 1"
@@ -1662,7 +1635,6 @@ export const EXTENDED_MATERIAL_SHOWCASES: readonly ExtendedMaterialShowcase[] = 
     "sampleModel": "catalog-vase",
     "group": "IOR",
     "description": "同じ器の形状で、屈折率を1.33と1.5にした違いを比べます。",
-    "note": "左右で同じ形状と照明を使っています。配置後はMaterialを選び、Inspectorで値とテクスチャを編集できます。",
     "labels": [
       "IOR 1.33",
       "IOR 1.5"

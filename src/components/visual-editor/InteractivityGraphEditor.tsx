@@ -2264,7 +2264,7 @@ function InteractivityGraphEditorBody({
                       値
                     </p>
                     <p className="mt-1 text-[10px] leading-4 text-slate-400">
-                      未接続の入力には、ここで設定した値を使います。
+                      未接続の入力には、設定した値を使います。
                     </p>
                   </div>
                   {literalValues.map((entry) => (

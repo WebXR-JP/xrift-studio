@@ -181,12 +181,12 @@ export function planScriptEmission(
                   : "script-import-unsupported",
           message:
             entry.reason === "remote"
-              ? `${entry.specifier} はネットワークからのmoduleです。公開ワールドへは出力できません。`
+              ? `${entry.specifier} はネットワークから読み込むモジュールです。公開ワールドへは出力できません。`
               : entry.reason === "dynamic"
-                ? "動的 import(...) は動作確認と公開で使用できません。許可されたmoduleを静的importしてください。"
+                ? "動的インポート（import(...)）は動作確認と公開で使用できません。許可されたモジュールを静的にインポートしてください。"
                 : entry.reason === "frame-hook"
                   ? "useFrameなどR3F frame callback APIはスクリプト単位で例外を隔離できません。defineScript(...).start()が返すupdate(delta)を使用し、@react-three/fiberはnamed importしてください。"
-                  : `${entry.specifier} は公開ワールドで解決できないmoduleです。`,
+                  : `${entry.specifier} は公開ワールドで解決できないモジュールです。`,
           assetId,
         });
       }

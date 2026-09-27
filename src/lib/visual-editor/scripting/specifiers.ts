@@ -167,11 +167,11 @@ export function describeScriptSpecifierRejection(
   reason: ScriptSpecifierRejection,
 ): string {
   if (reason === "remote-not-allowed") {
-    return `${specifier} はネットワークからのmoduleです。プロジェクト設定でリモートimportを許可すると動作確認で使えます。公開はできません。`;
+    return `${specifier} はネットワークから読み込むモジュールです。プロジェクト設定でリモートインポートを許可すると動作確認で使えます。公開はできません。`;
   }
   if (reason === "relative-not-supported") {
-    return `${specifier} は他のfileへの参照です。スクリプト間のimportにはまだ対応していません。`;
+    return `${specifier} は他のファイルへの参照です。スクリプト間のインポートにはまだ対応していません。`;
   }
-  return `${specifier} は使用できないmoduleです。使えるのは ${SCRIPT_MODULE_SPECIFIERS.join(", ")} です。`;
+  return `${specifier} は使用できないモジュールです。使えるのは ${SCRIPT_MODULE_SPECIFIERS.join(", ")} です。`;
 }
 import { stripCommentsAndStrings } from "./script-contract";

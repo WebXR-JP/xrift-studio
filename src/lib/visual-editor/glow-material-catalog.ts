@@ -25,13 +25,13 @@ export const GLOW_MATERIAL_PRESETS: readonly GlowMaterialPreset[] = [
   {
     id: "warm-white",
     label: "ウォームホワイト",
-    description: "室内灯のような暖かい白。天井や壁面の間接照明に",
+    description: "室内灯のような暖かい白。天井や壁面の間接照明に使います",
     tint: "#ffedd5",
   },
   {
     id: "cool-white",
     label: "クールホワイト",
-    description: "白色灯のような青みのある白。作業空間や通路に",
+    description: "白色灯のような青みのある白。作業空間や通路に使います",
     tint: "#e0f2fe",
   },
   {
@@ -43,7 +43,7 @@ export const GLOW_MATERIAL_PRESETS: readonly GlowMaterialPreset[] = [
   {
     id: "signal-magenta",
     label: "マゼンタ",
-    description: "演出向けの暖色寄りのピンク。舞台や看板に",
+    description: "演出向けの暖色寄りのピンク。舞台や看板に使います",
     tint: "#f0abfc",
   },
 ];
@@ -75,7 +75,7 @@ export const GLOW_FIXTURE_SHAPES: readonly GlowFixtureShape[] = [
   {
     id: "cube",
     label: "キューブ",
-    description: "どこにでも置ける基本の発光体。手軽な間接照明として",
+    description: "天井や壁に置く間接照明用の発光体",
     creationId: BUILTIN_PRIMITIVE_CREATION_IDS.glowCube,
     preview: "box",
     previewScale: [1, 1, 1],
@@ -84,7 +84,7 @@ export const GLOW_FIXTURE_SHAPES: readonly GlowFixtureShape[] = [
   {
     id: "panel",
     label: "パネル",
-    description: "面で照らす板状の光。天井や壁に埋め込む面光源として",
+    description: "面で照らす板状の光。天井や壁に埋め込む面光源に使います",
     creationId: BUILTIN_PRIMITIVE_CREATION_IDS.glowPanel,
     preview: "plane",
     previewScale: [1.8, 1, 1],
@@ -93,7 +93,7 @@ export const GLOW_FIXTURE_SHAPES: readonly GlowFixtureShape[] = [
   {
     id: "tube",
     label: "チューブ",
-    description: "細長い蛍光灯のような光。通路や什器の縁に沿わせて",
+    description: "細長い蛍光灯のような光。通路や什器の縁に付けます",
     creationId: BUILTIN_PRIMITIVE_CREATION_IDS.glowTube,
     preview: "cylinder",
     previewScale: [0.09, 2.2, 0.09],
@@ -102,7 +102,7 @@ export const GLOW_FIXTURE_SHAPES: readonly GlowFixtureShape[] = [
   {
     id: "bulb",
     label: "球",
-    description: "電球のような点の光。ランプや吊り下げ照明の芯に",
+    description: "電球のような点の光。ランプや吊り下げ照明の芯に使います",
     creationId: BUILTIN_PRIMITIVE_CREATION_IDS.glowBulb,
     preview: "sphere",
     previewScale: [0.5, 0.5, 0.5],

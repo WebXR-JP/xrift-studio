@@ -142,7 +142,7 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
         setToken("");
         setCredentialMessage("保存済みキーを確認しました。次回の公開時はブラウザからキーを選べます。");
       } else {
-        setCredentialMessage("保存を確認できませんでした。ブラウザの保存確認とキー選択を完了したか確かめてください。ここから再試行できます。");
+        setCredentialMessage("保存を確認できませんでした。ブラウザの保存確認とキー選択を完了したか確かめてください。ここから再試行してください。");
       }
     } catch (error) {
       if (error instanceof Error && (error.name === "NotSupportedError" || error.name === "SecurityError")) {

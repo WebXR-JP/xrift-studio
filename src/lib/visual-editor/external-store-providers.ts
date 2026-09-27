@@ -93,7 +93,7 @@ export const EXTERNAL_STORE_PROVIDERS = [
     installableKinds: [],
     authorFallback: "XRift Studio contributors",
     attributionNote:
-      "背景の色や動きを描くマテリアルです。追加後もInspectorで調整できます。",
+      "背景の色や動きを描くマテリアルです。",
   },
   {
     id: "xrift-water-shaders",
@@ -121,7 +121,7 @@ export const EXTERNAL_STORE_PROVIDERS = [
     installableKinds: [],
     authorFallback: "XRift Studio contributors",
     attributionNote:
-      "追加後も地形ブラシで形を変えられます。草の量はInspectorで調整できます。",
+      "追加後も地形ブラシで形を変えられます。",
   },
   {
     id: "xrift-glow-materials",
@@ -149,7 +149,7 @@ export const EXTERNAL_STORE_PROVIDERS = [
     installableKinds: [],
     authorFallback: "XRift Studio contributors",
     attributionNote:
-      "放出量、寿命、色、テクスチャは、追加後もInspectorで調整できます。",
+      "放出量、寿命、色、テクスチャの設定を含みます。",
   },
   {
     id: "xrift-scene-recipes",

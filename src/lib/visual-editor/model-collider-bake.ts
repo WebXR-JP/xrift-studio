@@ -19,14 +19,14 @@ import {
 } from "./texture-processing";
 
 /**
- * 当たり判定だけを軽量化して、見た目から切り離す。
+ * Mesh Colliderだけを軽量化して、描画Meshから切り離す。
  *
- * 当たり判定に見た目の細かさは要らない。海岸の地面は78,166三角形あるが、
- * 歩くだけならその1割で足りる。見た目のMeshを削ると質感まで落ちるので、
- * 削るのは当たり側だけにして、重いMeshをそのまま使えるようにする。
+ * Colliderに描画の細かさは要らない。海岸の地面は78,166三角形あるが、
+ * 歩行面ならその1割で足りる。描画Meshを削ると質感まで落ちるので、
+ * 削るのはCollider側だけにして、重いMeshをそのまま使えるようにする。
  *
- * 焼き出すのは位置と索引だけのGLB一枚で、Material・Texture・Animation・
- * 法線・UVは持たない。当たり判定はどれも使わないし、持たないぶん小さい。
+ * 作成するのは位置と索引だけのGLB一枚で、Material・Texture・Animation・
+ * 法線・UVは持たない。Colliderはどれも使わないし、持たないぶん小さい。
  */
 
 export type ColliderBakeResult =
@@ -42,7 +42,7 @@ export type ColliderBakeResult =
 export const COLLIDER_BAKE_RATIOS = [0.5, 0.25, 0.1, 0.05] as const;
 
 /**
- * Model一つのNode一つから、軽量な当たり判定用Modelを作ってManifestへ足す。
+ * Model一つのNode一つから、Collider用の軽量Modelを作ってManifestへ足す。
  * 元のModelには触らない。
  */
 export async function bakeNodeColliderModel(
@@ -68,7 +68,7 @@ export async function bakeNodeColliderModel(
   if (source.source.kind !== "project") {
     return {
       ok: false,
-      message: "プロジェクト内に保存された3Dモデルだけ当たり判定を焼き出せます。",
+      message: "Collider用の軽量Modelはプロジェクト内に保存された3Dモデルが対象です。",
     };
   }
 
@@ -90,11 +90,11 @@ export async function bakeNodeColliderModel(
     if (!mesh) {
       return {
         ok: false,
-        message: "選んだNodeにメッシュがないため、当たり判定を作れません。",
+        message: "選んだNodeにMeshがないため、軽量Modelを作成できません。",
       };
     }
 
-    // 位置と索引だけを写す。当たり判定はMaterialも法線もUVも見ない。
+    // 位置と索引だけを写す。ColliderはMaterialも法線もUVも見ない。
     const baked = new core.Document();
     const buffer = baked.createBuffer();
     const bakedMesh = baked.createMesh("collision");
@@ -137,7 +137,7 @@ export async function bakeNodeColliderModel(
     if (bakedMesh.listPrimitives().length === 0) {
       return {
         ok: false,
-        message: "選んだNodeから当たり判定に使える面が取れませんでした。",
+        message: "選んだNodeから軽量Modelに使える面が取れませんでした。",
       };
     }
     baked
@@ -170,7 +170,7 @@ export async function bakeNodeColliderModel(
     const bounds = boundsOfDocument(baked);
     const asset: ModelAsset = {
       id: assetId,
-      name: `${input.nodeName} の当たり判定`,
+      name: `${input.nodeName} のCollider用Model`,
       kind: "model",
       status: "ready",
       folderId: source.folderId ?? null,
@@ -219,7 +219,7 @@ export async function bakeNodeColliderModel(
   } catch (error) {
     return {
       ok: false,
-      message: `当たり判定を焼き出せませんでした。${describeAssetImportFailure(error)}`,
+      message: `軽量Modelを作成できませんでした。${describeAssetImportFailure(error)}`,
     };
   }
 }

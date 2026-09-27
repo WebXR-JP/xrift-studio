@@ -4,7 +4,7 @@ import type { SceneRecipe, SceneRecipePart, SceneRecipeAction, SceneRecipeBehavi
 import type { Vec3 } from './scene-document';
 
 const recipes:SceneRecipe[]=[];
-const note='操作はPlayで確認してください。各パーツ・音源・Interactivityグラフは追加後に編集できます。衝突判定やネットワーク同期は含みません。必要な対象へ別途設定してください。';
+const note='操作はPlayで確認してください。各パーツ・音源・Interactivityグラフは追加後に編集できます。Colliderやネットワーク同期は含みません。必要な対象へ別途設定してください。';
 function add(key:string,name:string,group:string,description:string,parts:SceneRecipePart[],behaviours:SceneRecipeBehaviour[],customNote=note) {
  recipes.push({id:`scene-recipe.${key}`,name,group,description,category:'tutorial',projectKinds:['world', 'item'],tags:[group,...new Set(behaviours.flatMap(b=>b.actions.map(a=>a.targetKind)))],
  note:customNote,parts:[box('展示ベース',[0,0.015,0.25],[2.3,0.03,2],M.charcoal),...parts],behaviours,
@@ -36,7 +36,7 @@ one('split-gate','左右に開くゲート','扉・動き','左右のパネル�
 one('display-turntable','一周する展示ターンテーブル','扉・動き','展示用の花器を4秒で一周させ、向きをリセットします。',
  [model('回転台','catalog-pedestal',[0,.02,0],M.slate),fixture('展示花器',mat('clearcoat-ceramic'))],
  [w('展示花器','transform','rotation',[0,360,0],{duration:4}),w('展示花器','transform','rotation',[0,0,0],{after:'done'})],'一周見る');
-one('display-lift','上下する展示リフト','扉・動き','台座と宝石を一緒に持ち上げ、ゆっくり元の高さへ戻します。',
+one('display-lift','上下する展示リフト','扉・動き','台座と宝石を一緒に持ち上げ、1.4秒かけて元の高さへ戻します。',
  [model('昇降台','catalog-pedestal',[0,.04,0],M.slate),model('宝石','catalog-gem',[0,.18,0],mat('crystal'))],
  [w('昇降台','transform','position',[0,.55,0],{duration:1.4}),w('宝石','transform','position',[0,.69,0],{duration:1.4}),w('昇降台','transform','position',[0,.04,0],{duration:1.4,after:'done',delay:1}),w('宝石','transform','position',[0,.18,0],{duration:1.4})],'持ち上げる');
 one('pullout-tray','手前に引き出すトレイ','扉・動き','トレイを手前へ引き出してから収納します。位置補間の見本です。',
@@ -67,10 +67,10 @@ add('lamp-dimmer','3段階の調光パネル','照明・発光','弱・中・強
 add('lamp-temperature','暖色・寒色の照明','照明・発光','暖かい色と冷たい色で、同じ花器の見え方を比べます。',
  [fixture('白い花器',M.white),light('照明',[0,.8,.65]),...button('暖色','暖色',-.45),...button('寒色','寒色',.45)],
  [behaviour('暖色','暖かい照明',[w('照明','light','color','#ffb46b',{duration:.6})]),behaviour('寒色','冷たい照明',[w('照明','light','color','#80bfff',{duration:.6})])]);
-one('timed-lamp','ゆっくり消えるタイマー灯','照明・発光','灯りを明るくし、2秒待ってからゆっくり暗くします。',
+one('timed-lamp','消えるタイマー灯','照明・発光','灯りを明るくし、2秒待ってから2秒かけて暗くします。',
  [fixture('照明カバー',mat('clear-glass')),light('タイマー灯',[0,.55,0],'#ffd9a0',.2)],
  [w('タイマー灯','light','intensity',7,{duration:.35}),w('タイマー灯','light','intensity',.2,{duration:2,after:'done',delay:2})],'灯りをつける');
-one('neon-pulse','Emissiveのパルス','照明・発光','ネオンの発光強度を上げ、ゆっくり元へ戻します。Lightは変更しません。',
+one('neon-pulse','Emissiveのパルス','照明・発光','ネオンの発光強度を上げ、1.6秒かけて元へ戻します。Lightは変更しません。',
  [model('ネオン','catalog-arch',[0,.15,0],mat('neon-tube'))],
  [w('ネオン','material','emissiveIntensity',14,{duration:.4}),w('ネオン','material','emissiveIntensity',1,{duration:1.6,after:'done'})],'発光する');
 one('warning-beacon','3回点灯する警告灯','照明・発光','短い間隔でLightを3回点灯し、最後に消灯します。',
@@ -121,15 +121,15 @@ one('countdown-sign','3・2・1のカウントダウン','案内・テキスト'
  [text('カウント','READY',[0,.8,0],.25),sound('開始音','pressChime',false)],
  [w('カウント','text','text','3'),w('カウント','text','text','2',{delay:1}),w('カウント','text','text','1',{delay:1}),w('カウント','text','text','GO!',{delay:1}),w('開始音','audio-source','playback','play'),w('カウント','text','text','READY',{delay:2})],'カウント開始');
 add('bilingual-guide','日本語・英語の案内切替','案内・テキスト','同じTextの案内文を、日本語と英語で切り替えます。',
- [text('案内板','ようこそ。ご自由にご覧ください。',[0,.8,0],.11),...button('日本語','日本語',-.45),...button('English','English',.45)],
- [behaviour('日本語','日本語で案内',[w('案内板','text','text','ようこそ。ご自由にご覧ください。')]),behaviour('English','英語で案内',[w('案内板','text','text','Welcome. Please enjoy the exhibition.')])]);
+ [text('案内板','展示をご覧ください',[0,.8,0],.11),...button('日本語','日本語',-.45),...button('English','English',.45)],
+ [behaviour('日本語','日本語で案内',[w('案内板','text','text','展示をご覧ください')]),behaviour('English','英語で案内',[w('案内板','text','text','Please enjoy the exhibition.')])]);
 one('temporary-caption','数秒だけ出る説明文','案内・テキスト','ボタンを押すと詳しい説明を表示し、4秒後に短い案内へ戻します。',
  [fixture('作品',mat('clearcoat-ceramic')),text('キャプション','ボタンで作品の説明を表示',[0,1.27,0],.08)],
  [w('キャプション','text','text','釉薬のある陶器。反射と表面の凹凸をご覧ください。'),w('キャプション','text','text','ボタンで作品の説明を表示',{delay:4})],'説明を見る');
 // 5 combinations with coordinated targets and an explicit final resting state.
 one('welcome-sequence','光・文字・音のウェルカム','組み合わせ','歓迎の文字、ライト、チャイムを同時に出し、数秒後に元へ戻します。',
  [text('メッセージ','WELCOME',[0,1.05,0],.15),light('歓迎ライト',[0,.6,.25],'#80bfff',1),sound('歓迎音','pressChime',false),model('ゲート','catalog-arch',[0,.1,0],mat('neon-tube'))],
- [w('メッセージ','text','text','ようこそ！'),w('歓迎ライト','light','intensity',8,{duration:.6}),w('歓迎音','audio-source','playback','play'),w('メッセージ','text','text','WELCOME',{delay:3}),w('歓迎ライト','light','intensity',1,{duration:.6})],'歓迎する');
+ [w('メッセージ','text','text','ようこそ'),w('歓迎ライト','light','intensity',8,{duration:.6}),w('歓迎音','audio-source','playback','play'),w('メッセージ','text','text','WELCOME',{delay:3}),w('歓迎ライト','light','intensity',1,{duration:.6})],'歓迎する');
 one('treasure-reward','宝石と紙吹雪のごほうび','組み合わせ','隠れた宝石を表示し、紙吹雪と音を出した後、元の状態へ戻します。',
  [model('台座','catalog-pedestal',[0,.1,0],M.slate),{...model('ごほうび','catalog-gem',[0,.24,0],mat('dispersion-cut')),startsDisabled:true},particle('紙吹雪','confetti'),sound('達成音','pressChime',false)],
  [w('ごほうび','entity','enabled',true),w('紙吹雪','particle','emissionRate',100),w('達成音','audio-source','playback','play'),w('紙吹雪','particle','emissionRate',0,{delay:.7}),w('ごほうび','entity','enabled',false,{delay:3})],'ごほうび');

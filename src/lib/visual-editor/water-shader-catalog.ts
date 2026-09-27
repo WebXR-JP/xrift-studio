@@ -103,7 +103,7 @@ const FEATURE_PARAMETERS: Record<Feature, readonly WaterShaderParameter[]> = {
   IRIDESCENT: [number("uIridescence", "偏光の色変化", "見る角度によって虹色を混ぜます。薄膜干渉の物理シミュレーションではありません。", "演出", 0, 1, 0.02)],
   GRID: [number("uGridScale", "発光グリッドの密度", "波の形で歪む光の格子です。遠くでは模様を薄くしてちらつきを抑えます。", "演出", 0.05, 2, 0.05)],
   RAIN: [number("uRainStrength", "雨の波紋", "時間差で広がる円形の波紋です。品質0では省略します。雨粒自体は生成しません。", "演出", 0, 3, 0.05)],
-  ICE: [number("uIceCoverage", "氷の覆う割合", "流氷風の平面的な模様です。氷の立体メッシュや衝突判定は作りません。", "演出", 0, 1, 0.02)],
+  ICE: [number("uIceCoverage", "氷の覆う割合", "流氷風の平面的な模様です。氷の立体メッシュやColliderは作りません。", "演出", 0, 1, 0.02)],
 };
 
 const BASE_VALUES: Record<string, number | string> = {
@@ -193,7 +193,7 @@ export const WATER_SHADER_CATALOG: readonly WaterShaderCatalogEntry[] = [
     values: { uWaveScale: 1.5, uWaveHeight: 0.68, uWaveLayers: 4, uWaveSpeed: 0.36,
       uFoamAmount: 0.61, uStreakStrength: 2.1, uDetailStrength: 1.35, uDeepColor: "#123e55" } }),
   preset({ id: "tropical-lagoon", label: "南国の浅い入り江", category: "tropical", cost: "medium", effects: ["CAUSTICS"],
-    description: "南国の浅いラグーン。小さな波と青緑の透明感、水面をゆっくり流れる集光模様を組み合わせます。",
+    description: "南国の浅いラグーン。小さな波と青緑の透明感、水面に流れる集光模様を組み合わせます。",
     features: ["青緑の浅瀬", "疑似コースティクス", "小さな波"],
     values: { uDeepColor: "#08717e", uShallowColor: "#63d9c5", uWaveHeight: 0.2, uWaveScale: 2.4,
       uWaveLayers: 2, uWaveSpeed: 0.17, uDetailStrength: 0.55, uDetailScale: 0.9,
@@ -267,7 +267,7 @@ export const WATER_SHADER_CATALOG: readonly WaterShaderCatalogEntry[] = [
       uZenithColor: "#7c898a", uHorizonColor: "#e5dfc8", uWaveHeight: 0.74, uWaveScale: 1.3,
       uDetailStrength: 0.55, uFoamAmount: 0.35, uPigmentStrength: 0.7, uGlintStrength: 0.15 } }),
   preset({ id: "aurora-tide", label: "オーロラ色の海", category: "fantasy", cost: "high", effects: ["GLOW", "IRIDESCENT"],
-    description: "緑から紫へ色が移る幻想的な海。角度による偏光色と発光する波頭を組み合わせます。空のオーロラを実際に反射するものではありません。",
+    description: "緑から紫へ色が移る海。角度による偏光色と発光する波頭を組み合わせます。空のオーロラを実際に反射するものではありません。",
     features: ["角度で変わる色", "発光する波頭", "光る微粒子"],
     values: { uDeepColor: "#11132b", uShallowColor: "#235952", uZenithColor: "#1b1c4a", uHorizonColor: "#7b79a0",
       uWaveHeight: 0.7, uWaveScale: 0.65, uFoamAmount: 0.51, uGlowColor: "#74f0b4", uGlowStrength: 2.3,

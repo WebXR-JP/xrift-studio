@@ -192,7 +192,7 @@ export function ModelAssetInspector({
           <span>
             読み込み時の倍率
             <span className="mt-0.5 block text-[11px] text-slate-500">
-              表示と当たり判定に反映します
+              表示とColliderに反映します
             </span>
           </span>
           <ScrubNumberInput
@@ -209,8 +209,8 @@ export function ModelAssetInspector({
           />
         </label>
         <RecipeToggle
-          label="配置時にメッシュ衝突判定を追加"
-          description="オフで再インポートすると、シーンとプレハブのメッシュ当たり判定を外します"
+          label="配置時にMesh Colliderを追加"
+          description="オフで再インポートすると、シーンとプレハブのMesh Colliderを外します"
           checked={asset.importSettings.generateColliders}
           disabled={readOnly}
           onChange={(generateColliders) =>
@@ -504,7 +504,7 @@ function ModelOptimizationPanel({
       />
       <RecipeToggle
         label="重複メッシュをインスタンス化"
-        description="近くの同じ不透明な部品をまとめて描画します。当たり判定は維持します。動く部品や、動作を設定したシーンは対象外です。"
+        description="近くの同じ不透明な部品をまとめて描画します。Colliderは維持します。動く部品や、動作を設定したシーンは対象外です。"
         checked={asset.importSettings.instanceMeshes === true}
         disabled={readOnly || busy || !canInstanceModel(asset)}
         status={canInstanceModel(asset) ? "実験的" : "静的なGLBのみ対応"}

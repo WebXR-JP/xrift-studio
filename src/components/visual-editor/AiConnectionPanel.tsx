@@ -40,11 +40,11 @@ export function AiConnectionPanel({
         <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
           <p className="font-semibold text-slate-800">デスクトップ版で利用できます</p>
           <p className="mt-1">
-            ブラウザ表示ではAIクライアントの検出や登録は実行しません。
+            ブラウザ表示ではAIクライアントの検出や登録は実行しません。モデルのダウンロードやAIクライアントの起動は行いません。
           </p>
         </div>
         <p>
-          CodexなどのAIクライアントにXRift StudioのMCPを登録すると、開いているシーンを会話から読み取り・編集できます。AIによる変更も自動保存され、「元に戻す」で取り消せます。
+          デスクトップ版では、CodexなどのAIクライアントから開いているシーンを読み取り・編集します。変更は自動保存され、「元に戻す」で取り消せます。
         </p>
       </div>
     );
@@ -75,7 +75,7 @@ export function AiConnectionPanel({
   return (
     <div className="scrollbar-thin max-h-[min(32rem,calc(100vh-10rem))] space-y-3 overflow-y-auto p-3.5 text-xs text-slate-600">
       <p className="rounded-md border border-violet-100 bg-violet-50/70 p-3 leading-5 text-slate-700">
-        CodexなどのAIクライアントをXRift StudioのMCPに接続できます。開いているシーンを会話から読み取り・編集し、変更は自動保存され、「元に戻す」で取り消せます。
+        CodexなどのAIクライアントをMCPに接続し、開いているシーンを会話から読み取り・編集します。変更は自動保存され、「元に戻す」で取り消せます。
       </p>
       <div className="flex items-start justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
         <div>

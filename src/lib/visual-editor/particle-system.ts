@@ -139,7 +139,7 @@ export const PARTICLE_AUTHORING_PRESETS = [
   {
     id: "smoke",
     name: "煙",
-    description: "ゆっくり広がって薄くなる煙",
+    description: "広がって薄くなる煙",
     category: "fire",
     properties: {
       maxParticles: 180,
@@ -175,7 +175,7 @@ export const PARTICLE_AUTHORING_PRESETS = [
   {
     id: "magic",
     name: "魔法",
-    description: "青紫にきらめく浮遊光",
+    description: "青紫の浮遊光",
     category: "effect",
     properties: {
       maxParticles: 280,
@@ -211,7 +211,7 @@ export const PARTICLE_AUTHORING_PRESETS = [
   {
     id: "snow",
     name: "雪",
-    description: "広い範囲へ静かに降る雪",
+    description: "広い範囲へ降る雪",
     category: "weather",
     properties: {
       maxParticles: 720,
@@ -427,7 +427,7 @@ export const PARTICLE_AUTHORING_PRESETS = [
   {
     id: "sakura",
     name: "桜",
-    description: "風に流されながら舞い落ちる花びら",
+    description: "風に流れて落ちる花びら",
     category: "weather",
     properties: {
       maxParticles: 420,
@@ -463,7 +463,7 @@ export const PARTICLE_AUTHORING_PRESETS = [
   {
     id: "firefly",
     name: "蛍",
-    description: "ゆっくり漂って明滅する小さな光",
+    description: "漂って明滅する小さな光",
     category: "nature",
     properties: {
       maxParticles: 90,

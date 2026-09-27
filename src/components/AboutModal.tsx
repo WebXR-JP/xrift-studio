@@ -130,10 +130,10 @@ export function AboutModal({
         kind: "error",
         title: "リセットまたは再起動に失敗しました",
         description:
-          "実行中のターミナルやエディターを閉じて、もう一度お試しください。",
+          "実行中のターミナルやエディターを閉じてください。",
       });
       setResetError(
-        `実行中のターミナルやエディターを閉じて、もう一度お試しください。\n\n詳細: ${String(e)}`,
+        `実行中のターミナルやエディターを閉じてください。\n\n詳細: ${String(e)}`,
       );
       setResetting(false);
     }

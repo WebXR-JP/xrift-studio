@@ -34,9 +34,9 @@
 
 ## Components：Entityに機能を足す
 
-ライト、音源、衝突判定などをEntityに付けるための機能です。個別の機能をComponentと呼び、Inspectorの「Componentを追加」から選びます。
+ライト、音源、ColliderなどをEntityに付けるための機能です。個別の機能をComponentと呼び、Inspectorの「Add Component」から選びます。
 
-最初からすべて覚える必要はありません。歩ける床を作るなら[衝突判定](./collision.md)、音を出すなら[音源](./audio.md)を使います。
+最初からすべて覚える必要はありません。歩ける床を作るなら[Collider](./collision.md)、音を出すなら[音源](./audio.md)を使います。
 
 ## パネルが見つからなくなったら
 
@@ -61,4 +61,3 @@
 ## 配置・設定・受け渡しを分ける
 
 「素材を追加」は新しく置くものを名前や用途で検索する入口です。今あるEntityへのComponent追加はInspectorで行います。Scene / Hierarchyの右クリックは同じ編集操作を使います。選択範囲を渡す場合は「選択範囲を書き出す」、受け取る場合は「素材を追加 → .xriftstudioから追加」です。プロジェクト全体を開く操作とは分かれています。
-

@@ -71,7 +71,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
   {
     id: BUILTIN_PREFAB_RECIPE_IDS.spawnPoint,
     name: "SpawnPoint",
-    description: "プレイヤーがワールドへ入る位置と向きを配置します。",
+    description: "プレイヤーがワールドへ入る位置と向きを決めます。",
     projectKinds: WORLD_ONLY,
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.spawnPoint,
     componentProperties: {
@@ -89,7 +89,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
   {
     id: BUILTIN_PREFAB_RECIPE_IDS.mirror,
     name: "Mirror",
-    description: "XRiftのリアルタイム反射面を配置します。",
+    description: "XRiftのリアルタイム反射面です。",
     projectKinds: ALL_PROJECTS,
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.mirror,
     componentProperties: {
@@ -111,7 +111,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
   {
     id: BUILTIN_PREFAB_RECIPE_IDS.entryLogBoard,
     name: "EntryLogBoard",
-    description: "入退室履歴を同期表示する公式XRiftボードを配置します。",
+    description: "入退室履歴を同期表示する公式XRiftボードです。",
     projectKinds: ALL_PROJECTS,
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.entryLogBoard,
     componentProperties: {
@@ -138,7 +138,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     ],
     configuration: {
       requiredBeforeCompile: false,
-      hint: "設定で履歴件数、文言、配色を変更できます。",
+      hint: "Inspectorで履歴件数、文言、配色を変更できます。",
     },
     defaultTransform: {
       position: [0, 1.5, -3],
@@ -150,7 +150,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
   {
     id: BUILTIN_PREFAB_RECIPE_IDS.portal,
     name: "Portal",
-    description: "別のXRiftインスタンスへ移動するゲートを配置します。",
+    description: "別のXRiftインスタンスへ移動するゲートです。",
     projectKinds: ALL_PROJECTS,
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.portal,
     componentProperties: {
@@ -161,7 +161,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     editablePropertyNames: ["instanceId", "disabled"],
     configuration: {
       requiredBeforeCompile: true,
-      hint: "配置後に設定で移動先のInstance IDを設定してください。",
+      hint: "配置後、Inspectorで移動先のInstance IDを指定してください。",
     },
     defaultTransform: {
       position: [0, 0, -3],
@@ -173,7 +173,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
   {
     id: BUILTIN_PREFAB_RECIPE_IDS.tagBoard,
     name: "TagBoard",
-    description: "ユーザーがタグを選択できるボードを配置します。",
+    description: "参加者がタグを選べるボードです。",
     projectKinds: ALL_PROJECTS,
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.tagBoard,
     componentProperties: {
@@ -189,7 +189,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     ],
     configuration: {
       requiredBeforeCompile: false,
-      hint: "標準タグをそのまま使うか、設定で内容を変更できます。",
+      hint: "標準タグをそのまま使うか、Inspectorで内容を変更できます。",
     },
     defaultTransform: {
       position: [0, 0, -3],
@@ -201,7 +201,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
   {
     id: BUILTIN_PREFAB_RECIPE_IDS.videoScreen,
     name: "VideoScreen",
-    description: "同期再生に対応する動画スクリーンを配置します。",
+    description: "同期再生に対応する動画スクリーンです。",
     projectKinds: ALL_PROJECTS,
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.videoScreen,
     componentProperties: {
@@ -220,7 +220,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     ],
     configuration: {
       requiredBeforeCompile: false,
-      hint: "設定で動画URLと同期方法を設定できます。",
+      hint: "Inspectorで動画URLと同期方法を設定します。",
     },
     defaultTransform: {
       position: [0, 2, -4],
@@ -232,7 +232,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
   {
     id: BUILTIN_PREFAB_RECIPE_IDS.videoPlayer,
     name: "VideoPlayer",
-    description: "操作UI付きの録画動画プレイヤーを配置します。",
+    description: "操作UI付きの録画動画プレイヤーです。",
     projectKinds: ALL_PROJECTS,
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.videoPlayer,
     componentProperties: {
@@ -243,7 +243,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     editablePropertyNames: ["id", "url", "playing", "volume"],
     configuration: {
       requiredBeforeCompile: false,
-      hint: "設定または実行中の操作UIから動画URLを設定できます。",
+      hint: "Inspectorまたは実行中の操作UIから動画URLを設定します。",
     },
     defaultTransform: {
       position: [0, 2, -4],
@@ -255,7 +255,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
   {
     id: BUILTIN_PREFAB_RECIPE_IDS.liveVideoPlayer,
     name: "LiveVideoPlayer",
-    description: "ライブストリーム向けの動画プレイヤーを配置します。",
+    description: "ライブストリーム向けの動画プレイヤーです。",
     projectKinds: ALL_PROJECTS,
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.liveVideoPlayer,
     componentProperties: {
@@ -266,7 +266,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     editablePropertyNames: ["id", "url", "playing", "volume", "sync"],
     configuration: {
       requiredBeforeCompile: false,
-      hint: "設定または実行中の操作UIから配信URLを設定できます。",
+      hint: "Inspectorまたは実行中の操作UIから配信URLを設定します。",
     },
     defaultTransform: {
       position: [0, 2, -4],
@@ -278,7 +278,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
   {
     id: BUILTIN_PREFAB_RECIPE_IDS.screenShareDisplay,
     name: "ScreenShareDisplay",
-    description: "画面共有の映像を表示するスクリーンを配置します。",
+    description: "画面共有の映像を表示するスクリーンです。",
     projectKinds: ALL_PROJECTS,
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.screenShareDisplay,
     componentProperties: {
@@ -289,7 +289,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     editablePropertyNames: ["id", "targetFps"],
     configuration: {
       requiredBeforeCompile: false,
-      hint: "設定で識別IDと更新フレームレートを設定できます。",
+      hint: "Inspectorで識別IDと更新フレームレートを設定します。",
     },
     defaultTransform: {
       position: [0, 2, -4],

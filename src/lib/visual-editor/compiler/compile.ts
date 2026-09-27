@@ -954,7 +954,7 @@ function validateCompilerDocuments(
       diagnostics.push({
         severity: "warning",
         code: "non-entry-scene-not-compiled",
-        message: "現在の compiler は entry scene のみを XRift 元データに変換します",
+        message: "現在のコンパイラーは入口のシーンだけをXRift元データへ変換します",
         sceneId,
       });
     }
@@ -2572,7 +2572,7 @@ function renderOwnedRigidBody(
         entity,
         component.id,
         "rigid-body-shape-missing",
-        "物理挙動の範囲に描画メッシュまたは衝突判定がありません",
+        "Rigid Bodyの範囲に描画メッシュまたはColliderがありません",
       ),
       sceneId: context.scene.sceneId,
     });
@@ -2621,7 +2621,7 @@ function renderOwnedColliderContent(
           entity,
           collider.id,
           "owned-collider-invalid-or-duplicate",
-          "親物理挙動へ含められない衝突判定設定です",
+          "親のRigid Bodyへ含められないCollider設定です",
         ),
         sceneId: context.scene.sceneId,
       });
@@ -2644,7 +2644,7 @@ function renderOwnedColliderContent(
       addDiagnostic(context, {
         severity: "warning",
         code: "mesh-collider-without-local-mesh",
-        message: "メッシュ衝突判定のEntityに有効なMesh Rendererがありません",
+        message: "Mesh ColliderのEntityに有効なMesh Rendererがありません",
         sceneId: context.scene.sceneId,
         entityId: entity.id,
         componentId: meshCollider.id,
@@ -2665,7 +2665,7 @@ function renderOwnedColliderContent(
         severity: "warning",
         code: "dynamic-trimesh-collider-converted-to-hull",
         message:
-          "Dynamic/KinematicのTrimesh 衝突判定はRapier互換のConvex Hullとして出力します",
+          "Dynamic/KinematicのTrimesh ColliderはRapier互換のConvex Hullとして出力します",
         sceneId: context.scene.sceneId,
         entityId: entity.id,
         componentId: meshCollider.id,
@@ -2684,7 +2684,7 @@ function renderOwnedColliderContent(
         severity: "warning",
         code: "dynamic-auto-trimesh-converted-to-hull",
         message:
-          "Dynamic/Kinematicの自動TrimeshはRapier互換のConvex Hullとして出力します",
+          "Dynamic/KinematicのAuto TrimeshはRapier互換のConvex Hullとして出力します",
         sceneId: context.scene.sceneId,
         entityId: entity.id,
       });
@@ -2731,8 +2731,8 @@ function renderModelNodeColliderGeometry(
 ): string | null {
   const modelNode = colliderModelNode(entity);
   if (!modelNode) return null;
-  // 当たり判定だけ差し替えてあるなら、そちらのModelを使う。焼き出したModelは
-  // Nodeが1つだけなので、選ぶのは常に先頭。見た目のMeshには触らない。
+  // Collider用の軽量Modelで差し替えてあるなら、そちらのModelを使う。軽量化したModelは
+  // Nodeが1つだけなので、選ぶのは常に先頭。描画Meshには触らない。
   const collision = collider.collisionModelAssetId
     ? context.assets.assets[collider.collisionModelAssetId]
     : undefined;
@@ -2747,7 +2747,7 @@ function renderModelNodeColliderGeometry(
       severity: "warning",
       code: "model-node-collider-source-unsupported",
       message:
-        "メッシュ衝突判定の3Dモデル Nodeが参照する3Dモデル元データを公開物へ含められません",
+        "Mesh Colliderの3Dモデル Nodeが参照する3Dモデル元データを公開物へ含められません",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: collider.id,
@@ -2849,7 +2849,7 @@ function renderColliderBody(
           entity,
           collider.id,
           "collider-surface-invalid",
-          "衝突判定のfrictionは0以上、restitutionは0から1で指定してください",
+          "Colliderのfrictionは0以上、restitutionは0から1で指定してください",
         ),
         sceneId: context.scene.sceneId,
         fieldPath: "friction/restitution",
@@ -2866,7 +2866,7 @@ function renderColliderBody(
             entity,
             collider.id,
             "box-collider-bounds-invalid",
-            "Box 衝突判定のCenterとHalf Extentsが不正です",
+            "Box ColliderのCenterとHalf Extentsが不正です",
           ),
           sceneId: context.scene.sceneId,
           fieldPath: "center/halfExtents",
@@ -2891,7 +2891,7 @@ function renderColliderBody(
       addDiagnostic(context, {
         severity: "warning",
         code: "mesh-collider-without-local-mesh",
-        message: "メッシュ衝突判定のEntityに有効なMesh Rendererがありません",
+        message: "Mesh ColliderのEntityに有効なMesh Rendererがありません",
         sceneId: context.scene.sceneId,
         entityId: entity.id,
         componentId: meshCollider.id,
@@ -2913,7 +2913,7 @@ function renderColliderBody(
       severity: "warning",
       code: "dynamic-trimesh-collider-converted-to-hull",
       message:
-        "Dynamic/KinematicのTrimesh 衝突判定はRapier互換のConvex Hullとして出力します",
+        "Dynamic/KinematicのTrimesh ColliderはRapier互換のConvex Hullとして出力します",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: meshCollider.id,

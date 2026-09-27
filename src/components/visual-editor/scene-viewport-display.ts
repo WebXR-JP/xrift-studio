@@ -42,8 +42,8 @@ export const SCENE_VIEWPORT_DISPLAY_OPTIONS: readonly {
   },
   {
     value: "colliders",
-    label: "コライダー編集",
-    description: "直方体とメッシュの衝突判定を確認しやすく表示します。",
+    label: "Collider編集",
+    description: "Box ColliderとMesh Colliderを確認しやすく表示します。",
   },
 ] as const;
 

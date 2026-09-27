@@ -52,7 +52,7 @@ const GUIDANCE: Record<string, WorldComponentGuidance> = {
     purpose: "入室して目的の場所へ向かう",
     selection: "訪問者が最初に見るものと、受付・客席への移動を設計する。既存スポーンを確認してから配置する。",
     placement: ["安全な床面へ置き、主な体験や案内へ向ける。スクリーン・鏡・受付の利用場所や待機列の中へ出現させない。"],
-    verification: ["スポーンの目の高さで撮影し、進む方向が分かるか、床と衝突判定が移動を支えるか動作確認で確認する。"],
+    verification: ["スポーンの目の高さで撮影し、進む方向が分かるか、床とColliderが移動を支えるか動作確認で確認する。"],
   },
   [XRIFT_COMPONENT_SCHEMA_IDS.entryLogBoard]: {
     purpose: "イベント会場で入退室の履歴を確認する",

@@ -3684,7 +3684,7 @@ export function VisualEditorPrototype({
             const entity = sourceBundle.scene.entities[entityId];
             const node = entity && colliderModelNode(entity);
             const collider = entity?.components.find((c) => c.id === componentId && c.type === "collider");
-            if (!node || collider?.type !== "collider" || collider.shape !== "mesh" || typeof args.ratio !== "number") throw new XriftMcpEditorToolError("INVALID_ARGUMENT", "3Dモデルのメッシュノードとメッシュ衝突判定、残す割合を指定してください");
+            if (!node || collider?.type !== "collider" || collider.shape !== "mesh" || typeof args.ratio !== "number") throw new XriftMcpEditorToolError("INVALID_ARGUMENT", "3DモデルのMeshノードとMesh Collider、残す割合を指定してください");
             if (assetOperationRef.current || importRunningRef.current) throw new XriftMcpEditorToolError("EDITOR_BUSY", "素材の処理が終わってから再実行してください");
             const token = Symbol("mcp-collider-bake");
             assetOperationRef.current = { kind: "model-reimport", token };
@@ -6494,7 +6494,7 @@ export function VisualEditorPrototype({
         }
         setSaveStatus("dirty");
         setNotice(
-          `${definition.label}をシーンに追加しました。Inspectorで調整できます。`,
+          `${definition.label}をシーンに追加しました`,
         );
         return commitEditorHistory(current, {
           ...current.present,
@@ -7008,8 +7008,8 @@ export function VisualEditorPrototype({
       });
       setNotice(
         editorMode === "play"
-          ? "衝突判定設定を保存し、このEntityの動作確認を先頭から再実行しました"
-          : "衝突判定設定をシーンへ反映しました",
+          ? "Collider設定を保存し、このEntityの動作確認を先頭から再実行しました"
+          : "Collider設定をシーンへ反映しました",
       );
     },
     [editorMode, playSession, updateScene],
@@ -7053,7 +7053,7 @@ export function VisualEditorPrototype({
       setHistory((current) => {
         if (current.present.bundle.assets !== startingAssets) {
           setNotice(
-            "処理中に素材が変更されたため、追加を取り消しました。もう一度お試しください",
+            "処理中に素材が変更されたため、追加を取り消しました",
           );
           return current;
         }
@@ -7162,7 +7162,7 @@ export function VisualEditorPrototype({
         setSaveStatus("dirty");
         setNotice(
           applyToSky
-            ? `「${entry.label}」をSkybox Shaderに設定しました。色や動きはInspectorで調整できます`
+            ? `「${entry.label}」をSkybox Shaderに設定しました`
             : `「${entry.label}」をマテリアルとしてAssetsに追加しました`,
         );
         const nextBundle = touchProject({
@@ -7715,7 +7715,7 @@ export function VisualEditorPrototype({
         // the author look at it — the same rule Terrain and the glow shelf use.
         setExternalStoreOpen(false);
         setNotice(
-          `「${name}」をシーンへ配置しました。放出量や色はInspectorで調整できます`,
+          `「${name}」をシーンへ配置しました`,
         );
       } else {
         setNotice(`「${name}」をAssetsに追加しました`);
@@ -7763,7 +7763,7 @@ export function VisualEditorPrototype({
         setAssetSelection(null);
         if (!recipe.lesson) setExternalStoreOpen(false);
         const entityName = result.scene.entities[result.rootEntityId]?.name ?? recipe.name;
-        setNotice(`「${entityName}」を追加しました。Hierarchyで各パーツを編集し、Playで動作を確認できます`);
+        setNotice(`「${entityName}」を追加しました。Hierarchyで各パーツを編集して、Playで確かめてください`);
         return { entityName, createdAssetCount: Object.keys(result.assets.assets).filter(id => !source.assets.assets[id]).length };
       } finally {
         importRunningRef.current = false;
@@ -7778,12 +7778,12 @@ export function VisualEditorPrototype({
       if (editorMode !== "edit" && !playSession) return;
       const optimized = optimizeColliderConfiguration(bundle.scene, { entityIds });
       if (optimized.changes.length === 0) {
-        setNotice("衝突判定の設定に自動修正できる問題はありません");
+        setNotice("Colliderの設定に自動修正できる問題はありません");
         return;
       }
       updateScene(() => optimized.scene);
       setNotice(
-        `${optimized.changes.length}件の衝突判定の設定を最適化しました`,
+        `${optimized.changes.length}件のCollider設定を最適化しました`,
       );
     },
     [bundle.scene, editorMode, playSession, updateScene],
@@ -8650,10 +8650,10 @@ export function VisualEditorPrototype({
   );
 
   /*
-   * 当たり判定だけを軽量化する。
+   * Colliderだけを軽量化する。
    *
-   * 見た目のMeshは触らない。地面のように重いまま見せたいものほど、当たりは
-   * 荒くて構わない。焼き出した軽量Modelを別Assetにして、Mesh Colliderから
+   * 描画Meshは触らない。地面のように重いまま見せたいものほど、Colliderは
+   * 荒くて構わない。作成した軽量Modelを別Assetにして、Mesh Colliderから
    * そこを指す。元に戻すのは参照を外すだけで済む。
    */
   const handleBakeNodeCollider = useCallback(
@@ -8672,11 +8672,11 @@ export function VisualEditorPrototype({
         },
       );
       if (!availability.allowed) {
-        setNotice(availability.disabledReason ?? "いまは当たり判定を作れません");
+        setNotice(availability.disabledReason ?? "いまはColliderを作れません");
         return;
       }
       if (!projectPath) {
-        setNotice("プロジェクトの保存後に当たり判定を作成できます");
+        setNotice("プロジェクトの保存後にColliderを作成できます");
         return;
       }
       const entity = bundleRef.current.scene.entities[entityId];
@@ -8686,13 +8686,13 @@ export function VisualEditorPrototype({
           component.type === "collider" && component.id === componentId,
       );
       if (!entity || !modelNode || collider?.shape !== "mesh") {
-        setNotice("当たり判定を作るメッシュ衝突判定が見つかりませんでした");
+        setNotice("Colliderを作るMesh Colliderが見つかりませんでした");
         return;
       }
       const startingModel = bundleRef.current.assets.assets[modelNode.modelAssetId];
       const token = Symbol("collider-bake");
       assetOperationRef.current = { kind: "model-reimport", token };
-      setNotice(`「${entity.name}」の当たり判定を作成しています`);
+      setNotice(`「${entity.name}」のColliderを作成しています`);
       try {
         const result = await bakeNodeColliderModel(
           projectPath,
@@ -8733,7 +8733,7 @@ export function VisualEditorPrototype({
           });
         });
         setNotice(
-          `「${entity.name}」の当たり判定を ${result.triangles.before.toLocaleString()} → ${result.triangles.after.toLocaleString()} ポリゴンで作成しました。見た目はそのままです`,
+          `「${entity.name}」のColliderを ${result.triangles.before.toLocaleString()} → ${result.triangles.after.toLocaleString()} ポリゴンで作成しました。見た目はそのままです`,
         );
       } finally {
         if (assetOperationRef.current?.token === token) {
@@ -8754,7 +8754,7 @@ export function VisualEditorPrototype({
           componentId,
         ),
       );
-      setNotice("当たり判定を見た目のジオメトリへ戻しました");
+      setNotice("Colliderを元のMeshに戻しました");
     },
     [updateScene],
   );
@@ -9091,7 +9091,7 @@ export function VisualEditorPrototype({
           },
         };
       });
-      setNotice("Rigid Bodyを削除しました。子孫の衝突判定は保持されています");
+      setNotice("Rigid Bodyを削除しました。子孫のColliderは保持されています");
     },
     [editorMode, playSession, updateScene],
   );
@@ -9498,7 +9498,7 @@ export function VisualEditorPrototype({
         onThumbnailChanged?.();
         setSceneSettingsOpen(true);
         setNotice(
-          `「${asset.name}」をサムネイルに設定しました。シーン設定で現在の画像を確認できます`,
+          `「${asset.name}」をサムネイルに設定しました。シーン設定に現在の画像が出ます`,
         );
       } catch (error) {
         setNotice(`サムネイルを設定できませんでした: ${error}`);
@@ -10883,7 +10883,7 @@ export function VisualEditorPrototype({
       if (onSaveRef.current && !(await runSave())) return;
       await onProjectExport(bundleRef.current);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "プロジェクトを書き出せませんでした。もう一度お試しください。");
+      setNotice(error instanceof Error ? error.message : "プロジェクトを書き出せませんでした。");
     } finally {
       projectExportLock.current = false;
       setProjectExportBusy(false);
@@ -10900,7 +10900,7 @@ export function VisualEditorPrototype({
       if (onSaveRef.current && !(await runSave())) return;
       await onProjectImport();
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "プロジェクトを開けませんでした。もう一度お試しください。");
+      setNotice(error instanceof Error ? error.message : "プロジェクトを開けませんでした。");
     } finally {
       projectExportLock.current = false;
       setProjectExportBusy(false);
@@ -12046,7 +12046,7 @@ export function VisualEditorPrototype({
               try {
                 const next = setMeshCollision(bundleRef.current.scene, entityId, action);
                 updateScene(() => next);
-                setNotice(action === "exclusive" ? "選んだメッシュだけを当たり判定にしました。「元に戻す」で取り消せます" : action === "remove" ? "このメッシュの当たり判定を外しました" : "固定の当たり判定に追加しました");
+                setNotice(action === "exclusive" ? "選んだMeshだけをColliderにしました。「元に戻す」で取り消せます" : action === "remove" ? "このMeshのColliderを外しました" : "固定のColliderに追加しました");
               } catch (error) { setNotice(error instanceof Error ? error.message : String(error)); }
             }}
             onInspectCollisionEntity={(entityId) => setSceneSelection({ kind: "entity", id: entityId })}

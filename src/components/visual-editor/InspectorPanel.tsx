@@ -1568,7 +1568,7 @@ function TerrainInspector({
         : TERRAIN_SCULPT_BRUSHES;
 
   return (
-    <ComponentCard title="Terrain" subtitle="高さマップ・固定コライダー">
+    <ComponentCard title="Terrain" subtitle="高さマップ・固定Collider">
       <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 text-xs">
         <dt className="text-slate-500">大きさ</dt>
         <dd className="text-right font-medium text-slate-700">
@@ -1976,7 +1976,7 @@ function TerrainSurfaceSection({
             </dl>
           ) : null}
           <p className="text-[10px] leading-4 text-slate-500">
-            境界を地形の高さに合わせます。適用後はInspectorで調整できます。
+            境界を地形の高さに合わせます。
           </p>
         </div>
       ) : null}
@@ -2784,7 +2784,7 @@ function ModelNodeDecimatePanel({
                   onClick={() => setPendingRatio(null)}
                   className="h-8 rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
-                  やめる
+                  取り消す
                 </button>
               </div>
             </div>
@@ -2837,11 +2837,11 @@ function ModelNodeDecimatePanel({
 }
 
 /**
- * 当たり判定だけを軽量化する。
+ * Colliderだけを軽量化する。
  *
- * 見た目を削ると質感まで落ちる。歩ければいい面は当たりだけ荒くすればよく、
- * 重いMeshをそのまま見せられる。焼き出した先は普通のModel Assetなので、
- * 参照を外せば元の見た目のジオメトリへ戻る。
+ * 描画Meshを削ると質感まで落ちる。歩行面など細部が要らない箇所はCollider側
+ * だけ荒くすればよく、重いMeshをそのまま見せられる。作成した軽量Modelは普通の
+ * Model Assetなので、参照を外せば元の描画Meshのジオメトリへ戻る。
  */
 function ModelNodeColliderBakePanel({
   entityId,
@@ -2868,15 +2868,15 @@ function ModelNodeColliderBakePanel({
   const bakedTriangles =
     baked?.kind === "model" ? baked.importMetadata?.primitiveCount : undefined;
   return (
-    <ComponentCard title="当たり判定だけ軽量化">
+    <ComponentCard title="Colliderの軽量化">
       <p className="text-xs leading-5 text-slate-600">
-        歩ければ十分な面は、当たり判定だけ粗くできます。「{nodeName}
-        」の見た目は変わりません。
+        歩行面など細部が要らない箇所はCollider用の軽量Modelに置き換えます。「{nodeName}
+        」の描画Meshは変わりません。
       </p>
       {baked?.kind === "model" ? (
         <div className="space-y-1.5 rounded border border-emerald-200 bg-emerald-50 p-2">
           <p className="text-xs leading-5 text-emerald-900">
-            いまの当たり判定: {baked.name}
+            現在の軽量Model: {baked.name}
             {bakedTriangles !== undefined ? `（${bakedTriangles} primitive）` : ""}
           </p>
           <button
@@ -2885,7 +2885,7 @@ function ModelNodeColliderBakePanel({
             onClick={() => onClear?.(entityId, collider.id)}
             className="h-8 w-full rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-45"
           >
-            見た目のジオメトリへ戻す
+            元のMeshに戻す
           </button>
         </div>
       ) : null}
@@ -2912,8 +2912,8 @@ function ModelNodeColliderBakePanel({
       {pendingRatio !== null ? (
         <div className="space-y-1.5 rounded border border-teal-200 bg-teal-50 p-2">
           <p className="text-xs leading-5 text-teal-900">
-            当たり判定を{Math.round(pendingRatio * 100)}
-            %のポリゴンで作り直します。見た目のメッシュは変わりません。
+            軽量Modelを{Math.round(pendingRatio * 100)}
+            %のポリゴンで作り直します。描画Meshは変わりません。
           </p>
           <div className="flex gap-1.5">
             <button
@@ -2926,7 +2926,7 @@ function ModelNodeColliderBakePanel({
               }}
               className="h-8 flex-1 rounded-md border border-teal-600 bg-teal-600 px-3 text-xs font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-45"
             >
-              {busy ? "当たり判定を作成中…" : "当たり判定を作る"}
+              {busy ? "作成中…" : "軽量Modelを作る"}
             </button>
             <button
               type="button"
@@ -2934,7 +2934,7 @@ function ModelNodeColliderBakePanel({
               onClick={() => setPendingRatio(null)}
               className="h-8 rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50"
             >
-              やめる
+              取り消す
             </button>
           </div>
         </div>
@@ -3433,7 +3433,7 @@ function ColliderInspector({
 
       {bodyOwner ? (
         <p className="rounded border border-indigo-100 bg-indigo-50 px-2 py-1.5 text-xs leading-5 text-indigo-800">
-          Rigid Body: {bodyOwner.name}。この衝突判定は親Bodyの形状として使われます。
+          Rigid Body: {bodyOwner.name}。このColliderは親Bodyの形状として使われます。
         </p>
       ) : (
       <div className="space-y-2.5 border-t border-slate-100 pt-2.5">
@@ -3454,14 +3454,14 @@ function ColliderInspector({
             }
             className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
           >
-            <option value="fixed">固定</option>
-            <option value="dynamic">物理演算で動かす</option>
-            <option value="kinematicPosition">位置を指定して動かす</option>
-            <option value="kinematicVelocity">速度を指定して動かす</option>
+            <option value="fixed">Fixed（固定）</option>
+            <option value="dynamic">Dynamic（動的）</option>
+            <option value="kinematicPosition">Kinematic Position</option>
+            <option value="kinematicVelocity">Kinematic Velocity</option>
           </select>
         </label>
         <ColliderNumberField
-          label="重力の倍率"
+          label="Gravity Scale"
           value={component.gravityScale ?? 1}
           min={-100}
           max={100}
@@ -3470,7 +3470,7 @@ function ColliderInspector({
           onChange={(gravityScale) => onChange({ gravityScale })}
         />
         <ColliderNumberField
-          label="移動の減衰"
+          label="Linear Damping"
           value={component.linearDamping ?? 0}
           min={0}
           step={0.05}
@@ -3478,7 +3478,7 @@ function ColliderInspector({
           onChange={(linearDamping) => onChange({ linearDamping })}
         />
         <ColliderNumberField
-          label="回転の減衰"
+          label="Angular Damping"
           value={component.angularDamping ?? 0}
           min={0}
           step={0.05}
@@ -3486,25 +3486,25 @@ function ColliderInspector({
           onChange={(angularDamping) => onChange({ angularDamping })}
         />
         <ToggleRow
-          label="静止中は計算を休止する"
+          label="Sleepを許可"
           checked={component.canSleep ?? true}
           disabled={readOnly}
           onChange={(canSleep) => onChange({ canSleep })}
         />
         <ToggleRow
-          label="高速移動時の衝突判定"
+          label="CCD（連続衝突検出）"
           checked={component.ccd ?? false}
           disabled={readOnly}
           onChange={(ccd) => onChange({ ccd })}
         />
         <ToggleRow
-          label="移動を固定する軸"
+          label="移動を固定"
           checked={component.lockTranslations ?? false}
           disabled={readOnly}
           onChange={(lockTranslations) => onChange({ lockTranslations })}
         />
         <ToggleRow
-          label="回転を固定する軸"
+          label="回転を固定"
           checked={component.lockRotations ?? false}
           disabled={readOnly}
           onChange={(lockRotations) => onChange({ lockRotations })}
@@ -3516,7 +3516,7 @@ function ColliderInspector({
         <div className="space-y-2.5 border-t border-slate-100 pt-2.5">
           <div className="flex items-center justify-between gap-2">
             <label className="flex min-w-0 flex-1 items-center gap-2 text-xs text-slate-700">
-              大きさを合わせる
+              Fit
               <select
                 value={component.fitMode}
                 disabled={readOnly}
@@ -3526,8 +3526,8 @@ function ColliderInspector({
                 }}
                 className="h-8 min-w-0 flex-1 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
               >
-                <option value="auto">メッシュに追従</option>
-                <option value="manual">手動</option>
+                <option value="auto">Auto（メッシュに追従）</option>
+                <option value="manual">Manual（手動）</option>
               </select>
             </label>
             <button
@@ -3536,18 +3536,18 @@ function ColliderInspector({
               onClick={onAutoFit}
               className="h-8 shrink-0 rounded border border-violet-300 bg-violet-50 px-2.5 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-45"
             >
-              再フィット
+              Fit
             </button>
           </div>
           <VectorEditor
-            label="中央"
+            label="Center"
             value={component.center}
             valueKind="position"
             disabled={readOnly}
             onChange={(center) => onChange({ center, fitMode: "manual" })}
           />
           <VectorEditor
-            label="各軸の半幅"
+            label="Half Extents"
             value={component.halfExtents}
             valueKind="scale"
             disabled={readOnly}
@@ -3557,13 +3557,13 @@ function ColliderInspector({
           />
           {effectiveSize ? (
             <p className="rounded bg-slate-50 px-2 py-1.5 text-xs leading-5 text-slate-500">
-              現在のScale適用後サイズ: {effectiveSize.map((value) => roundTo(value, 3)).join(" × ")}
+              Scale適用後のサイズ: {effectiveSize.map((value) => roundTo(value, 3)).join(" × ")}
             </p>
           ) : null}
         </div>
       ) : (
         <label className="grid grid-cols-[78px_minmax(0,1fr)] items-center gap-2 border-t border-slate-100 pt-2.5 text-xs text-slate-700">
-          形の作り方
+          Shape
           <select
             value={component.meshMode}
             disabled={readOnly}
@@ -3572,21 +3572,21 @@ function ColliderInspector({
             }
             className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
           >
-            <option value="trimesh">メッシュの形を使う（固定物向け）</option>
-            <option value="convex">外形を囲む形を使う（凸包）</option>
+            <option value="trimesh">Trimesh（固定物）</option>
+            <option value="convex">Convex Hull（凸包）</option>
           </select>
         </label>
       )}
 
       <div className="space-y-2.5 border-t border-slate-100 pt-2.5">
         <ToggleRow
-          label="接触の検知に使う"
+          label="Trigger（接触のみ検知）"
           checked={component.isTrigger}
           disabled={readOnly}
           onChange={(isTrigger) => onChange({ isTrigger })}
         />
         <ColliderNumberField
-          label="摩擦"
+          label="Friction"
           value={component.friction}
           min={0}
           step={0.05}
@@ -3594,7 +3594,7 @@ function ColliderInspector({
           onChange={(friction) => onChange({ friction })}
         />
         <ColliderNumberField
-          label="跳ね返り"
+          label="Restitution"
           value={component.restitution}
           min={0}
           max={1}
@@ -3654,26 +3654,25 @@ function RigidBodyInspector({
       }
     >
       <p className="rounded bg-indigo-50 px-2 py-1.5 text-xs leading-5 text-indigo-800">
-        このEntity以下を1つの物体として扱います。別のRigid Bodyを持つ子は除きます。
-        衝突判定 {descendantColliderCount} / メッシュ {descendantMeshCount}
+        このEntityと子孫を1つの剛体として扱います（別のRigid Bodyを持つ子とその子孫は除外）。Collider {descendantColliderCount} / Mesh {descendantMeshCount}
       </p>
       {(component.autoColliders === "none" &&
         descendantColliderCount === 0) ||
       (component.autoColliders !== "none" && descendantMeshCount === 0) ? (
         <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-5 text-amber-800">
           {component.autoColliders === "none"
-            ? "当たり判定がありません。子Entityに追加してください。"
-            : "当たり判定の自動作成に使えるメッシュがありません。"}
+            ? "Colliderがありません。子Entityに追加してください。"
+            : "自動生成に使えるMeshがありません。"}
         </p>
       ) : null}
       {component.autoColliders === "trimesh" &&
       component.bodyType !== "fixed" ? (
         <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-5 text-amber-800">
-          動く物体では、外形を囲む形（凸包）にして動作確認と書き出しを行います。
+          動く物体はConvex Hull（凸包）で動作確認と書き出しを行います。
         </p>
       ) : null}
       <label className="grid grid-cols-[minmax(0,1fr)_150px] items-center gap-3 text-xs text-slate-700">
-        種類
+        Body Type
         <select
           value={component.bodyType}
           disabled={readOnly}
@@ -3684,14 +3683,14 @@ function RigidBodyInspector({
           }
           className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
         >
-          <option value="fixed">固定</option>
-          <option value="dynamic">物理演算で動かす</option>
-          <option value="kinematicPosition">位置を指定して動かす</option>
-          <option value="kinematicVelocity">速度を指定して動かす</option>
+          <option value="fixed">Fixed（固定）</option>
+          <option value="dynamic">Dynamic（動的）</option>
+          <option value="kinematicPosition">Kinematic Position</option>
+          <option value="kinematicVelocity">Kinematic Velocity</option>
         </select>
       </label>
       <label className="grid grid-cols-[minmax(0,1fr)_150px] items-center gap-3 text-xs text-slate-700">
-        衝突判定を自動で作る
+        Auto Colliders
         <select
           value={component.autoColliders}
           disabled={readOnly}
@@ -3703,21 +3702,21 @@ function RigidBodyInspector({
           }
           className="h-8 rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:bg-slate-100"
         >
-          <option value="none">自動で付けない（手動の設定だけ使う）</option>
-          <option value="cuboid">直方体</option>
-          <option value="ball">球</option>
-          <option value="hull">凹みを省いた外形</option>
-          <option value="trimesh">メッシュと同じ形</option>
+          <option value="none">なし</option>
+          <option value="cuboid">Cuboid（直方体）</option>
+          <option value="ball">Ball（球）</option>
+          <option value="hull">Hull（凸包）</option>
+          <option value="trimesh">Trimesh（メッシュと同じ形）</option>
         </select>
       </label>
       <ToggleRow
-        label="自動生成した判定で接触を検知する"
+        label="自動生成したColliderをTriggerにする"
         checked={component.isTrigger}
         disabled={readOnly}
         onChange={(isTrigger) => onChange({ isTrigger })}
       />
       <ColliderNumberField
-        label="自動生成した判定の摩擦"
+        label="自動生成したColliderの摩擦"
         value={component.friction}
         min={0}
         step={0.05}
@@ -3725,7 +3724,7 @@ function RigidBodyInspector({
         onChange={(friction) => onChange({ friction })}
       />
       <ColliderNumberField
-        label="自動生成した判定の跳ね返り"
+        label="自動生成したColliderの跳ね返り"
         value={component.restitution}
         min={0}
         max={1}
@@ -3734,7 +3733,7 @@ function RigidBodyInspector({
         onChange={(restitution) => onChange({ restitution })}
       />
       <ColliderNumberField
-        label="重力の倍率"
+        label="Gravity Scale"
         value={component.gravityScale}
         min={-100}
         max={100}
@@ -3743,7 +3742,7 @@ function RigidBodyInspector({
         onChange={(gravityScale) => onChange({ gravityScale })}
       />
       <ColliderNumberField
-        label="移動の減衰"
+        label="Linear Damping"
         value={component.linearDamping}
         min={0}
         step={0.05}
@@ -3751,7 +3750,7 @@ function RigidBodyInspector({
         onChange={(linearDamping) => onChange({ linearDamping })}
       />
       <ColliderNumberField
-        label="回転の減衰"
+        label="Angular Damping"
         value={component.angularDamping}
         min={0}
         step={0.05}
@@ -3759,25 +3758,25 @@ function RigidBodyInspector({
         onChange={(angularDamping) => onChange({ angularDamping })}
       />
       <ToggleRow
-        label="静止中は計算を休止する"
+        label="Sleepを許可"
         checked={component.canSleep}
         disabled={readOnly}
         onChange={(canSleep) => onChange({ canSleep })}
       />
       <ToggleRow
-        label="高速移動時の衝突判定"
+        label="CCD（連続衝突検出）"
         checked={component.ccd}
         disabled={readOnly}
         onChange={(ccd) => onChange({ ccd })}
       />
       <ToggleRow
-        label="移動を固定する軸"
+        label="移動を固定"
         checked={component.lockTranslations}
         disabled={readOnly}
         onChange={(lockTranslations) => onChange({ lockTranslations })}
       />
       <ToggleRow
-        label="回転を固定する軸"
+        label="回転を固定"
         checked={component.lockRotations}
         disabled={readOnly}
         onChange={(lockRotations) => onChange({ lockRotations })}
@@ -5705,7 +5704,7 @@ function EntityInspector({
           }}
           className="w-full rounded-md border border-violet-300 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-45"
         >
-          Componentを追加
+          Add Component
         </button>
         {addComponentOpen ? (
           <div className="mt-2 max-h-80 space-y-1 overflow-y-auto rounded-md border border-slate-300 bg-white p-1 shadow-lg">

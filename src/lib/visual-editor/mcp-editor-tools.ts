@@ -1123,7 +1123,7 @@ function setMeshCollisionTool(context: XriftMcpEditorContext, args: Record<strin
   const bundle = touchProject(context, { ...context.bundle, scene });
   return { changed: true, bundle, sceneSelection: context.sceneSelection, assetSelection: context.assetSelection,
     result: { entityId, action, sources: collisionSources(scene), revisionBefore: context.revision, revisionAfter: context.revision + 1 },
-    activity: "メッシュの当たり判定を変更しました" };
+    activity: "MeshのColliderを変更しました" };
 }
 
 function inspectColliders(
@@ -1155,8 +1155,8 @@ function inspectColliders(
       sources: collisionSources(context.bundle.scene),
     },
     entityIds?.length === 1
-      ? `Entity「${context.bundle.scene.entities[entityIds[0]!]?.name ?? entityIds[0]}」の衝突判定を診断しました`
-      : "シーン全体の衝突判定を診断しました",
+      ? `Entity「${context.bundle.scene.entities[entityIds[0]!]?.name ?? entityIds[0]}」のColliderを診断しました`
+      : "シーン全体のColliderを診断しました",
   );
 }
 
@@ -1190,7 +1190,7 @@ function optimizeColliders(
         inspection: optimized.after,
         changes: [],
       },
-      "衝突判定に自動修正が必要な問題はありません",
+      "Colliderに自動修正が必要な問題はありません",
     );
   }
   const bundle = touchProject(context, {
@@ -1212,7 +1212,7 @@ function optimizeColliders(
       changes: optimized.changes,
       synchronizedDuringPlay: context.editorMode === "play",
     },
-    activity: `AIが衝突判定設定を${optimized.changes.length}件最適化しました`,
+    activity: `AIがCollider設定を${optimized.changes.length}件自動修正しました`,
   };
 }
 

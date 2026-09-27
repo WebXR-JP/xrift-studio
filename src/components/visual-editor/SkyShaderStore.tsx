@@ -123,7 +123,7 @@ export function SkyShaderStore({
             ? `「${selected.label}」のマテリアルを今の設定で更新しました。`
             : `「${selected.label}」をマテリアルとして追加しました。`,
           result.appliedToSky
-            ? "Skyboxに設定しました。色や動きはInspectorで調整できます。"
+            ? "Skyboxに設定しました。"
             : "シーン設定の「Skybox Shader」に割り当ててください。",
         ].join(""),
       );

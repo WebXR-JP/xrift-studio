@@ -193,7 +193,7 @@ export default defineScript({
   {
     id: "float",
     name: "上下に浮遊",
-    description: "開始位置を中心に、滑らかに上下移動します。",
+    description: "開始位置を中心に上下移動します。",
     category: "movement",
     suggestedName: "Floating Object",
     language: "ts",
@@ -226,7 +226,7 @@ export default defineScript({
   {
     id: "follow-entity",
     name: "Entityを追従",
-    description: "明示参照したEntityの位置へ滑らかに追従します。",
+    description: "明示参照したEntityの位置へ追従します。",
     category: "movement",
     suggestedName: "Entity Follower",
     language: "ts",

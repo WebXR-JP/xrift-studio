@@ -887,7 +887,7 @@ const FOUNTAIN: SceneRecipe = {
   description: "二段の石造噴水。受け皿と水面、流れ落ちる水筋、中央の飛沫。",
   category: "water",
   projectKinds: ["world", "item"],
-  note: "水面と水筋は静的なGLBで、中央の飛沫だけが動きます。水音と衝突判定は含みません。",
+  note: "水面と水筋は静的なGLBで、中央の飛沫だけが動きます。水音とColliderは含みません。",
   parts: [
     {
       kind: "model",
@@ -918,7 +918,7 @@ const FOUNTAIN: SceneRecipe = {
 const FIREFLY_BUSH: SceneRecipe = {
   id: SCENE_RECIPE_IDS.fireflyBush,
   name: "蛍の茂み",
-  description: "低い茂みと、その上をゆっくり漂う蛍。",
+  description: "低い茂みと、その上を漂う蛍。",
   category: "nature",
   projectKinds: ["world", "item"],
   note: "蛍は暗いほど見えます。昼の空のままだとほとんど見えないので、夜空のプリセットか暗めのライトと合わせてください。",
@@ -967,7 +967,7 @@ const BENCH: SceneRecipe = {
   description: "木の座面と背もたれ、脚を渡す貫木を持つ1.6mの公園ベンチ。",
   category: "furniture",
   projectKinds: ["world", "item"],
-  note: "座る機能は付いていません。見た目の家具として置けます。人が上を歩けないようにするなら衝突判定を追加してください。",
+  note: "座る機能は付いていません。見た目の家具として置けます。人が上を歩けないようにするならColliderを追加してください。",
   parts: [
     {
       kind: "model",
@@ -1053,7 +1053,7 @@ const BRAZIER: SceneRecipe = {
   description: "三脚の鉢で燃える火。焚き火より高い位置を照らします。",
   category: "light",
   projectKinds: ["world", "item"],
-  note: "音は含みません。鉢と脚に衝突判定は入っていないので、通り抜けを止めるなら追加してください。",
+  note: "音は含みません。鉢と脚にColliderは入っていないので、通り抜けを止めるなら追加してください。",
   parts: [
     {
       kind: "model",
@@ -1131,7 +1131,7 @@ const BAMBOO: SceneRecipe = {
   description: "高さの違う竹が7本。狭い場所の目隠しにも使えます。",
   category: "nature",
   projectKinds: ["world", "item"],
-  note: "衝突判定は入っていません。通り抜けさせたくない場合は幹ごとに追加してください。",
+  note: "Colliderは含みません。通り抜けさせたくない場合は幹ごとに追加してください。",
   parts: scatterBamboo(7, "竹", 1.1, 3.6),
 };
 
@@ -1227,7 +1227,7 @@ const HOT_SPRING: SceneRecipe = {
 const SNOWFALL: SceneRecipe = {
   id: SCENE_RECIPE_IDS.snowfall,
   name: "雪を降らせる",
-  description: "上空から広い範囲へ静かに降る雪。",
+  description: "上空から広い範囲へ降る雪。",
   category: "weather",
   projectKinds: ["world", "item"],
   note: "降る範囲はパーティクルのShapeで決まります。広げるには素材設定で箱の大きさを変えてください。ワールド全体に降らせるには複数置きます。",
@@ -1247,7 +1247,7 @@ const RAINFALL: SceneRecipe = {
 const PETALFALL: SceneRecipe = {
   id: SCENE_RECIPE_IDS.petalfall,
   name: "桜吹雪",
-  description: "風に流されながら舞い落ちる花びら。",
+  description: "風に流れて落ちる花びら。",
   category: "weather",
   projectKinds: ["world", "item"],
   note: "花びらは木から出ているわけではありません。木の上へ置くと自然に見えます。",
@@ -1257,7 +1257,7 @@ const PETALFALL: SceneRecipe = {
 const GROUND_FOG: SceneRecipe = {
   id: SCENE_RECIPE_IDS.groundFog,
   name: "立ちこめる霧",
-  description: "地面すれすれをゆっくり漂う霧。",
+  description: "地面すれすれを漂う霧。",
   category: "weather",
   projectKinds: ["world", "item"],
   note: "シーン設定のフォグとは別物です。こちらは置いた場所だけに溜まります。両方使うと濃くなりすぎることがあります。",
@@ -1333,7 +1333,7 @@ const COLUMN: SceneRecipe = {
   description: "基礎、柱身、柱頭でできた3.2mの柱。",
   category: "structure",
   projectKinds: ["world", "item"],
-  note: "衝突判定は入っていません。ぶつかるようにするには柱身へBox 衝突判定を追加してください。",
+  note: "Colliderは含みません。ぶつかるようにするには柱身へBox Colliderを追加してください。",
   parts: [
     {
       kind: "model",
@@ -1352,7 +1352,7 @@ const ARCH_GATE: SceneRecipe = {
   description: "2本の柱と梁。くぐれる幅で置いています。",
   category: "structure",
   projectKinds: ["world", "item"],
-  note: "内側の幅は約2.2mです。くぐれるようにするには、柱にだけ衝突判定を足してください。",
+  note: "内側の幅は約2.2mです。くぐれるようにするには、柱にだけColliderを足してください。",
   parts: [
     {
       kind: "model",
@@ -1380,7 +1380,7 @@ const STAIRS: SceneRecipe = {
   description: "5段の階段。1段18cmで上れる高さです。",
   category: "structure",
   projectKinds: ["world"],
-  note: "衝突判定は入っていません。上れるようにするには段ごとにBox 衝突判定を追加してください。",
+  note: "Colliderは含みません。上れるようにするには段ごとにBox Colliderを追加してください。",
   parts: [
     {
       kind: "model",
@@ -1399,7 +1399,7 @@ const WALL: SceneRecipe = {
   description: "柱で区切った5mの塀。並べて敷地を囲えます。",
   category: "structure",
   projectKinds: ["world"],
-  note: "衝突判定は入っていません。通り抜けを止めるには塀の面へBox 衝突判定を追加してください。",
+  note: "Colliderは含みません。通り抜けを止めるには塀の面へBox Colliderを追加してください。",
   parts: [
     {
       kind: "model",
@@ -1453,7 +1453,7 @@ const WELL: SceneRecipe = {
   description: "石囲いと屋根、水面まで。広場の中心に。",
   category: "structure",
   projectKinds: ["world", "item"],
-  note: "石積みの内側に静的な水面があります。衝突判定は含みません。落ちないようにするには石囲いへ衝突判定を追加してください。",
+  note: "石積みの内側に静的な水面があります。Colliderは含みません。落ちないようにするには石囲いへColliderを追加してください。",
   parts: [
     {
       kind: "model",
@@ -1480,7 +1480,7 @@ const PIER: SceneRecipe = {
   description: "水面へ張り出す板と杭。水辺の入口に。",
   category: "structure",
   projectKinds: ["world"],
-  note: "衝突判定は入っていません。上を歩けるようにするには板へBox 衝突判定を追加してください。",
+  note: "Colliderは含みません。上を歩けるようにするには板へBox Colliderを追加してください。",
   parts: [
     {
       kind: "model",
@@ -1499,7 +1499,7 @@ const DOOR: SceneRecipe = {
   description: "枠とノブ付きのドア。幅0.9m、壁の開口部に置きます。",
   category: "structure",
   projectKinds: ["world"],
-  note: "衝突判定は入っていません。通り抜けを止めるにはドアへBox 衝突判定を追加してください。開閉はできない見た目だけのドアです。",
+  note: "Colliderは含みません。通り抜けを止めるにはドアへBox Colliderを追加してください。開閉はできない見た目だけのドアです。",
   parts: [
     {
       kind: "model",
@@ -1518,7 +1518,7 @@ const WINDOW: SceneRecipe = {
   description: "木枠とガラス、水切りのある窓。幅0.9m、壁にはめ込んで使います。",
   category: "structure",
   projectKinds: ["world"],
-  note: "衝突判定は入っていません。ガラスは見た目だけで、開閉はできません。",
+  note: "Colliderは含みません。ガラスは見た目だけで、開閉はできません。",
   parts: [
     {
       kind: "model",
@@ -1556,7 +1556,7 @@ const WALL_PANEL: SceneRecipe = {
   description: "幅2m・高さ2.4mの壁パネル。幅木付き。並べて部屋の壁を組めます。",
   category: "structure",
   projectKinds: ["world"],
-  note: "衝突判定は入っていません。通り抜けを止めるには壁へBox 衝突判定を追加してください。並べるときは幅2mぶん横にずらすと隙間なく続きます。",
+  note: "Colliderは含みません。通り抜けを止めるには壁へBox Colliderを追加してください。並べるときは幅2mぶん横にずらすと隙間なく続きます。",
   parts: [
     {
       kind: "model",
@@ -1577,7 +1577,7 @@ const RECORDING_STUDIO: SceneRecipe = {
   category: "structure",
   projectKinds: ["world"],
   preview: { cameraPosition: [-1.8, 2.15, 1.42], lookAtY: 0.85, ground: false },
-  note: "床と壁を含む一体の3Dモデルです。原点は部屋の床の中心なので、既存の地面と同じ高さに置いてください。地面と床が重なるとZ-fightingするので、部屋の下の地面は消すか下げてください。メッシュ衝突判定が入っているので、そのまま中を歩けます。",
+  note: "床と壁を含む一体の3Dモデルです。原点は部屋の床の中心なので、既存の地面と同じ高さに置いてください。地面と床が重なるとZ-fightingするので、部屋の下の地面は消すか下げてください。Mesh Colliderが入っているので、そのまま中を歩けます。",
   parts: [
     {
       kind: "model",
@@ -1754,13 +1754,13 @@ const SLIDING_DOOR: SceneRecipe = {
     "押すと1秒かけて開き、2.5秒待って、また閉じます。時間をかけた変化と、変化が終わってからの続きを、1つのグラフで見せます。",
   category: "tutorial",
   projectKinds: ["world", "item"],
-  note: "扉は横へスライドするだけで、コライダーは入れていません。通り抜けさせたくない壁として使うときは、扉と枠にメッシュ衝突判定を足してください。",
+  note: "扉は横へスライドするだけで、Colliderは含みません。通り抜けさせたくない壁として使うときは、扉と枠にMesh Colliderを足してください。",
   lesson: {
     goal: "「動かす」「待つ」「戻す」を1本のグラフでつなげられるようになります",
     steps: [
       "動作確認を開始して扉を押します。音とともに開き、少し待って閉まります。",
       "動作確認を停止し、「扉」のグラフの実行のグラフを開きます。上から、音・開く・待つ・閉じる、の順に並んでいます。",
-      "「開く」のアクションの「かける時間」を3秒にすると、ゆっくり開きます。位置の値を変えれば開く幅が変わります。",
+      "「開く」のアクションの「かける時間」を3秒にすると、3秒かけて開きます。位置の値を変えれば開く幅が変わります。",
       "待ち時間のノードの秒数を変えると、開いたままの長さが変わります。",
       "「開く」から「待つ」へのつなぎは、出力ではなく「完了後」です。移動し終わってから数え始めたいので、ここだけ別のソケットを使っています。",
     ],
@@ -1982,7 +1982,7 @@ const LIGHT_COLOR_PANEL: SceneRecipe = {
       "動作確認を開始して3つのボタンを順に押します。ランプの色が変わります。",
       "動作確認を停止し、どれか1つのボタンのグラフを開きます。中身は「色を設定する」1つだけです。",
       "色の値を変えて、自分の色にします。3つとも同じ形なので、迷うところがありません。",
-      "「かける時間」を1秒にすると、色がゆっくり変わります。",
+      "「かける時間」を1秒にすると、1秒かけて色が変わります。",
       "4つ目の色が欲しくなったら、ボタンEntityを複製し、グラフの実行が指すグラフを複製したものへ差し替えます。",
     ],
   },
@@ -2233,7 +2233,7 @@ const HIDDEN_DOOR_SWITCH: SceneRecipe = {
       "動作確認を開始してスイッチを押します。台の上に宝箱が現れ、もう一度押すと消えます。",
       "動作確認を停止し、Hierarchyで「宝箱」を選びます。表示がOFFになっていますが、シーンにはあります。",
       "グラフのアクションは「表示」の切り替えです。箱と蓋は別のEntityなので、アクションも2つ並んでいます。",
-      "「表示」を切っても物理コライダーは残ります。通れないままにしたいときはこれで十分です。",
+      "「表示」を切ってもColliderは残ります。通れないままにしたいときはこれで十分です。",
       "宝箱の中身を自分の3Dモデルに差し替えます。隠す仕掛けはそのまま使えます。",
     ],
   },

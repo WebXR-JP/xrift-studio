@@ -107,7 +107,7 @@ export function ParticlePresetStore({
       const result = await onAdd(selected, placeInScene);
       setAddedMessage(
         result.placed
-          ? `「${result.assetName}」をシーンへ配置しました。放出量や色はInspectorで変えられます。`
+          ? `「${result.assetName}」をシーンへ配置しました`
           : `「${result.assetName}」をAssetsに追加しました。シーンへドラッグして配置できます。`,
       );
     } catch (reason) {

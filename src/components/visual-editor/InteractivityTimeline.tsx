@@ -292,8 +292,8 @@ export function InteractivityTimeline({
         {tracks.length === 0 ? (
           <p className="p-3 text-[11px] leading-5 text-slate-400">
             {entryPoint === "start"
-              ? "開始時に実行する処理がありません。「開始時」ノードに処理をつなぐと、実行時刻を確認できます。"
-              : "操作時に実行する処理がありません。「操作されたとき」ノードに処理をつなぐと、実行時刻を確認できます。"}
+              ? "開始時に実行する処理がありません。「開始時」ノードに処理をつないでください。"
+              : "操作時に実行する処理がありません。「操作されたとき」ノードに処理をつないでください。"}
           </p>
         ) : (
           <div className="min-w-[420px]">
@@ -379,7 +379,7 @@ export function InteractivityTimeline({
 
       {run.truncated ? (
         <p className="shrink-0 border-t border-slate-800 px-3 py-1 text-[10px] text-amber-200">
-          {horizonSeconds}秒の時点でまだ続きがあります。範囲を広げると先まで確認できます。
+          {horizonSeconds}秒の時点でまだ続きがあります。範囲を広げると先まで表示します。
         </p>
       ) : null}
     </section>

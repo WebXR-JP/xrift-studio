@@ -331,8 +331,8 @@ function getEntityIcon(entity: SceneEntity) {
 const HIERARCHY_KIND_FILTERS = [
   { id: "mesh", label: "メッシュ", icon: EDITOR_ICONS.model },
   { id: "light", label: "ライト", icon: EDITOR_ICONS.light },
-  { id: "rigid-body", label: "物理挙動", icon: EDITOR_ICONS.axis },
-  { id: "collider", label: "コライダー", icon: EDITOR_ICONS.primitive },
+  { id: "rigid-body", label: "Rigid Body", icon: EDITOR_ICONS.axis },
+  { id: "collider", label: "Collider", icon: EDITOR_ICONS.primitive },
   { id: "audio-source", label: "オーディオ", icon: EDITOR_ICONS.audio },
   { id: "particle-emitter", label: "パーティクル", icon: EDITOR_ICONS.particle },
   { id: "spawn-point", label: "スポーン", icon: EDITOR_ICONS.spawn },

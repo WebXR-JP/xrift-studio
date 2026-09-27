@@ -625,7 +625,7 @@ function SkyShaderField({
       {resolution.status === "ready" ? (
         <div className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] leading-4 text-slate-600">
           <p>
-            Skybox Textureより優先して背景を描きます。色や動きはInspectorで調整できます。
+            Skybox Textureより優先して背景を描きます。
           </p>
           <button
             type="button"

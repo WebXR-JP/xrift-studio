@@ -662,7 +662,7 @@ function MeshVisual({
     if (!component.enabled || primitive || terrain) {
       reportModelLoad({ status: "ready" });
     } else if (!projectModelSource || !projectPath) {
-      reportModelLoad({ status: "error", message: "描画と当たり判定に使うModelを読み込めません" });
+      reportModelLoad({ status: "error", message: "描画とColliderに使うModelを読み込めません" });
     }
     // Valid project models report their asynchronous load through the child.
   }, [component.enabled, primitive, terrain, projectModelSource, projectPath, reportModelLoad]);
@@ -1945,8 +1945,8 @@ function useModelNodeColliderGeometry(
   projectPath: string | undefined,
   collisionModelAssetId?: string,
 ): ModelNodeColliderGeometryData | null {
-  // 当たり判定だけ差し替えてあるなら、そちらのModelを読む。見た目のMeshは
-  // 触らないので、重いままでも当たりは軽い一枚で済む。
+  // Collider用の軽量Modelで差し替えてあるなら、そちらのModelを読む。描画Meshは
+  // 触らないので、重いままでもColliderは軽い一枚で済む。
   const collisionAsset = collisionModelAssetId
     ? assets.assets[collisionModelAssetId]
     : undefined;
@@ -1967,7 +1967,7 @@ function useModelNodeColliderGeometry(
   useEffect(() => {
     setLoaded(null);
     if (!projectPath || !sourceRelativePath) {
-      reportCollisionLoad({ status: "error", message: "当たり判定のModelが見つかりません" });
+      reportCollisionLoad({ status: "error", message: "ColliderのModelが見つかりません" });
       return;
     }
     let active = true;
@@ -1976,7 +1976,7 @@ function useModelNodeColliderGeometry(
       .then((data) => {
         if (!active) return;
         const geometry = extractModelNodeColliderGeometry(data.object, sourceNodeIndex);
-        if (!geometry) throw new Error("当たり判定に使えるメッシュがModel内に見つかりません");
+        if (!geometry) throw new Error("Colliderに使えるMeshがModel内に見つかりません");
         setLoaded({ key: sourceKey, geometry });
         reportCollisionLoad({ status: "ready" });
       })
@@ -1985,7 +1985,7 @@ function useModelNodeColliderGeometry(
         setLoaded(null);
         const message = error instanceof Error ? error.message : String(error);
         reportCollisionLoad({ status: "error", message });
-        console.error("当たり判定のModelを読み込めませんでした:", error);
+        console.error("ColliderのModelを読み込めませんでした:", error);
       });
     return () => { active = false; };
   }, [projectPath, sourceHash, sourceRelativePath, sourceNodeIndex, sourceKey, reportCollisionLoad]);
@@ -7281,7 +7281,7 @@ export function SceneViewport({
             aria-live="polite"
           >
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold">コライダー専用編集</p>
+              <p className="text-xs font-semibold">Collider専用編集</p>
               <span className="text-[11px] tabular-nums text-slate-300">
                 Box {colliderPanelInspection.boxColliderCount} · メッシュ {colliderPanelInspection.meshColliderCount}
               </span>
@@ -7289,7 +7289,7 @@ export function SceneViewport({
             <p className="mt-1 text-[11px] leading-4 text-slate-300">
               {colliderPanelInspection.diagnostics.length === 0
                 ? "表示中の形状と実行設定に問題はありません"
-                : `${colliderPanelInspection.diagnostics.length}件の診断。${colliderPanelInspection.fixableCount}件を自動修正できます`}
+                : `${colliderPanelInspection.diagnostics.length}件の診断。${colliderPanelInspection.fixableCount}件を自動修正`}
             </p>
             {colliderPanelInspection.diagnostics.slice(0, 2).map((diagnostic) => (
               <p
@@ -7359,15 +7359,15 @@ export function SceneViewport({
                 {!playRuntimeReady
                   ? playLoadErrors.length > 0
                     ? `Playを開始できません: ${playLoadErrors[0]}。停止して対象のModel・Colliderを確認してください`
-                    : "モデルと当たり判定を準備中…"
+                    : "ModelとColliderを準備中…"
                   : tablet
-                    ? "中央の照準を合わせて「操作」を押すと、対象を操作できます"
+                    ? "中央の照準を対象に合わせて「操作」を押します"
                     : playLockRefused === "unsupported"
                     ? "マウスを固定できません。ドラッグで視点を動かせます"
                     : playLockRefused === "retry"
                       ? "マウスを固定できません。少し待ってクリックするか、ドラッグで視点を動かしてください"
                       : playPointerLocked
-                        ? "マウス固定中 · Escで解放するとHierarchyと設定を操作できます"
+                        ? "マウス固定中 · Escで解放するとHierarchyとInspectorを操作できます"
                         : "マウス未固定 · ドラッグで視点を動かせます。クリックするとマウスを固定します"}
               </p>
             ) : null}

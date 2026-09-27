@@ -15,7 +15,7 @@ test("Interaction Triggerからノードグラフを開く入口が分かる", a
 
   await page.getByRole("tab", { name: "Scene Viewを表示" }).click();
   await page.getByRole("tree", { name: "シーンのEntity階層" }).getByText("床", { exact: true }).click();
-  await page.getByRole("button", { name: "Componentを追加", exact: true }).click();
+  await page.getByRole("button", { name: "Add Component", exact: true }).click();
   await page.getByPlaceholder("Componentを検索…").fill("Interaction Trigger");
   const addTrigger = page.getByRole("button", { name: "Interaction Trigger", exact: true });
   await expect(addTrigger.locator("svg.lucide-workflow")).toBeVisible();
