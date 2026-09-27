@@ -7,7 +7,7 @@ XRift Studioの公開済みインストーラーを、HomebrewとWinGetから使
 | Homebrew | macOS、Apple Silicon / Intel | このリポジトリを配布元として登録する |
 | WinGet | Windows、x64 | 登録準備中。ローカルの定義ファイルから利用する |
 
-初回の定義は[公開済みのv0.10.1](https://github.com/WebXR-JP/xrift-studio/releases/tag/v0.10.1)に対応しています。Homebrew本家とWinGetの公式一覧への登録は、このリポジトリへの追加とは別に行います。
+現在の定義は[公開済みのv0.10.6](https://github.com/WebXR-JP/xrift-studio/releases/tag/v0.10.6)に対応しています。Homebrew本家とWinGetの公式一覧への登録は、このリポジトリへの追加とは別に行います。
 
 ## Homebrew
 
@@ -61,7 +61,7 @@ winget settings --enable LocalManifestFiles
 次に通常のPowerShellを開き、このリポジトリのルートから実行します。
 
 ```powershell
-$manifest = '.\packaging\winget\manifests\w\WebXR-JP\XRiftStudio\0.10.1'
+$manifest = '.\packaging\winget\manifests\w\WebXR-JP\XRiftStudio\0.10.6'
 winget validate --manifest $manifest
 winget install --manifest $manifest
 ```
@@ -141,4 +141,4 @@ PR作成には、リポジトリの**Settings → Actions → General → Workfl
 
 HomebrewはmacOSのGitHub Actionsで、Caskの形式、DMGの取得とSHA-256、インストール、アプリの配置、アンインストールを確認しています。GUIの起動、Gatekeeper、既存のアプリ内更新との組み合わせは別途確認が必要です。
 
-Windowsでの`winget validate`と実インストール、旧版からの更新、アンインストールは未検証です。WinGetへ提出する前に、検証環境で各操作を確認してください。アプリ内更新後も同じアプリとして認識されることも確認します。
+v0.10.6のWindows用NSISインストーラーとmacOS用DMGは、実ファイルのSHA-256が配布定義と一致することを確認しました。Windowsの`winget validate`も成功しています。Windowsでの実インストール、旧版からの更新、アンインストールは未検証です。WinGetへ提出する前に、検証環境で各操作を確認してください。アプリ内更新後も同じアプリとして認識されることも確認します。
