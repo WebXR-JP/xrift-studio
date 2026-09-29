@@ -2029,7 +2029,7 @@ function App() {
             });
             return result;
           }}
-          onOpenFolder={(path) => tauri.openPath(path)}
+          onOpenFolder={(path) => tauri.openDirectory(path)}
           onOpenVSCode={async (path) => {
             await openInVSCode(path, appendLog);
           }}
@@ -2133,7 +2133,9 @@ function App() {
         onRequestedImportInspectionHandled={handleOpenedArchiveInspectionHandled}
         onImportArchive={handleImportProjectArchive}
         onImportRepository={handleImportProjectRepository}
-        onOpenPath={(path) => void tauri.openPath(path).catch(() => undefined)}
+        onRevealFile={(path) => void tauri.revealItemInDir(path).catch((error) => {
+          toast({ kind: "error", title: "保存先を開けませんでした", description: String(error) });
+        })}
         onNew={() => {
           setNewProjectError(null);
           setShowNewDialog(true);

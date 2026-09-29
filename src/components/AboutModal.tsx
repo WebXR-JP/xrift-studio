@@ -1,3 +1,4 @@
+import { useExternalLink } from "./useExternalLink";
 import { useEffect, useState } from "react";
 import {
   AlertTriangle,
@@ -8,7 +9,6 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { tauri } from "../lib/tauri";
 import { xrift } from "../lib/xrift-cli";
 import { BrandMark } from "./Brand";
@@ -64,6 +64,7 @@ export function AboutModal({
   onShowAppUpdate,
 }: Props) {
   const toast = useToast();
+  const openLink = useExternalLink();
   const [v, setV] = useState<VersionState>({
     app: null,
     node: null,
@@ -255,7 +256,7 @@ export function AboutModal({
         <div data-app-modal-footer className="flex items-center justify-between gap-2 border-t border-zinc-100 bg-zinc-50/70 px-5 py-3">
           <button
             type="button"
-            onClick={() => openUrl("https://docs.xrift.net/").catch(() => {})}
+            onClick={() => openLink("https://docs.xrift.net/")}
             className="flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-700"
           >
             <ExternalLink size={11} strokeWidth={2} />
@@ -264,7 +265,7 @@ export function AboutModal({
           {XRIFT_STUDIO_ISSUE_ASSISTANT_GPT_URL ? (
             <button
               type="button"
-              onClick={() => openUrl(XRIFT_STUDIO_ISSUE_ASSISTANT_GPT_URL).catch(() => {})}
+              onClick={() => openLink(XRIFT_STUDIO_ISSUE_ASSISTANT_GPT_URL)}
               className="flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-700"
             >
               <ExternalLink size={11} strokeWidth={2} />
@@ -273,7 +274,7 @@ export function AboutModal({
           ) : (
             <button
               type="button"
-              onClick={() => openUrl(XRIFT_STUDIO_NEW_ISSUE_URL).catch(() => {})}
+              onClick={() => openLink(XRIFT_STUDIO_NEW_ISSUE_URL)}
               className="flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-700"
             >
               <ExternalLink size={11} strokeWidth={2} />
@@ -282,7 +283,7 @@ export function AboutModal({
           )}
           <button
             type="button"
-            onClick={() => openUrl(XRIFT_STUDIO_REPOSITORY_URL).catch(() => {})}
+            onClick={() => openLink(XRIFT_STUDIO_REPOSITORY_URL)}
             className="flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-700"
           >
             <ExternalLink size={11} strokeWidth={2} />

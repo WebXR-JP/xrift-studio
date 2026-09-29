@@ -1,3 +1,4 @@
+import { useExternalLink } from "../useExternalLink";
 import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
@@ -22,7 +23,6 @@ import {
   type SkyShaderCatalogEntry,
   type SkyShaderParameter,
 } from "../../lib/visual-editor";
-import { tauri } from "../../lib/tauri";
 import { SkyShaderCatalogPreview } from "./SkyShaderCatalogPreview";
 
 export type SkyShaderInstallResult = {
@@ -49,6 +49,7 @@ export function SkyShaderStore({
     applyToSky: boolean,
   ) => Promise<SkyShaderInstallResult>;
 }) {
+  const openLink = useExternalLink();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<"all" | SkyShaderCatalogCategory>(
     "all",
@@ -262,7 +263,7 @@ export function SkyShaderStore({
                 </div>
                 <button
                   type="button"
-                  onClick={() => void tauri.openUrl(SKY_SHADER_CATALOG_SOURCE_URL)}
+                  onClick={() => openLink(SKY_SHADER_CATALOG_SOURCE_URL)}
                   title="シェーダーのソースを開く"
                   className="rounded p-1.5 text-slate-500 hover:bg-slate-100"
                 >

@@ -2628,6 +2628,28 @@ fn resolve_visual_asset_explorer_target(
 }
 
 #[tauri::command]
+fn open_directory(app: AppHandle, path: String) -> Result<(), String> {
+    let directory = resolve_directory_to_open(&path)?;
+    app.opener()
+        .open_path(directory.to_string_lossy().into_owned(), None::<&str>)
+        .map_err(|error| format!("フォルダーを開けません: {}", error))
+}
+
+fn resolve_directory_to_open(path: &str) -> Result<PathBuf, String> {
+    let directory = PathBuf::from(path);
+    if !directory.is_absolute() {
+        return Err("フォルダーは絶対パスで指定してください。".to_string());
+    }
+    let directory = directory
+        .canonicalize()
+        .map_err(|error| format!("フォルダーを確認できません: {}", error))?;
+    if !directory.is_dir() {
+        return Err("指定された場所はフォルダーではありません。".to_string());
+    }
+    Ok(directory)
+}
+
+#[tauri::command]
 fn open_visual_asset_location(
     app: AppHandle,
     project_path: String,
@@ -6294,6 +6316,7 @@ pub fn run() {
             read_local_model_import_source,
             read_local_shader_import_source,
             open_visual_asset_location,
+            open_directory,
             external_store::list_external_store_assets,
             external_store::get_external_store_asset_options,
             external_store::install_external_store_asset,
@@ -6367,6 +6390,24 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn directory_opening_rejects_files_relative_paths_and_missing_directories() {
+        let root = reset_fixture_root("open-directory");
+        std::fs::create_dir_all(&root).unwrap();
+        let file = root.join("take.webm");
+        std::fs::write(&file, b"fixture").unwrap();
+        assert_eq!(
+            resolve_directory_to_open(root.to_str().unwrap()).unwrap(),
+            root.canonicalize().unwrap()
+        );
+        assert!(resolve_directory_to_open(file.to_str().unwrap()).is_err());
+        assert!(resolve_directory_to_open(".").is_err());
+        assert!(
+            resolve_directory_to_open(root.join("missing").to_str().unwrap()).is_err()
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn project_archive_arguments_accept_only_xriftstudio_files() {

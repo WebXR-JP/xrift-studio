@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   ArrowLeft,
   Play,
@@ -391,7 +390,7 @@ export function EditorView({
         async (url) => {
           setDevUrl(url);
           try {
-            await openUrl(url);
+            await tauri.openUrl(url);
           } catch (e) {
             appendLog({ kind: "stderr", text: `open url failed: ${e}`, ts: Date.now() });
           }
@@ -421,7 +420,7 @@ export function EditorView({
   const handleOpenDevUrl = async () => {
     if (!devUrl) return;
     try {
-      await openUrl(devUrl);
+      await tauri.openUrl(devUrl);
     } catch (e) {
       appendLog({ kind: "stderr", text: `open url failed: ${e}`, ts: Date.now() });
     }
@@ -430,7 +429,7 @@ export function EditorView({
   const handleOpenPublished = async () => {
     const target = publishedUrl ?? "https://xrift.net/";
     try {
-      await openUrl(target);
+      await tauri.openUrl(target);
     } catch (e) {
       appendLog({ kind: "stderr", text: `open url failed: ${e}`, ts: Date.now() });
     }

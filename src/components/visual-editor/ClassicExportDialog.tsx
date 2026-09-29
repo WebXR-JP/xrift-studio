@@ -19,6 +19,7 @@ import type {
   ClassicExportTarget,
 } from "../../lib/visual-editor";
 import { ClassicExportError } from "../../lib/visual-editor";
+import { useToast } from "../Toast";
 
 type Props = {
   open: boolean;
@@ -48,6 +49,14 @@ export function ClassicExportDialog({
   onOpenVSCode,
   onOpenTerminal,
 }: Props) {
+  const toast = useToast();
+  const openResult = async (action: () => void | Promise<void>, label: string) => {
+    try {
+      await action();
+    } catch (error) {
+      toast({ kind: "error", title: `${label}を開けませんでした`, description: String(error) });
+    }
+  };
   const [target, setTarget] = useState<ClassicExportTarget | null>(null);
   const [integration, setIntegration] =
     useState<ClassicExportIntegration>("component");
@@ -268,13 +277,13 @@ export function ClassicExportDialog({
               ) : null}
 
               <div className="grid gap-2 sm:grid-cols-3">
-                <button type="button" onClick={() => void onOpenFolder(result.targetPath)} className="flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                <button type="button" onClick={() => void openResult(() => onOpenFolder(result.targetPath), "フォルダー")} className="flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
                   <FolderOpen size={16} aria-hidden="true" /> フォルダーを開く
                 </button>
-                <button type="button" onClick={() => void onOpenVSCode(result.targetPath)} className="flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                <button type="button" onClick={() => void openResult(() => onOpenVSCode(result.targetPath), "VS Code")} className="flex items-center justify-center gap-2 rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
                   <Code2 size={16} aria-hidden="true" /> VS Codeで開く
                 </button>
-                <button type="button" onClick={() => void onOpenTerminal(result.targetPath)} className="flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-violet-700">
+                <button type="button" onClick={() => void openResult(() => onOpenTerminal(result.targetPath), "ターミナル")} className="flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-violet-700">
                   <TerminalSquare size={16} aria-hidden="true" /> ターミナルを開く
                 </button>
               </div>

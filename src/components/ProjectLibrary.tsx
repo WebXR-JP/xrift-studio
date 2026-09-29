@@ -11,7 +11,7 @@ import {
   Settings,
   X,
 } from "lucide-react";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { useExternalLink } from "./useExternalLink";
 import type {
   Project,
   ProjectArchiveExport,
@@ -76,7 +76,7 @@ type Props = {
     repositoryUrl: string,
     directoryName: string,
   ) => Promise<Project | null>;
-  onOpenPath: (path: string) => void;
+  onRevealFile: (path: string) => void;
   onNew: () => void;
   onLogin: () => void;
   onLogout: () => void;
@@ -122,7 +122,7 @@ export function ProjectLibrary({
   onRequestedImportInspectionHandled,
   onImportArchive,
   onImportRepository,
-  onOpenPath,
+  onRevealFile,
   onNew,
   onLogin,
   onLogout,
@@ -131,6 +131,7 @@ export function ProjectLibrary({
   onCheckAppUpdate,
   onShowAppUpdate,
 }: Props) {
+  const openLink = useExternalLink();
   const [showAbout, setShowAbout] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
   const [editingThumb, setEditingThumb] = useState<Project | null>(null);
@@ -398,8 +399,7 @@ export function ProjectLibrary({
         result={exportResult}
         onOpenFolder={() => {
           if (!exportResult) return;
-          const parent = exportResult.archivePath.replace(/[\\/][^\\/]*$/, "");
-          onOpenPath(parent || exportResult.archivePath);
+          onRevealFile(exportResult.archivePath);
         }}
         onClose={() => setExportResult(null)}
       />
@@ -475,7 +475,7 @@ export function ProjectLibrary({
               {user ? (
                 <button
                   type="button"
-                  onClick={() => openUrl("https://xrift.net/").catch(() => {})}
+                  onClick={() => openLink("https://xrift.net/")}
                   className="flex h-8 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2.5 text-xs text-zinc-700 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
                   title="XRiftの公開ページを開く"
                 >
