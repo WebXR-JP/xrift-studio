@@ -4,6 +4,7 @@ import { useEditorDevice } from "./useEditorDevice";
 import {
   useRef,
   useEffect,
+  useLayoutEffect,
   useState,
   type ChangeEvent,
   type DragEvent,
@@ -1315,6 +1316,12 @@ export function AssetsPanel({
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [sortMode, setSortMode] = useState<AssetSortMode>("default");
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
+  const [contextMenuPosition, setContextMenuPosition] = useState<{
+    left: number;
+    top?: number;
+    bottom?: number;
+    maxHeight: number;
+  }>({ left: 0, top: 0, maxHeight: 640 });
   const [renameDraft, setRenameDraft] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [tabletKindFilter, setTabletKindFilter] = useState<SceneAsset["kind"] | "">("");
@@ -1343,7 +1350,6 @@ export function AssetsPanel({
   }, [activityOpen, statusBarHost]);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const panelRef = useRef<HTMLElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const selectionAnchorRef = useRef<string | null>(selectedAssetId);
   const readOnly = editorMode === "play";
@@ -1502,6 +1508,40 @@ export function AssetsPanel({
     return () => window.cancelAnimationFrame(frame);
   }, [assets.assets, assets.folders, renameRequest]);
 
+  useLayoutEffect(() => {
+    const menu = contextMenuRef.current;
+    if (!contextMenu || !menu) return;
+    const { x, y } = contextMenu;
+    const place = () => {
+      const margin = touch ? 12 : 8;
+      const windowHeight = viewportHeight ?? window.innerHeight;
+      const maximumHeight = Math.min(touch ? 640 : Infinity, windowHeight - margin * 2);
+      const { width } = menu.getBoundingClientRect();
+      const height = Math.min(menu.scrollHeight + menu.offsetHeight - menu.clientHeight, maximumHeight);
+      const anchorX = Math.max(margin, Math.min(x, window.innerWidth - margin));
+      const anchorY = Math.max(margin, Math.min(y, windowHeight - margin));
+      const below = windowHeight - anchorY - margin;
+      const above = anchorY - margin;
+      const openUp = height > below && above > below;
+      const left = anchorX + width + margin <= window.innerWidth
+        ? anchorX
+        : Math.max(margin, anchorX - width);
+      const next = {
+        left,
+        top: openUp ? undefined : anchorY,
+        bottom: openUp ? window.innerHeight - anchorY : undefined,
+        maxHeight: Math.min(maximumHeight, openUp ? above : below),
+      };
+      setContextMenuPosition((current) => current.left === next.left && current.top === next.top &&
+        current.bottom === next.bottom && current.maxHeight === next.maxHeight ? current : next);
+    };
+    // Keep a corner at the pointer, even when the Assets panel is short.
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(menu);
+    return () => observer.disconnect();
+  }, [contextMenu, touch, viewportHeight]);
+
   useEffect(() => {
     if (!contextMenu) return;
     contextMenuRef.current?.focus({ preventScroll: true });
@@ -1575,14 +1615,11 @@ export function AssetsPanel({
   ) => {
     event.preventDefault();
     event.stopPropagation();
-    const bounds = panelRef.current?.getBoundingClientRect() ?? event.currentTarget.getBoundingClientRect();
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const atPointer = event.type === "contextmenu";
     setContextMenu({
-      x: touch
-        ? Math.max(12, Math.min(event.clientX, window.innerWidth - 300))
-        : Math.min(event.clientX - bounds.left, Math.max(8, bounds.width - 232)),
-      y: touch
-        ? Math.max(12, Math.min(event.clientY, (viewportHeight ?? window.innerHeight) - Math.min(640, (viewportHeight ?? window.innerHeight) - 24) - 12))
-        : Math.min(event.clientY - bounds.top, Math.max(8, bounds.height - 260)),
+      x: atPointer ? event.clientX : bounds.left,
+      y: atPointer ? event.clientY : bounds.bottom,
       ...target,
       creationFolderId: resolveAssetCreationFolderId(
         assets,
@@ -1593,16 +1630,7 @@ export function AssetsPanel({
   };
 
   const openCreationMenu = (event: MouseEvent<HTMLElement>) => {
-    if (touch) {
-      openContextMenu(event);
-      return;
-    }
-    const bounds = panelRef.current?.getBoundingClientRect();
-    setContextMenu({
-      x: Math.max(8, (bounds?.width ?? 240) - 232),
-      y: 42,
-      creationFolderId: resolveAssetCreationFolderId(assets, activeFolderId, {}),
-    });
+    openContextMenu(event);
   };
 
   const handleLibraryMove = (
@@ -1720,7 +1748,6 @@ export function AssetsPanel({
 
   return (
     <section
-      ref={panelRef}
       className={`relative flex min-h-0 flex-col border-t border-editor-border bg-editor-surface ${phone ? "overflow-y-auto overscroll-contain" : ""} ${fileDragOver ? "ring-2 ring-inset ring-brand-500" : ""}`}
       aria-labelledby="assets-heading"
       onDragOver={handleDragOver}
@@ -2096,8 +2123,8 @@ export function AssetsPanel({
       {contextMenu ? createPortal(
         <div
           ref={contextMenuRef}
-          className={`overflow-y-auto overscroll-contain rounded-md border border-slate-300 bg-white p-1 shadow-xl ${touch ? "editor-touch-menu fixed z-[85] max-h-[min(640px,calc(100dvh-24px))] max-w-[calc(100vw-24px)] w-72" : "absolute z-30 max-h-[calc(100%-1rem)] w-56"}`}
-          style={{ left: contextMenu.x, top: contextMenu.y, maxHeight: touch && viewportHeight ? Math.max(44, viewportHeight - contextMenu.y - 12) : undefined }}
+          className={`fixed z-[85] overflow-y-auto overscroll-contain rounded-md border border-slate-300 bg-white p-1 shadow-xl ${touch ? "editor-touch-menu max-w-[calc(100vw-24px)] w-72" : "max-w-[calc(100vw-16px)] w-56"}`}
+          style={contextMenuPosition}
           role="menu"
           aria-label="Assetsのメニュー"
           tabIndex={-1}
@@ -2255,7 +2282,7 @@ export function AssetsPanel({
           <ContextMenuItem disabled={importLocked} disabledReason={importDisabledReason} icon="import" label="ファイルをインポート…" command="asset.import" onClick={() => { setContextMenu(null); if (onCommand("asset.import")) fileInputRef.current?.click(); }} />
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="prefab" label="Entityからプレハブを作成" command="prefab.create" onClick={() => { setContextMenu(null); onPhaseNotice(touch ? "HierarchyでEntityを選び、行の「… → プレハブを作成」を押してください" : "HierarchyのEntityをAssetsへドラッグしてください"); }} />
         </div>,
-        touch ? document.body : panelRef.current ?? document.body,
+        document.body,
       ) : null}
 
       {fileDragOver ? (
