@@ -363,8 +363,8 @@ function SkyboxProjectionField({
         className="h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
       >
         <option value="infinite">Infinite（無限遠）</option>
-        <option value="box">Box（ボックス）</option>
-        <option value="dome">Dome（ドーム）</option>
+        <option value="box">Box（箱型）</option>
+        <option value="dome">Dome（半球型）</option>
       </select>
       <span className="mt-1 block text-[11px] leading-4 text-slate-500">
         {descriptions[value]}
@@ -1084,7 +1084,6 @@ export function SceneSettingsInspector({
                     key={id}
                     position={position}
                     label="Bloom"
-                    reading="光のにじみ"
                     description="明るい部分の光をにじませます。周囲を照らす効果ではありません。"
                     enabled={settings.postprocessing.bloom.enabled}
                     disabled={postLayersDisabled}
@@ -1158,7 +1157,7 @@ export function SceneSettingsInspector({
                   onMoveDown={onMoveDown}
                 >
                   <NumberField
-                    label="Contrast（コントラスト）"
+                    label="Contrast（明暗差）"
                     value={settings.postprocessing.grading.contrast}
                     min={0}
                     max={3}

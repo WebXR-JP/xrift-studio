@@ -2673,7 +2673,7 @@ const MATERIAL_IOR: SceneRecipe = {
 
 const MATERIAL_UNLIT: SceneRecipe = {
   id: SCENE_RECIPE_IDS.materialUnlit,
-  name: "アンリットの見本",
+  name: "Unlitの見本",
   description:
     "同じ色の板2枚。片方はライティングを受けません。案内板、UI、遠景の書き割りに使えます。",
   category: "material",

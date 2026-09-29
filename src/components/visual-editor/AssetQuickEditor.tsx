@@ -2467,8 +2467,8 @@ function StandardMaterialQuickEditor({
               onChange={(event) => onChange({ shadingModel: event.currentTarget.value as MaterialShadingModel })}
             >
               <option value="standard">Standard (PBR)</option>
-              <option value="mtoon-0.x">MToon 0.x（エムトゥーン）</option>
-              <option value="mtoon-1.0">MToon 1.0（エムトゥーン）</option>
+              <option value="mtoon-0.x">MToon 0.x</option>
+              <option value="mtoon-1.0">MToon 1.0</option>
             </select>
           </label>
         </EditorSection>

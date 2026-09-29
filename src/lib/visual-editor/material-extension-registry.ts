@@ -171,7 +171,7 @@ export const MATERIAL_EXTENSION_DESCRIPTORS: Readonly<
   },
   VRMC_materials_mtoon: {
     label: "MToon",
-    reading: "アニメ調の陰影",
+    reading: "",
     // The VRMC specification explicitly permits an Unlit fallback. MToon
     // takes precedence while its settings and that fallback both round-trip.
     compatibleWithUnlit: true,

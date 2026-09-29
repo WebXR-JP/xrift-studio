@@ -24,7 +24,7 @@ test("page + heading links stay inside the guide; arbitrary schemes and paths do
  for(const href of ["../../secret.md","javascript:alert(1)","./not-present.md","//evil.example/a","data:text/html,hi"])assert.equal(resolveGuideLink(href,"index",manifest).kind,"invalid",href);
 });
 test("search includes body, heading targets, Japanese aliases and multi-word queries",()=>{
- for(const [query,slug] of [["ラフネス","materials"],["Tangent Space","textures"],["色 変わらない","materials"],["完全リセット","recovery"]]){
+ for(const [query,slug] of [["表面の粗さ","materials"],["Tangent Space","textures"],["色 変わらない","materials"],["完全リセット","recovery"]]){
    const hits=searchGuide(checked.search,query);assert.ok(hits.some(h=>h.slug===slug),query);
  }
  assert.ok(searchGuide(checked.search,"Tangent Space")[0].url.includes("#"));

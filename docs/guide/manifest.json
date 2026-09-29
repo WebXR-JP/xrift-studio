@@ -131,7 +131,7 @@
       "description": "マテリアルを作る・割り当てる基本、MToonの陰影と輪郭線、複数素材の一括編集を説明します。",
       "group": "basics",
       "file": "materials.md",
-      "keywords": "マテリアル 材質 色 反射 Base Color Metallic Roughness ラフネス メタリック プラスチック 金属 MToon MToon 0.x MToon 1.0 エムトゥーン トゥーン Outline アウトライン 輪郭線 Shade Color Matcap Rim Lighting UV Animation VRM アバター 一括 まとめて 切り替え 複数 全設定",
+      "keywords": "マテリアル 材質 色 反射 Base Color Metallic Roughness 表面の粗さ 金属度 プラスチック 金属 MToon MToon 0.x MToon 1.0 トゥーン Outline アウトライン 輪郭線 Shade Color Matcap Rim Lighting UV Animation VRM アバター 一括 まとめて 切り替え 複数 全設定",
       "related": [
         "textures",
         "transparent-materials",
@@ -212,7 +212,7 @@
       "description": "ライト・IBL・Emissive・Bloomを使い分け、暗いワールドや反射が見えない原因を確認します。",
       "group": "create",
       "file": "lighting.md",
-      "keywords": "ライト 明るさ 暗い 照明 影 IBL Bloom ブルーム Emissive Exposure SSAO",
+      "keywords": "ライト 明るさ 暗い 照明 影 IBL Bloom Emissive Exposure SSAO",
       "related": [
         "materials",
         "sky-and-water",
@@ -355,7 +355,7 @@
       "description": "標準の色と反射が整ってから、表現に必要な拡張だけを追加します。",
       "group": "materials-advanced",
       "file": "material-extensions.md",
-      "keywords": "Clearcoat Iridescence IOR Volume Dispersion Sheen Specular Anisotropy Unlit クリアコート イリデッセンス",
+      "keywords": "Clearcoat Iridescence IOR Volume Dispersion Sheen Specular Anisotropy Unlit 透明な上塗り 薄膜の虹色反射",
       "related": [
         "materials",
         "transparent-materials",

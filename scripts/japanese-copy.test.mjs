@@ -619,7 +619,7 @@ test('Skybox, lighting and post-effect headings expose English names visibly', (
   visit(ast);
   for (const [label, reading] of Object.entries({Skybox:'背景', Fog:'霧',
     'Ambient Light':'環境光', 'Post Processing':'画面効果', SSAO:'接地部分や隙間の陰影',
-    Bloom:'光のにじみ', 'Color Grading':'色調補正'})) assert.equal(labels.get(label), reading);
+    Bloom:undefined, 'Color Grading':'色調補正'})) assert.equal(labels.get(label), reading);
   assert.match(read(file), /flex flex-wrap items-baseline/);
   assert.match(read(file), /label="上空の色"/); // Real colors remain natural Japanese.
   assert.match(read(file), /label="地平線の色"/);

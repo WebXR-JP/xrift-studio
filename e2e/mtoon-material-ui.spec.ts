@@ -37,11 +37,11 @@ test(`MToon ${version}の色と輪郭線を編集し、バージョン切替・U
   const roughness = page.getByRole("spinbutton", { name: "Roughnessの数値", exact: true });
   await roughness.fill("0.42");
   await roughness.press("Tab");
-  await expect(shading.getByRole("option", { name: "MToon 0.x（エムトゥーン）", exact: true })).toHaveCount(1);
-  await expect(shading.getByRole("option", { name: "MToon 1.0（エムトゥーン）", exact: true })).toHaveCount(1);
+  await expect(shading.getByRole("option", { name: "MToon 0.x", exact: true })).toHaveCount(1);
+  await expect(shading.getByRole("option", { name: "MToon 1.0", exact: true })).toHaveCount(1);
   await shading.selectOption(materialType);
   await expect(page.getByText(`MToon ${version} マテリアル`, { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "MToon エムトゥーン", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "MToon", exact: true })).toBeVisible();
   await expect(roughness).toHaveCount(0);
   await expect(page.getByRole("checkbox", { name: "Clearcoatを有効にする" })).toHaveCount(0);
   const width = page.getByRole("spinbutton", { name: "Outline Width", exact: true });

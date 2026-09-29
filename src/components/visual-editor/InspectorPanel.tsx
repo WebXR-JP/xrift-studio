@@ -3048,8 +3048,8 @@ function MultiSelectionInspector({
             >
               <option value="" disabled>{editableMaterials.length === 0 ? "変更できるマテリアルがありません" : "一部異なる"}</option>
               <option value="standard">Standard (PBR)</option>
-              <option value="mtoon-0.x">MToon 0.x（エムトゥーン）</option>
-              <option value="mtoon-1.0">MToon 1.0（エムトゥーン）</option>
+              <option value="mtoon-0.x">MToon 0.x</option>
+              <option value="mtoon-1.0">MToon 1.0</option>
             </select>
           </label>
           {materials.length > editableMaterials.length ? <p className="text-[11px] leading-4 text-slate-500">カスタムシェーダーのマテリアル{materials.length - editableMaterials.length}件は種類を変更できません。</p> : null}
