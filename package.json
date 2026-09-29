@@ -41,6 +41,7 @@
     "runtime:typecheck": "pnpm --filter xrift-studio-runtime typecheck",
     "runtime:shell:check": "node scripts/check-world-runtime-shell.mjs",
     "recording:summarize": "node scripts/summarize-recording.mjs",
+    "test:recording": "node scripts/recording-session.test.mjs",
     "test:guide": "node --test scripts/guide.test.mjs",
     "guide:capture": "node scripts/guide/capture-guide.mjs capture",
     "guide:media": "node scripts/guide/capture-guide.mjs list"

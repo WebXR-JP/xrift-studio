@@ -1,3 +1,4 @@
+import { useExternalLink } from "../useExternalLink";
 import { DEFAULT_SCALE_LINKED, MIN_SCALE_MAGNITUDE, updateVectorAxis, type TransformValueKind } from "./inspector-transform";
 import { COMPONENT_CATEGORY_LABELS, matchesEditorSearch } from "../../lib/visual-editor/editor-menu-search";
 import { getDiscoverableXriftGroups } from "../../lib/visual-editor/component-discovery";
@@ -6112,6 +6113,7 @@ export function InspectorPanel({
   onApplyMaterialPatch: (patch: MaterialAssetPatch) => void;
   onApplyMaterialFieldValue: (path: string, value: unknown) => void;
 }) {
+  const openLink = useExternalLink();
   const touch = useEditorTouch();
   const entity = selectedEntityId ? scene.entities[selectedEntityId] : undefined;
   const asset = selectedAssetId ? assets.assets[selectedAssetId] : undefined;
@@ -6280,8 +6282,8 @@ export function InspectorPanel({
                   <span className="rounded bg-white px-1.5 py-0.5 font-semibold text-slate-700 ring-1 ring-slate-200">{asset.attribution.licenseName}</span>
                 </div>
                 <div className="mt-1 flex gap-3">
-                  <button type="button" onClick={() => void tauri.openUrl(asset.attribution!.assetUrl)} className="font-semibold text-brand-700 hover:underline">配布ページを開く</button>
-                  <button type="button" onClick={() => void tauri.openUrl(asset.attribution!.licenseUrl)} className="font-semibold text-brand-700 hover:underline">ライセンスを確認</button>
+                  <button type="button" onClick={() => openLink(asset.attribution!.assetUrl)} className="font-semibold text-brand-700 hover:underline">配布ページを開く</button>
+                  <button type="button" onClick={() => openLink(asset.attribution!.licenseUrl)} className="font-semibold text-brand-700 hover:underline">ライセンスを確認</button>
                 </div>
               </section>
             ) : null}

@@ -196,12 +196,12 @@ ${createSupportReportDraft(context, sanitizedErrorMessage)}
   const openWithEnvironment = async (url: string, label: string) => {
     setCopying(true);
     try {
+      // Open in the click handler before clipboard work consumes the browser's
+      // user gesture. noopener returns null even when a tab opens successfully.
+      if (!tauri.isAvailable()) await tauri.openUrl(url);
       await copyText(environmentText);
       if (tauri.isAvailable()) {
         await tauri.openUrl(url);
-      } else {
-        const opened = window.open(url, "_blank", "noopener,noreferrer");
-        if (!opened) window.location.assign(url);
       }
       toast({
         kind: "info",

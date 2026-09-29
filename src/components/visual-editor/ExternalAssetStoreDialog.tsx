@@ -1,3 +1,4 @@
+import { useExternalLink } from "../useExternalLink";
 import "./external-asset-store.css";
 import { useEditorDevice } from "./useEditorDevice";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -143,6 +144,7 @@ export function ExternalAssetStoreDialog({
     definition: XriftComponentDefinition,
   ) => Promise<boolean>;
 }) {
+  const openLink = useExternalLink();
   const { viewportHeight } = useEditorDevice();
   const [mobilePane, setMobilePane] = useState<"list" | "detail">("list");
   const catalogRef = useRef<HTMLDivElement>(null);
@@ -611,7 +613,7 @@ export function ExternalAssetStoreDialog({
               提供元{" "}
               <button
                 type="button"
-                onClick={() => void tauri.openUrl(provider.homepageUrl)}
+                onClick={() => openLink(provider.homepageUrl)}
                 className="font-semibold text-brand-700 hover:underline"
               >
                 {provider.name}
@@ -639,7 +641,7 @@ export function ExternalAssetStoreDialog({
                     <h3 className="text-base font-semibold text-slate-900">{selected.name}</h3>
                     <button
                       type="button"
-                      onClick={() => void tauri.openUrl(selected.assetUrl)}
+                      onClick={() => openLink(selected.assetUrl)}
                       title={`${provider.name}で開く`}
                       className="rounded p-1.5 text-slate-500 hover:bg-slate-100"
                     >
@@ -659,7 +661,7 @@ export function ExternalAssetStoreDialog({
                   <dd>
                     <button
                       type="button"
-                      onClick={() => void tauri.openUrl(selected.licenseUrl)}
+                      onClick={() => openLink(selected.licenseUrl)}
                       className="font-medium text-brand-700 hover:underline"
                     >
                       {selected.licenseName}
@@ -829,6 +831,7 @@ function OpenBrushStore({
     entry: OpenBrushCatalogEntry,
   ) => Promise<{ alreadyInstalled: boolean }>;
 }) {
+  const openLink = useExternalLink();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<"all" | OpenBrushCatalogCategory>(
     "all",
@@ -1008,7 +1011,7 @@ function OpenBrushStore({
                 </div>
                 <button
                   type="button"
-                  onClick={() => void tauri.openUrl(OPEN_BRUSH_CATALOG_SOURCE_URL)}
+                  onClick={() => openLink(OPEN_BRUSH_CATALOG_SOURCE_URL)}
                   title="three-icosa公式ソースを開く"
                   className="rounded p-1.5 text-slate-500 hover:bg-slate-100"
                 >
@@ -1037,7 +1040,7 @@ function OpenBrushStore({
                 <button
                   type="button"
                   onClick={() =>
-                    void tauri.openUrl(OPEN_BRUSH_CATALOG_LICENSE_URL)
+                    openLink(OPEN_BRUSH_CATALOG_LICENSE_URL)
                   }
                   className="font-medium text-brand-700 hover:underline"
                 >

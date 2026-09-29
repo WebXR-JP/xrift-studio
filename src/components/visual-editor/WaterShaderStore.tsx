@@ -1,3 +1,4 @@
+import { useExternalLink } from "../useExternalLink";
 import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
@@ -21,7 +22,6 @@ import {
   type WaterShaderParameter,
   type ResolvedWind,
 } from "../../lib/visual-editor";
-import { tauri } from "../../lib/tauri";
 import { WaterShaderCatalogPreview } from "./WaterShaderCatalogPreview";
 
 export type WaterShaderInstallResult = {
@@ -49,6 +49,7 @@ export function WaterShaderStore({
     parameterValues: Readonly<Record<string, number | string>>,
   ) => Promise<WaterShaderInstallResult>;
 }) {
+  const openLink = useExternalLink();
   const [query, setQuery] = useState("");
   const [sampleWind, setSampleWind] = useState(wind.speed <= 0);
   const [paused, setPaused] = useState(false);
@@ -275,7 +276,7 @@ export function WaterShaderStore({
                 </div>
                 <button
                   type="button"
-                  onClick={() => void tauri.openUrl(WATER_SHADER_CATALOG_SOURCE_URL)}
+                  onClick={() => openLink(WATER_SHADER_CATALOG_SOURCE_URL)}
                   title="シェーダーのソースを開く"
                   className="rounded p-1.5 text-slate-500 hover:bg-slate-100"
                 >

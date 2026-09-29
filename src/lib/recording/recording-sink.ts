@@ -62,8 +62,8 @@ export function createTauriRecordingSink(): RecordingSink {
     async close(metadata) {
       if (!fileId) return { path, metadataPath: null, bytesWritten: 0 };
       const id = fileId;
-      fileId = null;
       const summary = await tauri.finishRecordingFile(id, metadata);
+      fileId = null;
       return {
         path: summary.path,
         metadataPath: summary.metadataPath,
