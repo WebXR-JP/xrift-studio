@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { openPath, openUrl } from "@tauri-apps/plugin-opener";
+import { openPath, openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { PROJECT_PACKAGE_EXTENSION } from "./project-package";
 import {
@@ -375,6 +375,7 @@ export const tauri = {
       ...(defaultPath ? { defaultPath } : {}),
     }),
   openPath: (path: string) => openPath(path),
+  revealItemInDir: (path: string) => revealItemInDir(path),
   openUrl: (url: string): Promise<void> => {
     if (isTauri()) return openUrl(url);
     try {
