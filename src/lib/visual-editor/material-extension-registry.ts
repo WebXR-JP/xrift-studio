@@ -62,7 +62,7 @@ export type MaterialExtensionDescriptor = {
   readonly exclusive?: boolean;
   /** Allowed alongside an exclusive shading extension as a fallback. */
   readonly compatibleWithUnlit?: boolean;
-  /** UI names follow glTF; Japanese readings are presentation-only metadata. */
+  /** UI names follow glTF; Japanese explanations are presentation-only metadata. */
   readonly label: string;
   readonly reading: string;
 };
@@ -72,7 +72,7 @@ export const MATERIAL_EXTENSION_DESCRIPTORS: Readonly<
 > = {
   KHR_materials_anisotropy: {
     label: "Anisotropy",
-    reading: "アニソトロピー",
+    reading: "異方性反射",
     fields: [
       { kind: "unit", name: "anisotropyStrength", default: 0 },
       { kind: "finite", name: "anisotropyRotation", default: 0 },
@@ -81,7 +81,7 @@ export const MATERIAL_EXTENSION_DESCRIPTORS: Readonly<
   },
   KHR_materials_clearcoat: {
     label: "Clearcoat",
-    reading: "クリアコート",
+    reading: "透明な上塗り",
     fields: [
       { kind: "unit", name: "clearcoatFactor", default: 0 },
       { kind: "texture", name: "clearcoatTexture" },
@@ -92,13 +92,13 @@ export const MATERIAL_EXTENSION_DESCRIPTORS: Readonly<
   },
   KHR_materials_dispersion: {
     label: "Dispersion",
-    reading: "ディスパージョン",
+    reading: "光の分散",
     requires: ["KHR_materials_volume"],
     fields: [{ kind: "nonNegative", name: "dispersion", default: 0 }],
   },
   KHR_materials_emissive_strength: {
     label: "Emissive Strength",
-    reading: "エミッシブの強さ",
+    reading: "発光の強さ",
     fields: [{ kind: "nonNegative", name: "emissiveStrength", default: 1 }],
   },
   KHR_materials_ior: {
@@ -108,7 +108,7 @@ export const MATERIAL_EXTENSION_DESCRIPTORS: Readonly<
   },
   KHR_materials_iridescence: {
     label: "Iridescence",
-    reading: "イリデッセンス",
+    reading: "薄膜の虹色反射",
     fields: [
       { kind: "unit", name: "iridescenceFactor", default: 0 },
       { kind: "texture", name: "iridescenceTexture" },
@@ -122,7 +122,7 @@ export const MATERIAL_EXTENSION_DESCRIPTORS: Readonly<
   },
   KHR_materials_sheen: {
     label: "Sheen",
-    reading: "シーン",
+    reading: "布の光沢",
     fields: [
       { kind: "unitColor3", name: "sheenColorFactor", default: [0, 0, 0] },
       { kind: "texture", name: "sheenColorTexture" },
@@ -132,7 +132,7 @@ export const MATERIAL_EXTENSION_DESCRIPTORS: Readonly<
   },
   KHR_materials_specular: {
     label: "Specular",
-    reading: "スペキュラー",
+    reading: "鏡面反射",
     fields: [
       { kind: "unit", name: "specularFactor", default: 1 },
       { kind: "texture", name: "specularTexture" },
@@ -146,7 +146,7 @@ export const MATERIAL_EXTENSION_DESCRIPTORS: Readonly<
   },
   KHR_materials_transmission: {
     label: "Transmission",
-    reading: "トランスミッション",
+    reading: "光の透過",
     fields: [
       { kind: "unit", name: "transmissionFactor", default: 0 },
       { kind: "texture", name: "transmissionTexture" },
@@ -154,13 +154,13 @@ export const MATERIAL_EXTENSION_DESCRIPTORS: Readonly<
   },
   KHR_materials_unlit: {
     label: "Unlit",
-    reading: "アンリット",
+    reading: "照明の影響なし",
     exclusive: true,
     fields: [],
   },
   KHR_materials_volume: {
     label: "Volume",
-    reading: "ボリューム",
+    reading: "材質の厚み",
     requires: ["KHR_materials_transmission"],
     fields: [
       { kind: "nonNegative", name: "thicknessFactor", default: 0 },
@@ -171,7 +171,7 @@ export const MATERIAL_EXTENSION_DESCRIPTORS: Readonly<
   },
   VRMC_materials_mtoon: {
     label: "MToon",
-    reading: "エムトゥーン",
+    reading: "アニメ調の陰影",
     // The VRMC specification explicitly permits an Unlit fallback. MToon
     // takes precedence while its settings and that fallback both round-trip.
     compatibleWithUnlit: true,

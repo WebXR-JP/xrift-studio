@@ -834,7 +834,7 @@ export function SceneSettingsInspector({
           </button>
         </Section>
 
-        <Section title="Skybox" reading="スカイボックス" description="空や周囲の景色を、シーンの背景に表示します。">
+        <Section title="Skybox" reading="背景" description="空や周囲の景色を、シーンの背景に表示します。">
           <Toggle
             label="背景に表示"
             title="Skyboxの表示を切り替えます。IBLは別に設定します。"
@@ -951,7 +951,7 @@ export function SceneSettingsInspector({
           ) : null}
         </Section>
 
-        <Section title="Fog" reading="フォグ" description="遠くのものを霧でかすませます。">
+        <Section title="Fog" reading="霧" description="遠くのものを霧でかすませます。">
           <Toggle label="Fogを有効にする" checked={settings.fog.enabled} disabled={readOnly} onChange={(enabled) => update({ ...settings, fog: { ...settings.fog, enabled } })} />
           <ColorField label="Color（色）" value={settings.fog.color} disabled={readOnly || !settings.fog.enabled} onChange={(color) => update({ ...settings, fog: { ...settings.fog, color } })} />
           <NumberField label="Near（開始距離）" description="カメラから、この距離を超えると霧がかかり始めます。" value={settings.fog.near} min={0} max={settings.fog.far - 0.001} step={0.5} disabled={readOnly || !settings.fog.enabled} onChange={(near) => update({ ...settings, fog: { ...settings.fog, near } })} />
@@ -990,7 +990,7 @@ export function SceneSettingsInspector({
 
         <Section
           title="Post Processing"
-          reading="ポストプロセス"
+          reading="画面効果"
           description="上から順に重ねます。順番によって見た目が変わります。"
         >
           <Toggle
@@ -1029,7 +1029,7 @@ export function SceneSettingsInspector({
             <PostEffectLayer
               position={1}
               label="SSAO"
-              reading="スクリーンスペースAO"
+              reading="接地部分や隙間の陰影"
               description="物の接地部分や隙間に陰影を加えます。"
               fixedNote="常に最初に適用します。"
               enabled={settings.postprocessing.ao.enabled}
@@ -1084,7 +1084,7 @@ export function SceneSettingsInspector({
                     key={id}
                     position={position}
                     label="Bloom"
-                    reading="ブルーム"
+                    reading="光のにじみ"
                     description="明るい部分の光をにじませます。周囲を照らす効果ではありません。"
                     enabled={settings.postprocessing.bloom.enabled}
                     disabled={postLayersDisabled}
@@ -1145,7 +1145,7 @@ export function SceneSettingsInspector({
                   key={id}
                   position={position}
                   label="Color Grading"
-                  reading="カラーグレーディング"
+                  reading="色調補正"
                   description="画面全体の明暗差や色味を調整します。"
                   enabled={settings.postprocessing.grading.enabled}
                   disabled={postLayersDisabled}
@@ -1321,8 +1321,8 @@ export function SceneSettingsInspector({
           title="カメラ"
           description="カメラに映す距離と画角です。公開後も同じ設定を使います。"
         >
-          <NumberField label="Near Clip" value={settings.camera.near} min={0.01} max={settings.camera.far - 0.0001} step={0.01} disabled={readOnly} onChange={(near) => update({ ...settings, camera: { ...settings.camera, near } })} />
-          <NumberField label="Far Clip" value={settings.camera.far} min={1} step={1} disabled={readOnly} onChange={(far) => update({ ...settings, camera: { ...settings.camera, far: Math.max(far, settings.camera.near + 0.0001) } })} />
+          <NumberField label="Near Clip（描画する最短距離）" value={settings.camera.near} min={0.01} max={settings.camera.far - 0.0001} step={0.01} disabled={readOnly} onChange={(near) => update({ ...settings, camera: { ...settings.camera, near } })} />
+          <NumberField label="Far Clip（描画する最長距離）" value={settings.camera.far} min={1} step={1} disabled={readOnly} onChange={(far) => update({ ...settings, camera: { ...settings.camera, far: Math.max(far, settings.camera.near + 0.0001) } })} />
           <NumberField label="視野角" value={settings.camera.fov} min={1} max={179} step={1} disabled={readOnly} onChange={(fov) => update({ ...settings, camera: { ...settings.camera, fov } })} />
         </Section>
 

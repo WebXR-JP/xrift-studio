@@ -1439,7 +1439,7 @@ function MToonMaterialControls({
     <>
       <EditorSection title={descriptor.label} reading={descriptor.reading} titleHint="VRMC_materials_mtoon">
         <Color3Control materialPath="extensions.VRMC_materials_mtoon.shadeColorFactor"
-          label="Shade Color"
+          label="Shade Color（影の色）"
           value={value.shadeColorFactor}
           max={1}
           description="光が当たらない面の色です。"
@@ -1447,7 +1447,7 @@ function MToonMaterialControls({
           onChange={(shadeColorFactor) => onChange({ shadeColorFactor })}
         />
         <TextureSlot materialPath="extensions.VRMC_materials_mtoon.shadeMultiplyTexture"
-          label="Shade Multiply Map"
+          label="Shade Multiply Map（影の色の画像）"
           description="RGBをShade Colorに掛け合わせます（sRGB）。"
           value={value.shadeMultiplyTexture}
           textures={textures}
@@ -1458,21 +1458,21 @@ function MToonMaterialControls({
           onChange={(shadeMultiplyTexture) => onChange({ shadeMultiplyTexture })}
         />
         <NumberControl materialPath="extensions.VRMC_materials_mtoon.shadingShiftFactor"
-          label="Shading Shift"
+          label="Shading Shift（明暗の境界位置）"
           value={value.shadingShiftFactor}
           description="大きいほど明るい面が広がり、小さいほどShade Colorの面が広がります。"
           disabled={readOnly}
           onChange={(shadingShiftFactor) => onChange({ shadingShiftFactor })}
         />
         <RangeControl materialPath="extensions.VRMC_materials_mtoon.shadingToonyFactor"
-          label="Shading Toony"
+          label="Shading Toony（明暗の境界のくっきりさ）"
           value={value.shadingToonyFactor}
           description="大きいほど明るい面と暗い面の境界がくっきりします。"
           disabled={readOnly}
           onChange={(shadingToonyFactor) => onChange({ shadingToonyFactor })}
         />
         <RangeControl materialPath="extensions.VRMC_materials_mtoon.giEqualizationFactor"
-          label="GI Equalization"
+          label="GI Equalization（環境光による明暗差の抑制）"
           value={value.giEqualizationFactor}
           description="大きいほど環境光による明暗を均等にします。"
           disabled={readOnly}
@@ -1480,7 +1480,7 @@ function MToonMaterialControls({
         />
       </EditorSection>
 
-      <EditorSection title="Outline" reading="アウトライン">
+      <EditorSection title="Outline" reading="輪郭線">
         <label className="block text-xs text-slate-600">
           <span className="mb-1 block">Outline Width Mode</span>
           <MaterialSelect materialPath="extensions.VRMC_materials_mtoon.outlineWidthMode"
@@ -1497,7 +1497,7 @@ function MToonMaterialControls({
           </MaterialSelect>
         </label>
         <NumberControl materialPath="extensions.VRMC_materials_mtoon.outlineWidthFactor"
-          label="Outline Width"
+          label="Outline Width（輪郭線の太さ）"
           value={value.outlineWidthFactor}
           min={0}
           step={0.001}
@@ -1508,7 +1508,7 @@ function MToonMaterialControls({
           onChange={(outlineWidthFactor) => onChange({ outlineWidthFactor })}
         />
         <Color3Control materialPath="extensions.VRMC_materials_mtoon.outlineColorFactor"
-          label="Outline Color"
+          label="Outline Color（輪郭線の色）"
           value={value.outlineColorFactor}
           max={1}
           description="輪郭線の色です。"
@@ -1516,14 +1516,14 @@ function MToonMaterialControls({
           onChange={(outlineColorFactor) => onChange({ outlineColorFactor })}
         />
         <RangeControl materialPath="extensions.VRMC_materials_mtoon.outlineLightingMixFactor"
-          label="Outline Lighting Mix"
+          label="Outline Lighting Mix（照明の影響）"
           value={value.outlineLightingMixFactor}
           description="0で設定した色、1でライトの影響を受ける色になります。"
           disabled={outlineDisabled}
           onChange={(outlineLightingMixFactor) => onChange({ outlineLightingMixFactor })}
         />
         <TextureSlot materialPath="extensions.VRMC_materials_mtoon.outlineWidthMultiplyTexture"
-          label="Outline Width Multiply Map"
+          label="Outline Width Multiply Map（輪郭線の太さの画像）"
           description="G（緑）を輪郭線の幅に掛け合わせます（リニア色空間）。黒で幅0、白で指定した幅。"
           value={value.outlineWidthMultiplyTexture}
           textures={textures}
@@ -2457,7 +2457,7 @@ function StandardMaterialQuickEditor({
       </div> : null}
 
       {!settingsOnly && !openBrush && !customShader ? (
-        <EditorSection title="Shading" reading="シェーディング">
+        <EditorSection title="Shading" reading="陰影の方式">
           <label className="block text-xs text-slate-600">
             <span className="mb-1 block">マテリアルの種類</span>
             <select
@@ -2538,7 +2538,7 @@ function StandardMaterialQuickEditor({
         </p>
       </MaterialExtensionSection> : null}
 
-      <EditorSection title="Base Color" reading="ベースカラー">
+      <EditorSection title="Base Color" reading="基本色">
         <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
           頂点カラーを使用
           <MaterialInput materialPath="vertexColors" type="checkbox" checked={asset.properties.vertexColors ?? false} disabled={readOnly}
@@ -2581,7 +2581,7 @@ function StandardMaterialQuickEditor({
         />
       </EditorSection>
 
-      <EditorSection title="Alpha" reading="アルファ">
+      <EditorSection title="Alpha" reading="不透明度">
         <label className="block text-xs text-slate-600">
           <span className="mb-1 block">Alpha Mode</span>
           <MaterialSelect materialPath="alphaMode"
@@ -2673,7 +2673,7 @@ function StandardMaterialQuickEditor({
         </label>
       </EditorSection>
 
-      {!mtoon ? <EditorSection title="Metallic / Roughness" reading="メタリック / ラフネス">
+      {!mtoon ? <EditorSection title="Metallic / Roughness" reading="金属度 / 表面の粗さ">
         <RangeControl materialPath="pbrMetallicRoughness.metallicFactor"
           label="Metallic"
           description="0で非金属、1で金属の見た目になります。"
@@ -2707,7 +2707,7 @@ function StandardMaterialQuickEditor({
         />
       </EditorSection> : null}
 
-      <EditorSection title={mtoon ? "Normal" : "Normal / Occlusion"} reading={mtoon ? "ノーマル" : "ノーマル / オクルージョン"}>
+      <EditorSection title={mtoon ? "Normal" : "Normal / Occlusion"} reading={mtoon ? "凹凸の陰影" : "凹凸の陰影 / 隙間の陰影"}>
         <TextureSlot materialPath="normalTexture"
           label="Normal Map"
           description="陰影で細かな凹凸を表します。メッシュの形や輪郭は変わりません。"
@@ -2770,7 +2770,7 @@ function StandardMaterialQuickEditor({
         </> : null}
       </EditorSection>
 
-      <EditorSection title="Emissive" reading="エミッシブ">
+      <EditorSection title="Emissive" reading="発光">
         <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
           Color
           <span className="flex items-center gap-1.5">
@@ -2993,7 +2993,7 @@ function StandardMaterialQuickEditor({
               }
             />
             <TextureSlot materialPath="extensions.KHR_materials_anisotropy.anisotropyTexture"
-              label="Anisotropy Map"
+              label="Anisotropy Map（反射の方向と強さ）"
               description="RGが反射の方向、B（青）が強さです（リニア色空間）。"
               value={anisotropy.anisotropyTexture}
               textures={textures}
@@ -3116,7 +3116,7 @@ function StandardMaterialQuickEditor({
               }
             />
             <TextureSlot materialPath="extensions.KHR_materials_specular.specularTexture"
-              label="Specular Map"
+              label="Specular Map（鏡面反射の強さ）"
               description="Aが反射の強さです（リニア色空間）。"
               value={specular.specularTexture}
               textures={textures}
@@ -3221,7 +3221,7 @@ function StandardMaterialQuickEditor({
               }
             />
             <TextureSlot materialPath="extensions.KHR_materials_transmission.transmissionTexture"
-              label="Transmission Map"
+              label="Transmission Map（光の透過率）"
               description="R（赤）が光の透過率です（リニア色空間）。"
               value={transmission.transmissionTexture}
               textures={textures}
@@ -3420,7 +3420,7 @@ function StandardMaterialQuickEditor({
               }
             />
             <TextureSlot materialPath="extensions.KHR_materials_iridescence.iridescenceTexture"
-              label="Iridescence Map"
+              label="Iridescence Map（虹色反射の強さ）"
               description="R（赤）が色の変化の強さです（リニア色空間）。"
               value={iridescence.iridescenceTexture}
               textures={textures}

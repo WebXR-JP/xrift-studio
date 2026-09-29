@@ -2607,7 +2607,7 @@ const MATERIAL_SHEEN: SceneRecipe = {
 
 const MATERIAL_SPECULAR: SceneRecipe = {
   id: SCENE_RECIPE_IDS.materialSpecular,
-  name: "スペキュラーの見本",
+  name: "鏡面反射の見本",
   description:
     "黒いレンズ鏡筒2つと、金コーティングの球。金属にせずに映り込みの強さと色を変える表現。",
   category: "material",

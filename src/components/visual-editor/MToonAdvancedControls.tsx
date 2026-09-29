@@ -47,7 +47,7 @@ export function MToonAdvancedControls({
     <>
       <EditorSection title="Shading Shift Map" reading="陰影の境界を変える画像">
         <TextureSlot
-          label="Shading Shift Map"
+          label="Shading Shift Map（明暗の境界位置の画像）"
           materialPath={path("shadingShiftTexture")}
           description="R（赤）を使い、部分ごとに明るい面と暗い面の境界をずらします（リニア色空間）。"
           value={value.shadingShiftTexture}
@@ -56,7 +56,7 @@ export function MToonAdvancedControls({
           onChange={(shadingShiftTexture) => onChange({ shadingShiftTexture })}
         />
         <NumberControl
-          label="Shading Shift Map Scale"
+          label="Shading Shift Map Scale（画像による境界の調整量）"
           materialPath={path("shadingShiftTexture.scale")}
           value={value.shadingShiftTexture?.scale ?? 1}
           description="画像によるずらす量です。負の値で明暗の変化を反転します。"
@@ -67,9 +67,9 @@ export function MToonAdvancedControls({
         />
       </EditorSection>
 
-      <EditorSection title="Matcap" reading="マットキャップ">
+      <EditorSection title="Matcap" reading="画像による映り込み">
         <Color3Control
-          label="Matcap Color"
+          label="Matcap Color（映り込みの色）"
           materialPath={path("matcapFactor")}
           value={value.matcapFactor ?? MTOON_DEFAULTS.matcapFactor}
           max={1}
@@ -78,7 +78,7 @@ export function MToonAdvancedControls({
           onChange={(matcapFactor) => onChange({ matcapFactor })}
         />
         <TextureSlot
-          label="Matcap Map"
+          label="Matcap Map（映り込みの画像）"
           materialPath={path("matcapTexture")}
           description="見る向きに合わせた映り込みを加えます（sRGB）。UV Animationの影響は受けません。"
           value={value.matcapTexture}
@@ -88,9 +88,9 @@ export function MToonAdvancedControls({
         />
       </EditorSection>
 
-      <EditorSection title="Rim Lighting" reading="リムライト">
+      <EditorSection title="Rim Lighting" reading="縁の光">
         <Color3Control
-          label="Rim Color"
+          label="Rim Color（縁の光の色）"
           materialPath={path("parametricRimColorFactor")}
           value={value.parametricRimColorFactor ?? MTOON_DEFAULTS.parametricRimColorFactor}
           max={1}
@@ -99,7 +99,7 @@ export function MToonAdvancedControls({
           onChange={(parametricRimColorFactor) => onChange({ parametricRimColorFactor })}
         />
         <TextureSlot
-          label="Rim Multiply Map"
+          label="Rim Multiply Map（縁の光の画像）"
           materialPath={path("rimMultiplyTexture")}
           description="RGBをMatcapとRim Colorに掛け合わせます（sRGB）。"
           value={value.rimMultiplyTexture}
@@ -108,7 +108,7 @@ export function MToonAdvancedControls({
           onChange={(rimMultiplyTexture) => onChange({ rimMultiplyTexture })}
         />
         <NumberControl
-          label="Rim Fresnel Power"
+          label="Rim Fresnel Power（縁の光の集中度）"
           materialPath={path("parametricRimFresnelPowerFactor")}
           value={value.parametricRimFresnelPowerFactor ?? MTOON_DEFAULTS.parametricRimFresnelPowerFactor}
           min={0}
@@ -117,7 +117,7 @@ export function MToonAdvancedControls({
           onChange={(parametricRimFresnelPowerFactor) => onChange({ parametricRimFresnelPowerFactor })}
         />
         <NumberControl
-          label="Rim Lift"
+          label="Rim Lift（縁の光の底上げ）"
           materialPath={path("parametricRimLiftFactor")}
           value={value.parametricRimLiftFactor ?? MTOON_DEFAULTS.parametricRimLiftFactor}
           description="大きいほどリムライトが広い面に現れます。"
@@ -125,7 +125,7 @@ export function MToonAdvancedControls({
           onChange={(parametricRimLiftFactor) => onChange({ parametricRimLiftFactor })}
         />
         <RangeControl
-          label="Rim Lighting Mix"
+          label="Rim Lighting Mix（照明の影響）"
           materialPath={path("rimLightingMixFactor")}
           value={value.rimLightingMixFactor ?? MTOON_DEFAULTS.rimLightingMixFactor}
           description="0で設定した色、1でライトの影響を受ける色になります。"
@@ -136,7 +136,7 @@ export function MToonAdvancedControls({
 
       <EditorSection title="UV Animation" reading="画像のスクロールと回転">
         <TextureSlot
-          label="UV Animation Mask Map"
+          label="UV Animation Mask Map（動かす範囲の画像）"
           materialPath={path("uvAnimationMaskTexture")}
           description="B（青）を使い、部分ごとに動く速さを変えます（リニア色空間）。黒で停止、白で指定した速さ。"
           value={value.uvAnimationMaskTexture}
@@ -145,7 +145,7 @@ export function MToonAdvancedControls({
           onChange={(uvAnimationMaskTexture) => onChange({ uvAnimationMaskTexture })}
         />
         <NumberControl
-          label="UV Scroll X Speed"
+          label="UV Scroll X Speed（横方向の移動速度）"
           materialPath={path("uvAnimationScrollXSpeedFactor")}
           value={value.uvAnimationScrollXSpeedFactor ?? MTOON_DEFAULTS.uvAnimationScrollXSpeedFactor}
           description="1でUVを毎秒1ずらします。負の値で逆方向、0で停止。"
@@ -153,7 +153,7 @@ export function MToonAdvancedControls({
           onChange={(uvAnimationScrollXSpeedFactor) => onChange({ uvAnimationScrollXSpeedFactor })}
         />
         <NumberControl
-          label="UV Scroll Y Speed"
+          label="UV Scroll Y Speed（縦方向の移動速度）"
           materialPath={path("uvAnimationScrollYSpeedFactor")}
           value={value.uvAnimationScrollYSpeedFactor ?? MTOON_DEFAULTS.uvAnimationScrollYSpeedFactor}
           description="1でUVを毎秒1ずらします。負の値で逆方向、0で停止。"
@@ -161,7 +161,7 @@ export function MToonAdvancedControls({
           onChange={(uvAnimationScrollYSpeedFactor) => onChange({ uvAnimationScrollYSpeedFactor })}
         />
         <NumberControl
-          label="UV Rotation Speed"
+          label="UV Rotation Speed（回転速度）"
           materialPath={path("uvAnimationRotationSpeedFactor")}
           value={value.uvAnimationRotationSpeedFactor ?? MTOON_DEFAULTS.uvAnimationRotationSpeedFactor}
           description="単位はrad/秒です。約6.283で毎秒1回転、負の値で逆方向、0で停止。"
@@ -184,7 +184,7 @@ export function MToonAdvancedControls({
         </label>
         <p className="text-[11px] leading-4 text-slate-500">Alpha ModeがBlendで、Depth Writeが自動のとき、半透明の面も深度を書き込みます。</p>
         <NumberControl
-          label="Render Queue Offset"
+          label="Render Queue Offset（描画順の調整）"
           materialPath={path("renderQueueOffsetNumber")}
           value={value.renderQueueOffsetNumber ?? MTOON_DEFAULTS.renderQueueOffsetNumber}
           min={-9}
