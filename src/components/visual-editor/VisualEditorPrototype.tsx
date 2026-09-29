@@ -11952,8 +11952,7 @@ export function VisualEditorPrototype({
               },
               onResetDirectory: () => recordingSession.setOutputDirectory(null),
               onRevealRecording: (path) => {
-                const folder = path.replace(/[\\/][^\\/]+$/, "");
-                void tauri.openPath(folder || path).catch(() => {
+                void tauri.revealItemInDir(path).catch(() => {
                   setNotice("録画の保存先を開けませんでした");
                 });
               },
