@@ -22,6 +22,7 @@ import {
 } from "./open-brush-hierarchy";
 import {
   expandModelEntityHierarchy,
+  reconcileModelNodeCoordinatesInEntities,
   reconcileModelNodeEnabledInEntities,
 } from "./model-hierarchy";
 import {
@@ -469,14 +470,16 @@ export function parseVisualProjectFiles(
    */
   let modelNodeEnabledReconciled = 0;
   for (const [sceneId, scene] of Object.entries(migratedScenes)) {
-    const result = reconcileModelNodeEnabledInEntities(scene.entities);
-    if (result.reconciled === 0) continue;
+    const coordinates = reconcileModelNodeCoordinatesInEntities(scene.entities, migratedAssets);
+    const result = reconcileModelNodeEnabledInEntities(coordinates.entities);
+    if (coordinates.reconciled === 0 && result.reconciled === 0) continue;
     modelNodeEnabledReconciled += result.reconciled;
     migratedScenes[sceneId] = { ...scene, entities: result.entities };
   }
   for (const [prefabId, prefab] of Object.entries(migratedPrefabs)) {
-    const result = reconcileModelNodeEnabledInEntities(prefab.entities);
-    if (result.reconciled === 0) continue;
+    const coordinates = reconcileModelNodeCoordinatesInEntities(prefab.entities, migratedAssets);
+    const result = reconcileModelNodeEnabledInEntities(coordinates.entities);
+    if (coordinates.reconciled === 0 && result.reconciled === 0) continue;
     modelNodeEnabledReconciled += result.reconciled;
     migratedPrefabs[prefabId] = { ...prefab, entities: result.entities };
   }

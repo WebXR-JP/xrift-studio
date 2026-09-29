@@ -32,6 +32,7 @@ import {
   openBrushBuiltinTextureKey,
   type OpenBrushModelMetadata,
 } from "./open-brush";
+import { convertVrm0MaterialsForAuthoring } from "./vrm-material-conversion";
 
 type JsonObject = Record<string, unknown>;
 type GltfTextureInfoPatch = Exclude<
@@ -52,6 +53,7 @@ export type GltfJson = {
   samplers?: JsonObject[];
   extensionsUsed?: unknown;
   extensionsRequired?: unknown;
+  extensions?: JsonObject;
 };
 
 export type GltfDerivedAssetWrite = {
@@ -122,6 +124,7 @@ export async function expandGltfAssets(
   input: ExpandGltfAssetsInput,
 ): Promise<ExpandedGltfAssets> {
   const warnings: GltfDerivedAssetWarning[] = [];
+  input = { ...input, json: await convertVrm0MaterialsForAuthoring(input.json, warnings) };
   const images = input.openBrush ? [] : await extractImages(input, warnings);
   const textureExpansion = input.openBrush
     ? expandOpenBrushTextures(input, warnings)
@@ -707,11 +710,50 @@ function materialExtensions(
     const source = objectValue(extensions[name]);
     if (!source) continue;
     const basePath = `materials[${materialIndex}].extensions.${name}`;
+    if (name === "VRMC_materials_mtoon") {
+      if (source.specVersion !== "1.0") {
+        warnings.push({
+          code: "gltf-material-extension-version-unsupported",
+          message: "MToon は specVersion 1.0 に対応しています。別の版の設定は取り込みませんでした",
+          fieldPath: `${basePath}.specVersion`,
+        });
+        continue;
+      }
+      const supported = new Set(MATERIAL_EXTENSION_DESCRIPTORS[name].fields.map((field) => field.name));
+      for (const key of Object.keys(source)) {
+        if (supported.has(key) || key === "extensions" || key === "extras") continue;
+        warnings.push({
+          code: "gltf-material-extension-property-unsupported",
+          message: `MToon の ${key} は現在のマテリアル編集に対応していないため取り込みませんでした`,
+          fieldPath: `${basePath}.${key}`,
+        });
+      }
+    }
     const value: JsonObject = {};
     for (const field of MATERIAL_EXTENSION_DESCRIPTORS[name].fields) {
       const raw = source[field.name];
       const path = `${basePath}.${field.name}`;
       switch (field.kind) {
+        case "boolean":
+          value[field.name] = typeof raw === "boolean" ? raw : field.default;
+          break;
+        case "enum":
+          value[field.name] = typeof raw === "string" && field.values.includes(raw) ? raw : field.default;
+          break;
+        case "integer": {
+          const number = finiteNumber(raw, field.default);
+          value[field.name] = Number.isInteger(number) && number >= field.minimum && number <= field.maximum ? number : field.default;
+          break;
+        }
+        case "booleanRecord": {
+          const sourceRecord = objectValue(raw);
+          const record: Record<string, boolean> = {};
+          for (const key of field.keys) {
+            if (typeof sourceRecord?.[key] === "boolean") record[key] = sourceRecord[key];
+          }
+          if (Object.keys(record).length) value[field.name] = record;
+          break;
+        }
         case "texture": {
           const texture = textureInfo(raw, textureAssetIds, path, warnings);
           if (texture) value[field.name] = texture;

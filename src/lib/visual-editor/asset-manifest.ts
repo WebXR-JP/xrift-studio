@@ -6,6 +6,7 @@ import type {
   KHR_INTERACTIVITY_SPEC_STATUS,
 } from "./interactivity-graph";
 import type { MaterialShader } from "./custom-shader-contract";
+import type { MToonMaterialSettings } from "../../../packages/xrift-studio-runtime/src/mtoon-contract";
 import {
   MATERIAL_EXTENSION_DESCRIPTORS,
   MATERIAL_EXTENSION_NAMES,
@@ -356,7 +357,10 @@ export type KhrMaterialsDispersion = {
   dispersion: number;
 };
 
-/** Declaration-merge boundary for future typed KHR_materials_* support. */
+/** MToon 1.0 shares its scalar contract and defaults with every renderer. */
+export type VrmMaterialsMToon = MToonMaterialSettings<MaterialTextureInfo>;
+
+/** Declaration-merge boundary for typed material extensions. */
 export interface MaterialExtensionSchemaRegistry {
   KHR_materials_anisotropy: KhrMaterialsAnisotropy;
   KHR_materials_clearcoat: KhrMaterialsClearcoat;
@@ -369,6 +373,7 @@ export interface MaterialExtensionSchemaRegistry {
   KHR_materials_transmission: KhrMaterialsTransmission;
   KHR_materials_unlit: KhrMaterialsUnlit;
   KHR_materials_volume: KhrMaterialsVolume;
+  VRMC_materials_mtoon: VrmMaterialsMToon;
 }
 
 export type MaterialExtensions = Partial<{
@@ -432,6 +437,8 @@ export type MaterialProperties = {
 
 export type MaterialAsset = AssetBase<"material"> & {
   properties: MaterialProperties;
+  /** Inactive toon authoring settings restored when the builtin shader is selected again. */
+  savedMToonSettings?: VrmMaterialsMToon;
   /** Custom renderer preset retained without flattening it into glTF PBR. */
   shader?: import("./custom-shader-contract").MaterialShader;
   /** Present only for a Material expanded from an imported glTF/GLB. */
@@ -1142,6 +1149,18 @@ export type KhrMaterialsDispersionPatch = {
   dispersion?: number;
 };
 
+export type VrmMaterialsMToonPatch = Partial<
+  Omit<VrmMaterialsMToon, "shadeMultiplyTexture" | "shadingShiftTexture" | "matcapTexture" | "rimMultiplyTexture" | "outlineWidthMultiplyTexture" | "uvAnimationMaskTexture" | "extras">
+> & {
+  shadeMultiplyTexture?: MaterialTextureInfoPatch;
+  shadingShiftTexture?: NormalTextureInfoPatch;
+  matcapTexture?: MaterialTextureInfoPatch;
+  rimMultiplyTexture?: MaterialTextureInfoPatch;
+  outlineWidthMultiplyTexture?: MaterialTextureInfoPatch;
+  uvAnimationMaskTexture?: MaterialTextureInfoPatch;
+  extras?: VrmMaterialsMToon["extras"] | null;
+};
+
 export interface MaterialExtensionPatchRegistry {
   KHR_materials_anisotropy: KhrMaterialsAnisotropyPatch;
   KHR_materials_clearcoat: KhrMaterialsClearcoatPatch;
@@ -1154,6 +1173,7 @@ export interface MaterialExtensionPatchRegistry {
   KHR_materials_transmission: KhrMaterialsTransmissionPatch;
   KHR_materials_unlit: KhrMaterialsUnlitPatch;
   KHR_materials_volume: KhrMaterialsVolumePatch;
+  VRMC_materials_mtoon: VrmMaterialsMToonPatch;
 }
 
 export type MaterialExtensionsPatch = Partial<{
@@ -1162,7 +1182,11 @@ export type MaterialExtensionsPatch = Partial<{
     | null;
 }>;
 
+export type MaterialShadingModel = "standard" | "mtoon-0.x" | "mtoon-1.0";
+
 export type MaterialAssetPatch = {
+  /** Authoring operation; the active extension and inactive settings are persisted. */
+  shadingModel?: MaterialShadingModel;
   vertexColors?: boolean;
   opacityTexture?: MaterialTextureInfoPatch;
   opacityChannel?: "r" | "g" | "b" | "a";
@@ -1346,7 +1370,10 @@ export function isValidColor4(value: unknown): value is Color4 {
 export function normalizeMaterialProperties(
   input: MaterialAssetPatch = {},
 ): MaterialProperties {
-  return applyMaterialPatch(DEFAULT_MATERIAL_PROPERTIES, input);
+  const properties = applyMaterialPatch(DEFAULT_MATERIAL_PROPERTIES, input);
+  return isMaterialShadingModel(input.shadingModel) && !input.shader
+    ? applyMaterialShadingModel(properties, input.shadingModel).properties
+    : properties;
 }
 
 export function createDefaultMaterialAsset(
@@ -1421,17 +1448,26 @@ export function updateMaterialAsset(
 ): AssetManifest {
   const asset = getMaterialAsset(manifest, assetId);
   if (!asset) return manifest;
+  if (patch.shadingModel !== undefined &&
+    (!isMaterialShadingModel(patch.shadingModel) || asset.shader || patch.shader)) return manifest;
 
   // Normalizing first migrates an old prototype document without discarding it.
   const current = normalizeMaterialProperties(
     asset.properties as unknown as MaterialAssetPatch,
   );
-  const properties = applyMaterialPatch(current, patch, manifest);
+  let properties = applyMaterialPatch(current, patch, manifest);
+  let savedMToonSettings = asset.savedMToonSettings;
+  if (isMaterialShadingModel(patch.shadingModel)) {
+    const switched = applyMaterialShadingModel(properties, patch.shadingModel, savedMToonSettings, manifest);
+    properties = switched.properties;
+    savedMToonSettings = switched.savedMToonSettings;
+  }
   const shader = patch.shader === null ? undefined : patch.shader ?? asset.shader;
 
   if (
     jsonEqual(properties, asset.properties) &&
-    jsonEqual(shader, asset.shader)
+    jsonEqual(shader, asset.shader) &&
+    jsonEqual(savedMToonSettings, asset.savedMToonSettings)
   ) {
     return manifest;
   }
@@ -1442,6 +1478,8 @@ export function updateMaterialAsset(
   };
   if (shader) nextAsset.shader = shader;
   else delete nextAsset.shader;
+  if (savedMToonSettings) nextAsset.savedMToonSettings = savedMToonSettings;
+  else delete nextAsset.savedMToonSettings;
 
   return {
     ...manifest,
@@ -1463,6 +1501,52 @@ export function updateMaterialAsset(
       },
     },
   };
+}
+
+/** Custom shaders have their own renderer and are not builtin conversion targets. */
+export function getMaterialShadingModel(asset: MaterialAsset | undefined): MaterialShadingModel | undefined {
+  if (!asset || asset.shader) return undefined;
+  const toon = asset.properties.extensions?.VRMC_materials_mtoon;
+  return toon ? (toon.extras?.xriftVrm0CompatShade ? "mtoon-0.x" : "mtoon-1.0") : "standard";
+}
+
+function isMaterialShadingModel(value: unknown): value is MaterialShadingModel {
+  return value === "standard" || value === "mtoon-0.x" || value === "mtoon-1.0";
+}
+
+function applyMaterialShadingModel(
+  properties: MaterialProperties,
+  model: MaterialShadingModel,
+  saved?: VrmMaterialsMToon,
+  manifest?: AssetManifest,
+): { properties: MaterialProperties; savedMToonSettings?: VrmMaterialsMToon } {
+  const extensions = cloneMaterialExtensions(properties.extensions);
+  const active = extensions.VRMC_materials_mtoon;
+  if (model === "standard") {
+    delete extensions.VRMC_materials_mtoon;
+    delete extensions.KHR_materials_unlit;
+    return { properties: { ...properties, extensions }, savedMToonSettings: active ?? saved };
+  }
+  let settings = active ?? saved;
+  if (!settings) {
+    const [red, green, blue] = properties.pbrMetallicRoughness.baseColorFactor;
+    settings = applyMaterialExtensionsPatch({}, { VRMC_materials_mtoon: {
+      shadeColorFactor: [red * 0.8, green * 0.8, blue * 0.8],
+      ...(properties.pbrMetallicRoughness.baseColorTexture ? {
+        shadeMultiplyTexture: cloneTextureInfo(properties.pbrMetallicRoughness.baseColorTexture),
+      } : {}),
+      outlineWidthMode: "worldCoordinates", outlineWidthFactor: 0.003,
+      outlineColorFactor: [0, 0, 0], outlineLightingMixFactor: 0,
+    } }, manifest).VRMC_materials_mtoon!;
+  }
+  extensions.VRMC_materials_mtoon = Boolean(settings.extras?.xriftVrm0CompatShade) === (model === "mtoon-0.x")
+    ? settings
+    : applyMaterialExtensionsPatch(
+        { VRMC_materials_mtoon: settings },
+        { VRMC_materials_mtoon: { extras: { xriftVrm0CompatShade: model === "mtoon-0.x" } } },
+        manifest,
+      ).VRMC_materials_mtoon;
+  return { properties: { ...properties, extensions } };
 }
 
 function applyMaterialPatch(
@@ -1673,6 +1757,40 @@ function applyExtensionFields(
         if (value !== undefined) next[field.name] = value;
         break;
       }
+      case "boolean": {
+        const candidate = requested[field.name];
+        next[field.name] = typeof candidate === "boolean"
+          ? candidate
+          : (current ?? field.default);
+        break;
+      }
+      case "enum": {
+        const candidate = requested[field.name];
+        next[field.name] = typeof candidate === "string" && field.values.includes(candidate)
+          ? candidate
+          : (current ?? field.default);
+        break;
+      }
+      case "integer": {
+        const candidate = requested[field.name];
+        next[field.name] = typeof candidate === "number" && Number.isInteger(candidate) && candidate >= field.minimum && candidate <= field.maximum
+          ? candidate
+          : (current ?? field.default);
+        break;
+      }
+      case "booleanRecord": {
+        const candidate = hasOwn(requested, field.name) ? requested[field.name] : current;
+        if (candidate === null) break;
+        const value: Record<string, boolean> = {};
+        const baseRecord = typeof current === "object" && current ? current as ExtensionRecord : undefined;
+        const candidateRecord = typeof candidate === "object" && candidate ? candidate as ExtensionRecord : undefined;
+        for (const key of field.keys) {
+          const flag = candidateRecord?.[key] ?? baseRecord?.[key];
+          if (typeof flag === "boolean") value[key] = flag;
+        }
+        if (Object.keys(value).length) next[field.name] = value;
+        break;
+      }
       case "unitColor3":
       case "nonNegativeColor3": {
         const isValid =
@@ -1746,6 +1864,8 @@ function cloneMaterialExtensions(
         clone[field.name] = cloneNormalTextureInfo(
           clone[field.name] as NormalTextureInfo,
         );
+      } else if (field.kind === "booleanRecord") {
+        clone[field.name] = { ...(clone[field.name] as ExtensionRecord) };
       }
     }
     result[name] = clone;

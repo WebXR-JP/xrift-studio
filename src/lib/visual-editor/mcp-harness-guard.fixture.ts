@@ -113,6 +113,11 @@ export function runMcpHarnessGuardFixtureAssertions(): void {
     sameMaterial.warnings === 1 && sameMaterial.state.category === "material",
     "The two Material write tools share one streak per Material Asset",
   );
+  assert(
+    mcpHarnessKeyForCall("update_material_assets", { assetIds: ["b", "a"] })?.key ===
+      mcpHarnessKeyForCall("update_material_assets", { assetIds: ["a", "b"] })?.key,
+    "Repeated bulk writes to the same Materials share a streak regardless of ID order",
+  );
 
   assert(
     mcpHarnessKeyForCall("place_asset", { assetId: "x" }) === null &&

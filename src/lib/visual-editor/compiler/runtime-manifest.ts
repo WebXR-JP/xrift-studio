@@ -26,6 +26,7 @@ import type {
   VisualCompilerDocuments,
 } from "./types";
 import { OPEN_BRUSH_BRUSH_BASE_URL } from "../open-brush";
+import { extensionOfPath } from "../asset-format-registry";
 import { collectModelInstancingEntities } from "../model-instancing";
 import { isPublishedAsKtx2 } from "../texture-conversion";
 import { resolveRenderedTextFontId } from "../../../../packages/xrift-studio-runtime/src/text-font-catalog";
@@ -497,12 +498,15 @@ function compileRuntimeAsset(
 ): XriftRuntimeAsset | null {
   if (asset.kind === "model" && url) {
     const openBrush = asset.importMetadata?.openBrush;
+    const sourceExtension = asset.source.kind === "project" ? extensionOfPath(asset.source.relativePath) : undefined;
+    const sourceFormat = asset.importMetadata?.sourceFormat ??
+      (sourceExtension === "glb" || sourceExtension === "gltf" || sourceExtension === "obj" || sourceExtension === "vrm" ? sourceExtension : undefined);
     return {
       id: asset.id,
       kind: "model",
       name: asset.name,
       url,
-      sourceFormat: asset.importMetadata?.sourceFormat,
+      sourceFormat,
       scale: asset.importSettings.scale,
       ...(openBrush
         ? {

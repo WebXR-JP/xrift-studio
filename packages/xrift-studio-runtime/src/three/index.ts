@@ -21,6 +21,7 @@ import {
   Mesh,
   MeshStandardMaterial,
   MirroredRepeatWrapping,
+  NoColorSpace,
   Object3D,
   PlaneGeometry,
   PointLight,
@@ -48,6 +49,8 @@ import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader.js";
 import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { Reflector } from "three/examples/jsm/objects/Reflector.js";
+import { VRMLoaderPlugin, type VRM } from "@pixiv/three-vrm";
+import * as threeVrm from "@pixiv/three-vrm";
 import {
   DEFAULT_TEXT_BACKGROUND,
   XriftTextPanelObject,
@@ -60,6 +63,8 @@ import {
 
 import { detectTimeUniforms, stampObjectTimeUniforms } from "../shader-time.js";
 import { installMirrorReflectionInterval } from "../mirror-reflection.js";
+import { createMToonMaterial, attachMToonOutlines, removeNativeMToonOutlines, type MToonSurfaceProperties } from "../mtoon-runtime.js";
+export { updateMToonMaterials } from "../mtoon-runtime.js";
 import {
   getKhrInteractivityOnStartAnimationCues,
   type InteractivityAnimationCue,
@@ -273,6 +278,7 @@ export class XriftThreeLoader {
         }
       }
     }
+    attachMToonOutlines(root);
     return {
       root,
       assetBaseUrl: assetBase,
@@ -338,6 +344,14 @@ export class XriftThreeLoader {
       };
     }
     const loader = new GLTFLoader(this.manager);
+    const isVrm = asset.sourceFormat === "vrm" || /\.vrm(?:[?#]|$)/i.test(asset.url);
+    if (isVrm) {
+      loader.register(parser => {
+        const plugin = new VRMLoaderPlugin(parser);
+        plugin.mtoonMaterialPlugin.v0CompatShade = Boolean(parser.json.extensions?.VRM);
+        return plugin;
+      });
+    }
     const dracoLoader = new DRACOLoader(this.manager).setDecoderPath(
       dracoDecoderPath,
     );
@@ -360,6 +374,15 @@ export class XriftThreeLoader {
     } finally {
       dracoLoader.dispose();
     }
+    const vrm = gltf.userData.vrm as VRM | undefined;
+    if (vrm) {
+      // three-vrm's declaration reexports this directory without an extension;
+      // its runtime export works, while NodeNext does not resolve that type.
+      const vrmUtils = (threeVrm as unknown as { VRMUtils: { rotateVRM0(value: VRM): void } }).VRMUtils;
+      vrmUtils.rotateVRM0(vrm);
+      vrm.materials?.forEach((material: Material) => (material as Material & { update?: (delta: number) => void }).update?.(0));
+    }
+    if (isVrm) removeNativeMToonOutlines(gltf.scene);
     tagSourceMaterialIndices(gltf);
     // Open Brush brushes arrive from three-icosa with their GLSL already
     // compiled, so nothing has recorded their `u_time` uniform yet. Stamping
@@ -446,6 +469,12 @@ export class XriftThreeLoader {
         continue;
       }
       const properties = asset.properties;
+      if (asRecord(asRecord(properties.extensions)?.VRMC_materials_mtoon) && asset.shader?.kind !== "openbrush") {
+        const material = createRuntimeMToonMaterial(properties, textures, diagnostics, asset.id);
+        material.name = asset.name;
+        materials.set(asset.id, material);
+        continue;
+      }
       const pbr = asRecord(properties.pbrMetallicRoughness);
       const baseColor = asNumberArray(pbr?.baseColorFactor, 4) ?? [1, 1, 1, 1];
       const [red = 1, green = 1, blue = 1, alpha = 1] = baseColor;
@@ -525,7 +554,9 @@ export class XriftThreeLoader {
     const { component } = input;
     if (component.type === "mesh") {
       if (component.geometry.kind === "primitive") {
-        const material = materialForBinding(component, input.materials);
+        const material = component.geometry.primitive === "plane"
+          ? runtimeDoubleSidedMToonMaterial(component, input)
+          : materialForBinding(component, input.materials);
         const mesh = new Mesh(
           createPrimitiveGeometry(component.geometry.primitive),
           material ?? new MeshStandardMaterial({ color: 0xbfc7d5 }),
@@ -539,7 +570,7 @@ export class XriftThreeLoader {
         return mesh;
       }
       if (component.geometry.kind === "terrain") {
-        const material = materialForBinding(component, input.materials);
+        const material = runtimeDoubleSidedMToonMaterial(component, input);
         const mesh = new Mesh(
           createTerrainGeometry(component.geometry),
           material ?? new MeshStandardMaterial({ color: 0x6b8e4e }),
@@ -1009,6 +1040,61 @@ function runtimeTextureWrapping(
   return ClampToEdgeWrapping;
 }
 
+function createRuntimeMToonMaterial(
+  properties: Record<string, unknown>,
+  textures: ReadonlyMap<string, Texture>,
+  diagnostics: XriftRuntimeDiagnostic[],
+  assetId: string,
+  doubleSided?: boolean,
+): Material {
+  const pbr = asRecord(properties.pbrMetallicRoughness);
+  const mtoon = asRecord(asRecord(properties.extensions)?.VRMC_materials_mtoon);
+  const resolveTexture = (value: unknown, colorSpace: "srgb" | "linear"): Texture | undefined => {
+    const info = asRecord(value);
+    const textureId = info?.textureAssetId;
+    if (!info || typeof textureId !== "string") return undefined;
+    const source = textures.get(textureId);
+    if (!source) {
+      diagnostics.push({ severity: "warning", code: "texture-not-loaded", message: `Material texture could not be loaded: ${textureId}`, assetId });
+      return undefined;
+    }
+    const texture = configureMaterialTexture(source, info);
+    texture.colorSpace = colorSpace === "srgb" ? SRGBColorSpace : NoColorSpace;
+    return texture;
+  };
+  return createMToonMaterial(properties as unknown as MToonSurfaceProperties, {
+    baseColorMap: resolveTexture(pbr?.baseColorTexture, "srgb"),
+    opacityMap: resolveTexture(properties.opacityTexture, "linear"),
+    normalMap: resolveTexture(properties.normalTexture, "linear"),
+    emissiveMap: resolveTexture(properties.emissiveTexture, "srgb"),
+    shadeMultiplyMap: resolveTexture(mtoon?.shadeMultiplyTexture, "srgb"),
+    shadingShiftMap: resolveTexture(mtoon?.shadingShiftTexture, "linear"),
+    matcapMap: resolveTexture(mtoon?.matcapTexture, "srgb"),
+    rimMultiplyMap: resolveTexture(mtoon?.rimMultiplyTexture, "srgb"),
+    outlineWidthMultiplyMap: resolveTexture(mtoon?.outlineWidthMultiplyTexture, "linear"),
+    uvAnimationMaskMap: resolveTexture(mtoon?.uvAnimationMaskTexture, "linear"),
+  }, doubleSided);
+}
+
+/** Plane and terrain keep the Editor's explicit double-sided surface. */
+function runtimeDoubleSidedMToonMaterial(
+  component: Extract<XriftRuntimeComponent, { type: "mesh" }>,
+  input: {
+    materials: ReadonlyMap<string, Material>;
+    manifest: XriftRuntimeManifest;
+    textures: ReadonlyMap<string, Texture>;
+    diagnostics: XriftRuntimeDiagnostic[];
+  },
+): Material | undefined {
+  const material = materialForBinding(component, input.materials);
+  const binding = component.materialBindings[0];
+  const asset = binding ? input.manifest.assets[binding.materialAssetId] : undefined;
+  if (asset?.kind !== "material" || !(material as Material & { isMToonMaterial?: boolean })?.isMToonMaterial || material?.side === DoubleSide) return material;
+  const doubleSided = createRuntimeMToonMaterial(asset.properties, input.textures, input.diagnostics, asset.id, true);
+  doubleSided.name = asset.name;
+  return doubleSided;
+}
+
 function configureMaterialTexture(
   source: Texture,
   textureInfo: Record<string, unknown>,
@@ -1043,6 +1129,10 @@ export function disposeXriftLoadResult(result: XriftLoadResult): void {
   const textures = new Set<Texture>();
   const reflectors = new Set<Reflector>();
   const textPanels = new Set<XriftTextPanelObject>();
+  const collectTexture = (value: unknown): void => {
+    if (value instanceof Texture) textures.add(value);
+    else if (Array.isArray(value)) value.forEach(collectTexture);
+  };
   result.root.traverse((object) => {
     if (object instanceof Reflector) reflectors.add(object);
     // troika holds an SDF atlas and a derived material that the generic Mesh
@@ -1054,7 +1144,10 @@ export function disposeXriftLoadResult(result: XriftLoadResult): void {
     for (const material of entries) {
       materials.add(material);
       for (const value of Object.values(material)) {
-        if (value instanceof Texture) textures.add(value);
+        collectTexture(value);
+      }
+      if ((material as ShaderMaterial).isShaderMaterial) {
+        for (const uniform of Object.values((material as ShaderMaterial).uniforms)) collectTexture(uniform.value);
       }
     }
   });

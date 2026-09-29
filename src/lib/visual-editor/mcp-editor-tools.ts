@@ -5,6 +5,8 @@ import { SKY_SHADER_QUALITY_OPTIONS, withSkyShaderQuality } from "./sky-shader-q
 import { setMeshCollision, collisionSources } from "./mesh-collision-actions";
 import { isPlainObjectRecord } from "../json-guards";
 import { isModelTextureMaxSize } from "./asset-manifest";
+import { aggregateMaterialSelection, applyMaterialBatchPatch, applyMaterialBatchFieldValue } from "./material-batch";
+import { MATERIAL_EXTENSION_DESCRIPTORS, type MaterialExtensionFieldDescriptor, type MaterialExtensionName } from "./material-extension-registry";
 import { getWorldComponentAuthoring, getWorldComponentGuidance } from "./world-component-authoring";
 import { instantiateSceneAsset, isScenePlaceableAsset } from "./asset-placement";
 import {
@@ -253,6 +255,7 @@ import {
   addAssetFolder,
   getAudioAsset,
   getMaterialAsset,
+  getMaterialShadingModel,
   getTextureAsset,
   getModelAsset,
   isUserLibraryAsset,
@@ -451,6 +454,7 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   set_material: setMaterial,
   get_material_asset: getMaterial,
   update_material_asset: updateMaterial,
+  update_material_assets: updateMaterials,
   list_material_presets: listMaterialPresets,
   create_material_from_preset: createMaterialFromPreset,
   create_custom_shader: createCustomShader,
@@ -5026,6 +5030,55 @@ function updateMaterial(
   };
 }
 
+function updateMaterials(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const assetIds = optionalUniqueStringArray(argumentsValue.assetIds, "assetIds");
+  if (!assetIds?.length || assetIds.length > 200) invalidArgument("assetIds", "1..200 unique Asset IDs");
+  const selectedAssets = assetIds.map(assetId => {
+    if (!Object.prototype.hasOwnProperty.call(context.bundle.assets.assets, assetId)) throw new XriftMcpEditorToolError("ASSET_NOT_FOUND", "指定された素材が見つかりません", { assetId });
+    const asset = context.bundle.assets.assets[assetId];
+    if (!asset) throw new XriftMcpEditorToolError("ASSET_NOT_FOUND", "指定された素材が見つかりません", { assetId });
+    return asset;
+  });
+  const selection = aggregateMaterialSelection(selectedAssets);
+  const skippedAssets = selectedAssets.flatMap(asset => asset.kind !== "material"
+    ? [{ assetId: asset.id, reason: "NOT_MATERIAL" }]
+    : getMaterialShadingModel(asset) === undefined ? [{ assetId: asset.id, reason: "CUSTOM_SHADER" }] : []);
+  if (!selection.eligibleMaterials.length) throw new XriftMcpEditorToolError("NO_EDITABLE_MATERIALS", "標準またはMToonのマテリアルを指定してください", { skippedAssets });
+  if ((argumentsValue.patch === undefined) === (argumentsValue.fieldUpdates === undefined)) invalidArgument("patch/fieldUpdates", "exactly one operation");
+  const patch = argumentsValue.patch === undefined ? undefined : materialPatchValue(argumentsValue.patch);
+  const fieldUpdates = argumentsValue.fieldUpdates === undefined ? undefined : materialFieldUpdatesValue(argumentsValue.fieldUpdates);
+  if (patch) assertMaterialTextureReferences(patch, context.bundle.assets, "patch");
+  for (const field of fieldUpdates ?? []) {
+    assertMaterialTextureReferences(field.value, context.bundle.assets, `fieldUpdates.${field.path}`);
+    if (typeof field.value === "string" && /(?:Texture|TextureId|\.textureAssetId)$/.test(field.path)) assertMaterialTextureReference(field.value, context.bundle.assets, `fieldUpdates.${field.path}`);
+  }
+  if (!selection.canEditProperties && (fieldUpdates || !patch?.shadingModel || Object.keys(patch).some(key => key !== "shadingModel"))) {
+    throw new XriftMcpEditorToolError("MATERIAL_SHADING_MISMATCH", "種類をそろえてからマテリアル設定を一括変更してください", {
+      materialAssetIds: selection.eligibleMaterials.map(asset => asset.id),
+      shadingModels: selection.eligibleMaterials.map(asset => getMaterialShadingModel(asset)),
+    });
+  }
+  const assets = patch
+    ? applyMaterialBatchPatch(context.bundle.assets, assetIds, patch)
+    : fieldUpdates!.reduce((manifest, field) => applyMaterialBatchFieldValue(manifest, assetIds, field.path, field.value), context.bundle.assets);
+  const updatedMaterialAssetIds = selection.eligibleMaterials.filter(asset => assets.assets[asset.id] !== asset).map(asset => asset.id);
+  const result = {
+    materialAssetIds: selection.eligibleMaterials.map(asset => asset.id), updatedMaterialAssetIds, skippedAssets,
+    shadingModels: selection.eligibleMaterials.map(asset => ({ materialAssetId: asset.id, shadingModel: getMaterialShadingModel(getMaterialAsset(assets, asset.id)) })),
+  };
+  if (assets === context.bundle.assets) return unchanged(context, { ...result, revision: context.revision }, "マテリアルはすでに指定された状態です");
+  return {
+    changed: true, bundle: touchProject(context, { ...context.bundle, assets }),
+    sceneSelection: context.sceneSelection, assetSelection: context.assetSelection,
+    result: { ...result, revisionBefore: context.revision, revisionAfter: context.revision + 1 },
+    activity: `AIが${updatedMaterialAssetIds.length}件のマテリアルを一括変更しました`,
+  };
+}
+
 function createCustomShader(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
@@ -8827,10 +8880,114 @@ function assertCustomShaderAssetReferences(
   }
 }
 
+function materialFieldUpdatesValue(value: unknown): { path: string; value: unknown }[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 128) invalidArgument("fieldUpdates", "1..128 field operations");
+  const updates = value.map((entry, index) => {
+    const update = recordValue(entry, `fieldUpdates[${index}]`);
+    assertObjectKeys(update, `fieldUpdates[${index}]`, ["path", "value"]);
+    const path = requiredString(update.path, `fieldUpdates[${index}].path`);
+    if (!Object.prototype.hasOwnProperty.call(update, "value") || !isJsonValue(update.value)) invalidArgument(`fieldUpdates[${index}].value`, "finite JSON value");
+    validateMaterialFieldValue(path, update.value);
+    return { path, value: update.value };
+  });
+  if (new Set(updates.map(update => update.path)).size !== updates.length) invalidArgument("fieldUpdates", "unique property paths");
+  return updates;
+}
+
+function assertMaterialTextureReference(textureAssetId: string, assets: AssetManifest, path: string): void {
+  if (!Object.prototype.hasOwnProperty.call(assets.assets, textureAssetId) || !getTextureAsset(assets, textureAssetId)) {
+    throw new XriftMcpEditorToolError("INVALID_TEXTURE_REFERENCE", "テクスチャ素材が見つからないか、種類が異なります", { textureAssetId, path });
+  }
+}
+
+/** Validate explicit request references, leaving unrelated legacy values alone. */
+function assertMaterialTextureReferences(value: unknown, assets: AssetManifest, path: string): void {
+  if (!value || typeof value !== "object") return;
+  for (const [key, child] of Object.entries(value)) {
+    if (typeof child === "string" && (key === "textureAssetId" || /Texture(?:Id)?$/.test(key))) assertMaterialTextureReference(child, assets, `${path}.${key}`);
+    else if (child && typeof child === "object") assertMaterialTextureReferences(child, assets, `${path}.${key}`);
+  }
+}
+
+/** The extension registry supplies the same path shapes and ranges as the UI. */
+function validateMaterialFieldValue(path: string, value: unknown): void {
+  const fail = () => invalidArgument(`fieldUpdates.${path}`, "supported Material property path and value");
+  const finite = (candidate: unknown): candidate is number => typeof candidate === "number" && Number.isFinite(candidate);
+  const vector = (tail: string[], length: number, hdr = false) => {
+    const valid = (candidate: unknown) => finite(candidate) && candidate >= 0 && (hdr || candidate <= 1);
+    if (tail.length === 0 ? !Array.isArray(value) || value.length !== length || !value.every(valid)
+      : tail.length !== 1 || !/^[0-3]$/.test(tail[0]) || Number(tail[0]) >= length || !valid(value)) fail();
+  };
+  const tuple = (candidate: unknown) => Array.isArray(candidate) && candidate.length === 2 && candidate.every(finite);
+  const texture = (tail: string[], extra?: "scale" | "strength") => {
+    if (tail.length === 0) {
+      if (value === null || (typeof value === "string" && value.trim())) return;
+      const info = recordValue(value, `fieldUpdates.${path}`);
+      assertObjectKeys(info, `fieldUpdates.${path}`, ["textureAssetId", "texCoord", "transform", ...(extra ? [extra] : [])]);
+      requiredString(info.textureAssetId, `${path}.textureAssetId`);
+      if (info.texCoord !== undefined && (!Number.isInteger(info.texCoord) || Number(info.texCoord) < 0)) fail();
+      if (info.scale !== undefined && !finite(info.scale)) fail();
+      if (info.strength !== undefined && (!finite(info.strength) || info.strength < 0 || info.strength > 1)) fail();
+      if (info.transform !== undefined && info.transform !== null) {
+        const transform = recordValue(info.transform, `${path}.transform`);
+        assertObjectKeys(transform, `${path}.transform`, ["offset", "scale", "rotation"]);
+        if ((transform.offset !== undefined && !tuple(transform.offset)) || (transform.scale !== undefined && !tuple(transform.scale)) || (transform.rotation !== undefined && !finite(transform.rotation))) fail();
+      }
+      return;
+    }
+    if (tail.length === 1 && tail[0] === "textureAssetId") { if (!(value === null || (typeof value === "string" && value.trim()))) fail(); return; }
+    if (tail.length === 1 && tail[0] === "texCoord") { if (!Number.isInteger(value) || Number(value) < 0) fail(); return; }
+    if (tail.length === 1 && tail[0] === extra) { if (!finite(value) || (extra === "strength" && (value < 0 || value > 1))) fail(); return; }
+    if (tail[0] !== "transform") fail();
+    if (tail.length === 1 && value === null) return;
+    if (tail.length === 2 && tail[1] === "rotation" && finite(value)) return;
+    if (tail[1] === "offset" || tail[1] === "scale") {
+      if (tail.length === 2 && tuple(value)) return;
+      if (tail.length === 3 && /^[01]$/.test(tail[2]) && finite(value)) return;
+    }
+    fail();
+  };
+  const booleanPaths = ["vertexColors", "doubleSided", "alphaToCoverage"];
+  if (booleanPaths.includes(path)) { if (typeof value !== "boolean") fail(); return; }
+  const enumPaths: Record<string, readonly string[]> = { opacityChannel: ["r", "g", "b", "a"], alphaMode: ["OPAQUE", "MASK", "BLEND"], blending: ["normal", "additive", "multiply", "subtractive"], depthWrite: ["auto", "on", "off"] };
+  if (Object.prototype.hasOwnProperty.call(enumPaths, path)) { if (typeof value !== "string" || !enumPaths[path].includes(value)) fail(); return; }
+  if (path === "color") { if (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value)) fail(); return; }
+  if (["opacity", "metalness", "roughness", "pbrMetallicRoughness.metallicFactor", "pbrMetallicRoughness.roughnessFactor", "alphaCutoff"].includes(path)) {
+    if (!finite(value) || value < 0 || (path !== "alphaCutoff" && value > 1)) fail(); return;
+  }
+  for (const [prefix, length] of [["pbrMetallicRoughness.baseColorFactor", 4], ["emissiveFactor", 3]] as const) {
+    if (path === prefix || path.startsWith(`${prefix}.`)) { vector(path === prefix ? [] : path.slice(prefix.length + 1).split("."), length); return; }
+  }
+  for (const [prefix, extra] of [["pbrMetallicRoughness.baseColorTexture", undefined], ["pbrMetallicRoughness.metallicRoughnessTexture", undefined], ["normalTexture", "scale"], ["occlusionTexture", "strength"], ["emissiveTexture", undefined], ["opacityTexture", undefined]] as const) {
+    if (path === prefix || path.startsWith(`${prefix}.`)) { texture(path === prefix ? [] : path.slice(prefix.length + 1).split("."), extra); return; }
+  }
+  const [section, extension, field, ...tail] = path.split(".");
+  if (section !== "extensions" || !Object.prototype.hasOwnProperty.call(MATERIAL_EXTENSION_DESCRIPTORS, extension)) fail();
+  if (field === "enabled" && extension !== "VRMC_materials_mtoon" && !tail.length && typeof value === "boolean") return;
+  const descriptor = MATERIAL_EXTENSION_DESCRIPTORS[extension as MaterialExtensionName]?.fields.find(candidate => candidate.name === field);
+  if (!descriptor || descriptor.kind === "booleanRecord") fail();
+  const fieldDescriptor = descriptor as Exclude<MaterialExtensionFieldDescriptor, { kind: "booleanRecord" }>;
+  if (fieldDescriptor.kind === "texture" || fieldDescriptor.kind === "normalTexture") { texture(tail, fieldDescriptor.kind === "normalTexture" ? "scale" : undefined); return; }
+  if (fieldDescriptor.kind === "unitColor3" || fieldDescriptor.kind === "nonNegativeColor3") { vector(tail, 3, fieldDescriptor.kind === "nonNegativeColor3"); return; }
+  if (tail.length) fail();
+  switch (fieldDescriptor.kind) {
+    case "boolean": if (typeof value !== "boolean") fail(); break;
+    case "enum": if (typeof value !== "string" || !fieldDescriptor.values.includes(value)) fail(); break;
+    case "integer": if (!Number.isInteger(value) || Number(value) < fieldDescriptor.minimum || Number(value) > fieldDescriptor.maximum) fail(); break;
+    case "unit": if (!finite(value) || value < 0 || value > 1) fail(); break;
+    case "nonNegative": if (!finite(value) || value < 0) fail(); break;
+    case "atLeastOne": if (!finite(value) || value < 1) fail(); break;
+    case "ior": if (!finite(value) || (value !== 0 && value < 1)) fail(); break;
+    case "positiveOptional": if (value !== null && (!finite(value) || value <= 0)) fail(); break;
+    case "finite": if (!finite(value)) fail(); break;
+  }
+}
+
 function materialPatchValue(value: unknown): MaterialAssetPatch {
   const patch = recordValue(value, "patch");
   if (!isJsonValue(patch)) invalidArgument("patch", "JSON object");
   const allowed = new Set([
+    "shadingModel",
     "pbrMetallicRoughness",
     "normalTexture",
     "occlusionTexture",
@@ -8875,6 +9032,7 @@ function materialPatchValue(value: unknown): MaterialAssetPatch {
   if (Object.keys(patch).length === 0) invalidArgument("patch", "non-empty object");
 
   const normalized = JSON.parse(JSON.stringify(patch)) as Record<string, unknown>;
+  if (normalized.shadingModel !== undefined) normalized.shadingModel = requiredEnum(normalized.shadingModel, "patch.shadingModel", ["standard", "mtoon-0.x", "mtoon-1.0"]);
   const pbr =
     normalized.pbrMetallicRoughness === undefined
       ? {}

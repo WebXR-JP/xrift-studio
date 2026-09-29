@@ -6,7 +6,7 @@ import type {
 import { stableSerializeJson } from "./serialization";
 
 export const MATERIAL_THUMBNAIL_RENDERER_VERSION =
-  "xrift-studio-material-thumbnail@1";
+  "xrift-studio-material-thumbnail@2";
 
 /**
  * Builds a content fingerprint for the visible Material preview. The Material

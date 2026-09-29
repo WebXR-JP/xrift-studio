@@ -1,10 +1,10 @@
 import { WorldAssetCatalogPreview } from "./WorldAssetCatalogPreview";
 import { catalogPublicAssetUrl } from "../../lib/visual-editor/catalog-public-url";
 import { OrbitControls } from "@react-three/drei";
-import { useThree } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { useCatalogMaterial } from "./useCatalogMaterial";
-import { useEffect, useMemo, useState } from "react";
+import { getCatalogMaterialProperties, useCatalogMaterial } from "./useCatalogMaterial";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { XriftScriptParticleEmitter } from "../../../packages/xrift-studio-runtime/src/script/particle";
@@ -20,6 +20,7 @@ import {
 } from "../../lib/visual-editor";
 import { CatalogPreviewFrame, useCatalogPreviewAssetLoad } from "./CatalogPreviewFrame";
 import { disposeCatalogModel } from "./dispose-catalog-model";
+import { attachMToonOutlines, updateMToonMaterials } from "../../../packages/xrift-studio-runtime/src/mtoon-material";
 
 /**
  * Builds the card from the recipe's own parts.
@@ -42,13 +43,19 @@ export function SceneRecipeCatalogPreview({
   // Framing both from a fixed camera shows a speck or a cropped pole, so the
   // camera is derived from the parts the recipe actually places.
   const framing = useMemo(() => recipeFraming(recipe), [recipe]);
+  const hasMToon = useMemo(
+    () => recipe.parts.some((part) =>
+      (part.kind === "model" || part.kind === "primitive") &&
+      getCatalogMaterialProperties(part.materialAssetId)?.extensions.VRMC_materials_mtoon !== undefined),
+    [recipe],
+  );
 
   if (recipe.assembly === "vehicle") return <WorldAssetCatalogPreview kind="vehicle" className={className} />;
 
   return (
     <CatalogPreviewFrame
       key={recipe.id}
-      cacheKey={`recipe-studio-v2:${recipe.id}:${recipe.parts
+      cacheKey={`${hasMToon ? "recipe-studio-mtoon-directional-v1" : "recipe-studio-v2"}:${recipe.id}:${recipe.parts
         .filter((part) => part.kind === "model")
         .map((part) => getBuiltinRecipeModel(part.modelId)?.sha256.slice(0, 12) ?? part.modelId)
         .join(":")}`}
@@ -65,9 +72,9 @@ export function SceneRecipeCatalogPreview({
       {recipe.category === "material" || recipe.category === "tutorial" ? (
         <>
           <StudioEnvironment />
-          <ambientLight intensity={0.65} />
-          <directionalLight position={[0, 4, 3]} intensity={2.2} />
-          <directionalLight position={[0, 2, -3]} intensity={0.8} />
+          <ambientLight intensity={hasMToon ? 0.08 : 0.65} />
+          <directionalLight position={hasMToon ? [-3, 3, 0.75] : [0, 4, 3]} intensity={hasMToon ? 1.5 : 2.2} />
+          {!hasMToon ? <directionalLight position={[0, 2, -3]} intensity={0.8} /> : null}
         </>
       ) : recipe.parts.some((part) => part.kind === "light" && !part.startsOff) ? (
         <ambientLight intensity={0.22} />
@@ -191,6 +198,9 @@ function RecipeModelVisual({ modelId, materialAssetId }: { modelId: string; mate
   const override = useCatalogMaterial(materialAssetId);
   const [object, setObject] = useState<THREE.Object3D | null>(null);
   const trackAssetLoad = useCatalogPreviewAssetLoad();
+  useFrame((frame, delta) => {
+    if (object) updateMToonMaterials(object, delta, frame.gl.info.render.frame, frame.gl);
+  });
 
   useEffect(() => {
     setObject(null);
@@ -198,6 +208,7 @@ function RecipeModelVisual({ modelId, materialAssetId }: { modelId: string; mate
     if (!definition) return;
     let cancelled = false;
     let loaded: THREE.Object3D | null = null;
+    let outlines: ReturnType<typeof attachMToonOutlines> | undefined;
     const originals = new Map<THREE.Mesh, THREE.Material | THREE.Material[]>();
     const finishLoad = trackAssetLoad();
     const loader = new GLTFLoader();
@@ -209,11 +220,14 @@ function RecipeModelVisual({ modelId, materialAssetId }: { modelId: string; mate
           return;
         }
         loaded = gltf.scene;
-        if (materialAssetId) loaded.traverse((object) => {
-          if (!(object instanceof THREE.Mesh)) return;
-          originals.set(object, object.material);
-          object.material = override;
-        });
+        if (materialAssetId) {
+          loaded.traverse((object) => {
+            if (!(object instanceof THREE.Mesh)) return;
+            originals.set(object, object.material);
+            object.material = override;
+          });
+        }
+        outlines = attachMToonOutlines(loaded);
         setObject(loaded);
         finishLoad();
       },
@@ -228,6 +242,7 @@ function RecipeModelVisual({ modelId, materialAssetId }: { modelId: string; mate
     return () => {
       cancelled = true;
       finishLoad();
+      outlines?.dispose();
       // The override hook owns its textures. Restore GLB materials before disposal.
       for (const [mesh, material] of originals) mesh.material = material;
       if (loaded) disposeCatalogModel(loaded);
@@ -346,5 +361,20 @@ function StudioEnvironment() {
 
 function RecipePrimitiveMaterial({ materialAssetId }: { materialAssetId: string }) {
   const material = useCatalogMaterial(materialAssetId);
-  return <primitive object={material} attach="material" dispose={null} />;
+  const meshRef = useRef<THREE.Mesh | null>(null);
+  useFrame((frame, delta) => {
+    if (meshRef.current) updateMToonMaterials(meshRef.current, delta, frame.gl.info.render.frame, frame.gl);
+  });
+  const attach = useCallback((mesh: THREE.Mesh, instance: THREE.Material) => {
+    const previous = mesh.material;
+    mesh.material = instance;
+    meshRef.current = mesh;
+    const outlines = attachMToonOutlines(mesh);
+    return () => {
+      outlines.dispose();
+      if (mesh.material === instance) mesh.material = previous;
+      if (meshRef.current === mesh) meshRef.current = null;
+    };
+  }, []);
+  return <primitive object={material} attach={attach} dispose={null} />;
 }

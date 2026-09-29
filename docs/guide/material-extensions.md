@@ -2,6 +2,8 @@
 
 [Base Color・Metallic・Roughness](./materials.md)で基本の表面を作ってから、表現に必要な拡張だけを有効にします。項目名はglTFなどと照合できるよう、英語名を使っています。
 
+ここでは**Shading → マテリアルの種類**が**Standard (PBR)**の場合を扱います。マンガのような陰影と輪郭線は[基本のマテリアルでMToonを選ぶ手順](./materials.md#mtoonマンガのような陰影と輪郭線を付ける)を使います。
+
 ![マテリアルのInspectorでClearcoatなどの拡張設定が表示された状態](./media/material-extensions.png)
 
 *基本の表面が整ってから、必要な拡張だけを有効にします。項目名は英語名で確認します。*

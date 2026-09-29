@@ -1,6 +1,6 @@
 {
-  "version": "4eaf9171d614",
-  "runtimeContract": "2026-09-22-mirror-reflection-interval-v1",
+  "version": "6d310b9523a6",
+  "runtimeContract": "2026-09-29-mtoon-vrm-publication-v1",
   "cliVersion": "0.24.4",
   "worldComponentsVersion": "0.55.0",
   "entry": "remoteEntry.js",
@@ -8,7 +8,7 @@
     "BufferGeometryUtils-i3Krl1y0.js",
     "GLTFLoader-CobtVmvc.js",
     "Reflector-DRZ5JFma.js",
-    "__federation_expose_World-B3u_rbjG.js",
+    "__federation_expose_World-SOM3NPGw.js",
     "__federation_fn_import-DD7n5KPp.js",
     "__federation_shared_three/addons/loaders/DRACOLoader.js-BsW2FOCW.js",
     "__federation_shared_three/addons/loaders/KTX2Loader.js-DkaqkpYr.js",
@@ -20,13 +20,13 @@
     "draco_decoder-fzg4nYZr.js",
     "draco_wasm_wrapper-DxJM36Ib.js",
     "draco_wasm_wrapper-fZCQGLGb.js",
+    "index-CP46kVMZ.js",
     "index-CZFAL8r8.js",
     "index-CxGO-1df.js",
     "index-D3ouKBRF.js",
     "index-DB1oHa3H.js",
     "index-DFK1Z5k2.js",
     "index-DdA8OTRh.js",
-    "index-MRCIaLyu.js",
     "inter-CWDahd6k.js",
     "msdf-worker-D6HZN771.js",
     "preload-helper-CWZBUsdZ.js",
@@ -50,7 +50,7 @@
     "Reflector-DRZ5JFma.js": [
       "__federation_fn_import-DD7n5KPp.js"
     ],
-    "__federation_expose_World-B3u_rbjG.js": [
+    "__federation_expose_World-SOM3NPGw.js": [
       "GLTFLoader-CobtVmvc.js",
       "Reflector-DRZ5JFma.js",
       "__federation_fn_import-DD7n5KPp.js",
@@ -72,6 +72,10 @@
     "draco_decoder-fzg4nYZr.js": [],
     "draco_wasm_wrapper-DxJM36Ib.js": [],
     "draco_wasm_wrapper-fZCQGLGb.js": [],
+    "index-CP46kVMZ.js": [
+      "__federation_expose_World-SOM3NPGw.js",
+      "__federation_fn_import-DD7n5KPp.js"
+    ],
     "index-CZFAL8r8.js": [],
     "index-CxGO-1df.js": [],
     "index-D3ouKBRF.js": [
@@ -85,10 +89,6 @@
       "inter-CWDahd6k.js",
       "msdf-worker-D6HZN771.js",
       "preload-helper-CWZBUsdZ.js"
-    ],
-    "index-MRCIaLyu.js": [
-      "__federation_expose_World-B3u_rbjG.js",
-      "__federation_fn_import-DD7n5KPp.js"
     ],
     "inter-CWDahd6k.js": [],
     "msdf-worker-D6HZN771.js": [],

@@ -1,8 +1,16 @@
-import { normalizeMaterialProperties, normalizeTextureImportSettings, DEFAULT_MODEL_IMPORT_SETTINGS, type InteractivityAsset, type ModelAsset, type PrefabAsset, type ScriptAsset } from "./asset-manifest";
+import { VRMLoaderPlugin, type VRM } from "@pixiv/three-vrm";
+import { Mesh, SkinnedMesh, type Material } from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { unzipSync } from "three/examples/jsm/libs/fflate.module.js";
+import { normalizeMaterialProperties, normalizeTextureImportSettings, DEFAULT_MODEL_IMPORT_SETTINGS, type InteractivityAsset, type MaterialAsset, type MaterialProperties, type MaterialTextureInfo, type ModelAsset, type PrefabAsset, type ScriptAsset } from "./asset-manifest";
 import { createHierarchyTransfer, getHierarchyClipboard, hierarchySelectionRoots, hierarchyTransferMetadata, HIERARCHY_TRANSFER_MANIFEST, planHierarchyImport, prepareHierarchyTransferFiles, readHierarchyTransferWarnings, setHierarchyClipboard, type PreparedHierarchyTransfer } from "./hierarchy-transfer";
 import { applyHierarchyImportPlan } from "./hierarchy-transfer-commit";
+import { createHierarchyArchive, validateHierarchyBundle } from "./hierarchy-transfer-io";
 import { hierarchyMatrixTransform, hierarchyTransformMatrix, hierarchyWorldMatrix, identityHierarchyMatrix, inverseHierarchyMatrix, multiplyHierarchyMatrices } from "./hierarchy-transform";
 import { commitEditorHistory, createEditorHistory, redoEditorHistory, undoEditorHistory } from "./editor-history";
+import { readBrowserProjectArchive } from "./browser-project-transfer";
+import { createVrmAvatarFixtureBytes } from "./compiler/vrm-avatar.fixture";
+import { extractGltfModelNodeHierarchy } from "./model-hierarchy";
 import type { PrototypeVisualProject } from "./prototype-project";
 import type { SceneEntity, ScriptComponent, TransformComponent, Vec3 } from "./scene-document";
 
@@ -29,11 +37,96 @@ function transform(value: SceneEntity): TransformComponent { return value.compon
 const bytes = (value: string) => new TextEncoder().encode(value);
 const noFiles = async (): Promise<Uint8Array> => { throw new Error("Unexpected file read"); };
 
+function mtoonTextureSlots(properties: MaterialProperties): Array<MaterialTextureInfo | undefined> {
+  const toon = properties.extensions.VRMC_materials_mtoon;
+  return [properties.pbrMetallicRoughness.baseColorTexture, properties.normalTexture,
+    properties.emissiveTexture, properties.opacityTexture, toon?.shadeMultiplyTexture,
+    toon?.outlineWidthMultiplyTexture, toon?.shadingShiftTexture, toon?.matcapTexture,
+    toon?.rimMultiplyTexture, toon?.uvAnimationMaskTexture];
+}
+
+async function sha256(value: Uint8Array): Promise<string> {
+  return [...new Uint8Array(await crypto.subtle.digest("SHA-256", new Uint8Array(value)))].map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/** Isolated editable avatar and ten distinct maps, also reusable by project-archive tests. */
+export async function createMToonVrmHierarchyFixture(version: "0" | "1"): Promise<{ bundle: PrototypeVisualProject; files: Map<string, Uint8Array> }> {
+  const bundle = project();
+  const sourcePath = `assets/avatar-${version}.vrm`;
+  const sourceBytes = createVrmAvatarFixtureBytes(version);
+  const sourceHash = await sha256(sourceBytes);
+  const jsonLength = new DataView(sourceBytes.buffer).getUint32(12, true);
+  const json = JSON.parse(new TextDecoder().decode(sourceBytes.subarray(20, 20 + jsonLength)));
+  const avatar = model("model", sourcePath);
+  avatar.sourceHash = sourceHash;
+  avatar.importMetadata = {
+    sourceFormat: "vrm", sourceFileName: `avatar-${version}.vrm`, vrmVersion: version,
+    byteLength: sourceBytes.byteLength, nodeCount: 16, meshCount: 1, primitiveCount: 1,
+    bounds: { min: [-0.3, 0, 0], max: [0.3, 0.6, 0], center: [0, 0.3, 0], size: [0.6, 0.6, 0], boundingSphereRadius: Math.hypot(0.3, 0.3) },
+    animations: [], bones: [{ key: "hips", name: "hips", humanoidName: "hips" }],
+    morphTargets: [{ key: "Smile", name: "Smile" }], nodes: extractGltfModelNodeHierarchy(json),
+    extensionsUsed: json.extensionsUsed, extensionsRequired: [],
+  };
+  avatar.materialSlots = [{ slot: "material-0", name: "Native toon", sourceMaterialIndex: 0, defaultMaterialAssetId: "material" }];
+  bundle.assets.assets.model = avatar;
+  const files = new Map([[sourcePath, sourceBytes]]);
+  const slots: MaterialTextureInfo[] = [];
+  for (let index = 0; index < 10; index++) {
+    const id = `map-${index}`;
+    const path = `assets/textures/${id}.svg`;
+    const image = bytes(`<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="rgb(${index * 20},80,160)"/></svg>`);
+    files.set(path, image);
+    bundle.assets.assets[id] = { id, name: id, kind: "texture", status: "ready",
+      source: { kind: "project", relativePath: path }, sourceHash: await sha256(image),
+      importSettings: normalizeTextureImportSettings({ colorSpace: index === 1 || index === 5 || index === 6 || index === 9 ? "linear" : "srgb", sampler: { wrapS: "repeat", wrapT: "mirrored-repeat" } }) };
+    slots.push({ textureAssetId: id, texCoord: index % 2,
+      transform: { offset: [index / 20, -index / 30], rotation: index / 10, scale: [1 + index / 10, 2 - index / 20] } });
+  }
+  const material: MaterialAsset = {
+    id: "material", name: "Editable avatar MToon", kind: "material", status: "ready", source: { kind: "document" },
+    importedFromModel: { modelAssetId: "model", sourceMaterialIndex: 0, sourceMaterialName: "Native toon", sourceSlotId: "material-0", sourceHash, isUserOverridden: true },
+    properties: normalizeMaterialProperties({
+      pbrMetallicRoughness: { baseColorFactor: [0.2, 0.4, 0.7, 0.6], metallicFactor: 0.3, roughnessFactor: 0.7, baseColorTexture: slots[0] },
+      normalTexture: { ...slots[1], scale: -0.6 }, emissiveFactor: [0.2, 0.1, 0.3], emissiveTexture: slots[2],
+      opacityTexture: slots[3], opacityChannel: "g", alphaMode: "BLEND", alphaCutoff: 0.4,
+      doubleSided: true, alphaToCoverage: true, depthWrite: "off",
+      extensions: { ...(version === "0" ? { KHR_materials_emissive_strength: { emissiveStrength: 2 } } : { KHR_materials_unlit: {} }), VRMC_materials_mtoon: {
+        specVersion: "1.0", transparentWithZWrite: true, renderQueueOffsetNumber: -3,
+        shadeColorFactor: [0.12, 0.23, 0.34], shadeMultiplyTexture: slots[4],
+        shadingShiftFactor: 1.2, shadingShiftTexture: { ...slots[6], scale: -0.35 }, shadingToonyFactor: 0.8, giEqualizationFactor: 0.65,
+        matcapFactor: [0.4, 0.3, 0.2], matcapTexture: slots[7], parametricRimColorFactor: [0.3, 0.2, 0.1], rimMultiplyTexture: slots[8],
+        rimLightingMixFactor: 0.2, parametricRimFresnelPowerFactor: 3, parametricRimLiftFactor: -0.25,
+        outlineWidthMode: "screenCoordinates", outlineWidthFactor: 0.012, outlineWidthMultiplyTexture: slots[5],
+        outlineColorFactor: [0.1, 0.2, 0.3], outlineLightingMixFactor: 0.35,
+        uvAnimationMaskTexture: slots[9], uvAnimationScrollXSpeedFactor: -0.2, uvAnimationScrollYSpeedFactor: 0.4, uvAnimationRotationSpeedFactor: 1.5,
+        extras: { xriftVrm0CompatShade: version === "0" },
+      } },
+    }),
+  };
+  bundle.assets.assets.material = material;
+  attachMesh(bundle, "child", "model", "material");
+  const owner = bundle.scene.entities.child;
+  owner.name = `Avatar-${version}`;
+  Object.assign(transform(owner), { position: [2, 3, -4], rotation: [0.1, 0.2, -0.3], scale: [1.5, 1.5, 1.5] });
+  const mesh = owner.components.find(component => component.type === "mesh")!;
+  mesh.materialBindings[0].slot = "material-0";
+  mesh.modelPose = { bones: { hips: [0.2, -0.1, 0.05] }, morphTargets: { Smile: 0.8 },
+    nodes: { "15": { position: [0.2, 0.3, 0], rotation: [0.1, 0, 0], scale: [1, 1, 1] } } };
+  const body = entity("body", "child");
+  body.modelNode = { modelEntityId: "child", modelAssetId: "model", sourceNodeIndex: 15, nodeType: "skinned-mesh", sourceMaterialIndices: [0],
+    restPosition: [0, 0, 0], restRotation: [0, 0, 0], restScale: [1, 1, 1] };
+  bundle.scene.entities.body = body;
+  owner.children.push(body.id);
+  return { bundle, files };
+}
+
 /** Registered in cli/convert.fixture.mjs; all business logic runs without a renderer. */
 export async function runHierarchyTransferFixtureAssertions(): Promise<{ cases: number; assertions: number }> {
   let assertions = 0;
   const assert = (condition: unknown, message: string): void => { assertions++; if (!condition) throw new Error(`Hierarchy transfer: ${message}`); };
-  const equal = (left: unknown, right: unknown, message: string) => assert(JSON.stringify(left) === JSON.stringify(right), message);
+  const jsonData = (value: unknown) => JSON.stringify(value, (_key, item) => item && typeof item === "object" && !Array.isArray(item)
+    ? Object.fromEntries(Object.entries(item).sort(([left], [right]) => left.localeCompare(right))) : item);
+  const equal = (left: unknown, right: unknown, message: string) => assert(jsonData(left) === jsonData(right), message);
   const near = (left: readonly number[], right: readonly number[], message: string) => assert(left.length === right.length && left.every((value, index) => Math.abs(value - right[index]) < 1e-6), message);
   const throws = (run: () => unknown, message: string) => { let caught = false; try { run(); } catch { caught = true; } assert(caught, message); };
   const rejects = async (run: () => Promise<unknown>, message: string) => { let caught = false; try { await run(); } catch { caught = true; } assert(caught, message); };
@@ -107,6 +200,116 @@ export async function runHierarchyTransferFixtureAssertions(): Promise<{ cases: 
     assert([...plan.files.keys()].every((path) => path.startsWith("assets/imported/hierarchy-")), "fresh managed paths");
     const importedModel = plan.bundle.assets.assets[plan.assetIdMap.model];
     assert(importedModel.source.kind === "project" && plan.files.has(importedModel.source.relativePath), "asset files rebased");
+  });
+  for (const version of ["0", "1"] as const) test(`VRM ${version} MToon real Entity package round trip`, async () => {
+    const { bundle: source, files: sourceFiles } = await createMToonVrmHierarchyFixture(version);
+    const before = JSON.stringify(source);
+    const sourceBytesBefore = new Map([...sourceFiles].map(([path, data]) => [path, data.slice()]));
+    const readSource = async (path: string) => {
+      const data = sourceFiles.get(path);
+      if (!data) throw new Error(path);
+      return data;
+    };
+    const prepared = await prepareHierarchyTransferFiles(createHierarchyTransfer(source, ["child"], "local"), readSource);
+    equal(Object.keys(prepared.bundle.assets.assets).sort(), ["material", "model", ...Array.from({ length: 10 }, (_, index) => `map-${index}`)].sort(), "all ten MToon texture dependencies collected");
+    equal(prepared.files.size, 11, "source VRM and all ten images collected");
+    const archive = await createHierarchyArchive(prepared);
+    const packageBytes = new Uint8Array(await archive.blob.arrayBuffer());
+    assert(archive.fileName.endsWith(".xriftstudio") && packageBytes[0] === 0x50 && packageBytes[1] === 0x4b, "real .xriftstudio ZIP bytes generated");
+    const zip = unzipSync(packageBytes);
+    const inventoryPath = Object.keys(zip).find(path => path.endsWith("/.xrift-studio/package-manifest.json"))!;
+    const inventory = JSON.parse(new TextDecoder().decode(zip[inventoryPath]));
+    const prefix = inventoryPath.slice(0, -".xrift-studio/package-manifest.json".length);
+    for (const [path, data] of sourceFiles) {
+      const record = inventory.files.find((entry: { path: string }) => entry.path === path);
+      assert(record?.size === data.byteLength && record.sha256 === await sha256(data), "package inventory hashes actual avatar/texture bytes");
+      equal(zip[`${prefix}${path}`], data, "ZIP retains each source payload exactly");
+    }
+    const reopened = await readBrowserProjectArchive(new File([packageBytes], archive.fileName));
+    const { project: restoredProject, assets, prefabs, scenes } = reopened.documents;
+    const reopenedBundle: PrototypeVisualProject = { project: restoredProject, assets, prefabs, scene: scenes[restoredProject.entrySceneId] };
+    const warnings = readHierarchyTransferWarnings(reopened.files);
+    equal(warnings, prepared.warnings, "Hierarchy package metadata retained");
+    const restoredMaterial = reopenedBundle.assets.assets.material;
+    const sourceMaterial = source.assets.assets.material;
+    const sourceModel = source.assets.assets.model;
+    if (restoredMaterial.kind !== "material" || sourceMaterial.kind !== "material" || sourceModel.kind !== "model") throw new Error("Avatar fixture assets changed kind");
+    equal(restoredMaterial.properties, sourceMaterial.properties, "full canonical MToon, compatibility extras and fallback values survive archive parsing");
+    const reopenedPrepared = await prepareHierarchyTransferFiles(createHierarchyTransfer(reopenedBundle, reopenedBundle.scene.rootEntityIds, "local"), async path => {
+      const data = reopened.files.get(path);
+      if (!data) throw new Error(path);
+      return data;
+    });
+    const target = project("item");
+    target.assets.assets.model = model("model", "assets/existing.glb");
+    const targetBefore = JSON.stringify(target);
+    const plan = planHierarchyImport(target, reopenedPrepared, { parentId: "root", placement: "local" });
+    validateHierarchyBundle(plan.bundle);
+    equal(target, JSON.parse(targetBefore), "real package import plan never mutates existing project");
+    assert(plan.bundle.assets.assets.model === target.assets.assets.model && plan.assetIdMap.model !== "model", "fresh IDs preserve destination collision");
+    equal(plan.files.size, 11, "only transitive source files travel into destination");
+    const importedMaterial = plan.bundle.assets.assets[plan.assetIdMap.material];
+    const importedModel = plan.bundle.assets.assets[plan.assetIdMap.model];
+    if (importedMaterial.kind !== "material" || importedModel.kind !== "model" || importedModel.source.kind !== "project") throw new Error("Imported avatar assets changed kind");
+    const expectedProperties = structuredClone(sourceMaterial.properties);
+    for (const info of mtoonTextureSlots(expectedProperties)) {
+      if (info) info.textureAssetId = plan.assetIdMap[info.textureAssetId];
+    }
+    for (const key of ["baseColorTextureId", "normalTextureId", "emissiveTextureId"] as const) {
+      if (expectedProperties[key]) expectedProperties[key] = plan.assetIdMap[expectedProperties[key]];
+    }
+    equal(importedMaterial.properties, expectedProperties, "all ten slot IDs remap without changing UV transforms, scales or MToon factors");
+    equal(importedMaterial.importedFromModel, { ...sourceMaterial.importedFromModel, modelAssetId: plan.assetIdMap.model }, "avatar material provenance remains linked to rebased model");
+    equal(importedModel.importMetadata, sourceModel.importMetadata, "VRM version, humanoid/bone/morph and node metadata retained");
+    equal(importedModel.materialSlots, [{ ...sourceModel.materialSlots[0], defaultMaterialAssetId: plan.assetIdMap.material }], "native source slot index and remapped Material default retained");
+    for (const info of mtoonTextureSlots(importedMaterial.properties)) {
+      if (!info) throw new Error("MToon map disappeared");
+      const texture = plan.bundle.assets.assets[info.textureAssetId];
+      const originalId = Object.keys(plan.assetIdMap).find(id => plan.assetIdMap[id] === info.textureAssetId)!;
+      const original = source.assets.assets[originalId];
+      if (texture.kind !== "texture" || texture.source.kind !== "project" || original.kind !== "texture" || original.source.kind !== "project") throw new Error("Texture source disappeared");
+      equal(texture.importSettings, original.importSettings, "texture color spaces and samplers retained");
+      equal(texture.sourceHash, original.sourceHash, "texture source identity retained");
+      equal(plan.files.get(texture.source.relativePath), sourceFiles.get(original.source.relativePath), "remapped map points to unchanged image bytes");
+    }
+    const importedOwner = plan.bundle.scene.entities[plan.entityIdMap.child];
+    const importedMesh = importedOwner.components.find(component => component.type === "mesh")!;
+    const sourceMesh = source.scene.entities.child.components.find(component => component.type === "mesh")!;
+    equal(importedMesh.geometryAssetId, plan.assetIdMap.model, "legacy model reference remapped");
+    assert(importedMesh.geometry?.kind === "asset" && importedMesh.geometry.assetId === plan.assetIdMap.model, "canonical model reference remapped");
+    equal(importedMesh.materialBindings, [{ slot: "material-0", materialAssetId: plan.assetIdMap.material }], "Entity material binding remapped");
+    equal(importedMesh.modelPose, sourceMesh.modelPose, "authored bone pose, morph weights and node offsets retained");
+    const originalTransform = transform(source.scene.entities.child);
+    const importedTransform = transform(importedOwner);
+    equal([importedTransform.position, importedTransform.rotation, importedTransform.scale], [originalTransform.position, originalTransform.rotation, originalTransform.scale], "local Entity TRS retained");
+    const node = plan.bundle.scene.entities[plan.entityIdMap.body].modelNode!;
+    equal(node, { ...reopenedBundle.scene.entities.body.modelNode, modelEntityId: plan.entityIdMap.child, modelAssetId: plan.assetIdMap.model }, "skinned model-node owner and Asset refs remapped while the parsed source basis and index stay stable");
+    const avatarBytes = plan.files.get(importedModel.source.relativePath)!;
+    equal(avatarBytes, sourceFiles.get(`assets/avatar-${version}.vrm`), "original VRM bytes survive package and managed path relocation");
+    const native = await new GLTFLoader().register(parser => {
+      const plugin = new VRMLoaderPlugin(parser);
+      plugin.mtoonMaterialPlugin.v0CompatShade = Boolean(parser.json.extensions?.VRM);
+      return plugin;
+    }).parseAsync(new Uint8Array(avatarBytes).buffer, "");
+    try {
+      const vrm = native.userData.vrm as VRM | undefined;
+      assert(vrm?.meta.metaVersion === version && vrm.humanoid.getRawBoneNode("head"), "packaged source reopens as the same native humanoid VRM version");
+      const skin = native.scene.getObjectByName("Body") as SkinnedMesh;
+      assert(skin?.isSkinnedMesh && skin.skeleton.bones.length === 1 && skin.skeleton.bones[0].name === "hips", "packaged source retains real skin joints and skeleton");
+      assert(skin.morphTargetDictionary?.Smile === 0 && skin.morphTargetInfluences?.[0] === 0.25 && skin.geometry.morphAttributes.position?.length === 1, "packaged source retains real Smile morph and initial weight");
+    } finally {
+      const geometries = new Set<Mesh["geometry"]>();
+      const materials = new Set<Material>();
+      native.scene.traverse(object => {
+        if (!(object instanceof Mesh)) return;
+        geometries.add(object.geometry);
+        for (const material of Array.isArray(object.material) ? object.material : [object.material]) materials.add(material);
+      });
+      geometries.forEach(geometry => geometry.dispose());
+      materials.forEach(material => material.dispose());
+    }
+    equal(source, JSON.parse(before), "package export/import leaves authored source unchanged");
+    for (const [path, data] of sourceFiles) equal(data, sourceBytesBefore.get(path), "source files are unchanged after native VRM reload");
   });
   test("missing assets fail before changing destination", async () => {
     const source = project(); attachMesh(source);

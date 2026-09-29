@@ -788,7 +788,7 @@ function describeAssetOwnedReferences(
       const label = materialTexturePathLabel(entry.path);
       pathsBySlot.set(label, [...(pathsBySlot.get(label) ?? []), entry.path]);
     }
-    return [...pathsBySlot].map(([detail, paths]) => ({
+    const matches: AssetOwnedReferenceMatch[] = [...pathsBySlot].map(([detail, paths]) => ({
       kind: "material-texture" as const,
       detail,
       detachEffect: "clear-slot" as const,
@@ -803,6 +803,20 @@ function describeAssetOwnedReferences(
             }
           : current,
     }));
+    // A temporarily inactive MToon still owns these images: switching back
+    // must not restore a reference to a Texture that was treated as unused.
+    for (const entry of collectNestedAssetIds(asset.savedMToonSettings)) {
+      if (entry.assetId !== assetId) continue;
+      matches.push({
+        kind: "material-texture",
+        detail: `保存したMToon / ${materialTexturePathLabel(entry.path)}`,
+        detachEffect: "clear-slot",
+        detach: (current) => current.kind === "material" && current.savedMToonSettings
+          ? { ...current, savedMToonSettings: clearNestedAssetId(current.savedMToonSettings, entry.path) }
+          : current,
+      });
+    }
+    return matches;
   }
 
   if (asset.kind === "model") {

@@ -46,9 +46,11 @@ brew upgrade --cask --greedy webxr-jp/xrift-studio/xrift-studio
 | --- | --- |
 | Entityを配置する | [編集画面の使い方](./docs/guide/editor-basics.md) |
 | 色や質感を変える | [色と質感を変える](./docs/guide/materials.md) |
+| マンガのような陰影と輪郭線を付ける | [MToon 0.x・1.0を使う](./docs/guide/materials.md#mtoonマンガのような陰影と輪郭線を付ける) |
+| VRMアバターを配置して調整する | [VRM 0.x・1.0を取り込む](./docs/guide/assets.md#vrmアバターを取り込む) |
 | 押すと動く仕掛けを作る | [ノードで動きを作る](./docs/guide/interactivity.md) |
 | AIに制作を手伝ってもらう | [AI連携](./docs/guide/ai-connection.md) |
-| コードで続きを作る | [コードエディター用に書き出す](./docs/VISUAL_EDITOR_ROADMAP.md) |
+| コードで続きを作る | [コードエディターへ書き出す](./docs/guide/save-and-open.md#コードエディターへ書き出す) |
 | 起動や保存で困っている | [困ったとき](./docs/guide/troubleshooting.md) |
 
 保存場所と削除範囲は[データの保存とリセット](./docs/guide/recovery.md)、機能の制約は[対応状況](./docs/VISUAL_EDITOR_ROADMAP.md)にまとめています。不具合は[GitHub Issues](https://github.com/WebXR-JP/xrift-studio/issues)へ報告できます。ログを添える場合は、アクセストークンや個人情報を取り除いてください。

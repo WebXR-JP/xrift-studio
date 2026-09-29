@@ -701,6 +701,8 @@ export type ModelNodeAuthoringMetadata = {
   restScale: Vec3;
   /** Root-node transforms are displayed after applying the Model import scale. */
   rootImportScale?: number;
+  /** The displayed root includes the VRM 0.x scene's Y=PI orientation. */
+  rootVrm0Rotation?: true;
 };
 
 export type SceneDocument = {

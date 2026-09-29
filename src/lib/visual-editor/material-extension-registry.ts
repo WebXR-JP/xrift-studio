@@ -2,9 +2,10 @@ import type {
   Color3,
   MaterialExtensionSchemaRegistry,
 } from "./asset-manifest";
+import { MTOON_DEFAULTS } from "../../../packages/xrift-studio-runtime/src/mtoon-contract";
 
 /**
- * Single source of truth for the KHR_materials_* extensions the editor
+ * Single source of truth for the material extensions the editor
  * authors. Patch application, deep cloning, glTF import, document validation
  * and the Inspector sections all derive from this table.
  *
@@ -36,6 +37,14 @@ export type MaterialExtensionFieldDescriptor =
   | { readonly kind: "unitColor3"; readonly name: string; readonly default: Color3 }
   /** Three finite numbers >= 0; the extension permits HDR values above 1. */
   | { readonly kind: "nonNegativeColor3"; readonly name: string; readonly default: Color3 }
+  /** Boolean setting. */
+  | { readonly kind: "boolean"; readonly name: string; readonly default: boolean }
+  /** String enumeration; required fields must be present in saved documents. */
+  | { readonly kind: "enum"; readonly name: string; readonly values: readonly string[]; readonly default: string; readonly required?: boolean }
+  /** Integer in the declared inclusive range. */
+  | { readonly kind: "integer"; readonly name: string; readonly minimum: number; readonly maximum: number; readonly default: number }
+  /** Optional, explicitly supported Boolean import metadata. */
+  | { readonly kind: "booleanRecord"; readonly name: string; readonly keys: readonly string[] }
   /** `MaterialTextureInfo`. */
   | { readonly kind: "texture"; readonly name: string }
   /** `NormalTextureInfo` (adds `scale`). */
@@ -49,8 +58,10 @@ export type MaterialExtensionDescriptor = {
   readonly fields: readonly MaterialExtensionFieldDescriptor[];
   /** Extensions glTF requires to be present alongside this one. */
   readonly requires?: readonly MaterialExtensionName[];
-  /** Replaces the lit shading model and cannot be combined with any other. */
+  /** Replaces lit shading; conflicts except where fallback coexistence is declared. */
   readonly exclusive?: boolean;
+  /** Allowed alongside an exclusive shading extension as a fallback. */
+  readonly compatibleWithUnlit?: boolean;
   /** UI names follow glTF; Japanese readings are presentation-only metadata. */
   readonly label: string;
   readonly reading: string;
@@ -158,6 +169,41 @@ export const MATERIAL_EXTENSION_DESCRIPTORS: Readonly<
       { kind: "unitColor3", name: "attenuationColor", default: [1, 1, 1] },
     ],
   },
+  VRMC_materials_mtoon: {
+    label: "MToon",
+    reading: "エムトゥーン",
+    // The VRMC specification explicitly permits an Unlit fallback. MToon
+    // takes precedence while its settings and that fallback both round-trip.
+    compatibleWithUnlit: true,
+    fields: [
+      { kind: "enum", name: "specVersion", values: ["1.0"], default: MTOON_DEFAULTS.specVersion, required: true },
+      { kind: "boolean", name: "transparentWithZWrite", default: MTOON_DEFAULTS.transparentWithZWrite },
+      { kind: "integer", name: "renderQueueOffsetNumber", minimum: -9, maximum: 9, default: MTOON_DEFAULTS.renderQueueOffsetNumber },
+      { kind: "unitColor3", name: "shadeColorFactor", default: MTOON_DEFAULTS.shadeColorFactor },
+      { kind: "texture", name: "shadeMultiplyTexture" },
+      { kind: "finite", name: "shadingShiftFactor", default: MTOON_DEFAULTS.shadingShiftFactor },
+      { kind: "normalTexture", name: "shadingShiftTexture" },
+      { kind: "unit", name: "shadingToonyFactor", default: MTOON_DEFAULTS.shadingToonyFactor },
+      { kind: "unit", name: "giEqualizationFactor", default: MTOON_DEFAULTS.giEqualizationFactor },
+      { kind: "unitColor3", name: "matcapFactor", default: MTOON_DEFAULTS.matcapFactor },
+      { kind: "texture", name: "matcapTexture" },
+      { kind: "unitColor3", name: "parametricRimColorFactor", default: MTOON_DEFAULTS.parametricRimColorFactor },
+      { kind: "texture", name: "rimMultiplyTexture" },
+      { kind: "unit", name: "rimLightingMixFactor", default: MTOON_DEFAULTS.rimLightingMixFactor },
+      { kind: "nonNegative", name: "parametricRimFresnelPowerFactor", default: MTOON_DEFAULTS.parametricRimFresnelPowerFactor },
+      { kind: "finite", name: "parametricRimLiftFactor", default: MTOON_DEFAULTS.parametricRimLiftFactor },
+      { kind: "enum", name: "outlineWidthMode", values: ["none", "worldCoordinates", "screenCoordinates"], default: MTOON_DEFAULTS.outlineWidthMode },
+      { kind: "nonNegative", name: "outlineWidthFactor", default: MTOON_DEFAULTS.outlineWidthFactor },
+      { kind: "texture", name: "outlineWidthMultiplyTexture" },
+      { kind: "unitColor3", name: "outlineColorFactor", default: MTOON_DEFAULTS.outlineColorFactor },
+      { kind: "unit", name: "outlineLightingMixFactor", default: MTOON_DEFAULTS.outlineLightingMixFactor },
+      { kind: "texture", name: "uvAnimationMaskTexture" },
+      { kind: "finite", name: "uvAnimationScrollXSpeedFactor", default: MTOON_DEFAULTS.uvAnimationScrollXSpeedFactor },
+      { kind: "finite", name: "uvAnimationScrollYSpeedFactor", default: MTOON_DEFAULTS.uvAnimationScrollYSpeedFactor },
+      { kind: "finite", name: "uvAnimationRotationSpeedFactor", default: MTOON_DEFAULTS.uvAnimationRotationSpeedFactor },
+      { kind: "booleanRecord", name: "extras", keys: ["xriftVrm0CompatShade"] },
+    ],
+  },
 };
 /** Stable iteration order for every table-driven pass. */
 export const MATERIAL_EXTENSION_NAMES = Object.keys(
@@ -181,7 +227,7 @@ export const LIT_MATERIAL_EXTENSION_NAMES = MATERIAL_EXTENSION_NAMES.filter(
  */
 export const PHYSICAL_MATERIAL_EXTENSION_NAMES =
   LIT_MATERIAL_EXTENSION_NAMES.filter(
-    (name) => name !== "KHR_materials_emissive_strength",
+    (name) => name !== "KHR_materials_emissive_strength" && name !== "VRMC_materials_mtoon",
   );
 
 export function isMaterialExtensionName(
@@ -226,7 +272,7 @@ export function pruneMaterialExtensions<Value>(
   );
   if (exclusive) {
     for (const name of MATERIAL_EXTENSION_NAMES) {
-      if (name === exclusive || result[name] === undefined) continue;
+      if (name === exclusive || result[name] === undefined || MATERIAL_EXTENSION_DESCRIPTORS[name].compatibleWithUnlit) continue;
       delete result[name];
       onDrop?.(name, "unlit-conflict");
     }

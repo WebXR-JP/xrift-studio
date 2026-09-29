@@ -11,9 +11,16 @@ import {
   SRGBColorSpace,
   Vector3,
   WebGLRenderer,
+  type BufferGeometry,
   type Material,
+  type Mesh,
   type Object3D,
 } from "three";
+import {
+  attachMToonOutlines,
+  removeNativeMToonOutlines,
+  updateMToonMaterials,
+} from "../../../packages/xrift-studio-runtime/src/mtoon-runtime";
 import {
   GLTFLoader,
   type GLTF,
@@ -1947,7 +1954,11 @@ function parseWithGltfLoader(
   const draco = new DRACOLoader().setDecoderPath(resolveLocalVendorAssetPath("three-draco"));
   loader.setDRACOLoader(draco);
   if (format === "vrm") {
-    loader.register((parser) => new VRMLoaderPlugin(parser));
+    loader.register((parser) => {
+      const plugin = new VRMLoaderPlugin(parser);
+      plugin.mtoonMaterialPlugin.v0CompatShade = Boolean(parser.json.extensions?.VRM);
+      return plugin;
+    });
   }
   const source = isOpenBrush
     ? prepareOpenBrushGltfSource(bytes, format)
@@ -2376,7 +2387,28 @@ async function renderModelThumbnail(object: Object3D): Promise<ThumbnailResult> 
   fill.position.set(-4, 2, -3);
   preview.add(fill);
 
+  const nativeOutlineMeshes: Array<{
+    mesh: Mesh;
+    geometry: BufferGeometry;
+    material: Material[];
+  }> = [];
+  object.traverse((child) => {
+    const mesh = child as Mesh;
+    if (!mesh.isMesh || !Array.isArray(mesh.material)) return;
+    if (!mesh.material.some((material) => {
+      const toon = material as Material & { isMToonMaterial?: boolean; isOutline?: boolean };
+      return toon.isMToonMaterial && toon.isOutline;
+    })) return;
+    nativeOutlineMeshes.push({ mesh, geometry: mesh.geometry, material: mesh.material });
+  });
+  let outlinePasses: ReturnType<typeof attachMToonOutlines> | undefined;
+
   try {
+    // Use the same surface slots and outline geometry as Edit/Play/output.
+    // Native three-vrm groups can truncate non-indexed primitives.
+    removeNativeMToonOutlines(object);
+    outlinePasses = attachMToonOutlines(object);
+    updateMToonMaterials(object, 0);
     renderer.setSize(320, 240, false);
     renderer.setPixelRatio(1);
     renderer.outputColorSpace = SRGBColorSpace;
@@ -2400,6 +2432,15 @@ async function renderModelThumbnail(object: Object3D): Promise<ThumbnailResult> 
     const encoded = await encodeThumbnail(canvas);
     return { ...encoded, width: 320, height: 240 };
   } finally {
+    outlinePasses?.dispose();
+    // The thumbnail borrows the imported object. Release only our temporary
+    // outline materials and group metadata, retaining its source resources.
+    for (const { mesh, geometry, material } of nativeOutlineMeshes) {
+      const normalizedGeometry = mesh.geometry;
+      mesh.geometry = geometry;
+      mesh.material = material;
+      if (normalizedGeometry !== geometry) normalizedGeometry.dispose();
+    }
     preview.remove(object);
     if (originalParent) originalParent.add(object);
     renderer.dispose();

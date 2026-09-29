@@ -1,4 +1,5 @@
 import { applyOpenBrushMaterialProperties } from "../../../packages/xrift-studio-runtime/src/open-brush/material-properties";
+import { attachMToonOutlines, createMToonMaterial, removeNativeMToonOutlines, updateMToonMaterials } from "../../../packages/xrift-studio-runtime/src/mtoon-material";
 import {
   useEffect,
   useLayoutEffect,
@@ -102,6 +103,8 @@ import {
 } from "../../lib/visual-editor/open-brush-preview-loader";
 import { repairImportedObject3DHierarchy } from "../../lib/visual-editor/object3d-hierarchy";
 import type { SceneViewportMaterialStyle } from "./scene-viewport-display";
+import { createProjectModelPoseController } from "./project-model-pose-controller";
+import { bindModelNodePose, notifyModelNodePose } from "./project-model-node-pose-bridge";
 
 export type ProjectModelMaterialAssignment = {
   slot: string;
@@ -428,6 +431,13 @@ function ProjectModelRender({
     state.status === "ready"
       ? (state.interactionAnimationCues ?? EMPTY_ANIMATION_CUES)
       : EMPTY_ANIMATION_CUES;
+  const latestPoseRef = useRef(pose);
+  latestPoseRef.current = pose;
+  const invalidate = useThree((canvasState) => canvasState.invalidate);
+  const [previewBounds, setPreviewBounds] = useState<{
+    object: Object3D;
+    bounds: ModelSelectionBoundsValue;
+  } | null>(null);
   const renderedModel = useMemo(() => {
     if (!readyObject) return null;
     const sourceMaterials = getSourceModelIndex(readyObject).materials;
@@ -436,8 +446,13 @@ function ProjectModelRender({
       sourceNodeIndex,
       sourceNodeName,
     );
-    applyStaticModelPose(object, pose);
-    const selectionBounds = getModelSelectionBounds(object);
+    const poseController = createProjectModelPoseController(object, applyStaticModelPose,
+      child => child.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY]);
+    poseController.apply(latestPoseRef.current);
+    const selectionBounds = fitPreview ? getModelSelectionBounds(object) : {
+      position: [0, 0, 0] as [number, number, number],
+      scale: [1, 1, 1] as [number, number, number],
+    };
     const ownedGeometries: BufferGeometry[] = [];
     const ownedMaterials = applyAssignedMaterialPreviews(
       object,
@@ -448,16 +463,36 @@ function ProjectModelRender({
     ownedMaterials.push(
       ...applySceneViewportMaterialStyle(object, viewportMaterialStyle),
     );
-    return { object, ownedMaterials, ownedGeometries, selectionBounds };
+    return { object, poseController, ownedMaterials, ownedGeometries, selectionBounds };
   }, [
     assignedMaterials,
-    pose,
+    fitPreview,
     readyObject,
     sourceNodeIndex,
     sourceNodeName,
     viewportMaterialStyle,
   ]);
   const renderedObject = renderedModel?.object ?? null;
+  useLayoutEffect(() => {
+    if (!renderedModel) return;
+    renderedModel.poseController.apply(pose);
+    notifyModelNodePose(renderedModel.object, renderedModel.poseController);
+    if (fitPreview) {
+      const bounds = getModelSelectionBounds(renderedModel.object);
+      setPreviewBounds({ object: renderedModel.object, bounds });
+    }
+    invalidate();
+  }, [fitPreview, invalidate, pose, renderedModel]);
+  useLayoutEffect(() => {
+    if (!renderedModel) return;
+    const { object, poseController } = renderedModel;
+    return bindModelNodePose(object, poseController);
+  }, [renderedModel]);
+  useLayoutEffect(() => {
+    if (!renderedObject || viewportMaterialStyle !== "scene") return;
+    const outlines = attachMToonOutlines(renderedObject);
+    return () => outlines.dispose();
+  }, [renderedObject, viewportMaterialStyle]);
   const mixer = useMemo(
     () => (renderedObject ? new AnimationMixer(renderedObject) : null),
     [renderedObject],
@@ -491,7 +526,6 @@ function ProjectModelRender({
     playing,
   ]);
   const playbackActive = Boolean(mixer && playbackCues.length > 0);
-  const invalidate = useThree((canvasState) => canvasState.invalidate);
   const materialRuntimeInfo = useMemo(
     () =>
       renderedModel?.ownedMaterials.map(inspectProjectModelMaterialRuntime) ?? [],
@@ -619,6 +653,7 @@ function ProjectModelRender({
     }
     animationBridgeRef.current?.sample();
     const elapsed = frame.clock.getElapsedTime();
+    if (renderedObject) updateMToonMaterials(renderedObject, delta, frame.gl.info.render.frame, frame.gl);
     renderedModel?.ownedMaterials.forEach((material) => {
       const shader = material as ShaderMaterial;
       const specs = material.userData.xriftTimeUniforms as
@@ -657,11 +692,13 @@ function ProjectModelRender({
     : 1;
 
   if (renderedModel) {
+    const selectionBounds = previewBounds?.object === renderedModel.object
+      ? previewBounds.bounds : renderedModel.selectionBounds;
     const previewScale = fitPreview
-      ? 1.5 / Math.max(...renderedModel.selectionBounds.scale, 0.01)
+      ? 1.5 / Math.max(...selectionBounds.scale, 0.01)
       : 1;
     const previewOffset: [number, number, number] = fitPreview
-      ? renderedModel.selectionBounds.position.map((value) => -value) as [
+      ? selectionBounds.position.map((value) => -value) as [
           number,
           number,
           number,
@@ -980,8 +1017,16 @@ export function applyStaticModelPose(
   object: Object3D,
   pose: ModelPoseState | undefined,
 ): void {
-  if (!pose) return;
   object.traverse((child) => {
+    const skinned = child as Object3D & { isSkinnedMesh?: boolean; boundingBox?: Box3 | null; boundingSphere?: unknown };
+    if (skinned.isSkinnedMesh) {
+      skinned.boundingBox = null;
+      skinned.boundingSphere = null;
+    }
+    // These passes inherit the source Mesh's transform, skeleton and morphs.
+    // Applying a source-node offset to them again would deform it twice.
+    if (child.userData.xriftMToonOutline || child.userData.editorHelper) return;
+    if (!pose) return;
     const sourceNodeIndex = child.userData[
       PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY
     ];
@@ -1164,6 +1209,12 @@ export function createAssignedMaterialPreviewMaterial(
       typeof normalizeMaterialProperties
     >[0],
   );
+  if (properties.extensions.VRMC_materials_mtoon) {
+    preview.dispose();
+    const mtoon = createMToonMaterial(properties, assignedTextures);
+    mtoon.name = assignedMaterial.name;
+    return mtoon;
+  }
   const pbr = properties.pbrMetallicRoughness;
   preview.color.setRGB(
     pbr.baseColorFactor[0],
@@ -1690,7 +1741,11 @@ async function parseSelfContainedModel(
       new DRACOLoader().setDecoderPath(resolveLocalVendorAssetPath("three-draco")),
     );
     if (format === "vrm") {
-      loader.register((parser) => new VRMLoaderPlugin(parser));
+      loader.register((parser) => {
+        const plugin = new VRMLoaderPlugin(parser);
+        plugin.mtoonMaterialPlugin.v0CompatShade = Boolean(parser.json.extensions?.VRM);
+        return plugin;
+      });
     }
     if (openBrush) {
       loader.register(
@@ -1707,6 +1762,7 @@ async function parseSelfContainedModel(
       (gltf) => {
         const vrm = gltf.userData.vrm as VRM | undefined;
         if (vrm) VRMUtils.rotateVRM0(vrm);
+        removeNativeMToonOutlines(gltf.scene);
         repairImportedObject3DHierarchy(gltf.scene);
         tagSourceMaterialIndices(gltf, document);
         resolve({

@@ -41,8 +41,15 @@ const suites = {
   playSession: ["play-session.fixture.ts", "runPlaySessionFixtureAssertions"],
   geometry: ["mesh-collider-geometry.fixture.ts", "runMeshColliderGeometryFixtureAssertions"],
   compiler: ["compiler/fixture.ts", "runVisualCompilerFixtureAssertions"],
+  mtoonCompiler: ["compiler/mtoon-material.fixture.ts", "runMToonMaterialCompilerFixtureAssertions"],
+  mtoonData: ["material-mtoon.fixture.ts", "runMaterialMToonFixtureAssertions"],
+  vrmMaterials: ["vrm-material-conversion.fixture.ts", "runVrmMaterialConversionFixtureAssertions"],
+  materialExtensions: ["compiler/material-extensions.fixture.ts", "runMaterialExtensionFixtureAssertions"],
+  materialShowcases: ["material-showcase-catalog.fixture.ts", "runMaterialShowcaseCatalogFixtureAssertions"],
+  gltfDerived: ["gltf-derived-assets.fixture.ts", "runGltfDerivedAssetFixtureAssertions"],
   collision: ["mesh-collision-actions.fixture.ts", "runMeshCollisionActionsFixtureAssertions"],
   hierarchy: ["hierarchy-transfer.fixture.ts", "runHierarchyTransferFixtureAssertions"],
+  assetReferences: ["asset-reference-detach.fixture.ts", "runAssetReferenceDetachFixtureAssertions"],
   authoring: ["authoring-workflow.fixture.ts", "runAuthoringWorkflowFixtureAssertions"],
 };
 (async () => {
@@ -52,7 +59,11 @@ const suites = {
       const [file, entry] = suites[key];
       const fixture = await import(pathToFileURL(path.resolve(__dirname, "../src/lib/visual-editor", file)).href);
       const result = await fixture[entry]();
-      console.log(JSON.stringify({ status: "passed", suite: key, typescript: ts.version, ...result }, null, 2));
+      const summary = result && Array.isArray(result.overlayFiles)
+        ? { targetKind: result.targetKind, canStage: result.canStage, diagnostics: result.diagnostics,
+          sourceFiles: result.overlayFiles.map((file) => file.relativePath), assetCopies: result.assetCopyPlan?.length }
+        : result;
+      console.log(JSON.stringify({ status: "passed", suite: key, typescript: ts.version, ...summary }, null, 2));
     }
   } finally { hooks.deregister(); }
 })().catch((error) => { console.error(error); process.exitCode = 1; });

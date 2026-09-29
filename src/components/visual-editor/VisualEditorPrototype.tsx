@@ -11,6 +11,7 @@ import { applyModelReimportSettings } from "../../lib/visual-editor/model-reimpo
 import { colliderModelNode, setMeshCollision } from "../../lib/visual-editor/mesh-collision-actions";
 import { textureProcessingSettings } from "../../lib/visual-editor/texture-processing";
 import { normalizeTextureImportSettings } from "../../lib/visual-editor/asset-manifest";
+import { applyMaterialBatchPatch, applyMaterialBatchFieldValue } from "../../lib/visual-editor/material-batch";
 import { authoringFingerprint, authoringStatus, changeAuthoringState, readAuthoringState } from "../../lib/visual-editor/world-authoring";
 import { getWorldComponentAuthoring } from "../../lib/visual-editor/world-component-authoring";
 import {
@@ -521,6 +522,7 @@ type EditorSessionSnapshot = {
   sceneSelection: SceneSelection;
   entitySelectionIds?: string[];
   assetSelection: string | null;
+  assetSelectionIds?: string[];
 };
 
 type SaveStatus = "dirty" | "saving" | "saved" | "error" | "unavailable";
@@ -2065,6 +2067,7 @@ export function VisualEditorPrototype({
       replaceEditorHistoryPresent(current, {
         ...current.present,
         assetSelection: assetId,
+        assetSelectionIds: assetId ? [assetId] : [],
       }),
     );
   }, []);
@@ -2136,6 +2139,7 @@ export function VisualEditorPrototype({
     setHistory((current) =>
       replaceEditorHistoryPresent(current, {
         ...current.present,
+        assetSelectionIds: validIds,
         assetSelection: primaryAssetId && validIds.includes(primaryAssetId)
           ? primaryAssetId
           : validIds[0] ?? null,
@@ -2216,19 +2220,17 @@ export function VisualEditorPrototype({
     if (autosaveTimerRef.current !== null) {
       window.clearTimeout(autosaveTimerRef.current);
     }
-    autosaveTimerRef.current = window.setTimeout(() => {
+    const attemptAutosave = () => {
       autosaveTimerRef.current = null;
-      if (transformScrubRef.current || terrainStrokeActiveRef.current) {
-        // A scrub or terrain stroke is in progress. Reschedule so the pending
-        // changes are saved once the interaction settles.
-        autosaveTimerRef.current = window.setTimeout(() => {
-          autosaveTimerRef.current = null;
-          void requestAutosave(bundle);
-        }, AUTOSAVE_DELAY_MS);
+      if (transformScrubRef.current || valueScrubRef.current || terrainStrokeActiveRef.current) {
+        // Every retry must wait for the interaction to finish, including a
+        // paused drag that outlasts more than one autosave delay.
+        autosaveTimerRef.current = window.setTimeout(attemptAutosave, AUTOSAVE_DELAY_MS);
         return;
       }
       void requestAutosave(bundle);
-    }, AUTOSAVE_DELAY_MS);
+    };
+    autosaveTimerRef.current = window.setTimeout(attemptAutosave, AUTOSAVE_DELAY_MS);
     return () => {
       if (autosaveTimerRef.current !== null) {
         window.clearTimeout(autosaveTimerRef.current);
@@ -5302,6 +5304,10 @@ export function VisualEditorPrototype({
               bundle: outcome.bundle,
               sceneSelection: outcome.sceneSelection,
               assetSelection: outcome.assetSelection,
+              ...(request.tool === "update_material_assets" ? {
+                assetSelectionIds: current.present.assetSelectionIds,
+                entitySelectionIds: current.present.entitySelectionIds,
+              } : {}),
             }),
           );
           setSaveStatus("dirty");
@@ -5598,7 +5604,11 @@ export function VisualEditorPrototype({
       assetSelectionRef.current = snapshot.assetSelection;
       setSelectedEntityIds((snapshot.entitySelectionIds ?? (snapshot.sceneSelection?.id ? [snapshot.sceneSelection.id] : []))
         .filter((id) => Boolean(snapshot.bundle.scene.entities[id])));
-      setSelectedAssetIds(snapshot.assetSelection ? [snapshot.assetSelection] : []);
+      setSelectedAssetIds((snapshot.assetSelection
+        ? snapshot.assetSelectionIds?.includes(snapshot.assetSelection)
+          ? snapshot.assetSelectionIds
+          : [snapshot.assetSelection]
+        : []).filter((id) => Boolean(snapshot.bundle.assets.assets[id])));
       setSaveStatus("dirty");
       setNotice("元に戻しました");
       return withLiveGizmoSettings(transition.history, current.present.bundle);
@@ -5614,7 +5624,11 @@ export function VisualEditorPrototype({
       assetSelectionRef.current = snapshot.assetSelection;
       setSelectedEntityIds((snapshot.entitySelectionIds ?? (snapshot.sceneSelection?.id ? [snapshot.sceneSelection.id] : []))
         .filter((id) => Boolean(snapshot.bundle.scene.entities[id])));
-      setSelectedAssetIds(snapshot.assetSelection ? [snapshot.assetSelection] : []);
+      setSelectedAssetIds((snapshot.assetSelection
+        ? snapshot.assetSelectionIds?.includes(snapshot.assetSelection)
+          ? snapshot.assetSelectionIds
+          : [snapshot.assetSelection]
+        : []).filter((id) => Boolean(snapshot.bundle.assets.assets[id])));
       setSaveStatus("dirty");
       setNotice("やり直しました");
       return withLiveGizmoSettings(transition.history, current.present.bundle);
@@ -7472,22 +7486,30 @@ export function VisualEditorPrototype({
 
   const handleApplySelectedMaterialPatch = useCallback(
     (patch: MaterialAssetPatch) => {
-      if (editorMode !== "edit" || selectedAssetIds.length < 2) return;
+      if (editorMode !== "edit" || importBusy || selectedAssetIds.length < 2) return;
       setBundle((current) => {
-        const materialIds = selectedAssetIds.filter(
-          (assetId) => current.assets.assets[assetId]?.kind === "material",
-        );
-        if (materialIds.length !== selectedAssetIds.length) return current;
-        const assets = materialIds.reduce(
-          (next, assetId) => updateMaterialAsset(next, assetId, patch),
-          current.assets,
-        );
+        const assets = applyMaterialBatchPatch(current.assets, selectedAssetIds, patch);
         if (assets === current.assets) return current;
-        setNotice(`${materialIds.length}件のマテリアルを更新し、使用しているメッシュの表示に反映しました`);
+        const changedCount = selectedAssetIds.filter((assetId) => assets.assets[assetId] !== current.assets.assets[assetId]).length;
+        setNotice(`${changedCount}件のマテリアルを更新し、使用しているメッシュの表示に反映しました`);
         return touchProject({ ...current, assets });
       });
     },
-    [editorMode, selectedAssetIds, setBundle],
+    [editorMode, importBusy, selectedAssetIds, setBundle],
+  );
+
+  const handleApplySelectedMaterialFieldValue = useCallback(
+    (path: string, value: unknown) => {
+      if (editorMode !== "edit" || importBusy || selectedAssetIds.length < 2) return;
+      setBundle((current) => {
+        const assets = applyMaterialBatchFieldValue(current.assets, selectedAssetIds, path, value);
+        if (assets === current.assets) return current;
+        const changedCount = selectedAssetIds.filter((assetId) => assets.assets[assetId] !== current.assets.assets[assetId]).length;
+        setNotice(`${changedCount}件のマテリアルを更新し、使用しているメッシュの表示に反映しました`);
+        return touchProject({ ...current, assets });
+      });
+    },
+    [editorMode, importBusy, selectedAssetIds, setBundle],
   );
 
   const handleAudioSourceChange = useCallback(
@@ -11964,6 +11986,7 @@ export function VisualEditorPrototype({
             selectedEntityIds={selectedEntityIds}
             selectedAssetIds={selectedAssetIds}
             readOnly={renderedReadOnly}
+            materialBatchBusy={importBusy}
             playMode={renderedEditorMode === "play"}
             onRenameEntity={handleRenameEntity}
             onEntityEnabledChange={handleEntityEnabledChange}
@@ -12105,6 +12128,7 @@ export function VisualEditorPrototype({
             onSetMeshShadow={handleSetSelectedMeshShadow}
             onSetLightShadow={handleSetSelectedLightShadow}
             onApplyMaterialPatch={handleApplySelectedMaterialPatch}
+            onApplyMaterialFieldValue={handleApplySelectedMaterialFieldValue}
           />
           </EditorPanelVisibilityContext.Provider>
           </div>

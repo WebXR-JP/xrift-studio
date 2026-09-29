@@ -14,6 +14,8 @@ import {
   updateEntityTransform,
   type MaterialBinding,
   type MeshComponent,
+  type ModelNodeAuthoringMetadata,
+  type ModelNodeTransformOffset,
   type SceneDocument,
   type SceneEntity,
   type TransformPatch,
@@ -203,13 +205,15 @@ export function expandModelEntityHierarchy(
     const importScale = Number.isFinite(asset.importSettings.scale)
       ? asset.importSettings.scale
       : 1;
-    const position = node.position.map((value) =>
-      isGeneratedRoot ? value * importScale : value,
-    ) as [number, number, number];
-    const rotation = [...node.rotation] as [number, number, number];
-    const scale = node.scale.map((value) =>
-      isGeneratedRoot ? value * importScale : value,
-    ) as [number, number, number];
+    const rootVrm0Rotation = isGeneratedRoot && asset.importMetadata?.vrmVersion === "0";
+    const sourceTransform = {
+      position: node.position.map((value) => isGeneratedRoot ? value * importScale : value) as Vec3,
+      rotation: [...node.rotation] as Vec3,
+      scale: node.scale.map((value) => isGeneratedRoot ? value * importScale : value) as Vec3,
+    };
+    const { position, rotation, scale } = rootVrm0Rotation
+      ? rotateVrm0RootTransform(sourceTransform)
+      : sourceTransform;
     const components: SceneEntity["components"] = [
       createTransformComponent(
         `${entityId}-transform`,
@@ -268,6 +272,7 @@ export function expandModelEntityHierarchy(
               ...(isGeneratedRoot && importScale !== 1
                 ? { rootImportScale: importScale }
                 : {}),
+              ...(rootVrm0Rotation ? { rootVrm0Rotation: true as const } : {}),
             },
           }
         : {}),
@@ -275,6 +280,54 @@ export function expandModelEntityHierarchy(
   }
 
   return { ...scene, entities };
+}
+
+/** Converts a displayed node Transform to the shared source model's offset. */
+export function getModelNodeTransformOffset(
+  modelNode: ModelNodeAuthoringMetadata,
+  transform: Pick<ModelNodeTransformOffset, "position" | "rotation" | "scale">,
+): ModelNodeTransformOffset {
+  const rootScale = modelNode.rootImportScale ?? 1;
+  const offset = {
+    position: transform.position.map(
+      (value, index) => (value - modelNode.restPosition[index]) / rootScale,
+    ) as Vec3,
+    rotation: transform.rotation.map(
+      (value, index) => value - modelNode.restRotation[index],
+    ) as Vec3,
+    scale: transform.scale.map((value, index) => value / modelNode.restScale[index]) as Vec3,
+  };
+  // VRMUtils.rotateVRM0 rotates the scene above source nodes. The proxy root
+  // includes that orientation, while offsets still belong to the source node.
+  return modelNode.rootVrm0Rotation
+    ? {
+        ...offset,
+        position: [-offset.position[0], offset.position[1], -offset.position[2]],
+        rotation: [-offset.rotation[0], offset.rotation[1], offset.rotation[2]],
+      }
+    : offset;
+}
+
+/** Expresses an existing source Bone pose in the displayed node's Euler basis. */
+export function getModelNodeBoneRotationDelta(
+  modelNode: ModelNodeAuthoringMetadata,
+  sourceRotation: Vec3,
+): Vec3 {
+  return modelNode.rootVrm0Rotation
+    ? [-sourceRotation[0], sourceRotation[1], sourceRotation[2]]
+    : [...sourceRotation];
+}
+
+function rotateVrm0RootTransform(
+  transform: Pick<ModelNodeTransformOffset, "position" | "rotation" | "scale">,
+): Pick<ModelNodeTransformOffset, "position" | "rotation" | "scale"> {
+  return {
+    position: [-transform.position[0], transform.position[1], -transform.position[2]],
+    // RY(PI) * RX(x) * RY(y) * RZ(z) = RX(-x) * RY(y + PI) * RZ(z).
+    // Keep that exact Euler representation, including authored turns.
+    rotation: [-transform.rotation[0], transform.rotation[1] + Math.PI, transform.rotation[2]],
+    scale: [...transform.scale],
+  };
 }
 
 /**
@@ -298,19 +351,7 @@ export function updateModelNodeEntityTransform(
   );
   if (!modelEntity || !mesh) return nextScene;
 
-  const rootScale = modelNode.rootImportScale ?? 1;
-  const offset = {
-    position: transform.position.map(
-      (value, index) =>
-        (value - modelNode.restPosition[index]) / rootScale,
-    ) as Vec3,
-    rotation: transform.rotation.map(
-      (value, index) => value - modelNode.restRotation[index],
-    ) as Vec3,
-    scale: transform.scale.map((value, index) =>
-      value / modelNode.restScale[index],
-    ) as Vec3,
-  };
+  const offset = getModelNodeTransformOffset(modelNode, transform);
   const nodes = { ...(mesh.modelPose?.nodes ?? {}) };
   const key = String(modelNode.sourceNodeIndex);
   // A hidden node keeps its pose entry even at the rest Transform: the entry
@@ -488,6 +529,56 @@ export function reconcileModelNodeEnabledInEntities(
     entities: next ?? (entities as Record<string, SceneEntity>),
     reconciled,
   };
+}
+
+/** Aligns old VRM 0.x proxy roots with the scene orientation already rendered. */
+export function reconcileModelNodeCoordinatesInEntities(
+  entities: Readonly<Record<string, SceneEntity>>,
+  assets: AssetManifest,
+): { entities: Record<string, SceneEntity>; reconciled: number } {
+  let reconciled = 0;
+  let next: Record<string, SceneEntity> | null = null;
+  for (const [entityId, entity] of Object.entries(entities)) {
+    const metadata = entity.modelNode;
+    if (!metadata || metadata.rootVrm0Rotation || entity.parentId !== metadata.modelEntityId) continue;
+    const asset = assets.assets[metadata.modelAssetId];
+    if (asset?.kind !== "model" || asset.importMetadata?.vrmVersion !== "0") continue;
+    const owner = entities[metadata.modelEntityId];
+    const mesh = owner?.components.find(
+      (component): component is MeshComponent => component.type === "mesh" &&
+        component.geometry?.kind === "asset" && component.geometry.assetId === metadata.modelAssetId,
+    );
+    const transform = getTransform(entity);
+    if (!mesh || !transform) continue;
+    const sourceOffset = mesh.modelPose?.nodes?.[String(metadata.sourceNodeIndex)];
+    const rootScale = metadata.rootImportScale ?? 1;
+    const rest = rotateVrm0RootTransform({
+      position: metadata.restPosition,
+      rotation: metadata.restRotation,
+      scale: metadata.restScale,
+    });
+    const displayed = rotateVrm0RootTransform({
+      position: metadata.restPosition.map((value, index) => value + (sourceOffset?.position[index] ?? 0) * rootScale) as Vec3,
+      rotation: metadata.restRotation.map((value, index) => value + (sourceOffset?.rotation[index] ?? 0)) as Vec3,
+      scale: metadata.restScale.map((value, index) => value * (sourceOffset?.scale[index] ?? 1)) as Vec3,
+    });
+    next = next ?? { ...entities };
+    next[entityId] = {
+      ...entity,
+      components: entity.components.map(component => component.id === transform.id && component.type === "transform"
+        ? { ...component, ...displayed }
+        : component),
+      modelNode: {
+        ...metadata,
+        restPosition: rest.position,
+        restRotation: rest.rotation,
+        restScale: rest.scale,
+        rootVrm0Rotation: true,
+      },
+    };
+    reconciled += 1;
+  }
+  return { entities: next ?? (entities as Record<string, SceneEntity>), reconciled };
 }
 
 function isIdentityNodeOffset(

@@ -5,9 +5,10 @@ import {
   type MaterialExtensionName,
 } from "../../lib/visual-editor/material-extension-registry";
 import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
+import { XriftMToonMaterial } from "../../../packages/xrift-studio-runtime/src/mtoon-material";
 import { readImageDimensions } from "../../lib/visual-editor/gltf-derived-assets";
 import { readProjectAssetBytes, textureProcessingSettings } from "../../lib/visual-editor/texture-processing";
-import { normalizeTextureImportSettings } from "../../lib/visual-editor/asset-manifest";
+import { getMaterialShadingModel, normalizeTextureImportSettings, type MaterialShadingModel } from "../../lib/visual-editor/asset-manifest";
 import {
   useCallback,
   useEffect,
@@ -95,6 +96,8 @@ import {
   useMaterialPreviewTextureState,
 } from "./material-texture-preview";
 import { WebGlThumbnailCapture } from "./WebGlThumbnailCapture";
+import { MaterialFieldScope, MaterialFieldText, MaterialInput, MaterialSelect, MaterialBulkNumberControl, MaterialBulkRangeControl, MaterialBulkColor3Control, MaterialBulkTextureControl, useMaterialField } from "./material-field-context";
+import { MToonAdvancedControls } from "./MToonAdvancedControls";
 
 const INPUT_CLASS =
   "h-7 min-w-0 w-full rounded border border-slate-300 bg-white px-2 text-xs text-slate-800 outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-200 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400";
@@ -103,6 +106,10 @@ const EMPTY_ASSET_MANIFEST: AssetManifest = {
   schemaVersion: "0.1.0",
   assets: {},
 };
+
+// Thumbnails have no 3D pointer interactions. Avoid connecting DOM listeners
+// after an asynchronous Canvas creation outlives a project/pane transition.
+const staticMaterialPreviewEvents = () => ({ enabled: false, priority: 1 });
 
 function clampUnit(value: number): number {
   return Math.max(0, Math.min(1, value));
@@ -169,6 +176,7 @@ function MaterialPreviewScene({
   }, []);
   useMaterialPreviewRenderSync(previewMaterialRef, textures);
   const extensions = asset.properties.extensions;
+  const mtoon = extensions.VRMC_materials_mtoon !== undefined;
   const anisotropy = extensions.KHR_materials_anisotropy;
   const clearcoat = extensions.KHR_materials_clearcoat;
   const dispersion = extensions.KHR_materials_dispersion;
@@ -200,12 +208,16 @@ function MaterialPreviewScene({
   return (
     <>
       <color attach="background" args={["#f8fafc"]} />
-      <ambientLight intensity={1.45} />
-      <directionalLight position={[2.5, 3, 4]} intensity={2.8} />
-      <directionalLight position={[-2, -1, 1]} intensity={0.65} color="#ddd6fe" />
+      {/* Strong ambient and front fill erase the toon terminator. Keep an
+          angled key and a small ambient fill for the authored Shade Color. */}
+      <ambientLight intensity={mtoon ? 0.08 : 1.45} />
+      <directionalLight position={mtoon ? [-3, 3, 0.75] : [2.5, 3, 4]} intensity={mtoon ? 1.5 : 2.8} />
+      {!mtoon ? <directionalLight position={[-2, -1, 1]} intensity={0.65} color="#ddd6fe" /> : null}
       <mesh rotation={[0.16, 0.42, 0]}>
         <sphereGeometry args={[0.78, 32, 24]} />
-        {unlit ? (
+        {extensions.VRMC_materials_mtoon ? (
+          <XriftMToonMaterial properties={asset.properties} textures={textures} />
+        ) : unlit ? (
           <meshBasicMaterial
             ref={capturePreviewMaterial}
             color={color}
@@ -379,6 +391,7 @@ export function MaterialThumbnail({
   return (
     <div className={`overflow-hidden bg-slate-50 ${className}`}>
       <Canvas
+        events={staticMaterialPreviewEvents}
         frameloop="demand"
         dpr={[1, 1.25]}
         camera={{ position: [0, 0, 2.7], fov: 34 }}
@@ -782,18 +795,20 @@ function MaterialFallbackThumbnail({
   );
 }
 
-function EditorSection({
+export function EditorSection({
   title,
   reading,
+  titleHint,
   children,
 }: {
   title: string;
   reading?: string;
+  titleHint?: string;
   children: React.ReactNode;
 }) {
   return (
     <section className="rounded-md border border-slate-200 bg-white p-2 shadow-sm">
-      <h4 className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13px] font-semibold text-slate-800">
+      <h4 title={titleHint} className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13px] font-semibold text-slate-800">
         <span lang={reading ? "en" : undefined} className="min-w-0 break-words [overflow-wrap:anywhere]">{title}</span>
         {reading ? <span lang="ja" className="text-[11px] font-normal text-slate-500">{reading}</span> : null}
       </h4>
@@ -802,7 +817,7 @@ function EditorSection({
   );
 }
 
-function RangeControl({
+export function RangeControl({
   label,
   value,
   min = 0,
@@ -811,6 +826,8 @@ function RangeControl({
   description,
   disabled,
   onChange,
+  materialPath,
+  bulkDisabled,
 }: {
   label: string;
   value: number;
@@ -820,8 +837,12 @@ function RangeControl({
   description?: string;
   disabled: boolean;
   onChange: (value: number) => void;
+  materialPath?: string;
+  bulkDisabled?: boolean;
 }) {
   const transaction = useValueScrubTransaction();
+  const field = useMaterialField(materialPath);
+  if (field && materialPath) return <MaterialBulkRangeControl materialPath={materialPath} label={label} value={value} min={min} max={max} step={step} disabled={bulkDisabled ?? disabled} description={description} />;
   return (
     <label className="block text-xs text-slate-600">
       <span className="mb-1 flex items-center justify-between gap-2">
@@ -865,7 +886,7 @@ function RangeControl({
   );
 }
 
-function NumberControl({
+export function NumberControl({
   label,
   value,
   min,
@@ -875,6 +896,9 @@ function NumberControl({
   disabled,
   isAllowed,
   onChange,
+  materialPath,
+  materialEncode,
+  bulkDisabled,
 }: {
   label: string;
   value: number;
@@ -885,7 +909,12 @@ function NumberControl({
   disabled: boolean;
   isAllowed?: (value: number) => boolean;
   onChange: (value: number) => void;
+  materialPath?: string;
+  materialEncode?: (value: number) => number;
+  bulkDisabled?: boolean;
 }) {
+  const field = useMaterialField(materialPath);
+  if (field && materialPath) return <MaterialBulkNumberControl materialPath={materialPath} label={label} value={value} min={min} max={max} step={step} disabled={bulkDisabled ?? disabled} description={description} encode={materialEncode} />;
   return (
     <label className="block text-xs text-slate-600">
       <span className="mb-1 block">{label}</span>
@@ -912,13 +941,14 @@ function NumberControl({
   );
 }
 
-function Color3Control({
+export function Color3Control({
   label,
   value,
   description,
   max,
   disabled,
   onChange,
+  materialPath,
 }: {
   label: string;
   value: Color3;
@@ -926,7 +956,10 @@ function Color3Control({
   max?: number;
   disabled: boolean;
   onChange: (value: Color3) => void;
+  materialPath?: string;
 }) {
+  const field = useMaterialField(materialPath);
+  if (field && materialPath) return <MaterialBulkColor3Control materialPath={materialPath} label={label} value={value} max={max} disabled={disabled} description={description} />;
   const hex = colorToHex(value, "#ffffff");
   return (
     <fieldset className="min-w-0">
@@ -991,6 +1024,7 @@ function MaterialExtensionSection({
   children: React.ReactNode;
 }) {
   const { label: title, reading } = MATERIAL_EXTENSION_DESCRIPTORS[extensionName];
+  const enabledField = useMaterialField(`extensions.${extensionName}.enabled`);
   return (
     <section
       className={`rounded-md border bg-white p-2 shadow-sm transition-colors ${
@@ -1006,8 +1040,8 @@ function MaterialExtensionSection({
           <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{description}</p>
         </div>
         <label className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-slate-600">
-          <span>{enabled ? "有効" : "無効"}</span>
-          <input
+          <span>{enabledField?.mixed ? "一部異なる" : enabled ? "有効" : "無効"}</span>
+          <MaterialInput materialPath={`extensions.${extensionName}.enabled`}
             type="checkbox"
             checked={enabled}
             disabled={readOnly}
@@ -1070,7 +1104,7 @@ function TextureVectorControl({
   );
 }
 
-function TextureSlot({
+export function TextureSlot({
   label,
   description,
   inputHint,
@@ -1081,6 +1115,7 @@ function TextureSlot({
   previewStatus,
   onChange,
   onOpenTexture,
+  materialPath,
 }: {
   label: string;
   description: string;
@@ -1092,11 +1127,17 @@ function TextureSlot({
   previewStatus?: MaterialPreviewTextureLoadStatus;
   onChange: (value: TextureSlotPatch) => void;
   onOpenTexture: (assetId: string) => void;
+  materialPath?: string;
 }) {
+  const field = useMaterialField(materialPath);
   const touch = useEditorTouch();
   const [dropActive, setDropActive] = useState(false);
   const [showTransform, setShowTransform] = useState(true);
   const helpId = useId();
+  useEffect(() => {
+    if (value?.transform) setShowTransform(true);
+  }, [value?.transform]);
+  if (field && materialPath) return <MaterialBulkTextureControl materialPath={materialPath} label={label} description={description} value={value} textures={textures} disabled={disabled} onOpenTexture={onOpenTexture} />;
   const selectedTexture = value
     ? textures.find((texture) => texture.id === value.textureAssetId)
     : undefined;
@@ -1107,10 +1148,6 @@ function TextureSlot({
   );
   const transform = value?.transform ?? DEFAULT_TEXTURE_TRANSFORM;
   const TextureIcon = EDITOR_ICONS.texture;
-
-  useEffect(() => {
-    if (value?.transform) setShowTransform(true);
-  }, [value?.transform]);
 
   const updateTransform = (patch: Partial<MaterialTextureTransform>) => {
     if (!value) return;
@@ -1376,6 +1413,134 @@ function disabledLitMaterialExtensions(): MaterialExtensionsPatch {
   ) as MaterialExtensionsPatch;
 }
 
+function MToonMaterialControls({
+  value,
+  textures,
+  projectPath,
+  previewTextureStatuses,
+  readOnly,
+  onChange,
+  onOpenTexture,
+  zWriteEditable,
+}: {
+  value: NonNullable<MaterialAsset["properties"]["extensions"]["VRMC_materials_mtoon"]>;
+  textures: TextureAsset[];
+  projectPath?: string;
+  previewTextureStatuses: MaterialPreviewTextureStatuses;
+  readOnly: boolean;
+  onChange: (patch: NonNullable<MaterialExtensionsPatch["VRMC_materials_mtoon"]>) => void;
+  onOpenTexture: (assetId: string) => void;
+  zWriteEditable: boolean;
+}) {
+  const outlineModeField = useMaterialField("extensions.VRMC_materials_mtoon.outlineWidthMode");
+  const outlineDisabled = readOnly || (value.outlineWidthMode === "none" && !outlineModeField?.mixed);
+  const descriptor = MATERIAL_EXTENSION_DESCRIPTORS.VRMC_materials_mtoon;
+  return (
+    <>
+      <EditorSection title={descriptor.label} reading={descriptor.reading} titleHint="VRMC_materials_mtoon">
+        <Color3Control materialPath="extensions.VRMC_materials_mtoon.shadeColorFactor"
+          label="Shade Color"
+          value={value.shadeColorFactor}
+          max={1}
+          description="光が当たらない面の色です。"
+          disabled={readOnly}
+          onChange={(shadeColorFactor) => onChange({ shadeColorFactor })}
+        />
+        <TextureSlot materialPath="extensions.VRMC_materials_mtoon.shadeMultiplyTexture"
+          label="Shade Multiply Map"
+          description="RGBをShade Colorに掛け合わせます（sRGB）。"
+          value={value.shadeMultiplyTexture}
+          textures={textures}
+          projectPath={projectPath}
+          disabled={readOnly}
+          previewStatus={previewTextureStatuses.shadeMultiplyMap}
+          onOpenTexture={onOpenTexture}
+          onChange={(shadeMultiplyTexture) => onChange({ shadeMultiplyTexture })}
+        />
+        <NumberControl materialPath="extensions.VRMC_materials_mtoon.shadingShiftFactor"
+          label="Shading Shift"
+          value={value.shadingShiftFactor}
+          description="大きいほど明るい面が広がり、小さいほどShade Colorの面が広がります。"
+          disabled={readOnly}
+          onChange={(shadingShiftFactor) => onChange({ shadingShiftFactor })}
+        />
+        <RangeControl materialPath="extensions.VRMC_materials_mtoon.shadingToonyFactor"
+          label="Shading Toony"
+          value={value.shadingToonyFactor}
+          description="大きいほど明るい面と暗い面の境界がくっきりします。"
+          disabled={readOnly}
+          onChange={(shadingToonyFactor) => onChange({ shadingToonyFactor })}
+        />
+        <RangeControl materialPath="extensions.VRMC_materials_mtoon.giEqualizationFactor"
+          label="GI Equalization"
+          value={value.giEqualizationFactor}
+          description="大きいほど環境光による明暗を均等にします。"
+          disabled={readOnly}
+          onChange={(giEqualizationFactor) => onChange({ giEqualizationFactor })}
+        />
+      </EditorSection>
+
+      <EditorSection title="Outline" reading="アウトライン">
+        <label className="block text-xs text-slate-600">
+          <span className="mb-1 block">Outline Width Mode</span>
+          <MaterialSelect materialPath="extensions.VRMC_materials_mtoon.outlineWidthMode"
+            value={value.outlineWidthMode}
+            disabled={readOnly}
+            onChange={(event) => onChange({
+              outlineWidthMode: event.currentTarget.value as typeof value.outlineWidthMode,
+            })}
+            className={INPUT_CLASS}
+          >
+            <option value="none">None（なし）</option>
+            <option value="worldCoordinates">World（m）</option>
+            <option value="screenCoordinates">Screen（画面の高さに対する割合）</option>
+          </MaterialSelect>
+        </label>
+        <NumberControl materialPath="extensions.VRMC_materials_mtoon.outlineWidthFactor"
+          label="Outline Width"
+          value={value.outlineWidthFactor}
+          min={0}
+          step={0.001}
+          description={value.outlineWidthMode === "screenCoordinates"
+            ? "画面の高さに対する割合で輪郭線の幅を指定します。"
+            : "単位はmです。0.003で3 mm、0で輪郭線なし。"}
+          disabled={outlineDisabled}
+          onChange={(outlineWidthFactor) => onChange({ outlineWidthFactor })}
+        />
+        <Color3Control materialPath="extensions.VRMC_materials_mtoon.outlineColorFactor"
+          label="Outline Color"
+          value={value.outlineColorFactor}
+          max={1}
+          description="輪郭線の色です。"
+          disabled={outlineDisabled}
+          onChange={(outlineColorFactor) => onChange({ outlineColorFactor })}
+        />
+        <RangeControl materialPath="extensions.VRMC_materials_mtoon.outlineLightingMixFactor"
+          label="Outline Lighting Mix"
+          value={value.outlineLightingMixFactor}
+          description="0で設定した色、1でライトの影響を受ける色になります。"
+          disabled={outlineDisabled}
+          onChange={(outlineLightingMixFactor) => onChange({ outlineLightingMixFactor })}
+        />
+        <TextureSlot materialPath="extensions.VRMC_materials_mtoon.outlineWidthMultiplyTexture"
+          label="Outline Width Multiply Map"
+          description="G（緑）を輪郭線の幅に掛け合わせます（リニア色空間）。黒で幅0、白で指定した幅。"
+          value={value.outlineWidthMultiplyTexture}
+          textures={textures}
+          projectPath={projectPath}
+          disabled={outlineDisabled}
+          previewStatus={previewTextureStatuses.outlineWidthMultiplyMap}
+          onOpenTexture={onOpenTexture}
+          onChange={(outlineWidthMultiplyTexture) => onChange({ outlineWidthMultiplyTexture })}
+        />
+      </EditorSection>
+      <MToonAdvancedControls value={value} textures={textures} projectPath={projectPath} previewTextureStatuses={previewTextureStatuses}
+        readOnly={readOnly} zWriteEditable={zWriteEditable} onChange={onChange} onOpenTexture={onOpenTexture}
+        controls={{EditorSection,RangeControl,NumberControl,Color3Control,TextureSlot,MaterialInput}} />
+    </>
+  );
+}
+
 type MaterialQuickEditorProps = {
   asset: MaterialAsset;
   assets: AssetManifest;
@@ -1395,6 +1560,22 @@ type MaterialQuickEditorProps = {
 
 export function MaterialQuickEditor(props: MaterialQuickEditorProps) {
   return <StandardMaterialQuickEditor {...props} />;
+}
+
+/** Shared property surface; bulk edits address fields against each target. */
+export function MaterialSettingsControls({ asset, assets, projectPath, readOnly, onChange, onOpenTexture, mixedPropertyPaths, onEditField }: {
+  asset: MaterialAsset;
+  assets: AssetManifest;
+  projectPath?: string;
+  readOnly: boolean;
+  onChange: (patch: MaterialAssetPatch) => void;
+  onOpenTexture: (id: string) => void;
+  mixedPropertyPaths?: ReadonlySet<string>;
+  onEditField?: (path: string, value: unknown) => void;
+}) {
+  const controls=<StandardMaterialQuickEditor asset={asset} assets={assets} projectPath={projectPath} readOnly={readOnly} onChange={onChange}
+    onOpenTexture={onOpenTexture} onOpenShader={()=>{}} onOpenMaterialShader={()=>{}} onAssignShaderAsset={()=>{}} settingsOnly />;
+  return onEditField ? <MaterialFieldScope mixedPropertyPaths={mixedPropertyPaths ?? new Set()} onEditField={onEditField}>{controls}</MaterialFieldScope> : controls;
 }
 
 export function OpenBrushMaterialQuickEditor({
@@ -2163,7 +2344,8 @@ function StandardMaterialQuickEditor({
   onOpenShader,
   onOpenMaterialShader,
   onAssignShaderAsset,
-}: MaterialQuickEditorProps) {
+  settingsOnly = false,
+}: MaterialQuickEditorProps & { settingsOnly?: boolean }) {
   const { phone } = useEditorDevice();
   const pbr = asset.properties.pbrMetallicRoughness;
   const openBrush = asset.shader?.kind === "openbrush" ? asset.shader : undefined;
@@ -2187,6 +2369,14 @@ function StandardMaterialQuickEditor({
   const baseColor = colorToHex(pbr.baseColorFactor, asset.properties.color);
   const emissiveColor = colorToHex(asset.properties.emissiveFactor, "#000000");
   const extensions = asset.properties.extensions;
+  const mtoon = !asset.shader ? extensions.VRMC_materials_mtoon : undefined;
+  const shadingModel = getMaterialShadingModel(asset) ?? "standard";
+  const mtoonVersion = shadingModel === "mtoon-0.x" ? "0.x" : "1.0";
+  const alphaModeField = useMaterialField("alphaMode");
+  const depthWriteField = useMaterialField("depthWrite");
+  const normalTextureField = useMaterialField("normalTexture");
+  const occlusionTextureField = useMaterialField("occlusionTexture");
+  const clearcoatNormalTextureField = useMaterialField("extensions.KHR_materials_clearcoat.clearcoatNormalTexture");
   const anisotropy = extensions.KHR_materials_anisotropy;
   const clearcoat = extensions.KHR_materials_clearcoat;
   const dispersion = extensions.KHR_materials_dispersion;
@@ -2203,7 +2393,7 @@ function StandardMaterialQuickEditor({
   const updateLitExtension = (patch: MaterialExtensionsPatch) =>
     updateExtensions({ KHR_materials_unlit: null, ...patch });
 
-  const customShaderEditor = !openBrush ? (
+  const customShaderEditor = !settingsOnly && !openBrush && !mtoon ? (
     <CustomShaderQuickEditor
       asset={asset}
       assets={assets}
@@ -2219,8 +2409,8 @@ function StandardMaterialQuickEditor({
 
   return (
     <div className="min-w-0 space-y-3">
-      {!phone ? <GuideLink page="materials" label="色と質感の使い方" /> : null}
-      <div className={`grid gap-2 rounded-md border border-slate-200 bg-white p-2 ${phone ? "grid-cols-[48px_minmax(0,1fr)_44px]" : "grid-cols-[80px_minmax(0,1fr)] shadow-sm"}`}>
+      {!settingsOnly && !phone ? <GuideLink page="materials" label="色と質感の使い方" /> : null}
+      {!settingsOnly ? <div className={`grid gap-2 rounded-md border border-slate-200 bg-white p-2 ${phone ? "grid-cols-[48px_minmax(0,1fr)_44px]" : "grid-cols-[80px_minmax(0,1fr)] shadow-sm"}`}>
         <div className={`${phone ? "h-12" : "h-20"} overflow-hidden rounded-md border border-slate-300`}>
           <MaterialThumbnail
             asset={asset}
@@ -2236,7 +2426,9 @@ function StandardMaterialQuickEditor({
               ? `OpenBrush ブラシ · ${openBrush.brushName}`
               : customShader
                 ? "カスタムシェーダーマテリアル"
-                : "glTF 2.0 標準マテリアル"}
+                : mtoon
+                  ? `MToon ${mtoonVersion} マテリアル`
+                  : "glTF 2.0 標準マテリアル"}
           </p>
           {asset.importedFromModel ? (
             <p className={`mt-1 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${asset.importedFromModel.isUserOverridden ? "border-amber-200 bg-amber-50 text-amber-800" : "border-sky-200 bg-sky-50 text-sky-800"}`}>
@@ -2262,7 +2454,38 @@ function StandardMaterialQuickEditor({
             ? `${referenceSummary.entityCount} Entity / ${referenceSummary.slotCount}スロットで使用中。変更はすべてに反映します。`
             : "シーン内の参照はありません"}
         </p> : null}
-      </div>
+      </div> : null}
+
+      {!settingsOnly && !openBrush && !customShader ? (
+        <EditorSection title="Shading" reading="シェーディング">
+          <label className="block text-xs text-slate-600">
+            <span className="mb-1 block">マテリアルの種類</span>
+            <select
+              value={shadingModel}
+              disabled={readOnly}
+              className={INPUT_CLASS}
+              onChange={(event) => onChange({ shadingModel: event.currentTarget.value as MaterialShadingModel })}
+            >
+              <option value="standard">Standard (PBR)</option>
+              <option value="mtoon-0.x">MToon 0.x（エムトゥーン）</option>
+              <option value="mtoon-1.0">MToon 1.0（エムトゥーン）</option>
+            </select>
+          </label>
+        </EditorSection>
+      ) : null}
+
+      {mtoon ? (
+        <MToonMaterialControls
+          value={mtoon}
+          textures={textures}
+          projectPath={projectPath}
+          previewTextureStatuses={previewTextureStatuses}
+          readOnly={readOnly}
+          zWriteEditable={(asset.properties.alphaMode === "BLEND" && asset.properties.depthWrite === "auto") || Boolean(alphaModeField?.mixed || depthWriteField?.mixed)}
+          onChange={(patch) => updateExtensions({ VRMC_materials_mtoon: patch })}
+          onOpenTexture={onOpenTexture}
+        />
+      ) : null}
 
       {openBrush ? (
         <EditorSection title="Open Brushの描画">
@@ -2294,7 +2517,7 @@ function StandardMaterialQuickEditor({
         </details>
       ) : customShaderEditor}
 
-      <MaterialExtensionSection
+      {!mtoon ? <MaterialExtensionSection
         extensionName="KHR_materials_unlit"
         description="ライトの影響を受けず、Base Colorで表示します。"
         enabled={unlit !== undefined}
@@ -2313,20 +2536,20 @@ function StandardMaterialQuickEditor({
         <p className="rounded border border-sky-200 bg-sky-50 px-2 py-1.5 text-[11px] leading-4 text-sky-800">
           有効にすると、併用できない反射・透過の設定を解除します。
         </p>
-      </MaterialExtensionSection>
+      </MaterialExtensionSection> : null}
 
       <EditorSection title="Base Color" reading="ベースカラー">
         <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
           頂点カラーを使用
-          <input type="checkbox" checked={asset.properties.vertexColors ?? false} disabled={readOnly}
+          <MaterialInput materialPath="vertexColors" type="checkbox" checked={asset.properties.vertexColors ?? false} disabled={readOnly}
             onChange={(event) => onChange({ vertexColors: event.currentTarget.checked })} />
         </label>
         <p className="text-[11px] text-slate-500">モデルの頂点カラーをBase Colorに掛け合わせます。頂点カラーがない場合は変わりません。</p>
         <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
           RGB
           <span className="flex items-center gap-1.5">
-            <span className="font-mono text-slate-500">{baseColor}</span>
-            <input
+            <span className="font-mono text-slate-500"><MaterialFieldText materialPath="color">{baseColor}</MaterialFieldText></span>
+            <MaterialInput materialPath="color"
               type="color"
               value={baseColor}
               disabled={readOnly}
@@ -2343,7 +2566,7 @@ function StandardMaterialQuickEditor({
             />
           </span>
         </label>
-        <TextureSlot
+        <TextureSlot materialPath="pbrMetallicRoughness.baseColorTexture"
           label="Base Color Map"
           description="RGBはBase Color、AはAlphaに掛け合わせます（RGBはsRGB）。"
           value={pbr.baseColorTexture}
@@ -2361,7 +2584,7 @@ function StandardMaterialQuickEditor({
       <EditorSection title="Alpha" reading="アルファ">
         <label className="block text-xs text-slate-600">
           <span className="mb-1 block">Alpha Mode</span>
-          <select
+          <MaterialSelect materialPath="alphaMode"
             value={asset.properties.alphaMode}
             disabled={readOnly}
             onChange={(event) =>
@@ -2374,9 +2597,9 @@ function StandardMaterialQuickEditor({
             <option value="OPAQUE">Opaque（不透明）</option>
             <option value="MASK">Mask（切り抜き）</option>
             <option value="BLEND">Blend（半透明）</option>
-          </select>
+          </MaterialSelect>
         </label>
-        <RangeControl
+        <RangeControl materialPath="pbrMetallicRoughness.baseColorFactor.3"
           label="Alpha"
           description="0で透明、1で不透明。通常はAlpha ModeをBlendかMaskにします。"
           value={pbr.baseColorFactor[3]}
@@ -2394,9 +2617,9 @@ function StandardMaterialQuickEditor({
             })
           }
         />
-        {asset.properties.alphaMode === "MASK" ? (
+        {asset.properties.alphaMode === "MASK" || alphaModeField?.mixed ? (
           <>
-            <RangeControl
+            <RangeControl materialPath="alphaCutoff"
               label="Alpha Cutoff"
               description="Alphaがこの値未満の部分を切り抜きます。"
               value={asset.properties.alphaCutoff}
@@ -2410,7 +2633,7 @@ function StandardMaterialQuickEditor({
                   切り抜きの縁を滑らかにします。MSAAが有効な環境で使えます。
                 </span>
               </span>
-              <input
+              <MaterialInput materialPath="alphaToCoverage"
                 type="checkbox"
                 checked={asset.properties.alphaToCoverage}
                 disabled={readOnly}
@@ -2424,10 +2647,10 @@ function StandardMaterialQuickEditor({
         ) : null}
         {asset.properties.alphaMode === "OPAQUE" && asset.properties.blending === "normal" ? (
           <p className="text-[11px] leading-4 text-slate-500">
-            OpaqueではAlphaを使いません。ガラスの透け方はTransmissionで調整します。
+            {mtoon ? "OpaqueではAlphaを使いません。" : "OpaqueではAlphaを使いません。ガラスの透け方はTransmissionで調整します。"}
           </p>
         ) : null}
-        <TextureSlot
+        <TextureSlot materialPath="opacityTexture"
           label="Opacity Map"
           description="選んだチャンネルをAlphaに掛け合わせます。黒で透明、白で変化なし。Opaqueで追加するとBlendに切り替わります。"
           value={asset.properties.opacityTexture}
@@ -2442,16 +2665,16 @@ function StandardMaterialQuickEditor({
         />
         <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
           Channel
-          <select value={asset.properties.opacityChannel ?? "a"} disabled={readOnly}
+          <MaterialSelect materialPath="opacityChannel" value={asset.properties.opacityChannel ?? "a"} disabled={readOnly}
             className="rounded border border-slate-300 bg-white px-2 py-1 text-xs"
             onChange={(event) => onChange({ opacityChannel: event.currentTarget.value as "r" | "g" | "b" | "a" })}>
             {(["r", "g", "b", "a"] as const).map(channel => <option key={channel} value={channel}>{channel.toUpperCase()}</option>)}
-          </select>
+          </MaterialSelect>
         </label>
       </EditorSection>
 
-      <EditorSection title="Metallic / Roughness" reading="メタリック / ラフネス">
-        <RangeControl
+      {!mtoon ? <EditorSection title="Metallic / Roughness" reading="メタリック / ラフネス">
+        <RangeControl materialPath="pbrMetallicRoughness.metallicFactor"
           label="Metallic"
           description="0で非金属、1で金属の見た目になります。"
           value={pbr.metallicFactor}
@@ -2460,7 +2683,7 @@ function StandardMaterialQuickEditor({
             onChange({ pbrMetallicRoughness: { metallicFactor } })
           }
         />
-        <RangeControl
+        <RangeControl materialPath="pbrMetallicRoughness.roughnessFactor"
           label="Roughness"
           description="0で反射がくっきりし、1で反射がぼやけます。"
           value={pbr.roughnessFactor}
@@ -2469,7 +2692,7 @@ function StandardMaterialQuickEditor({
             onChange({ pbrMetallicRoughness: { roughnessFactor } })
           }
         />
-        <TextureSlot
+        <TextureSlot materialPath="pbrMetallicRoughness.metallicRoughnessTexture"
           label="Metallic Roughness Map"
           description="G（緑）をRoughness、B（青）をMetallicに掛け合わせます（リニア色空間）。"
           value={pbr.metallicRoughnessTexture}
@@ -2482,10 +2705,10 @@ function StandardMaterialQuickEditor({
             onChange({ pbrMetallicRoughness: { metallicRoughnessTexture } })
           }
         />
-      </EditorSection>
+      </EditorSection> : null}
 
-      <EditorSection title="Normal / Occlusion" reading="ノーマル / オクルージョン">
-        <TextureSlot
+      <EditorSection title={mtoon ? "Normal" : "Normal / Occlusion"} reading={mtoon ? "ノーマル" : "ノーマル / オクルージョン"}>
+        <TextureSlot materialPath="normalTexture"
           label="Normal Map"
           description="陰影で細かな凹凸を表します。メッシュの形や輪郭は変わりません。"
           inputHint="Tangent Space（接線空間）の画像を使用します。色補正なし（Linear）で読み込みます。"
@@ -2503,18 +2726,20 @@ function StandardMaterialQuickEditor({
             })
           }
         />
-        <NumberControl
+        <NumberControl materialPath="normalTexture.scale"
           label="Normal Scale"
           value={asset.properties.normalTexture?.scale ?? 1}
           step={0.01}
           description="0で効果なし、1が標準です。負の値で凹凸の向きを反転します。"
           disabled={readOnly || !asset.properties.normalTexture}
+          bulkDisabled={readOnly || (!asset.properties.normalTexture && !normalTextureField?.mixed)}
           onChange={(scale) => {
             const current = asset.properties.normalTexture;
             if (current) onChange({ normalTexture: { ...current, scale } });
           }}
         />
-        <TextureSlot
+        {!mtoon ? <>
+        <TextureSlot materialPath="occlusionTexture"
           label="Occlusion Map"
           description="溝や隙間を暗く見せます。画像のR（赤）が暗いほど効果が強くなります。"
           value={asset.properties.occlusionTexture}
@@ -2531,24 +2756,26 @@ function StandardMaterialQuickEditor({
             })
           }
         />
-        <RangeControl
+        <RangeControl materialPath="occlusionTexture.strength"
           label="Occlusion Strength"
           description="0で効果なし、1で画像どおりの陰影になります。"
           value={asset.properties.occlusionTexture?.strength ?? 1}
           disabled={readOnly || !asset.properties.occlusionTexture}
+          bulkDisabled={readOnly || (!asset.properties.occlusionTexture && !occlusionTextureField?.mixed)}
           onChange={(strength) => {
             const current = asset.properties.occlusionTexture;
             if (current) onChange({ occlusionTexture: { ...current, strength } });
           }}
         />
+        </> : null}
       </EditorSection>
 
       <EditorSection title="Emissive" reading="エミッシブ">
         <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
           Color
           <span className="flex items-center gap-1.5">
-            <span className="font-mono text-slate-500">{emissiveColor}</span>
-            <input
+            <span className="font-mono text-slate-500"><MaterialFieldText materialPath="emissiveFactor">{emissiveColor}</MaterialFieldText></span>
+            <MaterialInput materialPath="emissiveFactor"
               type="color"
               value={emissiveColor}
               disabled={readOnly}
@@ -2560,7 +2787,7 @@ function StandardMaterialQuickEditor({
             />
           </span>
         </label>
-        <TextureSlot
+        <TextureSlot materialPath="emissiveTexture"
           label="Emissive Map"
           description="光らせる場所と色をEmissiveに掛け合わせます（sRGB）。"
           value={asset.properties.emissiveTexture}
@@ -2587,7 +2814,7 @@ function StandardMaterialQuickEditor({
         }
       >
         {emissiveStrength ? (
-          <NumberControl
+          <NumberControl materialPath="extensions.KHR_materials_emissive_strength.emissiveStrength"
             label="Strength"
             value={emissiveStrength.emissiveStrength}
             min={0}
@@ -2605,6 +2832,7 @@ function StandardMaterialQuickEditor({
         ) : null}
       </MaterialExtensionSection>
 
+      {!mtoon ? <>
       <MaterialExtensionSection
         extensionName="KHR_materials_clearcoat"
         description="塗装やニスのような透明な光沢を重ねます。"
@@ -2623,7 +2851,7 @@ function StandardMaterialQuickEditor({
       >
         {clearcoat ? (
           <>
-            <RangeControl
+            <RangeControl materialPath="extensions.KHR_materials_clearcoat.clearcoatFactor"
               label="Factor"
               value={clearcoat.clearcoatFactor}
               description="0で上塗りなし、1で最大。テクスチャのR（赤）を掛け合わせます。"
@@ -2634,7 +2862,7 @@ function StandardMaterialQuickEditor({
                 })
               }
             />
-            <TextureSlot
+            <TextureSlot materialPath="extensions.KHR_materials_clearcoat.clearcoatTexture"
               label="Clearcoat Map"
               description="R（赤）が上塗りの強さです（リニア色空間）。"
               value={clearcoat.clearcoatTexture}
@@ -2649,7 +2877,7 @@ function StandardMaterialQuickEditor({
                 })
               }
             />
-            <RangeControl
+            <RangeControl materialPath="extensions.KHR_materials_clearcoat.clearcoatRoughnessFactor"
               label="Roughness"
               value={clearcoat.clearcoatRoughnessFactor}
               description="0でくっきり、1でぼやけた反射。テクスチャのG（緑）を掛け合わせます。"
@@ -2660,7 +2888,7 @@ function StandardMaterialQuickEditor({
                 })
               }
             />
-            <TextureSlot
+            <TextureSlot materialPath="extensions.KHR_materials_clearcoat.clearcoatRoughnessTexture"
               label="Roughness Map"
               description="G（緑）が上塗りの粗さです（リニア色空間）。"
               value={clearcoat.clearcoatRoughnessTexture}
@@ -2675,7 +2903,7 @@ function StandardMaterialQuickEditor({
                 })
               }
             />
-            <TextureSlot
+            <TextureSlot materialPath="extensions.KHR_materials_clearcoat.clearcoatNormalTexture"
               label="Normal Map"
               description="上塗りの層に凹凸の陰影を加えます。下地のNormal Mapとは別の設定です。"
               inputHint="Tangent Space（接線空間）の画像を使用します。色補正なし（Linear）で読み込みます。"
@@ -2698,12 +2926,13 @@ function StandardMaterialQuickEditor({
                 })
               }
             />
-            <NumberControl
+            <NumberControl materialPath="extensions.KHR_materials_clearcoat.clearcoatNormalTexture.scale"
               label="Normal Scale"
               value={clearcoat.clearcoatNormalTexture?.scale ?? 1}
               step={0.01}
               description="0で効果なし、1が標準です。負の値で凹凸の向きを反転します。"
               disabled={readOnly || !clearcoat.clearcoatNormalTexture}
+              bulkDisabled={readOnly || (!clearcoat.clearcoatNormalTexture && !clearcoatNormalTextureField?.mixed)}
               onChange={(scale) => {
                 if (!clearcoat.clearcoatNormalTexture) return;
                 updateLitExtension({
@@ -2738,7 +2967,7 @@ function StandardMaterialQuickEditor({
       >
         {anisotropy ? (
           <>
-            <RangeControl
+            <RangeControl materialPath="extensions.KHR_materials_anisotropy.anisotropyStrength"
               label="Strength"
               value={anisotropy.anisotropyStrength}
               description="大きいほど反射が伸びます。テクスチャのB（青）を掛け合わせます。"
@@ -2749,7 +2978,7 @@ function StandardMaterialQuickEditor({
                 })
               }
             />
-            <NumberControl
+            <NumberControl materialPath="extensions.KHR_materials_anisotropy.anisotropyRotation" materialEncode={(degrees) => degrees * Math.PI / 180}
               label="Rotation (°)"
               value={(anisotropy.anisotropyRotation * 180) / Math.PI}
               step={1}
@@ -2763,7 +2992,7 @@ function StandardMaterialQuickEditor({
                 })
               }
             />
-            <TextureSlot
+            <TextureSlot materialPath="extensions.KHR_materials_anisotropy.anisotropyTexture"
               label="Anisotropy Map"
               description="RGが反射の方向、B（青）が強さです（リニア色空間）。"
               value={anisotropy.anisotropyTexture}
@@ -2800,7 +3029,7 @@ function StandardMaterialQuickEditor({
       >
         {sheen ? (
           <>
-            <Color3Control
+            <Color3Control materialPath="extensions.KHR_materials_sheen.sheenColorFactor"
               label="Color"
               value={sheen.sheenColorFactor}
               max={1}
@@ -2812,7 +3041,7 @@ function StandardMaterialQuickEditor({
                 })
               }
             />
-            <TextureSlot
+            <TextureSlot materialPath="extensions.KHR_materials_sheen.sheenColorTexture"
               label="Color Map"
               description="テクスチャの色を光沢の色に掛け合わせます（sRGB）。"
               value={sheen.sheenColorTexture}
@@ -2827,7 +3056,7 @@ function StandardMaterialQuickEditor({
                 })
               }
             />
-            <RangeControl
+            <RangeControl materialPath="extensions.KHR_materials_sheen.sheenRoughnessFactor"
               label="Roughness"
               value={sheen.sheenRoughnessFactor}
               description="大きいほど光沢がぼやけます。テクスチャのAを掛け合わせます。"
@@ -2838,7 +3067,7 @@ function StandardMaterialQuickEditor({
                 })
               }
             />
-            <TextureSlot
+            <TextureSlot materialPath="extensions.KHR_materials_sheen.sheenRoughnessTexture"
               label="Roughness Map"
               description="Aが光沢の粗さです（リニア色空間）。"
               value={sheen.sheenRoughnessTexture}
@@ -2875,7 +3104,7 @@ function StandardMaterialQuickEditor({
       >
         {specular ? (
           <>
-            <RangeControl
+            <RangeControl materialPath="extensions.KHR_materials_specular.specularFactor"
               label="Factor"
               value={specular.specularFactor}
               description="0で反射なし、1が標準。テクスチャのAを掛け合わせます。"
@@ -2886,7 +3115,7 @@ function StandardMaterialQuickEditor({
                 })
               }
             />
-            <TextureSlot
+            <TextureSlot materialPath="extensions.KHR_materials_specular.specularTexture"
               label="Specular Map"
               description="Aが反射の強さです（リニア色空間）。"
               value={specular.specularTexture}
@@ -2901,7 +3130,7 @@ function StandardMaterialQuickEditor({
                 })
               }
             />
-            <Color3Control
+            <Color3Control materialPath="extensions.KHR_materials_specular.specularColorFactor"
               label="Color"
               value={specular.specularColorFactor}
               description="反射の色です。RGBは1を超える値も指定できます（リニア色空間）。"
@@ -2912,7 +3141,7 @@ function StandardMaterialQuickEditor({
                 })
               }
             />
-            <TextureSlot
+            <TextureSlot materialPath="extensions.KHR_materials_specular.specularColorTexture"
               label="Color Map"
               description="反射の色に掛け合わせます（sRGB）。"
               value={specular.specularColorTexture}
@@ -2943,7 +3172,7 @@ function StandardMaterialQuickEditor({
         }
       >
         {ior ? (
-          <NumberControl
+          <NumberControl materialPath="extensions.KHR_materials_ior.ior"
             label="IOR"
             value={ior.ior}
             min={0}
@@ -2980,7 +3209,7 @@ function StandardMaterialQuickEditor({
             <p className="text-[11px] leading-4 text-slate-500">
               ガラスの基本設定はAlpha 1・Alpha Mode Opaque・Metallic 0です。
             </p>
-            <RangeControl
+            <RangeControl materialPath="extensions.KHR_materials_transmission.transmissionFactor"
               label="Factor"
               value={transmission.transmissionFactor}
               description="0で透過なし、1で反射以外の光を通します。テクスチャのR（赤）を掛け合わせます。"
@@ -2991,7 +3220,7 @@ function StandardMaterialQuickEditor({
                 })
               }
             />
-            <TextureSlot
+            <TextureSlot materialPath="extensions.KHR_materials_transmission.transmissionTexture"
               label="Transmission Map"
               description="R（赤）が光の透過率です（リニア色空間）。"
               value={transmission.transmissionTexture}
@@ -3037,7 +3266,7 @@ function StandardMaterialQuickEditor({
             <p className="rounded border border-sky-200 bg-sky-50 px-2 py-1.5 text-[11px] leading-4 text-sky-800">
               Transmissionも有効になります。穴のない閉じたメッシュを使ってください。
             </p>
-            <NumberControl
+            <NumberControl materialPath="extensions.KHR_materials_volume.thicknessFactor"
               label="Thickness"
               value={volume.thicknessFactor}
               min={0}
@@ -3050,7 +3279,7 @@ function StandardMaterialQuickEditor({
                 })
               }
             />
-            <TextureSlot
+            <TextureSlot materialPath="extensions.KHR_materials_volume.thicknessTexture"
               label="Thickness Map"
               description="G（緑）を厚みに掛け合わせます（リニア色空間）。"
               value={volume.thicknessTexture}
@@ -3072,7 +3301,7 @@ function StandardMaterialQuickEditor({
                   距離に応じた光の減衰です。無効にすると、色も明るさも変わりません。
                 </span>
               </span>
-              <input
+              <MaterialInput materialPath="extensions.KHR_materials_volume.attenuationDistance" materialEncode={(enabled) => enabled ? 1 : null}
                 type="checkbox"
                 checked={volume.attenuationDistance !== undefined}
                 disabled={readOnly}
@@ -3087,7 +3316,7 @@ function StandardMaterialQuickEditor({
               />
             </label>
             {volume.attenuationDistance !== undefined ? (
-              <NumberControl
+              <NumberControl materialPath="extensions.KHR_materials_volume.attenuationDistance"
                 label="Attenuation Distance"
                 value={volume.attenuationDistance}
                 min={0.0001}
@@ -3101,7 +3330,7 @@ function StandardMaterialQuickEditor({
                 }
               />
             ) : null}
-            <Color3Control
+            <Color3Control materialPath="extensions.KHR_materials_volume.attenuationColor"
               label="Attenuation Color"
               value={volume.attenuationColor}
               max={1}
@@ -3142,7 +3371,7 @@ function StandardMaterialQuickEditor({
             <p className="rounded border border-sky-200 bg-sky-50 px-2 py-1.5 text-[11px] leading-4 text-sky-800">
               VolumeとTransmissionも同時に有効になります。
             </p>
-            <NumberControl
+            <NumberControl materialPath="extensions.KHR_materials_dispersion.dispersion"
               label="Dispersion"
               value={dispersion.dispersion}
               min={0}
@@ -3179,7 +3408,7 @@ function StandardMaterialQuickEditor({
       >
         {iridescence ? (
           <>
-            <RangeControl
+            <RangeControl materialPath="extensions.KHR_materials_iridescence.iridescenceFactor"
               label="Factor"
               value={iridescence.iridescenceFactor}
               description="0で効果なし、1で最大。テクスチャのR（赤）を掛け合わせます。"
@@ -3190,7 +3419,7 @@ function StandardMaterialQuickEditor({
                 })
               }
             />
-            <TextureSlot
+            <TextureSlot materialPath="extensions.KHR_materials_iridescence.iridescenceTexture"
               label="Iridescence Map"
               description="R（赤）が色の変化の強さです（リニア色空間）。"
               value={iridescence.iridescenceTexture}
@@ -3205,7 +3434,7 @@ function StandardMaterialQuickEditor({
                 })
               }
             />
-            <NumberControl
+            <NumberControl materialPath="extensions.KHR_materials_iridescence.iridescenceIor"
               label="IOR"
               value={iridescence.iridescenceIor}
               min={1}
@@ -3219,7 +3448,7 @@ function StandardMaterialQuickEditor({
               }
             />
             <div className="grid grid-cols-2 gap-2">
-              <NumberControl
+              <NumberControl materialPath="extensions.KHR_materials_iridescence.iridescenceThicknessMinimum"
                 label="Thickness Min (nm)"
                 value={iridescence.iridescenceThicknessMinimum}
                 min={0}
@@ -3234,7 +3463,7 @@ function StandardMaterialQuickEditor({
                   })
                 }
               />
-              <NumberControl
+              <NumberControl materialPath="extensions.KHR_materials_iridescence.iridescenceThicknessMaximum"
                 label="Thickness Max (nm)"
                 value={iridescence.iridescenceThicknessMaximum}
                 min={0}
@@ -3250,7 +3479,7 @@ function StandardMaterialQuickEditor({
                 }
               />
             </div>
-            <TextureSlot
+            <TextureSlot materialPath="extensions.KHR_materials_iridescence.iridescenceThicknessTexture"
               label="Thickness Map"
               description="G（緑）をThickness Min〜Maxに対応させます（リニア色空間）。"
               value={iridescence.iridescenceThicknessTexture}
@@ -3271,10 +3500,12 @@ function StandardMaterialQuickEditor({
         ) : null}
       </MaterialExtensionSection>
 
+      </> : null}
+
       <EditorSection title="Rendering" reading="描画設定">
         <label className="block text-xs text-slate-600">
           <span className="mb-1 block">Blending</span>
-          <select
+          <MaterialSelect materialPath="blending"
             value={asset.properties.blending}
             disabled={readOnly}
             onChange={(event) =>
@@ -3288,7 +3519,7 @@ function StandardMaterialQuickEditor({
             <option value="additive">Additive（加算）</option>
             <option value="multiply">Multiply（乗算）</option>
             <option value="subtractive">Subtractive（減算）</option>
-          </select>
+          </MaterialSelect>
           {asset.properties.blending !== "normal" ? (
             <span className="mt-1 block text-[11px] leading-4 text-slate-500">
               Normal以外は、Alpha Modeにかかわらず半透明として描画します。
@@ -3297,7 +3528,7 @@ function StandardMaterialQuickEditor({
         </label>
         <label className="block text-xs text-slate-600">
           <span className="mb-1 block">Depth Write</span>
-          <select
+          <MaterialSelect materialPath="depthWrite"
             value={asset.properties.depthWrite}
             disabled={readOnly}
             onChange={(event) =>
@@ -3310,14 +3541,14 @@ function StandardMaterialQuickEditor({
             <option value="auto">自動（Alpha Modeに従う）</option>
             <option value="on">常に書き込む</option>
             <option value="off">書き込まない</option>
-          </select>
+          </MaterialSelect>
           <span className="mt-1 block text-[11px] leading-4 text-slate-500">
             半透明のものを重ねたとき、前後関係が正しく表示されない場合に調整します。
           </span>
         </label>
         <label className="flex items-center justify-between gap-2 text-xs text-slate-600">
           <span>Double Sided<span className="mt-0.5 block text-[11px] text-slate-500">裏面も表示します。</span></span>
-          <input
+          <MaterialInput materialPath="doubleSided"
             type="checkbox"
             checked={asset.properties.doubleSided}
             disabled={readOnly}

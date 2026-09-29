@@ -28,6 +28,7 @@ const compilerPath = path.join(
   "compile.ts",
 );
 const shellBuilderPath = path.join(repoRoot, "scripts", "build-world-runtime-shell.mjs");
+const readableVrmPath = path.join(repoRoot, "packages", "xrift-studio-runtime", "src", "vendor", "three-vrm-readable.js");
 const manifestPath = path.join(
   repoRoot,
   "public",
@@ -107,6 +108,13 @@ const exposedWorld = await fs.readFile(
   path.join(repoRoot, "public", "xrift-runtime-shell", exposedWorldFiles[0]),
   "utf8",
 );
+const readableVrm = await fs.readFile(readableVrmPath, "utf8");
+const upstreamSha = readableVrm.match(/Original lib\/three-vrm\.module\.js SHA-256: ([a-f0-9]{64})/)?.[1];
+for (const marker of ["VRMC_materials_mtoon", "xriftVrm0CompatShade", "VRMLoaderPlugin", "vrmDefineEnumerableProperty", "Copyright (c) 2019-2026 pixiv Inc.", upstreamSha]) {
+  if (!marker || !exposedWorld.includes(marker)) {
+    throw new Error(`Bundled Runtime shell is missing the shared MToon/VRM code or pinned license: ${marker ?? "upstream SHA"}`);
+  }
+}
 if (!exposedWorld.includes(shellManifestUrl)) {
   throw new Error(`Bundled Runtime shell must load the uploaded ${uploadedManifest} from the world root`);
 }

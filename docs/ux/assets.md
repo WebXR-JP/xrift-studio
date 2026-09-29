@@ -22,6 +22,7 @@
 - パーティクルは素材の作成操作から追加する。右設定で emission、shape、velocity、lifetime、size、color、texture、blend を編集する。パーティクルはシーンまたはオブジェクト一覧へ drag してパーティクルの放出オブジェクトとして配置できる。
 - context menu は現在 kind / state で実行できる項目だけを有効にする。menu open だけでは selection や document を変えない。
 - 3Dモデルのscale、collider生成、メッシュ最適化、animation importを変更した時はrecipeだけを未保存にする。再importが必要な項目を設定内で示す。再import中も既存シーン参照とlast-good表示を消さない。
+- Assetsの複数選択では、標準マテリアルだけを対象に種類を一括変更する。同じ種類なら単体と共通の全設定を表示し、異なる値は「一部異なる」と示す。入力した項目だけを素材ごとに変更し、色の他成分と画像のUVを保持する。モデル・画像・カスタムシェーダー素材は変更しない。
 
 ### 成功時
 
@@ -30,6 +31,7 @@
 - パーティクルの作成は新素材を `assetSelection` にする。オブジェクトへの配置またはパーティクルの放出の追加は参照する素材 ID を SceneDocument に保持する。
 - thumbnail / derived は元データ / recipe / processor / target hash と一致した時だけ ready にする。同じ元データを再 import しても素材 ID と参照を保つ。マテリアル一覧は保存済み画像だけを表示する。変更時の生成queue以外ではWebGL contextを増やさない。
 - マテリアルの変更は共有素材に一度だけ保存する。同じ ID を参照する全 preview に反映する。
+- マテリアルの一括変更は一回の履歴と自動保存で確定する。元に戻す・やり直すでも複数選択を保ち、全対象の変更をまとめて復元する。
 - 3Dモデル再importは素材 IDを維持する。slot identityが一致する既存マテリアル bindingを保持する。新規slotは未設定として追加する。消失slotは診断に残す。参照先の修正へ進める。
 
 ### 失敗時
@@ -54,6 +56,7 @@
 
 - 読み込む入口にGLB / glTF / OBJ / VRMを同じ3Dモデル形式として表示する。OBJは単体のgeometryを取り込む。外部MTL / textureは自動取得しない。必要なマテリアルをXRift Studio内で割り当てることを示す。
 - VRM 0.x / 1.xは3Dモデルの素材として取り込む。humanoidを含むboneとシェイプキーを最後に正常解析したmetadataとして保持する。Timelineやクリップ編集は静的pose編集の対象外であることをUI上で区別する。
+- VRM 0.xのMToonは元ファイルを残し、旧互換の描画設定を持つ派生マテリアルとして取り込む。種類はMToon 0.xと表示し、VRM 1.0と共通のInspectorで影の色と輪郭線を編集する。取り込み済みマテリアルを上書きした作品は、通常のユーザー編集保護を維持する。
 - 配置後は3Dモデルオブジェクトの下に元データのNode、Bone、メッシュ、Skinned メッシュを親子順で表示する。SkinはNodeごとに複製しない。親3Dモデルオブジェクトの共有描画方式でbind poseとAnimationを維持する。
 - poseとノード別マテリアル bindingは3Dモデルの素材共通値ではなく配置オブジェクトのメッシュ componentに属する。同じ3Dモデルの別配置を変更しない。
 
@@ -61,6 +64,7 @@
 
 - 読み込む中は既存読み込む Queueで形式検証、元データ copy、parse、thumbnail、manifest commitを順に示す。二重読み込む / reimportを無効にする。
 - オブジェクト一覧でBoneまたはNodeを選ぶと、そのlocal 位置・回転・大きさを通常の数値入力とギズモで編集する。共有3Dモデルの元データノード poseへ即時反映する。従来のbone選択UIとシェイプキーの0..1 weightも同じ配置の静的poseとして維持する。
+- 数値ドラッグとギズモの操作中も、同じMesh・Material・Skeletonを使ってSkinの変形を反映する。VRM 0.x / 1.0ともWorld / Localの軸と実モデルの移動方向を揃える。長い数値ドラッグの途中では保存を待ち、離した時点の結果を一回の履歴として確定する。数値のEscapeとギズモのtouch / pen pointercancelでは操作前の姿勢へ戻す。
 - メッシュ / Skinned メッシュ Nodeを選ぶと、その元データノードが使うマテリアル枠だけを表示する。同じ元データ material indexを共有する別Nodeとは`sourceNodeIndex`で上書きを分離する。
 - オブジェクト一覧の目アイコンは共有3DモデルのNodeにも効く。enabledと同時に共有メッシュのpose（`nodes[i].visible`）へ書く。そのNodeのサブツリーの描画をシーン・公開ワールド・Runtimeで一致して消す。削除はNodeをオブジェクトとして削除しない。同じ非表示へ変換する。理由と再表示手段を通知する（MI-117）。
 - pose変更は有効な有限値だけを確定する。動作確認中は読み取り専用にする。素材 reimport中はlast-good metadataと現在のオブジェクト poseを表示したままにする。編集を止める。
@@ -69,7 +73,7 @@
 
 - 読み込む成功後は新3Dモデルの素材を選択する。形式、bone数、シェイプキー数、元データ、thumbnailを設定に残す。「配置」でオブジェクトを作成する。pose編集へ進める。
 - Bone / Node 位置・回転・大きさ、ノード別マテリアル、ノード別の表示 / 非表示、シェイプキー weightは共有メッシュ componentへ保存する。元に戻す / やり直す、project再表示、シーン、コード編集 JSX、Runtime manifestで同じ静的状態を復元する。旧版が保存した「無効なのに描画される」Node flagはprojectを開いた時に実態へそろえる。件数を通知する。
-- 「ポーズをリセット」はboneとシェイプキーだけを初期値へ戻す。オブジェクト位置・回転・大きさ、マテリアル binding、衝突判定、3Dモデルの素材を維持する。
+- 「ポーズをリセット」はboneとシェイプキーだけを初期値へ戻す。オブジェクト位置・回転・大きさ、Nodeごとの位置・回転・大きさ、マテリアル binding、衝突判定、3Dモデルの素材を維持する。bone回転とシェイプキーの個別変更でもNodeの調整値を保つ。
 
 ### 失敗時
 
@@ -270,6 +274,21 @@
 - マテリアル / graph変更の取消は通常の元に戻すを使い、MCP変更も同じhistoryとAutosaveから復元する。
 
 完了条件: マテリアルテクスチャの繰り返し、ずらす量、回転、UVセットをglTF互換値として編集する。MCP、Animation導線、KHR_interactivity pointer ノードから同じマテリアル設定へ到達できる。Runtime manifestでもテクスチャ transformと繰り返す samplerを維持する。
+
+### F-24 MToon 0.x・1.0とOutline（2026-09-29）
+
+参照: MI-03、MI-09、MI-15、MI-25。
+
+- 操作前: 標準マテリアルのInspectorに「Shading → マテリアルの種類」を置き、Standard (PBR)、MToon 0.x、MToon 1.0を選ぶ。VRM 0.x由来の旧互換設定もMToon 0.xとして表示する。MToonではShade Color、陰影の境界、Outlineの方式・幅・色、Shading Shift Map、Matcap、Rim Lighting、UV Animation、描画順を表示する。Base Color、Alpha、Normal Map、Emissive、Double Sidedは共通で編集する。
+- 操作中: MToonへの切り替えは同じマテリアルを一回更新する。初回はBase ColorのRGBを0.8倍したShade ColorとBase Color Mapを引き継ぎ、黒いOutline、World幅0.003 mを調整の出発点にする。MToon仕様の省略時既定値とは区別する。使わないPBRの反射・透過・Occlusion設定を非表示にし、値は保持する。Play中など既存の編集禁止状態では切り替えと値の入力を無効化する。
+- バージョンの切り替え: 0.x・1.0間では旧互換の陰影設定だけを変更し、色・陰影の数値・輪郭線・テクスチャ・読み込んだ追加設定を保つ。保存はglTFのMToon 1.0形式を維持し、旧互換はextras.xriftVrm0CompatShadeで区別する。glTFマテリアルの見本にも0.xと1.0の比較セットを置く。
+- PBRへの往復: MToon固有設定を非表示の素材情報として保ち、再度MToonを選んだとき復元する。画像参照を使用箇所として扱い、種類の切り替えで削除や剥離を起こさない。
+- 一括切り替え: Assets複数選択のInspector「マテリアルの一括変更」に同じ種類選択を置く。混在選択ではMaterialだけを対象にし、カスタムシェーダーを使うMaterialは対象外の件数を示す。各素材の共通色・画像・UVとPBR専用値を保持し、一回の更新・保存・Undoとして扱う。
+- 同種類の一括編集: 対象がすべて同じ種類なら単体と共通の全設定を表示する。値が異なる項目は空欄や「一部異なる」、チェックボックスはindeterminateで示し、先頭素材の値を全体の値として表示しない。操作したfieldの値だけを一回の履歴で反映する。RGB・UVの一成分では他成分を保持し、画像だけの変更は各素材のUVを保持する。画像未割当の素材にはUV編集で新しい参照を作らない。
+- 素材プレビュー: MToon 0.x・1.0は斜めのDirectional Lightと弱い環境光で、明るい面とShade Colorを見分ける。同じ照明を見本カードにも使う。保存済みの旧サムネイルは描画版の変更で再生成し、素材の色やシーンのLight設定は保持する。
+- 成功時: 使用中の全スロットと素材プレビューへ同じMToon設定を反映し、同じ素材設定へ留まる。Outline Width ModeがNoneなら幅・色の入力を無効化し、Screenでは画面の高さに対する割合、Worldではmを表示する。一括編集で方式が混在する場合は幅・色を入力できる。Transparent With ZWriteはAlpha ModeがBlend、Depth Writeが自動の素材で有効になり、条件が混在する選択でも保存値を一括変更できる。既存のBlending・Depth Writeの明示設定は保持し、Renderingで確認できる。
+- 失敗時: 不正な値や保存競合は通常のマテリアル更新で拒否し、前回の値と選択を保つ。テクスチャの読み込み失敗は該当slotに表示し、画像を開く・選び直す導線を残す。
+- 戻り先: Standard (PBR)へ戻すと保持したPBR設定を再表示する。種類と値の変更は通常の元に戻す・やり直すと自動保存を使う。オブジェクト設定から開いた素材は既存のパンくずから戻る。
 
 <a id="f-29"></a>
 

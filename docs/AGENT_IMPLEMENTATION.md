@@ -41,6 +41,8 @@ Studioで制作中に見えている素材と動作を、そのまま公開先�
 - Editor に新しい操作を足したら、同じ作業単位で MCP tool も足す。Inspector やツールバーからしか触れない操作は、AI から見ると存在しない機能になる。手順と surface ごとの権限は `docs/MCP_EDITOR_TOOLS.md` にある。公開しない判断をした場合は、その理由を同じ文書の「意図的に公開していない操作」へ記録する。
 - 公開した World が配信できるのは World 直下のファイルだけだ。`public/` のサブディレクトリは公開物に含まれないので、Asset、decoder、font、Runtime manifest はすべて `public/` 直下へ平坦に置き、名前で衝突を避ける。詳細は `docs/SCRIPTING.md` の「公開物はワールド直下にしか置けない」にある。
 
+MToon・VRMの生成コードには、固定した`@pixiv/three-vrm`の配布ソースとライセンスを同梱する。SDKが難読化と判定する既知の内部bindingだけを構文解析で改名し、公開APIと`constructor.name`、描画・読み込み処理を保つ。ブラウザ公開のランタイムシェルも、隔離した公式テンプレート内のaliasで同じ配布ソースを使う。描画コードの更新時はランタイム契約を更新し、`node scripts/build-world-runtime-shell.mjs`でシェルを再生成する。`node scripts/prepare-readable-three-vrm.mjs --check`で原本のSHA-256と生成物を照合する。依存更新時は再生成と`node --test scripts/readable-three-vrm.test.mjs`に加え、隔離した生成物の実ビルド・公式CLI検査・編集側との描画比較を行う。セキュリティ検査は通常のルールで実行する。
+
 ## Scene の更新と描画性能
 
 - Entity 単位で描くコンポーネントへ `SceneDocument` そのものを渡さない。Scene View の Entity tree は `scene-entity-tree-store.ts` の per-Entity 購読と、全ノード共通の値だけを載せた context の二経路で描く。ノードへ渡してよい prop は、親 Entity から決まる値 (`entityId`、`inheritedRigidBody`、`ancestorEnabled`) だけだ。Scene を上から配ると、1 Entity の編集で全 Entity の props が変わり、`memo` が一切効かなくなる。逆に Entity を親から配るだけでも届かない。Component を 1 つ足しても祖先の Entity は変わらないので、memo した親が再描画を止め、変更が葉へ届かなくなる。更新は上からではなく横から入れる。

@@ -25,7 +25,7 @@ test("アイテムでも共通のギミック一覧を検索して追加を選�
   await expect(dialog.getByRole("button", { name: /をシーンへ追加$/ })).toBeEnabled();
   await expect(dialog.getByText(/条件に合うギミックがありません/)).toHaveCount(0);
   await dialog.getByRole("button", { name: /glTFマテリアル/ }).click();
-  await expect(dialog.getByTestId("scene-recipe-card")).toHaveCount(50);
+  await expect(dialog.getByTestId("scene-recipe-card")).toHaveCount(52);
 });
 
 test("外部カタログを3D・マテリアル表現・ギミックで選べる", async ({ page }) => {
@@ -40,13 +40,18 @@ test("外部カタログを3D・マテリアル表現・ギミックで選べる
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: /glTFマテリアル/ }).click();
   const materials = dialog.getByRole("region", { name: "glTFマテリアル一覧", exact: true });
-  await expect(materials.getByTestId("scene-recipe-card")).toHaveCount(50);
+  await expect(materials.getByTestId("scene-recipe-card")).toHaveCount(52);
+  await materials.getByRole("combobox", { name: "glTFマテリアルのカテゴリ" }).selectOption("MToon");
+  await expect(materials.getByTestId("scene-recipe-card")).toHaveCount(2);
+  await expect(materials.getByRole("button", { name: "MToon 0.x アウトライン", exact: true })).toBeVisible();
+  await expect(materials.getByRole("button", { name: "MToon 1.0 アウトライン", exact: true })).toBeVisible();
+  await materials.getByRole("button", { name: "条件をリセット" }).click();
   await materials.getByRole("button", {name: "Emissive / 発光", exact: true}).click();
   await expect(materials.getByTestId("scene-recipe-card")).toHaveCount(7);
   await materials.getByRole("checkbox", {name: "テクスチャ付き"}).check();
   await expect(materials.getByTestId("scene-recipe-card")).toHaveCount(6);
   await materials.getByRole("button", {name: "条件をリセット"}).click();
-  await expect(materials.getByTestId("scene-recipe-card")).toHaveCount(50);
+  await expect(materials.getByTestId("scene-recipe-card")).toHaveCount(52);
   await materials.getByRole("textbox").fill("存在しない候補");
   await expect(materials.getByText("条件に合うglTFマテリアルがありません")).toBeVisible();
   await dialog.getByRole("button", { name: /ギミック/ }).click();

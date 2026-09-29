@@ -42,6 +42,7 @@ const editor = load('src/lib/visual-editor/interactivity-graph.ts');
 const runtime = load('packages/xrift-studio-runtime/src/interactivity/engine.ts');
 const properties = load('packages/xrift-studio-runtime/src/script/interaction-trigger.ts');
 const materials = load('src/lib/visual-editor/material-extension-registry.ts');
+const khrMaterialExtensionNames = materials.MATERIAL_EXTENSION_NAMES.filter(name => name.startsWith('KHR_materials_'));
 const { matchesInteractivityOperation: matches } = load('src/lib/visual-editor/interactivity-search.ts');
 const templates = editor.KHR_INTERACTIVITY_OPERATION_TEMPLATES;
 const types = { bool: 0, int: 1, float: 2, float2: 3, float3: 4, float4: 5 };
@@ -68,7 +69,7 @@ const contracts = {
   properties: ['dfe2f8867e93ffa01d79836b5a90da889c074d99a01f1801ae30580d934c2995',
     properties.XRIFT_INTERACTION_PROPERTIES],
   materials: ['06f28886e3bf32d820b66e291beb4973fe7cf138b60a646ba45cb5b440d7d2d7',
-    materials.MATERIAL_EXTENSION_DESCRIPTORS],
+    Object.fromEntries(khrMaterialExtensionNames.map(name => [name, materials.MATERIAL_EXTENSION_DESCRIPTORS[name]]))],
 };
 for (const [name, [expected, value]] of Object.entries(contracts)) {
   test(`${name}: names, types, ports, options and defaults retain the original contract`, () => {
@@ -408,7 +409,7 @@ test('all 11 material extensions keep their glTF name plus a Japanese reading', 
     unlit: ['Unlit', 'アンリット'],
     volume: ['Volume', 'ボリューム'],
   };
-  assert.equal(Object.keys(materials.MATERIAL_EXTENSION_DESCRIPTORS).length, 11);
+  assert.equal(khrMaterialExtensionNames.length, 11);
   for (const [key, [label, reading]] of Object.entries(expected)) {
     const descriptor = materials.MATERIAL_EXTENSION_DESCRIPTORS[`KHR_materials_${key}`];
     assert.equal(descriptor.label, label);
@@ -453,12 +454,28 @@ test('the material Inspector derives each extension heading from the shared regi
     ts.forEachChild(node, visit);
   }
   visit(fn);
-  assert.deepEqual(names.sort(), [...materials.MATERIAL_EXTENSION_NAMES].sort());
+  assert.deepEqual(names.sort(), [...khrMaterialExtensionNames].sort());
   const { fn: section } = editorFunction('MaterialExtensionSection');
   assert.match(section.getText(), /MATERIAL_EXTENSION_DESCRIPTORS\[extensionName\]/);
   assert.match(section.getText(), /flex-wrap/);
   assert.doesNotMatch(section.getText(), /truncate/);
+  const mtoon = editorFunction('MToonMaterialControls').fn.getText();
+  assert.match(mtoon, /MATERIAL_EXTENSION_DESCRIPTORS\.VRMC_materials_mtoon/);
+  assert.match(mtoon, /title=\{descriptor.label\} reading=\{descriptor.reading\}/);
+  assert.match(mtoon, /titleHint="VRMC_materials_mtoon"/);
 });
+
+// The added MToon and bulk dispatchers have separate authoring E2E coverage.
+// Exclude only these new surfaces from the copy-only baseline, so the original
+// single-material PBR values, limits and callbacks still match exactly.
+function isMToonAuthoringUi(node, ast) {
+  if (ts.isFunctionDeclaration(node) && ['MToonMaterialControls', 'MaterialSettingsControls'].includes(node.name?.text)) return true;
+  if (ts.isJsxSelfClosingElement(node) && ['MToonMaterialControls', 'MaterialBulkRangeControl', 'MaterialBulkNumberControl', 'MaterialBulkColor3Control', 'MaterialBulkTextureControl'].includes(node.tagName.getText(ast))) return true;
+  if (!ts.isJsxElement(node)) return false;
+  const opening = node.openingElement;
+  if (opening.tagName.getText(ast) === 'EditorSection' && jsxStringAttribute(opening, 'title') === 'Shading') return true;
+  return opening.tagName.getText(ast) === 'label' && node.getText(ast).includes('Transparent With ZWrite');
+}
 
 test('Alpha Mode, Alpha, Cutoff and Opacity Map are together and precede material effects', () => {
   const section = materialSection('Alpha');
@@ -479,8 +496,12 @@ test('Alpha Mode, Alpha, Cutoff and Opacity Map are together and precede materia
 
 test('material names stay consistent in the batch Inspector and node property lists', () => {
   const source = read('src/components/visual-editor/InspectorPanel.tsx');
-  const batch = source.slice(source.indexOf('  if (allMaterials) {'), source.indexOf('  return <p', source.indexOf('  if (allMaterials) {')));
-  for (const name of ['Base Color', 'Metallic', 'Roughness']) assert.ok(batch.includes(name), name);
+  assert.match(source, /materialSelection\.canEditProperties[\s\S]*<MaterialSettingsControls/);
+  const shared = editorFunction('MaterialSettingsControls').fn.getText();
+  assert.match(shared, /<StandardMaterialQuickEditor[\s\S]*settingsOnly/);
+  const single = editorFunction('StandardMaterialQuickEditor').fn.getText();
+  assert.ok(single.includes('title="Base Color"'));
+  for (const name of ['Metallic', 'Roughness']) assert.ok(single.includes(`label="${name}"`), name);
   for (const [id, label] of Object.entries({ 'base-color': 'Base Color', metallic: 'Metallic', roughness: 'Roughness', emissive: 'Emissive' }))
     assert.equal(editor.KHR_INTERACTIVITY_MATERIAL_POINTER_PRESETS.find(p => p.id === id)?.label, label);
   for (const [name, label] of Object.entries({ baseColor: 'Base Color', emissive: 'Emissive', emissiveIntensity: 'Emissive Strength', opacity: 'Opacity' }))
@@ -514,6 +535,7 @@ test('all 218 material value bindings, ranges and update callbacks are unchanged
   const printer = ts.createPrinter({ removeComments: true });
   const attributes = [];
   function visit(node) {
+    if (isMToonAuthoringUi(node, ast)) return;
     if (ts.isJsxAttribute(node) && node.initializer &&
       ['value', 'checked', 'min', 'max', 'step', 'disabled', 'readOnly', 'onChange', 'onToggle'].includes(node.name.getText(ast))) {
       attributes.push([node.name.getText(ast), printer.printNode(ts.EmitHint.Unspecified, node.initializer, ast)]);
@@ -669,6 +691,7 @@ for (const [file, count, hash] of [
   const printer = ts.createPrinter({removeComments:true});
   const attributes = [];
   function visit(node) {
+    if (file === 'AssetQuickEditor.tsx' && isMToonAuthoringUi(node, ast)) return;
     if (ts.isJsxAttribute(node) && node.initializer &&
       ['value','checked','min','max','step','scrubStep','disabled','readOnly','onChange','onToggle'].includes(node.name.getText(ast)))
       attributes.push([node.name.getText(ast), printer.printNode(ts.EmitHint.Unspecified, node.initializer, ast)]);

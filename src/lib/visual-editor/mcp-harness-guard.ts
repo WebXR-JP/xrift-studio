@@ -55,6 +55,7 @@ const CATEGORY_BY_TOOL: Readonly<Record<string, McpHarnessCategory>> = {
   paint_terrain_grass: "grass",
   update_transform: "transform",
   update_material_asset: "material",
+  update_material_assets: "material",
   set_material_texture_transform: "material",
   update_scene_settings: "scene-settings",
 };
@@ -110,6 +111,9 @@ export function mcpHarnessKeyForCall(
     return { key: `transform:${entityId}`, category };
   }
   if (category === "material") {
+    if (Array.isArray(argumentsValue?.assetIds)) {
+      return { key: `material:${argumentsValue.assetIds.filter((id): id is string => typeof id === "string").sort().join(",")}`, category };
+    }
     const assetId =
       stringArgument(argumentsValue, "materialAssetId") ??
       stringArgument(argumentsValue, "assetId") ??

@@ -1,3 +1,5 @@
+import runtimePackageManifest from "../../../../packages/xrift-studio-runtime/package.json";
+
 /**
  * The `@xrift/world-components` version a Classic output is built against.
  *
@@ -26,6 +28,10 @@ export const COMPILER_REACT_PACKAGE_SPECS = [
   "react@19.2.8",
   "react-dom@19.2.8",
 ] as const;
+
+/** Pinned alongside the runtime so emitted materials use Studio's shader. */
+export const COMPILER_MTOON_PACKAGE_SPEC =
+  `@pixiv/three-vrm@${runtimePackageManifest.dependencies["@pixiv/three-vrm"]}`;
 
 export type CompilerPackageChange = {
   name: string;

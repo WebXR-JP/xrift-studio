@@ -4,6 +4,7 @@ import { XriftPrimitiveGeometry } from "../../../packages/xrift-studio-runtime/s
 import { SceneContextMenu, type SceneContextMenuProps } from "./SceneContextMenu";
 import { createWorldPlaySeatStore } from "./world-play-seat-store";
 import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
+import { XriftMToonMaterial } from "../../../packages/xrift-studio-runtime/src/mtoon-material";
 import { XriftModelInstancing } from "../../../packages/xrift-studio-runtime/src/script/model-instancing";
 import { collectModelInstancingEntities } from "../../lib/visual-editor/model-instancing";
 import { colliderModelNode } from "../../lib/visual-editor/mesh-collision-actions";
@@ -132,6 +133,8 @@ import {
   getPrimaryMaterialAssetId,
   getTextureSourceFormat,
   getTransform,
+  getModelNodeTransformOffset,
+  getModelNodeBoneRotationDelta,
   inspectColliderConfiguration,
   isEnvironmentTextureAsset,
   normalizeProjectRelativePath,
@@ -159,6 +162,7 @@ import {
   type MaterialAsset,
   type MeshComponent,
   type ModelAsset,
+  type ModelNodeAuthoringMetadata,
   type PrefabDocument,
   type PrimitiveGeometry,
   type RigidBodyComponent,
@@ -240,6 +244,8 @@ import {
   ProjectModelVisual,
   PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY,
 } from "./ProjectModelVisual";
+import type { ProjectModelPoseController } from "./project-model-pose-controller";
+import { getModelNodePoseController, subscribeModelNodePose } from "./project-model-node-pose-bridge";
 import {
   loadOpenBrushPreviewMaterial,
   normalizeOpenBrushGlslSource,
@@ -912,6 +918,8 @@ function TerrainMeshVisual({
       <TerrainGeometryView terrain={terrain} />
       {usesAuthoredShader && authoredShaderMaterial ? (
         <primitive object={authoredShaderMaterial} attach="material" />
+      ) : viewportMaterialStyle === "scene" && material?.properties.extensions.VRMC_materials_mtoon ? (
+        <XriftMToonMaterial properties={material.properties} textures={materialTextures} doubleSided />
       ) : viewportMaterialStyle === "unlit" ? (
         <meshBasicMaterial
           color={material?.properties.color ?? "#6b8e4e"}
@@ -1251,6 +1259,12 @@ function PrimitiveMeshVisual({
         />
       ) : customShaderInstance ? (
         <primitive object={customShaderInstance} attach="material" />
+      ) : material?.properties.extensions.VRMC_materials_mtoon ? (
+        <XriftMToonMaterial
+          properties={material.properties}
+          textures={materialTextures}
+          doubleSided={primitive === "plane" || material.properties.doubleSided}
+        />
       ) : materialIsUnlit ? (
         // KHR_materials_unlit replaces the shading model instead of adding to
         // it, so the viewport drops to Basic exactly where the compiler does.
@@ -2512,14 +2526,29 @@ function EntityObject({
     muteTransformGizmo(transformControlsRef.current);
   }, [editable, primary, transform]);
 
+  const modelNode = entity.modelNode;
+  useLayoutEffect(() => {
+    const object = objectRef.current;
+    if (!object || !modelNode || !transform) return;
+    let owner: Object3D | null = object.parent;
+    while (owner && owner.userData.authoringEntityId !== modelNode.modelEntityId) owner = owner.parent;
+    if (!owner) return;
+    return subscribeModelNodePose(owner, (controller) => {
+      const sourceRotation = controller?.getBoneRotation(modelNode.sourceNodeIndex);
+      const delta = sourceRotation ? getModelNodeBoneRotationDelta(modelNode, sourceRotation) : [0, 0, 0];
+      object.userData.xriftModelNodeBoneRotation = delta;
+      object.rotation.set(
+        transform.rotation[0] + delta[0],
+        transform.rotation[1] + delta[1],
+        transform.rotation[2] + delta[2],
+      );
+    });
+  }, [modelNode, transform?.rotation]);
+
   const commitTransform = (peers?: readonly { entityId: string; patch: TransformPatch }[]) => {
     const object = objectRef.current;
     if (!object || !transform) return;
-    onTransformCommit(authoringEntityId, {
-      position: [object.position.x, object.position.y, object.position.z],
-      rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
-      scale: [object.scale.x, object.scale.y, object.scale.z],
-    }, peers);
+    onTransformCommit(authoringEntityId, getObjectAuthoringTransform(object), peers);
   };
 
   return (
@@ -2531,7 +2560,7 @@ function EntityObject({
         position={transform?.position ?? [0, 0, 0]}
         rotation={transform?.rotation ?? [0, 0, 0]}
         scale={transform?.scale ?? [1, 1, 1]}
-        userData={{ authoringEntityId, renderedEntityId: entity.id, xriftCollisionDisabled: !effectivelyEnabled }}
+        userData={{ authoringEntityId, renderedEntityId: entity.id, xriftCollisionDisabled: !effectivelyEnabled, xriftModelNode: entity.modelNode }}
       >
         <OfficialXriftEntityWrappers
           components={xriftWrapperComponents}
@@ -2594,6 +2623,15 @@ function EntityObject({
   );
 }
 
+function getObjectAuthoringTransform(object: Object3D): TransformPatch {
+  const boneRotation = object.userData.xriftModelNodeBoneRotation as Vec3 | undefined;
+  return {
+    position: [object.position.x, object.position.y, object.position.z],
+    rotation: [object.rotation.x - (boneRotation?.[0] ?? 0), object.rotation.y - (boneRotation?.[1] ?? 0), object.rotation.z - (boneRotation?.[2] ?? 0)],
+    scale: [object.scale.x, object.scale.y, object.scale.z],
+  };
+}
+
 /**
  * The transform gizmo for the primary selected Entity.
  *
@@ -2625,6 +2663,7 @@ function EntityTransformGizmo({
 }) {
   const sceneRoot = useThree((state) => state.scene);
   const surface = useThree((state) => state.gl.domElement);
+  const invalidate = useThree((state) => state.invalidate);
   const localControlsRef = useRef<ElementRef<typeof TransformControls> | null>(null);
   const pivotRef = useRef<Group>(null!);
   const multiple = selectedEntityIds.length > 1;
@@ -2634,24 +2673,66 @@ function EntityTransformGizmo({
     pivotWorldMatrix: Matrix4;
     targets: { id: string; object: Group; worldMatrix: Matrix4 }[];
   } | null>(null);
+  const modelNodePreviewsRef = useRef<{
+    object: Group;
+    metadata: ModelNodeAuthoringMetadata;
+    controller: ProjectModelPoseController;
+  }[]>([]);
+  const clearModelNodePreviews = useCallback(() => {
+    const controllers = new Set(modelNodePreviewsRef.current.map(({ controller }) => controller));
+    modelNodePreviewsRef.current = [];
+    for (const controller of controllers) controller.clearPreview();
+    if (controllers.size > 0) invalidate();
+  }, [invalidate]);
+  useEffect(() => clearModelNodePreviews, [clearModelNodePreviews]);
+  const captureModelNodePreviews = () => {
+    clearModelNodePreviews();
+    const targets = dragPositionsRef.current?.targets.map(({ object }) => object)
+      ?? (objectRef.current ? [objectRef.current] : []);
+    for (const object of targets) {
+      const metadata = object.userData.xriftModelNode as ModelNodeAuthoringMetadata | undefined;
+      if (!metadata) continue;
+      let owner: Object3D | null = object.parent;
+      while (owner && owner.userData.authoringEntityId !== metadata.modelEntityId) owner = owner.parent;
+      if (!owner) continue;
+      const controller = getModelNodePoseController(owner);
+      if (controller) {
+        const boneRotation = object.userData.xriftModelNodeBoneRotation as Vec3 | undefined;
+        const previewMetadata = boneRotation ? {
+          ...metadata,
+          restRotation: metadata.restRotation.map((value, axis) => value + boneRotation[axis]) as Vec3,
+        } : metadata;
+        modelNodePreviewsRef.current.push({ object, metadata: previewMetadata, controller });
+      }
+    }
+  };
   const previewSelection = () => {
     const drag = dragPositionsRef.current;
-    if (!drag) return;
-    pivotRef.current.updateWorldMatrix(true, false);
-    const delta = new Matrix4().multiplyMatrices(
-      pivotRef.current.matrixWorld,
-      drag.pivotWorldMatrix.clone().invert(),
-    );
-    for (const { object, worldMatrix } of drag.targets) {
-      const parent = object.parent;
-      if (!parent) continue;
-      parent.updateWorldMatrix(true, false);
-      const local = parent.matrixWorld.clone().invert().multiply(delta).multiply(worldMatrix);
-      const rotation = new Quaternion();
-      local.decompose(object.position, rotation, object.scale);
-      object.rotation.setFromQuaternion(rotation, object.rotation.order);
-      object.updateMatrixWorld(true);
+    if (drag) {
+      pivotRef.current.updateWorldMatrix(true, false);
+      const delta = new Matrix4().multiplyMatrices(
+        pivotRef.current.matrixWorld,
+        drag.pivotWorldMatrix.clone().invert(),
+      );
+      for (const { object, worldMatrix } of drag.targets) {
+        const parent = object.parent;
+        if (!parent) continue;
+        parent.updateWorldMatrix(true, false);
+        const local = parent.matrixWorld.clone().invert().multiply(delta).multiply(worldMatrix);
+        const rotation = new Quaternion();
+        local.decompose(object.position, rotation, object.scale);
+        object.rotation.setFromQuaternion(rotation, object.rotation.order);
+        object.updateMatrixWorld(true);
+      }
     }
+    for (const { object, metadata, controller } of modelNodePreviewsRef.current) {
+      controller.previewNode(metadata.sourceNodeIndex, getModelNodeTransformOffset(metadata, {
+        position: [object.position.x, object.position.y, object.position.z],
+        rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
+        scale: [object.scale.x, object.scale.y, object.scale.z],
+      }));
+    }
+    if (modelNodePreviewsRef.current.length > 0) invalidate();
   };
   const captureSelection = () => {
     if (!multiple) return;
@@ -2770,6 +2851,7 @@ function EntityTransformGizmo({
       onObjectChange={previewSelection}
       onMouseDown={() => {
         captureSelection();
+        captureModelNodePreviews();
         draggingTouchRef.current = lastTouchRef.current;
         lastTouchRef.current = null;
         onDragStart();
@@ -2780,14 +2862,11 @@ function EntityTransformGizmo({
           .filter(({ object }) => object !== objectRef.current)
           .map(({ id, object }) => ({
           entityId: id,
-          patch: {
-            position: [object.position.x, object.position.y, object.position.z] as [number, number, number],
-            rotation: [object.rotation.x, object.rotation.y, object.rotation.z] as [number, number, number],
-            scale: [object.scale.x, object.scale.y, object.scale.z] as [number, number, number],
-          },
+          patch: getObjectAuthoringTransform(object),
         }));
         dragPositionsRef.current = null;
         draggingTouchRef.current = null;
+        clearModelNodePreviews();
         onDragEnd(peers);
       }}
     />

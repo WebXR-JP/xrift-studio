@@ -43,7 +43,7 @@ export type MaterialShowcaseDefinition = {
   extensions: MaterialExtensionsPatch;
   /**
    * Name of the derived comparison Material. Extra legacy assets not used as
-   * a comparison pair may omit it; all 50 showcase recipes have a baseline.
+   * a comparison pair may omit it; all 52 showcase recipes have a baseline.
    */
   baselineName?: string;
   /**
@@ -351,6 +351,43 @@ export const MATERIAL_SHOWCASE_DEFINITIONS: readonly MaterialShowcaseDefinition[
       // lit half takes the scene's light and shadow, the unlit half does not.
       extensions: { KHR_materials_unlit: {} },
       baselineName: "Unlit看板（ライティングあり）",
+    },
+    {
+      key: "mtoon-outline",
+      name: "MToon 1.0 アウトライン",
+      extensionLabel: "VRMC_materials_mtoon",
+      base: { color: "#f2aa62", metalness: 0, roughness: 1 },
+      extensions: {
+        VRMC_materials_mtoon: {
+          specVersion: "1.0",
+          shadeColorFactor: [0.35, 0.18, 0.09],
+          shadingToonyFactor: 0.95,
+          outlineWidthMode: "worldCoordinates",
+          outlineWidthFactor: 0.006,
+          outlineColorFactor: [0.02, 0.01, 0.01],
+          outlineLightingMixFactor: 0,
+        },
+      },
+      baselineName: "MToon 1.0 アウトライン（標準マテリアル）",
+    },
+    {
+      key: "mtoon-0-outline",
+      name: "MToon 0.x アウトライン",
+      extensionLabel: "VRMC_materials_mtoon",
+      base: { color: "#6aaedb", metalness: 0, roughness: 1 },
+      extensions: {
+        VRMC_materials_mtoon: {
+          specVersion: "1.0",
+          shadeColorFactor: [0.08, 0.2, 0.38],
+          shadingToonyFactor: 0.95,
+          outlineWidthMode: "worldCoordinates",
+          outlineWidthFactor: 0.006,
+          outlineColorFactor: [0.01, 0.02, 0.03],
+          outlineLightingMixFactor: 0,
+          extras: { xriftVrm0CompatShade: true },
+        },
+      },
+      baselineName: "MToon 0.x アウトライン（標準マテリアル）",
     },
     ...EXTENDED_MATERIAL_SHOWCASES,
   ];

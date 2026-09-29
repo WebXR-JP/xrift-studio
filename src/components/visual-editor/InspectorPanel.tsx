@@ -6,6 +6,7 @@ import { MeshCollisionControls } from "./MeshCollisionControls";
 import { useEditorTouch } from "./useEditorDevice";
 import { colliderModelNode, type MeshCollisionAction } from "../../lib/visual-editor/mesh-collision-actions";
 import { normalizeTextureImportSettings, type TextureImportSettingsPatch } from "../../lib/visual-editor/asset-manifest";
+import { aggregateMaterialSelection } from "../../lib/visual-editor/material-batch";
 import { TEXTURE_MAX_SIZE_CHOICES } from "../../lib/visual-editor/texture-conversion";
 import { textureProcessingSettings } from "../../lib/visual-editor/texture-processing";
 import {
@@ -143,6 +144,7 @@ import {
 import {
   AssetQuickEditor,
   AssetThumbnail,
+  MaterialSettingsControls,
   type TextureProcessingState,
 } from "./AssetQuickEditor";
 import { tauri } from "../../lib/tauri";
@@ -2946,26 +2948,34 @@ function ModelNodeColliderBakePanel({
 function MultiSelectionInspector({
   scene,
   assets,
+  projectPath,
   selectedEntityIds,
   selectedAssetIds,
   readOnly,
+  materialBatchBusy,
   textureBatchState,
   onSetEntitiesEnabled,
   onSetMeshShadow,
   onSetLightShadow,
   onApplyMaterialPatch,
+  onApplyMaterialFieldValue,
+  onOpenTexture,
   onApplyTextureBatch,
 }: {
   scene: SceneDocument;
   assets: AssetManifest;
+  projectPath?: string;
   selectedEntityIds: readonly string[];
   selectedAssetIds: readonly string[];
   readOnly: boolean;
+  materialBatchBusy: boolean;
   textureBatchState?: TextureProcessingState;
   onSetEntitiesEnabled: (enabled: boolean) => void;
   onSetMeshShadow: (patch: Pick<MeshInspectorPatch, "castShadow" | "receiveShadow">) => void;
   onSetLightShadow: (castShadow: boolean) => void;
   onApplyMaterialPatch: (patch: MaterialAssetPatch) => void;
+  onApplyMaterialFieldValue: (path: string, value: unknown) => void;
+  onOpenTexture: (assetId: string) => void;
   onApplyTextureBatch?: (assetIds: readonly string[], settings?: TextureImportSettingsPatch) => void;
 }) {
   const entities = selectedEntityIds
@@ -2975,8 +2985,8 @@ function MultiSelectionInspector({
     .map((id) => assets.assets[id])
     .filter((asset): asset is NonNullable<typeof asset> => Boolean(asset));
   const entityMode = entities.length > 1 && selectedAssets.length === 0;
-  const materials = selectedAssets.filter((asset) => asset.kind === "material");
-  const allMaterials = selectedAssets.length > 1 && materials.length === selectedAssets.length;
+  const materialSelection = aggregateMaterialSelection(selectedAssets);
+  const { materials, eligibleMaterials: editableMaterials, shadingModel: materialShadingModel } = materialSelection;
   const allHaveMesh = entityMode && entities.every((entity) => entity.components.some((component) => component.type === "mesh"));
   const allHaveLight = entityMode && entities.every((entity) => entity.components.some((component) => component.type === "light"));
   const sameBoolean = (values: boolean[]) =>
@@ -2985,11 +2995,7 @@ function MultiSelectionInspector({
   const meshReceiveShadow = sameBoolean(entities.flatMap((entity) => entity.components.filter((component) => component.type === "mesh").map((component) => component.receiveShadow)));
   const lightCastShadow = sameBoolean(entities.flatMap((entity) => entity.components.filter((component) => component.type === "light").map((component) => component.castShadow)));
   const textures = selectedAssets.filter((asset) => asset.kind === "texture");
-  const materialProperties = materials.map((asset) => normalizeMaterialProperties(asset.properties as MaterialAssetPatch));
-  const sameValue = <T,>(values: T[]) => values.length > 0 && values.every((value) => value === values[0]) ? values[0] : undefined;
-  const materialColor = sameValue(materialProperties.map((properties) => properties.color));
-  const materialMetalness = sameValue(materialProperties.map((properties) => properties.metalness));
-  const materialRoughness = sameValue(materialProperties.map((properties) => properties.roughness));
+  const materialEditingDisabled = readOnly || materialBatchBusy;
 
   if (entityMode) {
     return (
@@ -3026,34 +3032,54 @@ function MultiSelectionInspector({
     );
   }
 
-  if (textures.length > 1) {
+  if (materials.length > 0 || textures.length > 1) {
     return (
       <div className="space-y-3">
-        <TextureBatchProcessingCard
-          key={textures.map((texture) => texture.id).join(":")}
-          textures={textures}
-          otherSelectionCount={selectedAssets.length - textures.length}
-          readOnly={readOnly}
-          state={textureBatchState ?? { phase: "idle" }}
-          onApply={onApplyTextureBatch}
-        />
-      </div>
-    );
-  }
-
-  if (allMaterials) {
-    return (
-      <div className="space-y-3">
-        <ComponentCard title="複数のマテリアル" subtitle={`${materials.length}件`}>
-          <p className="text-xs leading-5 text-slate-600">選択したマテリアルをまとめて変更します。すべての使用箇所に反映します。</p>
-          <label className="block text-xs font-semibold text-slate-600">Base Color
-            <span className="mt-1 flex items-center gap-2"><input type="color" disabled={readOnly} value={materialColor ?? "#ffffff"} onChange={(event) => onApplyMaterialPatch({ color: event.currentTarget.value })} className="h-8 w-12 rounded border border-slate-300 bg-white p-0.5 disabled:opacity-45" /><span className="font-normal text-slate-500">{materialColor ?? "一部異なる"}</span></span>
+        {materials.length > 0 ? (
+        <ComponentCard title="マテリアルの一括変更" subtitle={`${materials.length}件`}>
+          <p className="text-xs leading-5 text-slate-600">{editableMaterials.length}件のマテリアルの種類をまとめて変更します。各素材の色とテクスチャ設定を引き継ぎ、すべての使用箇所に反映します。</p>
+          <label className="block text-xs font-semibold text-slate-600">マテリアルの種類
+            <select
+              aria-label="選択したマテリアルの種類"
+              value={materialShadingModel ?? ""}
+              disabled={materialEditingDisabled || editableMaterials.length === 0}
+              onChange={(event) => onApplyMaterialPatch({ shadingModel: event.currentTarget.value as NonNullable<MaterialAssetPatch["shadingModel"]> })}
+              className="mt-1 h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <option value="" disabled>{editableMaterials.length === 0 ? "変更できるマテリアルがありません" : "一部異なる"}</option>
+              <option value="standard">Standard (PBR)</option>
+              <option value="mtoon-0.x">MToon 0.x（エムトゥーン）</option>
+              <option value="mtoon-1.0">MToon 1.0（エムトゥーン）</option>
+            </select>
           </label>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs font-semibold text-slate-600">Metallic<ScrubNumberInput min={0} max={1} step={0.01} scrubStep={0.002} disabled={readOnly} value={materialMetalness ?? Number.NaN} placeholder="一部異なる" ariaLabel="Metallic" scrubLabel="Metallic" onChange={(value) => onApplyMaterialPatch({ metalness: value })} wrapperClassName="mt-1" /></label>
-            <label className="text-xs font-semibold text-slate-600">Roughness<ScrubNumberInput min={0} max={1} step={0.01} scrubStep={0.002} disabled={readOnly} value={materialRoughness ?? Number.NaN} placeholder="一部異なる" ariaLabel="Roughness" scrubLabel="Roughness" onChange={(value) => onApplyMaterialPatch({ roughness: value })} wrapperClassName="mt-1" /></label>
-          </div>
+          {materials.length > editableMaterials.length ? <p className="text-[11px] leading-4 text-slate-500">カスタムシェーダーのマテリアル{materials.length - editableMaterials.length}件は種類を変更できません。</p> : null}
+          {selectedAssets.length > materials.length ? <p className="text-[11px] leading-4 text-slate-500">マテリアル以外の{selectedAssets.length - materials.length}件は変更しません。</p> : null}
+          {materialBatchBusy ? <p role="status" className="text-[11px] leading-4 text-slate-500">素材の処理が完了すると変更できます。</p> : null}
+          {editableMaterials.length > 0 ? <p className="text-[11px] leading-4 text-slate-500">{materialSelection.canEditProperties ? "値が異なる項目は「一部異なる」と表示します。変更した項目だけを各マテリアルに反映します。" : "種類をそろえると、色・輪郭線・テクスチャなどの設定もまとめて編集できます。"}</p> : null}
         </ComponentCard>
+        ) : null}
+        {materialSelection.canEditProperties && materialSelection.primaryMaterial && materialSelection.properties ? (
+          <MaterialSettingsControls
+            asset={{ ...materialSelection.primaryMaterial, properties: materialSelection.properties }}
+            assets={assets}
+            projectPath={projectPath}
+            readOnly={materialEditingDisabled}
+            onChange={onApplyMaterialPatch}
+            onOpenTexture={onOpenTexture}
+            mixedPropertyPaths={materialSelection.mixedPropertyPaths}
+            onEditField={onApplyMaterialFieldValue}
+          />
+        ) : null}
+        {textures.length > 1 ? (
+          <TextureBatchProcessingCard
+            key={textures.map((texture) => texture.id).join(":")}
+            textures={textures}
+            otherSelectionCount={selectedAssets.length - textures.length}
+            readOnly={readOnly}
+            state={textureBatchState ?? { phase: "idle" }}
+            onApply={onApplyTextureBatch}
+          />
+        ) : null}
       </div>
     );
   }
@@ -3233,7 +3259,7 @@ function ModelPoseEditor({
     } else {
       bonesNext[selectedBoneKey] = nextRotation;
     }
-    onChange({ bones: bonesNext, morphTargets: { ...current.morphTargets } });
+    onChange({ ...current, bones: bonesNext, morphTargets: { ...current.morphTargets } });
   };
 
   const updateMorphTarget = (key: string, weight: number) => {
@@ -3242,7 +3268,7 @@ function ModelPoseEditor({
     const normalized = Math.min(1, Math.max(0, weight));
     if (normalized < 1e-7) delete morphTargetsNext[key];
     else morphTargetsNext[key] = normalized;
-    onChange({ bones: { ...current.bones }, morphTargets: morphTargetsNext });
+    onChange({ ...current, bones: { ...current.bones }, morphTargets: morphTargetsNext });
   };
 
   return (
@@ -3352,7 +3378,7 @@ function ModelPoseEditor({
       <button
         type="button"
         disabled={readOnly || !hasPose}
-        onClick={() => onChange({ bones: {}, morphTargets: {} })}
+        onClick={() => onChange({ ...current, bones: {}, morphTargets: {} })}
         className="mt-2 h-8 rounded border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
       >
         ポーズをリセット
@@ -5860,6 +5886,7 @@ export function InspectorPanel({
   selectedEntityIds,
   selectedAssetIds,
   readOnly,
+  materialBatchBusy = false,
   playMode = false,
   onRenameEntity,
   onEntityEnabledChange,
@@ -5938,6 +5965,7 @@ export function InspectorPanel({
   onSetMeshShadow,
   onSetLightShadow,
   onApplyMaterialPatch,
+  onApplyMaterialFieldValue,
 }: {
   scene: SceneDocument;
   assets: AssetManifest;
@@ -5948,6 +5976,7 @@ export function InspectorPanel({
   selectedEntityIds: readonly string[];
   selectedAssetIds: readonly string[];
   readOnly: boolean;
+  materialBatchBusy?: boolean;
   playMode?: boolean;
   onRenameEntity: (entityId: string, name: string) => void;
   onEntityEnabledChange: (entityId: string, enabled: boolean) => void;
@@ -6081,6 +6110,7 @@ export function InspectorPanel({
   onSetMeshShadow: (patch: Pick<MeshInspectorPatch, "castShadow" | "receiveShadow">) => void;
   onSetLightShadow: (castShadow: boolean) => void;
   onApplyMaterialPatch: (patch: MaterialAssetPatch) => void;
+  onApplyMaterialFieldValue: (path: string, value: unknown) => void;
 }) {
   const touch = useEditorTouch();
   const entity = selectedEntityId ? scene.entities[selectedEntityId] : undefined;
@@ -6224,14 +6254,18 @@ export function InspectorPanel({
           <MultiSelectionInspector
             scene={scene}
             assets={assets}
+            projectPath={projectPath}
             selectedEntityIds={selectedEntityIds}
             selectedAssetIds={selectedAssetIds}
             readOnly={readOnly}
+            materialBatchBusy={materialBatchBusy}
             textureBatchState={textureBatchState}
             onSetEntitiesEnabled={onSetEntitiesEnabled}
             onSetMeshShadow={onSetMeshShadow}
             onSetLightShadow={onSetLightShadow}
             onApplyMaterialPatch={onApplyMaterialPatch}
+            onApplyMaterialFieldValue={onApplyMaterialFieldValue}
+            onOpenTexture={onSelectAsset}
             onApplyTextureBatch={onApplyTextureBatch}
           />
         ) : asset ? (

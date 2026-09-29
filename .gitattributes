@@ -27,7 +27,10 @@
 # Keep generated runtime chunks byte-for-byte: shader strings can contain CRLF,
 # and shell-manifest.json records a digest of the original build output.
 # Review the source and manifest instead of minified dependency bundles.
-public/xrift-runtime-shell/*.js binary
+public/xrift-runtime-shell/**/*.js binary
+
+# Preserve upstream license formatting in the generated VRM distribution.
+packages/xrift-studio-runtime/src/vendor/three-vrm-readable.js whitespace=-blank-at-eol
 
 # Lockfiles are generated; keep them out of diffs by default.
 pnpm-lock.yaml   -diff

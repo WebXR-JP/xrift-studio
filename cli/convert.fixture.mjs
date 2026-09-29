@@ -108,6 +108,7 @@ import { runWorldPlaySpawnFixtureAssertions } from "../src/components/visual-edi
 import { runEditorLibraryDragFixture } from "../src/components/visual-editor/editor-library-drag.fixture.ts";
 import { runMaterialDragFixtureAssertions } from "../src/components/visual-editor/material-drag.fixture.ts";
 import { runProjectModelMaterialPreviewFixtureAssertions } from "../src/components/visual-editor/ProjectModelVisual.fixture.ts";
+import { runProjectModelPoseControllerFixtureAssertions } from "../src/components/visual-editor/project-model-pose-controller.fixture.ts";
 import { runScriptExecutionScopeFixtureAssertions } from "../src/components/visual-editor/script-execution-scope.fixture.ts";
 import { runAudioImportFixtureAssertions } from "../src/lib/visual-editor/audio-import.fixture.ts";
 import { runBuiltinPrefabCatalogFixtureAssertions } from "../src/lib/visual-editor/builtin-prefab-catalog.fixture.ts";
@@ -128,6 +129,8 @@ import { runModelImportContractFixtureAssertions } from "../src/lib/visual-edito
 import { runModelReimportImpactFixtureAssertions } from "../src/lib/visual-editor/model-reimport-impact.fixture.ts";
 import { runOpenBrushFixtureAssertions } from "../src/lib/visual-editor/open-brush.fixture.ts";
 import { runOpenBrushMaterialCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/open-brush-material.fixture.ts";
+import { runMToonMaterialCompilerFixtureAssertions, runMToonThreeRuntimeFixtureAssertions } from "../src/lib/visual-editor/compiler/mtoon-material.fixture.ts";
+import { runVrmAvatarRuntimeFixtureAssertions } from "../src/lib/visual-editor/compiler/vrm-avatar.fixture.ts";
 import { runPrimitiveGeometryCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/primitive-geometry.fixture.ts";
 import { runVisualPublishFixtureAssertions } from "../src/lib/visual-editor/publish.fixture.ts";
 import { runSupportReportFixtureAssertions } from "../src/lib/support-report.fixture.ts";
@@ -137,6 +140,8 @@ import { runPrefabSourceDetachFixtureAssertions } from "../src/lib/visual-editor
 import { runAssetReferenceDetachFixtureAssertions } from "../src/lib/visual-editor/asset-reference-detach.fixture.ts";
 import { runLightingContractFixtureAssertions } from "../src/lib/visual-editor/lighting-contract.fixture.ts";
 import { runMaterialAlphaFixtureAssertions } from "../src/lib/visual-editor/material-alpha.fixture.ts";
+import { runMaterialMToonFixtureAssertions } from "../src/lib/visual-editor/material-mtoon.fixture.ts";
+import { runVrmMaterialConversionFixtureAssertions } from "../src/lib/visual-editor/vrm-material-conversion.fixture.ts";
 import {
   runInteractivityRecipeFixtureAssertions,
   runInteractivityRuntimeAdapterFixtureAssertions,
@@ -372,6 +377,9 @@ try {
     ["visual compiler", runVisualCompilerFixtureAssertions],
     ["primitive geometry compiler", runPrimitiveGeometryCompilerFixtureAssertions],
     ["OpenBrush assigned material compiler", runOpenBrushMaterialCompilerFixtureAssertions],
+    ["MToon assigned material compiler", runMToonMaterialCompilerFixtureAssertions],
+    ["MToon Three manifest runtime", runMToonThreeRuntimeFixtureAssertions],
+    ["VRM 0.x and 1.0 native avatar runtime", runVrmAvatarRuntimeFixtureAssertions],
     ["runtime package compatibility", runRuntimePackageFixtureAssertions],
     ["model material compiler", runModelMaterialCompilerFixtures],
     ["terrain", runTerrainFixtureAssertions],
@@ -447,6 +455,8 @@ try {
     ["asset reference detach", runAssetReferenceDetachFixtureAssertions],
     ["lighting contract", runLightingContractFixtureAssertions],
     ["material alpha", runMaterialAlphaFixtureAssertions],
+    ["material MToon", runMaterialMToonFixtureAssertions],
+    ["VRM legacy material conversion", runVrmMaterialConversionFixtureAssertions],
     ["interactivity recipes", runInteractivityRecipeFixtureAssertions],
     ["scene recipe catalog", runSceneRecipeCatalogFixtureAssertions],
     ["scene recipe runtime", runSceneRecipeRuntimeFixtureAssertions],
@@ -486,6 +496,7 @@ try {
     ["material drag", runMaterialDragFixtureAssertions],
     ["custom material preview", runCustomMaterialPreviewFixtureAssertions],
     ["project model material preview", runProjectModelMaterialPreviewFixtureAssertions],
+    ["project model pose controller", runProjectModelPoseControllerFixtureAssertions],
     ["staged world typecheck", runStagedWorldTypecheck],
   ]);
   process.stdout.write("convert/runtime fixture passed\n");
@@ -707,7 +718,17 @@ async function runStagedWorldTypecheck() {
       runOpenBrushMaterialCompilerFixtureAssertions(mode).overlayFiles,
       'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
     );
+    await typecheckWithTemplateOptions(
+      `mtoon-${mode}-only`,
+      runMToonMaterialCompilerFixtureAssertions(mode).overlayFiles,
+      'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
+    );
   }
+  await typecheckWithTemplateOptions(
+    "mtoon-vrm-only",
+    runMToonMaterialCompilerFixtureAssertions("vrm").overlayFiles,
+    'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
+  );
   await typecheckWithTemplateOptions(
     "grass-appearance-only",
     compileGrassAppearanceTypecheckWorld().overlayFiles,

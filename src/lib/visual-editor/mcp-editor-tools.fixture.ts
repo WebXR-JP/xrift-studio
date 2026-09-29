@@ -3,10 +3,14 @@ import { getWorldComponentAuthoring } from "./world-component-authoring";
 import { BUILTIN_ASSET_IDS, createPrototypeProject } from "./prototype-project";
 import {
   createTextureAsset,
+  createDefaultMaterialAsset,
+  updateMaterialAsset,
+  type MaterialAsset,
   type AudioAsset,
   type InteractivityAsset,
   type ModelAsset,
 } from "./asset-manifest";
+import { createDefaultCustomShader } from "./custom-shader-contract";
 import { createAnimationComponent } from "./scene-document";
 import { createScriptAsset } from "./scripting/script-files";
 import { extractScriptContract } from "./scripting/script-contract";
@@ -74,6 +78,7 @@ function assertMcpToolRegistryIsCoherent(): void {
 
 export function runXriftMcpEditorToolFixtures(): void {
   assertMcpToolRegistryIsCoherent();
+  assertMcpMaterialBatchAuthoring();
   const initial = createPrototypeProject("world", "mcp-fixture");
   const particle = createDefaultParticleAsset({
     id: "asset-mcp-particle",
@@ -2504,6 +2509,46 @@ export function runXriftMcpEditorToolFixtures(): void {
   );
   current = { ...current, bundle: allPbrParametersUpdated.bundle, revision: current.revision + 1 };
 
+  const mtoonUpdated = executeXriftMcpEditorTool(current, {
+    id: "fixture-update-mtoon-material",
+    tool: "update_material_asset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      materialAssetId: BUILTIN_ASSET_IDS.material.orange,
+      patch: { extensions: { VRMC_materials_mtoon: {
+        specVersion: "1.0",
+        shadeColorFactor: [0.2, 0.15, 0.1],
+        outlineWidthMode: "worldCoordinates",
+        outlineWidthFactor: 0.004,
+        outlineColorFactor: [0.1, 0.3, 0.5],
+        outlineWidthMultiplyTexture: texture.id,
+      } } },
+    },
+  });
+  const mtoonMaterial = mtoonUpdated.bundle.assets.assets[BUILTIN_ASSET_IDS.material.orange];
+  assert(mtoonUpdated.changed && mtoonMaterial?.kind === "material" &&
+    mtoonMaterial.properties.extensions.VRMC_materials_mtoon?.outlineColorFactor[2] === 0.5 &&
+    mtoonMaterial.properties.extensions.VRMC_materials_mtoon.outlineWidthMultiplyTexture?.textureAssetId === texture.id &&
+    mtoonMaterial.properties.extensions.KHR_materials_clearcoat?.clearcoatFactor === 0.7,
+    "MCP should author MToon outlines without losing existing PBR settings");
+  current = { ...current, bundle: mtoonUpdated.bundle, revision: current.revision + 1 };
+  const mtoonRemoved = executeXriftMcpEditorTool(current, {
+    id: "fixture-remove-mtoon-material",
+    tool: "update_material_asset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      materialAssetId: BUILTIN_ASSET_IDS.material.orange,
+      patch: { extensions: { VRMC_materials_mtoon: null } },
+    },
+  });
+  assert(mtoonRemoved.changed && JSON.stringify(mtoonRemoved.result.properties) === JSON.stringify(allPbrParametersUpdated.result.properties),
+    "MCP removing MToon should restore the stored PBR Material");
+  current = { ...current, bundle: mtoonRemoved.bundle, revision: current.revision + 1 };
+
   const customShaderCreated = executeXriftMcpEditorTool(current, {
     id: "fixture-create-custom-shader",
     tool: "create_custom_shader",
@@ -3750,6 +3795,90 @@ export function Scene() {
     "apply_component_code_import_plan should create two Entities",
   );
   current = { ...current, bundle: applied.bundle, revision: current.revision + 1 };
+}
+
+function assertMcpMaterialBatchAuthoring(): void {
+  const bundle = createPrototypeProject("world", "MCP Material batch");
+  const red = createDefaultMaterialAsset({ id: "mcp-batch-red", name: "Red" })!;
+  const blue = createDefaultMaterialAsset({ id: "mcp-batch-blue", name: "Blue" })!;
+  const custom = { ...createDefaultMaterialAsset({ id: "mcp-batch-custom", name: "Custom" })!, shader: createDefaultCustomShader() };
+  const texture = createTextureAsset({ id: "mcp-batch-texture", name: "Map", source: { kind: "project", relativePath: "assets/map.png" }, importSettings: {} });
+  assert(texture, "Material MCP fixture texture must be created");
+  for (const asset of [red, blue, custom, texture]) bundle.assets.assets[asset.id] = asset;
+  bundle.assets = updateMaterialAsset(bundle.assets, red.id, { pbrMetallicRoughness: { baseColorFactor: [.8, .1, .2, .35], baseColorTexture: { textureAssetId: texture.id, texCoord: 1, transform: { offset: [.1, .2], scale: [2, 3], rotation: .4 } } } });
+  bundle.assets = updateMaterialAsset(bundle.assets, blue.id, { shadingModel: "mtoon-1.0", pbrMetallicRoughness: { baseColorFactor: [.2, .6, .9, .8], baseColorTexture: { textureAssetId: texture.id, texCoord: 0, transform: { offset: [.3, .4], scale: [4, 5], rotation: .6 } } }, normalTexture: { textureAssetId: texture.id, scale: .7 }, extensions: { VRMC_materials_mtoon: { shadeColorFactor: [.2, .3, .4], outlineWidthFactor: .009, outlineColorFactor: [.1, .2, .3] } } });
+  let context: XriftMcpEditorContext = { bundle, sceneSelection: null, assetSelection: red.id, editorMode: "edit", importBusy: false, revision: 7, saveStatus: "saved", now: () => "2026-09-29T12:00:00Z" };
+  const ids = [red.id, blue.id, custom.id, texture.id];
+  const commonArguments = () => ({ projectId: context.bundle.project.projectId, sceneId: context.bundle.scene.sceneId, expectedRevision: context.revision });
+  const asset = (id: string) => context.bundle.assets.assets[id] as MaterialAsset;
+  const reject = (argumentsValue: Record<string, unknown>, code: string, override: Partial<XriftMcpEditorContext> = {}) => {
+    const before = JSON.stringify(context.bundle);
+    let error: unknown;
+    try { executeXriftMcpEditorTool({ ...context, ...override }, { id: "reject-batch", tool: "update_material_assets", arguments: { ...commonArguments(), assetIds: ids, ...argumentsValue } }); } catch (caught) { error = caught; }
+    assert(error instanceof XriftMcpEditorToolError && error.code === code, `Material bulk should reject with ${code}`);
+    assert(JSON.stringify(context.bundle) === before, "Rejected bulk must leave all source documents unchanged");
+  };
+  const call = (operation: Record<string, unknown>) => {
+    const result = executeXriftMcpEditorTool(context, { id: "edit-batch", tool: "update_material_assets", arguments: { ...commonArguments(), assetIds: ids, ...operation } });
+    if (result.changed) {
+      assert(result.result.revisionAfter === context.revision + 1 && result.result.revisionBefore === context.revision, "Any number of field updates must form one revision");
+      assert(result.assetSelection === context.assetSelection, "Bulk MCP edits should preserve the UI's primary selection");
+      context = { ...context, bundle: result.bundle, revision: context.revision + 1 };
+    }
+    return result;
+  };
+  reject({ patch: { roughness: .4 } }, "MATERIAL_SHADING_MISMATCH");
+  reject({ patch: { shadingModel: "mtoon-0.x", roughness: .4 } }, "MATERIAL_SHADING_MISMATCH");
+  reject({ patch: { shadingModel: "mtoon-0.x" }, fieldUpdates: [] }, "INVALID_ARGUMENT");
+  reject({ assetIds: [red.id, "missing"], patch: { shadingModel: "mtoon-0.x" } }, "ASSET_NOT_FOUND");
+  for (const id of ["constructor", "toString", "__proto__"]) reject({ assetIds: [red.id, id], patch: { shadingModel: "mtoon-0.x" } }, "ASSET_NOT_FOUND");
+  reject({ patch: { shadingModel: "mtoon-0.x" } }, "EDITOR_READ_ONLY", { editorMode: "play" });
+  reject({ patch: { shadingModel: "mtoon-0.x" } }, "EDITOR_BUSY", { importBusy: true });
+  reject({ patch: { shadingModel: "mtoon-0.x" }, expectedRevision: 6 }, "STALE_REVISION");
+  const original = structuredClone(context.bundle.assets);
+  const switched = call({ patch: { shadingModel: "mtoon-0.x" } });
+  assert(JSON.stringify(switched.result.updatedMaterialAssetIds) === JSON.stringify([red.id, blue.id]), "Bulk type switch must report exactly the two changed builtin Materials");
+  assert(JSON.stringify(switched.result.skippedAssets) === JSON.stringify([{ assetId: custom.id, reason: "CUSTOM_SHADER" }, { assetId: texture.id, reason: "NOT_MATERIAL" }]), "Bulk must report why custom and non-Material Assets were skipped");
+  for (const id of [red.id, blue.id]) {
+    assert(JSON.stringify(asset(id).properties.pbrMetallicRoughness) === JSON.stringify((original.assets[id] as MaterialAsset).properties.pbrMetallicRoughness), "Type switching must retain each Material's RGBA and full TextureInfo");
+  }
+  const beforeFields = structuredClone(context.bundle.assets);
+  const fields = call({ fieldUpdates: [
+    { path: "extensions.VRMC_materials_mtoon.outlineWidthFactor", value: .006 },
+    { path: "extensions.VRMC_materials_mtoon.shadeColorFactor.0", value: .55 },
+    { path: "pbrMetallicRoughness.baseColorFactor.3", value: .62 },
+    { path: "pbrMetallicRoughness.baseColorTexture.transform.offset.0", value: .75 },
+    { path: "normalTexture.scale", value: -.5 },
+  ] });
+  assert(fields.changed, "MCP must apply advanced toon, component, alpha and UV field updates");
+  for (const id of [red.id, blue.id]) {
+    const current = asset(id).properties; const previous = (beforeFields.assets[id] as MaterialAsset).properties;
+    const toon = current.extensions.VRMC_materials_mtoon!; const previousToon = previous.extensions.VRMC_materials_mtoon!;
+    assert(toon.outlineWidthFactor === .006 && toon.shadeColorFactor[0] === .55 && JSON.stringify(toon.shadeColorFactor.slice(1)) === JSON.stringify(previousToon.shadeColorFactor.slice(1)), "RGB component edits must preserve each Material's other channels");
+    assert(current.pbrMetallicRoughness.baseColorFactor[3] === .62 && JSON.stringify(current.pbrMetallicRoughness.baseColorFactor.slice(0, 3)) === JSON.stringify(previous.pbrMetallicRoughness.baseColorFactor.slice(0, 3)), "Alpha edits must retain distinct RGB");
+    assert(current.pbrMetallicRoughness.baseColorTexture!.transform!.offset[0] === .75 && current.pbrMetallicRoughness.baseColorTexture!.transform!.offset[1] === previous.pbrMetallicRoughness.baseColorTexture!.transform!.offset[1], "UV leaf edits must retain each other axis");
+  }
+  assert(asset(red.id).properties.normalTexture === undefined && asset(blue.id).properties.normalTexture?.scale === -.5, "Unbound texture scale must skip rather than invent a binding");
+  const unbound = call({ fieldUpdates: [{ path: "normalTexture.transform.offset.1", value: .2 }] });
+  assert(JSON.stringify(unbound.result.updatedMaterialAssetIds) === JSON.stringify([blue.id]), "Only a Material with a bound map should be reported as changed by UV edits");
+  for (const path of ["shader.fragmentShader", "savedMToonSettings.outlineWidthFactor", "name", "extensions.constructor.enabled", "normalTexture.transform.offset.2"]) reject({ fieldUpdates: [{ path, value: .2 }] }, "INVALID_ARGUMENT");
+  for (const value of [NaN, Infinity, "wide", -1]) reject({ fieldUpdates: [{ path: "extensions.VRMC_materials_mtoon.outlineWidthFactor", value }] }, "INVALID_ARGUMENT");
+  reject({ fieldUpdates: [{ path: "extensions.VRMC_materials_mtoon.outlineWidthFactor", value: .02 }, { path: "emissiveFactor.3", value: .1 }] }, "INVALID_ARGUMENT");
+  reject({ fieldUpdates: [{ path: "emissiveTexture", value: { textureAssetId: texture.id, scale: .5 } }] }, "INVALID_ARGUMENT");
+  reject({ fieldUpdates: [{ path: "normalTexture", value: { textureAssetId: texture.id, strength: .5 } }] }, "INVALID_ARGUMENT");
+  reject({ fieldUpdates: [{ path: "pbrMetallicRoughness.baseColorTexture.textureAssetId", value: "unknown-map" }] }, "INVALID_TEXTURE_REFERENCE");
+  reject({ fieldUpdates: [{ path: "normalTexture.textureAssetId", value: "unknown-map" }, { path: "roughness", value: .25 }] }, "INVALID_TEXTURE_REFERENCE");
+  reject({ patch: { baseColor: custom.id } }, "INVALID_TEXTURE_REFERENCE");
+  reject({ assetIds: [custom.id, texture.id], patch: { roughness: .4 } }, "NO_EDITABLE_MATERIALS");
+  const savedToon = structuredClone(asset(blue.id).properties.extensions.VRMC_materials_mtoon);
+  call({ patch: { shadingModel: "standard" } });
+  assert(JSON.stringify(asset(blue.id).savedMToonSettings) === JSON.stringify(savedToon), "MCP switching to PBR must stash all toon settings");
+  call({ patch: { shadingModel: "mtoon-1.0" } });
+  assert(asset(blue.id).properties.extensions.VRMC_materials_mtoon!.outlineWidthFactor === .006 && asset(blue.id).properties.extensions.VRMC_materials_mtoon!.extras?.xriftVrm0CompatShade === false, "MCP switching back must restore toon settings and the chosen compatibility mode");
+  assert(!call({ patch: { shadingModel: "mtoon-1.0" } }).changed, "An equal bulk operation must not consume a revision");
+  assert(JSON.stringify(context.bundle.assets.assets[custom.id]) === JSON.stringify(original.assets[custom.id]) && JSON.stringify(context.bundle.assets.assets[texture.id]) === JSON.stringify(original.assets[texture.id]), "Skipped assets must remain byte-for-byte identical in the document");
+  const single = executeXriftMcpEditorTool({ ...context, editorMode: "play" }, { id: "single-play-shading", tool: "update_material_asset", arguments: { ...commonArguments(), materialAssetId: red.id, patch: { shadingModel: "mtoon-0.x" } } });
+  assert(single.changed && (single.bundle.assets.assets[red.id] as MaterialAsset).properties.extensions.VRMC_materials_mtoon?.extras?.xriftVrm0CompatShade === true, "The existing single-Material Play contract must include shadingModel switching");
 }
 
 function assertWorldComponentAuthoring(initial: XriftMcpEditorContext): void {

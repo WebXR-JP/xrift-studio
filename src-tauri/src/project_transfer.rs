@@ -232,7 +232,7 @@ where
 
     let result = (|| {
         build(&temporary)?;
-        std::fs::rename(&temporary, &destination)
+        retry_transient_io(|| std::fs::rename(&temporary, &destination))
             .map_err(|e| format!("project cannot be finalized: {}", e))?;
         read_library_project_at(&destination)
     })();
@@ -725,6 +725,45 @@ mod tests {
         write(&project.join(".cache/tmp"), "x");
         write(&project.join(".xrift/world.json"), "{}");
         project
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn materialize_retries_a_transient_directory_lock() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let root = temp_root("directory-lock");
+        let mut release = None;
+        let result = materialize_library_project(
+            &root.to_string_lossy(),
+            "imported",
+            |temporary| {
+                write(&temporary.join(VISUAL_PROJECT_MANIFEST), &visual_manifest("imported", false));
+                write(&temporary.join("scenes/main.json"), "{}");
+                write(&temporary.join("assets.json"), "{}");
+                // An indexer can hold a directory without FILE_SHARE_DELETE.
+                // Reproduce that real Windows lock before releasing it.
+                let handle = std::fs::OpenOptions::new()
+                    .read(true)
+                    .share_mode(0x1 | 0x2)
+                    .custom_flags(0x02000000)
+                    .open(temporary)
+                    .unwrap();
+                let locked = std::fs::rename(temporary, root.join("locked-probe")).unwrap_err();
+                assert!(is_transient_io_error(&locked));
+                release = Some(std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    drop(handle);
+                }));
+                Ok(())
+            },
+        );
+        release.unwrap().join().unwrap();
+        assert!(result.is_ok(), "Transient directory lock prevented import: {:?}", result.as_ref().err());
+        assert!(root.join("imported").join(VISUAL_PROJECT_MANIFEST).is_file());
+        assert!(!std::fs::read_dir(&root).unwrap().any(|entry|
+            entry.unwrap().file_name().to_string_lossy().starts_with(".xrift-studio-create-")));
+        let _ = force_remove_dir_all(&root);
     }
 
     #[test]

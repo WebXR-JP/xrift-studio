@@ -142,6 +142,8 @@ import {
   OPEN_BRUSH_RUNTIME_PACKAGE,
 } from "../open-brush";
 import { createOpenBrushRuntimeOverlayFile, createOpenBrushPresetOverlayFiles } from "./open-brush-emit";
+import { createMToonOverlayFiles } from "./mtoon-emit";
+import { COMPILER_MTOON_PACKAGE_SPEC } from "./runtime-packages";
 import {
   createScenePostprocessingBridgeOverlayFiles,
   createScenePostprocessingOverlayFile,
@@ -374,6 +376,16 @@ export function compileVisualProject(
       : emptySource(documents.project.projectKind);
   }
   const usesOpenBrushModels = projectUsesOpenBrushModels(publishedAssets);
+  const usesMToonMaterials = Object.values(publishedAssets.assets).some(
+    (asset) => asset.kind === "material" &&
+      asset.properties.extensions.VRMC_materials_mtoon !== undefined,
+  );
+  const usesVrmModels = Object.values(publishedAssets.assets).some(
+    (asset) => asset.kind === "model" && (
+      asset.importMetadata?.sourceFormat === "vrm" ||
+      (asset.source.kind === "project" && fileExtension(asset.source.relativePath) === "vrm")
+    ),
+  );
   // Every emitted feature that trips a platform security rule declares its own
   // requirement; nothing here knows what those rules are.
   const publishPermissions = resolvePublishPermissions([
@@ -509,6 +521,9 @@ export function compileVisualProject(
       overlayFiles.push(...createOpenBrushPresetOverlayFiles());
     }
   }
+  if (outputMode === "classic-jsx" && (usesMToonMaterials || usesVrmModels)) {
+    overlayFiles.push(...createMToonOverlayFiles());
+  }
   // The compositor module ships whenever the Scene composites at all.
   // The compositor ships when the Scene asks for it, and also when a graph can
   // turn it on for one viewer — a「画質を上げる」button in a Scene whose post
@@ -562,6 +577,7 @@ export function compileVisualProject(
   const runtimePackageSpecs: string[] =
     outputMode === "classic-runtime" ? [XRIFT_STUDIO_RUNTIME_PACKAGE] : [];
   if (usesOpenBrushModels) runtimePackageSpecs.push(OPEN_BRUSH_RUNTIME_PACKAGE);
+  if (usesMToonMaterials || usesVrmModels) runtimePackageSpecs.push(COMPILER_MTOON_PACKAGE_SPEC);
   if (outputMode === "classic-jsx" && usesTextPanel) {
     // classic-runtime gets troika transitively through xrift-studio-runtime;
     // the emitted-source mode imports it directly and must ask for it.
@@ -3505,6 +3521,7 @@ function renderModelMesh(
       ? fileExtension(model.source.relativePath)
       : model.importMetadata?.sourceFormat;
   const isObj = sourceExtension === "obj";
+  const isVrm = sourceExtension === "vrm" || model.importMetadata?.sourceFormat === "vrm";
   const isOpenBrush = isOpenBrushModelMetadata(
     model.importMetadata?.openBrush,
   );
@@ -3573,6 +3590,26 @@ function renderModelMesh(
   }
 }`,
     );
+  } else if (isVrm) {
+    context.fiberImports.add("useLoader");
+    context.extraImports.add('import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";');
+    context.extraImports.add('import { VRMLoaderPlugin, VRMUtils, type MToonMaterial, type VRM } from "./xrift-studio/three-vrm-readable";');
+    context.extraImports.add('import { attachMToonOutlines, removeNativeMToonOutlines } from "./xrift-studio/mtoon-runtime";');
+    context.supportDeclarations.set("model-vrm-loader", `class CompiledVRMGLTFLoader extends GLTFLoader {
+  constructor() {
+    super();
+    this.register((parser) => {
+      const plugin = new VRMLoaderPlugin(parser);
+      plugin.mtoonMaterialPlugin.v0CompatShade = Boolean(parser.json.extensions?.VRM);
+      return plugin;
+    });
+  }
+}
+const nativeMToonFrames = new WeakMap<import("three").Material, { renderer: object; number: number }>();`);
+    context.fiberImports.add("useFrame");
+    context.reactValueImports.add("useRef");
+    context.reactValueImports.add("useLayoutEffect");
+    context.threeTypeImports.add("Group");
   } else {
     context.fiberImports.add("useLoader");
     context.extraImports.add(
@@ -3673,6 +3710,7 @@ function renderModelMesh(
   }
   const poseSource = renderCompiledModelPose(mesh, context, staticMerge);
   const vrm0Rotation =
+    !isVrm &&
     model.importMetadata?.sourceFormat === "vrm" &&
     model.importMetadata.vrmVersion === "0"
       ? ` rotation={[0, ${formatNumber(Math.PI)}, 0]}`
@@ -3697,11 +3735,39 @@ function renderModelMesh(
               ? ", (loader) => loader.setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath))"
               : ""
           });`
-        : `const { scene${needsParser ? ", parser" : ""}${animationLoaded ? ", animations" : ""} } = useLoader(GLTFLoader, modelUrl${
+        : `const { scene${needsParser ? ", parser" : ""}${animationLoaded ? ", animations" : ""}${isVrm ? ", userData: vrmUserData" : ""} } = useLoader(${isVrm ? "CompiledVRMGLTFLoader" : "GLTFLoader"}, modelUrl${
             usesDraco
               ? ", (loader) => loader.setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath))"
               : ""
           });`);
+  const vrmSource = isVrm ? `  if (!scene.userData.xriftStudioVrmPrepared) {
+    const vrm = vrmUserData.vrm as VRM | undefined;
+    if (vrm) {
+      VRMUtils.rotateVRM0(vrm);
+      vrm.materials?.forEach((material) => (material as MToonMaterial).update?.(0));
+    }
+    removeNativeMToonOutlines(scene);
+    scene.userData.xriftStudioVrmPrepared = true;
+  }
+  const vrmRoot = useRef<Group>(null);
+  useLayoutEffect(() => {
+    const root = vrmRoot.current;
+    if (!root) return;
+    const outlines = attachMToonOutlines(root);
+    return () => outlines.dispose();
+  }, [scene]);
+  useFrame((state, delta) => {
+    const renderer = state.gl;
+    const frameNumber = renderer.info.render.frame;
+    (vrmUserData.vrm as VRM | undefined)?.materials?.forEach((source) => {
+      const material = source as MToonMaterial;
+      const previous = nativeMToonFrames.get(material);
+      if (!material.isMToonMaterial || material.isOutline || (previous?.renderer === renderer && previous.number === frameNumber)) return;
+      nativeMToonFrames.set(material, { renderer, number: frameNumber });
+      material.update(delta);
+    });
+  });
+` : "";
   const animationBindings = (animationBridgeable ? ["mixer", "clips"] : []).join(", ");
   const graphCuePlans = planInteractivityAnimationCues(graphAnimationCues);
   if (graphCuePlans.length > 0) {
@@ -3816,11 +3882,12 @@ function renderModelMesh(
         receiveShadow={${mesh.receiveShadow}}${inject}
       />
     </group>`;
+  const vrmModel = isVrm ? `<group ref={vrmRoot}>${clonedModel}</group>` : clonedModel;
   const modelContent = usesBrushTime
     ? `<group ref={brushTimeRoot}>
-      ${clonedModel}
+      ${vrmModel}
     </group>`
-    : clonedModel;
+    : vrmModel;
   const renderedModelContent = renderMeshRenderOrder(
     renderMeshMaxDistance(
       modelContent,
@@ -3833,6 +3900,7 @@ function renderModelMesh(
   const source = `const ${componentName}: FC = () => {
   const modelUrl = useCompiledAssetUrl(${urlConstant});
   ${loaderSource}
+${vrmSource}
 ${poseSource.declaration}
 ${brushTimeSource}${animationSource}
   return (
@@ -4224,7 +4292,7 @@ ${useSourceIndices ? `            const materialIndex = sourceMaterialIndices.ge
 `;
   const source = `${useSourceIndices ? `(${wildcard && !hasOpenBrushAssignments ? "_sourceMaterialIndices" : "sourceMaterialIndices"}: ReadonlyMap<unknown, { materials?: number }>) => ` : ""}(object: Object3D) => {
 ${sourceNodeLookup}
-          if (!("material" in object)) return null;
+          if (!("material" in object) || object.userData.xriftMToonOutline) return null;
           const renderOverride = (${wildcard && !hasOpenBrushAssignments ? "_material" : "material"}: unknown, attach: string, key: string) => {
 ${materialNameLookup}
 ${resolver}
@@ -4323,6 +4391,7 @@ const SUPPORTED_COMPILED_MATERIAL_EXTENSIONS = new Set([
   "KHR_materials_transmission",
   "KHR_materials_unlit",
   "KHR_materials_volume",
+  "VRMC_materials_mtoon",
 ]);
 
 function getMaterialShaderModel(
@@ -4382,6 +4451,12 @@ function renderMaterial(
     );
     return `<${componentName} />`;
   }
+  if (properties.extensions.VRMC_materials_mtoon) {
+    const geometry = resolveMeshGeometry(mesh, context);
+    const doubleSided = geometry?.kind === "terrain" ||
+      (geometry?.kind === "primitive" && geometry.primitive === "plane");
+    return `<${registerMaterialComponent(entity, mesh, asset, context)}${doubleSided ? " doubleSided" : ""} />`;
+  }
   if (properties.doubleSided) context.usesDoubleSide = true;
   diagnoseMaterialExtensions(entity, mesh, asset, properties, context);
   const materialKind = getMaterialShaderModel(properties);
@@ -4431,6 +4506,9 @@ function registerMaterialComponent(
       context,
     );
   }
+  if (asset.properties.extensions.VRMC_materials_mtoon) {
+    return registerMToonMaterialComponent(entity, mesh, asset, componentName, declarationKey, context);
+  }
 
   const properties = normalizeMaterialProperties(
     asset.properties as unknown as Parameters<typeof normalizeMaterialProperties>[0],
@@ -4440,7 +4518,7 @@ function registerMaterialComponent(
   const materialKind = getMaterialShaderModel(properties);
   context.supportDeclarations.set(
     "material:00-props-type",
-    "type CompiledMaterialProps = { attach?: string; meshName?: string; sourceMaterial?: import(\"three\").Material };",
+    "type CompiledMaterialProps = { attach?: string; meshName?: string; sourceMaterial?: import(\"three\").Material; doubleSided?: boolean };",
   );
 
   const textureLines: string[] = [];
@@ -4547,6 +4625,54 @@ ${textureLines.length > 0 ? `${textureLines.map((line) => `  ${line}`).join("\n"
   return componentName;
 }
 
+function registerMToonMaterialComponent(
+  entity: SceneEntity,
+  mesh: MeshComponent,
+  asset: MaterialAsset,
+  componentName: string,
+  declarationKey: string,
+  context: CompileContext,
+): string {
+  const properties = normalizeMaterialProperties(asset.properties);
+  const mtoon = properties.extensions.VRMC_materials_mtoon!;
+  context.extraImports.add(
+    'import { XriftMToonMaterial, type MToonSurfaceProperties } from "./xrift-studio/mtoon-material";',
+  );
+  context.supportDeclarations.set(
+    "material:00-props-type",
+    "type CompiledMaterialProps = { attach?: string; meshName?: string; sourceMaterial?: import(\"three\").Material; doubleSided?: boolean };",
+  );
+  const textureLines: string[] = [];
+  const textures: string[] = [];
+  const addTexture = (name: string, info: MaterialTextureInfo | undefined, colorSpace: "srgb" | "linear") => {
+    if (addCompiledTexture(name, name, info, colorSpace, entity, mesh, asset, context, textureLines, [])) {
+      textures.push(name);
+    }
+  };
+  addTexture("baseColorMap", properties.pbrMetallicRoughness.baseColorTexture, "srgb");
+  addTexture("opacityMap", properties.opacityTexture, "linear");
+  addTexture("normalMap", properties.normalTexture, "linear");
+  addTexture("emissiveMap", properties.emissiveTexture, "srgb");
+  addTexture("shadeMultiplyMap", mtoon.shadeMultiplyTexture, "srgb");
+  addTexture("shadingShiftMap", mtoon.shadingShiftTexture, "linear");
+  addTexture("matcapMap", mtoon.matcapTexture, "srgb");
+  addTexture("rimMultiplyMap", mtoon.rimMultiplyTexture, "srgb");
+  addTexture("outlineWidthMultiplyMap", mtoon.outlineWidthMultiplyTexture, "linear");
+  addTexture("uvAnimationMaskMap", mtoon.uvAnimationMaskTexture, "linear");
+  const propertiesName = generatedIdentifier("MTOON_PROPERTIES", asset.id);
+  context.supportDeclarations.set(
+    `material-settings:${propertiesName}`,
+    `const ${propertiesName} = ${JSON.stringify(properties)} as MToonSurfaceProperties;`,
+  );
+  context.supportDeclarations.set(
+    declarationKey,
+    `const ${componentName}: FC<CompiledMaterialProps> = ({ attach = "material", doubleSided }) => {
+${textureLines.map((line) => `  ${line}\n`).join("")}  return <XriftMToonMaterial attach={attach} doubleSided={doubleSided} properties={${propertiesName}} textures={{ ${textures.join(", ")} }} />;
+};`,
+  );
+  return componentName;
+}
+
 function registerOpenBrushMaterialComponent(
   entity: SceneEntity,
   mesh: MeshComponent,
@@ -4558,7 +4684,7 @@ function registerOpenBrushMaterialComponent(
   const shader = asset.shader;
   if (!shader || shader.kind !== "openbrush") return componentName;
   context.extraImports.add('import { XriftOpenBrushPresetMaterial, XriftOpenBrushModelMaterial, type OpenBrushPresetSettings } from "./xrift-studio/open-brush-preset-material";');
-  context.supportDeclarations.set("material:00-props-type", "type CompiledMaterialProps = { attach?: string; meshName?: string; sourceMaterial?: import(\"three\").Material };");
+  context.supportDeclarations.set("material:00-props-type", "type CompiledMaterialProps = { attach?: string; meshName?: string; sourceMaterial?: import(\"three\").Material; doubleSided?: boolean };");
   const properties = normalizeMaterialProperties(asset.properties);
   const settingsName = generatedIdentifier("OPEN_BRUSH_SETTINGS", asset.id);
   context.supportDeclarations.set(`material-settings:${settingsName}`, `const ${settingsName}: OpenBrushPresetSettings = ${JSON.stringify({
@@ -4607,7 +4733,7 @@ function registerClassicR3fMaterialComponent(
   if (!shader || shader.kind !== "classic-r3f") return componentName;
   context.supportDeclarations.set(
     "material:00-props-type",
-    "type CompiledMaterialProps = { attach?: string; meshName?: string; sourceMaterial?: import(\"three\").Material };",
+    "type CompiledMaterialProps = { attach?: string; meshName?: string; sourceMaterial?: import(\"three\").Material; doubleSided?: boolean };",
   );
   context.supportDeclarations.set(
     "material:00-classic-variant-type",

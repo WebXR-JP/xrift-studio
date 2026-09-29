@@ -3,6 +3,7 @@ import { xrift } from "../xrift-cli";
 import { createPrototypeProject } from "./prototype-project";
 import { createStagedTypecheckWorldDocuments } from "./compiler/staged-world.fixture";
 import { COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC } from "./compiler/runtime-packages";
+import { createMToonExportFixtureDocuments, MTOON_EXPORT_TEXTURE_ROLES } from "./compiler/mtoon-export.fixture";
 import {
   CLASSIC_EXPORT_MANIFEST_FORMAT,
   exportVisualProjectToClassic,
@@ -372,6 +373,40 @@ export async function runClassicExportFixtureAssertions(): Promise<void> {
       richResult.notes.some((note) => note.includes("xrift-studio-runtime")),
       "removing the stale runtime dependency was not reported to the author",
     );
+
+    // VRM avatars and all independent MToon maps use the same concrete write
+    // boundary as other Assets, including the VRM 0.x compatibility metadata.
+    const png = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jP6kAAAAASUVORK5CYII="), character => character.charCodeAt(0));
+    const toonFixture = await createMToonExportFixtureDocuments(Object.fromEntries(MTOON_EXPORT_TEXTURE_ROLES.map(role => [role, png])));
+    const originalToonEntry = files.get(key(targetPath, "src/World.tsx"));
+    Object.assign(tauri, { readProjectFileDataUrl: async (_root: string, relative: string) => {
+      const bytes = toonFixture.binaryFiles.get(relative);
+      if (!bytes) throw new Error(`Missing MToon export source: ${relative}`);
+      return `data:application/octet-stream;base64,${btoa(Array.from(bytes, value => String.fromCharCode(value)).join(""))}`;
+    } });
+    const toonResult = await exportVisualProjectToClassic({
+      authoringProjectPath: authoringPath, target, documents: toonFixture.documents,
+      integration: "component", installDependencies: false,
+      save: async () => authoringPath, report: () => undefined, onLog: () => undefined,
+      loadBundledAssets: async () => [],
+    });
+    const toonScene = files.get(key(targetPath, toonResult.sceneSourceFile)) ?? "";
+    assert(files.get(key(targetPath, "src/World.tsx")) === originalToonEntry, "MToon component export replaced the author's Classic entry");
+    for (const role of MTOON_EXPORT_TEXTURE_ROLES) assert(toonScene.includes(`const ${role} = useCompiledTexture`), `Classic MToon export dropped ${role}`);
+    assert(toonScene.includes('"xriftVrm0CompatShade":true') && toonScene.includes("new VRMLoaderPlugin(parser)"), "Classic export lost the legacy MToon shader mode or native VRM loader");
+    assert(toonScene.includes('"texCoord":1') && toonScene.includes('"rotation":0.4'), "Classic export lost imported UV1 texture transforms");
+    const toonDirectory = toonResult.sceneDirectory;
+    for (const filename of ["mtoon-contract.ts", "mtoon-runtime.ts", "mtoon-material.tsx"]) assert(files.has(key(targetPath, `${toonDirectory}/xrift-studio/${filename}`)), `Classic export did not write shared ${filename}`);
+    const toonPackage = JSON.parse(files.get(key(targetPath, "package.json")) ?? "{}");
+    assert(toonPackage.dependencies?.["@pixiv/three-vrm"] === "3.5.5" && toonResult.packageInstallation === "recorded", "Classic export did not pin and report the MToon shader dependency");
+    const toonManifest = JSON.parse(files.get(key(targetPath, `${toonDirectory.replace("src/xrift-studio/", ".xrift-studio/exports/")}/export-manifest.json`)) ?? "{}");
+    const copiedAvatars = toonManifest.files.filter((relative: string) => relative.startsWith("public/") && relative.endsWith(".vrm"));
+    const copiedTextures = toonManifest.files.filter((relative: string) => relative.startsWith("public/") && relative.endsWith(".png"));
+    assert(copiedAvatars.length === 2 && copiedTextures.length === 10, "Classic export did not write both VRM generations and every independent map");
+    for (const bytes of toonFixture.binaryFiles.values()) {
+      const expected = `data:application/octet-stream;base64,${btoa(Array.from(bytes, value => String.fromCharCode(value)).join(""))}`;
+      assert([...copiedAvatars, ...copiedTextures].some(relative => files.get(key(targetPath, relative)) === expected), "Classic export changed MToon asset bytes");
+    }
   } finally {
     Object.assign(tauri, originalTauri);
     Object.assign(xrift, { installClassicExportPackages: originalInstall });

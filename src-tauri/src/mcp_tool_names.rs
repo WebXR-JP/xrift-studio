@@ -3,7 +3,7 @@
 // Source of truth: src/lib/visual-editor/mcp-tool-registry.ts
 // Regenerate with: pnpm mcp:tool-names
 
-pub const MCP_TOOL_NAMES: [&str; 146] = [
+pub const MCP_TOOL_NAMES: [&str; 147] = [
     "list_projects",
     "list_starter_templates",
     "create_project",
@@ -80,6 +80,7 @@ pub const MCP_TOOL_NAMES: [&str; 146] = [
     "set_material",
     "get_material_asset",
     "update_material_asset",
+    "update_material_assets",
     "list_material_presets",
     "create_material_from_preset",
     "create_custom_shader",

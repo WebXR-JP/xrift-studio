@@ -22,13 +22,37 @@ function comparisonParts(key:string,model:string,labels:readonly [string,string]
  }
  return parts;
 }
-export const EXTENDED_MATERIAL_RECIPES: readonly SceneRecipe[] = EXTENDED_MATERIAL_SHOWCASES.map(d=>({
+const EXTENDED_SURFACE_RECIPES: readonly SceneRecipe[] = EXTENDED_MATERIAL_SHOWCASES.map(d=>({
  id:`scene-recipe.material-${d.key}`, name:d.name, description:d.description,
  category:'material', projectKinds:['world','item'], group:d.group,tags:[d.extensionLabel,...d.tags],comparisonLabels:d.labels,
  note:d.note ?? COMPARISON_NOTE, preview:{cameraPosition:[0.12,1.24,3.8],lookAtY:0.63,ground:true},
  parts:comparisonParts(d.key,d.sampleModel,d.labels),
  lesson:{goal:d.description,steps:['左が効果あり、右が比較用です。ドラッグして反射や透け方を確認します。','「シーンに追加」で、見本・比較用Material・必要なテクスチャをまとめて追加します。','Hierarchyで見本を選び、MaterialをInspectorで編集します。テクスチャもAssetsから差し替えられます。']},
 }));
+
+const MTOON_MATERIAL_RECIPES: readonly SceneRecipe[] = ['mtoon-0-outline', 'mtoon-outline'].map(key => {
+ const definition = getMaterialShowcaseDefinition(key)!;
+ const version = key === 'mtoon-0-outline' ? '0.x' : '1.0';
+ const labels: readonly [string, string] = [`MToon ${version}`, 'Standard (PBR)'];
+ return {
+  id: `scene-recipe.material-${key}`, name: definition.name,
+  description: `MToon ${version}の陰影と輪郭線を、同じ形の標準マテリアルと比較します。`,
+  category: 'material', projectKinds: ['world', 'item'], group: 'MToon',
+  tags: ['MToon', version, 'VRM', 'Outline', '輪郭線', 'マンガ'], comparisonLabels: labels,
+  note: '配置後はマテリアルの種類からMToon 0.xとMToon 1.0を切り替えられます。色・陰影・輪郭線の値は保ちます。',
+  preview: { cameraPosition: [0.12, 1.24, 3.8], lookAtY: 0.63, ground: true },
+  parts: comparisonParts(key, 'catalog-shaderball', labels),
+  lesson: {
+   goal: `MToon ${version}の色と輪郭線を調整します。`,
+   steps: ['左がMToon、右が標準マテリアルです。ドラッグして陰影と輪郭線を見比べます。', '「シーンに追加」で、見本と比較用マテリアルを追加します。', '見本のマテリアルをInspectorで開き、Shade Color・Outline Color・Outline Widthを変えます。'],
+  },
+ };
+});
+
+export const EXTENDED_MATERIAL_RECIPES: readonly SceneRecipe[] = [
+ ...EXTENDED_SURFACE_RECIPES,
+ ...MTOON_MATERIAL_RECIPES,
+];
 
 const LEGACY:Record<string,{key:string;model:string;group:string;name:string;labels:readonly[string,string]}>={
  'scene-recipe.material-clearcoat':{key:'car-paint',model:'catalog-shaderball',group:'Clearcoat',name:'Clearcoat / 車の塗装',labels:['Clearcoat 1','Clearcoat 0']},

@@ -4,6 +4,10 @@
 
 テクスチャ枠にはTexture Asset IDか`{ "textureAssetId": "...", "texCoord": 0, "transform": { "offset": [0, 0], "rotation": 0, "scale": [1, 1] } }`を渡す。`null`で割当を解除する。Normal Mapの`scale`、Occlusion Mapの`strength`も同じオブジェクトで指定する。`patch.extensions`には対応する`KHR_materials_*`名をキーにし、拡張ごとの係数・色・テクスチャを部分更新する。拡張自体を削除するときはそのキーへ`null`を渡す。VolumeにはTransmission、DispersionにはVolumeを併せて設定する。`KHR_materials_unlit`は空オブジェクトで有効化する。
 
+MToon 1.0は`update_material_asset`の`patch.extensions.VRMC_materials_mtoon`へオブジェクトを渡して有効化する。`specVersion`は`"1.0"`。明るい部分の色は`pbrMetallicRoughness.baseColorFactor`、影の色は`shadeColorFactor`（0〜1のRGB配列）、影の境界は`shadingShiftFactor`、境界の硬さは`shadingToonyFactor`（0〜1）で設定する。アウトラインは`outlineWidthMode: "worldCoordinates"`と`outlineWidthFactor`（m）、または`"screenCoordinates"`と画面の高さに対する割合で指定し、`outlineColorFactor`で色を変える。`outlineWidthMode: "none"`で線だけを消し、拡張へ`null`を渡すと保存済みの標準マテリアル設定に戻る。`shadeMultiplyTexture`と`outlineWidthMultiplyTexture`には通常のTextureInfoを使う。MToonとUnlitの両方がある場合はMToonを優先する。更新後は`get_material_asset`で値を読み、割当先モデルで影と線を確認する。
+
+VRM 0.x / 1.0のアバターは通常のモデルと同じ取り込み操作で`.vrm`を指定する。VRM 0.xの`VRM/MToon`と`VRM/Unlit*`はthree-vrmの公式変換を通して、編集できるMToon 1.0のMaterial Assetへ展開する。元のVRMファイルを保存したまま、色のlinear変換、影の境界、アウトライン幅、UV変換、透過順序を引き継ぐ。MatCap、Rim、UV Animationの係数とテクスチャも保存し、アウトラインの色を部分更新しても保持する。これらの設定は`matcapFactor` / `matcapTexture`、`parametricRimColorFactor` / `rimMultiplyTexture`、`uvAnimationMaskTexture` / `uvAnimationScrollXSpeedFactor` / `uvAnimationScrollYSpeedFactor` / `uvAnimationRotationSpeedFactor`で更新できる。`shadingShiftTexture`はTextureInfoに有限の`scale`を追加する。`renderQueueOffsetNumber`は−9〜9の整数。`extras.xriftVrm0CompatShade`は旧版の描画互換を保つ取り込み情報なので、通常の色・線の編集では変更しない。BlenderやUnityの任意の独自Toonシェーダーはこの変換の対象に含まれない。
+
 XRift Studio は、開いている Editor をそのまま AIクライアントへ開放する MCP server を
 同梱している。この文書は「どの Editor 操作が MCP から動くのか」を一覧で示す。
 機能を足したときは、ここで MCP への対応漏れを確認する。
@@ -118,7 +122,7 @@ document tool の戻り値には `harness` が付くことがある。同じ種�
 
 `get_publish_readiness` は保存してから、公開情報（スターターのタイトル・説明のままでないこと）、サムネイル、ログイン、compiler の blocking diagnostics を確認し、足りない項目ごとに直す tool を `nextActions` に返す。`publish_project` は同じ確認を通ったときだけ、公開ダイアログと同じ `publishVisualProject` パイプライン（保存・変換・`xrift check --build`・アップロード）を実行し、結果を project の `lastPublication` に保存する。人が公開を依頼した場合にだけ呼ぶ。
 
-## document (93)
+## document (96)
 
 **Editor context / Project**
 `get_editor_context`, `get_project_health`, `analyze_performance`, `get_scripting_capabilities`, `update_project_metadata`
@@ -142,10 +146,18 @@ document tool の戻り値には `harness` が付くことがある。同じ種�
 **素材の設定**
 `get_audio_asset`, `get_model_asset`, `update_model_asset`,
 `get_texture_asset`, `update_texture_asset`, `get_particle_asset`,
-`update_particle_asset`, `get_material_asset`, `update_material_asset`,
+`update_particle_asset`, `get_material_asset`, `update_material_asset`, `update_material_assets`,
 `set_material`, `set_material_texture_transform`, `list_material_presets`,
 `create_material_from_preset`, `create_custom_shader`,
 `get_custom_shader`, `update_custom_shader`
+
+`update_material_asset`の`patch.shadingModel`は`standard`、`mtoon-0.x`、`mtoon-1.0`を受け付ける。各素材の色・Texture・UVを引き継いで種類を変え、Standardへ戻すとMToon専用設定を控えに保存する。再びMToonを選ぶとその設定を復元する。0.xは旧版の陰影互換モードであり、保存する`VRMC_materials_mtoon.specVersion`はどちらも`"1.0"`になる。既存の`patch.extensions.VRMC_materials_mtoon`による輪郭・陰影の編集も使える。単体編集は従来どおりEditとPlayで実行できる。
+
+複数素材はEdit中に`update_material_assets`へ`assetIds`を渡す。`patch`と`fieldUpdates`のどちらか一方を指定し、全変更を一回のrevision・Undo・自動保存として確定する。Custom Shader Materialとマテリアル以外のAssetは変更せず、`skippedAssets`が理由を返す。未知のIDは変更前に`ASSET_NOT_FOUND`で拒否する。通常設定は対象Materialの種類が同じ場合に変更できる。種類が混在する場合は`patch: { "shadingModel": "mtoon-0.x" }`などで先にそろえ、最新contextを取得してから設定を変える。混在種類に種類と通常設定を同時指定すると`MATERIAL_SHADING_MISMATCH`になる。
+
+`fieldUpdates`は`[{ "path": "extensions.VRMC_materials_mtoon.shadeColorFactor.0", "value": 0.5 }]`のように、`properties`接頭辞のない保存値のパスを指定する。`.0`などの成分だけを変えると、各素材の他のRGB・Alpha・UV成分を保つ。Texture参照の`.textureAssetId`だけを変える場合も各UVを保つ。例として`pbrMetallicRoughness.baseColorTexture.transform.offset.0`はUVのXだけを変える。未割当のMapへのUV・Scale操作はその素材だけを変更しない。新しいTexture参照が存在しないかTexture以外なら`INVALID_TEXTURE_REFERENCE`で全体を拒否する。`extensions.KHR_materials_clearcoat.enabled`などのBoolean操作はInspectorと同じ依存関係を扱う。
+
+未知のパス、Shader・メタデータのパス、不正な値は`INVALID_ARGUMENT`で全変更前に拒否する。`updatedMaterialAssetIds`は実際に変えた素材だけを返し、すべて同じ値ならrevisionを増やさない。更新後は`get_material_asset`で保存値を読み、割り当てたMeshを`capture_scene_view`で確認する。一括編集はPlay中に`EDITOR_READ_ONLY`となる。Play中の単体編集には`update_material_asset`を使う。
 
 `create_custom_shader` は任意の GLSL を受ける。「空っぽく見せる」用途には使わず、カタログから選ぶ。
 ゼロから書くとカタログが持つ数値を自分で決めることに
@@ -346,7 +358,7 @@ operation が型を決めているソケット (秒数、繰り返し回数、an
 **コンポーネントコードの取り込み**
 `analyze_component_code`, `apply_component_code_import_plan`
 
-## local-asset (14)
+## local-asset (15)
 
 `import_audio_asset`, `import_font_asset`, `import_texture_asset`, `import_model_asset`,
 `import_skybox_asset`, `import_shader_asset`, `reimport_model_asset`,
@@ -416,7 +428,7 @@ Scriptだけを作る場合は `create_script_asset` の `templateId` に指定�
 数十万三角形のものがある。重さを知らずに install すると公開物が壊れる。入れる前に
 読んで、そのワールドに決めた予算と見比べる。上限の数値はここでは決めない。
 
-## debug (11)
+## debug (15)
 
 `capture_scene_debug`, `capture_scene_view`, `set_scene_view_camera`,
 `start_recording`, `stop_recording`, `get_recording_status`,

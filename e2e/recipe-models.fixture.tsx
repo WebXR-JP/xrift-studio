@@ -10,6 +10,20 @@ let root: Root | undefined;
 let host: HTMLDivElement | undefined;
 const tracked = new Set<THREE.BufferGeometry>();
 const disposed = new Set<THREE.BufferGeometry>();
+const toonMaterials: Array<{ legacy: boolean; outline: boolean; width: number; sharesGeometry: boolean }> = [];
+const toonLights = new Map<boolean, Array<{ type: string; intensity: number; position: number[] }>>();
+const originalBeforeRender = THREE.Mesh.prototype.onBeforeRender;
+THREE.Mesh.prototype.onBeforeRender = function (renderer, scene, camera, geometry, inputMaterial, group) {
+  const material = inputMaterial as THREE.Material & { isMToonMaterial?: boolean; isOutline?: boolean; v0CompatShade?: boolean };
+  if (material.isMToonMaterial && !material.isOutline) {
+    const lights: Array<{ type: string; intensity: number; position: number[] }> = [];
+    scene.traverse(object => {
+      if (object instanceof THREE.Light) lights.push({ type: object.type, intensity: object.intensity, position: object.position.toArray() });
+    });
+    toonLights.set(material.v0CompatShade === true, lights);
+  }
+  return originalBeforeRender.call(this, renderer, scene, camera, geometry, inputMaterial, group);
+};
 const originalLoad = GLTFLoader.prototype.load;
 GLTFLoader.prototype.load = function (url, onLoad, onProgress, onError) {
   return originalLoad.call(this, url, gltf => {
@@ -20,9 +34,21 @@ GLTFLoader.prototype.load = function (url, onLoad, onProgress, onError) {
       geometry.addEventListener("dispose", () => disposed.add(geometry));
     });
     onLoad(gltf);
+    gltf.scene.traverse(object => {
+      const mesh=object as THREE.Mesh;
+      if(!mesh.isMesh) return;
+      for(const material of Array.isArray(mesh.material)?mesh.material:[mesh.material]){
+        const toon=material as THREE.Material & {isMToonMaterial?:boolean;v0CompatShade?:boolean;isOutline?:boolean;outlineWidthFactor?:number};
+        if(!toon.isMToonMaterial) continue;
+        toonMaterials.push({legacy:toon.v0CompatShade===true,outline:toon.isOutline===true,width:toon.outlineWidthFactor??0,
+          sharesGeometry:!toon.isOutline||mesh.geometry===(mesh.parent as THREE.Mesh).geometry});
+      }
+    });
   }, onProgress, onError);
 };
 export function resourceCounts() { return { loaded: tracked.size, disposed: disposed.size }; }
+export function mtoonPreviewMaterials() { return toonMaterials; }
+export function mtoonPreviewLights() { return [...toonLights.entries()]; }
 export function unmount() { root?.unmount(); host?.remove(); }
 export function mount(ids: string[], live = false) {
   unmount();
@@ -70,5 +96,5 @@ export async function renderModels() {
       } finally { disposeCatalogModel(gltf.scene); renderer.renderLists.dispose(); }
     }
   } finally { renderer.dispose(); renderer.forceContextLoss(); }
-  return { rendered, ...resourceCounts() };
+  return { rendered, expected: BUILTIN_RECIPE_MODELS.length, ...resourceCounts() };
 }

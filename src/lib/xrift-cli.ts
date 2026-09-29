@@ -61,6 +61,7 @@ const XRIFT_PROJECT_TEMPLATES: Record<ProjectKind, string> = {
  * drift apart again.
  */
 const COMPILER_RUNTIME_PACKAGE_ALLOWLIST = new Set([
+  `@pixiv/three-vrm@${runtimePackageManifest.dependencies["@pixiv/three-vrm"]}`,
   `three-icosa@${runtimePackageManifest.dependencies["three-icosa"]}`,
   `troika-three-text@${runtimePackageManifest.dependencies["troika-three-text"]}`,
   `${runtimePackageManifest.name}@${runtimePackageManifest.version}`,

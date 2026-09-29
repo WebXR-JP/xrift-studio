@@ -1,6 +1,7 @@
 import {
   ASSET_MANIFEST_SCHEMA_VERSION,
   normalizeMaterialProperties,
+  updateMaterialAsset,
   type AssetManifest,
   type MaterialAsset,
   type ModelAsset,
@@ -200,6 +201,7 @@ function meshOf(scene: SceneDocument, entityId: string): MeshComponent | undefin
  * nothing left and the Asset must delete.
  */
 export function runAssetReferenceDetachFixtureAssertions(): void {
+  assertSavedMToonTextureProtection();
   assertScriptDeletionProtection();
   const documents = fixtureDocuments();
 
@@ -329,6 +331,44 @@ export function runAssetReferenceDetachFixtureAssertions(): void {
       JSON.stringify(textureAnalysis.references.map(assetReferenceKey)),
     "Re-analyzing the same documents produced different reference rows",
   );
+}
+
+function assertSavedMToonTextureProtection(): void {
+  const documents = fixtureDocuments();
+  documents.scene = { ...documents.scene, entities: {}, rootEntityIds: [] };
+  documents.prefabs = {};
+  const material = documents.assets.assets[MATERIAL_ID] as MaterialAsset;
+  // The image lives only in inactive MToon settings, with no active PBR slot.
+  documents.assets.assets[MATERIAL_ID] = {
+    ...material,
+    properties: normalizeMaterialProperties({ color: "#336699" }),
+  };
+  documents.assets = updateMaterialAsset(documents.assets, MATERIAL_ID, {
+    shadingModel: "mtoon-0.x",
+    extensions: { VRMC_materials_mtoon: {
+      specVersion: "1.0",
+      outlineWidthMultiplyTexture: { textureAssetId: TEXTURE_ID, texCoord: 1 },
+      uvAnimationMaskTexture: { textureAssetId: TEXTURE_ID, texCoord: 0 },
+    } },
+  });
+  documents.assets = updateMaterialAsset(documents.assets, MATERIAL_ID, { shadingModel: "standard" });
+  const before = JSON.stringify(documents);
+  const references = collectAssetReferences(documents, TEXTURE_ID).filter(reference => reference.kind === "material-texture");
+  assert(references.length === 2 && references.every(reference => reference.detail.startsWith("保存したMToon / ")),
+    "Inactive MToon image slots were not included in Texture references");
+  assert(!deleteAssetIfUnreferenced(documents, TEXTURE_ID).changed,
+    "A Texture used only by inactive MToon was deleted");
+  const one = detachAssetReferences(documents, TEXTURE_ID, references[0]);
+  const oneMaterial = one.assets.assets[MATERIAL_ID] as MaterialAsset;
+  assert(Object.values(oneMaterial.savedMToonSettings ?? {}).filter(value =>
+    value && typeof value === "object" && "textureAssetId" in value).length === 1,
+    "Unlinking one inactive MToon slot removed another slot");
+  const all = detachAssetReferences(documents, TEXTURE_ID);
+  const restored = updateMaterialAsset(all.assets, MATERIAL_ID, { shadingModel: "mtoon-0.x" });
+  const toon = (restored.assets[MATERIAL_ID] as MaterialAsset).properties.extensions.VRMC_materials_mtoon;
+  assert(toon !== undefined && toon.outlineWidthMultiplyTexture === undefined && toon.uvAnimationMaskTexture === undefined,
+    "Switching back restored unlinked MToon Texture references");
+  assert(JSON.stringify(documents) === before, "Inactive MToon reference operations mutated source documents");
 }
 
 function assertScriptDeletionProtection(): void {

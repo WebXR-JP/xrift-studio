@@ -96,6 +96,7 @@ import {
   type TimeUniformSpec,
   applyTimeUniformValue,
 } from "../shader-time.js";
+import { updateMToonMaterials } from "../mtoon-runtime.js";
 import {
   XriftScriptParticleEmitter,
   type XriftParticleConfig,
@@ -2112,7 +2113,8 @@ function numberOr(value: unknown, fallback: number, minimum: number): number {
 }
 
 function XriftRuntimeTimeUniforms({ result }: { result: XriftLoadResult }) {
-  useFrame((state) => {
+  useFrame((state, delta) => {
+    updateMToonMaterials(result.root, delta);
     const elapsed = state.clock.getElapsedTime();
     result.root.traverse((object) => {
       const mesh = object as Mesh;

@@ -113,6 +113,7 @@ export const XRIFT_MCP_TOOLS = [
   { name: "set_material", surface: "document" },
   { name: "get_material_asset", surface: "document" },
   { name: "update_material_asset", surface: "document" },
+  { name: "update_material_assets", surface: "document" },
   { name: "list_material_presets", surface: "document" },
   { name: "create_material_from_preset", surface: "document" },
   { name: "create_custom_shader", surface: "document" },

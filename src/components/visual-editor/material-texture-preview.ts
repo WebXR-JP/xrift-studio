@@ -58,6 +58,12 @@ export type MaterialPreviewTextures = {
   specularColorMap?: Texture;
   transmissionMap?: Texture;
   thicknessMap?: Texture;
+  shadeMultiplyMap?: Texture;
+  outlineWidthMultiplyMap?: Texture;
+  shadingShiftMap?: Texture;
+  matcapMap?: Texture;
+  rimMultiplyMap?: Texture;
+  uvAnimationMaskMap?: Texture;
   /** Sampler uniforms used by an optional custom material renderer. */
   shaderUniforms?: Record<string, Texture>;
 };
@@ -340,6 +346,12 @@ function resolvePreviewTextureRequests(
     ["normalMap", properties.normalTexture, "linear"],
     ["occlusionMap", properties.occlusionTexture, "linear"],
     ["emissiveMap", properties.emissiveTexture, "srgb"],
+    ["shadeMultiplyMap", extensions.VRMC_materials_mtoon?.shadeMultiplyTexture, "srgb"],
+    ["outlineWidthMultiplyMap", extensions.VRMC_materials_mtoon?.outlineWidthMultiplyTexture, "linear"],
+    ["shadingShiftMap", extensions.VRMC_materials_mtoon?.shadingShiftTexture, "linear"],
+    ["matcapMap", extensions.VRMC_materials_mtoon?.matcapTexture, "srgb"],
+    ["rimMultiplyMap", extensions.VRMC_materials_mtoon?.rimMultiplyTexture, "srgb"],
+    ["uvAnimationMaskMap", extensions.VRMC_materials_mtoon?.uvAnimationMaskTexture, "linear"],
     [
       "anisotropyMap",
       extensions.KHR_materials_anisotropy?.anisotropyTexture,

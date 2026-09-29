@@ -186,7 +186,7 @@ export const EXTERNAL_STORE_PROVIDERS = [
     group: "special-materials",
     name: "glTFマテリアル",
     badge: "公式",
-    summary: "反射・透過・Emissive・テクスチャ。50種類の質感を見比べて追加",
+    summary: "MToon・反射・透過・Emissive・テクスチャの質感を見比べて追加",
     homepageUrl: "https://github.com/WebXR-JP/xrift-studio",
     catalogKinds: [],
     installableKinds: [],

@@ -201,6 +201,11 @@ export function parseAssetManifestJson(
                 typeof normalizeMaterialProperties
               >[0],
             ),
+            ...(asset.savedMToonSettings ? {
+              savedMToonSettings: normalizeMaterialProperties({
+                extensions: { VRMC_materials_mtoon: asset.savedMToonSettings },
+              }).extensions.VRMC_materials_mtoon,
+            } : {}),
           }
         : asset.kind === "texture"
           ? {
@@ -611,6 +616,14 @@ function validateMaterialAsset(
   assets: Record<string, unknown>,
   issues: DocumentValidationIssue[],
 ): void {
+  if (asset.savedMToonSettings !== undefined) {
+    const savedPath = `${path}.savedMToonSettings`;
+    if (!isRecord(asset.savedMToonSettings)) {
+      issues.push(issue(savedPath, "type", "saved MToon settings must be an object"));
+    } else {
+      validateMaterialExtension("VRMC_materials_mtoon", asset.savedMToonSettings, savedPath, assets, issues);
+    }
+  }
   if (
     asset.shader !== undefined &&
     !isOpenBrushMaterialShader(asset.shader) &&
@@ -737,7 +750,8 @@ function validateMaterialAsset(
       MATERIAL_EXTENSION_DESCRIPTORS[name].exclusive === true &&
       name in extensions,
   );
-  if (exclusive && extensionNames.some((name) => name !== exclusive)) {
+  if (exclusive && extensionNames.some((name) => name !== exclusive &&
+    !(SUPPORTED_MATERIAL_EXTENSIONS.has(name) && MATERIAL_EXTENSION_DESCRIPTORS[name as MaterialExtensionName].compatibleWithUnlit))) {
     issues.push(
       issue(
         `${path}.properties.extensions.${exclusive}`,
@@ -778,8 +792,38 @@ function validateMaterialExtension(
   );
   for (const field of descriptor.fields) {
     const key = field.name;
+    if (field.kind === "enum" && field.required && !(key in extension)) {
+      issues.push(issue(`${path}.${key}`, "required", `${key} is required`));
+    }
     if (!(key in extension)) continue;
     switch (field.kind) {
+      case "boolean":
+        if (typeof extension[key] !== "boolean") {
+          issues.push(issue(`${path}.${key}`, "type", `${key} must be a boolean`));
+        }
+        break;
+      case "enum":
+        if (typeof extension[key] !== "string" || !field.values.includes(extension[key] as string)) {
+          issues.push(issue(`${path}.${key}`, "enum", `${key} must be ${field.values.join(" or ")}`));
+        }
+        break;
+      case "integer":
+        validateOptionalNumber(extension, key, path, issues,
+          (value) => isFiniteNumber(value) && Number.isInteger(value) && value >= field.minimum && value <= field.maximum,
+          `an integer from ${field.minimum} to ${field.maximum}`);
+        break;
+      case "booleanRecord": {
+        const record = extension[key];
+        if (!isRecord(record)) {
+          issues.push(issue(`${path}.${key}`, "type", `${key} must be an object`));
+          break;
+        }
+        validateKnownKeys(record, field.keys, `${path}.${key}`, issues);
+        for (const [flag, value] of Object.entries(record)) {
+          if (typeof value !== "boolean") issues.push(issue(`${path}.${key}.${flag}`, "type", `${flag} must be a boolean`));
+        }
+        break;
+      }
       case "texture":
         validateMaterialTextureInfo(
           extension[key],
@@ -825,7 +869,7 @@ function validateMaterialExtension(
           path,
           issues,
           isFiniteNumber,
-          "a finite number in radians",
+          "a finite number",
         );
         break;
       case "atLeastOne":
@@ -2643,7 +2687,8 @@ function isValidModelNodeAuthoringMetadata(value: unknown): boolean {
     (value.rootImportScale === undefined ||
       (typeof value.rootImportScale === "number" &&
         Number.isFinite(value.rootImportScale) &&
-        Math.abs(value.rootImportScale) >= 0.0001))
+        Math.abs(value.rootImportScale) >= 0.0001)) &&
+    (value.rootVrm0Rotation === undefined || value.rootVrm0Rotation === true)
   );
 }
 

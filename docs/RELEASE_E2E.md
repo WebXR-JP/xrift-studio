@@ -34,7 +34,8 @@
 
 1. リリースタグとアプリバージョンの一致
 2. `pnpm typecheck` と `pnpm e2e:typecheck` の型検査
-3. `pnpm cli:test` のコンパイラfixtureと公開ステージング検査
+3. `pnpm runtime:shell:check` とVRM同梱コードの検査・テスト
+4. `pnpm cli:test` のコンパイラfixtureと公開ステージング検査
 
 `Release smoke E2E` job は1台・1 workerで次を実行します。
 

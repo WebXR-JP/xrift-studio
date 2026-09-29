@@ -35,6 +35,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { directRelativeModuleImports } from "./world-runtime-shell-imports.mjs";
+import { copyReadableVrm, withReadableVrmAlias } from "./world-runtime-shell-vendor.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const RUNTIME_PACKAGE_DIR = path.join(repoRoot, "packages", "xrift-studio-runtime");
@@ -181,6 +182,13 @@ async function main() {
     await fs.rm(path.join(projectDir, "src", "constants.ts"), { force: true });
     await fs.rm(path.join(projectDir, "public", "tokyo-station.jpg"), { force: true });
     await removeDtsPlugin(path.join(projectDir, "vite.config.ts"));
+    // Use the same pinned upstream code as Classic publication. This changes
+    // only known private bindings rejected by the SDK, retaining its license,
+    // exports, shader, VRM loader and public constructor names.
+    await run("node", ["scripts/prepare-readable-three-vrm.mjs", "--check"], repoRoot);
+    await copyReadableVrm(repoRoot, projectDir);
+    const viteConfigPath = path.join(projectDir, "vite.config.ts");
+    await fs.writeFile(viteConfigPath, withReadableVrmAlias(await fs.readFile(viteConfigPath, "utf8")), "utf8");
 
     process.stdout.write("3/6 xrift-studio-runtime をパックしています\n");
     await run("pnpm", ["runtime:build"], repoRoot);

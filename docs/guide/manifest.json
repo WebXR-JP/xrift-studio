@@ -115,10 +115,10 @@
     {
       "slug": "assets",
       "title": "モデルや画像を取り込む",
-      "description": "手元のファイルをAssetsに追加し、シーンに配置するまでを説明します。",
+      "description": "モデル・画像・VRMアバターをAssetsに追加し、シーンに配置して色やポーズを変えるまでを説明します。",
       "group": "basics",
       "file": "assets.md",
-      "keywords": "インポート GLB GLTF モデル 画像 音声 ファイル 読み込み",
+      "keywords": "インポート GLB GLTF VRM VRM 0.x VRM 1.0 アバター MToon モデル 画像 音声 ファイル 読み込み Bone シェイプキー",
       "related": [
         "external-resources",
         "textures",
@@ -128,10 +128,10 @@
     {
       "slug": "materials",
       "title": "色と質感を変える",
-      "description": "マテリアルを作る・割り当てる・編集する基本と、Base Color・Metallic・Roughnessの意味を説明します。",
+      "description": "マテリアルを作る・割り当てる基本、MToonの陰影と輪郭線、複数素材の一括編集を説明します。",
       "group": "basics",
       "file": "materials.md",
-      "keywords": "マテリアル 材質 色 反射 Base Color Metallic Roughness ラフネス メタリック プラスチック 金属",
+      "keywords": "マテリアル 材質 色 反射 Base Color Metallic Roughness ラフネス メタリック プラスチック 金属 MToon MToon 0.x MToon 1.0 エムトゥーン トゥーン Outline アウトライン 輪郭線 Shade Color Matcap Rim Lighting UV Animation VRM アバター 一括 まとめて 切り替え 複数 全設定",
       "related": [
         "textures",
         "transparent-materials",
@@ -155,10 +155,10 @@
     {
       "slug": "save-and-open",
       "title": "保存して制作を再開する",
-      "description": "保存状態を確認し、プロジェクトを開き直します。作品を守るための複製とZIP保存も説明します。",
+      "description": "保存状態を確認し、.xriftstudioで作品を受け渡します。コードエディターへの書き出しも説明します。",
       "group": "basics",
       "file": "save-and-open.md",
-      "keywords": "保存 自動保存 バックアップ ZIP 複製 プロジェクト 再開 データ",
+      "keywords": "保存 自動保存 バックアップ .xriftstudio ZIP 複製 プロジェクト 再開 データ エクスポート コードエディター Classic Component MToon VRM",
       "related": [
         "recovery",
         "publishing"
@@ -171,7 +171,7 @@
       "description": "選択したHierarchyを.xriftstudioで書き出し、ワールド・アイテムへ必要な部分だけ追加します。",
       "group": "basics",
       "file": "hierarchy-transfer.md",
-      "keywords": "Hierarchy Entity .xriftstudio コピー 貼り付け インポート エクスポート 部分 選択 ワールド アイテム",
+      "keywords": "Hierarchy Entity .xriftstudio コピー 貼り付け インポート エクスポート 部分 選択 ワールド アイテム MToon VRM モデルポーズ",
       "related": [
         "save-and-open",
         "assets",

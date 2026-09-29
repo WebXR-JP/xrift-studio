@@ -73,8 +73,25 @@ export function runSceneRecipeCatalogFixtureAssertions(): void {
     }
   }
 
-  assert(getSceneRecipesForProjectKind("world", "materials").length === 50, "Ship 50 material comparison sets");
-  assert(getSceneRecipesForProjectKind("item", "materials").length === 50, "Item projects retain the same 50 material sets");
+  assert(getSceneRecipesForProjectKind("world", "materials").length === 52, "Ship the 50 material comparison sets plus both MToon versions");
+  assert(getSceneRecipesForProjectKind("item", "materials").length === 52, "Item projects retain both MToon versions and all existing material sets");
+  for (const [key, legacy] of [["mtoon-0-outline", true], ["mtoon-outline", false]] as const) {
+    const recipe = getSceneRecipesForProjectKind("world", "materials").find((entry) => entry.id === `scene-recipe.material-${key}`);
+    assert(Boolean(recipe), `Missing MToon ${legacy ? "0.x" : "1.0"} comparison`);
+    const surface = recipe?.parts.find((part) => part.kind === "model" && part.name === "効果ありの見本");
+    const comparison = recipe?.parts.find((part) => part.kind === "model" && part.name === "比較用の見本");
+    assert(surface?.kind === "model" && comparison?.kind === "model", "MToon comparison must expose both surfaces");
+    const mtoon = getMaterialShowcaseAsset(surface.materialAssetId ?? "")?.properties.extensions.VRMC_materials_mtoon;
+    const standard = getMaterialShowcaseAsset(comparison.materialAssetId ?? "");
+    assert(mtoon?.specVersion === "1.0" && (mtoon.extras?.xriftVrm0CompatShade === true) === legacy,
+      `MToon ${legacy ? "0.x" : "1.0"} comparison must retain its shader compatibility mode without changing the glTF version`);
+    assert(mtoon.outlineWidthMode === "worldCoordinates" && mtoon.outlineWidthFactor > 0,
+      "Both MToon comparisons must include a visible authored outline");
+    assert(Boolean(standard) && standard?.properties.extensions.VRMC_materials_mtoon === undefined,
+      "MToon comparison must retain a standard PBR surface");
+    assert(surface.modelId === comparison.modelId && JSON.stringify(surface.scale) === JSON.stringify(comparison.scale),
+      "MToon comparison must use the same geometry and scale for both surfaces");
+  }
   assert(getSceneRecipesForProjectKind("world", "gimmicks").length === 51, "Ship custom vehicle alongside the 50 usable gimmicks");
   const worldGimmicks = getSceneRecipesForProjectKind("world", "gimmicks");
   const itemGimmicks = getSceneRecipesForProjectKind("item", "gimmicks");

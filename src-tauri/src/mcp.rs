@@ -1847,7 +1847,7 @@ fn material_extensions_schema() -> Value {
     let texture = material_texture_slot_schema();
     json!({
         "type": "object",
-        "description": "Set one supported KHR_materials extension to an object; null removes it. Volume requires Transmission, and Dispersion requires Volume.",
+        "description": "Set one supported material extension to an object; null removes it. For toon shading and outlines use VRMC_materials_mtoon (specVersion 1.0); outline width is metres in worldCoordinates or a screen-height ratio in screenCoordinates. MToon takes precedence over an Unlit fallback. Volume requires Transmission, and Dispersion requires Volume.",
         "properties": {
             "KHR_materials_anisotropy": { "type": ["object", "null"], "properties": {
                 "anisotropyStrength": unit, "anisotropyRotation": { "type": "number", "description": "Radians." }, "anisotropyTexture": texture
@@ -1883,6 +1883,36 @@ fn material_extensions_schema() -> Value {
                 "thicknessFactor": non_negative, "thicknessTexture": texture,
                 "attenuationDistance": { "type": ["number", "null"], "exclusiveMinimum": 0 },
                 "attenuationColor": material_color3_schema(false)
+            }, "additionalProperties": false },
+            "VRMC_materials_mtoon": { "type": ["object", "null"], "properties": {
+                "specVersion": { "type": "string", "enum": ["1.0"], "description": "The stored extension always uses specVersion 1.0. For legacy MToon 0.x shading choose patch.shadingModel mtoon-0.x; omitted patches preserve or initialize the canonical 1.0 extension." },
+                "transparentWithZWrite": { "type": "boolean", "description": "Write depth while alphaMode is BLEND." },
+                "renderQueueOffsetNumber": { "type": "integer", "minimum": -9, "maximum": 9 },
+                "shadeColorFactor": material_color3_schema(false),
+                "shadeMultiplyTexture": texture,
+                "shadingShiftFactor": { "type": "number", "description": "Move the boundary between light and shade." },
+                "shadingShiftTexture": texture,
+                "shadingToonyFactor": unit,
+                "giEqualizationFactor": unit,
+                "matcapFactor": material_color3_schema(false),
+                "matcapTexture": texture,
+                "parametricRimColorFactor": material_color3_schema(false),
+                "rimMultiplyTexture": texture,
+                "rimLightingMixFactor": unit,
+                "parametricRimFresnelPowerFactor": non_negative,
+                "parametricRimLiftFactor": { "type": "number" },
+                "outlineWidthMode": { "type": "string", "enum": ["none", "worldCoordinates", "screenCoordinates"] },
+                "outlineWidthFactor": { "type": "number", "minimum": 0, "description": "Metres for worldCoordinates; ratio to screen height for screenCoordinates." },
+                "outlineWidthMultiplyTexture": texture,
+                "outlineColorFactor": material_color3_schema(false),
+                "outlineLightingMixFactor": unit,
+                "uvAnimationMaskTexture": texture,
+                "uvAnimationScrollXSpeedFactor": { "type": "number" },
+                "uvAnimationScrollYSpeedFactor": { "type": "number" },
+                "uvAnimationRotationSpeedFactor": { "type": "number" },
+                "extras": { "type": ["object", "null"], "properties": {
+                    "xriftVrm0CompatShade": { "type": "boolean", "description": "Compatibility flag preserved by VRM 0.x import." }
+                }, "additionalProperties": false }
             }, "additionalProperties": false }
         },
         "additionalProperties": false
@@ -1906,6 +1936,60 @@ fn terrain_grass_appearance_schema() -> Value {
         },
         "additionalProperties": false
     })
+}
+
+fn material_patch_schema() -> Value {
+    json!({
+    "type": "object",
+    "description": "Material properties. Canonical glTF fields are accepted; the listed aliases assign imported Texture Assets directly.",
+    "properties": {
+        "shadingModel": { "type": "string", "enum": ["standard", "mtoon-0.x", "mtoon-1.0"], "description": "Change the builtin shading model while retaining each Material's color and texture coordinates. Standard keeps MToon-only settings for a later switch back." },
+        "baseColor": material_texture_slot_schema(),
+        "vertexColors": { "type": "boolean", "description": "Multiply the model's vertex colors into Diffuse. Models without colors are unchanged." },
+        "opacityTexture": material_texture_slot_schema(),
+        "opacityChannel": { "type": "string", "enum": ["r", "g", "b", "a"], "description": "Opacity map component (default a). Set alphaMode to BLEND or MASK, then inspect the assigned model. Use doubleSided for back faces." },
+        "baseColorTexture": material_texture_slot_schema(),
+        "metallicRoughness": material_texture_slot_schema(),
+        "metallicRoughnessTexture": material_texture_slot_schema(),
+        "normal": material_texture_slot_schema(),
+        "occlusion": material_texture_slot_schema(),
+        "emissive": material_texture_slot_schema(),
+        "pbrMetallicRoughness": {
+            "type": "object",
+            "properties": {
+                "baseColorFactor": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 1 }, "minItems": 4, "maxItems": 4 },
+                "metallicFactor": { "type": "number", "minimum": 0, "maximum": 1 },
+                "roughnessFactor": { "type": "number", "minimum": 0, "maximum": 1 },
+                "baseColorTexture": material_texture_slot_schema(),
+                "metallicRoughnessTexture": material_texture_slot_schema()
+            },
+            "minProperties": 1,
+            "additionalProperties": false
+        },
+        "normalTexture": material_texture_slot_schema(),
+        "occlusionTexture": material_texture_slot_schema(),
+        "emissiveTexture": material_texture_slot_schema(),
+        "emissiveFactor": material_color3_schema(false),
+        "alphaMode": { "type": "string", "enum": ["OPAQUE", "MASK", "BLEND"] },
+        "alphaCutoff": { "type": "number", "minimum": 0 },
+        "doubleSided": { "type": "boolean" },
+        "blending": { "type": "string", "enum": ["normal", "additive", "multiply", "subtractive"] },
+        "depthWrite": { "type": "string", "enum": ["auto", "on", "off"] },
+        "alphaToCoverage": { "type": "boolean" },
+        "extensions": material_extensions_schema(),
+        "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+        "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
+        "metalness": { "type": "number", "minimum": 0, "maximum": 1 },
+        "roughness": { "type": "number", "minimum": 0, "maximum": 1 },
+        "baseColorTextureId": { "type": ["string", "null"] },
+        "normalTextureId": { "type": ["string", "null"] },
+        "occlusionTextureId": { "type": ["string", "null"] },
+        "metallicRoughnessTextureId": { "type": ["string", "null"] },
+        "emissiveTextureId": { "type": ["string", "null"] }
+    },
+    "minProperties": 1,
+    "additionalProperties": false
+})
 }
 
 fn tool_definitions() -> Value {
@@ -3837,7 +3921,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "update_material_asset",
-            "description": "Persist all supported PBR Material Asset parameters in Edit or Play mode: core glTF factors and textures, alpha and rendering settings, UV transforms, and KHR_materials extension factors and textures. Use patch.pbrMetallicRoughness.baseColorFactor ([red, green, blue, alpha], each 0..1), metallicFactor, or roughnessFactor for PBR values; color, opacity, metalness, and roughness are simpler aliases. Texture slots accept baseColor, metallicRoughness, normal, occlusion, and emissive aliases. For a Classic R3F shader uniform use get_custom_shader then update_custom_shader instead. Read back with get_material_asset and inspect an assigned mesh. During Play only consuming Entities restart.",
+            "description": "Persist one Material Asset in Edit or Play: core glTF factors and textures, alpha, rendering, UV transforms, KHR extensions, MToon shading and outlines. Choose patch.shadingModel standard, mtoon-0.x or mtoon-1.0 to change the type while retaining colors, textures and each UV; Standard preserves MToon-only settings for switching back. MToon 0.x is the legacy shading compatibility mode; its persisted extension still uses specVersion 1.0. patch.extensions.VRMC_materials_mtoon updates individual toon/outline parameters, or null removes the active extension. Use pbrMetallicRoughness.baseColorFactor [r,g,b,a] for lit color and outlineColorFactor/outlineWidthFactor for the outline. Texture aliases baseColor, metallicRoughness, normal, occlusion and emissive remain supported. Custom shaders do not support shadingModel; use get_custom_shader/update_custom_shader for their uniforms. For multiple Materials or component-only RGB/UV changes use the Edit-only update_material_assets tool. Read back with get_material_asset and inspect an assigned mesh. During Play only consuming Entities restart.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3845,58 +3929,40 @@ fn tool_definitions() -> Value {
                     "sceneId": { "type": "string" },
                     "expectedRevision": { "type": "integer", "minimum": 0 },
                     "materialAssetId": { "type": "string" },
-                    "patch": {
-                        "type": "object",
-                        "description": "Material properties. Canonical glTF fields are accepted; the listed aliases assign imported Texture Assets directly.",
-                        "properties": {
-                            "baseColor": material_texture_slot_schema(),
-                            "vertexColors": { "type": "boolean", "description": "Multiply the model's vertex colors into Diffuse. Models without colors are unchanged." },
-                            "opacityTexture": material_texture_slot_schema(),
-                            "opacityChannel": { "type": "string", "enum": ["r", "g", "b", "a"], "description": "Opacity map component (default a). Set alphaMode to BLEND or MASK, then inspect the assigned model. Use doubleSided for back faces." },
-                            "baseColorTexture": material_texture_slot_schema(),
-                            "metallicRoughness": material_texture_slot_schema(),
-                            "metallicRoughnessTexture": material_texture_slot_schema(),
-                            "normal": material_texture_slot_schema(),
-                            "occlusion": material_texture_slot_schema(),
-                            "emissive": material_texture_slot_schema(),
-                            "pbrMetallicRoughness": {
-                                "type": "object",
-                                "properties": {
-                                    "baseColorFactor": { "type": "array", "items": { "type": "number", "minimum": 0, "maximum": 1 }, "minItems": 4, "maxItems": 4 },
-                                    "metallicFactor": { "type": "number", "minimum": 0, "maximum": 1 },
-                                    "roughnessFactor": { "type": "number", "minimum": 0, "maximum": 1 },
-                                    "baseColorTexture": material_texture_slot_schema(),
-                                    "metallicRoughnessTexture": material_texture_slot_schema()
-                                },
-                                "minProperties": 1,
-                                "additionalProperties": false
-                            },
-                            "normalTexture": material_texture_slot_schema(),
-                            "occlusionTexture": material_texture_slot_schema(),
-                            "emissiveTexture": material_texture_slot_schema(),
-                            "emissiveFactor": material_color3_schema(false),
-                            "alphaMode": { "type": "string", "enum": ["OPAQUE", "MASK", "BLEND"] },
-                            "alphaCutoff": { "type": "number", "minimum": 0 },
-                            "doubleSided": { "type": "boolean" },
-                            "blending": { "type": "string", "enum": ["normal", "additive", "multiply", "subtractive"] },
-                            "depthWrite": { "type": "string", "enum": ["auto", "on", "off"] },
-                            "alphaToCoverage": { "type": "boolean" },
-                            "extensions": material_extensions_schema(),
-                            "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
-                            "opacity": { "type": "number", "minimum": 0, "maximum": 1 },
-                            "metalness": { "type": "number", "minimum": 0, "maximum": 1 },
-                            "roughness": { "type": "number", "minimum": 0, "maximum": 1 },
-                            "baseColorTextureId": { "type": ["string", "null"] },
-                            "normalTextureId": { "type": ["string", "null"] },
-                            "occlusionTextureId": { "type": ["string", "null"] },
-                            "metallicRoughnessTextureId": { "type": ["string", "null"] },
-                            "emissiveTextureId": { "type": ["string", "null"] }
-                        },
-                        "minProperties": 1,
-                        "additionalProperties": false
-                    }
+                    "patch": material_patch_schema()
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "materialAssetId", "patch"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "update_material_assets",
+            "description": "Edit-only bulk Material authoring in one revision, Undo step and autosave. First read list_assets/get_material_asset and get_editor_context. assetIds may include other Assets or Custom Shader Materials: they remain unchanged and skippedAssets gives the reason; an unknown ID rejects the entire call. Supply exactly one of patch or fieldUpdates. patch uses the same parameters as update_material_asset and merges against each Material's own data. When shading types differ, send only patch.shadingModel (standard, mtoon-0.x, mtoon-1.0) first, preserving each color, texture, UV and saved toon settings, then fetch context again. Settings edits require one common builtin shading type. fieldUpdates addresses canonical property dot paths without a properties prefix: e.g. extensions.VRMC_materials_mtoon.outlineWidthFactor, extensions.VRMC_materials_mtoon.shadeColorFactor.0, or pbrMetallicRoughness.baseColorTexture.transform.offset.0. Vector component changes retain other components; textureAssetId changes retain each UV. UV or scale changes skip Materials without that texture binding. KHR extension enabled Boolean paths toggle their dependencies as in the Inspector. shader and metadata paths are excluded. All field updates form one atomic edit. updatedMaterialAssetIds reports actual changes; equal values create no revision. Read every changed Material back and capture_scene_view to inspect assigned meshes. Use update_material_asset for a single Material during Play.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "assetIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "maxItems": 200, "uniqueItems": true },
+                    "patch": material_patch_schema(),
+                    "fieldUpdates": {
+                        "type": "array", "minItems": 1, "maxItems": 128,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "path": { "type": "string", "minLength": 1, "description": "Supported canonical Material property path, including .0/.1/.2/.3 vector components and texture UV components. Paths must be unique in one call." },
+                                "value": { "type": ["number", "string", "boolean", "array", "object", "null"], "description": "Value for this property; its type and range are validated against the shared Material fields." }
+                            },
+                            "required": ["path", "value"], "additionalProperties": false
+                        }
+                    }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "assetIds"],
+                "oneOf": [
+                    { "required": ["patch"], "not": { "required": ["fieldUpdates"] } },
+                    { "required": ["fieldUpdates"], "not": { "required": ["patch"] } }
+                ],
                 "additionalProperties": false
             }
         },
@@ -4496,6 +4562,39 @@ mod tests {
             "iridescence", "sheen", "specular", "transmission", "unlit", "volume"] {
             assert!(extensions.get(format!("KHR_materials_{name}")).is_some(), "missing extension: {name}");
         }
+        let mtoon = extensions.pointer("/VRMC_materials_mtoon/properties").expect("MToon properties");
+        for field in ["specVersion", "transparentWithZWrite", "shadeColorFactor", "shadeMultiplyTexture",
+            "shadingShiftFactor", "shadingToonyFactor", "giEqualizationFactor", "outlineWidthMode",
+            "outlineWidthFactor", "outlineWidthMultiplyTexture", "outlineColorFactor", "outlineLightingMixFactor",
+            "renderQueueOffsetNumber", "shadingShiftTexture", "matcapFactor", "matcapTexture", "parametricRimColorFactor",
+            "rimMultiplyTexture", "rimLightingMixFactor", "parametricRimFresnelPowerFactor", "parametricRimLiftFactor",
+            "uvAnimationMaskTexture", "uvAnimationScrollXSpeedFactor", "uvAnimationScrollYSpeedFactor", "uvAnimationRotationSpeedFactor", "extras"] {
+            assert!(mtoon.get(field).is_some(), "missing MToon field: {field}");
+        }
+        assert_eq!(mtoon.pointer("/specVersion/enum"), Some(&json!(["1.0"])));
+        assert_eq!(mtoon.pointer("/outlineWidthMode/enum"), Some(&json!(["none", "worldCoordinates", "screenCoordinates"])));
+        assert_eq!(patch.pointer("/shadingModel/enum"), Some(&json!(["standard", "mtoon-0.x", "mtoon-1.0"])));
+    }
+
+    #[test]
+    fn material_bulk_tool_exposes_one_atomic_patch_or_field_operation() {
+        let tools = tool_definitions();
+        let tools = tools.as_array().expect("tool list");
+        let single = tools.iter().find(|tool| tool["name"] == "update_material_asset").expect("single material tool");
+        let bulk = tools.iter().find(|tool| tool["name"] == "update_material_assets").expect("bulk material tool");
+        assert_eq!(single.pointer("/inputSchema/properties/patch"), bulk.pointer("/inputSchema/properties/patch"));
+        assert_eq!(bulk.pointer("/inputSchema/properties/assetIds/uniqueItems"), Some(&json!(true)));
+        assert_eq!(bulk.pointer("/inputSchema/properties/assetIds/minItems"), Some(&json!(1)));
+        assert_eq!(bulk.pointer("/inputSchema/properties/fieldUpdates/items/required"), Some(&json!(["path", "value"])));
+        assert_eq!(bulk.pointer("/inputSchema/oneOf"), Some(&json!([
+            { "required": ["patch"], "not": { "required": ["fieldUpdates"] } },
+            { "required": ["fieldUpdates"], "not": { "required": ["patch"] } }
+        ])));
+        for field in ["projectId", "sceneId", "expectedRevision", "assetIds"] {
+            assert!(bulk["inputSchema"]["required"].as_array().unwrap().contains(&json!(field)));
+        }
+        assert!(bulk["description"].as_str().unwrap().contains("Edit-only"));
+        assert!(single["description"].as_str().unwrap().contains("Edit or Play"));
     }
 
     /// The allow-list is generated from the TypeScript registry, so its order
