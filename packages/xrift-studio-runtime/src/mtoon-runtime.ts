@@ -162,11 +162,21 @@ export function createMToonMaterial(
     uvAnimationScrollYSpeedFactor: settings.uvAnimationScrollYSpeedFactor,
     uvAnimationRotationSpeedFactor: settings.uvAnimationRotationSpeedFactor,
     v0CompatShade: settings.extras?.xriftVrm0CompatShade ?? false,
-    ignoreVertexColor: true,
+    ignoreVertexColor: false,
   });
   if (textures.opacityMap) bindOpacityMap(material, { texture: textures.opacityMap, channel: properties.opacityChannel ?? "a" });
   bindTextureUvChannels(material, textures);
-  material.onBeforeRender = () => material.update(0);
+  // Material assets can be shared by painted models and unpainted primitives.
+  // Enable the color attribute only for the geometry being drawn, so models
+  // retain GLB COLOR_0 without requesting a missing attribute on other meshes.
+  material.onBeforeRender = (_renderer: unknown, _scene: unknown, _camera: unknown, geometry: BufferGeometry) => {
+    const vertexColors = geometry.hasAttribute("color");
+    if (material.vertexColors !== vertexColors) {
+      material.vertexColors = vertexColors;
+      material.needsUpdate = true;
+    }
+    material.update(0);
+  };
   material.update(0);
   material.userData.xriftMToonRenderOrder = transparent ? (settings.transparentWithZWrite ? 0 : 19) + settings.renderQueueOffsetNumber : 0;
   return material;
