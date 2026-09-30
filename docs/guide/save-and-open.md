@@ -42,6 +42,12 @@ iPadではブラウザに保存し、**プロジェクトを書き出す**から
 
 元のビジュアルプロジェクトは引き続き編集できます。書き出したコードの変更は、ビジュアルエディターのシーンへ自動では戻りません。バックアップや別端末でのビジュアル編集には、[.xriftstudioファイル](#バックアップする)を使ってください。
 
+### VS Codeやターミナルが開かない
+
+**VS Codeで開く**には、VS Codeのインストールと`code`コマンドの設定が必要です。macOSではVS Codeのコマンドパレットから`Shell Command: Install 'code' command in PATH`を実行し、XRift Studioを再起動します。各OSの設定は[VS Codeの公式案内](https://code.visualstudio.com/docs/configure/command-line)を参照してください。
+
+**ターミナルを開く**は、プロジェクトのフォルダーを作業場所にして起動します。WindowsではWindows Terminalを優先し、見つからなければコマンドプロンプトを開きます。macOSではTerminalを開きます。Linuxではインストール済みのGNOME Terminal、Konsole、Xfce Terminal、システムのターミナル、xtermを順に探します。対応するターミナルがない場合は、画面の案内に従ってインストールしてください。
+
 ## 保存したのに見つからない
 
 プロジェクト一覧の検索文字と絞り込みを解除してください。似た名前の複製や、別の保存先を開いていないかも確認します。

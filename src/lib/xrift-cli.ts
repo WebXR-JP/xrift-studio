@@ -440,42 +440,66 @@ export async function openInVSCode(
   projectPath: string,
   onLog: (l: LogLine) => void,
 ): Promise<RunResult> {
-  return run({ bin: "code", args: [projectPath], onLog });
+  const result = await run({ bin: "code", args: [projectPath], onLog });
+  if (result.code !== 0) {
+    throw new Error(
+      "VS Codeを起動できませんでした。VS Codeをインストールし、ターミナルでcodeコマンドを使えることを確認してください。",
+    );
+  }
+  return result;
 }
 
 export async function openTerminal(
   projectPath: string,
   onLog: (l: LogLine) => void,
 ): Promise<void> {
-  const win = await isWindows();
+  const os = platform();
   const env = await getEnv();
   onLog(stamp("info", `$ terminal  (cwd: ${projectPath})`));
 
-  if (win) {
-    // Prefer Windows Terminal if available; fall back to cmd.
-    try {
-      const wt = Command.create("cmd", ["/c", "start", "", "wt.exe", "-d", projectPath], { env });
-      await wt.spawn();
-      return;
-    } catch {
-      // ignore and fall through
+  if (os === "windows" || os === "macos") {
+    // Keep the user's path in cwd, outside the command string. In particular,
+    // %, &, and quotes in a Windows folder name must never become cmd syntax.
+    const command = os === "windows"
+      ? Command.create("cmd", ["/d", "/c", 'where wt.exe >nul 2>nul && start "" wt.exe -d . || start "XRift Studio Terminal" cmd.exe /d /k'], { cwd: projectPath, env })
+      : Command.create("sh", ["-c", 'open -a Terminal "$PWD"'], { cwd: projectPath, env });
+    const result = await command.execute();
+    if (result.stdout) onLog(stamp("stdout", result.stdout));
+    if (result.stderr) onLog(stamp("stderr", result.stderr));
+    onLog(stamp("exit", `exit ${result.code ?? -1}`));
+    if (result.code !== 0) {
+      throw new Error(`ターミナルを起動できませんでした。${result.stderr.trim()}`);
     }
-    const fallback = Command.create(
-      "cmd",
-      ["/c", "start", "XRift Studio Terminal", "cmd.exe", "/k", `cd /d "${projectPath}"`],
-      { env },
-    );
-    await fallback.spawn();
     return;
   }
 
-  // macOS
-  const mac = Command.create(
-    "sh",
-    ["-lc", `open -a Terminal '${projectPath.replace(/'/g, "'\\''")}'`],
-    { env },
-  );
-  await mac.spawn();
+  if (os !== "linux") {
+    throw new Error("このOSではターミナルを開く操作に対応していません。");
+  }
+
+  // The old non-Windows branch called macOS `open` on Linux too. Discover
+  // an installed desktop terminal before spawning the long-lived GUI process.
+  const candidates = ["gnome-terminal", "konsole", "xfce4-terminal", "x-terminal-emulator", "xterm"];
+  const probe = await Command.create("sh", ["-c",
+    'for terminal do if command -v "$terminal" >/dev/null 2>&1; then printf "%s" "$terminal"; exit 0; fi; done; exit 127',
+    "xrift-terminal", ...candidates,
+  ], { cwd: projectPath, env }).execute();
+  const terminal = probe.stdout.trim();
+  if (probe.code !== 0 || !candidates.includes(terminal)) {
+    throw new Error("ターミナルが見つかりません。GNOME Terminal、Konsole、Xfce Terminal、xtermのいずれかをインストールしてください。");
+  }
+  const args = terminal === "gnome-terminal" || terminal === "xfce4-terminal"
+    ? ["--working-directory", projectPath]
+    : terminal === "konsole" ? ["--workdir", projectPath] : [];
+  // Positional arguments preserve spaces and shell characters in the path.
+  const command = Command.create("sh", ["-c", 'exec "$@"', "xrift-terminal", terminal, ...args], { cwd: projectPath, env });
+  command.stdout.on("data", (line) => onLog(stamp("stdout", line)));
+  command.stderr.on("data", (line) => onLog(stamp("stderr", line)));
+  command.on("error", (error) => onLog(stamp("stderr", `terminal failed: ${error}`)));
+  command.on("close", ({ code }) => {
+    if (code !== 0) onLog(stamp("stderr", `terminal exited with code ${code ?? -1}`));
+  });
+  await command.spawn();
 }
 
 export type DevHandle = {

@@ -372,11 +372,14 @@ export function EditorView({
     handleOpenThumbnail();
   };
   const handleOpenVSCode = () =>
-    wrap(() => openInVSCode(project.path, appendLog));
+    wrap(() => openInVSCode(project.path, appendLog)).catch((error) => {
+      toast({ kind: "error", title: "VS Codeを開けませんでした", description: String(error) });
+    });
   const handleOpenTerminal = () =>
-    openTerminal(project.path, appendLog).catch((e) =>
-      appendLog({ kind: "stderr", text: `terminal failed: ${e}`, ts: Date.now() }),
-    );
+    openTerminal(project.path, appendLog).catch((error) => {
+      appendLog({ kind: "stderr", text: `terminal failed: ${error}`, ts: Date.now() });
+      toast({ kind: "error", title: "ターミナルを開けませんでした", description: String(error) });
+    });
 
   const handleStartDev = async () => {
     if (devHandle || devStarting) return;
