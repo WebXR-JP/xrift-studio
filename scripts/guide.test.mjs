@@ -24,7 +24,7 @@ test("page + heading links stay inside the guide; arbitrary schemes and paths do
  for(const href of ["../../secret.md","javascript:alert(1)","./not-present.md","//evil.example/a","data:text/html,hi"])assert.equal(resolveGuideLink(href,"index",manifest).kind,"invalid",href);
 });
 test("search includes body, heading targets, Japanese aliases and multi-word queries",()=>{
- for(const [query,slug] of [["ラフネス","materials"],["Tangent Space","textures"],["色 変わらない","materials"],["完全リセット","recovery"]]){
+ for(const [query,slug] of [["表面の粗さ","materials"],["Tangent Space","textures"],["色 変わらない","materials"],["完全リセット","recovery"]]){
    const hits=searchGuide(checked.search,query);assert.ok(hits.some(h=>h.slug===slug),query);
  }
  assert.ok(searchGuide(checked.search,"Tangent Space")[0].url.includes("#"));
@@ -70,4 +70,17 @@ test("home screen links reach real editor headings and detail images keep their 
  assert.ok(html.includes('href="./media/first-world.png"'));
  const fallback=renderMarkdown('![見本](./media/first-world.png "unknown")',page,manifest);
  assert.doesNotMatch(fallback,/position:absolute/);
+});
+
+test("current guide version agrees with the desktop version and new features are searchable", async () => {
+ const config = JSON.parse(await read("src-tauri/tauri.conf.json"));
+ assert.equal(manifest.reviewedVersion, config.version);
+ for (const [query, slug] of [["MToon", "materials"], ["録画", "recording"], ["GLSL", "custom-shaders"]]) {
+   assert.ok(searchGuide(checked.search, query).some(hit => hit.slug === slug), query);
+ }
+ const recording = manifest.pages.find(page => page.slug === "recording");
+ const html = pageTemplate(recording, manifest, "<p>録画</p>", checked.headings.recording);
+ assert.ok(html.includes(`内容の確認基準：v${config.version}`));
+ assert.ok(html.includes(manifest.reviewedOn));
+ assert.ok((await read("src/components/visual-editor/RecordingPanel.tsx")).includes('page="recording"'));
 });

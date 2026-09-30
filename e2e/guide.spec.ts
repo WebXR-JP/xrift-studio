@@ -47,7 +47,7 @@ test("モバイル目次と検索の閉じ方がキーボードでも分かる",
   await page.setViewportSize({width:320,height:760});await page.goto("/guide/");
   const search=page.getByRole("button",{name:"使い方を検索"});await search.click();
   await expect(page.getByRole("searchbox")).toBeFocused();
-  await page.getByRole("searchbox").fill("ラフネス");
+  await page.getByRole("searchbox").fill("表面の粗さ");
   await page.keyboard.press("Escape");await expect(search).toBeFocused();
   await page.locator("[data-mobile-nav]>summary").click();
   await page.keyboard.press("Escape");await expect(page.locator("[data-mobile-nav]")).not.toHaveAttribute("open","");
@@ -63,7 +63,7 @@ test("検索失敗時にも目次・再試行を残す",async({page})=>{
 
 test("JavaScriptなしでも本文・次の手順・目次を読める",async({browser,baseURL})=>{
  const context=await browser.newContext({javaScriptEnabled:false,baseURL});const page=await context.newPage();
- await page.goto("/guide/materials.html");await expect(page.getByText("Base Color（ベースカラー）は",{exact:false})).toBeVisible();
+ await page.goto("/guide/materials.html");await expect(page.getByText("Base Color（基本色）は",{exact:false})).toBeVisible();
  await expect(page.locator(".guide-next")).toBeVisible();await context.close();
 });
 

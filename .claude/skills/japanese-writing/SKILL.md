@@ -21,7 +21,7 @@ description: XRift Studio の日本語文書・画面説明を作成または推
 
 - 画面名は「ビジュアルエディター」「コードエディター」。操作や形式の名前と区別する。
 - `Entity / Inspector / Hierarchy / Assets / Components` は英語のまま使う。ノードの旧名を検索用の別名として残さない。
-- glTFのマテリアル名は英語を主ラベルにして読み方を添え、数値の方向・単位・条件を短い日本語で説明する。
+- glTFのマテリアル名は英語を主ラベルにして意味が分かる日本語を添え、数値の方向・単位・条件を短い日本語で説明する。MToonやBloomの見出し・選択肢には読み方や補足を付けない。
 - Normal Map、Skybox、IBL、Bloomなど定着した用語も英語を保つ。一般的な操作や色名まで英語化しない。
 - AlphaとTransmission、Volumeの厚みとIridescenceの膜厚、SkyboxとIBL、Normal Mapと形状変形、EmissiveとBloomを区別する。
 - Component名はAdd Componentの英語表記に揃える。照合箇所は [UXスキル](../xrift-studio-ux/SKILL.md#コンポーネント名の表記) を参照する。

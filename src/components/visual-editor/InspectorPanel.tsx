@@ -3049,8 +3049,8 @@ function MultiSelectionInspector({
             >
               <option value="" disabled>{editableMaterials.length === 0 ? "変更できるマテリアルがありません" : "一部異なる"}</option>
               <option value="standard">Standard (PBR)</option>
-              <option value="mtoon-0.x">MToon 0.x（エムトゥーン）</option>
-              <option value="mtoon-1.0">MToon 1.0（エムトゥーン）</option>
+              <option value="mtoon-0.x">MToon 0.x</option>
+              <option value="mtoon-1.0">MToon 1.0</option>
             </select>
           </label>
           {materials.length > editableMaterials.length ? <p className="text-[11px] leading-4 text-slate-500">カスタムシェーダーのマテリアル{materials.length - editableMaterials.length}件は種類を変更できません。</p> : null}
@@ -3488,7 +3488,7 @@ function ColliderInspector({
           </select>
         </label>
         <ColliderNumberField
-          label="Gravity Scale"
+          label="Gravity Scale（重力の倍率）"
           value={component.gravityScale ?? 1}
           min={-100}
           max={100}
@@ -3497,7 +3497,7 @@ function ColliderInspector({
           onChange={(gravityScale) => onChange({ gravityScale })}
         />
         <ColliderNumberField
-          label="Linear Damping"
+          label="Linear Damping（移動の減衰）"
           value={component.linearDamping ?? 0}
           min={0}
           step={0.05}
@@ -3505,7 +3505,7 @@ function ColliderInspector({
           onChange={(linearDamping) => onChange({ linearDamping })}
         />
         <ColliderNumberField
-          label="Angular Damping"
+          label="Angular Damping（回転の減衰）"
           value={component.angularDamping ?? 0}
           min={0}
           step={0.05}
@@ -3513,7 +3513,7 @@ function ColliderInspector({
           onChange={(angularDamping) => onChange({ angularDamping })}
         />
         <ToggleRow
-          label="Sleepを許可"
+          label="静止時の物理計算を休止"
           checked={component.canSleep ?? true}
           disabled={readOnly}
           onChange={(canSleep) => onChange({ canSleep })}
@@ -3567,14 +3567,14 @@ function ColliderInspector({
             </button>
           </div>
           <VectorEditor
-            label="Center"
+            label="Center（中心）"
             value={component.center}
             valueKind="position"
             disabled={readOnly}
             onChange={(center) => onChange({ center, fitMode: "manual" })}
           />
           <VectorEditor
-            label="Half Extents"
+            label="Half Extents（各軸の半サイズ）"
             value={component.halfExtents}
             valueKind="scale"
             disabled={readOnly}
@@ -3613,7 +3613,7 @@ function ColliderInspector({
           onChange={(isTrigger) => onChange({ isTrigger })}
         />
         <ColliderNumberField
-          label="Friction"
+          label="Friction（摩擦係数）"
           value={component.friction}
           min={0}
           step={0.05}
@@ -3621,7 +3621,7 @@ function ColliderInspector({
           onChange={(friction) => onChange({ friction })}
         />
         <ColliderNumberField
-          label="Restitution"
+          label="Restitution（反発係数）"
           value={component.restitution}
           min={0}
           max={1}
@@ -3760,7 +3760,7 @@ function RigidBodyInspector({
         onChange={(restitution) => onChange({ restitution })}
       />
       <ColliderNumberField
-        label="Gravity Scale"
+        label="Gravity Scale（重力の倍率）"
         value={component.gravityScale}
         min={-100}
         max={100}
@@ -3769,7 +3769,7 @@ function RigidBodyInspector({
         onChange={(gravityScale) => onChange({ gravityScale })}
       />
       <ColliderNumberField
-        label="Linear Damping"
+        label="Linear Damping（移動の減衰）"
         value={component.linearDamping}
         min={0}
         step={0.05}
@@ -3777,7 +3777,7 @@ function RigidBodyInspector({
         onChange={(linearDamping) => onChange({ linearDamping })}
       />
       <ColliderNumberField
-        label="Angular Damping"
+        label="Angular Damping（回転の減衰）"
         value={component.angularDamping}
         min={0}
         step={0.05}
@@ -3785,7 +3785,7 @@ function RigidBodyInspector({
         onChange={(angularDamping) => onChange({ angularDamping })}
       />
       <ToggleRow
-        label="Sleepを許可"
+        label="静止時の物理計算を休止"
         checked={component.canSleep}
         disabled={readOnly}
         onChange={(canSleep) => onChange({ canSleep })}

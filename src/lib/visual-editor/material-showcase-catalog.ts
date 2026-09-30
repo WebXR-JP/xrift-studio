@@ -257,7 +257,7 @@ export const MATERIAL_SHOWCASE_DEFINITIONS: readonly MaterialShowcaseDefinition[
           specularColorFactor: [1, 1, 1],
         },
       },
-      baselineName: "マット塗装（スペキュラーそのまま）",
+      baselineName: "マット塗装（鏡面反射そのまま）",
     },
     {
       key: "gold-coat",

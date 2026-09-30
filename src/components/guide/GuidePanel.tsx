@@ -61,7 +61,7 @@ export function GuidePanel({ initialPage, onClose }: GuidePanelProps) {
     </div>
     <div ref={body} className="embedded-guide-body">
       <h1 id={`embedded-guide-${headingSlug(page.title)}`} ref={title} tabIndex={-1}>{page.title}</h1>
-      <p className="embedded-guide-note">編集画面を操作しながら読めます。</p>
+      <p className="embedded-guide-note">編集画面を操作しながら読めます。内容の確認基準：v{GUIDE_MANIFEST.reviewedVersion} · {GUIDE_MANIFEST.reviewedOn}</p>
       {!text && !error && <p role="status">本文を読み込んでいます…</p>}
       {error && <div role="alert"><p>{error}</p><button type="button" onClick={() => setAttempt((value) => value + 1)}>もう一度読み込む</button></div>}
       {linkError && <p role="alert">{linkError}</p>}

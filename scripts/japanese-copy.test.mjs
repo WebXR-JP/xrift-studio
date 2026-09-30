@@ -395,19 +395,19 @@ test('header-only component cards do not render an empty padded body', () => {
 
 
 // English property names are presentation; Japanese remains the language of help.
-test('all 11 material extensions keep their glTF name plus a Japanese reading', () => {
+test('all 11 material extensions keep their glTF name plus a Japanese explanation', () => {
   const expected = {
-    anisotropy: ['Anisotropy', 'アニソトロピー'],
-    clearcoat: ['Clearcoat', 'クリアコート'],
-    dispersion: ['Dispersion', 'ディスパージョン'],
-    emissive_strength: ['Emissive Strength', 'エミッシブの強さ'],
+    anisotropy: ['Anisotropy', '異方性反射'],
+    clearcoat: ['Clearcoat', '透明な上塗り'],
+    dispersion: ['Dispersion', '光の分散'],
+    emissive_strength: ['Emissive Strength', '発光の強さ'],
     ior: ['IOR', '屈折率'],
-    iridescence: ['Iridescence', 'イリデッセンス'],
-    sheen: ['Sheen', 'シーン'],
-    specular: ['Specular', 'スペキュラー'],
-    transmission: ['Transmission', 'トランスミッション'],
-    unlit: ['Unlit', 'アンリット'],
-    volume: ['Volume', 'ボリューム'],
+    iridescence: ['Iridescence', '薄膜の虹色反射'],
+    sheen: ['Sheen', '布の光沢'],
+    specular: ['Specular', '鏡面反射'],
+    transmission: ['Transmission', '光の透過'],
+    unlit: ['Unlit', '照明の影響なし'],
+    volume: ['Volume', '材質の厚み'],
   };
   assert.equal(khrMaterialExtensionNames.length, 11);
   for (const [key, [label, reading]] of Object.entries(expected)) {
@@ -617,9 +617,9 @@ test('Skybox, lighting and post-effect headings expose English names visibly', (
     ts.forEachChild(node, visit);
   }
   visit(ast);
-  for (const [label, reading] of Object.entries({Skybox:'スカイボックス', Fog:'フォグ',
-    'Ambient Light':'環境光', 'Post Processing':'ポストプロセス', SSAO:'スクリーンスペースAO',
-    Bloom:'ブルーム', 'Color Grading':'カラーグレーディング'})) assert.equal(labels.get(label), reading);
+  for (const [label, reading] of Object.entries({Skybox:'背景', Fog:'霧',
+    'Ambient Light':'環境光', 'Post Processing':'画面効果', SSAO:'接地部分や隙間の陰影',
+    Bloom:undefined, 'Color Grading':'色調補正'})) assert.equal(labels.get(label), reading);
   assert.match(read(file), /flex flex-wrap items-baseline/);
   assert.match(read(file), /label="上空の色"/); // Real colors remain natural Japanese.
   assert.match(read(file), /label="地平線の色"/);

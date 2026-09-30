@@ -10,7 +10,7 @@ XRift Studioは、画面に素材を配置してワールドやアイテムを�
 
 まだアプリがない方は、[インストール](./installation.md)から始めてください。アプリを開ける方は、[最初のワールドを作る](./first-world.md)へ進みます。
 
-インストールせずに始める場合は、[ブラウザのビジュアルエディター](https://webxr-jp.github.io/xrift-studio/editor.html)を開きます。iPadの操作は、[iPadで作り、パソコンへ引き継ぐ](./ipad.md)をご覧ください。ブラウザで編集し、`.xriftstudio`ファイルをMacまたはWindowsへ渡して公開する流れです。
+インストールせずに始める場合は、[ブラウザのビジュアルエディター](https://webxr-jp.github.io/xrift-studio/editor.html)を開きます。iPadの操作は、[iPadで作り、パソコンへ引き継ぐ](./ipad.md)をご覧ください。ブラウザ版βでのワールド公開と、`.xriftstudio`ファイルをMacまたはWindowsへ渡して公開する方法は、[公開の手順](./publishing.md)を参照してください。
 
 デスクトップ版は、初回セットアップを済ませてから制作を始めます。XRiftへのログインやAI接続はあとから行えます。まずは「配置する・色を変える・自動保存を確認する・Playで確かめる」を順に試します。
 
@@ -27,3 +27,11 @@ XRift Studioは、画面に素材を配置してワールドやアイテムを�
 ## 作ったものを別のプロジェクトでも使う
 
 家具やギミックなど、Hierarchyの一部を `.xriftstudio` で渡せます。[Entityを別のワールド・アイテムへ渡す](./hierarchy-transfer.md)を参照してください。
+
+## MToon・GLSL・録画を使う
+
+- [MToonの陰影と輪郭線](./materials.md#mtoonマンガのような陰影と輪郭線を付ける)
+- [GLSLでマテリアルを編集する](./custom-shaders.md)
+- [ワールドを動画に録画する](./recording.md)
+
+このガイドはv1.0.1のソースを基準に、2026年9月30日に更新しています。画像は過去の画面を含むため、操作名や対応範囲は本文で確認してください。
