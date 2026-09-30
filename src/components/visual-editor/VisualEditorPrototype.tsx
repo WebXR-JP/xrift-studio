@@ -11340,6 +11340,16 @@ export function VisualEditorPrototype({
   }, [leaving, projectExportBusy, projectTransferBusy, importBusy, onProjectExport, flushInteractivityDraft, backLabel, onBack, requestAutosave, flushCodeAutosaves]);
 
   mcpProjectBridgeActionsRef.current = { saveNow: runSave, leave: handleBack };
+  // Embedded browser hosts need the same save/current-document bridge without native IPC.
+  useEffect(() => {
+    if (mcpNativeAvailable) return;
+    onRegisterMcpProjectBridgeRef.current?.({
+      currentBundle: () => bundleRef.current,
+      saveNow: () => mcpProjectBridgeActionsRef.current?.saveNow() ?? Promise.resolve(undefined),
+      leave: () => mcpProjectBridgeActionsRef.current?.leave() ?? Promise.resolve(false),
+    });
+    return () => { onRegisterMcpProjectBridgeRef.current?.(null); };
+  }, [mcpNativeAvailable]);
 
   const kindLabel = projectKind === "world" ? "ワールド" : "アイテム";
   const KindIcon = projectKind === "world" ? EDITOR_ICONS.world : EDITOR_ICONS.item;

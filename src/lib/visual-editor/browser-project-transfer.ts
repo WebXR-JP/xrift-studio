@@ -29,7 +29,7 @@ function crc32(bytes: Uint8Array): number {
  * Three's unzipSync misses those sizes and does not verify CRCs. Read the
  * directory first, then bound actual Deflate output as well as declared sizes.
  */
-function readArchiveEntries(data: Uint8Array): Map<string, Uint8Array> {
+function readArchiveEntries(data: Uint8Array, maxExpandedBytes = BROWSER_PROJECT_ARCHIVE_MAX_BYTES): Map<string, Uint8Array> {
   const invalid = () => new Error("プロジェクトファイルが破損しているか、対応していないZIP形式です。");
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const range = (offset: number, length: number) => {
@@ -109,7 +109,7 @@ function readArchiveEntries(data: Uint8Array): Map<string, Uint8Array> {
     }
     if ((needsZip64 && !foundZip64) || disk !== 0) throw invalid();
     unpackedBytes += originalSize;
-    if (!Number.isSafeInteger(unpackedBytes) || unpackedBytes > BROWSER_PROJECT_ARCHIVE_MAX_BYTES) throw new Error("展開後256 MBを超えるZIPはデスクトップ版で開いてください。");
+    if (!Number.isSafeInteger(unpackedBytes) || unpackedBytes > maxExpandedBytes) throw new Error(`展開後${Math.floor(maxExpandedBytes / 1024 / 1024)} MBを超えるZIPはこの接続では開けません。`);
     if ((compression === 0 && size !== originalSize) || (name.endsWith("/") && originalSize !== 0)) throw invalid();
     if (u32(localOffset) !== 0x04034b50 || u16(localOffset + 6) !== flags || u16(localOffset + 8) !== compression || u16(localOffset + 26) !== nameLength) throw invalid();
     range(localOffset + 30, nameLength);
@@ -250,9 +250,10 @@ export async function createBrowserProjectArchive(documents: VisualProjectDocume
   return { blob: new Blob([new Uint8Array(archive)], { type: PROJECT_PACKAGE_MIME_TYPE }), fileName, fileCount: files.size };
 }
 
-export async function readBrowserProjectArchive(file: File): Promise<{ documents: VisualProjectDocuments; files: Map<string, Uint8Array> }> {
+export async function readBrowserProjectArchive(file: File, maxExpandedBytes = BROWSER_PROJECT_ARCHIVE_MAX_BYTES): Promise<{ documents: VisualProjectDocuments; files: Map<string, Uint8Array> }> {
   if (file.size > BROWSER_PROJECT_ARCHIVE_MAX_BYTES) throw new Error("ブラウザ版で開けるプロジェクトファイルは256 MBまでです。大きなプロジェクトはデスクトップ版で開いてください。");
-  const entries = readArchiveEntries(new Uint8Array(await file.arrayBuffer()));
+  if (!Number.isSafeInteger(maxExpandedBytes) || maxExpandedBytes <= 0 || maxExpandedBytes > BROWSER_PROJECT_ARCHIVE_MAX_BYTES) throw new Error("展開サイズの制限が不正です。");
+  const entries = readArchiveEntries(new Uint8Array(await file.arrayBuffer()), maxExpandedBytes);
   const manifests = [...entries.keys()].filter((path) => path === PROJECT_MANIFEST || (path.endsWith(`/${PROJECT_MANIFEST}`) && path.split("/").length === 2));
   if (manifests.length !== 1) throw new Error("XRift Studioで書き出したビジュアルプロジェクト（.xriftstudioまたは.zip）を選んでください。");
   const prefix = manifests[0].slice(0, -PROJECT_MANIFEST.length);

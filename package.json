@@ -44,7 +44,9 @@
     "test:recording": "node scripts/recording-session.test.mjs",
     "test:guide": "node --test scripts/guide.test.mjs",
     "guide:capture": "node scripts/guide/capture-guide.mjs capture",
-    "guide:media": "node scripts/guide/capture-guide.mjs list"
+    "guide:media": "node scripts/guide/capture-guide.mjs list",
+    "mcp:cloud:schemas": "node scripts/generate-cloud-mcp-schemas.mjs",
+    "mcp:cloud:check": "node scripts/generate-cloud-mcp-schemas.mjs --check && pnpm --filter xrift-studio-cloud typecheck"
   },
   "overrides": {
     "dompurify": "3.4.12"
@@ -86,6 +88,8 @@
     "yaml": "2.9.1"
   },
   "devDependencies": {
+    "@modelcontextprotocol/ext-apps": "2.0.3",
+    "@openai/mcp-extensions": "0.1.0",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "4.3.3",
     "@tauri-apps/cli": "^2.11.5",

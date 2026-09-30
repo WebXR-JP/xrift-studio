@@ -73,3 +73,7 @@ pnpm tauri:dev
 MIT。素材ごとの権利表記は[THIRD_PARTY_ASSETS.md](./THIRD_PARTY_ASSETS.md)を参照してください。
 
 Hierarchyの一部を `.xriftstudio` で書き出して別のワールド・アイテムへ追加する手順は、[Entityを別のワールド・アイテムへ渡す](./docs/guide/hierarchy-transfer.md)を参照してください。
+
+### ChatGPT Workプラグインの開発
+
+PCを起動せずにプロジェクトの作成・取り込み・会話での編集を行う[クラウドMCP実装](./packages/xrift-studio-cloud/README.md)を追加しています。既存のブラウザエディターと編集処理を再利用します。認証付きサーバーの配置、プラグイン接続、スマホ実機での表示確認は未実施です。現在のGitHub Pages版にMCPが自動で有効になる変更ではありません。
