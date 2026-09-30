@@ -131,7 +131,7 @@
       "description": "マテリアルを作る・割り当てる基本、MToonの陰影と輪郭線、複数素材の一括編集を説明します。",
       "group": "basics",
       "file": "materials.md",
-      "keywords": "マテリアル 材質 色 反射 Base Color Metallic Roughness 表面の粗さ 金属度 プラスチック 金属 MToon MToon 0.x MToon 1.0 トゥーン Outline アウトライン 輪郭線 Shade Color Matcap Rim Lighting UV Animation VRM アバター 一括 まとめて 切り替え 複数 全設定",
+      "keywords": "マテリアル 材質 色 反射 Base Color Metallic Roughness 表面の粗さ 金属度 プラスチック 金属 頂点カラー vertexColors オン オフ MToon MToon 0.x MToon 1.0 トゥーン Outline アウトライン 輪郭線 Shade Color Matcap Rim Lighting UV Animation VRM アバター 一括 まとめて 切り替え 複数 全設定",
       "related": [
         "textures",
         "transparent-materials",

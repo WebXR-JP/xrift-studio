@@ -51,6 +51,8 @@ MToon 0.xはVRM 0.xの陰影と互換性のある描画、MToon 1.0は新しい�
 
 **Outline Width Mode**は、**World（m）**ではモデルと同じ空間の幅、**Screen**では画面の高さに対する割合です。輪郭線の幅を画像で変える場合は**Outline Width Multiply Map**のG（緑）を使います。
 
+**Base Color → 頂点カラーを使用**はMToonでもオン・オフできます。オンにするとモデルの頂点カラーを基本色に掛け合わせ、オフにすると頂点カラーを使いません。モデルに頂点カラーがない場合は、オンにしても見た目は変わりません。設定は保存され、Playと公開後にも反映されます。
+
 Base Color、Alpha、Normal Map、Emissive、Double SidedはMToonでも使えます。半透明にするには**Alpha Mode → Blend**を選びます。**Transparent With ZWrite**は、**Rendering → Depth Write**が自動のときに半透明の面の深度を書き込みます。
 
 MToonを使う間、Metallic・Roughnessや反射・透過の拡張は表示されません。**Standard (PBR)**へ戻すと、保持していたPBR設定を再び編集できます。もう一度MToonを選ぶと、Shade Colorや輪郭線、MToon専用のテクスチャ設定も戻ります。切り替えと色・幅の変更は**元に戻す**で戻せます。
