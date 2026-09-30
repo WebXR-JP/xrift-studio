@@ -8,6 +8,7 @@ import { MTOON_DEFAULTS, type MToonMaterialSettings } from "./mtoon-contract.js"
 
 /** Structural contract shared by authoring and emitted Material components. */
 export type MToonSurfaceProperties = {
+  vertexColors?: boolean;
   pbrMetallicRoughness: { baseColorFactor: [number, number, number, number] };
   emissiveFactor: [number, number, number];
   normalTexture?: { scale?: number };
@@ -162,7 +163,7 @@ export function createMToonMaterial(
     uvAnimationScrollYSpeedFactor: settings.uvAnimationScrollYSpeedFactor,
     uvAnimationRotationSpeedFactor: settings.uvAnimationRotationSpeedFactor,
     v0CompatShade: settings.extras?.xriftVrm0CompatShade ?? false,
-    ignoreVertexColor: false,
+    ignoreVertexColor: !properties.vertexColors,
   });
   if (textures.opacityMap) bindOpacityMap(material, { texture: textures.opacityMap, channel: properties.opacityChannel ?? "a" });
   bindTextureUvChannels(material, textures);
@@ -170,7 +171,7 @@ export function createMToonMaterial(
   // Enable the color attribute only for the geometry being drawn, so models
   // retain GLB COLOR_0 without requesting a missing attribute on other meshes.
   material.onBeforeRender = (_renderer: unknown, _scene: unknown, _camera: unknown, geometry: BufferGeometry) => {
-    const vertexColors = geometry.hasAttribute("color");
+    const vertexColors = properties.vertexColors === true && geometry.hasAttribute("color");
     if (material.vertexColors !== vertexColors) {
       material.vertexColors = vertexColors;
       material.needsUpdate = true;
