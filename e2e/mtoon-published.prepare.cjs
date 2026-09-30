@@ -12,7 +12,7 @@ eval(fixtureHooks.slice(0, fixtureHooks.indexOf("(async () => {")));
   const project = createPrototypeProject("world", "mtoon-render-parity");
   const material = {
     id: "mtoon-parity", name: "MToon parity", kind: "material", status: "ready", source: { kind: "document" },
-    properties: normalizeMaterialProperties({ pbrMetallicRoughness: { baseColorFactor: [0.25, 0.5, 0.75, 1] },
+    properties: normalizeMaterialProperties({ vertexColors: true, pbrMetallicRoughness: { baseColorFactor: [0.25, 0.5, 0.75, 1] },
       extensions: { VRMC_materials_mtoon: { shadeColorFactor: [0.03, 0.15, 0.25], shadingToonyFactor: 0.9,
         outlineWidthMode: "worldCoordinates", outlineWidthFactor: 0.08, outlineColorFactor: [1, 0, 0], outlineLightingMixFactor: 0 } } }),
   };
