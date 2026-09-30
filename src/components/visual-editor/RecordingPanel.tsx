@@ -1,3 +1,4 @@
+import { GuideLink } from "../guide/GuideLink";
 import {
   RECORDING_ASPECT_RATIO_OPTIONS,
   RECORDING_FRAME_RATES,
@@ -82,6 +83,7 @@ export function RecordingPanel({
 
   return (
     <div className="space-y-4 p-3.5 text-xs text-slate-600">
+      <GuideLink page="recording" label="録画の使い方" />
       <section aria-label="録画の状態">
         <div className={`rounded-md border px-3 py-2 ${statusTone}`} role="status" aria-live="polite">
           <div className="flex items-center justify-between gap-2">

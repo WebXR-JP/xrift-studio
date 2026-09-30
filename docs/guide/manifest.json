@@ -1,7 +1,7 @@
 {
   "title": "XRift Studio 使い方ガイド",
-  "reviewedVersion": "0.9.25",
-  "reviewedOn": "2026-09-08",
+  "reviewedVersion": "1.0.1",
+  "reviewedOn": "2026-09-30",
   "siteUrl": "https://webxr-jp.github.io/xrift-studio/guide/",
   "groups": [
     {
@@ -135,7 +135,8 @@
       "related": [
         "textures",
         "transparent-materials",
-        "material-extensions"
+        "material-extensions",
+        "custom-shaders"
       ],
       "next": "save-and-open"
     },
@@ -189,7 +190,8 @@
       "related": [
         "collision",
         "interactivity",
-        "publishing"
+        "publishing",
+        "recording"
       ],
       "next": "publishing"
     },
@@ -449,6 +451,32 @@
       "related": [
         "editor-basics",
         "play-mode"
+      ]
+    },
+    {
+      "slug": "recording",
+      "title": "ワールドを動画に録画する",
+      "description": "録画用カメラ、動画サイズ、保存先を設定して動画を保存します。",
+      "group": "publish",
+      "file": "recording.md",
+      "keywords": "録画 動画 Recording カメラ 保存先 フォルダー 開かない REC",
+      "related": [
+        "play-mode",
+        "publishing",
+        "recovery"
+      ]
+    },
+    {
+      "slug": "custom-shaders",
+      "title": "GLSLでマテリアルを編集する",
+      "description": "カスタムシェーダーを作り、頂点とフラグメントのGLSLを編集します。",
+      "group": "materials-advanced",
+      "file": "custom-shaders.md",
+      "keywords": "GLSL Shader カスタムシェーダー 頂点 フラグメント uniform PBR",
+      "related": [
+        "materials",
+        "sky-and-water",
+        "textures"
       ]
     }
   ],

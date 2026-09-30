@@ -71,3 +71,16 @@ test("home screen links reach real editor headings and detail images keep their 
  const fallback=renderMarkdown('![見本](./media/first-world.png "unknown")',page,manifest);
  assert.doesNotMatch(fallback,/position:absolute/);
 });
+
+test("current guide version agrees with the desktop version and new features are searchable", async () => {
+ const config = JSON.parse(await read("src-tauri/tauri.conf.json"));
+ assert.equal(manifest.reviewedVersion, config.version);
+ for (const [query, slug] of [["MToon", "materials"], ["録画", "recording"], ["GLSL", "custom-shaders"]]) {
+   assert.ok(searchGuide(checked.search, query).some(hit => hit.slug === slug), query);
+ }
+ const recording = manifest.pages.find(page => page.slug === "recording");
+ const html = pageTemplate(recording, manifest, "<p>録画</p>", checked.headings.recording);
+ assert.ok(html.includes(`内容の確認基準：v${config.version}`));
+ assert.ok(html.includes(manifest.reviewedOn));
+ assert.ok((await read("src/components/visual-editor/RecordingPanel.tsx")).includes('page="recording"'));
+});
