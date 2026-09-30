@@ -1,1 +1,1 @@
-{"extends":"../../tsconfig.json","include":["worker.ts","sites-worker.ts","../../src/vite-env.d.ts","../../src/types/*.d.ts"],"references":[]}
+{"extends":"../../tsconfig.json","include":["worker.ts","../../src/vite-env.d.ts","../../src/types/*.d.ts"],"references":[]}

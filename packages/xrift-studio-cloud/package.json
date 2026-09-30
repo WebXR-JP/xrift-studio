@@ -1,1 +1,1 @@
-{"name":"xrift-studio-cloud","private":true,"version":"0.1.0","type":"module","scripts":{"typecheck":"tsc --noEmit -p tsconfig.json"}}
+{"name":"xrift-studio-cloud","private":true,"version":"0.1.1","type":"module","scripts":{"typecheck":"tsc --noEmit -p tsconfig.json"}}

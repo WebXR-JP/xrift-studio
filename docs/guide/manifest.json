@@ -331,7 +331,7 @@
       "description": "基本操作を覚えたあとで、AI接続から制作を手伝ってもらいます。",
       "group": "behavior",
       "file": "ai-connection.md",
-      "keywords": "AI MCP 接続 Claude Codex 登録 ChatGPT Work クラウド プラグイン",
+      "keywords": "AI MCP 接続 Claude Codex 登録 ChatGPT Work プラグイン ブラウザ保存",
       "related": [
         "save-and-open",
         "first-world",

@@ -1,18 +1,22 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "xrift-studio",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "XRift StudioのワールドをChatGPT内で作成・取り込み・編集するプラグイン",
-  "author": { "name": "WebXR-JP" },
+  "author": {
+    "name": "WebXR-JP"
+  },
   "extensions": {
     "com.openai": {
       "interface": {
         "displayName": "XRift Studio",
         "shortDescription": "会話で3Dワールドを作る",
-        "longDescription": "ワールドの新規作成、プロジェクトの取り込み、会話による編集、ブラウザ版と共通のエディターでの確認、プロジェクトの書き出しに対応します。",
+        "longDescription": "会話から3Dワールドを作り、ブラウザ版と共通のエディターで確認・編集できます。作品と素材はブラウザに保存し、ファイルで書き出して引き継ぎます。編集データはChatGPTと接続先のサーバーで処理します。クラウド保存・端末間同期・バックグラウンド制作には対応しません。",
         "developerName": "WebXR-JP",
         "category": "Productivity",
-        "capabilities": ["Interactive"],
+        "capabilities": [
+          "Interactive"
+        ],
         "logo": "./assets/icon.svg",
         "composerIcon": "./assets/icon.svg",
         "defaultPrompt": "XRift Studioでワールドを作ってください。"
