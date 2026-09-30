@@ -41,12 +41,22 @@ test("MToonの編集と生成した公開コードが同じ色と輪郭を実描
       return [...values];
     }
     const geometry = new T.SphereGeometry(0.8, 32, 24);
+    const colors = new Float32Array(geometry.getAttribute("position").count * 3);
+    for (let index = 0; index < colors.length; index += 3) {
+      colors[index] = 0.2;
+      colors[index + 1] = 1;
+      colors[index + 2] = 0.3;
+    }
+    geometry.setAttribute("color", new T.BufferAttribute(colors, 3));
     const source = new T.MeshStandardMaterial();
     const scene = makeScene();
     const mesh = new T.Mesh(geometry, m.createAssignedMaterialPreviewMaterial(source, material));
     scene.add(mesh);
     let outlines = m.attachMToonOutlines(mesh);
     const editor = sample(scene);
+    geometry.deleteAttribute("color");
+    const unpainted = sample(scene);
+    geometry.setAttribute("color", new T.BufferAttribute(colors, 3));
     const sharedGeometry = mesh.children[0]?.geometry === geometry;
     outlines.dispose(); mesh.material.dispose();
     const green = structuredClone(material);
@@ -76,9 +86,10 @@ test("MToonの編集と生成した公開コードが同じ色と輪郭を実描
     const published = sample(publishedScene);
     root.unmount();
     source.dispose(); target.dispose(); renderer.dispose();
-    return { editor, published, changed, none, sharedGeometry, noChildren };
+    return { editor, published, changed, none, sharedGeometry, noChildren, unpainted };
   });
   expect(errors).toEqual([]);
+  expect(pixels.editor.some((value: number, index: number) => value !== pixels.unpainted[index])).toBe(true);
   expect(pixels.sharedGeometry).toBe(true);
   expect(pixels.noChildren).toBe(true);
   expect(pixels.published.filter((value: number, index: number) => value !== pixels.editor[index]).length).toBe(0);
