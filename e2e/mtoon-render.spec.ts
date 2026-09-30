@@ -58,6 +58,12 @@ test("MToonの編集と生成した公開コードが同じ色と輪郭を実描
     const unpainted = sample(scene);
     geometry.setAttribute("color", new T.BufferAttribute(colors, 3));
     const sharedGeometry = mesh.children[0]?.geometry === geometry;
+    const disabled = structuredClone(material);
+    disabled.properties.vertexColors = false;
+    outlines.dispose(); mesh.material.dispose();
+    mesh.material = m.createAssignedMaterialPreviewMaterial(source, disabled);
+    outlines = m.attachMToonOutlines(mesh);
+    const disabledColors = sample(scene);
     outlines.dispose(); mesh.material.dispose();
     const green = structuredClone(material);
     green.properties.extensions.VRMC_materials_mtoon.outlineColorFactor = [0, 1, 0];
@@ -86,10 +92,11 @@ test("MToonの編集と生成した公開コードが同じ色と輪郭を実描
     const published = sample(publishedScene);
     root.unmount();
     source.dispose(); target.dispose(); renderer.dispose();
-    return { editor, published, changed, none, sharedGeometry, noChildren, unpainted };
+    return { editor, published, changed, none, sharedGeometry, noChildren, unpainted, disabledColors };
   });
   expect(errors).toEqual([]);
   expect(pixels.editor.some((value: number, index: number) => value !== pixels.unpainted[index])).toBe(true);
+  expect(pixels.disabledColors).toEqual(pixels.unpainted);
   expect(pixels.sharedGeometry).toBe(true);
   expect(pixels.noChildren).toBe(true);
   expect(pixels.published.filter((value: number, index: number) => value !== pixels.editor[index]).length).toBe(0);
