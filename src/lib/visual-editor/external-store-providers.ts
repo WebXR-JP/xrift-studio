@@ -1,6 +1,21 @@
-import type { ExternalStoreAssetKind } from "../tauri";
+import type { ExternalStoreAsset, ExternalStoreAssetKind } from "../tauri";
 
 export const EXTERNAL_STORE_PAGE_SIZE = 120;
+
+export type OtoguraAudioFilter = "all" | "sfx" | "music";
+
+/** Use the provider's metadata, never names or descriptions, to group audio. */
+export function matchesOtoguraAudioFilter(
+  asset: Pick<ExternalStoreAsset, "category" | "tags">,
+  filter: OtoguraAudioFilter,
+): boolean {
+  if (filter === "all") return true;
+  const music = asset.tags.includes("music")
+    || asset.category === "楽曲"
+    || asset.category.startsWith("楽曲・");
+  return filter === "music" ? music : !music;
+}
+
 
 /**
  * Sidebar sections for the external resource dialog. Providers are grouped by
@@ -75,13 +90,13 @@ export const EXTERNAL_STORE_PROVIDERS = [
     group: "material-sites",
     name: "音蔵",
     badge: "フリー",
-    summary: "効果音と環境音を探して追加",
+    summary: "効果音・環境音・音楽を探して追加",
     homepageUrl: "https://yushimatenjin.github.io/sound-generator/",
     catalogKinds: ["audio"],
     installableKinds: ["audio"],
     authorFallback: "音蔵 (おとぐら)",
     attributionNote:
-      "Stable Audio 3でローカル生成した音源です。ループ環境音は継ぎ目が出ないよう加工済みで、商用・改変を含め自由に使えます。",
+      "効果音・環境音・楽曲を配布しています。生成元と利用条件は音源ごとに異なります。詳細のライセンスを確認してください。",
   },
   {
     id: "xrift-sky-shaders",
