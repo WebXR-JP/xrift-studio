@@ -44,6 +44,24 @@ function Application() {
   async function context(next: Local, bundle = bundleFrom(next.documents)) {
     await app.updateModelContext({ content: [{ type: 'text', text: `編集対象: ${bundle.project.metadata.name}。このbundleとrevisionをedit_worldに渡してください。素材のバイト列は含みません。` }], structuredContent: { bundle: validateBundle(bundle), revision: next.revision } });
   }
+  async function captureSceneViewForConversation() {
+    const editor = bridge.current;
+    if (!editor) throw new Error('Scene Viewを開いてからもう一度実行してください');
+    const result = await editor.captureSceneView();
+    if (!result.ok) throw new Error(result.message);
+    const comma = result.dataUrl.indexOf(',');
+    if (comma < 0) throw new Error('Scene Viewの画像形式が不正です');
+    const data = result.dataUrl.slice(comma + 1);
+    const sent = await app.sendMessage({
+      role: 'user',
+      content: [
+        { type: 'image', data, mimeType: 'image/png' },
+        { type: 'text', text: 'XRift Studioの現在のScene Viewです。見た目を確認し、必要ならedit_worldで調整してからcapture_scene_viewでもう一度確認してください。' },
+      ],
+    });
+    if (sent.isError) throw new Error('Scene Viewを会話へ送れませんでした');
+    setNotice('現在のScene Viewを会話に送りました。');
+  }
   async function adopt(result: Result) {
     const b = validateBundle(result.bundle);
     const existing = current.current;
@@ -85,7 +103,14 @@ function Application() {
     if (setup.current) return; setup.current = true;
     app.ontoolresult = result => {
       if (result.isError) { setNotice(result.content?.find(c => c.type === 'text')?.text ?? '接続に失敗しました'); return; }
-      received.current = received.current.then(() => accept((result.structuredContent ?? {}) as Record<string, unknown>)).catch((e: Error) => setNotice(e.message));
+      const data = (result.structuredContent ?? {}) as Record<string, unknown>;
+      received.current = received.current.then(async () => {
+        if (data.captureSceneView === true) {
+          await captureSceneViewForConversation();
+          return;
+        }
+        await accept(data);
+      }).catch((e: Error) => setNotice(e.message));
     };
     const theme = () => { const host = app.getHostContext(); if (host?.theme) applyDocumentTheme(host.theme); if (host?.styles?.variables) applyHostStyleVariables(host.styles.variables); };
     app.addEventListener('hostcontextchanged', theme);
