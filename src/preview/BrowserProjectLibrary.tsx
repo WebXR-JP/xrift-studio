@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
   ArrowUpDown,
@@ -23,6 +23,7 @@ const PROJECT_SORT_LABELS: Record<ProjectSort, string> = {
 };
 
 type Props = {
+  hostControls?: ReactNode;
   projects: BrowserStoredProject[];
   loading: boolean;
   busy: boolean;
@@ -32,7 +33,7 @@ type Props = {
   onNew: () => void;
   onImport: () => void;
   onRefresh: () => void;
-  onBack: () => void;
+  onBack?: () => void;
 };
 
 function asProject(project: BrowserStoredProject): Project {
@@ -61,6 +62,7 @@ export function BrowserProjectLibrary({
   onImport,
   onRefresh,
   onBack,
+  hostControls,
 }: Props) {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<ProjectSort>("updated-desc");
@@ -128,8 +130,9 @@ export function BrowserProjectLibrary({
           <BrandMark size={28} />
           <BrandWordmark sub="プロジェクト" />
         </div>
+        {hostControls}
         <div className="flex items-center gap-1.5">
-          <button
+          {onBack && <button
             type="button"
             onClick={onBack}
             className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
@@ -137,7 +140,7 @@ export function BrowserProjectLibrary({
           >
             <ArrowLeft size={14} aria-hidden="true" />
             <span className="hidden sm:inline">紹介ページ</span>
-          </button>
+          </button>}
           <button
             type="button"
             onClick={onRefresh}
