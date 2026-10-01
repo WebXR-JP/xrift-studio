@@ -1773,7 +1773,7 @@ export function AssetsPanel({
        * the only part allowed to shrink, and the actions drop their labels
        * through container queries instead of wrapping onto a second line.
        */}
-      <div className={`@container/assets-header flex shrink-0 border-b border-editor-border bg-editor-surface ${tablet ? "flex-col gap-1 px-2 py-1 [&_button]:min-h-11 [&_button]:min-w-11" : "h-10 items-center justify-between gap-3 px-3"}`}>
+      <div className={`editor-assets-header @container/assets-header flex shrink-0 border-b border-editor-border bg-editor-surface ${tablet ? "flex-col gap-1 px-2 py-1" : "h-10 items-center justify-between gap-3 px-3"}`}>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <h2 id="assets-heading" className="shrink-0 text-[13px] font-semibold text-slate-800">Assets</h2>
           {tablet ? <span className="min-w-0 flex-1 truncate text-xs text-editor-muted">{selectedAssetId ? assets.assets[selectedAssetId]?.name : ""}</span> : null}

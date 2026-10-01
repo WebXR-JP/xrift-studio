@@ -1462,7 +1462,7 @@ export function HierarchyPanel({
       onContextMenu={openContextMenu}
       onPointerDown={() => contextMenu && setContextMenu(null)}
     >
-      <div className="flex h-10 shrink-0 items-center justify-between border-b border-editor-border bg-editor-surface px-3">
+      <div className="editor-panel-header flex h-10 shrink-0 items-center justify-between border-b border-editor-border bg-editor-surface px-3">
         <h2
           id="hierarchy-heading"
           className="text-[13px] font-semibold text-editor-text"
@@ -1513,7 +1513,7 @@ export function HierarchyPanel({
           </span>
         </div>
       </div>
-      <div className="shrink-0 border-b border-editor-border bg-editor-surface px-2 py-1.5">
+      <div className="editor-panel-controls shrink-0 border-b border-editor-border bg-editor-surface px-2 py-1.5">
         <div className="relative">
           <EDITOR_ICONS.search
             size={13}
