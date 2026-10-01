@@ -47,6 +47,7 @@ import {
 } from "../../lib/visual-editor";
 import {
   DEFAULT_EXTERNAL_STORE_PROVIDER_ID,
+  EXTERNAL_STORE_PAGE_SIZE,
   EXTERNAL_STORE_PROVIDER_GROUPS,
   EXTERNAL_STORE_PROVIDERS,
   getExternalStoreProvider,
@@ -79,8 +80,6 @@ import {
   GlowMaterialStore,
   type GlowMaterialInstallResult,
 } from "./GlowMaterialStore";
-
-const CATALOG_PAGE_SIZE = 120;
 
 type StoreKindFilter = "all" | ExternalStoreAsset["assetKind"];
 
@@ -158,7 +157,7 @@ export function ExternalAssetStoreDialog({
   const [assets, setAssets] = useState<ExternalStoreAsset[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [visibleCount, setVisibleCount] = useState(CATALOG_PAGE_SIZE);
+  const [visibleCount, setVisibleCount] = useState(EXTERNAL_STORE_PAGE_SIZE);
   const [kind, setKind] = useState<StoreKindFilter>("all");
   const [loading, setLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -257,7 +256,7 @@ export function ExternalAssetStoreDialog({
 
   // Keep every match searchable; reveal large catalogs in bounded batches.
   useEffect(() => {
-    setVisibleCount(CATALOG_PAGE_SIZE);
+    setVisibleCount(EXTERNAL_STORE_PAGE_SIZE);
   }, [open, provider.id, query, kind, assets]);
 
   const matchingAssets = useMemo(() => {
@@ -626,10 +625,10 @@ export function ExternalAssetStoreDialog({
                   {visibleAssets.length < matchingAssets.length ? (
                     <button
                       type="button"
-                      onClick={() => setVisibleCount((count) => count + CATALOG_PAGE_SIZE)}
+                      onClick={() => setVisibleCount((count) => count + EXTERNAL_STORE_PAGE_SIZE)}
                       className="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50"
                     >
-                      さらに{Math.min(CATALOG_PAGE_SIZE, matchingAssets.length - visibleAssets.length)}件を表示
+                      さらに{Math.min(EXTERNAL_STORE_PAGE_SIZE, matchingAssets.length - visibleAssets.length)}件を表示
                     </button>
                   ) : null}
                 </div>

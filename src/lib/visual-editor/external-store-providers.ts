@@ -1,5 +1,7 @@
 import type { ExternalStoreAssetKind } from "../tauri";
 
+export const EXTERNAL_STORE_PAGE_SIZE = 120;
+
 /**
  * Sidebar sections for the external resource dialog. Providers are grouped by
  * what the user is trying to add, not by where the data comes from — the

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
+import { EXTERNAL_STORE_PAGE_SIZE } from "../src/lib/visual-editor/external-store-providers";
 
 const apiRoot = "https://yushimatenjin.github.io/sound-generator/api/v1";
 const audioUrl = "https://yushimatenjin.github.io/sound-generator/processed/medium/browser-import-test.ogg";
@@ -64,20 +65,23 @@ test("ブラウザ版で音蔵の音源を追加し、再読み込み後も使�
     .toHaveAttribute("src", /^data:audio\/ogg;base64,/);
 });
 
-test("音蔵の589音源を最後まで表示し、検索と開き直しで表示件数を戻せる", async ({ page }) => {
-  // Match the published catalog's size without depending on the live service.
-  const catalog = Object.fromEntries(Array.from({ length: 589 }, (_, index) => {
-    const id = `catalog-${String(index).padStart(3, "0")}`;
-    return [id, {
-      name: id,
-      description: index < 375 ? "環境音" : "楽曲",
-      categories: [index < 375 ? "環境音" : "楽曲・BGM"],
-      tags: ["audio"],
-      authors: { "テスト": "generator" },
-      license: "Test fixture",
-      license_url: "https://yushimatenjin.github.io/sound-generator/",
-    }];
-  }));
+test("音蔵の続きを表示し、検索と開き直しで表示範囲を戻せる", async ({ page }) => {
+  // A synthetic first batch and an identifiable item beyond it. The fixture
+  // follows the UI batch size, never the changing public catalog's cardinality.
+  const firstId = "catalog-first";
+  const lastId = "music-target";
+  const fixture = (name: string, category: string) => ({
+    name, description: category, categories: [category], tags: ["audio"],
+    authors: { "テスト": "generator" }, license: "Test fixture",
+    license_url: "https://yushimatenjin.github.io/sound-generator/",
+  });
+  const catalog = {
+    ...Object.fromEntries(Array.from({ length: EXTERNAL_STORE_PAGE_SIZE }, (_, index) => [
+      index === 0 ? firstId : `catalog-${index}`,
+      fixture(index === 0 ? firstId : `catalog-${index}`, "環境音"),
+    ])),
+    [lastId]: fixture(lastId, "楽曲・BGM"),
+  };
   await page.route(`${apiRoot}/assets.json`, (route) => route.fulfill({
     contentType: "application/json", headers: cors, body: JSON.stringify(catalog),
   }));
@@ -107,42 +111,47 @@ test("音蔵の589音源を最後まで表示し、検索と開き直しで表�
   const provider = dialog.getByRole("button", { name: /音蔵.*効果音と環境音/ });
   await provider.click();
   const list = dialog.getByRole("region", { name: "音蔵のアセット一覧" });
-  const cards = list.locator("[data-catalog-card]");
+  const firstCard = list.getByRole("button", { name: `${firstId} Audio`, exact: true });
+  const lastCard = list.getByRole("button", { name: `${lastId} Audio`, exact: true });
+  const more = list.getByRole("button", { name: /さらに.*を表示/ });
   const search = list.getByRole("textbox", { name: "音蔵を検索" });
-  await expect(cards).toHaveCount(120);
-  await expect(list).toContainText("589件中120件を表示");
-  for (const count of [240, 360, 480, 589]) {
-    await list.getByRole("button", { name: /さらに\d+件を表示/ }).click();
-    await expect(cards).toHaveCount(count);
-  }
-  await expect(list.getByRole("button", { name: /さらに\d+件を表示/ })).toHaveCount(0);
-  await cards.last().click();
-  await expect(dialog.getByRole("heading", { name: "catalog-588" })).toBeVisible();
+  await expect(firstCard).toBeVisible();
+  await expect(lastCard).toBeHidden();
+  await more.click();
+  await expect(more).toBeHidden();
+  await lastCard.click();
+  await expect(dialog.getByRole("heading", { name: lastId })).toBeVisible();
   await expect(dialog.getByRole("button", { name: "プロジェクトに追加" })).toBeEnabled();
   await dialog.getByRole("button", { name: "プロジェクトに追加" }).click();
-  await expect(dialog.getByRole("status")).toContainText("catalog-588");
+  await expect(dialog.getByRole("status")).toContainText(lastId);
 
   await search.fill("楽曲");
-  await expect(cards).toHaveCount(120);
-  await expect(list).toContainText("214件中120件を表示");
-  await list.getByRole("button", { name: "さらに94件を表示" }).click();
-  await expect(cards).toHaveCount(214);
+  await expect(lastCard).toBeVisible();
+  await expect(firstCard).toBeHidden();
+  await expect(more).toBeHidden();
   await search.fill("存在しない音源");
-  await expect(cards).toHaveCount(0);
+  await expect(lastCard).toBeHidden();
   await expect(list).toContainText("条件に合うアセットがありません");
-  await search.fill("catalog-588");
-  await expect(cards).toHaveCount(1);
   await search.fill("");
-  await expect(cards).toHaveCount(120);
-  await list.getByRole("button", { name: "さらに120件を表示" }).click();
+  await expect(firstCard).toBeVisible();
+  await expect(lastCard).toBeHidden();
+  // Search must also find an item that has not been revealed by show-more.
+  await search.fill(lastId);
+  await expect(lastCard).toBeVisible();
+  await expect(firstCard).toBeHidden();
+  await search.fill("");
+  await more.click();
   await list.getByRole("combobox", { name: "アセット種別" }).selectOption("audio");
-  await expect(cards).toHaveCount(120);
-  await list.getByRole("button", { name: "さらに120件を表示" }).click();
+  await expect(lastCard).toBeHidden();
+  await more.click();
+  await expect(lastCard).toBeVisible();
   await dialog.getByRole("button", { name: /ギミック/ }).click();
   await provider.click();
-  await expect(cards).toHaveCount(120);
-  await list.getByRole("button", { name: "さらに120件を表示" }).click();
+  await expect(lastCard).toBeHidden();
+  await more.click();
+  await expect(lastCard).toBeVisible();
   await dialog.getByRole("button", { name: "「外部から追加」を閉じる" }).click();
   await page.getByRole("button", { name: "外部から追加", exact: true }).click();
-  await expect(cards).toHaveCount(120);
+  await expect(lastCard).toBeHidden();
+  await expect(more).toBeVisible();
 });
