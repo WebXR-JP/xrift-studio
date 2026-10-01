@@ -4,7 +4,22 @@ import { createServer } from 'vite';
 const server = await createServer({ configFile: false, optimizeDeps: { noDiscovery: true }, server: { middlewareMode: true, watch: null, hmr: false, ws: false } });
 after(() => server.close());
 const { verifyStudioResult, parseStudioResult } = await server.ssrLoadModule('/src/lib/visual-editor/chatgpt-delivery.ts');
-const { callTool } = await server.ssrLoadModule('/packages/xrift-studio-cloud/worker.ts');
+const { callTool, default: cloudWorker } = await server.ssrLoadModule('/packages/xrift-studio-cloud/worker.ts');
+
+test('discovered tools declare the OAuth scopes required by Sites hosting', async () => {
+  const request = new Request('https://studio.example/mcp', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+  });
+  const response = await cloudWorker.fetch(request, { ASSETS: { fetch() { throw new Error('Discovery must not load assets'); } } });
+  const { result } = await response.json();
+  assert.ok(result.tools.length > 0);
+  for (const tool of result.tools) {
+    assert.deepEqual(tool.securitySchemes, [{ type: 'oauth2', scopes: ['openid', 'resource.invoke', 'email'] }], tool.name);
+    assert.deepEqual(tool._meta.securitySchemes, tool.securitySchemes, tool.name);
+  }
+  assert.equal(result.tools.find(tool => tool.name === 'open_studio')._meta.ui.resourceUri, 'ui://xrift-studio/worlds-v17');
+});
 
 test('missing conversation state asks the agent to carry data, never to open the Editor', async () => {
   await assert.rejects(callTool('edit_world', { operations: [{ tool: 'create_primitive', arguments: { shape: 'box' } }] }), /conversation_state_required/);
@@ -92,9 +107,9 @@ test('global entry and later operations address the same live editor resource', 
   const rpc = async (method,params={}) => (await (await worker.fetch(new Request('https://example.test/mcp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})}),{ASSETS:{fetch:async()=>new Response('<!doctype html><html lang="ja"><head></head><body></body></html>')}})).json()).result;
   const tools=(await rpc('tools/list')).tools;
   const entry=tools.find(tool=>tool.name==='open_studio'); const edit=tools.find(tool=>tool.name==='edit_world');
-  assert.equal(edit._meta,undefined);
+  assert.equal(edit._meta.ui,undefined);
   assert.equal(entry._meta.ui.resourceUri,tools.find(tool=>tool.name==='capture_scene_view')._meta.ui.resourceUri);
-  assert.equal(tools.find(tool=>tool.name==='create_world')._meta,undefined);
+  assert.equal(tools.find(tool=>tool.name==='create_world')._meta.ui,undefined);
   assert.equal(entry._meta['openai/ui'].entrypoints[0].type,'global');
   assert.equal(entry._meta.ui.visibility,undefined);
   assert.equal(tools.find(tool=>tool.name==='capture_scene_view')._meta['openai/ui'],undefined);

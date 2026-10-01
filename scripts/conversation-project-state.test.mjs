@@ -98,8 +98,8 @@ test('tool schemas carry conversation state and project routes serve the common 
   const edit = tools.find(tool => tool.name === 'edit_world');
   assert.ok(edit.inputSchema.required.includes('bundle'));
   assert.ok(edit.inputSchema.required.includes('revision'));
-  assert.equal(edit._meta, undefined);
-  assert.equal(tools.find(tool => tool.name === 'create_world')._meta, undefined);
+  assert.equal(edit._meta.ui, undefined);
+  assert.equal(tools.find(tool => tool.name === 'create_world')._meta.ui, undefined);
   assert.equal(tools.find(tool => tool.name === 'capture_scene_view')._meta.ui.resourceUri, tools.find(tool => tool.name === 'open_studio')._meta.ui.resourceUri);
   const response = await worker.fetch(new Request('https://example.test/editor/project-example'), { ASSETS: { fetch: request => new Response(new URL(request.url).pathname + new URL(request.url).search) } });
   assert.equal(await response.text(), '/editor.html?project=project-example');

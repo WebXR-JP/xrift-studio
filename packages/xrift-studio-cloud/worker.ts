@@ -503,7 +503,11 @@ const tools = [
       }
     }
   }
-].map(tool => ({ ...tool, icons, securitySchemes: [{ type: 'noauth' }] }));
+].map(tool => {
+  // Sites authenticates MCP requests before dispatching them to this Worker.
+  const securitySchemes = [{ type: 'oauth2', scopes: ['openid', 'resource.invoke', 'email'] }];
+  return { ...tool, icons, securitySchemes, _meta: { ...tool._meta, securitySchemes } };
+});
 export async function callTool(name: string, args: Record<string, unknown>): Promise<Record<string, any>> {
   if (name === 'open_studio') {
     if (args.bundle) {
