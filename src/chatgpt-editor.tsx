@@ -199,6 +199,20 @@ function Application() {
   }
   const lastDeepLink = useRef<string | null>(null);
   const hostReady = useRef(false);
+  const entryCreated = useRef(false);
+  const initialArguments = useRef<Record<string, unknown>>({});
+  const initialResultReceived = useRef(false);
+  async function startNewEntry(name = '新しいワールド') {
+    if (latestResult.current || applying.current) throw new Error('未完了のAI編集が残っています。反映を再確認してから新しい作品を作成してください。');
+    if (!studio.current) throw new Error('Studioが接続されていません。プラグインを開き直してください');
+    if (!name.trim() || name.length > 80) throw new Error('プロジェクト名は1〜80文字で指定してください。');
+    await writes.current;
+    await studio.current.create(name.trim());
+    const projectId = current.current?.documents.project.projectId;
+    if (!projectId) throw new Error('作成した作品の保存先を確認できませんでした。');
+    await openTarget(projectId);
+    setNotice('新しいワールドをブラウザに保存し、エディターを開きました。');
+  }
   async function openTarget(projectId: string) {
     validateStudioProjectId(projectId);
     if (latestResult.current && current.current?.documents.project.projectId !== projectId) throw new Error('AIの編集が未完了です。反映を再確認してから作品を切り替えてください');
@@ -234,7 +248,9 @@ function Application() {
       current.current = null; setLocal(null); bridge.current = null;
       setNotice(`直前の作品を再開できませんでした。${restoreError.current}。一覧から別の作品を開くか、編集中のタブを閉じて開き直してください。`);
     });
+    app.ontoolinput = params => { initialArguments.current = params.arguments as Record<string, unknown>; };
     app.ontoolresult = result => {
+      initialResultReceived.current = true;
       if (result.isError) { setNotice(result.content?.find(c => c.type === 'text')?.text ?? '接続に失敗しました'); return; }
       const data = (result.structuredContent ?? {}) as Record<string, unknown>;
       received.current = received.current.then(async () => {
@@ -242,7 +258,10 @@ function Application() {
         if (data.localProjects === true) {
           // A deep link already selects/creates its target during host startup.
           // Do not create a second project from the global entry's default result.
-          if (data.launch === 'new' && !extensions.deepLink.getCurrent()?.url) await accept(await callTool('create_world', {}) as Record<string, unknown>);
+          if (data.launch === 'new' && !extensions.deepLink.getCurrent()?.url) {
+            if (entryCreated.current) entryCreated.current = false;
+            else await accept(await callTool('create_world', {}) as Record<string, unknown>);
+          }
           return;
         }
         if (data.studioCommand) { await command(data.studioCommand as Record<string, unknown>); return; }
@@ -275,7 +294,12 @@ function Application() {
       setNotice(restoreError.current ? `直前の作品を再開できませんでした。${restoreError.current}。一覧から別の作品を開くか、編集中のタブを閉じて開き直してください。` : recovery.current.pending ? '未完了のAI編集が残っています。反映を再確認してください。' : current.current ? 'ブラウザに保存した直前の編集を再開しました。' : '会話でワールドの制作を頼むか、作品ファイルを取り込んでください。');
       try {
         if (extensions.deepLink.getCurrent()?.url) await openDeepLink();
-        else {
+        else if (app.getHostContext()?.toolInfo?.tool.name === 'open_studio' && !initialResultReceived.current && initialArguments.current.mode === undefined && initialArguments.current.projectId === undefined) {
+          // Standalone app entry does not necessarily send a tool result.
+          // Use the same creation action as the ordinary browser editor.
+          entryCreated.current = true;
+          await startNewEntry(typeof initialArguments.current.name === 'string' ? initialArguments.current.name : undefined);
+        } else {
           const active = recovery.current.active;
           if (active) await openTarget(active.projectId);
           if (current.current) setNotice('ブラウザに保存した直前の編集を再開しました。');

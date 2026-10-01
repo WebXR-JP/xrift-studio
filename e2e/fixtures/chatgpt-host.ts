@@ -8,7 +8,7 @@ let latestOperationId: string | undefined;
 const receipts: unknown[] = [];
 async function connect() {
   if (host) await host.close();
-  host = new AppBridge(null, { name: '検証専用ホスト', version: '1' }, { message: { text: {}, image: {} }, updateModelContext: { text: {}, structuredContent: {} } }, { hostContext: { theme: 'light', displayMode: 'inline', availableDisplayModes: ['inline', 'fullscreen'], ...(new URLSearchParams(location.search).has('deep-new') ? { 'openai/deepLink': {url:'/new?name=ChatGPT新規起動・検証専用'} } : {}) } });
+  host = new AppBridge(null, { name: '検証専用ホスト', version: '1' }, { message: { text: {}, image: {} }, updateModelContext: { text: {}, structuredContent: {} } }, { hostContext: { theme: 'light', displayMode: 'inline', availableDisplayModes: ['inline', 'fullscreen'], ...(new URLSearchParams(location.search).has('standalone-new') ? {toolInfo:{tool:{name:'open_studio',inputSchema:{type:'object',properties:{}}}}}:{}), ...(new URLSearchParams(location.search).has('deep-new') ? { 'openai/deepLink': {url:'/new?name=ChatGPT新規起動・検証専用'} } : {}) } });
   host.onrequestdisplaymode = async ({ mode }) => { host.setHostContext({ displayMode: mode }); document.querySelector('#connection')!.textContent = `接続済み / ${mode}`; return { mode }; };
   host.onmessage = async ({ content }) => {
     const text = content.find(item => item.type === 'text');

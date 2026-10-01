@@ -36,6 +36,7 @@ function EditorFallback() {
 /** The browser editor has its own HTML entry, so its URL survives navigation. */
 export type BrowserStudioApi = {
   open(path: string): Promise<void>;
+  create(name: string): Promise<string>;
   openProject(projectId: string): Promise<void>;
   apply(bundle: PrototypeVisualProject): Promise<string>;
 };
@@ -261,6 +262,7 @@ export default function BrowserEditorApp({ host }: { host?: BrowserStudioHost } 
       await hostRef.current?.onProjectChange(path);
       setTransfer(null);
       requestAnimationFrame(() => window.scrollTo({ top: 0 }));
+      return path;
     } catch (error) {
       setTransfer({ phase: "failed", operation: "open", message: error instanceof Error ? error.message : "ブラウザにプロジェクトを保存できませんでした。保存容量やSafariの設定を確認してください。" });
     } finally { transferActive.current = false; }
@@ -289,6 +291,11 @@ export default function BrowserEditorApp({ host }: { host?: BrowserStudioHost } 
         try { await openProjectById(projectId); setTransfer(null); }
         catch (error) { setTransfer({ phase: 'failed', operation: 'open', message: error instanceof Error ? error.message : 'プロジェクトを開けませんでした。' }); throw error; }
         finally { transferActive.current = false; }
+      },
+      create: async (name) => {
+        const path = await createProject('world', name);
+        if (!path) throw new Error('新しい作品を作成できませんでした。表示されたエラーを確認して再試行してください。');
+        return path;
       },
       apply: applyBrowserBundle,
     });

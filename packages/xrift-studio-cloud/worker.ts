@@ -7,8 +7,8 @@ import documentTools from './document-tools.json';
 import { studioProjectRoute, validateStudioProjectId } from '../../src/lib/browser-project-routing';
 export interface Environment { ASSETS: { fetch(request: Request): Promise<Response> } }
 const MAX_BYTES = 1024 * 1024;
-const UI_URI = 'ui://xrift-studio/worlds-v10';
-const LEGACY_UI_URIS = ['ui://xrift-studio/worlds-v9', 'ui://xrift-studio/worlds-v8', 'ui://xrift-studio/worlds-v7', 'ui://xrift-studio/worlds-v6', 'ui://xrift-studio/worlds-v5', 'ui://xrift-studio/worlds-v3', 'ui://xrift-studio/worlds-v4'];
+const UI_URI = 'ui://xrift-studio/worlds-v11';
+const LEGACY_UI_URIS = ['ui://xrift-studio/worlds-v10', 'ui://xrift-studio/worlds-v9', 'ui://xrift-studio/worlds-v8', 'ui://xrift-studio/worlds-v7', 'ui://xrift-studio/worlds-v6', 'ui://xrift-studio/worlds-v5', 'ui://xrift-studio/worlds-v3', 'ui://xrift-studio/worlds-v4'];
 const names = documentTools.map((tool) => tool.name);
 const object = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('JSONオブジェクトで指定してください');
