@@ -195,7 +195,7 @@ export function createInteractionTriggerGraphExtension(): KhrInteractivityExtens
     createDefaultKhrInteractivityExtension(),
   );
   const graph = extension.graphs[0] as KhrInteractivityGraph;
-  graph.name = "Interaction trigger";
+  graph.name = "Interaction Trigger";
   graph.types = [];
   graph.declarations = [];
   graph.nodes = [];
@@ -389,7 +389,7 @@ export const INTERACTIVITY_RECIPES: readonly InteractivityRecipe[] = [
   {
     id: "start-fade-color",
     label: "開始時に色を変える",
-    description: "開始から基本色を1秒かけて変えます。「かける時間」で速さを変えられます",
+    description: "開始から基本色を1秒かけて変えます。「Duration (s)」で速さを変えられます",
     focusOffset: 1,
     build: (graph, origin) => {
       const start = appendInteractivityOperation(graph, "event/onStart", origin);
@@ -568,7 +568,7 @@ export function createModelAnimationClipGraphExtension(
     createDefaultKhrInteractivityExtension(),
   );
   const graph = extension.graphs[0] as KhrInteractivityGraph;
-  graph.name = "アニメーション";
+  graph.name = "Animation";
   graph.nodes = [];
   graph.declarations = [];
   graph.types = [];
@@ -613,7 +613,7 @@ export function createModelAnimationClipGraphExtension(
     if (fan !== null) {
       if (root === null) connectInteractivityFlow(graph, start, "out", fan);
       else connectInteractivityFlow(graph, root, String(groupIndex), fan);
-      // The card reads「順番に実行」, which is what the operation is: it runs its
+      // The card reads「Sequence」, which is what the operation is: it runs its
       // outputs in socket order. What it is not is a queue — every clip here
       // starts in the same instant, because starting an animation returns
       // immediately. Said on the card, because "in order" is exactly what an

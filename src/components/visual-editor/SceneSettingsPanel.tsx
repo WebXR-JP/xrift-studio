@@ -541,7 +541,7 @@ function SkyboxImageField({
           {skyboxes.map((skybox) => (
             <option key={skybox.id} value={skybox.id}>
               {skybox.name}
-              {isEnvironmentTextureAsset(skybox) ? "（HDRI テクスチャ）" : "（画像テクスチャ）"}
+              {isEnvironmentTextureAsset(skybox) ? "（HDRIテクスチャ）" : "（画像テクスチャ）"}
             </option>
           ))}
         </select>
@@ -1331,7 +1331,7 @@ export function SceneSettingsInspector({
           <NumberField label="分割数" value={settings.editor.gizmo.gridDivisions} min={1} step={1} disabled={readOnly || !settings.editor.gizmo.gridVisible} onChange={(gridDivisions) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, gridDivisions: Math.round(gridDivisions) } } })} />
           <NumberField label="ギズモの大きさ" value={settings.editor.gizmo.size} min={0.1} step={0.01} disabled={readOnly} onChange={(size) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, size } } })} />
           <Toggle label="スナップを有効にする" description="移動・回転・拡縮を一定間隔に揃えます。" checked={settings.editor.gizmo.snapEnabled} disabled={readOnly} onChange={(snapEnabled) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, snapEnabled } } })} />
-          <Toggle label="Shiftを押している間は反転する" description="スナップがオフの時は一時的にそろえ、オンの時は一時的に自由に動かせます。" checked={settings.editor.gizmo.snapHoldShift} disabled={readOnly} onChange={(snapHoldShift) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, snapHoldShift } } })} />
+          <Toggle label="Shiftを押している間は反転する" description="スナップがスナップがオフなら一時的にオンになり、オンなら一時的に自由に動かせます。" checked={settings.editor.gizmo.snapHoldShift} disabled={readOnly} onChange={(snapHoldShift) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, snapHoldShift } } })} />
           <NumberField label="移動スナップ" value={settings.editor.gizmo.translateSnap} min={0.001} step={0.1} disabled={readOnly} onChange={(translateSnap) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, translateSnap } } })} />
           <NumberField label="回転スナップ (度)" value={settings.editor.gizmo.rotateSnapDegrees} min={0.1} step={1} disabled={readOnly} onChange={(rotateSnapDegrees) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, rotateSnapDegrees } } })} />
           <NumberField label="拡縮スナップ" value={settings.editor.gizmo.scaleSnap} min={0.001} step={0.05} disabled={readOnly} onChange={(scaleSnap) => update({ ...settings, editor: { ...settings.editor, gizmo: { ...settings.editor.gizmo, scaleSnap } } })} />

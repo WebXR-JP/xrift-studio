@@ -152,7 +152,7 @@ export const XRIFT_INTERACTION_SCOPE_NOTES: Readonly<
   viewer:
     "操作した人の画面や位置だけが変わります。ほかの人には反映されません。",
   world:
-    "初期状態では操作した人にだけ反映されます。「みんなに見せる」を有効にすると、同じ部屋の参加者にも反映されます。",
+    "初期状態では操作した人にだけ反映されます。「同じ部屋の全員に反映する」を有効にすると、同じ部屋の参加者にも反映されます。",
 };
 
 export const XRIFT_INTERACTION_TARGET_LABELS: Readonly<
@@ -287,7 +287,7 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     name: "position",
     label: "位置",
     description:
-      "Entityの位置を、親から見たXYZ（メートル）で設定します。動作確認を止めると元の位置に戻ります。",
+      "親Entityを基準にしたXYZ座標を、メートルで設定します。動作確認を停止すると元の位置に戻ります。",
     kind: "vector3",
     defaultValue: [0, 0, 0],
   },
@@ -357,7 +357,7 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     name: "baseColor",
     label: "Base Color",
     description:
-      "このEntityが描くマテリアルの色を変えます。Entity内のすべてのマテリアルが対象です。動作確認を止めると元へ戻ります。",
+      "このEntityで使うすべてのマテリアルの色を変えます。動作確認を停止すると元の色に戻ります。",
     kind: "color",
     defaultValue: [1, 1, 1],
   },
@@ -398,7 +398,7 @@ export const XRIFT_INTERACTION_PROPERTIES: readonly XriftInteractionPropertyDesc
     name: "emitting",
     label: "放出",
     description:
-      "ONで粒を出し、OFFで止めて消します。押したときに出すには、最初はOFFにしておきます。",
+      "オンにすると粒を放出し、オフにすると停止して消します。操作したときだけ放出するには、初期状態をオフにしてください。",
     kind: "bool",
     defaultValue: true,
   },

@@ -6,13 +6,13 @@
 
 ワールド→アイテム、アイテム→ワールド、ワールド→ワールド、アイテム→アイテムを同じ追加処理で扱う。別プロジェクトを開く操作と、今のHierarchyへEntityを追加する操作を分離する。公開済みワールドからの抽出や、コードプロジェクトの任意ソース解析は行わない。
 
-追加Importでは追加先の `projectKind` を切り替えない。書き出し時だけ、本人がワールド／アイテムを選べる。種類を変える際も既存の追加計画と同じComponent制約を適用する。例えばワールドの家具をアイテムにする場合は、アイテムプロジェクトを作成して、そのHierarchyへ家具を追加する。以降の編集・公開は既存のアイテム向け経路を使う。
+追加Importでは追加先の`projectKind`を保持する。ワールド／アイテムの選択は書き出し時に行える。種類を変える場合も、既存の追加計画と同じComponent制約を適用する。例えばワールドの家具をアイテムにするには、アイテムプロジェクトを作成し、そのHierarchyへ家具を追加する。以降の編集・公開は既存のアイテム向け経路を使う。
 
 ## .xriftstudioとの互換性
 
-ZIPコンテナー、`.xrift-studio/package-manifest.json` の `formatVersion: 1`、編集documentの `schemaVersion: 0.1.0` を維持する。新しい拡張子や移行必須のschemaは導入しない。
+ZIPコンテナー、`.xrift-studio/package-manifest.json`の`formatVersion: 1`、編集documentの`schemaVersion: 0.1.0`を維持する。新しい拡張子や移行必須のschemaは導入しない。
 
-部分書き出しは選択範囲を一つの通常のビジュアルプロジェクトにする。新しいprojectIdとsceneIdを付け、`scenes/hierarchy.scene.json`、`assets/manifest.json` と参照ファイルを格納する。独立したプロジェクトとして開くこともできる。追加で次の補助情報を含める。
+部分書き出しは選択範囲を一つの通常のビジュアルプロジェクトにする。新しいprojectIdとsceneIdを付け、`scenes/hierarchy.scene.json`、`assets/manifest.json`と参照ファイルを格納する。独立したプロジェクトとして開くこともできる。追加で次の補助情報を含める。
 
 ```json
 {
@@ -23,9 +23,9 @@ ZIPコンテナー、`.xrift-studio/package-manifest.json` の `formatVersion: 1
 }
 ```
 
-格納先は `.xrift-studio/hierarchy-transfer.json`。これは既存documentを置き換えず、注意事項と形式の識別を補う。読み込み時は未来の形式や不正な注意事項を拒否する。補助情報のない従来のビジュアル `.xriftstudio` / `.zip` も読み込める。複数シーンのパッケージでは一度に一つのシーンから選ぶ。
+格納先は`.xrift-studio/hierarchy-transfer.json`。これは既存documentを置き換えず、注意事項と形式の識別を補う。読み込み時は未来の形式や不正な注意事項を拒否する。補助情報のない従来のビジュアル`.xriftstudio` / `.zip`も読み込める。複数シーンのパッケージでは一度に一つのシーンから選ぶ。
 
-元の `lastPublication`、公開記録sidecar、シーン全体の設定、未使用素材、キャッシュを選択範囲へ持ち込まない。Assetの著作者・提供元など、素材に付随する属性はコピーする。既存package manifestのファイル一覧とSHA-256は既存writerが生成するものであり、署名や安全なScriptの保証ではない。
+元の`lastPublication`、公開記録sidecar、シーン全体の設定、未使用素材、キャッシュを選択範囲へ持ち込まない。Assetの著作者・提供元など、素材に付随する属性はコピーする。既存package manifestのファイル一覧とSHA-256は既存writerが生成するものであり、署名や安全なScriptの保証ではない。
 
 ## 選択範囲と依存素材
 
@@ -39,37 +39,37 @@ Prefab Instanceは既存resolverで現在のEntityへ展開し、元Prefabとの
 
 ## 参照の再割り当て
 
-追加のたびにEntity、Component、Asset、AssetフォルダーのIDを生成する。Component IDはEntity単位なので、マップのキーには元のEntity IDとComponent IDを両方含める。ファイルは新しい `assets/imported/hierarchy-<id>/` 以下へ元の相対構成を保って格納する。同名のAsset、同じID、同じファイル名を理由に既存の内容を上書きしない。
+追加のたびにEntity、Component、Asset、AssetフォルダーのIDを生成する。Component IDはEntity単位なので、マップのキーには元のEntity IDとComponent IDを両方含める。ファイルは新しい`assets/imported/hierarchy-<id>/`以下へ元の相対構成を保って格納する。同名のAsset、同じID、同じファイル名を理由に既存の内容を上書きしない。
 
-型付きの参照フィールド、Componentの `entityReferences` / `assetReferences` で宣言されたproperties、GraphのEntity・Component・Asset設定を変換する。表示名、文章、コード、URL、shaderソースを一括文字列置換しない。Graphのscene/self/player用特殊IDを保持する。
+型付きの参照フィールド、Componentの`entityReferences` / `assetReferences`で宣言されたproperties、GraphのEntity・Component・Asset設定を変換する。表示名、文章、コード、URL、shaderソースを一括文字列置換しない。Graphのscene/self/player用特殊IDを保持する。
 
-選択範囲にないEntityへの参照は空にし、そのComponentを無効にする。Graphの参照は空にして未設定状態とし、注意事項を示す。追加先の偶然一致するIDに結び付けない。登録されたComponentの `uniqueWithinScene` な文字列も新しくする。コードに直接書いたIDや独自の一意キーは作者による確認が必要。
+選択範囲にないEntityへの参照は空にし、そのComponentを無効にする。Graphの参照は空にして未設定状態とし、注意事項を示す。追加先の偶然一致するIDに結び付けない。登録されたComponentの`uniqueWithinScene`な文字列も新しくする。コードに直接書いたIDや独自の一意キーは作者による確認が必要。
 
-追加先の種類で使えない、または定義がないXRift Componentは設定を残して無効にする。標準Spawn Pointは追加先に応じて `player` / `item-preview` にする。全てのギミックが別種別でも同じ動作をするという保証ではない。
+追加先の種類で使えない、または定義がないXRift Componentは設定を残して無効にする。標準Spawn Pointは追加先に応じて`player` / `item-preview`にする。全てのギミックが別種別でも同じ動作をするという保証ではない。
 
-Scriptの `play-and-edit` は受け渡すsnapshotで `play` にし、直接のimport planでも再確認する。元のScript Asset本文と元プロジェクトの実行設定は変更しない。受け渡し操作からPlayを開始しない。既存Script runtimeはsandboxではなく、Play時の安全性はコード内容による。
+Scriptの`play-and-edit`は受け渡すsnapshotで`play`にし、直接のimport planでも再確認する。元のScript Asset本文と元プロジェクトの実行設定は変更しない。受け渡し操作からPlayを開始しない。既存Script runtimeはsandboxではなく、Play時の安全性はコード内容による。
 
 ## 座標
 
-`world` は選択rootをワールド座標へ変換する。追加先に親がある場合は親のワールド行列の逆行列を使ってローカル座標へ変換する。`local` は元のローカルTRSをそのまま使う。`origin` はworld変換後の先頭rootの位置を全rootから引き、親またはSceneの原点へ移す。回転・大きさとroot間の相対配置は保持する。
+`world`は選択rootをワールド座標へ変換する。追加先に親がある場合は親のワールド行列の逆行列を使ってローカル座標へ変換する。`local`は元のローカルTRSをそのまま使う。`origin`はworld変換後の先頭rootの位置を全rootから引き、親またはSceneの原点へ移す。回転・大きさとroot間の相対配置は保持する。
 
-行列を再構成できないshear、逆変換できない大きさ0は拒否する。近似して形を壊さない。既に部分書き出ししたファイルは、その保存時のTRSを基準にする。切り離した元の親は復元しない。
+TRSで行列を再構成できないshearと、逆変換できない大きさ0は拒否する。形状が変わる近似変換は行わない。既に部分書き出ししたファイルは、その保存時のTRSを基準にする。切り離した元の親は復元しない。
 
 ## 追加とUndo
 
-`createHierarchyTransfer` → `prepareHierarchyTransferFiles` → `planHierarchyImport` → `applyHierarchyImportPlan` の順で処理する。計画段階は元bundleと追加先bundleを変更しない。
+`createHierarchyTransfer` → `prepareHierarchyTransferFiles` → `planHierarchyImport` → `applyHierarchyImportPlan`の順で処理する。計画段階は元bundleと追加先bundleを変更しない。
 
-素材バイト列を読み終え、既存codecでdocumentを検証し、確認を得てから既存 `commitVisualAssetImport` で素材を書き込む。書き込みの前後で対象bundle・projectPath・編集状態を確認する。変わっていた場合はdocumentを追加しない。既存のEntityは参照を維持し、追加先の親のみimmutableに更新する。更新後のbundle全体を一つの履歴へ入れる。
+素材バイト列を読み終え、既存codecでdocumentを検証し、確認を得てから既存`commitVisualAssetImport`で素材を書き込む。書き込みの前後で対象bundle・projectPath・編集状態を確認する。変わっていた場合はdocumentを追加しない。既存のEntityは参照を維持し、追加先の親のみimmutableに更新する。更新後のbundle全体を一つの履歴へ入れる。
 
-UndoはEntityとAssetの登録を一緒に戻す。Redoのため書き込んだ素材ファイル自体は削除しない。書き込み後に別操作でrevisionが変わって追加を中止した場合も、未参照の管理ファイルが残り得る。原子的なdocument・ファイル・永続保存の一括DB transactionを新設したわけではない。追加後の永続保存は既存autosaveを使い、保存エラーは既存UIで扱う。
+UndoはEntityとAssetの登録を一緒に戻す。Redoに使うため、書き込んだ素材ファイル自体は保持する。書き込み後に別操作でrevisionが変わり、追加を中止した場合も、未参照の管理ファイルが残ることがある。document、ファイル、永続保存を一括で確定するDB transactionは追加していない。追加後の永続保存には既存autosaveを使い、保存エラーは既存UIで扱う。
 
 ## UIと入出力
 
 同一window/tabのモジュール内clipboardに素材バイト列付きsnapshotを保持する。プロジェクト切り替えでは消さない。OS clipboard、別window/tab、再起動、他アプリへの貼り付けには対応しない。長期・端末間の受け渡しはファイルを使う。
 
-部分書き出しはScene / Hierarchy共通の右クリックから、追加Importは上部の「素材を追加」から確認dialogへ入る。dialogはnative `<dialog>` のmodal/focus管理を使い、処理中は変更・終了・二重実行を防ぐ。Entityの選択一覧は描画数を制限し、検索に対応する。Import完了までは確認画面を閉じず、失敗理由を残す。
+部分書き出しはScene / Hierarchy共通の右クリックから、追加Importは上部の「素材を追加」から確認dialogへ入る。dialogはnative `<dialog>`のmodal/focus管理を使い、処理中は変更・終了・二重実行を防ぐ。Entityの選択一覧は描画数を制限し、検索に対応する。Import完了までは確認画面を閉じず、失敗理由を残す。
 
-ブラウザでは準備後にdownloadリンクを本人が押す。保存開始と保存完了を混同しない。デスクトップは型付きIPC `saveHierarchyPackage` から明示的な保存先選択を行い、新規 `save_hierarchy_package` でサイズ・形式を確認した後、一時ファイルとrenameで保存する。既存の全プロジェクト書き出しを置き換えない。
+ブラウザでは準備後にdownloadリンクを本人が押す。保存開始と保存完了を混同しない。デスクトップは型付きIPC `saveHierarchyPackage`から明示的な保存先選択を行い、新規`save_hierarchy_package`でサイズ・形式を確認した後、一時ファイルとrenameで保存する。既存の全プロジェクト書き出しを置き換えない。
 
 ## 制限
 

@@ -1,4 +1,4 @@
 interface:
   display_name: "XRift Release Promo Video"
-  short_description: "差分から新機能紹介動画をRemotionで構成・演出"
+  short_description: "更新内容を確認し、Remotionで紹介動画を作る"
   default_prompt: "Use $xrift-release-promo-video to turn the current XRift Studio release diff into a Remotion feature-promo video plan and renderable project."

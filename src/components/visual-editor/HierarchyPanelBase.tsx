@@ -181,8 +181,8 @@ function getHierarchyFilterResult(
     if (!entityMatchesKindFilters(entity, kindFilters)) continue;
     const effectivelyEnabled = isEntityEffectivelyEnabled(scene, entity);
     const statusTerms = effectivelyEnabled
-      ? "enabled visible 有効表示"
-      : "disabled hidden 無効非表示";
+      ? "enabled visible有効表示"
+      : "disabled hidden無効非表示";
     const haystack = [
       entity.name,
       getEntityTypeLabel(entity),
@@ -551,7 +551,7 @@ const HierarchyEntityRow = memo(function HierarchyEntityRow({
           handlers.replaceAssetDropTarget({
             kind: "entity",
             entityId: entity.id,
-            message: `素材 / XRift プレハブを「${entity.name}」の子へ配置`,
+            message: `素材 / XRiftプレハブを「${entity.name}」の子へ配置`,
           });
           return;
         }
@@ -1608,7 +1608,7 @@ export function HierarchyPanel({
           if (readOnly) return;
           replaceAssetDropTarget({
             kind: "root",
-            message: "素材 / XRift プレハブをシーンの直下へ配置",
+            message: "素材 / XRiftプレハブをシーンの直下へ配置",
           });
         }}
         onDragOver={(event) => {
@@ -1643,7 +1643,7 @@ export function HierarchyPanel({
                 if (readOnly) return;
                 replaceAssetDropTarget({
                   kind: "root",
-                  message: "素材 / XRift プレハブをシーンの直下へ配置",
+                  message: "素材 / XRiftプレハブをシーンの直下へ配置",
                 });
                 return;
               }

@@ -10,7 +10,7 @@ XRift Studioのデバッグ版は、標準MCP経由で現在の画面をAIクラ
 - `webview_get_styles`: 指定要素のcomputed styleを確認する
 - `webview_select_element`: 要素を選択し、注釈付き画像と要素情報を取得する
 - `ipc_monitor` / `ipc_get_captured`: Tauri IPCの呼び出しと結果を確認する
-- シーンの「診断」: FPS、frame time、draw calls、triangles、visible メッシュ数、camera 奥を表示する
+- シーンの「診断」: FPS、frame time、draw calls、triangles、visibleメッシュ数、camera奥を表示する
 - シーンの「録画」: 実際の3D Canvasを最大15秒WebMへ保存し、見た目の問題を再現する
 
 画像だけで判断せず、DOM、console、IPCを同じ変更の確認材料として使います。
@@ -25,15 +25,15 @@ pnpm tauri:dev
 
 Tauri MCPはデバッグビルド専用です。アプリのウィンドウが開いた後、MCP client側でserver設定を読み直してください。
 
-**Codex** — リポジトリの [`.mcp.json`](../.mcp.json) に設定済みです。Codexでこのリポジトリを開きます。`tauri` MCP serverを再読み込みすると利用できます。
+Codexではリポジトリの[`.mcp.json`](../.mcp.json)に設定済みです。このリポジトリを開き、`tauri` MCP serverを再読み込みしてください。
 
-**DeepSeekなど、別のMCP host** — MCPを登録できるhostでは、次のコマンドでそのhost用の設定を生成できます。
+DeepSeekなどを使う別のMCP hostでは、次のコマンドで設定を生成できます。
 
 ```text
 pnpm mcp:debug-config
 ```
 
-出力された `mcpServers` のJSONをhostのMCP設定へ追加します。出力には現在のNode実行ファイルとリポジトリ内のserverラッパーの絶対パスが入ります。hostの作業ディレクトリに依存しません。
+出力された`mcpServers`のJSONをhostのMCP設定へ追加してください。現在のNode実行ファイルとリポジトリ内のserverラッパーの絶対パスを出力するため、hostの作業ディレクトリには依存しません。
 
 DeepSeekのモデルを使う場合も同じです。DeepSeekを接続できるMCP hostへこの設定を登録します。モデルAPIや単独のチャット画面がstdio MCPに対応していない場合は、MCP hostまたはIDE側が中継します。
 
@@ -48,7 +48,7 @@ DeepSeekのモデルを使う場合も同じです。DeepSeekを接続できるM
 5. `read_logs`でconsole errorを確認
 6. Tauri commandを変更した場合は`ipc_monitor`と`ipc_get_captured`で通信を確認します。
 
-静止画は `capture_scene_view`、負荷や時間変化は `capture_scene_debug` を使います。録画が必要な場合の例:
+静止画は`capture_scene_view`、負荷や時間変化は`capture_scene_debug`を使います。録画が必要な場合の例。
 
 ```json
 {"projectId":"…","sceneId":"…","action":"metrics"}
@@ -56,7 +56,7 @@ DeepSeekのモデルを使う場合も同じです。DeepSeekを接続できるM
 {"projectId":"…","sceneId":"…","action":"stop"}
 ```
 
-`capture_scene_debug` の `stop` は保存先ダイアログを開きません。アプリの `debug-captures` フォルダーへWebMを保存してパスを返します。`get_editor_context`で対象プロジェクト / シーンを確認してから呼び出してください。
+`capture_scene_debug`の`stop`は保存先ダイアログを開きません。アプリの`debug-captures`フォルダーへWebMを保存してパスを返します。`get_editor_context`で対象プロジェクト / シーンを確認してから呼び出してください。
 
 スクリーンショットは表示中のWebView領域だけを対象にします。OSのファイル選択ダイアログなどのネイティブUIは対象外です。シーンの録画は3D Canvasだけを最大15秒記録します。アプリ全体やネイティブUIを記録しません。読み取り確認は安全に行えます。書き込み操作は [共通ガイド](../AGENT.md#意思決定と完了) に従い、隔離した作業用データで検証します。許可済みの操作を再確認しません。
 

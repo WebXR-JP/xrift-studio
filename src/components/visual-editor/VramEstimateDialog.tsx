@@ -125,7 +125,7 @@ export function VramEstimateDialog({
               </h2>
             </div>
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              公開するテクスチャ・モデル・音声から、読み込み容量とVRAM使用量を概算します。
+              公開するテクスチャ、モデル、音声を基に、読み込み容量とVRAM使用量を概算します。
             </p>
           </div>
           <button
@@ -143,7 +143,7 @@ export function VramEstimateDialog({
         <div data-app-modal-body className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <SummaryCard
-              label="素材 VRAM"
+              label="素材VRAM"
               value={formatVramBytes(estimate.assetBytes)}
               detail={`${estimate.textureCount} Texture / ${estimate.modelCount} Model`}
               icon={<Box size={16} aria-hidden="true" />}
@@ -187,7 +187,7 @@ export function VramEstimateDialog({
                 ]}
               </span>
               <div className="mt-2 text-xs leading-5 text-slate-500">
-                VRAM 256 MB、初回素材 20 MB以下を余裕ありとするStudio基準
+                VRAM 256 MB、初回素材20 MB以下を余裕ありとするStudio基準
               </div>
             </div>
           </div>
@@ -286,7 +286,7 @@ export function VramEstimateDialog({
                   読み込み容量が多い順
                 </h3>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  公開時にコピーされる素材原本の合計です。アプリ本体と通信オーバーヘッドは含みません。
+                  公開時にコピーする素材ファイルの合計です。アプリ本体や通信に伴う追加のデータ量は含みません。
                 </p>
               </div>
               <span className="text-xs text-slate-400">
@@ -440,7 +440,7 @@ export function VramEstimateDialog({
                         {recommendation.estimatedVramSavingBytes &&
                         recommendation.estimatedVramSavingBytes > 0 ? (
                           <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">
-                            VRAM 最大約
+                            VRAM最大約
                             {formatVramBytes(
                               recommendation.estimatedVramSavingBytes,
                             )}削減
@@ -469,7 +469,7 @@ export function VramEstimateDialog({
               </div>
             ) : (
               <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                現在のStudio基準で優先度の高い改善候補はありません。
+                Studioの基準で優先度の高い改善候補は見つかりませんでした。
               </div>
             )}
           </section>
@@ -532,7 +532,7 @@ export function VramEstimateDialog({
           <div className="mt-6 flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
             <Info size={15} className="mt-0.5 shrink-0 text-slate-500" aria-hidden="true" />
             <p className="text-xs leading-5 text-slate-600">
-              これは実測値ではありません。ロード時間は素材原本と回線速度からの単純計算で、キャッシュ、CDN、アプリ本体、HTTP処理を含みません。
+              読み込み時間は、素材ファイルの容量と回線速度から計算した目安です。実測値ではありません。キャッシュ、CDN、アプリ本体、HTTP処理は計算に含みません。
               VRAMはブラウザ、GPU、画面解像度、影、Post Processing、KTX2の転送先形式で変動します。
               PNG・JPEG・WebPはGPU上のRGBA展開を基準にし、mipmap有効時は約33%を加算しています。
             </p>

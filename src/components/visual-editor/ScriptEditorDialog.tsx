@@ -298,7 +298,7 @@ function ScriptRuntimeConsole({ runtime }: { runtime: ScriptRuntimeReport }) {
   return (
     <section
       id="script-runtime-console"
-      aria-label="スクリプト Console"
+      aria-label="スクリプトConsole"
       className="h-36 shrink-0 overflow-y-auto border-t border-slate-700 bg-slate-950 px-3 py-2 font-mono text-[10px] text-slate-200 select-text"
     >
       <div className="mb-1 flex items-center gap-2 text-slate-400">
@@ -371,15 +371,15 @@ function ScriptApiGuide() {
           </span>
         </div>
         <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-          動作確認中のEntityや素材を操作します。変更は保存されません。
+          動作確認中のEntityや素材を操作できます。変更はプロジェクトには保存されません。
         </p>
       </div>
 
       <div className="space-y-4 p-3">
         <section>
-          <h4 className="text-[11px] font-bold text-slate-700">ノードグラフとつなぐ</h4>
+          <h4 className="text-[11px] font-bold text-slate-700">Node Graphとつなぐ</h4>
           <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-            ノードの「イベントを送信」「イベントを受信」と共通の通知です。値の受け渡しや他の参加者への同期は行いません。
+            ノードの「Send Event」「Receive Event」と共通の通知です。値の受け渡しや他の参加者への同期は行いません。
           </p>
           <GuideCode>{`start(ctx) {
   ctx.graph.on("door.open", () => {
@@ -532,7 +532,7 @@ ctx.particles.setOpacity(0.75);`}</GuideCode>
             ライトを動かす
           </h4>
           <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-            同じEntityのライトだけを選び、点灯、色、強度、Point / Spotの距離を
+            同じEntityのライトを選び、点灯状態、色、強度、Point / Spotの距離を
             動作確認中に変えられます。
           </p>
           <GuideCode>{`const lights = ctx.lights.select({ lightType: "point" });

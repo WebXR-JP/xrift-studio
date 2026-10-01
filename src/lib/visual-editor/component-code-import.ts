@@ -404,7 +404,7 @@ function analyzeComponentSources(input: {
     return emptyImportPlan({
       severity: "error",
       code: "entry-module-missing",
-      message: `${normalizedEntryFile}を元データ module一覧から読み取れませんでした。`,
+      message: `${normalizedEntryFile}を元データmodule一覧から読み取れませんでした。`,
       sourcePath: normalizedEntryFile,
     });
   }

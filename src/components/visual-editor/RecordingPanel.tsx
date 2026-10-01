@@ -107,7 +107,7 @@ export function RecordingPanel({
           ) : null}
           {snapshot.status === "recording" && !state.sourceAvailable ? (
             <p className="mt-1 text-[11px] leading-4">
-              シーンが表示されていません。表示されるまで最後のフレームが続きます。
+              シーンが表示されていません。表示が戻るまで、録画には最後のフレームを使います。
             </p>
           ) : null}
           {snapshot.status === "failed" && snapshot.message ? (
@@ -152,7 +152,7 @@ export function RecordingPanel({
         </button>
         {!nativeAvailable ? (
           <p className="mt-1.5 text-[11px] leading-4 text-slate-500">
-            ブラウザでは 60 秒までのサンプル録画をダウンロードします。長時間録画はデスクトップ版で行います。
+            ブラウザでは最大60秒のサンプル録画を保存できます。長時間録画にはデスクトップ版を使ってください。
           </p>
         ) : null}
       </section>
@@ -253,7 +253,7 @@ export function RecordingPanel({
             [
               { key: "showEditorUi", label: "エディターのパネルを表示" },
               { key: "showEditorHelpers", label: "グリッドやギズモを映す" },
-              { key: "showRecordingIndicator", label: "REC 表示（動画には入りません）" },
+              { key: "showRecordingIndicator", label: "REC表示（動画には入りません）" },
             ] as const
           ).map((option) => (
             <label key={option.key} className="flex items-center gap-2 text-[11px] text-slate-700">

@@ -40,11 +40,11 @@ export function AiConnectionPanel({
         <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
           <p className="font-semibold text-slate-800">デスクトップ版で利用できます</p>
           <p className="mt-1">
-            ブラウザ表示ではAIクライアントの検出や登録は実行しません。モデルのダウンロードやAIクライアントの起動は行いません。
+            AIクライアントの検出と登録はデスクトップ版で使えます。モデルのダウンロードやAIクライアントの起動は行いません。
           </p>
         </div>
         <p>
-          デスクトップ版では、CodexなどのAIクライアントから開いているシーンを読み取り・編集します。変更は自動保存され、「元に戻す」で取り消せます。
+          デスクトップ版ではCodexなどのAIクライアントから、開いているシーンを確認・編集できます。変更は自動保存されます。「元に戻す」で取り消すこともできます。
         </p>
       </div>
     );
@@ -64,7 +64,7 @@ export function AiConnectionPanel({
       : updateCount > 0
         ? {
             label: "MCPサーバーの更新が必要です",
-            detail: "「更新」後、登録したAIクライアントを再起動または再読み込みしてください。",
+            detail: "「更新」を押した後に、登録したAIクライアントを再起動するか、MCPを再読み込みしてください。",
             indicator: "bg-amber-500",
           }
         : {
@@ -75,7 +75,7 @@ export function AiConnectionPanel({
   return (
     <div className="scrollbar-thin max-h-[min(32rem,calc(100vh-10rem))] space-y-3 overflow-y-auto p-3.5 text-xs text-slate-600">
       <p className="rounded-md border border-violet-100 bg-violet-50/70 p-3 leading-5 text-slate-700">
-        CodexなどのAIクライアントをMCPに接続し、開いているシーンを会話から読み取り・編集します。変更は自動保存され、「元に戻す」で取り消せます。
+        CodexなどのAIクライアントをMCPに接続すると、会話でシーンの確認や編集を頼めます。変更は自動保存されます。「元に戻す」で取り消すこともできます。
       </p>
       <div className="flex items-start justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
         <div>
@@ -208,7 +208,7 @@ export function AiConnectionPanel({
           </div>
         ) : (
           <p className="rounded-md border border-slate-200 p-3 leading-4 text-slate-500">
-            まだAIからの操作はありません。登録後、AIクライアントを再起動して利用してください。
+            AIからの操作履歴はまだありません。接続を登録した後に、AIクライアントを再起動してください。
           </p>
         )}
       </section>

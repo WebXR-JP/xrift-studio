@@ -1,132 +1,128 @@
 # 色と質感を変える
 
-**マテリアル**は、物の表面の色や光の反射を決める素材です。最初は**Base Color・Metallic・Roughness**の三つだけ使いましょう。
+マテリアルでは、表面の色や光の反射を設定します。最初はBase Color、Metallic、Roughnessの三つから試してください。
 
-**始める前に：** シーンに球などを一つ配置し、Play中なら**Stop**で編集に戻ってください。
+シーンに球などを一つ置いてから始めます。Play中なら、Stopで編集に戻ってください。
 
 ![Sphere Blueを選択し、Base Colorに青色を設定した状態](./media/materials.png)
 
-*Assetsでマテリアルを選ぶと、右のInspectorにBase Colorが表示されます。*
+*Assetsでマテリアルを選ぶと、InspectorにBase Colorが表示されます。*
 
 ## 作って割り当てる
 
-1. **Assets**の追加メニュー、または空いている場所の右クリックから**新規マテリアル**を選びます。
-2. 作ったマテリアルをAssetsで選び、Inspectorの**Base Color**を変えます。
-3. **Hierarchy**で色を付けたいEntityを選びます。
-4. **Inspector → Mesh Renderer → マテリアル**で、作ったものを選びます。Assetsからこの欄へドラッグしても割り当てられます。
+Assetsの追加メニューか、空いている場所の右クリックメニューで「新規マテリアル」を選んでください。作ったマテリアルを選び、InspectorでBase Colorを変えます。
 
-**色が変わったら、割り当ては完了です。** 作っただけで反映されない場合は、四つ目の操作を確認してください。複数のスロットがあるモデルでは、対象の面に対応するスロットへ割り当てます。
+次にHierarchyで色を付けたいEntityを選び、「Inspector → Mesh Renderer → マテリアル」で、作ったマテリアルを指定してください。Assetsからこの欄へドラッグしても割り当てられます。
+
+色が変われば、割り当ては完了です。変わらない場合は、Mesh Rendererの設定を確認してください。複数のスロットがあるモデルでは、変えたい面に対応するスロットに割り当てます。
 
 ## MToon：マンガのような陰影と輪郭線を付ける
 
-1. **Assets**でマテリアルを選びます。
-2. **Inspector → Shading → マテリアルの種類**で**MToon 0.x**または**MToon 1.0**を選びます。
-3. **Base Color**で明るい面の色、**MToon → Shade Color**で暗い面の色を変えます。
-4. **Outline → Outline Color**で輪郭線の色、**Outline Width**で太さを変えます。
+Assetsでマテリアルを選び、「Inspector → Shading → マテリアルの種類」でMToon 0.xかMToon 1.0を選んでください。明るい面の色はBase Color、暗い面の色は「MToon → Shade Color」で変えられます。輪郭線の色は「Outline → Outline Color」、太さはOutline Widthで調整します。
 
-最初は黒い輪郭線が**0.003 m（3 mm）**で付きます。モデルの大きさに合わせて幅を調整してください。輪郭線を消すには**Outline Width Mode → None（なし）**を選びます。
+初期状態の輪郭線は黒色で、幅は0.003 m、つまり3 mmです。モデルの大きさに合わせて調整してください。線を消すには、「Outline Width Mode → None（なし）」を選びます。
 
-素材のプレビューと見本カードでは、斜めからの**Directional Light**と弱い環境光で、Base Colorの明るい面とShade Colorの暗い面を確認できます。シーンへ割り当てた後は、そのシーンの照明に合わせて見た目を調整してください。
+素材のプレビューや見本カードには、斜めからのDirectional Lightと弱い環境光が使われます。Base Colorの明るい面とShade Colorの暗い面を見比べられます。シーンに割り当てたあとは、そのシーンの照明で見た目を確認してください。
 
-MToon 0.xはVRM 0.xの陰影と互換性のある描画、MToon 1.0は新しい陰影の描画を使います。0.xと1.0の切り替えでは、色・陰影・輪郭線・テクスチャの設定を保ちます。初めてMToonへ切り替えるときは、Base ColorのRGBを0.8倍した色をShade Colorに使い、Base Color MapもShade Multiply Mapへ引き継ぎます。照明への反応が変わるため、切り替え後の見た目も確認してください。
+MToon 0.xはVRM 0.xと互換性のある陰影、MToon 1.0は新しい方式の陰影を使います。0.xと1.0を切り替えても、色、陰影、輪郭線、テクスチャの設定は保たれます。初めてMToonに切り替えるときは、Base ColorのRGBを0.8倍した色がShade Colorに入り、Base Color MapがShade Multiply Mapにも引き継がれます。照明への反応は変わるため、切り替え後の見た目を確認してください。
 
-見本から始めたい場合は、**外部から追加 → glTFマテリアル**で**MToon 0.x アウトライン**または**MToon 1.0 アウトライン**を選びます。標準マテリアルと並べて比較し、シーンへ追加できます。
+見本を使う場合は、「外部から追加 → glTFマテリアル」で「MToon 0.x アウトライン」か「MToon 1.0 アウトライン」を選んでください。標準マテリアルと並べて比べ、シーンへ追加できます。
 
 | 設定 | 値を変えたときの見え方 |
 | --- | --- |
-| Shading Shift | 大きいほど明るい面が広がります。 |
-| Shading Toony | 1に近いほど陰影の境界がくっきりします。 |
-| GI Equalization | 1に近いほど環境光による明暗が均等になります。 |
-| Outline Lighting Mix | 0では設定した輪郭線の色、1ではライトの影響を受ける色になります。 |
+| Shading Shift | 大きくすると、明るい面が広がります。 |
+| Shading Toony | 1に近づけると、陰影の境界がくっきりします。 |
+| GI Equalization | 1に近づけると、環境光による明暗が均等になります。 |
+| Outline Lighting Mix | 0では設定した輪郭線の色を使い、1ではライトの影響を受けた色になります。 |
 
-追加の表現は、同じInspectorの次の項目で調整します。
+同じInspectorで、次の表現も調整できます。
 
 | 項目 | 調整できること |
 | --- | --- |
-| Shading Shift Map | R（赤）で場所ごとに陰影の境界をずらします。Scaleはずらす量で、負の値では明暗の変化が反転します。 |
-| Matcap | 見る向きに合わせた映り込みをMatcap MapとMatcap Colorで加えます。 |
-| Rim Lighting | 縁に加える色・画像と広がりを調整します。Fresnel Powerを大きくすると縁に集中し、Liftを大きくすると広い面に現れます。Lighting Mixでライトの影響を変えます。 |
-| UV Animation | 画像をX・Y方向へスクロールし、回転させます。速度0で停止、負の値で逆方向です。回転速度の単位はrad/秒。Mask MapのB（青）で場所ごとの速さを変えます。 |
-| MToon Rendering | 半透明の深度書き込みと描画順を調整します。Render Queue Offsetは−9〜9で、大きいほど後に描画します。 |
+| Shading Shift Map | Rチャンネルの値で、場所ごとに陰影の境界をずらします。Scaleで量を調整し、負の値にすると明暗の変化が反転します。 |
+| Matcap | Matcap MapとMatcap Colorで、見る向きに応じた映り込みを加えます。 |
+| Rim Lighting | 縁の色、画像、広がりを調整します。Fresnel Powerを大きくすると縁に集中し、Liftを大きくすると広い面に現れます。Lighting Mixでライトの影響を変えられます。 |
+| UV Animation | 画像をX・Y方向にスクロールしたり回転したりできます。速度0で止まり、負の値では逆向きに動きます。回転速度の単位はrad/秒です。Mask MapのBチャンネルで、場所ごとの速さを変えられます。 |
+| MToon Rendering | 半透明の深度書き込みと描画順を調整します。Render Queue Offsetは−9〜9で、大きいほどあとに描画されます。 |
 
-**Outline Width Mode**は、**World（m）**ではモデルと同じ空間の幅、**Screen**では画面の高さに対する割合です。輪郭線の幅を画像で変える場合は**Outline Width Multiply Map**のG（緑）を使います。
+Outline Width ModeのWorld（m）では、輪郭線の幅をモデルと同じ空間の単位で設定します。Screenでは、画面の高さに対する割合で設定します。画像で幅を変える場合は、Outline Width Multiply MapのGチャンネルを使ってください。
 
-**Base Color → 頂点カラーを使用**はMToonでもオン・オフできます。オンにするとモデルの頂点カラーを基本色に掛け合わせ、オフにすると頂点カラーを使いません。モデルに頂点カラーがない場合は、オンにしても見た目は変わりません。設定は保存され、Playと公開後にも反映されます。
+MToonでも「Base Color → 頂点カラーを使用」を切り替えられます。有効にすると、モデルの頂点カラーが基本色に掛け合わされます。無効にすると、頂点カラーは使われません。モデルに頂点カラーがない場合は、有効にしても見た目は変わりません。設定は保存され、Playと公開後にも反映されます。
 
-Base Color、Alpha、Normal Map、Emissive、Double SidedはMToonでも使えます。半透明にするには**Alpha Mode → Blend**を選びます。**Transparent With ZWrite**は、**Rendering → Depth Write**が自動のときに半透明の面の深度を書き込みます。
+Base Color、Alpha、Normal Map、Emissive、Double Sidedは、MToonでも使えます。半透明にするには「Alpha Mode → Blend」を選んでください。Transparent With ZWriteを有効にすると、「Rendering → Depth Write」が自動の場合に、半透明の面の深度が書き込まれます。
 
-MToonを使う間、Metallic・Roughnessや反射・透過の拡張は表示されません。**Standard (PBR)**へ戻すと、保持していたPBR設定を再び編集できます。もう一度MToonを選ぶと、Shade Colorや輪郭線、MToon専用のテクスチャ設定も戻ります。切り替えと色・幅の変更は**元に戻す**で戻せます。
+MToonを選んでいる間は、Metallic、Roughness、反射や透過の拡張設定が表示されません。Standard (PBR)に戻すと、保持されていたPBR設定を編集できます。もう一度MToonに切り替えると、Shade Color、輪郭線、MToon専用のテクスチャ設定も戻ります。種類の切り替えや色、幅の変更は「元に戻す」で取り消せます。
 
 | 切り替え時に引き継ぐ設定 | 扱い |
 | --- | --- |
-| Base Color / Diffuseと対応する画像 | Base ColorとBase Color Mapで保ちます。 |
-| Normal・Emissiveと対応する画像 | 同じ色・強さ・画像を使います。 |
-| Alpha / Opacityと対応する画像 | Alpha Mode、Opacity MapとChannelを保ちます。 |
-| テクスチャのUV・位置・拡大率・回転 | 画像ごとの設定を保ちます。 |
-| Metallic・RoughnessなどPBR専用の設定 | 保持し、Standard (PBR)へ戻すと使います。 |
+| Base Color / Diffuseと対応する画像 | Base ColorとBase Color Mapとして保持されます。 |
+| Normal・Emissiveと対応する画像 | 同じ色、強さ、画像が使われます。 |
+| Alpha / Opacityと対応する画像 | Alpha Mode、Opacity Map、Channelが保持されます。 |
+| テクスチャのUV・位置・拡大率・回転 | 画像ごとの設定が保持されます。 |
+| Metallic・RoughnessなどPBR専用の設定 | 保持され、Standard (PBR)に戻すと使われます。 |
 
 ### 複数のマテリアルをまとめて編集する
 
-**Assets**でCtrlまたはShiftを使って複数のマテリアルを選び、**Inspector → マテリアルの一括変更 → マテリアルの種類**からStandard (PBR)、MToon 0.x、MToon 1.0を選びます。色や画像を全素材で同じにする操作ではなく、各素材の設定を保ったまま種類を切り替えます。同じマテリアルを使うすべての面に反映され、一度の**元に戻す**でまとめて戻せます。
+AssetsでCtrlかShiftを使って複数のマテリアルを選んでください。「Inspector → マテリアルの一括変更 → マテリアルの種類」から、Standard (PBR)、MToon 0.x、MToon 1.0にまとめて切り替えられます。各マテリアルの色や画像の設定は保たれます。同じマテリアルを使うすべての面に反映され、一回の「元に戻す」で取り消せます。
 
-モデルや画像も選択している場合は、選択中のマテリアルだけを変更します。カスタムシェーダーを使う素材は種類の一括変更の対象外です。
+モデルや画像を一緒に選んでいても、変更されるのはマテリアルだけです。カスタムシェーダーを使うマテリアルは、種類の一括変更から除外されます。
 
-対象の種類が同じなら、Base Color、Alpha、Normal Map、Emissive、Renderingと、その種類の全設定もまとめて編集できます。MToon 0.x同士、またはMToon 1.0同士では、陰影・輪郭線・Matcap・Rim Lighting・UV Animationも表示します。種類が異なる場合は、先に種類をそろえてください。
+選んだマテリアルの種類が同じなら、Base Color、Alpha、Normal Map、Emissive、Renderingと、その種類の全設定をまとめて編集できます。MToon 0.x同士かMToon 1.0同士なら、陰影、輪郭線、Matcap、Rim Lighting、UV Animationも表示されます。種類が異なる場合は、先にそろえてください。
 
-値が異なる項目は**一部異なる**と表示し、変更した項目だけを各素材へ反映します。たとえばShade ColorのRだけを変えると、G・Bは各素材の値を保ちます。画像だけの変更ではUVを保ち、UVの変更は画像を割り当て済みの素材へ反映します。一度の**元に戻す**で、その変更をまとめて戻せます。
+値が異なる項目には「一部異なる」と表示されます。変更した項目だけが、各マテリアルに反映されます。たとえばShade ColorのRだけを変えると、GとBは各マテリアルの値が保たれます。画像だけを変えてもUVは変わりません。UVの変更は、画像を割り当て済みのマテリアルに反映されます。一回の「元に戻す」で、変更をまとめて取り消せます。
 
-[VRM 0.x・VRM 1.0のアバターを取り込んだ場合](./assets.md#vrmアバターを取り込む)も、モデルの**Materials**から同じMToonの項目を編集できます。
+[VRM 0.xやVRM 1.0を取り込んだ場合](./assets.md#vrmアバターを取り込む)も、モデルのMaterialsでマテリアルを選ぶと、同じMToonの設定を編集できます。
 
-編集したMToonは、[.xriftstudioでの受け渡しとコードエディターへの書き出し](./save-and-open.md#バックアップする)にも含まれます。Entityだけを別の作品へ渡す場合は、[Hierarchyから書き出します](./hierarchy-transfer.md#mtoonvrmモデルを渡す)。
+編集したMToonは、[.xriftstudioでの受け渡しやコードエディターへの書き出し](./save-and-open.md#バックアップする)にも含まれます。Entityだけを別の作品へ渡すには、[Hierarchyから書き出してください](./hierarchy-transfer.md#mtoonvrmモデルを渡す)。
 
 ## Base Color：色を決める
 
-Base Color（基本色）は、非金属では表面の色、金属では反射の色を変えます。
+Base Colorは、非金属では表面の色、金属では反射の色を設定します。
 
-まずはMetallicを0にして、Base Colorを変えてみてください。画像も割り当てられている場合は、画像の色とBase Colorが掛け合わされます。画像の色をそのまま使う出発点は白です。
+まずMetallicを0にして、Base Colorを変えてみてください。画像を割り当てている場合は、画像の色にBase Colorが掛け合わされます。画像の色をそのまま使うには、Base Colorを白にします。
 
 ![Base Colorの色欄とRGB値](./media/materials.png "Base Color")
 
-*RGBの右にある色の欄から変更します。*
+*RGBの右にある色の欄から変更できます。*
 
 ## Metallic：金属かどうかを決める
 
-Metallic（金属度）は、**0で非金属、1で金属**です。プラスチックや塗装面ならまず0、金属の露出した面ならまず1を試します。
+Metallicは金属度です。0で非金属、1で金属になります。プラスチックや塗装面は0、金属が露出した面は1から試してください。
 
-値を上げれば何でもきれいになる設定ではありません。金属が暗く見える場合は、値だけでなく[照明とIBL](./lighting.md#金属が暗い反射が見えない)を確認してください。
+目的の素材に合わせて値を選びます。金属が暗く見える場合は、[照明とIBL](./lighting.md#金属が暗い反射が見えない)も確認してください。
 
 ![Metallic 0、Roughness 0.5の数値とスライダー](./media/material-values.png "Metallic / Roughness")
 
-*左の説明と右の数値を確認して、一つずつ調整します。*
+*説明と数値を見ながら、一つずつ調整してください。*
 
 ## Roughness：反射のぼけ方を決める
 
-Roughness（表面の粗さ）は、**0に近いほど反射がくっきり、1に近いほど反射がぼやける**設定です。形状をでこぼこにするものではありません。
+Roughnessは表面の粗さです。0に近いほど反射がくっきりし、1に近いほどぼやけます。モデルの形に凹凸を付ける設定ではありません。
 
-同じ色の球で、まず**0.15**と**0.8**を比べてみてください。反射する環境やライトによって見え方が変わるため、これは調整を始めるための例です。
+同じ色の球で、0.15と0.8を比べてみてください。反射する環境やライトによって見え方が変わるため、実際のシーンで調整します。
 
 ### 設定の出発点
 
-**つやのあるプラスチック：** Metallic 0、Roughness 0.2から試します。
+| 作りたい表面 | 最初に試す設定 |
+| --- | --- |
+| つやのあるプラスチック | Metallic 0、Roughness 0.2 |
+| つやを抑えた面 | Metallic 0、Roughness 0.8 |
+| 磨いた金属 | Metallic 1、Roughness 0.15。IBLなど、反射する環境も用意します。 |
 
-**つやを抑えた面：** Metallic 0、Roughness 0.8から試します。
-
-**磨いた金属：** Metallic 1、Roughness 0.15から試し、IBLなど反射する環境も用意します。
-
-これらの数値だけで特定の素材を完全に再現できるわけではありません。模様や細かな凹凸は[テクスチャ](./textures.md)で加えます。
+素材の見た目は、これらの数値に加えて画像や照明でも変わります。模様や細かな凹凸は、[テクスチャ](./textures.md)で加えてください。
 
 ## 一つだけ色を変える
 
-**同じマテリアルを使うEntityは、変更がまとめて反映されます。** Inspectorの使用箇所を確認してから編集してください。
+マテリアルを編集すると、そのマテリアルを使うすべてのEntityに反映されます。Inspectorで使用箇所を確認してから変更してください。
 
-一つだけ変える場合は、新しいマテリアルを作り、そのEntityにだけ割り当てます。Entityを複製しただけでは、マテリアルが独立するとは限りません。
+一つのEntityだけを変えるには、新しいマテリアルを作って、そのEntityに割り当ててください。Entityを複製しただけでは、同じマテリアルを使い続ける場合があります。
 
 ## 質感が変わらないとき
 
-まず**Stop**していること、編集したマテリアルを対象に割り当てたこと、変更したいスロットを選んだことを確認します。
+Stopで編集に戻っているか、マテリアルを対象に割り当てているか、変えたい面のスロットを選んでいるか確認してください。
 
-それでも違いが分かりにくい場合は、表示モードを**シーン**に戻し、ライトやIBLを確認します。**Unlit**が有効なマテリアルはライトの影響を受けません。
+違いが分かりにくい場合は、表示モードを「シーン」に戻し、ライトとIBLを確認します。Unlitが有効なマテリアルは、ライトの影響を受けません。
 
 ## 基本の次に進む
 
-模様は[テクスチャ](./textures.md)、ガラスや半透明は[透明な素材](./transparent-materials.md)、ClearcoatやIridescenceは[マテリアルの拡張](./material-extensions.md)で扱います。最初からすべての項目を変更する必要はありません。
+模様は[テクスチャ](./textures.md)、ガラスや半透明は[透明な素材](./transparent-materials.md)、ClearcoatやIridescenceは[マテリアルの拡張](./material-extensions.md)で説明します。作りたい表面に合う設定から試してください。

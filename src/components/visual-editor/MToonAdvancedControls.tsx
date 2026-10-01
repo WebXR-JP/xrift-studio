@@ -49,7 +49,7 @@ export function MToonAdvancedControls({
         <TextureSlot
           label="Shading Shift Map（明暗の境界位置の画像）"
           materialPath={path("shadingShiftTexture")}
-          description="R（赤）を使い、部分ごとに明るい面と暗い面の境界をずらします（リニア色空間）。"
+          description="画像のR成分で、明るい面と暗い面の境界を部分ごとにずらします。リニア色空間で読み込みます。"
           value={value.shadingShiftTexture}
           previewStatus={previewTextureStatuses.shadingShiftMap}
           {...textureProps}
@@ -80,7 +80,7 @@ export function MToonAdvancedControls({
         <TextureSlot
           label="Matcap Map（映り込みの画像）"
           materialPath={path("matcapTexture")}
-          description="見る向きに合わせた映り込みを加えます（sRGB）。UV Animationの影響は受けません。"
+          description="見る向きに応じた映り込みを加えます。画像はsRGBで読み込み、UV Animationは適用しません。"
           value={value.matcapTexture}
           previewStatus={previewTextureStatuses.matcapMap}
           {...textureProps}
@@ -101,7 +101,7 @@ export function MToonAdvancedControls({
         <TextureSlot
           label="Rim Multiply Map（縁の光の画像）"
           materialPath={path("rimMultiplyTexture")}
-          description="RGBをMatcapとRim Colorに掛け合わせます（sRGB）。"
+          description="画像のRGBをMatcapとRim Colorに掛けます。sRGBで読み込みます。"
           value={value.rimMultiplyTexture}
           previewStatus={previewTextureStatuses.rimMultiplyMap}
           {...textureProps}
@@ -138,7 +138,7 @@ export function MToonAdvancedControls({
         <TextureSlot
           label="UV Animation Mask Map（動かす範囲の画像）"
           materialPath={path("uvAnimationMaskTexture")}
-          description="B（青）を使い、部分ごとに動く速さを変えます（リニア色空間）。黒で停止、白で指定した速さ。"
+          description="画像のB成分で、動く速さを部分ごとに変えます。リニア色空間で読み込み、黒い部分は停止、白い部分は指定した速さになります。"
           value={value.uvAnimationMaskTexture}
           previewStatus={previewTextureStatuses.uvAnimationMaskMap}
           {...textureProps}
@@ -164,7 +164,7 @@ export function MToonAdvancedControls({
           label="UV Rotation Speed（回転速度）"
           materialPath={path("uvAnimationRotationSpeedFactor")}
           value={value.uvAnimationRotationSpeedFactor ?? MTOON_DEFAULTS.uvAnimationRotationSpeedFactor}
-          description="単位はrad/秒です。約6.283で毎秒1回転、負の値で逆方向、0で停止。"
+          description="単位はrad/秒です。約6.283で毎秒1回転します。負の値で逆方向に回り、0で停止します。"
           disabled={readOnly}
           onChange={(uvAnimationRotationSpeedFactor) => onChange({ uvAnimationRotationSpeedFactor })}
         />

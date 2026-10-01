@@ -945,7 +945,7 @@ function validateCompilerDocuments(
     diagnostics.push({
       severity: "blocking",
       code: "entry-scene-missing",
-      message: "entrySceneId に対応するシーン document がありません",
+      message: "entrySceneIdに対応するシーンdocumentがありません",
       fieldPath: "entrySceneId",
     });
   }
@@ -955,14 +955,14 @@ function validateCompilerDocuments(
       diagnostics.push({
         severity: "blocking",
         code: "scene-document-missing",
-        message: `シーン document がありません: ${sceneId}`,
+        message: `シーンdocumentがありません: ${sceneId}`,
         sceneId,
       });
     } else if (scene.sceneId !== sceneId) {
       diagnostics.push({
         severity: "blocking",
         code: "scene-id-mismatch",
-        message: `シーン document ID が scenePaths と一致しません: ${sceneId}`,
+        message: `シーンdocument IDがscenePathsと一致しません: ${sceneId}`,
         sceneId,
         fieldPath: "sceneId",
       });
@@ -1019,7 +1019,7 @@ function validateCompilerDocuments(
       diagnostics.push({
         severity: "blocking",
         code: "prefab-id-mismatch",
-        message: `プレハブ document IDがrecord keyと一致しません: ${prefabId}`,
+        message: `プレハブdocument IDがrecord keyと一致しません: ${prefabId}`,
         prefabId,
         fieldPath: `prefabs.${prefabId}.prefabId`,
       });
@@ -1235,7 +1235,7 @@ function resolveInteractionTriggers(
           entity,
           component.id,
           "interaction-trigger-asset-missing",
-          "グラフの実行が参照するノードグラフ素材がありません",
+          "Interaction Triggerが参照するNode Graph素材がありません",
           component.interactivityAssetId,
         ),
       );
@@ -1254,7 +1254,7 @@ function resolveInteractionTriggers(
         severity: "warning",
         code: "interaction-trigger-without-event",
         message:
-          "ノードグラフに開始のノードがないため、公開先では何も起きません",
+          "Node Graphに開始のノードがないため、公開先では何も起きません",
         sceneId: context.scene.sceneId,
         entityId: entity.id,
         componentId: component.id,
@@ -1390,7 +1390,7 @@ function generateComponentSource(
       addDiagnostic(context, {
         severity: "warning",
         code: "orphan-entity-not-compiled",
-        message: "rootEntityIds から到達できないEntityは変換されません",
+        message: "rootEntityIdsから到達できないEntityは変換されません",
         sceneId: scene.sceneId,
         entityId,
       });
@@ -2010,7 +2010,7 @@ function registerSceneGraphRuntime(context: CompileContext): string {
           addDiagnostic(context, {
             severity: "warning",
             code: "interaction-trigger-asset-unavailable",
-            message: `ノードグラフが素材「${assetId}」を指していますが、公開ワールドへ出力できないため差し替えは起きません`,
+            message: `Node Graphが素材「${assetId}」を指していますが、公開ワールドへ出力できないため差し替えは起きません`,
             sceneId: context.scene.sceneId,
             entityId: entity.id,
             componentId: component.id,
@@ -2152,7 +2152,7 @@ function renderSceneEnvironment(
       addDiagnostic(context, {
         severity: "warning",
         code: "sky-shader-texture-unsupported",
-        message: `Skybox Shader「${skyShader.asset.name}」のテクスチャ uniform（${textureUniforms.join("、")}）は空スロットでは解決できません。手続き的なuniformだけを使ってください`,
+        message: `Skybox Shader「${skyShader.asset.name}」のテクスチャuniform（${textureUniforms.join("、")}）は空スロットでは解決できません。手続き的なuniformだけを使ってください`,
         sceneId: context.scene.sceneId,
         assetId: skyShader.asset.id,
         fieldPath: "settings.skybox.materialAssetId",
@@ -2341,7 +2341,7 @@ function renderEntity(
     addDiagnostic(context, {
       severity: "blocking",
       code: "entity-reference-missing",
-      message: `Entity reference が見つかりません: ${entityId}`,
+      message: `Entity referenceが見つかりません: ${entityId}`,
       sceneId: context.scene.sceneId,
       entityId,
     });
@@ -2351,7 +2351,7 @@ function renderEntity(
     addDiagnostic(context, {
       severity: "blocking",
       code: "entity-cycle",
-      message: "Entity hierarchy に循環があります",
+      message: "Entity hierarchyに循環があります",
       sceneId: context.scene.sceneId,
       entityId,
     });
@@ -2450,7 +2450,7 @@ function renderEntity(
           entity,
           component.id,
           "prefab-instance-unresolved",
-          "プレハブ instanceをcompiler展開できませんでした",
+          "プレハブinstanceをcompiler展開できませんでした",
           component.prefabAssetId,
         ),
       );
@@ -2485,7 +2485,7 @@ function renderEntity(
       );
     } else {
       const unknownComponent = component as unknown as { id: string; type: string };
-      addDiagnostic(context, componentDiagnostic(entity, unknownComponent.id, "component-unsupported", `未対応の component type: ${unknownComponent.type}`));
+      addDiagnostic(context, componentDiagnostic(entity, unknownComponent.id, "component-unsupported", `未対応のcomponent type: ${unknownComponent.type}`));
     }
   }
   if (rigidBodyOwner) {
@@ -2506,7 +2506,7 @@ function renderEntity(
       addDiagnostic(context, {
         severity: "warning",
         code: "entity-parent-mismatch",
-        message: "children と parentId が一致していません",
+        message: "childrenとparentIdが一致していません",
         sceneId: context.scene.sceneId,
         entityId: childId,
       });
@@ -2763,7 +2763,7 @@ function renderModelNodeColliderGeometry(
       severity: "warning",
       code: "model-node-collider-source-unsupported",
       message:
-        "Mesh Colliderの3Dモデル Nodeが参照する3Dモデル元データを公開物へ含められません",
+        "Mesh Colliderの3DモデルNodeが参照する3Dモデル元データを公開物へ含められません",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: collider.id,
@@ -3114,7 +3114,7 @@ function resolveMeshGeometry(
     addDiagnostic(context, {
       severity: "blocking",
       code: "geometry-asset-missing",
-      message: "メッシュの geometry 素材が見つかりません",
+      message: "メッシュのgeometry素材が見つかりません",
       sceneId: context.scene.sceneId,
       componentId: mesh.id,
       assetId: geometryAssetId,
@@ -3502,7 +3502,7 @@ function renderModelMesh(
     addDiagnostic(context, {
       severity: "blocking",
       code: "model-source-unsupported",
-      message: "3Dモデルはproject-relativeなGLB / glTF / OBJ / VRM 元データである必要があります",
+      message: "3Dモデルはproject-relativeなGLB / glTF / OBJ / VRM元データである必要があります",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: mesh.id,
@@ -4344,7 +4344,7 @@ function resolveMeshMaterial(
     addDiagnostic(context, {
       severity: "warning",
       code: "primitive-extra-material-slots",
-      message: "Primitive メッシュでは先頭のマテリアル枠だけを使用します",
+      message: "Primitiveメッシュでは先頭のマテリアル枠だけを使用します",
       sceneId: context.scene.sceneId,
       componentId: mesh.id,
       fieldPath: "materialBindings",
@@ -5462,7 +5462,7 @@ function diagnoseMaterialExtensions(
     addDiagnostic(context, {
       severity: "blocking",
       code: "material-extension-unsupported",
-      message: `マテリアル extensionはstaging 元データに変換できません: ${extensionName}`,
+      message: `マテリアルextensionはstaging元データに変換できません: ${extensionName}`,
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: mesh.id,
@@ -5478,7 +5478,7 @@ function diagnoseMaterialExtensions(
     addDiagnostic(context, {
       severity: "blocking",
       code: "material-unlit-extension-conflict",
-      message: "Unlit マテリアルにライティング用マテリアル extensionは併用できません",
+      message: "Unlitマテリアルにライティング用マテリアルextensionは併用できません",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: mesh.id,
@@ -5493,7 +5493,7 @@ function diagnoseMaterialExtensions(
     addDiagnostic(context, {
       severity: "blocking",
       code: "material-volume-requires-transmission",
-      message: "Volume マテリアルにはTransmission extensionが必要です",
+      message: "VolumeマテリアルにはTransmission extensionが必要です",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: mesh.id,
@@ -5508,7 +5508,7 @@ function diagnoseMaterialExtensions(
     addDiagnostic(context, {
       severity: "blocking",
       code: "material-dispersion-requires-volume",
-      message: "Dispersion マテリアルにはVolume extensionが必要です",
+      message: "DispersionマテリアルにはVolume extensionが必要です",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: mesh.id,
@@ -5597,7 +5597,7 @@ function renderParticleEmitter(
     addDiagnostic(context, {
       severity: "warning",
       code: "particle-world-space-local-fallback",
-      message: "ワールド Spaceパーティクルは生成後のEntity移動に追従するローカル互換表示で出力します",
+      message: "ワールドSpaceパーティクルは生成後のEntity移動に追従するローカル互換表示で出力します",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: component.id,
@@ -5744,7 +5744,7 @@ function resolveParticleMaterial(
     addDiagnostic(context, {
       severity: "blocking",
       code: "particle-material-missing",
-      message: "パーティクル Rendererが参照するマテリアルが見つかりません",
+      message: "パーティクルRendererが参照するマテリアルが見つかりません",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: component.id,
@@ -5769,7 +5769,7 @@ function resolveParticleTextureUrl(
     addDiagnostic(context, {
       severity: "blocking",
       code: "particle-texture-missing",
-      message: "パーティクル Rendererが参照するテクスチャが見つかりません",
+      message: "パーティクルRendererが参照するテクスチャが見つかりません",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: component.id,
@@ -5896,7 +5896,7 @@ function resolveTextProjectFont(
       severity: "warning",
       code: "text-font-asset-missing",
       message:
-        "テキストが参照するFont 素材が見つからないため、同梱の書体で出力します",
+        "テキストが参照するFont素材が見つからないため、同梱の書体で出力します",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: text.id,
@@ -5912,7 +5912,7 @@ function resolveTextProjectFont(
       severity: "warning",
       code: "text-font-asset-unsupported",
       message:
-        "Font 素材を公開用にコピーできないため、同梱の書体で出力します",
+        "Font素材を公開用にコピーできないため、同梱の書体で出力します",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: text.id,
@@ -5945,7 +5945,7 @@ function resolveTextBackgroundTexture(
     addDiagnostic(context, {
       severity: "warning",
       code: "text-background-texture-unset",
-      message: "テキスト backgroundが画像に設定されていますが、テクスチャが未選択です",
+      message: "テキストbackgroundが画像に設定されていますが、テクスチャが未選択です",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: text.id,
@@ -5962,7 +5962,7 @@ function resolveTextBackgroundTexture(
     addDiagnostic(context, {
       severity: "warning",
       code: "text-background-texture-missing",
-      message: "テキスト backgroundのテクスチャを出力できないため、文字だけを出力します",
+      message: "テキストbackgroundのテクスチャを出力できないため、文字だけを出力します",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: text.id,
@@ -6213,7 +6213,7 @@ function renderAudioSource(
     addDiagnostic(context, {
       severity: "blocking",
       code: "audio-asset-source-unsupported",
-      message: "音声素材はproject-relativeなMP3またはWAV 元データである必要があります",
+      message: "音声素材はproject-relativeなMP3またはWAV元データである必要があります",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId: audio.id,
@@ -6263,7 +6263,7 @@ function renderSpawnPoint(
     addDiagnostic(context, {
       severity: "warning",
       code: "editor-only-spawn-point",
-      message: "アイテム preview 用の基準点は XRift 元データへ出力しません",
+      message: "アイテムpreview用の基準点はXRift元データへ出力しません",
       sceneId: context.scene.sceneId,
       entityId: entity.id,
       componentId,
@@ -6350,7 +6350,7 @@ function diagnoseReferencedUnsupportedAssets(context: CompileContext): void {
         ),
       );
     } else if (asset.kind === "template" && !isPrefabAsset(asset)) {
-      addDiagnostic(context, unsupportedAssetDiagnostic(asset, "prefab-asset-unsupported", "Template/Prefab 素材の展開は未対応です", "blocking"));
+      addDiagnostic(context, unsupportedAssetDiagnostic(asset, "prefab-asset-unsupported", "Template/Prefab素材の展開は未対応です", "blocking"));
     }
   }
 }
@@ -6467,7 +6467,7 @@ function createAssetCopyPlan(
       diagnostics.push({
         severity: "blocking",
         code: "asset-copy-source-invalid",
-        message: "素材 copy 元が project-relative path ではありません",
+        message: "素材copy元がproject-relative pathではありません",
         assetId: asset.id,
         fieldPath: "source.relativePath",
       });
@@ -6477,7 +6477,7 @@ function createAssetCopyPlan(
       diagnostics.push({
         severity: "blocking",
         code: "asset-copy-source-type-unsupported",
-        message: "素材 kindと拡張子が安全なstatic asset allow-listに一致しません",
+        message: "素材のkindと拡張子が、公開できる素材の一覧に含まれていません",
         assetId: asset.id,
         fieldPath: "source.relativePath",
       });
@@ -6494,7 +6494,7 @@ function createAssetCopyPlan(
       diagnostics.push({
         severity: "blocking",
         code: "asset-copy-target-collision",
-        message: "複数素材の copy target が衝突しています",
+        message: "複数素材のcopy targetが衝突しています",
         assetId: asset.id,
         fieldPath: "source.relativePath",
       });

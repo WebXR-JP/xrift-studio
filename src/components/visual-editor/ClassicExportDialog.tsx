@@ -186,7 +186,7 @@ export function ClassicExportDialog({
         <header data-app-modal-header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 sm:px-6 sm:py-5">
           <div>
             <h2 id="classic-export-title" className="text-xl font-semibold text-slate-950">
-              XRift コードエディターへ書き出す
+              XRiftコードエディターへ書き出す
             </h2>
             <p className="mt-1.5 text-sm leading-6 text-slate-600">
               {projectName}のシーンをコードプロジェクトに書き出します。
@@ -212,7 +212,7 @@ export function ClassicExportDialog({
                   <div>
                     <h3 className="font-semibold text-emerald-950">コードエディターへの書き出しが完了しました</h3>
                     <p className="mt-1 text-sm leading-6 text-emerald-900/80">
-                      シーンのソース、素材、組み込み用Componentを追加しました。
+                      シーンのソースコード、素材、組み込み用Componentを追加しました。
                       {result.packageInstallation === "installed"
                         ? " 必要なパッケージもインストールしました。"
                         : result.packageInstallation === "recorded"
@@ -293,7 +293,7 @@ export function ClassicExportDialog({
               <section>
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h3 className="text-sm font-semibold text-slate-900">1. 書き出し先</h3>
+                    <h3 className="text-sm font-semibold text-slate-900">1.書き出し先</h3>
                     <p className="mt-1 text-xs leading-5 text-slate-600">package.json、xrift.json、{projectKind === "world" ? "World.tsx" : "Item.tsx"}を検査します。</p>
                   </div>
                   <button type="button" disabled={busy} onClick={() => void chooseTarget()} className="flex shrink-0 items-center gap-2 rounded-lg border border-violet-300 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-wait disabled:opacity-50">
@@ -311,7 +311,7 @@ export function ClassicExportDialog({
               </section>
 
               <section className={!target ? "pointer-events-none opacity-45" : undefined}>
-                <h3 className="text-sm font-semibold text-slate-900">2. 組み込み方法</h3>
+                <h3 className="text-sm font-semibold text-slate-900">2.組み込み方法</h3>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <label className={`cursor-pointer rounded-xl border p-4 ${integration === "component" ? "border-violet-400 bg-violet-50 ring-1 ring-violet-200" : "border-slate-200 hover:bg-slate-50"}`}>
                     <span className="flex items-start gap-3"><input type="radio" name="classic-integration" checked={integration === "component"} onChange={() => { setIntegration("component"); setReplaceConfirmed(false); }} className="mt-1" /><span><span className="block text-sm font-semibold text-slate-900">Componentとして追加</span><span className="mt-1 block text-xs leading-5 text-slate-600">既存コードを残し、必要なファイルだけを追加します。</span></span></span>
@@ -329,7 +329,7 @@ export function ClassicExportDialog({
               </section>
 
               <section className={!target ? "pointer-events-none opacity-45" : undefined}>
-                <h3 className="text-sm font-semibold text-slate-900">3. 必要なパッケージ</h3>
+                <h3 className="text-sm font-semibold text-slate-900">3.必要なパッケージ</h3>
                 <label className="mt-3 flex items-start gap-3 rounded-xl border border-slate-200 p-4">
                   <input type="checkbox" checked={installDependencies} disabled={!target?.canInstallAutomatically} onChange={(event) => setInstallDependencies(event.target.checked)} className="mt-1" />
                   <span><span className="flex items-center gap-2 text-sm font-semibold text-slate-900"><PackageCheck size={16} aria-hidden="true" />不足しているパッケージをインストール</span><span className="mt-1 block text-xs leading-5 text-slate-600">{target?.canInstallAutomatically ? "書き出すシーンに必要なパッケージが不足している場合、対応するバージョンをnpmでインストールします。" : target ? `${target.packageManager}のプロジェクトでは、package.jsonへの記録のみ行います。書き出し後に${target.packageManager}でインストールしてください。` : "書き出し先ごとに必要なパッケージが変わります。"}</span></span>

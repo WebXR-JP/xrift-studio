@@ -780,7 +780,7 @@ export const SKY_SHADER_CATALOG: readonly SkyShaderCatalogEntry[] = [
     label: "立体的な雲の昼空",
     category: "day",
     description:
-      "雲の層をレイマーチして厚みごと描く昼の空です。太陽に向いた面が白く光り、底が影になります。カタログで最も重いプリセットなので、スタンドアロンVR向けにはストアの描画品質を「軽量」にして確認してください。",
+      "レイマーチングで雲の厚みを描く昼の空です。太陽に向いた面は白く光り、雲の下側には影が付きます。カタログで描画負荷が最も高いプリセットです。スタンドアロンVRで使う場合は、ストアの描画品質を「軽量」にして確認してください。",
     parameters: VOLUMETRIC_STORE_PARAMETERS,
     shader: volumetricShader("volumetric-daylight", {
       ...frameworkUniforms(),

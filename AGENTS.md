@@ -1,5 +1,5 @@
 # XRift Studio Agent Guide
 
-Codex のプロジェクト指示ファイルです。共通ルールは [AGENT.md](./AGENT.md) に集約しています。作業前に `AGENT.md` を読み、必要に応じて `.agents/skills/` の該当スキルを読み込んでください。
+Codex用のプロジェクト指示です。作業前に[AGENT.md](./AGENT.md)を読み、依頼に合うスキルを`.agents/skills/`から選んでください。日本語の作成・推敲では、`AGENT.md`の文章と用語の方針に従ってください。
 
-Claude Code でも同じスキルを利用できるよう、`.claude/skills/` に互換コピーを置いています。スキルの内容を変更した場合は、`node scripts/sync-agent-skills.mjs` で同期し、`--check` で確認してください。
+Claude Code用のコピーは`.claude/skills/`にあります。共通スキルを変更したら、`node scripts/sync-agent-skills.mjs`でコピーを更新し、`node scripts/sync-agent-skills.mjs --check`で一致を確認してください。

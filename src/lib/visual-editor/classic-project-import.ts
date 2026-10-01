@@ -905,7 +905,7 @@ export function applyClassicProjectVisualImportEnhancements(input: {
         diagnostics.push({
           severity: "warning",
           code: "classic-shader-texture-missing",
-          message: `${name}に必要な${uniform.sourcePath}をCustom マテリアルへ接続できませんでした。`,
+          message: `${name}に必要な${uniform.sourcePath}をCustomマテリアルへ接続できませんでした。`,
           sourcePath: materialInspection.sourceModulePath,
         });
         continue;

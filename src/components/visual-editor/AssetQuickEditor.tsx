@@ -496,7 +496,7 @@ function PrefabQuickEditor({
           })}
         </div>
         <p className="text-xs leading-4 text-slate-500">
-          選ぶと編集元のHierarchyへ移動します。編集後は「プレハブに反映」を押してください。
+          選択すると、プレハブを作成したHierarchyへ移動します。編集後は「プレハブに反映」を押してください。
         </p>
       </EditorSection>
       <div className="grid grid-cols-2 gap-2">
@@ -1460,7 +1460,7 @@ function MToonMaterialControls({
         <NumberControl materialPath="extensions.VRMC_materials_mtoon.shadingShiftFactor"
           label="Shading Shift（明暗の境界位置）"
           value={value.shadingShiftFactor}
-          description="大きいほど明るい面が広がり、小さいほどShade Colorの面が広がります。"
+          description="値を大きくすると明るい面が広がります。小さくするとShade Colorで描く面が広がります。"
           disabled={readOnly}
           onChange={(shadingShiftFactor) => onChange({ shadingShiftFactor })}
         />
@@ -1524,7 +1524,7 @@ function MToonMaterialControls({
         />
         <TextureSlot materialPath="extensions.VRMC_materials_mtoon.outlineWidthMultiplyTexture"
           label="Outline Width Multiply Map（輪郭線の太さの画像）"
-          description="G（緑）を輪郭線の幅に掛け合わせます（リニア色空間）。黒で幅0、白で指定した幅。"
+          description="画像のG成分を輪郭線の幅に掛けます。リニア色空間で読み込み、黒い部分は幅0、白い部分は指定した幅になります。"
           value={value.outlineWidthMultiplyTexture}
           textures={textures}
           projectPath={projectPath}
@@ -1661,7 +1661,7 @@ export function OpenBrushMaterialQuickEditor({
           <dd className="font-semibold text-slate-800">{shader.brushName}</dd>
           <dt className="text-slate-500">描画方式</dt>
           <dd className="text-slate-700">{shader.rendererVersion}</dd>
-          <dt className="text-slate-500">glTF マテリアル</dt>
+          <dt className="text-slate-500">glTFマテリアル</dt>
           <dd className="text-slate-700">#{shader.sourceMaterialIndex}</dd>
           {shader.brushGuid ? (
             <>
@@ -1690,7 +1690,7 @@ export function OpenBrushMaterialQuickEditor({
                     : "text-emerald-700"
                 }`}
               >
-                {runtimeInfo.materialType} / {runtimeInfo.pbrFallback ? "PBR fallback" : "適用済み"}
+                {runtimeInfo.materialType} / {runtimeInfo.pbrFallback ? "PBRで代替表示" : "適用済み"}
               </dd>
               <dt className="text-slate-500">シェーダー</dt>
               <dd className="text-slate-700">
@@ -1747,7 +1747,7 @@ export function OpenBrushMaterialQuickEditor({
                   ? runtimeInfo.resourcePaths.join("\n")
                   : runtimeInfo.pbrFallback
                     ? "GLB内のPBR / テクスチャ"
-                    : "three-icosa プリセット内"}
+                    : "three-icosaプリセット内"}
               </dd>
             </dl>
 
@@ -2423,12 +2423,12 @@ function StandardMaterialQuickEditor({
           <h3 className={`${phone ? "break-words [overflow-wrap:anywhere]" : "truncate"} text-[13px] font-semibold text-slate-900`}>{asset.name}</h3>
           <p className="text-xs text-slate-500">
             {openBrush
-              ? `OpenBrush ブラシ · ${openBrush.brushName}`
+              ? `OpenBrushブラシ · ${openBrush.brushName}`
               : customShader
                 ? "カスタムシェーダーマテリアル"
                 : mtoon
                   ? `MToon ${mtoonVersion} マテリアル`
-                  : "glTF 2.0 標準マテリアル"}
+                  : "glTF 2.0標準マテリアル"}
           </p>
           {asset.importedFromModel ? (
             <p className={`mt-1 inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold ${asset.importedFromModel.isUserOverridden ? "border-amber-200 bg-amber-50 text-amber-800" : "border-sky-200 bg-sky-50 text-sky-800"}`}>
@@ -2439,7 +2439,7 @@ function StandardMaterialQuickEditor({
           ) : null}
           {!phone ? <>
             <p className="mt-2 text-xs leading-4 text-slate-600">
-              変更は、このマテリアルの使用箇所すべてに反映します。
+              このマテリアルを変更すると、使用箇所すべてに反映されます。
             </p>
             <p className="mt-2 rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-medium text-slate-600">
               {referenceSummary && referenceSummary.slotCount > 0
@@ -2568,7 +2568,7 @@ function StandardMaterialQuickEditor({
         </label>
         <TextureSlot materialPath="pbrMetallicRoughness.baseColorTexture"
           label="Base Color Map"
-          description="RGBはBase Color、AはAlphaに掛け合わせます（RGBはsRGB）。"
+          description="画像のRGBをBase Color、AをAlphaに掛けます。RGBはsRGBで読み込みます。"
           value={pbr.baseColorTexture}
           textures={textures}
           projectPath={projectPath}
@@ -2652,7 +2652,7 @@ function StandardMaterialQuickEditor({
         ) : null}
         <TextureSlot materialPath="opacityTexture"
           label="Opacity Map"
-          description="選んだチャンネルをAlphaに掛け合わせます。黒で透明、白で変化なし。Opaqueで追加するとBlendに切り替わります。"
+          description="選んだチャンネルをAlphaに掛けます。黒い部分は透明になり、白い部分は元のAlphaを保ちます。Opaqueに追加するとBlendへ切り替わります。"
           value={asset.properties.opacityTexture}
           textures={textures}
           projectPath={projectPath}
@@ -2694,7 +2694,7 @@ function StandardMaterialQuickEditor({
         />
         <TextureSlot materialPath="pbrMetallicRoughness.metallicRoughnessTexture"
           label="Metallic Roughness Map"
-          description="G（緑）をRoughness、B（青）をMetallicに掛け合わせます（リニア色空間）。"
+          description="画像のG成分をRoughness、B成分をMetallicに掛けます。リニア色空間で読み込みます。"
           value={pbr.metallicRoughnessTexture}
           textures={textures}
           projectPath={projectPath}
@@ -2711,7 +2711,7 @@ function StandardMaterialQuickEditor({
         <TextureSlot materialPath="normalTexture"
           label="Normal Map"
           description="陰影で細かな凹凸を表します。メッシュの形や輪郭は変わりません。"
-          inputHint="Tangent Space（接線空間）の画像を使用します。色補正なし（Linear）で読み込みます。"
+          inputHint="接線空間のNormal Mapを使ってください。画像は色補正をせず、Linearで読み込みます。"
           value={asset.properties.normalTexture}
           textures={textures}
           projectPath={projectPath}
@@ -2880,7 +2880,7 @@ function StandardMaterialQuickEditor({
             <RangeControl materialPath="extensions.KHR_materials_clearcoat.clearcoatRoughnessFactor"
               label="Roughness"
               value={clearcoat.clearcoatRoughnessFactor}
-              description="0でくっきり、1でぼやけた反射。テクスチャのG（緑）を掛け合わせます。"
+              description="0で反射がくっきり見え、1でぼやけます。テクスチャを使う場合はG成分を掛けます。"
               disabled={readOnly}
               onChange={(clearcoatRoughnessFactor) =>
                 updateLitExtension({
@@ -2906,7 +2906,7 @@ function StandardMaterialQuickEditor({
             <TextureSlot materialPath="extensions.KHR_materials_clearcoat.clearcoatNormalTexture"
               label="Normal Map"
               description="上塗りの層に凹凸の陰影を加えます。下地のNormal Mapとは別の設定です。"
-              inputHint="Tangent Space（接線空間）の画像を使用します。色補正なし（Linear）で読み込みます。"
+              inputHint="接線空間のNormal Mapを使ってください。画像は色補正をせず、Linearで読み込みます。"
               value={clearcoat.clearcoatNormalTexture}
               textures={textures}
               projectPath={projectPath}
@@ -3189,7 +3189,7 @@ function StandardMaterialQuickEditor({
 
       <MaterialExtensionSection
         extensionName="KHR_materials_transmission"
-        description="反射を残して、ガラスのように光を通します。Alphaによる半透明とは別の設定です。"
+        description="ガラスのように反射しながら光を通します。Alphaによる半透明とは別に設定できます。"
         enabled={Boolean(transmission)}
         readOnly={readOnly}
         onToggle={(enabled) =>
@@ -3298,7 +3298,7 @@ function StandardMaterialQuickEditor({
               <span>
                 Attenuationを有効にする
                 <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">
-                  距離に応じた光の減衰です。無効にすると、色も明るさも変わりません。
+                  光が通る距離に応じて色と明るさを変えます。無効にすると、光の色と明るさを保ちます。
                 </span>
               </span>
               <MaterialInput materialPath="extensions.KHR_materials_volume.attenuationDistance" materialEncode={(enabled) => enabled ? 1 : null}
@@ -3334,7 +3334,7 @@ function StandardMaterialQuickEditor({
               label="Attenuation Color"
               value={volume.attenuationColor}
               max={1}
-              description="指定した距離を通った後の光の色です。白で減衰なし。RGBは0〜1です（リニア色空間）。"
+              description="指定した距離を通った後の光の色です。白にすると減衰しません。RGBはリニア色空間の0〜1で指定します。"
               disabled={readOnly}
               onChange={(attenuationColor) =>
                 updateLitExtension({
@@ -3376,7 +3376,7 @@ function StandardMaterialQuickEditor({
               value={dispersion.dispersion}
               min={0}
               step={0.01}
-              description="0で効果なし。通常は0〜1、強調する場合は1を超える値を指定します。"
+              description="0で効果がなくなります。通常は0〜1で指定し、強調する場合は1を超える値を使えます。"
               disabled={readOnly}
               onChange={(value) =>
                 updateLitExtension({
@@ -3481,7 +3481,7 @@ function StandardMaterialQuickEditor({
             </div>
             <TextureSlot materialPath="extensions.KHR_materials_iridescence.iridescenceThicknessTexture"
               label="Thickness Map"
-              description="G（緑）をThickness Min〜Maxに対応させます（リニア色空間）。"
+              description="画像のG成分をThickness MinからMaxの範囲に対応させます。リニア色空間で読み込みます。"
               value={iridescence.iridescenceThicknessTexture}
               textures={textures}
               projectPath={projectPath}
@@ -3660,7 +3660,7 @@ export function TextureQuickEditor({
           <dt className="text-slate-500">ソース</dt>
           <dd className="truncate text-right text-slate-700" title={textureSourceDisplayLabel(asset)}>{textureSourceDisplayLabel(asset)}</dd>
         </dl>
-        {asset.optimizedFrom ? <p className="text-[11px] leading-4 text-slate-500">変換済み（{(getTextureSourceFormat(asset) ?? "不明").toUpperCase()}）の画像を、シーンと公開の両方で使っています。元画像は保持してあるので、いつでも戻せます。</p> : null}
+        {asset.optimizedFrom ? <p className="text-[11px] leading-4 text-slate-500">変換済み（{(getTextureSourceFormat(asset) ?? "不明").toUpperCase()}）の画像を、シーンと公開の両方で使っています。元画像も保存されているため、いつでも元に戻せます。</p> : null}
       </EditorSection>
 
       <EditorSection title="サイズと圧縮">
@@ -3684,7 +3684,7 @@ export function TextureQuickEditor({
           >
             <option value="original">原寸のまま</option>
             {TEXTURE_MAX_SIZE_CHOICES.map((size) => (
-              <option key={size} value={size}>長辺を最大 {size}px まで</option>
+              <option key={size} value={size}>長辺を最大 {size}pxまで</option>
             ))}
           </select>
         </label>
@@ -3941,7 +3941,7 @@ function TextureQualityControl({
       <p className="mt-1 text-[11px] leading-4 text-slate-500">
         {ktx2
           ? "KTX2の画質・通信量・変換時間を調整します。VRAM使用量は変わりません。"
-          : "PNGでは画質の設定は効きません。圧縮にはWEBPかKTX2を選んでください。"}
+          : "PNGには画質設定を適用しません。圧縮するにはWEBPかKTX2を選んでください。"}
       </p>
     </div>
   );
@@ -4107,12 +4107,12 @@ function TextureProcessingPanel({
       ) : null}
       {plan.pending && plan.powerOfTwo ? (
         <p className="text-[11px] leading-4 text-slate-500">
-          辺をいちばん近い2のべき乗へ丸めるため、縦横比がわずかに変わります。
+          幅と高さを、それぞれ最も近い2の累乗にそろえます。縦横比がわずかに変わる場合があります。
         </p>
       ) : null}
       {plan.pending && !plan.qualityApplies && plan.outputFormat === "png" ? (
         <p className="text-[11px] leading-4 text-slate-500">
-          PNGでは画質の設定は効きません。圧縮にはWEBPかKTX2を選んでください。
+          PNGには画質設定を適用しません。圧縮するにはWEBPかKTX2を選んでください。
         </p>
       ) : null}
       <button
@@ -4140,7 +4140,7 @@ function TextureProcessingPanel({
         <p className="text-[11px] leading-4 text-slate-500">{blockedReason}</p>
       ) : plan.pending ? (
         <p className="rounded border border-amber-200 bg-amber-50 p-1.5 text-xs leading-4 text-amber-800">
-          「この設定で画像を書き出す」を押すと、変換後の画像を編集・公開に使います。元画像は残り、元に戻せます。
+          「この設定で画像を書き出す」を押すと、変換した画像を編集画面と公開先で使います。元画像は保存され、元に戻すこともできます。
         </p>
       ) : (
         <p className="text-[11px] leading-4 text-slate-500">{plan.settledReason}</p>
@@ -4316,7 +4316,7 @@ export function AssetQuickEditor({
       <EditorSection title="GLSLシェーダー">
         <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
           <p className="text-xs leading-4 text-slate-600">
-            {asset.stage} シェーダーとしてインポートされています。マテリアルから参照してシーンへ反映できます。
+            {asset.stage} シェーダーとして取り込んだ素材です。マテリアルに割り当てるとシーンで使えます。
           </p>
           <button
             type="button"

@@ -491,7 +491,7 @@ function modelRecommendations(
       severity: placementCount >= 20 ? "recommended" : "consider",
       title: `${asset.name}の重複メッシュ（${placementCount}部品）をインスタンス化`,
       detail:
-        "同じ形状とマテリアルの静的な部品を、動作確認と公開先でまとめて描画します。近くの不透明な部品が対象です。動く部品や振る舞いのあるシーンは通常描画を維持します。ファイル容量は変わりません。",
+        "同じ形状とマテリアルを使う静止した部品を、動作確認と公開先でまとめて描画します。近くにある不透明な部品が対象です。動く部品や動作を設定したシーンは元の方法で描画します。ファイル容量は変わりません。",
       assetId: asset.id,
       impact: "render",
     });

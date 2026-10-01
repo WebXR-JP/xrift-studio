@@ -39,7 +39,7 @@ export function AssetOptimizationOriginCard({
         </dd>
       </dl>
       <p className="mt-1 text-[11px] leading-4 text-violet-800">
-        元ファイルは残っています。戻すと変換前の設定もそのまま復元します。
+        元のファイルは保存されています。元に戻すと、変換前の設定も復元されます。
       </p>
       <button
         type="button"

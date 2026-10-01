@@ -436,7 +436,7 @@ function App() {
         ) {
           toast({
             kind: "success",
-            title: "XRift Studio をアップデートしました",
+            title: "XRift Studioをアップデートしました",
             description: `v${versions.appVersion.replace(/^v/, "")}`,
           });
         }
@@ -609,7 +609,7 @@ function App() {
       setRuntime(next);
       toast({
         kind: "success",
-        title: "@xrift/cli をアップデートしました",
+        title: "@xrift/cliをアップデートしました",
         description: `v${next.xriftVersion}`,
       });
       setUpdateInfo(null);
@@ -1985,7 +1985,7 @@ function App() {
           onClose={() => setVisualClassicExportBundle(null)}
           onChooseTarget={async () => {
             const selectedPath = await tauri.selectDirectory(
-              "XRift コードプロジェクトを選択",
+              "XRiftコードプロジェクトを選択",
               projectsRoot || undefined,
             );
             if (!selectedPath || Array.isArray(selectedPath)) return null;
@@ -2021,7 +2021,7 @@ function App() {
             });
             toast({
               kind: "success",
-              title: "XRift コードエディターへ書き出しました",
+              title: "XRiftコードエディターへ書き出しました",
               description:
                 integration === "component"
                   ? "組み込み用コードを追加すると、既存のシーンと一緒に使えます。"

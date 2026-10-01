@@ -263,7 +263,7 @@ export async function createUnityPackageImportPlan(
     selectedAssetId = plan.asset.id;
   }
 
-  reportProgress(input, 52, "Unity マテリアルを変換しています");
+  reportProgress(input, 52, "Unityマテリアルを変換しています");
   let materialCount = 0;
   for (const entry of entries.filter(
     (candidate) => candidate.asset && UNITY_MATERIAL.test(candidate.path),
@@ -427,7 +427,7 @@ export async function createUnityPackageImportPlan(
         "GameObject階層、GLB / glTF、対応テクスチャ、マテリアルのいずれも変換できませんでした",
     });
   }
-  reportProgress(input, 100, hasUsefulResult ? "Unity 読み込みの準備ができました" : "変換対象がありません");
+  reportProgress(input, 100, hasUsefulResult ? "Unity読み込みの準備ができました" : "変換対象がありません");
 
   return {
     canCommit:

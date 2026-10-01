@@ -299,7 +299,7 @@ export const MATERIAL_SHOWCASE_DEFINITIONS: readonly MaterialShowcaseDefinition[
     // on one would show three identical spheres.
     {
       key: "water-ior",
-      name: "水（屈折率 1.33）",
+      name: "水（屈折率1.33）",
       extensionLabel: "KHR_materials_ior",
       base: { color: "#ffffff", metalness: 0, roughness: 0.04 },
       extensions: {
@@ -313,7 +313,7 @@ export const MATERIAL_SHOWCASE_DEFINITIONS: readonly MaterialShowcaseDefinition[
     },
     {
       key: "glass-ior",
-      name: "ガラス（屈折率 1.5）",
+      name: "ガラス（屈折率1.5）",
       extensionLabel: "KHR_materials_ior",
       base: { color: "#ffffff", metalness: 0, roughness: 0.04 },
       extensions: {
@@ -329,7 +329,7 @@ export const MATERIAL_SHOWCASE_DEFINITIONS: readonly MaterialShowcaseDefinition[
       key: "diamond-ior",
       baselineName: "屈折率の比較（IOR 1.5）",
       baselineExtensions: {KHR_materials_transmission: {transmissionFactor: 1}, KHR_materials_volume: {thicknessFactor: 1, attenuationColor: [1,1,1]}},
-      name: "ダイヤモンド（屈折率 2.42）",
+      name: "ダイヤモンド（屈折率2.42）",
       extensionLabel: "KHR_materials_ior",
       base: { color: "#ffffff", metalness: 0, roughness: 0.02 },
       extensions: {
@@ -354,7 +354,7 @@ export const MATERIAL_SHOWCASE_DEFINITIONS: readonly MaterialShowcaseDefinition[
     },
     {
       key: "mtoon-outline",
-      name: "MToon 1.0 アウトライン",
+      name: "MToon 1.0アウトライン",
       extensionLabel: "VRMC_materials_mtoon",
       base: { color: "#f2aa62", metalness: 0, roughness: 1 },
       extensions: {
@@ -368,11 +368,11 @@ export const MATERIAL_SHOWCASE_DEFINITIONS: readonly MaterialShowcaseDefinition[
           outlineLightingMixFactor: 0,
         },
       },
-      baselineName: "MToon 1.0 アウトライン（標準マテリアル）",
+      baselineName: "MToon 1.0アウトライン（標準マテリアル）",
     },
     {
       key: "mtoon-0-outline",
-      name: "MToon 0.x アウトライン",
+      name: "MToon 0.xアウトライン",
       extensionLabel: "VRMC_materials_mtoon",
       base: { color: "#6aaedb", metalness: 0, roughness: 1 },
       extensions: {
@@ -387,7 +387,7 @@ export const MATERIAL_SHOWCASE_DEFINITIONS: readonly MaterialShowcaseDefinition[
           extras: { xriftVrm0CompatShade: true },
         },
       },
-      baselineName: "MToon 0.x アウトライン（標準マテリアル）",
+      baselineName: "MToon 0.xアウトライン（標準マテリアル）",
     },
     ...EXTENDED_MATERIAL_SHOWCASES,
   ];

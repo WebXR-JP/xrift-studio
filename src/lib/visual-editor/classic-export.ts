@@ -134,7 +134,7 @@ export async function inspectClassicExportTarget(
   if (!normalized) {
     throw new ClassicExportError(
       "target-required",
-      "XRift コードプロジェクトのフォルダーを選択してください。",
+      "XRiftコードプロジェクトのフォルダーを選択してください。",
     );
   }
   const [packageSource, xriftSource, entries] = await Promise.all([
@@ -342,8 +342,8 @@ export async function exportVisualProjectToClassic(input: {
     label: "コードプロジェクトへ追加しています",
     detail:
       input.integration === "component"
-        ? "既存のエントリーを保ち、XRift Studio シーンを独立したComponentとして追加します。"
-        : "既存エントリーをバックアップしてXRift Studio シーンへ切り替えます。",
+        ? "既存のエントリーを保ち、XRift Studioシーンを独立したComponentとして追加します。"
+        : "既存エントリーをバックアップしてXRift Studioシーンへ切り替えます。",
     percent: 46,
   });
 

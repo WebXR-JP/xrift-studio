@@ -508,7 +508,7 @@ export function applyOpenBrushCatalogInstall(
     name: `Open Brush · ${entry.label}`,
     folderId: folder.id,
   });
-  if (!material) throw new Error("Open Brush マテリアルを作成できませんでした");
+  if (!material) throw new Error("Open Brushマテリアルを作成できませんでした");
   const order = nextOrder({ ...manifest, folders }, folder.id);
   const assets: Record<string, SceneAsset> = {
     ...manifest.assets,

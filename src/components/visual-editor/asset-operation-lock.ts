@@ -68,13 +68,13 @@ export function resolveAssetOperationAvailability(
     if (snapshot.modelReimportActive) {
       return blocked(
         "model-reimport",
-        "3Dモデルの再インポート完了後にアセットをインポートできます",
+        "3Dモデルの再インポートが完了したら素材を取り込めます",
       );
     }
     if (snapshot.textureProcessingActive) {
       return blocked(
         "texture-processing",
-        "テクスチャの変換完了後にアセットをインポートできます",
+        "テクスチャの変換が完了したら素材を取り込めます",
       );
     }
 
@@ -96,29 +96,29 @@ export function resolveAssetOperationAvailability(
 }
 
 const READ_ONLY_REASONS: Record<AssetOperationKind, string> = {
-  "asset-import": "動作確認を停止してからアセットをインポートしてください",
+  "asset-import": "Playを停止してから素材を取り込んでください",
   "model-reimport": "動作確認を停止してから3Dモデルを再インポートしてください",
   "model-optimization": "動作確認を停止してから3Dモデルを最適化してください",
   "texture-processing": "動作確認を停止してからテクスチャを変換してください",
 };
 
 const BUSY_IMPORT_REASONS: Record<AssetOperationKind, string> = {
-  "asset-import": "アセットのインポートが進行中です",
-  "model-reimport": "アセットのインポート完了後に3Dモデルを再インポートできます",
-  "model-optimization": "アセットのインポート完了後に3Dモデルを最適化できます",
+  "asset-import": "素材を取り込んでいます",
+  "model-reimport": "素材の取り込みが完了したら3Dモデルを再インポートできます",
+  "model-optimization": "素材の取り込みが完了したら3Dモデルを最適化できます",
   "texture-processing": "アセットのインポート完了後にテクスチャを変換できます",
 };
 
 /** Model最適化は原本を差し替えるので、再インポートと同じ排他区間で扱う。 */
 const MODEL_BUSY_REASONS: Record<AssetOperationKind, string> = {
-  "asset-import": "3Dモデルの再インポート完了後にアセットをインポートできます",
+  "asset-import": "3Dモデルの再インポートが完了したら素材を取り込めます",
   "model-reimport": "3Dモデルの再インポートが進行中です",
   "model-optimization": "3Dモデルの再インポート完了後に3Dモデルを最適化できます",
   "texture-processing": "3Dモデルの再インポート完了後にテクスチャを変換できます",
 };
 
 const TEXTURE_BUSY_REASONS: Record<AssetOperationKind, string> = {
-  "asset-import": "テクスチャの変換完了後にアセットをインポートできます",
+  "asset-import": "テクスチャの変換が完了したら素材を取り込めます",
   "model-reimport": "テクスチャの変換完了後に3Dモデルを再インポートできます",
   "model-optimization": "テクスチャの変換完了後に3Dモデルを最適化できます",
   "texture-processing": "テクスチャの変換が進行中です",

@@ -1,7 +1,9 @@
 @AGENT.md
 
-Claude Code 固有の設定:
+## Claude Codeの設定
 
-- ブラウザプレビューは `.claude/launch.json` の `web` 設定を preview_start で使う。ポート 1420 が使用中なら既存の dev サーバーが動いているので、新たに起動せず `http://localhost:1420/preview.html` へ navigate する。
-- よく使うコマンドと Tauri MCP の読み取りは `.claude/settings.json` で事前許可済み。
-- 作業の種類に応じて `.agents/skills/` のスキルを読む: 機能追加・IPC は `docs/AGENT_IMPLEMENTATION.md`、UX 設計は `xrift-studio-ux`、動作確認・デバッグは `xrift-studio-verify`、MCP でワールドを作る・良くするときは `xrift-world-direction`。
+ブラウザのプレビューには、`.claude/launch.json`の`web`設定をpreview_startで使ってください。ポート1420で開発サーバーが起動済みなら、そのサーバーを使い、`http://localhost:1420/preview.html`を開きます。
+
+よく使うコマンドとTauri MCPの読み取り操作は、`.claude/settings.json`で事前に許可しています。
+
+作業に合う資料を読んでください。機能追加・IPC連携は`docs/AGENT_IMPLEMENTATION.md`、画面設計は`xrift-studio-ux`、動作確認とデバッグは`xrift-studio-verify`、MCPでのワールド制作・調整は`xrift-world-direction`を使います。日本語の作成・推敲では、`AGENT.md`の文章と用語の方針に従ってください。

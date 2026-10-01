@@ -79,7 +79,7 @@ export const EXTERNAL_STORE_PROVIDERS = [
     installableKinds: ["audio"],
     authorFallback: "音蔵 (おとぐら)",
     attributionNote:
-      "Stable Audio 3 でローカル生成した音源です。ループ環境音は継ぎ目が出ないよう加工済みで、商用・改変を含め自由に使えます。",
+      "Stable Audio 3でローカル生成した音源です。ループ環境音は継ぎ目が出ないよう加工済みで、商用・改変を含め自由に使えます。",
   },
   {
     id: "xrift-sky-shaders",
@@ -107,7 +107,7 @@ export const EXTERNAL_STORE_PROVIDERS = [
     installableKinds: [],
     authorFallback: "XRift Studio contributors",
     attributionNote:
-      "Gerstner波はMochie's Unity Shaders (MIT) を移植しています。波の動きはシーン設定の風に連動します。",
+      "Gerstner波はMochie's Unity Shaders (MIT)を移植しています。波の動きはシーン設定の風に連動します。",
   },
   {
     id: "xrift-terrain-presets",
@@ -164,7 +164,7 @@ export const EXTERNAL_STORE_PROVIDERS = [
     installableKinds: [],
     authorFallback: "XRift Studio contributors",
     attributionNote:
-      "既存のPrimitive、パーティクル、ライト、音、ノードグラフを組み合わせたEntityです。置いたあとは中身を1つずつ編集できます。",
+      "既存のPrimitive、パーティクル、ライト、音、Node Graphを組み合わせたEntityです。置いたあとは中身を1つずつ編集できます。",
   },
   {
     id: "open-brush",

@@ -875,7 +875,7 @@ function OpenBrushStore({
           : `「${selected.label}」をマテリアルとして追加しました。`,
       );
     } catch (reason) {
-      setError(errorMessage(reason, "Open Brush マテリアルを追加できませんでした"));
+      setError(errorMessage(reason, "Open Brushマテリアルを追加できませんでした"));
     } finally {
       setAdding(false);
     }
@@ -885,16 +885,16 @@ function OpenBrushStore({
     <>
       <section
         className="flex min-w-0 flex-1 flex-col border-r border-slate-200"
-        aria-label="Open Brush マテリアル一覧"
+        aria-label="Open Brushマテリアル一覧"
       >
         <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-2.5">
           <div className="mb-2 flex items-start justify-between gap-3">
             <div>
               <h3 className="text-xs font-semibold text-slate-900">
-                Open Brush マテリアル
+                Open Brushマテリアル
               </h3>
               <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                検証済み48ブラシを専用シェーダーのマテリアルとして追加できます
+                表示を確認した48種類のブラシを、専用シェーダーのマテリアルとして追加できます。
               </p>
             </div>
             <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] font-semibold text-sky-700">
@@ -989,7 +989,7 @@ function OpenBrushStore({
 
       <aside
         className="scrollbar-thin w-[350px] shrink-0 overflow-auto bg-white p-4"
-        aria-label="選択したOpen Brush マテリアルの詳細"
+        aria-label="選択したOpen Brushマテリアルの詳細"
       >
         {selected ? (
           <div className="space-y-4">

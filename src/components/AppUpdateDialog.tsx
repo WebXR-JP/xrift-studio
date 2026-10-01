@@ -82,7 +82,7 @@ export function AppUpdateDialog({
                 id="app-update-title"
                 className="text-lg font-semibold tracking-tight text-zinc-900"
               >
-                XRift Studio のアップデート
+                XRift Studioのアップデート
               </div>
               <div className="text-xs text-zinc-600">
                 署名を確認してからインストールします
@@ -127,7 +127,7 @@ export function AppUpdateDialog({
                 {state.releaseNotes?.trim() || "更新内容の説明はありません。"}
               </div>
               <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">
-                インストール後にアプリが再起動します。プロジェクトやアプリ専用のNode.js・@xrift/cliは変更しません。
+                インストールが完了するとアプリが再起動します。プロジェクトとアプリ専用のNode.js・@xrift/cliはそのまま使えます。
               </p>
             </>
           )}
@@ -215,7 +215,7 @@ function UpdateProgress({
               ? "アップデートをダウンロードしています…"
               : state.phase === "installing"
                 ? "署名を確認してインストールしています…"
-                : "XRift Studio を再起動しています…"}
+                : "XRift Studioを再起動しています…"}
         </span>
         {downloading && (
           <span className="font-mono text-zinc-500">

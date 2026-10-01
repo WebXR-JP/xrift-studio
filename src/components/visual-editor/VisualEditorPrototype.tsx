@@ -1598,7 +1598,7 @@ export function VisualEditorPrototype({
       async (savingBundle) => {
         const save = onSaveRef.current;
         if (!save) {
-          throw new Error("Desktop shellから自動保存callbackを指定してください");
+          throw new Error("デスクトップ側の呼び出し元で、自動保存用のコールバックを指定してください");
         }
         return await save(savingBundle);
       },
@@ -3599,7 +3599,7 @@ export function VisualEditorPrototype({
             if (!target || (target.kind !== "texture" && target.kind !== "model")) {
               throw new XriftMcpEditorToolError(
                 "ASSET_NOT_FOUND",
-                "テクスチャまたは 3Dモデルが見つかりません",
+                "テクスチャまたは3Dモデルが見つかりません",
                 { assetId },
               );
             }
@@ -4571,7 +4571,7 @@ export function VisualEditorPrototype({
             if (!template) {
               throw new XriftMcpEditorToolError(
                 "SCRIPT_TEMPLATE_NOT_FOUND",
-                "指定されたスクリプト Templateが見つかりません",
+                "指定されたスクリプトTemplateが見つかりません",
                 { templateId },
               );
             }
@@ -4603,7 +4603,7 @@ export function VisualEditorPrototype({
             if (source === null) {
               throw new XriftMcpEditorToolError(
                 "SCRIPT_TEMPLATE_NOT_FOUND",
-                "指定されたスクリプト Templateを生成できません",
+                "指定されたスクリプトTemplateを生成できません",
                 { templateId },
               );
             }
@@ -4792,7 +4792,7 @@ export function VisualEditorPrototype({
             if (templateId && !template) {
               throw new XriftMcpEditorToolError(
                 "SCRIPT_TEMPLATE_NOT_FOUND",
-                "指定されたスクリプト Templateが見つかりません",
+                "指定されたスクリプトTemplateが見つかりません",
                 { templateId },
               );
             }
@@ -7119,7 +7119,7 @@ export function VisualEditorPrototype({
         setNotice(
           applied.alreadyInstalled
             ? `「${entry.label}」は追加済みです。Assetsで選択しました`
-            : `「${entry.label}」をOpen Brush マテリアルとして追加しました`,
+            : `「${entry.label}」をOpen Brushマテリアルとして追加しました`,
         );
         if (applied.alreadyInstalled) {
           return {
@@ -7336,7 +7336,7 @@ export function VisualEditorPrototype({
         ) {
           const addedParticle = addDefaultParticleAsset(assets, {
             id: fallbackParticleId,
-            name: "新規パーティクル 1",
+            name: "新規パーティクル1",
           });
           if (addedParticle.added) {
             assets = addedParticle.manifest;
@@ -8140,8 +8140,8 @@ export function VisualEditorPrototype({
       } catch (cause) {
         setNotice(
           cause instanceof Error
-            ? `GLSL 素材を読み込めませんでした: ${cause.message}`
-            : "GLSL 素材を読み込めませんでした",
+            ? `GLSL素材を読み込めませんでした: ${cause.message}`
+            : "GLSL素材を読み込めませんでした",
         );
       }
     },
@@ -8953,7 +8953,7 @@ export function VisualEditorPrototype({
             ? `標準glTFマテリアルを${destination}に作成し、Inspectorで開きました`
             : kind === "particle"
               ? `パーティクルを${destination}に作成し、Inspectorで開きました`
-              : `ノードグラフを${destination}に作成し、ノードエディターで開きました`,
+              : `Node Graphを${destination}に作成し、ノードエディターで開きました`,
         );
         if (kind === "interactivity") {
           setInteractivityEditorAssetId(added.assetId);
@@ -8985,7 +8985,7 @@ export function VisualEditorPrototype({
   const handleCreateModelAnimationGraph = useCallback(
     (assetId: string) => {
       if (editorMode !== "edit") {
-        setNotice("動作確認を停止してからノードグラフを作成してください");
+        setNotice("動作確認を停止してからNode Graphを作成してください");
         return;
       }
       const model = bundleRef.current.assets.assets[assetId];
@@ -9000,19 +9000,19 @@ export function VisualEditorPrototype({
         const assets = current.present.bundle.assets;
         const added = addDefaultInteractivityAsset(assets, {
           id: graphAssetId,
-          name: `${model.name} のアニメーション`,
+          name: `${model.name} Animation`,
           folderId: model.folderId ?? null,
           extension: createModelAnimationGraphExtension(
             clips.map((clip) => clip.name),
           ),
         });
         if (!added.added) {
-          setNotice("ノードグラフを作成できませんでした");
+          setNotice("Node Graphを作成できませんでした");
           return current;
         }
         setSaveStatus("dirty");
         setNotice(
-          `${clips.length}件のクリップを再生するノードグラフを作成しました。Entityに付けると動作確認でループ再生されます`,
+          `${clips.length}件のクリップを再生するNode Graphを作成しました。Entityに付けると動作確認でループ再生されます`,
         );
         setInteractivityEditorAssetId(added.assetId);
         setGraphTabActive(true);
@@ -9458,7 +9458,7 @@ export function VisualEditorPrototype({
           return current;
         }
         if (!auto) {
-          setNotice("ノードグラフをAssetsに保存しました");
+          setNotice("Node GraphをAssetsに保存しました");
         }
         // The Entities the graph writes to are Component data, so saving the
         // graph is what keeps each trigger's reference list true.
@@ -9690,7 +9690,7 @@ export function VisualEditorPrototype({
         if (createdInteractivityAssetId) {
           const added = addDefaultInteractivityAsset(assets, {
             id: createdInteractivityAssetId,
-            name: "新規ノードグラフ 1",
+            name: "Node Graph 1",
             folderId: null,
           });
           if (added.added) {
@@ -9708,7 +9708,7 @@ export function VisualEditorPrototype({
         ) {
           const added = addDefaultParticleAsset(assets, {
             id: fallbackParticleId,
-            name: "新規パーティクル 1",
+            name: "新規パーティクル1",
           });
           if (added.added) {
             assets = added.manifest;
@@ -9740,7 +9740,7 @@ export function VisualEditorPrototype({
                   ? componentDefinitionId === "scripting.script"
                     ? "Assetsでスクリプトを作成してください"
                     : componentDefinitionId === "interaction.trigger"
-                      ? "Assetsでノードグラフを作成してください"
+                      ? "AssetsでNode Graphを作成してください"
                       : "必要なメッシュまたは素材がありません"
                   : "Componentを追加できませんでした";
           setNotice(reason);
@@ -9750,7 +9750,7 @@ export function VisualEditorPrototype({
           createdParticle
             ? "パーティクルを作成し、Particle Emitterを追加しました"
             : createdGraph
-              ? "ノードグラフを作成し、Interaction Triggerを追加しました"
+              ? "Node Graphを作成し、Interaction Triggerを追加しました"
               : "Componentを追加しました",
         );
         return touchProject({ ...current, assets, scene: result.scene });
@@ -10240,7 +10240,7 @@ export function VisualEditorPrototype({
                     : entry,
                 ),
               );
-              setNotice(`「${imported.name}」をGLSL シェーダー素材としてインポートしました`);
+              setNotice(`「${imported.name}」をGLSLシェーダー素材としてインポートしました`);
               continue;
             }
             // Sidecars stay out of the manifest as standalone Assets: the

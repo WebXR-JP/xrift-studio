@@ -1,8 +1,8 @@
-> 前回段階の修正記録です。Playを含む最終版の説明と最新検証結果は `PLAY_COLLIDER_FIX_NOTES.md` を参照してください。
+> 前回段階の修正記録です。Playを含む最終版の説明と最新検証結果は`PLAY_COLLIDER_FIX_NOTES.md`を参照してください。
 
 # 当たり判定の修正
 
-対象: `xrift-studio-authoring-workflow-no-diagnostics(1).zip` のソース。
+対象: `xrift-studio-authoring-workflow-no-diagnostics(1).zip`のソース。
 修正版のソース一式と回帰テストです。Windows向け実行ファイルではありません。
 
 ## 修正内容
@@ -43,14 +43,14 @@
 
 | 確認 | 結果 |
 | --- | --- |
-| Colliderの追加・解除・再有効化・共有モデルの設定操作 | 46 assertions 合格 |
-| 頂点変換・Interleaved・反転・子要素監視など | 24 assertions 合格 |
-| 添付済みRapier 0.19.2 WASMによる物理シミュレーション | 9ケース、22 assertions 合格 |
-| 既存Hierarchy Transferの回帰テスト | 20ケース、290 assertions 合格 |
-| 既存Authoring Workflowの回帰テスト | 42 assertions 合格 |
-| 変更ソース13ファイルの構文・接続箇所のチェック | 21 assertions 合格。型チェックではありません |
+| Colliderの追加・解除・再有効化・共有モデルの設定操作 | 46 assertions合格 |
+| 頂点変換・Interleaved・反転・子要素監視など | 24 assertions合格 |
+| 添付済みRapier 0.19.2 WASMによる物理シミュレーション | 9ケース、22 assertions合格 |
+| 既存Hierarchy Transferの回帰テスト | 20ケース、290 assertions合格 |
+| 既存Authoring Workflowの回帰テスト | 42 assertions合格 |
+| 変更ソース13ファイルの構文・接続箇所のチェック | 21 assertions合格。型チェックではありません |
 | Fixtureの実行登録チェック | 115 suitesが登録済み。115 suites全体を実行したという意味ではありません |
-| 差分の空白・競合マーカー確認 | `git diff --check` 合格 |
+| 差分の空白・競合マーカー確認 | `git diff --check`合格 |
 
 物理シミュレーションでは、床への着地、解除後の落下、Triggerの通り抜け、Triggerを解除した床、移動・拡縮した床、反転した床、穴のある床、形状の差し替え、両側からの壁への衝突、Rapier Character Controllerの接地を確認しました。
 

@@ -117,9 +117,9 @@ export function SetupView({ status, onReady }: Props) {
               <SetupItem
                 done={status.xriftInstalled && !status.xriftUpdateRequired}
                 label="@xrift/cli"
-                hint="ワールドやアイテムの作成・公開に使う XRift 公式ツール"
+                hint="ワールドやアイテムの作成・公開に使うXRift公式ツール"
                 version={status.xriftUpdateRequired && status.xriftVersion
-                  ? `現在 v${status.xriftVersion} → 推奨 v${status.recommendedXriftVersion}`
+                  ? `現在v${status.xriftVersion} → 推奨v${status.recommendedXriftVersion}`
                   : status.xriftVersion
                     ? `v${status.xriftVersion}`
                     : `インストールするバージョン: v${status.recommendedXriftVersion}`}

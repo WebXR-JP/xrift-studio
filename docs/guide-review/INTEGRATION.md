@@ -1,6 +1,6 @@
 # ガイドの統合確認
 
-2026-09-08。`xrift-studio-wiki-rebuilt.zip` を、コミット `b3c5388` の編集UIへ統合した。
+2026-09-08。`xrift-studio-wiki-rebuilt.zip`を、コミット`b3c5388`の編集UIへ統合した。
 
 ## 取り込み時の変更
 

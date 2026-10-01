@@ -1062,7 +1062,7 @@ function MeshInspector({
                   className="h-7 min-w-0 rounded-sm border border-slate-300 bg-white px-1.5 text-xs text-slate-800 outline-none focus:border-violet-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                 >
                   <option value="">
-                    {openBrush ? "OpenBrush Brush シェーダー" : "未設定"}
+                    {openBrush ? "OpenBrush Brushシェーダー" : "未設定"}
                   </option>
                   {materials.map((material) => (
                     <option key={material.id} value={material.id}>{material.name}</option>
@@ -1784,7 +1784,7 @@ function TerrainInspector({
             </summary>
             <div className="space-y-2 pt-2">
               <TerrainNumberField
-                label="中心 X"
+                label="中心X"
                 value={centerX}
                 min={-terrain.width / 2}
                 max={terrain.width / 2}
@@ -1793,7 +1793,7 @@ function TerrainInspector({
                 onChange={setCenterX}
               />
               <TerrainNumberField
-                label="中心 Z"
+                label="中心Z"
                 value={centerZ}
                 min={-terrain.depth / 2}
                 max={terrain.depth / 2}
@@ -2039,7 +2039,7 @@ function TerrainGrassLayerList({
 
       {grassLayers.length === 0 ? (
         <p className="text-[11px] leading-4 text-slate-500">
-          密度・高さ・傾斜で草の生え方を決め、ブラシで調整します。
+          密度、高さ、傾斜で草の生え方を設定できます。ブラシで部分ごとに調整することもできます。
         </p>
       ) : (
         <ul className="space-y-1">
@@ -2630,7 +2630,7 @@ function ModelNodeInspector({
           </dd>
         </dl>
         <p className="border-t border-slate-100 pt-2 text-xs leading-5 text-slate-500">
-          このノードの位置・回転・大きさを変更します。スキンとアニメーションは親モデルで保ちます。
+          このノードの位置、回転、大きさを変更できます。スキンとアニメーションは親モデルの設定を使います。
         </p>
       </ComponentCard>
       {nodeMesh && (node.nodeType === "mesh" || node.nodeType === "skinned-mesh") ? (
@@ -2760,7 +2760,7 @@ function ModelNodeDecimatePanel({
             <div className="space-y-1.5 rounded border border-violet-200 bg-violet-50 p-2">
               <p className="text-xs leading-5 text-violet-900">
                 「{nodeName}」のポリゴンを{Math.round(pendingRatio * 100)}
-                %まで減らします。この 3Dモデルを使っている配置すべてに反映されます。
+                %まで減らします。この3Dモデルを使っている配置すべてに反映されます。
               </p>
               <div className="flex gap-1.5">
                 <button
@@ -3695,7 +3695,7 @@ function RigidBodyInspector({
       {component.autoColliders === "trimesh" &&
       component.bodyType !== "fixed" ? (
         <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-5 text-amber-800">
-          動く物体はConvex Hull（凸包）で動作確認と書き出しを行います。
+          動く物体の動作確認と書き出しには、Convex Hullの凸形状を使います。
         </p>
       ) : null}
       <label className="grid grid-cols-[minmax(0,1fr)_150px] items-center gap-3 text-xs text-slate-700">
@@ -4044,7 +4044,7 @@ function LightInspector({
                 <div className="space-y-2">
                   <ColliderNumberField label="Near（影の開始距離）" value={component.shadowCameraNear ?? (component.lightType === "directional" ? 1 : 0.5)} min={0.001} max={(component.shadowCameraFar ?? (component.lightType === "directional" ? 400 : 500)) - 0.001} step={0.1} disabled={readOnly} onChange={(shadowCameraNear) => onChange({ shadowCameraNear })} />
                   <ColliderNumberField label="Far（影の終了距離）" value={component.lightType === "spot" && (component.distance ?? 0) > 0 ? component.distance! : (component.shadowCameraFar ?? (component.lightType === "directional" ? 400 : 500))} min={(component.shadowCameraNear ?? (component.lightType === "directional" ? 1 : 0.5)) + 0.001} step={1} disabled={readOnly || (component.lightType === "spot" && (component.distance ?? 0) > 0)} onChange={(shadowCameraFar) => onChange({ shadowCameraFar })} />
-                  {component.lightType === "spot" && (component.distance ?? 0) > 0 ? <p className="text-[11px] text-slate-500">Distance（届く距離）を設定すると、影の終了距離も同じ値になります。</p> : null}
+                  {component.lightType === "spot" && (component.distance ?? 0) > 0 ? <p className="text-[11px] text-slate-500">Distanceで光が届く距離を設定すると、影の終了距離も同じ値になります。</p> : null}
                   {component.lightType === "directional" ? <>
                     <ColliderNumberField label="Left（左端）" value={component.shadowCameraLeft ?? -120} min={-100000} step={1} disabled={readOnly} onChange={(shadowCameraLeft) => onChange({ shadowCameraLeft })} />
                     <ColliderNumberField label="Right（右端）" value={component.shadowCameraRight ?? 120} min={-100000} step={1} disabled={readOnly} onChange={(shadowCameraRight) => onChange({ shadowCameraRight })} />
@@ -4631,7 +4631,7 @@ function ImageInspector({
         </div>
         {textureAssets.length === 0 ? (
           <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-4 text-amber-800">
-            Assetsに画像を追加してください（PNG / JPG / WebP）。
+            PNG、JPG、WebPの画像をAssetsに追加してください。
           </p>
         ) : !component.textureAssetId ? (
           <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-4 text-amber-800">
@@ -4842,7 +4842,7 @@ function AudioSourceInspector({
       ) : null}
       {audioAssets.length === 0 ? (
         <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs leading-4 text-amber-800">
-          Assetsに音声を追加してください（MP3 / WAV）。
+          MP3またはWAVの音声をAssetsに追加してください。
         </p>
       ) : null}
       <ColliderNumberField
@@ -4937,7 +4937,7 @@ function VegetationWindInspector({
       }
     >
       <p className="text-xs leading-4 text-slate-600">
-        このEntityと子メッシュを風で揺らします。風の強さはシーン設定で調整します。
+        このEntityと子メッシュを風で揺らせます。風の強さはシーン設定で調整してください。
       </p>
       <ToggleRow
         label="有効"
@@ -5667,7 +5667,7 @@ function EntityInspector({
           >
             <p className="text-xs leading-4 text-slate-600">
               {component.type === "animation"
-                ? "このComponentは使えません。プロジェクトを開き直すと再生用のノードグラフに変換します。"
+                ? "このComponentは使えません。プロジェクトを開き直すと再生用のNode Graphに変換します。"
                 : "このComponentはInspectorで編集できません。削除は可能です。"}
             </p>
           </ComponentCard>
@@ -6437,7 +6437,7 @@ export function InspectorPanel({
           />
         ) : (
           <div className="rounded-md border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-xs leading-5 text-slate-500">
-            Hierarchy、シーン、Assetsから編集するものを選んでください。
+            HierarchyやシーンでEntityを選ぶか、Assetsで素材を選んでください。
           </div>
         )}
       </div>

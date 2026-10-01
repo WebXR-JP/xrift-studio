@@ -106,7 +106,7 @@ export function validateClassicR3fMaterialShader(
   value: unknown,
 ): string[] {
   if (isClassicR3fMaterialShader(value)) return [];
-  if (!value || typeof value !== "object") return ["シェーダーはobjectで指定してください"];
+  if (!value || typeof value !== "object") return ["シェーダーはオブジェクトで指定してください"];
   const shader = value as Partial<ClassicR3fMaterialShader>;
   const errors: string[] = [];
   if (shader.kind !== "classic-r3f") errors.push('kindは"classic-r3f"で指定してください');
@@ -120,7 +120,7 @@ export function validateClassicR3fMaterialShader(
     errors.push("fragmentShaderにvoid main()が必要です");
   }
   if (!shader.uniforms || typeof shader.uniforms !== "object" || Array.isArray(shader.uniforms)) {
-    errors.push("uniformsはobjectで指定してください");
+    errors.push("uniformsはオブジェクトで指定してください");
   }
   if (!Array.isArray(shader.variants) || shader.variants.length === 0) {
     errors.push("variantsを1件以上指定してください");

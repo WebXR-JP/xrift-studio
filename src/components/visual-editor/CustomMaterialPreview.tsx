@@ -106,7 +106,7 @@ export function resolveCustomMaterialPreviewSource(
   if (shader?.kind !== "openbrush") {
     return {
       status: "unavailable",
-      reason: "このマテリアルにはカスタムシェーダープレビュー Adapterがありません",
+      reason: "このマテリアルのカスタムシェーダーはプレビューに対応していません",
     };
   }
   const modelAssetId = asset.importedFromModel?.modelAssetId;
@@ -119,20 +119,20 @@ export function resolveCustomMaterialPreviewSource(
     if (entry) return { status: "standalone", entry };
     return {
       status: "unavailable",
-      reason: "元のOpenBrush 3Dモデル参照がマテリアルに保存されていません",
+      reason: "元のOpen Brushモデルへの参照がマテリアルに保存されていません",
     };
   }
   const candidate = assets.assets[modelAssetId];
   if (!candidate || candidate.kind !== "model") {
     return {
       status: "unavailable",
-      reason: "元のOpenBrush 3Dモデルが見つかりません",
+      reason: "元のOpen Brushモデルが見つかりません",
     };
   }
   if (candidate.source.kind !== "project") {
     return {
       status: "unavailable",
-      reason: "プレビュー可能なOpenBrush 3Dモデルソースがありません",
+      reason: "プレビューに使えるOpen Brushモデルの元データがありません",
     };
   }
   const sourceMaterialIndex = shader.sourceMaterialIndex;
@@ -365,10 +365,10 @@ export function CustomMaterialPreview({
         {loadState.status === "ready"
           ? runtimeInfo?.pbrFallback
             ? "glTF PBRへフォールバック"
-            : "three-icosa シェーダー適用済み"
+            : "three-icosaシェーダー適用済み"
           : loadState.status === "error"
             ? "Shaderの読み込み失敗"
-            : "three-icosa シェーダーを再構築中"}
+            : "three-icosaシェーダーを再構築中"}
       </span> : null}
 
       {!compact && loadState.status === "error" ? (
@@ -540,11 +540,11 @@ function formatPbrFallbackReason(
   reason: "unsupported-preset" | "shader-load-error" | "attribute-mismatch",
 ): string {
   if (reason === "unsupported-preset") {
-    return "未対応のブラシプリセットのため、GLB内のPBR マテリアルを表示しています";
+    return "未対応のブラシプリセットのため、GLB内のPBRマテリアルを表示しています";
   }
   return reason === "attribute-mismatch"
-    ? "必要なメッシュ attributeがないため、GLB内のPBR マテリアルを表示しています"
-    : "専用シェーダーを再構築できなかったため、GLB内のPBR マテリアルを表示しています";
+    ? "必要なメッシュ属性がないため、GLB内のPBRマテリアルを表示しています"
+    : "専用シェーダーを再構築できなかったため、GLB内のPBRマテリアルを表示しています";
 }
 
 function PreviewTurntable({

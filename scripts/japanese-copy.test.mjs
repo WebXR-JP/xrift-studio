@@ -77,10 +77,11 @@ for (const [name, [expected, value]] of Object.entries(contracts)) {
   });
 }
 
-test('all 45 nodes have short Japanese titles and complete descriptions', () => {
+test('all 45 nodes have short English titles and Japanese descriptions', () => {
   assert.equal(templates.length, 45);
   for (const entry of templates) {
-    assert.match(entry.label, /[ぁ-んァ-ヶ一-龠]/u, entry.op);
+    assert.match(entry.label, /^[A-Z][A-Za-z ]*$/, entry.op);
+    assert.match(entry.description, /[ぁ-んァ-ヶ一-龠]/u, entry.op);
     assert.ok(entry.label.length <= 24, entry.label);
     assert.match(entry.description, /。$/, entry.op);
     assert.ok(entry.description.length <= 110, entry.op);
@@ -238,7 +239,7 @@ test('product pane labels remain Inspector, Hierarchy and Assets', () => {
   assert.equal(jsxTextWithId(`${base}HierarchyPanelBase.tsx`, 'hierarchy-heading'), 'Hierarchy');
   assert.equal(jsxTextWithId(`${base}AssetsPanelBase.tsx`, 'assets-heading'), 'Assets');
   assert.match(read(`${base}InspectorPanel.tsx`), /Add Component/);
-  assert.equal(template('xrift/setProperty').label, 'Entityの設定を変更');
+  assert.equal(template('xrift/setProperty').label, 'Set Property');
   const source = read(`${base}VisualEditorPrototype.tsx`);
   for (const word of ['Inspectorの幅を変更', 'Hierarchyの幅を変更', 'Assetsの高さを変更'])
     assert.ok(source.includes(word), word);
@@ -246,7 +247,7 @@ test('product pane labels remain Inspector, Hierarchy and Assets', () => {
 
 test('empty selection states lead to actual panes without repeated explanations', () => {
   const inspector = read('src/components/visual-editor/InspectorPanel.tsx');
-  assert.match(inspector, /Hierarchy、シーン、Assetsから編集するものを選んでください。/);
+  assert.match(inspector, /HierarchyやシーンでEntityを選ぶか、Assetsで素材を選んでください。/);
   const graph = read('src/components/visual-editor/InteractivityGraphEditor.tsx');
   assert.equal(graph.split('ノードを選ぶと、ここで設定を変更できます。').length - 1, 1);
   assert.doesNotMatch(graph, /ノードを選ぶと、色や時間などをここで設定できます。/);
@@ -255,7 +256,7 @@ test('empty selection states lead to actual panes without repeated explanations'
 test('node guidance names real nodes and preserves completion semantics', () => {
   const source = read('src/components/visual-editor/InteractionTriggerInspector.tsx');
   assert.ok(source.includes(`「${template('xrift/onInteract').label}」`));
-  assert.match(template('flow/setDelay').description, /「出力」は待たず/);
+  assert.match(template('flow/setDelay').description, /「Out」は待たず/);
   assert.match(template('flow/sequence').description, /完了は待ちません/);
   assert.match(read('src/components/visual-editor/InteractivityGraphEditor.tsx'), /未保存の変更は失われます/);
 });
@@ -551,12 +552,11 @@ test('all 218 material value bindings, ranges and update callbacks are unchanged
 
 test('the material guide preserves cross-tool differences instead of inventing synonyms', () => {
   const guide = read('docs/guide/material-extensions.md') + read('docs/guide/transparent-materials.md');
-  assert.match(guide, /Base ColorをDiffuse Colorに読み替えない/);
+  assert.match(guide, /Base ColorとDiffuse Colorは、同じ意味とは限りません/);
   assert.match(guide, /RoughnessとSmoothnessは増減の向きが逆/);
   assert.match(guide, /Alpha.*Transmission/);
-  assert.match(guide, /単純な置換や同じ描画結果を保証するものではありません/);
+  assert.match(guide, /名前を置き換えるだけで同じ描画結果になるとは限りません/);
   assert.doesNotMatch(read('docs/ux/editor.md'), /音源[^\n]*厚みと吸収色/);
-  assert.equal(read('.agents/skills/japanese-writing/SKILL.md'), read('.claude/skills/japanese-writing/SKILL.md'));
 });
 
 // Scene, texture and rendering terms use established names, not invented synonyms.
@@ -564,7 +564,7 @@ test('Normal Map help separates visible shading from geometry and states the inp
   const source = editorFunction('StandardMaterialQuickEditor').fn.getText();
   assert.match(source, /label="Normal Map"\s+description="陰影で細かな凹凸を表します。メッシュの形や輪郭は変わりません。"/);
   assert.match(source, /上塗りの層に凹凸の陰影を加えます。下地のNormal Mapとは別の設定です。/);
-  assert.equal((source.match(/inputHint="Tangent Space（接線空間）の画像を使用します。色補正なし（Linear）で読み込みます。"/g) ?? []).length, 2);
+  assert.equal((source.match(/inputHint="接線空間のNormal Mapを使ってください。画像は色補正をせず、Linearで読み込みます。"/g) ?? []).length, 2);
   assert.equal((source.match(/0で効果なし、1が標準です。負の値で凹凸の向きを反転します。/g) ?? []).length, 2);
   const guide = read('docs/guide/textures.md');
   assert.match(guide, /輪郭やColliderは変わりません/);
@@ -659,8 +659,8 @@ test('catalog actions, notices and current help agree on Skybox Shader and Water
   assert.match(component, /label: "Skybox"/);
   assert.doesNotMatch(component, /label: "空の背景"/);
   const guide = read('docs/guide/sky-and-water.md');
-  assert.match(guide, /\*\*Skyboxに設定\*\*/);
-  assert.match(guide, /\*\*追加後にSkyboxへ設定\*\*/);
+  assert.match(guide, /Skyboxに設定/);
+  assert.match(guide, /追加後にSkyboxへ設定/);
   assert.match(guide, /## 水面を作る/);
   assert.doesNotMatch(guide, /〇〇を空へ設定|背景は単色のまま/);
 });
@@ -677,7 +677,7 @@ test('editor visibility guidance matches actual display and quality profiles', (
     assert.equal(quality.getSceneViewportQualityProfile(mode).shadows, false);
   }
   assert.match(read('docs/guide/sky-and-water.md'), /Skybox Shaderは編集中も表示されます/);
-  assert.match(read('docs/guide/editor-basics.md'), /表示モードを\*\*シーン\*\*、描画品質を\*\*高品質\*\*/);
+  assert.match(read('docs/guide/editor-basics.md'), /表示モードを「シーン」、描画品質を「高品質」/);
 });
 
 // Re-baselined after the editor copy review: copy, layout and accessibility
@@ -709,5 +709,4 @@ test('writing rules retain professional terms while keeping actions and explanat
   assert.match(guide, /英語名をツールチップだけに隠さない/);
   assert.match(guide, /一般語まで機械的に英語へ置き換えない/);
   assert.match(guide, /Normal Mapと形状の変形/);
-  assert.equal(read('.agents/skills/japanese-writing/SKILL.md'), read('.claude/skills/japanese-writing/SKILL.md'));
 });

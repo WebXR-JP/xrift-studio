@@ -56,7 +56,7 @@ export function ParticleAssetInspector({
       <section className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
         <h3 className="text-[13px] font-semibold text-slate-900">{asset.name}</h3>
         <p className="mt-1 text-xs leading-5 text-slate-500">
-          変更は、このパーティクルの使用箇所すべてに反映します。
+          このパーティクルを変更すると、使用箇所すべてに反映されます。
         </p>
       </section>
 

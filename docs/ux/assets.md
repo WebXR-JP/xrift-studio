@@ -8,45 +8,45 @@
 
 ### 操作前
 
-- 素材は左のfolder treeに実フォルダーの親子関係を常時表示する。右側に選択フォルダーの内容を出す。3Dモデル / GLTF、テクスチャ、マテリアル、プレハブ、パーティクルの種類別collectionは実フォルダーと区別する。primitiveは別の追加 paletteに置く。マテリアル / 3Dモデル / テクスチャはreadyなgenerated thumbnailを使う。未生成時だけkind iconを使う。
-- `sceneSelection` と `assetSelection` が独立する。右設定がどちらの context を表示しているかを選択背景、header、pinned tab で示す。
-- 読み込む前に対応形式を確認できる。HDR / EXRが空の背景へ直ちに設定されること、元データ保持、既定 max resolution / quality / mipmap / compression、resource budget、external URI が local dependency に限られることも確認できる。
-- モデルの設定は元データとlast-good解析結果、マテリアル枠、animation、bounds、現在のimport recipeを同時に示す。解析済みの値と次回再import用の設定を区別する。
+- Assetsの左側には、実フォルダーの親子関係を常に表示する。右側には選択したフォルダーの内容を表示し、3Dモデル / GLTF、テクスチャ、マテリアル、プレハブ、パーティクルの種類別一覧を実フォルダーと区別する。基本形状は別の追加パレットに置く。マテリアル、3Dモデル、テクスチャには生成済みのサムネイルを使い、未生成の場合は種類のアイコンを表示する。
+- `sceneSelection`と`assetSelection`は独立して保持する。Inspectorがどちらの選択を表示しているか、選択背景、見出し、固定タブで示す。
+- 取り込み前に対応形式を確認できるようにする。HDR / EXRを取り込むとシーンの空へ設定することと、元データを残すことも示す。最大解像度、品質、Mipmap、圧縮の既定値、リソースの上限、外部URIの参照先をローカルの依存ファイルに限定する条件を確認できるようにする。
+- モデルのInspectorには、元データ、最後に成功した解析結果、マテリアル枠、アニメーション、境界ボックス、現在の取り込み設定を表示する。解析済みの値と、次回の再インポートに使う設定は区別する。
 
 マテリアルスロットは件数付きで初期表示を折り畳み、閉じている間は行と選択肢を生成しない。展開後は20件ずつ表示し、スロット名とIDで検索できる。検索変更時は先頭ページへ戻る。該当なしの場合は検索語の変更を案内する。折り畳み・再展開時は検索とページを初期化するが、保存済みの割当は保持する（MI-117）。モデルの設定のプレビューは80px、素材のグリッドは最小幅76px・サムネイル高40pxにする。フォルダーアイコンは18pxに抑える。
 
 ### 操作中
 
-- マテリアル作成は dialog 内の validation、テクスチャ / 3Dモデル / HDRI import は読み込む Queue の validate、copy、decode、derive、thumbnail、commit を表示する。cancel を処理中 stage に合わせる。
-- MCP の `import_audio_asset` / `import_texture_asset` も編集中だけ通常読み込むと同じcontent-addressed copy、atomic commit、history、自動保存を通す。絶対元データ path は trusted client input としてnative側で通常file、symlink / reparse pointなし、対応拡張子、128 MB上限、read前後size、音声ではMP3 / WAV signatureも検査する。応答には外部path、data URL、bytesを返さない。
-- パーティクルは素材の作成操作から追加する。右設定で emission、shape、velocity、lifetime、size、color、texture、blend を編集する。パーティクルはシーンまたはオブジェクト一覧へ drag してパーティクルの放出オブジェクトとして配置できる。
-- context menu は現在 kind / state で実行できる項目だけを有効にする。menu open だけでは selection や document を変えない。
-- 3Dモデルのscale、collider生成、メッシュ最適化、animation importを変更した時はrecipeだけを未保存にする。再importが必要な項目を設定内で示す。再import中も既存シーン参照とlast-good表示を消さない。
-- Assetsの複数選択では、標準マテリアルだけを対象に種類を一括変更する。同じ種類なら単体と共通の全設定を表示し、異なる値は「一部異なる」と示す。入力した項目だけを素材ごとに変更し、色の他成分と画像のUVを保持する。モデル・画像・カスタムシェーダー素材は変更しない。
+- マテリアルの作成では、ダイアログ内に入力の検証結果を表示する。テクスチャ、3Dモデル、HDRIの取り込みでは、インポートキューに検証、コピー、デコード、派生データとサムネイルの生成、確定の進捗を表示する。キャンセルできるかどうかは、処理中の段階に合わせる。
+- MCPの`import_audio_asset` / `import_texture_asset`も編集中だけ通常のインポートと同じ内容のハッシュに基づくコピー、アトミックな確定、履歴、自動保存を通す。元データの絶対パスは信頼済みクライアントからの入力としてネイティブ側で通常ファイル、symlink / reparse pointがないこと、対応拡張子、128MBの上限、読み取り前後のサイズ、音声ではMP3 / WAVの識別情報も検査する。応答には外部パス、データURL、バイト列を返さない。
+- パーティクルは素材の作成操作から追加する。Inspectorでemission、shape、velocity、lifetime、size、color、テクスチャ、blendを編集する。パーティクルはシーンまたはHierarchyへドラッグしてパーティクルの放出オブジェクトとして配置できる。
+- 右クリックメニューでは、素材の種類と現在の状態で実行できる項目だけを有効にする。メニューを開くだけでは選択や編集データを変更しない。
+- 3Dモデルの取り込み時の倍率、Colliderの生成、メッシュ最適化、Animationの取り込みを変えた場合は、取り込み設定だけを未保存にする。再インポートが必要な項目をInspectorに示し、処理中も既存のシーン参照と直前の正常な表示を維持する。
+- Assetsの複数選択では、標準マテリアルだけを対象に種類を一括変更する。同じ種類なら単体と共通の全設定を表示し、異なる値は「一部異なる」と示す。入力した項目だけを素材ごとに変更し、色の他成分と画像のUVを保持する。モデル・画像・カスタムシェーダーAssetsは変更しない。
 
 ### 成功時
 
-- 読み込む / マテリアル作成は AssetManifest と folder membership を一度だけ確定する。新素材を `assetSelection` にする。HDR / EXR importだけは同じ履歴でシーン settingsの空の背景参照も確定する。それ以外は`sceneSelection`とSceneDocumentを維持する。
-- MCP 音声 / テクスチャ import は新素材を`assetSelection`にする。同じkindと元データ hashが登録済みなら複製しない。既存素材を選択する。結果には管理下のproject-relative pathと形式metadataだけを残す。外部元データを表示しない。
-- パーティクルの作成は新素材を `assetSelection` にする。オブジェクトへの配置またはパーティクルの放出の追加は参照する素材 ID を SceneDocument に保持する。
-- thumbnail / derived は元データ / recipe / processor / target hash と一致した時だけ ready にする。同じ元データを再 import しても素材 ID と参照を保つ。マテリアル一覧は保存済み画像だけを表示する。変更時の生成queue以外ではWebGL contextを増やさない。
-- マテリアルの変更は共有素材に一度だけ保存する。同じ ID を参照する全 preview に反映する。
+- インポート / マテリアル作成はAssetManifestとフォルダーの所属を一度だけ確定する。新素材を`assetSelection`にする。HDR / EXRインポートだけは同じ履歴でシーン設定の空の背景参照も確定する。それ以外は`sceneSelection`とSceneDocumentを維持する。
+- MCP音声 / テクスチャインポートは新素材を`assetSelection`にする。同じ種別と元データハッシュが登録済みなら複製しない。既存素材を選択する。結果には管理下のプロジェクトからの相対パスと形式メタデータだけを残す。外部元データを表示しない。
+- パーティクルの作成は新素材を`assetSelection`にする。オブジェクトへの配置またはパーティクルの放出の追加は参照する素材IDをSceneDocumentに保持する。
+- サムネイルと派生データは、元データ、取り込み設定、処理系、対象のハッシュと一致した場合にだけ準備済みとする。同じ元データを再インポートしても、素材IDと参照は保つ。マテリアルの一覧には保存済みの画像を使い、変更時の生成キュー以外でWebGLコンテキストを増やさない。
+- マテリアルの変更は共有素材に一度だけ保存する。同じIDを参照する全プレビューに反映する。
 - マテリアルの一括変更は一回の履歴と自動保存で確定する。元に戻す・やり直すでも複数選択を保ち、全対象の変更をまとめて復元する。
-- 3Dモデル再importは素材 IDを維持する。slot identityが一致する既存マテリアル bindingを保持する。新規slotは未設定として追加する。消失slotは診断に残す。参照先の修正へ進める。
+- 3Dモデル再インポートは素材IDを維持する。スロットの識別情報が一致する既存マテリアル割り当てを保持する。新規スロットは未設定として追加する。消失スロットは診断に残す。参照先の修正へ進める。
 
 ### 失敗時
 
-- extension、URI、budget、decode、マテリアル field、slot binding の失敗は素材 / field / 元データ URI を project-relative に示す。reimport、設定変更、参照置換のいずれかへ案内する。
-- MCP テクスチャ import の相対 path、最終 symlink、未対応形式、署名不一致、stale revisionでは manifest と history を変えない。外部絶対 path を error detailsへ含めない。
-- temporary data を回収する。シーン / 素材 / folder documents、両 selection、history、元データ、last-good derived を開始前のままにする。同じ設定の自動 retry loop は行わない。
-- 3Dモデル metadataが非有限、bounds不正、slot重複、未対応external URIの場合は新しいmanifestを確定しない。last-good 3Dモデルの素材と配置済みオブジェクトを維持する。
+- 拡張、URI、上限、デコード、マテリアルの入力、スロット割り当てに問題がある場合は、対象の素材、入力欄、元データURIを示す。パスはプロジェクトからの相対パスで表示し、再インポート、設定変更、参照の置き換えへ案内する。
+- MCPテクスチャインポートの相対パス、最終symlink、未対応形式、署名不一致、古いリビジョンではmanifestと履歴を変えない。外部絶対パスをエラーの詳細へ含めない。
+- 失敗した処理の一時データは削除する。シーン、素材、フォルダーの編集データ、両選択、履歴、元データ、直前の正常な派生データは、操作前の状態を維持する。同じ設定で自動的に再試行を繰り返さない。
+- 3Dモデルメタデータが非有限、境界ボックス不正、スロット重複、未対応external URIの場合は新しいmanifestを確定しない。直前の正常な3Dモデルの素材と配置済みオブジェクトを維持する。
 
 ### 戻り先
 
-- 読み込む Queue を閉じても素材と右設定に last result / diagnostic を残す。cancel は直前の `assetSelection`、設定 context、シーンへ戻る。
-- 動作確認中は既存マテリアル / パーティクルのpropertyとMCP経由の既存テクスチャ import settings変更を許可する。テクスチャ元データの新規importは停止まで無効にする。停止後は動作確認中に保存した変更と現在のselectionsを維持する。
+- インポートキューを閉じても素材とInspectorに直前の結果 / 診断を残す。キャンセルは直前の`assetSelection`、設定コンテキスト、シーンへ戻る。
+- 動作確認中は既存マテリアル / パーティクルのプロパティとMCP経由の既存テクスチャ取り込み設定変更を許可する。テクスチャ元データの新規インポートは停止まで無効にする。停止後は動作確認中に保存した変更と現在の選択を維持する。
 
-完了条件: マテリアル / テクスチャ / 3Dモデル / GLTF / OBJ / VRM / プレハブ / パーティクルを左のfolder tree、種類別collection、保存済みthumbnail付きで管理する。GLB / VRMの埋め込みマテリアル / テクスチャを再利用可能な素材へ展開する。マテリアルは変更時だけ一時rendererでthumbnailを更新する。card自体はWebGL contextを保持しない。HDR / EXRはequirectangular用途を持つテクスチャとして取り込む。現在シーンへ直ちに設定する。ソースから保存済みthumbnailを自動生成・再生成する。テクスチャはcontext menuからproject thumbnailへ設定する。シーン設定で実画像を確認できる。元データを壊さずimport、右設定で上下を反転するを含むrecipe編集、参照を保つreimport、stale診断を行える。配置したGLB / VRMはNode・Bone・メッシュ単位で編集できる。Animation取り込みを有効にした3Dモデルは配置時に再生設定へ到達できる。素材編集中も`sceneSelection`は保持する。
+完了条件: マテリアル / テクスチャ / 3Dモデル / GLTF / OBJ / VRM / プレハブ / パーティクルを左のフォルダーツリー、種類別一覧、保存済みサムネイル付きで管理する。GLB / VRMの埋め込みマテリアル / テクスチャを再利用可能な素材へ展開する。マテリアルは変更時だけ一時レンダラーでサムネイルを更新する。カード自体はWebGLコンテキストを保持しない。HDR / EXRはequirectangular用途を持つテクスチャとして取り込む。現在のシーンへ直ちに設定する。ソースから保存済みサムネイルを自動生成・再生成する。テクスチャは右クリックメニューからプロジェクトのサムネイルへ設定する。シーン設定で実画像を確認できる。元データを残してインポート、Inspectorで上下反転を含む取り込み設定の編集、参照を保つ再インポート、古い派生データの診断を行える。配置したGLB / VRMはNode・Bone・メッシュ単位で編集できる。Animation取り込みを有効にした3Dモデルは配置時に再生設定へ到達できる。素材編集中も`sceneSelection`は保持する。
 
 <a id="f-15"></a>
 
@@ -54,40 +54,40 @@
 
 ### 操作前
 
-- 読み込む入口にGLB / glTF / OBJ / VRMを同じ3Dモデル形式として表示する。OBJは単体のgeometryを取り込む。外部MTL / textureは自動取得しない。必要なマテリアルをXRift Studio内で割り当てることを示す。
-- VRM 0.x / 1.xは3Dモデルの素材として取り込む。humanoidを含むboneとシェイプキーを最後に正常解析したmetadataとして保持する。Timelineやクリップ編集は静的pose編集の対象外であることをUI上で区別する。
+- インポート操作にGLB / glTF / OBJ / VRMを同じ3Dモデル形式として表示する。OBJは単体のジオメトリを取り込む。外部MTL / テクスチャは自動取得しない。必要なマテリアルをXRift Studio内で割り当てることを示す。
+- VRM 0.x / 1.xは3Dモデルの素材として取り込む。humanoidのBoneを含む骨格とシェイプキーを最後に正常解析したメタデータとして保持する。Timelineやクリップ編集は静的ポーズ編集の対象外であることをUI上で区別する。
 - VRM 0.xのMToonは元ファイルを残し、旧互換の描画設定を持つ派生マテリアルとして取り込む。種類はMToon 0.xと表示し、VRM 1.0と共通のInspectorで影の色と輪郭線を編集する。取り込み済みマテリアルを上書きした作品は、通常のユーザー編集保護を維持する。
-- 配置後は3Dモデルオブジェクトの下に元データのNode、Bone、メッシュ、Skinned メッシュを親子順で表示する。SkinはNodeごとに複製しない。親3Dモデルオブジェクトの共有描画方式でbind poseとAnimationを維持する。
-- poseとノード別マテリアル bindingは3Dモデルの素材共通値ではなく配置オブジェクトのメッシュ componentに属する。同じ3Dモデルの別配置を変更しない。
+- 配置後は3Dモデルオブジェクトの下に元データのNode、Bone、メッシュ、Skinnedメッシュを親子順で表示する。SkinはNodeごとに複製しない。親3Dモデルオブジェクトの共有描画方式でbindポーズとAnimationを維持する。
+- ポーズとNode別のマテリアル割り当ては、配置したオブジェクトのMesh Componentに保存する。同じ3Dモデルを使う別の配置には反映しない。
 
 ### 操作中
 
-- 読み込む中は既存読み込む Queueで形式検証、元データ copy、parse、thumbnail、manifest commitを順に示す。二重読み込む / reimportを無効にする。
-- オブジェクト一覧でBoneまたはNodeを選ぶと、そのlocal 位置・回転・大きさを通常の数値入力とギズモで編集する。共有3Dモデルの元データノード poseへ即時反映する。従来のbone選択UIとシェイプキーの0..1 weightも同じ配置の静的poseとして維持する。
+- インポート中は既存インポートキューで形式検証、元データコピー、解析、サムネイル、manifest確定を順に示す。二重インポート / 再インポートを無効にする。
+- HierarchyでBoneまたはNodeを選ぶと、そのローカル位置・回転・大きさを通常の数値入力とギズモで編集する。共有3Dモデルの元データノードポーズへ即時反映する。従来のBone選択UIとシェイプキーの0..1のweightも同じ配置の静的ポーズとして維持する。
 - 数値ドラッグとギズモの操作中も、同じMesh・Material・Skeletonを使ってSkinの変形を反映する。VRM 0.x / 1.0ともWorld / Localの軸と実モデルの移動方向を揃える。長い数値ドラッグの途中では保存を待ち、離した時点の結果を一回の履歴として確定する。数値のEscapeとギズモのtouch / pen pointercancelでは操作前の姿勢へ戻す。
-- メッシュ / Skinned メッシュ Nodeを選ぶと、その元データノードが使うマテリアル枠だけを表示する。同じ元データ material indexを共有する別Nodeとは`sourceNodeIndex`で上書きを分離する。
-- オブジェクト一覧の目アイコンは共有3DモデルのNodeにも効く。enabledと同時に共有メッシュのpose（`nodes[i].visible`）へ書く。そのNodeのサブツリーの描画をシーン・公開ワールド・Runtimeで一致して消す。削除はNodeをオブジェクトとして削除しない。同じ非表示へ変換する。理由と再表示手段を通知する（MI-117）。
-- pose変更は有効な有限値だけを確定する。動作確認中は読み取り専用にする。素材 reimport中はlast-good metadataと現在のオブジェクト poseを表示したままにする。編集を止める。
+- メッシュ / SkinnedメッシュNodeを選ぶと、その元データノードが使うマテリアル枠だけを表示する。同じ元データのmaterial indexを共有する別Nodeとは`sourceNodeIndex`で上書きを分離する。
+- Hierarchyの目アイコンで、共有3DモデルのNodeも表示・非表示を切り替える。enabledと共有メッシュのポーズ（`nodes[i].visible`）を同時に更新し、シーン、公開ワールド、RuntimeでそのNodeのサブツリーを同じ状態にする。Nodeの削除操作も非表示への変更として扱い、オブジェクト自体は削除しない。理由と再表示の操作を通知する（MI-117）。
+- ポーズの変更は、有効な有限値だけを確定する。動作確認中は読み取り専用にする。素材を再インポートしている間は編集を無効にし、最後に成功した解析結果と現在のポーズを表示したままにする。
 
 ### 成功時
 
-- 読み込む成功後は新3Dモデルの素材を選択する。形式、bone数、シェイプキー数、元データ、thumbnailを設定に残す。「配置」でオブジェクトを作成する。pose編集へ進める。
-- Bone / Node 位置・回転・大きさ、ノード別マテリアル、ノード別の表示 / 非表示、シェイプキー weightは共有メッシュ componentへ保存する。元に戻す / やり直す、project再表示、シーン、コード編集 JSX、Runtime manifestで同じ静的状態を復元する。旧版が保存した「無効なのに描画される」Node flagはprojectを開いた時に実態へそろえる。件数を通知する。
-- 「ポーズをリセット」はboneとシェイプキーだけを初期値へ戻す。オブジェクト位置・回転・大きさ、Nodeごとの位置・回転・大きさ、マテリアル binding、衝突判定、3Dモデルの素材を維持する。bone回転とシェイプキーの個別変更でもNodeの調整値を保つ。
+- インポート成功後は新3Dモデルの素材を選択する。形式、Bone数、シェイプキー数、元データ、サムネイルを設定に残す。「配置」でオブジェクトを作成する。ポーズ編集へ進める。
+- Bone / Node位置・回転・大きさ、ノード別マテリアル、ノード別の表示 / 非表示、シェイプキーのweightは共有Mesh Componentへ保存する。元に戻す / やり直す、プロジェクト再表示、シーン、コード編集JSX、Runtime manifestで同じ静的状態を復元する。旧版が保存した「無効なのに描画される」Nodeのフラグはプロジェクトを開いた時に実態へそろえる。件数を通知する。
+- 「ポーズをリセット」はBoneとシェイプキーだけを初期値へ戻す。オブジェクト位置・回転・大きさ、Nodeごとの位置・回転・大きさ、マテリアル割り当て、衝突判定、3Dモデルの素材を維持する。Bone回転とシェイプキーの個別変更でもNodeの調整値を保つ。
 
 ### 失敗時
 
-- 不正なOBJ / VRM、上限超過、読めないgeometry、VRM拡張解析失敗ではAssetManifestへcommitしない。読み込む Queueに形式と再選択の案内を残す。
-- OBJの外部MTL / texture参照は自動取得しない。warningにする。3Dモデル自体は読める場合に限りcommitする。欠けた見た目はマテリアル枠から修正できる。
-- reimport後にpose対象のboneまたはシェイプキーが消えた場合は値を別対象へ移さない。残っている対象だけ適用する。設定に未適用件数とリセットを示す。
-- 元データ Node解析またはSkin参照が壊れている場合は部分的なオブジェクト一覧を成功表示しない。last-good 素材とシーンを維持する。読み込む Queueから再試行できるようにする。
+- 不正なOBJ / VRM、上限超過、読めないジオメトリ、VRM拡張解析失敗ではAssetManifestへ確定しない。インポートキューに形式と再選択の案内を残す。
+- OBJの外部MTL / テクスチャ参照は自動取得しない。警告にする。3Dモデル自体は読める場合に限り確定する。欠けた見た目はマテリアル枠から修正できる。
+- 再インポート後にポーズ対象のBoneまたはシェイプキーが消えた場合は値を別対象へ移さない。残っている対象だけ適用する。設定に未適用件数とリセットを示す。
+- 元データNode解析またはSkin参照が壊れている場合は部分的なHierarchyを成功として表示しない。直前の正常な素材とシーンを維持する。インポートキューから再試行できるようにする。
 
 ### 戻り先
 
-- 読み込む Queueを閉じても新3Dモデルの素材と診断を素材 / モデルの設定に残す。オブジェクトを選択すると直前のpose編集へ戻れる。
-- pose編集後に別オブジェクト / 素材を選んでも値を保持する。同じオブジェクトへ戻ると保存済みposeを再表示する。Timeline追加時はこの静的poseを初期状態として扱える構造を維持する。
+- インポートキューを閉じても新3Dモデルの素材と診断をAssets / モデルの設定に残す。オブジェクトを選択すると直前のポーズ編集へ戻れる。
+- ポーズ編集後に別オブジェクト / 素材を選んでも値を保持する。同じオブジェクトへ戻ると保存済みポーズを再表示する。Timeline追加時はこの静的ポーズを初期状態として扱える構造を維持する。
 
-完了条件: OBJ / VRMを3Dモデルの素材として配置できる。VRMのNode・Bone・Skinned メッシュをオブジェクト一覧から選ぶ。配置オブジェクトごとの位置・回転・大きさ、ノード別マテリアル、シェイプキー weight、ノード別の表示 / 非表示とノード単位の衝突判定追加を保存する。再表示と生成結果で同じ静的状態を復元できる。
+完了条件: OBJ / VRMを3Dモデルの素材として配置できる。VRMのNode・Bone・SkinnedメッシュをHierarchyから選ぶ。配置オブジェクトごとの位置・回転・大きさ、ノード別マテリアル、シェイプキーのweight、ノード別の表示 / 非表示とノード単位の衝突判定追加を保存する。再表示と生成結果で同じ静的状態を復元できる。
 
 <a id="f-16"></a>
 
@@ -95,31 +95,31 @@
 
 ### 操作前
 
-- 素材の読み込むとここに移動は`.unitypackage`、`.unity`、`.prefab`を既存3Dモデル / テクスチャと同じ入口で受け付ける。UnityPackageはシーンだけでなく依存素材を含む入力として区別する。単体シーン / プレハブは外部GUID 素材を同時取得しない入力として区別する。
-- 変換対象はGameObject階層、local 位置・回転・大きさ、GLB / glTF / OBJ / VRM、主要テクスチャ、Unity マテリアル、メッシュの描画、ライト、音源設定、衝突判定、Fog / Ambient / Camera設定とする。FBXなど実行時3Dモデルへ変換できない元データも参照先と件数を診断する。
-- MonoBehaviourのclass IDと件数はプレハブ生成元の記録へ記録する。C#からJavaScriptへのコード変換は開始しない。
+- 通常の素材インポートとドロップで、`.unitypackage`、`.unity`、`.prefab`も受け付ける。UnityPackageにはシーンと依存素材が含まれることを示す。単体のシーンやプレハブでは、外部GUIDの素材を同時に取得しないことを区別して説明する。
+- 変換対象はGameObject階層、ローカル位置・回転・大きさ、GLB / glTF / OBJ / VRM、主要テクスチャ、Unityマテリアル、Mesh Renderer、ライト、音源設定、衝突判定、Fog / Ambient / Camera設定とする。FBXなど実行時3Dモデルへ変換できない元データも参照先と件数を診断する。
+- MonoBehaviourのclass IDと件数を、プレハブの生成元情報として保存する。C#からJavaScriptへのコード変換は行わない。
 
 ### 操作中
 
-- 読み込む Queueはreading、gzip / tar展開、`pathname`安全性検査、Unity YAML object / GUID参照解析、素材 derive、シーン再構築、プレハブ生成、atomic commitを一つの進捗として表示する。処理中は3Dモデル reimportを含む別素材 mutationと動作確認を無効にする。
-- Unityの左手座標系はXRift / Three.jsの右手座標系へ変換する。positionのZとquaternionを対応させる。親参照の欠落とcycleはシーンの直下へ安全に戻す。warningにする。
-- 対応素材元データは既存のcontent-addressed保存とthumbnail生成を再利用する。同一SHAは既存素材を選択する。同じbinaryを再コピーしない。パッケージ内の全binary writeが揃うまでSceneDocument、AssetManifest、プレハブ documentを画面へ反映しない。
+- インポートキューは読み込み、gzip / tar展開、`pathname`安全性検査、Unity YAMLオブジェクト / GUID参照解析、素材派生データの生成、シーン再構築、プレハブ生成、アトミックな確定を一つの進捗として表示する。処理中は3Dモデル再インポートを含む別の素材の変更と動作確認を無効にする。
+- Unityの左手座標系はXRift / Three.jsの右手座標系へ変換する。positionのZとquaternionを対応させる。親参照の欠落と循環参照はシーンの直下へ安全に戻す。警告にする。
+- 対応素材元データは既存のcontent-addressed保存とサムネイル生成を再利用する。同一SHAは既存素材を選択する。同じバイナリを再コピーしない。パッケージ内の全バイナリの書き込みが揃うまでSceneDocument、AssetManifest、プレハブ編集データを画面へ反映しない。
 
 ### 成功時
 
-- 変換したGameObject rootsを現在シーンへ再構築する。Unity シーン / プレハブごとにプレハブ documentとプレハブを保存する。最後に作成または再利用したプレハブを素材で選択する。再構築したrootをオブジェクト一覧 / シーンで選択する。
-- Activity drawerにプレハブ、オブジェクト、素材、要確認の件数を残す。プレハブのimport metadataには元データ名、package内pathname、元データ SHA、Unity class ID件数、未対応class ID、C#変換を行っていない事実を保存する。
+- 変換したGameObjectのルートを現在のシーンへ再構築する。Unityシーン / プレハブごとにプレハブ編集データとプレハブを保存する。最後に作成または再利用したプレハブをAssetsで選択する。再構築したルートをHierarchy / シーンで選択する。
+- Activityパネルにプレハブ、オブジェクト、素材、要確認の件数を残す。プレハブのインポートメタデータには元データ名、パッケージ内のpathname、元データSHA、Unity class ID件数、未対応class ID、C#変換を行っていない事実を保存する。
 
 ### 失敗時
 
-- gzip / tar破損、安全でないpathname、展開上限超過、Unity YAML不正、変換対象なし、素材 commit失敗ではlast-good SceneDocument、AssetManifest、プレハブ set、両selectionを維持する。
-- 一部の素材 / コンポーネントだけ未対応の場合は変換可能な階層を残す。FBX、外部glTF、音声クリップ、MonoBehaviourなどの不足をwarningとしてActivity drawerから確認できる。黙って完全変換と表示しない。
+- gzip / tar破損、安全でないpathname、展開上限超過、Unity YAML不正、変換対象なし、素材確定失敗では直前の正常なSceneDocument、AssetManifest、プレハブ一式、両選択を維持する。
+- 一部の素材やComponentが未対応でも、変換できる階層は残す。FBX、外部glTF、音声クリップ、MonoBehaviourなどの不足は、Activityパネルから警告として確認できるようにする。すべて変換できた結果として表示しない。
 
 ### 戻り先
 
-- 成功後は「素材を表示」から生成プレハブへ移動する。オブジェクト一覧 / シーンには再構築結果を残す。失敗後はActivity drawerを閉じても元シーンを編集できる。同じまたは修正したpackageを再度ここに移動できる。
+- 成功後は「素材を表示」から生成プレハブへ移動する。Hierarchy / シーンには再構築結果を残す。失敗後はActivityパネルを閉じても元シーンを編集できる。同じパッケージか、修正したパッケージを再度ドロップできる。
 
-完了条件: UnityPackageの論理pathnameとGUID参照を安全に復元する。対応素材を抽出してシーン階層を再構築する。再利用可能なXRift プレハブとして保存する。未対応素材 / コンポーネントは黙って成功扱いしない。診断と生成元の記録へ残す。C#変換を行わない。
+完了条件: UnityPackageの論理pathnameとGUID参照を安全に復元する。対応素材を抽出してシーン階層を再構築する。再利用可能なXRiftプレハブとして保存する。未対応の素材 / Componentは黙って成功扱いしない。診断と生成元の記録へ残す。C#変換を行わない。
 
 <a id="f-18"></a>
 
@@ -127,45 +127,45 @@
 
 ### 操作前
 
-- 新規ビジュアル編集ワールドはBlankとOpenBrushの2サンプルを表示する。OpenBrushは48種類のbrushを含むこと、three-icosaを使うこと、Editorに埋め込んだ固定brush resourceを使うことをカードとモデルの設定で事前に示す。
-- 通常のGLB / glTF import入口をそのまま使う。`GOOGLE_tilt_brush_material`、旧Tilt Brush exporter、OpenBrush material名を自動判定する。別形式の指定を要求しない。
-- OpenBrush 元データに含まれるシェーダーを既定値とする。各brushを編集可能な素材一覧へ出す時もStandard/PBRへ変換しない。three-icosa プリセットを参照する専用マテリアルとして展開する。通常のXRift マテリアルの割当は明示的なslot上書きとして扱う。
+- 新規ビジュアル編集ワールドはBlankとOpenBrushの2サンプルを表示する。OpenBrushは48種類のブラシを含むこと、three-icosaを使うこと、エディターに埋め込んだ固定ブラシのリソースを使うことをカードとモデルの設定で事前に示す。
+- 通常のGLB / glTFのインポート操作をそのまま使う。`GOOGLE_tilt_brush_material`、旧Tilt Brush書き出し元、OpenBrushのmaterial名を自動判定する。別形式の指定を要求しない。
+- OpenBrush元データに含まれるシェーダーを既定値とする。各ブラシを編集可能な素材一覧へ出す時もStandard/PBRへ変換しない。three-icosaプリセットを参照する専用マテリアルとして展開する。通常のXRiftマテリアルの割当は明示的なスロット上書きとして扱う。
 
 ### 操作中
 
-- 読み込む Queueは既存のvalidate、copy、parse、thumbnail、commitを使う。OpenBrush exportに残る古い外部画像URLはimport解析時に取得しない。埋め込みplaceholderへ置換する。外部buffer参照は従来どおりblockする。
-- OpenBrushのglTF ノードは元データ GLBを複製しない。共有3Dモデルの素材と`sourceNodeIndex`を持つオブジェクト hierarchyへ展開する。ノードの親子関係とlocal 位置・回転・大きさを保持する。各メッシュオブジェクトにはそのノードが使用するbrush slotだけを表示する。
-- シーンはOpenBrush判定済み3Dモデルにだけthree-icosa loader extensionを登録する。通常のGLB / glTF、OBJ、VRMのloaderとマテリアル挙動を変更しない。
-- Custom マテリアルプレビュー Adapterはマテリアルのシェーダー kind、元データ 3Dモデル、元データ material indexから代表ノードを解決する。OpenBrush adapterは同じthree-icosa loaderを再利用する。Standard sphereへcustom シェーダーを貼らない。brush固有vertex attributeを持つ実ストロークgeometryで描画する。
-- カスタムシェーダー契約はマテリアル内の編集可能なシェーダー素材 copyとして、vertex / fragment GLSL、uniform型と設定状態、vertex attribute mappingを分離する。プリセットのGLSLを直接変更しない。マテリアル copyだけを編集・resetできる。
-- vertex GLSLの`in` / `attribute`宣言を解析する。`position`、`normal`、`color`、`uv`、`tangent`へsemantic mappingする。color / UV / tangentは安全な既定値を生成できる。設定から任意のgeometry attribute名へ上書きできる。解決不能な必須attributeはPBR fallback理由として表示する。
-- OpenBrush マテリアルも通常のマテリアルと同じメッシュの描画 slotへ割り当て可能とする。builtin primitiveでは元GLBに依存しない。brush プリセット、uniform、textureを独立ロードする。
-- editor preview用の公式GLSL / brush textureはprojectへ固定snapshotとして埋め込む。network状態や外部CDN更新に依存せず解決する。安定版templateのresourceを優先する。three-icosa本体にだけ存在する追加resourceを補完する。
-- three-icosaが知らないbrush プリセット、公開resourceがないプリセット、GLSL / texture読込失敗は、該当primitiveだけGLTFLoaderが作成したPBR マテリアルを保持する。他のbrushを含む3Dモデル全体のimportを失敗させない。preview badgeとマテリアル設定へfallback種別・brush名・失敗理由を示す。
-- このPBR fallbackは既存の互換挙動であり、制作時の見た目を再現できた状態とは扱わない。今後の修正では[編集・Play・公開の描画契約](../AGENT_IMPLEMENTATION.md#rendering-parity)に従い、元の素材と描画処理を共有して原因を解消する。
-- 公開変換ではcompiler-owned stagingに固定versionのthree-icosaだけをallowlist付きで追加する。authoring projectのpackage manifestや任意pathへpackageを追加しない。
+- インポートキューは既存の検証、コピー、解析、サムネイル、確定を使う。OpenBrush書き出しに残る古い外部画像URLはインポート解析時に取得しない。埋め込みの仮画像へ置換する。外部バッファー参照は従来どおり停止する。
+- OpenBrushのglTFノードは元データGLBを複製しない。共有3Dモデルの素材と`sourceNodeIndex`を持つオブジェクト階層へ展開する。ノードの親子関係とローカル位置・回転・大きさを保持する。各メッシュオブジェクトにはそのノードが使用するブラシのスロットだけを表示する。
+- シーンはOpenBrush判定済み3Dモデルにだけthree-icosaのローダー拡張を登録する。通常のGLB / glTF、OBJ、VRMのローダーとマテリアル挙動を変更しない。
+- Customマテリアルのプレビューアダプターはマテリアルのシェーダー種別、元データ3Dモデル、元データのmaterial indexから代表ノードを解決する。OpenBrushアダプターは同じthree-icosaローダーを再利用する。標準の球体へカスタムシェーダーを貼らない。ブラシ固有の頂点attributeを持つ実ストロークジオメトリで描画する。
+- カスタムシェーダー契約はマテリアル内の編集可能なシェーダー素材コピーとして、頂点 / フラグメントGLSL、uniform型と設定状態、頂点attributeの対応付けを分離する。プリセットのGLSLを直接変更しない。マテリアルコピーだけを編集・リセットできる。
+- 頂点GLSLの`in` / `attribute`宣言を解析する。`position`、`normal`、`color`、`uv`、`tangent`へ用途に応じて対応付けする。color / UV / tangentは安全な既定値を生成できる。設定から任意のジオメトリのattribute名へ上書きできる。解決不能な必須のattributeはPBRへ切り替えた理由として表示する。
+- OpenBrushマテリアルも通常のマテリアルと同じMesh Rendererスロットへ割り当て可能とする。組み込みの基本形状では元GLBに依存しない。ブラシプリセット、uniform、テクスチャを独立ロードする。
+- エディターのプレビュー用GLSLとブラシのテクスチャは、固定したコピーをプロジェクトへ同梱する。ネットワークや外部CDNの更新に依存せず参照できるようにする。安定版テンプレートのリソースを優先し、three-icosa本体にだけ含まれる追加リソースを補う。
+- three-icosaが知らないブラシプリセット、公開リソースがないプリセット、GLSL / テクスチャ読込失敗は、該当プリミティブだけGLTFLoaderが作成したPBRマテリアルを保持する。他のブラシを含む3Dモデル全体のインポートを失敗させない。プレビューの表示とマテリアル設定へ代替表示種別・ブラシ名・失敗理由を示す。
+- このPBRによる代替表示は既存の互換挙動であり、制作時の見た目を再現できた状態とは扱わない。今後の修正では[編集・Play・公開の描画契約](../AGENT_IMPLEMENTATION.md#rendering-parity)に従い、元の素材と描画処理を共有して原因を解消する。
+- 公開変換ではコンパイラーが管理する一時作業フォルダーに固定バージョンのthree-icosaだけを許可リスト付きで追加する。編集中のプロジェクトのパッケージのmanifestや任意のパスへパッケージを追加しない。
 
 ### 成功時
 
-- モデルの設定にOpenBrush / three-icosa、brush数、exporter、renderer versionを残す。各OpenBrush マテリアル設定にはbrush名、GUID、元データ material indexを表示する。対応マテリアルを各メッシュオブジェクトのslotへ初期設定する。通常のXRift マテリアルへ差し替えたslotだけシーンと生成結果でPBRへ置換する。
-- マテリアル設定のリアルタイムpreviewは実際に適用されたマテリアル type、GLSL 元データ、uniform一覧、解決済みbrush textureを表示する。見た目と内部シェーダーの両方から初期割当を確認できる。
-- OpenBrush Starterは検証済みGLBとApache-2.0 licenseをproject-relative pathへコピーする。48 brush メッシュをGallery root配下の個別オブジェクトとして展開したプレハブを一つの新規projectとして開く。プレハブ設定は同じtreeを表示する。元データオブジェクトへ移動できる。
-- プレハブ元データ hierarchyを編集して「プレハブに反映」する。既存プレハブ IDと元データオブジェクト mappingを保ったままプレハブ documentを再生成する。元に戻す / やり直すと通常の保存対象にする。
-- compiler outputはGLTFLoaderへthree-icosa extensionと固定brush base URLを登録し、一時stagingの実行環境 dependency planへ固定package specを記録する。
+- モデルの設定にOpenBrush / three-icosa、ブラシ数、書き出し元、レンダラーのバージョンを残す。各OpenBrushマテリアル設定にはブラシ名、GUID、元データのmaterial indexを表示する。対応マテリアルを各メッシュオブジェクトのスロットへ初期設定する。通常のXRiftマテリアルへ差し替えたスロットだけシーンと生成結果でPBRへ置換する。
+- マテリアル設定のリアルタイムプレビューは実際に適用されたマテリアル種類、GLSL元データ、uniform一覧、解決済みブラシのテクスチャを表示する。見た目と内部シェーダーの両方から初期割当を確認できる。
+- OpenBrush Starterは検証済みGLBとApache-2.0ライセンスをプロジェクトからの相対パスへコピーする。48ブラシメッシュをGalleryルート配下の個別オブジェクトとして展開したプレハブを一つの新規プロジェクトとして開く。プレハブ設定は同じツリーを表示する。元データオブジェクトへ移動できる。
+- プレハブの元データの階層を編集して「プレハブに反映」する。既存プレハブIDと元データオブジェクトの対応付けを保ったままプレハブ編集データを再生成する。元に戻す / やり直すと通常の保存対象にする。
+- コンパイラーの出力はGLTFLoaderへthree-icosa拡張と固定ブラシの基準URLを登録し、一時作業フォルダーの実行環境依存ファイルの計画へ固定したパッケージ仕様を記録する。
 
 ### 失敗時
 
-- 不正glTF、外部buffer、geometry解析失敗、copy / hash不一致ではAssetManifestとシーンを変更しない。読み込む Queueまたは新規作成へ戻す。OpenBrush判定だけを理由に不完全な素材をcommitしない。
-- brush libraryのnetwork / CORS / シェーダー load失敗は3Dモデル表示のerrorへ閉じ込める。Editor全体、他オブジェクト、保存済み元データを失わない。再試行と同じモデルの設定への復帰を保つ。
-- マテリアルの元データ 3Dモデル、代表ノード、brush resourceを解決できない場合は固定画像を成功表示しない。マテリアル preview内へ原因と再試行を残す。
-- stagingへのthree-icosa installが失敗した場合はcheck / uploadへ進まない。authoring projectを保持したまま公開modalに失敗理由を示す。
+- 不正glTF、外部バッファー、ジオメトリ解析失敗、コピー / ハッシュ不一致ではAssetManifestとシーンを変更しない。インポートキューまたは新規作成へ戻す。OpenBrush判定だけを理由に不完全な素材を確定しない。
+- ブラシライブラリーの通信、CORS、シェーダーの読み込みに失敗した場合は、その3Dモデルの表示エラーとして扱う。エディター全体、ほかのオブジェクト、保存済みの元データは維持し、再試行するか同じモデルのInspectorへ戻れるようにする。
+- マテリアルの元データ3Dモデル、代表ノード、ブラシのリソースを解決できない場合は固定画像を成功として表示しない。マテリアルプレビュー内へ原因と再試行を残す。
+- 一時作業フォルダーへのthree-icosaインストールが失敗した場合は検査 / アップロードへ進まない。編集中のプロジェクトを保持したまま公開モーダルに失敗理由を示す。
 
 ### 戻り先
 
-- 読み込む成功後は新3Dモデルの素材を選択する。OpenBrush情報とslotを確認できる。シーンへ配置した後は同じオブジェクトを選択する。通常の位置・回転・大きさ、衝突判定、プレハブ、元に戻す / やり直すを使う。
-- Starter作成後はOpenBrush 3Dモデルが見えるシーンを開く。Blankへ戻って作り直す場合も、失敗projectを成功一覧へ残さない。
+- インポート成功後は新3Dモデルの素材を選択する。OpenBrush情報とスロットを確認できる。シーンへ配置した後は同じオブジェクトを選択する。通常の位置・回転・大きさ、衝突判定、プレハブ、元に戻す / やり直すを使う。
+- Starter作成後はOpenBrush 3Dモデルが見えるシーンを開く。Blankへ戻って作り直す場合も、失敗プロジェクトを成功一覧へ残さない。
 
-完了条件: OpenBrush / Tilt Brush形式のglTFを通常の3Dモデルの素材として取り込む。three-icosaの専用シェーダーでシーンと生成ワールドを再現する。OpenBrush sampleは外部リソースのOpen Brush providerから追加する。Apache-2.0 licenseを検証付きで保存できる。
+完了条件: OpenBrush / Tilt Brush形式のglTFを通常の3Dモデルの素材として取り込む。three-icosaの専用シェーダーでシーンと生成ワールドを再現する。OpenBrushサンプルは外部リソースのOpen Brushの提供元から追加する。Apache-2.0ライセンスを検証付きで保存できる。
 
 <a id="f-21"></a>
 
@@ -173,37 +173,37 @@
 
 ### 操作前
 
-- 素材 headerの「外部から追加」から開始する。左sidebarに登録済みproviderを表示する。providerを選ぶと中央のcatalogと提供元creditを切り替える。選択中providerと対応種別が最初から分かるようにする。Poly Havenでは空の背景 / HDRI、マテリアル / テクスチャ、3Dモデルをinstall可能にする。ambientCGでは空の背景 / HDRIとマテリアル / テクスチャをinstall可能にする。ambientCGの3Dモデルは非glTF形式のため一覧表示に留める。Open BrushはPoly Havenの下位filterにしない。sidebarの同じ階層へ置く。XRift Studioで検証済みの48 マテリアルを名前、カテゴリ、tagから選べるようにする。
-- 各素材にはthumbnail、説明、作者、license、配布ページ、解像度、HDR / EXR形式、download容量を表示する。project未保存、動作確認中、別素材処理中は理由を示してinstallを無効にする。ローカルの`.hdr` / `.exr`も通常の読み込む入口から選べることをfile pickerに示す。
-- Open Brushの一覧と右詳細は、固定`all_brushes.glb`の各代表stroke ノードをthree-icosaで事前描画した保存済みWebPを共有する。全48件をGUID単位で保存する。Storeを開くだけではCanvasを作らない。右詳細にはbrush GUID、renderer version、catalog revisionと、stroke向けマテリアルである互換性説明を置く。解像度、file形式、download容量は表示しない。
-- XRift公式コンポーネントは同じprovider sidebarに置く。公開package version、公式元データ、コンポーネント名、categoryを表示する。全配置可能コンポーネントはpackage本体を事前描画したversion付き保存済みWebPを一覧と詳細で共有する。選択中コンポーネントだけを一件のシーン historyとして追加する。
+- Assetsのヘッダーの「外部から追加」から開始する。左のサイドバーに登録済み提供元を表示する。提供元を選ぶと中央のカタログと提供元の権利表記を切り替える。選択中の提供元と対応種別が最初から分かるようにする。Poly Havenでは空の背景 / HDRI、マテリアル / テクスチャ、3Dモデルをインストール可能にする。ambientCGでは空の背景 / HDRIとマテリアル / テクスチャをインストール可能にする。ambientCGの3Dモデルは非glTF形式のため一覧表示に留める。Open BrushはPoly Havenの下位の絞り込み条件にしない。サイドバーの同じ階層へ置く。XRift Studioで検証済みの48マテリアルを名前、カテゴリ、タグから選べるようにする。
+- 各素材にはサムネイル、説明、作者、ライセンス、配布ページ、解像度、HDR / EXR形式、ダウンロード容量を表示する。プロジェクト未保存、動作確認中、別素材処理中は理由を示してインストールを無効にする。ローカルの`.hdr` / `.exr`も通常のインポート操作から選べることをファイル選択画面に示す。
+- Open Brushの一覧と右詳細は、固定`all_brushes.glb`の各代表ストロークノードをthree-icosaで事前描画した保存済みWebPを共有する。全48件をGUID単位で保存する。Storeを開くだけではCanvasを作らない。右詳細にはブラシGUID、レンダラーのバージョン、カタログのリビジョンと、ストローク向けマテリアルである互換性説明を置く。解像度、ファイル形式、ダウンロード容量は表示しない。
+- XRift公式コンポーネントは同じ提供元のサイドバーに置く。公開パッケージのバージョン、公式元データ、コンポーネント名、カテゴリを表示する。全配置可能コンポーネントはパッケージ本体を事前描画したバージョン付き保存済みWebPを一覧と詳細で共有する。選択中コンポーネントだけを一件のシーン履歴として追加する。
 
 ### 操作中
 
-- catalogとfile情報はXRift Studio固有のUser-Agentで取得する。install要求に任意URLを含めない。provider ID、素材 ID、解像度からnative側でfile情報を再取得する。許可したHTTPS domainだけをproject管理下へ保存する。
-- マテリアルはbase color、normal、ARMをテクスチャにする。それらを参照するマテリアルを一つ作る。ambientCGでは色とNormalGLをテクスチャとして保存する。HDRIは選択したHDRまたはEXRだけを取得する。形式とequirectangular用途を保持したテクスチャにする。3DモデルはPoly Haven APIのglTF bundleを取得する。glTF 2.x、依存URI、安全な相対path、許可domain、容量を検証する。buffer / imageをdata URIへ埋め込んだ自己完結glTFにする。ambientCGの3DモデルはOBJなどの非glTF形式のためinstallを開始しない。ローカル読み込むでもHDR / EXRのシグネチャを検証する。HTML fallbackなど不正な内容はcommitしない。download中はdialogを閉じる操作と二重実行を止める。
-- Open Brushは任意URLやGLSLをrequestへ含めない。provider ID、brush GUID、固定catalog revisionをprovider側で照合する。追加中は主操作を「追加中」にする。provider切替、マテリアル切替、dialogを閉じる操作、二重実行を止める。一件のhistory transactionでOpenBrush マテリアルを作る。途中失敗ではAssetManifestを変更しない。
-- 環境テクスチャの保存後はHDR / EXRを一時WebGL rendererでtone mapする。`assets/.derived/thumbnails/`へ一覧用PNGを保存する。thumbnailが未生成、stale、旧renderer版、または上下を反転する変更後ならproject open時に自動再生成する。生成後はcardと設定を同じ画像へ更新する。
+- カタログとファイル情報はXRift Studio固有のUser-Agentで取得する。インストール要求に任意URLを含めない。提供元ID、素材ID、解像度からネイティブ側でファイル情報を再取得する。許可したHTTPSのドメインだけをプロジェクト管理下へ保存する。
+- マテリアルは基準color、normal、ARMをテクスチャにする。それらを参照するマテリアルを一つ作る。ambientCGでは色とNormalGLをテクスチャとして保存する。HDRIは選択したHDRまたはEXRだけを取得する。形式とequirectangular用途を保持したテクスチャにする。3DモデルはPoly Haven APIのglTF一式を取得する。glTF 2.x、依存URI、安全な相対パス、許可したドメイン、容量を検証する。バッファー / 画像をデータURIへ埋め込んだ自己完結glTFにする。ambientCGの3DモデルはOBJなどの非glTF形式のためインストールを開始しない。ローカルファイルのインポートでもHDR / EXRのシグネチャを検証する。HTMLの代替ページなど不正な内容は確定しない。ダウンロード中はダイアログを閉じる操作と二重実行を止める。
+- Open Brushは任意URLやGLSLを要求データへ含めない。提供元ID、ブラシGUID、固定カタログのリビジョンを提供元側で照合する。追加中は主操作を「追加中」にする。提供元切替、マテリアル切替、ダイアログを閉じる操作、二重実行を止める。一件の履歴として確定するトランザクションでOpenBrushマテリアルを作る。途中失敗ではAssetManifestを変更しない。
+- 環境テクスチャの保存後はHDR / EXRを一時WebGLレンダラーでトーンマッピングする。`assets/.derived/thumbnails/`へ一覧用PNGを保存する。サムネイルが未生成、古い状態、旧レンダラー版、または上下反転の変更後ならプロジェクトを開いたときに自動再生成する。生成後はカードとInspectorを同じ画像へ更新する。
 
 ### 成功時
 
-- installしたマテリアル、環境テクスチャ、3Dモデルを素材で選択する。provider、作者、license、配布ページを素材に保持する。3Dモデルは通常の3Dモデルの素材と同じ配置導線を使う。外部取得だけを理由にシーンへ自動配置しない。HDRIで「インストール後に空の背景へ設定」が有効なら、同じhistoryでシーン settingsへ参照を設定する。ローカルHDR / EXRのimport成功時も作成したテクスチャを選択する。同じhistoryでシーン settingsへ設定する。
-- Open Brushは`External/Open Brush` folderへbrush name、GUID、renderer version、元データ material index、attributionを持つマテリアルを追加する。シーンやメッシュへは自動割当しない。新マテリアルを`assetSelection`にする。同じGUIDとrenderer versionが既にあれば複製しない。既存マテリアルを選択する。成功面は「素材で開く」と「続けて追加」を残す。
-- 環境テクスチャをシーンまたはシーン settingsのここに移動領域へdragすると、オブジェクトを作らない。シーン全体の背景とIBLを既定で有効にする。以後はシーン settingsで片方だけを無効にできる。上下を反転するはテクスチャ設定、回転・露出・追加反転はシーン settingsから続けて調整できる。
+- インストールしたマテリアル、環境テクスチャ、3DモデルをAssetsで選択する。提供元、作者、ライセンス、配布ページを素材に保持する。3Dモデルは通常の3Dモデルの素材と同じ配置導線を使う。外部取得だけを理由にシーンへ自動配置しない。HDRIで「インストール後に空の背景へ設定」が有効なら、同じ履歴でシーン設定へ参照を設定する。ローカルHDR / EXRのインポート成功時も作成したテクスチャを選択する。同じ履歴でシーン設定へ設定する。
+- Open Brushは`External/Open Brush` フォルダーへブラシ名、GUID、レンダラーのバージョン、元データのmaterial index、権利表記を持つマテリアルを追加する。シーンやメッシュへは自動割当しない。新マテリアルを`assetSelection`にする。同じGUIDとレンダラーのバージョンが既にあれば複製しない。既存マテリアルを選択する。成功時の画面は「Assetsで開く」と「続けて追加」を残す。
+- 環境テクスチャをシーンまたはシーン設定のドロップ領域へドラッグすると、オブジェクトを作らない。シーン全体の背景とIBLを既定で有効にする。以後はシーン設定で片方だけを無効にできる。上下反転はテクスチャ設定、回転・露出・追加反転はシーン設定から続けて調整できる。
 
 ### 失敗時
 
-- catalog取得の失敗では選択中providerと検索条件を保つ。同じsidebarと一覧領域から再試行できる。file情報、download、保存、素材作成の失敗では既存AssetManifestとシーンを変更しない。同じprovider、素材、解像度、HDR / EXR形式を保持し、原因を見て再試行できる。
-- providerが未対応、file domainが許可外、保存先に異なる内容がある、HDRI、必須base color、glTF本体、またはglTF依存fileがない場合はinstallを完了扱いにしない。
-- Open Brushの保存済みthumbnailが欠落または破損している場合はinstall失敗と分ける。同じカード内にbrush iconと「プレビュー unavailable」を即時表示する。「準備中」を継続表示しない。マテリアル追加自体は固定catalogのGUID検証で判定する。GUID不一致、未対応プリセット、renderer version不一致では追加を完了扱いにしない。同じマテリアル選択から再試行できる。
+- カタログの取得に失敗した場合は、選択中の提供元と検索条件を保ち、同じ一覧から再試行できるようにする。ファイル情報の取得、ダウンロード、保存、素材作成に失敗した場合は、既存のAssetManifestとシーンを変更しない。提供元、素材、解像度、HDR / EXRの形式を保持し、原因を確認して再試行できるようにする。
+- 提供元が未対応、ファイルのドメインが許可外、保存先に異なる内容がある、HDRI、必須基準color、glTF本体、またはglTF依存ファイルがない場合はインストールを完了扱いにしない。
+- Open Brushの保存済みサムネイルが欠落または破損している場合はインストール失敗と分ける。同じカード内にブラシのアイコンと「プレビューを利用できません」を即時表示する。「準備中」を継続表示しない。マテリアル追加自体は固定カタログのGUID検証で判定する。GUID不一致、未対応プリセット、レンダラーのバージョン不一致では追加を完了扱いにしない。同じマテリアル選択から再試行できる。
 
 ### 戻り先
 
-- dialogを閉じると同じビジュアルエディター、シーン、選択、cameraへ戻る。成功後は選択済み素材の設定へ到達する。空の背景はシーンへのdragまたはシーン settingsから変更できる。
-- Open Brush追加後の「素材で開く」はdialogを閉じる。選択済みマテリアルの実previewとattributionを表示する。取消では追加前の素材 selectionを復元する。
-- provider を追加する場合も共通catalog、download option、attribution、install resultを再利用する。素材側にprovider固有の保存構造やlicense文言を散在させない。
+- ダイアログを閉じると同じビジュアルエディター、シーン、選択、カメラへ戻る。成功後は選択済み素材の設定へ到達する。空の背景はシーンへのドラッグまたはシーン設定から変更できる。
+- Open Brush追加後の「Assetsで開く」はダイアログを閉じる。選択済みマテリアルの実プレビューと権利表記を表示する。取消では追加前の素材選択を復元する。
+- 提供元を追加する場合も共通カタログ、ダウンロードの選択肢、権利表記、インストール結果を再利用する。素材側に提供元固有の保存構造やライセンス文言を散在させない。
 
-完了条件: 素材から提供元、作者、license、HDR / EXR形式を確認して外部マテリアル、テクスチャ、HDRI、3Dモデル、XRift公式コンポーネントを追加する。Poly Haven 3Dモデルは依存fileを検証した自己完結glTF 素材として保存する。ambientCGは公式v3 APIのdownload ZIPから色 / NormalGLまたはEXRを検証して保存する。UIとMCPのどちらからも同じinstall境界を使う。ambientCGの3DモデルはOBJなどの非glTF形式のためcatalog表示に留める。インストール可能に見せない。Open BrushはPoly Havenと同列のproviderから検証済みbrushを実stroke previewで選ぶ。GUIDとrenderer versionを保持したマテリアルとして追加できる。XRift公式コンポーネントも同列のproviderから公開package本体のpreviewを確認してシーンへ追加できる。ローカルまたは外部のHDR / EXRはequirectangular用途のテクスチャになる。上下を反転するなどを編集する。import / install直後またはシーンへのdragでシーン全体へ設定できる。provider境界はUIと保存形式から分離する。追加ストアへ拡張できる。
+完了条件: 素材から提供元、作者、ライセンス、HDR / EXR形式を確認して外部マテリアル、テクスチャ、HDRI、3Dモデル、XRift公式コンポーネントを追加する。Poly Haven 3Dモデルは依存ファイルを検証した自己完結glTF素材として保存する。ambientCGは公式v3 APIのダウンロードしたZIPから色 / NormalGLまたはEXRを検証して保存する。UIとMCPのどちらからも同じインストール境界を使う。ambientCGの3DモデルはOBJなどの非glTF形式のためカタログ表示に留める。インストール可能に見せない。Open BrushはPoly Havenと同列の提供元から検証済みブラシを実際のストロークのプレビューで選ぶ。GUIDとレンダラーのバージョンを保持したマテリアルとして追加できる。XRift公式コンポーネントも同列の提供元から公開パッケージ本体のプレビューを確認してシーンへ追加できる。ローカルまたは外部のHDR / EXRはequirectangular用途のテクスチャになる。上下反転などを編集する。インポート / インストール直後またはシーンへのドラッグでシーン全体へ設定できる。提供元境界はUIと保存形式から分離する。追加ストアへ拡張できる。
 
 <a id="f-23"></a>
 
@@ -211,35 +211,35 @@
 
 ### 操作前
 
-- 公式カタログは素材の「外部から追加」で「ギミック・機能」区分の「XRift公式コンポーネント」providerから開く。project kindで配置可能なコンポーネントを全件表示し、各カードにコンポーネント名、category、package本体を事前描画した保存済みthumbnailを置く。一覧と詳細を開くだけではWebGL Contextを作らない。`DevEnvironment`はシーンコンポーネントではなくdev 開始ファイル用wrapperとして別注記する。
-- 選択中コンポーネントには公開package version、公式元データ、実際に生成するnamed importとJSX sampleを表示する。
-- 右上の「読み込む」には3Dモデル / 3D 素材とR3F / コード編集変換を置く。R3F / コード編集変換には貼り付け欄、「コード編集プロジェクトを選択」、HTTPS / git SSHのリポジトリのURL入力を並べ、folder / repository読込がデスクトップ機能であること、選択後のpackage名、開始ファイル、pathまたはURL、読み込んだmodule数を表示する。確定前にシーンへ追加するオブジェクト、3Dモデル、テクスチャ、音声、空の背景、Custom マテリアル、衝突判定部位と診断をreviewする。コード編集素材はこのreviewへ入る時点で書き込みなしの通常読み込む transactionまで準備し、原本容量、テクスチャ解像度とRGBA / mipmap展開量、3Dモデル原寸、3Dモデル import scale、親を含む配置大きさ、配置後寸法、中心補正、反転、同大きさで復元するnamed 衝突判定を表示する。この段階ではシーン、AssetManifest、project fileを変更しない。
+- 公式カタログは素材の「外部から追加」で「ギミック・機能」区分の「XRift公式コンポーネント」提供元から開く。プロジェクトの種別で配置可能なコンポーネントを全件表示し、各カードにコンポーネント名、カテゴリ、パッケージ本体を事前描画した保存済みサムネイルを置く。一覧と詳細を開くだけではWebGL Contextを作らない。`DevEnvironment`はシーンコンポーネントではなくdevエントリーファイル用ラッパーとして別注記する。
+- 選択中コンポーネントには公開パッケージのバージョン、公式元データ、実際に生成する名前付きインポートとJSXの例を表示する。
+- 右上の「読み込む」には3Dモデル / 3D素材とR3F / コード編集変換を置く。R3F / コード編集変換には貼り付け欄、「コード編集プロジェクトを選択」、HTTPS / git SSHのリポジトリのURL入力を並べ、フォルダー / リポジトリの読み込みがデスクトップ機能であること、選択したパッケージ名、エントリーファイル、パスまたはURL、読み込んだモジュール数を表示する。確定前にシーンへ追加するオブジェクト、3Dモデル、テクスチャ、音声、空の背景、Customマテリアル、衝突判定部位と診断を確認する。コード編集プロジェクトの素材はこの確認画面へ入る時点で書き込みなしの通常のインポート処理まで準備し、原本容量、テクスチャ解像度とRGBA / mipmap展開量、3Dモデルの原寸、3Dモデルの取り込み時の倍率、親を含む配置時の大きさ、配置後寸法、中心補正、反転、同じ倍率で復元する名前で指定された衝突判定を表示する。この段階ではシーン、AssetManifest、プロジェクトのファイルを変更しない。
 
 ### 処理中
 
-- 公式sampleまたは貼り付けTSXをJavaScriptとして実行しない。import alias、JSX tag、string / boolean / number / array / object literal、`Math.PI`を含む有限な数式だけを解析する。
-- Drei primitiveはStudio primitiveとマテリアルへ、R3F ライトはライトへ、Rapier RigidBodyは親オブジェクトの独立した物理挙動コンポーネントへ、`Billboard`は`BillboardY`へ、`Reflector`は`Mirror`へ、`Sky` / `Environment`は`Skybox`へ変換する。RigidBodyの`fixed` / `dynamic` / `kinematicPosition` / `kinematicVelocity`、一般設定、`colliders`生成方式を保持する。親原点へ仮直方体の衝突判定を作らない。動的callbackと未対応コンポーネントだけを診断へ残す。
-- コード編集 folderまたは浅くcloneしたRepositoryは`package.json`、`xrift.json`、`src/World.tsx`または`src/Item.tsx`を検査する。file数、総容量、symlinkをnative境界で制限する。`src`内のTypeScript / JavaScript moduleを上限付きで読む。開始ファイルからrelative importを再帰的に解決する。local コンポーネントはinstance境界をオブジェクトとして保持する。静的に見つかるreturn JSXをその子へ展開する。参照されるlocal 3Dモデル、テクスチャ、MP3 / WAVは`baseUrl`、先頭`/`、`public/`を同じproject-relative pathへ正規化して重複を除く。通常の素材 transactionへ接続する。リポジトリのURLでは浅いcloneのworking tree全体から解決する。宣言pathが欠けていても`public`内で同名fileが一意なら復旧する。sphere / BackSideの背景画像は有限半径のメッシュではなく無限遠projectionのシーン空の背景へ変換する。`new Audio`のloop音源は音源として復元する。任意のcustom code、Hook、callback、条件分岐、動的collectionを実行しない。
-- `THREE.ShaderMaterial`はvertex / fragment GLSL、literal uniform、テクスチャ sampler、メッシュ名に対するdefine variantだけを宣言的なCustom マテリアルへ保存する。元3Dモデルのマテリアル枠へ適用する。シーン、動作確認、コード編集 JSX compilerで同じシェーダーと時間uniformを使う。OBJ内で明示的に選ばれた衝突判定メッシュ名はnamed submeshとして復元する。元の非表示衝突判定 groupをモデル全体の代替Boxへ変換しない。
-- `group`、RigidBody、Drei / XRift wrapperを独立オブジェクトとして残す。local 位置・回転・大きさと親子順を維持する。定数参照を含むlocal コンポーネントの大きさと位置を静的に復元する。3Dモデル import scale、中心offset、X反転を同じ単位系で合成する。named OBJ 衝突判定はroot 3Dモデル描画を通らないため3Dモデル import scaleを衝突判定オブジェクト自身へ適用する。可視3Dモデル、衝突判定、physics形状の寸法を一致させる。RigidBody オブジェクトは次のネストしたRigidBody境界までの子孫メッシュ / 衝突判定を一つのBodyとして所有する。対応するleaf 形状、ライト、衝突判定、公式コンポーネントはその境界の子またはコンポーネントとして変換する。
-- シーン、AssetManifest、selectionは「追加」を確定するまで変更しない。
+- 公式サンプルまたは貼り付けTSXをJavaScriptとして実行しない。インポート時の別名、JSXタグ、string / boolean / number / array / オブジェクト リテラル、`Math.PI`を含む有限な数式だけを解析する。
+- Dreiの基本形状はStudioの基本形状とマテリアルへ、R3Fライトはライトへ、Rapier RigidBodyは親オブジェクトの独立したRigid Body Componentへ、`Billboard`は`BillboardY`へ、`Reflector`は`Mirror`へ、`Sky` / `Environment`は`Skybox`へ変換する。RigidBodyの`fixed` / `dynamic` / `kinematicPosition` / `kinematicVelocity`、一般設定、`colliders`生成方式を保持する。親原点へ仮直方体の衝突判定を作らない。動的なコールバックと未対応コンポーネントだけを診断へ残す。
+- コード編集フォルダーまたはshallow cloneしたリポジトリは`package.json`、`xrift.json`、`src/World.tsx`または`src/Item.tsx`を検査する。ファイル数、総容量、symlinkをネイティブ側で制限する。`src`内のTypeScript / JavaScriptモジュールを上限付きで読む。エントリーファイルから相対パスのインポートを再帰的に解決する。ローカルコンポーネントはインスタンス境界をオブジェクトとして保持する。静的に確認できるreturnのJSXをその子へ展開する。参照されるローカルの3Dモデル、テクスチャ、MP3 / WAVは`baseUrl`、先頭`/`、`public/`を同じプロジェクトからの相対パスへ正規化して重複を除く。通常の素材のトランザクションへ接続する。リポジトリのURLではshallow cloneの作業ツリー全体から解決する。指定されたパスが欠けていても`public`内で同名ファイルが一意なら復旧する。sphere / BackSideの背景画像は有限半径のメッシュではなく無限遠投影のシーン背景へ変換する。`new Audio`のloop音源はAudio Sourceとして復元する。任意のカスタムコード、Hook、コールバック、条件分岐、動的な一覧を実行しない。
+- `THREE.ShaderMaterial`は頂点 / フラグメントGLSL、リテラルのuniform、テクスチャのsampler、メッシュ名に対するdefineのvariantだけを宣言的なCustomマテリアルへ保存する。元3Dモデルのマテリアル枠へ適用する。シーン、動作確認、コード編集JSXのコンパイラーで同じシェーダーと時間uniformを使う。OBJ内で明示的に選ばれた衝突判定メッシュ名は名前付きのサブメッシュとして復元する。元の非表示衝突判定のグループをモデル全体の代替Boxへ変換しない。
+- `group`、RigidBody、Drei / XRiftラッパーを独立オブジェクトとして残す。ローカル位置・回転・大きさと親子順を維持する。定数参照を含むローカルコンポーネントの大きさと位置を静的に復元する。3Dモデルの取り込み時の倍率、中心のオフセット、X反転を同じ単位系で合成する。名前で指定されたOBJの衝突判定はルートの3Dモデル描画を通らないため3Dモデルの取り込み時の倍率を衝突判定オブジェクト自身へ適用する。可視3Dモデル、衝突判定、物理演算形状の寸法を一致させる。RigidBodyオブジェクトは次のネストしたRigidBody境界までの子孫メッシュ / 衝突判定を一つのBodyとして所有する。対応する末端の形状、ライト、衝突判定、公式コンポーネントはその境界の子またはコンポーネントとして変換する。
+- シーン、AssetManifest、選択は「追加」を確定するまで変更しない。
 
 ### 成功時
 
 - 追加オブジェクト、必要な3Dモデル / テクスチャ / 音声 / マテリアル、空の背景、ライト、衝突判定、公式XRiftのコンポーネントを一つの元に戻す履歴へ確定し、最後のオブジェクトを選択して設定で編集できる。「インポート後、そのまま動作確認で確認」が有効なら、確定したシーン / 素材の分離コピーで直ちに動作確認を開始する。
-- compilerは`@xrift/world-components`から公式名をimportする。移動先への入口など実行時Contextが必要なコンポーネントは編集と動作確認でも公式本体を描画し、外部通信や遷移だけをStudio Provider bridgeで止め、生成結果では公式実行環境を使用する。
+- コンパイラーは`@xrift/world-components`から公式名をインポートする。Portalなど実行時Contextが必要なコンポーネントは編集と動作確認でも公式本体を描画し、外部通信や遷移だけをStudioのProvider連携で止め、生成結果では公式実行環境を使用する。
 
 ### 失敗時
 
-- folder取消は入力を変えない。package / xrift manifestまたは同種開始ファイルの欠落、JSXなし、対応要素なし、project kind不一致、オブジェクト / マテリアル / コンポーネント作成失敗では追加を成功表示しない。個別素材の欠落、未対応形式、変換失敗は対象pathをwarningとして残し、その素材だけをスキップして読み込めるシーンと素材を一つの履歴へ確定する。
-- 入力コードと元データ module path／行番号付き診断をdialogに保持し、literalへの修正、未対応要素の除去、別コンポーネントの選択へ戻れる。
+- フォルダー取消は入力を変えない。パッケージ / XRiftのmanifestまたは同種エントリーファイルの欠落、JSXなし、対応要素なし、プロジェクトの種別不一致、オブジェクト / マテリアル / コンポーネント作成失敗では追加を成功として表示しない。個別素材の欠落、未対応形式、変換失敗は対象パスを警告として残し、その素材だけをスキップして読み込めるシーンと素材を一つの履歴へ確定する。
+- 入力コードと元データモジュールのパス／行番号付き診断をダイアログに保持し、リテラルへの修正、未対応要素の除去、別コンポーネントの選択へ戻れる。
 
 ### 戻り先
 
-- キャンセルとEscapeはシーンを変更せず同じEditorへ戻る。
-- 成功後はシーン、オブジェクト一覧、右設定が追加オブジェクトへ同期し、元に戻すで追加前の両selectionとdocument setへ戻れる。
+- キャンセルとEscapeはシーンを変更せず同じエディターへ戻る。
+- 成功後はシーン、Hierarchy、Inspectorが追加オブジェクトへ同期し、元に戻すで追加前の両選択と編集データ一式へ戻れる。
 
-完了条件: 外部リソースで公開package versionと公式元データを確認しながら、配置可能な公式コンポーネントを全件サムネイル付きで選べる。右上読み込むからDrei / React Three Fiberの標準primitiveとライト、Rapier RigidBody、公式XRift JSXを安全なシーン dataへ変換する。既存コード編集は検査済み開始ファイルを同じ変換器へ渡す。未対応custom codeや素材を完全変換と誤表示しない。追加後のオブジェクトと設定へ到達できる。
+完了条件: 外部リソースで公開パッケージのバージョンと公式元データを確認しながら、配置可能な公式コンポーネントを全件サムネイル付きで選べる。右上の「読み込む」からDrei / React Three Fiberの標準の基本形状とライト、Rapier RigidBody、公式XRift JSXを安全なシーンデータへ変換する。既存コード編集は検査済みエントリーファイルを同じ変換器へ渡す。未対応カスタムコードや素材を完全変換と誤表示しない。追加後のオブジェクトと設定へ到達できる。
 
 <a id="f-24"></a>
 
@@ -247,33 +247,33 @@
 
 ### 操作前
 
-- マテリアル設定の各テクスチャ slotはテクスチャ選択、UVセット、画像の繰り返しと補間参照、繰り返し / UV変換を同じ面に置く。繰り返しを隠れた詳細機能にせず、glTF既定値がずらす量 0、回転 0°、繰り返し 1であることを示す。
-- Animation 設定は3Dモデルクリップ再生とマテリアル Animationを分け、マテリアル Animationはノードグラフ素材の`pointer/interpolate`を開く導線として表示する。独自タイムラインが存在するようには見せない。
+- マテリアル設定の各テクスチャスロットはテクスチャ選択、UVセット、画像の繰り返しと補間参照、繰り返し / UV変換を同じ面に置く。繰り返しを隠れた詳細機能にせず、glTF既定値がずらす量0、回転0°、繰り返し1であることを示す。
+- Animation設定は3Dモデルクリップ再生とマテリアルAnimationを分け、マテリアルAnimationはNode Graph素材の`pointer/interpolate`を開く導線として表示する。独自タイムラインが存在するようには見せない。
 - ノードグラフの`pointer/get`、`pointer/set`、`pointer/interpolate`は変更するマテリアルを選択可能にし、手書きJSON Pointerを前提にしない。設定前は対象マテリアルと項目が未選択であることを示す。
 
 ### 操作中
 
-- テクスチャ slotのずらす量、繰り返し、回転、UVセット変更は`MaterialTextureInfo`へ保存し、compilerとRuntime manifest adapterで`KHR_texture_transform` semanticsを維持する。繰り返しが1以外で横方向の繰り返し / Tが繰り返すでなければ、マテリアル値を勝手に戻さずテクスチャ設定への修正案を表示する。
-- マテリアル pointer プリセットは選択したマテリアルの安定順index、canonical pointer、KHR type index、`material` inline 接続口、設定または補間する`value` 接続口を一操作で更新する。テクスチャ transform プリセットは`KHR_texture_transform`のoffset、scale、rotationだけを対象にする。
-- MCPは`get_material_asset`、`update_material_asset`、`set_material_texture_transform`、`configure_interactivity_material_pointer`を公開し、project ID、シーン ID、expected revision、編集 / 読み込む状態を通常操作と同じ境界で検査する。
+- テクスチャスロットのずらす量、繰り返し、回転、UVセット変更は`MaterialTextureInfo`へ保存し、コンパイラーとRuntime manifestアダプターで`KHR_texture_transform` semanticsを維持する。繰り返しが1以外で横方向の繰り返し / Tが繰り返すでなければ、マテリアル値を勝手に戻さずテクスチャ設定への修正案を表示する。
+- マテリアルのpointerプリセットは選択したマテリアルの安定した順序のインデックス、正規形式のpointer、KHRの型インデックス、`material` インラインの接続口、設定または補間する`value`接続口を一操作で更新する。テクスチャTransformのプリセットは`KHR_texture_transform`のoffset、大きさ、rotationだけを対象にする。
+- MCPは`get_material_asset`、`update_material_asset`、`set_material_texture_transform`、`configure_interactivity_material_pointer`を公開し、プロジェクトID、シーンID、想定するリビジョン、編集 / インポート状態を通常操作と同じ境界で検査する。
 
 ### 成功時
 
-- マテリアル変更は同じマテリアルを参照するシーン、thumbnail、Runtime manifestへ反映し、マテリアルを選択状態にする。Runtime loaderはテクスチャをマテリアルごとにcloneしてUV channel、offset、repeat、rotationを適用し、別マテリアルのテクスチャ stateを汚染しない。
-- ノードグラフはcanonical `KHR_interactivity` JSONとして保存し、ノードの設定とMCP read結果にpointer、type、マテリアル indexを残す。Animation 設定から開いた場合も同じgraph editorとvalidationを使う。
+- マテリアル変更は同じマテリアルを参照するシーン、サムネイル、Runtime manifestへ反映し、マテリアルを選択状態にする。Runtimeローダーはテクスチャをマテリアルごとに複製してUVチャンネル、offset、repeat、rotationを適用し、別マテリアルのテクスチャ状態は変更しない。
+- ノードグラフは正規形式の `KHR_interactivity` JSONとして保存し、ノードの設定とMCPの取得結果にpointer、種類、マテリアルindexを残す。Animation設定から開いた場合も同じGraphエディターと入力検証を使う。
 
 ### 失敗時
 
-- テクスチャ未設定slot、存在しないマテリアル、非pointer ノード、不明プリセット、不正vector、動作確認 / 読み込む中、stale revisionではAssetManifest、ノードグラフ素材、historyを変更しない。MCPは原因codeと対象IDを返す。
-- Runtimeでテクスチャを読み込めない場合はマテリアル全体を消さず、該当mapのdiagnosticを残してfactor値による表示を継続する。
+- テクスチャ未設定スロット、存在しないマテリアル、非pointerノード、不明プリセット、不正vector、動作確認 / インポート中、古いリビジョンではAssetManifest、Node Graph素材、履歴を変更しない。MCPは原因を示すコードと対象IDを返す。
+- Runtimeでテクスチャを読み込めない場合はマテリアル全体を消さず、該当mapの診断を残してfactor値による表示を継続する。
 
 ### 戻り先
 
-- マテリアル編集後は同じ素材設定、Animationからgraphを開いた後は同じノードグラフ素材へ戻れる。シーン selectionは維持し、素材 tabを閉じると元のオブジェクト設定へ戻る。
-- オブジェクトから開いた素材設定は、見出し下のパンくずに「<オブジェクト名>へ戻る」ボタンと現在の素材の名前を表示する。押すと同じオブジェクト設定へ戻り、選択は変えない。
-- マテリアル / graph変更の取消は通常の元に戻すを使い、MCP変更も同じhistoryとAutosaveから復元する。
+- マテリアル編集後は同じ素材設定、AnimationからGraphを開いた後は同じNode Graph素材へ戻れる。シーン選択は維持し、素材タブを閉じると元のEntityの設定へ戻る。
+- オブジェクトから開いた素材設定は、見出し下のパンくずに「<オブジェクト名>へ戻る」ボタンと現在の素材の名前を表示する。押すと同じEntityの設定へ戻り、選択は変えない。
+- マテリアル / Graphの変更の取消は通常の元に戻すを使い、MCP変更も同じ履歴とAutosaveから復元する。
 
-完了条件: マテリアルテクスチャの繰り返し、ずらす量、回転、UVセットをglTF互換値として編集する。MCP、Animation導線、KHR_interactivity pointer ノードから同じマテリアル設定へ到達できる。Runtime manifestでもテクスチャ transformと繰り返す samplerを維持する。
+完了条件: マテリアルテクスチャの繰り返し、ずらす量、回転、UVセットをglTF互換値として編集する。MCP、Animation導線、KHR_interactivity pointerノードから同じマテリアル設定へ到達できる。Runtime manifestでもテクスチャTransformと繰り返しのsamplerを維持する。
 
 ### F-24 MToon 0.x・1.0とOutline（2026-09-29）
 
@@ -284,11 +284,11 @@
 - バージョンの切り替え: 0.x・1.0間では旧互換の陰影設定だけを変更し、色・陰影の数値・輪郭線・テクスチャ・読み込んだ追加設定を保つ。保存はglTFのMToon 1.0形式を維持し、旧互換はextras.xriftVrm0CompatShadeで区別する。glTFマテリアルの見本にも0.xと1.0の比較セットを置く。
 - PBRへの往復: MToon固有設定を非表示の素材情報として保ち、再度MToonを選んだとき復元する。画像参照を使用箇所として扱い、種類の切り替えで削除や剥離を起こさない。
 - 一括切り替え: Assets複数選択のInspector「マテリアルの一括変更」に同じ種類選択を置く。混在選択ではMaterialだけを対象にし、カスタムシェーダーを使うMaterialは対象外の件数を示す。各素材の共通色・画像・UVとPBR専用値を保持し、一回の更新・保存・Undoとして扱う。
-- 同種類の一括編集: 対象がすべて同じ種類なら単体と共通の全設定を表示する。値が異なる項目は空欄や「一部異なる」、チェックボックスはindeterminateで示し、先頭素材の値を全体の値として表示しない。操作したfieldの値だけを一回の履歴で反映する。RGB・UVの一成分では他成分を保持し、画像だけの変更は各素材のUVを保持する。画像未割当の素材にはUV編集で新しい参照を作らない。
-- 素材プレビュー: MToon 0.x・1.0は斜めのDirectional Lightと弱い環境光で、明るい面とShade Colorを見分ける。同じ照明を見本カードにも使う。保存済みの旧サムネイルは描画版の変更で再生成し、素材の色やシーンのLight設定は保持する。
-- 成功時: 使用中の全スロットと素材プレビューへ同じMToon設定を反映し、同じ素材設定へ留まる。Outline Width ModeがNoneなら幅・色の入力を無効化し、Screenでは画面の高さに対する割合、Worldではmを表示する。一括編集で方式が混在する場合は幅・色を入力できる。Transparent With ZWriteはAlpha ModeがBlend、Depth Writeが自動の素材で有効になり、条件が混在する選択でも保存値を一括変更できる。既存のBlending・Depth Writeの明示設定は保持し、Renderingで確認できる。
-- 失敗時: 不正な値や保存競合は通常のマテリアル更新で拒否し、前回の値と選択を保つ。テクスチャの読み込み失敗は該当slotに表示し、画像を開く・選び直す導線を残す。
-- 戻り先: Standard (PBR)へ戻すと保持したPBR設定を再表示する。種類と値の変更は通常の元に戻す・やり直すと自動保存を使う。オブジェクト設定から開いた素材は既存のパンくずから戻る。
+- 同種類の一括編集: 対象がすべて同じ種類なら単体と共通の全設定を表示する。値が異なる項目は空欄や「一部異なる」、チェックボックスは一部選択の状態で示し、先頭素材の値を全体の値として表示しない。操作した入力欄の値だけを一回の履歴で反映する。RGB・UVの一成分では他成分を保持し、画像だけの変更は各素材のUVを保持する。画像未割当の素材にはUV編集で新しい参照を作らない。
+- 素材プレビュー: MToon 0.x・1.0は斜めのDirectional Lightと弱い環境光で、明るい面とShade Colorを見分ける。同じ照明を見本カードにも使う。保存済みの旧サムネイルは描画処理のバージョン変更で再生成し、素材の色やシーンのLight設定は保持する。
+- 成功時: 使用中の全スロットと素材プレビューへ同じMToon設定を反映し、同じ素材設定へ留まる。Outline Width ModeがNoneなら幅・色の入力を無効化し、Screenでは画面の高さに対する割合、Worldではmを表示する。一括編集で方式が混在する場合は幅・色を入力できる。Transparent With ZWriteはAlpha ModeがBlend、Depth Writeが自動のAssetsで有効になり、条件が混在する選択でも保存値を一括変更できる。既存のBlending・Depth Writeの明示設定は保持し、Renderingで確認できる。
+- 失敗時: 不正な値や保存競合は通常のマテリアル更新で拒否し、前回の値と選択を保つ。テクスチャの読み込み失敗は該当スロットに表示し、画像を開く・選び直す導線を残す。
+- 戻り先: Standard (PBR)へ戻すと保持したPBR設定を再表示する。種類と値の変更は通常の元に戻す・やり直すと自動保存を使う。Entityの設定から開いたAssetsは既存のパンくずから戻る。
 
 <a id="f-29"></a>
 
@@ -306,31 +306,31 @@
 
 ### 操作前
 
-- マテリアル設定に「カスタムシェーダーを作成」を置き、標準PBR マテリアルから切り替えるとstarter GLSL、uniform、default variantを同じマテリアルへ作成する。作成だけではシーンのbindingを変えず、マテリアルを選択した状態を保つ。
-- カスタムシェーダーはマテリアル内の編集可能なシェーダー契約として、vertex / fragment GLSL、uniform値、variant、時間uniformを持つ。既存の3Dモデル由来シェーダーを直接壊さず、マテリアル単位のcopyとして編集する。
-- MCPは`create_custom_shader`、`get_custom_shader`、`update_custom_shader`を公開し、`get_editor_context`のproject ID、シーン ID、revisionを要求する。既存マテリアルへの設定と新規マテリアル作成は同じAssetManifest境界へ入る。
+- マテリアル設定に「カスタムシェーダーを作成」を置き、標準PBRマテリアルから切り替えると初期GLSL、uniform、既定のvariantを同じマテリアルへ作成する。作成だけではシーンの割り当てを変えず、マテリアルを選択した状態を保つ。
+- カスタムシェーダーはマテリアル内の編集可能なシェーダー契約として、頂点 / フラグメントGLSL、uniform値、variant、時間uniformを持つ。既存の3Dモデル由来シェーダーを直接壊さず、マテリアル単位のコピーとして編集する。
+- MCPは`create_custom_shader`、`get_custom_shader`、`update_custom_shader`を公開し、`get_editor_context`のプロジェクトID、シーンID、リビジョンを要求する。既存マテリアルへの設定と新規マテリアル作成は同じAssetManifest境界へ入る。
 
 ### 処理中
 
-- GLSL 元データ、uniform、variantの編集中はマテリアルのassetSelectionと参照オブジェクトを維持し、連続入力を一つの素材更新へまとめる。処理中の保存・MCP更新は同じrevisionを消費し、古いMCP requestは`STALE_REVISION`で止める。
-- シーンではカスタムシェーダーを実際のShaderMaterialとしてメッシュへ適用し、primitiveと3Dモデルのマテリアル枠で同じuniform・attribute・時間uniform契約を使う。テクスチャ uniformは明示されたテクスチャだけを読み込む。
-- MCP updateは`void main()`、uniform型、variant、元データ長を検証してからcommitする。設定の途中入力は診断対象として保持し、compile / 動作確認ではそのマテリアルだけをPBR fallbackまたはblocking diagnosticへ分離する。
+- GLSL元データ、uniform、variantの編集中はマテリアルのassetSelectionと参照オブジェクトを維持し、連続入力を一つの素材更新へまとめる。処理中の保存・MCP更新は同じリビジョンを消費し、古いMCP要求データは`STALE_REVISION`で止める。
+- シーンではカスタムシェーダーを実際のShaderMaterialとしてメッシュへ適用し、基本形状と3Dモデルのマテリアル枠で同じuniform・attribute・時間uniform契約を使う。テクスチャuniformは明示されたテクスチャだけを読み込む。
+- MCPの更新は`void main()`、uniform型、variant、元データ長を検証してから確定する。設定の途中入力は診断対象として保持し、コンパイル / 動作確認ではそのマテリアルだけをPBRによる代替表示または公開を止める診断へ分離する。
 
 ### 成功時
 
-- マテリアル設定にカスタムシェーダー preview、GLSL、uniform、variant情報を残し、同じマテリアルを参照する全メッシュと生成ワールドへ反映する。必要なら既存の`set_material`で任意のオブジェクト slotへ割り当てられる。
-- GLSLはマテリアル内の短い編集だけに閉じず、`.glsl` / `.vert` / `.frag` / `.vs` / `.fs`を通常の素材読み込むからシェーダー素材として登録できる。素材のダブルクリックとマテリアル設定の「編集」はスクリプトと同じドック型Editorを開き、頂点シェーダー / フラグメントシェーダーごとにマテリアル内コードまたはシェーダー素材を選択できる。
-- MCPの作成・更新結果にはマテリアル ID、シェーダー内容、revisionAfterを返し、作成直後にマテリアル設定へ到達できる。元に戻す、Autosave、動作確認中の影響オブジェクト再同期は通常のマテリアル変更と同じにする。
+- マテリアル設定にカスタムシェーダープレビュー、GLSL、uniform、variant情報を残し、同じマテリアルを参照する全メッシュと生成ワールドへ反映する。必要なら既存の`set_material`で任意のオブジェクトスロットへ割り当てられる。
+- GLSLはマテリアル内の短い編集だけに閉じず、`.glsl` / `.vert` / `.frag` / `.vs` / `.fs`を通常の素材のインポートからシェーダー素材として登録できる。素材のダブルクリックとマテリアル設定の「編集」はスクリプトと同じドック型エディターを開き、頂点シェーダー / フラグメントシェーダーごとにマテリアル内コードまたはシェーダー素材を選択できる。
+- MCPの作成・更新結果にはマテリアルID、シェーダー内容、revisionAfterを返し、作成直後にマテリアル設定へ到達できる。元に戻す、Autosave、動作確認中の影響オブジェクト再同期は通常のマテリアル変更と同じにする。
 
 ### 失敗時
 
-- シェーダー形式不正、必須`main`欠落、uniform テクスチャ欠落、variant不正、stale revision、動作確認 / 読み込む競合ではマテリアル、シーン binding、historyを部分更新しない。原因code、field、マテリアル IDをMCPと設定へ残す。
-- WebGL compile failureはEditor全体を停止せず、該当マテリアルのpreviewへ原因とPBRへ戻す操作を示す。MCPの不正更新は前回の正常なマテリアルを維持する。
+- シェーダー形式不正、必須`main`欠落、uniformテクスチャ欠落、variant不正、古いリビジョン、動作確認 / インポートの競合ではマテリアル、シーン割り当て、履歴を部分更新しない。原因を示すコード、入力欄、マテリアルIDをMCPと設定へ残す。
+- WebGLのコンパイル失敗はエディター全体を停止せず、該当マテリアルのプレビューへ原因とPBRへ戻す操作を示す。MCPの不正更新は前回の正常なマテリアルを維持する。
 
 ### 戻り先
 
 - 成功後は同じマテリアル設定へ留まり、シーンで参照メッシュを確認できる。MCP作成後も`assetSelection`を新しいマテリアルへ更新する。
-- 取消、PBRへ戻す、または失敗時の再試行では元のマテリアル、シーン selection、素材 selectionを維持し、通常の元に戻すでカスタムシェーダー設定前へ戻れる。
+- 取消、PBRへ戻す、または失敗時の再試行では元のマテリアル、シーン選択、素材選択を維持し、通常の元に戻すでカスタムシェーダー設定前へ戻れる。
 
 完了条件: マテリアル設定またはMCPからGLSL、uniform、variant、時間uniformを作成・編集する。同じマテリアルをメッシュの割り当て枠へ割り当てる。シーン、動作確認、生成ワールドへ反映できる。無効なシェーダーは診断とPBR復帰を残す。成功後は対象マテリアルへ戻れる。
 
@@ -342,11 +342,11 @@
 
 ### 操作前
 
-- 音声素材を素材から選ぶと、右設定の「試聴」に再生コントロールを表示する。試聴は音源の作成、配置、loop設定、SceneDocumentを変更しない。
+- 音声素材をAssetsから選ぶと、Inspectorの「試聴」に再生コントロールを表示する。試聴は音源の作成、配置、loopの設定、SceneDocumentを変更しない。
 
 ### 処理中
 
-- 管理済みのプロジェクト音源を読み込み中は「再生用の音源を読み込んでいます」と表示し、二重の再生操作を示さない。
+- プロジェクト内の音源を読み込んでいる間は「再生用の音源を読み込んでいます」と表示し、再生の二重実行を防ぐ。
 
 ### 成功時
 
@@ -354,7 +354,7 @@
 
 ### 失敗時
 
-- ファイルが欠落、未保存、または読込に失敗した場合は再生可能であるように見せず、素材の保存先確認と再取込を案内する。素材と選択状態は維持する。
+- ファイルがない場合、未保存の場合、読み込みに失敗した場合は、再生できない状態を示す。素材の保存先を確認するか、取り込み直すように案内する。素材と選択状態は維持する。
 
 ### 戻り先
 
@@ -378,19 +378,19 @@
 ### 操作前
 
 - テクスチャ設定の最大解像度と圧縮（方式・Quality）は設定として保持されるだけで、原本の画像ファイルは変わらない。「この設定で画像を書き出す」で適用すると、編集・公開で使用する画像が変わる。公開時には未適用の設定を実行しない。「画像の書き出し」に現在の解像度・形式・容量と、変換後の解像度・形式・Qualityを並べて示す。
-- 設定が原本と一致していて変換するものがない場合は、その理由を示して実行操作を無効にする。環境テクスチャ（HDRI）、KTX2やSVGなど書き戻せない形式、外部・組み込み元データ、解析結果のない素材は、実行操作を出さずに対応していない理由を示す。
+- 設定が原本と一致していて変換するものがない場合は、その理由を示して実行操作を無効にする。環境テクスチャ（HDRI）、KTX2やSVGなど書き戻せない形式、外部・組み込み元データ、解析結果のないAssetsは、実行操作を出さずに対応していない理由を示す。
 - 未適用の設定があるときは、明示的に書き出すと編集・公開で使う画像が変わることと、元画像が残ることを操作前に示す。適用後はシーンとPlayで見た目を確認する。
 - 動作確認中と、素材のインポート・3Dモデル再インポート・別テクスチャの変換中は実行できない。理由と、停止または完了後に同じ設定から実行できることを示す。
 
 ### 処理中
 
-- ボタンを「変換中」にして無効化し、同じテクスチャの設定変更も止める。読み込み・変換・保存の段階を文言で示し、二重実行を示さない。
-- 書き出しは`assets/.optimized/`へハッシュ名の新しいfileとして保存し、元の原本を上書きしない。保存に失敗した場合はAssetManifestを変更せず、表示中のテクスチャも壊さない。
+- ボタンを「変換中」にして無効化し、同じテクスチャの設定変更も止める。読み込み・変換・保存の段階を文言で示し、二重実行を防ぐ。
+- 書き出しは`assets/.optimized/`へハッシュ名の新しいファイルとして保存し、元の原本を上書きしない。保存に失敗した場合はAssetManifestを変更せず、表示中のテクスチャも維持する。
 
 ### 成功時
 
-- 変換後の解像度、形式、変換前後の容量を設定に残し、通知にも同じ内容を出す。素材の元データと読み込む metadataを書き出したfileへ切り替える。保存上は未反映設定をリセットするが、設定・一括編集は保持した適用済み設定を表示・編集の基準にする。既存Optimize結果も実際の形式と寸法から補い、KTX2が意図せずJPEGへ戻らないようにする。
-- 一件の元に戻す履歴として確定し、自動保存へ引き継ぐ。生成済みthumbnailはstaleにして再生成の対象にする。元に戻すで変換前の素材へ戻る。
+- 変換後の解像度、形式、変換前後の容量を設定に残し、通知にも同じ内容を出す。素材の元データとインポートのメタデータを書き出したファイルへ切り替える。保存上は未反映設定をリセットするが、設定・一括編集は保持した適用済み設定を表示・編集の基準にする。既存Optimize結果も実際の形式と寸法から補い、KTX2が意図せずJPEGへ戻らないようにする。
+- 一件の元に戻す履歴として確定し、自動保存へ引き継ぐ。生成済みサムネイルは古い状態にして再生成の対象にする。元に戻すで変換前の素材へ戻る。
 
 ### 失敗時
 
@@ -399,7 +399,7 @@
 
 ### 戻り先
 
-- 成功・失敗のいずれでも同じテクスチャ設定に留まり、設定を変えて再実行するか、Upload reviewの容量見積もりへ進める。Upload reviewの一括最適化と同じ変換結果の保存先を使う。書き出さずに公開へ進んだ場合は、F-40に従って現在使用中の画像をそのまま公開する。
+- 成功・失敗のいずれでも同じテクスチャ設定に留まり、設定を変えて再実行するか、Upload確認画面の容量見積もりへ進める。Upload確認画面の一括最適化と同じ変換結果の保存先を使う。書き出さずに公開へ進んだ場合は、F-40に従って現在使用中の画像をそのまま公開する。
 
 完了条件: テクスチャ設定の最大解像度・圧縮設定を明示的に適用でき、原画像を残す。変換前後の解像度、形式、容量を同じ場所で見比べる。編集画面で確認した画像をそのまま公開する。環境テクスチャや書き戻せない形式は理由を示して実行させない。
 
@@ -411,9 +411,9 @@
 
 ### 操作前
 
-- 公開・アップロード・コード編集書き出し・CLI書き出しは、編集画面で使用中のテクスチャを同じ形式・解像度で配る。未適用の最大解像度・2のべき乗・圧縮設定を公開時に実行しない。Upload reviewには現在使用中の画像をそのまま公開する旨を短く示す。
+- 公開・アップロード・コード編集書き出し・CLI書き出しは、編集画面で使用中のテクスチャを同じ形式・解像度で配る。未適用の最大解像度・2のべき乗・圧縮設定を公開時に実行しない。Upload確認画面には現在使用中の画像をそのまま公開する旨を短く示す。
 - 画像を変更する場合は、F-37の「この設定で画像を書き出す」、または容量の詳細画面で選んだ最適化を明示的に適用する。適用後はシーンとPlayで見た目を確認してから公開する。
-- 歯車から開く設定パネルに「取り込むテクスチャのサイズと圧縮」を置く。読み込むメニューでは設定しない。未設定時は最大1024px・KTX2圧縮とし、シーンへ配置する前に変換を完了する。保存済みの設定とMCPで明示したテクスチャ設定は優先する。単体・モデル内蔵の対応画像に同じ上限で編集用画像を生成し、元ファイルを保持する。選択した既定値はEditor Stateとしてブラウザに残る。モデル再インポートにも適用し、個別に保護した設定を優先する。
+- 歯車から開く設定パネルに「取り込むテクスチャのサイズと圧縮」を置く。読み込むメニューでは設定しない。未設定時は最大1024px・KTX2圧縮とし、シーンへ配置する前に変換を完了する。保存済みの設定とMCPで明示したテクスチャ設定は優先する。単体・モデル内蔵の対応画像に同じ上限で編集用画像を生成し、元ファイルを保持する。選択した既定値はエディターの状態としてブラウザに残る。モデル再インポートにも適用し、個別に保護した設定を優先する。
 
 ### 処理中
 
@@ -451,29 +451,29 @@
 
 ### 処理中
 
-- 追加ボタンは「追加中」に変わり、無効化する (MI-03)。音のimportと素材 commitが終わるまで完了にしない。
+- 追加ボタンは「追加中」に変わり、無効化する (MI-03)。音のインポートと素材確定が終わるまで完了にしない。
 
 ### 成功時
 
-- シーンへ配置し、追加した素材の件数を示す (MI-05)。配置したオブジェクトを選択状態にし、オブジェクト一覧から中身を1つずつ編集できる状態にする。
-- 手順を持つセットでは、棚を閉じない。手順はこのパネルにしかないので、閉じると次にすることが画面から消える。代わりに「この画面を閉じて動作確認を開始してください」と、次の一手を示す。
-- 手順を持たないセットでは、これまでどおり棚を閉じ、通知で編集方法を示す。
+- シーンへ配置し、追加した素材の件数を示す (MI-05)。配置したオブジェクトを選択状態にし、Hierarchyから中身を1つずつ編集できる状態にする。
+- 手順があるセットは、追加後もカタログを開いたままにする。手順はこのパネルで確認するため、閉じる前に「この画面を閉じて動作確認を開始してください」と次の操作を示す。
+- 手順がないセットは、追加後にカタログを閉じ、通知で編集方法を示す。
 
 ### 失敗時
 
-- 動作確認中、import中、未保存のプロジェクトでは、追加前に理由を示して止める (MI-09)。
-- 音のimportやグラフの生成に失敗した場合は、途中まで配置したオブジェクトを残さない。シーンもAssetManifestも変えず、同じボタンから再試行できる。
+- 動作確認中、インポート中、未保存のプロジェクトでは、追加前に理由を示して止める (MI-09)。
+- 音のインポートやグラフの生成に失敗した場合は、途中まで配置したオブジェクトを残さない。シーンもAssetManifestも変えず、同じボタンから再試行できる。
 
 ### 戻り先
 
-- 棚を閉じると、配置したオブジェクトを選択したEditorへ戻る。元に戻す一回でオブジェクトと、そのセットが作ったパーティクル / ノードグラフ素材がまとめて消える。
-- 置いたあとはただのオブジェクトとコンポーネントなので、戻り先はいつもの設定とNode Editorになる。
+- カタログを閉じると、配置したオブジェクトを選択したエディターへ戻る。元に戻す操作を一回行うと、そのオブジェクトとセットから作成したパーティクル、Node Graph素材をまとめて取り消す。
+- 配置後は通常のオブジェクトとComponentとして扱う。Inspectorとノードエディターで編集を続けられる。
 
 ### F-43 モデル更新版のプレビュー補足（2026-09-07）
 
 参照: MI-03, MI-09。追加ボタンや戻り先は変更しません。カードは同じレシピを描画し、GLBの読み込みが終わってから静止画を保存します。モデルの読み込みに失敗した場合は、モデルを欠いた画像を完成状態として保存せず、失敗と確認先を表示します。タイムアウト時も失敗として表示し、一覧を開き直して再確認できます。詳細を閉じた後の読み込み完了も含め、プレビュー専用リソースを解放します。新しいUI操作やMCP操作は追加していません。
 
-噴水の詳細には、水面・水筋が静的モデルで、中央の飛沫だけが動くことを配置前に示します。既存ワールドへ取り込み済みの素材は自動上書きしません。ブラウザの実描画で読み込み待ち・失敗・ジオメトリ解放を確認しました。Tauri実機とメモリ使用量の測定は未実施です。
+噴水の詳細には、水面・水筋が静的モデルで、中央の飛沫だけが動くことを配置前に示します。既存ワールドへ取り込み済みのAssetsは自動上書きしません。ブラウザの実描画で読み込み待ち・失敗・ジオメトリ解放を確認しました。Tauri実機とメモリ使用量の測定は未実施です。
 
 ### F-24 頂点カラーと不透明度マップ（2026-09-08）
 
@@ -490,8 +490,8 @@
 
 処理中は検索・分類・選択・追加を無効にし、素材・画像・音・グラフの取り込み完了まで「追加中」とする。時間のかかる取り込み中にプロジェクトや編集内容が切り替わったら、古い内容を上書きせず失敗理由を表示する。
 
-成功後は追加したセットを選択し、追加素材数と次の操作を残す。手順付きの見本は棚を閉じず、編集・Playへ進む案内を表示する。失敗時は途中のセットをSceneへ確定せず、同じ項目から再試行できる。プレビューはGLBだけでなくテクスチャの読み込みも待ち、失敗した画像を完成サムネイルとして保存しない。閉じるとEditorへ戻り、一回のUndoで配置を戻せる。
+成功後は追加したセットを選択し、追加素材数と次の操作を残す。手順付きの見本はカタログを閉じず、編集・Playへ進む案内を表示する。失敗時は途中のセットをSceneへ確定せず、同じ項目から再試行できる。プレビューはGLBだけでなくテクスチャの読み込みも待ち、失敗した画像を完成サムネイルとして保存しない。閉じるとエディターへ戻り、一回のUndoで配置を戻せる。
 
 スタジオ照明は比較用であり、配置先へは追加しない。Emissiveの発光とLightによる照明、Bloomによるにじみは区別して説明する。実装と検証の範囲は [カタログ拡充](../catalog-expansion/README.ja.md) を参照。
 
-ワールドとアイテムは同じギミック一覧・検索・追加処理を使う。アイテムで選べるレシピは、配置時のprojectKinds検査も通す。Vehicle・Seatも追加できるが、プレイヤーやルームを必要とする動作は配置先ワールドでの確認を案内する。SpawnPointなど、個別Componentに設定された本来のproject kind制約は解除しない。読み込み中・失敗・Undoは既存のAsset操作と履歴を維持する。
+ワールドとアイテムは同じギミック一覧・検索・追加処理を使う。アイテムで選べるレシピは、配置時のprojectKinds検査も通す。Vehicle・Seatも追加できるが、プレイヤーやルームを必要とする動作は配置先ワールドでの確認を案内する。SpawnPointなど、個別Componentに設定された本来のプロジェクトの種別制約は解除しない。読み込み中・失敗・Undoは既存のAsset操作と履歴を維持する。
