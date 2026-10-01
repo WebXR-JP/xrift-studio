@@ -11,6 +11,8 @@ description: XRift Studioで会話から3Dワールドを新規制作したり�
 
 使うdocument toolのschemaを`describe_document_tool`で確認し、`operations`に`tool`と`arguments`を並べる。projectId・sceneId・操作ごとのexpectedRevisionは変換処理が補う。最大200操作を一つのバッチで適用し、revisionを一度進める。`ref`で作成結果に名前を付け、後の引数から`$ref`で参照できる。途中で失敗したバッチの部分結果は使わない。
 
+形式エラーには、失敗した操作の番号、正しいdefinition、変更前のbundleとrevisionが返る。そのdefinition.inputSchemaに合わせて引数を直し、返された同じ作品の状態で`edit_world`を再試行する。失敗を理由に`create_world`で作品を作り直さない。create_primitiveの図形指定は`shape`で、`type`や`primitive_type`ではない。ツールのJSONテキストとstructuredContentは同じ結果を表す。
+
 床、SpawnPoint、配置する物の寸法・材質・照明を整える。入手していない画像やモデルの参照は作らない。素材ファイルは利用者がAssetsから取り込む。会話の添付素材が自動転送されたとは扱わない。
 
 作成・追編集のツールは画面を開かない。最後に`open_studio`または`capture_scene_view`へ最新のbundle・revision・operationId・baseHashを内部で渡し、共通Editorへ一度だけ取り込む。中間結果ごとに別のエディターを表示しない。

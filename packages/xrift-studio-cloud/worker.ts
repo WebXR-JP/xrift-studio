@@ -7,8 +7,8 @@ import documentTools from './document-tools.json';
 import { studioProjectRoute, validateStudioProjectId } from '../../src/lib/browser-project-routing';
 export interface Environment { ASSETS: { fetch(request: Request): Promise<Response> } }
 const MAX_BYTES = 1024 * 1024;
-const UI_URI = 'ui://xrift-studio/worlds-v16';
-const LEGACY_UI_URIS = ['ui://xrift-studio/worlds-v15', 'ui://xrift-studio/worlds-v14', 'ui://xrift-studio/worlds-v13', 'ui://xrift-studio/worlds-v12', 'ui://xrift-studio/worlds-v11', 'ui://xrift-studio/worlds-v10', 'ui://xrift-studio/worlds-v9', 'ui://xrift-studio/worlds-v8', 'ui://xrift-studio/worlds-v7', 'ui://xrift-studio/worlds-v6', 'ui://xrift-studio/worlds-v5', 'ui://xrift-studio/worlds-v3', 'ui://xrift-studio/worlds-v4'];
+const UI_URI = 'ui://xrift-studio/worlds-v17';
+const LEGACY_UI_URIS = ['ui://xrift-studio/worlds-v16', 'ui://xrift-studio/worlds-v15', 'ui://xrift-studio/worlds-v14', 'ui://xrift-studio/worlds-v13', 'ui://xrift-studio/worlds-v12', 'ui://xrift-studio/worlds-v11', 'ui://xrift-studio/worlds-v10', 'ui://xrift-studio/worlds-v9', 'ui://xrift-studio/worlds-v8', 'ui://xrift-studio/worlds-v7', 'ui://xrift-studio/worlds-v6', 'ui://xrift-studio/worlds-v5', 'ui://xrift-studio/worlds-v3', 'ui://xrift-studio/worlds-v4'];
 const names = documentTools.map((tool) => tool.name);
 const object = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('JSONオブジェクトで指定してください');
@@ -24,6 +24,9 @@ async function delivery(bundle: ReturnType<typeof validateBundle>, revision: num
   return { bundle, revision, baseHash, operationId, projectId: bundle.project.projectId, sceneId: bundle.scene.sceneId,
     editorUrl: `https://chatgpt.com/plugins/plugin_asdk_app_sites_a7e0e2c988c08191aa694d396a182112/app/open_studio?path=${encodeURIComponent(studioProjectRoute(bundle.project.projectId))}`,
     delivery: { status: 'awaiting_studio_verification', projectId: bundle.project.projectId, revision, hash: await bundleHash(bundle), documentEdited: true, serverSaved: false, browserSaved: false, rendered: false, captureStatus: 'not_requested' } };
+}
+class DocumentBatchError extends Error {
+  constructor(message: string, readonly recovery: Record<string, unknown>) { super(message); }
 }
 const tools = [
   {
@@ -75,7 +78,7 @@ const tools = [
     },
     "_meta": {
       "ui": {
-        "resourceUri": "ui://xrift-studio/worlds-v16"
+        "resourceUri": "ui://xrift-studio/worlds-v17"
       },
       "openai/ui": {
         "entrypoints": [
@@ -120,7 +123,7 @@ const tools = [
     },
     "_meta": {
       "ui": {
-        "resourceUri": "ui://xrift-studio/worlds-v16"
+        "resourceUri": "ui://xrift-studio/worlds-v17"
       }
     }
   },
@@ -140,7 +143,7 @@ const tools = [
     },
     "_meta": {
       "ui": {
-        "resourceUri": "ui://xrift-studio/worlds-v16"
+        "resourceUri": "ui://xrift-studio/worlds-v17"
       }
     }
   },
@@ -166,7 +169,7 @@ const tools = [
     },
     "_meta": {
       "ui": {
-        "resourceUri": "ui://xrift-studio/worlds-v16"
+        "resourceUri": "ui://xrift-studio/worlds-v17"
       }
     }
   },
@@ -429,7 +432,8 @@ const tools = [
                 ]
               },
               "arguments": {
-                "type": "object"
+                "type": "object",
+                "description": "Use the exact inputSchema from describe_document_tool. Do not guess property names. create_primitive requires shape. Refer to newly created IDs with $ref in subsequent operations."
               },
               "ref": {
                 "type": "string",
@@ -495,7 +499,7 @@ const tools = [
     },
     "_meta": {
       "ui": {
-        "resourceUri": "ui://xrift-studio/worlds-v16"
+        "resourceUri": "ui://xrift-studio/worlds-v17"
       }
     }
   }
@@ -557,18 +561,29 @@ export async function callTool(name: string, args: Record<string, unknown>): Pro
     return value;
   };
   const results: unknown[] = [];
-  for (const raw of args.operations) {
-    const operation = object(raw); const tool = string(operation.tool);
-    if (!names.includes(tool)) throw new Error('この接続では使えない操作です');
-    const outcome = executeXriftMcpEditorTool({ bundle, sceneSelection: null, assetSelection: null, editorMode: 'edit', importBusy: false, revision, saveStatus: 'saved' }, { id: crypto.randomUUID(), tool: tool as XriftMcpEditorToolName, arguments: { ...object(resolveRefs(operation.arguments)), projectId: bundle.project.projectId, sceneId: bundle.scene.sceneId, expectedRevision: revision } });
-    if (outcome.changed) { bundle = validateBundle(outcome.bundle); revision++; }
-    if (operation.ref !== undefined) {
-      const ref = string(operation.ref);
-      if (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(ref) || refs[ref]) throw new Error('操作参照が不正または重複しています');
-      const result = object(outcome.result); const id = result.entityId ?? result.assetId ?? result.id;
-      if (typeof id !== 'string') throw new Error('この操作は参照可能なIDを返しません'); refs[ref] = id;
+  for (const [operationIndex, raw] of args.operations.entries()) {
+    let tool: string | undefined;
+    try {
+      const operation = object(raw); tool = string(operation.tool);
+      if (!names.includes(tool)) throw new Error('この接続では使えない操作です');
+      const outcome = executeXriftMcpEditorTool({ bundle, sceneSelection: null, assetSelection: null, editorMode: 'edit', importBusy: false, revision, saveStatus: 'saved' }, { id: crypto.randomUUID(), tool: tool as XriftMcpEditorToolName, arguments: { ...object(resolveRefs(operation.arguments)), projectId: bundle.project.projectId, sceneId: bundle.scene.sceneId, expectedRevision: revision } });
+      if (outcome.changed) { bundle = validateBundle(outcome.bundle); revision++; }
+      if (operation.ref !== undefined) {
+        const ref = string(operation.ref);
+        if (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(ref) || refs[ref]) throw new Error('操作参照が不正または重複しています');
+        const result = object(outcome.result); const id = result.entityId ?? result.assetId ?? result.id;
+        if (typeof id !== 'string') throw new Error('この操作は参照可能なIDを返しません'); refs[ref] = id;
+      }
+      results.push(outcome.result);
+    } catch (error) {
+      throw new DocumentBatchError(error instanceof Error ? error.message : 'Document operation failed', {
+        status: 'edit_failed', batchApplied: false, failedOperationIndex: operationIndex, tool,
+        definition: documentTools.find(definition => definition.name === tool),
+        bundle: validateBundle(args.bundle), revision: initialRevision,
+        projectId: validateBundle(args.bundle).project.projectId,
+        nextAction: 'Correct the failed operation using definition.inputSchema and retry edit_world with this unchanged bundle and revision. Do not create a replacement project. No changes from this batch were saved or displayed.',
+      });
     }
-    results.push(outcome.result);
   }
   return { ...await delivery(bundle, initialRevision + (revision > initialRevision ? 1 : 0), baseHash, typeof args.operationId === 'string' ? args.operationId : undefined), results, refs };
 }
@@ -613,11 +628,20 @@ export async function handleMcp(request: Request, env: Environment): Promise<Res
         const name = string(params.name); if (!tools.some((tool) => tool.name === name)) throw new Error('Unknown tool');
         try {
           const result = await callTool(name, params.arguments === undefined ? {} : object(params.arguments));
-          const text = name === 'capture_scene_view'
+          const text = name === 'describe_document_tool'
+            ? '次のdefinition.inputSchemaに従って操作のargumentsを指定してください。'
+            : name === 'capture_scene_view'
             ? 'XRift Studioに現在のScene Viewのキャプチャを依頼しました。アプリから届く画像を確認してから必要な編集を続けてください。'
             : '編集データを会話へ返しました。次の編集にはこのbundleとrevisionを内部で引き継いでください。Editor未起動でも追編集できます。Sitesには保存していません。ブラウザ保存・Studioへの反映・画像の受信はそれぞれ実際の報告を受けるまで未確認です。';
-          return ok({ content: [{ type: 'text', text, annotations: { audience: ['assistant'] } }], structuredContent: result });
-        } catch (error) { return ok({ isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : 'Studio operation failed' }] }); }
+          return ok({ content: [{ type: 'text', text, annotations: { audience: ['assistant'] } }, { type: 'text', text: JSON.stringify(result), annotations: { audience: ['assistant'] } }], structuredContent: result });
+        } catch (error) {
+          const content = [{ type: 'text', text: error instanceof Error ? error.message : 'Studio operation failed' }];
+          if (error instanceof DocumentBatchError) {
+            content.push({ type: 'text', text: JSON.stringify(error.recovery) });
+            return ok({ isError: true, content, structuredContent: error.recovery });
+          }
+          return ok({ isError: true, content });
+        }
       }
       default: return response({ jsonrpc: '2.0', id, error: { code: -32601, message: 'Method not found' } });
     }

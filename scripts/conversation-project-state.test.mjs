@@ -66,6 +66,33 @@ test('headless browser saves preserve source bytes and release the same Editor l
   assert.equal(await saveBrowserStudioProject(next), path);
 });
 
+test('MCP text carries state and failed batches return unchanged state with the exact tool definition', async () => {
+  const created = await rpc('tools/call', { name: 'create_world', arguments: { name: '復旧検証' } });
+  assert.deepEqual(JSON.parse(created.content[1].text), created.structuredContent);
+  const original = created.structuredContent;
+  const failed = await rpc('tools/call', { name: 'edit_world', arguments: { bundle: original.bundle, revision: 0, operations: [
+    { tool: 'create_primitive', arguments: { shape: 'box' } },
+    { tool: 'create_primitive', arguments: { primitive_type: 'cylinder' } },
+  ] } });
+  assert.equal(failed.isError, true);
+  const recovery = JSON.parse(failed.content[1].text);
+  assert.equal(recovery.batchApplied, false);
+  assert.equal(recovery.failedOperationIndex, 1);
+  assert.equal(recovery.definition.name, 'create_primitive');
+  assert.ok(recovery.definition.inputSchema.properties.shape);
+  assert.deepEqual(recovery.bundle, original.bundle);
+  assert.equal(recovery.revision, 0);
+  const corrected = await rpc('tools/call', { name: 'edit_world', arguments: { bundle: recovery.bundle, revision: recovery.revision, operations: [
+    { tool: 'create_primitive', arguments: { shape: 'box' } },
+    { tool: 'create_primitive', arguments: { shape: 'cylinder' } },
+  ] } });
+  assert.equal(corrected.isError, undefined);
+  assert.equal(corrected.structuredContent.projectId, original.projectId);
+  assert.equal(Object.keys(corrected.structuredContent.bundle.scene.entities).length, Object.keys(original.bundle.scene.entities).length + 2);
+  const definition = await rpc('tools/call', { name: 'describe_document_tool', arguments: { tool: 'create_primitive' } });
+  assert.deepEqual(JSON.parse(definition.content[1].text).definition, recovery.definition);
+});
+
 test('tool schemas carry conversation state and project routes serve the common Editor', async () => {
   const tools = (await rpc('tools/list', {})).tools;
   const edit = tools.find(tool => tool.name === 'edit_world');
