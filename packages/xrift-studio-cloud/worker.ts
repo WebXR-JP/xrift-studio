@@ -7,9 +7,8 @@ import documentTools from './document-tools.json';
 import { studioProjectRoute, validateStudioProjectId } from '../../src/lib/browser-project-routing';
 export interface Environment { ASSETS: { fetch(request: Request): Promise<Response> } }
 const MAX_BYTES = 1024 * 1024;
-const UI_URI = 'ui://xrift-studio/worlds-v14';
-const NEW_UI_URI = 'ui://xrift-studio/new-v14';
-const LEGACY_UI_URIS = ['ui://xrift-studio/worlds-v13', 'ui://xrift-studio/worlds-v12', 'ui://xrift-studio/worlds-v11', 'ui://xrift-studio/worlds-v10', 'ui://xrift-studio/worlds-v9', 'ui://xrift-studio/worlds-v8', 'ui://xrift-studio/worlds-v7', 'ui://xrift-studio/worlds-v6', 'ui://xrift-studio/worlds-v5', 'ui://xrift-studio/worlds-v3', 'ui://xrift-studio/worlds-v4'];
+const UI_URI = 'ui://xrift-studio/worlds-v15';
+const LEGACY_UI_URIS = ['ui://xrift-studio/worlds-v14', 'ui://xrift-studio/worlds-v13', 'ui://xrift-studio/worlds-v12', 'ui://xrift-studio/worlds-v11', 'ui://xrift-studio/worlds-v10', 'ui://xrift-studio/worlds-v9', 'ui://xrift-studio/worlds-v8', 'ui://xrift-studio/worlds-v7', 'ui://xrift-studio/worlds-v6', 'ui://xrift-studio/worlds-v5', 'ui://xrift-studio/worlds-v3', 'ui://xrift-studio/worlds-v4'];
 const names = documentTools.map((tool) => tool.name);
 const object = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('JSONオブジェクトで指定してください');
@@ -21,7 +20,7 @@ const string = (value: unknown) => {
 };
 const schema = (properties: Record<string, unknown>, required: string[] = []) => ({ type: 'object', properties, required, additionalProperties: false });
 const ui = { ui: { resourceUri: UI_URI } };
-const entryUi = { ui: { resourceUri: NEW_UI_URI }, 'openai/ui': { entrypoints: [{ type: 'global' }] } };
+const entryUi = { ui: { resourceUri: UI_URI }, 'openai/ui': { entrypoints: [{ type: 'global' }] } };
 const icons = [{ src: 'data:image/svg+xml;base64,' + btoa("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"512\" height=\"512\" viewBox=\"0 0 512 512\"><defs><linearGradient id=\"brand\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop stop-color=\"#a78bfa\"/><stop offset=\".4\" stop-color=\"#8b5cf6\"/><stop offset=\".8\" stop-color=\"#6366f1\"/><stop offset=\"1\" stop-color=\"#3b82f6\"/></linearGradient></defs><rect width=\"512\" height=\"512\" rx=\"112\" fill=\"url(#brand)\"/><path d=\"m189.5 189.5 133 133m0-133-133 133\" fill=\"none\" stroke=\"#fff\" stroke-width=\"33.3\" stroke-linecap=\"round\"/></svg>"), mimeType: 'image/svg+xml', sizes: ['any'] }];
 const deliveryDescription = 'Document generation is not Studio application. Always report awaiting verification until a matching studioDelivery operationId/projectId/revision/hash with status verified AND a Scene View PNG arrives from the app. If no app, disconnected, failed, or no receipt, say the data is prepared but Studio application remains unverified. Use retry_world with operationId to recover its stored browser result; do not regenerate or re-run edits.';
 async function delivery(bundle: ReturnType<typeof validateBundle>, revision: number, baseHash: string | null, operationId: string = crypto.randomUUID()) {
@@ -127,12 +126,12 @@ export async function handleMcp(request: Request, env: Environment): Promise<Res
       case 'initialize': return ok({ protocolVersion: '2025-11-25', capabilities: { tools: {}, resources: {} }, serverInfo: { name: 'XRift Studio', title: 'XRift Studio', version: '0.1.2', icons }, instructions: deliveryDescription + ' Stateless Studio document transformer: no accounts, database, saved worlds or publication. A null activeProjectId means no existing edit target, not inability to create. When asked for a new world, call create_world immediately; do not ask the user to open or create a project manually. Opening the plugin starts a new project directly; mode resume or projectId reopens existing work. Call create_world, await its matching receipt and PNG, then edit_world with operations only to edit the active project. Use get_editor_context for actual context, retry_world({operationId}) for recovery, and get_operation_status for its receipt. Read describe_document_tool before using a document operation. Batch operations to build the requested world. Never invent source files. Results open in the app and can be exported locally. When visual confirmation matters, call capture_scene_view after the result is open; the app will capture the rendered Scene View and send the PNG into the conversation. For an existing imported world, ask the user to share its editing context from the app. Documents are sent through ChatGPT and processed transiently by this endpoint. No background job continues after the tool call. Rendering and Play require the app.' });
       case 'ping': return ok({});
       case 'tools/list': return ok({ tools });
-      case 'resources/list': return ok({ resources: [{ uri: NEW_UI_URI, name: 'XRift Studio 新規起動', mimeType: 'text/html;profile=mcp-app' }, { uri: UI_URI, name: 'XRift Studio', mimeType: 'text/html;profile=mcp-app' }] });
+      case 'resources/list': return ok({ resources: [{ uri: UI_URI, name: 'XRift Studio', mimeType: 'text/html;profile=mcp-app' }] });
       case 'resources/read': {
-        if (params.uri !== UI_URI && params.uri !== NEW_UI_URI && !LEGACY_UI_URIS.includes(String(params.uri))) throw new Error('Unknown resource');
+        if (params.uri !== UI_URI && !LEGACY_UI_URIS.includes(String(params.uri))) throw new Error('Unknown resource');
         const asset = await env.ASSETS.fetch(new Request(new URL('/chatgpt.html', request.url)));
         if (!asset.ok) throw new Error('ChatGPT App assets are not deployed');
-        const html = (await asset.text()).replace('<html', params.uri === NEW_UI_URI ? '<html data-studio-new-entry="true"' : '<html');
+        const html = (await asset.text()).replace('<html', params.uri === UI_URI ? '<html data-studio-new-entry="true"' : '<html');
         return ok({ contents: [{ uri: String(params.uri), mimeType: 'text/html;profile=mcp-app', text: html.replace('<head>', `<head><base href="${new URL(request.url).origin}/">`).replace(/(src|href)="\.\//g, `$1="${new URL(request.url).origin}/`), _meta: { 'openai/ui': { availableDisplayModes: ['inline', 'fullscreen'], preferredDisplayMode: 'inline' }, ui: { csp: { resourceDomains: [new URL(request.url).origin, 'https://public.xrift.net'], connectDomains: [new URL(request.url).origin, 'https://public.xrift.net'] } } } }] });
       }
       case 'tools/call': {
