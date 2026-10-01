@@ -100,6 +100,8 @@ test('global open entry starts new while creation and editing keep the neutral e
   assert.equal(tools.find(tool=>tool.name==='capture_scene_view')._meta['openai/ui'],undefined);
   const fresh=(await rpc('resources/read',{uri:entry._meta.ui.resourceUri})).contents[0];
   assert.equal(fresh.uri,entry._meta.ui.resourceUri); assert.match(fresh.text,/data-studio-new-entry="true"/);
+  assert.ok(fresh._meta.ui.csp.connectDomains.includes('https://public.xrift.net'));
+  assert.ok(fresh._meta.ui.csp.resourceDomains.includes('https://public.xrift.net'));
   const neutral=(await rpc('resources/read',{uri:edit._meta.ui.resourceUri})).contents[0];
   assert.doesNotMatch(neutral.text,/data-studio-new-entry/);
 });

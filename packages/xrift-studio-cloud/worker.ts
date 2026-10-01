@@ -7,9 +7,9 @@ import documentTools from './document-tools.json';
 import { studioProjectRoute, validateStudioProjectId } from '../../src/lib/browser-project-routing';
 export interface Environment { ASSETS: { fetch(request: Request): Promise<Response> } }
 const MAX_BYTES = 1024 * 1024;
-const UI_URI = 'ui://xrift-studio/worlds-v13';
-const NEW_UI_URI = 'ui://xrift-studio/new-v13';
-const LEGACY_UI_URIS = ['ui://xrift-studio/worlds-v12', 'ui://xrift-studio/worlds-v11', 'ui://xrift-studio/worlds-v10', 'ui://xrift-studio/worlds-v9', 'ui://xrift-studio/worlds-v8', 'ui://xrift-studio/worlds-v7', 'ui://xrift-studio/worlds-v6', 'ui://xrift-studio/worlds-v5', 'ui://xrift-studio/worlds-v3', 'ui://xrift-studio/worlds-v4'];
+const UI_URI = 'ui://xrift-studio/worlds-v14';
+const NEW_UI_URI = 'ui://xrift-studio/new-v14';
+const LEGACY_UI_URIS = ['ui://xrift-studio/worlds-v13', 'ui://xrift-studio/worlds-v12', 'ui://xrift-studio/worlds-v11', 'ui://xrift-studio/worlds-v10', 'ui://xrift-studio/worlds-v9', 'ui://xrift-studio/worlds-v8', 'ui://xrift-studio/worlds-v7', 'ui://xrift-studio/worlds-v6', 'ui://xrift-studio/worlds-v5', 'ui://xrift-studio/worlds-v3', 'ui://xrift-studio/worlds-v4'];
 const names = documentTools.map((tool) => tool.name);
 const object = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('JSONオブジェクトで指定してください');
@@ -133,7 +133,7 @@ export async function handleMcp(request: Request, env: Environment): Promise<Res
         const asset = await env.ASSETS.fetch(new Request(new URL('/chatgpt.html', request.url)));
         if (!asset.ok) throw new Error('ChatGPT App assets are not deployed');
         const html = (await asset.text()).replace('<html', params.uri === NEW_UI_URI ? '<html data-studio-new-entry="true"' : '<html');
-        return ok({ contents: [{ uri: String(params.uri), mimeType: 'text/html;profile=mcp-app', text: html.replace('<head>', `<head><base href="${new URL(request.url).origin}/">`).replace(/(src|href)="\.\//g, `$1="${new URL(request.url).origin}/`), _meta: { 'openai/ui': { availableDisplayModes: ['inline', 'fullscreen'], preferredDisplayMode: 'inline' }, ui: { csp: { resourceDomains: [new URL(request.url).origin], connectDomains: [new URL(request.url).origin] } } } }] });
+        return ok({ contents: [{ uri: String(params.uri), mimeType: 'text/html;profile=mcp-app', text: html.replace('<head>', `<head><base href="${new URL(request.url).origin}/">`).replace(/(src|href)="\.\//g, `$1="${new URL(request.url).origin}/`), _meta: { 'openai/ui': { availableDisplayModes: ['inline', 'fullscreen'], preferredDisplayMode: 'inline' }, ui: { csp: { resourceDomains: [new URL(request.url).origin, 'https://public.xrift.net'], connectDomains: [new URL(request.url).origin, 'https://public.xrift.net'] } } } }] });
       }
       case 'tools/call': {
         const name = string(params.name); if (!tools.some((tool) => tool.name === name)) throw new Error('Unknown tool');
