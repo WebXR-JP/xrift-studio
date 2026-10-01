@@ -159,7 +159,7 @@
       "description": "自動保存を確認し、.xriftstudioでバックアップや受け渡しができます。コードエディターへの書き出しも説明します。",
       "group": "basics",
       "file": "save-and-open.md",
-      "keywords": "保存 自動保存 バックアップ .xriftstudio ZIP 複製 プロジェクト 再開 データ エクスポート コードエディター Classic Component MToon VRM",
+      "keywords": "保存 自動保存 バックアップ .xriftstudio ZIP 複製 プロジェクト 再開 データ エクスポート コードエディター Classic Component MToon VRM ChatGPT 会話 Sites Editor 追編集 保存先",
       "related": [
         "recovery",
         "publishing"

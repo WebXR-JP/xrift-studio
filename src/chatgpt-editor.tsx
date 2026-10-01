@@ -70,7 +70,7 @@ function Application() {
       at: new Date().toISOString(), reported: false };
     recovery.current = addReceipt(recovery.current, item); setReceipt(item); await persist();
     const sent = await app.sendMessage({ role: 'user', content: [
-      { type: 'text', text: JSON.stringify({ studioDelivery: { ...item, sceneId: result.bundle.scene.sceneId, saved: status === 'verified', rendered: status === 'verified', projectMatched: bridge.current?.currentBundle().project.projectId === result.bundle.project.projectId, activeProjectId: current.current?.documents.project.projectId ?? null, results: result.results },
+      { type: 'text', text: JSON.stringify({ ...(image ? { sceneCapture: { operationId: item.operationId, projectId: item.projectId, status: 'verified', revision: item.revision } } : {}), studioDelivery: { ...item, sceneId: result.bundle.scene.sceneId, saved: status === 'verified', rendered: status === 'verified', projectMatched: bridge.current?.currentBundle().project.projectId === result.bundle.project.projectId, activeProjectId: current.current?.documents.project.projectId ?? null, results: result.results },
         instruction: status === 'verified' ? 'この操作のStudioへの反映、ブラウザ保存、Scene Viewの取得を確認しました。画像を確認してから完了を報告してください。' : 'この操作は未完了です。反映確認済みとは報告しないでください。Studioを開き、保存された結果を再適用するかretry_worldで同じデータを再送してください。' }) },
       ...(image ? [{ type: 'image' as const, data: image, mimeType: 'image/png' }] : []),
     ] }, { timeout: 15000 });
@@ -105,7 +105,7 @@ function Application() {
   }
   function select(next: Local) { current.current = next; setLocal(next); }
   async function context(next: Local, bundle = bundleFrom(next.documents)) {
-    await app.updateModelContext({ content: [{ type: 'text', text: `編集対象: ${bundle.project.metadata.name}。edit_worldはoperationsだけで編集できます。現在のprojectIdとrevisionを対象・競合の確認に使ってください。Studioの反映報告と画像が届くまで完了扱いにしないでください。素材のバイト列は含みません。` }], structuredContent: { bundle: validateBundle(bundle), revision: next.revision, projectId: bundle.project.projectId, studioHistory: recovery.current.history } });
+    await app.updateModelContext({ content: [{ type: 'text', text: `編集対象: ${bundle.project.metadata.name}。edit_worldへこのbundleとrevisionを内部で引き継いでください。以後は直前のツール結果を使ってEditorの表示確認を待たずに追編集できます。データ編集、ブラウザ保存、画面反映、画像受信を区別してください。Sitesには作品を保存せず、素材のバイト列は含みません。` }], structuredContent: { bundle: validateBundle(bundle), revision: next.revision, projectId: bundle.project.projectId, studioHistory: recovery.current.history } });
   }
   async function captureSceneViewForConversation(operationId?: string) {
     const editor = bridge.current;
@@ -174,6 +174,18 @@ function Application() {
   async function accept(data: Record<string, unknown>) {
     if (!data.bundle) return;
     const result = parseStudioResult(data);
+    const waiting = latestResult.current;
+    if (waiting && result.operationId !== waiting.operationId &&
+        result.bundle.project.projectId === waiting.bundle.project.projectId &&
+        result.revision > waiting.revision && result.baseHash === await bundleHash(waiting.bundle)) {
+      // A later conversation edit is valid even when the earlier image report
+      // was unavailable. Keep the old operation recoverable without blocking it.
+      recovery.current.operations ??= {};
+      if (waiting.operationId) recovery.current.operations[waiting.operationId] = waiting;
+      latestResult.current = null;
+      recovery.current.pending = null;
+      setPending(null);
+    }
     const previous = recovery.current.history.find(item => item.operationId === result.operationId);
     if (previous && previous.hash !== await bundleHash(result.bundle)) throw new Error('同じ操作IDで異なる編集データを受信しました');
     if (latestResult.current && result.operationId !== latestResult.current.operationId) {
@@ -211,6 +223,7 @@ function Application() {
     const projectId = current.current?.documents.project.projectId;
     if (!projectId) throw new Error('作成した作品の保存先を確認できませんでした。');
     await openTarget(projectId);
+    await context(current.current!);
     setNotice('新しいワールドをブラウザに保存し、エディターを開きました。');
   }
   async function openTarget(projectId: string) {
@@ -271,6 +284,7 @@ function Application() {
         }
         if (data.studioCommand) { await command(data.studioCommand as Record<string, unknown>); return; }
         if (data.captureSceneView === true) {
+          if (data.bundle) { await accept(data); return; }
           await captureSceneViewForConversation(typeof data.operationId === 'string' ? data.operationId : undefined);
           return;
         }
@@ -327,26 +341,25 @@ function Application() {
     }
     if (name === 'get_editor_context' || name === 'get_operation_status') {
       const active = current.current;
-      const result = name === 'get_operation_status' ? { operationId: command.operationId, receipt: recovery.current.history.find(item => item.operationId === command.operationId) ?? null, recoverable: !!recovery.current.operations?.[String(command.operationId)] } : { connected: true, mode: 'edit', projectId: active?.documents.project.projectId ?? null, sceneId: active?.documents.project.entrySceneId ?? null, revision: active?.revision ?? null, hash: active ? await bundleHash(bridge.current?.currentBundle() ?? bundleFrom(active.documents)) : null };
+      const result = name === 'get_operation_status' ? { operationId: command.operationId, receipt: recovery.current.history.find(item => item.operationId === command.operationId) ?? null, recoverable: !!recovery.current.operations?.[String(command.operationId)] } : { connected: true, mode: 'edit', projectId: active?.documents.project.projectId ?? null, sceneId: active?.documents.project.entrySceneId ?? null, revision: active?.revision ?? null, hash: active ? await bundleHash(bridge.current?.currentBundle() ?? bundleFrom(active.documents)) : null, bundle: active ? validateBundle(bridge.current?.currentBundle() ?? bundleFrom(active.documents)) : null };
       const requested = name === 'get_operation_status' ? recovery.current.operations?.[String(command.operationId)]?.bundle.project.projectId : active?.documents.project.projectId;
       const studioState = { connected: hostReady.current, activeProjectId: active?.documents.project.projectId ?? null, projectMatched: !!requested && requested === active?.documents.project.projectId && requested === bridge.current?.currentBundle().project.projectId };
-      await app.sendMessage({ role: 'user', content: [{ type: 'text', text: JSON.stringify({ studioContext: { ...result, ...studioState, canCreateProject: true, canEditProject: !!active && !!bridge.current }, instruction: active ? 'この作品への編集を続けられます。新規制作の依頼はcreate_worldで別の作品を作成してください。' : '新規制作は可能です。activeProjectIdがnullでもcreate_worldをすぐ呼び、自動作成・反映確認まで続けてください。手動で作品を開くよう依頼して止まらないでください。既存作品への編集だけはprojectIdで対象を確認してください。', requestId: command.requestId }) }] }); return;
+      await app.sendMessage({ role: 'user', content: [{ type: 'text', text: JSON.stringify({ studioContext: { ...result, ...studioState, canCreateProject: true, canEditProject: !!active, editorReady: !!bridge.current }, instruction: active ? 'この作品への編集を続けられます。新規制作の依頼はcreate_worldで別の作品を作成してください。' : '新規制作は可能です。activeProjectIdがnullでもcreate_worldをすぐ呼び、自動作成・反映確認まで続けてください。手動で作品を開くよう依頼して止まらないでください。既存作品への編集だけはprojectIdで対象を確認してください。', requestId: command.requestId }) }] }); return;
     }
     if (name === 'retry_world') {
       const result = recovery.current.operations?.[String(command.operationId)] ?? recovery.current.pending;
       if (!result || result.operationId !== command.operationId) throw new Error('再送データがこのブラウザにありません。元の結果をretry_worldで再送してください');
       await accept(result as unknown as Record<string, unknown>); return;
     }
-    if (latestResult.current) throw new Error('前の編集が未完了です。反映を再確認してから追加編集してください');
     const active = current.current;
-    if (!active || !bridge.current) throw new Error('編集対象が開いていません。Studioで作品を開いてから再試行してください');
+    if (!active) throw new Error('会話内の最新のbundleとrevisionをedit_worldへ引き継いでください。新規制作はcreate_worldで開始できます');
     if (command.projectId && command.projectId !== active.documents.project.projectId) throw new Error('編集対象が異なります。対象の作品を開いてください');
-    if (!(await bridge.current.saveNow())) throw new Error('最新の編集を保存できませんでした');
+    if (bridge.current && !(await bridge.current.saveNow())) throw new Error('最新の編集を保存できませんでした');
     await writes.current;
     const latest = current.current!;
     const additionsOnly = Array.isArray(command.operations) && command.operations.every(raw => raw && typeof raw === 'object' && ['create_primitive', 'create_entity', 'create_material'].includes((raw as { tool: string }).tool));
     if (command.expectedRevision !== undefined && command.expectedRevision !== latest.revision && !additionsOnly) throw new Error('revision_conflict: 最新状態をget_editor_contextで確認して再試行してください');
-    const result = await callTool('edit_world', { ...command, bundle: bridge.current.currentBundle(), revision: latest.revision });
+    const result = await callTool('edit_world', { ...command, bundle: bridge.current?.currentBundle() ?? bundleFrom(latest.documents), revision: latest.revision });
     await accept(result as Record<string, unknown>);
   }
   async function saved(path: string, bundle: PrototypeVisualProject) {

@@ -1,26 +1,28 @@
 ---
 name: world-creation
-description: XRift Studioで会話から3Dワールドを新規制作したり、利用者が会話に渡した作品を編集するときに使う。
+description: XRift Studioで会話から3Dワールドを新規制作したり、会話に引き継いだ作品を編集するときに使う。
 ---
 
 # XRift Studioでワールドを作る
 
-利用者の制作依頼を、Studioの実際のdocument toolで形にする。新規制作では`create_world`を呼び、反映報告と画像を待ってから`edit_world({operations})`を続けて呼ぶ。既存作品は開いているStudioの最新データを使う。`get_editor_context`で対象を確認し、activeProjectIdがnullでも新規制作は可能。新規制作の依頼ならcreate_worldをすぐ呼び、作品の作成・保存・表示まで続ける。「まずプロジェクトを開いてください」で止まらない。既存作品への編集を頼まれた場合だけ、対象のprojectIdを確認して開く。open_studioは引数なしで新規作成して直接エディターへ入る。mode: resumeまたはprojectIdで再開する。/newからも新規作成できる。
+新規制作では`create_world`を呼ぶ。返された`bundle`、`revision`、`projectId`、`operationId`、`baseHash`を会話内の編集状態として引き継ぐ。続く`edit_world`には、直前の結果の`bundle`と`revision`を内部で渡す。利用者にJSONの貼り直しやプロジェクトの手動選択を求めない。Editorが閉じていても、`activeProjectId`がnullでも、データの作成・追編集は続けられる。画面の起動、反映報告、PNGを待つことを編集の前提にしない。
 
-使うdocument toolのschemaを`describe_document_tool`で確認する。`edit_world.operations`に`tool`と通常の`arguments`を並べる。projectId・sceneId・expectedRevisionはStudioが各操作に補う。最大200操作を一つのバッチで適用し、revisionを一度進める。bundleを省略すれば手動編集後も現在のデータを使う。
+利用者が現在のEditorを手動編集した場合は、`get_editor_context`から届く最新の`bundle`と`revision`を使う。会話の結果が古い可能性があるときは、既存作品を巻き戻さない。対象の`projectId`と`expectedRevision`を確認する。元のデータが会話にもブラウザにもなければ、復元できるとは言わず、作品ファイルの取り込みを案内する。
 
-床、SpawnPoint、配置する物の大きさと関係を整え、依頼に必要な形状・材質・照明を作る。入手していない画像やモデルの参照を作らない。素材ファイルは利用者がアプリ内で取り込む。添付画像やモデルが自動転送されたとは扱わない。
+使うdocument toolのschemaを`describe_document_tool`で確認し、`operations`に`tool`と`arguments`を並べる。projectId・sceneId・操作ごとのexpectedRevisionは変換処理が補う。最大200操作を一つのバッチで適用し、revisionを一度進める。`ref`で作成結果に名前を付け、後の引数から`$ref`で参照できる。途中で失敗したバッチの部分結果は使わない。
 
-結果はアプリで確認できる。開いている作品へ自動反映する。失敗時だけ「反映を再確認」を案内する。見た目の確認が制作判断に必要なら、結果をStudioで開いたあとに`capture_scene_view`を呼ぶ。アプリが現在のScene ViewをPNGで会話へ送り返すので、その画像を見て構図・明るさ・配置・スケールなどを判断し、必要なら`edit_world`で調整して再度`capture_scene_view`する。キャプチャが失敗した場合は確認済みと扱わない。制作後は何を配置したかを短く伝え、「プロジェクトを書き出す」でブラウザ版・デスクトップ版へ引き継げることを伝える。Playの動作は実際に確認していない限り確認済みと書かない。
+床、SpawnPoint、配置する物の寸法・材質・照明を整える。入手していない画像やモデルの参照は作らない。素材ファイルは利用者がAssetsから取り込む。会話の添付素材が自動転送されたとは扱わない。
 
-作品のクラウド保存・端末間同期・XRiftへの公開・非同期の制作ジョブはない。サーバーに作品を保存した、アプリを閉じた後も作り続ける、という説明をしない。
+作成・追編集のツールは画面を開かない。最後に`open_studio`または`capture_scene_view`へ最新のbundle・revision・operationId・baseHashを内部で渡し、共通Editorへ一度だけ取り込む。中間結果ごとに別のエディターを表示しない。
 
-データの生成とStudioへの反映を区別する。create_world・edit_world・retry_worldの戻り値は反映待ちであり、完了の証拠ではない。同じoperationId・projectId・revision・hashのstudioDelivery報告（verified）とScene View画像が届いてから、画像を確認して反映済みと報告する。報告が届かない、画面が開いていない、接続が切れている、failed・waitingの場合は未完了と伝える。以前の成功報告を別の操作の確認に流用しない。復旧時はretry_worldにoperationIdを渡す。保存された結果が見つからない場合だけ元のデータも渡す。同じ編集操作を再実行して重複させない。
+## 保存と画面の確認
 
-### ChatGPTで継続編集する
+Sitesはdocument JSONを一時的に処理するだけで、作品・素材・編集セッションを保存しない。ツール結果の編集データはChatGPTの会話を通るが、会話の保存や保持期間をこのプラグインが保証することはできない。Editorへ取り込まれた作品・素材は共通のブラウザ保存に残る。通常サイトとChatGPT内の保存領域は分かれ、自動同期はない。`projectId`だけから別端末の作品を取得できるとは説明しない。
 
-ChatGPT版は共通エディターまたはプロジェクト一覧へ直接入る。作成後はその作品をactiveにし、`edit_world({operations})`で現在のブラウザ保存と編集データを使う。`get_editor_context`で対象、`get_operation_status`で実際の反映結果を確認する。各ツール要求はアプリの返答まで未完了で、サーバーは作品やACKを保持しない。Studioが閉じている場合は完了扱いにしない。
+データ編集、ブラウザ保存、Editorへの反映、画像取得を分けて報告する。編集結果の返却だけでブラウザ保存や画面反映を完了扱いにしない。同じoperationId・projectId・revision・hashの`studioDelivery`報告を確認し、実際のScene View PNGを受け取って見た場合だけ画像確認済みと伝える。画像が未受信でも、データ編集を続けることはできる。
 
-1回の編集は最大200操作。`ref`で作成結果へ名前を付け、後の引数で`$ref`を参照する。projectId、sceneId、操作ごとのrevisionはStudioが補完する。追加だけの操作は最新revisionへ適用できるが、変更・削除のrevision競合は最新状態を確認して再試行する。失敗したバッチの途中データは保存しない。
+見た目の確認が必要になったら、結果をEditorへ適用して`capture_scene_view`を呼ぶ。構図・明るさ・配置を画像で判断し、必要なら最新のbundleで追編集する。画像取得が失敗した場合は未確認と説明する。Playは実際に試していなければ確認済みと書かない。
 
-受信後は自動で適用し、実データ・保存・Scene View PNGを検証して会話へ返す。失敗・未報告はChatGPTメニューの再確認で復旧する。スマホも共通エディターを使い、全画面を強制しない。利用可能な場合に会話内表示と全画面を切り替える。MI-03（処理中）、MI-05（成功）、MI-09（復帰）の既存表示を使い、長い案内や確認ダイアログを追加しない。
+復旧は`retry_world`へ会話内の元の`operationId`、`bundle`、`revision`、`baseHash`を内部で渡す。変更操作を再実行して重複させない。古い操作を再送してその後の編集を巻き戻さない。ブラウザ内の未完了操作も再確認できる。Sitesに保存された状態からの復元とは説明しない。
+
+`open_studio`は新規エディターへ入る。保存済み作品はprojectId、一覧はmode: resumeで開く。作品ごとの`/editor/{projectId}`、新規作成の`/new`も共通エディターにつながる。保存済み作品のURLは同じブラウザの保存領域が必要。取り込み・素材追加・書き出しは通常版と同じ場所を使う。長い説明や確認ダイアログを制作画面に重ねない。スマホは全画面を強制せず、対応するhostで会話内表示と広いEditorを切り替える。

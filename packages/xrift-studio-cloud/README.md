@@ -5,18 +5,18 @@ ChatGPTの制作依頼からワールドを作るリモートMCPと、既存の�
 ## 制作の流れ
 
 1. プラグインを接続し、会話でワールド制作を頼みます。
-2. `create_world`の結果を共通エディターへ適用し、保存と実際のScene View画像を確認して会話へ返します。データ生成だけでは反映完了と扱いません。
-3. `edit_world({operations})`で開いている作品の最新データを引き継いで編集できます。最大200操作を一つのバッチで適用し、途中で失敗した結果は保存しません。
+2. `create_world`の結果のbundleとrevisionを会話内で引き継ぎ、`edit_world({bundle, revision, operations})`で追編集します。Editorの表示、activeProjectId、反映報告や画像を編集の前提にしません。最大200操作を一つのバッチで適用し、途中で失敗した部分結果は使いません。
+3. 結果を共通エディターへ取り込み、ブラウザ保存と実際のScene Viewを確認します。データ編集・ブラウザ保存・画面反映・画像受信を区別します。画像が未取得でも追編集は続けられます。
 4. 作品ID付きリンクまたは`open_studio({projectId})`で保存した作品を再開します。対象の一致はアプリの`projectMatched`報告で確認します。
 5. 取り込みと書き出しは、通常版と同じ「プロジェクトを開く」「プロジェクトを書き出す」を使います。会話に添付した素材の自動取り込みは未対応です。
 
 ## 共通処理とChatGPT接続の境界
 
-`BrowserEditorApp.tsx`を両版の入口にし、`BrowserProjectLibrary`と`VisualEditorPrototype`で同じ画面を表示します。作品を開く・保存する・書き出す操作は`browser-project-session.ts`の同じキューと所有権の処理を使います。プロジェクトIDの検証・解決・URLと取り込み時のID重複処理は`browser-project-routing.ts`、永続化は`browser-project-storage.ts`にまとめています。
+`BrowserEditorApp.tsx`を両版の入口にし、`BrowserProjectLibrary`と`VisualEditorPrototype`で同じ画面を表示します。作品を開く・保存する・書き出す操作は`browser-project-session.ts`の同じキューと所有権の処理を使います。プロジェクトIDの検証・解決・URLと取り込み時のID重複処理は`browser-project-routing.ts`、永続化は`browser-project-storage.ts`にまとめています。`browser-studio-project-store.ts`はEditorをマウントせずに同じ所有権・保存キューでデータを保存し、画面を開く処理から分離します。
 
 `chatgpt-editor.tsx`は共通入口へホスト機能を渡します。MCP Apps接続、受信キュー、会話への報告、AI操作の復旧履歴を扱い、作品の保存・一覧・取り込み・書き出しは再実装しません。変更は共通入口の`apply`へ渡し、共通エディターの実データ・保存・Scene View PNGを確認します。
 
-作品と素材はブラウザに保存します。通常サイトとChatGPT内では保存領域が分かれるため、自動同期はありません。受け渡しには作品ファイルを使います。
+Sitesに作品を保存する領域は追加しません。会話内の最新の編集結果を次の呼び出しへ渡し、ブラウザ内の作品と操作履歴で再開・再送できます。ChatGPTの会話の保持は提供元の条件に従い、projectIdだけでサーバーから作品を取得するAPIはありません。作品と素材はブラウザに保存します。通常サイトとChatGPT内では保存領域が分かれるため、自動同期はありません。受け渡しには作品ファイルを使います。
 
 ## 保存とデータの境界
 

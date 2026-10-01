@@ -8,7 +8,7 @@ import { BrowserProjectTransferDialog, type BrowserRecentProject, type BrowserTr
 import { BrowserProjectLibrary } from "./preview/BrowserProjectLibrary";
 import { openBrowserProjectSession, type BrowserProjectSession } from "./preview/browser-project-session";
 import type { PrototypeVisualProject } from "./lib/visual-editor/prototype-project";
-import type { VisualProjectDocuments } from "./lib/visual-editor/persistence";
+import { saveBrowserStudioProject } from './lib/browser-studio-project-store';
 import {
   WebUploadDialog,
 } from "./preview/WebUploadDialog";
@@ -240,13 +240,8 @@ export default function BrowserEditorApp({ host }: { host?: BrowserStudioHost } 
       setExternalGeneration(value => value + 1);
       return session.path;
     }
-    const [storage, transferTools] = await Promise.all([import('./lib/browser-project-storage'), import('./lib/visual-editor/browser-project-transfer')]);
-    const documents: VisualProjectDocuments = { project: bundle.project, scenes: { [bundle.scene.sceneId]: bundle.scene }, assets: bundle.assets, prefabs: bundle.prefabs };
-    const matches = (await storage.listBrowserProjects()).filter(project => project.projectId === bundle.project.projectId);
-    if (matches.length > 1) throw new Error('同じプロジェクトIDの作品が複数あります。作品一覧から対象を開いてください。');
-    const path = matches[0]?.path ?? await storage.createBrowserProject(transferTools.browserProjectDocumentFiles(documents), { activate: false });
+    const path = await saveBrowserStudioProject(bundle);
     await openStoredBrowserProject(path, false);
-    if (matches[0]) { await activeSession.current!.save(bundle); setEditorInitialBundle(bundle); setExternalGeneration(value => value + 1); }
     return path;
   };
 
