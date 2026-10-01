@@ -21,7 +21,7 @@ async function connect() {
   host.onupdatemodelcontext = async ({structuredContent}) => { if (structuredContent?.bundle) result = structuredContent as unknown as StudioResult; return {}; };
   host.oninitialized = () => { document.querySelector('#connection')!.textContent = '接続済み'; void (async () => { await host.sendToolInput({ arguments: {} }); if(new URLSearchParams(location.search).has('auto-new')) await host.sendToolResult({content:[],structuredContent:await callTool('open_studio',{})}); })(); };
   await host.connect(new PostMessageTransport(frame.contentWindow!, frame.contentWindow!));
-  frame.src = new URLSearchParams(location.search).has('build') ? '/dist/client/chatgpt.html' : '/chatgpt.html';
+  frame.src = new URLSearchParams(location.search).has('anonymous-entry') ? '/e2e/fixtures/chatgpt-entry.html' : new URLSearchParams(location.search).has('build') ? '/dist/client/chatgpt.html' : '/chatgpt.html';
 }
 async function send() {
   if (!result) return;

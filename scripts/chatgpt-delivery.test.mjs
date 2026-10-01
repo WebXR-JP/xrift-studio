@@ -88,3 +88,19 @@ test('Sites new entry redirects without touching saved projects or assets', asyn
   const url = new URL(response.headers.get('location'));
   assert.equal(url.pathname, '/editor.html'); assert.equal(url.searchParams.get('new'),'1'); assert.equal(url.searchParams.get('name'),'秋の公園');
 });
+
+test('global launch has a dedicated new entry while creation and editing keep the neutral editor resource', async () => {
+  const {default:worker} = await server.ssrLoadModule('/packages/xrift-studio-cloud/worker.ts');
+  const rpc = async (method,params={}) => (await (await worker.fetch(new Request('https://example.test/mcp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})}),{ASSETS:{fetch:async()=>new Response('<!doctype html><html lang="ja"><head></head><body></body></html>')}})).json()).result;
+  const tools=(await rpc('tools/list')).tools;
+  const entry=tools.find(tool=>tool.name==='new_studio'); const edit=tools.find(tool=>tool.name==='edit_world');
+  assert.notEqual(entry._meta.ui.resourceUri,edit._meta.ui.resourceUri);
+  assert.equal(entry._meta['openai/ui'].entrypoints[0].type,'global');
+  assert.deepEqual(entry._meta.ui.visibility,['app']);
+  assert.equal(tools.find(tool=>tool.name==='open_studio')._meta['openai/ui'],undefined);
+  assert.equal(tools.find(tool=>tool.name==='capture_scene_view')._meta['openai/ui'],undefined);
+  const fresh=(await rpc('resources/read',{uri:entry._meta.ui.resourceUri})).contents[0];
+  assert.equal(fresh.uri,entry._meta.ui.resourceUri); assert.match(fresh.text,/data-studio-new-entry="true"/);
+  const neutral=(await rpc('resources/read',{uri:edit._meta.ui.resourceUri})).contents[0];
+  assert.doesNotMatch(neutral.text,/data-studio-new-entry/);
+});
