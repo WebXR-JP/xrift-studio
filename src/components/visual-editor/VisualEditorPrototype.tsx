@@ -689,6 +689,10 @@ export type ExternalAssetsCommit = (update: {
 export type VisualEditorMcpProjectBridge = {
   /** The Editor's current documents, ahead of any pending autosave. */
   currentBundle: () => PrototypeVisualProject;
+  /** Captures the currently rendered Scene View as a PNG data URL. */
+  captureSceneView: () => Promise<
+    { ok: true; dataUrl: string } | { ok: false; message: string }
+  >;
   /** Flushes the pending autosave. Resolves to the project path when known. */
   saveNow: () => Promise<string | undefined>;
   /** Saves, then leaves to the Library. Resolves false when the save failed. */
@@ -5422,6 +5426,7 @@ export function VisualEditorPrototype({
         // listener, so it stops answering them with EDITOR_UNAVAILABLE.
         onRegisterMcpProjectBridgeRef.current?.({
           currentBundle: () => bundleRef.current,
+          captureSceneView: requestSceneScreenshot,
           saveNow: () =>
             mcpProjectBridgeActionsRef.current?.saveNow() ??
             Promise.resolve(undefined),
@@ -5443,7 +5448,7 @@ export function VisualEditorPrototype({
       unlisten?.();
       onRegisterMcpProjectBridgeRef.current?.(null);
     };
-  }, [mcpNativeAvailable]);
+  }, [mcpNativeAvailable, requestSceneScreenshot]);
   const assetImportPanelAvailability = resolveAssetOperationAvailability(
     "asset-import",
     {
@@ -11345,11 +11350,12 @@ export function VisualEditorPrototype({
     if (mcpNativeAvailable) return;
     onRegisterMcpProjectBridgeRef.current?.({
       currentBundle: () => bundleRef.current,
+      captureSceneView: requestSceneScreenshot,
       saveNow: () => mcpProjectBridgeActionsRef.current?.saveNow() ?? Promise.resolve(undefined),
       leave: () => mcpProjectBridgeActionsRef.current?.leave() ?? Promise.resolve(false),
     });
     return () => { onRegisterMcpProjectBridgeRef.current?.(null); };
-  }, [mcpNativeAvailable]);
+  }, [mcpNativeAvailable, requestSceneScreenshot]);
 
   const kindLabel = projectKind === "world" ? "ワールド" : "アイテム";
   const KindIcon = projectKind === "world" ? EDITOR_ICONS.world : EDITOR_ICONS.item;
