@@ -24,3 +24,14 @@ test('missing, malformed and ambiguous IDs never open another project', () => {
   for (const id of ['../one', 'one/two', '', 'one%2Ftwo', 'one?x=1']) assert.throws(() => routing.validateStudioProjectId(id), /不正/);
   assert.throws(() => routing.studioProjectIdFromUrl('/editor/one%2Ftwo'), /不正/);
 });
+
+test('new links create explicitly and replace themselves with persistent project links', () => {
+  for (const route of ['/new', '/new/', '/xrift-studio/new/', '/#/new', '/editor.html?new=1']) assert.deepEqual(routing.studioLaunchFromUrl(route), {kind:'new',name:'新しいワールド'});
+  assert.deepEqual(routing.studioLaunchFromUrl('/new?name=秋の公園'), {kind:'new',name:'秋の公園'});
+  assert.deepEqual(routing.studioLaunchFromUrl('/editor.html'), {kind:'library'});
+  assert.throws(() => routing.studioLaunchFromUrl('/new?project=project-existing'), /同時/);
+  assert.throws(() => routing.studioLaunchFromUrl('/new?name='+ 'a'.repeat(81)), /80/);
+  const saved = routing.browserProjectEditorUrl('project-created', 'https://example.test/xrift-studio/new/?new=1&name=test');
+  assert.equal(saved, 'https://example.test/xrift-studio/editor.html?project=project-created');
+  assert.deepEqual(routing.studioLaunchFromUrl(saved), {kind:'project',projectId:'project-created'});
+});

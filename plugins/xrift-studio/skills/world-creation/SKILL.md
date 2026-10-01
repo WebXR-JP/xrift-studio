@@ -5,7 +5,7 @@ description: XRift Studioで会話から3Dワールドを新規制作したり�
 
 # XRift Studioでワールドを作る
 
-利用者の制作依頼を、Studioの実際のdocument toolで形にする。新規制作では`create_world`を呼び、反映報告と画像を待ってから`edit_world({operations})`を続けて呼ぶ。既存作品は開いているStudioの最新データを使う。`get_editor_context`で対象を確認し、対象がなければ作品を開く操作を案内する。
+利用者の制作依頼を、Studioの実際のdocument toolで形にする。新規制作では`create_world`を呼び、反映報告と画像を待ってから`edit_world({operations})`を続けて呼ぶ。既存作品は開いているStudioの最新データを使う。`get_editor_context`で対象を確認し、activeProjectIdがnullでも新規制作は可能。新規制作の依頼ならcreate_worldをすぐ呼び、作品の作成・保存・表示まで続ける。「まずプロジェクトを開いてください」で止まらない。既存作品への編集を頼まれた場合だけ、対象のprojectIdを確認して開く。open_studioは引数なしで新規作成して直接エディターへ入る。mode: resumeまたはprojectIdで再開する。/newからも新規作成できる。
 
 使うdocument toolのschemaを`describe_document_tool`で確認する。`edit_world.operations`に`tool`と通常の`arguments`を並べる。projectId・sceneId・expectedRevisionはStudioが各操作に補う。最大200操作を一つのバッチで適用し、revisionを一度進める。bundleを省略すれば手動編集後も現在のデータを使う。
 

@@ -20,12 +20,29 @@ export function studioProjectIdFromUrl(value: string): string | null {
   return validateStudioProjectId(decodeURIComponent(match[1]));
 }
 
+export function studioLaunchFromUrl(value: string): { kind: 'new'; name: string } | { kind: 'project'; projectId: string } | { kind: 'library' } {
+  const url = new URL(value, 'https://studio.invalid');
+  const route = url.hash.startsWith('#/') ? url.hash.slice(1) : url.pathname;
+  const create = /\/new\/?$/.test(route) || url.searchParams.get('new') === '1';
+  const projectId = studioProjectIdFromUrl(value);
+  if (create && projectId) throw new Error('新規作成と既存作品の指定を同時に使えません。');
+  if (create) {
+    const name = url.searchParams.get('name')?.trim() || '新しいワールド';
+    if (name.length > 80) throw new Error('プロジェクト名は80文字までです。');
+    return { kind: 'new', name };
+  }
+  return projectId ? { kind: 'project', projectId } : { kind: 'library' };
+}
+
 /** editor.html stays directly addressable on GitHub Pages without a rewrite rule. */
 export function browserProjectEditorUrl(projectId: string | null, baseUrl: string): string {
   const url = new URL(baseUrl);
   url.pathname = url.pathname.replace(/\/editor\/[^/]+\/?$/, '/editor.html');
+  url.pathname = url.pathname.replace(/\/new\/?$/, '/editor.html');
   if (!url.pathname.endsWith('/chatgpt.html')) url.pathname = url.pathname.replace(/[^/]*$/, 'editor.html');
   url.searchParams.delete('kind');
+  url.searchParams.delete('new');
+  url.searchParams.delete('name');
   url.searchParams.delete('project');
   url.hash = '';
   if (projectId) url.searchParams.set('project', validateStudioProjectId(projectId));

@@ -67,3 +67,24 @@ test('project opening targets a validated ID and generated links retain the same
   assert.equal((await callTool('open_studio', {})).localProjects, true);
   await assert.rejects(() => callTool('open_studio', {projectId:'../other'}), /不正/);
 });
+
+test('new worlds need no active project or name and each new request gets its own ID', async () => {
+  const first = await callTool('create_world', {});
+  const second = await callTool('open_studio', {mode:'new'});
+  assert.equal(first.bundle.project.metadata.name, '新しいワールド');
+  assert.notEqual(first.projectId, second.projectId);
+  assert.equal(first.delivery.status, 'awaiting_studio_verification');
+  assert.equal((await callTool('open_studio', {})).launch, 'new');
+  assert.equal((await callTool('open_studio', {mode:'resume'})).launch, 'resume');
+  await assert.rejects(callTool('open_studio', {mode:'new',projectId:first.projectId}), /同時/);
+  await assert.rejects(callTool('open_studio', {mode:'unknown'}), /不正/);
+  await assert.rejects(callTool('create_world', {name:''}));
+});
+
+test('Sites new entry redirects without touching saved projects or assets', async () => {
+  const {default:worker} = await server.ssrLoadModule('/packages/xrift-studio-cloud/worker.ts');
+  const response = await worker.fetch(new Request('https://example.test/new?name=秋の公園'), {ASSETS:{fetch(){throw new Error('Unexpected asset access');}}});
+  assert.equal(response.status,307);
+  const url = new URL(response.headers.get('location'));
+  assert.equal(url.pathname, '/editor.html'); assert.equal(url.searchParams.get('new'),'1'); assert.equal(url.searchParams.get('name'),'秋の公園');
+});

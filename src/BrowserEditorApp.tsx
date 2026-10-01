@@ -17,7 +17,7 @@ import { imageDataUrlToPng } from "./lib/project-thumbnail";
 import { tauri } from "./lib/tauri";
 import type { ProjectKind } from "./preview/content";
 import type { BrowserStoredProject } from './lib/browser-project-storage';
-import { browserProjectEditorUrl, prepareStudioProjectImport, resolveStudioProject, studioProjectIdFromUrl } from './lib/browser-project-routing';
+import { browserProjectEditorUrl, prepareStudioProjectImport, resolveStudioProject, studioLaunchFromUrl } from './lib/browser-project-routing';
 
 const VisualEditorPrototype = lazy(() =>
   import("./components/visual-editor/VisualEditorPrototype").then((module) => ({
@@ -231,6 +231,24 @@ export default function BrowserEditorApp({ host }: { host?: BrowserStudioHost } 
     }
   };
 
+  const applyBrowserBundle = async (bundle: PrototypeVisualProject): Promise<string> => {
+    const session = activeSession.current;
+    if (session?.initialBundle.project.projectId === bundle.project.projectId) {
+      await session.save(bundle);
+      setEditorInitialBundle(bundle);
+      setExternalGeneration(value => value + 1);
+      return session.path;
+    }
+    const [storage, transferTools] = await Promise.all([import('./lib/browser-project-storage'), import('./lib/visual-editor/browser-project-transfer')]);
+    const documents: VisualProjectDocuments = { project: bundle.project, scenes: { [bundle.scene.sceneId]: bundle.scene }, assets: bundle.assets, prefabs: bundle.prefabs };
+    const matches = (await storage.listBrowserProjects()).filter(project => project.projectId === bundle.project.projectId);
+    if (matches.length > 1) throw new Error('同じプロジェクトIDの作品が複数あります。作品一覧から対象を開いてください。');
+    const path = matches[0]?.path ?? await storage.createBrowserProject(transferTools.browserProjectDocumentFiles(documents), { activate: false });
+    await openStoredBrowserProject(path, false);
+    if (matches[0]) { await activeSession.current!.save(bundle); setEditorInitialBundle(bundle); setExternalGeneration(value => value + 1); }
+    return path;
+  };
+
   const createProject = async (projectKind: ProjectKind, name: string) => {
     if (transferActive.current) return;
     transferActive.current = true;
@@ -238,15 +256,9 @@ export default function BrowserEditorApp({ host }: { host?: BrowserStudioHost } 
     retryTransfer.current = () => { void createProject(projectKind, name); };
     try {
       await closingSession.current;
-      const [storage, transferTools, { createPrototypeProject }] = await Promise.all([
-        import("./lib/browser-project-storage"),
-        import("./lib/visual-editor/browser-project-transfer"),
-        import("./lib/visual-editor/prototype-project"),
-      ]);
-      const bundle = createPrototypeProject(projectKind, name);
-      const documents: VisualProjectDocuments = { project: bundle.project, scenes: { [bundle.scene.sceneId]: bundle.scene }, assets: bundle.assets, prefabs: bundle.prefabs };
-      const path = await storage.createBrowserProject(transferTools.browserProjectDocumentFiles(documents), { activate: false });
-      await openStoredBrowserProject(path);
+      const { createPrototypeProject } = await import('./lib/visual-editor/prototype-project');
+      const path = await applyBrowserBundle(createPrototypeProject(projectKind, name));
+      await hostRef.current?.onProjectChange(path);
       setTransfer(null);
       requestAnimationFrame(() => window.scrollTo({ top: 0 }));
     } catch (error) {
@@ -255,13 +267,17 @@ export default function BrowserEditorApp({ host }: { host?: BrowserStudioHost } 
   };
 
   useEffect(() => {
-    // Only list metadata at startup. A broken project must not trap the author
-    // in an automatic restore loop; opening and creating require a choice.
+    // Explicit /new and project links select the startup action. The ordinary
+    // entry lists metadata without restoring an unrelated or broken project.
     if (startupStarted.current) return;
     startupStarted.current = true;
     void refreshBrowserProjects();
     if (!hostRef.current) {
-      try { const projectId = studioProjectIdFromUrl(window.location.href); if (projectId) void openProjectRoute(projectId); }
+      try {
+        const launch = studioLaunchFromUrl(window.location.href);
+        if (launch.kind === 'new') void createProject('world', launch.name);
+        else if (launch.kind === 'project') void openProjectRoute(launch.projectId);
+      }
       catch (error) { setTransfer({ phase: 'failed', operation: 'open', message: error instanceof Error ? error.message : 'プロジェクトIDが不正です。' }); }
     }
     hostRef.current?.onReady({
@@ -274,23 +290,7 @@ export default function BrowserEditorApp({ host }: { host?: BrowserStudioHost } 
         catch (error) { setTransfer({ phase: 'failed', operation: 'open', message: error instanceof Error ? error.message : 'プロジェクトを開けませんでした。' }); throw error; }
         finally { transferActive.current = false; }
       },
-      apply: async (bundle) => {
-        const session = activeSession.current;
-        if (session?.initialBundle.project.projectId === bundle.project.projectId) {
-          await session.save(bundle);
-          setEditorInitialBundle(bundle);
-          setExternalGeneration(value => value + 1);
-          return session.path;
-        }
-        const [storage, transferTools] = await Promise.all([import('./lib/browser-project-storage'), import('./lib/visual-editor/browser-project-transfer')]);
-        const documents: VisualProjectDocuments = { project: bundle.project, scenes: { [bundle.scene.sceneId]: bundle.scene }, assets: bundle.assets, prefabs: bundle.prefabs };
-        const matches = (await storage.listBrowserProjects()).filter(project => project.projectId === bundle.project.projectId);
-        if (matches.length > 1) throw new Error('同じプロジェクトIDの作品が複数あります。作品一覧から対象を開いてください。');
-        const path = matches[0]?.path ?? await storage.createBrowserProject(transferTools.browserProjectDocumentFiles(documents), { activate: false });
-        await openStoredBrowserProject(path, false);
-        if (matches[0]) { await activeSession.current!.save(bundle); setEditorInitialBundle(bundle); setExternalGeneration(value => value + 1); }
-        return path;
-      },
+      apply: applyBrowserBundle,
     });
     return () => { void activeSession.current?.close(); };
   }, []);

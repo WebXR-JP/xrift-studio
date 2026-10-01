@@ -8,7 +8,7 @@ let latestOperationId: string | undefined;
 const receipts: unknown[] = [];
 async function connect() {
   if (host) await host.close();
-  host = new AppBridge(null, { name: '検証専用ホスト', version: '1' }, { message: { text: {}, image: {} }, updateModelContext: { text: {}, structuredContent: {} } }, { hostContext: { theme: 'light', displayMode: 'inline', availableDisplayModes: ['inline', 'fullscreen'] } });
+  host = new AppBridge(null, { name: '検証専用ホスト', version: '1' }, { message: { text: {}, image: {} }, updateModelContext: { text: {}, structuredContent: {} } }, { hostContext: { theme: 'light', displayMode: 'inline', availableDisplayModes: ['inline', 'fullscreen'], ...(new URLSearchParams(location.search).has('deep-new') ? { 'openai/deepLink': {url:'/new?name=ChatGPT新規起動・検証専用'} } : {}) } });
   host.onrequestdisplaymode = async ({ mode }) => { host.setHostContext({ displayMode: mode }); document.querySelector('#connection')!.textContent = `接続済み / ${mode}`; return { mode }; };
   host.onmessage = async ({ content }) => {
     const text = content.find(item => item.type === 'text');
@@ -18,8 +18,8 @@ async function connect() {
     document.querySelector('#receipts')!.textContent = JSON.stringify(receipts, null, 2);
     return (document.querySelector('#reject') as HTMLInputElement).checked ? { isError: true } : {};
   };
-  host.onupdatemodelcontext = async () => ({});
-  host.oninitialized = () => { document.querySelector('#connection')!.textContent = '接続済み'; void host.sendToolInput({ arguments: {} }); };
+  host.onupdatemodelcontext = async ({structuredContent}) => { if (structuredContent?.bundle) result = structuredContent as unknown as StudioResult; return {}; };
+  host.oninitialized = () => { document.querySelector('#connection')!.textContent = '接続済み'; void (async () => { await host.sendToolInput({ arguments: {} }); if(new URLSearchParams(location.search).has('auto-new')) await host.sendToolResult({content:[],structuredContent:await callTool('open_studio',{})}); })(); };
   await host.connect(new PostMessageTransport(frame.contentWindow!, frame.contentWindow!));
   frame.src = new URLSearchParams(location.search).has('build') ? '/dist/client/chatgpt.html' : '/chatgpt.html';
 }
@@ -29,7 +29,7 @@ async function send() {
 }
 document.querySelector('#create')!.addEventListener('click', async () => { result = await callTool('create_world', { name: '反映確認・検証専用' }) as StudioResult; await send(); });
 document.querySelector('#edit')!.addEventListener('click', async () => {
-  if (!result) return;
+  if (!result) { await host.sendToolResult({content:[], structuredContent:await callTool('edit_world',{operations:[{tool:'create_primitive',ref:'trunk',arguments:{shape:'cylinder',position:[-2,1,0]}},{tool:'update_transform',arguments:{entityId:'$trunk',scale:[0.3,2,0.3]}}]})}); return; }
   const cube = Object.values(result.bundle.scene.entities).find(entity => entity.name === '立方体')!;
   const command = await callTool('edit_world', { operations: [{ tool: 'update_transform', arguments: { entityId: cube.id, position: [2, 1, 0] } }, { tool: 'create_primitive', ref: 'trunk', arguments: { shape: 'cylinder', name: '秋の木の幹', position: [-2, 1, 0] } }, { tool: 'update_transform', arguments: { entityId: '$trunk', scale: [0.3, 2, 0.3] } }] });
   await host.sendToolResult({ content: [], structuredContent: command });

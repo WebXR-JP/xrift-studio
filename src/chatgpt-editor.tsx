@@ -11,7 +11,7 @@ import type { VisualProjectDocuments } from './lib/visual-editor/persistence';
 import { createBrowserProject, getBrowserProjectFiles, readStudioRecovery, writeStudioRecovery } from './lib/browser-project-storage';
 import { parseStudioResult, verifyStudioResult, addReceipt, emptyRecovery, type StudioResult, type StudioRecovery, type StudioReceipt } from './lib/visual-editor/chatgpt-delivery';
 import { browserProjectDocumentFiles, parseBrowserProjectFiles } from './lib/visual-editor/browser-project-transfer';
-import { studioProjectIdFromUrl, validateStudioProjectId } from './lib/browser-project-routing';
+import { studioLaunchFromUrl, validateStudioProjectId } from './lib/browser-project-routing';
 import './index.css';
 import './preview.css';
 const app = new App({ name: 'XRift Studio', version: '0.1.1' });
@@ -105,7 +105,7 @@ function Application() {
   }
   function select(next: Local) { current.current = next; setLocal(next); }
   async function context(next: Local, bundle = bundleFrom(next.documents)) {
-    await app.updateModelContext({ content: [{ type: 'text', text: `編集対象: ${bundle.project.metadata.name}。このbundleとrevisionをedit_worldに渡してください。Studioの反映報告と画像が届くまで完了扱いにしないでください。素材のバイト列は含みません。` }], structuredContent: { bundle: validateBundle(bundle), revision: next.revision, projectId: bundle.project.projectId, studioHistory: recovery.current.history } });
+    await app.updateModelContext({ content: [{ type: 'text', text: `編集対象: ${bundle.project.metadata.name}。edit_worldはoperationsだけで編集できます。現在のprojectIdとrevisionを対象・競合の確認に使ってください。Studioの反映報告と画像が届くまで完了扱いにしないでください。素材のバイト列は含みません。` }], structuredContent: { bundle: validateBundle(bundle), revision: next.revision, projectId: bundle.project.projectId, studioHistory: recovery.current.history } });
   }
   async function captureSceneViewForConversation(operationId?: string) {
     const editor = bridge.current;
@@ -214,9 +214,10 @@ function Application() {
     const url = extensions.deepLink.getCurrent()?.url;
     if (!url || url === lastDeepLink.current) return;
     lastDeepLink.current = url;
-    const projectId = studioProjectIdFromUrl(url);
-    if (!projectId) throw new Error('作品へのリンクが不正です。作品一覧から開いてください');
-    await openTarget(projectId);
+    const launch = studioLaunchFromUrl(url);
+    if (launch.kind === 'new') await accept(await callTool('create_world', { name: launch.name }) as Record<string, unknown>);
+    else if (launch.kind === 'project') await openTarget(launch.projectId);
+    else throw new Error('作品へのリンクが不正です。作品一覧から開いてください');
   }
   const setup = useRef(false);
   React.useEffect(() => {
@@ -238,6 +239,12 @@ function Application() {
       const data = (result.structuredContent ?? {}) as Record<string, unknown>;
       received.current = received.current.then(async () => {
         await initialized.current;
+        if (data.localProjects === true) {
+          // A deep link already selects/creates its target during host startup.
+          // Do not create a second project from the global entry's default result.
+          if (data.launch === 'new' && !extensions.deepLink.getCurrent()?.url) await accept(await callTool('create_world', {}) as Record<string, unknown>);
+          return;
+        }
         if (data.studioCommand) { await command(data.studioCommand as Record<string, unknown>); return; }
         if (data.captureSceneView === true) {
           await captureSceneViewForConversation(typeof data.operationId === 'string' ? data.operationId : undefined);
@@ -294,7 +301,7 @@ function Application() {
       const result = name === 'get_operation_status' ? { operationId: command.operationId, receipt: recovery.current.history.find(item => item.operationId === command.operationId) ?? null, recoverable: !!recovery.current.operations?.[String(command.operationId)] } : { connected: true, mode: 'edit', projectId: active?.documents.project.projectId ?? null, sceneId: active?.documents.project.entrySceneId ?? null, revision: active?.revision ?? null, hash: active ? await bundleHash(bridge.current?.currentBundle() ?? bundleFrom(active.documents)) : null };
       const requested = name === 'get_operation_status' ? recovery.current.operations?.[String(command.operationId)]?.bundle.project.projectId : active?.documents.project.projectId;
       const studioState = { connected: hostReady.current, activeProjectId: active?.documents.project.projectId ?? null, projectMatched: !!requested && requested === active?.documents.project.projectId && requested === bridge.current?.currentBundle().project.projectId };
-      await app.sendMessage({ role: 'user', content: [{ type: 'text', text: JSON.stringify({ studioContext: { ...result, ...studioState }, requestId: command.requestId }) }] }); return;
+      await app.sendMessage({ role: 'user', content: [{ type: 'text', text: JSON.stringify({ studioContext: { ...result, ...studioState, canCreateProject: true, canEditProject: !!active && !!bridge.current }, instruction: active ? 'この作品への編集を続けられます。新規制作の依頼はcreate_worldで別の作品を作成してください。' : '新規制作は可能です。activeProjectIdがnullでもcreate_worldをすぐ呼び、自動作成・反映確認まで続けてください。手動で作品を開くよう依頼して止まらないでください。既存作品への編集だけはprojectIdで対象を確認してください。', requestId: command.requestId }) }] }); return;
     }
     if (name === 'retry_world') {
       const result = recovery.current.operations?.[String(command.operationId)] ?? recovery.current.pending;
