@@ -63,7 +63,7 @@ test("検索失敗時にも目次・再試行を残す",async({page})=>{
 
 test("JavaScriptなしでも本文・次の手順・目次を読める",async({browser,baseURL})=>{
  const context=await browser.newContext({javaScriptEnabled:false,baseURL});const page=await context.newPage();
- await page.goto("/guide/materials.html");await expect(page.getByText("Base Color（基本色）は",{exact:false})).toBeVisible();
+ await page.goto("/guide/materials.html");await expect(page.getByText("Base Colorは、非金属では表面の色、金属では反射の色を設定します。",{exact:false})).toBeVisible();
  await expect(page.locator(".guide-next")).toBeVisible();await context.close();
 });
 

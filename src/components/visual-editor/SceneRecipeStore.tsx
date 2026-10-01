@@ -56,7 +56,7 @@ export function SceneRecipeStore({
     [projectKind, shelf],
   );
   const title = shelf === "materials" ? "glTFマテリアル" : shelf === "gimmicks" ? "ギミック" : "3Dセット";
-  const description = shelf === "materials" ? "反射・透過・Emissive・テクスチャの違いを、同じモデルで比較します。" : shelf === "gimmicks" ? "扉・照明・音・演出。操作と編集の手順が付いた、動くサンプルです。" : "家具や装飾など、組み立て済みの3Dを配置できます。";
+  const description = shelf === "materials" ? "同じモデルで、反射、透過、発光、テクスチャの違いを比較できます。" : shelf === "gimmicks" ? "扉、照明、音、演出を設定したサンプルです。操作と編集の手順も確認できます。" : "家具や装飾などを組み合わせた3Dセットを配置できます。";
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
   const [texturesOnly, setTexturesOnly] = useState(false);
@@ -315,7 +315,7 @@ export function SceneRecipeStore({
                 {contents.text > 0 ? <li>文字 {contents.text} 枚</li> : null}
                 {contents.graph > 0 ? (
                   <li>
-                    しかけ {contents.graph} 本（ノードグラフ素材として追加します）
+                    しかけ {contents.graph} 本（Node Graph素材として追加します）
                   </li>
                 ) : null}
                 {usesTextures(selected) ? <li>使用するPBRテクスチャもAssetsに追加します</li> : null}

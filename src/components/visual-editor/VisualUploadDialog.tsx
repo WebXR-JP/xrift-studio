@@ -654,7 +654,7 @@ export function VisualUploadDialog({
                       読み込み 約
                       {formatVramBytes(review.vramEstimate.loadBytes)}
                       {" / "}
-                      VRAM 約
+                      VRAM約
                       {formatVramBytes(review.vramEstimate.runtimeLowBytes)}〜
                       {formatVramBytes(review.vramEstimate.runtimeHighBytes)}
                       {" / "}
@@ -746,8 +746,8 @@ export function VisualUploadDialog({
                 公開結果をプロジェクトに保存します。
               </p>
               <dl className="mx-auto mt-5 grid max-w-md grid-cols-[120px_minmax(0,1fr)] gap-x-3 gap-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4 text-left text-xs">
-                {projectKind === "world" && result?.worldId ? <><dt className="text-slate-500">ワールド ID</dt><dd className="truncate font-mono text-slate-800">{result.worldId}</dd></> : null}
-                {projectKind === "item" && result?.itemId ? <><dt className="text-slate-500">アイテム ID</dt><dd className="truncate font-mono text-slate-800">{result.itemId}</dd></> : null}
+                {projectKind === "world" && result?.worldId ? <><dt className="text-slate-500">ワールドID</dt><dd className="truncate font-mono text-slate-800">{result.worldId}</dd></> : null}
+                {projectKind === "item" && result?.itemId ? <><dt className="text-slate-500">アイテムID</dt><dd className="truncate font-mono text-slate-800">{result.itemId}</dd></> : null}
                 {!result?.worldId && !result?.itemId && result?.contentId ? <><dt className="text-slate-500">Content ID</dt><dd className="truncate font-mono text-slate-800">{result.contentId}</dd></> : null}
                 {result?.versionId ? <><dt className="text-slate-500">Version ID</dt><dd className="truncate font-mono text-slate-800">{result.versionId}</dd></> : null}
                 {result?.versionNumber !== undefined ? <><dt className="text-slate-500">バージョン</dt><dd className="text-slate-800">{result.versionNumber}</dd></> : null}

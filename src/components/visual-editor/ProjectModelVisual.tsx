@@ -891,7 +891,7 @@ export function applyAssignedMaterialPreviews(
               renderer: "gltf-pbr",
               reason: "shader-load-error",
               brushName: assignment.material.shader.brushName,
-              message: "Vertex or fragment シェーダー has no void main() entrypoint",
+              message: "頂点シェーダーまたはフラグメントシェーダーにvoid main()がありません",
             });
             ownedMaterials.push(fallback);
             return fallback;
@@ -1729,7 +1729,7 @@ async function parseSelfContainedModel(
   const openBrush = detectOpenBrushGltfDocument(document);
   if (hasExternalResources(document, openBrush !== undefined)) {
     throw new Error(
-      "外部ファイルを参照するglTFは表示できません。GLBまたは自己完結glTFを使用してください",
+      "外部ファイルを参照するglTFは表示できません。GLBか、必要なデータを含むglTFを使ってください",
     );
   }
 

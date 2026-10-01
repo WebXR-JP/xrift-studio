@@ -41,7 +41,7 @@
 
 ## 実施した確認
 
-`validate_assets.py` で32点についてGLBヘッダー・長さ・JSON/BINアライメント・BufferView / Accessorの範囲・頂点属性数・三角形のインデックス・座標の有限性・法線と接線の長さと直交性・画像の読み出し・PBR係数・参照の整合性を検査しました。大きく裏返った法線がないことも確認しています。スムーズ法線の局所的なずれの件数は `after.json` に記録しています。
+`validate_assets.py`で32点についてGLBヘッダー・長さ・JSON/BINアライメント・BufferView / Accessorの範囲・頂点属性数・三角形のインデックス・座標の有限性・法線と接線の長さと直交性・画像の読み出し・PBR係数・参照の整合性を検査しました。大きく裏返った法線がないことも確認しています。スムーズ法線の局所的なずれの件数は`after.json`に記録しています。
 
 既存29点のバウンディングボックスは元データと各軸0.15mm以内で一致します。これは配置位置が自動的に移行されることや、形状が元モデルと同一であることを保証するものではありません。
 
@@ -49,7 +49,7 @@
 
 Node回帰テスト8件は、ハッシュ、モデル参照、焚き火・噴水・井戸のレシピ設定、リソース破棄の重複防止、非ImageBitmapへの対応、読み込み待ち・遅延完了処理のコード上の存在を確認しています。Reactの画面操作を再現したテストではありません。
 
-変更TS/TSXの構文チェック結果は `typescript-syntax.json`、回帰テスト結果は `node-tests.tap`、構造検査の集計は `validation.json` です。
+変更TS/TSXの構文チェック結果は`typescript-syntax.json`、回帰テスト結果は`node-tests.tap`、構造検査の集計は`validation.json`です。
 
 ## 比較で分かること・分からないこと
 
@@ -59,7 +59,7 @@ Node回帰テスト8件は、ハッシュ、モデル参照、焚き火・噴水
 
 ## 未実施
 
-Blender本体は導入できず、ネイティブな `.blend` の保存と同梱再構築スクリプトの実行は未実施です。公式Khronos glTF Validatorも実行していません。`pnpm typecheck` は `pnpm: command not found` で開始できず、Vite / Tauri / XR端末 / 公開先での検証もしていません。本番ビルド、インストーラ生成、GitHubへの反映はしていません。
+Blender本体は導入できず、ネイティブな`.blend`の保存と同梱再構築スクリプトの実行は未実施です。公式Khronos glTF Validatorも実行していません。`pnpm typecheck`は`pnpm: command not found`で開始できず、Vite / Tauri / XR端末 / 公開先での検証もしていません。本番ビルド、インストーラ生成、GitHubへの反映はしていません。
 
 ## 見た目の確認
 

@@ -1,51 +1,60 @@
 # XRift Studio Agent Guide
 
-Codex と Claude Code の共通ルール。現在の依頼に関係する資料だけを読む。
+CodexとClaude Codeで使う共通の作業ルールです。依頼に関係する資料を読んでから作業してください。
 
 ## プロジェクトの原則
 
-- React 19・TypeScript・Vite・Tailwind CSS と Tauri v2 を使う。IPC は `src/lib/tauri.ts` の型付きラッパーへ分離する。
-- 依存変更は Takumi Guard の設定に従い、ロックファイルを更新する。
-- `Entity / Inspector / Hierarchy / Assets / Components` と定着した glTF・3D 用語は英語で残し、説明は短い自然な日本語にする。
-- Markdown、画面文言、コミットメッセージでは絵文字を使わない。
-- 公式 Component と 3D Asset は実際の描画経路で表示する。架空の画像や成功したように見えるモックを実機能として扱わない。
-- 制作中に見えている内容をそのまま公開する。編集・Play・公開は同じ素材と描画コードを使い、公開専用の材質置換、色補正、形状変更、画像の自動縮小・圧縮を加えない。共通化と検証の契約は [実装時に守る契約](./docs/AGENT_IMPLEMENTATION.md#rendering-parity) に従う。
-- 既存作品、パス検証、権限制御を保つ。依頼外の機能や体験を追加しない。
+React 19、TypeScript、Vite、Tailwind CSS、Tauri v2を使います。IPCの呼び出しは、`src/lib/tauri.ts`の型付きラッパーにまとめてください。依存パッケージを変更する場合は、Takumi Guardの設定に従ってロックファイルも更新します。
+
+画面ではEntity、Inspector、Hierarchy、Assets、Componentsの名前を使います。glTFや3D制作で定着した用語も保ち、操作の説明は自然な日本語で書いてください。Markdown、画面文言、コミットメッセージに絵文字は使いません。
+
+公式Componentと3D Assetは、アプリで使う描画処理を通して表示してください。架空の画像や成功を装ったモックを、実装済みの機能として扱いません。
+
+編集・Play・公開には同じ素材と描画コードを使います。作者が見ている内容をそのまま公開できるよう、公開時だけの材質置換、色補正、形状変更、画像の自動縮小・圧縮は加えません。共通化と検証は[描画の契約](./docs/AGENT_IMPLEMENTATION.md#rendering-parity)に従ってください。
+
+既存作品、パスの検証、権限の制御を保ちます。依頼されていない機能や体験は追加しません。
 
 ## 意思決定と完了
 
-- 調査、依頼範囲の編集、ローカルコミット、隔離した作業用データでの検証は継続して進める。既存作品と分離できたことを確認してから書き込み検証を行う。
-- 実装、影響に応じた検証、今回の変更に起因する問題の修正までを完了条件とする。初回実装だけで確認待ちにしない。
-- 依頼されたローカルビルドや成果物作成は同じ許可を再度求めない。公開・配布は別の操作として扱う。
-- PR の依頼は作業ブランチへの Push と PR 作成を含む。main への直接 Push、マージ、公開・配布、外部送信は依頼に含まれる場合だけ実行する。
-- 依頼外の破壊的変更、既存作品の削除・初期化、公開先の変更、本人による認証が必要な場合は対象と理由を示して確認する。進められる作業は先に終える。
-- 実行環境の権限を守る。接続や検証環境が利用できなければ、実施済みと未検証を区別して報告する。
+調査、依頼された編集、ローカルコミット、隔離した作業用データでの検証は続けて進めてください。書き込みを伴う検証では、作業用データが既存作品と分かれていることを先に確認します。
+
+作業は、実装と必要な検証を終え、今回の変更で生じた問題を修正した時点で完了です。実装直後に確認待ちで止めないでください。依頼済みのローカルビルドや成果物の作成も、同じ許可を取り直す必要はありません。公開・配布は別途判断します。
+
+PRの依頼には、作業ブランチへのPushとPR作成が含まれます。mainへの直接Push、マージ、公開・配布、外部送信は、依頼に含まれる場合だけ実行してください。
+
+依頼外の破壊的な変更、既存作品の削除・初期化、公開先の変更、本人による認証が必要な場合は、対象と理由を示して確認します。その確認を必要としない作業は先に終えてください。
+
+実行環境の権限に従います。接続先や検証環境を利用できない場合は、確認した内容と未検証の内容を分けて報告してください。
 
 ## 作業別の参照
 
-| 変更対象 | 必要な資料 |
+| 変更対象 | 読む資料 |
 |---|---|
-| UI・状態遷移 | `.agents/skills/xrift-studio-ux/SKILL.md`、`docs/AGENT_IMPLEMENTATION.md` の UI 節 |
-| Component・Graph・公開物 | `docs/AGENT_IMPLEMENTATION.md` の該当節、`docs/SCRIPTING.md` |
-| Scene 更新・描画性能 | `docs/AGENT_IMPLEMENTATION.md` の Scene 節 |
-| MCP・Rust コマンド | `docs/AGENT_IMPLEMENTATION.md` の MCP 節、`docs/MCP_EDITOR_TOOLS.md` |
-| 機能追加・IPC 連携 | `docs/AGENT_IMPLEMENTATION.md` の IPC・CLI 節 |
-| 日本語の作成・推敲 | `.agents/skills/japanese-writing/SKILL.md`。誤字だけなら対象文と差分を確認 |
+| UI・状態遷移 | `.agents/skills/xrift-studio-ux/SKILL.md`、`docs/AGENT_IMPLEMENTATION.md`のUI節 |
+| Component・Graph・公開物 | `docs/AGENT_IMPLEMENTATION.md`の該当節、`docs/SCRIPTING.md` |
+| Sceneの更新・描画性能 | `docs/AGENT_IMPLEMENTATION.md`のScene節 |
+| MCP・Rustコマンド | `docs/AGENT_IMPLEMENTATION.md`のMCP節、`docs/MCP_EDITOR_TOOLS.md` |
+| 機能追加・IPC連携 | `docs/AGENT_IMPLEMENTATION.md`のIPC・CLI節 |
+| 日本語の作成・推敲 | `docs/JAPANESE_WRITING.md`で画面名と専門用語を確認 |
 | コード・画面の検証 | `.agents/skills/xrift-studio-verify/SKILL.md` |
-| Tauri MCP 接続 | `docs/AGENT_TAURI_MCP.md` |
+| Tauri MCPの接続 | `docs/AGENT_TAURI_MCP.md` |
 | 不具合の再現・修正 | `.agents/skills/xrift-studio-error-recovery/SKILL.md` |
-| ワールド制作・調整 | `.agents/skills/xrift-world-direction/SKILL.md` |
-| 3D モデル制作・取込 | `.agents/skills/xrift-mcp-blender-modeling/SKILL.md` |
-| リリース動画 | `.agents/skills/xrift-release-promo-video/SKILL.md` |
+| ワールドの制作・調整 | `.agents/skills/xrift-world-direction/SKILL.md` |
+| 3Dモデルの制作・取り込み | `.agents/skills/xrift-mcp-blender-modeling/SKILL.md` |
+| リリース紹介動画 | `.agents/skills/xrift-release-promo-video/SKILL.md` |
 
-開発環境とコマンドは `DEVELOPMENT.md` を参照する。文書だけの変更では型チェックや実機起動を一律に行わず、内容・リンク・スキルの同期を確認する。
+開発環境とコマンドは`DEVELOPMENT.md`にあります。文書だけを変更した場合は、内容・リンク・スキルの同期を確認してください。型チェックや実機起動は、変更の影響に応じて選びます。
 
 ## 利用ガイドの更新
 
-- 利用者向け機能や操作名を変更したら、同じPRで `docs/guide/` の該当手順、`manifest.json` の目次・検索語・関連ページを確認する。公開ガイドとアプリ内ヘルプはこの原稿を共有する。
-- `reviewedVersion` と `reviewedOn` は実際に確認したソースのバージョンと日付を記録する。画像を更新していない場合は、本文と画像の確認範囲を区別する。
-- mainへのマージ後にPagesのワークフローが公開する。PR作成だけで公開済みとは報告しない。
+利用者向けの機能や操作名を変更したら、同じPRで`docs/guide/`の手順も確認してください。`manifest.json`の目次、検索語、関連ページも対象です。公開ガイドとアプリ内ヘルプには、この原稿を使います。
+
+`reviewedVersion`と`reviewedOn`には、実際に確認したソースのバージョンと日付を記録します。画像を更新していない場合は、本文と画像のどちらを確認したか報告してください。
+
+Pagesのワークフローはmainへのマージ後にガイドを公開します。PRを作成した段階では、公開済みと報告しません。
 
 ## スキルの管理
 
-共通スキルの正本は `.agents/skills/`。`node scripts/sync-agent-skills.mjs` で `.claude/skills/` 互換コピーを同期し、`--check` で差分を検出する。Claude 専用スキルとクライアント別の `agents/` メタデータは同期対象外。詳細な手順や例は必要なときだけ参照し、description には適用条件を短く書く。
+共通スキルは`.agents/skills/`で管理します。変更後は`node scripts/sync-agent-skills.mjs`で`.claude/skills/`へコピーし、`--check`で一致を確認してください。Claude専用スキルと、クライアント別の`agents/`メタデータは同期しません。削除した共通スキルのコピーは残るため、対象を確認して明示的に削除します。
+
+スキルのdescriptionには、使う場面を短く書いてください。詳しい手順や例は参照資料に分けます。日本語は、誰が何をするか、どの条件で操作できるかを明確に書いてください。利用者の環境にYomiyasuがある場合は、文体の推敲に使えます。Yomiyasu本体と推敲の作業ファイルはGitの管理対象から除外します。

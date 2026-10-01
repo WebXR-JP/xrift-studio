@@ -20,7 +20,7 @@ export function ThumbnailEditor({
   publishPreparation = false,
 }: Props) {
   const projectLabel = projectKind === "item" ? "アイテム" : "ワールド";
-  const recommendedSize = projectKind === "item" ? "512×512" : "1024×576 以上";
+  const recommendedSize = projectKind === "item" ? "512×512" : "1024×576以上";
   const [thumb, setThumb] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -189,7 +189,7 @@ export function ThumbnailEditor({
               <span>
                 <span className="block font-semibold">サムネイルを設定しました</span>
                 <span className="mt-0.5 block text-emerald-700">
-                  プロジェクト一覧に反映しました。XRiftには、次の公開時に反映します。
+                  プロジェクト一覧の画像を更新しました。XRift上の画像は次の公開時に更新されます。
                 </span>
               </span>
             </div>

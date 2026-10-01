@@ -52,7 +52,7 @@ test("しかけ付きの3Dセットは、音とグラフごとシーンへ入る
   await expect(tree.getByText("音の出るボタン", { exact: true })).toBeVisible();
   await tree.getByText("ボタン", { exact: true }).click();
 
-  for (const component of ["操作を受け付ける", "音源", "グラフの実行"]) {
+  for (const component of ["Interactable", "Audio Source", "Interaction Trigger"]) {
     await expect(
       page.getByText(component, { exact: true }).first(),
       `${component}が配置されたEntityに載っている`,

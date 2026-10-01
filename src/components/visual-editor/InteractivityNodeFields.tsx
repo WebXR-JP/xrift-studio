@@ -83,7 +83,7 @@ export function LiteralValueField({
           onChange={(event) =>
             onSignatureChange(event.target.value as InteractivityLiteralSignature)
           }
-          aria-label={`${socket} の値の種類`}
+          aria-label={`${socket}の値の種類`}
           className="h-6 rounded border border-slate-600 bg-slate-950 px-1 text-[10px] text-slate-300 disabled:opacity-45"
         >
           {INTERACTIVITY_LITERAL_SIGNATURES.map((entry) => (
@@ -138,7 +138,7 @@ export function LiteralValueField({
               onChange(alpha === null ? [red, green, blue] : [red, green, blue, alpha]);
             }}
             className="h-7 w-10 shrink-0 cursor-pointer rounded border border-slate-600 bg-slate-950 disabled:opacity-45"
-            aria-label={`${socket} の色`}
+            aria-label={`${socket}の色`}
           />
           <code className="text-[10px] text-slate-400">{linearRgbToTint(channels)}</code>
           {alpha === null ? null : (
@@ -154,7 +154,7 @@ export function LiteralValueField({
                 size="sm"
                 compact
                 wrapperClassName="w-16"
-                ariaLabel={`${socket} のA`}
+                ariaLabel={`${socket}のA`}
                 scrubLabel="A"
                 onChange={(next) =>
                   onChange([channels[0], channels[1], channels[2], next])
@@ -382,7 +382,7 @@ export function TriggerValueField({
             disabled={disabled}
             onChange={(event) => onChange(tintToLinearRgb(event.target.value))}
             className="h-7 w-10 shrink-0 cursor-pointer rounded border border-slate-600 bg-slate-950 disabled:opacity-45"
-            aria-label={`${descriptor.label} の色`}
+            aria-label={`${descriptor.label}の色`}
           />
           <code className="text-[10px] text-slate-400">
             {linearRgbToTint(channels)}
@@ -451,13 +451,13 @@ export const TIMED_PROPERTY_KINDS: ReadonlySet<string> = new Set([
 ]);
 
 export const EASING_LABELS: Readonly<Record<InteractivityEasing, string>> = {
-  linear: "一定の速さ",
-  "ease-in": "ゆっくり始まる",
-  "ease-out": "ゆっくり止まる",
-  "ease-in-out": "ゆっくり始まり、ゆっくり止まる",
-  "ease-in-strong": "ゆっくり始まる（強め）",
-  "ease-out-strong": "ゆっくり止まる（強め）",
-  "ease-out-back": "少し行き過ぎて戻る",
+  linear: "Linear",
+  "ease-in": "Ease In",
+  "ease-out": "Ease Out",
+  "ease-in-out": "Ease In Out",
+  "ease-in-strong": "Ease In Cubic",
+  "ease-out-strong": "Ease Out Cubic",
+  "ease-out-back": "Ease Out Back",
 };
 
 /** Draws the chosen curve, so the wording and the motion are the same thing. */
@@ -512,7 +512,7 @@ export function TriggerTimingField({
   return (
     <div className="space-y-2 rounded border border-slate-700 bg-slate-950/60 p-2">
       <label className="block text-[10px] text-slate-300">
-        かける時間（秒）
+        Duration (s)
         <ScrubNumberInput
           min={0}
           max={600}
@@ -520,8 +520,8 @@ export function TriggerTimingField({
           value={seconds}
           disabled={disabled}
           tone="dark"
-          ariaLabel="かける時間（秒）"
-          scrubLabel="かける時間"
+          ariaLabel="Duration (s)"
+          scrubLabel="Duration"
           onChange={onSecondsChange}
           wrapperClassName="mt-1"
         />
@@ -529,7 +529,7 @@ export function TriggerTimingField({
       {seconds > 0 ? (
         <div className="flex items-end gap-2">
           <label className="min-w-0 flex-1 text-[10px] text-slate-300">
-            変わり方
+            Easing
             <select
               value={easing}
               disabled={disabled}

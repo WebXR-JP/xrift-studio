@@ -2,7 +2,7 @@
 
 [XRift](https://xrift.net/)のワールドとアイテムを作る、非公式のデスクトップアプリです。素材の配置、見た目や動きの調整、動作確認、公開までを行えます。コードを書いて制作することもできます。
 
-**[ダウンロード](https://github.com/WebXR-JP/xrift-studio/releases/latest)** · **[使い方](./docs/guide/index.md)** · **[ビジュアルエディターを開く](https://webxr-jp.github.io/xrift-studio/editor.html)**
+[ダウンロード](https://github.com/WebXR-JP/xrift-studio/releases/latest) · [使い方](./docs/guide/index.md) · [ビジュアルエディターを開く](https://webxr-jp.github.io/xrift-studio/editor.html)
 
 > XRift公式とは無関係の有志製ツールです。編集内容は自動保存されます。開発中のため、大切なプロジェクトはファイルに書き出してバックアップも残してください。
 
@@ -12,18 +12,18 @@ Windows・macOS・Linux用のインストーラーは[ダウンロードペー�
 
 ### macOSでHomebrewを使う
 
-[Homebrew](https://brew.sh/)を導入済みなら、ターミナルで次のコマンドを実行します。Apple Silicon・Intelの両方で使えるUniversal版がインストールされます。
+[Homebrew](https://brew.sh/)を導入済みなら、ターミナルで次のコマンドを実行してください。Apple Silicon・Intelの両方で使えるUniversal版をインストールできます。
 
 ```bash
 brew tap webxr-jp/xrift-studio https://github.com/WebXR-JP/xrift-studio.git
 brew install --cask webxr-jp/xrift-studio/xrift-studio
 ```
 
-`tap`は、Homebrewがアプリを探すときに参照する追加の配布元です。XRift Studioでは、WebXR-JPが管理するこのリポジトリを専用の配布元（独自tap）として使います。最初の`brew tap`は初回だけ必要で、配布元を登録した後はHomebrewのコマンドでインストール・更新できます。
+`tap`はHomebrewに追加する配布元です。XRift Studioの配布元には、WebXR-JPが管理するこのリポジトリを使います。`brew tap`での登録は初回だけ必要です。登録後はHomebrewのコマンドでインストール・更新できます。
 
-インストールが終わったら、アプリケーションフォルダーからXRift Studioを開きます。開発元の確認で止まった場合は、[macOSで開けないとき](./docs/guide/installation-problems.md#macosで開けない)を参照してください。
+インストール後はアプリケーションフォルダーからXRift Studioを開いてください。開発元の確認で起動できない場合は、[macOSで開けないとき](./docs/guide/installation-problems.md#macosで開けない)を参照してください。
 
-更新するときはアプリを終了し、次のコマンドを実行します。
+更新するときはアプリを終了し、次のコマンドを実行してください。
 
 ```bash
 brew update
@@ -34,9 +34,9 @@ brew upgrade --cask --greedy webxr-jp/xrift-studio/xrift-studio
 
 ## はじめて使う
 
-1. アプリを起動して**セットアップを開始**を押します。完了したら、プロジェクト一覧の**新規プロジェクト**からビジュアルエディターを開きます。
+1. アプリを起動して「セットアップを開始」を押します。完了したら、プロジェクト一覧の「新規プロジェクト」からビジュアルエディターを開きます。
 2. [最初のワールドを作る](./docs/guide/first-world.md)に沿って、物を配置し、マテリアルで色を変えます。
-3. 保存し、**Play**で歩いて確かめます。公開の準備ができたら**XRiftへ公開**へ進みます。
+3. 保存し、Playで歩いて確かめます。公開の準備ができたら「XRiftへ公開」へ進みます。
 
 ブラウザ版βでは、パソコン・iPad・スマートフォンからビジュアルエディターで制作し、APIキーによるワールド送信を試せます。プロジェクトはブラウザに自動保存され、`.xriftstudio`ファイルでデスクトップ版へ引き継げます。アイテムやスクリプトを含むワールドの公開、MCPでのAI接続にはデスクトップ版を使います。
 
@@ -66,13 +66,13 @@ pnpm tauri:dev
 
 ブラウザ版のみの起動は`pnpm dev`、型の確認は`pnpm typecheck`です。開発サーバーの`/preview.html`が紹介ページ、`/editor.html`がビジュアルエディターです。
 
-設計・API・検証手順は[開発文書の一覧](./docs/README.md)、日本語の表記は[文章と用語のルール](./docs/JAPANESE_WRITING.md)を参照してください。
+設計・API・検証手順は[開発文書の一覧](./docs/README.md)、画面名と専門用語は[用語表](./docs/JAPANESE_WRITING.md)を参照してください。
 
 ## ライセンス
 
 MIT。素材ごとの権利表記は[THIRD_PARTY_ASSETS.md](./THIRD_PARTY_ASSETS.md)を参照してください。
 
-Hierarchyの一部を `.xriftstudio` で書き出して別のワールド・アイテムへ追加する手順は、[Entityを別のワールド・アイテムへ渡す](./docs/guide/hierarchy-transfer.md)を参照してください。
+Hierarchyの一部を`.xriftstudio`で書き出して別のワールド・アイテムへ追加する手順は、[Entityを別のワールド・アイテムへ渡す](./docs/guide/hierarchy-transfer.md)を参照してください。
 
 ### ChatGPT Workプラグインの開発
 

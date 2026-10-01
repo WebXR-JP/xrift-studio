@@ -38,10 +38,10 @@ export const RECORDING_ASPECT_RATIO_OPTIONS: readonly {
   label: string;
   description: string;
 }[] = [
-  { value: "16:9", label: "16:9", description: "横型。YouTube、X の埋め込み、LP" },
+  { value: "16:9", label: "16:9", description: "横型。YouTube、Xの埋め込み、LP" },
   { value: "9:16", label: "9:16", description: "縦型。Shorts、Reels、TikTok" },
-  { value: "1:1", label: "1:1", description: "正方形。X、Instagram のフィード" },
-  { value: "4:5", label: "4:5", description: "縦長。Instagram のフィード" },
+  { value: "1:1", label: "1:1", description: "正方形。X、Instagramのフィード" },
+  { value: "4:5", label: "4:5", description: "縦長。Instagramのフィード" },
 ];
 
 const ASPECT_RATIO_TERMS: Record<RecordingAspectRatio, [number, number]> = {

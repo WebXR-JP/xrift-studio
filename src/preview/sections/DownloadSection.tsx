@@ -86,7 +86,7 @@ export function DownloadSection() {
         <div className="landing-section-heading">
           <p className="landing-eyebrow">ダウンロード</p>
           <h2>デスクトップ版を<br />ダウンロード</h2>
-          <p>アイテムやスクリプトを含むワールドの公開、AIとの連携にはデスクトップ版を使います。お使いのOSに合うファイルを選んでください。</p>
+          <p>アイテムやスクリプトを含むワールドの公開、AIとの連携にはデスクトップ版が必要です。使っているOSに合うファイルを選んでください。</p>
           <a href={`${XRIFT_STUDIO_GUIDE_URL}installation.html`} className="landing-text-link">
             インストール手順を見る
           </a>
@@ -103,7 +103,7 @@ export function DownloadSection() {
             ) : null}
             <div className="flex gap-2">
               <dt className="text-zinc-500">料金</dt>
-              <dd className="text-zinc-800">無料・オープンソース（MIT License）</dd>
+              <dd className="text-zinc-800">無料・MIT Licenseで公開</dd>
             </div>
           </dl>
           <p className="mt-6 text-xs font-semibold" aria-live="polite">
@@ -174,12 +174,12 @@ export function DownloadSection() {
                 {cta.option.sha256 ? (
                   <details className="preview-download-details">
                     <summary>
-                      <span>ファイルの照合用ハッシュ（SHA-256）</span>
+                      <span>SHA-256でファイルを確認</span>
                       <ChevronDown size={16} className="shrink-0 text-zinc-400" />
                     </summary>
                     <p className="preview-download-hash">{cta.option.sha256}</p>
                     <p className="preview-download-note">
-                      保存したファイルのハッシュがこの値と一致すれば、GitHubのリリースに置かれたものと同じファイルです。
+                      保存したファイルのSHA-256を計算し、この値と比較してください。一致すれば、GitHubで公開されているファイルと同じ内容です。
                     </p>
                   </details>
                 ) : null}
@@ -188,7 +188,7 @@ export function DownloadSection() {
               <div className="mt-4">
                 <p className="text-sm font-bold leading-7 text-zinc-800">
                   {cta.platform === "mobile"
-                    ? "デスクトップ版はWindows・macOS・Linux向けです。この端末では、ブラウザ版βをインストール不要で試せます。"
+                    ? "デスクトップ版はWindows・macOS・Linuxで使えます。この端末では、インストール不要のブラウザ版βを試してください。"
                     : cta.platform === null
                       ? "少しお待ちください。"
                       : "このパソコンに合うファイルを判別できませんでした。下の一覧から選んでください。"}

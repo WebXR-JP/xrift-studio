@@ -14,14 +14,14 @@ export function TextureImportSettingsPanel({
       <div className="border-b border-slate-100 px-3 py-2.5">
         <h3 className="text-[13px] font-semibold text-slate-800">取り込むテクスチャのサイズと圧縮</h3>
         <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
-          次の読み込みと再インポートに適用します。既存の画像はAssetsで変更してください。
+          これから読み込む画像と、再インポートする画像に適用します。取り込み済みの画像はAssetsで変更してください。
         </p>
       </div>
       <div className="space-y-2.5 p-3">
         <label className="block text-xs text-slate-700">最大解像度
           <select value={textureMaxSize} onChange={(event) => onTextureMaxSizeChange(event.currentTarget.value === "original" ? "original" : Number(event.currentTarget.value) as TextureImportMaxSize)} className="mt-1 h-8 w-full rounded-md border border-slate-300 bg-white px-2 focus-visible:ring-2 focus-visible:ring-violet-100">
             <option value="original">原寸のまま</option>
-            {TEXTURE_MAX_SIZE_CHOICES.map((size) => <option key={size} value={size}>長辺を最大 {size}px まで{size === 1024 ? "（初期値）" : ""}</option>)}
+            {TEXTURE_MAX_SIZE_CHOICES.map((size) => <option key={size} value={size}>長辺を最大 {size}pxまで{size === 1024 ? "（初期値）" : ""}</option>)}
           </select>
         </label>
         <label className="block text-xs text-slate-700">圧縮方式

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("ノードグラフの作成入口、素材、編集タブで同じアイコンを使う", async ({ page }) => {
+test("Node Graphの作成入口、素材、編集タブで同じアイコンを使う", async ({ page }) => {
   await page.goto("/e2e.html?scenario=ready");
   await page.getByRole("button", { name: /新規プロジェクト/ }).click();
   await page.getByRole("button", { name: /ワールドをビジュアルで作る/ }).click();
@@ -10,13 +10,13 @@ test("ノードグラフの作成入口、素材、編集タブで同じアイ�
 
   const assets = page.getByRole("region", { name: "Assets" });
   await assets.getByRole("button", { name: "新規アセットまたはフォルダー" }).click();
-  const createGraph = page.getByRole("button", { name: "新規ノードグラフ", exact: true });
+  const createGraph = page.getByRole("button", { name: "新規Node Graph", exact: true });
   await expect(createGraph.locator("svg.lucide-workflow")).toBeVisible();
   await createGraph.click();
 
   await expect(assets.locator("[data-asset-drag-preview] svg.lucide-workflow")).toBeVisible();
   const inspector = page.getByRole("complementary", { name: "Inspector" });
-  await expect(inspector.getByText("KHR ノードグラフ")).toBeVisible();
+  await expect(inspector.getByText("Node Graph", { exact: true })).toBeVisible();
   await expect(inspector.locator("svg.lucide-workflow")).toBeVisible();
   await expect(inspector.getByText("画像データなし")).toHaveCount(0);
   await expect(inspector.getByText(/サムネイルがないため/)).toHaveCount(0);

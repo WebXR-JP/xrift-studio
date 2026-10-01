@@ -45,13 +45,13 @@ const RESET_META: Record<
   runtime: {
     title: "ランタイムをリセット",
     description:
-      "同梱の Node.js と @xrift/cli を削除し、ログイン情報も削除します。\nプロジェクトは残ります。リセット後、アプリを再起動して必要なツールを再インストールします。",
+      "アプリ専用のNode.js、@xrift/cli、ログイン情報を削除します。プロジェクトは残ります。\nアプリの再起動後に、必要なツールを再インストールしてください。",
     confirm: "リセットして再起動",
   },
   all: {
     title: "完全リセット",
     description:
-      "アプリ専用のNode.js、@xrift/cli、ログイン情報、すべてのプロジェクトを削除します。\nこの操作は元に戻せません。削除後、アプリを再起動します。本当に実行しますか？",
+      "アプリ専用のNode.js、@xrift/cli、ログイン情報、すべてのプロジェクトを削除します。\nこの操作は元に戻せません。削除が完了するとアプリが再起動します。",
     confirm: "すべて削除して再起動",
   },
 };
@@ -183,14 +183,14 @@ export function AboutModal({
 
         <div data-app-modal-body className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
-            XRift Studioは、有志が開発する非公式制作ツールです。ワールドやアイテムの作成・動作確認・公開に使えます。
+            XRift Studioは有志が開発する非公式ツールです。ワールドやアイテムを制作し、動作を確認してXRiftに公開できます。
           </div>
           <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
             バージョン
           </div>
           <dl className="mt-2 divide-y divide-zinc-100">
             <Row label="XRift Studio" value={v.app} hint="アプリ本体" />
-            <Row label="Node.js" value={v.node} hint="アプリ同梱 (LTS)" />
+            <Row label="Node.js" value={v.node} hint="アプリ同梱のLTS版" />
             <Row
               label="@xrift/cli"
               value={v.xrift}
@@ -212,7 +212,7 @@ export function AboutModal({
               データの削除とリセット
             </div>
             <div className="mt-1 text-[11px] leading-relaxed text-rose-700/80">
-              リセット後はアプリが再起動し、セットアップが必要になります。
+              リセットするとアプリが再起動します。起動後にセットアップを行ってください。
             </div>
             <div className="mt-2.5 grid grid-cols-2 gap-2">
               <button
@@ -225,8 +225,8 @@ export function AboutModal({
                 className="flex items-center justify-center gap-1.5 rounded-md border border-rose-200 bg-white px-2.5 py-1.5 text-[11px] font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50"
                 title={
                   v.xriftLoading
-                    ? "@xrift/cli の確認が終わるまでお待ちください"
-                    : "Node.js / @xrift/cli / ログイン状態を削除（プロジェクトは残る）"
+                    ? "@xrift/cliの確認が終わるまでお待ちください"
+                    : "Node.js、@xrift/cli、ログイン情報を削除します。プロジェクトは残ります。"
                 }
               >
                 <RefreshCw size={11} strokeWidth={2.25} />
@@ -242,7 +242,7 @@ export function AboutModal({
                 className="flex items-center justify-center gap-1.5 rounded-md bg-rose-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-rose-500 disabled:opacity-50"
                 title={
                   v.xriftLoading
-                    ? "@xrift/cli の確認が終わるまでお待ちください"
+                    ? "@xrift/cliの確認が終わるまでお待ちください"
                     : "プロジェクトを含めてすべて削除"
                 }
               >
@@ -260,7 +260,7 @@ export function AboutModal({
             className="flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-700"
           >
             <ExternalLink size={11} strokeWidth={2} />
-            XRift 公式ドキュメント
+            XRift公式ドキュメント
           </button>
           {XRIFT_STUDIO_ISSUE_ASSISTANT_GPT_URL ? (
             <button
@@ -287,7 +287,7 @@ export function AboutModal({
             className="flex items-center gap-1 text-xs text-zinc-600 hover:text-brand-700"
           >
             <ExternalLink size={11} strokeWidth={2} />
-            XRift Studio の GitHub
+            XRift StudioのGitHub
           </button>
           <button
             type="button"
@@ -360,7 +360,7 @@ function AppUpdateSettings({
         </div>
         <div className="mt-0.5 text-[11px] leading-relaxed text-zinc-500">
           {checking
-            ? "GitHub Releases の更新情報を確認しています…"
+            ? "GitHub Releasesの更新情報を確認しています…"
             : installing
               ? "アップデートを適用しています。完了後に再起動します。"
               : available
@@ -369,7 +369,7 @@ function AppUpdateSettings({
                   ? `v${state.currentVersion?.replace(/^v/, "")} は最新版です。`
                   : state.phase === "error"
                     ? "更新情報を確認できませんでした。現在のバージョンはそのまま利用できます。"
-                    : "GitHub Releases から署名済みの最新版を確認します。"}
+                    : "GitHub Releasesから署名済みの最新版を確認します。"}
         </div>
       </div>
       <button

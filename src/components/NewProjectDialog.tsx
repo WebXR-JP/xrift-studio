@@ -353,7 +353,7 @@ export function NewProjectDialog({
                   テンプレート
                 </legend>
                 <p className="mt-1 text-xs leading-5 text-zinc-500">
-                  使いたいシーンを選んでください。配置や素材は、作成後に変更できます。
+                  使いたいシーンを選んでください。配置や素材は作成後も変更できます。
                 </p>
                 <div
                   className={`mt-3 grid gap-3 ${
@@ -528,7 +528,7 @@ export function NewProjectDialog({
                               コードプロジェクト
                             </div>
                             <p className="mt-1 text-xs text-zinc-500">
-                              package.json、xrift.json、srcがあるフォルダーを選択します。
+                              package.json、xrift.json、srcがあるフォルダーを選んでください。
                             </p>
                           </div>
                           <button
@@ -591,7 +591,7 @@ export function NewProjectDialog({
                       </div>
                     )}
                     <p className="mt-3 text-xs leading-5 text-zinc-500">
-                      選んだ種類（ワールド・アイテム）のシーンを読み込みます。動的な処理は変換できません。元のシーンにない床、ライト、SpawnPointは追加しません。
+                      選んだプロジェクト種別のシーンを読み込みます。動的な処理は変換できません。床、ライト、SpawnPointは元のシーンにあるものだけを取り込みます。
                     </p>
                     {classicProjectSelectError && (
                       <p className="mt-2 text-sm text-rose-700">

@@ -130,7 +130,7 @@ const PROVENANCE_LABELS: Readonly<Record<ScriptProvenanceKind, string>> = {
   mcp: "MCP",
   "classic-import": "コードプロジェクトからの取り込み",
   prefab: "プレハブ",
-  starter: "Starter 素材",
+  starter: "Starter素材",
   "external-store": "外部ストア",
   filesystem: "ファイルシステム",
   unknown: "不明",

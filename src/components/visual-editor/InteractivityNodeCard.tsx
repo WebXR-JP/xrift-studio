@@ -111,14 +111,14 @@ export const CATEGORY_MINIMAP_COLOR: Record<GraphNodeCategory, string> = {
 };
 
 export const CATEGORY_LABEL: Record<GraphNodeCategory, string> = {
-  event: "きっかけ",
-  flow: "処理の流れ",
-  animation: "アニメーション",
-  variable: "変数",
-  pointer: "glTFプロパティ",
-  math: "計算と条件",
-  entity: "Entityの操作",
-  extension: "拡張",
+  event: "Event",
+  flow: "Flow",
+  animation: "Animation",
+  variable: "Variable",
+  pointer: "Pointer",
+  math: "Math",
+  entity: "Entity",
+  extension: "Extension",
 };
 
 export const PALETTE_CATEGORY_ORDER: readonly GraphNodeCategory[] = [
@@ -142,7 +142,7 @@ export const DELETE_KEY_CODES: string[] = ["Backspace", "Delete"];
 export const FIT_VIEW_OPTIONS = { padding: 0.25 } as const;
 
 /**
- * Japanese names for the sockets an author actually reads.
+ * English names for the sockets an author actually reads.
  *
  * The canonical names are part of the KHR contract and stay in the saved JSON,
  * but `err`, `lastDelay` and `timeSinceLastTick` are not what a card should
@@ -150,42 +150,42 @@ export const FIT_VIEW_OPTIONS = { padding: 0.25 } as const;
  * so the two never drift apart in the author's head.
  */
 export const SOCKET_LABELS: Readonly<Record<string, string>> = {
-  true: "成立",
-  false: "不成立",
-  in: "入力",
-  out: "出力",
-  done: "完了後",
-  err: "失敗時",
-  cancel: "取り消し",
-  reset: "やり直し",
-  completed: "すべて完了後",
-  loopBody: "繰り返す先",
-  default: "その他",
-  condition: "条件",
-  isValid: "取得できたか",
-  p1: "変化の調整点1",
-  p2: "変化の調整点2",
-  selection: "選ぶ番号",
-  duration: "秒数",
-  delay: "待機ID",
-  lastDelay: "待機ID",
-  value: "値",
-  animation: "クリップ番号",
-  startTime: "開始位置",
-  endTime: "終了位置",
-  stopTime: "停止位置",
-  speed: "速度",
-  n: "回数",
-  startIndex: "開始番号",
-  endIndex: "終了番号",
-  index: "現在の番号",
-  currentCount: "通った回数",
-  remainingInputs: "残りの入力",
-  lastRemainingTime: "残り秒数",
-  event: "きっかけ",
-  timeSinceStart: "開始からの秒",
-  timeSinceLastTick: "前フレームからの秒",
-  material: "マテリアル",
+  true: "True",
+  false: "False",
+  in: "In",
+  out: "Out",
+  done: "Done",
+  err: "Error",
+  cancel: "Cancel",
+  reset: "Reset",
+  completed: "Completed",
+  loopBody: "Loop Body",
+  default: "Default",
+  condition: "Condition",
+  isValid: "Is Valid",
+  p1: "Control Point 1",
+  p2: "Control Point 2",
+  selection: "Selection",
+  duration: "Duration (s)",
+  delay: "Delay ID",
+  lastDelay: "Delay ID",
+  value: "Value",
+  animation: "Animation Index",
+  startTime: "Start Time (s)",
+  endTime: "End Time (s)",
+  stopTime: "Stop Time (s)",
+  speed: "Speed",
+  n: "Count",
+  startIndex: "Start Index",
+  endIndex: "End Index",
+  index: "Index",
+  currentCount: "Current Count",
+  remainingInputs: "Remaining Inputs",
+  lastRemainingTime: "Remaining Time (s)",
+  event: "Event",
+  timeSinceStart: "Elapsed Time (s)",
+  timeSinceLastTick: "Delta Time (s)",
+  material: "Material",
   a: "A",
   b: "B",
   c: "C",
@@ -196,7 +196,7 @@ export const SOCKET_LABELS: Readonly<Record<string, string>> = {
 export function socketDisplayLabel(socket: string): string {
   const named = SOCKET_LABELS[socket];
   if (named) return named;
-  return /^\d+$/.test(socket) ? `${Number(socket) + 1}番目` : socket;
+  return /^\d+$/.test(socket) ? `${Number(socket) + 1}` : socket;
 }
 
 /**
@@ -249,7 +249,7 @@ export const CANVAS_NAVIGATION = {
 /**
  * What each socket is for, in the words an author would use.
  *
- * 「出力」and「イベント」sit next to each other on the same card and say
+ * 「Out」and「イベント」sit next to each other on the same card and say
  * nothing about which one to drag: one continues the flow, the other is a value
  * another node reads. Hovering has to answer that, because the colour alone
  * only says they are different.
@@ -261,22 +261,22 @@ const SOCKET_HINTS: Readonly<Record<string, string>> = {
   out: "この操作を始めた直後に、次のノードへ進みます",
   done: "この操作が終わってから、次のノードへ進みます",
   err: "処理に失敗したときに進みます",
-  cancel: "ここへ流れが来ると、待機を取り消します",
-  reset: "ここへ流れが来ると、数えた回数や状態を戻します",
+  cancel: "この入力に処理が届くと、待機を取り消します。",
+  reset: "この入力に処理が届くと、回数や状態を初期値に戻します。",
   completed: "入力待ちや繰り返しが終わると進みます。",
-  loopBody: "繰り返しの 1 回ごとに、ここから先が動きます",
+  loopBody: "繰り返すたびに、この出力につないだ処理を実行します。",
   default: "どの番号にも当てはまらなかったときに進みます",
-  condition: "true か false を出すノードをつなぎます",
+  condition: "trueかfalseを出すノードをつなぎます",
   selection: "整数を出すノードをつなぎます。その番号の出力へ進みます",
   duration: "変化にかける秒数。0なら即時に変わります",
-  delay: "取り消したい待機の ID。「指定時間待つ」の待機ID からつなぎます",
-  lastDelay: "この待機の ID。「待機を取り消す」の待機ID へつなげます",
+  delay: "取り消す待機のIDです。「Set Delay」の待機IDをつないでください。",
+  lastDelay: "この待機を識別するIDです。「待機を取り消す」の待機IDにつなげます。",
   value: "書き込む値。直接入力するか、値の出力をつなぎます",
   animation: "再生するクリップの番号",
   startTime: "クリップの何秒目から再生するか",
   endTime: "クリップの何秒目で止めるか",
   stopTime: "何秒目で止めるか",
-  speed: "再生の速さ。1 が等速、2 で倍速",
+  speed: "再生の速さ。1が等速、2で倍速",
   n: "何回まで通すか",
   startIndex: "繰り返しの開始番号",
   endIndex: "繰り返しを終える番号。この番号自体は実行しません。",
@@ -289,13 +289,13 @@ const SOCKET_HINTS: Readonly<Record<string, string>> = {
     "前のフレームからの秒数です。速さを掛けると移動量になります",
   isValid: "変数を読めたかどうかを出します",
   material: "書き込む先のマテリアル。下の選択欄で選びます",
-  p1: "補間の効き方を決める制御点。0〜1 の間で指定します",
-  p2: "補間の効き方を決める制御点。0〜1 の間で指定します",
+  p1: "補間の変化を調整する制御点です。0〜1で指定してください。",
+  p2: "補間の変化を調整する制御点です。0〜1で指定してください。",
   event: "このノードが動いたことを値として出します",
-  a: "1 つめの値",
-  b: "2 つめの値",
-  c: "3 つめの値",
-  d: "4 つめの値",
+  a: "1つめの値",
+  b: "2つめの値",
+  c: "3つめの値",
+  d: "4つめの値",
 };
 
 function socketHint(socket: string, kind: "flow" | "value", side: "left" | "right"): string {

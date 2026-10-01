@@ -1265,7 +1265,7 @@ function InteractivityGraphEditorBody({
                   setSelectedNodeIndex(null);
                 }}
                 className="h-7 max-w-[11rem] shrink-0 rounded border border-slate-600 bg-slate-800 px-2 text-xs"
-                aria-label="ノードグラフ"
+                aria-label="Node Graph"
               >
                 {draft.graphs.map((candidate, index) => (
                   <option key={index} value={index}>
@@ -1550,7 +1550,7 @@ function InteractivityGraphEditorBody({
               <>
                 <span className="font-semibold">操作を受け付ける設定がありません。</span>
                 <span className="text-amber-200/90">
-                  「操作されたとき」を使うには、同じEntityに「操作を受け付ける」が必要です。
+                  「On Interact」を使うには、同じEntityに「Interactable」が必要です。
                 </span>
                 <button
                   type="button"
@@ -1558,7 +1558,7 @@ function InteractivityGraphEditorBody({
                   onClick={() => setup.onAddInteractable(setupStep.entity.entityId)}
                   className="h-6 shrink-0 rounded bg-amber-400 px-2 text-[11px] font-bold text-amber-950 hover:bg-amber-300 disabled:opacity-40"
                 >
-                  「{setupStep.entity.name}」に「操作を受け付ける」を追加
+                  「{setupStep.entity.name}」に「Interactable」を追加
                 </button>
               </>
             )}
@@ -1656,7 +1656,7 @@ function InteractivityGraphEditorBody({
                 />
                 {paletteQuery && paletteGroups[0]?.templates[0] ? (
                   <p className="mt-1 truncate text-[10px] text-slate-400">
-                    Enter で「{paletteGroups[0].templates[0].label}」を置きます
+                    Enterで「{paletteGroups[0].templates[0].label}」を置きます
                   </p>
                 ) : null}
               </div>
@@ -1905,7 +1905,7 @@ function InteractivityGraphEditorBody({
                 <section className="space-y-2 rounded border border-orange-800 bg-orange-950/30 p-2.5">
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-orange-300">
-                      対象
+                      Target
                     </p>
                     <p className="mt-1 text-[10px] leading-4 text-slate-400">
                       変更するEntityと項目を選んでください。
@@ -1995,7 +1995,7 @@ function InteractivityGraphEditorBody({
                       )}
                       {triggerComponent ? (
                         <label className="block text-[10px] text-slate-300">
-                          プロパティ
+                          Property
                           <select
                             value={triggerAction.property}
                             disabled={readOnly}

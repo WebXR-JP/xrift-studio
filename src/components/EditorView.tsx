@@ -289,7 +289,7 @@ export function EditorView({
           toast({
             kind: "success",
             title: "アップロード完了",
-            description: "XRift で確認できます",
+            description: "XRiftで確認できます",
           });
         } else {
           toast({ kind: "success", title: "アップロード完了" });
@@ -325,7 +325,7 @@ export function EditorView({
       toast({
         kind: "error",
         title: "公開前の確認を完了できませんでした",
-        description: "xrift.json とサムネイルを確認してください",
+        description: "xrift.jsonとサムネイルを確認してください",
       });
     } finally {
       setCheckingPublish(false);
@@ -487,10 +487,10 @@ export function EditorView({
               type="button"
               onClick={handleOpenPublished}
               className="ml-2 flex items-center gap-1.5 rounded-md border border-brand-200 bg-brand-50 px-2 py-1 text-[11px] font-medium text-brand-700 hover:bg-brand-100"
-              title={`アップロード済み${projectLabel}を XRift で開く`}
+              title={`アップロード済み${projectLabel}をXRiftで開く`}
             >
               <Globe size={10} strokeWidth={2} />
-              XRift で開く
+              XRiftで開く
               <ExternalLink size={10} strokeWidth={2} />
             </button>
           )}
@@ -522,7 +522,7 @@ export function EditorView({
               onClick={handleStartDev}
               disabled={devStarting || busy}
               className="flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-              title="このPCで起動し、ブラウザで動作を確認します"
+              title="このPCでプロジェクトを起動し、ブラウザで動作を確認する"
             >
               <Play size={11} fill="currentColor" strokeWidth={0} />
               {devStarting ? "起動中…" : "Play"}
@@ -551,7 +551,7 @@ export function EditorView({
             onClick={handleOpenVSCode}
             disabled={busy}
             className="flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50"
-            title="プロジェクトを VS Code で開く"
+            title="プロジェクトをVS Codeで開く"
           >
             <Code2 size={12} strokeWidth={2} />
             VS Code
@@ -562,7 +562,7 @@ export function EditorView({
               onClick={handleItemCheck}
               disabled={busy || checkingPublish}
               className="flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
-              title="ビルドを含むアイテムのセキュリティチェックを実行"
+              title="アイテムをビルドし、セキュリティをチェックする"
             >
               <ShieldCheck size={12} strokeWidth={2} />
               チェック

@@ -142,7 +142,7 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
         setToken("");
         setCredentialMessage("保存済みキーを確認しました。次回の公開時はブラウザからキーを選べます。");
       } else {
-        setCredentialMessage("保存を確認できませんでした。ブラウザの保存確認とキー選択を完了したか確かめてください。ここから再試行してください。");
+        setCredentialMessage("APIキーの保存を確認できませんでした。ブラウザの保存確認とキーの選択を終えてから、もう一度試してください。");
       }
     } catch (error) {
       if (error instanceof Error && (error.name === "NotSupportedError" || error.name === "SecurityError")) {
@@ -181,7 +181,7 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
     }
     const submittedToken = (token || tokenInput.current?.value || "").trim();
     if (!submittedToken) {
-      setState({ phase: "failed", message: "XRift APIキーを入力してください。設定画面で write:worlds 権限付きのキーを発行できます。" });
+      setState({ phase: "failed", message: "XRift APIキーを入力してください。XRiftの設定画面でwrite:worlds権限を付けて発行できます。" });
       return;
     }
     setToken(submittedToken);
@@ -286,7 +286,7 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
             <input ref={tokenInput} id="web-upload-token" type={showToken ? "text" : "password"} value={token} onChange={(event) => { tokenEdited.current = true; setSavedKeyInUse(false); setToken(event.target.value); setCredentialMessage(null); }} placeholder="xrift_sk_..." autoComplete="current-password" spellCheck={false} disabled={running} className="min-h-11 min-w-0 flex-1 rounded-md border border-zinc-300 px-3 font-mono text-sm focus-visible:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-100" />
             <button type="button" onClick={() => setShowToken(!showToken)} disabled={running} aria-label={showToken ? "APIキーを隠す" : "APIキーを表示"} className="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-zinc-300 text-zinc-600 disabled:opacity-50">{showToken ? <EyeOff size={16} /> : <Eye size={16} />}</button>
           </div>
-          <p className="text-xs leading-relaxed text-zinc-500">設定画面で <code>write:worlds</code> を付けて発行してください。XRift Studio はキーをプロジェクトや Web Storage に保存しません。</p>
+          <p className="text-xs leading-relaxed text-zinc-500">XRiftの設定画面で<code>write:worlds</code>権限を付けて発行してください。XRift StudioはキーをプロジェクトやWeb Storageに保存しません。</p>
           {canSaveWithBrowser ? <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-700">
             <p className="leading-relaxed text-zinc-600">送信が完了したら、この画面からブラウザのパスワード管理機能へキーを保存できます。保存と端末間の同期はブラウザの設定に従います。</p>
             {!token ? <button type="button" onClick={() => void chooseSavedKey()} disabled={running} className="font-medium text-brand-600 underline underline-offset-2 disabled:opacity-50">保存済みキーを選ぶ</button> : null}
@@ -304,10 +304,10 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
         <p className="font-semibold">{state.phase === "done" ? "XRiftへのファイル送信が完了しました" : "ファイル送信は完了しました"}</p>
         <p className="break-all text-xs text-zinc-600">ワールドID: {uploadedWorldId(state.result)}</p>
         {state.result.versionNumber !== undefined ? <p className="text-xs text-zinc-600">バージョン: {state.result.versionNumber}</p> : null}
-        {state.phase === "save-failed" ? <p role="alert" className="text-xs leading-relaxed text-rose-700">公開結果をこのブラウザに保存できませんでした。{state.message} 同じワールドを再送せず、まず保存をやり直してください。</p> : <p className="text-xs text-zinc-500">送信完了だけでは再生可能とは限りません。XRiftのマイワールドで状態を確認してください。</p>}
+        {state.phase === "save-failed" ? <p role="alert" className="text-xs leading-relaxed text-rose-700">公開結果をこのブラウザに保存できませんでした。{state.message} 同じワールドを再送せず、まず保存をやり直してください。</p> : <p className="text-xs text-zinc-500">XRiftのマイワールドで、送信したワールドが再生できる状態か確認してください。</p>}
         {canSaveWithBrowser && !savedKeyInUse && token ? <button type="button" onClick={() => void saveCredential()} disabled={credentialSaving} className="preview-button preview-button-light min-h-10 text-xs disabled:opacity-50">{credentialSaving ? "キーを保存中…" : "APIキーをブラウザに保存"}</button> : null}
         {credentialMessage ? <p role="status" className="text-xs text-zinc-600">{credentialMessage}</p> : null}
-        <p className="text-xs text-zinc-500">この画面を閉じると Play に戻れます。</p>
+        <p className="text-xs text-zinc-500">この画面を閉じるとPlay画面に戻ります。</p>
         <a className="preview-button preview-button-light inline-flex min-h-10 text-xs" href="https://app.xrift.net/worlds" target="_blank" rel="noreferrer">ワールド一覧を開く <ExternalLink size={13} aria-hidden="true" /></a>
       </div> : null}
       {state.phase === "failed" ? <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs leading-relaxed text-rose-700">{state.message}</p> : null}

@@ -59,7 +59,7 @@ export function UpdateDialog({
             </div>
             <div>
               <h2 id="cli-update-title" className="text-lg font-semibold tracking-tight text-zinc-900">
-                @xrift/cli アップデート
+                @xrift/cliアップデート
               </h2>
               <div className="text-xs text-zinc-600">
                 新しいバージョンが公開されました

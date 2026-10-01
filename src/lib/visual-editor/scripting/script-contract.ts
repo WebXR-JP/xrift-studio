@@ -81,7 +81,7 @@ export function extractScriptContract(source: string): ScriptContract {
         {
           code: "missing-define-script",
           message:
-            "defineScript(...) が見つかりません。default export として defineScript を呼んでください。",
+            "defineScript(...)が見つかりません。default exportとしてdefineScriptを呼んでください。",
         },
       ],
     };
@@ -96,7 +96,7 @@ export function extractScriptContract(source: string): ScriptContract {
       issues: [
         {
           code: "unreadable-props",
-          message: "defineScript(...) の括弧が閉じていません。",
+          message: "defineScript(...)の括弧が閉じていません。",
         },
       ],
     };
@@ -107,7 +107,7 @@ export function extractScriptContract(source: string): ScriptContract {
   if (!name) {
     issues.push({
       code: "missing-name",
-      message: "name を文字列リテラルで指定してください。",
+      message: "nameを文字列リテラルで指定してください。",
     });
   }
 
@@ -117,7 +117,7 @@ export function extractScriptContract(source: string): ScriptContract {
       issues.push({
         code: "unreadable-props",
         message:
-          "props は prop.<kind>(...) を並べたObject literalで宣言してください。",
+          "propsはprop.<kind>(...)を並べたObject literalで宣言してください。",
       });
     }
     return { name, wrapsChildren, props: [], complete: issues.length === 0, issues };
@@ -296,7 +296,7 @@ function parsePropEntry(
   if (!kindMatch) {
     issues.push({
       code: "unreadable-props",
-      message: `${name} は prop.<kind>(...) の形で宣言してください。`,
+      message: `${name} はprop.<kind>(...)の形で宣言してください。`,
       propName: name,
     });
     return null;
@@ -333,7 +333,7 @@ function parsePropEntry(
   if (kind === "enum" && (!options || options.length === 0)) {
     issues.push({
       code: "unreadable-prop-options",
-      message: `${name} の options は空でない文字列リテラル配列で指定してください。`,
+      message: `${name} のoptionsは空でない文字列リテラル配列で指定してください。`,
       propName: name,
     });
     return null;
@@ -348,7 +348,7 @@ function parsePropEntry(
     ) {
       issues.push({
         code: "unreadable-prop-default",
-        message: `${name} の default は ${kind} の静的なリテラルで指定してください。`,
+        message: `${name} のdefaultは ${kind} の静的なリテラルで指定してください。`,
         propName: name,
       });
       // Do not persist a guessed fallback. Leaving the property undeclared in

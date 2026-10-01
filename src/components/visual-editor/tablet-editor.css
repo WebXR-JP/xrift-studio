@@ -103,10 +103,53 @@
   touch-action: manipulation;
 }
 
-.visual-editor-shell[data-tablet] .editor-tablet-panel > :is(aside, section) > div:first-of-type {
+.visual-editor-shell[data-tablet] .editor-panel-header {
   height: auto;
-  min-height: 44px;
+  min-height: 52px;
   flex-wrap: wrap;
+  gap: 4px;
+  padding-block: 4px;
+}
+
+/* Named control rows work through the display:contents panel wrappers too.
+   Keep compact desktop controls from mixing 24/28/40px heights on touch. */
+.visual-editor-shell[data-tablet] :is(.editor-panel-header, .editor-panel-controls, .editor-assets-header) button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  flex-shrink: 0;
+  touch-action: manipulation;
+}
+
+.visual-editor-shell[data-tablet] :is(.editor-panel-header, .editor-assets-header) button {
+  height: 44px;
+  padding-block: 0;
+}
+
+.visual-editor-shell[data-tablet] :is(.editor-main-header, .scene-viewport-header, .editor-panel-header, .editor-panel-controls, .editor-assets-header) button > svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+/* Eight kind filters need their own scrollable row on 320px phones. */
+.visual-editor-shell[data-tablet] .editor-panel-controls [role="group"] {
+  overflow-x: auto;
+}
+
+.visual-editor-shell[data-tablet] .editor-panel-controls input[type="search"] {
+  padding-right: 48px;
+}
+
+.visual-editor-shell[data-tablet] .editor-assets-header > div:first-child {
+  min-height: 44px;
+}
+
+/* Search keeps a readable width instead of competing with four icon actions. */
+.visual-editor-shell[data-phone] .editor-assets-header label {
+  flex-basis: 100%;
 }
 
 .visual-editor-shell[data-touch] .editor-tablet-panel :is(button, [role="treeitem"]) {

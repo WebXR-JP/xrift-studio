@@ -131,7 +131,7 @@ export async function loadScriptModule(
     return {
       ok: false,
       message:
-        "スクリプトではuseFrameなどR3F frame callback APIを使用できません。フレーム更新はdefineScript(...).start()が返すupdate(delta)へ記述してください。@react-three/fiberはnamed importを使用してください。",
+        "スクリプトではuseFrameなど、R3Fのフレーム更新APIを使えません。フレームごとの処理はdefineScript(...).start()が返すupdate(delta)に書いてください。@react-three/fiberは名前付きインポートで読み込んでください。",
     };
   }
   const transpiled = await transpileScriptModuleCached(source, fileName);
@@ -140,7 +140,7 @@ export async function loadScriptModule(
     return {
       ok: false,
       message:
-        "動的 import(...) は使用できません。許可されたmoduleを静的importしてください。",
+        "動的import(...)は使用できません。許可されたmoduleを静的importしてください。",
     };
   }
 

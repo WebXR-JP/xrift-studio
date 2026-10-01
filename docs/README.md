@@ -9,7 +9,7 @@
 | データ形式・保存・実行・公開の仕組み | [全体設計](./VISUAL_EDITOR_ARCHITECTURE.md) |
 | 現在の対応範囲と今後の課題 | [対応状況](./VISUAL_EDITOR_ROADMAP.md) |
 | 操作と状態の表示方針 | [操作設計の原則](./UX_PRINCIPLES.md) · [機能別の設計](./UX_INTERACTIONS.md) |
-| 日本語の用語と説明の書き方 | [文章と用語のルール](./JAPANESE_WRITING.md) |
+| 画面名と専門用語 | [用語表](./JAPANESE_WRITING.md) |
 
 ## 機能別の仕様
 
@@ -39,8 +39,8 @@
 
 - 作業の許可と完了条件は [AGENT.md](../AGENT.md)、手順は該当スキル、APIの実行条件は現行ソースとtoolのschemaを確認します。
 - 設計案の「実装順」「受け入れ条件」を実装済みの証拠にしません。対応状況の記述とコードが違う場合は、コード・fixture・実画面で確認し、未確認の対応を断定しません。
-- `releases/`、`asset-refresh/`、`catalog-expansion/`、`guide-review/`、`sky-shader-verification/` は実施時点の記録です。現在の成功を保証しません。
-- 大きな設計文書は変更対象の節だけを読みます。利用者向けの操作は `guide/`、機能IDは `UX_INTERACTIONS.md` から辿ります。
+- `releases/`、`asset-refresh/`、`catalog-expansion/`、`guide-review/`、`sky-shader-verification/`は実施時点の記録です。現在の成功を保証しません。
+- 大きな設計文書は変更対象の節だけを読みます。利用者向けの操作は`guide/`、機能IDは`UX_INTERACTIONS.md`から辿ります。
 
 ## 文書の管理
 

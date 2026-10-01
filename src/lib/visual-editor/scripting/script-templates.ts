@@ -65,7 +65,7 @@ export default defineScript({
   {
     id: "vehicle",
     name: "Vehicle",
-    description: "World向け。Hierarchyに車体・運転席・同乗席を配置し、公式Vehicleで動かします。W/Sで前後、A/Dで旋回、Spaceで降車します。",
+    description: "ワールドで使う車です。車体、運転席、同乗席をHierarchyに配置し、公式Vehicleで動かします。W/Sで前後に移動し、A/Dで旋回、Spaceで降車してください。",
     category: "movement",
     suggestedName: "Vehicle",
     language: "tsx",
@@ -128,7 +128,7 @@ ${vehicleGroundDriveSource}
   {
     id: "seat",
     name: "Seat",
-    description: "World向け。座れる椅子のModelをHierarchyに配置します。高さはTransformで変更できます。PlayではSpaceで立ちます。",
+    description: "ワールドで使う椅子のModelをHierarchyに配置します。高さはTransformで変更できます。PlayではSpaceを押して立ち上がってください。",
     category: "interaction",
     suggestedName: "Seat",
     language: "tsx",

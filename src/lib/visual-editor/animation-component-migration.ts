@@ -167,7 +167,7 @@ export function migrateAnimationComponentsInEntities(
       const assetId = createId("interactivity");
       const result = addDefaultInteractivityAsset(nextAssets, {
         id: assetId,
-        name: `${entity.name} のアニメーション`,
+        name: `${entity.name} Animation`,
         folderId: null,
         extension: createModelAnimationClipGraphExtension([
           {
@@ -278,7 +278,7 @@ export function describeAnimationComponentMigration(
   const parts: string[] = [];
   if (result.converted.length > 0) {
     parts.push(
-      `${result.converted.length}件のAnimationをノードグラフへ変換しました`,
+      `${result.converted.length}件のAnimationをNode Graphへ変換しました`,
     );
   }
   const dropped = result.skipped.filter(
@@ -298,7 +298,7 @@ export function describeAnimationComponentMigration(
   }
   if (clearedActions > 0) {
     parts.push(
-      `Animationを操作する${clearedActions}件のノードは、Entityの 3Dモデルを直接指すようにしました`,
+      `Animationを操作する${clearedActions}件のノードは、Entityの3Dモデルを直接指すようにしました`,
     );
   }
   return parts.join("。");

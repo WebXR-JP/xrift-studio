@@ -107,7 +107,7 @@ export function GlowMaterialStore({
                 Emissive
               </h3>
               <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                Bloomでネオンのように光がにじむEntityです
+                ネオンのような発光表現を持つEntityを追加できます。Bloomを有効にすると光がにじみます。
               </p>
             </div>
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">

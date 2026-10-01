@@ -139,7 +139,7 @@ export function runCustomMaterialPreviewFixtureAssertions(): void {
   );
   assert(
     orphanUnknownBrush.status === "unavailable" &&
-      orphanUnknownBrush.reason.includes("元のOpenBrush"),
+      orphanUnknownBrush.reason.includes("元のOpen Brush"),
     "An orphan custom Material did not explain how to restore its preview",
   );
 }

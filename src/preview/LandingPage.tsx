@@ -32,9 +32,9 @@ export default function LandingPage() {
         <section id="top" className="landing-hero landing-section">
           <div className="landing-container">
             <p className="landing-eyebrow">XRift Studio · 無料のワールド・アイテム制作ツール</p>
-            <h1>XRiftのワールドを<br />並べて仕上げる。</h1>
+            <h1>3Dモデルを並べて、<br />XRiftのワールドを作る。</h1>
             <p className="landing-lead">
-              3Dモデルを並べて、質感や光を調整します。Playで歩きながら、空間を仕上げます。
+              モデルの配置、質感、照明を画面上で編集できます。Playで歩き、見た目や動きを確認できます。
               ワールドで使うアイテムも作れます。
             </p>
             <div className="landing-actions">
@@ -45,7 +45,7 @@ export default function LandingPage() {
                 ブラウザ版を試す<span className="landing-beta-mark">β</span><ArrowRight size={17} aria-hidden="true" />
               </a>
             </div>
-            <p className="landing-caption">ブラウザ版βではAPIキーによるワールド送信を試せます。アイテムやスクリプトを含むワールドの公開にはデスクトップ版を使います。</p>
+            <p className="landing-caption">ブラウザ版βではAPIキーを使ってワールドを送信できます。アイテムやスクリプトを含むワールドは、デスクトップ版から公開してください。</p>
             <figure className="landing-editor-figure">
               <a href={editorUrl} aria-label="ブラウザ版βを試す" className="landing-screenshot-link">
                 <img
@@ -57,7 +57,7 @@ export default function LandingPage() {
                 />
                 <span className="landing-screenshot-beta">ブラウザ版を試す <span className="landing-beta-mark">β</span></span>
               </a>
-              <figcaption>デスクトップ版の編集・Play画面。タッチ端末ではパネルを切り替えて操作します。</figcaption>
+              <figcaption>デスクトップ版の編集画面とPlay画面。タッチ端末ではパネルを切り替えて操作できます。</figcaption>
             </figure>
           </div>
         </section>
@@ -66,8 +66,8 @@ export default function LandingPage() {
           <div className="landing-container">
             <div className="landing-section-heading">
               <p className="landing-eyebrow">ビジュアルエディター</p>
-              <h2>素材を配置して、<br className="sm:hidden" />見た目と動きを整える。</h2>
-              <p>手持ちの3Dモデルや画像、音声を追加します。素材や機能を探すときは「外部から追加」を開きます。</p>
+              <h2>素材を配置し、<br className="sm:hidden" />見た目と動きを設定する。</h2>
+              <p>手持ちの3Dモデルや画像、音声を取り込めます。カタログから素材や機能を追加するには「外部から追加」を開いてください。</p>
             </div>
             <div className="landing-feature-grid">
               {editorFeatures.map(({ title, text, icon: Icon, formats }) => (
@@ -89,20 +89,20 @@ export default function LandingPage() {
           <div className="landing-container">
             <div className="landing-section-heading">
               <p className="landing-eyebrow">XRift Studioを始める</p>
-              <h2>使う端末に合わせて、<br />制作を始める。</h2>
-              <p>デスクトップ版はワールドとアイテムの制作・公開に対応。ブラウザ版βはパソコン・iPad・スマートフォンから使え、APIキーによるワールド送信を試せます。</p>
+              <h2>パソコンでも、<br />タッチ端末でも編集できる。</h2>
+              <p>デスクトップ版ではワールドとアイテムを制作・公開できます。ブラウザ版βはパソコン、iPad、スマートフォンで使えます。</p>
             </div>
             <div className="landing-platform-grid">
               <article className="landing-platform">
                 <Monitor size={24} aria-hidden="true" />
                 <h3>デスクトップ版</h3>
-                <p>Windows・macOS・Linuxに対応。XRiftへの公開、AIとの連携、コードエディターを使った制作に対応しています。</p>
+                <p>Windows・macOS・Linuxで使えます。ワールドとアイテムの公開、AIとの連携、コード編集にも対応しています。</p>
                 <a href="#download" className="landing-text-link">ダウンロードへ<ArrowRight size={16} aria-hidden="true" /></a>
               </article>
               <article className="landing-platform">
                 <Globe2 size={24} aria-hidden="true" />
                 <h3>ブラウザ版 <span className="landing-beta-mark">β</span></h3>
-                <p>インストール不要で、APIキーによるワールド送信も試せます。変更は使っているブラウザへ自動保存され、プロジェクトはデスクトップ版へ引き継げます。</p>
+                <p>インストールせずに編集できます。変更は使っているブラウザに自動保存されます。APIキーでワールドを送信したり、プロジェクトをデスクトップ版へ移したりできます。</p>
                 <div className="landing-platform-links">
                   <a href={editorUrl} className="landing-text-link">ブラウザ版を試す<span className="landing-beta-mark">β</span><ArrowRight size={16} aria-hidden="true" /></a>
                 </div>
@@ -112,7 +112,7 @@ export default function LandingPage() {
               <PackageOpen size={23} aria-hidden="true" />
               <div>
                 <h3>パソコンで続きを編集するには</h3>
-                <p>「ファイル」→「プロジェクトを書き出す」で.xriftstudioファイルをダウンロード。パソコンに移して、デスクトップ版で開きます。</p>
+                <p>「ファイル」の「プロジェクトを書き出す」で.xriftstudioファイルを保存してください。パソコンにファイルを移し、デスクトップ版で開けば続きを編集できます。</p>
                 <a href={`${XRIFT_STUDIO_GUIDE_URL}ipad.html`} className="landing-text-link">タッチ操作と引き継ぎの手順<ArrowRight size={15} aria-hidden="true" /></a>
               </div>
             </div>
@@ -123,9 +123,9 @@ export default function LandingPage() {
           <div className="landing-container landing-ai-grid">
             <div className="landing-section-heading">
               <p className="landing-eyebrow">デスクトップ版のAI連携</p>
-              <h2>AIと一緒に、<br />シーンを編集。</h2>
-              <p>CodexやClaude CodeなどとMCPで接続します。モデルの配置やマテリアルの調整を会話で頼み、結果をエディターで確認します。</p>
-              <p>AIに頼んだモデルの配置や質感の変更も、Undoで戻せます。</p>
+              <h2>AIに頼んで、<br />シーンを編集する。</h2>
+              <p>CodexやClaude CodeなどをMCPで接続できます。モデルの配置やマテリアルの調整を会話で依頼し、結果をエディターで確認してください。</p>
+              <p>AIが変更した配置や質感も「元に戻す」で取り消せます。</p>
               <a href={`${XRIFT_STUDIO_GUIDE_URL}ai-connection.html`} className="landing-text-link">
                 <Bot size={17} aria-hidden="true" />AIの接続方法<ArrowRight size={15} aria-hidden="true" />
               </a>

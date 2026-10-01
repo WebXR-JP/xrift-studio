@@ -238,7 +238,7 @@ export function InteractivityTimeline({
   return (
     <section
       className="flex min-h-0 flex-1 flex-col border-t border-slate-700 bg-slate-950"
-      aria-label="ノードグラフのタイムライン"
+      aria-label="Node Graphのタイムライン"
     >
       <div className="flex shrink-0 items-center gap-2 border-b border-slate-800 px-3 py-1.5">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
@@ -254,8 +254,8 @@ export function InteractivityTimeline({
             className="h-6 rounded border border-slate-700 bg-slate-900 px-1 text-[10px] text-slate-200"
             aria-label="タイムラインの起点"
           >
-            <option value="start">開始時</option>
-            <option value="interact">インタラクト</option>
+            <option value="start">On Start</option>
+            <option value="interact">On Interact</option>
           </select>
         </label>
         <label className="flex items-center gap-1 text-[10px] text-slate-400">
@@ -292,8 +292,8 @@ export function InteractivityTimeline({
         {tracks.length === 0 ? (
           <p className="p-3 text-[11px] leading-5 text-slate-400">
             {entryPoint === "start"
-              ? "開始時に実行する処理がありません。「開始時」ノードに処理をつないでください。"
-              : "操作時に実行する処理がありません。「操作されたとき」ノードに処理をつないでください。"}
+              ? "開始時に実行する処理がありません。「On Start」ノードに処理をつないでください。"
+              : "操作時に実行する処理がありません。「On Interact」ノードに処理をつないでください。"}
           </p>
         ) : (
           <div className="min-w-[420px]">

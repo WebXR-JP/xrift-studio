@@ -150,7 +150,7 @@ export function SkyShaderStore({
             <div>
               <h3 className="text-xs font-semibold text-slate-900">Skybox Shader</h3>
               <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                自然・天候・宇宙・幻想・抽象・水中の空を、画像なしで描くマテリアルです
+                自然や天候、宇宙などの背景をシェーダーで描くマテリアルです。画像を用意せずに使えます。
               </p>
             </div>
             <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-[10px] font-semibold text-indigo-700">

@@ -820,7 +820,7 @@ function BuiltinPrefabCard({
           ) : (
             <span className="pointer-events-none flex h-10 items-center justify-center rounded border border-sky-100 bg-sky-50 text-sky-700"><Icon size={22} aria-hidden="true" /></span>
           )}
-          <span className="pointer-events-none min-w-0"><span className="block truncate text-xs font-semibold text-slate-800">{recipe.name}</span><span className="block text-[11px] font-medium text-sky-700">XRift 組み込み{recipe.configuration?.requiredBeforeCompile ? "・配置後に設定" : ""}</span></span>
+          <span className="pointer-events-none min-w-0"><span className="block truncate text-xs font-semibold text-slate-800">{recipe.name}</span><span className="block text-[11px] font-medium text-sky-700">XRift組み込み{recipe.configuration?.requiredBeforeCompile ? "・配置後に設定" : ""}</span></span>
           {!tablet ? <span className="pointer-events-none line-clamp-2 text-xs leading-4 text-slate-500" title={recipe.configuration?.hint}>{recipe.description}</span> : null}
         </div>
         <button type="button" disabled={readOnly} onClick={onPlace} className={`rounded bg-sky-600 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-700 disabled:opacity-40 ${tablet ? "min-h-11" : ""}`}>配置</button>
@@ -849,7 +849,7 @@ function BuiltinPrefabCard({
             <Icon size={22} aria-hidden="true" />
           </div>
         )}
-        <div className="pointer-events-none mt-2 flex min-w-0 items-start gap-1.5"><Icon size={15} className="mt-0.5 shrink-0 text-sky-700" aria-hidden="true" /><div className="min-w-0"><h3 className="truncate text-[13px] font-semibold text-slate-800">{recipe.name}</h3><p className="text-[11px] font-medium text-sky-700">XRift 組み込み</p></div></div>
+        <div className="pointer-events-none mt-2 flex min-w-0 items-start gap-1.5"><Icon size={15} className="mt-0.5 shrink-0 text-sky-700" aria-hidden="true" /><div className="min-w-0"><h3 className="truncate text-[13px] font-semibold text-slate-800">{recipe.name}</h3><p className="text-[11px] font-medium text-sky-700">XRift組み込み</p></div></div>
         <p className="pointer-events-none mt-1.5 line-clamp-2 text-xs leading-4 text-slate-500">{recipe.description}</p>
         {recipe.configuration?.requiredBeforeCompile ? (
           <p className="pointer-events-none mt-1 line-clamp-2 text-[11px] font-medium leading-4 text-amber-700" title={recipe.configuration.hint}>
@@ -1001,7 +1001,7 @@ function ImportActivityDrawer({
       {!projectPersisted && waitingForSave ? (
         <div className="mb-2 rounded-md border border-brand-200 bg-brand-50 p-2.5">
           <p className="text-xs leading-4 text-slate-700">
-            初回の自動保存を待っています。選択したファイルはこの画面を開いている間、保持します。
+            初回の自動保存が完了するまでお待ちください。選択したファイルは、この画面を開いている間は保持されます。
           </p>
           <button
             type="button"
@@ -1095,13 +1095,13 @@ function ImportQueueEntry({
           {entry.resourceKind === "unity-package"
             ? `Prefab ${entry.result.prefabCount ?? 0}件・Entity ${entry.result.entityCount ?? 0}件・素材 ${entry.result.assetCount ?? 0}件${entry.result.warningCount ? `・要確認 ${entry.result.warningCount}件` : ""}`
             : entry.resourceKind === "skybox"
-              ? "HDRI テクスチャ 1件・Skyboxへ設定済み"
+              ? "HDRIテクスチャ1件・Skyboxへ設定済み"
               : entry.resourceKind === "audio"
-                ? "音声素材 1件"
+                ? "音声素材1件"
               : entry.resourceKind === "font"
-                ? "フォント 1件"
+                ? "フォント1件"
               : entry.resourceKind === "shader"
-                ? "GLSL シェーダー素材 1件"
+                ? "GLSLシェーダー素材1件"
                 : `マテリアル ${entry.result.materialCount}件・テクスチャ ${entry.result.textureCount}件`}
         </p>
       ) : null}
@@ -1357,7 +1357,7 @@ export function AssetsPanel({
     externalOperationLockReason?.trim() || null;
   const activeAssetImport = hasActiveAssetImport(pendingImports);
   const importDisabledReason = readOnly
-    ? "動作確認を停止してからアセットをインポートしてください"
+    ? "Playを停止してから素材を取り込んでください"
     : normalizedExternalLockReason;
   const importLocked = Boolean(importDisabledReason);
   const assetMutationLocked =
@@ -1773,7 +1773,7 @@ export function AssetsPanel({
        * the only part allowed to shrink, and the actions drop their labels
        * through container queries instead of wrapping onto a second line.
        */}
-      <div className={`@container/assets-header flex shrink-0 border-b border-editor-border bg-editor-surface ${tablet ? "flex-col gap-1 px-2 py-1 [&_button]:min-h-11 [&_button]:min-w-11" : "h-10 items-center justify-between gap-3 px-3"}`}>
+      <div className={`editor-assets-header @container/assets-header flex shrink-0 border-b border-editor-border bg-editor-surface ${tablet ? "flex-col gap-1 px-2 py-1" : "h-10 items-center justify-between gap-3 px-3"}`}>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <h2 id="assets-heading" className="shrink-0 text-[13px] font-semibold text-slate-800">Assets</h2>
           {tablet ? <span className="min-w-0 flex-1 truncate text-xs text-editor-muted">{selectedAssetId ? assets.assets[selectedAssetId]?.name : ""}</span> : null}
@@ -2223,7 +2223,7 @@ export function AssetsPanel({
           {contextMenu.assetId && assets.assets[contextMenu.assetId]?.kind === "interactivity" ? (
             <ContextMenuItem
               icon="graph"
-              label="ノードグラフを編集"
+              label="Node Graphを編集"
               command="asset.edit-interactivity"
               onClick={() => {
                 const assetId = contextMenu.assetId;
@@ -2277,7 +2277,7 @@ export function AssetsPanel({
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="folder" label="新規フォルダー" command="asset.create-folder" onClick={() => { setContextMenu(null); onCommand("asset.create-folder"); }} />
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="material" label="新規マテリアル" command="asset.create-material" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-material", { folderId }); }} />
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="particle" label="新規パーティクル" command="asset.create-particle" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-particle", { folderId }); }} />
-          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="graph" label="新規ノードグラフ" command="asset.create-interactivity" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-interactivity", { folderId }); }} />
+          <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="graph" label="新規Node Graph" command="asset.create-interactivity" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-interactivity", { folderId }); }} />
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="script" label="新規スクリプト" command="asset.create-script" onClick={() => { const folderId = contextMenu.creationFolderId; setContextMenu(null); onCommand("asset.create-script", { folderId }); }} />
           <ContextMenuItem disabled={importLocked} disabledReason={importDisabledReason} icon="import" label="ファイルをインポート…" command="asset.import" onClick={() => { setContextMenu(null); if (onCommand("asset.import")) fileInputRef.current?.click(); }} />
           <ContextMenuItem disabled={assetMutationLocked} disabledReason={assetMutationDisabledReason} icon="prefab" label="Entityからプレハブを作成" command="prefab.create" onClick={() => { setContextMenu(null); onPhaseNotice(touch ? "HierarchyでEntityを選び、行の「… → プレハブを作成」を押してください" : "HierarchyのEntityをAssetsへドラッグしてください"); }} />
@@ -2287,7 +2287,7 @@ export function AssetsPanel({
 
       {fileDragOver ? (
         <div className="pointer-events-none absolute inset-2 z-40 flex items-center justify-center rounded-md border-2 border-dashed border-violet-500 bg-white/95 px-4 text-center text-[12px] font-semibold leading-5 text-violet-900 shadow-lg">
-          {importDisabledReason ?? "UnityPackage / シーン / プレハブ / 3Dモデル / テクスチャ / GLSL を解析してインポート"}
+          {importDisabledReason ?? "UnityPackage / シーン / プレハブ / 3Dモデル / テクスチャ / GLSLを解析してインポート"}
         </div>
       ) : null}
     </section>

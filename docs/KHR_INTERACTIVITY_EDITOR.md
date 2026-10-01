@@ -33,6 +33,14 @@ checked while authoring behavior.
 - `extension.graphs`, the canonical Khronos graph data
 - optional `extras.xriftStudio.position` per node for authoring layout only
 
+The Asset type is displayed as Node Graph. Newly generated graph names use
+Main, Interaction Trigger or Animation as appropriate. Asset names generated
+from a Model append Animation to the Model's name; new Assets created manually
+use numbered Node Graph names, and duplicated graphs append Copy. Names assigned
+by the author, including names already saved in an existing project, remain
+unchanged. Renaming UI labels does not change operations, socket IDs or saved
+type signatures.
+
 Unknown extension-defined operations are preserved. XRift Studio only adds a
 dedicated socket template where it understands the operation; it does not
 replace unknown behavior with proprietary event names or JavaScript.
@@ -59,7 +67,7 @@ The built-in `xrift-studio` MCP server exposes:
 **Read**
 
 - `list_interactivity_operations` — every operation the palette offers, each with
-  its Japanese label and description, its sockets, which of its value inputs
+  its English label and Japanese description, its sockets, which of its value inputs
   have a type the operation fixes, and whether the Play runtime executes it
 - `list_interaction_trigger_targets` — every Entity, Component and property an
   action can write to, with kinds, ranges and enum options
@@ -119,25 +127,26 @@ without replacing its canonical JSON.
 
 ### Every operation says what it does, as an action
 
-An operation template carries a Japanese `label` and a required `description`,
-and both are written as something the ノード *does*:「ランダムな数を出す」rather
-than「乱数」,「指定した秒だけ待つ」rather than「待機」. A noun label names a
-concept and leaves the author to guess what dropping it on the canvas would
-change, which is the reading cost the palette was charging on every node.
+An operation template carries an English `label` and a required Japanese
+`description`. The label uses a standard node name, such as Random or Set Delay.
+The description explains when the node runs and what it does before the author
+adds it to the canvas. Categories, ports and type names also appear in English;
+numbered inputs and outputs display only their position, counting from 1.
+Operation buttons and explanations remain in Japanese.
 
 The description is one plain sentence saying when the node runs and what it
 leaves behind — including the part that is not visible from the sockets, such
-as `flow/setDelay` continuing out of「出力」immediately and out of「完了後」only
+as `flow/setDelay` continuing out of Out immediately and out of Done only
 after the wait. It appears under the label in the palette, in the Node
 Inspector's header while the fields below are being edited, and in the card's
 hover text; the palette's search matches it as well as the label and the raw
-`op`, so「連打」finds `flow/throttle`. `list_interactivity_operations` returns
+`op`, so「間隔」finds `flow/throttle`. `list_interactivity_operations` returns
 it too, so an MCP client chooses on behavior rather than on the shape of a name.
 
 It is a required field rather than an optional one: an operation added to the
 palette without a sentence explaining it is a node no author can be expected to
 try. When a label changes, the socket hints in `InteractivityNodeCard.tsx` that
-quote it by name (「指定した秒だけ待つ」の待機ID) change with it, or the two
+quote it by name (Set Delay's Delay ID) change with it, or the two
 tell the author to look for a node that is no longer there.
 
 ### A fixed value is a socket's own literal
@@ -145,10 +154,10 @@ tell the author to look for a node that is no longer there.
 KHR_interactivity has no constant node. A number that does not come from
 another node reaches a socket as that socket's `value`, and the socket's type
 entry is what decides whether the author is sending `3` or `(0, 1, 0)`. So
-「固定値を送る」and「型を選ぶ」are one act, and the 設定 has to offer both
-in the same place or neither is reachable.
+entering a fixed value and choosing its type are one operation. The Node
+Inspector offers both in the same place.
 
-The 設定's 値 list is therefore built from every value input the operation
+The Node Inspector's value list is therefore built from every value input the operation
 declares, unioned with whatever the node already carries — the same union the
 card and the height estimate use, so a socket drawn on the canvas is always one
 the author can type into. Reading `node.values` alone was the bug this replaced:
@@ -160,8 +169,10 @@ rather than hidden — a socket that vanishes when wired reads as a socket that
 stopped existing.
 
 Each free socket carries a type list: `bool`, `int`, `float`, `float2`,
-`float3`, `float4`. Matrices are left out because four rows of boxes typed by
-hand is not an input anyone finishes; `math/combine2x2` builds one out of
+`float3`, `float4`. Their display names are Boolean, Integer, Float, Vector2,
+Vector3 and Vector4; the saved signatures remain unchanged. Matrices are left
+out because four rows of boxes typed by hand is not an input anyone finishes;
+`math/combine2x2` builds one out of
 numbers that are. Changing the type rewrites the literal to the new length,
 keeping the leading components and padding with zero, because a `float3` type
 over a one-entry value is rejected by the validator and read as zero by the
@@ -177,7 +188,7 @@ MCP agree on what is legal. `list_interactivity_operations` returns the map, so
 a client can tell the fixed sockets from the ones it may send a vector into
 without first being refused. A socket left out of the map is genuinely free:
 `pointer/set` writes whatever the pointer holds, a variable takes its own type,
-and「AとBを足す」adds two numbers or two vectors.
+and Add adds two numbers or two vectors.
 
 Retyping is refused for a socket fed by a wire as well. Such a socket takes its
 type from the node upstream, and writing one here would describe a value this
@@ -592,7 +603,7 @@ written after the wait out of the list of what a press touches, which is what
 the compiler emits a disabled trigger target from.
 
 An overshooting curve returns a ratio above 1 on purpose, and the blend is not
-clamped, so「少し行き過ぎて戻る」really passes its target. What keeps that from
+clamped, so Ease Out Back really passes its target. What keeps that from
 leaving a property outside its range is the write itself: a value is clamped to
 the range the property declares as it is applied, which is the same protection
 a hand-typed value needs.

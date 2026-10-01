@@ -301,7 +301,7 @@ export function useScriptRuntime({
           assetId: snapshot.assetId,
           assetName: snapshot.name,
           relativePath: snapshot.path,
-          message: "default export が defineScript(...) ではありません",
+          message: "default exportがdefineScript(...)ではありません",
         });
         continue;
       }

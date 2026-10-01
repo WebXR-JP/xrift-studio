@@ -174,7 +174,7 @@ export function assertRuntimeShellDependencies(
   const jsPaths = manifest.files.filter((path) => path.endsWith(".js")).sort();
   const declaredPaths = Object.keys(manifest.dependencies).sort();
   if (jsPaths.join("\0") !== declaredPaths.join("\0")) {
-    throw new Error("ランタイムシェルの依存一覧と JS ファイルが一致しません。");
+    throw new Error("ランタイムシェルの依存一覧とJSファイルが一致しません。");
   }
   for (const [source, dependencies] of Object.entries(manifest.dependencies)) {
     if (!Array.isArray(dependencies) ||
@@ -207,7 +207,7 @@ async function prepareWebUpload(
     (file) => file.relativePath === "xrift.json",
   )?.content;
   if (!configSource) {
-    throw new Error("公開用の xrift.json を生成できませんでした。");
+    throw new Error("公開用のxrift.jsonを生成できませんでした。");
   }
   // The desktop SDK path parses this same generated config. Keep its metadata,
   // security permissions and hash-affecting options aligned with that path.
@@ -313,7 +313,7 @@ export async function loadRuntimeShell(
   if (!response.ok) {
     throw new WebUploadUnsupportedError(
       "shell-missing",
-      `ランタイムシェルを取得できませんでした (${response.status})。node scripts/build-world-runtime-shell.mjs で生成してください。`,
+      `ランタイムシェルを取得できませんでした (${response.status})。node scripts/build-world-runtime-shell.mjsで生成してください。`,
     );
   }
 
@@ -366,7 +366,7 @@ function assertRuntimeShellFileResponse(
     /^<(?:!doctype\s+html|html\b|head\b|body\b)/i.test(prefix)) {
     throw new WebUploadUnsupportedError(
       "shell-missing",
-      `ランタイムシェルのファイルが HTML として返されました: ${path}。開発サーバーを再起動するか、配信先のファイルを確認してください。`,
+      `ランタイムシェルのファイルがHTMLとして返されました: ${path}。開発サーバーを再起動するか、配信先のファイルを確認してください。`,
     );
   }
 }
@@ -379,7 +379,7 @@ async function assertRuntimeShellIntegrity(
   if (!subtle) {
     throw new WebUploadUnsupportedError(
       "shell-missing",
-      "ランタイムシェルの整合性を確認できません。HTTPS または localhost から開いてください。",
+      "ランタイムシェルの整合性を確認できません。HTTPSまたはlocalhostから開いてください。",
     );
   }
   const encoder = new TextEncoder();
@@ -429,7 +429,7 @@ export function parseShellManifest(value: unknown): ShellManifest {
   }
   if (record.runtimeContract !== REQUIRED_RUNTIME_SHELL_CONTRACT) {
     throw new Error(
-      `ランタイムシェルが古いため公開できません。要求契約 ${REQUIRED_RUNTIME_SHELL_CONTRACT}、検出値 ${typeof record.runtimeContract === "string" ? record.runtimeContract : "なし"}。node scripts/build-world-runtime-shell.mjs で再生成してください。`,
+      `ランタイムシェルが古いため公開できません。要求契約 ${REQUIRED_RUNTIME_SHELL_CONTRACT}、検出値 ${typeof record.runtimeContract === "string" ? record.runtimeContract : "なし"}。node scripts/build-world-runtime-shell.mjsで再生成してください。`,
     );
   }
   if (!record.dependencies || typeof record.dependencies !== "object" ||
@@ -567,13 +567,13 @@ export class WebUploadRejectedError extends Error {
 /** Turns an SDK error into a message that says what to do next. */
 export function describeSdkError(error: unknown): string {
   if (error instanceof XriftAuthError) {
-    return "APIキーが受け付けられませんでした。設定画面で有効なキーと write:worlds 権限を確認してください。";
+    return "APIキーが受け付けられませんでした。設定画面で有効なキーとwrite:worlds権限を確認してください。";
   }
   if (error instanceof XriftApiError) {
     // 403 from a scoped API key means the key was issued without the write
     // scope, which is fixed by reissuing it rather than by retrying.
     if (error.statusCode === 403) {
-      return `このトークンにはワールドを公開する権限がありません (${redactToken(error.message)})。APIキーを使う場合は write:worlds スコープを付けて発行し直してください。`;
+      return `このトークンにはワールドを公開する権限がありません (${redactToken(error.message)})。APIキーを使う場合はwrite:worldsスコープを付けて発行し直してください。`;
     }
     return `XRiftがアップロードを拒否しました (${error.statusCode}): ${redactToken(error.message)}`;
   }
@@ -583,7 +583,7 @@ export function describeSdkError(error: unknown): string {
     // available to this code can tell an unreachable host from a response the
     // browser refused to expose, so name both possibilities rather than
     // asserting one. The devtools console does carry the real reason.
-    return `XRiftへ送信できませんでした: ${redactToken(error.message)}。ネットワーク接続、またはブラウザがレスポンスを読み取れているか (CORS) を確認してください。詳しい理由はブラウザの開発者ツールのコンソールに表示されます。`;
+    return `XRiftへ送信できませんでした: ${redactToken(error.message)}。ネットワーク接続、またはブラウザがレスポンスを読み取れているか (CORS)を確認してください。詳しい理由はブラウザの開発者ツールのコンソールに表示されます。`;
   }
   if (error instanceof Error) return redactToken(error.message);
   return redactToken(String(error));

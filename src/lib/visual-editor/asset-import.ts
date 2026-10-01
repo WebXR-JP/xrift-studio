@@ -542,7 +542,7 @@ async function createAssetImportPlanInternal(
       message:
         bytes.byteLength === 0
           ? "空のファイルは取り込めません"
-          : `取り込み上限 ${ASSET_IMPORT_MAX_BYTES / 1024 / 1024} MB を超えています`,
+          : `取り込み上限 ${ASSET_IMPORT_MAX_BYTES / 1024 / 1024} MBを超えています`,
       fileName,
       fieldPath: "bytes",
     });

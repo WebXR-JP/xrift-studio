@@ -709,7 +709,7 @@ function scatterBamboo(
 const CAMPFIRE: SceneRecipe = {
   id: SCENE_RECIPE_IDS.campfire,
   name: "焚き火",
-  description: "石の炉、焦げた薪と熾火、炎、薄い煙、暖色のライトをまとめて置きます。",
+  description: "石の炉、焦げた薪、赤く光る炭、炎、薄い煙、暖色のライトをまとめて配置できます。",
   category: "light",
   projectKinds: ["world", "item"],
   note: "音は含みません。焚き火の音を鳴らすには、MP3を音声素材として取り込み、この焚き火へ音源を追加してください。",
@@ -791,7 +791,7 @@ const CAMPFIRE: SceneRecipe = {
 const STREET_LIGHT: SceneRecipe = {
   id: SCENE_RECIPE_IDS.streetLight,
   name: "街灯",
-  description: "支柱、笠、光る球、届く範囲を決めたライトを1本で置きます。",
+  description: "支柱、笠、光る球、照射範囲を設定したライトをまとめた街灯です。",
   category: "light",
   projectKinds: ["world", "item"],
   note: "球の光をにじませるには、シーン設定のPost ProcessingとBloomを有効にします。無効でもライトは点きます。",
@@ -825,7 +825,7 @@ const STREET_LIGHT: SceneRecipe = {
 const TORCH: SceneRecipe = {
   id: SCENE_RECIPE_IDS.torch,
   name: "松明",
-  description: "細い柄に小さな炎と火の粉、手元を照らす暖色のライト。",
+  description: "細い柄に小さな炎と火の粉を付けた松明です。暖色のライトで手元を照らします。",
   category: "light",
   projectKinds: ["world", "item"],
   note: "壁に付ける場合は、追加後に位置・回転・大きさのRotationで傾けてください。炎は柄の先に固定されているので一緒に傾きます。",
@@ -884,7 +884,7 @@ const TORCH: SceneRecipe = {
 const FOUNTAIN: SceneRecipe = {
   id: SCENE_RECIPE_IDS.fountain,
   name: "噴水",
-  description: "二段の石造噴水。受け皿と水面、流れ落ちる水筋、中央の飛沫。",
+  description: "2段の石造噴水です。受け皿、水面、流れ落ちる水、中央の飛沫を含みます。",
   category: "water",
   projectKinds: ["world", "item"],
   note: "水面と水筋は静的なGLBで、中央の飛沫だけが動きます。水音とColliderは含みません。",
@@ -918,7 +918,7 @@ const FOUNTAIN: SceneRecipe = {
 const FIREFLY_BUSH: SceneRecipe = {
   id: SCENE_RECIPE_IDS.fireflyBush,
   name: "蛍の茂み",
-  description: "低い茂みと、その上を漂う蛍。",
+  description: "低い茂みと、その上を漂う蛍をまとめて配置できます。",
   category: "nature",
   projectKinds: ["world", "item"],
   note: "蛍は暗いほど見えます。昼の空のままだとほとんど見えないので、夜空のプリセットか暗めのライトと合わせてください。",
@@ -964,7 +964,7 @@ const FIREFLY_BUSH: SceneRecipe = {
 const BENCH: SceneRecipe = {
   id: SCENE_RECIPE_IDS.bench,
   name: "ベンチ",
-  description: "木の座面と背もたれ、脚を渡す貫木を持つ1.6mの公園ベンチ。",
+  description: "幅1.6mの公園ベンチです。木の座面と背もたれ、脚をつなぐ横木を含みます。",
   category: "furniture",
   projectKinds: ["world", "item"],
   note: "座る機能は付いていません。見た目の家具として置けます。人が上を歩けないようにするならColliderを追加してください。",
@@ -983,10 +983,10 @@ const BENCH: SceneRecipe = {
 const LANTERNS: SceneRecipe = {
   id: SCENE_RECIPE_IDS.lanterns,
   name: "提灯",
-  description: "横木に下げた3つの提灯と、下を照らす1灯。",
+  description: "横木から3つの提灯を下げた飾りです。下を照らすライトを1灯含みます。",
   category: "light",
   projectKinds: ["world", "item"],
-  note: "Bloomを有効にすると、提灯の光がにじみます。ライトは提灯ごとではなく中央に1つだけ置いています。",
+  note: "Bloomを有効にすると提灯の光がにじみます。ライトは中央に1灯配置しています。",
   parts: [
     {
       kind: "primitive",
@@ -1030,7 +1030,7 @@ const LANTERNS: SceneRecipe = {
 const STONE_LANTERN: SceneRecipe = {
   id: SCENE_RECIPE_IDS.stoneLantern,
   name: "石灯籠",
-  description: "基礎、竿、火袋、笠を積んだ石の灯り。",
+  description: "台座、支柱、灯りを入れる囲い、笠を重ねた石灯籠です。",
   category: "light",
   projectKinds: ["world", "item"],
   note: "火袋の光はBloomが有効なときに強く見えます。無効でもライトは点きます。",
@@ -1109,7 +1109,7 @@ const CANDELABRA: SceneRecipe = {
 const TREE: SceneRecipe = {
   id: SCENE_RECIPE_IDS.tree,
   name: "木",
-  description: "根元から枝先へ細くなる幹と枝、一枚ずつ形のある葉でできた約3mの木。",
+  description: "高さ約3mの木です。根元から枝先に向かって細くなる幹と枝、1枚ずつ形を作った葉を含みます。",
   category: "nature",
   projectKinds: ["world", "item"],
   note: "森にするときはこのセットを複製し、位置・回転・大きさで大きさと向きを変えてください。同じ木が並ぶと不自然に見えます。",
@@ -1128,7 +1128,7 @@ const TREE: SceneRecipe = {
 const BAMBOO: SceneRecipe = {
   id: SCENE_RECIPE_IDS.bamboo,
   name: "竹林",
-  description: "高さの違う竹が7本。狭い場所の目隠しにも使えます。",
+  description: "高さの異なる7本の竹です。狭い場所の目隠しにも使えます。",
   category: "nature",
   projectKinds: ["world", "item"],
   note: "Colliderは含みません。通り抜けさせたくない場合は幹ごとに追加してください。",
@@ -1138,24 +1138,24 @@ const BAMBOO: SceneRecipe = {
 const ROCKS: SceneRecipe = {
   id: SCENE_RECIPE_IDS.rocks,
   name: "岩場",
-  description: "大きさの違う岩が6つ。地形の切れ目を隠すのに向きます。",
+  description: "大きさの異なる6つの岩です。地形の切れ目を隠すのにも使えます。",
   category: "nature",
   projectKinds: ["world", "item"],
   note: "地面へめり込ませる前提の配置です。位置・回転・大きさで少し沈めると据わりが良くなります。",
   parts: [
-    rockPart("岩 1", "rockA", [0, 0, 0], [1.071, 0.81, 0.952], [0.06, 0.4, 0.04]),
-    rockPart("岩 2", "rockB", [0.75, 0, 0.4], [0.833, 0.611, 0.764], [0, -0.7, 0.05]),
-    rockPart("岩 3", "rockA", [-0.6, 0, 0.35], [0.595, 0.429, 0.548], [0, 0, 0]),
-    rockPart("岩 4", "rockB", [-0.35, 0, -0.7], [0.611, 0.444, 0.556], [0.04, 1.1, 0]),
-    rockPart("岩 5", "rockA", [0.5, 0, -0.6], [0.405, 0.31, 0.381], [0, 0, 0]),
-    rockPart("岩 6", "rockB", [1.1, 0, -0.15], [0.417, 0.278, 0.389], [0, 0.5, 0.06]),
+    rockPart("岩1", "rockA", [0, 0, 0], [1.071, 0.81, 0.952], [0.06, 0.4, 0.04]),
+    rockPart("岩2", "rockB", [0.75, 0, 0.4], [0.833, 0.611, 0.764], [0, -0.7, 0.05]),
+    rockPart("岩3", "rockA", [-0.6, 0, 0.35], [0.595, 0.429, 0.548], [0, 0, 0]),
+    rockPart("岩4", "rockB", [-0.35, 0, -0.7], [0.611, 0.444, 0.556], [0.04, 1.1, 0]),
+    rockPart("岩5", "rockA", [0.5, 0, -0.6], [0.405, 0.31, 0.381], [0, 0, 0]),
+    rockPart("岩6", "rockB", [1.1, 0, -0.15], [0.417, 0.278, 0.389], [0, 0.5, 0.06]),
   ],
 };
 
 const STUMP: SceneRecipe = {
   id: SCENE_RECIPE_IDS.stump,
   name: "切り株",
-  description: "年輪の見える切り株と、根元のきのこ。",
+  description: "年輪の見える切り株と、根元のきのこをまとめて配置できます。",
   category: "nature",
   projectKinds: ["world", "item"],
   note: "座れる機能は付いていません。見た目の小物として置けます。",
@@ -1174,23 +1174,23 @@ const STUMP: SceneRecipe = {
 const FIREWOOD: SceneRecipe = {
   id: SCENE_RECIPE_IDS.firewood,
   name: "薪の山",
-  description: "横に寝かせた薪を積んだ小山。焚き火の隣に。",
+  description: "横に寝かせた薪の山です。焚き火の隣などに配置できます。",
   category: "nature",
   projectKinds: ["world", "item"],
   note: "薪はモデルパーツです。向きを変えるときは親の位置・回転・大きさを回すと束のまま動きます。",
   parts: [
-    logPart("薪 1", [-0.42, 0, 0.16], 0.05, [1, 1, 1]),
-    logPart("薪 2", [-0.4, 0, -0.1], -0.08, [0.95, 0.95, 0.95]),
-    logPart("薪 3", [-0.38, 0, 0.42], 0.15, [0.85, 0.9, 0.9]),
-    logPart("薪 4", [-0.4, 0.09, 0.03], 0.02, [0.97, 0.95, 0.95]),
-    logPart("薪 5", [-0.38, 0.17, 0.1], -0.05, [0.8, 0.85, 0.85]),
+    logPart("薪1", [-0.42, 0, 0.16], 0.05, [1, 1, 1]),
+    logPart("薪2", [-0.4, 0, -0.1], -0.08, [0.95, 0.95, 0.95]),
+    logPart("薪3", [-0.38, 0, 0.42], 0.15, [0.85, 0.9, 0.9]),
+    logPart("薪4", [-0.4, 0.09, 0.03], 0.02, [0.97, 0.95, 0.95]),
+    logPart("薪5", [-0.38, 0.17, 0.1], -0.05, [0.8, 0.85, 0.85]),
   ],
 };
 
 const SNOWMAN: SceneRecipe = {
   id: SCENE_RECIPE_IDS.snowman,
   name: "雪だるま",
-  description: "雪玉2つに目と鼻。冬の広場の目印に。",
+  description: "2つの雪玉に目と鼻を付けた雪だるまです。冬の広場の目印などに使えます。",
   category: "effect",
   projectKinds: ["world", "item"],
   note: "顔は前(+Z)を向いています。向きを変えるときは親の位置・回転・大きさを回してください。",
@@ -1209,7 +1209,7 @@ const SNOWMAN: SceneRecipe = {
 const HOT_SPRING: SceneRecipe = {
   id: SCENE_RECIPE_IDS.hotSpring,
   name: "露天風呂",
-  description: "石で囲った湯船と、立ちのぼる湯気。",
+  description: "石で囲った湯船と、立ちのぼる湯気をまとめて配置できます。",
   category: "water",
   projectKinds: ["world", "item"],
   note: "湯は青いマテリアルの面です。波を立てるには、「外部から追加」のWater Shaderを湯のマテリアルへ割り当ててください。",
@@ -1305,7 +1305,7 @@ const MAGIC_CIRCLE: SceneRecipe = {
 const WARP_PILLAR: SceneRecipe = {
   id: SCENE_RECIPE_IDS.warpPillar,
   name: "ワープの柱",
-  description: "光の柱と昇っていく粒。移動先の目印に。",
+  description: "光の柱と上昇する粒を配置できます。移動先の目印などに使えます。",
   category: "effect",
   projectKinds: ["world", "item"],
   note: "見た目だけのセットです。実際に移動させるには、XRift公式ComponentのPortalを重ねて置いてください。",
@@ -1330,7 +1330,7 @@ const WARP_PILLAR: SceneRecipe = {
 const COLUMN: SceneRecipe = {
   id: SCENE_RECIPE_IDS.column,
   name: "石柱",
-  description: "基礎、柱身、柱頭でできた3.2mの柱。",
+  description: "高さ3.2mの柱です。台座、柱本体、上部の飾りを含みます。",
   category: "structure",
   projectKinds: ["world", "item"],
   note: "Colliderは含みません。ぶつかるようにするには柱身へBox Colliderを追加してください。",
@@ -1349,7 +1349,7 @@ const COLUMN: SceneRecipe = {
 const ARCH_GATE: SceneRecipe = {
   id: SCENE_RECIPE_IDS.archGate,
   name: "アーチ門",
-  description: "2本の柱と梁。くぐれる幅で置いています。",
+  description: "2本の柱と梁を組んだ門です。人がくぐれる幅があります。",
   category: "structure",
   projectKinds: ["world", "item"],
   note: "内側の幅は約2.2mです。くぐれるようにするには、柱にだけColliderを足してください。",
@@ -1377,7 +1377,7 @@ const ARCH_GATE: SceneRecipe = {
 const STAIRS: SceneRecipe = {
   id: SCENE_RECIPE_IDS.stairs,
   name: "階段",
-  description: "5段の階段。1段18cmで上れる高さです。",
+  description: "5段の階段です。1段の高さは18cmで、上って移動できます。",
   category: "structure",
   projectKinds: ["world"],
   note: "Colliderは含みません。上れるようにするには段ごとにBox Colliderを追加してください。",
@@ -1415,7 +1415,7 @@ const WALL: SceneRecipe = {
 const TABLE_SET: SceneRecipe = {
   id: SCENE_RECIPE_IDS.tableSet,
   name: "テーブルと椅子",
-  description: "4本脚のテーブルと丸椅子2脚。",
+  description: "4本脚のテーブルと2脚の丸椅子をまとめて配置できます。",
   category: "furniture",
   projectKinds: ["world", "item"],
   note: "座る機能は付いていません。物を置くならテーブル天板の高さは0.74mです。",
@@ -1430,7 +1430,7 @@ const TABLE_SET: SceneRecipe = {
     },
     {
       kind: "model",
-      name: "椅子 1",
+      name: "椅子1",
       modelId: "stool",
       position: [0, 0, 0.85],
       rotation: [0, 0, 0],
@@ -1438,7 +1438,7 @@ const TABLE_SET: SceneRecipe = {
     },
     {
       kind: "model",
-      name: "椅子 2",
+      name: "椅子2",
       modelId: "stool",
       position: [0, 0, -0.85],
       rotation: [0, 0, 0],
@@ -1450,7 +1450,7 @@ const TABLE_SET: SceneRecipe = {
 const WELL: SceneRecipe = {
   id: SCENE_RECIPE_IDS.well,
   name: "井戸",
-  description: "石囲いと屋根、水面まで。広場の中心に。",
+  description: "石囲い、屋根、水面を含む井戸です。広場の中心などに配置できます。",
   category: "structure",
   projectKinds: ["world", "item"],
   note: "石積みの内側に静的な水面があります。Colliderは含みません。落ちないようにするには石囲いへColliderを追加してください。",
@@ -1477,7 +1477,7 @@ const WELL: SceneRecipe = {
 const PIER: SceneRecipe = {
   id: SCENE_RECIPE_IDS.pier,
   name: "桟橋",
-  description: "水面へ張り出す板と杭。水辺の入口に。",
+  description: "水面へ張り出す板と杭を組んだ桟橋です。水辺の入口などに配置できます。",
   category: "structure",
   projectKinds: ["world"],
   note: "Colliderは含みません。上を歩けるようにするには板へBox Colliderを追加してください。",
@@ -1496,10 +1496,10 @@ const PIER: SceneRecipe = {
 const DOOR: SceneRecipe = {
   id: SCENE_RECIPE_IDS.door,
   name: "ドア",
-  description: "枠とノブ付きのドア。幅0.9m、壁の開口部に置きます。",
+  description: "幅0.9mのドアです。枠とノブを含みます。壁の開口部に配置してください。",
   category: "structure",
   projectKinds: ["world"],
-  note: "Colliderは含みません。通り抜けを止めるにはドアへBox Colliderを追加してください。開閉はできない見た目だけのドアです。",
+  note: "外観のみのドアで、開閉機能とColliderは含みません。通り抜けを防ぐにはBox Colliderを追加してください。",
   parts: [
     {
       kind: "model",
@@ -1537,7 +1537,7 @@ const FLOOR_PANEL: SceneRecipe = {
   description: "2m四方の床板タイル。並べて部屋の床に敷けます。",
   category: "structure",
   projectKinds: ["world"],
-  note: "原点は歩ける面（上面）です。板の厚みぶんだけ下に沈むので、既存の地面と同じ高さに置くと段差なく馴染みます。隣に並べるときは2mぶんずらしてください。",
+  note: "原点は床板の上面にあります。既存の地面と原点の高さを合わせると、段差なく配置できます。隣に並べるときは2mずつずらしてください。",
   parts: [
     {
       kind: "model",
@@ -1553,7 +1553,7 @@ const FLOOR_PANEL: SceneRecipe = {
 const WALL_PANEL: SceneRecipe = {
   id: SCENE_RECIPE_IDS.wallPanel,
   name: "壁パネル",
-  description: "幅2m・高さ2.4mの壁パネル。幅木付き。並べて部屋の壁を組めます。",
+  description: "幅2m、高さ2.4mの幅木付き壁パネルです。並べて部屋の壁を作れます。",
   category: "structure",
   projectKinds: ["world"],
   note: "Colliderは含みません。通り抜けを止めるには壁へBox Colliderを追加してください。並べるときは幅2mぶん横にずらすと隙間なく続きます。",
@@ -1573,11 +1573,11 @@ const RECORDING_STUDIO: SceneRecipe = {
   id: SCENE_RECIPE_IDS.recordingStudio,
   name: "収録スタジオ",
   description:
-    "小さな FM ラジオ局の収録ブース。3.6 x 2.8m の一室に机、椅子、マイク、ON AIR サインまで入っています。",
+    "小さなFMラジオ局の収録ブース。3.6 x 2.8mの一室に机、椅子、マイク、ON AIRサインまで入っています。",
   category: "structure",
   projectKinds: ["world"],
   preview: { cameraPosition: [-1.8, 2.15, 1.42], lookAtY: 0.85, ground: false },
-  note: "床と壁を含む一体の3Dモデルです。原点は部屋の床の中心なので、既存の地面と同じ高さに置いてください。地面と床が重なるとZ-fightingするので、部屋の下の地面は消すか下げてください。Mesh Colliderが入っているので、そのまま中を歩けます。",
+  note: "床と壁をまとめた3Dモデルです。原点は床の中心にあります。既存の地面と同じ高さに配置してください。地面と床が重なると表示がちらつくため、部屋の下の地面は削除するか下げてください。Mesh Colliderを含むので、そのまま中を歩けます。",
   parts: [
     {
       kind: "model",
@@ -1612,17 +1612,17 @@ const SOUND_BUTTON: SceneRecipe = {
   id: SCENE_RECIPE_IDS.soundButton,
   name: "音の出るボタン",
   description:
-    "押すと沈んで光り、音が鳴って戻るボタンです。操作の受け付け、音源、ノードグラフの組み合わせを確認できます。",
+    "押すと沈んで光り、音が鳴って戻るボタンです。操作の受け付け、音源、Node Graphの組み合わせを確認できます。",
   category: "tutorial",
   projectKinds: ["world", "item"],
-  note: "動作確認を開始して、ボタンにカーソルを合わせてクリックしてください。音はボタンの音源から鳴ります。設定の「音源」で素材を差し替えると、そのまま自分の音になります。",
+  note: "Playを開始し、ボタンにカーソルを合わせてクリックしてください。ボタンに設定した音源が鳴ります。「音源」の素材を差し替えると、好きな音を使えます。",
   lesson: {
     goal: "押したら何かが起きる、をひと通り自分で作れるようになります",
     steps: [
       "動作確認を開始し、ボタンを見てクリックします。音が鳴り、ボタンが沈んで光り、元へ戻ります。",
-      "動作確認を停止し、Hierarchyで「ボタン」を選びます。Interactable、音源、グラフの実行の3つが載っています。",
-      "グラフの実行のGraphを開きます。「押されたとき」から、音・光る・沈む・戻る、の順につながっています。",
-      "沈んで戻る2つは、位置を書くアクションです。戻る側だけ「完了後」からつないでいるので、沈み切ってから戻ります。",
+      "動作確認を停止し、Hierarchyで「ボタン」を選びます。Interactable、Audio Source、Interaction Triggerの3つが載っています。",
+      "Interaction TriggerのNode Graphを開いてください。「On Interact」から、音・光る・沈む・戻る、の順につながっています。",
+      "沈んで戻る2つは、位置を書くアクションです。戻る側だけ「Done」からつないでいるので、沈み切ってから戻ります。",
       "音源の素材を、自分で読み込みした音に差し替えます。グラフはそのままで音だけ変わります。",
     ],
   },
@@ -1655,15 +1655,15 @@ const LIGHT_SWITCH: SceneRecipe = {
   id: SCENE_RECIPE_IDS.lightSwitch,
   name: "灯りのスイッチ",
   description:
-    "ボタンを押すと、離れた場所に立つランプが点いたり消えたりします。押したものとは違うEntityを書き換える、いちばん短い例です。",
+    "ボタンを押すと、離れたランプの点灯と消灯が切り替わります。操作したボタンから別のEntityを変更する例です。",
   category: "tutorial",
   projectKinds: ["world", "item"],
-  note: "灯りは消えた状態で置かれます。動作確認を開始してボタンを押すと点きます。ライトは「灯り」Entityにあるので、色や強さはそこの設定で変えられます。",
+  note: "ランプは消灯した状態で配置されます。Playを開始してボタンを押すと点灯します。色や強さは「灯り」Entityのライト設定で変更してください。",
   lesson: {
     goal: "押したEntityとは別のEntityを、グラフから動かせるようになります",
     steps: [
       "動作確認を開始してボタンを押します。カチッと鳴って灯りが点き、もう一度押すと消えます。",
-      "動作確認を停止し、「スイッチ」のグラフの実行のグラフを開きます。点灯のアクションだけ対象が「灯り」になっています。",
+      "動作確認を停止し、「スイッチ」のInteraction TriggerのNode Graphを開いてください。点灯のアクションだけ対象が「灯り」になっています。",
       "対象のEntityを別のものに変えると、同じスイッチで別の灯りを点けられます。シーンに灯りを増やして試してください。",
       "「点灯」は「切り替える」なので値を持ちません。ON/OFFを決め打ちしたいときは「設定する」に変えます。",
       "「灯り」Entityのライトで、色と強さを変えて動作確認し直します。",
@@ -1709,7 +1709,7 @@ const AMBIENT_SPEAKER: SceneRecipe = {
   id: SCENE_RECIPE_IDS.ambientSpeaker,
   name: "環境音のスピーカー",
   description:
-    "つなぎ目のない4秒のループを流し続けるスピーカーです。近づくと大きく、離れると聞こえなくなる距離の設定が、そのまま入っています。",
+    "4秒の音声をつなぎ目なく繰り返すスピーカーです。近づくほど大きく聞こえ、一定の距離を超えると聞こえなくなるように設定されています。",
   category: "tutorial",
   projectKinds: ["world", "item"],
   note: "動作確認を開始した時点から鳴り続けます。ブラウザの仕様で、最初のクリックまで音が出ないことがあります。無音のまま置きたいときは、音源のAutoplayをオフにしてください。",
@@ -1717,7 +1717,7 @@ const AMBIENT_SPEAKER: SceneRecipe = {
     goal: "空間に置く音の、聞こえる範囲を自分で決められるようになります",
     steps: [
       "動作確認を開始して、スピーカーに近づいたり離れたりします。音量が距離で変わります。",
-      "動作確認を停止し、「環境音」Entityの音源を開きます。Ref distanceが全開で聞こえる距離、Max distanceが聞こえなくなる距離です。",
+      "Playを停止し、「環境音」Entityの音源設定を開いてください。Ref distanceは設定した音量で聞こえる距離、Max distanceは聞こえなくなる距離です。",
       "Max distanceを小さくして動作確認し直すと、すぐ聞こえなくなります。部屋ごとに違う音を置くときの調整です。",
       "Spatialをオフにすると、どこにいても同じ音量で鳴ります。BGMはこちらです。",
       "素材を読み込みした自分の音に差し替えます。ループさせる音は、始まりと終わりがつながっているものを選んでください。",
@@ -1759,10 +1759,10 @@ const SLIDING_DOOR: SceneRecipe = {
     goal: "「動かす」「待つ」「戻す」を1本のグラフでつなげられるようになります",
     steps: [
       "動作確認を開始して扉を押します。音とともに開き、少し待って閉まります。",
-      "動作確認を停止し、「扉」のグラフの実行のグラフを開きます。上から、音・開く・待つ・閉じる、の順に並んでいます。",
-      "「開く」のアクションの「かける時間」を3秒にすると、3秒かけて開きます。位置の値を変えれば開く幅が変わります。",
+      "動作確認を停止し、「扉」のInteraction TriggerのNode Graphを開いてください。上から、音・開く・待つ・閉じる、の順に並んでいます。",
+      "「開く」のアクションの「Duration (s)」を3秒にすると、3秒かけて開きます。位置の値を変えれば開く幅が変わります。",
       "待ち時間のノードの秒数を変えると、開いたままの長さが変わります。",
-      "「開く」から「待つ」へのつなぎは、出力ではなく「完了後」です。移動し終わってから数え始めたいので、ここだけ別のソケットを使っています。",
+      "「開く」の「Done」を「待つ」につないでいます。扉の移動が終わってから待機時間を数え始める設定です。",
     ],
   },
   behaviours: [
@@ -1832,7 +1832,7 @@ const CONFETTI_BUTTON: SceneRecipe = {
     goal: "押したときだけ出るエフェクトの作り方が分かります",
     steps: [
       "動作確認を開始してボタンを押します。押すたびに紙吹雪が出ます。",
-      "動作確認を停止し、「紙吹雪」Entityを選びます。グラフの実行が1つ載っていて、そのグラフは「開始時」から放出をOFFにしています。",
+      "Playを停止し、「紙吹雪」Entityを選んでください。Interaction Triggerを1つ含み、「On Start」に放出をオフにする設定になっています。",
       "これが、置いた瞬間に出てしまうエフェクトを止めておく方法です。ボタン側のグラフは「出し直す」を書いています。",
       "「出し直す」は、押すたびに最初から出し直すという意味です。押しっぱなしにしたいときは「放出」をONにするアクションへ変えます。",
       "素材のパーティクルを開いて、色と量を自分の演出に合わせます。",
@@ -1898,7 +1898,7 @@ const TELEPORT_PAD: SceneRecipe = {
     "押すと画面が白くなり、決めた座標へ移動して、また明るくなります。移動と暗転を1本につないだ、行き来のある世界の基本形です。",
   category: "tutorial",
   projectKinds: ["world", "item"],
-  note: "行き先の初期値はワールド原点です。「テレポート」アクションの値を、飛ばしたい場所の座標へ変えてから使ってください。移動するのも画面が変わるのも、押した人だけです。",
+  note: "移動先の初期値はワールドの原点です。「テレポート」の値を目的地の座標に変えてください。移動と画面の変化は、ボタンを押した人にだけ反映されます。",
   lesson: {
     goal: "押した人だけを動かす移動と、暗転の作り方が分かります",
     steps: [
@@ -1975,15 +1975,15 @@ const LIGHT_COLOR_PANEL: SceneRecipe = {
     "3つのボタンが、同じランプの色をそれぞれの色に変えます。1つのセットに3本のグラフが入った、いちばん分かりやすい形です。",
   category: "tutorial",
   projectKinds: ["world", "item"],
-  note: "色はライトの色です。押した人だけでなく全員に見えます。ボタンを増やすときは、どれか1つのグラフの実行を複製し、色の値だけ変えてください。",
+  note: "色はライトの色です。押した人だけでなく全員に見えます。ボタンを増やすときは、どれか1つのInteraction Triggerを複製し、色の値だけ変えてください。",
   lesson: {
     goal: "同じ対象を、複数のボタンから別々に変えられるようになります",
     steps: [
       "動作確認を開始して3つのボタンを順に押します。ランプの色が変わります。",
       "動作確認を停止し、どれか1つのボタンのグラフを開きます。中身は「色を設定する」1つだけです。",
       "色の値を変えて、自分の色にします。3つとも同じ形なので、迷うところがありません。",
-      "「かける時間」を1秒にすると、1秒かけて色が変わります。",
-      "4つ目の色が欲しくなったら、ボタンEntityを複製し、グラフの実行が指すグラフを複製したものへ差し替えます。",
+      "「Duration (s)」を1秒にすると、1秒かけて色が変わります。",
+      "4つ目の色が欲しくなったら、ボタンEntityを複製し、Interaction Triggerが参照するNode Graphを複製したものへ差し替えます。",
     ],
   },
   behaviours: [
@@ -2089,8 +2089,8 @@ const DAY_NIGHT_PANEL: SceneRecipe = {
     goal: "ワールド全体の見え方を、押した人の画面だけで変えられるようになります",
     steps: [
       "動作確認を開始して「夜」を押します。2秒かけて暗くなります。「昼」で戻ります。",
-      "動作確認を停止し、「夜のボタン」のグラフを開きます。対象がEntityではなくシーンになっています。",
-      "露出と環境光の強さを、それぞれ好みの値に変えます。「かける時間」で変化の速さが決まります。",
+      "Playを停止し、「夜のボタン」のグラフを開いてください。変更対象はシーンに設定されています。",
+      "露出と環境光の強さを、それぞれ好みの値に変えます。「Duration (s)」で変化の速さが決まります。",
       "シーンへの書き込みは押した人だけに効きます。重い端末の人が自分でPost Processingを切れるのも同じ仕組みです。",
       "フォグや空の明るさも同じ対象から書けます。夕方や霧の朝を足してみてください。",
     ],
@@ -2174,7 +2174,7 @@ const QUALITY_SWITCH: SceneRecipe = {
   id: SCENE_RECIPE_IDS.qualitySwitch,
   name: "画質のスイッチ",
   description:
-    "押すとPost Processingが切れて、重い端末でも動くようになります。ワールドの品質を下げずに、見る人が自分で選べるようにする置き方です。",
+    "ボタンを押すと、その人の画面でPost Processingがオフになり、描画負荷が下がります。参加者が自分の端末に合わせて画質を選べます。",
   category: "tutorial",
   projectKinds: ["world", "item"],
   note: "切り替わるのは押した人の画面だけです。入口の近くに置くと、重くて入れなかった人が自分で軽くできます。",
@@ -2226,7 +2226,7 @@ const HIDDEN_DOOR_SWITCH: SceneRecipe = {
     "押すと、見えていなかった箱が現れます。最初から置いてあるけれど消してあるものを、グラフから出す仕掛けです。",
   category: "tutorial",
   projectKinds: ["world", "item"],
-  note: "隠してあるEntityはHierarchyでは表示OFFで見えます。シーンには存在しているので、位置や中身は普通に編集できます。",
+  note: "非表示のEntityは、Hierarchyで表示オフの状態になっています。位置や内部の設定はそのまま編集できます。",
   lesson: {
     goal: "隠しておいたものを、押したときに出せるようになります",
     steps: [
@@ -2294,7 +2294,7 @@ const SIGN_TEXT_BUTTONS: SceneRecipe = {
       "動作確認を開始して2つのボタンを押します。看板の文字が入れ替わります。",
       "動作確認を停止し、どちらかのグラフを開きます。アクションに文字そのものが書かれています。",
       "文字を自分の案内に書き換えます。改行も入れられます。",
-      "文字は補間できないので「かける時間」はありません。切り替えたいときは表示のON/OFFと組み合わせます。",
+      "文字は補間できないので「Duration (s)」はありません。切り替えたいときは表示のON/OFFと組み合わせます。",
       "看板のテキストで、色・大きさ・折り返し幅を整えます。",
     ],
   },
@@ -2404,9 +2404,9 @@ function showcaseFrame(input: {
           // it. Vertical bars in three colours made the left and right halves
           // refract different backgrounds, which is the one thing a comparison
           // stand must not do.
-          box("背景の帯 1", M.blue, [0, 0.28, -0.24], [2.2, 0.14, 0.03]),
-          box("背景の帯 2", M.orange, [0, 0.5, -0.24], [2.2, 0.14, 0.03]),
-          box("背景の帯 3", M.green, [0, 0.72, -0.24], [2.2, 0.14, 0.03]),
+          box("背景の帯1", M.blue, [0, 0.28, -0.24], [2.2, 0.14, 0.03]),
+          box("背景の帯2", M.orange, [0, 0.5, -0.24], [2.2, 0.14, 0.03]),
+          box("背景の帯3", M.green, [0, 0.72, -0.24], [2.2, 0.14, 0.03]),
         ]
       : []),
     sign("左のラベル", [SHOWCASE_LEFT, SHOWCASE_LABEL_Y, -0.1], input.leftLabel, 0.085),
@@ -2463,7 +2463,7 @@ const MATERIAL_CLEARCOAT: SceneRecipe = {
   category: "material",
   projectKinds: ["world", "item"],
   preview: SHOWCASE_PREVIEW,
-  note: "見本用のライトが2つ入っています。ワールドの照明が決まったら消してください。金属の塗装はシーンのSkyboxでIBLを有効にすると、映り込みが入って本来の見え方になります。強さはマテリアルの設定のClearcoatで変えられます。",
+  note: "見本用のライトを2灯含みます。ワールドの照明を設定したら削除してください。SkyboxでIBLを有効にすると、金属の塗装に映り込みが加わります。強さはマテリアルのClearcoatで調整できます。",
   parts: [
     ...showcaseFrame({
       leftLabel: "クリアコートあり",
@@ -2482,7 +2482,7 @@ const MATERIAL_ANISOTROPY: SceneRecipe = {
   category: "material",
   projectKinds: ["world", "item"],
   preview: SHOWCASE_PREVIEW,
-  note: "異方性の向きはUVに沿います。円柱では周方向に流れるので、鍋やボトルの仕上げに合います。板に使うときは設定のAnisotropyのRotationで向きを合わせてください。金属なので、シーンのSkyboxでIBLを有効にすると映り込みが入って本来の見え方になります。",
+  note: "異方性の向きはUVに沿います。円柱では周方向に反射が伸びるため、鍋やボトルの表面に使えます。板に使うときはAnisotropyのRotationで向きを合わせてください。SkyboxでIBLを有効にすると、金属表面に映り込みが加わります。",
   parts: [
     ...showcaseFrame({
       leftLabel: "異方性あり",
@@ -2503,7 +2503,7 @@ const MATERIAL_TRANSMISSION: SceneRecipe = {
   category: "material",
   projectKinds: ["world", "item"],
   preview: SHOWCASE_PREVIEW,
-  note: "透過は不透明(OPAQUE)のまま背景を屈折させる仕組みで、Opacityを下げる半透明とは別物です。このコップはVolumeを持たない薄い壁の設定なので、歪みは控えめです。中身が詰まったガラスにするにはVolumeのThicknessを足してください（厚みと減衰の見本）。背景の帯は屈折を見るために置いてあります。",
+  note: "TransmissionはAlpha ModeをOPAQUEに保ったまま、背景を屈折させる設定です。このコップはVolumeを使わない薄い壁の設定で、歪みを抑えています。厚みのあるガラスにするにはVolumeのThicknessを設定してください。背景の帯で屈折を確認できます。",
   parts: [
     ...showcaseFrame({
       leftLabel: "透過あり",
@@ -2523,7 +2523,7 @@ const MATERIAL_VOLUME: SceneRecipe = {
   category: "material",
   projectKinds: ["world", "item"],
   preview: SHOWCASE_PREVIEW,
-  note: "色は基本色ではなくVolumeのAttenuation ColorとAttenuation Distanceで付いています。距離を短くするほど濃くなります。",
+  note: "ガラスの色にはVolumeのAttenuation ColorとAttenuation Distanceを使っています。距離を短くすると色が濃くなります。",
   parts: [
     ...showcaseFrame({
       leftLabel: "厚みあり",
@@ -2547,7 +2547,7 @@ const MATERIAL_DISPERSION: SceneRecipe = {
   category: "material",
   projectKinds: ["world", "item"],
   preview: SHOWCASE_PREVIEW,
-  note: "分散はTransmissionとVolumeが揃っているときだけ効きます。どちらかを外すと値が残っていても見た目に出ません。負荷は透過と同じで、球が画面を覆うほど重くなります。",
+  note: "分散はTransmissionとVolumeが両方有効な場合に適用されます。片方を外すと、値を設定していても表示に反映されません。透過と同様に、球が画面を占めるほど描画負荷が高くなります。",
   parts: [
     ...showcaseFrame({
       leftLabel: "分散あり",
@@ -2569,7 +2569,7 @@ const MATERIAL_IRIDESCENCE: SceneRecipe = {
   category: "material",
   projectKinds: ["world", "item"],
   preview: SHOWCASE_PREVIEW,
-  note: "薄膜の厚み(nm)で色が決まります。範囲を広げると色が面上を流れ、狭めると一色に寄ります。色が付くのは反射の側なので、丸い面と強いライトほど分かりやすくなります。透けるもの(シャボン玉)にも、透けないもの(玉虫塗装)にも付けられます。",
+  note: "薄膜の厚みをnmで指定します。厚みの範囲を広げると色の変化が大きくなり、狭めると均一な色に近づきます。反射に色が付くため、丸い面と強いライトで変化を確認しやすくなります。シャボン玉や玉虫塗装にも使えます。",
   parts: [
     ...showcaseFrame({
       leftLabel: "虹色あり",
@@ -2594,11 +2594,11 @@ const MATERIAL_SHEEN: SceneRecipe = {
   category: "material",
   projectKinds: ["world", "item"],
   preview: SHOWCASE_PREVIEW,
-  note: "Sheenは輪郭側に光沢を足します。Roughnessを下げると布に見えなくなるので、0.8前後のざらついた面と組み合わせてください。",
+  note: "Sheenは輪郭側に光沢を足します。Roughnessを下げると布の質感が弱くなるため、0.8前後の粗い面と組み合わせてください。",
   parts: [
     ...showcaseFrame({
-      leftLabel: "Sheen あり",
-      rightLabel: "Sheen なし",
+      leftLabel: "Sheenあり",
+      rightLabel: "Sheenなし",
     }),
     box("クッションあり", SHOWCASE("velvet"), [SHOWCASE_LEFT, 0.18, 0], [0.46, 0.16, 0.36]),
     box("クッションなし", SHOWCASE_PLAIN("velvet"), [SHOWCASE_RIGHT, 0.18, 0], [0.46, 0.16, 0.36]),
@@ -2613,7 +2613,7 @@ const MATERIAL_SPECULAR: SceneRecipe = {
   category: "material",
   projectKinds: ["world", "item"],
   preview: SHOWCASE_PREVIEW,
-  note: "金属でない面も既定で4%ほど反射します。暗い小物が黒く沈まないのはこの反射のためで、Specularを下げると本当のマットになります。色を付けると、金属にせずに暖かい映り込みが作れます。",
+  note: "金属以外の面も、初期設定では約4%の光を反射します。Specularを下げると光沢を抑えられます。反射に色を付けると、金属以外の面にも色付きの映り込みを加えられます。",
   parts: [
     ...showcaseFrame({
       leftLabel: "Specular 0.08",
@@ -2641,8 +2641,8 @@ const MATERIAL_EMISSIVE_STRENGTH: SceneRecipe = {
   note: "Emissive Strengthで発光の強さを変えます。光のにじみはBloomのThreshold・Strength・Radiusで調整します。管自体は周囲を照らさないため、必要な場所にライトも置いてください。",
   parts: [
     ...showcaseFrame({
-      leftLabel: "強度 8",
-      rightLabel: "強度 1（既定）",
+      leftLabel: "強度8",
+      rightLabel: "強度1（既定）",
     }),
     cyl("ネオン管あり", SHOWCASE("neon-tube"), [SHOWCASE_LEFT, 0.35, 0], [0.05, 0.5, 0.05]),
     cyl("ネオン管なし", SHOWCASE_PLAIN("neon-tube"), [SHOWCASE_RIGHT, 0.35, 0], [0.05, 0.5, 0.05]),
@@ -2660,9 +2660,9 @@ const MATERIAL_IOR: SceneRecipe = {
   note: "屈折率は物質ごとにほぼ決まっています。水1.33、ガラス1.5、ダイヤモンド2.42。迷ったら1.5のままで構いません。",
   parts: [
     ...showcaseFrame({
-      leftLabel: "水 1.33",
-      centerLabel: "ガラス 1.5",
-      rightLabel: "ダイヤ 2.42",
+      leftLabel: "水1.33",
+      centerLabel: "ガラス1.5",
+      rightLabel: "ダイヤ2.42",
       stripes: true,
     }),
     showcaseBall("球水", SHOWCASE("water-ior"), SHOWCASE_LEFT, 0.38),
@@ -2679,7 +2679,7 @@ const MATERIAL_UNLIT: SceneRecipe = {
   category: "material",
   projectKinds: ["world", "item"],
   preview: SHOWCASE_PREVIEW,
-  note: "Unlitはシェーディング自体を置き換えるので、ほかのマテリアル拡張と併用できません。影も陰影も付かない代わりに一番軽い描き方です。",
+  note: "Unlitは照明による陰影を付けずに描画します。ほかのマテリアル拡張とは併用できません。影や陰影の計算を省くため、描画負荷を抑えられます。",
   parts: [
     ...showcaseFrame({
       leftLabel: "Unlit",
@@ -2689,7 +2689,7 @@ const MATERIAL_UNLIT: SceneRecipe = {
     // even light and an unlit panel are nearly the same grey; at an angle the
     // lit one shades from face to edge and the unlit one does not shade at
     // all, which is the whole of what the extension does.
-    box("看板 Unlit", SHOWCASE("unlit-sign"), [SHOWCASE_LEFT, 0.32, 0], [0.56, 0.44, 0.08], [0, 0.5, 0]),
+    box("看板Unlit", SHOWCASE("unlit-sign"), [SHOWCASE_LEFT, 0.32, 0], [0.56, 0.44, 0.08], [0, 0.5, 0]),
     box("看板ライティングあり", SHOWCASE_PLAIN("unlit-sign"), [SHOWCASE_RIGHT, 0.32, 0], [0.56, 0.44, 0.08], [0, 0.5, 0]),
   ],
 };

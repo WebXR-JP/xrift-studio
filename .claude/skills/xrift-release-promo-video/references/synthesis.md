@@ -1,18 +1,18 @@
 # 音源の作り方
 
-`dev/release-promo/_kit/scripts` の 3 ファイルで完結している。外部ライブラリを使わない。
+音源は`dev/release-promo/_kit/scripts`の3ファイルで生成できます。外部ライブラリは使いません。
 
 | ファイル | 役割 |
 |---|---|
-| `dsp.mjs` | 波形、フィルタ、エンベロープ、リバーブ、WAV 書き出し |
+| `dsp.mjs` | 波形、フィルタ、エンベロープ、リバーブ、WAV書き出し |
 | `instruments.mjs` | 楽器と効果音の合成 |
 | `gen-audio.mjs` | 曲の設計（BEDS）と効果音の一覧（SFX）、CLI |
 
-出力は 44.1kHz / 16bit / ステレオ。乱数はすべて種を固定した `mulberry32` なので、何度実行しても同じ波形になる。
+出力は44.1kHz / 16bit / ステレオ。乱数はすべて種を固定した`mulberry32`なので、何度実行しても同じ波形になる。
 
 ## 曲を足す
 
-`gen-audio.mjs` の `BEDS` に足す。
+`gen-audio.mjs`の`BEDS`へ曲を追加してください。
 
 ```js
 {
@@ -28,25 +28,25 @@
 }
 ```
 
-`mood` は `renderBed` の中で楽器構成を切り替えるキー。新しい構成が必要なら分岐を足す。
+`mood`は`renderBed`の中で楽器構成を切り替えるキー。新しい構成が必要なら分岐を足す。
 
-- `bright`: 1 拍目と 3 拍目のキック、8 分ハット、シェイカー、上昇アルペジオ
+- `bright`: 1拍目と3拍目のキック、8分ハット、シェイカー、上昇アルペジオ
 - `calm`: パッドとベルだけ。打楽器なし
-- `drive`: 4 つ打ち、オフビートのベース、8 分のプラック
+- `drive`: 4つ打ち、オフビートのベース、8分のプラック
 
-足したら `_kit/src/core/timing.ts` の `BED_SPECS` に同じ `bpm` と `bars` を書く。ここが実際の長さとずれると、ループを並べたときに継ぎ目が合わなくなる。
+追加後は`_kit/src/core/timing.ts`の`BED_SPECS`にも、同じ`bpm`と`bars`を設定してください。実際の長さと違う値を設定すると、ループの継ぎ目が合わなくなります。
 
 ## ループを途切れさせない
 
-BGM 用のバッファは `new Track(length, { wrap: true })` で作る。末尾を超えた書き込みが先頭へ回り込むので、最後の小節の残響やリリースがループの頭に乗る。
+BGM用のバッファは`new Track(length, { wrap: true })`で作る。末尾を超えた書き込みが先頭へ回り込むので、最後の小節の残響やリリースがループの頭に乗る。
 
-リバーブは `applyReverb(track, { passes: 2 })` で 2 周ぶん処理し、2 周目だけを残す。1 周目で溜まった残響が 2 周目の先頭に入るため、継ぎ目で残響が切れない。
+リバーブは`applyReverb(track, { passes: 2 })`で2周ぶん処理し、2周目だけを残す。1周目で溜まった残響が2周目の先頭に入るため、継ぎ目で残響が切れない。
 
-単発の効果音は `wrap` を使わず、`edgeFade()` で先頭と末尾に極短いフェードを入れる。これがないと再生開始と終了でプチノイズが出る。
+単発の効果音は`wrap`を使わず、`edgeFade()`で先頭と末尾に極短いフェードを入れる。これがないと再生開始と終了でプチノイズが出る。
 
 ## 効果音を足す
 
-`instruments.mjs` に合成関数を書き、`Track` を返す。
+`instruments.mjs`に合成関数を書き、`Track`を返す。
 
 ```js
 export const sfxConfirm = () => {
@@ -59,23 +59,23 @@ export const sfxConfirm = () => {
 };
 ```
 
-`t.render(開始秒, 長さ秒, (経過秒, サンプル番号) => [左, 右])` で加算する。`normalize` でピークを揃え、`edgeFade` で端を整える。
+`t.render(開始秒, 長さ秒, (経過秒, サンプル番号) => [左, 右])`で加算する。`normalize`でピークを揃え、`edgeFade`で端を整える。
 
-書けたら `gen-audio.mjs` の `SFX` に `{ id, label, make }` を足し、`node gen-audio.mjs --only sfx --force` で作り直す。
+書けたら`gen-audio.mjs`の`SFX`に`{ id, label, make }`を足し、`node gen-audio.mjs --only sfx --force`で作り直す。
 
 ## 使える部品
 
 | 部品 | 用途 |
 |---|---|
-| `wave.sine` `wave.tri` `wave.saw` `wave.square` | 基本波形。`saw` と `square` は倍音数を渡して帯域制限する |
+| `wave.sine` `wave.tri` `wave.saw` `wave.square` | 基本波形。`saw`と`square`は倍音数を渡して帯域制限する |
 | `harmonicCap(freq, max)` | ナイキストを超えない倍音数を返す。折り返しノイズを防ぐ |
 | `adsr(t, dur, a, d, s, r)` | 持続音のエンベロープ |
 | `decay(t, tau)` | 指数減衰。打楽器とプラック |
-| `OnePole(cutoff, "lp" \| "hp")` | 1 次フィルタ |
-| `SVF(cutoff, q)` | レゾナンス付き。掃引に使う。`process(x)` は `{low, band, high}` |
-| `Reverb` / `applyReverb` | Schroeder 型の残響 |
+| `OnePole(cutoff, "lp" \| "hp")` | 1次フィルタ |
+| `SVF(cutoff, q)` | レゾナンス付き。掃引に使う。`process(x)`は`{low, band, high}` |
+| `Reverb` / `applyReverb` | Schroeder型の残響 |
 | `mulberry32(seed)` | 種を固定した乱数。ノイズ系はこれを使う |
-| `midi(n)` | MIDI 番号から周波数 |
+| `midi(n)` | MIDI番号から周波数 |
 
 ## 音量の目安
 
@@ -83,15 +83,15 @@ export const sfxConfirm = () => {
 
 | 対象 | 生成時のピーク | 動画側の既定音量 |
 |---|---|---|
-| BGM | 0.88 に正規化して 0.82 倍 | 0.32 |
+| BGM | 0.88に正規化して0.82倍 | 0.32 |
 | 目立たせる効果音（`impact` `chime`） | 0.66〜0.85 | 0.50〜0.62 |
 | 補助の効果音（`tick` `type` `zoom`） | 0.42〜0.60 | 0.30〜0.34 |
 
-生成した WAV は次で確認する。
+生成したWAVは次で確認する。
 
 ```powershell
 ffmpeg -i _kit/assets/audio/bgm-bright-120.wav -af volumedetect -f null -
 ffmpeg -y -i _kit/assets/audio/bgm-bright-120.wav -lavfi showspectrumpic=s=1000x300:legend=0 spec.png
 ```
 
-`max_volume` が 0 dB に張り付いていたら歪んでいる。`mean_volume` が -30 dB より小さいと動画上でほとんど聞こえない。
+`max_volume`が0dBに達している場合は、音の歪みを確認してください。`mean_volume`が-30dBより小さいと、動画上ではほとんど聞こえません。

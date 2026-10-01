@@ -50,7 +50,7 @@ export function UserMenu({ user, loading, busy, onLogin, onLogout }: Props) {
         className="flex items-center gap-1.5 rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
       >
         <LogIn size={12} strokeWidth={2.25} />
-        XRift にログイン
+        XRiftにログイン
       </button>
     );
   }
@@ -107,13 +107,13 @@ export function UserMenu({ user, loading, busy, onLogin, onLogout }: Props) {
                         });
                       }}
                       className="rounded p-0.5 text-zinc-400 hover:bg-white/60 hover:text-zinc-700"
-                      title="ID をコピー"
+                      title="IDをコピー"
                     >
                       {copied ? <Check size={10} strokeWidth={2.5} /> : <Copy size={10} strokeWidth={2} />}
                     </button>
                   </>
                 ) : (
-                  <span className="text-[10px] text-zinc-400">XRift アカウント</span>
+                  <span className="text-[10px] text-zinc-400">XRiftアカウント</span>
                 )}
               </div>
             </div>

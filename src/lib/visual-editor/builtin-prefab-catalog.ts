@@ -111,7 +111,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
   {
     id: BUILTIN_PREFAB_RECIPE_IDS.entryLogBoard,
     name: "EntryLogBoard",
-    description: "入退室履歴を同期表示する公式XRiftボードです。",
+    description: "参加者の入退室履歴を同期して表示するXRift公式のボードです。",
     projectKinds: ALL_PROJECTS,
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.entryLogBoard,
     componentProperties: {
@@ -220,7 +220,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     ],
     configuration: {
       requiredBeforeCompile: false,
-      hint: "Inspectorで動画URLと同期方法を設定します。",
+      hint: "Inspectorで動画URLと同期方法を設定してください。",
     },
     defaultTransform: {
       position: [0, 2, -4],
@@ -243,7 +243,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     editablePropertyNames: ["id", "url", "playing", "volume"],
     configuration: {
       requiredBeforeCompile: false,
-      hint: "Inspectorまたは実行中の操作UIから動画URLを設定します。",
+      hint: "Inspectorか、再生中の操作画面で動画URLを設定してください。",
     },
     defaultTransform: {
       position: [0, 2, -4],
@@ -266,7 +266,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     editablePropertyNames: ["id", "url", "playing", "volume", "sync"],
     configuration: {
       requiredBeforeCompile: false,
-      hint: "Inspectorまたは実行中の操作UIから配信URLを設定します。",
+      hint: "Inspectorか、再生中の操作画面で配信URLを設定してください。",
     },
     defaultTransform: {
       position: [0, 2, -4],
@@ -289,7 +289,7 @@ export const BUILTIN_PREFAB_RECIPES: readonly BuiltinPrefabRecipe[] = [
     editablePropertyNames: ["id", "targetFps"],
     configuration: {
       requiredBeforeCompile: false,
-      hint: "Inspectorで識別IDと更新フレームレートを設定します。",
+      hint: "Inspectorで識別IDと更新フレームレートを設定してください。",
     },
     defaultTransform: {
       position: [0, 2, -4],
