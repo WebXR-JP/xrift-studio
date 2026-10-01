@@ -80,6 +80,8 @@ import {
   type GlowMaterialInstallResult,
 } from "./GlowMaterialStore";
 
+const CATALOG_PAGE_SIZE = 120;
+
 type StoreKindFilter = "all" | ExternalStoreAsset["assetKind"];
 
 export function ExternalAssetStoreDialog({
@@ -156,6 +158,7 @@ export function ExternalAssetStoreDialog({
   const [assets, setAssets] = useState<ExternalStoreAsset[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [visibleCount, setVisibleCount] = useState(CATALOG_PAGE_SIZE);
   const [kind, setKind] = useState<StoreKindFilter>("all");
   const [loading, setLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -252,7 +255,12 @@ export function ExternalAssetStoreDialog({
     };
   }, [open, provider.kind, remoteAssetsAvailable, selected, selectedIsInstallable]);
 
-  const visibleAssets = useMemo(() => {
+  // Keep every match searchable; reveal large catalogs in bounded batches.
+  useEffect(() => {
+    setVisibleCount(CATALOG_PAGE_SIZE);
+  }, [open, provider.id, query, kind, assets]);
+
+  const matchingAssets = useMemo(() => {
     const tokens = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
     return assets
       .filter((asset) => kind === "all" || asset.assetKind === kind)
@@ -261,9 +269,9 @@ export function ExternalAssetStoreDialog({
           .join(" ")
           .toLocaleLowerCase();
         return tokens.every((token) => text.includes(token));
-      })
-      .slice(0, 120);
+      });
   }, [assets, kind, query]);
+  const visibleAssets = matchingAssets.slice(0, visibleCount);
   const selectedResolution = options?.resolutions.find((entry) => entry.id === resolution);
   const selectedFormat = selectedResolution?.formats.find((entry) => entry.id === fileFormat);
 
@@ -610,6 +618,22 @@ export function ExternalAssetStoreDialog({
               ) : null}
             </div>
             <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
+              {!loading && !catalogError ? (
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <span aria-live="polite" aria-atomic="true">
+                    {matchingAssets.length}件中{visibleAssets.length}件を表示
+                  </span>
+                  {visibleAssets.length < matchingAssets.length ? (
+                    <button
+                      type="button"
+                      onClick={() => setVisibleCount((count) => count + CATALOG_PAGE_SIZE)}
+                      className="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      さらに{Math.min(CATALOG_PAGE_SIZE, matchingAssets.length - visibleAssets.length)}件を表示
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
               提供元{" "}
               <button
                 type="button"
