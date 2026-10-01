@@ -1,7 +1,7 @@
 {
   "title": "XRift Studio 使い方ガイド",
   "reviewedVersion": "1.0.1",
-  "reviewedOn": "2026-09-30",
+  "reviewedOn": "2026-10-01",
   "siteUrl": "https://webxr-jp.github.io/xrift-studio/guide/",
   "groups": [
     {
@@ -201,7 +201,7 @@
       "description": "「外部から追加」のカタログで、モデル、マテリアル、空、水、ギミックの見本を探せます。",
       "group": "create",
       "file": "external-resources.md",
-      "keywords": "外部から追加 カタログ Poly Haven ambientCG 素材 配布 モデル",
+      "keywords": "外部から追加 カタログ Poly Haven ambientCG 音蔵 音声 楽曲 素材 配布 モデル さらに表示",
       "related": [
         "assets",
         "materials",
