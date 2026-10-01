@@ -201,7 +201,7 @@
       "description": "「外部から追加」のカタログで、モデル、マテリアル、空、水、ギミックの見本を探せます。",
       "group": "create",
       "file": "external-resources.md",
-      "keywords": "外部から追加 カタログ Poly Haven ambientCG 音蔵 音声 楽曲 素材 配布 モデル さらに表示",
+      "keywords": "外部から追加 カタログ Poly Haven ambientCG 音蔵 音声 楽曲 SFX BGM 効果音 環境音 音楽 素材 配布 モデル さらに表示",
       "related": [
         "assets",
         "materials",

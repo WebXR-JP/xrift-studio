@@ -46,7 +46,7 @@ test("ブラウザ版で音蔵の音源を追加し、再読み込み後も使�
   await page.getByRole("button", { name: "作成して開く" }).click();
   await page.getByRole("button", { name: "外部から追加", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "外部から追加" });
-  await dialog.getByRole("button", { name: /音蔵.*効果音と環境音/ }).click();
+  await dialog.getByRole("button", { name: /音蔵.*効果音・環境音・音楽/ }).click();
   await expect(dialog.getByRole("heading", { name: "ブラウザ取り込みテスト" })).toBeVisible();
   await expect(dialog.getByRole("button", { name: "プロジェクトに追加" })).toBeEnabled();
   await dialog.getByRole("button", { name: "プロジェクトに追加" }).click();
@@ -108,11 +108,12 @@ test("音蔵の続きを表示し、検索と開き直しで表示範囲を戻�
   await page.getByRole("button", { name: "作成して開く" }).click();
   await page.getByRole("button", { name: "外部から追加", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "外部から追加" });
-  const provider = dialog.getByRole("button", { name: /音蔵.*効果音と環境音/ });
+  const provider = dialog.getByRole("button", { name: /音蔵.*効果音・環境音・音楽/ });
   await provider.click();
   const list = dialog.getByRole("region", { name: "音蔵のアセット一覧" });
   const firstCard = list.getByRole("button", { name: `${firstId} Audio`, exact: true });
   const lastCard = list.getByRole("button", { name: `${lastId} Audio`, exact: true });
+  const audioFilter = list.getByRole("combobox", { name: "音蔵の音源分類" });
   const more = list.getByRole("button", { name: /さらに.*を表示/ });
   const search = list.getByRole("textbox", { name: "音蔵を検索" });
   await expect(firstCard).toBeVisible();
@@ -125,6 +126,18 @@ test("音蔵の続きを表示し、検索と開き直しで表示範囲を戻�
   await dialog.getByRole("button", { name: "プロジェクトに追加" }).click();
   await expect(dialog.getByRole("status")).toContainText(lastId);
 
+  await audioFilter.selectOption("music");
+  await expect(lastCard).toBeVisible();
+  await expect(firstCard).toBeHidden();
+  await search.fill("環境音");
+  await expect(lastCard).toBeHidden();
+  await expect(list).toContainText("条件に合うアセットがありません");
+  await search.fill("");
+  await audioFilter.selectOption("sfx");
+  await expect(firstCard).toBeVisible();
+  await expect(lastCard).toBeHidden();
+  await audioFilter.selectOption("all");
+  await expect(lastCard).toBeHidden();
   await search.fill("楽曲");
   await expect(lastCard).toBeVisible();
   await expect(firstCard).toBeHidden();
@@ -141,12 +154,15 @@ test("音蔵の続きを表示し、検索と開き直しで表示範囲を戻�
   await expect(firstCard).toBeHidden();
   await search.fill("");
   await more.click();
-  await list.getByRole("combobox", { name: "アセット種別" }).selectOption("audio");
+  await audioFilter.selectOption("sfx");
+  await audioFilter.selectOption("all");
   await expect(lastCard).toBeHidden();
   await more.click();
   await expect(lastCard).toBeVisible();
+  await audioFilter.selectOption("music");
   await dialog.getByRole("button", { name: /ギミック/ }).click();
   await provider.click();
+  await expect(audioFilter).toHaveValue("all");
   await expect(lastCard).toBeHidden();
   await more.click();
   await expect(lastCard).toBeVisible();
