@@ -149,3 +149,22 @@ test("a browser-forced database close can reopen the saved project without a pag
   const restored = parseVisualProjectFiles(await storage.readBrowserVisualProject(projectPath));
   assert.equal(restored.project.metadata.name, "storage-reopen");
 });
+
+
+test("project-ID routes restore saved work and importing a copy preserves the original URL and assets", async () => {
+  const routing = await server.ssrLoadModule('/src/lib/browser-project-routing.ts');
+  const documents = projectDocuments('routing-original');
+  const files = browserProjectDocumentFiles(documents);
+  files.set('assets/imported/exact.glb', new Uint8Array([1, 127, 255]));
+  const path = await storage.createBrowserProject(files, { activate: false });
+  assert.equal((await routing.resolveStudioProject(documents.project.projectId)).path, path);
+  const imported = await routing.prepareStudioProjectImport(files);
+  const { parseBrowserProjectFiles } = await server.ssrLoadModule('/src/lib/visual-editor/browser-project-transfer.ts');
+  const copyDocuments = parseBrowserProjectFiles(imported);
+  assert.notEqual(copyDocuments.project.projectId, documents.project.projectId);
+  const copyPath = await storage.createBrowserProject(imported, { activate: false });
+  assert.equal((await routing.resolveStudioProject(documents.project.projectId)).path, path);
+  assert.equal((await routing.resolveStudioProject(copyDocuments.project.projectId)).path, copyPath);
+  assert.deepEqual(await storage.getBrowserProjectFiles(path), files);
+  assert.deepEqual(imported.get('assets/imported/exact.glb'), files.get('assets/imported/exact.glb'));
+});

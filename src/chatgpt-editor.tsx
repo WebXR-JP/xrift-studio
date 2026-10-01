@@ -1,54 +1,120 @@
-import React, { lazy, Suspense, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { App, applyDocumentTheme, applyHostStyleVariables } from '@modelcontextprotocol/ext-apps';
 import { OpenAIExtensions } from '@openai/mcp-extensions/app';
-import { VisualEditorErrorBoundary } from './components/visual-editor/VisualEditorErrorBoundary';
+import BrowserEditorApp, { type BrowserStudioApi } from './BrowserEditorApp';
+import { callTool } from '../packages/xrift-studio-cloud/worker';
 import type { VisualEditorMcpProjectBridge } from './components/visual-editor/VisualEditorPrototype';
 import type { PrototypeVisualProject } from './lib/visual-editor/prototype-project';
 import { validateBundle, bundleHash } from './lib/visual-editor/chatgpt-project';
 import type { VisualProjectDocuments } from './lib/visual-editor/persistence';
-import { serializeVisualProjectDocuments } from './lib/visual-editor/persistence';
-import { createBrowserProject, getBrowserProjectFiles, listBrowserProjects, saveBrowserVisualProject, type BrowserStoredProject } from './lib/browser-project-storage';
-import { browserProjectDocumentFiles, parseBrowserProjectFiles, readBrowserProjectArchive, createBrowserProjectArchive } from './lib/visual-editor/browser-project-transfer';
+import { createBrowserProject, getBrowserProjectFiles, readStudioRecovery, writeStudioRecovery } from './lib/browser-project-storage';
+import { parseStudioResult, verifyStudioResult, addReceipt, emptyRecovery, type StudioResult, type StudioRecovery, type StudioReceipt } from './lib/visual-editor/chatgpt-delivery';
+import { browserProjectDocumentFiles, parseBrowserProjectFiles } from './lib/visual-editor/browser-project-transfer';
+import { studioProjectIdFromUrl, validateStudioProjectId } from './lib/browser-project-routing';
 import './index.css';
 import './preview.css';
-const Editor = lazy(() => import('./components/visual-editor/VisualEditorPrototype').then(m => ({ default: m.VisualEditorPrototype })));
 const app = new App({ name: 'XRift Studio', version: '0.1.1' });
-new OpenAIExtensions(app);
-type Result = { bundle: PrototypeVisualProject; revision: number; baseHash: string | null };
+const extensions = new OpenAIExtensions(app);
+type Result = StudioResult;
 type Local = { path: string; documents: VisualProjectDocuments; revision: number };
-async function call(name: string, args: Record<string, unknown> = {}) {
-  const result = await app.callServerTool({ name, arguments: args });
-  if (result.isError) throw new Error(result.content?.find(c => c.type === 'text')?.text ?? '操作に失敗しました');
-  return result.structuredContent as Record<string, unknown>;
-}
 function bundleFrom(documents: VisualProjectDocuments): PrototypeVisualProject {
   return { project: documents.project, scene: documents.scenes[documents.project.entrySceneId], assets: documents.assets, prefabs: documents.prefabs };
 }
 function Application() {
-  const [projects, setProjects] = useState<BrowserStoredProject[]>([]);
   const [local, setLocal] = useState<Local | null>(null);
   const current = useRef<Local | null>(null);
-  const [generation, setGeneration] = useState(0);
   const received = useRef<Promise<unknown>>(Promise.resolve());
   const [pending, setPending] = useState<Result | null>(null);
   const latestResult = useRef<Result | null>(null);
   const [busy, setBusy] = useState(false);
   const [connected, setConnected] = useState(false);
   const [notice, setNotice] = useState('ChatGPTに接続しています…');
-  const [name, setName] = useState('');
+  const [displayMode, setDisplayMode] = useState<string>('inline');
+  const [displayModes, setDisplayModes] = useState<string[]>([]);
+  const studio = useRef<BrowserStudioApi | null>(null);
   const operation = useRef(false);
   const bridge = useRef<VisualEditorMcpProjectBridge | null>(null);
   const writes = useRef<Promise<unknown>>(Promise.resolve());
-  function select(next: Local) { current.current = next; setLocal(next); setGeneration(value => value + 1); bridge.current = null; }
-  async function context(next: Local, bundle = bundleFrom(next.documents)) {
-    await app.updateModelContext({ content: [{ type: 'text', text: `編集対象: ${bundle.project.metadata.name}。このbundleとrevisionをedit_worldに渡してください。素材のバイト列は含みません。` }], structuredContent: { bundle: validateBundle(bundle), revision: next.revision } });
+  const recovery = useRef<StudioRecovery>(emptyRecovery());
+  const recoveryWrites = useRef<Promise<void>>(Promise.resolve());
+  const [checking, setChecking] = useState(false);
+  const [receipt, setReceipt] = useState<StudioReceipt | null>(null);
+  const initialized = useRef<Promise<void>>(Promise.resolve());
+  const restoreError = useRef<string | null>(null);
+  const applying = useRef(false);
+  const mounted = useRef(true);
+  function persist() {
+    const snapshot = structuredClone(recovery.current);
+    const task = recoveryWrites.current.then(() => writeStudioRecovery(snapshot));
+    recoveryWrites.current = task.catch(() => {});
+    return task;
   }
-  async function captureSceneViewForConversation() {
+  async function remember(next: Local) {
+    recovery.current.active = { path: next.path, projectId: next.documents.project.projectId,
+      revision: next.revision, hash: await bundleHash(bundleFrom(next.documents)) };
+    recovery.current.projects[next.documents.project.projectId] = { revision: next.revision, hash: recovery.current.active.hash };
+    await persist();
+  }
+  async function resume(path: string) {
+    const documents = parseBrowserProjectFiles(await getBrowserProjectFiles(path));
+    const saved = recovery.current.projects[documents.project.projectId];
+    const hash = await bundleHash(bundleFrom(documents));
+    select({ path, documents, revision: saved ? saved.revision + (hash === saved.hash ? 0 : 1) : 0 });
+    await remember(current.current!);
+  }
+  async function report(result: Result, status: StudioReceipt['status'], message: string, image?: string) {
+    if (!result.operationId) return;
+    const item: StudioReceipt = { operationId: result.operationId, projectId: result.bundle.project.projectId,
+      revision: result.revision, hash: await bundleHash(result.bundle), status, message,
+      at: new Date().toISOString(), reported: false };
+    recovery.current = addReceipt(recovery.current, item); setReceipt(item); await persist();
+    const sent = await app.sendMessage({ role: 'user', content: [
+      { type: 'text', text: JSON.stringify({ studioDelivery: { ...item, sceneId: result.bundle.scene.sceneId, saved: status === 'verified', rendered: status === 'verified', projectMatched: bridge.current?.currentBundle().project.projectId === result.bundle.project.projectId, activeProjectId: current.current?.documents.project.projectId ?? null, results: result.results },
+        instruction: status === 'verified' ? 'この操作のStudioへの反映、ブラウザ保存、Scene Viewの取得を確認しました。画像を確認してから完了を報告してください。' : 'この操作は未完了です。反映確認済みとは報告しないでください。Studioを開き、保存された結果を再適用するかretry_worldで同じデータを再送してください。' }) },
+      ...(image ? [{ type: 'image' as const, data: image, mimeType: 'image/png' }] : []),
+    ] }, { timeout: 15000 });
+    if (sent.isError) throw new Error('反映結果を会話へ送れませんでした。反映を再確認してください');
+    item.reported = true; recovery.current = addReceipt(recovery.current, item); setReceipt({ ...item }); await persist();
+  }
+  async function verify(result: Result) {
+    const selected = current.current;
+    if (!selected) throw new Error('Studioの編集画面が開いていません');
+    setChecking(true);
+    try {
+      const deadline = Date.now() + 15000;
+      while (!bridge.current && Date.now() < deadline && mounted.current && current.current === selected) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      if (!bridge.current) throw new Error('エディターの起動を確認できませんでした');
+      const frame = await verifyStudioResult(result, bridge.current, () => mounted.current && current.current?.path === selected.path && !operation.current);
+      await report(result, 'verified', 'Studioへの反映とブラウザ保存を確認しました。', frame.data);
+      if (latestResult.current?.operationId === result.operationId) {
+        const next = recovery.current.queue.shift() ?? null;
+        latestResult.current = next; setPending(next); recovery.current.pending = next; await persist();
+      }
+      setNotice(latestResult.current ? '前の編集の反映を確認しました。次のAIの結果を適用できます。' : 'Studioへの反映とブラウザ保存を確認しました。');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '反映を確認できませんでした';
+      setNotice(`反映は未完了です。${message}。「反映を再確認」から再試行できます。`);
+      // A report transport failure must not replace a real verified receipt with a false apply failure.
+      if (recovery.current.history.find(item => item.operationId === result.operationId)?.status !== 'verified') {
+        try { await report(result, 'failed', message); } catch { /* Keep the pending result and unsent receipt. */ }
+      }
+    } finally { setChecking(false); applying.current = false; }
+  }
+  function select(next: Local) { current.current = next; setLocal(next); }
+  async function context(next: Local, bundle = bundleFrom(next.documents)) {
+    await app.updateModelContext({ content: [{ type: 'text', text: `編集対象: ${bundle.project.metadata.name}。このbundleとrevisionをedit_worldに渡してください。Studioの反映報告と画像が届くまで完了扱いにしないでください。素材のバイト列は含みません。` }], structuredContent: { bundle: validateBundle(bundle), revision: next.revision, projectId: bundle.project.projectId, studioHistory: recovery.current.history } });
+  }
+  async function captureSceneViewForConversation(operationId?: string) {
     const editor = bridge.current;
     if (!editor) throw new Error('Scene Viewを開いてからもう一度実行してください');
+    const selected = current.current;
+    const hash = await bundleHash(editor.currentBundle());
     const result = await editor.captureSceneView();
     if (!result.ok) throw new Error(result.message);
+    if (!selected || current.current?.path !== selected.path || bridge.current !== editor || await bundleHash(editor.currentBundle()) !== hash) throw new Error('撮影中に編集対象が変更されました。もう一度撮影してください');
     const comma = result.dataUrl.indexOf(',');
     if (comma < 0) throw new Error('Scene Viewの画像形式が不正です');
     const data = result.dataUrl.slice(comma + 1);
@@ -56,122 +122,240 @@ function Application() {
       role: 'user',
       content: [
         { type: 'image', data, mimeType: 'image/png' },
-        { type: 'text', text: 'XRift Studioの現在のScene Viewです。見た目を確認し、必要ならedit_worldで調整してからcapture_scene_viewでもう一度確認してください。' },
+        { type: 'text', text: JSON.stringify({ sceneCapture: { operationId, status: 'verified', projectId: current.current?.documents.project.projectId, sceneId: current.current?.documents.project.entrySceneId, revision: current.current?.revision, capturedAt: new Date().toISOString() }, instruction: 'XRift Studioの現在のScene Viewです。画像を確認してから結果を報告してください。ワールド変更の反映確認とは別の画像取得結果です。' }) },
       ],
-    });
+    }, { timeout: 15000 });
     if (sent.isError) throw new Error('Scene Viewを会話へ送れませんでした');
     setNotice('現在のScene Viewを会話に送りました。');
   }
   async function adopt(result: Result) {
-    const b = validateBundle(result.bundle);
-    const existing = current.current;
-    if (existing && b.project.projectId === existing.documents.project.projectId) {
-      const documents = { ...existing.documents, project: b.project, assets: b.assets, prefabs: b.prefabs, scenes: { ...existing.documents.scenes, [b.scene.sceneId]: b.scene } };
-      const files = await getBrowserProjectFiles(existing.path);
-      for (const [path, bytes] of browserProjectDocumentFiles(documents)) files.set(path, bytes);
-      // Validate source references before replacing anything; keep every other scene and source file.
-      parseBrowserProjectFiles(files);
-      await saveBrowserVisualProject(existing.path, serializeVisualProjectDocuments(documents));
-      select({ path: existing.path, documents, revision: result.revision });
-    } else {
-      const documents = { project: b.project, assets: b.assets, prefabs: b.prefabs, scenes: { [b.scene.sceneId]: b.scene } };
-      const files = browserProjectDocumentFiles(documents);
-      parseBrowserProjectFiles(files);
-      select({ path: await createBrowserProject(files, { activate: false }), documents, revision: result.revision });
+    if (result.operationId) {
+      latestResult.current = result; setPending(result); recovery.current.pending = result; await persist();
     }
-    latestResult.current = null; setPending(null);
-    setNotice('AIの結果を開きました。作品はこのブラウザに保存されます。');
+    if (result.operationId) {
+      recovery.current.operations ??= {}; recovery.current.operations[result.operationId] = result;
+      const ids = Object.keys(recovery.current.operations); for (const id of ids.slice(0, Math.max(0, ids.length - 20))) delete recovery.current.operations[id];
+      await persist();
+    }
+    const b = validateBundle(result.bundle);
+    if (!studio.current) throw new Error('Studioが接続されていません。プラグインを開き直してください');
+    bridge.current = null;
+    const path = await studio.current.apply(b);
+    const documents = parseBrowserProjectFiles(await getBrowserProjectFiles(path));
+    select({ path, documents, revision: result.revision });
+    await remember(current.current!);
+    if (result.operationId) {
+      setNotice('データを適用しました。Studioへの反映を確認しています…');
+      applying.current = true;
+      operation.current = false;
+      // The editor mounts after select; confirmation waits for its real bridge and Scene View.
+      await verify(result);
+    } else { setNotice('作品をブラウザに保存しました。'); }
+  }
+  async function applyResult(result: Result) {
+    applying.current = true; setChecking(true);
+    const previous = recovery.current.history.find(item => item.operationId === result.operationId);
+    if (previous?.status === 'verified' && previous.reported && current.current && await bundleHash(bridge.current?.currentBundle() ?? bundleFrom(current.current.documents)) !== previous.hash) throw new Error('この操作はすでに反映済みです。その後の編集を巻き戻さず、現在のScene Viewを確認してください');
+        const editing = bridge.current?.currentBundle() ?? (current.current ? bundleFrom(current.current.documents) : null);
+        if (editing && await bundleHash(editing) === await bundleHash(result.bundle)) { operation.current = false; applying.current = true; await verify(result); return; }
+        const differs = editing && (editing.project.projectId !== result.bundle.project.projectId || !result.baseHash || await bundleHash(editing) !== result.baseHash);
+        if (bridge.current && !(await bridge.current.saveNow())) throw new Error('保存できませんでした。プロジェクトを書き出してから再試行してください');
+        await writes.current;
+        if (differs && current.current && editing?.project.projectId === result.bundle.project.projectId) {
+          const files = await getBrowserProjectFiles(current.current.path);
+          const documents = parseBrowserProjectFiles(files);
+          documents.project = { ...documents.project, projectId: `project-${crypto.randomUUID()}`, metadata: { ...documents.project.metadata, name: `${documents.project.metadata.name}（AI適用前）` } };
+          for (const [path, bytes] of browserProjectDocumentFiles(documents)) files.set(path, bytes);
+          parseBrowserProjectFiles(files);
+          await createBrowserProject(files, { activate: false });
+        }
+        await adopt(result);
   }
   async function accept(data: Record<string, unknown>) {
     if (!data.bundle) return;
-    if (!Number.isSafeInteger(data.revision) || (data.revision as number) < 0 || !(data.baseHash === null || typeof data.baseHash === 'string')) throw new Error('AIの結果が不正です');
-    const result: Result = { bundle: validateBundle(data.bundle), revision: data.revision as number, baseHash: data.baseHash as string | null };
+    const result = parseStudioResult(data);
+    const previous = recovery.current.history.find(item => item.operationId === result.operationId);
+    if (previous && previous.hash !== await bundleHash(result.bundle)) throw new Error('同じ操作IDで異なる編集データを受信しました');
+    if (latestResult.current && result.operationId !== latestResult.current.operationId) {
+      if (recovery.current.queue.length >= 32) throw new Error('未完了の編集が多いため、このデータは会話から再送してください');
+      if (!recovery.current.queue.some(item => item.operationId === result.operationId)) recovery.current.queue.push(result);
+      await persist();
+      try { await report(result, 'waiting', '前の編集の反映を待っています。'); } catch { /* Keep queue. */ }
+      return;
+    }
     latestResult.current = result;
-    if (current.current || operation.current) {
-      setPending(result); setNotice('AIの編集結果があります。「AIの結果を開く」で確認できます。');
-    } else await adopt(result);
+    recovery.current.pending = result; setPending(result); await persist();
+    if (operation.current || applying.current) {
+      setNotice('AIのデータを受信しました。Studioへの反映は未完了です。「AIの結果を適用」を押してください。');
+      try { await report(result, 'waiting', 'Studioへの適用操作を待っています。'); } catch { /* Pending result remains recoverable. */ }
+    } else await applyResult(result);
   }
   async function run(action: () => Promise<void>) {
-    if (operation.current || !connected) return;
+    if (operation.current || applying.current || !connected) return;
     operation.current = true; setBusy(true);
     try { await writes.current; await action(); }
-    catch (error) { setNotice(error instanceof Error ? error.message : '操作に失敗しました'); }
+    catch (error) { applying.current = false; setChecking(false); setNotice(error instanceof Error ? error.message : '操作に失敗しました'); }
     finally { operation.current = false; setBusy(false); }
+  }
+  const lastDeepLink = useRef<string | null>(null);
+  const hostReady = useRef(false);
+  async function openTarget(projectId: string) {
+    validateStudioProjectId(projectId);
+    if (latestResult.current && current.current?.documents.project.projectId !== projectId) throw new Error('AIの編集が未完了です。反映を再確認してから作品を切り替えてください');
+    if (!studio.current) throw new Error('Studioが接続されていません。プラグインを開き直してください');
+    await writes.current;
+    await studio.current.openProject(projectId);
+    const deadline = Date.now() + 15000;
+    while (mounted.current && Date.now() < deadline && (!bridge.current || current.current?.documents.project.projectId !== projectId)) await new Promise(resolve => setTimeout(resolve, 100));
+    if (!bridge.current || bridge.current.currentBundle().project.projectId !== projectId || current.current?.documents.project.projectId !== projectId) throw new Error('指定した作品の起動を確認できませんでした。作品一覧から開き直してください');
+    setNotice('指定した作品を開きました。');
+  }
+  async function openDeepLink() {
+    const url = extensions.deepLink.getCurrent()?.url;
+    if (!url || url === lastDeepLink.current) return;
+    lastDeepLink.current = url;
+    const projectId = studioProjectIdFromUrl(url);
+    if (!projectId) throw new Error('作品へのリンクが不正です。作品一覧から開いてください');
+    await openTarget(projectId);
   }
   const setup = useRef(false);
   React.useEffect(() => {
     if (setup.current) return; setup.current = true;
+    initialized.current = (async () => {
+      recovery.current = await readStudioRecovery<StudioRecovery>() ?? emptyRecovery();
+      recovery.current.projects ??= {}; recovery.current.queue ??= [];
+      if (recovery.current.pending) { latestResult.current = parseStudioResult(recovery.current.pending); setPending(latestResult.current); }
+      setReceipt(recovery.current.history[recovery.current.history.length - 1] ?? null);
+    })().catch(error => {
+      // A locked or damaged saved project must not disable the host connection
+      // or trap every later tool result in the rejected startup promise.
+      restoreError.current = error instanceof Error ? error.message : '直前の作品を再開できませんでした';
+      current.current = null; setLocal(null); bridge.current = null;
+      setNotice(`直前の作品を再開できませんでした。${restoreError.current}。一覧から別の作品を開くか、編集中のタブを閉じて開き直してください。`);
+    });
     app.ontoolresult = result => {
       if (result.isError) { setNotice(result.content?.find(c => c.type === 'text')?.text ?? '接続に失敗しました'); return; }
       const data = (result.structuredContent ?? {}) as Record<string, unknown>;
       received.current = received.current.then(async () => {
+        await initialized.current;
+        if (data.studioCommand) { await command(data.studioCommand as Record<string, unknown>); return; }
         if (data.captureSceneView === true) {
-          await captureSceneViewForConversation();
+          await captureSceneViewForConversation(typeof data.operationId === 'string' ? data.operationId : undefined);
           return;
         }
         await accept(data);
-      }).catch((e: Error) => setNotice(e.message));
+      }).catch(async (e: Error) => {
+        applying.current = false; setChecking(false);
+        setNotice(`反映は未完了です。${e.message}`);
+        if (data.studioCommand) {
+          const command = data.studioCommand as Record<string, unknown>;
+          try { await app.sendMessage({ role: 'user', content: [{ type: 'text', text: JSON.stringify({ studioCommand: { operationId: command.operationId, requestId: command.requestId, status: 'failed', message: e.message, recoverable: true, activeProjectId: current.current?.documents.project.projectId ?? null, projectMatched: !!command.projectId && command.projectId === bridge.current?.currentBundle().project.projectId }, instruction: '編集は未完了です。エラーを説明し、Studioの状態を確認してから再試行してください。' }) }] }); } catch { /* Keep failure visible in Studio. */ }
+        }
+        if (data.bundle) { try { await report(parseStudioResult(data), 'failed', e.message); } catch { /* Preserve recovery data. */ } }
+        else if (data.captureSceneView) { try { await app.sendMessage({ role: 'user', content: [{ type: 'text', text: JSON.stringify({ sceneCapture: { operationId: data.operationId, status: 'failed', message: e.message }, instruction: 'Scene Viewの取得は未完了です。Studioで作品を開いてからcapture_scene_viewで再試行してください。' }) }] }, { timeout: 15000 }); } catch { /* Keep failure visible in Studio. */ } }
+      });
     };
-    const theme = () => { const host = app.getHostContext(); if (host?.theme) applyDocumentTheme(host.theme); if (host?.styles?.variables) applyHostStyleVariables(host.styles.variables); };
+    const theme = () => { const host = app.getHostContext(); setDisplayMode(host?.displayMode ?? 'inline'); setDisplayModes(host?.availableDisplayModes ?? []); if (host?.theme) applyDocumentTheme(host.theme); if (host?.styles?.variables) applyHostStyleVariables(host.styles.variables); };
+    app.addEventListener('hostcontextchanged', () => {
+      if (!hostReady.current) return;
+      received.current = received.current.then(() => openDeepLink()).catch((error: Error) => setNotice(error.message));
+    });
     app.addEventListener('hostcontextchanged', theme);
-    void app.connect().then(async () => {
-      setConnected(true); theme(); setProjects(await listBrowserProjects());
-      setNotice('会話でワールドの制作を頼むか、作品ファイルを取り込んでください。');
+    app.onclose = () => { setConnected(false); setNotice('ChatGPTとの接続が切れました。プラグインを開き直して、未完了の編集を再確認してください。'); };
+    const restored = initialized.current;
+    initialized.current = (async () => {
+      await app.connect(); theme(); await restored; hostReady.current = true; setConnected(true);
+      setNotice(restoreError.current ? `直前の作品を再開できませんでした。${restoreError.current}。一覧から別の作品を開くか、編集中のタブを閉じて開き直してください。` : recovery.current.pending ? '未完了のAI編集が残っています。反映を再確認してください。' : current.current ? 'ブラウザに保存した直前の編集を再開しました。' : '会話でワールドの制作を頼むか、作品ファイルを取り込んでください。');
+      try {
+        if (extensions.deepLink.getCurrent()?.url) await openDeepLink();
+        else {
+          const active = recovery.current.active;
+          if (active) await openTarget(active.projectId);
+          if (current.current) setNotice('ブラウザに保存した直前の編集を再開しました。');
+        }
+      } catch (error) { setNotice(error instanceof Error ? error.message : '指定した作品を開けませんでした'); }
       const host = app.getHostContext();
-      if (host?.availableDisplayModes?.includes('fullscreen') && host.displayMode !== 'fullscreen') await app.requestDisplayMode({ mode: 'fullscreen' });
-    }).catch((e: Error) => setNotice(e.message));
+      if (window.matchMedia('(max-width: 767px)').matches && host?.availableDisplayModes?.includes('inline') && host.displayMode === 'fullscreen') { try { await app.requestDisplayMode({ mode: 'inline' }); } catch { /* Display mode does not affect the MCP connection. */ } }
+    })().catch((e: Error) => { setConnected(false); setNotice(`接続または再開を確認できません。${e.message}`); });
+    return () => { mounted.current = false; };
   }, []);
-  async function save(bundle: PrototypeVisualProject) {
+  async function command(command: Record<string, unknown>) {
+    const name = command.name;
+    if (name === 'open_project') {
+      if (latestResult.current || applying.current) throw new Error('AIの編集が未完了です。反映を再確認してから作品を切り替えてください');
+      const projectId = String(command.projectId);
+      await openTarget(projectId);
+      const sent = await app.sendMessage({ role: 'user', content: [{ type: 'text', text: JSON.stringify({ studioContext: { connected: true, activeProjectId: current.current?.documents.project.projectId, projectId, projectMatched: bridge.current?.currentBundle().project.projectId === projectId, status: 'opened' }, requestId: command.requestId }) }] });
+      if (sent.isError) throw new Error('作品を開いた結果を会話に送れませんでした');
+      return;
+    }
+    if (name === 'get_editor_context' || name === 'get_operation_status') {
+      const active = current.current;
+      const result = name === 'get_operation_status' ? { operationId: command.operationId, receipt: recovery.current.history.find(item => item.operationId === command.operationId) ?? null, recoverable: !!recovery.current.operations?.[String(command.operationId)] } : { connected: true, mode: 'edit', projectId: active?.documents.project.projectId ?? null, sceneId: active?.documents.project.entrySceneId ?? null, revision: active?.revision ?? null, hash: active ? await bundleHash(bridge.current?.currentBundle() ?? bundleFrom(active.documents)) : null };
+      const requested = name === 'get_operation_status' ? recovery.current.operations?.[String(command.operationId)]?.bundle.project.projectId : active?.documents.project.projectId;
+      const studioState = { connected: hostReady.current, activeProjectId: active?.documents.project.projectId ?? null, projectMatched: !!requested && requested === active?.documents.project.projectId && requested === bridge.current?.currentBundle().project.projectId };
+      await app.sendMessage({ role: 'user', content: [{ type: 'text', text: JSON.stringify({ studioContext: { ...result, ...studioState }, requestId: command.requestId }) }] }); return;
+    }
+    if (name === 'retry_world') {
+      const result = recovery.current.operations?.[String(command.operationId)] ?? recovery.current.pending;
+      if (!result || result.operationId !== command.operationId) throw new Error('再送データがこのブラウザにありません。元の結果をretry_worldで再送してください');
+      await accept(result as unknown as Record<string, unknown>); return;
+    }
+    if (latestResult.current) throw new Error('前の編集が未完了です。反映を再確認してから追加編集してください');
+    const active = current.current;
+    if (!active || !bridge.current) throw new Error('編集対象が開いていません。Studioで作品を開いてから再試行してください');
+    if (command.projectId && command.projectId !== active.documents.project.projectId) throw new Error('編集対象が異なります。対象の作品を開いてください');
+    if (!(await bridge.current.saveNow())) throw new Error('最新の編集を保存できませんでした');
+    await writes.current;
+    const latest = current.current!;
+    const additionsOnly = Array.isArray(command.operations) && command.operations.every(raw => raw && typeof raw === 'object' && ['create_primitive', 'create_entity', 'create_material'].includes((raw as { tool: string }).tool));
+    if (command.expectedRevision !== undefined && command.expectedRevision !== latest.revision && !additionsOnly) throw new Error('revision_conflict: 最新状態をget_editor_contextで確認して再試行してください');
+    const result = await callTool('edit_world', { ...command, bundle: bridge.current.currentBundle(), revision: latest.revision });
+    await accept(result as Record<string, unknown>);
+  }
+  async function saved(path: string, bundle: PrototypeVisualProject) {
+    if (current.current?.path !== path) await resume(path);
     const snapshot = current.current;
     if (!snapshot) throw new Error('編集対象がありません');
     const task = writes.current.then(async () => {
       const latest = current.current;
-      if (!latest || latest.path !== snapshot.path) throw new Error('編集対象が切り替わりました');
+      if (!latest || latest.path !== snapshot.path || path !== latest.path) throw new Error('編集対象が切り替わりました');
       const documents = { ...latest.documents, project: bundle.project, scenes: { ...latest.documents.scenes, [bundle.scene.sceneId]: bundle.scene }, assets: bundle.assets, prefabs: bundle.prefabs };
-      await saveBrowserVisualProject(latest.path, serializeVisualProjectDocuments(documents));
-      current.current = { ...latest, documents, revision: latest.revision + 1 };
+      const changed = await bundleHash(bundle) !== await bundleHash(bundleFrom(latest.documents));
+      current.current = { ...latest, documents, revision: latest.revision + (changed ? 1 : 0) };
+      await remember(current.current);
       // Model context is opt-in via the toolbar; local saves do not send documents to the server.
     });
-    writes.current = task.catch(() => {}); await task; return snapshot.path;
+    writes.current = task.catch(() => {}); await task;
   }
-  async function download(bundle?: PrototypeVisualProject) {
-    const next = current.current; if (!next) return;
-    const documents = bundle ? { ...next.documents, project: bundle.project, assets: bundle.assets, prefabs: bundle.prefabs, scenes: { ...next.documents.scenes, [bundle.scene.sceneId]: bundle.scene } } : next.documents;
-    const archive = await createBrowserProjectArchive(documents, await getBrowserProjectFiles(next.path));
-    const url = URL.createObjectURL(archive.blob); const link = document.createElement('a'); link.href = url; link.download = archive.fileName; link.click(); setTimeout(() => URL.revokeObjectURL(url), 60000);
-  }
-  async function back() {
-    if (bridge.current && !(await bridge.current.saveNow())) throw new Error('保存できませんでした。作品を書き出してください');
-    await writes.current; current.current = null; bridge.current = null; setLocal(null); setProjects(await listBrowserProjects());
-  }
-  const toolbar = <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 bg-white p-3 text-sm text-zinc-900">
-    {pending && <button disabled={busy || !connected} onClick={() => void run(async () => {
-      const result = latestResult.current; if (!result) return;
-      const editing = bridge.current?.currentBundle() ?? (current.current ? bundleFrom(current.current.documents) : null);
-      const differs = editing && (editing.project.projectId !== result.bundle.project.projectId || !result.baseHash || await bundleHash(editing) !== result.baseHash);
-      if (differs && !window.confirm('手元の編集とAIの結果が異なります。手元の編集を保存してからAIの結果を開きます。同じ作品の場合、現在のSceneはAIの結果に置き換わります。必要なら先に書き出してください。')) return;
-      if (bridge.current && !(await bridge.current.saveNow())) throw new Error('保存できませんでした。作品を書き出してから再試行してください');
-      await writes.current; await adopt(result);
-    })}>AIの結果を開く</button>}
-    {local && <button disabled={busy || !connected} onClick={() => void run(() => download(bridge.current?.currentBundle()))}>作品を書き出す</button>}
-    {local && <button disabled={busy || !connected} onClick={() => void run(async () => {
-      if (bridge.current && !(await bridge.current.saveNow())) throw new Error('保存できませんでした');
-      await writes.current; const next = current.current; if (!next) return;
-      await context(next, bridge.current?.currentBundle()); setNotice('編集データを会話に渡しました。変更内容を入力してください。');
-    })}>会話に編集対象を渡す</button>}
-    <span role="status" aria-live="polite">{busy ? '処理しています…' : notice}</span>
-  </div>;
-  if (local) {
-    const d = local.documents;
-    return <div className="flex h-[100dvh] flex-col">{toolbar}<div className="relative min-h-0 flex-1"><VisualEditorErrorBoundary key={local.path + ':' + generation} featureName="ビジュアルエディター" onBack={() => void run(back)}><Suspense fallback={<p>エディターを準備しています…</p>}><Editor key={local.path + ':' + generation} projectKind={d.project.projectKind} projectName={d.project.metadata.name} projectPath={local.path} initialBundle={bundleFrom(d)} onSave={save} onRegisterMcpProjectBridge={value => { bridge.current = value; }} onProjectExport={download} backLabel="プロジェクト" onBack={() => void run(back)} /></Suspense></VisualEditorErrorBoundary></div></div>;
-  }
-  return <main className="min-h-[100dvh] bg-zinc-50 text-zinc-900">{toolbar}<div className="mx-auto max-w-4xl p-5"><h1 className="mb-5 text-2xl font-semibold">XRift Studio</h1><p className="mb-4">作品はこのブラウザに保存します。別の端末へ移すときは作品を書き出してください。</p><form className="mb-4 flex flex-wrap gap-3" onSubmit={event => { event.preventDefault(); void run(async () => { await adopt(await call('create_world', { name }) as unknown as Result); }); }}><input className="rounded border p-3" required maxLength={80} value={name} onChange={event => setName(event.target.value)} aria-label="ワールド名" placeholder="ワールド名"/><button disabled={busy || !connected} className="rounded bg-zinc-900 px-4 py-3 text-white">新しく作る</button></form><label className="mb-6 block">プロジェクトを取り込む（.xriftstudio / ZIP）<input className="mt-2 block max-w-full" type="file" accept=".xriftstudio,.zip" disabled={busy || !connected} onChange={event => {
-    const file = event.target.files?.[0]; event.target.value = ''; if (!file) return;
-    void run(async () => {
-      const imported = await readBrowserProjectArchive(file);
-      select({ path: await createBrowserProject(imported.files, { activate: false }), documents: imported.documents, revision: 0 });
-      setNotice('取り込みました。AIで編集するときは「会話に編集対象を渡す」を押してください。');
-    });
-  }}/></label><div className="grid gap-3 sm:grid-cols-2">{projects.map(project => <button className="rounded-xl border bg-white p-5 text-left" disabled={busy || !connected} key={project.path} onClick={() => void run(async () => { const documents = parseBrowserProjectFiles(await getBrowserProjectFiles(project.path)); select({ path: project.path, documents, revision: 0 }); setNotice('ブラウザに保存した作品を開きました。'); })}>{project.name}</button>)}</div></div></main>;
+  const displayedReceipt = receipt && (pending ? receipt.operationId === pending.operationId : receipt.projectId === current.current?.documents.project.projectId && receipt.hash === recovery.current.active?.hash) ? receipt : null;
+  const stateLabel = !connected ? '未接続' : checking ? '確認中' : displayedReceipt?.status === 'failed' ? '反映失敗' : pending && displayedReceipt?.status === 'verified' && !displayedReceipt.reported ? '未報告' : pending ? '反映未完了' : displayedReceipt?.status === 'verified' ? '反映済み' : '接続済み';
+  const controls = <div className="flex items-center gap-1">{displayModes.includes(displayMode === 'fullscreen' ? 'inline' : 'fullscreen') && <button className="min-h-9 rounded-md px-2 text-xs hover:bg-editor-subtle" onClick={() => { void app.requestDisplayMode({ mode: displayMode === 'fullscreen' ? 'inline' : 'fullscreen' }).then(result => setDisplayMode(result.mode)).catch(() => setNotice('画面を切り替えられませんでした。ChatGPTの戻る操作を使ってください。')); }}>{displayMode === 'fullscreen' ? '会話へ戻る' : 'エディターを広げる'}</button>}<details className="relative shrink-0 text-xs text-editor-text">
+    <summary className="flex min-h-9 cursor-pointer list-none items-center rounded-md px-3 font-medium hover:bg-editor-subtle" aria-label={`ChatGPT ${stateLabel}`}>ChatGPT · {stateLabel}</summary>
+    <div className={`absolute right-0 z-50 w-80 max-w-[90vw] rounded-lg border border-editor-border bg-editor-surface p-3 shadow-lg ${local ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
+      <p role="status" className="mb-3 break-words text-xs text-editor-muted">{notice}</p>
+      {displayedReceipt && <p className="mb-3 text-xs text-editor-muted">{displayedReceipt.status === 'verified' ? displayedReceipt.reported ? '反映確認済み・報告済み' : '反映確認済み・会話へ未報告' : displayedReceipt.status === 'failed' ? '反映失敗' : '適用待ち'} / revision {displayedReceipt.revision}</p>}
+      {pending && <button className="mb-2 min-h-10 w-full rounded-md bg-violet-600 px-3 text-white disabled:opacity-50" disabled={busy || checking || !connected} onClick={() => void run(async () => {
+        const result = latestResult.current; if (result) await applyResult(result);
+      })}>{displayedReceipt?.status === 'failed' || displayedReceipt?.status === 'verified' && !displayedReceipt.reported ? '反映を再確認' : 'AIの結果を適用'}</button>}
+      {local && <button className="min-h-10 w-full rounded-md border border-editor-border px-3 hover:bg-editor-subtle disabled:opacity-50" disabled={busy || checking || !connected} onClick={() => void run(async () => {
+        if (bridge.current && !(await bridge.current.saveNow())) throw new Error('保存できませんでした');
+        await writes.current; const next = current.current; if (!next) return;
+        await context(next, bridge.current?.currentBundle()); setNotice('編集対象を会話に渡しました。変更内容を入力してください。');
+      })}>会話に編集対象を渡す</button>}
+    </div>
+  </details></div>;
+  return <>
+    <BrowserEditorApp host={{
+      controls, busy: checking,
+      onReady: api => { studio.current = api; },
+      onBridge: value => { bridge.current = value; },
+      onSaved: saved,
+      onProjectChange: async path => {
+        if (path) { await resume(path); setNotice('ブラウザに保存した作品を開きました。'); }
+        else { current.current = null; setLocal(null); bridge.current = null; recovery.current.active = null; await persist(); }
+      },
+    }} />
+  </>;
 }
 ReactDOM.createRoot(document.getElementById('root')!).render(<Application />);

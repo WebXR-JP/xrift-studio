@@ -689,10 +689,7 @@ export type ExternalAssetsCommit = (update: {
 export type VisualEditorMcpProjectBridge = {
   /** The Editor's current documents, ahead of any pending autosave. */
   currentBundle: () => PrototypeVisualProject;
-  /** Captures the currently rendered Scene View as a PNG data URL. */
-  captureSceneView: () => Promise<
-    { ok: true; dataUrl: string } | { ok: false; message: string }
-  >;
+  captureSceneView: () => Promise<{ ok: true; dataUrl: string } | { ok: false; message: string }>;
   /** Flushes the pending autosave. Resolves to the project path when known. */
   saveNow: () => Promise<string | undefined>;
   /** Saves, then leaves to the Library. Resolves false when the save failed. */
@@ -700,6 +697,7 @@ export type VisualEditorMcpProjectBridge = {
 };
 
 export type VisualEditorPrototypeProps = {
+  hostControls?: import('react').ReactNode;
   projectKind: VisualProjectKind;
   onBack: () => void;
   /** Lets embedded surfaces name the actual destination instead of always saying Library. */
@@ -964,6 +962,7 @@ export function VisualEditorPrototype({
   projectTransferBusy = false,
   onRegisterExternalAssetsCommit,
   onRegisterMcpProjectBridge,
+  hostControls,
   onClassicExport,
   compilationFresh = false,
   onThumbnailChanged,
@@ -1794,7 +1793,7 @@ export function VisualEditorPrototype({
     } finally {
       setMcpLoading(false);
     }
-  }, [mcpNativeAvailable]);
+  }, [mcpNativeAvailable, requestSceneScreenshot]);
 
   const registerMcpClient = useCallback(
     async (clientId: XriftMcpClientId) => {
@@ -5448,7 +5447,7 @@ export function VisualEditorPrototype({
       unlisten?.();
       onRegisterMcpProjectBridgeRef.current?.(null);
     };
-  }, [mcpNativeAvailable, requestSceneScreenshot]);
+  }, [mcpNativeAvailable]);
   const assetImportPanelAvailability = resolveAssetOperationAvailability(
     "asset-import",
     {
@@ -11345,7 +11344,6 @@ export function VisualEditorPrototype({
   }, [leaving, projectExportBusy, projectTransferBusy, importBusy, onProjectExport, flushInteractivityDraft, backLabel, onBack, requestAutosave, flushCodeAutosaves]);
 
   mcpProjectBridgeActionsRef.current = { saveNow: runSave, leave: handleBack };
-  // Embedded browser hosts need the same save/current-document bridge without native IPC.
   useEffect(() => {
     if (mcpNativeAvailable) return;
     onRegisterMcpProjectBridgeRef.current?.({
@@ -12523,8 +12521,10 @@ export function VisualEditorPrototype({
             onUndo={handleUndo}
           />
             <div ref={setAssetStatusHost} className="relative min-w-0 flex-1 self-stretch border-l border-editor-border" />
+            {hostControls}
           </footer>
         ) : null}
+        {(tablet || phone) && !recordingUiHidden && hostControls ? <div className="flex shrink-0 justify-end border-t border-editor-border bg-editor-surface px-2 py-1">{hostControls}</div> : null}
         {tablet && !recordingUiHidden && notice && (tabletPanel !== "assets" || panelsHidden) ? (
           <div className="flex shrink-0 items-center gap-2 border-t border-editor-border bg-editor-surface px-3 py-1.5 text-xs text-editor-text">
             <p role="status" className="min-w-0 flex-1 whitespace-pre-wrap break-words select-text cursor-text">{notice}</p>

@@ -76,4 +76,4 @@ Hierarchyの一部を`.xriftstudio`で書き出して別のワールド・アイ
 
 ### ChatGPT Workプラグインの開発
 
-会話からワールドを作り、ブラウザに保存して書き出す[プラグイン用MCP実装](./packages/xrift-studio-cloud/README.md)を追加しています。共有DBやクラウド作品保存は使わず、既存のブラウザエディターと編集処理を再利用します。MCP用サーバーの配置、プラグイン接続、スマホ実機での表示確認は未実施です。現在のGitHub Pages版にMCPが自動で有効になる変更ではありません。
+ChatGPT版と通常ブラウザ版は、作品一覧・新規作成・再開・保存・取り込み・書き出しを同じエディターで行います。[プラグイン用MCP実装](./packages/xrift-studio-cloud/README.md)は、ChatGPTとの接続、編集データの受信、反映確認と会話への報告を追加します。作品はブラウザに保存し、通常サイトとChatGPT内の保存領域は分かれます。GitHub Pages版を開くだけではMCP接続は有効になりません。
