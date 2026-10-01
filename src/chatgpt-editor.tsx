@@ -226,12 +226,16 @@ function Application() {
   }
   async function openDeepLink() {
     const url = extensions.deepLink.getCurrent()?.url;
-    if (!url || url === lastDeepLink.current) return;
-    lastDeepLink.current = url;
+    if (!url) return false;
     const launch = studioLaunchFromUrl(url);
+    // ChatGPT also supplies its global entry URL as a deep link. It does not
+    // select a project, so allow the entry's normal new/resume action to run.
+    if (launch.kind === 'library') return false;
+    if (url === lastDeepLink.current) return true;
+    lastDeepLink.current = url;
     if (launch.kind === 'new') await accept(await callTool('create_world', { name: launch.name }) as Record<string, unknown>);
     else if (launch.kind === 'project') await openTarget(launch.projectId);
-    else throw new Error('作品へのリンクが不正です。作品一覧から開いてください');
+    return true;
   }
   const setup = useRef(false);
   React.useEffect(() => {
@@ -258,7 +262,8 @@ function Application() {
         if (data.localProjects === true) {
           // A deep link already selects/creates its target during host startup.
           // Do not create a second project from the global entry's default result.
-          if (data.launch === 'new' && !extensions.deepLink.getCurrent()?.url) {
+          const deepUrl = extensions.deepLink.getCurrent()?.url;
+          if (data.launch === 'new' && (!deepUrl || studioLaunchFromUrl(deepUrl).kind === 'library')) {
             if (entryCreated.current) entryCreated.current = false;
             else await accept(await callTool('create_world', {}) as Record<string, unknown>);
           }
@@ -293,7 +298,7 @@ function Application() {
       await app.connect(); theme(); await restored; hostReady.current = true; setConnected(true);
       setNotice(restoreError.current ? `直前の作品を再開できませんでした。${restoreError.current}。一覧から別の作品を開くか、編集中のタブを閉じて開き直してください。` : recovery.current.pending ? '未完了のAI編集が残っています。反映を再確認してください。' : current.current ? 'ブラウザに保存した直前の編集を再開しました。' : '会話でワールドの制作を頼むか、作品ファイルを取り込んでください。');
       try {
-        if (extensions.deepLink.getCurrent()?.url) await openDeepLink();
+        if (await openDeepLink()) { /* Explicit project/new links take priority. */ }
         else if (document.documentElement.hasAttribute('data-studio-new-entry') && !initialResultReceived.current && initialArguments.current.mode === undefined && initialArguments.current.projectId === undefined) {
           // The app-only new entry does not necessarily send a tool result.
           // Use the same creation action as the ordinary browser editor.

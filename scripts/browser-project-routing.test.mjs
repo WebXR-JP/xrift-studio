@@ -35,3 +35,10 @@ test('new links create explicitly and replace themselves with persistent project
   assert.equal(saved, 'https://example.test/xrift-studio/editor.html?project=project-created');
   assert.deepEqual(routing.studioLaunchFromUrl(saved), {kind:'project',projectId:'project-created'});
 });
+
+test('ChatGPT global entry deep links do not select a project or block the entry action', () => {
+  for (const url of ['/', '/open_studio', '/new_studio', 'https://chatgpt.com/mcp-app/app-id/open_studio']) {
+    assert.deepEqual(routing.studioLaunchFromUrl(url), {kind:'library'});
+  }
+  assert.deepEqual(routing.studioLaunchFromUrl('/editor/project-saved'), {kind:'project',projectId:'project-saved'});
+});
