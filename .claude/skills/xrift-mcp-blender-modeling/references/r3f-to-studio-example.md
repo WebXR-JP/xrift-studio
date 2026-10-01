@@ -1,32 +1,31 @@
 # 動作例: R3F ワールドを Studio に変換して配置する
 
-`ComponentCodeImportDialog`（コード貼り付け）と TSX Script `Render` を使った、実際に動く
-「R3F → Xrift Studio」の手順とサンプルコード。
+R3FのコードをXRift Studioへ取り込む手順と、TSX Scriptのサンプルです。「コードから作成」の`ComponentCodeImportDialog`と、Scriptの`Render`を使います。
 
 ## シナリオ: 既存 R3F の World.tsx を XRift ワールドへ取り込む
 
 ### 手順
 
-1. 変換したい R3F コード（`@xrift/world-components` + R3F の JSX）を用意。
-2. Studio の「コードから作成」(`ComponentCodeImportDialog`) に貼り付ける。
-   - 内部で `analyzeComponentCode` → `applyComponentCodeImportPlan` が走る。
-3. モデル・テクスチャ参照は Asset として取り込まれる。不足は `import_model_asset` /
-   `import_texture_asset` で補う。
-4. Entity 構造が生成されたら、`update_transform` で配置を微調整。
-5. 動的な動き（回転・浮遊）は TSX Script に切り出す（下のサンプル）。
+1. 変換したいR3Fコード（`@xrift/world-components` + R3FのJSX）を用意。
+2. Studioの「コードから作成」(`ComponentCodeImportDialog`) に貼り付ける。
+   - 内部で`analyzeComponentCode` → `applyComponentCodeImportPlan`が走る。
+3. モデル・テクスチャ参照はAssetとして取り込まれる。不足は`import_model_asset` /
+   `import_texture_asset`で補う。
+4. Entity構造が生成されたら、`update_transform`で配置を微調整。
+5. 動的な動き（回転・浮遊）はTSX Scriptに切り出す（下のサンプル）。
 
 ### 変換でつまずきやすい点
 
-- **`useFrame`** → `start(ctx)` の `update(delta)` に置き換え。
-- **`useGLTF(url)`** → `ctx.assets.url(declaredModelId)`。アセットIDは `update_script_component` の
-  `assetReferences` に必ず宣言。
-- **`@xrift/world-components` の Component**（`Portal`, `Mirror`, `SpawnPoint` 等）は
-  `place_builtin_prefab` か `add_component`（`definitionId` はコンポーネント一覧で確認） で置く。
-- **プリミティブ**（`<Box>`, `<mesh>`）は Entity + `core.mesh` になる。
+- `useFrame` → `start(ctx)`の`update(delta)`に置き換え。
+- `useGLTF(url)` → `ctx.assets.url(declaredModelId)`。アセットIDは`update_script_component`の
+  `assetReferences`に必ず宣言。
+- `@xrift/world-components`のComponent（`Portal`, `Mirror`, `SpawnPoint`等）は
+  `place_builtin_prefab`か`add_component`（`definitionId`はコンポーネント一覧で確認） で置く。
+- プリミティブ（`<Box>`, `<mesh>`）はEntity + `core.mesh`になる。
 
 ## TSX Script サンプル（`model-display` テンプレート準拠）
 
-外部 GLB を Render で表示し、回転させる最小の動く形。
+外部GLBをRenderで表示し、回転させる最小構成の例です。
 
 ```tsx
 import {
@@ -69,12 +68,12 @@ export function Render({ ctx }: ScriptRenderProps<Props>) {
 }
 ```
 
-> これを `create_script_asset(language: "tsx")` で作り、`update_script_component` で
-> `assetReferences: [モデルアセットID]` を宣言する。モデルアセットは先に `import_model_asset` で用意する。Render がモデルを表示するので、同じモデルを別途配置すると二重表示になる。
+> これを`create_script_asset(language: "tsx")`で作り、`update_script_component`で
+> `assetReferences: [モデルアセットID]`を宣言する。モデルアセットは先に`import_model_asset`で用意する。Renderがモデルを表示するので、同じモデルを別途配置すると二重表示になる。
 
-## プリミティブだけのシーン例（コード中心の極み）
+## プリミティブだけで作るシーン
 
-`ComponentCodeImportDialog` に貼るだけで、Entity 群に変換できるシンプルな例。
+`ComponentCodeImportDialog`に貼るだけで、Entity群に変換できるシンプルな例。
 
 ```tsx
 export function Scene() {
@@ -97,13 +96,13 @@ export function Scene() {
 }
 ```
 
-> 変換後は各 `<mesh>` が Entity + `core.mesh` になり、`update_transform` や `set_material` で
-> 個別に編集できる。`@xrift/world-components` の Component も同様に変換される。
+> 変換後は各`<mesh>`がEntity + `core.mesh`になり、`update_transform`や`set_material`で
+> 個別に編集できる。`@xrift/world-components`のComponentも同様に変換される。
 
 ## 配置からアニメまでの最短ルート
 
-1. `import_model_asset`（GLB）でモデルを取り込み、Script を付ける Entity を用意する。
-2. `create_script_asset(language: "tsx")` で上記サンプルを作成。
-3. `add_component(definitionId: "scripting.script", scriptAssetId)` で Entity に付与。
-4. `update_script_component` で `assetReferences` / プロパティを設定。
+1. `import_model_asset`（GLB）でモデルを取り込み、Scriptを付けるEntityを用意する。
+2. `create_script_asset(language: "tsx")`で上記サンプルを作成。
+3. `add_component(definitionId: "scripting.script", scriptAssetId)`でEntityに付与。
+4. `update_script_component`で`assetReferences` / プロパティを設定。
 5. `set_play_mode(mode: "play")` → 変換・実行結果を確認。

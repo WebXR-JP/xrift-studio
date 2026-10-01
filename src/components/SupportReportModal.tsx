@@ -276,7 +276,7 @@ ${createSupportReportDraft(context, sanitizedErrorMessage)}
                 ヘルプと報告
               </h2>
               <p className="text-xs text-zinc-600">
-                環境情報を添えて、相談内容をまとめられます。
+                相談に使う環境情報をコピーし、報告先を開けます。
               </p>
             </div>
           </div>
@@ -286,7 +286,7 @@ ${createSupportReportDraft(context, sanitizedErrorMessage)}
           <section className="mb-4 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
             <h3 className="text-sm font-semibold text-zinc-800">まずは症状から確認する</h3>
             <GuideExternalLink page="troubleshooting" label="困ったときのガイド（ブラウザー）" />
-            <p className="text-xs leading-5 text-zinc-600">ログインや環境情報のコピーなしで読めます。</p>
+            <p className="text-xs leading-5 text-zinc-600">ログインせずに読めます。環境情報のコピーも不要です。</p>
           </section>
           <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
             相談先
@@ -361,7 +361,7 @@ ${createSupportReportDraft(context, sanitizedErrorMessage)}
                 ) : null}
               </div>
               <p className="mt-2 text-[10px] leading-4 text-amber-800">
-                絶対パスや認証情報は伏せています。送信前に、貼り付けた内容を確認してください。
+                絶対パスや認証情報は伏せています。送信前に貼り付けた内容を確認してください。
               </p>
             </div>
           ) : null}

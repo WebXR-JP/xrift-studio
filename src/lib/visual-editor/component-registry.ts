@@ -1279,7 +1279,7 @@ export function validateXriftComponent(
       makeDiagnostic(
         "error",
         "invalid-xrift-component-properties",
-        "propertiesは有限数値だけを含むJSON objectである必要があります。",
+        "propertiesは有限数値だけを含むJSONオブジェクトで指定してください。",
         `${path}.properties`,
         common,
       ),
@@ -1513,7 +1513,7 @@ export function validateXriftComponentFieldValue(
     return (typeof value === "number" && Number.isFinite(value)) ||
       isFiniteNumberArray(value, 3)
       ? null
-      : typeFailure("number または [number, number, number]");
+      : typeFailure("numberまたは [number, number, number]");
   }
   if (definition.kind === "grabbable-transform") {
     if (!isPlainObjectRecord(value)) return typeFailure("GrabbableTransform");

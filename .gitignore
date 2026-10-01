@@ -33,3 +33,8 @@ src-tauri/updater.key.pub
 # Generated static documentation preview
 .guide-dev/
 .guide-review/
+
+# Local Japanese writing tools and review files
+/.agents/skills/yomiyasu/
+/.claude/skills/yomiyasu/
+/tmp/yomiyasu-*

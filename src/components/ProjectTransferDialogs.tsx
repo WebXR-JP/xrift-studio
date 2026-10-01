@@ -235,7 +235,7 @@ export function DuplicateProjectDialog({
     >
       <p className="mt-1 text-xs text-zinc-600">
         「{project.title || project.name}」を別名のフォルダーにコピーします。
-        コピーは未公開の独立したプロジェクトになり、公開しても元のプロジェクトの公開先には影響しません。
+        コピーしたプロジェクトは未公開の状態になります。公開すると新しい公開先が作られ、元のプロジェクトの公開先はそのまま残ります。
       </p>
       <NameField
         value={name}
@@ -258,12 +258,12 @@ export function DuplicateProjectDialog({
             className="mt-2 w-full rounded-lg border border-zinc-300 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200 disabled:opacity-50"
           />
           <span className="mt-1 block text-[11px] text-zinc-500">
-            空のままなら元のタイトルを引き継ぎます。あとから公開画面で変更できます。
+            空欄にすると元のタイトルを使います。タイトルは後から公開画面で変更できます。
           </span>
         </label>
       ) : (
         <p className="mt-3 text-[11px] text-zinc-500">
-          コードプロジェクトのタイトルは xrift.json をそのまま引き継ぎます。
+          コードプロジェクトでは、元のxrift.jsonに書かれたタイトルを使います。
         </p>
       )}
       <ErrorNote error={error} />
@@ -431,8 +431,8 @@ export function ImportProjectRepositoryDialog({
       }
     >
       <p className="mt-1 text-xs text-zinc-600">
-        リポジトリの直下に xrift-studio.project.json か xrift.json があるプロジェクトを、
-        自分の保存先に新しいプロジェクトとしてコピーします。Git の履歴は持ち込みません。
+        リポジトリの直下にxrift-studio.project.jsonかxrift.jsonがあるプロジェクトを、
+        プロジェクトの保存先へ新しいプロジェクトとしてコピーします。Gitの履歴は含まれません。
       </p>
       <label className="mt-4 block">
         <span className="text-sm font-medium text-zinc-700">リポジトリのURL</span>

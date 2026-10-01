@@ -24,9 +24,9 @@ export function EditorCreationMenuSections({ entries, disabled, onSelect, onCrea
   return <>
     <EditorMenuSection label="Entityを作成" icon={EDITOR_ICONS.sceneEntity} forceOpen={Boolean(searchQuery.trim())}>
       <EntityCreationMenuContent searchQuery={searchQuery} entries={entries} disabled={disabled} onSelect={onSelect}
-        worldContent={onCreateTerrain && matchesEditorSearch(searchQuery, "Terrain 地形 ワールド", ...TERRAIN_PRESETS.map((p) => p.label)) ? <EditorMenuSection label="Terrain" icon={Mountain} forceOpen={Boolean(searchQuery.trim())}>
-          {matchesEditorSearch(searchQuery, "Terrain 地形 ワールド 平らなTerrain") ? <EditorMenuItem icon={Mountain} label="平らなTerrain" disabled={disabled} onClick={() => onCreateTerrain()} /> : null}
-          {TERRAIN_PRESETS.filter((preset) => matchesEditorSearch(searchQuery, "Terrain 地形 ワールド", preset.label)).map((preset) => <EditorMenuItem key={preset.id} icon={Mountain} label={preset.label}
+        worldContent={onCreateTerrain && matchesEditorSearch(searchQuery, "Terrain地形 ワールド", ...TERRAIN_PRESETS.map((p) => p.label)) ? <EditorMenuSection label="Terrain" icon={Mountain} forceOpen={Boolean(searchQuery.trim())}>
+          {matchesEditorSearch(searchQuery, "Terrain地形 ワールド 平らなTerrain") ? <EditorMenuItem icon={Mountain} label="平らなTerrain" disabled={disabled} onClick={() => onCreateTerrain()} /> : null}
+          {TERRAIN_PRESETS.filter((preset) => matchesEditorSearch(searchQuery, "Terrain地形 ワールド", preset.label)).map((preset) => <EditorMenuItem key={preset.id} icon={Mountain} label={preset.label}
             disabled={disabled} onClick={() => onCreateTerrain(preset.id)} />)}
           {terrainOverlapCount > 0 && onArrangeTerrains ? <>
             <div className="my-1 border-t border-slate-200" />

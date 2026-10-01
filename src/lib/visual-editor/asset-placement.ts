@@ -332,7 +332,7 @@ function createModelEntity(
     const graphAssetId = createDocumentId("interactivity");
     const added = addDefaultInteractivityAsset(assets, {
       id: graphAssetId,
-      name: `${asset.name} のアニメーション`,
+      name: `${asset.name} Animation`,
       folderId: asset.folderId ?? null,
       extension: createModelAnimationGraphExtension(
         clips.map((clip) => clip.name),

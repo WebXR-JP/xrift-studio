@@ -1,8 +1,8 @@
 # 最終版: Collider設定とPlay実行時の修正
 
-対象: `xrift-studio-collider-fix.zip` を土台にしたソース一式。前回のCollider設定・形状生成修正をすべて保持し、Play実行経路の修正を追加しています。
+対象: `xrift-studio-collider-fix.zip`を基にしたソース一式。前回のCollider設定・形状生成修正をすべて保持し、Play実行経路の修正を追加しています。
 
-**これは修正済みソースのZIPです。ビルド済みWindowsアプリではありません。アプリ全体のビルド・画面上のPlay操作は、この環境では確認できていません。**
+これは修正済みソースのZIPです。ビルド済みWindowsアプリではありません。アプリ全体のビルド・画面上のPlay操作は、この環境では確認できていません。
 
 ## Play側で追加修正した問題
 
@@ -10,7 +10,7 @@
 
 Playの外側にある読み込み監視は、Physics/Suspense配下がまだマウントされていない時も、読み込み中のモデルを0件と数えられました。初期化が遅いと、モデルがまだ登録されていないだけなのに準備完了となる経路です。
 
-`SceneModelLoadCommit` を実際のPhysics配下へ配置し、シーンがコミットされるまで準備完了にしません。非同期モデルと衝突用モデルは、最初の通知を待たずLayout Effectで読み込み中として登録します。
+`SceneModelLoadCommit`を実際のPhysics配下へ配置し、シーンがコミットされるまで準備完了にしません。非同期モデルと衝突用モデルは、最初の通知を待たずLayout Effectで読み込み中として登録します。
 
 ### 2. モデルの読み込み完了と衝突形状の登録完了が別
 
@@ -30,7 +30,7 @@ Playの外側にある読み込み監視は、Physics/Suspense配下がまだマ
 
 ### 5. 共有モデルの一部をColliderにした場合
 
-`sourceNodeIndex` も読み込み依存関係へ含めました。別ノードへ切り替えた直後に、前のノードの衝突形状を使わないようにします。指定された衝突用モデルが欠けている時に、描画用モデルへ黙って置き換える経路も取り除いています。
+`sourceNodeIndex`も読み込み依存関係へ含めました。別ノードへ切り替えた直後に、前のノードの衝突形状を使わないようにします。指定された衝突用モデルが欠けている時に、利用者に知らせず描画用モデルへ置き換える経路も取り除いています。
 
 ### 6. ランタイムと出力側
 
@@ -44,21 +44,21 @@ Play・ランタイム・Classic JSX出力は、共通のメッシュ衝突生�
 
 | 検証 | 結果 |
 | --- | --- |
-| Play開始判定の状態遷移 | 27 assertions 合格 |
-| Play開始・再実行の物理ワークフロー | 4ケース / 33 assertions 合格 |
-| 既存の床・壁・Trigger・反転・穴・形状差し替え・接地 | 9ケース / 22 assertions 合格 |
-| Collider設定操作 | 46 assertions 合格 |
-| 形状変換・子要素監視 | 24 assertions 合格 |
+| Play開始判定の状態遷移 | 27 assertions合格 |
+| Play開始・再実行の物理ワークフロー | 4ケース / 33 assertions合格 |
+| 既存の床・壁・Trigger・反転・穴・形状差し替え・接地 | 9ケース / 22 assertions合格 |
+| Collider設定操作 | 46 assertions合格 |
+| 形状変換・子要素監視 | 24 assertions合格 |
 | 既存Playセッションfixture | 合格。件数を返さないsuiteです |
-| Hierarchy Transfer | 20ケース / 290 assertions 合格 |
-| Authoring Workflow | 42 assertions 合格 |
-| 18ファイルの構文とコードの接続、生成される補助コード | 52 assertions 合格。全体型チェックではありません |
+| Hierarchy Transfer | 20ケース / 290 assertions合格 |
+| Authoring Workflow | 42 assertions合格 |
+| 18ファイルの構文とコードの接続、生成される補助コード | 52 assertions合格。全体型チェックではありません |
 | 新しい開始判定コアとfixtureのstrict型チェック | 合格 |
 | fixtureの実行登録確認 | 116 suites登録済み。全116 suitesを実行した意味ではありません |
 
-Play物理ワークフローのテストは、本物のRapierと実装した開始判定コアを使用しています。シーンのマウント/読み込みの時系列を模擬し、Play用カプセル寸法で接地、解除後の落下、再実行時に旧床の判定が残らないことを検証しました。**React Three Fiberの描画、実際の公式PhysicsPlayer、Tauri UIを動かしたE2Eではありません。**
+Play物理ワークフローのテストは、本物のRapierと実装した開始判定コアを使用しています。シーンのマウント/読み込みの時系列を模擬し、Play用カプセル寸法で接地、解除後の落下、再実行時に旧床の判定が残らないことを検証しました。React Three Fiberの描画、実際の公式PhysicsPlayer、Tauri UIを動かしたE2Eではありません。
 
-実行結果は `PLAY_COLLIDER_TEST_RESULTS.txt` にあります。以前の `COLLIDER_FIX_NOTES.md` と `COLLIDER_TEST_RESULTS.txt` は前回段階の記録です。
+実行結果は`PLAY_COLLIDER_TEST_RESULTS.txt`にあります。以前の`COLLIDER_FIX_NOTES.md`と`COLLIDER_TEST_RESULTS.txt`は前回段階の記録です。
 
 ## 未確認・反映が必要な範囲
 
@@ -66,7 +66,7 @@ Play物理ワークフローのテストは、本物のRapierと実装した開�
 
 アプリ全体のビルド、コンパイラー全fixture、ブラウザ/Tauriの実画面でのPlay、公開先の動作確認は未実施です。単体テストの成功をもって実画面の不具合解消が確認済みとはしていません。
 
-**`public/xrift-runtime-shell` は元の事前ビルド済みファイルを保持しています。ソース修正は含まれますが、ブラウザから直接公開するシェルへ反映するには、依存導入後の再ビルドが必要です。** 主エディターのPlayは今回修正したソース側の経路です。
+`public/xrift-runtime-shell`は元の事前ビルド済みファイルを保持しています。ソース修正は含まれますが、ブラウザから直接公開するシェルへ反映するには、依存導入後の再ビルドが必要です。 主エディターのPlayは今回修正したソース側の経路です。
 
 ```sh
 pnpm install --frozen-lockfile
@@ -91,7 +91,7 @@ node scripts/check-mesh-collider-sources.cjs
 node scripts/check-fixture-coverage.mjs
 ```
 
-TypeScriptが別ディレクトリーにある場合は `XRIFT_TYPESCRIPT_PATH` を指定できます。
+TypeScriptが別ディレクトリーにある場合は`XRIFT_TYPESCRIPT_PATH`を指定できます。
 
 ## 実画面での確認手順
 

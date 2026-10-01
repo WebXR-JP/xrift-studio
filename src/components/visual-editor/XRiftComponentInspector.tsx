@@ -126,8 +126,8 @@ export function XRiftComponentInspector({
         {recipeLocked ? (
           <div className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs leading-4 text-slate-600">
             {editableFieldLabels.length > 0
-              ? `XRift プレハブの構成は保護されています。${editableFieldLabels.join("、")}はこのテンプレートの設定として変更できます。位置・回転・大きさはEntityの位置・回転・大きさで調整します。`
-              : "XRift プレハブのComponent設定は読み取り専用です。位置・回転・大きさはEntityの位置・回転・大きさで調整できます。"}
+              ? `XRiftプレハブの構成は保護されています。${editableFieldLabels.join("、")}はこのテンプレートの設定として変更できます。位置・回転・大きさはEntityの位置・回転・大きさで調整します。`
+              : "XRiftプレハブのComponent設定は読み取り専用です。位置・回転・大きさはEntityの位置・回転・大きさで調整できます。"}
           </div>
         ) : null}
         {placementLabels.length > 0 ? (
@@ -137,8 +137,8 @@ export function XRiftComponentInspector({
         ) : null}
         {placementDiverged ? (
           <div className="rounded border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs leading-4 text-amber-800">
-            このComponentは以下の値の分だけEntityの原点からずれた位置に描かれています。ギズモと回転の中心はEntityの原点のままです。
-            このEntityには他の内容もあるため自動では移せません。値を0にしてEntityの位置・回転・大きさで配置し直すと、選択したときの原点と一致します。
+            このComponentは、以下の値に応じてEntityの原点からずれた位置に表示されます。ギズモと回転の中心はEntityの原点です。
+            このEntityには他の要素も含まれるため、自動では移動できません。値を0にし、Entityの位置、回転、大きさで配置し直すと、選択時の原点と一致します。
           </div>
         ) : null}
         {definition.fields
@@ -440,7 +440,7 @@ function JsonObjectEditor({
     try {
       const parsed: unknown = JSON.parse(draft);
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        setError("JSON objectを入力してください。");
+        setError("JSONオブジェクトを入力してください。");
         return;
       }
       setError(null);

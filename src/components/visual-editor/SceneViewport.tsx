@@ -4868,7 +4868,7 @@ function SnapToolbarControl({
           {modifierHeld
             ? snapActive
               ? `Shift ${stepText}`
-              : "Shift 自由"
+              : "Shift自由"
             : stepText}
         </span>
       </button>
@@ -4912,7 +4912,7 @@ function SnapToolbarControl({
             </button>
           </div>
           <p className="mt-1 text-[11px] leading-4 text-slate-500">
-            ギズモのドラッグと矢印キーの1ステップを、指定した間隔にそろえます。
+            ギズモのドラッグと矢印キーでの移動を、指定した間隔にそろえます。
           </p>
 
           {(["translate", "rotate", "scale"] as const).map((mode) => (
@@ -4939,7 +4939,7 @@ function SnapToolbarControl({
                 Shiftを押している間は反転する
               </span>
               <span className="block text-[11px] leading-4 text-slate-500">
-                オフの時は一時的にそろえ、オンの時は一時的に自由に動かせます。
+                スナップがオフなら一時的にオンになり、オンなら一時的に自由に動かせます。
               </span>
             </span>
             <input
@@ -4953,7 +4953,7 @@ function SnapToolbarControl({
           </label>
 
           <p className="mt-2 border-t border-slate-100 pt-2 text-[11px] leading-4 text-slate-500">
-            矢印キーで選択を1ステップ動かします。左右がX、上下がZ、PageUpとPageDownがYです。回転ツールと拡縮ツールでは、その軸の角度と倍率が同じ1ステップだけ動きます。
+            矢印キーで選択中のEntityを1ステップ動かせます。左右キーはX軸、上下キーはZ軸、PageUpとPageDownはY軸です。回転と拡縮では、各軸の角度や倍率を指定した間隔で変えられます。
           </p>
         </div>
       ) : null}
@@ -6295,7 +6295,7 @@ export function SceneViewport({
           groundPosition[2],
         ]);
       } else {
-        onDropRejected("XRift プレハブのドラッグ情報を読み取れませんでした");
+        onDropRejected("XRiftプレハブのドラッグ情報を読み取れませんでした");
       }
       return;
     }
@@ -6382,7 +6382,7 @@ export function SceneViewport({
         : playPointerLocked
         ? "WASD / 矢印キーで移動 · マウスで視点 · Space / Eでジャンプ（着席中はSpaceで降車） · Gで掴む · クリックでインタラクト · Escでマウス解放"
         : "クリックして操作を開始 · ドラッグでも視点を動かせます"
-      : "ドラッグでアイテムをOrbit確認";
+      : "ドラッグで視点を回し、アイテムを確認できます";
   const readyMaterialDropTarget =
     materialDropTarget?.status === "ready" ? materialDropTarget : null;
 
@@ -6637,7 +6637,7 @@ export function SceneViewport({
                 role="status"
                 aria-live="polite"
               >
-                分離された実行コピー · 更新 {runtimeRevision}
+                動作確認用のコピー · 更新 {runtimeRevision}
               </span>
             </>
           ) : selectedEntityIds.length > 1 ? (
@@ -7247,7 +7247,7 @@ export function SceneViewport({
                 implementation from it, and the published world mounts the same
                 component for the same reason. */}
             <XriftPlayerRuntime enabled={worldPlayActive} />
-            {/* XRift's own instance state, so an action marked「みんなに見せる」
+            {/* XRift's own instance state, so an action marked「同じ部屋の全員に反映する」
                 goes through the platform's synchronisation rather than a
                 Studio-only shortcut. One viewer in Play means the room is a
                 room of one - the same send and receive still run. */}
@@ -7427,7 +7427,7 @@ export function SceneViewport({
 
         {editorMode === "play" ? (
           <div className="pointer-events-none absolute left-2.5 top-2.5 z-10 max-w-[80%] rounded-md border border-violet-400/60 bg-violet-950/90 px-2.5 py-1.5 text-xs leading-4 text-violet-50 shadow-lg backdrop-blur">
-            <p className="font-semibold">実行コピー · 編集データとは分離</p>
+            <p className="font-semibold">編集データと分けた動作確認用のコピー</p>
             <p className="text-violet-200">{profileGuide}</p>
             {worldPlayActive ? (
               <p
@@ -7475,7 +7475,7 @@ export function SceneViewport({
 
         {modelProxyVisible ? (
           <div className="pointer-events-none absolute right-2.5 top-2.5 z-10 rounded border border-amber-700/60 bg-amber-950/75 px-2 py-1 text-xs text-amber-200">
-            3Dモデル proxy preview
+            3Dモデルの簡易プレビュー
           </div>
         ) : null}
 

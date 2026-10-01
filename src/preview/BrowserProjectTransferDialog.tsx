@@ -66,10 +66,10 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
     setSharing(true);
     setShareMessage(null);
     try {
-      await navigator.share({ files: [sharedFile], title: "XRift Studio プロジェクト" });
+      await navigator.share({ files: [sharedFile], title: "XRift Studioプロジェクト" });
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
-        setShareMessage("共有を開けませんでした。「ダウンロード」からプロジェクトファイルを保存してください。");
+        setShareMessage("共有画面を開けませんでした。「ダウンロード」でプロジェクトファイルを保存してください。");
       }
     } finally { setSharing(false); }
   };
@@ -142,16 +142,16 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
       </div> : null}
       {ready ? (
         <div className="mt-4 space-y-4 text-sm leading-relaxed text-zinc-600">
-          <p>シーンと素材を.xriftstudioファイルにまとめました。「ダウンロード」で手元に残せます。</p>
+          <p>シーンと素材を.xriftstudioファイルにまとめました。「ダウンロード」で保存してください。</p>
           <p className="break-all rounded-lg border border-zinc-200 bg-zinc-50 p-3 font-medium text-zinc-800">
             {ready.fileName}<span className="ml-2 text-xs font-normal text-zinc-500">{(ready.blob.size / 1024 / 1024).toFixed(1)} MB / {ready.fileCount}ファイル</span>
           </p>
           <details className="rounded-lg border border-zinc-200 px-3">
           <summary className="flex min-h-11 cursor-pointer items-center font-medium text-zinc-700">パソコンへ引き継ぐには</summary>
           <ol className="list-decimal space-y-2 pb-3 pl-5">
-            <li>「ダウンロード」を押します。保存先はSafariのダウンロード一覧で確認してください。</li>
-            <li>iCloud DriveなどでMacまたはWindowsへ渡します。</li>
-            <li>パソコン版のプロジェクト一覧で「ファイルから取り込む」を選びます。アイテムやスクリプトを含むワールドはパソコン版から公開します。</li>
+            <li>「ダウンロード」を押してください。保存先はSafariのダウンロード一覧で確認できます。</li>
+            <li>iCloud Driveなどでパソコンにファイルを移してください。</li>
+            <li>デスクトップ版のプロジェクト一覧で「ファイルから取り込む」を選んでください。アイテムやスクリプトを含むワールドも、デスクトップ版から公開できます。</li>
           </ol>
           </details>
           {downloadStarted ? <p role="status">ダウンロードを開始しました。</p> : null}

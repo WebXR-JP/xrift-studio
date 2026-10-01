@@ -54,44 +54,44 @@ The original local storage paths are intentionally not recorded in source code o
 
 | 取り込み先 | 上流ソース | ライセンス | 表示 |
 | --- | --- | --- | --- |
-| `src/lib/visual-editor/water-shader-core.ts` の `xriftWaterGerstner` | [`MochiesCode/Mochies-Unity-Shaders`](https://github.com/MochiesCode/Mochies-Unity-Shaders) `Assets/Mochie/Water Shader/WaterFunctions.cginc` の `GerstnerWave` | MIT | Copyright (c) 2020 MochiesCode |
+| `src/lib/visual-editor/water-shader-core.ts`の`xriftWaterGerstner` | [`MochiesCode/Mochies-Unity-Shaders`](https://github.com/MochiesCode/Mochies-Unity-Shaders) `Assets/Mochie/Water Shader/WaterFunctions.cginc`の`GerstnerWave` | MIT | Copyright (c) 2020 MochiesCode |
 
-移植したのは分散関係 `c = sqrt(9.8 / k)`、振幅と急峻さの関係 `a = steepness / k`、
-および接線・従法線の解析微分だけで、HLSL から GLSL へ書き換えている。Unity 側の
-テッセレーション、GrabPass 屈折、リフレクションプローブ、深度バッファ由来の
-フォームは WebGL に対応物が無いため移植していない。
+移植したのは分散関係`c = sqrt(9.8 / k)`、振幅と急峻さの関係`a = steepness / k`、
+および接線・従法線の解析微分だけで、HLSLからGLSLへ書き換えている。Unity側の
+テッセレーション、GrabPass屈折、リフレクションプローブ、深度バッファ由来の
+フォームはWebGLに対応物が無いため移植していない。
 
-MIT は substantial portion に著作権表示を求めるため、表示は3か所に置いている。
-GLSL のコメント、`applyWaterShaderCatalogInstall` が Material Asset へ書く
-`attribution.authors`、そしてこの表。Water の GLSL は生成 World へ埋め込まれて
-公開ワールドごと配布されるので、Asset に表示が乗っていることが実質的な条件を満たす。
+MITはsubstantial portionに著作権表示を求めるため、表示は3か所に置いている。
+GLSLのコメント、`applyWaterShaderCatalogInstall`がMaterial Assetへ書く
+`attribution.authors`、そしてこの表。WaterのGLSLは生成Worldへ埋め込まれて
+公開ワールドごと配布されるので、Assetに表示が乗っていることが実質的な条件を満たす。
 
 ## しかけ付き 3D セットの音
 
-チュートリアルの 3D セット（音の出るボタン、灯りのスイッチ、環境音のスピーカー、
-自動で閉まる扉）が使う WAV は、`scripts/generate-recipe-audio.mjs` が合成したもので、
+チュートリアルの3Dセット（音の出るボタン、灯りのスイッチ、環境音のスピーカー、
+自動で閉まる扉）が使うWAVは、`scripts/generate-recipe-audio.mjs`が合成したもので、
 録音素材も第三者のサンプルも含みません。スクリプトを再実行すると同じバイト列になり、
-`src/lib/visual-editor/builtin-recipe-audio.ts` のハッシュと一致します。
+`src/lib/visual-editor/builtin-recipe-audio.ts`のハッシュと一致します。
 
 | Bundled file | Upstream source | License | SHA-256 |
 | --- | --- | --- | --- |
-| `public/visual-editor/recipe-assets/audio/press-chime.wav` | XRift Studio 制作（スクリプトで合成） | project-owned | `6b3aa614291997f00818a892eb13ef08fe790b2467e741c5a2351f8b13c62155` |
-| `public/visual-editor/recipe-assets/audio/soft-click.wav` | XRift Studio 制作（スクリプトで合成） | project-owned | `a5e9489b1f0fe73cffa39a0747b31305dc53090465903ddcecdb440b6d011132` |
-| `public/visual-editor/recipe-assets/audio/ambient-hum.wav` | XRift Studio 制作（スクリプトで合成） | project-owned | `d4337c78ec9fc27c3757ae6487eb5986b8a248af3c065db02c56890c414c0356` |
-| `public/visual-editor/recipe-assets/audio/door-slide.wav` | XRift Studio 制作（スクリプトで合成） | project-owned | `460d8601d3119e8eda7e116c328b17f66cf59f5a65871e4d28e3450515ef7c69` |
+| `public/visual-editor/recipe-assets/audio/press-chime.wav` | XRift Studio制作（スクリプトで合成） | project-owned | `6b3aa614291997f00818a892eb13ef08fe790b2467e741c5a2351f8b13c62155` |
+| `public/visual-editor/recipe-assets/audio/soft-click.wav` | XRift Studio制作（スクリプトで合成） | project-owned | `a5e9489b1f0fe73cffa39a0747b31305dc53090465903ddcecdb440b6d011132` |
+| `public/visual-editor/recipe-assets/audio/ambient-hum.wav` | XRift Studio制作（スクリプトで合成） | project-owned | `d4337c78ec9fc27c3757ae6487eb5986b8a248af3c065db02c56890c414c0356` |
+| `public/visual-editor/recipe-assets/audio/door-slide.wav` | XRift Studio制作（スクリプトで合成） | project-owned | `460d8601d3119e8eda7e116c328b17f66cf59f5a65871e4d28e3450515ef7c69` |
 
 ## Recording Studio Scene recipe
 
-収録スタジオ (`scene-recipe.recording-studio`) の GLB は XRift Studio 側で Blender を使って
+収録スタジオ (`scene-recipe.recording-studio`) のGLBはXRift Studio側でBlenderを使って
 手続き的に生成したもので、ジオメトリに外部アセットは含まれません。埋め込みテクスチャ
 だけが第三者素材です。
 
 | Bundled file | Upstream source | License | SHA-256 |
 | --- | --- | --- | --- |
-| `public/visual-editor/recipe-assets/recording-studio.glb` | XRift Studio 制作（元のBlender形状を保持して再パック） | project-owned | `fbd21a2d1212511c9ebf0c599da7dc9dd0c35e23c93eab6783e825b48ecfccdf` |
+| `public/visual-editor/recipe-assets/recording-studio.glb` | XRift Studio制作（元のBlender形状を保持して再パック） | project-owned | `fbd21a2d1212511c9ebf0c599da7dc9dd0c35e23c93eab6783e825b48ecfccdf` |
 
-埋め込まれている PBR テクスチャ（`baseColorTexture` / `normalTexture` /
-`metallicRoughnessTexture`、計 9 枚）の出所は次のとおりです。
+埋め込まれているPBRテクスチャ（`baseColorTexture` / `normalTexture` /
+`metallicRoughnessTexture`、計9枚）の出所は次のとおりです。
 
 | テクスチャ | 出所 | 作者 | License | 加工 |
 | --- | --- | --- | --- | --- |
@@ -99,69 +99,69 @@ GLSL のコメント、`applyWaterShaderCatalogInstall` が Material Asset へ�
 | `plastered_wall_04` (512) | [Poly Haven](https://polyhaven.com/a/plastered_wall_04) | Rob Tuytel | CC0-1.0 | 512pxへ縮小、JPEG再圧縮 |
 | `dirty_carpet` (512) | [Poly Haven](https://polyhaven.com/a/dirty_carpet) | Rohit Seervi | CC0-1.0 | 既存の彩度調整・512pxを維持し、JPEG再圧縮 |
 
-[Poly Haven のライセンス](https://polyhaven.com/license)は全アセット CC0 で、商用利用・
-再配布・改変が可能、クレジット表記は不要です。CC0 は追加の義務を課さないため、GLB 全体の
-provenance は `project-owned` として登録していますが、由来を辿れるようここに記録します。
+[Poly Havenのライセンス](https://polyhaven.com/license)は全アセットCC0で、商用利用・
+再配布・改変が可能、クレジット表記は不要です。CC0は追加の義務を課さないため、GLB全体の
+provenanceは`project-owned`として登録していますが、由来を辿れるようここに記録します。
 
 ## Text Component のフォント
 
-Text Component の書体は `@fontsource` の固定 version を依存として持ち、その
-`.woff` ファイルを Studio に同梱します。カタログとファイル path の組み立ては
-`packages/xrift-studio-runtime/src/text-font-catalog.ts` の一箇所にあり、Studio、
-Play、生成した Classic source、公開した World が同じ path を読みます。公開時は
-World が使う書体だけを `public/xrift-studio/vendor/text-fonts/` へコピーするため、
-公開された World はフォントのために通信しません。
+Text Componentの書体は`@fontsource`の固定versionを依存として持ち、その
+`.woff`ファイルをStudioに同梱します。カタログとファイルpathの組み立ては
+`packages/xrift-studio-runtime/src/text-font-catalog.ts`の一箇所にあり、Studio、
+Play、生成したClassic source、公開したWorldが同じpathを読みます。公開時は
+Worldが使う書体だけを`public/xrift-studio/vendor/text-fonts/`へコピーするため、
+公開されたWorldはフォントのために通信しません。
 
 | 項目 | 値 |
 | --- | --- |
 | 取得元 | npm `@fontsource/noto-sans-jp` 5.3.0（`--save-exact`） |
-| 同梱 path | `xrift-studio/vendor/text-fonts/<family>-<subset>-<weight>-normal.woff` |
+| 同梱path | `xrift-studio/vendor/text-fonts/<family>-<subset>-<weight>-normal.woff` |
 | 形式 | WOFF 1.0 |
 | License | SIL Open Font License 1.1 |
 | Upstream | [Google Fonts](https://fonts.google.com/) / [fontsource/font-files](https://github.com/fontsource/font-files) |
 
-収録している family は次のとおりです。`japanese` subset は Basic Latin を含むため、
-和欧混在のキャプションでも 1 ファイルで足ります。
+収録しているfamilyは次のとおりです。`japanese` subsetはBasic Latinを含むため、
+和欧混在のキャプションでも1ファイルで足ります。
 
 | Subset | Family | Weight | サイズ |
 | --- | --- | --- | --- |
-| japanese | Noto Sans JP | 400 / 700 | 約 1.38MB / 約 1.39MB |
+| japanese | Noto Sans JP | 400 / 700 | 約1.38MB / 約1.39MB |
 
-CDN からの実行時取得をやめ、同梱に切り替えた理由は次のとおりです。
+CDNからの実行時取得をやめ、同梱に切り替えた理由は次のとおりです。
 
-- 公開した World がフォントを取得すると、それはネットワーク通信であり、権限を
-  宣言していない World は platform のセキュリティ検査に落ちる。しかもこの権限は
-  host だけに絞れない。file URL を family と weight から組み立てるため、解析器は
-  domain を許可しても `no-network-without-permission` を報告する（実測）。同梱に
-  すれば same-origin になり、宣言そのものが不要になる。
-- 数か月前に公開した World が、配布元の障害や変更に左右されなくなる。
-- 同梱していても、World 自身のコードが `fetch` を持っていれば解析器は
-  `no-network-without-permission` を報告する。same-origin かどうかは区別されない。
-  そのため `text-panel.ts` は書体の到達確認を自前の `fetch` ではなく
-  troika の `preloadFont` で行う。実際の読み込みは troika の worker 側にあり、
-  Text を含む World が通信権限を宣言せずに公開できる状態を保つ。
-- Google Fonts CSS API は現代ブラウザへ WOFF2 だけを返すが、troika-three-text は
-  WOFF2 を明示的に拒否する。`@fontsource` は WOFF 1.0 も公開しているので、SDF 化
+- 公開したWorldがフォントを取得すると、それはネットワーク通信であり、権限を
+  宣言していないWorldはplatformのセキュリティ検査に落ちる。しかもこの権限は
+  hostだけに絞れない。file URLをfamilyとweightから組み立てるため、解析器は
+  domainを許可しても`no-network-without-permission`を報告する（実測）。同梱に
+  すればsame-originになり、宣言そのものが不要になる。
+- 数か月前に公開したWorldが、配布元の障害や変更に左右されなくなる。
+- 同梱していても、World自身のコードが`fetch`を持っていれば解析器は
+  `no-network-without-permission`を報告する。same-originかどうかは区別されない。
+  そのため`text-panel.ts`は書体の到達確認を自前の`fetch`ではなく
+  troikaの`preloadFont`で行う。実際の読み込みはtroikaのworker側にあり、
+  Textを含むWorldが通信権限を宣言せずに公開できる状態を保つ。
+- Google Fonts CSS APIは現代ブラウザへWOFF2だけを返すが、troika-three-textは
+  WOFF2を明示的に拒否する。`@fontsource`はWOFF 1.0も公開しているので、SDF化
   できる形式を確実に得られる。
 
-同梱する family を増やすとアプリと公開 World の両方が重くなります（日本語 subset は
-1 書体あたり約 1.4MB）。そのため catalog は意図的に 1 書体だけです。`@fontsource` の
-version を上げるときは `scripts/vite-local-text-fonts.ts` が
-`TEXT_FONT_PACKAGE_VERSION` との一致を検査し、食い違えば build を失敗させます。
+同梱するfamilyを増やすとアプリと公開Worldの両方が重くなります（日本語subsetは
+1書体あたり約1.4MB）。そのためcatalogは意図的に1書体だけです。`@fontsource`の
+versionを上げるときは`scripts/vite-local-text-fonts.ts`が
+`TEXT_FONT_PACKAGE_VERSION`との一致を検査し、食い違えばbuildを失敗させます。
 
-同梱されていない書体 id が document に残っている場合（過去の catalog で選んだもの）、
-compiler が `text-font-not-bundled` の warning を出し、自動の書体で描画します。文字が
+同梱されていない書体idがdocumentに残っている場合（過去のcatalogで選んだもの）、
+compilerが`text-font-not-bundled`のwarningを出し、自動の書体で描画します。文字が
 消えることはありません。
 
-書体を選ばない「自動」では、troika-three-text が
+書体を選ばない「自動」では、troika-three-textが
 `https://cdn.jsdelivr.net/gh/lojjic/unicode-font-resolver@v1.0.1/packages/data`
-から文字種に応じた Noto を取得します。これは troika 自身の既定動作で、
-XRift Studio が追加した依存ではありません。
+から文字種に応じたNotoを取得します。これはtroika自身の既定動作で、
+XRift Studioが追加した依存ではありません。
 
 ## 3Dセット用モデルの差し替え（2026-09-07）
 
-収録スタジオ以外の31点は、`tools/recipe-models/` の新しい造形コードとテクスチャ生成コードから作成しました。新たな第三者のモデル・画像素材は取り込んでいません。元のライセンスを他のファイルへ拡張したり、リポジトリ全体を再ライセンスしたりする変更ではありません。
+収録スタジオ以外の31点は、`tools/recipe-models/`の新しい造形コードとテクスチャ生成コードから作成しました。新たな第三者のモデル・画像素材は取り込んでいません。元のライセンスを他のファイルへ拡張したり、リポジトリ全体を再ライセンスしたりする変更ではありません。
 
-全点の出所・サイズ・SHA-256は `docs/asset-refresh/manifest.json` にあります。収録スタジオの編集用原本 `tools/recipe-models/sources/recording-studio.original.glb` は、従来の形状と元のCC0テクスチャを保持しています。配布GLBとはハッシュが異なります。
+全点の出所・サイズ・SHA-256は`docs/asset-refresh/manifest.json`にあります。収録スタジオの編集用原本`tools/recipe-models/sources/recording-studio.original.glb`は、従来の形状と元のCC0テクスチャを保持しています。配布GLBとはハッシュが異なります。
 
-今回のBlender実行状況と編集用データについては `docs/asset-refresh/README.md` を参照してください。
+今回のBlender実行状況と編集用データについては`docs/asset-refresh/README.md`を参照してください。

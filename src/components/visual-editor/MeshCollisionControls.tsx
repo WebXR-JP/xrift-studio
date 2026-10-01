@@ -34,11 +34,11 @@ export function MeshCollisionControls({ scene, entity, readOnly, onAction, onSel
     <div className="flex flex-wrap gap-1">
       {([["add", "Colliderを追加"], ["remove", "外す"], ["exclusive", "これだけにする"]] as const).map(([action, label]) =>
         <button key={action} type="button" disabled={readOnly || !enabled || !onAction}
-          title={action === "exclusive" ? "シーン全体のほかのCollider（Triggerを含む）と自動生成を解除します。Undoで戻せます。" : action === "add" ? "既存設定も含めて、固定・Trimesh・TriggerなしのColliderにします。" : "このMeshのColliderを無効にします。親のBox Colliderなど独立した形状は一覧から編集できます。"}
+          title={action === "exclusive" ? "シーン全体のほかのColliderと自動生成の設定を解除します。Triggerも対象です。「元に戻す」で復元できます。" : action === "add" ? "既存設定も含めて、固定・Trimesh・TriggerなしのColliderにします。" : "このMeshのColliderを無効にします。親のBox Colliderなど独立した形状は一覧から編集できます。"}
           onClick={() => onAction?.(entity.id, action)}
           className="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-45">{label}</button>)}
     </div>
-    {triggerOnly ? <p className="text-[11px] leading-4 text-slate-500">Triggerは物体を止めません。「Colliderを追加」で歩ける設定になります。</p> : null}
+    {triggerOnly ? <p className="text-[11px] leading-4 text-slate-500">Triggerでは物体が通り抜けます。「Colliderを追加」を選ぶと、上を歩ける設定になります。</p> : null}
     <p className="text-[11px] leading-4 text-slate-500">「これだけにする」はシーン全体を置き換えます。Undoで戻せます。</p>
     <details><summary className="cursor-pointer text-xs text-slate-600">Colliderの一覧（{rows.length}）</summary>
       <div className="max-h-40 overflow-y-auto">{rows.length ? rows.map((row) => <CollisionRow key={`${row.entityId}:${row.componentId}`} row={row} select={select} />) : <p className="py-1 text-xs text-slate-500">Colliderと自動生成の設定はありません。</p>}</div>

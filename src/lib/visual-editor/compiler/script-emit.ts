@@ -185,7 +185,7 @@ export function planScriptEmission(
               : entry.reason === "dynamic"
                 ? "動的インポート（import(...)）は動作確認と公開で使用できません。許可されたモジュールを静的にインポートしてください。"
                 : entry.reason === "frame-hook"
-                  ? "useFrameなどR3F frame callback APIはスクリプト単位で例外を隔離できません。defineScript(...).start()が返すupdate(delta)を使用し、@react-three/fiberはnamed importしてください。"
+                  ? "useFrameなど、R3Fのフレーム更新APIではスクリプトごとに例外を処理できません。defineScript(...).start()が返すupdate(delta)を使い、@react-three/fiberは名前付きインポートで読み込んでください。"
                   : `${entry.specifier} は公開ワールドで解決できないモジュールです。`,
           assetId,
         });

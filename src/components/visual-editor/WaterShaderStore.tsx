@@ -365,7 +365,7 @@ export function WaterShaderStore({
             <Notice text="板や地形に割り当てて使います。" />
             <Notice text={selected.notes} />
             {selected.shader.variants[0]?.defines.WATER_SHORE ? <Notice tone="warning" text="寄せ波は「演出」で岸の位置・方角・幅を調整します。岩や地形には自動で合わせません。" /> : null}
-            <Notice text="Gerstner波の基礎部分はMochie's Unity Shaders (MIT, (c) 2020 MochiesCode) を移植しています。" />
+            <Notice text="Gerstner波の基礎部分はMochie's Unity Shaders (MIT, (c) 2020 MochiesCode)を移植しています。" />
 
           </div>
         ) : null}

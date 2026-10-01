@@ -1,61 +1,48 @@
 ---
 name: xrift-studio-verify
-description: XRift Studio のコード変更、ブラウザ表示、Tauri 実機動作を検証するときに使う。
+description: XRift Studioのコード変更、ブラウザ表示、Tauri実機の動作を確認するときに使う。
 ---
 
-# XRift Studio 検証ループ
+# XRift Studioの検証
 
-変更に関係する Tier だけを選ぶ。全 Tier の実行は必須ではない。失敗を修正したら影響箇所を再確認する。
-実行許可はクライアントごとの設定に従う。Claude Code では `.claude/settings.json` を使い、Codex では現在のセッションの許可とツールを使う。
+変更の影響に合う検証を選んでください。すべてのTierを実行する必要はありません。失敗を修正したら、その影響を受ける箇所を再確認します。
+
+Claude Codeでは`.claude/settings.json`、Codexでは現在のセッションの権限とツールに従って実行します。
 
 ## 本番ビルドの扱い
 
-- 通常の開発、レビュー、Push 前の確認では、`pnpm build`、`pnpm build:preview`、`pnpm tauri:build`、インストーラ生成などの本番ビルドを実行しない。`pnpm typecheck`、`cargo check`、Vite の開発サーバー、必要に応じた Tauri のデバッグ起動でフィードバックを得る。
-- 本番ビルドを実行するのは、ユーザーから明示的に依頼された場合、リリース成果物を作る直前、署名、バンドル、インストーラ設定を変更した場合に限る。
-- 上記の依頼に必要なローカルビルドは目的と対象 OS を伝えて進める。既に依頼された操作の許可を再度求めない。公開・配布は `AGENT.md` の意思決定に従う。
+通常の開発、レビュー、Push前の確認には型チェックと開発サーバーを使います。フロントエンドは`pnpm typecheck`、Rustは`cargo check`で確認し、必要に応じてTauriをデバッグ起動してください。
+
+`pnpm build`、`pnpm build:preview`、`pnpm tauri:build`、インストーラーの生成は、本番ビルドを明示的に依頼された場合、リリース成果物を作る直前、署名・バンドル・インストーラー設定を変更した場合に限ります。依頼に必要なローカルビルドは、目的と対象OSを伝えて進めてください。依頼済みの許可を取り直す必要はありません。公開・配布は`AGENT.md`に従って判断します。
 
 ## Tier 0: 静的チェック（数秒）
 
-- フロントエンド: `pnpm typecheck`
-- Rust を触ったら: `cargo check --manifest-path src-tauri/Cargo.toml`
+フロントエンドを変更したら`pnpm typecheck`、Rustを変更したら`cargo check --manifest-path src-tauri/Cargo.toml`を実行してください。文書だけの変更では、内容・リンク・参照の確認で構いません。
 
-コードの変更箇所に応じて選ぶ。文書だけなら内容・リンク・参照の確認でよい。Rust のテストが参照する同梱ファイルを削除・移動した場合は `cargo test --manifest-path src-tauri/Cargo.toml` も行う。`cargo check` だけではテストの `include_bytes!` の参照切れを検出できない。影響箇所の確認で十分なら検証を広げない。
+Rustのテストが参照する同梱ファイルを削除・移動した場合は、`cargo test --manifest-path src-tauri/Cargo.toml`も実行します。`cargo check`だけでは、テスト内の`include_bytes!`の参照切れを検出できません。必要な検証を終えたら、無関係な検証まで広げないでください。
 
 ## Tier 1: ブラウザプレビュー（LP と純粋な UI、数秒で再確認可）
 
-Vite サーバーを port 1420 で起動する。Claude Code では `.claude/launch.json` の `web` 設定と preview_start を再利用でき、Codex では `pnpm dev -- --host 127.0.0.1 --port 1420` など、利用可能な起動手段を使う。起動済みなら再利用し、Vite の HMR が効くのでファイル保存のたびに再起動しない。
+Viteの開発サーバーをポート1420で起動してください。Claude Codeでは`.claude/launch.json`の`web`設定とpreview_startを使えます。Codexでは`pnpm dev -- --host 127.0.0.1 --port 1420`など、利用可能な手段で起動します。起動済みなら同じサーバーを使ってください。保存した変更はHMRで反映されるため、毎回の再起動は不要です。
 
-- LP（GitHub Pages 相当）: `http://localhost:1420/preview.html`
-- メインアプリ（`index.html`）は Tauri IPC 前提のため、ブラウザでは起動画面から先へ進めない。メインアプリの画面確認は Tier 2 を使う。
+LPの確認先は`http://localhost:1420/preview.html`です。メインアプリの`index.html`はTauri IPCを使うため、ブラウザでは起動画面までしか確認できません。メインアプリの画面はTier 2で確認してください。
 
-手順:
-
-1. navigate でページを開き、screenshot で全体を確認する
-2. read_console_messages (onlyErrors) でエラーがないことを確認する
-3. 文言・構造・リンク先は read_page / get_page_text で確認する（テキスト検証は screenshot より確実）
-4. レスポンシブは resize_window（preset: mobile / desktop）で両方確認する
+ページを開き、スクリーンショットで配置と文字切れを確認します。ブラウザのコンソールも読み、エラーを確認してください。本文、画面構造、リンク先は、DOMやページのテキストを取得して確かめます。モバイルとデスクトップの両方の幅で、改行と操作ボタンの見え方も確認してください。ツール名は実行環境に合わせて選びます。
 
 ## Tier 2: デスクトップ実機（Tauri MCP）
 
-セットアップ、CLI 実行、ファイル操作、公開フローなどデスクトップ固有の機能を確認するとき。
+セットアップ、CLIの実行、ファイル操作、公開フローなど、デスクトップアプリ固有の動作を確認する場合に使います。
 
-1. `pnpm tauri:dev` を Bash の run_in_background で起動する。ビルド済みなら 1〜2 分、初回は数分かかる。ウィンドウが開くまで待つ。
-2. Tauri MCP（`.mcp.json` の `tauri` サーバー、`tauri-plugin-mcp-bridge` は debug ビルドのみ有効）で次を行う:
-   - ウィンドウのスクリーンショット取得
-   - DOM スナップショットで主要ボタン・導線の確認
-   - コンソールログにエラーがないかの確認
-   - 操作で発生する IPC の監視
-3. このセッションに `tauri` MCP サーバーが接続されていない場合は、`pnpm mcp:cli`（@hypothesi/tauri-mcp-cli）で同等の操作を CLI から行える。`pnpm mcp:cli -- --help` で操作一覧を確認する。
-4. 読み取りと隔離した作業用データへの検証操作は進めてよい。既存作品の削除・初期化、公開・アップロード、認証は `AGENT.md` の意思決定に従う。
-5. 確認が終わったら、起動した dev プロセスを停止する。放置しない。
+`pnpm tauri:dev`をバックグラウンドで起動し、ウィンドウが開くまで待ってください。ビルド済みなら1〜2分、初回は数分かかる場合があります。`.mcp.json`のTauri MCPを使い、スクリーンショット、DOM、コンソールログ、操作時のIPCを確認します。`tauri-plugin-mcp-bridge`はデバッグビルドだけで利用できます。
 
-スクリーンショットはセッションの scratchpad ディレクトリへ保存し、リポジトリを汚さない。
+Tauri MCPがこのセッションに接続されていない場合は、`pnpm mcp:cli`で同等の操作を行えます。`pnpm mcp:cli -- --help`で利用できる操作を確認してください。
+
+読み取り操作と、隔離した作業用データへの検証は進めて構いません。既存作品の削除・初期化、公開・アップロード、認証は`AGENT.md`の判断基準に従います。確認を終えたら、今回起動した開発プロセスを停止してください。スクリーンショットはセッションの一時保存先に置き、リポジトリへ追加しません。
 
 ## 何を確認するか
 
-描画の変更は[編集・Play・公開の描画契約](../../../docs/AGENT_IMPLEMENTATION.md#rendering-parity)に従う。実際の編集描画と生成した公開コードを、同じ素材・カメラ・照明・品質・再生状態で比較する。モック、別実装の近似描画、サンプルだけの成功から全体の一致を断言しない。
+描画を変更した場合は[編集・Play・公開の描画契約](../../../docs/AGENT_IMPLEMENTATION.md#rendering-parity)に従ってください。同じ素材、カメラ、照明、品質、再生状態を使い、編集画面と生成した公開コードの描画を比較します。モックや別の描画実装、サンプルだけの結果で、全体が一致すると判断しません。
 
-- 変更した画面の「操作前 → 実行中 → 成功 → 失敗」の各状態（docs/UX_PRINCIPLES.md の完了条件）
-- コンソールにエラー・警告が出ていないこと
-- 成功後に、作成物・URL・更新結果へ画面から到達できること
-- LP を変更した場合: 実アプリ（EditorView / ProjectLibrary / SetupView）と見た目・文言・挙動が食い違っていないこと
+画面の変更では、操作前、処理中、成功後、失敗後の状態を確認してください。成功後に作成物・URL・更新結果を開けること、失敗後にログや再試行の操作が見つかることも確認します。コンソールのエラーと警告は原因を調べてください。LPを変更した場合は、EditorView、ProjectLibrary、SetupViewの表示・文言・動作とも比較します。
+
+日本語を保存したら、画面の名称、操作、条件が伝わるかを読み直してください。ローカルに文章用のリンターがある場合は、指摘を文脈に照らして見直します。リンターと型チェックだけでは、実画面の確認を完了したことにはなりません。報告には、実施した検証と未検証の範囲を記載します。

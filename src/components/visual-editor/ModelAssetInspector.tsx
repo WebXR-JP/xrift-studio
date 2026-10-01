@@ -219,7 +219,7 @@ export function ModelAssetInspector({
         />
         <RecipeToggle
           label="配置時にアニメーションを再生する"
-          description="配置時に、アニメーションを再生するノードグラフを付けます。"
+          description="配置時に、アニメーションを再生するNode Graphを付けます。"
           checked={asset.importSettings.importAnimations}
           disabled={readOnly}
           onChange={(importAnimations) =>
@@ -504,7 +504,7 @@ function ModelOptimizationPanel({
       />
       <RecipeToggle
         label="重複メッシュをインスタンス化"
-        description="近くの同じ不透明な部品をまとめて描画します。Colliderは維持します。動く部品や、動作を設定したシーンは対象外です。"
+        description="同じ形状とマテリアルを使う、近くの不透明な部品をまとめて描画します。Colliderはそのまま使えます。動く部品や動作を設定したシーンは対象外です。"
         checked={asset.importSettings.instanceMeshes === true}
         disabled={readOnly || busy || !canInstanceModel(asset)}
         status={canInstanceModel(asset) ? "実験的" : "静的なGLBのみ対応"}

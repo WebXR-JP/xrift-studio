@@ -182,13 +182,13 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
   },
   {
     id: "asset.create-interactivity",
-    label: "ノードグラフを作成",
+    label: "Node Graphを作成",
     category: "edit",
     bindings: [],
   },
   {
     id: "asset.edit-interactivity",
-    label: "ノードグラフを編集",
+    label: "Node Graphを編集",
     category: "edit",
     bindings: [],
   },
@@ -206,7 +206,7 @@ export const EDITOR_COMMANDS: readonly EditorCommandDefinition[] = [
   },
   {
     id: "asset.edit-shader",
-    label: "GLSL シェーダーを編集",
+    label: "GLSLシェーダーを編集",
     category: "edit",
     bindings: [],
   },

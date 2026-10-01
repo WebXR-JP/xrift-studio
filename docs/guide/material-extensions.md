@@ -1,51 +1,51 @@
 # Clearcoat・Iridescenceなどを使う
 
-[Base Color・Metallic・Roughness](./materials.md)で基本の表面を作ってから、表現に必要な拡張だけを有効にします。項目名はglTFなどと照合できるよう、英語名を使っています。
+[Base Color、Metallic、Roughness](./materials.md)で基本の表面を作ったあと、必要な拡張を有効にしてください。glTFなどの資料と照合できるよう、項目名には英語を使っています。
 
-ここでは**Shading → マテリアルの種類**が**Standard (PBR)**の場合を扱います。マンガのような陰影と輪郭線は[基本のマテリアルでMToonを選ぶ手順](./materials.md#mtoonマンガのような陰影と輪郭線を付ける)を使います。
+ここでは「Shading → マテリアルの種類」がStandard (PBR)の場合を説明します。マンガのような陰影や輪郭線には、[MToon](./materials.md#mtoonマンガのような陰影と輪郭線を付ける)を使ってください。
 
 ![マテリアルのInspectorでClearcoatなどの拡張設定が表示された状態](./media/material-extensions.png)
 
-*基本の表面が整ってから、必要な拡張だけを有効にします。項目名は英語名で確認します。*
+*使いたい表現に合わせて、必要な拡張を有効にしてください。*
 
 ## Clearcoat
 
-Clearcoat（透明な上塗り）は、塗装やニスのような透明な光沢の層を重ねます。下地のRoughnessと、上塗りのRoughnessは別です。
+Clearcoatでは、塗装やニスのような透明な光沢の層を重ねられます。下地のRoughnessと、上塗りのRoughnessは別に調整できます。
 
-Clearcoat内のNormal Mapも、上塗りの層にだけ使う別の設定です。まず上塗りの量と粗さだけを変えて比べてください。
+ClearcoatのNormal Mapも、上塗りの層だけに使われます。まず上塗りの量と粗さを変えて、見た目を比べてください。
 
 ## Iridescence
 
-Iridescence（薄膜の虹色反射）は、薄膜によって反射色が角度で変わる表現です。設定後は視点を動かして確認してください。
+Iridescenceでは、薄膜によって反射色が見る角度で変わる表現を作れます。設定後は、視点を動かして確かめてください。
 
-**Thickness Min / Max**は薄膜の厚みで、単位は**nm**です。マップを使わない場合はMaxが適用されます。ここでのIORは薄膜の屈折率で、素材本体のIORとは別です。
+Thickness Min / Maxは薄膜の厚みで、単位はnmです。マップを使わない場合はMaxが適用されます。ここでのIORは薄膜の屈折率を表し、素材本体のIORとは別の設定です。
 
-**VolumeのThicknessはメッシュ内の距離、IridescenceのThicknessは薄膜の厚み**です。同じ数値をそのまま移し替えないでください。
+VolumeのThicknessはメッシュ内の距離、IridescenceのThicknessは薄膜の厚みです。数値を移す場合は、それぞれの単位と意味を確認してください。
 
 ## Sheen・Anisotropy・Specular
 
-**Sheen（布の光沢）**は、ベルベットのような柔らかな光沢に使います。
-
-**Anisotropy（異方性反射）**は、筋のある金属のように反射を一方向へ伸ばします。
-
-**Specular（鏡面反射）**は、非金属の反射の強さと色を調整します。金属を表すMetallicとは別の設定です。
+| 拡張 | 表現できること |
+| --- | --- |
+| Sheen | ベルベットのような、柔らかな布の光沢を加えます。 |
+| Anisotropy | 筋のある金属のように、反射を一方向に伸ばします。 |
+| Specular | 非金属の反射の強さと色を調整します。金属度を設定するMetallicとは別です。 |
 
 ## Transmission・Volume・Dispersion
 
-**Transmission**は光を通し、**Volume**は厚みと光の減衰を扱います。[透明な素材の手順](./transparent-materials.md)から始めてください。
+Transmissionは光の透過、Volumeは厚みと光の減衰を扱います。まず[透明な素材の手順](./transparent-materials.md)を参照してください。
 
-**Dispersion（光の分散）**は、透過光を色ごとに分ける表現です。有効にするとVolumeとTransmissionも有効になるため、単独の色付け設定として扱わないでください。
+Dispersionでは、透過光を色ごとに分けられます。有効にするとVolumeとTransmissionも有効になるため、透過や厚みの設定も確認してください。
 
 ## Unlit
 
-**Unlit（照明の影響なし）**は、ライトの影響を受けずに表示します。有効にすると、併用できない反射・透過の設定を解除します。
+Unlitを有効にすると、ライトの影響を受けずに表示されます。併用できない反射や透過の設定は解除されます。
 
-Roughnessなどの違いを見たいときにUnlitを有効にすると、比較したい反射が見えなくなります。
+Roughnessなどによる反射の違いを比べる場合は、Unlitをオフにしてください。
 
 ## ほかのツールから値を移すとき
 
-**Base ColorをDiffuse Colorに読み替えない。** Base Colorは金属の反射色も扱います。
+Base ColorとDiffuse Colorは、同じ意味とは限りません。Base Colorは、金属の反射色も扱います。
 
-**RoughnessとSmoothnessは増減の向きが逆。** 同じ数値をそのままコピーせず、使用するシェーダーと画像のチャンネルを確認してください。
+RoughnessとSmoothnessは増減の向きが逆です。同じ値をコピーする前に、シェーダーと画像のチャンネルを確認してください。
 
-ClearcoatとCoat、IridescenceとThin Filmは照合の手掛かりになりますが、単純な置換や同じ描画結果を保証するものではありません。
+ClearcoatとCoat、IridescenceとThin Filmは、対応する表現を探す手掛かりになります。ただし、名前を置き換えるだけで同じ描画結果になるとは限りません。

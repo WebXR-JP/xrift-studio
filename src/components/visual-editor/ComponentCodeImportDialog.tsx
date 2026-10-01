@@ -291,7 +291,7 @@ export function ComponentCodeImportDialog({
             </label>
           ) : (
             <div className="text-[11px] leading-4 text-slate-500">
-              コードは実行せず、読み取れる構造と固定値を変換します。
+              コードから読み取れる構造と固定値を変換します。コード自体は実行しません。
             </div>
           )}
           <div className="flex items-center gap-2">
@@ -366,7 +366,7 @@ function CodeConverter({
         <div>
           <h3 className="text-sm font-semibold text-slate-900">TSXを変換</h3>
           <p className="mt-0.5 text-[11px] leading-4 text-slate-500">
-            標準Geometry、R3F ライト、Rapier RigidBody、Billboard、Reflector、Skyと公式XRiftのComponentに対応します。
+            標準Geometry、R3Fのライト、Rapier RigidBody、Billboard、Reflector、Sky、XRift公式のComponentに対応しています。
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -416,7 +416,7 @@ function CodeConverter({
           }}
           disabled={loading}
           aria-label="リポジトリのURL"
-          placeholder="https://github.com/owner/repository.git または git@github.com:owner/repository.git"
+          placeholder="https://github.com/owner/repository.gitまたはgit@github.com:owner/repository.git"
           className="min-w-0 flex-1 rounded border border-slate-300 bg-white px-2.5 py-1.5 font-mono text-[11px] text-slate-700 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
         />
         <button
@@ -442,7 +442,7 @@ function CodeConverter({
         className="min-h-72 w-full resize-y rounded-lg border border-slate-300 bg-slate-950 p-4 font-mono text-xs leading-5 text-slate-100 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100"
       />
       <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-4 text-amber-900">
-        ファイル間の参照をたどり、構造をHierarchyに再現します。動的な処理は実行せず、変換できない箇所を診断に表示します。
+        ファイル間の参照を調べ、構造をHierarchyに再現します。動的な処理は実行しません。変換できない箇所は診断に表示します。
       </p>
     </section>
   );

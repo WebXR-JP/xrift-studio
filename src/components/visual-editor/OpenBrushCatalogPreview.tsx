@@ -118,7 +118,7 @@ export function OpenBrushCatalogPreview({
             }`}
           >
             {loadState.status === "ready"
-              ? "three-icosa 実ストローク"
+              ? "three-icosa実ストローク"
               : loadState.status === "error"
                 ? "Shaderの読み込み失敗"
                 : "ブラシを再構築中"}

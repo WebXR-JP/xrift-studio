@@ -182,7 +182,7 @@ export function ModelViewer({ projectPath, rel }: Props) {
   if (!format) {
     return (
       <div className="flex flex-1 items-center justify-center bg-white text-sm text-zinc-400">
-        未対応の 3D フォーマット
+        未対応の3Dフォーマット
       </div>
     );
   }
@@ -223,7 +223,7 @@ export function ModelViewer({ projectPath, rel }: Props) {
         {error && (
           <div className="absolute inset-0 flex items-center justify-center p-6">
             <div className="max-w-md rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-              <div className="font-medium">3D モデルを読み込めませんでした</div>
+              <div className="font-medium">3Dモデルを読み込めませんでした</div>
               <div className="mt-1 font-mono text-[11px]">{error}</div>
             </div>
           </div>

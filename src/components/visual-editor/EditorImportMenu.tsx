@@ -117,7 +117,7 @@ export function EditorImportMenu({
               onClick={() => { closeAfterAction(); onImportR3f(); }} />
             {onImportHierarchy ? <MenuItem query={query} icon={Import}
               label=".xriftstudioから追加"
-              description="別のワールド・アイテムのHierarchyを部分インポート。今のシーンは置き換えません。"
+              description="別のワールドやアイテムから、選んだEntityと素材を現在のシーンに追加します。"
               onClick={() => { closeAfterAction(); onImportHierarchy(); }} /> : null}
             {onOpenExternalStore ? (
               <MenuItem query={query} icon={Store} label="外部から追加"

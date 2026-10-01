@@ -1,6 +1,6 @@
 # 制作導線・再利用の実装と検証
 
-2026-09-16。対象は `xrift-studio-ui-polish.zip` のソース（PR #101相当のUI調整版、0.9.35）。この作業ではGitHubの最新mainを再取得していない。前回のUI調整に、今回の追加変更を統合したソース一式である。バージョン・依存関係・lockfile・既存CI/CDは変更していない。GitHubへのPush・PR作成・mainの変更は行っていない。
+2026-09-16に、`xrift-studio-ui-polish.zip`のソースを検証した。対象はPR #101相当のUI調整版、0.9.35に今回の追加変更を統合したもの。GitHubの最新mainは再取得していない。バージョン・依存関係・lockfile・既存CI/CDも変更していない。GitHubへのPush・PR作成・mainの変更は行っていない。
 
 ## 追加した範囲
 
@@ -10,7 +10,7 @@
 - 同じウィンドウ・タブ内の別プロジェクトへのコピー。素材の読み出し完了後に切り替える。同じプロジェクト内の通常貼り付け・反転は既存の即時操作を保つ。
 - 操作ガイド、UI原則、MCPの操作境界、回帰テストを更新する。テレメトリ、同意画面、KPI収集、検索履歴、利用状況の外部送信は追加しない。
 
-Hierarchy受け渡しの基礎は保存されていた `xrift-studio-hierarchy-transfer.patch`（2026-09-14）から復元し、PR #101相当のSceneメニューとUIへ統合した。その後に報告だけが残っていた変更ファイルが復旧したという意味ではなく、本ZIP向けに編集・統合し直したもの。
+Hierarchy受け渡しの基礎を、保存されていた`xrift-studio-hierarchy-transfer.patch`（2026-09-14）から復元し、PR #101相当のSceneメニューとUIへ統合した。報告だけが残っていた変更ファイルを復旧したものではない。本ZIP向けに編集・統合し直した。
 
 ## 実行結果
 
@@ -31,9 +31,9 @@ Hierarchy受け渡しの基礎は保存されていた `xrift-studio-hierarchy-t
 
 ## 未確認・失敗した検証
 
-- `tsc --noEmit` は実行したが、React・Three・Tauri等の依存と型定義がなく終了コード2。環境内TypeScriptによる実行で、依存導入後のプロジェクト指定バージョンによる完全な型チェックではない。
-- `npm run e2e:test -- e2e/authoring-workflow.spec.ts` は `unknown command 'test'` で停止。プロジェクトのJavaScript版Playwrightと依存がなく、ブラウザ回帰テストは未実行。
-- Rust toolchainがなく、追加した保存コマンドの `cargo fmt` / `cargo check` / native testsは未実行。Tauri実機の保存先選択・Windows / macOSの保存も未確認。
+- `tsc --noEmit`は実行したが、React・Three・Tauri等の依存と型定義がなく終了コード2。環境内TypeScriptによる実行で、依存導入後のプロジェクト指定バージョンによる完全な型チェックではない。
+- `npm run e2e:test -- e2e/authoring-workflow.spec.ts`は`unknown command 'test'`で停止。プロジェクトのJavaScript版Playwrightと依存がなく、ブラウザ回帰テストは未実行。
+- Rust toolchainがなく、追加した保存コマンドの`cargo fmt` / `cargo check` / native testsは未実行。Tauri実機の保存先選択・Windows / macOSの保存も未確認。
 - 実画面での密度・重なり・フォーカス、iPadタッチ、glTF描画・アニメーション・ギミックの実行、公開、アプリを再起動した後の保存復元は未確認。
 - 本番ビルド・インストーラ生成はしていない。このZIPは実行ファイルではなくソースコード。
 
@@ -54,7 +54,7 @@ cargo check --manifest-path src-tauri/Cargo.toml
 cargo test --manifest-path src-tauri/Cargo.toml hierarchy_transfer
 ```
 
-単独runnerはNode 22.15以上・TypeScriptが必要。別バージョンのNodeでは通常の `pnpm cli:test` に登録された同じfixtureを使う。TypeScriptをグローバルに用意した検証環境では `XRIFT_TYPESCRIPT_PATH` を指定できる。依存未導入のまま上記全部が動くという意味ではない。
+単独runnerにはNode 22.15以上とTypeScriptが必要。別バージョンのNodeでは、同じfixtureを通常の`pnpm cli:test`から実行する。TypeScriptをグローバルに導入した検証環境では`XRIFT_TYPESCRIPT_PATH`を指定できる。上記のコマンドを実行する前に、必要な依存を導入する。
 
 実画面では、素材検索→Cube配置→Component追加→複数選択→Scene / Hierarchyの反転、選択範囲をItemとして書き出し→別ワールドへ追加→Undo / Redo→保存・再起動を確認する。次に実際のglTF付随ファイル、Script、Prefab、壊れた参照、保存キャンセル、データ更新競合を試す。
 

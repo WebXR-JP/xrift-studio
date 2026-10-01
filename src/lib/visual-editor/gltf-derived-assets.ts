@@ -714,7 +714,7 @@ function materialExtensions(
       if (source.specVersion !== "1.0") {
         warnings.push({
           code: "gltf-material-extension-version-unsupported",
-          message: "MToon は specVersion 1.0 に対応しています。別の版の設定は取り込みませんでした",
+          message: "MToonはspecVersion 1.0に対応しています。別の版の設定は取り込みませんでした",
           fieldPath: `${basePath}.specVersion`,
         });
         continue;
@@ -724,7 +724,7 @@ function materialExtensions(
         if (supported.has(key) || key === "extensions" || key === "extras") continue;
         warnings.push({
           code: "gltf-material-extension-property-unsupported",
-          message: `MToon の ${key} は現在のマテリアル編集に対応していないため取り込みませんでした`,
+          message: `MToonの ${key} は現在のマテリアル編集に対応していないため取り込みませんでした`,
           fieldPath: `${basePath}.${key}`,
         });
       }
@@ -816,7 +816,7 @@ function materialExtensions(
       message:
         reason === "dependency"
           ? `${name} が必要とする拡張が同じマテリアルに存在しないため取り込みませんでした`
-          : `${name} は KHR_materials_unlit と併用できないため取り込みませんでした`,
+          : `${name} はKHR_materials_unlitと併用できないため取り込みませんでした`,
       fieldPath: `materials[${materialIndex}].extensions.${name}`,
     });
   });

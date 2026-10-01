@@ -68,7 +68,7 @@ test("初回セットアップからプロジェクト一覧へ進める", { tag
 test("旧CLIは推奨版への更新を示し、利用者の操作後に一度だけ準備する", { tag: "@release-smoke" }, async ({ page }) => {
   await openReleaseApp(page, "runtime-update");
   await expect(page.getByRole("heading", { name: "制作ツールの更新が必要です" })).toBeVisible();
-  await expect(page.getByText("現在 v0.24.3 → 推奨 v0.24.4", { exact: true })).toBeVisible();
+  await expect(page.getByText("現在v0.24.3 → 推奨v0.24.4", { exact: true })).toBeVisible();
   await expect(page.getByText("Node.js v24.21.0 LTS", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "XRift Studio", exact: true })).toBeVisible();
   await expect(page.getByText("ようこそ", { exact: false })).toHaveCount(0);

@@ -23,13 +23,13 @@ export async function convertVrm0MaterialsForAuthoring(
       if (converted.materials?.[index]) recognized.set(index, shader);
       else warnings.push({
         code: "vrm0-material-missing",
-        message: "VRM 0.x のマテリアル設定に対応する glTF マテリアルがありません",
+        message: "VRM 0.xのマテリアル設定に対応するglTFマテリアルがありません",
         fieldPath: `extensions.VRM.materialProperties[${index}]`,
       });
     } else if (shader !== "VRM_USE_GLTFSHADER") {
       warnings.push({
         code: "vrm0-material-shader-unsupported",
-        message: `VRM 0.x の ${shader ?? "不明なシェーダー"} は対応する glTF マテリアルとして取り込みます`,
+        message: `VRM 0.xの ${shader ?? "不明なシェーダー"} は対応するglTFマテリアルとして取り込みます`,
         fieldPath: `extensions.VRM.materialProperties[${index}].shader`,
       });
     }
@@ -46,7 +46,7 @@ export async function convertVrm0MaterialsForAuthoring(
   } catch {
     warnings.push({
       code: "vrm0-material-conversion-failed",
-      message: "VRM 0.x のマテリアル設定を変換できなかったため、元の glTF マテリアルを取り込みます",
+      message: "VRM 0.xのマテリアル設定を変換できなかったため、元のglTFマテリアルを取り込みます",
       fieldPath: "extensions.VRM.materialProperties",
     });
     return json;

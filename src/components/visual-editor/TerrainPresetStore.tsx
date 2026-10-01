@@ -118,7 +118,7 @@ export function TerrainPresetStore({
             <div>
               <h3 className="text-xs font-semibold text-slate-900">地形</h3>
               <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                形と草が入った地形です。追加後は地形ブラシで形を変えられます
+                地形と草のプリセットを追加できます。追加後は地形ブラシで形を調整してください。
               </p>
             </div>
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-700">

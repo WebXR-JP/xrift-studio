@@ -1,8 +1,8 @@
 # XRift Studio リリース動画キット
 
-リリース動画を毎回ゼロから作らないための共通基盤。動画ごとに書くのは `storyboard.json` だけで、シーン部品・BGM・効果音・レイアウトはここが持つ。
+リリース動画に使うシーン部品・BGM・効果音・レイアウトをまとめたキットです。動画ごとに`storyboard.json`を書くと、共通の部品を使って制作できます。
 
-進め方は `.agents/skills/` のスキルを見る。
+制作手順は`.agents/skills/`のスキルを参照してください。
 
 | 内容 | スキル |
 |---|---|
@@ -22,9 +22,9 @@ npm run studio
 npm run render
 ```
 
-`pnpm install` は必ずこのディレクトリで実行する。`pnpm-workspace.yaml` があるおかげで、リポジトリ本体の `node_modules` を巻き込まない。消さないこと。
+`pnpm install`は必ずこのディレクトリで実行してください。`pnpm-workspace.yaml`によって依存関係の管理範囲を分け、リポジトリ本体の`node_modules`に影響を与えないようにしています。この設定ファイルは削除しないでください。
 
-各動画プロジェクトは依存を持たず、`dev/release-promo/node_modules` を共有する。React が二重に読み込まれないので、キットのソースを相対パスでそのまま読み込める。
+各動画プロジェクトでは個別に依存関係を導入せず、`dev/release-promo/node_modules`を共有します。Reactを二重に読み込まないため、キットのソースを相対パスで読み込めます。
 
 ## 中身
 
@@ -53,7 +53,7 @@ _kit/
 
 ## 音について
 
-BGM は 2 系統。標準は `assets/music/` の楽曲を動画の尺に合わせて切り出したもので、XRift Studio の制作者が Suno で作成し、公開してよいものとして提供している。もう 1 つは `gen-audio.mjs` が合成するループ素材。効果音はすべて合成音。外部素材を含まないので、出典表記もライセンス確認もいらない。
+BGMは2系統あります。標準では、XRift Studioの制作者がSunoで作り、公開用に提供した`assets/music/`の楽曲を動画の長さに合わせて切り出します。もう1つは、`gen-audio.mjs`で合成するループ素材です。効果音はすべて合成音で、外部素材を含まないため、出典表記や外部素材のライセンス確認は不要です。
 
 ```powershell
 node _kit/scripts/analyze-music.mjs assets/music/xxx.mp3   # BPM と構成を調べる
@@ -61,13 +61,13 @@ node _kit/scripts/cut-music.mjs                            # 30秒 / 60秒 を�
 node _kit/scripts/gen-audio.mjs                            # 効果音と合成ループ
 ```
 
-Git に入れるのは原曲（`assets/music/*.mp3`）と設計（`tracks.json` `beds.json`）だけ。書き出した WAV は `.gitignore` 対象で、別のクローンでも同じコマンドで同じものが揃う。
+Gitには、原曲の`assets/music/*.mp3`と設定ファイルの`tracks.json`、`beds.json`だけを追加してください。書き出したWAVは`.gitignore`の対象です。別のクローンでも、同じコマンドで再生成できます。
 
-使える BGM の一覧は `beds.json`。楽曲から切り出した BGM は長さが決まっているので、動画の小節数をその `bars` に合わせる。
+使えるBGMは`beds.json`に記載しています。楽曲から切り出したBGMは長さが決まっているため、動画の小節数をその`bars`に合わせてください。
 
 ## 動作確認
 
-`kit-demo` がキットの動作確認用プロジェクト。実際のリリース動画ではないので、そのまま公開しない。キットを変更したら、ここで静止画と書き出しを確認する。
+`kit-demo`は動作確認用のプロジェクトです。リリース動画としてそのまま公開しないでください。キットを変更したら、ここで静止画と動画の書き出しを確認してください。
 
 ```powershell
 cd kit-demo

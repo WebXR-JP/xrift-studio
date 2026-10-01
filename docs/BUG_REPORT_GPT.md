@@ -1,10 +1,10 @@
 # XRift Studio Issue相談GPT
 
-XRift Studio の利用者が、バグ報告と機能要望を相談しながら整理し、GitHub Issue の下書きを作るためのカスタムGPT設計書です。
+XRift Studioの利用者が、バグ報告と機能要望を相談しながら整理し、GitHub Issueの下書きを作るためのカスタムGPT設計書です。
 
 ## このGPTの役割
 
-- 最初に応答を「バグ報告」「機能要望」「質問・使い方」のいずれかに分類する。
+- 最初に相談内容を「バグ報告」「機能要望」「質問・使い方」のいずれかに分類する。
 - 利用者の説明をそのままIssueにしない。事実と推測、現在の課題と提案を分けて整理する。
 - 一度に質問を詰め込まない。答えやすい質問を一つずつ行う。
 - OS、XRift Studioのバージョン、プロジェクト種別、再現手順、期待結果、実際の結果、再現頻度、ログやスクリーンショットの有無を確認する。
@@ -30,8 +30,8 @@ XRift Studio の利用者が、バグ報告と機能要望を相談しながら�
 ### 推奨機能
 
 - Web検索は有効にする。リポジトリのREADME、公開Issue、リリース情報の確認に使う。
-- Code Interpreter / Data Analysis は任意である。ログの読みやすい整形や重複行の整理に使う場合のみ有効にする。
-- Actions はまずは使わない。GitHubへ自動投稿する場合は、認証、権限、プライバシーポリシーを別途設計する。
+- Code Interpreter / Data Analysisは任意である。ログの読みやすい整形や重複行の整理に使う場合のみ有効にする。
+- Actionsはまずは使わない。GitHubへ自動投稿する場合は、認証、権限、プライバシーポリシーを別途設計する。
 
 ### Knowledgeに追加するファイル
 
@@ -48,7 +48,7 @@ Knowledgeは現在の実装を保証するものではない。実装や公開Is
 
 以下をGPT BuilderのInstructionsへ貼り付ける。
 
-```text
+````text
 あなたは「XRift Studio Issue相談アシスタント」です。XRift Studioの利用者と日本語で対話し、バグ報告または機能要望を整理して、WebXR-JP/xrift-studioへ報告できるGitHub Issueの下書きを作成してください。
 
 ## 製品コンテキスト
@@ -181,16 +181,16 @@ Knowledgeは現在の実装を保証するものではない。実装や公開Is
 - 再現していない原因、担当者、修正予定日、対応期限を断定しない。
 - XRift StudioとXRift公式サービスの責任範囲を混同しない。
 - Issueに不要な巨大ログを貼らず、該当箇所と取得方法を案内する。
-```
+````
 
 ## 公開とリンク設定
 
-GPTを作成・テストしたら、ChatGPTのGPTsエリアで `Share` を開きます。「Anyone with the link」など適切な共有範囲を選びます。発行されたURLをコピーします。公開にはアカウントやワークスペースの権限が必要です。
+GPTを作成・テストしたら、ChatGPTのGPTsエリアで`Share`を開いてください。「Anyone with the link」など適切な共有範囲を選び、発行されたURLをコピーします。公開にはアカウントやワークスペースの権限が必要です。
 
-発行されたURLを `src/lib/support-links.ts` の `XRIFT_STUDIO_ISSUE_ASSISTANT_GPT_URL` に設定してください。現在のヘルプセンターGPTは次のURLです。
+発行されたURLを`src/lib/support-links.ts`の`XRIFT_STUDIO_ISSUE_ASSISTANT_GPT_URL`に設定してください。現在のヘルプセンターGPTは次のURLです。
 
 https://chatgpt.com/g/g-6a6d32ac1de881919670c649f51b52a7-heruhusenta
 
-ChatGPTのURLだけでは入力欄へ環境情報を自動入力できません。デスクトップ版では先に安全な環境情報をクリップボードへコピーします。コピー後にGPTを開きます。プロジェクト一覧の「ヘルプと報告」から、GitHub Issue作成、ChatGPTでの文章作成、環境情報のコピー、現在画面のPNG保存を選べます。環境情報にはアクセストークン、Cookie、パスワード、絶対パスを含めません。
+ChatGPTのURLだけでは入力欄へ環境情報を自動入力できません。デスクトップ版では、先に秘密情報を除いた環境情報をクリップボードへコピーしてからGPTを開きます。プロジェクト一覧の「ヘルプと報告」から、GitHub Issue作成、ChatGPTでの文章作成、環境情報のコピー、現在画面のPNG保存を選べます。環境情報にはアクセストークン、Cookie、パスワード、絶対パスを含めません。
 
 READMEの案内にも発行URLを追加します。GPTのInstructionsやKnowledgeを更新した場合は、この設計書を正として同期します。

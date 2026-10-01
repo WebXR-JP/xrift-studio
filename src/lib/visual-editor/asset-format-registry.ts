@@ -667,7 +667,7 @@ export const ASSET_KIND_UI = {
   texture: { icon: "texture", label: "テクスチャ" },
   skybox: { icon: "texture", label: "テクスチャ / HDRI" },
   particle: { icon: "particle", label: "パーティクル" },
-  interactivity: { icon: "graph", label: "KHR ノードグラフ" },
+  interactivity: { icon: "graph", label: "Node Graph" },
   audio: { icon: "audio", label: "音声" },
   font: { icon: "font", label: "フォント" },
   script: { icon: "script", label: "スクリプト" },

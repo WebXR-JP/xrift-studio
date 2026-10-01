@@ -113,7 +113,7 @@ const FORMAT_RULES: readonly FormatRule[] = [
     suffix: ".msi",
     platform: "windows",
     extension: ".msi",
-    formatLabel: "Windows Installer 形式",
+    formatLabel: "Windows Installer形式",
     rank: 1,
   },
   {
@@ -134,14 +134,14 @@ const FORMAT_RULES: readonly FormatRule[] = [
     suffix: ".deb",
     platform: "linux",
     extension: ".deb",
-    formatLabel: "Debian / Ubuntu 向け",
+    formatLabel: "Debian / Ubuntu向け",
     rank: 1,
   },
   {
     suffix: ".rpm",
     platform: "linux",
     extension: ".rpm",
-    formatLabel: "Fedora / RHEL 向け",
+    formatLabel: "Fedora / RHEL向け",
     rank: 2,
   },
 ];

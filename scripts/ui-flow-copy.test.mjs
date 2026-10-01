@@ -112,7 +112,7 @@ test('project-transfer labels do not promise a remote Git fork or retained publi
   assert.match(library, /リポジトリの内容をコピーして始める/);
   assert.doesNotMatch(library, /fork/);
   const transfer = read('src/components/ProjectTransferDialogs.tsx');
-  assert.match(transfer, /Git の履歴は持ち込みません/);
+  assert.match(transfer, /Gitの履歴は含まれません/);
   assert.match(transfer, /取り込んだプロジェクトは未公開になります/);
 });
 
@@ -135,7 +135,7 @@ test('the publish flow keeps uncertainty, duplicate-publication safeguards and n
   ]) assert.ok(dialog.includes(text), text);
   assert.doesNotMatch(dialog, /ステージング|原本にもこの設定/);
   assert.doesNotMatch(dialog, /onApplyTextureConversions|textureConversions|公開用に変換します/);
-  assert.match(read(`${visual}AssetQuickEditor.tsx`), /「この設定で画像を書き出す」を押すと、変換後の画像を編集・公開に使います/);
+  assert.match(read(`${visual}AssetQuickEditor.tsx`), /「この設定で画像を書き出す」を押すと、変換した画像を編集画面と公開先で使います/);
   assert.match(read('src-tauri/src/lib.rs'), /公開されていないことを確認できた場合に限り/);
   const guide = read('docs/guide/publishing.md');
   assert.match(guide, /公開されていないことを確認できた場合に限り/);
@@ -174,7 +174,7 @@ test('recovery and reset documentation matches current controls without dropping
   const reset = read('src/components/AboutModal.tsx');
   assert.match(reset, /ランタイムをリセット/);
   assert.match(reset, /すべてのプロジェクトを削除/);
-  assert.match(read('docs/guide/recovery.md'), /完全リセットは元に戻せません/);
+  assert.match(read('docs/guide/recovery.md'), /完全リセットでは[^\n]*保存済みプロジェクト[^\n]*元に戻せません/);
 });
 
 test('broken literal translations do not return to user-facing source', () => {

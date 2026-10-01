@@ -132,7 +132,7 @@ export function ParticlePresetStore({
             <div>
               <h3 className="text-xs font-semibold text-slate-900">パーティクル</h3>
               <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                炎、雪、桜などの粒です。追加後はパーティクルとして調整できます
+                炎、雪、桜などのパーティクルを追加できます。追加後に色や量を調整してください。
               </p>
             </div>
             <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700">
