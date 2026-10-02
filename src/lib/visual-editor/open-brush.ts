@@ -528,7 +528,8 @@ function collectRecordKeys(value: unknown, target: Set<string>): void {
 }
 
 function normalizeBrushName(name: string, index: number): string {
-  const normalized = name.replace(/^(?:ob-|brush_|material_)/i, "").trim();
+  const normalized = name.replace(/^(?:ob-|brush_|material_)/i, "")
+    .replace(/\s*\(Instance\)$/i, "").trim();
   return normalized || `Brush ${index + 1}`;
 }
 

@@ -1,4 +1,5 @@
 import {
+  BufferAttribute,
   GLSL3,
   type Material,
   RawShaderMaterial,
@@ -10,8 +11,9 @@ import {
   type Texture,
   type IUniform,
   type LoadingManager,
+  type BufferGeometry,
 } from "three";
-import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
+import type { GLTF, GLTFParser } from "three/examples/jsm/loaders/GLTFLoader.js";
 // three-icosa publishes no TypeScript declarations. Studio supplies its own
 // ambient declaration, a published world does not, so this file has to compile
 // in both places — `@ts-ignore` rather than `@ts-expect-error`, which would
@@ -49,6 +51,7 @@ export type InternalTiltShaderLoader = {
   path: string;
   withCredentials: boolean;
   loadedMaterials: Record<string, RawShaderMaterial>;
+  lookupMaterialName: (brushName: string) => string;
   lookupMaterialParams: (brushName: string) => unknown;
   load: (
     brushName: string,
@@ -60,6 +63,7 @@ export type InternalTiltShaderLoader = {
 
 type OpenBrushTargetMesh = {
   material: Material | Material[];
+  geometry?: BufferGeometry;
 };
 
 type OpenBrushMaterialReplacementExtension = {
@@ -97,6 +101,7 @@ export function createOpenBrushMaterialExtension(
   );
   const internal = extension as unknown as OpenBrushMaterialExtension;
   installIsolatedLoader(internal.tiltShaderLoader);
+  installOpenBrushGeometryCompatibility(internal);
   installOpenBrushPbrFallback(internal);
   installOpenBrushDocumentGuard(extension, parser);
   return extension;
@@ -110,8 +115,8 @@ function installOpenBrushDocumentGuard(
   },
   parser: unknown,
 ): void {
-  const beforeRoot = extension.beforeRoot.bind(extension);
-  const afterRoot = extension.afterRoot.bind(extension);
+  const internal = extension as unknown as OpenBrushMaterialExtension;
+  const gltfParser = parser as GLTFParser;
   const brushMaterials = () => {
     const json = (parser as { json?: Record<string, unknown> } | undefined)?.json;
     if (!json || !Array.isArray(json.materials)) return undefined;
@@ -140,11 +145,112 @@ function installOpenBrushDocumentGuard(
     // Only the in-memory parser document is normalized. The original GLB and
     // its optional names stay untouched, and extension GUIDs still select brushes.
     materials.forEach((material) => { material.name ??= ""; });
-    return beforeRoot();
+    // Embedded images already contain the author's pixels. The stock hook
+    // overwrites them and treats a texture index as an image index. Resolve
+    // legacy external URLs through textures[].source instead.
+    const json = gltfParser.json;
+    for (const material of materials) {
+      const name = internal.tiltShaderLoader.lookupMaterialName(resolveOpenBrushMaterialName(material));
+      const params = internal.tiltShaderLoader.lookupMaterialParams(name) as
+        OpenBrushMaterialParameters | undefined;
+      if (!params) continue;
+      const definition = material as typeof material & {
+        pbrMetallicRoughness?: { baseColorTexture?: { index: number } };
+        normalTexture?: { index: number };
+      };
+      for (const [texture, uniform] of [
+        [definition.pbrMetallicRoughness?.baseColorTexture, params.uniforms.u_MainTex],
+        [definition.normalTexture, params.uniforms.u_BumpMap],
+      ] as const) {
+        if (!texture || typeof uniform?.value !== "string") continue;
+        const image = json.images?.[json.textures?.[texture.index]?.source];
+        if (image?.bufferView === undefined && typeof image?.uri === "string" &&
+          /^https?:\/\//i.test(image.uri)) {
+          image.uri = new URL(uniform.value, internal.tiltShaderLoader.path).href;
+        }
+      }
+    }
   };
   extension.afterRoot = (gltf) => {
-    if (!brushMaterials()) return;
-    return afterRoot(gltf);
+    const materials = brushMaterials();
+    if (!materials) return;
+    const pending: Promise<void>[] = [];
+    const visited = new Set<object>();
+    for (const scene of gltf.scenes) scene.traverse((object) => {
+      if (!(object as { isMesh?: boolean }).isMesh || visited.has(object)) return;
+      visited.add(object);
+      const association = gltfParser.associations.get(object) as
+        { meshes?: number; primitives?: number } | undefined;
+      if (association?.meshes === undefined) return;
+      const primitive = gltfParser.json.meshes[association.meshes].primitives[
+        association.primitives ?? 0
+      ];
+      const material = materials[primitive?.material];
+      if (!material) return;
+      const brushName = resolveOpenBrushMaterialName(material);
+      if (brushName) pending.push(Promise.resolve(internal.replaceMaterial(
+        object as unknown as OpenBrushTargetMesh, brushName,
+      )));
+    });
+    return Promise.all(pending);
+  };
+}
+
+function resolveOpenBrushMaterialName(
+  material: { name?: string; extensions?: Record<string, unknown> },
+): string {
+  for (const name of ["GOOGLE_tilt_brush_material", "GOOGLE_tilt_brush_techniques"]) {
+    const definition = material.extensions?.[name] as { guid?: unknown } | undefined;
+    if (typeof definition?.guid === "string" && definition.guid) return definition.guid;
+  }
+  const name = (material.name ?? "").trim()
+    .replace(/^(?:ob-|brush_|material_)/i, "")
+    .replace(/\s*\(Instance\)$/i, "").trim();
+  for (const block of ["BlocksPaper", "BlocksGlass", "BlocksGem"]) {
+    if (name.includes(`_${block} `)) return block;
+  }
+  // Only documents already identified as Open Brush reach this resolver.
+  // Unknown brush names retain the existing diagnostic PBR fallback.
+  return name;
+}
+
+/** Keep the library's brush-specific setup without its unbound THREE global. */
+function installOpenBrushGeometryCompatibility(extension: OpenBrushMaterialExtension): void {
+  const replaceMaterial = extension.replaceMaterial.bind(extension);
+  extension.replaceMaterial = async (mesh, brushName) => {
+    const geometry = mesh.geometry;
+    if (!geometry) return replaceMaterial(mesh, brushName);
+    const color = geometry.getAttribute("color");
+    let pending: Promise<void> | void;
+    try {
+      if (color?.array instanceof Float32Array) {
+        const bytes = new Uint8Array(color.count * color.itemSize);
+        for (let i = 0; i < color.count; i += 1) {
+          const values = [color.getX(i), color.getY(i), color.getZ(i), color.getW(i)];
+          for (let channel = 0; channel < color.itemSize; channel += 1) {
+            const linear = values[channel] ?? 0;
+            const value = channel === 3 ? linear : linear <= 0.0031308
+              ? linear * 12.92 : 1.055 * Math.pow(linear, 1 / 2.4) - 0.055;
+            bytes[i * color.itemSize + channel] = Math.round(Math.max(0, Math.min(1, value)) * 255);
+          }
+        }
+        // The vendor copies color synchronously, before its first shader await.
+        // A byte attribute bypasses its `new THREE.BufferAttribute` branch.
+        // Restore the linear glTF attribute immediately for standard materials.
+        geometry.setAttribute("color", new BufferAttribute(bytes, color.itemSize, true));
+      }
+      pending = replaceMaterial(mesh, brushName);
+    } finally {
+      if (color) geometry.setAttribute("color", color);
+    }
+    await pending;
+    for (const [target, candidates] of [
+      ["a_texcoord0", ["_tb_unity_texcoord_0", "texcoord_0", "uv"]],
+      ["a_texcoord1", ["_tb_unity_texcoord_1", "texcoord_1", "uv1", "uv2"]],
+    ] as const) {
+      const source = candidates.map((name) => geometry.getAttribute(name)).find(Boolean);
+      if (source) geometry.setAttribute(target, source);
+    }
   };
 }
 

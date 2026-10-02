@@ -8,12 +8,13 @@ import {
 import { OPEN_BRUSH_CATALOG } from "./open-brush-catalog";
 import { applyOpenBrushCatalogInstall } from "./external-store";
 import type { AssetManifest } from "./asset-manifest";
-import { Mesh, MeshStandardMaterial } from "three";
+import { BufferAttribute, BufferGeometry, Group, LoadingManager, Mesh, MeshStandardMaterial, RawShaderMaterial, type Material } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { createOpenBrushMaterialExtension } from "../../../packages/xrift-studio-runtime/src/open-brush/material-extension";
+import { createOpenBrushMaterialExtension, readOpenBrushPbrFallback, type OpenBrushMaterialExtension } from "../../../packages/xrift-studio-runtime/src/open-brush/material-extension";
 
 export async function runOpenBrushFixtureAssertions(): Promise<void> {
   await assertOpenBrushLoaderAcceptsOptionalGltfMaterials();
+  await assertUnityExportBrushMaterials();
   const document = {
     asset: { version: "2.0", generator: "Open Brush 2.8" },
     extensionsUsed: ["GOOGLE_tilt_brush_material"],
@@ -106,6 +107,67 @@ export async function runOpenBrushFixtureAssertions(): Promise<void> {
     "OpenBrush catalog did not deduplicate the same brush GUID");
   assert(Object.keys(duplicate.manifest.assets).length === 1,
     "OpenBrush catalog duplicated an installed Material");
+}
+
+async function assertUnityExportBrushMaterials(): Promise<void> {
+  const document = {
+    asset: { version: "2.0", generator: "Open Brush UnityGLTF Exporter" },
+    materials: [{ name: "OilPaint (Instance)" }, { name: "Disco (Instance)" }],
+    meshes: [{ primitives: [{ material: 0 }, { material: 1 }] }],
+    // Texture indices intentionally differ from image indices.
+    textures: [{ source: 1 }],
+    images: [{ bufferView: 0 }, { uri: "https://example.invalid/old.png" }],
+  };
+  const metadata = detectOpenBrushGltfDocument(document);
+  assert(metadata?.brushNames.join(",") === "OilPaint,Disco", "Unity instance names must identify the brush presets");
+  assert(extractOpenBrushMaterialShader(document, 0)?.brushName === "OilPaint", "Imported Material Assets must use the same preset name as the model loader");
+  const oil = { ...document.materials[0], pbrMetallicRoughness: { baseColorTexture: { index: 0 } } };
+  const json = { ...document, materials: [oil, document.materials[1]] };
+  const associations = new Map<object, { meshes: number; primitives: number }>();
+  const parser = { json, options: { manager: new LoadingManager() }, associations };
+  const extension = createOpenBrushMaterialExtension(parser, "https://example.invalid/brushes/");
+  const internal = extension as unknown as OpenBrushMaterialExtension;
+  await extension.beforeRoot();
+  assert(json.images[0].bufferView === 0 && !("uri" in json.images[0]), "The loader must preserve embedded images");
+  assert(json.images[1].uri?.includes("OilPaint-"), "Legacy image remapping must resolve textures[].source");
+
+  const root = new Group();
+  const meshes = [new Mesh(), new Mesh()];
+  meshes.forEach((mesh, index) => {
+    root.add(mesh);
+    associations.set(mesh, { meshes: 0, primitives: index });
+  });
+  const replacements: string[] = [];
+  const replace = internal.replaceMaterial;
+  internal.replaceMaterial = (mesh, name) => {
+    replacements.push(`${meshes.indexOf(mesh as Mesh)}:${name}`);
+  };
+  await extension.afterRoot({ scenes: [root, root] } as never);
+  assert(replacements.join(",") === "0:OilPaint,1:Disco", "Each primitive must receive only its own brush, once across shared scenes");
+  internal.replaceMaterial = replace;
+
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new BufferAttribute(new Float32Array([0, 0, 0]), 3));
+  geometry.setAttribute("normal", new BufferAttribute(new Float32Array([0, 1, 0]), 3));
+  const color = new BufferAttribute(new Float32Array([0.5, 0.2, 0.1, 0.5]), 4);
+  geometry.setAttribute("color", color);
+  const uv = new BufferAttribute(new Float32Array([0.25, 0.75]), 2);
+  const uv1 = new BufferAttribute(new Float32Array([0.1, 0.2]), 2);
+  geometry.setAttribute("uv", uv);
+  geometry.setAttribute("uv1", uv1);
+  const mesh = new Mesh<BufferGeometry, Material>(geometry, new MeshStandardMaterial());
+  const shader = new RawShaderMaterial();
+  internal.tiltShaderLoader.loadedMaterials.Dots = shader;
+  await internal.replaceMaterial(mesh, "Dots");
+  assert(mesh.material === shader && !readOpenBrushPbrFallback(mesh.material), "Float32 vertex colors must load without a global THREE namespace");
+  assert(geometry.getAttribute("color") === color && color.getX(0) === 0.5, "The linear glTF vertex colors must stay untouched");
+  const brushColor = geometry.getAttribute("a_color");
+  assert(brushColor.normalized && brushColor.array[0] === 188 && brushColor.array[3] === 128, "Brush RGB must use the library's sRGB encoding while alpha stays linear");
+  assert(geometry.getAttribute("a_texcoord1") === uv1, "Modern GLTFLoader uv1 must reach particle brushes");
+  const legacyUv = new BufferAttribute(new Float32Array([0.25, 0.75, 2, 3]), 4);
+  geometry.setAttribute("_tb_unity_texcoord_0", legacyUv);
+  await internal.replaceMaterial(mesh, "Dots");
+  assert(geometry.getAttribute("a_texcoord0") === legacyUv, "Legacy four-component brush UVs must take priority over truncated standard UVs");
 }
 
 async function assertOpenBrushLoaderAcceptsOptionalGltfMaterials(): Promise<void> {
