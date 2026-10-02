@@ -1,0 +1,48 @@
+name: Check Sites MCP
+
+on:
+  pull_request:
+    paths:
+      - '.openai/**'
+      - 'packages/xrift-studio-cloud/**'
+      - 'plugins/xrift-studio/**'
+      - 'scripts/**'
+      - 'src/**'
+      - 'public/**'
+      - 'e2e/chatgpt-delivery.spec.ts'
+      - 'e2e/fixtures/chatgpt-*'
+      - 'vite*.config.*'
+      - '*.html'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/sites-mcp.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sites-mcp-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - uses: flatt-security/setup-takumi-guard-npm@v1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm mcp:cloud:check
+      - run: pnpm e2e:typecheck
+      - run: pnpm test:cloud
+      - run: pnpm build:sites
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec playwright test e2e/chatgpt-delivery.spec.ts --project chromium

@@ -14,7 +14,7 @@ import { browserProjectDocumentFiles, parseBrowserProjectFiles } from './lib/vis
 import { studioLaunchFromUrl, validateStudioProjectId } from './lib/browser-project-routing';
 import './index.css';
 import './preview.css';
-const app = new App({ name: 'XRift Studio', version: '0.1.1' });
+const app = new App({ name: 'XRift Studio', version: '0.1.3' });
 const extensions = new OpenAIExtensions(app);
 type Result = StudioResult;
 type Local = { path: string; documents: VisualProjectDocuments; revision: number };

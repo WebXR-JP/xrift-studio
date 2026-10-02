@@ -33,43 +33,69 @@ Sitesに作品を保存する領域は追加しません。会話内の最新の
 
 ## Sitesへの配置と接続
 
-PR #124のMCPは既存のSitesプロジェクトで運用しています。接続先は `https://xrift-studio-pr124.kkkkkkasdad.chatgpt.site/mcp` です。GitHub Pagesは通常ブラウザ版の公開先であり、`POST /mcp`を処理しません。PRへのPushだけではSitesの内容は更新されません。
+この実装は、SitesにMCPとMCP Appを配置し、Sitesが用意するプラグインを接続する方式です。[公式のSites MCP手順](https://help.openai.com/en/articles/20001547-hosting-a-plugin-with-chatgpt-sites)に従います。公開ディレクトリへの審査は、所有者が使い始めるための前提ではありません。
 
-SitesはMCPの手前でOAuth認証を行います。未認証のアクセスには401と、`/.well-known/oauth-protected-resource/mcp`を指す`WWW-Authenticate`を返します。必要なscopeは`openid resource.invoke email`です。各toolの`securitySchemes`もこの値を宣言します。Sitesが用意した既存App・プラグインを使い、認証なしの接続へ変更したり、代わりのAppを新規作成したりしないでください。
+- Site: https://xrift-studio-pr124.kkkkkkasdad.chatgpt.site
+- MCP: https://xrift-studio-pr124.kkkkkkasdad.chatgpt.site/mcp
+- 既存の所有者用プラグイン: https://chatgpt.com/plugins/plugin_asdk_app_sites_a7e0e2c988c08191aa694d396a182112
 
-公開申請ポータルで「Authentication unavailable」「MCP configuration incomplete」と表示された場合は、既存MCPのConnectまたはReconnectで認証方式と接続状態を確認します。別の申請AppでSitesの既存OAuth接続を利用できない場合は、認証を削除せず、既存のAppを公開申請へつなぐ方法を確認してください。ZIPの再アップロードだけでは認証やscanは完了しません。
+所有者はChatGPTの「Plugins → Personal → Created by you」からXRift Studioを開き、必要に応じてInstall・Connectを行います。接続済みなら、対応するChatGPT・Codexの会話でXRift Studioを選び、「小さな公園を作って」のように依頼します。グローバル入口の`open_studio`から共通エディターも開けます。Web・モバイル・デスクトップの提供状況と、WebGL・保存・ファイル操作が実際に使えるかは別に確認します。
 
-`initialize`では、クライアントが指定した対応版（2025-03-26、2025-06-18、2025-11-25）を返します。未対応版には最新の対応版を返し、クライアントが接続を続けられるか判断します。
+### 再現できるビルドと更新
 
-接続用パッケージは実際のエンドポイントから生成します。
-
-```sh
-node scripts/package-cloud-plugin.mjs https://xrift-studio-pr124.kkkkkkasdad.chatgpt.site/mcp /tmp/xrift-plugin
-```
-
-生成先にはmetadata、制作手順skill、PNGアイコン、`mcp.json`が入ります。サーバーの配置や公開申請は別の手順です。
-
-## 全員向けの公開
-
-自分用の開発接続と、一般公開の審査は別。一般公開では次を用意してOpenAIのプラグイン公開ポータルへ申請する。
-
-1. 実運用のHTTPSエンドポイントと、検証済みのアプリ表示。
-2. 公開する開発者の本人・組織確認とドメイン確認。
-3. 実際の機能に合う説明・アイコン・Webサイト・サポート・プライバシーポリシー・利用規約の公開URL。
-4. 実録デモ、正常系5件・失敗系3件の審査例、対象地域・リリース情報など。
-5. 公開用ZIPをドラフトとしてアップロードし、MCPを接続・検査して審査例を実行する。審査に提出し、承認後に公開する。
-
-接続先とポリシーのURLは掲載情報に含めています。カテゴリは3Dワールドの創作に合わせた`Creativity`です。公開申請の接続状態、最新scan、対象地域、審査用ケース、デモ録画、認証用の審査アクセスは、申請する版のポータルで確認してください。既存の録画草稿は手動操作の確認用で、AI制作の審査を満たした録画とは扱いません。メタデータ修正用のZIPだけで審査提出可能とは判断しません。
-
-公式手順: [公開申請](https://developers.openai.com/plugins/deploy/submission)、[認証](https://developers.openai.com/plugins/build/auth)、[接続と検証](https://developers.openai.com/plugins/deploy/connect-chatgpt)。要件は申請時に再確認する。
-
-## 検証
+`.openai/hosting.json`には既存の`project_id`と`mcp` capabilityを保持します。新しいSiteやAppを作って置き換えず、同じSitesソースへ変更を反映して公開します。GitHubへのPushだけではSiteは更新されません。GitHub Pagesの通常ブラウザ版も、MCPをホストしません。
 
 ```sh
+pnpm install --frozen-lockfile
 pnpm typecheck
-pnpm --filter xrift-studio-cloud typecheck
-node scripts/generate-cloud-mcp-schemas.mjs --check
-node scripts/browser-project-transfer.test.mjs
+pnpm mcp:cloud:check
+pnpm test:cloud
+pnpm build:sites
 ```
 
-ChatGPT WorkのMCP App / Extensionsに対応するhostが対象。通常のChatGPT画面・iOS / Androidの実機、iframe内のIndexedDB・ダウンロード・WebGL・Playは未確認。スマホで使えることは、対応するhostで制作から書き出しまで確認してから案内する。
+`build:sites`は次をまとめて生成し、実際の出力を使ったMCPの初期化・ツール一覧・画面リソース・新規作成・追編集・表示要求を確認します。
+
+- `dist/server/index.js`: Cloudflare Workers互換のMCPサーバー
+- `dist/client/index.html`、`editor.html`: 紹介ページと通常ブラウザ版
+- `dist/client/chatgpt.html`: 公式MCP Apps / OpenAI Extensionsのbridgeを使う共通エディター
+- `dist/.openai/hosting.json`: 既存SiteのIDとcapability
+
+AppのJavaScriptとCSSは認証済みMCPリソースのHTMLに同梱します。別originのiframeからSiteのJavaScriptを匿名で読み込むことに依存しません。HTMLは10 MiB未満に制限します。`vite.chatgpt.config.ts`と`vite.sites.config.ts`を含むこのビルド設定を、Sites側だけの手作業として残さないでください。
+
+出力確認後、同じソースを既存Sitesプロジェクトのソースリポジトリへ反映し、そのコミットから作った出力を保存・公開します。公開後は既存プラグインのツール一覧を更新し、`describe_document_tool`などの読み取りと、影響した操作を確認します。ローカルのWrangler設定はこの出力を確認する補助です。別のCloudflare公開先を作る手順ではありません。
+
+### 認証とアクセス
+
+SitesはMCPの手前でOAuth認証を行います。未認証のアクセスには401と、`/.well-known/oauth-protected-resource/mcp`を指す`WWW-Authenticate`を返します。必要なscopeは`openid resource.invoke email`です。各toolの`securitySchemes`もこの値を宣言します。認証を削除したり、手作業のBearer tokenを`mcp.json`に含めたりしないでください。
+
+Siteの公開範囲とプラグインの利用権限は別です。現在の公式案内ではBusiness・Enterpriseのワークスペース共有には両方へのアクセスと各人の接続が必要で、Pro・個人アカウントはSiteプラグインを招待や共有リンクで直接共有できません。SiteのURLを公開するだけで、全員がプラグインを使えるとは案内しません。公開ディレクトリへの申請可否は、その申請用Appの設定と審査で別途確認します。
+
+`initialize`は対応版（2025-03-26、2025-06-18、2025-11-25）が指定された場合に同じ版を返します。未対応版には最新の対応版を返し、クライアントが接続を続けられるか判断します。
+
+## 公開ディレクトリの申請資料
+
+`plugins/xrift-studio`には掲載情報、アイコン、制作手順skillを置きます。このディレクトリだけではサーバーを配置できません。また、ここでskillを編集しただけではSitesが管理する既存プラグインに自動追加されません。既存プラグインの編集機能と、Siteを再公開した後の保持を確認してから扱ってください。
+
+公開申請資料の書き出しが必要な場合だけ、実際のHTTPSエンドポイントと空の出力先を指定します。
+
+```sh
+node scripts/package-cloud-plugin.mjs https://xrift-studio-pr124.kkkkkkasdad.chatgpt.site/mcp /tmp/xrift-publication
+```
+
+生成先の`xrift-studio`をZIPに含めます。スクリプトは既存出力への混在を防ぎ、`.app.json`と非公開Appへの参照を含めません。`mcp.json`にはStreamable HTTPの接続先を記載します。OAuthを用意する項目ではなく、ZIP書き出しは接続・scan・審査の完了も意味しません。Sitesを使い始めるために、このZIPから同名のプラグインを作り直す必要はありません。
+
+公開申請には、開発者・ドメインの確認、実際の機能に合った紹介文とポリシー、対象地域、実録デモ、正常系5件・失敗系3件の審査例、必要な審査アクセスを揃えます。カテゴリは3Dワールドの創作に合わせた`Creativity`です。保存済みドラフトの審査資料を保持しながら更新してください。
+
+申請用Appに「Authorization unavailable」「MCP configuration incomplete」と表示された場合は、Connect・Reconnectと最新scanの結果を確認します。Sites由来の所有者用Appと申請用Appは同じものとは限りません。所有者用接続が動いていても、申請用接続の成功は保証されません。認証開始前の失敗はWorkerの編集処理やZIPの再生成だけで修復できると判断せず、接続の対応関係を確認します。
+
+既存の録画草稿は手動操作の確認用です。会話からの制作、同じ作品への追編集、実際の表示までを録画していない場合、AI制作の審査を満たすデモとして扱いません。
+
+公式手順: [公開申請](https://developers.openai.com/plugins/deploy/submission)、[認証](https://developers.openai.com/plugins/build/auth)、[接続と検証](https://developers.openai.com/plugins/deploy/connect-chatgpt)。要件は申請時に再確認します。
+
+## 検証と確認できていない範囲
+
+`pnpm test:cloud`はMCPと共通の保存・再開・作品ID・取り込み・書き出し・申請資料の生成を確認します。`pnpm build:sites`は配布するWorkerとHTMLを実際に読み、MCPの応答とAppリソースを確認します。どちらも実際のChatGPTで画面が表示された証拠ではありません。
+
+ローカルで表示と保存を確認する場合は、`pnpm dev -- --host localhost --port 1420`で起動し、`/delivery-test.html`を開きます。「検証ワールドを作成」「立方体を移動」は、最新のbundleとrevisionを引き継いで同じ作品を編集します。`?build=1`はビルド済みのApp HTMLを使います。専用ブラウザプロファイルを使い、利用者の既存作品と分けてください。
+
+実ホストでは、新規作成、同じbundleへの追編集、`open_studio`への最新結果の受け渡し、同じ操作IDの`studioDelivery`、ブラウザ保存、実際のScene View PNGの受信を順に確かめます。ローカルのAppBridgeで画像を送れても、実際のChatGPTで受信できたことにはしません。2026-10-02時点では所有者用プラグインの認証済みMCP呼び出しを確認済みで、ChatGPTでのAI編集の自動反映・会話へのPNG受信、iOS・Androidの実機操作は未確認です。

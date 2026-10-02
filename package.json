@@ -46,7 +46,9 @@
     "guide:capture": "node scripts/guide/capture-guide.mjs capture",
     "guide:media": "node scripts/guide/capture-guide.mjs list",
     "mcp:cloud:schemas": "node scripts/generate-cloud-mcp-schemas.mjs",
-    "mcp:cloud:check": "node scripts/generate-cloud-mcp-schemas.mjs --check && pnpm --filter xrift-studio-cloud typecheck"
+    "mcp:cloud:check": "node scripts/generate-cloud-mcp-schemas.mjs --check && pnpm --filter xrift-studio-cloud typecheck",
+    "build:sites": "node scripts/build-sites.mjs && node scripts/check-sites-build.mjs",
+    "test:cloud": "node --test scripts/chatgpt-delivery.test.mjs scripts/browser-project-routing.test.mjs scripts/browser-project-session.test.mjs scripts/browser-project-storage.test.mjs scripts/browser-project-transfer.test.mjs scripts/package-cloud-plugin.test.mjs"
   },
   "overrides": {
     "dompurify": "3.4.12"

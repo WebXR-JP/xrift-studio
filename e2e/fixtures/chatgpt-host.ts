@@ -29,10 +29,15 @@ async function send() {
 }
 document.querySelector('#create')!.addEventListener('click', async () => { result = await callTool('create_world', { name: '反映確認・検証専用' }) as StudioResult; await send(); });
 document.querySelector('#edit')!.addEventListener('click', async () => {
-  if (!result) { await host.sendToolResult({content:[], structuredContent:await callTool('edit_world',{operations:[{tool:'create_primitive',ref:'trunk',arguments:{shape:'cylinder',position:[-2,1,0]}},{tool:'update_transform',arguments:{entityId:'$trunk',scale:[0.3,2,0.3]}}]})}); return; }
-  const cube = Object.values(result.bundle.scene.entities).find(entity => entity.name === '立方体')!;
-  const command = await callTool('edit_world', { operations: [{ tool: 'update_transform', arguments: { entityId: cube.id, position: [2, 1, 0] } }, { tool: 'create_primitive', ref: 'trunk', arguments: { shape: 'cylinder', name: '秋の木の幹', position: [-2, 1, 0] } }, { tool: 'update_transform', arguments: { entityId: '$trunk', scale: [0.3, 2, 0.3] } }] });
-  await host.sendToolResult({ content: [], structuredContent: command });
+  if (!result) throw new Error('先に検証ワールドを作成するか、Editorの現在のデータを受信してください');
+  // Exercise the same stateless conversation contract as the real plugin.
+  const cube = Object.values(result.bundle.scene.entities).find(entity => entity.name === '立方体');
+  result = await callTool('edit_world', { bundle: result.bundle, revision: result.revision, operations: [
+    ...(cube ? [{ tool: 'update_transform', arguments: { entityId: cube.id, position: [2, 1, 0] } }] : []),
+    { tool: 'create_primitive', ref: 'trunk', arguments: { shape: 'cylinder', position: [-2, 1, 0] } },
+    { tool: 'update_transform', arguments: { entityId: '$trunk', scale: [0.3, 2, 0.3] } },
+  ] }) as StudioResult;
+  await send();
 });
 document.querySelector('#retry')!.addEventListener('click', async () => { if (latestOperationId) await host.sendToolResult({ content: [], structuredContent: await callTool('retry_world', { operationId: latestOperationId }) }); });
 document.querySelector('#reload')!.addEventListener('click', () => { void connect(); });
