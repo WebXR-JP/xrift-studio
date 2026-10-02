@@ -320,7 +320,7 @@ function Application() {
       setNotice(restoreError.current ? `直前の作品を再開できませんでした。${restoreError.current}。一覧から別の作品を開くか、編集中のタブを閉じて開き直してください。` : recovery.current.pending ? '未完了のAI編集が残っています。反映を再確認してください。' : current.current ? 'ブラウザに保存した直前の編集を再開しました。' : '会話でワールドの制作を頼むか、作品ファイルを取り込んでください。');
       try {
         if (await openDeepLink()) { /* Explicit project/new links take priority. */ }
-        else if (document.documentElement.hasAttribute('data-studio-new-entry') && !initialResultReceived.current && initialArguments.current.mode === undefined && initialArguments.current.projectId === undefined) {
+        else if (document.documentElement.hasAttribute('data-studio-new-entry') && !initialResultReceived.current && Object.keys(initialArguments.current).length === 0 && (!app.getHostContext()?.toolInfo?.tool.name || app.getHostContext()?.toolInfo?.tool.name === 'open_studio')) {
           // The app-only new entry does not necessarily send a tool result.
           // Use the same creation action as the ordinary browser editor.
           entryCreated.current = true;

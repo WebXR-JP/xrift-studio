@@ -7,7 +7,7 @@ ChatGPTの制作依頼からワールドを作るリモートMCPと、既存の�
 1. プラグインを接続し、会話でワールド制作を頼みます。
 2. `create_world`の結果のbundleとrevisionを会話内で引き継ぎ、`edit_world({bundle, revision, operations})`で追編集します。Editorの表示、activeProjectId、反映報告や画像を編集の前提にしません。最大200操作を一つのバッチで適用し、途中で失敗した部分結果は使いません。
 3. 結果を共通エディターへ取り込み、ブラウザ保存と実際のScene Viewを確認します。データ編集・ブラウザ保存・画面反映・画像受信を区別します。画像が未取得でも追編集は続けられます。
-4. 作品ID付きリンクまたは`open_studio({projectId})`で保存した作品を再開します。対象の一致はアプリの`projectMatched`報告で確認します。
+4. 作品ID付きリンクまたは作品一覧から保存した作品を再開します。対象の一致はアプリの`projectMatched`報告で確認します。
 5. 取り込みと書き出しは、通常版と同じ「プロジェクトを開く」「プロジェクトを書き出す」を使います。会話に添付した素材の自動取り込みは未対応です。
 
 ## 共通処理とChatGPT接続の境界
@@ -98,4 +98,10 @@ node scripts/package-cloud-plugin.mjs https://xrift-studio-pr124.kkkkkkasdad.cha
 
 ローカルで表示と保存を確認する場合は、`pnpm dev -- --host localhost --port 1420`で起動し、`/delivery-test.html`を開きます。「検証ワールドを作成」「立方体を移動」は、最新のbundleとrevisionを引き継いで同じ作品を編集します。`?build=1`はビルド済みのApp HTMLを使います。専用ブラウザプロファイルを使い、利用者の既存作品と分けてください。
 
-実ホストでは、新規作成、同じbundleへの追編集、`open_studio`への最新結果の受け渡し、同じ操作IDの`studioDelivery`、ブラウザ保存、実際のScene View PNGの受信を順に確かめます。ローカルのAppBridgeで画像を送れても、実際のChatGPTで受信できたことにはしません。2026-10-02時点では所有者用プラグインの認証済みMCP呼び出しを確認済みで、ChatGPTでのAI編集の自動反映・会話へのPNG受信、iOS・Androidの実機操作は未確認です。
+実ホストでは、新規作成、同じbundleへの追編集、`show_world`への最新結果の受け渡し、同じ操作IDの`studioDelivery`、ブラウザ保存、実際のScene View PNGの受信を順に確かめます。ローカルのAppBridgeで画像を送れても、実際のChatGPTで受信できたことにはしません。2026-10-02時点では所有者用プラグインの認証済みMCP呼び出しを確認済みで、ChatGPTでのAI編集の自動反映・会話へのPNG受信、iOS・Androidの実機操作は未確認です。
+
+### 表示の引数とグローバル入口
+
+会話では`show_world`へ完全なbundle、revision、operationId、baseHashを渡します。欠けた引数は`conversation_state_required`として拒否し、別作品や新しい作品を代用しません。元の編集データの値はエラーへ出さず、読み取れない文書部分と検証パスを示します。
+
+`open_studio`は`ui.visibility: ["app"]`のグローバル入口です。[公式仕様](https://github.com/openai/mcp-extensions/blob/main/docs/spec.md#global-entrypoint)に従い、ナビゲーションからの空の引数は受け入れます。会話モデルには`show_world`を公開し、既存プラグインIDと`open_studio`のdeep linkは維持します。

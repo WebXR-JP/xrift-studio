@@ -45,7 +45,7 @@ const edited = (await rpc('tools/call', { name: 'edit_world', arguments: {
 assert.equal(edited.projectId, created.projectId);
 assert.equal(edited.revision, created.revision + 1);
 assert.equal(Object.keys(edited.bundle.scene.entities).length, beforeCount + 1);
-const opened = (await rpc('tools/call', { name: 'open_studio', arguments: {
+const opened = (await rpc('tools/call', { name: 'show_world', arguments: {
   bundle: edited.bundle, revision: edited.revision, operationId: edited.operationId, baseHash: edited.baseHash,
 } })).structuredContent;
 assert.equal(opened.operationId, edited.operationId);

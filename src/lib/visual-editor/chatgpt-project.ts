@@ -6,18 +6,18 @@ export function validateBundle(value: unknown): PrototypeVisualProject {
   if (!json || new TextEncoder().encode(json).byteLength > 1024 * 1024) throw new Error('会話で編集するデータは1 MBまでです。大きな作品はStudioで編集してください');
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('編集データが不正です');
   const raw = value as Record<string, unknown>;
-  function parse<T>(codec: VisualDocumentCodec<T>, input: unknown): T {
+  function parse<T>(codec: VisualDocumentCodec<T>, input: unknown, section: string): T {
     const result = codec.parse(JSON.stringify(input));
-    if (!result.ok) throw new Error('Studioの編集データを読み取れません');
+    if (!result.ok) throw new Error(`bundle.${section}を読み取れません: ${result.issues.slice(0, 5).map(issue => `${issue.path} (${issue.code})`).join(', ')}。直前のツール結果のbundleを省略・変更せず引き継いでください`);
     return result.document;
   }
-  const project = parse(visualProjectDocumentCodec, raw.project);
-  const scene = parse(sceneDocumentCodec, raw.scene);
-  const assets = parse(assetManifestCodec, raw.assets);
+  const project = parse(visualProjectDocumentCodec, raw.project, 'project');
+  const scene = parse(sceneDocumentCodec, raw.scene, 'scene');
+  const assets = parse(assetManifestCodec, raw.assets, 'assets');
   if (scene.sceneId !== project.entrySceneId) throw new Error('編集対象のSceneが一致しません');
   if (!raw.prefabs || typeof raw.prefabs !== 'object' || Array.isArray(raw.prefabs)) throw new Error('Prefabが不正です。bundle.prefabsはPrefab IDをキーにしたオブジェクトです。空の場合も{}を含め、直前のツール結果のbundleを省略せず引き継いでください');
   const prefabs = Object.fromEntries(Object.entries(raw.prefabs).map(([id, data]) => {
-    const prefab = parse(prefabDocumentCodec, data);
+    const prefab = parse(prefabDocumentCodec, data, 'prefabs');
     return [id, prefab];
   }));
   return { project, scene, assets, prefabs };

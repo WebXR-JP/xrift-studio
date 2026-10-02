@@ -12,8 +12,8 @@ const MCP_PROTOCOL_VERSIONS = ['2025-03-26', '2025-06-18', '2025-11-25'] as cons
 const negotiateProtocolVersion = (requested: unknown): string =>
   typeof requested === 'string' && MCP_PROTOCOL_VERSIONS.some(version => version === requested)
     ? requested : MCP_PROTOCOL_VERSIONS[MCP_PROTOCOL_VERSIONS.length - 1];
-const UI_URI = 'ui://xrift-studio/worlds-v17';
-const LEGACY_UI_URIS = ['ui://xrift-studio/worlds-v16', 'ui://xrift-studio/worlds-v15', 'ui://xrift-studio/worlds-v14', 'ui://xrift-studio/worlds-v13', 'ui://xrift-studio/worlds-v12', 'ui://xrift-studio/worlds-v11', 'ui://xrift-studio/worlds-v10', 'ui://xrift-studio/worlds-v9', 'ui://xrift-studio/worlds-v8', 'ui://xrift-studio/worlds-v7', 'ui://xrift-studio/worlds-v6', 'ui://xrift-studio/worlds-v5', 'ui://xrift-studio/worlds-v3', 'ui://xrift-studio/worlds-v4'];
+const UI_URI = 'ui://xrift-studio/worlds-v18';
+const LEGACY_UI_URIS = ['ui://xrift-studio/worlds-v17', 'ui://xrift-studio/worlds-v16', 'ui://xrift-studio/worlds-v15', 'ui://xrift-studio/worlds-v14', 'ui://xrift-studio/worlds-v13', 'ui://xrift-studio/worlds-v12', 'ui://xrift-studio/worlds-v11', 'ui://xrift-studio/worlds-v10', 'ui://xrift-studio/worlds-v9', 'ui://xrift-studio/worlds-v8', 'ui://xrift-studio/worlds-v7', 'ui://xrift-studio/worlds-v6', 'ui://xrift-studio/worlds-v5', 'ui://xrift-studio/worlds-v3', 'ui://xrift-studio/worlds-v4'];
 const names = documentTools.map((tool) => tool.name);
 const object = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('JSONオブジェクトで指定してください');
@@ -29,7 +29,7 @@ const operationId = (value: unknown): string => {
   return id;
 };
 const icons = [{ src: 'data:image/svg+xml;base64,' + btoa("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"512\" height=\"512\" viewBox=\"0 0 512 512\"><defs><linearGradient id=\"brand\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop stop-color=\"#a78bfa\"/><stop offset=\".4\" stop-color=\"#8b5cf6\"/><stop offset=\".8\" stop-color=\"#6366f1\"/><stop offset=\"1\" stop-color=\"#3b82f6\"/></linearGradient></defs><rect width=\"512\" height=\"512\" rx=\"112\" fill=\"url(#brand)\"/><path d=\"m189.5 189.5 133 133m0-133-133 133\" fill=\"none\" stroke=\"#fff\" stroke-width=\"33.3\" stroke-linecap=\"round\"/></svg>"), mimeType: 'image/svg+xml', sizes: ['any'] }];
-const deliveryDescription = "Editor startup is not required for document edits. Internally carry the latest complete bundle, revision, projectId, operationId and baseHash from the previous tool result in this conversation. Pass bundle and revision to edit_world without asking the user to copy JSON. Continue create_world -> edit_world without waiting for UI receipts or PNGs. After editing, call open_studio or capture_scene_view with the latest result to display it once. Sites stores no projects or assets. Conversation data is not proof of browser saving or display. Report document editing, browser saving, Studio display and image capture separately. Claim displayed only after a matching studioDelivery receipt; claim image confirmation only after inspecting a real PNG. Retry the original complete result without rerunning edits or overwriting later work.";
+const deliveryDescription = "Editor startup is not required for document edits. Internally carry the latest complete bundle, revision, projectId, operationId and baseHash from the previous tool result in this conversation. Pass bundle and revision to edit_world without asking the user to copy JSON. Continue create_world -> edit_world without waiting for UI receipts or PNGs. After editing, call show_world or capture_scene_view with the latest result to display it once. Sites stores no projects or assets. Conversation data is not proof of browser saving or display. Report document editing, browser saving, Studio display and image capture separately. Claim displayed only after a matching studioDelivery receipt; claim image confirmation only after inspecting a real PNG. Retry the original complete result without rerunning edits or overwriting later work.";
 async function delivery(bundle: ReturnType<typeof validateBundle>, revision: number, baseHash: string | null, operationId: string = crypto.randomUUID()) {
   return { bundle, revision, baseHash, operationId, projectId: bundle.project.projectId, sceneId: bundle.scene.sceneId,
     editorUrl: `https://chatgpt.com/plugins/plugin_asdk_app_sites_a7e0e2c988c08191aa694d396a182112/app/open_studio?path=${encodeURIComponent(studioProjectRoute(bundle.project.projectId))}`,
@@ -43,9 +43,9 @@ const bundleInputSchema = {
   type: 'object',
   description: 'Copy the complete bundle from the latest create_world, edit_world, retry_world or actual Editor context result. Keep project, scene, assets and prefabs unchanged; prefabs is an object keyed by prefab ID, including {} when empty. Never replace or omit document sections.',
   properties: {
-    project: { type: 'object' },
-    scene: { type: 'object' },
-    assets: { type: 'object' },
+    project: { type: 'object', additionalProperties: true },
+    scene: { type: 'object', additionalProperties: true },
+    assets: { type: 'object', additionalProperties: true },
     prefabs: { type: 'object', additionalProperties: { type: 'object' } },
   },
   required: ['project', 'scene', 'assets', 'prefabs'],
@@ -54,7 +54,7 @@ const bundleInputSchema = {
 const tools = [
   {
     "name": "open_studio",
-    "description": "Show the shared Studio Editor. To display the conversation project, automatically carry bundle, revision, operationId and baseHash from the latest result. No arguments starts a new saved project; mode resume shows the local library. projectId alone opens a project already saved in the same browser. IDs are not server retrieval keys. Show the final result once rather than opening each intermediate edit. Editor startup is not required for document edits. Internally carry the latest complete bundle, revision, projectId, operationId and baseHash from the previous tool result in this conversation. Pass bundle and revision to edit_world without asking the user to copy JSON. Continue create_world -> edit_world without waiting for UI receipts or PNGs. After editing, call open_studio or capture_scene_view with the latest result to display it once. Sites stores no projects or assets. Conversation data is not proof of browser saving or display. Report document editing, browser saving, Studio display and image capture separately. Claim displayed only after a matching studioDelivery receipt; claim image confirmation only after inspecting a real PNG. Retry the original complete result without rerunning edits or overwriting later work.",
+    "description": "Show the shared Studio Editor. To display the conversation project, automatically carry bundle, revision, operationId and baseHash from the latest result. No arguments starts a new saved project; mode resume shows the local library. projectId alone opens a project already saved in the same browser. IDs are not server retrieval keys. Show the final result once rather than opening each intermediate edit. Editor startup is not required for document edits. Internally carry the latest complete bundle, revision, projectId, operationId and baseHash from the previous tool result in this conversation. Pass bundle and revision to edit_world without asking the user to copy JSON. Continue create_world -> edit_world without waiting for UI receipts or PNGs. After editing, call show_world or capture_scene_view with the latest result to display it once. Sites stores no projects or assets. Conversation data is not proof of browser saving or display. Report document editing, browser saving, Studio display and image capture separately. Claim displayed only after a matching studioDelivery receipt; claim image confirmation only after inspecting a real PNG. Retry the original complete result without rerunning edits or overwriting later work.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -99,7 +99,8 @@ const tools = [
     },
     "_meta": {
       "ui": {
-        "resourceUri": "ui://xrift-studio/worlds-v17"
+        "resourceUri": UI_URI,
+        "visibility": ["app"]
       },
       "openai/ui": {
         "entrypoints": [
@@ -110,6 +111,24 @@ const tools = [
       }
     },
     "title": "XRift Studio"
+  },
+  {
+    name: 'show_world',
+    description: 'Display the exact conversation result in Studio. Required: copy the complete bundle, revision, operationId and baseHash returned by create_world, edit_world or retry_world. Never replace the bundle with IDs, empty objects or a summary. Missing state is an error: do not create another project or open a local project instead. ' + deliveryDescription,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        bundle: bundleInputSchema,
+        revision: { type: 'integer', minimum: 0 },
+        operationId: { type: 'string', pattern: '^[A-Za-z0-9-]{1,120}$' },
+        baseHash: { type: ['string', 'null'] },
+      },
+      required: ['bundle', 'revision', 'operationId', 'baseHash'],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    _meta: { ui: { resourceUri: UI_URI } },
+    title: '作品を表示',
   },
   {
     "name": "capture_scene_view",
@@ -142,7 +161,7 @@ const tools = [
     },
     "_meta": {
       "ui": {
-        "resourceUri": "ui://xrift-studio/worlds-v17"
+        "resourceUri": UI_URI
       }
     }
   },
@@ -162,7 +181,7 @@ const tools = [
     },
     "_meta": {
       "ui": {
-        "resourceUri": "ui://xrift-studio/worlds-v17"
+        "resourceUri": UI_URI
       }
     }
   },
@@ -188,7 +207,7 @@ const tools = [
     },
     "_meta": {
       "ui": {
-        "resourceUri": "ui://xrift-studio/worlds-v17"
+        "resourceUri": UI_URI
       }
     }
   },
@@ -308,7 +327,7 @@ const tools = [
   },
   {
     "name": "create_world",
-    "description": "Create a new conversation project even when no Editor is open or activeProjectId is null. Omitted name creates a new world. Returns the full bundle and revision for immediate editing. Does not open a view or save to Sites. After editing, display the latest result with open_studio or capture_scene_view. Editor startup is not required for document edits. Internally carry the latest complete bundle, revision, projectId, operationId and baseHash from the previous tool result in this conversation. Pass bundle and revision to edit_world without asking the user to copy JSON. Continue create_world -> edit_world without waiting for UI receipts or PNGs. After editing, call open_studio or capture_scene_view with the latest result to display it once. Sites stores no projects or assets. Conversation data is not proof of browser saving or display. Report document editing, browser saving, Studio display and image capture separately. Claim displayed only after a matching studioDelivery receipt; claim image confirmation only after inspecting a real PNG. Retry the original complete result without rerunning edits or overwriting later work.",
+    "description": "Create a new conversation project even when no Editor is open or activeProjectId is null. Omitted name creates a new world. Returns the full bundle and revision for immediate editing. Does not open a view or save to Sites. After editing, display the latest result with show_world or capture_scene_view. Editor startup is not required for document edits. Internally carry the latest complete bundle, revision, projectId, operationId and baseHash from the previous tool result in this conversation. Pass bundle and revision to edit_world without asking the user to copy JSON. Continue create_world -> edit_world without waiting for UI receipts or PNGs. After editing, call show_world or capture_scene_view with the latest result to display it once. Sites stores no projects or assets. Conversation data is not proof of browser saving or display. Report document editing, browser saving, Studio display and image capture separately. Claim displayed only after a matching studioDelivery receipt; claim image confirmation only after inspecting a real PNG. Retry the original complete result without rerunning edits or overwriting later work.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -329,7 +348,7 @@ const tools = [
   },
   {
     "name": "edit_world",
-    "description": "Edit the latest conversation project without opening the Editor. Automatically carry bundle and revision from the previous create_world/edit_world or actual manual-editor context. Keep projectId stable and use expectedRevision to guard conflicts. Up to 200 original Studio operations in order; ref on creation and $ref in later arguments. Each operation advances internal revision but the batch advances the result revision once. Errors discard partial results. No source-file bytes, script execution or publication. Return the complete next bundle without opening a view. Editor startup is not required for document edits. Internally carry the latest complete bundle, revision, projectId, operationId and baseHash from the previous tool result in this conversation. Pass bundle and revision to edit_world without asking the user to copy JSON. Continue create_world -> edit_world without waiting for UI receipts or PNGs. After editing, call open_studio or capture_scene_view with the latest result to display it once. Sites stores no projects or assets. Conversation data is not proof of browser saving or display. Report document editing, browser saving, Studio display and image capture separately. Claim displayed only after a matching studioDelivery receipt; claim image confirmation only after inspecting a real PNG. Retry the original complete result without rerunning edits or overwriting later work.",
+    "description": "Edit the latest conversation project without opening the Editor. Automatically carry bundle and revision from the previous create_world/edit_world or actual manual-editor context. Keep projectId stable and use expectedRevision to guard conflicts. Up to 200 original Studio operations in order; ref on creation and $ref in later arguments. Each operation advances internal revision but the batch advances the result revision once. Errors discard partial results. No source-file bytes, script execution or publication. Return the complete next bundle without opening a view. Editor startup is not required for document edits. Internally carry the latest complete bundle, revision, projectId, operationId and baseHash from the previous tool result in this conversation. Pass bundle and revision to edit_world without asking the user to copy JSON. Continue create_world -> edit_world without waiting for UI receipts or PNGs. After editing, call show_world or capture_scene_view with the latest result to display it once. Sites stores no projects or assets. Conversation data is not proof of browser saving or display. Report document editing, browser saving, Studio display and image capture separately. Claim displayed only after a matching studioDelivery receipt; claim image confirmation only after inspecting a real PNG. Retry the original complete result without rerunning edits or overwriting later work.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -480,7 +499,7 @@ const tools = [
   },
   {
     "name": "retry_world",
-    "description": "Restore the same conversation result without re-executing changes. Automatically pass original operationId, bundle, revision and baseHash. No server storage. Preserve later work when retrying an older operation. The browser may additionally recover a known operation locally. Editor startup is not required for document edits. Internally carry the latest complete bundle, revision, projectId, operationId and baseHash from the previous tool result in this conversation. Pass bundle and revision to edit_world without asking the user to copy JSON. Continue create_world -> edit_world without waiting for UI receipts or PNGs. After editing, call open_studio or capture_scene_view with the latest result to display it once. Sites stores no projects or assets. Conversation data is not proof of browser saving or display. Report document editing, browser saving, Studio display and image capture separately. Claim displayed only after a matching studioDelivery receipt; claim image confirmation only after inspecting a real PNG. Retry the original complete result without rerunning edits or overwriting later work.",
+    "description": "Restore the same conversation result without re-executing changes. Automatically pass original operationId, bundle, revision and baseHash. No server storage. Preserve later work when retrying an older operation. The browser may additionally recover a known operation locally. Editor startup is not required for document edits. Internally carry the latest complete bundle, revision, projectId, operationId and baseHash from the previous tool result in this conversation. Pass bundle and revision to edit_world without asking the user to copy JSON. Continue create_world -> edit_world without waiting for UI receipts or PNGs. After editing, call show_world or capture_scene_view with the latest result to display it once. Sites stores no projects or assets. Conversation data is not proof of browser saving or display. Report document editing, browser saving, Studio display and image capture separately. Claim displayed only after a matching studioDelivery receipt; claim image confirmation only after inspecting a real PNG. Retry the original complete result without rerunning edits or overwriting later work.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -514,7 +533,7 @@ const tools = [
     },
     "_meta": {
       "ui": {
-        "resourceUri": "ui://xrift-studio/worlds-v17"
+        "resourceUri": UI_URI
       }
     }
   }
@@ -524,6 +543,14 @@ const tools = [
   return { ...tool, icons, securitySchemes, _meta: { ...tool._meta, securitySchemes } };
 });
 export async function callTool(name: string, args: Record<string, unknown>): Promise<Record<string, any>> {
+  if (name === 'show_world') {
+    if (!args.bundle || !Number.isSafeInteger(args.revision) || Number(args.revision) < 0 ||
+        typeof args.operationId !== 'string' || !(args.baseHash === null || typeof args.baseHash === 'string')) {
+      throw new Error('conversation_state_required: 表示する作品を特定できません。直前のcreate_world、edit_worldまたはretry_worldの完全なbundle、revision、operationId、baseHashを内部で引き継いでください。別作品の作成や保存済み作品の代用はしないでください。');
+    }
+    operationId(args.operationId);
+    return callTool('open_studio', args);
+  }
   if (name === 'open_studio') {
     if (args.bundle) {
       if (!Number.isSafeInteger(args.revision) || Number(args.revision) < 0) throw new Error('revisionが不正です');

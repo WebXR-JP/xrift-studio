@@ -15,7 +15,7 @@ description: XRift Studioで会話から3Dワールドを新規制作したり�
 
 床、SpawnPoint、配置する物の寸法・材質・照明を整える。入手していない画像やモデルの参照は作らない。素材ファイルは利用者がAssetsから取り込む。会話の添付素材が自動転送されたとは扱わない。
 
-作成・追編集のツールは画面を開かない。最後に`open_studio`または`capture_scene_view`へ最新のbundle・revision・operationId・baseHashを内部で渡し、共通Editorへ一度だけ取り込む。中間結果ごとに別のエディターを表示しない。
+作成・追編集のツールは画面を開かない。最後に`show_world`または`capture_scene_view`へ最新のbundle・revision・operationId・baseHashを内部で渡し、共通Editorへ一度だけ取り込む。中間結果ごとに別のエディターを表示しない。
 
 ## 保存と画面の確認
 
@@ -27,4 +27,4 @@ Sitesはdocument JSONを一時的に処理するだけで、作品・素材・�
 
 復旧は`retry_world`へ会話内の元の`operationId`、`bundle`、`revision`、`baseHash`を内部で渡す。変更操作を再実行して重複させない。古い操作を再送してその後の編集を巻き戻さない。ブラウザ内の未完了操作も再確認できる。Sitesに保存された状態からの復元とは説明しない。
 
-`open_studio`は新規エディターへ入る。保存済み作品はprojectId、一覧はmode: resumeで開く。作品ごとの`/editor/{projectId}`、新規作成の`/new`も共通エディターにつながる。保存済み作品のURLは同じブラウザの保存領域が必要。取り込み・素材追加・書き出しは通常版と同じ場所を使う。長い説明や確認ダイアログを制作画面に重ねない。スマホは全画面を強制せず、対応するhostで会話内表示と広いEditorを切り替える。
+会話の表示は`show_world`に完全なbundle、revision、operationId、baseHashを渡す。引数が欠けたら会話内の直前の結果を引き継ぎ、別の作品を作って代用しない。`open_studio`はアプリ専用のグローバル入口で、会話の表示には使わない。保存済み作品は一覧または作品ID付きリンクから開く。作品ごとの`/editor/{projectId}`、新規作成の`/new`も共通エディターにつながる。保存済み作品のURLは同じブラウザの保存領域が必要。取り込み・素材追加・書き出しは通常版と同じ場所を使う。長い説明や確認ダイアログを制作画面に重ねない。スマホは全画面を強制せず、対応するhostで会話内表示と広いEditorを切り替える。

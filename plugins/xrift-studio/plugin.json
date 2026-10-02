@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "xrift-studio",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Create, import and edit XRift Studio 3D worlds in ChatGPT.",
   "author": {
     "name": "Ryuto Haga"
@@ -26,7 +26,7 @@
         "termsOfServiceURL": "https://xrift-studio-pr124.kkkkkkasdad.chatgpt.site/terms.html"
       },
       "publication": {
-        "release_notes": "審査用の正例5件・負例3件をパッケージに追加し、日本語の紹介文を翻訳欄に保存しました。会話内の同じ作品への追編集と同一結果の再送、ブラウザ保存・画面反映・画像受信の確認方法を明記しました。Sites管理のOAuthとMCP URLは変更していません。",
+        "release_notes": "会話の表示をshow_worldへ分離し、完全なbundle・revision・operationId・baseHashを必須にしました。引数不足を別作品の表示や新規作成で代用しません。アプリ専用のグローバル入口と既存リンクを維持し、正例5件・負例3件と日本語翻訳を保持します。Sites管理のOAuthとMCP URLは変更していません。",
         "translations": {
           "ja-JP": {
             "subtitle": "会話で3Dワールドを作る",
@@ -58,8 +58,8 @@
             {
               "description": "直前の作成・編集結果を、MCP Appsに対応するChatGPTの表示領域へ取り込む。ブラウザ保存と描画は実際のアプリ報告で確認する。",
               "prompt": "いま作ったワールドをStudioで開いて、Scene Viewの画像を見せてください。保存と表示を確認できたかも教えてください。",
-              "tools_triggered": "open_studio, capture_scene_view; get_editor_context または get_operation_status（状態確認が必要な場合）",
-              "expected_behavior": "最新結果のbundle、revision、operationId、baseHashをopen_studioまたはcapture_scene_viewへ内部で渡し、対応するChatGPTのMCP Appに同じprojectIdの共通Editorを表示する。実際のScene ViewのPNGを受け取り、緑の立方体とオレンジ色の円柱を確認する。同じoperationId・projectId・revision・hashのstudioDelivery報告を根拠に、データ編集、ブラウザ保存、画面反映、画像受信の状態を別々に伝える。Editorの起動・描画・報告が失敗した場合は未確認の項目と再確認方法を明記し、PNGを見ていなければ画像確認済みと言わない。主な成功経路の審査では実画面とPNGの確認まで必要。"
+              "tools_triggered": "show_world, capture_scene_view; get_editor_context または get_operation_status（状態確認が必要な場合）",
+              "expected_behavior": "最新結果のbundle、revision、operationId、baseHashをshow_worldまたはcapture_scene_viewへ内部で渡し、対応するChatGPTのMCP Appに同じprojectIdの共通Editorを表示する。実際のScene ViewのPNGを受け取り、緑の立方体とオレンジ色の円柱を確認する。同じoperationId・projectId・revision・hashのstudioDelivery報告を根拠に、データ編集、ブラウザ保存、画面反映、画像受信の状態を別々に伝える。Editorの起動・描画・報告が失敗した場合は未確認の項目と再確認方法を明記し、PNGを見ていなければ画像確認済みと言わない。主な成功経路の審査では実画面とPNGの確認まで必要。"
             },
             {
               "description": "直前の編集結果のoperationId、bundle、revision、baseHashを会話に残す。再送対象の後に新しい編集を行わない。",
@@ -70,7 +70,7 @@
           ],
           "negative": [
             {
-              "description": "クラウド保存と端末間同期は提供しない。作品がサーバーにあると仮定してcreate_world、edit_world、open_studio、retry_worldを呼ばない。元ブラウザから.xriftstudioを書き出して取り込む方法を案内する。",
+              "description": "クラウド保存と端末間同期は提供しない。作品がサーバーにあると仮定してcreate_world、edit_world、show_world、retry_worldを呼ばない。元ブラウザから.xriftstudioを書き出して取り込む方法を案内する。",
               "prompt": "別の端末で作ったワールドをクラウドから探して、ここへ自動同期してください。"
             },
             {
