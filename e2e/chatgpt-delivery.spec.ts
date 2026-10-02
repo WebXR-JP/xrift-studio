@@ -1,5 +1,23 @@
 import { expect, test } from '@playwright/test';
 
+const errorsByPage = new WeakMap<object,string[]>();
+test.beforeEach(async ({ page }) => {
+  const errors:string[]=[];errorsByPage.set(page,errors);
+  page.on('pageerror',error=>errors.push(error.message));
+});
+test.afterEach(async ({ page },testInfo) => {
+  if(testInfo.status===testInfo.expectedStatus)return;
+  const diagnostics = {
+    pageErrors:errorsByPage.get(page),
+    evidence:await page.evaluate(()=>(window as unknown as {studioTestEvidence?:unknown}).studioTestEvidence).catch(()=>null),
+    receipts:await page.locator('#receipts').textContent().catch(()=>null),
+    editorStatuses:await page.frameLocator('iframe').getByRole('status').allTextContents().catch(()=>[]),
+  };
+  const body=JSON.stringify(diagnostics,null,2);
+  console.error('Editor command diagnostics:',body);
+  await testInfo.attach('editor-command-diagnostics.json',{body,contentType:'application/json'});
+});
+
 test('the real Studio applies conversation edits and reports a saved Scene View', async ({ page }) => {
   // Playwright creates an isolated browser context; never use an owner's projects.
   await page.goto('/delivery-test.html?build=1');
@@ -12,6 +30,8 @@ test('the real Studio applies conversation edits and reports a saved Scene View'
   await expect.poll(async () => (await receipts()).some(item => item.status === 'verified' && item.saved && item.rendered && item.hasScenePng), { timeout: 120_000 }).toBe(true);
   const first = (await receipts()).find(item => item.status === 'verified')!;
   expect(first.projectId).toBe('project-mcp-browser-create-test');
+  await page.locator('#context').click();
+  await expect.poll(async () => (await receipts()).some(item => item.projectId === first.projectId && (item as unknown as {canEditProject?:boolean}).canEditProject === true), {timeout:45_000}).toBe(true);
   await page.locator('#edit').click();
   await expect.poll(async () => (await receipts()).some(item => item.projectId === first.projectId && item.revision > first.revision && item.status === 'verified' && item.hasScenePng), { timeout: 120_000 }).toBe(true);
   const edited = (await receipts()).find(item => item.projectId === first.projectId && item.revision > first.revision && item.status === 'verified')!;
@@ -42,8 +62,9 @@ test('manual editor context remains browser-local and never uploads documents', 
   await editor.getByLabel(/^ChatGPT /).click();
   const share=editor.getByRole('button',{name:'会話に編集対象を渡す'});
   await expect(share).toBeEnabled({timeout:120_000});await share.click();
-  await expect(editor.getByRole('status')).toContainText('現在の編集対象を会話に伝えました',{timeout:30_000});
+  await expect(editor.getByText('現在の編集対象を会話に伝えました。変更内容を入力してください。',{exact:true})).toBeVisible({timeout:45_000});
   const completed=await evidence();
   expect(completed.uploads).toHaveLength(0);expect(completed.toolCalls).toHaveLength(0);
+  expect(completed.contexts.at(-1)?.canEditProject).toBe(true);
   for(const context of completed.contexts){expect(context).not.toHaveProperty('bundle');expect(context).not.toHaveProperty('snapshotId');}
 });

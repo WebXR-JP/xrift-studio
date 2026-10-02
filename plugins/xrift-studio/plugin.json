@@ -46,8 +46,8 @@
             {
               "description": "同じ会話で、正例1のEditorから実際の作成・保存報告が返っている。対象IDと最新revisionを使って同じ作品へ追編集する。",
               "prompt": "そのワールドの原点に立方体を1つ追加してください。",
-              "tools_triggered": "describe_document_tool, edit_world",
-              "expected_behavior": "describe_document_toolでcreate_primitiveのschemaを読む。edit_worldに実際のEditor報告のprojectId、expectedRevision、一意のoperationId、create_primitiveのshape:\"box\"、position:[0,0,0]を渡す。Editorは同じ作品へEntityを1つ追加し、成功バッチごとにrevisionを1段階進める。実行報告を待ち、MCPの受付を編集成功と扱わない。作品全文を会話やMCPへ送らない。"
+              "tools_triggered": "get_editor_context, describe_document_tool, edit_world",
+              "expected_behavior": "get_editor_contextで素材プレビュー生成とブラウザ保存が完了した現在の対象ID・revisionを確認する。describe_document_toolでcreate_primitiveのschemaを読む。edit_worldに実際のEditor報告のprojectId、expectedRevision、一意のoperationId、create_primitiveのshape:\"box\"、position:[0,0,0]を渡す。Editorは同じ作品へEntityを1つ追加し、成功バッチごとにrevisionを1段階進める。実行報告を待ち、MCPの受付を編集成功と扱わない。作品全文を会話やMCPへ送らない。"
             },
             {
               "description": "直前のEditor報告のprojectIdとrevisionを引き継ぐ。1つのバッチ内で新しく作ったEntityを参照する。",

@@ -9,7 +9,7 @@ MCPは小さな操作をEditorへ渡すだけで、作品を生成・編集・�
 
 新規制作は`create_world({name, operationId})`で依頼する。操作ごとに一意のoperationIdを付け、同じ引数の再送だけで同じIDを使う。サーバーの応答は受付であり、作成・保存・表示の成功ではない。Editorから実際のstudioDeliveryまたはstudioContextが届くまで、依存する追編集を実行しない。未接続や閉じたEditorでは、実行済みと伝えない。
 
-追編集は`edit_world({projectId, expectedRevision, operationId, operations})`を使う。実際のEditor報告にある対象IDとrevisionを指定する。`describe_document_tool`で操作のschemaを確認し、operationsにtoolとargumentsを並べる。操作ごとのprojectId・sceneId・expectedRevisionはEditorが現在の作品から補う。最大200操作を一つのバッチで処理し、失敗したバッチでは作品を変えない。`ref`と後続の`$ref`で作成したEntityを参照できる。
+新規作成の実行報告を受けた後は、get_editor_contextで素材プレビュー生成と保存が落ち着いた現在の対象ID・revisionを確認する。追編集は`edit_world({projectId, expectedRevision, operationId, operations})`を使う。実際のEditor報告にある対象IDとrevisionを指定する。`describe_document_tool`で操作のschemaを確認し、operationsにtoolとargumentsを並べる。操作ごとのprojectId・sceneId・expectedRevisionはEditorが現在の作品から補う。最大200操作を一つのバッチで処理し、失敗したバッチでは作品を変えない。`ref`と後続の`$ref`で作成したEntityを参照できる。
 
 create_primitiveの図形指定はshapeで、typeやprimitive_typeではない。材質やEntityのIDは、実際のEditorで実行したlist_assets・list_entitiesなどの結果から得る。schemaに合わせて引数を修正し、実行されていない失敗を直した場合だけ新しいoperationIdを使う。結果が不明ならget_operation_statusで確認し、成功済みの編集を別IDで繰り返さない。
 

@@ -112,7 +112,10 @@ function Application() {
         try { await report(result, 'failed', message, undefined, verification); } catch { /* Keep the pending result and unsent receipt. */ }
       }
       if (verification?.applied && verification.saved) await settle(result, verification);
-    } finally { setChecking(false); applying.current = false; }
+    } finally {
+      setChecking(false); applying.current = false;
+      if (current.current && hostReady.current) await context(current.current, bridge.current?.currentBundle()).catch(() => {});
+    }
   }
   async function settle(result: Result, verification: StudioVerification) {
     const next = settleStudioData(recovery.current, result, verification);
@@ -123,13 +126,14 @@ function Application() {
   async function editorContext(next: Local | null, bundle = next ? bundleFrom(next.documents) : undefined) {
     if (!next || !bundle) return { projectId: null, revision: null, canEditProject: false };
     return { projectId: bundle.project.projectId, sceneId: bundle.scene.sceneId, revision: next.revision,
-      name: bundle.project.metadata.name, canEditProject: !!bridge.current && !operation.current && !applying.current,
+      name: bundle.project.metadata.name, canEditProject: !!bridge.current && !operation.current && !applying.current && !latestResult.current,
       entityCount: Object.keys(bundle.scene.entities).length,
       entities: Object.values(bundle.scene.entities).slice(0,50).map(entity => ({ id: entity.id, name: entity.name })),
       contextTruncated: Object.keys(bundle.scene.entities).length > 50 };
   }
-  async function context(next: Local | null, bundle = next ? bundleFrom(next.documents) : undefined) {
+  async function context(next: Local | null, bundle = next ? bundleFrom(next.documents) : undefined, prepared = false) {
     const value = await editorContext(next,bundle);
+    if (prepared && next && bridge.current && !applying.current && !latestResult.current) value.canEditProject = true;
     await app.updateModelContext({ content: [{ type:'text', text: next
       ? 'このEditorのprojectIdとrevisionをedit_worldへ渡してください。操作はEditorで実行し、作品全体をMCPへ送ったり一時保存したりしません。実際の実行報告を待ってから次の編集へ進んでください。'
       : '現在の編集対象はありません。create_worldで新規制作を依頼し、Editorからの実行報告を待ってください。' }], structuredContent:value });
@@ -147,7 +151,7 @@ function Application() {
       await writes.current;
       if (current.current?.path !== selected.path || bridge.current !== editor) throw new Error('編集中の作品が切り替わりました');
       operation.current = previousOperation;
-      return await context(current.current,editor.currentBundle());
+      return await context(current.current,editor.currentBundle(),true);
     } finally { capturingSnapshot.current = false; operation.current = previousOperation; setChecking(false); }
   }
   async function captureSceneViewForConversation(operationId?: string) {

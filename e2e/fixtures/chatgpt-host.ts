@@ -37,6 +37,7 @@ async function connect() {
   frame.src=new URLSearchParams(location.search).has('anonymous-entry')?'/e2e/fixtures/chatgpt-entry.html':new URLSearchParams(location.search).has('build')?'/dist/client/chatgpt.html':'/chatgpt.html';
 }
 document.querySelector('#create')!.addEventListener('click',()=>{void send('create_world',{name:'反映確認・検証専用',operationId:'browser-create-test'});});
+document.querySelector('#context')!.addEventListener('click',()=>{void send('get_editor_context',{});});
 document.querySelector('#edit')!.addEventListener('click',()=>{
   if(typeof currentContext.projectId!=='string'||typeof currentContext.revision!=='number')throw new Error('Editor context is unavailable');
   lastEdit={name:'edit_world',arguments:{projectId:currentContext.projectId,expectedRevision:currentContext.revision,operationId:'browser-edit-test',operations:[{tool:'create_primitive',ref:'trunk',arguments:{shape:'cylinder',position:[-2,1,0]}},{tool:'update_transform',arguments:{entityId:'$trunk',scale:[0.3,2,0.3]}}]}};

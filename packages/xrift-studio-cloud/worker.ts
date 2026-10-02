@@ -540,7 +540,7 @@ const tools = [
   }
 ].map(tool => {
   const descriptions: Record<string,string> = {
-    create_world: 'Ask the Editor to create a new local world. Supply a stable unique operationId. The response only dispatches a command; await its actual projectId/revision receipt before editing. ',
+    create_world: 'Ask the Editor to create a new local world. Supply a stable unique operationId. The response only dispatches a command; await its actual projectId/revision receipt, then get_editor_context for the stable current revision before editing. ',
     edit_world: 'Ask the current Editor to apply 1–200 operations atomically to projectId at expectedRevision. Read describe_document_tool for exact operation arguments. ref/$ref addresses newly created objects. Await the actual Editor result, not the dispatch summary. ',
     show_world: 'Open the specified project already saved in this browser. Missing projects are errors; never create a substitute. ',
     capture_scene_view: 'Ask the actual Editor to capture the specified current project. Confirm an actual PNG before reporting image success. ',

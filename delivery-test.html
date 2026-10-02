@@ -1,6 +1,6 @@
 <!doctype html><html lang="ja"><head><meta charset="utf-8"><title>XRift Studio 反映検証専用</title></head>
 <body style="margin:0;font-family:system-ui"><header style="padding:8px;background:#eee">検証専用ホスト（実際のStudioとMCPの作成処理を使用）
-<button id="create">検証ワールドを作成</button><button id="edit">立方体を移動</button><button id="retry">同じ結果を再送</button><button id="duplicate">同じ編集コマンドを再送</button><button id="stale">古いrevisionを送信</button><button id="reload">Studioを開き直す</button>
+<button id="create">検証ワールドを作成</button><button id="context">現在の編集対象を確認</button><button id="edit">立方体を移動</button><button id="retry">同じ結果を再送</button><button id="duplicate">同じ編集コマンドを再送</button><button id="stale">古いrevisionを送信</button><button id="reload">Studioを開き直す</button>
 <button id="open-target">作成した作品を指定して開く</button><button id="deep-target">作品へのリンクを受信</button><button id="missing-target">見つからない作品を指定</button><label><input id="reject" type="checkbox">会話への報告失敗を再現</label><span id="connection">接続待ち</span></header>
 <pre id="receipts" style="max-height:100px;overflow:auto;margin:0;font-size:11px"></pre><iframe title="XRift Studio 検証" style="border:0;width:100%;height:calc(100vh - 140px)"></iframe>
 <script type="module" src="/e2e/fixtures/chatgpt-host.ts"></script></body></html>
