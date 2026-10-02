@@ -4,6 +4,8 @@ import {
   extractOpenBrushMaterialSlots,
   isOpenBrushMaterialShader,
   prepareOpenBrushGltfSource,
+  resolveOpenBrushEditorBrushBaseUrl,
+  resolveOpenBrushBuiltinTextureUrl,
 } from "./open-brush";
 import { OPEN_BRUSH_CATALOG } from "./open-brush-catalog";
 import { applyOpenBrushCatalogInstall } from "./external-store";
@@ -13,6 +15,14 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { createOpenBrushMaterialExtension, readOpenBrushPbrFallback, type OpenBrushMaterialExtension } from "../../../packages/xrift-studio-runtime/src/open-brush/material-extension";
 
 export async function runOpenBrushFixtureAssertions(): Promise<void> {
+  for (const [page, base, expected] of [
+    ["https://example.invalid/editor.html", "/", "https://example.invalid/visual-editor/openbrush/brushes/"],
+    ["https://example.invalid/studio/editor.html", "./", "https://example.invalid/studio/visual-editor/openbrush/brushes/"],
+    ["https://example.invalid/studio/editor.html", "/studio/", "https://example.invalid/studio/visual-editor/openbrush/brushes/"],
+  ]) {
+    assert(resolveOpenBrushEditorBrushBaseUrl(page, base) === expected, "Bundled brush shaders must resolve under the deployed application base");
+    assert(resolveOpenBrushBuiltinTextureUrl("openbrush:Brush/main.png", page, base) === `${expected}Brush/main.png`, "Builtin brush textures must use the same deployment base as shaders");
+  }
   await assertOpenBrushLoaderAcceptsOptionalGltfMaterials();
   await assertUnityExportBrushMaterials();
   const document = {

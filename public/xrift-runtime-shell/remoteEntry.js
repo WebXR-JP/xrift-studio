@@ -3,7 +3,7 @@ const exportSet = /* @__PURE__ */ new Set(["Module", "__esModule", "default", "_
 let moduleMap = {
   "./World": () => {
     dynamicLoadingCss([], false, "./World");
-    return __federation_import("./__federation_expose_World-SOM3NPGw.js").then((module) => Object.keys(module).every((item) => exportSet.has(item)) ? () => module.default : () => module);
+    return __federation_import("./__federation_expose_World-BP_wbAIi.js").then((module) => Object.keys(module).every((item) => exportSet.has(item)) ? () => module.default : () => module);
   }
 };
 const seen = {};

@@ -1,6 +1,7 @@
 import runtimePackageManifest from "../../../packages/xrift-studio-runtime/package.json";
 import { isRecord } from "../json-guards";
 import { Euler, Matrix4, Quaternion, Vector3 } from "three";
+import { catalogPublicAssetUrl } from "./catalog-public-url";
 import {
   permissionDomainForUrl,
   type PublishPermissionRequirement,
@@ -26,10 +27,12 @@ export const OPEN_BRUSH_EDITOR_BRUSH_BASE_PATH =
 export const OPEN_BRUSH_BUILTIN_TEXTURE_KEY_PREFIX = "openbrush:";
 
 export function resolveOpenBrushEditorBrushBaseUrl(
-  origin = typeof window === "undefined" ? undefined : window.location.origin,
+  pageUrl = typeof window === "undefined" ? undefined : window.location.href,
+  baseUrl: string = import.meta.env?.BASE_URL ?? "/",
 ): string {
-  if (!origin || origin === "null") return OPEN_BRUSH_EDITOR_BRUSH_BASE_PATH;
-  return new URL(OPEN_BRUSH_EDITOR_BRUSH_BASE_PATH, `${origin}/`).href;
+  const path = catalogPublicAssetUrl(OPEN_BRUSH_EDITOR_BRUSH_BASE_PATH, baseUrl);
+  if (!pageUrl || pageUrl === "null") return path;
+  return new URL(path, pageUrl).href;
 }
 
 /**
@@ -75,7 +78,8 @@ export function openBrushBuiltinTextureKey(
 /** Resolves a whitelisted OpenBrush Texture Asset source to the bundled file. */
 export function resolveOpenBrushBuiltinTextureUrl(
   key: string,
-  origin = typeof window === "undefined" ? undefined : window.location.origin,
+  pageUrl = typeof window === "undefined" ? undefined : window.location.href,
+  baseUrl: string = import.meta.env?.BASE_URL ?? "/",
 ): string | undefined {
   if (!key.startsWith(OPEN_BRUSH_BUILTIN_TEXTURE_KEY_PREFIX)) return undefined;
   const relative = key.slice(OPEN_BRUSH_BUILTIN_TEXTURE_KEY_PREFIX.length);
@@ -86,8 +90,7 @@ export function resolveOpenBrushBuiltinTextureUrl(
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/");
-  const path = `${OPEN_BRUSH_EDITOR_BRUSH_BASE_PATH}${encodedPath}`;
-  return origin && origin !== "null" ? new URL(path, origin).href : path;
+  return `${resolveOpenBrushEditorBrushBaseUrl(pageUrl, baseUrl)}${encodedPath}`;
 }
 
 /**

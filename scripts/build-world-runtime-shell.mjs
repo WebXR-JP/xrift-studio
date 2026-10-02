@@ -188,7 +188,12 @@ async function main() {
     await run("node", ["scripts/prepare-readable-three-vrm.mjs", "--check"], repoRoot);
     await copyReadableVrm(repoRoot, projectDir);
     const viteConfigPath = path.join(projectDir, "vite.config.ts");
-    await fs.writeFile(viteConfigPath, withReadableVrmAlias(await fs.readFile(viteConfigPath, "utf8")), "utf8");
+    const viteConfig = withReadableVrmAlias(await fs.readFile(viteConfigPath, "utf8"));
+    if (!/\bbuild:\s*\{/.test(viteConfig)) throw new Error("Template Vite build configuration is missing");
+    // A federated World runs inside the player's document. Vite's default
+    // module preloads resolve against that host instead of this world's URL.
+    // Native relative imports already load these chunks from the right origin.
+    await fs.writeFile(viteConfigPath, viteConfig.replace(/\bbuild:\s*\{/, "$&\n    modulePreload: false,"), "utf8");
 
     process.stdout.write("3/6 xrift-studio-runtime をパックしています\n");
     await run("pnpm", ["runtime:build"], repoRoot);

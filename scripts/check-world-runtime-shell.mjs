@@ -118,6 +118,12 @@ for (const marker of ["VRMC_materials_mtoon", "xriftVrm0CompatShade", "VRMLoader
 if (!exposedWorld.includes(shellManifestUrl)) {
   throw new Error(`Bundled Runtime shell must load the uploaded ${uploadedManifest} from the world root`);
 }
+if (!exposedWorld.includes("createOpenBrushMaterialExtension")) {
+  throw new Error("Bundled Runtime shell must use the editor's shared Open Brush material loader");
+}
+if (exposedWorld.includes("__vite__mapDeps")) {
+  throw new Error("Federated World chunks must load from the world origin without player-relative preloads");
+}
 const mountProps = exposedWorld.match(/\bjsx\w*\(XriftWorld,\s*\{([^}]+)\}\)/)?.[1];
 if (!mountProps || !/\bmanifest:\s*MANIFEST_URL\b/.test(mountProps) || !/\bphysics:\s*["']inherit["']/.test(mountProps)) {
   throw new Error("Bundled Runtime shell must mount XriftWorld in the XRift player Physics provider");

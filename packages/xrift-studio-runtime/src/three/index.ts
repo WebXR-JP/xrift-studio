@@ -63,6 +63,7 @@ import {
 
 import { detectTimeUniforms, stampObjectTimeUniforms } from "../shader-time.js";
 import { installMirrorReflectionInterval } from "../mirror-reflection.js";
+import { applyOpenBrushMaterialProperties } from "../open-brush/material-properties.js";
 import { createMToonMaterial, attachMToonOutlines, removeNativeMToonOutlines, type MToonSurfaceProperties } from "../mtoon-runtime.js";
 export { updateMToonMaterials } from "../mtoon-runtime.js";
 import {
@@ -357,12 +358,12 @@ export class XriftThreeLoader {
     );
     loader.setDRACOLoader(dracoLoader);
     if (asset.openBrush?.renderer === "three-icosa") {
-      const { GLTFGoogleTiltBrushMaterialExtension } = await import(
-        "three-icosa/dist/three-icosa.module.js"
+      const { createOpenBrushMaterialExtension } = await import(
+        "../open-brush/material-extension.js"
       );
       loader.register(
         (parser) =>
-          new GLTFGoogleTiltBrushMaterialExtension(
+          createOpenBrushMaterialExtension(
             parser,
             asset.openBrush!.brushBaseUrl,
           ),
@@ -605,6 +606,7 @@ export class XriftThreeLoader {
         component,
         input.manifest,
         input.materials,
+        input.textures,
       );
       applyModelPose(instance, component);
       instance.traverse((object) => {
@@ -1226,6 +1228,7 @@ function applyModelMaterials(
   component: Extract<XriftRuntimeComponent, { type: "mesh" }>,
   manifest: XriftRuntimeManifest,
   materials: ReadonlyMap<string, Material>,
+  textures: ReadonlyMap<string, Texture>,
 ): void {
   const asset =
     component.geometry.kind === "model"
@@ -1264,11 +1267,32 @@ function applyModelMaterials(
         materialAsset?.kind === "material" &&
         materialAsset.shader?.kind === "openbrush"
       ) {
-        return (
+        const instance = (
           loaded.sourceMaterials
             .get(materialAsset.shader.sourceMaterialIndex)
             ?.clone() ?? material
         );
+        const shaderTextures: Record<string, Texture> = {};
+        for (const [uniformName, binding] of Object.entries(materialAsset.shader.textureBindings ?? {})) {
+          const source = textures.get(binding.textureAssetId);
+          if (!source) continue;
+          const texture = source.clone();
+          // Brush GLSL performs its own color conversion, as in the editor.
+          texture.colorSpace = NoColorSpace;
+          shaderTextures[uniformName] = texture;
+        }
+        const properties = materialAsset.properties;
+        const pbr = asRecord(properties.pbrMetallicRoughness);
+        const factor = asNumberArray(pbr?.baseColorFactor, 4) ?? [1, 1, 1, 1];
+        applyOpenBrushMaterialProperties(instance, {
+          pbrMetallicRoughness: {
+            baseColorFactor: [factor[0]!, factor[1]!, factor[2]!, factor[3]!],
+            roughnessFactor: typeof pbr?.roughnessFactor === "number" ? pbr.roughnessFactor : 1,
+          },
+          alphaMode: properties.alphaMode === "MASK" || properties.alphaMode === "BLEND" ? properties.alphaMode : "OPAQUE",
+          alphaCutoff: typeof properties.alphaCutoff === "number" ? properties.alphaCutoff : 0.5,
+        }, shaderTextures);
+        return instance;
       }
       return (materialId ? materials.get(materialId) : undefined) ?? material;
     });

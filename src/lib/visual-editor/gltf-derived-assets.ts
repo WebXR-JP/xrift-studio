@@ -125,10 +125,13 @@ export async function expandGltfAssets(
 ): Promise<ExpandedGltfAssets> {
   const warnings: GltfDerivedAssetWarning[] = [];
   input = { ...input, json: await convertVrm0MaterialsForAuthoring(input.json, warnings) };
-  const images = input.openBrush ? [] : await extractImages(input, warnings);
-  const textureExpansion = input.openBrush
-    ? expandOpenBrushTextures(input, warnings)
-    : expandTextures(input, images, warnings);
+  const images = await extractImages(input, warnings);
+  const textureExpansion = expandTextures(input, images, warnings);
+  if (input.openBrush) {
+    const builtin = expandOpenBrushTextures(input, warnings);
+    textureExpansion.textures.push(...builtin.textures);
+    for (const [index, id] of builtin.textureAssetIds) textureExpansion.textureAssetIds.set(index, id);
+  }
   const materialAssets = expandMaterials(
     input,
     textureExpansion.textureAssetIds,
@@ -186,6 +189,8 @@ async function extractImages(
   const buffers = await resolveBuffers(input);
   const results: EmbeddedImage[] = [];
   for (const [index, candidate] of (input.json.images ?? []).entries()) {
+    const uri = stringValue(candidate.uri);
+    if (input.openBrush && uri && openBrushBuiltinTextureKey(uri)) continue;
     try {
       const decoded = await resolveImageBytes(candidate, input.json, buffers);
       const detected = detectImageFormat(decoded.bytes, decoded.mediaType);
@@ -284,6 +289,8 @@ function expandTextures(
 
   for (const [textureIndex, texture] of (input.json.textures ?? []).entries()) {
     const imageIndex = integerValue(texture.source);
+    const uri = imageIndex === undefined ? undefined : stringValue(input.json.images?.[imageIndex]?.uri);
+    if (input.openBrush && uri && openBrushBuiltinTextureKey(uri)) continue;
     const image = imageIndex === undefined ? undefined : imageByIndex.get(imageIndex);
     if (!image || imageIndex === undefined) {
       warnings.push({
@@ -356,6 +363,8 @@ function expandOpenBrushTextures(
     const image = imageIndex === undefined ? undefined : input.json.images?.[imageIndex];
     const sourceUri = image ? stringValue(image.uri) : undefined;
     const builtinKey = sourceUri ? openBrushBuiltinTextureKey(sourceUri) : undefined;
+    // Embedded pixels were expanded above through the standard glTF path.
+    if (image && (integerValue(image.bufferView) !== undefined || sourceUri?.startsWith("data:"))) continue;
     if (imageIndex === undefined || !image || !builtinKey) {
       warnings.push({
         code: "openbrush-texture-source-unavailable",

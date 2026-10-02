@@ -6,7 +6,7 @@ export const XRIFT_STUDIO_RUNTIME_SCHEMA_VERSION = "1.0.0" as const;
  * manifest, and the browser upload path refuses an older shell.
  */
 export const XRIFT_RUNTIME_CONTRACT_VERSION =
-  "2026-09-29-mtoon-vrm-publication-v1" as const;
+  "2026-10-03-openbrush-loader-v1" as const;
 
 export type XriftRuntimeDiagnostic = {
   severity: "warning" | "error";
@@ -359,6 +359,7 @@ export type XriftRuntimeAsset =
             brushGuid?: string;
             brushBaseUrl: string;
             sourceMaterialIndex: number;
+            textureBindings?: Record<string, { textureAssetId: string }>;
             sourceOverrides?: {
               vertexShader?: string;
               fragmentShader?: string;

@@ -269,6 +269,26 @@ export async function runGltfDerivedAssetFixtureAssertions(): Promise<void> {
     "OpenBrush sampler uniforms were not connected to Texture Assets",
   );
 
+  const mixedBrush = await expandGltfAssets({
+    json: {
+      ...json,
+      asset: { version: "2.0" },
+      images: [json.images![0], openBrushJson.images![1]],
+      textures: [{ source: 0 }, { source: 1 }],
+      materials: [{ name: "OilPaint (Instance)", pbrMetallicRoughness: { baseColorTexture: { index: 0 } }, normalTexture: { index: 1 } }],
+    },
+    modelBytes: glbBinaryFixture(image), sourceFormat: "glb",
+    modelAssetId: "model-mixed-brush", modelSourceHash: "d".repeat(64),
+    materialSlots: [{ slot: "material-0", name: "OilPaint (Instance)", sourceMaterialIndex: 0 }],
+    materialFolderId: "fixture-materials", textureFolderId: "fixture-textures", hashBytes: fixtureHash,
+    openBrush: { renderer: "three-icosa", rendererVersion: "three-icosa@fixture", extensionNames: [], brushNames: ["OilPaint"] },
+  });
+  assert(mixedBrush.warnings.length === 0, "Mixed embedded and legacy brush images must import without discarding textures");
+  assert(mixedBrush.textureAssets.length === 2 && mixedBrush.textureAssets[0].source.kind === "project" && mixedBrush.textureAssets[1].source.kind === "builtin", "Embedded brush images must remain project Texture Assets alongside builtin brush resources");
+  assert(mixedBrush.writes.length === 1 && mixedBrush.writes[0].bytes.length === image.length && mixedBrush.writes[0].bytes.every((value, index) => value === image[index]), "Embedded Open Brush pixels must retain their original bytes");
+  const mixedShader = mixedBrush.materialAssets[0].shader;
+  assert(mixedShader?.kind === "openbrush" && mixedShader.brushName === "OilPaint" && mixedShader.textureBindings?.u_MainTex?.textureAssetId === mixedBrush.textureAssets[0].id && mixedShader.textureBindings?.u_BumpMap?.textureAssetId === mixedBrush.textureAssets[1].id, "Both brush sampler references must survive the import transaction");
+
   const allExtensionsJson: GltfJson = {
     asset: { version: "2.0" },
     materials: [
