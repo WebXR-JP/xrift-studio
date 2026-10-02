@@ -1,14 +1,23 @@
 import {
   isTextureImportCompression,
+  loadTextureImportCompression,
+  loadTextureImportMaxSize,
+  saveTextureImportCompression,
+  saveTextureImportMaxSize,
+  TEXTURE_IMPORT_COMPRESSION_STORAGE_KEY,
+  TEXTURE_IMPORT_MAX_SIZE_STORAGE_KEY,
   isTextureImportMaxSize,
   textureImportSettingsPatch,
   DEFAULT_TEXTURE_IMPORT_MAX_SIZE,
   DEFAULT_TEXTURE_IMPORT_COMPRESSION,
 } from "./texture-import-defaults";
 import {
+  ASSET_MANIFEST_SCHEMA_VERSION,
   normalizeTextureImportSettings,
   type TextureAsset,
 } from "../../lib/visual-editor/asset-manifest";
+import { createAssetImportPlan, commitAssetImportPlan } from "../../lib/visual-editor/asset-import";
+import { readImageDimensions } from "../../lib/visual-editor/gltf-derived-assets";
 import { planTextureConversion } from "../../lib/visual-editor/texture-conversion";
 
 /**
@@ -16,11 +25,20 @@ import { planTextureConversion } from "../../lib/visual-editor/texture-conversio
  * Import設定へ写ることを確かめる。ここが崩れると、複数選択で取り込んだ
  * Textureだけ圧縮されない、といったサーフェス間の食い違いに戻る。
  */
-export function runTextureImportDefaultsFixtureAssertions(): void {
+export async function runTextureImportDefaultsFixtureAssertions(): Promise<void> {
   assertPatchShapes();
   assertPatchDrivesConversion();
   const defaults = textureImportSettingsPatch(DEFAULT_TEXTURE_IMPORT_MAX_SIZE, DEFAULT_TEXTURE_IMPORT_COMPRESSION);
-  assert(defaults?.resize?.mode === "max-size" && defaults.resize.maxSize === 1024 && defaults.compression?.format === "ktx2", "New imports must be bounded and GPU compressed before placement");
+  assert(defaults === undefined, "New imports must preserve source bytes without automatic resize or KTX2 compression");
+  const original: TextureAsset = {
+    id: "panorama", kind: "texture", name: "panorama", status: "ready",
+    source: { kind: "project", relativePath: "assets/textures/panorama.png" },
+    importMetadata: { sourceFormat: "png", mimeType: "image/png", byteLength: 8192, width: 4096, height: 2048 },
+    importSettings: normalizeTextureImportSettings(defaults),
+  };
+  assert(planTextureConversion(original) === null, "A full-size PNG panorama must not schedule a conversion by default");
+  assertStoredChoices();
+  await assertPngSourceBytes();
 }
 
 function assertPatchShapes(): void {
@@ -86,4 +104,59 @@ function assertPatchDrivesConversion(): void {
 
 function assert(condition: boolean, message: string): void {
   if (!condition) throw new Error(message);
+}
+
+/** Existing Assets are untouched; only future-import preferences move to v2. */
+function assertStoredChoices(): void {
+  if (typeof window === "undefined") return;
+  const keys = [TEXTURE_IMPORT_MAX_SIZE_STORAGE_KEY, TEXTURE_IMPORT_COMPRESSION_STORAGE_KEY,
+    "xrift-studio.visual-editor.texture-import-max-size.v1",
+    "xrift-studio.visual-editor.texture-import-compression.v1"];
+  const previous = keys.map(key => window.localStorage.getItem(key));
+  try {
+    keys.forEach(key => window.localStorage.removeItem(key));
+    window.localStorage.setItem(keys[2], "1024");
+    window.localStorage.setItem(keys[3], "ktx2");
+    assert(loadTextureImportMaxSize() === "original" && loadTextureImportCompression() === "source",
+      "Legacy automatic compression preferences must not silently opt in after the fix");
+    saveTextureImportMaxSize(2048);
+    saveTextureImportCompression("webp");
+    assert(loadTextureImportMaxSize() === 2048 && loadTextureImportCompression() === "webp",
+      "Explicit optimization choices must remain available and persist");
+    saveTextureImportMaxSize("original");
+    saveTextureImportCompression("source");
+    assert(textureImportSettingsPatch(loadTextureImportMaxSize(), loadTextureImportCompression()) === undefined,
+      "Returning to original settings must stop automatic conversion");
+    window.localStorage.setItem(keys[0], "invalid");
+    window.localStorage.setItem(keys[1], "invalid");
+    assert(loadTextureImportMaxSize() === "original" && loadTextureImportCompression() === "source",
+      "Invalid preferences must fall back to original-preserving defaults");
+  } finally {
+    keys.forEach((key, index) => previous[index] === null
+      ? window.localStorage.removeItem(key)
+      : window.localStorage.setItem(key, previous[index]!));
+  }
+}
+
+/** Transparent red and half-transparent green pixels in a real 2:1 RGBA PNG. */
+async function assertPngSourceBytes(): Promise<void> {
+  const bytes = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAAEUlEQVR4nGP4z8DAwHAipQEAC6ECrCMZHVoAAAAASUVORK5CYII="), value => value.charCodeAt(0));
+  const plan = await createAssetImportPlan({
+    fileName: "rgba-panorama.png", mimeType: "image/png", bytes,
+    textureImportSettings: textureImportSettingsPatch(DEFAULT_TEXTURE_IMPORT_MAX_SIZE, DEFAULT_TEXTURE_IMPORT_COMPRESSION),
+  });
+  assert(plan.canCommit && plan.asset?.kind === "texture", "A valid PNG must be importable with original-preserving defaults");
+  const original = plan.writes.find(write => write.purpose === "source");
+  assert(original?.payload.encoding === "bytes", "The original PNG must be written directly");
+  if (original?.payload.encoding !== "bytes") return;
+  const written = original.payload.bytes;
+  assert(written.length === bytes.length && written.every((value, index) => value === bytes[index]),
+    "PNG source bytes, including color and alpha, must be preserved exactly");
+  const size = readImageDimensions(written, "png")?.dimensions;
+  assert(size?.width === 2 && size.height === 1 && written[25] === 6,
+    "PNG dimensions and RGBA color type must remain unchanged");
+  const committed = await commitAssetImportPlan({ schemaVersion: ASSET_MANIFEST_SCHEMA_VERSION, assets: {} }, plan, async () => undefined);
+  const asset = committed.assets[plan.asset!.id];
+  assert(asset.kind === "texture" && asset.importMetadata?.sourceFormat === "png" && !asset.optimizedFrom && planTextureConversion(asset) === null,
+    "Committing a PNG must keep the original source without a pending conversion");
 }

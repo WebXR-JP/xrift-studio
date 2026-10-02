@@ -530,7 +530,7 @@ function SkyboxImageField({
   return (
     <div className="space-y-2">
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-slate-700">Skybox Texture</span>
+        <span className="mb-1 block text-xs font-medium text-slate-700">Skybox Texture（360度の背景画像）</span>
         <select
           value={imageAssetId ?? ""}
           disabled={disabled || skyboxes.length === 0}
@@ -546,6 +546,9 @@ function SkyboxImageField({
           ))}
         </select>
       </label>
+      <p className="text-[11px] leading-4 text-slate-500">
+        360度ペイントなどのPNG / JPEGを「Assets → ファイルから素材を追加」で取り込み、ここで選びます。横:縦が2:1の全天球画像（Equirectangular）を使ってください。HDR / EXRにも対応しています。
+      </p>
       <div
         className={`rounded border border-dashed px-2.5 py-2 text-xs leading-4 transition-colors ${
           disabled
@@ -565,9 +568,10 @@ function SkyboxImageField({
             readEditorDragData(event.dataTransfer, SKYBOX_DRAG_MIME) ||
             readEditorDragData(event.dataTransfer, TEXTURE_DRAG_MIME);
           clearEditorDragData();
+          const dropped = assets.assets[nextAssetId];
           if (
-            assets.assets[nextAssetId]?.kind === "skybox" ||
-            assets.assets[nextAssetId]?.kind === "texture"
+            (dropped?.kind === "skybox" || dropped?.kind === "texture") &&
+            dropped.source.kind === "project"
           ) onChange(nextAssetId);
         }}
       >
@@ -575,7 +579,7 @@ function SkyboxImageField({
           ? "Assetsから別のテクスチャをドロップして変更できます。"
           : imageAssetId
             ? "設定した画像がAssetsに見つかりません。別のテクスチャを選んでください。"
-            : "Assetsから全天球画像やHDRIをドロップしてください。"}
+            : "取り込んだ画像をAssetsからここへドロップすることもできます。"}
       </div>
     </div>
   );
