@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { createServer } from 'vite';
 const server = await createServer({ configFile: false, optimizeDeps: { noDiscovery: true }, server: { middlewareMode: true, watch: null, hmr: false, ws: false } });
 after(() => server.close());
-const { verifyStudioResult, parseStudioResult } = await server.ssrLoadModule('/src/lib/visual-editor/chatgpt-delivery.ts');
+const { verifyStudioResult, parseStudioResult, StudioVerificationError, studioReceiptVerification, assertStudioProjectOpenAllowed } = await server.ssrLoadModule('/src/lib/visual-editor/chatgpt-delivery.ts');
+const { openBrowserProjectSession } = await server.ssrLoadModule('/src/preview/browser-project-session.ts');
 const { callTool, default: cloudWorker } = await server.ssrLoadModule('/packages/xrift-studio-cloud/worker.ts');
 
 test('MCP initialization negotiates supported Streamable HTTP revisions', async () => {
@@ -105,6 +106,93 @@ test('document creation, save failure, missing render and changing editors canno
   const verified = await verifyStudioResult(result, editor, () => true);
   assert.equal(verified.hash, result.delivery.hash);
   assert.equal(verified.data, 'rendered-frame');
+  assert.deepEqual(verified.verification, { applied: true, saved: true, rendered: true, captured: true });
+});
+
+test('a capture failure retains confirmed application and save without changing the project', async () => {
+  const result = await callTool('create_world', { name: 'capture-failure-regression' });
+  const original = structuredClone(result.bundle);
+  const persistedOriginal = JSON.parse(JSON.stringify(original));
+  let documents = { project: original.project, scenes: { [original.scene.sceneId]: original.scene }, assets: original.assets, prefabs: original.prefabs };
+  const backend = {
+    acquire: async () => () => {},
+    read: async () => structuredClone(documents),
+    save: async (_path, next) => { documents = JSON.parse(JSON.stringify(next)); },
+  };
+  const session = await openBrowserProjectSession('capture-failure-project', backend);
+  const events = [];
+  const editor = {
+    currentBundle: () => result.bundle,
+    saveNow: async () => { events.push('save'); return session.save(result.bundle); },
+    captureSceneView: async () => { events.push('capture'); return { ok: false, message: 'シーンのフレームを取得できませんでした' }; },
+  };
+  try {
+    await assert.rejects(verifyStudioResult(result, editor, () => true), error => {
+      assert.ok(error instanceof StudioVerificationError);
+      assert.match(error.message, /フレーム/);
+      // These are the exact fields emitted in studioDelivery, even though the
+      // overall receipt remains failed until a real PNG can be confirmed.
+      assert.deepEqual(studioReceiptVerification({ status: 'failed', verification: error.verification }), {
+        applied: true, saved: true, rendered: false, captured: false,
+      });
+      return true;
+    });
+    assert.deepEqual(events, ['save', 'capture']);
+    assert.deepEqual(result.bundle, original);
+  } finally { await session.close(); }
+  const reopened = await openBrowserProjectSession('capture-failure-project', backend);
+  try {
+    assert.deepEqual(reopened.initialBundle, persistedOriginal);
+    const retried = await verifyStudioResult(result, {
+      currentBundle: () => reopened.initialBundle,
+      saveNow: () => reopened.save(reopened.initialBundle),
+      captureSceneView: async () => ({ ok: true, dataUrl: 'data:image/png;base64,rendered-frame' }),
+    }, () => true);
+    assert.deepEqual(retried.verification, { applied: true, saved: true, rendered: true, captured: true });
+    assert.deepEqual(reopened.initialBundle, persistedOriginal);
+  } finally { await reopened.close(); }
+});
+
+test('verification receipts keep failed saves and stale captures distinct from saved data', async () => {
+  const result = await callTool('create_world', { name: 'verification-stages-regression' });
+  const editor = {
+    currentBundle: () => result.bundle,
+    saveNow: async () => undefined,
+    captureSceneView: async () => { throw new Error('A failed save must not attempt capture'); },
+  };
+  await assert.rejects(verifyStudioResult(result, editor, () => true), error => {
+    assert.deepEqual(error.verification, { applied: true, saved: false, rendered: false, captured: false });
+    return true;
+  });
+  let current = true;
+  await assert.rejects(verifyStudioResult(result, {
+    ...editor, saveNow: async () => 'saved-project',
+    captureSceneView: async () => { current = false; return { ok: false, message: 'capture unavailable' }; },
+  }, () => current), error => {
+    assert.match(error.message, /切り替わり/);
+    assert.deepEqual(error.verification, { applied: false, saved: true, rendered: false, captured: false });
+    return true;
+  });
+  assert.deepEqual(studioReceiptVerification({ status: 'failed' }), { applied: false, saved: false, rendered: false, captured: false });
+  assert.deepEqual(studioReceiptVerification({ status: 'verified' }), { applied: true, saved: true, rendered: true, captured: true });
+});
+
+test('startup can restore a saved pending project without allowing a different project or bypassing ownership', async () => {
+  const pending = await callTool('create_world', { name: 'pending-restore-regression' });
+  const projectId = pending.bundle.project.projectId;
+  const active = { projectId, path: 'pending-project', revision: pending.revision, hash: pending.delivery.hash };
+  assert.doesNotThrow(() => assertStudioProjectOpenAllowed(projectId, null, pending, active));
+  assert.doesNotThrow(() => assertStudioProjectOpenAllowed(projectId, projectId, pending));
+  assert.throws(() => assertStudioProjectOpenAllowed(projectId, null, pending), /未完了/);
+  assert.throws(() => assertStudioProjectOpenAllowed('different-project', null, pending, active), /未完了/);
+  assert.throws(() => assertStudioProjectOpenAllowed(projectId, null, pending, { ...active, projectId: 'different-project' }), /未完了/);
+  assert.throws(() => assertStudioProjectOpenAllowed(projectId, 'different-project', pending, active), /未完了/);
+  // Passing the startup guard still uses the ordinary project lease. Another
+  // live Editor remains the owner and its documents must not even be read.
+  await assert.rejects(openBrowserProjectSession(active.path, {
+    acquire: async () => { throw new Error('already editing'); },
+    read: async () => { assert.fail('A locked project must not be read'); },
+  }), /already editing/);
 });
 
 

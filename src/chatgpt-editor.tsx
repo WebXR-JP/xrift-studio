@@ -9,7 +9,7 @@ import type { PrototypeVisualProject } from './lib/visual-editor/prototype-proje
 import { validateBundle, bundleHash } from './lib/visual-editor/chatgpt-project';
 import type { VisualProjectDocuments } from './lib/visual-editor/persistence';
 import { createBrowserProject, getBrowserProjectFiles, readStudioRecovery, writeStudioRecovery } from './lib/browser-project-storage';
-import { parseStudioResult, verifyStudioResult, addReceipt, emptyRecovery, type StudioResult, type StudioRecovery, type StudioReceipt } from './lib/visual-editor/chatgpt-delivery';
+import { parseStudioResult, verifyStudioResult, StudioVerificationError, studioReceiptVerification, assertStudioProjectOpenAllowed, addReceipt, emptyRecovery, type StudioResult, type StudioRecovery, type StudioReceipt, type StudioVerification } from './lib/visual-editor/chatgpt-delivery';
 import { browserProjectDocumentFiles, parseBrowserProjectFiles } from './lib/visual-editor/browser-project-transfer';
 import { studioLaunchFromUrl, validateStudioProjectId } from './lib/browser-project-routing';
 import './index.css';
@@ -63,15 +63,16 @@ function Application() {
     select({ path, documents, revision: saved ? saved.revision + (hash === saved.hash ? 0 : 1) : 0 });
     await remember(current.current!);
   }
-  async function report(result: Result, status: StudioReceipt['status'], message: string, image?: string) {
+  async function report(result: Result, status: StudioReceipt['status'], message: string, image?: string, verification?: StudioVerification) {
     if (!result.operationId) return;
     const item: StudioReceipt = { operationId: result.operationId, projectId: result.bundle.project.projectId,
       revision: result.revision, hash: await bundleHash(result.bundle), status, message,
-      at: new Date().toISOString(), reported: false };
+      at: new Date().toISOString(), reported: false, verification };
     recovery.current = addReceipt(recovery.current, item); setReceipt(item); await persist();
+    const evidence = studioReceiptVerification(item);
     const sent = await app.sendMessage({ role: 'user', content: [
-      { type: 'text', text: JSON.stringify({ ...(image ? { sceneCapture: { operationId: item.operationId, projectId: item.projectId, status: 'verified', revision: item.revision } } : {}), studioDelivery: { ...item, sceneId: result.bundle.scene.sceneId, saved: status === 'verified', rendered: status === 'verified', projectMatched: bridge.current?.currentBundle().project.projectId === result.bundle.project.projectId, activeProjectId: current.current?.documents.project.projectId ?? null, results: result.results },
-        instruction: status === 'verified' ? 'この操作のStudioへの反映、ブラウザ保存、Scene Viewの取得を確認しました。画像を確認してから完了を報告してください。' : 'この操作は未完了です。反映確認済みとは報告しないでください。Studioを開き、保存された結果を再適用するかretry_worldで同じデータを再送してください。' }) },
+      { type: 'text', text: JSON.stringify({ ...(image ? { sceneCapture: { operationId: item.operationId, projectId: item.projectId, status: 'verified', revision: item.revision } } : {}), studioDelivery: { ...item, ...evidence, sceneId: result.bundle.scene.sceneId, projectMatched: bridge.current?.currentBundle().project.projectId === result.bundle.project.projectId, activeProjectId: current.current?.documents.project.projectId ?? null, results: result.results },
+        instruction: status === 'verified' ? 'この操作のStudioへの反映、ブラウザ保存、Scene Viewの取得を確認しました。画像を確認してから完了を報告してください。' : evidence.applied && evidence.saved ? '編集データの一致とブラウザ保存を確認しました。Scene Viewの描画と画像取得は未確認です。保存失敗や編集の未適用とは報告せず、未確認の段階を伝えてください。会話内の最新bundleとrevisionを使って編集を続けられます。画像を再確認する場合はretry_worldで同じ結果を再送し、編集処理を繰り返さないでください。' : 'この操作は未完了です。反映確認済みとは報告しないでください。Studioを開き、保存された結果を再適用するかretry_worldで同じデータを再送してください。' }) },
       ...(image ? [{ type: 'image' as const, data: image, mimeType: 'image/png' }] : []),
     ] }, { timeout: 15000 });
     if (sent.isError) throw new Error('反映結果を会話へ送れませんでした。反映を再確認してください');
@@ -88,7 +89,7 @@ function Application() {
       }
       if (!bridge.current) throw new Error('エディターの起動を確認できませんでした');
       const frame = await verifyStudioResult(result, bridge.current, () => mounted.current && current.current?.path === selected.path && !operation.current);
-      await report(result, 'verified', 'Studioへの反映とブラウザ保存を確認しました。', frame.data);
+      await report(result, 'verified', 'Studioへの反映とブラウザ保存を確認しました。', frame.data, frame.verification);
       if (latestResult.current?.operationId === result.operationId) {
         const next = recovery.current.queue.shift() ?? null;
         latestResult.current = next; setPending(next); recovery.current.pending = next; await persist();
@@ -96,10 +97,13 @@ function Application() {
       setNotice(latestResult.current ? '前の編集の反映を確認しました。次のAIの結果を適用できます。' : 'Studioへの反映とブラウザ保存を確認しました。');
     } catch (error) {
       const message = error instanceof Error ? error.message : '反映を確認できませんでした';
-      setNotice(`反映は未完了です。${message}。「反映を再確認」から再試行できます。`);
+      const verification = error instanceof StudioVerificationError ? error.verification : undefined;
+      setNotice(verification?.applied && verification.saved
+        ? `データの適用とブラウザ保存は完了しています。描画と画像取得は未確認です。${message}。「反映を再確認」から再試行できます。`
+        : `反映は未完了です。${message}。「反映を再確認」から再試行できます。`);
       // A report transport failure must not replace a real verified receipt with a false apply failure.
       if (recovery.current.history.find(item => item.operationId === result.operationId)?.status !== 'verified') {
-        try { await report(result, 'failed', message); } catch { /* Keep the pending result and unsent receipt. */ }
+        try { await report(result, 'failed', message, undefined, verification); } catch { /* Keep the pending result and unsent receipt. */ }
       }
     } finally { setChecking(false); applying.current = false; }
   }
@@ -226,9 +230,9 @@ function Application() {
     await context(current.current!);
     setNotice('新しいワールドをブラウザに保存し、エディターを開きました。');
   }
-  async function openTarget(projectId: string) {
+  async function openTarget(projectId: string, restoring = false) {
     validateStudioProjectId(projectId);
-    if (latestResult.current && current.current?.documents.project.projectId !== projectId) throw new Error('AIの編集が未完了です。反映を再確認してから作品を切り替えてください');
+    assertStudioProjectOpenAllowed(projectId, current.current?.documents.project.projectId ?? null, latestResult.current, restoring ? recovery.current.active : null);
     if (!studio.current) throw new Error('Studioが接続されていません。プラグインを開き直してください');
     await writes.current;
     await studio.current.openProject(projectId);
@@ -320,7 +324,7 @@ function Application() {
           await startNewEntry(typeof initialArguments.current.name === 'string' ? initialArguments.current.name : undefined);
         } else {
           const active = recovery.current.active;
-          if (active) await openTarget(active.projectId);
+          if (active) await openTarget(active.projectId, true);
           if (current.current) setNotice('ブラウザに保存した直前の編集を再開しました。');
         }
       } catch (error) { setNotice(error instanceof Error ? error.message : '指定した作品を開けませんでした'); }
@@ -379,12 +383,13 @@ function Application() {
     writes.current = task.catch(() => {}); await task;
   }
   const displayedReceipt = receipt && (pending ? receipt.operationId === pending.operationId : receipt.projectId === current.current?.documents.project.projectId && receipt.hash === recovery.current.active?.hash) ? receipt : null;
-  const stateLabel = !connected ? '未接続' : checking ? '確認中' : displayedReceipt?.status === 'failed' ? '反映失敗' : pending && displayedReceipt?.status === 'verified' && !displayedReceipt.reported ? '未報告' : pending ? '反映未完了' : displayedReceipt?.status === 'verified' ? '反映済み' : '接続済み';
+  const savedWithoutCapture = displayedReceipt?.status === 'failed' && displayedReceipt.verification?.applied && displayedReceipt.verification.saved;
+  const stateLabel = !connected ? '未接続' : checking ? '確認中' : savedWithoutCapture ? '画像未確認' : displayedReceipt?.status === 'failed' ? '反映失敗' : pending && displayedReceipt?.status === 'verified' && !displayedReceipt.reported ? '未報告' : pending ? '反映未完了' : displayedReceipt?.status === 'verified' ? '反映済み' : '接続済み';
   const controls = <div className="flex items-center gap-1">{displayModes.includes(displayMode === 'fullscreen' ? 'inline' : 'fullscreen') && <button className="min-h-9 rounded-md px-2 text-xs hover:bg-editor-subtle" onClick={() => { void app.requestDisplayMode({ mode: displayMode === 'fullscreen' ? 'inline' : 'fullscreen' }).then(result => setDisplayMode(result.mode)).catch(() => setNotice('画面を切り替えられませんでした。ChatGPTの戻る操作を使ってください。')); }}>{displayMode === 'fullscreen' ? '会話へ戻る' : 'エディターを広げる'}</button>}<details className="relative shrink-0 text-xs text-editor-text">
     <summary className="flex min-h-9 cursor-pointer list-none items-center rounded-md px-3 font-medium hover:bg-editor-subtle" aria-label={`ChatGPT ${stateLabel}`}>ChatGPT · {stateLabel}</summary>
     <div className={`absolute right-0 z-50 w-80 max-w-[90vw] rounded-lg border border-editor-border bg-editor-surface p-3 shadow-lg ${local ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
       <p role="status" className="mb-3 break-words text-xs text-editor-muted">{notice}</p>
-      {displayedReceipt && <p className="mb-3 text-xs text-editor-muted">{displayedReceipt.status === 'verified' ? displayedReceipt.reported ? '反映確認済み・報告済み' : '反映確認済み・会話へ未報告' : displayedReceipt.status === 'failed' ? '反映失敗' : '適用待ち'} / revision {displayedReceipt.revision}</p>}
+      {displayedReceipt && <p className="mb-3 text-xs text-editor-muted">{displayedReceipt.status === 'verified' ? displayedReceipt.reported ? '反映確認済み・報告済み' : '反映確認済み・会話へ未報告' : savedWithoutCapture ? 'データ適用・ブラウザ保存済み / 描画・画像は未確認' : displayedReceipt.status === 'failed' ? '反映失敗' : '適用待ち'} / revision {displayedReceipt.revision}</p>}
       {pending && <button className="mb-2 min-h-10 w-full rounded-md bg-violet-600 px-3 text-white disabled:opacity-50" disabled={busy || checking || !connected} onClick={() => void run(async () => {
         const result = latestResult.current; if (result) await applyResult(result);
       })}>{displayedReceipt?.status === 'failed' || displayedReceipt?.status === 'verified' && !displayedReceipt.reported ? '反映を再確認' : 'AIの結果を適用'}</button>}
