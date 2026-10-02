@@ -141,11 +141,15 @@ function Application() {
   async function captureEditorSnapshot() {
     if (applying.current || latestResult.current || capturingSnapshot.current) throw new Error('AIの編集または一時保存が未完了です。完了を確認してから編集対象を会話に渡してください');
     capturingSnapshot.current = true; setChecking(true);
+    setNotice('会話に渡す編集データを準備しています…');
     const previousOperation = operation.current; operation.current = true;
     try {
       const selected = current.current;
       const editor = bridge.current;
       if (!selected || !editor) throw new Error('会話で編集する作品を開いてからもう一度実行してください');
+      // Generated thumbnail descriptors are real document changes. Let their
+      // queues finish before taking the exact version to upload, never omit them.
+      await editor.prepareSnapshot?.();
       if (!(await editor.saveNow())) throw new Error('最新の編集を保存できませんでした');
       await writes.current;
       if (current.current?.path !== selected.path || bridge.current !== editor) throw new Error('編集中の作品が切り替わりました。もう一度実行してください');

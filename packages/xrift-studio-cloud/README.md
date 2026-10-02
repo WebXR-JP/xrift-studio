@@ -8,7 +8,7 @@ ChatGPTの制作依頼からワールドを作るMCPと、通常ブラウザ版�
 2. `describe_document_tool`で操作のschemaを読み、`edit_world({snapshotId, expectedRevision, operationId, operations})`へ短い参照を渡します。Editorが閉じていても編集できます。最大200操作を一括処理し、途中の失敗では保存しません。成功バッチごとにrevisionが一度進みます。
 3. 最新の`show_world({snapshotId})`または`capture_scene_view({snapshotId})`で表示します。文書全体は`_meta.xriftStudio`からアプリへ渡し、モデルへJSONの転記を求めません。
 4. 同じ結果の再送は`retry_world({snapshotId})`です。期限切れや後続編集のある古いIDを拒否し、別作品を代用しません。
-5. 手動編集したブラウザ作品は、`get_editor_context`または「会話に編集対象を渡す」で明示的に一時保存します。開いたり保存したりするだけでは既存作品をアップロードしません。
+5. 手動編集したブラウザ作品は、`get_editor_context`または「会話に編集対象を渡す」で明示的に一時保存します。開いたり保存したりするだけでは既存作品をアップロードしません。素材プレビュー生成による文書更新を待ち、同じ版をブラウザに保存してから取り込みます。準備が30秒で完了しなければ送信せず再試行を案内し、生成済みのサムネイルと全文ハッシュの確認を保ちます。
 
 一時保存、ブラウザ保存、画面反映、画像受信を区別します。serverSaved:trueは一時保存を確認した値であり、ブラウザ保存や表示の証拠ではありません。同じoperationId・projectId・revision・hashのアプリ報告と実際のPNGを確認します。
 

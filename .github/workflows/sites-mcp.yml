@@ -48,4 +48,4 @@ jobs:
       - run: pnpm test:cloud
       - run: pnpm build:sites
       - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm exec playwright test e2e/chatgpt-delivery.spec.ts --project chromium
+      - run: pnpm exec playwright test e2e/chatgpt-delivery.spec.ts --project chromium --fail-on-flaky-tests

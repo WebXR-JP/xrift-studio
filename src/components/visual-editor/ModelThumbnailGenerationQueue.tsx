@@ -36,6 +36,7 @@ export function ModelThumbnailGenerationQueue({
   enabled,
   onGenerated,
   onFailed,
+  onPendingChange,
 }: {
   assets: AssetManifest;
   projectPath?: string;
@@ -45,6 +46,8 @@ export function ModelThumbnailGenerationQueue({
     thumbnail: AssetThumbnailDescriptor,
   ) => void;
   onFailed: (assetId: string, message: string) => void;
+  /** Includes the fingerprint debounce, rendering and descriptor commit. */
+  onPendingChange?: (pending: boolean) => void;
 }) {
   const [jobs, setJobs] = useState<ModelThumbnailJob[]>([]);
   const processingKeyRef = useRef<string | null>(null);
@@ -67,7 +70,9 @@ export function ModelThumbnailGenerationQueue({
   }, [enabled, projectPath]);
 
   useEffect(() => {
-    if (!enabled || !projectPath || jobs.length > 0) return;
+    if (!enabled || !projectPath) { onPendingChange?.(false); return; }
+    onPendingChange?.(true);
+    if (jobs.length > 0) return;
     const timer = window.setTimeout(() => {
       const models = Object.values(assets.assets).filter(
         (asset): asset is ModelAsset & { sourceHash: string } =>
@@ -77,19 +82,19 @@ export function ModelThumbnailGenerationQueue({
           Boolean(asset.sourceHash) &&
           modelThumbnailNeedsRefresh(asset),
       );
-      setJobs(
-        models
-          .map((asset) => ({
-            assetId: asset.id,
-            sourceHash: asset.sourceHash,
-            key: `${asset.id}:${asset.sourceHash}`,
-          }))
-          .filter((candidate) => !failedKeysRef.current.has(candidate.key))
-          .sort((left, right) => left.assetId.localeCompare(right.assetId)),
-      );
+      const nextJobs = models
+        .map((asset) => ({
+          assetId: asset.id,
+          sourceHash: asset.sourceHash,
+          key: `${asset.id}:${asset.sourceHash}`,
+        }))
+        .filter((candidate) => !failedKeysRef.current.has(candidate.key))
+        .sort((left, right) => left.assetId.localeCompare(right.assetId));
+      setJobs(nextJobs);
+      onPendingChange?.(nextJobs.length > 0);
     }, GENERATION_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [assets, enabled, jobs.length, projectPath]);
+  }, [assets, enabled, jobs.length, onPendingChange, projectPath]);
 
   const finishJob = useCallback((job: ModelThumbnailJob) => {
     processingKeyRef.current = null;
