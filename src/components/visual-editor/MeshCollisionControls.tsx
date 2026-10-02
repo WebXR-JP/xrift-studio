@@ -28,17 +28,17 @@ export function MeshCollisionControls({ scene, entity, readOnly, onAction, onSel
   const enabled = chain.every((e) => e.enabled);
   return <div className="space-y-2 border-t border-slate-100 pt-2">
     <div className="flex justify-between gap-2 text-xs"><span className="font-medium text-slate-700">Collision</span>
-      <span className="text-slate-500">{!enabled ? "Entity無効" : triggerOnly ? "Triggerのみ" : local.length ? "このEntityに設定" : inherited.length ? "親に設定" : "設定なし"}</span>
+      <span className="min-w-0 text-right text-slate-500">{!enabled ? "Entity無効" : triggerOnly ? "Triggerのみ" : local.length ? local.map((row) => row.label).join(" / ") : inherited.length ? "親に設定" : "設定なし"}</span>
     </div>
     {inherited.map((r) => <button key={r.componentId} type="button" onClick={() => onSelect?.(r.entityId)} className="block text-left text-[11px] text-slate-500 hover:text-violet-700">親: {r.entityName} · {r.label}</button>)}
     <div className="flex flex-wrap gap-1">
-      {([["add", "Colliderを追加"], ["remove", "外す"], ["exclusive", "これだけにする"]] as const).map(([action, label]) =>
+      {([["add", "固定Mesh Colliderにする"], ["remove", "外す"], ["exclusive", "これだけにする"]] as const).map(([action, label]) =>
         <button key={action} type="button" disabled={readOnly || !enabled || !onAction}
-          title={action === "exclusive" ? "シーン全体のほかのColliderと自動生成の設定を解除します。Triggerも対象です。「元に戻す」で復元できます。" : action === "add" ? "既存設定も含めて、固定・Trimesh・TriggerなしのColliderにします。" : "このMeshのColliderを無効にします。親のBox Colliderなど独立した形状は一覧から編集できます。"}
+          title={action === "exclusive" ? "シーン全体のほかのColliderと自動生成の設定を解除します。Triggerも対象です。「元に戻す」で復元できます。" : action === "add" ? "Box Colliderなどの既存設定を無効にし、固定・Trimesh・TriggerなしのMesh Colliderに置き換えます。" : "このMeshのColliderを無効にします。親のBox Colliderなど独立した形状は一覧から編集できます。"}
           onClick={() => onAction?.(entity.id, action)}
           className="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-45">{label}</button>)}
     </div>
-    {triggerOnly ? <p className="text-[11px] leading-4 text-slate-500">Triggerでは物体が通り抜けます。「Colliderを追加」を選ぶと、上を歩ける設定になります。</p> : null}
+    {triggerOnly ? <p className="text-[11px] leading-4 text-slate-500">Triggerでは物体が通り抜けます。「固定Mesh Colliderにする」を選ぶと、上を歩ける設定になります。</p> : null}
     <p className="text-[11px] leading-4 text-slate-500">「これだけにする」はシーン全体を置き換えます。Undoで戻せます。</p>
     <details><summary className="cursor-pointer text-xs text-slate-600">Colliderの一覧（{rows.length}）</summary>
       <div className="max-h-40 overflow-y-auto">{rows.length ? rows.map((row) => <CollisionRow key={`${row.entityId}:${row.componentId}`} row={row} select={select} />) : <p className="py-1 text-xs text-slate-500">Colliderと自動生成の設定はありません。</p>}</div>

@@ -45,7 +45,7 @@ test("Mesh Rendererで当たり判定を追加・解除してUndoで戻せる", 
   await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
   await page.getByLabel("プロジェクト名").fill("mesh-collision");
   await page.getByRole("button", { name: "作成して開く" }).click();
-  await page.getByRole("tree", { name: "シーンのEntity階層" }).getByText("床", { exact: true }).click();
+  await page.getByRole("tree", { name: "シーンのEntity階層" }).getByText("Plane", { exact: true }).click();
   await page.getByRole("button", { name: "これだけにする", exact: true }).click();
   await expect(page.getByText("Colliderの一覧（1）", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "外す", exact: true }).click();

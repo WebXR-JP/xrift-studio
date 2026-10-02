@@ -75,10 +75,10 @@ test("タッチ操作では削除アイコンの代わりに操作メニュー�
     await openVisualWorld(page);
     await page.getByRole("button", { name: "Assets", exact: true }).click();
     const assets = page.getByRole("region", { name: "Assets" });
-    await assets.locator('button[aria-pressed]').filter({ hasText: "Neutral Ground" }).first().click();
+    await assets.locator('button[aria-pressed]').filter({ hasText: "Plane Material" }).first().click();
     await expect(assets.locator('button[aria-label$="を削除"]')).toHaveCount(0);
-    await expect(assets.getByRole("button", { name: "Neutral Groundの操作" })).toBeVisible();
-    await assets.getByRole("button", { name: "Neutral Groundの操作" }).click();
+    await expect(assets.getByRole("button", { name: "Plane Materialの操作" })).toBeVisible();
+    await assets.getByRole("button", { name: "Plane Materialの操作" }).click();
     await expect(page.getByRole("menu", { name: "Assetsのメニュー" }).getByRole("button", { name: "削除", exact: true })).toBeVisible();
   } finally {
     await context.close();

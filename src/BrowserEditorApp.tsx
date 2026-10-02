@@ -199,12 +199,12 @@ export default function BrowserEditorApp() {
     retryTransfer.current = () => { void createProject(projectKind, name); };
     try {
       await closingSession.current;
-      const [storage, transferTools, { createPrototypeProject }] = await Promise.all([
+      const [storage, transferTools, { createStarterVisualProject, defaultVisualStarterTemplateId }] = await Promise.all([
         import("./lib/browser-project-storage"),
         import("./lib/visual-editor/browser-project-transfer"),
-        import("./lib/visual-editor/prototype-project"),
+        import("./lib/visual-editor/starter-templates"),
       ]);
-      const bundle = createPrototypeProject(projectKind, name);
+      const bundle = createStarterVisualProject(projectKind, defaultVisualStarterTemplateId(projectKind), name);
       const documents: VisualProjectDocuments = { project: bundle.project, scenes: { [bundle.scene.sceneId]: bundle.scene }, assets: bundle.assets, prefabs: bundle.prefabs };
       const path = await storage.createBrowserProject(transferTools.browserProjectDocumentFiles(documents), { activate: false });
       await openStoredBrowserProject(path);

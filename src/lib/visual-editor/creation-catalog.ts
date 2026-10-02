@@ -276,7 +276,8 @@ function createDefinition(
         ? {
             position: [0, 0, 0],
             rotation: [-Math.PI / 2, 0, 0],
-            scale: [6, 6, 6],
+            // Preserve a thin local Z thickness when the Plane lies on XZ.
+            scale: [6, 6, 1],
           }
         : {
             position: [0, 0.5, 0],

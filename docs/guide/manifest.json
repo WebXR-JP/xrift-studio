@@ -76,7 +76,7 @@
       "description": "床の上に球を置いて色を変え、保存できたらPlayで見て回ります。外部素材やAI接続は必要ありません。",
       "group": "start",
       "file": "first-world.md",
-      "keywords": "チュートリアル 初めて 入門 新規プロジェクト 作成 球",
+      "keywords": "チュートリアル 初めて 入門 新規プロジェクト 作成 球 Plane Box Light SpawnPoint",
       "related": [
         "editor-basics",
         "assets",
@@ -253,7 +253,7 @@
       "description": "床のColliderとプレイヤーの開始位置を設定し、Playで歩けるか確認します。",
       "group": "create",
       "file": "collision.md",
-      "keywords": "床 すり抜ける 落ちる 衝突判定 Collider Spawn Point スポーン 開始位置",
+      "keywords": "床 Plane すり抜ける 落ちる 衝突判定 Box Collider Mesh Collider SpawnPoint スポーン 開始位置",
       "related": [
         "play-mode",
         "objects",

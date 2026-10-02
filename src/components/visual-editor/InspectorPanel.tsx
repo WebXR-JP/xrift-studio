@@ -975,8 +975,10 @@ function MeshInspector({
         <dd className="truncate text-right font-medium text-slate-700">
           {terrain ? "地形" : geometry?.name ?? builtinDefinition?.name ?? `Missing: ${geometryAssetId}`}
         </dd>
-        <dt className="text-slate-500">スロット</dt>
-        <dd className="text-right text-slate-700">{slots.length}</dd>
+        {!builtinDefinition || slots.length > 1 ? <>
+          <dt className="text-slate-500">スロット</dt>
+          <dd className="text-right text-slate-700">{slots.length}</dd>
+        </> : null}
       </dl>
 
       <div className="border-t border-slate-100 pt-2">

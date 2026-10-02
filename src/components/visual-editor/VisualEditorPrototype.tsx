@@ -67,7 +67,8 @@ import {
   createEmptyEntity,
   createPrefabDocument,
   createPlaySession,
-  createPrototypeProject,
+  createStarterVisualProject,
+  defaultVisualStarterTemplateId,
   createDefaultScriptComponentState,
   createScriptRuntimeReport,
   classifyMcpPlayStartFailure,
@@ -806,7 +807,7 @@ function preparePrototypeProject(
   projectName?: string,
   sourceBundle?: PrototypeVisualProject,
 ): PrototypeVisualProject {
-  const bundle = sourceBundle ?? createPrototypeProject(projectKind, projectName);
+  const bundle = sourceBundle ?? createStarterVisualProject(projectKind, defaultVisualStarterTemplateId(projectKind), projectName);
   const normalizedAssets = Object.fromEntries(
     Object.entries(bundle.assets.assets).map(([id, asset]) => [
       id,
