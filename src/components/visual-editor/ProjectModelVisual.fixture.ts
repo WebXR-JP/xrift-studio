@@ -18,15 +18,18 @@ import {
 } from "three";
 import {
   BUILTIN_ASSET_IDS,
+  ASSET_MANIFEST_SCHEMA_VERSION,
   applyCustomShaderSourceOverrides,
   bindCustomShaderGeometryAttributes,
   createPrototypeProject,
   getMaterialAsset,
   getTextureAsset,
   normalizeTextureImportSettings,
+  normalizeMaterialProperties,
   repairImportedObject3DHierarchy,
   updateMaterialAsset,
   type ClassicR3fMaterialShader,
+  type AssetManifest,
   type MaterialAsset,
   type ModelAsset,
   type TextureAsset,
@@ -49,6 +52,7 @@ import { getModelNodeMaterialSlots } from "./model-node-materials";
 import { attachModelSelectionHighlight } from "./model-selection-highlight";
 import {
   configureMaterialPreviewTexture,
+  createMaterialPreviewTextureSession,
   refreshMaterialPreviewRender,
   resolveMaterialPreviewTextureDisplayStatus,
 } from "./material-texture-preview";
@@ -74,6 +78,7 @@ export async function runProjectModelMaterialPreviewFixtureAssertions(): Promise
   assertCustomShaderRuntimeCanBeInspected();
   assertClassicR3fMaterialReceivesSceneFog();
   await assertOpenBrushPbrFallbackKeepsTheModelUsable();
+  await assertMaterialTextureEditsKeepReadySlots();
 
   const project = createPrototypeProject("world", "model-material-preview");
   const fixtureTextureAsset: TextureAsset = {
@@ -939,4 +944,80 @@ function colorNear(
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
+}
+
+/** Texture reselection must not blank unrelated maps or let older loads win. */
+async function assertMaterialTextureEditsKeepReadySlots(): Promise<void> {
+  type Request = Parameters<Parameters<typeof createMaterialPreviewTextureSession>[0]>[0];
+  const pending: Array<{ resolve(texture: Texture): void; reject(error: Error): void }> = [];
+  let state: Parameters<Parameters<typeof createMaterialPreviewTextureSession>[1]>[0] = { textures: {}, statuses: {} };
+  const session = createMaterialPreviewTextureSession(() => new Promise<Texture>((resolve, reject) => {
+    pending.push({ resolve, reject });
+  }), next => { state = next; });
+  const request = (role: Request["role"], id: string): Request => ({
+    role, textureInfo: { textureAssetId: id, texCoord: 0 }, colorSpace: "srgb",
+    asset: { id, name: id, kind: "texture", status: "ready", source: { kind: "project", relativePath: `assets/${id}.png` },
+      importSettings: normalizeTextureImportSettings() },
+  });
+  const base = request("baseColorMap", "base"), shade = request("shadeMultiplyMap", "shade");
+  const outlineA = request("outlineWidthMultiplyMap", "outline-a"), outlineB = request("outlineWidthMultiplyMap", "outline-b");
+  const baseMap = new Texture(), shadeMap = new Texture();
+  let baseDisposals = 0, shadeDisposals = 0;
+  baseMap.addEventListener("dispose", () => baseDisposals++);
+  shadeMap.addEventListener("dispose", () => shadeDisposals++);
+  session.setRequests([base, shade]);
+  pending[0]!.resolve(baseMap); await Promise.resolve();
+  assert(state.textures.baseColorMap === baseMap && state.statuses.shadeMultiplyMap === "loading",
+    "A ready Base Color must render before another map finishes loading");
+  pending[1]!.resolve(shadeMap); await Promise.resolve();
+  session.setRequests([base, shade, outlineA]);
+  assert(pending.length === 3 && state.textures.baseColorMap === baseMap && state.textures.shadeMultiplyMap === shadeMap,
+    "Selecting an Outline map removed or reloaded unchanged Base Color/Shade maps");
+  session.setRequests([base, shade, outlineB]);
+  session.setRequests([base, shade, outlineA]);
+  const latestOutline = new Texture(), staleOutline = new Texture(), staleOther = new Texture();
+  let staleDisposals = 0;
+  for (const texture of [staleOutline, staleOther]) texture.addEventListener("dispose", () => staleDisposals++);
+  pending[4]!.resolve(latestOutline); await Promise.resolve();
+  pending[2]!.resolve(staleOutline); pending[3]!.resolve(staleOther); await Promise.resolve();
+  assert(state.textures.outlineWidthMultiplyMap === latestOutline && staleDisposals === 2,
+    "A late A → B → A texture load replaced the latest binding or leaked its Texture");
+  session.setRequests([base, shade, outlineB]);
+  pending[5]!.reject(new Error("isolated failed auxiliary map")); await Promise.resolve();
+  assert(state.statuses.outlineWidthMultiplyMap === "error" && state.textures.baseColorMap === baseMap && state.textures.shadeMultiplyMap === shadeMap,
+    "A failed auxiliary Texture load blanked ready surface maps");
+
+  const source = new MeshPhysicalMaterial();
+  for (const legacy of [false, true]) {
+    const asset: MaterialAsset = { id: "edited-toon", name: "Edited toon", kind: "material", status: "ready", source: { kind: "document" },
+      properties: normalizeMaterialProperties({ pbrMetallicRoughness: { baseColorTexture: base.textureInfo },
+        extensions: { VRMC_materials_mtoon: { shadeMultiplyTexture: shade.textureInfo, extras: { xriftVrm0CompatShade: legacy } } } }) };
+    let manifest: AssetManifest = { schemaVersion: ASSET_MANIFEST_SCHEMA_VERSION, assets: { [asset.id]: asset } };
+    for (const green of [0.2, 0.6, 0.9]) {
+      manifest = updateMaterialAsset(manifest, asset.id, { pbrMetallicRoughness: { baseColorFactor: [0.1, green, 0.4, 1] },
+        extensions: { VRMC_materials_mtoon: { outlineWidthFactor: green / 100 } } });
+      const edited = manifest.assets[asset.id] as MaterialAsset;
+      const material = createAssignedMaterialPreviewMaterial(source, edited, state.textures) as import("@pixiv/three-vrm").MToonMaterial;
+      assert(material.map === baseMap && material.shadeMultiplyTexture === shadeMap && near(material.color.g, green),
+        `MToon ${legacy ? "0.x" : "1.0"} lost Texture bindings or stopped applying color edits after a failed auxiliary load`);
+      material.dispose();
+    }
+  }
+  source.dispose();
+  assert(baseDisposals === 0 && shadeDisposals === 0, "Rebuilding edited Materials disposed the retained surface textures");
+  const normal = { ...request("normalMap", "normal"), colorSpace: "linear" as const, textureInfo: { textureAssetId: "normal", texCoord: 0, scale: 0.2 } };
+  session.setRequests([base, shade, normal]);
+  const count = pending.length;
+  session.setRequests([base, shade, { ...normal, textureInfo: { ...normal.textureInfo, scale: 0.9 } } as Request]);
+  assert(pending.length === count, "Normal strength edits reloaded Texture resources");
+  session.setRequests([shade]);
+  assert(Number(baseDisposals) === 1 && !state.textures.baseColorMap && state.textures.shadeMultiplyMap === shadeMap,
+    "Removing Base Color retained its binding or disposed an unrelated Shade map");
+  const stoppedState = state;
+  session.dispose();
+  const lateNormal = new Texture(); let lateDisposed = false;
+  lateNormal.addEventListener("dispose", () => { lateDisposed = true; });
+  pending[count - 1]!.resolve(lateNormal); await Promise.resolve();
+  assert(Number(shadeDisposals) === 1 && lateDisposed && state === stoppedState,
+    "Unmount failed to dispose owned/late textures or published stale state");
 }
