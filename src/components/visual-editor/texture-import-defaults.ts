@@ -14,15 +14,17 @@ export type TextureImportMaxSize = "original" | (typeof TEXTURE_MAX_SIZE_CHOICES
 /** "source" は原本の画像形式のまま。Inspectorの圧縮方式と同じ語彙を使う。 */
 export type TextureImportCompression = "source" | "webp" | "ktx2";
 
+// v1 defaulted to 1024px/KTX2. Do not carry that automatic conversion forward.
+// This resets only future-import preferences, never an existing Asset or source.
 export const TEXTURE_IMPORT_MAX_SIZE_STORAGE_KEY =
-  "xrift-studio.visual-editor.texture-import-max-size.v1";
+  "xrift-studio.visual-editor.texture-import-max-size.v2";
 
 export const TEXTURE_IMPORT_COMPRESSION_STORAGE_KEY =
-  "xrift-studio.visual-editor.texture-import-compression.v1";
+  "xrift-studio.visual-editor.texture-import-compression.v2";
 
-export const DEFAULT_TEXTURE_IMPORT_MAX_SIZE: TextureImportMaxSize = 1024;
+export const DEFAULT_TEXTURE_IMPORT_MAX_SIZE: TextureImportMaxSize = "original";
 
-export const DEFAULT_TEXTURE_IMPORT_COMPRESSION: TextureImportCompression = "ktx2";
+export const DEFAULT_TEXTURE_IMPORT_COMPRESSION: TextureImportCompression = "source";
 
 export function isTextureImportMaxSize(value: unknown): value is TextureImportMaxSize {
   return (
