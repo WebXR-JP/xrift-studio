@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "xrift-studio",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Create, import and edit XRift Studio 3D worlds in ChatGPT.",
   "author": {
     "name": "Ryuto Haga"
@@ -26,7 +26,7 @@
         "termsOfServiceURL": "https://xrift-studio-pr124.kkkkkkasdad.chatgpt.site/terms.html"
       },
       "publication": {
-        "release_notes": "作品データを認証された利用者ごとに24時間参照できる一時保存へ変更しました。会話ではsnapshotIdで作成・追編集・表示・再送をつなぎ、完全な文書はアプリ専用メタデータで渡します。利用者の分離、同時編集の競合、二重送信、期限切れ、古い結果の巻き戻しを検証します。ブラウザ保存・描画・画像受信は実際のアプリ報告で確認します。",
+        "release_notes": "作品データを認証された利用者ごとに24時間参照できる一時保存へ変更しました。会話ではsnapshotIdで作成・追編集・表示・再送をつなぎ、完全な文書はアプリ専用メタデータで渡します。利用者の分離、同時編集の競合、二重送信、期限切れ、古い結果の巻き戻しを検証します。ブラウザ保存・描画・画像受信は実際のアプリ報告で確認します。 0.1.7は申請資料のみの更新で、既存の録画URLを追加しました。動画は手動編集・色の変更・ブラウザ保存・再開の実画面を示す以前の草稿で、待機時間を一部省略しています。現在の24時間の一時保存や、ChatGPTからのAI編集・表示・画像受信の成功を証明する動画ではありません。 The linked recording is an earlier manual-editing draft with some waiting time omitted; it does not verify the current authenticated snapshot or AI editing workflow.",
         "translations": {
           "ja-JP": {
             "subtitle": "会話で3Dワールドを作る",
@@ -84,7 +84,8 @@
           ]
         },
         "commerce": false,
-        "commerce_description": "XRift Studioには課金・購入・決済機能はありません。ChatGPTと外部サービスの料金は、それぞれの契約に従います。"
+        "commerce_description": "XRift Studioには課金・購入・決済機能はありません。ChatGPTと外部サービスの料金は、それぞれの契約に従います。",
+        "demo_recording_url": "https://xrift-studio-pr124.kkkkkkasdad.chatgpt.site/review/xrift-studio-walkthrough-draft.mp4"
       }
     }
   }

@@ -89,7 +89,9 @@ node scripts/package-cloud-plugin.mjs https://xrift-studio-pr124.kkkkkkasdad.cha
 
 申請用Appに「Authorization unavailable」「MCP configuration incomplete」と表示された場合は、Connect・Reconnectと最新scanの結果を確認します。Sites由来の所有者用Appと申請用Appは同じものとは限りません。所有者用接続が動いていても、申請用接続の成功は保証されません。認証開始前の失敗はWorkerの編集処理やZIPの再生成だけで修復できると判断せず、接続の対応関係を確認します。
 
-既存の録画草稿は手動操作の確認用です。会話からの制作、同じ作品への追編集、実際の表示までを録画していない場合、AI制作の審査を満たすデモとして扱いません。
+[既存の録画草稿](https://xrift-studio-pr124.kkkkkkasdad.chatgpt.site/review/xrift-studio-walkthrough-draft.mp4)を`extensions.com.openai.review.demo_recording_url`に設定しています。手動編集・色の変更・ブラウザ保存・再開の実画面を収録した以前の草稿で、待機時間を一部省略しています。現在の24時間の一時保存や、ChatGPTからのAI編集・表示・画像受信を証明する動画ではありません。申請資料0.1.7はこのURLと説明だけを更新し、MCPサーバーのバージョンは0.1.6のままです。
+
+録画は既存Sitesソースの`public/review/xrift-studio-walkthrough-draft.mp4`で管理します。Viteが公開素材を出力し、Sitesビルドが`dist/client/review/`へ引き継ぎます。更新時は既存Sitesソースを基点とし、PRのファイルだけで置き換えて録画を消さないでください。会話からの制作、同じ作品への追編集、実際の表示までを録画していない場合、AI制作の審査を満たすデモとして扱いません。
 
 公式手順: [公開申請](https://developers.openai.com/plugins/deploy/submission)、[認証](https://developers.openai.com/plugins/build/auth)、[接続と検証](https://developers.openai.com/plugins/deploy/connect-chatgpt)。要件は申請時に再確認します。
 
