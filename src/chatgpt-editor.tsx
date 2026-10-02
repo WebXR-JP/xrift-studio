@@ -351,6 +351,7 @@ function Application() {
       if (!result || result.operationId !== command.operationId) throw new Error('再送データがこのブラウザにありません。元の結果をretry_worldで再送してください');
       await accept(result as unknown as Record<string, unknown>); return;
     }
+    if (name !== 'edit_world') throw new Error('未対応のStudio操作です');
     const active = current.current;
     if (!active) throw new Error('会話内の最新のbundleとrevisionをedit_worldへ引き継いでください。新規制作はcreate_worldで開始できます');
     if (command.projectId && command.projectId !== active.documents.project.projectId) throw new Error('編集対象が異なります。対象の作品を開いてください');

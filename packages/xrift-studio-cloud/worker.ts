@@ -23,6 +23,11 @@ const string = (value: unknown) => {
   if (typeof value !== 'string' || !value.trim()) throw new Error('空でない文字列で指定してください');
   return value;
 };
+const operationId = (value: unknown): string => {
+  const id = string(value);
+  if (!/^[A-Za-z0-9-]{1,120}$/.test(id)) throw new Error('操作IDが不正です');
+  return id;
+};
 const icons = [{ src: 'data:image/svg+xml;base64,' + btoa("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"512\" height=\"512\" viewBox=\"0 0 512 512\"><defs><linearGradient id=\"brand\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop stop-color=\"#a78bfa\"/><stop offset=\".4\" stop-color=\"#8b5cf6\"/><stop offset=\".8\" stop-color=\"#6366f1\"/><stop offset=\"1\" stop-color=\"#3b82f6\"/></linearGradient></defs><rect width=\"512\" height=\"512\" rx=\"112\" fill=\"url(#brand)\"/><path d=\"m189.5 189.5 133 133m0-133-133 133\" fill=\"none\" stroke=\"#fff\" stroke-width=\"33.3\" stroke-linecap=\"round\"/></svg>"), mimeType: 'image/svg+xml', sizes: ['any'] }];
 const deliveryDescription = "Editor startup is not required for document edits. Internally carry the latest complete bundle, revision, projectId, operationId and baseHash from the previous tool result in this conversation. Pass bundle and revision to edit_world without asking the user to copy JSON. Continue create_world -> edit_world without waiting for UI receipts or PNGs. After editing, call open_studio or capture_scene_view with the latest result to display it once. Sites stores no projects or assets. Conversation data is not proof of browser saving or display. Report document editing, browser saving, Studio display and image capture separately. Claim displayed only after a matching studioDelivery receipt; claim image confirmation only after inspecting a real PNG. Retry the original complete result without rerunning edits or overwriting later work.";
 async function delivery(bundle: ReturnType<typeof validateBundle>, revision: number, baseHash: string | null, operationId: string = crypto.randomUUID()) {
@@ -531,12 +536,15 @@ export async function callTool(name: string, args: Record<string, unknown>): Pro
     if (args.bundle) return { ...await callTool('open_studio', args), captureSceneView: true };
     return { captureSceneView: true, operationId: crypto.randomUUID(), delivery: { status: 'awaiting_studio_verification' } };
   }
-  if (name === 'get_editor_context' || name === 'get_operation_status') return { studioCommand: { name, ...args, requestId: crypto.randomUUID() }, delivery: { status: 'awaiting_studio_verification' } };
+  if (name === 'get_editor_context' || name === 'get_operation_status') {
+    const allowed = name === 'get_operation_status' ? ['operationId'] : [];
+    if (Object.keys(args).some(key => !allowed.includes(key))) throw new Error('未対応の引数が含まれています');
+    return { studioCommand: { name, ...(name === 'get_operation_status' ? { operationId: operationId(args.operationId) } : {}), requestId: crypto.randomUUID() }, delivery: { status: 'awaiting_studio_verification' } };
+  }
   if ((name === 'edit_world' || name === 'retry_world') && !args.bundle) {
     if (name === 'edit_world' && (!Array.isArray(args.operations) || args.operations.length < 1 || args.operations.length > 200)) throw new Error('編集操作は1〜200個で指定してください');
     if (name === 'edit_world') throw new Error('conversation_state_required: 会話内の直前のcreate_worldまたはedit_worldのbundleとrevisionを内部で引き継いでください。Editorを開く必要はありません。利用者にJSONの再提示を求めないでください。');
-    if (name === 'retry_world') string(args.operationId);
-    return { studioCommand: { name, ...args, operationId: name === 'retry_world' ? args.operationId : crypto.randomUUID() }, delivery: { status: 'awaiting_studio_verification' } };
+    return { studioCommand: { name: 'retry_world', operationId: operationId(args.operationId) }, delivery: { status: 'awaiting_studio_verification' } };
   }
   if (name === 'describe_document_tool') {
     const definition = documentTools.find(tool => tool.name === args.tool);
@@ -549,8 +557,8 @@ export async function callTool(name: string, args: Record<string, unknown>): Pro
     return delivery(createPrototypeProject('world', name), 0, null);
   }
   if (name === 'retry_world') {
-    const id = string(args.operationId);
-    if (!/^[A-Za-z0-9-]{1,120}$/.test(id) || !Number.isSafeInteger(args.revision) || (args.revision as number) < 0 || !(args.baseHash === null || typeof args.baseHash === 'string')) throw new Error('再送する結果が不正です');
+    const id = operationId(args.operationId);
+    if (!Number.isSafeInteger(args.revision) || (args.revision as number) < 0 || !(args.baseHash === null || typeof args.baseHash === 'string')) throw new Error('再送する結果が不正です');
     return delivery(validateBundle(args.bundle), args.revision as number, args.baseHash as string | null, id);
   }
   if (name !== 'edit_world') throw new Error('Unknown tool');
@@ -636,7 +644,10 @@ export async function handleMcp(request: Request, env: Environment): Promise<Res
       case 'tools/call': {
         const name = string(params.name); if (!tools.some((tool) => tool.name === name)) throw new Error('Unknown tool');
         try {
-          const result = await callTool(name, params.arguments === undefined ? {} : object(params.arguments));
+          const args = params.arguments === undefined ? {} : object(params.arguments);
+          const properties = tools.find(tool => tool.name === name)!.inputSchema.properties;
+          if (Object.keys(args).some(key => !Object.prototype.hasOwnProperty.call(properties, key))) throw new Error('未対応の引数が含まれています');
+          const result = await callTool(name, args);
           const text = name === 'describe_document_tool'
             ? '次のdefinition.inputSchemaに従って操作のargumentsを指定してください。'
             : name === 'capture_scene_view'

@@ -48,6 +48,28 @@ test('missing conversation state asks the agent to carry data, never to open the
   await assert.rejects(callTool('edit_world', { operations: Array(201).fill({}) }), /200/);
 });
 
+test('read-only tools cannot be changed into browser write commands through extra arguments', async () => {
+  for (const name of ['get_editor_context', 'get_operation_status']) {
+    await assert.rejects(callTool(name, { name: 'edit_world', operationId: 'test-id', operations: [] }), /未対応/);
+  }
+  await assert.rejects(callTool('get_operation_status', {}));
+  await assert.rejects(callTool('get_operation_status', { operationId: '__proto__' }), /操作ID/);
+  const status = await callTool('get_operation_status', { operationId: 'test-id' });
+  assert.equal(status.studioCommand.name, 'get_operation_status');
+  assert.equal(status.studioCommand.operationId, 'test-id');
+  const retry = await callTool('retry_world', { operationId: 'test-id', name: 'edit_world', operations: [] });
+  assert.deepEqual(retry.studioCommand, { name: 'retry_world', operationId: 'test-id' });
+  const response = await cloudWorker.fetch(new Request('https://studio.example/mcp', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
+      name: 'retry_world', arguments: { operationId: 'test-id', name: 'edit_world', operations: [] },
+    } }),
+  }), { ASSETS: { fetch() { throw new Error('No assets should be accessed'); } } });
+  const { result } = await response.json();
+  assert.equal(result.isError, true);
+  assert.equal(result.structuredContent, undefined);
+});
+
 test('a batch uses temporary IDs, advances revision once and rolls back invalid references', async () => {
   const original = await callTool('create_world', { name: 'batch-regression' });
   const count = Object.keys(original.bundle.scene.entities).length;
