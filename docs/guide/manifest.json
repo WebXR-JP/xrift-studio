@@ -1,7 +1,7 @@
 {
   "title": "XRift Studio 使い方ガイド",
   "reviewedVersion": "1.0.1",
-  "reviewedOn": "2026-10-01",
+  "reviewedOn": "2026-10-02",
   "siteUrl": "https://webxr-jp.github.io/xrift-studio/guide/",
   "groups": [
     {
@@ -146,7 +146,7 @@
       "description": "画像をマテリアルに貼り、模様や凹凸の陰影を加えます。Normal Mapなどの用途と入力条件も確認できます。",
       "group": "basics",
       "file": "textures.md",
-      "keywords": "Normal Map ノーマルマップ Texture テクスチャ UV Occlusion Map 模様 凹凸 画像 Linear Mipmaps",
+      "keywords": "Normal Map ノーマルマップ Texture テクスチャ UV Occlusion Map 模様 凹凸 画像 Linear Mipmaps KTX2 圧縮 原寸 元画像",
       "related": [
         "materials",
         "external-resources",
@@ -201,7 +201,7 @@
       "description": "「外部から追加」のカタログで、モデル、マテリアル、空、水、ギミックの見本を探せます。",
       "group": "create",
       "file": "external-resources.md",
-      "keywords": "外部から追加 カタログ Poly Haven ambientCG 素材 配布 モデル",
+      "keywords": "外部から追加 カタログ Poly Haven ambientCG 音蔵 音声 楽曲 SFX BGM 効果音 環境音 音楽 素材 配布 モデル さらに表示",
       "related": [
         "assets",
         "materials",
@@ -227,7 +227,7 @@
       "description": "空の背景にSkybox Shader、水面にWater Shaderを設定します。背景と照明の設定も説明します。",
       "group": "create",
       "file": "sky-and-water.md",
-      "keywords": "Skybox Skybox Shader Water Shader 空 水 海 背景 HDRI IBL 風",
+      "keywords": "Skybox Skybox Shader Water Shader 空 水 海 背景 HDRI IBL 風 360度 全天球 パノラマ PNG JPEG Equirectangular Skybox Texture 背景画像",
       "related": [
         "lighting",
         "external-resources",

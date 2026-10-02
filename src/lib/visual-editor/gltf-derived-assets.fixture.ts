@@ -85,6 +85,10 @@ export async function runGltfDerivedAssetFixtureAssertions(): Promise<void> {
   assert(expanded.writes.length === 1, "Extracted image write was not deduplicated");
   const texture = expanded.textureAssets[0];
   const material = expanded.materialAssets[0];
+  assert(texture.importSettings.compression.format === "source" && texture.importSettings.resize.mode === "original",
+    "Embedded model textures must keep their original format and size by default");
+  assert(expanded.writes[0].bytes.every((value, index) => value === image[index]) && expanded.writes[0].bytes.length === image.length,
+    "Extracting a model texture must preserve the source image bytes");
   assert(texture.folderId === "folder-avocado-textures", "Texture folder was lost");
   assert(texture.importSettings.sampler.wrapS === "clamp-to-edge", "wrapS was lost");
   assert(texture.importSettings.sampler.wrapT === "mirrored-repeat", "wrapT was lost");

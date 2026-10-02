@@ -47,9 +47,12 @@ import {
 } from "../../lib/visual-editor";
 import {
   DEFAULT_EXTERNAL_STORE_PROVIDER_ID,
+  EXTERNAL_STORE_PAGE_SIZE,
   EXTERNAL_STORE_PROVIDER_GROUPS,
   EXTERNAL_STORE_PROVIDERS,
   getExternalStoreProvider,
+  matchesOtoguraAudioFilter,
+  type OtoguraAudioFilter,
   type ExternalStoreProvider,
 } from "../../lib/visual-editor/external-store-providers";
 import { formatFileSize } from "./editor-utils";
@@ -156,7 +159,9 @@ export function ExternalAssetStoreDialog({
   const [assets, setAssets] = useState<ExternalStoreAsset[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [visibleCount, setVisibleCount] = useState(EXTERNAL_STORE_PAGE_SIZE);
   const [kind, setKind] = useState<StoreKindFilter>("all");
+  const [audioFilter, setAudioFilter] = useState<OtoguraAudioFilter>("all");
   const [loading, setLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -252,18 +257,24 @@ export function ExternalAssetStoreDialog({
     };
   }, [open, provider.kind, remoteAssetsAvailable, selected, selectedIsInstallable]);
 
-  const visibleAssets = useMemo(() => {
+  // Keep every match searchable; reveal large catalogs in bounded batches.
+  useEffect(() => {
+    setVisibleCount(EXTERNAL_STORE_PAGE_SIZE);
+  }, [open, provider.id, query, kind, audioFilter, assets]);
+
+  const matchingAssets = useMemo(() => {
     const tokens = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
     return assets
       .filter((asset) => kind === "all" || asset.assetKind === kind)
+      .filter((asset) => provider.id !== "otogura" || matchesOtoguraAudioFilter(asset, audioFilter))
       .filter((asset) => {
         const text = [asset.name, asset.description, asset.category, ...asset.tags]
           .join(" ")
           .toLocaleLowerCase();
         return tokens.every((token) => text.includes(token));
-      })
-      .slice(0, 120);
-  }, [assets, kind, query]);
+      });
+  }, [assets, kind, query, provider.id, audioFilter]);
+  const visibleAssets = matchingAssets.slice(0, visibleCount);
   const selectedResolution = options?.resolutions.find((entry) => entry.id === resolution);
   const selectedFormat = selectedResolution?.formats.find((entry) => entry.id === fileFormat);
 
@@ -273,6 +284,7 @@ export function ExternalAssetStoreDialog({
     setProviderId(nextProviderId);
     setQuery("");
     setKind("all");
+    setAudioFilter("all");
     setInstalledName(null);
     setApplySkybox(true);
   };
@@ -533,18 +545,34 @@ export function ExternalAssetStoreDialog({
                     className="h-8 w-full rounded-md border border-slate-300 bg-white pl-8 pr-3 text-xs outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
                   />
                 </label>
-                <select
-                  value={kind}
-                  onChange={(event) => setKind(event.currentTarget.value as StoreKindFilter)}
-                  aria-label="アセット種別"
-                  className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700"
-                >
-                  <option value="all">すべて</option>
-                  {provider.catalogKinds.map((entry) => (
-                    <option key={entry} value={entry}>{kindLabel(entry)}</option>
-                  ))}
-                </select>
+                {provider.id === "otogura" ? (
+                  <select
+                    value={audioFilter}
+                    onChange={(event) => setAudioFilter(event.currentTarget.value as OtoguraAudioFilter)}
+                    aria-label="音蔵の音源分類"
+                    className="h-8 max-w-[55%] rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700"
+                  >
+                    <option value="all">すべて</option>
+                    <option value="sfx">SFX（効果音・環境音）</option>
+                    <option value="music">BGM（音楽）</option>
+                  </select>
+                ) : (
+                  <select
+                    value={kind}
+                    onChange={(event) => setKind(event.currentTarget.value as StoreKindFilter)}
+                    aria-label="アセット種別"
+                    className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700"
+                  >
+                    <option value="all">すべて</option>
+                    {provider.catalogKinds.map((entry) => (
+                      <option key={entry} value={entry}>{kindLabel(entry)}</option>
+                    ))}
+                  </select>
+                )}
               </div>
+              {provider.id === "otogura" && audioFilter === "music" ? (
+                <p className="mt-2 text-[11px] text-slate-500">BGMには歌入りの楽曲も含まれます。</p>
+              ) : null}
             </div>
             <div className="scrollbar-thin min-h-0 flex-1 overflow-auto p-3">
               {loading ? (
@@ -610,6 +638,22 @@ export function ExternalAssetStoreDialog({
               ) : null}
             </div>
             <footer className="shrink-0 border-t border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-500">
+              {!loading && !catalogError ? (
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <span aria-live="polite" aria-atomic="true">
+                    {matchingAssets.length}件中{visibleAssets.length}件を表示
+                  </span>
+                  {visibleAssets.length < matchingAssets.length ? (
+                    <button
+                      type="button"
+                      onClick={() => setVisibleCount((count) => count + EXTERNAL_STORE_PAGE_SIZE)}
+                      className="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      さらに{Math.min(EXTERNAL_STORE_PAGE_SIZE, matchingAssets.length - visibleAssets.length)}件を表示
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
               提供元{" "}
               <button
                 type="button"

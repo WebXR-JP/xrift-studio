@@ -2,6 +2,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type RefObject,
 } from "react";
@@ -129,138 +130,133 @@ export function useMaterialPreviewTextureState(
     [assets, material],
   );
   const requestKey = useMemo(
-    () =>
-      JSON.stringify(
-        requests.map((request) => ({
-          role: request.role ?? `uniform:${request.uniformName ?? ""}`,
-          assetId: request.asset.id,
-          sourceHash: request.asset.sourceHash ?? "",
-          source:
-            request.asset.source.kind === "project"
-              ? request.asset.source.relativePath
-              : request.asset.source.key,
-          textureInfo: request.textureInfo,
-          importSettings: request.asset.importSettings,
-          colorSpace: request.colorSpace,
-        })),
-      ),
+    () => JSON.stringify(requests.map(previewTextureRequestKey)),
     [requests],
   );
   const [state, setState] = useState<MaterialPreviewTextureState>({
     textures: {},
     statuses: {},
   });
+  const sessionRef = useRef<ReturnType<typeof createMaterialPreviewTextureSession> | null>(null);
 
   useEffect(() => {
-    let active = true;
-    let ownedTextures: Texture[] = [];
-    if (requests.length === 0) {
-      setState({ textures: {}, statuses: {} });
-      return () => {
-        active = false;
-      };
-    }
-    setState({
-      textures: {},
-      statuses: Object.fromEntries(
-        requests.flatMap((request) =>
-          request.role
-            ? [
-                [
-                  request.role,
-                  projectPath || request.asset.source.kind === "builtin"
-                    ? "loading"
-                    : "error",
-                ] as const,
-              ]
-            : [],
-        ),
-      ) as MaterialPreviewTextureStatuses,
-    });
-    const readableRequests = requests.filter(
-      (request) => projectPath || request.asset.source.kind === "builtin",
-    );
-    if (readableRequests.length === 0) {
-      return () => {
-        active = false;
-      };
-    }
-
-    void Promise.all(
-      requests.map(async (request) => {
-        if (!projectPath && request.asset.source.kind !== "builtin") {
-          return { ...request, status: "error" as const };
-        }
+    const session = createMaterialPreviewTextureSession(async (request) => {
+      if (!projectPath && request.asset.source.kind !== "builtin") {
+        throw new Error("A project path is required to load this Texture");
+      }
+      const dataUrl = await readMaterialPreviewTextureUrl(projectPath ?? "", request.asset);
+      let texture: Texture;
+      if (getTextureSourceFormat(request.asset) === "ktx2") {
+        const loader = new KTX2Loader()
+          .setTranscoderPath(KTX2_TRANSCODER_PATH)
+          .detectSupport(gl);
         try {
-          const dataUrl = await readMaterialPreviewTextureUrl(
-            projectPath ?? "",
-            request.asset,
-          );
-          let texture: Texture;
-          if (getTextureSourceFormat(request.asset) === "ktx2") {
-            const loader = new KTX2Loader()
-              .setTranscoderPath(KTX2_TRANSCODER_PATH)
-              .detectSupport(gl);
-            try {
-              texture = await loader.loadAsync(dataUrl);
-            } finally {
-              loader.dispose();
-            }
-          } else {
-            texture = await new TextureLoader().loadAsync(dataUrl);
-          }
-          configureMaterialPreviewTexture(
-            texture,
-            request.asset,
-            request.textureInfo,
-            request.colorSpace,
-            request.role ?? request.uniformName ?? "shader sampler",
-          );
-          return { ...request, texture, status: "ready" as const };
-        } catch {
-          return { ...request, status: "error" as const };
+          texture = await loader.loadAsync(dataUrl);
+        } finally {
+          loader.dispose();
         }
-      }),
-    ).then((loaded) => {
-        const available: Array<PreviewTextureRequest & { texture: Texture }> = [];
-      for (const entry of loaded) {
-        if (entry.status === "ready") available.push(entry);
+      } else {
+        texture = await new TextureLoader().loadAsync(dataUrl);
       }
-      if (!active) {
-        available.forEach((entry) => entry.texture.dispose());
-        return;
-      }
-      ownedTextures = available.map((entry) => entry.texture);
-        const shaderUniforms: Record<string, Texture> = {};
-        const textures: MaterialPreviewTextures = {};
-        for (const entry of available) {
-          if (entry.uniformName) shaderUniforms[entry.uniformName] = entry.texture;
-          else if (entry.role) textures[entry.role] = entry.texture;
-        }
-        if (Object.keys(shaderUniforms).length > 0) {
-          textures.shaderUniforms = shaderUniforms;
-        }
-        setState({
-          textures,
-          statuses: Object.fromEntries(
-            loaded.flatMap((entry) =>
-              entry.role ? [[entry.role, entry.status] as const] : [],
-            ),
-          ) as MaterialPreviewTextureStatuses,
-        });
-    });
-
+      configureMaterialPreviewTexture(
+        texture, request.asset, request.textureInfo, request.colorSpace,
+        request.role ?? request.uniformName ?? "shader sampler",
+      );
+      return texture;
+    }, setState);
+    sessionRef.current = session;
     return () => {
-      active = false;
-      ownedTextures.forEach((texture) => texture.dispose());
-      ownedTextures = [];
+      session.dispose();
+      if (sessionRef.current === session) sessionRef.current = null;
     };
-  // Scalar Material edits must not clear and reload every unchanged Texture.
-  // `requestKey` contains every source, slot, transform, sampler, and color-space
-  // input that can change the owned Texture set.
+  }, [gl, projectPath]);
+
+  useEffect(() => {
+    sessionRef.current?.setRequests(requests);
+  // Scalar edits reuse their Texture objects. Each changed slot loads on its
+  // own; an Outline/Normal load must not remove a ready Base Color/Shade map.
   }, [gl, projectPath, requestKey]);
 
   return state;
+}
+
+/** Only inputs that configure a Texture belong in its resource identity. */
+function previewTextureRequestKey(request: PreviewTextureRequest): string {
+  return JSON.stringify({
+    role: request.role,
+    uniformName: request.uniformName,
+    assetId: request.asset.id,
+    sourceHash: request.asset.sourceHash,
+    source: request.asset.source,
+    sourceFormat: getTextureSourceFormat(request.asset),
+    texCoord: request.textureInfo.texCoord,
+    transform: request.textureInfo.transform,
+    importSettings: request.asset.importSettings,
+    colorSpace: request.colorSpace,
+  });
+}
+
+/** Own each slot independently, including pending loads retired by a new edit. */
+export function createMaterialPreviewTextureSession(
+  load: (request: PreviewTextureRequest) => Promise<Texture>,
+  onChange: (state: MaterialPreviewTextureState) => void,
+) {
+  type Entry = { request: PreviewTextureRequest; status: MaterialPreviewTextureLoadStatus; texture?: Texture };
+  const entries = new Map<string, Entry>();
+  let active = true;
+  const publish = () => {
+    if (!active) return;
+    const textures: MaterialPreviewTextures = {};
+    const statuses: MaterialPreviewTextureStatuses = {};
+    for (const { request, status, texture } of entries.values()) {
+      if (request.role) {
+        statuses[request.role] = status;
+        if (texture) textures[request.role] = texture;
+      } else if (request.uniformName && texture) {
+        (textures.shaderUniforms ??= {})[request.uniformName] = texture;
+      }
+    }
+    onChange({ textures, statuses });
+  };
+  return {
+    setRequests(requests: readonly PreviewTextureRequest[]) {
+      if (!active) return;
+      const requested = new Map(requests.map(request => [previewTextureRequestKey(request), request]));
+      let changed = false;
+      for (const [key, entry] of entries) {
+        if (requested.has(key)) continue;
+        entries.delete(key);
+        entry.texture?.dispose();
+        changed = true;
+      }
+      for (const [key, request] of requested) {
+        if (entries.has(key)) continue;
+        const entry: Entry = { request, status: "loading" };
+        entries.set(key, entry);
+        changed = true;
+        void load(request).then(texture => {
+          // A → B → A is a new request, even if the old A finishes last.
+          if (!active || entries.get(key) !== entry) {
+            texture.dispose();
+            return;
+          }
+          entry.texture = texture;
+          entry.status = "ready";
+          publish();
+        }, () => {
+          if (!active || entries.get(key) !== entry) return;
+          entry.status = "error";
+          publish();
+        });
+      }
+      if (changed || requests.length === 0) publish();
+    },
+    dispose() {
+      active = false;
+      for (const entry of entries.values()) entry.texture?.dispose();
+      entries.clear();
+    },
+  };
 }
 
 export function useMaterialPreviewTextures(
