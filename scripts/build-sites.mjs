@@ -39,4 +39,6 @@ writeFileSync('dist/client/chatgpt.html', appHtml);
 copyFileSync('dist/client/preview.html', 'dist/client/index.html');
 mkdirSync('dist/.openai', { recursive: true });
 copyFileSync('.openai/hosting.json', 'dist/.openai/hosting.json');
+// Sites applies checked-in schema migrations before uploading this Worker.
+cpSync('drizzle', 'dist/drizzle', { recursive: true });
 console.log('Sites Worker and editor assets are ready.');

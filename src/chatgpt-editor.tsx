@@ -9,14 +9,19 @@ import type { PrototypeVisualProject } from './lib/visual-editor/prototype-proje
 import { validateBundle, bundleHash } from './lib/visual-editor/chatgpt-project';
 import type { VisualProjectDocuments } from './lib/visual-editor/persistence';
 import { createBrowserProject, getBrowserProjectFiles, readStudioRecovery, writeStudioRecovery } from './lib/browser-project-storage';
-import { parseStudioResult, verifyStudioResult, StudioVerificationError, studioReceiptVerification, settleStudioData, assertStudioReplayAllowed, assertStudioProjectOpenAllowed, addReceipt, emptyRecovery, type StudioResult, type StudioRecovery, type StudioReceipt, type StudioVerification } from './lib/visual-editor/chatgpt-delivery';
+import { parseStudioResult, verifyStudioResult, StudioVerificationError, studioReceiptVerification, settleStudioData, assertStudioReplayAllowed, assertStudioProjectOpenAllowed, addReceipt, emptyRecovery, type StudioRecovery, type StudioReceipt, type StudioVerification } from './lib/visual-editor/chatgpt-delivery';
+import { studioToolData, parseSnapshotStudioResult, resultSnapshot, studioSnapshotContext, type SnapshotStudioResult, type StudioSnapshot } from './lib/visual-editor/chatgpt-snapshot';
 import { browserProjectDocumentFiles, parseBrowserProjectFiles } from './lib/visual-editor/browser-project-transfer';
 import { studioLaunchFromUrl, validateStudioProjectId } from './lib/browser-project-routing';
 import './index.css';
 import './preview.css';
-const app = new App({ name: 'XRift Studio', version: '0.1.3' });
+const app = new App({ name: 'XRift Studio', version: '0.1.6' });
 const extensions = new OpenAIExtensions(app);
-type Result = StudioResult;
+type Result = SnapshotStudioResult;
+type Recovery = StudioRecovery & {
+  snapshots?: Record<string, StudioSnapshot>;
+  snapshotUploads?: Record<string, { operationId: string; hash: string; previousSnapshotId?: string }>;
+};
 type Local = { path: string; documents: VisualProjectDocuments; revision: number };
 function bundleFrom(documents: VisualProjectDocuments): PrototypeVisualProject {
   return { project: documents.project, scene: documents.scenes[documents.project.entrySceneId], assets: documents.assets, prefabs: documents.prefabs };
@@ -36,13 +41,14 @@ function Application() {
   const operation = useRef(false);
   const bridge = useRef<VisualEditorMcpProjectBridge | null>(null);
   const writes = useRef<Promise<unknown>>(Promise.resolve());
-  const recovery = useRef<StudioRecovery>(emptyRecovery());
+  const recovery = useRef<Recovery>(emptyRecovery());
   const recoveryWrites = useRef<Promise<void>>(Promise.resolve());
   const [checking, setChecking] = useState(false);
   const [receipt, setReceipt] = useState<StudioReceipt | null>(null);
   const initialized = useRef<Promise<void>>(Promise.resolve());
   const restoreError = useRef<string | null>(null);
   const applying = useRef(false);
+  const capturingSnapshot = useRef(false);
   const mounted = useRef(true);
   function persist() {
     const snapshot = structuredClone(recovery.current);
@@ -56,12 +62,22 @@ function Application() {
     recovery.current.projects[next.documents.project.projectId] = { revision: next.revision, hash: recovery.current.active.hash };
     await persist();
   }
+  async function rememberSnapshot(result: Result) {
+    const snapshot = resultSnapshot(result);
+    if (!snapshot) return;
+    const previous = recovery.current.snapshots?.[snapshot.projectId];
+    // Replaying a receipt cannot move the known server base behind a later result.
+    if (previous && (previous.expiresAt > snapshot.expiresAt || previous.expiresAt === snapshot.expiresAt && previous.revision > snapshot.revision)) return;
+    recovery.current.snapshots = { ...recovery.current.snapshots, [snapshot.projectId]: snapshot };
+    await persist();
+  }
   async function resume(path: string) {
     const documents = parseBrowserProjectFiles(await getBrowserProjectFiles(path));
     const saved = recovery.current.projects[documents.project.projectId];
     const hash = await bundleHash(bundleFrom(documents));
     select({ path, documents, revision: saved ? saved.revision + (hash === saved.hash ? 0 : 1) : 0 });
     await remember(current.current!);
+    if (hostReady.current) await context(current.current!).catch(() => {});
   }
   async function report(result: Result, status: StudioReceipt['status'], message: string, image?: string, verification?: StudioVerification) {
     if (!result.operationId) return;
@@ -71,8 +87,8 @@ function Application() {
     recovery.current = addReceipt(recovery.current, item); setReceipt(item); await persist();
     const evidence = studioReceiptVerification(item);
     const sent = await app.sendMessage({ role: 'user', content: [
-      { type: 'text', text: JSON.stringify({ ...(image ? { sceneCapture: { operationId: item.operationId, projectId: item.projectId, status: 'verified', revision: item.revision } } : {}), studioDelivery: { ...item, ...evidence, sceneId: result.bundle.scene.sceneId, projectMatched: bridge.current?.currentBundle().project.projectId === result.bundle.project.projectId, activeProjectId: current.current?.documents.project.projectId ?? null, results: result.results },
-        instruction: status === 'verified' ? 'この操作のStudioへの反映、ブラウザ保存、Scene Viewの取得を確認しました。画像を確認してから完了を報告してください。' : evidence.applied && evidence.saved ? '編集データの一致とブラウザ保存を確認しました。Scene Viewの描画と画像取得は未確認です。保存失敗や編集の未適用とは報告せず、未確認の段階を伝えてください。会話内の最新bundleとrevisionを使って編集を続けられます。画像を再確認する場合はretry_worldで同じ結果を再送し、編集処理を繰り返さないでください。' : 'この操作は未完了です。反映確認済みとは報告しないでください。Studioを開き、保存された結果を再適用するかretry_worldで同じデータを再送してください。' }) },
+      { type: 'text', text: JSON.stringify({ ...(image ? { sceneCapture: { operationId: item.operationId, projectId: item.projectId, status: 'verified', revision: item.revision } } : {}), studioDelivery: { ...item, ...evidence, ...(result.snapshotId ? { snapshotId: result.snapshotId, expiresAt: result.expiresAt } : {}), sceneId: result.bundle.scene.sceneId, projectMatched: bridge.current?.currentBundle().project.projectId === result.bundle.project.projectId, activeProjectId: current.current?.documents.project.projectId ?? null, results: result.results },
+        instruction: status === 'verified' ? 'この操作のStudioへの反映、ブラウザ保存、Scene Viewの取得を確認しました。画像を確認してから完了を報告してください。' : evidence.applied && evidence.saved ? '編集データの一致とブラウザ保存を確認しました。Scene Viewの描画と画像取得は未確認です。保存失敗や編集の未適用とは報告せず、未確認の段階を伝えてください。会話内の最新snapshotIdを使って編集を続けられます。画像を再確認する場合はretry_worldで同じsnapshotIdを再送し、編集処理を繰り返さないでください。' : 'この操作は未完了です。反映確認済みとは報告しないでください。Studioを開き、保存された結果を再適用するかretry_worldで同じsnapshotIdを再送してください。' }) },
       ...(image ? [{ type: 'image' as const, data: image, mimeType: 'image/png' }] : []),
     ] }, { timeout: 15000 });
     if (sent.isError) throw new Error('反映結果を会話へ送れませんでした。反映を再確認してください');
@@ -111,8 +127,57 @@ function Application() {
     recovery.current = next; latestResult.current = next.pending; setPending(next.pending); await persist();
   }
   function select(next: Local) { current.current = next; setLocal(next); }
-  async function context(next: Local, bundle = bundleFrom(next.documents)) {
-    await app.updateModelContext({ content: [{ type: 'text', text: `編集対象: ${bundle.project.metadata.name}。edit_worldへこのbundleとrevisionを内部で引き継いでください。以後は直前のツール結果を使ってEditorの表示確認を待たずに追編集できます。データ編集、ブラウザ保存、画面反映、画像受信を区別してください。Sitesには作品を保存せず、素材のバイト列は含みません。` }], structuredContent: { bundle: validateBundle(bundle), revision: next.revision, projectId: bundle.project.projectId, studioHistory: recovery.current.history } });
+  async function editorContext(next: Local | null, bundle = next ? bundleFrom(next.documents) : undefined) {
+    return studioSnapshotContext(next && bundle ? { projectId: bundle.project.projectId, sceneId: bundle.scene.sceneId, revision: next.revision, hash: await bundleHash(bundle) } : null, next ? recovery.current.snapshots?.[next.documents.project.projectId] : undefined);
+  }
+  async function context(next: Local | null, bundle = next ? bundleFrom(next.documents) : undefined) {
+    const value = await editorContext(next, bundle);
+    await app.updateModelContext({ content: [{ type: 'text', text: value.canEditProject
+      ? '編集対象のsnapshotIdをedit_worldへ引き継いでください。データ編集、ブラウザ保存、画面反映、画像受信を区別してください。'
+      : next ? '手元の編集内容を会話で編集する前にget_editor_contextを呼び、現在の作品を一時保存してください。以前のsnapshotIdで手動変更を上書きしないでください。新規制作はcreate_worldで別作品を作成してください。'
+      : '現在の編集対象はありません。新規制作はcreate_worldで開始できます。' }], structuredContent: value });
+    return value;
+  }
+  async function captureEditorSnapshot() {
+    if (applying.current || latestResult.current || capturingSnapshot.current) throw new Error('AIの編集または一時保存が未完了です。完了を確認してから編集対象を会話に渡してください');
+    capturingSnapshot.current = true; setChecking(true);
+    const previousOperation = operation.current; operation.current = true;
+    try {
+      const selected = current.current;
+      const editor = bridge.current;
+      if (!selected || !editor) throw new Error('会話で編集する作品を開いてからもう一度実行してください');
+      if (!(await editor.saveNow())) throw new Error('最新の編集を保存できませんでした');
+      await writes.current;
+      if (current.current?.path !== selected.path || bridge.current !== editor) throw new Error('編集中の作品が切り替わりました。もう一度実行してください');
+      const bundle = validateBundle(editor.currentBundle());
+      const hash = await bundleHash(bundle);
+      const stored = recovery.current.snapshots?.[bundle.project.projectId];
+      // Only an explicit capture can start a new lifetime after the known expiry.
+      // The server still rejects this if another live head exists for the project.
+      const previous = stored && stored.expiresAt > Date.now() ? stored : undefined;
+      const pendingUpload = recovery.current.snapshotUploads?.[bundle.project.projectId];
+      const upload = pendingUpload?.hash === hash && pendingUpload.previousSnapshotId === previous?.snapshotId
+        ? pendingUpload : { operationId: crypto.randomUUID(), hash, ...(previous ? { previousSnapshotId: previous.snapshotId } : {}) };
+      recovery.current.snapshotUploads = { ...recovery.current.snapshotUploads, [bundle.project.projectId]: upload };
+      await persist();
+      const response = await app.callServerTool({ name: 'store_editor_snapshot', arguments: {
+        bundle, operationId: upload.operationId, ...(upload.previousSnapshotId ? { previousSnapshotId: upload.previousSnapshotId } : {}),
+      } }, { timeout: 30000 });
+      if (response.isError) throw new Error(response.content.find(item => item.type === 'text')?.text ?? '会話用の編集内容を一時保存できませんでした');
+      const result = await parseSnapshotStudioResult(studioToolData(response));
+      const snapshot = resultSnapshot(result);
+      if (!snapshot || snapshot.projectId !== bundle.project.projectId || snapshot.hash !== hash || result.operationId !== upload.operationId ||
+          result.baseHash !== (previous?.hash ?? null) || result.revision !== (previous ? previous.revision + 1 : 0)) throw new Error('一時保存した作品と編集中の内容が一致しません');
+      delete recovery.current.snapshotUploads[bundle.project.projectId];
+      await rememberSnapshot(result);
+      if (current.current?.path !== selected.path || bridge.current !== editor || await bundleHash(editor.currentBundle()) !== hash) {
+        if (current.current) await context(current.current, bridge.current?.currentBundle());
+        throw new Error('一時保存中に編集内容が変わりました。最新の内容をもう一度会話に渡してください');
+      }
+      select({ ...current.current, revision: snapshot.revision });
+      await remember(current.current!);
+      return await context(current.current, bundle);
+    } finally { capturingSnapshot.current = false; operation.current = previousOperation; setChecking(false); }
   }
   async function captureSceneViewForConversation(operationId?: string) {
     const editor = bridge.current;
@@ -151,6 +216,8 @@ function Application() {
     const documents = parseBrowserProjectFiles(await getBrowserProjectFiles(path));
     select({ path, documents, revision: result.revision });
     await remember(current.current!);
+    await rememberSnapshot(result);
+    await context(current.current!).catch(() => {});
     if (result.operationId) {
       setNotice('データを適用しました。Studioへの反映を確認しています…');
       applying.current = true;
@@ -164,7 +231,16 @@ function Application() {
     assertStudioReplayAllowed(previous, current.current ? await bundleHash(bridge.current?.currentBundle() ?? bundleFrom(current.current.documents)) : null);
     applying.current = true; setChecking(true);
         const editing = bridge.current?.currentBundle() ?? (current.current ? bundleFrom(current.current.documents) : null);
-        if (editing && await bundleHash(editing) === await bundleHash(result.bundle)) { operation.current = false; applying.current = true; await verify(result); return; }
+        if (editing && await bundleHash(editing) === await bundleHash(result.bundle)) {
+          await rememberSnapshot(result);
+          if (current.current) {
+            const known = recovery.current.snapshots?.[editing.project.projectId];
+            select({ ...current.current, revision: result.snapshotId && result.snapshotId === known?.snapshotId ? result.revision : Math.max(current.current.revision, result.revision) });
+            await remember(current.current!);
+            await context(current.current, editing).catch(() => {});
+          }
+          operation.current = false; applying.current = true; await verify(result); return;
+        }
         const differs = editing && (editing.project.projectId !== result.bundle.project.projectId || !result.baseHash || await bundleHash(editing) !== result.baseHash);
         if (bridge.current && !(await bridge.current.saveNow())) throw new Error('保存できませんでした。プロジェクトを書き出してから再試行してください');
         await writes.current;
@@ -180,7 +256,7 @@ function Application() {
   }
   async function accept(data: Record<string, unknown>) {
     if (!data.bundle) return;
-    const result = parseStudioResult(data);
+    const result = await parseSnapshotStudioResult(data);
     const waiting = latestResult.current;
     if (waiting && result.operationId !== waiting.operationId &&
         result.bundle.project.projectId === waiting.bundle.project.projectId &&
@@ -261,9 +337,9 @@ function Application() {
   React.useEffect(() => {
     if (setup.current) return; setup.current = true;
     initialized.current = (async () => {
-      recovery.current = await readStudioRecovery<StudioRecovery>() ?? emptyRecovery();
+      recovery.current = await readStudioRecovery<Recovery>() ?? emptyRecovery();
       recovery.current.projects ??= {}; recovery.current.queue ??= [];
-      if (recovery.current.pending) { latestResult.current = parseStudioResult(recovery.current.pending); setPending(latestResult.current); }
+      if (recovery.current.pending) { latestResult.current = await parseSnapshotStudioResult(recovery.current.pending as unknown as Record<string, unknown>); setPending(latestResult.current); }
       setReceipt(recovery.current.history[recovery.current.history.length - 1] ?? null);
     })().catch(error => {
       // A locked or damaged saved project must not disable the host connection
@@ -276,9 +352,10 @@ function Application() {
     app.ontoolresult = result => {
       initialResultReceived.current = true;
       if (result.isError) { setNotice(result.content?.find(c => c.type === 'text')?.text ?? '接続に失敗しました'); return; }
-      const data = (result.structuredContent ?? {}) as Record<string, unknown>;
+      let data = (result.structuredContent ?? {}) as Record<string, unknown>;
       received.current = received.current.then(async () => {
         await initialized.current;
+        data = studioToolData(result);
         if (data.localProjects === true) {
           // A deep link already selects/creates its target during host startup.
           // Do not create a second project from the global entry's default result.
@@ -347,11 +424,14 @@ function Application() {
       return;
     }
     if (name === 'get_editor_context' || name === 'get_operation_status') {
+      if (name === 'get_editor_context' && operation.current) throw new Error('Studioの操作が完了してからもう一度実行してください');
+      const result = name === 'get_operation_status' ? { operationId: command.operationId, receipt: recovery.current.history.find(item => item.operationId === command.operationId) ?? null, recoverable: !!recovery.current.operations?.[String(command.operationId)] } : { connected: true, mode: 'edit', ...(current.current ? await captureEditorSnapshot() : await editorContext(null)) };
       const active = current.current;
-      const result = name === 'get_operation_status' ? { operationId: command.operationId, receipt: recovery.current.history.find(item => item.operationId === command.operationId) ?? null, recoverable: !!recovery.current.operations?.[String(command.operationId)] } : { connected: true, mode: 'edit', projectId: active?.documents.project.projectId ?? null, sceneId: active?.documents.project.entrySceneId ?? null, revision: active?.revision ?? null, hash: active ? await bundleHash(bridge.current?.currentBundle() ?? bundleFrom(active.documents)) : null, bundle: active ? validateBundle(bridge.current?.currentBundle() ?? bundleFrom(active.documents)) : null };
       const requested = name === 'get_operation_status' ? recovery.current.operations?.[String(command.operationId)]?.bundle.project.projectId : active?.documents.project.projectId;
       const studioState = { connected: hostReady.current, activeProjectId: active?.documents.project.projectId ?? null, projectMatched: !!requested && requested === active?.documents.project.projectId && requested === bridge.current?.currentBundle().project.projectId };
-      await app.sendMessage({ role: 'user', content: [{ type: 'text', text: JSON.stringify({ studioContext: { ...result, ...studioState, canCreateProject: true, canEditProject: !!active, editorReady: !!bridge.current }, instruction: active ? 'この作品への編集を続けられます。新規制作の依頼はcreate_worldで別の作品を作成してください。' : '新規制作は可能です。activeProjectIdがnullでもcreate_worldをすぐ呼び、自動作成・反映確認まで続けてください。手動で作品を開くよう依頼して止まらないでください。既存作品への編集だけはprojectIdで対象を確認してください。', requestId: command.requestId }) }] }); return;
+      const sent = await app.sendMessage({ role: 'user', content: [{ type: 'text', text: JSON.stringify({ studioContext: { ...result, ...studioState, canCreateProject: true, editorReady: !!bridge.current }, instruction: active ? name === 'get_editor_context' ? '現在の作品を一時保存しました。このsnapshotIdでedit_worldを続けられます。新規制作の依頼はcreate_worldで別の作品を作成してください。' : 'これは指定した操作の反映状況です。最新のsnapshotIdと現在の編集内容が一致するか確認してから次の編集へ進んでください。' : '新規制作は可能です。activeProjectIdがnullでもcreate_worldをすぐ呼び、自動作成・反映確認まで続けてください。手動で作品を開くよう依頼して止まらないでください。既存作品への編集だけは対象を開いてget_editor_contextを呼んでください。', requestId: command.requestId }) }] });
+      if (sent.isError) throw new Error('編集対象の情報を会話に送れませんでした');
+      return;
     }
     if (name === 'retry_world') {
       const result = recovery.current.operations?.[String(command.operationId)] ?? recovery.current.pending;
@@ -381,7 +461,8 @@ function Application() {
       const changed = await bundleHash(bundle) !== await bundleHash(bundleFrom(latest.documents));
       current.current = { ...latest, documents, revision: latest.revision + (changed ? 1 : 0) };
       await remember(current.current);
-      // Model context is opt-in via the toolbar; local saves do not send documents to the server.
+      // Local saves publish freshness only. Documents are uploaded only by an explicit context request.
+      if (hostReady.current) await context(current.current, bundle).catch(() => {});
     });
     writes.current = task.catch(() => {}); await task;
   }
@@ -397,11 +478,9 @@ function Application() {
       {retryableResult && <button className="mb-2 min-h-10 w-full rounded-md bg-violet-600 px-3 text-white disabled:opacity-50" disabled={busy || checking || !connected} onClick={() => void run(async () => {
         const result = latestResult.current ?? (displayedReceipt ? recovery.current.operations?.[displayedReceipt.operationId] : undefined); if (result) await applyResult(result);
       })}>{savedWithoutCapture ? '画像を再確認' : displayedReceipt?.status === 'failed' || displayedReceipt?.status === 'verified' && !displayedReceipt.reported ? '反映を再確認' : 'AIの結果を適用'}</button>}
-      {local && <button className="min-h-10 w-full rounded-md border border-editor-border px-3 hover:bg-editor-subtle disabled:opacity-50" disabled={busy || checking || !connected} onClick={() => void run(async () => {
-        if (bridge.current && !(await bridge.current.saveNow())) throw new Error('保存できませんでした');
-        await writes.current; const next = current.current; if (!next) return;
-        await context(next, bridge.current?.currentBundle()); setNotice('編集対象を会話に渡しました。変更内容を入力してください。');
-      })}>会話に編集対象を渡す</button>}
+      {local && <><p className="mb-2 text-xs text-editor-muted">この操作で現在の編集データを24時間一時保存します。素材ファイルは送りません。</p><button className="min-h-10 w-full rounded-md border border-editor-border px-3 hover:bg-editor-subtle disabled:opacity-50" disabled={busy || checking || !connected} onClick={() => void run(async () => {
+        await captureEditorSnapshot(); setNotice('現在の作品を会話用に一時保存しました。変更内容を入力してください。');
+      })}>会話に編集対象を渡す</button></>}
     </div>
   </details></div>;
   return <>
@@ -412,7 +491,7 @@ function Application() {
       onSaved: saved,
       onProjectChange: async path => {
         if (path) { await resume(path); setNotice('ブラウザに保存した作品を開きました。'); }
-        else { current.current = null; setLocal(null); bridge.current = null; recovery.current.active = null; await persist(); }
+        else { current.current = null; setLocal(null); bridge.current = null; recovery.current.active = null; await persist(); if (hostReady.current) await context(null).catch(() => {}); }
       },
     }} />
   </>;

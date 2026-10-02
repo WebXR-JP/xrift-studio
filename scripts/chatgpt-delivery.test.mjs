@@ -37,7 +37,7 @@ test('discovered tools declare the OAuth scopes required by Sites hosting', asyn
     assert.deepEqual(tool.securitySchemes, [{ type: 'oauth2', scopes: ['openid', 'resource.invoke', 'email'] }], tool.name);
     assert.deepEqual(tool._meta.securitySchemes, tool.securitySchemes, tool.name);
   }
-  assert.equal(result.tools.find(tool => tool.name === 'open_studio')._meta.ui.resourceUri, 'ui://xrift-studio/worlds-v18');
+  assert.equal(result.tools.find(tool => tool.name === 'open_studio')._meta.ui.resourceUri, 'ui://xrift-studio/worlds-v19');
 });
 
 test('discovered bundle inputs require the complete document envelope, including empty prefabs', async () => {
@@ -48,7 +48,7 @@ test('discovered bundle inputs require the complete document envelope, including
   const { result } = await response.json();
   const created = await callTool('create_world', { name: 'complete-bundle-regression' });
   const bundleTools = result.tools.filter(tool => tool.inputSchema.properties.bundle);
-  assert.deepEqual(bundleTools.map(tool => tool.name).sort(), ['capture_scene_view', 'edit_world', 'open_studio', 'retry_world', 'show_world']);
+  assert.deepEqual(bundleTools.map(tool => tool.name).sort(), ['store_editor_snapshot']);
   for (const tool of bundleTools) {
     const schema = tool.inputSchema.properties.bundle;
     assert.deepEqual(schema.required, ['project', 'scene', 'assets', 'prefabs'], tool.name);
@@ -71,36 +71,20 @@ test('discovered bundle inputs require the complete document envelope, including
   assert.equal(opened.projectId, created.projectId);
 });
 
-test('model display rejects absent or partial state while the app-only global entry accepts empty arguments', async () => {
-  const rpc = async (method, params = {}) => (await (await cloudWorker.fetch(new Request('https://studio.example/mcp', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({jsonrpc:'2.0', id:1, method, params}),
-  }), {ASSETS:{fetch(){throw new Error('Display validation must not access assets');}}})).json()).result;
-  const {tools} = await rpc('tools/list');
+test('model display uses only snapshot IDs while the app global entry accepts empty arguments', async () => {
+  const response = await cloudWorker.fetch(new Request('https://studio.example/mcp', {
+    method: 'POST', body: JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/list'}),
+  }), {ASSETS:{fetch(){throw new Error('No asset access');}}});
+  const {tools} = (await response.json()).result;
   assert.deepEqual(tools.find(tool=>tool.name==='open_studio')._meta.ui.visibility,['app']);
+  assert.deepEqual(tools.find(tool=>tool.name==='store_editor_snapshot')._meta.ui.visibility,['app']);
   const visible = tools.filter(tool=>!tool._meta.ui?.visibility || tool._meta.ui.visibility.includes('model'));
   assert.ok(visible.some(tool=>tool.name==='show_world'));
-  assert.ok(!visible.some(tool=>tool.name==='open_studio'));
-  const original = await callTool('create_world', {name:'strict-display-regression'});
-  const args = {bundle:original.bundle, revision:original.revision, operationId:original.operationId, baseHash:original.baseHash};
-  for (const key of Object.keys(args)) {
-    const partial = {...args}; delete partial[key];
-    const failed = await rpc('tools/call',{name:'show_world',arguments:partial});
-    assert.equal(failed.isError,true,key);
-    assert.match(failed.content[0].text,/conversation_state_required/,key);
-    assert.equal(failed.structuredContent,undefined);
+  assert.ok(!visible.some(tool=>tool.inputSchema.properties.bundle));
+  for(const name of ['show_world','retry_world','capture_scene_view']) {
+    assert.deepEqual(tools.find(tool=>tool.name===name).inputSchema.required,['snapshotId']);
   }
-  for (const partial of [{},{operationId:original.operationId}]) {
-    await assert.rejects(callTool('show_world',partial),/conversation_state_required/);
-  }
-  const opened=await rpc('tools/call',{name:'show_world',arguments:args});
-  assert.notEqual(opened.isError,true);
-  assert.equal(opened.structuredContent.projectId,original.projectId);
-  assert.equal(opened.structuredContent.operationId,original.operationId);
-  assert.equal(opened.structuredContent.delivery.hash,original.delivery.hash);
-  assert.deepEqual(JSON.parse(JSON.stringify(opened.structuredContent.bundle)),JSON.parse(JSON.stringify(original.bundle)));
   assert.equal((await callTool('open_studio',{})).launch,'new');
-  await assert.rejects(callTool('show_world',{...args,bundle:{...original.bundle,project:{}}}),/bundle.project/);
 });
 
 test('missing conversation state asks the agent to carry data, never to open the Editor', async () => {
@@ -124,7 +108,7 @@ test('read-only tools cannot be changed into browser write commands through extr
   const retry = await callTool('retry_world', { operationId: 'test-id', name: 'edit_world', operations: [] });
   assert.deepEqual(retry.studioCommand, { name: 'retry_world', operationId: 'test-id' });
   const response = await cloudWorker.fetch(new Request('https://studio.example/mcp', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'oai-authenticated-user-id':'isolated-test-owner' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: {
       name: 'retry_world', arguments: { operationId: 'test-id', name: 'edit_world', operations: [] },
     } }),

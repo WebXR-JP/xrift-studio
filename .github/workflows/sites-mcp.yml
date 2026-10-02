@@ -4,6 +4,9 @@ on:
   pull_request:
     paths:
       - '.openai/**'
+      - 'db/**'
+      - 'drizzle/**'
+      - 'drizzle.config.ts'
       - 'packages/xrift-studio-cloud/**'
       - 'plugins/xrift-studio/**'
       - 'scripts/**'
