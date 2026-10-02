@@ -38,6 +38,19 @@ async function delivery(bundle: ReturnType<typeof validateBundle>, revision: num
 class DocumentBatchError extends Error {
   constructor(message: string, readonly recovery: Record<string, unknown>) { super(message); }
 }
+// Tool callers must carry the complete document envelope, including empty prefabs.
+const bundleInputSchema = {
+  type: 'object',
+  description: 'Copy the complete bundle from the latest create_world, edit_world, retry_world or actual Editor context result. Keep project, scene, assets and prefabs unchanged; prefabs is an object keyed by prefab ID, including {} when empty. Never replace or omit document sections.',
+  properties: {
+    project: { type: 'object' },
+    scene: { type: 'object' },
+    assets: { type: 'object' },
+    prefabs: { type: 'object', additionalProperties: { type: 'object' } },
+  },
+  required: ['project', 'scene', 'assets', 'prefabs'],
+  additionalProperties: false,
+};
 const tools = [
   {
     "name": "open_studio",
@@ -45,9 +58,7 @@ const tools = [
     "inputSchema": {
       "type": "object",
       "properties": {
-        "bundle": {
-          "type": "object"
-        },
+        "bundle": bundleInputSchema,
         "revision": {
           "type": "integer",
           "minimum": 0
@@ -106,9 +117,7 @@ const tools = [
     "inputSchema": {
       "type": "object",
       "properties": {
-        "bundle": {
-          "type": "object"
-        },
+        "bundle": bundleInputSchema,
         "revision": {
           "type": "integer",
           "minimum": 0
@@ -324,9 +333,7 @@ const tools = [
     "inputSchema": {
       "type": "object",
       "properties": {
-        "bundle": {
-          "type": "object"
-        },
+        "bundle": bundleInputSchema,
         "revision": {
           "type": "integer",
           "minimum": 0
@@ -477,9 +484,7 @@ const tools = [
     "inputSchema": {
       "type": "object",
       "properties": {
-        "bundle": {
-          "type": "object"
-        },
+        "bundle": bundleInputSchema,
         "revision": {
           "type": "integer",
           "minimum": 0

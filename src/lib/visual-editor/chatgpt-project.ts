@@ -15,7 +15,7 @@ export function validateBundle(value: unknown): PrototypeVisualProject {
   const scene = parse(sceneDocumentCodec, raw.scene);
   const assets = parse(assetManifestCodec, raw.assets);
   if (scene.sceneId !== project.entrySceneId) throw new Error('編集対象のSceneが一致しません');
-  if (!raw.prefabs || typeof raw.prefabs !== 'object' || Array.isArray(raw.prefabs)) throw new Error('Prefabが不正です');
+  if (!raw.prefabs || typeof raw.prefabs !== 'object' || Array.isArray(raw.prefabs)) throw new Error('Prefabが不正です。bundle.prefabsはPrefab IDをキーにしたオブジェクトです。空の場合も{}を含め、直前のツール結果のbundleを省略せず引き継いでください');
   const prefabs = Object.fromEntries(Object.entries(raw.prefabs).map(([id, data]) => {
     const prefab = parse(prefabDocumentCodec, data);
     return [id, prefab];

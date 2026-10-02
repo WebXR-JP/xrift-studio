@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'vite';
 const server = await createServer({ configFile: false, optimizeDeps: { noDiscovery: true }, server: { middlewareMode: true, watch: null, hmr: false, ws: false } });
 after(() => server.close());
-const { verifyStudioResult, parseStudioResult, StudioVerificationError, studioReceiptVerification, assertStudioProjectOpenAllowed } = await server.ssrLoadModule('/src/lib/visual-editor/chatgpt-delivery.ts');
+const { verifyStudioResult, parseStudioResult, StudioVerificationError, studioReceiptVerification, settleStudioData, assertStudioReplayAllowed, assertStudioProjectOpenAllowed } = await server.ssrLoadModule('/src/lib/visual-editor/chatgpt-delivery.ts');
 const { openBrowserProjectSession } = await server.ssrLoadModule('/src/preview/browser-project-session.ts');
 const { callTool, default: cloudWorker } = await server.ssrLoadModule('/packages/xrift-studio-cloud/worker.ts');
 
@@ -38,6 +38,37 @@ test('discovered tools declare the OAuth scopes required by Sites hosting', asyn
     assert.deepEqual(tool._meta.securitySchemes, tool.securitySchemes, tool.name);
   }
   assert.equal(result.tools.find(tool => tool.name === 'open_studio')._meta.ui.resourceUri, 'ui://xrift-studio/worlds-v17');
+});
+
+test('discovered bundle inputs require the complete document envelope, including empty prefabs', async () => {
+  const response = await cloudWorker.fetch(new Request('https://studio.example/mcp', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+  }), { ASSETS: { fetch() { throw new Error('Discovery must not load assets'); } } });
+  const { result } = await response.json();
+  const created = await callTool('create_world', { name: 'complete-bundle-regression' });
+  const bundleTools = result.tools.filter(tool => tool.inputSchema.properties.bundle);
+  assert.deepEqual(bundleTools.map(tool => tool.name).sort(), ['capture_scene_view', 'edit_world', 'open_studio', 'retry_world']);
+  for (const tool of bundleTools) {
+    const schema = tool.inputSchema.properties.bundle;
+    assert.deepEqual(schema.required, ['project', 'scene', 'assets', 'prefabs'], tool.name);
+    for (const field of schema.required) {
+      assert.equal(schema.properties[field].type, 'object', `${tool.name}.${field}`);
+      assert.equal(typeof created.bundle[field], 'object');
+      assert.equal(Array.isArray(created.bundle[field]), false);
+    }
+  }
+  for (const prefabs of [undefined, null, []]) {
+    await assert.rejects(callTool('open_studio', {
+      bundle: { ...created.bundle, prefabs }, revision: created.revision,
+    }), /bundle.prefabs/);
+  }
+  const opened = await callTool('open_studio', {
+    bundle: created.bundle, revision: created.revision, operationId: created.operationId,
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(opened.bundle)), JSON.parse(JSON.stringify(created.bundle)));
+  assert.equal(opened.delivery.hash, created.delivery.hash);
+  assert.equal(opened.projectId, created.projectId);
 });
 
 test('missing conversation state asks the agent to carry data, never to open the Editor', async () => {
@@ -175,6 +206,37 @@ test('verification receipts keep failed saves and stale captures distinct from s
   });
   assert.deepEqual(studioReceiptVerification({ status: 'failed' }), { applied: false, saved: false, rendered: false, captured: false });
   assert.deepEqual(studioReceiptVerification({ status: 'verified' }), { applied: true, saved: true, rendered: true, captured: true });
+});
+
+test('saved data advances the queue after capture failure and stale retries cannot overwrite later edits', async () => {
+  const original = await callTool('create_world', { name: 'saved-data-queue-regression' });
+  const first = await callTool('edit_world', { bundle: original.bundle, revision: 0, operations: [
+    { tool: 'create_primitive', arguments: { shape: 'box' } },
+  ] });
+  const latest = await callTool('edit_world', { bundle: first.bundle, revision: 1, operations: [
+    { tool: 'create_primitive', arguments: { shape: 'sphere' } },
+  ] });
+  const saved = { applied: true, saved: true, rendered: false, captured: false };
+  const receipt = { operationId: original.operationId, projectId: original.projectId, revision: original.revision,
+    hash: original.delivery.hash, status: 'failed', message: 'capture unavailable', at: new Date().toISOString(), reported: false, verification: saved };
+  const state = { active: null, pending: original, queue: [latest], history: [receipt], projects: {} };
+  const settled = settleStudioData(state, original, saved);
+  assert.equal(state.pending, original);
+  assert.deepEqual(state.queue, [latest]);
+  assert.equal(settled.pending, latest);
+  assert.deepEqual(settled.queue, []);
+  assert.equal(settled.operations[original.operationId], original);
+  assert.deepEqual(settled.history, [receipt]);
+  const done = settleStudioData(settled, latest, saved);
+  assert.equal(done.pending, null);
+  assert.equal(done.operations[latest.operationId], latest);
+  assert.doesNotThrow(() => assertStudioProjectOpenAllowed('another-project', latest.projectId, done.pending));
+  assert.throws(() => assertStudioReplayAllowed(receipt, latest.delivery.hash), /巻き戻さず/);
+  assert.doesNotThrow(() => assertStudioReplayAllowed(receipt, original.delivery.hash));
+  assert.equal(settleStudioData(state, original, { ...saved, saved: false }), state);
+  assert.equal(settleStudioData(state, latest, saved), state);
+  assert.equal(original.revision, 0);
+  assert.equal(latest.revision, 2);
 });
 
 test('startup can restore a saved pending project without allowing a different project or bypassing ownership', async () => {

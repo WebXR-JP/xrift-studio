@@ -33,6 +33,20 @@ export type StudioRecovery = {
   queue: StudioResult[];
   operations?: Record<string, StudioResult>;
 };
+/** Saved data no longer blocks later edits; its original result remains retryable. */
+export function settleStudioData(state: StudioRecovery, result: StudioResult, verification: StudioVerification): StudioRecovery {
+  if (!verification.applied || !verification.saved || !result.operationId || state.pending?.operationId !== result.operationId) return state;
+  const operations = { ...state.operations, [result.operationId]: result };
+  const ids = Object.keys(operations);
+  for (const id of ids.slice(0, Math.max(0, ids.length - 20))) delete operations[id];
+  return { ...state, operations, pending: state.queue[0] ?? null, queue: state.queue.slice(1) };
+}
+/** A lost image or report does not authorize replaying old data over later edits. */
+export function assertStudioReplayAllowed(previous: StudioReceipt | undefined, currentHash: string | null) {
+  if (!previous || currentHash === null) return;
+  const evidence = studioReceiptVerification(previous);
+  if (evidence.applied && evidence.saved && currentHash !== previous.hash) throw new Error('この操作のデータはすでに保存済みです。その後の編集を巻き戻さず、現在のScene Viewを確認してください');
+}
 /** Startup may reopen the pending operation's saved project, never switch it. */
 export function assertStudioProjectOpenAllowed(projectId: string, currentProjectId: string | null, pending: StudioResult | null, restoring: StudioRecovery['active'] = null) {
   if (!pending || currentProjectId === projectId) return;
