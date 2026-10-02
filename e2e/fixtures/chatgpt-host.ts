@@ -11,7 +11,8 @@ const receipts: unknown[] = [];
 const snapshots = new Map<string, SnapshotStudioResult>();
 const contexts: unknown[] = [];
 const uploads: unknown[] = [];
-Object.assign(window, { studioTestEvidence: { contexts, uploads } });
+const toolCalls: Array<Record<string, unknown>> = [];
+Object.assign(window, { studioTestEvidence: { contexts, uploads, toolCalls } });
 async function snapshot(value: StudioResult): Promise<SnapshotStudioResult> {
   const saved = { ...value, snapshotId: `snapshot-${crypto.randomUUID()}`, projectId: value.bundle.project.projectId,
     expiresAt: Date.now() + 86400000, delivery: { hash: await bundleHash(value.bundle) } };
@@ -24,7 +25,7 @@ function envelope(value: SnapshotStudioResult) {
 }
 async function connect() {
   if (host) await host.close();
-  host = new AppBridge(null, { name: '検証専用ホスト', version: '1' }, { message: { text: {}, image: {} }, updateModelContext: { text: {}, structuredContent: {} } }, { hostContext: { theme: 'light', displayMode: 'inline', availableDisplayModes: ['inline', 'fullscreen'], ...(new URLSearchParams(location.search).has('standalone-new') ? {toolInfo:{tool:{name:'open_studio',inputSchema:{type:'object',properties:{}}}}}:{}), ...(new URLSearchParams(location.search).has('default-link') ? { 'openai/deepLink': {url:'/'} } : {}), ...(new URLSearchParams(location.search).has('deep-new') ? { 'openai/deepLink': {url:'/new?name=ChatGPT新規起動・検証専用'} } : {}) } });
+  host = new AppBridge(null, { name: '検証専用ホスト', version: '1' }, { serverTools: {}, message: { text: {}, image: {} }, updateModelContext: { text: {}, structuredContent: {} } }, { hostContext: { theme: 'light', displayMode: 'inline', availableDisplayModes: ['inline', 'fullscreen'], ...(new URLSearchParams(location.search).has('standalone-new') ? {toolInfo:{tool:{name:'open_studio',inputSchema:{type:'object',properties:{}}}}}:{}), ...(new URLSearchParams(location.search).has('default-link') ? { 'openai/deepLink': {url:'/'} } : {}), ...(new URLSearchParams(location.search).has('deep-new') ? { 'openai/deepLink': {url:'/new?name=ChatGPT新規起動・検証専用'} } : {}) } });
   host.onrequestdisplaymode = async ({ mode }) => { host.setHostContext({ displayMode: mode }); document.querySelector('#connection')!.textContent = `接続済み / ${mode}`; return { mode }; };
   host.onmessage = async ({ content }) => {
     const text = content.find(item => item.type === 'text');
@@ -43,14 +44,25 @@ async function connect() {
   // This isolated host emulates metadata transport. Real persistence/authentication
   // is exercised separately by snapshot-mcp and snapshot-store integration tests.
   host.oncalltool = async ({name, arguments: args = {}}) => {
-    if (name !== 'store_editor_snapshot') throw new Error(`Unexpected app tool: ${name}`);
-    uploads.push(args);
-    const previous = typeof args.previousSnapshotId === 'string' ? snapshots.get(args.previousSnapshotId) : undefined;
-    if (args.previousSnapshotId && !previous) return { isError: true, content: [{ type: 'text', text: 'snapshot_not_found' }] };
-    const stored = await callTool('open_studio', { bundle: args.bundle, revision: previous ? previous.revision + 1 : 0,
-      operationId: args.operationId, baseHash: previous?.delivery?.hash ?? null }) as StudioResult;
-    result = await snapshot(stored);
-    return envelope(result);
+    const event = { name, operationId: args.operationId, previousSnapshotId: args.previousSnapshotId };
+    toolCalls.push({ ...event, stage: 'received' });
+    try {
+      if (name !== 'store_editor_snapshot') throw new Error(`Unexpected app tool: ${name}`);
+      uploads.push(args);
+      const previous = typeof args.previousSnapshotId === 'string' ? snapshots.get(args.previousSnapshotId) : undefined;
+      if (args.previousSnapshotId && !previous) {
+        toolCalls.push({ ...event, stage: 'failed', message: 'snapshot_not_found' });
+        return { isError: true, content: [{ type: 'text', text: 'snapshot_not_found' }] };
+      }
+      const stored = await callTool('open_studio', { bundle: args.bundle, revision: previous ? previous.revision + 1 : 0,
+        operationId: args.operationId, baseHash: previous?.delivery?.hash ?? null }) as StudioResult;
+      result = await snapshot(stored);
+      toolCalls.push({ ...event, stage: 'returned', snapshotId: result.snapshotId, revision: result.revision, hash: result.delivery?.hash });
+      return envelope(result);
+    } catch (error) {
+      toolCalls.push({ ...event, stage: 'failed', message: error instanceof Error ? error.message : String(error) });
+      throw error;
+    }
   };
   host.oninitialized = () => { document.querySelector('#connection')!.textContent = '接続済み'; void (async () => { await host.sendToolInput({ arguments: {} }); if(new URLSearchParams(location.search).has('auto-new')) await host.sendToolResult({content:[],structuredContent:await callTool('open_studio',{})}); })(); };
   await host.connect(new PostMessageTransport(frame.contentWindow!, frame.contentWindow!));
