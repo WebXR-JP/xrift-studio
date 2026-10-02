@@ -77,8 +77,8 @@ test("参照されているAssetを、削除ダイアログから参照を外し
 
   // The blank starter's floor Material is used by the Scene, so the delete is
   // refused with a row that lets the author unlink that owner in place.
-  await page.getByPlaceholder("アセットを検索…").fill("Neutral Ground");
-  await page.getByRole("region", { name: "Assets" }).getByRole("button", { name: /Neutral Ground/ }).first().click({ button: "right" });
+  await page.getByPlaceholder("アセットを検索…").fill("Plane Material");
+  await page.getByRole("region", { name: "Assets" }).getByRole("button", { name: /Plane Material/ }).first().click({ button: "right" });
   await page.getByRole("menu", { name: "Assetsのメニュー" }).getByRole("button", { name: "削除", exact: true }).click();
 
   const dialog = page.getByRole("dialog");
@@ -91,18 +91,18 @@ test("参照されているAssetを、削除ダイアログから参照を外し
   // Unlinking the row clears the final owner and keeps the dialog open so the
   // now-safe deletion can be completed without finding the Asset again.
   await dialog
-    .getByRole("button", { name: "床の参照を外す", exact: true })
+    .getByRole("button", { name: "Planeの参照を外す", exact: true })
     .click();
   await expect(references).toHaveCount(0);
-  await expect(page.getByText("「床」の参照を外しました")).toBeVisible();
+  await expect(page.getByText("「Plane」の参照を外しました")).toBeVisible();
 
   await dialog.getByRole("button", { name: "削除", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(
-    page.getByText("「Neutral Ground」をAssetsから削除しました"),
+    page.getByText("「Plane Material」をAssetsから削除しました"),
   ).toBeVisible();
   await expect(
-    page.getByRole("region", { name: "Assets" }).getByRole("button", { name: /Neutral Ground/ }),
+    page.getByRole("region", { name: "Assets" }).getByRole("button", { name: /Plane Material/ }),
   ).toHaveCount(0);
 });
 
@@ -156,7 +156,7 @@ test("Scene Viewの右クリックから、指しているEntityを削除でき�
   await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
 
   const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
-  await expect(tree.getByText("床", { exact: true })).toBeVisible();
+  await expect(tree.getByText("Plane", { exact: true })).toBeVisible();
 
   await waitForPickableEntity(page, "starter-floor");
 
@@ -182,9 +182,9 @@ test("Scene Viewの右クリックから、指しているEntityを削除でき�
   // The edit menu and its tooltip identify the object under the pointer.
   const menu = page.getByRole("menu", { name: "シーンの編集", exact: true });
   const deleteEntity = menu.getByRole("menuitem", { name: "削除", exact: true });
-  await expect(deleteEntity).toHaveAttribute("title", /床/);
-  await expect(selected).toContainText("床");
+  await expect(deleteEntity).toHaveAttribute("title", /Plane/);
+  await expect(selected).toContainText("Plane");
   await deleteEntity.click();
-  await expect(page.getByText("「床」を削除しました")).toBeVisible();
-  await expect(tree.getByText("床", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("「Plane」を削除しました")).toBeVisible();
+  await expect(tree.getByText("Plane", { exact: true })).toHaveCount(0);
 });

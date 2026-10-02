@@ -98,12 +98,12 @@ export const BUILTIN_MATERIAL_ASSETS = [
 ] satisfies readonly MaterialAsset[];
 
 /**
- * Adds a builtin Material to a manifest that predates it.
+ * Adds only the builtin Material required by a new creation.
  *
- * Builtin Materials are seeded when a project is created, so a project made
- * before one existed does not have it. Placing something that depends on a
- * specific Material has to bring it along rather than silently fall back to
- * whatever Material happens to be present.
+ * Minimal starters do not seed the entire palette. Placing something that
+ * depends on a specific Material must bring it along rather than silently
+ * fall back to whatever Material happens to be present. This also supports
+ * older projects created before a preset existed.
  */
 export function ensureBuiltinMaterialAsset(
   assets: AssetManifest,

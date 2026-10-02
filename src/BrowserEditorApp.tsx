@@ -252,8 +252,8 @@ export default function BrowserEditorApp({ host }: { host?: BrowserStudioHost } 
     retryTransfer.current = () => { void createProject(projectKind, name); };
     try {
       await closingSession.current;
-      const { createPrototypeProject } = await import('./lib/visual-editor/prototype-project');
-      const path = await applyBrowserBundle(createPrototypeProject(projectKind, name));
+      const { createStarterVisualProject, defaultVisualStarterTemplateId } = await import('./lib/visual-editor/starter-templates');
+      const path = await applyBrowserBundle(createStarterVisualProject(projectKind, defaultVisualStarterTemplateId(projectKind), name));
       await hostRef.current?.onProjectChange(path);
       setTransfer(null);
       requestAnimationFrame(() => window.scrollTo({ top: 0 }));

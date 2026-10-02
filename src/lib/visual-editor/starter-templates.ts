@@ -294,7 +294,7 @@ export const STARTER_WORLD_TEMPLATES = [
   {
     id: "blank",
     name: "空のワールド",
-    description: "床、ライト1灯、開始位置だけを配置したシーンです。",
+    description: "Plane、Box、Light、SpawnPointを配置した最小シーンです。",
     bundledAssetIds: [],
   },
 ] as const satisfies readonly StarterWorldTemplateDefinition[];
@@ -411,7 +411,6 @@ export function createStarterWorldProject(
     ...prototype.assets,
     folders: templateId === "blank" ? {} : createStarterAssetFolders(),
     assets: {
-      ...(templateId === "blank" ? {} : prototype.assets.assets),
       ...Object.fromEntries(customMaterials.map((asset) => [asset.id, asset])),
       ...Object.fromEntries(models.map((asset) => [asset.id, asset])),
       ...Object.fromEntries(textures.map((asset) => [asset.id, asset])),
@@ -575,6 +574,12 @@ export function createStarterItemProject(
       },
     },
     scene: { ...prototype.scene, name: definition.name },
+    assets: {
+      ...prototype.assets,
+      assets: Object.fromEntries(Object.entries(prototype.assets.assets).filter(
+        ([assetId]) => assetId === BUILTIN_ASSET_IDS.material.violet,
+      )),
+    },
     bundledAssetCopies: [],
   };
 }
@@ -655,43 +660,22 @@ function starterPrefabSeeds(
 }
 
 function createTemplateEntities(): SceneEntity[] {
-  return organizeStarterHierarchy([
+  // The first objects are directly selectable; an empty grouping Entity hides
+  // the useful starting point without adding anything to the rendered world.
+  return [
     createFloorEntity(),
+    createBoxEntity(),
     createLightEntity(
       "starter-sun",
-      "メインライト",
+      "Light",
       "directional",
       [5, 8, 4],
       2.4,
       true,
     ),
     createSpawnEntity(),
-  ]);
+  ];
 }
-
-function organizeStarterHierarchy(entities: SceneEntity[]): SceneEntity[] {
-  const lightId = "starter-sun";
-  const spawnId = "starter-spawn";
-  const environmentChildren = entities
-    .filter((entity) => entity.id !== lightId && entity.id !== spawnId)
-    .map((entity) => entity.id);
-  const environment: SceneEntity = {
-    id: "starter-environment",
-    name: "Environment",
-    parentId: null,
-    children: environmentChildren,
-    enabled: true,
-    components: [
-      createTransformComponent("starter-environment-transform"),
-    ],
-  };
-  const organized = entities.map((entity) => {
-    if (entity.id === lightId || entity.id === spawnId) return entity;
-    return { ...entity, parentId: environment.id };
-  });
-  return [environment, ...organized];
-}
-
 
 const STARTER_MODEL_IDS = {
   logBench: "starter-model-log-bench",
@@ -715,6 +699,7 @@ const STARTER_TEXTURE_IDS = {
 
 const STARTER_MATERIAL_IDS = {
   ground: "starter-material-ground",
+  box: "starter-material-box",
 } as const;
 
 function createStarterMaterials(
@@ -726,12 +711,21 @@ function createStarterMaterials(
   const materials = [
     createMaterial(
       STARTER_MATERIAL_IDS.ground,
-      "Neutral Ground",
+      "Plane Material",
       "#dbe4ee",
       0,
       0.82,
       undefined,
       0,
+    ),
+    createMaterial(
+      STARTER_MATERIAL_IDS.box,
+      "Box Material",
+      "#60a5fa",
+      0,
+      0.72,
+      undefined,
+      1,
     ),
   ];
   return materials.map(({ folderId: _folderId, ...material }) => material);
@@ -986,7 +980,7 @@ function createFloorEntity(): SceneEntity {
   const floorMaterialAssetId = STARTER_MATERIAL_IDS.ground;
   return {
     id: "starter-floor",
-    name: "床",
+    name: "Plane",
     parentId: null,
     children: [],
     enabled: true,
@@ -1006,6 +1000,25 @@ function createFloorEntity(): SceneEntity {
         halfExtents: [0.5, 0.5, 0.01],
         fitMode: "auto",
       }),
+    ],
+  };
+}
+
+function createBoxEntity(): SceneEntity {
+  const definition = getBuiltinPrimitiveCreation(BUILTIN_PRIMITIVE_CREATION_IDS.box);
+  if (!definition) throw new Error("Builtin box is unavailable");
+  return {
+    id: "starter-box",
+    name: "Box",
+    parentId: null,
+    children: [],
+    enabled: true,
+    components: [
+      createTransformComponent("starter-box-transform", [0, 0.51, 0]),
+      createBuiltinPrimitiveMeshComponent("starter-box-mesh", definition, [
+        { slot: "default", materialAssetId: STARTER_MATERIAL_IDS.box },
+      ]),
+      createBoxColliderComponent("starter-box-collider", { fitMode: "auto" }),
     ],
   };
 }
@@ -1039,7 +1052,7 @@ function createLightEntity(
   };
 }
 
-function createSpawnEntity(position: Vec3 = [0, 0.05, 4]): SceneEntity {
+function createSpawnEntity(position: Vec3 = [0, 0.05, 3]): SceneEntity {
   const created = createBuiltinPrefabEntity(
     "world",
     BUILTIN_PREFAB_RECIPE_IDS.spawnPoint,
@@ -1047,7 +1060,7 @@ function createSpawnEntity(position: Vec3 = [0, 0.05, 4]): SceneEntity {
       entityId: "starter-spawn",
       componentId: "starter-spawn-xrift-component",
       transformComponentId: "starter-spawn-transform",
-      name: "Spawn Point",
+      name: "SpawnPoint",
       position,
     },
   );

@@ -37,7 +37,7 @@ test('discovered tools declare the OAuth scopes required by Sites hosting', asyn
     assert.deepEqual(tool.securitySchemes, [{ type: 'oauth2', scopes: ['openid', 'resource.invoke', 'email'] }], tool.name);
     assert.deepEqual(tool._meta.securitySchemes, tool.securitySchemes, tool.name);
   }
-  assert.equal(result.tools.find(tool => tool.name === 'open_studio')._meta.ui.resourceUri, 'ui://xrift-studio/worlds-v19');
+  assert.equal(result.tools.find(tool => tool.name === 'open_studio')._meta.ui.resourceUri, 'ui://xrift-studio/worlds-v20');
 });
 
 test('discovered bundle inputs require the complete document envelope, including empty prefabs', async () => {
@@ -48,7 +48,7 @@ test('discovered bundle inputs require the complete document envelope, including
   const { result } = await response.json();
   const created = await callTool('create_world', { name: 'complete-bundle-regression' });
   const bundleTools = result.tools.filter(tool => tool.inputSchema.properties.bundle);
-  assert.deepEqual(bundleTools.map(tool => tool.name).sort(), ['store_editor_snapshot']);
+  assert.deepEqual(bundleTools.map(tool => tool.name).sort(), []);
   for (const tool of bundleTools) {
     const schema = tool.inputSchema.properties.bundle;
     assert.deepEqual(schema.required, ['project', 'scene', 'assets', 'prefabs'], tool.name);
@@ -71,18 +71,18 @@ test('discovered bundle inputs require the complete document envelope, including
   assert.equal(opened.projectId, created.projectId);
 });
 
-test('model display uses only snapshot IDs while the app global entry accepts empty arguments', async () => {
+test('model commands carry local targets while the app global entry accepts empty arguments', async () => {
   const response = await cloudWorker.fetch(new Request('https://studio.example/mcp', {
     method: 'POST', body: JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/list'}),
   }), {ASSETS:{fetch(){throw new Error('No asset access');}}});
   const {tools} = (await response.json()).result;
   assert.deepEqual(tools.find(tool=>tool.name==='open_studio')._meta.ui.visibility,['app']);
-  assert.deepEqual(tools.find(tool=>tool.name==='store_editor_snapshot')._meta.ui.visibility,['app']);
+  assert.equal(tools.find(tool=>tool.name==='store_editor_snapshot'),undefined);
   const visible = tools.filter(tool=>!tool._meta.ui?.visibility || tool._meta.ui.visibility.includes('model'));
   assert.ok(visible.some(tool=>tool.name==='show_world'));
   assert.ok(!visible.some(tool=>tool.inputSchema.properties.bundle));
   for(const name of ['show_world','retry_world','capture_scene_view']) {
-    assert.deepEqual(tools.find(tool=>tool.name===name).inputSchema.required,['snapshotId']);
+    assert.deepEqual(tools.find(tool=>tool.name===name).inputSchema.required,name==='retry_world'?['projectId','operationId']:['projectId']);
   }
   assert.equal((await callTool('open_studio',{})).launch,'new');
 });
@@ -313,9 +313,9 @@ test('global entry and later operations address the same live editor resource', 
   const rpc = async (method,params={}) => (await (await worker.fetch(new Request('https://example.test/mcp',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})}),{ASSETS:{fetch:async()=>new Response('<!doctype html><html lang="ja"><head></head><body></body></html>')}})).json()).result;
   const tools=(await rpc('tools/list')).tools;
   const entry=tools.find(tool=>tool.name==='open_studio'); const edit=tools.find(tool=>tool.name==='edit_world');
-  assert.equal(edit._meta.ui,undefined);
+  assert.equal(edit._meta.ui.resourceUri,entry._meta.ui.resourceUri);
   assert.equal(entry._meta.ui.resourceUri,tools.find(tool=>tool.name==='capture_scene_view')._meta.ui.resourceUri);
-  assert.equal(tools.find(tool=>tool.name==='create_world')._meta.ui,undefined);
+  assert.equal(tools.find(tool=>tool.name==='create_world')._meta.ui.resourceUri,entry._meta.ui.resourceUri);
   assert.equal(entry._meta['openai/ui'].entrypoints[0].type,'global');
   assert.deepEqual(entry._meta.ui.visibility,['app']);
   assert.equal(tools.find(tool=>tool.name==='show_world')._meta.ui.visibility,undefined);

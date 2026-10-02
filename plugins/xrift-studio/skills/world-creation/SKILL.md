@@ -1,28 +1,28 @@
 ---
 name: world-creation
-description: XRift Studioで会話から3Dワールドを新規制作したり、一時保存した作品を編集するときに使う。
+description: XRift StudioのEditorを開き、会話からブラウザ内の3Dワールドを制作・編集するときに使う。
 ---
 
 # XRift Studioでワールドを作る
 
-新規制作は`create_world({name, operationId})`を使う。各変更に一意のoperationIdを付け、通信失敗で同じ要求を再送するときだけ同じIDを使う。返された短い`snapshotId`、projectId、revision、hash、expiresAtを引き継ぐ。文書JSONを会話へコピーしたり、組み直したりしない。
+MCPは小さな操作をEditorへ渡すだけで、作品を生成・編集・保存するサーバーではない。作品全文やbundleをツール引数へ渡さない。snapshotIdやサーバーの作品一覧も使わない。
 
-追編集は`edit_world({snapshotId, expectedRevision, operationId, operations})`を使う。Editorの起動、画面の報告、PNGを待つ必要はない。使う操作のschemaを`describe_document_tool`で確認し、operationsにtoolとargumentsを並べる。projectId・sceneId・操作ごとのexpectedRevisionはサーバーが補う。最大200操作を一つのバッチで処理し、読み取りを含む成功バッチごとにrevisionが一度進む。`ref`と後続の`$ref`で作成したEntityを参照できる。途中で失敗したバッチは保存しない。
+新規制作は`create_world({name, operationId})`で依頼する。操作ごとに一意のoperationIdを付け、同じ引数の再送だけで同じIDを使う。サーバーの応答は受付であり、作成・保存・表示の成功ではない。Editorから実際のstudioDeliveryまたはstudioContextが届くまで、依存する追編集を実行しない。未接続や閉じたEditorでは、実行済みと伝えない。
 
-引数エラーには失敗した番号、definition、変更前のsnapshotIdとexpectedRevisionが返る。schemaに合わせて修正し、新しいoperationIdで再試行する。通信失敗で結果が不明な場合は、24時間の参照期限内に元と同じ引数・operationIdで再送する。期限が過ぎた古い作成要求は再送せず、手元の作品の再取り込みか明示的な新規作成を案内する。成功済みの操作を別IDで繰り返さない。create_primitiveの図形指定はshapeであり、typeやprimitive_typeではない。必要な材質やEntityのIDはlist_assets・list_entitiesなどの結果から得る。
+追編集は`edit_world({projectId, expectedRevision, operationId, operations})`を使う。実際のEditor報告にある対象IDとrevisionを指定する。`describe_document_tool`で操作のschemaを確認し、operationsにtoolとargumentsを並べる。操作ごとのprojectId・sceneId・expectedRevisionはEditorが現在の作品から補う。最大200操作を一つのバッチで処理し、失敗したバッチでは作品を変えない。`ref`と後続の`$ref`で作成したEntityを参照できる。
 
-最後に`show_world({snapshotId})`または`capture_scene_view({snapshotId})`で最新の作品を表示する。完全な文書はアプリ専用メタデータからEditorへ届く。中間結果ごとに別画面を開かない。再送は`retry_world({snapshotId})`を使い、編集操作を再実行しない。期限切れや後続編集のある古いIDはエラーとなる。別の作品や新規作品を代わりに開かず、最新の結果を使う。
+create_primitiveの図形指定はshapeで、typeやprimitive_typeではない。材質やEntityのIDは、実際のEditorで実行したlist_assets・list_entitiesなどの結果から得る。schemaに合わせて引数を修正し、実行されていない失敗を直した場合だけ新しいoperationIdを使う。結果が不明ならget_operation_statusで確認し、成功済みの編集を別IDで繰り返さない。
 
-## 手動編集した作品
+`show_world({projectId})`は同じブラウザに保存された作品を開く。`capture_scene_view({projectId})`は現在開いている対象の実際のPNGを取得する。別作品・見つからない作品・古いrevisionは拒否される。失敗を新しい作品の作成で置き換えない。
 
-利用者が現在のEditorの作品を会話で編集したい場合は、`get_editor_context`または「会話に編集対象を渡す」を使う。この明示的な操作で文書JSONを一時保存し、短い参照を会話へ渡す。単に作品を開いたりブラウザ保存したりしても、既存作品を自動ではアップロードしない。手動変更後の古い参照で上書きしない。期限切れ後は必要なローカル作品を明示的に取り込み直す。元データが残っていなければ、復元できると案内しない。
+再確認は`retry_world({projectId, operationId})`で、このブラウザにある元の結果を使う。編集を再実行せず、新しい編集を古い結果で巻き戻さない。ローカルの結果が残っていなければ、その事実を伝えて現在の作品を確認する。
 
-## 保存と確認
+## 手動作品と保存
 
-Sitesは認証された利用者ごとに文書JSONと操作参照を保存する。各snapshotは書き込みから24時間参照でき、読み取り・表示・再送では延長されない。他の利用者のIDを知っていても参照できない。素材ファイル、認証用のメールアドレスや認証トークンは保存しない。期限切れの行は後続の書き込み時に件数を区切って削除する。基盤のバックアップ保持期間は未確認であり、24時間以内の完全消去は約束しない。
+現在の作品を会話で編集するときは、get_editor_contextまたは「会話に編集対象を渡す」で対象情報を確認する。作品名・projectId・revision・上限付きのEntity一覧を会話へ送り、作品全文や素材ファイルをMCPへアップロードしない。手動変更後は最新のrevisionを使う。
 
-一時保存は1件1 MiB、利用者ごとに有効な128件・20作品・合計16 MiBまで。上限や保存障害は失敗として伝え、保存済みと報告しない。通常サイトとChatGPT内のブラウザ保存領域は別で、一般的なクラウド作品一覧や端末間の自動同期はない。長期保管は.xriftstudioへ書き出す。
+作品、素材、操作履歴はブラウザに保存する。MCPには作品の一時保存やクラウド作品管理を設けない。通常サイトとChatGPT内では保存領域が分かれ、端末間の自動同期はない。必要な作品は.xriftstudioに書き出す。
 
-データ編集、一時保存、ブラウザ保存、Editor表示、画像取得を分ける。serverSaved:trueだけでブラウザ保存や表示を完了扱いしない。同じoperationId・projectId・revision・hashのstudioDelivery報告を確認し、実際のPNGを見たときだけ画像確認済みと伝える。描画や画像取得が失敗しても、確認済みのブラウザ保存を失敗へ置き換えない。Playは実際に試した場合だけ確認済みと伝える。
+操作の受付、データ適用、ブラウザ保存、表示、画像受信を区別する。同じoperationId・projectId・revision・hashの実際のstudioDeliveryを根拠にし、PNGを確認した場合だけ画像確認済みと伝える。描画や画像取得の失敗で確認済みのブラウザ保存を失敗へ置き換えない。Playは実際に試した場合だけ確認済みと伝える。
 
-素材はAssetsから取り込む。会話の添付素材の自動転送、購入、支払いは提供しない。`open_studio`はアプリ専用のグローバル入口であり、会話の作品表示にはshow_worldを使う。作品一覧・取り込み・書き出し・通常ブラウザ版との共通Editorを維持する。
+素材はAssetsから取り込む。会話の添付素材の自動転送、購入、支払いは提供しない。open_studioはアプリ専用の入口で、会話から対象を開く場合はshow_worldを使う。Sitesの接続認証は、作品保存の有無とは別に必要となる。

@@ -3008,7 +3008,7 @@ function defaultTransformForPrimitive(asset: PrimitiveAsset): {
     return {
       position: [0, 0, 0],
       rotation: [-Math.PI / 2, 0, 0],
-      scale: [6, 6, 6],
+      scale: [6, 6, 1],
     };
   }
 

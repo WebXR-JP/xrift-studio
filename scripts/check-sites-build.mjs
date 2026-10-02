@@ -2,8 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import worker from '../dist/server/index.js';
-import { createSnapshotSqliteDatabase } from './fixtures/snapshot-sqlite.mjs';
-const fixture = createSnapshotSqliteDatabase();
+
 
 const sourceConfig = JSON.parse(await readFile('.openai/hosting.json', 'utf8'));
 const outputConfig = JSON.parse(await readFile('dist/.openai/hosting.json', 'utf8'));
@@ -13,7 +12,7 @@ assert.equal(typeof worker.fetch, 'function');
 
 assert.equal(outputConfig.d1, 'DB');
 assert.match(await readFile('dist/drizzle/0000_plain_mysterio.sql', 'utf8'), /studio_snapshots/);
-const env = { DB: fixture.db, ASSETS: { async fetch(request) {
+const env = { get DB() { throw new Error("MCP commands must not use the database"); }, ASSETS: { async fetch(request) {
   assert.equal(new URL(request.url).pathname, '/chatgpt.html');
   return new Response(await readFile('dist/client/chatgpt.html'), { headers: { 'Content-Type': 'text/html' } });
 } } };
@@ -41,20 +40,17 @@ assert.match(view.text, /DecompressionStream/);
 assert.doesNotMatch(view.text, /<script\b[^>]*\bsrc=|<link\b[^>]*rel="stylesheet"|\/src\/chatgpt-editor/);
 assert.ok(Buffer.byteLength(view.text) < 10 * 1024 * 1024);
 const created = (await rpc('tools/call', { name: 'create_world', arguments: { name: 'Sites build check', operationId: 'artifact-create' } })).structuredContent;
-const beforeCount = created.document.entityCount;
-const edited = (await rpc('tools/call', { name: 'edit_world', arguments: {
-  snapshotId: created.snapshotId, expectedRevision: created.revision, operationId: 'artifact-edit',
-  operations: [{ tool: 'create_primitive', arguments: { shape: 'box', position: [2, 1, 0] } }],
-} })).structuredContent;
-assert.equal(edited.projectId, created.projectId);
-assert.equal(edited.revision, created.revision + 1);
-assert.equal(edited.document.entityCount, beforeCount + 1);
-const opened = (await rpc('tools/call', { name: 'show_world', arguments: {
-  snapshotId: edited.snapshotId,
-} })).structuredContent;
-assert.equal(opened.operationId, edited.operationId);
-assert.equal(opened.delivery.browserSaved, false);
-assert.equal(opened.delivery.rendered, false);
+assert.equal(created.command.projectId, 'project-mcp-artifact-create');
+assert.equal(created.delivery.serverSaved, false);
+const edited = await rpc('tools/call', { name: 'edit_world', arguments: {
+  projectId: created.command.projectId, expectedRevision: 0, operationId: 'artifact-edit',
+  operations: [{ tool: 'create_primitive', arguments: { shape: 'box', position: [2,1,0] } }],
+} });
+assert.equal(edited._meta.xriftCommand.projectId, created.command.projectId);
+assert.equal(edited.structuredContent.delivery.documentEdited, false);
+assert.equal(edited.structuredContent.delivery.browserSaved, false);
+const opened = await rpc('tools/call', { name: 'show_world', arguments: { projectId: created.command.projectId } });
+assert.equal(opened._meta.xriftCommand.name, 'show_world');
+assert.equal(opened.structuredContent.delivery.rendered, false);
 for (const file of ['index.html', 'editor.html']) assert.match(await readFile(`dist/client/${file}`, 'utf8'), /<html/);
-fixture.close();
-console.log(`Sites artifact verified: ${tools.length} tools, embedded MCP App, create/edit/open flow. Browser rendering requires host verification.`);
+console.log(`Sites artifact verified: ${tools.length} tools, embedded MCP App, stateless create/edit/open commands. Browser rendering requires host verification.`);

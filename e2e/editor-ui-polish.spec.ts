@@ -79,7 +79,7 @@ test("Creation remains discoverable without a Hierarchy header action", async ({
 test("Scale starts independent, including negative scale; linking remains opt-in", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await openVisualProject(page, "world", "independent-scale");
-  await page.getByRole("tree", { name: "シーンのEntity階層" }).getByText("床", { exact: true }).click();
+  await page.getByRole("tree", { name: "シーンのEntity階層" }).getByText("Plane", { exact: true }).click();
   const fields = ["X", "Y", "Z"].map(axis => page.getByRole("spinbutton", { name: `大きさ ${axis}`, exact: true }));
   const before = await Promise.all(fields.map(field => field.inputValue()));
   const link = page.getByRole("button", { name: "Scale比率を固定", exact: true });
@@ -121,8 +121,8 @@ test.describe("Touch entry points", () => {
     await openVisualProject(page, "world", "touch-row-actions");
     const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
     const before = await tree.getByRole("treeitem").count();
-    await tree.getByText("床", { exact: true }).tap();
-    await tree.getByRole("button", { name: "床のメニュー", exact: true }).tap();
+    await tree.getByText("Plane", { exact: true }).tap();
+    await tree.getByRole("button", { name: "Planeのメニュー", exact: true }).tap();
     const menu = page.getByRole("menu", { name: "Hierarchyの編集", exact: true });
     await expect(menu).toBeVisible();
     await menu.getByRole("menuitem", { name: "複製", exact: true }).tap();

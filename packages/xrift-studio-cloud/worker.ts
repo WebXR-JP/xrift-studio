@@ -1,20 +1,20 @@
-/** Authenticated temporary document snapshots; the pure transformer also serves the local Editor. */
-import { createPrototypeProject } from '../../src/lib/visual-editor/prototype-project';
+/** Stateless MCP commands; project documents are transformed only inside the local Editor. */
+import { createStarterVisualProject, defaultVisualStarterTemplateId } from '../../src/lib/visual-editor/starter-templates';
 import { executeXriftMcpEditorTool } from '../../src/lib/visual-editor/mcp-editor-tools';
 import type { XriftMcpEditorToolName } from '../../src/lib/visual-editor/mcp-tool-registry';
 import { validateBundle, bundleHash } from '../../src/lib/visual-editor/chatgpt-project';
 import documentTools from './document-tools.json';
-import { createSnapshotStore, SnapshotStoreError, type SnapshotDatabase, type StoredSnapshot } from './snapshot-store';
+import { createStudioCommand, studioCommandEnvelope, studioCommandSchemas } from '../../src/lib/visual-editor/chatgpt-command';
 import { studioProjectRoute, validateStudioProjectId } from '../../src/lib/browser-project-routing';
-export interface Environment { ASSETS: { fetch(request: Request): Promise<Response> }; DB?: SnapshotDatabase }
+export interface Environment { ASSETS: { fetch(request: Request): Promise<Response> }; DB?: unknown }
 const MAX_BYTES = 1024 * 1024;
 // Streamable HTTP clients must receive their supported revision when we implement it.
 const MCP_PROTOCOL_VERSIONS = ['2025-03-26', '2025-06-18', '2025-11-25'] as const;
 const negotiateProtocolVersion = (requested: unknown): string =>
   typeof requested === 'string' && MCP_PROTOCOL_VERSIONS.some(version => version === requested)
     ? requested : MCP_PROTOCOL_VERSIONS[MCP_PROTOCOL_VERSIONS.length - 1];
-const UI_URI = 'ui://xrift-studio/worlds-v19';
-const LEGACY_UI_URIS = ['ui://xrift-studio/worlds-v18', 'ui://xrift-studio/worlds-v17', 'ui://xrift-studio/worlds-v16', 'ui://xrift-studio/worlds-v15', 'ui://xrift-studio/worlds-v14', 'ui://xrift-studio/worlds-v13', 'ui://xrift-studio/worlds-v12', 'ui://xrift-studio/worlds-v11', 'ui://xrift-studio/worlds-v10', 'ui://xrift-studio/worlds-v9', 'ui://xrift-studio/worlds-v8', 'ui://xrift-studio/worlds-v7', 'ui://xrift-studio/worlds-v6', 'ui://xrift-studio/worlds-v5', 'ui://xrift-studio/worlds-v3', 'ui://xrift-studio/worlds-v4'];
+const UI_URI = 'ui://xrift-studio/worlds-v20';
+const LEGACY_UI_URIS = ['ui://xrift-studio/worlds-v19', 'ui://xrift-studio/worlds-v18', 'ui://xrift-studio/worlds-v17', 'ui://xrift-studio/worlds-v16', 'ui://xrift-studio/worlds-v15', 'ui://xrift-studio/worlds-v14', 'ui://xrift-studio/worlds-v13', 'ui://xrift-studio/worlds-v12', 'ui://xrift-studio/worlds-v11', 'ui://xrift-studio/worlds-v10', 'ui://xrift-studio/worlds-v9', 'ui://xrift-studio/worlds-v8', 'ui://xrift-studio/worlds-v7', 'ui://xrift-studio/worlds-v6', 'ui://xrift-studio/worlds-v5', 'ui://xrift-studio/worlds-v3', 'ui://xrift-studio/worlds-v4'];
 const names = documentTools.map((tool) => tool.name);
 const object = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('JSONオブジェクトで指定してください');
@@ -30,7 +30,7 @@ const operationId = (value: unknown): string => {
   return id;
 };
 const icons = [{ src: 'data:image/svg+xml;base64,' + btoa("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"512\" height=\"512\" viewBox=\"0 0 512 512\"><defs><linearGradient id=\"brand\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop stop-color=\"#a78bfa\"/><stop offset=\".4\" stop-color=\"#8b5cf6\"/><stop offset=\".8\" stop-color=\"#6366f1\"/><stop offset=\"1\" stop-color=\"#3b82f6\"/></linearGradient></defs><rect width=\"512\" height=\"512\" rx=\"112\" fill=\"url(#brand)\"/><path d=\"m189.5 189.5 133 133m0-133-133 133\" fill=\"none\" stroke=\"#fff\" stroke-width=\"33.3\" stroke-linecap=\"round\"/></svg>"), mimeType: 'image/svg+xml', sizes: ['any'] }];
-const deliveryDescription = 'Use the latest short snapshotId returned by create_world or edit_world. Never copy or reconstruct document JSON. Authenticated, owner-scoped document snapshots expire 24 hours after each write; reads and retries do not renew them. create_world -> edit_world does not require an open Editor. Use a stable unique operationId for each new mutation and reuse that ID only when retrying exactly the same arguments. Idempotency is guaranteed only during the 24-hour snapshot lifetime; after expiry use a new operationId only for an explicitly requested new mutation. edit_world requires expectedRevision from the latest result; on conflict obtain the latest result rather than recreating a project. show_world displays a snapshot; retry_world resends without editing. Server snapshot storage, browser saving, Studio display and PNG capture are separate. Only report browser saving, rendering or image confirmation after matching actual app receipts. Expired or superseded snapshots fail without substituting another project. Existing manual browser edits need explicit get_editor_context capture before server editing.';
+const deliveryDescription = 'The MCP server only validates and forwards small commands to the open Studio Editor. It never stores or retrieves project documents. Creation, editing, local browser saving and rendering happen in the Editor. Wait for an actual studioDelivery or studioContext report before claiming completion or issuing dependent edits. Use the exact projectId and revision from that report; never send or reconstruct full project JSON. If the Editor is closed, unavailable or on another project, the command is not confirmed. Reuse operationId only for identical retries, and retry_world asks the same browser for its local receipt without repeating edits. Browser storage is separate between origins/devices. Sites connection authentication remains required.';
 async function delivery(bundle: ReturnType<typeof validateBundle>, revision: number, baseHash: string | null, operationId: string = crypto.randomUUID()) {
   return { bundle, revision, baseHash, operationId, projectId: bundle.project.projectId, sceneId: bundle.scene.sceneId,
     editorUrl: `https://chatgpt.com/plugins/plugin_asdk_app_sites_a7e0e2c988c08191aa694d396a182112/app/open_studio?path=${encodeURIComponent(studioProjectRoute(bundle.project.projectId))}`,
@@ -539,39 +539,24 @@ const tools = [
     }
   }
 ].map(tool => {
-  const snapshot = { type: 'string', description: 'Exact snapshotId from the latest tool result. Do not use projectId.', pattern: '^snapshot-[A-Za-z0-9-]{1,100}$' };
-  const op = { type: 'string', pattern: '^[A-Za-z0-9-]{1,120}$', description: 'Unique idempotency key for this mutation. Reuse only when retrying identical arguments.' };
-  const schemas: Record<string, unknown> = {
-    create_world: { type: 'object', properties: { name: { type: 'string', minLength: 1, maxLength: 80 }, operationId: op }, required: ['operationId'], additionalProperties: false },
-    edit_world: { type: 'object', properties: { snapshotId: snapshot, expectedRevision: { type: 'integer', minimum: 0 }, operationId: op, operations: tool.inputSchema.properties.operations }, required: ['snapshotId', 'expectedRevision', 'operationId', 'operations'], additionalProperties: false },
-    show_world: { type: 'object', properties: { snapshotId: snapshot }, required: ['snapshotId'], additionalProperties: false },
-    retry_world: { type: 'object', properties: { snapshotId: snapshot }, required: ['snapshotId'], additionalProperties: false },
-    capture_scene_view: { type: 'object', properties: { snapshotId: snapshot }, required: ['snapshotId'], additionalProperties: false },
-    open_studio: { type: 'object', properties: { mode: { type: 'string', enum: ['new', 'resume'] }, projectId: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$' }, name: { type: 'string', minLength: 1, maxLength: 80 } }, required: [], additionalProperties: false },
+  const descriptions: Record<string,string> = {
+    create_world: 'Ask the Editor to create a new local world. Supply a stable unique operationId. The response only dispatches a command; await its actual projectId/revision receipt before editing. ',
+    edit_world: 'Ask the current Editor to apply 1–200 operations atomically to projectId at expectedRevision. Read describe_document_tool for exact operation arguments. ref/$ref addresses newly created objects. Await the actual Editor result, not the dispatch summary. ',
+    show_world: 'Open the specified project already saved in this browser. Missing projects are errors; never create a substitute. ',
+    capture_scene_view: 'Ask the actual Editor to capture the specified current project. Confirm an actual PNG before reporting image success. ',
+    retry_world: 'Ask the same browser to report/retry the exact local operationId for projectId. Do not execute the edit again or overwrite newer work. ',
+    get_editor_context: 'Read current projectId, revision and bounded editing context from the open Editor. No document upload or server storage. ',
+    get_operation_status: 'Read the local Editor receipt for operationId. No server execution result is available. ',
+    open_studio: 'App-only global entry for the common local Editor. Empty arguments opens the Editor. mode resume opens the local library; projectId identifies only the same browser library. ',
   };
-  const descriptions: Record<string, string> = {
-    create_world: 'Create a new authenticated temporary world snapshot and return its short snapshotId. No Editor startup required. ' + deliveryDescription,
-    edit_world: 'Edit the exact snapshot by snapshotId, expectedRevision and stable operationId. Read describe_document_tool before each unfamiliar operation. Up to 200 operations atomically; failed batches change nothing. ref/$ref can address newly created objects. No binary file uploads, code execution or publication. ' + deliveryDescription,
-    show_world: 'Display the exact current snapshotId. The complete document travels only to the app in result metadata. Missing, expired or superseded IDs are errors; never open or create a substitute world. ' + deliveryDescription,
-    retry_world: 'Resend the same current snapshotId without re-running edits or extending expiry. Older snapshots are rejected after later edits. ' + deliveryDescription,
-    capture_scene_view: 'Display and capture the exact current snapshotId in the real Editor. A real MCP Apps renderer and matching PNG receipt are required. ' + deliveryDescription,
-    open_studio: 'App-only global entry. Empty arguments starts the browser Editor; mode resume shows local projects. projectId addresses only the same browser local library, not server storage. This does not upload existing browser projects. Use show_world to display a conversation snapshot.',
-    get_editor_context: 'Ask the actual open Editor to explicitly capture its current document into an authenticated temporary snapshot and return a short reference. Use only when the user asks to edit or inspect that local project. Opening the Editor alone does not upload it. If unavailable, existing local contents are unknown; do not create a substitute. ' + deliveryDescription,
-    get_operation_status: 'Ask the actual open Editor for the local receipt for operationId. A server snapshot alone cannot confirm browser save, rendering or PNG receipt.',
-  };
-  return { ...tool, ...(schemas[tool.name] ? { inputSchema: schemas[tool.name] as typeof tool.inputSchema } : {}),
-    ...(tool.name === 'get_editor_context' ? { annotations: { ...tool.annotations, readOnlyHint: false } } : {}),
-    description: descriptions[tool.name] ?? tool.description };
-}).concat([{
-  name: 'store_editor_snapshot', title: '編集対象を会話へ渡す',
-  description: 'App-only: explicitly store the currently selected local document for authenticated conversation editing. Never called automatically for existing browser projects.',
-  inputSchema: { type: 'object', properties: { bundle: bundleInputSchema, operationId: { type: 'string', pattern: '^[A-Za-z0-9-]{1,120}$' }, previousSnapshotId: { type: 'string' } }, required: ['bundle', 'operationId'], additionalProperties: false } as any,
-  annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-  _meta: { ui: { visibility: ['app'] } } as any,
-}]).map(tool => {
-  // Sites authenticates MCP requests before dispatching them to this Worker.
   const securitySchemes = [{ type: 'oauth2', scopes: ['openid', 'resource.invoke', 'email'] }];
-  return { ...tool, icons, securitySchemes, _meta: { ...tool._meta, securitySchemes } };
+  const inputSchema = studioCommandSchemas[tool.name] ?? (tool.name === 'open_studio' ? {
+    type: 'object', properties: { mode: { type: 'string', enum: ['new','resume'] }, projectId: { type:'string', pattern:'^[A-Za-z0-9][A-Za-z0-9_-]{0,159}$' }, name:{type:'string',minLength:1,maxLength:80} }, required:[], additionalProperties:false,
+  } : tool.inputSchema);
+  return { ...tool, inputSchema, icons, securitySchemes,
+    ...(tool.name === 'edit_world' ? { annotations: { ...tool.annotations, destructiveHint: true } } : {}),
+    description: descriptions[tool.name] ? descriptions[tool.name] + deliveryDescription : tool.description,
+    _meta: { ...tool._meta, ...(tool.name === 'describe_document_tool' ? {} : { ui: { ...tool._meta?.ui, resourceUri: UI_URI } }), securitySchemes } };
 });
 export async function callTool(name: string, args: Record<string, unknown>): Promise<Record<string, any>> {
   if (name === 'show_world') {
@@ -617,7 +602,7 @@ export async function callTool(name: string, args: Record<string, unknown>): Pro
   if (name === 'create_world') {
     const name = args.name === undefined ? '新しいワールド' : string(args.name).trim();
     if (name.length > 80) throw new Error('名前は80文字までです');
-    return delivery(createPrototypeProject('world', name), 0, null);
+    return delivery(validateBundle(createStarterVisualProject('world', defaultVisualStarterTemplateId('world'), name)), 0, null);
   }
   if (name === 'retry_world') {
     const id = operationId(args.operationId);
@@ -669,106 +654,6 @@ export async function callTool(name: string, args: Record<string, unknown>): Pro
 }
 // Only this dispatcher reaches server storage. The exported callTool above is a
 // pure local document transformer, never an HTTP escape hatch around ownership.
-const canonicalJson = (value: unknown): string => JSON.stringify(value, (_key, item) =>
-  item && typeof item === 'object' && !Array.isArray(item)
-    ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
-const inputHash = async (name: string, args: Record<string, unknown>) => {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonicalJson({ name, args })));
-  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-};
-function assertDocumentOnly(value: unknown): void {
-  if (typeof value === 'string' && /^data:/i.test(value)) throw new Error('binary_assets_unsupported: 素材のバイト列は一時保存できません');
-  if (Array.isArray(value)) { for (const item of value) assertDocumentOnly(item); }
-  else if (value && typeof value === 'object') { for (const item of Object.values(value)) assertDocumentOnly(item); }
-}
-function snapshotSummary(snapshot: StoredSnapshot): Record<string, any> {
-  const bundle = validateBundle(snapshot.bundle);
-  // Mutation results expose useful IDs and bounded inspection data, never the
-  // full document envelope. The exact bundle is delivered only in app metadata.
-  const results = Array.isArray(snapshot.results) ? snapshot.results.map(result =>
-    JSON.stringify(result).length <= 12000 ? result : { omitted: true, reason: 'large_operation_result' }) : undefined;
-  return { snapshotId: snapshot.snapshotId, projectId: snapshot.projectId, sceneId: snapshot.sceneId,
-    revision: snapshot.revision, operationId: snapshot.operationId, baseHash: snapshot.baseHash,
-    hash: snapshot.hash, expiresAt: snapshot.expiresAt, editorUrl: snapshot.editorUrl,
-    document: { name: bundle.project.metadata.name, entityCount: Object.keys(bundle.scene.entities).length },
-    ...(results ? { results } : {}), ...(snapshot.refs ? { refs: snapshot.refs } : {}),
-    delivery: { status: 'awaiting_studio_verification', projectId: snapshot.projectId, revision: snapshot.revision,
-      hash: snapshot.hash, documentEdited: true, serverSaved: true, browserSaved: false, rendered: false, captureStatus: 'not_requested' } };
-}
-export async function callSnapshotTool(name: string, args: Record<string, unknown>, env: Environment, owner: string): Promise<{ summary: Record<string, any>; app?: Record<string, any> }> {
-  if (!owner || owner.length > 512) throw new Error('authentication_required: 認証済みの利用者を確認できません');
-  if (['describe_document_tool', 'open_studio', 'get_editor_context', 'get_operation_status'].includes(name)) {
-    const local = await callTool(name, args);
-    if (name === 'open_studio' && local.bundle) {
-      // The app-only new-project entry is local authoring, not server storage.
-      // Keep its full document out of both model-visible response surfaces.
-      const { bundle: _bundle, ...summary } = local;
-      return { summary, app: local };
-    }
-    return { summary: local };
-  }
-  if (!env.DB) throw new SnapshotStoreError('snapshot_store_unavailable', '一時保存を利用できません。編集内容は変更していません。後で同じ操作IDで再試行してください');
-  const store = createSnapshotStore(env.DB, owner);
-  const deliver = (snapshot: StoredSnapshot, toApp: boolean) => {
-    const summary = snapshotSummary(snapshot);
-    const app = { ...snapshot, ...summary, bundle: snapshot.bundle,
-      ...(name === 'capture_scene_view' ? { captureSceneView: true } : {}) };
-    return { summary: name === 'capture_scene_view' ? { ...summary, captureSceneView: true } : summary,
-      ...(toApp ? { app } : {}) };
-  };
-  if (['show_world', 'retry_world', 'capture_scene_view'].includes(name)) {
-    if (typeof args.snapshotId !== 'string') throw new Error('conversation_state_required: 直前の結果のsnapshotIdを指定してください。別作品を作らないでください');
-    return deliver(await store.get(args.snapshotId, { requireHead: true }), true);
-  }
-  if (!['create_world', 'edit_world', 'store_editor_snapshot'].includes(name)) throw new Error('Unknown tool');
-  const id = operationId(args.operationId);
-  const digest = await inputHash(name, args);
-  const existing = await store.getByOperation(id, digest);
-  // Replaying an earlier mutation returns its original reference, but never
-  // makes it current or lets show_world roll back a newer stored revision.
-  if (existing) return deliver(existing, name === 'store_editor_snapshot');
-  let expectedSnapshotId: string | null = null;
-  let transformed: Record<string, any>;
-  if (name === 'create_world') {
-    transformed = await callTool(name, args);
-  } else if (name === 'store_editor_snapshot') {
-    const bundle = validateBundle(args.bundle); assertDocumentOnly(bundle);
-    if (args.previousSnapshotId !== undefined) {
-      const previous = await store.get(string(args.previousSnapshotId), { requireHead: true });
-      if (previous.projectId !== bundle.project.projectId) throw new Error('project_conflict: 前の編集対象と一致しません');
-      expectedSnapshotId = previous.snapshotId;
-      transformed = await delivery(bundle, previous.revision + 1, previous.hash, id);
-    } else transformed = await delivery(bundle, 0, null, id);
-  } else {
-    if (typeof args.snapshotId !== 'string' || !Number.isSafeInteger(args.expectedRevision) || Number(args.expectedRevision) < 0) {
-      throw new Error('conversation_state_required: 最新のsnapshotIdとexpectedRevisionを指定してください');
-    }
-    const previous = await store.get(args.snapshotId, { requireHead: true });
-    if (args.expectedRevision !== previous.revision) throw new Error('revision_conflict: 直前の編集結果のrevisionを使ってください');
-    expectedSnapshotId = previous.snapshotId;
-    try {
-      transformed = await callTool('edit_world', { bundle: previous.bundle, revision: previous.revision,
-        operationId: id, operations: args.operations, expectedRevision: args.expectedRevision });
-      // Every accepted batch has a unique successor, including explicit reads.
-      transformed.revision = previous.revision + 1;
-    } catch (error) {
-      if (error instanceof DocumentBatchError) {
-        const { bundle: _bundle, ...recovery } = error.recovery;
-        throw new DocumentBatchError(error.message, { ...recovery, snapshotId: previous.snapshotId,
-          expectedRevision: previous.revision, nextAction: 'Correct the failed operation using definition.inputSchema, then retry edit_world with the same snapshotId and expectedRevision and a new operationId. This failed batch changed nothing. Do not create a replacement project.' });
-      }
-      throw error;
-    }
-  }
-  transformed.operationId = id;
-  assertDocumentOnly(transformed.bundle);
-  const hash = await bundleHash(transformed.bundle);
-  transformed.delivery = { ...transformed.delivery, projectId: transformed.projectId,
-    revision: transformed.revision, hash, serverSaved: true };
-  const saved = await store.write({ expectedSnapshotId, inputHash: digest,
-    result: { ...transformed, operationId: id, hash } as any });
-  return deliver(saved, name === 'store_editor_snapshot');
-}
 const response = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } });
 export async function handleMcp(request: Request, env: Environment): Promise<Response> {
   if (request.method !== 'POST') return new Response(null, { status: 405, headers: { Allow: 'POST' } });
@@ -795,7 +680,7 @@ export async function handleMcp(request: Request, env: Environment): Promise<Res
     const params = message.params === undefined ? {} : object(message.params);
     if (message.id === undefined) return new Response(null, { status: 202 });
     switch (message.method) {
-      case 'initialize': return ok({ protocolVersion: negotiateProtocolVersion(params.protocolVersion), capabilities: { tools: {}, resources: {} }, serverInfo: { name: 'XRift Studio', title: 'XRift Studio', version: '0.1.6', icons }, instructions: deliveryDescription + ' Read describe_document_tool before editing. No source files or background jobs. Rendering and Play need the actual app.' });
+      case 'initialize': return ok({ protocolVersion: negotiateProtocolVersion(params.protocolVersion), capabilities: { tools: {}, resources: {} }, serverInfo: { name: 'XRift Studio', title: 'XRift Studio', version: '0.1.8', icons }, instructions: deliveryDescription + ' Read describe_document_tool before editing. No source files or background jobs. Rendering and Play need the actual app.' });
       case 'ping': return ok({});
       case 'tools/list': return ok({ tools });
       case 'resources/list': return ok({ resources: [{ uri: UI_URI, name: 'XRift Studio', mimeType: 'text/html;profile=mcp-app' }] });
@@ -816,20 +701,25 @@ export async function handleMcp(request: Request, env: Environment): Promise<Res
           const args = params.arguments === undefined ? {} : object(params.arguments);
           const properties = tools.find(tool => tool.name === name)!.inputSchema.properties;
           if (Object.keys(args).some(key => !Object.prototype.hasOwnProperty.call(properties, key))) throw new Error('未対応の引数が含まれています');
-          const { summary, app } = name === 'describe_document_tool'
-            ? { summary: await callTool(name, args), app: undefined }
-            : await callSnapshotTool(name, args, env, owner!);
-          const text = name === 'describe_document_tool'
-            ? 'definition.inputSchemaに従って操作のargumentsを指定してください。'
-            : summary.snapshotId
-            ? '作品の一時保存を確認しました。次の操作にはsnapshotIdを使い、JSONを書き直さないでください。参照は作成から24時間で期限切れとなり、読み取りや再送では延長されません。ブラウザ保存・画面反映・画像受信は実際のアプリ報告を確認してください。'
-            : 'Studioへ依頼しました。実際のアプリ報告を受けるまで保存・表示・画像受信を確認済みと報告しないでください。';
-          return ok({ content: [{ type: 'text', text }, { type: 'text', text: JSON.stringify(summary) }], structuredContent: summary,
-            ...(app ? { _meta: { xriftStudio: app } } : {}) });
+          if (name === 'describe_document_tool') {
+            const summary = await callTool(name,args);
+            return ok({content:[{type:'text',text:'definition.inputSchemaに従って操作のargumentsを指定してください。'}],structuredContent:summary});
+          }
+          if (name === 'open_studio' && args.mode === 'new') {
+            const command = await createStudioCommand('create_world',{name:args.name ?? '新しいワールド',operationId:crypto.randomUUID()});
+            return ok({content:[{type:'text',text:'Editorで新規作成します。実際の保存報告を待ってください。'}],structuredContent:studioCommandEnvelope(command),_meta:{xriftCommand:command}});
+          }
+          if (name === 'open_studio') {
+            const summary = await callTool(name,args);
+            const { bundle: _bundle, ...visible } = summary;
+            return ok({content:[{type:'text',text:'Editorを開きます。実際の保存・表示はアプリの報告で確認してください。'}],structuredContent:visible,...(_bundle ? {_meta:{xriftStudio:summary}} : {})});
+          }
+          const command = await createStudioCommand(name,args);
+          const summary = studioCommandEnvelope(command);
+          return ok({content:[{type:'text',text:'Editorへ操作を渡しました。サーバーは作品を保存・編集していません。アプリから実行結果が返るまで完了と報告せず、依存する次の編集を待ってください。'}],structuredContent:summary,_meta:{xriftCommand:command}});
+
         } catch (error) {
           const content = [{ type: 'text', text: error instanceof Error ? error.message : 'Studio operation failed' }];
-          if (error instanceof SnapshotStoreError) return ok({ isError: true, content,
-            structuredContent: { error: { code: error.code, message: error.message } } });
           if (error instanceof DocumentBatchError) {
             content.push({ type: 'text', text: JSON.stringify(error.recovery) });
             return ok({ isError: true, content, structuredContent: error.recovery });

@@ -117,14 +117,16 @@ test("親を動かした子Entityでもギズモが対象の上に描かれる",
 
   const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
 
-  // The starter Scene parents its content under Environment. Moving that
-  // parent is what makes a doubly applied transform visible at all.
-  await tree.getByText("Environment", { exact: true }).click();
-  const environmentX = page.getByRole("spinbutton", { name: "位置 X" });
-  await environmentX.fill("6");
-  await environmentX.press("Enter");
+  // Minimal starters are flat. Explicitly create the parent-child relation
+  // this regression requires instead of depending on a starter-only group.
+  await tree.getByText("Plane", { exact: true }).dragTo(tree.getByText("Box", { exact: true }));
+  await expect(tree.locator('[data-hierarchy-entity-id="starter-floor"]')).toHaveAttribute("aria-level", "2");
+  await tree.getByText("Box", { exact: true }).click();
+  const parentX = page.getByRole("spinbutton", { name: "位置 X" });
+  await parentX.fill("6");
+  await parentX.press("Enter");
 
-  await tree.getByText("床", { exact: true }).click();
+  await tree.getByText("Plane", { exact: true }).click();
   await expect
     .poll(async () => (await readGizmo(page)).found, { timeout: 15_000 })
     .toBe(true);
@@ -152,8 +154,8 @@ test("複数選択の回転と拡縮はドラッグ中に全Entityへ反映さ�
   await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
 
   const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
-  await tree.getByText("床", { exact: true }).click();
-  await tree.getByText("Spawn Point", { exact: true }).click({ modifiers: ["Control"] });
+  await tree.getByText("Plane", { exact: true }).click();
+  await tree.getByText("SpawnPoint", { exact: true }).click({ modifiers: ["Control"] });
   await expect(tree.getByRole("treeitem", { selected: true })).toHaveCount(2);
 
   const transform = async (mode: "rotate" | "scale") => page.evaluate((mode) => {
