@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "xrift-studio",
-  "version": "0.1.3",
-  "description": "XRift StudioのワールドをChatGPT内で作成・取り込み・編集するプラグイン",
+  "version": "0.1.4",
+  "description": "Create, import and edit XRift Studio 3D worlds in ChatGPT.",
   "author": {
     "name": "Ryuto Haga"
   },
@@ -10,8 +10,8 @@
     "com.openai": {
       "interface": {
         "displayName": "XRift Studio",
-        "shortDescription": "会話で3Dワールドを作る",
-        "longDescription": "XRift Studioは、3Dワールドを創作するためのビジュアルエディターです。オブジェクトの配置、材質、地形、照明を調整し、作品を保存・書き出して制作を続けられます。ChatGPT向けのワールド作成・編集ツールと、通常ブラウザ版と共通のエディターを提供します。作品の新規作成・再開・ブラウザ保存、.xriftstudio／ZIPの取り込み、.xriftstudioの書き出し、Assetsからの素材追加に対応します。データ編集、ブラウザ保存、画面反映、画像の受信を区別します。ChatGPTからの自動反映とScene View画像の会話への送信は実環境で検証中です。Sitesに作品・素材の保存領域は設けません。通常サイトとChatGPT内ではブラウザの保存領域が分かれ、端末間の自動同期はありません。会話に渡す編集データはChatGPTとMCPサーバーで処理されます。",
+        "shortDescription": "Create 3D worlds in chat",
+        "longDescription": "XRift Studio is a visual editor for creating 3D worlds. Arrange objects and adjust materials, terrain and lighting, then save or export your work. It provides world creation and editing tools for ChatGPT alongside the same editor used in the browser version. The editor supports new and resumed projects, browser storage, .xriftstudio and ZIP import, .xriftstudio export, and adding assets through Assets. Document edits, browser saves, rendering and image receipt are reported separately. Automatic updates from ChatGPT and delivery of Scene View images to the conversation are still being verified in the actual ChatGPT environment. Sites does not store projects or assets. The regular website and ChatGPT app use separate browser storage, with no automatic synchronization between devices. Editing data included in the conversation is processed by ChatGPT and the MCP server.",
         "developerName": "Ryuto Haga",
         "category": "Creativity",
         "capabilities": [
@@ -26,7 +26,65 @@
         "termsOfServiceURL": "https://xrift-studio-pr124.kkkkkkasdad.chatgpt.site/terms.html"
       },
       "publication": {
-        "release_notes": "3Dワールドの創作という主な用途に合わせてカテゴリと紹介文を更新しました。公開用PNGアイコンと掲載先URLをパッケージに含め、MCP初期化で対応するプロトコル版を選ぶようにしました。認証、保存先、既存作品の扱いは変更していません。"
+        "release_notes": "審査用の正例5件・負例3件をパッケージに追加し、日本語の紹介文を翻訳欄に保存しました。会話内の同じ作品への追編集と同一結果の再送、ブラウザ保存・画面反映・画像受信の確認方法を明記しました。Sites管理のOAuthとMCP URLは変更していません。",
+        "translations": {
+          "ja-JP": {
+            "subtitle": "会話で3Dワールドを作る",
+            "description": "XRift Studioは、3Dワールドを創作するためのビジュアルエディターです。オブジェクトの配置、材質、地形、照明を調整し、作品を保存・書き出して制作を続けられます。ChatGPT向けのワールド作成・編集ツールと、通常ブラウザ版と共通のエディターを提供します。作品の新規作成・再開・ブラウザ保存、.xriftstudio／ZIPの取り込み、.xriftstudioの書き出し、Assetsからの素材追加に対応します。データ編集、ブラウザ保存、画面反映、画像の受信を区別します。ChatGPTからの自動反映とScene View画像の会話への送信は実環境で検証中です。Sitesに作品・素材の保存領域は設けません。通常サイトとChatGPT内ではブラウザの保存領域が分かれ、端末間の自動同期はありません。会話に渡す編集データはChatGPTとMCPサーバーで処理されます。"
+          }
+        }
+      },
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "新しい会話で開始する。既存のEditorや作品を開かず、プラグインを接続した審査用環境を使う。以下の正例2〜5は同じ会話で順に実行し、審査用作品だけを編集する。データ生成とブラウザ保存を区別する。",
+              "prompt": "「審査用の広場」という新しい3Dワールドを作ってください。",
+              "tools_triggered": "create_world",
+              "expected_behavior": "create_world({name:\"審査用の広場\"})を実行する。projectId、bundle、revision:0、operationIdを受け取り、bundle.project.projectIdとprojectIdが一致する。serverSaved、browserSaved、renderedはfalseのままで、ツールの返却だけを保存・表示完了と説明しない。"
+            },
+            {
+              "description": "同じ会話の直前にcreate_worldで作成した結果がある。作品の取り直しや手動選択を要求せず追編集する。",
+              "prompt": "そのワールドの原点に緑色の立方体を1つ追加してください。",
+              "tools_triggered": "describe_document_tool, edit_world",
+              "expected_behavior": "describe_document_tool({tool:\"create_primitive\"})でschemaを読み、直前のbundleとrevisionを内部でedit_worldへ渡す。operationsにはcreate_primitiveのshape:\"box\"、position:[0,0,0]、元のbundleに存在する緑色のmaterialAssetIdを指定する。同じprojectIdを保持し、Entityが1つ増え、revisionは1段階進む。元の作品や素材を取り直すよう利用者に求めない。"
+            },
+            {
+              "description": "直前のワールドを引き継ぐ。1つのバッチ内で新しく作ったEntityを参照する。",
+              "prompt": "原点から右に2、上に1の位置にオレンジ色の円柱を追加して、幅と奥行きを0.3倍、高さを2倍にしてください。",
+              "tools_triggered": "describe_document_tool, edit_world",
+              "expected_behavior": "create_primitiveとupdate_transformのschemaを確認する。1回のedit_worldでshape:\"cylinder\"、position:[2,1,0]、元のbundleに存在するオレンジ色のmaterialAssetIdを指定し、作成操作にrefを付ける。同じバッチでその$refを使いscale:[0.3,2,0.3]を設定する。projectIdは変えず、Entityが1つ増え、refsのIDに対応するEntityのTransformが指定値を持ち、revisionを1段階進める。"
+            },
+            {
+              "description": "直前の作成・編集結果を、MCP Appsに対応するChatGPTの表示領域へ取り込む。ブラウザ保存と描画は実際のアプリ報告で確認する。",
+              "prompt": "いま作ったワールドをStudioで開いて、Scene Viewの画像を見せてください。保存と表示を確認できたかも教えてください。",
+              "tools_triggered": "open_studio, capture_scene_view; get_editor_context または get_operation_status（状態確認が必要な場合）",
+              "expected_behavior": "最新結果のbundle、revision、operationId、baseHashをopen_studioまたはcapture_scene_viewへ内部で渡し、対応するChatGPTのMCP Appに同じprojectIdの共通Editorを表示する。実際のScene ViewのPNGを受け取り、緑の立方体とオレンジ色の円柱を確認する。同じoperationId・projectId・revision・hashのstudioDelivery報告を根拠に、データ編集、ブラウザ保存、画面反映、画像受信の状態を別々に伝える。Editorの起動・描画・報告が失敗した場合は未確認の項目と再確認方法を明記し、PNGを見ていなければ画像確認済みと言わない。主な成功経路の審査では実画面とPNGの確認まで必要。"
+            },
+            {
+              "description": "直前の編集結果のoperationId、bundle、revision、baseHashを会話に残す。再送対象の後に新しい編集を行わない。",
+              "prompt": "同じ編集結果をもう一度Studioへ送ってください。内容は変更しないでください。",
+              "tools_triggered": "retry_world",
+              "expected_behavior": "retry_worldへ元のoperationId、bundle、revision、baseHashを渡す。結果は同じprojectId、operationId、revision、bundle、hashを保つ。create_worldやedit_worldで変更を再実行してEntityを重複させない。ブラウザ状態を確認する場合、get_operation_statusにはそのoperationIdを指定する。再送後の描画や保存は実際のアプリ報告で確認し、MCPの応答だけで完了としない。"
+            }
+          ],
+          "negative": [
+            {
+              "description": "クラウド保存と端末間同期は提供しない。作品がサーバーにあると仮定してcreate_world、edit_world、open_studio、retry_worldを呼ばない。元ブラウザから.xriftstudioを書き出して取り込む方法を案内する。",
+              "prompt": "別の端末で作ったワールドをクラウドから探して、ここへ自動同期してください。"
+            },
+            {
+              "description": "会話添付素材の自動転送・自動同期は未対応。添付ファイルの用意は不要。いずれのMCPツールも呼ばず、その設定は提供されていないと説明し、ファイルを保存してAssetsから手動で取り込む方法を案内する。自動同期や取り込みが完了したと主張しない。",
+              "prompt": "ChatGPTの添付ファイルをStudioのAssetsと常に自動同期する設定を有効にしてください。"
+            },
+            {
+              "description": "購入・支払いツールは提供しない。いずれのMCPツールも呼ばず、プラグインでは購入できないと説明する。注文や支払いが完了したと主張しない。",
+              "prompt": "有料の3Dモデルを探して、私のカードで購入しておいてください。"
+            }
+          ]
+        },
+        "commerce": false,
+        "commerce_description": "XRift Studioには課金・購入・決済機能はありません。ChatGPTと外部サービスの料金は、それぞれの契約に従います。"
       }
     }
   }
