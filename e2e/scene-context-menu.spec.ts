@@ -113,11 +113,11 @@ test("Real editor: copy, mirror paste, Undo and Redo keep the source and selecte
   await page.getByLabel("プロジェクト名").fill("mirror-paste");
   await page.getByRole("button", { name: "作成して開く" }).click();
   const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
-  await tree.getByText("床", { exact: true }).click();
+  await tree.getByText("Plane", { exact: true }).click();
   const scales = ["X", "Y", "Z"].map((axis) => page.getByRole("spinbutton", { name: `大きさ ${axis}`, exact: true }));
   const original = await Promise.all(scales.map((field) => field.inputValue()));
   const initialCount = await tree.getByRole("treeitem").count();
-  await tree.getByText("床", { exact: true }).click({ button: "right" });
+  await tree.getByText("Plane", { exact: true }).click({ button: "right" });
   await page.getByRole("menu", { name: "Hierarchyの編集", exact: true }).getByRole("menuitem", { name: "コピー", exact: true }).click();
   await expect(page.getByRole("menu")).toHaveCount(0);
   await expect.poll(async () => page.getByRole("status").allTextContents()).toContainEqual(expect.stringContaining("コピーしました"));
@@ -139,6 +139,6 @@ test("Real editor: copy, mirror paste, Undo and Redo keep the source and selecte
   await page.keyboard.press("ControlOrMeta+Shift+z");
   await expect(tree.getByRole("treeitem")).toHaveCount(initialCount + 1);
   await expect(scales[0]).toHaveValue(String(-Number(original[0])));
-  await tree.getByText("床", { exact: true }).first().click();
+  await tree.getByText("Plane", { exact: true }).first().click();
   await expect(scales[0]).toHaveValue(original[0]);
 });

@@ -46,7 +46,7 @@ test("Transformの数値は横へ引いて動かし、Escapeで戻せる", async
   await openBlankWorld(page, "number-scrub-transform");
 
   const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
-  await tree.getByText("床", { exact: true }).click();
+  await tree.getByText("Plane", { exact: true }).click();
 
   const positionX = page.getByRole("spinbutton", { name: "位置 X" });
   await expect(positionX).toHaveValue("0");
@@ -68,7 +68,7 @@ test("Transformの数値は横へ引いて動かし、Escapeで戻せる", async
 
   // ドラッグ一回が Undo 一件。数値入力の中では Editor の shortcut を
   // 抑止しているので、入力欄から出てから Undo する。
-  await tree.getByText("床", { exact: true }).click();
+  await tree.getByText("Plane", { exact: true }).click();
   await page.keyboard.press("Control+z");
   expect(
     Number(await positionX.inputValue()),
@@ -82,7 +82,7 @@ test("Transformの数値は打った時点で反映する", async ({ page }) => 
   await openBlankWorld(page, "number-scrub-typing");
 
   const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
-  await tree.getByText("床", { exact: true }).click();
+  await tree.getByText("Plane", { exact: true }).click();
 
   const positionY = page.getByRole("spinbutton", { name: "位置 Y" });
   await positionY.click();
@@ -91,8 +91,8 @@ test("Transformの数値は打った時点で反映する", async ({ page }) => 
   await expect(positionY).toBeFocused();
 
   // 別の Entity を挟んで戻る。確定前なら 0 に戻ってしまう。
-  await tree.getByText("Environment", { exact: true }).click();
-  await tree.getByText("床", { exact: true }).click();
+  await tree.getByText("Box", { exact: true }).click();
+  await tree.getByText("Plane", { exact: true }).click();
   await expect(page.getByRole("spinbutton", { name: "位置 Y" })).toHaveValue(
     "2.5",
   );

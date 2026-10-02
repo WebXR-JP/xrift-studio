@@ -35,7 +35,7 @@ const STARTER_LIBRARY_EXPECTATIONS: Record<
     textures: 1,
     materials: { atLeast: 3 },
   },
-  blank: { bundledAssetCopies: 0, models: 0, textures: 0, materials: 1 },
+  blank: { bundledAssetCopies: 0, models: 0, textures: 0, materials: 2 },
 };
 
 export function runStarterTemplateFixtureAssertions(): void {
@@ -252,9 +252,9 @@ export function runStarterTemplateFixtureAssertions(): void {
 
   assert(Object.keys(blank.assets.folders ?? {}).length === 0,
     "Blank World must not seed Starter Library folders");
-  assert(Object.values(blank.assets.assets).length === 1 &&
+  assert(Object.values(blank.assets.assets).length === 2 &&
     Object.values(blank.assets.assets).every((asset) => asset.kind === "material" && !asset.folderId),
-    "Blank World must contain only its floor Material at the asset root");
+    "Blank World must contain only the Plane and Box Materials at the asset root");
   assert(Object.keys(blank.prefabs).length === 0, "Blank World must not seed Prefabs");
   const groundPrefab = createPrefabDocument(blank.scene, blank.assets, {
     prefabId: "fixture-ground", name: "Ground", sourceRootEntityIds: ["starter-floor"],

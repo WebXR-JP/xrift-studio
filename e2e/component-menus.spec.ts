@@ -102,7 +102,7 @@ test("Audio Sourceのグローバルを切り替えても同じ音源として�
   await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
   await page.getByLabel("プロジェクト名").fill("audio-source-settings");
   await page.getByRole("button", { name: "作成して開く" }).click();
-  await page.getByRole("tree", { name: "シーンのEntity階層" }).getByText("床", { exact: true }).click();
+  await page.getByRole("tree", { name: "シーンのEntity階層" }).getByText("Plane", { exact: true }).click();
   await page.getByRole("button", { name: "Add Component", exact: true }).click();
   await page.getByPlaceholder("Componentを検索…").fill("Audio");
   await expect(page.getByRole("button", { name: /Global Audio/ })).toHaveCount(0);
@@ -165,7 +165,7 @@ test("Inspector adds to the selection; the header creates a new Entity", async (
   await page.getByLabel("プロジェクト名").fill("component-menu-flow");
   await page.getByRole("button", { name: "作成して開く" }).click();
   const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
-  await tree.getByText("床", { exact: true }).click();
+  await tree.getByText("Plane", { exact: true }).click();
   const initialCount = await tree.getByRole("treeitem").count();
   await page.getByRole("button", { name: "Add Component", exact: true }).click();
   const search = page.getByPlaceholder("Componentを検索…");
@@ -182,7 +182,7 @@ test("Inspector adds to the selection; the header creates a new Entity", async (
   await menu.getByRole("menuitem", { name: "Cube", exact: true }).click();
   await expect(tree.getByRole("treeitem")).toHaveCount(initialCount + 1);
   await expect(tree.getByRole("treeitem", { selected: true })).toContainText("Cube");
-  await tree.getByText("床", { exact: true }).click();
+  await tree.getByText("Plane", { exact: true }).click();
   await tree.getByText("Cube", { exact: true }).click({ modifiers: ["Control"] });
   await tree.getByText("Cube", { exact: true }).click({ button: "right" });
   const multi = page.getByRole("menu", { name: "Hierarchyの編集", exact: true });
