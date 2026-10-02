@@ -1,4 +1,5 @@
-// A private plugin export needs the real, deployed MCP endpoint; never ship a fake URL.
+// Export a portable upload copy using the real, deployed MCP endpoint.
+// Public review readiness still requires checking the saved portal draft.
 import { cp, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 const [endpoint, output] = process.argv.slice(2);

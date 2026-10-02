@@ -1,25 +1,32 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "xrift-studio",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "XRift StudioのワールドをChatGPT内で作成・取り込み・編集するプラグイン",
   "author": {
-    "name": "WebXR-JP"
+    "name": "Ryuto Haga"
   },
   "extensions": {
     "com.openai": {
       "interface": {
         "displayName": "XRift Studio",
         "shortDescription": "会話で3Dワールドを作る",
-        "longDescription": "会話から3Dワールドを作り、ブラウザ版と共通のエディターで確認・編集できます。作品と素材はブラウザに保存し、ファイルで書き出して引き継ぎます。編集データはChatGPTと接続先のサーバーで処理します。クラウド保存・端末間同期・バックグラウンド制作には対応しません。",
-        "developerName": "WebXR-JP",
-        "category": "Productivity",
+        "longDescription": "XRift Studioは、3Dワールドを創作するためのビジュアルエディターです。オブジェクトの配置、材質、地形、照明を調整し、作品を保存・書き出して制作を続けられます。ChatGPT向けのワールド作成・編集ツールと、通常ブラウザ版と共通のエディターを提供します。作品の新規作成・再開・ブラウザ保存、.xriftstudio／ZIPの取り込み、.xriftstudioの書き出し、Assetsからの素材追加に対応します。データ編集、ブラウザ保存、画面反映、画像の受信を区別します。ChatGPTからの自動反映とScene View画像の会話への送信は実環境で検証中です。Sitesに作品・素材の保存領域は設けません。通常サイトとChatGPT内ではブラウザの保存領域が分かれ、端末間の自動同期はありません。会話に渡す編集データはChatGPTとMCPサーバーで処理されます。",
+        "developerName": "Ryuto Haga",
+        "category": "Creativity",
         "capabilities": [
           "Interactive"
         ],
-        "logo": "./assets/icon.svg",
-        "composerIcon": "./assets/icon.svg",
-        "defaultPrompt": "XRift Studioでワールドを作ってください。"
+        "logo": "./assets/icon.png",
+        "composerIcon": "./assets/icon.png",
+        "defaultPrompt": "XRift Studioでワールドを作ってください。",
+        "websiteURL": "https://webxr-jp.github.io/xrift-studio/",
+        "supportURL": "https://github.com/WebXR-JP/xrift-studio/issues",
+        "privacyPolicyURL": "https://xrift-studio-pr124.kkkkkkasdad.chatgpt.site/privacy.html",
+        "termsOfServiceURL": "https://xrift-studio-pr124.kkkkkkasdad.chatgpt.site/terms.html"
+      },
+      "publication": {
+        "release_notes": "3Dワールドの創作という主な用途に合わせてカテゴリと紹介文を更新しました。公開用PNGアイコンと掲載先URLをパッケージに含め、MCP初期化で対応するプロトコル版を選ぶようにしました。認証、保存先、既存作品の扱いは変更していません。"
       }
     }
   }

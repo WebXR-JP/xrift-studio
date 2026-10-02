@@ -7,6 +7,11 @@ import documentTools from './document-tools.json';
 import { studioProjectRoute, validateStudioProjectId } from '../../src/lib/browser-project-routing';
 export interface Environment { ASSETS: { fetch(request: Request): Promise<Response> } }
 const MAX_BYTES = 1024 * 1024;
+// Streamable HTTP clients must receive their supported revision when we implement it.
+const MCP_PROTOCOL_VERSIONS = ['2025-03-26', '2025-06-18', '2025-11-25'] as const;
+const negotiateProtocolVersion = (requested: unknown): string =>
+  typeof requested === 'string' && MCP_PROTOCOL_VERSIONS.some(version => version === requested)
+    ? requested : MCP_PROTOCOL_VERSIONS[MCP_PROTOCOL_VERSIONS.length - 1];
 const UI_URI = 'ui://xrift-studio/worlds-v17';
 const LEGACY_UI_URIS = ['ui://xrift-studio/worlds-v16', 'ui://xrift-studio/worlds-v15', 'ui://xrift-studio/worlds-v14', 'ui://xrift-studio/worlds-v13', 'ui://xrift-studio/worlds-v12', 'ui://xrift-studio/worlds-v11', 'ui://xrift-studio/worlds-v10', 'ui://xrift-studio/worlds-v9', 'ui://xrift-studio/worlds-v8', 'ui://xrift-studio/worlds-v7', 'ui://xrift-studio/worlds-v6', 'ui://xrift-studio/worlds-v5', 'ui://xrift-studio/worlds-v3', 'ui://xrift-studio/worlds-v4'];
 const names = documentTools.map((tool) => tool.name);
@@ -617,7 +622,7 @@ export async function handleMcp(request: Request, env: Environment): Promise<Res
     const params = message.params === undefined ? {} : object(message.params);
     if (message.id === undefined) return new Response(null, { status: 202 });
     switch (message.method) {
-      case 'initialize': return ok({ protocolVersion: '2025-11-25', capabilities: { tools: {}, resources: {} }, serverInfo: { name: 'XRift Studio', title: 'XRift Studio', version: '0.1.2', icons }, instructions: deliveryDescription + ' Read describe_document_tool before editing. No source files or background jobs. Rendering and Play need the actual app.' });
+      case 'initialize': return ok({ protocolVersion: negotiateProtocolVersion(params.protocolVersion), capabilities: { tools: {}, resources: {} }, serverInfo: { name: 'XRift Studio', title: 'XRift Studio', version: '0.1.3', icons }, instructions: deliveryDescription + ' Read describe_document_tool before editing. No source files or background jobs. Rendering and Play need the actual app.' });
       case 'ping': return ok({});
       case 'tools/list': return ok({ tools });
       case 'resources/list': return ok({ resources: [{ uri: UI_URI, name: 'XRift Studio', mimeType: 'text/html;profile=mcp-app' }] });

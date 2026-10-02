@@ -20,7 +20,7 @@ Sitesに作品を保存する領域は追加しません。会話内の最新の
 
 ## 保存とデータの境界
 
-- Workerは1回のリクエストに含まれるdocument JSONを検証・加工して返す。作品・一覧・所有者を保持せず、他の利用者の作品を取得するAPIを持たない。認証不要の純粋な変換ツールとして公開する。
+- Workerは1回のリクエストに含まれるdocument JSONを検証・加工して返す。作品・一覧・所有者を保持せず、他の利用者の作品を取得するAPIを持たない。Sitesの認証済み接続から利用する。Workerは利用者を識別して作品を保存する処理を持たないが、MCPの認証が不要という意味ではない。
 - 編集するdocument JSONはChatGPTの会話とMCP通信を通る。「サーバーを通らない」「会話にも残らない」という意味ではない。リクエスト本文・編集結果をログに出さない。インフラのログやChatGPT側の保持条件は公開時のポリシーで説明する。
 - 素材と他のSceneはブラウザのIndexedDBで保持する。適用前にパス・document schema・参照素材を既存のStudio処理で検証する。保存済みの作品は同じブラウザの一覧から再開できる。iframeのストレージ可否はhost依存。保存失敗時は成功扱いしない。
 - 会話用bundleとMCPリクエストは1 MBまで。最大200操作を順に処理し、途中で失敗した場合は部分結果を適用しない。取り込みは既存ブラウザ版の展開サイズ制限256 MBを使う。大きな作品のAI編集には向かない。
@@ -31,24 +31,23 @@ Sitesに作品を保存する領域は追加しません。会話内の最新の
 
 `worker.ts`は`POST /mcp`の初期化、ツール、App resourceを扱う。`ASSETS`だけを使い、DB・オブジェクトストア・認証ヘッダーには依存しない。`document-tools.json`は既存MCPから再利用した91個のdocument toolのschema。`src/chatgpt-editor.tsx`は公式host bridgeから共通の`BrowserEditorApp`を使う。`chatgpt-project.ts`はschema検証と、編集元の比較に使うSHA-256を共用する。ハッシュはユーザー認証やサーバー上のCASではない。
 
-## 配置と個人接続（未実施）
+## Sitesへの配置と接続
 
-GitHub Pagesでは`POST /mcp`を処理できないため、MCP用のWorkerを別途運用する。Pagesの既存URLは変えない。DBの運用は不要だが、Workerの費用・利用量・エラーの確認は運営者に残る。公開前にリクエスト数・予算の制限をCloudflare側で設定する。ツールが任意のURLを取得したり外部の有料APIを呼んだりする機能はない。
+PR #124のMCPは既存のSitesプロジェクトで運用しています。接続先は `https://xrift-studio-pr124.kkkkkkasdad.chatgpt.site/mcp` です。GitHub Pagesは通常ブラウザ版の公開先であり、`POST /mcp`を処理しません。PRへのPushだけではSitesの内容は更新されません。
 
-Cloudflareを使う場合の配置手順は以下。まだデプロイしていない。
+SitesはMCPの手前でOAuth認証を行います。未認証のアクセスには401と、`/.well-known/oauth-protected-resource/mcp`を指す`WWW-Authenticate`を返します。必要なscopeは`openid resource.invoke email`です。各toolの`securitySchemes`もこの値を宣言します。Sitesが用意した既存App・プラグインを使い、認証なしの接続へ変更したり、代わりのAppを新規作成したりしないでください。
+
+公開申請ポータルで「Authentication unavailable」「MCP configuration incomplete」と表示された場合は、既存MCPのConnectまたはReconnectで認証方式と接続状態を確認します。別の申請AppでSitesの既存OAuth接続を利用できない場合は、認証を削除せず、既存のAppを公開申請へつなぐ方法を確認してください。ZIPの再アップロードだけでは認証やscanは完了しません。
+
+`initialize`では、クライアントが指定した対応版（2025-03-26、2025-06-18、2025-11-25）を返します。未対応版には最新の対応版を返し、クライアントが接続を続けられるか判断します。
+
+接続用パッケージは実際のエンドポイントから生成します。
 
 ```sh
-# リポジトリ直下で、公開用のアセットを作るときに実行
-pnpm build:preview
-# Cloudflareアカウントで認証し、MCPとアセットを配置
-pnpm dlx wrangler deploy --config packages/xrift-studio-cloud/wrangler.jsonc
-# 実際に配置したURLを使う
-node scripts/package-cloud-plugin.mjs https://YOUR-DEPLOYED-HOST/mcp /tmp/xrift-plugin
+node scripts/package-cloud-plugin.mjs https://xrift-studio-pr124.kkkkkkasdad.chatgpt.site/mcp /tmp/xrift-plugin
 ```
 
-`YOUR-DEPLOYED-HOST`は説明用。Wranglerの実デプロイとバンドルは未検証。現在の環境では本番ビルド・公開を実行していない。Workerは独自の`ASSETS`で`chatgpt.html`と既存エディターのJS・CSS・カタログを配信する。`resources/read`がそのHTMLの参照URLを配置先の絶対URLにする。
-
-配置後はChatGPTの開発者モードで実際のHTTPS `/mcp`を認証なしの接続として登録し、tool discovery、新規制作、編集、保存、再開、書き出しを確認する。生成したplugin packageには実URLの`mcp.json`、metadata、制作手順skillが入る。パッケージ配布だけではWorkerは動かない。
+生成先にはmetadata、制作手順skill、PNGアイコン、`mcp.json`が入ります。サーバーの配置や公開申請は別の手順です。
 
 ## 全員向けの公開
 
@@ -60,7 +59,7 @@ node scripts/package-cloud-plugin.mjs https://YOUR-DEPLOYED-HOST/mcp /tmp/xrift-
 4. 実録デモ、正常系5件・失敗系3件の審査例、対象地域・リリース情報など。
 5. 公開用ZIPをドラフトとしてアップロードし、MCPを接続・検査して審査例を実行する。審査に提出し、承認後に公開する。
 
-現状はソースと接続用パッケージの生成処理まで。実URL、公開用のポリシー、録画デモ、開発者・ドメイン確認、公開申請は未実施。審査済み・申請可能な完成パッケージとは扱わない。公開後もWorkerはこちらで運用する。
+接続先とポリシーのURLは掲載情報に含めています。カテゴリは3Dワールドの創作に合わせた`Creativity`です。公開申請の接続状態、最新scan、対象地域、審査用ケース、デモ録画、認証用の審査アクセスは、申請する版のポータルで確認してください。既存の録画草稿は手動操作の確認用で、AI制作の審査を満たした録画とは扱いません。メタデータ修正用のZIPだけで審査提出可能とは判断しません。
 
 公式手順: [公開申請](https://developers.openai.com/plugins/deploy/submission)、[認証](https://developers.openai.com/plugins/build/auth)、[接続と検証](https://developers.openai.com/plugins/deploy/connect-chatgpt)。要件は申請時に再確認する。
 

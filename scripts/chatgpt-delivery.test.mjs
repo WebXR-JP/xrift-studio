@@ -6,6 +6,24 @@ after(() => server.close());
 const { verifyStudioResult, parseStudioResult } = await server.ssrLoadModule('/src/lib/visual-editor/chatgpt-delivery.ts');
 const { callTool, default: cloudWorker } = await server.ssrLoadModule('/packages/xrift-studio-cloud/worker.ts');
 
+test('MCP initialization negotiates supported Streamable HTTP revisions', async () => {
+  for (const [requested, expected] of [
+    ['2025-03-26', '2025-03-26'], ['2025-06-18', '2025-06-18'],
+    ['2025-11-25', '2025-11-25'], ['2099-01-01', '2025-11-25'],
+  ]) {
+    const response = await cloudWorker.fetch(new Request('https://studio.example/mcp', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {
+        protocolVersion: requested, capabilities: {}, clientInfo: { name: 'compatibility-test', version: '1.0.0' },
+      } }),
+    }), { ASSETS: { fetch() { throw new Error('Initialization must not load assets'); } } });
+    assert.equal(response.status, 200);
+    const { result } = await response.json();
+    assert.equal(result.protocolVersion, expected);
+    assert.deepEqual(result.capabilities, { tools: {}, resources: {} });
+  }
+});
+
 test('discovered tools declare the OAuth scopes required by Sites hosting', async () => {
   const request = new Request('https://studio.example/mcp', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
