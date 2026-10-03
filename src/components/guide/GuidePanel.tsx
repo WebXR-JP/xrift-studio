@@ -77,6 +77,7 @@ export function GuidePanel({ initialPage, onClose }: GuidePanelProps) {
           a: ({href,children}) => {
             const target=resolveGuideLink(href ?? "",page.slug,GUIDE_MANIFEST);
             if(target.kind === "invalid" || target.kind === "empty")return <span>{children}</span>;
+            if(target.kind === "video") return <a href={new URL(target.href, GUIDE_MANIFEST.siteUrl).href} target="_blank" rel="noopener noreferrer" onClick={(event) => {if(tauri.isAvailable()){event.preventDefault();void tauri.openUrl(new URL(target.href, GUIDE_MANIFEST.siteUrl).href).catch(() => setLinkError("動画を開けませんでした。ネットワーク接続を確認してください。"));}}}>{children}（ブラウザーで開く・通信が必要です）</a>;
             if(target.kind === "external") return <a href={target.href} target="_blank" rel="noopener noreferrer" onClick={(event) => {if(tauri.isAvailable()){event.preventDefault();void tauri.openUrl(target.href).catch(() => setLinkError("ブラウザーでリンクを開けませんでした。接続や設定を確認してください。"));}}}>{children}</a>;
             return <a href={target.href} onClick={(event) => {event.preventDefault();if(target.kind === "page")navigate(target.slug!,target.fragment);else if(target.kind === "heading")setRoute({...route,fragment:target.href.slice(1)});}}>{children}</a>;
           },

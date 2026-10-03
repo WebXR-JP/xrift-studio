@@ -9,6 +9,10 @@
       "label": "はじめて使う"
     },
     {
+      "id": "learn",
+      "label": "動画で学ぶ"
+    },
+    {
       "id": "basics",
       "label": "基本の操作"
     },
@@ -41,7 +45,281 @@
       "group": "start",
       "file": "index.md",
       "keywords": "",
-      "related": []
+      "related": [
+        "video-tutorials"
+      ]
+    },
+    {
+      "slug": "video-tutorials",
+      "title": "動画で学ぶ XRift Studio",
+      "description": "1本約1分。19本の短い動画を見ながら、配置、質感、仕掛け、仕上げを一つずつ試せます。",
+      "group": "learn",
+      "file": "video-tutorials.md",
+      "keywords": "動画 教材 入門 チュートリアル レッスン 基本操作 アセット プログラム 仕上げ",
+      "related": [
+        "installation",
+        "first-world",
+        "editor-basics"
+      ],
+      "next": "lesson-01-01"
+    },
+    {
+      "slug": "lesson-01-01",
+      "title": "新しいプロジェクトを作る",
+      "description": "新しいプロジェクトを作り、制作を始める準備をします。",
+      "group": "learn",
+      "file": "lesson-01-01.md",
+      "keywords": "動画 教材 01-01 01 基本操作 新しいプロジェクトを作る",
+      "related": [
+        "video-tutorials",
+        "first-world"
+      ],
+      "next": "lesson-01-02"
+    },
+    {
+      "slug": "lesson-01-02",
+      "title": "オブジェクトを移動・拡大縮小する",
+      "description": "位置と大きさの数値を変えて、オブジェクトの配置を調整します。",
+      "group": "learn",
+      "file": "lesson-01-02.md",
+      "keywords": "動画 教材 01-02 01 基本操作 オブジェクトを移動・拡大縮小する",
+      "related": [
+        "video-tutorials",
+        "objects"
+      ],
+      "next": "lesson-01-03"
+    },
+    {
+      "slug": "lesson-01-03",
+      "title": "Hierarchyで選ぶ・視点を動かす",
+      "description": "Hierarchyで対象を選び、作業しやすい視点へ動かします。",
+      "group": "learn",
+      "file": "lesson-01-03.md",
+      "keywords": "動画 教材 01-03 01 基本操作 Hierarchyで選ぶ・視点を動かす",
+      "related": [
+        "video-tutorials",
+        "editor-basics"
+      ],
+      "next": "lesson-01-04"
+    },
+    {
+      "slug": "lesson-01-04",
+      "title": "複製とUndo・Redoを使う",
+      "description": "複製とUndo・Redoで、変更を試しながら編集します。",
+      "group": "learn",
+      "file": "lesson-01-04.md",
+      "keywords": "動画 教材 01-04 01 基本操作 複製とUndo・Redoを使う",
+      "related": [
+        "video-tutorials",
+        "objects"
+      ],
+      "next": "lesson-01-05"
+    },
+    {
+      "slug": "lesson-01-05",
+      "title": "床Collider・SpawnPoint・Playを確認する",
+      "description": "床の当たり判定と開始位置を確認し、Playで動作を確かめます。",
+      "group": "learn",
+      "file": "lesson-01-05.md",
+      "keywords": "動画 教材 01-05 01 基本操作 床Collider・SpawnPoint・Playを確認する",
+      "related": [
+        "video-tutorials",
+        "collision"
+      ],
+      "next": "lesson-01-06"
+    },
+    {
+      "slug": "lesson-01-06",
+      "title": "ライトの明るさと影を調整する",
+      "description": "ライトの明るさと影を調整し、空間の見え方を整えます。",
+      "group": "learn",
+      "file": "lesson-01-06.md",
+      "keywords": "動画 教材 01-06 01 基本操作 ライトの明るさと影を調整する",
+      "related": [
+        "video-tutorials",
+        "lighting"
+      ],
+      "next": "lesson-01-07"
+    },
+    {
+      "slug": "lesson-01-07",
+      "title": "Skybox Shaderで青空を作る",
+      "description": "Skybox Shaderを使い、空間の背景に青空を作ります。",
+      "group": "learn",
+      "file": "lesson-01-07.md",
+      "keywords": "動画 教材 01-07 01 基本操作 Skybox Shaderで青空を作る",
+      "related": [
+        "video-tutorials",
+        "sky-and-water"
+      ],
+      "next": "lesson-01-08"
+    },
+    {
+      "slug": "lesson-01-08",
+      "title": "HDRIを背景と環境光に使う",
+      "description": "HDRIを背景と環境光に使う設定を確認します。",
+      "group": "learn",
+      "file": "lesson-01-08.md",
+      "keywords": "動画 教材 01-08 01 基本操作 HDRIを背景と環境光に使う",
+      "related": [
+        "video-tutorials",
+        "sky-and-water"
+      ],
+      "next": "lesson-02-01"
+    },
+    {
+      "slug": "lesson-02-01",
+      "title": "外部GLBを読み込んで配置する",
+      "description": "外部のGLBモデルを読み込み、空間に配置します。",
+      "group": "learn",
+      "file": "lesson-02-01.md",
+      "keywords": "動画 教材 02-01 02 アセット 外部GLBを読み込んで配置する",
+      "related": [
+        "video-tutorials",
+        "assets"
+      ],
+      "next": "lesson-02-03"
+    },
+    {
+      "slug": "lesson-02-03",
+      "title": "PBRの色と光沢を調整する",
+      "description": "PBRマテリアルの色と光沢を調整します。",
+      "group": "learn",
+      "file": "lesson-02-03.md",
+      "keywords": "動画 教材 02-03 02 アセット PBRの色と光沢を調整する",
+      "related": [
+        "video-tutorials",
+        "materials"
+      ],
+      "next": "lesson-02-04"
+    },
+    {
+      "slug": "lesson-02-04",
+      "title": "画像を貼って、模様の大きさを変える",
+      "description": "画像を貼り、模様の大きさを調整します。",
+      "group": "learn",
+      "file": "lesson-02-04.md",
+      "keywords": "動画 教材 02-04 02 アセット 画像を貼って、模様の大きさを変える",
+      "related": [
+        "video-tutorials",
+        "textures"
+      ],
+      "next": "lesson-02-07"
+    },
+    {
+      "slug": "lesson-02-07",
+      "title": "MToonでアニメ調の陰影を作る",
+      "description": "MToonを使った、アニメ調の陰影を確認します。",
+      "group": "learn",
+      "file": "lesson-02-07.md",
+      "keywords": "動画 教材 02-07 02 アセット MToonでアニメ調の陰影を作る",
+      "related": [
+        "video-tutorials",
+        "materials"
+      ],
+      "next": "lesson-02-08"
+    },
+    {
+      "slug": "lesson-02-08",
+      "title": "Prefabを作って再利用する",
+      "description": "Prefabを作り、同じ構成を再利用します。",
+      "group": "learn",
+      "file": "lesson-02-08.md",
+      "keywords": "動画 教材 02-08 02 アセット Prefabを作って再利用する",
+      "related": [
+        "video-tutorials",
+        "prefabs"
+      ],
+      "next": "lesson-03-00"
+    },
+    {
+      "slug": "lesson-03-00",
+      "title": "ノードをつないで箱を動かす",
+      "description": "ノードをつなぎ、箱を動かす仕組みを作ります。",
+      "group": "learn",
+      "file": "lesson-03-00.md",
+      "keywords": "動画 教材 03-00 03 プログラム ノードをつないで箱を動かす",
+      "related": [
+        "video-tutorials",
+        "interactivity"
+      ],
+      "next": "lesson-03-01"
+    },
+    {
+      "slug": "lesson-03-01",
+      "title": "押すと動くボタンを作る",
+      "description": "ボタンを押したときに動く仕組みを作ります。",
+      "group": "learn",
+      "file": "lesson-03-01.md",
+      "keywords": "動画 教材 03-01 03 プログラム 押すと動くボタンを作る",
+      "related": [
+        "video-tutorials",
+        "interactivity"
+      ],
+      "next": "lesson-03-02"
+    },
+    {
+      "slug": "lesson-03-02",
+      "title": "Delayで待ってから動かす",
+      "description": "Delayを使い、動き始めるまでの待ち時間を加えます。",
+      "group": "learn",
+      "file": "lesson-03-02.md",
+      "keywords": "動画 教材 03-02 03 プログラム Delayで待ってから動かす",
+      "related": [
+        "video-tutorials",
+        "interactivity"
+      ],
+      "next": "lesson-03-04"
+    },
+    {
+      "slug": "lesson-03-04",
+      "title": "テンプレートでBoxを回転させる",
+      "description": "テンプレートを使い、Boxを回転させます。",
+      "group": "learn",
+      "file": "lesson-03-04.md",
+      "keywords": "動画 教材 03-04 03 プログラム テンプレートでBoxを回転させる",
+      "related": [
+        "video-tutorials",
+        "interactivity"
+      ],
+      "next": "lesson-04-08"
+    },
+    {
+      "slug": "lesson-04-08",
+      "title": "Bloomで光をにじませる",
+      "description": "Bloomを使い、光のにじみを調整します。",
+      "group": "learn",
+      "file": "lesson-04-08.md",
+      "keywords": "動画 教材 04-08 04 仕上げ Bloomで光をにじませる",
+      "related": [
+        "video-tutorials",
+        "lighting"
+      ],
+      "next": "lesson-04-09"
+    },
+    {
+      "slug": "lesson-04-09",
+      "title": "テクスチャの解像度と容量を確認する",
+      "description": "テクスチャの解像度と容量を確認します。",
+      "group": "learn",
+      "file": "lesson-04-09.md",
+      "keywords": "動画 教材 04-09 04 仕上げ テクスチャの解像度と容量を確認する",
+      "related": [
+        "video-tutorials",
+        "performance"
+      ],
+      "next": "video-tutorials"
+    },
+    {
+      "slug": "video-credits",
+      "title": "動画教材の利用条件",
+      "description": "教材に含まれる素材、合成音声と再配布時の確認事項を説明します。",
+      "group": "support",
+      "file": "video-credits.md",
+      "keywords": "動画 教材 利用条件 クレジット 合成音声 OmniVoice",
+      "related": [
+        "video-tutorials"
+      ]
     },
     {
       "slug": "installation",
@@ -80,7 +358,8 @@
       "related": [
         "editor-basics",
         "assets",
-        "save-and-open"
+        "save-and-open",
+        "video-tutorials"
       ],
       "next": "materials"
     },
@@ -94,7 +373,8 @@
       "related": [
         "shortcuts",
         "materials",
-        "troubleshooting"
+        "troubleshooting",
+        "video-tutorials"
       ],
       "next": "objects"
     },
@@ -108,7 +388,8 @@
       "related": [
         "assets",
         "prefabs",
-        "save-and-open"
+        "save-and-open",
+        "video-tutorials"
       ],
       "next": "materials"
     },
@@ -122,7 +403,8 @@
       "related": [
         "external-resources",
         "textures",
-        "troubleshooting"
+        "troubleshooting",
+        "video-tutorials"
       ]
     },
     {
@@ -136,7 +418,8 @@
         "textures",
         "transparent-materials",
         "material-extensions",
-        "custom-shaders"
+        "custom-shaders",
+        "video-tutorials"
       ],
       "next": "save-and-open"
     },
@@ -150,7 +433,8 @@
       "related": [
         "materials",
         "external-resources",
-        "performance"
+        "performance",
+        "video-tutorials"
       ]
     },
     {
@@ -218,7 +502,8 @@
       "related": [
         "materials",
         "sky-and-water",
-        "performance"
+        "performance",
+        "video-tutorials"
       ]
     },
     {
@@ -231,7 +516,8 @@
       "related": [
         "lighting",
         "external-resources",
-        "collision"
+        "collision",
+        "video-tutorials"
       ]
     },
     {
@@ -257,7 +543,8 @@
       "related": [
         "play-mode",
         "objects",
-        "interactivity"
+        "interactivity",
+        "video-tutorials"
       ]
     },
     {
@@ -309,7 +596,8 @@
       "related": [
         "objects",
         "materials",
-        "save-and-open"
+        "save-and-open",
+        "video-tutorials"
       ]
     },
     {
@@ -322,7 +610,8 @@
       "related": [
         "audio",
         "external-resources",
-        "ai-connection"
+        "ai-connection",
+        "video-tutorials"
       ]
     },
     {
@@ -387,7 +676,8 @@
       "related": [
         "publishing",
         "textures",
-        "particles"
+        "particles",
+        "video-tutorials"
       ]
     },
     {
@@ -481,6 +771,7 @@
     }
   ],
   "homeTopics": [
+    "video-tutorials",
     "assets",
     "materials",
     "lighting",
