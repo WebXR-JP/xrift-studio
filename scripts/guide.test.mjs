@@ -84,3 +84,59 @@ test("current guide version agrees with the desktop version and new features are
  assert.ok(html.includes(manifest.reviewedOn));
  assert.ok((await read("src/components/visual-editor/RecordingPanel.tsx")).includes('page="recording"'));
 });
+
+test("tutorial catalog contains 19 finished, local MP4 lessons with posters and text alternatives", async () => {
+ const {tutorials, durationLabel} = await import("./guide/tutorials.mjs");
+ assert.equal(tutorials.length, 19);
+ assert.equal(new Set(tutorials.map(lesson => lesson.id)).size, 19);
+ let totalBytes = 0;
+ for (const lesson of tutorials) {
+   assert.match(lesson.video, /^\.\/media\/tutorials\/lesson-\d{2}-\d{2}\.mp4$/);
+   assert.match(lesson.poster, /^\.\/media\/tutorials\/lesson-\d{2}-\d{2}-poster\.jpg$/);
+   assert.equal(resolveGuideLink(lesson.video, lesson.slug, manifest).kind, "video");
+   assert.ok(lesson.durationSeconds > 0 && lesson.durationSeconds < 90);
+   for (const file of [lesson.video, lesson.poster]) {
+     const stat = await fs.stat(path.join(projectRoot, "docs/guide", file));
+     assert.ok(stat.size > 0 && stat.size < 100_000_000, file);
+     if (file.endsWith(".mp4")) totalBytes += stat.size;
+   }
+   assert.ok(manifest.pages.some(page => page.slug === lesson.slug));
+   assert.ok(data.sources[lesson.slug].includes(lesson.video));
+   assert.ok(data.sources[lesson.slug].includes("## 操作の要点"));
+   assert.ok(data.sources[lesson.slug].includes(`./${lesson.guide}.md`));
+   assert.doesNotMatch(JSON.stringify(lesson), /drive\.google|file_attachments|localhost|token|pending/i);
+ }
+ assert.ok(totalBytes < 100_000_000, `video bytes: ${totalBytes}`);
+ assert.equal(durationLabel(60.5), "1:01");
+ for (const href of ["./media/tutorials/../secret.mp4", "./media/tutorials/not-a-lesson.mp4", "./media/tutorials/lesson-01-01.mp4?token=secret", "//example.com/video.mp4"]) {
+   assert.equal(resolveGuideLink(href, "index", manifest).kind, "invalid", href);
+ }
+});
+
+test("tutorial index shows lightweight cards and each lesson has one accessible native player", async () => {
+ const {renderMarkdown} = await import("./guide/render.mjs");
+ const {tutorials} = await import("./guide/tutorials.mjs");
+ const landing = manifest.pages.find(page => page.slug === "video-tutorials");
+ const index = renderMarkdown(data.sources[landing.slug], landing, manifest);
+ assert.equal((index.match(/class="guide-lesson-card"/g) || []).length, 19);
+ assert.equal((index.match(/loading="lazy"/g) || []).length, 19);
+ assert.doesNotMatch(index, /<video|<source|<iframe/);
+ for (const lesson of tutorials) {
+   const page = manifest.pages.find(page => page.slug === lesson.slug);
+   const html = renderMarkdown(data.sources[lesson.slug], page, manifest);
+   assert.equal((html.match(/<video\b/g) || []).length, 1);
+   assert.ok(html.includes('controls=""'));
+   assert.ok(html.includes('playsInline=""'));
+   assert.ok(html.includes('preload="metadata"'));
+   assert.ok(html.includes(`poster="${lesson.poster}"`));
+   assert.ok(html.includes(`src="${lesson.video}"`));
+   assert.ok(html.includes('type="video/mp4"'));
+   assert.ok(html.includes('aria-describedby="video-help"'));
+   assert.ok(html.includes(`href="${lesson.video}"`));
+   assert.doesNotMatch(html, /autoplay|autoPlay|<iframe|<p><figure/);
+ }
+ const panel = await read("src/components/guide/GuidePanel.tsx");
+ assert.ok(panel.includes('target.kind === "video"'));
+ assert.ok(panel.includes('new URL(target.href, GUIDE_MANIFEST.siteUrl)'));
+ assert.doesNotMatch(panel, /import\.meta\.glob[^\n]*tutorials/);
+});

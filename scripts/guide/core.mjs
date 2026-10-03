@@ -33,8 +33,8 @@ export async function validateGuide({ manifest, sources }) {
     for (const match of body.matchAll(/!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
       const raw = match[1], link = resolveGuideLink(raw, page.slug, manifest);
       if (link.kind === "invalid") errors.push(`${page.slug}: invalid link ${raw}`);
-      if (link.kind === "media") {
-        try { await fs.access(path.join(sourceRoot, link.href)); } catch { errors.push(`${page.slug}: missing image ${raw}`); }
+      if (link.kind === "media" || link.kind === "video") {
+        try { await fs.access(path.join(sourceRoot, link.href)); } catch { errors.push(`${page.slug}: missing media ${raw}`); }
       }
       if (link.kind === "page" || link.kind === "heading") {
         const fragment = link.kind === "heading" ? raw.slice(1) : link.fragment;

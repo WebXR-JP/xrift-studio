@@ -1,5 +1,7 @@
 # 空と水を作る
 
+動画で操作を確認する：[Skybox Shaderで青空を作る](./lesson-01-07.md) / [HDRIを背景と環境光に使う](./lesson-01-08.md)
+
 空の背景にはSkybox、水面にはWater Shaderのマテリアルを使います。背景とメッシュに、それぞれ割り当ててください。
 
 ![背景に表示を有効にし、上空と地平線の色でSkyboxを表示した状態](./media/sky-and-water.png)

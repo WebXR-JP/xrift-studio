@@ -1,5 +1,7 @@
 # 画面の見方と視点操作
 
+動画で操作を確認する：[Hierarchyで選ぶ・視点を動かす](./lesson-01-03.md)
+
 左のHierarchyで配置したものを選び、中央のシーンで見た目を確認します。設定は右のInspector、素材の管理は下のAssetsで行います。
 
 ![左にHierarchy、中央にシーン、右にInspector、下にAssetsが並ぶ編集画面](./media/editor-layout.png)
