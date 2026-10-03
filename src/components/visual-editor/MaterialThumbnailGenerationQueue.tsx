@@ -26,6 +26,7 @@ export function MaterialThumbnailGenerationQueue({
   enabled,
   onGenerated,
   onFailed,
+  onPendingChange,
 }: {
   assets: AssetManifest;
   projectPath?: string;
@@ -35,6 +36,8 @@ export function MaterialThumbnailGenerationQueue({
     thumbnail: AssetThumbnailDescriptor,
   ) => void;
   onFailed: (assetId: string, message: string) => void;
+  /** Includes the fingerprint debounce, rendering and descriptor commit. */
+  onPendingChange?: (pending: boolean) => void;
 }) {
   const [jobs, setJobs] = useState<MaterialThumbnailJob[]>([]);
   const processingKeyRef = useRef<string | null>(null);
@@ -55,7 +58,9 @@ export function MaterialThumbnailGenerationQueue({
   }, [enabled, projectPath]);
 
   useEffect(() => {
-    if (!enabled || !projectPath || jobs.length > 0) return;
+    if (!enabled || !projectPath) { onPendingChange?.(false); return; }
+    onPendingChange?.(true);
+    if (jobs.length > 0) return;
     let cancelled = false;
     const timer = window.setTimeout(() => {
       const materials = Object.values(assets.assets).filter(
@@ -78,27 +83,28 @@ export function MaterialThumbnailGenerationQueue({
       )
         .then((candidates) => {
           if (cancelled) return;
-          setJobs(
-            candidates
-              .filter(
-                (candidate) =>
-                  candidate.refresh &&
-                  !failedKeysRef.current.has(candidate.key),
-              )
-              .sort(
-                (left, right) =>
-                  Number(right.openBrush) - Number(left.openBrush) ||
-                  left.assetId.localeCompare(right.assetId),
-              )
-              .map(({ assetId, sourceHash, key }) => ({
-                assetId,
-                sourceHash,
-                key,
-              })),
-          );
+          const nextJobs = candidates
+            .filter(
+              (candidate) =>
+                candidate.refresh &&
+                !failedKeysRef.current.has(candidate.key),
+            )
+            .sort(
+              (left, right) =>
+                Number(right.openBrush) - Number(left.openBrush) ||
+                left.assetId.localeCompare(right.assetId),
+            )
+            .map(({ assetId, sourceHash, key }) => ({
+              assetId,
+              sourceHash,
+              key,
+            }));
+          setJobs(nextJobs);
+          onPendingChange?.(nextJobs.length > 0);
         })
         .catch((error) => {
           if (!cancelled) {
+            onPendingChange?.(false);
             onFailed(
               "material-thumbnail-queue",
               error instanceof Error
@@ -112,7 +118,7 @@ export function MaterialThumbnailGenerationQueue({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [assets, enabled, jobs.length, onFailed, projectPath]);
+  }, [assets, enabled, jobs.length, onFailed, onPendingChange, projectPath]);
 
   const finishJob = useCallback((job: MaterialThumbnailJob) => {
     processingKeyRef.current = null;

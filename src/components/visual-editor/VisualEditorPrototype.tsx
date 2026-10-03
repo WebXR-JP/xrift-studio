@@ -231,6 +231,7 @@ import {
   type McpHarnessState,
 } from "../../lib/visual-editor/mcp-harness-guard";
 import { setProjectThumbnailFromAsset } from "../../lib/project-thumbnail";
+import { prepareStableEditorSnapshot } from "../../lib/visual-editor/studio-snapshot-barrier";
 import { AssetsPanel } from "./AssetsPanel";
 import {
   ValueScrubContext,
@@ -690,13 +691,17 @@ export type ExternalAssetsCommit = (update: {
 export type VisualEditorMcpProjectBridge = {
   /** The Editor's current documents, ahead of any pending autosave. */
   currentBundle: () => PrototypeVisualProject;
+  captureSceneView: () => Promise<{ ok: true; dataUrl: string } | { ok: false; message: string }>;
   /** Flushes the pending autosave. Resolves to the project path when known. */
   saveNow: () => Promise<string | undefined>;
+  /** Waits for derived thumbnail document updates and saves a stable version. */
+  prepareSnapshot?: () => Promise<void>;
   /** Saves, then leaves to the Library. Resolves false when the save failed. */
   leave: () => Promise<boolean>;
 };
 
 export type VisualEditorPrototypeProps = {
+  hostControls?: import('react').ReactNode;
   projectKind: VisualProjectKind;
   onBack: () => void;
   /** Lets embedded surfaces name the actual destination instead of always saying Library. */
@@ -961,6 +966,7 @@ export function VisualEditorPrototype({
   projectTransferBusy = false,
   onRegisterExternalAssetsCommit,
   onRegisterMcpProjectBridge,
+  hostControls,
   onClassicExport,
   compilationFresh = false,
   onThumbnailChanged,
@@ -1005,6 +1011,15 @@ export function VisualEditorPrototype({
   );
   const bundle = history.present.bundle;
   const bundleRef = useRef(bundle);
+  const snapshotEditorMounted = useRef(true);
+  useEffect(() => {
+    snapshotEditorMounted.current = true;
+    return () => { snapshotEditorMounted.current = false; };
+  }, []);
+  const thumbnailPending = useRef({ material: true, environment: true, model: true });
+  const onMaterialThumbnailPending = useCallback((pending: boolean) => { thumbnailPending.current.material = pending; }, []);
+  const onEnvironmentThumbnailPending = useCallback((pending: boolean) => { thumbnailPending.current.environment = pending; }, []);
+  const onModelThumbnailPending = useCallback((pending: boolean) => { thumbnailPending.current.model = pending; }, []);
   const historyRef = useRef(history);
   // Editor commands also update notices, selection and save status. Execute
   // them once at dispatch, not inside a React updater which can be replayed
@@ -1740,6 +1755,7 @@ export function VisualEditorPrototype({
   onRegisterMcpProjectBridgeRef.current = onRegisterMcpProjectBridge;
   const mcpProjectBridgeActionsRef = useRef<{
     saveNow: () => Promise<string | undefined>;
+    prepareSnapshot: () => Promise<void>;
     leave: () => Promise<boolean>;
   } | null>(null);
   const [mcpClients, setMcpClients] = useState<XriftMcpClientStatus[]>([]);
@@ -1791,7 +1807,7 @@ export function VisualEditorPrototype({
     } finally {
       setMcpLoading(false);
     }
-  }, [mcpNativeAvailable]);
+  }, [mcpNativeAvailable, requestSceneScreenshot]);
 
   const registerMcpClient = useCallback(
     async (clientId: XriftMcpClientId) => {
@@ -5423,6 +5439,7 @@ export function VisualEditorPrototype({
         // listener, so it stops answering them with EDITOR_UNAVAILABLE.
         onRegisterMcpProjectBridgeRef.current?.({
           currentBundle: () => bundleRef.current,
+          captureSceneView: requestSceneScreenshot,
           saveNow: () =>
             mcpProjectBridgeActionsRef.current?.saveNow() ??
             Promise.resolve(undefined),
@@ -11340,7 +11357,27 @@ export function VisualEditorPrototype({
     return true;
   }, [leaving, projectExportBusy, projectTransferBusy, importBusy, onProjectExport, flushInteractivityDraft, backLabel, onBack, requestAutosave, flushCodeAutosaves]);
 
-  mcpProjectBridgeActionsRef.current = { saveNow: runSave, leave: handleBack };
+  const prepareSnapshot = useCallback(async () => {
+    const projectId = bundleRef.current.project.projectId;
+    await prepareStableEditorSnapshot({
+      currentBundle: () => bundleRef.current,
+      backgroundPending: () => Object.values(thumbnailPending.current).some(Boolean),
+      stillCurrent: () => snapshotEditorMounted.current && bundleRef.current.project.projectId === projectId,
+      saveNow: runSave,
+    });
+  }, [runSave]);
+  mcpProjectBridgeActionsRef.current = { saveNow: runSave, prepareSnapshot, leave: handleBack };
+  useEffect(() => {
+    if (mcpNativeAvailable) return;
+    onRegisterMcpProjectBridgeRef.current?.({
+      currentBundle: () => bundleRef.current,
+      captureSceneView: requestSceneScreenshot,
+      saveNow: () => mcpProjectBridgeActionsRef.current?.saveNow() ?? Promise.resolve(undefined),
+      prepareSnapshot: () => mcpProjectBridgeActionsRef.current?.prepareSnapshot() ?? Promise.reject(new Error('エディターの準備ができていません')),
+      leave: () => mcpProjectBridgeActionsRef.current?.leave() ?? Promise.resolve(false),
+    });
+    return () => { onRegisterMcpProjectBridgeRef.current?.(null); };
+  }, [mcpNativeAvailable, requestSceneScreenshot]);
 
   const kindLabel = projectKind === "world" ? "ワールド" : "アイテム";
   const KindIcon = projectKind === "world" ? EDITOR_ICONS.world : EDITOR_ICONS.item;
@@ -12217,6 +12254,7 @@ export function VisualEditorPrototype({
             projectPath={projectPath}
             enabled={renderedEditorMode === "edit" && !importBusy && (!tablet || (!panelsHidden && tabletPanel === "assets"))}
             onGenerated={handleAssetThumbnailGenerated}
+            onPendingChange={onMaterialThumbnailPending}
             onFailed={handleMaterialThumbnailFailure}
           />
           <EnvironmentTextureThumbnailGenerationQueue
@@ -12224,6 +12262,7 @@ export function VisualEditorPrototype({
             projectPath={projectPath}
             enabled={renderedEditorMode === "edit" && !importBusy && (!tablet || (!panelsHidden && tabletPanel === "assets"))}
             onGenerated={handleAssetThumbnailGenerated}
+            onPendingChange={onEnvironmentThumbnailPending}
             onFailed={handleEnvironmentTextureThumbnailFailure}
           />
           <ModelThumbnailGenerationQueue
@@ -12231,6 +12270,7 @@ export function VisualEditorPrototype({
             projectPath={projectPath}
             enabled={renderedEditorMode === "edit" && !importBusy && (!tablet || (!panelsHidden && tabletPanel === "assets"))}
             onGenerated={handleAssetThumbnailGenerated}
+            onPendingChange={onModelThumbnailPending}
             onFailed={handleModelThumbnailFailure}
           />
 
@@ -12508,8 +12548,10 @@ export function VisualEditorPrototype({
             onUndo={handleUndo}
           />
             <div ref={setAssetStatusHost} className="relative min-w-0 flex-1 self-stretch border-l border-editor-border" />
+            {hostControls}
           </footer>
         ) : null}
+        {(tablet || phone) && !recordingUiHidden && hostControls ? <div className="flex shrink-0 justify-end border-t border-editor-border bg-editor-surface px-2 py-1">{hostControls}</div> : null}
         {tablet && !recordingUiHidden && notice && (tabletPanel !== "assets" || panelsHidden) ? (
           <div className="flex shrink-0 items-center gap-2 border-t border-editor-border bg-editor-surface px-3 py-1.5 text-xs text-editor-text">
             <p role="status" className="min-w-0 flex-1 whitespace-pre-wrap break-words select-text cursor-text">{notice}</p>

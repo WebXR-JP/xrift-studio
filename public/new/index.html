@@ -1,0 +1,8 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>XRift Studio</title></head>
+<body><p>新しいワールドを開いています。</p><script>
+const target = new URL('../editor.html', location.href);
+target.search = location.search;
+target.searchParams.set('new', '1');
+location.replace(target.href);
+</script></body></html>

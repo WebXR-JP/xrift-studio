@@ -38,7 +38,7 @@ brew upgrade --cask --greedy webxr-jp/xrift-studio/xrift-studio
 2. [最初のワールドを作る](./docs/guide/first-world.md)に沿って、物を配置し、マテリアルで色を変えます。
 3. 保存し、Playで歩いて確かめます。公開の準備ができたら「XRiftへ公開」へ進みます。
 
-ブラウザ版βでは、パソコン・iPad・スマートフォンからビジュアルエディターで制作し、APIキーによるワールド送信を試せます。プロジェクトはブラウザに自動保存され、`.xriftstudio`ファイルでデスクトップ版へ引き継げます。アイテムやスクリプトを含むワールドの公開、MCPでのAI接続にはデスクトップ版を使います。
+ブラウザ版βでは、パソコン・iPad・スマートフォンからビジュアルエディターで制作し、APIキーによるワールド送信を試せます。プロジェクトはブラウザに自動保存され、`.xriftstudio`ファイルでデスクトップ版へ引き継げます。アイテムやスクリプトを含むワールドの公開や、ローカルMCPでのAI接続にはデスクトップ版を使います。ChatGPTとの会話で制作する場合は、下記のSitesプラグインを使います。
 
 ## 作りたいものから探す
 
@@ -73,3 +73,11 @@ pnpm tauri:dev
 MIT。素材ごとの権利表記は[THIRD_PARTY_ASSETS.md](./THIRD_PARTY_ASSETS.md)を参照してください。
 
 Hierarchyの一部を`.xriftstudio`で書き出して別のワールド・アイテムへ追加する手順は、[Entityを別のワールド・アイテムへ渡す](./docs/guide/hierarchy-transfer.md)を参照してください。
+
+### ChatGPTのSitesプラグイン
+
+ChatGPT SitesでMCPとエディターをホストし、Sitesが用意した[既存の所有者用プラグイン](https://chatgpt.com/plugins/plugin_asdk_app_sites_a7e0e2c988c08191aa694d396a182112)を接続して使います。インストールはChatGPTの「Plugins → Personal → Created by you」からも行えます。対応するChatGPT・Codexの画面でプラグインを選び、制作を依頼してください。利用できる画面と権限はアカウント側の提供状況に従います。
+
+ChatGPT版と通常ブラウザ版は、作品一覧・新規作成・再開・保存・取り込み・書き出しを同じエディターで行います。[プラグイン用MCP実装](./packages/xrift-studio-cloud/README.md)は、ChatGPTとの接続、編集データの受信、反映確認と会話への報告を追加します。作品はブラウザに保存し、通常サイトとChatGPT内の保存領域は分かれます。GitHub Pages版を開くだけではMCP接続は有効になりません。
+
+Sites用のビルドは`pnpm build:sites`です。公開済みのSite、所有者用プラグイン、公開ディレクトリへの審査申請はそれぞれ状態が異なります。[配置・接続・検証の手順](./packages/xrift-studio-cloud/README.md#sitesへの配置と接続)を確認してください。

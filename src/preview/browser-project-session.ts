@@ -21,7 +21,7 @@ export async function acquireBrowserProjectLease(path: string): Promise<() => vo
   return new Promise((resolve, reject) => {
     void navigator.locks.request(`xrift-studio:${path}`, { mode: "exclusive", ifAvailable: true }, (lock) => {
       if (!lock) {
-        reject(new Error("このプロジェクトは別のタブで編集中です。そちらで紹介ページへ戻るかタブを閉じてから、もう一度開いてください。"));
+        reject(new Error("このプロジェクトは別のタブで編集中です。そちらでプロジェクト一覧へ戻るかタブを閉じてから、もう一度開いてください。"));
         return;
       }
       return new Promise<void>((release) => resolve(release));

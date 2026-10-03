@@ -1,4 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import type { VisualEditorMcpProjectBridge } from './components/visual-editor/VisualEditorPrototype';
 import { PROJECT_PACKAGE_ACCEPT } from "./lib/project-package";
 import { VisualEditorErrorBoundary } from "./components/visual-editor/VisualEditorErrorBoundary";
 import { MobileEditorHelp } from "./preview/MobileEditorHelp";
@@ -7,7 +8,7 @@ import { BrowserProjectTransferDialog, type BrowserRecentProject, type BrowserTr
 import { BrowserProjectLibrary } from "./preview/BrowserProjectLibrary";
 import { openBrowserProjectSession, type BrowserProjectSession } from "./preview/browser-project-session";
 import type { PrototypeVisualProject } from "./lib/visual-editor/prototype-project";
-import type { VisualProjectDocuments } from "./lib/visual-editor/persistence";
+import { saveBrowserStudioProject } from './lib/browser-studio-project-store';
 import {
   WebUploadDialog,
 } from "./preview/WebUploadDialog";
@@ -15,6 +16,8 @@ import type { XriftUploadResult } from "./lib/visual-editor/publish";
 import { imageDataUrlToPng } from "./lib/project-thumbnail";
 import { tauri } from "./lib/tauri";
 import type { ProjectKind } from "./preview/content";
+import type { BrowserStoredProject } from './lib/browser-project-storage';
+import { browserProjectEditorUrl, prepareStudioProjectImport, resolveStudioProject, studioLaunchFromUrl } from './lib/browser-project-routing';
 
 const VisualEditorPrototype = lazy(() =>
   import("./components/visual-editor/VisualEditorPrototype").then((module) => ({
@@ -31,7 +34,24 @@ function EditorFallback() {
 }
 
 /** The browser editor has its own HTML entry, so its URL survives navigation. */
-export default function BrowserEditorApp() {
+export type BrowserStudioApi = {
+  open(path: string): Promise<void>;
+  create(name: string): Promise<string>;
+  openProject(projectId: string): Promise<void>;
+  apply(bundle: PrototypeVisualProject): Promise<string>;
+};
+export type BrowserStudioHost = {
+  controls: ReactNode;
+  busy: boolean;
+  onReady(api: BrowserStudioApi): void;
+  onProjectChange(path: string | null): Promise<void>;
+  onSaved(path: string, bundle: PrototypeVisualProject): Promise<void>;
+  onBridge(bridge: VisualEditorMcpProjectBridge | null): void;
+  onLanding?: () => void;
+};
+export default function BrowserEditorApp({ host }: { host?: BrowserStudioHost } = {}) {
+  const hostRef = useRef(host); hostRef.current = host;
+  const [externalGeneration, setExternalGeneration] = useState(0);
   const [visualEditorKind, setVisualEditorKind] = useState<ProjectKind | null>(null);
   const [webUploadBundle, setWebUploadBundle] = useState<PrototypeVisualProject | null>(null);
   const [editorInitialBundle, setEditorInitialBundle] = useState<PrototypeVisualProject | null>(null);
@@ -45,9 +65,14 @@ export default function BrowserEditorApp() {
   const startupStarted = useRef(false);
   const [browserSession, setBrowserSession] = useState<BrowserProjectSession | null>(null);
   const activeSession = useRef<BrowserProjectSession | null>(null);
+  const editorBridge = useRef<VisualEditorMcpProjectBridge | null>(null);
+  const registerEditorBridge = useCallback((bridge: VisualEditorMcpProjectBridge | null) => {
+    editorBridge.current = bridge;
+    hostRef.current?.onBridge(bridge);
+  }, []);
   const closingSession = useRef<Promise<void>>(Promise.resolve());
   const [transfer, setTransfer] = useState<BrowserTransferState | null>(null);
-  const [recentProjects, setRecentProjects] = useState<BrowserRecentProject[]>([]);
+  const [recentProjects, setRecentProjects] = useState<BrowserStoredProject[]>([]);
   const [recentProjectsLoading, setRecentProjectsLoading] = useState(false);
   const chooserGeneration = useRef(0);
   const transferActive = useRef(false);
@@ -64,28 +89,43 @@ export default function BrowserEditorApp() {
     setThumbnailCaptureError(null);
     setVisualEditorKind(session.initialBundle.project.projectKind);
     document.title = `${session.initialBundle.project.metadata.name} | XRift Studio`;
-    // Drop legacy startup hints; every visit now begins in the project library.
-    const url = new URL(window.location.href);
-    if (url.searchParams.has("kind")) {
-      url.searchParams.delete("kind");
-      window.history.replaceState(null, "", url);
-    }
+    const url = browserProjectEditorUrl(session.initialBundle.project.projectId, window.location.href);
+    if (url !== window.location.href) window.history.replaceState(null, '', url);
   };
 
-  const openStoredBrowserProject = async (path: string) => {
+  const openStoredBrowserProject = async (path: string, notify = true) => {
     await closingSession.current;
     if (activeSession.current?.path === path) return;
+    if (activeSession.current && (!editorBridge.current || !(await editorBridge.current.saveNow()))) throw new Error('現在の作品を保存できませんでした。書き出してからもう一度開いてください。');
     const session = await openBrowserProjectSession(path);
     try {
       const { activateBrowserProject } = await import("./lib/browser-project-storage");
       await activateBrowserProject(path);
       adoptBrowserSession(session);
     } catch (error) { await session.close(); throw error; }
+    if (notify) await hostRef.current?.onProjectChange(session.path);
+  };
+
+  const openProjectById = async (projectId: string) => {
+    const project = await resolveStudioProject(projectId);
+    await openStoredBrowserProject(project.path);
+  };
+
+  const openProjectRoute = async (projectId: string) => {
+    if (transferActive.current) throw new Error('プロジェクトの処理が終わってからもう一度開いてください。');
+    transferActive.current = true;
+    setTransfer({ phase: 'preparing', operation: 'open' });
+    retryTransfer.current = () => { void openProjectRoute(projectId); };
+    try { await openProjectById(projectId); setTransfer(null); }
+    catch (error) { setTransfer({ phase: 'failed', operation: 'open', message: error instanceof Error ? error.message : 'プロジェクトを開けませんでした。' }); }
+    finally { transferActive.current = false; }
   };
 
   const saveBrowserProject = useCallback(async (bundle: PrototypeVisualProject) => {
     if (!browserSession || activeSession.current !== browserSession) throw new Error("ブラウザの保存先を確認できません。現在のプロジェクトを開き直してください。");
-    return browserSession.save(bundle);
+    const path = await browserSession.save(bundle);
+    await hostRef.current?.onSaved(path, bundle);
+    return path;
   }, [browserSession]);
 
   const exportBrowserProject = async (bundle: PrototypeVisualProject) => {
@@ -113,7 +153,7 @@ export default function BrowserEditorApp() {
         import("./lib/visual-editor/browser-project-transfer"),
       ]);
       const imported = await readBrowserProjectArchive(file);
-      const path = await createBrowserProject(imported.files, { activate: false });
+      const path = await createBrowserProject(await prepareStudioProjectImport(imported.files), { activate: false });
       await openStoredBrowserProject(path);
       setTransfer(null);
     } catch (error) {
@@ -192,6 +232,19 @@ export default function BrowserEditorApp() {
     }
   };
 
+  const applyBrowserBundle = async (bundle: PrototypeVisualProject): Promise<string> => {
+    const session = activeSession.current;
+    if (session?.initialBundle.project.projectId === bundle.project.projectId) {
+      await session.save(bundle);
+      setEditorInitialBundle(bundle);
+      setExternalGeneration(value => value + 1);
+      return session.path;
+    }
+    const path = await saveBrowserStudioProject(bundle);
+    await openStoredBrowserProject(path, false);
+    return path;
+  };
+
   const createProject = async (projectKind: ProjectKind, name: string) => {
     if (transferActive.current) return;
     transferActive.current = true;
@@ -199,28 +252,49 @@ export default function BrowserEditorApp() {
     retryTransfer.current = () => { void createProject(projectKind, name); };
     try {
       await closingSession.current;
-      const [storage, transferTools, { createStarterVisualProject, defaultVisualStarterTemplateId }] = await Promise.all([
-        import("./lib/browser-project-storage"),
-        import("./lib/visual-editor/browser-project-transfer"),
-        import("./lib/visual-editor/starter-templates"),
-      ]);
-      const bundle = createStarterVisualProject(projectKind, defaultVisualStarterTemplateId(projectKind), name);
-      const documents: VisualProjectDocuments = { project: bundle.project, scenes: { [bundle.scene.sceneId]: bundle.scene }, assets: bundle.assets, prefabs: bundle.prefabs };
-      const path = await storage.createBrowserProject(transferTools.browserProjectDocumentFiles(documents), { activate: false });
-      await openStoredBrowserProject(path);
+      const { createStarterVisualProject, defaultVisualStarterTemplateId } = await import('./lib/visual-editor/starter-templates');
+      const path = await applyBrowserBundle(createStarterVisualProject(projectKind, defaultVisualStarterTemplateId(projectKind), name));
+      await hostRef.current?.onProjectChange(path);
       setTransfer(null);
       requestAnimationFrame(() => window.scrollTo({ top: 0 }));
+      return path;
     } catch (error) {
       setTransfer({ phase: "failed", operation: "open", message: error instanceof Error ? error.message : "ブラウザにプロジェクトを保存できませんでした。保存容量やSafariの設定を確認してください。" });
     } finally { transferActive.current = false; }
   };
 
   useEffect(() => {
-    // Only list metadata at startup. A broken project must not trap the author
-    // in an automatic restore loop; opening and creating require a choice.
+    // Explicit /new and project links select the startup action. The ordinary
+    // entry lists metadata without restoring an unrelated or broken project.
     if (startupStarted.current) return;
     startupStarted.current = true;
     void refreshBrowserProjects();
+    if (!hostRef.current) {
+      try {
+        const launch = studioLaunchFromUrl(window.location.href);
+        if (launch.kind === 'new') void createProject('world', launch.name);
+        else if (launch.kind === 'project') void openProjectRoute(launch.projectId);
+      }
+      catch (error) { setTransfer({ phase: 'failed', operation: 'open', message: error instanceof Error ? error.message : 'プロジェクトIDが不正です。' }); }
+    }
+    hostRef.current?.onReady({
+      open: async (path) => { await openStoredBrowserProject(path, false); },
+      openProject: async (projectId) => {
+        if (transferActive.current) throw new Error('プロジェクトの処理が終わってからもう一度開いてください。');
+        transferActive.current = true; setTransfer({ phase: 'preparing', operation: 'open' });
+        retryTransfer.current = () => { void openProjectRoute(projectId); };
+        try { await openProjectById(projectId); setTransfer(null); }
+        catch (error) { setTransfer({ phase: 'failed', operation: 'open', message: error instanceof Error ? error.message : 'プロジェクトを開けませんでした。' }); throw error; }
+        finally { transferActive.current = false; }
+      },
+      create: async (name) => {
+        const path = await createProject('world', name);
+        if (!path) throw new Error('新しい作品を作成できませんでした。表示されたエラーを確認して再試行してください。');
+        return path;
+      },
+      apply: applyBrowserBundle,
+    });
+    return () => { void activeSession.current?.close(); };
   }, []);
 
   useEffect(() => {
@@ -232,6 +306,7 @@ export default function BrowserEditorApp() {
       activeSession.current = null;
       if (session) await session.close();
       await closingSession.current;
+      if (hostRef.current?.onLanding) { hostRef.current.onLanding(); setLeaving(false); return; }
       window.location.assign(import.meta.env.DEV ? "preview.html" : "./");
     };
     void finishLeaving();
@@ -249,9 +324,11 @@ export default function BrowserEditorApp() {
     setThumbnailCaptureBusy(false);
     setThumbnailCaptureError(null);
     document.title = "XRift Studio";
+    window.history.replaceState(null, '', browserProjectEditorUrl(null, window.location.href));
     if (session) await session.close();
     await closingSession.current;
     await refreshBrowserProjects();
+    await hostRef.current?.onProjectChange(null);
   };
 
   const recordBrowserPublication = async (
@@ -334,7 +411,7 @@ export default function BrowserEditorApp() {
         >
           <Suspense fallback={<EditorFallback />}>
             {browserSession ? <VisualEditorPrototype
-              key={browserSession.path}
+              key={browserSession.path + ':' + externalGeneration}
               projectKind={visualEditorKind}
               projectName={browserSession.initialBundle.project.metadata.name}
               projectPath={browserSession.path}
@@ -342,6 +419,8 @@ export default function BrowserEditorApp() {
               onSave={saveBrowserProject}
               onProjectExport={exportBrowserProject}
               onProjectImport={openProjectChooser}
+              onRegisterMcpProjectBridge={registerEditorBridge}
+              hostControls={host?.controls}
               projectTransferBusy={transfer?.phase === "preparing"}
               backLabel="プロジェクト"
               onBack={() => { void returnToProjectLibrary(); }}
@@ -353,7 +432,7 @@ export default function BrowserEditorApp() {
               onThumbnailCaptured={(dataUrl) => { void captureBrowserThumbnail(dataUrl); }}
               onThumbnailCaptureError={(message) => { setThumbnailCaptureError(message); setThumbnailCaptureBusy(false); }}
             /> : <EditorFallback />}
-            {phone && !mobileHelpDismissed && !transfer && browserSession ? <MobileEditorHelp onClose={() => setMobileHelpDismissed(true)} /> : null}
+            {phone && !host && !mobileHelpDismissed && !transfer && browserSession ? <MobileEditorHelp onClose={() => setMobileHelpDismissed(true)} /> : null}
           </Suspense>
         </VisualEditorErrorBoundary>
         {webUploadBundle && browserSession ? <WebUploadDialog
@@ -376,6 +455,7 @@ export default function BrowserEditorApp() {
           onUploaded={recordBrowserPublication}
         /> : null}
         {transferControls}
+        {host?.busy && <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/70 text-sm" role="status">Studioへの反映を確認しています…</div>}
       </div>
     );
   }
@@ -392,7 +472,8 @@ export default function BrowserEditorApp() {
         onNew={() => setTransfer({ phase: "new", operation: "open" })}
         onImport={() => importInput.current?.click()}
         onRefresh={() => { void refreshBrowserProjects(); }}
-        onBack={() => setLeaving(true)}
+        onBack={host && !host.onLanding ? undefined : () => setLeaving(true)}
+        hostControls={host?.controls}
       />
       {transferControls}
     </div>
