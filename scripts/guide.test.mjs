@@ -140,3 +140,43 @@ test("tutorial index shows lightweight cards and each lesson has one accessible 
  assert.ok(panel.includes('new URL(target.href, GUIDE_MANIFEST.siteUrl)'));
  assert.doesNotMatch(panel, /import\.meta\.glob[^\n]*tutorials/);
 });
+
+test("the learning course reaches publishing, updates and invitations through complete lessons", async () => {
+ const course = JSON.parse(await read("docs/guide/curriculum.json"));
+ const lessons = course.chapters.flatMap(chapter => chapter.lessons);
+ assert.equal(course.chapters.length, 8);
+ assert.equal(new Set(lessons.map(lesson => lesson.slug)).size, lessons.length);
+ assert.equal(lessons.filter(lesson => lesson.format === "video").length, 19);
+ assert.equal(lessons.filter(lesson => lesson.format === "article").length, 10);
+ for (const [index, lesson] of lessons.entries()) {
+   const page = manifest.pages.find(page => page.slug === lesson.slug);
+   assert.ok(page, lesson.slug);
+   assert.equal(page.next, lessons[index + 1]?.slug ?? "learning-course");
+   const source = data.sources[lesson.slug];
+   for (const heading of ["## このレッスンでできること", "## 始める前に", "## できたか確認する", "## うまくいかないとき", "## 次のレッスン"]) {
+     assert.ok(source.includes(heading), `${lesson.slug}: ${heading}`);
+   }
+   assert.match(source, /## (?:手順|操作の要点)/, lesson.slug);
+   if (lesson.format === "article") {
+     assert.ok(source.includes("動画：未収録（文章で進められます）"), lesson.slug);
+     assert.doesNotMatch(source, /media\/tutorials\/[^)]+\.mp4|<video|<iframe/);
+   }
+ }
+ const index = data.sources["learning-course"];
+ for (const lesson of lessons) assert.ok(index.includes(`./${lesson.slug}.md`), lesson.slug);
+ assert.ok(data.sources["video-tutorials"].includes("./learning-course.md"));
+ assert.ok(data.sources.index.includes("./learning-course.md"));
+});
+
+test("the course distinguishes authority, review and device limitations without teaching unsafe shortcuts", () => {
+ assert.match(data.sources["course-publish-account"], /APIキー/);
+ assert.match(data.sources["course-publish-review"], /PENDING/);
+ assert.match(data.sources["course-publish-review"], /ACTIVE/);
+ assert.match(data.sources["course-publish-review"], /REJECTED/);
+ assert.match(data.sources["course-publish-invite"], /インスタンス/);
+ assert.match(data.sources["course-publish-invite"], /ゲスト/);
+ assert.match(data.sources["lesson-03-04"], /スクリプトを含むワールドの公開にはデスクトップ版/);
+ for (const page of manifest.pages.filter(page => page.slug.startsWith("course-") || page.slug.startsWith("lesson-") || page.slug === "learning-course")) {
+   assert.doesNotMatch(data.sources[page.slug], /drive\.google\.com|file_attachments|localhost:\d+|Bearer [A-Za-z0-9]/, page.slug);
+ }
+});
