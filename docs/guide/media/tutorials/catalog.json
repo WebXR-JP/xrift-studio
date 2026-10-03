@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "seriesTitle": "1分でわかる XRift Studio",
   "videoCount": 19,
-  "totalVideoBytes": 59197397,
+  "totalVideoBytes": 57560862,
   "totalPosterBytes": 954906,
   "totalDurationSeconds": 1068.566669,
   "lessons": [
@@ -83,9 +83,9 @@
       "description": "Hierarchyで対象を選び、作業しやすい視点へ動かします。",
       "file": "lesson-01-03.mp4",
       "durationSeconds": 50.6,
-      "audioDurationSeconds": 50.619002,
-      "sizeBytes": 4548405,
-      "sha256": "1fa2516e73511bed684068637bcc4b8f573d9db46209e66c390440a4498ea881",
+      "audioDurationSeconds": 50.6,
+      "sizeBytes": 4498250,
+      "sha256": "acf42b642f6f5af7d40791ad73b0361f4de7983c249fe3170e567f3a3f07048c",
       "video": {
         "codec": "h264",
         "profile": "High",
@@ -100,7 +100,7 @@
         "codec": "aac",
         "profile": "LC",
         "channels": 2,
-        "sampleRate": 44100
+        "sampleRate": 48000
       },
       "poster": {
         "file": "lesson-01-03-poster.jpg",
@@ -153,9 +153,9 @@
       "description": "床の当たり判定と開始位置を確認し、Playで動作を確かめます。",
       "file": "lesson-01-05.mp4",
       "durationSeconds": 58.1,
-      "audioDurationSeconds": 58.119002,
-      "sizeBytes": 3937771,
-      "sha256": "c7379ed9e92584b86624020cd336d369ddd36ae1e7a76131e1ac88502ea8dc65",
+      "audioDurationSeconds": 58.1,
+      "sizeBytes": 3744918,
+      "sha256": "1a3d98a44a446849a27866ed6e7bebd1f2e76ed8bda1454fa19af6307285138e",
       "video": {
         "codec": "h264",
         "profile": "High",
@@ -170,7 +170,7 @@
         "codec": "aac",
         "profile": "LC",
         "channels": 2,
-        "sampleRate": 44100
+        "sampleRate": 48000
       },
       "poster": {
         "file": "lesson-01-05-poster.jpg",
@@ -188,9 +188,9 @@
       "description": "ライトの明るさと影を調整し、空間の見え方を整えます。",
       "file": "lesson-01-06.mp4",
       "durationSeconds": 57.6,
-      "audioDurationSeconds": 57.608005,
-      "sizeBytes": 3931230,
-      "sha256": "283f3553585ad033aab7684ed6786131e685fd0c32c1cc07f557372443578a21",
+      "audioDurationSeconds": 57.6,
+      "sizeBytes": 3712799,
+      "sha256": "c448e0e31268275c38864e4ee93ee6ae9e28f40261f3cf4004e6cbd1e18dbd3a",
       "video": {
         "codec": "h264",
         "profile": "High",
@@ -205,7 +205,7 @@
         "codec": "aac",
         "profile": "LC",
         "channels": 2,
-        "sampleRate": 44100
+        "sampleRate": 48000
       },
       "poster": {
         "file": "lesson-01-06-poster.jpg",
@@ -223,9 +223,9 @@
       "description": "Skybox Shaderを使い、空間の背景に青空を作ります。",
       "file": "lesson-01-07.mp4",
       "durationSeconds": 58.1,
-      "audioDurationSeconds": 58.119002,
-      "sizeBytes": 4075031,
-      "sha256": "482e25988642548eda6a62d0d8224f8e652325dbb98ec12bacb78cbc79abea76",
+      "audioDurationSeconds": 58.1,
+      "sizeBytes": 3922236,
+      "sha256": "8fa8d46179ef2b0618ee727a302e0cee0471f46185c2ff76288898aa19851349",
       "video": {
         "codec": "h264",
         "profile": "High",
@@ -240,7 +240,7 @@
         "codec": "aac",
         "profile": "LC",
         "channels": 2,
-        "sampleRate": 44100
+        "sampleRate": 48000
       },
       "poster": {
         "file": "lesson-01-07-poster.jpg",
@@ -258,9 +258,9 @@
       "description": "HDRIを背景と環境光に使う設定を確認します。",
       "file": "lesson-01-08.mp4",
       "durationSeconds": 57.6,
-      "audioDurationSeconds": 57.608005,
-      "sizeBytes": 2644371,
-      "sha256": "8bdd55c989a45b602f545c59abd6a99218da734655307d29201aa5aafb7f3cee",
+      "audioDurationSeconds": 57.6,
+      "sizeBytes": 2377085,
+      "sha256": "45c7319a12ddbc058b8b40abeb65e63c789cfd62b009f27dcd05af15086db2c8",
       "video": {
         "codec": "h264",
         "profile": "High",
@@ -275,7 +275,7 @@
         "codec": "aac",
         "profile": "LC",
         "channels": 2,
-        "sampleRate": 44100
+        "sampleRate": 48000
       },
       "poster": {
         "file": "lesson-01-08-poster.jpg",
@@ -293,9 +293,9 @@
       "description": "外部のGLBモデルを読み込み、空間に配置します。",
       "file": "lesson-02-01.mp4",
       "durationSeconds": 44.6,
-      "audioDurationSeconds": 44.605011,
-      "sizeBytes": 2457133,
-      "sha256": "288e80efb3249e35c871a14853e6fea7347427bed19239b6a627bfdff95310bf",
+      "audioDurationSeconds": 44.6,
+      "sizeBytes": 2294871,
+      "sha256": "0d19094827e22eb68d33ed21062856e8c0f1e3d29a7361b28465a9ea4355f700",
       "video": {
         "codec": "h264",
         "profile": "High",
@@ -310,7 +310,7 @@
         "codec": "aac",
         "profile": "LC",
         "channels": 2,
-        "sampleRate": 44100
+        "sampleRate": 48000
       },
       "poster": {
         "file": "lesson-02-01-poster.jpg",
@@ -328,9 +328,9 @@
       "description": "PBRマテリアルの色と光沢を調整します。",
       "file": "lesson-02-03.mp4",
       "durationSeconds": 48.6,
-      "audioDurationSeconds": 48.621995,
-      "sizeBytes": 2171738,
-      "sha256": "8e425ad091bb70c18fe466513c79e4a16181c69334c0a9923a140db09922b328",
+      "audioDurationSeconds": 48.6,
+      "sizeBytes": 2039436,
+      "sha256": "5f8b137c7f6e3f8fe42c3f0d8be90c9947a66be1345414ad0b99aeecd08af5b7",
       "video": {
         "codec": "h264",
         "profile": "High",
@@ -345,7 +345,7 @@
         "codec": "aac",
         "profile": "LC",
         "channels": 2,
-        "sampleRate": 44100
+        "sampleRate": 48000
       },
       "poster": {
         "file": "lesson-02-03-poster.jpg",
@@ -398,9 +398,9 @@
       "description": "MToonを使った、アニメ調の陰影を確認します。",
       "file": "lesson-02-07.mp4",
       "durationSeconds": 50.6,
-      "audioDurationSeconds": 50.619002,
-      "sizeBytes": 2595959,
-      "sha256": "669dd7351670afa314101ce182ef79d4ed41626092e93d455b03a5aaa5b6d1b4",
+      "audioDurationSeconds": 50.6,
+      "sizeBytes": 2500107,
+      "sha256": "c6aa09672f7dd20095f39ac73ca834ef1ec6aeb74a8bdac69a4d2fc9b75798e5",
       "video": {
         "codec": "h264",
         "profile": "High",
@@ -415,7 +415,7 @@
         "codec": "aac",
         "profile": "LC",
         "channels": 2,
-        "sampleRate": 44100
+        "sampleRate": 48000
       },
       "poster": {
         "file": "lesson-02-07-poster.jpg",
@@ -433,9 +433,9 @@
       "description": "Prefabを作り、同じ構成を再利用します。",
       "file": "lesson-02-08.mp4",
       "durationSeconds": 50.6,
-      "audioDurationSeconds": 50.619002,
-      "sizeBytes": 2091779,
-      "sha256": "f9f34583241fd3070089ffd52f6939fd45b60e1d5addf3fad0adc6e512e628c2",
+      "audioDurationSeconds": 50.6,
+      "sizeBytes": 1982987,
+      "sha256": "7599c41e6d9157dfad184e0990968c698853f3016ef8f161afc725264db67497",
       "video": {
         "codec": "h264",
         "profile": "High",
@@ -450,7 +450,7 @@
         "codec": "aac",
         "profile": "LC",
         "channels": 2,
-        "sampleRate": 44100
+        "sampleRate": 48000
       },
       "poster": {
         "file": "lesson-02-08-poster.jpg",
@@ -468,9 +468,9 @@
       "description": "ノードをつなぎ、箱を動かす仕組みを作ります。",
       "file": "lesson-03-00.mp4",
       "durationSeconds": 58.6,
-      "audioDurationSeconds": 58.607007,
-      "sizeBytes": 3381448,
-      "sha256": "d84ed01f039e997731ae9b7ffe669c2b31d52c2e14a80e2c4530a6e757413db2",
+      "audioDurationSeconds": 58.6,
+      "sizeBytes": 3125641,
+      "sha256": "0c5526d888f70e982b7e09b92bce910bc02090ba4cd8222df4b30761ea349272",
       "video": {
         "codec": "h264",
         "profile": "High",
@@ -485,7 +485,7 @@
         "codec": "aac",
         "profile": "LC",
         "channels": 2,
-        "sampleRate": 44100
+        "sampleRate": 48000
       },
       "poster": {
         "file": "lesson-03-00-poster.jpg",
