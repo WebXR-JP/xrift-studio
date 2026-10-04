@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
+import {createHash} from "node:crypto";
 import {readGuide,validateGuide,projectRoot,escapeHtml} from "./guide/core.mjs";
 import {headingSlug,markdownHeadings,resolveGuideLink,searchGuide,remarkGuideHeadings} from "../src/lib/guide-utils.mjs";
 import {pageTemplate} from "./guide/template.mjs";
@@ -139,4 +140,27 @@ test("tutorial index shows lightweight cards and each lesson has one accessible 
  assert.ok(panel.includes('target.kind === "video"'));
  assert.ok(panel.includes('new URL(target.href, GUIDE_MANIFEST.siteUrl)'));
  assert.doesNotMatch(panel, /import\.meta\.glob[^\n]*tutorials/);
+});
+
+test("narrated tutorial metadata matches all 19 published MP4 files", async () => {
+ const {tutorials} = await import("./guide/tutorials.mjs");
+ const catalog = JSON.parse(await read("docs/guide/media/tutorials/catalog.json"));
+ assert.equal(catalog.videoCount, 19);
+ assert.equal(catalog.lessons.length, 19);
+ let totalBytes = 0;
+ for (const lesson of tutorials) {
+   assert.equal(lesson.narration, "recorded", lesson.slug);
+   const media = catalog.lessons.find(item => item.file === `${lesson.slug}.mp4`);
+   assert.ok(media, lesson.slug);
+   const bytes = await fs.readFile(path.join(projectRoot, "docs/guide", lesson.video));
+   assert.equal(media.sizeBytes, bytes.length, lesson.slug);
+   assert.equal(lesson.sizeBytes, bytes.length, lesson.slug);
+   assert.equal(media.sha256, createHash("sha256").update(bytes).digest("hex"), lesson.slug);
+   assert.equal(media.durationSeconds, lesson.durationSeconds, lesson.slug);
+   assert.ok(Math.abs(media.audioDurationSeconds - media.durationSeconds) < 0.05, lesson.slug);
+   totalBytes += bytes.length;
+ }
+ assert.equal(catalog.totalVideoBytes, totalBytes);
+ assert.ok(totalBytes < 100_000_000);
+ assert.doesNotMatch(data.sources["video-credits"], /「ノードをつないで箱を動かす」は字幕で説明/);
 });
