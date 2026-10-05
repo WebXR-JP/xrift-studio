@@ -11,6 +11,7 @@ const MAX_FILE_BYTES = 128 * 1024 * 1024;
 const MAX_TRANSACTION_BYTES = 320 * 1024 * 1024;
 type StoredFile = { projectPath: string; relativePath: string; bytes: Uint8Array };
 export type BrowserStoredProject = {
+  projectId: string;
   path: string;
   name: string;
   title: string;
@@ -142,6 +143,17 @@ export async function restoreBrowserProject(): Promise<string | null> {
   });
 }
 
+/** Plugin recovery metadata uses the same transactional browser storage as projects. */
+export async function readStudioRecovery<T>(): Promise<T | undefined> {
+  return transaction<T | undefined>('readonly', (_files, settings, result) => {
+    const request = settings.get('chatgpt:recovery');
+    request.onsuccess = () => result(request.result as T | undefined);
+  });
+}
+export async function writeStudioRecovery(value: unknown): Promise<void> {
+  return transaction<void>('readwrite', (_files, settings) => { settings.put(value, 'chatgpt:recovery'); });
+}
+
 /** Previous imports remain accessible. Scan keys first so the picker never loads models into memory. */
 export async function listBrowserProjects(): Promise<BrowserStoredProject[]> {
   const { visualProjectDocumentCodec } = await import("./visual-editor/serialization");
@@ -164,6 +176,7 @@ export async function listBrowserProjects(): Promise<BrowserStoredProject[]> {
             if (parsed.ok) {
               const { metadata, projectKind, lastPublication } = parsed.document;
               projects.push({
+                projectId: parsed.document.projectId,
                 path: file.projectPath,
                 name: metadata.name,
                 title: metadata.title,

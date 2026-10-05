@@ -443,7 +443,7 @@
       "description": "自動保存を確認し、.xriftstudioでバックアップや受け渡しができます。コードエディターへの書き出しも説明します。",
       "group": "basics",
       "file": "save-and-open.md",
-      "keywords": "保存 自動保存 バックアップ .xriftstudio ZIP 複製 プロジェクト 再開 データ エクスポート コードエディター Classic Component MToon VRM",
+      "keywords": "保存 自動保存 バックアップ .xriftstudio ZIP 複製 プロジェクト 再開 データ エクスポート コードエディター Classic Component MToon VRM ChatGPT 会話 Sites Editor 追編集 保存先",
       "related": [
         "recovery",
         "publishing"
@@ -620,7 +620,7 @@
       "description": "AIクライアントを接続し、配置や設定の変更を頼めます。依頼方法と変更後の確認を説明します。",
       "group": "behavior",
       "file": "ai-connection.md",
-      "keywords": "AI MCP 接続 Claude Codex 登録",
+      "keywords": "AI MCP 接続 Claude Codex 登録 ChatGPT Work プラグイン ブラウザ保存",
       "related": [
         "save-and-open",
         "first-world",

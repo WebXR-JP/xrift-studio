@@ -5,6 +5,8 @@ allowBuilds:
   esbuild: true
   sharp: false
 
+minimumReleaseAgeExclude:
+  - '@openai/mcp-extensions@0.1.0'
+
 overrides:
   dompurify: 3.4.12
-
