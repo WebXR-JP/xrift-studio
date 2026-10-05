@@ -1,7 +1,7 @@
 {
   "title": "XRift Studio 使い方ガイド",
   "reviewedVersion": "1.0.4",
-  "reviewedOn": "2026-10-03",
+  "reviewedOn": "2026-10-05",
   "siteUrl": "https://webxr-jp.github.io/xrift-studio/guide/",
   "groups": [
     {
@@ -370,7 +370,7 @@
       "description": "作品の情報、保存状態、ログインを確認し、XRiftへ送信します。送信後は審査と公開状況を確認します。",
       "group": "publish",
       "file": "publishing.md",
-      "keywords": "公開 アップロード ログイン セットアップ 審査 更新 URL 送信保留",
+      "keywords": "公開 アップロード ログイン セットアップ 審査 更新 URL 送信保留 APIキー ブラウザ パスワード 保存済みキーを確認",
       "related": [
         "performance",
         "play-mode",
