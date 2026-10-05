@@ -55,7 +55,8 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
   const [showToken, setShowToken] = useState(false);
   const [canSaveWithBrowser, setCanSaveWithBrowser] = useState(canUseBrowserPasswordManager);
   const [savedKeyInUse, setSavedKeyInUse] = useState(false);
-  const [credentialSaving, setCredentialSaving] = useState(false);
+  const [credentialAction, setCredentialAction] = useState<"save" | "verify" | null>(null);
+  const [credentialSaveRequested, setCredentialSaveRequested] = useState(false);
   const [credentialMessage, setCredentialMessage] = useState<string | null>(null);
   const tokenEdited = useRef(false);
   const [state, setState] = useState<WebUploadState>({ phase: "review" });
@@ -65,6 +66,7 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
   const [thumbnailSaving, setThumbnailSaving] = useState(false);
   const [thumbnailError, setThumbnailError] = useState<string | null>(null);
   const running = state.phase === "running";
+  const credentialBusy = credentialAction !== null;
   const isWorld = bundle.project.projectKind === "world";
   const complete = metadataReady(bundle);
   const sampleMetadata = hasSampleMetadata(bundle);
@@ -132,18 +134,13 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
   };
 
   const saveCredential = async () => {
-    if (!canSaveWithBrowser || credentialSaving || !token.trim()) return;
-    setCredentialSaving(true);
-    setCredentialMessage("ブラウザの保存確認と保存済みキーの選択を待っています。");
+    if (!canSaveWithBrowser || credentialBusy || !token.trim()) return;
+    setCredentialAction("save");
+    setCredentialMessage("ブラウザにキーの保存を依頼しています。");
     try {
-      const result = await askBrowserToSaveXriftApiKey(token.trim());
-      if (result === "verified") {
-        setSavedKeyInUse(true);
-        setToken("");
-        setCredentialMessage("保存済みキーを確認しました。次回の公開時はブラウザからキーを選べます。");
-      } else {
-        setCredentialMessage("APIキーの保存を確認できませんでした。ブラウザの保存確認とキーの選択を終えてから、もう一度試してください。");
-      }
+      await askBrowserToSaveXriftApiKey(token.trim());
+      setCredentialSaveRequested(true);
+      setCredentialMessage("ブラウザの保存確認で「保存」を選んでください。保存が終わったら「保存済みキーを確認」を押してください。");
     } catch (error) {
       if (error instanceof Error && (error.name === "NotSupportedError" || error.name === "SecurityError")) {
         setCanSaveWithBrowser(false);
@@ -152,7 +149,29 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
         setCredentialMessage("ブラウザに保存できませんでした。パスワード保存の設定を確認して、もう一度試してください。");
       }
     } finally {
-      setCredentialSaving(false);
+      setCredentialAction(null);
+    }
+  };
+
+  const verifyCredential = async () => {
+    if (!canSaveWithBrowser || credentialBusy || !token.trim()) return;
+    setCredentialAction("verify");
+    setCredentialMessage("ブラウザで今回保存したキーを選んでください。");
+    try {
+      const saved = await readSavedXriftApiKey("required");
+      if (saved === token.trim()) {
+        setSavedKeyInUse(true);
+        setToken("");
+        setCredentialMessage("保存済みキーを確認しました。次回の公開時はブラウザからキーを選べます。");
+      } else if (saved) {
+        setCredentialMessage("今回使ったAPIキーと異なるキーが選ばれました。今回のキーをブラウザに保存し、もう一度確認してください。");
+      } else {
+        setCredentialMessage("保存済みキーを確認できませんでした。ブラウザで保存を完了してから、もう一度確認してください。");
+      }
+    } catch {
+      setCredentialMessage("保存済みキーを読み込めませんでした。ブラウザの設定を確認して、もう一度確認してください。");
+    } finally {
+      setCredentialAction(null);
     }
   };
 
@@ -247,10 +266,10 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
   return <dialog
     ref={dialog}
     aria-labelledby="web-upload-title"
-    aria-busy={running || credentialSaving}
+    aria-busy={running || credentialBusy}
     className="preview-dialog-theme m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white p-0 text-zinc-900 shadow-2xl open:flex backdrop:bg-zinc-900/45"
     onKeyDown={(event) => event.stopPropagation()}
-    onCancel={(event) => { event.preventDefault(); if (!running && !credentialSaving) close(); }}
+    onCancel={(event) => { event.preventDefault(); if (!running && !credentialBusy) close(); }}
   >
     <h2 id="web-upload-title" className="shrink-0 border-b border-zinc-200 px-5 py-4 text-base font-semibold">XRiftへ公開</h2>
     <div className="min-h-0 space-y-4 overflow-y-auto px-5 py-4 text-sm">
@@ -305,7 +324,10 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
         <p className="break-all text-xs text-zinc-600">ワールドID: {uploadedWorldId(state.result)}</p>
         {state.result.versionNumber !== undefined ? <p className="text-xs text-zinc-600">バージョン: {state.result.versionNumber}</p> : null}
         {state.phase === "save-failed" ? <p role="alert" className="text-xs leading-relaxed text-rose-700">公開結果をこのブラウザに保存できませんでした。{state.message} 同じワールドを再送せず、まず保存をやり直してください。</p> : <p className="text-xs text-zinc-500">XRiftのマイワールドで、送信したワールドが再生できる状態か確認してください。</p>}
-        {canSaveWithBrowser && !savedKeyInUse && token ? <button type="button" onClick={() => void saveCredential()} disabled={credentialSaving} className="preview-button preview-button-light min-h-10 text-xs disabled:opacity-50">{credentialSaving ? "キーを保存中…" : "APIキーをブラウザに保存"}</button> : null}
+        {canSaveWithBrowser && !savedKeyInUse && token ? <div className="flex flex-wrap gap-2">
+          {credentialSaveRequested ? <button type="button" onClick={() => void verifyCredential()} disabled={credentialBusy} className="preview-button preview-button-light min-h-10 text-xs disabled:opacity-50">{credentialAction === "verify" ? "保存済みキーを確認中…" : "保存済みキーを確認"}</button> : null}
+          <button type="button" onClick={() => void saveCredential()} disabled={credentialBusy} className="preview-button preview-button-light min-h-10 text-xs disabled:opacity-50">{credentialAction === "save" ? "保存を依頼中…" : credentialSaveRequested ? "保存をもう一度依頼" : "APIキーをブラウザに保存"}</button>
+        </div> : null}
         {credentialMessage ? <p role="status" className="text-xs text-zinc-600">{credentialMessage}</p> : null}
         <p className="text-xs text-zinc-500">この画面を閉じるとPlay画面に戻ります。</p>
         <a className="preview-button preview-button-light inline-flex min-h-10 text-xs" href="https://app.xrift.net/worlds" target="_blank" rel="noreferrer">ワールド一覧を開く <ExternalLink size={13} aria-hidden="true" /></a>
@@ -314,7 +336,7 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
       {state.phase === "needs-check" ? <div role="alert" className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900"><p>{state.message}</p><p>送信結果を確認できません。XRiftのワールド一覧で公開状態を確かめてください。結果が分かるまで再送しないでください。</p><a href="https://app.xrift.net/worlds" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 underline">ワールド一覧を開く <ExternalLink size={12} aria-hidden="true" /></a></div> : null}
     </div>
     <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-zinc-200 bg-white px-5 py-3">
-      <button type="button" onClick={close} disabled={running || credentialSaving} className="preview-button preview-button-light min-h-11 disabled:opacity-50">{state.phase === "done" || complete ? "閉じる" : "編集に戻る"}</button>
+      <button type="button" onClick={close} disabled={running || credentialBusy} className="preview-button preview-button-light min-h-11 disabled:opacity-50">{state.phase === "done" || complete ? "閉じる" : "編集に戻る"}</button>
       {!isWorld ? <button type="button" onClick={onExport} className="preview-button preview-button-primary min-h-11">プロジェクトを書き出す</button> : null}
       {state.phase === "save-failed" ? <button type="button" onClick={() => void retrySavingResult(state.result)} className="preview-button preview-button-primary min-h-11">公開結果を保存し直す</button> : null}
       {isWorld && (state.phase === "review" || state.phase === "failed") ? <button type="button" onClick={() => void start()} className="preview-button preview-button-primary min-h-11"><Upload size={15} aria-hidden="true" />{targetWorldId ? "このワールドを更新" : "ワールドをアップロード"}</button> : null}
