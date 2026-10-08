@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 1,
+  "title": "制作から公開まで、順番に学ぶ",
+  "reviewedVersion": "1.0.4",
+  "reviewedOn": "2026-10-08",
+  "chapters": [
+    {
+      "id": "00",
+      "title": "XRiftと作り方を知る",
+      "description": "作品を体験するサービスと制作ツールの関係を知り、作りたいものに合う方法を選びます。",
+      "lessons": [
+        {
+          "slug": "course-introduction",
+          "format": "article"
+        }
+      ]
+    },
+    {
+      "id": "01",
+      "title": "準備して、ワールドを開く",
+      "description": "制作する環境と保存先を決め、練習用の空間を一つ開きます。",
+      "lessons": [
+        {
+          "slug": "course-start-here",
+          "format": "article"
+        },
+        {
+          "slug": "lesson-01-01",
+          "format": "video"
+        }
+      ]
+    },
+    {
+      "id": "02",
+      "title": "選んで、動かして、保存する",
+      "description": "何を選んでいるかを確認し、変更前へ戻せる状態で編集します。",
+      "lessons": [
+        {
+          "slug": "lesson-01-03",
+          "format": "video"
+        },
+        {
+          "slug": "lesson-01-02",
+          "format": "video"
+        },
+        {
+          "slug": "lesson-01-04",
+          "format": "video"
+        },
+        {
+          "slug": "course-save-backup",
+          "format": "article"
+        }
+      ]
+    },
+    {
+      "id": "03",
+      "title": "素材と質感を作る",
+      "description": "モデルを配置し、色、画像、陰影を変え、組み合わせを再利用します。",
+      "lessons": [
+        {
+          "slug": "lesson-02-01",
+          "format": "video"
+        },
+        {
+          "slug": "lesson-02-03",
+          "format": "video"
+        },
+        {
+          "slug": "lesson-02-04",
+          "format": "video"
+        },
+        {
+          "slug": "lesson-02-07",
+          "format": "video"
+        },
+        {
+          "slug": "lesson-02-08",
+          "format": "video"
+        }
+      ]
+    },
+    {
+      "id": "04",
+      "title": "歩ける空間と光を整える",
+      "description": "床と開始位置を確認し、ライト、空、環境の反射を整えます。",
+      "lessons": [
+        {
+          "slug": "lesson-01-05",
+          "format": "video"
+        },
+        {
+          "slug": "lesson-01-06",
+          "format": "video"
+        },
+        {
+          "slug": "lesson-01-07",
+          "format": "video"
+        },
+        {
+          "slug": "lesson-01-08",
+          "format": "video"
+        }
+      ]
+    },
+    {
+      "id": "05",
+      "title": "動く仕掛けを作る",
+      "description": "開始時、押したとき、待ってから、という違いを順に試します。",
+      "lessons": [
+        {
+          "slug": "lesson-03-00",
+          "format": "video"
+        },
+        {
+          "slug": "lesson-03-01",
+          "format": "video"
+        },
+        {
+          "slug": "lesson-03-02",
+          "format": "video"
+        },
+        {
+          "slug": "lesson-03-04",
+          "format": "video",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "id": "06",
+      "title": "見た目と動作を確認する",
+      "description": "仕上げを加えたら、同じ条件でテストし、必要な素材だけ軽くします。",
+      "lessons": [
+        {
+          "slug": "lesson-04-08",
+          "format": "video"
+        },
+        {
+          "slug": "lesson-04-09",
+          "format": "video"
+        },
+        {
+          "slug": "course-test-world",
+          "format": "article"
+        },
+        {
+          "slug": "course-optimize-world",
+          "format": "article"
+        }
+      ]
+    },
+    {
+      "id": "07",
+      "title": "XRiftへ送り、公開状況を確認する",
+      "description": "作品情報、アカウント、送信、審査を一つずつ確認します。",
+      "lessons": [
+        {
+          "slug": "course-publish-prepare",
+          "format": "article"
+        },
+        {
+          "slug": "course-publish-account",
+          "format": "article"
+        },
+        {
+          "slug": "course-publish-upload",
+          "format": "article"
+        },
+        {
+          "slug": "course-publish-review",
+          "format": "article"
+        }
+      ]
+    },
+    {
+      "id": "08",
+      "title": "同じ作品を更新し、人を招く",
+      "description": "更新先と参加範囲を確認してから、実際に入れることを確かめます。",
+      "lessons": [
+        {
+          "slug": "course-publish-update",
+          "format": "article"
+        },
+        {
+          "slug": "course-publish-invite",
+          "format": "article"
+        }
+      ]
+    }
+  ]
+}
