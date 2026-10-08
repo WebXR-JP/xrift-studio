@@ -39,7 +39,7 @@
     "guide": "editor-basics",
     "captionMode": "burned-in",
     "narration": "recorded",
-    "sizeBytes": 4548405
+    "sizeBytes": 4498250
   },
   {
     "id": "01-04",
@@ -67,7 +67,7 @@
     "guide": "collision",
     "captionMode": "burned-in",
     "narration": "recorded",
-    "sizeBytes": 3937771
+    "sizeBytes": 3744918
   },
   {
     "id": "01-06",
@@ -81,7 +81,7 @@
     "guide": "lighting",
     "captionMode": "burned-in",
     "narration": "recorded",
-    "sizeBytes": 3931230
+    "sizeBytes": 3712799
   },
   {
     "id": "01-07",
@@ -95,7 +95,7 @@
     "guide": "sky-and-water",
     "captionMode": "burned-in",
     "narration": "recorded",
-    "sizeBytes": 4075031
+    "sizeBytes": 3922236
   },
   {
     "id": "01-08",
@@ -109,7 +109,7 @@
     "guide": "sky-and-water",
     "captionMode": "burned-in",
     "narration": "recorded",
-    "sizeBytes": 2644371
+    "sizeBytes": 2377085
   },
   {
     "id": "02-01",
@@ -123,7 +123,7 @@
     "guide": "assets",
     "captionMode": "burned-in",
     "narration": "recorded",
-    "sizeBytes": 2457133
+    "sizeBytes": 2294871
   },
   {
     "id": "02-03",
@@ -137,7 +137,7 @@
     "guide": "materials",
     "captionMode": "burned-in",
     "narration": "recorded",
-    "sizeBytes": 2171738
+    "sizeBytes": 2039436
   },
   {
     "id": "02-04",
@@ -165,7 +165,7 @@
     "guide": "materials",
     "captionMode": "burned-in",
     "narration": "recorded",
-    "sizeBytes": 2595959
+    "sizeBytes": 2500107
   },
   {
     "id": "02-08",
@@ -179,7 +179,7 @@
     "guide": "prefabs",
     "captionMode": "burned-in",
     "narration": "recorded",
-    "sizeBytes": 2091779
+    "sizeBytes": 1982987
   },
   {
     "id": "03-00",
@@ -192,8 +192,8 @@
     "poster": "./media/tutorials/lesson-03-00-poster.jpg",
     "guide": "interactivity",
     "captionMode": "burned-in",
-    "narration": "none",
-    "sizeBytes": 3381448
+    "narration": "recorded",
+    "sizeBytes": 3125641
   },
   {
     "id": "03-01",

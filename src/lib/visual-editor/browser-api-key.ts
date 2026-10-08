@@ -40,8 +40,11 @@ export async function readSavedXriftApiKey(
   return typeof password === "string" && password.length > 0 ? password : null;
 }
 
-/** A resolved store() does not prove that the user accepted the browser's save prompt. */
-export async function askBrowserToSaveXriftApiKey(key: string): Promise<"verified" | "unverified"> {
+/**
+ * Request saving only. store() may resolve before the user accepts the prompt;
+ * calling get() here can race that prompt. Read back from a later user action.
+ */
+export async function askBrowserToSaveXriftApiKey(key: string): Promise<void> {
   const Constructor = passwordCredentialConstructor();
   if (!Constructor) throw new Error("このブラウザはパスワード管理機能からの保存に対応していません。");
   await navigator.credentials.store(new Constructor({
@@ -49,12 +52,4 @@ export async function askBrowserToSaveXriftApiKey(key: string): Promise<"verifie
     name: "XRiftワールド公開APIキー",
     password: key,
   }));
-  try {
-    // A freshly saved credential can still require user mediation. A silent
-    // read may return null even though the browser has stored the key.
-    return await readSavedXriftApiKey("required") === key ? "verified" : "unverified";
-  } catch {
-    // Saving may have succeeded even if the browser disallows a read.
-    return "unverified";
-  }
 }
