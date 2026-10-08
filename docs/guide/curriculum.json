@@ -2,8 +2,19 @@
   "schemaVersion": 1,
   "title": "制作から公開まで、順番に学ぶ",
   "reviewedVersion": "1.0.4",
-  "reviewedOn": "2026-10-03",
+  "reviewedOn": "2026-10-08",
   "chapters": [
+    {
+      "id": "00",
+      "title": "XRiftと作り方を知る",
+      "description": "作品を体験するサービスと制作ツールの関係を知り、作りたいものに合う方法を選びます。",
+      "lessons": [
+        {
+          "slug": "course-introduction",
+          "format": "article"
+        }
+      ]
+    },
     {
       "id": "01",
       "title": "準備して、ワールドを開く",

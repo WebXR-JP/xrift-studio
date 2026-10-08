@@ -11,7 +11,7 @@ const read=(p)=>fs.readFile(path.join(projectRoot,p),"utf8");
 test("every authored page, relative link, image and fragment resolves",async()=>{
  assert.equal(Object.keys(checked.headings).length,manifest.pages.length);
  assert.ok(manifest.pages.length>=25);assert.ok(checked.search.length>150);
- assert.deepEqual(manifest.firstSteps,["installation","first-world","save-and-open","play-mode"]);
+ assert.deepEqual(manifest.firstSteps,["course-introduction","installation","first-world","save-and-open","play-mode"]);
 });
 test("heading IDs agree for Japanese, formatted text and duplicate headings",()=>{
  assert.equal(headingSlug("**Base Color**：色を決める"),"base-color色を決める");
@@ -145,10 +145,10 @@ test("tutorial index shows lightweight cards and each lesson has one accessible 
 test("the learning course reaches publishing, updates and invitations through complete lessons", async () => {
  const course = JSON.parse(await read("docs/guide/curriculum.json"));
  const lessons = course.chapters.flatMap(chapter => chapter.lessons);
- assert.equal(course.chapters.length, 8);
+ assert.equal(course.chapters.length, 9);
  assert.equal(new Set(lessons.map(lesson => lesson.slug)).size, lessons.length);
  assert.equal(lessons.filter(lesson => lesson.format === "video").length, 19);
- assert.equal(lessons.filter(lesson => lesson.format === "article").length, 10);
+ assert.equal(lessons.filter(lesson => lesson.format === "article").length, 11);
  for (const [index, lesson] of lessons.entries()) {
    const page = manifest.pages.find(page => page.slug === lesson.slug);
    assert.ok(page, lesson.slug);

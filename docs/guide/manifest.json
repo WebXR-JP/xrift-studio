@@ -1,7 +1,7 @@
 {
   "title": "XRift Studio 使い方ガイド",
   "reviewedVersion": "1.0.4",
-  "reviewedOn": "2026-10-05",
+  "reviewedOn": "2026-10-08",
   "siteUrl": "https://webxr-jp.github.io/xrift-studio/guide/",
   "groups": [
     {
@@ -41,25 +41,44 @@
     {
       "slug": "index",
       "title": "XRift Studio 使い方ガイド",
-      "description": "インストールから配置、色の変更、保存、Play、公開まで、ビジュアルエディターの使い方を説明します。",
+      "description": "XRiftとの関係、作り方の紹介から、配置、色の変更、保存、Play、公開までを説明します。",
       "group": "start",
       "file": "index.md",
       "keywords": "",
       "related": [
+        "course-introduction",
+        "learning-course",
         "video-tutorials"
       ]
     },
     {
       "slug": "learning-course",
       "title": "制作から公開まで、順番に学ぶ",
-      "description": "準備、保存、素材、仕掛け、テスト、公開、更新、招待まで。動画19本と文章教材をつないで、最初のワールドを仕上げます。",
+      "description": "XRiftと作り方の紹介、準備、保存、素材、仕掛け、テスト、公開、更新、招待まで。動画19本と文章教材で最初のワールドを仕上げます。",
       "group": "learn",
       "file": "learning-course.md",
       "keywords": "講座 コース カリキュラム 初心者 学習 教材 公開まで 順番",
       "related": [
+        "course-introduction",
         "video-tutorials",
         "installation",
         "publishing"
+      ],
+      "next": "course-introduction"
+    },
+    {
+      "slug": "course-introduction",
+      "title": "XRiftとXRift Studioでできること",
+      "description": "XRiftと制作ツールの関係、ワールドとアイテムの違い、Node Graphやコードでできることを知ります。",
+      "group": "learn",
+      "file": "course-introduction.md",
+      "keywords": "XRift XRift Studio 違い 関係 紹介 入門 初心者 ワールド アイテム ワールドビルダー 作り方 コード コーディング プログラミング Node Graph Script TypeScript TSX React GLSL シェーダー AI",
+      "related": [
+        "learning-course",
+        "course-start-here",
+        "interactivity",
+        "custom-shaders",
+        "save-and-open"
       ],
       "next": "course-start-here"
     },
@@ -959,6 +978,7 @@
     "publishing"
   ],
   "firstSteps": [
+    "course-introduction",
     "installation",
     "first-world",
     "save-and-open",
