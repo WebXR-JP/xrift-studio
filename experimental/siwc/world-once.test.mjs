@@ -30,7 +30,7 @@ test("creates only a new project; checks revision on every write", async () => {
   const calls = [];
   const call = async (tool, args) => {
     calls.push({ tool, args });
-    if (tool === "create_project") return { ok: true, result: { projectId: "only-new-world" } };
+    if (tool === "create_project") return { ok: true, result: { projectId: "only-new-world", sceneId: "scene1", created: true } };
     if (tool === "get_editor_context") return { ok: true, result: {
       projectId: "only-new-world", sceneId: "scene1", revision, editorMode: "edit", saveStatus: "saved"
     }};
@@ -64,10 +64,23 @@ test("stops on project creation failure without changing an existing project", a
 test("stops if another project opens mid-session", async () => {
   let reads = 0;
   const call = async tool => {
+    if (tool === "create_project") return { result: { projectId: "own", sceneId: "scene", created: true } };
     if (tool === "get_editor_context") {
       return { result: { projectId: ++reads === 1 ? "own" : "foreign", sceneId: "scene", revision: reads, editorMode: "edit" } };
     }
     return { result: {} };
   };
   await assert.rejects(executePlan({ name: "world-new-01", plan, call }), /switched projects/);
+});
+
+test("refuses to write if the newly created project is not the open editor", async () => {
+  const calls = [];
+  const call = async tool => {
+    calls.push(tool);
+    if (tool === "create_project") return { result: { projectId: "new", sceneId: "newScene", created: true } };
+    if (tool === "get_editor_context") return { result: { projectId: "old", sceneId: "oldScene", revision: 1, editorMode: "edit" } };
+    throw new Error("Unexpected write");
+  };
+  await assert.rejects(executePlan({ name: "new-world-007", plan, call, sleep: async () => {} }), /newly created project/);
+  assert.ok(calls.every(tool => tool === "create_project" || tool === "get_editor_context"));
 });
