@@ -19,7 +19,7 @@ No world publishing, asset purchases, external asset imports, runtime scripts, m
 
 - Node.js 22+.
 - XRift Studio desktop open, with its bundled MCP sidecar executable.
-- For natural-language mode only, use the **separate standalone experimental** SIWC auth client siwc-local.mjs from the earlier reference package (copy it next to world-once.mjs). It is intentionally **not bundled in the shipping app**: that prototype stores tokens in a restricted local file but not in a native OS keychain. Production integration requires a security review.
+- For natural-language mode only, use the **included experimental** SIWC auth client siwc-local.mjs. It is intentionally **not bundled in the shipping app**: this proof of concept stores tokens in a restricted local file but not in a native OS keychain. Production integration requires a security review.
 - An eligible ChatGPT account with explicit permission for plan usage.
 
 ## Usage
@@ -55,7 +55,7 @@ Dry run (no editor changes):
 
 Tests:
 
-    node --test experimental/siwc/world-once.test.mjs
+    node --test experimental/siwc/*.test.mjs
 
 The tests use mocked MCP calls. They do not establish real sign-in, actual scene rendering, screenshot receipt, or a packaged desktop build. Do not ship this prototype unchanged.
 
