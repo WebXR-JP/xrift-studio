@@ -122,14 +122,24 @@ export async function executePlan({ name, plan, call, sleep = ms => new Promise(
   const world = validatePlan(plan);
   let created = false, writes = 0;
   try {
-    await call("create_project", { name, templateId: "blank" });
+    const creation = await call("create_project", { name, templateId: "blank" });
     created = true;
+    const createdProjectId = creation.result?.projectId;
+    const createdSceneId = creation.result?.sceneId;
+    if (creation.result?.created !== true || typeof createdProjectId !== "string" ||
+        typeof createdSceneId !== "string") fail("Project creation was not confirmed");
     let context;
     for (let i = 0; i < 8; i++) {
-      try { context = editorContext(await call("get_editor_context", {})); break; }
-      catch (error) { if (i === 7) throw error; await sleep(350); }
+      try {
+        const candidate = editorContext(await call("get_editor_context", {}));
+        if (candidate.projectId !== createdProjectId || candidate.sceneId !== createdSceneId) {
+          fail("Waiting for the newly created project to open");
+        }
+        context = candidate;
+        break;
+      } catch (error) { if (i === 7) throw error; await sleep(350); }
     }
-    const projectId = context.projectId, sceneId = context.sceneId;
+    const projectId = createdProjectId, sceneId = createdSceneId;
     const write = async (tool, args) => {
       const response = await call(tool, { projectId, sceneId, expectedRevision: context.revision, ...args });
       writes += 1;
