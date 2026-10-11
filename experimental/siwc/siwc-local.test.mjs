@@ -53,7 +53,7 @@ test("ID token must validate signature, issuer, audience, nonce, and expiry", as
   assert.equal((await verifyIdentity(jwt(claims), { clientId: "client-real", nonce: "nonce-check", jwks: keys, now })).subject, "user-1");
   await assert.rejects(verifyIdentity(jwt({ ...claims, aud: "other" }), { clientId: "client-real", nonce: "nonce-check", jwks: keys, now }), /claims/);
   await assert.rejects(verifyIdentity(jwt({ ...claims, exp: 1 }), { clientId: "client-real", nonce: "nonce-check", jwks: keys, now }), /claims/);
-  await assert.rejects(verifyIdentity(jwt(claims).replace(/.$/, "A"), { clientId: "client-real", nonce: "nonce-check", jwks: keys, now }), /signature/);
+  await assert.rejects(verifyIdentity(jwt(claims).replace(/\.[^.]+$/, ".AA"), { clientId: "client-real", nonce: "nonce-check", jwks: keys, now }), /signature/);
 });
 
 test("SSE assembly requires completed and refuses failed/incomplete responses", () => {
