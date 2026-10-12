@@ -1,0 +1,32 @@
+name: Experimental SIWC tests
+
+on:
+  pull_request:
+    paths:
+      - 'experimental/siwc/**'
+      - '.github/workflows/siwc-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'experimental/siwc/**'
+      - '.github/workflows/siwc-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: ['22', '24']
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Run isolated regression tests (no sign-in or external inference)
+        run: node --test experimental/siwc/siwc-local.test.mjs experimental/siwc/siwc-regression.test.mjs experimental/siwc/world-once.test.mjs experimental/siwc/world-regression.test.mjs

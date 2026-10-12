@@ -8,10 +8,10 @@
 import { createHash, createPublicKey, randomBytes, randomUUID, verify } from "node:crypto";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { mkdir, readFile, rename, chmod, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, chmod, writeFile, open, unlink } from "node:fs/promises";
 import { homedir, platform } from "node:os";
 import { join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 const AUTH = "https://auth.openai.com";
 const API = "https://api.openai.com/v1";
@@ -23,9 +23,14 @@ const tokenString = () => randomBytes(32).toString("base64url");
 const sha256 = value => createHash("sha256").update(value).digest("base64url");
 const checkPermission = scopes => Array.isArray(scopes) && scopes.includes("chatgpt.tokens.use.direct");
 
+const safeErrorCode = code => typeof code === "string" && /^[a-z0-9_]{1,100}$/.test(code) ? " (" + code + ")" : "";
+
 async function jsonFetch(uri, opts = {}) {
   const response = await fetch(uri, { signal: AbortSignal.timeout(30000), ...opts });
-  if (!response.ok) error("OpenAI request returned HTTP " + response.status);
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    error("OpenAI request returned HTTP " + response.status + safeErrorCode(payload?.error?.code));
+  }
   return response.json();
 }
 
@@ -48,7 +53,27 @@ async function saveStore(data) {
     if (platform() !== "win32") await chmod(temp, 0o600);
     await rename(temp, FILE);
   } catch (e) {
+    await unlink(temp).catch(() => {});
     error("Unable to write local credentials (" + (e.code ?? "IO error") + ")");
+  }
+}
+
+// Atomic rename protects readers, but a lock is also needed for read/modify/write
+// operations and rotating refresh tokens. Fail closed instead of stealing a lock
+// from a long-running browser sign-in or a process killed during token rotation.
+async function withStoreLock(action) {
+  await mkdir(DATA_DIR, { recursive: true, mode: 0o700 });
+  const lockPath = join(DATA_DIR, "accounts.lock");
+  let lock;
+  try { lock = await open(lockPath, "wx", 0o600); }
+  catch (e) {
+    if (e.code === "EEXIST") error("Credential store is busy; finish the other command first. If it crashed, remove accounts.lock only after it has stopped.");
+    throw e;
+  }
+  try { return await action(); }
+  finally {
+    await lock.close();
+    await unlink(lockPath);
   }
 }
 
@@ -89,12 +114,14 @@ export function parseCallback(uri, state, expectedClientId) {
 
 function openBrowser(uri) {
   const command = platform() === "win32" ? "explorer.exe" : platform() === "darwin" ? "open" : "xdg-open";
-  const child = spawn(command, [uri], { detached: true, stdio: "ignore" });
-  child.on("error", () => {});
-  child.unref();
+  return new Promise((resolveOpen, reject) => {
+    const child = spawn(command, [uri], { detached: true, stdio: "ignore" });
+    child.once("error", () => reject(new Error("Unable to open the sign-in browser")));
+    child.once("spawn", () => { child.unref(); resolveOpen(); });
+  });
 }
 
-async function receiveAuthorization({ state, urlFactory, timeout = 180000 }) {
+export async function receiveAuthorization({ state, urlFactory, timeout = 180000, open = openBrowser }) {
   let server, timer;
   try {
     const callback = new Promise((resolveCallback, reject) => {
@@ -102,18 +129,22 @@ async function receiveAuthorization({ state, urlFactory, timeout = 180000 }) {
         if (req.method !== "GET" || !req.url?.startsWith("/auth/callback?")) {
           res.writeHead(404).end("Not found"); return;
         }
-        const parsed = new URL(req.url, "http://127.0.0.1");
+        let parsed;
+        try { parsed = new URL(req.url, "http://127.0.0.1"); }
+        catch { res.writeHead(400).end("Invalid callback"); return; }
         if (parsed.searchParams.get("state") !== state) {
           res.writeHead(400).end("Invalid state"); return;
         }
         res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" })
-          .end("ChatGPT sign-in completed. You may return to XRift Studio.");
+          .end(parsed.searchParams.has("error")
+            ? "ChatGPT authorization was declined. Return to XRift Studio."
+            : "Authorization received. Return to XRift Studio to check the sign-in result.");
         resolveCallback(req.url);
       });
       server.on("error", reject);
       server.listen(0, "127.0.0.1", () => {
         const port = server.address().port;
-        try { openBrowser(urlFactory("http://127.0.0.1:" + port + "/auth/callback")); }
+        try { Promise.resolve(open(urlFactory("http://127.0.0.1:" + port + "/auth/callback"))).catch(reject); }
         catch (e) { reject(e); }
       });
       timer = setTimeout(() => reject(new Error("Sign-in timed out")), timeout);
@@ -121,7 +152,10 @@ async function receiveAuthorization({ state, urlFactory, timeout = 180000 }) {
     return await callback;
   } finally {
     clearTimeout(timer);
-    if (server) await new Promise(done => server.close(done));
+    if (server) {
+      server.closeAllConnections();
+      await new Promise(done => server.close(done));
+    }
   }
 }
 
@@ -163,7 +197,7 @@ async function exchange(params) {
 }
 
 function updated(account, token) {
-  if (token.token_type?.toLowerCase() !== "bearer" || typeof token.access_token !== "string") {
+  if (token.token_type?.toLowerCase() !== "bearer" || typeof token.access_token !== "string" || !token.access_token) {
     error("Invalid token exchange");
   }
   return {
@@ -176,9 +210,10 @@ function updated(account, token) {
 
 const summary = a => ({ key: a.key, email: a.email, subject: a.subject, planUsageEnabled: checkPermission(a.scopes) });
 
-export async function login({ key } = {}) {
+async function loginUnlocked({ key, newAccount = false } = {}) {
+  if (typeof newAccount !== "boolean" || (newAccount && key)) error("Choose a saved account or a new account");
   const store = await readStore();
-  const previous = key ? store.accounts.find(a => a.key === key) : undefined;
+  const previous = newAccount ? undefined : store.accounts.find(a => a.key === (key ?? store.active));
   if (key && !previous) error("Account not found");
   await saveStore(store); // Persist unique per-install host ID before requesting OAuth.
   const state = tokenString(), nonce = tokenString(), verifier = tokenString();
@@ -219,7 +254,7 @@ export async function status() {
   return { active: store.active, accounts: store.accounts.map(summary) };
 }
 
-export async function logout({ key } = {}) {
+async function logoutUnlocked({ key } = {}) {
   const store = await readStore();
   store.accounts = store.accounts.filter(a => a.key !== (key || store.active));
   if (!store.accounts.some(a => a.key === store.active)) store.active = store.accounts[0]?.key ?? null;
@@ -227,7 +262,7 @@ export async function logout({ key } = {}) {
   return status();
 }
 
-export async function select({ key }) {
+async function selectUnlocked({ key }) {
   const store = await readStore();
   if (!store.accounts.some(a => a.key === key)) error("Account not found");
   store.active = key;
@@ -235,8 +270,9 @@ export async function select({ key }) {
   return status();
 }
 
-async function accessToken() {
+async function accessTokenUnlocked(key) {
   const store = await readStore();
+  if (key !== undefined && key !== store.active) error("Selected ChatGPT account changed; retry with the intended account");
   const index = store.accounts.findIndex(a => a.key === store.active);
   if (index < 0) error("Sign in with ChatGPT first");
   const account = store.accounts[index];
@@ -248,58 +284,75 @@ async function accessToken() {
     refresh_token: account.refreshToken, resource: API
   });
   const refreshed = updated(account, next);
-  if (!checkPermission(refreshed.scopes)) error("ChatGPT plan usage has been revoked");
   store.accounts[index] = refreshed;
   await saveStore(store);
+  if (!checkPermission(refreshed.scopes)) error("ChatGPT plan usage has been revoked");
   return refreshed.accessToken;
 }
 
-export async function models() {
-  const token = await accessToken();
+export const login = input => withStoreLock(() => loginUnlocked(input));
+export const logout = input => withStoreLock(() => logoutUnlocked(input));
+export const select = input => withStoreLock(() => selectUnlocked(input));
+const accessToken = key => withStoreLock(() => accessTokenUnlocked(key));
+
+async function modelsWithToken(token) {
   const result = await jsonFetch(API + "/models", { headers: { Authorization: "Bearer " + token } });
   return (result.models ?? []).filter(m => m.visibility === "list")
     .map(m => ({ slug: m.slug, displayName: m.display_name }));
+}
+
+export async function models({ key } = {}) {
+  return modelsWithToken(await accessToken(key));
 }
 
 export function joinInferenceEvents(events) {
   let text = "", complete = false;
   for (const event of events) {
     if (event.type === "response.output_text.delta") text += event.delta || "";
-    if (event.type === "response.failed" || event.type === "response.incomplete") error("Model inference failed or incomplete");
+    if (event.type === "error") error("Model inference error" + safeErrorCode(event.code));
+    if (event.type === "response.failed" || event.type === "response.incomplete") error("Model inference failed or incomplete" + safeErrorCode(event.code ?? event.response?.error?.code));
     if (event.type === "response.completed") complete = true;
   }
   if (!complete) error("Inference stream ended before completion");
   return text;
 }
 
-async function* readEvents(reader) {
-  const decoder = new TextDecoder();
+export async function* readEvents(reader) {
+  const decoder = new TextDecoder("utf-8", { fatal: true });
   let data = "";
   try {
     while (true) {
       const chunk = await reader.read();
-      if (chunk.done) break;
-      data += decoder.decode(chunk.value, { stream: true }).replace(/\r\n/g, "\n");
-      let pos;
-      while ((pos = data.indexOf("\n\n")) >= 0) {
-        const block = data.slice(0, pos);
-        data = data.slice(pos + 2);
-        const body = block.split("\n").filter(line => line.startsWith("data:")).map(line => line.slice(5).trim()).join("\n");
+      data += chunk.done ? decoder.decode() : decoder.decode(chunk.value, { stream: true });
+      // Match separators in the accumulated buffer: CR and LF can be delivered
+      // in different chunks. Normalizing individual chunks corrupts CRLF SSE.
+      let separator;
+      while ((separator = /\r\n\r\n|\n\n|\r\r/.exec(data))) {
+        const block = data.slice(0, separator.index);
+        data = data.slice(separator.index + separator[0].length);
+        if (block.length > 1000000) error("Model event too large");
+        const body = block.split(/\r\n|\n|\r/).filter(line => line.startsWith("data:"))
+          .map(line => line.slice(5).replace(/^ /, "")).join("\n");
         if (!body || body === "[DONE]") continue;
         let event;
         try { event = JSON.parse(body); } catch { error("Malformed model event"); }
+        if (!event || typeof event !== "object" || Array.isArray(event) || typeof event.type !== "string") error("Malformed model event");
         yield event;
       }
+      if (data.length > 1000000) error("Model event too large");
+      if (chunk.done) break;
     }
-  } finally { reader.releaseLock(); }
+  } finally {
+    try { await reader.cancel(); } finally { reader.releaseLock(); }
+  }
 }
 
-export async function infer({ model, input }) {
+export async function infer({ model, input, key }) {
   if (typeof model !== "string" || !model || typeof input !== "string" || !input ||
       input.length > 50000) error("Provide valid model and text input (max 50000 characters)");
-  const available = await models();
+  const token = await accessToken(key);
+  const available = await modelsWithToken(token);
   if (!available.some(m => m.slug === model)) error("Model not available to account");
-  const token = await accessToken();
   const res = await fetch(API + "/responses", {
     method: "POST",
     headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
@@ -309,11 +362,24 @@ export async function infer({ model, input }) {
     }),
     signal: AbortSignal.timeout(120000)
   });
-  if (!res.ok || !res.body) error("Inference returned HTTP " + res.status);
+  if (!res.ok || !res.body) {
+    const payload = await res.json().catch(() => null);
+    error("Inference returned HTTP " + res.status + safeErrorCode(payload?.error?.code));
+  }
   const events = [];
+  let outputLength = 0, eventCount = 0;
   for await (const event of readEvents(res.body.getReader())) {
-    events.push(event);
-    if (["response.failed","response.incomplete","response.completed"].includes(event.type)) break;
+    if (++eventCount > 10000) error("Too many model events");
+    // Retain only the bounded text and terminal events, not the full response.
+    if (event.type === "response.output_text.delta") {
+      if (typeof event.delta !== "string") error("Malformed model text delta");
+      outputLength += event.delta.length;
+      if (outputLength > 100000) error("Model output too large");
+      events.push({ type: event.type, delta: event.delta });
+    } else if (["error", "response.failed", "response.incomplete", "response.completed"].includes(event.type)) {
+      events.push({ type: event.type, code: event.code ?? event.response?.error?.code });
+    }
+    if (["error","response.failed","response.incomplete","response.completed"].includes(event.type)) break;
   }
   return { text: joinInferenceEvents(events), model };
 }

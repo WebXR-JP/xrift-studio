@@ -9,8 +9,9 @@ This proof of concept converts one Japanese natural-language request into a stru
 - Plan up to 32 box / plane / sphere / cylinder / cone entities.
 - Call create_project with the blank template; never edit an existing project.
 - Set the project title, description, entity positions, scale, names, and rotation.
-- Refresh get_editor_context after each write and use current expectedRevision, projectId and sceneId.
-- Attempt capture_scene_view and report saveStatus and screenshot receipt separately.
+- Refresh get_editor_context after each write and use current expectedRevision, projectId and sceneId. Stop if the write's revision no longer matches the Editor.
+- Wait up to 30 context checks (350ms between checks) for autosave and report `saveStatus` and `saveConfirmed` separately from editing success.
+- Attempt capture_scene_view and confirm PNG data from the same project, scene, revision and Edit mode. Report `screenshotReceived` and `screenshotError` separately. A path alone is not image receipt; receipt does not establish visual quality.
 - Validate model output against a bounded data schema; never execute model-provided code or arbitrary MCP names.
 
 No world publishing, asset purchases, external asset imports, runtime scripts, materials, or textures.
@@ -27,6 +28,15 @@ No world publishing, asset purchases, external asset imports, runtime scripts, m
 Sign in through the browser once:
 
     node experimental/siwc/siwc-local.mjs login
+
+Running `login` again reconnects the active account with its saved client ID.
+To add a different account, pass `{"newAccount":true}` on stdin to `login`.
+The `select` command takes `{"key":"<key from status>"}` on stdin.
+World planning pins the selected account; switching accounts between commands fails rather than charging an unintended account.
+
+Credential-changing commands are serialized with `accounts.lock` in the credential directory. A concurrent command fails with a busy error. If a process crashes, remove the lock only after that process has stopped, then reconnect if refresh-token rotation was interrupted. Failed credential writes clean up their temporary file.
+
+This file-based credential store remains experimental. POSIX file modes do not provide Windows ACL or native keychain protection. Use a private credential directory; do not distribute this as production authentication on any OS.
 
 One-command world creation:
 
@@ -53,11 +63,17 @@ Dry run (no editor changes):
 
     node experimental/siwc/world-once.mjs --name night-plaza-001 --plan-file plan.json --dry-run true
 
+Choose exactly one of `--prompt` and `--plan-file`. `--dry-run` must be `true` or `false`; duplicate options are rejected. Invalid options and missing/non-executable sidecar paths fail before natural-language inference. A natural-language dry run still uses the selected ChatGPT plan; plan-file dry runs do not make inference requests.
+
+Scale is local, not a world-space bounding box. A horizontal Plane keeps its default rotation of `[-90,0,0]` degrees; its scale is `[width,depth,thickness]`, such as `[12,12,1]` for a square floor. An explicit rotation replaces the default rotation.
+
+Editing success (`ok`) is independent of persistence and capture. `saveConfirmed:false` means saving was not confirmed, even when all writes succeeded. On errors, the project may contain partial changes; no automatic rollback, project deletion or write retry is performed. Inspect the new project before retrying. `create_project` saves and closes any currently open project as part of Studio's normal switching behavior, but this script's authoring writes target only the newly created project.
+
 Tests:
 
     node --test experimental/siwc/*.test.mjs
 
-The tests use mocked MCP calls. They do not establish real sign-in, actual scene rendering, screenshot receipt, or a packaged desktop build. Do not ship this prototype unchanged.
+The tests include real local CLI subprocesses and a loopback listener, byte-split Japanese/CRLF streams, mocked OAuth rotation/inference, and MCP responses shaped like the Editor contract. They do not establish real OpenAI sign-in, actual scene rendering, screenshot receipt from Studio, or a packaged desktop build. Do not ship this prototype unchanged.
 
 ## Follow-up
 
