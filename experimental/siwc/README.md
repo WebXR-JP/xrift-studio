@@ -1,6 +1,6 @@
 # ChatGPT × XRift Studio — one-shot world PoC
 
-**Experimental only. Not integrated with the released desktop UI.**
+**CLI reference prototype. The Editor integration is implemented separately in Rust and the AI connection panel. End users do not need Node.js or this script for Editor generation.**
 
 This proof of concept converts one Japanese natural-language request into a structured world plan and executes it with XRift Studio's **existing MCP sidecar**, creating a **new** project.
 
