@@ -22,6 +22,7 @@ import {
 import {
   EntryLogBoard,
   Grabbable,
+  Item,
   LiveVideoPlayer,
   Portal,
   ScreenShareDisplay,
@@ -33,6 +34,7 @@ import {
   useSpawnPointContext,
   type EntryLogBoardProps,
   type GrabbableProps,
+  type ItemProps,
   type InteractableProps,
   type PortalProps,
   type ScreenShareDisplayProps,
@@ -867,7 +869,8 @@ function isRuntimeOfficialLeafSchema(schemaId: string): boolean {
     schemaId === "xrift.screen-share-display" ||
     schemaId === "xrift.tag-board" ||
     schemaId === "xrift.entry-log-board" ||
-    schemaId === "xrift.portal"
+    schemaId === "xrift.portal" ||
+    schemaId === "xrift.item"
   );
 }
 
@@ -881,6 +884,8 @@ function XriftRuntimeOfficialLeaves({
       {components.map((component) => {
         const properties = component.properties;
         switch (component.schemaId) {
+          case "xrift.item":
+            return <Item key={component.id} {...(properties as unknown as ItemProps)} />;
           case "xrift.video-screen":
             return (
               <VideoScreen

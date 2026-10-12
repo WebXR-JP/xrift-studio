@@ -67,7 +67,7 @@ export default function LandingPage() {
             <div className="landing-section-heading">
               <p className="landing-eyebrow">ビジュアルエディター</p>
               <h2>素材を配置し、<br className="sm:hidden" />見た目と動きを設定する。</h2>
-              <p>手持ちの3Dモデルや画像、音声を取り込めます。カタログから素材や機能を追加するには「外部から追加」を開いてください。</p>
+              <p>手持ちの3Dモデルや画像、音声を取り込めます。カタログから素材や機能を追加するには「アセットストア」を開いてください。</p>
             </div>
             <div className="landing-feature-grid">
               {editorFeatures.map(({ title, text, icon: Icon, formats }) => (

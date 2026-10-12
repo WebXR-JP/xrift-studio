@@ -18,6 +18,7 @@ mod hierarchy_transfer;
 pub mod mcp;
 mod script_trust;
 mod runtime_installation;
+mod xrift_items;
 use runtime_installation::{
     cli_manifest_version, cli_version_output_matches, cli_version_supported, installed_cli_version,
     node_distribution, NODE_VERSION, XRIFT_CLI_VERSION,
@@ -6287,6 +6288,7 @@ pub fn run() {
     let app = builder
         .invoke_handler(tauri::generate_handler![
             runtime_paths,
+            xrift_items::resolve_xrift_item,
             runtime_status,
             take_opened_project_archives,
             setup_runtime,

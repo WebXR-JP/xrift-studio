@@ -26,7 +26,7 @@ test("しかけ付きの3Dセットは、音とグラフごとシーンへ入る
   await openBlankWorld(page);
 
   const assets = page.getByRole("region", { name: "Assets" });
-  await assets.getByRole("button", { name: "外部から追加" }).click();
+  await assets.getByRole("button", { name: "アセットストア" }).click();
   await page.getByRole("button", { name: /3Dセット/ }).click();
 
   const shelf = page.getByRole("region", { name: "3Dセット一覧" });
@@ -46,7 +46,7 @@ test("しかけ付きの3Dセットは、音とグラフごとシーンへ入る
   await expect(
     detail.getByText("上の手順を見ながら、この画面を閉じてPlayを開始してください。"),
   ).toBeVisible();
-  await page.getByRole("button", { name: "「外部から追加」を閉じる" }).click();
+  await page.getByRole("button", { name: "「アセットストア」を閉じる" }).click();
 
   const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
   await expect(tree.getByText("音の出るボタン", { exact: true })).toBeVisible();
@@ -94,13 +94,13 @@ for (const name of [
     const shelf = page.getByRole("region", { name: "3Dセット一覧" });
     const detail = page.getByRole("complementary", { name: "選択した3Dセットの詳細" });
     const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
-    await assets.getByRole("button", { name: "外部から追加" }).click();
+    await assets.getByRole("button", { name: "アセットストア" }).click();
     await page.getByRole("button", { name: /3Dセット/ }).click();
     await shelf.getByLabel("3Dセットを検索").fill(name);
     await shelf.getByRole("button", { name: new RegExp(name) }).click();
     await detail.getByRole("button", { name: new RegExp(`${name}をシーンへ追加`) }).click();
     await expect(detail.getByText(/シーンへ配置し/)).toBeVisible();
-    await page.getByRole("button", { name: "「外部から追加」を閉じる" }).click();
+    await page.getByRole("button", { name: "「アセットストア」を閉じる" }).click();
     await expect(tree.getByText(name, { exact: true })).toBeVisible();
     if (name === "環境音のスピーカー") {
       await expect(assets.getByText("環境音のループ").first()).toBeVisible();

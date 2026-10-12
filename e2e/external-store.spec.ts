@@ -6,7 +6,7 @@ test("アイテムでも共通のギミック一覧を検索して追加を選�
   await page.getByRole("button", { name: /アイテムをビジュアルで作る/ }).click();
   await page.getByLabel("プロジェクト名").fill("item-gimmick-catalog");
   await page.getByRole("button", { name: "作成して開く" }).click();
-  await page.getByRole("button", { name: "外部から追加", exact: true }).click();
+  await page.getByRole("button", { name: "アセットストア", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: /ギミック/ }).click();
   const catalog = dialog.getByRole("region", { name: "ギミック一覧", exact: true });
@@ -36,15 +36,15 @@ test("外部カタログを3D・マテリアル表現・ギミックで選べる
   await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
   await page.getByLabel("プロジェクト名").fill("catalog-shelves");
   await page.getByRole("button", { name: "作成して開く" }).click();
-  await page.getByRole("button", { name: "外部から追加", exact: true }).click();
+  await page.getByRole("button", { name: "アセットストア", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: /glTFマテリアル/ }).click();
   const materials = dialog.getByRole("region", { name: "glTFマテリアル一覧", exact: true });
   await expect(materials.getByTestId("scene-recipe-card")).toHaveCount(52);
   await materials.getByRole("combobox", { name: "glTFマテリアルのカテゴリ" }).selectOption("MToon");
   await expect(materials.getByTestId("scene-recipe-card")).toHaveCount(2);
-  await expect(materials.getByRole("button", { name: "MToon 0.x アウトライン", exact: true })).toBeVisible();
-  await expect(materials.getByRole("button", { name: "MToon 1.0 アウトライン", exact: true })).toBeVisible();
+  await expect(materials.getByRole("button", { name: "MToon 0.xアウトライン", exact: true })).toBeVisible();
+  await expect(materials.getByRole("button", { name: "MToon 1.0アウトライン", exact: true })).toBeVisible();
   await materials.getByRole("button", { name: "条件をリセット" }).click();
   await materials.getByRole("button", {name: "Emissive / 発光", exact: true}).click();
   await expect(materials.getByTestId("scene-recipe-card")).toHaveCount(7);

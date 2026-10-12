@@ -490,7 +490,7 @@ Editorの`import_model_asset`と、`importSettings`を省略した`import_textur
 
 ### ギミックのカスタム車を配置する
 
-UIでは「外部から追加 → ギミック → カスタム車」と「XRift公式コンポーネント → Vehicle」の両方から、同じ設定済みの車を配置できる。MCPではWorld向けの`scene-recipe.custom-vehicle`を`apply_scene_recipe`で配置する。`place_builtin_prefab`にVehicleは登録されていないため、公式カードの表示名をそのまま渡さない。配置される車は通常のEntity・Model・Scriptを組み合わせた編集可能なセットである。
+UIでは「アセットストア → ギミック → カスタム車」と「XRift公式コンポーネント → Vehicle」の両方から、同じ設定済みの車を配置できる。MCPではWorld向けの`scene-recipe.custom-vehicle`を`apply_scene_recipe`で配置する。`place_builtin_prefab`にVehicleは登録されていないため、公式カードの表示名をそのまま渡さない。配置される車は通常のEntity・Model・Scriptを組み合わせた編集可能なセットである。
 
 1. `get_editor_context`で編集中の`projectId`、`sceneId`、revisionとEditモードを確認する。保存済みのWorldプロジェクトが必要。
 2. `list_scene_recipes`を引数`{}`で呼び、返された`recipes`から`shelf: "gimmicks"`、`id: "scene-recipe.custom-vehicle"`を選ぶ。`shelf`は戻り値であり、このtoolの入力引数ではない。

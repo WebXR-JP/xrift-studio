@@ -646,7 +646,7 @@ function SkyShaderField({
       ) : (
         <p className="rounded border border-dashed border-slate-300 bg-slate-50 px-2.5 py-2 text-[11px] leading-4 text-slate-600">
           {candidates.length === 0
-            ? "「外部から追加 → Skybox Shader」で追加できます。"
+            ? "「アセットストア → Skybox Shader」で追加できます。"
             : "Shaderを使わない場合は、Skybox Textureまたはグラデーションを表示します。"}
         </p>
       )}

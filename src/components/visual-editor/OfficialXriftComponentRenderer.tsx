@@ -3,6 +3,7 @@ import {
   BillboardY,
   EntryLogBoard,
   Grabbable,
+  Item,
   LiveVideoPlayer,
   Mirror,
   Portal,
@@ -19,6 +20,7 @@ import {
   type EntryLogBoardProps,
   type GrabbableContextValue,
   type GrabbableProps,
+  type ItemProps,
   type InstanceContextValue,
   type InteractableProps,
   type MirrorProps,
@@ -35,6 +37,7 @@ import {
   type VideoScreenProps,
 } from "@xrift/world-components";
 import { XriftInteractable as Interactable } from "../../../packages/xrift-studio-runtime/src/script/interactable";
+import { useStudioItemLoader } from "../../lib/visual-editor/xrift-item-loader";
 import {
   Suspense,
   useMemo,
@@ -114,6 +117,7 @@ export function OfficialXriftPreviewProvider({
   usersImplementation?: UsersContextValue;
   seatImplementation?: SeatContextValue;
 }) {
+  const itemLoader = useStudioItemLoader();
   const content = (
     <XRiftProvider
       baseUrl=""
@@ -123,6 +127,7 @@ export function OfficialXriftPreviewProvider({
       usersImplementation={usersImplementation}
       seatImplementation={seatImplementation}
       placementMode="preview"
+      itemLoaderImplementation={itemLoader}
     >
       {children}
     </XRiftProvider>
@@ -147,6 +152,8 @@ export function OfficialXriftComponentRenderer({
   }
   const properties = component.properties;
   switch (component.schemaId) {
+    case XRIFT_COMPONENT_SCHEMA_IDS.item:
+      return <Item {...(properties as unknown as ItemProps)} />;
     case XRIFT_COMPONENT_SCHEMA_IDS.mirror:
       return <Mirror {...(properties as unknown as MirrorProps)} />;
     case XRIFT_COMPONENT_SCHEMA_IDS.skybox:

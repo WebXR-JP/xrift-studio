@@ -20,7 +20,7 @@ export function runRuntimePackageFixtureAssertions(): void {
     assert(manifest.devDependencies.react === "19.2.8", `React was not migrated: ${react}`);
     assert(manifest.devDependencies["react-dom"] === "19.2.8", "React DOM differs from React");
     assert(!("react" in manifest.dependencies), "React was duplicated across dependency sections");
-    assert(manifest.dependencies["@xrift/world-components"] === "0.55.0", "old Components survived");
+    assert(manifest.dependencies["@xrift/world-components"] === "0.57.1", "old Components survived");
     assert(manifest.dependencies.custom === "^1.0.0", "unrelated dependency changed");
     assert(manifest.scripts.build === "tsc && vite build", "build checks were changed");
     const saved = JSON.stringify(manifest);
@@ -36,11 +36,11 @@ export function runRuntimePackageFixtureAssertions(): void {
   for (const oldVersion of ["^0.52.0", "^0.53.0", "^0.54.0"]) {
     const previous = { dependencies: { "@xrift/world-components": oldVersion } };
     recordCompilerPackageSpecs(previous, specs);
-    assert(previous.dependencies["@xrift/world-components"] === "0.55.0", `${oldVersion} template missed the Components update`);
+    assert(previous.dependencies["@xrift/world-components"] === "0.57.1", `${oldVersion} template missed the Components update`);
   }
-  const current = { dependencies: { "@xrift/world-components": "^0.55.0" } };
+  const current = { dependencies: { "@xrift/world-components": "^0.57.1" } };
   recordCompilerPackageSpecs(current, specs);
-  assert(current.dependencies["@xrift/world-components"] === "^0.55.0", "compatible author range changed");
+  assert(current.dependencies["@xrift/world-components"] === "^0.57.1", "compatible author range changed");
   const empty: Record<string, unknown> = {};
   recordCompilerPackageSpecs(empty, specs);
   assert((empty.dependencies as Record<string, unknown>).react === "19.2.8", "missing React was not added");
