@@ -769,6 +769,7 @@ async function uploadStagedProjectWithSdk(input: {
     camera: config.camera,
     permissions: config.permissions,
     outputBufferType: config.outputBufferType,
+    items: config.items,
     onProgress: (progress) =>
       input.report({
         stage: "uploading",
@@ -839,12 +840,13 @@ export type StagedXriftConfig = {
   camera?: CameraConfig;
   permissions?: WorldPermissions;
   outputBufferType?: OutputBufferType;
+  items?: string[];
 };
 
 /**
  * Parse staging config with the SDK itself, not a Studio-side approximation.
  *
- * CLI 0.24.4 delegates distDir/ignore/config parsing to @xrift/sdk 0.1.3. Using
+ * CLI 0.25.0 delegates distDir/ignore/config parsing to @xrift/sdk 0.2.0. Using
  * those same parsers here makes the direct SDK upload path select the exact
  * same files and hash-affecting options as the CLI path.
  */
@@ -865,6 +867,7 @@ export function parseStagedXriftConfig(
         camera: config.camera,
         permissions: config.permissions,
         outputBufferType: config.outputBufferType,
+        items: config.items,
       };
     }
 

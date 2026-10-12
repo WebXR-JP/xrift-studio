@@ -518,6 +518,7 @@ export async function uploadVisualProjectFromWeb(
       camera: prepared.config.camera,
       permissions: resolveWebRuntimePermissions(prepared.config.permissions),
       outputBufferType: prepared.config.outputBufferType,
+      items: prepared.config.items,
       onProgress: (progress) => {
         request.report({
           stage: "uploading",

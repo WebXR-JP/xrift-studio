@@ -6455,7 +6455,7 @@ mod tests {
         std::fs::create_dir_all(entry.parent().unwrap()).unwrap();
         std::fs::write(entry, b"").unwrap();
         let manifest = entry.parent().unwrap().parent().unwrap().join("package.json");
-        for (version, ready) in [("0.24.3", false), (XRIFT_CLI_VERSION, true), ("0.25.0", true)] {
+        for (version, ready) in [("0.24.4", false), (XRIFT_CLI_VERSION, true), ("0.25.1", true)] {
             std::fs::write(&manifest, serde_json::json!({
                 "name": "@xrift/cli", "version": version,
                 "bin": { "xrift": "dist/index.js" }

@@ -67,7 +67,7 @@
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-shell": "2.3.6",
     "@tauri-apps/plugin-updater": "^2.12.0",
-    "@xrift/sdk": "^0.1.3",
+    "@xrift/sdk": "^0.2.0",
     "@xrift/world-components": "0.55.0",
     "@xyflow/react": "12.11.6",
     "draco3dgltf": "1.5.7",

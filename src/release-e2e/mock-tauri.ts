@@ -36,7 +36,7 @@ declare global {
 const PROJECTS_ROOT = "C:\\XRiftE2E\\projects";
 const CLASSIC_WORLD_PATH = `${PROJECTS_ROOT}\\classic-world`;
 const CLASSIC_ITEM_PATH = `${PROJECTS_ROOT}\\classic-item`;
-const RECOMMENDED_XRIFT_VERSION = "0.24.4";
+const RECOMMENDED_XRIFT_VERSION = "0.25.0";
 const NODE_VERSION = "24.21.0";
 
 const runtimePaths: RuntimePaths = {
@@ -222,9 +222,9 @@ export function installReleaseE2EMock(): void {
   let xriftVersion = firstSetup
     ? null
     : xriftUpdateRequired
-      ? "0.24.3"
+      ? "0.24.4"
       : scenario === "runtime-newer" || scenario === "runtime-node-update"
-        ? "0.25.0"
+        ? "0.26.0"
         : RECOMMENDED_XRIFT_VERSION;
   let setupFailuresRemaining = scenario === "runtime-update-error" ? 1 : 0;
   let updateFailuresRemaining = scenario === "cli-update-error" ? 1 : 0;
@@ -410,14 +410,14 @@ export function installReleaseE2EMock(): void {
         case "read_image_data_url":
           throw new Error("Release E2E fixture does not contain binary files");
         case "check_xrift_latest":
-          return cliUpdate ? "0.24.5" : RECOMMENDED_XRIFT_VERSION;
+          return cliUpdate ? "0.25.1" : RECOMMENDED_XRIFT_VERSION;
         case "update_xrift":
           await new Promise((resolve) => window.setTimeout(resolve, 500));
           if (updateFailuresRemaining > 0) {
             updateFailuresRemaining -= 1;
             throw new Error("CLIのダウンロードに失敗しました");
           }
-          if (scenario !== "cli-update-incomplete") xriftVersion = "0.24.6";
+          if (scenario !== "cli-update-incomplete") xriftVersion = "0.25.2";
           return null;
         case "detect_xrift_mcp_clients":
           return [];
