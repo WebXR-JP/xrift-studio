@@ -7,6 +7,7 @@ on:
       - 'src/components/visual-editor/ChatgptWorldPanel.tsx'
       - 'src/lib/visual-editor/chatgpt-world.ts'
       - 'scripts/chatgpt-world.test.mjs'
+      - 'scripts/chatgpt-panel-ui.mjs'
       - '.github/workflows/chatgpt-editor.yml'
   workflow_dispatch:
 permissions:
@@ -25,6 +26,16 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: node --test scripts/chatgpt-world.test.mjs scripts/guide.test.mjs
+      - name: Verify real panel UI with isolated native IPC
+        env:
+          XRIFT_TEST_CHROME: /usr/bin/google-chrome
+        run: node scripts/chatgpt-panel-ui.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chatgpt-panel-ui
+          path: dev/chatgpt-ui-artifacts
+          if-no-files-found: ignore
   native:
     strategy:
       fail-fast: false
