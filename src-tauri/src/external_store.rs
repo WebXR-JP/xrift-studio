@@ -25,7 +25,7 @@ const OTOGURA_RESOLUTION: &str = "src";
 const POLY_HAVEN_USER_AGENT: &str =
     "XRiftStudio/0.6.0 (+https://github.com/xrift-studio/xrift-studio; asset-browser)";
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExternalStoreAsset {
     pub provider_id: String,
