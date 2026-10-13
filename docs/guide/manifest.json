@@ -404,7 +404,7 @@
     {
       "slug": "first-world",
       "title": "最初のワールドを作る",
-      "description": "床の上に球を置いて色を変え、保存できたらPlayで見て回ります。外部素材やAI接続は必要ありません。",
+      "description": "床の上に球を置いて色を変え、保存できたらPlayで見て回ります。外部素材やMCP接続は必要ありません。",
       "group": "start",
       "file": "first-world.md",
       "keywords": "チュートリアル 初めて 入門 新規プロジェクト 作成 球 Plane Box Light SpawnPoint",
@@ -673,7 +673,7 @@
       "description": "AIクライアントを接続し、配置や設定の変更を頼めます。依頼方法と変更後の確認を説明します。",
       "group": "behavior",
       "file": "ai-connection.md",
-      "keywords": "AI MCP 接続 Claude Codex 登録 ChatGPT ログイン ワールド生成 モデル 日本語 外部3Dモデル Poly Haven 取り込み CC0 音蔵 音声 glTF PBR マテリアル",
+      "keywords": "AI MCP MCP接続 設定 接続 Claude Codex 登録 ChatGPT タブ チャット Plan プラン 相談 反映 停止 破棄 現在のScene 調整 進捗 Inspector ログイン 認証 復元 エラー ワールド生成 モデル 日本語 外部3Dモデル Poly Haven 取り込み CC0 音蔵 音声 glTF PBR マテリアル",
       "related": [
         "save-and-open",
         "first-world",
@@ -712,7 +712,7 @@
       "description": "作品の情報、保存状態、ログインを確認し、XRiftへ送信します。送信後は審査と公開状況を確認します。",
       "group": "publish",
       "file": "publishing.md",
-      "keywords": "公開 アップロード ログイン セットアップ 審査 更新 URL 送信保留 APIキー ブラウザ パスワード 保存済みキーを確認",
+      "keywords": "公開 アップロード ログイン セットアップ 審査 更新 URL 送信保留 APIキー ブラウザ Item アイテム write:items write:worlds パスワード 保存済みキーを確認",
       "related": [
         "performance",
         "play-mode",

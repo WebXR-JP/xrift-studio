@@ -3,11 +3,37 @@ on:
   pull_request:
     paths:
       - 'src-tauri/src/chatgpt.rs'
+      - 'src-tauri/src/chatgpt/**'
       - 'src-tauri/Cargo.*'
-      - 'src/components/visual-editor/ChatgptWorldPanel.tsx'
-      - 'src/lib/visual-editor/chatgpt-world.ts'
+      - 'src/components/visual-editor/Chatgpt*.tsx'
+      - 'src/components/visual-editor/AiConnectionPanel.tsx'
+      - 'src/components/visual-editor/McpConnectionSettings.tsx'
+      - 'src/components/AboutModal.tsx'
+      - 'src/components/visual-editor/EditorDialog.tsx'
+      - 'src/components/visual-editor/EditorUtilityRail.tsx'
+      - 'src/components/visual-editor/SceneViewport.tsx'
+      - 'src/components/visual-editor/VisualEditorPrototype.tsx'
+      - 'src/App.tsx'
+      - 'src/lib/tauri.ts'
+      - 'src/lib/visual-editor/mcp-tool-registry.ts'
+      - 'src-tauri/src/mcp.rs'
+      - 'src-tauri/src/mcp_tool_names.rs'
+      - 'src-tauri/src/lib.rs'
+      - 'e2e/chatgpt-tabs.spec.ts'
+      - 'src/release-e2e/mock-tauri.ts'
+      - 'src/lib/visual-editor/chatgpt-*.ts'
       - 'scripts/chatgpt-world.test.mjs'
+      - 'scripts/chatgpt-generation.test.mjs'
+      - 'scripts/mcp-chatgpt-contract.test.mjs'
       - 'scripts/chatgpt-panel-ui.mjs'
+      - 'scripts/generate-mcp-tool-names.mjs'
+      - 'docs/guide/ai-connection.md'
+      - 'docs/guide/manifest.json'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'playwright.config.ts'
+      - 'vite.config.ts'
+      - 'tsconfig*.json'
       - '.github/workflows/chatgpt-editor.yml'
   workflow_dispatch:
 permissions:
@@ -25,16 +51,24 @@ jobs:
       - uses: flatt-security/setup-takumi-guard-npm@v1
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
-      - run: node --test scripts/chatgpt-world.test.mjs scripts/guide.test.mjs
+      - run: pnpm e2e:typecheck
+      - run: pnpm mcp:tool-names --check
+      - run: node --test scripts/chatgpt-world.test.mjs scripts/chatgpt-generation.test.mjs scripts/mcp-chatgpt-contract.test.mjs scripts/guide.test.mjs
       - name: Verify real panel UI with isolated native IPC
         env:
           XRIFT_TEST_CHROME: /usr/bin/google-chrome
         run: node scripts/chatgpt-panel-ui.mjs
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Verify Editor tabs and MCP generation through the real App
+        run: pnpm exec playwright test e2e/chatgpt-tabs.spec.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: chatgpt-panel-ui
-          path: dev/chatgpt-ui-artifacts
+          path: |
+            dev/chatgpt-ui-artifacts
+            test-results
+            playwright-report
           if-no-files-found: ignore
   native:
     strategy:
@@ -53,8 +87,8 @@ jobs:
           workspaces: src-tauri
       - name: Linux desktop dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev libssl-dev
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev libssl-dev libdbus-1-dev
       - name: Check native integration and dependencies
         run: cargo check --locked --manifest-path src-tauri/Cargo.toml
-      - name: Test authentication validation and native streaming
-        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib chatgpt::tests
+      - name: Test authentication, MCP, saves and publication records
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib
