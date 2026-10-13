@@ -1,5 +1,7 @@
 # ライトと画面の明るさを調整する
 
+動画で操作を確認する：[ライトの明るさと影を調整する](./lesson-01-06.md) / [Bloomで光をにじませる](./lesson-04-08.md)
+
 ライトは物を照らし、画面効果は表示全体の見え方を調整します。ライトの設定は、Play中もInspectorで変更して確認できます。
 
 ![Ambient Lightを有効にし、Intensityを0.55にした状態](./media/lighting.png "Ambient Light")

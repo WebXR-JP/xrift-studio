@@ -18,3 +18,26 @@
 @media(max-width:360px){.guide-welcome h1{font-size:25px}.guide-secondary{font-size:14px}}
 
 .guide-overview{margin:28px 0 36px}.guide-overview>a{display:block}.guide-overview img{width:100%;border:1px solid var(--guide-line);border-radius:10px}.guide-overview figcaption{font-size:14px;color:var(--guide-muted);line-height:1.8;margin:12px 0}.guide-screen-key{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;list-style:none;padding:0;margin:18px 0 0}.guide-screen-key li+li{margin:0}.guide-screen-key a{display:block;font-size:13px;color:var(--guide-muted);text-decoration:none;border-top:2px solid #d9c8f6;padding:10px 0}.guide-screen-key strong{display:block;font-size:14px;color:var(--guide-ink);margin-bottom:4px}.guide-screen-key a:hover strong{color:var(--guide-brand)}.guide-prose p:has(>.guide-image)+p>em:only-child{display:block;font-size:14px;line-height:1.8;font-style:normal;color:var(--guide-muted);margin-top:-14px}.guide-prose .guide-image{margin-bottom:20px}@media(max-width:850px){.guide-screen-key{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Video lessons use one native player per page; the index loads only thumbnails. */
+.guide-video-entry{font-weight:650}
+.guide-video{margin:24px 0 32px}
+.guide-video video{display:block;width:100%;height:auto;aspect-ratio:16/9;background:#17171d;border-radius:12px}
+.guide-video figcaption{display:flex;flex-direction:column;gap:7px;font-size:14px;line-height:1.75;color:var(--guide-muted);margin-top:14px}
+.guide-video-meta{font-weight:650;color:var(--guide-ink)}
+.guide-video figcaption a{width:fit-content;min-height:44px;display:inline-flex;align-items:center}
+.guide-video-index{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.guide-video-index>p,.guide-video-index>h2{grid-column:1/-1;margin:0}
+.guide-video-index>h2{margin-top:32px}
+.guide-video-index>p:has(>.guide-lesson-card){grid-column:auto;display:flex}
+.guide-lesson-card{display:flex;flex-direction:column;width:100%;border:1px solid var(--guide-line);border-radius:12px;overflow:hidden;text-decoration:none;color:var(--guide-ink);background:white}
+.guide-lesson-card:hover{border-color:#b29ad9;text-decoration:none;background:#fbfaff}
+.guide-lesson-thumbnail{display:block;position:relative;background:#17171d;aspect-ratio:16/9}
+.guide-prose .guide-lesson-thumbnail img{width:100%;height:100%;object-fit:contain;border:0;border-radius:0}
+.guide-lesson-duration{position:absolute;right:10px;bottom:10px;background:#17171def;color:white;padding:2px 7px;border-radius:4px;font-size:13px;font-variant-numeric:tabular-nums;line-height:1.7}
+.guide-lesson-copy{display:flex;flex-direction:column;gap:7px;padding:17px 18px;flex:1;font-size:14px;line-height:1.8;color:var(--guide-muted)}
+.guide-lesson-number{font-size:12px;color:var(--guide-brand);font-weight:650}
+.guide-lesson-copy strong{font-size:17px;line-height:1.65;color:var(--guide-ink)}
+.guide-lesson-watch{color:var(--guide-brand);margin-top:auto;padding-top:8px;font-weight:650}
+@media(max-width:600px){.guide-video-index{grid-template-columns:minmax(0,1fr)}.guide-video-index>p:has(>.guide-lesson-card){grid-column:1/-1}.guide-video video{border-radius:8px}}
+@media print{.guide-video video{display:none}.guide-lesson-card{break-inside:avoid}}

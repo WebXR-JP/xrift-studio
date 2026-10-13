@@ -1,0 +1,675 @@
+{
+  "schemaVersion": 1,
+  "seriesTitle": "1分でわかる XRift Studio",
+  "videoCount": 19,
+  "totalVideoBytes": 57560862,
+  "totalPosterBytes": 954906,
+  "totalDurationSeconds": 1068.566669,
+  "lessons": [
+    {
+      "id": "01-01",
+      "title": "新しいプロジェクトを作る",
+      "chapter": "01 基本操作",
+      "description": "新しいプロジェクトを作り、制作を始める準備をします。",
+      "file": "lesson-01-01.mp4",
+      "durationSeconds": 40.466667,
+      "audioDurationSeconds": 40.469,
+      "sizeBytes": 1878099,
+      "sha256": "8e7ba79660ad43963b019efd928f210ea24450cef6501cb5eb124cd1ab37e1da",
+      "video": {
+        "codec": "h264",
+        "profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frameCount": 1214,
+        "fastStart": true
+      },
+      "audio": {
+        "codec": "aac",
+        "profile": "LC",
+        "channels": 2,
+        "sampleRate": 48000
+      },
+      "poster": {
+        "file": "lesson-01-01-poster.jpg",
+        "timeSeconds": 13.488889,
+        "width": 960,
+        "height": 540,
+        "sizeBytes": 31854,
+        "sha256": "88992687dd0cf2481c237343140a0bc092fa7beb49831edc94d188dda26039b3"
+      }
+    },
+    {
+      "id": "01-02",
+      "title": "オブジェクトを移動・拡大縮小する",
+      "chapter": "01 基本操作",
+      "description": "位置と大きさの数値を変えて、オブジェクトの配置を調整します。",
+      "file": "lesson-01-02.mp4",
+      "durationSeconds": 58.8,
+      "audioDurationSeconds": 58.816,
+      "sizeBytes": 2840284,
+      "sha256": "81b43833cb1de5ceb92ef31326ef0f1d68bad870d42c06295c872be155857b3e",
+      "video": {
+        "codec": "h264",
+        "profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frameCount": 1764,
+        "fastStart": true
+      },
+      "audio": {
+        "codec": "aac",
+        "profile": "LC",
+        "channels": 2,
+        "sampleRate": 48000
+      },
+      "poster": {
+        "file": "lesson-01-02-poster.jpg",
+        "timeSeconds": 19.6,
+        "width": 960,
+        "height": 540,
+        "sizeBytes": 61951,
+        "sha256": "987cbef8f863543c166bd0e5c7591c4608980d1c8c2d95b60f751e6d38f27f6f"
+      }
+    },
+    {
+      "id": "01-03",
+      "title": "Hierarchyで選ぶ・視点を動かす",
+      "chapter": "01 基本操作",
+      "description": "Hierarchyで対象を選び、作業しやすい視点へ動かします。",
+      "file": "lesson-01-03.mp4",
+      "durationSeconds": 50.6,
+      "audioDurationSeconds": 50.6,
+      "sizeBytes": 4498250,
+      "sha256": "acf42b642f6f5af7d40791ad73b0361f4de7983c249fe3170e567f3a3f07048c",
+      "video": {
+        "codec": "h264",
+        "profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frameCount": 1518,
+        "fastStart": true
+      },
+      "audio": {
+        "codec": "aac",
+        "profile": "LC",
+        "channels": 2,
+        "sampleRate": 48000
+      },
+      "poster": {
+        "file": "lesson-01-03-poster.jpg",
+        "timeSeconds": 16.866667,
+        "width": 960,
+        "height": 540,
+        "sizeBytes": 62271,
+        "sha256": "1fc41451342510d7247bdff3e829dd12ab4da8c884a8f0554d3b370a2d54d6ff"
+      }
+    },
+    {
+      "id": "01-04",
+      "title": "複製とUndo・Redoを使う",
+      "chapter": "01 基本操作",
+      "description": "複製とUndo・Redoで、変更を試しながら編集します。",
+      "file": "lesson-01-04.mp4",
+      "durationSeconds": 52.6,
+      "audioDurationSeconds": 52.608,
+      "sizeBytes": 2142694,
+      "sha256": "730ca541bdea458691dd702e897fea2ba6da6257c22052ef86ff21924d98661d",
+      "video": {
+        "codec": "h264",
+        "profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frameCount": 1578,
+        "fastStart": true
+      },
+      "audio": {
+        "codec": "aac",
+        "profile": "LC",
+        "channels": 2,
+        "sampleRate": 48000
+      },
+      "poster": {
+        "file": "lesson-01-04-poster.jpg",
+        "timeSeconds": 17.533333,
+        "width": 960,
+        "height": 540,
+        "sizeBytes": 44580,
+        "sha256": "4602a9921dde6c19fb063a72bd09d183a521a9b34250d8aad662787f126df6e8"
+      }
+    },
+    {
+      "id": "01-05",
+      "title": "床Collider・SpawnPoint・Playを確認する",
+      "chapter": "01 基本操作",
+      "description": "床の当たり判定と開始位置を確認し、Playで動作を確かめます。",
+      "file": "lesson-01-05.mp4",
+      "durationSeconds": 58.1,
+      "audioDurationSeconds": 58.1,
+      "sizeBytes": 3744918,
+      "sha256": "1a3d98a44a446849a27866ed6e7bebd1f2e76ed8bda1454fa19af6307285138e",
+      "video": {
+        "codec": "h264",
+        "profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frameCount": 1743,
+        "fastStart": true
+      },
+      "audio": {
+        "codec": "aac",
+        "profile": "LC",
+        "channels": 2,
+        "sampleRate": 48000
+      },
+      "poster": {
+        "file": "lesson-01-05-poster.jpg",
+        "timeSeconds": 19.366667,
+        "width": 960,
+        "height": 540,
+        "sizeBytes": 65444,
+        "sha256": "dde02e1bbffdab2cd6f68e040243320624816346a1fc069d864d2a4f95f8ea08"
+      }
+    },
+    {
+      "id": "01-06",
+      "title": "ライトの明るさと影を調整する",
+      "chapter": "01 基本操作",
+      "description": "ライトの明るさと影を調整し、空間の見え方を整えます。",
+      "file": "lesson-01-06.mp4",
+      "durationSeconds": 57.6,
+      "audioDurationSeconds": 57.6,
+      "sizeBytes": 3712799,
+      "sha256": "c448e0e31268275c38864e4ee93ee6ae9e28f40261f3cf4004e6cbd1e18dbd3a",
+      "video": {
+        "codec": "h264",
+        "profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frameCount": 1728,
+        "fastStart": true
+      },
+      "audio": {
+        "codec": "aac",
+        "profile": "LC",
+        "channels": 2,
+        "sampleRate": 48000
+      },
+      "poster": {
+        "file": "lesson-01-06-poster.jpg",
+        "timeSeconds": 19.2,
+        "width": 960,
+        "height": 540,
+        "sizeBytes": 61140,
+        "sha256": "70b9432eca5ba228fe80821249f4ccbaf3f4cef615d8988ac9fd67225be23bd8"
+      }
+    },
+    {
+      "id": "01-07",
+      "title": "Skybox Shaderで青空を作る",
+      "chapter": "01 基本操作",
+      "description": "Skybox Shaderを使い、空間の背景に青空を作ります。",
+      "file": "lesson-01-07.mp4",
+      "durationSeconds": 58.1,
+      "audioDurationSeconds": 58.1,
+      "sizeBytes": 3922236,
+      "sha256": "8fa8d46179ef2b0618ee727a302e0cee0471f46185c2ff76288898aa19851349",
+      "video": {
+        "codec": "h264",
+        "profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frameCount": 1743,
+        "fastStart": true
+      },
+      "audio": {
+        "codec": "aac",
+        "profile": "LC",
+        "channels": 2,
+        "sampleRate": 48000
+      },
+      "poster": {
+        "file": "lesson-01-07-poster.jpg",
+        "timeSeconds": 19.366667,
+        "width": 960,
+        "height": 540,
+        "sizeBytes": 38767,
+        "sha256": "7bc125a2ef62291cc4b512752c734be129ffb06adbea3c89999b03d05e82b0aa"
+      }
+    },
+    {
+      "id": "01-08",
+      "title": "HDRIを背景と環境光に使う",
+      "chapter": "01 基本操作",
+      "description": "HDRIを背景と環境光に使う設定を確認します。",
+      "file": "lesson-01-08.mp4",
+      "durationSeconds": 57.6,
+      "audioDurationSeconds": 57.6,
+      "sizeBytes": 2377085,
+      "sha256": "45c7319a12ddbc058b8b40abeb65e63c789cfd62b009f27dcd05af15086db2c8",
+      "video": {
+        "codec": "h264",
+        "profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frameCount": 1728,
+        "fastStart": true
+      },
+      "audio": {
+        "codec": "aac",
+        "profile": "LC",
+        "channels": 2,
+        "sampleRate": 48000
+      },
+      "poster": {
+        "file": "lesson-01-08-poster.jpg",
+        "timeSeconds": 40,
+        "width": 960,
+        "height": 540,
+        "sizeBytes": 52793,
+        "sha256": "e9ac811bcc6bda8211e7d4fae7eee2222c6b9a405805704aff7e77434f59121d"
+      }
+    },
+    {
+      "id": "02-01",
+      "title": "外部GLBを読み込んで配置する",
+      "chapter": "02 アセット",
+      "description": "外部のGLBモデルを読み込み、空間に配置します。",
+      "file": "lesson-02-01.mp4",
+      "durationSeconds": 44.6,
+      "audioDurationSeconds": 44.6,
+      "sizeBytes": 2294871,
+      "sha256": "0d19094827e22eb68d33ed21062856e8c0f1e3d29a7361b28465a9ea4355f700",
+      "video": {
+        "codec": "h264",
+        "profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frameCount": 1338,
+        "fastStart": true
+      },
+      "audio": {
+        "codec": "aac",
+        "profile": "LC",
+        "channels": 2,
+        "sampleRate": 48000
+      },
+      "poster": {
+        "file": "lesson-02-01-poster.jpg",
+        "timeSeconds": 14.866667,
+        "width": 960,
+        "height": 540,
+        "sizeBytes": 38336,
+        "sha256": "00e19782dc7e806dd766a082235bce04cdaa7be8be768866cb263b60fe3a6fa0"
+      }
+    },
+    {
+      "id": "02-03",
+      "title": "PBRの色と光沢を調整する",
+      "chapter": "02 アセット",
+      "description": "PBRマテリアルの色と光沢を調整します。",
+      "file": "lesson-02-03.mp4",
+      "durationSeconds": 48.6,
+      "audioDurationSeconds": 48.6,
+      "sizeBytes": 2039436,
+      "sha256": "5f8b137c7f6e3f8fe42c3f0d8be90c9947a66be1345414ad0b99aeecd08af5b7",
+      "video": {
+        "codec": "h264",
+        "profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frameCount": 1458,
+        "fastStart": true
+      },
+      "audio": {
+        "codec": "aac",
+        "profile": "LC",
+        "channels": 2,
+        "sampleRate": 48000
+      },
+      "poster": {
+        "file": "lesson-02-03-poster.jpg",
+        "timeSeconds": 16.2,
+        "width": 960,
+        "height": 540,
+        "sizeBytes": 47446,
+        "sha256": "5f6d297ce890897a9dabd7a98249ec7aceaaf8e295d77fdd45862746278448d1"
+      }
+    },
+    {
+      "id": "02-04",
+      "title": "画像を貼って、模様の大きさを変える",
+      "chapter": "02 アセット",
+      "description": "画像を貼り、模様の大きさを調整します。",
+      "file": "lesson-02-04.mp4",
+      "durationSeconds": 60.466667,
+      "audioDurationSeconds": 60.48,
+      "sizeBytes": 3175298,
+      "sha256": "ad0ef2e7d86136432e22cf4957726a3182b33a86caf8945840c5945d77eb768c",
+      "video": {
+        "codec": "h264",
+        "profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frameCount": 1814,
+        "fastStart": true
+      },
+      "audio": {
+        "codec": "aac",
+        "profile": "LC",
+        "channels": 2,
+        "sampleRate": 48000
+      },
+      "poster": {
+        "file": "lesson-02-04-poster.jpg",
+        "timeSeconds": 42,
+        "width": 960,
+        "height": 540,
+        "sizeBytes": 56383,
+        "sha256": "d178557b70c6918d70b99411fbd2cf77d6ee878296991226ae066d1a7291c683"
+      }
+    },
+    {
+      "id": "02-07",
+      "title": "MToonでアニメ調の陰影を作る",
+      "chapter": "02 アセット",
+      "description": "MToonを使った、アニメ調の陰影を確認します。",
+      "file": "lesson-02-07.mp4",
+      "durationSeconds": 50.6,
+      "audioDurationSeconds": 50.6,
+      "sizeBytes": 2500107,
+      "sha256": "c6aa09672f7dd20095f39ac73ca834ef1ec6aeb74a8bdac69a4d2fc9b75798e5",
+      "video": {
+        "codec": "h264",
+        "profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frameCount": 1518,
+        "fastStart": true
+      },
+      "audio": {
+        "codec": "aac",
+        "profile": "LC",
+        "channels": 2,
+        "sampleRate": 48000
+      },
+      "poster": {
+        "file": "lesson-02-07-poster.jpg",
+        "timeSeconds": 16.866667,
+        "width": 960,
+        "height": 540,
+        "sizeBytes": 52855,
+        "sha256": "f22a1c421d896dcb0c38d793cb2f5d6c01b1588a86ea8abbd0619bfa5791a515"
+      }
+    },
+    {
+      "id": "02-08",
+      "title": "Prefabを作って再利用する",
+      "chapter": "02 アセット",
+      "description": "Prefabを作り、同じ構成を再利用します。",
+      "file": "lesson-02-08.mp4",
+      "durationSeconds": 50.6,
+      "audioDurationSeconds": 50.6,
+      "sizeBytes": 1982987,
+      "sha256": "7599c41e6d9157dfad184e0990968c698853f3016ef8f161afc725264db67497",
+      "video": {
+        "codec": "h264",
+        "profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frameCount": 1518,
+        "fastStart": true
+      },
+      "audio": {
+        "codec": "aac",
+        "profile": "LC",
+        "channels": 2,
+        "sampleRate": 48000
+      },
+      "poster": {
+        "file": "lesson-02-08-poster.jpg",
+        "timeSeconds": 16.866667,
+        "width": 960,
+        "height": 540,
+        "sizeBytes": 34299,
+        "sha256": "d2d72932e1ea142fc8bb6a6dd77a4b90f68ce6234abc4a76b4a6d9301fd4035a"
+      }
+    },
+    {
+      "id": "03-00",
+      "title": "ノードをつないで箱を動かす",
+      "chapter": "03 プログラム",
+      "description": "ノードをつなぎ、箱を動かす仕組みを作ります。",
+      "file": "lesson-03-00.mp4",
+      "durationSeconds": 58.6,
+      "audioDurationSeconds": 58.6,
+      "sizeBytes": 3125641,
+      "sha256": "0c5526d888f70e982b7e09b92bce910bc02090ba4cd8222df4b30761ea349272",
+      "video": {
+        "codec": "h264",
+        "profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frameCount": 1758,
+        "fastStart": true
+      },
+      "audio": {
+        "codec": "aac",
+        "profile": "LC",
+        "channels": 2,
+        "sampleRate": 48000
+      },
+      "poster": {
+        "file": "lesson-03-00-poster.jpg",
+        "timeSeconds": 19.533333,
+        "width": 960,
+        "height": 540,
+        "sizeBytes": 59796,
+        "sha256": "960b80198fed1b6bbe9f92d95ef667ddf1c596abacf5edd2281699c980567d14"
+      }
+    },
+    {
+      "id": "03-01",
+      "title": "押すと動くボタンを作る",
+      "chapter": "03 プログラム",
+      "description": "ボタンを押したときに動く仕組みを作ります。",
+      "file": "lesson-03-01.mp4",
+      "durationSeconds": 64.066667,
+      "audioDurationSeconds": 64.085,
+      "sizeBytes": 3536882,
+      "sha256": "69911a3eb4885e5c725cf876567de19eb624d3a2305df9c8b8083bf9bd81b3f6",
+      "video": {
+        "codec": "h264",
+        "profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frameCount": 1922,
+        "fastStart": true
+      },
+      "audio": {
+        "codec": "aac",
+        "profile": "LC",
+        "channels": 2,
+        "sampleRate": 48000
+      },
+      "poster": {
+        "file": "lesson-03-01-poster.jpg",
+        "timeSeconds": 21.355556,
+        "width": 960,
+        "height": 540,
+        "sizeBytes": 43419,
+        "sha256": "e66cf3eabeb6493b2a982a3256704098c88e748bda3beca7d3d8debb799d30b1"
+      }
+    },
+    {
+      "id": "03-02",
+      "title": "Delayで待ってから動かす",
+      "chapter": "03 プログラム",
+      "description": "Delayを使い、動き始めるまでの待ち時間を加えます。",
+      "file": "lesson-03-02.mp4",
+      "durationSeconds": 65.266667,
+      "audioDurationSeconds": 65.28,
+      "sizeBytes": 3605815,
+      "sha256": "e3b235c5e333b0a622ea84a615a886304f2471def6f653f203a67f02f14085f3",
+      "video": {
+        "codec": "h264",
+        "profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frameCount": 1958,
+        "fastStart": true
+      },
+      "audio": {
+        "codec": "aac",
+        "profile": "LC",
+        "channels": 2,
+        "sampleRate": 48000
+      },
+      "poster": {
+        "file": "lesson-03-02-poster.jpg",
+        "timeSeconds": 21.755556,
+        "width": 960,
+        "height": 540,
+        "sizeBytes": 46106,
+        "sha256": "6ccd65e6a670bcecaabb6033383a8c71c8d4706621d0235b4f6fd1c69c084853"
+      }
+    },
+    {
+      "id": "03-04",
+      "title": "テンプレートでBoxを回転させる",
+      "chapter": "03 プログラム",
+      "description": "テンプレートを使い、Boxを回転させます。",
+      "file": "lesson-03-04.mp4",
+      "durationSeconds": 66.466667,
+      "audioDurationSeconds": 66.474,
+      "sizeBytes": 2965321,
+      "sha256": "87787a9d527ffed4b7d10a907d853ca2aaa9d36c2ec56765f45ef9ccf143f9c9",
+      "video": {
+        "codec": "h264",
+        "profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frameCount": 1994,
+        "fastStart": true
+      },
+      "audio": {
+        "codec": "aac",
+        "profile": "LC",
+        "channels": 2,
+        "sampleRate": 48000
+      },
+      "poster": {
+        "file": "lesson-03-04-poster.jpg",
+        "timeSeconds": 55,
+        "width": 960,
+        "height": 540,
+        "sizeBytes": 32868,
+        "sha256": "769207381ef20c5c0e17468f8115778889ede843c29c2baa9c545faa067072e7"
+      }
+    },
+    {
+      "id": "04-08",
+      "title": "Bloomで光をにじませる",
+      "chapter": "04 仕上げ",
+      "description": "Bloomを使い、光のにじみを調整します。",
+      "file": "lesson-04-08.mp4",
+      "durationSeconds": 66.466667,
+      "audioDurationSeconds": 66.474,
+      "sizeBytes": 4458396,
+      "sha256": "e50f669dec1def0ebd31cc216ae39abc5405fe6d5a0ab0627407d39d33b5edeb",
+      "video": {
+        "codec": "h264",
+        "profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frameCount": 1994,
+        "fastStart": true
+      },
+      "audio": {
+        "codec": "aac",
+        "profile": "LC",
+        "channels": 2,
+        "sampleRate": 48000
+      },
+      "poster": {
+        "file": "lesson-04-08-poster.jpg",
+        "timeSeconds": 52,
+        "width": 960,
+        "height": 540,
+        "sizeBytes": 69979,
+        "sha256": "229c8126838f96c3d42e2ca4d02e675a9a32e12e28e3564a7aeb564f32694ef2"
+      }
+    },
+    {
+      "id": "04-09",
+      "title": "テクスチャの解像度と容量を確認する",
+      "chapter": "04 仕上げ",
+      "description": "テクスチャの解像度と容量を確認します。",
+      "file": "lesson-04-09.mp4",
+      "durationSeconds": 58.966667,
+      "audioDurationSeconds": 58.986,
+      "sizeBytes": 2759743,
+      "sha256": "a8eb035efe87a91443e2790426bc5adb5e6fcabfd627e5fc5633ebc58047d9f6",
+      "video": {
+        "codec": "h264",
+        "profile": "High",
+        "width": 1920,
+        "height": 1080,
+        "pixelFormat": "yuv420p",
+        "frameRate": "30/1",
+        "frameCount": 1769,
+        "fastStart": true
+      },
+      "audio": {
+        "codec": "aac",
+        "profile": "LC",
+        "channels": 2,
+        "sampleRate": 48000
+      },
+      "poster": {
+        "file": "lesson-04-09-poster.jpg",
+        "timeSeconds": 19.655556,
+        "width": 960,
+        "height": 540,
+        "sizeBytes": 54619,
+        "sha256": "f2730dc719f7205dd38452904104fb791dbbe9db5a75491ed3e0f6836e188f8b"
+      }
+    }
+  ]
+}

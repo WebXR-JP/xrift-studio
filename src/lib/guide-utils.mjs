@@ -48,7 +48,8 @@ export function resolveGuideLink(href, page, manifest) {
   if (match && manifest.pages.some((entry) => entry.slug === match[1])) {
     return { kind: "page", slug: match[1], fragment: match[2] || "", href: `./${match[1]}.html${match[2] ? `#${match[2]}` : ""}` };
   }
-  if (/^(?:\.\/)?media\/[a-z0-9-]+\.(?:png|jpg|webp|svg)$/i.test(href)) return { kind: "media", href };
+  if (/^\.\/media\/tutorials\/lesson-[0-9]{2}-[0-9]{2}\.mp4$/.test(href)) return { kind: "video", href };
+  if (/^(?:\.\/)?media\/(?:tutorials\/)?[a-z0-9-]+\.(?:png|jpg|webp|svg)$/i.test(href)) return { kind: "media", href };
   return { kind: "invalid", href };
 }
 export function makeSearchEntries(manifest, sources) {

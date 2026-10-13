@@ -1,5 +1,7 @@
 # 配置・移動・整理する
 
+動画で操作を確認する：[オブジェクトを移動・拡大縮小する](./lesson-01-02.md) / [複製とUndo・Redoを使う](./lesson-01-04.md)
+
 シーンに置いたEntityは、選択してから位置、回転、大きさを調整できます。色や質感を変えるには、Assetsのマテリアルを編集します。
 
 ![HierarchyでSphereを選び、InspectorにTransformが表示された状態](./media/objects.png "Transform")

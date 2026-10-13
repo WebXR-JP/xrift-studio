@@ -9,6 +9,10 @@
       "label": "はじめて使う"
     },
     {
+      "id": "learn",
+      "label": "教材で学ぶ"
+    },
+    {
       "id": "basics",
       "label": "基本の操作"
     },
@@ -37,11 +41,338 @@
     {
       "slug": "index",
       "title": "XRift Studio 使い方ガイド",
-      "description": "インストールから配置、色の変更、保存、Play、公開まで、ビジュアルエディターの使い方を説明します。",
+      "description": "XRiftとの関係、作り方の紹介から、配置、色の変更、保存、Play、公開までを説明します。",
       "group": "start",
       "file": "index.md",
       "keywords": "",
-      "related": []
+      "related": [
+        "course-introduction",
+        "learning-course",
+        "video-tutorials"
+      ]
+    },
+    {
+      "slug": "learning-course",
+      "title": "制作から公開まで、順番に学ぶ",
+      "description": "XRiftと作り方の紹介、準備、保存、素材、仕掛け、テスト、公開、更新、招待まで。動画19本と文章教材で最初のワールドを仕上げます。",
+      "group": "learn",
+      "file": "learning-course.md",
+      "keywords": "講座 コース カリキュラム 初心者 学習 教材 公開まで 順番",
+      "related": [
+        "course-introduction",
+        "video-tutorials",
+        "installation",
+        "publishing"
+      ],
+      "next": "course-introduction"
+    },
+    {
+      "slug": "course-introduction",
+      "title": "XRiftとXRift Studioでできること",
+      "description": "XRiftと制作ツールの関係、ワールドとアイテムの違い、Node Graphやコードでできることを知ります。",
+      "group": "learn",
+      "file": "course-introduction.md",
+      "keywords": "XRift XRift Studio 違い 関係 紹介 入門 初心者 ワールド アイテム ワールドビルダー 作り方 コード コーディング プログラミング Node Graph Script TypeScript TSX React GLSL シェーダー AI",
+      "related": [
+        "learning-course",
+        "course-start-here",
+        "interactivity",
+        "custom-shaders",
+        "save-and-open"
+      ],
+      "next": "course-start-here"
+    },
+    {
+      "slug": "video-tutorials",
+      "title": "動画で学ぶ XRift Studio",
+      "description": "1本約1分。19本の短い動画を見ながら、配置、質感、仕掛け、仕上げを一つずつ試せます。",
+      "group": "learn",
+      "file": "video-tutorials.md",
+      "keywords": "動画 教材 入門 チュートリアル レッスン 基本操作 アセット プログラム 仕上げ",
+      "related": [
+        "learning-course",
+        "installation",
+        "first-world",
+        "editor-basics"
+      ],
+      "next": "learning-course"
+    },
+    {
+      "slug": "lesson-01-01",
+      "title": "新しいプロジェクトを作る",
+      "description": "新しいプロジェクトを作り、制作を始める準備をします。",
+      "group": "learn",
+      "file": "lesson-01-01.md",
+      "keywords": "動画 教材 01-01 01 基本操作 新しいプロジェクトを作る",
+      "related": [
+        "learning-course",
+        "video-tutorials",
+        "first-world"
+      ],
+      "next": "lesson-01-03"
+    },
+    {
+      "slug": "lesson-01-02",
+      "title": "オブジェクトを移動・拡大縮小する",
+      "description": "位置と大きさの数値を変えて、オブジェクトの配置を調整します。",
+      "group": "learn",
+      "file": "lesson-01-02.md",
+      "keywords": "動画 教材 01-02 01 基本操作 オブジェクトを移動・拡大縮小する",
+      "related": [
+        "learning-course",
+        "video-tutorials",
+        "objects"
+      ],
+      "next": "lesson-01-04"
+    },
+    {
+      "slug": "lesson-01-03",
+      "title": "Hierarchyで選ぶ・視点を動かす",
+      "description": "Hierarchyで対象を選び、作業しやすい視点へ動かします。",
+      "group": "learn",
+      "file": "lesson-01-03.md",
+      "keywords": "動画 教材 01-03 01 基本操作 Hierarchyで選ぶ・視点を動かす",
+      "related": [
+        "learning-course",
+        "video-tutorials",
+        "editor-basics"
+      ],
+      "next": "lesson-01-02"
+    },
+    {
+      "slug": "lesson-01-04",
+      "title": "複製とUndo・Redoを使う",
+      "description": "複製とUndo・Redoで、変更を試しながら編集します。",
+      "group": "learn",
+      "file": "lesson-01-04.md",
+      "keywords": "動画 教材 01-04 01 基本操作 複製とUndo・Redoを使う",
+      "related": [
+        "learning-course",
+        "video-tutorials",
+        "objects"
+      ],
+      "next": "course-save-backup"
+    },
+    {
+      "slug": "lesson-01-05",
+      "title": "床Collider・SpawnPoint・Playを確認する",
+      "description": "床の当たり判定と開始位置を確認し、Playで動作を確かめます。",
+      "group": "learn",
+      "file": "lesson-01-05.md",
+      "keywords": "動画 教材 01-05 01 基本操作 床Collider・SpawnPoint・Playを確認する",
+      "related": [
+        "learning-course",
+        "video-tutorials",
+        "collision"
+      ],
+      "next": "lesson-01-06"
+    },
+    {
+      "slug": "lesson-01-06",
+      "title": "ライトの明るさと影を調整する",
+      "description": "ライトの明るさと影を調整し、空間の見え方を整えます。",
+      "group": "learn",
+      "file": "lesson-01-06.md",
+      "keywords": "動画 教材 01-06 01 基本操作 ライトの明るさと影を調整する",
+      "related": [
+        "learning-course",
+        "video-tutorials",
+        "lighting"
+      ],
+      "next": "lesson-01-07"
+    },
+    {
+      "slug": "lesson-01-07",
+      "title": "Skybox Shaderで青空を作る",
+      "description": "Skybox Shaderを使い、空間の背景に青空を作ります。",
+      "group": "learn",
+      "file": "lesson-01-07.md",
+      "keywords": "動画 教材 01-07 01 基本操作 Skybox Shaderで青空を作る",
+      "related": [
+        "learning-course",
+        "video-tutorials",
+        "sky-and-water"
+      ],
+      "next": "lesson-01-08"
+    },
+    {
+      "slug": "lesson-01-08",
+      "title": "HDRIを背景と環境光に使う",
+      "description": "HDRIを背景と環境光に使う設定を確認します。",
+      "group": "learn",
+      "file": "lesson-01-08.md",
+      "keywords": "動画 教材 01-08 01 基本操作 HDRIを背景と環境光に使う",
+      "related": [
+        "learning-course",
+        "video-tutorials",
+        "sky-and-water"
+      ],
+      "next": "lesson-03-00"
+    },
+    {
+      "slug": "lesson-02-01",
+      "title": "外部GLBを読み込んで配置する",
+      "description": "外部のGLBモデルを読み込み、空間に配置します。",
+      "group": "learn",
+      "file": "lesson-02-01.md",
+      "keywords": "動画 教材 02-01 02 アセット 外部GLBを読み込んで配置する",
+      "related": [
+        "learning-course",
+        "video-tutorials",
+        "assets"
+      ],
+      "next": "lesson-02-03"
+    },
+    {
+      "slug": "lesson-02-03",
+      "title": "PBRの色と光沢を調整する",
+      "description": "PBRマテリアルの色と光沢を調整します。",
+      "group": "learn",
+      "file": "lesson-02-03.md",
+      "keywords": "動画 教材 02-03 02 アセット PBRの色と光沢を調整する",
+      "related": [
+        "learning-course",
+        "video-tutorials",
+        "materials"
+      ],
+      "next": "lesson-02-04"
+    },
+    {
+      "slug": "lesson-02-04",
+      "title": "画像を貼って、模様の大きさを変える",
+      "description": "画像を貼り、模様の大きさを調整します。",
+      "group": "learn",
+      "file": "lesson-02-04.md",
+      "keywords": "動画 教材 02-04 02 アセット 画像を貼って、模様の大きさを変える",
+      "related": [
+        "learning-course",
+        "video-tutorials",
+        "textures"
+      ],
+      "next": "lesson-02-07"
+    },
+    {
+      "slug": "lesson-02-07",
+      "title": "MToonでアニメ調の陰影を作る",
+      "description": "MToonを使った、アニメ調の陰影を確認します。",
+      "group": "learn",
+      "file": "lesson-02-07.md",
+      "keywords": "動画 教材 02-07 02 アセット MToonでアニメ調の陰影を作る",
+      "related": [
+        "learning-course",
+        "video-tutorials",
+        "materials"
+      ],
+      "next": "lesson-02-08"
+    },
+    {
+      "slug": "lesson-02-08",
+      "title": "Prefabを作って再利用する",
+      "description": "Prefabを作り、同じ構成を再利用します。",
+      "group": "learn",
+      "file": "lesson-02-08.md",
+      "keywords": "動画 教材 02-08 02 アセット Prefabを作って再利用する",
+      "related": [
+        "learning-course",
+        "video-tutorials",
+        "prefabs"
+      ],
+      "next": "lesson-01-05"
+    },
+    {
+      "slug": "lesson-03-00",
+      "title": "ノードをつないで箱を動かす",
+      "description": "ノードをつなぎ、箱を動かす仕組みを作ります。",
+      "group": "learn",
+      "file": "lesson-03-00.md",
+      "keywords": "動画 教材 03-00 03 プログラム ノードをつないで箱を動かす",
+      "related": [
+        "learning-course",
+        "video-tutorials",
+        "interactivity"
+      ],
+      "next": "lesson-03-01"
+    },
+    {
+      "slug": "lesson-03-01",
+      "title": "押すと動くボタンを作る",
+      "description": "ボタンを押したときに動く仕組みを作ります。",
+      "group": "learn",
+      "file": "lesson-03-01.md",
+      "keywords": "動画 教材 03-01 03 プログラム 押すと動くボタンを作る",
+      "related": [
+        "learning-course",
+        "video-tutorials",
+        "interactivity"
+      ],
+      "next": "lesson-03-02"
+    },
+    {
+      "slug": "lesson-03-02",
+      "title": "Delayで待ってから動かす",
+      "description": "Delayを使い、動き始めるまでの待ち時間を加えます。",
+      "group": "learn",
+      "file": "lesson-03-02.md",
+      "keywords": "動画 教材 03-02 03 プログラム Delayで待ってから動かす",
+      "related": [
+        "learning-course",
+        "video-tutorials",
+        "interactivity"
+      ],
+      "next": "lesson-03-04"
+    },
+    {
+      "slug": "lesson-03-04",
+      "title": "テンプレートでBoxを回転させる",
+      "description": "テンプレートを使い、Boxを回転させます。",
+      "group": "learn",
+      "file": "lesson-03-04.md",
+      "keywords": "動画 教材 03-04 03 プログラム テンプレートでBoxを回転させる",
+      "related": [
+        "learning-course",
+        "video-tutorials",
+        "interactivity"
+      ],
+      "next": "lesson-04-08"
+    },
+    {
+      "slug": "lesson-04-08",
+      "title": "Bloomで光をにじませる",
+      "description": "Bloomを使い、光のにじみを調整します。",
+      "group": "learn",
+      "file": "lesson-04-08.md",
+      "keywords": "動画 教材 04-08 04 仕上げ Bloomで光をにじませる",
+      "related": [
+        "learning-course",
+        "video-tutorials",
+        "lighting"
+      ],
+      "next": "lesson-04-09"
+    },
+    {
+      "slug": "lesson-04-09",
+      "title": "テクスチャの解像度と容量を確認する",
+      "description": "テクスチャの解像度と容量を確認します。",
+      "group": "learn",
+      "file": "lesson-04-09.md",
+      "keywords": "動画 教材 04-09 04 仕上げ テクスチャの解像度と容量を確認する",
+      "related": [
+        "learning-course",
+        "video-tutorials",
+        "performance"
+      ],
+      "next": "course-test-world"
+    },
+    {
+      "slug": "video-credits",
+      "title": "動画教材の利用条件",
+      "description": "教材に含まれる素材、合成音声と再配布時の確認事項を説明します。",
+      "group": "support",
+      "file": "video-credits.md",
+      "keywords": "動画 教材 利用条件 クレジット 合成音声 OmniVoice",
+      "related": [
+        "video-tutorials"
+      ]
     },
     {
       "slug": "installation",
@@ -80,7 +411,8 @@
       "related": [
         "editor-basics",
         "assets",
-        "save-and-open"
+        "save-and-open",
+        "video-tutorials"
       ],
       "next": "materials"
     },
@@ -94,7 +426,8 @@
       "related": [
         "shortcuts",
         "materials",
-        "troubleshooting"
+        "troubleshooting",
+        "video-tutorials"
       ],
       "next": "objects"
     },
@@ -108,7 +441,8 @@
       "related": [
         "assets",
         "prefabs",
-        "save-and-open"
+        "save-and-open",
+        "video-tutorials"
       ],
       "next": "materials"
     },
@@ -122,7 +456,8 @@
       "related": [
         "external-resources",
         "textures",
-        "troubleshooting"
+        "troubleshooting",
+        "video-tutorials"
       ]
     },
     {
@@ -136,7 +471,8 @@
         "textures",
         "transparent-materials",
         "material-extensions",
-        "custom-shaders"
+        "custom-shaders",
+        "video-tutorials"
       ],
       "next": "save-and-open"
     },
@@ -150,7 +486,8 @@
       "related": [
         "materials",
         "external-resources",
-        "performance"
+        "performance",
+        "video-tutorials"
       ]
     },
     {
@@ -201,7 +538,7 @@
       "description": "「アセットストア」のカタログで、モデル、マテリアル、空、水、ギミックの見本を探せます。",
       "group": "create",
       "file": "external-resources.md",
-      "keywords": "アセットストア カタログ Poly Haven ambientCG 音蔵 音声 楽曲 SFX BGM 効果音 環境音 音楽 素材 配布 モデル さらに表示",
+      "keywords": "アセットストア カタログ Poly Haven ambientCG AI LOWPOLY PROPS ローポリ GLB CC0 音蔵 音声 楽曲 SFX BGM 効果音 環境音 音楽 素材 配布 モデル さらに表示",
       "related": [
         "assets",
         "materials",
@@ -218,7 +555,8 @@
       "related": [
         "materials",
         "sky-and-water",
-        "performance"
+        "performance",
+        "video-tutorials"
       ]
     },
     {
@@ -231,7 +569,8 @@
       "related": [
         "lighting",
         "external-resources",
-        "collision"
+        "collision",
+        "video-tutorials"
       ]
     },
     {
@@ -257,7 +596,8 @@
       "related": [
         "play-mode",
         "objects",
-        "interactivity"
+        "interactivity",
+        "video-tutorials"
       ]
     },
     {
@@ -309,7 +649,8 @@
       "related": [
         "objects",
         "materials",
-        "save-and-open"
+        "save-and-open",
+        "video-tutorials"
       ]
     },
     {
@@ -322,7 +663,8 @@
       "related": [
         "audio",
         "external-resources",
-        "ai-connection"
+        "ai-connection",
+        "video-tutorials"
       ]
     },
     {
@@ -387,7 +729,8 @@
       "related": [
         "publishing",
         "textures",
-        "particles"
+        "particles",
+        "video-tutorials"
       ]
     },
     {
@@ -487,9 +830,155 @@
         "sky-and-water",
         "textures"
       ]
+    },
+    {
+      "slug": "course-start-here",
+      "title": "制作する環境と保存先を決める",
+      "description": "ブラウザ、デスクトップ、iPadから制作環境を選び、自動保存とバックアップの場所を確認します。",
+      "group": "learn",
+      "file": "course-start-here.md",
+      "keywords": "環境 ブラウザ デスクトップ iPad 始め方 セットアップ 保存先",
+      "related": [
+        "learning-course",
+        "installation",
+        "ipad",
+        "save-and-open"
+      ],
+      "next": "lesson-01-01"
+    },
+    {
+      "slug": "course-save-backup",
+      "title": "保存して開き直し、バックアップを残す",
+      "description": "保存完了を確認し、プロジェクトを開き直して、.xriftstudioで復元できるバックアップを残します。",
+      "group": "learn",
+      "file": "course-save-backup.md",
+      "keywords": "保存 自動保存 バックアップ 復元 .xriftstudio 引き継ぎ",
+      "related": [
+        "learning-course",
+        "save-and-open",
+        "hierarchy-transfer",
+        "recovery"
+      ],
+      "next": "lesson-02-01"
+    },
+    {
+      "slug": "course-test-world",
+      "title": "公開前のワールドを同じ順番でテストする",
+      "description": "開始位置、床、仕掛け、音を同じ順番で確認し、Playだけでは分からない項目を分けます。",
+      "group": "learn",
+      "file": "course-test-world.md",
+      "keywords": "テスト 動作確認 Play Stop 再確認 公開前 音",
+      "related": [
+        "learning-course",
+        "play-mode",
+        "collision",
+        "interactivity"
+      ],
+      "next": "course-optimize-world"
+    },
+    {
+      "slug": "course-optimize-world",
+      "title": "容量を調べ、必要な画像だけ軽くする",
+      "description": "端末ごとの確認場所から大きい素材を探し、見た目と容量を比較しながら画像を変換します。",
+      "group": "learn",
+      "file": "course-optimize-world.md",
+      "keywords": "容量 軽量化 最適化 テクスチャ VRAM KTX2 復元",
+      "related": [
+        "learning-course",
+        "performance",
+        "textures",
+        "publishing"
+      ],
+      "next": "course-publish-prepare"
+    },
+    {
+      "slug": "course-publish-prepare",
+      "title": "公開前のバックアップと作品情報を整える",
+      "description": "公開前にタイトル、説明、サムネイル、素材の利用条件とバックアップを確認します。",
+      "group": "learn",
+      "file": "course-publish-prepare.md",
+      "keywords": "公開 準備 タイトル 説明 サムネイル 利用条件",
+      "related": [
+        "learning-course",
+        "publishing",
+        "performance",
+        "save-and-open"
+      ],
+      "next": "course-publish-account"
+    },
+    {
+      "slug": "course-publish-account",
+      "title": "公開用のアカウントを確認する",
+      "description": "公開先のアカウントと端末別の認証方法を確認し、秘密情報を安全に扱います。",
+      "group": "learn",
+      "file": "course-publish-account.md",
+      "keywords": "公開 アカウント ログイン 認証 APIキー 権限",
+      "related": [
+        "learning-course",
+        "publishing",
+        "recovery"
+      ],
+      "next": "course-publish-upload"
+    },
+    {
+      "slug": "course-publish-upload",
+      "title": "ワールドを一度だけ送信する",
+      "description": "公開先を確認して一度送信し、処理中・完了・結果不明のときに取る行動を区別します。",
+      "group": "learn",
+      "file": "course-publish-upload.md",
+      "keywords": "公開 アップロード 送信 結果不明 再送 保存",
+      "related": [
+        "learning-course",
+        "publishing",
+        "recovery"
+      ],
+      "next": "course-publish-review"
+    },
+    {
+      "slug": "course-publish-review",
+      "title": "審査と一覧への公開を確認する",
+      "description": "送信後の審査状態、現在使用中の版、ワールド一覧への掲載を別々に確認します。",
+      "group": "learn",
+      "file": "course-publish-review.md",
+      "keywords": "審査 公開状況 ACTIVE PENDING REJECTED 一覧 限定公開",
+      "related": [
+        "learning-course",
+        "publishing"
+      ],
+      "next": "course-publish-update"
+    },
+    {
+      "slug": "course-publish-update",
+      "title": "同じワールドを更新する",
+      "description": "公開済みの元プロジェクトから更新先と変更内容を確認し、新しい版を送信します。",
+      "group": "learn",
+      "file": "course-publish-update.md",
+      "keywords": "更新 再公開 公開先 バージョン 履歴",
+      "related": [
+        "learning-course",
+        "publishing",
+        "save-and-open"
+      ],
+      "next": "course-publish-invite"
+    },
+    {
+      "slug": "course-publish-invite",
+      "title": "ワールドに入り、友達を招く",
+      "description": "ワールドとインスタンスを区別し、参加範囲やゲスト許可を確かめてから共有します。",
+      "group": "learn",
+      "file": "course-publish-invite.md",
+      "keywords": "招待 インスタンス 参加 URL フレンド ゲスト パブリック",
+      "related": [
+        "learning-course",
+        "publishing",
+        "play-mode"
+      ],
+      "next": "learning-course"
     }
   ],
   "homeTopics": [
+    "learning-course",
+    "video-tutorials",
     "assets",
     "materials",
     "lighting",
@@ -498,6 +987,7 @@
     "publishing"
   ],
   "firstSteps": [
+    "course-introduction",
     "installation",
     "first-world",
     "save-and-open",

@@ -1,5 +1,7 @@
 # 歩ける床と開始位置を作る
 
+動画で操作を確認する：[床Collider・SpawnPoint・Playを確認する](./lesson-01-05.md)
+
 プレイヤーが床に立つには、床のColliderによる衝突判定が必要です。床が見えるのに落ちる場合は、Colliderとプレイヤーの開始位置を確認してください。
 
 ![床を選択し、Box Colliderの有効状態と固定のRigid Bodyを表示した状態](./media/collision.png)
