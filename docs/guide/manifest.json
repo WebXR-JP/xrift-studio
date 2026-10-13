@@ -538,7 +538,7 @@
       "description": "「アセットストア」のカタログで、モデル、マテリアル、空、水、ギミックの見本を探せます。",
       "group": "create",
       "file": "external-resources.md",
-      "keywords": "アセットストア カタログ Poly Haven ambientCG AI LOWPOLY PROPS ローポリ GLB CC0 音蔵 音声 楽曲 SFX BGM 効果音 環境音 音楽 素材 配布 モデル さらに表示",
+      "keywords": "アセットストア カタログ Poly Haven ambientCG AI LOWPOLY PROPS ローポリ GLB CC0 音蔵 音声 楽曲 SFX BGM 効果音 環境音 音楽 素材 配布 モデル 3Dモデルを設定 選択Entity 差し替え Mesh Renderer Transform Collider さらに表示",
       "related": [
         "assets",
         "materials",
@@ -670,10 +670,10 @@
     {
       "slug": "ai-connection",
       "title": "AIに編集を手伝ってもらう",
-      "description": "AIクライアントやChatGPTを接続し、モデルと思考量を選んでSceneの編集を頼めます。Planと変更後の確認を説明します。",
+        "description": "AIクライアントやChatGPTを接続し、会話を引き継いでSceneを少しずつ編集します。モデルと思考量、Plan、履歴、続ける・戻す操作を説明します。",
       "group": "behavior",
       "file": "ai-connection.md",
-      "keywords": "AI MCP MCP接続 設定 接続 Claude Codex 登録 ChatGPT 接続カード タブ チャット Plan プラン 相談 反映 停止 破棄 現在のScene 調整 進捗 Inspector ログイン 認証 復元 エラー ワールド生成 モデル 思考量 モデルの既定 速さ優先 標準 じっくり reasoningEffort 日本語 外部3Dモデル Poly Haven 取り込み CC0 音蔵 音声 glTF PBR マテリアル",
+        "keywords": "AI MCP MCP接続 設定 接続 Claude Codex 登録 ChatGPT 接続カード タブ チャット セッション 履歴 コピー Continue Revert 続ける 戻す Plan プラン 相談 反映 停止 破棄 現在のScene 調整 進捗 Inspector ログイン 認証 復元 エラー ワールド生成 モデル 差し替え 位置 回転 Skybox BGM Collider 思考量 モデルの既定 速さ優先 標準 じっくり reasoningEffort 日本語 外部3Dモデル Poly Haven ambientCG AI LOWPOLY PROPS 取り込み CC0 音蔵 音声 glTF PBR マテリアル",
       "related": [
         "save-and-open",
         "first-world",

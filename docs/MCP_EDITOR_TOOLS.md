@@ -74,6 +74,8 @@ snapshotへの適用を防ぐためだ。複数clientが同時に触っても編
 
 MCPの要求は常にshell (`App.tsx`) が受け取る。`project` toolはshellが処理し、それ以外は開いているEditorが処理する。Editorが無いあいだはshellが`EDITOR_UNAVAILABLE`を返し、`list_projects`、`open_project`、`create_project`を案内する。EditorはMCPのlistenerを登録した時点でshellへbridge（最新bundle、保存、退出）を登録し、shellはこのbridgeを通じて公開と閉じる操作を行う。
 
+`set_entity_model`は既存EntityへAssetsのModelを設定し、Mesh Rendererがなければ追加する。`projectId`・`sceneId`・`expectedRevision`・`entityId`・`modelAssetId`を渡す。Mesh Rendererが複数ある場合は`componentId`も指定する。名前・Transform・他のComponents・手動の子を保ち、同じEntityを更新する。元モデルの既定Materialやポーズは新モデルに合わせる。自動Box Colliderは新しい寸法に合わせ、手動Box Colliderは保つ。元の生成子にあったMesh Colliderは新モデルへ引き継ぐ。モデルの一部への適用、手動の子やComponentを失う差し替え、別の形状モデルを使うColliderがある場合は拒否する。Editで読み込み済みのModelだけを扱い、素材の取り込みや新Entityの配置は行わない。`get_entity_components`と`capture_scene_view`で結果を確認する。
+
 ## instructions と description の役割
 
 利用者のプロジェクトに接続したAIクライアントは、serverの`instructions`とtoolのdescriptionを読む。このリポジトリのスキルや文書は届かないため、制作手順は`instructions`の先頭に書く。各toolのdescriptionには、機能、選ぶ基準、実行後の確認、失敗しやすい条件を記す。採用するかは設計図の内容で決め、descriptionに一律の禁止は書かない。
@@ -103,7 +105,7 @@ document toolの戻り値には`harness`が付くことがある。同じ種類�
 
 ### ChatGPTによる現在のSceneの編集
 
-`get_chatgpt_connection`, `connect_chatgpt`, `disconnect_chatgpt`, `list_chatgpt_models`, `open_chatgpt_panel`, `generate_chatgpt_world`, `get_chatgpt_generation`, `apply_chatgpt_plan`, `cancel_chatgpt_generation`
+`get_chatgpt_connection`, `connect_chatgpt`, `disconnect_chatgpt`, `list_chatgpt_models`, `open_chatgpt_panel`, `generate_chatgpt_world`, `get_chatgpt_generation`, `apply_chatgpt_plan`, `cancel_chatgpt_generation`, `list_chatgpt_sessions`, `get_chatgpt_session`, `manage_chatgpt_session`, `revert_chatgpt_generation`
 
 `connect_chatgpt`はブラウザでの認証を開始して直ちに返す。本人が許可した後、`get_chatgpt_connection`で`connecting: false`、`restoring: false`、`signedIn: true`、`planUsageEnabled: true`を確認する。失敗理由は`error`に残る。更新用の認証情報はOSの安全な保存先に保管し、Studioの起動時に復元する。認証情報をMCPやプロジェクトへ返さない。XRiftの`login`とは別の接続で、接続・状態確認はプロジェクトを開かずに使える。外部MCPクライアントの登録は「設定」の「MCP接続」から行う。
 
@@ -111,11 +113,15 @@ document toolの戻り値には`harness`が付くことがある。同じ種類�
 
 `generate_chatgpt_world`には最新の`get_editor_context`から`projectId`・`sceneId`・`expectedRevision`、選んだ`model`、2000文字以内の`prompt`を渡す。任意の`reasoningEffort`は`none`・`minimal`・`low`・`medium`・`high`・`xhigh`・`max`のうち、選択モデルの`supportedReasoningEfforts`に含まれる値だけを指定する。省略時は推論APIへ思考量を送らず、モデル側の既定設定を保つ。モデル情報がない場合も省略する。非対応の指定は推論APIへ送る前に拒否する。`options`は`models`・`materials`・`audio`のbooleanを持つオブジェクトで、省略時はすべて有効。Editで、素材の取り込みなど他の処理が完了していることが必要。Itemプロジェクトでは生成できない。
 
-生成には接続アカウントの利用枠を使う。開始の応答は`generationId`と`status: "running"`を返す。既定は`target: "current"`、`mode: "build"`。現在のSceneで既存Entityの位置・回転・大きさ・名前を調整し、必要なEntityを追加する。追加と調整は合わせて最大32件。`target: "new"`を明示すると従来どおり別のワールドを作る。
+生成には接続アカウントの利用枠を使う。開始の応答は`generationId`と`status: "running"`を返す。既定は`target: "current"`、`mode: "build"`。現在のSceneで既存Entityの位置・回転・大きさ・名前、モデル・Material、Skybox・Audio Source・Colliderを調整し、必要なEntityを追加する。内部では小さいPlanに分け、`hasMore`・`remainingWork`で残りの作業を示す。利用者に内部JSONや件数の調整を要求しない。`target: "new"`を明示すると別のワールドを作る。
 
 `mode: "plan"`はPlanの検証までを行い、`status: "planned"`と公開用のPlan概要を返す。Sceneやプロジェクトのファイルは変更しない。内容を確認した後、最新の`get_editor_context`から`projectId`・`sceneId`・`expectedRevision`と`generationId`を`apply_chatgpt_plan`へ渡す。作成済みのPlanを実行し、再推論やモデル・思考量の変更は行わない。元の作品とSceneを開いていることが必要で、古いrevisionやPlanの対象Entityの変更は拒否する。`cancel_chatgpt_generation`は未反映のPlanを破棄するか、実行中の制作を停止する。
 
-`get_chatgpt_generation`で同じIDを確認し、`progress`の`phase`・`message`（実行中の工程）、`completed`・`total`（保存済みの件数）、`recentEvents`（直近の実行結果）、`projectId`（生成先）を読む。状態は`running`・`planned`・`completed`・`cancelled`・`failed`。開始や途中の進行表示を完了と扱わない。検証後に下書きを保存し、素材の取り込みとEntityの調整・配置を順次進め、各工程の結果を保存する。途中の失敗や停止でも保存済みの結果を残す。停止は反映済みの変更を取り消さない。`completed`の保存先、または`failed`のエラーを確認し、`get_editor_context`と`capture_scene_view`で実物を確認する。制作中に作品やSceneが切り替わった場合は追加を停止する。公開は行わない。直近8件の結果をStudio終了まで保持する。
+`get_chatgpt_generation`で同じIDを確認し、`progress`の`phase`・`message`（実行中の工程）、`completed`・`total`（保存済みの件数）、`recentEvents`（直近の実行結果）、`projectId`（生成先）を読む。状態は`running`・`planned`・`completed`・`cancelled`・`failed`。開始や途中の進行表示を完了と扱わない。検証後に下書きを保存し、素材の取り込みとEntityの調整・配置を順次進め、各工程の結果を保存する。途中の失敗や停止でも保存済みの結果を残す。停止は反映済みの変更を取り消さない。`completed`の保存先、または`failed`のエラーを確認し、`get_editor_context`と`capture_scene_view`で実物を確認する。制作中に作品やSceneが切り替わった場合は追加を停止する。公開は行わない。会話の公開履歴は端末へ保存し、Planの実行用データと変更を戻す控えはStudio終了まで保持する。
+
+`list_chatgpt_sessions`は現在の作品・Sceneの会話一覧、`get_chatgpt_session`は`sessionId`の会話とコピー用の全文を返す。`manage_chatgpt_session`は最新の作品・Scene・revisionで`create`・`select`・`rename`・`delete`を行う。履歴削除ではSceneを変更しない。`generate_chatgpt_world`の`sessionId`で会話を引き継ぎ、直近の相談と現在のSceneを使う。履歴は端末に最大20チャット・各30件・全体3MiBで保持する。再起動時には実行中・未反映Planを終了状態にし、失われた処理を実行中と表示しない。
+
+`revert_chatgpt_generation`は最新の作品・Scene・revisionと`generationId`を受け、依頼前のScene・Assetsを復元して保存する。`revertAvailable`が必要で、後の手動編集や別の依頼があると拒否する。控えはStudio起動中の直近8件までで、再起動後には使用できない。ダウンロード済みのファイルと会話履歴は削除しない。
 
 `disconnect_chatgpt`は認証・復元・推論中の解除を拒否する。Studio内とOSの保存先から接続を消し、ChatGPT側のリフレッシュトークンも失効させる。遠隔の失効を確認できなかった場合は返された`error`に従ってChatGPTの設定を確認する。
 

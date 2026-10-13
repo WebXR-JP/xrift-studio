@@ -29,8 +29,12 @@ on:
       - 'src-tauri/src/mcp.rs'
       - 'src-tauri/src/mcp_tool_names.rs'
       - 'src-tauri/src/lib.rs'
-      - 'e2e/chatgpt-tabs.spec.ts'
-      - 'e2e/chatgpt-context-ui.spec.ts'
+      - 'e2e/chatgpt-*.ts'
+      - 'e2e/model-assignment.*'
+      - 'src/lib/visual-editor/external-store.ts'
+      - 'src/lib/visual-editor/model-assignment.ts'
+      - 'src/components/visual-editor/ChatgptSessionBar.tsx'
+      - 'src/components/visual-editor/useChatgptSessions.ts'
       - 'e2e/publish-readiness-race.spec.ts'
       - 'e2e/editor-ui-polish.spec.ts'
       - 'e2e/script-workspace.spec.ts'
@@ -40,8 +44,9 @@ on:
       - 'src/lib/application-bootstrap.*'
       - 'src/release-e2e/mock-tauri.ts'
       - 'src/lib/visual-editor/chatgpt-*.ts'
-      - 'scripts/chatgpt-world.test.mjs'
-      - 'scripts/chatgpt-generation.test.mjs'
+      - 'scripts/chatgpt-*.test.mjs'
+      - 'scripts/model-assignment.test.mjs'
+      - 'scripts/external-store-merge.test.mjs'
       - 'scripts/mcp-chatgpt-contract.test.mjs'
       - 'scripts/chatgpt-panel-ui.mjs'
       - 'scripts/vite-guide.mjs'
@@ -73,14 +78,14 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm e2e:typecheck
       - run: pnpm mcp:tool-names --check
-      - run: node --test scripts/chatgpt-world.test.mjs scripts/chatgpt-generation.test.mjs scripts/mcp-chatgpt-contract.test.mjs scripts/guide.test.mjs scripts/vite-guide.test.mjs
+      - run: node --test scripts/chatgpt-world.test.mjs scripts/chatgpt-generation.test.mjs scripts/chatgpt-sessions.test.mjs scripts/chatgpt-scene-resources.test.mjs scripts/chatgpt-builtin-catalog.test.mjs scripts/chatgpt-resources.test.mjs scripts/model-assignment.test.mjs scripts/external-store-merge.test.mjs scripts/mcp-chatgpt-contract.test.mjs scripts/guide.test.mjs scripts/vite-guide.test.mjs
       - name: Verify real panel UI with isolated native IPC
         env:
           XRIFT_TEST_CHROME: /usr/bin/google-chrome
         run: node scripts/chatgpt-panel-ui.mjs
       - run: pnpm exec playwright install --with-deps chromium
       - name: Verify Editor tabs and MCP generation through the real App
-        run: pnpm exec playwright test e2e/chatgpt-tabs.spec.ts e2e/chatgpt-context-ui.spec.ts e2e/bootstrap-recovery.spec.ts e2e/canvas-event-lifecycle.spec.ts e2e/publish-readiness-race.spec.ts e2e/editor-ui-polish.spec.ts e2e/script-workspace.spec.ts
+        run: pnpm exec playwright test e2e/chatgpt-tabs.spec.ts e2e/chatgpt-context-ui.spec.ts e2e/chatgpt-connection-reasoning.spec.ts e2e/chatgpt-sessions.spec.ts e2e/chatgpt-scene-settings.spec.ts e2e/model-assignment.spec.ts e2e/bootstrap-recovery.spec.ts e2e/canvas-event-lifecycle.spec.ts e2e/publish-readiness-race.spec.ts e2e/editor-ui-polish.spec.ts e2e/script-workspace.spec.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:
