@@ -6,7 +6,12 @@ type EditorContext = { projectId: string; sceneId: string; revision: number; sav
 const options = { models: false, materials: false, audio: false };
 declare global {
   interface Window {
-    __XRIFT_CHATGPT_BRIDGE_GATE__?: { waiting: boolean; release: (() => void) | null };
+    __XRIFT_CHATGPT_BRIDGE_GATE__?: {
+      waiting: boolean;
+      allowNewSubscriptions: boolean;
+      released: boolean;
+      releases: (() => void)[];
+    };
   }
 }
 
@@ -123,17 +128,19 @@ test("新Worldのbridge登録待ちに別作品を開いても、その作品へ
     const modulePath = "/src/lib/tauri.ts";
     const { tauri } = await import(/* @vite-ignore */ modulePath);
     const subscribe = tauri.onXriftMcpEditorRequest.bind(tauri);
-    const gate = { waiting: false, release: null as (() => void) | null };
+    const gate = { waiting: false, allowNewSubscriptions: false, released: false, releases: [] as (() => void)[] };
     window.__XRIFT_CHATGPT_BRIDGE_GATE__ = gate;
-    let armed = true;
-    // The next Editor's native listener is installed normally, but its bridge
-    // registration waits. Later Editors keep normal subscription behavior.
+    let pending = 0;
+    // Hold every subscription started for the new World, including the
+    // StrictMode rehearsal and actual mount. Capture the decision before the
+    // native await so opening B cannot accidentally release a pending A.
     tauri.onXriftMcpEditorRequest = async (handler: Parameters<typeof subscribe>[0]) => {
+      const shouldWait = !gate.allowNewSubscriptions;
       const dispose = await subscribe(handler);
-      if (armed) {
-        armed = false; gate.waiting = true;
-        await new Promise<void>(resolve => { gate.release = resolve; });
-        gate.waiting = false;
+      if (shouldWait && !gate.released) {
+        pending++; gate.waiting = true;
+        await new Promise<void>(resolve => { gate.releases.push(resolve); });
+        pending--; gate.waiting = pending > 0;
       }
       return dispose;
     };
@@ -156,6 +163,7 @@ test("新Worldのbridge登録待ちに別作品を開いても、その作品へ
 
     // The generation is background work, so the ordinary MCP open operation
     // can switch projects while the new World's bridge is still pending.
+    await page.evaluate(() => { window.__XRIFT_CHATGPT_BRIDGE_GATE__!.allowNewSubscriptions = true; });
     const opened = await call(page, "open_project", { path: other.path });
     expect(opened.ok, JSON.stringify(opened)).toBe(true);
     await expect.poll(async () => (await generation(page, generationId)).status).toBe("failed");
@@ -177,7 +185,13 @@ test("新Worldのbridge登録待ちに別作品を開いても、その作品へ
     expect(await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.uploadAttempts)).toEqual([]);
     expect(await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.unhandledCommands)).toEqual([]);
   } finally {
-    await page.evaluate(() => { window.__XRIFT_CHATGPT_BRIDGE_GATE__?.release?.(); }).catch(() => undefined);
+    await page.evaluate(() => {
+      const gate = window.__XRIFT_CHATGPT_BRIDGE_GATE__;
+      if (!gate) return;
+      gate.allowNewSubscriptions = true; gate.released = true;
+      for (const release of gate.releases.splice(0)) release();
+      gate.waiting = false;
+    }).catch(() => undefined);
   }
 });
 
