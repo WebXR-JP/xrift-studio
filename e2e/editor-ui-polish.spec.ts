@@ -19,6 +19,21 @@ async function openCreateMenu(page: Page) {
   return menu;
 }
 
+test("The project library opens MCP from shared app settings and returns to the same library", async ({ page }) => {
+  await page.goto("/e2e.html?scenario=ready");
+  const openSettings = page.getByRole("button", { name: "設定", exact: true });
+  await openSettings.click();
+  const settings = page.getByRole("dialog", { name: "XRift Studio", exact: true });
+  await settings.getByRole("button", { name: "MCP接続を開く", exact: true }).click();
+  await expect(settings).toBeHidden();
+  const mcp = page.getByRole("dialog", { name: "MCP接続", exact: true });
+  await expect(mcp).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(mcp).toBeHidden();
+  await expect(page.getByRole("heading", { name: "プロジェクト", exact: true })).toBeVisible();
+  await expect(openSettings).toBeFocused();
+});
+
 for (const width of [1280, 1600]) {
   test(`Header actions align and the utility/status dock does not cover the workspace (${width}px)`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
@@ -46,16 +61,34 @@ for (const width of [1280, 1600]) {
     expect(workspace!.y + workspace!.height).toBeLessThanOrEqual(footer!.y + 1);
     expect(footer!.y + footer!.height).toBeLessThanOrEqual(900);
 
-    const ai = dock.getByRole("button", { name: "AI接続", exact: true });
-    await ai.click();
-    const panel = dock.getByRole("dialog", { name: "AI接続", exact: true });
+    await expect(dock.getByRole("button", { name: "MCP接続", exact: true })).toHaveCount(0);
+    const ai = dock.getByRole("button", { name: "ChatGPTを開く", exact: true });
+    await expect(ai).toHaveText("");
+    const appSettings = dock.getByRole("button", { name: "設定", exact: true });
+    await appSettings.click();
+    const settings = page.getByRole("dialog", { name: "XRift Studio", exact: true });
+    await expect(settings).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(settings).toBeHidden();
+    await expect(appSettings).toBeFocused();
+    await appSettings.click();
+    await settings.getByRole("button", { name: "MCP接続を開く", exact: true }).click();
+    await expect(settings).toBeHidden();
+    const panel = page.getByRole("dialog", { name: "MCP接続", exact: true });
     await expect(panel).toBeVisible();
     const panelBox = await panel.boundingBox();
     expect(panelBox!.y).toBeGreaterThanOrEqual(0);
-    expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(footer!.y);
+    expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(900);
+    await expect(page.getByRole("tab", { name: "MCP接続を表示", exact: true })).toHaveCount(0);
+    await panel.getByRole("button", { name: "MCP接続を閉じる", exact: true }).click();
+    await expect(panel).toBeHidden();
+    await expect(page.locator('section[aria-labelledby="scene-view-heading"] canvas').first()).toBeVisible();
+    await appSettings.click();
+    await settings.getByRole("button", { name: "MCP接続を開く", exact: true }).click();
+    await expect(panel).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(panel).toHaveCount(0);
-    await expect(ai).toBeFocused();
+    await expect(panel).toBeHidden();
+    await expect(appSettings).toBeFocused();
   });
 }
 
@@ -99,6 +132,8 @@ test("Scale starts independent, including negative scale; linking remains opt-in
 
 for (const kind of ["world", "item"] as const) {
   test(`${kind}: project display default and user choice survive ordinary edits`, async ({ page }) => {
+    const frameErrors: string[] = [];
+    page.on("pageerror", error => frameErrors.push(error.message));
     await page.setViewportSize({ width: 1600, height: 1000 });
     await openVisualProject(page, kind, `display-${kind}`);
     const mode = page.getByRole("combobox", { name: "シーン表示モード", exact: true });
@@ -110,12 +145,40 @@ for (const kind of ["world", "item"] as const) {
     await expect(mode).toHaveValue("wireframe");
     await page.getByRole("banner").getByRole("button", { name: "元に戻す", exact: true }).click();
     await expect(mode).toHaveValue("wireframe");
+    for (const style of ["colliders", "unlit", "scene", "unlit", "wireframe"]) {
+      await mode.selectOption(style);
+      await expect(mode).toHaveValue(style);
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      await expect(page.getByRole("heading", { name: "ビジュアルエディターを表示できませんでした", exact: true })).toHaveCount(0);
+    }
+    expect(frameErrors).toEqual([]);
   });
 }
 
 
 test.describe("Touch entry points", () => {
   test.use({ hasTouch: true, viewport: { width: 1024, height: 768 } });
+
+  test("App settings stay usable without leaving the project on touch", async ({ page }, testInfo) => {
+    await openVisualProject(page, "world", "touch-app-settings");
+    const dock = page.getByRole("contentinfo", { name: "エディターのステータスバー" });
+    await expect(dock.getByRole("button", { name: "ChatGPTを開く", exact: true })).toHaveText("");
+    await expect(dock.getByRole("button", { name: "MCP接続", exact: true })).toHaveCount(0);
+    const openSettings = dock.getByRole("button", { name: "設定", exact: true });
+    await openSettings.tap();
+    const settings = page.getByRole("dialog", { name: "XRift Studio", exact: true });
+    const bounds = await settings.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.y).toBeGreaterThanOrEqual(0);
+    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(768);
+    await page.screenshot({ path: testInfo.outputPath("touch-app-settings.png") });
+    await settings.getByRole("button", { name: "MCP接続を開く", exact: true }).tap();
+    const mcp = page.getByRole("dialog", { name: "MCP接続", exact: true });
+    await expect(mcp).toBeVisible();
+    await mcp.getByRole("button", { name: "MCP接続を閉じる", exact: true }).tap();
+    await expect(mcp).toBeHidden();
+    await expect(page.getByRole("tree", { name: "シーンのEntity階層" })).toBeVisible();
+  });
 
   test("Selected rows retain editing without the old Hierarchy header action", async ({ page }) => {
     await openVisualProject(page, "world", "touch-row-actions");

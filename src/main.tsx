@@ -1,19 +1,5 @@
 import "./lib/react-performance-protection";
-import React from "react";
-import ReactDOM from "react-dom/client";
-import App from "./App";
-import { ToastProvider } from "./components/Toast";
-import { installVitePreloadRecovery } from "./lib/vite-preload-recovery";
-import "./index.css";
-import { GuideHost } from "./components/guide/GuideHost";
+import { startApplication } from "./lib/application-bootstrap";
 
-installVitePreloadRecovery();
-
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <ToastProvider>
-      <App />
-      <GuideHost />
-    </ToastProvider>
-  </React.StrictMode>,
-);
+// Shared React/R3F bundles must evaluate after the development capability guard.
+startApplication(() => import("./main-bootstrap"));

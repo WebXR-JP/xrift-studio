@@ -39,6 +39,7 @@ base64 = "0.22"
 sha2 = "0.10"
 ring = "0.17.14"
 getrandom = "0.3"
+keyring = { version = "3.6.3", default-features = false, features = ["windows-native", "apple-native", "sync-secret-service", "crypto-rust"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"

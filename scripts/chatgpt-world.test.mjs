@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "vite";
-const server = await createServer({ server: { middlewareMode: true }, appType: "custom" });
+const server = await createServer({ configFile: false, cacheDir: "node_modules/.vite-chatgpt-world-test", server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: "custom", optimizeDeps: { noDiscovery: true, include: [] } });
 const { parseChatgptWorldPlan, buildChatgptWorld } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-world.ts");
 const { placeChatgptAssets } = await server.ssrLoadModule('/src/lib/visual-editor/chatgpt-world.ts');
 const { applyExternalStoreInstall } = await server.ssrLoadModule('/src/lib/visual-editor/external-store.ts');
@@ -42,6 +42,49 @@ test("rejects arbitrary instructions and bounded-data violations before creating
   ]) assert.throws(() => parseChatgptWorldPlan(JSON.stringify(raw)));
   assert.throws(() => parseChatgptWorldPlan("not JSON"));
   assert.throws(() => parseChatgptWorldPlan("x".repeat(100001)));
+});
+test("strict schema optional nulls preserve default placement and are not persisted", () => {
+  const strict = { ...input, objects: input.objects.map(v => ({ externalId: null, materialExternalId: null, gltfMaterialId: null, rotation: null, ...v })) };
+  const before = JSON.stringify(strict);
+  const parsed = parseChatgptWorldPlan(before);
+  assert.deepEqual(parsed, input);
+  const built = buildChatgptWorld(parsed, "nullable-plan");
+  const ground = Object.values(built.scene.entities).find(v => v.name === "地面");
+  assert.equal(ground.components.find(c => c.type === "transform").rotation[0], -Math.PI / 2);
+  assert.equal(JSON.stringify(strict), before);
+  for (const field of ["name", "shape", "position", "scale"]) {
+    assert.throws(() => parseChatgptWorldPlan(JSON.stringify({ ...strict, objects: [{ ...strict.objects[0], [field]: null }] })));
+  }
+});
+test("invalid plans identify the object and field instead of a generic bounds error", () => {
+  const check = (patch, message) => assert.throws(() => parseChatgptWorldPlan(JSON.stringify({ ...input, objects: [input.objects[0], { ...input.objects[1], ...patch }] })), message);
+  check({ shape: "torus" }, /2番目.*形状.*box/);
+  check({ name: " " }, /2番目.*名前.*80文字/);
+  check({ position: [0, 51, 0] }, /2番目.*位置.*-50.*50/);
+  check({ scale: [1, 0, 1] }, /2番目.*スケール.*0.02.*40/);
+  check({ rotation: [0, 361, 0] }, /2番目.*回転.*360/);
+  check({ color: "red" }, /2番目.*未対応の項目/);
+  check({ externalId: "forged" }, /2番目.*外部素材.*候補/);
+  check({ materialExternalId: "forged" }, /2番目.*マテリアル.*候補/);
+  check({ gltfMaterialId: "forged" }, /2番目.*glTFマテリアル/);
+  assert.throws(() => parseChatgptWorldPlan(JSON.stringify({ ...input, title: "" })), /タイトル.*100文字/);
+  assert.throws(() => parseChatgptWorldPlan(JSON.stringify({ ...input, description: "x".repeat(601) })), /説明.*600文字/);
+  assert.throws(() => parseChatgptWorldPlan(JSON.stringify({ ...input, objects: [] })), /追加と調整.*32件/);
+});
+test("existing Entity edits are bounded, use context IDs and never accept raw documents or duplicate targets", () => {
+  const edits = [{ entityId: "current-entity", name: null, position: [2, 1, 0], scale: null, rotation: [0, 90, 0] }];
+  const raw = { title: "ベンチを調整", description: "通路を広げる", objects: [], edits };
+  const parsed = parseChatgptWorldPlan(JSON.stringify(raw), [], false, ["current-entity"]);
+  assert.deepEqual(parsed.edits, [{ entityId: "current-entity", position: [2,1,0], rotation: [0,90,0] }]);
+  for (const invalid of [
+    { ...raw, edits: [{ ...edits[0], entityId: "other-world-entity" }] },
+    { ...raw, edits: [edits[0], edits[0]] },
+    { ...raw, edits: [{ entityId: "current-entity", position: null, rotation: null }] },
+    { ...raw, edits: [{ ...edits[0], position: [0,51,0] }] },
+    { ...raw, edits: [{ ...edits[0], remove: true }] },
+    { ...raw, objects: Array(32).fill(input.objects[0]) },
+  ]) assert.throws(() => parseChatgptWorldPlan(JSON.stringify(invalid), [], false, ["current-entity"]));
+  assert.throws(() => parseChatgptWorldPlan(JSON.stringify(raw)));
 });
 const candidates = [{ providerId: 'poly-haven', externalId: 'bench', assetKind: 'model' }];
 const props = { ...input, objects: [input.objects[0], ...[0,1].map(i => ({ name: `外部ベンチ${i}`, shape: 'model', externalId: 'bench', position: [i*3,0,0], scale: [1,1,1], rotation: [0,90,0] }))] };

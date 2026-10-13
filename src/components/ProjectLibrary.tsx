@@ -84,6 +84,7 @@ type Props = {
   appUpdate: AppUpdateState;
   onCheckAppUpdate: () => void;
   onShowAppUpdate: () => void;
+  onOpenMcp?: () => void;
 };
 
 function compareProjects(sort: ProjectSort) {
@@ -130,6 +131,7 @@ export function ProjectLibrary({
   appUpdate,
   onCheckAppUpdate,
   onShowAppUpdate,
+  onOpenMcp,
 }: Props) {
   const openLink = useExternalLink();
   const [showAbout, setShowAbout] = useState(false);
@@ -330,6 +332,7 @@ export function ProjectLibrary({
         appUpdate={appUpdate}
         onCheckAppUpdate={onCheckAppUpdate}
         onShowAppUpdate={onShowAppUpdate}
+        onOpenMcp={onOpenMcp}
       />
       <SupportReportModal
         open={showSupport}

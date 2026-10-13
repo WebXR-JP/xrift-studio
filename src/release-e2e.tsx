@@ -1,19 +1,9 @@
 import "./lib/react-performance-protection";
-import React from "react";
-import ReactDOM from "react-dom/client";
-import App from "./App";
-import { ToastProvider } from "./components/Toast";
-import { GuideHost } from "./components/guide/GuideHost";
+import { startApplication } from "./lib/application-bootstrap";
 import { installReleaseE2EMock } from "./release-e2e/mock-tauri";
-import "./index.css";
 
-installReleaseE2EMock();
+// Fixtures may run as soon as the entry loads, before App's dynamic imports.
+// Keep the native environment stable even when the entry runs again during HMR.
+if (!window.__XRIFT_RELEASE_E2E__) installReleaseE2EMock();
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <ToastProvider>
-      <App />
-      <GuideHost />
-    </ToastProvider>
-  </React.StrictMode>,
-);
+startApplication(() => import("./release-e2e-bootstrap"));

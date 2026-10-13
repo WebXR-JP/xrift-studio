@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ExternalLink, Eye, EyeOff, Upload } from "lucide-react";
 import { imageDataUrlToPng } from "../lib/project-thumbnail";
-import { readBrowserFile } from "../lib/browser-project-storage";
+import { readBrowserFile, readBrowserUploadAttempt, writeBrowserUploadAttempt, clearBrowserUploadAttempt, type BrowserUploadAttempt } from "../lib/browser-project-storage";
 import { tauri } from "../lib/tauri";
 import {
   askBrowserToSaveXriftApiKey,
@@ -29,16 +29,17 @@ function metadataReady(bundle: PrototypeVisualProject): boolean {
 function hasSampleMetadata(bundle: PrototypeVisualProject): boolean {
   const { title, description } = bundle.project.metadata;
   return title.trim() === "新しいワールド" || title.trim() === "サンプルワールド" ||
+    title.trim() === "新しいアイテム" || title.trim() === "サンプルアイテム" ||
     description.trim() === DEFAULT_DESCRIPTION ||
     description.trim() === "React Three FiberとRapierで作られたサンプルワールドです";
 }
 
-function uploadedWorldId(result: XriftUploadResult): string {
-  return result.worldId ?? result.contentId ?? "";
+function uploadedContentId(result: XriftUploadResult): string {
+  return result.itemId ?? result.worldId ?? result.contentId ?? "";
 }
 
 /** One publish attempt. The API key lives only in this mounted dialog. */
-export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thumbnailCaptureBusy, thumbnailCaptureError, onCaptureThumbnail, onClose, onExport, onUploaded }: {
+export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thumbnailCaptureBusy, thumbnailCaptureError, onCaptureThumbnail, onClose, onUploaded }: {
   bundle: PrototypeVisualProject;
   projectPath: string;
   thumbnailRefreshKey: number;
@@ -60,6 +61,7 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
   const [credentialMessage, setCredentialMessage] = useState<string | null>(null);
   const tokenEdited = useRef(false);
   const [state, setState] = useState<WebUploadState>({ phase: "review" });
+  const [attemptLoading, setAttemptLoading] = useState(true);
   const [thumbnail, setThumbnail] = useState<Uint8Array | null>(null);
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [thumbnailLoading, setThumbnailLoading] = useState(true);
@@ -68,14 +70,34 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
   const running = state.phase === "running";
   const credentialBusy = credentialAction !== null;
   const isWorld = bundle.project.projectKind === "world";
+  const kind = bundle.project.projectKind;
+  const contentLabel = isWorld ? "ワールド" : "アイテム";
+  const scope = isWorld ? "write:worlds" : "write:items";
+  const resultsUrl = isWorld ? "https://app.xrift.net/worlds" : "https://app.xrift.net";
+  const resultsLabel = isWorld ? "ワールド一覧を開く" : "XRiftを開く";
   const complete = metadataReady(bundle);
   const sampleMetadata = hasSampleMetadata(bundle);
-  const targetWorldId = bundle.project.lastPublication?.worldId ?? bundle.project.lastPublication?.contentId;
+  const targetId = (isWorld ? bundle.project.lastPublication?.worldId : bundle.project.lastPublication?.itemId) ?? bundle.project.lastPublication?.contentId;
 
   useEffect(() => {
     dialog.current?.showModal();
     return () => dialog.current?.close();
   }, []);
+
+  const heldAttemptMessage = (attempt: BrowserUploadAttempt) => {
+    const target = attempt.targetId ? ` ${contentLabel}ID: ${attempt.targetId}` : "";
+    return `前回の送信結果が未確認です。XRiftで公開状態を確認してください。${target}`;
+  };
+
+  useEffect(() => {
+    let active = true;
+    void readBrowserUploadAttempt(projectPath).then(attempt => {
+      if (active && attempt) setState({ phase: "needs-check", message: heldAttemptMessage(attempt) });
+    }).catch(() => {
+      if (active) setState({ phase: "failed", message: "前回の送信記録を読み込めませんでした。公開画面を開き直してください。" });
+    }).finally(() => { if (active) setAttemptLoading(false); });
+    return () => { active = false; };
+  }, [projectPath]);
 
   useEffect(() => {
     if (!canSaveWithBrowser) return;
@@ -193,14 +215,14 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
   };
 
   const start = async () => {
-    if (running || !isWorld) return;
+    if (running || attemptLoading || (state.phase !== "review" && state.phase !== "failed")) return;
     if (!complete) {
       setState({ phase: "failed", message: "タイトルと説明を入力してください。「シーン設定」内の「公開情報」で編集できます。" });
       return;
     }
     const submittedToken = (token || tokenInput.current?.value || "").trim();
     if (!submittedToken) {
-      setState({ phase: "failed", message: "XRift APIキーを入力してください。XRiftの設定画面でwrite:worlds権限を付けて発行できます。" });
+      setState({ phase: "failed", message: `XRift APIキーを入力してください。XRiftの設定画面で${scope}権限を付けて発行できます。` });
       return;
     }
     setToken(submittedToken);
@@ -213,12 +235,24 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
     setCredentialMessage(null);
     setState({ phase: "running", label: "送信するファイルを準備しています", percent: 4 });
     let remoteStarted = false;
+    let attemptWritten = false;
     let result: XriftUploadResult;
     try {
+      const pending = await readBrowserUploadAttempt(projectPath);
+      if (pending) {
+        setState({ phase: "needs-check", message: heldAttemptMessage(pending) });
+        return;
+      }
+      const attempt: BrowserUploadAttempt = { kind, startedAt: new Date().toISOString(), targetId };
+      await writeBrowserUploadAttempt(projectPath, attempt);
+      attemptWritten = true;
       const { loadRuntimeShell, uploadVisualProjectFromWeb } = await import("../lib/visual-editor/web-upload");
-      const shellFiles = await loadRuntimeShell();
+      const shellFiles = await loadRuntimeShell(undefined, undefined, kind, (completed, total) => {
+        setState({ phase: "running", label: "公開用ファイルを準備しています",
+          percent: 4 + Math.floor(completed / Math.max(1, total) * 8), detail: `${completed} / ${total} ファイル` });
+      });
       result = await uploadVisualProjectFromWeb({
-        kind: "world",
+        kind,
         documents: {
           project: bundle.project,
           scenes: { [bundle.scene.sceneId]: bundle.scene },
@@ -228,7 +262,8 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
         token: submittedToken,
         shellFiles,
         thumbnail: thumbnail ?? undefined,
-        worldId: targetWorldId,
+        ...(isWorld ? { worldId: targetId } : { itemId: targetId }),
+        onRemoteCreated: (id) => writeBrowserUploadAttempt(projectPath, { ...attempt, targetId: id }),
         readAssetBytes: (relativePath) => readBrowserFile(projectPath, relativePath),
         report: (progress) => {
           if (progress.stage === "uploading" || progress.stage === "processing") remoteStarted = true;
@@ -239,6 +274,13 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const retrySafe = error instanceof Error && "retrySafe" in error && error.retrySafe === true;
+      if (attemptWritten && (!remoteStarted || retrySafe)) {
+        try { await clearBrowserUploadAttempt(projectPath); }
+        catch {
+          setState({ phase: "needs-check", message: `${message} 送信保留の記録を解除できませんでした。公開状態を確認してから解除してください。` });
+          return;
+        }
+      }
       setState(remoteStarted && !retrySafe ? { phase: "needs-check", message } : { phase: "failed", message });
       return;
     }
@@ -247,6 +289,7 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
     if (!canSaveWithBrowser || savedKeyInUse) setToken("");
     try {
       await onUploaded(bundle, result);
+      await clearBrowserUploadAttempt(projectPath);
       setState({ phase: "done", result });
     } catch (error) {
       setState({ phase: "save-failed", result, message: error instanceof Error ? error.message : String(error) });
@@ -257,9 +300,20 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
     setState({ phase: "running", label: "公開結果をこのブラウザに保存しています", percent: 99 });
     try {
       await onUploaded(bundle, result);
+      await clearBrowserUploadAttempt(projectPath);
       setState({ phase: "done", result });
     } catch (error) {
       setState({ phase: "save-failed", result, message: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
+  const releaseHeldAttempt = async () => {
+    setState({ phase: "running", label: "送信保留を解除しています", percent: 0 });
+    try {
+      await clearBrowserUploadAttempt(projectPath);
+      setState({ phase: "review" });
+    } catch {
+      setState({ phase: "needs-check", message: "送信保留を解除できませんでした。制作データを保存してから公開画面を開き直してください。" });
     }
   };
 
@@ -273,13 +327,12 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
   >
     <h2 id="web-upload-title" className="shrink-0 border-b border-zinc-200 px-5 py-4 text-base font-semibold">XRiftへ公開</h2>
     <div className="min-h-0 space-y-4 overflow-y-auto px-5 py-4 text-sm">
-      {!isWorld ? <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900">ブラウザ版から公開できるのはワールドです。アイテムはプロジェクトを書き出してデスクトップ版から公開してください。</p> : null}
-      {isWorld && state.phase !== "done" && state.phase !== "save-failed" ? <>
+      {state.phase !== "done" && state.phase !== "save-failed" ? <>
         <section aria-label="公開する作品" className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
           <p className="text-xs font-semibold text-zinc-500">公開する作品</p>
           <p className="font-semibold text-zinc-900">{bundle.project.metadata.title || "タイトル未設定"}</p>
           <p className="text-xs leading-relaxed text-zinc-600">{bundle.project.metadata.description || "説明未設定"}</p>
-          <p className="break-all text-xs text-zinc-500">{targetWorldId ? `更新先: ${targetWorldId}` : "新しいワールドとして送信"}</p>
+          <p className="break-all text-xs text-zinc-500">{state.phase === "needs-check" ? "送信結果を確認するまで、新しい送信は保留します。" : targetId ? `更新先: ${targetId}` : `新しい${contentLabel}として送信`}</p>
         </section>
         {!complete ? <p role="alert" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">タイトルと説明が未入力です。閉じて「シーン設定」内の「公開情報」で編集してください。</p> : null}
         {complete && sampleMetadata ? <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">タイトルまたは説明が初期値です。この内容で送信できます。作品に合わせて変える場合は「シーン設定」内の「公開情報」で編集してください。</p> : null}
@@ -305,14 +358,14 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
             <input ref={tokenInput} id="web-upload-token" type={showToken ? "text" : "password"} value={token} onChange={(event) => { tokenEdited.current = true; setSavedKeyInUse(false); setToken(event.target.value); setCredentialMessage(null); }} placeholder="xrift_sk_..." autoComplete="current-password" spellCheck={false} disabled={running} className="min-h-11 min-w-0 flex-1 rounded-md border border-zinc-300 px-3 font-mono text-sm focus-visible:border-brand-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-100" />
             <button type="button" onClick={() => setShowToken(!showToken)} disabled={running} aria-label={showToken ? "APIキーを隠す" : "APIキーを表示"} className="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-zinc-300 text-zinc-600 disabled:opacity-50">{showToken ? <EyeOff size={16} /> : <Eye size={16} />}</button>
           </div>
-          <p className="text-xs leading-relaxed text-zinc-500">XRiftの設定画面で<code>write:worlds</code>権限を付けて発行してください。XRift StudioはキーをプロジェクトやWeb Storageに保存しません。</p>
+          <p className="text-xs leading-relaxed text-zinc-500">XRiftの設定画面で<code>{scope}</code>権限を付けて発行してください。XRift StudioはキーをプロジェクトやWeb Storageに保存しません。</p>
           {canSaveWithBrowser ? <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-700">
             <p className="leading-relaxed text-zinc-600">送信が完了したら、この画面からブラウザのパスワード管理機能へキーを保存できます。保存と端末間の同期はブラウザの設定に従います。</p>
             {!token ? <button type="button" onClick={() => void chooseSavedKey()} disabled={running} className="font-medium text-brand-600 underline underline-offset-2 disabled:opacity-50">保存済みキーを選ぶ</button> : null}
           </div> : null}
           {credentialMessage ? <p role="status" className="text-xs text-zinc-600">{credentialMessage}</p> : null}
         </section>
-        <p className="text-xs leading-relaxed text-zinc-500">スクリプトを含むワールドはデスクトップ版から公開してください。</p>
+        <p className="text-xs leading-relaxed text-zinc-500">スクリプトを含む作品はデスクトップ版から公開してください。</p>
       </> : null}
       {running ? <div role="status" className="space-y-2">
         <p className="text-sm font-semibold">{state.label}</p>
@@ -321,25 +374,26 @@ export function WebUploadDialog({ bundle, projectPath, thumbnailRefreshKey, thum
       </div> : null}
       {state.phase === "done" || state.phase === "save-failed" ? <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
         <p className="font-semibold">{state.phase === "done" ? "XRiftへのファイル送信が完了しました" : "ファイル送信は完了しました"}</p>
-        <p className="break-all text-xs text-zinc-600">ワールドID: {uploadedWorldId(state.result)}</p>
+        <p className="break-all text-xs text-zinc-600">{contentLabel}ID: {uploadedContentId(state.result)}</p>
         {state.result.versionNumber !== undefined ? <p className="text-xs text-zinc-600">バージョン: {state.result.versionNumber}</p> : null}
-        {state.phase === "save-failed" ? <p role="alert" className="text-xs leading-relaxed text-rose-700">公開結果をこのブラウザに保存できませんでした。{state.message} 同じワールドを再送せず、まず保存をやり直してください。</p> : <p className="text-xs text-zinc-500">XRiftのマイワールドで、送信したワールドが再生できる状態か確認してください。</p>}
+        {state.phase === "save-failed" ? <p role="alert" className="text-xs leading-relaxed text-rose-700">公開結果をこのブラウザに保存できませんでした。{state.message} 同じ{contentLabel}を再送せず、まず保存をやり直してください。</p> : <p className="text-xs text-zinc-500">XRiftの{isWorld ? "マイワールド" : "マイアイテム"}で、送信した{contentLabel}が{isWorld ? "再生" : "使用"}できる状態か確認してください。</p>}
         {canSaveWithBrowser && !savedKeyInUse && token ? <div className="flex flex-wrap gap-2">
           {credentialSaveRequested ? <button type="button" onClick={() => void verifyCredential()} disabled={credentialBusy} className="preview-button preview-button-light min-h-10 text-xs disabled:opacity-50">{credentialAction === "verify" ? "保存済みキーを確認中…" : "保存済みキーを確認"}</button> : null}
           <button type="button" onClick={() => void saveCredential()} disabled={credentialBusy} className="preview-button preview-button-light min-h-10 text-xs disabled:opacity-50">{credentialAction === "save" ? "保存を依頼中…" : credentialSaveRequested ? "保存をもう一度依頼" : "APIキーをブラウザに保存"}</button>
         </div> : null}
         {credentialMessage ? <p role="status" className="text-xs text-zinc-600">{credentialMessage}</p> : null}
-        <p className="text-xs text-zinc-500">この画面を閉じるとPlay画面に戻ります。</p>
-        <a className="preview-button preview-button-light inline-flex min-h-10 text-xs" href="https://app.xrift.net/worlds" target="_blank" rel="noreferrer">ワールド一覧を開く <ExternalLink size={13} aria-hidden="true" /></a>
+        <p className="text-xs text-zinc-500">この画面を閉じると制作画面に戻ります。</p>
+        <a className="preview-button preview-button-light inline-flex min-h-10 text-xs" href={resultsUrl} target="_blank" rel="noreferrer">{resultsLabel} <ExternalLink size={13} aria-hidden="true" /></a>
       </div> : null}
       {state.phase === "failed" ? <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs leading-relaxed text-rose-700">{state.message}</p> : null}
-      {state.phase === "needs-check" ? <div role="alert" className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900"><p>{state.message}</p><p>送信結果を確認できません。XRiftのワールド一覧で公開状態を確かめてください。結果が分かるまで再送しないでください。</p><a href="https://app.xrift.net/worlds" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 underline">ワールド一覧を開く <ExternalLink size={12} aria-hidden="true" /></a></div> : null}
+      {state.phase === "needs-check" ? <div role="alert" className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900"><p>{state.message}</p><p>送信結果を確認できません。XRiftの{isWorld ? "マイワールド" : "マイアイテム"}で公開状態を確かめてください。結果が分かるまで再送しないでください。</p><a href={resultsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 underline">{resultsLabel} <ExternalLink size={12} aria-hidden="true" /></a></div> : null}
+      {state.phase === "needs-check" ? <p className="text-xs leading-relaxed text-zinc-600">XRiftで公開されていないことを確認した場合だけ、送信保留を解除してやり直してください。</p> : null}
     </div>
     <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-zinc-200 bg-white px-5 py-3">
       <button type="button" onClick={close} disabled={running || credentialBusy} className="preview-button preview-button-light min-h-11 disabled:opacity-50">{state.phase === "done" || complete ? "閉じる" : "編集に戻る"}</button>
-      {!isWorld ? <button type="button" onClick={onExport} className="preview-button preview-button-primary min-h-11">プロジェクトを書き出す</button> : null}
       {state.phase === "save-failed" ? <button type="button" onClick={() => void retrySavingResult(state.result)} className="preview-button preview-button-primary min-h-11">公開結果を保存し直す</button> : null}
-      {isWorld && (state.phase === "review" || state.phase === "failed") ? <button type="button" onClick={() => void start()} className="preview-button preview-button-primary min-h-11"><Upload size={15} aria-hidden="true" />{targetWorldId ? "このワールドを更新" : "ワールドをアップロード"}</button> : null}
+      {state.phase === "needs-check" ? <button type="button" onClick={() => void releaseHeldAttempt()} className="preview-button preview-button-light min-h-11">未公開を確認して送信保留を解除</button> : null}
+      {state.phase === "review" || state.phase === "failed" ? <button type="button" onClick={() => void start()} disabled={attemptLoading} className="preview-button preview-button-primary min-h-11 disabled:opacity-50"><Upload size={15} aria-hidden="true" />{targetId ? `この${contentLabel}を更新` : `${contentLabel}をアップロード`}</button> : null}
     </div>
   </dialog>;
 }

@@ -27,14 +27,14 @@ test("しかけ付きの3Dセットは、音とグラフごとシーンへ入る
 
   const assets = page.getByRole("region", { name: "Assets" });
   await assets.getByRole("button", { name: "アセットストア" }).click();
-  await page.getByRole("button", { name: /3Dセット/ }).click();
+  await page.getByRole("button", { name: /^ギミック/ }).click();
 
-  const shelf = page.getByRole("region", { name: "3Dセット一覧" });
-  await shelf.getByLabel("3Dセットを検索").fill("音の出るボタン");
+  const shelf = page.getByRole("region", { name: "ギミック一覧" });
+  await shelf.getByLabel("ギミックを検索").fill("音の出るボタン");
   await shelf.getByRole("button", { name: /音の出るボタン/ }).click();
 
   const detail = page.getByRole("complementary", {
-    name: "選択した3Dセットの詳細",
+    name: "選択したギミックの詳細",
   });
   // The lesson is the reason this set exists, and it has to be readable before
   // placing rather than only after.
@@ -91,12 +91,12 @@ for (const name of [
     test.setTimeout(180_000);
     await openBlankWorld(page);
     const assets = page.getByRole("region", { name: "Assets" });
-    const shelf = page.getByRole("region", { name: "3Dセット一覧" });
-    const detail = page.getByRole("complementary", { name: "選択した3Dセットの詳細" });
+    const shelf = page.getByRole("region", { name: "ギミック一覧" });
+    const detail = page.getByRole("complementary", { name: "選択したギミックの詳細" });
     const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
     await assets.getByRole("button", { name: "アセットストア" }).click();
-    await page.getByRole("button", { name: /3Dセット/ }).click();
-    await shelf.getByLabel("3Dセットを検索").fill(name);
+    await page.getByRole("button", { name: /^ギミック/ }).click();
+    await shelf.getByLabel("ギミックを検索").fill(name);
     await shelf.getByRole("button", { name: new RegExp(name) }).click();
     await detail.getByRole("button", { name: new RegExp(`${name}をシーンへ追加`) }).click();
     await expect(detail.getByText(/シーンへ配置し/)).toBeVisible();

@@ -2,20 +2,30 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { buildGuide } from "./guide/build.mjs";
 const types = {".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".mjs":"text/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".webp":"image/webp",".png":"image/png",".jpg":"image/jpeg",".svg":"image/svg+xml"};
-export function staticGuide({ publish = false } = {}) {
+export function staticGuide({ publish = false, build = buildGuide } = {}) {
   let config;
   return {
     name:"xrift-static-user-guide",
     configResolved(resolved) { config=resolved; },
     configureServer(server) {
       let pending, generation=0, built=-1;
-      server.watcher.add([path.join(config.root,"docs/guide"),path.join(config.root,"scripts/guide"),path.join(config.root,"src/lib/guide-utils.mjs")]);
-      server.watcher.on("all", (_event, file) => {
-        if (/\/(docs\/guide|scripts\/guide)\//.test(file.replaceAll("\\","/")) || file.endsWith("guide-utils.mjs")) {
+      const sourceDirectories = [path.resolve(config.root,"docs/guide"),path.resolve(config.root,"scripts/guide")];
+      const sourceUtils = path.resolve(config.root,"src/lib/guide-utils.mjs");
+      server.watcher.add([...sourceDirectories,sourceUtils]);
+      const onSourceChange = (_event, file) => {
+        const resolved = path.resolve(file);
+        if (resolved === sourceUtils || sourceDirectories.some(root => {
+          const relative = path.relative(root,resolved);
+          return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
+        })) {
           generation++;
-          server.ws.send({type:"full-reload",path:"/guide/*"});
+          // The guide rebuilds on its next request. Vite's full-reload wildcard
+          // also reloads the Editor and discards unsaved work. Generated guide
+          // files from another dev server must not invalidate this cache.
         }
-      });
+      };
+      server.watcher.on("all", onSourceChange);
+      server.httpServer?.once("close", () => server.watcher.off("all",onSourceChange));
       server.middlewares.use(async (req,res,next) => {
         let pathname;
         try { pathname = decodeURIComponent(new URL(req.url ?? "/", "http://localhost").pathname); } catch { res.statusCode=400;res.end("Invalid URL");return; }
@@ -24,7 +34,7 @@ export function staticGuide({ publish = false } = {}) {
         try {
           if (!pending && built !== generation) {
             const version=generation;
-            pending=buildGuide({outDir:".guide-dev/guide"}).then((result) => {built=version;return result;}).finally(() => {pending=undefined;});
+            pending=build({outDir:".guide-dev/guide"}).then((result) => {built=version;return result;}).finally(() => {pending=undefined;});
           }
           if (pending) await pending;
           const root=path.join(config.root,".guide-dev/guide"), relative=pathname.slice("/guide/".length)||"index.html";
@@ -37,7 +47,7 @@ export function staticGuide({ publish = false } = {}) {
       });
     },
     async closeBundle() {
-      if (publish && config.command === "build") await buildGuide({outDir:path.join(config.build.outDir,"guide")});
+      if (publish && config.command === "build") await build({outDir:path.join(config.build.outDir,"guide")});
     },
   };
 }

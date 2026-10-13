@@ -138,6 +138,7 @@ type Props = {
   projectPath: string;
   selected: string | null;
   onSelect: (rel: string, kind: FileKind) => void;
+  onBeforePathChange?: () => Promise<boolean>;
   onPathChanged?: (
     change:
       | { type: "rename"; oldRel: string; newRel: string }
@@ -159,6 +160,7 @@ export function FileTree({
   projectPath,
   selected,
   onSelect,
+  onBeforePathChange,
   onPathChanged,
   refreshKey,
 }: Props) {
@@ -179,6 +181,7 @@ export function FileTree({
   } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const changingPathRef = useRef(false);
 
   const loadDir = useCallback(
     async (rel: string): Promise<Node[]> => {
@@ -301,6 +304,7 @@ export function FileTree({
   };
 
   const commitRename = async (oldRel: string) => {
+    if (changingPathRef.current) return;
     const trimmed = renameValue.trim();
     if (!trimmed || trimmed === basenameOf(oldRel)) {
       setRenaming(null);
@@ -311,7 +315,9 @@ export function FileTree({
       return;
     }
     const newRel = dirOf(oldRel) ? `${dirOf(oldRel)}/${trimmed}` : trimmed;
+    changingPathRef.current = true;
     try {
+      if (onBeforePathChange && !(await onBeforePathChange())) return;
       await tauri.renamePath(projectPath, oldRel, newRel);
       toast({
         kind: "success",
@@ -327,6 +333,8 @@ export function FileTree({
         title: "名前変更に失敗しました",
         description: `${e}`,
       });
+    } finally {
+      changingPathRef.current = false;
     }
   };
 
@@ -336,9 +344,11 @@ export function FileTree({
   };
 
   const performDelete = async () => {
-    if (!confirmDelete) return;
+    if (!confirmDelete || changingPathRef.current) return;
+    changingPathRef.current = true;
     setDeleting(true);
     try {
+      if (onBeforePathChange && !(await onBeforePathChange())) return;
       await tauri.deletePath(projectPath, confirmDelete.rel);
       toast({
         kind: "success",
@@ -357,6 +367,7 @@ export function FileTree({
         description: `${e}`,
       });
     } finally {
+      changingPathRef.current = false;
       setDeleting(false);
     }
   };

@@ -4,7 +4,7 @@ import { createServer } from "vite";
 
 // Run the real controller through Vite's development TS loader. The encoder
 // and sink are controlled so stop/read/write races are deterministic.
-const server = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false, ws: false, watch: null }, optimizeDeps: { noDiscovery: true }, appType: "custom" });
+const server = await createServer({ configFile: false, cacheDir: "node_modules/.vite-recording-session-tests", server: { middlewareMode: true, hmr: false, ws: false, watch: null }, optimizeDeps: { noDiscovery: true }, appType: "custom" });
 const { recordingSession } = await server.ssrLoadModule("/src/lib/recording/recording-session.ts");
 const { createTauriRecordingSink } = await server.ssrLoadModule("/src/lib/recording/recording-sink.ts");
 const { tauri } = await server.ssrLoadModule("/src/lib/tauri.ts");

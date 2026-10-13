@@ -1,4 +1,5 @@
 import { GuideLink } from "../guide/GuideLink";
+import { createStaticEditorCanvasEvents } from "../../lib/visual-editor/canvas-events";
 import { useEditorDevice, useEditorTouch } from "./useEditorDevice";
 import {
   MATERIAL_EXTENSION_DESCRIPTORS,
@@ -109,7 +110,6 @@ const EMPTY_ASSET_MANIFEST: AssetManifest = {
 
 // Thumbnails have no 3D pointer interactions. Avoid connecting DOM listeners
 // after an asynchronous Canvas creation outlives a project/pane transition.
-const staticMaterialPreviewEvents = () => ({ enabled: false, priority: 1 });
 
 function clampUnit(value: number): number {
   return Math.max(0, Math.min(1, value));
@@ -391,7 +391,7 @@ export function MaterialThumbnail({
   return (
     <div className={`overflow-hidden bg-slate-50 ${className}`}>
       <Canvas
-        events={staticMaterialPreviewEvents}
+        events={createStaticEditorCanvasEvents}
         frameloop="demand"
         dpr={[1, 1.25]}
         camera={{ position: [0, 0, 2.7], fov: 34 }}

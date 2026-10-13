@@ -62,6 +62,32 @@ function validateProjectPath(path: string): void {
   if (!isBrowserProjectPath(path)) throw new Error("ブラウザのプロジェクトを確認できません。");
 }
 
+/** Separate from successful publication records; contains no API key. */
+export type BrowserUploadAttempt = {
+  kind: ProjectKind;
+  startedAt: string;
+  targetId?: string;
+};
+
+export async function readBrowserUploadAttempt(projectPath: string): Promise<BrowserUploadAttempt | null> {
+  validateProjectPath(projectPath);
+  return transaction("readonly", (_files, settings, done) => {
+    const request = settings.get(`upload-attempt:${projectPath}`);
+    request.onsuccess = () => done(request.result ?? null);
+  });
+}
+
+/** Persist before any remote mutation so reloading cannot trigger duplicate creation. */
+export async function writeBrowserUploadAttempt(projectPath: string, attempt: BrowserUploadAttempt): Promise<void> {
+  validateProjectPath(projectPath);
+  await transaction<void>("readwrite", (_files, settings) => settings.put(attempt, `upload-attempt:${projectPath}`));
+}
+
+export async function clearBrowserUploadAttempt(projectPath: string): Promise<void> {
+  validateProjectPath(projectPath);
+  await transaction<void>("readwrite", (_files, settings) => settings.delete(`upload-attempt:${projectPath}`));
+}
+
 export function validateBrowserRelativePath(path: string): string {
   if (!path || path.length > 1024 || path !== path.trim() || /[\\:\x00-\x1f\x7f]/.test(path) ||
       path.split("/").some((part) => !part || part === "." || part === "..")) {

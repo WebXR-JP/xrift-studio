@@ -1,3 +1,4 @@
+import { createEditorCanvasEvents } from "../../lib/visual-editor/canvas-events";
 import {
   useCallback,
   useContext,
@@ -293,7 +294,7 @@ export function CustomMaterialPreview({
         runtimeInfo?.pbrFallback ? "gltf-pbr-fallback" : resolution.source.renderer
       }
     >
-      <Canvas
+      <Canvas events={createEditorCanvasEvents}
         frameloop={compact ? "demand" : "always"}
         dpr={[1, 1.5]}
         camera={{ position: [0, 0.15, 2.65], fov: 34 }}
@@ -451,7 +452,7 @@ function StandaloneCustomShaderPreview({
       data-custom-material-preview="classic-r3f"
       data-custom-material-renderer="standalone-shader"
     >
-      <Canvas
+      <Canvas events={createEditorCanvasEvents}
         frameloop={compact ? "demand" : "always"}
         dpr={[1, 1.5]}
         camera={{ position: [0, 0.1, 2.25], fov: 36 }}

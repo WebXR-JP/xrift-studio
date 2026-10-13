@@ -662,11 +662,16 @@ export async function publishVisualProject({
       percent: 96,
       cancelSafe: false,
     });
+    const parsed = parseXriftUploadResult(uploadOutput);
+    // The verified CLI sidecar owns the local upload timestamp. A server
+    // timestamp in stdout may describe a different point in the pipeline.
+    const { uploadedAt: _reportedUploadedAt, ...publicationRecord } = parsed;
     let publicationMetadata: CompilerPublicationMetadata;
     try {
       publicationMetadata = await tauri.persistCompilerPublicationMetadata(
         resolvedAuthoringPath,
         compilation.stagingPlan.stagingDirectoryName,
+        publicationRecord,
       );
     } catch (metadataError) {
       throw new Error(
@@ -674,7 +679,6 @@ export async function publishVisualProject({
       );
     }
 
-    const parsed = parseXriftUploadResult(uploadOutput);
     const parsedKindId = kind === "world" ? parsed.worldId : parsed.itemId;
     if (parsedKindId && parsedKindId !== publicationMetadata.id) {
       throw new Error(
@@ -796,6 +800,13 @@ async function uploadStagedProjectWithSdk(input: {
       input.stagingDirectoryName,
       uploaded.worldId,
       new Date().toISOString(),
+      {
+        worldId: uploaded.worldId,
+        contentId: uploaded.worldId,
+        versionId: uploaded.versionId,
+        versionNumber: uploaded.versionNumber,
+        contentHash: uploaded.contentHash,
+      },
     );
   } catch (error) {
     throw new Error(

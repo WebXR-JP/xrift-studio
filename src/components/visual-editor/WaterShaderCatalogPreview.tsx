@@ -1,3 +1,4 @@
+import { createEditorCanvasEvents } from "../../lib/visual-editor/canvas-events";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ClassicR3fMaterialShader } from "../../lib/visual-editor/custom-shader-contract";
@@ -68,7 +69,7 @@ export function WaterShaderCatalogPreview({ shader, wind, className = "h-full w-
           {!diagnostics.length && animated ? <span className="text-[10px]">別のプリセットを選び直してください。</span> : null}
         </div>
       ) : animated ? (
-        <Canvas frameloop={running ? "always" : "demand"} dpr={1}
+        <Canvas events={createEditorCanvasEvents} frameloop={running ? "always" : "demand"} dpr={1}
           camera={{ ...WATER_PREVIEW_CAMERA, near: 0.1, far: 500 }} gl={{ antialias: true, alpha: false }}
           onCreated={({ camera, gl }) => {
             camera.lookAt(...WATER_PREVIEW_TARGET);

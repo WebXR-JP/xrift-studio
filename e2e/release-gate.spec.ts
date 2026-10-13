@@ -253,7 +253,7 @@ test("狭い画面でもエディターのツールバーが一行に収まり�
   await expect(page.getByLabel("カメラ投影方式")).toBeVisible();
   await expect(page.getByLabel("シーン表示モード")).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "診断動画を録画" }),
+    page.getByRole("button", { name: "録画", exact: true }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(diagnostics).toBeHidden();
@@ -266,6 +266,7 @@ test("狭い画面でもエディターのツールバーが一行に収まり�
     assets.getByRole("button", { name: "アセットストア" }),
   ).toBeVisible();
   await expect(assets.getByRole("searchbox")).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("editor-toolbar-900px.png") });
 
   // A wide window keeps the same controls in the row itself.
   await page.setViewportSize({ width: 1600, height: 900 });
@@ -274,6 +275,7 @@ test("狭い画面でもエディターのツールバーが一行に収まり�
     page.getByRole("button", { name: "表示と診断の設定" }),
   ).toBeHidden();
   expect(await editorHeaderLayoutProblems(page)).toEqual([]);
+  await page.screenshot({ path: test.info().outputPath("editor-toolbar-1600px.png") });
 });
 
 const creationCases = [

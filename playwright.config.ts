@@ -1,6 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const isCI = Boolean(process.env.CI);
+// A dedicated port keeps a full audit independent of a running Tauri session.
+const port = process.env.XRIFT_E2E_PORT ?? "1420";
+const baseURL = `http://localhost:${port}`;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -28,7 +31,7 @@ export default defineConfig({
         ["html", { open: "never", outputFolder: "playwright-report" }],
       ],
   use: {
-    baseURL: "http://localhost:1420",
+    baseURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
@@ -45,8 +48,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm dev -- --host localhost --port 1420",
-    url: "http://localhost:1420/e2e.html?scenario=ready",
+    command: `pnpm exec vite --host localhost --port ${port} --mode e2e`,
+    url: `${baseURL}/e2e.html?scenario=ready`,
     reuseExistingServer: !isCI,
     timeout: 120_000,
     stdout: "ignore",

@@ -1,3 +1,4 @@
+import { createEditorCanvasEvents } from "../../lib/visual-editor/canvas-events";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BackSide, Color, SphereGeometry, Vector2, Vector3, Vector4, type ShaderMaterial } from "three";
@@ -151,7 +152,7 @@ function SkyShaderLivePreview({ shader, className = "h-full w-full", animated = 
         }));
       }}
     >
-      <Canvas
+      <Canvas events={createEditorCanvasEvents}
         frameloop={running ? "always" : "demand"}
         dpr={1}
         camera={{ position: [0, 0, 0], fov: 62, near: 0.05, far: 10 }}

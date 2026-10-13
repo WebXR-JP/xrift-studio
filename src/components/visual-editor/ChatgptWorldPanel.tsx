@@ -1,28 +1,70 @@
-import type { ChatgptAssetOptions } from "../../lib/tauri";
 import { useEffect, useRef, useState } from "react";
-import { tauri, type ChatgptConnection, type ChatgptModel } from "../../lib/tauri";
+import { ArrowUp, Bot, ClipboardList, LoaderCircle, Square, UserRound } from "lucide-react";
+import { tauri, type ChatgptAssetOptions, type ChatgptConnection, type ChatgptModel } from "../../lib/tauri";
+import { CHATGPT_ALL_ASSETS, type ChatgptGeneration, type ChatgptGenerationMode } from "../../lib/visual-editor/chatgpt-generation";
 
-export function ChatgptWorldPanel({ onGenerate, disabledReason }: { onGenerate: (model: string, prompt: string, options: ChatgptAssetOptions) => Promise<void>; disabledReason?: string }) {
+export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onCancel, disabledReason, generation, conversation = [], onSelectEntity }: {
+  onGenerate: (model: string, prompt: string, options: ChatgptAssetOptions, mode?: ChatgptGenerationMode) => Promise<void>;
+  onApplyPlan?: (generationId: string) => Promise<void>;
+  onCancel?: (generationId: string) => Promise<unknown>;
+  disabledReason?: string;
+  generation?: ChatgptGeneration | null;
+  conversation?: readonly ChatgptGeneration[];
+  onSelectEntity?: (entityId: string) => void;
+}) {
   const [connection, setConnection] = useState<ChatgptConnection | null>(null);
   const [models, setModels] = useState<ChatgptModel[]>([]);
-  const [model, setModel] = useState("");
-  const [assetOptions, setAssetOptions] = useState({ models: true, materials: true, audio: true });
+  const [model, setModel] = useState(generation?.model ?? "");
+  const [mode, setMode] = useState<ChatgptGenerationMode>("build");
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState<"loading" | "login" | "logout" | "generate" | null>("loading");
   const [error, setError] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const running = useRef(false);
   const mounted = useRef(true);
+  const modelAccount = useRef<string | null>(null);
+  const modelLoading = useRef<{ account: string; epoch: number } | null>(null);
+  const currentAccount = useRef<string | null>(null);
+  const accountEpoch = useRef(0);
   const sync = async (next: ChatgptConnection) => {
-    if (mounted.current) { setConnection(next); setModels([]); setModel(""); }
-    const list = next.planUsageEnabled ? await tauri.chatgptModels() : [];
     if (!mounted.current) return;
-    setConnection(next); setModels(list); setModel(current => list.some(m => m.slug === current) ? current : list[0]?.slug ?? "");
+    setConnection(next);
+    const account = next.planUsageEnabled ? next.accountId ?? next.email ?? "active" : null;
+    if (currentAccount.current !== account) {
+      currentAccount.current = account; accountEpoch.current++;
+      modelAccount.current = null; setModels([]); setModel(""); setConnectionError(null);
+    }
+    if (!account) { setModel(""); return; }
+    const epoch = accountEpoch.current;
+    if (next.connecting || next.restoring || modelAccount.current === account || (modelLoading.current?.account === account && modelLoading.current.epoch === epoch)) return;
+    const loading = { account, epoch };
+    modelLoading.current = loading;
+    // Model discovery must not delay the connection poll or hide disconnects.
+    void (async () => { try {
+      const list = await tauri.chatgptModels();
+      if (!mounted.current || currentAccount.current !== account || accountEpoch.current !== epoch) return;
+      modelAccount.current = account;
+      setModels(list); setModel(current => list.some(m => m.slug === current) ? current : list[0]?.slug ?? "");
+      setConnectionError(list.length ? null : "利用できるモデルがありません。アカウントの接続状態を確認してください。");
+    } catch (e) { if (mounted.current && currentAccount.current === account && accountEpoch.current === epoch) setConnectionError(e instanceof Error ? e.message : String(e)); }
+    finally { if (modelLoading.current === loading) modelLoading.current = null; } })();
   };
   useEffect(() => {
     mounted.current = true;
-    void tauri.chatgptStatus().then(sync).catch(e => { if (mounted.current) setError(String(e)); })
-      .finally(() => { if (mounted.current) setBusy(null); });
-    return () => { mounted.current = false; };
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      try {
+        const next = await tauri.chatgptStatus();
+        if (!active) return;
+        await sync(next);
+        if (active) setStatusError(null);
+      } catch (e) { if (active && mounted.current) setStatusError(e instanceof Error ? e.message : String(e)); }
+      finally { if (active && mounted.current) { setBusy(current => current === "loading" ? null : current); timer = setTimeout(refresh, 2000); } }
+    };
+    void refresh();
+    return () => { active = false; mounted.current = false; clearTimeout(timer); };
   }, []);
   const run = async (action: "login" | "logout" | "generate", task: () => Promise<void>) => {
     if (running.current) return;
@@ -31,41 +73,65 @@ export function ChatgptWorldPanel({ onGenerate, disabledReason }: { onGenerate: 
     catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : String(e)); }
     finally { running.current = false; if (mounted.current) setBusy(null); }
   };
-  return <section aria-labelledby="chatgpt-world-heading" className="space-y-2.5 rounded-md border border-slate-200 p-3">
-    <h3 id="chatgpt-world-heading" className="font-semibold text-slate-900">ChatGPTでワールドを作る</h3>
-    <p className="leading-5">作りたい場所を入力すると、新しいワールドを保存して開きます。選んだ種類の外部素材も取り込みます。</p>
-    {connection?.signedIn ? <p className="break-words text-slate-700">接続中：{connection.email ?? "ChatGPTアカウント"}</p> : null}
-    <div className="flex flex-wrap gap-2">
-      <button type="button" disabled={busy !== null} onClick={() => void run("login", async () => sync(await tauri.chatgptLogin()))}
-        className="rounded-md border border-slate-300 bg-white px-3 py-2 font-semibold text-slate-800 disabled:opacity-50">
-        {busy === "login" ? "ブラウザでログインを完了してください…" : connection?.signedIn ? "ChatGPTに再接続" : "ChatGPTに接続"}
-      </button>
-      {connection?.signedIn ? <button type="button" disabled={busy !== null} onClick={() => void run("logout", async () => sync(await tauri.chatgptLogout()))}
-        className="rounded-md px-2 py-2 underline underline-offset-2 disabled:opacity-50">接続を解除</button> : null}
+  const generating = busy === "generate" || generation?.status === "running";
+  const pending = busy !== null || Boolean(connection?.connecting || connection?.restoring) || generating;
+  const placed = generation?.progress.recentEvents.filter(event => event.entityId) ?? [];
+  const alert = generation?.error ?? error ?? statusError ?? connectionError ?? connection?.error;
+  const send = () => void run("generate", async () => { await onGenerate(model, prompt.trim(), { ...CHATGPT_ALL_ASSETS }, mode); if (mounted.current) setPrompt(""); });
+  return <section aria-label="ワールド制作のチャット" className="flex min-h-0 flex-1 flex-col gap-3">
+    <header className="flex shrink-0 items-center justify-between gap-2">
+      <div className="flex items-center gap-1.5 font-medium text-slate-800"><Bot size={16} aria-hidden="true" /><span>制作アシスタント</span></div>
+      {connection?.signedIn ? <details className="relative">
+        <summary aria-label="ChatGPTアカウント" title="ChatGPTアカウント" className="flex size-8 cursor-pointer list-none items-center justify-center rounded-full hover:bg-slate-100"><UserRound size={16} aria-hidden="true" /></summary>
+        <div className="absolute right-0 top-9 z-10 w-60 space-y-2 rounded-lg border border-slate-200 bg-white p-3 shadow-lg">
+          <p className="break-words text-slate-700">接続中：{connection.email ?? "ChatGPTアカウント"}</p>
+          <p className="text-[11px] leading-4 text-slate-500">接続情報はOSの保護された領域に保存されます。</p>
+          <button type="button" disabled={pending} onClick={() => void run("logout", async () => sync(await tauri.chatgptLogout()))} className="rounded px-1 py-1.5 underline underline-offset-2 disabled:opacity-50">接続を解除</button>
+        </div>
+      </details> : <button type="button" disabled={pending} onClick={() => void run("login", async () => { modelAccount.current = null; await sync(await tauri.chatgptLogin()); })} className="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 font-medium text-slate-800 disabled:opacity-50">ChatGPTに接続</button>}
+    </header>
+    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain" aria-label="制作の会話と結果">
+      {conversation.filter(turn => turn.generationId !== generation?.generationId).map(turn => <div key={turn.generationId} className="space-y-2">
+        <p className="ml-5 whitespace-pre-wrap break-words rounded-xl bg-slate-100 px-3 py-2.5 text-slate-800">{turn.prompt}</p>
+        <p className="break-words leading-5 text-slate-500">{turn.progress.message}</p>
+      </div>)}
+      {!generation ? <p className="leading-5 text-slate-500">今のSceneの編集を手伝います。小さな調整から依頼して、結果を見ながら進めましょう。</p> : <>
+        <p className="ml-5 whitespace-pre-wrap break-words rounded-xl bg-slate-100 px-3 py-2.5 text-slate-800">{generation.prompt}</p>
+        <div className="space-y-2 px-0.5">
+          <p role="status" aria-live="polite" className="break-words leading-5 text-slate-700">{generation.cancelling ? "現在の処理を安全に終えて停止しています…" : generation.progress.message}</p>
+          {generation.progress.total > 0 && generation.status !== "planned" ? <div className="space-y-1"><p className="text-[11px] text-slate-500">保存済み {generation.progress.completed} / {generation.progress.total}</p><progress aria-label="依頼の反映と保存" value={generation.progress.completed} max={generation.progress.total} className="h-1 w-full accent-brand-600" /></div> : null}
+          {generation.plan ? <details open={generation.status === "planned"} className="rounded-lg border border-slate-200 p-2.5">
+            <summary className="cursor-pointer font-medium text-slate-800">Plan：{generation.plan.title}</summary>
+            <p className="mt-2 break-words leading-5 text-slate-500">{generation.plan.description}</p>
+            <ol className="mt-2 space-y-1" aria-label="依頼の作業結果">{generation.plan.objects.map((object, index) => {
+              const event = placed[index];
+              return <li key={index} className="flex min-w-0 items-center justify-between gap-2 rounded bg-slate-50 px-2 py-1.5">
+                {event?.entityId && onSelectEntity ? <button type="button" onClick={() => onSelectEntity(event.entityId!)} aria-label={`${object.name}をInspectorで表示`} className="min-w-0 break-words text-left text-brand-700 underline underline-offset-2">{object.name}</button> : <span className="min-w-0 break-words">{object.name}</span>}
+                <span className="shrink-0 text-[11px] text-slate-500">{event ? "保存済み" : object.shape === "調整" ? "調整" : "追加"}</span>
+              </li>;
+            })}</ol>
+            {generation.status === "planned" && onApplyPlan ? <button type="button" disabled={pending || Boolean(disabledReason)} onClick={() => void run("generate", () => onApplyPlan(generation.generationId))} className="mt-3 w-full rounded-md bg-brand-600 px-3 py-2 font-semibold text-white disabled:bg-slate-200 disabled:text-slate-500">Planを反映</button> : null}
+            {generation.status === "planned" && onCancel ? <button type="button" disabled={pending} onClick={() => { void onCancel(generation.generationId).catch(e => setError(e instanceof Error ? e.message : String(e))); }} className="mt-1 w-full rounded-md px-3 py-2 text-slate-500 hover:bg-slate-50 disabled:opacity-50">Planを破棄</button> : null}
+          </details> : null}
+          {generation.progress.recentEvents.length > 0 ? <details><summary className="cursor-pointer text-[11px] text-slate-500">作業の記録</summary><ol className="mt-2 space-y-1 border-l border-slate-200 pl-2 text-[11px] leading-4">{generation.progress.recentEvents.map(event => <li key={event.sequence} className="break-words">{event.message}</li>)}</ol></details> : null}
+          {(generation.status === "failed" || generation.status === "cancelled") && generation.projectId ? <p className="leading-5 text-slate-500">保存済みの変更は残っています。結果を確認して、次の依頼を送れます。</p> : null}
+        </div>
+      </>}
+      {connection?.restoring ? <p role="status">保存した接続を確認しています…</p> : connection?.connecting ? <p role="status">ブラウザで許可すると、接続状態が更新されます。</p> : null}
+      {connection?.signedIn && !connection.planUsageEnabled ? <p className="text-amber-800">ChatGPTプランの利用許可がありません。接続を解除してから、再接続して許可してください。</p> : null}
+      {alert ? <p role="alert" className="rounded-lg bg-rose-50 p-2.5 leading-5 text-rose-700">{alert}</p> : null}
+      {disabledReason ? <p className="leading-5 text-amber-800">{disabledReason}</p> : null}
     </div>
-    {connection?.signedIn && !connection.planUsageEnabled ? <p className="text-amber-800">ChatGPTプランの利用許可がありません。再接続して許可してください。</p> : null}
-    <p className="text-[11px] leading-4 text-slate-500">生成にはChatGPTプランの利用許可が必要です。接続はStudio終了時に解除されます。XRiftへのログインとは別です。</p>
-    <label className="block space-y-1">モデル
-      <select aria-label="ワールド生成のモデル" disabled={busy !== null || !models.length} value={model} onChange={e => setModel(e.target.value)} className="w-full rounded border border-slate-300 bg-white p-2">
-        {!models.length ? <option value="">{busy === "loading" ? "接続を確認中…" : "ChatGPTへの接続後に選択できます"}</option> : models.map(m => <option key={m.slug} value={m.slug}>{m.displayName}</option>)}
-      </select>
-    </label>
-    <fieldset disabled={busy !== null} className="space-y-1">
-      <legend className="font-medium">生成に使う外部素材</legend>
-      <div className="flex flex-wrap gap-x-3 gap-y-2">{([['models','3Dモデル'],['materials','マテリアル'],['audio','音声']] as const).map(([key,label]) => <label key={key} className="flex items-center gap-1.5"><input type="checkbox" checked={assetOptions[key]} onChange={e => setAssetOptions(v => ({...v,[key]:e.target.checked}))}/>{label}</label>)}</div>
-      <p className="text-[11px] leading-4 text-slate-500">モデルはPoly Haven、マテリアルはglTFマテリアル棚とPoly Haven、音声は音蔵から選びます。マテリアルだけを選ぶと基本形状に適用します。</p>
-    </fieldset>
-    <label className="block space-y-1">作りたいワールド
-      <textarea value={prompt} maxLength={2000} disabled={busy !== null} onChange={e => setPrompt(e.target.value)} rows={4}
-        placeholder="秋の公園。木とベンチのある静かな広場" className="w-full resize-y rounded border border-slate-300 bg-white p-2 leading-5" />
-    </label>
-    <p className="text-[11px] leading-4 text-slate-500">生成には選択したChatGPTアカウントの利用枠を使います。現在の作品を保存し、別のワールドを作成します。</p>
-    <button type="button" disabled={busy !== null || !connection?.planUsageEnabled || !model || !prompt.trim() || Boolean(disabledReason)}
-      onClick={() => void run("generate", () => onGenerate(model, prompt.trim(), assetOptions))}
-      className="w-full rounded-md bg-brand-600 px-3 py-2 font-semibold text-white hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-500">
-      {busy === "generate" ? "ワールドの生成・素材の取り込み中…" : "新しいワールドを作る"}
-    </button>
-    {disabledReason ? <p className="text-amber-800">{disabledReason}</p> : null}
-    {error ? <p role="alert" className="rounded bg-rose-50 p-2 leading-5 text-rose-700">{error}</p> : null}
+    <form onSubmit={e => { e.preventDefault(); if (!pending && connection?.planUsageEnabled && models.some(m => m.slug === model) && prompt.trim() && !disabledReason) send(); }} className="shrink-0 rounded-xl border border-slate-300 bg-white p-2.5 focus-within:border-slate-500">
+      <textarea aria-label="ワールドへの依頼" value={prompt} maxLength={2000} disabled={pending} onChange={e => setPrompt(e.target.value)} rows={3} placeholder="このSceneで変えたいところ、追加したいもの" className="block w-full resize-none border-0 bg-transparent p-0 leading-5 text-slate-800 outline-none placeholder:text-slate-400" />
+      <div className="mt-2 flex min-w-0 items-center gap-1.5">
+        <select aria-label="ワールド制作のモデル" disabled={pending || !models.length} value={model} onChange={e => setModel(e.target.value)} className="min-w-0 max-w-[55%] rounded-full border-0 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-700 outline-none">
+          {!models.length ? <option value="">{busy === "loading" ? "確認中…" : "モデル"}</option> : models.map(m => <option key={m.slug} value={m.slug}>{m.displayName}</option>)}
+        </select>
+        <button type="button" aria-pressed={mode === "plan"} disabled={pending} title="Planで内容を確認してから反映" onClick={() => setMode(current => current === "plan" ? "build" : "plan")} className={`flex items-center gap-1 rounded-full px-2 py-1.5 text-[11px] ${mode === "plan" ? "bg-brand-50 text-brand-700" : "text-slate-500 hover:bg-slate-100"} disabled:opacity-50`}><ClipboardList size={13} aria-hidden="true" />Plan</button>
+        <div className="ml-auto shrink-0">{generating && onCancel && generation?.status === "running" ? <button type="button" aria-label="制作を停止" title="制作を停止" disabled={generation.cancelling} onClick={() => { setError(null); void onCancel(generation.generationId).catch(e => setError(e instanceof Error ? e.message : String(e))); }} className="flex size-8 items-center justify-center rounded-full bg-slate-900 text-white disabled:opacity-50"><Square size={12} fill="currentColor" aria-hidden="true" /></button> : <button type="submit" aria-label="依頼を送信" title={mode === "plan" ? "Planを相談する" : "依頼を送信"} disabled={pending || !connection?.planUsageEnabled || !models.some(m => m.slug === model) || !prompt.trim() || Boolean(disabledReason)} className="flex size-8 items-center justify-center rounded-full bg-slate-900 text-white disabled:bg-slate-100 disabled:text-slate-400">{generating ? <LoaderCircle size={16} className="animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <ArrowUp size={16} aria-hidden="true" />}</button>}</div>
+      </div>
+    </form>
+    <p className="text-[10px] leading-4 text-slate-400">ChatGPTの利用枠を使用します。変更はこのワールドに保存されます。</p>
   </section>;
 }

@@ -11,21 +11,24 @@ async function start(page: Page, kind: "world" | "item") {
   await expect(page.getByRole("tree", { name: "シーンのEntity階層" })).toBeVisible();
 }
 
-test("Search finds a placement directly; no results and Escape preserve the scene", async ({ page }) => {
+test("Creation categories place an Entity; Escape preserves the scene and returns focus", async ({ page }) => {
   await start(page, "world");
   const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
   const count = await tree.getByRole("treeitem").count();
   const trigger = page.getByRole("banner").getByRole("button", { name: "素材を追加", exact: true });
   await trigger.click();
   const menu = page.getByRole("menu", { name: "素材を追加", exact: true });
-  const search = menu.getByRole("searchbox");
-  await expect(search).toBeFocused();
-  await search.fill("not-a-real-creation-123");
-  await expect(menu.getByRole("status")).toContainText("該当する項目はありません");
+  await expect(menu).toBeFocused();
+  await expect(menu.getByRole("searchbox")).toHaveCount(0);
+  await menu.getByRole("button", { name: "Entityを作成", exact: true }).click();
+  await menu.getByRole("button", { name: /^基本形状/ }).click();
   await expect(tree.getByRole("treeitem")).toHaveCount(count);
   await page.keyboard.press("Escape");
-  await expect(search).toHaveValue("");
-  await search.fill("Ｃｕｂｅ");
+  await expect(menu).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await menu.getByRole("button", { name: "Entityを作成", exact: true }).click();
+  await menu.getByRole("button", { name: /^基本形状/ }).click();
   await menu.getByRole("menuitem", { name: "Cube", exact: true }).click();
   await expect(menu).toHaveCount(0);
   await expect(tree.getByRole("treeitem")).toHaveCount(count + 1);
@@ -37,7 +40,8 @@ test("Item keeps World-only creation discoverable with a reason, without creatin
   const count = await tree.getByRole("treeitem").count();
   await page.getByRole("banner").getByRole("button", { name: "素材を追加", exact: true }).click();
   const menu = page.getByRole("menu", { name: "素材を追加", exact: true });
-  await menu.getByRole("searchbox").fill("SpawnPoint");
+  await menu.getByRole("button", { name: "Entityを作成", exact: true }).click();
+  await menu.getByRole("button", { name: /^ワールド/ }).click();
   const spawn = menu.getByRole("menuitem", { name: /SpawnPoint/ });
   await expect(spawn).toHaveAttribute("aria-disabled", "true");
   await expect(spawn).toContainText("ワールドでのみ使用できます");

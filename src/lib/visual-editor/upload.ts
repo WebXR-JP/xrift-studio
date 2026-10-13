@@ -23,10 +23,8 @@ import {
  *   runs unchanged in a browser.
  *
  * Callers should branch their UI on `resolveVisualUploadEnvironment()` before
- * collecting input, because the web path needs a token and currently accepts
- * neither Scripts nor Items. Those two limits differ in kind: Scripts cannot
- * be represented in `runtime.json` at all, while Items are simply not built
- * yet on this path.
+ * collecting input, because the web path needs a token and cannot represent
+ * executable Script source in `runtime.json`.
  */
 
 export type VisualUploadEnvironment = "native" | "web";
@@ -65,12 +63,7 @@ export async function uploadVisualProject(
 
 export type VisualUploadCapabilities = {
   environment: VisualUploadEnvironment;
-  /**
-   * Items are desktop-only here because Studio has not built the web path for
-   * them, not because XRift prevents it: `@xrift/sdk` exposes
-   * `client.items.upload()` and the runtime shell is a world shell. Adding an
-   * item shell would lift this.
-   */
+  /** Both publication surfaces use the same Scene runtime and authored Assets. */
   supportsItems: boolean;
   /** `runtime.json` cannot represent executable Script source. */
   supportsScripts: boolean;
@@ -92,7 +85,7 @@ export function describeVisualUploadCapabilities(
   const native = environment === "native";
   return {
     environment,
-    supportsItems: native,
+    supportsItems: true,
     supportsScripts: native,
     runsPrePublishCheck: native,
     requiresToken: !native,

@@ -57,6 +57,7 @@ test("MToonの編集と生成した公開コードが同じ色と輪郭を実描
     geometry.deleteAttribute("color");
     const unpainted = sample(scene);
     geometry.setAttribute("color", new T.BufferAttribute(colors, 3));
+    const restored = sample(scene);
     const sharedGeometry = mesh.children[0]?.geometry === geometry;
     const disabled = structuredClone(material);
     disabled.properties.vertexColors = false;
@@ -78,6 +79,22 @@ test("MToonの編集と生成した公開コードが同じ色と輪郭を実描
     const none = sample(scene);
     const noChildren = mesh.children.length === 0;
     outlines.dispose(); mesh.material.dispose();
+    // Native VRM surfaces are constructed by their loader, outside Studio's
+    // material factory, and must work even when no outline pass is requested.
+    const nativeScene = makeScene();
+    const nativeMaterial = new m.MToonMaterial({ color: new T.Color(1, 1, 1), shadeColorFactor: new T.Color(1, 1, 1),
+      vertexColors: true, ignoreVertexColor: false, outlineWidthMode: "none" });
+    const nativeMesh = new T.Mesh(geometry, nativeMaterial);
+    nativeScene.add(nativeMesh);
+    const nativeOutlines = m.attachMToonOutlines(nativeMesh);
+    const nativeNoChildren = nativeMesh.children.length === 0;
+    const nativeColored = sample(nativeScene);
+    nativeMaterial.ignoreVertexColor = true;
+    const nativeUnpainted = sample(nativeScene);
+    nativeMaterial.ignoreVertexColor = false;
+    nativeMaterial.v0CompatShade = true;
+    const nativeLegacyColored = sample(nativeScene);
+    nativeOutlines.dispose(); nativeMaterial.dispose();
     const publishedScene = makeScene();
     const root = m.createRoot(renderer.domElement);
     await root.configure({ gl: renderer, scene: publishedScene, camera, frameloop: "never", flat: true, linear: true,
@@ -92,11 +109,16 @@ test("MToonの編集と生成した公開コードが同じ色と輪郭を実描
     const published = sample(publishedScene);
     root.unmount();
     source.dispose(); target.dispose(); renderer.dispose();
-    return { editor, published, changed, none, sharedGeometry, noChildren, unpainted, disabledColors };
+    return { editor, published, changed, none, sharedGeometry, noChildren, unpainted, restored, disabledColors,
+      nativeColored, nativeUnpainted, nativeLegacyColored, nativeNoChildren };
   });
   expect(errors).toEqual([]);
   expect(pixels.editor.some((value: number, index: number) => value !== pixels.unpainted[index])).toBe(true);
+  expect(pixels.restored).toEqual(pixels.editor);
   expect(pixels.disabledColors).toEqual(pixels.unpainted);
+  expect(pixels.nativeColored).not.toEqual(pixels.nativeUnpainted);
+  expect(pixels.nativeLegacyColored).not.toEqual(pixels.nativeUnpainted);
+  expect(pixels.nativeNoChildren).toBe(true);
   expect(pixels.sharedGeometry).toBe(true);
   expect(pixels.noChildren).toBe(true);
   expect(pixels.published.filter((value: number, index: number) => value !== pixels.editor[index]).length).toBe(0);

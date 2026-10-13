@@ -10,10 +10,11 @@ import {
   useRef,
   useState,
 } from "react";
-import { parseChatgptWorldPlan, buildChatgptWorld, placeChatgptAssets, chatgptAssetRequests } from "./lib/visual-editor/chatgpt-world";
+import { parseChatgptWorldPlan, chatgptAssetRequests, type ChatgptWorldPlan } from "./lib/visual-editor/chatgpt-world";
+import { createChatgptScaffold, editChatgptEntity, placeChatgptObject, type ChatgptGeneration, type ChatgptGenerationEvent, type ChatgptGenerationMode } from "./lib/visual-editor/chatgpt-generation";
 import { ProjectLibrary } from "./components/ProjectLibrary";
 import { retryStudioItemLoading } from "./lib/visual-editor/xrift-item-loader";
-import { EditorView } from "./components/EditorView";
+import { StudioLoading } from "./components/StudioLoading";
 import { NewProjectDialog } from "./components/NewProjectDialog";
 import { SetupView } from "./components/SetupView";
 import { UpdateDialog } from "./components/UpdateDialog";
@@ -23,6 +24,7 @@ import { AppUpdateDialog } from "./components/AppUpdateDialog";
 import {
   tauri,
   type ChatgptAssetOptions,
+  type ChatgptSceneContext,
   type Project,
   type ProjectArchiveExport,
   type ProjectArchiveInspection,
@@ -105,6 +107,8 @@ import {
   type ClassicProjectCreationSource,
 } from "./lib/visual-editor";
 
+const EditorView = lazy(() => import("./components/EditorView").then(module => ({ default: module.EditorView })));
+const McpConnectionSettings = lazy(() => import("./components/visual-editor/McpConnectionSettings").then(module => ({ default: module.McpConnectionSettings })));
 const VisualEditorPrototype = lazy(() =>
   import("./components/visual-editor/VisualEditorPrototype").then((module) => ({
     default: module.VisualEditorPrototype,
@@ -274,6 +278,7 @@ function App() {
     INITIAL_APP_UPDATE_STATE,
   );
   const [showAppUpdate, setShowAppUpdate] = useState(false);
+  const [libraryMcpOpen, setLibraryMcpOpen] = useState(false);
   const appUpdateHandleRef = useRef<AppUpdateHandle | null>(null);
   const appUpdateCheckRunRef = useRef(0);
   const appUpdateInitialCheckRef = useRef(false);
@@ -930,8 +935,29 @@ function App() {
     report: (progress: VisualPublishPipelineProgress) => void,
     signal: AbortSignal,
   ) => {
+    if (mcpPublishActiveRef.current || chatgptGenerationRef.current) {
+      throw new XriftMcpEditorToolError(
+        "EDITOR_BUSY",
+        "公開または制作の依頼を処理中です。完了してから公開してください",
+      );
+    }
+    mcpPublishActiveRef.current = true;
+    try {
+      return await performVisualPublish(publishBundle, report, signal);
+    } finally {
+      mcpPublishActiveRef.current = false;
+    }
+  };
+
+  const performVisualPublish = async (
+    publishBundle: PrototypeVisualProject,
+    report: (progress: VisualPublishPipelineProgress) => void,
+    signal: AbortSignal,
+  ) => {
     const session = visualSessionRef.current;
-    let savedProjectPath: string | null = null;
+    if (!session || session.bundle.project.projectId !== publishBundle.project.projectId) {
+      throw new Error("公開するプロジェクトが変わりました。現在の作品から公開画面を開き直してください");
+    }
     let result: Awaited<ReturnType<typeof publishVisualProject>>;
     try {
       result = await publishVisualProject({
@@ -949,15 +975,10 @@ function App() {
             publishBundle.assets,
           ),
         },
-        save: async () => {
-          savedProjectPath = await handleSaveVisualProject(
-            publishBundle,
-            false,
-          );
-          return savedProjectPath;
-        },
+        save: () => handleSaveVisualProject(publishBundle, false),
         report: (progress) => {
-          if (progress.thumbnailStaging?.state === "verified") {
+          if (progress.thumbnailStaging?.state === "verified" &&
+              visualSessionRef.current?.bundle.project.projectId === publishBundle.project.projectId) {
             setVisualCompilationFresh(true);
           }
           report(progress);
@@ -966,49 +987,41 @@ function App() {
         signal,
       });
     } catch (error) {
-      setVisualCompilationFresh(false);
+      if (visualSessionRef.current?.bundle.project.projectId === publishBundle.project.projectId) {
+        setVisualCompilationFresh(false);
+      }
       throw error;
     }
-    const publishedBundle: PrototypeVisualProject = {
-      ...publishBundle,
-      project: {
-        ...publishBundle.project,
-        metadata: {
-          ...publishBundle.project.metadata,
-          updatedAt: new Date().toISOString(),
+    const currentBundle = mcpProjectBridgeRef.current?.currentBundle();
+    const currentSession = visualSessionRef.current;
+    if (currentSession?.bundle.project.projectId === publishBundle.project.projectId) {
+      const resultBundle = currentBundle?.project.projectId === publishBundle.project.projectId
+        ? currentBundle : currentSession.bundle;
+      const publishedBundle: PrototypeVisualProject = {
+        ...resultBundle,
+        project: {
+          ...resultBundle.project,
+          metadata: {
+            ...resultBundle.project.metadata,
+            updatedAt: new Date().toISOString(),
+          },
+          lastPublication: {
+            ...result,
+            uploadedAt: result.uploadedAt ?? new Date().toISOString(),
+          },
         },
-        lastPublication: {
-          ...result,
-          uploadedAt: result.uploadedAt ?? new Date().toISOString(),
-        },
-      },
-    };
-    setVisualPublishBundle((current) => (current ? publishedBundle : current));
-    // Keep the authoritative remote result in memory even if the
-    // follow-up manifest write fails. A later Save must not restore an
-    // older publication target over the durable CLI sidecar.
-    setVisualSession((current) =>
-      current ? { ...current, bundle: publishedBundle } : current,
-    );
-    try {
-      if (!savedProjectPath) {
-        throw new Error("保存先を確認できませんでした。");
-      }
-      await saveVisualProjectToDisk(savedProjectPath, {
-        project: publishedBundle.project,
-        scenes: {
-          [publishedBundle.scene.sceneId]: publishedBundle.scene,
-        },
-        assets: publishedBundle.assets,
-        prefabs: publishedBundle.prefabs,
-      });
-      await refreshProjects();
-    } catch {
-      toast({
-        kind: "error",
-        title: "アップロードは完了しましたが、結果をプロジェクトへ保存できませんでした",
-      });
+      };
+      // The native pipeline merges the publication record into the latest
+      // manifest under the project I/O lock. Never re-save a Scene snapshot
+      // here: its author may have edited or closed the project during upload.
+      const nextSession = { ...currentSession, bundle: publishedBundle };
+      visualSessionRef.current = nextSession;
+      setVisualSession(current => current === currentSession ? nextSession : current);
+      setVisualPublishBundle(current => current?.project.projectId === publishBundle.project.projectId ? publishedBundle : current);
     }
+    await refreshProjects().catch(() => {
+      toast({ kind: "error", title: "公開は完了しましたが、プロジェクト一覧を更新できませんでした" });
+    });
     return result;
   };
 
@@ -1050,11 +1063,24 @@ function App() {
   /** Resolves once the Editor for a newly opened project has registered its bridge. */
   const waitForMcpProjectBridge = async (
     previous: VisualEditorMcpProjectBridge | null,
+    expected?: { projectId: string; sceneId: string },
+    assertWaiting?: () => void,
   ): Promise<VisualEditorMcpProjectBridge> => {
     const deadline = Date.now() + 60_000;
     while (Date.now() < deadline) {
+      assertWaiting?.();
+      const session = visualSessionRef.current;
+      if (expected && (session?.bundle.project.projectId !== expected.projectId || session.bundle.scene.sceneId !== expected.sceneId)) {
+        throw new XriftMcpEditorToolError("STALE_REVISION", "開いている作品またはSceneが変わりました。依頼を反映せず停止しました");
+      }
       const bridge = mcpProjectBridgeRef.current;
-      if (bridge && bridge !== previous && visualSessionRef.current) return bridge;
+      if (bridge && bridge !== previous && session) {
+        const bundle = bridge.currentBundle();
+        if (expected && (bundle.project.projectId !== expected.projectId || bundle.scene.sceneId !== expected.sceneId)) {
+          throw new XriftMcpEditorToolError("STALE_REVISION", "反映先のEditorが変わりました。依頼を反映せず停止しました");
+        }
+        return bridge;
+      }
       await new Promise((resolve) => window.setTimeout(resolve, 100));
     }
     throw new XriftMcpEditorToolError(
@@ -1106,33 +1132,49 @@ function App() {
     const bridge = requireMcpProjectBridge(tool);
     const session = visualSessionRef.current;
     if (!session) throw editorSessionUnavailableError(tool);
-    const bundle = withLatestPublication(
-      bridge.currentBundle(),
-      session.bundle.project.lastPublication,
-    );
+    const initial = bridge.currentBundle();
     if (
-      (typeof args.projectId === "string" && args.projectId !== bundle.project.projectId) ||
-      (typeof args.sceneId === "string" && args.sceneId !== bundle.scene.sceneId)
+      (typeof args.projectId === "string" && args.projectId !== initial.project.projectId) ||
+      (typeof args.sceneId === "string" && args.sceneId !== initial.scene.sceneId)
     ) {
       throw new XriftMcpEditorToolError(
         "STALE_REVISION",
         "対象シーンが現在のEditorと一致しません。get_editor_contextで再取得してください",
-        { projectId: bundle.project.projectId, sceneId: bundle.scene.sceneId },
+        { projectId: initial.project.projectId, sceneId: initial.scene.sceneId },
       );
     }
-    const path = (await bridge.saveNow()) ?? visualSessionRef.current?.project?.path;
-    if (!path) {
+    const assertCurrent = () => {
+      if (mcpProjectBridgeRef.current !== bridge || visualSessionRef.current?.bundle.project.projectId !== initial.project.projectId || bridge.currentBundle().scene.sceneId !== initial.scene.sceneId) {
+        throw new XriftMcpEditorToolError("STALE_REVISION", "確認中に対象が変わりました。get_editor_contextで再取得してください");
+      }
+    };
+    let path: string | undefined;
+    let saved: PrototypeVisualProject | undefined;
+    // saveNow first flushes code and Graph drafts. A flush can change the
+    // document set; only inspect a snapshot that was actually saved unchanged.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      assertCurrent();
+      const before = bridge.currentBundle();
+      path = await bridge.saveNow();
+      assertCurrent();
+      if (!path) break;
+      if (before === bridge.currentBundle()) { saved = before; break; }
+    }
+    if (!path || !saved) {
       throw new XriftMcpEditorToolError(
         "EDITOR_ERROR",
-        "プロジェクトを保存できませんでした。Studioの画面で保存の失敗を確認してください",
+        "保存が完了していないか、確認中に編集されました。保存状態を確認して再試行してください",
       );
     }
+    const bundle = withLatestPublication(saved, visualSessionRef.current?.bundle.project.lastPublication);
     const kind = bundle.project.projectKind;
     const [thumbnail, account, scriptSources] = await Promise.all([
       inspectPublishThumbnail(path, kind),
       readMcpAccount(),
       readScriptSources(path, bundle.assets),
     ]);
+    assertCurrent();
+    if (bridge.currentBundle() !== saved) throw new XriftMcpEditorToolError("STALE_REVISION", "確認中に作品が編集されました。保存してから再試行してください");
     const review = analyzePublishReview({ bundle, scriptSources });
     const publication = bundle.project.lastPublication;
     const readiness = buildPublishReadiness({
@@ -1164,75 +1206,231 @@ function App() {
     };
   };
 
-  const chatgptGenerationRef = useRef(false);
-  const handleChatgptGenerate = async (model: string, prompt: string, options: ChatgptAssetOptions): Promise<void> => {
-    if (chatgptGenerationRef.current) throw new Error("ワールドを生成中です");
+  const chatgptGenerationRef = useRef<string | null>(null);
+  const chatgptGenerationsRef = useRef(new Map<string, ChatgptGeneration>());
+  const chatgptPlansRef = useRef(new Map<string, { plan: ChatgptWorldPlan; snapshots: Record<string, string>; target: "current" | "new" }>());
+  const chatgptControlsRef = useRef(new Map<string, { cancelled: boolean }>());
+  const [chatgptGeneration, setChatgptGeneration] = useState<ChatgptGeneration | null>(null);
+  const generateChatgptWorld = async (model: string, prompt: string, options: ChatgptAssetOptions, generationId: string = crypto.randomUUID(), mode: ChatgptGenerationMode = "build", target: "current" | "new" = "current", approved?: ChatgptWorldPlan): Promise<Project | null> => {
+    if (chatgptGenerationRef.current) throw new Error("制作の依頼を処理中です。完了するか停止してから、次の依頼を送ってください");
+    if (mcpPublishActiveRef.current) throw new Error("公開を処理中です。完了してから制作の依頼を送ってください");
     const sourceId = visualSessionRef.current?.bundle.project.projectId;
     if (!sourceId || !projectsRoot || !tauri.isAvailable()) throw new Error("デスクトップ版でワールドを開いてください");
-    chatgptGenerationRef.current = true;
+    const sourceBridge = requireMcpProjectBridge("ChatGPTの制作チャット");
+    const sourceSceneId = sourceBridge.currentBundle().scene.sceneId;
+    if (sourceBridge.currentBundle().project.projectKind !== "world") throw new Error("ワールドのプロジェクトを開いてください");
+    if (!sourceBridge.currentContext().canGenerate) throw new Error("Playを停止し、素材の読み込み完了を待ってから依頼を送ってください");
+    chatgptGenerationRef.current = generationId;
+    const control = { cancelled: false };
+    chatgptControlsRef.current.set(generationId, control);
+    let job: ChatgptGeneration = { ...chatgptGenerationsRef.current.get(generationId), generationId, status: "running", mode, cancelling: false, model, prompt, options: { ...options }, sourceProjectId: sourceId, sourceSceneId, sceneId: sourceSceneId,
+      progress: { phase: "planning", message: approved ? "確認したPlanを反映する準備をしています" : "現在のSceneと依頼を確認しています", completed: 0, total: 0, recentEvents: [] } };
+    const jobs = chatgptGenerationsRef.current;
+    if (!jobs.has(generationId) && jobs.size >= 8) { const oldest = jobs.keys().next().value!; jobs.delete(oldest); chatgptPlansRef.current.delete(oldest); }
+    const report = (patch: Partial<ChatgptGeneration>, event?: Omit<ChatgptGenerationEvent, "sequence">) => {
+      job = { ...job, ...patch, cancelling: control.cancelled && patch.status !== "cancelled" };
+      if (event) job = { ...job, progress: { ...job.progress, recentEvents: [...job.progress.recentEvents,
+        { ...event, sequence: (job.progress.recentEvents[job.progress.recentEvents.length - 1]?.sequence ?? 0) + 1 }].slice(-128) } };
+      jobs.set(generationId, job); setChatgptGeneration(job);
+    };
+    const phase = (value: ChatgptGeneration["progress"]["phase"], message: string) => report({ progress: { ...job.progress, phase: value, message } }, { phase: value, message });
+    report({}, { phase: "planning", message: job.progress.message });
     let createdProject: Project | null = null;
+    let unlisten: (() => void) | undefined;
+    const checkCancelled = () => { if (control.cancelled) throw new Error("制作を停止しました。保存済みの変更は残っています"); };
     try {
-      const result = await tauri.chatgptPlan(model, prompt, options, options.materials ? MATERIAL_SHOWCASE_DEFINITIONS.map(v => ({id: materialShowcaseAssetId(v.key), name: v.name, extension: v.extensionLabel})) : []);
-      const plan = parseChatgptWorldPlan(result.plan, result.assetCandidates, options.materials);
-      if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("開いている作品が変わりました。生成結果を適用せず停止しました");
-      const name = await uniqueProjectDirectoryName(projectsRoot, `chatgpt-world-${Date.now()}`);
-      const prepared = await prepareStarterVisualProject(buildChatgptWorld(plan, name, result.assetCandidates, options.materials));
-      if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("開いている作品が変わりました。もう一度生成してください");
-      // Resolve bounded download options before creating a project. Downloads never target the source work.
-      const requests = [];
-      for (const asset of chatgptAssetRequests(plan)) {
-        const options = await tauri.getExternalStoreAssetOptions(asset.providerId, asset.externalId);
-        const resolution = options.resolutions.filter(v => v.byteLength > 0 && v.byteLength <= 32 * 1024 * 1024).sort((a,b) => a.byteLength - b.byteLength)[0];
-        if (options.assetKind !== asset.kind || !resolution) throw new Error("取り込み可能なサイズの外部素材がありません。別の素材を使う依頼で再試行してください");
-        requests.push({ providerId: asset.providerId, externalId: asset.externalId, resolution: resolution.id });
+      sourceBridge.openChatgpt();
+      const baseline = sourceBridge.currentBundle();
+      const selectedEntityId = sourceBridge.currentContext().selectedEntityId;
+      const sceneContext: ChatgptSceneContext = { title: [...(baseline.project.metadata.title ?? baseline.project.metadata.name)].slice(0, 100).join(""), entities: [] };
+      const entities = Object.values(baseline.scene.entities).sort((a,b) => Number(b.id === selectedEntityId) - Number(a.id === selectedEntityId));
+      for (const entity of target === "current" ? entities.slice(0, 100) : []) {
+        const transform = entity.components.find(c => c.type === "transform");
+        if (!transform) continue;
+        const summary = { id: entity.id, name: [...entity.name].slice(0, 80).join(""), components: entity.components.map(c => c.type), position: [...transform.position], scale: [...transform.scale], rotation: transform.rotation.map(n => n * 180 / Math.PI) };
+        sceneContext.entities.push(summary);
+        if (new TextEncoder().encode(JSON.stringify(sceneContext)).byteLength > 15000) { sceneContext.entities.pop(); break; }
       }
-      // Save the current work before opening a fully prepared, separately saved world.
+      if (selectedEntityId && sceneContext.entities.some(e => e.id === selectedEntityId)) sceneContext.selectedEntityId = selectedEntityId;
+      unlisten = await tauri.onChatgptGenerationProgress(progress => {
+        if (progress.generationId !== generationId || job.status !== "running" || job.progress.phase !== "planning") return;
+        if (control.cancelled) { void tauri.chatgptCancelGeneration(generationId).catch(() => undefined); return; }
+        phase("planning", progress.message);
+      });
+      checkCancelled();
+      const result = approved ? null : await tauri.chatgptPlan(model, prompt, options, options.materials ? MATERIAL_SHOWCASE_DEFINITIONS.map(v => ({id: materialShowcaseAssetId(v.key), name: v.name, extension: v.extensionLabel})) : [], generationId, target === "current" ? sceneContext : undefined);
+      checkCancelled();
+      const plan = approved ?? parseChatgptWorldPlan(result!.plan, result!.assetCandidates, options.materials, sceneContext.entities.map(e => e.id));
+      const checkSource = () => {
+        checkCancelled();
+        if (visualSessionRef.current?.bundle.project.projectId !== sourceId || mcpProjectBridgeRef.current !== sourceBridge || sourceBridge.currentBundle().scene.sceneId !== sourceSceneId) throw new Error("開いている作品またはSceneが変わりました。依頼を反映せず停止しました");
+        if (!sourceBridge.currentContext().canGenerate) throw new Error("Playまたは素材の読み込みが始まりました。停止してから再試行してください");
+      };
+      checkSource();
+      const previousPlan = chatgptPlansRef.current.get(generationId);
+      for (const edit of plan.edits ?? []) {
+        const expected = approved ? previousPlan?.snapshots[edit.entityId] : JSON.stringify(baseline.scene.entities[edit.entityId]);
+        if (!expected || JSON.stringify(sourceBridge.currentBundle().scene.entities[edit.entityId]) !== expected) throw new Error("調整するEntityがPlanの作成後に編集されました。Planを見直してください");
+      }
+      report({ plan: { title: plan.title, description: plan.description, objects: [...(plan.edits ?? []).map(v => ({ name: v.name ?? baseline.scene.entities[v.entityId]?.name ?? "Entity", shape: "調整" })), ...plan.objects.map(v => ({ name: v.name, shape: v.shape }))] },
+        progress: { ...job.progress, total: plan.objects.length + (plan.edits?.length ?? 0) } });
+      if (mode === "plan") {
+        chatgptPlansRef.current.set(generationId, { plan, target, snapshots: Object.fromEntries((plan.edits ?? []).map(e => [e.entityId, JSON.stringify(sourceBridge.currentBundle().scene.entities[e.entityId])])) });
+        report({ status: "planned", progress: { ...job.progress, phase: "planned", message: "Planを確認してください。反映するまでSceneは変更されません" } });
+        return null;
+      }
+      phase("preparing", "依頼の反映前に、現在の作品を保存しています");
       const saveSource = async () => {
-        const bridge = requireMcpProjectBridge("ChatGPTワールド生成");
         for (let attempt = 0; attempt < 3; attempt++) {
-          if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("開いている作品が変わりました。生成を停止しました");
-          const before = bridge.currentBundle();
-          if (!(await bridge.saveNow())) throw new Error("現在の作品を保存できませんでした。保存先を確認して再試行してください");
-          if (bridge.currentBundle() === before) return;
+          checkSource();
+          const before = sourceBridge.currentBundle();
+          if (!(await sourceBridge.saveNow())) throw new Error("現在の作品を保存できませんでした。保存先を確認して再試行してください");
+          checkSource();
+          if (sourceBridge.currentBundle() === before) return before;
         }
         throw new Error("現在の作品が編集中です。操作を止めて再試行してください");
       };
       await saveSource();
-      if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("開いている作品が変わりました。もう一度生成してください");
-      const project = await createPreparedStarterVisualProjectOnDisk(projectsRoot, name, prepared);
+      let project = visualSessionRef.current?.project;
+      let targetBridge = sourceBridge;
+      if (target === "new") {
+      const name = await uniqueProjectDirectoryName(projectsRoot, `chatgpt-world-${Date.now()}`);
+      const prepared = await prepareStarterVisualProject(createChatgptScaffold(plan, name));
+      project = await createPreparedStarterVisualProjectOnDisk(projectsRoot, name, prepared);
       createdProject = project;
-      let completedPlan = prepared.plan;
-      const assetIds = new Map<string, string>();
-      for (const request of requests) {
-        if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("開いている作品が変わりました。素材の取り込みを停止しました");
-        const installed = await tauri.installExternalStoreAsset(project.path, request);
-        const applied = await applyExternalStoreInstallAndAnalyzeModel(project.path, completedPlan.assets, installed);
-        completedPlan = { ...completedPlan, assets: applied.manifest };
-        assetIds.set(`${request.providerId}:${request.externalId}`, applied.primaryAssetId);
-      }
-      for (const id of new Set(plan.objects.flatMap(v => v.gltfMaterialId ? [v.gltfMaterialId] : []))) {
-        const material = getMaterialShowcaseAsset(id);
-        if (!material) throw new Error("glTFマテリアルが見つかりません");
-        const manifest = { ...completedPlan.assets, assets: { ...completedPlan.assets.assets, [id]: structuredClone(material) } };
-        const withTextures = await ensureCatalogMaterialTextures(project.path, manifest, material.properties);
-        if (!withTextures) throw new Error("glTFマテリアルのテクスチャを取り込めませんでした");
-        completedPlan = { ...completedPlan, assets: withTextures };
-      }
-      completedPlan = placeChatgptAssets(completedPlan, plan, assetIds);
-      await saveVisualProjectToDisk(project.path, { project: completedPlan.project, scenes: { [completedPlan.scene.sceneId]: completedPlan.scene }, assets: completedPlan.assets, prefabs: completedPlan.prefabs });
-      if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("新しいワールドは保存しました。プロジェクト一覧から開いてください");
-      await saveSource();
-      if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("新しいワールドは保存しました。プロジェクト一覧から開いてください");
+      checkSource();
+      // Creating the new files is asynchronous; flush edits made during that
+      // interval before the old Editor and its autosave timer are unmounted.
+      const savedSource = await saveSource();
+      checkSource();
+      if (sourceBridge.currentBundle() !== savedSource) throw new Error("現在の作品が編集中です。操作を止めて再試行してください");
+      const initial = prepared.plan;
+      report({ projectId: initial.project.projectId, sceneId: initial.scene.sceneId, path: project.path, name: project.name,
+        progress: { ...job.progress, projectId: initial.project.projectId } });
       setVisualCompilationFresh(false);
       setVisualThumbnailReadiness(null);
-      setVisualSession({ project, bundle: { project: completedPlan.project, scene: completedPlan.scene, assets: completedPlan.assets, prefabs: completedPlan.prefabs } });
-      await refreshProjects();
-      toast({ kind: "success", title: `${plan.title}を作成しました`, description: "新しいワールドを保存して開きました。Scene ViewとPlayで確認してください。" });
+      const nextSession = { project, bundle: { project: initial.project, scene: initial.scene, assets: initial.assets, prefabs: initial.prefabs } };
+      visualSessionRef.current = nextSession;
+      setVisualSession(nextSession);
+      targetBridge = await waitForMcpProjectBridge(sourceBridge, { projectId: initial.project.projectId, sceneId: initial.scene.sceneId }, checkCancelled);
+      }
+      if (!project) throw new Error("保存先を確認できませんでした");
+      const targetId = targetBridge.currentBundle().project.projectId;
+      const targetSceneId = targetBridge.currentBundle().scene.sceneId;
+      report({ projectId: targetId, sceneId: targetSceneId, path: project.path, name: project.name, progress: { ...job.progress, projectId: targetId } });
+      const checkTarget = (checkCancellation = true) => {
+        if (checkCancellation) checkCancelled();
+        if (visualSessionRef.current?.bundle.project.projectId !== targetId || mcpProjectBridgeRef.current !== targetBridge || targetBridge.currentBundle().scene.sceneId !== targetSceneId) throw new Error("開いている作品またはSceneが変わりました。保存済みの変更はプロジェクト一覧から確認できます");
+        if (!targetBridge.currentContext().canGenerate) throw new Error("Playまたは素材の読み込みが始まったため依頼の反映を停止しました。保存済みのEntityは残っています");
+      };
+      checkTarget(); targetBridge.openChatgpt();
+      const commit = (expectedBundle: PrototypeVisualProject, nextBundle: PrototypeVisualProject, entityId?: string) => {
+        checkTarget();
+        if (!targetBridge.applyGenerationStep({ expectedBundle, nextBundle, entityId })) throw new Error("反映中に作品が編集されました。編集内容を保ち、依頼の反映を停止しました");
+      };
+      const saveTarget = async () => {
+        checkTarget(false);
+        if (!(await targetBridge.saveNow())) throw new Error("作成中のワールドを保存できませんでした。保存先を確認し、Studioで保存を再試行してください");
+        checkTarget(false);
+      };
+      const assetIds = new Map<string, string>();
+      const requests = chatgptAssetRequests(plan);
+      for (const [index, edit] of (plan.edits ?? []).entries()) {
+        phase("placing", `${index + 1}/${job.progress.total}：${targetBridge.currentBundle().scene.entities[edit.entityId]?.name ?? "Entity"}を調整しています`);
+        const before = targetBridge.currentBundle();
+        const snapshot = approved ? previousPlan?.snapshots[edit.entityId] : JSON.stringify(baseline.scene.entities[edit.entityId]);
+        if (JSON.stringify(before.scene.entities[edit.entityId]) !== snapshot) throw new Error("調整するEntityが編集中です。編集内容を保ち、Planの反映を停止しました");
+        const changed = editChatgptEntity(before, edit);
+        commit(before, changed.bundle, changed.entityId);
+        await saveTarget();
+        const name = changed.bundle.scene.entities[changed.entityId].name;
+        report({ progress: { ...job.progress, completed: index + 1, message: `${name}を調整して保存しました` } }, { phase: "placing", message: `${name}を調整して保存しました`, entityId: changed.entityId, name });
+        await new Promise(resolve => window.setTimeout(resolve, 40));
+      }
+      for (const [index, value] of plan.objects.entries()) {
+        checkTarget();
+        const needed = requests.filter(v => (v.kind === "texture" && v.externalId === value.materialExternalId) || (v.kind === value.shape && v.externalId === value.externalId));
+        for (const asset of needed) {
+          const key = `${asset.providerId}:${asset.externalId}`;
+          if (assetIds.has(key)) continue;
+          phase("importing", `${value.name}に使う素材を取り込んでいます`);
+          const before = targetBridge.currentBundle();
+          const choices = await tauri.getExternalStoreAssetOptions(asset.providerId, asset.externalId);
+          const resolution = choices.resolutions.filter(v => v.byteLength > 0 && v.byteLength <= 32 * 1024 * 1024).sort((a,b) => a.byteLength - b.byteLength)[0];
+          if (choices.assetKind !== asset.kind || !resolution) throw new Error(`${value.name}に使えるサイズの素材がありません。別の素材を使う依頼で再試行してください`);
+          checkTarget();
+          const installed = await tauri.installExternalStoreAsset(project.path, { providerId: asset.providerId, externalId: asset.externalId, resolution: resolution.id });
+          const applied = await applyExternalStoreInstallAndAnalyzeModel(project.path, before.assets, installed);
+          commit(before, { ...before, assets: applied.manifest });
+          assetIds.set(key, applied.primaryAssetId);
+          await saveTarget();
+        }
+        if (value.gltfMaterialId && !targetBridge.currentBundle().assets.assets[value.gltfMaterialId]) {
+          phase("importing", `${value.name}のglTFマテリアルを取り込んでいます`);
+          const before = targetBridge.currentBundle();
+          const material = getMaterialShowcaseAsset(value.gltfMaterialId);
+          if (!material) throw new Error(`${value.name}のglTFマテリアルが見つかりません`);
+          const manifest = { ...before.assets, assets: { ...before.assets.assets, [material.id]: structuredClone(material) } };
+          const withTextures = await ensureCatalogMaterialTextures(project.path, manifest, material.properties);
+          if (!withTextures) throw new Error(`${value.name}のテクスチャを取り込めませんでした`);
+          commit(before, { ...before, assets: withTextures });
+          await saveTarget();
+        }
+        phase("placing", `${index + 1 + (plan.edits?.length ?? 0)}/${job.progress.total}：${value.name}を配置しています`);
+        const before = targetBridge.currentBundle();
+        const placed = placeChatgptObject(before, value, assetIds);
+        commit(before, placed.bundle, placed.entityId);
+        await saveTarget();
+        report({ progress: { ...job.progress, completed: index + 1 + (plan.edits?.length ?? 0), message: `${value.name}を配置して保存しました` } },
+          { phase: "placing", message: `${value.name}を配置して保存しました`, entityId: placed.entityId, name: value.name });
+        // Yield to the live Scene and Inspector between actual saved operations.
+        await new Promise(resolve => window.setTimeout(resolve, 40));
+      }
+      phase("saving", "ワールドの保存結果を確認しています");
+      await saveTarget(); await refreshProjects();
+      checkTarget();
+      report({ status: "completed", nextActions: ["get_editor_context", "capture_scene_view"],
+        progress: { ...job.progress, phase: "completed", message: "依頼を反映して保存しました。Scene ViewとInspectorで確認できます" } },
+        { phase: "completed", message: "依頼した追加と調整を保存しました" });
+      chatgptPlansRef.current.delete(generationId);
+      toast({ kind: "success", title: "依頼を反映しました", description: "Scene ViewとInspectorで結果を確認できます。" });
+      return project;
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      report({ status: control.cancelled ? "cancelled" : "failed", cancelling: false, error: control.cancelled ? undefined : message, nextActions: ["get_chatgpt_connection", "get_editor_context"],
+        progress: { ...job.progress, phase: control.cancelled ? "cancelled" : "failed", message } }, { phase: control.cancelled ? "cancelled" : "failed", message });
       if (createdProject) await refreshProjects().catch(() => undefined);
-      toast({ kind: "error", title: "ワールドを生成できませんでした", description: error instanceof Error ? error.message : String(error) });
+      toast({ kind: control.cancelled ? "success" : "error", title: "制作を停止しました", description: message });
       throw error;
-    } finally { chatgptGenerationRef.current = false; }
+    } finally {
+      unlisten?.(); chatgptControlsRef.current.delete(generationId);
+      if (chatgptGenerationRef.current === generationId) chatgptGenerationRef.current = null;
+    }
+  };
+  const handleChatgptGenerate = async (model: string, prompt: string, options: ChatgptAssetOptions, mode: ChatgptGenerationMode = "build"): Promise<void> => {
+    await generateChatgptWorld(model, prompt, options, crypto.randomUUID(), mode);
+  };
+  const applyChatgptPlan = async (generationId: string) => {
+    const job = chatgptGenerationsRef.current.get(generationId);
+    const stored = chatgptPlansRef.current.get(generationId);
+    if (!stored || job?.status !== "planned") throw new Error("反映できるPlanがありません。依頼を送ってPlanを作り直してください");
+    if (job.sourceProjectId !== visualSessionRef.current?.bundle.project.projectId || job.sourceSceneId !== mcpProjectBridgeRef.current?.currentBundle().scene.sceneId) throw new Error("Planを作成したワールドとSceneを開いてから反映してください");
+    await generateChatgptWorld(job.model, job.prompt, job.options, generationId, "build", stored.target, stored.plan);
+  };
+  const cancelChatgptGeneration = async (generationId: string) => {
+    const control = chatgptControlsRef.current.get(generationId);
+    const job = chatgptGenerationsRef.current.get(generationId);
+    if (job?.status === "planned") {
+      const cancelled: ChatgptGeneration = { ...job, status: "cancelled", progress: { ...job.progress, phase: "cancelled", message: "Planを破棄しました。Sceneは変更されていません" } };
+      chatgptPlansRef.current.delete(generationId); chatgptGenerationsRef.current.set(generationId, cancelled); setChatgptGeneration(cancelled);
+      return { generationId, cancelled: true };
+    }
+    if (!control || !job || job.status !== "running") return { generationId, cancelled: false };
+    control.cancelled = true;
+    const cancelling = { ...job, cancelling: true };
+    chatgptGenerationsRef.current.set(generationId, cancelling); setChatgptGeneration(cancelling);
+    if (job.progress.phase === "planning") await tauri.chatgptCancelGeneration(generationId);
+    return { generationId, cancelled: true };
   };
 
   const handleMcpProjectTool = async (
@@ -1256,6 +1454,60 @@ function App() {
       }
       case "get_account":
         return readMcpAccount();
+      case "get_chatgpt_connection":
+        return { ...(await tauri.chatgptStatus()), nextActions: ["connect_chatgpt", "list_chatgpt_models"] };
+      case "connect_chatgpt":
+        return { ...(await tauri.chatgptLogin()), nextActions: ["get_chatgpt_connection"], message: "ブラウザで本人が接続を許可してください。接続完了またはエラーはget_chatgpt_connectionで確認できます。" };
+      case "disconnect_chatgpt":
+        return { ...(await tauri.chatgptLogout()) };
+      case "list_chatgpt_models":
+        return { models: await tauri.chatgptModels() };
+      case "open_chatgpt_panel": {
+        const bridge = requireMcpProjectBridge(request.tool);
+        if (bridge.currentBundle().project.projectKind !== "world") throw new XriftMcpEditorToolError("PROJECT_NOT_EDITABLE", "ワールドを開いてください");
+        bridge.openChatgpt();
+        return { opened: true, nextActions: ["get_chatgpt_connection"] };
+      }
+      case "generate_chatgpt_world": {
+        const bridge = requireMcpProjectBridge(request.tool);
+        if (bridge.currentBundle().project.projectKind !== "world") throw new XriftMcpEditorToolError("PROJECT_NOT_EDITABLE", "ワールドを開いてください");
+        const context = bridge.currentContext();
+        if (args.projectId !== context.projectId || args.sceneId !== context.sceneId || args.expectedRevision !== context.revision) {
+          throw new XriftMcpEditorToolError("STALE_REVISION", "get_editor_contextで対象とrevisionを再取得してください", context);
+        }
+        if (!context.canGenerate || chatgptGenerationRef.current || mcpPublishActiveRef.current) throw new XriftMcpEditorToolError("EDITOR_BUSY", "処理中です。Playと素材の読み込みを停止し、公開や生成が終わってから再試行してください");
+        if (typeof args.model !== "string" || !args.model.trim() || args.model.length > 128 || typeof args.prompt !== "string" || !args.prompt.trim() || args.prompt.length > 2000) {
+          throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "モデルと2000文字以内の依頼を指定してください");
+        }
+        const options = args.options ?? { models: true, materials: true, audio: true };
+        if (!options || typeof options !== "object" || Array.isArray(options) || Object.keys(options).some(key => !["models", "materials", "audio"].includes(key)) || !["models", "materials", "audio"].every(key => typeof (options as Record<string, unknown>)[key] === "boolean")) {
+          throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "optionsにはmodels・materials・audioのbooleanを指定してください");
+        }
+        if (args.mode !== undefined && args.mode !== "build" && args.mode !== "plan") throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "modeにはbuildまたはplanを指定してください");
+        if (args.target !== undefined && args.target !== "current" && args.target !== "new") throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "targetにはcurrentまたはnewを指定してください");
+        const generationId = crypto.randomUUID();
+        void generateChatgptWorld(args.model, args.prompt, options as ChatgptAssetOptions, generationId, args.mode ?? "build", args.target ?? "current").catch(() => undefined);
+        return { generationId, status: "running", nextActions: ["get_chatgpt_generation"] };
+      }
+      case "apply_chatgpt_plan": {
+        const context = requireMcpProjectBridge(request.tool).currentContext();
+        if (args.projectId !== context.projectId || args.sceneId !== context.sceneId || args.expectedRevision !== context.revision) throw new XriftMcpEditorToolError("STALE_REVISION", "get_editor_contextで対象とrevisionを再取得してください", context);
+        if (!context.canGenerate || chatgptGenerationRef.current || mcpPublishActiveRef.current) throw new XriftMcpEditorToolError("EDITOR_BUSY", "Play、素材の読み込み、制作、公開が終わってから再試行してください");
+        const job = typeof args.generationId === "string" ? chatgptGenerationsRef.current.get(args.generationId) : undefined;
+        if (!job || job.status !== "planned" || !chatgptPlansRef.current.has(job.generationId)) throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "反映できるPlanのgenerationIdを指定してください");
+        if (job.sourceProjectId !== context.projectId || job.sourceSceneId !== context.sceneId) throw new XriftMcpEditorToolError("STALE_REVISION", "Planを作成したワールドとSceneを開いてください");
+        void applyChatgptPlan(job.generationId).catch(() => undefined);
+        return { generationId: job.generationId, status: "running", nextActions: ["get_chatgpt_generation"] };
+      }
+      case "cancel_chatgpt_generation": {
+        if (typeof args.generationId !== "string" || !chatgptGenerationsRef.current.has(args.generationId)) throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "このStudioで開始したgenerationIdを指定してください");
+        return cancelChatgptGeneration(args.generationId);
+      }
+      case "get_chatgpt_generation": {
+        const result = typeof args.generationId === "string" ? chatgptGenerationsRef.current.get(args.generationId) : undefined;
+        if (!result) throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "このStudioで開始したgenerationIdを指定してください");
+        return { ...result };
+      }
       case "reload_xrift_items":
         retryStudioItemLoading();
         return { reloading: true, nextActions: ["capture_scene_view"] };
@@ -1445,10 +1697,10 @@ function App() {
       case "get_publish_readiness":
         return (await inspectMcpPublishReadiness(request.tool, args)).result;
       case "publish_project": {
-        if (mcpPublishActiveRef.current) {
+        if (mcpPublishActiveRef.current || chatgptGenerationRef.current) {
           throw new XriftMcpEditorToolError(
             "EDITOR_BUSY",
-            "公開を処理中です。完了してからget_publish_readinessで状態を確認してください",
+            "公開または制作の依頼を処理中です。完了してからget_publish_readinessで状態を確認してください",
           );
         }
         const inspected = await inspectMcpPublishReadiness(request.tool, args);
@@ -1463,9 +1715,7 @@ function App() {
             },
           );
         }
-        mcpPublishActiveRef.current = true;
         const progress: string[] = [];
-        try {
           const controller = new AbortController();
           const result = await runVisualPublish(
             inspected.bundle,
@@ -1502,9 +1752,6 @@ function App() {
               ? "公開しました。URLを利用者に伝えてください"
               : "公開しました。XRiftの公開先を確認してください",
           };
-        } finally {
-          mcpPublishActiveRef.current = false;
-        }
       }
       default:
         throw new XriftMcpEditorToolError(
@@ -1718,6 +1965,9 @@ function App() {
     refreshLibrary = notify,
   ): Promise<string> => {
     const currentSession = visualSessionRef.current;
+    if (!currentSession || currentSession.bundle.project.projectId !== bundle.project.projectId) {
+      throw new Error("保存対象のプロジェクトが変わりました。現在の作品を開き直してから保存してください");
+    }
     const persistedBundle = withLatestPublication(
       bundle,
       currentSession?.bundle.project.lastPublication,
@@ -1732,8 +1982,10 @@ function App() {
       if (currentSession?.project) {
         await saveVisualProjectToDisk(currentSession.project.path, documents);
         const nextSession = { ...currentSession, bundle: persistedBundle };
-        visualSessionRef.current = nextSession;
-        setVisualSession(nextSession);
+        if (visualSessionRef.current === currentSession) {
+          visualSessionRef.current = nextSession;
+          setVisualSession(current => current === currentSession ? nextSession : current);
+        }
         if (refreshLibrary) await refreshProjects();
         if (notify) {
           toast({
@@ -1756,8 +2008,10 @@ function App() {
           documents,
         );
         const nextSession = { bundle: persistedBundle, project };
-        visualSessionRef.current = nextSession;
-        setVisualSession(nextSession);
+        if (visualSessionRef.current === currentSession) {
+          visualSessionRef.current = nextSession;
+          setVisualSession(current => current === currentSession ? nextSession : current);
+        }
         if (refreshLibrary) await refreshProjects();
         if (notify) {
           toast({
@@ -1843,8 +2097,17 @@ function App() {
   if (visualSession) {
     const publishBundle = visualPublishBundle;
     const handleVisualEditorBack = () => {
+      // An explicit leave makes this Scene's running request inaccessible.
+      // Abort its native plan; retain the lease until safe cleanup completes.
+      const generationId = chatgptGenerationRef.current;
+      if (generationId) void cancelChatgptGeneration(generationId).catch(error => {
+        toast({ kind: "error", title: "制作の停止を確認できませんでした", description: error instanceof Error ? error.message : String(error) });
+      });
       setVisualPublishBundle(null);
       setVisualClassicExportBundle(null);
+      // MCP leave() resolves before React's next render. Publish the closed
+      // session immediately so close_project and in-flight guards see it.
+      visualSessionRef.current = null;
       setVisualSession(null);
       void refreshProjects();
     };
@@ -1861,9 +2124,7 @@ function App() {
         >
           <Suspense
             fallback={
-              <div className="flex h-screen items-center justify-center bg-zinc-50 text-sm text-zinc-600">
-                ビジュアルエディターを準備しています…
-              </div>
+              <StudioLoading message="ビジュアルエディターを準備しています…" />
             }
           >
             <VisualEditorPrototype
@@ -1873,6 +2134,13 @@ function App() {
               initialBundle={visualSession.bundle}
               compilationFresh={visualCompilationFresh}
               onChatgptGenerate={handleChatgptGenerate}
+              onChatgptApplyPlan={async id => { await applyChatgptPlan(id); }}
+              onChatgptCancel={cancelChatgptGeneration}
+              appUpdate={appUpdate}
+              onCheckAppUpdate={() => void checkAppUpdate(true)}
+              onShowAppUpdate={() => setShowAppUpdate(true)}
+              chatgptGeneration={chatgptGeneration}
+              chatgptConversation={Array.from(chatgptGenerationsRef.current.values())}
               onSave={(bundle) => {
                 setVisualCompilationFresh(false);
                 return handleSaveVisualProject(bundle, false, false);
@@ -2122,17 +2390,13 @@ function App() {
 
   if (visualLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-zinc-50 text-sm text-zinc-600">
-        ビジュアルプロジェクトを読み込んでいます…
-      </div>
+      <StudioLoading message="プロジェクトを開いています…" />
     );
   }
 
   if (runtimeLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-zinc-50 text-sm text-zinc-500">
-        起動中…
-      </div>
+      <StudioLoading message="制作環境を準備しています…" />
     );
   }
 
@@ -2179,7 +2443,7 @@ function App() {
   if (selected) {
     return (
       <>
-        <EditorView
+        <Suspense fallback={<StudioLoading message="コードエディターを準備しています…" />}><EditorView
           project={selected}
           user={user}
           busy={busy}
@@ -2189,7 +2453,7 @@ function App() {
           clearLogs={() => setLogs([])}
           onBack={() => setSelected(null)}
           onProjectChanged={refreshProjects}
-        />
+        /></Suspense>
         {cliUpdateDialog}
         {appUpdateDialog}
       </>
@@ -2227,7 +2491,9 @@ function App() {
         appUpdate={appUpdate}
         onCheckAppUpdate={() => void checkAppUpdate(true)}
         onShowAppUpdate={() => setShowAppUpdate(true)}
+        onOpenMcp={() => setLibraryMcpOpen(true)}
       />
+      {libraryMcpOpen ? <Suspense fallback={null}><McpConnectionSettings onClose={() => setLibraryMcpOpen(false)} /></Suspense> : null}
       <NewProjectDialog
         open={showNewDialog}
         busy={busy}

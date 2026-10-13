@@ -2021,7 +2021,7 @@ fn save_visual_project(
         .map_err(|_| "visual project I/O lock is unavailable".to_string())?;
     let project_root = canonical_project_root(&project_path)?;
     recover_visual_save_transactions(&project_root)?;
-    let validated = validate_visual_write_request(request)?;
+    let mut validated = validate_visual_write_request(request)?;
     if !validated.binary_files.is_empty() {
         return Err(
             "binary starter assets can only be written during project creation".to_string(),
@@ -2045,6 +2045,12 @@ fn save_visual_project(
         return Err("visual project id cannot change during save".to_string());
     }
 
+    preserve_verified_visual_publication(
+        &project_root,
+        &existing_manifest_content,
+        &existing_manifest,
+        &mut validated,
+    )?;
     save_visual_documents_transaction(&project_root, &validated.files)
 }
 
@@ -3062,12 +3068,138 @@ fn manifest_publication_id(manifest: &VisualProjectManifest) -> Option<&str> {
         .filter(|value| !value.is_empty())
 }
 
+/// A full-document autosave may have started before a verified upload finished.
+/// Carry the authoritative record forward under the same I/O lock as the save,
+/// including fields unknown to this native manifest parser.
+fn preserve_verified_visual_publication(
+    project_root: &Path,
+    existing_content: &str,
+    existing_manifest: &VisualProjectManifest,
+    incoming: &mut ValidatedVisualWrite,
+) -> Result<(), String> {
+    let Some(publication) = existing_manifest.last_publication.as_ref() else {
+        return Ok(());
+    };
+    let Some(loaded) =
+        read_compiler_publication_metadata(project_root, &existing_manifest.project_kind)?
+    else {
+        return Ok(());
+    };
+    if manifest_publication_id(existing_manifest) != Some(loaded.metadata.id.as_str())
+        || publication.uploaded_at != loaded.metadata.last_uploaded_at
+    {
+        return Ok(());
+    }
+    if incoming.manifest.project_kind != existing_manifest.project_kind {
+        return Err("published visual project kind cannot change during save".to_string());
+    }
+    let existing: serde_json::Value = serde_json::from_str(existing_content)
+        .map_err(|e| format!("existing visual project manifest is invalid: {}", e))?;
+    let (_, incoming_content) = incoming
+        .files
+        .iter_mut()
+        .find(|(path, _)| path == VISUAL_PROJECT_MANIFEST)
+        .ok_or_else(|| "visual save is missing the project manifest".to_string())?;
+    let mut value: serde_json::Value = serde_json::from_str(incoming_content)
+        .map_err(|e| format!("incoming visual project manifest is invalid: {}", e))?;
+    value["lastPublication"] = existing["lastPublication"].clone();
+    *incoming_content = format!(
+        "{}\n",
+        serde_json::to_string_pretty(&value)
+            .map_err(|e| format!("visual project manifest cannot be serialized: {}", e))?
+    );
+    incoming.manifest.last_publication = Some(publication.clone());
+    Ok(())
+}
+
+fn verified_visual_publication_value(
+    manifest: &VisualProjectManifest,
+    manifest_value: &serde_json::Value,
+    loaded: &LoadedCompilerPublicationMetadata,
+    publication: Option<&serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    let matches_existing = manifest_publication_id(manifest) == Some(loaded.metadata.id.as_str())
+        && manifest.last_publication.as_ref().is_some_and(|record| {
+            record.uploaded_at == loaded.metadata.last_uploaded_at
+        });
+    let mut record = match publication {
+        Some(value) => value.clone(),
+        None if matches_existing => manifest_value["lastPublication"].clone(),
+        None => serde_json::json!({}),
+    };
+    if record.to_string().len() as u64 > XRIFT_PUBLICATION_METADATA_MAX_BYTES {
+        return Err("XRift publication result is too large".to_string());
+    }
+    let fields = record
+        .as_object_mut()
+        .ok_or_else(|| "XRift publication result must be an object".to_string())?;
+    for key in ["worldId", "itemId", "contentId", "versionId", "contentHash", "status"] {
+        if let Some(value) = fields.get(key) {
+            if !value.as_str().is_some_and(|text| !text.trim().is_empty()) {
+                return Err(format!("XRift publication result has an invalid {}", key));
+            }
+        }
+    }
+    if let Some(value) = fields.get("versionNumber") {
+        if value.as_u64().is_none() {
+            return Err("XRift publication result has an invalid versionNumber".to_string());
+        }
+    }
+    if let Some(value) = fields.get("url") {
+        let valid = value.as_str()
+            .filter(|text| {
+                let lower = text.to_ascii_lowercase();
+                lower.starts_with("https://") || lower.starts_with("http://")
+            })
+            .and_then(|text| reqwest::Url::parse(text).ok())
+            .is_some_and(|url| {
+                matches!(url.scheme(), "https" | "http")
+                    && url.host_str().is_some_and(|host| !host.is_empty())
+            });
+        if !valid {
+            return Err("XRift publication result has an invalid url".to_string());
+        }
+    }
+    if let Some(value) = fields.get("uploadedAt") {
+        if value.as_str() != Some(loaded.metadata.last_uploaded_at.as_str()) {
+            return Err("XRift publication result timestamp does not match verified metadata".to_string());
+        }
+    }
+    let kind_field = match manifest.project_kind.as_str() {
+        "world" => "worldId",
+        "item" => "itemId",
+        _ => return Err("visual project kind must be world or item".to_string()),
+    };
+    // contentId is the fallback target when XRift did not report a kind id.
+    // When both are reported they can describe different server resources.
+    if let Some(id) = fields.get(kind_field).or_else(|| fields.get("contentId")) {
+        if id.as_str() != Some(loaded.metadata.id.as_str()) {
+            return Err("XRift publication result id does not match verified metadata".to_string());
+        }
+    }
+    fields.insert(kind_field.to_string(), serde_json::json!(loaded.metadata.id));
+    fields.entry("contentId".to_string()).or_insert_with(|| serde_json::json!(loaded.metadata.id));
+    fields.insert("uploadedAt".to_string(), serde_json::json!(loaded.metadata.last_uploaded_at));
+    Ok(record)
+}
+
 fn persist_verified_authoring_publication_metadata(
     authoring_root: &Path,
     manifest: &VisualProjectManifest,
     loaded: &LoadedCompilerPublicationMetadata,
+    publication: Option<&serde_json::Value>,
 ) -> Result<(), String> {
-    if let Some(expected_id) = manifest_publication_id(manifest) {
+    // Read only the latest manifest. Never restore Scene or Asset snapshots
+    // captured before an asynchronous upload or a project switch.
+    let manifest_content = std::fs::read_to_string(authoring_root.join(VISUAL_PROJECT_MANIFEST))
+        .map_err(|e| format!("visual project manifest cannot be read: {}", e))?;
+    let current_manifest = parse_visual_project_manifest(&manifest_content)?;
+    if current_manifest.project_id != manifest.project_id
+        || current_manifest.project_kind != manifest.project_kind
+    {
+        return Err("visual project identity changed before publication persistence".to_string());
+    }
+    if let Some(expected_id) = manifest_publication_id(&current_manifest) {
         if loaded.metadata.id != expected_id {
             return Err(
                 "XRift returned a different publication id than the saved project target"
@@ -3076,7 +3208,7 @@ fn persist_verified_authoring_publication_metadata(
         }
     }
     if let Some(existing) =
-        read_compiler_publication_metadata(authoring_root, &manifest.project_kind)?
+        read_compiler_publication_metadata(authoring_root, &current_manifest.project_kind)?
     {
         if existing.metadata.id != loaded.metadata.id {
             return Err(
@@ -3084,7 +3216,29 @@ fn persist_verified_authoring_publication_metadata(
             );
         }
     }
-    persist_authoring_publication_metadata(authoring_root, &manifest.project_kind, loaded)
+    let mut manifest_value: serde_json::Value = serde_json::from_str(&manifest_content)
+        .map_err(|e| format!("visual project manifest is invalid: {}", e))?;
+    manifest_value["lastPublication"] = verified_visual_publication_value(
+        &current_manifest,
+        &manifest_value,
+        loaded,
+        publication,
+    )?;
+    let manifest_json = format!(
+        "{}\n",
+        serde_json::to_string_pretty(&manifest_value)
+            .map_err(|e| format!("visual project manifest cannot be serialized: {}", e))?
+    );
+    let relative_path = xrift_publication_metadata_relative_path(&current_manifest.project_kind)?;
+    let sidecar = if loaded.raw.ends_with('\n') {
+        loaded.raw.clone()
+    } else {
+        format!("{}\n", loaded.raw)
+    };
+    save_publication_metadata_transaction(authoring_root, &[
+        (relative_path, sidecar),
+        (VISUAL_PROJECT_MANIFEST.to_string(), manifest_json),
+    ])
 }
 
 fn metadata_from_manifest(
@@ -3410,6 +3564,7 @@ fn prepare_existing_compiler_staging(
                     &authoring_root,
                     &manifest,
                     loaded,
+                    None,
                 )?;
             }
             (Some(owner), Some(loaded)) => {
@@ -3423,6 +3578,7 @@ fn prepare_existing_compiler_staging(
                     &authoring_root,
                     &manifest,
                     loaded,
+                    None,
                 )?;
             }
             (Some(owner), None) if owner.upload_attempt_started_unix_ms.is_some() => {
@@ -3922,6 +4078,7 @@ fn persist_compiler_publication_result(
     directory_name: String,
     publication_id: String,
     uploaded_at: String,
+    publication: Option<serde_json::Value>,
 ) -> Result<CompilerPublicationMetadata, String> {
     let _compiler_guard = COMPILER_STAGING_IO_LOCK
         .lock()
@@ -3973,7 +4130,7 @@ fn persist_compiler_publication_result(
 
     verify_compiler_upload_advanced(&owner, &loaded)?;
     write_compiler_publication_metadata(&staging_root, &manifest.project_kind, &loaded)?;
-    persist_verified_authoring_publication_metadata(&authoring_root, &manifest, &loaded)?;
+    persist_verified_authoring_publication_metadata(&authoring_root, &manifest, &loaded, publication.as_ref())?;
     Ok(loaded.metadata)
 }
 
@@ -3985,6 +4142,7 @@ fn persist_compiler_publication_metadata(
     app: AppHandle,
     authoring_project_path: String,
     directory_name: String,
+    publication: Option<serde_json::Value>,
 ) -> Result<CompilerPublicationMetadata, String> {
     let _compiler_guard = COMPILER_STAGING_IO_LOCK
         .lock()
@@ -4020,7 +4178,7 @@ fn persist_compiler_publication_metadata(
         return Err("compiler upload attempt was not marked before completion".to_string());
     }
     verify_compiler_upload_advanced(&owner, &loaded)?;
-    persist_verified_authoring_publication_metadata(&authoring_root, &manifest, &loaded)?;
+    persist_verified_authoring_publication_metadata(&authoring_root, &manifest, &loaded, publication.as_ref())?;
     Ok(loaded.metadata)
 }
 
@@ -5546,6 +5704,9 @@ fn cleanup_pending_resets(root: &Path) {
 fn reset_app_data(app: AppHandle, scope: String) -> Result<(), String> {
     let root = app_root(&app)?;
     let paths = derive_paths(&root);
+    if scope == "all" {
+        chatgpt::clear_for_app_reset(&app)?;
+    }
 
     // 削除に失敗したパスを収集し、全ターゲットを試行してからまとめてエラー化する。
     // 途中で失敗しても残りの領域は掃除されるので、ユーザの再試行が効きやすい。
@@ -6271,6 +6432,7 @@ pub fn run() {
         .manage(RecordingFileState::default())
         .manage(OpenProjectArchivesState(Mutex::new(initial_archives)))
         .setup(|app| {
+            chatgpt::restore_session(app.handle());
             mcp::start_broker(app.handle())?;
             if let Ok(root) = app_root(app.handle()) {
                 std::thread::spawn(move || cleanup_pending_resets(&root));
@@ -6294,6 +6456,7 @@ pub fn run() {
             chatgpt::chatgpt_logout,
             chatgpt::chatgpt_models,
             chatgpt::chatgpt_plan,
+            chatgpt::chatgpt_cancel_generation,
             runtime_paths,
             xrift_items::resolve_xrift_item,
             runtime_status,
@@ -6427,8 +6590,8 @@ mod tests {
                 cwd,
             ),
             vec![
-                "/tmp/shared/gift.xriftstudio".to_string(),
-                "/tmp/shared/OTHER.XRIFTSTUDIO".to_string()
+                cwd.join("gift.xriftstudio").to_string_lossy().into_owned(),
+                cwd.join("OTHER.XRIFTSTUDIO").to_string_lossy().into_owned()
             ]
         );
     }
@@ -6985,6 +7148,168 @@ mod tests {
             raw: serde_json::to_string(&metadata).expect("metadata must serialize"),
             metadata,
         }
+    }
+
+    fn publication_test_write_request(kind: &str, revision: u64) -> VisualProjectWriteRequest {
+        let project = serde_json::json!({
+            "schemaVersion": VISUAL_PROJECT_SCHEMA_VERSION,
+            "projectId": "publication-race-fixture",
+            "projectKind": kind,
+            "metadata": {"name": "fixture", "title": "Fixture", "description": "",
+                "createdAt": "2026-10-01T00:00:00.000Z", "updatedAt": "2026-10-02T00:00:00.000Z"},
+            "entrySceneId": "scene-01",
+            "scenePaths": {"scene-01": "scenes/one.json", "scene-02": "scenes/two.json"},
+            "assetManifestPath": "assets/manifest.json",
+            "futureManifestField": {"nested": ["preserve", revision]}
+        });
+        VisualProjectWriteRequest {
+            project_json: serde_json::to_string(&project).unwrap(),
+            scene_documents: ["scene-01", "scene-02"].iter().enumerate().map(|(index, id)| {
+                VisualDocumentWrite {
+                    relative_path: if index == 0 {"scenes/one.json"} else {"scenes/two.json"}.to_string(),
+                    content: serde_json::json!({
+                        "schemaVersion": SCENE_DOCUMENT_SCHEMA_VERSION, "sceneId": id,
+                        "rootEntityIds": [], "entities": {}, "revision": revision
+                    }).to_string(),
+                }
+            }).collect(),
+            prefab_documents: vec![],
+            asset_manifest_json: serde_json::json!({
+                "schemaVersion": ASSET_MANIFEST_SCHEMA_VERSION,
+                "assets": {"latest-material": {"id": "latest-material", "kind": "Material", "revision": revision}}
+            }).to_string(),
+            binary_documents: vec![],
+        }
+    }
+
+    #[test]
+    fn publication_metadata_only_commit_preserves_authoring_documents() {
+        let fixture_root = std::env::temp_dir().join(format!("xrift-publication-merge-{}", transaction_id()));
+        for kind in ["world", "item"] {
+            let project = create_visual_project(
+                fixture_root.to_string_lossy().to_string(), kind.to_string(),
+                publication_test_write_request(kind, 0),
+            ).unwrap();
+            let root = PathBuf::from(project.path);
+            let manifest = parse_visual_project_manifest(
+                &std::fs::read_to_string(root.join(VISUAL_PROJECT_MANIFEST)).unwrap()
+            ).unwrap();
+            // The upload captured revision 0. A later edit reached disk while
+            // the remote request was still in flight.
+            save_visual_project(root.to_string_lossy().to_string(), publication_test_write_request(kind, 7)).unwrap();
+            let original_manifest = std::fs::read_to_string(root.join(VISUAL_PROJECT_MANIFEST)).unwrap();
+            let original_documents = ["scenes/one.json", "scenes/two.json", "assets/manifest.json"]
+                .map(|path| (path, std::fs::read(root.join(path)).unwrap()));
+            let loaded = publication_metadata("remote-fixture", "2026-10-13T02:03:04.000Z");
+            let kind_field = if kind == "world" {"worldId"} else {"itemId"};
+            let mut result = serde_json::json!({
+                "contentId": "remote-fixture", "versionId": "version-fixture", "versionNumber": 3,
+                "contentHash": "hash-fixture", "status": "published", "url": "https://example.invalid/result",
+                "futureResultField": {"preserve": true}
+            });
+            result[kind_field] = serde_json::json!("remote-fixture");
+            persist_verified_authoring_publication_metadata(&root, &manifest, &loaded, Some(&result)).unwrap();
+            let saved: serde_json::Value = serde_json::from_str(
+                &std::fs::read_to_string(root.join(VISUAL_PROJECT_MANIFEST)).unwrap()
+            ).unwrap();
+            let mut expected: serde_json::Value = serde_json::from_str(&original_manifest).unwrap();
+            result["uploadedAt"] = serde_json::json!(loaded.metadata.last_uploaded_at);
+            expected["lastPublication"] = result.clone();
+            assert_eq!(saved, expected, "metadata-only commit must preserve every other manifest field");
+            for (path, content) in original_documents {
+                assert_eq!(std::fs::read(root.join(path)).unwrap(), content);
+            }
+            assert_eq!(read_compiler_publication_metadata(&root, kind).unwrap().unwrap().metadata, loaded.metadata);
+            // Recovery has only the verified sidecar. It must retain richer
+            // result fields already committed for exactly this upload.
+            persist_verified_authoring_publication_metadata(&root, &manifest, &loaded, None).unwrap();
+            let reopened = read_visual_project(root.to_string_lossy().to_string()).unwrap();
+            let reopened_manifest: serde_json::Value = serde_json::from_str(&reopened.project_json).unwrap();
+            assert_eq!(reopened_manifest["lastPublication"], result);
+            assert_eq!(reopened.scene_documents.len(), 2);
+        }
+        std::fs::remove_dir_all(fixture_root).unwrap();
+    }
+
+    #[test]
+    fn publication_verified_record_survives_old_autosaves_and_project_move() {
+        let fixture_root = std::env::temp_dir().join(format!("xrift-publication-autosave-{}", transaction_id()));
+        let project = create_visual_project(
+            fixture_root.to_string_lossy().to_string(), "source".to_string(),
+            publication_test_write_request("world", 0),
+        ).unwrap();
+        let source = PathBuf::from(project.path);
+        let manifest = parse_visual_project_manifest(
+            &std::fs::read_to_string(source.join(VISUAL_PROJECT_MANIFEST)).unwrap()
+        ).unwrap();
+        let loaded = publication_metadata("remote-fixture", "2026-10-13T02:03:04.000Z");
+        let result = serde_json::json!({"worldId": "remote-fixture", "versionNumber": 9,
+            "url": "https://example.invalid/result", "futureResultField": "retain"});
+        persist_verified_authoring_publication_metadata(&source, &manifest, &loaded, Some(&result)).unwrap();
+        let published: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(source.join(VISUAL_PROJECT_MANIFEST)).unwrap()
+        ).unwrap();
+        let moved = fixture_root.join("moved");
+        std::fs::rename(source, &moved).unwrap();
+        for revision in 1..=3 {
+            let mut request = publication_test_write_request("world", revision);
+            let mut incoming: serde_json::Value = serde_json::from_str(&request.project_json).unwrap();
+            if revision > 1 {
+                incoming["lastPublication"] = serde_json::json!({
+                    "worldId": if revision == 2 {"remote-fixture"} else {"obsolete-target"},
+                    "uploadedAt": "2026-10-01T00:00:00.000Z", "versionNumber": 1
+                });
+            }
+            request.project_json = incoming.to_string();
+            save_visual_project(moved.to_string_lossy().to_string(), request).unwrap();
+            let reopened = read_visual_project(moved.to_string_lossy().to_string()).unwrap();
+            let saved: serde_json::Value = serde_json::from_str(&reopened.project_json).unwrap();
+            assert_eq!(saved["lastPublication"], published["lastPublication"]);
+            assert_eq!(saved["futureManifestField"]["nested"][1], revision);
+            let assets: serde_json::Value = serde_json::from_str(&reopened.asset_manifest_json).unwrap();
+            assert_eq!(assets["assets"]["latest-material"]["revision"], revision);
+            for scene in reopened.scene_documents {
+                let value: serde_json::Value = serde_json::from_str(&scene.content).unwrap();
+                assert_eq!(value["revision"], revision);
+            }
+        }
+        std::fs::remove_dir_all(fixture_root).unwrap();
+    }
+
+    #[test]
+    fn publication_rejects_mismatched_result_without_partial_metadata_commit() {
+        let fixture_root = std::env::temp_dir().join(format!("xrift-publication-reject-{}", transaction_id()));
+        let project = create_visual_project(
+            fixture_root.to_string_lossy().to_string(), "source".to_string(),
+            publication_test_write_request("world", 4),
+        ).unwrap();
+        let root = PathBuf::from(project.path);
+        let original = std::fs::read_to_string(root.join(VISUAL_PROJECT_MANIFEST)).unwrap();
+        let manifest = parse_visual_project_manifest(&original).unwrap();
+        let loaded = publication_metadata("remote-fixture", "2026-10-13T02:03:04.000Z");
+        for invalid in [
+            serde_json::json!({"worldId": "different-target"}),
+            serde_json::json!({"contentId": "different-target"}),
+            serde_json::json!({"uploadedAt": "2026-10-01T00:00:00.000Z"}),
+            serde_json::json!({"versionNumber": -1}),
+            serde_json::json!({"url": "file:///outside"}),
+            serde_json::json!({"url": "http://"}),
+            serde_json::json!({"url": "https://?missing-host"}),
+            serde_json::json!({"url": "http:example.invalid"}),
+            serde_json::json!({"status": ""}),
+            serde_json::json!([]),
+        ] {
+            assert!(persist_verified_authoring_publication_metadata(&root, &manifest, &loaded, Some(&invalid)).is_err());
+            assert_eq!(std::fs::read_to_string(root.join(VISUAL_PROJECT_MANIFEST)).unwrap(), original);
+            assert!(read_compiler_publication_metadata(&root, "world").unwrap().is_none());
+        }
+        let mut replacement: serde_json::Value = serde_json::from_str(&original).unwrap();
+        replacement["projectId"] = serde_json::json!("replacement-project");
+        std::fs::write(root.join(VISUAL_PROJECT_MANIFEST), replacement.to_string()).unwrap();
+        assert!(persist_verified_authoring_publication_metadata(&root, &manifest, &loaded, None)
+            .unwrap_err().contains("identity changed"));
+        assert!(read_compiler_publication_metadata(&root, "world").unwrap().is_none());
+        std::fs::remove_dir_all(fixture_root).unwrap();
     }
 
     fn visual_manifest(

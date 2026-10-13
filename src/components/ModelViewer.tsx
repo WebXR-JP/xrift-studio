@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { createEditorCanvasEvents } from "../lib/visual-editor/canvas-events";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Stage, Environment, Bounds } from "@react-three/drei";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -230,7 +231,7 @@ export function ModelViewer({ projectPath, rel }: Props) {
         )}
         {object && (
           <>
-            <Canvas
+            <Canvas events={createEditorCanvasEvents}
               shadows="basic"
               dpr={[1, 2]}
               camera={{ position: [2.5, 2, 4], fov: 45 }}

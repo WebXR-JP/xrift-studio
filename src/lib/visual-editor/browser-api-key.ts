@@ -49,7 +49,7 @@ export async function askBrowserToSaveXriftApiKey(key: string): Promise<void> {
   if (!Constructor) throw new Error("このブラウザはパスワード管理機能からの保存に対応していません。");
   await navigator.credentials.store(new Constructor({
     id: CREDENTIAL_ID,
-    name: "XRiftワールド公開APIキー",
+    name: "XRift公開APIキー",
     password: key,
   }));
 }

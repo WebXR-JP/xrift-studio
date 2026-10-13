@@ -1,3 +1,4 @@
+import { createEditorCanvasEvents } from "../../lib/visual-editor/canvas-events";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useCatalogPreviewVisibility } from "./useCatalogPreviewVisibility";
@@ -166,7 +167,7 @@ export function CatalogPreviewFrame({
   if (live) {
     return (
       <div ref={ref} className={`${className} bg-[#0b1120]`}>
-        <Canvas
+        <Canvas events={createEditorCanvasEvents}
           dpr={[1, 1.5]}
           camera={{ position: [...cameraPosition], fov }}
           gl={{ antialias: true }}
@@ -195,7 +196,7 @@ export function CatalogPreviewFrame({
           draggable={false}
         />
       ) : capturing ? (
-        <Canvas
+        <Canvas events={createEditorCanvasEvents}
           key={cacheKey}
           dpr={1}
           camera={{ position: [...cameraPosition], fov }}

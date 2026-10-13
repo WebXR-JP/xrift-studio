@@ -102,22 +102,24 @@ export async function openBrowserProjectSession(path: string, backend: SessionBa
     if (bundle.project.projectId !== documents.project.projectId || bundle.project.projectKind !== documents.project.projectKind) {
       throw new Error("公開するプロジェクトが一致しません。現在のプロジェクトを開き直してください。");
     }
-    if (documents.project.projectKind !== "world" || result.itemId) {
-      throw new Error("この公開結果はワールドのプロジェクトへ保存できません。");
+    const kind = documents.project.projectKind;
+    const label = kind === "item" ? "アイテム" : "ワールド";
+    if (kind === "world" ? result.itemId : result.worldId) {
+      throw new Error(`この公開結果は${label}のプロジェクトへ保存できません。`);
     }
-    const worldId = (result.worldId ?? result.contentId)?.trim();
-    if (!worldId) throw new Error("XRiftからワールドIDを取得できませんでした。公開結果を確認してください。");
+    const id = ((kind === "item" ? result.itemId : result.worldId) ?? result.contentId)?.trim();
+    if (!id) throw new Error(`XRiftから${label}IDを取得できませんでした。公開結果を確認してください。`);
     const publication: VisualPublicationRecord = {
       ...result,
-      worldId,
-      contentId: result.contentId?.trim() ?? worldId,
+      ...(kind === "item" ? { itemId: id } : { worldId: id }),
+      contentId: result.contentId?.trim() ?? id,
       uploadedAt: result.uploadedAt ?? new Date().toISOString(),
     };
     if (!Number.isFinite(Date.parse(publication.uploadedAt))) {
       throw new Error("XRiftから受け取った公開日時を確認できませんでした。");
     }
-    const known = latestBrowserPublication("world", documents.project.lastPublication, latestPublication);
-    const lastPublication = latestBrowserPublication("world", known, publication);
+    const known = latestBrowserPublication(kind, documents.project.lastPublication, latestPublication);
+    const lastPublication = latestBrowserPublication(kind, known, publication);
     if (!lastPublication) throw new Error("公開結果を保存できませんでした。もう一度保存してください。");
     // Keep the result in memory before writing. A later Save can retry storing
     // the successful remote target without issuing another upload.

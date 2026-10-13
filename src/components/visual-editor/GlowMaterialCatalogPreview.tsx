@@ -1,3 +1,4 @@
+import { createEditorCanvasEvents } from "../../lib/visual-editor/canvas-events";
 import { Canvas } from "@react-three/fiber";
 import { DoubleSide, FrontSide } from "three";
 import { useMemo } from "react";
@@ -56,7 +57,7 @@ export function GlowMaterialCatalogPreview({
 
   return (
     <div className={className}>
-      <Canvas
+      <Canvas events={createEditorCanvasEvents}
         dpr={[1, 1.5]}
         camera={{ position: [1.9, 1.4, 2.2], fov: 40 }}
         gl={{ antialias: true }}

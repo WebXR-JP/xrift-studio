@@ -119,7 +119,9 @@ test("親を動かした子Entityでもギズモが対象の上に描かれる",
 
   // Minimal starters are flat. Explicitly create the parent-child relation
   // this regression requires instead of depending on a starter-only group.
-  await tree.getByText("Plane", { exact: true }).dragTo(tree.getByText("Box", { exact: true }));
+  const source = tree.locator('[data-hierarchy-entity-id="starter-floor"] [data-editor-drag-source="hierarchy-entity"]');
+  const target = tree.locator('[data-hierarchy-entity-id="starter-box"] [data-editor-drag-source="hierarchy-entity"]');
+  await source.dragTo(target);
   await expect(tree.locator('[data-hierarchy-entity-id="starter-floor"]')).toHaveAttribute("aria-level", "2");
   await tree.getByText("Box", { exact: true }).click();
   const parentX = page.getByRole("spinbutton", { name: "位置 X" });
@@ -141,6 +143,26 @@ test("親を動かした子Entityでもギズモが対象の上に描かれる",
   expect(report.plane, "ドラッグ平面も対象の上に置かれる").toEqual(
     report.object,
   );
+
+  // Starting a native drag must preserve row positions. Feedback inserted
+  // above the rows previously moved the source and cancelled Chromium's drag.
+  const beforeDrag = (await source.boundingBox())!;
+  await page.mouse.move(beforeDrag.x + beforeDrag.width / 2, beforeDrag.y + beforeDrag.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(beforeDrag.x + beforeDrag.width / 2 + 10, beforeDrag.y + beforeDrag.height / 2, { steps: 2 });
+  const rootDrop = page.getByText("シーンの直下へ移動", { exact: true });
+  await expect(rootDrop).toBeVisible();
+  const duringDrag = (await source.boundingBox())!;
+  expect(duringDrag.y).toBeCloseTo(beforeDrag.y, 1);
+  const rootTarget = (await rootDrop.boundingBox())!;
+  await page.mouse.move(rootTarget.x + rootTarget.width / 2, rootTarget.y + rootTarget.height / 2, { steps: 2 });
+  await page.mouse.up();
+  await expect(tree.locator('[data-hierarchy-entity-id="starter-floor"]')).toHaveAttribute("aria-level", "1");
+  await expect(rootDrop).toHaveCount(0);
+  await expect.poll(async () => (await readGizmo(page)).object?.[0]).toBeCloseTo(0, 3);
+  const rootReport = await readGizmo(page);
+  expect(rootReport.handle).toEqual(rootReport.object);
+  expect(rootReport.plane).toEqual(rootReport.object);
 });
 
 test("複数選択の回転と拡縮はドラッグ中に全Entityへ反映される", async ({ page }) => {

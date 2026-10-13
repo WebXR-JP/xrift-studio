@@ -94,6 +94,12 @@ export function EditorView({
   const [logsCollapsed, setLogsCollapsed] = useState(true);
   const [fileTreeKey, setFileTreeKey] = useState(0);
   const [xriftJsonRaw, setXriftJsonRaw] = useState(false);
+  const metadataSaveRef = useRef<(() => Promise<boolean>) | null>(null);
+  const [metadataDirty, setMetadataDirty] = useState(false);
+  const [metadataSaving, setMetadataSaving] = useState(false);
+  const registerMetadataSave = useCallback((save: (() => Promise<boolean>) | null) => {
+    metadataSaveRef.current = save;
+  }, []);
 
   const [devHandle, setDevHandle] = useState<DevHandle | null>(null);
   const [devUrl, setDevUrl] = useState<string | null>(null);
@@ -103,6 +109,7 @@ export function EditorView({
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   const [publishReadiness, setPublishReadiness] = useState<PublishReadiness | null>(null);
   const [checkingPublish, setCheckingPublish] = useState(false);
+  const checkingPublishRef = useRef(false);
   const [resumePublishAfterPreparation, setResumePublishAfterPreparation] = useState(false);
 
   const isXriftJson = selectedRel === "xrift.json";
@@ -210,8 +217,10 @@ export function EditorView({
   }, [loadFile]);
 
   const handleSave = useCallback(async () => {
-    if (loading || savingRef.current) return false;
+    if (isXriftJsonForm) return await metadataSaveRef.current?.() ?? false;
+    if (savingRef.current) return false;
     if (!isDirty) return true;
+    if (loading) return false;
     if (!selectedRel || !fileKey || activeFileKeyRef.current !== fileKey) return false;
     // The ref closes the same-event gap before React disables the button.
     savingRef.current = true;
@@ -224,7 +233,8 @@ export function EditorView({
       if (activeFileKeyRef.current === fileKey && fileLoadRunRef.current === loadRun) {
         setSavedContent(content);
       }
-      return contentRef.current === content;
+      return activeFileKeyRef.current === fileKey &&
+        fileLoadRunRef.current === loadRun && contentRef.current === content;
     } catch (e) {
       setSaveError(`自動保存に失敗しました: ${e}`);
       toast({ kind: "error", title: "自動保存に失敗しました", description: `${e}` });
@@ -234,7 +244,7 @@ export function EditorView({
       savingRef.current = false;
       setSaving(false);
     }
-  }, [fileKey, isDirty, loading, project.path, selectedRel, content, appendLog, toast]);
+  }, [isXriftJsonForm, fileKey, isDirty, loading, project.path, selectedRel, content, appendLog, toast]);
 
   useEffect(() => {
     if (!isDirty || loading || saving || saveError) return;
@@ -244,12 +254,12 @@ export function EditorView({
 
   useEffect(() => {
     const preventUnsavedClose = (event: BeforeUnloadEvent) => {
-      if (!isDirty) return;
+      if (!isDirty && !metadataDirty && !metadataSaving) return;
       event.preventDefault(); event.returnValue = "";
     };
     window.addEventListener("beforeunload", preventUnsavedClose);
     return () => window.removeEventListener("beforeunload", preventUnsavedClose);
-  }, [isDirty]);
+  }, [isDirty, metadataDirty, metadataSaving]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -304,9 +314,11 @@ export function EditorView({
     });
 
   const checkPublishReadiness = async () => {
-    if (checkingPublish || busy) return;
+    if (checkingPublishRef.current || busy) return;
+    checkingPublishRef.current = true;
     setCheckingPublish(true);
     try {
+      if (!(await handleSave())) return;
       const readiness = await inspectPublishReadiness(project.path, project.kind);
       if (readiness.ready) {
         setPublishReadiness(null);
@@ -328,6 +340,7 @@ export function EditorView({
         description: "xrift.jsonとサムネイルを確認してください",
       });
     } finally {
+      checkingPublishRef.current = false;
       setCheckingPublish(false);
     }
   };
@@ -338,6 +351,7 @@ export function EditorView({
 
   const handleItemCheck = () =>
     wrap(async () => {
+      if (!(await handleSave())) return;
       setLogsCollapsed(false);
       const result = await xrift.checkItem(project.path, appendLog);
       if (result.code === 0) {
@@ -387,6 +401,7 @@ export function EditorView({
     setDevUrl(null);
     setLogsCollapsed(false);
     try {
+      if (!(await handleSave())) return;
       const handle = await startDevServer(
         project.path,
         appendLog,
@@ -520,7 +535,7 @@ export function EditorView({
             <button
               type="button"
               onClick={handleStartDev}
-              disabled={devStarting || busy}
+              disabled={devStarting || busy || saving || metadataSaving}
               className="flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
               title="このPCでプロジェクトを起動し、ブラウザで動作を確認する"
             >
@@ -560,7 +575,7 @@ export function EditorView({
             <button
               type="button"
               onClick={handleItemCheck}
-              disabled={busy || checkingPublish}
+              disabled={busy || checkingPublish || saving || metadataSaving}
               className="flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-50"
               title="アイテムをビルドし、セキュリティをチェックする"
             >
@@ -571,7 +586,7 @@ export function EditorView({
           <button
             type="button"
             onClick={handleUpload}
-            disabled={busy || checkingPublish || !user}
+            disabled={busy || checkingPublish || saving || metadataSaving || !user}
             title={!user ? "公開するにはXRiftにログインしてください" : "XRiftに公開"}
             className="flex items-center gap-1.5 rounded-md bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-violet-500 disabled:opacity-50"
           >
@@ -601,6 +616,7 @@ export function EditorView({
               projectPath={project.path}
               selected={selectedRel}
               refreshKey={fileTreeKey}
+              onBeforePathChange={handleSave}
               onSelect={async (rel, kind) => {
                 if (!(await handleSave())) return;
                 selectionIntentRef.current++;
@@ -670,9 +686,12 @@ export function EditorView({
             <XriftJsonEditor
               projectPath={project.path}
               projectKind={project.kind}
-              onOpenRaw={() => setXriftJsonRaw(true)}
+              onOpenRaw={async () => { if (await handleSave()) setXriftJsonRaw(true); }}
               onRefresh={onProjectChanged}
               onSaved={handlePreparationChanged}
+              onSaveReady={registerMetadataSave}
+              onDirtyChange={setMetadataDirty}
+              onSavingChange={setMetadataSaving}
               publishPreparation={resumePublishAfterPreparation}
             />
           ) : isText ? (

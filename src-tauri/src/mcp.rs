@@ -621,7 +621,8 @@ fn editor_error(code: &str, message: &str) -> XriftMcpEditorError {
 fn request_timeout_seconds(tool_name: &str) -> u64 {
     match tool_name {
         "publish_project" | "create_project" | "open_project" | "close_project"
-        | "duplicate_project" | "export_project" | "import_project" => {
+        | "duplicate_project" | "export_project" | "import_project"
+        | "list_chatgpt_models" | "disconnect_chatgpt" => {
             MCP_LONG_REQUEST_TIMEOUT_SECONDS
         }
         _ => MCP_REQUEST_TIMEOUT_SECONDS,
@@ -675,7 +676,7 @@ fn rendezvous_path(app: &AppHandle) -> Result<PathBuf, String> {
 fn write_private_json(path: &Path, value: &impl Serialize) -> Result<(), String> {
     let parent = path
         .parent()
-        .ok_or_else(|| "AI接続情報の保存先が不正です".to_string())?;
+        .ok_or_else(|| "MCP接続情報の保存先が不正です".to_string())?;
     std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     let payload = serde_json::to_vec(value).map_err(|error| error.to_string())?;
     write_private_bytes(path, &payload)
@@ -1469,7 +1470,7 @@ pub fn run_stdio_server() -> Result<(), String> {
                     "protocolVersion": MCP_PROTOCOL_VERSION,
                     "capabilities": { "tools": { "listChanged": false } },
                     "serverInfo": { "name": MCP_SERVER_NAME, "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": "XRift Studio edits one Scene of a world that people visit together. Output: one finished world. Start with list_projects: it says which project is open. With none open, create_project (name, optional kind and templateId from list_starter_templates) or open_project makes one the Editor session; until then editing tools answer EDITOR_UNAVAILABLE. Publishing is available: get_publish_readiness names what is missing (starter metadata via update_project_metadata, a thumbnail via set_project_thumbnail, sign-in via login and get_account, blocking diagnostics), and publish_project uploads to XRift and returns the URL or id. Call publish_project only when the person asked for the world to be published. Studio includes persistent world authoring: call get_world_authoring to resume, or begin_world_authoring to save the blueprint and completion criteria. No source checkout, Node.js runner or local skill is required. After edits, capture_scene_view with authoringView spawn and iso returns images and capture IDs; review_world_authoring records each criterion verdict, and complete_world_authoring checks current evidence. Recording files go to Recording inside the open world project. Read the current Scene and available capabilities first. Before a new world or substantial change, write a short blueprint covering the requested scope and completion criteria. For a small adjustment, record the target and expected result; do not add unrequested visitor activities or equipment. Preserve the begin/review/complete world-authoring evidence contract when using that session. For social, collaborative and presentation worlds, consider ScreenShareDisplay first and record inclusion or a purpose-based omission reason. Use Mirror when avatar viewing matters and TagBoard when an event needs participant tag selection; do not invent a TagMarker API. Read list_component_definitions worldComponents for official recipes, fields, existing instances and placement/verification guidance. Reserve functional equipment and its usage areas before decoration. Frame screens and mirrors with the architecture without covering displays or controls, and check sightlines from front/back/side audience and operator positions. An Edit placeholder or component presence does not prove live sharing, multi-user synchronization or tag selection; verify in a supported runtime and report untested behavior. State the blueprint and continue. Continue through requested edits and verification. Ask when authentication needs the person, the target is ambiguous, or an unrequested destructive or external action is required. Report unavailable tools or verification honestly. If publishing was not requested, finish after saving and verification. Terrain, grass, post effects, external assets, heavy models require one line of reason in the blueprint. Without that line, skip them. For a new world, use this order as a starting point and adapt it to the task: ground and blockout with real Materials and circulation; main experience equipment and visual focus; sky, ambient light, fog together; remaining blueprint items; verification. Three same-category writes (Terrain, grass, one Entity Transform, one Material, Scene settings) without capture_scene_view return a harness warning. Post effects require a before/after capture_scene_view comparison. Do not ship default grey primitives. Motion, repetition, generative structure belong to Scripts. Read get_scripting_capabilities and list_script_templates before writing one. Do not report a world as done without capture_scene_view from the spawn point at eye height and from the iso view; metrics and the document state expectations, frames state results. When the client has the xrift-world-direction skill, read it before building. Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Use get_terrain before sculpt_terrain; Terrain is a static height-sampled mesh with a fixed Trimesh Collider, so create_terrain and sculpt_terrain are Edit-only. Script execution is not sandboxed. Studio Play and set_play_mode compile and execute saved Scripts without a separate approval dialog. Source fingerprints are diagnostics, not permission. Compilation failure leaves the editor in Edit; failed hot reload keeps the last working module. Inspect scriptRuntime after starting or updating Scripts. Call get_scripting_capabilities and list_script_templates before authoring a Script. Use create_script_asset with templateId to create a built-in example, or apply_script_template to create it and attach its Script Component to an Entity in one editor revision. For custom source, use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, update_script_component to declare properties and references, then set_play_mode. Use import_audio_asset, import_font_asset, import_texture_asset, import_model_asset, import_skybox_asset, or import_shader_asset only for a trusted absolute local path while Edit is active; the Editor validates extension, signature, regular-file/no-link status, and size limits, then copies it into managed project storage without returning file bytes or the external path. Use get_model_asset/update_model_asset for import settings and material slots, and reimport_model_asset to apply derived Model changes. Use get_shader_asset/update_shader_asset for project shader source. Use get_audio_asset plus place_asset, or add_component with core.audio-source and update_component, for persistent Audio Source authoring. Use get_texture_asset/update_texture_asset for persistent sampler and import settings; updates are supported during Play and restart only consuming Entities. Runtime ctx.audioSources, ctx.materials, and ctx.particles changes reset on Stop; use persistent Audio Source, Material, or Particle tools to save authoring data. Call list_component_definitions and get_entity_components before add_component, update_component, or remove_component. Use create_prefab to turn an Entity hierarchy into a reusable Prefab Asset, then place_asset to instantiate it. While Play is active, Entity enabled state and supported component/scene structure tools synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. To record the Scene View while building, call get_recording_status, then start_recording (idempotent), set_recording_camera with fitScene as the world grows, and stop_recording when done; a failed recording call never affects editing tools. XRift Studio must be running; open or create a project with the project tools before editing."
+                    "instructions": "XRift Studio edits one Scene of a world that people visit together. Output: one finished world. Start with list_projects: it says which project is open. With none open, create_project (name, optional kind and templateId from list_starter_templates) or open_project makes one the Editor session; until then editing tools answer EDITOR_UNAVAILABLE. Publishing is available: get_publish_readiness names what is missing (starter metadata via update_project_metadata, a thumbnail via set_project_thumbnail, sign-in via login and get_account, blocking diagnostics), and publish_project uploads to XRift and returns the URL or id. Call publish_project only when the person asked for the world to be published. Studio includes persistent world authoring: call get_world_authoring to resume, or begin_world_authoring to save the blueprint and completion criteria. No source checkout, Node.js runner or local skill is required. After edits, capture_scene_view with authoringView spawn and iso returns images and capture IDs; review_world_authoring records each criterion verdict, and complete_world_authoring checks current evidence. Recording files go to Recording inside the open world project. Read the current Scene and available capabilities first. Before a new world or substantial change, write a short blueprint covering the requested scope and completion criteria. For a small adjustment, record the target and expected result; do not add unrequested visitor activities or equipment. Preserve the begin/review/complete world-authoring evidence contract when using that session. For social, collaborative and presentation worlds, consider ScreenShareDisplay first and record inclusion or a purpose-based omission reason. Use Mirror when avatar viewing matters and TagBoard when an event needs participant tag selection; do not invent a TagMarker API. Read list_component_definitions worldComponents for official recipes, fields, existing instances and placement/verification guidance. Reserve functional equipment and its usage areas before decoration. Frame screens and mirrors with the architecture without covering displays or controls, and check sightlines from front/back/side audience and operator positions. An Edit placeholder or component presence does not prove live sharing, multi-user synchronization or tag selection; verify in a supported runtime and report untested behavior. State the blueprint and continue. Continue through requested edits and verification. Ask when authentication needs the person, the target is ambiguous, or an unrequested destructive or external action is required. Report unavailable tools or verification honestly. If publishing was not requested, finish after saving and verification. Terrain, grass, post effects, external assets, heavy models require one line of reason in the blueprint. Without that line, skip them. For a new world, use this order as a starting point and adapt it to the task: ground and blockout with real Materials and circulation; main experience equipment and visual focus; sky, ambient light, fog together; remaining blueprint items; verification. Three same-category writes (Terrain, grass, one Entity Transform, one Material, Scene settings) without capture_scene_view return a harness warning. Post effects require a before/after capture_scene_view comparison. Do not ship default grey primitives. Motion, repetition, generative structure belong to Scripts. Read get_scripting_capabilities and list_script_templates before writing one. Do not report a world as done without capture_scene_view from the spawn point at eye height and from the iso view; metrics and the document state expectations, frames state results. When the client has the xrift-world-direction skill, read it before building. Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Use get_terrain before sculpt_terrain; Terrain is a static height-sampled mesh with a fixed Trimesh Collider, so create_terrain and sculpt_terrain are Edit-only. Script execution is not sandboxed. Studio Play and set_play_mode compile and execute saved Scripts without a separate approval dialog. Source fingerprints are diagnostics, not permission. Compilation failure leaves the editor in Edit; failed hot reload keeps the last working module. Inspect scriptRuntime after starting or updating Scripts. Call get_scripting_capabilities and list_script_templates before authoring a Script. Use create_script_asset with templateId to create a built-in example, or apply_script_template to create it and attach its Script Component to an Entity in one editor revision. For custom source, use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, update_script_component to declare properties and references, then set_play_mode. Use import_audio_asset, import_font_asset, import_texture_asset, import_model_asset, import_skybox_asset, or import_shader_asset only for a trusted absolute local path while Edit is active; the Editor validates extension, signature, regular-file/no-link status, and size limits, then copies it into managed project storage without returning file bytes or the external path. Use get_model_asset/update_model_asset for import settings and material slots, and reimport_model_asset to apply derived Model changes. Use get_shader_asset/update_shader_asset for project shader source. Use get_audio_asset plus place_asset, or add_component with core.audio-source and update_component, for persistent Audio Source authoring. Use get_texture_asset/update_texture_asset for persistent sampler and import settings; updates are supported during Play and restart only consuming Entities. Runtime ctx.audioSources, ctx.materials, and ctx.particles changes reset on Stop; use persistent Audio Source, Material, or Particle tools to save authoring data. Call list_component_definitions and get_entity_components before add_component, update_component, or remove_component. Use create_prefab to turn an Entity hierarchy into a reusable Prefab Asset, then place_asset to instantiate it. While Play is active, Entity enabled state and supported component/scene structure tools synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. To record the Scene View while building, call get_recording_status, then start_recording (idempotent), set_recording_camera with fitScene as the world grows, and stop_recording when done; a failed recording call never affects editing tools. For Studio ChatGPT generation, open Settings then MCP connection to configure external clients; the Editor ChatGPT tab is separate. connect_chatgpt starts browser authorization; the person grants access. Renewable credentials stay in the OS secure store for startup restore, never in MCP responses or projects. Poll get_chatgpt_connection until signedIn and planUsageEnabled are true and connecting and restoring are false. Choose a slug from list_chatgpt_models and call generate_chatgpt_world with current context. It consumes the connected account allowance and returns generationId immediately. Defaults are target=current and mode=build: validate the plan, save drafts, then adjust and add Entities in the current Scene sequentially, saving each result. mode=plan validates and returns a public plan with status planned without changing files or the Scene. Review that plan and apply_chatgpt_plan with a fresh context for the same source project and Scene. target=new opens a separate World after saving the source. cancel_chatgpt_generation requests cancellation and keeps already saved results. Poll get_chatgpt_generation for planned, completed, cancelled or failed and inspect the actual World after execution. Saved partial results remain after failure or cancellation. XRift Studio must be running; open or create a project with the project tools before editing."
                 }),
             )?,
             "ping" => write_json_rpc_result(&mut stdout, id, json!({}))?,
@@ -2062,6 +2063,65 @@ fn tool_definitions() -> Value {
             "name": "reload_xrift_items",
             "description": "Retry loading placed XRift Items using Studio's current account. Does not modify the Scene or return credentials. Inspect the Scene afterward; this response does not prove loading succeeded.",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "get_chatgpt_connection",
+            "description": "Read Studio's ChatGPT connection: signedIn, planUsageEnabled, connecting, restoring and the last connection error. No credentials are returned. Poll after connect_chatgpt or startup restore; only signedIn with planUsageEnabled and connecting=false and restoring=false permits inference. Independent of XRift sign-in.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "connect_chatgpt",
+            "description": "Start ChatGPT authorization in the person's system browser and return immediately. The person completes authorization; poll get_chatgpt_connection for completion or error. Idempotent while connecting. Renewable credentials stay in the OS secure store for startup restore and are never returned to MCP or saved in projects. Does not require an open project.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "disconnect_chatgpt",
+            "description": "Disconnect Studio's ChatGPT session, remove its OS secure-store credentials and revoke its refresh token. Refuses while authorization, restoration or inference is running. Returns the connection summary without credentials; a remote revocation error does not restore the local session.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "list_chatgpt_models",
+            "description": "List model slugs and display names available to Studio's connected ChatGPT account. Requires planUsageEnabled. Choose a returned slug for generate_chatgpt_world instead of inventing one.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "open_chatgpt_panel",
+            "description": "Show the ChatGPT tab in the open World's Editor. Keeps the Scene and drafts. Use when the person needs to review connection, model or generation settings. Item projects cannot open this tab.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "generate_chatgpt_world",
+            "description": "Plan or edit a World using Studio's connected ChatGPT account and its usage allowance. Defaults to target=current and mode=build: validate the plan, save drafts, then adjust existing Entities and add new Entities sequentially to the current Scene, saving each result. mode=plan returns a planned job without changing the Scene or project files; review its public plan and use apply_chatgpt_plan to execute it. target=new creates and opens a separate World after saving the source. Requires a World in Edit, a current get_editor_context snapshot and a slug from list_chatgpt_models. Options choose models/materials/audio; omit for all three. Returns generationId immediately; poll get_chatgpt_generation. Saved partial results remain on failure or cancellation. Never publishes.",
+            "inputSchema": { "type": "object", "properties": {
+                "projectId": { "type": "string", "minLength": 1 },
+                "sceneId": { "type": "string", "minLength": 1 },
+                "expectedRevision": { "type": "integer", "minimum": 0 },
+                "model": { "type": "string", "minLength": 1, "maxLength": 128 },
+                "prompt": { "type": "string", "minLength": 1, "maxLength": 2000 },
+                "target": { "type": "string", "enum": ["current", "new"], "default": "current" },
+                "mode": { "type": "string", "enum": ["build", "plan"], "default": "build" },
+                "options": { "type": "object", "properties": { "models": { "type": "boolean" }, "materials": { "type": "boolean" }, "audio": { "type": "boolean" } }, "required": ["models", "materials", "audio"], "additionalProperties": false }
+            }, "required": ["projectId", "sceneId", "expectedRevision", "model", "prompt"], "additionalProperties": false }
+        },
+        {
+            "name": "get_chatgpt_generation",
+            "description": "Read a generationId returned by generate_chatgpt_world in this Studio session. Reports running, planned, completed, cancelled or failed, its public plan and any error. progress includes phase, message, completed, total, recentEvents and projectId so the client can show actual execution results. A planned job has not changed the Scene or project files. After execution, use get_editor_context and capture_scene_view to inspect saved results, including partial results after failure or cancellation. Recent eight jobs are retained until Studio exits.",
+            "inputSchema": { "type": "object", "properties": { "generationId": { "type": "string", "minLength": 1 } }, "required": ["generationId"], "additionalProperties": false }
+        },
+        {
+            "name": "apply_chatgpt_plan",
+            "description": "Execute a planned ChatGPT job once, using its stored model, options and target. Supply a fresh get_editor_context snapshot for the same source project and Scene; refuses stale revisions and changes to Entities the plan intends to adjust. Returns generationId and running immediately. Poll get_chatgpt_generation for sequential edits, saves and completion. Saved partial results remain on failure or cancellation. Never publishes.",
+            "inputSchema": { "type": "object", "properties": {
+                "generationId": { "type": "string", "minLength": 1 },
+                "projectId": { "type": "string", "minLength": 1 },
+                "sceneId": { "type": "string", "minLength": 1 },
+                "expectedRevision": { "type": "integer", "minimum": 0 }
+            }, "required": ["generationId", "projectId", "sceneId", "expectedRevision"], "additionalProperties": false }
+        },
+        {
+            "name": "cancel_chatgpt_generation",
+            "description": "Discard a planned ChatGPT job or request cancellation of a running job by generationId. Does not undo Entities or assets already applied and saved. Cancellation may finish after an active step; poll get_chatgpt_generation for the final cancelled, completed or failed status. Returns whether cancellation was requested and never returns credentials.",
+            "inputSchema": { "type": "object", "properties": { "generationId": { "type": "string", "minLength": 1 } }, "required": ["generationId"], "additionalProperties": false }
         },
         {
             "name": "login",
@@ -4627,11 +4687,48 @@ mod tests {
     }
 
     #[test]
+    fn chatgpt_plan_and_execution_have_distinct_context_contracts() {
+        let tools = tool_definitions();
+        let tools = tools.as_array().expect("tool list");
+        let find = |name: &str| {
+            tools.iter().find(|tool| tool["name"] == name)
+                .unwrap_or_else(|| panic!("missing tool: {name}"))
+        };
+        let generate = find("generate_chatgpt_world");
+        let properties = &generate["inputSchema"]["properties"];
+        assert_eq!(properties["target"]["enum"], json!(["current", "new"]));
+        assert_eq!(properties["target"]["default"], "current");
+        assert_eq!(properties["mode"]["enum"], json!(["build", "plan"]));
+        assert_eq!(properties["mode"]["default"], "build");
+        let required = generate["inputSchema"]["required"].as_array().unwrap();
+        for optional in ["target", "mode", "options"] {
+            assert!(!required.contains(&json!(optional)), "{optional} must remain optional");
+        }
+        assert_eq!(properties["options"]["additionalProperties"], false);
+        assert_eq!(generate["inputSchema"]["additionalProperties"], false);
+
+        let apply = find("apply_chatgpt_plan");
+        assert_eq!(apply["inputSchema"]["required"],
+            json!(["generationId", "projectId", "sceneId", "expectedRevision"]));
+        assert_eq!(apply["inputSchema"]["properties"]["expectedRevision"]["minimum"], 0);
+        assert_eq!(apply["inputSchema"]["additionalProperties"], false);
+        // Cancellation follows the job even if the person left its Scene.
+        for name in ["cancel_chatgpt_generation", "get_chatgpt_generation"] {
+            let tool = find(name);
+            assert_eq!(tool["inputSchema"]["required"], json!(["generationId"]));
+            assert_eq!(tool["inputSchema"]["properties"].as_object().unwrap().len(), 1);
+            assert_eq!(tool["inputSchema"]["additionalProperties"], false);
+        }
+    }
+
+    #[test]
     fn persistent_editor_writes_expose_revision_contracts() {
         let tools = tool_definitions();
         let tools = tools.as_array().expect("tool list");
         for name in [
             "import_audio_asset",
+            "generate_chatgpt_world",
+            "apply_chatgpt_plan",
             "import_texture_asset",
             "update_texture_asset",
             "create_document_asset",

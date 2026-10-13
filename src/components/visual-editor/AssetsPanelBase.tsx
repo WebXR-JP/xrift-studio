@@ -1494,19 +1494,19 @@ export function AssetsPanel({
     }
   }, [importError, pendingImports]);
 
+  const renameOriginalName = renameRequest?.kind === "asset"
+    ? assets.assets[renameRequest.id]?.name
+    : renameRequest?.kind === "folder" ? assets.folders?.[renameRequest.id]?.name : undefined;
+
   useEffect(() => {
     if (!renameRequest) return;
-    const name =
-      renameRequest.kind === "asset"
-        ? assets.assets[renameRequest.id]?.name
-        : assets.folders?.[renameRequest.id]?.name;
-    setRenameDraft(name ?? "");
+    setRenameDraft(renameOriginalName ?? "");
     const frame = window.requestAnimationFrame(() => {
       renameInputRef.current?.focus();
       renameInputRef.current?.select();
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [assets.assets, assets.folders, renameRequest]);
+  }, [renameOriginalName, renameRequest]);
 
   useLayoutEffect(() => {
     const menu = contextMenuRef.current;
@@ -1774,7 +1774,7 @@ export function AssetsPanel({
        * through container queries instead of wrapping onto a second line.
        */}
       <div className={`editor-assets-header @container/assets-header flex shrink-0 border-b border-editor-border bg-editor-surface ${tablet ? "flex-col gap-1 px-2 py-1" : "h-10 items-center justify-between gap-3 px-3"}`}>
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex min-w-10 flex-1 items-center gap-2">
           <h2 id="assets-heading" className="shrink-0 text-[13px] font-semibold text-slate-800">Assets</h2>
           {tablet ? <span className="min-w-0 flex-1 truncate text-xs text-editor-muted">{selectedAssetId ? assets.assets[selectedAssetId]?.name : ""}</span> : null}
           {touch && selectedAssetId && assets.assets[selectedAssetId] ? (
@@ -1823,7 +1823,7 @@ export function AssetsPanel({
             ))}
           </nav>
         </div>
-        <div className={`flex min-w-0 shrink-0 items-center gap-1 ${tablet ? "flex-wrap" : ""}`}>
+        <div className={`flex min-w-0 shrink items-center gap-1 ${tablet ? "flex-wrap" : ""}`}>
           {!tablet ? <GuideLink page="assets" label="Assetsの使い方" compact /> : null}
           {normalizedExternalLockReason ? (
             <span
@@ -1834,7 +1834,7 @@ export function AssetsPanel({
               {normalizedExternalLockReason}
             </span>
           ) : null}
-          <label className={`relative flex items-center ${tablet ? "min-w-0 flex-1" : "h-7 w-44 @[560px]/assets-header:w-52 @[700px]/assets-header:w-64"}`}>
+          <label className={`relative flex min-w-0 items-center ${tablet ? "flex-1" : "h-7 w-44 @[560px]/assets-header:w-52 @[700px]/assets-header:w-64"}`}>
             <span className="sr-only">アセットを検索</span>
             <input
               type="search"
@@ -1849,7 +1849,7 @@ export function AssetsPanel({
                 }
               }}
               placeholder="アセットを検索…"
-              className="h-7 w-full rounded-md border border-editor-border bg-editor-surface pl-2.5 pr-12 text-xs text-editor-text placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-brand-400 focus-visible:ring-2 focus-visible:ring-brand-100"
+              className="h-7 min-w-0 w-full rounded-md border border-editor-border bg-editor-surface pl-2.5 pr-12 text-xs text-editor-text placeholder:text-slate-400 focus-visible:outline-none focus-visible:border-brand-400 focus-visible:ring-2 focus-visible:ring-brand-100"
             />
             {searching ? (
               <button
@@ -1974,9 +1974,10 @@ export function AssetsPanel({
                   <span className={`flex shrink-0 items-center justify-center text-slate-500 ${viewMode === "grid" ? "size-8" : "size-6"}`}><EDITOR_ICONS.folder size={viewMode === "grid" ? 24 : 16} aria-hidden="true" /></span>
                   <input
                     ref={renameInputRef}
+                    aria-label={`${folder.name}の名前`}
                     value={renameDraft}
                     onChange={(event) => setRenameDraft(event.currentTarget.value)}
-                    onBlur={() => onRename({ kind: "folder", id: folder.id }, renameDraft)}
+                    onBlur={(event) => onRename({ kind: "folder", id: folder.id }, event.currentTarget.value)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") event.currentTarget.blur();
                       if (event.key === "Escape") {
@@ -2020,9 +2021,10 @@ export function AssetsPanel({
               <span className={`block shrink-0 overflow-hidden rounded [&_svg]:!size-4 ${viewMode === "grid" ? "size-8" : "size-6"}`}><AssetThumbnail asset={asset} assets={assets} projectPath={projectPath} /></span>
               <input
                 ref={renameInputRef}
+                aria-label={`${asset.name}の名前`}
                 value={renameDraft}
                 onChange={(event) => setRenameDraft(event.currentTarget.value)}
-                onBlur={() => onRename({ kind: "asset", id: asset.id }, renameDraft)}
+                onBlur={(event) => onRename({ kind: "asset", id: asset.id }, event.currentTarget.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") event.currentTarget.blur();
                   if (event.key === "Escape") {

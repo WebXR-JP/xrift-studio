@@ -6,6 +6,9 @@
  * This only disables DevTools timeline tracks in development; React warnings,
  * the Profiler, performance.mark/measure and Studio metrics remain available.
  * Remove when both React DOM and R3F's bundled reconciler bound serialization.
+ * App entry points load their React bootstrap dynamically after this module.
+ * Static imports can initialize a shared SDK reconciler before this guard,
+ * leaving its cached capability true after timeStamp has been disabled.
  */
 if (import.meta.env.DEV && typeof window !== "undefined") {
   Object.defineProperty(console, "timeStamp", {

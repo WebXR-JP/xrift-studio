@@ -44,9 +44,9 @@ test(`MToon ${version}の色と輪郭線を編集し、バージョン切替・U
   await expect(page.getByRole("heading", { name: "MToon", exact: true })).toBeVisible();
   await expect(roughness).toHaveCount(0);
   await expect(page.getByRole("checkbox", { name: "Clearcoatを有効にする" })).toHaveCount(0);
-  const width = page.getByRole("spinbutton", { name: "Outline Width", exact: true });
+  const width = page.getByRole("spinbutton", { name: "Outline Width（輪郭線の太さ）", exact: true });
   const mode = page.getByRole("combobox", { name: "Outline Width Mode", exact: true });
-  const color = page.getByLabel("Outline Colorのカラーピッカー", { exact: true });
+  const color = page.getByLabel("Outline Color（輪郭線の色）のカラーピッカー", { exact: true });
   await expect(mode).toHaveValue("worldCoordinates");
   await expect(width).toHaveValue("0.003");
   await color.fill("#c03050");
@@ -64,9 +64,9 @@ test(`MToon ${version}の色と輪郭線を編集し、バージョン切替・U
   await expect(mode).toHaveValue("worldCoordinates");
   await expect(width).toHaveValue("0.007");
 
-  const shade = page.getByLabel("Shade Colorのカラーピッカー", { exact: true });
+  const shade = page.getByLabel("Shade Color（影の色）のカラーピッカー", { exact: true });
   await shade.fill("#405060");
-  const shift = page.getByRole("spinbutton", { name: "Shading Shift", exact: true });
+  const shift = page.getByRole("spinbutton", { name: "Shading Shift（明暗の境界位置）", exact: true });
   await shift.fill("-0.25");
   await shift.press("Tab");
   await shading.selectOption(otherType);
@@ -91,10 +91,10 @@ test(`MToon ${version}の色と輪郭線を編集し、バージョン切替・U
   await expect(zWrite).toBeDisabled();
   await page.getByRole("combobox", { name: /^Depth Write/ }).selectOption("auto");
   const advanced = [
-    ["Matcap Color R", "0.2"],
-    ["Rim Color B", "0.4"],
-    ["UV Scroll X Speed", "0.12"],
-    ["Render Queue Offset", "-3"],
+    ["Matcap Color（映り込みの色） R", "0.2"],
+    ["Rim Color（縁の光の色） B", "0.4"],
+    ["UV Scroll X Speed（横方向の移動速度）", "0.12"],
+    ["Render Queue Offset（描画順の調整）", "-3"],
   ] as const;
   for (const [label, value] of advanced) {
     const input = page.getByRole("spinbutton", { name: label, exact: true });
@@ -195,8 +195,8 @@ test("単体の種類選択で個別の色・Texture・UVを保ち、PBR保存�
       ...blue.properties.extensions.VRMC_materials_mtoon,
       extras:{...blue.properties.extensions.VRMC_materials_mtoon?.extras,xriftVrm0CompatShade:type==="mtoon-0.x"},
     });
-    await expect(page.getByRole("combobox",{name:"Shade Multiply Mapのテクスチャ",exact:true})).toHaveValue("batch-texture-1");
-    await expect(page.getByRole("combobox",{name:"Outline Width Multiply Mapのテクスチャ",exact:true})).toHaveValue("batch-texture-5");
+    await expect(page.getByRole("combobox",{name:"Shade Multiply Map（影の色の画像）のテクスチャ",exact:true})).toHaveValue("batch-texture-1");
+    await expect(page.getByRole("combobox",{name:"Outline Width Multiply Map（輪郭線の太さの画像）のテクスチャ",exact:true})).toHaveValue("batch-texture-5");
     await expect(page.getByRole("combobox",{name:"Base Color Mapのテクスチャ",exact:true})).toHaveValue("batch-texture-2");
     await expect(page.getByRole("combobox",{name:"Normal Mapのテクスチャ",exact:true})).toHaveValue("batch-texture-4");
     await setShading("standard");

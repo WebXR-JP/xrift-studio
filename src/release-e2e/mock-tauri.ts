@@ -1,5 +1,10 @@
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
+import { emit } from "@tauri-apps/api/event";
 import type {
+  ChatgptConnection,
+  ChatgptSceneContext,
+  ChatgptAssetOptions,
+  XriftMcpEditorResponse,
   Project,
   ProjectKind,
   RuntimePaths,
@@ -19,9 +24,34 @@ export type ReleaseE2EState = {
   uploadAttempts: string[];
   unhandledCommands: string[];
   projects: Project[];
+  chatgpt: ChatgptConnection;
+  /** Isolated native-save controls for observing ChatGPT's incremental writes. */
+  chatgptSaveGate: number | null;
+  chatgptSaveFailAt: number | null;
+  chatgptCreateGate: boolean;
+  chatgptCreateWaiting: boolean;
+  chatgptSavedSteps: Array<{ projectPath: string; projectId: string; entityNames: string[] }>;
+  chatgptPlanGate: boolean;
+  chatgptPlanWaiting: boolean;
+  chatgptPlanFixture: string | null;
+  chatgptSceneContexts: ChatgptSceneContext[];
+  chatgptCancelledGenerations: string[];
+  chatgptRequests: Array<{ generationId: string; options: ChatgptAssetOptions }>;
 };
 
+const mcpResponses = new Map<string, (response: XriftMcpEditorResponse) => void>();
+/** Uses the real App/Editor handlers, with only the native transport mocked. */
+export async function callReleaseE2EMcp(tool: string, argumentsValue: Record<string, unknown> = {}): Promise<XriftMcpEditorResponse> {
+  const id = crypto.randomUUID();
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => { mcpResponses.delete(id); reject(new Error(`MCP fixture timeout: ${tool}`)); }, 30_000);
+    mcpResponses.set(id, response => { clearTimeout(timeout); resolve(response); });
+    void emit("xrift-mcp-editor-request", { id, tool, arguments: argumentsValue, clientName: "Release E2E" }).catch(reject);
+  });
+}
+
 type TauriInternals = {
+  invoke?: (command: string, args?: Record<string, unknown>, options?: unknown) => Promise<unknown>;
   convertFileSrc?: (filePath: string, protocol?: string) => string;
   runCallback?: (id: number, payload: unknown) => void;
 };
@@ -209,6 +239,8 @@ function emitShellEvent(
 }
 
 export function installReleaseE2EMock(): void {
+  // Tauri 2 checks this flag, independently of the mocked IPC internals.
+  Object.defineProperty(window, "isTauri", { value: true, configurable: true });
   const searchParams = new URLSearchParams(window.location.search);
   const scenario = searchParams.get("scenario");
   let saveFailuresRemaining = Math.max(
@@ -246,6 +278,18 @@ export function installReleaseE2EMock(): void {
     uploadAttempts: [],
     unhandledCommands: [],
     projects: initialProjects.map(copyProject),
+    chatgpt: { signedIn: false, email: null, planUsageEnabled: false, connecting: false, error: null },
+    chatgptSaveGate: null,
+    chatgptSaveFailAt: null,
+    chatgptCreateGate: false,
+    chatgptCreateWaiting: false,
+    chatgptSavedSteps: [],
+    chatgptPlanGate: false,
+    chatgptPlanWaiting: false,
+    chatgptPlanFixture: null,
+    chatgptSceneContexts: [],
+    chatgptCancelledGenerations: [],
+    chatgptRequests: [],
   };
   const projectFiles = new Map<string, Map<string, string>>([
     [CLASSIC_WORLD_PATH, classicFiles("world")],
@@ -307,6 +351,8 @@ export function installReleaseE2EMock(): void {
           return null;
         case "list_projects":
           return state.projects.map(copyProject);
+        case "take_opened_project_archives":
+          return [];
         case "delete_project": {
           const projectPath = stringArg(payload, "projectPath");
           state.projects = state.projects.filter(
@@ -320,6 +366,13 @@ export function installReleaseE2EMock(): void {
           const root = stringArg(payload, "root", PROJECTS_ROOT);
           const directoryName = stringArg(payload, "directoryName");
           const request = payload.request as VisualProjectWriteRequest;
+          if (directoryName.startsWith("chatgpt-world-")) {
+            state.chatgptCreateWaiting = true;
+            while (state.chatgptCreateGate) {
+              await new Promise(resolve => window.requestAnimationFrame(resolve));
+            }
+            state.chatgptCreateWaiting = false;
+          }
           const project = projectFromVisualRequest(root, directoryName, request);
           state.projects.push(project);
           visualDocuments.set(project.path, request);
@@ -342,9 +395,27 @@ export function installReleaseE2EMock(): void {
             throw new Error("E2E transient visual save failure");
           }
           const projectPath = stringArg(payload, "projectPath");
+          const request = payload.request as VisualProjectWriteRequest;
+          // The delay and failures affect only newly generated fixture Worlds.
+          // Real Editor mutations and saving still run through the App handlers.
+          if (/[/\\]chatgpt-world-/.test(projectPath)) {
+            const entityNames = request.sceneDocuments.flatMap(file => {
+              const scene = JSON.parse(file.content) as { entities: Record<string, { name: string }> };
+              return Object.values(scene.entities).map(entity => entity.name);
+            });
+            const placedCount = entityNames.filter(name => ["広場", "ベンチ", "木"].includes(name)).length;
+            await new Promise(resolve => window.setTimeout(resolve, 60));
+            while (state.chatgptSaveGate !== null && placedCount === state.chatgptSaveGate) {
+              await new Promise(resolve => window.requestAnimationFrame(resolve));
+            }
+            if (state.chatgptSaveFailAt !== null && placedCount >= state.chatgptSaveFailAt) {
+              throw new Error("逐次配置の保存検証用エラー");
+            }
+            state.chatgptSavedSteps.push({ projectPath, projectId: JSON.parse(request.projectJson).projectId as string, entityNames });
+          }
           visualDocuments.set(
             projectPath,
-            payload.request as VisualProjectWriteRequest,
+            request,
           );
           const project = state.projects.find(
             (candidate) => candidate.path === projectPath,
@@ -404,9 +475,54 @@ export function installReleaseE2EMock(): void {
         case "commit_visual_asset_import":
         case "open_visual_asset_location":
         case "set_xrift_mcp_editor_ready":
-        case "complete_xrift_mcp_request":
         case "kill_pid_tree":
           return null;
+        case "complete_xrift_mcp_request": {
+          const response = payload.response as XriftMcpEditorResponse;
+          mcpResponses.get(response.id)?.(response);
+          mcpResponses.delete(response.id);
+          return null;
+        }
+        case "chatgpt_status":
+          return { ...state.chatgpt };
+        case "chatgpt_login":
+          state.chatgpt = { ...state.chatgpt, connecting: true, error: null };
+          return { ...state.chatgpt };
+        case "chatgpt_logout":
+          if (state.chatgpt.connecting) throw new Error("ブラウザでの接続が終わってから解除してください");
+          state.chatgpt = { signedIn: false, email: null, planUsageEnabled: false, connecting: false, error: null };
+          return { ...state.chatgpt };
+        case "chatgpt_models":
+          if (!state.chatgpt.planUsageEnabled) throw new Error("ChatGPTプランの利用許可がありません");
+          return [{ slug: "fixture-model", displayName: "検証用モデル" }];
+        case "chatgpt_cancel_generation": {
+          const generationId = stringArg(payload, "generationId");
+          state.chatgptCancelledGenerations.push(generationId);
+          return { generationId, cancelled: true };
+        }
+        case "chatgpt_plan": {
+          if (payload.sceneContext) state.chatgptSceneContexts.push(structuredClone(payload.sceneContext as ChatgptSceneContext));
+          const generationId = stringArg(payload, "generationId");
+          const cancelled = () => state.chatgptCancelledGenerations.includes(generationId);
+          state.chatgptRequests.push({ generationId, options: structuredClone(payload.options as ChatgptAssetOptions) });
+          state.chatgptPlanWaiting = true;
+          try {
+            while (state.chatgptPlanGate) {
+              if (cancelled()) throw new Error("検証用の生成処理を停止しました");
+              await new Promise(resolve => window.setTimeout(resolve, 25));
+            }
+            await new Promise(resolve => window.setTimeout(resolve, 300));
+            if (cancelled()) throw new Error("検証用の生成処理を停止しました");
+          } finally { state.chatgptPlanWaiting = false; }
+          if (!state.chatgpt.planUsageEnabled) throw new Error("ChatGPTプランの利用許可がありません");
+          if (payload.prompt === "failure") throw new Error("検証用の生成エラー");
+          if (state.chatgptPlanFixture) return { plan: state.chatgptPlanFixture, assetCandidates: [] };
+          return { plan: JSON.stringify({ title: "検証用の広場", description: "生成操作の検証", objects: [
+            { name: "広場", shape: "plane", position: [0, 0, 0], scale: [12, 1, 12] },
+            { name: "ベンチ", shape: "box", position: [2, 0.5, 0], scale: [2, 1, 0.7] },
+            { name: "木", shape: "cone", position: [-2, 2, 0], scale: [2, 4, 2] },
+          ] }), assetCandidates: [] };
+        }
         case "read_image_data_url":
           throw new Error("Release E2E fixture does not contain binary files");
         case "check_xrift_latest":
@@ -534,6 +650,11 @@ export function installReleaseE2EMock(): void {
   );
 
   if (window.__TAURI_INTERNALS__) {
+    // event.js sends eventId while the bundled event mock removes args.id.
+    // Normalize the fixture transport so StrictMode listeners are removed.
+    const originalInvoke = window.__TAURI_INTERNALS__.invoke;
+    if (originalInvoke) window.__TAURI_INTERNALS__.invoke = (command, args, options) => originalInvoke(command,
+      command === "plugin:event|unlisten" && args ? { ...args, id: args.eventId ?? args.id } : args, options);
     window.__TAURI_INTERNALS__.convertFileSrc = (
       filePath: string,
       protocol = "asset",

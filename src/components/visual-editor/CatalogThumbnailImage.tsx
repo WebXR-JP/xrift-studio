@@ -15,7 +15,8 @@ export function CatalogThumbnailImage({
   useEffect(() => {
     if (failedSrc !== src) setFailedSrc(null);
   }, [failedSrc, src]);
-  const failed = failedSrc === src;
+  const missing = !src.trim();
+  const failed = missing || failedSrc === src;
   return (
     <div className={`relative overflow-hidden bg-slate-100 ${className}`}>
       {!failed ? (
@@ -30,7 +31,7 @@ export function CatalogThumbnailImage({
       ) : (
         <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-slate-100 px-2 text-center text-slate-500">
           {fallback}
-          <span className="text-[10px] font-medium">プレビュー unavailable</span>
+          <span className="text-[10px] font-medium">{missing ? "プレビューなし" : "プレビューを表示できません"}</span>
         </div>
       )}
     </div>

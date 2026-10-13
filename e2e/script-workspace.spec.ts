@@ -19,11 +19,13 @@ async function state(page: Page) { return page.evaluate(async (url) => (await im
 async function edit(page: Page, value: string) { await page.evaluate(async ({ url, value }) => (await import(url) as Fixture).edit(value), { url, value }); }
 
 test("Scriptタブの往復でコードとUndoを保持し、非表示中は保存キーを受け取らない", async ({ page }, testInfo) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   const errors: string[] = []; page.on("pageerror", (error) => errors.push(error.message));
   await mount(page);
   await page.getByRole("button", { name: "Open Door" }).click();
   await read(page, "scripts/door.ts", "// original");
   await expect(page.locator(".monaco-editor textarea")).toBeVisible();
+  await page.clock.pauseAt(new Date("2026-01-01T00:01:00Z"));
   await edit(page, "// draft");
   await page.getByRole("button", { name: "Scene View", exact: true }).click();
   await page.keyboard.press("Control+s");
@@ -55,23 +57,29 @@ test("Scriptの遅い読み込みとエラーが選択中のファイルを上�
 });
 
 test("Script保存の重複を防ぎ、失敗後に同じ下書きを再保存できる", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   await mount(page);
   await page.getByRole("button", { name: "Open Door" }).click();
   await read(page, "scripts/door.ts", "// original");
   await expect(page.locator(".monaco-editor textarea")).toBeVisible();
+  await page.clock.pauseAt(new Date("2026-01-01T00:01:00Z"));
   await edit(page, "// saved draft");
-  const save = page.getByRole("button", { name: "保存 (⌘/Ctrl+S)" });
+  const save = page.getByRole("button", { name: /^(保存待ち|自動保存中|自動保存を再試行|保存済み)$/ });
+  await expect(save).toHaveText("保存待ち");
   await save.evaluate((button) => {
     (button as HTMLButtonElement).click();
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true }));
   });
   expect((await state(page)).writes).toEqual(["// saved draft"]);
+  await expect(save).toHaveText("自動保存中");
   await expect(page.getByRole("button", { name: "スクリプトエディターを閉じる" })).toBeDisabled();
   await expect(page.getByRole("navigation", { name: "スクリプトファイル" }).getByRole("button").last()).toBeDisabled();
   await page.evaluate(async (url) => (await import(url) as Fixture).settleWrite(true), url);
   await expect(page.getByText("Save failed; retry")).toBeVisible();
+  await expect(save).toHaveText("自動保存を再試行");
   await save.click();
   await page.evaluate(async (url) => (await import(url) as Fixture).settleWrite(), url);
   await expect(save).toBeDisabled();
+  await expect(save).toHaveText("保存済み");
   expect((await state(page)).editor.source).toBe("// saved draft");
 });

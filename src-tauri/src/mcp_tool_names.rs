@@ -3,7 +3,7 @@
 // Source of truth: src/lib/visual-editor/mcp-tool-registry.ts
 // Regenerate with: pnpm mcp:tool-names
 
-pub const MCP_TOOL_NAMES: [&str; 148] = [
+pub const MCP_TOOL_NAMES: [&str; 157] = [
     "list_projects",
     "list_starter_templates",
     "create_project",
@@ -13,6 +13,15 @@ pub const MCP_TOOL_NAMES: [&str; 148] = [
     "export_project",
     "import_project",
     "get_account",
+    "get_chatgpt_connection",
+    "connect_chatgpt",
+    "disconnect_chatgpt",
+    "list_chatgpt_models",
+    "open_chatgpt_panel",
+    "generate_chatgpt_world",
+    "get_chatgpt_generation",
+    "apply_chatgpt_plan",
+    "cancel_chatgpt_generation",
     "reload_xrift_items",
     "login",
     "get_publish_readiness",

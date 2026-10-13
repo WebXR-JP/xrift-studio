@@ -1,3 +1,4 @@
+import { createEditorCanvasEvents } from "../../lib/visual-editor/canvas-events";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { tauri } from "../../lib/tauri";
@@ -236,7 +237,7 @@ export function ModelThumbnailGenerationQueue({
       aria-hidden="true"
       className="pointer-events-none fixed -left-[10000px] top-0 h-[240px] w-[320px] overflow-hidden opacity-0"
     >
-      <Canvas
+      <Canvas events={createEditorCanvasEvents}
         frameloop="demand"
         dpr={[1, 1.25]}
         camera={{ position: [0, 0.15, 2.65], fov: 34 }}

@@ -14,7 +14,12 @@ async function rejects(operation: () => Promise<unknown>, message: string): Prom
 }
 
 export async function runBrowserPublicationFixtureAssertions(): Promise<void> {
-  const bundle = createPrototypeProject("world", "Publication fixture");
+  await assertBrowserPublication("world");
+  await assertBrowserPublication("item");
+}
+
+async function assertBrowserPublication(kind: "world" | "item"): Promise<void> {
+  const bundle = createPrototypeProject(kind, "Publication fixture");
   const staleBundle: PrototypeVisualProject = structuredClone(bundle);
   let stored: VisualProjectDocuments = {
     project: bundle.project,
@@ -54,8 +59,8 @@ export async function runBrowserPublicationFixtureAssertions(): Promise<void> {
   const pendingSave = session.save(queuedBundle);
   await firstSaveReached;
   const result = {
-    worldId: "world-fixture",
-    contentId: "world-fixture",
+    ...(kind === "item" ? { itemId: "item-fixture" } : { worldId: "world-fixture" }),
+    contentId: `${kind}-fixture`,
     versionId: "version-1",
     versionNumber: 1,
     uploadedAt: "2026-09-24T01:00:00.000Z",
@@ -65,7 +70,7 @@ export async function runBrowserPublicationFixtureAssertions(): Promise<void> {
   await pendingSave;
   const publishedBundle = await pendingPublication;
   assert(stored.project.metadata.title === "Saved before publication", "publication keeps an earlier queued autosave");
-  assert(stored.project.lastPublication?.worldId === result.worldId, "remote world ID persisted");
+  assert(stored.project.lastPublication?.contentId === result.contentId, "remote target ID persisted");
   assert(publishedBundle.project.lastPublication?.versionId === result.versionId, "returned bundle carries publication");
 
   await session.save(staleBundle);
@@ -82,18 +87,22 @@ export async function runBrowserPublicationFixtureAssertions(): Promise<void> {
   assert(stored.project.lastPublication?.versionId === nextResult.versionId, "same version retry is idempotent");
 
   await rejects(
-    () => session.recordPublication(staleBundle, { ...nextResult, worldId: "another-world", contentId: "another-world" }),
+    () => session.recordPublication(staleBundle, { ...nextResult, ...(kind === "item" ? { itemId: "another-item" } : { worldId: "another-world" }), contentId: `another-${kind}` }),
     "different remote world is rejected",
   );
   await rejects(
     () => session.recordPublication({ ...staleBundle, project: { ...staleBundle.project, projectId: "another-project" } }, nextResult),
     "different project is rejected",
   );
-  assert(stored.project.lastPublication?.worldId === result.worldId, "rejected results leave remote ID unchanged");
+  await rejects(
+    () => session.recordPublication(staleBundle, kind === "item" ? { worldId: "wrong-kind" } : { itemId: "wrong-kind" }),
+    "the other publication kind is rejected",
+  );
+  assert(stored.project.lastPublication?.contentId === result.contentId, "rejected results leave remote ID unchanged");
 
-  const older = latestBrowserPublication("world", stored.project.lastPublication, result);
+  const older = latestBrowserPublication(kind, stored.project.lastPublication, result);
   assert(older?.versionId === nextResult.versionId, "older version cannot replace newer version");
-  const newer = latestBrowserPublication("world", stored.project.lastPublication, {
+  const newer = latestBrowserPublication(kind, stored.project.lastPublication, {
     ...result,
     versionId: "version-3",
     versionNumber: 3,

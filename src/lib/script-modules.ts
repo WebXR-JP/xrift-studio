@@ -7,7 +7,6 @@ import * as Rapier from "@react-three/rapier";
 import * as XriftWorldComponents from "../../packages/xrift-studio-runtime/src/script/world-components";
 import * as XriftScript from "../../packages/xrift-studio-runtime/src/script/api";
 
-import { transpileTypeScriptModule } from "./monaco";
 import { createScriptModuleBridgeSource } from "./script-module-bridge";
 import {
   collectDynamicScriptImports,
@@ -197,7 +196,21 @@ async function transpileScriptModuleCached(
   }
 
   transpiledScriptCacheMisses += 1;
-  const transpiled = await transpileTypeScriptModule(source, fileName);
+  // A Scene without Scripts must not load the code editor and its workers.
+  // Load the existing compiler only when a Script actually needs conversion.
+  let compile: typeof import("./monaco").transpileTypeScriptModule;
+  try {
+    compile = (await import("./monaco")).transpileTypeScriptModule;
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "TypeScript compilerを読み込めませんでした",
+    };
+  }
+  const transpiled = await compile(source, fileName);
   if (!transpiled.ok) return transpiled;
   transpiledScriptCache.set(cacheKey, transpiled.javaScript);
   while (

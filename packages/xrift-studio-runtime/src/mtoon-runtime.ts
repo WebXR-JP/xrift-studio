@@ -41,6 +41,19 @@ export type MToonMaterialTextures = {
 type OpacityBinding = { texture: Texture; channel: "r" | "g" | "b" | "a" };
 const opacityBindings = new WeakMap<MToonMaterial, OpacityBinding>();
 
+/** Three r185 uses a vec4 varying even for RGB color attributes. */
+function prepareMToonVertexColorShader(material: MToonMaterial): void {
+  // Keep three-vrm's RGB-only vertex color behavior on both vec3 and vec4
+  // varyings, without applying the color attribute's alpha to opacity.
+  const fragmentShader = material.fragmentShader
+    .replace("diffuseColor.rgb *= vColor;", "diffuseColor.rgb *= vColor.rgb;")
+    .replace("material.shadeColor.rgb *= vColor;", "material.shadeColor.rgb *= vColor.rgb;");
+  if (fragmentShader !== material.fragmentShader) {
+    material.fragmentShader = fragmentShader;
+    material.needsUpdate = true;
+  }
+}
+
 /** three-vrm uses UV0; retain Studio's per-slot glTF texture coordinates. */
 function bindTextureUvChannels(material: MToonMaterial, textures: MToonMaterialTextures): void {
   const entries: Array<[string, Texture | undefined]> = [
@@ -165,6 +178,7 @@ export function createMToonMaterial(
     v0CompatShade: settings.extras?.xriftVrm0CompatShade ?? false,
     ignoreVertexColor: !properties.vertexColors,
   });
+  prepareMToonVertexColorShader(material);
   if (textures.opacityMap) bindOpacityMap(material, { texture: textures.opacityMap, channel: properties.opacityChannel ?? "a" });
   bindTextureUvChannels(material, textures);
   // Material assets can be shared by painted models and unpainted primitives.
@@ -232,6 +246,9 @@ export function attachMToonOutlines(root: Object3D): { dispose(): void } {
   for (const mesh of meshes) {
     outlinesByMesh.get(mesh)?.();
     const sourceMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    // Native VRM loaders create their own MToon materials. Prepare those
+    // surfaces too, including materials which have no outline pass.
+    sourceMaterials.forEach(material => { if (isMToon(material)) prepareMToonVertexColorShader(material); });
     const orders = sourceMaterials.map(material => material.userData.xriftMToonRenderOrder).filter((value): value is number => typeof value === "number");
     if (orders.length) {
       if (!sourceRenderOrders.has(mesh)) sourceRenderOrders.set(mesh, mesh.renderOrder);
