@@ -267,6 +267,7 @@ function assertStagedConfigParsing(): void {
           allowedCodeRules: ["no-network-without-permission"],
         },
         outputBufferType: "HalfFloatType",
+        items: ["550e8400-e29b-41d4-a716-446655440000", "550e8400-e29b-41d4-a716-446655440000"],
       },
     }),
     "world",
@@ -282,6 +283,14 @@ function assertStagedConfigParsing(): void {
   );
   assert(config.physics?.gravity === 9.81, "physics was not read");
   assert(config.camera?.far === 1000, "camera was not read");
+  assert(
+    config.items?.join(",") === "550e8400-e29b-41d4-a716-446655440000",
+    "declared world items must be preserved and deduplicated by the SDK",
+  );
+  assertThrows(
+    () => parseStagedXriftConfig(JSON.stringify({ world: { distDir: "dist", items: ["invalid"] } }), "world"),
+    "an invalid declared item id was accepted",
+  );
   assert(
     config.permissions?.allowedDomains?.[0] === "api.example.com",
     "permissions were not read",

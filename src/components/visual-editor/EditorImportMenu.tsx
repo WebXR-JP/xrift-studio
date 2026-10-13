@@ -101,7 +101,7 @@ export function EditorImportMenu({
               description="別のワールドやアイテムから、選んだEntityと素材を現在のシーンに追加します。"
               onClick={() => { closeAfterAction(); onImportHierarchy(); }} /> : null}
             {onOpenExternalStore ? (
-              <MenuItem icon={Store} label="外部から追加"
+              <MenuItem icon={Store} label="アセットストア"
                 description="3Dセット、マテリアル、ギミック、公式Componentなど"
                 onClick={() => { closeAfterAction(); onOpenExternalStore(); }} />
             ) : null}

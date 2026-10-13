@@ -738,7 +738,7 @@ ES moduleのstrict modeでは`eval`をlexical bindingで遮蔽できない。
 
 ## Vehicle / Seat（world-components 0.53.0）
 
-車は「外部から追加 → ギミック → カスタム車」または「XRift公式コンポーネント → Vehicle」、椅子単体は「外部から追加 → XRift公式コンポーネント → Seat」から追加する。
+車は「アセットストア → ギミック → カスタム車」または「XRift公式コンポーネント → Vehicle」、椅子単体は「アセットストア → XRift公式コンポーネント → Seat」から追加する。
 カスタム車を追加すると、親Entityに操縦用Script、その子に「車体」「運転席」「同乗席」、タイヤ4個と「排気煙」を作る。
 車体と座席は通常のMesh ComponentでModel Assetを参照し、各座席にSeat用Scriptを付ける。
 Hierarchyでモデルを選び、Transform・Mesh・Materialを編集できる。Seat単体も同じ構成を使う。

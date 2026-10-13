@@ -161,7 +161,7 @@ visual manifestが不正な場合は、classicとして開かない。「ビジ�
 - 追加paletteのprimitiveと、3Dモデル、テクスチャ、マテリアル、プレハブ、パーティクルを見た目とラベルの両方で区別する。検索とfilterは表示名、kind、diagnostic statusを対象にする。
 - thumbnailは`pending -> generating -> ready | failed | stale`のlifecycleを持つ動的なderived viewとする。元データ、マテリアルproperty、dependency、thumbnail recipeの変更を検知してbackground queueで再生成する。3Dモデル / プレハブは固定camera、マテリアルは基準球、テクスチャは用途の色空間、パーティクルは代表時刻を使い、選択中またはhover中だけbudget内でorbit / particle loopなど短いlive previewを許す。
 - テクスチャ / GLB / GLTFの外部drag-and-dropは取り込みQueueで検証、元データcopy、derived / thumbnail生成、manifest commitまで実行する。import完了前にシーンやマテリアル枠の参照を確定せず、成功後は素材を右設定で編集できる。
-- 「外部から追加」は [6.8外部リソースカタログ](#68-外部リソースカタログ) のcatalogを開き、CC0 providerとXRift公式カタログから同じimport transactionで素材を追加する。
+- 「アセットストア」は [6.8外部リソースカタログ](#68-外部リソースカタログ) のcatalogを開き、CC0 providerとXRift公式カタログから同じimport transactionで素材を追加する。
 - 非対応形式はシーンを変更せず、対応形式と次の操作を表示する。
 - folderは素材IDと別の安定`folderId`を持つ表示上の整理単位とし、元データ / derivedの実ファイルpathをfolder移動だけで変更しない。空白部またはfolderのcontext menuから「マテリアル / プレハブ / パーティクルを作成」「3Dモデル / テクスチャをインポート」「新しいフォルダー」を選べる。素材のcontext menuには「名前を変更」「複製」「削除」「参照元を表示」「再インポート」「サムネイルを再生成」をkindと状態に応じて出す。
 - 削除前には参照中のオブジェクト、プレハブ、マテリアル枠件数を示す。参照を壊す削除は暗黙に続けず、置換または明示的な参照解除を同じCommand Transactionに含める。
@@ -940,7 +940,7 @@ glTF 2.0 coreはbuffer / imageにdata URIとrelative pathを許し、clientが�
 
 自分のファイル以外から素材を得る経路も、通常のimport transactionの上に載せる。ブラウザで探して保存し直す手順をユーザーに要求しない。
 
-- 素材の「外部から追加」はcatalogを開く。CC0 providerとしてPoly Haven（HDRI / マテリアル / 3Dモデル）とambientCG（HDRI / マテリアル、3Dモデルは検索のみ）、XRift公式カタログとしてOpen Brushのマテリアル、空の背景シェーダー、水面シェーダー、地形プリセット、発光オブジェクト、公式コンポーネントを扱う。
+- 素材の「アセットストア」はcatalogを開く。CC0 providerとしてPoly Haven（HDRI / マテリアル / 3Dモデル）とambientCG（HDRI / マテリアル、3Dモデルは検索のみ）、XRift公式カタログとしてOpen Brushのマテリアル、空の背景シェーダー、水面シェーダー、地形プリセット、発光オブジェクト、公式コンポーネントを扱う。
 - ダウンロードは解像度と形式を選ばせ、確定前に容量の目安を示す。取得した実体は6.1のimport transactionを通し、検証、元データcopy、derived生成、manifest commitまで同じ経路で確定する。catalog専用の抜け道を作らない。
 - catalog cardは静止画のサムネイルではなく、実際のGLSLや高さフィールドをWebGLで描画する。カードで見えているものと、追加後にシーンへ入るものを一致させる。
 - 追加した素材は作者、ライセンス、配布ページURLを`attribution`として保持し、公開したワールドの生成物へも同じ情報を出力する。CC0とMITを同じ表示にせず、詳細パネルから配布ページとライセンス原文へ移動できるようにする。

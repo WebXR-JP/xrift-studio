@@ -9,7 +9,7 @@ test("Vehicleを追加すると編集可能な車体と座席がHierarchyに展�
   await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
   await page.getByLabel("プロジェクト名").fill("vehicle-hierarchy-test");
   await page.getByRole("button", { name: "作成して開く" }).click();
-  await page.getByRole("button", { name: "外部から追加", exact: true }).click();
+  await page.getByRole("button", { name: "アセットストア", exact: true }).click();
   await page.getByRole("button", { name: /^ギミック/ }).click();
   await page.locator("[data-catalog-card]").filter({ hasText: /^カスタム車/ }).click();
   await page.getByRole("button", { name: "カスタム車をシーンへ追加" }).click();

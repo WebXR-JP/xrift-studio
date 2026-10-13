@@ -52,7 +52,7 @@ test("初回セットアップからプロジェクト一覧へ進める", { tag
     page.getByRole("heading", { name: "XRift Studio", exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Node.js v24.21.0 LTS", { exact: true })).toBeVisible();
-  await expect(page.getByText("インストールするバージョン: v0.24.4", { exact: true })).toBeVisible();
+  await expect(page.getByText("インストールするバージョン: v0.25.0", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "ワールドを作る", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "セットアップを開始" }).click();
   await expect(
@@ -68,7 +68,7 @@ test("初回セットアップからプロジェクト一覧へ進める", { tag
 test("旧CLIは推奨版への更新を示し、利用者の操作後に一度だけ準備する", { tag: "@release-smoke" }, async ({ page }) => {
   await openReleaseApp(page, "runtime-update");
   await expect(page.getByRole("heading", { name: "制作ツールの更新が必要です" })).toBeVisible();
-  await expect(page.getByText("現在v0.24.3 → 推奨v0.24.4", { exact: true })).toBeVisible();
+  await expect(page.getByText("現在v0.24.4 → 推奨v0.25.0", { exact: true })).toBeVisible();
   await expect(page.getByText("Node.js v24.21.0 LTS", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "XRift Studio", exact: true })).toBeVisible();
   await expect(page.getByText("ようこそ", { exact: false })).toHaveCount(0);
@@ -263,7 +263,7 @@ test("狭い画面でもエディターのツールバーが一行に収まり�
     assets.getByRole("button", { name: "ファイルから素材を追加" }),
   ).toBeVisible();
   await expect(
-    assets.getByRole("button", { name: "外部から追加" }),
+    assets.getByRole("button", { name: "アセットストア" }),
   ).toBeVisible();
   await expect(assets.getByRole("searchbox")).toBeVisible();
 

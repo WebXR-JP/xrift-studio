@@ -20,6 +20,14 @@ export function runXriftComponentRegistryFixtureAssertions(): void {
   assertRequiredAuthoringIds();
   assertPrefabRuntimeIdentifiers();
 
+  const item = requiredComponent(XRIFT_COMPONENT_SCHEMA_IDS.item, { itemId: "12345678-1234-1234-1234-123456789abc" });
+  const compiledItem = compileXriftComponent(item, "world", FIXTURE_SOURCE);
+  assert(compiledItem.mode === "leaf" && compiledItem.importName === "Item", "Item uses the official leaf adapter");
+  assert(compiledItem.jsx?.includes('itemId={"12345678-1234-1234-1234-123456789abc"}') && compiledItem.jsx.includes("placementId="), "Item publishes both asset and placement identities");
+  assert(compileXriftComponent(item, "item", FIXTURE_SOURCE).mode === "unsupported", "An Item cannot contain a placed Item");
+  const invalidItem = { ...item, properties: { ...item.properties, itemId: "invalid-id" } };
+  assert(compileXriftComponent(invalidItem, "world", FIXTURE_SOURCE).mode === "unsupported", "Invalid Item UUIDs block publication");
+
   const skybox = requiredComponent(XRIFT_COMPONENT_SCHEMA_IDS.skybox);
   const compiledSkybox = compileXriftComponent(skybox, "world", FIXTURE_SOURCE);
   assert(compiledSkybox.mode === "leaf", "Skybox must compile as a leaf");
@@ -254,6 +262,7 @@ function assertPrefabRuntimeIdentifiers(): void {
 
 function assertRequiredAuthoringIds(): void {
   const cases = [
+    [XRIFT_COMPONENT_SCHEMA_IDS.item, "placementId", "item-fixture-id"],
     [XRIFT_COMPONENT_SCHEMA_IDS.interactable, "id", "interactable-fixture-id"],
     [XRIFT_COMPONENT_SCHEMA_IDS.grabbable, "id", "grabbable-fixture-id"],
     [XRIFT_COMPONENT_SCHEMA_IDS.videoScreen, "id", "video-screen-fixture-id"],

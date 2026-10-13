@@ -2059,6 +2059,11 @@ fn tool_definitions() -> Value {
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         },
         {
+            "name": "reload_xrift_items",
+            "description": "Retry loading placed XRift Items using Studio's current account. Does not modify the Scene or return credentials. Inspect the Scene afterward; this response does not prove loading succeeded.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
             "name": "login",
             "description": "Start XRift sign-in from Studio: the person's browser opens the XRift login page and the credential stays inside Studio. Returns immediately with started: true; poll get_account until signedIn is true, and tell the person to finish the login in the browser. Already signed in answers started: false. Needs no open project.",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }

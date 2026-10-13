@@ -102,7 +102,9 @@ document toolの戻り値には`harness`が付くことがある。同じ種類�
 `import_project`は`archivePath`（`.xriftstudio` / `.zip`）か`repositoryUrl`（GitのHTTPS / SSH URL、shallow cloneして履歴は持ち込まない）のどちらか一つを受け取る。`archivePath`は読むだけで、内部のZIPの直下または一つのフォルダーの中にプロジェクトの定義がないと`inspect`の段階で断る。ZIPの構成とpackage manifestは従来どおりで、拡張子の変更によるdocumentの変換は行わない。詳細は[プロジェクトの受け渡し形式](./PROJECT_PACKAGE.md)を参照する。
 
 **アカウント**
-`get_account`, `login`
+`get_account`, `login`, `reload_xrift_items`
+
+公開済みItemは`add_component`で`xrift.item`を追加し、`update_component`で`itemId`を設定します。`placementId`は配置ごとに生成されます。公開設定の`world.items`はSceneから自動生成します。読み込み失敗後は`reload_xrift_items`で現在のログイン状態を使って再試行できます。応答は再試行の開始だけを示すため、`capture_scene_view`で表示を確認してください。
 
 `login`はStudioの中で`xrift login`を始める。ブラウザでの認証は人が完了し、認証情報はStudioの実行環境homeに残る。MCPへは「ログインしているか」と表示名だけを返す。
 
@@ -458,6 +460,7 @@ projectではなくapp dataへ置く。
 | 録画の保存先の指定 | `recording_begin_file`が開けるのは既定の保存先と、フォルダーダイアログで選んだ場所だけだ。pathを直接書けるとRust側のpath検証を迂回する。保存先を変える場合は録画パネルを使う |
 | 公式コンポーネントのposition / rotation / scale | `update_component`はXRiftのコンポーネントのこれらのpropを受け取らない。コンポーネント側に持たせるとオブジェクトの位置・回転・大きさと別の原点ができ、選択したときのギズモと回転の中心が描かれている場所からずれる。配置は`update_component`の`transform` patchでオブジェクトへ書く |
 | 任意pathの読み書き・削除 | Rust側のpath検証と権限制御を迂回させないためだ |
+| コードプロジェクトのworld.items編集 | 現行MCPのScene編集はビジュアルプロジェクトを対象にする。コードプロジェクトの設定編集はコードエディターで行う。ビジュアルでは`add_component` / `update_component`のItem配置から一覧を生成する |
 | 任意JavaScriptの実行 | 汎用JavaScript評価toolは提供しない。Script AssetはPlayで追加承認なく実行され、sandboxではない（SCRIPTING.md参照） |
 | テクスチャの一括変換 | 複数選択したものをまとめて書き出すための導線だ。MCPからは`process_texture_asset`を素材ごとに呼ぶ。対象の選び方は設計図で決まる |
 | テクスチャの共通設定・サイズ確認 | 共通設定は`update_texture_asset`の`importSettings`と`process_texture_asset`で同じ処理を実行する。サイズ確認は既存画像の読み取りだけを行う設定の表示状態だ。再インポートで取得した寸法は素材のimportMetadataにも入る |
@@ -490,7 +493,7 @@ Editorの`import_model_asset`と、`importSettings`を省略した`import_textur
 
 ### ギミックのカスタム車を配置する
 
-UIでは「外部から追加 → ギミック → カスタム車」と「XRift公式コンポーネント → Vehicle」の両方から、同じ設定済みの車を配置できる。MCPではWorld向けの`scene-recipe.custom-vehicle`を`apply_scene_recipe`で配置する。`place_builtin_prefab`にVehicleは登録されていないため、公式カードの表示名をそのまま渡さない。配置される車は通常のEntity・Model・Scriptを組み合わせた編集可能なセットである。
+UIでは「アセットストア → ギミック → カスタム車」と「XRift公式コンポーネント → Vehicle」の両方から、同じ設定済みの車を配置できる。MCPではWorld向けの`scene-recipe.custom-vehicle`を`apply_scene_recipe`で配置する。`place_builtin_prefab`にVehicleは登録されていないため、公式カードの表示名をそのまま渡さない。配置される車は通常のEntity・Model・Scriptを組み合わせた編集可能なセットである。
 
 1. `get_editor_context`で編集中の`projectId`、`sceneId`、revisionとEditモードを確認する。保存済みのWorldプロジェクトが必要。
 2. `list_scene_recipes`を引数`{}`で呼び、返された`recipes`から`shelf: "gimmicks"`、`id: "scene-recipe.custom-vehicle"`を選ぶ。`shelf`は戻り値であり、このtoolの入力引数ではない。

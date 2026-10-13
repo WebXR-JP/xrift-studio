@@ -3,6 +3,8 @@ import { Save, Code2, RefreshCw, Info } from "lucide-react";
 import { tauri, type ProjectKind } from "../lib/tauri";
 import { useToast } from "./Toast";
 import { ScrubNumberInput } from "./visual-editor/ScrubNumberInput";
+import { parseWorldItemIdsInput } from "../lib/visual-editor/world-items";
+import { GuideLink } from "./guide/GuideLink";
 
 type Props = {
   projectPath: string;
@@ -25,6 +27,7 @@ type Form = {
   cameraFar: number;
   allowedDomains: string;
   allowedCodeRules: string;
+  itemIds: string;
 };
 
 const DEFAULTS: Form = {
@@ -39,6 +42,7 @@ const DEFAULTS: Form = {
   cameraFar: 1000,
   allowedDomains: "",
   allowedCodeRules: "",
+  itemIds: "",
 };
 
 function toCommaSeparated(value: unknown): string {
@@ -54,6 +58,8 @@ function fromJson(
   try {
     const parsed = JSON.parse(raw);
     const config = parsed?.[projectKind] ?? {};
+    if (projectKind === "world" && config.items !== undefined &&
+      (!Array.isArray(config.items) || !config.items.every((id: unknown) => typeof id === "string"))) return null;
     return {
       parsed,
       form: {
@@ -76,6 +82,7 @@ function fromJson(
           typeof config.camera?.far === "number" ? config.camera.far : DEFAULTS.cameraFar,
         allowedDomains: toCommaSeparated(config.permissions?.allowedDomains),
         allowedCodeRules: toCommaSeparated(config.permissions?.allowedCodeRules),
+        itemIds: projectKind === "world" ? (config.items ?? []).join("\n") : "",
       },
     };
   } catch {
@@ -125,8 +132,15 @@ export function XriftJsonEditor({
   }, [load]);
 
   const isDirty = JSON.stringify(form) !== JSON.stringify(saved);
+  let worldItems: string[] = [];
+  let itemIdsError: string | null = null;
+  if (projectKind === "world") {
+    try { worldItems = parseWorldItemIdsInput(form.itemIds); }
+    catch (error) { itemIdsError = String(error instanceof Error ? error.message : error); }
+  }
 
   const handleSave = async () => {
+    if (itemIdsError) return;
     setSaving(true);
     try {
       const base = parsed ?? {};
@@ -143,6 +157,7 @@ export function XriftJsonEditor({
         projectKind === "world"
           ? {
               ...shared,
+              ...(worldItems.length > 0 || current.items !== undefined ? { items: worldItems } : {}),
               physics: {
                 ...(current.physics ?? {}),
                 gravity: form.gravity,
@@ -260,7 +275,7 @@ export function XriftJsonEditor({
           <button
             type="button"
             onClick={handleSave}
-            disabled={!isDirty || saving}
+            disabled={!isDirty || saving || itemIdsError !== null}
             className="flex items-center gap-1 rounded-md bg-violet-600 px-2.5 py-1 text-[11px] font-medium text-white shadow-sm hover:bg-violet-500 disabled:opacity-40"
           >
             <Save size={11} strokeWidth={2.25} />
@@ -333,6 +348,22 @@ export function XriftJsonEditor({
 
           {projectKind === "world" ? (
             <>
+              <Section title="配置するItem" hint="コードの<Item itemId>で使うIDを登録します。自作またはライブラリに追加したアイテムを指定してください。">
+                <Field label="Item ID（world.items）" hint="1行に1つのUUIDを入力してください。同じアイテムを複数配置する場合も、登録は1回で構いません。">
+                  <textarea
+                    aria-label="Item ID（world.items）"
+                    aria-invalid={itemIdsError !== null}
+                    aria-describedby={itemIdsError ? "world-items-error" : undefined}
+                    value={form.itemIds}
+                    onChange={(event) => setForm({ ...form, itemIds: event.currentTarget.value })}
+                    rows={3}
+                    className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-[12px] outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-200"
+                  />
+                  {itemIdsError && <p id="world-items-error" role="alert" className="mt-1 text-xs text-rose-700">{itemIdsError}</p>}
+                </Field>
+                <p className="text-xs text-zinc-600">配置ごとに一意のPlacement IDをコードで指定してください。プレビューにはxriftDev()とXRiftへのログインが必要です。</p>
+                <GuideLink page="world-items" label="Itemの配置手順" />
+              </Section>
               <Section title="物理">
                 <div className="grid grid-cols-2 gap-4">
                   <Field label="重力 (gravity)" hint="地球: 9.81 / 月: 1.62">

@@ -300,9 +300,10 @@ try {
     "Classic package must not depend on the unpublished runtime package",
   );
   assert(
-    packageJson.dependencies?.["@xrift/world-components"] === "0.55.0",
+    packageJson.dependencies?.["@xrift/world-components"] === "0.57.1",
     "Classic package must pin @xrift/world-components to the compiler's version when the template has none",
   );
+  assert(packageJson.dependencies?.["@xrift/sdk"] === "0.2.0", "Classic package must install the SDK that provides xriftDev()");
   assert(
     packageJson.dependencies?.react === "19.2.8" &&
       packageJson.dependencies?.["react-dom"] === "19.2.8",

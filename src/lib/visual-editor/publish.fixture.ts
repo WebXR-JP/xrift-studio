@@ -1,4 +1,4 @@
-import { COMPILER_REACT_PACKAGE_SPECS } from "./compiler/runtime-packages";
+import { COMPILER_REACT_PACKAGE_SPECS, COMPILER_SDK_PACKAGE_SPEC } from "./compiler/runtime-packages";
 import {
   BUILD_OUTPUT_SEPARATOR,
   didXriftUploadStopBeforeRemoteTransfer,
@@ -292,6 +292,7 @@ function assertStagingCanInstallEveryRequestablePackage(): void {
     OPEN_BRUSH_RUNTIME_PACKAGE,
     TEXT_PANEL_RUNTIME_PACKAGE,
     COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
+    COMPILER_SDK_PACKAGE_SPEC,
     ...COMPILER_REACT_PACKAGE_SPECS,
   ]) {
     assert(

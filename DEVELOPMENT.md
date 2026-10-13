@@ -114,11 +114,13 @@ src-tauri/                 Rust バックエンド (Tauri v2)
 
 ### 制作ツールのバージョン
 
-初回セットアップの基準は`src-tauri/src/runtime_installation.rs`にまとめています。現在はNode.js **24.21.0** と`@xrift/cli` **0.24.4** です。CLIは初回導入時にこの版を指定し、既存の古い版もセットアップ画面から更新します。推奨版以上の安定版は保持します。Node.jsの保存先は版ごとに分かれますが、CLIの保存先、ログイン情報、作品フォルダーは引き継ぎます。
+初回セットアップの基準は`src-tauri/src/runtime_installation.rs`にまとめています。現在はNode.js **24.21.0** と`@xrift/cli` **0.25.0** です。CLIは初回導入時にこの版を指定し、既存の古い版もセットアップ画面から更新します。推奨版以上の安定版は保持します。Node.jsの保存先は版ごとに分かれますが、CLIの保存先、ログイン情報、作品フォルダーは引き継ぎます。
 
 CLIはアプリ専用Node.jsから公式の`dist/index.js`を直接実行します。`sh -c`を使い、ログインシェルによる`PATH`やアプリ専用ホームの書き換えを避けます。セットアップ・更新は同時に実行できず、完了表示の前に`--version`の実行を確認します。
 
-CLI 0.24.4ではアップロード対象の除外判定がSDKに統一されています。StudioもSDKを **0.1.3** に揃えます。`xrift.json`のあるプロジェクトルートで実行し、タイトルと既存の除外設定を引き続き渡します。`check world --build` / `check item --build`ではビルドが実行されないため、種類を自動判定する **`check --build`** を維持します。コンパイラと公開用shellの生成には、想定する構成を持つ公式テンプレートを明示します。
+CLI 0.25.0に合わせ、StudioもSDKを **0.2.0** に揃えます。ワールドの公開では、ビルド成果物の`<Item itemId>`と`xrift.json`の`world.items`をCLIが照合します。SDK経由の公開でも、設定にあるItem IDを公開オプションへ引き継ぎます。`xrift.json`のあるプロジェクトルートで実行し、タイトルと既存の除外設定を引き続き渡します。`check world --build` / `check item --build`ではビルドが実行されないため、種類を自動判定する **`check --build`** を維持します。コンパイラと公開用shellの生成には、想定する構成を持つ公式テンプレートを明示します。
+
+Item配置はworld-components **0.57.1** の公式Itemを使います。2026-10-13に[componentsのソース](https://github.com/WebXR-JP/xrift-world-components/tree/16f45d38e76a6312e90098ef9e87bb2dc567b6bc)と[world-templateのソース](https://github.com/WebXR-JP/xrift-world-template/tree/e8b22b78a51cf83748a2019c80e2b639bb137dff)を照合しました。配置ごとの固定`placementId`、`world.items`宣言、`remoteEntry.js`の`./Item`公開、公式の共有依存ラベルを保ちます。生成するVite設定にはSDK 0.2.0の`xriftDev()`を含めます。Studioの編集・Play用ローダーはネイティブで認証情報を付けて配信URLだけを返し、公開物はXRift側のItemLoaderを使います。
 
 公式Componentsの更新では、エディター・Play・コンパイラ・公開用shell・runtime packageの版を揃えます。更新後は`scripts/check-world-components-alignment.mjs`と`pnpm runtime:shell:check`で整合を確認します。
 

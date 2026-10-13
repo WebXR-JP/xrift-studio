@@ -38,7 +38,7 @@
   "peerDependencies": {
     "@react-three/fiber": ">=9.0.0",
     "@react-three/rapier": ">=2.0.0",
-    "@xrift/world-components": ">=0.55.0",
+    "@xrift/world-components": ">=0.57.1",
     "react": ">=19.0.0",
     "three": ">=0.180.0"
   },
@@ -59,7 +59,7 @@
   "devDependencies": {
     "@react-three/fiber": "9.7.0",
     "@react-three/rapier": "2.2.0",
-    "@xrift/world-components": "0.55.0",
+    "@xrift/world-components": "0.57.1",
     "@types/react": "~19.2.18",
     "@types/three": "0.185.1",
     "react": "19.2.8",

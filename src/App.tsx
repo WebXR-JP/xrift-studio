@@ -12,6 +12,7 @@ import {
 } from "react";
 import { parseChatgptWorldPlan, buildChatgptWorld, placeChatgptAssets, chatgptAssetRequests } from "./lib/visual-editor/chatgpt-world";
 import { ProjectLibrary } from "./components/ProjectLibrary";
+import { retryStudioItemLoading } from "./lib/visual-editor/xrift-item-loader";
 import { EditorView } from "./components/EditorView";
 import { NewProjectDialog } from "./components/NewProjectDialog";
 import { SetupView } from "./components/SetupView";
@@ -1255,6 +1256,9 @@ function App() {
       }
       case "get_account":
         return readMcpAccount();
+      case "reload_xrift_items":
+        retryStudioItemLoading();
+        return { reloading: true, nextActions: ["capture_scene_view"] };
       case "login": {
         const account = await readMcpAccount();
         if (account.signedIn) return { ...account, started: false };

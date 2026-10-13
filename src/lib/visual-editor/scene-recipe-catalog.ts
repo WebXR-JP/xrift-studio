@@ -1212,7 +1212,7 @@ const HOT_SPRING: SceneRecipe = {
   description: "石で囲った湯船と、立ちのぼる湯気をまとめて配置できます。",
   category: "water",
   projectKinds: ["world", "item"],
-  note: "湯は青いマテリアルの面です。波を立てるには、「外部から追加」のWater Shaderを湯のマテリアルへ割り当ててください。",
+  note: "湯は青いマテリアルの面です。波を立てるには、「アセットストア」のWater Shaderを湯のマテリアルへ割り当ててください。",
   parts: [
     ...stoneRing(10, 1.25, [0.34, 0.26, 0.3]),
     cyl("湯", M.blue, [0, 0.12, 0], [1.1, 0.22, 1.1]),

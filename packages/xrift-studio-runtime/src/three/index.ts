@@ -961,7 +961,8 @@ function isRuntimeOfficialLeafComponent(schemaId: string): boolean {
     schemaId === "xrift.screen-share-display" ||
     schemaId === "xrift.tag-board" ||
     schemaId === "xrift.entry-log-board" ||
-    schemaId === "xrift.portal"
+    schemaId === "xrift.portal" ||
+    schemaId === "xrift.item"
   );
 }
 

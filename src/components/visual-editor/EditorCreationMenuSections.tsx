@@ -39,7 +39,7 @@ export function EditorCreationMenuSections({ entries, disabled, onSelect, onCrea
       {onImportFile ? <EditorMenuItem icon={Import} label="ファイルから素材を追加"
         disabled={disabled || Boolean(importDisabledReason)} title={importDisabledReason ?? undefined}
         onClick={onImportFile} /> : null}
-      {onOpenExternalStore ? <EditorMenuItem icon={Store} label="外部から追加" disabled={disabled} onClick={onOpenExternalStore} /> : null}
+      {onOpenExternalStore ? <EditorMenuItem icon={Store} label="アセットストア" disabled={disabled} onClick={onOpenExternalStore} /> : null}
     </EditorMenuSection> : null}
   </>;
 }

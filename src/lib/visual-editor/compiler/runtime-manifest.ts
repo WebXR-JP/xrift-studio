@@ -311,6 +311,7 @@ function runtimeXriftComponentSupport(
     case "xrift.tag-board":
     case "xrift.entry-log-board":
     case "xrift.portal":
+    case "xrift.item":
       return "supported";
     default:
       return "missing";

@@ -9,6 +9,17 @@
 | イベント受付で役割や興味を選択 | TagBoard | 見つけやすい受付、待機列、用途に合うタグとタイトル |
 | 動画を一緒に見る | VideoScreen、VideoPlayer、LiveVideoPlayer | 映像の種類、必要な同期、客席と音の届き方 |
 | 入室・会場間の移動 | SpawnPoint、Portal | 安全な床、案内の見え方、目的地への通路 |
+| 自作・ライブラリのアイテムをワールドの一部として置く | Item | Item ID、配置ごとに固定するPlacement ID、利用権、接地・通路と操作範囲 |
+
+## Itemを配置する
+
+公式仕様は[ItemのAPI](https://docs.xrift.net/world-components/components/#item)と[公式xrift-world skill](https://github.com/WebXR-JP/xrift-skills/tree/main/skills/xrift-world)を確認してください。2026-10-13に公式skillの`41d65040e8c2a5313991acddf93406888fc84326`を照合しました。
+
+Studioのビジュアル編集では、`create_empty_entity`、`add_component`の`definitionId: xrift.item`、`update_component`の`patch.properties.itemId`で配置します。配置ごとの`placementId`は生成済みの値を保ち、移動や更新では変えません。複製・Prefab展開では別の配置IDになります。Item IDを捏造せず、自作またはライブラリに追加したアイテムのUUIDを指定してください。
+
+公開用の`world.items`はSceneから生成します。登録できるのは50種類までです。同じItemを複数置いても、登録するItem IDは一つです。読み込めない場合は認証、利用権、審査状態を確認し、`reload_xrift_items`で再試行して`capture_scene_view`で確認します。仮の箱や配置済みという文書状態だけでは成功と判断しません。`useItem().placedBy`は`null`なので、設置者だけに操作を許すItemの条件にも注意してください。
+
+コードプロジェクトでは`<Item itemId="..." placementId="..." />`を使い、同じIDを`xrift.json`の`world.items`へ宣言します。ローカルはSDK 0.2.0以降の`xriftDev()`、XRiftログイン、公式`DevEnvironment`を使います。ローカルComponentを`DevEnvironment.items`に渡す場合も宣言が必要です。宣言漏れで止まったら設定を直し、`--skip-item-scan`で回避しません。素材の相対URLはItem自身の`useXRift().baseUrl`から解決してください。
 
 TagBoardは、参加者がタグを選ぶ部品です。場所にマーカーを付けるTagMarkerのAPIは想定しません。追加機能が必要なら、公式の定義を確認してから設計してください。
 

@@ -437,7 +437,7 @@
       "description": "Entityを配置し、位置、回転、大きさを調整できます。複製、コピー、親子関係、削除の操作も説明します。",
       "group": "basics",
       "file": "objects.md",
-      "keywords": "移動 回転 大きさ 拡大 縮小 複製 削除 親子 Transform Entity",
+        "keywords": "移動 回転 大きさ 拡大 縮小 複製 削除 親子 Transform Entity Item Item ID Placement ID world.items アイテム",
       "related": [
         "assets",
         "prefabs",
@@ -535,10 +535,10 @@
     {
       "slug": "external-resources",
       "title": "カタログから素材を追加する",
-      "description": "「外部から追加」のカタログで、モデル、マテリアル、空、水、ギミックの見本を探せます。",
+      "description": "「アセットストア」のカタログで、モデル、マテリアル、空、水、ギミックの見本を探せます。",
       "group": "create",
       "file": "external-resources.md",
-      "keywords": "外部から追加 カタログ Poly Haven ambientCG AI LOWPOLY PROPS ローポリ GLB CC0 音蔵 音声 楽曲 SFX BGM 効果音 環境音 音楽 素材 配布 モデル さらに表示",
+      "keywords": "アセットストア カタログ Poly Haven ambientCG AI LOWPOLY PROPS ローポリ GLB CC0 音蔵 音声 楽曲 SFX BGM 効果音 環境音 音楽 素材 配布 モデル さらに表示",
       "related": [
         "assets",
         "materials",
@@ -808,6 +808,15 @@
         "publishing",
         "recovery"
       ]
+    },
+    {
+      "slug": "world-items",
+      "title": "ワールドにItemを配置する",
+      "description": "ビジュアル編集とコード編集でItemを配置し、world.itemsの設定とプレビューを確認します。",
+      "group": "create",
+      "file": "world-items.md",
+      "keywords": "Item アイテム Item ID Placement ID world.items コード TSX xriftDev DevEnvironment ライブラリ 宣言",
+      "related": ["objects", "play-mode", "publishing"]
     },
     {
       "slug": "custom-shaders",

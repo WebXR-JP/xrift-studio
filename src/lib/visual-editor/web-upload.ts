@@ -49,7 +49,7 @@ export const DEFAULT_SHELL_BASE_URL = "./xrift-runtime-shell";
 const SHELL_MANIFEST_FILE = "shell-manifest.json";
 /** The shell must be rebuilt when Runtime adapters change. */
 export const REQUIRED_RUNTIME_SHELL_CONTRACT =
-  "2026-10-03-openbrush-loader-v1" as const;
+  "2026-10-13-world-items-v1" as const;
 
 /**
  * One file of the prebuilt runtime shell.
@@ -518,6 +518,7 @@ export async function uploadVisualProjectFromWeb(
       camera: prepared.config.camera,
       permissions: resolveWebRuntimePermissions(prepared.config.permissions),
       outputBufferType: prepared.config.outputBufferType,
+      items: prepared.config.items,
       onProgress: (progress) => {
         request.report({
           stage: "uploading",

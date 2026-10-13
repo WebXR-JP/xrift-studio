@@ -364,7 +364,7 @@ export function ExternalAssetStoreDialog({
             </span>
             <div>
               <h2 id="external-store-title" className="text-sm font-semibold text-slate-900">
-                外部から追加
+                アセットストア
               </h2>
             </div>
           </div>
@@ -372,7 +372,7 @@ export function ExternalAssetStoreDialog({
             type="button"
             onClick={onClose}
             disabled={installing}
-            aria-label="「外部から追加」を閉じる"
+            aria-label="「アセットストア」を閉じる"
             className="rounded-md p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-40"
           >
             <X size={17} />

@@ -12,6 +12,7 @@ import {
 import {
   COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
   COMPILER_REACT_PACKAGE_SPECS,
+  COMPILER_SDK_PACKAGE_SPEC,
   recordCompilerPackageSpecs,
   declaredVersionReaches,
   parsePackageSpec,
@@ -124,6 +125,7 @@ export type ClassicExportFilePlan = {
   packageSpecs: string[];
   /** `xrift.json` fragment the author has to merge, when the world needs one. */
   xriftJsonPermissions?: string;
+  xriftJsonItems?: string[];
 };
 
 export async function inspectClassicExportTarget(
@@ -231,6 +233,8 @@ export function planClassicExportFiles(
     content: generateBridgeSource(projectKind),
   });
   const permissions = publishPermissionsJson(compilation.publishPermissions);
+  const metadata = compilation.overlayFiles.find((file) => file.relativePath === "xrift.json");
+  const items = metadata ? (JSON.parse(metadata.content) as { world?: { items?: string[] } }).world?.items ?? [] : [];
   return {
     exportId,
     exportRoot,
@@ -241,9 +245,11 @@ export function planClassicExportFiles(
     assetFiles: compilation.stagingPlan.assetCopyPlan,
     bundledFiles: compilation.stagingPlan.bundledAssetCopyPlan,
     metadataFiles,
+    ...(items.length > 0 ? { xriftJsonItems: items } : {}),
     packageSpecs: [
       ...compilation.stagingPlan.runtimePackageSpecs,
       COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
+      COMPILER_SDK_PACKAGE_SPEC,
       ...COMPILER_REACT_PACKAGE_SPECS,
     ],
     ...(Object.keys(permissions).length > 0
@@ -414,6 +420,9 @@ export async function exportVisualProjectToClassic(input: {
       `このシーンはxrift.jsonへ次の権限が必要です。既存のxrift.jsonへ追加してください。
 ${plan.xriftJsonPermissions}`,
     );
+  }
+  if (plan.xriftJsonItems?.length) {
+    notes.push(`配置したItemを読み込むには、既存のxrift.jsonのworld.itemsへ次のIDを追加してください: ${JSON.stringify(plan.xriftJsonItems)}。ローカルプレビューにはvite.config.tsで@xrift/sdk/viteのxriftDev()を追加してください。`);
   }
 
   // A file this export wrote last time and no longer produces (a removed

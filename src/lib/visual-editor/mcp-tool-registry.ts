@@ -46,6 +46,7 @@ export const XRIFT_MCP_TOOLS = [
   { name: "export_project", surface: "project" },
   { name: "import_project", surface: "project" },
   { name: "get_account", surface: "project" },
+  { name: "reload_xrift_items", surface: "project" },
   { name: "login", surface: "project" },
   { name: "get_publish_readiness", surface: "project" },
   { name: "publish_project", surface: "project" },

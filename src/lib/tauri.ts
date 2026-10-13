@@ -378,6 +378,7 @@ export type ScriptTrustMutationResult = {
 };
 
 export const tauri = {
+  resolveXriftItem: (itemId: string) => invoke<string>("resolve_xrift_item", { itemId }),
   isAvailable: () => isTauri(),
   selectDirectory: (title: string, defaultPath?: string) =>
     openDialog({

@@ -241,7 +241,7 @@ function placementPropertyNames(
   definition: XriftComponentDefinition,
 ): readonly string[] {
   return definition.fields
-    .filter((field) => PLACEMENT_FIELD_KINDS[field.name]?.includes(field.kind))
+    .filter((field) => PLACEMENT_FIELD_KINDS[field.name]?.includes(field.kind) || (definition.schemaId === "xrift.item" && field.name === "scale" && field.kind === "number"))
     .map((field) => field.name);
 }
 

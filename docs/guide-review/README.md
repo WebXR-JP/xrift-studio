@@ -57,7 +57,7 @@
 
 ### ワールドを仕上げる
 
-- [カタログから素材を追加する](../guide/external-resources.md)：外部から追加で、モデル・マテリアル・空・水・仕掛けの見本を選びます。
+- [カタログから素材を追加する](../guide/external-resources.md)：アセットストアで、モデル・マテリアル・空・水・仕掛けの見本を選びます。
 - [ライトと画面の明るさを調整する](../guide/lighting.md)：ライト・IBL・Emissive・Bloomを使い分け、暗いワールドや反射が見えない原因を確認します。
 - [空と水を作る](../guide/sky-and-water.md)：Skybox Shaderを背景へ、Water Shaderを水面へ設定します。背景と照明は分けて扱います。
 - [地形と草を作る](../guide/terrain.md)：必要な場所にだけ起伏や草を加え、歩いて確認します。

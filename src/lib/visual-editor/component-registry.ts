@@ -12,7 +12,7 @@ import type {
 
 export const XRIFT_COMPONENT_MODULE = "@xrift/world-components" as const;
 /** npm package version used to verify the authoring registry. */
-export const XRIFT_COMPONENT_API_VERSION = "0.55.0" as const;
+export const XRIFT_COMPONENT_API_VERSION = "0.57.1" as const;
 export const XRIFT_COMPONENT_API_SOURCE =
   "https://github.com/WebXR-JP/xrift-world-components" as const;
 export const XRIFT_COMPONENT_SCHEMA_VERSION = "1.0.0" as const;
@@ -34,6 +34,7 @@ export const XRIFT_COMPONENT_SCHEMA_IDS = {
   entryLogBoard: "xrift.entry-log-board",
   portal: "xrift.portal",
   billboardY: "xrift.billboard-y",
+  item: "xrift.item",
 } as const;
 
 export type XriftComponentSchemaId =
@@ -60,7 +61,8 @@ export type XriftComponentIcon =
   | "tagBoard"
   | "entryLogBoard"
   | "portal"
-  | "billboardY";
+  | "billboardY"
+  | "item";
 
 export type XriftComponentFieldKind =
   | "string"
@@ -234,6 +236,23 @@ const REQUIRED_WRAPPER = { kind: "wrapper", childrenRequired: true } as const;
  * development helper rather than authoring data.
  */
 export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
+  componentDefinition({
+    schemaId: XRIFT_COMPONENT_SCHEMA_IDS.item,
+    importName: "Item",
+    label: "Item",
+    description: "公開済みのXRiftアイテムをワールドに配置します。Item IDはマイアイテムやマーケットのURL末尾から確認できます。",
+    icon: "item",
+    category: "world",
+    allowedProjectKinds: WORLD_PROJECT_KIND,
+    attachBehavior: LEAF,
+    fields: [
+      field("itemId", "Item ID", "配置するアイテムのUUID。自作またはライブラリに追加したアイテムを指定してください。", "string", true, { format: "uuid" }),
+      field("placementId", "Placement ID", "ワールド内で一意の配置名。移動や更新後も同じ値を使います。", "string", true, { uniqueWithinScene: true }),
+      field("position", "Position", "Entityからの相対位置。", "vec3", false, { defaultValue: [0, 0, 0] }),
+      field("rotation", "Rotation", "Entityからの相対回転（ラジアン）。", "vec3", false, { defaultValue: [0, 0, 0] }),
+      field("scale", "Scale", "アイテムの均一スケール。", "number", false, { defaultValue: 1, range: { min: 0.001 } }),
+    ],
+  }),
   componentDefinition({
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.interactable,
     importName: "Interactable",

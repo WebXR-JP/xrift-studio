@@ -4,7 +4,7 @@ use std::path::Path;
 // Versions verified together for Studio's first-run setup. Optional CLI
 // updates may install a newer stable release without lowering this baseline.
 pub const NODE_VERSION: &str = "24.21.0";
-pub const XRIFT_CLI_VERSION: &str = "0.24.4";
+pub const XRIFT_CLI_VERSION: &str = "0.25.0";
 
 pub fn node_distribution(platform: &str) -> String {
     format!("node-v{NODE_VERSION}-{platform}")
@@ -98,15 +98,17 @@ mod tests {
     fn supported_cli_releases_keep_newer_versions_and_reject_old_or_prerelease() {
         for version in [
             XRIFT_CLI_VERSION,
-            "0.24.5",
-            "0.25.0",
+            "0.25.1",
+            "0.26.0",
             "1.0.0",
-            "0.24.4+build.1",
+            "0.25.0+build.1",
         ] {
             assert!(cli_version_supported(version), "{version}");
         }
         for version in [
             "0.24.3",
+            "0.24.4",
+            "0.24.5",
             "0.9.0",
             "0.24.4-rc.1",
             "0.25.0-beta.1",
@@ -149,20 +151,20 @@ mod tests {
 
     #[test]
     fn version_output_accepts_update_notices_but_requires_the_running_version() {
-        assert!(cli_version_output_matches("0.24.4\n", XRIFT_CLI_VERSION));
+        assert!(cli_version_output_matches("0.25.0\n", XRIFT_CLI_VERSION));
         assert!(cli_version_output_matches(
-            "\nUpdate available: 0.24.4 → 0.25.0\nRun npm install -g @xrift/cli\n\n0.24.4\n",
+            "\nUpdate available: 0.25.0 → 0.25.1\nRun npm install -g @xrift/cli\n\n0.25.0\n",
             XRIFT_CLI_VERSION,
         ));
-        assert!(!cli_version_output_matches("Update available: 0.24.4 → 0.25.0", XRIFT_CLI_VERSION));
+        assert!(!cli_version_output_matches("Update available: 0.25.0 → 0.25.1", XRIFT_CLI_VERSION));
         assert!(!cli_version_output_matches("0.24.3\n", XRIFT_CLI_VERSION));
     }
 
     #[test]
     fn broken_newer_install_retains_its_version_for_repair() {
         let fixture = Fixture::new();
-        let entry = fixture.write("0.25.0");
+        let entry = fixture.write("0.25.1");
         std::fs::remove_file(entry).unwrap();
-        assert_eq!(cli_manifest_version(&fixture.0.join("dist/index.js")).as_deref(), Some("0.25.0"));
+        assert_eq!(cli_manifest_version(&fixture.0.join("dist/index.js")).as_deref(), Some("0.25.1"));
     }
 }

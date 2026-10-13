@@ -19,6 +19,7 @@ mod hierarchy_transfer;
 pub mod mcp;
 mod script_trust;
 mod runtime_installation;
+mod xrift_items;
 use runtime_installation::{
     cli_manifest_version, cli_version_output_matches, cli_version_supported, installed_cli_version,
     node_distribution, NODE_VERSION, XRIFT_CLI_VERSION,
@@ -6294,6 +6295,7 @@ pub fn run() {
             chatgpt::chatgpt_models,
             chatgpt::chatgpt_plan,
             runtime_paths,
+            xrift_items::resolve_xrift_item,
             runtime_status,
             take_opened_project_archives,
             setup_runtime,
@@ -6462,7 +6464,7 @@ mod tests {
         std::fs::create_dir_all(entry.parent().unwrap()).unwrap();
         std::fs::write(entry, b"").unwrap();
         let manifest = entry.parent().unwrap().parent().unwrap().join("package.json");
-        for (version, ready) in [("0.24.3", false), (XRIFT_CLI_VERSION, true), ("0.25.0", true)] {
+        for (version, ready) in [("0.24.4", false), (XRIFT_CLI_VERSION, true), ("0.25.1", true)] {
             std::fs::write(&manifest, serde_json::json!({
                 "name": "@xrift/cli", "version": version,
                 "bin": { "xrift": "dist/index.js" }

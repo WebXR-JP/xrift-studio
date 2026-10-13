@@ -8,6 +8,7 @@ import path from 'node:path'
 import { defineConfig } from 'vite'
 import dts from 'vite-plugin-dts'
 import federation from '@originjs/vite-plugin-federation'
+import { xriftDev } from '@xrift/sdk/vite'
 
 // XRift serves each publication from a single directory. Scoped packages and
 // package subpaths otherwise become directories in federation chunk names.
@@ -21,6 +22,7 @@ export default defineConfig({
   base: './',
   plugins: [
     react(),
+    xriftDev(),
     dts({ insertTypesEntry: true }),
     federation({
       name: 'xrift_studio_project',

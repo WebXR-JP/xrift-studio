@@ -23,6 +23,7 @@ import {
 import {
   COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
   COMPILER_REACT_PACKAGE_SPECS,
+  COMPILER_SDK_PACKAGE_SPEC,
   recordCompilerPackageSpecs,
 } from "../src/lib/visual-editor/compiler/runtime-packages.ts";
 import { resolveBundledAssetSource } from "./bundled-assets.mjs";
@@ -375,6 +376,7 @@ function runtimePackagePlan(compilation) {
   return [
     ...compilation.stagingPlan.runtimePackageSpecs,
     COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
+    COMPILER_SDK_PACKAGE_SPEC,
     ...COMPILER_REACT_PACKAGE_SPECS,
   ];
 }
