@@ -118,7 +118,7 @@ async function prepare() {
       load("src/lib/visual-editor/classic-export.ts"), load("cli/bundled-assets.mjs"), load("src/lib/tauri.ts"),
       load("src/lib/visual-editor/compiler/runtime-packages.ts"),
     ]);
-    const png = new Uint8Array(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jP6kAAAAASUVORK5CYII=", "base64"));
+    const png = new Uint8Array(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=", "base64"));
     const { documents, binaryFiles } = await createMToonExportFixtureDocuments(Object.fromEntries(MTOON_EXPORT_TEXTURE_ROLES.map(role => [role, png])));
     const authoring = path.join(runRoot, "authoring");
     const serialized = serializeVisualProjectDocuments(documents);

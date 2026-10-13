@@ -387,7 +387,7 @@ export async function runClassicExportFixtureAssertions(): Promise<void> {
 
     // VRM avatars and all independent MToon maps use the same concrete write
     // boundary as other Assets, including the VRM 0.x compatibility metadata.
-    const png = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jP6kAAAAASUVORK5CYII="), character => character.charCodeAt(0));
+    const png = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII="), character => character.charCodeAt(0));
     const toonFixture = await createMToonExportFixtureDocuments(Object.fromEntries(MTOON_EXPORT_TEXTURE_ROLES.map(role => [role, png])));
     const originalToonEntry = files.get(key(targetPath, "src/World.tsx"));
     Object.assign(tauri, { readProjectFileDataUrl: async (_root: string, relative: string) => {

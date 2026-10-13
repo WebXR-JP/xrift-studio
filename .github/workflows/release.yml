@@ -91,7 +91,7 @@ jobs:
         run: |
           pnpm runtime:shell:check
           node scripts/prepare-readable-three-vrm.mjs --check
-          node --test scripts/readable-three-vrm.test.mjs scripts/async-map.test.mjs scripts/runtime-shell-fetch.test.mjs scripts/browser-api-key.test.mjs scripts/browser-project-session.test.mjs
+          node --test scripts/readable-three-vrm.test.mjs scripts/async-map.test.mjs scripts/runtime-shell-fetch.test.mjs scripts/browser-api-key.test.mjs scripts/browser-project-session.test.mjs scripts/classic-mtoon-png.test.mjs
 
       # 公開ステージングの tsc をなぞる staged world typecheck を含む。
       # コンパイラが出力するコードが公開ビルドで落ちる退行は、ここで
