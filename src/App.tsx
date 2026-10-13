@@ -1,3 +1,6 @@
+import { MATERIAL_SHOWCASE_DEFINITIONS, materialShowcaseAssetId, getMaterialShowcaseAsset } from "./lib/visual-editor/material-showcase-catalog";
+import { ensureCatalogMaterialTextures } from "./lib/visual-editor/asset-import-persistence";
+import { applyExternalStoreInstallAndAnalyzeModel } from "./lib/visual-editor/external-store";
 import {
   lazy,
   Suspense,
@@ -7,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { parseChatgptWorldPlan, buildChatgptWorld, placeChatgptAssets, chatgptAssetRequests } from "./lib/visual-editor/chatgpt-world";
 import { ProjectLibrary } from "./components/ProjectLibrary";
 import { EditorView } from "./components/EditorView";
 import { NewProjectDialog } from "./components/NewProjectDialog";
@@ -17,6 +21,7 @@ import { projectPackageFileName } from "./lib/project-package";
 import { AppUpdateDialog } from "./components/AppUpdateDialog";
 import {
   tauri,
+  type ChatgptAssetOptions,
   type Project,
   type ProjectArchiveExport,
   type ProjectArchiveInspection,
@@ -1158,6 +1163,77 @@ function App() {
     };
   };
 
+  const chatgptGenerationRef = useRef(false);
+  const handleChatgptGenerate = async (model: string, prompt: string, options: ChatgptAssetOptions): Promise<void> => {
+    if (chatgptGenerationRef.current) throw new Error("ワールドを生成中です");
+    const sourceId = visualSessionRef.current?.bundle.project.projectId;
+    if (!sourceId || !projectsRoot || !tauri.isAvailable()) throw new Error("デスクトップ版でワールドを開いてください");
+    chatgptGenerationRef.current = true;
+    let createdProject: Project | null = null;
+    try {
+      const result = await tauri.chatgptPlan(model, prompt, options, options.materials ? MATERIAL_SHOWCASE_DEFINITIONS.map(v => ({id: materialShowcaseAssetId(v.key), name: v.name, extension: v.extensionLabel})) : []);
+      const plan = parseChatgptWorldPlan(result.plan, result.assetCandidates, options.materials);
+      if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("開いている作品が変わりました。生成結果を適用せず停止しました");
+      const name = await uniqueProjectDirectoryName(projectsRoot, `chatgpt-world-${Date.now()}`);
+      const prepared = await prepareStarterVisualProject(buildChatgptWorld(plan, name, result.assetCandidates, options.materials));
+      if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("開いている作品が変わりました。もう一度生成してください");
+      // Resolve bounded download options before creating a project. Downloads never target the source work.
+      const requests = [];
+      for (const asset of chatgptAssetRequests(plan)) {
+        const options = await tauri.getExternalStoreAssetOptions(asset.providerId, asset.externalId);
+        const resolution = options.resolutions.filter(v => v.byteLength > 0 && v.byteLength <= 32 * 1024 * 1024).sort((a,b) => a.byteLength - b.byteLength)[0];
+        if (options.assetKind !== asset.kind || !resolution) throw new Error("取り込み可能なサイズの外部素材がありません。別の素材を使う依頼で再試行してください");
+        requests.push({ providerId: asset.providerId, externalId: asset.externalId, resolution: resolution.id });
+      }
+      // Save the current work before opening a fully prepared, separately saved world.
+      const saveSource = async () => {
+        const bridge = requireMcpProjectBridge("ChatGPTワールド生成");
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("開いている作品が変わりました。生成を停止しました");
+          const before = bridge.currentBundle();
+          if (!(await bridge.saveNow())) throw new Error("現在の作品を保存できませんでした。保存先を確認して再試行してください");
+          if (bridge.currentBundle() === before) return;
+        }
+        throw new Error("現在の作品が編集中です。操作を止めて再試行してください");
+      };
+      await saveSource();
+      if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("開いている作品が変わりました。もう一度生成してください");
+      const project = await createPreparedStarterVisualProjectOnDisk(projectsRoot, name, prepared);
+      createdProject = project;
+      let completedPlan = prepared.plan;
+      const assetIds = new Map<string, string>();
+      for (const request of requests) {
+        if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("開いている作品が変わりました。素材の取り込みを停止しました");
+        const installed = await tauri.installExternalStoreAsset(project.path, request);
+        const applied = await applyExternalStoreInstallAndAnalyzeModel(project.path, completedPlan.assets, installed);
+        completedPlan = { ...completedPlan, assets: applied.manifest };
+        assetIds.set(`${request.providerId}:${request.externalId}`, applied.primaryAssetId);
+      }
+      for (const id of new Set(plan.objects.flatMap(v => v.gltfMaterialId ? [v.gltfMaterialId] : []))) {
+        const material = getMaterialShowcaseAsset(id);
+        if (!material) throw new Error("glTFマテリアルが見つかりません");
+        const manifest = { ...completedPlan.assets, assets: { ...completedPlan.assets.assets, [id]: structuredClone(material) } };
+        const withTextures = await ensureCatalogMaterialTextures(project.path, manifest, material.properties);
+        if (!withTextures) throw new Error("glTFマテリアルのテクスチャを取り込めませんでした");
+        completedPlan = { ...completedPlan, assets: withTextures };
+      }
+      completedPlan = placeChatgptAssets(completedPlan, plan, assetIds);
+      await saveVisualProjectToDisk(project.path, { project: completedPlan.project, scenes: { [completedPlan.scene.sceneId]: completedPlan.scene }, assets: completedPlan.assets, prefabs: completedPlan.prefabs });
+      if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("新しいワールドは保存しました。プロジェクト一覧から開いてください");
+      await saveSource();
+      if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("新しいワールドは保存しました。プロジェクト一覧から開いてください");
+      setVisualCompilationFresh(false);
+      setVisualThumbnailReadiness(null);
+      setVisualSession({ project, bundle: { project: completedPlan.project, scene: completedPlan.scene, assets: completedPlan.assets, prefabs: completedPlan.prefabs } });
+      await refreshProjects();
+      toast({ kind: "success", title: `${plan.title}を作成しました`, description: "新しいワールドを保存して開きました。Scene ViewとPlayで確認してください。" });
+    } catch (error) {
+      if (createdProject) await refreshProjects().catch(() => undefined);
+      toast({ kind: "error", title: "ワールドを生成できませんでした", description: error instanceof Error ? error.message : String(error) });
+      throw error;
+    } finally { chatgptGenerationRef.current = false; }
+  };
+
   const handleMcpProjectTool = async (
     request: XriftMcpEditorRequestEvent,
   ): Promise<Record<string, unknown>> => {
@@ -1792,6 +1868,7 @@ function App() {
               projectPath={visualSession.project?.path}
               initialBundle={visualSession.bundle}
               compilationFresh={visualCompilationFresh}
+              onChatgptGenerate={handleChatgptGenerate}
               onSave={(bundle) => {
                 setVisualCompilationFresh(false);
                 return handleSaveVisualProject(bundle, false, false);

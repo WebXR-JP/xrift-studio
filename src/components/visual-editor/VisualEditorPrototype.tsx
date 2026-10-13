@@ -1,3 +1,4 @@
+import type { ChatgptAssetOptions } from "../../lib/tauri";
 import { HierarchyTransferDialog } from "./HierarchyTransferDialog";
 import { useHierarchyTransfer } from "./useHierarchyTransfer";
 import { getHierarchyClipboard } from "../../lib/visual-editor/hierarchy-transfer";
@@ -716,6 +717,7 @@ export type VisualEditorPrototypeProps = {
   onProjectExport?: (bundle: PrototypeVisualProject) => void | Promise<void>;
   onProjectImport?: () => void | Promise<void>;
   projectTransferBusy?: boolean;
+  onChatgptGenerate?: (model: string, prompt: string, options: ChatgptAssetOptions) => Promise<void>;
   /**
    * 公開ダイアログなど、Editorの外で作られたAsset Manifestの更新を、この
    * セッションの履歴へ取り込むための登録口。外の処理がディスクへ書いた変換を
@@ -959,6 +961,7 @@ export function VisualEditorPrototype({
   onProjectExport,
   onProjectImport,
   projectTransferBusy = false,
+  onChatgptGenerate,
   onRegisterExternalAssetsCommit,
   onRegisterMcpProjectBridge,
   onClassicExport,
@@ -11340,7 +11343,14 @@ export function VisualEditorPrototype({
     return true;
   }, [leaving, projectExportBusy, projectTransferBusy, importBusy, onProjectExport, flushInteractivityDraft, backLabel, onBack, requestAutosave, flushCodeAutosaves]);
 
-  mcpProjectBridgeActionsRef.current = { saveNow: runSave, leave: handleBack };
+  mcpProjectBridgeActionsRef.current = {
+    saveNow: async () => {
+      if (!(await flushCodeAutosaves())) return undefined;
+      flushInteractivityDraft();
+      return runSave();
+    },
+    leave: handleBack,
+  };
 
   const kindLabel = projectKind === "world" ? "ワールド" : "アイテム";
   const KindIcon = projectKind === "world" ? EDITOR_ICONS.world : EDITOR_ICONS.item;
@@ -12484,6 +12494,8 @@ export function VisualEditorPrototype({
               setSceneSettingsOpen((current) => !current);
               if (tablet) { setTabletPanel("inspector"); setViewportMaximized(false); }
             }}
+            onChatgptGenerate={onChatgptGenerate}
+            chatgptDisabledReason={renderedReadOnly ? "Playを停止してから生成してください" : importBusy ? "素材の読み込み完了を待ってください" : undefined}
             mcpNativeAvailable={mcpNativeAvailable}
             mcpClients={mcpClients}
             mcpLoading={mcpLoading}

@@ -1,3 +1,5 @@
+import type { ChatgptAssetOptions } from "../../lib/tauri";
+import { ChatgptWorldPanel } from "./ChatgptWorldPanel";
 import type {
   XriftMcpClientId,
   XriftMcpClientStatus,
@@ -12,6 +14,8 @@ export type XriftMcpActivity = {
 } | null;
 
 export function AiConnectionPanel({
+  onChatgptGenerate,
+  chatgptDisabledReason,
   nativeAvailable,
   clients,
   loading,
@@ -23,6 +27,8 @@ export function AiConnectionPanel({
   onRegister,
   onUndo,
 }: {
+  onChatgptGenerate?: (model: string, prompt: string, options: ChatgptAssetOptions) => Promise<void>;
+  chatgptDisabledReason?: string;
   nativeAvailable: boolean;
   clients: readonly XriftMcpClientStatus[];
   loading: boolean;
@@ -74,6 +80,7 @@ export function AiConnectionPanel({
           };
   return (
     <div className="scrollbar-thin max-h-[min(32rem,calc(100vh-10rem))] space-y-3 overflow-y-auto p-3.5 text-xs text-slate-600">
+      {onChatgptGenerate ? <ChatgptWorldPanel onGenerate={onChatgptGenerate} disabledReason={chatgptDisabledReason} /> : null}
       <p className="rounded-md border border-violet-100 bg-violet-50/70 p-3 leading-5 text-slate-700">
         CodexなどのAIクライアントをMCPに接続すると、会話でシーンの確認や編集を頼めます。変更は自動保存されます。「元に戻す」で取り消すこともできます。
       </p>

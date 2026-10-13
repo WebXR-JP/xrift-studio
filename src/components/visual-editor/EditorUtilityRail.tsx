@@ -1,3 +1,4 @@
+import type { ChatgptAssetOptions } from "../../lib/tauri";
 import { useEffect, useRef, useState } from "react";
 import { EDITOR_ICONS } from "./editor-icons";
 import {
@@ -45,6 +46,8 @@ function UtilityButton({
 }
 
 export function EditorUtilityRail({
+  onChatgptGenerate,
+  chatgptDisabledReason,
   sceneSettingsOpen,
   onToggleSceneSettings,
   mcpNativeAvailable,
@@ -59,6 +62,8 @@ export function EditorUtilityRail({
   onRegisterMcpClient,
   onUndo,
 }: {
+  onChatgptGenerate?: (model: string, prompt: string, options: ChatgptAssetOptions) => Promise<void>;
+  chatgptDisabledReason?: string;
   sceneSettingsOpen: boolean;
   onToggleSceneSettings: () => void;
   mcpNativeAvailable: boolean;
@@ -157,6 +162,8 @@ export function EditorUtilityRail({
           </div>
 
           <AiConnectionPanel
+            onChatgptGenerate={onChatgptGenerate}
+            chatgptDisabledReason={chatgptDisabledReason}
             nativeAvailable={mcpNativeAvailable}
             clients={mcpClients}
             loading={mcpLoading}
