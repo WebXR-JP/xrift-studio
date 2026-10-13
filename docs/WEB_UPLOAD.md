@@ -1,6 +1,6 @@
-# ブラウザからのワールド公開
+# ブラウザからのワールド・アイテム公開
 
-ブラウザ版βはワールドをXRiftへ直接送信する経路を持つ。パソコン・iPad・スマートフォンで同じ公開操作を試せる。利用手順は [利用者向けガイド](./guide/publishing.md) に記す。実送信とXRift上でのシーン描画は確認済みで、Collider修正後の衝突動作は再送して確認する。
+ブラウザ版βはワールドとアイテムをXRiftへ直接送信する経路を持つ。パソコン・iPad・スマートフォンで同じ公開操作を試せる。利用手順は [利用者向けガイド](./guide/publishing.md) に記す。ワールドの実送信とXRift上でのシーン描画は確認済み。アイテムはSDKの送信先を隔離したE2Eと、ビルド済みシェルの描画を検証し、実サービスへの送信・審査・利用は別途確認する。
 
 ## 実装の場所
 
@@ -10,7 +10,7 @@
 - ブラウザのプロジェクトと素材: `src/lib/browser-project-storage.ts`
 - ランタイムシェル: `public/xrift-runtime-shell/`
 
-ブラウザはワールドごとのビルドを行わず、事前にビルドしたシェル、`xrift-runtime.json`、素材を組み合わせる。シェルは`XriftWorld`でmanifestを描画し、送信には`@xrift/sdk`の`client.worlds.upload()`を使う。Tauriや公式CLIは実行しない。アイテムとスクリプトを含むワールドはこの経路の対象外。
+ブラウザは作品ごとのビルドを行わず、事前にビルドしたシェル、`xrift-runtime.json`、素材を組み合わせる。共有シェルはModule Federationの`./World`と`./Item`を公開し、`XriftWorld`と`XriftItem`でmanifestを描画する。描画、素材とシェーダーには編集・Playと同じRuntime adapterを使う。ワールドの物理処理は`inherit`、アイテムは既存のItem adapterと同じ既定値を使う。送信には`@xrift/sdk`の`client.worlds.upload()`または`client.items.upload()`を使い、ItemにはWorld専用のphysics、camera、itemsを送らない。Tauriや公式CLIは実行しない。スクリプトを含む作品はこの経路の対象外。
 
 ランタイムや`@xrift/world-components`の変更時にシェルを再生成する。本番ビルドの実行条件は`AGENT.md`に従う。
 
@@ -23,15 +23,16 @@
 | CORS | [Issue #12](https://github.com/WebXR-JP/xrift-studio/issues/12) への開発元対応後、2026-09-24にlocalhostのブラウザからSDKの署名付きURLを含む送信を完了した。GitHub PagesオリジンからのAPIへのOPTIONSも通る。GitHub Pages上での実送信は別途確認する。 |
 | 素材 | ブラウザの素材はIndexedDBに保存する。公開時に`readBrowserFile`で必要なファイルを読み、送信したファイルがXRift上でも読み込めるか確認する。 |
 | スクリプト | Runtime JSONは実行コードを表せない。compilerは`script-unsupported-runtime-output`で拒否する。 |
-| アイテム | ワールド用のランタイムシェルだけを同梱しているため、この経路の対象外。 |
+| アイテム | `./Item`を同梱し、SDKのItem用の作成・署名付きURL取得・ファイル送信・完了経路を使う。新規送信後のItem IDは制作データに保存し、再読込後も同じItemを更新する。2026-10-13にGLSL付きItemの生成物を公式CLI 0.25.0の`check item`で検査し、34 JSファイルすべてがAPPROVEだった。実サービスへの送信・審査・利用は未確認。 |
 | シェルの再利用 | Module Federationのremote名を複数ワールドで共用できるか、公開先での確認が必要。シェルが読む`xrift-runtime.json`はアップロード先のワールド直下に置く。 |
 | 公開結果 | SDKの`upload()`は送信結果のIDを返すが、後続の審査状態を返さない。送信完了を再生可能と表示しない。2026-09-24の実機試験では、権限宣言、Federationの直接参照ファイル、Viteが返したHTMLの混入を順に修正した。v8はXRift側で審査通過・使用中となり、`xrift-runtime.json`、モデル、テクスチャ、DRACO/KTX2の応答とシーン描画を確認した。次のCollider修正は別途再送と衝突確認が必要。URLを推測せず、結果不明の送信は即時に繰り返さない。 |
+| 送信保留 | 外部送信前にIndexedDBのsettingsへ作品ごとの保留を保存し、作成された公開先IDも記録する。認証情報は含めない。送信結果が不明な場合は画面を閉じても再読み込みしても保留し、XRiftで確認してから解除する。401 / 403でも、公開先作成後やファイル送信開始後の失敗では再送を許可しない。送信と公開結果の保存が終わった場合、または送信前の確定した拒否の場合に解除する。 |
 
 シェルの生成・取得、JSONとファイルの組み立て、進捗・失敗表示、APIへのファイル送信、XRift側でのシーン描画を確認した。シェルのファイルは送信前にHTML応答を拒否し、manifestのSHA-256バージョンと照合する。
 
 ## 認証
 
-XRiftの[設定画面](https://app.xrift.net/settings)で`write:worlds`権限付きのAPIキーを発行し、公開画面で入力する。XRift Studioはキーをプロジェクト、IndexedDB、`localStorage`、ログへ保存しない。
+XRiftの[設定画面](https://app.xrift.net/settings)で、ワールド用の`write:worlds`またはアイテム用の`write:items`権限付きのAPIキーを発行し、公開画面で入力する。XRift Studioはキーをプロジェクト、IndexedDB、`localStorage`、ログへ保存しない。公開画面には作品の種類に合う権限名を表示し、401 / 403でも同じ権限を案内する。
 
 対応ブラウザでは、送信完了画面で利用者が「APIキーをブラウザに保存」を押したときにパスワード管理機能へ保存を依頼する。保存APIは利用者がブラウザの保存確認を承諾する前に完了する場合があるため、その直後にキー選択を呼び出さない。ブラウザで保存を終えてから、利用者が「保存済みキーを確認」を押して読み戻す。今回送信に使ったキーと一致した場合だけ保存済みと表示する。確認の取り消し、読み取り失敗、別のキーの選択ではキーを保持し、確認または「保存をもう一度依頼」をやり直せるようにする。
 
@@ -39,10 +40,10 @@ XRiftの[設定画面](https://app.xrift.net/settings)で`write:worlds`権限付
 
 キーは公開画面を開いている間だけメモリーに保持し、閉じると消す。ブラウザの資格情報APIに非対応の場合は、手入力またはブラウザの通常の自動入力を使う。トークンの接頭辞だけで有効性やスコープを判定せず、サーバーの401 / 403を伝える。
 
-[Public API v1の資料](https://docs.xrift.net/public-api/v1)はAPIキーの認証方法を説明しているが、現時点のスコープ表には読み取り権限だけが載っている。ここでの公開はPublic API v1の`GET /worlds`ではなく、`@xrift/sdk`の`client.worlds.upload()`を使う。資料の表だけから公開権限の有無を判断しない。
+[Public API v1の資料](https://docs.xrift.net/public-api/v1)はAPIキーの認証方法を説明しているが、確認時点のスコープ表には読み取り権限だけが載っている。ここでの公開はPublic API v1の一覧取得ではなく、SDK 0.2.0の`client.worlds.upload()`と`client.items.upload()`を使う。資料の表だけから公開権限の有無を判断しない。設定画面でItem用の権限を発行できない場合は、実サービスの対応を確認する。
 
 ## 再開時の判断
 
-CORSと素材の読み取り経路を確認したうえで、実際のAPIキーを使う試験は既存作品と分離したワールドで行う。直接送信が成立しなければ、プロジェクトを書き出してデスクトップ版から公開する。認証情報を扱う中継サーバーは採用済みの構成ではない。追加する場合は、認証と運用の設計を別途行う。
+CORSと素材の読み取り経路を確認したうえで、実際のAPIキーを使う試験は既存作品と分離した作品で行う。直接送信が成立しなければ、プロジェクトを書き出してデスクトップ版から公開する。認証情報を扱う中継サーバーは採用済みの構成ではない。追加する場合は、認証と運用の設計を別途行う。
 
-表示の調査ではNetworkで`xrift-runtime.json`の取得先を確認する。シェルは`import.meta.url`を基準に、ワールド自身の保存先からmanifestを読む。
+表示の調査ではNetworkで`xrift-runtime.json`の取得先を確認する。シェルは`import.meta.url`を基準に、作品自身の保存先からmanifestを読む。
