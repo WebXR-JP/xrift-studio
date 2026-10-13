@@ -29,19 +29,25 @@ async function mockApi(page: Page, detail: unknown = model) {
 }
 
 test("ブラウザの一覧からGLBを取り込み、CC0と元データを再読み込み後も保持する", async ({ page }) => {
+  const imageErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error" && message.text().includes("An empty string")) imageErrors.push(message.text());
+  });
   await mockApi(page);
   await page.goto("/editor.html");
   await page.getByRole("button", { name: /新規プロジェクト/ }).click();
   await page.getByRole("button", { name: /ワールドを作る/ }).click();
   await page.getByRole("textbox", { name: "プロジェクト名" }).fill("ローポリAPI検証");
   await page.getByRole("button", { name: "作成して開く" }).click();
-  await page.getByRole("button", { name: "外部から追加", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "外部から追加" });
+  await page.getByRole("region", { name: "Assets", exact: true }).getByRole("button", { name: "アセットストア", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "アセットストア" });
   await dialog.getByRole("button", { name: /AI LOWPOLY PROPS.*ローポリ/ }).click();
   const list = dialog.getByRole("region", { name: "AI LOWPOLY PROPSのアセット一覧" });
   const search = list.getByRole("textbox", { name: "AI LOWPOLY PROPSを検索" });
   const card = list.getByRole("button", { name: "木製ランタン Model", exact: true });
   await expect(card).toBeVisible();
+  await expect(card.getByText("プレビューなし")).toBeVisible();
+  await expect(dialog.locator('img:not([src]), img[src=""]')).toHaveCount(0);
   await search.fill("木製,ﾗﾝﾀﾝ");
   await expect(card).toBeVisible();
   await search.fill("ＷＯＯＤＥＮ lantern");
@@ -54,7 +60,7 @@ test("ブラウザの一覧からGLBを取り込み、CC0と元データを再�
   await page.screenshot({ path: "/tmp/ai-lowpoly-props-desktop.png" });
   await dialog.getByRole("button", { name: "プロジェクトに追加" }).click();
   await expect(dialog.getByRole("status")).toContainText("木製ランタン");
-  await dialog.getByRole("button", { name: "「外部から追加」を閉じる" }).click();
+  await dialog.getByRole("button", { name: "「アセットストア」を閉じる" }).click();
   await expect(page.getByRole("status", { name: "変更は自動保存されています" })).toBeVisible();
 
   await page.reload();
@@ -80,6 +86,7 @@ test("ブラウザの一覧からGLBを取り込み、CC0と元データを再�
   await assetCard.click({ button: "right" });
   await page.getByRole("button", { name: "シーンへ配置", exact: true }).click();
   await expect(page.getByRole("treeitem", { name: /木製ランタン/ }).first()).toBeVisible();
+  expect(imageErrors).toEqual([]);
 });
 
 test("ページ取得中の409から先頭へ戻り、未表示モデルも検索する", async ({ page }) => {
@@ -144,7 +151,7 @@ test("デスクトップの取り込みは既存のアトミックIPCへ元のGL
       const load = (path: string) => import(/* @vite-ignore */ path);
       const { tauri } = await load("/src/lib/tauri.ts");
       const installed = await tauri.installExternalStoreAsset("/isolated-test", { providerId: "ai-lowpoly-props", externalId: "test_vase", resolution: "src" });
-      return { installed, calls };
+      return { installed, calls: calls.filter((call) => call.command === "commit_visual_asset_import") };
     } finally { delete (window as any).__TAURI_INTERNALS__; }
   });
   expect(result.calls).toHaveLength(1);

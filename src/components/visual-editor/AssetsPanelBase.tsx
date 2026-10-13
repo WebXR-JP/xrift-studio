@@ -1494,19 +1494,19 @@ export function AssetsPanel({
     }
   }, [importError, pendingImports]);
 
+  const renameOriginalName = renameRequest?.kind === "asset"
+    ? assets.assets[renameRequest.id]?.name
+    : renameRequest?.kind === "folder" ? assets.folders?.[renameRequest.id]?.name : undefined;
+
   useEffect(() => {
     if (!renameRequest) return;
-    const name =
-      renameRequest.kind === "asset"
-        ? assets.assets[renameRequest.id]?.name
-        : assets.folders?.[renameRequest.id]?.name;
-    setRenameDraft(name ?? "");
+    setRenameDraft(renameOriginalName ?? "");
     const frame = window.requestAnimationFrame(() => {
       renameInputRef.current?.focus();
       renameInputRef.current?.select();
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [assets.assets, assets.folders, renameRequest]);
+  }, [renameOriginalName, renameRequest]);
 
   useLayoutEffect(() => {
     const menu = contextMenuRef.current;
@@ -1974,9 +1974,10 @@ export function AssetsPanel({
                   <span className={`flex shrink-0 items-center justify-center text-slate-500 ${viewMode === "grid" ? "size-8" : "size-6"}`}><EDITOR_ICONS.folder size={viewMode === "grid" ? 24 : 16} aria-hidden="true" /></span>
                   <input
                     ref={renameInputRef}
+                    aria-label={`${folder.name}の名前`}
                     value={renameDraft}
                     onChange={(event) => setRenameDraft(event.currentTarget.value)}
-                    onBlur={() => onRename({ kind: "folder", id: folder.id }, renameDraft)}
+                    onBlur={(event) => onRename({ kind: "folder", id: folder.id }, event.currentTarget.value)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") event.currentTarget.blur();
                       if (event.key === "Escape") {
@@ -2020,9 +2021,10 @@ export function AssetsPanel({
               <span className={`block shrink-0 overflow-hidden rounded [&_svg]:!size-4 ${viewMode === "grid" ? "size-8" : "size-6"}`}><AssetThumbnail asset={asset} assets={assets} projectPath={projectPath} /></span>
               <input
                 ref={renameInputRef}
+                aria-label={`${asset.name}の名前`}
                 value={renameDraft}
                 onChange={(event) => setRenameDraft(event.currentTarget.value)}
-                onBlur={() => onRename({ kind: "asset", id: asset.id }, renameDraft)}
+                onBlur={(event) => onRename({ kind: "asset", id: asset.id }, event.currentTarget.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") event.currentTarget.blur();
                   if (event.key === "Escape") {

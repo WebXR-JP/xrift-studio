@@ -19,10 +19,14 @@ test("Assetsのグリッドは名前をアイコンの下に表示し横には�
     await assets.getByRole("button", { name: "新規アセットまたはフォルダー" }).click();
     await page.getByRole("button", { name: "新規マテリアル", exact: true }).click();
   }
-  await assets.getByRole("button", { name: /新規マテリアル 2/ }).first().click({ button: "right" });
+  const material = assets.getByRole("button", { name: /マテリアル 新規マテリアル \d+/ }).first();
+  const materialName = (await material.innerText()).trim();
+  await material.click({ button: "right" });
   await page.getByRole("menu", { name: "Assetsのメニュー" }).getByRole("button", { name: "名前を変更" }).click();
-  await assets.locator("input:focus").fill("xdrift_extremely_long_material_asset_name_for_layout");
-  await assets.locator("input:focus").press("Enter");
+  const rename = assets.getByRole("textbox", { name: `${materialName}の名前`, exact: true });
+  await rename.fill("xdrift_extremely_long_material_asset_name_for_layout");
+  await rename.press("Enter");
+  await expect(assets.getByRole("button", { name: /xdrift_extremely_long_material_asset_name_for_layout/ })).toBeVisible();
   await assets.getByRole("button", { name: "新規アセットまたはフォルダー" }).click();
   await page.getByRole("button", { name: "新規フォルダー", exact: true }).click();
   await assets.locator('button[title="Assets/を表示"]').click();
@@ -52,7 +56,9 @@ test("Assetsのグリッドは名前をアイコンの下に表示し横には�
           if (!name?.classList.contains("line-clamp-2")) issues.push("Asset name is limited to one line");
           if (name && preview.getBoundingClientRect().bottom > name.getBoundingClientRect().top + 1) issues.push("Name is not below the icon");
           const longName = [...container.querySelectorAll<HTMLElement>(".line-clamp-2")].find((element) => element.textContent?.startsWith("xdrift_extremely_long_material"));
-          if (!longName || longName.getBoundingClientRect().height < 25) issues.push("Long asset name does not wrap to two lines");
+          const nameRange = document.createRange();
+          if (longName) nameRange.selectNodeContents(longName);
+          if (!longName || nameRange.getClientRects().length < 2 || longName.getBoundingClientRect().height < 25) issues.push("Long asset name does not wrap to two lines");
           const unselected = container.querySelector<HTMLElement>('[aria-pressed="false"]')?.parentElement;
           if (unselected && !unselected.classList.contains("bg-transparent")) issues.push("Unselected tile has a card background");
           const folder = container.querySelector<HTMLElement>('[data-editor-drag-source="asset-folder"]');

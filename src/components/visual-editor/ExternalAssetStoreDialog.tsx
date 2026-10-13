@@ -612,6 +612,7 @@ export function ExternalAssetStoreDialog({
                         setInstalledName(null);
                       }}
                       data-catalog-card
+                      aria-label={`${asset.name} ${kindLabel(asset.assetKind)}`}
                       aria-pressed={selectedId === asset.externalId}
                       className={`overflow-hidden rounded-lg border bg-white text-left transition ${
                         selectedId === asset.externalId
@@ -619,16 +620,12 @@ export function ExternalAssetStoreDialog({
                           : "border-slate-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm"
                       }`}
                     >
-                      <div className="aspect-square bg-slate-100">
-                        <img
+                        <CatalogThumbnailImage
                           src={asset.thumbnailUrl}
                           alt=""
-                          width={320}
-                          height={320}
-                          loading="lazy"
-                          className="h-full w-full object-cover"
+                          className="aspect-square w-full"
+                          fallback={<Boxes size={24} aria-hidden="true" />}
                         />
-                      </div>
                       <div className="p-2.5">
                         <p className="truncate text-xs font-semibold text-slate-800">{asset.name}</p>
                         <p className="mt-1 text-[10px] font-medium text-slate-500">
@@ -675,13 +672,11 @@ export function ExternalAssetStoreDialog({
           >
             {selected ? (
               <div className="space-y-4">
-                <img
+                <CatalogThumbnailImage
                   src={selected.thumbnailUrl}
                   alt={`${selected.name}のプレビュー`}
-                  width={640}
-                  height={400}
-                  loading="lazy"
-                  className="aspect-[16/10] w-full rounded-lg bg-slate-100 object-cover"
+                  className="aspect-[16/10] w-full rounded-lg"
+                  fallback={<Boxes size={28} aria-hidden="true" />}
                 />
                 <div>
                   <div className="flex items-start justify-between gap-2">
