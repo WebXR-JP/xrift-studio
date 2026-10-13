@@ -4,6 +4,11 @@ import type { ChatgptGeneration } from "../src/lib/visual-editor/chatgpt-generat
 
 type EditorContext = { projectId: string; sceneId: string; revision: number; saveStatus: string };
 const options = { models: false, materials: false, audio: false };
+declare global {
+  interface Window {
+    __XRIFT_CHATGPT_BRIDGE_GATE__?: { waiting: boolean; release: (() => void) | null };
+  }
+}
 
 async function call(page: Page, tool: string, args: Record<string, unknown> = {}): Promise<XriftMcpEditorResponse> {
   return page.evaluate(async ({ tool, args }) => {
@@ -28,8 +33,8 @@ async function openFixture(page: Page) {
   }; });
 }
 
-async function generateFresh(page: Page, prompt: string, mode: "build" | "plan" = "build") {
-  return page.evaluate(async ({ prompt, mode, options }) => {
+async function generateFresh(page: Page, prompt: string, mode: "build" | "plan" = "build", target: "current" | "new" = "current") {
+  return page.evaluate(async ({ prompt, mode, target, options }) => {
     const path = "/src/release-e2e/mock-tauri.ts";
     const { callReleaseE2EMcp: call } = await import(/* @vite-ignore */ path);
     const context = await call("get_editor_context");
@@ -37,10 +42,10 @@ async function generateFresh(page: Page, prompt: string, mode: "build" | "plan" 
     const source = context.result as EditorContext;
     const response = await call("generate_chatgpt_world", {
       projectId: source.projectId, sceneId: source.sceneId, expectedRevision: source.revision,
-      model: "fixture-model", prompt, options, mode, target: "current",
+      model: "fixture-model", prompt, options, mode, target,
     });
     return { source, response };
-  }, { prompt, mode, options });
+  }, { prompt, mode, target, options });
 }
 
 async function generation(page: Page, generationId: string): Promise<ChatgptGeneration> {
@@ -98,6 +103,82 @@ test("Scene最大化中もfooterとMCPからチャットを開き、入力と制
   expect((await saved(page)).files.sceneDocuments).toEqual(before.files.sceneDocuments);
   expect(await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.uploadAttempts)).toEqual([]);
   expect(await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.unhandledCommands)).toEqual([]);
+});
+
+test("新Worldのbridge登録待ちに別作品を開いても、その作品へPlanを適用しない", async ({ page }) => {
+  await openFixture(page);
+  const source = await saved(page);
+  const created = await call(page, "create_project", { name: "chatgpt-context-other-fixture", kind: "world", templateId: "blank" });
+  expect(created.ok, JSON.stringify(created)).toBe(true);
+  const other = await page.evaluate(async () => {
+    const path = window.__XRIFT_RELEASE_E2E__!.projects.find(project => project.name === "chatgpt-context-other-fixture")!.path;
+    const modulePath = "/src/lib/tauri.ts";
+    const files = await (await import(/* @vite-ignore */ modulePath)).tauri.readVisualProject(path) as VisualProjectFiles;
+    return { path, files };
+  });
+  expect((await call(page, "open_project", { path: source.path })).ok).toBe(true);
+  await expect(page.getByRole("tree", { name: "シーンのEntity階層" })).toBeVisible();
+
+  await page.evaluate(async () => {
+    const modulePath = "/src/lib/tauri.ts";
+    const { tauri } = await import(/* @vite-ignore */ modulePath);
+    const subscribe = tauri.onXriftMcpEditorRequest.bind(tauri);
+    const gate = { waiting: false, release: null as (() => void) | null };
+    window.__XRIFT_CHATGPT_BRIDGE_GATE__ = gate;
+    let armed = true;
+    // The next Editor's native listener is installed normally, but its bridge
+    // registration waits. Later Editors keep normal subscription behavior.
+    tauri.onXriftMcpEditorRequest = async (handler: Parameters<typeof subscribe>[0]) => {
+      const dispose = await subscribe(handler);
+      if (armed) {
+        armed = false; gate.waiting = true;
+        await new Promise<void>(resolve => { gate.release = resolve; });
+        gate.waiting = false;
+      }
+      return dispose;
+    };
+    window.__XRIFT_RELEASE_E2E__!.chatgptPlanFixture = JSON.stringify({
+      title: "新World限定Plan", description: "待機中の対象以外には追加しない",
+      objects: [{ name: "誤適用を防ぐSphere", shape: "sphere", position: [1, 1, 1], scale: [1, 1, 1] }],
+    });
+  });
+  try {
+    const { source: context, response } = await generateFresh(page, "新しい検証用Worldだけへの依頼", "build", "new");
+    expect(response.ok, JSON.stringify(response)).toBe(true);
+    const { generationId } = response.result as { generationId: string };
+    await expect.poll(() => page.evaluate(() => window.__XRIFT_CHATGPT_BRIDGE_GATE__!.waiting)).toBe(true);
+    const waiting = await generation(page, generationId);
+    expect(waiting.status).toBe("running");
+    expect(waiting.projectId).toBeTruthy();
+    expect(waiting.projectId).not.toBe(context.projectId);
+    expect(waiting.path).not.toBe(source.path);
+    expect(waiting.path).not.toBe(other.path);
+
+    // The generation is background work, so the ordinary MCP open operation
+    // can switch projects while the new World's bridge is still pending.
+    const opened = await call(page, "open_project", { path: other.path });
+    expect(opened.ok, JSON.stringify(opened)).toBe(true);
+    await expect.poll(async () => (await generation(page, generationId)).status).toBe("failed");
+    const stopped = await generation(page, generationId);
+    expect(stopped.error).toMatch(/作品|Scene|プロジェクト/);
+    expect(stopped.progress.completed).toBe(0);
+    expect((await call(page, "get_editor_context")).result).toMatchObject({ projectId: JSON.parse(other.files.projectJson).projectId });
+    const documents = await page.evaluate(async paths => {
+      const modulePath = "/src/lib/tauri.ts";
+      const { tauri } = await import(/* @vite-ignore */ modulePath);
+      return Promise.all(paths.map(async path => ({ path, files: await tauri.readVisualProject(path) as VisualProjectFiles })));
+    }, [source.path, other.path, waiting.path!]);
+    expect(documents[0].files.sceneDocuments).toEqual(source.files.sceneDocuments);
+    expect(documents[1].files.sceneDocuments).toEqual(other.files.sceneDocuments);
+    for (const document of documents) {
+      const names = document.files.sceneDocuments.flatMap(file => Object.values(JSON.parse(file.content).entities as Record<string, { name: string }>).map(entity => entity.name));
+      expect(names).not.toContain("誤適用を防ぐSphere");
+    }
+    expect(await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.uploadAttempts)).toEqual([]);
+    expect(await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.unhandledCommands)).toEqual([]);
+  } finally {
+    await page.evaluate(() => { window.__XRIFT_CHATGPT_BRIDGE_GATE__?.release?.(); }).catch(() => undefined);
+  }
 });
 
 test("同じprojectの別Sceneでは旧Planを自動表示せず、明示open後も表示と反映を拒否する", async ({ page }) => {

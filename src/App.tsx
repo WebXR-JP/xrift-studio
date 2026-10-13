@@ -1063,11 +1063,24 @@ function App() {
   /** Resolves once the Editor for a newly opened project has registered its bridge. */
   const waitForMcpProjectBridge = async (
     previous: VisualEditorMcpProjectBridge | null,
+    expected?: { projectId: string; sceneId: string },
+    assertWaiting?: () => void,
   ): Promise<VisualEditorMcpProjectBridge> => {
     const deadline = Date.now() + 60_000;
     while (Date.now() < deadline) {
+      assertWaiting?.();
+      const session = visualSessionRef.current;
+      if (expected && (session?.bundle.project.projectId !== expected.projectId || session.bundle.scene.sceneId !== expected.sceneId)) {
+        throw new XriftMcpEditorToolError("STALE_REVISION", "開いている作品またはSceneが変わりました。依頼を反映せず停止しました");
+      }
       const bridge = mcpProjectBridgeRef.current;
-      if (bridge && bridge !== previous && visualSessionRef.current) return bridge;
+      if (bridge && bridge !== previous && session) {
+        const bundle = bridge.currentBundle();
+        if (expected && (bundle.project.projectId !== expected.projectId || bundle.scene.sceneId !== expected.sceneId)) {
+          throw new XriftMcpEditorToolError("STALE_REVISION", "反映先のEditorが変わりました。依頼を反映せず停止しました");
+        }
+        return bridge;
+      }
       await new Promise((resolve) => window.setTimeout(resolve, 100));
     }
     throw new XriftMcpEditorToolError(
@@ -1296,8 +1309,10 @@ function App() {
         progress: { ...job.progress, projectId: initial.project.projectId } });
       setVisualCompilationFresh(false);
       setVisualThumbnailReadiness(null);
-      setVisualSession({ project, bundle: { project: initial.project, scene: initial.scene, assets: initial.assets, prefabs: initial.prefabs } });
-      targetBridge = await waitForMcpProjectBridge(sourceBridge);
+      const nextSession = { project, bundle: { project: initial.project, scene: initial.scene, assets: initial.assets, prefabs: initial.prefabs } };
+      visualSessionRef.current = nextSession;
+      setVisualSession(nextSession);
+      targetBridge = await waitForMcpProjectBridge(sourceBridge, { projectId: initial.project.projectId, sceneId: initial.scene.sceneId }, checkCancelled);
       }
       if (!project) throw new Error("保存先を確認できませんでした");
       const targetId = targetBridge.currentBundle().project.projectId;
