@@ -132,6 +132,11 @@ for (const marker of ["VRMC_materials_mtoon", "xriftVrm0CompatShade", "VRMLoader
     throw new Error(`Bundled Runtime shell is missing the shared MToon/VRM code or pinned license: ${marker ?? "upstream SHA"}`);
   }
 }
+for (const assignment of ["diffuseColor.rgb *= vColor.rgb;", "material.shadeColor.rgb *= vColor.rgb;"]) {
+  if (!runtimeSources.includes(assignment)) {
+    throw new Error("Bundled Runtime shell is missing the shared Three r185 MToon vertex color compatibility fix");
+  }
+}
 if (!exposedWorld.includes(shellManifestUrl)) {
   throw new Error(`Bundled Runtime shell must load the uploaded ${uploadedManifest} from the world root`);
 }
