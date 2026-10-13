@@ -138,6 +138,9 @@ jobs:
       - name: Check browser publication, credentials and built runtime rendering
         run: pnpm exec playwright test e2e/browser-item-publish.spec.ts e2e/browser-api-key.spec.ts e2e/browser-mtoon-shell.spec.ts e2e/runtime-shell-audio.spec.ts
 
+      - name: Check editor dragging, quality and shared MToon rendering
+        run: pnpm exec playwright test e2e/gizmo.spec.ts e2e/hierarchy-drag.spec.ts e2e/scene-view-quality.spec.ts e2e/mtoon-render.spec.ts --workers=1
+
       - name: Upload E2E failure report
         if: failure()
         uses: actions/upload-artifact@v4

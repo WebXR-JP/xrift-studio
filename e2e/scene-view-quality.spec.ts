@@ -37,7 +37,16 @@ test("Scene Viewを軽量にすると描画解像度が下がる", async ({ page
     await page.getByRole("button", { name: "表示と診断の設定" }).click();
   }
   await expect(quality).toHaveValue("auto");
-  await expect.poll(bufferScale, { timeout: 20_000 }).toBeLessThanOrEqual(0.76);
+  // Auto starts at high quality and may adapt to actual frame load. Its
+  // displayed percentage must describe the renderer's real drawing buffer.
+  const autoScaleDifference = () => canvas.evaluate((element) => {
+    const node = element as HTMLCanvasElement;
+    const select = document.querySelector<HTMLSelectElement>('[aria-label="シーン描画品質"]');
+    const match = select?.selectedOptions[0]?.textContent?.match(/描画(\d+)%/);
+    const width = node.getBoundingClientRect().width;
+    return match && width > 0 ? Math.abs(node.width / width - Number(match[1]) / 100) : 1;
+  });
+  await expect.poll(autoScaleDifference, { timeout: 20_000 }).toBeLessThan(0.01);
   await quality.selectOption("low");
 
   await expect.poll(bufferScale, { timeout: 20_000 }).toBeCloseTo(0.75, 1);
@@ -51,5 +60,9 @@ test("Scene Viewを軽量にすると描画解像度が下がる", async ({ page
   await expect.poll(bufferScale, { timeout: 20_000 }).toBeCloseTo(0.25, 1);
 
   await quality.selectOption("high");
+  await expect.poll(bufferScale, { timeout: 20_000 }).toBeCloseTo(1, 1);
+
+  await quality.selectOption("auto");
+  await expect(quality.locator("option:checked")).toHaveText("自動 (描画100%)");
   await expect.poll(bufferScale, { timeout: 20_000 }).toBeCloseTo(1, 1);
 });

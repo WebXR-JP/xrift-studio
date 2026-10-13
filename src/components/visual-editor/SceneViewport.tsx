@@ -6878,7 +6878,7 @@ export function SceneViewport({
                     const next = event.currentTarget
                       .value as SceneViewportQualityMode;
                     setQualityMode(next);
-                    setAutomaticQuality("low");
+                    setAutomaticQuality("high");
                     saveSceneViewportQualityMode(next);
                   }}
                   aria-label="シーン描画品質"
