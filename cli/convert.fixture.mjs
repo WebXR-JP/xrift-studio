@@ -1,3 +1,41 @@
+import {
+  runStarterTemplateFixtureAssertions,
+  runVisualCompilerFixtureAssertions,
+  runXriftMcpEditorToolFixtures,
+  runXriftMcpProjectToolFixtures,
+  runXriftComponentPlacementFixtureAssertions,
+  runPlaySessionFixtureAssertions,
+  runTerrainFixtureAssertions,
+  compileGrassAppearanceTypecheckWorld,
+  runTerrainGrassFixtureAssertions,
+  runTerrainGrassPublishFixtureAssertions,
+  runTerrainPresetFixtureAssertions,
+  runAssetImportTransactionFixtureAssertions,
+  runModelOptimizationFixtureAssertions,
+  runModelAnimationGroupFixtureAssertions,
+  runAudioImportFixtureAssertions,
+  runBuiltinPrefabCatalogFixtureAssertions,
+  runClassicProjectImportFixtureAssertions,
+  runMaterialExtensionFixtureAssertions,
+  runDocumentAssetCreationFixtureAssertions,
+  runEditorSessionHierarchyFixtureAssertions,
+  runEntityBoundsFixtureAssertions,
+  runModelCompanionBatchFixtureAssertions,
+  runModelHierarchyFixtureAssertions,
+  runModelImportContractFixtureAssertions,
+  runModelReimportImpactFixtureAssertions,
+  runOpenBrushFixtureAssertions,
+  runVisualPublishFixtureAssertions,
+  runVisualUploadFixtureAssertions,
+  runRuntimeSpawnFixtureAssertions,
+  runSkyboxImportFixtureAssertions,
+  runSkyShaderFixtureAssertions,
+  runGizmoFocusFixtureAssertions,
+  runGizmoSnapFixtureAssertions,
+  runWindContractFixtureAssertions,
+  runWaterShaderFixtureAssertions,
+  runUnityPackageImportFixture,
+} from "../src/lib/visual-editor/fixtures.ts";
 import { runSceneLoadStateFixtureAssertions } from "../src/components/visual-editor/scene-load-state.fixture.ts";
 import { runMeshColliderGeometryFixtureAssertions } from "../src/lib/visual-editor/mesh-collider-geometry.fixture.ts";
 import { runMeshCollisionActionsFixtureAssertions } from "../src/lib/visual-editor/mesh-collision-actions.fixture.ts";
@@ -36,18 +74,12 @@ import {
   generateClassicEntrySource,
   planClassicExportFiles,
 } from "../src/lib/visual-editor/classic-export.ts";
-import { runStarterTemplateFixtureAssertions } from "../src/lib/visual-editor/starter-templates.fixture.ts";
 import { createStarterWorldProject } from "../src/lib/visual-editor/starter-templates.ts";
 import { prepareStarterVisualProject } from "../src/lib/visual-editor/persistence.ts";
-import { runVisualCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/fixture.ts";
 import { compileStagedTypecheckWorld } from "../src/lib/visual-editor/compiler/staged-world.fixture.ts";
 import * as runtimeEmission from "../src/lib/visual-editor/compiler/script-emit.ts";
 import { runClassicExportFixtureAssertions } from "../src/lib/visual-editor/classic-export.fixture.ts";
 import { runComponentCodeImportFixtureAssertions } from "../src/lib/visual-editor/component-code-import.fixture.ts";
-import { runXriftMcpEditorToolFixtures } from "../src/lib/visual-editor/mcp-editor-tools.fixture.ts";
-import { runXriftMcpProjectToolFixtures } from "../src/lib/visual-editor/mcp-project-tools.fixture.ts";
-import { runXriftComponentPlacementFixtureAssertions } from "../src/lib/visual-editor/xrift-component-placement.fixture.ts";
-import { runPlaySessionFixtureAssertions } from "../src/lib/visual-editor/play-session.fixture.ts";
 import { runScriptSpecifierFixtureAssertions } from "../src/lib/visual-editor/scripting/specifiers.fixture.ts";
 import { runScriptTemplateFixtureAssertions } from "../src/lib/visual-editor/scripting/script-templates.fixture.ts";
 import { runScriptPropsFixtureAssertions } from "../src/lib/visual-editor/scripting/script-props.fixture.ts";
@@ -81,21 +113,11 @@ import { runScriptTrustFixtureAssertions } from "../src/lib/visual-editor/script
 import { runScriptRuntimeReportFixtureAssertions } from "../src/lib/visual-editor/scripting/runtime-report.fixture.ts";
 import { runScriptEmitFixtureAssertions } from "../src/lib/visual-editor/compiler/script-emit.fixture.ts";
 import { runBasisTranscoderFixtureAssertions } from "../src/lib/visual-editor/basis-transcoder.fixture.ts";
-import { runTerrainFixtureAssertions } from "../src/lib/visual-editor/terrain.fixture.ts";
-import {
-  compileGrassAppearanceTypecheckWorld,
-  runTerrainGrassFixtureAssertions,
-  runTerrainGrassPublishFixtureAssertions,
-  runTerrainPresetFixtureAssertions,
-} from "../src/lib/visual-editor/terrain-grass.fixture.ts";
 import { runTerrainSurfaceFixtureAssertions } from "../src/lib/visual-editor/terrain-surface.fixture.ts";
 import { runTextureProcessingFixtureAssertions } from "../src/lib/visual-editor/texture-processing.fixture.ts";
 import { runTextureImportDefaultsFixtureAssertions } from "../src/components/visual-editor/texture-import-defaults.fixture.ts";
-import { runAssetImportTransactionFixtureAssertions } from "../src/lib/visual-editor/asset-import-transaction.fixture.ts";
-import { runModelOptimizationFixtureAssertions } from "../src/lib/visual-editor/model-optimization.fixture.ts";
 import { runModelDecimationFixtureAssertions } from "../src/lib/visual-editor/model-decimation.fixture.ts";
 import { runModelStaticMergeFixtureAssertions } from "../src/lib/visual-editor/model-static-merge.fixture.ts";
-import { runModelAnimationGroupFixtureAssertions } from "../src/lib/visual-editor/model-animation-groups.fixture.ts";
 import { runAssetOperationLockFixtureAssertions } from "../src/components/visual-editor/asset-operation-lock.fixture.ts";
 import { runAutosaveCoordinatorFixtureAssertions } from "../src/components/visual-editor/autosave-coordinator.fixture.ts";
 import { runCustomMaterialPreviewFixtureAssertions } from "../src/components/visual-editor/CustomMaterialPreview.fixture.ts";
@@ -110,29 +132,16 @@ import { runMaterialDragFixtureAssertions } from "../src/components/visual-edito
 import { runProjectModelMaterialPreviewFixtureAssertions } from "../src/components/visual-editor/ProjectModelVisual.fixture.ts";
 import { runProjectModelPoseControllerFixtureAssertions } from "../src/components/visual-editor/project-model-pose-controller.fixture.ts";
 import { runScriptExecutionScopeFixtureAssertions } from "../src/components/visual-editor/script-execution-scope.fixture.ts";
-import { runAudioImportFixtureAssertions } from "../src/lib/visual-editor/audio-import.fixture.ts";
-import { runBuiltinPrefabCatalogFixtureAssertions } from "../src/lib/visual-editor/builtin-prefab-catalog.fixture.ts";
-import { runClassicProjectImportFixtureAssertions } from "../src/lib/visual-editor/classic-project-import.fixture.ts";
-import { runMaterialExtensionFixtureAssertions } from "../src/lib/visual-editor/compiler/material-extensions.fixture.ts";
 import { runXriftComponentRegistryFixtureAssertions } from "../src/lib/visual-editor/compiler/xrift-component-registry.fixture.ts";
-import { runDocumentAssetCreationFixtureAssertions } from "../src/lib/visual-editor/document-asset-creation.fixture.ts";
 import { runEntityClipboardFixtureAssertions } from "../src/lib/visual-editor/entity-clipboard.fixture.ts";
-import { runEditorSessionHierarchyFixtureAssertions } from "../src/lib/visual-editor/editor-session.fixture.ts";
 import { runSceneEntityTreeStoreFixtureAssertions } from "../src/components/visual-editor/scene-entity-tree-store.fixture.ts";
 import { runSceneClickSelectionFixtureAssertions } from "../src/lib/visual-editor/scene-click-selection.fixture.ts";
-import { runEntityBoundsFixtureAssertions } from "../src/lib/visual-editor/entity-bounds.fixture.ts";
 import { runMcpHarnessGuardFixtureAssertions } from "../src/lib/visual-editor/mcp-harness-guard.fixture.ts";
 import { runGltfDerivedAssetFixtureAssertions } from "../src/lib/visual-editor/gltf-derived-assets.fixture.ts";
-import { runModelCompanionBatchFixtureAssertions } from "../src/lib/visual-editor/model-companion-batch.fixture.ts";
-import { runModelHierarchyFixtureAssertions } from "../src/lib/visual-editor/model-hierarchy.fixture.ts";
-import { runModelImportContractFixtureAssertions } from "../src/lib/visual-editor/model-import-contract.fixture.ts";
-import { runModelReimportImpactFixtureAssertions } from "../src/lib/visual-editor/model-reimport-impact.fixture.ts";
-import { runOpenBrushFixtureAssertions } from "../src/lib/visual-editor/open-brush.fixture.ts";
 import { runOpenBrushMaterialCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/open-brush-material.fixture.ts";
 import { runMToonMaterialCompilerFixtureAssertions, runMToonThreeRuntimeFixtureAssertions } from "../src/lib/visual-editor/compiler/mtoon-material.fixture.ts";
 import { runVrmAvatarRuntimeFixtureAssertions } from "../src/lib/visual-editor/compiler/vrm-avatar.fixture.ts";
 import { runPrimitiveGeometryCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/primitive-geometry.fixture.ts";
-import { runVisualPublishFixtureAssertions } from "../src/lib/visual-editor/publish.fixture.ts";
 import { runSupportReportFixtureAssertions } from "../src/lib/support-report.fixture.ts";
 import { runXriftCliFixtureAssertions } from "../src/lib/xrift-cli.fixture.ts";
 import { runGlowMaterialCatalogFixtureAssertions } from "../src/lib/visual-editor/glow-material-catalog.fixture.ts";
@@ -153,18 +162,9 @@ import { runSceneRecipeCatalogFixtureAssertions } from "../src/lib/visual-editor
 import { runMaterialShowcaseCatalogFixtureAssertions } from "../src/lib/visual-editor/material-showcase-catalog.fixture.ts";
 import { runInteractionTriggerFixtureAssertions } from "../src/lib/visual-editor/interaction-trigger.fixture.ts";
 import { runInteractionTriggerApplierFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/interaction-trigger-applier.fixture.ts";
-import { runVisualUploadFixtureAssertions } from "../src/lib/visual-editor/upload.fixture.ts";
 import { runBrowserPublicationFixtureAssertions } from "../src/preview/browser-project-session.fixture.ts";
-import { runRuntimeSpawnFixtureAssertions } from "../src/lib/visual-editor/runtime-spawn.fixture.ts";
-import { runSkyboxImportFixtureAssertions } from "../src/lib/visual-editor/skybox-import.fixture.ts";
-import { runSkyShaderFixtureAssertions } from "../src/lib/visual-editor/sky-shader.fixture.ts";
 import { runSceneSettingsCompatFixtureAssertions } from "../src/lib/visual-editor/scene-settings-compat.fixture.ts";
-import { runGizmoFocusFixtureAssertions } from "../src/lib/visual-editor/gizmo-focus.fixture.ts";
 import { runRecordingFixtureAssertions } from "../src/lib/recording/recording.fixture.ts";
-import { runGizmoSnapFixtureAssertions } from "../src/lib/visual-editor/gizmo-snap.fixture.ts";
-import { runWindContractFixtureAssertions } from "../src/lib/visual-editor/wind-contract.fixture.ts";
-import { runWaterShaderFixtureAssertions } from "../src/lib/visual-editor/water-shader.fixture.ts";
-import { runUnityPackageImportFixture } from "../src/lib/visual-editor/unity-package-import.fixture.ts";
 
 // Asset import runs in the Tauri webview, so it uses the browser file APIs.  Node
 // already provides Blob, fetch and URL.createObjectURL, but not these two, and

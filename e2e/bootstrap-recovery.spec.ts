@@ -12,9 +12,15 @@ test("アプリの読み込み中は状態を表示し、読み込み後は制�
   await page.goto("/e2e.html?scenario=ready", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("status")).toHaveText("XRift Studioを読み込んでいます…");
   expect(await page.evaluate(() => Boolean(window.__XRIFT_RELEASE_E2E__ && window.__TAURI_INTERNALS__))).toBe(true);
+  const resumedAt = Date.now();
   finish?.();
   await expect(page.getByRole("heading", { name: "プロジェクト", exact: true })).toBeVisible();
   await expect(page.getByText("XRift Studioを読み込んでいます…")).toHaveCount(0);
+  const fixtureRequests = await page.evaluate(() => performance.getEntriesByType("resource")
+    .map(entry => new URL(entry.name).pathname)
+    .filter(path => /\.fixture\.|\/compiler\/fixture\.|\/visual-editor\/fixtures\./.test(path)));
+  expect(fixtureRequests).toEqual([]);
+  console.log(`Initial App imports: ${Date.now() - resumedAt}ms; fixture requests: ${fixtureRequests.length}`);
 });
 
 test("アプリの読み込み失敗を表示し、再表示で起動し直せる", async ({ page }) => {
