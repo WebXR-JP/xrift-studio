@@ -216,6 +216,19 @@ export async function runSkyboxImportFixtureAssertions(): Promise<void> {
       modelAsset.source.relativePath.endsWith(".gltf"),
     "External model was not installed as a project-relative Model Asset",
   );
+  const appliedGlb = applyExternalStoreInstall(emptyManifest, {
+    ...externalModel,
+    providerId: "ai-lowpoly-props",
+    providerName: "AI LOWPOLY PROPS",
+    files: [{ ...externalModel.files[0], format: "glb", relativePath: "assets/imported/external/ai-lowpoly-props/test/test.glb" }],
+  });
+  const glbAsset = appliedGlb.manifest.assets[appliedGlb.primaryAssetId];
+  assert(
+    appliedGlb.kind === "model" && glbAsset?.kind === "model"
+      && glbAsset.source.kind === "project" && glbAsset.source.relativePath.endsWith(".glb")
+      && glbAsset.attribution?.providerId === "ai-lowpoly-props",
+    "External GLB was not installed through the shared Model Asset pipeline",
+  );
   const externalWithPreview = updateAssetThumbnail(
     appliedExternal.manifest,
     externalAsset.id,

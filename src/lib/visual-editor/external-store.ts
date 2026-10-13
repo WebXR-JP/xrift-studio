@@ -199,8 +199,8 @@ export function applyExternalStoreInstall(
 
   if (result.assetKind === "model") {
     const file = result.files.find((entry) => entry.role === "model");
-    if (!file || file.format !== "gltf") {
-      throw new Error("3Dモデル用の自己完結glTFファイルがありません");
+    if (!file || !["gltf", "glb"].includes(file.format)) {
+      throw new Error("3Dモデル用の自己完結glTF・GLBファイルがありません");
     }
     const id = `${baseId}-model`;
     const model: ModelAsset = {
