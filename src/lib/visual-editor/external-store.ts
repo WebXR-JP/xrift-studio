@@ -322,7 +322,17 @@ export async function applyExternalStoreInstallAndAnalyzeModel(
       `「${result.name}」の構造を解析できませんでした: ${reimport.message}`,
     );
   }
-  return { ...applied, manifest: reimport.manifest };
+  // Reimport reconstructs Model/derived assets; attach the provider credit
+  // after analysis so it survives the normal import pipeline.
+  const credit = attribution(result);
+  const assets = { ...reimport.manifest.assets };
+  for (const asset of Object.values(assets)) {
+    if (asset.id === applied.primaryAssetId ||
+        ((asset.kind === "material" || asset.kind === "texture") && asset.importedFromModel?.modelAssetId === applied.primaryAssetId)) {
+      assets[asset.id] = { ...asset, attribution: { ...credit, authors: [...credit.authors] } };
+    }
+  }
+  return { ...applied, manifest: { ...reimport.manifest, assets } };
 }
 
 /**

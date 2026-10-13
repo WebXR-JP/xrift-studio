@@ -131,6 +131,11 @@ test('external glTF goes through the real importer before it can be saved', asyn
     assert.equal(committed,true);
     const model = applied.manifest.assets[applied.primaryAssetId];
     assert.ok(model.importMetadata);assert.equal(model.materialSlots.length,1);
+    assert.equal(model.attribution.providerId,'poly-haven');
+    assert.equal(model.attribution.licenseName,'CC0 1.0');
+    const derived = applied.manifest.assets[model.materialSlots[0].defaultMaterialAssetId];
+    assert.equal(derived.attribution.externalId,'bench');
+    assert.deepEqual(derived.attribution.authors,['Artist']);
     const placed = placeChatgptAssets({...base,assets:applied.manifest},plan,new Map([['poly-haven:bench',applied.primaryAssetId]]));
     assert.doesNotThrow(() => serializeVisualProjectDocuments({project:placed.project,scenes:{[placed.scene.sceneId]:placed.scene},assets:placed.assets,prefabs:placed.prefabs}));
     tauri.readProjectFileDataUrl = async() => 'data:model/gltf+json;base64,'+Buffer.from('invalid').toString('base64');
