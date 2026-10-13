@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const bootstrap = "**/src/release-e2e-bootstrap.tsx*";
 
-test("アプリの読み込み中は状態を表示し、読み込み後は制作画面へ進む", async ({ page }) => {
+test("アプリの読み込み中はブランドと状態を表示し、読み込み後は制作画面へ進む", async ({ page }, testInfo) => {
   let finish: (() => void) | undefined;
   const pending = new Promise<void>((resolve) => { finish = resolve; });
   await page.route(bootstrap, async (route) => {
@@ -10,7 +10,9 @@ test("アプリの読み込み中は状態を表示し、読み込み後は制�
     await route.continue();
   });
   await page.goto("/e2e.html?scenario=ready", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "XRift Studio", exact: true })).toBeVisible();
   await expect(page.getByRole("status")).toHaveText("XRift Studioを読み込んでいます…");
+  await page.screenshot({ path: testInfo.outputPath("startup-brand-desktop.png") });
   expect(await page.evaluate(() => Boolean(window.__XRIFT_RELEASE_E2E__ && window.__TAURI_INTERNALS__))).toBe(true);
   const resumedAt = Date.now();
   finish?.();
@@ -23,15 +25,34 @@ test("アプリの読み込み中は状態を表示し、読み込み後は制�
   console.log(`Initial App imports: ${Date.now() - resumedAt}ms; fixture requests: ${fixtureRequests.length}`);
 });
 
-test("アプリの読み込み失敗を表示し、再表示で起動し直せる", async ({ page }) => {
+test("アプリの読み込み失敗を表示し、再表示で起動し直せる", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 568 });
   await page.route(bootstrap, (route) => route.abort("failed"));
   await page.goto("/e2e.html?scenario=ready");
   await expect(page.getByRole("alert")).toContainText("XRift Studioを起動できませんでした");
   await expect(page.getByRole("alert")).toContainText("保存済みの制作データは削除されていません");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("startup-failure-phone.png") });
   await page.unroute(bootstrap);
   await page.getByRole("button", { name: "XRift Studioを再表示", exact: true }).click();
   await expect(page.getByRole("heading", { name: "プロジェクト", exact: true })).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("狭い画面でも起動ブランドを表示し、動きを減らす設定を尊重する", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  let finish: (() => void) | undefined;
+  const pending = new Promise<void>((resolve) => { finish = resolve; });
+  await page.route(bootstrap, async route => { await pending; await route.continue(); });
+  await page.goto("/e2e.html?scenario=ready", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "XRift Studio", exact: true })).toBeVisible();
+  await expect(page.getByRole("status")).toHaveText("XRift Studioを読み込んでいます…");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(await page.locator(".xrift-startup-spinner").evaluate(element => getComputedStyle(element).animationName)).toBe("none");
+  await page.screenshot({ path: testInfo.outputPath("startup-brand-phone.png") });
+  finish?.();
+  await expect(page.getByRole("heading", { name: "プロジェクト", exact: true })).toBeVisible();
 });
 
 test("entryの再実行でキャッシュ済みのアプリ画面を消さない", async ({ page }) => {
