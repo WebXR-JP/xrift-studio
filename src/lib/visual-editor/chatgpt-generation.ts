@@ -2,6 +2,8 @@ import type { ChatgptWorldPlan } from "./chatgpt-world";
 import { executeXriftMcpEditorTool, type XriftMcpEditorContext, type XriftMcpEditorRequest } from "./mcp-editor-tools";
 import { createStarterVisualProject } from "./starter-templates";
 import type { ChatgptAssetOptions } from "../tauri";
+import { chatgptReferenceKey, type ChatgptOperation, type ChatgptResourceContext } from "./chatgpt-resources";
+import { normalizeMaterialProperties } from "./asset-manifest";
 
 export type ChatgptGenerationPhase = "planning" | "planned" | "preparing" | "importing" | "placing" | "saving" | "completed" | "failed" | "cancelled";
 export type ChatgptGenerationMode = "build" | "plan";
@@ -37,6 +39,10 @@ export type ChatgptGeneration = {
   cancelling?: boolean;
   model: string;
   reasoningEffort?: string;
+  sessionId?: string;
+  createdAt?: string;
+  revertedAt?: string;
+  revertAvailable?: boolean;
   prompt: string;
   options: ChatgptAssetOptions;
   sourceProjectId: string;
@@ -46,7 +52,7 @@ export type ChatgptGeneration = {
   sceneId?: string;
   path?: string;
   name?: string;
-  plan?: { title: string; description: string; objects: { name: string; shape: string }[] };
+  plan?: { title: string; description: string; hasMore?: boolean; remainingWork?: string; objects: { name: string; shape: string }[] };
   progress: { phase: ChatgptGenerationPhase; message: string; completed: number; total: number; recentEvents: ChatgptGenerationEvent[]; projectId?: string };
   error?: string;
   nextActions?: string[];
@@ -78,14 +84,20 @@ export function placeChatgptObject(bundle: XriftMcpEditorContext["bundle"], valu
     return outcome.result;
   };
   const external = value.shape === "model" || value.shape === "audio";
-  const assetId = external ? assetIds.get(`${value.shape === "audio" ? "otogura" : "poly-haven"}:${value.externalId}`) : undefined;
+  const reference = value.externalId ? chatgptReferenceKey(value.externalId, value.shape === "audio" ? "otogura" : "poly-haven") : undefined;
+  const assetId = external && reference ? (reference.startsWith("project:") ? reference.slice(8) : assetIds.get(reference)) : undefined;
   if (external && (!assetId || bundle.assets.assets[assetId]?.kind !== value.shape)) throw new Error(`${value.name}の素材を確認できません`);
-  let materialAssetId = value.gltfMaterialId ?? (value.materialExternalId ? assetIds.get(`poly-haven:${value.materialExternalId}`) : undefined);
+  const materialReference = value.materialExternalId ? chatgptReferenceKey(value.materialExternalId, "poly-haven") : undefined;
+  let materialAssetId = value.gltfMaterialId ?? (materialReference ? (materialReference.startsWith("project:") ? materialReference.slice(8) : assetIds.get(materialReference)) : undefined);
   if (value.materialExternalId || value.gltfMaterialId) {
     if (!materialAssetId || bundle.assets.assets[materialAssetId]?.kind !== "material") throw new Error(`${value.name}のマテリアルを確認できません`);
   }
   if (!external && !materialAssetId) {
-    materialAssetId = Object.values(context.bundle.assets.assets).find(asset => asset.kind === "material")?.id;
+    // An unspecified primitive must not inherit an unrelated Sky/Water shader
+    // merely because that Material is first in the current world's Assets.
+    const defaultProperties = normalizeMaterialProperties({ pbrMetallicRoughness: { baseColorFactor: [0.82, 0.84, 0.9, 1], metallicFactor: 0, roughnessFactor: 0.65 } });
+    materialAssetId = Object.values(context.bundle.assets.assets).find(asset => asset.kind === "material"
+      && JSON.stringify(asset.properties) === JSON.stringify(defaultProperties))?.id;
     if (!materialAssetId) {
       // The scaffold has no unused starter assets. Create the normal Editor
       // default material when the first primitive needs one, then reuse it.
@@ -106,5 +118,57 @@ export function placeChatgptObject(bundle: XriftMcpEditorContext["bundle"], valu
   }
   apply("update_transform", { entityId, scale: value.scale, rotation: (value.rotation ?? (value.shape === "plane" ? [-90, 0, 0] : [0, 0, 0])).map(n => n * Math.PI / 180) });
   apply("rename_entity", { entityId, name: value.name });
+  return { bundle: context.bundle, entityId };
+}
+
+/** Trusted operations keep the current Entity and its unrelated data intact. */
+export async function applyChatgptOperation(bundle: XriftMcpEditorContext["bundle"], operation: ChatgptOperation,
+  assetIds: ReadonlyMap<string, string>, resources: ChatgptResourceContext, projectPath?: string): Promise<{ bundle: typeof bundle; entityId?: string }> {
+  const candidateId = "candidateId" in operation ? operation.candidateId : undefined;
+  if (candidateId && resources.builtinCandidates.some(candidate => candidate.candidateId === candidateId)) {
+    if (!["catalog", "material", "skybox"].includes(operation.kind) || !projectPath) throw new Error("素材を適用するためのプロジェクトを確認できませんでした");
+    const builtin = await import("./chatgpt-builtin-catalog");
+    return builtin.applyChatgptBuiltinOperation(bundle, operation as Extract<ChatgptOperation, { kind: "catalog" | "material" | "skybox" }>, projectPath);
+  }
+  if (operation.kind === "catalog") throw new Error("素材の候補を確認できませんでした。Planを作り直してください");
+  let context: XriftMcpEditorContext = { bundle, sceneSelection: null, assetSelection: null, editorMode: "edit", importBusy: false, revision: 0, saveStatus: "dirty" };
+  const apply = (tool: XriftMcpEditorRequest["tool"], args: Record<string, unknown>) => {
+    const outcome = executeXriftMcpEditorTool(context, { id: crypto.randomUUID(), tool, arguments: { projectId: bundle.project.projectId, sceneId: bundle.scene.sceneId, expectedRevision: context.revision, ...args } });
+    context = { ...context, bundle: outcome.bundle, revision: context.revision + (outcome.changed ? 1 : 0) };
+    return outcome.result;
+  };
+  const assetId = candidateId ? (candidateId.startsWith("project:") ? candidateId.slice(8) : assetIds.get(candidateId)) : undefined;
+  if (candidateId && (!assetId || !bundle.assets.assets[assetId])) throw new Error("適用する素材を確認できませんでした。Planを作り直してください");
+  if (operation.kind === "skybox") {
+    const { kind: _kind, candidateId: _candidate, ...skybox } = operation;
+    const patch: Record<string, unknown> = { ...skybox };
+    if (assetId) {
+      const asset = bundle.assets.assets[assetId];
+      if (asset.kind === "texture" || asset.kind === "skybox") {
+        Object.assign(patch, { imageAssetId: assetId, materialAssetId: null, projection: "infinite", enabled: operation.enabled ?? true });
+        if (asset.kind === "texture") patch.flipY = asset.importSettings.flipY;
+      } else if (asset.kind === "material") Object.assign(patch, { materialAssetId: assetId, enabled: operation.enabled ?? true });
+      else throw new Error("背景に使える素材を確認できませんでした");
+    }
+    apply("update_scene_settings", { skybox: patch });
+    return { bundle: context.bundle };
+  }
+  const entityId = operation.entityId;
+  if (operation.kind === "mesh-collision") apply("set_mesh_collision", { entityId, action: operation.action });
+  else if (operation.kind === "model-attachment") apply("set_entity_model", { entityId, modelAssetId: assetId, componentId: operation.componentId });
+  else if (operation.kind === "material") apply("set_material", { entityId, materialAssetId: assetId, meshComponentId: operation.componentId });
+  else {
+    const sources = bundle.scene.entities[entityId]?.components.filter(component => component.type === "audio-source") ?? [];
+    let componentId = operation.componentId ?? (sources.length === 1 ? sources[0]?.id : undefined);
+    if (!componentId && sources.length > 1) throw new Error("調整するAudio Sourceを選んでPlanを作り直してください");
+    if (!componentId) {
+      if (!assetId) throw new Error("追加するBGMの素材を選んでPlanを作り直してください");
+      const added = apply("add_component", { entityId, definitionId: "core.audio-source" });
+      if (typeof added.componentId !== "string") throw new Error("Audio Sourceを追加できませんでした");
+      componentId = added.componentId;
+    }
+    const { kind: _kind, candidateId: _candidate, entityId: _entity, componentId: _component, ...patch } = operation;
+    apply("update_component", { entityId, componentId, patch: { ...patch, ...(assetId ? { audioAssetId: assetId } : {}) } });
+  }
   return { bundle: context.bundle, entityId };
 }

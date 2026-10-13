@@ -56,20 +56,15 @@ test("strict schema optional nulls preserve default placement and are not persis
     assert.throws(() => parseChatgptWorldPlan(JSON.stringify({ ...strict, objects: [{ ...strict.objects[0], [field]: null }] })));
   }
 });
-test("invalid plans identify the object and field instead of a generic bounds error", () => {
-  const check = (patch, message) => assert.throws(() => parseChatgptWorldPlan(JSON.stringify({ ...input, objects: [input.objects[0], { ...input.objects[1], ...patch }] })), message);
-  check({ shape: "torus" }, /2番目.*形状.*box/);
-  check({ name: " " }, /2番目.*名前.*80文字/);
-  check({ position: [0, 51, 0] }, /2番目.*位置.*-50.*50/);
-  check({ scale: [1, 0, 1] }, /2番目.*スケール.*0.02.*40/);
-  check({ rotation: [0, 361, 0] }, /2番目.*回転.*360/);
-  check({ color: "red" }, /2番目.*未対応の項目/);
-  check({ externalId: "forged" }, /2番目.*外部素材.*候補/);
-  check({ materialExternalId: "forged" }, /2番目.*マテリアル.*候補/);
-  check({ gltfMaterialId: "forged" }, /2番目.*glTFマテリアル/);
-  assert.throws(() => parseChatgptWorldPlan(JSON.stringify({ ...input, title: "" })), /タイトル.*100文字/);
-  assert.throws(() => parseChatgptWorldPlan(JSON.stringify({ ...input, description: "x".repeat(601) })), /説明.*600文字/);
-  assert.throws(() => parseChatgptWorldPlan(JSON.stringify({ ...input, objects: [] })), /追加と調整.*32件/);
+test("invalid model plans request a retry without asking the author to repair JSON", () => {
+  for (const patch of [{shape:"torus"},{name:" "},{position:[0,51,0]},{scale:[1,0,1]},
+    {rotation:[0,361,0]},{color:"red"},{externalId:"forged"},{materialExternalId:"forged"},{gltfMaterialId:"forged"}]) {
+    assert.throws(() => parseChatgptWorldPlan(JSON.stringify({...input,objects:[{...input.objects[0],...patch}]})), /編集プランを確認できませんでした。再試行してください/);
+  }
+  assert.throws(() => parseChatgptWorldPlan(JSON.stringify({...input,title:""})), /編集プランを確認できませんでした/);
+  assert.throws(() => parseChatgptWorldPlan(JSON.stringify({...input,description:"x".repeat(601)})), /編集プランを確認できませんでした/);
+  const noOp = parseChatgptWorldPlan(JSON.stringify({title:"完了",description:"現在のSceneで作業済みです",objects:[],edits:[],hasMore:false,remainingWork:null}));
+  assert.deepEqual(noOp.objects,[]); assert.equal(noOp.hasMore,false); assert.equal(noOp.remainingWork,undefined);
 });
 test("existing Entity edits are bounded, use context IDs and never accept raw documents or duplicate targets", () => {
   const edits = [{ entityId: "current-entity", name: null, position: [2, 1, 0], scale: null, rotation: [0, 90, 0] }];
