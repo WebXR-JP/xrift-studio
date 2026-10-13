@@ -9,6 +9,8 @@ on:
       - 'src/components/visual-editor/AiConnectionPanel.tsx'
       - 'src/components/visual-editor/McpConnectionSettings.tsx'
       - 'src/components/AboutModal.tsx'
+      - 'src/components/ProjectLibrary.tsx'
+      - 'src/components/StudioLoading.tsx'
       - 'src/components/visual-editor/EditorDialog.tsx'
       - 'src/components/visual-editor/EditorUtilityRail.tsx'
       - 'src/components/visual-editor/SceneViewport.tsx'
@@ -20,6 +22,9 @@ on:
       - 'src-tauri/src/mcp_tool_names.rs'
       - 'src-tauri/src/lib.rs'
       - 'e2e/chatgpt-tabs.spec.ts'
+      - 'e2e/bootstrap-recovery.spec.ts'
+      - 'src/*-bootstrap.tsx'
+      - 'src/lib/application-bootstrap.*'
       - 'src/release-e2e/mock-tauri.ts'
       - 'src/lib/visual-editor/chatgpt-*.ts'
       - 'scripts/chatgpt-world.test.mjs'
@@ -60,7 +65,7 @@ jobs:
         run: node scripts/chatgpt-panel-ui.mjs
       - run: pnpm exec playwright install --with-deps chromium
       - name: Verify Editor tabs and MCP generation through the real App
-        run: pnpm exec playwright test e2e/chatgpt-tabs.spec.ts
+        run: pnpm exec playwright test e2e/chatgpt-tabs.spec.ts e2e/bootstrap-recovery.spec.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:
