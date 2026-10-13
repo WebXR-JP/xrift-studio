@@ -9,7 +9,10 @@ import { staticGuide } from "./scripts/vite-guide.mjs";
 const host = env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
-export default defineConfig(async () => ({
+export default defineConfig(async ({ mode }) => ({
+  cacheDir: mode === "e2e"
+    ? env.XRIFT_E2E_CACHE_DIR ?? `node_modules/.vite-e2e-${env.XRIFT_E2E_PORT ?? "1420"}`
+    : undefined,
   plugins: [
     // Compiler templates are strings, including when imported inside a Worker.
     // React Refresh assumes window exists and must never wrap these raw modules.
@@ -43,7 +46,7 @@ export default defineConfig(async () => ({
     port: 1420,
     strictPort: true,
     host: host || false,
-    hmr: host
+    hmr: mode === "e2e" ? false : host
       ? {
           protocol: "ws",
           host,

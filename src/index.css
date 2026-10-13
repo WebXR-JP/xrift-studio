@@ -1,4 +1,5 @@
-@import "tailwindcss";
+/* Keep test artifacts and documentation outside the CSS dependency graph. */
+@import "tailwindcss" source("./");
 @import "./syntax-highlight.css";
 @import "./components/visual-editor/tablet-editor.css";
 

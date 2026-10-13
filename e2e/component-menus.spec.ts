@@ -144,9 +144,11 @@ test("Hierarchy context menu is editing-only and preserves the clicked target", 
   });
   const panel = page.getByRole("complementary", { name: "Hierarchy" });
   const menu = page.getByRole("menu", { name: "Hierarchyの編集", exact: true });
+  const creationMenu = page.getByRole("menu", { name: "Hierarchyの追加と編集", exact: true });
   await panel.getByRole("heading", { name: "Hierarchy" }).click({ button: "right" });
-  await expect(menu.getByRole("menuitem")).toHaveCount(2);
-  await expect(menu.getByRole("menuitem", { name: "貼り付け", exact: true })).toBeDisabled();
+  await expect(creationMenu.getByRole("menuitem")).toHaveCount(2);
+  await expect(creationMenu.getByRole("button", { name: "Entityを作成", exact: true })).toBeVisible();
+  await expect(creationMenu.getByRole("menuitem", { name: "貼り付け", exact: true })).toBeDisabled();
   await page.keyboard.press("Escape");
   await panel.getByRole("treeitem").click({ button: "right" });
   await expect(menu).not.toContainText(/Create|Primitive|光る|Componentを追加/);
@@ -178,7 +180,8 @@ test("Inspector adds to the selection; the header creates a new Entity", async (
   await page.getByRole("button", { name: "Add Component", exact: true }).click();
   await page.getByRole("banner").getByRole("button", { name: "素材を追加", exact: true }).click();
   const menu = page.getByRole("menu", { name: "素材を追加", exact: true });
-  await menu.getByRole("searchbox").fill("Cube");
+  await menu.getByRole("button", { name: "Entityを作成", exact: true }).click();
+  await menu.getByRole("button", { name: /^基本形状/ }).click();
   await menu.getByRole("menuitem", { name: "Cube", exact: true }).click();
   await expect(tree.getByRole("treeitem")).toHaveCount(initialCount + 1);
   await expect(tree.getByRole("treeitem", { selected: true })).toContainText("Cube");

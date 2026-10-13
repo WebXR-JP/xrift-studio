@@ -174,7 +174,7 @@ test("Scene Viewの右クリックから、指しているEntityを削除でき�
   await expect(selected).toHaveCount(0);
 
   await page.mouse.click(
-    bounds.x + bounds.width / 2,
+    bounds.x + bounds.width * 0.75,
     bounds.y + bounds.height * 0.6,
     { button: "right" },
   );

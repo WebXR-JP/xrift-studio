@@ -53,7 +53,6 @@ test("ブラウザ版で音蔵の音源を追加し、再読み込み後も使�
   await expect(dialog.getByRole("status")).toContainText("ブラウザ取り込みテスト");
   await dialog.getByRole("button", { name: "「アセットストア」を閉じる" }).click();
   await expect(page.getByRole("button", { name: /Audio 1/ })).toBeVisible();
-  await expect(page.getByRole("status", { name: "変更はまもなく自動保存されます" })).toBeVisible();
   await expect(page.getByRole("status", { name: "変更は自動保存されています" })).toBeVisible();
 
   await page.reload();

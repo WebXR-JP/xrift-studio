@@ -11,6 +11,7 @@ on:
       - 'src/components/AboutModal.tsx'
       - 'src/components/ProjectLibrary.tsx'
       - 'src/components/StudioLoading.tsx'
+      - 'src/components/visual-editor/CodeEditorLoading.tsx'
       - 'src/components/ModelViewer.tsx'
       - 'src/components/visual-editor/*Preview*.tsx'
       - 'src/components/visual-editor/*Thumbnail*.tsx'
@@ -21,12 +22,18 @@ on:
       - 'src/components/visual-editor/VisualEditorPrototype.tsx'
       - 'src/App.tsx'
       - 'src/lib/tauri.ts'
+      - 'src/lib/script-modules.ts'
+      - 'src/lib/monaco.ts'
       - 'src/lib/visual-editor/mcp-tool-registry.ts'
       - 'src/lib/visual-editor/canvas-events.ts'
       - 'src-tauri/src/mcp.rs'
       - 'src-tauri/src/mcp_tool_names.rs'
       - 'src-tauri/src/lib.rs'
       - 'e2e/chatgpt-tabs.spec.ts'
+      - 'e2e/chatgpt-context-ui.spec.ts'
+      - 'e2e/publish-readiness-race.spec.ts'
+      - 'e2e/editor-ui-polish.spec.ts'
+      - 'e2e/script-workspace.spec.ts'
       - 'e2e/bootstrap-recovery.spec.ts'
       - 'e2e/canvas-event-lifecycle.*'
       - 'src/*-bootstrap.tsx'
@@ -37,6 +44,8 @@ on:
       - 'scripts/chatgpt-generation.test.mjs'
       - 'scripts/mcp-chatgpt-contract.test.mjs'
       - 'scripts/chatgpt-panel-ui.mjs'
+      - 'scripts/vite-guide.mjs'
+      - 'scripts/vite-guide.test.mjs'
       - 'scripts/generate-mcp-tool-names.mjs'
       - 'docs/guide/ai-connection.md'
       - 'docs/guide/manifest.json'
@@ -64,14 +73,14 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm e2e:typecheck
       - run: pnpm mcp:tool-names --check
-      - run: node --test scripts/chatgpt-world.test.mjs scripts/chatgpt-generation.test.mjs scripts/mcp-chatgpt-contract.test.mjs scripts/guide.test.mjs
+      - run: node --test scripts/chatgpt-world.test.mjs scripts/chatgpt-generation.test.mjs scripts/mcp-chatgpt-contract.test.mjs scripts/guide.test.mjs scripts/vite-guide.test.mjs
       - name: Verify real panel UI with isolated native IPC
         env:
           XRIFT_TEST_CHROME: /usr/bin/google-chrome
         run: node scripts/chatgpt-panel-ui.mjs
       - run: pnpm exec playwright install --with-deps chromium
       - name: Verify Editor tabs and MCP generation through the real App
-        run: pnpm exec playwright test e2e/chatgpt-tabs.spec.ts e2e/bootstrap-recovery.spec.ts e2e/canvas-event-lifecycle.spec.ts
+        run: pnpm exec playwright test e2e/chatgpt-tabs.spec.ts e2e/chatgpt-context-ui.spec.ts e2e/bootstrap-recovery.spec.ts e2e/canvas-event-lifecycle.spec.ts e2e/publish-readiness-race.spec.ts e2e/editor-ui-polish.spec.ts e2e/script-workspace.spec.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:
