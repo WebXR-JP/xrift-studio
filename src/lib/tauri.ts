@@ -23,6 +23,9 @@ import {
   writeBrowserTextFile,
 } from "./browser-project-storage";
 
+export type ChatgptConnection = { signedIn: boolean; email: string | null; planUsageEnabled: boolean };
+export type ChatgptModel = { slug: string; displayName: string };
+
 export type ProjectKind = "world" | "item";
 export type ProjectFormat = "classic" | "visual";
 
@@ -774,6 +777,11 @@ export const tauri = {
   relaunchApp: () => relaunch(),
   checkXriftLatest: () => invoke<string | null>("check_xrift_latest"),
   updateXrift: () => invoke<void>("update_xrift"),
+  chatgptStatus: () => invoke<ChatgptConnection>("chatgpt_status"),
+  chatgptLogin: () => invoke<ChatgptConnection>("chatgpt_login"),
+  chatgptLogout: () => invoke<ChatgptConnection>("chatgpt_logout"),
+  chatgptModels: () => invoke<ChatgptModel[]>("chatgpt_models"),
+  chatgptPlan: (model: string, prompt: string) => invoke<string>("chatgpt_plan", { model, prompt }),
   detectXriftMcpClients: () =>
     invoke<XriftMcpClientStatus[]>("detect_xrift_mcp_clients"),
   registerXriftMcpClient: (clientId: XriftMcpClientId) =>

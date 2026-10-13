@@ -45,6 +45,8 @@ function UtilityButton({
 }
 
 export function EditorUtilityRail({
+  onChatgptGenerate,
+  chatgptDisabledReason,
   sceneSettingsOpen,
   onToggleSceneSettings,
   mcpNativeAvailable,
@@ -59,6 +61,8 @@ export function EditorUtilityRail({
   onRegisterMcpClient,
   onUndo,
 }: {
+  onChatgptGenerate?: (model: string, prompt: string) => Promise<void>;
+  chatgptDisabledReason?: string;
   sceneSettingsOpen: boolean;
   onToggleSceneSettings: () => void;
   mcpNativeAvailable: boolean;
@@ -157,6 +161,8 @@ export function EditorUtilityRail({
           </div>
 
           <AiConnectionPanel
+            onChatgptGenerate={onChatgptGenerate}
+            chatgptDisabledReason={chatgptDisabledReason}
             nativeAvailable={mcpNativeAvailable}
             clients={mcpClients}
             loading={mcpLoading}

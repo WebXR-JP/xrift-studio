@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { parseChatgptWorldPlan, buildChatgptWorld } from "./lib/visual-editor/chatgpt-world";
 import { ProjectLibrary } from "./components/ProjectLibrary";
 import { EditorView } from "./components/EditorView";
 import { NewProjectDialog } from "./components/NewProjectDialog";
@@ -1158,6 +1159,46 @@ function App() {
     };
   };
 
+  const chatgptGenerationRef = useRef(false);
+  const handleChatgptGenerate = async (model: string, prompt: string): Promise<void> => {
+    if (chatgptGenerationRef.current) throw new Error("ワールドを生成中です");
+    const sourceId = visualSessionRef.current?.bundle.project.projectId;
+    if (!sourceId || !projectsRoot || !tauri.isAvailable()) throw new Error("デスクトップ版でワールドを開いてください");
+    chatgptGenerationRef.current = true;
+    try {
+      const plan = parseChatgptWorldPlan(await tauri.chatgptPlan(model, prompt));
+      if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("開いている作品が変わりました。生成結果を適用せず停止しました");
+      const name = await uniqueProjectDirectoryName(projectsRoot, `chatgpt-world-${Date.now()}`);
+      const prepared = await prepareStarterVisualProject(buildChatgptWorld(plan, name));
+      if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("開いている作品が変わりました。もう一度生成してください");
+      // Save the current work before opening a fully prepared, separately saved world.
+      const saveSource = async () => {
+        const bridge = requireMcpProjectBridge("ChatGPTワールド生成");
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("開いている作品が変わりました。生成を停止しました");
+          const before = bridge.currentBundle();
+          if (!(await bridge.saveNow())) throw new Error("現在の作品を保存できませんでした。保存先を確認して再試行してください");
+          if (bridge.currentBundle() === before) return;
+        }
+        throw new Error("現在の作品が編集中です。操作を止めて再試行してください");
+      };
+      await saveSource();
+      if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("開いている作品が変わりました。もう一度生成してください");
+      const project = await createPreparedStarterVisualProjectOnDisk(projectsRoot, name, prepared);
+      if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("新しいワールドは保存しました。プロジェクト一覧から開いてください");
+      await saveSource();
+      if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("新しいワールドは保存しました。プロジェクト一覧から開いてください");
+      setVisualCompilationFresh(false);
+      setVisualThumbnailReadiness(null);
+      setVisualSession({ project, bundle: { project: prepared.plan.project, scene: prepared.plan.scene, assets: prepared.plan.assets, prefabs: prepared.plan.prefabs } });
+      await refreshProjects();
+      toast({ kind: "success", title: `${plan.title}を作成しました`, description: "新しいワールドを保存して開きました。Scene ViewとPlayで確認してください。" });
+    } catch (error) {
+      toast({ kind: "error", title: "ワールドを生成できませんでした", description: error instanceof Error ? error.message : String(error) });
+      throw error;
+    } finally { chatgptGenerationRef.current = false; }
+  };
+
   const handleMcpProjectTool = async (
     request: XriftMcpEditorRequestEvent,
   ): Promise<Record<string, unknown>> => {
@@ -1792,6 +1833,7 @@ function App() {
               projectPath={visualSession.project?.path}
               initialBundle={visualSession.bundle}
               compilationFresh={visualCompilationFresh}
+              onChatgptGenerate={handleChatgptGenerate}
               onSave={(bundle) => {
                 setVisualCompilationFresh(false);
                 return handleSaveVisualProject(bundle, false, false);

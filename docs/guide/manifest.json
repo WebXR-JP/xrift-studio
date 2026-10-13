@@ -620,7 +620,7 @@
       "description": "AIクライアントを接続し、配置や設定の変更を頼めます。依頼方法と変更後の確認を説明します。",
       "group": "behavior",
       "file": "ai-connection.md",
-      "keywords": "AI MCP 接続 Claude Codex 登録",
+      "keywords": "AI MCP 接続 Claude Codex 登録 ChatGPT ログイン ワールド生成 モデル 日本語",
       "related": [
         "save-and-open",
         "first-world",

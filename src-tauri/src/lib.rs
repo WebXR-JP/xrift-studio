@@ -3,6 +3,7 @@
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 mod world_authoring;
+mod chatgpt;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
@@ -6265,6 +6266,7 @@ pub fn run() {
 
     let builder = builder
         .manage(mcp::XriftMcpBrokerState::default())
+        .manage(chatgpt::ChatgptState::default())
         .manage(RecordingFileState::default())
         .manage(OpenProjectArchivesState(Mutex::new(initial_archives)))
         .setup(|app| {
@@ -6286,6 +6288,11 @@ pub fn run() {
 
     let app = builder
         .invoke_handler(tauri::generate_handler![
+            chatgpt::chatgpt_status,
+            chatgpt::chatgpt_login,
+            chatgpt::chatgpt_logout,
+            chatgpt::chatgpt_models,
+            chatgpt::chatgpt_plan,
             runtime_paths,
             runtime_status,
             take_opened_project_archives,
