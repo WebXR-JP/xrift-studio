@@ -95,7 +95,7 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onCancel, disabledR
         <p className="ml-5 whitespace-pre-wrap break-words rounded-xl bg-slate-100 px-3 py-2.5 text-slate-800">{turn.prompt}</p>
         <p className="break-words leading-5 text-slate-500">{turn.progress.message}</p>
       </div>)}
-      {!generation ? <p className="leading-5 text-slate-500">このワールドで作りたいものや、調整したいEntityを伝えてください。</p> : <>
+      {!generation ? <p className="leading-5 text-slate-500">今のSceneの編集を手伝います。小さな調整から依頼して、結果を見ながら進めましょう。</p> : <>
         <p className="ml-5 whitespace-pre-wrap break-words rounded-xl bg-slate-100 px-3 py-2.5 text-slate-800">{generation.prompt}</p>
         <div className="space-y-2 px-0.5">
           <p role="status" aria-live="polite" className="break-words leading-5 text-slate-700">{generation.cancelling ? "現在の処理を安全に終えて停止しています…" : generation.progress.message}</p>
@@ -123,7 +123,7 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onCancel, disabledR
       {disabledReason ? <p className="leading-5 text-amber-800">{disabledReason}</p> : null}
     </div>
     <form onSubmit={e => { e.preventDefault(); if (!pending && connection?.planUsageEnabled && models.some(m => m.slug === model) && prompt.trim() && !disabledReason) send(); }} className="shrink-0 rounded-xl border border-slate-300 bg-white p-2.5 focus-within:border-slate-500">
-      <textarea aria-label="ワールドへの依頼" value={prompt} maxLength={2000} disabled={pending} onChange={e => setPrompt(e.target.value)} rows={3} placeholder="このワールドで作りたいもの、調整したいこと" className="block w-full resize-none border-0 bg-transparent p-0 leading-5 text-slate-800 outline-none placeholder:text-slate-400" />
+      <textarea aria-label="ワールドへの依頼" value={prompt} maxLength={2000} disabled={pending} onChange={e => setPrompt(e.target.value)} rows={3} placeholder="このSceneで変えたいところ、追加したいもの" className="block w-full resize-none border-0 bg-transparent p-0 leading-5 text-slate-800 outline-none placeholder:text-slate-400" />
       <div className="mt-2 flex min-w-0 items-center gap-1.5">
         <select aria-label="ワールド制作のモデル" disabled={pending || !models.length} value={model} onChange={e => setModel(e.target.value)} className="min-w-0 max-w-[55%] rounded-full border-0 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-700 outline-none">
           {!models.length ? <option value="">{busy === "loading" ? "確認中…" : "モデル"}</option> : models.map(m => <option key={m.slug} value={m.slug}>{m.displayName}</option>)}
