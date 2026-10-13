@@ -4,6 +4,22 @@ import { createStarterVisualProject } from "./starter-templates";
 import type { ChatgptAssetOptions } from "../tauri";
 import { chatgptReferenceKey, type ChatgptOperation, type ChatgptResourceContext } from "./chatgpt-resources";
 import { normalizeMaterialProperties } from "./asset-manifest";
+import { mergeExternalStoreImport } from "./external-store";
+
+/** Keep background previews and unrelated asset edits made during an async step. */
+export function rebaseChatgptStep(before: XriftMcpEditorContext["bundle"], next: XriftMcpEditorContext["bundle"], latest: XriftMcpEditorContext["bundle"]) {
+  if (before === latest) return next;
+  const changedScene = next.scene !== before.scene;
+  const changedPrefabs = next.prefabs !== before.prefabs;
+  if (before.project.projectId !== latest.project.projectId || before.scene.sceneId !== latest.scene.sceneId
+    || (changedScene && JSON.stringify(before.scene) !== JSON.stringify(latest.scene))
+    || (changedPrefabs && JSON.stringify(before.prefabs) !== JSON.stringify(latest.prefabs))) {
+    throw new Error("反映中に作品が編集されました。編集内容を保ち、依頼の反映を停止しました");
+  }
+  return { ...latest, scene: changedScene ? next.scene : latest.scene,
+    prefabs: changedPrefabs ? next.prefabs : latest.prefabs,
+    assets: mergeExternalStoreImport(before.assets, next.assets, latest.assets) };
+}
 
 export type ChatgptGenerationPhase = "planning" | "planned" | "preparing" | "importing" | "placing" | "saving" | "completed" | "failed" | "cancelled";
 export type ChatgptGenerationMode = "build" | "plan";
@@ -52,7 +68,7 @@ export type ChatgptGeneration = {
   sceneId?: string;
   path?: string;
   name?: string;
-  plan?: { title: string; description: string; hasMore?: boolean; remainingWork?: string; objects: { name: string; shape: string }[] };
+  plan?: { title: string; description: string; hasMore?: boolean; remainingWork?: string; objects: { name: string; shape: string; detail?: string }[] };
   progress: { phase: ChatgptGenerationPhase; message: string; completed: number; total: number; recentEvents: ChatgptGenerationEvent[]; projectId?: string };
   error?: string;
   nextActions?: string[];

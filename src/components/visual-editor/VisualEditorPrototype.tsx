@@ -1,5 +1,6 @@
 import type { ChatgptAssetOptions } from "../../lib/tauri";
 import { ChatgptWorldPanel } from "./ChatgptWorldPanel";
+import type { ChatgptSessionActions } from "./ChatgptSessionBar";
 import { AboutModal } from "../AboutModal";
 import { INITIAL_APP_UPDATE_STATE, type AppUpdateState } from "../../lib/app-updater";
 import { chatgptGenerationMatchesScene, type ChatgptGenerationMode } from "../../lib/visual-editor/chatgpt-generation";
@@ -16,6 +17,7 @@ import { ensureCatalogMaterialTextures } from "../../lib/visual-editor/asset-imp
 import { catalogMaterialTextures } from "../../lib/visual-editor/catalog-material-dependencies";
 import { getEditorEntityCreationDefinitions, getEditorComponentLabel } from "../../lib/visual-editor/editor-session";
 import { applyModelReimportSettings } from "../../lib/visual-editor/model-reimport-impact";
+import { mergeExternalStoreImport } from "../../lib/visual-editor/external-store";
 import { colliderModelNode, setMeshCollision } from "../../lib/visual-editor/mesh-collision-actions";
 import { textureProcessingSettings } from "../../lib/visual-editor/texture-processing";
 import { normalizeTextureImportSettings } from "../../lib/visual-editor/asset-manifest";
@@ -249,7 +251,8 @@ import {
 import { EnvironmentTextureThumbnailGenerationQueue } from "./EnvironmentTextureThumbnailGenerationQueue";
 import { MaterialThumbnailGenerationQueue } from "./MaterialThumbnailGenerationQueue";
 import { ModelThumbnailGenerationQueue } from "./ModelThumbnailGenerationQueue";
-import { ExternalAssetStoreDialog } from "./ExternalAssetStoreDialog";
+import { ExternalAssetStoreDialog, type ModelAttachmentTarget } from "./ExternalAssetStoreDialog";
+import { setEntityModel } from "../../lib/visual-editor/model-assignment";
 import type { SkyShaderInstallResult } from "./SkyShaderStore";
 import type { WaterShaderInstallResult } from "./WaterShaderStore";
 import type { TerrainPresetInstallResult } from "./TerrainPresetStore";
@@ -735,6 +738,10 @@ export type VisualEditorPrototypeProps = {
   onChatgptGenerate?: (model: string, prompt: string, options: ChatgptAssetOptions, mode?: ChatgptGenerationMode, reasoningEffort?: string) => Promise<void>;
   onChatgptApplyPlan?: (generationId: string) => Promise<void>;
   onChatgptCancel?: (generationId: string) => Promise<unknown>;
+  onChatgptRevert?: (generationId: string) => Promise<unknown>;
+  chatgptSessionActions?: ChatgptSessionActions;
+  chatgptHistoryError?: string;
+  chatgptBusy?: boolean;
   appUpdate?: AppUpdateState;
   onCheckAppUpdate?: () => void;
   onShowAppUpdate?: () => void;
@@ -989,6 +996,10 @@ export function VisualEditorPrototype({
   chatgptConversation = [],
   onChatgptApplyPlan,
   onChatgptCancel,
+  onChatgptRevert,
+  chatgptSessionActions,
+  chatgptHistoryError,
+  chatgptBusy,
   appUpdate = INITIAL_APP_UPDATE_STATE,
   onCheckAppUpdate = () => {},
   onShowAppUpdate = () => {},
@@ -1458,7 +1469,9 @@ export function VisualEditorPrototype({
   const [chatgptTabOpen, setChatgptTabOpen] = useState(false);
   const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
-  const sceneChatgptGeneration = chatgptGeneration && chatgptGenerationMatchesScene(chatgptGeneration, bundle.project.projectId, bundle.scene.sceneId) ? chatgptGeneration : null;
+  const sceneChatgptSessions = chatgptSessionActions?.sessions.filter(session => session.projectId === bundle.project.projectId && session.sceneId === bundle.scene.sceneId);
+  const selectedChatgptSession = sceneChatgptSessions?.find(session => session.id === chatgptSessionActions?.activeSessionId) ?? sceneChatgptSessions?.[0];
+  const sceneChatgptGeneration = chatgptSessionActions ? selectedChatgptSession?.turns[selectedChatgptSession.turns.length - 1] ?? null : chatgptGeneration && chatgptGenerationMatchesScene(chatgptGeneration, bundle.project.projectId, bundle.scene.sceneId) ? chatgptGeneration : null;
   const openMcpSettings = () => {
     setMcpSettingsOpen(true);
     if (!mcpClients.length && !mcpLoading) void refreshMcpClients();
@@ -1740,6 +1753,7 @@ export function VisualEditorPrototype({
   const [sceneRecipeImportBusy, setSceneRecipeImportBusy] = useState(false);
   const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
   const [externalStoreOpen, setExternalStoreOpen] = useState(false);
+  const [modelStoreIntent, setModelStoreIntent] = useState<{ entityId: string; componentId?: string } | null>(null);
   const [supportOpen, setSupportOpen] = useState(false);
   /**
    * Gives the Scene View's cell the whole editor area.
@@ -5203,6 +5217,11 @@ export function VisualEditorPrototype({
               "formatはhdrまたはexrで指定してください",
             );
           }
+          if (importRunningRef.current || assetOperationRef.current !== null) throw new XriftMcpEditorToolError("IMPORT_BUSY", "素材の処理が終わってから再試行してください");
+          const sourceBundle = bundleRef.current;
+          importRunningRef.current = true;
+          setMcpLocalAssetImportBusy(true);
+          try {
           const installed = await tauri.installExternalStoreAsset(
             currentProjectPath,
             {
@@ -5212,7 +5231,6 @@ export function VisualEditorPrototype({
               ...(format ? { format } : {}),
             },
           );
-          const sourceBundle = bundleRef.current;
           let applied;
           try {
             applied = await applyExternalStoreInstallAndAnalyzeModel(
@@ -5246,13 +5264,20 @@ export function VisualEditorPrototype({
                 : [];
             },
           );
+          const latest = bundleRef.current;
+          if (disposed || projectPathRef.current !== currentProjectPath || latest.project.projectId !== sourceBundle.project.projectId || latest.scene.sceneId !== sourceBundle.scene.sceneId) {
+            throw new XriftMcpEditorToolError("STALE_REVISION", "作品またはSceneが変わりました。元の編集状態への反映は行っていません。");
+          }
+          if (editorModeRef.current !== "edit" || assetOperationRef.current !== null) throw new XriftMcpEditorToolError("EDITOR_BUSY", "Playと他の素材処理を停止してから再試行してください");
+          const mergedAssets = mergeExternalStoreImport(sourceBundle.assets, applied.manifest, latest.assets);
           const applySkybox = args.applySkybox === true && applied.kind === "skybox";
+          if (applySkybox && JSON.stringify(latest.scene.settings?.skybox) !== JSON.stringify(sourceBundle.scene.settings?.skybox)) throw new XriftMcpEditorToolError("STALE_REVISION", "Skyboxが処理中に編集されました。編集内容を保ち、背景への設定を停止しました。");
           const nextBundle = touchProject({
-            ...sourceBundle,
-            assets: applied.manifest,
+            ...latest,
+            assets: mergedAssets,
             scene: applySkybox
-              ? assignSkyboxToScene(sourceBundle.scene, applied.primaryAssetId)
-              : sourceBundle.scene,
+              ? assignSkyboxToScene(latest.scene, applied.primaryAssetId)
+              : latest.scene,
           });
           mcpRevisionRef.current += 1;
           mcpRevisionBundleRef.current = nextBundle;
@@ -5295,6 +5320,10 @@ export function VisualEditorPrototype({
             },
           });
           return;
+          } finally {
+            importRunningRef.current = false;
+            setMcpLocalAssetImportBusy(false);
+          }
         }
         const sourceBundle = bundleRef.current;
         const outcome = executeXriftMcpEditorTool(
@@ -5485,11 +5514,18 @@ export function VisualEditorPrototype({
               expectedBundle.project.projectId !== nextBundle.project.projectId || expectedBundle.scene.sceneId !== nextBundle.scene.sceneId) return false;
             mcpRevisionRef.current += 1;
             mcpRevisionBundleRef.current = nextBundle;
+            bundleRef.current = nextBundle;
             saveStatusRef.current = "dirty";
             if (entityId) { sceneSelectionRef.current = { kind: "entity", id: entityId }; assetSelectionRef.current = null; }
+            else {
+              if (sceneSelectionRef.current?.kind === "entity" && !nextBundle.scene.entities[sceneSelectionRef.current.id]) sceneSelectionRef.current = null;
+              if (assetSelectionRef.current && !nextBundle.assets.assets[assetSelectionRef.current]) assetSelectionRef.current = null;
+            }
             setHistory(current => commitEditorHistory(current, { ...current.present, bundle: nextBundle,
-              ...(entityId ? { sceneSelection: { kind: "entity" as const, id: entityId }, entitySelectionIds: [entityId], assetSelection: null } : {}) }));
+              sceneSelection: sceneSelectionRef.current, assetSelection: assetSelectionRef.current,
+              entitySelectionIds: entityId ? [entityId] : (current.present.entitySelectionIds ?? []).filter(id => !!nextBundle.scene.entities[id]) }));
             if (entityId) { setSelectedEntityIds([entityId]); setSelectedAssetIds([]); }
+            else { setSelectedEntityIds(ids => ids.filter(id => !!nextBundle.scene.entities[id])); setSelectedAssetIds(ids => ids.filter(id => !!nextBundle.assets.assets[id])); }
             setSaveStatus("dirty");
             return true;
           },
@@ -6991,6 +7027,22 @@ export function VisualEditorPrototype({
     [editorMode, updateScene],
   );
 
+  const handleSetEntityModel = useCallback((entityId: string, modelAssetId: string, componentId?: string) => {
+    if (editorModeRef.current !== "edit" || importBusy) return;
+    try {
+      const source = bundleRef.current;
+      const outcome = executeXriftMcpEditorTool({ bundle: source, sceneSelection: sceneSelectionRef.current, assetSelection: assetSelectionRef.current, editorMode: "edit", importBusy: false, revision: mcpRevisionRef.current, saveStatus: saveStatusRef.current }, {
+        id: crypto.randomUUID(), tool: "set_entity_model", arguments: { projectId: source.project.projectId, sceneId: source.scene.sceneId, expectedRevision: mcpRevisionRef.current, entityId, modelAssetId, ...(componentId ? { componentId } : {}) },
+      });
+      if (!outcome.changed) return;
+      bundleRef.current = outcome.bundle; mcpRevisionRef.current++; mcpRevisionBundleRef.current = outcome.bundle;
+      sceneSelectionRef.current = outcome.sceneSelection; assetSelectionRef.current = null; saveStatusRef.current = "dirty";
+      setSelectedEntityIds([entityId]); setSelectedAssetIds([]);
+      setHistory(current => commitEditorHistory(current, { bundle: outcome.bundle, sceneSelection: outcome.sceneSelection, assetSelection: null }));
+      setSaveStatus("dirty"); setNotice(`「${outcome.bundle.scene.entities[entityId].name}」の3Dモデルを設定しました`);
+    } catch (error) { setNotice(error instanceof Error ? error.message : "モデルを設定できませんでした"); }
+  }, [importBusy]);
+
   const handleMeshChange = useCallback(
     (entityId: string, componentId: string, patch: MeshInspectorPatch) => {
       if (editorMode !== "edit") return;
@@ -7132,6 +7184,7 @@ export function VisualEditorPrototype({
     async (
       result: Parameters<typeof applyExternalStoreInstall>[1],
       applySkybox: boolean,
+      modelTarget?: ModelAttachmentTarget,
     ) => {
       const projectPath = projectPathRef.current;
       if (!projectPath) {
@@ -7140,49 +7193,45 @@ export function VisualEditorPrototype({
       // A Model must never be committed with sourceHash but no importMetadata
       // (the manifest contract requires both), so the structure analysis has
       // to complete before this reaches history/autosave. That analysis is
-      // async, so the starting assets are re-checked after the await instead
-      // of mutating state from inside a single synchronous updater.
-      const startingAssets = bundleRef.current.assets;
+      // async, so merge just its analyzed changes onto the latest assets.
+      // Background thumbnails and unrelated edits must remain intact.
+      if (editorModeRef.current !== "edit" || importBusyRef.current || importRunningRef.current || assetOperationRef.current !== null) throw new Error("Playと他の素材処理を停止してから素材を追加してください。");
+      const startingBundle = bundleRef.current;
+      const startingAssets = startingBundle.assets;
+      importRunningRef.current = true;
+      setMcpLocalAssetImportBusy(true);
+      try {
       const applied = await applyExternalStoreInstallAndAnalyzeModel(
         projectPath,
         startingAssets,
         result,
       );
-      setHistory((current) => {
-        if (current.present.bundle.assets !== startingAssets) {
-          setNotice(
-            "処理中に素材が変更されたため、追加を取り消しました",
-          );
-          return current;
-        }
-        const scene = applySkybox
-          ? assignSkyboxToScene(
-              current.present.bundle.scene,
-              applied.primaryAssetId,
-            )
-          : current.present.bundle.scene;
-        const primary = applied.manifest.assets[applied.primaryAssetId];
-        setActiveAssetFolderId(primary?.folderId ?? null);
-        selectInstalledAsset(applied.primaryAssetId);
-        setSaveStatus("dirty");
-        setNotice(
-          applySkybox
-            ? `「${result.name}」を追加し、Skyboxに設定しました`
-            : `「${result.name}」をAssetsに追加しました`,
-        );
-        const nextBundle = touchProject({
-          ...current.present.bundle,
-          assets: applied.manifest,
-          scene,
-        });
-        bundleRef.current = nextBundle;
-        return commitEditorHistory(current, {
-          bundle: nextBundle,
-          sceneSelection: current.present.sceneSelection,
-          assetSelection: applied.primaryAssetId,
-        });
-      });
+      const source = bundleRef.current;
+      if (projectPathRef.current !== projectPath || source.project.projectId !== startingBundle.project.projectId || source.scene.sceneId !== startingBundle.scene.sceneId) throw new Error("作品またはSceneが変わりました。元の編集状態への反映は行っていません。");
+      if (editorModeRef.current !== "edit" || assetOperationRef.current !== null) throw new Error("Playと他の素材処理を停止してから素材を追加してください。");
+      if (modelTarget && (modelTarget.projectId !== source.project.projectId || modelTarget.sceneId !== source.scene.sceneId)) throw new Error("作品またはSceneが変わりました。元のEntityへの設定は行っていません。");
+      const mergedAssets = mergeExternalStoreImport(startingAssets, applied.manifest, source.assets);
+      if (applySkybox && JSON.stringify(source.scene.settings?.skybox) !== JSON.stringify(startingBundle.scene.settings?.skybox)) throw new Error("Skyboxが処理中に編集されました。編集内容を保ち、背景への設定を停止しました。");
+      const modelAssignment = modelTarget ? setEntityModel(source.scene, mergedAssets, modelTarget.entityId, applied.primaryAssetId, modelTarget.componentId) : undefined;
+      const scene = applySkybox ? assignSkyboxToScene(source.scene, applied.primaryAssetId) : modelAssignment?.scene ?? source.scene;
+      const nextBundle = touchProject({ ...source, assets: mergedAssets, scene });
+      const selection = modelTarget ? { kind: "entity" as const, id: modelTarget.entityId } : sceneSelectionRef.current;
+      const selectedAsset = modelTarget ? null : applied.primaryAssetId;
+      // No await between the latest bundle check, pure assignment and commit.
+      if (bundleRef.current !== source) throw new Error("制作データが変わりました。もう一度追加してください。");
+      bundleRef.current = nextBundle; mcpRevisionRef.current++; mcpRevisionBundleRef.current = nextBundle;
+      sceneSelectionRef.current = selection; assetSelectionRef.current = selectedAsset; saveStatusRef.current = "dirty";
+      setActiveAssetFolderId(applied.manifest.assets[applied.primaryAssetId]?.folderId ?? null);
+      if (modelTarget) { setSelectedEntityIds([modelTarget.entityId]); setSelectedAssetIds([]); }
+      else selectInstalledAsset(applied.primaryAssetId);
+      setHistory(current => commitEditorHistory(current, { bundle: nextBundle, sceneSelection: selection, assetSelection: selectedAsset }));
+      setSaveStatus("dirty");
+      setNotice(applySkybox ? `「${result.name}」を追加し、Skyboxに設定しました` : modelTarget ? `「${result.name}」を追加し、「${source.scene.entities[modelTarget.entityId].name}」へ設定しました` : `「${result.name}」をAssetsに追加しました`);
       setSceneSettingsOpen(false);
+      } finally {
+        importRunningRef.current = false;
+        setMcpLocalAssetImportBusy(false);
+      }
     },
     [selectInstalledAsset],
   );
@@ -12075,10 +12124,13 @@ export function VisualEditorPrototype({
           />
           <div id="editor-panel-inspector" className={chatgptDockActive ? `${tablet ? "editor-tablet-panel" : "col-start-3 row-span-2"} flex min-h-0 min-w-0 flex-col overflow-hidden` : sidePanelClass("inspector", true)}>
           {chatgptTabVisited && onChatgptGenerate ? <section aria-label="ChatGPTの制作チャット"
-            className={chatgptDockActive ? `flex min-h-0 ${phone ? "flex-1" : "basis-[58%] shrink-0"} flex-col overflow-hidden border-l border-b border-editor-border bg-editor-surface p-3 text-xs text-slate-600` : "hidden"}>
+            className={chatgptDockActive ? `flex min-h-0 ${phone ? "flex-1" : "basis-[min(76%,34rem)] shrink-0"} flex-col overflow-hidden border-l border-b border-editor-border bg-editor-surface p-3 text-xs text-slate-600` : "hidden"}>
             <ChatgptWorldPanel onGenerate={onChatgptGenerate} generation={sceneChatgptGeneration}
               onApplyPlan={onChatgptApplyPlan} onCancel={onChatgptCancel}
-              conversation={chatgptConversation.filter(turn => chatgptGenerationMatchesScene(turn, bundle.project.projectId, bundle.scene.sceneId))}
+              onRevert={onChatgptRevert} historyError={chatgptHistoryError} externallyBusy={chatgptBusy}
+              sessionActions={chatgptSessionActions ? { ...chatgptSessionActions, sessions: sceneChatgptSessions ?? [], activeSessionId: selectedChatgptSession?.id } : undefined}
+              draftScope={selectedChatgptSession?.id ?? `${bundle.project.projectId}:${bundle.scene.sceneId}`}
+              conversation={chatgptSessionActions ? selectedChatgptSession?.turns ?? [] : chatgptConversation.filter(turn => chatgptGenerationMatchesScene(turn, bundle.project.projectId, bundle.scene.sceneId))}
               onSelectEntity={sceneChatgptGeneration?.projectId === bundle.project.projectId ? entityId => { if (bundle.scene.entities[entityId]) { handleEntitySelectionChange([entityId], entityId); if (phone) { setActiveEditorTab(SCENE_VIEW_TAB_ID); setTabletPanel("inspector"); } } } : undefined}
               disabledReason={renderedReadOnly ? "Playを停止してから依頼を送ってください" : importBusy ? "素材の読み込み完了を待ってください" : undefined} />
           </section> : null}
@@ -12105,6 +12157,8 @@ export function VisualEditorPrototype({
             onTransformScrubEnd={handleTransformScrubEnd}
             onTransformScrubCancel={handleTransformScrubCancel}
             onMeshChange={handleMeshChange}
+            onSetEntityModel={handleSetEntityModel}
+            onOpenModelStore={(entityId, componentId) => { setModelStoreIntent({ entityId, componentId }); setExternalStoreOpen(true); }}
             onTerrainBrush={handleTerrainBrush}
             onTerrainSettings={handleTerrainSettings}
             onTerrainGrassLayersChange={handleTerrainGrassLayersChange}
@@ -12353,8 +12407,13 @@ export function VisualEditorPrototype({
                 ? "動作確認を停止してから外部アセットを追加してください"
                 : assetImportPanelAvailability.disabledReason
             }
-            onClose={() => setExternalStoreOpen(false)}
+            onClose={() => { setExternalStoreOpen(false); setModelStoreIntent(null); }}
             onInstalled={handleExternalStoreInstalled}
+            modelAttachmentTarget={(() => {
+              const entity = bundle.scene.entities[modelStoreIntent?.entityId ?? sceneSelection?.id ?? ""];
+              return entity && !entity.modelNode ? { projectId: bundle.project.projectId, sceneId: bundle.scene.sceneId, entityId: entity.id, name: entity.name, ...(modelStoreIntent?.componentId ? { componentId: modelStoreIntent.componentId } : {}) } : undefined;
+            })()}
+            preferModelAttachment={Boolean(modelStoreIntent)}
             onAddOpenBrush={handleAddOpenBrushMaterial}
             onAddSkyShader={handleAddSkyShader}
             onAddWaterShader={handleAddWaterShader}

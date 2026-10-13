@@ -2,14 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Bot, ClipboardList, LoaderCircle, Square, UserRound } from "lucide-react";
 import { tauri, type ChatgptAssetOptions, type ChatgptConnection, type ChatgptModel } from "../../lib/tauri";
 import { CHATGPT_ALL_ASSETS, type ChatgptGeneration, type ChatgptGenerationMode } from "../../lib/visual-editor/chatgpt-generation";
+import { ChatgptSessionBar, type ChatgptSessionActions } from "./ChatgptSessionBar";
 
 const effortLabels: Record<string, string> = { none: "なし（速さ優先）", minimal: "最小（速さ優先）", low: "低（速さ優先）", medium: "中（標準）", high: "高（じっくり）", xhigh: "より高い", max: "最大" };
 const preferredEffort = (model?: ChatgptModel) => ["low", "minimal", "medium", "high", "xhigh", "max", "none"].find(effort => model?.supportedReasoningEfforts?.includes(effort)) ?? "";
 
-export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onCancel, disabledReason, generation, conversation = [], onSelectEntity }: {
+export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onCancel, onRevert, disabledReason, generation, conversation = [], onSelectEntity, sessionActions, historyError, externallyBusy = false, draftScope = "default" }: {
   onGenerate: (model: string, prompt: string, options: ChatgptAssetOptions, mode?: ChatgptGenerationMode, reasoningEffort?: string) => Promise<void>;
   onApplyPlan?: (generationId: string) => Promise<void>;
   onCancel?: (generationId: string) => Promise<unknown>;
+  onRevert?: (generationId: string) => Promise<unknown>;
+  sessionActions?: ChatgptSessionActions;
+  historyError?: string;
+  externallyBusy?: boolean;
+  draftScope?: string;
   disabledReason?: string;
   generation?: ChatgptGeneration | null;
   conversation?: readonly ChatgptGeneration[];
@@ -21,16 +27,39 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onCancel, disabledR
   const [reasoningEffort, setReasoningEffort] = useState<string | null>(generation?.reasoningEffort ?? null);
   const [mode, setMode] = useState<ChatgptGenerationMode>("build");
   const [prompt, setPrompt] = useState("");
-  const [busy, setBusy] = useState<"loading" | "login" | "logout" | "generate" | null>("loading");
+  const [busy, setBusy] = useState<"loading" | "login" | "logout" | "generate" | "revert" | null>("loading");
   const [error, setError] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const running = useRef(false);
   const mounted = useRef(true);
+  const conversationElement = useRef<HTMLDivElement>(null);
+  const followingLatest = useRef(true);
   const modelAccount = useRef<string | null>(null);
   const modelLoading = useRef<{ account: string; epoch: number } | null>(null);
   const currentAccount = useRef<string | null>(null);
   const accountEpoch = useRef(0);
+  const drafts = useRef(new Map<string, { prompt: string; model: string; reasoningEffort: string | null; mode: ChatgptGenerationMode }>());
+  const previousScope = useRef(draftScope);
+  const currentDraft = useRef({ prompt, model, reasoningEffort, mode });
+  currentDraft.current = { prompt, model, reasoningEffort, mode };
+  useEffect(() => {
+    if (previousScope.current === draftScope) return;
+    drafts.current.set(previousScope.current, currentDraft.current);
+    previousScope.current = draftScope;
+    // The first send creates a persistent chat from the initial draft.
+    if (running.current && !drafts.current.has(draftScope)) return;
+    const draft = drafts.current.get(draftScope);
+    setPrompt(draft?.prompt ?? ""); setMode(draft?.mode ?? "build"); setReasoningEffort(draft?.reasoningEffort ?? null);
+    if (draft?.model) setModel(draft.model);
+    setError(null);
+    while (drafts.current.size > 20) drafts.current.delete(drafts.current.keys().next().value!);
+  }, [draftScope]);
+  useEffect(() => { followingLatest.current = true; }, [draftScope]);
+  useEffect(() => {
+    const element = conversationElement.current;
+    if (element && followingLatest.current) element.scrollTop = element.scrollHeight;
+  }, [draftScope, generation?.generationId, generation?.status, generation?.progress.message, generation?.progress.recentEvents.length, error, statusError]);
   const selectedModel = models.find(item => item.slug === model);
   const supportedEfforts = selectedModel?.supportedReasoningEfforts ?? [];
   const effectiveEffort = reasoningEffort === "" ? "" : reasoningEffort && supportedEfforts.includes(reasoningEffort) ? reasoningEffort : preferredEffort(selectedModel);
@@ -76,7 +105,7 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onCancel, disabledR
     void refresh();
     return () => { active = false; mounted.current = false; clearTimeout(timer); };
   }, []);
-  const run = async (action: "login" | "logout" | "generate", task: () => Promise<void>) => {
+  const run = async (action: "login" | "logout" | "generate" | "revert", task: () => Promise<void>) => {
     if (running.current) return;
     running.current = true; setBusy(action); setError(null);
     try { await task(); }
@@ -84,14 +113,14 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onCancel, disabledR
     finally { running.current = false; if (mounted.current) setBusy(null); }
   };
   const generating = busy === "generate" || generation?.status === "running";
-  const pending = busy !== null || Boolean(connection?.connecting || connection?.restoring) || generating;
-  const placed = generation?.progress.recentEvents.filter(event => event.entityId) ?? [];
-  const alert = generation?.error ?? error ?? statusError ?? connectionError ?? connection?.error;
+  const pending = busy !== null || Boolean(connection?.connecting || connection?.restoring) || generating || externallyBusy;
+  const placed = generation?.progress.recentEvents.filter(event => event.phase === "placing" && event.name) ?? [];
+  const alert = error ?? generation?.error ?? statusError ?? connectionError ?? connection?.error;
   const connecting = busy === "login" || Boolean(connection?.connecting);
   const restoring = busy === "loading" || Boolean(connection?.restoring);
   const showConnect = !connection?.signedIn;
   const connectAlert = error ?? statusError ?? connection?.error;
-  const send = () => void run("generate", async () => { await onGenerate(model, prompt.trim(), { ...CHATGPT_ALL_ASSETS }, mode, effectiveEffort || undefined); if (mounted.current) setPrompt(""); });
+  const send = (request = prompt.trim()) => void run("generate", async () => { await onGenerate(model, request, { ...CHATGPT_ALL_ASSETS }, mode, effectiveEffort || undefined); if (mounted.current) setPrompt(""); });
   return <section aria-label="ワールド制作のチャット" className="flex min-h-0 flex-1 flex-col gap-3">
     <header className="flex shrink-0 items-center justify-between gap-2">
       <div className="flex items-center gap-1.5 font-medium text-slate-800"><Bot size={16} aria-hidden="true" /><span>制作アシスタント</span></div>
@@ -104,7 +133,9 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onCancel, disabledR
         </div>
       </details> : null}
     </header>
-    <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${showConnect ? "flex flex-col" : "space-y-3"}`} aria-label="制作の会話と結果">
+    {sessionActions ? <ChatgptSessionBar {...sessionActions} disabled={pending} /> : null}
+    {historyError ? <p role="alert" className="shrink-0 text-[11px] leading-4 text-amber-800">{historyError}</p> : null}
+    <div ref={conversationElement} onScroll={event => { const element = event.currentTarget; followingLatest.current = element.scrollHeight - element.clientHeight - element.scrollTop < 32; }} className={`min-h-0 flex-1 overflow-y-auto overscroll-contain ${showConnect ? "flex flex-col" : "space-y-3"}`} aria-label="制作の会話と結果">
       {showConnect ? <div className="my-auto flex shrink-0 flex-col items-center gap-2.5 px-2 py-4 text-center" aria-label="ChatGPTの接続">
         <div className="flex size-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600"><Bot size={21} aria-hidden="true" /></div>
         <h3 className="text-sm font-medium text-slate-800">Sceneの編集を一緒に</h3>
@@ -119,6 +150,8 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onCancel, disabledR
       {conversation.filter(turn => turn.generationId !== generation?.generationId).map(turn => <div key={turn.generationId} className="space-y-2">
         <p className="ml-5 whitespace-pre-wrap break-words rounded-xl bg-slate-100 px-3 py-2.5 text-slate-800">{turn.prompt}</p>
         <p className="break-words leading-5 text-slate-500">{turn.progress.message}</p>
+        {turn.plan ? <details className="rounded-lg border border-slate-200 p-2.5"><summary className="cursor-pointer text-slate-700">Plan：{turn.plan.title}</summary><p className="mt-2 whitespace-pre-wrap break-words leading-5">{turn.plan.description}</p><ol className="mt-2 space-y-1">{turn.plan.objects.map((object, index) => <li key={index} className="break-words">{object.name}（{object.shape}）{object.detail ? <p className="mt-1 text-[11px] leading-4 text-slate-500">{object.detail}</p> : null}</li>)}</ol></details> : null}
+        {turn.error ? <p className="break-words text-rose-700">{turn.error}</p> : null}
       </div>)}
       {!generation ? <p className="leading-5 text-slate-500">今のSceneの編集を手伝います。小さな調整から依頼して、結果を見ながら進めましょう。</p> : <>
         <p className="ml-5 whitespace-pre-wrap break-words rounded-xl bg-slate-100 px-3 py-2.5 text-slate-800">{generation.prompt}</p>
@@ -128,10 +161,12 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onCancel, disabledR
           {generation.plan ? <details open={generation.status === "planned"} className="rounded-lg border border-slate-200 p-2.5">
             <summary className="cursor-pointer font-medium text-slate-800">Plan：{generation.plan.title}</summary>
             <p className="mt-2 break-words leading-5 text-slate-500">{generation.plan.description}</p>
+            {generation.plan.hasMore ? <p className="mt-2 break-words leading-5 text-slate-500">この後：{generation.plan.remainingWork || "結果を確認して、続きの作業を進めます。"}</p> : null}
             <ol className="mt-2 space-y-1" aria-label="依頼の作業結果">{generation.plan.objects.map((object, index) => {
               const event = placed[index];
               return <li key={index} className="flex min-w-0 items-center justify-between gap-2 rounded bg-slate-50 px-2 py-1.5">
-                {event?.entityId && onSelectEntity ? <button type="button" onClick={() => onSelectEntity(event.entityId!)} aria-label={`${object.name}をInspectorで表示`} className="min-w-0 break-words text-left text-brand-700 underline underline-offset-2">{object.name}</button> : <span className="min-w-0 break-words">{object.name}</span>}
+                <div className="min-w-0">{event?.entityId && onSelectEntity ? <button type="button" onClick={() => onSelectEntity(event.entityId!)} aria-label={`${object.name}をInspectorで表示`} className="min-w-0 break-words text-left text-brand-700 underline underline-offset-2">{object.name}</button> : <span className="min-w-0 break-words">{object.name}</span>}
+                {object.detail ? <p className="mt-1 break-words text-[11px] leading-4 text-slate-500">{object.detail}</p> : null}</div>
                 <span className="shrink-0 text-[11px] text-slate-500">{event ? "保存済み" : object.shape === "調整" ? "調整" : "追加"}</span>
               </li>;
             })}</ol>
@@ -140,6 +175,10 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onCancel, disabledR
           </details> : null}
           {generation.progress.recentEvents.length > 0 ? <details><summary className="cursor-pointer text-[11px] text-slate-500">作業の記録</summary><ol className="mt-2 space-y-1 border-l border-slate-200 pl-2 text-[11px] leading-4">{generation.progress.recentEvents.map(event => <li key={event.sequence} className="break-words">{event.message}</li>)}</ol></details> : null}
           {(generation.status === "failed" || generation.status === "cancelled") && generation.projectId ? <p className="leading-5 text-slate-500">保存済みの変更は残っています。結果を確認して、次の依頼を送れます。</p> : null}
+          {generation.status !== "running" && generation.status !== "planned" ? <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={pending || !connection?.planUsageEnabled || !selectedModel || Boolean(disabledReason)} title="Continue：このチャットの続きから進める" onClick={() => send(prompt.trim() || "このチャットの依頼の続きを進めてください。保存済みの変更を繰り返さず、未完了の作業だけを進めてください。完了済みなら追加せず状況を説明してください。")} className="rounded-md border border-slate-200 px-2.5 py-1.5 text-slate-700 hover:bg-slate-50 disabled:opacity-50">続ける</button>
+            {generation.revertAvailable && !generation.revertedAt && onRevert ? <button type="button" disabled={pending || Boolean(disabledReason)} title="Revert：この依頼の変更を戻す" onClick={() => void run("revert", async () => { await onRevert(generation.generationId); })} className="rounded-md border border-slate-200 px-2.5 py-1.5 text-slate-700 hover:bg-slate-50 disabled:opacity-50">変更を戻す</button> : null}
+          </div> : null}
         </div>
       </>}
       {connection?.restoring ? <p role="status">保存した接続を確認しています…</p> : connection?.connecting ? <p role="status">ブラウザで許可すると、接続状態が更新されます。</p> : null}

@@ -3,11 +3,36 @@ import assert from "node:assert/strict";
 import { createServer } from "vite";
 
 const server = await createServer({ configFile: false, cacheDir: "node_modules/.vite-chatgpt-generation-test", server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: "custom", optimizeDeps: { noDiscovery: true, include: [] } });
-const { createChatgptScaffold, placeChatgptObject, editChatgptEntity } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-generation.ts");
+const { createChatgptScaffold, placeChatgptObject, editChatgptEntity, rebaseChatgptStep } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-generation.ts");
 const { applyExternalStoreInstall } = await server.ssrLoadModule("/src/lib/visual-editor/external-store.ts");
 const { serializeVisualProjectDocuments } = await server.ssrLoadModule("/src/lib/visual-editor/persistence.ts");
 const { getMaterialShowcaseAsset, materialShowcaseAssetId } = await server.ssrLoadModule("/src/lib/visual-editor/material-showcase-catalog.ts");
 test.after(() => server.close());
+
+test("async Scene step retains concurrent thumbnails and metadata but refuses manual Scene edits", () => {
+  const before = createChatgptScaffold({ title: "", description: "", objects: [] }, "async-world");
+  const entity = Object.values(before.scene.entities)[0];
+  const next = editChatgptEntity(before, { entityId: entity.id, name: "変更後" }).bundle;
+  const latest = { ...before, project: { ...before.project, metadata: { ...before.project.metadata, title: "作品名" } }, assets: { ...before.assets, assets: { other: { id: "other", kind: "material", thumbnail: { status: "generated" } } } } };
+  const merged = rebaseChatgptStep(before, next, latest);
+  assert.equal(merged.scene.entities[entity.id].name, "変更後");
+  assert.equal(merged.assets.assets.other, latest.assets.assets.other);
+  assert.equal(merged.project, latest.project);
+  const edited = editChatgptEntity(latest, { entityId: entity.id, position: [5, 6, 7] }).bundle;
+  assert.throws(() => rebaseChatgptStep(before, next, edited), /編集内容を保ち/);
+});
+
+test("asset-only async step retains manual Scene edits, but cannot cross Scene or project boundaries", () => {
+  const before = createChatgptScaffold({ title: "", description: "", objects: [] }, "async-assets");
+  const entity = Object.values(before.scene.entities)[0];
+  const next = { ...before, assets: { ...before.assets, assets: { imported: { id: "imported", kind: "material" } } } };
+  const latest = editChatgptEntity(before, { entityId: entity.id, position: [5, 6, 7] }).bundle;
+  const merged = rebaseChatgptStep(before, next, latest);
+  assert.equal(merged.scene, latest.scene);
+  assert.equal(merged.assets.assets.imported, next.assets.assets.imported);
+  assert.throws(() => rebaseChatgptStep(before, next, { ...latest, scene: { ...latest.scene, sceneId: "other" } }));
+  assert.throws(() => rebaseChatgptStep(before, next, { ...latest, project: { ...latest.project, projectId: "other" } }));
+});
 test("assistant edits preserve project, Entity identity, Components, Assets and the immutable source", () => {
   const before = createChatgptScaffold({ title: "編集", description: "", objects: [] }, "editing-world");
   const entity = Object.values(before.scene.entities).find(e => e.components.some(c => c.type === "light"));

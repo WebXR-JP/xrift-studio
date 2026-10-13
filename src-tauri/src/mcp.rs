@@ -2097,6 +2097,7 @@ fn tool_definitions() -> Value {
                 "sceneId": { "type": "string", "minLength": 1 },
                 "expectedRevision": { "type": "integer", "minimum": 0 },
                 "model": { "type": "string", "minLength": 1, "maxLength": 128 },
+                "sessionId": { "type": "string", "minLength": 1, "description": "Continue a chat returned by list_chatgpt_sessions for this project and Scene. Omit to use the active chat, or create one if none exists." },
                 "reasoningEffort": { "type": "string", "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"], "description": "Choose a value from the selected model's supportedReasoningEfforts. Omit to use the API's model default; do not infer support from the model name." },
                 "prompt": { "type": "string", "minLength": 1, "maxLength": 2000 },
                 "target": { "type": "string", "enum": ["current", "new"], "default": "current" },
@@ -2106,7 +2107,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "get_chatgpt_generation",
-            "description": "Read a generationId returned by generate_chatgpt_world in this Studio session. Reports running, planned, completed, cancelled or failed, its public plan and any error. progress includes phase, message, completed, total, recentEvents and projectId so the client can show actual execution results. A planned job has not changed the Scene or project files. After execution, use get_editor_context and capture_scene_view to inspect saved results, including partial results after failure or cancellation. Recent eight jobs are retained until Studio exits.",
+            "description": "Read a generationId returned by generate_chatgpt_world. Reports running, planned, completed, cancelled or failed, its public plan and any error. progress includes phase, message, completed, total, recentEvents and projectId so the client can show actual execution results. A planned job has not changed the Scene or project files. Public history persists locally in up to 20 chats with 30 requests each. Unapplied plans and Revert checkpoints are valid only while Studio remains open. Inspect actual saved results with get_editor_context and capture_scene_view.",
             "inputSchema": { "type": "object", "properties": { "generationId": { "type": "string", "minLength": 1 } }, "required": ["generationId"], "additionalProperties": false }
         },
         {
@@ -2123,6 +2124,31 @@ fn tool_definitions() -> Value {
             "name": "cancel_chatgpt_generation",
             "description": "Discard a planned ChatGPT job or request cancellation of a running job by generationId. Does not undo Entities or assets already applied and saved. Cancellation may finish after an active step; poll get_chatgpt_generation for the final cancelled, completed or failed status. Returns whether cancellation was requested and never returns credentials.",
             "inputSchema": { "type": "object", "properties": { "generationId": { "type": "string", "minLength": 1 } }, "required": ["generationId"], "additionalProperties": false }
+        },
+        {
+            "name": "list_chatgpt_sessions",
+            "description": "List saved production chats for the currently open project and Scene, with titles, timestamps and request counts. History contains public requests and results, never authentication credentials.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "get_chatgpt_session",
+            "description": "Read a production chat and its copyable public transcript for the currently open project and Scene. Pass sessionId to generate_chatgpt_world to continue it using recent conversation and the current Scene.",
+            "inputSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false }
+        },
+        {
+            "name": "manage_chatgpt_session",
+            "description": "Create, select, rename or delete a chat for the currently open project and Scene. Delete removes only local chat history, preserving Scene content. Requires fresh editor context; unavailable during generation.",
+            "inputSchema": { "type": "object", "properties": {
+                "projectId": { "type": "string", "minLength": 1 }, "sceneId": { "type": "string", "minLength": 1 }, "expectedRevision": { "type": "integer", "minimum": 0 },
+                "action": { "type": "string", "enum": ["create", "select", "rename", "delete"] }, "sessionId": { "type": "string", "minLength": 1 }, "title": { "type": "string", "minLength": 1, "maxLength": 80 }
+            }, "required": ["projectId", "sceneId", "expectedRevision", "action"], "additionalProperties": false }
+        },
+        {
+            "name": "revert_chatgpt_generation",
+            "description": "Restore and save the Scene and asset manifest from before one completed or stopped request. Requires revertAvailable, the same project and Scene and an unchanged result. Refuses when later manual or AI edits would be overwritten. Checkpoints are in memory only and expire on restart. Downloaded files and chat history remain.",
+            "inputSchema": { "type": "object", "properties": {
+                "projectId": { "type": "string", "minLength": 1 }, "sceneId": { "type": "string", "minLength": 1 }, "expectedRevision": { "type": "integer", "minimum": 0 }, "generationId": { "type": "string", "minLength": 1 }
+            }, "required": ["projectId", "sceneId", "expectedRevision", "generationId"], "additionalProperties": false }
         },
         {
             "name": "login",
@@ -2550,6 +2576,18 @@ fn tool_definitions() -> Value {
                 "required": ["projectId", "sceneId", "expectedRevision", "sourcePath"],
                 "additionalProperties": false
             }
+        },
+        {
+            "name": "set_entity_model",
+            "description": "Set an existing Entity's Mesh Renderer to a ready Model Asset, or add a Mesh Renderer when it has none. Preserves the Entity ID, name, Transform, other Components and manual children. Supply componentId when there are multiple Mesh Renderers. Uses the Model's default Materials, clears geometry-specific pose overrides, fits automatic Box Colliders to the new Model and keeps manual Box Colliders. Refuses generated model-node targets, a separately baked Mesh Collider, and model replacement that would discard manual child Components or Entities. Does not create a new Entity, import assets, add animation graphs or delete source files. Edit only; use list_assets/get_model_asset first, then inspect the Entity and capture_scene_view.",
+            "inputSchema": { "type": "object", "properties": {
+                "projectId": { "type": "string", "minLength": 1 },
+                "sceneId": { "type": "string", "minLength": 1 },
+                "expectedRevision": { "type": "integer", "minimum": 0 },
+                "entityId": { "type": "string", "minLength": 1 },
+                "modelAssetId": { "type": "string", "minLength": 1 },
+                "componentId": { "type": "string", "minLength": 1 }
+            }, "required": ["projectId", "sceneId", "expectedRevision", "entityId", "modelAssetId"], "additionalProperties": false }
         },
         {
             "name": "get_texture_asset",
@@ -4702,7 +4740,7 @@ mod tests {
         assert_eq!(properties["mode"]["enum"], json!(["build", "plan"]));
         assert_eq!(properties["mode"]["default"], "build");
         let required = generate["inputSchema"]["required"].as_array().unwrap();
-        for optional in ["target", "mode", "options", "reasoningEffort"] {
+        for optional in ["target", "mode", "options", "reasoningEffort", "sessionId"] {
             assert!(!required.contains(&json!(optional)), "{optional} must remain optional");
         }
         assert_eq!(properties["reasoningEffort"]["type"], "string");
@@ -4735,6 +4773,9 @@ mod tests {
             "import_audio_asset",
             "generate_chatgpt_world",
             "apply_chatgpt_plan",
+            "manage_chatgpt_session",
+            "revert_chatgpt_generation",
+            "set_entity_model",
             "import_texture_asset",
             "update_texture_asset",
             "create_document_asset",

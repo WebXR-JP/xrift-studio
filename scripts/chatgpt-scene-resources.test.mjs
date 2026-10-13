@@ -5,7 +5,7 @@ import { createServer } from "vite";
 const server = await createServer({ configFile: false, cacheDir: "node_modules/.vite-chatgpt-scene-resources-test", server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: "custom", optimizeDeps: { noDiscovery: true, include: [] } });
 test.after(() => server.close());
 const { collectChatgptSceneResources } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-scene-resources.ts");
-const { chatgptPlanSnapshots, assertChatgptPlanCurrent } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-plan-guards.ts");
+const { chatgptPlanSnapshots, assertChatgptPlanCurrent, chatgptOperationDetail } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-plan-guards.ts");
 const { createStarterVisualProject } = await server.ssrLoadModule("/src/lib/visual-editor/starter-templates.ts");
 const starter = () => createStarterVisualProject("world", "blank", "resources-fixture");
 test("resource context includes selected components and usable assets without paths, source URLs or bytes", () => {
@@ -41,4 +41,31 @@ test("Plan guards refuse touched Entity, project asset or sky changes but allow 
   }
   const derived = structuredClone(bundle); derived.assets.assets.model.thumbnail = { status: "generated" }; derived.project.metadata.title = "作品名の変更";
   assert.doesNotThrow(() => assertChatgptPlanCurrent(derived, plan, snapshots));
+});
+
+test("public Plan details expose proposed audio and Skybox settings without raw JSON or target IDs", () => {
+  const resources = { projectAssets: [], builtinCandidates: [], components: [] };
+  const audio = chatgptOperationDetail({kind:"audio",entityId:"private-entity-id",componentId:"private-component-id",enabled:false,volume:.125,loop:true,spatial:false,autoplay:true}, resources);
+  assert.equal(audio,"音源 無効、音量 12.5%、ループ 有効、空間音声 無効、自動再生 有効");
+  assert.equal(chatgptOperationDetail({kind:"audio",entityId:"target",volume:3},resources),"音量 300%");
+  assert.equal(chatgptOperationDetail({kind:"skybox",enabled:true,iblEnabled:false,rotationDegrees:-45.25,exposure:.8},resources),"背景 有効、IBL 無効、回転 -45.25°、明るさ 0.8");
+  assert.equal(chatgptOperationDetail({kind:"skybox",rotationDegrees:0,exposure:0},resources),"回転 0°、明るさ 0");
+  assert.equal(chatgptOperationDetail({kind:"mesh-collision",entityId:"target",action:"add"},resources),"Colliderを追加");
+  assert.equal(chatgptOperationDetail({kind:"mesh-collision",entityId:"target",action:"remove"},resources),"Colliderを解除");
+  assert.doesNotMatch(audio,/private|entityId|componentId|[{}]/);
+});
+
+test("public Plan details use project, builtin and remote candidate names with safe missing-candidate fallbacks", () => {
+  const resources={projectAssets:[{id:"private-model",kind:"model",name:"木の椅子"},{id:"private-material",kind:"material",name:"木材"}],builtinCandidates:[{candidateId:"builtin:private:sky",providerId:"private",name:"星空",description:"",actions:["skybox"]},{candidateId:"builtin:private:props",providerId:"private",name:"石のベンチ",description:"",actions:["catalog"]}],components:[]};
+  const external=[{providerId:"ai-lowpoly-props",externalId:"private-remote-id",assetKind:"model",name:"小さなランプ"},{providerId:"otogura",externalId:"private-audio-id",assetKind:"audio",name:"鳥の声"}];
+  assert.equal(chatgptOperationDetail({kind:"model-attachment",entityId:"target",candidateId:"project:private-model"},resources),"木の椅子を装着（名前・位置・回転・スケールを保持）");
+  assert.equal(chatgptOperationDetail({kind:"material",entityId:"target",candidateId:"project:private-material"},resources),"Material：木材");
+  assert.equal(chatgptOperationDetail({kind:"skybox",candidateId:"builtin:private:sky"},resources),"背景：星空");
+  assert.equal(chatgptOperationDetail({kind:"catalog",candidateId:"builtin:private:props",position:[1,0,2]},resources),"石のベンチを追加");
+  const remote=chatgptOperationDetail({kind:"model-attachment",entityId:"target",candidateId:"ai-lowpoly-props:private-remote-id"},resources,external);
+  assert.match(remote,/小さなランプ/); assert.doesNotMatch(remote,/private|ai-lowpoly-props/);
+  assert.equal(chatgptOperationDetail({kind:"audio",entityId:"target",candidateId:"otogura:private-audio-id",volume:.3},resources,external),"音声：鳥の声、音量 30%");
+  for (const op of [{kind:"model-attachment",entityId:"target",candidateId:"private-unknown-id"},{kind:"material",entityId:"target",candidateId:"private-unknown-id"},{kind:"skybox",candidateId:"private-unknown-id"}]) {
+    assert.doesNotMatch(chatgptOperationDetail(op,resources),/private|unknown|candidateId/);
+  }
 });

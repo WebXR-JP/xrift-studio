@@ -52,6 +52,51 @@ export type AppliedOpenBrushCatalogInstall = AppliedExternalStoreInstall & {
   alreadyInstalled: boolean;
 };
 
+function canonicalImportValue(value: unknown): string {
+  return JSON.stringify(value, (_key, item) => item && typeof item === "object" && !Array.isArray(item)
+    ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b))) : item) ?? "missing";
+}
+
+function authoredImportAsset(asset: SceneAsset | undefined): string {
+  if (!asset) return "missing";
+  const { thumbnail: _thumbnail, ...authored } = asset;
+  return canonicalImportValue(authored);
+}
+
+/** Rebase an analyzed install without replacing edits made while files loaded. */
+export function mergeExternalStoreImport(
+  before: AssetManifest,
+  imported: AssetManifest,
+  latest: AssetManifest,
+): AssetManifest {
+  const assets = { ...latest.assets };
+  const changedIds = new Set([...Object.keys(before.assets), ...Object.keys(imported.assets)]);
+  const touchedIds: string[] = [];
+  for (const id of changedIds) {
+    if (before.assets[id] === imported.assets[id] || canonicalImportValue(before.assets[id]) === canonicalImportValue(imported.assets[id])) continue;
+    if (authoredImportAsset(before.assets[id]) !== authoredImportAsset(latest.assets[id])) {
+      throw new Error("取り込む素材が処理中に編集されました。編集内容を保ち、追加を停止しました。");
+    }
+    if (imported.assets[id]) assets[id] = imported.assets[id];
+    else delete assets[id];
+    touchedIds.push(id);
+  }
+  const folders = { ...(latest.folders ?? {}) };
+  for (const id of new Set([...Object.keys(before.folders ?? {}), ...Object.keys(imported.folders ?? {})])) {
+    if (canonicalImportValue(before.folders?.[id]) === canonicalImportValue(imported.folders?.[id])) continue;
+    if (canonicalImportValue(before.folders?.[id]) !== canonicalImportValue(latest.folders?.[id])) {
+      throw new Error("取り込み先のフォルダーが処理中に編集されました。追加を停止しました。");
+    }
+    if (imported.folders?.[id]) folders[id] = imported.folders[id];
+    else delete folders[id];
+  }
+  for (const id of touchedIds) {
+    const asset = assets[id];
+    if (asset?.folderId && !folders[asset.folderId]) throw new Error("取り込み先のフォルダーが変更されました。素材を追加し直してください。");
+  }
+  return { ...latest, assets, ...(latest.folders || imported.folders ? { folders } : {}) };
+}
+
 function safeId(value: string): string {
   return value
     .trim()

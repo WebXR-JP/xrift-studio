@@ -44,6 +44,7 @@ import {
   assignMaterialToPrimaryMeshSlot,
 } from "./material-assignment";
 import type { PrototypeVisualProject } from "./prototype-project";
+import { setEntityModel } from "./model-assignment";
 import { XRIFT_SCRIPTING_CAPABILITIES } from "./scripting-capabilities.data";
 import {
   addBuiltinPrimitiveEntity,
@@ -417,6 +418,7 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   get_model_asset: getModel,
   get_texture_asset: getTexture,
   update_model_asset: updateModel,
+  set_entity_model: assignEntityModel,
   update_texture_asset: updateTexture,
   create_document_asset: createDocumentAsset,
   get_particle_asset: getParticleAsset,
@@ -3908,6 +3910,23 @@ function addComponent(
     },
     activity: `AIが${definitionId}をEntityへ追加しました`,
   };
+}
+
+function assignEntityModel(context: XriftMcpEditorContext, argumentsValue: Record<string, unknown>): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const modelAssetId = requiredString(argumentsValue.modelAssetId, "modelAssetId");
+  const componentId = optionalString(argumentsValue.componentId);
+  if (!context.bundle.scene.entities[entityId]) throw new XriftMcpEditorToolError("ENTITY_NOT_FOUND", "モデルを設定するEntityが見つかりません", { entityId });
+  const model = context.bundle.assets.assets[modelAssetId];
+  if (model?.kind !== "model") throw new XriftMcpEditorToolError(model ? "ASSET_KIND_MISMATCH" : "ASSET_NOT_FOUND", "Assetsにある3Dモデルを指定してください", { modelAssetId });
+  let result;
+  try { result = setEntityModel(context.bundle.scene, context.bundle.assets, entityId, modelAssetId, componentId); }
+  catch (error) { throw new XriftMcpEditorToolError("COMPONENT_UPDATE_REJECTED", error instanceof Error ? error.message : "モデルを設定できませんでした", { entityId, modelAssetId, componentId }); }
+  const bundle = result.changed ? touchProject(context, { ...context.bundle, scene: result.scene }) : context.bundle;
+  return { changed: result.changed, bundle, sceneSelection: { kind: "entity", id: entityId }, assetSelection: null,
+    result: { projectId: bundle.project.projectId, sceneId: bundle.scene.sceneId, revisionBefore: context.revision, revisionAfter: context.revision + Number(result.changed), entityId, componentId: result.componentId, modelAssetId },
+    activity: `AIがEntity「${bundle.scene.entities[entityId].name}」の3Dモデルを設定しました` };
 }
 
 function updateComponent(

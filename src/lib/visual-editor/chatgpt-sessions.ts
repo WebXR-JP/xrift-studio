@@ -100,7 +100,7 @@ function normalizeTurn(value: unknown, interrupted: boolean): ChatgptGeneration 
     title: text(value.plan.title, 100), description: text(value.plan.description, 600),
     ...(typeof value.plan.hasMore === "boolean" ? { hasMore: value.plan.hasMore } : {}),
     ...(typeof value.plan.remainingWork === "string" ? { remainingWork: text(value.plan.remainingWork, 600) } : {}),
-    objects: value.plan.objects.slice(0, 32).filter(isRecord).map(object => ({ name: text(object.name, 80), shape: text(object.shape, 32) })),
+    objects: value.plan.objects.slice(0, 32).filter(isRecord).map(object => ({ name: text(object.name, 80), shape: text(object.shape, 32), ...(typeof object.detail === "string" ? { detail: text(object.detail, 500) } : {}) })),
   };
   return turn;
 }
@@ -162,7 +162,7 @@ export function upsertChatgptSessionTurn(sessions: readonly ChatgptSession[], se
 function resultSummary(turn: ChatgptGeneration): string {
   const status = { running: "処理中", planned: "Plan確認待ち", completed: "完了", failed: "失敗", cancelled: "停止" }[turn.status];
   const lines = [turn.revertedAt ? `変更を戻しました（${turn.revertedAt}）。この依頼の変更は現在のSceneに残っていません。` : status, turn.progress.message, `保存済み ${turn.progress.completed} / ${turn.progress.total}`];
-  if (turn.plan) lines.push(`Plan: ${turn.plan.title}`, turn.plan.description, ...turn.plan.objects.map(object => `${object.name}（${object.shape}）`));
+  if (turn.plan) lines.push(`Plan: ${turn.plan.title}`, turn.plan.description, ...turn.plan.objects.map(object => `${object.name}（${object.shape}）${object.detail ? `：${object.detail}` : ""}`));
   if (turn.plan?.hasMore) lines.push(`残りの作業: ${turn.plan.remainingWork || "この依頼の続き"}`);
   lines.push(...turn.progress.recentEvents.map(event => event.message));
   if (turn.error) lines.push(`エラー: ${turn.error}`);

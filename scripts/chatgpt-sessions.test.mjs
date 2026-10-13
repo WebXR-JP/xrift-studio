@@ -59,6 +59,16 @@ test("restarting ends native running/planned jobs without advertising lost apply
   assert.equal(restored.turns[2].progress.completed, 1);
 });
 
+test("public Plan settings remain readable after reload and in a copied transcript", () => {
+  const storage = new MemoryStorage();
+  const value = turn();
+  value.plan.objects = [{ name: "BGM", shape: "調整", detail: "音量30%、ループあり" }];
+  api.saveChatgptSessions([withTurn(value)], storage);
+  const restored = api.loadChatgptSessions(storage)[0];
+  assert.equal(restored.turns[0].plan.objects[0].detail, "音量30%、ループあり");
+  assert.match(api.chatgptSessionTranscript(restored), /音量30%、ループあり/);
+});
+
 test("persisted/copy/context records exclude transport credentials, URL queries and local paths", () => {
   const storage = new MemoryStorage();
   const secret = "testsecret987654321";

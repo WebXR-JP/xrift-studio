@@ -85,6 +85,7 @@ import {
 } from "./GlowMaterialStore";
 
 type StoreKindFilter = "all" | ExternalStoreAsset["assetKind"];
+export type ModelAttachmentTarget = { projectId: string; sceneId: string; entityId: string; name: string; componentId?: string };
 
 export function ExternalAssetStoreDialog({
   open,
@@ -93,6 +94,8 @@ export function ExternalAssetStoreDialog({
   disabledReason,
   onClose,
   onInstalled,
+  modelAttachmentTarget,
+  preferModelAttachment = false,
   onAddOpenBrush,
   onAddSkyShader,
   onAddWaterShader,
@@ -113,7 +116,10 @@ export function ExternalAssetStoreDialog({
   onInstalled: (
     result: ExternalStoreInstallResult,
     applySkybox: boolean,
+    modelTarget?: ModelAttachmentTarget,
   ) => Promise<void>;
+  modelAttachmentTarget?: ModelAttachmentTarget;
+  preferModelAttachment?: boolean;
   onAddOpenBrush: (
     entry: OpenBrushCatalogEntry,
   ) => Promise<{ alreadyInstalled: boolean }>;
@@ -172,8 +178,11 @@ export function ExternalAssetStoreDialog({
   const [resolution, setResolution] = useState("");
   const [fileFormat, setFileFormat] = useState<ExternalStoreFileFormat | "">("");
   const [applySkybox, setApplySkybox] = useState(true);
+  const [applyModelToEntity, setApplyModelToEntity] = useState(preferModelAttachment);
+  useEffect(() => { if (open) setApplyModelToEntity(preferModelAttachment); }, [open, preferModelAttachment]);
   const [installing, setInstalling] = useState(false);
   const [installedName, setInstalledName] = useState<string | null>(null);
+  const [installedTargetName, setInstalledTargetName] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open || provider.kind !== "remote-assets" || !remoteAssetsAvailable) {
@@ -317,6 +326,8 @@ export function ExternalAssetStoreDialog({
     setInstalling(true);
     setDetailError(null);
     setInstalledName(null);
+    setInstalledTargetName(null);
+    const modelTarget = selected.assetKind === "model" && applyModelToEntity ? modelAttachmentTarget : undefined;
     try {
       const result = await tauri.installExternalStoreAsset(projectPath, {
         providerId: selected.providerId,
@@ -326,7 +337,9 @@ export function ExternalAssetStoreDialog({
           ? { format: fileFormat as ExternalStoreFileFormat }
           : {}),
       });
-      await onInstalled(result, result.assetKind === "hdri" && applySkybox);
+      await onInstalled(result, result.assetKind === "hdri" && applySkybox,
+        result.assetKind === "model" ? modelTarget : undefined);
+      setInstalledTargetName(result.assetKind === "model" ? modelTarget?.name ?? null : null);
       const environmentFormat = result.files.find((entry) => entry.role === "environment")?.format;
       setInstalledName(
         environmentFormat
@@ -802,6 +815,10 @@ export function ExternalAssetStoreDialog({
                     )}
                   </>
                 )}
+                {selected.assetKind === "model" && modelAttachmentTarget ? <label className="flex items-start gap-2 rounded-md bg-slate-50 p-2.5 text-xs text-slate-700">
+                  <input type="checkbox" checked={applyModelToEntity} disabled={installing || Boolean(disabledReason)} onChange={event => setApplyModelToEntity(event.target.checked)} className="mt-0.5 size-3.5 shrink-0 accent-brand-600" />
+                  <span><span className="block font-semibold">追加後に「{modelAttachmentTarget.name}」へモデルを設定</span><span className="mt-1 block text-[11px] leading-4 text-slate-500">Entityの名前・位置・回転・大きさを保ちます。モデルはAssetsにも残ります。</span></span>
+                </label> : null}
                 {!projectPath ? (
                   <Notice tone="warning" text="初回の自動保存が完了すると追加できます。保存エラーが出た場合は、編集画面で確認してください。" />
                 ) : null}
@@ -821,7 +838,7 @@ export function ExternalAssetStoreDialog({
                     role="status"
                   >
                     <CheckCircle2 size={15} className="shrink-0" />
-                    <span>「{installedName}」を追加しました。Assetsで選択されています。</span>
+                    <span>「{installedName}」を追加しました。{installedTargetName ? `「${installedTargetName}」のモデルを設定しました。` : "Assetsで選択されています。"}</span>
                   </div>
                 ) : null}
                 {selectedIsInstallable ? (
@@ -843,6 +860,8 @@ export function ExternalAssetStoreDialog({
                         <LoaderCircle size={16} className="animate-spin" />
                         ダウンロード中…
                       </>
+                    ) : selected.assetKind === "model" && applyModelToEntity && modelAttachmentTarget ? (
+                      `追加して「${modelAttachmentTarget.name}」へモデルを設定`
                     ) : selected.assetKind === "hdri" && applySkybox ? (
                       `${fileFormat.toUpperCase()}を追加してSkyboxに設定`
                     ) : (
