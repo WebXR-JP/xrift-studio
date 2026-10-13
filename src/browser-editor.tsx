@@ -1,14 +1,4 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import BrowserEditorApp from "./BrowserEditorApp";
-import { installVitePreloadRecovery } from "./lib/vite-preload-recovery";
-import "./index.css";
-import "./preview.css";
+import "./lib/react-performance-protection";
+import { startApplication } from "./lib/application-bootstrap";
 
-installVitePreloadRecovery();
-
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <BrowserEditorApp />
-  </React.StrictMode>,
-);
+startApplication(() => import("./browser-editor-bootstrap"));
