@@ -63,7 +63,7 @@
 - [F-28スクリプトとスクリプトのコンポーネント](./ux/behavior.md#f-28)
 - [F-38操作のトリガー](./ux/behavior.md#f-38)
 
-## AI 接続・診断・録画
+## MCP接続・診断・録画
 
 - [F-17 AI editor integration / MCP](./ux/tools.md#f-17)
 - [F-35ビジュアル編集QA診断と短時間録画](./ux/tools.md#f-35)

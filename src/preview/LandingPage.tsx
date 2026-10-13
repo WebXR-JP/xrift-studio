@@ -45,7 +45,7 @@ export default function LandingPage() {
                 ブラウザ版を試す<span className="landing-beta-mark">β</span><ArrowRight size={17} aria-hidden="true" />
               </a>
             </div>
-            <p className="landing-caption">ブラウザ版βではAPIキーを使ってワールドを送信できます。アイテムやスクリプトを含むワールドは、デスクトップ版から公開してください。</p>
+            <p className="landing-caption">ブラウザ版βではAPIキーを使ってワールドとアイテムを送信できます。スクリプトを含む作品は、デスクトップ版から公開してください。</p>
             <figure className="landing-editor-figure">
               <a href={editorUrl} aria-label="ブラウザ版βを試す" className="landing-screenshot-link">
                 <img
@@ -131,7 +131,7 @@ export default function LandingPage() {
               </a>
             </div>
             <figure className="landing-ai-figure">
-              <img src={assetUrl("editor-ai-panel.webp")} alt="デスクトップ版のAI接続画面。Codex、Claude Codeなどの接続設定を登録できる" width={1760} height={1192} loading="lazy" decoding="async" />
+              <img src={assetUrl("editor-ai-panel.webp")} alt="デスクトップ版のMCP接続画面。Codex、Claude Codeなどの接続設定を登録できる" width={1760} height={1192} loading="lazy" decoding="async" />
             </figure>
           </div>
         </section>

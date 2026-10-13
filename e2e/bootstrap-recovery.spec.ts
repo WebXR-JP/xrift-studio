@@ -67,3 +67,25 @@ test("entryの再実行でキャッシュ済みのアプリ画面を消さない
   await expect(page.getByText("XRift Studioを読み込んでいます…")).toHaveCount(0);
   expect(await page.evaluate(() => window.__XRIFT_RELEASE_E2E__?.calls.some(call => call.command === "entry-state-preserved"))).toBe(true);
 });
+
+test("Sceneの表示と操作にはコードエディターの読み込みを待たない", async ({ page }) => {
+  const codeEditorRequests: string[] = [];
+  page.on("request", request => {
+    const path = new URL(request.url()).pathname;
+    if (/monaco|\/ScriptEditorWorkspace\.|\/ShaderEditorDialog\./i.test(path)) codeEditorRequests.push(path);
+  });
+  await page.goto("/e2e.html?scenario=ready");
+  await expect(page.getByRole("heading", { name: "プロジェクト", exact: true })).toBeVisible();
+  expect(codeEditorRequests).toEqual([]);
+  const opened = await page.evaluate(async () => {
+    const modulePath = "/src/release-e2e/mock-tauri.ts";
+    const { callReleaseE2EMcp } = await import(/* @vite-ignore */ modulePath);
+    return callReleaseE2EMcp("create_project", { name: "startup-runtime-graph", kind: "world", templateId: "blank" });
+  });
+  expect(opened.ok, JSON.stringify(opened)).toBe(true);
+  const hierarchy = page.getByRole("tree", { name: "シーンのEntity階層" });
+  await expect(hierarchy).toBeVisible();
+  await hierarchy.getByText("Box", { exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Inspector" }).getByRole("textbox", { name: "Entity名", exact: true })).toHaveValue("Box");
+  expect(codeEditorRequests).toEqual([]);
+});

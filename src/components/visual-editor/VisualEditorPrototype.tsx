@@ -1,4 +1,11 @@
 import type { ChatgptAssetOptions } from "../../lib/tauri";
+import { ChatgptWorldPanel } from "./ChatgptWorldPanel";
+import { AboutModal } from "../AboutModal";
+import { INITIAL_APP_UPDATE_STATE, type AppUpdateState } from "../../lib/app-updater";
+import { chatgptGenerationMatchesScene, type ChatgptGenerationMode } from "../../lib/visual-editor/chatgpt-generation";
+import type { ChatgptGeneration } from "../../lib/visual-editor/chatgpt-generation";
+import { AiConnectionPanel } from "./AiConnectionPanel";
+import { EditorDialog } from "./EditorDialog";
 import { HierarchyTransferDialog } from "./HierarchyTransferDialog";
 import { useHierarchyTransfer } from "./useHierarchyTransfer";
 import { getHierarchyClipboard } from "../../lib/visual-editor/hierarchy-transfer";
@@ -16,6 +23,8 @@ import { applyMaterialBatchPatch, applyMaterialBatchFieldValue } from "../../lib
 import { authoringFingerprint, authoringStatus, changeAuthoringState, readAuthoringState } from "../../lib/visual-editor/world-authoring";
 import { getWorldComponentAuthoring } from "../../lib/visual-editor/world-component-authoring";
 import {
+  lazy,
+  Suspense,
   startTransition,
   useCallback,
   useEffect,
@@ -376,9 +385,8 @@ import {
   type ScriptCompileError,
 } from "./useScriptRuntime";
 import { useScriptEditor } from "./useScriptEditor";
-import { ScriptEditorWorkspace } from "./ScriptEditorWorkspace";
+import { CodeEditorLoading } from "./CodeEditorLoading";
 import { useShaderEditor } from "./useShaderEditor";
-import { ShaderEditorDialog } from "./ShaderEditorDialog";
 import {
   ScriptTemplateDialog,
   type ScriptTemplateCreateRequest,
@@ -459,6 +467,9 @@ import type {
 import { useTerrainAuthoring } from "./useTerrainAuthoring";
 
 export type { VisualEditorLayout } from "./editor-layout";
+
+const ScriptEditorWorkspace = lazy(() => import("./ScriptEditorWorkspace").then(module => ({ default: module.ScriptEditorWorkspace })));
+const ShaderEditorDialog = lazy(() => import("./ShaderEditorDialog").then(module => ({ default: module.ShaderEditorDialog })));
 
 const IMPORT_RESOURCE_KIND: Readonly<
   Partial<Record<AssetFormatKind, PendingImport["resourceKind"]>>
@@ -689,6 +700,10 @@ export type ExternalAssetsCommit = (update: {
 }) => boolean;
 
 export type VisualEditorMcpProjectBridge = {
+  currentContext: () => { projectId: string; sceneId: string; revision: number; canGenerate: boolean; selectedEntityId?: string };
+  openChatgpt: () => void;
+  /** Apply one generated step only while the captured documents are still current. */
+  applyGenerationStep: (update: { expectedBundle: PrototypeVisualProject; nextBundle: PrototypeVisualProject; entityId?: string }) => boolean;
   /** The Editor's current documents, ahead of any pending autosave. */
   currentBundle: () => PrototypeVisualProject;
   /** Flushes the pending autosave. Resolves to the project path when known. */
@@ -717,7 +732,14 @@ export type VisualEditorPrototypeProps = {
   onProjectExport?: (bundle: PrototypeVisualProject) => void | Promise<void>;
   onProjectImport?: () => void | Promise<void>;
   projectTransferBusy?: boolean;
-  onChatgptGenerate?: (model: string, prompt: string, options: ChatgptAssetOptions) => Promise<void>;
+  onChatgptGenerate?: (model: string, prompt: string, options: ChatgptAssetOptions, mode?: ChatgptGenerationMode) => Promise<void>;
+  onChatgptApplyPlan?: (generationId: string) => Promise<void>;
+  onChatgptCancel?: (generationId: string) => Promise<unknown>;
+  appUpdate?: AppUpdateState;
+  onCheckAppUpdate?: () => void;
+  onShowAppUpdate?: () => void;
+  chatgptGeneration?: ChatgptGeneration | null;
+  chatgptConversation?: readonly ChatgptGeneration[];
   /**
    * 公開ダイアログなど、Editorの外で作られたAsset Manifestの更新を、この
    * セッションの履歴へ取り込むための登録口。外の処理がディスクへ書いた変換を
@@ -948,6 +970,7 @@ function sanitizedImportMessage(error: unknown, projectPath: string): string {
 /** The graph editor's tab in the Scene View's cell. */
 const INTERACTIVITY_GRAPH_TAB_ID = "interactivity-graph";
 const SCRIPT_TAB_ID = "script-editor";
+const CHATGPT_WORLD_TAB_ID = "chatgpt-world";
 
 export function VisualEditorPrototype({
   projectKind,
@@ -962,6 +985,13 @@ export function VisualEditorPrototype({
   onProjectImport,
   projectTransferBusy = false,
   onChatgptGenerate,
+  chatgptGeneration,
+  chatgptConversation = [],
+  onChatgptApplyPlan,
+  onChatgptCancel,
+  appUpdate = INITIAL_APP_UPDATE_STATE,
+  onCheckAppUpdate = () => {},
+  onShowAppUpdate = () => {},
   onRegisterExternalAssetsCommit,
   onRegisterMcpProjectBridge,
   onClassicExport,
@@ -1424,6 +1454,27 @@ export function VisualEditorPrototype({
   const [activeEditorTab, setActiveEditorTab] = useState(SCENE_VIEW_TAB_ID);
   const graphTabActive = activeEditorTab === INTERACTIVITY_GRAPH_TAB_ID;
   const scriptTabActive = activeEditorTab === SCRIPT_TAB_ID;
+  const [chatgptTabVisited, setChatgptTabVisited] = useState(false);
+  const [chatgptTabOpen, setChatgptTabOpen] = useState(false);
+  const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
+  const [appSettingsOpen, setAppSettingsOpen] = useState(false);
+  const sceneChatgptGeneration = chatgptGeneration && chatgptGenerationMatchesScene(chatgptGeneration, bundle.project.projectId, bundle.scene.sceneId) ? chatgptGeneration : null;
+  const openMcpSettings = () => {
+    setMcpSettingsOpen(true);
+    if (!mcpClients.length && !mcpLoading) void refreshMcpClients();
+  };
+  const selectEditorTab = (id: string) => {
+    if (id === CHATGPT_WORLD_TAB_ID) { setViewportMaximized(false); setChatgptTabVisited(true); setChatgptTabOpen(true); }
+    setActiveEditorTab(id);
+    if (id === CHATGPT_WORLD_TAB_ID) setTabletPanel("inspector");
+    else if (phone) setTabletPanel(null);
+  };
+  useEffect(() => {
+    if (!sceneChatgptGeneration || (sceneChatgptGeneration.status !== "running" && sceneChatgptGeneration.status !== "planned")) return;
+    setViewportMaximized(false);
+    setChatgptTabVisited(true); setChatgptTabOpen(true); setActiveEditorTab(CHATGPT_WORLD_TAB_ID);
+    if (tablet) setTabletPanel("inspector");
+  }, [sceneChatgptGeneration?.generationId, sceneChatgptGeneration?.projectId, sceneChatgptGeneration?.status, bundle.project.projectId, bundle.scene.sceneId]);
   const setGraphTabActive = useCallback((active: boolean) => {
     setActiveEditorTab(active ? INTERACTIVITY_GRAPH_TAB_ID : SCENE_VIEW_TAB_ID);
     if (phone && active) setTabletPanel(null);
@@ -5425,6 +5476,23 @@ export function VisualEditorPrototype({
         // lifetime; registering here tells it that Editor tools now have a
         // listener, so it stops answering them with EDITOR_UNAVAILABLE.
         onRegisterMcpProjectBridgeRef.current?.({
+          currentContext: () => ({ projectId: bundleRef.current.project.projectId, sceneId: bundleRef.current.scene.sceneId, revision: mcpRevisionRef.current,
+            selectedEntityId: sceneSelectionRef.current?.id,
+            canGenerate: editorModeRef.current === "edit" && !importBusyRef.current && !projectExportLock.current }),
+          openChatgpt: () => { setViewportMaximized(false); setChatgptTabVisited(true); setChatgptTabOpen(true); setActiveEditorTab(CHATGPT_WORLD_TAB_ID); setTabletPanel("inspector"); },
+          applyGenerationStep: ({ expectedBundle, nextBundle, entityId }) => {
+            if (bundleRef.current !== expectedBundle || editorModeRef.current !== "edit" || importBusyRef.current || projectExportLock.current ||
+              expectedBundle.project.projectId !== nextBundle.project.projectId || expectedBundle.scene.sceneId !== nextBundle.scene.sceneId) return false;
+            mcpRevisionRef.current += 1;
+            mcpRevisionBundleRef.current = nextBundle;
+            saveStatusRef.current = "dirty";
+            if (entityId) { sceneSelectionRef.current = { kind: "entity", id: entityId }; assetSelectionRef.current = null; }
+            setHistory(current => commitEditorHistory(current, { ...current.present, bundle: nextBundle,
+              ...(entityId ? { sceneSelection: { kind: "entity" as const, id: entityId }, entitySelectionIds: [entityId], assetSelection: null } : {}) }));
+            if (entityId) { setSelectedEntityIds([entityId]); setSelectedAssetIds([]); }
+            setSaveStatus("dirty");
+            return true;
+          },
           currentBundle: () => bundleRef.current,
           saveNow: () =>
             mcpProjectBridgeActionsRef.current?.saveNow() ??
@@ -6249,6 +6317,8 @@ export function VisualEditorPrototype({
             ? `「${result.recipe.name}」を「${parentName}」の子へ配置しました`
             : `「${result.recipe.name}」をシーンへ配置しました`,
         );
+        setSelectedEntityIds([result.entityId]);
+        setSelectedAssetIds([]);
         return commitEditorHistory(current, {
           ...current.present,
           bundle: touchProject({
@@ -6256,6 +6326,7 @@ export function VisualEditorPrototype({
             scene,
           }),
           sceneSelection: { kind: "entity", id: result.entityId },
+          entitySelectionIds: [result.entityId],
           assetSelection: null,
         });
       });
@@ -6357,6 +6428,8 @@ export function VisualEditorPrototype({
         setNotice(
           `「${result.assetName}」を${parentName ? `「${parentName}」の子` : "シーン"}へ配置しました`,
         );
+        setSelectedEntityIds([result.entityId]);
+        setSelectedAssetIds([]);
         return commitEditorHistory(current, {
           ...current.present,
           bundle: touchProject({
@@ -6367,6 +6440,7 @@ export function VisualEditorPrototype({
             assets: result.assets,
           }),
           sceneSelection: { kind: "entity", id: result.entityId },
+          entitySelectionIds: [result.entityId],
           assetSelection: null,
         });
       });
@@ -6470,6 +6544,8 @@ export function VisualEditorPrototype({
             ? `「${parentName}」の子に空のEntityを作成しました`
             : "シーンの直下に空のEntityを作成しました",
         );
+        setSelectedEntityIds([result.entityId]);
+        setSelectedAssetIds([]);
         return commitEditorHistory(current, {
           ...current.present,
           bundle: touchProject({
@@ -6477,6 +6553,7 @@ export function VisualEditorPrototype({
             scene: result.scene,
           }),
           sceneSelection: { kind: "entity", id: result.entityId },
+          entitySelectionIds: [result.entityId],
           assetSelection: null,
         });
       });
@@ -6514,6 +6591,8 @@ export function VisualEditorPrototype({
         setNotice(
           `${definition.label}をシーンに追加しました`,
         );
+        setSelectedEntityIds([created.entityId]);
+        setSelectedAssetIds([]);
         return commitEditorHistory(current, {
           ...current.present,
           bundle: touchProject({
@@ -6521,6 +6600,7 @@ export function VisualEditorPrototype({
             scene: added.scene,
           }),
           sceneSelection: { kind: "entity", id: created.entityId },
+          entitySelectionIds: [created.entityId],
           assetSelection: null,
         });
       });
@@ -7378,6 +7458,8 @@ export function VisualEditorPrototype({
             ? "パーティクルと、放出用のEntityを作成しました"
             : `${definition.label} Entityを作成しました`,
         );
+        setSelectedEntityIds([created.entityId]);
+        setSelectedAssetIds([]);
         return commitEditorHistory(current, {
           ...current.present,
           bundle: touchProject({
@@ -7386,6 +7468,7 @@ export function VisualEditorPrototype({
             scene: added.scene,
           }),
           sceneSelection: { kind: "entity", id: created.entityId },
+          entitySelectionIds: [created.entityId],
           assetSelection: null,
         });
       });
@@ -10889,7 +10972,9 @@ export function VisualEditorPrototype({
       return;
     }
     try {
-      await onClassicExport(bundle);
+      if (!(await flushCodeAutosaves())) return;
+      flushInteractivityDraft();
+      await onClassicExport(bundleRef.current);
     } catch (error) {
       setNotice(
         error instanceof Error
@@ -10897,7 +10982,7 @@ export function VisualEditorPrototype({
           : "コードエディターへの書き出しを開始できませんでした",
       );
     }
-  }, [bundle, onClassicExport]);
+  }, [onClassicExport, flushCodeAutosaves, flushInteractivityDraft]);
 
   const runProjectExport = async () => {
     if (!onProjectExport || projectExportLock.current || projectTransferBusy || importBusy || editorMode !== "edit") return;
@@ -11445,7 +11530,7 @@ export function VisualEditorPrototype({
     return entity ? { entityId: entity.id, name: entity.name } : null;
   })();
 
-  const viewportEditorTabs: { id: string; label: string; icon: "graph" | "script"; closable: boolean }[] = interactivityEditorAsset
+  const viewportEditorTabs: { id: string; label: string; icon: "graph" | "script" | "ai"; closable: boolean }[] = interactivityEditorAsset
     ? [
         {
           id: INTERACTIVITY_GRAPH_TAB_ID,
@@ -11461,12 +11546,14 @@ export function VisualEditorPrototype({
     icon: "script",
     closable: true,
   });
+  if (chatgptTabOpen && onChatgptGenerate && bundle.project.projectKind === "world") viewportEditorTabs.push({ id: CHATGPT_WORLD_TAB_ID, label: "ChatGPT", icon: "ai", closable: true });
 
   // The recording view without editor UI is the same layout as a maximized
   // viewport: the frame gets the whole editor area and the panels fold away.
   const recordingUiHidden =
     recordingViewport.visible && !recordingViewport.showEditorUi;
   const panelsHidden = viewportMaximized || recordingUiHidden;
+  const chatgptDockActive = activeEditorTab === CHATGPT_WORLD_TAB_ID && !panelsHidden && (!tablet || tabletPanel === "inspector");
   const sceneContentVisible = !phone || panelsHidden || !tabletPanel;
   const hierarchyTrack = panelsHidden || tablet
     ? "0px"
@@ -11850,12 +11937,14 @@ export function VisualEditorPrototype({
                 ? activeEditorTab
                 : SCENE_VIEW_TAB_ID
             }
-            onSelectTab={setActiveEditorTab}
+            onSelectTab={selectEditorTab}
             onCloseTab={(id) => {
               if (id === SCRIPT_TAB_ID) closeScriptEditor();
               else {
-                setInteractivityEditorAssetId(null);
+                if (id === CHATGPT_WORLD_TAB_ID) setChatgptTabOpen(false);
+                else setInteractivityEditorAssetId(null);
                 setActiveEditorTab((current) => current === id ? SCENE_VIEW_TAB_ID : current);
+                if (phone && activeEditorTab === id) setTabletPanel(null);
               }
             }}
             maximized={viewportMaximized}
@@ -11983,7 +12072,16 @@ export function VisualEditorPrototype({
               },
             }}
           />
-          <div id="editor-panel-inspector" className={sidePanelClass("inspector", true)}>
+          <div id="editor-panel-inspector" className={chatgptDockActive ? `${tablet ? "editor-tablet-panel" : "col-start-3 row-span-2"} flex min-h-0 min-w-0 flex-col overflow-hidden` : sidePanelClass("inspector", true)}>
+          {chatgptTabVisited && onChatgptGenerate ? <section aria-label="ChatGPTの制作チャット"
+            className={chatgptDockActive ? "flex min-h-0 basis-[58%] shrink-0 flex-col overflow-hidden border-l border-b border-editor-border bg-editor-surface p-3 text-xs text-slate-600" : "hidden"}>
+            <ChatgptWorldPanel onGenerate={onChatgptGenerate} generation={sceneChatgptGeneration}
+              onApplyPlan={onChatgptApplyPlan} onCancel={onChatgptCancel}
+              conversation={chatgptConversation.filter(turn => chatgptGenerationMatchesScene(turn, bundle.project.projectId, bundle.scene.sceneId))}
+              onSelectEntity={sceneChatgptGeneration?.projectId === bundle.project.projectId ? entityId => { if (bundle.scene.entities[entityId]) handleEntitySelectionChange([entityId], entityId); } : undefined}
+              disabledReason={renderedReadOnly ? "Playを停止してから依頼を送ってください" : importBusy ? "素材の読み込み完了を待ってください" : undefined} />
+          </section> : null}
+          <div className={chatgptDockActive ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "contents"}>
           <EditorPanelVisibilityContext.Provider value={!panelsHidden && (!tablet || tabletPanel === "inspector")}>
           <InspectorPanel
             scene={bundle.scene}
@@ -12141,6 +12239,7 @@ export function VisualEditorPrototype({
             onApplyMaterialFieldValue={handleApplySelectedMaterialFieldValue}
           />
           </EditorPanelVisibilityContext.Provider>
+          </div>
           </div>
           <div id="editor-panel-assets" className={sidePanelClass("assets", false)}>
           <AssetsPanel
@@ -12363,6 +12462,7 @@ export function VisualEditorPrototype({
             </div>
           ) : null}
           {scriptEditorAsset ? (
+            <Suspense fallback={<CodeEditorLoading kind="script" active={scriptTabActive && sceneContentVisible} onClose={closeScriptEditor} />}>
             <ScriptEditorWorkspace
               assets={bundle.assets}
               active={scriptTabActive && sceneContentVisible}
@@ -12382,8 +12482,28 @@ export function VisualEditorPrototype({
               onAutosaveReady={registerScriptAutosave}
               onClose={closeScriptEditor}
             />
+            </Suspense>
           ) : null}
+          <AboutModal open={appSettingsOpen} onClose={() => setAppSettingsOpen(false)} appUpdate={appUpdate} onCheckAppUpdate={onCheckAppUpdate} onShowAppUpdate={onShowAppUpdate} onOpenMcp={openMcpSettings} />
+          {mcpSettingsOpen ? <EditorDialog onDismiss={() => setMcpSettingsOpen(false)} ariaLabelledBy="mcp-connection-title"
+            backdropClassName="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/25 p-3 sm:p-5"
+            surfaceClassName="flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-editor-border bg-editor-surface shadow-2xl">
+            <header data-app-modal-header className="flex shrink-0 items-center justify-between gap-3 border-b border-editor-border px-4 py-3">
+              <h2 id="mcp-connection-title" className="text-sm font-semibold text-editor-text">MCP接続</h2>
+              <button type="button" aria-label="MCP接続を閉じる" onClick={() => setMcpSettingsOpen(false)}
+                className="flex size-11 shrink-0 items-center justify-center rounded-md text-editor-muted hover:bg-editor-subtle">
+                <EDITOR_ICONS.close size={18} aria-hidden="true" />
+              </button>
+            </header>
+            <div data-app-modal-body className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <AiConnectionPanel nativeAvailable={mcpNativeAvailable} clients={mcpClients} loading={mcpLoading}
+              registeringClientId={mcpRegisteringClientId} error={mcpError} lastActivity={mcpLastActivity}
+              canUndo={!renderedReadOnly && !importBusy && history.past.length > 0 && mcpLastActivity?.revision === mcpRevisionRef.current}
+              onRefresh={() => void refreshMcpClients()} onRegister={clientId => void registerMcpClient(clientId)} onUndo={handleUndo} />
+            </div>
+          </EditorDialog> : null}
           {shaderEditorAsset && shaderEditorRequest?.kind === "asset" ? (
+            <Suspense fallback={<CodeEditorLoading kind="shader" onClose={closeShaderEditor} />}>
             <ShaderEditorDialog
               key={`shader:${shaderEditorAsset.id}`}
               title={shaderEditorAsset.name}
@@ -12397,7 +12517,9 @@ export function VisualEditorPrototype({
               onAutosaveReady={registerShaderAutosave}
               onClose={closeShaderEditor}
             />
+            </Suspense>
           ) : shaderEditorMaterialShader && shaderEditorRequest?.kind === "material" ? (
+            <Suspense fallback={<CodeEditorLoading kind="shader" onClose={closeShaderEditor} />}>
             <ShaderEditorDialog
               key={`material-shader:${shaderEditorRequest.assetId}:${shaderEditorRequest.stage}`}
               title={shaderEditorMaterial?.name ?? "Material Shader"}
@@ -12416,6 +12538,7 @@ export function VisualEditorPrototype({
               onAutosaveReady={registerShaderAutosave}
               onClose={closeShaderEditor}
             />
+            </Suspense>
           ) : null}
           <button
             type="button"
@@ -12485,7 +12608,7 @@ export function VisualEditorPrototype({
             }}
           />
         </main>
-        {!tablet && !recordingUiHidden ? (
+        {!recordingUiHidden ? (
           <footer className="editor-status-dock relative z-40 flex min-h-10 shrink-0 items-center border-t border-editor-border bg-editor-surface px-1"
             aria-label="エディターのステータスバー">
           <EditorUtilityRail
@@ -12494,32 +12617,11 @@ export function VisualEditorPrototype({
               setSceneSettingsOpen((current) => !current);
               if (tablet) { setTabletPanel("inspector"); setViewportMaximized(false); }
             }}
-            onChatgptGenerate={onChatgptGenerate}
-            chatgptDisabledReason={renderedReadOnly ? "Playを停止してから生成してください" : importBusy ? "素材の読み込み完了を待ってください" : undefined}
-            mcpNativeAvailable={mcpNativeAvailable}
-            mcpClients={mcpClients}
-            mcpLoading={mcpLoading}
-            mcpRegisteringClientId={mcpRegisteringClientId}
-            mcpError={mcpError}
-            mcpLastActivity={mcpLastActivity}
-            canUndo={
-              !renderedReadOnly &&
-              !importBusy &&
-              history.past.length > 0 &&
-              mcpLastActivity?.revision === mcpRevisionRef.current
-            }
-            onOpenMcp={() => {
-              if (
-                mcpClients.length === 0 && !mcpLoading
-              ) {
-                void refreshMcpClients();
-              }
-            }}
-            onRefreshMcp={() => void refreshMcpClients()}
-            onRegisterMcpClient={(clientId) => void registerMcpClient(clientId)}
-            onUndo={handleUndo}
+            onOpenSettings={() => setAppSettingsOpen(true)}
+            onOpenChatgpt={onChatgptGenerate && projectKind === "world" ? () => selectEditorTab(CHATGPT_WORLD_TAB_ID) : undefined}
+            touch={touch}
           />
-            <div ref={setAssetStatusHost} className="relative min-w-0 flex-1 self-stretch border-l border-editor-border" />
+            {!tablet ? <div ref={setAssetStatusHost} className="relative min-w-0 flex-1 self-stretch border-l border-editor-border" /> : null}
           </footer>
         ) : null}
         {tablet && !recordingUiHidden && notice && (tabletPanel !== "assets" || panelsHidden) ? (

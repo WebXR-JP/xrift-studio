@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Download,
   ExternalLink,
+  Plug,
   RefreshCw,
   Trash2,
   X,
@@ -13,6 +14,7 @@ import { tauri } from "../lib/tauri";
 import { xrift } from "../lib/xrift-cli";
 import { BrandMark } from "./Brand";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { EditorDialog } from "./visual-editor/EditorDialog";
 import { useToast } from "./Toast";
 import type { AppUpdateState } from "../lib/app-updater";
 import {
@@ -27,6 +29,7 @@ type Props = {
   appUpdate: AppUpdateState;
   onCheckAppUpdate: () => void;
   onShowAppUpdate: () => void;
+  onOpenMcp?: () => void;
 };
 
 type VersionState = {
@@ -45,7 +48,7 @@ const RESET_META: Record<
   runtime: {
     title: "ランタイムをリセット",
     description:
-      "アプリ専用のNode.js、@xrift/cli、ログイン情報を削除します。プロジェクトは残ります。\nアプリの再起動後に、必要なツールを再インストールしてください。",
+      "アプリ専用のNode.js、@xrift/cli、XRiftのログイン情報を削除します。プロジェクトとChatGPTの接続は残ります。\nアプリの再起動後に、必要なツールを再インストールしてください。",
     confirm: "リセットして再起動",
   },
   all: {
@@ -62,6 +65,7 @@ export function AboutModal({
   appUpdate,
   onCheckAppUpdate,
   onShowAppUpdate,
+  onOpenMcp,
 }: Props) {
   const toast = useToast();
   const openLink = useExternalLink();
@@ -144,24 +148,19 @@ export function AboutModal({
 
   return (
     <>
-    <div
-      data-app-modal-backdrop
-      className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/30 backdrop-blur-sm animate-fade-in"
-      onClick={() => !resetting && onClose()}
+    <EditorDialog
+      onDismiss={() => { if (!resetting && resetScope === null) onClose(); }}
+      backdropClassName="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/30 p-3 backdrop-blur-sm animate-fade-in"
+      surfaceClassName="flex max-h-[calc(100dvh-2rem)] w-full max-w-[460px] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-brand-lg animate-scale-in"
+      ariaLabelledBy="settings-title"
     >
-      <div
-        data-app-modal-surface
-        className="flex w-full max-w-[460px] flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-brand-lg animate-scale-in"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="settings-title"
-        onClick={(e) => e.stopPropagation()}
-      >
         <div data-app-modal-header className="relative gradient-brand-soft px-6 pb-5 pt-6">
           <button
             type="button"
             onClick={onClose}
-            className="absolute right-3 top-3 rounded-md p-1 text-zinc-500 hover:bg-white/60 hover:text-zinc-800"
+            disabled={resetting}
+            aria-label="設定を閉じる"
+            className="absolute right-2 top-2 flex size-11 items-center justify-center rounded-md text-zinc-500 hover:bg-white/60 hover:text-zinc-800"
           >
             <X size={14} strokeWidth={2} />
           </button>
@@ -185,6 +184,21 @@ export function AboutModal({
           <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
             XRift Studioは有志が開発する非公式ツールです。ワールドやアイテムを制作し、動作を確認してXRiftに公開できます。
           </div>
+          {onOpenMcp ? (
+            <section aria-label="MCP接続の設定" className="mb-5 rounded-lg border border-zinc-200 bg-zinc-50/60 px-3 py-3">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-800">
+                <Plug size={13} aria-hidden="true" />
+                MCP接続
+              </div>
+              <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
+                外部のAIやMCPクライアントから、ワールドの制作を進められます。
+              </p>
+              <button type="button" disabled={resetting} onClick={() => { onClose(); onOpenMcp(); }}
+                className="mt-2.5 min-h-11 rounded-md border border-zinc-200 bg-white px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300">
+                MCP接続を開く
+              </button>
+            </section>
+          ) : null}
           <div className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
             バージョン
           </div>
@@ -253,7 +267,7 @@ export function AboutModal({
           </div>
         </div>
 
-        <div data-app-modal-footer className="flex items-center justify-between gap-2 border-t border-zinc-100 bg-zinc-50/70 px-5 py-3">
+        <div data-app-modal-footer className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 bg-zinc-50/70 px-5 py-3">
           <button
             type="button"
             onClick={() => openLink("https://docs.xrift.net/")}
@@ -292,13 +306,13 @@ export function AboutModal({
           <button
             type="button"
             onClick={onClose}
+            disabled={resetting}
             className="ml-auto rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-700 hover:bg-zinc-50"
           >
             閉じる
           </button>
         </div>
-      </div>
-    </div>
+    </EditorDialog>
 
     <ConfirmDialog
       open={resetScope !== null}

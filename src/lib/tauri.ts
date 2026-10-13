@@ -4,6 +4,7 @@ import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialo
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { PROJECT_PACKAGE_EXTENSION } from "./project-package";
+import type { VisualPublicationRecord } from "./visual-editor/project-document";
 import {
   AI_LOWPOLY_PROPS_PROVIDER_ID,
   getAiLowpolyPropsAssetOptions,
@@ -29,8 +30,10 @@ import {
   writeBrowserTextFile,
 } from "./browser-project-storage";
 
-export type ChatgptConnection = { signedIn: boolean; email: string | null; planUsageEnabled: boolean };
+export type ChatgptConnection = { signedIn: boolean; email: string | null; accountId?: string | null; planUsageEnabled: boolean; connecting: boolean; restoring?: boolean; error: string | null };
 export type ChatgptModel = { slug: string; displayName: string };
+export type ChatgptGenerationProgress = { generationId: string; stage: "model" | "catalog" | "request" | "receiving"; message: string; receivedCharacters?: number; eventCount?: number };
+export type ChatgptSceneContext = { title: string; selectedEntityId?: string; entities: { id: string; name: string; components: string[]; position: number[]; scale: number[]; rotation: number[] }[] };
 
 export type ProjectKind = "world" | "item";
 export type ProjectFormat = "classic" | "visual";
@@ -163,6 +166,11 @@ export type CompilerPublicationMetadata = {
   id: string;
   createdAt: string;
   lastUploadedAt: string;
+};
+
+/** Native persistence supplies the timestamp from the verified upload sidecar. */
+export type CompilerPublicationRecordInput = Omit<VisualPublicationRecord, "uploadedAt"> & {
+  uploadedAt?: string;
 };
 
 export type VisualAssetImportWrite = {
@@ -603,10 +611,12 @@ export const tauri = {
   persistCompilerPublicationMetadata: (
     authoringProjectPath: string,
     directoryName: string,
+    publication?: CompilerPublicationRecordInput,
   ) =>
     invoke<CompilerPublicationMetadata>("persist_compiler_publication_metadata", {
       authoringProjectPath,
       directoryName,
+      publication,
     }),
   markCompilerUploadStarted: (
     authoringProjectPath: string,
@@ -772,12 +782,14 @@ export const tauri = {
     directoryName: string,
     publicationId: string,
     uploadedAt: string,
+    publication?: CompilerPublicationRecordInput,
   ) =>
     invoke<CompilerPublicationMetadata>("persist_compiler_publication_result", {
       authoringProjectPath,
       directoryName,
       publicationId,
       uploadedAt,
+      publication,
     }),
   writeBinaryFile: (projectPath: string, rel: string, dataUrl: string) =>
     isBrowserProjectPath(projectPath)
@@ -798,7 +810,9 @@ export const tauri = {
   chatgptLogin: () => invoke<ChatgptConnection>("chatgpt_login"),
   chatgptLogout: () => invoke<ChatgptConnection>("chatgpt_logout"),
   chatgptModels: () => invoke<ChatgptModel[]>("chatgpt_models"),
-  chatgptPlan: (model: string, prompt: string, options: ChatgptAssetOptions, gltfMaterials: { id: string; name: string; extension: string }[] = []) => invoke<{ plan: string; assetCandidates: ExternalStoreAsset[] }>("chatgpt_plan", { model, prompt, options, gltfMaterials }),
+  chatgptPlan: (model: string, prompt: string, options: ChatgptAssetOptions, gltfMaterials: { id: string; name: string; extension: string }[] = [], generationId?: string, sceneContext?: ChatgptSceneContext) => invoke<{ plan: string; assetCandidates: ExternalStoreAsset[] }>("chatgpt_plan", { model, prompt, options, gltfMaterials, generationId, sceneContext }),
+  chatgptCancelGeneration: (generationId: string) => invoke<{ generationId: string; cancelled: boolean }>("chatgpt_cancel_generation", { generationId }),
+  onChatgptGenerationProgress: (handler: (progress: ChatgptGenerationProgress) => void) => listen<ChatgptGenerationProgress>("chatgpt-generation-progress", event => handler(event.payload)),
   detectXriftMcpClients: () =>
     invoke<XriftMcpClientStatus[]>("detect_xrift_mcp_clients"),
   registerXriftMcpClient: (clientId: XriftMcpClientId) =>

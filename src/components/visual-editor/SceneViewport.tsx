@@ -1,3 +1,4 @@
+import { createEditorCanvasEvents } from "../../lib/visual-editor/canvas-events";
 import { XRiftStudioMeshColliders, XriftColliderLoadContext } from "../../../packages/xrift-studio-runtime/src/mesh-colliders";
 import { bakeXriftColliderGeometry } from "../../../packages/xrift-studio-runtime/src/mesh-collider-geometry";
 import { XriftPrimitiveGeometry } from "../../../packages/xrift-studio-runtime/src/primitive-geometry";
@@ -922,6 +923,7 @@ function TerrainMeshVisual({
         <XriftMToonMaterial properties={material.properties} textures={materialTextures} doubleSided />
       ) : viewportMaterialStyle === "unlit" ? (
         <meshBasicMaterial
+          key={viewportMaterialStyle}
           color={material?.properties.color ?? "#6b8e4e"}
           map={materialTextures.baseColorMap}
           {...materialSurfaceProps(material?.properties, materialTextures.opacityMap)}
@@ -933,6 +935,7 @@ function TerrainMeshVisual({
       ) : viewportMaterialStyle === "wireframe" ||
         viewportMaterialStyle === "collider-wireframe" ? (
         <meshBasicMaterial
+          key={viewportMaterialStyle}
           color={
             viewportMaterialStyle === "collider-wireframe" ? "#0f766e" : "#52606d"
           }
@@ -945,6 +948,7 @@ function TerrainMeshVisual({
         />
       ) : viewportMaterialStyle === "ghost" ? (
         <meshBasicMaterial
+          key={viewportMaterialStyle}
           color="#64748b"
           transparent
           opacity={0.16}
@@ -1222,6 +1226,7 @@ function PrimitiveMeshVisual({
       <XriftPrimitiveGeometry primitive={primitive} />
       {viewportMaterialStyle === "unlit" ? (
         <meshBasicMaterial
+          key={viewportMaterialStyle}
           color={material?.properties.color ?? "#f43f5e"}
           map={materialTextures.baseColorMap}
           {...materialSurfaceProps(material?.properties, materialTextures.opacityMap)}
@@ -1238,9 +1243,10 @@ function PrimitiveMeshVisual({
           }
         />
       ) : viewportMaterialStyle === "wireframe" ? (
-        <meshBasicMaterial color="#52606d" wireframe />
+        <meshBasicMaterial key={viewportMaterialStyle} color="#52606d" wireframe />
       ) : viewportMaterialStyle === "ghost" ? (
         <meshBasicMaterial
+          key={viewportMaterialStyle}
           color="#64748b"
           transparent
           opacity={0.16}
@@ -1249,6 +1255,7 @@ function PrimitiveMeshVisual({
         />
       ) : viewportMaterialStyle === "collider-wireframe" ? (
         <meshBasicMaterial
+          key={viewportMaterialStyle}
           color="#0f766e"
           wireframe
           transparent
@@ -6551,7 +6558,7 @@ export function SceneViewport({
                   ? editorMode === "play" ? "Play Windowを表示" : "Scene Viewを表示"
                   : tab.icon === "graph"
                     ? `${tab.label}のノードエディターを表示`
-                    : `${tab.label}のスクリプトエディターを表示`;
+                    : tab.icon === "script" ? `${tab.label}のスクリプトエディターを表示` : `${tab.label}を表示`;
                 return (
                   <div
                     key={tab.id}
@@ -7098,7 +7105,7 @@ export function SceneViewport({
               : undefined
           }
         >
-        <Canvas
+        <Canvas events={createEditorCanvasEvents}
           key={projection}
           orthographic={projection === "orthographic"}
           shadows={qualityProfile.shadows ? "percentage" : false}

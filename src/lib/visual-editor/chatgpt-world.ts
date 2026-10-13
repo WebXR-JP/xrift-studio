@@ -7,35 +7,62 @@ type Shape = "box" | "plane" | "sphere" | "cylinder" | "cone";
 type Vec3 = [number, number, number];
 export type ChatgptWorldPlan = { title: string; description: string; objects: {
   name: string; shape: Shape | "model" | "audio"; externalId?: string; materialExternalId?: string; gltfMaterialId?: string; position: Vec3; scale: Vec3; rotation?: Vec3;
-}[] };
+}[]; edits?: { entityId: string; name?: string; position?: Vec3; scale?: Vec3; rotation?: Vec3 }[] };
 const object = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 const keys = (v: Record<string, unknown>, allowed: string[]) => Object.keys(v).every(k => allowed.includes(k));
-function vector(v: unknown, min: number, max: number): Vec3 {
-  if (!Array.isArray(v) || v.length !== 3 || ![...v].every(n => typeof n === "number" && Number.isFinite(n) && n >= min && n <= max)) throw new Error("配置データの数値が不正です");
+const length = (v: string) => [...v].length;
+function vector(v: unknown, min: number, max: number, field: string, index: number): Vec3 {
+  if (!Array.isArray(v) || v.length !== 3 || ![...v].every(n => typeof n === "number" && Number.isFinite(n) && n >= min && n <= max)) {
+    throw new Error(`配置プランの${index + 1}番目: ${field}は${min}から${max}までの数値3つで指定してください。もう一度生成してください`);
+  }
   return [...v] as Vec3;
 }
-export function parseChatgptWorldPlan(text: string, candidates: readonly ExternalStoreAsset[] = [], allowGltfMaterials = false): ChatgptWorldPlan {
+export function parseChatgptWorldPlan(text: string, candidates: readonly ExternalStoreAsset[] = [], allowGltfMaterials = false, entityIds: readonly string[] = []): ChatgptWorldPlan {
   if (text.length > 100000) throw new Error("生成結果が大きすぎます");
   let raw: unknown;
   try { raw = JSON.parse(text); } catch { throw new Error("配置プランを読み取れませんでした。依頼を短くして再試行してください"); }
-  if (!object(raw) || !keys(raw, ["title", "description", "objects"]) || typeof raw.title !== "string" || !raw.title.trim() || raw.title.length > 100 ||
-      typeof raw.description !== "string" || raw.description.length > 600 || !Array.isArray(raw.objects) || raw.objects.length < 1 || raw.objects.length > 32) throw new Error("生成した配置プランが対応範囲を超えています");
-  return { title: raw.title.trim(), description: raw.description, objects: raw.objects.map(v => {
-    if (!object(v) || !keys(v, ["name", "shape", "externalId", "materialExternalId", "gltfMaterialId", "position", "scale", "rotation"]) || typeof v.name !== "string" || !v.name.trim() || v.name.length > 80 ||
-        typeof v.shape !== "string" || !["box", "plane", "sphere", "cylinder", "cone", "model", "audio"].includes(v.shape)) throw new Error("生成したオブジェクトが対応範囲を超えています");
+  if (!object(raw) || !keys(raw, ["title", "description", "objects", "edits"])) throw new Error("配置プランに未対応の項目があります。もう一度生成してください");
+  if (typeof raw.title !== "string" || !raw.title.trim() || length(raw.title) > 100) throw new Error("配置プランのタイトルは1から100文字で指定してください。もう一度生成してください");
+  if (typeof raw.description !== "string" || length(raw.description) > 600) throw new Error("配置プランの説明は600文字以内で指定してください。もう一度生成してください");
+  const editValues = raw.edits ?? [];
+  if (!Array.isArray(raw.objects) || !Array.isArray(editValues) || raw.objects.length + editValues.length < 1 || raw.objects.length + editValues.length > 32) throw new Error("制作プランの追加と調整は合計1から32件で指定してください。範囲を絞ってもう一度依頼してください");
+  const plan: ChatgptWorldPlan = { title: raw.title.trim(), description: raw.description, objects: raw.objects.map((value, index) => {
+    const invalid = (reason: string) => new Error(`配置プランの${index + 1}番目: ${reason}。もう一度生成してください`);
+    if (!object(value) || !keys(value, ["name", "shape", "externalId", "materialExternalId", "gltfMaterialId", "position", "scale", "rotation"])) throw invalid("未対応の項目があります");
+    // Strict Structured Outputs represents optional fields as null. Convert
+    // only the documented optional fields; required values still fail closed.
+    const v = { ...value };
+    for (const key of ["externalId", "materialExternalId", "gltfMaterialId", "rotation"]) if (v[key] === null) delete v[key];
+    if (typeof v.name !== "string" || !v.name.trim() || length(v.name) > 80) throw invalid("名前は1から80文字で指定してください");
+    if (typeof v.shape !== "string" || !["box", "plane", "sphere", "cylinder", "cone", "model", "audio"].includes(v.shape)) throw invalid("形状はbox、plane、sphere、cylinder、cone、model、audioのいずれかで指定してください");
     const externalKind = v.shape === "model" ? "model" : v.shape === "audio" ? "audio" : null;
-    if (externalKind ? (typeof v.externalId !== "string" || !candidates.some(c => c.providerId === (externalKind === "audio" ? "otogura" : "poly-haven") && c.assetKind === externalKind && c.externalId === v.externalId)) : v.externalId !== undefined) throw new Error("カタログにない外部素材が指定されました");
-    if (v.materialExternalId !== undefined && (externalKind !== null || typeof v.materialExternalId !== "string" || !candidates.some(c => c.providerId === "poly-haven" && c.assetKind === "texture" && c.externalId === v.materialExternalId))) throw new Error("カタログにないマテリアルが指定されました");
-    if (v.gltfMaterialId !== undefined && (!allowGltfMaterials || v.shape === "audio" || v.materialExternalId !== undefined || typeof v.gltfMaterialId !== "string" || !getMaterialShowcaseAsset(v.gltfMaterialId))) throw new Error("glTFマテリアルが候補にありません");
-    return { ...(v.gltfMaterialId === undefined ? {} : { gltfMaterialId: v.gltfMaterialId as string }), ...(externalKind ? { externalId: v.externalId as string } : {}), ...(v.materialExternalId === undefined ? {} : { materialExternalId: v.materialExternalId as string }), name: v.name.trim(), shape: v.shape as Shape | "model" | "audio", position: vector(v.position, -50, 50), scale: vector(v.scale, 0.02, 40),
-      ...(v.rotation === undefined ? {} : { rotation: vector(v.rotation, -360, 360) }) };
+    if (externalKind ? (typeof v.externalId !== "string" || !candidates.some(c => c.providerId === (externalKind === "audio" ? "otogura" : "poly-haven") && c.assetKind === externalKind && c.externalId === v.externalId)) : v.externalId !== undefined) throw invalid("この種類で使える外部素材がカタログ候補にありません");
+    if (v.materialExternalId !== undefined && (externalKind !== null || typeof v.materialExternalId !== "string" || !candidates.some(c => c.providerId === "poly-haven" && c.assetKind === "texture" && c.externalId === v.materialExternalId))) throw invalid("マテリアルはプリミティブにカタログ候補から指定してください");
+    if (v.gltfMaterialId !== undefined && (!allowGltfMaterials || v.shape === "audio" || v.materialExternalId !== undefined || typeof v.gltfMaterialId !== "string" || !getMaterialShowcaseAsset(v.gltfMaterialId))) throw invalid("glTFマテリアルは音声以外に候補から1種類だけ指定してください");
+    return { ...(v.gltfMaterialId === undefined ? {} : { gltfMaterialId: v.gltfMaterialId as string }), ...(externalKind ? { externalId: v.externalId as string } : {}), ...(v.materialExternalId === undefined ? {} : { materialExternalId: v.materialExternalId as string }), name: v.name.trim(), shape: v.shape as Shape | "model" | "audio", position: vector(v.position, -50, 50, "位置", index), scale: vector(v.scale, 0.02, 40, "スケール", index),
+      ...(v.rotation === undefined ? {} : { rotation: vector(v.rotation, -360, 360, "回転（度）", index) }) };
   }) };
+  const seen = new Set<string>();
+  plan.edits = editValues.map((value, index) => {
+    if (!object(value) || !keys(value, ["entityId", "name", "position", "scale", "rotation"]) || typeof value.entityId !== "string" || !entityIds.includes(value.entityId) || seen.has(value.entityId)) throw new Error(`調整プランの${index + 1}番目: 現在のSceneのEntityを重複せず指定してください`);
+    seen.add(value.entityId);
+    const v = { ...value };
+    for (const key of ["name", "position", "scale", "rotation"]) if (v[key] === null) delete v[key];
+    if (v.name !== undefined && (typeof v.name !== "string" || !v.name.trim() || length(v.name) > 80)) throw new Error("調整する名前は1から80文字で指定してください");
+    if (["name", "position", "scale", "rotation"].every(key => v[key] === undefined)) throw new Error("調整プランに変更する内容がありません");
+    return { entityId: value.entityId, ...(typeof v.name === "string" ? { name: v.name.trim() } : {}),
+      ...(v.position !== undefined ? { position: vector(v.position, -50, 50, "位置", index) } : {}),
+      ...(v.scale !== undefined ? { scale: vector(v.scale, 0.02, 40, "スケール", index) } : {}),
+      ...(v.rotation !== undefined ? { rotation: vector(v.rotation, -360, 360, "回転（度）", index) } : {}) };
+  });
+  if (!plan.edits.length) delete plan.edits;
+  if (chatgptAssetRequests(plan).length + new Set(plan.objects.flatMap(v => v.gltfMaterialId ? [v.gltfMaterialId] : [])).size > 6) throw new Error("外部素材とglTFマテリアルは合計6種類以内で指定してください。素材の種類を絞ってもう一度生成してください");
+  return plan;
 }
 /** Build a new document set with the same operations used by the live Editor.
  * Never applies model data to the currently open project; no file I/O here. */
 export function buildChatgptWorld(plan: ChatgptWorldPlan, name: string, candidates: readonly ExternalStoreAsset[] = [], allowGltfMaterials = false): StarterVisualProjectPlan {
   const validated = parseChatgptWorldPlan(JSON.stringify(plan), candidates, allowGltfMaterials);
-  if (chatgptAssetRequests(validated).length + new Set(validated.objects.flatMap(v => v.gltfMaterialId ? [v.gltfMaterialId] : [])).size > 6) throw new Error("外部素材は合計6種類以内で指定してください");
   const starter = createStarterVisualProject("world", "blank", name);
   let context: XriftMcpEditorContext = { bundle: starter, sceneSelection: null, assetSelection: null, editorMode: "edit", importBusy: false, revision: 0, saveStatus: "dirty" };
   const apply = (tool: XriftMcpEditorRequest["tool"], args: Record<string, unknown>) => {
