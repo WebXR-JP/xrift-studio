@@ -1,11 +1,14 @@
 import { tauri, type FsEntry } from "../tauri";
 import { xrift } from "../xrift-cli";
 import { createPrototypeProject } from "./prototype-project";
+import { createXriftComponent } from "./component-registry";
+import { compileVisualProject } from "./compiler/compile";
 import { createStagedTypecheckWorldDocuments } from "./compiler/staged-world.fixture";
 import { COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC } from "./compiler/runtime-packages";
 import { createMToonExportFixtureDocuments, MTOON_EXPORT_TEXTURE_ROLES } from "./compiler/mtoon-export.fixture";
 import {
   CLASSIC_EXPORT_MANIFEST_FORMAT,
+  planClassicExportFiles,
   exportVisualProjectToClassic,
   inspectClassicExportTarget,
 } from "./classic-export";
@@ -23,11 +26,12 @@ export async function runClassicExportFixtureAssertions(): Promise<void> {
   const originalEntry = "export const World = () => <group name=\"hand-written\" />;\n";
   const originalViteConfig = "export default { build: { target: 'es2022' } };\n";
   const files = new Map<string, string>([
-    [key(targetPath, "package.json"), `${JSON.stringify({ name: "fixture-classic", private: true, dependencies: { react: "19.2.8", "react-dom": "19.2.8", "@xrift/world-components": "^0.57.1" } }, null, 2)}\n`],
+    [key(targetPath, "package.json"), `${JSON.stringify({ name: "fixture-classic", private: true, dependencies: { react: "19.2.8", "react-dom": "19.2.8", "@xrift/world-components": "^0.57.1", "@xrift/sdk": "0.2.0" } }, null, 2)}\n`],
     [key(targetPath, "xrift.json"), "{}\n"],
     [key(targetPath, "src/World.tsx"), originalEntry],
     [key(targetPath, "vite.config.ts"), originalViteConfig],
     [key(targetPath, "node_modules/@xrift/world-components/package.json"), JSON.stringify({ version: "0.57.1" })],
+    [key(targetPath, "node_modules/@xrift/sdk/package.json"), JSON.stringify({ version: "0.2.0" })],
   ]);
   for (const name of ["react", "react-dom"]) {
     files.set(key(targetPath, `node_modules/${name}/package.json`), JSON.stringify({ version: "19.2.8" }));
@@ -96,6 +100,13 @@ export async function runClassicExportFixtureAssertions(): Promise<void> {
     };
     const target = await inspectClassicExportTarget(targetPath, "world");
     assert(target.packageManager === "npm", "npm target was not detected");
+    const itemDocuments = structuredClone(documents);
+    const itemId = "12345678-1234-1234-1234-123456789abc";
+    const placedItem = createXriftComponent("xrift.item", { properties: { itemId } });
+    assert(placedItem, "Item is registered");
+    itemDocuments.scenes[prototype.scene.sceneId].entities[prototype.scene.rootEntityIds[0]].components.push(placedItem);
+    const itemPlan = planClassicExportFiles(compileVisualProject(itemDocuments), prototype.project.projectId, "world");
+    assert(JSON.stringify(itemPlan.xriftJsonItems) === JSON.stringify([itemId]), "Existing Classic exports surface the Item declaration without replacing author config");
 
     const componentResult = await exportVisualProjectToClassic({
       authoringProjectPath: authoringPath,

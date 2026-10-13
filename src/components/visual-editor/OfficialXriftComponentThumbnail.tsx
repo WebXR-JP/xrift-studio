@@ -22,6 +22,12 @@ export function OfficialXriftComponentStaticPreview({
 }) {
   const portal = definition.importName === "Portal";
   const Icon = EDITOR_ICONS[definition.icon];
+  if (definition.importName === "Item") return (
+    <div className={`flex flex-col items-center justify-center gap-2 rounded-md bg-slate-50 text-xs text-slate-500 ${className}`}>
+      <Icon size={24} aria-hidden="true" />
+      <span>Item IDを指定して表示</span>
+    </div>
+  );
   return (
     <div
       className={`relative overflow-hidden bg-slate-50 ${className}`}

@@ -175,9 +175,47 @@ export function runVisualCompilerFixtureAssertions(
   const second = compileVisualProject(world, { generatedAt: fixedTime });
   assert(JSON.stringify(first) === JSON.stringify(second), "Compiler output is not deterministic");
   assert(first.canStage, "Default world fixture should be stageable");
+  const itemWorld = structuredClone(world);
+  const itemScene = Object.values(itemWorld.scenes)[0];
+  const itemOwner = itemScene.entities[itemScene.rootEntityIds[0]];
+  const itemId = "12345678-1234-1234-1234-123456789abc";
+  for (const componentId of ["placed-item-a", "placed-item-b"]) {
+    const item = createXriftComponent(XRIFT_COMPONENT_SCHEMA_IDS.item, { componentId, properties: { itemId } });
+    assert(item, "Item is registered");
+    itemScene.entities[componentId] = { ...itemOwner, id: componentId, parentId: null, children: [], components: [createTransformComponent(`${componentId}-transform`), item] };
+    itemScene.rootEntityIds.push(componentId);
+  }
+  for (const outputMode of ["classic-jsx", "classic-runtime"] as const) {
+    const compiled = compileVisualProject(itemWorld, { generatedAt: fixedTime, outputMode });
+    assert(compiled.canStage, `Placed Items compile in ${outputMode}: ${JSON.stringify(compiled.diagnostics)}`);
+    const metadata = compiled.overlayFiles.find((file) => file.relativePath === "xrift.json");
+    assert(metadata, "Item World has publication metadata");
+    assert(JSON.stringify(parseWorldConfig(metadata.content).items) === JSON.stringify([itemId]), "Both modes declare deduplicated world.items");
+  }
+  const duplicatePlacement = structuredClone(itemWorld);
+  const duplicateScene = Object.values(duplicatePlacement.scenes)[0];
+  for (const id of ["placed-item-a", "placed-item-b"]) {
+    const component = duplicateScene.entities[id].components.find((entry) => entry.type === "xrift-component");
+    assert(component?.type === "xrift-component", "Placed Item is present");
+    component.properties.placementId = "same-placement";
+  }
+  const duplicateOutput = compileVisualProject(duplicatePlacement);
+  assert(!duplicateOutput.canStage && duplicateOutput.diagnostics.some((entry) => entry.code === "duplicate-xrift-identifier"), "Colliding placement identities block publishing");
+  const tooManyItems = structuredClone(itemWorld);
+  const limitScene = Object.values(tooManyItems.scenes)[0];
+  for (let index = 0; index < 50; index++) {
+    const id = `extra-item-${index}`;
+    const component = createXriftComponent("xrift.item", { componentId: id, properties: { itemId: `${index.toString(16).padStart(8, "0")}-1234-1234-1234-123456789abc` } });
+    assert(component, "Extra Item is registered");
+    limitScene.entities[id] = { ...itemOwner, id, parentId: null, children: [], components: [createTransformComponent(`${id}-transform`), component] };
+    limitScene.rootEntityIds.push(id);
+  }
+  const overLimit = compileVisualProject(tooManyItems);
+  assert(!overLimit.canStage && overLimit.diagnostics.some((entry) => entry.code === "world-item-limit-exceeded"), "More than 50 distinct Items block staging before upload");
   const publicationConfig = first.overlayFiles.find((file) => file.relativePath === "vite.config.ts")?.content ?? "";
   assert(
     publicationConfig.includes("base: './'") &&
+      publicationConfig.includes("xriftDev()") && publicationConfig.includes("@xrift/sdk/vite") &&
       publicationConfig.includes("'xrift-studio-shared-'") &&
       publicationConfig.includes("entryFileNames: flatChunkFileName") &&
       publicationConfig.includes("chunkFileNames: flatChunkFileName") &&

@@ -1,4 +1,4 @@
-import { COMPILER_REACT_PACKAGE_SPECS } from "./compiler/runtime-packages";
+import { COMPILER_REACT_PACKAGE_SPECS, COMPILER_SDK_PACKAGE_SPEC } from "./compiler/runtime-packages";
 import {
   XriftClient,
   parseItemConfig,
@@ -475,6 +475,7 @@ export async function materializeVisualCompilation(
     [
       ...compilation.stagingPlan.runtimePackageSpecs,
       COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
+      COMPILER_SDK_PACKAGE_SPEC,
       ...COMPILER_REACT_PACKAGE_SPECS,
     ],
     onLog,

@@ -82,6 +82,7 @@ export function ExistingScene() {
 
 export function createOfficialXriftComponentSample(importName: string): string {
   const samples: Readonly<Record<string, string>> = {
+    Item: `<Item itemId="12345678-1234-1234-1234-123456789abc" placementId="sample-item" />`,
     Interactable: `<Interactable id="sample-button" interactionText="押す" onInteract={() => {}}>
   <mesh>
     <boxGeometry args={[1, 0.35, 0.2]} />

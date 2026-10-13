@@ -25,6 +25,8 @@ description: XRift Studio MCPでワールドを作成し、配置や景観を調
 
 `list_component_definitions`または`get_world_authoring`の`worldComponents`に、用途、配置の手順、公式のプロパティ定義、既存設備が返る。既存設備を調べてから追加・調整する。現行のタグ選択部品は`TagBoard`であり、別の`TagMarker` APIがあると推測しない。詳しい判断は`references/world-components.md`にある。
 
+自作やライブラリのアイテムを置く場合は、同資料の「Itemを配置する」に従い、公式Itemを使ってください。Item IDと配置ごとのPlacement IDを区別し、公開設定と読み込み結果を確認します。
+
 ## 工程
 
 新規制作では、次の工程を目安にしてください。既存Sceneの状態と依頼内容に合わせて、工程と順序を選びます。小さな変更では、対象と影響する箇所を確認し、全体を作り直す必要はありません。

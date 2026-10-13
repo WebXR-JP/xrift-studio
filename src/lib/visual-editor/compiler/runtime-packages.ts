@@ -20,6 +20,7 @@ import runtimePackageManifest from "../../../../packages/xrift-studio-runtime/pa
  */
 export const COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC =
   "@xrift/world-components@0.57.1";
+export const COMPILER_SDK_PACKAGE_SPEC = "@xrift/sdk@0.2.0";
 
 // Resolve both packages in the same install, including for reused staging
 // projects. A ^19 range can select 19.3, outside the template R3F peer range.

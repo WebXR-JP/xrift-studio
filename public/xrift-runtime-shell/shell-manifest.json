@@ -1,17 +1,17 @@
 {
-  "version": "c54d26367175",
-  "runtimeContract": "2026-10-03-openbrush-loader-v1",
+  "version": "d18d6108602d",
+  "runtimeContract": "2026-10-13-world-items-v1",
   "cliVersion": "0.25.0",
-  "worldComponentsVersion": "0.55.0",
+  "worldComponentsVersion": "0.57.1",
   "entry": "remoteEntry.js",
   "files": [
-    "BufferGeometryUtils-CwFWEHb3.js",
-    "GLTFLoader-C7NcQkJf.js",
-    "Reflector-BWa30lU_.js",
-    "__federation_expose_World-r-_VqjCx.js",
-    "__federation_fn_import-CEp9F42Q.js",
-    "__federation_shared_three/addons/loaders/DRACOLoader.js-BFrhxmOJ.js",
-    "__federation_shared_three/addons/loaders/KTX2Loader.js-C38JUv6C.js",
+    "BufferGeometryUtils-BVYPI6DV.js",
+    "GLTFLoader-NTiG8lxw.js",
+    "Reflector-CCK-QmWQ.js",
+    "__federation_expose_World-ByoYZc9v.js",
+    "__federation_fn_import-DBzjo2-f.js",
+    "__federation_shared_three/addons/loaders/DRACOLoader.js-Blo8Uqvc.js",
+    "__federation_shared_three/addons/loaders/KTX2Loader.js-hE3totWY.js",
     "_commonjsHelpers-BqLXS_qQ.js",
     "basis_transcoder-VXdx5NbI.wasm",
     "basis_transcoder-o4Hde_L7.js",
@@ -20,90 +20,102 @@
     "draco_decoder-fzg4nYZr.js",
     "draco_wasm_wrapper-DxJM36Ib.js",
     "draco_wasm_wrapper-fZCQGLGb.js",
-    "index-BZtvRYkB.js",
-    "index-Bra6T01Q.js",
     "index-CZFAL8r8.js",
     "index-CxGO-1df.js",
+    "index-CyarrCUJ.js",
     "index-D3ouKBRF.js",
+    "index-DAcPjG_Z.js",
     "index-DB1oHa3H.js",
     "index-DFK1Z5k2.js",
+    "index-DaQDyZI7.js",
     "inter-CWDahd6k.js",
-    "material-extension-DyhJvumq.js",
+    "jsx-runtime-BAg69Pif.js",
+    "jsx-runtime-BuyO1Nk4.js",
+    "material-extension-C9Pm8v8j.js",
     "msdf-worker-D6HZN771.js",
     "preload-helper-Dea3Szod.js",
     "rapier-BEkZi1Ii.js",
-    "react-DeHnhjkF.js",
+    "react-qhqJhy0G.js",
     "remoteEntry.js",
-    "troika-three-text.esm-DAhlDsfH.js",
+    "troika-three-text.esm-poPcWKJ8.js",
     "vanilla-BBcibl5N.js",
     "vision_bundle-DJzU6HDp.js",
     "with-selector-CFv1P6u2.js",
     "worker-_Lh8Vt-i.js"
   ],
   "dependencies": {
-    "BufferGeometryUtils-CwFWEHb3.js": [
-      "__federation_fn_import-CEp9F42Q.js"
+    "BufferGeometryUtils-BVYPI6DV.js": [
+      "__federation_fn_import-DBzjo2-f.js"
     ],
-    "GLTFLoader-C7NcQkJf.js": [
-      "__federation_fn_import-CEp9F42Q.js"
+    "GLTFLoader-NTiG8lxw.js": [
+      "__federation_fn_import-DBzjo2-f.js"
     ],
-    "Reflector-BWa30lU_.js": [
-      "__federation_fn_import-CEp9F42Q.js"
+    "Reflector-CCK-QmWQ.js": [
+      "__federation_fn_import-DBzjo2-f.js"
     ],
-    "__federation_expose_World-r-_VqjCx.js": [
-      "GLTFLoader-C7NcQkJf.js",
-      "Reflector-BWa30lU_.js",
-      "__federation_fn_import-CEp9F42Q.js",
-      "__federation_shared_three/addons/loaders/DRACOLoader.js-BFrhxmOJ.js",
-      "__federation_shared_three/addons/loaders/KTX2Loader.js-C38JUv6C.js",
-      "material-extension-DyhJvumq.js",
+    "__federation_expose_World-ByoYZc9v.js": [
+      "GLTFLoader-NTiG8lxw.js",
+      "Reflector-CCK-QmWQ.js",
+      "__federation_fn_import-DBzjo2-f.js",
+      "__federation_shared_three/addons/loaders/DRACOLoader.js-Blo8Uqvc.js",
+      "__federation_shared_three/addons/loaders/KTX2Loader.js-hE3totWY.js",
+      "material-extension-C9Pm8v8j.js",
       "preload-helper-Dea3Szod.js",
-      "troika-three-text.esm-DAhlDsfH.js"
+      "troika-three-text.esm-poPcWKJ8.js"
     ],
-    "__federation_fn_import-CEp9F42Q.js": [],
-    "__federation_shared_three/addons/loaders/DRACOLoader.js-BFrhxmOJ.js": [
-      "__federation_fn_import-CEp9F42Q.js"
+    "__federation_fn_import-DBzjo2-f.js": [],
+    "__federation_shared_three/addons/loaders/DRACOLoader.js-Blo8Uqvc.js": [
+      "__federation_fn_import-DBzjo2-f.js"
     ],
-    "__federation_shared_three/addons/loaders/KTX2Loader.js-C38JUv6C.js": [
-      "__federation_fn_import-CEp9F42Q.js"
+    "__federation_shared_three/addons/loaders/KTX2Loader.js-hE3totWY.js": [
+      "__federation_fn_import-DBzjo2-f.js"
     ],
     "_commonjsHelpers-BqLXS_qQ.js": [],
     "basis_transcoder-o4Hde_L7.js": [],
     "draco_decoder-fzg4nYZr.js": [],
     "draco_wasm_wrapper-DxJM36Ib.js": [],
     "draco_wasm_wrapper-fZCQGLGb.js": [],
-    "index-BZtvRYkB.js": [
-      "__federation_expose_World-r-_VqjCx.js",
-      "__federation_fn_import-CEp9F42Q.js"
+    "index-CZFAL8r8.js": [],
+    "index-CxGO-1df.js": [],
+    "index-CyarrCUJ.js": [
+      "_commonjsHelpers-BqLXS_qQ.js",
+      "index-CZFAL8r8.js"
     ],
-    "index-Bra6T01Q.js": [
-      "__federation_fn_import-CEp9F42Q.js",
+    "index-D3ouKBRF.js": [
+      "index-CZFAL8r8.js"
+    ],
+    "index-DAcPjG_Z.js": [
+      "__federation_fn_import-DBzjo2-f.js",
       "index-CxGO-1df.js",
       "inter-CWDahd6k.js",
       "msdf-worker-D6HZN771.js",
       "preload-helper-Dea3Szod.js"
     ],
-    "index-CZFAL8r8.js": [],
-    "index-CxGO-1df.js": [],
-    "index-D3ouKBRF.js": [
-      "index-CZFAL8r8.js"
-    ],
     "index-DB1oHa3H.js": [],
     "index-DFK1Z5k2.js": [],
+    "index-DaQDyZI7.js": [
+      "__federation_expose_World-ByoYZc9v.js",
+      "__federation_fn_import-DBzjo2-f.js"
+    ],
     "inter-CWDahd6k.js": [],
-    "material-extension-DyhJvumq.js": [
-      "__federation_fn_import-CEp9F42Q.js"
+    "jsx-runtime-BAg69Pif.js": [
+      "_commonjsHelpers-BqLXS_qQ.js",
+      "jsx-runtime-BuyO1Nk4.js"
+    ],
+    "jsx-runtime-BuyO1Nk4.js": [],
+    "material-extension-C9Pm8v8j.js": [
+      "__federation_fn_import-DBzjo2-f.js"
     ],
     "msdf-worker-D6HZN771.js": [],
     "preload-helper-Dea3Szod.js": [],
     "rapier-BEkZi1Ii.js": [],
-    "react-DeHnhjkF.js": [
-      "__federation_fn_import-CEp9F42Q.js",
+    "react-qhqJhy0G.js": [
+      "__federation_fn_import-DBzjo2-f.js",
       "vanilla-BBcibl5N.js"
     ],
     "remoteEntry.js": [],
-    "troika-three-text.esm-DAhlDsfH.js": [
-      "__federation_fn_import-CEp9F42Q.js"
+    "troika-three-text.esm-poPcWKJ8.js": [
+      "__federation_fn_import-DBzjo2-f.js"
     ],
     "vanilla-BBcibl5N.js": [],
     "vision_bundle-DJzU6HDp.js": [],

@@ -104,7 +104,7 @@
       "description": "Entityを配置し、位置、回転、大きさを調整できます。複製、コピー、親子関係、削除の操作も説明します。",
       "group": "basics",
       "file": "objects.md",
-      "keywords": "移動 回転 大きさ 拡大 縮小 複製 削除 親子 Transform Entity",
+        "keywords": "移動 回転 大きさ 拡大 縮小 複製 削除 親子 Transform Entity Item Item ID Placement ID world.items アイテム",
       "related": [
         "assets",
         "prefabs",
@@ -465,6 +465,15 @@
         "publishing",
         "recovery"
       ]
+    },
+    {
+      "slug": "world-items",
+      "title": "ワールドにItemを配置する",
+      "description": "ビジュアル編集とコード編集でItemを配置し、world.itemsの設定とプレビューを確認します。",
+      "group": "create",
+      "file": "world-items.md",
+      "keywords": "Item アイテム Item ID Placement ID world.items コード TSX xriftDev DevEnvironment ライブラリ 宣言",
+      "related": ["objects", "play-mode", "publishing"]
     },
     {
       "slug": "custom-shaders",

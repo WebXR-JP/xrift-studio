@@ -113,6 +113,7 @@ import {
   type SourceDocumentHash,
 } from "../serialization";
 import { sha256Utf8 } from "./hash";
+import { collectWorldItemIds, MAX_WORLD_ITEM_IDS } from "../world-items";
 import { generatePublicationViteConfig } from "./publication-vite-config";
 import { collectRequiredScriptAssetIds } from "../scripting/script-schedule";
 import { createScriptAssetRuntimeDescriptorMap } from "../scripting/asset-runtime";
@@ -391,6 +392,10 @@ export function compileVisualProject(
   const publishPermissions = resolvePublishPermissions([
     ...(usesOpenBrushModels ? [OPEN_BRUSH_PUBLISH_PERMISSION] : []),
   ]);
+  const worldItems = collectWorldItemIds(resolvedEntryScene?.scene ?? null);
+  if (worldItems.length > MAX_WORLD_ITEM_IDS) {
+    diagnostics.push({ severity: "blocking", code: "world-item-limit-exceeded", message: `ワールドに登録できるItem IDは${MAX_WORLD_ITEM_IDS}種類までです。`, sceneId: resolvedEntryScene?.scene.sceneId, fieldPath: "world.items" });
+  }
   const xriftJson = generateXriftJson(
     documents.project.projectKind,
     documents.project.metadata.title,
@@ -402,6 +407,7 @@ export function compileVisualProject(
       ? resolveSceneSettings(resolvedEntryScene.scene.settings)
       : undefined,
     publishPermissions,
+    worldItems,
   );
   const sourcePath =
     documents.project.projectKind === "world" ? "src/World.tsx" : "src/Item.tsx";
@@ -6582,6 +6588,7 @@ function generateXriftJson(
   description: string,
   settings?: SceneSettings,
   permissions?: ResolvedPublishPermissions,
+  items: string[] = [],
 ): string {
   // physics and camera are world-only in xrift.json; an item has neither, and
   // emitting them would produce a config the CLI does not recognise.
@@ -6607,6 +6614,7 @@ function generateXriftJson(
       buildCommand: "npm run build",
       ignore: ["**/.DS_Store", "**/Thumbs.db", "**/*.js.map", "**/*.d.ts", "**/*.d.ts.map", "**/.gitkeep"],
       ...worldSettings,
+      ...(kind === "world" && items.length > 0 ? { items } : {}),
       // `permissions` applies to both kinds, unlike physics and camera above.
       ...publishPermissionsJson(permissions),
     },

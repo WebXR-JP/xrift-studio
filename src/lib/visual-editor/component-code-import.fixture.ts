@@ -12,7 +12,7 @@ import { analyzeOfficialXriftWorldTemplate } from "./official-world-template-imp
 /** Pure assertions for official XRift samples and the safe Drei/R3F adapter. */
 export function runComponentCodeImportFixtureAssertions(): void {
   const definitions = listXriftComponentDefinitions("world");
-  assert(definitions.length === 15, "The official world catalog must contain 15 scene components");
+  assert(definitions.length === 16, "The official world catalog must contain 16 scene components including Item");
 
   for (const definition of definitions) {
     const plan = analyzeComponentCode(

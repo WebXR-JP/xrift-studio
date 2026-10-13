@@ -12,6 +12,8 @@ import {
 } from "../../lib/visual-editor";
 import { EDITOR_ICONS } from "./editor-icons";
 import { ScrubNumberInput } from "./ScrubNumberInput";
+import { retryStudioItemLoading } from "../../lib/visual-editor/xrift-item-loader";
+import { tauri } from "../../lib/tauri";
 
 type Props = {
   component: XRiftComponent;
@@ -34,6 +36,7 @@ export function XRiftComponentInspector({
   onRemove,
 }: Props) {
   const definition = getXriftComponentDefinition(component.schemaId);
+  const [previewApiKey, setPreviewApiKey] = useState("");
   if (!definition) {
     return (
       <section className="rounded-md border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
@@ -123,6 +126,17 @@ export function XRiftComponentInspector({
       </header>
 
       <div className="space-y-3 p-3">
+        {component.schemaId === "xrift.item" ? (
+          <div className="space-y-2 rounded border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-600">
+            <p>公開時のItem一覧は自動生成します。読み込みに失敗したら、ログインとアイテムの利用権を確認して再試行してください。</p>
+            {!tauri.isAvailable() ? <label className="block space-y-1">
+              <span>プレビュー用APIキー</span>
+              <input type="password" disabled={readOnly} value={previewApiKey} onChange={(event) => setPreviewApiKey(event.currentTarget.value)} autoComplete="off" className={INPUT_CLASS} aria-label="Itemプレビュー用APIキー" />
+              <span className="block text-[11px]">このセッションで使います。作品には保存しません。</span>
+            </label> : null}
+            <button type="button" disabled={readOnly || !component.enabled} onClick={() => retryStudioItemLoading(tauri.isAvailable() ? undefined : previewApiKey)} className="rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs hover:bg-slate-100 disabled:opacity-50">Itemを再読み込み</button>
+          </div>
+        ) : null}
         {recipeLocked ? (
           <div className="rounded border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs leading-4 text-slate-600">
             {editableFieldLabels.length > 0
@@ -407,6 +421,7 @@ function renderFieldControl(
   return (
     <input
       type={field.name.toLowerCase().includes("url") || field.name === "src" ? "url" : "text"}
+      aria-label={field.label}
       value={typeof value === "string" ? value : ""}
       disabled={readOnly}
       onChange={(event) => onChange(event.currentTarget.value)}
