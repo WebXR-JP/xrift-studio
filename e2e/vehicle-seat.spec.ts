@@ -115,8 +115,12 @@ test("generated Vehicle and Seat TSX typecheck against the installed official AP
   const host = ts.createCompilerHost(options);
   const read = host.readFile;
   const exists = host.fileExists;
-  host.readFile = filename => files.find(([name]) => name === filename)?.[1] ?? read(filename);
-  host.fileExists = filename => files.some(([name]) => name === filename) || exists(filename);
+  // TypeScript normalizes root names to forward slashes on Windows too.
+  // Resolve both reader requests and virtual file keys to the same spelling.
+  const canonicalName = (filename: string) => host.getCanonicalFileName(path.resolve(filename).replaceAll("\\", "/"));
+  const virtualSources = new Map(files.map(([name, source]) => [canonicalName(name), source]));
+  host.readFile = filename => virtualSources.get(canonicalName(filename)) ?? read(filename);
+  host.fileExists = filename => virtualSources.has(canonicalName(filename)) || exists(filename);
   const program = ts.createProgram(files.map(([name]) => name), options, host);
   const diagnostics = ts.getPreEmitDiagnostics(program);
   expect(diagnostics.map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"))).toEqual([]);
