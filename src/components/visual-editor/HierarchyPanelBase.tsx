@@ -1581,7 +1581,7 @@ export function HierarchyPanel({
       ) : null}
       {dragEntityId || assetDropTarget ? (
         <div
-          className={`flex min-h-9 shrink-0 items-center gap-2 border-b px-3 py-1.5 text-xs font-medium leading-4 ${
+          className={`pointer-events-none absolute inset-x-2 top-11 z-20 flex min-h-9 items-center gap-2 rounded border px-3 py-1.5 text-xs font-medium leading-4 shadow-sm ${
             assetDropTarget
               ? "border-sky-200 bg-sky-50 text-sky-800"
               : dropTarget?.allowed === false
@@ -1626,7 +1626,7 @@ export function HierarchyPanel({
       >
         {dragEntityId || assetDropTarget ? (
           <div
-            className={`mx-2 mb-1 flex min-h-9 items-center justify-center gap-1.5 rounded border border-dashed px-2 text-xs font-semibold transition-colors ${
+            className={`absolute inset-x-2 top-1 z-30 flex ${primaryTouch ? "min-h-11" : "min-h-9"} items-center justify-center gap-1.5 rounded border border-dashed px-2 text-xs font-semibold transition-colors ${
               assetDropTarget?.kind === "root"
                 ? "border-sky-500 bg-sky-100 text-sky-800"
                 : dropTarget?.kind === "root"
