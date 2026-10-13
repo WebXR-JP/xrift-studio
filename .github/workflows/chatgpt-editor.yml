@@ -11,6 +11,10 @@ on:
       - 'src/components/AboutModal.tsx'
       - 'src/components/ProjectLibrary.tsx'
       - 'src/components/StudioLoading.tsx'
+      - 'src/components/ModelViewer.tsx'
+      - 'src/components/visual-editor/*Preview*.tsx'
+      - 'src/components/visual-editor/*Thumbnail*.tsx'
+      - 'src/components/visual-editor/AssetQuickEditor.tsx'
       - 'src/components/visual-editor/EditorDialog.tsx'
       - 'src/components/visual-editor/EditorUtilityRail.tsx'
       - 'src/components/visual-editor/SceneViewport.tsx'
@@ -18,11 +22,13 @@ on:
       - 'src/App.tsx'
       - 'src/lib/tauri.ts'
       - 'src/lib/visual-editor/mcp-tool-registry.ts'
+      - 'src/lib/visual-editor/canvas-events.ts'
       - 'src-tauri/src/mcp.rs'
       - 'src-tauri/src/mcp_tool_names.rs'
       - 'src-tauri/src/lib.rs'
       - 'e2e/chatgpt-tabs.spec.ts'
       - 'e2e/bootstrap-recovery.spec.ts'
+      - 'e2e/canvas-event-lifecycle.*'
       - 'src/*-bootstrap.tsx'
       - 'src/lib/application-bootstrap.*'
       - 'src/release-e2e/mock-tauri.ts'
@@ -65,7 +71,7 @@ jobs:
         run: node scripts/chatgpt-panel-ui.mjs
       - run: pnpm exec playwright install --with-deps chromium
       - name: Verify Editor tabs and MCP generation through the real App
-        run: pnpm exec playwright test e2e/chatgpt-tabs.spec.ts e2e/bootstrap-recovery.spec.ts
+        run: pnpm exec playwright test e2e/chatgpt-tabs.spec.ts e2e/bootstrap-recovery.spec.ts e2e/canvas-event-lifecycle.spec.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:

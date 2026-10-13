@@ -1,3 +1,4 @@
+import { createEditorCanvasEvents } from "../../lib/visual-editor/canvas-events";
 import { Canvas } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
 import { BufferGeometry, DoubleSide, Float32BufferAttribute } from "three";
@@ -66,7 +67,7 @@ export function TerrainPresetCatalogPreview({
       className={`relative overflow-hidden bg-slate-900 ${className}`}
       data-terrain-preset-preview={preset.id}
     >
-      <Canvas
+      <Canvas events={createEditorCanvasEvents}
         frameloop={animated ? "always" : "demand"}
         dpr={[1, 1.5]}
         camera={{

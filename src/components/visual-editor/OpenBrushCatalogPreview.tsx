@@ -1,3 +1,4 @@
+import { createEditorCanvasEvents } from "../../lib/visual-editor/canvas-events";
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -63,7 +64,7 @@ export function OpenBrushCatalogPreview({
       data-open-brush-catalog-preview={entry.brushGuid}
       data-open-brush-preview-state={loadState.status}
     >
-      <Canvas
+      <Canvas events={createEditorCanvasEvents}
         frameloop={compact ? "demand" : "always"}
         dpr={[1, 1.5]}
         camera={{ position: [0, 0.15, 2.7], fov: 34 }}

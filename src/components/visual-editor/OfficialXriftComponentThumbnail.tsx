@@ -1,3 +1,4 @@
+import { createEditorCanvasEvents } from "../../lib/visual-editor/canvas-events";
 import { PerspectiveCamera } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import {
@@ -33,7 +34,7 @@ export function OfficialXriftComponentStaticPreview({
       className={`relative overflow-hidden bg-slate-50 ${className}`}
       data-official-xrift-static-preview={definition.importName}
     >
-      <Canvas
+      <Canvas events={createEditorCanvasEvents}
         frameloop="always"
         dpr={1}
         gl={{ alpha: false, antialias: true, powerPreference: "high-performance" }}
