@@ -11,6 +11,7 @@ test("アプリの読み込み中は状態を表示し、読み込み後は制�
   });
   await page.goto("/e2e.html?scenario=ready", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("status")).toHaveText("XRift Studioを読み込んでいます…");
+  expect(await page.evaluate(() => Boolean(window.__XRIFT_RELEASE_E2E__ && window.__TAURI_INTERNALS__))).toBe(true);
   finish?.();
   await expect(page.getByRole("heading", { name: "プロジェクト", exact: true })).toBeVisible();
   await expect(page.getByText("XRift Studioを読み込んでいます…")).toHaveCount(0);
@@ -31,9 +32,11 @@ test("entryの再実行でキャッシュ済みのアプリ画面を消さない
   await page.goto("/e2e.html?scenario=ready");
   const library = page.getByRole("heading", { name: "プロジェクト", exact: true });
   await expect(library).toBeVisible();
+  await page.evaluate(() => window.__XRIFT_RELEASE_E2E__?.calls.push({ command: "entry-state-preserved" }));
   await page.evaluate(async (entry) => { await import(entry); }, "/src/release-e2e.tsx?entry-reload-test=1");
   await expect(library).toBeVisible();
   await page.evaluate(async (entry) => { await import(entry); }, "/src/release-e2e.tsx?entry-reload-test=2");
   await expect(library).toBeVisible();
   await expect(page.getByText("XRift Studioを読み込んでいます…")).toHaveCount(0);
+  expect(await page.evaluate(() => window.__XRIFT_RELEASE_E2E__?.calls.some(call => call.command === "entry-state-preserved"))).toBe(true);
 });

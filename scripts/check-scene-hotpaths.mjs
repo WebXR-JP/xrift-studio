@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 
 const server = await createServer({ configFile: false, cacheDir: "node_modules/.vite-hotpath-fixtures",
   optimizeDeps: { noDiscovery: true },
-  server: { middlewareMode: true, watch: null, hmr: false } });
+  server: { middlewareMode: true, watch: null, hmr: false, ws: false } });
 try {
 
   const suites = [

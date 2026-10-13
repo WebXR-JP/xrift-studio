@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '..');
 // TypeScript 7 no longer exposes the legacy transpileModule API.
 async function main() {
   const { createServer } = await import('vite');
-  const server = await createServer({ server: { middlewareMode: true }, appType: 'custom', optimizeDeps: { noDiscovery: true, include: [] } });
+  const server = await createServer({ configFile: false, cacheDir: 'node_modules/.vite-water-catalog-check', server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: 'custom', optimizeDeps: { noDiscovery: true, include: [] } });
   let catalog;
   try {
     catalog = await server.ssrLoadModule('/src/lib/visual-editor/water-shader-catalog.ts');

@@ -8,7 +8,7 @@ const path = require('node:path');
 const out=path.resolve(process.argv[2] || path.join(require('node:os').tmpdir(),'xrift-sky-shader-check'));
 async function main() {
 const { createServer } = await import('vite');
-const server = await createServer({server:{middlewareMode:true},appType:'custom',optimizeDeps:{noDiscovery:true,include:[]}});
+const server = await createServer({configFile:false,cacheDir:'node_modules/.vite-sky-catalog-check',server:{middlewareMode:true,hmr:false,ws:false,watch:null},appType:'custom',optimizeDeps:{noDiscovery:true,include:[]}});
 let catalog, quality;
 try {
   catalog = await server.ssrLoadModule('/src/lib/visual-editor/sky-shader-catalog.ts');
