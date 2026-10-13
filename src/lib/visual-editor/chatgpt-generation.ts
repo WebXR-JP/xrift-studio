@@ -36,6 +36,7 @@ export type ChatgptGeneration = {
   mode?: ChatgptGenerationMode;
   cancelling?: boolean;
   model: string;
+  reasoningEffort?: string;
   prompt: string;
   options: ChatgptAssetOptions;
   sourceProjectId: string;

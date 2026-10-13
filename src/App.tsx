@@ -1211,7 +1211,7 @@ function App() {
   const chatgptPlansRef = useRef(new Map<string, { plan: ChatgptWorldPlan; snapshots: Record<string, string>; target: "current" | "new" }>());
   const chatgptControlsRef = useRef(new Map<string, { cancelled: boolean }>());
   const [chatgptGeneration, setChatgptGeneration] = useState<ChatgptGeneration | null>(null);
-  const generateChatgptWorld = async (model: string, prompt: string, options: ChatgptAssetOptions, generationId: string = crypto.randomUUID(), mode: ChatgptGenerationMode = "build", target: "current" | "new" = "current", approved?: ChatgptWorldPlan): Promise<Project | null> => {
+  const generateChatgptWorld = async (model: string, prompt: string, options: ChatgptAssetOptions, generationId: string = crypto.randomUUID(), mode: ChatgptGenerationMode = "build", target: "current" | "new" = "current", approved?: ChatgptWorldPlan, reasoningEffort?: string): Promise<Project | null> => {
     if (chatgptGenerationRef.current) throw new Error("制作の依頼を処理中です。完了するか停止してから、次の依頼を送ってください");
     if (mcpPublishActiveRef.current) throw new Error("公開を処理中です。完了してから制作の依頼を送ってください");
     const sourceId = visualSessionRef.current?.bundle.project.projectId;
@@ -1223,7 +1223,7 @@ function App() {
     chatgptGenerationRef.current = generationId;
     const control = { cancelled: false };
     chatgptControlsRef.current.set(generationId, control);
-    let job: ChatgptGeneration = { ...chatgptGenerationsRef.current.get(generationId), generationId, status: "running", mode, cancelling: false, model, prompt, options: { ...options }, sourceProjectId: sourceId, sourceSceneId, sceneId: sourceSceneId,
+    let job: ChatgptGeneration = { ...chatgptGenerationsRef.current.get(generationId), generationId, status: "running", mode, cancelling: false, model, reasoningEffort, prompt, options: { ...options }, sourceProjectId: sourceId, sourceSceneId, sceneId: sourceSceneId,
       progress: { phase: "planning", message: approved ? "確認したPlanを反映する準備をしています" : "現在のSceneと依頼を確認しています", completed: 0, total: 0, recentEvents: [] } };
     const jobs = chatgptGenerationsRef.current;
     if (!jobs.has(generationId) && jobs.size >= 8) { const oldest = jobs.keys().next().value!; jobs.delete(oldest); chatgptPlansRef.current.delete(oldest); }
@@ -1258,7 +1258,7 @@ function App() {
         phase("planning", progress.message);
       });
       checkCancelled();
-      const result = approved ? null : await tauri.chatgptPlan(model, prompt, options, options.materials ? MATERIAL_SHOWCASE_DEFINITIONS.map(v => ({id: materialShowcaseAssetId(v.key), name: v.name, extension: v.extensionLabel})) : [], generationId, target === "current" ? sceneContext : undefined);
+      const result = approved ? null : await tauri.chatgptPlan(model, prompt, options, options.materials ? MATERIAL_SHOWCASE_DEFINITIONS.map(v => ({id: materialShowcaseAssetId(v.key), name: v.name, extension: v.extensionLabel})) : [], generationId, target === "current" ? sceneContext : undefined, reasoningEffort);
       checkCancelled();
       const plan = approved ?? parseChatgptWorldPlan(result!.plan, result!.assetCandidates, options.materials, sceneContext.entities.map(e => e.id));
       const checkSource = () => {
@@ -1407,15 +1407,15 @@ function App() {
       if (chatgptGenerationRef.current === generationId) chatgptGenerationRef.current = null;
     }
   };
-  const handleChatgptGenerate = async (model: string, prompt: string, options: ChatgptAssetOptions, mode: ChatgptGenerationMode = "build"): Promise<void> => {
-    await generateChatgptWorld(model, prompt, options, crypto.randomUUID(), mode);
+  const handleChatgptGenerate = async (model: string, prompt: string, options: ChatgptAssetOptions, mode: ChatgptGenerationMode = "build", reasoningEffort?: string): Promise<void> => {
+    await generateChatgptWorld(model, prompt, options, crypto.randomUUID(), mode, "current", undefined, reasoningEffort);
   };
   const applyChatgptPlan = async (generationId: string) => {
     const job = chatgptGenerationsRef.current.get(generationId);
     const stored = chatgptPlansRef.current.get(generationId);
     if (!stored || job?.status !== "planned") throw new Error("反映できるPlanがありません。依頼を送ってPlanを作り直してください");
     if (job.sourceProjectId !== visualSessionRef.current?.bundle.project.projectId || job.sourceSceneId !== mcpProjectBridgeRef.current?.currentBundle().scene.sceneId) throw new Error("Planを作成したワールドとSceneを開いてから反映してください");
-    await generateChatgptWorld(job.model, job.prompt, job.options, generationId, "build", stored.target, stored.plan);
+    await generateChatgptWorld(job.model, job.prompt, job.options, generationId, "build", stored.target, stored.plan, job.reasoningEffort);
   };
   const cancelChatgptGeneration = async (generationId: string) => {
     const control = chatgptControlsRef.current.get(generationId);
@@ -1485,8 +1485,9 @@ function App() {
         }
         if (args.mode !== undefined && args.mode !== "build" && args.mode !== "plan") throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "modeにはbuildまたはplanを指定してください");
         if (args.target !== undefined && args.target !== "current" && args.target !== "new") throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "targetにはcurrentまたはnewを指定してください");
+        if (args.reasoningEffort !== undefined && (typeof args.reasoningEffort !== "string" || !["none", "minimal", "low", "medium", "high", "xhigh", "max"].includes(args.reasoningEffort))) throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "reasoningEffortはlist_chatgpt_modelsの対応する思考量から指定してください");
         const generationId = crypto.randomUUID();
-        void generateChatgptWorld(args.model, args.prompt, options as ChatgptAssetOptions, generationId, args.mode ?? "build", args.target ?? "current").catch(() => undefined);
+        void generateChatgptWorld(args.model, args.prompt, options as ChatgptAssetOptions, generationId, args.mode ?? "build", args.target ?? "current", undefined, args.reasoningEffort as string | undefined).catch(() => undefined);
         return { generationId, status: "running", nextActions: ["get_chatgpt_generation"] };
       }
       case "apply_chatgpt_plan": {

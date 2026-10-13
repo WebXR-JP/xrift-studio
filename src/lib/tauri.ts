@@ -31,7 +31,7 @@ import {
 } from "./browser-project-storage";
 
 export type ChatgptConnection = { signedIn: boolean; email: string | null; accountId?: string | null; planUsageEnabled: boolean; connecting: boolean; restoring?: boolean; error: string | null };
-export type ChatgptModel = { slug: string; displayName: string };
+export type ChatgptModel = { slug: string; displayName: string; supportedReasoningEfforts?: string[]; defaultReasoningEffort?: string | null };
 export type ChatgptGenerationProgress = { generationId: string; stage: "model" | "catalog" | "request" | "receiving"; message: string; receivedCharacters?: number; eventCount?: number };
 export type ChatgptSceneContext = { title: string; selectedEntityId?: string; entities: { id: string; name: string; components: string[]; position: number[]; scale: number[]; rotation: number[] }[] };
 
@@ -810,7 +810,7 @@ export const tauri = {
   chatgptLogin: () => invoke<ChatgptConnection>("chatgpt_login"),
   chatgptLogout: () => invoke<ChatgptConnection>("chatgpt_logout"),
   chatgptModels: () => invoke<ChatgptModel[]>("chatgpt_models"),
-  chatgptPlan: (model: string, prompt: string, options: ChatgptAssetOptions, gltfMaterials: { id: string; name: string; extension: string }[] = [], generationId?: string, sceneContext?: ChatgptSceneContext) => invoke<{ plan: string; assetCandidates: ExternalStoreAsset[] }>("chatgpt_plan", { model, prompt, options, gltfMaterials, generationId, sceneContext }),
+  chatgptPlan: (model: string, prompt: string, options: ChatgptAssetOptions, gltfMaterials: { id: string; name: string; extension: string }[] = [], generationId?: string, sceneContext?: ChatgptSceneContext, reasoningEffort?: string) => invoke<{ plan: string; assetCandidates: ExternalStoreAsset[] }>("chatgpt_plan", { model, prompt, options, gltfMaterials, generationId, sceneContext, reasoningEffort }),
   chatgptCancelGeneration: (generationId: string) => invoke<{ generationId: string; cancelled: boolean }>("chatgpt_cancel_generation", { generationId }),
   onChatgptGenerationProgress: (handler: (progress: ChatgptGenerationProgress) => void) => listen<ChatgptGenerationProgress>("chatgpt-generation-progress", event => handler(event.payload)),
   detectXriftMcpClients: () =>

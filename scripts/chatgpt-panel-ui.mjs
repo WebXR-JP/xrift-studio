@@ -21,14 +21,14 @@ const state=()=>({signedIn,email:signedIn?'fixture@example.invalid':null,account
 tauri.chatgptStatus=async()=>{document.body.dataset.statusCalls=String(Number(document.body.dataset.statusCalls??0)+1);await new Promise(r=>setTimeout(r,5));return state();};
 tauri.chatgptLogin=async()=>{signedIn=true;return state();};
 tauri.chatgptLogout=async()=>{signedIn=false;return state();};
-tauri.chatgptModels=async()=>{const requested=account();if(document.body.dataset.modelGate===requested){document.body.dataset.modelWaiting=requested;while(document.body.dataset.modelGate===requested)await new Promise(r=>setTimeout(r,25));document.body.dataset.modelReturned=requested;}return [{slug:requested==='fixture-account-a'?'fixture-model':'fixture-model-'+requested.slice(-1),displayName:'検証用モデル'}];};
+tauri.chatgptModels=async()=>{const requested=account();if(document.body.dataset.modelGate===requested){document.body.dataset.modelWaiting=requested;while(document.body.dataset.modelGate===requested)await new Promise(r=>setTimeout(r,25));document.body.dataset.modelReturned=requested;}return [{slug:requested==='fixture-account-a'?'fixture-model':'fixture-model-'+requested.slice(-1),displayName:'検証用モデル',supportedReasoningEfforts:['low','medium','high'],defaultReasoningEffort:'medium'}];};
 function Harness(){
 const [generation,setGeneration]=useState<ChatgptGeneration|null>(null);
 const release=useRef<(()=>void)|null>(null);
 const make=(model,prompt,options,status):ChatgptGeneration=>({generationId:'fixture-generation',status,model,prompt,options,sourceProjectId:'fixture-world',projectId:'fixture-world',plan:{title:'検証用Plan',description:'床をひとつ追加します',objects:[{name:'床',shape:'plane'}]},progress:{phase:status==='planned'?'planned':'placing',message:status==='planned'?'Planを確認してください':'依頼を反映中です',completed:0,total:1,recentEvents:[]}});
-return <ChatgptWorldPanel generation={generation} onGenerate={async(model,prompt,options,mode)=>{
+return <ChatgptWorldPanel generation={generation} onGenerate={async(model,prompt,options,mode,reasoningEffort)=>{
 await new Promise(r=>setTimeout(r,200));if(prompt==='error')throw new Error('検証用エラー');
-document.body.dataset.result=model+':'+prompt;document.body.dataset.options=JSON.stringify(options);
+document.body.dataset.result=model+':'+prompt;document.body.dataset.options=JSON.stringify(options);document.body.dataset.reasoningEffort=reasoningEffort??'';
 const job=make(model,prompt,options,mode==='plan'?'planned':'running');setGeneration(job);
 if(prompt==='stop'){await new Promise<void>(r=>{release.current=r;});return;}
 if(mode!=='plan'){await new Promise(r=>setTimeout(r,200));setGeneration({...job,status:'completed',progress:{...job.progress,phase:'completed',message:'床を保存しました',completed:1}});}
@@ -58,6 +58,7 @@ try {
   assert.ok(polls - beforePoll >= 2 && polls - beforePoll <= 3, `one status polling loop: ${polls - beforePoll} reads`);
   await page.getByRole("button", { name: "ChatGPTに接続", exact: true }).click();
   await page.getByRole("combobox", { name: "ワールド制作のモデル" }).selectOption("fixture-model");
+  await page.getByRole("combobox", { name: "思考量", exact: true }).selectOption("high");
   await page.getByLabel("ChatGPTアカウント", { exact: true }).click();
   await page.getByText("接続中：fixture@example.invalid", { exact: true }).waitFor();
   await page.getByLabel("ChatGPTアカウント", { exact: true }).click();
@@ -71,6 +72,7 @@ try {
   await generate.click();
   assert.equal(await prompt.isDisabled(), true);
   await page.waitForFunction(() => document.body.dataset.result === "fixture-model:秋の公園");
+  assert.equal(await page.evaluate(() => document.body.dataset.reasoningEffort), "high");
   assert.deepEqual(JSON.parse(await page.evaluate(() => document.body.dataset.options)), {models:true,materials:true,audio:true});
   await page.getByRole("status").filter({ hasText: "床を保存しました" }).waitFor();
   await prompt.fill("Planを相談");

@@ -732,7 +732,7 @@ export type VisualEditorPrototypeProps = {
   onProjectExport?: (bundle: PrototypeVisualProject) => void | Promise<void>;
   onProjectImport?: () => void | Promise<void>;
   projectTransferBusy?: boolean;
-  onChatgptGenerate?: (model: string, prompt: string, options: ChatgptAssetOptions, mode?: ChatgptGenerationMode) => Promise<void>;
+  onChatgptGenerate?: (model: string, prompt: string, options: ChatgptAssetOptions, mode?: ChatgptGenerationMode, reasoningEffort?: string) => Promise<void>;
   onChatgptApplyPlan?: (generationId: string) => Promise<void>;
   onChatgptCancel?: (generationId: string) => Promise<unknown>;
   appUpdate?: AppUpdateState;
@@ -11789,13 +11789,14 @@ export function VisualEditorPrototype({
               className={`rounded-md px-3 py-1.5 text-xs font-semibold ${panelsHidden || !tabletPanel ? "bg-brand-100 text-brand-800" : "text-editor-muted hover:bg-editor-subtle"}`}>シーン</button> : null}
             {([['hierarchy', 'Hierarchy'], ['assets', 'Assets'], ['inspector', 'Inspector']] as const).map(([panel, label]) =>
               <button key={panel} type="button"
-                aria-pressed={!panelsHidden && tabletPanel === panel}
+                aria-pressed={!panelsHidden && tabletPanel === panel && !(phone && chatgptDockActive)}
                 aria-controls={`editor-panel-${panel}`}
                 onClick={() => {
                   setViewportMaximized(false);
+                  if (phone && chatgptDockActive) { setActiveEditorTab(SCENE_VIEW_TAB_ID); setTabletPanel(panel); return; }
                   setTabletPanel((current) => current === panel && !panelsHidden ? null : panel);
                 }}
-                className={`rounded-md px-3 py-1.5 text-xs font-semibold ${!panelsHidden && tabletPanel === panel ? "bg-brand-100 text-brand-800" : "text-editor-muted hover:bg-editor-subtle"}`}
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold ${!panelsHidden && tabletPanel === panel && !(phone && chatgptDockActive) ? "bg-brand-100 text-brand-800" : "text-editor-muted hover:bg-editor-subtle"}`}
               >{label}</button>,
             )}
           </div> : null}
@@ -12074,14 +12075,14 @@ export function VisualEditorPrototype({
           />
           <div id="editor-panel-inspector" className={chatgptDockActive ? `${tablet ? "editor-tablet-panel" : "col-start-3 row-span-2"} flex min-h-0 min-w-0 flex-col overflow-hidden` : sidePanelClass("inspector", true)}>
           {chatgptTabVisited && onChatgptGenerate ? <section aria-label="ChatGPTの制作チャット"
-            className={chatgptDockActive ? "flex min-h-0 basis-[58%] shrink-0 flex-col overflow-hidden border-l border-b border-editor-border bg-editor-surface p-3 text-xs text-slate-600" : "hidden"}>
+            className={chatgptDockActive ? `flex min-h-0 ${phone ? "flex-1" : "basis-[58%] shrink-0"} flex-col overflow-hidden border-l border-b border-editor-border bg-editor-surface p-3 text-xs text-slate-600` : "hidden"}>
             <ChatgptWorldPanel onGenerate={onChatgptGenerate} generation={sceneChatgptGeneration}
               onApplyPlan={onChatgptApplyPlan} onCancel={onChatgptCancel}
               conversation={chatgptConversation.filter(turn => chatgptGenerationMatchesScene(turn, bundle.project.projectId, bundle.scene.sceneId))}
-              onSelectEntity={sceneChatgptGeneration?.projectId === bundle.project.projectId ? entityId => { if (bundle.scene.entities[entityId]) handleEntitySelectionChange([entityId], entityId); } : undefined}
+              onSelectEntity={sceneChatgptGeneration?.projectId === bundle.project.projectId ? entityId => { if (bundle.scene.entities[entityId]) { handleEntitySelectionChange([entityId], entityId); if (phone) { setActiveEditorTab(SCENE_VIEW_TAB_ID); setTabletPanel("inspector"); } } } : undefined}
               disabledReason={renderedReadOnly ? "Playを停止してから依頼を送ってください" : importBusy ? "素材の読み込み完了を待ってください" : undefined} />
           </section> : null}
-          <div className={chatgptDockActive ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "contents"}>
+          <div className={chatgptDockActive ? phone ? "hidden" : "flex min-h-0 flex-1 flex-col overflow-hidden" : "contents"}>
           <EditorPanelVisibilityContext.Provider value={!panelsHidden && (!tablet || tabletPanel === "inspector")}>
           <InspectorPanel
             scene={bundle.scene}

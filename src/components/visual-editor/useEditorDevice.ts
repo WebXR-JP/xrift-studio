@@ -23,7 +23,8 @@ function readEditorDevice(): EditorDevice {
   const viewport = window.visualViewport;
   return {
     tablet,
-    phone: !tablet && (/iPhone|iPod/.test(navigator.userAgent) || primaryTouch),
+    // A narrow desktop window needs the same single-panel layout as a phone.
+    phone: !tablet && (/iPhone|iPod/.test(navigator.userAgent) || primaryTouch || (viewport?.scale === 1 ? viewport.width : window.innerWidth) <= 640),
     touch,
     primaryTouch,
     // Safari's keyboard resizes the visual viewport, not always 100dvh.
