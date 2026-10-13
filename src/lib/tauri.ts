@@ -5,6 +5,12 @@ import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { PROJECT_PACKAGE_EXTENSION } from "./project-package";
 import {
+  AI_LOWPOLY_PROPS_PROVIDER_ID,
+  getAiLowpolyPropsAssetOptions,
+  installAiLowpolyPropsAsset,
+  listAiLowpolyPropsAssets,
+} from "./ai-lowpoly-props-store";
+import {
   getBrowserOtoguraAssetOptions,
   installBrowserOtoguraAsset,
   listBrowserOtoguraAssets,
@@ -205,6 +211,8 @@ export type ExternalStoreAsset = {
   description: string;
   category: string;
   tags: string[];
+  /** Local search aliases supplied by catalogs with multilingual keywords. */
+  searchKeywords?: string[];
   thumbnailUrl: string;
   assetKind: ExternalStoreAssetKind;
   maxResolution?: [number, number] | null;
@@ -651,11 +659,15 @@ export const tauri = {
       sourceRelativePath: sourceRelativePath ?? null,
     }),
   listExternalStoreAssets: (providerId: string) =>
-    !isTauri() && providerId === "otogura"
+    providerId === AI_LOWPOLY_PROPS_PROVIDER_ID
+      ? listAiLowpolyPropsAssets()
+      : !isTauri() && providerId === "otogura"
       ? listBrowserOtoguraAssets()
       : invoke<ExternalStoreAsset[]>("list_external_store_assets", { providerId }),
   getExternalStoreAssetOptions: (providerId: string, externalId: string) =>
-    !isTauri() && providerId === "otogura"
+    providerId === AI_LOWPOLY_PROPS_PROVIDER_ID
+      ? getAiLowpolyPropsAssetOptions(externalId)
+      : !isTauri() && providerId === "otogura"
       ? getBrowserOtoguraAssetOptions(externalId)
       : invoke<ExternalStoreAssetOptions>("get_external_store_asset_options", {
       providerId,
@@ -665,7 +677,9 @@ export const tauri = {
     projectPath: string,
     request: ExternalStoreInstallRequest,
   ) =>
-    isBrowserProjectPath(projectPath) && request.providerId === "otogura"
+    request.providerId === AI_LOWPOLY_PROPS_PROVIDER_ID
+      ? installAiLowpolyPropsAsset(projectPath, request, tauri.commitVisualAssetImport)
+      : isBrowserProjectPath(projectPath) && request.providerId === "otogura"
       ? installBrowserOtoguraAsset(projectPath, request)
       : invoke<ExternalStoreInstallResult>("install_external_store_asset", {
       projectPath,

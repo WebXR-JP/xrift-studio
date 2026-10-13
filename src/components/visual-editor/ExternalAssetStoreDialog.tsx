@@ -1,6 +1,7 @@
 import { useExternalLink } from "../useExternalLink";
 import "./external-asset-store.css";
 import { useEditorDevice } from "./useEditorDevice";
+import { AI_LOWPOLY_PROPS_PROVIDER_ID, matchesAiLowpolyPropsQuery } from "../../lib/ai-lowpoly-props-store";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Boxes,
@@ -154,7 +155,8 @@ export function ExternalAssetStoreDialog({
   useEffect(() => { if (open) setMobilePane("list"); }, [open]);
   const [providerId, setProviderId] = useState<string>(() => tauri.isAvailable() ? DEFAULT_EXTERNAL_STORE_PROVIDER_ID : "xrift-scene-recipes");
   const provider = getExternalStoreProvider(providerId);
-  const remoteAssetsAvailable = tauri.isAvailable() || provider.id === "otogura";
+  const remoteAssetsAvailable = tauri.isAvailable() || provider.id === "otogura"
+    || provider.id === AI_LOWPOLY_PROPS_PROVIDER_ID;
   const [catalogRevision, setCatalogRevision] = useState(0);
   const [assets, setAssets] = useState<ExternalStoreAsset[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -268,6 +270,7 @@ export function ExternalAssetStoreDialog({
       .filter((asset) => kind === "all" || asset.assetKind === kind)
       .filter((asset) => provider.id !== "otogura" || matchesOtoguraAudioFilter(asset, audioFilter))
       .filter((asset) => {
+        if (provider.id === AI_LOWPOLY_PROPS_PROVIDER_ID) return matchesAiLowpolyPropsQuery(asset, query);
         const text = [asset.name, asset.description, asset.category, ...asset.tags]
           .join(" ")
           .toLocaleLowerCase();
@@ -464,7 +467,7 @@ export function ExternalAssetStoreDialog({
           {provider.kind === "remote-assets" && !remoteAssetsAvailable ? (
             <section className="min-w-0 flex-1 overflow-y-auto p-6 text-sm text-editor-text">
               <h3 className="font-semibold">{provider.name}の素材</h3>
-              <p className="mt-3 leading-6">{provider.name}からの直接追加はデスクトップ版で利用できます。ブラウザでは素材をファイルに保存し、上部の「素材を追加」から取り込めます。音蔵の音声はブラウザでも直接追加できます。</p>
+              <p className="mt-3 leading-6">{provider.name}からの直接追加はデスクトップ版で利用できます。ブラウザでは素材をファイルに保存し、上部の「素材を追加」から取り込めます。音蔵の音声とAI LOWPOLY PROPSのモデルはブラウザでも直接追加できます。</p>
               <a href={provider.homepageUrl} target="_blank" rel="noopener noreferrer"
                 className="mt-4 inline-flex min-h-11 items-center rounded-md border border-editor-border px-3 font-semibold text-brand-700">素材サイトを開く</a>
               <p className="mt-4 text-xs leading-5 text-editor-muted">空・海・Terrain・3Dモデルなど、同梱のカタログはiPadでも追加できます。</p>
