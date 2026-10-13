@@ -1206,7 +1206,7 @@ function App() {
     };
   };
 
-  const chatgptGenerationRef = useRef(false);
+  const chatgptGenerationRef = useRef<string | null>(null);
   const chatgptGenerationsRef = useRef(new Map<string, ChatgptGeneration>());
   const chatgptPlansRef = useRef(new Map<string, { plan: ChatgptWorldPlan; snapshots: Record<string, string>; target: "current" | "new" }>());
   const chatgptControlsRef = useRef(new Map<string, { cancelled: boolean }>());
@@ -1220,7 +1220,7 @@ function App() {
     const sourceSceneId = sourceBridge.currentBundle().scene.sceneId;
     if (sourceBridge.currentBundle().project.projectKind !== "world") throw new Error("ワールドのプロジェクトを開いてください");
     if (!sourceBridge.currentContext().canGenerate) throw new Error("Playを停止し、素材の読み込み完了を待ってから依頼を送ってください");
-    chatgptGenerationRef.current = true;
+    chatgptGenerationRef.current = generationId;
     const control = { cancelled: false };
     chatgptControlsRef.current.set(generationId, control);
     let job: ChatgptGeneration = { ...chatgptGenerationsRef.current.get(generationId), generationId, status: "running", mode, cancelling: false, model, prompt, options: { ...options }, sourceProjectId: sourceId, sourceSceneId, sceneId: sourceSceneId,
@@ -1402,7 +1402,10 @@ function App() {
       if (createdProject) await refreshProjects().catch(() => undefined);
       toast({ kind: control.cancelled ? "success" : "error", title: "制作を停止しました", description: message });
       throw error;
-    } finally { unlisten?.(); chatgptControlsRef.current.delete(generationId); chatgptGenerationRef.current = false; }
+    } finally {
+      unlisten?.(); chatgptControlsRef.current.delete(generationId);
+      if (chatgptGenerationRef.current === generationId) chatgptGenerationRef.current = null;
+    }
   };
   const handleChatgptGenerate = async (model: string, prompt: string, options: ChatgptAssetOptions, mode: ChatgptGenerationMode = "build"): Promise<void> => {
     await generateChatgptWorld(model, prompt, options, crypto.randomUUID(), mode);
@@ -2094,6 +2097,12 @@ function App() {
   if (visualSession) {
     const publishBundle = visualPublishBundle;
     const handleVisualEditorBack = () => {
+      // An explicit leave makes this Scene's running request inaccessible.
+      // Abort its native plan; retain the lease until safe cleanup completes.
+      const generationId = chatgptGenerationRef.current;
+      if (generationId) void cancelChatgptGeneration(generationId).catch(error => {
+        toast({ kind: "error", title: "制作の停止を確認できませんでした", description: error instanceof Error ? error.message : String(error) });
+      });
       setVisualPublishBundle(null);
       setVisualClassicExportBundle(null);
       // MCP leave() resolves before React's next render. Publish the closed

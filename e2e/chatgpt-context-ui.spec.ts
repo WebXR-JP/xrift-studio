@@ -68,6 +68,102 @@ async function saved(page: Page) {
   });
 }
 
+function sceneContents(files: VisualProjectFiles) {
+  return files.sceneDocuments.map(file => ({ relativePath: file.relativePath, scene: JSON.parse(file.content) }))
+    .sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+}
+
+for (const destination of ["別World", "同じWorldの別Scene"] as const) {
+  test(`Planの応答待ちから${destination}へ移動すると旧依頼を停止し、新しい依頼を開始できる`, async ({ page }) => {
+    await openFixture(page);
+    const source = await saved(page);
+    let targetPath = source.path;
+    let expectedTarget = source.files;
+    if (destination === "別World") {
+      const created = await call(page, "create_project", { name: "chatgpt-cancel-destination-fixture", kind: "world", templateId: "blank" });
+      expect(created.ok, JSON.stringify(created)).toBe(true);
+      const target = await page.evaluate(async () => {
+        const path = window.__XRIFT_RELEASE_E2E__!.projects.find(project => project.name === "chatgpt-cancel-destination-fixture")!.path;
+        const modulePath = "/src/lib/tauri.ts";
+        return { path, files: await (await import(/* @vite-ignore */ modulePath)).tauri.readVisualProject(path) as VisualProjectFiles };
+      });
+      targetPath = target.path; expectedTarget = target.files;
+      expect((await call(page, "open_project", { path: source.path })).ok).toBe(true);
+      await expect(page.getByRole("tree", { name: "シーンのEntity階層" })).toBeVisible();
+    }
+    await page.evaluate(() => {
+      window.__XRIFT_RELEASE_E2E__!.chatgptPlanGate = true;
+      window.__XRIFT_RELEASE_E2E__!.chatgptPlanFixture = JSON.stringify({ title: "移動前のScene専用Plan", description: "移動後には反映しない",
+        objects: [{ name: "旧依頼だけのSphere", shape: "sphere", position: [1, 1, 1], scale: [1, 1, 1] }] });
+    });
+    let nextGenerationId: string | undefined;
+    try {
+      const { source: context, response } = await generateFresh(page, "移動前のSceneだけへの依頼", destination === "別World" ? "build" : "plan");
+      expect(response.ok, JSON.stringify(response)).toBe(true);
+      const { generationId } = response.result as { generationId: string };
+      await expect.poll(() => page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptPlanWaiting)).toBe(true);
+      expect((await generation(page, generationId)).status).toBe("running");
+      if (destination === "同じWorldの別Scene") {
+        await page.getByRole("button", { name: "プロジェクト一覧へ戻る", exact: true }).click();
+        // Keep Scene A intact and add Scene B only to this page's in-memory files.
+        expectedTarget = await page.evaluate(async ({ path, files }) => {
+          const modulePath = "/src/lib/tauri.ts";
+          const serializationPath = "/src/lib/visual-editor/serialization.ts";
+          const { tauri } = await import(/* @vite-ignore */ modulePath);
+          const { stableSerializeJson } = await import(/* @vite-ignore */ serializationPath);
+          const project = JSON.parse(files.projectJson), scene = JSON.parse(files.sceneDocuments[0].content);
+          const sceneId = `scene-${crypto.randomUUID()}`;
+          scene.sceneId = sceneId;
+          project.scenePaths = { ...project.scenePaths, [sceneId]: "scenes/other.scene.json" };
+          project.entrySceneId = sceneId;
+          const next = { ...files, projectJson: stableSerializeJson(project), sceneDocuments: [
+            ...files.sceneDocuments, { relativePath: "scenes/other.scene.json", content: stableSerializeJson(scene) },
+          ] };
+          await tauri.saveVisualProject(path, next);
+          return next;
+        }, source);
+      }
+      // open_project leaves the previous Editor through the same saved back action.
+      expect((await call(page, "open_project", { path: targetPath })).ok).toBe(true);
+      await expect(page.getByRole("tree", { name: "シーンのEntity階層" })).toBeVisible();
+      await expect.poll(async () => (await generation(page, generationId)).status).toBe("cancelled");
+      expect((await generation(page, generationId)).progress.completed).toBe(0);
+      expect(await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptCancelledGenerations)).toContain(generationId);
+      // The native-equivalent fixture aborted the held request, rather than returning a Plan.
+      expect(await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptPlanGate)).toBe(true);
+      const opened = (await call(page, "get_editor_context")).result as EditorContext;
+      if (destination === "別World") expect(opened.projectId).not.toBe(context.projectId);
+      else { expect(opened.projectId).toBe(context.projectId); expect(opened.sceneId).not.toBe(context.sceneId); }
+      expect((await call(page, "open_chatgpt_panel")).ok).toBe(true);
+      const panel = page.getByRole("region", { name: "ChatGPTの制作チャット", exact: true });
+      await expect(panel).not.toContainText("移動前のSceneだけへの依頼");
+      await expect(panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true })).toBeEnabled();
+
+      const next = await generateFresh(page, "移動後のSceneで始める新しい依頼", "plan");
+      expect(next.response.ok, JSON.stringify(next.response)).toBe(true);
+      nextGenerationId = (next.response.result as { generationId: string }).generationId;
+      await expect.poll(() => page.evaluate(id => window.__XRIFT_RELEASE_E2E__!.chatgptRequests.some(request => request.generationId === id), nextGenerationId!)).toBe(true);
+      expect((await generation(page, nextGenerationId)).status).toBe("running");
+      expect(await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptCancelledGenerations)).not.toContain(nextGenerationId);
+      expect((await call(page, "cancel_chatgpt_generation", { generationId: nextGenerationId })).ok).toBe(true);
+      await expect.poll(async () => (await generation(page, nextGenerationId!)).status).toBe("cancelled");
+      const documents = await page.evaluate(async paths => {
+        const modulePath = "/src/lib/tauri.ts";
+        const { tauri } = await import(/* @vite-ignore */ modulePath);
+        return Promise.all(paths.map(path => tauri.readVisualProject(path) as Promise<VisualProjectFiles>));
+      }, [source.path, targetPath]);
+      if (destination === "別World") expect(sceneContents(documents[0])).toEqual(sceneContents(source.files));
+      else expect(sceneContents(documents[0]).find(file => file.relativePath === source.files.sceneDocuments[0].relativePath)).toEqual(sceneContents(source.files)[0]);
+      expect(sceneContents(documents[1])).toEqual(sceneContents(expectedTarget));
+      expect(await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.uploadAttempts)).toEqual([]);
+      expect(await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.unhandledCommands)).toEqual([]);
+    } finally {
+      if (nextGenerationId) await call(page, "cancel_chatgpt_generation", { generationId: nextGenerationId }).catch(() => undefined);
+      await page.evaluate(() => { window.__XRIFT_RELEASE_E2E__!.chatgptPlanGate = false; }).catch(() => undefined);
+    }
+  });
+}
+
 test("Scene最大化中もfooterとMCPからチャットを開き、入力と制作停止に到達できる", async ({ page }) => {
   await openFixture(page);
   const before = await saved(page);
