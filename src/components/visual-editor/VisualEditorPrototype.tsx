@@ -1,3 +1,4 @@
+import type { ChatgptAssetOptions } from "../../lib/tauri";
 import { HierarchyTransferDialog } from "./HierarchyTransferDialog";
 import { useHierarchyTransfer } from "./useHierarchyTransfer";
 import { getHierarchyClipboard } from "../../lib/visual-editor/hierarchy-transfer";
@@ -716,7 +717,7 @@ export type VisualEditorPrototypeProps = {
   onProjectExport?: (bundle: PrototypeVisualProject) => void | Promise<void>;
   onProjectImport?: () => void | Promise<void>;
   projectTransferBusy?: boolean;
-  onChatgptGenerate?: (model: string, prompt: string) => Promise<void>;
+  onChatgptGenerate?: (model: string, prompt: string, options: ChatgptAssetOptions) => Promise<void>;
   /**
    * 公開ダイアログなど、Editorの外で作られたAsset Manifestの更新を、この
    * セッションの履歴へ取り込むための登録口。外の処理がディスクへ書いた変換を

@@ -1,3 +1,4 @@
+import type { ChatgptAssetOptions } from "../../lib/tauri";
 import { ChatgptWorldPanel } from "./ChatgptWorldPanel";
 import type {
   XriftMcpClientId,
@@ -26,7 +27,7 @@ export function AiConnectionPanel({
   onRegister,
   onUndo,
 }: {
-  onChatgptGenerate?: (model: string, prompt: string) => Promise<void>;
+  onChatgptGenerate?: (model: string, prompt: string, options: ChatgptAssetOptions) => Promise<void>;
   chatgptDisabledReason?: string;
   nativeAvailable: boolean;
   clients: readonly XriftMcpClientStatus[];

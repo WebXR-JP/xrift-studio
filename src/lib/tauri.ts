@@ -198,6 +198,8 @@ export type LocalShaderImportSource = {
   source: string;
 };
 
+export type ChatgptAssetOptions = { models: boolean; materials: boolean; audio: boolean };
+
 export type ExternalStoreAssetKind = "hdri" | "texture" | "model" | "audio";
 export type ExternalStoreFileFormat = "hdr" | "exr";
 
@@ -781,7 +783,7 @@ export const tauri = {
   chatgptLogin: () => invoke<ChatgptConnection>("chatgpt_login"),
   chatgptLogout: () => invoke<ChatgptConnection>("chatgpt_logout"),
   chatgptModels: () => invoke<ChatgptModel[]>("chatgpt_models"),
-  chatgptPlan: (model: string, prompt: string) => invoke<string>("chatgpt_plan", { model, prompt }),
+  chatgptPlan: (model: string, prompt: string, options: ChatgptAssetOptions) => invoke<{ plan: string; assetCandidates: ExternalStoreAsset[] }>("chatgpt_plan", { model, prompt, options }),
   detectXriftMcpClients: () =>
     invoke<XriftMcpClientStatus[]>("detect_xrift_mcp_clients"),
   registerXriftMcpClient: (clientId: XriftMcpClientId) =>
