@@ -11,8 +11,8 @@ name: Release
 #
 # 所要時間の設計:
 #   OS 別ビルドの前に置く検査は verify と release-e2e の 2 job に分け、
-#   同時に走らせる。E2E は主要導線9件に絞り、1台・1 worker で実行する。
-#   個別機能の回帰テストは変更時に選んで実行する。
+#   同時に走らせる。E2E は主要導線とChatGPT・Itemの回帰を1台・1 workerで実行する。
+#   ほかの個別機能の回帰テストは変更時に選んで実行する。
 #   Rust の成果物は src-tauri/target と src-tauri/target-mcp-sidecar の
 #   両方をキャッシュする。sidecar は別の target ディレクトリへ出力するので、
 #   target だけをキャッシュしていた頃は毎回すべての依存を作り直していた。
@@ -91,7 +91,7 @@ jobs:
         run: |
           pnpm runtime:shell:check
           node scripts/prepare-readable-three-vrm.mjs --check
-          node --test scripts/readable-three-vrm.test.mjs
+          node --test scripts/readable-three-vrm.test.mjs scripts/async-map.test.mjs scripts/runtime-shell-fetch.test.mjs scripts/browser-api-key.test.mjs scripts/browser-project-session.test.mjs
 
       # 公開ステージングの tsc をなぞる staged world typecheck を含む。
       # コンパイラが出力するコードが公開ビルドで落ちる退行は、ここで
@@ -131,6 +131,12 @@ jobs:
 
       - name: Run release E2E before upload
         run: pnpm e2e:smoke
+
+      - name: Check ChatGPT tabs and Item cleanup before upload
+        run: pnpm exec playwright test e2e/chatgpt-tabs.spec.ts e2e/world-items.spec.ts
+
+      - name: Check browser publication, credentials and built runtime rendering
+        run: pnpm exec playwright test e2e/browser-item-publish.spec.ts e2e/browser-api-key.spec.ts e2e/browser-mtoon-shell.spec.ts e2e/runtime-shell-audio.spec.ts
 
       - name: Upload E2E failure report
         if: failure()

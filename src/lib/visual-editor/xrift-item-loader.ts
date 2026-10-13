@@ -1,6 +1,7 @@
 import { useMemo, useSyncExternalStore } from "react";
 import { FEDERATION_SHARED_VERSIONS, ItemLoadError, type ItemLoaderContextValue, type LoadedItem } from "@xrift/world-components";
 import { tauri } from "../tauri";
+import { installPositionalAudioCleanup } from "../../../packages/xrift-studio-runtime/src/positional-audio-cleanup";
 
 type FederationScope = Record<string, Record<string, { get: () => Promise<() => unknown>; loaded: boolean; scope: string }>>;
 type ItemContainer = { init: (scope: FederationScope) => Promise<void>; get: (name: string) => Promise<() => { Item?: LoadedItem["Item"] }> };
@@ -46,9 +47,13 @@ export function createStudioItemLoader(
   importItem: ImportItem = (url) => import(/* @vite-ignore */ url),
   getScope: () => Promise<FederationScope> = studioShareScope,
 ): ItemLoaderContextValue {
+  installPositionalAudioCleanup();
   const cache = new Map<string, Promise<LoadedItem>>();
   return {
     load(rawId) {
+      // The official Item calls load even while its Inspector field is empty.
+      // Always reject asynchronously so its error placeholder can handle it.
+      if (typeof rawId !== "string") return Promise.reject(new ItemLoadError("NOT_FOUND", "Item IDにはアイテムのUUIDを指定してください"));
       const id = rawId.trim().toLowerCase();
       if (!UUID.test(id)) return Promise.reject(new ItemLoadError("NOT_FOUND", "Item IDにはアイテムのUUIDを指定してください"));
       const previous = cache.get(id);

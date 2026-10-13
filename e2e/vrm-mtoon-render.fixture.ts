@@ -5,7 +5,7 @@ export { React, createRoot, extend, XRiftProvider } from "./classic-mtoon-export
 export { Physics } from "@react-three/rapier";
 
 /** XRift's player supplies these actual shared modules to a federated World. */
-export async function loadBuiltShellWorld(url: string) {
+export async function loadBuiltShellWorld(url: string, moduleName: "./World" | "./Item" = "./World") {
   const [remote, react, reactDom, reactDomClient, jsx, three, gltf, draco, ktx, fiber, rapier, drei, uikit, components] = await Promise.all([
     import(/* @vite-ignore */ url), import("react"), import("react-dom"), import("react-dom/client"), import("react/jsx-runtime"), import("three"),
     import("three/addons/loaders/GLTFLoader.js"), import("three/addons/loaders/DRACOLoader.js"), import("three/addons/loaders/KTX2Loader.js"),
@@ -18,6 +18,6 @@ export async function loadBuiltShellWorld(url: string) {
     "@react-three/uikit": ["1.0.76", uikit], "@xrift/world-components": ["0.55.0", components],
   };
   remote.init(Object.fromEntries(Object.entries(modules).map(([name, [version, module]]) => [name, { [version]: { get: async () => () => module, loaded: true } }])));
-  const factory = await remote.get("./World");
-  return factory().World;
+  const factory = await remote.get(moduleName);
+  return factory()[moduleName === "./Item" ? "Item" : "World"];
 }

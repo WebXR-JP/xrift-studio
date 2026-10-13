@@ -182,6 +182,7 @@ async function assertBrowserUploadParity(): Promise<void> {
     await uploadVisualProjectFromWeb({
       kind: "world",
       documents,
+      worldId: "fixture-existing-world",
       token: "xrf_fixture",
       readAssetBytes: async (path) => {
         if (path === "assets/pending.png") return textureBytes;
@@ -404,6 +405,12 @@ function assertShellManifestRules(): void {
     manifest.runtimeContract === REQUIRED_RUNTIME_SHELL_CONTRACT,
     "shell runtime contract was not read",
   );
+  assertThrows(
+    () => parseShellManifest(manifest, "item"),
+    "a World-only shell was accepted for Item publication",
+  );
+  const sharedShell = parseShellManifest({ ...manifest, modules: ["./World", "./Item"] }, "item");
+  assert(sharedShell.modules.includes("./Item"), "the shared shell must expose Item");
 
   // XRift loads the world as a Module Federation remote, so a listing without
   // remoteEntry.js would upload cleanly and then render nothing.
@@ -474,8 +481,8 @@ function assertCapabilities(): void {
 
   const web = describeVisualUploadCapabilities("web");
   assert(
-    !web.supportsItems,
-    "Items need the official CLI and must stay desktop-only",
+    web.supportsItems,
+    "the shared runtime shell supports Item publication from the browser",
   );
   assert(
     !web.supportsScripts,

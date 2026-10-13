@@ -2,6 +2,7 @@ import meshColliderStatusSource from "../../../../packages/xrift-studio-runtime/
 import meshColliderGeometrySource from "../../../../packages/xrift-studio-runtime/src/mesh-collider-geometry.ts?raw";
 import meshCollidersSource from "../../../../packages/xrift-studio-runtime/src/mesh-colliders.tsx?raw";
 import primitiveGeometrySource from "../../../../packages/xrift-studio-runtime/src/primitive-geometry.tsx?raw";
+import positionalAudioCleanupSource from "../../../../packages/xrift-studio-runtime/src/positional-audio-cleanup.ts?raw";
 import { opacityShaderChunk } from "../material-surface";
 import { createRigidBodyComponent } from "../scene-document";
 import { collectModelInstancingEntities } from "../model-instancing";
@@ -1405,6 +1406,11 @@ function generateComponentSource(
   diagnoseReferencedUnsupportedAssets(context);
 
   const worldImports = [...context.imports].sort();
+  if (worldImports.includes("Item")) {
+    context.extraImports.add('import { installPositionalAudioCleanup } from "./xrift-studio/positional-audio-cleanup";');
+    context.supportDeclarations.set("positional-audio-cleanup", "installPositionalAudioCleanup();");
+    context.runtimeOverlayFiles.set("src/xrift-studio/positional-audio-cleanup.ts", compilerFile("src/xrift-studio/positional-audio-cleanup.ts", positionalAudioCleanupSource, "source"));
+  }
   const threeValueImports = new Set(context.threeValueImports);
   if (context.usesDoubleSide) threeValueImports.add("DoubleSide");
   // A value import already binds the name in type space too, so emitting the

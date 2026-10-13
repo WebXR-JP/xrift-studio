@@ -97,6 +97,9 @@ if (!cliVersion || manifest.cliVersion !== cliVersion) {
 if (manifest.entry !== "remoteEntry.js") {
   throw new Error(`Runtime shell entry must be remoteEntry.js (detected ${manifest.entry ?? "missing"})`);
 }
+if (!Array.isArray(manifest.modules) || !["./World", "./Item"].every(module => manifest.modules.includes(module))) {
+  throw new Error("Runtime shell must expose both ./World and ./Item; rebuild before release");
+}
 if (!Array.isArray(manifest.files) || !manifest.files.includes("remoteEntry.js")) {
   throw new Error("Runtime shell manifest does not list remoteEntry.js");
 }
@@ -108,17 +111,31 @@ const exposedWorld = await fs.readFile(
   path.join(repoRoot, "public", "xrift-runtime-shell", exposedWorldFiles[0]),
   "utf8",
 );
+const runtimeSources = (await Promise.all(manifest.files.filter(file => file.endsWith(".js")).map(file =>
+  fs.readFile(path.join(repoRoot, "public", "xrift-runtime-shell", file), "utf8")))).join("\n");
+const entrySource = await fs.readFile(path.join(repoRoot, "public", "xrift-runtime-shell", "remoteEntry.js"), "utf8");
+for (const module of ["./World", "./Item"]) {
+  if (!entrySource.includes(JSON.stringify(module)) && !entrySource.includes(`'${module}'`)) {
+    throw new Error(`Runtime shell entry is missing ${module}`);
+  }
+}
+const exposedItemFiles = manifest.files.filter(file => /^__federation_expose_Item-[^/]+\.js$/.test(file));
+if (exposedItemFiles.length !== 1) throw new Error("Runtime shell must contain one exposed Item chunk");
+const exposedItem = await fs.readFile(path.join(repoRoot, "public", "xrift-runtime-shell", exposedItemFiles[0]), "utf8");
+if (!exposedItem.includes(shellManifestUrl) || !/\bjsx\w*\(XriftItem,\s*\{\s*manifest:\s*MANIFEST_URL\s*\}\)/.test(exposedItem)) {
+  throw new Error("Runtime shell Item must load the authored manifest through the compiler's XriftItem adapter");
+}
 const readableVrm = await fs.readFile(readableVrmPath, "utf8");
 const upstreamSha = readableVrm.match(/Original lib\/three-vrm\.module\.js SHA-256: ([a-f0-9]{64})/)?.[1];
 for (const marker of ["VRMC_materials_mtoon", "xriftVrm0CompatShade", "VRMLoaderPlugin", "vrmDefineEnumerableProperty", "Copyright (c) 2019-2026 pixiv Inc.", upstreamSha]) {
-  if (!marker || !exposedWorld.includes(marker)) {
+  if (!marker || !runtimeSources.includes(marker)) {
     throw new Error(`Bundled Runtime shell is missing the shared MToon/VRM code or pinned license: ${marker ?? "upstream SHA"}`);
   }
 }
 if (!exposedWorld.includes(shellManifestUrl)) {
   throw new Error(`Bundled Runtime shell must load the uploaded ${uploadedManifest} from the world root`);
 }
-if (!exposedWorld.includes("createOpenBrushMaterialExtension")) {
+if (!runtimeSources.includes("createOpenBrushMaterialExtension")) {
   throw new Error("Bundled Runtime shell must use the editor's shared Open Brush material loader");
 }
 if (exposedWorld.includes("__vite__mapDeps")) {

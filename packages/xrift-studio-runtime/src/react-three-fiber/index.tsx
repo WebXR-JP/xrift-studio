@@ -1,4 +1,5 @@
 import { XRiftStudioMeshColliders } from "../mesh-colliders.js";
+import { installPositionalAudioCleanup } from "../positional-audio-cleanup.js";
 import { resolveXriftRuntimePhysicsMode, type XriftRuntimePhysicsSetting } from "../physics-mode.js";
 import { XriftModelInstancing } from "../script/model-instancing.js";
 import { XriftShadowMapSettings, type XriftShadowMapType } from "../script/light.js";
@@ -148,6 +149,7 @@ function XriftRuntimeScene({
   physics,
   expectedKind,
 }: XriftRuntimeSceneProps & { expectedKind: "world" | "item" }) {
+  installPositionalAudioCleanup();
   const renderer = useThree((state) => state.gl);
   const loader = useMemo(
     () => new XriftThreeLoader({ assetBaseUrl, renderer }),
@@ -1017,7 +1019,7 @@ function XriftRuntimeInteractionTriggers({ result }: { result: XriftLoadResult }
           return [];
         }
         return [
-          createPortal(
+          <Fragment key={`${entity.id}:${component.id}`}>{createPortal(
             <XriftInteractionTriggerRuntime
               key={`${entity.id}:${component.id}`}
               entityId={entity.id}
@@ -1026,7 +1028,7 @@ function XriftRuntimeInteractionTriggers({ result }: { result: XriftLoadResult }
               order={order}
             />,
             target,
-          ),
+          )}</Fragment>,
         ];
       });
     });
@@ -1058,7 +1060,7 @@ function XriftRuntimeParticleAdapters({ result }: { result: XriftLoadResult }) {
         const config = parseRuntimeParticleConfig(asset.properties);
         if (!config) return [];
         return [
-          createPortal(
+          <Fragment key={`${entity.id}:${component.id}`}>{createPortal(
             <XriftScriptParticleEmitter
               key={`${entity.id}:${component.id}`}
               config={config}
@@ -1066,7 +1068,7 @@ function XriftRuntimeParticleAdapters({ result }: { result: XriftLoadResult }) {
               opacity={1}
             />,
             target,
-          ),
+          )}</Fragment>,
         ];
       });
     });
@@ -1088,7 +1090,7 @@ function XriftRuntimeAudioAdapters({ result }: { result: XriftLoadResult }) {
           : undefined;
         if (!asset || asset.kind !== "audio") return [];
         return [
-          createPortal(
+          <Fragment key={`${entity.id}:${component.id}`}>{createPortal(
             <XriftAudioSource
               key={`${entity.id}:${component.id}`}
               componentId={component.id}
@@ -1105,7 +1107,7 @@ function XriftRuntimeAudioAdapters({ result }: { result: XriftLoadResult }) {
               maxDistance={numberOr(component.maxDistance, 10000, 0)}
             />,
             target,
-          ),
+          )}</Fragment>,
         ];
       });
     });

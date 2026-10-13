@@ -17,8 +17,8 @@ function deferred() {
   return { promise, resolve };
 }
 
-function fixture() {
-  const bundle = createPrototypeProject("world", "session-world");
+function fixture(kind = "world") {
+  const bundle = createPrototypeProject(kind, `session-${kind}`);
   const secondScene = { ...bundle.scene, sceneId: "second-scene", name: "Second scene" };
   bundle.project = { ...bundle.project, scenePaths: { ...bundle.project.scenePaths, [secondScene.sceneId]: "scenes/second.scene.json" } };
   const documents = { project: bundle.project, scenes: { [bundle.scene.sceneId]: bundle.scene, [secondScene.sceneId]: secondScene }, assets: bundle.assets, prefabs: bundle.prefabs };
@@ -117,15 +117,16 @@ test("failed saves can be retried and cannot switch the project identity", async
   assert.equal(f.events.filter((event) => event === "release").length, 1);
 });
 
-test("a successful upload target survives an older autosave and a later version", async () => {
-  const f = fixture();
+for (const kind of ["world", "item"]) {
+test(`a successful ${kind} upload target survives an older autosave and a later version`, async () => {
+  const f = fixture(kind);
   const session = await openBrowserProjectSession("project", f.backend);
   const first = {
-    worldId: "world-1", contentId: "world-1", versionId: "version-1",
+    [`${kind}Id`]: `${kind}-1`, contentId: `${kind}-1`, versionId: "version-1",
     versionNumber: 1, contentHash: "hash-1", uploadedAt: "2026-09-24T12:00:00.000Z",
   };
   const published = await session.recordPublication(f.bundle, first);
-  assert.equal(published.project.lastPublication?.worldId, "world-1");
+  assert.equal(published.project.lastPublication?.[`${kind}Id`], `${kind}-1`);
   assert.equal(f.saved().project.lastPublication?.versionId, "version-1");
   await session.save(f.edit("edited after upload"));
   assert.equal(f.saved().project.metadata.title, "edited after upload");
@@ -135,8 +136,11 @@ test("a successful upload target survives an older autosave and a later version"
   await session.recordPublication(f.bundle, second);
   await session.save(f.edit("stale snapshot"));
   assert.equal(f.saved().project.lastPublication?.versionId, "version-2");
+  await assert.rejects(session.recordPublication(f.bundle, { ...first, [kind === "item" ? "worldId" : "itemId"]: "other-kind" }), /保存できません/);
+  assert.equal(f.saved().project.lastPublication?.versionId, "version-2");
   await session.close();
 });
+}
 
 test("an upload result can be saved after the first local write fails", async () => {
   const f = fixture();

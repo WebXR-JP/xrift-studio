@@ -5,12 +5,14 @@ import {
   XriftClient,
   filterFiles,
   getMimeType,
+  parseItemConfig,
   parseWorldConfig,
   type UploadFile,
   type WorldPermissions,
-  type XriftWorldConfig,
+  type XriftConfig,
 } from "@xrift/sdk";
 import type { ProjectKind } from "../tauri";
+import { mapWithConcurrency } from "../async-map";
 import { compileVisualProject } from "./compiler";
 import type { VisualCompilerDocuments } from "./compiler";
 import { loadCompilerBundledAssetBytes } from "./compiler-bundled-assets";
@@ -49,7 +51,7 @@ export const DEFAULT_SHELL_BASE_URL = "./xrift-runtime-shell";
 const SHELL_MANIFEST_FILE = "shell-manifest.json";
 /** The shell must be rebuilt when Runtime adapters change. */
 export const REQUIRED_RUNTIME_SHELL_CONTRACT =
-  "2026-10-13-world-items-v1" as const;
+  "2026-10-13-world-items-audio-v2" as const;
 
 /**
  * One file of the prebuilt runtime shell.
@@ -86,6 +88,10 @@ export type WebUploadRequest = {
   thumbnail?: Uint8Array;
   /** Publishes a new version of this world instead of creating one. */
   worldId?: string;
+  /** Publishes a new version of this Item instead of creating one. */
+  itemId?: string;
+  /** Host persists a newly created target before upload continues. No token is included. */
+  onRemoteCreated?: (id: string) => Promise<void>;
   report: (progress: VisualPublishPipelineProgress) => void;
   signal: AbortSignal;
 };
@@ -93,7 +99,7 @@ export type WebUploadRequest = {
 export class WebUploadUnsupportedError extends Error {
   constructor(
     readonly code:
-      | "item-unsupported"
+      | "kind-mismatch"
       | "shell-missing"
       | "scripts-unsupported"
       | "token-invalid",
@@ -196,7 +202,7 @@ async function prepareWebUpload(
     WebUploadRequest,
     "documents" | "readAssetBytes" | "shellFiles" | "thumbnail" | "signal"
   >,
-): Promise<{ files: UploadFile[]; config: XriftWorldConfig }> {
+): Promise<{ files: UploadFile[]; config: XriftConfig }> {
   const compilation = compileVisualProject(request.documents, {
     outputMode: "classic-runtime",
   });
@@ -211,7 +217,9 @@ async function prepareWebUpload(
   }
   // The desktop SDK path parses this same generated config. Keep its metadata,
   // security permissions and hash-affecting options aligned with that path.
-  const config = parseWorldConfig(configSource);
+  const config = request.documents.project.projectKind === "item"
+    ? parseItemConfig(configSource)
+    : parseWorldConfig(configSource);
 
   if (request.shellFiles.length === 0) {
     throw new WebUploadUnsupportedError(
@@ -293,6 +301,8 @@ export type ShellManifest = {
   entry: string;
   files: string[];
   dependencies: Record<string, string[]>;
+  /** Module Federation surfaces verified by the builder. */
+  modules: string[];
 };
 
 /**
@@ -304,6 +314,8 @@ export type ShellManifest = {
 export async function loadRuntimeShell(
   baseUrl: string = DEFAULT_SHELL_BASE_URL,
   signal?: AbortSignal,
+  kind: ProjectKind = "world",
+  onProgress?: (completed: number, total: number) => void,
 ): Promise<RuntimeShellFile[]> {
   const root = baseUrl.replace(/\/+$/, "");
   const response = await fetch(`${root}/${SHELL_MANIFEST_FILE}`, {
@@ -319,8 +331,9 @@ export async function loadRuntimeShell(
 
   let manifest: ShellManifest;
   try {
-    manifest = parseShellManifest(await response.json());
+    manifest = parseShellManifest(await response.json(), kind);
   } catch (error) {
+    if (signal?.aborted) throwIfAborted(signal);
     throw new WebUploadUnsupportedError(
       "shell-missing",
       error instanceof Error
@@ -328,30 +341,43 @@ export async function loadRuntimeShell(
         : "ランタイムシェルの契約を確認できませんでした。",
     );
   }
-  const files: RuntimeShellFile[] = [];
-  for (const path of manifest.files) {
-    if (signal?.aborted) {
-      throw new DOMException("The operation was aborted", "AbortError");
-    }
-    // A release can update bytes while retaining a template-generated chunk
-    // name. Pin the source fetch to the manifest version so browser caches do
-    // not silently assemble a world from mixed shell revisions.
-    const file = await fetch(
-      `${root}/${path}?v=${encodeURIComponent(manifest.version)}`,
-      { signal, cache: "no-store" },
-    );
-    if (!file.ok) {
-      throw new WebUploadUnsupportedError(
-        "shell-missing",
-        `ランタイムシェルのファイルを取得できませんでした: ${path} (${file.status})`,
+  let completed = 0;
+  // Also stop in-flight siblings on failure so progress cannot update a closed
+  // or failed dialog after this batch has already rejected.
+  const batch = new AbortController();
+  const abortBatch = () => batch.abort();
+  if (signal?.aborted) abortBatch();
+  signal?.addEventListener("abort", abortBatch, { once: true });
+  try {
+    const files = await mapWithConcurrency(manifest.files, 4, async (path): Promise<RuntimeShellFile> => {
+      throwIfAborted(batch.signal);
+      // Pin every file to the manifest version to avoid mixed shell revisions.
+      const file = await fetch(
+        `${root}/${path}?v=${encodeURIComponent(manifest.version)}`,
+        { signal: batch.signal, cache: "no-store" },
       );
-    }
-    const data = new Uint8Array(await file.arrayBuffer());
-    assertRuntimeShellFileResponse(path, file, data);
-    files.push({ path, data });
+      if (!file.ok) {
+        throw new WebUploadUnsupportedError(
+          "shell-missing",
+          `ランタイムシェルのファイルを取得できませんでした: ${path} (${file.status})`,
+        );
+      }
+      const data = new Uint8Array(await file.arrayBuffer());
+      throwIfAborted(batch.signal);
+      assertRuntimeShellFileResponse(path, file, data);
+      completed++;
+      onProgress?.(completed, manifest.files.length);
+      return { path, data };
+    }, batch.signal);
+    await assertRuntimeShellIntegrity(manifest, files);
+    throwIfAborted(batch.signal);
+    return files;
+  } catch (error) {
+    batch.abort();
+    throw error;
+  } finally {
+    signal?.removeEventListener("abort", abortBatch);
   }
-  await assertRuntimeShellIntegrity(manifest, files);
-  return files;
 }
 
 function assertRuntimeShellFileResponse(
@@ -410,7 +436,7 @@ async function assertRuntimeShellIntegrity(
   }
 }
 
-export function parseShellManifest(value: unknown): ShellManifest {
+export function parseShellManifest(value: unknown, kind: ProjectKind = "world"): ShellManifest {
   if (!value || typeof value !== "object") {
     throw new Error("ランタイムシェルの一覧が正しい形式ではありません。");
   }
@@ -436,12 +462,20 @@ export function parseShellManifest(value: unknown): ShellManifest {
     Array.isArray(record.dependencies)) {
     throw new Error("ランタイムシェルの依存一覧がありません。");
   }
+  const modules = Array.isArray(record.modules)
+    ? record.modules.filter((entry): entry is string => typeof entry === "string")
+    : ["./World"];
+  const requiredModule = kind === "item" ? "./Item" : "./World";
+  if (!modules.includes(requiredModule)) {
+    throw new Error(`ランタイムシェルが${kind === "item" ? "アイテム" : "ワールド"}に対応していません。最新版のXRift Studioで開き直してください。`);
+  }
   const manifest: ShellManifest = {
     version: typeof record.version === "string" ? record.version : "unknown",
     runtimeContract: REQUIRED_RUNTIME_SHELL_CONTRACT,
     entry: SHELL_ENTRY_PATH,
     files,
     dependencies: record.dependencies as Record<string, string[]>,
+    modules,
   };
   assertRuntimeShellDependencies(manifest);
   return manifest;
@@ -457,13 +491,11 @@ export function parseShellManifest(value: unknown): ShellManifest {
 export async function uploadVisualProjectFromWeb(
   request: WebUploadRequest,
 ): Promise<XriftUploadResult> {
-  if (request.kind !== "world") {
-    // Not an XRift limitation: the SDK exposes client.items.upload(). The
-    // runtime shell is built from the world template, so an item shell would
-    // be needed before this path could carry them.
+  if (request.kind !== request.documents.project.projectKind ||
+    (request.kind === "world" ? request.itemId : request.worldId)) {
     throw new WebUploadUnsupportedError(
-      "item-unsupported",
-      "ブラウザ版はまだワールドの公開のみ対応しています。アイテムはデスクトップ版から公開してください。",
+      "kind-mismatch",
+      "公開する作品の種類と送信先が一致しません。公開画面を開き直してください。",
     );
   }
   assertUploadableToken(request.token);
@@ -491,38 +523,47 @@ export async function uploadVisualProjectFromWeb(
     ) {
       throw new WebUploadUnsupportedError(
         "scripts-unsupported",
-        "スクリプトを含むワールドはブラウザ版から公開できません。Runtime JSONがスクリプトを表現できないため、デスクトップ版から公開してください。",
+        "スクリプトを含む作品はブラウザ版から公開できません。デスクトップ版から公開してください。",
       );
     }
     throw error;
   }
 
+  const contentLabel = request.kind === "item" ? "アイテム" : "ワールド";
   throwIfAborted(request.signal);
   request.report({
     stage: "uploading",
-    label: "XRiftへワールドを送信しています",
+    label: `XRiftへ${contentLabel}を送信しています`,
     detail: `${prepared.files.length}個のファイルを送信します。`,
     percent: 40,
     cancelSafe: false,
   });
 
   const client = new XriftClient({ token: request.token });
+  let destinationId = request.kind === "item" ? request.itemId : request.worldId;
+  let createdRemotely = false;
+  let transferringFiles = false;
 
   try {
-    const result = await client.worlds.upload(prepared.files, {
-      worldId: request.worldId,
+    // Resolve the target separately so a rejection after creation is not
+    // mistaken for a harmless auth failure and retried as another new work.
+    if (!destinationId) {
+      const created = request.kind === "item" ? await client.items.create() : await client.worlds.create();
+      createdRemotely = true;
+      destinationId = created.id;
+      if (!destinationId?.trim()) throw new Error("XRiftから新しい公開先のIDを取得できませんでした。");
+      await request.onRemoteCreated?.(destinationId);
+    }
+    const commonOptions = {
       name: prepared.config.name,
       description: prepared.config.description,
       thumbnailPath: request.thumbnail ? prepared.config.thumbnailPath : undefined,
-      physics: prepared.config.physics,
-      camera: prepared.config.camera,
       permissions: resolveWebRuntimePermissions(prepared.config.permissions),
-      outputBufferType: prepared.config.outputBufferType,
-      items: prepared.config.items,
-      onProgress: (progress) => {
+      onProgress: (progress: { currentFile: string; completed: number; total: number }) => {
+        transferringFiles = true;
         request.report({
           stage: "uploading",
-          label: "XRiftへワールドを送信しています",
+          label: `XRiftへ${contentLabel}を送信しています`,
           detail: progress.currentFile,
           percent:
             40 +
@@ -530,7 +571,15 @@ export async function uploadVisualProjectFromWeb(
           cancelSafe: false,
         });
       },
-    });
+    };
+    const result = prepared.config.type === "item"
+      ? await client.items.upload(prepared.files, { ...commonOptions, itemId: destinationId })
+      : await client.worlds.upload(prepared.files, {
+        ...commonOptions, worldId: destinationId,
+        physics: prepared.config.physics, camera: prepared.config.camera,
+        outputBufferType: prepared.config.outputBufferType, items: prepared.config.items,
+      });
+    const id = "itemId" in result ? result.itemId : result.worldId;
 
     request.report({
       stage: "processing",
@@ -540,8 +589,8 @@ export async function uploadVisualProjectFromWeb(
     });
 
     return {
-      worldId: result.worldId,
-      contentId: result.worldId,
+      ...(request.kind === "item" ? { itemId: id } : { worldId: id }),
+      contentId: id,
       versionId: result.versionId,
       versionNumber: result.versionNumber,
       contentHash: result.contentHash,
@@ -550,13 +599,16 @@ export async function uploadVisualProjectFromWeb(
   } catch (error) {
     if (error instanceof XriftAuthError ||
       (error instanceof XriftApiError && (error.statusCode === 401 || error.statusCode === 403))) {
-      throw new WebUploadRejectedError(describeSdkError(error));
+      if (!createdRemotely && !transferringFiles) {
+        throw new WebUploadRejectedError(describeSdkError(error, request.kind, request.token));
+      }
     }
-    throw new Error(describeSdkError(error));
+    const target = destinationId ? ` ${contentLabel}ID: ${destinationId}` : "";
+    throw new Error(`${describeSdkError(error, request.kind, request.token)}${target}`);
   }
 }
 
-/** A definitive 401/403 rejection has no remote publication to reconcile. */
+/** A definitive 401/403 before creation or file transfer is safe to retry. */
 export class WebUploadRejectedError extends Error {
   readonly retrySafe = true;
   constructor(message: string) {
@@ -566,17 +618,19 @@ export class WebUploadRejectedError extends Error {
 }
 
 /** Turns an SDK error into a message that says what to do next. */
-export function describeSdkError(error: unknown): string {
+export function describeSdkError(error: unknown, kind: ProjectKind = "world", knownToken?: string): string {
+  const label = kind === "item" ? "アイテム" : "ワールド";
+  const scope = kind === "item" ? "write:items" : "write:worlds";
   if (error instanceof XriftAuthError) {
-    return "APIキーが受け付けられませんでした。設定画面で有効なキーとwrite:worlds権限を確認してください。";
+    return `APIキーが受け付けられませんでした。設定画面で有効なキーと${scope}権限を確認してください。`;
   }
   if (error instanceof XriftApiError) {
     // 403 from a scoped API key means the key was issued without the write
     // scope, which is fixed by reissuing it rather than by retrying.
     if (error.statusCode === 403) {
-      return `このトークンにはワールドを公開する権限がありません (${redactToken(error.message)})。APIキーを使う場合はwrite:worldsスコープを付けて発行し直してください。`;
+      return `このトークンには${label}を公開する権限がありません (${redactToken(error.message, knownToken)})。APIキーを使う場合は${scope}スコープを付けて発行し直してください。`;
     }
-    return `XRiftがアップロードを拒否しました (${error.statusCode}): ${redactToken(error.message)}`;
+    return `XRiftがアップロードを拒否しました (${error.statusCode}): ${redactToken(error.message, knownToken)}`;
   }
   if (error instanceof XriftNetworkError) {
     // The SDK raises this when fetch itself failed, which the browser reports
@@ -584,15 +638,17 @@ export function describeSdkError(error: unknown): string {
     // available to this code can tell an unreachable host from a response the
     // browser refused to expose, so name both possibilities rather than
     // asserting one. The devtools console does carry the real reason.
-    return `XRiftへ送信できませんでした: ${redactToken(error.message)}。ネットワーク接続、またはブラウザがレスポンスを読み取れているか (CORS)を確認してください。詳しい理由はブラウザの開発者ツールのコンソールに表示されます。`;
+    return `XRiftへ送信できませんでした: ${redactToken(error.message, knownToken)}。ネットワーク接続、またはブラウザがレスポンスを読み取れているか (CORS)を確認してください。詳しい理由はブラウザの開発者ツールのコンソールに表示されます。`;
   }
-  if (error instanceof Error) return redactToken(error.message);
-  return redactToken(String(error));
+  if (error instanceof Error) return redactToken(error.message, knownToken);
+  return redactToken(String(error), knownToken);
 }
 
 /** An API error body can echo the request, so never show it verbatim. */
-export function redactToken(value: string): string {
-  return value
+export function redactToken(value: string, knownToken?: string): string {
+  // Compatible bearer tokens do not necessarily use XRift's known prefixes.
+  const sanitized = knownToken ? value.split(knownToken).join("[REDACTED]") : value;
+  return sanitized
     .replace(/\bxrf_[A-Za-z0-9._-]+/g, "xrf_[REDACTED]")
     .replace(/\bxrift_sk_[A-Za-z0-9._-]+/g, "xrift_sk_[REDACTED]")
     .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/gi, "Bearer [REDACTED]")

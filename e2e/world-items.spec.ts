@@ -80,15 +80,48 @@ test("Item loader coalesces requests, retries failures and rejects invalid input
     const samePromise = a === b;
     const loaded = await a;
     await loader.load("../invalid").catch(() => undefined);
+    const emptyIds = await Promise.all([undefined, null, "", 42].map(value => {
+      try { return loader.load(value as string).then(() => false, () => true); }
+      catch { return false; }
+    }));
     const bad = createStudioItemLoader(async () => "file:///secret", async () => { throw new Error("should not import"); });
     const rejectedUrl = await bad.load(id).then(() => false, () => true);
-    return { resolves, imports, inits, exports, samePromise, sceneUrl: loaded.sceneUrl, rejectedUrl };
+    return { resolves, imports, inits, exports, samePromise, sceneUrl: loaded.sceneUrl, rejectedUrl, emptyIds };
   });
-  expect(result).toEqual({ resolves: 2, imports: 1, inits: 1, exports: "./Item", samePromise: true, sceneUrl: "https://items.example/version/remoteEntry.js", rejectedUrl: true });
+  expect(result).toEqual({ resolves: 2, imports: 1, inits: 1, exports: "./Item", samePromise: true, sceneUrl: "https://items.example/version/remoteEntry.js", rejectedUrl: true, emptyIds: [true, true, true, true] });
+});
+
+test("PositionalAudio cleanup tolerates replay and teardown while preserving playback", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await page.goto("/e2e.html?scenario=ready");
+  const result = await page.evaluate(async () => {
+    const load = (path: string) => import(/* @vite-ignore */ path);
+    const { THREE: T } = await load("/e2e/world-items.fixture.tsx");
+    const { installPositionalAudioCleanup } = await load("/packages/xrift-studio-runtime/src/positional-audio-cleanup.ts");
+    installPositionalAudioCleanup(); installPositionalAudioCleanup();
+    const listener = new T.AudioListener();
+    const sound = new T.PositionalAudio(listener);
+    sound.disconnect(); sound.disconnect();
+    sound.setBuffer(listener.context.createBuffer(1, 441, 44100));
+    sound.play(); sound.stop(); sound.disconnect(); sound.disconnect();
+    sound.play(); const playing = sound.isPlaying;
+    sound.stop(); sound.disconnect(); sound.disconnect();
+    // Only the already-removed panner edge is tolerated; unexpected defects surface.
+    const original = sound.panner.disconnect;
+    sound.panner.disconnect = () => { throw new Error("unexpected cleanup failure"); };
+    let propagated = false;
+    try { sound.disconnect(); } catch (error) { propagated = String(error).includes("unexpected cleanup failure"); }
+    sound.panner.disconnect = original;
+    sound.gain.disconnect(); listener.gain.disconnect();
+    return { playing, propagated };
+  });
+  expect(result).toEqual({ playing: true, propagated: true });
+  expect(errors).toEqual([]);
 });
 
 test("Item Inspector edits IDs and offers retry without saving preview credentials", async ({ page }) => {
-  await page.goto("/e2e.html?scenario=ready");
+  await page.goto("/editor.html");
   await page.evaluate(async () => {
     const load = (path: string) => import(/* @vite-ignore */ path);
     const m = await load("/e2e/world-items.fixture.tsx");

@@ -151,7 +151,7 @@ export function BrowserProjectTransferDialog({ state, onClose, onRetry, onPickFi
           <ol className="list-decimal space-y-2 pb-3 pl-5">
             <li>「ダウンロード」を押してください。保存先はSafariのダウンロード一覧で確認できます。</li>
             <li>iCloud Driveなどでパソコンにファイルを移してください。</li>
-            <li>デスクトップ版のプロジェクト一覧で「ファイルから取り込む」を選んでください。アイテムやスクリプトを含むワールドも、デスクトップ版から公開できます。</li>
+            <li>デスクトップ版のプロジェクト一覧で「ファイルから取り込む」を選んでください。スクリプトを含む作品も、デスクトップ版から公開できます。</li>
           </ol>
           </details>
           {downloadStarted ? <p role="status">ダウンロードを開始しました。</p> : null}

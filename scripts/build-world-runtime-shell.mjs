@@ -1,5 +1,5 @@
 /**
- * Builds the runtime shell that lets Studio publish worlds from a browser.
+ * Builds the shared World/Item runtime shell for browser publication.
  *
  * An XRift world is a Module Federation remote: the official template builds
  * `dist/remoteEntry.js` exposing `./World`, and XRift's player loads it with
@@ -82,6 +82,23 @@ export const World: FC<WorldProps> = ({ position = [0, 0, 0], scale = 1 }) => (
     <XriftWorld manifest={MANIFEST_URL} physics="inherit" />
   </group>
 );
+`;
+
+/** Item uses the same authored Scene runtime without world-level settings. */
+const SHELL_ITEM_SOURCE = `import type { FC } from "react";
+import { XriftItem } from "xrift-studio-runtime/react-three-fiber";
+
+const MANIFEST_URL = new URL("./xrift-runtime.json", import.meta.url).href;
+export interface ItemProps {
+  position?: [number, number, number];
+  scale?: number;
+}
+export const Item: FC<ItemProps> = ({ position = [0, 0, 0], scale = 1 }) => (
+  <group position={position} scale={scale}>
+    <XriftItem manifest={MANIFEST_URL} />
+  </group>
+);
+export default Item;
 `;
 
 function parseArguments(argv) {
@@ -173,6 +190,7 @@ async function main() {
       SHELL_WORLD_SOURCE,
       "utf8",
     );
+    await fs.writeFile(path.join(projectDir, "src", "Item.tsx"), SHELL_ITEM_SOURCE, "utf8");
     // The template's Skybox and panorama would otherwise be built into every
     // published world.
     await fs.rm(path.join(projectDir, "src", "components"), {
@@ -188,7 +206,9 @@ async function main() {
     await run("node", ["scripts/prepare-readable-three-vrm.mjs", "--check"], repoRoot);
     await copyReadableVrm(repoRoot, projectDir);
     const viteConfigPath = path.join(projectDir, "vite.config.ts");
-    const viteConfig = withReadableVrmAlias(await fs.readFile(viteConfigPath, "utf8"));
+    let viteConfig = withReadableVrmAlias(await fs.readFile(viteConfigPath, "utf8"));
+    if (!/exposes:\s*\{/.test(viteConfig)) throw new Error("Template Module Federation exports are missing");
+    viteConfig = viteConfig.replace(/exposes:\s*\{/, "$&\n        './Item': './src/Item.tsx',");
     if (!/\bbuild:\s*\{/.test(viteConfig)) throw new Error("Template Vite build configuration is missing");
     // A federated World runs inside the player's document. Vite's default
     // module preloads resolve against that host instead of this world's URL.
@@ -273,6 +293,12 @@ async function main() {
         `ビルド結果に ${SHELL_ENTRY} がありません。テンプレートのfederation設定を確認してください。`,
       );
     }
+    const entrySource = await fs.readFile(path.join(distDir, SHELL_ENTRY), "utf8");
+    for (const module of ["./World", "./Item"]) {
+      if (!entrySource.includes(JSON.stringify(module)) && !entrySource.includes(`'${module}'`)) {
+        throw new Error(`ランタイムシェルに ${module} の公開口がありません。`);
+      }
+    }
 
     await fs.rm(outputDir, { recursive: true, force: true });
     await fs.mkdir(outputDir, { recursive: true });
@@ -299,6 +325,7 @@ async function main() {
           cliVersion,
           worldComponentsVersion: WORLD_COMPONENTS_SPEC.slice(WORLD_COMPONENTS_SPEC.lastIndexOf("@") + 1),
           entry: SHELL_ENTRY,
+          modules: ["./World", "./Item"],
           files: shellFiles.sort(),
           dependencies,
         },
