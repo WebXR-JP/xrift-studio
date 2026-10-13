@@ -56,6 +56,19 @@ pnpm tauri:dev
 
 手動のRelease workflowでは、主要導線9件のE2EをOS別ビルドの前に実行します。個別機能の回帰テストは変更時に`pnpm e2e:test e2e/<対象>.spec.ts`で実行し、全件は`pnpm e2e:test`で確認できます。テスト範囲、アップロード禁止境界、失敗時の確認方法は [リリース前E2E](./docs/RELEASE_E2E.md) を参照してください。
 
+### 実Classic書き出しの描画確認
+
+`classic-mtoon-export.spec.ts`は、CLI変換と既存Classicへの書き出しで作った実ファイルを描画します。通常のcheckoutでは準備結果がないためSKIPします。Node.js 22.15以上、ロックファイルに沿ったリポジトリ依存、導入済みの公式CLI 0.25.0、Chromiumを用意し、次をリポジトリ直下で実行してください。`--cli`には公式CLIの`dist/index.js`を指定します。`XRIFT_CLASSIC_CLI_ENTRY`環境変数でも指定できます。
+
+```bash
+node scripts/prepare-classic-mtoon-exports.cjs --cli "/installed/path/@xrift/cli/dist/index.js"
+pnpm e2e:test e2e/classic-mtoon-export.spec.ts --workers=1
+```
+
+準備にはGitHubの公式テンプレート取得が必要です。既定ではCLI版を0.25.0、world-templateのcommitを`e8b22b78a51cf83748a2019c80e2b639bb137dff`に固定します。更新時は`--cli-version`と`--template-commit`で確認する版と40桁のcommit SHAを明示してください。CLI版・入口のSHA256・テンプレートcommitは完了記録へ残ります。
+
+[準備script](./scripts/prepare-classic-mtoon-exports.cjs)は検証用の合成VRM0/1とPNG10件を使い、`node_modules/.cache/xrift-studio/classic-mtoon-export/`内に別々のClassicプロジェクトを作ります。実際の変換とファイル書き込みを通し、素材12件・生成コード・manifest・provenanceの検査後だけ`completed.json`を作ります。開始時と失敗時には古い完了記録を除き、終了コード1で失敗を知らせます。制作物の依存インストール、ビルド、認証、公開は行いません。準備が強制終了して`prepare.lock`だけ残った場合は、準備プロセスが終了したことを確認してそのファイルだけを除いてください。
+
 ## 紹介ページのダウンロード導線
 
 GitHub Pagesの紹介ページから、最新リリースのインストーラーを直接ダウンロードできます。ページにはビルド時に取得したリリースを表示し、表示後に公開APIの応答で更新します。
