@@ -20,7 +20,7 @@ tauri.chatgptStatus=async()=>state();
 tauri.chatgptLogin=async()=>{signedIn=true;return state();};
 tauri.chatgptLogout=async()=>{signedIn=false;return state();};
 tauri.chatgptModels=async()=>[{slug:'fixture-model',displayName:'検証用モデル'}];
-createRoot(document.getElementById('root')).render(<div style={{fontFamily:'"Noto Sans JP", sans-serif'}} className="mx-auto w-80 p-2 text-xs text-slate-600"><ChatgptWorldPanel onGenerate={async(model,prompt)=>{await new Promise(r=>setTimeout(r,200));if(prompt==='error')throw new Error('検証用エラー');document.body.dataset.result=model+':'+prompt;}}/></div>);`);
+createRoot(document.getElementById('root')).render(<div style={{fontFamily:'"Noto Sans JP", sans-serif'}} className="mx-auto w-80 p-2 text-xs text-slate-600"><ChatgptWorldPanel onGenerate={async(model,prompt,options)=>{await new Promise(r=>setTimeout(r,200));if(prompt==='error')throw new Error('検証用エラー');document.body.dataset.result=model+':'+prompt;document.body.dataset.options=JSON.stringify(options);}}/></div>);`);
 const server = await createServer({ server: { host: "127.0.0.1", port: 0 }, clearScreen: false });
 let browser;
 try {
@@ -42,8 +42,12 @@ try {
   await page.evaluate(() => document.fonts.ready);
   await page.screenshot({ path: "dev/chatgpt-ui-artifacts/narrow.png", fullPage: true });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.getByRole("checkbox", { name: "3Dモデル", exact: true }).uncheck();
+  await page.getByRole("checkbox", { name: "音声", exact: true }).uncheck();
   await generate.click();
+  assert.equal(await page.getByRole("checkbox", { name: "マテリアル", exact: true }).isDisabled(), true);
   await page.waitForFunction(() => document.body.dataset.result === "fixture-model:秋の公園");
+  assert.deepEqual(JSON.parse(await page.evaluate(() => document.body.dataset.options)), {models:false,materials:true,audio:false});
   await page.getByPlaceholder("秋の公園。木とベンチのある静かな広場").fill("error");
   await generate.click();
   await page.getByRole("alert").filter({ hasText: "検証用エラー" }).waitFor();

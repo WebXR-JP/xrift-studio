@@ -1,3 +1,4 @@
+import type { ChatgptAssetOptions } from "../../lib/tauri";
 import { useEffect, useRef, useState } from "react";
 import { EDITOR_ICONS } from "./editor-icons";
 import {
@@ -61,7 +62,7 @@ export function EditorUtilityRail({
   onRegisterMcpClient,
   onUndo,
 }: {
-  onChatgptGenerate?: (model: string, prompt: string) => Promise<void>;
+  onChatgptGenerate?: (model: string, prompt: string, options: ChatgptAssetOptions) => Promise<void>;
   chatgptDisabledReason?: string;
   sceneSettingsOpen: boolean;
   onToggleSceneSettings: () => void;
