@@ -6,7 +6,7 @@ import { createServer } from "vite";
 const server = await createServer({ configFile: false, cacheDir: "node_modules/.vite-mcp-chatgpt-contract-test", server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: "custom", optimizeDeps: { noDiscovery: true, include: [] } });
 test.after(() => server.close());
 const registry = await server.ssrLoadModule("/src/lib/visual-editor/mcp-tool-registry.ts");
-const chatgptTools = ["get_chatgpt_connection", "connect_chatgpt", "disconnect_chatgpt", "list_chatgpt_models", "open_chatgpt_panel", "generate_chatgpt_world", "get_chatgpt_generation", "apply_chatgpt_plan", "cancel_chatgpt_generation"];
+const chatgptTools = ["get_chatgpt_connection", "connect_chatgpt", "disconnect_chatgpt", "list_chatgpt_models", "open_chatgpt_panel", "generate_chatgpt_world", "get_chatgpt_generation", "apply_chatgpt_plan", "cancel_chatgpt_generation", "list_chatgpt_sessions", "get_chatgpt_session", "manage_chatgpt_session", "revert_chatgpt_generation"];
 
 test("ChatGPT planning, application and cancellation route through the project shell", () => {
   for (const name of chatgptTools) {

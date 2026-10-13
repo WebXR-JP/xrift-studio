@@ -288,7 +288,7 @@ test("ChatGPTは必要時だけタブで開き、独立したMCP設定を開閉�
   await expect(panel.getByRole("alert")).toHaveText("本人確認の検証用エラー");
   expect((await call(page, "get_chatgpt_connection")).result).toMatchObject({ connecting: false, error: "本人確認の検証用エラー" });
   await connectFixture(page);
-  await expect(panel.getByRole("combobox")).toHaveValue("fixture-model");
+  await expect(panel.getByRole("combobox", { name: "ワールド制作のモデル", exact: true })).toHaveValue("fixture-model");
   expect((await call(page, "list_chatgpt_models")).result).toMatchObject({ models: [{ slug: "fixture-model" }] });
   expect((await call(page, "disconnect_chatgpt")).result).toMatchObject({ signedIn: false });
   await expect(panel.getByRole("button", { name: "依頼を送信", exact: true })).toBeDisabled();
@@ -548,8 +548,9 @@ test("生成先の作成中に元作品を開き直したら停止し、新し�
       return result;
     }, plane.id);
     expect(renamed.ok, JSON.stringify(renamed)).toBe(true);
-    await expect.poll(async () => (await generation(page, generationId)).status).toBe("failed");
-    expect((await generation(page, generationId)).error).toContain("開いている作品またはSceneが変わりました");
+    await expect.poll(async () => (await generation(page, generationId)).status).toBe("cancelled");
+    expect((await generation(page, generationId)).error).toBeUndefined();
+    expect((await generation(page, generationId)).progress.completed).toBe(0);
     expect((await call(page, "get_editor_context")).result).toMatchObject({ projectId: source.projectId });
     await expect(page.getByRole("tree", { name: "シーンのEntity階層" })).toContainText("開き直したEditorの未保存の床");
     await expect.poll(() => savedEntityNames(page, sourcePath)).toContain("開き直したEditorの未保存の床");

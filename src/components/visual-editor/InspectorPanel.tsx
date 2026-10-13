@@ -868,12 +868,31 @@ function MaterialSwatch({
   );
 }
 
+function ModelAssignmentFields({ assets, value = "", readOnly, onSetModel, onOpenStore }: {
+  assets: AssetManifest;
+  value?: string;
+  readOnly: boolean;
+  onSetModel: (assetId: string) => void;
+  onOpenStore?: () => void;
+}) {
+  const models = Object.values(assets.assets).filter((asset): asset is ModelAsset => asset.kind === "model" && asset.status === "ready" && Boolean(asset.importMetadata));
+  return <div className="flex min-w-0 items-center gap-1.5">
+    <select aria-label="Entityの3Dモデル" value={value} disabled={readOnly || !models.length} onChange={event => { if (event.target.value) onSetModel(event.target.value); }} className="min-w-0 flex-1 rounded border border-slate-200 bg-white px-2 py-1.5 text-xs disabled:opacity-50">
+      <option value="">モデルを選択</option>
+      {models.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}
+    </select>
+    {onOpenStore ? <button type="button" disabled={readOnly} onClick={() => onOpenStore()} title="選択Entityに使う3Dモデルを素材ストアで探す" className="shrink-0 rounded border border-slate-200 px-2 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-50">素材ストア</button> : null}
+  </div>;
+}
+
 function MeshInspector({
   component,
   assets,
   projectPath,
   readOnly,
   onChange,
+  onSetModel,
+  onOpenModelStore,
   onOpenMaterial,
   onTerrainBrush,
   onGrassLayersChange,
@@ -891,6 +910,8 @@ function MeshInspector({
   projectPath?: string;
   readOnly: boolean;
   onChange: (patch: MeshInspectorPatch) => void;
+  onSetModel?: (assetId: string) => void;
+  onOpenModelStore?: () => void;
   onOpenMaterial: (assetId: string) => void;
   onRemove?: () => void;
   onTerrainBrush?: (operation: TerrainSceneBrushOperation) => void;
@@ -970,6 +991,7 @@ function MeshInspector({
       }}
     >
       {collisionControls}
+      {onSetModel && !(component.geometry?.kind === "asset" && (component.geometry.sourceNodeIndex !== undefined || component.geometry.sourceNodeName !== undefined)) ? <ModelAssignmentFields assets={assets} value={model?.id} readOnly={readOnly} onSetModel={onSetModel} onOpenStore={onOpenModelStore} /> : null}
       <dl className="grid grid-cols-[62px_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
         <dt className="text-slate-500">形状</dt>
         <dd className="truncate text-right font-medium text-slate-700">
@@ -5102,6 +5124,8 @@ function EntityInspector({
   onTransformScrubEnd,
   onTransformScrubCancel,
   onMeshChange,
+  onSetEntityModel,
+  onOpenModelStore,
   onTerrainBrush,
   onTerrainGrassLayersChange,
   onTerrainSettings,
@@ -5157,6 +5181,8 @@ function EntityInspector({
   onTransformScrubEnd: () => void;
   onTransformScrubCancel: () => void;
   onMeshChange: (componentId: string, patch: MeshInspectorPatch) => void;
+  onSetEntityModel?: (assetId: string, componentId?: string) => void;
+  onOpenModelStore?: (componentId?: string) => void;
   onTerrainBrush: (
     componentId: string,
     operation: TerrainSceneBrushOperation,
@@ -5407,6 +5433,8 @@ function EntityInspector({
         </ComponentCard>
       ) : null}
 
+      {!entity.modelNode && !entity.components.some(component => component.type === "mesh") && onSetEntityModel ? <ComponentCard title="3Dモデルを設定"><ModelAssignmentFields assets={assets} readOnly={readOnly} onSetModel={onSetEntityModel} onOpenStore={onOpenModelStore} /></ComponentCard> : null}
+
       {entity.modelNode ? (
         <ModelNodeInspector
           entity={entity}
@@ -5438,6 +5466,8 @@ function EntityInspector({
               projectPath={projectPath}
               readOnly={readOnly}
               onChange={(patch) => onMeshChange(component.id, patch)}
+              onSetModel={onSetEntityModel ? assetId => onSetEntityModel(assetId, component.id) : undefined}
+              onOpenModelStore={onOpenModelStore ? () => onOpenModelStore(component.id) : undefined}
               onTerrainBrush={(operation) =>
                 onTerrainBrush(component.id, operation)
               }
@@ -5899,6 +5929,8 @@ export function InspectorPanel({
   onTransformScrubEnd,
   onTransformScrubCancel,
   onMeshChange,
+  onSetEntityModel,
+  onOpenModelStore,
   onTerrainBrush,
   onTerrainGrassLayersChange,
   onTerrainSettings,
@@ -5989,6 +6021,8 @@ export function InspectorPanel({
   onTransformScrubEnd: (entityId: string) => void;
   onTransformScrubCancel: (entityId: string) => void;
   onMeshChange: (entityId: string, componentId: string, patch: MeshInspectorPatch) => void;
+  onSetEntityModel?: (entityId: string, assetId: string, componentId?: string) => void;
+  onOpenModelStore?: (entityId: string, componentId?: string) => void;
   onTerrainBrush: (
     entityId: string,
     componentId: string,
@@ -6363,6 +6397,8 @@ export function InspectorPanel({
                 editing ? { ...editing, entityId: entity.id } : null,
               )
             }
+            onSetEntityModel={onSetEntityModel ? (assetId, componentId) => onSetEntityModel(entity.id, assetId, componentId) : undefined}
+            onOpenModelStore={onOpenModelStore ? componentId => onOpenModelStore(entity.id, componentId) : undefined}
             onModelNodeMeshChange={onMeshChange}
             modelOptimizationState={modelOptimizationState}
             onApplyModelOptimization={onApplyModelOptimization}
