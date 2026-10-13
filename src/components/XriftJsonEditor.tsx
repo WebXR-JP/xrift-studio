@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Save, Code2, RefreshCw, Info } from "lucide-react";
 import { tauri, type ProjectKind } from "../lib/tauri";
 import { useToast } from "./Toast";
@@ -12,6 +12,9 @@ type Props = {
   onOpenRaw: () => void;
   onRefresh?: () => void;
   onSaved?: () => void;
+  onSaveReady?: (save: (() => Promise<boolean>) | null) => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  onSavingChange?: (saving: boolean) => void;
   publishPreparation?: boolean;
 };
 
@@ -96,6 +99,9 @@ export function XriftJsonEditor({
   onOpenRaw,
   onRefresh,
   onSaved,
+  onSaveReady,
+  onDirtyChange,
+  onSavingChange,
   publishPreparation = false,
 }: Props) {
   const toast = useToast();
@@ -106,6 +112,11 @@ export function XriftJsonEditor({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const formRef = useRef(form);
+  formRef.current = form;
+  const savedRef = useRef(saved);
+  savedRef.current = saved;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -132,26 +143,32 @@ export function XriftJsonEditor({
   }, [load]);
 
   const isDirty = JSON.stringify(form) !== JSON.stringify(saved);
-  let worldItems: string[] = [];
   let itemIdsError: string | null = null;
   if (projectKind === "world") {
-    try { worldItems = parseWorldItemIdsInput(form.itemIds); }
+    try { parseWorldItemIdsInput(form.itemIds); }
     catch (error) { itemIdsError = String(error instanceof Error ? error.message : error); }
   }
 
-  const handleSave = async () => {
-    if (itemIdsError) return;
+  const handleSave = useCallback(async (): Promise<boolean> => {
+    if (savingRef.current) return false;
+    const snapshot = formRef.current;
+    if (JSON.stringify(snapshot) === JSON.stringify(savedRef.current)) return true;
+    if (loading || error || itemIdsError) return false;
+    savingRef.current = true;
     setSaving(true);
+    onSavingChange?.(true);
+    let complete = false;
     try {
+      const worldItems = projectKind === "world" ? parseWorldItemIdsInput(snapshot.itemIds) : [];
       const base = parsed ?? {};
       const current = base[projectKind] ?? {};
       const shared = {
         ...current,
-        title: form.title || undefined,
-        description: form.description || undefined,
-        thumbnailPath: form.thumbnailPath || DEFAULTS.thumbnailPath,
-        distDir: form.distDir || DEFAULTS.distDir,
-        buildCommand: form.buildCommand || DEFAULTS.buildCommand,
+        title: snapshot.title || undefined,
+        description: snapshot.description || undefined,
+        thumbnailPath: snapshot.thumbnailPath || DEFAULTS.thumbnailPath,
+        distDir: snapshot.distDir || DEFAULTS.distDir,
+        buildCommand: snapshot.buildCommand || DEFAULTS.buildCommand,
       };
       const projectConfig =
         projectKind === "world"
@@ -160,24 +177,24 @@ export function XriftJsonEditor({
               ...(worldItems.length > 0 || current.items !== undefined ? { items: worldItems } : {}),
               physics: {
                 ...(current.physics ?? {}),
-                gravity: form.gravity,
-                allowInfiniteJump: form.allowInfiniteJump,
+                gravity: snapshot.gravity,
+                allowInfiniteJump: snapshot.allowInfiniteJump,
               },
               camera: {
                 ...(current.camera ?? {}),
-                near: form.cameraNear,
-                far: form.cameraFar,
+                near: snapshot.cameraNear,
+                far: snapshot.cameraFar,
               },
             }
           : {
               ...shared,
               permissions: {
                 ...(current.permissions ?? {}),
-                allowedDomains: form.allowedDomains
+                allowedDomains: snapshot.allowedDomains
                   .split(",")
                   .map((domain) => domain.trim())
                   .filter(Boolean),
-                allowedCodeRules: form.allowedCodeRules
+                allowedCodeRules: snapshot.allowedCodeRules
                   .split(",")
                   .map((rule) => rule.trim())
                   .filter(Boolean),
@@ -189,17 +206,32 @@ export function XriftJsonEditor({
       };
       const text = JSON.stringify(updated, null, 2) + "\n";
       await tauri.writeTextFile(projectPath, "xrift.json", text);
-      setSaved(form);
+      savedRef.current = snapshot;
+      setSaved(snapshot);
       setParsed(updated);
+      complete = JSON.stringify(formRef.current) === JSON.stringify(snapshot);
       toast({ kind: "success", title: `${projectLabel}設定を保存しました` });
       onRefresh?.();
-      onSaved?.();
     } catch (e) {
       toast({ kind: "error", title: "保存に失敗しました", description: `${e}` });
     } finally {
+      savingRef.current = false;
       setSaving(false);
+      onSavingChange?.(false);
     }
-  };
+    if (complete) onSaved?.();
+    return complete;
+  }, [loading, error, itemIdsError, parsed, projectKind, projectPath, projectLabel, toast, onRefresh, onSaved, onSavingChange]);
+
+  useEffect(() => {
+    onSaveReady?.(handleSave);
+    return () => onSaveReady?.(null);
+  }, [handleSave, onSaveReady]);
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+    return () => onDirtyChange?.(false);
+  }, [isDirty, onDirtyChange]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
