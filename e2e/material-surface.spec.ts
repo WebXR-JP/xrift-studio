@@ -99,6 +99,8 @@ test("頂点カラーとOpacity Channelを編集しUndo・Redo・再読み込み
   await page.getByRole("radio", { name: /空のワールド/ }).click();
   await page.getByLabel("プロジェクト名").fill("material-surface-regression");
   await page.getByRole("button", { name: "作成して開く" }).click();
+  const assets = page.getByRole("region", { name: "Assets" });
+  await assets.getByText("Plane Material", { exact: true }).click();
   const vertex = page.getByLabel("頂点カラーを使用");
   await vertex.click();
   await expect(vertex).toBeChecked();
@@ -108,8 +110,9 @@ test("頂点カラーとOpacity Channelを編集しUndo・Redo・再読み込み
   await expect(channel).toHaveValue("a");
   await page.getByRole("button", { name: "やり直す", exact: true }).click();
   await expect(channel).toHaveValue("r");
-  await page.getByRole("button", { name: "プロジェクト一覧", exact: true }).click();
+  await page.getByRole("button", { name: "プロジェクト一覧へ戻る", exact: true }).click();
   await page.locator('button[title="material-surface-regressionを開く"]').click();
+  await assets.getByText("Plane Material", { exact: true }).click();
   await expect(vertex).toBeChecked();
   await expect(channel).toHaveValue("r");
   await expect(page.locator("header").first().getByRole("status")).toHaveText("保存済み");

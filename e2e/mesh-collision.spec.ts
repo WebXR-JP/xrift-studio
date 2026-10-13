@@ -104,7 +104,7 @@ test("Decimationは見た目を保ち、当たり判定専用のGLBを保存・�
       const references = collectAssetReferences({ assets: baked.manifest, scene, prefabs: {} }, baked.assetId);
       return { reduced: baked.triangles.after < baked.triangles.before, retained: JSON.stringify(baked.manifest.assets[original.id]) === before,
         saved: files.has(baked.manifest.assets[baked.assetId].source.relativePath),
-        referenced: references.length > 0, bakedWrapper: /<MeshCollider[^>]*>\s*<CompiledModelNodeCollider[^>]*\/>\s*<\/MeshCollider>/.test(code),
+        referenced: references.length > 0, bakedWrapper: /<XRiftStudioMeshColliders[^>]*>\s*<CompiledModelNodeCollider[^>]*\/>\s*<\/XRiftStudioMeshColliders>/.test(code),
         stageable: compiled.canStage, diagnostics: compiled.diagnostics.filter((d: any) => d.severity === "blocking"),
       };
     } finally { tauri.readProjectFileDataUrl = oldRead; tauri.commitVisualAssetImport = oldWrite; mesh.geometry.dispose(); mesh.material.dispose(); }

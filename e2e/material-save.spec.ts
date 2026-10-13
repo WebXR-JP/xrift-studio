@@ -40,6 +40,8 @@ test("発光色を連続変更しても編集が止まらず、保存して開�
   await page.getByRole("radio", { name: /空のワールド/ }).click();
   await page.getByLabel("プロジェクト名").fill("material-save-regression");
   await page.getByRole("button", { name: "作成して開く" }).click();
+  const assets = page.getByRole("region", { name: "Assets" });
+  await assets.getByText("Plane Material", { exact: true }).click();
   const color = page.locator("section").filter({ has: page.getByRole("heading", { name: /^Emissive / }) }).locator('input[type="color"]');
   await expect(color).toBeVisible();
   for (let i = 1; i <= 80; i++) await color.fill(`#${i.toString(16).padStart(2, "0")}8040`);
@@ -56,8 +58,11 @@ test("発光色を連続変更しても編集が止まらず、保存して開�
   await page.getByRole("button", { name: "やり直す", exact: true }).click();
   await expect(color).toHaveValue("#805040");
   await color.fill("#448866");
-  await page.getByRole("button", { name: "プロジェクト一覧", exact: true }).click();
+  await page.getByRole("button", { name: "プロジェクト一覧へ戻る", exact: true }).click();
   await page.locator('button[title="material-save-regressionを開く"]').click();
+  // Reopening picks the first asset in the current sort order. Inspect the
+  // authored material again, rather than Box Material's unchanged default.
+  await assets.getByText("Plane Material", { exact: true }).click();
   await expect(color).toHaveValue("#448866");
   await expect(page.locator("header").first().getByRole("status")).toHaveText("保存済み");
   expect(errors).toEqual([]);
