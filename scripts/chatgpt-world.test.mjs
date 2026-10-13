@@ -9,6 +9,7 @@ const { serializeVisualProjectDocuments } = await server.ssrLoadModule('/src/lib
 const { chatgptAssetRequests } = await server.ssrLoadModule('/src/lib/visual-editor/chatgpt-world.ts');
 const { applyExternalStoreInstallAndAnalyzeModel } = await server.ssrLoadModule('/src/lib/visual-editor/external-store.ts');
 const { tauri } = await server.ssrLoadModule('/src/lib/tauri.ts');
+const { getMaterialShowcaseAsset, materialShowcaseAssetId, MATERIAL_SHOWCASE_DEFINITIONS } = await server.ssrLoadModule('/src/lib/visual-editor/material-showcase-catalog.ts');
 test.after(() => server.close());
 const input = { title: "秋の公園", description: "木とベンチのある広場", objects: [
   { name: "地面", shape: "plane", position: [0,0,0], scale: [12,12,1] },
@@ -135,4 +136,24 @@ test('external glTF goes through the real importer before it can be saved', asyn
     tauri.readProjectFileDataUrl = async() => 'data:model/gltf+json;base64,'+Buffer.from('invalid').toString('base64');
     await assert.rejects(() => applyExternalStoreInstallAndAnalyzeModel('/isolated/new-world',base.assets,{providerId:'poly-haven',providerName:'Poly Haven',externalId:'bench',name:'Bench',assetKind:'model',resolution:'1k',files:[{role:'model',format:'gltf',relativePath:'assets/bench.gltf',byteLength:10,sha256:'a'.repeat(64)}],authors:[],assetUrl:'',licenseName:'CC0 1.0',licenseUrl:''}));
   } finally {tauri.readProjectFileDataUrl=originalRead;tauri.commitVisualAssetImport=originalCommit;globalThis.ProgressEvent=originalProgress;globalThis.FileReader=originalFileReader;}
+});
+
+test('glTF catalog material alone retains its extension and adds no sample model', () => {
+  assert.ok(MATERIAL_SHOWCASE_DEFINITIONS.length <= 128);
+  const id = materialShowcaseAssetId('car-paint');
+  const material = getMaterialShowcaseAsset(id);
+  const raw = {...input,objects:[{...input.objects[0],gltfMaterialId:id}]};
+  assert.throws(() => parseChatgptWorldPlan(JSON.stringify(raw)));
+  const plan = parseChatgptWorldPlan(JSON.stringify(raw),[],true);
+  const base = buildChatgptWorld(plan,'gltf-material-only',[],true);
+  const imported = {...base,assets:{...base.assets,assets:{...base.assets.assets,[id]:structuredClone(material)}}};
+  const placed = placeChatgptAssets(imported,plan,new Map());
+  const floor = Object.values(placed.scene.entities).find(e => e.name === '地面');
+  assert.ok(floor.components.find(c => c.type === 'mesh').materialBindings.some(b => b.materialAssetId === id));
+  assert.deepEqual(placed.assets.assets[id].properties,material.properties);
+  assert.ok(placed.assets.assets[id].properties.extensions.KHR_materials_clearcoat);
+  assert.equal(Object.values(placed.assets.assets).some(a => a.kind === 'model'),false);
+  assert.doesNotThrow(() => serializeVisualProjectDocuments({project:placed.project,scenes:{[placed.scene.sceneId]:placed.scene},assets:placed.assets,prefabs:placed.prefabs}));
+  assert.throws(() => parseChatgptWorldPlan(JSON.stringify({...raw,objects:[{...raw.objects[0],gltfMaterialId:'forged'}]}),[],true));
+  assert.throws(() => parseChatgptWorldPlan(JSON.stringify({...raw,objects:[{...raw.objects[0],materialExternalId:'wood'}]}),[{providerId:'poly-haven',assetKind:'texture',externalId:'wood'}],true));
 });

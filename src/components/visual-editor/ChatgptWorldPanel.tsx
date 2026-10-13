@@ -53,7 +53,7 @@ export function ChatgptWorldPanel({ onGenerate, disabledReason }: { onGenerate: 
     <fieldset disabled={busy !== null} className="space-y-1">
       <legend className="font-medium">生成に使う外部素材</legend>
       <div className="flex flex-wrap gap-x-3 gap-y-2">{([['models','3Dモデル'],['materials','マテリアル'],['audio','音声']] as const).map(([key,label]) => <label key={key} className="flex items-center gap-1.5"><input type="checkbox" checked={assetOptions[key]} onChange={e => setAssetOptions(v => ({...v,[key]:e.target.checked}))}/>{label}</label>)}</div>
-      <p className="text-[11px] leading-4 text-slate-500">モデル・マテリアルはPoly Haven、音声は音蔵から選びます。マテリアルだけを選ぶと基本形状に適用します。</p>
+      <p className="text-[11px] leading-4 text-slate-500">モデルはPoly Haven、マテリアルはglTFマテリアル棚とPoly Haven、音声は音蔵から選びます。マテリアルだけを選ぶと基本形状に適用します。</p>
     </fieldset>
     <label className="block space-y-1">作りたいワールド
       <textarea value={prompt} maxLength={2000} disabled={busy !== null} onChange={e => setPrompt(e.target.value)} rows={4}

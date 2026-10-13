@@ -783,7 +783,7 @@ export const tauri = {
   chatgptLogin: () => invoke<ChatgptConnection>("chatgpt_login"),
   chatgptLogout: () => invoke<ChatgptConnection>("chatgpt_logout"),
   chatgptModels: () => invoke<ChatgptModel[]>("chatgpt_models"),
-  chatgptPlan: (model: string, prompt: string, options: ChatgptAssetOptions) => invoke<{ plan: string; assetCandidates: ExternalStoreAsset[] }>("chatgpt_plan", { model, prompt, options }),
+  chatgptPlan: (model: string, prompt: string, options: ChatgptAssetOptions, gltfMaterials: { id: string; name: string; extension: string }[] = []) => invoke<{ plan: string; assetCandidates: ExternalStoreAsset[] }>("chatgpt_plan", { model, prompt, options, gltfMaterials }),
   detectXriftMcpClients: () =>
     invoke<XriftMcpClientStatus[]>("detect_xrift_mcp_clients"),
   registerXriftMcpClient: (clientId: XriftMcpClientId) =>

@@ -1,3 +1,5 @@
+import { MATERIAL_SHOWCASE_DEFINITIONS, materialShowcaseAssetId, getMaterialShowcaseAsset } from "./lib/visual-editor/material-showcase-catalog";
+import { ensureCatalogMaterialTextures } from "./lib/visual-editor/asset-import-persistence";
 import { applyExternalStoreInstallAndAnalyzeModel } from "./lib/visual-editor/external-store";
 import {
   lazy,
@@ -1169,11 +1171,11 @@ function App() {
     chatgptGenerationRef.current = true;
     let createdProject: Project | null = null;
     try {
-      const result = await tauri.chatgptPlan(model, prompt, options);
-      const plan = parseChatgptWorldPlan(result.plan, result.assetCandidates);
+      const result = await tauri.chatgptPlan(model, prompt, options, options.materials ? MATERIAL_SHOWCASE_DEFINITIONS.map(v => ({id: materialShowcaseAssetId(v.key), name: v.name, extension: v.extensionLabel})) : []);
+      const plan = parseChatgptWorldPlan(result.plan, result.assetCandidates, options.materials);
       if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("開いている作品が変わりました。生成結果を適用せず停止しました");
       const name = await uniqueProjectDirectoryName(projectsRoot, `chatgpt-world-${Date.now()}`);
-      const prepared = await prepareStarterVisualProject(buildChatgptWorld(plan, name, result.assetCandidates));
+      const prepared = await prepareStarterVisualProject(buildChatgptWorld(plan, name, result.assetCandidates, options.materials));
       if (visualSessionRef.current?.bundle.project.projectId !== sourceId) throw new Error("開いている作品が変わりました。もう一度生成してください");
       // Resolve bounded download options before creating a project. Downloads never target the source work.
       const requests = [];
@@ -1206,6 +1208,14 @@ function App() {
         const applied = await applyExternalStoreInstallAndAnalyzeModel(project.path, completedPlan.assets, installed);
         completedPlan = { ...completedPlan, assets: applied.manifest };
         assetIds.set(`${request.providerId}:${request.externalId}`, applied.primaryAssetId);
+      }
+      for (const id of new Set(plan.objects.flatMap(v => v.gltfMaterialId ? [v.gltfMaterialId] : []))) {
+        const material = getMaterialShowcaseAsset(id);
+        if (!material) throw new Error("glTFマテリアルが見つかりません");
+        const manifest = { ...completedPlan.assets, assets: { ...completedPlan.assets.assets, [id]: structuredClone(material) } };
+        const withTextures = await ensureCatalogMaterialTextures(project.path, manifest, material.properties);
+        if (!withTextures) throw new Error("glTFマテリアルのテクスチャを取り込めませんでした");
+        completedPlan = { ...completedPlan, assets: withTextures };
       }
       completedPlan = placeChatgptAssets(completedPlan, plan, assetIds);
       await saveVisualProjectToDisk(project.path, { project: completedPlan.project, scenes: { [completedPlan.scene.sceneId]: completedPlan.scene }, assets: completedPlan.assets, prefabs: completedPlan.prefabs });
