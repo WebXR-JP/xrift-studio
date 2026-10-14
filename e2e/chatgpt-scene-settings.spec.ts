@@ -79,8 +79,9 @@ test("Plan待ちに手動変更したSkyboxを上書きしない", async ({ page
   await expect.poll(async () => (await job(page, id)).status).toBe("planned");
   expect((await call(page, "update_scene_settings", { skybox: { exposure: 1.8 } }, true)).ok).toBe(true);
   expect((await call(page, "apply_chatgpt_plan", { generationId: id }, true)).ok).toBe(true);
-  await expect.poll(async () => (await job(page, id)).status).toBe("failed");
-  expect((await job(page, id)).error).toContain("Planの作成後");
+  await expect.poll(() => page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptRequests.length)).toBe(2);
+  await expect.poll(async () => (await job(page, id)).status).toBe("planned");
+  expect((await job(page, id)).error).toBeUndefined();
   await expect.poll(async () => (await savedScene(page)).settings.skybox.exposure).toBe(1.8);
 });
 

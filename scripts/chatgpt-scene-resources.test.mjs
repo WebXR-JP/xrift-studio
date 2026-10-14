@@ -4,7 +4,8 @@ import { createServer } from "vite";
 
 const server = await createServer({ configFile: false, cacheDir: "node_modules/.vite-chatgpt-scene-resources-test", server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: "custom", optimizeDeps: { noDiscovery: true, include: [] } });
 test.after(() => server.close());
-const { collectChatgptSceneResources } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-scene-resources.ts");
+const { collectChatgptSceneContext, collectChatgptSceneResources } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-scene-resources.ts");
+const { createAudioSourceComponent } = await server.ssrLoadModule("/src/lib/visual-editor/scene-document.ts");
 const { chatgptPlanSnapshots, assertChatgptPlanCurrent, chatgptOperationDetail } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-plan-guards.ts");
 const { createStarterVisualProject } = await server.ssrLoadModule("/src/lib/visual-editor/starter-templates.ts");
 const starter = () => createStarterVisualProject("world", "blank", "resources-fixture");
@@ -30,6 +31,45 @@ test("large Japanese resource context respects the native UTF8 budget and preser
   assert.ok(resources.projectAssets.some(asset => asset.id === "model-0"));
   assert.ok(resources.projectAssets.length <= 128);
 });
+test("an empty Audio Source keeps its settings without sending a blank optional asset ID", () => {
+  const bundle = starter(), entity = Object.values(bundle.scene.entities)[0];
+  entity.components.push(createAudioSourceComponent("empty-audio"));
+  const resources = collectChatgptSceneResources(bundle, [entity.id, entity.id], []);
+  const components = JSON.parse(JSON.stringify(resources)).components.filter(component => component.componentId === "empty-audio");
+  assert.equal(components.length, 1);
+  assert.deepEqual(components[0].audio, { enabled: true, volume: 1, loop: false, spatial: true, autoplay: false });
+  assert.equal(entity.components.at(-1).audioAssetId, "", "Snapshot collection does not change authored data");
+});
+test("primitive geometry references are not advertised as project model asset IDs", () => {
+  const bundle = starter(), entity = Object.values(bundle.scene.entities)[0];
+  entity.components.push({ id: "primitive-mesh", type: "mesh", geometryAssetId: "builtin-primitive/plane", enabled: true });
+  const resources = collectChatgptSceneResources(bundle, [entity.id], []);
+  const primitive = JSON.parse(JSON.stringify(resources)).components.find(component => component.componentId === "primitive-mesh");
+  assert.equal(primitive.type, "mesh");
+  assert.equal(primitive.modelAssetId, undefined);
+});
+
+test("Scene summaries preserve selected Entity and Unicode names while bounding many Components and native float serialization", () => {
+  const bundle = starter(), template = Object.values(bundle.scene.entities)[0];
+  const unicodeName = "景色𠮷野".repeat(80);
+  bundle.project.metadata.title = unicodeName;
+  bundle.scene.entities = Object.fromEntries(Array.from({ length: 500 }, (_, index) => {
+    const entity = structuredClone(template);
+    entity.id = `entity-${index}`; entity.name = unicodeName;
+    entity.components = [...entity.components, ...Array.from({ length: 80 }, (_, component) => createAudioSourceComponent(`audio-${component}`))];
+    return [entity.id, entity];
+  }));
+  const context = collectChatgptSceneContext(bundle, "entity-499");
+  assert.equal(context.selectedEntityId, "entity-499");
+  assert.equal(context.entities[0].id, "entity-499");
+  assert.equal([...context.title].length, 100);
+  assert.equal([...context.entities[0].name].length, 80);
+  assert.equal(context.entities[0].components.filter(type => type === "audio-source").length, 1);
+  assert.ok(context.entities.every(entity => entity.components.length <= 32));
+  assert.ok(context.entities.length <= 100);
+  assert.ok(Buffer.byteLength(JSON.stringify(context)) <= 14 * 1024);
+  assert.ok(Buffer.byteLength(JSON.stringify(context)) + context.entities.length * 9 * 2 < 16 * 1024);
+});
 test("Plan guards refuse touched Entity, project asset or sky changes but allow unrelated edits and generated thumbnails", () => {
   const bundle = starter(), entity = Object.values(bundle.scene.entities)[0];
   bundle.assets.assets.model = { id: "model", name: "Model", kind: "model", status: "ready" };
@@ -47,7 +87,7 @@ test("public Plan details expose proposed audio and Skybox settings without raw 
   const resources = { projectAssets: [], builtinCandidates: [], components: [] };
   const audio = chatgptOperationDetail({kind:"audio",entityId:"private-entity-id",componentId:"private-component-id",enabled:false,volume:.125,loop:true,spatial:false,autoplay:true}, resources);
   assert.equal(audio,"音源 無効、音量 12.5%、ループ 有効、空間音声 無効、自動再生 有効");
-  assert.equal(chatgptOperationDetail({kind:"audio",entityId:"target",volume:3},resources),"音量 300%");
+  assert.equal(chatgptOperationDetail({kind:"audio",entityId:"target",volume:1},resources),"音量 100%");
   assert.equal(chatgptOperationDetail({kind:"skybox",enabled:true,iblEnabled:false,rotationDegrees:-45.25,exposure:.8},resources),"背景 有効、IBL 無効、回転 -45.25°、明るさ 0.8");
   assert.equal(chatgptOperationDetail({kind:"skybox",rotationDegrees:0,exposure:0},resources),"回転 0°、明るさ 0");
   assert.equal(chatgptOperationDetail({kind:"mesh-collision",entityId:"target",action:"add"},resources),"Colliderを追加");

@@ -56,6 +56,22 @@ pnpm tauri:dev
 
 手動のRelease workflowでは、主要導線9件のE2EをOS別ビルドの前に実行します。個別機能の回帰テストは変更時に`pnpm e2e:test e2e/<対象>.spec.ts`で実行し、全件は`pnpm e2e:test`で確認できます。テスト範囲、アップロード禁止境界、失敗時の確認方法は [リリース前E2E](./docs/RELEASE_E2E.md) を参照してください。
 
+### ChatGPTに渡すScene・素材の契約確認
+
+ChatGPT連携のScene・素材情報を変更したら、次のテストを実行してください。フロントエンドの実カタログと収集処理で作ったJSONを、Rustの検証処理へ渡します。空のAudio Source、大きなScene、全組み込み素材のIDを、アカウント接続やAPI通信なしで確認できます。
+
+```bash
+node --test scripts/chatgpt-resource-contract.test.mjs
+```
+
+`--generate-only <出力先.json>`の実行範囲は、JSONの生成とフロントエンド側の検査です。Rust側では`XRIFT_CHATGPT_RESOURCE_CONTRACT`にJSONの絶対パスを設定し、`cargo test --manifest-path src-tauri/Cargo.toml --lib`で検証できます。`chatgpt-editor.yml`では、frontendの生成物を専用artifactで受け渡し、Windows・macOS・Linuxで同じJSONを確認します。
+
+### 導入済みBlenderからの実GLB取り込み確認
+
+通常のnativeテストはBlenderの導入を要求しません。実機確認では`XRIFT_TEST_BLENDER=1`を指定し、`blender_modeling::tests::installed_blender_exports_real_geometry_pbr_and_studio_axes`を実行します。新規の隔離プロジェクトで実GLBと`.blend`を作り、形状・PBR Material・Studioの軸と複合回転を検査し、作業用プロジェクトだけを削除します。
+
+`XRIFT_TEST_BLENDER_OUTPUT`にリポジトリ直下の`node_modules/.cache/chatgpt-blender-model/fixture.glb`の絶対パスを指定すると、確認した実GLBと生成仕様の`fixture.json`を残します。保存先はこの固定cache内に限り、別の内容で上書きしません。続けて`node --test scripts/chatgpt-modeling.test.mjs`と`pnpm e2e:test e2e/chatgpt-modeling.spec.ts`を実行すると、通常のAssets取り込みとScene・Playの実描画、保存後の再表示を確認できます。実GLBがない環境では、その実データを使う試験だけをSKIPします。ブラウザ試験のnative transportと推論応答は隔離fixtureで、本物のGLB bytesと通常の取り込み・描画処理を使います。
+
 ### 実Classic書き出しの描画確認
 
 `classic-mtoon-export.spec.ts`は、CLI変換と既存Classicへの書き出しで作った実ファイルを描画します。通常のcheckoutでは準備結果がないためSKIPします。Node.js 22.15以上、ロックファイルに沿ったリポジトリ依存、導入済みの公式CLI 0.25.0、Chromiumを用意し、次をリポジトリ直下で実行してください。`--cli`には公式CLIの`dist/index.js`を指定します。`XRIFT_CLASSIC_CLI_ENTRY`環境変数でも指定できます。

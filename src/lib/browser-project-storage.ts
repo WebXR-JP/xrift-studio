@@ -1,5 +1,6 @@
 import type { FsEntry, ProjectKind, VisualAssetImportWrite, VisualProjectFiles, VisualProjectWriteRequest } from "./tauri";
 import { isValidAssetImportPath, isValidAssetImportTransactionId } from "./visual-editor/asset-import-transaction";
+import { hasGlbContainerHeader } from "./glb-container";
 import type { VisualPublicationRecord } from "./visual-editor/project-document";
 
 const PROJECT_PREFIX = "browser-project://";
@@ -286,16 +287,27 @@ function fileMimeType(path: string): string {
   return ({ png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif", avif: "image/avif", svg: "image/svg+xml", glb: "model/gltf-binary", gltf: "model/gltf+json", vrm: "model/gltf-binary", json: "application/json", wav: "audio/wav", mp3: "audio/mpeg", ogg: "audio/ogg", m4a: "audio/mp4", aac: "audio/aac", flac: "audio/flac", woff: "font/woff", woff2: "font/woff2", ttf: "font/ttf", otf: "font/otf", ktx2: "image/ktx2" } as Record<string, string>)[extension] ?? "application/octet-stream";
 }
 
-function decodeDataUrl(dataUrl: string): Uint8Array {
+function decodeDataUrl(dataUrl: string, relativePath: string): Uint8Array {
   const match = /^data:[^,]*;base64,([A-Za-z0-9+/]*={0,2})$/.exec(dataUrl);
-  if (!match || match[1].length > Math.ceil(MAX_FILE_BYTES / 3) * 4) throw new Error("asset import payload size is invalid");
-  const binary = atob(match[1]);
-  if (binary.length > MAX_FILE_BYTES) throw new Error("asset import payload size is invalid");
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  if (!match) throw new Error("asset import payload size is invalid");
+  const byteLength = Math.floor(match[1].length * 3 / 4) - (match[1].endsWith("==") ? 2 : match[1].endsWith("=") ? 1 : 0);
+  const glbPath = relativePath.toLowerCase().endsWith(".glb");
+  const prefix = glbPath ? Uint8Array.from(atob(match[1].slice(0, 28)), (character) => character.charCodeAt(0)) : undefined;
+  if (byteLength > MAX_FILE_BYTES && (!prefix || !hasGlbContainerHeader(prefix, byteLength))) throw new Error("asset import payload size is invalid");
+  try {
+    const binary = atob(match[1]);
+    if (binary.length > MAX_FILE_BYTES && (!glbPath || !hasGlbContainerHeader(prefix!, binary.length))) throw new Error("asset import payload size is invalid");
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+    return bytes;
+  } catch (error) {
+    if (error instanceof RangeError) throw new Error("素材を読み込むためのメモリを確保できませんでした。");
+    throw error;
+  }
 }
 
 export async function writeBrowserBinaryFile(projectPath: string, relativePath: string, dataUrl: string): Promise<void> {
-  await writeBrowserFiles(projectPath, new Map([[relativePath, decodeDataUrl(dataUrl)]]));
+  await writeBrowserFiles(projectPath, new Map([[relativePath, decodeDataUrl(dataUrl, relativePath)]]));
 }
 
 /** Matches desktop atomic import rules, including content-addressed no-overwrite semantics. */
@@ -309,9 +321,9 @@ export async function commitBrowserAssetImport(projectPath: string, transactionI
     const path = validateBrowserRelativePath(write.relativePath);
     if (!isValidAssetImportPath(path)) throw new Error("outside the managed Asset folders");
     if (decoded.has(path)) throw new Error("asset import transaction contains duplicate targets");
-    const bytes = decodeDataUrl(write.dataUrl);
+    const bytes = decodeDataUrl(write.dataUrl, path);
     if (!bytes.length) throw new Error("asset import payload size is invalid");
-    total += bytes.length;
+    if (!path.toLowerCase().endsWith(".glb") || !hasGlbContainerHeader(bytes)) total += bytes.length;
     if (total > MAX_TRANSACTION_BYTES) throw new Error("asset import transaction is too large");
     decoded.set(path, bytes);
   }
@@ -345,7 +357,7 @@ export async function saveBrowserVisualProject(projectPath: string, request: Vis
     { relativePath: documents.project.assetManifestPath, content: request.assetManifestJson },
     ...request.sceneDocuments, ...(request.prefabDocuments ?? []),
   ]) add(file.relativePath, new TextEncoder().encode(file.content));
-  for (const file of request.binaryDocuments ?? []) add(file.relativePath, decodeDataUrl(file.dataUrl));
+  for (const file of request.binaryDocuments ?? []) add(file.relativePath, decodeDataUrl(file.dataUrl, file.relativePath));
   await transaction<void>("readwrite", (files, settings, _result, fail) => {
     const previous = files.get([projectPath, PROJECT_MANIFEST]);
     previous.onsuccess = () => {

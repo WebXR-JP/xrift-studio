@@ -50,10 +50,32 @@ MToon・VRMの生成コードには、固定した`@pixiv/three-vrm`の配布ソ
 - 一覧パネルの行数がSceneのEntity数やAsset数に比例する場合は、行を`memo`したコンポーネントに分ける。行から親のclosureを呼ぶ場合は、毎renderで更新する1つのrefにまとめて渡す。closureをpropとして直接渡すと毎renderで参照が変わり、`memo`で再描画を抑止できない。
 - Scene Viewの描画品質には、CSS表示サイズに対する固定の割合を使う。React Three FiberにdevicePixelRatioの範囲を渡すと、ディスプレイのdevicePixelRatioをその範囲に収める処理になる。1倍のディスプレイでは描画ピクセル数を減らせないため、範囲では指定しない。ラベルに示す割合と実際の描画ピクセル数を一致させる。
 
+## ChatGPTと手動編集を続ける
+
+Sceneの正本は、開いているEditor bridgeの最新bundleとする。各依頼と再計画でScene・素材を読み直し、会話は制作意図と保存済みの作業を補う参照として渡す。以前のPlanの全項目を完了済みと扱わない。
+
+- `chatgpt-scene-resources.ts`で送信用のSceneと素材情報を要約する。選択対象を優先し、件数・文字数・UTF-8容量を送信側で収める。未割当の素材参照は省略する。catalog keyの構文とファイルパスの構文は区別し、正規の内蔵候補をパスとして拒否しない。
+- `chatgpt-plan-guards.ts`の推論用snapshotは、Scene・Assets・Prefabと入力に使う作品名を検査する。推論中に新規配置・削除・位置変更などがあれば、返答を適用する前に最新状態で再計画する。素材のサムネイルや保存時刻だけの更新は再計画の理由にしない。
+- 確認済みPlanと反映中の保護は、変更するEntity・Skyboxと再利用するproject Assetを対象にする。既存素材を使う新規配置も保護する。非同期処理の結果は`rebaseChatgptStep`で最新bundleへ統合し、別Entity、別Settingsの節、別Prefab、独立したroot Entity追加を保持する。同じデータへの手動編集は上書きしない。
+- 同一Sceneの編集競合は`ChatgptSceneConflictError`として扱い、`App.tsx`で同じ依頼を最大2回再計画する。`chatgpt-live-scene.ts`は保存済みイベントだけを続きを考えるための要約に含める。generationId、会話、モデル、思考量、保存件数を保ち、実行モードは未完了の作業を続ける。承認済みPlanから再計画した場合は、新しいPlanの確認待ちへ戻す。
+- プロジェクト・Sceneの切り替え、Play、素材の読み込み、利用者による停止は再計画の対象にしない。反映を停止し、保存済みの変更を残す。手動編集が続いて再計画の上限に達した場合も、変更を保持し、最新状態から「続ける」で再開できることを案内する。
+
+実collectorからRust検証までの契約、同じ対象と無関係な対象の編集、保存済み作業を含む再計画、Planの再確認を回帰試験で確認する。ブラウザのIPC fixtureでモデル応答を与える試験と、実アカウントでの推論・認証の確認は区別して報告する。
+
+計画用JSON Schemaでは、同じEntity・Component・候補IDの一覧を`$defs`で共有し、操作ごとに列挙を複製しない。[Structured Outputsの公式仕様](https://developers.openai.com/api/docs/guides/structured-outputs)は、enum値の合計を1000、入れ子を10段階までとしている。最大件数のSceneと素材を使うnative回帰試験で上限内に収まることを確認し、利用者の素材を切り落として対処しない。
+
+送信を受け付けた時点で入力欄を空にし、処理中や送信条件が整っていない依頼はFIFOのQueueに保持する。各依頼のモデル、思考量、実行モード、素材・制作方法の選択を保持し、送信直前に最新Sceneを読む。Queueはアプリ起動中の作品・Scene・チャットごとに管理する。停止・失敗・Planの破棄ではQueueも一時停止し、Planの確認待ちでは次の依頼を始めない。World画面から離れたQueueは復帰時に利用者が再開する。別作品や別Sceneへ自動転送しない。
+
+Queueのdispatchは予約した作品・Scene・チャットをAppへ渡し、最新のbridgeと同期した選択refに一致する場合だけ開始する。Queueの依頼IDをgenerationIdとして使い、初回に作成したチャットへは同じIDの依頼だけを引き継ぐ。文面の一致を別依頼や別チャットへの関連付けに使わない。
+
+導入済みのBlenderは`get_blender_status`で検出し、制作方法の「自動」「素材ストア」「Blender」に反映する。`blender-model`は形状とPBR Materialの構造化データを、同梱の固定runnerで解釈する。バックグラウンドの初期Sceneで実GLBと編集可能な`.blend`を作り、通常のModel分析・Asset保存・描画経路で取り込む。任意のPythonをモデル応答から実行しない。作成先は作品内の一意な所有マーカー付きcacheとし、既存のBlender作品やファイルを上書きしない。StudioとBlenderの軸・Euler XYZ回転・寸法を実GLBで検証する。
+
 ## MCP とネイティブの契約
 
 - AI clientはMCP toolのdescriptionとserverの`instructions`を操作説明として読む。toolの追加・修正時は、機能、選ぶ基準、実行後の操作、失敗しやすい条件を書く。代替toolがあれば名前も挙げる。説明だけでは防げない失敗には、戻り値の`harness`警告など、実装側の対応を用意する。
 - Rustコマンドへ外部入力を渡すときは、既存のパス検証と権限制御を保ち、任意のパス実行や削除を追加しない。
+- 外部ストアの配布元が使う正規CDNへの転送を、別サイトのダウンロードとして誤って拒否しない。ダウンロードの入口と各redirect先を、配布元ごとのHTTPS・host・配布pathで送信前に検査する。ambientCGは`ambientcg.com/get`から`acg-download.struffelproductions.com/file/ambientCG-Web/download/`へ転送する。全hostの許可や最終URLだけの事後検査で対処しない。
+- ストアのモデル形式は、配布元のファイル情報にあるglTF・GLBだけを選ぶ。自己完結したGLBの元bytesを変換せず保存し、署名、version、container length、外部参照、保存先と通常fileの検査を保つ。GLBにはストア・取り込み共通の固定byte上限を適用しない。ブラウザのストアは先頭のGLB署名と宣言lengthを検査して読み取り、保存時のfile・transaction上限も正規GLBだけ対象外にする。配布情報のlength・hashとlicenseを保ち、再読込には同じ元bytesを使う。ZIP展開、画像・音声などの既存保護は別に保つ。メモリー確保や保存領域不足は、形式・配布先の拒否と区別して報告する。
 
 
 ## IPC・CLI 連携

@@ -50,6 +50,8 @@ export const XRIFT_MCP_TOOLS = [
   { name: "connect_chatgpt", surface: "project" },
   { name: "disconnect_chatgpt", surface: "project" },
   { name: "list_chatgpt_models", surface: "project" },
+  { name: "get_modeling_tools", surface: "project" },
+  { name: "create_blender_model", surface: "project" },
   { name: "open_chatgpt_panel", surface: "project" },
   { name: "generate_chatgpt_world", surface: "project" },
   { name: "get_chatgpt_generation", surface: "project" },

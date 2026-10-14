@@ -69,6 +69,20 @@ test("public Plan settings remain readable after reload and in a copied transcri
   assert.match(api.chatgptSessionTranscript(restored), /音量30%、ループあり/);
 });
 
+test("saved requests retain their modeling source across updates and restart", () => {
+  for (const modelSource of ["auto", "blender", "store"]) {
+    const storage = new MemoryStorage();
+    const options = { models: true, materials: false, audio: false, modelSource };
+    const updated = api.upsertChatgptSessionTurn([session()], "session-1", turn("model", { options }));
+    assert.deepEqual(updated[0].turns[0].options, options);
+    api.saveChatgptSessions(updated, storage);
+    assert.deepEqual(api.loadChatgptSessions(storage)[0].turns[0].options, options);
+  }
+  const storage = new MemoryStorage();
+  api.saveChatgptSessions([withTurn(turn("unknown-source", { options: { models: true, materials: true, audio: true, modelSource: "unrecognized" } }))], storage);
+  assert.equal(api.loadChatgptSessions(storage)[0].turns[0].options.modelSource, undefined);
+});
+
 test("persisted/copy/context records exclude transport credentials, URL queries and local paths", () => {
   const storage = new MemoryStorage();
   const secret = "testsecret987654321";

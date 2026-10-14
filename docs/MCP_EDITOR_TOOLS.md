@@ -111,11 +111,13 @@ document toolの戻り値には`harness`が付くことがある。同じ種類�
 
 ワールドを開き、`list_chatgpt_models`で利用可能なslug・表示名・`supportedReasoningEfforts`・`defaultReasoningEffort`を取得する。対応する思考量はモデルごとに異なり、情報がなければ空配列とnullを返す。モデル名から対応値を推測しない。`open_chatgpt_panel`は同じEditorのChatGPTタブを表示し、Scene Viewの横で作成プランと進行状況を読める。未接続の接続カード、処理・復元中の案内、接続エラーは会話中央に表示する。接続後は右上のアカウントアイコンから詳細を確認できる。
 
-`generate_chatgpt_world`には最新の`get_editor_context`から`projectId`・`sceneId`・`expectedRevision`、選んだ`model`、2000文字以内の`prompt`を渡す。任意の`reasoningEffort`は`none`・`minimal`・`low`・`medium`・`high`・`xhigh`・`max`のうち、選択モデルの`supportedReasoningEfforts`に含まれる値だけを指定する。省略時は推論APIへ思考量を送らず、モデル側の既定設定を保つ。モデル情報がない場合も省略する。非対応の指定は推論APIへ送る前に拒否する。`options`は`models`・`materials`・`audio`のbooleanを持つオブジェクトで、省略時はすべて有効。Editで、素材の取り込みなど他の処理が完了していることが必要。Itemプロジェクトでは生成できない。
+`generate_chatgpt_world`には最新の`get_editor_context`から`projectId`・`sceneId`・`expectedRevision`、選んだ`model`、2000文字以内の`prompt`を渡す。任意の`reasoningEffort`は`none`・`minimal`・`low`・`medium`・`high`・`xhigh`・`max`のうち、選択モデルの`supportedReasoningEfforts`に含まれる値だけを指定する。省略時は推論APIへ思考量を送らず、モデル側の既定設定を保つ。モデル情報がない場合も省略する。非対応の指定は推論APIへ送る前に拒否する。`options`は`models`・`materials`・`audio`のbooleanと、任意の`modelSource: "auto" | "blender" | "store"`を持つオブジェクトで、省略時はすべて有効・制作方法は自動。Blenderを使うには端末にBlenderが必要で、素材ストアを選ぶとBlenderでの作成を行わない。Editで、素材の取り込みなど他の処理が完了していることが必要。Itemプロジェクトでは生成できない。
 
 生成には接続アカウントの利用枠を使う。開始の応答は`generationId`と`status: "running"`を返す。既定は`target: "current"`、`mode: "build"`。現在のSceneで既存Entityの位置・回転・大きさ・名前、モデル・Material、Skybox・Audio Source・Colliderを調整し、必要なEntityを追加する。内部では小さいPlanに分け、`hasMore`・`remainingWork`で残りの作業を示す。利用者に内部JSONや件数の調整を要求しない。`target: "new"`を明示すると別のワールドを作る。
 
-`mode: "plan"`はPlanの検証までを行い、`status: "planned"`と公開用のPlan概要を返す。Sceneやプロジェクトのファイルは変更しない。内容を確認した後、最新の`get_editor_context`から`projectId`・`sceneId`・`expectedRevision`と`generationId`を`apply_chatgpt_plan`へ渡す。作成済みのPlanを実行し、再推論やモデル・思考量の変更は行わない。元の作品とSceneを開いていることが必要で、古いrevisionやPlanの対象Entityの変更は拒否する。`cancel_chatgpt_generation`は未反映のPlanを破棄するか、実行中の制作を停止する。
+`mode: "plan"`はPlanの検証までを行い、`status: "planned"`と公開用のPlan概要を返す。Sceneやプロジェクトのファイルは変更しない。内容を確認した後、最新の`get_editor_context`から`projectId`・`sceneId`・`expectedRevision`と`generationId`を`apply_chatgpt_plan`へ渡す。元の作品とSceneを開いていることが必要で、古いrevisionは拒否する。確認済みPlanの対象が編集された場合は、手動編集を保持して新しいPlanを作り、同じ`generationId`の`status: "planned"`に戻す。新しい内容を確認してから、もう一度`apply_chatgpt_plan`を呼ぶ。モデルと思考量は維持する。`cancel_chatgpt_generation`は未反映のPlanを破棄するか、実行中の制作を停止する。
+
+通常の制作では、推論中にSceneや素材が編集された場合、最新の情報から内容を考え直す。反映中は無関係な編集を組み合わせ、変更対象との競合だけを再計画する。保存済みの作業と手動編集を保ち、未完了の作業を続ける。自動再計画は同じ依頼で最大2回とし、進捗に状況を示す。上限に達した場合は変更を保持して停止し、次の依頼では現在のSceneと会話を読み直す。
 
 `get_chatgpt_generation`で同じIDを確認し、`progress`の`phase`・`message`（実行中の工程）、`completed`・`total`（保存済みの件数）、`recentEvents`（直近の実行結果）、`projectId`（生成先）を読む。状態は`running`・`planned`・`completed`・`cancelled`・`failed`。開始や途中の進行表示を完了と扱わない。検証後に下書きを保存し、素材の取り込みとEntityの調整・配置を順次進め、各工程の結果を保存する。途中の失敗や停止でも保存済みの結果を残す。停止は反映済みの変更を取り消さない。`completed`の保存先、または`failed`のエラーを確認し、`get_editor_context`と`capture_scene_view`で実物を確認する。制作中に作品やSceneが切り替わった場合は追加を停止する。公開は行わない。会話の公開履歴は端末へ保存し、Planの実行用データと変更を戻す控えはStudio終了まで保持する。
 
@@ -124,6 +126,14 @@ document toolの戻り値には`harness`が付くことがある。同じ種類�
 `revert_chatgpt_generation`は最新の作品・Scene・revisionと`generationId`を受け、依頼前のScene・Assetsを復元して保存する。`revertAvailable`が必要で、後の手動編集や別の依頼があると拒否する。控えはStudio起動中の直近8件までで、再起動後には使用できない。ダウンロード済みのファイルと会話履歴は削除しない。
 
 `disconnect_chatgpt`は認証・復元・推論中の解除を拒否する。Studio内とOSの保存先から接続を消し、ChatGPT側のリフレッシュトークンも失効させる。遠隔の失効を確認できなかった場合は返された`error`に従ってChatGPTの設定を確認する。
+
+### Blenderでモデルを作成する
+
+`get_modeling_tools`, `create_blender_model`
+
+`get_modeling_tools`は導入済みのBlenderの利用状況と版を返す。プラグインやChatGPT接続は必要ない。`create_blender_model`には最新の`get_editor_context`の作品・Scene・revisionと`model`を渡す。`model`は名前と最大64個のpartsを持ち、各partはbox・sphere・cylinder・cone・torus・meshから形状を選び、位置、Euler XYZの回転、寸法、色、metallic、roughnessを指定する。座標はStudioのY-up・メートルで、回転は度数。meshではverticesとfacesを指定する。任意のPythonや外部ファイルを渡すことはできない。
+
+Editで実行すると、独立したBlenderプロセスが実GLBと編集可能な`.blend`を作成し、GLBを通常のModelとしてAssetsに保存する。既存のBlender作品は変更しない。返された`modelAssetId`を`get_model_asset`で確認し、`place_asset`で配置する。作成中に利用者が別のEntityを編集しても、その編集を保存結果へ組み合わせる。作品やSceneが変わった場合は反映を停止する。
 
 **アカウント**
 `get_account`, `login`, `reload_xrift_items`
@@ -542,3 +552,5 @@ UIでは「アセットストア → ギミック → カスタム車」と「XR
 Playでは運転席をクリックして乗り、W/Sで前後移動、A/Dで旋回、Spaceで降りる。同乗席も着席できる。タイヤと煙は、各参加者側で公式Vehicleの同期済み移動量から表示を更新する。停止中は回転と新しい煙の放出を止める。粒子ごとの位置やタイヤの角度を個別送信する方式ではないため、粒子の形や位置が参加者間で完全に一致する保証はない。公開XRiftでの複数人表示は別途確認する。
 
 追加後は`get_entity_components`で構成、`capture_scene_view`でEdit中の見た目を確認し、`set_play_mode`で乗降と走行を確認する。既存の車は新規配置と別の編集対象であり、この操作だけでは差し替わらない。
+
+素材庫は`providerId: "shared-material-library"`で`search_external_assets`、`get_external_asset_options`、`install_external_asset`を使えます。`resolution`には取得したファイル名を指定し、`format`は省略します。GLBはModel、PNG・マスクはTextureです。未指定のライセンスを許諾として扱わないでください。

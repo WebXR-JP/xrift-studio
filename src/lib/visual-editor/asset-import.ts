@@ -92,6 +92,16 @@ import {
 
 export const ASSET_IMPORT_THUMBNAIL_RENDERER_VERSION = "three-white-v1";
 export const ASSET_IMPORT_MAX_BYTES = 128 * 1024 * 1024;
+/** Large GLBs use their verified container length, rather than the generic asset quota. */
+export function assetImportSizeIsSupported(classification: ClassifiedAssetImport, byteLength: number, header: Uint8Array): boolean {
+  if (!Number.isSafeInteger(byteLength) || byteLength <= 0) return false;
+  if (byteLength <= ASSET_IMPORT_MAX_BYTES) return true;
+  if (classification.kind !== "model" || classification.format !== "glb" || header.byteLength < 20) return false;
+  const view = new DataView(header.buffer, header.byteOffset, header.byteLength);
+  return view.getUint32(0, true) === 0x46546c67 && view.getUint32(4, true) === 2
+    && view.getUint32(8, true) === byteLength && view.getUint32(12, true) <= byteLength - 20
+    && view.getUint32(16, true) === 0x4e4f534a;
+}
 /** Guards recursive library and React render paths before GLTFLoader runs. */
 export const ASSET_IMPORT_MAX_MODEL_NODES = 10_000;
 export const ASSET_IMPORT_MAX_MODEL_HIERARCHY_DEPTH = 256;
@@ -535,13 +545,15 @@ async function createAssetImportPlanInternal(
       reimportAsset?.id,
     );
   }
-  if (bytes.byteLength === 0 || bytes.byteLength > ASSET_IMPORT_MAX_BYTES) {
+  if (!assetImportSizeIsSupported(classification, bytes.byteLength, bytes.subarray(0, 20))) {
+    const invalidLargeGlb = classification.kind === "model" && classification.format === "glb" && bytes.byteLength > ASSET_IMPORT_MAX_BYTES;
     diagnostics.push({
       severity: "blocking",
-      code: bytes.byteLength === 0 ? "asset-empty" : "asset-too-large",
+      code: bytes.byteLength === 0 ? "asset-empty" : invalidLargeGlb ? "glb-header-invalid" : "asset-too-large",
       message:
         bytes.byteLength === 0
           ? "空のファイルは取り込めません"
+          : invalidLargeGlb ? "GLBヘッダーとファイルの長さを確認できませんでした"
           : `取り込み上限 ${ASSET_IMPORT_MAX_BYTES / 1024 / 1024} MBを超えています`,
       fileName,
       fieldPath: "bytes",

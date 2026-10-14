@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::io::AsyncWriteExt;
@@ -13,6 +13,11 @@ const POLY_HAVEN_API: &str = "https://api.polyhaven.com";
 const POLY_HAVEN_PROVIDER_ID: &str = "poly-haven";
 const AMBIENT_CG_API: &str = "https://ambientcg.com/api/v3";
 const AMBIENT_CG_PROVIDER_ID: &str = "ambient-cg";
+// The provider's public /get endpoint redirects assets to this download bucket.
+// Keep the media/thumbnail bucket and other Backblaze buckets out of downloads.
+const AMBIENT_CG_DOWNLOAD_HOST: &str = "acg-download.struffelproductions.com";
+const AMBIENT_CG_DOWNLOAD_PREFIX: &str = "/file/ambientCG-Web/download/";
+const DOWNLOAD_REDIRECT_LIMIT: usize = 10;
 /// 音蔵 serves a Poly Haven shaped read-only catalogue of freely usable
 /// sounds, so it reuses this pipeline rather than needing its own.
 const OTOGURA_API: &str = "https://yushimatenjin.github.io/sound-generator/api/v1";
@@ -176,7 +181,10 @@ async fn fetch_otogura_json(path: &str) -> Result<Value, String> {
         .await
         .map_err(|error| format!("音蔵へ接続できませんでした: {}", error))?;
     if !response.status().is_success() {
-        return Err(format!("音蔵APIがエラーを返しました ({})", response.status()));
+        return Err(format!(
+            "音蔵APIがエラーを返しました ({})",
+            response.status()
+        ));
     }
     response
         .json::<Value>()
@@ -199,7 +207,10 @@ async fn otogura_download_spec(id: &str) -> Result<DownloadSpec, String> {
     Ok(DownloadSpec {
         role: "audio".to_string(),
         url: url.to_string(),
-        size: entry.get("size").and_then(Value::as_u64).unwrap_or_default(),
+        size: entry
+            .get("size")
+            .and_then(Value::as_u64)
+            .unwrap_or_default(),
         extension: "ogg".to_string(),
     })
 }
@@ -725,7 +736,24 @@ fn model_bundle_path(value: &str) -> Result<String, String> {
 }
 
 fn model_specs(root: &Value, resolution: &str) -> Vec<DownloadSpec> {
-    let Some(leaf) = file_leaf(root, &["gltf", resolution, "gltf"]) else {
+    ["glb", "gltf"]
+        .into_iter()
+        .find_map(|format| {
+            let specs = model_specs_for_format(root, resolution, format);
+            (!specs.is_empty()).then_some(specs)
+        })
+        .unwrap_or_default()
+}
+
+fn model_specs_for_format(root: &Value, resolution: &str, format: &str) -> Vec<DownloadSpec> {
+    if !matches!(format, "glb" | "gltf") {
+        return Vec::new();
+    }
+    let Some(leaf) = file_leaf(root, &["gltf", resolution, format]).or_else(|| {
+        (format == "glb")
+            .then(|| file_leaf(root, &["glb", resolution, format]))
+            .flatten()
+    }) else {
         return Vec::new();
     };
     let Some(url) = leaf.get("url").and_then(Value::as_str) else {
@@ -735,7 +763,7 @@ fn model_specs(root: &Value, resolution: &str) -> Vec<DownloadSpec> {
         role: "model".to_string(),
         url: url.to_string(),
         size: leaf.get("size").and_then(Value::as_u64).unwrap_or_default(),
-        extension: "gltf".to_string(),
+        extension: format.to_string(),
     }];
     if let Some(includes) = leaf.get("include").and_then(Value::as_object) {
         for (bundle_path, entry) in includes {
@@ -764,6 +792,25 @@ fn model_specs(root: &Value, resolution: &str) -> Vec<DownloadSpec> {
     specs
 }
 
+fn model_format_options(root: &Value, resolution: &str) -> Vec<ExternalStoreFormatOption> {
+    ["glb", "gltf"]
+        .into_iter()
+        .filter_map(|format| {
+            let specs = model_specs_for_format(root, resolution, format);
+            (!specs.is_empty()).then(|| ExternalStoreFormatOption {
+                id: format.to_string(),
+                label: if format == "glb" {
+                    "GLB".to_string()
+                } else {
+                    "glTF".to_string()
+                },
+                byte_length: specs.iter().map(|entry| entry.size).sum(),
+                file_count: specs.len(),
+            })
+        })
+        .collect()
+}
+
 fn available_resolutions(root: &Value, kind: &str) -> Vec<ExternalStoreResolution> {
     let candidates = ["1k", "2k", "4k", "8k", "16k", "24k"];
     candidates
@@ -777,7 +824,10 @@ fn available_resolutions(root: &Value, kind: &str) -> Vec<ExternalStoreResolutio
                     .unwrap_or_default();
                 (specs, formats)
             } else if kind == "model" {
-                (model_specs(root, resolution), Vec::new())
+                (
+                    model_specs(root, resolution),
+                    model_format_options(root, resolution),
+                )
             } else {
                 (texture_specs(root, resolution), Vec::new())
             };
@@ -861,23 +911,31 @@ pub async fn get_external_store_asset_options(
 
 fn validate_download_url(provider_id: &str, value: &str) -> Result<reqwest::Url, String> {
     let url = reqwest::Url::parse(value).map_err(|_| "ダウンロードURLが不正です".to_string())?;
+    if url.scheme() != "https"
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.port_or_known_default() != Some(443)
+        || url.fragment().is_some()
+    {
+        return Err("許可されていないダウンロード先です".to_string());
+    }
     let allowed = match provider_id {
-        POLY_HAVEN_PROVIDER_ID => {
-            url.scheme() == "https" && url.host_str() == Some("dl.polyhaven.org")
-        }
+        POLY_HAVEN_PROVIDER_ID => url.host_str() == Some("dl.polyhaven.org"),
         OTOGURA_PROVIDER_ID => {
-            url.scheme() == "https"
-                && url.host_str() == Some(OTOGURA_HOST)
+            url.host_str() == Some(OTOGURA_HOST)
                 && url.path().starts_with("/sound-generator/")
                 && url.path().ends_with(".ogg")
         }
         AMBIENT_CG_PROVIDER_ID => {
-            url.scheme() == "https"
-                && url.host_str() == Some("ambientcg.com")
+            let source = url.host_str() == Some("ambientcg.com")
                 && url.path() == "/get"
                 && url
                     .query_pairs()
-                    .any(|(key, value)| key == "file" && !value.is_empty())
+                    .any(|(key, value)| key == "file" && !value.is_empty());
+            let download = url.host_str() == Some(AMBIENT_CG_DOWNLOAD_HOST)
+                && url.path().starts_with(AMBIENT_CG_DOWNLOAD_PREFIX)
+                && url.path().ends_with(".zip");
+            source || download
         }
         _ => false,
     };
@@ -887,13 +945,44 @@ fn validate_download_url(provider_id: &str, value: &str) -> Result<reqwest::Url,
     Ok(url)
 }
 
+fn validate_download_redirect(
+    provider_id: &str,
+    next: &reqwest::Url,
+    previous: &[reqwest::Url],
+) -> Result<(), String> {
+    // previous includes the initial request, as in reqwest's default policy.
+    if previous.len() > DOWNLOAD_REDIRECT_LIMIT || previous.contains(next) {
+        return Err("配布元の転送が繰り返されたため、ダウンロードを停止しました".to_string());
+    }
+    validate_download_url(provider_id, next.as_str()).map(|_| ())
+}
+
+fn external_store_download_client(provider_id: &str) -> Result<reqwest::Client, String> {
+    let provider_id = provider_id.to_string();
+    reqwest::Client::builder()
+        .user_agent(POLY_HAVEN_USER_AGENT)
+        .timeout(std::time::Duration::from_secs(120))
+        .redirect(reqwest::redirect::Policy::custom(
+            move |attempt| match validate_download_redirect(
+                &provider_id,
+                attempt.url(),
+                attempt.previous(),
+            ) {
+                Ok(()) => attempt.follow(),
+                Err(error) => attempt.error(error),
+            },
+        ))
+        .build()
+        .map_err(|error| error.to_string())
+}
+
 async fn download_to(
     provider_id: &str,
     path: &Path,
     spec: &DownloadSpec,
 ) -> Result<(u64, String), String> {
     let url = validate_download_url(provider_id, &spec.url)?;
-    let response = external_store_client()?
+    let response = external_store_download_client(provider_id)?
         .get(url)
         .send()
         .await
@@ -912,14 +1001,14 @@ async fn download_to(
     let mut stream = response.bytes_stream();
     let mut digest = Sha256::new();
     let mut size = 0u64;
-    let mut prefix = Vec::with_capacity(16);
+    let mut prefix = Vec::with_capacity(20);
     while let Some(chunk) = stream.next().await {
         let bytes = chunk.map_err(|error| error.to_string())?;
         size = size.saturating_add(bytes.len() as u64);
-        if size > 768 * 1024 * 1024 {
+        if !(spec.role == "model" && spec.extension == "glb") && size > 768 * 1024 * 1024 {
             return Err("外部アセットが許可サイズを超えています".to_string());
         }
-        let remaining_prefix = 16usize.saturating_sub(prefix.len());
+        let remaining_prefix = 20usize.saturating_sub(prefix.len());
         prefix.extend_from_slice(&bytes[..bytes.len().min(remaining_prefix)]);
         digest.update(&bytes);
         file.write_all(&bytes)
@@ -938,7 +1027,19 @@ async fn download_to(
             spec.extension.to_ascii_uppercase()
         ));
     }
+    if spec.extension == "glb" && !has_binary_model_signature(&prefix, size) {
+        return Err("ダウンロードしたGLBファイルの形式を確認できませんでした".to_string());
+    }
     Ok((size, format!("{:x}", digest.finalize())))
+}
+
+pub(crate) fn has_binary_model_signature(bytes: &[u8], size: u64) -> bool {
+    bytes.len() >= 20
+        && bytes.starts_with(b"glTF")
+        && u32::from_le_bytes(bytes[4..8].try_into().unwrap()) == 2
+        && u32::from_le_bytes(bytes[8..12].try_into().unwrap()) as u64 == size
+        && u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as u64 <= size.saturating_sub(20)
+        && &bytes[16..20] == b"JSON"
 }
 
 fn has_environment_file_signature(bytes: &[u8], format: &str) -> bool {
@@ -1259,6 +1360,47 @@ fn embed_model_uri(
 }
 
 fn make_model_self_contained(staged: &mut BTreeMap<String, StagedDownload>) -> Result<(), String> {
+    if staged.get("model").is_some_and(|entry| entry.4 == "glb") {
+        let entry = &staged["model"];
+        let mut file = std::fs::File::open(&entry.1).map_err(|error| error.to_string())?;
+        let size = file.metadata().map_err(|error| error.to_string())?.len();
+        let mut prefix = [0; 20];
+        file.read_exact(&mut prefix)
+            .map_err(|_| "GLBヘッダーを読み取れませんでした".to_string())?;
+        if !has_binary_model_signature(&prefix, size) {
+            return Err("ダウンロードしたGLBファイルの形式を確認できませんでした".to_string());
+        }
+        let json_size = u32::from_le_bytes(prefix[12..16].try_into().unwrap()) as usize;
+        if json_size as u64 > size - 20 {
+            return Err("GLBのJSON情報がファイルの範囲を超えています".to_string());
+        }
+        let mut bytes = Vec::new();
+        bytes
+            .try_reserve_exact(json_size)
+            .map_err(|_| "GLBのJSON情報を読み取るメモリーを確保できませんでした".to_string())?;
+        bytes.resize(json_size, 0);
+        file.read_exact(&mut bytes)
+            .map_err(|_| "GLBのJSON情報を読み取れませんでした".to_string())?;
+        let document: Value =
+            serde_json::from_slice(&bytes).map_err(|_| "GLBのJSON情報が不正です".to_string())?;
+        if document["asset"]["version"].as_str() != Some("2.0") {
+            return Err("モデルがglTF 2.0形式ではありません".to_string());
+        }
+        for collection in ["buffers", "images"] {
+            if document[collection].as_array().is_some_and(|entries| {
+                entries.iter().any(|entry| {
+                    entry.get("uri").is_some_and(|uri| {
+                        !uri.as_str().is_some_and(|uri| uri.starts_with("data:"))
+                    })
+                })
+            }) {
+                return Err("GLBが外部ファイルを参照しています。自己完結したGLBまたはglTF形式を選んでください".to_string());
+            }
+        }
+        // Preserve all authored binary bytes; no conversion or texture substitution.
+        staged.retain(|role, _| role == "model");
+        return Ok(());
+    }
     let main_path = staged
         .get("model")
         .map(|entry| entry.1.clone())
@@ -1359,15 +1501,19 @@ pub async fn install_external_store_asset(
         }
         texture_specs(&files, &resolution)
     } else {
-        if request
+        let format = request
             .format
             .as_deref()
             .map(str::trim)
-            .is_some_and(|value| !value.is_empty())
-        {
-            return Err("モデルにはファイル形式を指定できません".to_string());
+            .filter(|value| !value.is_empty());
+        if let Some(format) = format {
+            if !matches!(format, "glb" | "gltf") {
+                return Err("モデルにはglTFまたはGLB形式を指定してください".to_string());
+            }
+            model_specs_for_format(&files, &resolution, format)
+        } else {
+            model_specs(&files, &resolution)
         }
-        model_specs(&files, &resolution)
     };
     if specs.is_empty()
         || (kind == "texture" && !specs.iter().any(|entry| entry.role == "base-color"))
@@ -1393,7 +1539,7 @@ pub async fn install_external_store_asset(
         let mut staged = BTreeMap::<String, StagedDownload>::new();
         for (index, spec) in specs.iter().enumerate() {
             let file_name = if kind == "model" && spec.role == "model" {
-                format!("{}_model_{}.gltf", id, resolution)
+                format!("{}_model_{}.{}", id, resolution, spec.extension)
             } else if kind == "model" {
                 format!("{}_dependency_{}.{}", id, index, spec.extension)
             } else {
@@ -1729,6 +1875,229 @@ mod tests {
     }
 
     #[test]
+    fn ambient_cg_source_and_published_download_cdn_are_the_same_asset_route() {
+        // Public API and Location header verified from ambientCG on 2026-10-14.
+        let source = validate_download_url(
+            AMBIENT_CG_PROVIDER_ID,
+            "https://ambientcg.com/get?file=Bricks076C_1K-JPG.zip",
+        )
+        .unwrap();
+        let download = validate_download_url(
+            AMBIENT_CG_PROVIDER_ID,
+            "https://acg-download.struffelproductions.com/file/ambientCG-Web/download/Bricks076C_fG2CH0yb/Bricks076C_1K-JPG.zip",
+        )
+        .unwrap();
+        assert!(validate_download_redirect(AMBIENT_CG_PROVIDER_ID, &download, &[source]).is_ok());
+        assert!(validate_download_url(
+            AMBIENT_CG_PROVIDER_ID,
+            "https://acg-download.struffelproductions.com/file/ambientCG-Web/download/EveningSkyHDRI048B_IoBiqX4S/EveningSkyHDRI048B_1K.zip",
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn provider_downloads_reject_credentials_ports_private_hosts_and_other_buckets() {
+        for candidate in [
+            "http://acg-download.struffelproductions.com/file/ambientCG-Web/download/a/a.zip",
+            "https://user:synthetic@ambientcg.com/get?file=a.zip",
+            "https://ambientcg.com:8443/get?file=a.zip",
+            "https://ambientcg.com/get?file=a.zip#fragment",
+            "https://127.0.0.1/get?file=a.zip",
+            "https://[::1]/get?file=a.zip",
+            "https://acg-download.struffelproductions.com.evil.example/file/ambientCG-Web/download/a/a.zip",
+            "https://acg-media.struffelproductions.com/file/ambientCG-Web/download/a/a.zip",
+            "https://acg-download.struffelproductions.com/file/other-bucket/download/a/a.zip",
+            "https://acg-download.struffelproductions.com/file/ambientCG-Web/media/thumbnail/a.zip",
+            "https://acg-download.struffelproductions.com/file/ambientCG-Web/download/a/a.exe",
+        ] {
+            assert!(validate_download_url(AMBIENT_CG_PROVIDER_ID, candidate).is_err(), "should reject {candidate}");
+        }
+        for (provider, candidate) in [
+            (
+                POLY_HAVEN_PROVIDER_ID,
+                "https://synthetic@dl.polyhaven.org/file.hdr",
+            ),
+            (
+                POLY_HAVEN_PROVIDER_ID,
+                "https://dl.polyhaven.org:8443/file.hdr",
+            ),
+            (
+                OTOGURA_PROVIDER_ID,
+                "https://synthetic@yushimatenjin.github.io/sound-generator/a.ogg",
+            ),
+            (
+                OTOGURA_PROVIDER_ID,
+                "https://yushimatenjin.github.io:8443/sound-generator/a.ogg",
+            ),
+            (
+                POLY_HAVEN_PROVIDER_ID,
+                "https://acg-download.struffelproductions.com/file/ambientCG-Web/download/a/a.zip",
+            ),
+        ] {
+            assert!(validate_download_url(provider, candidate).is_err());
+        }
+        assert!(validate_download_url(
+            AMBIENT_CG_PROVIDER_ID,
+            "https://ambientcg.com:443/get?file=a.zip"
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn download_redirects_validate_each_hop_and_bound_loops() {
+        let source = reqwest::Url::parse("https://ambientcg.com/get?file=a.zip").unwrap();
+        let download = reqwest::Url::parse(
+            "https://acg-download.struffelproductions.com/file/ambientCG-Web/download/a/a.zip",
+        )
+        .unwrap();
+        for intermediate in [
+            "http://ambientcg.com/get?file=a.zip",
+            "https://169.254.169.254/latest/meta-data/",
+            "https://example.invalid/file/ambientCG-Web/download/a/a.zip",
+            "https://acg-download.struffelproductions.com/file/private/a.zip",
+        ] {
+            let intermediate = reqwest::Url::parse(intermediate).unwrap();
+            // Returning to a valid final host cannot authorize an invalid earlier hop.
+            assert!(validate_download_redirect(
+                AMBIENT_CG_PROVIDER_ID,
+                &intermediate,
+                std::slice::from_ref(&source)
+            )
+            .is_err());
+        }
+        assert!(validate_download_redirect(
+            AMBIENT_CG_PROVIDER_ID,
+            &download,
+            &vec![source.clone(); DOWNLOAD_REDIRECT_LIMIT]
+        )
+        .is_ok());
+        assert!(validate_download_redirect(
+            AMBIENT_CG_PROVIDER_ID,
+            &download,
+            &vec![source.clone(); DOWNLOAD_REDIRECT_LIMIT + 1]
+        )
+        .is_err());
+        assert!(validate_download_redirect(
+            AMBIENT_CG_PROVIDER_ID,
+            &source,
+            &[source.clone(), download]
+        )
+        .is_err());
+    }
+
+    #[tokio::test]
+    #[ignore = "reads public provider APIs and downloads only into a disposable temporary directory"]
+    async fn live_public_provider_downloads_follow_validated_redirects() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temporary_root = std::env::temp_dir().canonicalize().unwrap();
+        let root = temporary_root.join(format!("xrift-external-download-contract-{unique}"));
+        std::fs::create_dir(&root).unwrap();
+        let root = root.canonicalize().unwrap();
+        assert_eq!(root.parent(), Some(temporary_root.as_path()));
+        assert!(root
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("xrift-external-download-contract-"));
+        let result: Result<(), String> = async {
+            let payload = fetch_ambient_cg_json("?id=Bricks076C&include=type,downloads").await?;
+            let metadata = &payload["assets"][0];
+            let downloads = ambient_cg_downloads(metadata);
+            let selected = ambient_cg_texture_download(&downloads, "1k")
+                .ok_or("public texture fixture is unavailable")?;
+            let archive = root.join("ambient-cg.zip");
+            let spec = DownloadSpec {
+                role: "archive".into(),
+                url: selected.url.clone(),
+                size: selected.size,
+                extension: "zip".into(),
+            };
+            let (size, hash) = download_to(AMBIENT_CG_PROVIDER_ID, &archive, &spec).await?;
+            assert_eq!(size, selected.size);
+            assert_eq!(hash.len(), 64);
+            let texture_members =
+                zip::ZipArchive::new(std::fs::File::open(&archive).unwrap()).unwrap();
+            let extracted =
+                extract_ambient_cg_files(&archive, &root, "texture", "").map_err(|error| {
+                    format!(
+                        "public texture archive: {error}; {:?}",
+                        texture_members.file_names().collect::<Vec<_>>()
+                    )
+                })?;
+            assert!(extracted.iter().any(|entry| entry.0 == "base-color"));
+
+            let sky_payload =
+                fetch_ambient_cg_json("?id=EveningSkyHDRI048B&include=type,downloads").await?;
+            let sky_downloads = ambient_cg_downloads(&sky_payload["assets"][0]);
+            let sky = ambient_cg_hdri_download(&sky_downloads, "1k")
+                .ok_or("public sky fixture is unavailable")?;
+            let sky_archive = root.join("ambient-cg-sky.zip");
+            let sky_spec = DownloadSpec {
+                role: "archive".into(),
+                url: sky.url.clone(),
+                size: sky.size,
+                extension: "zip".into(),
+            };
+            let (size, _) = download_to(AMBIENT_CG_PROVIDER_ID, &sky_archive, &sky_spec).await?;
+            assert_eq!(size, sky.size);
+            let sky_members =
+                zip::ZipArchive::new(std::fs::File::open(&sky_archive).unwrap()).unwrap();
+            // ambientCG's official ZIP contains EXR, the only advertised format.
+            for format in ["exr"] {
+                let extracted = extract_ambient_cg_files(&sky_archive, &root, "hdri", format)
+                    .map_err(|error| {
+                        format!(
+                            "public sky archive ({format}): {error}; {:?}",
+                            sky_members.file_names().collect::<Vec<_>>()
+                        )
+                    })?;
+                assert!(extracted.iter().any(|entry| entry.4 == format));
+            }
+
+            let model = fetch_poly_haven_json("/files/wooden_table_02").await?;
+            let specs = model_specs(&model, "1k");
+            assert!(specs.len() > 1);
+            for (index, spec) in specs.iter().enumerate() {
+                let (size, _) = download_to(
+                    POLY_HAVEN_PROVIDER_ID,
+                    &root.join(format!("poly-{index}.{}", spec.extension)),
+                    spec,
+                )
+                .await?;
+                assert_eq!(size, spec.size);
+            }
+
+            let environment = fetch_poly_haven_json("/files/studio_small_09").await?;
+            for format in ["hdr", "exr"] {
+                let specs = hdri_specs(&environment, "1k", format);
+                assert_eq!(specs.len(), 1);
+                let (size, _) = download_to(
+                    POLY_HAVEN_PROVIDER_ID,
+                    &root.join(format!("poly-sky.{format}")),
+                    &specs[0],
+                )
+                .await?;
+                assert_eq!(size, specs[0].size);
+            }
+
+            let audio = otogura_download_spec("ambience-ocean-calm-01").await?;
+            let (size, _) =
+                download_to(OTOGURA_PROVIDER_ID, &root.join("otogura.ogg"), &audio).await?;
+            assert_eq!(size, audio.size);
+            assert!(std::fs::read(root.join("otogura.ogg"))
+                .unwrap()
+                .starts_with(b"OggS"));
+            Ok(())
+        }
+        .await;
+        std::fs::remove_dir_all(root).unwrap();
+        result.unwrap();
+    }
+
+    #[test]
     fn ambient_cg_downloads_group_by_resolution_and_prefer_jpg() {
         let asset: Value = serde_json::json!({
             "type": "material",
@@ -1794,6 +2163,96 @@ mod tests {
         assert_eq!(resolutions.len(), 1);
         assert_eq!(resolutions[0].byte_length, 60);
         assert_eq!(resolutions[0].file_count, 3);
+    }
+
+    #[test]
+    fn model_format_choices_only_offer_files_present_in_provider_metadata() {
+        let mut files = serde_json::json!({"gltf":{"1k":{"gltf":{"url":"https://dl.polyhaven.org/model.gltf","size":40}}}});
+        assert_eq!(model_specs(&files, "1k")[0].extension, "gltf");
+        assert_eq!(
+            model_format_options(&files, "1k")
+                .iter()
+                .map(|format| format.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["gltf"]
+        );
+        assert!(model_specs_for_format(&files, "1k", "glb").is_empty());
+        files["gltf"]["1k"]["glb"] =
+            serde_json::json!({"url":"https://dl.polyhaven.org/model.glb","size":900_000_000_u64});
+        assert_eq!(model_specs(&files, "1k")[0].extension, "glb");
+        assert_eq!(
+            model_specs_for_format(&files, "1k", "gltf")[0].extension,
+            "gltf"
+        );
+        assert_eq!(
+            model_format_options(&files, "1k")
+                .iter()
+                .map(|format| format.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["glb", "gltf"]
+        );
+        assert_eq!(
+            available_resolutions(&files, "model")[0].byte_length,
+            900_000_000
+        );
+    }
+
+    fn model_glb_fixture(document: Value) -> Vec<u8> {
+        let mut json = serde_json::to_vec(&document).unwrap();
+        while json.len() % 4 != 0 {
+            json.push(b' ');
+        }
+        let mut bytes = Vec::from(b"glTF".as_slice());
+        bytes.extend_from_slice(&2_u32.to_le_bytes());
+        bytes.extend_from_slice(&((20 + json.len()) as u32).to_le_bytes());
+        bytes.extend_from_slice(&(json.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(b"JSON");
+        bytes.extend_from_slice(&json);
+        bytes
+    }
+
+    #[test]
+    fn glb_validation_preserves_authored_bytes_and_refuses_external_file_references() {
+        let temporary_root = std::env::temp_dir().canonicalize().unwrap();
+        let root = temporary_root.join(format!(
+            "xrift-store-glb-contract-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let root = root.canonicalize().unwrap();
+        assert_eq!(root.parent(), Some(temporary_root.as_path()));
+        assert!(root
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("xrift-store-glb-contract-"));
+        let path = root.join("model.glb");
+        let original = model_glb_fixture(
+            serde_json::json!({"asset":{"version":"2.0"},"scenes":[{}],"scene":0}),
+        );
+        std::fs::write(&path, &original).unwrap();
+        let mut staged = BTreeMap::from([(
+            "model".to_string(),
+            (
+                PathBuf::from("assets/model.glb"),
+                path.clone(),
+                original.len() as u64,
+                file_sha256(&path).unwrap(),
+                "glb".to_string(),
+            ),
+        )]);
+        assert!(make_model_self_contained(&mut staged).is_ok());
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+        assert_eq!(staged["model"].4, "glb");
+        let external = model_glb_fixture(
+            serde_json::json!({"asset":{"version":"2.0"},"images":[{"uri":"../outside.png"}]}),
+        );
+        std::fs::write(&path, external).unwrap();
+        assert!(make_model_self_contained(&mut staged).is_err());
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

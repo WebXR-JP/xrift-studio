@@ -1,4 +1,5 @@
 import type { ChatgptAssetOptions } from "../../lib/tauri";
+import type { ChatgptRequestScope } from "../../lib/visual-editor/chatgpt-request-queue";
 import { ChatgptWorldPanel } from "./ChatgptWorldPanel";
 import type { ChatgptSessionActions } from "./ChatgptSessionBar";
 import { AboutModal } from "../AboutModal";
@@ -735,7 +736,7 @@ export type VisualEditorPrototypeProps = {
   onProjectExport?: (bundle: PrototypeVisualProject) => void | Promise<void>;
   onProjectImport?: () => void | Promise<void>;
   projectTransferBusy?: boolean;
-  onChatgptGenerate?: (model: string, prompt: string, options: ChatgptAssetOptions, mode?: ChatgptGenerationMode, reasoningEffort?: string) => Promise<void>;
+  onChatgptGenerate?: (model: string, prompt: string, options: ChatgptAssetOptions, mode?: ChatgptGenerationMode, reasoningEffort?: string, expectedScope?: ChatgptRequestScope) => Promise<void>;
   onChatgptApplyPlan?: (generationId: string) => Promise<void>;
   onChatgptCancel?: (generationId: string) => Promise<unknown>;
   onChatgptRevert?: (generationId: string) => Promise<unknown>;
@@ -1481,6 +1482,11 @@ export function VisualEditorPrototype({
     setActiveEditorTab(id);
     if (id === CHATGPT_WORLD_TAB_ID) setTabletPanel("inspector");
     else if (phone) setTabletPanel(null);
+  };
+  const closeChatgpt = () => {
+    setChatgptTabOpen(false);
+    setActiveEditorTab(current => current === CHATGPT_WORLD_TAB_ID ? SCENE_VIEW_TAB_ID : current);
+    if (phone && activeEditorTab === CHATGPT_WORLD_TAB_ID) setTabletPanel(null);
   };
   useEffect(() => {
     if (!sceneChatgptGeneration || (sceneChatgptGeneration.status !== "running" && sceneChatgptGeneration.status !== "planned")) return;
@@ -11990,9 +11996,9 @@ export function VisualEditorPrototype({
             onSelectTab={selectEditorTab}
             onCloseTab={(id) => {
               if (id === SCRIPT_TAB_ID) closeScriptEditor();
+              else if (id === CHATGPT_WORLD_TAB_ID) closeChatgpt();
               else {
-                if (id === CHATGPT_WORLD_TAB_ID) setChatgptTabOpen(false);
-                else setInteractivityEditorAssetId(null);
+                setInteractivityEditorAssetId(null);
                 setActiveEditorTab((current) => current === id ? SCENE_VIEW_TAB_ID : current);
                 if (phone && activeEditorTab === id) setTabletPanel(null);
               }
@@ -12127,9 +12133,11 @@ export function VisualEditorPrototype({
             className={chatgptDockActive ? `flex min-h-0 ${phone ? "flex-1" : "basis-[min(76%,34rem)] shrink-0"} flex-col overflow-hidden border-l border-b border-editor-border bg-editor-surface p-3 text-xs text-slate-600` : "hidden"}>
             <ChatgptWorldPanel onGenerate={onChatgptGenerate} generation={sceneChatgptGeneration}
               onApplyPlan={onChatgptApplyPlan} onCancel={onChatgptCancel}
+              onClose={closeChatgpt}
               onRevert={onChatgptRevert} historyError={chatgptHistoryError} externallyBusy={chatgptBusy}
               sessionActions={chatgptSessionActions ? { ...chatgptSessionActions, sessions: sceneChatgptSessions ?? [], activeSessionId: selectedChatgptSession?.id } : undefined}
               draftScope={selectedChatgptSession?.id ?? `${bundle.project.projectId}:${bundle.scene.sceneId}`}
+              sceneScope={`${bundle.project.projectId}:${bundle.scene.sceneId}`}
               conversation={chatgptSessionActions ? selectedChatgptSession?.turns ?? [] : chatgptConversation.filter(turn => chatgptGenerationMatchesScene(turn, bundle.project.projectId, bundle.scene.sceneId))}
               onSelectEntity={sceneChatgptGeneration?.projectId === bundle.project.projectId ? entityId => { if (bundle.scene.entities[entityId]) { handleEntitySelectionChange([entityId], entityId); if (phone) { setActiveEditorTab(SCENE_VIEW_TAB_ID); setTabletPanel("inspector"); } } } : undefined}
               disabledReason={renderedReadOnly ? "Playを停止してから依頼を送ってください" : importBusy ? "素材の読み込み完了を待ってください" : undefined} />

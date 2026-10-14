@@ -4,6 +4,7 @@ use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 mod world_authoring;
 mod chatgpt;
+mod blender_modeling;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
@@ -4702,6 +4703,11 @@ fn read_local_texture_import_source(
 
 const MAX_LOCAL_MODEL_BYTES: u64 = 128 * 1024 * 1024;
 
+fn model_source_size_is_supported(mime_type: &str, size: u64, header: &[u8]) -> bool {
+    size > 0 && (size <= MAX_LOCAL_MODEL_BYTES
+        || (mime_type == "model/gltf-binary" && external_store::has_binary_model_signature(header, size)))
+}
+
 fn local_model_mime_type(path: &Path) -> Option<&'static str> {
     match path
         .extension()
@@ -4728,11 +4734,13 @@ fn read_local_model_import_source_path(
     if source_metadata.file_type().is_symlink() || !source_metadata.is_file() {
         return Err("local Model source must be a regular non-symlink file".to_string());
     }
-    if source_metadata.len() == 0 || source_metadata.len() > MAX_LOCAL_MODEL_BYTES {
-        return Err("local Model source exceeds the supported size".to_string());
-    }
     let mime_type = local_model_mime_type(source_path)
         .ok_or_else(|| "local Model source format is not supported".to_string())?;
+    if source_metadata.len() == 0
+        || (mime_type != "model/gltf-binary" && source_metadata.len() > MAX_LOCAL_MODEL_BYTES)
+    {
+        return Err("local Model source exceeds the supported size".to_string());
+    }
     let resolved = source_path
         .canonicalize()
         .map_err(|_| "local Model source cannot be resolved".to_string())?;
@@ -4751,9 +4759,22 @@ fn read_local_model_import_source_path(
     if !opened_metadata.is_file() || opened_metadata.len() != source_metadata.len() {
         return Err("local Model source changed while it was inspected".to_string());
     }
-    let mut bytes = Vec::with_capacity(opened_metadata.len() as usize);
+    if source_metadata.len() > MAX_LOCAL_MODEL_BYTES {
+        let mut header = [0; 20];
+        file.read_exact(&mut header).map_err(|_| "GLBヘッダーを読み取れませんでした".to_string())?;
+        if !model_source_size_is_supported(mime_type, source_metadata.len(), &header) {
+            return Err("GLBヘッダーとファイルの長さを確認できませんでした".to_string());
+        }
+        std::io::Seek::seek(&mut file, std::io::SeekFrom::Start(0))
+            .map_err(|_| "local Model source cannot be read".to_string())?;
+    }
+    let byte_capacity = usize::try_from(opened_metadata.len())
+        .map_err(|_| "この端末で3Dモデルを読み込むための領域を確保できませんでした".to_string())?;
+    let mut bytes = Vec::new();
+    bytes.try_reserve_exact(byte_capacity)
+        .map_err(|_| "3Dモデルを読み込むメモリーを確保できませんでした".to_string())?;
     std::io::Read::by_ref(&mut file)
-        .take(MAX_LOCAL_MODEL_BYTES + 1)
+        .take(opened_metadata.len().saturating_add(1))
         .read_to_end(&mut bytes)
         .map_err(|_| "local Model source cannot be read".to_string())?;
     let final_length = file
@@ -4762,7 +4783,7 @@ fn read_local_model_import_source_path(
         .len();
     if bytes.len() as u64 != source_metadata.len()
         || final_length != source_metadata.len()
-        || bytes.len() as u64 > MAX_LOCAL_MODEL_BYTES
+        || (mime_type != "model/gltf-binary" && bytes.len() as u64 > MAX_LOCAL_MODEL_BYTES)
     {
         return Err("local Model source changed while it was read".to_string());
     }
@@ -4772,12 +4793,17 @@ fn read_local_model_import_source_path(
         .filter(|name| !name.is_empty())
         .ok_or_else(|| "local Model source file name is invalid".to_string())?;
     use base64::Engine;
-    let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+    let encoded_capacity = bytes.len().checked_add(2).and_then(|length| length.checked_div(3))
+        .and_then(|length| length.checked_mul(4)).ok_or_else(|| "この端末で3Dモデルの転送データを作成するための領域を確保できませんでした".to_string())?;
+    let mut data_url = format!("data:{};base64,", mime_type);
+    data_url.try_reserve_exact(encoded_capacity)
+        .map_err(|_| "3Dモデルの転送データを作成するメモリーを確保できませんでした".to_string())?;
+    base64::engine::general_purpose::STANDARD.encode_string(bytes, &mut data_url);
     Ok(LocalModelImportSource {
         file_name: file_name.to_string(),
         mime_type: mime_type.to_string(),
         byte_length: source_metadata.len(),
-        data_url: format!("data:{};base64,{}", mime_type, encoded),
+        data_url,
     })
 }
 
@@ -4879,6 +4905,11 @@ fn read_local_shader_import_source(source_path: String) -> Result<LocalShaderImp
     read_local_shader_import_source_path(Path::new(source_path))
 }
 
+fn verified_glb_asset_payload(relative: &Path, size: u64, header: &[u8]) -> bool {
+    relative.extension().and_then(|extension| extension.to_str()).is_some_and(|extension| extension.eq_ignore_ascii_case("glb"))
+        && external_store::has_binary_model_signature(header, size)
+}
+
 /// Publishes imported sources and derived thumbnails as a single operation.
 /// Import destinations are content-addressed. An existing byte-identical file
 /// is reused, while a different payload at the same path is never overwritten.
@@ -4930,11 +4961,14 @@ fn commit_visual_asset_import(
         ensure_no_symlink_ancestors(&project_root, &relative)?;
         let target = project_root.join(&relative);
         let bytes = decode_data_url_bytes(&write.data_url)?;
-        if bytes.is_empty() || bytes.len() > MAX_IMPORT_BYTES {
+        let verified_glb = verified_glb_asset_payload(&relative, bytes.len() as u64, &bytes);
+        if bytes.is_empty() || (!verified_glb && bytes.len() > MAX_IMPORT_BYTES) {
             let _ = std::fs::remove_dir_all(&transaction_root);
             return Err("asset import payload size is invalid".to_string());
         }
-        transaction_bytes = transaction_bytes.saturating_add(bytes.len());
+        // GLB bytes have their own validated container length. Keep the generic
+        // transaction quota for thumbnails, images and other imported sources.
+        if !verified_glb { transaction_bytes = transaction_bytes.saturating_add(bytes.len()); }
         if transaction_bytes > MAX_TRANSACTION_BYTES {
             let _ = std::fs::remove_dir_all(&transaction_root);
             return Err("asset import transaction is too large".to_string());
@@ -6457,6 +6491,8 @@ pub fn run() {
             chatgpt::chatgpt_models,
             chatgpt::chatgpt_plan,
             chatgpt::chatgpt_cancel_generation,
+            blender_modeling::get_blender_status,
+            blender_modeling::create_blender_model,
             runtime_paths,
             xrift_items::resolve_xrift_item,
             runtime_status,
@@ -6921,6 +6957,28 @@ mod tests {
         }
 
         std::fs::remove_dir_all(&fixture_root).expect("fixture must be removed");
+    }
+
+    #[test]
+    fn verified_glb_uses_container_length_without_generic_model_or_payload_byte_cap() {
+        // Only metadata and the twenty-byte container header are needed to
+        // check large-file eligibility, without allocating a gigabyte fixture.
+        let size = 1024_u64 * 1024 * 1024;
+        let mut header = Vec::from(b"glTF".as_slice());
+        header.extend_from_slice(&2_u32.to_le_bytes());
+        header.extend_from_slice(&(size as u32).to_le_bytes());
+        header.extend_from_slice(&4_u32.to_le_bytes());
+        header.extend_from_slice(b"JSON");
+        assert!(model_source_size_is_supported("model/gltf-binary", size, &header));
+        assert!(verified_glb_asset_payload(Path::new("assets/imported/models/fixture/model.glb"), size, &header));
+        assert!(!verified_glb_asset_payload(Path::new("assets/imported/textures/fixture/image.png"), size, &header));
+        for mime in ["model/gltf+json", "model/vrm", "model/obj"] {
+            assert!(!model_source_size_is_supported(mime, size, &header));
+        }
+        assert!(!model_source_size_is_supported("model/gltf-binary", size + 4, &header));
+        header[0] = b'x';
+        assert!(!model_source_size_is_supported("model/gltf-binary", size, &header));
+        assert!(!verified_glb_asset_payload(Path::new("assets/imported/models/fixture/model.glb"), size, &header));
     }
 
     #[test]

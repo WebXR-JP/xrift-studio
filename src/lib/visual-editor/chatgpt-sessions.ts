@@ -76,7 +76,13 @@ function normalizeTurn(value: unknown, interrupted: boolean): ChatgptGeneration 
     status: wasInterrupted ? "cancelled" : value.status as ChatgptGeneration["status"],
     cancelling: interrupted ? false : value.cancelling === true,
     model: text(value.model, 128), prompt: text(value.prompt, 2000),
-    options: { models: !isRecord(value.options) || value.options.models !== false, materials: !isRecord(value.options) || value.options.materials !== false, audio: !isRecord(value.options) || value.options.audio !== false },
+    options: {
+      models: !isRecord(value.options) || value.options.models !== false,
+      materials: !isRecord(value.options) || value.options.materials !== false,
+      audio: !isRecord(value.options) || value.options.audio !== false,
+      ...(isRecord(value.options) && ["auto", "blender", "store"].includes(String(value.options.modelSource))
+        ? { modelSource: value.options.modelSource as "auto" | "blender" | "store" } : {}),
+    },
     sourceProjectId: identifier(value.sourceProjectId),
     progress: {
       phase: wasInterrupted ? "cancelled" : phases.includes(progress.phase as ChatgptGenerationPhase) ? progress.phase as ChatgptGenerationPhase : "failed",
@@ -84,7 +90,7 @@ function normalizeTurn(value: unknown, interrupted: boolean): ChatgptGeneration 
       completed: integer(progress.completed), total: integer(progress.total),
       recentEvents: Array.isArray(progress.recentEvents) ? progress.recentEvents.slice(-128).filter(isRecord).map(event => ({
         sequence: integer(event.sequence), phase: phases.includes(event.phase as ChatgptGenerationPhase) ? event.phase as ChatgptGenerationPhase : "failed",
-        message: text(event.message, 600), ...(typeof event.entityId === "string" ? { entityId: identifier(event.entityId) } : {}), ...(typeof event.name === "string" ? { name: text(event.name, 80) } : {}),
+        message: text(event.message, 600), ...(typeof event.entityId === "string" ? { entityId: identifier(event.entityId) } : {}), ...(typeof event.name === "string" ? { name: text(event.name, 80) } : {}), ...(event.saved === true ? { saved: true } : {}),
       })) : [],
     },
     revertAvailable: interrupted ? false : value.revertAvailable === true,
