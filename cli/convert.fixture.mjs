@@ -139,6 +139,7 @@ import { runSceneClickSelectionFixtureAssertions } from "../src/lib/visual-edito
 import { runMcpHarnessGuardFixtureAssertions } from "../src/lib/visual-editor/mcp-harness-guard.fixture.ts";
 import { runGltfDerivedAssetFixtureAssertions } from "../src/lib/visual-editor/gltf-derived-assets.fixture.ts";
 import { runOpenBrushMaterialCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/open-brush-material.fixture.ts";
+import { compileNativeOpenBrushModelTypecheckWorld } from "../src/lib/visual-editor/compiler/open-brush-model.fixture.ts";
 import { runMToonMaterialCompilerFixtureAssertions, runMToonThreeRuntimeFixtureAssertions } from "../src/lib/visual-editor/compiler/mtoon-material.fixture.ts";
 import { runVrmAvatarRuntimeFixtureAssertions } from "../src/lib/visual-editor/compiler/vrm-avatar.fixture.ts";
 import { runPrimitiveGeometryCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/primitive-geometry.fixture.ts";
@@ -708,6 +709,13 @@ async function runModelMaterialCompilerFixtures() {
  * author's publish dialog.
  */
 async function runStagedWorldTypecheck() {
+  for (const mode of ["model", "node"]) {
+    await typecheckWithTemplateOptions(
+      `native-open-brush-${mode}-only`,
+      compileNativeOpenBrushModelTypecheckWorld(mode).overlayFiles,
+      'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
+    );
+  }
   await typecheckWithTemplateOptions(
     "primitive-geometry-only",
     runPrimitiveGeometryCompilerFixtureAssertions().overlayFiles,
