@@ -1,3 +1,4 @@
+import { SHARED_MATERIAL_LIBRARY_PROVIDER_ID, listSharedLibraryAssets, getSharedLibraryAssetOptions, installSharedLibraryAsset } from "./shared-material-library-store";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
@@ -212,10 +213,11 @@ export type LocalShaderImportSource = {
   source: string;
 };
 
-export type ChatgptAssetOptions = { models: boolean; materials: boolean; audio: boolean };
+export type ChatgptAssetOptions = { models: boolean; materials: boolean; audio: boolean; modelSource?: "auto" | "blender" | "store" };
+export type BlenderStatus = { available: boolean; version?: string | null };
 
 export type ExternalStoreAssetKind = "hdri" | "texture" | "model" | "audio";
-export type ExternalStoreFileFormat = "hdr" | "exr";
+export type ExternalStoreFileFormat = "hdr" | "exr" | "gltf" | "glb";
 
 export type ExternalStoreAsset = {
   providerId: string;
@@ -270,7 +272,7 @@ export type ExternalStoreInstallRequest = {
 };
 
 export type ExternalStoreInstalledFile = {
-  role: "environment" | "base-color" | "normal" | "arm" | "model" | "audio";
+  role: "environment" | "base-color" | "normal" | "arm" | "model" | "audio" | "mask";
   relativePath: string;
   byteLength: number;
   sha256: string;
@@ -662,6 +664,9 @@ export const tauri = {
     invoke<LocalModelImportSource>("read_local_model_import_source", {
       sourcePath,
     }),
+  getBlenderStatus: () => invoke<BlenderStatus>("get_blender_status"),
+  createBlenderModel: (projectPath: string, model: import("./visual-editor/chatgpt-modeling").BlenderModelSpec) =>
+    invoke<{ path: string; fileName: string; byteLength: number }>("create_blender_model", { projectPath, model }),
   readLocalShaderImportSource: (sourcePath: string) =>
     invoke<LocalShaderImportSource>("read_local_shader_import_source", {
       sourcePath,
@@ -675,13 +680,17 @@ export const tauri = {
       sourceRelativePath: sourceRelativePath ?? null,
     }),
   listExternalStoreAssets: (providerId: string) =>
-    providerId === AI_LOWPOLY_PROPS_PROVIDER_ID
+    providerId === SHARED_MATERIAL_LIBRARY_PROVIDER_ID
+      ? listSharedLibraryAssets()
+      : providerId === AI_LOWPOLY_PROPS_PROVIDER_ID
       ? listAiLowpolyPropsAssets()
       : !isTauri() && providerId === "otogura"
       ? listBrowserOtoguraAssets()
       : invoke<ExternalStoreAsset[]>("list_external_store_assets", { providerId }),
   getExternalStoreAssetOptions: (providerId: string, externalId: string) =>
-    providerId === AI_LOWPOLY_PROPS_PROVIDER_ID
+    providerId === SHARED_MATERIAL_LIBRARY_PROVIDER_ID
+      ? getSharedLibraryAssetOptions(externalId)
+      : providerId === AI_LOWPOLY_PROPS_PROVIDER_ID
       ? getAiLowpolyPropsAssetOptions(externalId)
       : !isTauri() && providerId === "otogura"
       ? getBrowserOtoguraAssetOptions(externalId)
@@ -693,7 +702,9 @@ export const tauri = {
     projectPath: string,
     request: ExternalStoreInstallRequest,
   ) =>
-    request.providerId === AI_LOWPOLY_PROPS_PROVIDER_ID
+    request.providerId === SHARED_MATERIAL_LIBRARY_PROVIDER_ID
+      ? installSharedLibraryAsset(projectPath, request, tauri.commitVisualAssetImport)
+      : request.providerId === AI_LOWPOLY_PROPS_PROVIDER_ID
       ? installAiLowpolyPropsAsset(projectPath, request, tauri.commitVisualAssetImport)
       : isBrowserProjectPath(projectPath) && request.providerId === "otogura"
       ? installBrowserOtoguraAsset(projectPath, request)

@@ -620,11 +620,16 @@ fn editor_error(code: &str, message: &str) -> XriftMcpEditorError {
 /// The broker waits longer on tools whose work is a whole pipeline, not one edit.
 fn request_timeout_seconds(tool_name: &str) -> u64 {
     match tool_name {
-        "publish_project" | "create_project" | "open_project" | "close_project"
-        | "duplicate_project" | "export_project" | "import_project"
-        | "list_chatgpt_models" | "disconnect_chatgpt" => {
-            MCP_LONG_REQUEST_TIMEOUT_SECONDS
-        }
+        "publish_project"
+        | "create_project"
+        | "open_project"
+        | "close_project"
+        | "duplicate_project"
+        | "export_project"
+        | "import_project"
+        | "list_chatgpt_models"
+        | "disconnect_chatgpt"
+        | "create_blender_model" => MCP_LONG_REQUEST_TIMEOUT_SECONDS,
         _ => MCP_REQUEST_TIMEOUT_SECONDS,
     }
 }
@@ -2085,13 +2090,28 @@ fn tool_definitions() -> Value {
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         },
         {
+            "name": "get_modeling_tools",
+            "description": "Detect installed local modeling tools. Reports whether Blender is available without opening its UI or changing a project. When available, create_blender_model can build geometry and import its actual GLB into Assets. Studio does not require a Blender plugin.",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        },
+        {
+            "name": "create_blender_model",
+            "description": "Use installed Blender to create a custom Model from structured primitive or indexed mesh parts with PBR colors, then import the real GLB into the current project's Assets. Requires get_modeling_tools Blender availability and a fresh get_editor_context snapshot in Edit. Positions and rotations are Studio Y-up metres and Euler XYZ degrees; primitive scale gives dimensions. No Python source, external files or download URLs are accepted. Existing Blender scenes are preserved. Returns modelAssetId; inspect get_model_asset and use place_asset to place it.",
+            "inputSchema": { "type": "object", "properties": {
+                "projectId": { "type": "string", "minLength": 1 },
+                "sceneId": { "type": "string", "minLength": 1 },
+                "expectedRevision": { "type": "integer", "minimum": 0 },
+                "model": crate::blender_modeling::blender_model_schema()
+            }, "required": ["projectId", "sceneId", "expectedRevision", "model"], "additionalProperties": false }
+        },
+        {
             "name": "open_chatgpt_panel",
             "description": "Show the ChatGPT tab in the open World's Editor. Keeps the Scene and drafts. Use when the person needs to review connection, model or generation settings. Item projects cannot open this tab.",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         },
         {
             "name": "generate_chatgpt_world",
-            "description": "Plan or edit a World using Studio's connected ChatGPT account and its usage allowance. Defaults to target=current and mode=build: validate the plan, save drafts, then adjust existing Entities and add new Entities sequentially to the current Scene, saving each result. mode=plan returns a planned job without changing the Scene or project files; review its public plan and use apply_chatgpt_plan to execute it. target=new creates and opens a separate World after saving the source. Requires a World in Edit, a current get_editor_context snapshot and a slug from list_chatgpt_models. Optional reasoningEffort must be supported by that model; omit it to use the API's model default. Unsupported efforts are rejected before inference is sent. Options choose models/materials/audio; omit for all three. Returns generationId immediately; poll get_chatgpt_generation. Saved partial results remain on failure or cancellation. Never publishes.",
+            "description": "Plan or edit a World using Studio's connected ChatGPT account and its usage allowance. Defaults to target=current and mode=build: validate the plan, save drafts, then adjust existing Entities and add new Entities sequentially to the current Scene, saving each result. Human edits made during reasoning trigger fresh planning from the current Scene. During execution, independent edits merge and conflicting edits trigger up to two fresh planning attempts, preserving saved results and continuing only unfinished work. mode=plan returns a planned job without changing the Scene or project files; review its public plan and use apply_chatgpt_plan to execute it. target=new creates and opens a separate World after saving the source. Requires a World in Edit, a current get_editor_context snapshot and a slug from list_chatgpt_models. Optional reasoningEffort must be supported by that model; omit it to use the API's model default. Unsupported efforts are rejected before inference is sent. Options choose models/materials/audio; omit for all three. Returns generationId immediately; poll get_chatgpt_generation. Saved partial results remain on failure or cancellation. Never publishes.",
             "inputSchema": { "type": "object", "properties": {
                 "projectId": { "type": "string", "minLength": 1 },
                 "sceneId": { "type": "string", "minLength": 1 },
@@ -2102,7 +2122,7 @@ fn tool_definitions() -> Value {
                 "prompt": { "type": "string", "minLength": 1, "maxLength": 2000 },
                 "target": { "type": "string", "enum": ["current", "new"], "default": "current" },
                 "mode": { "type": "string", "enum": ["build", "plan"], "default": "build" },
-                "options": { "type": "object", "properties": { "models": { "type": "boolean" }, "materials": { "type": "boolean" }, "audio": { "type": "boolean" } }, "required": ["models", "materials", "audio"], "additionalProperties": false }
+                "options": { "type": "object", "properties": { "models": { "type": "boolean" }, "materials": { "type": "boolean" }, "audio": { "type": "boolean" }, "modelSource": { "type": "string", "enum": ["auto", "blender", "store"] } }, "required": ["models", "materials", "audio"], "additionalProperties": false }
             }, "required": ["projectId", "sceneId", "expectedRevision", "model", "prompt"], "additionalProperties": false }
         },
         {
@@ -2112,7 +2132,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "apply_chatgpt_plan",
-            "description": "Execute an already generated ChatGPT plan once, preserving its stored model, reasoning selection, options and target without another inference request. Supply a fresh get_editor_context snapshot for the same source project and Scene; refuses stale revisions and changes to Entities the plan intends to adjust. Returns generationId and running immediately. Poll get_chatgpt_generation for sequential edits, saves and completion. Saved partial results remain on failure or cancellation. Never publishes.",
+            "description": "Execute an already generated ChatGPT plan once, preserving its stored model, reasoning selection, options and target. Supply a fresh get_editor_context snapshot for the same source project and Scene; refuses stale revisions. If a planned target changed, preserve human edits and generate a fresh plan with status planned for review instead of applying it automatically. Call apply_chatgpt_plan again only after reviewing that replacement plan. Returns generationId and running immediately. Poll get_chatgpt_generation for sequential edits, saves, planned or completion. Saved partial results remain on failure or cancellation. Never publishes.",
             "inputSchema": { "type": "object", "properties": {
                 "generationId": { "type": "string", "minLength": 1 },
                 "projectId": { "type": "string", "minLength": 1 },
@@ -3154,11 +3174,11 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "search_external_assets",
-            "description": "Search the Poly Haven or ambientCG catalog for CC0 models (furniture, seating, props, plants, shrubs, flowers, rocks, lighting fixtures, modular building parts, industrial equipment), PBR textures/materials, and HDRIs. Matches the query against name, description, category and tags. Model results carry polycount and dimensionsMm (width, depth, height in millimetres): compare polycount with the budget set for the world and dimensionsMm with the space the model goes into. Poly Haven trees are photogrammetry in the millions of triangles; make trees in Blender or from lighter parts instead. Returns external IDs for get_external_asset_options and install_external_asset.",
+            "description": "Search Poly Haven / ambientCG for CC0 assets, or shared-material-library for GLB models and PNG textures/masks with per-asset licenses (unspecified does not grant permission). Search CC0 models (furniture, seating, props, plants, shrubs, flowers, rocks, lighting fixtures, modular building parts, industrial equipment), PBR textures/materials, and HDRIs. Matches the query against name, description, category and tags. Model results carry polycount and dimensionsMm (width, depth, height in millimetres): compare polycount with the budget set for the world and dimensionsMm with the space the model goes into. Poly Haven trees are photogrammetry in the millions of triangles; make trees in Blender or from lighter parts instead. Returns external IDs for get_external_asset_options and install_external_asset.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "providerId": { "type": "string", "enum": ["poly-haven", "ambient-cg"] },
+                    "providerId": { "type": "string", "enum": ["poly-haven", "ambient-cg", "shared-material-library"] },
                     "query": { "type": "string" },
                     "kind": { "type": "string", "enum": ["hdri", "texture", "model"] },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 120 }
@@ -3168,11 +3188,11 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "get_external_asset_options",
-            "description": "List installable resolutions and formats for a Poly Haven or ambientCG external asset.",
+            "description": "List installable resolutions and formats for Poly Haven / ambientCG, or file variants for shared-material-library. For shared-material-library pass the returned resolution id (filename) to install_external_asset; animated GLBs are separate variants.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "providerId": { "type": "string", "enum": ["poly-haven", "ambient-cg"] },
+                    "providerId": { "type": "string", "enum": ["poly-haven", "ambient-cg", "shared-material-library"] },
                     "externalId": { "type": "string" }
                 },
                 "required": ["externalId"],
@@ -3181,17 +3201,17 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "install_external_asset",
-            "description": "Download a Poly Haven or ambientCG asset into the open project and create XRift Studio assets: an HDRI becomes an environment Texture (applySkybox makes it the sky at once), a texture bundle becomes a PBR Material ready for set_material, and a Poly Haven Model is validated and saved as a self-contained glTF Model Asset to place with place_asset. Choose resolution from the download budget set for the world; larger textures multiply its size. Read polycount from search_external_assets before installing a model. ambientCG Models remain catalog-only until a compatible glTF download is available.",
+            "description": "For shared-material-library, use the filename resolution from get_external_asset_options and omit format: GLB becomes a Model, PNG/mask becomes a Texture. Preserve and check its license; unspecified does not grant permission. Download a Poly Haven or ambientCG asset into the open project and create XRift Studio assets: an HDRI becomes an environment Texture (applySkybox makes it the sky at once), a texture bundle becomes a PBR Material ready for set_material, and a Poly Haven Model is validated and saved as a self-contained glTF Model Asset to place with place_asset. Choose resolution from the download budget set for the world; larger textures multiply its size. Read polycount from search_external_assets before installing a model. ambientCG Models remain catalog-only until a compatible glTF download is available.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "projectId": { "type": "string" },
                     "sceneId": { "type": "string" },
                     "expectedRevision": { "type": "integer", "minimum": 0 },
-                    "providerId": { "type": "string", "enum": ["poly-haven", "ambient-cg"] },
+                    "providerId": { "type": "string", "enum": ["poly-haven", "ambient-cg", "shared-material-library"] },
                     "externalId": { "type": "string" },
-                    "resolution": { "type": "string", "enum": ["1k", "2k", "4k", "8k", "12k", "16k", "24k"] },
-                    "format": { "type": "string", "enum": ["hdr", "exr"] },
+                    "resolution": { "type": "string", "minLength": 1 },
+                    "format": { "type": "string", "enum": ["hdr", "exr", "gltf", "glb"] },
                     "applySkybox": { "type": "boolean" }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "externalId", "resolution"],
@@ -4989,6 +5009,18 @@ mod tests {
                 .join("Links")
                 .join("codex.exe")
         ));
+    }
+
+    #[test]
+    fn blender_creation_waits_for_native_build_and_asset_import() {
+        assert_eq!(
+            request_timeout_seconds("create_blender_model"),
+            MCP_LONG_REQUEST_TIMEOUT_SECONDS
+        );
+        assert_eq!(
+            request_timeout_seconds("get_modeling_tools"),
+            MCP_REQUEST_TIMEOUT_SECONDS
+        );
     }
 
     #[test]

@@ -5,20 +5,53 @@ import type { ChatgptAssetOptions } from "../tauri";
 import { chatgptReferenceKey, type ChatgptOperation, type ChatgptResourceContext } from "./chatgpt-resources";
 import { normalizeMaterialProperties } from "./asset-manifest";
 import { mergeExternalStoreImport } from "./external-store";
+import { ChatgptSceneConflictError } from "./chatgpt-plan-guards";
 
-/** Keep background previews and unrelated asset edits made during an async step. */
+const equalAuthoredValue = (left: unknown, right: unknown) => left === right || JSON.stringify(left) === JSON.stringify(right);
+function mergeChangedEntries<T extends object>(before: T, next: T, latest: T): T {
+  const merged = { ...latest } as Record<string, unknown>;
+  const oldValues = before as Record<string, unknown>, newValues = next as Record<string, unknown>, currentValues = latest as Record<string, unknown>;
+  for (const key of new Set([...Object.keys(before), ...Object.keys(next)])) {
+    if (equalAuthoredValue(oldValues[key], newValues[key])) continue;
+    if (!equalAuthoredValue(oldValues[key], currentValues[key])) throw new ChatgptSceneConflictError("変更するEntity・設定・Prefabが制作中に編集されました。編集内容を保ち、現在のSceneから制作を続けます");
+    if (key in newValues) merged[key] = newValues[key];
+    else delete merged[key];
+  }
+  return merged as T;
+}
+function mergeRootEntityIds(before: string[], next: string[], latest: string[]): string[] {
+  if (equalAuthoredValue(before, next)) return latest;
+  if (equalAuthoredValue(before, latest)) return next;
+  // Independent new root Entities can coexist in their actual insertion order.
+  const appendsOnly = (value: string[]) => value.length >= before.length && before.every((id, index) => value[index] === id);
+  if (appendsOnly(next) && appendsOnly(latest)) return [...latest, ...next.slice(before.length).filter(id => !latest.includes(id))];
+  throw new ChatgptSceneConflictError("Entityの階層が制作中に編集されました。編集内容を保ち、現在のSceneから制作を続けます");
+}
+
+/** Merge separate author edits; conflicts on the same authored data need a fresh plan. */
 export function rebaseChatgptStep(before: XriftMcpEditorContext["bundle"], next: XriftMcpEditorContext["bundle"], latest: XriftMcpEditorContext["bundle"]) {
   if (before === latest) return next;
   const changedScene = next.scene !== before.scene;
-  const changedPrefabs = next.prefabs !== before.prefabs;
-  if (before.project.projectId !== latest.project.projectId || before.scene.sceneId !== latest.scene.sceneId
-    || (changedScene && JSON.stringify(before.scene) !== JSON.stringify(latest.scene))
-    || (changedPrefabs && JSON.stringify(before.prefabs) !== JSON.stringify(latest.prefabs))) {
+  if (before.project.projectId !== latest.project.projectId || before.scene.sceneId !== latest.scene.sceneId) {
     throw new Error("反映中に作品が編集されました。編集内容を保ち、依頼の反映を停止しました");
   }
-  return { ...latest, scene: changedScene ? next.scene : latest.scene,
-    prefabs: changedPrefabs ? next.prefabs : latest.prefabs,
-    assets: mergeExternalStoreImport(before.assets, next.assets, latest.assets) };
+  let scene = latest.scene;
+  if (changedScene) {
+    const { entities: _oldEntities, rootEntityIds: _oldRoots, settings: _oldSettings, ...oldFields } = before.scene;
+    const { entities: _nextEntities, rootEntityIds: _nextRoots, settings: _nextSettings, ...nextFields } = next.scene;
+    const { entities: _latestEntities, rootEntityIds: _latestRoots, settings: _latestSettings, ...latestFields } = latest.scene;
+    scene = { ...mergeChangedEntries(oldFields, nextFields, latestFields),
+      entities: mergeChangedEntries(before.scene.entities, next.scene.entities, latest.scene.entities),
+      rootEntityIds: mergeRootEntityIds(before.scene.rootEntityIds, next.scene.rootEntityIds, latest.scene.rootEntityIds),
+      ...(before.scene.settings || next.scene.settings || latest.scene.settings ? {
+        settings: mergeChangedEntries(before.scene.settings ?? {}, next.scene.settings ?? {}, latest.scene.settings ?? {}) as NonNullable<XriftMcpEditorContext["bundle"]["scene"]["settings"]>,
+      } : {}),
+    };
+  }
+  let assets;
+  try { assets = mergeExternalStoreImport(before.assets, next.assets, latest.assets); }
+  catch (error) { throw new ChatgptSceneConflictError(error instanceof Error ? error.message : String(error)); }
+  return { ...latest, scene, prefabs: mergeChangedEntries(before.prefabs, next.prefabs, latest.prefabs), assets };
 }
 
 export type ChatgptGenerationPhase = "planning" | "planned" | "preparing" | "importing" | "placing" | "saving" | "completed" | "failed" | "cancelled";
@@ -30,6 +63,7 @@ export type ChatgptGenerationEvent = {
   message: string;
   entityId?: string;
   name?: string;
+  saved?: boolean;
 };
 
 /** Existing Entities retain their Components and identity. No raw document replacement. */
@@ -140,6 +174,13 @@ export function placeChatgptObject(bundle: XriftMcpEditorContext["bundle"], valu
 /** Trusted operations keep the current Entity and its unrelated data intact. */
 export async function applyChatgptOperation(bundle: XriftMcpEditorContext["bundle"], operation: ChatgptOperation,
   assetIds: ReadonlyMap<string, string>, resources: ChatgptResourceContext, projectPath?: string): Promise<{ bundle: typeof bundle; entityId?: string }> {
+  if (operation.kind === "blender-model") {
+    if (!projectPath || !resources.blenderAvailable || resources.modelSource === "store") throw new Error("Blenderでモデルを作成する設定を確認してください");
+    const { createBlenderModelAsset } = await import("./chatgpt-modeling");
+    const imported = await createBlenderModelAsset(bundle, operation.model, projectPath);
+    return placeChatgptObject(imported.bundle, { name: operation.model.name, shape: "model", externalId: `project:${imported.modelAssetId}`,
+      position: operation.position, rotation: operation.rotation, scale: operation.scale ?? [1, 1, 1] }, new Map());
+  }
   const candidateId = "candidateId" in operation ? operation.candidateId : undefined;
   if (candidateId && resources.builtinCandidates.some(candidate => candidate.candidateId === candidateId)) {
     if (!["catalog", "material", "skybox"].includes(operation.kind) || !projectPath) throw new Error("素材を適用するためのプロジェクトを確認できませんでした");

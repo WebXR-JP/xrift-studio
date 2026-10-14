@@ -45,7 +45,7 @@ export type AppliedExternalStoreInstall = {
   manifest: AssetManifest;
   primaryAssetId: string;
   installedAssetIds: string[];
-  kind: "skybox" | "material" | "model" | "audio";
+  kind: "skybox" | "material" | "model" | "audio" | "texture";
 };
 
 export type AppliedOpenBrushCatalogInstall = AppliedExternalStoreInstall & {
@@ -301,6 +301,11 @@ export function applyExternalStoreInstall(
     assets[id] = imported;
     textureIds.set(file.role, id);
     installedAssetIds.push(id);
+  }
+
+  if (result.providerId === "shared-material-library") {
+    if (!installedAssetIds.length) throw new Error("素材庫のPNGファイルがありません");
+    return { manifest: { ...manifest, folders, assets }, primaryAssetId: installedAssetIds[0], installedAssetIds, kind: "texture" };
   }
 
   const materialId = `${baseId}-material`;

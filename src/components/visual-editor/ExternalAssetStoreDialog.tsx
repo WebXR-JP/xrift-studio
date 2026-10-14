@@ -162,7 +162,7 @@ export function ExternalAssetStoreDialog({
   const [providerId, setProviderId] = useState<string>(() => tauri.isAvailable() ? DEFAULT_EXTERNAL_STORE_PROVIDER_ID : "xrift-scene-recipes");
   const provider = getExternalStoreProvider(providerId);
   const remoteAssetsAvailable = tauri.isAvailable() || provider.id === "otogura"
-    || provider.id === AI_LOWPOLY_PROPS_PROVIDER_ID;
+    || provider.id === AI_LOWPOLY_PROPS_PROVIDER_ID || provider.id === "shared-material-library";
   const [catalogRevision, setCatalogRevision] = useState(0);
   const [assets, setAssets] = useState<ExternalStoreAsset[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -714,13 +714,13 @@ export function ExternalAssetStoreDialog({
                   </dd>
                   <dt className="text-slate-400">ライセンス</dt>
                   <dd>
-                    <button
+                    {selected.licenseUrl ? <button
                       type="button"
                       onClick={() => openLink(selected.licenseUrl)}
                       className="font-medium text-brand-700 hover:underline"
                     >
                       {selected.licenseName}
-                    </button>
+                    </button> : <span className="text-slate-700">{selected.licenseName}</span>}
                   </dd>
                   <dt className="text-slate-400">カテゴリ</dt>
                   <dd className="text-slate-700">{selected.category || "未分類"}</dd>
@@ -732,7 +732,7 @@ export function ExternalAssetStoreDialog({
                 ) : (
                   <>
                     <label className="block">
-                      <span className="mb-1 block text-xs font-semibold text-slate-700">{selected.assetKind === "audio" ? "音声ファイル" : "解像度"}</span>
+                      <span className="mb-1 block text-xs font-semibold text-slate-700">{provider.id === "shared-material-library" ? "ファイル" : selected.assetKind === "audio" ? "音声ファイル" : "解像度"}</span>
                       <select
                         value={resolution}
                         disabled={optionsLoading || installing}
@@ -810,7 +810,9 @@ export function ExternalAssetStoreDialog({
                         <p className="text-[11px] text-slate-500">
                           ダウンロード目安 {selectedResolution ? formatFileSize(selectedResolution.byteLength) : "—"}
                         </p>
-                        <Notice text="テクスチャを割り当てたマテリアルを作成します。" />
+                        <Notice text={provider.id === "shared-material-library"
+                          ? "選択したPNGをTextureとして保存します。"
+                          : "テクスチャを割り当てたマテリアルを作成します。"} />
                       </>
                     )}
                   </>

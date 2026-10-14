@@ -1,4 +1,5 @@
 import { createAssetImportTransactionId } from "./visual-editor/asset-import-transaction";
+import { hasGlbContainerHeader, readGlbResponse } from "./glb-container";
 import type {
   ExternalStoreAsset,
   ExternalStoreAssetOptions,
@@ -12,7 +13,6 @@ const SITE_ROOT = "https://apps.n-jelly.com/ai-lowpoly-props";
 const API_ROOT = `${SITE_ROOT}/api/v1`;
 const LICENSE_URL = "https://creativecommons.org/publicdomain/zero/1.0/";
 const MAX_JSON_BYTES = 8 * 1024 * 1024;
-const MAX_MODEL_BYTES = 128 * 1024 * 1024;
 const MAX_CATALOG_ASSETS = 50_000;
 
 type JsonRecord = Record<string, unknown>;
@@ -108,8 +108,8 @@ function fileSpec(value: unknown, id: string, folder: "assets" | "previews"): Fi
     throw new Error("モデルのURLがAI LOWPOLY PROPSの配布先ではありません");
   }
   const size = file.size === null ? null : integer(file.size);
-  if (folder === "assets" && size !== null && (size < 20 || size > MAX_MODEL_BYTES)) {
-    throw new Error("モデルの容量は128 MiB以下にしてください");
+  if (folder === "assets" && size !== null && size < 20) {
+    throw new Error("モデルの容量が不正です");
   }
   return { url: url.href, size, sha256: file.sha256 === null ? null : hash(file.sha256) };
 }
@@ -236,11 +236,9 @@ export async function installAiLowpolyPropsAsset(
     credentials: "omit", mode: "cors", redirect: "error", signal: AbortSignal.timeout(120_000),
   });
   if (!response.ok) throw new Error(`GLBをダウンロードできませんでした (${response.status})`);
-  const bytes = await readBounded(response, MAX_MODEL_BYTES);
+  const bytes = await readGlbResponse(response, "ダウンロードしたモデルがGLB形式ではありません");
   if (spec.size !== null && bytes.byteLength !== spec.size) throw new Error("GLBの容量が配布情報と一致しません");
-  const header = new DataView(bytes.buffer);
-  if (bytes.byteLength < 20 || header.getUint32(0, true) !== 0x46546c67
-    || header.getUint32(4, true) !== 2 || header.getUint32(8, true) !== bytes.byteLength) {
+  if (!hasGlbContainerHeader(bytes)) {
     throw new Error("ダウンロードしたモデルがGLB形式ではありません");
   }
   const digest = await crypto.subtle.digest("SHA-256", bytes.buffer);

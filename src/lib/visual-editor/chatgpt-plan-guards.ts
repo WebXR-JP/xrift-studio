@@ -4,30 +4,56 @@ import { resolveSceneSettings } from "./scene-settings";
 import type { ExternalStoreAsset } from "../tauri";
 import { resolveChatgptCandidate, type ChatgptOperation, type ChatgptResourceContext } from "./chatgpt-resources";
 
-/** Only fingerprint values the plan can overwrite; unrelated edits may continue. */
+/** Only same-Scene authoring conflicts are eligible for planning again. */
+export class ChatgptSceneConflictError extends Error {
+  constructor(message = "変更するEntity・素材・SkyboxがPlanの作成後に編集されました。編集内容を保ち、Planの反映を停止しました。Planを作り直してください") {
+    super(message);
+    this.name = "ChatgptSceneConflictError";
+  }
+}
+
+/** Fresh reasoning must see author edits anywhere in its input, not just its eventual targets. */
+export function chatgptPlanningSnapshot(bundle: PrototypeVisualProject): string {
+  const assets = { ...bundle.assets, assets: Object.fromEntries(Object.entries(bundle.assets.assets).map(([id, asset]) => {
+    const { thumbnail: _thumbnail, ...authored } = asset;
+    return [id, authored];
+  })) };
+  return JSON.stringify({ title: bundle.project.metadata.title ?? bundle.project.metadata.name, scene: bundle.scene, assets, prefabs: bundle.prefabs });
+}
+
+/** Fingerprint authored values the plan changes or reuses; unrelated edits may continue. */
 export function chatgptPlanSnapshots(bundle: PrototypeVisualProject, plan: ChatgptWorldPlan): Record<string, string> {
   const result: Record<string, string> = {};
+  const snapshotProjectAsset = (reference?: string) => {
+    if (!reference?.startsWith("project:")) return;
+    const id = reference.slice("project:".length);
+    const asset = bundle.assets.assets[id];
+    if (asset) { const { thumbnail: _thumbnail, ...authored } = asset; result[`asset:${id}`] = JSON.stringify(authored); }
+  };
+  for (const object of plan.objects) {
+    snapshotProjectAsset(object.externalId);
+    snapshotProjectAsset(object.materialExternalId);
+  }
   for (const edit of plan.edits ?? []) result[`entity:${edit.entityId}`] = JSON.stringify(bundle.scene.entities[edit.entityId]);
   for (const operation of plan.operations ?? []) {
     if ("entityId" in operation) result[`entity:${operation.entityId}`] = JSON.stringify(bundle.scene.entities[operation.entityId]);
     if (operation.kind === "skybox") result.skybox = JSON.stringify(resolveSceneSettings(bundle.scene.settings).skybox);
-    if ("candidateId" in operation && operation.candidateId?.startsWith("project:")) {
-      const id = operation.candidateId.slice("project:".length);
-      const asset = bundle.assets.assets[id];
-      if (asset) { const { thumbnail: _thumbnail, ...authored } = asset; result[`asset:${id}`] = JSON.stringify(authored); }
-    }
+    if ("candidateId" in operation) snapshotProjectAsset(operation.candidateId);
   }
   return result;
 }
 export function assertChatgptPlanCurrent(bundle: PrototypeVisualProject, plan: ChatgptWorldPlan, expected: Record<string, string>) {
   const current = chatgptPlanSnapshots(bundle, plan);
   if (Object.keys(current).length !== Object.keys(expected).length || Object.entries(expected).some(([key, value]) => current[key] !== value)) {
-    throw new Error("変更するEntity・素材・SkyboxがPlanの作成後に編集されました。編集内容を保ち、Planの反映を停止しました。Planを作り直してください");
+    throw new ChatgptSceneConflictError();
   }
 }
+export function assertChatgptPlanningCurrent(bundle: PrototypeVisualProject, expected: string) {
+  if (chatgptPlanningSnapshot(bundle) !== expected) throw new ChatgptSceneConflictError("制作を考えている間にSceneや素材が編集されました。最新の内容から続きを考えます");
+}
 export function chatgptOperationLabel(operation: NonNullable<ChatgptWorldPlan["operations"]>[number], bundle: PrototypeVisualProject) {
-  const labels = { skybox: "Skyboxを設定", audio: "Audio Sourceを設定", "mesh-collision": "Colliderを設定", "model-attachment": "モデルを設定", material: "Materialを設定", catalog: "素材を追加" };
-  const name = "entityId" in operation ? bundle.scene.entities[operation.entityId]?.name : operation.kind === "catalog" ? operation.name : undefined;
+  const labels = { skybox: "Skyboxを設定", audio: "Audio Sourceを設定", "mesh-collision": "Colliderを設定", "model-attachment": "モデルを設定", material: "Materialを設定", catalog: "素材を追加", "blender-model": "Blenderでモデルを作成" };
+  const name = "entityId" in operation ? bundle.scene.entities[operation.entityId]?.name : operation.kind === "catalog" ? operation.name : operation.kind === "blender-model" ? operation.model.name : undefined;
   return name ? `${name}：${labels[operation.kind]}` : labels[operation.kind];
 }
 
@@ -39,6 +65,7 @@ export function chatgptOperationDetail(operation: ChatgptOperation, resources: C
   const candidate = "candidateId" in operation && operation.candidateId
     ? resolveChatgptCandidate(operation.candidateId, resources, externalCandidates) : undefined;
   const name = candidate ? [...candidate.asset.name.replace(/\s+/g, " ").trim()].slice(0, 80).join("") : "";
+  if (operation.kind === "blender-model") return `${operation.model.name}をBlenderで作成してGLBを取り込み`;
   if (operation.kind === "mesh-collision") return operation.action === "add" ? "Colliderを追加" : "Colliderを解除";
   if (operation.kind === "model-attachment") return `${name || "選択したモデル"}を装着（名前・位置・回転・スケールを保持）`;
   if (operation.kind === "material") return `Material：${name || "選択したMaterial"}`;

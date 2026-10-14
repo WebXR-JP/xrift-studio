@@ -59,6 +59,19 @@ export type ExternalStoreProvider = {
 
 export const EXTERNAL_STORE_PROVIDERS = [
   {
+    id: "shared-material-library",
+    kind: "remote-assets",
+    group: "material-sites",
+    name: "素材庫",
+    badge: "利用条件を確認",
+    summary: "モデル・アニメーション・画像・マスクを探して追加",
+    homepageUrl: "https://shared-material-library.kkkkkkasdad.chatgpt.site/gallery.html",
+    catalogKinds: ["model", "texture"],
+    installableKinds: ["model", "texture"],
+    authorFallback: "未指定",
+    attributionNote: "利用条件は素材ごとに確認してください。ライセンス未指定は利用・再配布の許諾を意味しません。PNGはTextureとして追加します。",
+  },
+  {
     id: "poly-haven",
     kind: "remote-assets",
     group: "material-sites",
@@ -252,9 +265,9 @@ export const EXTERNAL_STORE_PROVIDERS = [
   },
 ] as const satisfies readonly ExternalStoreProvider[];
 
-export const DEFAULT_EXTERNAL_STORE_PROVIDER_ID = EXTERNAL_STORE_PROVIDERS[0].id;
+export const DEFAULT_EXTERNAL_STORE_PROVIDER_ID = "poly-haven";
 
 export function getExternalStoreProvider(providerId: string): ExternalStoreProvider {
   return EXTERNAL_STORE_PROVIDERS.find((provider) => provider.id === providerId)
-    ?? EXTERNAL_STORE_PROVIDERS[0];
+    ?? EXTERNAL_STORE_PROVIDERS.find((provider) => provider.id === DEFAULT_EXTERNAL_STORE_PROVIDER_ID)!;
 }

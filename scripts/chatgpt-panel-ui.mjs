@@ -21,6 +21,7 @@ const state=()=>({signedIn,email:signedIn?'fixture@example.invalid':null,account
 tauri.chatgptStatus=async()=>{document.body.dataset.statusCalls=String(Number(document.body.dataset.statusCalls??0)+1);await new Promise(r=>setTimeout(r,5));return state();};
 tauri.chatgptLogin=async()=>{signedIn=true;return state();};
 tauri.chatgptLogout=async()=>{signedIn=false;return state();};
+tauri.getBlenderStatus=async()=>({available:false});
 tauri.chatgptModels=async()=>{const requested=account();if(document.body.dataset.modelGate===requested){document.body.dataset.modelWaiting=requested;while(document.body.dataset.modelGate===requested)await new Promise(r=>setTimeout(r,25));document.body.dataset.modelReturned=requested;}return [{slug:requested==='fixture-account-a'?'fixture-model':'fixture-model-'+requested.slice(-1),displayName:'検証用モデル',supportedReasoningEfforts:['low','medium','high'],defaultReasoningEffort:'medium'}];};
 function Harness(){
 const [generation,setGeneration]=useState<ChatgptGeneration|null>(null);
@@ -43,9 +44,10 @@ try {
   const port = server.httpServer.address().port;
   browser = await chromium.launch({ headless: true, ...(process.env.XRIFT_TEST_CHROME ? { executablePath: process.env.XRIFT_TEST_CHROME } : {}) });
   const page = await browser.newPage({ viewport: { width: 375, height: 900 } });
+  page.setDefaultNavigationTimeout(120_000);
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
-  await page.goto(`http://127.0.0.1:${port}/dev/${root}/index.html`);
+  await page.goto(`http://127.0.0.1:${port}/dev/${root}/index.html`, { waitUntil: "domcontentloaded" });
   const generate = page.getByRole("button", { name: "依頼を送信", exact: true });
   await generate.waitFor();
   assert.equal(await generate.isDisabled(), true);
@@ -70,10 +72,11 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   assert.equal(await page.getByRole("checkbox").count(), 0);
   await generate.click();
-  assert.equal(await prompt.isDisabled(), true);
+  assert.equal(await prompt.isDisabled(), false);
+  assert.equal(await prompt.inputValue(), "");
   await page.waitForFunction(() => document.body.dataset.result === "fixture-model:秋の公園");
   assert.equal(await page.evaluate(() => document.body.dataset.reasoningEffort), "high");
-  assert.deepEqual(JSON.parse(await page.evaluate(() => document.body.dataset.options)), {models:true,materials:true,audio:true});
+  assert.deepEqual(JSON.parse(await page.evaluate(() => document.body.dataset.options)), {models:true,materials:true,audio:true,modelSource:"auto"});
   await page.getByRole("status").filter({ hasText: "床を保存しました" }).waitFor();
   await prompt.fill("Planを相談");
   await page.getByRole("button", { name: "Plan", exact: true }).click();
@@ -93,21 +96,24 @@ try {
   await page.waitForFunction(() => document.body.dataset.cancelled === "true");
   await prompt.fill("error");
   await generate.click();
+  await page.getByRole("region", { name: "送信待ちの依頼", exact: true }).getByRole("button", { name: "再開", exact: true }).click();
   await page.getByRole("alert").filter({ hasText: "検証用エラー" }).waitFor();
+  await page.getByRole("region", { name: "送信待ちの依頼", exact: true }).getByRole("button", { name: "送信待ちの依頼を取り消す", exact: true }).click();
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.screenshot({ path: "dev/chatgpt-ui-artifacts/error.png", fullPage: true });
   await prompt.fill("アカウント変更後の依頼");
   await page.evaluate(() => { document.body.dataset.modelGate = "fixture-account-b"; document.body.dataset.accountId = "fixture-account-b"; });
   await page.waitForFunction(() => document.body.dataset.modelWaiting === "fixture-account-b");
-  assert.equal(await generate.isDisabled(), true, "old account model cannot be used during discovery");
+  assert.equal(await generate.isDisabled(), false, "input can be queued during model discovery");
   assert.equal(await page.getByRole("combobox", { name: "ワールド制作のモデル" }).inputValue(), "");
+  await generate.click();
+  await page.getByRole("region", { name: "送信待ちの依頼", exact: true }).getByRole("button", { name: "再開", exact: true }).click();
   // A second account switch must keep polling while the previous catalog is pending.
   await page.evaluate(() => { document.body.dataset.accountId = "fixture-account-c"; });
   await page.waitForFunction(() => document.querySelector('select[aria-label="ワールド制作のモデル"]').value === "fixture-model-c");
   await page.evaluate(() => { delete document.body.dataset.modelGate; });
   await page.waitForFunction(() => document.body.dataset.modelReturned === "fixture-account-b");
   assert.equal(await page.getByRole("combobox", { name: "ワールド制作のモデル" }).inputValue(), "fixture-model-c", "late catalog cannot replace the current account model");
-  await generate.click();
   await page.waitForFunction(() => document.body.dataset.result === "fixture-model-c:アカウント変更後の依頼");
   await page.getByRole("status").filter({ hasText: "床を保存しました" }).waitFor();
   await page.getByLabel("ChatGPTアカウント", { exact: true }).click();

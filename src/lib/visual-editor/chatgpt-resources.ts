@@ -1,4 +1,5 @@
 import type { ExternalStoreAsset } from "../tauri";
+import { parseBlenderModelSpec, type BlenderModelSpec } from "./chatgpt-modeling";
 
 export type ChatgptResourceKind = "model" | "material" | "audio" | "hdri";
 export type ChatgptBuiltinAction = "catalog" | "material" | "skybox";
@@ -10,6 +11,8 @@ export type ChatgptBuiltinCandidate = {
   actions: ChatgptBuiltinAction[];
 };
 export type ChatgptResourceContext = {
+  blenderAvailable?: boolean;
+  modelSource?: "auto" | "blender" | "store";
   projectAssets: { id: string; kind: ChatgptResourceKind; name: string; skyboxMaterial?: boolean }[];
   builtinCandidates: ChatgptBuiltinCandidate[];
   components: {
@@ -36,7 +39,8 @@ export type ChatgptOperation =
   | { kind: "mesh-collision"; entityId: string; action: "add" | "remove" }
   | { kind: "model-attachment"; entityId: string; componentId?: string; candidateId: string }
   | { kind: "material"; entityId: string; componentId?: string; candidateId: string }
-  | { kind: "catalog"; candidateId: string; name?: string; position: [number, number, number]; rotation?: [number, number, number]; scale?: [number, number, number] };
+  | { kind: "catalog"; candidateId: string; name?: string; position: [number, number, number]; rotation?: [number, number, number]; scale?: [number, number, number] }
+  | { kind: "blender-model"; model: BlenderModelSpec; position: [number, number, number]; rotation?: [number, number, number]; scale?: [number, number, number] };
 
 export type ChatgptCatalogSearchRequest = {
   providerId: "poly-haven" | "ambient-cg" | "ai-lowpoly-props" | "otogura";
@@ -93,6 +97,7 @@ export function parseChatgptOperations(raw: unknown, resources: ChatgptResourceC
       "model-attachment": ["entityId", "componentId", "candidateId"],
       material: ["entityId", "componentId", "candidateId"],
       catalog: ["candidateId", "name", "position", "rotation", "scale"],
+      "blender-model": ["model", "position", "rotation", "scale"],
     };
     const allowed = keys[value.kind as string];
     if (!allowed || Object.keys(value).some(key => key !== "kind" && !allowed.includes(key))) throw invalid();
@@ -110,14 +115,18 @@ export function parseChatgptOperations(raw: unknown, resources: ChatgptResourceC
       if (!chatgptCandidateSupports(resolveChatgptCandidate(operation.candidateId as string, resources, candidates), action as ChatgptResourceKind | "catalog" | "skybox")) throw invalid();
     } else if (["model-attachment", "material", "catalog"].includes(operation.kind as string)) throw invalid();
     for (const key of ["enabled", "iblEnabled", "loop", "spatial", "autoplay"]) if (operation[key] !== undefined && typeof operation[key] !== "boolean") throw invalid();
-    for (const [key, min, max] of [["volume", 0, 4], ["exposure", 0, 20], ["rotationDegrees", -360, 360]] as const) {
+    for (const [key, min, max] of [["volume", 0, 1], ["exposure", 0, 20], ["rotationDegrees", -360, 360]] as const) {
       const number = operation[key];
       if (number !== undefined && (typeof number !== "number" || !Number.isFinite(number) || number < min || number > max)) throw invalid();
     }
     if (operation.kind === "mesh-collision" && operation.action !== "add" && operation.action !== "remove") throw invalid();
-    if (operation.kind === "catalog") {
+    if (operation.kind === "catalog" || operation.kind === "blender-model") {
       if (!vector(operation.position, -50, 50) || (operation.rotation !== undefined && !vector(operation.rotation, -360, 360))
         || (operation.scale !== undefined && !vector(operation.scale, 0.02, 40)) || (operation.name !== undefined && !text(operation.name, 80))) throw invalid();
+    }
+    if (operation.kind === "blender-model") {
+      if (!resources.blenderAvailable || resources.modelSource === "store") throw invalid();
+      operation.model = parseBlenderModelSpec(operation.model);
     }
     if (["audio", "model-attachment", "material"].includes(operation.kind as string)) {
       const relevant = resources.components.filter(component => component.entityId === operation.entityId && component.type === (operation.kind === "audio" ? "audio-source" : "mesh"));

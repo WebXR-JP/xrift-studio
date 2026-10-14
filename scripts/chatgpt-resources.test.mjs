@@ -51,6 +51,10 @@ test("resource references reject URLs, unavailable provider formats, wrong actio
   assert.throws(()=>parseChatgptWorldPlan(JSON.stringify({...noOp,operations:[{kind:"audio",entityId:"bgm",volume:0.2}]}),[],false,["bgm"],ambiguous));
   assert.doesNotThrow(()=>parse({...noOp,operations:[{kind:"skybox",candidateId:"project:local-sky"},{kind:"audio",entityId:"bgm",componentId:"source",volume:0.2}]}));
 });
+test("audio Plan volume stays within the range the editor can apply", () => {
+  for (const volume of [0, 0.35, 1]) assert.doesNotThrow(() => parse({ ...noOp, operations: [{ kind: "audio", entityId: "bgm", volume }] }));
+  for (const volume of [-0.01, 1.01, 4]) assert.throws(() => parse({ ...noOp, operations: [{ kind: "audio", entityId: "bgm", volume }] }), /編集プランを確認できませんでした/);
+});
 function imported() {
   let bundle = createChatgptScaffold(noOp,"resource-regression"); const ids = new Map();
   for (const asset of [{providerId:"poly-haven",externalId:"chair",assetKind:"model",role:"model",format:"gltf"},{providerId:"otogura",externalId:"birds",assetKind:"audio",role:"audio",format:"wav"}]) {

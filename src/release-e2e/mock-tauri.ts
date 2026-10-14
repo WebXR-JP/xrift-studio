@@ -485,6 +485,8 @@ export function installReleaseE2EMock(): void {
         }
         case "chatgpt_status":
           return { ...state.chatgpt };
+        case "get_blender_status":
+          return { available: false };
         case "chatgpt_login":
           state.chatgpt = { ...state.chatgpt, connecting: true, error: null };
           return { ...state.chatgpt };

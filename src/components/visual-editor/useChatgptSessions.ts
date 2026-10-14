@@ -9,7 +9,12 @@ export function useChatgptSessions() {
   });
   const [sessions, setSessions] = useState(loaded.sessions);
   const sessionsRef = useRef(sessions);
-  const [selectedSessionId, selectSession] = useState<string>();
+  const [selectedSessionId, setSelectedSessionId] = useState<string>();
+  const selectedSessionIdRef = useRef<string | undefined>(undefined);
+  const selectSession = (id: string | undefined) => {
+    selectedSessionIdRef.current = id;
+    setSelectedSessionId(id);
+  };
   const [historyError, setHistoryError] = useState(loaded.error);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const persist = () => {
@@ -31,5 +36,5 @@ export function useChatgptSessions() {
       try { saveChatgptSessions(sessionsRef.current); } catch { /* In-session writes already report failures. */ }
     }
   }, [loaded]);
-  return { sessions, sessionsRef, selectedSessionId, selectSession, historyError, updateSessions };
+  return { sessions, sessionsRef, selectedSessionId, selectedSessionIdRef, selectSession, historyError, updateSessions };
 }

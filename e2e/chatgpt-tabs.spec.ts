@@ -153,7 +153,7 @@ test("PlanはSceneや保存済みファイルを変更せず、確認後に同�
   await panel.getByRole("button", { name: "依頼を送信", exact: true }).click();
   await expect(panel.getByRole("button", { name: "Planを反映", exact: true })).toBeEnabled();
   const requested = await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptRequests.at(-1)!);
-  expect(requested.options).toEqual({ models: true, materials: true, audio: true });
+  expect(requested.options).toEqual({ models: true, materials: true, audio: true, modelSource: "auto" });
   expect((await generation(page, requested.generationId)).status).toBe("planned");
   expect((await savedWorld(page)).files).toEqual(before.files);
   await panel.getByRole("button", { name: "Planを反映", exact: true }).click();
@@ -176,8 +176,9 @@ test("Plan作成後の手動編集を上書きせず、追加も始めない", a
   await expect.poll(async () => (await generation(page, generationId)).status).toBe("planned");
   expect((await mutateFresh(page, "rename_entity", { entityId: plane.id, name: "本人が変更したPlane" })).ok).toBe(true);
   expect((await mutateFresh(page, "apply_chatgpt_plan", { generationId })).ok).toBe(true);
-  await expect.poll(async () => (await generation(page, generationId)).status).toBe("failed");
-  expect((await generation(page, generationId)).error).toContain("Planの作成後に編集されました");
+  await expect.poll(() => page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptRequests.length)).toBe(2);
+  await expect.poll(async () => (await generation(page, generationId)).status).toBe("planned");
+  expect((await generation(page, generationId)).error).toBeUndefined();
   await expect.poll(async () => (await savedWorld(page)).scene.entities[plane.id].name).toBe("本人が変更したPlane");
   expect(Object.values((await savedWorld(page)).scene.entities).map(entity => entity.name)).not.toContain("追加したSphere");
 });
@@ -274,7 +275,7 @@ test("ChatGPTは必要時だけタブで開き、独立したMCP設定を開閉�
   await expect(chatgptTab).toHaveAttribute("aria-selected", "true");
   await expect(prompt).toHaveValue("秋の公園");
   expect((await call(page, "get_chatgpt_connection")).result).toMatchObject({ connecting: true, signedIn: false });
-  await page.getByRole("button", { name: "ChatGPTを閉じる", exact: true }).click();
+  await panel.getByRole("button", { name: "制作チャットを閉じる", exact: true }).click();
   await expect(chatgptTab).toHaveCount(0);
   await expect(page.locator('section[aria-labelledby="scene-view-heading"] canvas').first()).toBeVisible();
   await expect(panel).toBeHidden();
@@ -291,7 +292,37 @@ test("ChatGPTは必要時だけタブで開き、独立したMCP設定を開閉�
   await expect(panel.getByRole("combobox", { name: "ワールド制作のモデル", exact: true })).toHaveValue("fixture-model");
   expect((await call(page, "list_chatgpt_models")).result).toMatchObject({ models: [{ slug: "fixture-model" }] });
   expect((await call(page, "disconnect_chatgpt")).result).toMatchObject({ signedIn: false });
-  await expect(panel.getByRole("button", { name: "依頼を送信", exact: true })).toBeDisabled();
+  await expect(panel.getByRole("button", { name: "ChatGPTに接続", exact: true })).toBeVisible();
+  await expect(panel.getByRole("button", { name: "依頼を送信", exact: true })).toBeEnabled();
+  expect(await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.unhandledCommands)).toEqual([]);
+});
+
+test("Inspector内の閉じる操作は各画面幅で見つかり、再表示で未送信の依頼を保持する", async ({ page }, testInfo) => {
+  await openWorld(page);
+  await connectFixture(page);
+  const panel = page.getByRole("region", { name: "ChatGPTの制作チャット", exact: true });
+  const open = page.getByRole("contentinfo", { name: "エディターのステータスバー", exact: true }).getByRole("button", { name: "ChatGPTを開く", exact: true });
+  for (const width of [1600, 1024, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await open.click();
+    const close = panel.getByRole("button", { name: "制作チャットを閉じる", exact: true });
+    const prompt = panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true });
+    await expect(close).toBeVisible();
+    await expect(close).toContainText("閉じる");
+    await expect(prompt).toBeEnabled();
+    await prompt.fill(`画面幅${width}の未送信の相談`);
+    const panelBounds = await panel.boundingBox(), closeBounds = await close.boundingBox();
+    expect(closeBounds!.x).toBeGreaterThanOrEqual(panelBounds!.x);
+    expect(closeBounds!.x + closeBounds!.width).toBeLessThanOrEqual(panelBounds!.x + panelBounds!.width);
+    await page.screenshot({ path: testInfo.outputPath(`inspector-chatgpt-${width}.png`) });
+    await close.click();
+    await expect(panel).toBeHidden();
+    await expect(page.getByRole("tab", { name: "ChatGPTを表示", exact: true })).toHaveCount(0);
+    await open.click();
+    await expect(prompt).toHaveValue(`画面幅${width}の未送信の相談`);
+    await close.click();
+  }
+  expect((await call(page, "get_chatgpt_connection")).result).toMatchObject({ signedIn: true });
   expect(await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.unhandledCommands)).toEqual([]);
 });
 
@@ -355,7 +386,7 @@ test("MCPの逐次生成はプランと保存済みの進捗を返し、Sceneと
     await expect(panel).toContainText("検証用の広場");
     await expect(panel.getByRole("checkbox")).toHaveCount(0);
     await panel.getByText("Plan：検証用の広場", { exact: true }).click();
-    await page.getByRole("button", { name: "ChatGPTを閉じる", exact: true }).click();
+    await panel.getByRole("button", { name: "制作チャットを閉じる", exact: true }).click();
     await expect(panel).toBeHidden();
     await expect(page.getByRole("tab", { name: "ChatGPTを表示", exact: true })).toHaveCount(0);
     expect((await generation(page, generationId)).status).toBe("running");
