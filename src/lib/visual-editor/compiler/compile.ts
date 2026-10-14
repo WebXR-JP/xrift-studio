@@ -3742,7 +3742,7 @@ const nativeMToonFrames = new WeakMap<import("three").Material, { renderer: obje
     (isObj
       ? "const scene = useLoader(OBJLoader, modelUrl);"
       : isOpenBrush
-        ? `const { scene, parser${animationLoaded ? ", animations" : ""} } = useLoader(CompiledOpenBrushGLTFLoader, modelUrl${
+        ? `const { scene${needsParser ? ", parser" : ""}${animationLoaded ? ", animations" : ""} } = useLoader(CompiledOpenBrushGLTFLoader, modelUrl${
             usesDraco
               ? ", (loader) => loader.setDRACOLoader(new DRACOLoader().setDecoderPath(dracoDecoderPath))"
               : ""
