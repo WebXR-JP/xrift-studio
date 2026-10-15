@@ -15,6 +15,8 @@ import { addBuiltinPrimitiveEntity, createScriptComponent } from "./scene-docume
 import { instantiateSceneAsset } from "./asset-placement";
 import { createDocumentId } from "./document-id";
 import { getMaterialAssignmentTarget } from "./material-assignment";
+import { normalizeChatgptSkyboxPatch } from "./chatgpt-skybox";
+import { ChatgptPlanInputError } from "./chatgpt-plan-recovery";
 
 type BuiltinOperation = Extract<ChatgptOperation, { kind: "catalog" | "material" | "skybox" }>;
 type Entry = {
@@ -184,12 +186,12 @@ export async function applyChatgptBuiltinOperation(bundle: PrototypeVisualProjec
   if (operation.kind === "skybox") {
     const { kind: _kind, candidateId: _candidate, ...patch } = operation;
     const materialAssetId = selected ? await installMaterial(run, selected, projectPath) : undefined;
-    run.run("update_scene_settings", { skybox: { ...patch, ...(materialAssetId ? { materialAssetId, enabled: patch.enabled ?? true } : {}) } });
+    run.run("update_scene_settings", { skybox: normalizeChatgptSkyboxPatch(run.bundle, { ...patch, ...(materialAssetId ? { materialAssetId, enabled: patch.enabled ?? true } : {}) }) });
     return { bundle: run.bundle };
   }
   if (operation.kind === "material") {
     // Validate the target before fetching or saving any catalog dependencies.
-    if (!getMaterialAssignmentTarget(bundle.scene, bundle.assets, operation.entityId, operation.componentId).ready) throw new Error("マテリアルを割り当てられるメッシュが見つかりません");
+    if (!getMaterialAssignmentTarget(bundle.scene, bundle.assets, operation.entityId, operation.componentId).ready) throw new ChatgptPlanInputError("マテリアルを割り当てられるメッシュが見つかりません");
     const materialAssetId = await installMaterial(run, selected!, projectPath);
     run.run("set_material", { entityId: operation.entityId, materialAssetId, ...(operation.componentId ? { meshComponentId: operation.componentId } : {}) });
     return { bundle: run.bundle, entityId: operation.entityId };

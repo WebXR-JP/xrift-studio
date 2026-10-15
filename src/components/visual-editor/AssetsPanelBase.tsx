@@ -489,6 +489,7 @@ function AssetCard({
   assets,
   projectPath,
   selected,
+  selectedMaterialIds,
   viewMode,
   readOnly,
   onSelect,
@@ -500,6 +501,7 @@ function AssetCard({
   assets: AssetManifest;
   projectPath?: string;
   selected: boolean;
+  selectedMaterialIds: readonly string[];
   viewMode: ViewMode;
   readOnly: boolean;
   onSelect: (assetId: string, event: MouseEvent<HTMLButtonElement>) => void;
@@ -551,7 +553,7 @@ function AssetCard({
       event.preventDefault();
       return;
     }
-    writeAssetCardDragData(event.dataTransfer, asset);
+    writeAssetCardDragData(event.dataTransfer, asset, selectedMaterialIds);
     event.dataTransfer.effectAllowed = "copyMove";
   };
 
@@ -1381,6 +1383,7 @@ export function AssetsPanel({
   const allFolders = [...KIND_FOLDERS, ...customFolders];
   const activeFolder = allFolders.find((folder) => folder.id === activeFolderId);
   const allAssets = Object.values(assets.assets).filter((asset) => asset.kind !== "primitive");
+  const selectedMaterialIds = selectedAssetIds.filter(id => assets.assets[id]?.kind === "material" && assets.assets[id]?.status === "ready");
   const modelFolderIds = importedModelFolderIds(assets);
   const searching = searchQuery.trim().length > 0;
   const visibleFolders = searching
@@ -2042,6 +2045,7 @@ export function AssetsPanel({
               assets={assets}
               projectPath={projectPath}
               selected={selectedAssetIds.includes(asset.id)}
+              selectedMaterialIds={selectedMaterialIds}
               viewMode={viewMode}
               readOnly={assetMutationLocked}
               onSelect={handleAssetSelect}

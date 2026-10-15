@@ -172,7 +172,7 @@ test("途中の保存結果を最新Sceneと会話へ引き継ぎ、重複させ
     expect(after.entities[boxId].name).toBe("手動で調整したBox");
     expect(after.entities[boxId].components.find(component => component.type === "transform")).toMatchObject({ position: [9, 2, 0] });
     const panel = page.getByRole("region", { name: "ChatGPTの制作チャット", exact: true });
-    await panel.getByText("Plan：残りのベンチとCollider", { exact: true }).click();
+    await expect(panel.getByText("Plan：残りのベンチとCollider", { exact: true })).toHaveCount(0);
     await panel.getByRole("button", { name: "ベンチをInspectorで表示", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Entity名", exact: true })).toHaveValue("ベンチ");
   } finally { await page.evaluate(() => { window.__XRIFT_RELEASE_E2E__!.chatgptSaveGate = null; }).catch(() => undefined); }

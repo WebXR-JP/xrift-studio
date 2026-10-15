@@ -1,5 +1,7 @@
 import type { ExternalStoreAsset } from "../tauri";
 import { parseBlenderModelSpec, type BlenderModelSpec } from "./chatgpt-modeling";
+import { CHATGPT_EDITOR_ACTIONS, validateChatgptEditorAction, type ChatgptEditorAction } from "./chatgpt-editor-actions";
+import type { JsonValue, SceneComponent } from "./scene-document";
 
 export type ChatgptResourceKind = "model" | "material" | "audio" | "hdri";
 export type ChatgptBuiltinAction = "catalog" | "material" | "skybox";
@@ -13,12 +15,17 @@ export type ChatgptBuiltinCandidate = {
 export type ChatgptResourceContext = {
   blenderAvailable?: boolean;
   modelSource?: "auto" | "blender" | "store";
-  projectAssets: { id: string; kind: ChatgptResourceKind; name: string; skyboxMaterial?: boolean }[];
+  currentSettingsJson?: string;
+  componentDefinitions?: { id: string; label: string; description: string; fields: Record<string, JsonValue>[]; fieldsFrom?: string }[];
+  projectAssets: { id: string; kind: ChatgptResourceKind; name: string; skyboxMaterial?: boolean; attached?: boolean; propertiesJson?: string }[];
   builtinCandidates: ChatgptBuiltinCandidate[];
   components: {
     entityId: string;
     componentId: string;
-    type: "mesh" | "audio-source" | "collider";
+    type: SceneComponent["type"];
+    definitionId?: string;
+    propertiesJson?: string;
+    enabled?: boolean;
     modelAssetId?: string;
     audio?: { audioAssetId?: string; enabled: boolean; volume: number; loop: boolean; spatial: boolean; autoplay: boolean };
   }[];
@@ -34,13 +41,14 @@ export function chatgptReferenceKey(reference: string, legacyProviderId: string)
 }
 
 export type ChatgptOperation =
+  | ChatgptEditorAction
   | { kind: "skybox"; candidateId?: string; enabled?: boolean; iblEnabled?: boolean; rotationDegrees?: number; exposure?: number }
   | { kind: "audio"; entityId: string; componentId?: string; candidateId?: string; enabled?: boolean; volume?: number; loop?: boolean; spatial?: boolean; autoplay?: boolean }
   | { kind: "mesh-collision"; entityId: string; action: "add" | "remove" }
   | { kind: "model-attachment"; entityId: string; componentId?: string; candidateId: string }
   | { kind: "material"; entityId: string; componentId?: string; candidateId: string }
   | { kind: "catalog"; candidateId: string; name?: string; position: [number, number, number]; rotation?: [number, number, number]; scale?: [number, number, number] }
-  | { kind: "blender-model"; model: BlenderModelSpec; position: [number, number, number]; rotation?: [number, number, number]; scale?: [number, number, number] };
+  | { kind: "blender-model"; model: BlenderModelSpec; entityId?: string; componentId?: string; position?: [number, number, number]; rotation?: [number, number, number]; scale?: [number, number, number] };
 
 export type ChatgptCatalogSearchRequest = {
   providerId: "poly-haven" | "ambient-cg" | "ai-lowpoly-props" | "otogura";
@@ -91,18 +99,26 @@ export function parseChatgptOperations(raw: unknown, resources: ChatgptResourceC
     const invalid = () => new Error("編集プランを確認できませんでした。再試行してください");
     if (!record(value) || !text(value.kind, 32)) throw invalid();
     const keys: Record<string, readonly string[]> = {
+      ...Object.fromEntries(CHATGPT_EDITOR_ACTIONS.map(spec => [spec.kind, Object.keys(spec.properties)])),
       skybox: ["candidateId", "enabled", "iblEnabled", "rotationDegrees", "exposure"],
       audio: ["entityId", "componentId", "candidateId", "enabled", "volume", "loop", "spatial", "autoplay"],
       "mesh-collision": ["entityId", "action"],
       "model-attachment": ["entityId", "componentId", "candidateId"],
       material: ["entityId", "componentId", "candidateId"],
       catalog: ["candidateId", "name", "position", "rotation", "scale"],
-      "blender-model": ["model", "position", "rotation", "scale"],
+      "blender-model": ["model", "entityId", "componentId", "position", "rotation", "scale"],
     };
     const allowed = keys[value.kind as string];
     if (!allowed || Object.keys(value).some(key => key !== "kind" && !allowed.includes(key))) throw invalid();
     const operation = { ...value };
     for (const key of allowed) if (operation[key] === null) delete operation[key];
+    if (CHATGPT_EDITOR_ACTIONS.some(spec => spec.kind === operation.kind)) {
+      if (operation.enabled !== undefined && typeof operation.enabled !== "boolean") throw invalid();
+      if (operation.name !== undefined && !text(operation.name, 80)) throw invalid();
+      if (operation.position !== undefined && !vector(operation.position, -50, 50)) throw invalid();
+      if (!validateChatgptEditorAction(operation, resources, entityIds)) throw invalid();
+      return operation as ChatgptEditorAction;
+    }
     if (["audio", "mesh-collision", "model-attachment", "material"].includes(operation.kind as string)) {
       if (typeof operation.entityId !== "string" || !entityIds.includes(operation.entityId)) throw invalid();
       if (operation.componentId !== undefined && (typeof operation.componentId !== "string"
@@ -120,12 +136,18 @@ export function parseChatgptOperations(raw: unknown, resources: ChatgptResourceC
       if (number !== undefined && (typeof number !== "number" || !Number.isFinite(number) || number < min || number > max)) throw invalid();
     }
     if (operation.kind === "mesh-collision" && operation.action !== "add" && operation.action !== "remove") throw invalid();
-    if (operation.kind === "catalog" || operation.kind === "blender-model") {
+    if (operation.kind === "catalog" || operation.kind === "blender-model" && operation.entityId === undefined) {
       if (!vector(operation.position, -50, 50) || (operation.rotation !== undefined && !vector(operation.rotation, -360, 360))
         || (operation.scale !== undefined && !vector(operation.scale, 0.02, 40)) || (operation.name !== undefined && !text(operation.name, 80))) throw invalid();
     }
     if (operation.kind === "blender-model") {
       if (!resources.blenderAvailable || resources.modelSource === "store") throw invalid();
+      if (operation.entityId !== undefined) {
+        if (typeof operation.entityId !== "string" || !entityIds.includes(operation.entityId)
+          || ["position", "rotation", "scale"].some(key => operation[key] !== undefined)) throw invalid();
+        const meshes = resources.components.filter(component => component.entityId === operation.entityId && component.type === "mesh");
+        if (!meshes.length || (operation.componentId === undefined ? meshes.length !== 1 : !meshes.some(component => component.componentId === operation.componentId))) throw invalid();
+      } else if (operation.componentId !== undefined) throw invalid();
       operation.model = parseBlenderModelSpec(operation.model);
     }
     if (["audio", "model-attachment", "material"].includes(operation.kind as string)) {

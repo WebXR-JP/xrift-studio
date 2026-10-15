@@ -1,0 +1,150 @@
+[
+  {
+    "kind": "material-update",
+    "label": "Materialを変更",
+    "requires": "materials",
+    "properties": {
+      "candidateId": { "$ref": "#/$defs/projectMaterialId" },
+      "propertiesJson": {
+        "type": "string",
+        "minLength": 2,
+        "maxLength": 6000,
+        "description": "Partial MCP update_material_asset patch for this existing project Material. Supported: pbrMetallicRoughness {baseColorFactor:[r,g,b,a] with four 0..1 values, roughnessFactor:0..1, metallicFactor:0..1}; or aliases color:#rrggbb, roughness:0..1, metalness:0..1, opacity:0..1. Also emissiveFactor:[r,g,b] finite nonnegative, alphaMode:OPAQUE|MASK|BLEND, alphaCutoff:0..1, doubleSided:boolean, vertexColors:boolean, blending:normal|additive|multiply|subtractive, depthWrite:auto|on|off, alphaToCoverage:boolean. Do not specify an alias and its canonical field together (opacity corresponds to baseColorFactor alpha). Preserve all other values, shader and textures. Data only; no source code, paths, URLs or new asset references."
+      }
+    }
+  },
+  {
+    "kind": "component-add",
+    "label": "Componentを追加",
+    "requires": "definitions",
+    "properties": {
+      "entityId": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "$ref": "#/$defs/entityId"
+          }
+        ]
+      },
+      "definitionId": {
+        "$ref": "#/$defs/componentDefinitionId"
+      },
+      "name": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          }
+        ]
+      },
+      "position": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "$ref": "#/$defs/position"
+          }
+        ]
+      },
+      "propertiesJson": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "string",
+            "maxLength": 6000,
+            "description": "JSON object containing documented componentDefinitions fields. For official XRift Components these are authoring properties; for basic Components these are update_component patch fields. Data only; never code or callbacks. Omitted values are preserved."
+          }
+        ]
+      },
+      "enabled": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "boolean"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "kind": "component-update",
+    "label": "Componentを設定",
+    "requires": "components",
+    "properties": {
+      "entityId": {
+        "$ref": "#/$defs/entityId"
+      },
+      "componentId": {
+        "$ref": "#/$defs/editorComponentId"
+      },
+      "propertiesJson": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "string",
+            "maxLength": 6000,
+            "description": "Partial JSON object with documented authoring properties only. Unspecified properties are preserved."
+          }
+        ]
+      },
+      "enabled": {
+        "anyOf": [
+          {
+            "type": "null"
+          },
+          {
+            "type": "boolean"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "kind": "entity-delete",
+    "label": "Entityを削除",
+    "requires": "entities",
+    "properties": {
+      "entityId": {
+        "$ref": "#/$defs/entityId"
+      }
+    }
+  },
+  {
+    "kind": "scene-settings",
+    "label": "シーンの項目を変更",
+    "requires": "scene",
+    "properties": {
+      "settingsJson": {
+        "type": "string",
+        "maxLength": 6000,
+        "description": "Partial JSON object of Scene settings; preserve unspecified fields. Allowed sections/fields: shadowMapType (basic|pcf|pcfSoft|vsm); skybox {enabled,iblEnabled,projection(infinite|box|dome),topColor,bottomColor(#rrggbb),offset,exponent,rotationDegrees,flipY,exposure,meshPosition,meshRotationDegrees,meshScale,center}; fog {enabled,color(#rrggbb),near,far>near}; ambient {color(#rrggbb),intensity>=0}; camera {near>=0.01,far>near,fov:1..179}; postprocessing {enabled,order:[bloom,grading] in desired order,hdr:{enabled,toneMapping:aces|none},bloom:{enabled,threshold>=0,strength>=0,radius>=0},ao:{enabled,radius>=0.1,minDistance>=0,maxDistance>minDistance},grading:{enabled,contrast>=0,saturation>=0,temperature:-1..1,tint:-1..1},exposure>=0}; vegetation {enabled,windStrength>=0,windSpeed>=0,gustStrength>=0,windDirectionDegrees}; physics {gravity:0..100,allowInfiniteJump}; editor {backgroundColor(#rrggbb),gizmo:{size>=0.1,gridVisible,gridSize>=1,gridDivisions(integer>=1),snapEnabled,snapHoldShift,translateSnap>=0.001,rotateSnapDegrees>=0.1,scaleSnap>=0.001}}. Data only, no code, IDs or paths. Use skybox candidate operation to select an image or sky material. IBL requires an image. Use post effects only when requested or explain their purpose."
+      }
+    }
+  },
+  {
+    "kind": "component-remove",
+    "label": "Componentを取り外す",
+    "requires": "components",
+    "properties": {
+      "entityId": {
+        "$ref": "#/$defs/entityId"
+      },
+      "componentId": {
+        "$ref": "#/$defs/editorComponentId"
+      }
+    }
+  }
+]

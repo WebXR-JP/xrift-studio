@@ -1,12 +1,12 @@
 import type { ChatgptAssetOptions } from "../../lib/tauri";
 import type { ChatgptRequestScope } from "../../lib/visual-editor/chatgpt-request-queue";
 import { ChatgptWorldPanel } from "./ChatgptWorldPanel";
+import type { ChatgptSceneSettingsPatch } from "./ChatgptSceneControls";
 import type { ChatgptSessionActions } from "./ChatgptSessionBar";
-import { AboutModal } from "../AboutModal";
-import { INITIAL_APP_UPDATE_STATE, type AppUpdateState } from "../../lib/app-updater";
 import { chatgptGenerationMatchesScene, type ChatgptGenerationMode } from "../../lib/visual-editor/chatgpt-generation";
 import type { ChatgptGeneration } from "../../lib/visual-editor/chatgpt-generation";
 import { AiConnectionPanel } from "./AiConnectionPanel";
+import { refreshXriftMcpClients, registerXriftMcpClient } from "../../lib/mcp-connection";
 import { EditorDialog } from "./EditorDialog";
 import { HierarchyTransferDialog } from "./HierarchyTransferDialog";
 import { useHierarchyTransfer } from "./useHierarchyTransfer";
@@ -738,14 +738,12 @@ export type VisualEditorPrototypeProps = {
   projectTransferBusy?: boolean;
   onChatgptGenerate?: (model: string, prompt: string, options: ChatgptAssetOptions, mode?: ChatgptGenerationMode, reasoningEffort?: string, expectedScope?: ChatgptRequestScope) => Promise<void>;
   onChatgptApplyPlan?: (generationId: string) => Promise<void>;
+  onChatgptAnswerQuestions?: (generationId: string, answers: import("../../lib/visual-editor/chatgpt-questions").ChatgptQuestionAnswer[]) => Promise<void>;
   onChatgptCancel?: (generationId: string) => Promise<unknown>;
   onChatgptRevert?: (generationId: string) => Promise<unknown>;
   chatgptSessionActions?: ChatgptSessionActions;
   chatgptHistoryError?: string;
   chatgptBusy?: boolean;
-  appUpdate?: AppUpdateState;
-  onCheckAppUpdate?: () => void;
-  onShowAppUpdate?: () => void;
   chatgptGeneration?: ChatgptGeneration | null;
   chatgptConversation?: readonly ChatgptGeneration[];
   /**
@@ -996,14 +994,12 @@ export function VisualEditorPrototype({
   chatgptGeneration,
   chatgptConversation = [],
   onChatgptApplyPlan,
+  onChatgptAnswerQuestions,
   onChatgptCancel,
   onChatgptRevert,
   chatgptSessionActions,
   chatgptHistoryError,
   chatgptBusy,
-  appUpdate = INITIAL_APP_UPDATE_STATE,
-  onCheckAppUpdate = () => {},
-  onShowAppUpdate = () => {},
   onRegisterExternalAssetsCommit,
   onRegisterMcpProjectBridge,
   onClassicExport,
@@ -1469,13 +1465,12 @@ export function VisualEditorPrototype({
   const [chatgptTabVisited, setChatgptTabVisited] = useState(false);
   const [chatgptTabOpen, setChatgptTabOpen] = useState(false);
   const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
-  const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const sceneChatgptSessions = chatgptSessionActions?.sessions.filter(session => session.projectId === bundle.project.projectId && session.sceneId === bundle.scene.sceneId);
   const selectedChatgptSession = sceneChatgptSessions?.find(session => session.id === chatgptSessionActions?.activeSessionId) ?? sceneChatgptSessions?.[0];
   const sceneChatgptGeneration = chatgptSessionActions ? selectedChatgptSession?.turns[selectedChatgptSession.turns.length - 1] ?? null : chatgptGeneration && chatgptGenerationMatchesScene(chatgptGeneration, bundle.project.projectId, bundle.scene.sceneId) ? chatgptGeneration : null;
   const openMcpSettings = () => {
     setMcpSettingsOpen(true);
-    if (!mcpClients.length && !mcpLoading) void refreshMcpClients();
+    void refreshMcpClients();
   };
   const selectEditorTab = (id: string) => {
     if (id === CHATGPT_WORLD_TAB_ID) { setViewportMaximized(false); setChatgptTabVisited(true); setChatgptTabOpen(true); }
@@ -1562,6 +1557,7 @@ export function VisualEditorPrototype({
     skippedAssetIds: [],
   }));
   const stopPlayModeRef = useRef<() => void>(() => {});
+  const chatgptEntityReferences = useMemo(() => Object.values(bundle.scene.entities).map(entity => ({ id: entity.id, name: entity.name, parentId: entity.parentId })), [bundle.scene.entities]);
   const scriptEntityOptions = useMemo(
     () =>
       Object.values(bundle.scene.entities)
@@ -1818,6 +1814,7 @@ export function VisualEditorPrototype({
   } | null>(null);
   const [mcpClients, setMcpClients] = useState<XriftMcpClientStatus[]>([]);
   const [mcpLoading, setMcpLoading] = useState(false);
+  const mcpPendingRef = useRef(false);
   const [mcpRegisteringClientId, setMcpRegisteringClientId] =
     useState<XriftMcpClientId | null>(null);
   const [mcpError, setMcpError] = useState<string | null>(null);
@@ -1853,29 +1850,35 @@ export function VisualEditorPrototype({
   }, [editorMode, scriptRuntime.compile, scriptRuntimeInputKey]);
 
   const refreshMcpClients = useCallback(async () => {
-    if (!mcpNativeAvailable) return;
+    if (!mcpNativeAvailable || mcpPendingRef.current) return;
+    mcpPendingRef.current = true;
     setMcpLoading(true);
     setMcpError(null);
     try {
-      setMcpClients(await tauri.detectXriftMcpClients());
+      const refreshed = await refreshXriftMcpClients({ onClients: setMcpClients, onUpdating: setMcpRegisteringClientId });
+      setMcpClients(refreshed.clients);
+      setMcpError(refreshed.error);
     } catch {
       setMcpError(
         "AIクライアントを確認できませんでした。XRift Studioを再起動して再試行してください",
       );
     } finally {
+      mcpPendingRef.current = false;
       setMcpLoading(false);
+      setMcpRegisteringClientId(null);
     }
   }, [mcpNativeAvailable]);
 
   const registerMcpClient = useCallback(
     async (clientId: XriftMcpClientId) => {
-      if (!mcpNativeAvailable || mcpRegisteringClientId) {
+      if (!mcpNativeAvailable || mcpPendingRef.current) {
         return;
       }
+      mcpPendingRef.current = true;
       setMcpRegisteringClientId(clientId);
       setMcpError(null);
       try {
-        const status = await tauri.registerXriftMcpClient(clientId);
+        const status = await registerXriftMcpClient(clientId);
         setMcpClients((current) =>
           current.map((client) => (client.id === status.id ? status : client)),
         );
@@ -1889,21 +1892,26 @@ export function VisualEditorPrototype({
             : "登録できません。AIクライアントがインストールされているか確認してください",
         );
       } finally {
+        mcpPendingRef.current = false;
         setMcpRegisteringClientId(null);
       }
     },
-    [mcpNativeAvailable, mcpRegisteringClientId],
+    [mcpNativeAvailable],
   );
 
   const requestAutosave = useCallback(
     async (
       savingBundle: PrototypeVisualProject,
     ): Promise<string | undefined> => {
-      if (lastSavedBundleRef.current === savingBundle) {
+      const coordinator = autosaveCoordinatorRef.current;
+      const latestRequested = coordinator?.latestRequested();
+      // Undo/Redo can return the exact saved snapshot. A different pending
+      // write must finish before that snapshot can be considered saved again.
+      if (lastSavedBundleRef.current === savingBundle && !coordinator?.isPending() && (!latestRequested || latestRequested === savingBundle)) {
+        if (bundleRef.current === savingBundle) setSaveStatus("saved");
         return lastSavedPathRef.current ?? projectPathRef.current;
       }
 
-      const coordinator = autosaveCoordinatorRef.current;
       if (!coordinator) return undefined;
       setSaveStatus("saving");
       try {
@@ -2291,7 +2299,11 @@ export function VisualEditorPrototype({
       setSaveStatus("unavailable");
       return;
     }
-    if (lastSavedBundleRef.current === bundle) return;
+    const latestRequested = autosaveCoordinatorRef.current?.latestRequested();
+    if (lastSavedBundleRef.current === bundle && !autosaveCoordinatorRef.current?.isPending() && (!latestRequested || latestRequested === bundle)) {
+      setSaveStatus("saved");
+      return;
+    }
     if (autosaveTimerRef.current !== null) {
       window.clearTimeout(autosaveTimerRef.current);
     }
@@ -2317,7 +2329,8 @@ export function VisualEditorPrototype({
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       if (!onSaveRef.current) return;
-      if (lastSavedBundleRef.current === bundleRef.current) return;
+      const latestRequested = autosaveCoordinatorRef.current?.latestRequested();
+      if (lastSavedBundleRef.current === bundleRef.current && !autosaveCoordinatorRef.current?.isPending() && (!latestRequested || latestRequested === bundleRef.current)) return;
       event.preventDefault();
       event.returnValue = "";
     };
@@ -5657,6 +5670,35 @@ export function VisualEditorPrototype({
     },
     [editorMode, handleGizmoSettingsChange, updateScene],
   );
+
+  const handleChatgptSceneSettingsChange = useCallback((patch: ChatgptSceneSettingsPatch) => {
+    if (editorModeRef.current !== "edit" || importBusyRef.current || importRunningRef.current || projectExportLock.current) {
+      setNotice("Playと素材の処理を停止してからシーン設定を調整してください。");
+      return;
+    }
+    try {
+      const source = bundleRef.current;
+      // Apply only supplied fields to the latest Scene through the MCP validator.
+      const outcome = executeXriftMcpEditorTool({
+        bundle: source, sceneSelection: sceneSelectionRef.current, assetSelection: assetSelectionRef.current,
+        editorMode: editorModeRef.current, importBusy: importBusyRef.current,
+        revision: mcpRevisionRef.current, saveStatus: saveStatusRef.current,
+      }, {
+        id: crypto.randomUUID(), tool: "update_scene_settings",
+        arguments: { projectId: source.project.projectId, sceneId: source.scene.sceneId, expectedRevision: mcpRevisionRef.current, ...patch },
+      });
+      if (!outcome.changed) return;
+      bundleRef.current = outcome.bundle;
+      mcpRevisionRef.current += 1;
+      mcpRevisionBundleRef.current = outcome.bundle;
+      saveStatusRef.current = "dirty";
+      // The normal setter keeps selection and groups scrubbing into one Undo.
+      setBundle(outcome.bundle);
+      setNotice("シーン設定を更新しました。変更を自動保存します");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "シーン設定を更新できませんでした。");
+    }
+  }, [setBundle]);
 
   /**
    * One keyboard step of the active gizmo tool, applied to every selected
@@ -12132,8 +12174,11 @@ export function VisualEditorPrototype({
           {chatgptTabVisited && onChatgptGenerate ? <section aria-label="ChatGPTの制作チャット"
             className={chatgptDockActive ? `flex min-h-0 ${phone ? "flex-1" : "basis-[min(76%,34rem)] shrink-0"} flex-col overflow-hidden border-l border-b border-editor-border bg-editor-surface p-3 text-xs text-slate-600` : "hidden"}>
             <ChatgptWorldPanel onGenerate={onChatgptGenerate} generation={sceneChatgptGeneration}
-              onApplyPlan={onChatgptApplyPlan} onCancel={onChatgptCancel}
-              onClose={closeChatgpt}
+              entityReferences={chatgptEntityReferences} assets={bundle.assets} projectPath={projectPath}
+              onApplyPlan={onChatgptApplyPlan} onAnswerQuestions={onChatgptAnswerQuestions} onCancel={onChatgptCancel}
+              onClose={closeChatgpt} onOpenMcp={openMcpSettings}
+              onMaterialChange={handleMaterialChange}
+              sceneSettings={resolveSceneSettings(bundle.scene.settings)} onSceneSettingsChange={handleChatgptSceneSettingsChange}
               onRevert={onChatgptRevert} historyError={chatgptHistoryError} externallyBusy={chatgptBusy}
               sessionActions={chatgptSessionActions ? { ...chatgptSessionActions, sessions: sceneChatgptSessions ?? [], activeSessionId: selectedChatgptSession?.id } : undefined}
               draftScope={selectedChatgptSession?.id ?? `${bundle.project.projectId}:${bundle.scene.sceneId}`}
@@ -12552,7 +12597,6 @@ export function VisualEditorPrototype({
             />
             </Suspense>
           ) : null}
-          <AboutModal open={appSettingsOpen} onClose={() => setAppSettingsOpen(false)} appUpdate={appUpdate} onCheckAppUpdate={onCheckAppUpdate} onShowAppUpdate={onShowAppUpdate} onOpenMcp={openMcpSettings} />
           {mcpSettingsOpen ? <EditorDialog onDismiss={() => setMcpSettingsOpen(false)} ariaLabelledBy="mcp-connection-title"
             backdropClassName="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/25 p-3 sm:p-5"
             surfaceClassName="flex max-h-[calc(100dvh-2rem)] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-editor-border bg-editor-surface shadow-2xl">
@@ -12683,9 +12727,10 @@ export function VisualEditorPrototype({
             sceneSettingsOpen={sceneSettingsOpen}
             onToggleSceneSettings={() => {
               setSceneSettingsOpen((current) => !current);
-              if (tablet) { setTabletPanel("inspector"); setViewportMaximized(false); }
+              setViewportMaximized(false);
+              setActiveEditorTab(SCENE_VIEW_TAB_ID);
+              if (tablet) setTabletPanel("inspector");
             }}
-            onOpenSettings={() => setAppSettingsOpen(true)}
             onOpenChatgpt={onChatgptGenerate && projectKind === "world" ? () => selectEditorTab(CHATGPT_WORLD_TAB_ID) : undefined}
             touch={touch}
           />

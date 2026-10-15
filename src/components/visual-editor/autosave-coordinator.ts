@@ -8,6 +8,7 @@ export type AutosaveSuperseded = typeof AUTOSAVE_SUPERSEDED;
 export type SerializedAutosaveCoordinator<Value, Result> = {
   request: (value: Value) => Promise<Result | AutosaveSuperseded>;
   latestRequested: () => Value | null;
+  isPending: () => boolean;
 };
 
 export type SerializedAutosaveCoordinatorOptions<Value> = {
@@ -97,6 +98,9 @@ export function createSerializedAutosaveCoordinator<Value, Result>(
     },
     latestRequested() {
       return latestValue;
+    },
+    isPending() {
+      return latestJob !== null;
     },
   };
 }

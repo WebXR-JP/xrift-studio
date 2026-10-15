@@ -40,6 +40,7 @@ import {
 } from "./editor-drag-data";
 import {
   ENTITY_DRAG_MIME,
+  ENTITIES_DRAG_MIME,
   MATERIAL_DRAG_MIME,
   SCENE_ASSET_DRAG_MIME,
   type EditorSelection,
@@ -376,6 +377,7 @@ function reparentBlockedMessage(
  * keeps 1,600 unchanged rows out of the render.
  */
 type HierarchyRowHandlers = {
+  selectedEntityIds: readonly string[];
   dragEntityId: string | null;
   selectEntity: (entityId: string, event?: MouseEvent<HTMLElement>) => void;
   openContextMenu: (event: MouseEvent<HTMLElement>, entityId: string | null) => void;
@@ -662,13 +664,14 @@ const HierarchyEntityRow = memo(function HierarchyEntityRow({
           const handlers = handlersRef.current;
           writeEditorDragData(event.dataTransfer, {
             [ENTITY_DRAG_MIME]: entity.id,
+            [ENTITIES_DRAG_MIME]: JSON.stringify(handlers.selectedEntityIds.includes(entity.id) ? handlers.selectedEntityIds : [entity.id]),
           });
           // Hierarchy drop reparents (move); Assets drop creates a Prefab
           // (copy). One drag source advertises both editor intents.
           event.dataTransfer.effectAllowed = "copyMove";
           handlers.setDragEntityId(entity.id);
           handlers.setDropTarget(null);
-          handlers.selectEntity(entity.id);
+          if (!handlers.selectedEntityIds.includes(entity.id)) handlers.selectEntity(entity.id);
         }}
         onDragEnd={() => {
           const handlers = handlersRef.current;
@@ -1429,6 +1432,7 @@ export function HierarchyPanel({
   // stay memoised on their own data and still call the current closures.
   const rowHandlersRef = useRef<HierarchyRowHandlers>(null!);
   rowHandlersRef.current = {
+    selectedEntityIds,
     dragEntityId,
     selectEntity,
     openContextMenu,

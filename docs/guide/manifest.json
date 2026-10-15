@@ -1,7 +1,7 @@
 {
   "title": "XRift Studio 使い方ガイド",
-  "reviewedVersion": "1.0.6",
-  "reviewedOn": "2026-10-15",
+  "reviewedVersion": "1.0.7",
+  "reviewedOn": "2026-10-16",
   "siteUrl": "https://webxr-jp.github.io/xrift-studio/guide/",
   "groups": [
     {
@@ -422,7 +422,7 @@
       "description": "Hierarchy、シーン、Inspector、Assetsの使い方と、Entityの編集や視点移動の操作を説明します。",
       "group": "start",
       "file": "editor-basics.md",
-      "keywords": "画面 視点 カメラ Inspector Hierarchy Assets Components 選択 F",
+      "keywords": "画面 視点 カメラ Inspector Hierarchy Assets Components 選択 F シーン設定 歯車",
       "related": [
         "shortcuts",
         "materials",
@@ -670,10 +670,10 @@
     {
       "slug": "ai-connection",
       "title": "AIに編集を手伝ってもらう",
-        "description": "AIクライアントやChatGPTを接続し、会話と手動編集を引き継いでSceneを編集します。モデルと思考量、Plan、履歴、続ける・戻す操作を説明します。",
+        "description": "AIクライアントやChatGPTを接続し、会話と手動編集を引き継いでSceneを編集します。結果からMaterial・Skybox・Fogを調整する方法、次の依頼の候補、履歴、添付、選択式の確認、戻す操作を説明します。",
       "group": "behavior",
       "file": "ai-connection.md",
-        "keywords": "AI MCP MCP接続 設定 接続 Claude Codex 登録 ChatGPT 接続カード タブ チャット 閉じる 手動編集 共同制作 再計画 セッション 履歴 コピー Continue Revert 続ける 戻す Plan プラン 相談 反映 停止 破棄 現在のScene 調整 進捗 Inspector ログイン 認証 復元 エラー ワールド生成 モデル 差し替え 位置 回転 Skybox BGM Collider 思考量 モデルの既定 速さ優先 標準 じっくり reasoningEffort 日本語 外部3Dモデル Poly Haven ambientCG AI LOWPOLY PROPS 取り込み CC0 音蔵 音声 glTF PBR マテリアル",
+        "keywords": "AI MCP MCP接続 入力欄下のMCP 制作チャットからMCP 接続設定 設定 接続 Claude Codex 登録 ChatGPT 接続カード タブ チャット 閉じる 手動編集 共同制作 再計画 セッション 履歴 コピー 出力をコピー Entity添付 Material添付 マテリアル添付 Material編集 現在のMaterialを調整 現在のScene設定を調整 Skyboxを表示 Fogを有効にする Skyboxの明るさ Fogの開始距離 Fogの終了距離 IBL 結果から編集 インライン編集 Base Color HEX カラーピッカー スライダー 色 粗さ 金属感 透明度 Roughness Metallic Opacity Entity削除 Component追加 Component設定 Component取り外し 作業の記録 作業ログ 進行状況 重複表示 変更前 変更後 設定値 設定項目 オン オフ 色見本 JSON表示 サムネイル プレビュー 候補比較 公式Component Mirror ScreenShareDisplay TagBoard 選択肢 次の依頼 依頼候補 入力候補 Tab入力 Tab補完 上下キー ↑ ↓ Escape 候補を閉じる Tab Shift+Tab Space キーボード 3択 その他 自由入力 質問 3ページ Primitive Blender Mesh Renderer 置き換え 配下 階層 ドラッグ ドロップ Revert 戻す この依頼の変更を戻す 保存件数 直接編集 変更を反映 変更を破棄 MCP/API Plan プラン 相談 反映 停止 破棄 画像生成 画像取り込み 現在のScene 調整 進捗 Inspector ログイン 認証 復元 エラー ワールド生成 モデル 差し替え 位置 回転 Skybox 環境光 Fog 露出 Bloom 色調 Scene設定 重力 グリッド スナップ 再起動 componentDefinitions BGM Collider 思考量 モデルの既定 速さ優先 標準 じっくり reasoningEffort 日本語 外部3Dモデル Poly Haven ambientCG AI LOWPOLY PROPS 取り込み CC0 音蔵 音声 glTF PBR マテリアル",
       "related": [
         "save-and-open",
         "first-world",

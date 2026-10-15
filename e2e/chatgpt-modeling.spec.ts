@@ -104,3 +104,48 @@ test("MCPでBlenderの利用状況を確認して実GLBをAssetsへ取り込み�
   expect(after.scene.entities).toEqual(before.scene.entities);
   expect(after.assets.assets[generated.result!.modelAssetId as string]).toMatchObject({ kind: "model", name: model.name, status: "ready" });
 });
+
+
+test("配置したPrimitiveをBlenderモデルに置き換え、Entityと手動の子・Componentを保持して戻せる", async ({ page }, info) => {
+  const { projectPath, model } = await ready(page);
+  const parent = await call(page, "create_empty_entity", { name: "配置Group" }, true);
+  const target = await call(page, "create_primitive", { shape: "box", position: [2, 1, -3] }, true);
+  expect(target.ok).toBe(true);
+  const entityId = target.result!.entityId as string;
+  expect((await call(page, "rename_entity", { entityId, name: "置き換える椅子" }, true)).ok).toBe(true);
+  expect((await call(page, "reparent_entity", { entityId, parentEntityId: parent.result!.entityId }, true)).ok).toBe(true);
+  expect((await call(page, "update_transform", { entityId, rotation: [0, 0.5, 0], scale: [2, 3, 4] }, true)).ok).toBe(true);
+  const child = await call(page, "create_empty_entity", { name: "手動の子", parentEntityId: entityId }, true);
+  expect((await call(page, "add_component", { entityId, definitionId: "xrift.mirror" }, true)).ok).toBe(true);
+  await expect.poll(async () => (await call(page, "get_editor_context")).result?.saveStatus).toBe("saved");
+  const before = await readDocuments(page, projectPath);
+  const original = before.scene.entities[entityId];
+  expect(original.parentId).toBe(parent.result!.entityId);
+  expect(original.children).toContain(child.result!.entityId);
+  const mesh = original.components.find((c: any) => c.type === "mesh");
+  await page.evaluate(({ model, entityId, componentId }) => {
+    window.__XRIFT_RELEASE_E2E__!.chatgptPlanFixture = JSON.stringify({ title: "下案を詳細化", description: "配置を保って置き換え", objects: [], operations: [{ kind: "blender-model", model, entityId, componentId, position: null, rotation: null, scale: null }] });
+  }, { model, entityId, componentId: mesh.id });
+  const start = await call(page, "generate_chatgpt_world", { model: "fixture-model", prompt: "このPrimitiveをBlenderモデルに置き換えて", attachedEntityIds: [entityId], options: { models: true, materials: false, audio: false, modelSource: "blender" } }, true);
+  expect(start.ok).toBe(true);
+  const generationId = start.result!.generationId;
+  await expect.poll(async () => ((await call(page, "get_chatgpt_generation", { generationId })).result as ChatgptGeneration).status, { timeout: 60_000 }).toBe("completed");
+  const after = await readDocuments(page, projectPath);
+  const replaced = after.scene.entities[entityId];
+  expect(replaced.name).toBe(original.name);
+  expect(replaced.parentId).toBe(original.parentId);
+  expect(replaced.children).toEqual(original.children);
+  expect(after.scene.entities[child.result!.entityId as string]).toEqual(before.scene.entities[child.result!.entityId as string]);
+  expect(replaced.components.filter((c: any) => c.type !== "mesh" && c.type !== "collider")).toEqual(original.components.filter((c: any) => c.type !== "mesh" && c.type !== "collider"));
+  const collider = replaced.components.find((c: any) => c.type === "collider");
+  const originalCollider = original.components.find((c: any) => c.type === "collider");
+  expect(collider).toMatchObject({ id: originalCollider.id, shape: "box", fitMode: "auto", enabled: originalCollider.enabled });
+  expect(collider.halfExtents).not.toEqual(originalCollider.halfExtents);
+  const replacementMesh = replaced.components.find((c: any) => c.type === "mesh");
+  expect(replacementMesh.id).toBe(mesh.id);
+  expect(after.assets.assets[replacementMesh.geometryAssetId]).toMatchObject({ kind: "model", status: "ready" });
+  await expect.poll(async () => (await runtime(page, entityId))?.vertexCount ?? 0).toBeGreaterThan(3);
+  await page.screenshot({ path: info.outputPath("primitive-replaced.png") });
+  expect((await call(page, "revert_chatgpt_generation", { generationId }, true)).ok).toBe(true);
+  expect((await readDocuments(page, projectPath)).scene.entities[entityId]).toEqual(original);
+});

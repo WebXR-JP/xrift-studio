@@ -127,25 +127,21 @@ test("接続失敗は中央で再試行でき、復元中は重複接続と依�
   await expect(panel.getByRole("alert")).toHaveCount(0);
 });
 
-test("選択した思考量がPlanと通常の依頼から実IPCへ渡る", async ({ page }) => {
+test("Planの切替なしで通常の依頼を保存し、選択した思考量を次の依頼の実IPCにも渡す", async ({ page }) => {
   const panel = await openFixture(page);
   await signIn(page);
   const thinking = panel.getByRole("combobox", { name: "思考量", exact: true });
   await expect(thinking).toHaveValue("low");
   await thinking.selectOption("high");
   const prompt = panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true });
-  const plan = panel.getByRole("button", { name: "Plan", exact: true });
-  await plan.click();
-  await prompt.fill("Planで床を追加する相談");
+  await expect(panel.getByRole("button", { name: "Plan", exact: true })).toHaveCount(0);
+  await prompt.fill("最初の依頼で床を追加");
   await panel.getByRole("button", { name: "依頼を送信", exact: true }).click();
-  await expect(panel.getByRole("button", { name: "Planを反映", exact: true })).toBeEnabled();
-  expect(await page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.at(-1))).toMatchObject({ model: "fixture-a", reasoningEffort: "high", prompt: "Planで床を追加する相談" });
-  await panel.getByRole("button", { name: "Planを破棄", exact: true }).click();
-  await expect(panel.getByRole("button", { name: "Planを反映", exact: true })).toHaveCount(0);
-  await plan.click();
+  await expect(panel.getByRole("progressbar", { name: "依頼の反映と保存", exact: true })).toHaveAttribute("value", "3");
+  expect(await page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.at(-1))).toMatchObject({ model: "fixture-a", reasoningEffort: "high", prompt: "最初の依頼で床を追加" });
+  await expect(panel.getByRole("button", { name: "変更を反映", exact: true })).toHaveCount(0);
   await prompt.fill("通常の依頼で床を追加");
   await panel.getByRole("button", { name: "依頼を送信", exact: true }).click();
-  await panel.getByRole("region", { name: "送信待ちの依頼", exact: true }).getByRole("button", { name: "再開", exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.length)).toBe(2);
   expect(await page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.at(-1))).toMatchObject({ model: "fixture-a", reasoningEffort: "high", prompt: "通常の依頼で床を追加" });
   await expect(panel.getByRole("progressbar", { name: "依頼の反映と保存", exact: true })).toHaveAttribute("value", "3");
@@ -166,18 +162,15 @@ test("モデル切替で対応する思考量を保ち、非対応なら既定�
   await expect(thinking).toHaveValue("");
   await expect(thinking).toBeDisabled();
   await expect(thinking.locator("option")).toHaveCount(1);
-  await panel.getByRole("button", { name: "Plan", exact: true }).click();
-  await panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true }).fill("既定の思考量でPlanを相談");
+  await panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true }).fill("既定の思考量で床を追加");
   await panel.getByRole("button", { name: "依頼を送信", exact: true }).click();
-  await expect(panel.getByRole("button", { name: "Planを反映", exact: true })).toBeEnabled();
+  await expect(panel.getByRole("progressbar", { name: "依頼の反映と保存", exact: true })).toHaveAttribute("value", "3");
   const request = await page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.at(-1)!);
   expect(request.model).toBe("fixture-d");
   expect(request.reasoningEffort).toBeUndefined();
 
   // Choosing the model default explicitly is different from capability
   // fallback. A later model switch must not silently opt into "low".
-  await panel.getByRole("button", { name: "Planを破棄", exact: true }).click();
-  await expect(panel.getByRole("button", { name: "Planを反映", exact: true })).toHaveCount(0);
   await model.selectOption("fixture-a");
   await expect(thinking).toHaveValue("low");
   await thinking.selectOption("");
@@ -185,8 +178,8 @@ test("モデル切替で対応する思考量を保ち、非対応なら既定�
   await expect(thinking).toHaveValue("");
   await panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true }).fill("明示したモデル既定のまま相談");
   await panel.getByRole("button", { name: "依頼を送信", exact: true }).click();
-  await panel.getByRole("region", { name: "送信待ちの依頼", exact: true }).getByRole("button", { name: "再開", exact: true }).click();
-  await expect(panel.getByRole("button", { name: "Planを反映", exact: true })).toBeEnabled();
+  await expect.poll(() => page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.length)).toBe(2);
+  await expect(panel.getByRole("progressbar", { name: "依頼の反映と保存", exact: true })).toHaveAttribute("value", "3");
   const explicitDefault = await page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.at(-1)!);
   expect(explicitDefault.model).toBe("fixture-b");
   expect(explicitDefault.reasoningEffort).toBeUndefined();

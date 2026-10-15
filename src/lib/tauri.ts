@@ -1,3 +1,4 @@
+import { assertChatgptNativeContract } from "./visual-editor/chatgpt-native-contract";
 import { SHARED_MATERIAL_LIBRARY_PROVIDER_ID, listSharedLibraryAssets, getSharedLibraryAssetOptions, installSharedLibraryAsset } from "./shared-material-library-store";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -34,7 +35,7 @@ import {
 export type ChatgptConnection = { signedIn: boolean; email: string | null; accountId?: string | null; planUsageEnabled: boolean; connecting: boolean; restoring?: boolean; error: string | null };
 export type ChatgptModel = { slug: string; displayName: string; supportedReasoningEfforts?: string[]; defaultReasoningEffort?: string | null };
 export type ChatgptGenerationProgress = { generationId: string; stage: "model" | "catalog" | "request" | "receiving"; message: string; receivedCharacters?: number; eventCount?: number };
-export type ChatgptSceneContext = { title: string; selectedEntityId?: string; entities: { id: string; name: string; components: string[]; position: number[]; scale: number[]; rotation: number[] }[]; conversation?: { prompt: string; result: string }[] };
+export type ChatgptSceneContext = { title: string; selectedEntityId?: string; attachedEntityIds?: string[]; entities: { id: string; name: string; parentId?: string; components: string[]; position: number[]; scale: number[]; rotation: number[] }[]; conversation?: { prompt: string; result: string }[] };
 
 export type ProjectKind = "world" | "item";
 export type ProjectFormat = "classic" | "visual";
@@ -307,6 +308,8 @@ export type XriftMcpClientStatus = {
   installed: boolean;
   registered: boolean;
   needsUpdate: boolean;
+  /** False for a registration the author explicitly disabled. */
+  autoUpdateAllowed?: boolean;
   message: string;
 };
 
@@ -821,7 +824,10 @@ export const tauri = {
   chatgptLogin: () => invoke<ChatgptConnection>("chatgpt_login"),
   chatgptLogout: () => invoke<ChatgptConnection>("chatgpt_logout"),
   chatgptModels: () => invoke<ChatgptModel[]>("chatgpt_models"),
-  chatgptPlan: (model: string, prompt: string, options: ChatgptAssetOptions, gltfMaterials: { id: string; name: string; extension: string }[] = [], generationId?: string, sceneContext?: ChatgptSceneContext, reasoningEffort?: string, resourceContext?: import("./visual-editor/chatgpt-resources").ChatgptResourceContext) => invoke<{ plan: string; assetCandidates: ExternalStoreAsset[] }>("chatgpt_plan", { model, prompt, options, gltfMaterials, generationId, sceneContext, reasoningEffort, resourceContext }),
+  chatgptPlan: async (model: string, prompt: string, options: ChatgptAssetOptions, gltfMaterials: { id: string; name: string; extension: string }[] = [], generationId?: string, sceneContext?: ChatgptSceneContext, reasoningEffort?: string, resourceContext?: import("./visual-editor/chatgpt-resources").ChatgptResourceContext) => {
+    await assertChatgptNativeContract(command => invoke(command));
+    return invoke<{ plan: string; assetCandidates: ExternalStoreAsset[] }>("chatgpt_plan", { model, prompt, options, gltfMaterials, generationId, sceneContext, reasoningEffort, resourceContext });
+  },
   chatgptCancelGeneration: (generationId: string) => invoke<{ generationId: string; cancelled: boolean }>("chatgpt_cancel_generation", { generationId }),
   onChatgptGenerationProgress: (handler: (progress: ChatgptGenerationProgress) => void) => listen<ChatgptGenerationProgress>("chatgpt-generation-progress", event => handler(event.payload)),
   detectXriftMcpClients: () =>

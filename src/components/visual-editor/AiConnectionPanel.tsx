@@ -55,7 +55,13 @@ export function AiConnectionPanel({
   ).length;
   const updateCount = clients.filter((client) => client.needsUpdate).length;
   const connectionState =
-    registeredCount > 0
+    loading
+      ? {
+          label: registeringClientId ? "MCPサーバーを自動更新中" : "MCP接続を確認中",
+          detail: "登録済みの接続を確認し、MCPサーバーを最新の状態に更新します。",
+          indicator: "bg-violet-500",
+        }
+      : registeredCount > 0
       ? {
           label: "AI編集を待機中",
           detail: "XRift Studioを開いている間だけ、現在のシーンを操作できます。",
@@ -134,6 +140,7 @@ export function AiConnectionPanel({
                   type="button"
                   disabled={
                     !client.installed ||
+                    loading ||
                     (client.registered && !client.needsUpdate) ||
                     registeringClientId !== null
                   }
@@ -168,9 +175,9 @@ export function AiConnectionPanel({
 
       {error ? (
         <div role="alert" className="rounded-md border border-rose-200 bg-rose-50 p-2.5 text-rose-700">
-          <p>{error}</p>
+          <p className="whitespace-pre-wrap">{error}</p>
           <p className="mt-1 text-[11px] leading-4">
-            上の「登録」から再試行できます。AIクライアントを更新した場合は状態を再確認してください。
+            上の「更新」または「登録」から再試行できます。AIクライアントを更新した場合は状態を再確認してください。
           </p>
           <button
             type="button"

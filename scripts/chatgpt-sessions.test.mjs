@@ -1,13 +1,35 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
+import { existsSync, readFileSync } from "node:fs";
+import { registerHooks } from "node:module";
+import { fileURLToPath } from "node:url";
+import ts from "typescript-test-api";
 
-const require = createRequire(import.meta.url);
-const ts = require("typescript-test-api");
-const source = readFileSync(new URL("../src/lib/visual-editor/chatgpt-sessions.ts", import.meta.url), "utf8");
-const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
-const api = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
+const sourceRoots = ["../src/", "../packages/xrift-studio-runtime/src/"].map(path => new URL(path, import.meta.url).href);
+const isSource = url => sourceRoots.some(root => url.startsWith(root));
+// Load production code and its local data dependencies, without rewriting packages.
+const hooks = registerHooks({
+  resolve(specifier, context, next) {
+    if (specifier.startsWith(".") && context.parentURL && isSource(context.parentURL)) {
+      const candidate = new URL(specifier, context.parentURL);
+      if (isSource(candidate.href) && !candidate.pathname.endsWith(".ts") && !candidate.pathname.endsWith(".json")) {
+        const typed = new URL(`${candidate.href}.ts`);
+        if (existsSync(fileURLToPath(typed))) return next(typed.href, context);
+      }
+    }
+    return next(specifier, context);
+  },
+  load(url, context, next) {
+    if (isSource(url) && url.endsWith(".ts")) return { format: "module", shortCircuit: true,
+      source: ts.transpileModule(readFileSync(fileURLToPath(url), "utf8"), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText };
+    if (isSource(url) && url.endsWith(".json")) return { format: "module", shortCircuit: true,
+      source: `export default JSON.parse(${JSON.stringify(readFileSync(fileURLToPath(url), "utf8"))});` };
+    return next(url, context);
+  },
+});
+const api = await import("../src/lib/visual-editor/chatgpt-sessions.ts");
+const { sceneSettingsDisplay } = await import("../src/lib/visual-editor/chatgpt-change-description.ts");
+hooks.deregister();
 const date = "2026-10-14T00:00:00.000Z";
 const session = (id = "session-1", title = "新しいチャット") => api.createChatgptSession("project-1", "scene-1", title, date, id);
 const turn = (id = "job-1", extra = {}) => ({
@@ -24,6 +46,19 @@ class MemoryStorage {
 }
 const withTurn = (...turns) => ({ ...session(), turns });
 const bytes = value => Buffer.byteLength(JSON.stringify(value), "utf8");
+
+test("Material attachments survive restart and remain named in copied history and continuation context", () => {
+  const storage = new MemoryStorage();
+  const attachedMaterials = [{ id: "material-1", name: "公園の床Material" }];
+  api.saveChatgptSessions([withTurn(turn("material-request", { attachedMaterials,
+    plan: { title: "Materialの調整", description: "既存の質感を調整", objects: [{ name: "Materialの設定を変更", shape: "調整", materialAssetId: "material-1" }] },
+  }))], storage);
+  const restored = api.loadChatgptSessions(storage)[0];
+  assert.deepEqual(restored.turns[0].attachedMaterials, attachedMaterials);
+  assert.equal(restored.turns[0].plan.objects[0].materialAssetId, "material-1");
+  assert.match(api.chatgptSessionTranscript(restored), /添付Material: 公園の床Material/);
+  assert.match(api.chatgptConversationContext(restored)[0].result, /添付Material: 公園の床Material/);
+});
 
 test("session updates preserve identity, user titles, request times and live cancellation", () => {
   const before = [session()];
@@ -67,6 +102,62 @@ test("public Plan settings remain readable after reload and in a copied transcri
   const restored = api.loadChatgptSessions(storage)[0];
   assert.equal(restored.turns[0].plan.objects[0].detail, "音量30%、ループあり");
   assert.match(api.chatgptSessionTranscript(restored), /音量30%、ループあり/);
+});
+
+test("Scene setting rows retain labels, units, previous values and safe visual metadata after reload", () => {
+  const storage = new MemoryStorage();
+  const settings = [
+    { label: "Fog", value: "有効", previousValue: "無効", enabled: true },
+    { label: "Fogの開始距離", value: "35 m", previousValue: "20 m" },
+    { label: "Fogの色", value: "#dce8ed", previousValue: "#112233", color: "#dce8ed" },
+    { label: "型の不正な付加情報", value: "値", enabled: "true", color: "url(unsafe)" },
+    { label: "長".repeat(100), value: "値".repeat(300), previousValue: "前".repeat(300) },
+  ];
+  api.saveChatgptSessions([withTurn(turn("settings", { plan: { title: "Fog", description: "遠景を調整", objects: [{ name: "Fogを変更", shape: "調整", settings }] } }))], storage);
+  const restored = api.loadChatgptSessions(storage)[0].turns[0].plan.objects[0].settings;
+  assert.deepEqual(restored.slice(0, 3), settings.slice(0, 3));
+  assert.deepEqual(restored[3], { label: "型の不正な付加情報", value: "値" });
+  assert.equal(restored[4].label.length, 80);
+  assert.equal(restored[4].value.length, 240);
+  assert.equal(restored[4].previousValue.length, 240);
+});
+
+test("old JSON Scene details recover readable rows without inventing historical previous values", () => {
+  for (const detail of [
+    'fog: {"enabled":true,"color":"#dce8ed","near":35,"far":110}',
+    '{"fog":{"enabled":true,"color":"#dce8ed","near":35,"far":110}}',
+  ]) {
+    const storage = new MemoryStorage();
+    api.saveChatgptSessions([withTurn(turn("legacy", { plan: { title: "設定", description: "設定", objects: [{ name: "Scene設定を調整", shape: "調整", detail }] } }))], storage);
+    const object = api.loadChatgptSessions(storage)[0].turns[0].plan.objects[0];
+    assert.match(object.name, /^Fog・Fogの色・Fogの開始距離/);
+    assert.deepEqual(object.settings, [
+      { label: "Fog", value: "有効", enabled: true },
+      { label: "Fogの色", value: "#dce8ed", color: "#dce8ed" },
+      { label: "Fogの開始距離", value: "35 m" },
+      { label: "Fogの終了距離", value: "110 m" },
+    ]);
+    assert.ok(object.settings.every(setting => setting.previousValue === undefined));
+  }
+  const storage = new MemoryStorage();
+  const details = ['shadowMapType: "pcfSoft"', 'fog: {"enabled":true', '{"__proto__":{"enabled":true}}'];
+  api.saveChatgptSessions([withTurn(turn("legacy-shadow", { plan: { title: "設定", description: "設定", objects: details.map(detail => ({ name: "Scene設定を調整", shape: "調整", detail })) } }))], storage);
+  const objects = api.loadChatgptSessions(storage)[0].turns[0].plan.objects;
+  assert.deepEqual(objects[0].settings, [{ label: "Shadow Mapの種類", value: "PCF Soft" }]);
+  assert.ok(objects.slice(1).every(object => object.settings === undefined && object.name === "Scene設定を調整"));
+});
+
+test("saved Scene rows show actual disabled IBL after the proposed value was normalized", () => {
+  const before = bundle(), after = structuredClone(before);
+  before.scene.settings.skybox = { iblEnabled: false };
+  after.scene.settings.skybox = { iblEnabled: false };
+  const patch = { skybox: { iblEnabled: true } };
+  assert.equal(sceneSettingsDisplay(patch, before)[0].enabled, true);
+  const settings = sceneSettingsDisplay(patch, before, after);
+  assert.deepEqual(settings, [{ label: "IBL（画像による照明）", value: "無効", previousValue: "無効", enabled: false }]);
+  const storage = new MemoryStorage();
+  api.saveChatgptSessions([withTurn(turn("actual-ibl", { plan: { title: "Skybox", description: "画像なしのIBL", objects: [{ name: "IBLを変更", shape: "調整", settings }] } }))], storage);
+  assert.deepEqual(api.loadChatgptSessions(storage)[0].turns[0].plan.objects[0].settings, settings);
 });
 
 test("saved requests retain their modeling source across updates and restart", () => {

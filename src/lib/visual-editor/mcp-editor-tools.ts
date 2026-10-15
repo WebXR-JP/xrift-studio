@@ -1,3 +1,4 @@
+import { COMPONENT_PATCH_KEYS, RIGID_BODY_PATCH_KEYS, COLLIDER_PATCH_KEYS, LIGHT_PATCH_KEYS, TEXT_PATCH_KEYS, IMAGE_PATCH_KEYS, AUDIO_SOURCE_PATCH_KEYS, INTERACTION_TRIGGER_PATCH_KEYS } from "./component-patch-contract";
 import { catalogMaterialTextures } from "./catalog-material-dependencies";
 import { inspectProjectHealth } from "./value-up/project-health";
 import { analyzeProjectPerformance } from "./value-up/performance-budget";
@@ -72,7 +73,6 @@ import {
   updateInteractionTriggerComponent,
   type AudioSourcePatch,
   type ColliderPatch,
-  type InteractionTriggerPatch,
   type LightPatch,
   type RigidBodyPatch,
   type SceneComponent,
@@ -4153,7 +4153,7 @@ function updateComponent(
     case "vegetation-wind": {
       assertPatchKeys(
         patch,
-        ["enabled"],
+        COMPONENT_PATCH_KEYS[component.type],
         component.type,
         {
           guidance:
@@ -4175,7 +4175,7 @@ function updateComponent(
     case "particle-emitter": {
       assertPatchKeys(
         patch,
-        ["enabled", "particleAssetId"],
+        COMPONENT_PATCH_KEYS[component.type],
         component.type,
       );
       const enabled = optionalBoolean(patch.enabled, "patch.enabled");
@@ -4215,7 +4215,7 @@ function updateComponent(
     case "xrift-component": {
       assertPatchKeys(
         patch,
-        ["enabled", "properties", "assetReferences", "entityReferences"],
+        COMPONENT_PATCH_KEYS[component.type],
         component.type,
       );
       const enabled = optionalBoolean(patch.enabled, "patch.enabled");
@@ -4300,7 +4300,7 @@ function updateComponent(
       break;
     }
     case "script":
-      assertPatchKeys(patch, ["enabled"], component.type, {
+      assertPatchKeys(patch, COMPONENT_PATCH_KEYS[component.type], component.type, {
         guidance:
           "スクリプトのproperties、assetReferences、entityReferencesはupdate_script_componentを使用してください",
       });
@@ -4312,7 +4312,7 @@ function updateComponent(
       );
       break;
     case "transform":
-      assertPatchKeys(patch, ["enabled"], component.type, {
+      assertPatchKeys(patch, COMPONENT_PATCH_KEYS[component.type], component.type, {
         guidance:
           "位置・回転・大きさ値はupdate_transformを使用してください",
       });
@@ -4326,15 +4326,7 @@ function updateComponent(
     case "mesh": {
       assertPatchKeys(
         patch,
-        [
-          "enabled",
-          "materialBindings",
-          "castShadow",
-          "receiveShadow",
-          "modelPose",
-          "maxDistance",
-          "renderOrder",
-        ],
+        COMPONENT_PATCH_KEYS[component.type],
         component.type,
       );
       const mesh = component;
@@ -4507,7 +4499,7 @@ function updateComponent(
     }
     case "spawn-point":
     case "prefab-instance":
-      assertPatchKeys(patch, ["enabled"], component.type);
+      assertPatchKeys(patch, COMPONENT_PATCH_KEYS[component.type], component.type);
       scene = updateSceneComponentEnabled(
         context.bundle.scene,
         entityId,
@@ -8331,155 +8323,6 @@ function particlePatchValue(value: unknown): ParticlePropertiesPatch {
   }
   return JSON.parse(JSON.stringify(patch)) as ParticlePropertiesPatch;
 }
-
-/**
- * Declares which Patch fields `update_component` accepts, and fails the build
- * when the Patch type and this list stop agreeing.
- *
- * The allow-list has to exist at runtime, so it cannot be read off the type.
- * That made it a hand-copy of the Patch definition, and a field added to a
- * component without being copied here becomes quietly unsettable through MCP —
- * the same silent-drift failure that already produced one shipped bug in the
- * document validators. Passing the list through here turns that into a compile
- * error naming the field that was left out.
- */
-function patchKeysOf<Patch>() {
-  return <const Keys extends readonly (keyof Patch)[]>(
-    keys: Exclude<keyof Patch, Keys[number]> extends never
-      ? Keys
-      : {
-          error: "update_component is missing a Patch field";
-          missing: Exclude<keyof Patch, Keys[number]>;
-        },
-  ): readonly string[] => keys as readonly string[];
-}
-
-const RIGID_BODY_PATCH_KEYS = patchKeysOf<RigidBodyPatch>()([
-  "enabled",
-  "bodyType",
-  "autoColliders",
-  "isTrigger",
-  "friction",
-  "restitution",
-  "gravityScale",
-  "linearDamping",
-  "angularDamping",
-  "canSleep",
-  "ccd",
-  "lockTranslations",
-  "lockRotations",
-]);
-
-const COLLIDER_PATCH_KEYS = patchKeysOf<ColliderPatch>()([
-  "collisionModelAssetId",
-  "enabled",
-  "isTrigger",
-  "friction",
-  "restitution",
-  "center",
-  "halfExtents",
-  "fitMode",
-  "meshMode",
-  "bodyType",
-  "gravityScale",
-  "linearDamping",
-  "angularDamping",
-  "canSleep",
-  "ccd",
-  "lockTranslations",
-  "lockRotations",
-]);
-
-const LIGHT_PATCH_KEYS = patchKeysOf<LightPatch>()([
-  "enabled",
-  "lightType",
-  "color",
-  "intensity",
-  "castShadow",
-  "targetPosition",
-  "mapAssetId",
-  "shadowIntensity",
-  "shadowStyle",
-  "shadowMapSize",
-  "shadowMapWidth",
-  "shadowMapHeight",
-  "shadowRadius",
-  "shadowBias",
-  "shadowNormalBias",
-  "shadowBlurSamples",
-  "shadowAutoUpdate",
-  "shadowCameraNear",
-  "shadowCameraFar",
-  "shadowCameraLeft",
-  "shadowCameraRight",
-  "shadowCameraTop",
-  "shadowCameraBottom",
-  "shadowFocus",
-  "shadowAspect",
-  "groundColor",
-  "distance",
-  "decay",
-  "angle",
-  "penumbra",
-  "width",
-  "height",
-]);
-
-const TEXT_PATCH_KEYS = patchKeysOf<TextPatch>()([
-  "enabled",
-  "text",
-  "color",
-  "fontSize",
-  "maxWidth",
-  "anchorX",
-  "anchorY",
-  "outlineWidth",
-  "outlineColor",
-  "fontId",
-  "fontWeight",
-  "fontAssetId",
-  "textAlign",
-  "lineHeight",
-  "letterSpacing",
-  "background",
-]);
-
-const IMAGE_PATCH_KEYS = patchKeysOf<ImagePatch>()([
-  "enabled",
-  "textureAssetId",
-  "width",
-  "height",
-  "anchorX",
-  "anchorY",
-  "color",
-  "opacity",
-  "alphaMode",
-  "doubleSided",
-  "lit",
-]);
-
-const AUDIO_SOURCE_PATCH_KEYS = patchKeysOf<AudioSourcePatch>()([
-  "enabled",
-  "audioAssetId",
-  "volume",
-  "loop",
-  "autoplay",
-  "spatial",
-  "refDistance",
-  "rolloffFactor",
-  "maxDistance",
-]);
-
-/**
- * `entityReferences` is deliberately absent.
- *
- * It is derived from the graph the Component points at, not authored, so a
- * caller that could set it would be able to write a list the graph disagrees
- * with. Pointing the Component at another Asset re-derives it instead.
- */
-const INTERACTION_TRIGGER_PATCH_KEYS = patchKeysOf<
-  Pick<InteractionTriggerPatch, "enabled" | "interactivityAssetId">
->()(["enabled", "interactivityAssetId"]);
 
 function assertPatchKeys(  patch: Record<string, unknown>,
   allowedKeys: readonly string[],

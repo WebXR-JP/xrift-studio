@@ -46,3 +46,31 @@ export function readModelRuntime(entityId: string) {
   }
   return null;
 }
+
+/** Observe the active Editor's environment without creating another Scene. */
+export function readSceneEnvironmentRuntime() {
+  for (const root of _roots.values()) {
+    const state = root.store.getState();
+    if (!state.gl.domElement.isConnected) continue;
+    let hasEditorEntity = false;
+    const skies: { exposure?: number; topColor?: string; bottomColor?: string }[] = [];
+    state.scene.traverse(object => {
+      if (object.userData.authoringEntityId === "starter-floor") hasEditorEntity = true;
+      if (!(object instanceof Mesh)) return;
+      for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+        const uniforms = (material as unknown as { uniforms?: Record<string, { value: unknown }> }).uniforms;
+        if (!uniforms?.uExposure) continue;
+        const color = (value: unknown) => value && typeof (value as { getHexString?: unknown }).getHexString === "function"
+          ? `#${(value as { getHexString: () => string }).getHexString()}` : undefined;
+        skies.push({ exposure: typeof uniforms.uExposure.value === "number" ? uniforms.uExposure.value : undefined,
+          topColor: color(uniforms.uTopColor?.value), bottomColor: color(uniforms.uBottomColor?.value) });
+      }
+    });
+    if (!hasEditorEntity) continue;
+    const fog = state.scene.fog as { color: { getHexString: () => string }; near?: number; far?: number } | null;
+    return { fog: fog ? { color: `#${fog.color.getHexString()}`, near: fog.near, far: fog.far } : null,
+      skies, backgroundIntensity: state.scene.backgroundIntensity, environmentIntensity: state.scene.environmentIntensity,
+      environment: Boolean(state.scene.environment), drawCalls: state.gl.info.render.calls, contextLost: state.gl.getContext().isContextLost() };
+  }
+  return null;
+}

@@ -56,6 +56,7 @@ export const XRIFT_MCP_TOOLS = [
   { name: "generate_chatgpt_world", surface: "project" },
   { name: "get_chatgpt_generation", surface: "project" },
   { name: "apply_chatgpt_plan", surface: "project" },
+  { name: "answer_chatgpt_questions", surface: "project" },
   { name: "cancel_chatgpt_generation", surface: "project" },
   { name: "list_chatgpt_sessions", surface: "project" },
   { name: "get_chatgpt_session", surface: "project" },

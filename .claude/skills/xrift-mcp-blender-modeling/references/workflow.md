@@ -65,6 +65,12 @@ Studioの「コードから作成」にR3F / Three.jsのJSXを貼り付けると
 7. PBRとKHR拡張は`update_material_asset`、テクスチャの追加は`import_texture_asset`で行います。
 8. 必要なら`add_component`で`core.mesh`などを追加し、castShadowとreceiveShadowを設定してください。
 
+### 配置済みPrimitiveの置き換え
+
+配置や寸法を先に決めたい依頼では、Primitiveで下案を作り、対象が決まってからBlenderで詳細を作ります。`get_editor_context`などでEntity一覧とTransformを読み、`get_entity_components`で対象のMesh RendererとcomponentIdを確認してください。GLBを取り込んだ後は、新規配置の代わりに`set_entity_model`へentityId、modelAssetId、必要ならcomponentIdを渡します。名前・Transform・親子関係・ほかのComponentを保持できます。モデルの一部を示すEntityは元モデルのEntityを選び直してください。
+
+Blenderでは対象Entityのローカル座標と原点に合わせて作ります。既存Transformのscaleを考慮し、寸法をモデルとTransformへ二重に適用しません。対象が曖昧なら公開名で確認し、複数のMesh Rendererから推測で選びません。Colliderの自動フィットやモデル内部ノードの変更制約は通常の置き換え操作に従います。
+
 ### E. 検証ループ
 
 `set_play_mode(mode: "play")`で動作を確認し、`get_editor_context`のscriptRuntimeでcompile errorとtrust状態を確認してください。問題があれば、`update_script_asset`、`update_transform`、`update_material_asset`で対象を修正します。

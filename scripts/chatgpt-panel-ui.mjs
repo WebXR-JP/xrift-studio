@@ -8,7 +8,7 @@ const folder = resolve(`dev/chatgpt-ui-check-${process.pid}`);
 await mkdir(folder, { recursive: true });
 const root = folder.split(/[\\/]/).at(-1);
 await writeFile(`${folder}/index.html`, '<html lang="ja"><body><div id="root"></div><script type="module" src="./main.tsx"></script></body></html>');
-await writeFile(`${folder}/main.tsx`, `import React,{useRef,useState} from 'react';
+await writeFile(`${folder}/main.tsx`, `import React,{useEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import '../../src/index.css';
 import '@fontsource/noto-sans-jp/400.css';
@@ -26,14 +26,15 @@ tauri.chatgptModels=async()=>{const requested=account();if(document.body.dataset
 function Harness(){
 const [generation,setGeneration]=useState<ChatgptGeneration|null>(null);
 const release=useRef<(()=>void)|null>(null);
-const make=(model,prompt,options,status):ChatgptGeneration=>({generationId:'fixture-generation',status,model,prompt,options,sourceProjectId:'fixture-world',projectId:'fixture-world',plan:{title:'検証用Plan',description:'床をひとつ追加します',objects:[{name:'床',shape:'plane'}]},progress:{phase:status==='planned'?'planned':'placing',message:status==='planned'?'Planを確認してください':'依頼を反映中です',completed:0,total:1,recentEvents:[]}});
+const make=(model,prompt,options,status):ChatgptGeneration=>({generationId:'fixture-generation',status,model,prompt,options,sourceProjectId:'fixture-world',projectId:'fixture-world',plan:{title:'検証用の変更内容',description:'床をひとつ追加します',objects:[{name:'床',shape:'plane'}]},progress:{phase:status==='planned'?'planned':'placing',message:status==='planned'?'変更内容を確認してください':'依頼を反映中です',completed:0,total:1,recentEvents:[]}});
+useEffect(()=>{const inject=(event:Event)=>{const {model,prompt,options}=(event as CustomEvent).detail;setGeneration(make(model,prompt,options,'planned'));};window.addEventListener('xrift-test-confirmation',inject);return()=>window.removeEventListener('xrift-test-confirmation',inject);},[]);
 return <ChatgptWorldPanel generation={generation} onGenerate={async(model,prompt,options,mode,reasoningEffort)=>{
 await new Promise(r=>setTimeout(r,200));if(prompt==='error')throw new Error('検証用エラー');
-document.body.dataset.result=model+':'+prompt;document.body.dataset.options=JSON.stringify(options);document.body.dataset.reasoningEffort=reasoningEffort??'';
-const job=make(model,prompt,options,mode==='plan'?'planned':'running');setGeneration(job);
+document.body.dataset.result=model+':'+prompt;document.body.dataset.options=JSON.stringify(options);document.body.dataset.reasoningEffort=reasoningEffort??'';document.body.dataset.mode=mode;
+const job=make(model,prompt,options,'running');setGeneration(job);
 if(prompt==='stop'){await new Promise<void>(r=>{release.current=r;});return;}
-if(mode!=='plan'){await new Promise(r=>setTimeout(r,200));setGeneration({...job,status:'completed',progress:{...job.progress,phase:'completed',message:'床を保存しました',completed:1}});}
-}} onApplyPlan={async()=>{setGeneration(current=>({...current!,status:'running',progress:{...current!.progress,message:'Planを反映中です'}}));await new Promise(r=>setTimeout(r,200));setGeneration(current=>({...current!,status:'completed',progress:{...current!.progress,phase:'completed',message:'Planを反映して保存しました',completed:1}}));document.body.dataset.applied='true';}}
+await new Promise(r=>setTimeout(r,200));setGeneration({...job,status:'completed',progress:{...job.progress,phase:'completed',message:'床を保存しました',completed:1}});
+}} onApplyPlan={async()=>{setGeneration(current=>({...current!,status:'running',progress:{...current!.progress,phase:'placing',message:'変更内容を反映中です'}}));await new Promise(r=>setTimeout(r,200));setGeneration(current=>({...current!,status:'completed',progress:{...current!.progress,phase:'completed',message:'変更内容を反映して保存しました',completed:1}}));document.body.dataset.applied='true';}}
 onCancel={async()=>{setGeneration(current=>({...current!,status:'cancelled',progress:{...current!.progress,phase:'cancelled',message:'制作を停止しました'}}));release.current?.();document.body.dataset.cancelled='true';}}/>;
 }
 createRoot(document.getElementById('root')).render(<React.StrictMode><div style={{fontFamily:'"Noto Sans JP", sans-serif',margin:'0 auto',display:'flex',height:'calc(100dvh - 1rem)',width:'100%',maxWidth:'20rem',flexDirection:'column',padding:'0.5rem',fontSize:'0.75rem',color:'#475569'}}><Harness/></div></React.StrictMode>);`);
@@ -71,17 +72,21 @@ try {
   await page.screenshot({ path: "dev/chatgpt-ui-artifacts/narrow.png", fullPage: true });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   assert.equal(await page.getByRole("checkbox").count(), 0);
+  assert.equal(await page.getByRole("button", { name: "Plan", exact: true }).count(), 0);
   await generate.click();
   assert.equal(await prompt.isDisabled(), false);
   assert.equal(await prompt.inputValue(), "");
   await page.waitForFunction(() => document.body.dataset.result === "fixture-model:秋の公園");
   assert.equal(await page.evaluate(() => document.body.dataset.reasoningEffort), "high");
+  assert.equal(await page.evaluate(() => document.body.dataset.mode), "build");
   assert.deepEqual(JSON.parse(await page.evaluate(() => document.body.dataset.options)), {models:true,materials:true,audio:true,modelSource:"auto"});
   await page.getByRole("status").filter({ hasText: "床を保存しました" }).waitFor();
-  await prompt.fill("Planを相談");
-  await page.getByRole("button", { name: "Plan", exact: true }).click();
-  await generate.click();
-  const applyPlan = page.getByRole("button", { name: "Planを反映", exact: true });
+  // MCP can supply a pending confirmation. Inject that state at the harness
+  // boundary without exposing a planning toggle in the chat composer.
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent("xrift-test-confirmation", { detail: {
+    model: "fixture-model", prompt: "変更内容を相談", options: { models: true, materials: true, audio: true, modelSource: "auto" },
+  } })));
+  const applyPlan = page.getByRole("button", { name: "変更を反映", exact: true });
   await applyPlan.waitFor();
   await page.screenshot({ path: "dev/chatgpt-ui-artifacts/plan-narrow.png", fullPage: true });
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -89,7 +94,6 @@ try {
   await page.setViewportSize({ width: 375, height: 900 });
   await applyPlan.click();
   await page.waitForFunction(() => document.body.dataset.applied === "true");
-  await page.getByRole("button", { name: "Plan", exact: true }).click();
   await prompt.fill("stop");
   await generate.click();
   await page.getByRole("button", { name: "制作を停止", exact: true }).click();
@@ -120,7 +124,7 @@ try {
   await page.getByRole("button", { name: "接続を解除", exact: true }).click();
   await page.waitForFunction(() => !document.body.textContent.includes("fixture@example.invalid"));
   assert.deepEqual(errors, []);
-  console.log("ChatGPT panel UI: connect/account switches, stale model catalog, composer, all assets, Plan/apply, build/cancel, failure, disconnect, narrow layout and one polling loop passed (mocked native IPC).");
+  console.log("ChatGPT panel UI: connect/account switches, stale model catalog, composer, all assets, confirmation/apply, build/cancel, failure, disconnect, narrow layout and one polling loop passed (mocked native IPC).");
 } finally {
   await browser?.close();
   await server.close();

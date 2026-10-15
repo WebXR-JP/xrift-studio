@@ -1,0 +1,12 @@
+{
+  "type": "array", "maxItems": 3,
+  "items": {
+    "type": "object", "additionalProperties": false,
+    "properties": {
+      "question": { "type": "string", "minLength": 1, "maxLength": 240 },
+      "choices": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "string", "minLength": 1, "maxLength": 160 } },
+      "choiceCandidateIds": { "anyOf": [{ "type": "null" }, { "type": "array", "minItems": 3, "maxItems": 3, "items": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/questionCandidateId" }] } }] }
+    },
+    "required": ["question", "choices", "choiceCandidateIds"]
+  }
+}

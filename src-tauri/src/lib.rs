@@ -6489,6 +6489,7 @@ pub fn run() {
             chatgpt::chatgpt_login,
             chatgpt::chatgpt_logout,
             chatgpt::chatgpt_models,
+            chatgpt::chatgpt_authoring_contract,
             chatgpt::chatgpt_plan,
             chatgpt::chatgpt_cancel_generation,
             blender_modeling::get_blender_status,

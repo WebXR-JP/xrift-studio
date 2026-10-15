@@ -2,6 +2,8 @@ export const ASSET_DRAG_MIME =
   "application/x-xrift-visual-editor-asset" as const;
 export const MATERIAL_DRAG_MIME =
   "application/x-xrift-visual-editor-material" as const;
+/** Optional Material selection; existing drop targets still use the primary ID. */
+export const MATERIALS_DRAG_MIME = "application/x-xrift-visual-editor-materials" as const;
 export const TEXTURE_DRAG_MIME =
   "application/x-xrift-visual-editor-texture" as const;
 export const SKYBOX_DRAG_MIME =
@@ -16,6 +18,8 @@ export const ASSET_LIBRARY_FOLDER_DRAG_MIME =
   "application/x-xrift-visual-editor-library-folder" as const;
 export const ENTITY_DRAG_MIME =
   "application/x-xrift-visual-editor-entity" as const;
+/** Optional multi-selection; single-Entity consumers retain the primary MIME. */
+export const ENTITIES_DRAG_MIME = "application/x-xrift-visual-editor-entities" as const;
 
 export type EditorMode = "edit" | "play";
 export type TransformMode = "translate" | "rotate" | "scale";

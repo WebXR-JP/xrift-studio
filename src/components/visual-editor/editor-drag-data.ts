@@ -1,3 +1,6 @@
+import { ASSET_DRAG_MIME, ASSET_LIBRARY_ITEM_DRAG_MIME, ENTITIES_DRAG_MIME, ENTITY_DRAG_MIME, MATERIAL_DRAG_MIME, MATERIALS_DRAG_MIME } from "./types";
+import { CHATGPT_MAX_MATERIAL_ATTACHMENTS } from "../../lib/visual-editor/chatgpt-attachments";
+
 const EDITOR_DRAG_FALLBACK_MIME = "text/plain" as const;
 const EDITOR_DRAG_PAYLOAD_TYPE = "xrift-studio/editor-drag" as const;
 const EDITOR_DRAG_PAYLOAD_VERSION = 1 as const;
@@ -167,4 +170,34 @@ export function readEditorDragData(
 /** Clears the same-window compatibility payload after dragend or drop. */
 export function clearEditorDragData(): void {
   activeEditorDragData = null;
+}
+
+/** Entity references only: never treat arbitrary dropped text as an ID. */
+export function readEditorEntityIds(dataTransfer: DragDataTransferReader): string[] {
+  const multiple = readEditorDragData(dataTransfer, ENTITIES_DRAG_MIME);
+  if (multiple && multiple.length <= MAX_FALLBACK_PAYLOAD_LENGTH) {
+    try {
+      const ids: unknown = JSON.parse(multiple);
+      if (Array.isArray(ids) && ids.every(id => typeof id === "string" && id.length > 0 && id.length <= 160)) return [...new Set(ids as string[])].slice(0, 100);
+    } catch { /* A valid primary reference still works for older clients. */ }
+  }
+  const primary = readEditorDragData(dataTransfer, ENTITY_DRAG_MIME);
+  return primary && primary.length <= 160 ? [primary] : [];
+}
+
+/** Material references are checked against the current Asset Manifest by the receiver. */
+export function readEditorMaterialIds(dataTransfer: DragDataTransferReader): string[] {
+  const result: string[] = [];
+  const multiple = readEditorDragData(dataTransfer, MATERIALS_DRAG_MIME);
+  if (multiple && multiple.length <= MAX_FALLBACK_PAYLOAD_LENGTH) {
+    try {
+      const ids: unknown = JSON.parse(multiple);
+      if (Array.isArray(ids) && ids.every(id => typeof id === "string" && id.length > 0 && id.length <= 160)) result.push(...ids as string[]);
+    } catch { /* A valid primary Material still works for older clients. */ }
+  }
+  for (const mime of [MATERIAL_DRAG_MIME, ASSET_DRAG_MIME, ASSET_LIBRARY_ITEM_DRAG_MIME]) {
+    const primary = readEditorDragData(dataTransfer, mime);
+    if (primary && primary.length <= 160) result.push(primary);
+  }
+  return [...new Set(result)].slice(0, CHATGPT_MAX_MATERIAL_ATTACHMENTS);
 }

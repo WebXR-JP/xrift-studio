@@ -129,6 +129,7 @@ pub struct XriftMcpClientStatus {
     pub installed: bool,
     pub registered: bool,
     pub needs_update: bool,
+    pub auto_update_allowed: bool,
     pub message: String,
 }
 
@@ -712,8 +713,9 @@ fn detect_client(
         }
         let registered_command = managed_config_registration_command(client);
         let registered = registered_command.is_some();
+        let registration_enabled = managed_config_registration_enabled(client);
         let needs_update = registered
-            && (!managed_config_registration_enabled(client)
+            && (!registration_enabled
                 || expected_sidecar_path.is_some_and(|expected| {
                     !expected.is_file()
                         || !registered_command
@@ -721,7 +723,7 @@ fn detect_client(
                             .is_some_and(|command| same_path(command, expected))
                 }));
         if needs_update {
-            return client_update_status(client);
+            return client_update_status(client, registration_enabled);
         }
         return client_status(
             client,
@@ -747,7 +749,7 @@ fn detect_client(
                     .is_some_and(|command| same_path(command, expected))
         });
     if needs_update {
-        return client_update_status(client);
+        return client_update_status(client, true);
     }
     client_status(
         client,
@@ -773,17 +775,22 @@ fn client_status(
         installed,
         registered,
         needs_update: false,
+        auto_update_allowed: true,
         message: message.to_string(),
     }
 }
 
-fn client_update_status(client: SupportedMcpClient) -> XriftMcpClientStatus {
+fn client_update_status(
+    client: SupportedMcpClient,
+    auto_update_allowed: bool,
+) -> XriftMcpClientStatus {
     XriftMcpClientStatus {
         id: client.id().to_string(),
         label: client.label().to_string(),
         installed: true,
         registered: true,
         needs_update: true,
+        auto_update_allowed,
         message: "MCPサーバーを更新できます".to_string(),
     }
 }
@@ -1038,17 +1045,19 @@ fn managed_config_registration_enabled(client: SupportedMcpClient) -> bool {
     let Some(config_path) = managed_config_path(client) else {
         return false;
     };
-    let Some(server) = read_json_file(&config_path)
+    read_json_file(&config_path)
         .ok()
         .flatten()
-        .and_then(|config| {
-            config
-                .get("mcp")
-                .and_then(Value::as_object)
-                .and_then(|servers| servers.get(MCP_SERVER_NAME))
-                .and_then(Value::as_object)
-                .cloned()
-        })
+        .map(|config| opencode_registration_enabled(&config))
+        .unwrap_or(true)
+}
+
+fn opencode_registration_enabled(config: &Value) -> bool {
+    let Some(server) = config
+        .get("mcp")
+        .and_then(Value::as_object)
+        .and_then(|servers| servers.get(MCP_SERVER_NAME))
+        .and_then(Value::as_object)
     else {
         return true;
     };
@@ -1147,13 +1156,17 @@ fn merge_mcp_servers_config(
         .get_mut("mcpServers")
         .and_then(Value::as_object_mut)
         .ok_or_else(|| format!("{client_label}のmcpServers設定がJSONオブジェクトではありません"))?;
-    servers.insert(
-        MCP_SERVER_NAME.to_string(),
-        json!({
-            "command": sidecar_path.to_string_lossy(),
-            "args": ["--rendezvous", rendezvous_path.to_string_lossy()],
-        }),
+    let mut server = servers
+        .get(MCP_SERVER_NAME)
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    server.insert("command".to_string(), json!(sidecar_path.to_string_lossy()));
+    server.insert(
+        "args".to_string(),
+        json!(["--rendezvous", rendezvous_path.to_string_lossy()]),
     );
+    servers.insert(MCP_SERVER_NAME.to_string(), Value::Object(server));
     Ok(config)
 }
 
@@ -1172,18 +1185,22 @@ fn merge_opencode_config(
         .get_mut("mcp")
         .and_then(Value::as_object_mut)
         .ok_or_else(|| "OpenCodeのmcp設定がJSONオブジェクトではありません".to_string())?;
-    servers.insert(
-        MCP_SERVER_NAME.to_string(),
-        json!({
-            "type": "local",
-            "command": [
-                sidecar_path.to_string_lossy(),
-                "--rendezvous",
-                rendezvous_path.to_string_lossy()
-            ],
-            "enabled": true,
-        }),
+    let mut server = servers
+        .get(MCP_SERVER_NAME)
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    server.insert("type".to_string(), json!("local"));
+    server.insert(
+        "command".to_string(),
+        json!([
+            sidecar_path.to_string_lossy(),
+            "--rendezvous",
+            rendezvous_path.to_string_lossy()
+        ]),
     );
+    server.insert("enabled".to_string(), json!(true));
+    servers.insert(MCP_SERVER_NAME.to_string(), Value::Object(server));
     Ok(config)
 }
 
@@ -2118,6 +2135,8 @@ fn tool_definitions() -> Value {
                 "expectedRevision": { "type": "integer", "minimum": 0 },
                 "model": { "type": "string", "minLength": 1, "maxLength": 128 },
                 "sessionId": { "type": "string", "minLength": 1, "description": "Continue a chat returned by list_chatgpt_sessions for this project and Scene. Omit to use the active chat, or create one if none exists." },
+                "attachedEntityIds": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 160 }, "uniqueItems": true, "maxItems": 100, "description": "Existing Entity roots to attach as editing targets in target=current. The latest roots and all descendants are prioritized ahead of surrounding Scene context within the input budget. Never copies or duplicates the Entities. The job records attached names. Not supported for target=new." },
+                "attachedMaterialIds": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 160 }, "uniqueItems": true, "maxItems": 16, "description": "Ready Material Asset IDs to attach as editing targets in target=current. Their current properties are prioritized in the AI context; material-update edits the Material itself while preserving its references. Not supported for target=new." },
                 "reasoningEffort": { "type": "string", "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"], "description": "Choose a value from the selected model's supportedReasoningEfforts. Omit to use the API's model default; do not infer support from the model name." },
                 "prompt": { "type": "string", "minLength": 1, "maxLength": 2000 },
                 "target": { "type": "string", "enum": ["current", "new"], "default": "current" },
@@ -2139,6 +2158,15 @@ fn tool_definitions() -> Value {
                 "sceneId": { "type": "string", "minLength": 1 },
                 "expectedRevision": { "type": "integer", "minimum": 0 }
             }, "required": ["generationId", "projectId", "sceneId", "expectedRevision"], "additionalProperties": false }
+        },
+        {
+            "name": "answer_chatgpt_questions",
+            "description": "Answer all clarification pages from a planned ChatGPT job. Supply each zero-based questionIndex once and its selected choice text or the author's free-text answer. Requires the same project and Scene and a fresh revision. Resumes the same request with its attached Entities, model and mode; plan mode returns a plan for review and build mode continues after validation. No Scene changes happen while answers are incomplete. Poll get_chatgpt_generation after submission.",
+            "inputSchema": { "type": "object", "properties": {
+                "generationId": { "type": "string", "minLength": 1 },
+                "projectId": { "type": "string", "minLength": 1 }, "sceneId": { "type": "string", "minLength": 1 }, "expectedRevision": { "type": "integer", "minimum": 0 },
+                "answers": { "type": "array", "minItems": 1, "maxItems": 3, "items": { "type": "object", "properties": { "questionIndex": { "type": "integer", "minimum": 0, "maximum": 2 }, "answer": { "type": "string", "minLength": 1, "maxLength": 500 } }, "required": ["questionIndex", "answer"], "additionalProperties": false } }
+            }, "required": ["generationId", "projectId", "sceneId", "expectedRevision", "answers"], "additionalProperties": false }
         },
         {
             "name": "cancel_chatgpt_generation",
@@ -5218,6 +5246,108 @@ mod tests {
         assert_eq!(
             merged.pointer("/mcp/xrift-studio/enabled"),
             Some(&json!(true))
+        );
+    }
+
+    #[test]
+    fn mcp_server_update_preserves_custom_xrift_settings() {
+        let config = json!({
+            "preferences": { "theme": "dark" },
+            "mcpServers": {
+                "existing-server": { "command": "existing-command" },
+                "xrift-studio": {
+                    "command": "old-sidecar",
+                    "args": ["--rendezvous", "old-rendezvous.json"],
+                    "env": { "XRIFT_TEST_OPTION": "custom-value" },
+                    "timeout": 45000,
+                    "disabled": false
+                }
+            }
+        });
+        let merged = merge_mcp_servers_config(
+            config.clone(),
+            Path::new("new-sidecar"),
+            Path::new("new-rendezvous.json"),
+            "Cursor",
+        )
+        .expect("update existing MCP registration");
+        let mut expected = config;
+        expected["mcpServers"]["xrift-studio"]["command"] = json!("new-sidecar");
+        expected["mcpServers"]["xrift-studio"]["args"] =
+            json!(["--rendezvous", "new-rendezvous.json"]);
+
+        assert_eq!(merged, expected);
+    }
+
+    #[test]
+    fn opencode_manual_update_preserves_custom_settings_and_enables_registration() {
+        let config = json!({
+            "$schema": "https://opencode.ai/config.json",
+            "mcp": {
+                "existing-server": { "type": "remote", "url": "https://example.com/mcp" },
+                "xrift-studio": {
+                    "type": "local",
+                    "command": ["old-sidecar", "--rendezvous", "old-rendezvous.json"],
+                    "enabled": false,
+                    "environment": { "XRIFT_TEST_OPTION": "custom-value" },
+                    "timeout": 45000
+                }
+            }
+        });
+        assert!(!opencode_registration_enabled(&config));
+        let status = client_update_status(
+            SupportedMcpClient::OpenCode,
+            opencode_registration_enabled(&config),
+        );
+        let serialized = serde_json::to_value(status).expect("serialize disabled registration");
+        assert_eq!(serialized["registered"], json!(true));
+        assert_eq!(serialized["needsUpdate"], json!(true));
+        assert_eq!(serialized["autoUpdateAllowed"], json!(false));
+
+        let merged = merge_opencode_config(
+            config.clone(),
+            Path::new("new-sidecar"),
+            Path::new("new-rendezvous.json"),
+        )
+        .expect("manually update OpenCode registration");
+        let mut expected = config;
+        expected["mcp"]["xrift-studio"]["command"] =
+            json!(["new-sidecar", "--rendezvous", "new-rendezvous.json"]);
+        expected["mcp"]["xrift-studio"]["enabled"] = json!(true);
+
+        assert_eq!(merged, expected);
+        assert!(opencode_registration_enabled(&merged));
+    }
+
+    #[test]
+    fn client_auto_update_status_respects_opencode_enabled_setting() {
+        for enabled in [None, Some(true), Some(false)] {
+            let mut config = json!({
+                "mcp": {
+                    "xrift-studio": {
+                        "type": "local",
+                        "command": ["old-sidecar"]
+                    }
+                }
+            });
+            if let Some(enabled) = enabled {
+                config["mcp"]["xrift-studio"]["enabled"] = json!(enabled);
+            }
+            let status = client_update_status(
+                SupportedMcpClient::OpenCode,
+                opencode_registration_enabled(&config),
+            );
+            assert_eq!(status.auto_update_allowed, enabled.unwrap_or(true));
+        }
+        assert!(!opencode_registration_enabled(&json!({
+            "mcp": {
+                "xrift-studio": { "type": "remote", "url": "https://example.com/mcp" }
+            }
+        })));
+        assert!(client_update_status(SupportedMcpClient::Codex, true).auto_update_allowed);
+        assert!(
+            client_status(SupportedMcpClient::Cursor, true, false, "登録できます")
+                .auto_update_allowed
         );
     }
 

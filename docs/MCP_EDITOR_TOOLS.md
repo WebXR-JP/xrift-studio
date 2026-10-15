@@ -1,5 +1,11 @@
 # MCP editor tool の全体像
 
+`generate_chatgpt_world`の`attachedEntityIds`には、現在のSceneのEntityを編集対象として添付できる。添付した根と配下のEntityを、送信量の範囲で周辺のEntityより優先する。`target=current`で使い、送信・再計画時には最新のSceneを読む。Entityの複製や移動は行わない。添付した名前は制作の履歴へ残す。`attachedMaterialIds`では、現在の作品にある利用可能なMaterialを最大16件添付できる。送信直前の設定を優先して渡し、`material-update`は既存の`update_material_asset`と同じ処理でMaterial自体を部分更新する。既存の割当・テクスチャ・Shaderを保ち、通常の保存・競合検査・依頼全体の取り消しを使う。
+
+Studio内のChatGPTは、公式定義に沿った`component-add`・`component-update`と、配下を含む`entity-delete`をPlanとして提案・実行できる。通常の`add_component`・`update_component`・`delete_entity`を使い、編集権限・型の検証・履歴・保存を共有する。操作を拡張する場合は[ChatGPT制作機能の拡張](./CHATGPT_AUTHORING.md)を参照する。
+
+`get_chatgpt_generation`が`status=planned`と`plan.questions`を返した場合、Sceneを変更せず回答を待っている。`answer_chatgpt_questions`に全ページの`questionIndex`（0から）と選択肢の本文または自由入力の`answer`を渡す。同じ作品・Sceneと最新revisionが必要。回答後は同じgenerationIdをポーリングする。回答前に`apply_chatgpt_plan`は使えない。
+
 マテリアルのPBR値は`update_material_asset`の`patch.pbrMetallicRoughness`で変更する。`baseColorFactor`は0〜1のRGBA配列、`metallicFactor`と`roughnessFactor`は0〜1の数値。簡易指定には`patch.color`（#rrggbb）、`opacity`、`metalness`、`roughness`も使える。描画方式は`patch.blending`、深度書き込みは`patch.depthWrite`、アルファトゥカバレッジは`patch.alphaToCoverage`で変更する。Classic R3Fシェーダーのuniformは`get_custom_shader`で現在値を読み、`update_custom_shader`の`patch.uniforms`で更新する。マテリアルの頂点カラーと不透明度マップも`update_material_asset`で設定する。`patch.vertexColors`はboolean、`patch.opacityTexture`は既存テクスチャのIDまたはTextureInfo（nullで解除）、`patch.opacityChannel`は`r`・`g`・`b`・`a`（既定は`a`）。透過には`alphaMode: "BLEND"`または`"MASK"`を併せて指定し、裏面も表示するなら`doubleSided: true`にする。更新後は`get_material_asset`で保存値を読み、割当先モデルで色と透過を確認する。Unityの独自シェーダーをそのまま実行する設定ではない。
 
 テクスチャ枠にはTexture Asset IDか`{ "textureAssetId": "...", "texCoord": 0, "transform": { "offset": [0, 0], "rotation": 0, "scale": [1, 1] } }`を渡す。`null`で割当を解除する。Normal Mapの`scale`、Occlusion Mapの`strength`も同じオブジェクトで指定する。`patch.extensions`には対応する`KHR_materials_*`名をキーにし、拡張ごとの係数・色・テクスチャを部分更新する。拡張自体を削除するときはそのキーへ`null`を渡す。VolumeにはTransmission、DispersionにはVolumeを併せて設定する。`KHR_materials_unlit`は空オブジェクトで有効化する。
@@ -107,15 +113,15 @@ document toolの戻り値には`harness`が付くことがある。同じ種類�
 
 `get_chatgpt_connection`, `connect_chatgpt`, `disconnect_chatgpt`, `list_chatgpt_models`, `open_chatgpt_panel`, `generate_chatgpt_world`, `get_chatgpt_generation`, `apply_chatgpt_plan`, `cancel_chatgpt_generation`, `list_chatgpt_sessions`, `get_chatgpt_session`, `manage_chatgpt_session`, `revert_chatgpt_generation`
 
-`connect_chatgpt`はブラウザでの認証を開始して直ちに返す。本人が許可した後、`get_chatgpt_connection`で`connecting: false`、`restoring: false`、`signedIn: true`、`planUsageEnabled: true`を確認する。失敗理由は`error`に残る。更新用の認証情報はOSの安全な保存先に保管し、Studioの起動時に復元する。認証情報をMCPやプロジェクトへ返さない。XRiftの`login`とは別の接続で、接続・状態確認はプロジェクトを開かずに使える。外部MCPクライアントの登録は「設定」の「MCP接続」から行う。
+`connect_chatgpt`はブラウザでの認証を開始して直ちに返す。本人が許可した後、`get_chatgpt_connection`で`connecting: false`、`restoring: false`、`signedIn: true`、`planUsageEnabled: true`を確認する。失敗理由は`error`に残る。更新用の認証情報はOSの安全な保存先に保管し、Studioの起動時に復元する。認証情報をMCPやプロジェクトへ返さない。XRiftの`login`とは別の接続で、接続・状態確認はプロジェクトを開かずに使える。外部MCPクライアントの登録は制作チャットの入力欄下にある「MCP接続」、またはプロジェクト一覧の「設定」から行う。MCP接続を開くと、登録済みのサーバーを同梱版へ自動更新する。更新後は、表示された案内に従ってAIクライアントを再起動するかMCPを再読み込みする。
 
-ワールドを開き、`list_chatgpt_models`で利用可能なslug・表示名・`supportedReasoningEfforts`・`defaultReasoningEffort`を取得する。対応する思考量はモデルごとに異なり、情報がなければ空配列とnullを返す。モデル名から対応値を推測しない。`open_chatgpt_panel`は同じEditorのChatGPTタブを表示し、Scene Viewの横で作成プランと進行状況を読める。未接続の接続カード、処理・復元中の案内、接続エラーは会話中央に表示する。接続後は右上のアカウントアイコンから詳細を確認できる。
+ワールドを開き、`list_chatgpt_models`で利用可能なslug・表示名・`supportedReasoningEfforts`・`defaultReasoningEffort`を取得する。対応する思考量はモデルごとに異なり、情報がなければ空配列とnullを返す。モデル名から対応値を推測しない。`open_chatgpt_panel`は同じEditorのChatGPTタブを表示し、Scene Viewの横で変更内容と進行状況を読める。Studioのチャットは依頼を送ると編集を進め、制作モードの切り替えは表示しない。未接続の接続カード、処理・復元中の案内、接続エラーは会話中央に表示する。接続後は右上のアカウントアイコンから詳細を確認できる。
 
 `generate_chatgpt_world`には最新の`get_editor_context`から`projectId`・`sceneId`・`expectedRevision`、選んだ`model`、2000文字以内の`prompt`を渡す。任意の`reasoningEffort`は`none`・`minimal`・`low`・`medium`・`high`・`xhigh`・`max`のうち、選択モデルの`supportedReasoningEfforts`に含まれる値だけを指定する。省略時は推論APIへ思考量を送らず、モデル側の既定設定を保つ。モデル情報がない場合も省略する。非対応の指定は推論APIへ送る前に拒否する。`options`は`models`・`materials`・`audio`のbooleanと、任意の`modelSource: "auto" | "blender" | "store"`を持つオブジェクトで、省略時はすべて有効・制作方法は自動。Blenderを使うには端末にBlenderが必要で、素材ストアを選ぶとBlenderでの作成を行わない。Editで、素材の取り込みなど他の処理が完了していることが必要。Itemプロジェクトでは生成できない。
 
 生成には接続アカウントの利用枠を使う。開始の応答は`generationId`と`status: "running"`を返す。既定は`target: "current"`、`mode: "build"`。現在のSceneで既存Entityの位置・回転・大きさ・名前、モデル・Material、Skybox・Audio Source・Colliderを調整し、必要なEntityを追加する。内部では小さいPlanに分け、`hasMore`・`remainingWork`で残りの作業を示す。利用者に内部JSONや件数の調整を要求しない。`target: "new"`を明示すると別のワールドを作る。
 
-`mode: "plan"`はPlanの検証までを行い、`status: "planned"`と公開用のPlan概要を返す。Sceneやプロジェクトのファイルは変更しない。内容を確認した後、最新の`get_editor_context`から`projectId`・`sceneId`・`expectedRevision`と`generationId`を`apply_chatgpt_plan`へ渡す。元の作品とSceneを開いていることが必要で、古いrevisionは拒否する。確認済みPlanの対象が編集された場合は、手動編集を保持して新しいPlanを作り、同じ`generationId`の`status: "planned"`に戻す。新しい内容を確認してから、もう一度`apply_chatgpt_plan`を呼ぶ。モデルと思考量は維持する。`cancel_chatgpt_generation`は未反映のPlanを破棄するか、実行中の制作を停止する。
+MCP/APIの`mode: "plan"`はPlanの検証までを行い、`status: "planned"`と公開用のPlan概要を返す。Sceneやプロジェクトのファイルは変更しない。内容を確認した後、最新の`get_editor_context`から`projectId`・`sceneId`・`expectedRevision`と`generationId`を`apply_chatgpt_plan`へ渡す。元の作品とSceneを開いていることが必要で、古いrevisionは拒否する。確認済みPlanの対象が編集された場合は、手動編集を保持して新しいPlanを作り、同じ`generationId`の`status: "planned"`に戻す。新しい内容を確認してから、もう一度`apply_chatgpt_plan`を呼ぶ。モデルと思考量は維持する。`cancel_chatgpt_generation`は未反映のPlanを破棄するか、実行中の制作を停止する。Studioに確認待ちが表示された場合の操作名は「変更を反映」「変更を破棄」。
 
 通常の制作では、推論中にSceneや素材が編集された場合、最新の情報から内容を考え直す。反映中は無関係な編集を組み合わせ、変更対象との競合だけを再計画する。保存済みの作業と手動編集を保ち、未完了の作業を続ける。自動再計画は同じ依頼で最大2回とし、進捗に状況を示す。上限に達した場合は変更を保持して停止し、次の依頼では現在のSceneと会話を読み直す。
 

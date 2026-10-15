@@ -302,8 +302,8 @@ test("同じprojectの別Sceneでは旧Planを自動表示せず、明示open後
   const { generationId } = response.result as { generationId: string };
   await expect.poll(async () => (await generation(page, generationId)).status).toBe("planned");
   const panel = page.getByRole("region", { name: "ChatGPTの制作チャット", exact: true });
-  await expect(panel.getByRole("button", { name: "Planを反映", exact: true })).toBeVisible();
-  await expect(panel).toContainText("Scene A専用Plan");
+  await expect(panel.getByRole("button", { name: "変更を反映", exact: true })).toBeVisible();
+  await expect(panel.getByRole("list", { name: "依頼の作業結果", exact: true })).toContainText("Scene Aの球");
   const before = await saved(page);
   await page.getByRole("button", { name: "プロジェクト一覧へ戻る", exact: true }).click();
 
@@ -330,9 +330,9 @@ test("同じprojectの別Sceneでは旧Planを自動表示せず、明示open後
 
   expect((await call(page, "open_chatgpt_panel")).ok).toBe(true);
   await expect(panel).toBeVisible();
-  await expect(panel).not.toContainText("Scene A専用Plan");
+  await expect(panel).not.toContainText("Scene Aの球");
   await expect(panel).not.toContainText("Scene Aだけの依頼");
-  await expect(panel.getByRole("button", { name: "Planを反映", exact: true })).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: "変更を反映", exact: true })).toHaveCount(0);
   await expect(panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true })).toBeEnabled();
   const rejected = await page.evaluate(async generationId => {
     const modulePath = "/src/release-e2e/mock-tauri.ts";

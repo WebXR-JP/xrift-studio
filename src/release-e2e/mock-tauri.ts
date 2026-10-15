@@ -1,3 +1,4 @@
+import CHATGPT_AUTHORING_CONTRACT from "../lib/visual-editor/chatgpt-authoring-contract.json";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import { emit } from "@tauri-apps/api/event";
 import type {
@@ -494,6 +495,8 @@ export function installReleaseE2EMock(): void {
           if (state.chatgpt.connecting) throw new Error("ブラウザでの接続が終わってから解除してください");
           state.chatgpt = { signedIn: false, email: null, planUsageEnabled: false, connecting: false, error: null };
           return { ...state.chatgpt };
+        case "chatgpt_authoring_contract":
+          return CHATGPT_AUTHORING_CONTRACT;
         case "chatgpt_models":
           if (!state.chatgpt.planUsageEnabled) throw new Error("ChatGPTプランの利用許可がありません");
           return [{ slug: "fixture-model", displayName: "検証用モデル" }];

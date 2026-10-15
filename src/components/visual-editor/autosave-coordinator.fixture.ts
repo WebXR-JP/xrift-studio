@@ -23,21 +23,25 @@ export async function runAutosaveCoordinatorFixtureAssertions(): Promise<void> {
   );
 
   const first = { id: "first" };
+  assert(!coordinator.isPending(), "idle autosave was reported as pending");
   const firstRequest = coordinator.request(first);
   const duplicateRequest = coordinator.request(first);
   assert(firstRequest === duplicateRequest, "same snapshot was not deduplicated");
+  assert(coordinator.isPending(), "requested autosave must remain pending until its write finishes");
   await waitFor(() => started.length === 1);
   const skippedRequests = Array.from({ length: 100 }, (_, i) => coordinator.request({ id: `obsolete-${i}` }));
   const secondRequest = coordinator.request({ id: "second" });
   assert(started.join(",") === "first", "first save did not start first");
   releases.shift()?.();
   await waitFor(() => started.length === 2);
+  assert(coordinator.isPending(), "queued latest autosave was reported as saved before completion");
   assert(started.join(",") === "first,second", "second save did not wait for first");
   releases.shift()?.();
   await Promise.all([firstRequest, secondRequest]);
   assert((await Promise.all(skippedRequests)).every(result => result === AUTOSAVE_SUPERSEDED), "queued obsolete snapshots must skip disk writes");
   assert(maxActive === 1, "autosave writes ran concurrently");
   assert(completed.join(",") === "first,second", "autosave completion order changed");
+  assert(!coordinator.isPending(), "completed autosave stayed pending");
 
   const attempts: string[] = [];
   const recovery = createSerializedAutosaveCoordinator(async (value: string) => {

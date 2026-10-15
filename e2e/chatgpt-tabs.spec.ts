@@ -6,6 +6,13 @@ import type { SceneDocument } from "../src/lib/visual-editor/scene-document";
 const primitiveOptions = { models: false, materials: false, audio: false };
 type EditorContext = { projectId: string; sceneId: string; revision: number; saveStatus: string };
 
+async function expectMcpWithoutPlan(page: Page) {
+  const panel = page.getByRole("region", { name: "ChatGPTの制作チャット", exact: true });
+  const controls = panel.getByRole("group", { name: "接続の操作", exact: true });
+  await expect(panel.getByRole("button", { name: "Plan", exact: true })).toHaveCount(0);
+  await expect(controls.getByRole("button", { name: "MCP接続", exact: true })).toBeInViewport();
+}
+
 async function call(page: Page, tool: string, args: Record<string, unknown> = {}): Promise<XriftMcpEditorResponse> {
   return page.evaluate(async ({ tool, args }) => {
     const load = (path: string) => import(/* @vite-ignore */ path);
@@ -54,11 +61,6 @@ async function generateFresh(page: Page, prompt: string, settings: { target?: "c
     });
     return { source, response };
   }, { prompt, options: primitiveOptions, settings });
-}
-
-async function openMcpSettings(page: Page) {
-  await page.getByRole("contentinfo", { name: "エディターのステータスバー", exact: true }).getByRole("button", { name: "設定", exact: true }).click();
-  await page.getByRole("dialog", { name: "XRift Studio", exact: true }).getByRole("button", { name: "MCP接続を開く", exact: true }).click();
 }
 
 async function generation(page: Page, generationId: string): Promise<ChatgptGeneration> {
@@ -137,7 +139,7 @@ test("現在のワールドへ追加と調整を保存し、EntityのIDと既存
   expect(await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptSceneContexts.at(-1))).toMatchObject({ selectedEntityId: plane.id, entities: expect.arrayContaining([expect.objectContaining({ id: plane.id, name: "Plane" })]) });
 });
 
-test("PlanはSceneや保存済みファイルを変更せず、確認後に同じワールドへ反映する", async ({ page }) => {
+test("Plan切替なしの通常送信で同じワールドへ変更を反映する", async ({ page }) => {
   await openWorld(page);
   await connectFixture(page);
   await settleBackgroundThumbnails(page);
@@ -148,15 +150,13 @@ test("PlanはSceneや保存済みファイルを変更せず、確認後に同�
   const panel = page.getByRole("region", { name: "ChatGPTの制作チャット", exact: true });
   await expect(panel.getByRole("combobox", { name: "ワールド制作のモデル", exact: true })).toHaveValue("fixture-model");
   await expect(panel.getByRole("checkbox")).toHaveCount(0);
-  await panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true }).fill("Planで床の調整と球の追加を相談");
-  await panel.getByRole("button", { name: "Plan", exact: true }).click();
+  await panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true }).fill("床を調整して球を追加");
+  await expectMcpWithoutPlan(page);
   await panel.getByRole("button", { name: "依頼を送信", exact: true }).click();
-  await expect(panel.getByRole("button", { name: "Planを反映", exact: true })).toBeEnabled();
+  await expect.poll(() => page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptRequests.length)).toBe(1);
   const requested = await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptRequests.at(-1)!);
   expect(requested.options).toEqual({ models: true, materials: true, audio: true, modelSource: "auto" });
-  expect((await generation(page, requested.generationId)).status).toBe("planned");
-  expect((await savedWorld(page)).files).toEqual(before.files);
-  await panel.getByRole("button", { name: "Planを反映", exact: true }).click();
+  expect((await generation(page, requested.generationId)).mode).toBe("build");
   await expect.poll(async () => (await generation(page, requested.generationId)).status).toBe("completed");
   const after = await savedWorld(page);
   expect(after.path).toBe(before.path);
@@ -229,21 +229,24 @@ test("推論中の停止をnativeへ渡し、現在のSceneと保存済みデー
   } finally { await page.evaluate(() => { window.__XRIFT_RELEASE_E2E__!.chatgptPlanGate = false; }).catch(() => undefined); }
 });
 
-test("ChatGPTは必要時だけタブで開き、独立したMCP設定を開閉しても入力と認証を保持する", async ({ page }) => {
+test("ChatGPTは必要時だけタブで開き、チャット枠からMCP設定を開閉しても入力と認証を保持する", async ({ page }, info) => {
   await openWorld(page);
   const chatgptTab = page.getByRole("tab", { name: "ChatGPTを表示", exact: true });
   const mcpTab = page.getByRole("tab", { name: "MCP接続を表示", exact: true });
   const utility = page.getByRole("contentinfo", { name: "エディターのステータスバー", exact: true });
   const openChatgpt = utility.getByRole("button", { name: "ChatGPTを開く", exact: true });
-  const openMcp = utility.getByRole("button", { name: "設定", exact: true });
+  const openSettings = utility.getByRole("button", { name: "シーン設定を開く", exact: true });
   await expect(chatgptTab).toHaveCount(0);
   await expect(mcpTab).toHaveCount(0);
   await expect(openChatgpt).toBeVisible();
-  await expect(openMcp).toBeVisible();
+  await expect(openSettings).toBeVisible();
   await openChatgpt.click();
   await expect(chatgptTab).toHaveAttribute("aria-selected", "true");
   await expect(mcpTab).toHaveCount(0);
   const panel = page.getByRole("region", { name: "ChatGPTの制作チャット", exact: true });
+  const openMcp = panel.getByRole("button", { name: "MCP接続", exact: true });
+  await expect(openMcp).toBeInViewport();
+  await expectMcpWithoutPlan(page);
   const mcpPanel = page.getByRole("dialog", { name: "MCP接続", exact: true });
   const prompt = panel.getByRole("textbox", { name: "ワールドへの依頼" });
   await prompt.fill("秋の公園");
@@ -251,7 +254,7 @@ test("ChatGPTは必要時だけタブで開き、独立したMCP設定を開閉�
   expect(start.result).toMatchObject({ connecting: true, signedIn: false });
   await expect(panel.getByRole("status")).toContainText("ブラウザで許可すると");
   await expect(mcpPanel).toBeHidden();
-  await openMcpSettings(page);
+  await openMcp.click();
   await expect(mcpPanel).toBeVisible();
   await expect.poll(() => mcpPanel.evaluate(dialog => dialog.contains(document.activeElement))).toBe(true);
   await page.keyboard.press("Shift+Tab");
@@ -267,7 +270,7 @@ test("ChatGPTは必要時だけタブで開き、独立したMCP設定を開閉�
   await expect(openMcp).toBeFocused();
   await expect(panel).toBeVisible();
   await expect(prompt).toHaveValue("秋の公園");
-  await openMcpSettings(page);
+  await openMcp.click();
   await expect(mcpPanel).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(mcpPanel).toBeHidden();
@@ -288,8 +291,18 @@ test("ChatGPTは必要時だけタブで開き、独立したMCP設定を開閉�
   await expect(prompt).toHaveValue("秋の公園");
   await expect(panel.getByRole("alert")).toHaveText("本人確認の検証用エラー");
   expect((await call(page, "get_chatgpt_connection")).result).toMatchObject({ connecting: false, error: "本人確認の検証用エラー" });
+  await expect(openMcp).toBeVisible();
+  await openMcp.click();
+  await expect(mcpPanel).toBeVisible();
+  await page.keyboard.press("Escape");
   await connectFixture(page);
   await expect(panel.getByRole("combobox", { name: "ワールド制作のモデル", exact: true })).toHaveValue("fixture-model");
+  await expect(openMcp).toBeInViewport();
+  await openMcp.click();
+  await expect(mcpPanel).toBeVisible();
+  await mcpPanel.getByRole("button", { name: "MCP接続を閉じる", exact: true }).click();
+  await expect(prompt).toHaveValue("秋の公園");
+  await page.screenshot({ path: info.outputPath("chatgpt-mcp-entry.png") });
   expect((await call(page, "list_chatgpt_models")).result).toMatchObject({ models: [{ slug: "fixture-model" }] });
   expect((await call(page, "disconnect_chatgpt")).result).toMatchObject({ signedIn: false });
   await expect(panel.getByRole("button", { name: "ChatGPTに接続", exact: true })).toBeVisible();
@@ -383,9 +396,9 @@ test("MCPの逐次生成はプランと保存済みの進捗を返し、Sceneと
     await expect(panel).toBeVisible();
     await expect(page.getByRole("tab", { name: "ChatGPTを表示", exact: true })).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("tab", { name: "MCP接続を表示", exact: true })).toHaveCount(0);
-    await expect(panel).toContainText("検証用の広場");
+    await expect(panel.getByRole("list", { name: "依頼の作業結果", exact: true })).toBeVisible();
     await expect(panel.getByRole("checkbox")).toHaveCount(0);
-    await panel.getByText("Plan：検証用の広場", { exact: true }).click();
+    await expect(panel.getByText("Plan：検証用の広場", { exact: true })).toHaveCount(0);
     await panel.getByRole("button", { name: "制作チャットを閉じる", exact: true }).click();
     await expect(panel).toBeHidden();
     await expect(page.getByRole("tab", { name: "ChatGPTを表示", exact: true })).toHaveCount(0);
@@ -455,7 +468,7 @@ test("ItemプロジェクトからのChatGPT生成は推論開始前に拒否す
 
 test.describe("Phone workspace", () => {
 test.use({ hasTouch: true, isMobile: true, viewport: { width: 375, height: 812 }, contextOptions: { screen: { width: 375, height: 812 } } });
-test("375pxでもChatGPTタブとMCP設定の別々の入口を使え、開閉後も依頼を保持する", async ({ page }) => {
+test("375pxでもChatGPTタブとMCP設定の別々の入口を使え、開閉後も依頼を保持する", async ({ page }, info) => {
   await openWorld(page);
   // The phone shows Inspector instead of the Scene toolbar while chatting.
   // Check the retained tab state, then return to Scene before closing it.
@@ -463,11 +476,11 @@ test("375pxでもChatGPTタブとMCP設定の別々の入口を使え、開閉�
   const mcpTab = page.getByRole("tab", { name: "MCP接続を表示", exact: true });
   const utility = page.getByRole("contentinfo", { name: "エディターのステータスバー", exact: true });
   const openChatgpt = utility.getByRole("button", { name: "ChatGPTを開く", exact: true });
-  const openMcp = utility.getByRole("button", { name: "設定", exact: true });
+  const sceneSettings = utility.getByRole("button", { name: "シーン設定を開く", exact: true });
   await expect(chatgptTab).toHaveCount(0);
   await expect(mcpTab).toHaveCount(0);
   await expect(openChatgpt).toBeInViewport();
-  await expect(openMcp).toBeInViewport();
+  await expect(sceneSettings).toBeInViewport();
   await openChatgpt.click();
   await expect(chatgptTab).toHaveAttribute("aria-selected", "true");
   await expect(mcpTab).toHaveCount(0);
@@ -479,7 +492,10 @@ test("375pxでもChatGPTタブとMCP設定の別々の入口を使え、開閉�
   await expect(prompt).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
-  await openMcpSettings(page);
+  const chatMcp = panel.getByRole("button", { name: "MCP接続", exact: true });
+  await expect(chatMcp).toBeInViewport();
+  await expectMcpWithoutPlan(page);
+  await chatMcp.click();
   const mcpPanel = page.getByRole("dialog", { name: "MCP接続", exact: true });
   await expect(mcpPanel).toBeVisible();
   await expect(mcpPanel).toBeInViewport();
@@ -489,6 +505,8 @@ test("375pxでもChatGPTタブとMCP設定の別々の入口を使え、開閉�
   await expect(mcpPanel).toBeHidden();
   await expect(chatgptTab).toHaveAttribute("aria-selected", "true");
   await expect(prompt).toHaveValue("小さな公園を順番に作ってください");
+  await expect(chatMcp).toBeFocused();
+  await page.screenshot({ path: info.outputPath("phone-chatgpt-mcp-entry.png") });
   await page.getByRole("button", { name: "シーン", exact: true }).click();
   await expect(chatgptTab).toBeVisible();
   await page.getByRole("button", { name: "ChatGPTを閉じる", exact: true }).click();
@@ -506,6 +524,14 @@ test("375pxでもChatGPTタブとMCP設定の別々の入口を使え、開閉�
   await expect(page.locator('section[aria-labelledby="scene-view-heading"] canvas').first()).toBeVisible();
   await chatgptTab.click();
   await expect(panel).toBeVisible();
+  await expect(prompt).toHaveValue("小さな公園を順番に作ってください");
+  await sceneSettings.click();
+  await expect(panel).toBeHidden();
+  await expect(page.getByLabel("視野角", { exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "XRift Studio", exact: true })).toHaveCount(0);
+  await utility.getByRole("button", { name: "シーン設定を閉じる", exact: true }).click();
+  await page.getByRole("button", { name: "シーン", exact: true }).click();
+  await chatgptTab.click();
   await expect(prompt).toHaveValue("小さな公園を順番に作ってください");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.unhandledCommands)).toEqual([]);

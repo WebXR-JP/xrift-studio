@@ -57,7 +57,8 @@ export function useChatgptRequestQueue(input: QueueInput) {
     void (async () => {
       try {
         // App resolves the current Scene when this request reaches the front.
-        await latest.current.onDispatch(first, resolvedModel, { sceneScope: lease.sceneScope, scope: lease.scope, requestId: lease.id });
+        await latest.current.onDispatch(first, resolvedModel, { sceneScope: lease.sceneScope, scope: lease.scope, requestId: lease.id,
+          attachedEntityIds: first.attachedEntityIds, attachedMaterialIds: first.attachedMaterialIds });
         finishChatgptQueuedRequest(first.id);
       } catch (error) { finishChatgptQueuedRequest(first.id, error instanceof Error ? error.message : String(error)); }
     })();

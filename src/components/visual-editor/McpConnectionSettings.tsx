@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { tauri, type XriftMcpClientId, type XriftMcpClientStatus } from "../../lib/tauri";
+import { refreshXriftMcpClients, registerXriftMcpClient } from "../../lib/mcp-connection";
 import { AiConnectionPanel } from "./AiConnectionPanel";
 import { EditorDialog } from "./EditorDialog";
 import { EDITOR_ICONS } from "./editor-icons";
@@ -22,14 +23,21 @@ export function McpConnectionSettings({ onClose }: { onClose: () => void }) {
     setLoading(true);
     setError(null);
     try {
-      const detected = await tauri.detectXriftMcpClients();
-      if (mounted.current && request.current === current) setClients(detected);
+      const refreshed = await refreshXriftMcpClients({
+        onClients: detected => { if (mounted.current && request.current === current) setClients(detected); },
+        onUpdating: clientId => { if (mounted.current && request.current === current) setRegisteringClientId(clientId); },
+      });
+      if (mounted.current && request.current === current) {
+        setClients(refreshed.clients);
+        setError(refreshed.error);
+      }
     } catch (reason) {
       if (mounted.current && request.current === current) setError(reason instanceof Error ? reason.message : String(reason));
     } finally {
       if (mounted.current && request.current === current) {
         pending.current = false;
         setLoading(false);
+        setRegisteringClientId(null);
       }
     }
   }, [nativeAvailable]);
@@ -51,7 +59,7 @@ export function McpConnectionSettings({ onClose }: { onClose: () => void }) {
     setRegisteringClientId(clientId);
     setError(null);
     try {
-      const registered = await tauri.registerXriftMcpClient(clientId);
+      const registered = await registerXriftMcpClient(clientId);
       if (mounted.current && request.current === current) {
         setClients(previous => previous.some(client => client.id === registered.id)
           ? previous.map(client => client.id === registered.id ? registered : client)

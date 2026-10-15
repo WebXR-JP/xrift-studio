@@ -38,10 +38,10 @@ test(generateOnlyPath ? "generate real frontend Scene and resource contract fixt
     const fixtures = [];
     const starter = kind => createStarterVisualProject(kind, kind === "world" ? "blank" : "basic-item", "resource-contract-fixture");
 
-    function snapshot(name, bundle, candidates, selectedEntityId, conversation) {
+    function snapshot(name, bundle, candidates, selectedEntityId, conversation, attachedMaterialIds = []) {
       const before = JSON.stringify(bundle);
       const sceneContext = collectChatgptSceneContext(bundle, selectedEntityId, conversation);
-      const resourceContext = collectChatgptSceneResources(bundle, sceneContext.entities.map(entity => entity.id), candidates);
+      const resourceContext = collectChatgptSceneResources(bundle, sceneContext.entities.map(entity => entity.id), candidates, attachedMaterialIds);
       assert.equal(JSON.stringify(bundle), before, "Snapshot collection must preserve the open Scene");
       const fixture = { name, sceneContext, resourceContext };
       fixtures.push(fixture);
@@ -61,16 +61,18 @@ test(generateOnlyPath ? "generate real frontend Scene and resource contract fixt
       // catalog through the same collector so every current and future key is
       // checked without constructing an oversized native request.
       const covered = [];
-      for (let offset = 0; offset < all.length;) {
-        const pending = all.slice(offset, offset + 128);
-        const fixture = snapshot(`${kind}: catalog from ${offset}`, bundle, pending, selected);
+      for (let remaining = [...all]; remaining.length;) {
+        const pending = remaining.slice(0, 128);
+        const fixture = snapshot(`${kind}: catalog remaining ${remaining.length}`, bundle, pending, selected);
         const emitted = fixture.resourceContext.builtinCandidates.map(candidate => candidate.candidateId);
-        assert.ok(emitted.length > 0, `The collector must retain a catalog candidate at ${offset}`);
-        assert.deepEqual(emitted, pending.slice(0, emitted.length).map(candidate => candidate.candidateId));
+        assert.ok(emitted.length > 0, "The collector must retain a catalog candidate");
+        assert.equal(new Set(emitted).size, emitted.length, "Candidates must remain unique after visual prioritization");
+        assert.ok(emitted.every(id => pending.some(candidate => candidate.candidateId === id)), "Only trusted candidates from the input may be emitted");
         covered.push(...emitted);
-        offset += emitted.length;
+        const sent = new Set(emitted);
+        remaining = remaining.filter(candidate => !sent.has(candidate.candidateId));
       }
-      assert.deepEqual(covered, all.map(candidate => candidate.candidateId), "Every trusted catalog key must reach native validation");
+      assert.deepEqual([...covered].sort(), all.map(candidate => candidate.candidateId).sort(), "Every trusted catalog key must reach native validation");
       context.diagnostic(`${kind}: ${covered.length} real builtin candidates covered`);
     }
 
@@ -123,6 +125,46 @@ test(generateOnlyPath ? "generate real frontend Scene and resource contract fixt
     assert.equal(largeFixture.sceneContext.selectedEntityId, lastEntityId, "The selected Entity must survive Scene budgeting");
     assert.ok(largeFixture.sceneContext.entities.length < 180, "Exercise the bounded Scene snapshot");
     assert.ok(largeFixture.resourceContext.projectAssets.length > 0 && largeFixture.resourceContext.projectAssets.length < 500, "Exercise the bounded resource snapshot");
+
+    const materialTemplate = Object.values(largeBundle.assets.assets).find(asset => asset.kind === "material");
+    assert.ok(materialTemplate);
+    const attachedMaterialIds = Array.from({ length: 16 }, (_, index) => `attached-material-${index}`);
+    for (const id of attachedMaterialIds) {
+      const material = structuredClone(materialTemplate);
+      material.id = id; material.name = `添付したMaterial ${id}`;
+      material.properties.pbrMetallicRoughness.roughnessFactor = 0.73;
+      largeBundle.assets.assets[id] = material;
+    }
+    const materialFixture = snapshot("16 attached Materials behind a large Asset library", largeBundle, listChatgptBuiltinCandidates("world"), lastEntityId, [], attachedMaterialIds);
+    assert.deepEqual(materialFixture.resourceContext.projectAssets.slice(0, 16).map(asset => asset.id), attachedMaterialIds);
+    for (const asset of materialFixture.resourceContext.projectAssets.slice(0, 16)) {
+      assert.equal(asset.attached, true);
+      assert.equal(JSON.parse(asset.propertiesJson).pbrMetallicRoughness.roughnessFactor, 0.73);
+    }
+    assert.ok(Buffer.byteLength(JSON.stringify(materialFixture.resourceContext)) <= 31 * 1024, "Attached Material values must fit the native resource budget");
+
+    const stressedBundle = structuredClone(largeBundle);
+    for (const id of attachedMaterialIds) {
+      const material = stressedBundle.assets.assets[id];
+      material.name = "𠮷".repeat(80);
+      material.properties.pbrMetallicRoughness = { ...material.properties.pbrMetallicRoughness,
+        baseColorFactor: [0.12345678901234567, 0.23456789012345678, 0.34567890123456789, 0.4567890123456789],
+        roughnessFactor: 0.12345678901234567, metallicFactor: 0.23456789012345678 };
+      material.properties.emissiveFactor = [1.2345678901234567e300, 2.3456789012345678e299, 3.4567890123456789e298];
+    }
+    const stressedCandidates = listChatgptBuiltinCandidates("world").map(candidate => ({ ...candidate, name: "𠮷".repeat(80), description: "𠮷".repeat(160) }));
+    const stressedFixture = snapshot("16 attached Materials with maximal Unicode names and catalog prose", stressedBundle, stressedCandidates, lastEntityId, [], attachedMaterialIds);
+    assert.deepEqual(stressedFixture.resourceContext.projectAssets.slice(0, 16).map(asset => asset.id), attachedMaterialIds);
+    for (const asset of stressedFixture.resourceContext.projectAssets.slice(0, 16)) {
+      assert.equal(asset.attached, true);
+      assert.deepEqual(JSON.parse(asset.propertiesJson).pbrMetallicRoughness, stressedBundle.assets.assets[asset.id].properties.pbrMetallicRoughness);
+    }
+    assert.ok(Buffer.byteLength(JSON.stringify(stressedFixture.resourceContext)) <= 31 * 1024, "Reference prose must not crowd out attached Materials");
+    const withoutDefinitionProse = definitions => definitions.map(({ description, fields, ...definition }) => ({ ...definition, fields: fields.map(({ description, ...field }) => field) }));
+    assert.deepEqual(withoutDefinitionProse(stressedFixture.resourceContext.componentDefinitions), withoutDefinitionProse(materialFixture.resourceContext.componentDefinitions), "Budgeting must preserve every Component field, type, default, range and enum");
+    const shelfRepresentatives = [...new Map(stressedCandidates.map(candidate => [candidate.providerId, candidate])).keys()];
+    for (const provider of shelfRepresentatives) assert.ok(stressedFixture.resourceContext.builtinCandidates.some(candidate => candidate.providerId === provider), "Budgeting must retain every catalog shelf");
+    for (const candidate of stressedCandidates.filter(candidate => candidate.actions.includes("skybox")).slice(0, 3)) assert.ok(stressedFixture.resourceContext.builtinCandidates.some(included => included.candidateId === candidate.candidateId), "Budgeting must retain three visual Skybox choices");
 
     // Integral JavaScript Transform values become f64 decimals in Rust's
     // reserialization. A dense Scene near the JS budget exercises that gap.

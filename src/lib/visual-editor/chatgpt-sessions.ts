@@ -1,5 +1,7 @@
 import type { ChatgptGeneration, ChatgptGenerationPhase } from "./chatgpt-generation";
 import type { PrototypeVisualProject } from "./prototype-project";
+import { parseChatgptQuestions } from "./chatgpt-questions";
+import { sceneSettingsDisplayFromLegacyDetail, type ChatgptSettingDisplay } from "./chatgpt-change-description";
 
 export const CHATGPT_SESSION_STORAGE_KEY = "xrift-studio:chatgpt-sessions:v1";
 export const CHATGPT_MAX_SESSIONS = 20;
@@ -49,6 +51,16 @@ export function sanitizeChatgptHistoryText(value: string, limit = 2000): string 
 }
 function text(value: unknown, limit: number): string {
   return sanitizeChatgptHistoryText(typeof value === "string" ? value : "", limit);
+}
+function normalizeSettingDisplays(value: unknown): ChatgptSettingDisplay[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const settings = value.slice(0, 96).filter(isRecord).filter(setting => typeof setting.label === "string" && typeof setting.value === "string").map(setting => ({
+    label: text(setting.label, 80), value: text(setting.value, 240),
+    ...(typeof setting.previousValue === "string" ? { previousValue: text(setting.previousValue, 240) } : {}),
+    ...(typeof setting.enabled === "boolean" ? { enabled: setting.enabled } : {}),
+    ...(typeof setting.color === "string" && /^#(?:[a-f\d]{3}|[a-f\d]{6})$/iu.test(setting.color) ? { color: setting.color } : {}),
+  })).filter(setting => setting.label && setting.value);
+  return settings.length ? settings : undefined;
 }
 function identifier(value: unknown): string {
   if (typeof value !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,159}$/.test(value)) throw new Error("会話履歴のIDを読み取れませんでした。保存した履歴を確認してください。");
@@ -101,13 +113,36 @@ function normalizeTurn(value: unknown, interrupted: boolean): ChatgptGeneration 
   if (typeof value.reasoningEffort === "string" && efforts.includes(value.reasoningEffort)) turn.reasoningEffort = value.reasoningEffort;
   for (const key of ["createdAt", "revertedAt"] as const) if (value[key] !== undefined) turn[key] = timestamp(value[key]);
   if (value.name !== undefined) turn.name = text(value.name, 100);
+  if (Array.isArray(value.attachedEntities)) turn.attachedEntities = value.attachedEntities.slice(0, 100).filter(isRecord).map(entity => ({ id: identifier(entity.id), name: text(entity.name, 80) }));
+  if (Array.isArray(value.attachedMaterials)) turn.attachedMaterials = value.attachedMaterials.slice(0, 16).filter(isRecord).map(material => ({ id: identifier(material.id), name: text(material.name, 80) }));
+  if (Array.isArray(value.clarifications)) turn.clarifications = value.clarifications.slice(-9).filter(isRecord).map(item => ({ question: text(item.question, 240), answer: text(item.answer, 500), ...(typeof item.candidateId === "string" && item.candidateId.length <= 320 && /^(?:builtin|project|poly-haven|ambient-cg|ai-lowpoly-props|otogura):[^\s\u0000-\u001f]+$/u.test(item.candidateId) ? { candidateId: item.candidateId } : {}) }));
   if (value.error !== undefined) turn.error = text(value.error, 2000);
   if (isRecord(value.plan) && Array.isArray(value.plan.objects)) turn.plan = {
+    ...(value.plan.questions !== undefined ? { questions: parseChatgptQuestions(value.plan.questions) } : {}),
     title: text(value.plan.title, 100), description: text(value.plan.description, 600),
     ...(typeof value.plan.hasMore === "boolean" ? { hasMore: value.plan.hasMore } : {}),
     ...(typeof value.plan.remainingWork === "string" ? { remainingWork: text(value.plan.remainingWork, 600) } : {}),
-    objects: value.plan.objects.slice(0, 32).filter(isRecord).map(object => ({ name: text(object.name, 80), shape: text(object.shape, 32), ...(typeof object.detail === "string" ? { detail: text(object.detail, 500) } : {}) })),
+    objects: value.plan.objects.slice(0, 32).filter(isRecord).map(object => {
+      const settings = normalizeSettingDisplays(object.settings) ?? normalizeSettingDisplays(typeof object.detail === "string" ? sceneSettingsDisplayFromLegacyDetail(object.detail) : undefined);
+      const originalName = text(object.name, 80);
+      const labels = settings ? [...new Set(settings.map(setting => setting.label))] : [];
+      const name = originalName === "Scene設定を調整" && labels.length ? `${labels.slice(0, 3).join("・")}${labels.length > 3 ? `ほか${labels.length - 3}項目` : ""}を変更` : originalName;
+      return { name, shape: text(object.shape, 32), ...(typeof object.detail === "string" ? { detail: text(object.detail, 500) } : {}), ...(typeof object.materialAssetId === "string" ? { materialAssetId: identifier(object.materialAssetId) } : {}), ...(Array.isArray(object.sceneSettingsSections) ? { sceneSettingsSections: [...new Set(object.sceneSettingsSections.filter((section): section is "skybox" | "fog" => section === "skybox" || section === "fog"))] } : {}), ...(settings ? { settings } : {}) };
+    }),
   };
+  if (isRecord(value.questionPreviews) && turn.plan?.questions?.length) {
+    const referenced = new Set(turn.plan.questions.flatMap(question => question.choiceCandidateIds ?? []));
+    turn.questionPreviews = {};
+    for (const [id, preview] of Object.entries(value.questionPreviews).slice(0, 9)) {
+      if (!referenced.has(id) || !isRecord(preview)) continue;
+      const name = text(preview.name, 80);
+      if (preview.kind === "sky" && typeof preview.catalogId === "string" && /^[a-z0-9-]{1,100}$/.test(preview.catalogId) && id === `builtin:xrift-sky-shaders:${preview.catalogId}`) turn.questionPreviews[id] = { kind: "sky", name, catalogId: preview.catalogId };
+      else if (preview.kind === "project" && typeof preview.assetId === "string" && id === `project:${preview.assetId}`) turn.questionPreviews[id] = { kind: "project", name, assetId: identifier(preview.assetId) };
+      else if (preview.kind === "remote" && typeof preview.thumbnailUrl === "string" && preview.thumbnailUrl.length <= 2048) {
+        try { const url = new URL(preview.thumbnailUrl); if (url.protocol === "https:" && !url.username && !url.password) turn.questionPreviews[id] = { kind: "remote", name, thumbnailUrl: url.href }; } catch { /* Keep the question usable without an invalid image. */ }
+      }
+    }
+  }
   return turn;
 }
 function normalizeSessions(values: readonly unknown[], interrupted: boolean): ChatgptSession[] {
@@ -168,8 +203,12 @@ export function upsertChatgptSessionTurn(sessions: readonly ChatgptSession[], se
 function resultSummary(turn: ChatgptGeneration): string {
   const status = { running: "処理中", planned: "Plan確認待ち", completed: "完了", failed: "失敗", cancelled: "停止" }[turn.status];
   const lines = [turn.revertedAt ? `変更を戻しました（${turn.revertedAt}）。この依頼の変更は現在のSceneに残っていません。` : status, turn.progress.message, `保存済み ${turn.progress.completed} / ${turn.progress.total}`];
+  if (turn.attachedEntities?.length) lines.push(`添付Entity（配下を優先）: ${turn.attachedEntities.map(entity => entity.name).join("、")}`);
+  if (turn.attachedMaterials?.length) lines.push(`添付Material: ${turn.attachedMaterials.map(material => material.name).join("、")}`);
+  if (turn.clarifications?.length) lines.unshift(...turn.clarifications.slice(-3).map(item => `確認: ${Array.from(item.question).slice(0, 80).join("")}\n${item.candidateId ? `候補ID: ${item.candidateId}\n` : ""}回答: ${Array.from(item.answer).slice(0, Math.max(160, 500 - (item.candidateId?.length ?? 0))).join("")}`));
   if (turn.plan) lines.push(`Plan: ${turn.plan.title}`, turn.plan.description, ...turn.plan.objects.map(object => `${object.name}（${object.shape}）${object.detail ? `：${object.detail}` : ""}`));
   if (turn.plan?.hasMore) lines.push(`残りの作業: ${turn.plan.remainingWork || "この依頼の続き"}`);
+  if (turn.plan?.questions?.length) lines.push(...turn.plan.questions.map((question, index) => `確認${index + 1}: ${question.question}\n${question.choices.map((choice, i) => `${i + 1}. ${choice}`).join("\n")}\nその他（自由入力）`));
   lines.push(...turn.progress.recentEvents.map(event => event.message));
   if (turn.error) lines.push(`エラー: ${turn.error}`);
   return lines.filter(Boolean).join("\n");

@@ -1,7 +1,7 @@
 import type { ChatgptAssetOptions } from "../tauri";
 import type { ChatgptGeneration, ChatgptGenerationMode } from "./chatgpt-generation";
 
-export type ChatgptRequestScope = { sceneScope: string; scope: string; requestId: string };
+export type ChatgptRequestScope = { sceneScope: string; scope: string; requestId: string; attachedEntityIds?: readonly string[]; attachedMaterialIds?: readonly string[] };
 /** A Scene draft follows only the chat created by its own dispatched request. */
 export function isChatgptInitialScopeAdoption(lease: { id: string; scope: string; sceneScope: string } | null, scope: string, sceneScope: string,
   generation?: Pick<ChatgptGeneration, "sessionId" | "generationId" | "sourceProjectId" | "sourceSceneId"> | null): boolean {
@@ -13,6 +13,8 @@ export function isChatgptInitialScopeAdoption(lease: { id: string; scope: string
 export type ChatgptQueuedRequest = {
   id: string;
   prompt: string;
+  attachedEntityIds?: readonly string[];
+  attachedMaterialIds?: readonly string[];
   model: string;
   reasoningEffort?: string;
   options: ChatgptAssetOptions;
@@ -30,7 +32,10 @@ function change(queues: ChatgptRequestQueues, scope: string, update: (queue: Cha
   return { ...queues, [scope]: update(chatgptQueueFor(queues, scope)) };
 }
 export function enqueueChatgptRequest(queues: ChatgptRequestQueues, scope: string, request: Omit<ChatgptQueuedRequest, "status" | "error">) {
-  return change(queues, scope, queue => ({ ...queue, items: [...queue.items, { ...request, options: { ...request.options }, status: "waiting" }] }));
+  return change(queues, scope, queue => ({ ...queue, items: [...queue.items, { ...request,
+    attachedEntityIds: request.attachedEntityIds ? [...request.attachedEntityIds] : undefined,
+    attachedMaterialIds: request.attachedMaterialIds?.slice(0, 16),
+    options: { ...request.options }, status: "waiting" }] }));
 }
 export function beginChatgptQueuedRequest(queues: ChatgptRequestQueues, scope: string, id: string) {
   return change(queues, scope, queue => queue.pauseReason || queue.items[0]?.id !== id || queue.items[0].status !== "waiting" ? queue
