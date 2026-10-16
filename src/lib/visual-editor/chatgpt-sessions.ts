@@ -1,6 +1,6 @@
 import type { ChatgptGeneration, ChatgptGenerationPhase } from "./chatgpt-generation";
 import type { PrototypeVisualProject } from "./prototype-project";
-import { parseChatgptQuestions } from "./chatgpt-questions";
+import { restoreChatgptChoicePreview, parseChatgptQuestions } from "./chatgpt-questions";
 import { sceneSettingsDisplayFromLegacyDetail, type ChatgptSettingDisplay } from "./chatgpt-change-description";
 
 export const CHATGPT_SESSION_STORAGE_KEY = "xrift-studio:chatgpt-sessions:v1";
@@ -109,7 +109,8 @@ function normalizeTurn(value: unknown, interrupted: boolean): ChatgptGeneration 
   };
   for (const key of ["sourceSceneId", "projectId", "sceneId", "sessionId"] as const) if (value[key] !== undefined) turn[key] = identifier(value[key]);
   if (progress.projectId !== undefined) turn.progress.projectId = identifier(progress.projectId);
-  if (value.mode === "build" || value.mode === "plan") turn.mode = value.mode;
+  if (value.mode === "build" || value.mode === "plan" || value.mode === "goal") turn.mode = value.mode;
+  if (turn.mode === "goal" && isRecord(value.goal)) turn.goal = { iteration: Math.max(1, integer(value.goal.iteration, 1)), noProgressPasses: integer(value.goal.noProgressPasses) };
   if (typeof value.reasoningEffort === "string" && efforts.includes(value.reasoningEffort)) turn.reasoningEffort = value.reasoningEffort;
   for (const key of ["createdAt", "revertedAt"] as const) if (value[key] !== undefined) turn[key] = timestamp(value[key]);
   if (value.name !== undefined) turn.name = text(value.name, 100);
@@ -127,20 +128,20 @@ function normalizeTurn(value: unknown, interrupted: boolean): ChatgptGeneration 
       const originalName = text(object.name, 80);
       const labels = settings ? [...new Set(settings.map(setting => setting.label))] : [];
       const name = originalName === "Scene設定を調整" && labels.length ? `${labels.slice(0, 3).join("・")}${labels.length > 3 ? `ほか${labels.length - 3}項目` : ""}を変更` : originalName;
-      return { name, shape: text(object.shape, 32), ...(typeof object.detail === "string" ? { detail: text(object.detail, 500) } : {}), ...(typeof object.materialAssetId === "string" ? { materialAssetId: identifier(object.materialAssetId) } : {}), ...(Array.isArray(object.sceneSettingsSections) ? { sceneSettingsSections: [...new Set(object.sceneSettingsSections.filter((section): section is "skybox" | "fog" => section === "skybox" || section === "fog"))] } : {}), ...(settings ? { settings } : {}) };
+      const preview = restoreChatgptChoicePreview(object.preview);
+      return { name, shape: text(object.shape, 32), ...(preview ? { preview: { ...preview, name: text(preview.name, 80) } } : {}), ...(typeof object.saved === "boolean" ? { saved: object.saved } : {}), ...(typeof object.entityId === "string" ? { entityId: identifier(object.entityId) } : {}), ...(typeof object.detail === "string" ? { detail: text(object.detail, 500) } : {}), ...(typeof object.materialAssetId === "string" ? { materialAssetId: identifier(object.materialAssetId) } : {}), ...(Array.isArray(object.sceneSettingsSections) ? { sceneSettingsSections: [...new Set(object.sceneSettingsSections.filter((section): section is "skybox" | "fog" => section === "skybox" || section === "fog"))] } : {}), ...(settings ? { settings } : {}) };
     }),
   };
   if (isRecord(value.questionPreviews) && turn.plan?.questions?.length) {
     const referenced = new Set(turn.plan.questions.flatMap(question => question.choiceCandidateIds ?? []));
     turn.questionPreviews = {};
-    for (const [id, preview] of Object.entries(value.questionPreviews).slice(0, 9)) {
-      if (!referenced.has(id) || !isRecord(preview)) continue;
-      const name = text(preview.name, 80);
-      if (preview.kind === "sky" && typeof preview.catalogId === "string" && /^[a-z0-9-]{1,100}$/.test(preview.catalogId) && id === `builtin:xrift-sky-shaders:${preview.catalogId}`) turn.questionPreviews[id] = { kind: "sky", name, catalogId: preview.catalogId };
-      else if (preview.kind === "project" && typeof preview.assetId === "string" && id === `project:${preview.assetId}`) turn.questionPreviews[id] = { kind: "project", name, assetId: identifier(preview.assetId) };
-      else if (preview.kind === "remote" && typeof preview.thumbnailUrl === "string" && preview.thumbnailUrl.length <= 2048) {
-        try { const url = new URL(preview.thumbnailUrl); if (url.protocol === "https:" && !url.username && !url.password) turn.questionPreviews[id] = { kind: "remote", name, thumbnailUrl: url.href }; } catch { /* Keep the question usable without an invalid image. */ }
-      }
+    for (const [id, rawPreview] of Object.entries(value.questionPreviews).slice(0, 36)) {
+      if (!referenced.has(id)) continue;
+      const preview = restoreChatgptChoicePreview(rawPreview);
+      if (!preview || preview.kind === "sky" && id !== `builtin:xrift-sky-shaders:${preview.catalogId}`
+        || preview.kind === "builtin" && id !== preview.candidateId
+        || preview.kind === "project" && id !== `project:${preview.assetId}`) continue;
+      turn.questionPreviews[id] = { ...preview, name: text(preview.name, 80) };
     }
   }
   return turn;
@@ -216,7 +217,7 @@ function resultSummary(turn: ChatgptGeneration): string {
 export function chatgptSessionTranscript(session: ChatgptSession): string {
   const safe = normalizeSessions([session], false)[0];
   return [safe.title, `作成: ${safe.createdAt}`, `更新: ${safe.updatedAt}`, ...safe.turns.map((turn, index) => [
-    `\n依頼 ${index + 1}${turn.createdAt ? `（${turn.createdAt}）` : ""}`, `モデル: ${turn.model}`, `思考量: ${turn.reasoningEffort ?? "モデルの既定"}`, turn.prompt, resultSummary(turn),
+    `\n依頼 ${index + 1}${turn.createdAt ? `（${turn.createdAt}）` : ""}`, `モデル: ${turn.model}`, `思考量: ${turn.reasoningEffort ?? "モデルの既定"}`, ...(turn.mode === "goal" ? [`Goal（${turn.goal?.iteration ?? 1}回）`] : []), turn.prompt, resultSummary(turn),
   ].join("\n"))].join("\n");
 }
 /** Earlier turns are data, not instructions. The native prompt enforces this too. */

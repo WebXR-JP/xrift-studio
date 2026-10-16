@@ -164,7 +164,8 @@ test(generateOnlyPath ? "generate real frontend Scene and resource contract fixt
     assert.deepEqual(withoutDefinitionProse(stressedFixture.resourceContext.componentDefinitions), withoutDefinitionProse(materialFixture.resourceContext.componentDefinitions), "Budgeting must preserve every Component field, type, default, range and enum");
     const shelfRepresentatives = [...new Map(stressedCandidates.map(candidate => [candidate.providerId, candidate])).keys()];
     for (const provider of shelfRepresentatives) assert.ok(stressedFixture.resourceContext.builtinCandidates.some(candidate => candidate.providerId === provider), "Budgeting must retain every catalog shelf");
-    for (const candidate of stressedCandidates.filter(candidate => candidate.actions.includes("skybox")).slice(0, 3)) assert.ok(stressedFixture.resourceContext.builtinCandidates.some(included => included.candidateId === candidate.candidateId), "Budgeting must retain three visual Skybox choices");
+    for (const candidate of stressedCandidates.filter(candidate => candidate.actions.includes("skybox")).slice(0, 12)) assert.ok(stressedFixture.resourceContext.builtinCandidates.some(included => included.candidateId === candidate.candidateId), "Budgeting must retain twelve visual Skybox choices");
+    for (const candidate of stressedCandidates.filter(candidate => candidate.actions.includes("material") && !candidate.actions.includes("skybox")).slice(0, 12)) assert.ok(stressedFixture.resourceContext.builtinCandidates.some(included => included.candidateId === candidate.candidateId), "Budgeting must retain twelve surface Material choices");
 
     // Integral JavaScript Transform values become f64 decimals in Rust's
     // reserialization. A dense Scene near the JS budget exercises that gap.

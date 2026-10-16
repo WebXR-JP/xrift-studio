@@ -2113,7 +2113,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "create_blender_model",
-            "description": "Use installed Blender to create a custom Model from structured primitive or indexed mesh parts with PBR colors, then import the real GLB into the current project's Assets. Requires get_modeling_tools Blender availability and a fresh get_editor_context snapshot in Edit. Positions and rotations are Studio Y-up metres and Euler XYZ degrees; primitive scale gives dimensions. No Python source, external files or download URLs are accepted. Existing Blender scenes are preserved. Returns modelAssetId; inspect get_model_asset and use place_asset to place it.",
+            "description": "Use installed Blender to create a finished custom Model from structured primitives, indexed meshes, curved tubes or revolved profiles with PBR colors and UVs, then import the real GLB into Assets. Prefer finished models for furniture and props; use Scene primitives for an explicitly requested replaceable blockout or simple surfaces. Requires get_modeling_tools Blender availability and a fresh get_editor_context in Edit. Positions are Studio Y-up metres, rotations Euler XYZ degrees; primitive scale gives dimensions, mesh/tube/lathe scale multiplies local geometry. tube vertices are 2-128 ordered centreline points, bevel is tube radius, faces=null. lathe vertices are an ordered [radius,height,0] profile revolved around Y, faces=null. No Python source, external files or download URLs. Existing Blender scenes are preserved. Returns modelAssetId; inspect get_model_asset and use place_asset to place it.",
             "inputSchema": { "type": "object", "properties": {
                 "projectId": { "type": "string", "minLength": 1 },
                 "sceneId": { "type": "string", "minLength": 1 },
@@ -2128,7 +2128,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "generate_chatgpt_world",
-            "description": "Plan or edit a World using Studio's connected ChatGPT account and its usage allowance. Defaults to target=current and mode=build: validate the plan, save drafts, then adjust existing Entities and add new Entities sequentially to the current Scene, saving each result. Human edits made during reasoning trigger fresh planning from the current Scene. During execution, independent edits merge and conflicting edits trigger up to two fresh planning attempts, preserving saved results and continuing only unfinished work. mode=plan returns a planned job without changing the Scene or project files; review its public plan and use apply_chatgpt_plan to execute it. target=new creates and opens a separate World after saving the source. Requires a World in Edit, a current get_editor_context snapshot and a slug from list_chatgpt_models. Optional reasoningEffort must be supported by that model; omit it to use the API's model default. Unsupported efforts are rejected before inference is sent. Options choose models/materials/audio; omit for all three. Returns generationId immediately; poll get_chatgpt_generation. Saved partial results remain on failure or cancellation. Never publishes.",
+            "description": "Plan or edit a World using Studio's connected ChatGPT account and its usage allowance. Defaults to target=current and mode=build: validate the plan, save drafts, then adjust existing Entities and add new Entities sequentially to the current Scene, saving each result. Human edits made during reasoning trigger fresh planning from the current Scene. During execution, independent edits merge and conflicting edits trigger up to two fresh planning attempts, preserving saved results and continuing only unfinished work. mode=goal continues the same request across saved passes, reading the latest Scene and reviewing after every changed pass until no relevant work remains. Questions pause for answers; three unchanged passes with remaining work stop with an error. Cancellation and Scene changes preserve saved work. mode=plan returns a planned job without changing the Scene or project files; review its public plan and use apply_chatgpt_plan to execute it. target=new creates and opens a separate World after saving the source. Requires a World in Edit, a current get_editor_context snapshot and a slug from list_chatgpt_models. Optional reasoningEffort must be supported by that model; omit it to use the API's model default. Unsupported efforts are rejected before inference is sent. Options choose models/materials/audio; omit for all three. Returns generationId immediately; poll get_chatgpt_generation. Saved partial results remain on failure or cancellation. Never publishes.",
             "inputSchema": { "type": "object", "properties": {
                 "projectId": { "type": "string", "minLength": 1 },
                 "sceneId": { "type": "string", "minLength": 1 },
@@ -2140,7 +2140,7 @@ fn tool_definitions() -> Value {
                 "reasoningEffort": { "type": "string", "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"], "description": "Choose a value from the selected model's supportedReasoningEfforts. Omit to use the API's model default; do not infer support from the model name." },
                 "prompt": { "type": "string", "minLength": 1, "maxLength": 2000 },
                 "target": { "type": "string", "enum": ["current", "new"], "default": "current" },
-                "mode": { "type": "string", "enum": ["build", "plan"], "default": "build" },
+                "mode": { "type": "string", "enum": ["build", "plan", "goal"], "default": "build" },
                 "options": { "type": "object", "properties": { "models": { "type": "boolean" }, "materials": { "type": "boolean" }, "audio": { "type": "boolean" }, "modelSource": { "type": "string", "enum": ["auto", "blender", "store"] } }, "required": ["models", "materials", "audio"], "additionalProperties": false }
             }, "required": ["projectId", "sceneId", "expectedRevision", "model", "prompt"], "additionalProperties": false }
         },
@@ -4785,7 +4785,7 @@ mod tests {
         let properties = &generate["inputSchema"]["properties"];
         assert_eq!(properties["target"]["enum"], json!(["current", "new"]));
         assert_eq!(properties["target"]["default"], "current");
-        assert_eq!(properties["mode"]["enum"], json!(["build", "plan"]));
+        assert_eq!(properties["mode"]["enum"], json!(["build", "plan", "goal"]));
         assert_eq!(properties["mode"]["default"], "build");
         let required = generate["inputSchema"]["required"].as_array().unwrap();
         for optional in ["target", "mode", "options", "reasoningEffort", "sessionId"] {

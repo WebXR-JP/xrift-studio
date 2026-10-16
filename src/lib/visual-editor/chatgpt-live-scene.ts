@@ -7,7 +7,7 @@ export type ChatgptSceneRetry = {
   completed: number;
   conversation: ChatgptConversationTurn[];
   reconfirm: boolean;
-  reason?: "plan-input" | "clarification";
+  reason?: "plan-input" | "clarification" | "goal";
 };
 
 /** Saved steps are evidence; a previous, partly executed plan is not completion. */

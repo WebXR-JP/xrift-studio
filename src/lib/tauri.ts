@@ -1,6 +1,6 @@
 import { assertChatgptNativeContract } from "./visual-editor/chatgpt-native-contract";
 import { SHARED_MATERIAL_LIBRARY_PROVIDER_ID, listSharedLibraryAssets, getSharedLibraryAssetOptions, installSharedLibraryAsset } from "./shared-material-library-store";
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -35,7 +35,7 @@ import {
 export type ChatgptConnection = { signedIn: boolean; email: string | null; accountId?: string | null; planUsageEnabled: boolean; connecting: boolean; restoring?: boolean; error: string | null };
 export type ChatgptModel = { slug: string; displayName: string; supportedReasoningEfforts?: string[]; defaultReasoningEffort?: string | null };
 export type ChatgptGenerationProgress = { generationId: string; stage: "model" | "catalog" | "request" | "receiving"; message: string; receivedCharacters?: number; eventCount?: number };
-export type ChatgptSceneContext = { title: string; selectedEntityId?: string; attachedEntityIds?: string[]; entities: { id: string; name: string; parentId?: string; components: string[]; position: number[]; scale: number[]; rotation: number[] }[]; conversation?: { prompt: string; result: string }[] };
+export type ChatgptSceneContext = { title: string; goal?: boolean; selectedEntityId?: string; attachedEntityIds?: string[]; entities: { id: string; name: string; parentId?: string; components: string[]; position: number[]; scale: number[]; rotation: number[] }[]; conversation?: { prompt: string; result: string }[] };
 
 export type ProjectKind = "world" | "item";
 export type ProjectFormat = "classic" | "visual";
@@ -829,6 +829,12 @@ export const tauri = {
     return invoke<{ plan: string; assetCandidates: ExternalStoreAsset[] }>("chatgpt_plan", { model, prompt, options, gltfMaterials, generationId, sceneContext, reasoningEffort, resourceContext });
   },
   chatgptCancelGeneration: (generationId: string) => invoke<{ generationId: string; cancelled: boolean }>("chatgpt_cancel_generation", { generationId }),
+  chatgptModelSpecs: (model: string, briefs: import("./visual-editor/chatgpt-modeling").BlenderModelBrief[], generationId: string,
+    reasoningEffort: string | undefined, onModel: (result: { index: number; model: import("./visual-editor/chatgpt-modeling").BlenderModelSpec }) => void) => {
+    const channel = new Channel<{ index: number; model: import("./visual-editor/chatgpt-modeling").BlenderModelSpec }>();
+    channel.onmessage = onModel;
+    return invoke<{ index: number; model: import("./visual-editor/chatgpt-modeling").BlenderModelSpec }[]>("chatgpt_model_specs", { model, briefs, generationId, reasoningEffort, onModel: channel });
+  },
   onChatgptGenerationProgress: (handler: (progress: ChatgptGenerationProgress) => void) => listen<ChatgptGenerationProgress>("chatgpt-generation-progress", event => handler(event.payload)),
   detectXriftMcpClients: () =>
     invoke<XriftMcpClientStatus[]>("detect_xrift_mcp_clients"),

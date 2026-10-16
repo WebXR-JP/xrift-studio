@@ -150,7 +150,7 @@ export function chatgptAssetRequests(plan: ChatgptWorldPlan) {
     if (operation.kind === "skybox") add(operation.candidateId, "hdri");
     else if (operation.kind === "audio") add(operation.candidateId, "audio");
     else if (operation.kind === "model-attachment") add(operation.candidateId, "model");
-    else if (operation.kind === "material") add(operation.candidateId, "texture");
+    else if (operation.kind === "material" || operation.kind === "material-scene") add(operation.candidateId, "texture");
   }
   return [...requests.values()];
 }

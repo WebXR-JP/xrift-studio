@@ -9,6 +9,7 @@ import { listXriftComponentDefinitions } from "./component-registry";
 import type { JsonValue, SceneComponent } from "./scene-document";
 import { EDITOR_COMPONENT_REGISTRY, addEditorComponent, createEmptyEntity } from "./editor-session";
 import { COMPONENT_PATCH_KEYS } from "./component-patch-contract";
+import { CHATGPT_MAX_VISUAL_CHOICES } from "./chatgpt-questions";
 
 const utf8Bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
 const boundedText = (value: string, limit: number) => [...value].slice(0, limit).join("");
@@ -84,14 +85,16 @@ export function collectChatgptSceneResources(bundle: PrototypeVisualProject, ent
   // Reserve space for every shelf before large projects contribute resources.
   const firstByShelf = new Map<string, ChatgptBuiltinCandidate>();
   for (const candidate of builtinCandidates) if (!firstByShelf.has(candidate.providerId)) firstByShelf.set(candidate.providerId, candidate);
-  // Three visual alternatives need to remain available even when their shelf
+  // A broad visual selection needs to remain available even when its shelf
   // appears later in the relevance-ranked catalog.
-  const firstChoices = [...firstByShelf.values(), ...builtinCandidates.filter(candidate => candidate.actions.includes("skybox")).slice(0, 3)];
+  const firstChoices = [...firstByShelf.values(),
+    ...builtinCandidates.filter(candidate => candidate.actions.includes("skybox")).slice(0, CHATGPT_MAX_VISUAL_CHOICES),
+    ...builtinCandidates.filter(candidate => candidate.actions.includes("material") && !candidate.actions.includes("skybox")).slice(0, CHATGPT_MAX_VISUAL_CHOICES)];
   const firstIds = new Set(firstChoices.map(candidate => candidate.candidateId));
   const balancedCandidates = [...new Map(firstChoices.map(candidate => [candidate.candidateId, candidate])).values(), ...builtinCandidates.filter(candidate => !firstIds.has(candidate.candidateId))];
   for (const candidate of balancedCandidates.slice(0, 128)) result.builtinCandidates.push({ ...candidate,
     name: [...candidate.name].slice(0, 80).join(""), description: [...candidate.description].slice(0, 160).join("") });
-  const fits = () => utf8Bytes(result) <= 31 * 1024;
+  const fits = (reservedBytes = 0) => utf8Bytes(result) <= 31 * 1024 - reservedBytes;
   // The catalog must not crowd out the selected Entity's components and assets.
   while (utf8Bytes(result) > 24 * 1024 && result.builtinCandidates.length > firstIds.size) result.builtinCandidates.pop();
   // Include every attached Material before surrounding Components and Assets.
@@ -109,22 +112,34 @@ export function collectChatgptSceneResources(bundle: PrototypeVisualProject, ent
       ...(isSkyShaderMaterialAsset(asset) ? { skyboxMaterial: true } : {}) });
   }
   while (utf8Bytes(result) > 24 * 1024 && result.builtinCandidates.length > firstIds.size) result.builtinCandidates.pop();
+  // Leave room for the author's resources after surrounding Components. A
+  // larger visual catalog must not fill the snapshot before Assets are read.
+  const assetReserve = Math.min(3 * 1024, utf8Bytes(Object.values(bundle.assets.assets)
+    .filter(asset => asset.status === "ready" && (["model", "material", "audio", "skybox"].includes(asset.kind) || isEnvironmentTextureAsset(asset))
+      && !result.projectAssets.some(included => included.id === asset.id))
+    .slice(0, Math.max(0, 8 - result.projectAssets.length)).map(asset => ({ id: asset.id, kind: asset.kind, name: boundedText(asset.name, 80) }))));
   // Attached targets and current values take priority over reference prose.
   // Keep catalog IDs/actions and every Component field/type/default intact.
-  if (!fits()) for (const candidate of result.builtinCandidates) {
+  if (!fits(assetReserve)) for (const candidate of result.builtinCandidates) {
     candidate.name = boundedText(candidate.name, 32);
     candidate.description = boundedText(candidate.description, 48);
   }
-  if (!fits()) for (const candidate of result.builtinCandidates) {
+  if (!fits(assetReserve)) for (const candidate of result.builtinCandidates) {
     candidate.name = boundedText(candidate.name, 16);
     candidate.description = "";
   }
-  if (!fits()) for (const definition of result.componentDefinitions ?? []) {
+  if (!fits(assetReserve)) for (const definition of result.componentDefinitions ?? []) {
     definition.description = "";
     for (const field of definition.fields) delete field.description;
   }
-  if (!fits()) for (const candidate of result.builtinCandidates) candidate.name = boundedText(candidate.name, 8);
-  if (!fits()) for (const asset of result.projectAssets) asset.name = boundedText(asset.name, 24);
+  if (!fits(assetReserve)) for (const candidate of result.builtinCandidates) candidate.name = boundedText(candidate.name, 8);
+  if (!fits(assetReserve)) for (const asset of result.projectAssets) asset.name = boundedText(asset.name, 24);
+  // Even maximal Unicode labels must leave exact IDs, attached appearance
+  // values and every Component field available to the native planner.
+  if (!fits(assetReserve)) {
+    for (const candidate of result.builtinCandidates) candidate.name = boundedText(candidate.name, 4);
+    for (const asset of result.projectAssets) asset.name = boundedText(asset.name, 4);
+  }
   for (const id of new Set(entityIds)) {
     for (const component of bundle.scene.entities[id]?.components ?? []) {
       const type = component.type;
@@ -142,7 +157,7 @@ export function collectChatgptSceneResources(bundle: PrototypeVisualProject, ent
         ...(type === "mesh" ? { modelAssetId: bundle.assets.assets[component.geometryAssetId]?.kind === "model" ? optionalAssetId(component.geometryAssetId) : undefined } : {}),
         ...(type === "audio-source" ? { audio: { audioAssetId: optionalAssetId(component.audioAssetId), enabled: component.enabled, volume: component.volume,
           loop: component.loop, spatial: component.spatial, autoplay: component.autoplay } } : {}) });
-      if (result.components.length > 128 || !fits()) { result.components.pop(); break; }
+      if (result.components.length > 128 || !fits(assetReserve)) { result.components.pop(); break; }
     }
   }
   const referenced = new Set(result.components.flatMap(component => [component.modelAssetId, component.audio?.audioAssetId]).concat([sky.imageAssetId, sky.materialAssetId]));

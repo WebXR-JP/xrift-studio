@@ -17,8 +17,9 @@ import { createDocumentId } from "./document-id";
 import { getMaterialAssignmentTarget } from "./material-assignment";
 import { normalizeChatgptSkyboxPatch } from "./chatgpt-skybox";
 import { ChatgptPlanInputError } from "./chatgpt-plan-recovery";
+import { applyChatgptSceneMaterial, chatgptSceneMaterialTargets } from "./chatgpt-scene-material";
 
-type BuiltinOperation = Extract<ChatgptOperation, { kind: "catalog" | "material" | "skybox" }>;
+type BuiltinOperation = Extract<ChatgptOperation, { kind: "catalog" | "material" | "material-scene" | "skybox" }>;
 type Entry = {
   candidate: ChatgptBuiltinCandidate;
   kind: "sky" | "water" | "terrain" | "glow" | "particle" | "recipe" | "open-brush" | "component" | "world-asset";
@@ -180,9 +181,15 @@ async function addWorldAsset(bundle: PrototypeVisualProject, templateId: string,
 export async function applyChatgptBuiltinOperation(bundle: PrototypeVisualProject, operation: BuiltinOperation, projectPath: string): Promise<{ bundle: PrototypeVisualProject; entityId?: string }> {
   const selected = operation.candidateId ? trustedEntries(bundle.project.projectKind).get(operation.candidateId) : undefined;
   if (operation.candidateId && !selected) throw new Error("この組み込み候補は現在のプロジェクトで利用できません");
-  if (selected && !selected.candidate.actions.includes(operation.kind)) throw new Error("この組み込み候補には指定された操作を使用できません");
+  if (selected && !selected.candidate.actions.includes(operation.kind === "material-scene" ? "material" : operation.kind)) throw new Error("この組み込み候補には指定された操作を使用できません");
   if (operation.kind !== "skybox" && !selected) throw new Error("組み込み候補を指定してください");
   const run = runner(bundle);
+  if (operation.kind === "material-scene") {
+    if (!chatgptSceneMaterialTargets(bundle).length) throw new ChatgptPlanInputError("Materialを一括変更できるMesh RendererがSceneにありません");
+    const materialAssetId = await installMaterial(run, selected!, projectPath);
+    applyChatgptSceneMaterial(run.bundle, materialAssetId, args => run.run("set_material", args));
+    return { bundle: run.bundle };
+  }
   if (operation.kind === "skybox") {
     const { kind: _kind, candidateId: _candidate, ...patch } = operation;
     const materialAssetId = selected ? await installMaterial(run, selected, projectPath) : undefined;

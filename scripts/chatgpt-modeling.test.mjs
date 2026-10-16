@@ -5,7 +5,7 @@ import { createServer } from "vite";
 
 const server = await createServer({ configFile: false, cacheDir: "node_modules/.vite-chatgpt-modeling-test", server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: "custom", optimizeDeps: { noDiscovery: true, include: [] } });
 test.after(() => server.close());
-const { parseBlenderModelSpec } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-modeling.ts");
+const { parseBlenderModelSpec, parseBlenderModelBrief } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-modeling.ts");
 const { parseChatgptOperations } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-resources.ts");
 const { createAssetImportPlan } = await server.ssrLoadModule("/src/lib/visual-editor/asset-import.ts");
 const part = { name: "座面", shape: "box", position: [0, 0.4, 0], rotation: [10, 20, 30], scale: [1.2, 0.1, 0.5], color: [0.4, 0.2, 0.1, 1], metallic: 0, roughness: 0.6, vertices: null, faces: null, bevel: 0.02 };
@@ -27,7 +27,18 @@ test("a Blender plan is enabled only by actual availability and the selected mod
   const resources = { projectAssets: [], builtinCandidates: [], components: [], blenderAvailable: true, modelSource: "blender" };
   const operation = { kind: "blender-model", model, position: [2, 0, -1], rotation: null, scale: null };
   assert.equal(parseChatgptOperations([operation], resources, [], [])[0].model.name, model.name);
+  const brief = { name: model.name, brief: "幅1.8m。スラット座面、傾いた背もたれ、曲線の肘掛け" };
+  assert.deepEqual(parseChatgptOperations([{ ...operation, model: brief }], resources, [], [])[0].model, brief);
+  assert.throws(() => parseBlenderModelBrief({ ...brief, python: "unexpected" }));
   for (const unavailable of [{ ...resources, blenderAvailable: false }, { ...resources, modelSource: "store" }]) assert.throws(() => parseChatgptOperations([operation], unavailable, [], []));
+});
+test("curved supports and revolved profiles have bounded geometry", () => {
+  const tube = { ...part, shape: "tube", vertices: [[0, 0, 0], [0, 0.5, 0.2]], faces: null, bevel: 0.025 };
+  const lathe = { ...part, shape: "lathe", vertices: [[0, 0, 0], [0.2, 0.5, 0], [0, 0.5, 0]], faces: null };
+  assert.equal(parseBlenderModelSpec({ ...model, parts: [tube, lathe] }).parts.length, 2);
+  for (const bad of [{ ...tube, bevel: 0 }, { ...tube, vertices: [[0, 0, 0]] }, { ...lathe, vertices: [[-1, 0, 0], [1, 1, 0]] }, { ...lathe, vertices: [[1, 0, 1], [1, 1, 0]] }]) {
+    assert.throws(() => parseBlenderModelSpec({ ...model, parts: [bad] }));
+  }
 });
 test("the GLB exported by real Blender is analyzed as an ordinary Model with actual materials and bounds", async context => {
   let source;

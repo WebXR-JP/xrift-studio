@@ -1,5 +1,5 @@
 import { getMaterialAsset } from "./lib/visual-editor/asset-manifest";
-import { chatgptChoicePreviews } from "./lib/visual-editor/chatgpt-choice-previews";
+import { chatgptCandidatePreview, chatgptChoicePreviews } from "./lib/visual-editor/chatgpt-choice-previews";
 import { chatgptMaterialSettingsDisplay, describeChatgptEntityEdit, sceneSettingsDisplay } from "./lib/visual-editor/chatgpt-change-description";
 import { parseChatgptMaterialProperties, parseChatgptSceneSettings } from "./lib/visual-editor/chatgpt-editor-actions";
 import { MATERIAL_SHOWCASE_DEFINITIONS, materialShowcaseAssetId, getMaterialShowcaseAsset } from "./lib/visual-editor/material-showcase-catalog";
@@ -20,6 +20,7 @@ import { useChatgptSessions } from "./components/visual-editor/useChatgptSession
 import { collectChatgptSceneContext, collectChatgptSceneResources } from "./lib/visual-editor/chatgpt-scene-resources";
 import { assertChatgptPlanCurrent, assertChatgptPlanningCurrent, ChatgptSceneConflictError, chatgptOperationDetail, chatgptOperationLabel, chatgptOperationProgress, chatgptPlanSnapshots, chatgptPlanningSnapshot } from "./lib/visual-editor/chatgpt-plan-guards";
 import { CHATGPT_SCENE_REPLAN_LIMIT, chatgptSceneRetryConversation, type ChatgptSceneRetry } from "./lib/visual-editor/chatgpt-live-scene";
+import { chatgptGoalConversation, chatgptGoalNextPass } from "./lib/visual-editor/chatgpt-goal";
 import { ChatgptPlanInputError, isChatgptPlanInputError } from "./lib/visual-editor/chatgpt-plan-recovery";
 import { validateChatgptQuestionAnswers, type ChatgptQuestionAnswer } from "./lib/visual-editor/chatgpt-questions";
 import { chatgptReferenceKey, type ChatgptResourceContext } from "./lib/visual-editor/chatgpt-resources";
@@ -1233,7 +1234,8 @@ function App() {
     for (const id of ids) sessions = upsertChatgptSessionTurn(sessions, id, job);
     updateChatgptSessions(sessions, flush);
   };
-  const generateChatgptWorld = async (model: string, prompt: string, options: ChatgptAssetOptions, generationId: string = crypto.randomUUID(), mode: ChatgptGenerationMode = "build", target: "current" | "new" = "current", approved?: ChatgptWorldPlan, reasoningEffort?: string, requestedSessionId?: string, sceneRetry?: ChatgptSceneRetry, attachedEntityIds: readonly string[] = [], attachedMaterialIds: readonly string[] = []): Promise<Project | null> => {
+  type ChatgptPassRetry = { retry: ChatgptSceneRetry; target: "current" | "new"; sessionId?: string };
+  const generateChatgptWorldPass = async (model: string, prompt: string, options: ChatgptAssetOptions, generationId: string = crypto.randomUUID(), mode: ChatgptGenerationMode = "build", target: "current" | "new" = "current", approved?: ChatgptWorldPlan, reasoningEffort?: string, requestedSessionId?: string, sceneRetry?: ChatgptSceneRetry, attachedEntityIds: readonly string[] = [], attachedMaterialIds: readonly string[] = []): Promise<Project | null | ChatgptPassRetry> => {
     if (chatgptGenerationRef.current) throw new Error("制作の依頼を処理中です。完了するか停止してから、次の依頼を送ってください");
     if (mcpPublishActiveRef.current) throw new Error("公開を処理中です。完了してから制作の依頼を送ってください");
     if (mcpModelingActiveRef.current) throw new Error("モデルを作成しています。完了すると制作を続けられます");
@@ -1251,7 +1253,7 @@ function App() {
       chatSession = createChatgptSession(sourceId, sourceSceneId);
       updateChatgptSessions([chatSession, ...chatgptSessionsRef.current].slice(0, 20), true);
     }
-    selectChatgptSession(chatSession.id);
+    if (!(mode === "goal" && sceneRetry)) selectChatgptSession(chatSession.id);
     const sessionId = chatSession.id;
     const conversation = sceneRetry?.conversation ?? chatgptConversationContext(chatSession);
     const previousJob = chatgptGenerationsRef.current.get(generationId);
@@ -1262,9 +1264,10 @@ function App() {
     const control = { cancelled: false };
     chatgptControlsRef.current.set(generationId, control);
     let job: ChatgptGeneration = { ...previousJob, generationId, sessionId, createdAt: previousJob?.createdAt ?? new Date().toISOString(), status: "running", mode, cancelling: false, error: undefined, model, reasoningEffort, prompt, options: { ...options }, sourceProjectId: sourceId, sourceSceneId, sceneId: sourceSceneId,
+      goal: mode === "goal" ? sceneRetry || approved ? previousJob?.goal ?? { iteration: 1, noProgressPasses: 0 } : { iteration: 1, noProgressPasses: 0 } : undefined,
       attachedEntities: requestEntityIds.map(id => ({ id, name: sourceBridge.currentBundle().scene.entities[id]?.name ?? id })),
       attachedMaterials: requestMaterialIds.map(id => ({ id, name: sourceBridge.currentBundle().assets.assets[id]?.name ?? id })),
-      progress: { phase: "planning", message: sceneRetry?.reason === "clarification" ? "回答を基に、現在のSceneから制作内容を考えています" : sceneRetry?.reason === "plan-input" ? "利用できる素材と設定を確認し、制作の続きを考えています" : sceneRetry ? "手動編集を取り込み、現在のSceneから続きを考えています" : approved ? "確認した変更内容を反映する準備をしています" : "考えています…", completed: completedBefore, total: completedBefore, recentEvents: sceneRetry || completedBefore > 0 ? previousJob?.progress.recentEvents ?? [] : [] } };
+      progress: { phase: "planning", message: sceneRetry?.reason === "goal" ? "目標と最新のSceneを見直し、次の改善を考えています" : sceneRetry?.reason === "clarification" ? "回答を基に、現在のSceneから制作内容を考えています" : sceneRetry?.reason === "plan-input" ? "利用できる素材と設定を確認し、制作の続きを考えています" : sceneRetry ? "手動編集を取り込み、現在のSceneから続きを考えています" : approved ? "確認した変更内容を反映する準備をしています" : "現在のSceneと制作に使う素材を確認しています", completed: completedBefore, total: completedBefore, recentEvents: sceneRetry || completedBefore > 0 ? previousJob?.progress.recentEvents ?? [] : [] } };
     const jobs = chatgptGenerationsRef.current;
     if (!jobs.has(generationId) && jobs.size >= 600) { const oldest = jobs.keys().next().value!; jobs.delete(oldest); chatgptPlansRef.current.delete(oldest); chatgptRevertsRef.current.delete(oldest); }
     const report = (patch: Partial<ChatgptGeneration>, event?: Omit<ChatgptGenerationEvent, "sequence">) => {
@@ -1295,6 +1298,7 @@ function App() {
       const sceneContext: ChatgptSceneContext = target === "current"
         ? collectChatgptSceneContext(baseline, sourceBridge.currentContext().selectedEntityId, conversation, requestEntityIds)
         : { title: "", entities: [], ...(sceneRetry ? { conversation } : {}) };
+      if (mode === "goal") sceneContext.goal = true;
       const builtinCatalog = await import("./lib/visual-editor/chatgpt-builtin-catalog");
       const previousPlan = chatgptPlansRef.current.get(generationId);
       const resourceBundle = target === "current" ? baseline : createChatgptScaffold({ title: "", description: "", objects: [] }, "new-world");
@@ -1304,13 +1308,17 @@ function App() {
         blenderAvailable: blender.available, modelSource: options.modelSource ?? "auto",
       };
       unlisten = await tauri.onChatgptGenerationProgress(progress => {
-        if (chatgptControlsRef.current.get(generationId) !== control || progress.generationId !== generationId || job.status !== "running" || job.progress.phase !== "planning") return;
+        if (chatgptControlsRef.current.get(generationId) !== control || progress.generationId !== generationId || job.status !== "running") return;
         if (control.cancelled) { void tauri.chatgptCancelGeneration(generationId).catch(() => undefined); return; }
-        // Native exchange details do not belong in the production chat. Keep
-        // this listener for cancellation that arrives before the native lease.
+        if (job.progress.phase !== "planning") return;
+        const message = progress.stage === "model" ? "利用できる制作環境を確認しています"
+          : progress.stage === "catalog" ? "依頼に必要な素材を探しています"
+          : progress.stage === "request" ? "制作プランの応答を待っています"
+          : progress.stage === "receiving" && progress.message.startsWith("制作予定：") ? progress.message : undefined;
+        if (message && message !== job.progress.message) report({ progress: { ...job.progress, message } });
       });
       checkCancelled();
-      const result = approved ? null : await tauri.chatgptPlan(model, prompt, options, options.materials ? MATERIAL_SHOWCASE_DEFINITIONS.map(v => ({id: materialShowcaseAssetId(v.key), name: v.name, extension: v.extensionLabel})) : [], generationId, target === "current" || sceneRetry ? sceneContext : undefined, reasoningEffort, resources);
+      const result = approved ? null : await tauri.chatgptPlan(model, prompt, options, options.materials ? MATERIAL_SHOWCASE_DEFINITIONS.map(v => ({id: materialShowcaseAssetId(v.key), name: v.name, extension: v.extensionLabel})) : [], generationId, target === "current" || sceneRetry || mode === "goal" ? sceneContext : undefined, reasoningEffort, resources);
       checkCancelled();
       failedStep = "Planの検証";
       let plan: ChatgptWorldPlan;
@@ -1321,8 +1329,9 @@ function App() {
       if (!approved && target === "current") assertChatgptPlanningCurrent(sourceBridge.currentBundle(), planningSnapshot);
       const snapshots = approved ? previousPlan!.snapshots : chatgptPlanSnapshots(baseline, plan);
       assertChatgptPlanCurrent(sourceBridge.currentBundle(), plan, snapshots);
-      report({ questionPreviews: chatgptChoicePreviews(plan.questions ?? [], resources, result?.assetCandidates), plan: approved && job.plan ? job.plan : { title: plan.title, description: plan.description, hasMore: plan.hasMore, remainingWork: plan.remainingWork, questions: plan.questions, objects: [...(plan.edits ?? []).map(v => ({ name: v.name ?? baseline.scene.entities[v.entityId]?.name ?? "Entity", shape: "調整" })), ...plan.objects.map(v => ({ name: v.name, shape: v.shape })), ...(plan.operations ?? []).map(operation => ({ name: chatgptOperationLabel(operation, baseline), shape: operation.kind === "entity-delete" || operation.kind === "component-remove" ? "削除" : operation.kind === "catalog" || operation.kind === "blender-model" && !operation.entityId || operation.kind === "component-add" && !operation.entityId ? "追加" : "調整", detail: chatgptOperationDetail(operation, resources, result?.assetCandidates, baseline), ...(operation.kind === "scene-settings" ? { sceneSettingsSections: (["skybox", "fog"] as const).filter(section => parseChatgptSceneSettings(operation.settingsJson)[section] !== undefined), settings: sceneSettingsDisplay(parseChatgptSceneSettings(operation.settingsJson), baseline) } : operation.kind === "skybox" ? { sceneSettingsSections: ["skybox"] as ("skybox" | "fog")[] } : operation.kind === "material-update" ? { materialAssetId: operation.candidateId.slice(8), settings: chatgptMaterialSettingsDisplay(parseChatgptMaterialProperties(operation.propertiesJson), getMaterialAsset(baseline.assets, operation.candidateId.slice(8)) ?? undefined) } : {}) }))] },
+      report({ questionPreviews: chatgptChoicePreviews(plan.questions ?? [], resources, result?.assetCandidates), plan: approved && job.plan ? job.plan : { title: plan.title, description: plan.description, hasMore: plan.hasMore, remainingWork: plan.remainingWork, questions: plan.questions, objects: [...(plan.edits ?? []).map(v => ({ name: v.name ?? baseline.scene.entities[v.entityId]?.name ?? "Entity", shape: "調整" })), ...plan.objects.map(v => ({ name: v.name, shape: v.shape, preview: chatgptCandidatePreview(v.externalId ?? v.materialExternalId, resources, result?.assetCandidates) })), ...(plan.operations ?? []).map(operation => ({ name: chatgptOperationLabel(operation, baseline), shape: operation.kind === "entity-delete" || operation.kind === "component-remove" ? "削除" : operation.kind === "catalog" || operation.kind === "blender-model" && !operation.entityId || operation.kind === "component-add" && !operation.entityId ? "追加" : "調整", detail: chatgptOperationDetail(operation, resources, result?.assetCandidates, baseline), preview: chatgptCandidatePreview("candidateId" in operation ? operation.candidateId : undefined, resources, result?.assetCandidates), ...(operation.kind === "scene-settings" ? { sceneSettingsSections: (["skybox", "fog"] as const).filter(section => parseChatgptSceneSettings(operation.settingsJson)[section] !== undefined), settings: sceneSettingsDisplay(parseChatgptSceneSettings(operation.settingsJson), baseline) } : operation.kind === "skybox" ? { sceneSettingsSections: ["skybox"] as ("skybox" | "fog")[] } : operation.kind === "material-update" ? { materialAssetId: operation.candidateId.slice(8), settings: chatgptMaterialSettingsDisplay(parseChatgptMaterialProperties(operation.propertiesJson), getMaterialAsset(baseline.assets, operation.candidateId.slice(8)) ?? undefined) } : {}) }))] },
         progress: { ...job.progress, total: completedBefore + plan.objects.length + (plan.edits?.length ?? 0) + (plan.operations?.length ?? 0) } });
+      if (!approved && job.plan) report({ plan: { ...job.plan, objects: job.plan.objects.map(object => ({ ...object, saved: false })) } });
       if (mode === "plan" || plan.questions?.length) {
         chatgptPlansRef.current.set(generationId, { plan, target, resources, snapshots });
         if (plan.questions?.length) {
@@ -1415,6 +1424,8 @@ function App() {
       };
       const assetIds = new Map<string, string>();
       const requests = chatgptAssetRequests(plan);
+      const savedPlanObject = (index: number, entityId?: string, settings?: NonNullable<ChatgptGeneration["plan"]>["objects"][number]["settings"]) => job.plan
+        ? { ...job.plan, objects: job.plan.objects.map((object, objectIndex) => objectIndex === index ? { ...object, saved: true, ...(entityId ? { entityId } : {}), ...(settings ? { settings } : {}) } : object) } : undefined;
       const importNeeded = async (needed: typeof requests, name: string) => {
         for (const asset of needed) {
           const key = `${asset.providerId}:${asset.externalId}`;
@@ -1444,7 +1455,7 @@ function App() {
         await saveTarget();
         const name = changed.bundle.scene.entities[changed.entityId].name;
         const savedMessage = `保存しました：${describeChatgptEntityEdit(edit, before, changed.bundle)}`;
-        report({ progress: { ...job.progress, completed: completedBefore + index + 1, message: savedMessage } }, { phase: "placing", message: savedMessage, entityId: changed.entityId, name, saved: true });
+        report({ plan: savedPlanObject(index, changed.entityId), progress: { ...job.progress, completed: completedBefore + index + 1, message: savedMessage } }, { phase: "placing", message: savedMessage, entityId: changed.entityId, name, saved: true });
         await new Promise(resolve => window.setTimeout(resolve, 40));
       }
       for (const [index, value] of plan.objects.entries()) {
@@ -1469,18 +1480,18 @@ function App() {
         failedStep = undefined;
         commit(before, placed.bundle, placed.entityId);
         await saveTarget();
-        report({ progress: { ...job.progress, completed: completedBefore + index + 1 + (plan.edits?.length ?? 0), message: `${value.name}を配置して保存しました` } },
+        report({ plan: savedPlanObject((plan.edits?.length ?? 0) + index, placed.entityId), progress: { ...job.progress, completed: completedBefore + index + 1 + (plan.edits?.length ?? 0), message: `${value.name}を配置して保存しました` } },
           { phase: "placing", message: `${value.name}を配置して保存しました`, entityId: placed.entityId, name: value.name, saved: true });
         // Yield to the live Scene and Inspector between actual saved operations.
         await new Promise(resolve => window.setTimeout(resolve, 40));
       }
-      for (const [index, operation] of (plan.operations ?? []).entries()) {
+      const applyOperation = async (operation: NonNullable<ChatgptWorldPlan["operations"]>[number], index: number) => {
         checkTarget();
         const name = chatgptOperationLabel(operation, targetBridge.currentBundle());
         const candidateId = "candidateId" in operation ? operation.candidateId : undefined;
         await importNeeded(requests.filter(asset => `${asset.providerId}:${asset.externalId}` === candidateId), name);
         const before = targetBridge.currentBundle();
-        const step = completedBefore + (plan.edits?.length ?? 0) + plan.objects.length + index + 1;
+        const step = job.progress.completed + 1;
         phase("placing", `${step}/${job.progress.total} 変更中：${chatgptOperationProgress(operation, before, resources, result?.assetCandidates)}`);
         assertChatgptPlanCurrent(before, plan, expectedPlanSnapshots);
         failedStep = name;
@@ -1491,21 +1502,58 @@ function App() {
         const savedMessage = `保存しました：${chatgptOperationProgress(operation, before, resources, result?.assetCandidates, changed.bundle)}`;
         const savedSettings = operation.kind === "scene-settings" ? sceneSettingsDisplay(parseChatgptSceneSettings(operation.settingsJson), before, changed.bundle)
           : operation.kind === "material-update" ? chatgptMaterialSettingsDisplay(parseChatgptMaterialProperties(operation.propertiesJson), getMaterialAsset(before.assets, operation.candidateId.slice(8)) ?? undefined, getMaterialAsset(changed.bundle.assets, operation.candidateId.slice(8)) ?? undefined) : undefined;
-        const savedPlan = savedSettings && job.plan ? { ...job.plan, objects: job.plan.objects.map((object, objectIndex) => objectIndex === (plan.edits?.length ?? 0) + plan.objects.length + index
-          ? { ...object, settings: savedSettings } : object) } : job.plan;
+        const savedPlan = savedPlanObject((plan.edits?.length ?? 0) + plan.objects.length + index, changed.entityId, savedSettings);
         report({ plan: savedPlan, progress: { ...job.progress, completed: step, message: savedMessage } },
           { phase: "placing", message: savedMessage, entityId: changed.entityId, name, saved: true });
         await new Promise(resolve => window.setTimeout(resolve, 40));
+      };
+      const operations = (plan.operations ?? []).map((operation, index) => ({ operation, index }));
+      // Scene changes stay serial. Finished models arrive independently, so a
+      // slow modeling worker does not hold up another worker's saved result.
+      type DraftStep = (typeof operations)[number] & { operation: Extract<(typeof operations)[number]["operation"], { kind: "blender-model" }> & { model: import("./lib/visual-editor/chatgpt-modeling").BlenderModelBrief } };
+      const isDraft = (item: (typeof operations)[number]): item is DraftStep => item.operation.kind === "blender-model" && "brief" in item.operation.model;
+      for (let cursor = 0; cursor < operations.length;) {
+        const item = operations[cursor];
+        if (!isDraft(item)) { await applyOperation(item.operation, item.index); cursor++; continue; }
+        const drafts: DraftStep[] = [];
+        const targets = new Set<string>();
+        // Keep dependent operations in their planned order. Only adjacent
+        // models with independent targets may be applied as they finish.
+        while (cursor < operations.length) {
+          const candidate = operations[cursor];
+          if (!isDraft(candidate) || (candidate.operation.entityId && targets.has(candidate.operation.entityId))) break;
+          drafts.push(candidate);
+          if (candidate.operation.entityId) targets.add(candidate.operation.entityId);
+          cursor++;
+        }
+        const { streamChatgptModels } = await import("./lib/visual-editor/chatgpt-model-stream");
+        phase("importing", `モデルを制作しています：${drafts.map(item => item.operation.model.name).join("、")}。完成したものから順に反映します`);
+        failedStep = "モデルの詳細制作";
+        for await (const ready of streamChatgptModels(model, drafts.map(item => item.operation.model), generationId, reasoningEffort)) {
+          checkTarget();
+          const { operation, index } = drafts[ready.index];
+          await applyOperation({ ...operation, model: ready.model }, index);
+          if (job.progress.completed < job.progress.total) phase("importing", "完成したモデルを保存しました。残りのモデルを制作しています");
+          failedStep = "モデルの詳細制作";
+        }
+        failedStep = undefined;
       }
       phase("saving", "ワールドの保存結果を確認しています");
       await saveTarget(); if (createdProject) await refreshProjects();
       checkTarget();
-      report({ status: "completed", nextActions: ["get_editor_context", "capture_scene_view"],
-        progress: { ...job.progress, phase: "completed", message: job.progress.total === 0 ? plan.description || "追加の変更はありません" : plan.hasMore ? "ここまでの変更を保存しました。結果を確認し、次の依頼を送れます" : "依頼を反映して保存しました。Scene ViewとInspectorで確認できます" } },
-        { phase: "completed", message: job.progress.total === 0 ? "Sceneの変更はありません" : "依頼した追加と調整を保存しました" });
+      const nextGoal = chatgptGoalNextPass(job, planningSnapshot !== chatgptPlanningSnapshot(targetBridge.currentBundle()));
       chatgptPlansRef.current.delete(generationId);
-      if (job.progress.total > 0) toast({ kind: "success", title: "依頼を反映しました", description: "Scene ViewとInspectorで結果を確認できます。" });
-      return project;
+      if (nextGoal) {
+        retryRequest = { attempt: 0, completed: job.progress.completed, reason: "goal", reconfirm: false, conversation: chatgptGoalConversation(conversation, job) };
+        report({ goal: nextGoal });
+        phase("planning", `ここまでの変更を保存しました。目標に向けて${nextGoal.iteration}回目の制作と見直しを続けます`);
+      } else {
+        report({ status: "completed", nextActions: ["get_editor_context", "capture_scene_view"],
+          progress: { ...job.progress, phase: "completed", message: mode === "goal" ? "目標に向けた制作と見直しを終えました。Scene Viewで結果を確認できます" : job.progress.total === 0 ? plan.description || "追加の変更はありません" : plan.hasMore ? "ここまでの変更を保存しました。結果を確認し、次の依頼を送れます" : "依頼を反映して保存しました。Scene ViewとInspectorで確認できます" } },
+          { phase: "completed", message: job.progress.total === 0 ? "Sceneの変更はありません" : "依頼した追加と調整を保存しました" });
+        if (job.progress.total > 0) toast({ kind: "success", title: "依頼を反映しました", description: "Scene ViewとInspectorで結果を確認できます。" });
+        return project;
+      }
     } catch (error) {
       if (failedStep && isChatgptPlanInputError(error) && !control.cancelled) {
         try {
@@ -1546,7 +1594,21 @@ function App() {
     }
     // Start a separate planning exchange only after the old native lease and
     // listeners are released. The same visible request keeps its saved results.
-    return generateChatgptWorld(model, prompt, options, generationId, retryRequest!.reconfirm ? "plan" : mode, createdProject ? "current" : target, undefined, reasoningEffort, retryRequest!.reason === "plan-input" ? job.sessionId : sessionId, retryRequest);
+    return { retry: retryRequest!, target: createdProject ? "current" : target,
+      sessionId: retryRequest!.reason === "plan-input" || retryRequest!.reason === "goal" ? job.sessionId : sessionId };
+  };
+  const generateChatgptWorld = async (...initial: Parameters<typeof generateChatgptWorldPass>): Promise<Project | null> => {
+    // Release every pass's native lease, listeners and Scene snapshots before
+    // starting the next one; long goals must not accumulate recursive frames.
+    initial[3] ??= crypto.randomUUID();
+    let request = initial;
+    for (;;) {
+      const result = await generateChatgptWorldPass(...request);
+      if (!result || !("retry" in result)) return result;
+      const [model, prompt, options, generationId, mode = "build", , , reasoningEffort] = request;
+      request = [model, prompt, options, generationId, result.retry.reconfirm ? "plan" : mode, result.target,
+        undefined, reasoningEffort, result.sessionId, result.retry];
+    }
   };
   const handleChatgptGenerate = async (model: string, prompt: string, options: ChatgptAssetOptions, mode: ChatgptGenerationMode = "build", reasoningEffort?: string,
     expectedScope?: { sceneScope: string; scope: string; requestId: string; attachedEntityIds?: readonly string[]; attachedMaterialIds?: readonly string[] }): Promise<void> => {
@@ -1569,7 +1631,7 @@ function App() {
     if (!stored || job?.status !== "planned") throw new Error("反映できる変更内容がありません。依頼を送り直してください");
     if (stored.plan.questions?.length) throw new Error("確認事項に回答してから制作を進めてください");
     if (job.sourceProjectId !== visualSessionRef.current?.bundle.project.projectId || job.sourceSceneId !== mcpProjectBridgeRef.current?.currentBundle().scene.sceneId) throw new Error("変更を依頼したワールドとSceneを開いてから反映してください");
-    await generateChatgptWorld(job.model, job.prompt, job.options, generationId, "build", stored.target, stored.plan, job.reasoningEffort, job.sessionId);
+    await generateChatgptWorld(job.model, job.prompt, job.options, generationId, job.mode === "goal" ? "goal" : "build", stored.target, stored.plan, job.reasoningEffort, job.sessionId);
   };
   const answerChatgptQuestions = async (generationId: string, rawAnswers: ChatgptQuestionAnswer[]) => {
     const job = chatgptGenerationsRef.current.get(generationId), stored = chatgptPlansRef.current.get(generationId);
@@ -1606,7 +1668,7 @@ function App() {
     const cancelling = { ...job, cancelling: true };
     chatgptGenerationsRef.current.set(generationId, cancelling); setChatgptGeneration(cancelling);
     recordChatgptGeneration(cancelling);
-    if (job.progress.phase === "planning") await tauri.chatgptCancelGeneration(generationId);
+    await tauri.chatgptCancelGeneration(generationId);
     return { generationId, cancelled: true };
   };
 
@@ -1771,7 +1833,7 @@ function App() {
         if (!options || typeof options !== "object" || Array.isArray(options) || Object.keys(options).some(key => !["models", "materials", "audio", "modelSource"].includes(key)) || !["models", "materials", "audio"].every(key => typeof (options as Record<string, unknown>)[key] === "boolean") || ((options as ChatgptAssetOptions).modelSource !== undefined && !["auto", "blender", "store"].includes((options as ChatgptAssetOptions).modelSource!))) {
           throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "optionsにはmodels・materials・audioのbooleanを指定してください");
         }
-        if (args.mode !== undefined && args.mode !== "build" && args.mode !== "plan") throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "modeにはbuildまたはplanを指定してください");
+        if (args.mode !== undefined && args.mode !== "build" && args.mode !== "plan" && args.mode !== "goal") throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "modeにはbuild・plan・goalを指定してください");
         if (args.target !== undefined && args.target !== "current" && args.target !== "new") throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "targetにはcurrentまたはnewを指定してください");
         if (args.reasoningEffort !== undefined && (typeof args.reasoningEffort !== "string" || !["none", "minimal", "low", "medium", "high", "xhigh", "max"].includes(args.reasoningEffort))) throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "reasoningEffortはlist_chatgpt_modelsの対応する思考量から指定してください");
         if (args.sessionId !== undefined && (typeof args.sessionId !== "string" || !chatgptSessionsRef.current.some(session => session.id === args.sessionId && session.projectId === context.projectId && session.sceneId === context.sceneId))) throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "このSceneのsessionIdを指定してください");

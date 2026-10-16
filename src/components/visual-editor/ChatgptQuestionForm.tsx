@@ -22,20 +22,23 @@ export function ChatgptQuestionForm({ questions, previews, assets, projectPath, 
     <p className="text-[11px] text-slate-500" aria-live="polite">確認 {page + 1} / {questions.length}</p>
     <p className="text-[11px] text-slate-500">Tabで候補を移動、Spaceで選択できます。</p>
     <div hidden data-chatgpt-copy-hidden>{questions.map((item, index) => <div key={index}><p>確認{index + 1}: {item.question}</p>{item.choices.map((choice, i) => <p key={i}>{i + 1}. {choice}</p>)}<p>その他（自由入力）</p></div>)}</div>
-    <fieldset data-chatgpt-copy-skip disabled={disabled} className="space-y-2" onKeyDown={event => {
+    <fieldset data-chatgpt-copy-skip disabled={disabled} className="min-w-0 space-y-2" onKeyDown={event => {
       if (event.key !== "Tab" || !(event.target instanceof HTMLInputElement) || event.target.type !== "radio") return;
       const choices = [...event.currentTarget.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
       const next = choices[choices.indexOf(event.target) + (event.shiftKey ? -1 : 1)];
       if (next) { event.preventDefault(); next.focus(); }
     }}>
       <legend className="mb-2 break-words font-medium leading-5 text-slate-800">{question.question}</legend>
-      {question.choices.map((choice, index) => <label key={`${page}-${index}`} className="flex cursor-pointer items-start gap-2 rounded-md border border-slate-200 bg-white p-2 text-slate-700 focus-within:ring-2 focus-within:ring-brand-500">
+      {visualChoices ? <p className="text-[11px] text-slate-500">おすすめ順 · {question.choices.length}候補</p> : null}
+      <div className={visualChoices ? "grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-2" : "space-y-2"}>
+      {question.choices.map((choice, index) => <label key={`${page}-${index}`} className={`flex min-w-0 cursor-pointer items-start gap-2 rounded-md border bg-white p-2 text-slate-700 focus-within:ring-2 focus-within:ring-brand-500 ${answers[page]?.choice === index ? "border-brand-500 ring-1 ring-brand-200" : "border-slate-200"}`}>
         <input type="radio" tabIndex={0} name={`question-${page}`} checked={answers[page]?.choice === index} onChange={() => setAnswers(current => ({ ...current, [page]: { choice: index, text: current[page]?.text ?? "" } }))} className="mt-0.5 accent-brand-600" />
-        <span className={`min-w-0 flex-1 ${visualChoices ? "flex items-center gap-2" : ""}`}>
-          {visualChoices ? <span aria-hidden="true" className="block h-16 w-28 shrink-0 overflow-hidden rounded" data-chatgpt-choice-preview={question.choiceCandidateIds?.[index] ?? "none"}><ChatgptChoiceThumbnail preview={previews?.[question.choiceCandidateIds?.[index] ?? ""]} assets={assets} projectPath={projectPath} /></span> : null}
-          <span className="block min-w-0 break-words">{index + 1}. {choice}</span>
-        </span>
+        <div className="min-w-0 flex-1">
+          <span className="block min-w-0 break-words leading-5">{index + 1}. {choice}</span>
+          {visualChoices ? <div aria-hidden="true" className="pointer-events-none mt-2 aspect-video w-full overflow-hidden rounded" data-chatgpt-choice-preview={question.choiceCandidateIds?.[index] ?? "none"}><ChatgptChoiceThumbnail preview={previews?.[question.choiceCandidateIds?.[index] ?? ""]} assets={assets} projectPath={projectPath} /></div> : null}
+        </div>
       </label>)}
+      </div>
       <label className="flex cursor-pointer items-center gap-2 rounded-md text-slate-700 focus-within:ring-2 focus-within:ring-brand-500"><input type="radio" tabIndex={0} name={`question-${page}`} checked={answers[page]?.choice === -1} onChange={() => setAnswers(current => ({ ...current, [page]: { choice: -1, text: current[page]?.text ?? "" } }))} className="accent-brand-600" /><span>その他（自由入力）</span></label>
       {answers[page]?.choice === -1 ? <textarea aria-label="その他の回答" value={answers[page].text} maxLength={500} rows={2} onChange={event => setAnswers(current => ({ ...current, [page]: { choice: -1, text: event.target.value } }))} className="w-full resize-y rounded-md border border-slate-300 bg-white p-2 text-slate-800" /> : null}
     </fieldset>

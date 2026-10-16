@@ -14,6 +14,10 @@ test("initial suggestions are bounded local drafts without unsupported generatio
   assert.equal(result.length, 3);
   assert.equal(new Set(result.map(item => item.id)).size, 3);
   assert.ok(result.some(item => item.prompt.includes("Primitive")));
+  const bulk = result.find(item => item.id === "scene-materials");
+  assert.ok(bulk.prompt.includes("全体に使う候補を1つ選んだら"));
+  assert.ok(bulk.prompt.includes("Entityごとの質問には分けず"));
+  assert.equal(bulk.attachedEntityIds, undefined);
   assert.ok(result.every(item => !/Blender|画像生成|削除|公開/u.test(item.prompt)));
 });
 
@@ -35,6 +39,18 @@ test("current attachments take priority and suggestions carry valid IDs back int
     assert.deepEqual(item.attachedEntityIds, ["tree"]);
   }
   assert.equal(JSON.stringify(value), before);
+});
+
+test("Material catalog suggestions allow separate choices on exact attached Entities without changing shared Assets", () => {
+  for (const attachedEntityIds of [["bench"], ["bench", "tree"]]) {
+    const candidate = suggestions(input({ attachedEntityIds })).find(item => item.id === "entity-surface:bench");
+    assert.ok(candidate.prompt.includes("最大12候補"));
+    assert.ok(candidate.prompt.includes("サムネイル"));
+    assert.ok(candidate.prompt.includes("対象ごとに違うMaterial"));
+    assert.ok(candidate.prompt.includes("共有Material自体は変更しない"));
+    assert.deepEqual(candidate.attachedEntityIds, attachedEntityIds);
+    assert.equal(candidate.prompt.includes("を含む添付したEntity"), attachedEntityIds.length > 1);
+  }
 });
 
 test("deleted targets never recover historical names and current deleted attachments do not switch targets", () => {
@@ -75,4 +91,10 @@ test("saved Skybox settings yield environment candidates and Blender requires av
   assert.ok(suggestions(input({ generation, blenderAvailable: true })).some(item => item.id === "entity-blender:tree"));
   assert.ok(!suggestions(input({ generation: completed({ ...generation, plan: { objects: [{ name: "今の木", shape: "model" }] } }), blenderAvailable: true })).some(item => item.id.includes("blender")));
   assert.ok(!suggestions(input({ generation: completed({ ...generation, progress: { recentEvents: [{ saved: true, entityId: "bench" }] } }), attachedEntityIds: ["tree"], blenderAvailable: true })).some(item => item.id.includes("blender")));
+});
+
+test("a finished whole-Scene Material request keeps the next suggestion scoped to the whole Scene", () => {
+  const result = suggestions(input({ generation: completed({ plan: { objects: [{ name: "Scene全体のMaterialを一括変更", shape: "調整" }] } }) }));
+  assert.equal(result[0].id, "scene-materials");
+  assert.equal(new Set(result.map(item => item.id)).size, result.length);
 });

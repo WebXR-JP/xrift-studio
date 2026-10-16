@@ -4,6 +4,8 @@ import type { BlenderModelSpec } from "../src/lib/visual-editor/chatgpt-modeling
 import type { ChatgptGeneration } from "../src/lib/visual-editor/chatgpt-generation";
 import type { XriftMcpEditorResponse } from "../src/lib/tauri";
 
+declare global { interface Window { __XRIFT_MODEL_WORKERS__?: { releaseSlow: boolean } } }
+
 // Real GLB/Material rendering and a cold Editor compile share this budget.
 test.setTimeout(240_000);
 
@@ -52,6 +54,52 @@ async function runtime(page: Page, entityId: string) {
     return (await import(/* @vite-ignore */ path)).readModelRuntime(entityId);
   }, entityId) as Promise<ReturnType<typeof import("./chatgpt-modeling.fixture").readModelRuntime>>;
 }
+
+test("詳細制作が先に終わったモデルを保存・描画し、遅いモデルの待機中も手動編集を保つ", async ({ page }, info) => {
+  const { projectPath, model } = await ready(page);
+  await page.evaluate(async model => {
+    const modulePath = "/src/lib/tauri.ts";
+    const { tauri }: typeof import("../src/lib/tauri") = await import(/* @vite-ignore */ modulePath);
+    window.__XRIFT_MODEL_WORKERS__ = { releaseSlow: false };
+    tauri.chatgptModelSpecs = async (_model, briefs, _id, _effort, onReady) => {
+      const results = briefs.map((brief, index) => ({ index, model: { ...model, name: brief.name } }));
+      onReady(results[1]);
+      while (!window.__XRIFT_MODEL_WORKERS__!.releaseSlow) await new Promise(resolve => setTimeout(resolve, 25));
+      onReady(results[0]);
+      return results;
+    };
+    window.__XRIFT_RELEASE_E2E__!.chatgptPlanFixture = JSON.stringify({ title: "非同期のモデル制作", description: "完成したモデルから順に反映します", objects: [], edits: [], operations: [
+      { kind: "blender-model", model: { name: "遅いモデル", brief: "木のスラットと曲線の脚を持つベンチ" }, position: [-2, 0, 0] },
+      { kind: "blender-model", model: { name: "先に完成するモデル", brief: "回転面を使った植木鉢" }, position: [2, 0, 0] },
+    ], hasMore: false });
+  }, model);
+  const created = await call(page, "generate_chatgpt_world", { model: "fixture-model", prompt: "ベンチと植木鉢を制作", options: { models: true, materials: true, audio: true, modelSource: "auto" } }, true);
+  expect(created.ok, JSON.stringify(created)).toBe(true);
+  const generationId = created.result!.generationId as string;
+  const job = async () => (await call(page, "get_chatgpt_generation", { generationId })).result as unknown as ChatgptGeneration;
+  await expect.poll(async () => (await job()).progress.completed, { timeout: 60_000 }).toBe(1);
+  expect((await job()).status).toBe("running");
+  const first = await readDocuments(page, projectPath);
+  const placed = Object.values(first.scene.entities).find((entity: any) => entity.name === "先に完成するモデル") as any;
+  expect(placed).toBeDefined();
+  expect(Object.values(first.scene.entities).some((entity: any) => entity.name === "遅いモデル")).toBe(false);
+  await expect.poll(async () => (await runtime(page, placed.id))?.vertexCount ?? 0).toBeGreaterThan(3);
+  const results = page.getByRole("list", { name: "依頼の作業結果", exact: true });
+  await expect(results.getByRole("listitem").filter({ hasText: "先に完成するモデル" })).toContainText("反映済み");
+  await expect(results.getByRole("listitem").filter({ hasText: "遅いモデル" })).not.toContainText("反映済み");
+  await expect(results.getByRole("button", { name: /先に完成するモデル.*Inspectorで表示/ })).toBeVisible();
+  await expect(results.getByRole("button", { name: /遅いモデル.*Inspectorで表示/ })).toHaveCount(0);
+  await expect.poll(async () => (await job()).progress.message).toContain("残りのモデル");
+  await page.screenshot({ path: info.outputPath("first-model-while-worker-running.png") });
+  const manual = await call(page, "create_empty_entity", { name: "待機中の手動編集", position: [4, 0, 2] }, true);
+  expect(manual.ok).toBe(true);
+  await page.evaluate(() => { window.__XRIFT_MODEL_WORKERS__!.releaseSlow = true; });
+  await expect.poll(async () => (await job()).status, { timeout: 60_000 }).toBe("completed");
+  const finished = await readDocuments(page, projectPath);
+  expect(finished.scene.entities[manual.result!.entityId as string].name).toBe("待機中の手動編集");
+  expect(Object.values(finished.scene.entities).filter((entity: any) => ["遅いモデル", "先に完成するモデル"].includes(entity.name))).toHaveLength(2);
+  expect((await job()).progress.completed).toBe(2);
+});
 
 test("ChatGPTのBlenderモデルを実GLBからAssetsへ取り込み、Scene・Play・再表示で同じ形状を描画する", async ({ page }, info) => {
   const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));

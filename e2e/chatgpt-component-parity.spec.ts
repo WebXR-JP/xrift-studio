@@ -88,7 +88,7 @@ test("共通Component定義は送信量内に収まり、無効な設定とTrans
   });
   expect(result.bytes).toBeLessThanOrEqual(31 * 1024);
   expect(result.lightFields).toEqual(expect.arrayContaining(["intensity", "castShadow", "shadowCameraFar"]));
-  expect(result.skies).toBeGreaterThanOrEqual(3);
+  expect(result.skies).toBeGreaterThanOrEqual(12);
   expect(result.shelves).toBe(result.expectedShelves);
   expect(result.rejected).toEqual([true, true, true]);
 });

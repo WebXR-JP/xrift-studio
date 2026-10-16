@@ -1,5 +1,5 @@
 import type { ExternalStoreAsset } from "../tauri";
-import { parseBlenderModelSpec, type BlenderModelSpec } from "./chatgpt-modeling";
+import { parseBlenderModel, type BlenderModelSpec, type BlenderModelBrief } from "./chatgpt-modeling";
 import { CHATGPT_EDITOR_ACTIONS, validateChatgptEditorAction, type ChatgptEditorAction } from "./chatgpt-editor-actions";
 import type { JsonValue, SceneComponent } from "./scene-document";
 
@@ -47,8 +47,9 @@ export type ChatgptOperation =
   | { kind: "mesh-collision"; entityId: string; action: "add" | "remove" }
   | { kind: "model-attachment"; entityId: string; componentId?: string; candidateId: string }
   | { kind: "material"; entityId: string; componentId?: string; candidateId: string }
+  | { kind: "material-scene"; candidateId: string }
   | { kind: "catalog"; candidateId: string; name?: string; position: [number, number, number]; rotation?: [number, number, number]; scale?: [number, number, number] }
-  | { kind: "blender-model"; model: BlenderModelSpec; entityId?: string; componentId?: string; position?: [number, number, number]; rotation?: [number, number, number]; scale?: [number, number, number] };
+  | { kind: "blender-model"; model: BlenderModelSpec | BlenderModelBrief; entityId?: string; componentId?: string; position?: [number, number, number]; rotation?: [number, number, number]; scale?: [number, number, number] };
 
 export type ChatgptCatalogSearchRequest = {
   providerId: "poly-haven" | "ambient-cg" | "ai-lowpoly-props" | "otogura";
@@ -105,6 +106,7 @@ export function parseChatgptOperations(raw: unknown, resources: ChatgptResourceC
       "mesh-collision": ["entityId", "action"],
       "model-attachment": ["entityId", "componentId", "candidateId"],
       material: ["entityId", "componentId", "candidateId"],
+      "material-scene": ["candidateId"],
       catalog: ["candidateId", "name", "position", "rotation", "scale"],
       "blender-model": ["model", "entityId", "componentId", "position", "rotation", "scale"],
     };
@@ -127,9 +129,9 @@ export function parseChatgptOperations(raw: unknown, resources: ChatgptResourceC
     }
     if (operation.candidateId !== undefined) {
       if (!text(operation.candidateId, 320)) throw invalid();
-      const action = operation.kind === "model-attachment" ? "model" : operation.kind;
+      const action = operation.kind === "model-attachment" ? "model" : operation.kind === "material-scene" ? "material" : operation.kind;
       if (!chatgptCandidateSupports(resolveChatgptCandidate(operation.candidateId as string, resources, candidates), action as ChatgptResourceKind | "catalog" | "skybox")) throw invalid();
-    } else if (["model-attachment", "material", "catalog"].includes(operation.kind as string)) throw invalid();
+    } else if (["model-attachment", "material", "material-scene", "catalog"].includes(operation.kind as string)) throw invalid();
     for (const key of ["enabled", "iblEnabled", "loop", "spatial", "autoplay"]) if (operation[key] !== undefined && typeof operation[key] !== "boolean") throw invalid();
     for (const [key, min, max] of [["volume", 0, 1], ["exposure", 0, 20], ["rotationDegrees", -360, 360]] as const) {
       const number = operation[key];
@@ -148,7 +150,7 @@ export function parseChatgptOperations(raw: unknown, resources: ChatgptResourceC
         const meshes = resources.components.filter(component => component.entityId === operation.entityId && component.type === "mesh");
         if (!meshes.length || (operation.componentId === undefined ? meshes.length !== 1 : !meshes.some(component => component.componentId === operation.componentId))) throw invalid();
       } else if (operation.componentId !== undefined) throw invalid();
-      operation.model = parseBlenderModelSpec(operation.model);
+      operation.model = parseBlenderModel(operation.model);
     }
     if (["audio", "model-attachment", "material"].includes(operation.kind as string)) {
       const relevant = resources.components.filter(component => component.entityId === operation.entityId && component.type === (operation.kind === "audio" ? "audio-source" : "mesh"));

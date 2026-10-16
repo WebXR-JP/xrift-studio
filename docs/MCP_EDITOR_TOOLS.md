@@ -111,6 +111,8 @@ document toolの戻り値には`harness`が付くことがある。同じ種類�
 
 ### ChatGPTによる現在のSceneの編集
 
+制作チャットの`/goal 目標`は、既存の`generate_chatgpt_world`へ`mode: "goal"`を指定すると同じ継続制作を開始できる。現在のSceneを各回で取得し、変更を保存して見直しを続け、必要な改善がなくなったら完了する。`cancel_chatgpt_generation`で停止する。質問待ち、進展なし、失敗、Scene変更では保存済みの成果を保持する。
+
 `get_chatgpt_connection`, `connect_chatgpt`, `disconnect_chatgpt`, `list_chatgpt_models`, `open_chatgpt_panel`, `generate_chatgpt_world`, `get_chatgpt_generation`, `apply_chatgpt_plan`, `cancel_chatgpt_generation`, `list_chatgpt_sessions`, `get_chatgpt_session`, `manage_chatgpt_session`, `revert_chatgpt_generation`
 
 `connect_chatgpt`はブラウザでの認証を開始して直ちに返す。本人が許可した後、`get_chatgpt_connection`で`connecting: false`、`restoring: false`、`signedIn: true`、`planUsageEnabled: true`を確認する。失敗理由は`error`に残る。更新用の認証情報はOSの安全な保存先に保管し、Studioの起動時に復元する。認証情報をMCPやプロジェクトへ返さない。XRiftの`login`とは別の接続で、接続・状態確認はプロジェクトを開かずに使える。外部MCPクライアントの登録は制作チャットの入力欄下にある「MCP接続」、またはプロジェクト一覧の「設定」から行う。MCP接続を開くと、登録済みのサーバーを同梱版へ自動更新する。更新後は、表示された案内に従ってAIクライアントを再起動するかMCPを再読み込みする。
@@ -127,6 +129,8 @@ MCP/APIの`mode: "plan"`はPlanの検証までを行い、`status: "planned"`と
 
 `get_chatgpt_generation`で同じIDを確認し、`progress`の`phase`・`message`（実行中の工程）、`completed`・`total`（保存済みの件数）、`recentEvents`（直近の実行結果）、`projectId`（生成先）を読む。状態は`running`・`planned`・`completed`・`cancelled`・`failed`。開始や途中の進行表示を完了と扱わない。検証後に下書きを保存し、素材の取り込みとEntityの調整・配置を順次進め、各工程の結果を保存する。途中の失敗や停止でも保存済みの結果を残す。停止は反映済みの変更を取り消さない。`completed`の保存先、または`failed`のエラーを確認し、`get_editor_context`と`capture_scene_view`で実物を確認する。制作中に作品やSceneが切り替わった場合は追加を停止する。公開は行わない。会話の公開履歴は端末へ保存し、Planの実行用データと変更を戻す控えはStudio終了まで保持する。
 
+ChatGPTへの全体一括のMaterial依頼では、候補を一度選んだ後、authoring契約7の`material-scene`で現在のSceneの有効なMesh Rendererの全スロットとModelの部分Entityへまとめて適用する。内部では既存の`set_material`を使い、1操作・1回の保存として扱う。32件を超えても依頼を分割せず、Scene全体の変更を検出して再確認し、依頼単位で元に戻せる。
+
 `list_chatgpt_sessions`は現在の作品・Sceneの会話一覧、`get_chatgpt_session`は`sessionId`の会話とコピー用の全文を返す。`manage_chatgpt_session`は最新の作品・Scene・revisionで`create`・`select`・`rename`・`delete`を行う。履歴削除ではSceneを変更しない。`generate_chatgpt_world`の`sessionId`で会話を引き継ぎ、直近の相談と現在のSceneを使う。履歴は端末に最大20チャット・各30件・全体3MiBで保持する。再起動時には実行中・未反映Planを終了状態にし、失われた処理を実行中と表示しない。
 
 `revert_chatgpt_generation`は最新の作品・Scene・revisionと`generationId`を受け、依頼前のScene・Assetsを復元して保存する。`revertAvailable`が必要で、後の手動編集や別の依頼があると拒否する。控えはStudio起動中の直近8件までで、再起動後には使用できない。ダウンロード済みのファイルと会話履歴は削除しない。
@@ -137,7 +141,7 @@ MCP/APIの`mode: "plan"`はPlanの検証までを行い、`status: "planned"`と
 
 `get_modeling_tools`, `create_blender_model`
 
-`get_modeling_tools`は導入済みのBlenderの利用状況と版を返す。プラグインやChatGPT接続は必要ない。`create_blender_model`には最新の`get_editor_context`の作品・Scene・revisionと`model`を渡す。`model`は名前と最大64個のpartsを持ち、各partはbox・sphere・cylinder・cone・torus・meshから形状を選び、位置、Euler XYZの回転、寸法、色、metallic、roughnessを指定する。座標はStudioのY-up・メートルで、回転は度数。meshではverticesとfacesを指定する。任意のPythonや外部ファイルを渡すことはできない。
+`get_modeling_tools`は導入済みのBlenderの利用状況と版を返す。プラグインやChatGPT接続は必要ない。`create_blender_model`には最新の`get_editor_context`の作品・Scene・revisionと`model`を渡す。`model`は名前と最大64個のpartsを持ち、各partはbox・sphere・cylinder・cone・torus・mesh・tube・latheから形状を選び、位置、Euler XYZの回転、寸法、色、metallic、roughnessを指定する。座標はStudioのY-up・メートルで、回転は度数。meshではverticesとfacesを指定する。tubeはverticesに2〜128個の中心線の点、bevelに管の半径を指定し、滑らかな曲線にする。latheはverticesに順番に並べた`[半径, 高さ, 0]`の断面を指定し、Y軸を中心に32分割で回転させる。tubeとlatheのfacesはnull。各パーツにUVを作る。任意のPythonや外部ファイルを渡すことはできない。
 
 Editで実行すると、独立したBlenderプロセスが実GLBと編集可能な`.blend`を作成し、GLBを通常のModelとしてAssetsに保存する。既存のBlender作品は変更しない。返された`modelAssetId`を`get_model_asset`で確認し、`place_asset`で配置する。作成中に利用者が別のEntityを編集しても、その編集を保存結果へ組み合わせる。作品やSceneが変わった場合は反映を停止する。
 
@@ -470,6 +474,8 @@ projectではなくapp dataへ置く。
 **ワールド制作の録画**（詳細は [ワールド制作の録画](./RECORDING.md)）
 
 ## 意図的に公開していない操作
+
+- 制作チャットの表示幅の切り替え、入力候補の表示・非表示とTab補完は画面内の表示・下書き操作なので、専用MCP toolは設けない。Sceneや素材、制作依頼の実行内容は変更しない。
 
 - 部分.xriftstudio書き出し・追加Importのファイル選択、保存先、セッションクリップボードは本人のローカル操作として扱い、今回専用MCP toolは追加しない。UIは既存のdocument/Asset/Undo処理を共用する。ファイル受け渡しの制約は[Hierarchyの受け渡し契約](./HIERARCHY_TRANSFER.md)を参照する。
 - 素材・Component検索、Inspector見出し、制作データ確認dialogはUI上の導線であり、新規toolやネットワーク計測にしない。既存のproject health toolが実行時やファイルの存在まで確認したとは扱わない。

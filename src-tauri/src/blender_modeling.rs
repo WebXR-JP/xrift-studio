@@ -19,6 +19,28 @@ pub(crate) struct BlenderModelSpec {
     pub parts: Vec<BlenderModelPart>,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct BlenderModelBrief {
+    pub name: String,
+    pub brief: String,
+}
+impl BlenderModelBrief {
+    pub(crate) fn validate(&self) -> Result<(), String> {
+        if self.name.trim().is_empty() || self.name.chars().count() > 80 || self.name.chars().any(char::is_control)
+            || self.brief.trim().is_empty() || self.brief.chars().count() > 1600
+            || self.brief.chars().any(|c| c.is_control() && c != '\n' && c != '\t') {
+            return Err("モデルの名前・形・寸法を確認してください".into());
+        }
+        Ok(())
+    }
+}
+pub(crate) fn blender_brief_schema() -> serde_json::Value {
+    serde_json::json!({"type":"object","additionalProperties":false,"required":["name","brief"],"properties":{
+        "name":{"type":"string","minLength":1,"maxLength":80},
+        "brief":{"type":"string","minLength":1,"maxLength":1600}
+    }})
+}
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct BlenderModelPart {
     pub name: String,
@@ -56,11 +78,11 @@ pub(crate) fn blender_model_schema() -> serde_json::Value {
         "parts":{"type":"array","minItems":1,"maxItems":64,"items":{"type":"object","additionalProperties":false,
             "required":["name","shape","position","rotation","scale","color","metallic","roughness","vertices","faces","bevel"],"properties":{
                 "name":{"type":"string","minLength":1,"maxLength":80},
-                "shape":{"type":"string","enum":["box","sphere","cylinder","cone","torus","mesh"]},
+                "shape":{"type":"string","enum":["box","sphere","cylinder","cone","torus","mesh","tube","lathe"]},
                 "position":vector(-50.,50.),"rotation":vector(-360.,360.),"scale":vector(0.02,50.),
                 "color":{"type":"array","minItems":4,"maxItems":4,"items":{"type":"number","minimum":0,"maximum":1}},
                 "metallic":{"type":"number","minimum":0,"maximum":1},"roughness":{"type":"number","minimum":0,"maximum":1},
-                "vertices":{"anyOf":[{"type":"null"},{"type":"array","minItems":3,"maxItems":2048,"items":vector(-50.,50.)}]},
+                "vertices":{"anyOf":[{"type":"null"},{"type":"array","minItems":2,"maxItems":2048,"items":vector(-50.,50.)}]},
                 "faces":{"anyOf":[{"type":"null"},{"type":"array","minItems":1,"maxItems":4096,"items":{"type":"array","minItems":3,"maxItems":64,"items":{"type":"integer","minimum":0,"maximum":2047}}}]},
                 "bevel":{"anyOf":[{"type":"null"},{"type":"number","minimum":0,"maximum":1}]}
             }}}
@@ -82,7 +104,7 @@ pub(crate) fn validate_model_spec(model: &BlenderModelSpec) -> Result<(), String
         if !name(&part.name)
             || !matches!(
                 part.shape.as_str(),
-                "box" | "sphere" | "cylinder" | "cone" | "torus" | "mesh"
+                "box" | "sphere" | "cylinder" | "cone" | "torus" | "mesh" | "tube" | "lathe"
             )
             || part.position.iter().any(|v| !bounded(*v, -50., 50.))
             || part.rotation.iter().any(|v| !bounded(*v, -360., 360.))
@@ -107,6 +129,14 @@ pub(crate) fn validate_model_spec(model: &BlenderModelSpec) -> Result<(), String
                 })
             {
                 return Err("Meshの頂点・面・頂点番号が対応範囲を超えています".into());
+            }
+        } else if matches!(part.shape.as_str(), "tube" | "lathe") {
+            let Some(vertices) = &part.vertices else { return Err("曲線または回転面の断面を指定してください".into()); };
+            if !(2..=128).contains(&vertices.len()) || part.faces.is_some()
+                || vertices.iter().flatten().any(|v| !bounded(*v, -50., 50.))
+                || (part.shape == "tube" && !part.bevel.is_some_and(|v| bounded(v, 0.001, 1.)))
+                || (part.shape == "lathe" && vertices.iter().any(|v| v[0] < 0. || v[2] != 0.)) {
+                return Err("曲線・断面・太さが対応範囲を超えています".into());
             }
         } else if part.vertices.is_some() || part.faces.is_some() {
             return Err("頂点と面はMeshだけに指定できます".into());
@@ -749,8 +779,8 @@ mod tests {
             let output = std::process::Command::new("powershell.exe")
                 .creation_flags(0x08000000)
                 .args(["-NoProfile", "-NonInteractive", "-Command", "New-Item -ItemType Junction -Path $env:XRIFT_BLENDER_TEST_LINK -Target $env:XRIFT_BLENDER_TEST_TARGET -ErrorAction Stop | Out-Null"])
-                .env("XRIFT_BLENDER_TEST_LINK", &link)
-                .env("XRIFT_BLENDER_TEST_TARGET", &target)
+                .env("XRIFT_BLENDER_TEST_LINK", blender_path(&link))
+                .env("XRIFT_BLENDER_TEST_TARGET", blender_path(&target))
                 .output().unwrap();
             assert!(
                 output.status.success(),
@@ -814,6 +844,31 @@ mod tests {
                 (actual.as_f64().unwrap() - expected).abs() < 0.00001,
                 "{actual} != {expected}"
             );
+        }
+    }
+    #[tokio::test]
+    async fn installed_blender_exports_curved_supports_and_revolved_surfaces_with_uvs() {
+        if std::env::var("XRIFT_TEST_BLENDER").as_deref() != Ok("1") { return; }
+        let fixture = Fixture::new();
+        let spec = BlenderModelSpec { name: "Curved furniture fixture".into(), parts: vec![
+            BlenderModelPart { name: "Curved arm".into(), shape: "tube".into(),
+                vertices: Some(vec![[0., 0.4, -0.3], [0., 0.75, -0.2], [0., 0.75, 0.2], [0., 0.4, 0.3]]),
+                bevel: Some(0.025), ..part("tube") },
+            BlenderModelPart { name: "Revolved planter".into(), shape: "lathe".into(), position: [2., 0., 0.],
+                vertices: Some(vec![[0., 0., 0.], [0.2, 0., 0.], [0.3, 0.5, 0.], [0.27, 0.5, 0.], [0.18, 0.04, 0.], [0., 0.04, 0.]]),
+                ..part("lathe") }
+        ] };
+        validate_model_spec(&spec).unwrap();
+        let result = create_blender_model(fixture.0.to_string_lossy().to_string(), spec).await.unwrap();
+        let document = glb_json(Path::new(&result.path));
+        assert_eq!(document["meshes"].as_array().unwrap().len(), 2);
+        for mesh in document["meshes"].as_array().unwrap() {
+            for primitive in mesh["primitives"].as_array().unwrap() {
+                assert!(primitive["attributes"]["NORMAL"].is_number());
+                assert!(primitive["attributes"]["TEXCOORD_0"].is_number());
+                let positions = primitive["attributes"]["POSITION"].as_u64().unwrap() as usize;
+                assert!(document["accessors"][positions]["count"].as_u64().unwrap() > 30);
+            }
         }
     }
     #[tokio::test]
