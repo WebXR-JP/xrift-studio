@@ -74,7 +74,12 @@ test("Skyboxを実サムネイルで比較し、選んだ候補を回答に残�
     const scene = JSON.parse(files.sceneDocuments[0].content), assets = JSON.parse(files.assetManifestJson);
     return { sky: assets.assets[scene.settings.skybox.materialAssetId], context: window.__XRIFT_RELEASE_E2E__!.chatgptSceneContexts[2] };
   });
-  expect(result.sky.name).toBe(`空 · ${candidates[7].name}`);
+  const expectedSkyName = await page.evaluate(async candidateId => {
+    const path = "/src/lib/visual-editor/chatgpt-builtin-catalog.ts";
+    const { listChatgptBuiltinCandidates } = await import(/* @vite-ignore */ path);
+    return listChatgptBuiltinCandidates("world", "Skyboxを選んで設定して").find((candidate: { candidateId: string }) => candidate.candidateId === candidateId)!.name;
+  }, candidates[7].candidateId);
+  expect(result.sky.name).toBe(`空 · ${expectedSkyName}`);
   expect(JSON.stringify(result.context.conversation)).toContain(candidates[7].candidateId);
   await page.evaluate(async () => {
     const path = "/src/lib/tauri.ts";
