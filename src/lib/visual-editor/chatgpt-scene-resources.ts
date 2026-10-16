@@ -157,6 +157,17 @@ export function collectChatgptSceneResources(bundle: PrototypeVisualProject, ent
         ...(type === "mesh" ? { modelAssetId: bundle.assets.assets[component.geometryAssetId]?.kind === "model" ? optionalAssetId(component.geometryAssetId) : undefined } : {}),
         ...(type === "audio-source" ? { audio: { audioAssetId: optionalAssetId(component.audioAssetId), enabled: component.enabled, volume: component.volume,
           loop: component.loop, spatial: component.spatial, autoplay: component.autoplay } } : {}) });
+      // Actual editable Component IDs take priority over catalog reference prose.
+      // A larger visual catalog must not hide a light or another later target.
+      while (!fits(assetReserve) && result.builtinCandidates.length > firstIds.size) result.builtinCandidates.pop();
+      if (!fits(assetReserve)) for (const candidate of result.builtinCandidates) {
+        candidate.description = "";
+        candidate.name = boundedText(candidate.name, 16);
+      }
+      if (!fits(assetReserve)) for (const definition of result.componentDefinitions ?? []) {
+        definition.description = "";
+        for (const field of definition.fields) delete field.description;
+      }
       if (result.components.length > 128 || !fits(assetReserve)) { result.components.pop(); break; }
     }
   }
