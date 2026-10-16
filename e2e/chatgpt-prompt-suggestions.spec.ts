@@ -15,7 +15,7 @@ declare global {
 }
 
 const panel = (page: Page) => page.getByRole("region", { name: "ChatGPTの制作チャット", exact: true });
-const suggestions = (page: Page) => panel(page).getByRole("region", { name: "次の依頼の候補", exact: true });
+const suggestions = (page: Page) => panel(page).getByLabel("入力候補", { exact: true });
 const input = (page: Page) => panel(page).getByRole("textbox", { name: "ワールドへの依頼", exact: true });
 
 async function call(page: Page, tool: string, args: Record<string, unknown> = {}, fresh = false): Promise<XriftMcpEditorResponse> {
@@ -52,11 +52,11 @@ async function ready(page: Page) {
   expect((await call(page, "open_chatgpt_panel")).ok).toBe(true);
   await expect(panel(page).getByRole("combobox", { name: "ワールド制作のモデル", exact: true })).toHaveValue("fixture-model");
   await expect(suggestions(page)).toBeVisible();
-  await expect(suggestions(page).getByRole("button")).toHaveCount(3);
+  await expect(suggestions(page).locator("span[title]")).toHaveCount(1);
 }
 
 async function titles(page: Page) {
-  return suggestions(page).getByRole("button").evaluateAll(elements => elements.map(element => element.getAttribute("title") ?? ""));
+  return suggestions(page).locator("span[title]").evaluateAll(elements => elements.map(element => element.getAttribute("title") ?? ""));
 }
 
 async function requests(page: Page) {
@@ -92,24 +92,20 @@ test.afterEach(async ({ page }) => {
   if (state) { expect(state.uploads).toEqual([]); expect(state.unhandled).toEqual([]); }
 });
 
-test("候補を上下キーで選びTabでは入力だけ行い、編集した依頼をEnterでSceneの実コンテキストへ送る", async ({ page }) => {
+test("候補を1件だけ表示しTabでは入力だけ行い、編集した依頼をEnterでSceneの実コンテキストへ送る", async ({ page }) => {
   await ready(page);
   const before = await titles(page);
   expect(before.every(value => value.length > 0)).toBe(true);
-  const buttons = suggestions(page).getByRole("button");
-  await expect(buttons.first()).toHaveAttribute("aria-pressed", "true");
   await input(page).focus();
   await input(page).press("ArrowDown");
-  await expect(buttons.nth(1)).toHaveAttribute("aria-pressed", "true");
   await input(page).press("ArrowUp");
-  await expect(buttons.first()).toHaveAttribute("aria-pressed", "true");
-  await input(page).press("ArrowDown");
+  expect(await titles(page)).toEqual(before);
   await input(page).press("Tab");
-  await expect(input(page)).toHaveValue(before[1]);
+  await expect(input(page)).toHaveValue(before[0]);
   await expect(input(page)).toBeFocused();
   await expect(suggestions(page)).toBeHidden();
   expect(await requests(page)).toEqual([]);
-  const edited = `${before[1]}\n床の名前を「候補から編集した床」に変更してください。`;
+  const edited = `${before[0]}\n床の名前を「候補から編集した床」に変更してください。`;
   await input(page).fill(edited);
   await page.evaluate(() => { window.__XRIFT_RELEASE_E2E__!.chatgptPlanFixture = JSON.stringify({
     title: "床の調整", description: "床の名前を保存しました", objects: [],
@@ -121,7 +117,7 @@ test("候補を上下キーで選びTabでは入力だけ行い、編集した�
   expect((await saved(page)).scene.entities["starter-floor"].name).toBe("候補から編集した床");
   await expect(input(page)).toHaveValue("");
   await expect(suggestions(page)).toBeVisible();
-  await expect(suggestions(page).getByRole("button")).toHaveCount(3);
+  await expect(suggestions(page).locator("span[title]")).toHaveCount(1);
   await expect.poll(() => titles(page)).not.toEqual(before);
   expect(await requests(page)).toHaveLength(1);
 });
@@ -157,15 +153,15 @@ test("IME中は候補を入れず送信せず、非空入力とShift+TabとEscap
   expect(await requests(page)).toEqual([]);
 });
 
-test("EntityとMaterialに沿う候補はクリックで添付も復元し、チャットの切替と携帯幅でも入力を保つ", async ({ page }, info) => {
+test("EntityとMaterialに沿う候補はTabで添付も復元し、チャットの切替と携帯幅でも入力を保つ", async ({ page }, info) => {
   await ready(page);
   const material = Object.values((await saved(page)).assets.assets).find(asset => asset.kind === "material")!;
   await drop(page, "starter-floor", "application/x-xrift-visual-editor-entity");
   await drop(page, material.id, "application/x-xrift-visual-editor-material");
   await expect.poll(async () => (await titles(page)).join("\n")).toContain(material.name);
-  await expect.poll(async () => (await titles(page)).join("\n")).toContain("Plane");
   const attachmentPrompt = (await titles(page))[0];
-  await suggestions(page).getByRole("button").first().click();
+  await input(page).focus();
+  await input(page).press("Tab");
   await expect(input(page)).toHaveValue(attachmentPrompt);
   await expect(input(page)).toBeFocused();
   await input(page).press("Enter");
@@ -176,7 +172,8 @@ test("EntityとMaterialに沿う候補はクリックで添付も復元し、チ
   await expect(panel(page).getByLabel("添付したMaterial", { exact: true })).toHaveCount(0);
   await expect(suggestions(page)).toBeVisible();
   const nextPrompt = (await titles(page))[0];
-  await suggestions(page).getByRole("button").first().click();
+  await input(page).focus();
+  await input(page).press("Tab");
   await expect(input(page)).toHaveValue(nextPrompt);
   await expect(input(page)).toBeFocused();
   expect(await input(page).evaluate((element: HTMLTextAreaElement) => element.selectionStart === element.value.length && element.selectionEnd === element.value.length)).toBe(true);
@@ -205,6 +202,12 @@ test("EntityとMaterialに沿う候補はクリックで添付も復元し、チ
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath(`prompt-suggestions-${width}.png`) });
   }
+  await suggestions(page).getByRole("button", { name: "入力候補を閉じる", exact: true }).click();
+  await expect(suggestions(page)).toBeHidden();
+  await expect(input(page)).toBeFocused();
+  await panel(page).getByRole("button", { name: "制作チャットを閉じる", exact: true }).click();
+  expect((await call(page, "open_chatgpt_panel")).ok).toBe(true);
+  await expect(suggestions(page)).toBeHidden();
   expect(await requests(page)).toHaveLength(1);
 });
 

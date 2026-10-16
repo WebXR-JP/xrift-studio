@@ -44,8 +44,11 @@ export function chatgptPromptSuggestions({ generation, entities, materials, atta
   const add = (id: string, label: string, prompt: string, targeted = false) => {
     if (result.length < 3) result.push({ id, label, prompt, ...(targeted ? scope : {}) });
   };
+  const addSceneMaterials = () => add("scene-materials", "全体のMaterialを見比べて一括変更", "Scene全体に合うMaterialを使える素材から最大12候補、おすすめ順にサムネイル付きで提案してください。全体に使う候補を1つ選んだら、SceneのMesh Rendererへまとめて適用してください。Entityごとの質問には分けず、形状・配置は保ってください。");
   // A new explicit attachment takes priority over unfinished work from another turn.
   if (!explicit && generation?.plan?.hasMore) add("remaining-work", "残りの作業を進める", "保存済みの変更を保ち、直前の依頼で残っている作業を今のSceneから進めてください。完了した変更は繰り返さず、対象が見つからなければ確認してください。", true);
+
+  if (!explicit && generation?.plan?.objects.some(object => object.name === "Scene全体のMaterialを一括変更")) addSceneMaterials();
 
   if (materialIds.length) {
     const name = publicName(materialById.get(materialIds[0])!.name) || "Material";
@@ -60,7 +63,8 @@ export function chatgptPromptSuggestions({ generation, entities, materials, atta
     const entity = entityById.get(entityIds[0])!;
     const name = publicName(entity.name) || "Entity";
     add(`entity-layout:${entity.id}`, "Entityの位置・大きさを調整", `添付したEntity「${name}」の位置と大きさを、周囲とのバランスに合わせて調整してください。`, true);
-    add(`entity-surface:${entity.id}`, "Entityの色・質感を3案から選ぶ", `添付したEntity「${name}」の色と質感を3つの選択肢で提案し、選んでから変更してください。共有Materialにも影響する場合は変更前に確認してください。`, true);
+    const targets = entityIds.length === 1 ? `添付したEntity「${name}」` : `「${name}」を含む添付したEntity`;
+    add(`entity-surface:${entity.id}`, "Materialを見比べて選ぶ", `${targets}に合うMaterialを、使える素材から最大12候補、合う順にサムネイル付きで提案し、選んでから変更してください。対象ごとに違うMaterialも選べるようにしてください。指定した対象だけ割り当てを変え、ほかのEntityや共有Material自体は変更しないでください。`, true);
     const primitive = generation?.progress.recentEvents.some(event => event.saved && event.entityId === entity.id)
       && generation.plan?.objects.some(object => ["box", "plane", "sphere", "cylinder", "cone"].includes(object.shape) && object.name === entity.name);
     if (blenderAvailable && primitive) add(`entity-blender:${entity.id}`, "PrimitiveをBlenderで仕上げる", `添付したEntity「${name}」をBlenderのモデルに置き換えて仕上げたいです。配置・名前・親子関係を保つ形で3つの仕上げ案を提案し、選んでから進めてください。`, true);
@@ -68,12 +72,12 @@ export function chatgptPromptSuggestions({ generation, entities, materials, atta
 
   const skyResult = generation?.plan?.objects.some(object => object.settings?.some(setting => /^(?:Skybox|IBL)/u.test(setting.label)) || /^Skybox(?:を|の|：|$)/u.test(object.name));
   if (skyResult && !explicit) {
-    add("sky-choices", "空の雰囲気を3案から選ぶ", "今のSceneに合うSkyboxを3つの選択肢で提案し、選んでから設定してください。現在使える空や素材から選んでください。");
+    add("sky-choices", "空の雰囲気を見比べて選ぶ", "今のSceneに合うSkyboxを、使える素材から最大12候補、合う順にサムネイル付きで提案し、選んでから設定してください。");
     add("sky-lighting", "空の明るさ・照明を調整", "今の空を保ち、Skyboxの明るさとAmbient LightをSceneに合わせて調整したいです。3つの選択肢で雰囲気を確認してから変更してください。");
   }
   if (explicit && result.length) return result;
   add("primitive-layout", "Primitiveで配置を考える", "まずPrimitiveで大まかな配置を考えたいです。このSceneの用途に合う配置を3つの選択肢で確認し、選んでから進めてください。");
-  add("environment", "空・照明の雰囲気を選ぶ", "今のSceneに合う空と照明の雰囲気を3つの選択肢で提案し、選んでから設定してください。");
-  add("scene-purpose", "Sceneの用途から相談する", "このSceneの用途と必要な構成を、3つの選択肢で相談したいです。決まるまでSceneは変更しないでください。");
+  add("environment", "空・照明の雰囲気を選ぶ", "今のSceneに合うSkyboxを使える素材から最大12候補、合う順に見比べて選びたいです。選んだ空に合わせて照明も設定してください。");
+  addSceneMaterials();
   return result;
 }

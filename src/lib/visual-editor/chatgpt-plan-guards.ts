@@ -6,6 +6,7 @@ import { resolveChatgptCandidate, type ChatgptOperation, type ChatgptResourceCon
 import { CHATGPT_EDITOR_ACTIONS, parseChatgptComponentProperties, parseChatgptMaterialProperties, parseChatgptSceneSettings } from "./chatgpt-editor-actions";
 import { chatgptAttachmentEntityIds } from "./chatgpt-attachments";
 import { chatgptMaterialSettingsDisplay, chatgptSceneSettingsLabel, describeChatgptSceneSettings } from "./chatgpt-change-description";
+import { chatgptSceneMaterialTargets } from "./chatgpt-scene-material";
 
 /** Only same-Scene authoring conflicts are eligible for planning again. */
 export class ChatgptSceneConflictError extends Error {
@@ -39,6 +40,7 @@ export function chatgptPlanSnapshots(bundle: PrototypeVisualProject, plan: Chatg
   }
   for (const edit of plan.edits ?? []) result[`entity:${edit.entityId}`] = JSON.stringify(bundle.scene.entities[edit.entityId]);
   for (const operation of plan.operations ?? []) {
+    if (operation.kind === "material-scene") result.materialScene = chatgptPlanningSnapshot(bundle);
     if ("entityId" in operation && operation.entityId) result[`entity:${operation.entityId}`] = JSON.stringify(bundle.scene.entities[operation.entityId]);
     if (operation.kind === "entity-delete") {
       for (const id of chatgptAttachmentEntityIds(Object.values(bundle.scene.entities), [operation.entityId])) result[`entity:${id}`] = JSON.stringify(bundle.scene.entities[id]);
@@ -61,6 +63,7 @@ export function assertChatgptPlanningCurrent(bundle: PrototypeVisualProject, exp
   if (chatgptPlanningSnapshot(bundle) !== expected) throw new ChatgptSceneConflictError("制作を考えている間にSceneや素材が編集されました。最新の内容から続きを考えます");
 }
 export function chatgptOperationLabel(operation: NonNullable<ChatgptWorldPlan["operations"]>[number], bundle: PrototypeVisualProject) {
+  if (operation.kind === "material-scene") return "Scene全体のMaterialを一括変更";
   if (operation.kind === "scene-settings") return chatgptSceneSettingsLabel(parseChatgptSceneSettings(operation.settingsJson));
   if (operation.kind === "material-update") return `${bundle.assets.assets[operation.candidateId.slice(8)]?.name ?? "Material"}の設定を変更`;
   const labels: Partial<Record<ChatgptOperation["kind"], string>> = { skybox: "Skyboxを設定", audio: "Audio Sourceを設定", "mesh-collision": "Colliderを設定", "model-attachment": "モデルを設定", material: "Materialを設定", catalog: "素材を追加", "blender-model": "Blenderでモデルを作成" };
@@ -102,10 +105,14 @@ export function chatgptOperationDetail(operation: ChatgptOperation, resources: C
   const candidate = "candidateId" in operation && operation.candidateId
     ? resolveChatgptCandidate(operation.candidateId, resources, externalCandidates) : undefined;
   const name = candidate ? [...candidate.asset.name.replace(/\s+/g, " ").trim()].slice(0, 80).join("") : "";
-  if (operation.kind === "blender-model") return operation.entityId ? `${operation.model.name}をBlenderで作成し、Mesh Rendererを置き換え（名前・Transform・親子関係・ほかのComponentを保持）` : `${operation.model.name}をBlenderで作成してGLBを取り込み`;
+  if (operation.kind === "blender-model") {
+    const action = operation.entityId ? `${operation.model.name}をBlenderで作成し、Mesh Rendererを置き換え（名前・Transform・親子関係・ほかのComponentを保持）` : `${operation.model.name}をBlenderで作成してGLBを取り込み`;
+    return "brief" in operation.model ? `${action}。${operation.model.brief}` : action;
+  }
   if (operation.kind === "mesh-collision") return operation.action === "add" ? "Colliderを追加" : "Colliderを解除";
   if (operation.kind === "model-attachment") return `${name || "選択したモデル"}を装着（名前・位置・回転・スケールを保持）`;
   if (operation.kind === "material") return `Material：${name || "選択したMaterial"}`;
+  if (operation.kind === "material-scene") return `${name || "選択したMaterial"}をScene全体へ一括適用${bundle ? `（${chatgptSceneMaterialTargets(bundle).length}スロット）` : ""}`;
   if (operation.kind === "catalog") return `${name || "選択した素材"}を追加`;
   const details: string[] = [];
   if (operation.kind === "skybox") {

@@ -47,6 +47,26 @@ class MemoryStorage {
 const withTurn = (...turns) => ({ ...session(), turns });
 const bytes = value => Buffer.byteLength(JSON.stringify(value), "utf8");
 
+test("twelve-choice metadata and catalog proposal thumbnails survive history reload", () => {
+  const storage = new MemoryStorage();
+  const ids = Array.from({ length: 12 }, (_, index) => `builtin:xrift-sky-shaders:sky-${index}`);
+  const questions = [{ question: "空を選ぶ", choices: ids.map((_, index) => `空${index}`), choiceCandidateIds: ids }];
+  const preview = { kind: "builtin", name: "素材", candidateId: "builtin:xrift-material-showcases:scene-recipe.material-clearcoat" };
+  const value = turn("preview-turn", { plan: { title: "候補", description: "見た目を比較", questions, objects: [{ name: "素材", shape: "追加", preview }] }, questionPreviews: Object.fromEntries(ids.map((id, index) => [id, { kind: "sky", name: `空${index}`, catalogId: `sky-${index}` }])) });
+  api.saveChatgptSessions([withTurn(value)], storage);
+  const restored = api.loadChatgptSessions(storage)[0].turns[0];
+  assert.equal(Object.keys(restored.questionPreviews).length, 12);
+  assert.deepEqual(restored.plan.questions, questions);
+  assert.deepEqual(restored.plan.objects[0].preview, preview);
+});
+
+test("out-of-order model results keep their saved flag and Inspector target after restart", () => {
+  const storage = new MemoryStorage();
+  const objects = [{ name: "制作中", shape: "追加", saved: false }, { name: "完成したモデル", shape: "追加", saved: true, entityId: "finished-model" }];
+  api.saveChatgptSessions([withTurn(turn("models", { status: "running", plan: { title: "モデル制作", description: "完成順に反映", objects } }))], storage);
+  assert.deepEqual(api.loadChatgptSessions(storage)[0].turns[0].plan.objects, objects);
+});
+
 test("Material attachments survive restart and remain named in copied history and continuation context", () => {
   const storage = new MemoryStorage();
   const attachedMaterials = [{ id: "material-1", name: "公園の床Material" }];

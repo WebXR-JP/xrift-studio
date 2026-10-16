@@ -3,7 +3,7 @@ import type { PrototypeVisualProject } from "./prototype-project";
 
 export type BlenderModelPart = {
   name: string;
-  shape: "box" | "sphere" | "cylinder" | "cone" | "torus" | "mesh";
+  shape: "box" | "sphere" | "cylinder" | "cone" | "torus" | "mesh" | "tube" | "lathe";
   position: [number, number, number];
   rotation: [number, number, number];
   scale: [number, number, number];
@@ -15,6 +15,17 @@ export type BlenderModelPart = {
   bevel?: number;
 };
 export type BlenderModelSpec = { name: string; parts: BlenderModelPart[] };
+export type BlenderModelBrief = { name: string; brief: string };
+export function parseBlenderModelBrief(value: unknown): BlenderModelBrief {
+  if (!record(value) || Object.keys(value).some(key => !["name", "brief"].includes(key)) || !name(value.name)
+    || typeof value.brief !== "string" || !value.brief.trim() || [...value.brief].length > 1600 || /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/u.test(value.brief)) {
+    throw new Error("モデルの制作内容を確認できませんでした。形や寸法を指定して再試行してください");
+  }
+  return { name: value.name, brief: value.brief };
+}
+export function parseBlenderModel(value: unknown): BlenderModelSpec | BlenderModelBrief {
+  return record(value) && "brief" in value ? parseBlenderModelBrief(value) : parseBlenderModelSpec(value);
+}
 const record = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const scalar = (value: unknown, min: number, max: number): value is number => typeof value === "number" && Number.isFinite(value) && value >= min && value <= max;
 const vector = (value: unknown, size: number, min: number, max: number) => Array.isArray(value) && value.length === size && value.every(number => scalar(number, min, max));
@@ -29,7 +40,7 @@ export function parseBlenderModelSpec(value: unknown): BlenderModelSpec {
     if (!record(raw) || Object.keys(raw).some(key => !["name", "shape", "position", "rotation", "scale", "color", "metallic", "roughness", "vertices", "faces", "bevel"].includes(key))) throw invalid();
     const part = { ...raw };
     for (const key of ["vertices", "faces", "bevel"]) if (part[key] === null) delete part[key];
-    if (!name(part.name) || !["box", "sphere", "cylinder", "cone", "torus", "mesh"].includes(String(part.shape))
+    if (!name(part.name) || !["box", "sphere", "cylinder", "cone", "torus", "mesh", "tube", "lathe"].includes(String(part.shape))
       || !vector(part.position, 3, -50, 50) || !vector(part.rotation, 3, -360, 360) || !vector(part.scale, 3, 0.02, 50)
       || !vector(part.color, 4, 0, 1) || !scalar(part.metallic, 0, 1) || !scalar(part.roughness, 0, 1)
       || (part.bevel !== undefined && !scalar(part.bevel, 0, 1))) throw invalid();
@@ -40,6 +51,11 @@ export function parseBlenderModelSpec(value: unknown): BlenderModelSpec {
       const count = part.vertices.length;
       if (!part.faces.every(face => Array.isArray(face) && face.length >= 3 && face.length <= 64
         && face.every(index => Number.isInteger(index) && index >= 0 && index < count))) throw invalid();
+    } else if (part.shape === "tube" || part.shape === "lathe") {
+      if (!Array.isArray(part.vertices) || part.vertices.length < 2 || part.vertices.length > 128
+        || !part.vertices.every(vertex => vector(vertex, 3, -50, 50)) || part.faces !== undefined
+        || (part.shape === "tube" && !scalar(part.bevel, 0.001, 1))
+        || (part.shape === "lathe" && !part.vertices.every(vertex => (vertex as number[])[0] >= 0 && (vertex as number[])[2] === 0))) throw invalid();
     } else if (part.vertices !== undefined || part.faces !== undefined) throw invalid();
     return part as unknown as BlenderModelPart;
   });

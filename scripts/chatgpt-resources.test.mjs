@@ -10,6 +10,76 @@ const { serializeVisualProjectDocuments } = await server.ssrLoadModule("/src/lib
 const { createDefaultMaterialAsset, normalizeMaterialProperties } = await server.ssrLoadModule("/src/lib/visual-editor/asset-manifest.ts");
 const { SKY_SHADER_CATALOG } = await server.ssrLoadModule("/src/lib/visual-editor/sky-shader-catalog.ts");
 test.after(() => server.close());
+test("one scene Material operation covers more than 32 meshes, every slot and model-node overrides atomically", async () => {
+  const { chatgptSceneMaterialTargets } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-scene-material.ts");
+  const { chatgptPlanSnapshots, assertChatgptPlanCurrent } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-plan-guards.ts");
+  const { createStarterVisualProject } = await server.ssrLoadModule("/src/lib/visual-editor/starter-templates.ts");
+  const bundle = createStarterVisualProject("world", "blank", "bulk-material-test");
+  const template = Object.values(bundle.scene.entities).find(entity => entity.components.some(component => component.type === "mesh"));
+  const originalMaterial = template.components.find(component => component.type === "mesh").materialBindings[0].materialAssetId;
+  bundle.assets.assets["bulk-model"] = { id: "bulk-model", name: "Two surfaces", kind: "model", status: "ready", materialSlots: [{ slot: "body", name: "Body", sourceMaterialIndex: 0 }, { slot: "trim", name: "Trim", sourceMaterialIndex: 1 }] };
+  bundle.assets.assets["bulk-material"] = createDefaultMaterialAsset({ id: "bulk-material", name: "選んだMaterial" });
+  bundle.scene.entities = {}; bundle.scene.rootEntityIds = [];
+  for (let index = 0; index < 40; index++) {
+    const entity = structuredClone(template); entity.id = `bulk-${index}`; entity.parentId = null; entity.children = [];
+    for (const [componentIndex, component] of entity.components.entries()) component.id = `${entity.id}-component-${componentIndex}`;
+    const mesh = entity.components.find(component => component.type === "mesh");
+    mesh.geometryAssetId = "bulk-model"; mesh.geometry = { kind: "asset", assetId: "bulk-model" }; mesh.materialBindings = ["body", "trim"].map(slot => ({ slot, materialAssetId: originalMaterial }));
+    if (!index) mesh.materialBindings.push({ slot: "body", materialAssetId: originalMaterial, sourceNodeIndex: 2 });
+    bundle.scene.entities[entity.id] = entity; bundle.scene.rootEntityIds.push(entity.id);
+  }
+  const child = structuredClone(template); child.id = "model-part"; child.parentId = "bulk-0"; child.components = child.components.filter(component => component.type === "transform");
+  child.modelNode = { modelEntityId: "bulk-0", sourceNodeIndex: 2, sourceMaterialIndices: [0, 1] };
+  bundle.scene.entities[child.id] = child; bundle.scene.entities["bulk-0"].children = [child.id];
+  const context = { projectAssets: [{ id: "bulk-material", name: "選んだMaterial", kind: "material" }], builtinCandidates: [], components: [] };
+  const operation = { kind: "material-scene", candidateId: "project:bulk-material" };
+  const plan = parseChatgptWorldPlan(JSON.stringify({ title: "一括", description: "", objects: [], operations: [operation] }), [], false, Object.keys(bundle.scene.entities), context);
+  const snapshot = JSON.stringify(bundle), guards = chatgptPlanSnapshots(bundle, plan);
+  const result = await applyChatgptOperation(bundle, operation, new Map(), context);
+  assert.equal(JSON.stringify(bundle), snapshot);
+  assert.equal(chatgptSceneMaterialTargets(bundle).length, 82);
+  for (const entity of Object.values(result.bundle.scene.entities)) for (const mesh of entity.components.filter(component => component.type === "mesh")) {
+    assert.equal(mesh.geometryAssetId, "bulk-model");
+    assert.ok(mesh.materialBindings.every(binding => binding.materialAssetId === "bulk-material"));
+  }
+  assert.deepEqual(result.bundle.assets, bundle.assets);
+  const concurrent = structuredClone(bundle); concurrent.scene.entities["bulk-39"].name = "手動変更";
+  assert.throws(() => assertChatgptPlanCurrent(concurrent, plan, guards));
+  assert.deepEqual(chatgptAssetRequests({ ...plan, operations: [{ kind: "material-scene", candidateId: "ambient-cg:stone" }] }), [{ providerId: "ambient-cg", externalId: "stone", kind: "texture" }]);
+  for (const invalid of [{ kind: "material-scene" }, { ...operation, entityId: "bulk-0" }, { ...operation, candidateId: "unknown" }]) assert.throws(() => parseChatgptWorldPlan(JSON.stringify({ ...plan, operations: [invalid] }), [], false, Object.keys(bundle.scene.entities), context));
+});
+test("twelve ranked Skybox choices preserve exact order and reject unsafe or mismatched candidates", async () => {
+  const { listChatgptBuiltinCandidates } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-builtin-catalog.ts");
+  const { chatgptChoicePreviews } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-choice-previews.ts");
+  const skies = listChatgptBuiltinCandidates("world", "夕暮れの公園").filter(item => item.actions.includes("skybox")).slice(0, 12).reverse();
+  assert.equal(skies.length, 12);
+  const context = { projectAssets: [], builtinCandidates: skies, components: [] };
+  const question = { question: "空を選ぶ", choices: skies.map(item => item.name), choiceCandidateIds: skies.map(item => item.candidateId) };
+  const parse = question => parseChatgptWorldPlan(JSON.stringify({ title: "空", description: "おすすめ順", objects: [], questions: [question] }), [], false, [], context);
+  assert.deepEqual(parse(question).questions[0], question);
+  assert.equal(Object.keys(chatgptChoicePreviews([question], context)).length, 12);
+  for (const bad of [
+    { ...question, choiceCandidateIds: null },
+    { ...question, choiceCandidateIds: question.choiceCandidateIds.slice(1) },
+    { ...question, choiceCandidateIds: Array(12).fill(question.choiceCandidateIds[0]) },
+    { ...question, choiceCandidateIds: ["builtin:sky:forged", ...question.choiceCandidateIds.slice(1)] },
+    { ...question, choices: [...question.choices, "余分な空"], choiceCandidateIds: [...question.choiceCandidateIds, "builtin:sky:overflow"] },
+  ]) assert.throws(() => parse(bad));
+});
+
+test("catalog proposals resolve real builtin, project and HTTPS previews without accepting model URLs", async () => {
+  const { listChatgptBuiltinCandidates } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-builtin-catalog.ts");
+  const { chatgptCandidatePreview } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-choice-previews.ts");
+  const builtinCandidates = listChatgptBuiltinCandidates();
+  const context = { projectAssets: [{ id: "chair", kind: "model", name: "椅子" }], builtinCandidates, components: [] };
+  for (const item of builtinCandidates.filter(item => item.providerId !== "xrift-sky-shaders")) assert.deepEqual(chatgptCandidatePreview(item.candidateId, context), { kind: "builtin", name: item.name, candidateId: item.candidateId });
+  assert.deepEqual(chatgptCandidatePreview("project:chair", context), { kind: "project", name: "椅子", assetId: "chair" });
+  assert.equal(chatgptCandidatePreview("https://example.invalid/made-up.png", context), undefined);
+  for (const thumbnailUrl of ["https://example.invalid/chair.webp", "file:///private.png", "https://user:secret@example.invalid/private.png"]) {
+    const remote = [{ providerId: "poly-haven", externalId: "chair", name: "Chair", assetKind: "model", thumbnailUrl }];
+    assert.equal(chatgptCandidatePreview("poly-haven:chair", context, remote)?.kind, thumbnailUrl === "https://example.invalid/chair.webp" ? "remote" : undefined);
+  }
+});
 const noOp = { title: "調整", description: "現在のSceneを調整します", objects: [], hasMore: false, remainingWork: null };
 const resources = { projectAssets: [{id:"local-model",kind:"model",name:"Model"},{id:"local-audio",kind:"audio",name:"Audio"},{id:"local-material",kind:"material",name:"PBR"},{id:"local-sky",kind:"material",name:"Sky",skyboxMaterial:true}], builtinCandidates: [{candidateId:"builtin:material:glass",providerId:"material",name:"Glass",description:"",actions:["material"]},{candidateId:"builtin:sky:night",providerId:"sky",name:"Night",description:"",actions:["skybox"]},{candidateId:"builtin:props:bench",providerId:"props",name:"Bench",description:"",actions:["catalog"]}], components: [{entityId:"bgm",componentId:"source",type:"audio-source"}] };
 const remote = [

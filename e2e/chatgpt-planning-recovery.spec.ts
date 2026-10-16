@@ -70,7 +70,7 @@ async function noExternalActions(page: Page) {
   expect(state).toEqual({ uploads: [], unhandled: [], authentication: [] });
 }
 
-test("nativeの通信進捗を制作チャットや作業記録へ表示せず、取消callbackは維持する", async ({ page }) => {
+test("公開用の制作予定だけを表示し、通信内部の進捗は表示せず取消callbackを維持する", async ({ page }) => {
   await ready(page, "chatgpt-progress-isolated-fixture");
   await page.evaluate(async () => {
     const modulePath = "/src/lib/tauri.ts";
@@ -92,6 +92,8 @@ test("nativeの通信進捗を制作チャットや作業記録へ表示せず�
   const messages = ["ChatGPTから受信しています（検証用4096文字）", "推論APIへ送信しています（検証用通信）", "モデルを確認しています（検証用通信）"];
   try {
     await expect.poll(() => page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptPlanWaiting)).toBe(true);
+    await page.evaluate(id => window.__XRIFT_PLANNING_RECOVERY__!.progress!({ generationId: id, stage: "receiving", message: "制作予定：床と照明を整えます" }), id);
+    expect((await job(page, id)).progress.message).toBe("制作予定：床と照明を整えます");
     const before = (await job(page, id)).progress;
     await page.evaluate(({ id, messages }) => {
       const handler = window.__XRIFT_PLANNING_RECOVERY__!.progress!;

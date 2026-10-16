@@ -71,7 +71,7 @@ try {
   await page.evaluate(() => document.fonts.ready);
   await page.screenshot({ path: "dev/chatgpt-ui-artifacts/narrow.png", fullPage: true });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
-  assert.equal(await page.getByRole("checkbox").count(), 0);
+  assert.equal(await page.getByRole("checkbox", { name: "Blenderを使う", exact: true }).count(), 1);
   assert.equal(await page.getByRole("button", { name: "Plan", exact: true }).count(), 0);
   await generate.click();
   assert.equal(await prompt.isDisabled(), false);

@@ -9,6 +9,14 @@ const { createAudioSourceComponent } = await server.ssrLoadModule("/src/lib/visu
 const { chatgptPlanSnapshots, assertChatgptPlanCurrent, chatgptOperationDetail } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-plan-guards.ts");
 const { createStarterVisualProject } = await server.ssrLoadModule("/src/lib/visual-editor/starter-templates.ts");
 const starter = () => createStarterVisualProject("world", "blank", "resources-fixture");
+test("budget keeps twelve surface materials as well as twelve skies for visual comparisons", async () => {
+  const { listChatgptBuiltinCandidates } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-builtin-catalog.ts");
+  const bundle = starter();
+  const resources = collectChatgptSceneResources(bundle, Object.keys(bundle.scene.entities), listChatgptBuiltinCandidates("world", "床に合う木や石の質感"));
+  assert.equal(resources.builtinCandidates.filter(item => item.actions.includes("skybox")).length >= 12, true);
+  assert.equal(resources.builtinCandidates.filter(item => item.actions.includes("material") && !item.actions.includes("skybox")).length >= 12, true);
+  assert.ok(Buffer.byteLength(JSON.stringify(resources)) <= 31 * 1024);
+});
 test("resource context includes selected components and usable assets without paths, source URLs or bytes", () => {
   const bundle = starter(), entity = Object.values(bundle.scene.entities)[0];
   entity.components.push({ id: "audio-1", type: "audio-source", enabled: true, audioAssetId: "audio", sourceUrl: "https://fixture.invalid/private?token=private", volume: 0.4, loop: true, autoplay: true, spatial: false, refDistance: 1, rolloffFactor: 1, maxDistance: 100 });

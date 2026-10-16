@@ -1464,6 +1464,7 @@ export function VisualEditorPrototype({
   const scriptTabActive = activeEditorTab === SCRIPT_TAB_ID;
   const [chatgptTabVisited, setChatgptTabVisited] = useState(false);
   const [chatgptTabOpen, setChatgptTabOpen] = useState(false);
+  const [chatgptExpanded, setChatgptExpanded] = useState(false);
   const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
   const sceneChatgptSessions = chatgptSessionActions?.sessions.filter(session => session.projectId === bundle.project.projectId && session.sceneId === bundle.scene.sceneId);
   const selectedChatgptSession = sceneChatgptSessions?.find(session => session.id === chatgptSessionActions?.activeSessionId) ?? sceneChatgptSessions?.[0];
@@ -11300,6 +11301,7 @@ export function VisualEditorPrototype({
           } else void enterPlayMode({ interactive: true });
           return true;
         case "layout.reset":
+          setChatgptExpanded(false);
           setLayout(DEFAULT_EDITOR_LAYOUT);
           try {
             window.localStorage.removeItem(EDITOR_LAYOUT_STORAGE_KEY);
@@ -11651,13 +11653,16 @@ export function VisualEditorPrototype({
     recordingViewport.visible && !recordingViewport.showEditorUi;
   const panelsHidden = viewportMaximized || recordingUiHidden;
   const chatgptDockActive = activeEditorTab === CHATGPT_WORLD_TAB_ID && !panelsHidden && (!tablet || tabletPanel === "inspector");
+  const chatgptExpandedActive = chatgptDockActive && chatgptExpanded && !phone;
   const sceneContentVisible = !phone || panelsHidden || !tabletPanel;
-  const hierarchyTrack = panelsHidden || tablet
+  const hierarchyTrack = panelsHidden || tablet || chatgptExpandedActive
     ? "0px"
     : `min(${layout.hierarchyWidth}px, 22%)`;
   const inspectorTrack = panelsHidden || (tablet && !tabletPanel)
     ? "0px"
-    : tablet ? "var(--editor-tablet-side-track)" : `min(${layout.inspectorWidth}px, 36%)`;
+    : chatgptExpandedActive
+      ? tablet ? "min(66%, calc(100% - 280px))" : "min(70%, calc(100% - 360px))"
+      : tablet ? "var(--editor-tablet-side-track)" : `min(${layout.inspectorWidth}px, 36%)`;
   const assetsTrack = panelsHidden || (tablet && !tabletPanel)
     ? "0px"
     : tablet ? "var(--editor-tablet-bottom-track)" : `min(${layout.assetsHeight}px, calc(100% - 240px))`;
@@ -11952,7 +11957,7 @@ export function VisualEditorPrototype({
             } as CSSProperties
           }
         >
-          <div id="editor-panel-hierarchy" className={sidePanelClass("hierarchy", true)}>
+          <div id="editor-panel-hierarchy" inert={chatgptExpandedActive && !tablet ? true : undefined} className={chatgptExpandedActive && !tablet ? "row-span-2 overflow-hidden" : sidePanelClass("hierarchy", true)}>
           <HierarchyPanel
             scene={bundle.scene}
             selection={sceneSelection}
@@ -12172,8 +12177,9 @@ export function VisualEditorPrototype({
           />
           <div id="editor-panel-inspector" className={chatgptDockActive ? `${tablet ? "editor-tablet-panel" : "col-start-3 row-span-2"} flex min-h-0 min-w-0 flex-col overflow-hidden` : sidePanelClass("inspector", true)}>
           {chatgptTabVisited && onChatgptGenerate ? <section aria-label="ChatGPTの制作チャット"
-            className={chatgptDockActive ? `flex min-h-0 ${phone ? "flex-1" : "basis-[min(76%,34rem)] shrink-0"} flex-col overflow-hidden border-l border-b border-editor-border bg-editor-surface p-3 text-xs text-slate-600` : "hidden"}>
+            className={chatgptDockActive ? `flex min-h-0 ${phone || chatgptExpandedActive ? "flex-1" : "basis-[min(76%,34rem)] shrink-0"} flex-col overflow-hidden border-l border-b border-editor-border bg-editor-surface p-3 text-xs text-slate-600` : "hidden"}>
             <ChatgptWorldPanel onGenerate={onChatgptGenerate} generation={sceneChatgptGeneration}
+              expanded={chatgptExpanded} onExpandedChange={phone ? undefined : setChatgptExpanded}
               entityReferences={chatgptEntityReferences} assets={bundle.assets} projectPath={projectPath}
               onApplyPlan={onChatgptApplyPlan} onAnswerQuestions={onChatgptAnswerQuestions} onCancel={onChatgptCancel}
               onClose={closeChatgpt} onOpenMcp={openMcpSettings}
@@ -12187,8 +12193,8 @@ export function VisualEditorPrototype({
               onSelectEntity={sceneChatgptGeneration?.projectId === bundle.project.projectId ? entityId => { if (bundle.scene.entities[entityId]) { handleEntitySelectionChange([entityId], entityId); if (phone) { setActiveEditorTab(SCENE_VIEW_TAB_ID); setTabletPanel("inspector"); } } } : undefined}
               disabledReason={renderedReadOnly ? "Playを停止してから依頼を送ってください" : importBusy ? "素材の読み込み完了を待ってください" : undefined} />
           </section> : null}
-          <div className={chatgptDockActive ? phone ? "hidden" : "flex min-h-0 flex-1 flex-col overflow-hidden" : "contents"}>
-          <EditorPanelVisibilityContext.Provider value={!panelsHidden && (!tablet || tabletPanel === "inspector")}>
+          <div className={chatgptDockActive ? phone || chatgptExpandedActive ? "hidden" : "flex min-h-0 flex-1 flex-col overflow-hidden" : "contents"}>
+          <EditorPanelVisibilityContext.Provider value={!panelsHidden && !chatgptExpandedActive && (!tablet || tabletPanel === "inspector")}>
           <InspectorPanel
             scene={bundle.scene}
             assets={renderedPlaySession?.runtimeAssets ?? bundle.assets}
@@ -12658,7 +12664,7 @@ export function VisualEditorPrototype({
             title={commandTitle("Hierarchyの幅を変更", "ResizePanel.Hierarchy")}
             onPointerDown={(event) => beginResize("hierarchy", event)}
             className={`absolute bottom-0 top-0 z-40 w-1 cursor-col-resize bg-transparent hover:bg-violet-400/70 focus:bg-violet-400/70 ${
-              panelsHidden || tablet ? "hidden" : ""
+              panelsHidden || tablet || chatgptExpandedActive ? "hidden" : ""
             }`}
             style={{ left: `calc(${hierarchyTrack} - 2px)` }}
           />
@@ -12701,7 +12707,7 @@ export function VisualEditorPrototype({
             title={commandTitle("Inspectorの幅を変更", "ResizePanel.Inspector")}
             onPointerDown={(event) => beginResize("inspector", event)}
             className={`absolute bottom-0 top-0 z-40 w-1 cursor-col-resize bg-transparent hover:bg-violet-400/70 focus:bg-violet-400/70 ${
-              panelsHidden || tablet ? "hidden" : ""
+              panelsHidden || tablet || chatgptExpandedActive ? "hidden" : ""
             }`}
             style={{ right: `calc(${inspectorTrack} - 2px)` }}
           />

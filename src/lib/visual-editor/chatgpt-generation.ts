@@ -9,6 +9,7 @@ import { ChatgptSceneConflictError } from "./chatgpt-plan-guards";
 import { normalizeChatgptSkyboxPatch } from "./chatgpt-skybox";
 import { ChatgptPlanInputError } from "./chatgpt-plan-recovery";
 import { applyChatgptEditorAction, isChatgptEditorAction } from "./chatgpt-editor-actions";
+import { applyChatgptSceneMaterial } from "./chatgpt-scene-material";
 
 const equalAuthoredValue = (left: unknown, right: unknown) => left === right || JSON.stringify(left) === JSON.stringify(right);
 function mergeChangedEntries<T extends object>(before: T, next: T, latest: T): T {
@@ -62,7 +63,7 @@ export function rebaseChatgptStep(before: XriftMcpEditorContext["bundle"], next:
 }
 
 export type ChatgptGenerationPhase = "planning" | "planned" | "preparing" | "importing" | "placing" | "saving" | "completed" | "failed" | "cancelled";
-export type ChatgptGenerationMode = "build" | "plan";
+export type ChatgptGenerationMode = "build" | "plan" | "goal";
 export const CHATGPT_ALL_ASSETS: ChatgptAssetOptions = { models: true, materials: true, audio: true };
 export type ChatgptGenerationEvent = {
   sequence: number;
@@ -93,6 +94,7 @@ export type ChatgptGeneration = {
   generationId: string;
   status: "running" | "planned" | "completed" | "failed" | "cancelled";
   mode?: ChatgptGenerationMode;
+  goal?: { iteration: number; noProgressPasses: number };
   cancelling?: boolean;
   model: string;
   reasoningEffort?: string;
@@ -113,7 +115,7 @@ export type ChatgptGeneration = {
   sceneId?: string;
   path?: string;
   name?: string;
-  plan?: { title: string; description: string; hasMore?: boolean; remainingWork?: string; questions?: import("./chatgpt-questions").ChatgptQuestion[]; objects: { name: string; shape: string; detail?: string; materialAssetId?: string; sceneSettingsSections?: ("skybox" | "fog")[]; settings?: import("./chatgpt-change-description").ChatgptSettingDisplay[] }[] };
+  plan?: { title: string; description: string; hasMore?: boolean; remainingWork?: string; questions?: import("./chatgpt-questions").ChatgptQuestion[]; objects: { name: string; shape: string; preview?: import("./chatgpt-questions").ChatgptChoicePreview; detail?: string; saved?: boolean; entityId?: string; materialAssetId?: string; sceneSettingsSections?: ("skybox" | "fog")[]; settings?: import("./chatgpt-change-description").ChatgptSettingDisplay[] }[] };
   progress: { phase: ChatgptGenerationPhase; message: string; completed: number; total: number; recentEvents: ChatgptGenerationEvent[]; projectId?: string };
   error?: string;
   nextActions?: string[];
@@ -186,6 +188,7 @@ export function placeChatgptObject(bundle: XriftMcpEditorContext["bundle"], valu
 export async function applyChatgptOperation(bundle: XriftMcpEditorContext["bundle"], operation: ChatgptOperation,
   assetIds: ReadonlyMap<string, string>, resources: ChatgptResourceContext, projectPath?: string): Promise<{ bundle: typeof bundle; entityId?: string }> {
   if (operation.kind === "blender-model") {
+    if ("brief" in operation.model) throw new Error("モデルの詳細制作が完了していません");
     if (!projectPath || !resources.blenderAvailable || resources.modelSource === "store") throw new Error("Blenderでモデルを作成する設定を確認してください");
     const { createBlenderModelAsset } = await import("./chatgpt-modeling");
     // Validate the target before generating files; replacement retains its Transform.
@@ -201,9 +204,9 @@ export async function applyChatgptOperation(bundle: XriftMcpEditorContext["bundl
   }
   const candidateId = "candidateId" in operation ? operation.candidateId : undefined;
   if (candidateId && resources.builtinCandidates.some(candidate => candidate.candidateId === candidateId)) {
-    if (!["catalog", "material", "skybox"].includes(operation.kind) || !projectPath) throw new Error("素材を適用するためのプロジェクトを確認できませんでした");
+    if (!["catalog", "material", "material-scene", "skybox"].includes(operation.kind) || !projectPath) throw new Error("素材を適用するためのプロジェクトを確認できませんでした");
     const builtin = await import("./chatgpt-builtin-catalog");
-    return builtin.applyChatgptBuiltinOperation(bundle, operation as Extract<ChatgptOperation, { kind: "catalog" | "material" | "skybox" }>, projectPath);
+    return builtin.applyChatgptBuiltinOperation(bundle, operation as Extract<ChatgptOperation, { kind: "catalog" | "material" | "material-scene" | "skybox" }>, projectPath);
   }
   if (operation.kind === "catalog") throw new ChatgptPlanInputError("素材の候補を確認できませんでした");
   let context: XriftMcpEditorContext = { bundle, sceneSelection: null, assetSelection: null, editorMode: "edit", importBusy: false, revision: 0, saveStatus: "dirty" };
@@ -218,6 +221,10 @@ export async function applyChatgptOperation(bundle: XriftMcpEditorContext["bundl
     return { bundle: context.bundle, ...(entityId ? { entityId } : {}) };
   }
   if (candidateId && (!assetId || !bundle.assets.assets[assetId])) throw new ChatgptPlanInputError("適用する素材を確認できませんでした");
+  if (operation.kind === "material-scene") {
+    applyChatgptSceneMaterial(context.bundle, assetId!, args => apply("set_material", args));
+    return { bundle: context.bundle };
+  }
   if (operation.kind === "skybox") {
     const { kind: _kind, candidateId: _candidate, ...skybox } = operation;
     const patch: Record<string, unknown> = { ...skybox };

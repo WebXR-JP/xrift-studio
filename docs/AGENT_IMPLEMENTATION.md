@@ -52,6 +52,8 @@ MToon・VRMの生成コードには、固定した`@pixiv/three-vrm`の配布ソ
 
 ## ChatGPTと手動編集を続ける
 
+`/goal`とMCPの`mode: "goal"`は、同じgenerationIdで制作・保存・最新Sceneの見直しを続ける。変更後には必ずもう一度確認し、変更も残り作業もない場合に完了する。進展のない継続は3回で停止する。質問、停止、失敗、Scene変更、再起動の扱いと、native契約7の`ChatgptSceneContext.goal`は[ChatGPT制作の契約](./CHATGPT_AUTHORING.md#goalの継続制作)に従う。
+
 Sceneの正本は、開いているEditor bridgeの最新bundleとする。各依頼と再計画でScene・素材を読み直し、会話は制作意図と保存済みの作業を補う参照として渡す。以前のPlanの全項目を完了済みと扱わない。
 
 - `chatgpt-scene-resources.ts`で送信用のSceneと素材情報を要約する。選択対象を優先し、件数・文字数・UTF-8容量を送信側で収める。未割当の素材参照は省略する。catalog keyの構文とファイルパスの構文は区別し、正規の内蔵候補をパスとして拒否しない。
@@ -68,7 +70,7 @@ Sceneの正本は、開いているEditor bridgeの最新bundleとする。各�
 
 Queueのdispatchは予約した作品・Scene・チャットをAppへ渡し、最新のbridgeと同期した選択refに一致する場合だけ開始する。Queueの依頼IDをgenerationIdとして使い、初回に作成したチャットへは同じIDの依頼だけを引き継ぐ。文面の一致を別依頼や別チャットへの関連付けに使わない。
 
-導入済みのBlenderは`get_blender_status`で検出し、制作方法の「自動」「素材ストア」「Blender」に反映する。`blender-model`は形状とPBR Materialの構造化データを、同梱の固定runnerで解釈する。バックグラウンドの初期Sceneで実GLBと編集可能な`.blend`を作り、通常のModel分析・Asset保存・描画経路で取り込む。任意のPythonをモデル応答から実行しない。作成先は作品内の一意な所有マーカー付きcacheとし、既存のBlender作品やファイルを上書きしない。StudioとBlenderの軸・Euler XYZ回転・寸法を実GLBで検証する。
+導入済みのBlenderは`get_blender_status`で検出し、「Blenderを使う」の有効・無効へ反映する。`blender-model`は短い`name`・`brief`で計画し、詳細な形状とPBR Materialは別の推論処理で制作する。独立した対象は最大2件を並行して制作し、完成順に同梱の固定runnerへ渡す。Sceneへの反映と保存は1件ずつ行い、同じ対象への連続操作や非モデル操作の順番を保つ。バックグラウンドの初期Sceneで実GLBと編集可能な`.blend`を作り、通常のModel分析・Asset保存・描画経路で取り込む。任意のPythonをモデル応答から実行しない。作成先は作品内の一意な所有マーカー付きcacheとし、既存のBlender作品やファイルを上書きしない。StudioとBlenderの軸・Euler XYZ回転・寸法、曲線・回転面の形状とUVを実GLBで検証する。完成した家具や小物をSceneのPrimitiveで代用せず、下案を明示された場合や単純な面に限って使う方針を推論へ渡す。
 
 ## MCP とネイティブの契約
 

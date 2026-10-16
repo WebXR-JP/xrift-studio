@@ -23,7 +23,7 @@ async function generate(page: Page, operations: unknown[]) {
   const response = await call(page, "generate_chatgpt_world", { model: "fixture-model", prompt: "指定したComponentを追加、設定、取り外して", mode: "build" }, true);
   expect(response.ok, JSON.stringify(response)).toBe(true);
   const generationId = response.result!.generationId as string;
-  await expect.poll(async () => ((await call(page, "get_chatgpt_generation", { generationId })).result as ChatgptGeneration).status).toBe("completed");
+  await expect.poll(async () => { const job = (await call(page, "get_chatgpt_generation", { generationId })).result as ChatgptGeneration; return job.status === "failed" ? `failed: ${job.error}` : job.status; }).toBe("completed");
   return generationId;
 }
 
@@ -88,7 +88,7 @@ test("共通Component定義は送信量内に収まり、無効な設定とTrans
   });
   expect(result.bytes).toBeLessThanOrEqual(31 * 1024);
   expect(result.lightFields).toEqual(expect.arrayContaining(["intensity", "castShadow", "shadowCameraFar"]));
-  expect(result.skies).toBeGreaterThanOrEqual(3);
+  expect(result.skies).toBeGreaterThanOrEqual(12);
   expect(result.shelves).toBe(result.expectedShelves);
   expect(result.rejected).toEqual([true, true, true]);
 });
