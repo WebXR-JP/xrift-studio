@@ -211,7 +211,7 @@ test("考えている間は進行状況を一度だけ表示し、空の記録�
   try {
     const id = await generate(page);
     await expect.poll(() => page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptPlanWaiting)).toBe(true);
-    await expect(chat(page).getByText("考えています…", { exact: true })).toHaveCount(1);
+    await expect(chat(page).getByText("現在のSceneと制作に使う素材を確認しています", { exact: true })).toHaveCount(1);
     await expect(chat(page).getByRole("region", { name: "作業の記録", exact: true })).toHaveCount(0);
     expect((await job(page, id)).status).toBe("running");
     await page.evaluate(() => { window.__XRIFT_RELEASE_E2E__!.chatgptPlanGate = false; });
