@@ -25,6 +25,7 @@ import {
   type Texture,
 } from "three";
 import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
+import { useSceneReviewResource, type SceneReviewLoadState } from "./scene-review-readiness";
 import { tauri } from "../../lib/tauri";
 import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
 import { resolveLocalBasisTranscoderPath } from "../../lib/visual-editor/basis-transcoder";
@@ -138,6 +139,12 @@ export function useMaterialPreviewTextureState(
     statuses: {},
   });
   const sessionRef = useRef<ReturnType<typeof createMaterialPreviewTextureSession> | null>(null);
+  const reportReview = useSceneReviewResource(`material:${projectPath ?? ""}:${requestKey}`,
+    { status: requests.length ? "loading" : "ready" });
+  const [readiness, setReadiness] = useState<{ key: string; state: SceneReviewLoadState }>({ key: "", state: { status: "loading" } });
+  useLayoutEffect(() => {
+    if (readiness.key === requestKey) reportReview(readiness.state);
+  }, [readiness, reportReview, requestKey]);
 
   useEffect(() => {
     const session = createMaterialPreviewTextureSession(async (request) => {
@@ -163,7 +170,7 @@ export function useMaterialPreviewTextureState(
         request.role ?? request.uniformName ?? "shader sampler",
       );
       return texture;
-    }, setState);
+    }, setState, (state, key) => setReadiness({ key, state }));
     sessionRef.current = session;
     return () => {
       session.dispose();
@@ -200,10 +207,12 @@ function previewTextureRequestKey(request: PreviewTextureRequest): string {
 export function createMaterialPreviewTextureSession(
   load: (request: PreviewTextureRequest) => Promise<Texture>,
   onChange: (state: MaterialPreviewTextureState) => void,
+  onReadiness?: (state: SceneReviewLoadState, requestKey: string) => void,
 ) {
   type Entry = { request: PreviewTextureRequest; status: MaterialPreviewTextureLoadStatus; texture?: Texture };
   const entries = new Map<string, Entry>();
   let active = true;
+  let requestKey = "[]";
   const publish = () => {
     if (!active) return;
     const textures: MaterialPreviewTextures = {};
@@ -217,10 +226,15 @@ export function createMaterialPreviewTextureSession(
       }
     }
     onChange({ textures, statuses });
+    const states = [...entries.values()].map(entry => entry.status);
+    onReadiness?.(states.includes("error")
+      ? { status: "error", message: "Materialの画像を読み込めず、見た目を確認できませんでした" }
+      : { status: states.includes("loading") ? "loading" : "ready" }, requestKey);
   };
   return {
     setRequests(requests: readonly PreviewTextureRequest[]) {
       if (!active) return;
+      requestKey = JSON.stringify(requests.map(previewTextureRequestKey));
       const requested = new Map(requests.map(request => [previewTextureRequestKey(request), request]));
       let changed = false;
       for (const [key, entry] of entries) {

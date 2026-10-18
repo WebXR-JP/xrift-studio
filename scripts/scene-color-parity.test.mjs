@@ -23,22 +23,40 @@ function mountCompositor(settings, effectsEnabled) {
     outputColorSpace: three.LinearSRGBColorSpace,
     render() { counts.directFrames++; },
   };
-  const state = { gl, camera: {}, scene: {}, size: { width: 64, height: 64 } };
+  const state = { gl, camera: new three.PerspectiveCamera(50, 1, 0.1, 100), scene: new three.Scene(), size: { width: 64, height: 64 } };
+  const passes = [];
+  const rendered = [];
+  let failRender = false;
   class Composer {
     constructor() { counts.composers++; }
     addPass() {}
     setSize() {}
     dispose() {}
-    render() { counts.compositeFrames++; }
+    render() {
+      counts.compositeFrames++;
+      const ao = passes.find(pass => pass.ssaoMaterial);
+      rendered.push({ camera: passes[0]?.camera, aoCamera: ao?.camera, near: ao?.ssaoMaterial.uniforms.cameraNear.value,
+        far: ao?.ssaoMaterial.uniforms.cameraFar.value, projection: ao?.ssaoMaterial.uniforms.cameraProjectionMatrix.value.clone() });
+      if (failRender) throw new Error("renderer fixture failure");
+    }
   }
   class Pass {
-    constructor(config) { this.uniforms = config?.uniforms; }
+    constructor(config, camera) { this.uniforms = config?.uniforms; this.camera = camera; passes.push(this); }
+  }
+  class AoPass extends Pass {
+    constructor(scene, camera) {
+      super(scene, camera);
+      this.ssaoMaterial = { uniforms: { cameraNear: { value: camera.near }, cameraFar: { value: camera.far },
+        cameraProjectionMatrix: { value: camera.projectionMatrix.clone() }, cameraInverseProjectionMatrix: { value: camera.projectionMatrixInverse.clone() } } };
+      this.depthRenderMaterial = { uniforms: { cameraNear: { value: camera.near }, cameraFar: { value: camera.far } } };
+    }
   }
   const imports = {
     react: {
       useMemo: factory => factory(),
       useRef: current => ({ current }),
       useEffect: effect => { const cleanup = effect(); if (cleanup) cleanups.push(cleanup); },
+      useLayoutEffect: effect => { const cleanup = effect(); if (cleanup) cleanups.push(cleanup); },
     },
     "@react-three/fiber": {
       useThree: () => state,
@@ -52,7 +70,7 @@ function mountCompositor(settings, effectsEnabled) {
   };
   for (const name of ["RenderPass", "ShaderPass", "SSAOPass", "UnrealBloomPass", "EffectComposer"]) {
     imports[`three/examples/jsm/postprocessing/${name}.js`] = {
-      [name]: name === "EffectComposer" ? Composer : Pass,
+      [name]: name === "EffectComposer" ? Composer : name === "SSAOPass" ? AoPass : Pass,
     };
   }
   const exports = {};
@@ -62,7 +80,8 @@ function mountCompositor(settings, effectsEnabled) {
   }, exports);
   exports.ScenePostprocessing({ settings, effectsEnabled });
   frame();
-  return { gl, counts, cleanup: () => cleanups.reverse().forEach(cleanup => cleanup()) };
+  return { gl, counts, state, passes, rendered, frame, render: camera => exports.renderXriftSceneFrame(gl, state.scene, camera),
+    fail: () => { failRender = true; }, cleanup: () => cleanups.reverse().forEach(cleanup => cleanup()) };
 }
 
 test("low-quality effects skip buffers while preserving authored exposure and tone mapping", () => {
@@ -88,4 +107,35 @@ test("low-quality effects skip buffers while preserving authored exposure and to
     assert.equal(low.gl.toneMappingExposure, 1);
     assert.equal(low.gl.outputColorSpace, three.LinearSRGBColorSpace);
   }
+});
+
+test("temporary review cameras use the compositor and restore RenderPass and SSAO state after success or failure", () => {
+  const settings = { enabled: true, exposure: 1, hdr: { enabled: false, toneMapping: "none" },
+    bloom: { enabled: true, threshold: 0.5, strength: 1, radius: 0.3 },
+    ao: { enabled: true, radius: 8, minDistance: 0.005, maxDistance: 0.1 },
+    grading: { enabled: true, contrast: 1, saturation: 0, temperature: 0.3, tint: 0 } };
+  const mounted = mountCompositor(settings, true);
+  const camera = new three.PerspectiveCamera(35, 1.5, 0.03, 300);
+  const ao = mounted.passes.find(pass => pass.ssaoMaterial);
+  const previous = ao.ssaoMaterial.uniforms.cameraProjectionMatrix.value.clone();
+  assert.equal(mounted.render(camera), true);
+  const captured = mounted.rendered.at(-1);
+  assert.equal(captured.camera, camera);
+  assert.equal(captured.aoCamera, camera);
+  assert.equal(captured.near, 0.03);
+  assert.equal(captured.far, 300);
+  assert.deepEqual(captured.projection.elements, camera.projectionMatrix.elements);
+  assert.equal(mounted.passes[0].camera, mounted.state.camera);
+  assert.equal(ao.camera, mounted.state.camera);
+  assert.equal(ao.ssaoMaterial.uniforms.cameraNear.value, mounted.state.camera.near);
+  assert.deepEqual(ao.ssaoMaterial.uniforms.cameraProjectionMatrix.value.elements, previous.elements);
+  mounted.frame();
+  assert.equal(mounted.rendered.at(-1).camera, mounted.state.camera);
+  mounted.fail();
+  assert.throws(() => mounted.render(camera), /renderer fixture failure/);
+  assert.equal(mounted.passes[0].camera, mounted.state.camera);
+  assert.equal(ao.camera, mounted.state.camera);
+  assert.deepEqual(ao.ssaoMaterial.uniforms.cameraProjectionMatrix.value.elements, previous.elements);
+  mounted.cleanup();
+  assert.equal(mounted.render(camera), false);
 });

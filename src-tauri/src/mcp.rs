@@ -1444,6 +1444,13 @@ fn resolve_sidecar_path() -> Result<PathBuf, String> {
         })
 }
 
+fn mcp_authoring_instructions() -> String {
+    format!("{} {}", crate::chatgpt::authoring_core_instructions(), MCP_AUTHORING_INSTRUCTIONS)
+}
+
+const MCP_AUTHORING_INSTRUCTIONS: &str = "XRift Studio edits one Scene of a world people visit together. Start with list_projects; create_project or open_project opens an Editor when needed. Read get_editor_context for current scope, revision and host-verified starterEntityIds. Never infer disposable content by a name or ID alone. For a new place those exact untouched starter Entities may be replaced; preserve authored content outside the requested scope. target=current selects the project to work in, not a requirement to reuse initial shapes. Before substantial production, resume get_world_authoring or save a short blueprint and criteria with begin_world_authoring. Keep the existing run budget unchanged and never replace it just to reset limits. get_world_authoring returns writeAdmission, terminalReason, reasons and nextActions. After a limit stop writing; reading and captures remain available. cancel_world_authoring stops later writes and preserves saved work. For static source composition, read get_world_authoring_guide(topic:r3f) and use apply_r3f_scene; update its returned root after reading get_entity_components.r3fAuthoring. For existing/catalog resources read topic:assets; for necessary complex bespoke geometry read topic:blender. Load only the needed route, not every guide. Runtime behavior uses get_scripting_capabilities and list_script_templates; Play executes saved Scripts without sandboxing or a separate approval dialog. Read list_component_definitions for exact official fields and worldComponents placement/runtime guidance when adding functional equipment. Always send current projectId, sceneId and expectedRevision with document writes. On EDITOR_BUSY or STALE_REVISION, fetch current context and replan only unfinished changes. Save and capture_scene_view from spawn at eye height and iso; judge the actual images, record each criterion with review_world_authoring, then complete_world_authoring checks saved current evidence. A Component or Edit placeholder does not prove live or multiplayer behavior; report untested behavior. Studio ChatGPT generation uses connect_chatgpt, list_chatgpt_models and generate_chatgpt_world; follow their tool descriptions for authorization, supported reasoning and polling. Ask only for a consequential missing decision, authentication, or an unrequested destructive/external action. Publish only when explicitly requested, using get_publish_readiness then publish_project. Otherwise finish after saving and verification. No source checkout, runner or local skill is required.";
+
+
 pub fn run_stdio_server() -> Result<(), String> {
     let rendezvous_path = parse_rendezvous_argument()?;
     let stdin = std::io::stdin();
@@ -1492,7 +1499,7 @@ pub fn run_stdio_server() -> Result<(), String> {
                     "protocolVersion": MCP_PROTOCOL_VERSION,
                     "capabilities": { "tools": { "listChanged": false } },
                     "serverInfo": { "name": MCP_SERVER_NAME, "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": "XRift Studio edits one Scene of a world that people visit together. Output: one finished world. Start with list_projects: it says which project is open. With none open, create_project (name, optional kind and templateId from list_starter_templates) or open_project makes one the Editor session; until then editing tools answer EDITOR_UNAVAILABLE. Publishing is available: get_publish_readiness names what is missing (starter metadata via update_project_metadata, a thumbnail via set_project_thumbnail, sign-in via login and get_account, blocking diagnostics), and publish_project uploads to XRift and returns the URL or id. Call publish_project only when the person asked for the world to be published. Studio includes persistent world authoring: call get_world_authoring to resume, or begin_world_authoring to save the blueprint and completion criteria. No source checkout, Node.js runner or local skill is required. After edits, capture_scene_view with authoringView spawn and iso returns images and capture IDs; review_world_authoring records each criterion verdict, and complete_world_authoring checks current evidence. Recording files go to Recording inside the open world project. Read the current Scene and available capabilities first. Before a new world or substantial change, write a short blueprint covering the requested scope and completion criteria. For a small adjustment, record the target and expected result; do not add unrequested visitor activities or equipment. Preserve the begin/review/complete world-authoring evidence contract when using that session. For social, collaborative and presentation worlds, consider ScreenShareDisplay first and record inclusion or a purpose-based omission reason. Use Mirror when avatar viewing matters and TagBoard when an event needs participant tag selection; do not invent a TagMarker API. Read list_component_definitions worldComponents for official recipes, fields, existing instances and placement/verification guidance. Reserve functional equipment and its usage areas before decoration. Frame screens and mirrors with the architecture without covering displays or controls, and check sightlines from front/back/side audience and operator positions. An Edit placeholder or component presence does not prove live sharing, multi-user synchronization or tag selection; verify in a supported runtime and report untested behavior. State the blueprint and continue. Continue through requested edits and verification. Ask when authentication needs the person, the target is ambiguous, or an unrequested destructive or external action is required. Report unavailable tools or verification honestly. If publishing was not requested, finish after saving and verification. Terrain, grass, post effects, external assets, heavy models require one line of reason in the blueprint. Without that line, skip them. For a new world, use this order as a starting point and adapt it to the task: ground and blockout with real Materials and circulation; main experience equipment and visual focus; sky, ambient light, fog together; remaining blueprint items; verification. Three same-category writes (Terrain, grass, one Entity Transform, one Material, Scene settings) without capture_scene_view return a harness warning. Post effects require a before/after capture_scene_view comparison. Do not ship default grey primitives. Motion, repetition, generative structure belong to Scripts. Read get_scripting_capabilities and list_script_templates before writing one. Do not report a world as done without capture_scene_view from the spawn point at eye height and from the iso view; metrics and the document state expectations, frames state results. When the client has the xrift-world-direction skill, read it before building. Call get_editor_context before a write. Send projectId, sceneId, and expectedRevision with each document or Script write, then verify the result. Use get_terrain before sculpt_terrain; Terrain is a static height-sampled mesh with a fixed Trimesh Collider, so create_terrain and sculpt_terrain are Edit-only. Script execution is not sandboxed. Studio Play and set_play_mode compile and execute saved Scripts without a separate approval dialog. Source fingerprints are diagnostics, not permission. Compilation failure leaves the editor in Edit; failed hot reload keeps the last working module. Inspect scriptRuntime after starting or updating Scripts. Call get_scripting_capabilities and list_script_templates before authoring a Script. Use create_script_asset with templateId to create a built-in example, or apply_script_template to create it and attach its Script Component to an Entity in one editor revision. For custom source, use create_script_asset or update_script_asset, add_component with definitionId scripting.script and scriptAssetId, update_script_component to declare properties and references, then set_play_mode. Use import_audio_asset, import_font_asset, import_texture_asset, import_model_asset, import_skybox_asset, or import_shader_asset only for a trusted absolute local path while Edit is active; the Editor validates extension, signature, regular-file/no-link status, and size limits, then copies it into managed project storage without returning file bytes or the external path. Use get_model_asset/update_model_asset for import settings and material slots, and reimport_model_asset to apply derived Model changes. Use get_shader_asset/update_shader_asset for project shader source. Use get_audio_asset plus place_asset, or add_component with core.audio-source and update_component, for persistent Audio Source authoring. Use get_texture_asset/update_texture_asset for persistent sampler and import settings; updates are supported during Play and restart only consuming Entities. Runtime ctx.audioSources, ctx.materials, and ctx.particles changes reset on Stop; use persistent Audio Source, Material, or Particle tools to save authoring data. Call list_component_definitions and get_entity_components before add_component, update_component, or remove_component. Use create_prefab to turn an Entity hierarchy into a reusable Prefab Asset, then place_asset to instantiate it. While Play is active, Entity enabled state and supported component/scene structure tools synchronize immediately; fetch context again after every write. For portable behavior, call list_interactivity_operations, author a KHR_interactivity Asset, and validate it after edits. If EDITOR_BUSY or STALE_REVISION is returned, wait briefly, fetch context again, and retry from the latest revision. To record the Scene View while building, call get_recording_status, then start_recording (idempotent), set_recording_camera with fitScene as the world grows, and stop_recording when done; a failed recording call never affects editing tools. For Studio ChatGPT generation, open Settings then MCP connection to configure external clients; the Editor ChatGPT tab is separate. connect_chatgpt starts browser authorization; the person grants access. Renewable credentials stay in the OS secure store for startup restore, never in MCP responses or projects. Poll get_chatgpt_connection until signedIn and planUsageEnabled are true and connecting and restoring are false. Choose a slug from list_chatgpt_models and call generate_chatgpt_world with current context. Its supportedReasoningEfforts and defaultReasoningEffort describe model-specific reasoning choices. Set optional reasoningEffort only to a supported value; omit it for the API model default. Metadata that is empty or null is not evidence of support. It consumes the connected account allowance and returns generationId immediately. Defaults are target=current and mode=build: validate the plan, save drafts, then adjust and add Entities in the current Scene sequentially, saving each result. mode=plan validates and returns a public plan with status planned without changing files or the Scene. Review that plan and apply_chatgpt_plan with a fresh context for the same source project and Scene. target=new opens a separate World after saving the source. cancel_chatgpt_generation requests cancellation and keeps already saved results. Poll get_chatgpt_generation for planned, completed, cancelled or failed and inspect the actual World after execution. Saved partial results remain after failure or cancellation. XRift Studio must be running; open or create a project with the project tools before editing."
+                    "instructions": mcp_authoring_instructions()
                 }),
             )?,
             "ping" => write_json_rpc_result(&mut stdout, id, json!({}))?,
@@ -2103,7 +2110,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "list_chatgpt_models",
-            "description": "List model slugs, display names, supportedReasoningEfforts and defaultReasoningEffort available to Studio's connected ChatGPT account. Requires planUsageEnabled. Choose a returned slug for generate_chatgpt_world instead of inventing one. An empty supportedReasoningEfforts list or null defaultReasoningEffort means that metadata is unavailable. Set reasoningEffort only to a value supported by the selected model; omit it to use the API's model default.",
+            "description": "List model slugs, display names, supportedReasoningEfforts and defaultReasoningEffort available to Studio's connected ChatGPT account. Requires planUsageEnabled. Choose a returned slug for generate_chatgpt_world instead of inventing one. An empty supportedReasoningEfforts list or null defaultReasoningEffort means that metadata is unavailable. Set reasoningEffort only to a value supported by the selected model. This result is reused briefly for omitted reasoningEffort: low when supported, otherwise the supported catalog default. With no current metadata, Studio uses the API default without an extra catalog request.",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         },
         {
@@ -2113,7 +2120,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "create_blender_model",
-            "description": "Use installed Blender to create a finished custom Model from structured primitives, indexed meshes, curved tubes or revolved profiles with PBR colors and UVs, then import the real GLB into Assets. Prefer finished models for furniture and props; use Scene primitives for an explicitly requested replaceable blockout or simple surfaces. Requires get_modeling_tools Blender availability and a fresh get_editor_context in Edit. Positions are Studio Y-up metres, rotations Euler XYZ degrees; primitive scale gives dimensions, mesh/tube/lathe scale multiplies local geometry. tube vertices are 2-128 ordered centreline points, bevel is tube radius, faces=null. lathe vertices are an ordered [radius,height,0] profile revolved around Y, faces=null. No Python source, external files or download URLs. Existing Blender scenes are preserved. Returns modelAssetId; inspect get_model_asset and use place_asset to place it.",
+            "description": "Use installed Blender to create a finished custom Model from structured primitives, indexed meshes, curved tubes or revolved profiles with PBR colors and UVs, then import the real GLB into Assets. Prefer finished models for furniture and props; use Scene primitives for an explicitly requested replaceable blockout or simple surfaces. Requires get_modeling_tools Blender availability and a fresh get_editor_context in Edit. Positions are Studio Y-up metres, rotations Euler XYZ degrees; primitive scale gives dimensions, mesh/tube/lathe scale multiplies local geometry. tube vertices are 2-128 ordered centreline points, bevel is tube radius, faces=null. lathe vertices are an ordered [radius,height,0] profile revolved around Y, faces=null. No Python source, external files or download URLs. Existing Blender scenes are preserved. During an explicit world-authoring run, native file generation acquires one cumulative write slot before starting; failed generation still consumes that attempt and closes its pending slot. A stopped or exhausted run refuses before producing files. Returns modelAssetId; inspect get_model_asset and use place_asset to place it.",
             "inputSchema": { "type": "object", "properties": {
                 "projectId": { "type": "string", "minLength": 1 },
                 "sceneId": { "type": "string", "minLength": 1 },
@@ -2128,7 +2135,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "generate_chatgpt_world",
-            "description": "Plan or edit a World using Studio's connected ChatGPT account and its usage allowance. Defaults to target=current and mode=build: validate the plan, save drafts, then adjust existing Entities and add new Entities sequentially to the current Scene, saving each result. Human edits made during reasoning trigger fresh planning from the current Scene. During execution, independent edits merge and conflicting edits trigger up to two fresh planning attempts, preserving saved results and continuing only unfinished work. mode=goal continues the same request across saved passes, reading the latest Scene and reviewing after every changed pass until no relevant work remains. Questions pause for answers; three unchanged passes with remaining work stop with an error. Cancellation and Scene changes preserve saved work. mode=plan returns a planned job without changing the Scene or project files; review its public plan and use apply_chatgpt_plan to execute it. target=new creates and opens a separate World after saving the source. Requires a World in Edit, a current get_editor_context snapshot and a slug from list_chatgpt_models. Optional reasoningEffort must be supported by that model; omit it to use the API's model default. Unsupported efforts are rejected before inference is sent. Options choose models/materials/audio; omit for all three. Returns generationId immediately; poll get_chatgpt_generation. Saved partial results remain on failure or cancellation. Never publishes.",
+            "description": "Plan or edit a World using Studio's connected ChatGPT account and its usage allowance. Defaults to target=current and mode=build: validate the plan, save drafts, then adjust existing Entities and add new Entities sequentially to the current Scene, saving each result. Human edits made during reasoning trigger fresh planning from the current Scene. During execution, independent edits merge and conflicting edits trigger up to two fresh planning attempts, preserving saved results and continuing only unfinished work. mode=goal continues the same request across saved passes, reading the latest Scene and reviewing after every changed pass until no relevant work remains. Questions pause for answers; three unchanged passes with remaining work stop with an error. Cancellation and Scene changes preserve saved work. mode=plan returns a planned job without changing the Scene or project files; review its public plan and use apply_chatgpt_plan to execute it. target=new creates and opens a separate World after saving the source. Requires a World in Edit, a current get_editor_context snapshot and a slug from list_chatgpt_models. Optional reasoningEffort must be supported by that model. When omitted, recent list_chatgpt_models metadata selects low if supported, otherwise the supported catalog default; missing or expired metadata leaves the API default unchanged without another catalog request. Unsupported efforts are rejected before inference is sent. Options choose models/materials/audio; omit for all three. An active explicit MCP world-authoring run owns the Scene: continue that run or cancel_world_authoring before starting this separate ChatGPT run. Returns generationId immediately; poll get_chatgpt_generation. Saved partial results remain on failure or cancellation. Never publishes.",
             "inputSchema": { "type": "object", "properties": {
                 "projectId": { "type": "string", "minLength": 1 },
                 "sceneId": { "type": "string", "minLength": 1 },
@@ -2137,7 +2144,7 @@ fn tool_definitions() -> Value {
                 "sessionId": { "type": "string", "minLength": 1, "description": "Continue a chat returned by list_chatgpt_sessions for this project and Scene. Omit to use the active chat, or create one if none exists." },
                 "attachedEntityIds": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 160 }, "uniqueItems": true, "maxItems": 100, "description": "Existing Entity roots to attach as editing targets in target=current. The latest roots and all descendants are prioritized ahead of surrounding Scene context within the input budget. Never copies or duplicates the Entities. The job records attached names. Not supported for target=new." },
                 "attachedMaterialIds": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 160 }, "uniqueItems": true, "maxItems": 16, "description": "Ready Material Asset IDs to attach as editing targets in target=current. Their current properties are prioritized in the AI context; material-update edits the Material itself while preserving its references. Not supported for target=new." },
-                "reasoningEffort": { "type": "string", "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"], "description": "Choose a value from the selected model's supportedReasoningEfforts. Omit to use the API's model default; do not infer support from the model name." },
+                "reasoningEffort": { "type": "string", "enum": ["none", "minimal", "low", "medium", "high", "xhigh", "max"], "description": "Choose a value from the selected model's supportedReasoningEfforts. Omit to prefer low using recent list_chatgpt_models metadata, then the supported catalog default. Without current metadata, use the API default. Do not infer support from the model name." },
                 "prompt": { "type": "string", "minLength": 1, "maxLength": 2000 },
                 "target": { "type": "string", "enum": ["current", "new"], "default": "current" },
                 "mode": { "type": "string", "enum": ["build", "plan", "goal"], "default": "build" },
@@ -2220,18 +2227,44 @@ fn tool_definitions() -> Value {
             }, "required": ["projectId", "sceneId"], "additionalProperties": false }
         },
         {
+            "name": "get_world_authoring_guide",
+            "description": "Read the shared production contract and a concise route directory (overview, default), or load only the selected r3f, assets or blender procedure. Use the route that can express the intended form; do not load every procedure before making progress. Read-only, needs an open Editor but no project/scene scope arguments. R3F supports complete editable static source via apply_r3f_scene; assets covers reuse and targeted discovery; Blender covers complex bespoke geometry.",
+            "inputSchema": { "type": "object", "properties": {
+                "topic": { "type": "string", "enum": ["overview", "r3f", "assets", "blender"] }
+            }, "additionalProperties": false }
+        },
+        {
+            "name": "apply_r3f_scene",
+            "description": "Create or revise a coherent editable static R3F composition in one saved authoring write. Read get_world_authoring_guide(topic:r3f) for the exact supported syntax. Supply complete source, a public name and fresh Editor scope/revision. Omit entityId or use null for a new root; the result returns its entityId. To revise it, first read get_entity_components for that root's latest complete r3fAuthoring.source, preserve unchanged parts/stable names/keys and send the exact root entityId. Never target generated children, duplicate a root to update it, or guess missing source. The shared compiler rejects unsupported syntax without executing arbitrary JavaScript. Updates preserve manual edits or return a conflict. Capture and inspect the saved result before claiming completion.",
+            "inputSchema": { "type": "object", "properties": {
+                "projectId": { "type": "string", "minLength": 1 },
+                "sceneId": { "type": "string", "minLength": 1 },
+                "expectedRevision": { "type": "integer", "minimum": 0 },
+                "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                "source": { "type": "string", "minLength": 1, "maxLength": 48000, "description": "Complete static TSX; additionally limited to 48000 UTF-8 bytes by the compiler." },
+                "entityId": { "type": ["string", "null"], "minLength": 1 }
+            }, "required": ["projectId", "sceneId", "expectedRevision", "name", "source"], "additionalProperties": false }
+        },
+        {
             "name": "begin_world_authoring",
-            "description": "Save a blueprint and unique completion criteria in the open world project before editing. No repository clone or client-side skill is required. If a goal already exists, use get_world_authoring to resume. Record what visitors do together, the ScreenShareDisplay inclusion or omission decision, required functional components, audience/operator/circulation areas and visual plus functional criteria. Returns worldComponents with current instances and placement guidance. Include metrics/budget criteria. Capture spawn and iso views plus relevant usage viewpoints; verify interactions in a supported runtime and record untested behavior honestly before reviewing each criterion.",
+            "description": "Save a blueprint and unique completion criteria in the open world project before substantial authoring. An explicit run has cumulative finite write, inspection-pass, no-progress, consecutive-failure and elapsed-time budgets; optional budget narrows or sets them. Host-observed writes count once before dispatch, including failed attempts. Studio cannot observe an external client's model-call count and does not invent it. Read/capture tools stay available after a limit; further authoring writes stop. Defaults: 256 writes, 8 inspection passes, 3 no-progress, 3 consecutive failures, 900000ms. Never restart or replace a run merely to evade its budget. Small direct edits need no authoring run. If a goal already exists, get_world_authoring resumes it. Record the requested visitor use, functional components, circulation, and visible completion criteria. Returns worldComponents and current evidence. Capture spawn and iso, inspect actual usage viewpoints, and report untested runtime behavior honestly.",
             "inputSchema": { "type": "object", "properties": {
                 "projectId": { "type": "string" }, "sceneId": { "type": "string" },
                 "blueprint": { "type": "string", "minLength": 1, "maxLength": 20000 },
                 "replaceExisting": { "type": "boolean", "description": "Start a new goal or revise the blueprint. Explicit true replaces the current criteria and clears reviews; previous state remains in the journal." },
+                "budget": { "type": "object", "properties": {
+                    "maxWrites": { "type": "integer", "minimum": 1, "maximum": 4096 },
+                    "maxPasses": { "type": "integer", "minimum": 1, "maximum": 32 },
+                    "maxNoProgress": { "type": "integer", "minimum": 1, "maximum": 6 },
+                    "maxConsecutiveFailures": { "type": "integer", "minimum": 1, "maximum": 6 },
+                    "maxElapsedMs": { "type": "integer", "minimum": 1000, "maximum": 3600000 }
+                }, "additionalProperties": false },
                 "criteria": { "type": "array", "minItems": 1, "maxItems": 100, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 1000 } }
             }, "required": ["projectId", "sceneId", "blueprint", "criteria"], "additionalProperties": false }
         },
         {
             "name": "get_world_authoring",
-            "description": "Resume persistent world authoring: return the blueprint, criteria, capture IDs, reviews, nextActions and worldComponents (usage/placement guidance and current document component instances). Revisit the screenShareDecision before decorating a social, collaborative or presentation world. Scene content changes invalidate previous captures even across app restarts. Follow nextActions; the LLM judges image quality and functional evidence, Studio checks capture freshness. Component presence or an Edit placeholder does not prove sharing or synchronization works.",
+            "description": "Resume persistent world authoring: returns the blueprint, fixed budgets, cumulative counters, bounded typed journal, terminalReason, writeAdmission, canComplete, blocking reasons, capture IDs, reviews, nextActions and worldComponents. Latest saved fingerprint, current spawn/iso images and successful current criterion reviews are all required for completion. Dirty or pending saves cannot complete. Scene changes, recaptures and cancellation invalidate old evidence across reconnects. Follow nextActions; the client judges actual images and functional evidence, Studio checks freshness. Component presence or an Edit placeholder does not prove live runtime behavior.",
             "inputSchema": { "type": "object", "properties": { "projectId": { "type": "string" }, "sceneId": { "type": "string" } }, "required": ["projectId", "sceneId"], "additionalProperties": false }
         },
         {
@@ -2245,7 +2278,12 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "complete_world_authoring",
-            "description": "Check completion against the latest scene and saved image reviews. Missing or stale evidence is not completion; get_world_authoring returns unchecked criteria and nextActions. This never publishes the world or approves Scripts.",
+            "description": "Save and check completion against the exact latest Scene fingerprint, both current saved capture images and successful current reviews of every criterion. Returns completionAccepted=false plus canComplete/reasons/nextActions while saving, a writer is pending, images are stale or criteria are unconfirmed. A final allowed pass may complete after a budget limit if all evidence is current. A cancelled run cannot complete. This never publishes or approves Scripts.",
+            "inputSchema": { "type": "object", "properties": { "projectId": { "type": "string" }, "sceneId": { "type": "string" } }, "required": ["projectId", "sceneId"], "additionalProperties": false }
+        },
+        {
+            "name": "cancel_world_authoring",
+            "description": "Stop an explicit world-authoring run, close admission for later authoring writes and invalidate all capture/review completion evidence. Keeps Scene edits, Assets and saved files. Read, diagnostics and captures remain available. Async operations already started may finish their owned cleanup; fresh writes require an explicitly requested new blueprint, never an automatic budget reset.",
             "inputSchema": { "type": "object", "properties": { "projectId": { "type": "string" }, "sceneId": { "type": "string" } }, "required": ["projectId", "sceneId"], "additionalProperties": false }
         },
         {
@@ -3471,7 +3509,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "get_entity_components",
-            "description": "Read one Entity's enabled state and complete serialized Component list, including the stable definitionId for each registered Component.",
+            "description": "Read one Entity's enabled state and complete serialized Component list, including the stable definitionId for each registered Component. An authored R3F root also returns r3fAuthoring with version, revision and complete retained source; read this exact root before revising it with apply_r3f_scene. Generated children are not independent source roots.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -4698,6 +4736,35 @@ mod tests {
     use std::io::Cursor;
 
     #[test]
+    fn world_creation_policy_replaces_scaffolding_without_discarding_authored_work() {
+        let instructions = mcp_authoring_instructions();
+        for expected in ["whole place", "without inventing a feature", "Never infer disposable content by a name or ID alone",
+            "starterEntityIds", "Preserve authored content outside the requested scope", "first saved result", "Finish as soon as the criteria pass", "existing run budget unchanged"] {
+            assert!(instructions.contains(expected), "missing creation policy: {expected}");
+        }
+        assert!(instructions.contains("target=current selects the project to work in"));
+        assert!(instructions.contains("a floor or one isolated prop is not a completed place"));
+        assert!(instructions.contains("get_world_authoring_guide(topic:r3f)"));
+        assert!(!instructions.contains("Geometry args specify dimensions"), "route details load only when selected");
+        assert!(instructions.len() < 6500, "MCP core must stay bounded: {}", instructions.len());
+        eprintln!("MCP instructions UTF-8 bytes: {} (before: 10842)", instructions.len());
+    }
+
+    #[test]
+    fn source_authoring_tools_expose_complete_source_revision_and_progressive_guides() {
+        let tools = tool_definitions();
+        let find = |name: &str| tools.as_array().unwrap().iter().find(|tool| tool["name"] == name).unwrap();
+        let guide = find("get_world_authoring_guide");
+        assert_eq!(guide["inputSchema"]["properties"]["topic"]["enum"], json!(["overview", "r3f", "assets", "blender"]));
+        assert!(guide["inputSchema"]["properties"].get("projectId").is_none());
+        let apply = find("apply_r3f_scene");
+        assert_eq!(apply["inputSchema"]["required"], json!(["projectId", "sceneId", "expectedRevision", "name", "source"]));
+        assert_eq!(apply["inputSchema"]["properties"]["entityId"]["type"], json!(["string", "null"]));
+        assert_eq!(apply["inputSchema"]["properties"]["source"]["maxLength"], 48000);
+        assert!(apply["description"].as_str().unwrap().contains("latest complete r3fAuthoring.source"));
+    }
+
+    #[test]
     fn pbr_material_tool_exposes_all_supported_extensions_and_core_settings() {
         let tools = tool_definitions();
         let material = tools.as_array().expect("tool list").iter()
@@ -4774,6 +4841,24 @@ mod tests {
     }
 
     #[test]
+    fn world_authoring_exposes_optional_bounded_budgets_and_cancellation() {
+        let tools = tool_definitions();
+        let tools = tools.as_array().unwrap();
+        let begin = tools.iter().find(|tool| tool["name"] == "begin_world_authoring").unwrap();
+        let budget = &begin["inputSchema"]["properties"]["budget"]["properties"];
+        for (key, minimum, maximum) in [("maxWrites", 1, 4096), ("maxPasses", 1, 32), ("maxNoProgress", 1, 6),
+            ("maxConsecutiveFailures", 1, 6), ("maxElapsedMs", 1000, 3_600_000)] {
+            assert_eq!(budget[key]["minimum"], minimum);
+            assert_eq!(budget[key]["maximum"], maximum);
+        }
+        assert!(!begin["inputSchema"]["required"].as_array().unwrap().contains(&json!("budget")), "legacy calls remain valid");
+        let cancel = tools.iter().find(|tool| tool["name"] == "cancel_world_authoring").unwrap();
+        assert!(cancel["description"].as_str().unwrap().contains("Keeps Scene edits"));
+        let complete = tools.iter().find(|tool| tool["name"] == "complete_world_authoring").unwrap();
+        assert!(complete["description"].as_str().unwrap().contains("exact latest Scene fingerprint"));
+    }
+
+    #[test]
     fn chatgpt_plan_and_execution_have_distinct_context_contracts() {
         let tools = tool_definitions();
         let tools = tools.as_array().expect("tool list");
@@ -4795,7 +4880,7 @@ mod tests {
         assert_eq!(properties["reasoningEffort"]["enum"],
             json!(["none", "minimal", "low", "medium", "high", "xhigh", "max"]));
         assert!(properties["reasoningEffort"].get("default").is_none(),
-            "the model's API default must not become a global fixed effort");
+            "a capability-aware preference must not become an unconditional schema default");
         assert_eq!(properties["options"]["additionalProperties"], false);
         assert_eq!(generate["inputSchema"]["additionalProperties"], false);
 

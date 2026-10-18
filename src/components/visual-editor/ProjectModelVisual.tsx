@@ -61,6 +61,7 @@ import {
   type Texture,
 } from "three";
 import { tauri } from "../../lib/tauri";
+import { useSceneReviewResource, type SceneReviewLoadState } from "./scene-review-readiness";
 import {
   applyTimeUniformValue,
   detectTimeUniforms,
@@ -241,6 +242,7 @@ export function ProjectModelVisual({
 }: Props) {
   const cacheKey = `${projectPath}\n${sourceRelativePath}\n${sourceHash ?? ""}\n${loadRevision}`;
   const [state, setState] = useState<ProjectModelLoadState>({ status: "loading" });
+  const loadedSourceHashRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     let active = true;
@@ -253,6 +255,7 @@ export function ProjectModelVisual({
     )
       .then((data) => {
         if (!active) return;
+        loadedSourceHashRef.current = sourceHash;
         setState({ status: "ready", ...data });
       })
       .catch((error) => {
@@ -283,6 +286,8 @@ export function ProjectModelVisual({
       {(resolvedMaterials) => (
         <ProjectModelRender
           state={state}
+          loadedSourceHash={loadedSourceHashRef.current}
+          requestedSourceHash={sourceHash}
           importScale={importScale}
           castShadow={castShadow}
           receiveShadow={receiveShadow}
@@ -384,6 +389,8 @@ function ProjectModelMaterialTextureSlot({
 
 function ProjectModelRender({
   state,
+  loadedSourceHash,
+  requestedSourceHash,
   importScale,
   castShadow,
   receiveShadow,
@@ -400,6 +407,8 @@ function ProjectModelRender({
   onMaterialRuntimeInfoChange,
 }: {
   state: ProjectModelLoadState;
+  loadedSourceHash?: string;
+  requestedSourceHash?: string;
   importScale: number;
   castShadow: boolean;
   receiveShadow: boolean;
@@ -705,7 +714,7 @@ function ProjectModelRender({
         ]
       : [0, 0, 0];
     return (
-      <group scale={modelScale * previewScale}>
+      <group scale={modelScale * previewScale} userData={{ xriftModelSourceHash: loadedSourceHash, xriftModelLoadState: loadedSourceHash === requestedSourceHash ? "ready" : "loading" }}>
         <group position={previewOffset}>
           <primitive object={renderedModel.object} />
           {selected ? <ModelSelectionHighlight object={renderedModel.object} /> : null}
@@ -719,6 +728,7 @@ function ProjectModelRender({
       castShadow={false}
       receiveShadow={false}
       userData={{
+        xriftModelLoadState: state.status,
         xriftColliderExclude: true,
         loadError: state.status === "error" ? state.message : undefined,
       }}
@@ -1338,19 +1348,25 @@ export function useClassicShaderTextures(
     {},
   );
   const signature = shader
-    ? Object.entries(shader.uniforms)
-        .flatMap(([name, uniform]) =>
-          uniform.kind === "texture"
-            ? [`${name}:${uniform.textureAssetId}`]
-            : [],
-        )
-        .sort()
-        .join("|")
+    ? JSON.stringify(Object.entries(shader.uniforms)
+        .filter(([, uniform]) => uniform.kind === "texture")
+        .map(([name, uniform]) => {
+          const asset = uniform.kind === "texture" ? assets.assets[uniform.textureAssetId] : undefined;
+          return [name, uniform, asset?.sourceHash, asset?.source];
+        }).sort(([a], [b]) => String(a).localeCompare(String(b))))
     : "";
+  const hasTextures = Boolean(shader && Object.values(shader.uniforms).some(uniform => uniform.kind === "texture"));
+  const reportReview = useSceneReviewResource(`classic:${projectPath ?? ""}:${signature}`, { status: hasTextures ? "loading" : "ready" });
+  const [readiness, setReadiness] = useState<{ key: string; state: SceneReviewLoadState }>({ key: "", state: { status: "ready" } });
+  useLayoutEffect(() => {
+    if (!hasTextures) reportReview({ status: "ready" });
+    else if (readiness.key === signature) reportReview(readiness.state);
+  }, [hasTextures, readiness, reportReview, signature]);
 
   useEffect(() => {
-    if (!shader || !signature || !projectPath) {
+    if (!shader || !hasTextures || !projectPath) {
       setTextures({});
+      setReadiness({ key: signature, state: hasTextures ? { status: "error", message: "Shaderの画像の参照元を読み込めず、見た目を確認できませんでした" } : { status: "ready" } });
       return;
     }
     let active = true;
@@ -1395,16 +1411,23 @@ export function useClassicShaderTextures(
       }),
     )
       .then((entries) => {
-        if (active) setTextures(Object.fromEntries(entries));
+        if (active) {
+          setTextures(Object.fromEntries(entries));
+          const expected = Object.values(shader.uniforms).filter(uniform => uniform.kind === "texture").length;
+          setReadiness({ key: signature, state: entries.length === expected ? { status: "ready" } : { status: "error", message: "Shaderの画像が不足し、見た目を確認できませんでした" } });
+        }
       })
       .catch(() => {
-        if (active) setTextures({});
+        if (active) {
+          setTextures({});
+          setReadiness({ key: signature, state: { status: "error", message: "Shaderの画像を読み込めず、見た目を確認できませんでした" } });
+        }
       });
     return () => {
       active = false;
       loaded.forEach((texture) => texture.dispose());
     };
-  }, [assets, projectPath, shader, signature]);
+  }, [assets, hasTextures, projectPath, shader, signature]);
 
   return textures;
 }

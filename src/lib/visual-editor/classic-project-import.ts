@@ -578,7 +578,7 @@ function calculateClassicPlanPlacementScale(
   let node = nodeById.get(planNodeId);
   while (node && !visited.has(node.planNodeId)) {
     visited.add(node.planNodeId);
-    const material = node.localComponent
+    const material = node.localComponent && !node.componentPropsResolved
       ? materials.find(
           (candidate) => candidate.componentName === node?.sourceTag,
         )
@@ -1007,10 +1007,10 @@ export function applyClassicProjectVisualImportEnhancements(input: {
       : undefined;
     if (componentEntityId && scene.entities[componentEntityId]) {
       const componentScale = normalizedClassicComponentScale(
-        materialInspection.componentScale,
+        componentBoundary?.componentPropsResolved ? 1 : materialInspection.componentScale,
       );
       scene = updateEntityTransform(scene, componentEntityId, {
-        position: materialInspection.componentPosition,
+        position: componentBoundary?.componentPropsResolved ? componentBoundary.transform.position : materialInspection.componentPosition,
         // Townscaper and similar OBJ pipelines mirror the geometry before
         // centering. A negative component X scale preserves that authored
         // handedness without mutating the imported source Asset.

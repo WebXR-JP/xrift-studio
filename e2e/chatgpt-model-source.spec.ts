@@ -32,13 +32,14 @@ async function ready(page: Page, available: boolean, gate = false) {
   const panel = page.getByRole("region", { name: "ChatGPTの制作チャット", exact: true });
   await expect(panel.getByRole("combobox", { name: "ワールド制作のモデル", exact: true })).toHaveValue("fixture-model");
   await expect(panel.getByRole("combobox", { name: "モデルの制作方法", exact: true })).toHaveCount(0);
-  return { panel, source: panel.getByRole("checkbox", { name: "Blenderを使う", exact: true }), prompt: panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true }) };
+  return { panel, source: panel.getByRole("checkbox", { name: "コード・Blenderで制作", exact: true }), prompt: panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true }) };
 }
 
-test("Blender未導入では理由を示し、利用可能になると有効・無効を切り替えられる", async ({ page }) => {
+test("Blender未導入でもコード制作を選べ、素材ストアへ切り替えられる", async ({ page }) => {
   const { panel, source, prompt } = await ready(page, false);
-  await expect(source).not.toBeChecked();
-  await expect(source).toBeDisabled();
+  await expect(source).toBeChecked();
+  await expect(source).toBeEnabled();
+  await expect(panel).toContainText("コードでの制作は利用できます。");
   await expect(panel).toContainText("Blenderは未導入です。");
   await page.evaluate(() => { window.__XRIFT_CHATGPT_MODEL_SOURCE_FIXTURE__!.available = true; });
   await panel.getByRole("button", { name: "Blenderを再確認" }).click();
@@ -51,14 +52,14 @@ test("Blender未導入では理由を示し、利用可能になると有効・�
   await expect.poll(() => page.evaluate(() => window.__XRIFT_CHATGPT_MODEL_SOURCE_FIXTURE__!.requests)).toEqual([{ models: true, materials: true, audio: true, modelSource: "store" }]);
 });
 
-test("Blender確認中は操作を保留し、有効・無効の設定を依頼ごとに保持する", async ({ page }) => {
+test("Blender確認中でもコード制作を送信でき、制作方法を依頼ごとに保持する", async ({ page }) => {
   const { panel, source, prompt } = await ready(page, true, true);
-  await expect(source).toBeDisabled();
+  await expect(source).toBeEnabled();
   await expect(panel).toContainText("Blenderを確認しています。");
-  await page.evaluate(() => { window.__XRIFT_CHATGPT_MODEL_SOURCE_FIXTURE__!.gate = false; window.__XRIFT_RELEASE_E2E__!.chatgptPlanGate = true; });
+  await page.evaluate(() => { window.__XRIFT_RELEASE_E2E__!.chatgptPlanGate = true; });
   await expect(source).toBeEnabled();
   await expect(source).toBeChecked();
-  await prompt.fill("Blenderでモデルを制作する依頼");
+  await prompt.fill("コードでモデルを制作する依頼");
   await prompt.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__XRIFT_CHATGPT_MODEL_SOURCE_FIXTURE__!.requests.length)).toBe(1);
   await expect(source).toBeEnabled();

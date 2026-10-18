@@ -3,6 +3,7 @@
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 mod world_authoring;
+mod authoring_context;
 mod chatgpt;
 mod blender_modeling;
 use sha2::{Digest, Sha256};
@@ -6492,6 +6493,8 @@ pub fn run() {
             chatgpt::chatgpt_authoring_contract,
             chatgpt::chatgpt_plan,
             chatgpt::modeling::chatgpt_model_specs,
+            chatgpt::modeling::chatgpt_review_model,
+            chatgpt::modeling::chatgpt_review_scene,
             chatgpt::chatgpt_cancel_generation,
             blender_modeling::get_blender_status,
             blender_modeling::create_blender_model,
@@ -6534,6 +6537,8 @@ pub fn run() {
             write_world_file,
             clone_classic_project_repository,
             read_text_file,
+            authoring_context::read_chatgpt_harness_context,
+            authoring_context::write_chatgpt_harness_context,
             read_script_source,
             write_text_file,
             read_thumbnail,

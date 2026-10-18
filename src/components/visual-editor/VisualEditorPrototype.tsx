@@ -23,8 +23,10 @@ import { colliderModelNode, setMeshCollision } from "../../lib/visual-editor/mes
 import { textureProcessingSettings } from "../../lib/visual-editor/texture-processing";
 import { normalizeTextureImportSettings } from "../../lib/visual-editor/asset-manifest";
 import { applyMaterialBatchPatch, applyMaterialBatchFieldValue } from "../../lib/visual-editor/material-batch";
-import { authoringFingerprint, authoringStatus, changeAuthoringState, readAuthoringState } from "../../lib/visual-editor/world-authoring";
+import { authoringFingerprint, authoringStatus, beginAuthoringWrite, changeAuthoringState, finishAuthoringWrite, isAuthoringWriteTool, observeAuthoringScene, readAuthoringState } from "../../lib/visual-editor/world-authoring";
+import { authoringSceneProgressFingerprint } from "../../lib/visual-editor/authoring-scene-progress";
 import { getWorldComponentAuthoring } from "../../lib/visual-editor/world-component-authoring";
+import { resolveRuntimeSpawn } from "../../lib/visual-editor/runtime-spawn";
 import {
   lazy,
   Suspense,
@@ -244,6 +246,7 @@ import {
   type McpHarnessState,
 } from "../../lib/visual-editor/mcp-harness-guard";
 import { setProjectThumbnailFromAsset } from "../../lib/project-thumbnail";
+import { isDerivedMcpDocumentUpdate, isMcpDerivedRevisionCurrent } from "../../lib/visual-editor/mcp-derived-update";
 import { AssetsPanel } from "./AssetsPanel";
 import {
   ValueScrubContext,
@@ -710,6 +713,9 @@ export type VisualEditorMcpProjectBridge = {
   applyGenerationStep: (update: { expectedBundle: PrototypeVisualProject; nextBundle: PrototypeVisualProject; entityId?: string }) => boolean;
   /** The Editor's current documents, ahead of any pending autosave. */
   currentBundle: () => PrototypeVisualProject;
+  /** Real Model views for quality review; never moves the author's camera. */
+  captureModelViews: (entityId: string, sourceHash: string, checkCurrent?: () => void) => Promise<{ label: string; dataUrl: string }[]>;
+  captureWorldViews: (checkCurrent?: () => void) => Promise<{ label: string; dataUrl: string }[]>;
   /** Flushes the pending autosave. Resolves to the project path when known. */
   saveNow: () => Promise<string | undefined>;
   /** Saves, then leaves to the Library. Resolves false when the save failed. */
@@ -1046,6 +1052,8 @@ export function VisualEditorPrototype({
   );
   const bundle = history.present.bundle;
   const bundleRef = useRef(bundle);
+  const authoringOwnerBusyRef = useRef(chatgptBusy);
+  authoringOwnerBusyRef.current = chatgptBusy;
   const historyRef = useRef(history);
   // Editor commands also update notices, selection and save status. Execute
   // them once at dispatch, not inside a React updater which can be replayed
@@ -1095,34 +1103,45 @@ export function VisualEditorPrototype({
     useState<SceneScreenshotRequest | null>(null);
   const sceneScreenshotIdRef = useRef(0);
   const requestSceneScreenshot = useCallback(
-    () =>
+    (modelView?: SceneScreenshotRequest["modelView"], worldView?: SceneScreenshotRequest["worldView"], checkCurrent?: () => void) =>
       new Promise<{ ok: true; dataUrl: string } | { ok: false; message: string }>(
         (resolve) => {
           const id = sceneScreenshotIdRef.current + 1;
           sceneScreenshotIdRef.current = id;
           let settled = false;
+          let timeout: number | undefined;
+          let cancellationPoll: number | undefined;
           const settle = (
             result: { ok: true; dataUrl: string } | { ok: false; message: string },
           ) => {
             if (settled) return;
             settled = true;
+            window.clearTimeout(timeout);
+            window.clearInterval(cancellationPoll);
+            setSceneScreenshotRequest(current => current?.id === id ? null : current);
             resolve(result);
           };
           setSceneScreenshotRequest({
             id,
+            ...(modelView ? { modelView } : {}),
+            ...(worldView ? { worldView } : {}),
             onCapture: (dataUrl) => settle({ ok: true, dataUrl }),
             onError: (message) => settle({ ok: false, message }),
           });
           // The Canvas does not render while the window is hidden, so a request
           // that never reaches a frame must still answer the MCP client.
-          window.setTimeout(
+          timeout = window.setTimeout(
             () =>
               settle({
                 ok: false,
                 message: "シーンのフレームを取得できませんでした",
               }),
-            5_000,
+            modelView || worldView ? 15_000 : 5_000,
           );
+          if (checkCurrent) cancellationPoll = window.setInterval(() => {
+            try { checkCurrent(); }
+            catch (error) { settle({ ok: false, message: error instanceof Error ? error.message : String(error) }); }
+          }, 100);
         },
       ),
     [],
@@ -1270,6 +1289,8 @@ export function VisualEditorPrototype({
     }
   }, []);
   const mcpRevisionRef = useRef(0);
+  const mcpDerivedRevisionRef = useRef(0);
+  const mcpDerivedRevisionWatchersRef = useRef(0);
   // Streak of same-category writes since the last capture. Session memory only;
   // it is never written to the project.
   const mcpHarnessStateRef = useRef<McpHarnessState>(EMPTY_MCP_HARNESS_STATE);
@@ -1279,7 +1300,11 @@ export function VisualEditorPrototype({
     mcpRevisionProjectRef.current = bundle.project.projectId;
     mcpRevisionBundleRef.current = bundle;
     mcpRevisionRef.current = 0;
+    mcpDerivedRevisionRef.current = 0;
   } else if (mcpRevisionBundleRef.current !== bundle) {
+    // Classifying a complete document is only needed while an asynchronous
+    // source conversion holds a lease, never on ordinary pointer edits.
+    if (mcpDerivedRevisionWatchersRef.current > 0 && isDerivedMcpDocumentUpdate(mcpRevisionBundleRef.current, bundle)) mcpDerivedRevisionRef.current++;
     mcpRevisionBundleRef.current = bundle;
     mcpRevisionRef.current += 1;
   }
@@ -2703,19 +2728,32 @@ export function VisualEditorPrototype({
     const complete = async (
       request: XriftMcpEditorRequestEvent,
     ): Promise<void> => {
+      let authoringWriteScope: { root: string; projectId: string; sceneId: string } | undefined;
+      const savedAuthoringEvidence = async () => {
+        const saved = lastSavedBundleRef.current;
+        const savedFingerprint = saved ? await authoringFingerprint(saved) : null;
+        return { savedFingerprint: lastSavedBundleRef.current === saved ? savedFingerprint : null,
+          pendingWrites: Boolean(autosaveCoordinatorRef.current?.isPending()) };
+      };
       const completeResponse = async (response: Parameters<typeof tauri.completeXriftMcpRequest>[0]) => {
         // Preserve successful edit results even when auxiliary history cannot be saved.
         // Reporting the edit itself as failed could make a client execute it twice.
         const root = projectPathRef.current;
         const sceneId = bundleRef.current.scene.sceneId;
-        if (root && response.ok && request.arguments.sceneId === sceneId && request.arguments.projectId === bundleRef.current.project.projectId) {
+        if (authoringWriteScope || root && response.ok && request.arguments.sceneId === sceneId && request.arguments.projectId === bundleRef.current.project.projectId) {
           try {
-            const state = readAuthoringState(await tauri.readWorldAuthoring(root, sceneId));
-            const fingerprint = await authoringFingerprint(bundleRef.current);
-            if (state && state.activity.fingerprint !== fingerprint) {
-              const next = { ...state, sequence: state.sequence + 1, completedFingerprint: null,
-                activity: { tool: request.tool, at: new Date().toISOString(), fingerprint } };
-              await tauri.saveWorldAuthoring(root, sceneId, state.sequence, next);
+            const journalRoot = authoringWriteScope?.root ?? root!, journalScene = authoringWriteScope?.sceneId ?? sceneId;
+            const state = readAuthoringState(await tauri.readWorldAuthoring(journalRoot, journalScene));
+            const currentBundle = bundleRef.current;
+            const sameScene = journalScene === currentBundle.scene.sceneId && (authoringWriteScope?.projectId ?? currentBundle.project.projectId) === currentBundle.project.projectId;
+            if (state) {
+              const fingerprint = sameScene ? await authoringFingerprint(currentBundle) : state.activity.fingerprint;
+              const next = authoringWriteScope ? finishAuthoringWrite(state, request.tool, request.id, fingerprint, response.ok && sameScene, response.error?.message,
+                sameScene ? authoringSceneProgressFingerprint(currentBundle) : state.run?.pendingWrite?.progressFingerprint ?? fingerprint)
+                : observeAuthoringScene(state, request.tool, fingerprint);
+              if (next !== state) await tauri.saveWorldAuthoring(journalRoot, journalScene, state.sequence, next);
+              if (authoringWriteScope && sameScene) response = { ...response, result: { ...response.result,
+                authoring: authoringStatus(next, fingerprint, await savedAuthoringEvidence()) } };
             }
           } catch (error) {
             response = { ...response, result: { ...response.result, authoringWarning: String(error) } };
@@ -2743,6 +2781,21 @@ export function VisualEditorPrototype({
             "TOOL_NOT_FOUND",
             "対応していないAI editor toolです",
           );
+        }
+        if (isAuthoringWriteTool(request.tool)) {
+          const root = projectPathRef.current, current = bundleRef.current;
+          if (root && request.arguments.projectId === current.project.projectId && request.arguments.sceneId === current.scene.sceneId) {
+            const state = readAuthoringState(await tauri.readWorldAuthoring(root, current.scene.sceneId));
+            if (state?.run && state.run.terminalReason !== "completed") {
+              const fingerprint = await authoringFingerprint(current);
+              let next;
+              try { next = beginAuthoringWrite(state, request.tool, request.id, fingerprint, request.arguments, authoringSceneProgressFingerprint(current)); }
+              catch (error) { throw new XriftMcpEditorToolError("AUTHORING_WRITE_STOPPED", error instanceof Error ? error.message : String(error),
+                { authoring: authoringStatus(state, fingerprint, await savedAuthoringEvidence()) }); }
+              await tauri.saveWorldAuthoring(root, current.scene.sceneId, state.sequence, next);
+              authoringWriteScope = { root, projectId: current.project.projectId, sceneId: current.scene.sceneId };
+            }
+          }
         }
         if (RECORDING_TOOL_NAMES.has(request.tool)) {
           const result = await handleRecordingToolRef.current(request);
@@ -2772,15 +2825,18 @@ export function VisualEditorPrototype({
               { projectId, sceneId },
             );
           }
-          if (["begin_world_authoring", "get_world_authoring", "review_world_authoring", "complete_world_authoring"].includes(request.tool)) {
+          if (["begin_world_authoring", "get_world_authoring", "review_world_authoring", "complete_world_authoring", "cancel_world_authoring"].includes(request.tool)) {
+            if (request.tool === "begin_world_authoring" && authoringOwnerBusyRef.current) throw new XriftMcpEditorToolError("EDITOR_BUSY", "現在の制作が終わるか停止してから、MCPの制作目標を開始してください。");
             const root = projectPathRef.current;
             if (!root) throw new Error("自動保存の完了後に制作を開始してください。");
             const worldComponents = getWorldComponentAuthoring(bundleRef.current.scene, bundleRef.current.project.projectKind);
             const fingerprint = await authoringFingerprint(bundleRef.current);
             let state = readAuthoringState(await tauri.readWorldAuthoring(root, sceneId));
-            if (request.tool === "complete_world_authoring" && (!state || authoringStatus(state, fingerprint).uncheckedCriteria?.length)) {
+            if (request.tool === "complete_world_authoring") await mcpProjectBridgeActionsRef.current?.saveNow();
+            const evidence = await savedAuthoringEvidence();
+            if (request.tool === "complete_world_authoring" && (!state || !authoringStatus(state, fingerprint, evidence).canComplete)) {
               await completeResponse({ id: request.id, ok: true, result: { projectId, sceneId,
-                ...authoringStatus(state, fingerprint), worldComponents, completionAccepted: false } });
+                ...authoringStatus(state, fingerprint, evidence), worldComponents, completionAccepted: false } });
               return;
             }
             if (request.tool === "complete_world_authoring") {
@@ -2788,16 +2844,19 @@ export function VisualEditorPrototype({
                 if ((await tauri.readWorldAuthoringImages(root, sceneId, fingerprint)).length !== 2) throw new Error("Missing images");
               } catch {
                 await completeResponse({ id: request.id, ok: true, result: { projectId, sceneId,
-                  ...authoringStatus(state, fingerprint), worldComponents, completed: false, completionAccepted: false,
+                  ...authoringStatus(state, fingerprint, evidence), worldComponents, completed: false, canComplete: false, completionAccepted: false,
                   imageWarning: "保存画像を読み取れません。両視点を撮り直してください。",
                   missingViews: ["spawn", "iso"], nextActions: ["set_scene_view_camera", "capture_scene_view"] } });
                 return;
               }
             }
             if (request.tool !== "get_world_authoring") {
-              const next = changeAuthoringState(state, request.tool, args, fingerprint);
+              const next = changeAuthoringState(state, request.tool, args, fingerprint, evidence);
               if (fingerprint !== await authoringFingerprint(bundleRef.current)) throw new Error("シーンが変更されました。状態を読み直してください。");
               await tauri.saveWorldAuthoring(root, sceneId, state?.sequence ?? 0, next);
+              // Async file/model operations recheck expectedRevision before
+              // committing. Invalidate that lease when a run is cancelled.
+              if (request.tool === "cancel_world_authoring" && state?.run?.pendingWrite) mcpRevisionRef.current++;
               state = next;
             }
             let images;
@@ -2807,8 +2866,9 @@ export function VisualEditorPrototype({
               catch { imageWarning = "保存画像を読み取れません。両視点を撮り直してください。"; }
             }
             await completeResponse({ id: request.id, ok: true, result: {
-              projectId, sceneId, ...authoringStatus(state, fingerprint), worldComponents, images, imageWarning,
-              ...(imageWarning ? { completed: false, missingViews: ["spawn", "iso"], nextActions: ["set_scene_view_camera", "capture_scene_view"] } : {}),
+              projectId, sceneId, ...authoringStatus(state, fingerprint, evidence), worldComponents, images, imageWarning,
+              ...(request.tool === "complete_world_authoring" ? { completionAccepted: true } : {}),
+              ...(imageWarning ? { completed: false, canComplete: false, missingViews: ["spawn", "iso"], nextActions: ["set_scene_view_camera", "capture_scene_view"] } : {}),
             } });
             return;
           }
@@ -2908,9 +2968,10 @@ export function VisualEditorPrototype({
               if (!root) throw new Error("自動保存が完了していません。保存状態を確認してください。");
               if (fingerprint !== await authoringFingerprint(bundleRef.current)) throw new Error("撮影中にシーンが変更されました。撮り直してください。");
               const state = readAuthoringState(await tauri.readWorldAuthoring(root, sceneId));
-              const next = changeAuthoringState(state, request.tool, { ...args, path }, fingerprint);
+              const evidence = await savedAuthoringEvidence();
+              const next = changeAuthoringState(state, request.tool, { ...args, path }, fingerprint, evidence);
               await tauri.saveWorldAuthoring(root, sceneId, state?.sequence ?? 0, next);
-              authoring = authoringStatus(next, fingerprint);
+              authoring = authoringStatus(next, fingerprint, evidence);
             }
             await completeResponse({
               id: request.id,
@@ -5346,8 +5407,9 @@ export function VisualEditorPrototype({
           }
         }
         const sourceBundle = bundleRef.current;
-        const outcome = executeXriftMcpEditorTool(
-          {
+        const sourceRevision = mcpRevisionRef.current;
+        const sourceDerivedRevision = mcpDerivedRevisionRef.current;
+        const documentContext = {
             bundle: sourceBundle,
             sceneSelection: sceneSelectionRef.current,
             assetSelection: assetSelectionRef.current,
@@ -5357,13 +5419,34 @@ export function VisualEditorPrototype({
             saveStatus: saveStatusRef.current,
             scriptContracts: scriptContractsRef.current,
             scriptRuntime: scriptRuntimeReportRef.current,
-          },
+          };
+        let outcome: ReturnType<typeof executeXriftMcpEditorTool>;
+        if (request.tool === "apply_r3f_scene") {
+          mcpDerivedRevisionWatchersRef.current++;
+          try {
+            const { applyMcpR3fScene, rebaseMcpR3fOutcome } = await import("../../lib/visual-editor/mcp-code-authoring");
+            const checkCurrent = () => {
+              if (disposed || projectPathRef.current !== currentProjectPath || editorModeRef.current !== "edit" || importBusyRef.current || projectExportLock.current
+                || !isMcpDerivedRevisionCurrent(sourceBundle, bundleRef.current, sourceRevision, mcpRevisionRef.current, sourceDerivedRevision, mcpDerivedRevisionRef.current)) {
+                throw new XriftMcpEditorToolError("STALE_REVISION", "R3Fの変換中に編集状態が変わりました。変更を保ち、get_editor_contextで最新の状態を取得してください");
+              }
+            };
+            const result = await applyMcpR3fScene(documentContext, request.arguments, checkCurrent);
+            checkCurrent();
+            outcome = rebaseMcpR3fOutcome(documentContext, result, bundleRef.current, mcpRevisionRef.current);
+          } finally {
+            mcpDerivedRevisionWatchersRef.current--;
+          }
+        } else {
+          outcome = executeXriftMcpEditorTool(
+          documentContext,
           {
             id: request.id,
             tool: request.tool as XriftMcpEditorToolName,
             arguments: request.arguments,
           },
         );
+        }
 
         if (request.tool === "create_material_from_preset" && request.arguments.kind === "gltf") {
           const id = outcome.result.materialAssetId;
@@ -5550,6 +5633,38 @@ export function VisualEditorPrototype({
             return true;
           },
           currentBundle: () => bundleRef.current,
+          captureModelViews: async (entityId, sourceHash, checkCurrent) => {
+            const views: { label: string; direction: [number, number, number] }[] = [
+              { label: "正面", direction: [0, 0.15, 1] },
+              { label: "斜め前", direction: [1, 0.65, 1] },
+              { label: "斜め後ろ", direction: [-1, 0.55, -1] },
+            ];
+            const images: { label: string; dataUrl: string }[] = [];
+            for (const view of views) {
+              checkCurrent?.();
+              if (editorModeRef.current !== "edit" || !bundleRef.current.scene.entities[entityId]) throw new Error("モデルの確認対象が変わりました");
+              const captured = await requestSceneScreenshot({ entityId, sourceHash, direction: view.direction }, undefined, checkCurrent);
+              if (!captured.ok) throw new Error(captured.message);
+              images.push({ label: view.label, dataUrl: captured.dataUrl });
+            }
+            return images;
+          },
+          captureWorldViews: async (checkCurrent) => {
+            const spawn = resolveRuntimeSpawn(bundleRef.current.scene);
+            const views: { label: string; view: NonNullable<SceneScreenshotRequest["worldView"]> }[] = [
+              { label: "ワールド全体の俯瞰", view: { kind: "overview" } },
+              { label: "スポーン位置からの視界（目の高さ1.6m）", view: { kind: "spawn", position: spawn.position, yaw: spawn.yaw } },
+            ];
+            const images: { label: string; dataUrl: string }[] = [];
+            for (const item of views) {
+              checkCurrent?.();
+              if (editorModeRef.current !== "edit") throw new Error("ワールドの確認中にPlayへ切り替わりました");
+              const captured = await requestSceneScreenshot(undefined, item.view, checkCurrent);
+              if (!captured.ok) throw new Error(captured.message);
+              images.push({ label: item.label, dataUrl: captured.dataUrl });
+            }
+            return images;
+          },
           saveNow: () =>
             mcpProjectBridgeActionsRef.current?.saveNow() ??
             Promise.resolve(undefined),

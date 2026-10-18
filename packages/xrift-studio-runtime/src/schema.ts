@@ -1,3 +1,5 @@
+import { isXriftExtrudeProfile } from "./extrude-profile.js";
+
 export const XRIFT_STUDIO_RUNTIME_FORMAT = "xrift-studio.runtime" as const;
 export const XRIFT_STUDIO_RUNTIME_SCHEMA_VERSION = "1.0.0" as const;
 /**
@@ -6,7 +8,7 @@ export const XRIFT_STUDIO_RUNTIME_SCHEMA_VERSION = "1.0.0" as const;
  * manifest, and the browser upload path refuses an older shell.
  */
 export const XRIFT_RUNTIME_CONTRACT_VERSION =
-  "2026-10-14-world-items-mtoon-v3" as const;
+  "2026-10-17-r3f-extrude-v1" as const;
 
 export type XriftRuntimeDiagnostic = {
   severity: "warning" | "error";
@@ -36,6 +38,13 @@ export type XriftRuntimeGeometry =
       heights: number[];
       /** `true` omits the corresponding heightmap cell from the mesh. */
       holes?: boolean[];
+    }
+  | {
+      kind: "extrude";
+      /** Closed 2D profile points in local XY. */
+      points: [number, number][];
+      /** Extrusion length along local +Z. */
+      depth: number;
     }
   | { kind: "model"; assetId: string; sourceNodeIndex?: number };
 
@@ -558,6 +567,9 @@ function isRuntimeGeometry(value: unknown): value is XriftRuntimeGeometry {
     );
   }
   if (value.kind === "model") return typeof value.assetId === "string";
+  if (value.kind === "extrude") {
+    return isXriftExtrudeProfile(value);
+  }
   if (value.kind !== "terrain") return false;
   return (
     isRuntimeTerrainSize(value.width) &&

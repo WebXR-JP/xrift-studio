@@ -13,6 +13,7 @@ import {
 } from "./creation-catalog";
 import { createDocumentId } from "./document-id";
 import { cloneXriftComponentIdentifiers } from "./xrift-component-identity";
+import { r3fManagedEntityId, remapR3fSceneAuthoring } from "./r3f-scene-source";
 import type { SceneSettings } from "./scene-settings";
 import {
   applyTerrainBrush,
@@ -46,6 +47,7 @@ import {
   type XriftImageQuadAnchorX,
   type XriftImageQuadAnchorY,
 } from "../../../packages/xrift-studio-runtime/src/image-quad-layout";
+import { isXriftExtrudeProfile, validateXriftExtrudeProfile, type XriftExtrudeProfile } from "../../../packages/xrift-studio-runtime/src/extrude-profile";
 
 export const SCENE_DOCUMENT_SCHEMA_VERSION = "0.1.0" as const;
 
@@ -119,6 +121,15 @@ export type ModelNodeTransformOffset = {
   visible?: boolean;
 };
 
+/** A 2D profile in local XY extruded along local +Z, authored like Terrain data. */
+export type ExtrudeGeometryData = XriftExtrudeProfile;
+
+export function isExtrudeGeometryData(
+  value: unknown,
+): value is ExtrudeGeometryData {
+  return isXriftExtrudeProfile(value);
+}
+
 export type MeshGeometryReference =
   | {
       kind: "asset";
@@ -137,6 +148,11 @@ export type MeshGeometryReference =
       /** Persisted height samples authored by the Terrain tools. */
       kind: "terrain";
       terrain: TerrainGeometry;
+    }
+  | {
+      /** Persisted 2D profile extruded along local +Z. */
+      kind: "extrude";
+      extrude: ExtrudeGeometryData;
     };
 
 export type MaterialBinding = {
@@ -688,6 +704,8 @@ export type SceneEntity = {
   components: RegisteredSceneComponent[];
   /** Editor-only link for a node exposed from one shared skinned/animated Model. */
   modelNode?: ModelNodeAuthoringMetadata;
+  /** Persisted code source and baselines used for reversible R3F revisions. */
+  codeAuthoring?: import("./r3f-scene-source").R3fSceneAuthoring;
 };
 
 export type ModelNodeAuthoringMetadata = {
@@ -1397,6 +1415,42 @@ export function createTerrainMeshComponent(
   };
 }
 
+/** Creates an extruded-profile mesh stored entirely in the Scene document. */
+export function createExtrudeMeshComponent(
+  id: string,
+  materialAssetId: string,
+  extrude: ExtrudeGeometryData,
+  options: { castShadow?: boolean; receiveShadow?: boolean } = {},
+): MeshComponent {
+  const error = validateXriftExtrudeProfile(extrude);
+  if (error) throw new Error(error);
+  return {
+    id,
+    type: "mesh",
+    enabled: true,
+    // Extrude is authored data, not an Asset Library geometry, like Terrain.
+    geometryAssetId: "extrude",
+    geometry: {
+      kind: "extrude",
+      extrude: {
+        points: extrude.points.map(
+          (point): [number, number] => [point[0], point[1]],
+        ),
+        depth: extrude.depth,
+      },
+    },
+    materialBindings: [{ slot: "default", materialAssetId }],
+    castShadow: options.castShadow ?? true,
+    receiveShadow: options.receiveShadow ?? true,
+  };
+}
+
+export function getExtrudeGeometry(
+  mesh: MeshComponent,
+): ExtrudeGeometryData | undefined {
+  return mesh.geometry?.kind === "extrude" ? mesh.geometry.extrude : undefined;
+}
+
 export function getTerrainGeometry(
   mesh: MeshComponent,
 ): TerrainGeometry | undefined {
@@ -1728,6 +1782,24 @@ export function getColliderAutoFitBounds(
   mesh: MeshComponent,
   assets: AssetManifest,
 ): ColliderAutoFitBounds | null {
+  if (mesh.geometry?.kind === "extrude") {
+    if (!isExtrudeGeometryData(mesh.geometry.extrude)) return null;
+    const { points, depth } = mesh.geometry.extrude;
+    const xs = points.map((point) => point[0]);
+    const ys = points.map((point) => point[1]);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    return {
+      center: [(minX + maxX) / 2, (minY + maxY) / 2, depth / 2],
+      halfExtents: [
+        Math.max((maxX - minX) / 2, MIN_COLLIDER_HALF_EXTENT),
+        Math.max((maxY - minY) / 2, MIN_COLLIDER_HALF_EXTENT),
+        Math.max(depth / 2, MIN_COLLIDER_HALF_EXTENT),
+      ],
+    };
+  }
   if (mesh.geometry?.kind === "terrain") {
     const range = terrainHeightRange(mesh.geometry.terrain);
     return {
@@ -2709,6 +2781,9 @@ export function getMeshMaterialSlots(
   if (mesh.geometry?.kind === "terrain") {
     return [{ slot: TERRAIN_MATERIAL_SLOT, name: "Terrain" }];
   }
+  if (mesh.geometry?.kind === "extrude") {
+    return [{ slot: "default", name: "Default" }];
+  }
   if (mesh.geometry?.kind === "builtin-primitive") {
     return (
       getBuiltinPrimitiveCreation(mesh.geometry.creationId)?.materialSlots.map(
@@ -3252,6 +3327,22 @@ export function cloneEntityHierarchy(
     usedIds.add(nextId);
   }
 
+  // Code revisions address generated nodes by root + stable source key. A
+  // copied root must own a separate namespace before references are cloned.
+  for (const sourceId of sourceIds) {
+    const authoring = scene.entities[sourceId]?.codeAuthoring;
+    if (!authoring) continue;
+    for (const [key, node] of Object.entries(authoring.nodes)) {
+      const previousId = entityIdMap[node.entityId];
+      if (!previousId || node.entityId === sourceId) continue;
+      const nextId = r3fManagedEntityId(entityIdMap[sourceId], key);
+      usedIds.delete(previousId);
+      if (usedIds.has(nextId) || scene.entities[nextId]) return null;
+      entityIdMap[node.entityId] = nextId;
+      usedIds.add(nextId);
+    }
+  }
+
   const entities: Record<string, SceneEntity> = {};
   for (const sourceId of sourceIds) {
     const source = scene.entities[sourceId];
@@ -3290,6 +3381,14 @@ export function cloneEntityHierarchy(
           }
         : {}),
     };
+  }
+
+  // All component IDs now exist, including references to later siblings.
+  for (const sourceId of sourceIds) {
+    const authoring = scene.entities[sourceId]?.codeAuthoring;
+    if (authoring) entities[entityIdMap[sourceId]].codeAuthoring = remapR3fSceneAuthoring(
+      authoring, entityIdMap[sourceId], new Map(Object.entries(entityIdMap)), new Map(Object.entries(componentIdMap)),
+    );
   }
 
   return {
@@ -3378,7 +3477,9 @@ function cloneSceneComponent(
     return {
       ...component,
       id,
-      ...(component.geometry ? { geometry: { ...component.geometry } } : {}),
+      ...(component.geometry ? { geometry: component.geometry.kind === "extrude"
+        ? { kind: "extrude" as const, extrude: { depth: component.geometry.extrude.depth, points: component.geometry.extrude.points.map(([x, y]): [number, number] => [x, y]) } }
+        : { ...component.geometry } } : {}),
       materialBindings: component.materialBindings.map((binding) => ({
         ...binding,
       })),

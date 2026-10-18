@@ -4,6 +4,7 @@ import type { ChatgptConnection, ChatgptModel, XriftMcpEditorResponse } from "..
 type ConnectionFixture = {
   loginCalls: number;
   loginFailure: string | null;
+  modelCalls: number;
   requests: Record<string, unknown>[];
   models: ChatgptModel[];
 };
@@ -28,7 +29,7 @@ async function openFixture(page: Page, width = 1440) {
   // native authentication/catalog response and outbound payload are isolated.
   await page.evaluate(() => {
     const fixture: ConnectionFixture = {
-      loginCalls: 0, loginFailure: null, requests: [],
+      loginCalls: 0, loginFailure: null, modelCalls: 0, requests: [],
       models: [
         { slug: "fixture-a", displayName: "検証モデルA", supportedReasoningEfforts: ["low", "medium", "high"], defaultReasoningEffort: "medium" },
         { slug: "fixture-b", displayName: "検証モデルB", supportedReasoningEfforts: ["low", "high"], defaultReasoningEffort: "low" },
@@ -44,7 +45,7 @@ async function openFixture(page: Page, width = 1440) {
         fixture.loginCalls++;
         if (fixture.loginFailure) throw new Error(fixture.loginFailure);
       }
-      if (command === "chatgpt_models") return structuredClone(fixture.models);
+      if (command === "chatgpt_models") { fixture.modelCalls++; return structuredClone(fixture.models); }
       if (command === "chatgpt_plan") fixture.requests.push(structuredClone(args ?? {}));
       return invoke(command, args, options);
     };
@@ -72,8 +73,24 @@ async function expectCentralConnection(page: Page) {
   const connect = card.getByRole("button");
   await expect(connect).toBeVisible();
   await expect(connect).toHaveText("ChatGPTに接続");
+  await expect(connect).toBeEnabled();
+  // The compact desktop dock shares height with Inspector. Its connection
+  // card can overflow, but the real button must remain reachable by scrolling.
+  await connect.scrollIntoViewIfNeeded();
+  await expect(connect).toBeInViewport({ ratio: 1 });
+  await connect.click({ trial: true });
+  const expand = panel.getByRole("button", { name: "チャットを広く", exact: true });
+  if (await expand.isVisible()) {
+    await expand.click();
+    await expect(expand).toHaveAttribute("aria-pressed", "true");
+  }
   await page.evaluate(() => document.fonts.ready);
   await expect(panel.locator("header").getByRole("button", { name: "ChatGPTに接続", exact: true })).toHaveCount(0);
+  await expect.poll(() => panel.evaluate(element => {
+    const viewport = element.querySelector('[aria-label="制作の会話と結果"]')!;
+    const connectionCard = element.querySelector('[aria-label="ChatGPTの接続"]')!;
+    return connectionCard.getBoundingClientRect().height <= viewport.getBoundingClientRect().height;
+  })).toBe(true);
   const bounds = await panel.locator('[aria-label="制作の会話と結果"]').boundingBox();
   const button = await connect.boundingBox();
   const cardBounds = await card.boundingBox();
@@ -183,4 +200,41 @@ test("モデル切替で対応する思考量を保ち、非対応なら既定�
   const explicitDefault = await page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.at(-1)!);
   expect(explicitDefault.model).toBe("fixture-b");
   expect(explicitDefault.reasoningEffort).toBeUndefined();
+});
+
+test("UIは低を初期送信し、MCPも直近のモデル能力で低を選び追加の一覧取得をしない", async ({ page }) => {
+  const panel = await openFixture(page);
+  await signIn(page);
+  await expect(panel.getByRole("combobox", { name: "思考量", exact: true })).toHaveValue("low");
+  await panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true }).fill("低い思考量で床を追加");
+  await panel.getByRole("button", { name: "依頼を送信", exact: true }).click();
+  await expect(panel.getByRole("progressbar", { name: "依頼の反映と保存", exact: true })).toHaveAttribute("value", "3");
+  expect(await page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.at(-1))).toMatchObject({ model: "fixture-a", reasoningEffort: "low" });
+
+  expect((await call(page, "get_chatgpt_connection")).ok).toBe(true);
+  expect((await call(page, "list_chatgpt_models")).ok).toBe(true);
+  const modelCalls = await page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.modelCalls);
+  for (const [model, explicit, expected] of [["fixture-a", undefined, "low"], ["fixture-b", "high", "high"], ["fixture-c", undefined, "medium"], ["fixture-d", undefined, undefined]] as const) {
+    const requestCount = await page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.length);
+    let response: XriftMcpEditorResponse | undefined;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const context = (await call(page, "get_editor_context")).result!;
+      response = await call(page, "generate_chatgpt_world", {
+        projectId: context.projectId, sceneId: context.sceneId, expectedRevision: context.revision,
+        model, prompt: "床の配置を計画", mode: "plan", ...(explicit ? { reasoningEffort: explicit } : {}),
+      });
+      if (response.error?.code !== "STALE_REVISION") break;
+      // A derived thumbnail can finish between the revision read and admission.
+      // Retry only a rejected admission that dispatched no model request.
+      expect(await page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.length)).toBe(requestCount);
+    }
+    if (!response) throw new Error("No generation admission was attempted");
+    expect(response.ok, JSON.stringify(response)).toBe(true);
+    await expect.poll(async () => (await call(page, "get_chatgpt_generation", { generationId: response.result!.generationId })).result?.status).toBe("planned");
+    const sent = await page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.at(-1)!);
+    expect(sent.model).toBe(model);
+    expect(sent.reasoningEffort).toBe(expected);
+    expect(await page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.modelCalls)).toBe(modelCalls);
+    expect((await call(page, "cancel_chatgpt_generation", { generationId: response.result!.generationId })).ok).toBe(true);
+  }
 });

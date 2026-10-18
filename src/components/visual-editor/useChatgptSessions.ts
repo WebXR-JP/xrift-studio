@@ -17,18 +17,28 @@ export function useChatgptSessions() {
   };
   const [historyError, setHistoryError] = useState(loaded.error);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const persist = () => {
+  const flush = () => {
+    clearTimeout(timer.current);
     // A failed read must never be replaced with an empty/new history silently.
-    if (loaded.error) return;
+    if (loaded.error) {
+      setHistoryError(loaded.error);
+      throw new Error(loaded.error);
+    }
     try { saveChatgptSessions(sessionsRef.current); setHistoryError(null); }
-    catch (error) { setHistoryError(error instanceof Error ? error.message : "会話履歴を保存できませんでした。作業履歴をコピーして残してください。"); }
+    catch (error) {
+      const message = error instanceof Error ? error.message : "会話履歴を保存できませんでした。作業履歴をコピーして残してください。";
+      setHistoryError(message);
+      throw error instanceof Error ? error : new Error(message);
+    }
   };
-  const updateSessions = (next: ChatgptSession[], flush = false) => {
+  const updateSessions = (next: ChatgptSession[], flushNow = false) => {
     sessionsRef.current = next;
     setSessions(next);
     clearTimeout(timer.current);
-    if (flush) persist();
-    else timer.current = setTimeout(persist, 250);
+    // Existing UI updates report failures. Side-effect checkpoints call the
+    // exposed flush directly so storage rejection stops downstream dispatch.
+    if (flushNow) { try { flush(); } catch { /* The visible history error was already set. */ } }
+    else timer.current = setTimeout(() => { try { flush(); } catch { /* The visible history error was already set. */ } }, 250);
   };
   useEffect(() => () => {
     clearTimeout(timer.current);
@@ -36,5 +46,5 @@ export function useChatgptSessions() {
       try { saveChatgptSessions(sessionsRef.current); } catch { /* In-session writes already report failures. */ }
     }
   }, [loaded]);
-  return { sessions, sessionsRef, selectedSessionId, selectedSessionIdRef, selectSession, historyError, updateSessions };
+  return { sessions, sessionsRef, selectedSessionId, selectedSessionIdRef, selectSession, historyError, updateSessions, flush };
 }

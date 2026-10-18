@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "core": [
+    "Infer the requested result and scope before choosing tools: a local edit, one model, coordinated surroundings or a whole place. Match detail to its role and viewing distance. A close-view house may need visible construction; a town needs coherent streets and building variants, not an interior for every building.",
+    "Define a few concrete completion criteria from the author's intended result and current corrections. Decide composition, human scale, circulation, focal features, supporting elements, material palette and lighting together. Make the first saved result a coherent version of that whole composition; a floor or one isolated prop is not a completed place.",
+    "Use the current Scene to locate exact editing targets and existing authored work. Selection alone does not restrict a whole-place request. For a new place, host-verified starterEntityIds are optional scaffolding; replace them when useful without inventing a feature just to retain a starter shape. Preserve authored content outside the requested scope and the author's manual edits.",
+    "Choose representation by the form and the available authoring capabilities. Prefer reusable static source when it can faithfully express the composed result; choose an existing Asset or Blender for shapes it cannot express well. Respect the author's chosen production method. Read only the detailed guide for the route being used.",
+    "Make routine design choices within the request and begin the composition with available capabilities. Search for external Assets only when a specific missing shape or surface would improve the intended result; narrow that search to the gap. Do not turn catalog discovery or separate generation of every repeated object into a prerequisite for the whole scene.",
+    "Reuse stable parts and completed work, with variation where it serves the design. Spend geometry and effort on visible structure and the focal subject; omit hidden or irrelevant detail. Choose functional equipment for the requested experience and reserve its usable space before surrounding decoration.",
+    "Save a coherent result, inspect the actual rendered Scene at the requested viewing distance, and compare it against the original completion criteria. Correct specific unmet criteria rather than restarting the composition or adding unrequested decoration. Scene data and counts alone do not prove visual quality or runtime behavior.",
+    "Use the host's finite run budget and current completion evidence. Finish as soon as the criteria pass; stop with the saved result and specific remaining work when further writing is not admitted. A continuation keeps the same budget and criteria unless the author changes the request. Report unverified behavior honestly and publish only when requested."
+  ],
+  "routes": {
+    "r3f": {
+      "summary": "Compose reusable static TSX parts into editable Scene Entities, retaining complete source for later revisions.",
+      "instructions": [
+        "Return complete TSX, at most 48,000 UTF-8 bytes, with a default-exported function component. Source is statically translated into editable Scene Entities, never executed as arbitrary JavaScript. Unsupported constructs fail with an importer diagnostic; do not treat a partial import or warning as a faithful result.",
+        "Define reusable named function components at module scope, outside World and outside other functions. Use static const arrays and objects, literal props, finite array.map repetitions, arithmetic and Math.PI. Use ordinary group and mesh elements and supported geometry for the construction. Repeated instances should have sensible variation and visible construction detail appropriate to their role.",
+        "Allowed static imports are supported named components from @react-three/drei (Box, Sphere, Cylinder, Cone, Plane, Extrude, Text, Billboard, Reflector, Sky), supplied official @xrift/world-components definitions, and Shape/Vector2 or namespace THREE from three. Do not import React, Canvas, hooks, loaders, arbitrary modules or files. Do not spread props; write supported attributes explicitly.",
+        "Geometry args specify dimensions only: Box [width,height,depth], Plane [width,height], Sphere [radius], Cylinder [radius,radius,height] with equal top and bottom radii, or Cone [radius,height]. Use coneGeometry for a cone rather than unequal Cylinder radii. Omit segments, openEnded and angle parameters. Retained topology is Box/Plane segments 1, Sphere 32x20, Cylinder/Cone radial 32 and height 1, closed with full angles. Custom topology, partial angles and unknown native JSX attributes are rejected rather than silently approximated.",
+        "Use Three.js Y-up metres, radians for rotations and primitive args for dimensions. Do not apply Studio's JSON Euler-degree convention to JSX rotations. Keep human-scale proportions: importer limits of dimensions 1000 metres and position axes +/-10000 metres are bounds, not design targets.",
+        "Use meshStandardMaterial for supported PBR construction. Material attributes are limited to color, roughness, metalness and side; do not invent unsupported shader, texture, opacity or other Material attributes. Omitted roughness defaults to 1, so specify supported roughness when the intended surface differs. meshBasicMaterial retains its unlit appearance; Standard/Physical attributes are limited to the supported PBR fields.",
+        "Straight extruded profiles may use new Shape()/Vector2(), Shape.moveTo/lineTo/closePath and extrudeGeometry; these are the only imperative construction exceptions. Profiles lie in XY and extrude toward +Z. Explicitly set bevelEnabled: false. Use a different authoring route for curved or bevelled shapes that this importer cannot faithfully express.",
+        "Do not use Canvas, useFrame/useEffect/useState or other hooks, events, refs, network, URLs, dynamic import, arbitrary calls, timers, eval, runtime behavior or unknown dynamic props. Use the Script capabilities only when runtime motion or interaction is part of the requested result.",
+        "Give every persistent group, mesh and reusable part a stable name. Mapped instances need stable explicit keys derived from data IDs, not random values or array indices. Preserve component names, group names, keys, materials and unedited subtrees across revisions. React key identifies the part and is not a component prop.",
+        "For a new source root, express its placement through the source root group. For a revision, read the latest complete retained source and target its exact owning root Entity through a source-update-capable operation. Modify only requested parts, preserve the other parts and root placement, and return the complete revised source. Do not target generated children, omit untouched parts, duplicate an existing root or replace it with a catalog Asset. If the source is unavailable, resolve the editing target or recover the source rather than guessing. Apply at most one source update per root in a pass.",
+        "Use concrete completion criteria and a finite production budget even for a single model or local source edit. Review the saved result as a composition; do not generate and visually review every repeated piece through a separate modeling worker. Describe the visible contribution before the source and report remaining requested work, without claiming a rendered review that has not happened."
+      ]
+    },
+    "assets": {
+      "summary": "Use a fitting existing or external Asset when its shape, surface or function serves a specific part of the composition.",
+      "instructions": [
+        "Identify the intended role, approximate dimensions and visible characteristics before searching. Reuse suitable project or built-in Assets when available. Search an external provider only for an identified gap, with a focused kind and query rather than enumerating every catalog.",
+        "Read the returned candidate's dimensions, available formats and usage terms, then use its exact supported identifier and import operation. Do not invent IDs, preview images, file paths or installability. Choose a coordinated palette for the composition instead of independently replacing every surface.",
+        "Reuse an imported Model or Material for repeated instances where appropriate. Consider shared Material references when editing an Asset itself; use a target-specific assignment when the request concerns only one Entity. Preserve unrequested geometry, settings and authored content.",
+        "After placement, inspect scale, contact with surfaces, orientation and how the Asset fits the main composition. A catalog preview is not evidence of the imported result. Ask the author to choose when they requested a comparison or an unresolved choice changes the intended outcome."
+      ]
+    },
+    "blender": {
+      "summary": "Author bespoke surfaces or construction that the static source importer cannot faithfully express.",
+      "instructions": [
+        "Use Blender when its geometry is needed for the intended form and the connected host supports it. Do not wait for or invoke Blender merely because a request names an object that can be composed faithfully with supported static source.",
+        "Give each authored model a complete brief covering its role in the composition, local dimensions, silhouette, visible construction, materials and detail level. State which hidden or distant details are unnecessary. For a whole place, reuse completed models and modest exterior variants instead of generating every instance separately.",
+        "Use the host's supported modeling contract and retained source for revisions. Target the exact owning model root, preserve placement and unspecified parts, and keep stable part identities. Do not replace a requested local revision with a different catalog Asset or a duplicated model.",
+        "Inspect the actual saved result at the intended distance. Use the host's bounded review and correction flow for focal models, and review supporting models within the whole composition. Report unavailable authoring or verification honestly and preserve the last saved work on failure or cancellation."
+      ]
+    }
+  },
+  "skill": {
+    "name": "xrift-world-authoring",
+    "description": "XRift Studioで依頼に合うワールドや3Dモデルを制作・修正する。アプリ本体の開発や一般的なコードレビューには使わない。"
+  }
+}

@@ -1,4 +1,6 @@
+import { useEffect, useMemo } from "react";
 import type {} from "@react-three/fiber";
+import { createXriftExtrudeGeometry } from "./extrude-geometry.js";
 
 export type XriftPrimitiveGeometryKind = "box" | "sphere" | "cylinder" | "cone" | "plane";
 
@@ -16,4 +18,17 @@ export function XriftPrimitiveGeometry({ primitive }: { primitive: XriftPrimitiv
     case "plane":
       return <planeGeometry args={[1, 1]} />;
   }
+}
+
+/** A 2D profile in local XY extruded along local +Z, shared by Edit, Play and publication. */
+export function XriftExtrudeGeometry({
+  points,
+  depth,
+}: {
+  points: [number, number][];
+  depth: number;
+}) {
+  const geometry = useMemo(() => createXriftExtrudeGeometry({ points, depth }), [points, depth]);
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  return <primitive object={geometry} attach="geometry" />;
 }

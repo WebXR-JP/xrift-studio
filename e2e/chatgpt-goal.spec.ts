@@ -114,18 +114,22 @@ test("Goalの途中で停止すると保存済みの変更を残し、後の依�
   } finally { await release(page).catch(() => undefined); }
 });
 
-test("進展がないGoalは3回で停止し、通常の依頼はhasMoreでも自動継続しない", async ({ page }) => {
+test("進展がないGoalは3回で停止し、通常の途中結果も同じ依頼で続ける", async ({ page }) => {
   await ready(page, [{ ...empty, hasMore: true, remainingWork: "必要な素材を検討する" }]);
   const result = await call(page, "generate_chatgpt_world", { model: "fixture-model", prompt: "全体を作り込む", mode: "goal" }, true);
   expect(result.ok, JSON.stringify(result)).toBe(true);
   const id = result.result!.generationId as string;
   await expect.poll(async () => (await generation(page, id)).status).toBe("failed");
-  expect((await generation(page, id)).error).toContain("3回続けて"); expect(await calls(page)).toHaveLength(3);
+  expect((await generation(page, id)).error).toContain("3回"); expect(await calls(page)).toHaveLength(3);
+  expect((await generation(page, id)).harness?.reason).toBe("stalled-progress");
   await page.reload();
-  await ready(page, [{ ...empty, edits: [{ entityId: "starter-floor", name: "通常の依頼の床" }], hasMore: true }]);
+  await ready(page, [{ ...empty, edits: [{ entityId: "starter-floor", name: "通常の依頼の床" }], hasMore: true }, empty]);
   await send(page, "床の名前を調整してください"); const normalId = await firstId(page);
   await expect.poll(async () => (await generation(page, normalId)).status).toBe("completed");
-  expect(await calls(page)).toHaveLength(1); expect((await generation(page, normalId)).mode).toBe("build");
+  expect(await calls(page)).toHaveLength(2); expect((await generation(page, normalId)).mode).toBe("build");
+  expect((await calls(page)).every(request => request.id === normalId)).toBe(true);
+  expect((await generation(page, normalId)).harness?.counters.passes).toBe(2);
+  expect((await floor(page)).name).toBe("通常の依頼の床");
 });
 
 test("質問に回答した後もGoalを保ち、改善と最終確認を続ける", async ({ page }) => {

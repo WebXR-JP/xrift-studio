@@ -1,5 +1,5 @@
 import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import {
   ACESFilmicToneMapping,
   HalfFloatType,
@@ -8,6 +8,10 @@ import {
   SRGBColorSpace,
   Vector2,
   WebGLRenderTarget,
+  type Camera,
+  type Matrix4,
+  type Scene,
+  type WebGLRenderer,
 } from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
@@ -36,6 +40,18 @@ const XRIFT_POST_EFFECT_ORDER_IDS: readonly XriftScenePostEffectOrderId[] = [
   "bloom",
   "grading",
 ];
+
+const sceneFrameRenderers = new WeakMap<Scene, WeakMap<WebGLRenderer, (camera: Camera) => void>>();
+
+/** Read an actual composed frame with a temporary camera. Returns false until
+ * the normal Scene compositor has mounted; callers must not substitute a raw
+ * renderer frame as evidence of the authored appearance. */
+export function renderXriftSceneFrame(gl: WebGLRenderer, scene: Scene, camera: Camera): boolean {
+  const render = sceneFrameRenderers.get(scene)?.get(gl);
+  if (!render) return false;
+  render(camera);
+  return true;
+}
 
 /**
  * The author's layer order, repaired.
@@ -261,7 +277,7 @@ export function ScenePostprocessing({
     for (const id of orderKey.split(",")) {
       composer.addPass(id === "grading" ? gradingPass : bloomPass);
     }
-    return { composer, aoPass, bloomPass, gradingPass };
+    return { composer, renderPass, aoPass, bloomPass, gradingPass };
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [camera, gl, hdrEnabled, orderKey, scene]);
@@ -370,7 +386,7 @@ export function ScenePostprocessing({
     [],
   );
 
-  useFrame(() => {
+  const renderFrame = (frameCamera: Camera) => {
     // Re-read every frame: a graph writes into the bridge, not into React
     // state, so nothing re-renders when a viewer turns the passes on.
     const bridge = findXriftSceneRuntimeBridge(scene);
@@ -386,13 +402,61 @@ export function ScenePostprocessing({
       configure(pipeline, active);
     }
     if (effectsEnabled && active.enabled && pipeline) {
-      pipeline.composer.render();
+      if (frameCamera === camera) { pipeline.composer.render(); return; }
+      const previousRenderCamera = pipeline.renderPass.camera;
+      const previousAoCamera = pipeline.aoPass.camera;
+      const uniforms = [pipeline.aoPass.ssaoMaterial.uniforms, pipeline.aoPass.depthRenderMaterial.uniforms];
+      // SSAOPass caches camera planes/projections independently of its camera.
+      // Change and restore those too, so a review camera cannot affect Play or
+      // the author's following frame.
+      const saved = uniforms.map(values => Object.fromEntries(
+        ["cameraNear", "cameraFar", "cameraProjectionMatrix", "cameraInverseProjectionMatrix"].flatMap(key => {
+          const uniform = values[key];
+          if (!uniform) return [];
+          const value = uniform.value;
+          return [[key, value?.isMatrix4 ? (value as Matrix4).clone() : value]];
+        }),
+      ));
+      pipeline.renderPass.camera = frameCamera;
+      pipeline.aoPass.camera = frameCamera;
+      const planes = frameCamera as Camera & { near: number; far: number };
+      for (const values of uniforms) {
+        if (values.cameraNear) values.cameraNear.value = planes.near;
+        if (values.cameraFar) values.cameraFar.value = planes.far;
+        if (values.cameraProjectionMatrix) (values.cameraProjectionMatrix.value as Matrix4).copy(frameCamera.projectionMatrix);
+        if (values.cameraInverseProjectionMatrix) (values.cameraInverseProjectionMatrix.value as Matrix4).copy(frameCamera.projectionMatrixInverse);
+      }
+      try { pipeline.composer.render(); }
+      finally {
+        pipeline.renderPass.camera = previousRenderCamera;
+        pipeline.aoPass.camera = previousAoCamera;
+        for (const [index, savedUniforms] of saved.entries()) {
+          const values = uniforms[index];
+          if (!values) continue;
+          for (const [key, value] of Object.entries(savedUniforms)) {
+            const uniform = values[key];
+            if (!uniform) continue;
+            if ((value as { isMatrix4?: boolean } | undefined)?.isMatrix4) (uniform.value as Matrix4).copy(value as Matrix4);
+            else uniform.value = value;
+          }
+        }
+      }
     } else {
       // A positive-priority frame callback takes over R3F's default render
       // loop. Keep the viewport live when postprocessing is disabled instead
       // of leaving the last composited frame on screen.
-      gl.render(scene, camera);
+      gl.render(scene, frameCamera);
     }
-  }, 1);
+  };
+  const renderFrameRef = useRef(renderFrame);
+  renderFrameRef.current = renderFrame;
+  useLayoutEffect(() => {
+    let renderers = sceneFrameRenderers.get(scene);
+    if (!renderers) { renderers = new WeakMap(); sceneFrameRenderers.set(scene, renderers); }
+    const render = (frameCamera: Camera) => renderFrameRef.current(frameCamera);
+    renderers.set(gl, render);
+    return () => { if (renderers.get(gl) === render) renderers.delete(gl); };
+  }, [gl, scene]);
+  useFrame(() => renderFrame(camera), 1);
   return null;
 }

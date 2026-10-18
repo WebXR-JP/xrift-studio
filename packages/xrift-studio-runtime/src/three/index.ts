@@ -19,6 +19,7 @@ import {
   LoadingManager,
   Material,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   MirroredRepeatWrapping,
   NoColorSpace,
@@ -38,6 +39,7 @@ import {
   TextureLoader,
   WebGLRenderer,
 } from "three";
+import { createXriftExtrudeGeometry } from "../extrude-geometry.js";
 import {
   GLTFLoader,
   type GLTF,
@@ -479,7 +481,7 @@ export class XriftThreeLoader {
       const pbr = asRecord(properties.pbrMetallicRoughness);
       const baseColor = asNumberArray(pbr?.baseColorFactor, 4) ?? [1, 1, 1, 1];
       const [red = 1, green = 1, blue = 1, alpha = 1] = baseColor;
-      const material = new MeshStandardMaterial({
+      const commonParameters = {
         color: new Color(red, green, blue),
         opacity: alpha,
         transparent: properties.alphaMode === "BLEND" || alpha < 1,
@@ -487,10 +489,13 @@ export class XriftThreeLoader {
           properties.alphaMode === "MASK" && typeof properties.alphaCutoff === "number"
             ? properties.alphaCutoff
             : 0,
-        metalness: typeof pbr?.metallicFactor === "number" ? pbr.metallicFactor : 0,
-        roughness: typeof pbr?.roughnessFactor === "number" ? pbr.roughnessFactor : 1,
         ...(properties.doubleSided === true ? { side: DoubleSide } : {}),
-      });
+      };
+      const material = asRecord(properties.extensions)?.KHR_materials_unlit !== undefined
+        ? new MeshBasicMaterial(commonParameters)
+        : new MeshStandardMaterial({ ...commonParameters,
+          metalness: typeof pbr?.metallicFactor === "number" ? pbr.metallicFactor : 0,
+          roughness: typeof pbr?.roughnessFactor === "number" ? pbr.roughnessFactor : 1 });
       const baseColorTexture = asRecord(pbr?.baseColorTexture);
       const resolveTexture = (
         textureInfo: Record<string, unknown> | undefined,
@@ -512,6 +517,16 @@ export class XriftThreeLoader {
         return resolved;
       };
       material.map = resolveTexture(baseColorTexture);
+      if (material instanceof MeshBasicMaterial) {
+        // Preserve the authored unlit shader model. It does not consume the
+        // PBR light, normal or emissive inputs below, like the Editor/JSX path.
+        material.opacity = properties.alphaMode === "OPAQUE" ? 1 : alpha;
+        material.transparent = properties.alphaMode === "BLEND";
+        material.depthWrite = properties.alphaMode !== "BLEND";
+        material.name = asset.name;
+        materials.set(asset.id, material);
+        continue;
+      }
       const metallicRoughnessTexture = asRecord(pbr?.metallicRoughnessTexture);
       const resolvedMetallicRoughness = resolveTexture(metallicRoughnessTexture);
       material.metalnessMap = resolvedMetallicRoughness;
@@ -557,9 +572,23 @@ export class XriftThreeLoader {
       if (component.geometry.kind === "primitive") {
         const material = component.geometry.primitive === "plane"
           ? runtimeDoubleSidedMToonMaterial(component, input)
-          : materialForBinding(component, input.materials);
+          : runtimeAuthoredSurfaceMaterial(component, input);
         const mesh = new Mesh(
           createPrimitiveGeometry(component.geometry.primitive),
+          material ?? new MeshStandardMaterial({ color: 0xbfc7d5 }),
+        );
+        mesh.castShadow = component.castShadow;
+        mesh.receiveShadow = component.receiveShadow;
+        mesh.userData.xriftStudioComponentId = component.id;
+        if (component.maxDistance !== undefined) {
+          mesh.userData.xriftRuntimeMaxDistance = component.maxDistance;
+        }
+        return mesh;
+      }
+      if (component.geometry.kind === "extrude") {
+        const material = runtimeAuthoredSurfaceMaterial(component, input);
+        const mesh = new Mesh(
+          createXriftExtrudeGeometry({ points: component.geometry.points, depth: component.geometry.depth }),
           material ?? new MeshStandardMaterial({ color: 0xbfc7d5 }),
         );
         mesh.castShadow = component.castShadow;
@@ -1089,13 +1118,29 @@ function runtimeDoubleSidedMToonMaterial(
     diagnostics: XriftRuntimeDiagnostic[];
   },
 ): Material | undefined {
-  const material = materialForBinding(component, input.materials);
+  const material = runtimeAuthoredSurfaceMaterial(component, input);
   const binding = component.materialBindings[0];
   const asset = binding ? input.manifest.assets[binding.materialAssetId] : undefined;
   if (asset?.kind !== "material" || !(material as Material & { isMToonMaterial?: boolean })?.isMToonMaterial || material?.side === DoubleSide) return material;
   const doubleSided = createRuntimeMToonMaterial(asset.properties, input.textures, input.diagnostics, asset.id, true);
   doubleSided.name = asset.name;
   return doubleSided;
+}
+
+/** Authored surfaces use the Inspector's display colour; imported Models use
+ * the original linear glTF factors. Keep variants separate when one Asset is
+ * assigned to both, as the Editor and generated JSX already do. */
+function runtimeAuthoredSurfaceMaterial(
+  component: Extract<XriftRuntimeComponent, { type: "mesh" }>,
+  input: { materials: ReadonlyMap<string, Material>; manifest: XriftRuntimeManifest },
+): Material | undefined {
+  const source = materialForBinding(component, input.materials);
+  const binding = component.materialBindings[0];
+  const asset = binding ? input.manifest.assets[binding.materialAssetId] : undefined;
+  if (asset?.kind !== "material" || typeof asset.properties.color !== "string" || !(source instanceof MeshBasicMaterial || source instanceof MeshStandardMaterial)) return source;
+  const material = source.clone();
+  material.color.set(asset.properties.color);
+  return material;
 }
 
 function configureMaterialTexture(

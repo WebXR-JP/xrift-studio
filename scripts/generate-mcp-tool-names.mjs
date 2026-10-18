@@ -40,7 +40,7 @@ function readRegistryToolNames() {
       `${path.relative(repoRoot, REGISTRY_PATH)} no longer contains an XRIFT_MCP_TOOLS table, so the Rust allow-list cannot be generated`,
     );
   }
-  const names = [...table[1].matchAll(/\{\s*name:\s*"([a-z_]+)",\s*surface:/g)].map(
+  const names = [...table[1].matchAll(/\{\s*name:\s*"([a-z][a-z0-9_]+)",\s*surface:/g)].map(
     (entry) => entry[1],
   );
   if (names.length < MINIMUM_EXPECTED_TOOLS) {

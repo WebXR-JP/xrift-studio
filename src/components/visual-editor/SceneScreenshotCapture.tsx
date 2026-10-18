@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useThree } from "@react-three/fiber";
+import { captureModelReviewView, captureWorldReviewView, modelReviewTarget, renderReviewFrame, worldReviewReady, type ModelReviewView, type WorldReviewView } from "./model-review-capture";
+import { sceneReviewReadiness } from "./scene-review-readiness";
 
 export type SceneScreenshotRequest = {
   /**
@@ -7,6 +9,9 @@ export type SceneScreenshotRequest = {
    * re-renders while holding the same request does not capture repeatedly.
    */
   id: number;
+  /** Capture a loaded Model from a temporary camera, leaving the Edit camera intact. */
+  modelView?: ModelReviewView;
+  worldView?: WorldReviewView;
   /** Receives the captured PNG as a data URL. */
   onCapture: (dataUrl: string) => void;
   /** Called instead of `onCapture` when the frame could not be read. */
@@ -53,18 +58,36 @@ export function SceneScreenshotCapture({ request, onComplete }: Props) {
     let cancelled = false;
     let firstFrame = 0;
     let secondFrame = 0;
+    const startedAt = performance.now();
 
-    invalidate();
-    firstFrame = window.requestAnimationFrame(() => {
+    const schedule = () => {
       invalidate();
-      secondFrame = window.requestAnimationFrame(() => {
+      firstFrame = window.requestAnimationFrame(() => {
+        invalidate();
+        secondFrame = window.requestAnimationFrame(() => {
         if (cancelled) return;
+        const current = requestRef.current;
+        const readiness = sceneReviewReadiness(scene);
+        const target = current?.modelView ? modelReviewTarget(scene, current.modelView) : null;
+        const waiting = current?.modelView && !target || current?.worldView && !worldReviewReady(scene);
+        if (waiting && !readiness.error && performance.now() - startedAt < 12_000) { schedule(); return; }
         // Marked before the read so a failure cannot retry in a loop.
         capturedIdRef.current = requestId;
-        const current = requestRef.current;
         try {
-          gl.render(scene, camera);
-          const dataUrl = gl.domElement.toDataURL("image/png");
+          if (current?.modelView || current?.worldView) {
+            if (readiness.error) throw new Error(readiness.error);
+          }
+          if (current?.modelView && !target) throw new Error("制作したモデルの読み込みが終わらず、見た目を確認できませんでした");
+          if (current?.worldView && waiting) throw new Error("ワールドの素材の読み込みが終わらず、見た目を確認できませんでした");
+          let dataUrl: string;
+          try {
+            if (current?.modelView && target) dataUrl = captureModelReviewView(gl, scene, target, current.modelView);
+            else if (current?.worldView) dataUrl = captureWorldReviewView(gl, scene, current.worldView);
+            else { gl.render(scene, camera); dataUrl = gl.domElement.toDataURL("image/png"); }
+          } finally {
+            // Restore the visible frame before yielding, including on failure.
+            if (current?.modelView || current?.worldView) renderReviewFrame(gl, scene, camera);
+          }
           if (!dataUrl.startsWith("data:image/") || dataUrl.length < 100) {
             throw new Error("シーンから画像を取得できませんでした");
           }
@@ -78,8 +101,10 @@ export function SceneScreenshotCapture({ request, onComplete }: Props) {
         } finally {
           completeRef.current?.();
         }
+        });
       });
-    });
+    };
+    schedule();
 
     return () => {
       cancelled = true;

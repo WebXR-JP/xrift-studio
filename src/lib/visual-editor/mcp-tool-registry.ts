@@ -16,6 +16,8 @@
 export type XriftMcpToolSurface =
   /** Pure function over the document set. Runs in `mcp-editor-tools`. */
   | "document"
+  /** Asynchronous static authoring over the document set; commits in the Editor. */
+  | "async-document"
   /** Native file I/O, so the React shell owns it. */
   | "local-asset"
   /** Project file I/O or a Play-mode change, so the React shell owns it. */
@@ -67,15 +69,18 @@ export const XRIFT_MCP_TOOLS = [
   { name: "get_publish_readiness", surface: "project" },
   { name: "publish_project", surface: "project" },
   { name: "get_editor_context", surface: "document" },
+  { name: "get_world_authoring_guide", surface: "document" },
   { name: "get_project_health", surface: "document" },
   { name: "analyze_performance", surface: "document" },
   { name: "begin_world_authoring", surface: "debug" },
   { name: "get_world_authoring", surface: "debug" },
   { name: "review_world_authoring", surface: "debug" },
   { name: "complete_world_authoring", surface: "debug" },
+  { name: "cancel_world_authoring", surface: "debug" },
   { name: "get_scripting_capabilities", surface: "document" },
   { name: "analyze_component_code", surface: "document" },
   { name: "apply_component_code_import_plan", surface: "document" },
+  { name: "apply_r3f_scene", surface: "async-document" },
   { name: "list_assets", surface: "document" },
   { name: "update_project_metadata", surface: "document" },
   { name: "create_asset_folder", surface: "document" },
@@ -217,6 +222,7 @@ type ToolNameForSurface<S extends XriftMcpToolSurface> = Extract<
 >["name"];
 
 export type XriftMcpEditorToolName = ToolNameForSurface<"document">;
+export type XriftMcpAsyncDocumentToolName = ToolNameForSurface<"async-document">;
 export type XriftMcpLocalAssetToolName = ToolNameForSurface<"local-asset">;
 export type XriftMcpScriptToolName = ToolNameForSurface<"script">;
 export type XriftMcpExternalStoreTool = ToolNameForSurface<"external-store">;
@@ -246,6 +252,7 @@ export const XRIFT_MCP_TOOL_NAMES: readonly XriftMcpToolName[] =
   XRIFT_MCP_TOOLS.map((tool) => tool.name);
 
 export const XRIFT_MCP_EDITOR_TOOLS = toolNamesForSurface("document");
+export const XRIFT_MCP_ASYNC_DOCUMENT_TOOLS = toolNamesForSurface("async-document");
 export const XRIFT_MCP_LOCAL_ASSET_TOOLS = toolNamesForSurface("local-asset");
 export const XRIFT_MCP_SCRIPT_TOOLS = toolNamesForSurface("script");
 export const XRIFT_MCP_EXTERNAL_STORE_TOOLS =

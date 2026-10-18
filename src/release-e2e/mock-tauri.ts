@@ -390,6 +390,8 @@ export function installReleaseE2EMock(): void {
             assetManifestJson: request.assetManifestJson,
           } satisfies VisualProjectFiles;
         }
+        case "read_world_authoring":
+          return null;
         case "save_visual_project": {
           if (saveFailuresRemaining > 0) {
             saveFailuresRemaining -= 1;
@@ -423,6 +425,19 @@ export function installReleaseE2EMock(): void {
           );
           if (project) project.modifiedAtMs = Date.now();
           return null;
+        }
+        case "read_chatgpt_harness_context": {
+          const fingerprint = stringArg(payload, "fingerprint");
+          if (!/^[a-f0-9]{64}$/.test(fingerprint)) throw new Error("Invalid authoring context locator");
+          return projectFiles.get(stringArg(payload, "projectPath"))?.get(`.cache/xrift-studio-harness/contexts/${fingerprint}.json`) ?? null;
+        }
+        case "write_chatgpt_harness_context": {
+          const projectPath = stringArg(payload, "projectPath"), fingerprint = stringArg(payload, "fingerprint"), content = stringArg(payload, "content");
+          if (!/^[a-f0-9]{64}$/.test(fingerprint)) throw new Error("Invalid authoring context locator");
+          const relativePath = `.cache/xrift-studio-harness/contexts/${fingerprint}.json`;
+          const files = projectFiles.get(projectPath) ?? new Map<string, string>(), previous = files.get(relativePath);
+          if (previous !== undefined && previous !== content) throw new Error("Immutable authoring context already exists");
+          files.set(relativePath, content); projectFiles.set(projectPath, files); return null;
         }
         case "read_text_file": {
           const projectPath = stringArg(payload, "projectPath");

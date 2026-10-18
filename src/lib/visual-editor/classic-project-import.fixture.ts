@@ -173,16 +173,9 @@ export function runClassicProjectImportFixtureAssertions(): void {
     "TypeScript generic parameters were parsed as JSX",
   );
   assert(
-    plan.diagnostics.some(
-      (diagnostic) =>
-        diagnostic.code === "classic-component-scale-recovered" &&
-        diagnostic.severity === "info",
-    ) &&
-      plan.diagnostics.some(
-        (diagnostic) =>
-          diagnostic.code === "classic-component-transform-recovered",
-      ),
-    "Recovered Classic component transforms remained misleading skip warnings",
+    plan.nodes.some(node => node.sourcePath === "src/Town.tsx" && node.sourceTag === "group" && node.transform.position.join(",") === "0,2,0" && node.transform.scale.join(",") === "3,3,3") &&
+      !plan.diagnostics.some(diagnostic => diagnostic.code === "dynamic-prop-skipped" && /^(?:Town\.scale|group\.(?:position|scale))\b/.test(diagnostic.message)),
+    "Classic placement props must resolve to their actual returned group without skip warnings",
   );
 
   const modelAsset: ModelAsset = {
@@ -287,8 +280,9 @@ export function runClassicProjectImportFixtureAssertions(): void {
   );
   assert(
     townBoundary &&
-      getTransform(townBoundary)?.scale.join(",") === "-3,3,3",
-    "Classic component scale and authored mirror were not retained",
+      getTransform(townBoundary)?.scale.join(",") === "-1,1,1" &&
+      townBoundary.children.some(id => getTransform(enhancedResult.scene.entities[id])?.scale.join(",") === "3,3,3"),
+    "Classic mirror belongs to the boundary; resolved placement scale must occur once in its returned group",
   );
   assert(
     namedColliders.length === 2 &&

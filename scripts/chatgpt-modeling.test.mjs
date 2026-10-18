@@ -40,6 +40,48 @@ test("curved supports and revolved profiles have bounded geometry", () => {
     assert.throws(() => parseBlenderModelSpec({ ...model, parts: [bad] }));
   }
 });
+test("part source IDs survive revision edits and legacy IDs normalize without collisions", () => {
+  const source = { ...model, parts: [{ ...part, id: null }, { ...part, id: "part-001" }, { ...part, id: "back_support" }] };
+  const before = JSON.stringify(source);
+  const normalized = parseBlenderModelSpec(source);
+  assert.deepEqual(normalized.parts.map(part => part.id), ["part-002", "part-001", "back_support"]);
+  assert.deepEqual(parseBlenderModelSpec(normalized), normalized);
+  assert.deepEqual(parseBlenderModelSpec({ ...normalized, parts: normalized.parts.toReversed() }).parts.map(part => part.id), ["back_support", "part-001", "part-002"]);
+  normalized.parts[0].position[0] = 9;
+  assert.equal(JSON.stringify(source), before, "editing a new source revision must preserve its base revision");
+  for (const id of ["", "_part", "part.name", "日本語", "part\n", "a".repeat(65)]) {
+    assert.throws(() => parseBlenderModelSpec({ ...model, parts: [{ ...part, id }] }), /\.id/);
+  }
+  assert.throws(() => parseBlenderModelSpec({ ...model, parts: [{ ...part, id: "slat" }, { ...part, id: "slat" }] }), /slat.*重複/);
+});
+test("repeated details enforce model budgets and bound every translated instance", () => {
+  const repeated = { ...part, id: "slats", repeat: { count: 32, offset: [0.1, 0, 0] } };
+  const exactBudget = { ...model, parts: Array.from({ length: 8 }, (_, index) => ({ ...repeated, id: `slats-${index}` })) };
+  assert.equal(parseBlenderModelSpec(exactBudget).parts.length, 8);
+  assert.throws(() => parseBlenderModelSpec({ ...exactBudget, parts: [...exactBudget.parts, part] }), /256/);
+  const boundary = { ...part, position: [50, -50, 0], repeat: { count: 2, offset: [-50, 50, 0] } };
+  assert.deepEqual(parseBlenderModelSpec({ ...model, parts: [boundary] }).parts[0].repeat, boundary.repeat);
+  for (const repeat of [{ count: 0, offset: [0, 0, 0] }, { count: 33, offset: [0, 0, 0] }, { count: 1.5, offset: [0, 0, 0] },
+    { count: 32, offset: [2, 0, 0] }, { count: 2, offset: [0, Infinity, 0] }, { count: 2, offset: [0, 0, 0], source: "unexpected" }]) {
+    assert.throws(() => parseBlenderModelSpec({ ...model, parts: [{ ...repeated, repeat }] }), /slats.*repeat/);
+  }
+});
+test("extrusion keeps concise concave contours and rejects ambiguous or invalid profiles", () => {
+  const profile = [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0.5, 1, 0], [0.5, 2, 0], [0, 2, 0]];
+  const extruded = { ...part, id: "side", shape: "extrude", vertices: profile, faces: null, depth: 0.2 };
+  const parsed = parseBlenderModelSpec({ ...model, parts: [extruded] }).parts[0];
+  assert.deepEqual(parsed.vertices, profile);
+  assert.equal(parsed.depth, 0.2);
+  assert.equal(parsed.faces, undefined);
+  assert.equal(parseBlenderModelSpec({ ...model, parts: [{ ...extruded, vertices: profile.toReversed() }] }).parts.length, 1);
+  for (const vertices of [[[0, 0, 0], [1, 0, 0]], [[0, 0, 0], [1, 0, 0], [2, 0, 0]],
+    [[0, 0, 0], [3, 2, 0], [0, 2, 0], [2, 0, 0]], [...profile, profile[0]], [[0, 0, 0], [1, 0, 0], [0, 1, 0.001]]]) {
+    assert.throws(() => parseBlenderModelSpec({ ...model, parts: [{ ...extruded, vertices }] }), /id=side.*vertices/);
+  }
+  for (const depth of [undefined, null, 0, 50.01, Infinity]) assert.throws(() => parseBlenderModelSpec({ ...model, parts: [{ ...extruded, depth }] }), /depth/);
+  assert.throws(() => parseBlenderModelSpec({ ...model, parts: [{ ...part, depth: 0.2 }] }), /depth/);
+  assert.throws(() => parseBlenderModelSpec({ ...model, parts: [{ ...extruded, faces: [[0, 1, 2]] }] }), /faces/);
+});
 test("the GLB exported by real Blender is analyzed as an ordinary Model with actual materials and bounds", async context => {
   let source;
   try { source = await readFile(new URL("../node_modules/.cache/chatgpt-blender-model/fixture.glb", import.meta.url)); }
@@ -51,4 +93,31 @@ test("the GLB exported by real Blender is analyzed as an ordinary Model with act
   assert.ok(plan.asset.materialSlots.length > 0);
   assert.ok(plan.asset.importMetadata.bounds.size.some(value => value > 0));
   assert.deepEqual(plan.writes.find(write => write.purpose === "source").payload.bytes, new Uint8Array(source));
+});
+test("a repaired source produces different real imported bounds while preserving its other parts", async context => {
+  let files;
+  try {
+    files = await Promise.all(["before", "after"].flatMap(version => ["json", "glb"].map(extension =>
+      readFile(new URL(`../node_modules/.cache/chatgpt-blender-model/fixture-quality-${version}.${extension}`, import.meta.url)))));
+  } catch (error) {
+    if (error.code === "ENOENT") { context.skip("Run the installed Blender two-revision quality smoke to provide its actual GLBs first"); return; }
+    throw error;
+  }
+  const [beforeJson, beforeGlb, afterJson, afterGlb] = files;
+  const before = parseBlenderModelSpec(JSON.parse(beforeJson.toString("utf8")));
+  const after = parseBlenderModelSpec(JSON.parse(afterJson.toString("utf8")));
+  assert.equal(before.name, after.name);
+  assert.equal(before.parts[0].id, "backrest");
+  assert.deepEqual(before.parts.slice(1), after.parts.slice(1));
+  assert.ok(after.parts[0].scale[1] > before.parts[0].scale[1]);
+  assert.notDeepEqual(before.parts[0].color, after.parts[0].color);
+  assert.notDeepEqual(beforeGlb, afterGlb, "the repair must be backed by an actual regenerated GLB");
+  const [beforePlan, afterPlan] = await Promise.all([beforeGlb, afterGlb].map((bytes, index) =>
+    createAssetImportPlan({ fileName: `quality-${index}.glb`, bytes: new Uint8Array(bytes), mimeType: "model/gltf-binary" })));
+  for (const plan of [beforePlan, afterPlan]) assert.ok(plan.canCommit, JSON.stringify(plan.diagnostics));
+  const beforeBounds = beforePlan.asset.importMetadata.bounds.size;
+  const afterBounds = afterPlan.asset.importMetadata.bounds.size;
+  assert.ok(afterBounds[1] > beforeBounds[1], `expected a higher imported backrest: ${beforeBounds} → ${afterBounds}`);
+  assert.ok(Math.abs(afterBounds[0] - beforeBounds[0]) < 0.00001);
+  assert.ok(Math.abs(afterBounds[2] - beforeBounds[2]) < 0.00001);
 });

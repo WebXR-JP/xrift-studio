@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
+import { useSceneReviewResource, type SceneReviewLoadState } from "./scene-review-readiness";
 import { useThree } from "@react-three/fiber";
 import { TextureLoader, type Texture } from "three";
 import { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
@@ -47,6 +48,9 @@ export function useProjectTexture(
             : "document",
       ].join("\n")
     : "";
+  const reportReview = useSceneReviewResource(`texture:${role}:${textureKey}`, { status: textureAsset ? "loading" : "ready" });
+  const [readiness, setReadiness] = useState<{ key: string; state: SceneReviewLoadState }>({ key: "", state: { status: "ready" } });
+  useLayoutEffect(() => { if (readiness.key === textureKey) reportReview(readiness.state); }, [readiness, reportReview, textureKey]);
 
   useEffect(() => {
     let active = true;
@@ -57,6 +61,7 @@ export function useProjectTexture(
       (!projectPath && textureAsset.source.kind !== "builtin") ||
       textureAsset.source.kind === "document"
     ) {
+      setReadiness({ key: textureKey, state: textureAsset ? { status: "error", message: "画像の参照元を読み込めず、見た目を確認できませんでした" } : { status: "ready" } });
       return () => {
         active = false;
       };
@@ -95,9 +100,13 @@ export function useProjectTexture(
         }
         ownedTexture = loaded;
         setTexture(loaded);
+        setReadiness({ key: textureKey, state: { status: "ready" } });
       })
       .catch(() => {
-        if (active) setTexture(null);
+        if (active) {
+          setTexture(null);
+          setReadiness({ key: textureKey, state: { status: "error", message: "画像を読み込めず、見た目を確認できませんでした" } });
+        }
       });
 
     return () => {

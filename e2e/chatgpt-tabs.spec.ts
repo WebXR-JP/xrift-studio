@@ -149,7 +149,7 @@ test("Plan切替なしの通常送信で同じワールドへ変更を反映す�
   expect((await call(page, "open_chatgpt_panel")).ok).toBe(true);
   const panel = page.getByRole("region", { name: "ChatGPTの制作チャット", exact: true });
   await expect(panel.getByRole("combobox", { name: "ワールド制作のモデル", exact: true })).toHaveValue("fixture-model");
-  await expect(panel.getByRole("checkbox", { name: "Blenderを使う", exact: true })).toHaveCount(1);
+  await expect(panel.getByRole("checkbox", { name: "コード・Blenderで制作", exact: true })).toHaveCount(1);
   await panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true }).fill("床を調整して球を追加");
   await expectMcpWithoutPlan(page);
   await panel.getByRole("button", { name: "依頼を送信", exact: true }).click();
@@ -397,7 +397,7 @@ test("MCPの逐次生成はプランと保存済みの進捗を返し、Sceneと
     await expect(page.getByRole("tab", { name: "ChatGPTを表示", exact: true })).toHaveAttribute("aria-selected", "true");
     await expect(page.getByRole("tab", { name: "MCP接続を表示", exact: true })).toHaveCount(0);
     await expect(panel.getByRole("list", { name: "依頼の作業結果", exact: true })).toBeVisible();
-    await expect(panel.getByRole("checkbox", { name: "Blenderを使う", exact: true })).toHaveCount(1);
+    await expect(panel.getByRole("checkbox", { name: "コード・Blenderで制作", exact: true })).toHaveCount(1);
     await expect(panel.getByText("Plan：検証用の広場", { exact: true })).toHaveCount(0);
     await panel.getByRole("button", { name: "制作チャットを閉じる", exact: true }).click();
     await expect(panel).toBeHidden();

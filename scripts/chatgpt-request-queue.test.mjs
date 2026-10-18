@@ -34,6 +34,9 @@ test("failure preserves the failed prompt and holds later requests until an expl
   state = queue.resumeChatgptRequestQueue(state, "chat-a");
   assert.equal(state["chat-a"].pauseReason, undefined);
   assert.equal(state["chat-a"].items[0].status, "waiting");
+  assert.notEqual(state["chat-a"].items[0].id, "first", "explicit retry creates a new execution while the failed run remains terminal");
+  assert.equal(state["chat-a"].items[0].prompt, "依頼first");
+  assert.equal(state["chat-a"].items[1].id, "second", "waiting requests retain their original identity");
   assert.equal(state["chat-a"].items[0].error, undefined);
 });
 test("queues stay in their own Scene/chat and draft adoption never replaces an existing chat queue", () => {

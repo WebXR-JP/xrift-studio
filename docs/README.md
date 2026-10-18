@@ -37,7 +37,7 @@
 
 ## 参照時の判断
 
-- 作業の許可と完了条件は [AGENT.md](../AGENT.md)、手順は該当スキル、APIの実行条件は現行ソースとtoolのschemaを確認します。
+- 作業の許可と完了条件は [AGENT.md](../AGENT.md)、手順は該当する実装資料、APIの実行条件は現行ソースとtoolのschemaを確認します。
 - 設計案の「実装順」「受け入れ条件」を実装済みの証拠にしません。対応状況の記述とコードが違う場合は、コード・fixture・実画面で確認し、未確認の対応を断定しません。
 - `releases/`、`asset-refresh/`、`catalog-expansion/`、`guide-review/`、`sky-shader-verification/`は実施時点の記録です。現在の成功を保証しません。
 - 大きな設計文書は変更対象の節だけを読みます。利用者向けの操作は`guide/`、機能IDは`UX_INTERACTIONS.md`から辿ります。

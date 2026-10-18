@@ -1,4 +1,5 @@
 import type { PrototypeVisualProject } from "./prototype-project";
+import { estimateXriftExtrudeGeometryBytes } from "../../../packages/xrift-studio-runtime/src/extrude-profile";
 import { canInstanceModel, countRepeatedModelMeshes } from "./model-instancing";
 import type {
   AudioAsset,
@@ -82,6 +83,7 @@ export function estimateWorldVram(
   ).scene;
   const references = new Map<string, number>();
   const meshPlacements = new Map<string, number>();
+  const authoredGeometry: VramContribution[] = [];
 
   const addReference = (assetId: string | undefined, count = 1) => {
     if (!assetId) return;
@@ -93,6 +95,11 @@ export function estimateWorldVram(
     for (const component of entity.components) {
       if (!component.enabled) continue;
       collectComponentReferences(component, addReference, meshPlacements);
+      if (component.type === "mesh" && component.geometry?.kind === "extrude") {
+        const id = `extrude:${entity.id}:${component.id}`;
+        meshPlacements.set(id, 1);
+        authoredGeometry.push({ assetId: id, name: entity.name, kind: "model", estimatedBytes: estimateXriftExtrudeGeometryBytes(component.geometry.extrude), referenceCount: 1, detail: "Extrude / 輪郭から生成するメッシュ" });
+      }
     }
   }
   addReference(resolvedScene.settings?.skybox.imageAssetId);
@@ -114,7 +121,7 @@ export function estimateWorldVram(
     }
   }
 
-  const contributions: VramContribution[] = [];
+  const contributions: VramContribution[] = [...authoredGeometry];
   const loadContributions: LoadContribution[] = [];
   const recommendations: VramRecommendation[] = [];
   let textureCount = 0;
@@ -250,7 +257,7 @@ function collectComponentReferences(
   meshPlacements: Map<string, number>,
 ): void {
   if (component.type === "mesh") {
-    const geometryId = component.geometry?.kind === "terrain"
+    const geometryId = component.geometry?.kind === "terrain" || component.geometry?.kind === "extrude"
       ? undefined
       : component.geometry?.kind === "asset"
         ? component.geometry.assetId

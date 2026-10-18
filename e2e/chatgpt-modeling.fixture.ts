@@ -10,6 +10,7 @@ export function installBlenderOutput(projectPath: string, dataUrl: string, byteL
   const outputPath = `${projectPath}\\.cache\\xrift-studio-blender\\isolated-native-output\\model.glb`;
   window.__TAURI_INTERNALS__!.invoke = async (command, args, options) => {
     if (command === "get_blender_status") return { available: true, version: "Blender 5.1.2" };
+    if (command === "chatgpt_review_model") return { approved: true, summary: "実描画を受け取る見直し経路の検証用応答です", model: null };
     if (command === "create_blender_model" && args?.projectPath === projectPath) {
       calls.push(args.model as BlenderModelSpec);
       return { path: outputPath, fileName: "model.glb", byteLength };
@@ -19,6 +20,7 @@ export function installBlenderOutput(projectPath: string, dataUrl: string, byteL
       for (const write of args.writes as { relativePath: string; dataUrl: string }[]) disk.set(write.relativePath, write.dataUrl);
     }
     if (command === "read_image_data_url" && args?.projectPath === projectPath && disk.has(String(args.rel))) return disk.get(String(args.rel));
+    if (command === "read_text_file" && args?.projectPath === projectPath && disk.has(String(args.rel))) return await (await fetch(disk.get(String(args.rel))!)).text();
     return invoke(command, args, options);
   };
   return { outputPath, byteLength, calls };

@@ -1,4 +1,6 @@
 import { isRecord } from "../json-guards";
+import { isR3fSceneAuthoring } from "./r3f-scene-source";
+import { validateXriftExtrudeProfile } from "../../../packages/xrift-studio-runtime/src/extrude-profile";
 import {
   ASSET_MANIFEST_SCHEMA_VERSION,
   isValidAssetFolderName,
@@ -2002,6 +2004,10 @@ function validatePrefabComponentShape(
         ),
       );
     }
+    if (isRecord(component.geometry) && component.geometry.kind === "extrude") {
+      const error = validateXriftExtrudeProfile(component.geometry.extrude);
+      if (error) issues.push(issue(`${path}.geometry.extrude`, "range", error));
+    }
     // Grass is validated here rather than inside isTerrainGeometry so the
     // terrain module keeps a type-only dependency on the grass module and the
     // two never form an import cycle.
@@ -2329,6 +2335,9 @@ function validateSceneComponentShapes(
   if (!isRecord(value) || !isRecord(value.entities)) return;
   for (const [entityId, entity] of Object.entries(value.entities)) {
     if (!isRecord(entity) || !Array.isArray(entity.components)) continue;
+    if (entity.codeAuthoring !== undefined && !isR3fSceneAuthoring(entity.codeAuthoring)) {
+      issues.push(issue(`$.entities.${entityId}.codeAuthoring`, "type", "R3F source authoring metadata is invalid"));
+    }
     if (
       entity.modelNode !== undefined &&
       !isValidModelNodeAuthoringMetadata(entity.modelNode)

@@ -8,6 +8,10 @@ declare global { interface Window { __XRIFT_MODEL_WORKERS__?: { releaseSlow: boo
 
 // Real GLB/Material rendering and a cold Editor compile share this budget.
 test.setTimeout(240_000);
+test.beforeEach(async ({ page }) => {
+  const metricsPath = process.env.XRIFT_E2E_FONT_METRICS_PATH;
+  if (metricsPath) await page.route("https://public.xrift.net/fonts/msdf/NotoSansJP/metrics.json?v=3", route => route.fulfill({ contentType: "application/json", path: metricsPath }));
+});
 
 async function call(page: Page, tool: string, args: Record<string, unknown> = {}, fresh = false): Promise<XriftMcpEditorResponse> {
   return page.evaluate(async ({ tool, args, fresh }) => {
