@@ -10,6 +10,9 @@ import type { JsonValue, SceneComponent } from "./scene-document";
 import { EDITOR_COMPONENT_REGISTRY, addEditorComponent, createEmptyEntity } from "./editor-session";
 import { COMPONENT_PATCH_KEYS } from "./component-patch-contract";
 import { CHATGPT_MAX_VISUAL_CHOICES } from "./chatgpt-questions";
+import { resolveBlenderEntityModelAsset } from "./chatgpt-model-source";
+import { isR3fSceneAuthoring, R3F_SOURCE_MAX_BYTES, r3fManagedEntityId } from "./r3f-scene-source";
+import { untouchedChatgptStarterEntityIds } from "./chatgpt-starter-context";
 
 const utf8Bytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
 const boundedText = (value: string, limit: number) => [...value].slice(0, limit).join("");
@@ -38,11 +41,36 @@ export function collectChatgptSceneContext(bundle: PrototypeVisualProject, selec
   conversation: ChatgptSceneContext["conversation"] = [], attachedEntityIds: readonly string[] = []): ChatgptSceneContext {
   const result: ChatgptSceneContext = { title: boundedText(bundle.project.metadata.title ?? bundle.project.metadata.name, 100),
     ...(selectedEntityId ? { selectedEntityId } : {}), entities: [] };
+  const starterEntityIds = untouchedChatgptStarterEntityIds(bundle, attachedEntityIds);
+  if (starterEntityIds.length) result.starterEntityIds = starterEntityIds;
   const all = Object.values(bundle.scene.entities);
   const priority = chatgptAttachmentEntityIds(all, attachedEntityIds);
   const attachedRoots = new Set(attachedEntityIds.slice(0, 100));
   if (attachedRoots.size) result.attachedEntityIds = [];
-  const orderedIds = [...new Set([...priority, ...(selectedEntityId ? [selectedEntityId] : []), ...all.map(entity => entity.id)])];
+  // A part's parent chain and editable source are required to revise it. Keep
+  // them before surrounding entities, including when the author reparented a
+  // generated part outside its original hierarchy. A copied/forged baseline
+  // must not make another root claim ownership of that part.
+  const codeOwners = new Map<string, string>();
+  for (const root of all) if (isR3fSceneAuthoring(root.codeAuthoring)) {
+    for (const [key, node] of Object.entries(root.codeAuthoring.nodes)) {
+      if (node.entityId === r3fManagedEntityId(root.id, key)) codeOwners.set(node.entityId, root.id);
+    }
+  }
+  const contextualIds = new Set<string>();
+  const includeWithContext = (id: string) => {
+    const pending = [id];
+    while (pending.length) {
+      const next = pending.pop()!, entity = bundle.scene.entities[next];
+      if (!entity || contextualIds.has(next)) continue;
+      contextualIds.add(next);
+      if (entity.parentId) pending.push(entity.parentId);
+      const owner = codeOwners.get(next);
+      if (owner && owner !== next) pending.push(owner);
+    }
+  };
+  for (const id of [...attachedRoots, ...(selectedEntityId ? [selectedEntityId] : []), ...priority]) includeWithContext(id);
+  const orderedIds = [...new Set([...contextualIds, ...all.map(entity => entity.id)])];
   const entities = orderedIds.map(id => bundle.scene.entities[id]).filter(Boolean);
   for (const entity of entities) {
     if (result.entities.length >= 100) break;
@@ -61,6 +89,10 @@ export function collectChatgptSceneContext(bundle: PrototypeVisualProject, selec
   }
   if (!result.entities.some(entity => entity.id === selectedEntityId)) delete result.selectedEntityId;
   const included = new Set(result.entities.map(entity => entity.id));
+  if (result.starterEntityIds) {
+    result.starterEntityIds = result.starterEntityIds.filter(id => included.has(id));
+    if (!result.starterEntityIds.length) delete result.starterEntityIds;
+  }
   for (const entity of result.entities) if (entity.parentId && !included.has(entity.parentId)) delete entity.parentId;
   if (!result.attachedEntityIds?.length) delete result.attachedEntityIds;
   if (conversation.length) result.conversation = conversation;
@@ -141,6 +173,15 @@ export function collectChatgptSceneResources(bundle: PrototypeVisualProject, ent
     for (const asset of result.projectAssets) asset.name = boundedText(asset.name, 4);
   }
   for (const id of new Set(entityIds)) {
+    let target;
+    try { target = resolveBlenderEntityModelAsset(bundle, id); } catch { continue; }
+    const asset = target ? bundle.assets.assets[target.modelAssetId] : undefined;
+    if (asset?.kind !== "model" || asset.authoring?.kind !== "blender") continue;
+    (result.authoredModels ??= []).push({ entityId: id, modelAssetId: asset.id, revision: asset.authoring.revision });
+    if (!fits(assetReserve)) { result.authoredModels.pop(); break; }
+  }
+  if (!result.authoredModels?.length) delete result.authoredModels;
+  for (const id of new Set(entityIds)) {
     for (const component of bundle.scene.entities[id]?.components ?? []) {
       const type = component.type;
       if (type === "animation") continue;
@@ -171,7 +212,7 @@ export function collectChatgptSceneResources(bundle: PrototypeVisualProject, ent
       if (result.components.length > 128 || !fits(assetReserve)) { result.components.pop(); break; }
     }
   }
-  const referenced = new Set(result.components.flatMap(component => [component.modelAssetId, component.audio?.audioAssetId]).concat([sky.imageAssetId, sky.materialAssetId]));
+  const referenced = new Set(result.components.flatMap(component => [component.modelAssetId, component.audio?.audioAssetId]).concat([sky.imageAssetId, sky.materialAssetId], (result.authoredModels ?? []).map(model => model.modelAssetId)));
   for (const asset of Object.values(bundle.assets.assets).sort((a, b) => Number(referenced.has(b.id)) - Number(referenced.has(a.id)))) {
     if (result.projectAssets.some(included => included.id === asset.id)) continue;
     if (asset.status !== "ready") continue;
@@ -181,5 +222,19 @@ export function collectChatgptSceneResources(bundle: PrototypeVisualProject, ent
       ...(isSkyShaderMaterialAsset(asset) ? { skyboxMaterial: true } : {}) });
     if (result.projectAssets.length > 128 || !fits()) { result.projectAssets.pop(); break; }
   }
+  // Code originals have a separate bounded allowance. Preserve exact TSX so
+  // subsequent edits do not reconstruct a world from a lossy prose summary.
+  let sourceBytes = 0;
+  for (const id of new Set(entityIds)) {
+    const entity = bundle.scene.entities[id];
+    const original = entity?.codeAuthoring;
+    if (!isR3fSceneAuthoring(original)) continue;
+    const length = new TextEncoder().encode(original.source).byteLength;
+    if (sourceBytes + length > R3F_SOURCE_MAX_BYTES) continue;
+    (result.authoredScenes ??= []).push({ entityId: id, name: boundedText(entity.name, 80), source: original.source });
+    if (utf8Bytes(result) > 96 * 1024) { result.authoredScenes.pop(); continue; }
+    sourceBytes += length;
+  }
+  if (!result.authoredScenes?.length) delete result.authoredScenes;
   return result;
 }

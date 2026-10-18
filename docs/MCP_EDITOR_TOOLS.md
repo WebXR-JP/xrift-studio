@@ -60,7 +60,17 @@ Studioに同梱する`xrift-studio-mcp-sidecar`は、MCPサーバーとCLIを兼
 
 ## surface
 
-ワールド制作の開始・再開には`begin_world_authoring` / `get_world_authoring`、画像判定の記録には`review_world_authoring`、完成条件の確認には`complete_world_authoring`を使う。Studioに内蔵されており、利用者側のソースコードや追加ランナーは不要。`capture_scene_view`は保存パスに加えてMCPの画像を直接返す。制作状態の保存と鮮度の判定は [ワールド制作ハーネス](./WORLD_AUTHORING_HARNESS.md) を参照する。
+`get_editor_context.starterEntityIds`は、初期テンプレートとの照合で未編集と確認できた`starter-floor`・`starter-box`のIDを返す。新しい場所を作る依頼では、この初期配置を置き換えたり削除したりできる。一覧が空または省略された場合は、名前やIDから削除可能と推測しない。書込前にcontextを再取得して最新revisionを使い、編集済みの作品や依頼範囲外の内容は保持する。選択中のEntityだけを理由に、ワールド全体の依頼を部分編集へ狭めない。
+
+ワールド制作の開始・再開には`begin_world_authoring` / `get_world_authoring`、画像判定の記録には`review_world_authoring`、完成条件の確認には`complete_world_authoring`、制作runの停止には`cancel_world_authoring`を使う。Studioに内蔵されており、利用者側のソースコードや追加ランナーは不要。`capture_scene_view`は保存パスに加えてMCPの画像を直接返す。制作状態の保存と鮮度の判定は [ワールド制作ハーネス](./WORLD_AUTHORING_HARNESS.md) を参照する。
+
+`begin_world_authoring`で始める新しいrunには累積budgetがある。既定は変更256回、画像確認8回、進展なし3回、連続失敗3回、経過時間900,000ms。任意の`budget`で`maxWrites`・`maxPasses`・`maxNoProgress`・`maxConsecutiveFailures`・`maxElapsedMs`を指定する。書込を実行前に予約して保存し、失敗した試行も数える。`get_world_authoring`の`state.run`にbudget・累積回数・直近128件のjournalがあり、`writeAdmission`、`terminalReason`、`canComplete`、`reasons`、`nextActions`で次の操作を判断する。外部クライアント内部の推論回数はStudioから見えないため数えない。
+
+上限に達したrunでは新しい制作書込を拒否する。読取・camera・captureは利用でき、最後の許可された工程で現在の証拠が揃っていれば完了できる。`complete_world_authoring`は最新Sceneと保存済みfingerprint、spawn・iso両画像、同じSceneに対する全条件の合格、処理中の書込・saveがないことを共通gateで検査する。未確認や保存待ちは`completionAccepted: false`と理由を返す。`replaceExisting`で同じ依頼の予算を自動リセットしない。
+
+`cancel_world_authoring`は後続の書込を止め、capture・reviewの完了証拠を無効にし、Scene・Assets・保存済みファイルを保持する。MCP brokerはtoolを直列処理するため、現在実行中のtoolがsettleした後に停止要求を処理する。実行中processのhard killとは異なる。停止したrunは完了できない。runを持たない旧履歴と、明示runを始めていない小さな直接編集の互換は保つ。
+
+制作ownerは一つにする。MCP runが実行中または上限で停止中なら、UIとMCPからのChatGPT新規制作・再開を拒否する。MCP runのcancelまたはcompleted後はChatGPTを開始でき、ChatGPT実行中の`begin_world_authoring`は拒否する。project入口の`create_blender_model`も、永続化された同じrunのwrite budgetをファイル生成前に検査し、結果を記録する。
 
 制作状態と`list_component_definitions`は、ワールドの場合に`worldComponents`も返す。用途別の公式設備、配置と検証の手順、公式フィールド、プレハブの編集可能項目、現在の設備一覧を確認できる。交流・共同作業・発表では画面共有を最初に検討し、採用・省略の理由と利用場所を設計図に残す。鏡はアバター確認、タグ選択はイベントのタグ選択に合わせて選ぶ。`place_builtin_prefab`は`componentId`と該当する`placementGuidance`を返す。位置・向き・大きさを調整し、客席や操作位置から撮影してから、対応環境で動作を確認する。設備の存在だけで共有・同期が動いたとは判断しない。
 
@@ -70,6 +80,7 @@ toolは実行する場所と副作用に応じて、6つのsurfaceに分類す�
 | --- | --- | --- |
 | `project` | `App.tsx` | プロジェクトの作成・開く・閉じる、公開、アカウント確認。Editorの外で動くので、プロジェクトが開いていなくても呼べる |
 | `document` | `mcp-editor-tools.ts` | document setへの純粋な関数。副作用なし |
+| `async-document` | `mcp-code-authoring.ts`とEditor | 原本の静的変換を非同期で検証し、通常のrevision・履歴・自動保存へ反映する |
 | `local-asset` | React shell | ネイティブfile I/Oを伴う |
 | `script` | React shell | project file I/Oまたは動作確認modeの変更を伴う |
 | `external-store` | React shell | ネットワークと取り込みQueueを使う |
@@ -86,13 +97,15 @@ MCPの要求は常にshell (`App.tsx`) が受け取る。`project` toolはshell�
 
 利用者のプロジェクトに接続したAIクライアントは、serverの`instructions`とtoolのdescriptionを読む。このリポジトリのスキルや文書は届かないため、制作手順は`instructions`の先頭に書く。各toolのdescriptionには、機能、選ぶ基準、実行後の確認、失敗しやすい条件を記す。採用するかは設計図の内容で決め、descriptionに一律の禁止は書かない。
 
+共有方針は`world-authoring-guide.json`から読み込む。`get_world_authoring_guide`で`topic: "overview"`を指定すると共有方針と制作方法の概要、`r3f`・`assets`・`blender`では選んだ方法の詳細だけを返す。現在の接続先で使える操作はtool定義とcapabilityで確認する。全制作方法の長い説明を毎回のEditor contextへ追加しない。
+
 地形と草には14本、床には1本のtoolがある。説明がなければ、AIがtoolの多い機能を優先するおそれがあるため、用途に応じた選び方を伝える。設計判断と経緯は[ワールド制作ハーネス](./WORLD_AUTHORING_HARNESS.md)を参照する。
 
 document toolの戻り値には`harness`が付くことがある。同じ種類（地形、草、同じオブジェクトの
 位置・回転・大きさ、同じマテリアル）の書き込みを`capture_scene_view`を挟まずに3回続けると付く警告だ。
-書き込み自体は拒否しない。数え方はEditorのメモリだけを使う。projectには残らない。
+この警告自体は書込を拒否せず、Editorのメモリーだけを使う。明示的な制作runの累積budgetとは別の仕組みであり、runの上限到達後は書込を拒否する。
 
-## project (22)
+## project (29)
 
 **Library / セッション**
 `list_projects`, `list_starter_templates`, `create_project`, `open_project`,
@@ -113,15 +126,23 @@ document toolの戻り値には`harness`が付くことがある。同じ種類�
 
 制作チャットの`/goal 目標`は、既存の`generate_chatgpt_world`へ`mode: "goal"`を指定すると同じ継続制作を開始できる。現在のSceneを各回で取得し、変更を保存して見直しを続け、必要な改善がなくなったら完了する。`cancel_chatgpt_generation`で停止する。質問待ち、進展なし、失敗、Scene変更では保存済みの成果を保持する。
 
+Studio内ChatGPTは同じgeneration/run IDの制作runtimeを使い、pass・repair・推論工程・変更工程・時間の予算を継続して数える。既定はpass 12回、repair 4回、hostへ登録した推論工程24回、変更工程192回、active time 20分、1工程4分。productionの上限1〜6回も併用し、先に到達した条件で停止する。確認待ちはpauseしてactive timeから除く。native内部のHTTP requestとtool attemptの全数をこの推論工程数として数えたとは扱わない。native内の既存loop・retry上限は別に維持する。
+
+authoring契約11では、初回の`world`・`environment`の上限を最低3回にし、制作・画像確認・修正の余地を確保する。モデルの提案は3〜6回とし、1回目で完成条件を満たせば終了する。保存済みの継続予算は延長せず、`model`・`edit`の1回上限も保持する。ChatGPTへ渡す`starterEntityIds`は同じ初期配置の照合を使い、明示的に添付した対象と配下を除く。
+
+モデル・副作用の前には会話履歴をflushし、保存失敗時は開始しない。Studio再起動後の実行中runは中断終了し、自動再開しない。`cancel_chatgpt_generation`は該当generationのnative cancelを依頼し、所有する処理の終了を待ち、遅着結果の反映を拒否する。MCP tool直列処理による`cancel_world_authoring`とは停止範囲が異なる。
+
+`cancel_chatgpt_generation`の応答は停止要求の受理であり、処理終了の通知ではない。`get_chatgpt_generation`では所有処理のdrain完了まで`status: "running"`・`cancelling: true`を返し、その後`cancelled`になる。native lease登録前の取消は同じgenerationのprogressでも再送する。自動修復と継続は同じgeneration ID・予算を維持し、利用者がQueueの「再試行」を選んだ場合だけ新しいgeneration IDで開始する。旧runは閉じた履歴として残す。制作方針とcontextの省略数は既存の検証済みconversationに含めてnativeへ渡し、repairでも保持する。
+
 `get_chatgpt_connection`, `connect_chatgpt`, `disconnect_chatgpt`, `list_chatgpt_models`, `open_chatgpt_panel`, `generate_chatgpt_world`, `get_chatgpt_generation`, `apply_chatgpt_plan`, `cancel_chatgpt_generation`, `list_chatgpt_sessions`, `get_chatgpt_session`, `manage_chatgpt_session`, `revert_chatgpt_generation`
 
 `connect_chatgpt`はブラウザでの認証を開始して直ちに返す。本人が許可した後、`get_chatgpt_connection`で`connecting: false`、`restoring: false`、`signedIn: true`、`planUsageEnabled: true`を確認する。失敗理由は`error`に残る。更新用の認証情報はOSの安全な保存先に保管し、Studioの起動時に復元する。認証情報をMCPやプロジェクトへ返さない。XRiftの`login`とは別の接続で、接続・状態確認はプロジェクトを開かずに使える。外部MCPクライアントの登録は制作チャットの入力欄下にある「MCP接続」、またはプロジェクト一覧の「設定」から行う。MCP接続を開くと、登録済みのサーバーを同梱版へ自動更新する。更新後は、表示された案内に従ってAIクライアントを再起動するかMCPを再読み込みする。
 
 ワールドを開き、`list_chatgpt_models`で利用可能なslug・表示名・`supportedReasoningEfforts`・`defaultReasoningEffort`を取得する。対応する思考量はモデルごとに異なり、情報がなければ空配列とnullを返す。モデル名から対応値を推測しない。`open_chatgpt_panel`は同じEditorのChatGPTタブを表示し、Scene Viewの横で変更内容と進行状況を読める。Studioのチャットは依頼を送ると編集を進め、制作モードの切り替えは表示しない。未接続の接続カード、処理・復元中の案内、接続エラーは会話中央に表示する。接続後は右上のアカウントアイコンから詳細を確認できる。
 
-`generate_chatgpt_world`には最新の`get_editor_context`から`projectId`・`sceneId`・`expectedRevision`、選んだ`model`、2000文字以内の`prompt`を渡す。任意の`reasoningEffort`は`none`・`minimal`・`low`・`medium`・`high`・`xhigh`・`max`のうち、選択モデルの`supportedReasoningEfforts`に含まれる値だけを指定する。省略時は推論APIへ思考量を送らず、モデル側の既定設定を保つ。モデル情報がない場合も省略する。非対応の指定は推論APIへ送る前に拒否する。`options`は`models`・`materials`・`audio`のbooleanと、任意の`modelSource: "auto" | "blender" | "store"`を持つオブジェクトで、省略時はすべて有効・制作方法は自動。Blenderを使うには端末にBlenderが必要で、素材ストアを選ぶとBlenderでの作成を行わない。Editで、素材の取り込みなど他の処理が完了していることが必要。Itemプロジェクトでは生成できない。
+`generate_chatgpt_world`には最新の`get_editor_context`から`projectId`・`sceneId`・`expectedRevision`、選んだ`model`、2000文字以内の`prompt`を渡す。任意の`reasoningEffort`は`none`・`minimal`・`low`・`medium`・`high`・`xhigh`・`max`のうち、選択モデルの`supportedReasoningEfforts`に含まれる値だけを指定する。省略時は対応する`low`を優先し、非対応ならcatalogの対応済み`defaultReasoningEffort`を使う。モデル情報を確認できない場合は推論APIへ思考量を指定しない。明示した対応値は保持し、非対応の指定は推論APIへ送る前に拒否する。`options`は`models`・`materials`・`audio`のbooleanと、任意の`modelSource: "auto" | "blender" | "store"`を持つオブジェクトで、省略時はすべて有効・制作方法は自動。Blenderを使うには端末にBlenderが必要で、素材ストアを選ぶとBlenderでの作成を行わない。Editで、素材の取り込みなど他の処理が完了していることが必要。Itemプロジェクトでは生成できない。
 
-生成には接続アカウントの利用枠を使う。開始の応答は`generationId`と`status: "running"`を返す。既定は`target: "current"`、`mode: "build"`。現在のSceneで既存Entityの位置・回転・大きさ・名前、モデル・Material、Skybox・Audio Source・Colliderを調整し、必要なEntityを追加する。内部では小さいPlanに分け、`hasMore`・`remainingWork`で残りの作業を示す。利用者に内部JSONや件数の調整を要求しない。`target: "new"`を明示すると別のワールドを作る。
+生成には接続アカウントの利用枠を使う。開始の応答は`generationId`と`status: "running"`を返す。既定は`target: "current"`、`mode: "build"`。現在のSceneで既存Entityの位置・回転・大きさ・名前、モデル・Material、Skybox・Audio Source・Colliderを調整し、必要なEntityを追加する。場所全体を作る依頼では、初期配置の再利用に縛られず、主な特徴・導線・照明を含む構成を作る。`hasMore`・`remainingWork`で必要な残作業を示し、利用者に内部JSONや件数の調整を要求しない。`target: "new"`を明示すると別のワールドを作る。
 
 MCP/APIの`mode: "plan"`はPlanの検証までを行い、`status: "planned"`と公開用のPlan概要を返す。Sceneやプロジェクトのファイルは変更しない。内容を確認した後、最新の`get_editor_context`から`projectId`・`sceneId`・`expectedRevision`と`generationId`を`apply_chatgpt_plan`へ渡す。元の作品とSceneを開いていることが必要で、古いrevisionは拒否する。確認済みPlanの対象が編集された場合は、手動編集を保持して新しいPlanを作り、同じ`generationId`の`status: "planned"`に戻す。新しい内容を確認してから、もう一度`apply_chatgpt_plan`を呼ぶ。モデルと思考量は維持する。`cancel_chatgpt_generation`は未反映のPlanを破棄するか、実行中の制作を停止する。Studioに確認待ちが表示された場合の操作名は「変更を反映」「変更を破棄」。
 
@@ -157,10 +178,22 @@ Editで実行すると、独立したBlenderプロセスが実GLBと編集可能
 
 `get_publish_readiness`は保存してから、公開情報（スターターのタイトル・説明のままでないこと）、サムネイル、ログイン、compilerのblocking diagnosticsを確認し、足りない項目ごとに直すtoolを`nextActions`に返す。`publish_project`は同じ確認を通ったときだけ、公開ダイアログと同じ`publishVisualProject`パイプライン（保存・変換・`xrift check --build`・アップロード）を実行し、結果をprojectの`lastPublication`に保存する。人が公開を依頼した場合にだけ呼ぶ。
 
-## document (96)
+## async-document (1)
+
+`apply_r3f_scene`
+
+完全な静的R3F原本から、まとまった形状と配置を編集可能なEntityとして作成・更新する。最新の`projectId`・`sceneId`・`expectedRevision`と、`name`・`source`を渡す。新規作成では`entityId`を省略するか`null`にし、返されたルートEntityのIDを保持する。対応構文と制約は`get_world_authoring_guide`の`topic: "r3f"`で取得する。
+
+更新時はそのルートを`get_entity_components`で読み、`r3fAuthoring.source`の完全な原本を修正して、同じ`entityId`へ渡す。安定した名前・keyと変更しない部分を保つ。生成された子Entityは原本更新の対象にしない。`list_entities`は原本の有無・版だけを返し、全TSXを一覧へ重複しない。
+
+変換は任意のJavaScriptを実行せず、対応しない構文を`R3F_SOURCE_INVALID`で拒否する。手動変更を失う場合は`R3F_EDIT_CONFLICT`、変換中に編集状態が変わった場合は`STALE_REVISION`を返し、部分的なSceneを反映しない。同じ原本なら`changed: false`でrevisionとUndoを増やさない。制作run中は通常の書込予算を使い、変更のない試行や失敗も記録する。保存済みのSceneを撮影して完成条件を確認する。
+
+変換中にEditorが観測したAssetのサムネイル・保存日時だけの更新は、最新状態へ合流して保持する。手動編集、取り消しで元へ戻した編集、停止やScript保存による明示的なrevision更新は、この例外に含めない。派生更新の比較は非同期の原本変換中だけ行い、通常の編集へ全Sceneの比較処理を追加しない。
+
+## document (98)
 
 **Editor context / Project**
-`get_editor_context`, `get_project_health`, `analyze_performance`, `get_scripting_capabilities`, `update_project_metadata`
+`get_editor_context`, `get_world_authoring_guide`, `get_project_health`, `analyze_performance`, `get_scripting_capabilities`, `update_project_metadata`
 
 `get_project_health`は既存のProject / Scene / Asset検証を実行し、件数とほぼ0のScaleを報告する。`scope: document`の`ready`はファイルの存在、Playの動作、公開可能な状態を保証しない。指摘を修正したら再診断し、既存のPlay・Compile・公開前チェックへ進む。
 
@@ -446,14 +479,16 @@ Scriptだけを作る場合は`create_script_asset`の`templateId`に指定す�
 
 `search_external_assets`の3Dモデルには、Poly Havenの一覧APIが返す`polycount`と`dimensionsMm`が付く。寸法は幅・奥行・高さの順で、単位はmm。Poly Havenの写真スキャンには、木で数百万、岩でも数十万の三角形を持つモデルがある。取り込む前に値を読み、そのワールドの制作予算と比較する。上限の数値はこの文書では固定しない。
 
-## debug (15)
+## debug (16)
 
 `capture_scene_debug`, `capture_scene_view`, `set_scene_view_camera`,
 `start_recording`, `stop_recording`, `get_recording_status`,
 `set_recording_profile`, `set_recording_viewport`, `get_recording_viewport`,
-`set_recording_camera`, `get_recording_camera`
+`set_recording_camera`, `get_recording_camera`,
+`begin_world_authoring`, `get_world_authoring`, `review_world_authoring`,
+`complete_world_authoring`, `cancel_world_authoring`
 
-documentを書き換えない。現在表示中のシーンを読む / 向きを変える / 録画するだけだ。
+SceneDocumentを書き換えない。現在表示中のSceneの読取、camera、録画、別ファイルの制作run・証拠の保存を扱う。
 元に戻す履歴も選択も動かさない。
 
 - `capture_scene_debug` — fps、frame time、draw call、triangle、可視メッシュ数、

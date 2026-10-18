@@ -214,6 +214,15 @@ export type ModelOptimizationOrigin = {
 
 export type ModelAsset = AssetBase<"model"> & {
   importSettings: ModelImportSettings;
+  /** Durable geometry recipe for generated Models; the source remains immutable. */
+  authoring?: {
+    kind: "blender";
+    version: 1;
+    sourcePath: string;
+    sourceHash: string;
+    revision: number;
+    parentAssetId?: string;
+  };
   /** Slots discovered from glTF primitives/material indices during import. */
   materialSlots: MaterialSlotDefinition[];
   importMetadata?: ModelImportMetadata;

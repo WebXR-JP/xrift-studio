@@ -8,8 +8,9 @@ import { mergeExternalStoreImport } from "./external-store";
 import { ChatgptSceneConflictError } from "./chatgpt-plan-guards";
 import { normalizeChatgptSkyboxPatch } from "./chatgpt-skybox";
 import { ChatgptPlanInputError } from "./chatgpt-plan-recovery";
-import { applyChatgptEditorAction, isChatgptEditorAction } from "./chatgpt-editor-actions";
+import { applyChatgptEditorAction, type ChatgptEditorAction } from "./chatgpt-editor-actions";
 import { applyChatgptSceneMaterial } from "./chatgpt-scene-material";
+import { createSceneOperationRegistry, SceneOperationRegistryError, type SceneOperationPlugin } from "./chatgpt-operation-registry";
 
 const equalAuthoredValue = (left: unknown, right: unknown) => left === right || JSON.stringify(left) === JSON.stringify(right);
 function mergeChangedEntries<T extends object>(before: T, next: T, latest: T): T {
@@ -92,9 +93,16 @@ export function editChatgptEntity(bundle: XriftMcpEditorContext["bundle"], edit:
 }
 export type ChatgptGeneration = {
   generationId: string;
+  harness?: import("./chatgpt-harness-runtime").ChatgptHarnessSnapshot;
+  contextRefs?: import("./chatgpt-harness-context-ref").ChatgptHarnessContextRef[];
   status: "running" | "planned" | "completed" | "failed" | "cancelled";
   mode?: ChatgptGenerationMode;
   goal?: { iteration: number; noProgressPasses: number };
+  production?: import("./chatgpt-production").ChatgptProduction;
+  productionPass?: number;
+  productionNoProgressPasses?: number;
+  /** A code-authored result always receives the bounded rendered Scene review. */
+  productionVisualReview?: boolean;
   cancelling?: boolean;
   model: string;
   reasoningEffort?: string;
@@ -184,77 +192,185 @@ export function placeChatgptObject(bundle: XriftMcpEditorContext["bundle"], valu
   return { bundle: context.bundle, entityId };
 }
 
-/** Trusted operations keep the current Entity and its unrelated data intact. */
-export async function applyChatgptOperation(bundle: XriftMcpEditorContext["bundle"], operation: ChatgptOperation,
-  assetIds: ReadonlyMap<string, string>, resources: ChatgptResourceContext, projectPath?: string): Promise<{ bundle: typeof bundle; entityId?: string }> {
-  if (operation.kind === "blender-model") {
+type ChatgptOperationResult = { bundle: XriftMcpEditorContext["bundle"]; entityId?: string };
+type ChatgptOperationHost = {
+  bundle: XriftMcpEditorContext["bundle"];
+  assetIds: ReadonlyMap<string, string>;
+  resources: ChatgptResourceContext;
+  projectPath?: string;
+  authoring?: { prompt?: string; originalPrompt?: string; brief?: string };
+  execution?: import("./chatgpt-modeling").BlenderModelExecution;
+};
+type ChatgptOperationCapability = "scene-write" | "code-authoring" | "blender-authoring" | "project-files";
+type ChatgptOperationPlugin = SceneOperationPlugin<ChatgptOperation, ChatgptOperationHost, ChatgptOperationResult, ChatgptOperationCapability>;
+
+/** Exact, exhaustive built-in tool surface. No generated operation can select
+ * an MCP method, a module path or an arbitrary function through this table. */
+export const CHATGPT_SCENE_OPERATION_KINDS = ["r3f-scene", "blender-model", "catalog", "component-add", "component-update", "component-remove", "entity-delete",
+  "material-update", "scene-settings", "material-scene", "skybox", "mesh-collision", "model-attachment", "material", "audio"] as const satisfies readonly ChatgptOperation["kind"][];
+const missingOperationKinds: Record<Exclude<ChatgptOperation["kind"], typeof CHATGPT_SCENE_OPERATION_KINDS[number]>, never> = {};
+void missingOperationKinds;
+
+function editorOperationHost(host: ChatgptOperationHost) {
+  let context: XriftMcpEditorContext = { bundle: host.bundle, sceneSelection: null, assetSelection: null, editorMode: "edit", importBusy: false, revision: 0, saveStatus: "dirty" };
+  return {
+    get bundle() { return context.bundle; },
+    apply(tool: XriftMcpEditorRequest["tool"], args: Record<string, unknown>) {
+      host.execution?.checkCurrent?.();
+      const outcome = executeXriftMcpEditorTool(context, { id: crypto.randomUUID(), tool, arguments: {
+        projectId: host.bundle.project.projectId, sceneId: host.bundle.scene.sceneId, expectedRevision: context.revision, ...args,
+      } });
+      context = { ...context, bundle: outcome.bundle, revision: context.revision + (outcome.changed ? 1 : 0) };
+      return outcome.result;
+    },
+  };
+}
+
+const isBuiltinOperation = (operation: { candidateId?: string }, host: ChatgptOperationHost) => Boolean(operation.candidateId
+  && host.resources.builtinCandidates.some(candidate => candidate.candidateId === operation.candidateId));
+const candidateCapabilities = (operation: { candidateId?: string }, host: ChatgptOperationHost): readonly ChatgptOperationCapability[] =>
+  isBuiltinOperation(operation, host) ? ["scene-write", "project-files"] : ["scene-write"];
+type BuiltinOperation = Extract<ChatgptOperation, { kind: "catalog" | "material" | "material-scene" | "skybox" }>;
+async function applyBuiltinOperation(operation: BuiltinOperation, host: ChatgptOperationHost): Promise<ChatgptOperationResult | undefined> {
+  if (!isBuiltinOperation(operation, host)) return undefined;
+  if (!host.projectPath) throw new ChatgptPlanInputError("素材を適用するためのプロジェクトを確認できませんでした");
+  const builtin = await import("./chatgpt-builtin-catalog");
+  return builtin.applyChatgptBuiltinOperation(host.bundle, operation, host.projectPath);
+}
+function operationAssetId(operation: { candidateId?: string }, host: ChatgptOperationHost) {
+  const candidateId = operation.candidateId;
+  const assetId = candidateId ? candidateId.startsWith("project:") ? candidateId.slice(8) : host.assetIds.get(candidateId) : undefined;
+  if (candidateId && (!assetId || !Object.prototype.hasOwnProperty.call(host.bundle.assets.assets, assetId))) throw new ChatgptPlanInputError("適用する素材を確認できませんでした");
+  return assetId;
+}
+function applyEditorOperation(operation: ChatgptEditorAction, host: ChatgptOperationHost): ChatgptOperationResult {
+  const editor = editorOperationHost(host);
+  const entityId = applyChatgptEditorAction(operation, editor.bundle, editor.apply);
+  return { bundle: editor.bundle, ...(entityId ? { entityId } : {}) };
+}
+
+const sceneOperationPlugins: readonly ChatgptOperationPlugin[] = [
+  { kind: "r3f-scene", requiredCapabilities: ["scene-write", "code-authoring"], async execute(operation, host) {
+    const { applyChatgptR3fScene } = await import("./chatgpt-code-authoring");
+    return applyChatgptR3fScene(host.bundle, operation, { prompt: host.authoring?.prompt, checkCurrent: host.execution?.checkCurrent });
+  } },
+  { kind: "blender-model", requiredCapabilities: ["scene-write", "blender-authoring", "project-files"], async execute(operation, host) {
+    const { bundle, resources, projectPath, authoring, execution } = host;
     if ("brief" in operation.model) throw new Error("モデルの詳細制作が完了していません");
     if (!projectPath || !resources.blenderAvailable || resources.modelSource === "store") throw new Error("Blenderでモデルを作成する設定を確認してください");
     const { createBlenderModelAsset } = await import("./chatgpt-modeling");
+    const { resolveBlenderEntityModelAsset } = await import("./chatgpt-model-source");
+    const previousTarget = operation.entityId ? resolveBlenderEntityModelAsset(bundle, operation.entityId, operation.componentId) : null;
+    if (operation.entityId && previousTarget) {
+      const { assertBlenderModelSourceCurrent } = await import("./chatgpt-model-integrity");
+      assertBlenderModelSourceCurrent(bundle, operation.entityId, previousTarget.modelAssetId);
+    }
     // Validate the target before generating files; replacement retains its Transform.
     if (operation.entityId) {
       const meshes = bundle.scene.entities[operation.entityId]?.components.filter(component => component.type === "mesh") ?? [];
-      if (!meshes.length || (operation.componentId ? !meshes.some(component => component.id === operation.componentId) : meshes.length !== 1)
+      if ((!meshes.length && !previousTarget) || (operation.componentId ? !meshes.some(component => component.id === operation.componentId) : meshes.length > 1)
         || operation.position || operation.rotation || operation.scale) throw new ChatgptPlanInputError("置き換えるMesh Rendererを確認してください");
     } else if (!operation.position || operation.componentId) throw new ChatgptPlanInputError("モデルの配置先を確認してください");
-    const imported = await createBlenderModelAsset(bundle, operation.model, projectPath);
-    if (operation.entityId) return applyChatgptOperation(imported.bundle, { kind: "model-attachment", entityId: operation.entityId, componentId: operation.componentId, candidateId: `project:${imported.modelAssetId}` }, new Map(), resources, projectPath);
+    const previousMesh = operation.entityId ? bundle.scene.entities[operation.entityId]?.components.find(component => component.type === "mesh" && (!operation.componentId || component.id === operation.componentId)) : undefined;
+    const previousGeometryId = previousMesh?.type === "mesh" ? previousMesh.geometry?.kind === "asset" ? previousMesh.geometry.assetId : previousMesh.geometryAssetId : undefined;
+    const previousAssetId = previousTarget?.modelAssetId ?? (previousGeometryId && bundle.assets.assets[previousGeometryId]?.kind === "model" ? previousGeometryId : undefined);
+    const imported = await createBlenderModelAsset(bundle, operation.model, projectPath, { ...authoring, previousAssetId }, execution);
+    execution?.checkCurrent?.();
+    if (operation.entityId && imported.bundle === bundle) return { bundle, entityId: operation.entityId };
+    if (operation.entityId) return applyChatgptOperation(imported.bundle, { kind: "model-attachment", entityId: operation.entityId, componentId: operation.componentId, candidateId: `project:${imported.modelAssetId}` }, new Map(), resources, projectPath, authoring, execution);
     return placeChatgptObject(imported.bundle, { name: operation.model.name, shape: "model", externalId: `project:${imported.modelAssetId}`,
       position: operation.position!, rotation: operation.rotation, scale: operation.scale ?? [1, 1, 1] }, new Map());
-  }
-  const candidateId = "candidateId" in operation ? operation.candidateId : undefined;
-  if (candidateId && resources.builtinCandidates.some(candidate => candidate.candidateId === candidateId)) {
-    if (!["catalog", "material", "material-scene", "skybox"].includes(operation.kind) || !projectPath) throw new Error("素材を適用するためのプロジェクトを確認できませんでした");
-    const builtin = await import("./chatgpt-builtin-catalog");
-    return builtin.applyChatgptBuiltinOperation(bundle, operation as Extract<ChatgptOperation, { kind: "catalog" | "material" | "material-scene" | "skybox" }>, projectPath);
-  }
-  if (operation.kind === "catalog") throw new ChatgptPlanInputError("素材の候補を確認できませんでした");
-  let context: XriftMcpEditorContext = { bundle, sceneSelection: null, assetSelection: null, editorMode: "edit", importBusy: false, revision: 0, saveStatus: "dirty" };
-  const apply = (tool: XriftMcpEditorRequest["tool"], args: Record<string, unknown>) => {
-    const outcome = executeXriftMcpEditorTool(context, { id: crypto.randomUUID(), tool, arguments: { projectId: bundle.project.projectId, sceneId: bundle.scene.sceneId, expectedRevision: context.revision, ...args } });
-    context = { ...context, bundle: outcome.bundle, revision: context.revision + (outcome.changed ? 1 : 0) };
-    return outcome.result;
-  };
-  const assetId = candidateId ? (candidateId.startsWith("project:") ? candidateId.slice(8) : assetIds.get(candidateId)) : undefined;
-  if (isChatgptEditorAction(operation)) {
-    const entityId = applyChatgptEditorAction(operation, context.bundle, apply);
-    return { bundle: context.bundle, ...(entityId ? { entityId } : {}) };
-  }
-  if (candidateId && (!assetId || !bundle.assets.assets[assetId])) throw new ChatgptPlanInputError("適用する素材を確認できませんでした");
-  if (operation.kind === "material-scene") {
-    applyChatgptSceneMaterial(context.bundle, assetId!, args => apply("set_material", args));
-    return { bundle: context.bundle };
-  }
-  if (operation.kind === "skybox") {
+  } },
+  { kind: "catalog", requiredCapabilities: ["scene-write", "project-files"], async execute(operation, host) {
+    const result = await applyBuiltinOperation(operation, host);
+    if (!result) throw new ChatgptPlanInputError("素材の候補を確認できませんでした");
+    return result;
+  } },
+  { kind: "component-add", requiredCapabilities: ["scene-write"], execute: applyEditorOperation },
+  { kind: "component-update", requiredCapabilities: ["scene-write"], execute: applyEditorOperation },
+  { kind: "component-remove", requiredCapabilities: ["scene-write"], execute: applyEditorOperation },
+  { kind: "entity-delete", requiredCapabilities: ["scene-write"], execute: applyEditorOperation },
+  { kind: "material-update", requiredCapabilities: ["scene-write"], execute: applyEditorOperation },
+  { kind: "scene-settings", requiredCapabilities: ["scene-write"], execute: applyEditorOperation },
+  { kind: "material-scene", requiredCapabilities: candidateCapabilities, async execute(operation, host) {
+    const builtin = await applyBuiltinOperation(operation, host);
+    if (builtin) return builtin;
+    const assetId = operationAssetId(operation, host), editor = editorOperationHost(host);
+    applyChatgptSceneMaterial(editor.bundle, assetId!, args => editor.apply("set_material", args));
+    return { bundle: editor.bundle };
+  } },
+  { kind: "skybox", requiredCapabilities: candidateCapabilities, async execute(operation, host) {
+    const builtin = await applyBuiltinOperation(operation, host);
+    if (builtin) return builtin;
+    const assetId = operationAssetId(operation, host), editor = editorOperationHost(host);
     const { kind: _kind, candidateId: _candidate, ...skybox } = operation;
     const patch: Record<string, unknown> = { ...skybox };
     if (assetId) {
-      const asset = bundle.assets.assets[assetId];
+      const asset = host.bundle.assets.assets[assetId];
       if (asset.kind === "texture" || asset.kind === "skybox") {
         Object.assign(patch, { imageAssetId: assetId, materialAssetId: null, projection: "infinite", enabled: operation.enabled ?? true });
         if (asset.kind === "texture") patch.flipY = asset.importSettings.flipY;
       } else if (asset.kind === "material") Object.assign(patch, { materialAssetId: assetId, enabled: operation.enabled ?? true });
       else throw new ChatgptPlanInputError("背景に使える素材を確認できませんでした");
     }
-    apply("update_scene_settings", { skybox: normalizeChatgptSkyboxPatch(context.bundle, patch) });
-    return { bundle: context.bundle };
-  }
-  const entityId = operation.entityId;
-  if (operation.kind === "mesh-collision") apply("set_mesh_collision", { entityId, action: operation.action });
-  else if (operation.kind === "model-attachment") apply("set_entity_model", { entityId, modelAssetId: assetId, componentId: operation.componentId });
-  else if (operation.kind === "material") apply("set_material", { entityId, materialAssetId: assetId, meshComponentId: operation.componentId });
-  else {
-    const sources = bundle.scene.entities[entityId]?.components.filter(component => component.type === "audio-source") ?? [];
+    editor.apply("update_scene_settings", { skybox: normalizeChatgptSkyboxPatch(editor.bundle, patch) });
+    return { bundle: editor.bundle };
+  } },
+  { kind: "mesh-collision", requiredCapabilities: ["scene-write"], execute(operation, host) {
+    const editor = editorOperationHost(host);
+    editor.apply("set_mesh_collision", { entityId: operation.entityId, action: operation.action });
+    return { bundle: editor.bundle, entityId: operation.entityId };
+  } },
+  { kind: "model-attachment", requiredCapabilities: ["scene-write"], execute(operation, host) {
+    const assetId = operationAssetId(operation, host), editor = editorOperationHost(host);
+    editor.apply("set_entity_model", { entityId: operation.entityId, modelAssetId: assetId, componentId: operation.componentId });
+    return { bundle: editor.bundle, entityId: operation.entityId };
+  } },
+  { kind: "material", requiredCapabilities: candidateCapabilities, async execute(operation, host) {
+    const builtin = await applyBuiltinOperation(operation, host);
+    if (builtin) return builtin;
+    const assetId = operationAssetId(operation, host), editor = editorOperationHost(host);
+    editor.apply("set_material", { entityId: operation.entityId, materialAssetId: assetId, meshComponentId: operation.componentId });
+    return { bundle: editor.bundle, entityId: operation.entityId };
+  } },
+  { kind: "audio", requiredCapabilities: ["scene-write"], execute(operation, host) {
+    const entityId = operation.entityId, assetId = operationAssetId(operation, host), editor = editorOperationHost(host);
+    const sources = host.bundle.scene.entities[entityId]?.components.filter(component => component.type === "audio-source") ?? [];
     let componentId = operation.componentId ?? (sources.length === 1 ? sources[0]?.id : undefined);
     if (!componentId && sources.length > 1) throw new ChatgptPlanInputError("Audio Sourceが複数あるため、調整するcomponentIdを選んでください");
     if (!componentId) {
       if (!assetId) throw new ChatgptPlanInputError("Audio Sourceを追加するには音声素材の候補が必要です");
-      const added = apply("add_component", { entityId, definitionId: "core.audio-source" });
+      const added = editor.apply("add_component", { entityId, definitionId: "core.audio-source" });
       if (typeof added.componentId !== "string") throw new Error("Audio Sourceを追加できませんでした");
       componentId = added.componentId;
     }
     const { kind: _kind, candidateId: _candidate, entityId: _entity, componentId: _component, ...patch } = operation;
-    apply("update_component", { entityId, componentId, patch: { ...patch, ...(assetId ? { audioAssetId: assetId } : {}) } });
+    editor.apply("update_component", { entityId, componentId, patch: { ...patch, ...(assetId ? { audioAssetId: assetId } : {}) } });
+    return { bundle: editor.bundle, entityId };
+  } },
+];
+
+const sceneOperationRegistry = createSceneOperationRegistry<ChatgptOperation, ChatgptOperationHost, ChatgptOperationResult, ChatgptOperationCapability>({
+  kinds: CHATGPT_SCENE_OPERATION_KINDS, plugins: sceneOperationPlugins,
+});
+
+/** Compatibility adapter for the live Editor driver. Registry dispatch keeps
+ * every operation on one trusted handler and checks authoring capabilities
+ * before any async import, native call or Scene mutation. */
+export async function applyChatgptOperation(bundle: XriftMcpEditorContext["bundle"], operation: ChatgptOperation,
+  assetIds: ReadonlyMap<string, string>, resources: ChatgptResourceContext, projectPath?: string,
+  authoring?: ChatgptOperationHost["authoring"], execution?: ChatgptOperationHost["execution"]): Promise<ChatgptOperationResult> {
+  execution?.checkCurrent?.();
+  const capabilities = new Set<ChatgptOperationCapability>(["scene-write"]);
+  if (resources.modelSource !== "store") capabilities.add("code-authoring");
+  if (projectPath) capabilities.add("project-files");
+  if (resources.modelSource !== "store" && resources.blenderAvailable && projectPath) capabilities.add("blender-authoring");
+  try {
+    const result = await sceneOperationRegistry.dispatch(operation, { bundle, assetIds, resources, projectPath, authoring, execution }, capabilities);
+    execution?.checkCurrent?.();
+    return result;
+  } catch (error) {
+    if (error instanceof SceneOperationRegistryError) throw new ChatgptPlanInputError(error.message);
+    throw error;
   }
-  return { bundle: context.bundle, entityId };
 }

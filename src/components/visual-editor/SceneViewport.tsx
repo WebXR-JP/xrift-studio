@@ -1,8 +1,9 @@
 import { createEditorCanvasEvents } from "../../lib/visual-editor/canvas-events";
 import { XRiftStudioMeshColliders, XriftColliderLoadContext } from "../../../packages/xrift-studio-runtime/src/mesh-colliders";
 import { bakeXriftColliderGeometry } from "../../../packages/xrift-studio-runtime/src/mesh-collider-geometry";
-import { XriftPrimitiveGeometry } from "../../../packages/xrift-studio-runtime/src/primitive-geometry";
+import { XriftExtrudeGeometry, XriftPrimitiveGeometry } from "../../../packages/xrift-studio-runtime/src/primitive-geometry";
 import { SceneContextMenu, type SceneContextMenuProps } from "./SceneContextMenu";
+import { useSceneReviewResource, type SceneReviewLoadState } from "./scene-review-readiness";
 import { createWorldPlaySeatStore } from "./world-play-seat-store";
 import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
 import { XriftMToonMaterial } from "../../../packages/xrift-studio-runtime/src/mtoon-material";
@@ -160,6 +161,7 @@ import {
   type ResolvedWind,
   type AudioSourceComponent,
   type ColliderComponent,
+  type ExtrudeGeometryData,
   type MaterialAsset,
   type MeshComponent,
   type ModelAsset,
@@ -656,6 +658,10 @@ function MeshVisual({
     component.geometry?.kind === "terrain"
       ? component.geometry.terrain
       : undefined;
+  const extrude =
+    component.geometry?.kind === "extrude"
+      ? component.geometry.extrude
+      : undefined;
   const projectModelSource =
     geometry?.kind === "model"
       ? resolveProjectModelSource(geometry, projectPath)
@@ -663,16 +669,16 @@ function MeshVisual({
   // Register async models as pending in the layout phase; do not rely on
   // their first passive load-state callback arriving before the quiet timer.
   const reportModelLoad = useSceneModelLoadReport({
-    status: !component.enabled || primitive || terrain ? "ready" : "loading",
+    status: !component.enabled || primitive || terrain || extrude ? "ready" : "loading",
   });
   useEffect(() => {
-    if (!component.enabled || primitive || terrain) {
+    if (!component.enabled || primitive || terrain || extrude) {
       reportModelLoad({ status: "ready" });
     } else if (!projectModelSource || !projectPath) {
       reportModelLoad({ status: "error", message: "描画とColliderに使うModelを読み込めません" });
     }
     // Valid project models report their asynchronous load through the child.
-  }, [component.enabled, primitive, terrain, projectModelSource, projectPath, reportModelLoad]);
+  }, [component.enabled, primitive, terrain, extrude, projectModelSource, projectPath, reportModelLoad]);
   const assignedModelMaterials = useMemo(
     () => {
       if (geometry?.kind !== "model") return [];
@@ -771,6 +777,27 @@ function MeshVisual({
               ? getMaterialAsset(assets, materialAssetId)
               : undefined
           }
+          assets={assets}
+          projectPath={projectPath}
+          selected={selected}
+          materialDropHighlighted={materialDropHighlighted}
+          viewportMaterialStyle={viewportMaterialStyle}
+        />
+      </RenderDistanceGate>
+    );
+  }
+
+  if (extrude) {
+    const materialAssetId = getPrimaryMaterialAssetId(component);
+    const material = materialAssetId
+      ? getMaterialAsset(assets, materialAssetId)
+      : undefined;
+    return (
+      <RenderDistanceGate maxDistance={component.maxDistance} renderOrder={component.renderOrder}>
+        <PrimitiveMeshVisual
+          component={component}
+          extrude={extrude}
+          material={material}
           assets={assets}
           projectPath={projectPath}
           selected={selected}
@@ -1050,9 +1077,10 @@ function TerrainSelectionOutline({
   );
 }
 
-function PrimitiveMeshVisual({
+export function PrimitiveMeshVisual({
   component,
   primitive,
+  extrude,
   material,
   assets,
   projectPath,
@@ -1061,7 +1089,8 @@ function PrimitiveMeshVisual({
   viewportMaterialStyle,
 }: {
   component: MeshComponent;
-  primitive: PrimitiveGeometry;
+  primitive?: PrimitiveGeometry;
+  extrude?: ExtrudeGeometryData;
   material?: MaterialAsset;
   assets: AssetManifest;
   projectPath?: string;
@@ -1160,7 +1189,7 @@ function PrimitiveMeshVisual({
         : undefined,
     );
     customShaderInstance.needsUpdate = true;
-  }, [customShaderInstance, material?.shader, primitive]);
+  }, [customShaderInstance, material?.shader, primitive, extrude]);
   useEffect(
     () => () => customShaderInstance?.dispose(),
     [customShaderInstance],
@@ -1223,7 +1252,11 @@ function PrimitiveMeshVisual({
       castShadow={component.castShadow}
       receiveShadow={component.receiveShadow}
     >
-      <XriftPrimitiveGeometry primitive={primitive} />
+      {extrude ? (
+        <XriftExtrudeGeometry points={extrude.points} depth={extrude.depth} />
+      ) : primitive ? (
+        <XriftPrimitiveGeometry primitive={primitive} />
+      ) : null}
       {viewportMaterialStyle === "unlit" ? (
         <meshBasicMaterial
           key={viewportMaterialStyle}
@@ -2149,7 +2182,7 @@ function ModelNodeMeshColliderOutline({
   );
 }
 
-function RuntimePhysicsEntity({
+export function RuntimePhysicsEntity({
   entity,
   children,
 }: {
@@ -4212,6 +4245,7 @@ function createSkyGeometry(
 const SKY_MESH_USER_DATA = Object.freeze({
   [XRIFT_SCENE_SKYBOX_USER_DATA_KEY]: true,
 });
+const INFINITE_SKY_MESH_USER_DATA = Object.freeze({ ...SKY_MESH_USER_DATA, xriftReviewCameraCentered: true });
 
 /**
  * Sky images the Scene's Interactivity Graphs can switch to, ready to load.
@@ -4313,6 +4347,7 @@ function useSceneSkyboxTexture(
   imageAssetId: string | undefined,
   projectPath: string | undefined,
   flipY: boolean,
+  required: boolean,
 ): Texture | null {
   const asset = imageAssetId ? assets.assets[imageAssetId] : undefined;
   const textureAsset =
@@ -4344,12 +4379,19 @@ function useSceneSkyboxTexture(
       ].join("\\n")
     : "";
   const [texture, setTexture] = useState<Texture | null>(null);
+  const reportReview = useSceneReviewResource(`skybox:${required}:${textureKey}`, { status: required && imageAssetId ? "loading" : "ready" });
+  const [readiness, setReadiness] = useState<{ key: string; state: SceneReviewLoadState }>({ key: "", state: { status: "ready" } });
+  useLayoutEffect(() => {
+    if (!required || !imageAssetId) reportReview({ status: "ready" });
+    else if (readiness.key === textureKey) reportReview(readiness.state);
+  }, [imageAssetId, readiness, reportReview, required, textureKey]);
 
   useEffect(() => {
     let active = true;
     let ownedTexture: Texture | null = null;
     setTexture(null);
     if (!projectPath || !sourceAsset) {
+      setReadiness({ key: textureKey, state: imageAssetId ? { status: "error", message: "Skyboxの画像の参照元を読み込めず、見た目を確認できませんでした" } : { status: "ready" } });
       return () => {
         active = false;
       };
@@ -4383,9 +4425,13 @@ function useSceneSkyboxTexture(
         }
         ownedTexture = nextTexture;
         setTexture(nextTexture);
+        setReadiness({ key: textureKey, state: { status: "ready" } });
       })
       .catch(() => {
-        if (active) setTexture(null);
+        if (active) {
+          setTexture(null);
+          setReadiness({ key: textureKey, state: { status: "error", message: "Skyboxの画像を読み込めず、見た目を確認できませんでした" } });
+        }
       });
 
     return () => {
@@ -4519,7 +4565,7 @@ function ProjectedSkyboxPreview({
         <mesh
           ref={meshRef}
           geometry={geometry}
-          userData={SKY_MESH_USER_DATA}
+          userData={settings.projection === "infinite" ? INFINITE_SKY_MESH_USER_DATA : SKY_MESH_USER_DATA}
           position={
             settings.projection === "infinite" ? undefined : settings.meshPosition
           }
@@ -4707,7 +4753,7 @@ function SkyShaderPreview({
       ref={meshRef}
       geometry={geometry}
       material={material}
-      userData={SKY_MESH_USER_DATA}
+      userData={settings.projection === "infinite" ? INFINITE_SKY_MESH_USER_DATA : SKY_MESH_USER_DATA}
       position={
         settings.projection === "infinite" ? undefined : settings.meshPosition
       }
@@ -4740,6 +4786,7 @@ function SceneSkyboxPreview({
     settings.enabled || settings.iblEnabled ? settings.imageAssetId : undefined,
     projectPath,
     settings.flipY,
+    settings.iblEnabled || (settings.enabled && !shaderDrawsSky),
   );
   if (!settings.enabled && !settings.iblEnabled) return null;
   const backgroundSettings = shaderDrawsSky
@@ -5316,8 +5363,9 @@ export function SceneViewport({
   // A clean frame: no grid, gizmo, selection or helper icons. Thumbnails always
   // want one; the recording view wants one unless the author asked to keep
   // the editing helpers in the take.
+  const reviewCaptureActive = Boolean(screenshotRequest?.modelView || screenshotRequest?.worldView);
   const cleanRender =
-    thumbnailCaptureActive ||
+    thumbnailCaptureActive || reviewCaptureActive ||
     (recordingViewActive && !recordingViewport.showEditorHelpers);
   const defaultDisplayMode = getDefaultSceneViewportDisplayMode(projectKind);
   const [displayMode, setDisplayMode] = useState<SceneViewportDisplayMode>(
@@ -5532,11 +5580,11 @@ export function SceneViewport({
   const qualityProfile = useMemo(
     () =>
       getSceneViewportQualityProfile(
-        editorMode === "play" || thumbnailCaptureActive || recordingViewActive
+        editorMode === "play" || thumbnailCaptureActive || reviewCaptureActive || recordingViewActive
           ? "high"
           : effectiveQuality,
       ),
-    [editorMode, effectiveQuality, recordingViewActive, thumbnailCaptureActive],
+    [editorMode, effectiveQuality, recordingViewActive, reviewCaptureActive, thumbnailCaptureActive],
   );
   const activeRenderScale = useMemo(
     () =>

@@ -2,7 +2,8 @@ import { tauri } from "../tauri";
 import { parseBlenderModelSpec, type BlenderModelBrief, type BlenderModelSpec } from "./chatgpt-modeling";
 
 /** Workers may finish out of order. The caller remains the single Scene writer. */
-export async function* streamChatgptModels(model: string, briefs: BlenderModelBrief[], generationId: string, reasoningEffort?: string) {
+export async function* streamChatgptModels(model: string, briefs: BlenderModelBrief[], generationId: string, reasoningEffort?: string,
+  contexts?: { prompt: string; originalPrompt?: string; previous?: BlenderModelSpec }[]) {
   const ready: { index: number; model: BlenderModelSpec }[] = [];
   const delivered = new Set<number>();
   let wake: (() => void) | undefined;
@@ -22,7 +23,7 @@ export async function* streamChatgptModels(model: string, briefs: BlenderModelBr
     }
     wake?.();
   };
-  const pending = tauri.chatgptModelSpecs(model, briefs, generationId, reasoningEffort, receive).then(results => {
+  const pending = tauri.chatgptModelSpecs(model, briefs, generationId, reasoningEffort, receive, contexts).then(results => {
     // The command result also contains completed models, so a channel delivery
     // delayed behind the invoke reply cannot lose the last result.
     for (const result of results) if (!delivered.has(result.index)) receive(result);

@@ -3,6 +3,7 @@ import type { ExternalStoreAsset } from "../tauri";
 import { createStarterVisualProject, type StarterVisualProjectPlan } from "./starter-templates";
 import { executeXriftMcpEditorTool, type XriftMcpEditorContext, type XriftMcpEditorRequest } from "./mcp-editor-tools";
 import { parseChatgptQuestions, type ChatgptQuestion } from "./chatgpt-questions";
+import { parseChatgptProduction, type ChatgptProduction } from "./chatgpt-production";
 import { CHATGPT_REMOTE_KINDS, chatgptCandidateSupports, chatgptReferenceKey, parseChatgptOperations, resolveChatgptCandidate,
   type ChatgptOperation, type ChatgptResourceContext } from "./chatgpt-resources";
 
@@ -11,7 +12,7 @@ type Vec3 = [number, number, number];
 export type ChatgptWorldPlan = { title: string; description: string; objects: {
   name: string; shape: Shape | "model" | "audio"; externalId?: string; materialExternalId?: string; gltfMaterialId?: string; position: Vec3; scale: Vec3; rotation?: Vec3;
 }[]; edits?: { entityId: string; name?: string; position?: Vec3; scale?: Vec3; rotation?: Vec3 }[];
-  operations?: ChatgptOperation[]; hasMore?: boolean; remainingWork?: string; questions?: ChatgptQuestion[] };
+  operations?: ChatgptOperation[]; hasMore?: boolean; remainingWork?: string; questions?: ChatgptQuestion[]; production?: ChatgptProduction };
 const object = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
 const keys = (v: Record<string, unknown>, allowed: string[]) => Object.keys(v).every(k => allowed.includes(k));
 const length = (v: string) => [...v].length;
@@ -26,7 +27,7 @@ export function parseChatgptWorldPlan(text: string, candidates: readonly Externa
   if (text.length > 100000) throw invalidPlan();
   let raw: unknown;
   try { raw = JSON.parse(text); } catch { throw invalidPlan(); }
-  if (!object(raw) || !keys(raw, ["title", "description", "objects", "edits", "operations", "hasMore", "remainingWork", "questions"])) throw invalidPlan();
+  if (!object(raw) || !keys(raw, ["title", "description", "objects", "edits", "operations", "hasMore", "remainingWork", "questions", "production"])) throw invalidPlan();
   if (typeof raw.title !== "string" || !raw.title.trim() || length(raw.title) > 100) throw invalidPlan();
   if (typeof raw.description !== "string" || length(raw.description) > 600) throw invalidPlan();
   const editValues = raw.edits ?? [];
@@ -66,6 +67,9 @@ export function parseChatgptWorldPlan(text: string, candidates: readonly Externa
   if (operations.length) plan.operations = operations;
   if (typeof raw.hasMore === "boolean") plan.hasMore = raw.hasMore;
   if (typeof raw.remainingWork === "string") plan.remainingWork = raw.remainingWork;
+  const production = parseChatgptProduction(raw.production);
+  if (operations.some(operation => operation.kind === "r3f-scene") && !production) throw invalidPlan();
+  if (production) plan.production = production;
   const questions = parseChatgptQuestions(raw.questions);
   for (const question of questions) for (const id of question.choiceCandidateIds ?? []) if (id !== null && !resolveChatgptCandidate(id, resources, candidates)) throw invalidPlan();
   if (questions.length) {

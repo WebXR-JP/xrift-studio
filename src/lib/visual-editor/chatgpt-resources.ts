@@ -15,6 +15,10 @@ export type ChatgptBuiltinCandidate = {
 export type ChatgptResourceContext = {
   blenderAvailable?: boolean;
   modelSource?: "auto" | "blender" | "store";
+  /** Logical generated-model roots can own expanded nodes without a root Mesh Renderer. */
+  authoredModels?: { entityId: string; modelAssetId: string; revision: number }[];
+  /** Exact bounded TSX originals for generated Scene roots, never truncated. */
+  authoredScenes?: { entityId: string; name: string; source: string }[];
   currentSettingsJson?: string;
   componentDefinitions?: { id: string; label: string; description: string; fields: Record<string, JsonValue>[]; fieldsFrom?: string }[];
   projectAssets: { id: string; kind: ChatgptResourceKind; name: string; skyboxMaterial?: boolean; attached?: boolean; propertiesJson?: string }[];
@@ -42,6 +46,7 @@ export function chatgptReferenceKey(reference: string, legacyProviderId: string)
 
 export type ChatgptOperation =
   | ChatgptEditorAction
+  | { kind: "r3f-scene"; name: string; source: string; entityId?: string }
   | { kind: "skybox"; candidateId?: string; enabled?: boolean; iblEnabled?: boolean; rotationDegrees?: number; exposure?: number }
   | { kind: "audio"; entityId: string; componentId?: string; candidateId?: string; enabled?: boolean; volume?: number; loop?: boolean; spatial?: boolean; autoplay?: boolean }
   | { kind: "mesh-collision"; entityId: string; action: "add" | "remove" }
@@ -109,11 +114,19 @@ export function parseChatgptOperations(raw: unknown, resources: ChatgptResourceC
       "material-scene": ["candidateId"],
       catalog: ["candidateId", "name", "position", "rotation", "scale"],
       "blender-model": ["model", "entityId", "componentId", "position", "rotation", "scale"],
+      "r3f-scene": ["name", "source", "entityId"],
     };
     const allowed = keys[value.kind as string];
     if (!allowed || Object.keys(value).some(key => key !== "kind" && !allowed.includes(key))) throw invalid();
     const operation = { ...value };
     for (const key of allowed) if (operation[key] === null) delete operation[key];
+    if (operation.kind === "r3f-scene") {
+      if (resources.modelSource === "store" || !text(operation.name, 80) || typeof operation.source !== "string" || !operation.source.trim()
+        || new TextEncoder().encode(operation.source).byteLength > 48_000
+        || operation.entityId !== undefined && (typeof operation.entityId !== "string" || !entityIds.includes(operation.entityId)
+          || !resources.authoredScenes?.some(scene => scene.entityId === operation.entityId))) throw invalid();
+      return operation as ChatgptOperation;
+    }
     if (CHATGPT_EDITOR_ACTIONS.some(spec => spec.kind === operation.kind)) {
       if (operation.enabled !== undefined && typeof operation.enabled !== "boolean") throw invalid();
       if (operation.name !== undefined && !text(operation.name, 80)) throw invalid();
@@ -148,7 +161,8 @@ export function parseChatgptOperations(raw: unknown, resources: ChatgptResourceC
         if (typeof operation.entityId !== "string" || !entityIds.includes(operation.entityId)
           || ["position", "rotation", "scale"].some(key => operation[key] !== undefined)) throw invalid();
         const meshes = resources.components.filter(component => component.entityId === operation.entityId && component.type === "mesh");
-        if (!meshes.length || (operation.componentId === undefined ? meshes.length !== 1 : !meshes.some(component => component.componentId === operation.componentId))) throw invalid();
+        const authoredRoot = resources.authoredModels?.some(model => model.entityId === operation.entityId);
+        if (operation.componentId === undefined ? meshes.length > 1 || !meshes.length && !authoredRoot : !meshes.some(component => component.componentId === operation.componentId)) throw invalid();
       } else if (operation.componentId !== undefined) throw invalid();
       operation.model = parseBlenderModel(operation.model);
     }

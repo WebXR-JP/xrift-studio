@@ -1,3 +1,5 @@
+import { XriftThreeLoader } from "../../../packages/xrift-studio-runtime/src/three/index";
+import { compileVisualProject } from "./compiler/compile";
 import { listXriftComponentDefinitions } from "./component-registry";
 import {
   DREI_R3F_IMPORT_SAMPLE,
@@ -10,7 +12,7 @@ import { createPrototypeProject } from "./prototype-project";
 import { analyzeOfficialXriftWorldTemplate } from "./official-world-template-import";
 
 /** Pure assertions for official XRift samples and the safe Drei/R3F adapter. */
-export function runComponentCodeImportFixtureAssertions(): void {
+export async function runComponentCodeImportFixtureAssertions(): Promise<void> {
   const definitions = listXriftComponentDefinitions("world");
   assert(definitions.length === 16, "The official world catalog must contain 16 scene components including Item");
 
@@ -123,6 +125,155 @@ export const Room = () => {
     "Named and default local TSX modules must expand beneath their invocation boundary without flattening",
   );
 
+  const mappedPlan = analyzeComponentCode(
+    `const HOUSES = [
+  { x: -9, color: "#b45309" },
+  { x: -3, color: "#2563eb" },
+  { x: 3, color: "#16a34a" },
+  { x: 9, color: "#dc2626" },
+];
+export function Street() {
+  return (
+    <group>
+      {HOUSES.map((house, index) => (
+        <mesh key={house.x} name={"House " + index} position={[house.x, 1, 0]}>
+          <boxGeometry args={[2, 2, 2]} />
+          <meshStandardMaterial color={house.color} />
+        </mesh>
+      ))}
+    </group>
+  );
+}`,
+    "world",
+  );
+  const mappedHouses = mappedPlan.nodes.filter(
+    (node) => node.kind === "primitive",
+  );
+  assert(
+    !mappedPlan.diagnostics.some((diagnostic) => diagnostic.severity === "error") &&
+      mappedPlan.summary.entityCount === 5 &&
+      mappedPlan.summary.primitiveCount === 4 &&
+      mappedPlan.diagnostics.some(
+        (diagnostic) => diagnostic.code === "static-map-expanded",
+      ) &&
+      mappedHouses.map((node) => node.name).join(",") ===
+        "House 0,House 1,House 2,House 3" &&
+      mappedHouses.map((node) => node.transform.position[0]).join(",") ===
+        "-9,-3,3,9" &&
+      mappedHouses.map((node) => node.material?.color).join(",") ===
+        "#b45309,#2563eb,#16a34a,#dc2626",
+    "A static .map() over a const array must expand into one Entity per item with substituted values",
+  );
+
+  const inlineMappedPlan = analyzeComponentCode(
+    `export function Row() {
+  return (
+    <group>
+      {Array.from({ length: 3 }, (_, i) => (
+        <mesh key={i} position={[i * 4, 0.5, 0]}>
+          <boxGeometry args={[1, 1, 1]} />
+        </mesh>
+      ))}
+    </group>
+  );
+}`,
+    "world",
+  );
+  const inlineMapped = inlineMappedPlan.nodes.filter(
+    (node) => node.kind === "primitive",
+  );
+  assert(
+    inlineMappedPlan.summary.primitiveCount === 3 &&
+      inlineMapped.map((node) => node.transform.position[0]).join(",") ===
+        "0,4,8",
+    "Array.from({ length }) with index arithmetic must expand into placed Entities",
+  );
+
+  const nestedMappedPlan = analyzeComponentCode(
+    `const HOUSES = [
+  { x: 0, windows: [-0.5, 0.5] },
+  { x: 5, windows: [0] },
+];
+export function Street() {
+  return (
+    <group>
+      {HOUSES.map((house) => (
+        <group key={house.x} position={[house.x, 0, 0]}>
+          {house.windows.map((offset) => (
+            <mesh key={offset} position={[offset, 1, 0]}>
+              <boxGeometry args={[0.4, 0.6, 0.1]} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+    </group>
+  );
+}`,
+    "world",
+  );
+  const nestedWindows = nestedMappedPlan.nodes.filter(
+    (node) => node.kind === "primitive",
+  );
+  assert(
+    nestedMappedPlan.summary.primitiveCount === 3 &&
+      nestedWindows.map((node) => node.transform.position[0]).join(",") ===
+        "-0.5,0.5,0",
+    "A nested .map() over an item member must expand after the outer expansion",
+  );
+
+  const dynamicMappedPlan = analyzeComponentCode(
+    `export function Street(props: { xs: number[] }) {
+  return (
+    <group>
+      {props.xs.map((x) => (
+        <mesh key={x} position={[x, 0, 0]}>
+          <boxGeometry args={[1, 1, 1]} />
+        </mesh>
+      ))}
+    </group>
+  );
+}`,
+    "world",
+  );
+  assert(
+    !dynamicMappedPlan.diagnostics.some(
+      (diagnostic) => diagnostic.code === "static-map-expanded",
+    ) && dynamicMappedPlan.summary.primitiveCount === 1,
+    "A .map() over unknown data must stay a single unexpanded template node",
+  );
+
+  const extrudePlan = analyzeComponentCode(
+    `import * as THREE from "three";
+const roofShape = new THREE.Shape();
+roofShape.moveTo(-2, 0);
+roofShape.lineTo(2, 0);
+roofShape.lineTo(0, 1.5);
+roofShape.closePath();
+export function House() {
+  return (
+    <group>
+      <mesh name="Roof" position={[0, 2, 0]}>
+        <extrudeGeometry args={[roofShape, { depth: 3, bevelEnabled: false }]} />
+        <meshStandardMaterial color="#7f1d1d" />
+      </mesh>
+    </group>
+  );
+}`,
+    "world",
+  );
+  const roofNode = extrudePlan.nodes.find((node) => node.name === "Roof");
+  assert(
+    !extrudePlan.diagnostics.some((diagnostic) => diagnostic.severity === "error") &&
+      roofNode?.kind === "primitive" &&
+      roofNode.extrude?.depth === 3 &&
+      JSON.stringify(roofNode.extrude?.points) === "[[-2,0],[2,0],[0,1.5]]" &&
+      roofNode.material?.color === "#7f1d1d" &&
+      extrudePlan.diagnostics.some(
+        (diagnostic) => diagnostic.code === "extrude-geometry-converted",
+      ),
+    "A static THREE.Shape extrude must convert into an authored extrude node",
+  );
+
   const rigidBodyPlan = analyzeComponentCode(
     `import { RigidBody } from '@react-three/rapier'
 export function PhysicsTree() {
@@ -203,6 +354,92 @@ export function PhysicsTree() {
         (component) => component.type === "collider",
       ),
     "Applying a RigidBody import must not synthesize an origin Box Collider",
+  );
+
+  const extrudeApplied = applyComponentCodeImportPlan({
+    scene: project.scene,
+    assets: project.assets,
+    projectKind: "world",
+    plan: extrudePlan,
+  });
+  const roofEntity = extrudeApplied.entityIds
+    .map((entityId) => extrudeApplied.scene.entities[entityId])
+    .find((entity) => entity.name === "Roof");
+  const roofMesh = roofEntity?.components.find(
+    (component) => component.type === "mesh",
+  );
+  assert(
+    roofMesh?.type === "mesh" &&
+      roofMesh.geometry?.kind === "extrude" &&
+      roofMesh.geometry.extrude.depth === 3 &&
+      JSON.stringify(roofMesh.geometry.extrude.points) ===
+        "[[-2,0],[2,0],[0,1.5]]" &&
+      roofMesh.materialBindings[0]?.materialAssetId !== undefined,
+    "Applying an extrude plan must create an extrude Mesh component with its material",
+  );
+
+  const extrudeCompilation = compileVisualProject({
+    project: project.project,
+    scenes: { [extrudeApplied.scene.sceneId]: extrudeApplied.scene },
+    assets: extrudeApplied.assets,
+    prefabs: project.prefabs,
+  });
+  const extrudeRuntimeCompilation = compileVisualProject(
+    {
+      project: project.project,
+      scenes: { [extrudeApplied.scene.sceneId]: extrudeApplied.scene },
+      assets: extrudeApplied.assets,
+      prefabs: project.prefabs,
+    },
+    { outputMode: "classic-runtime" },
+  );
+  const extrudeWorldSource =
+    extrudeCompilation.overlayFiles.find(
+      (file) => file.relativePath === "src/World.tsx",
+    )?.content ?? "";
+  assert(
+    extrudeWorldSource.includes("<XriftExtrudeGeometry") &&
+      extrudeWorldSource.includes("XRIFT_EXTRUDE_DATA"),
+    "Publishing an extruded Mesh must emit the shared extrude renderer and its data",
+  );
+  const extrudeRuntimeFile = extrudeRuntimeCompilation.runtimeManifestFile;
+  assert(extrudeRuntimeFile, "classic-runtime output must include the manifest");
+  const extrudeRuntime = JSON.parse(extrudeRuntimeFile.content) as {
+    scenes: Record<
+      string,
+      {
+        entities: Record<
+          string,
+          {
+            components: {
+              type: string;
+              geometry?: { kind: string; depth?: number; points?: unknown };
+            }[];
+          }
+        >;
+      }
+    >;
+  };
+  const runtimeRoofGeometry = Object.values(extrudeRuntime.scenes)
+    .flatMap((scene) => Object.values(scene.entities))
+    .flatMap((entity) => entity.components)
+    .find((component) => component.geometry?.kind === "extrude")?.geometry;
+  assert(
+    runtimeRoofGeometry?.depth === 3 &&
+      JSON.stringify(runtimeRoofGeometry.points) === "[[-2,0],[2,0],[0,1.5]]",
+    "The Runtime manifest must carry the same extrude profile as the Scene",
+  );
+  const loadedExtrude = await new XriftThreeLoader().parse(extrudeRuntime);
+  const loadedGeometries: string[] = [];
+  for (const object of loadedExtrude.entities.values()) {
+    object.traverse((child) => {
+      const geometry = (child as { geometry?: { type?: string } }).geometry;
+      if (geometry?.type) loadedGeometries.push(geometry.type);
+    });
+  }
+  assert(
+    loadedGeometries.includes("ExtrudeGeometry"),
+    "The Runtime loader must build a real ExtrudeGeometry from the manifest",
   );
 
   const rejected = applyComponentCodeImportPlan({

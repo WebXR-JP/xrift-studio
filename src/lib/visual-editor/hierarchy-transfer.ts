@@ -6,6 +6,7 @@ import { createDocumentId } from "./document-id";
 import { resolvePrefabInstances } from "./compiler/prefab-resolver";
 import { validateBrowserRelativePath } from "../browser-project-storage";
 import { hierarchyMatrixTransform, hierarchyTransformMatrix, hierarchyWorldMatrix, inverseHierarchyMatrix, multiplyHierarchyMatrices } from "./hierarchy-transform";
+import { isR3fSceneAuthoring, remapR3fSceneAuthoring, r3fManagedEntityId } from "./r3f-scene-source";
 
 export const HIERARCHY_TRANSFER_MANIFEST = ".xrift-studio/hierarchy-transfer.json";
 export const HIERARCHY_TRANSFER_MAX_BYTES = 256 * 1024 * 1024;
@@ -29,6 +30,16 @@ const hasOwn = (object: object, key: string): boolean => Object.prototype.hasOwn
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: true });
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value));
+
+function generatedModelNodeOwner(scene: SceneDocument, id: string): { rootId: string; suffix: string } | null {
+  for (const kind of ["model", "openbrush"]) {
+    const marker = `-${kind}-node-`, index = id.lastIndexOf(marker);
+    if (index < 0 || !/^\d+$/u.test(id.slice(index + marker.length))) continue;
+    const rootId = id.slice(0, index);
+    if (hasOwn(scene.entities, rootId)) return { rootId, suffix: id.slice(index) };
+  }
+  return null;
+}
 
 /** Enumerate true roots once, even when both an ancestor and its child are selected. */
 export function hierarchySelectionRoots(scene: SceneDocument, ids: readonly string[]): string[] {
@@ -99,6 +110,7 @@ export function collectHierarchyAssetReferences(value: unknown): Set<string> {
     // another field already added to the same set.
     if (key === "geometryAssetId" && owner.type === "mesh" && isRecord(owner.geometry) && owner.geometry.kind !== "asset") return;
     if (key === "sourceModelAssetId" && owner.kind === "classic-r3f") return;
+    if (key === "parentAssetId" && owner.kind === "blender" && owner.version === 1) return;
     if ((ID_FIELDS.test(key) || key === "assetId") && typeof child === "string" && child) ids.add(child);
     if (key === "assetReferences" && Array.isArray(child)) for (const id of child) if (typeof id === "string" && id) ids.add(id);
     // KHR_interactivity action configuration stores Asset IDs in value arrays.
@@ -119,6 +131,7 @@ function remapPropertyReferences(value: unknown, mapping: ReadonlyMap<string, st
 function rewriteAssetReferences<T>(value: T, mapping: ReadonlyMap<string, string>): T {
   const result = structuredClone(value);
   visit(result, (key, child, owner) => {
+    if (key === "parentAssetId" && owner.kind === "blender" && owner.version === 1) return;
     if ((ID_FIELDS.test(key) || key === "assetId") && typeof child === "string") owner[key] = mapping.get(child) ?? child;
     if (key === "assetReferences" && Array.isArray(child)) owner[key] = child.map((id) => typeof id === "string" ? mapping.get(id) ?? id : id);
     if (key === "asset" && isRecord(child) && Array.isArray(child.value)) child.value = child.value.map((id) => typeof id === "string" ? mapping.get(id) ?? id : id);
@@ -277,6 +290,7 @@ function sourcePaths(assets: AssetManifest): Set<string> {
     visit(asset, (key, child, owner) => {
       if (key === "relativePath" && owner.kind === "project" && typeof child === "string") paths.add(validateBrowserRelativePath(child));
       if (key === "derivedPath" && typeof child === "string") paths.add(validateBrowserRelativePath(child));
+      if (key === "sourcePath" && owner.kind === "blender" && owner.version === 1 && typeof child === "string") paths.add(validateBrowserRelativePath(child));
     });
   }
   return paths;
@@ -339,10 +353,25 @@ export function planHierarchyImport(target: PrototypeVisualProject, prepared: Pr
   const source = prepared.bundle;
   const warnings = new Set(prepared.warnings);
   const entityIdMap = Object.fromEntries(Object.keys(source.scene.entities).map((id) => [id, createDocumentId("entity")]));
+  // Generated children stay owned by their newly assigned logical Model root.
+  // Ordinary set_entity_model can then replace them after a transfer as well.
+  for (const id of Object.keys(entityIdMap)) {
+    const generated = generatedModelNodeOwner(source.scene, id);
+    if (generated) entityIdMap[id] = `${entityIdMap[generated.rootId]}${generated.suffix}`;
+  }
+  for (const entity of Object.values(source.scene.entities)) if (isR3fSceneAuthoring(entity.codeAuthoring)) {
+    for (const [key, node] of Object.entries(entity.codeAuthoring.nodes)) if (hasOwn(entityIdMap, node.entityId)) {
+      entityIdMap[node.entityId] = r3fManagedEntityId(entityIdMap[entity.id], key);
+    }
+  }
   const entityMap = new Map(Object.entries(entityIdMap));
   const assetIdMap = Object.fromEntries(Object.keys(source.assets.assets).map((id) => [id, createDocumentId("asset")]));
   const assetMap = new Map(Object.entries(assetIdMap));
-  const componentMap = new Map(Object.values(source.scene.entities).flatMap((entity) => entity.components.map((component) => [`${entity.id}/${component.id}`, createDocumentId("component")] as const)));
+  const componentMap = new Map(Object.values(source.scene.entities).flatMap((entity) => entity.components.map((component) => {
+    const generated = generatedModelNodeOwner(source.scene, entity.id);
+    const ownedSuffix = ["transform", "mesh", "collider"].find(suffix => component.id === `${entity.id}-${suffix}`);
+    return [`${entity.id}/${component.id}`, generated && ownedSuffix ? `${entityIdMap[entity.id]}-${ownedSuffix}` : createDocumentId("component")] as const;
+  })));
   const folderMap = new Map(Object.keys(source.assets.folders ?? {}).map((id) => [id, createDocumentId("folder")]));
   const importFolderId = createDocumentId("folder");
   const prefix = `assets/imported/${createDocumentId("hierarchy")}`;
@@ -356,7 +385,7 @@ export function planHierarchyImport(target: PrototypeVisualProject, prepared: Pr
     next.folderId = asset.folderId ? folderMap.get(asset.folderId) ?? importFolderId : importFolderId;
     if ((next.kind === "material" || next.kind === "texture") && next.importedFromModel) next.importedFromModel.modelAssetId = assetMap.get(next.importedFromModel.modelAssetId) ?? next.importedFromModel.modelAssetId;
     visit(next, (key, child, owner) => {
-      if ((key === "relativePath" && owner.kind === "project") || key === "derivedPath") {
+      if ((key === "relativePath" && owner.kind === "project") || key === "derivedPath" || (key === "sourcePath" && owner.kind === "blender" && owner.version === 1)) {
         if (typeof child !== "string" || !pathMap.has(child)) throw new Error(`素材のファイルが不足しています: ${String(child)}`);
         owner[key] = pathMap.get(child)!;
       }
@@ -395,6 +424,7 @@ export function planHierarchyImport(target: PrototypeVisualProject, prepared: Pr
       if (mapped.type === "spawn-point") mapped.target = target.project.projectKind === "world" ? "player" : "item-preview";
       return mapped;
     });
+    if (isR3fSceneAuthoring(entity.codeAuthoring)) next.codeAuthoring = remapR3fSceneAuthoring(entity.codeAuthoring, id, entityMap, componentMap, assetMap, assets);
     if (rootSet.has(entity.id)) {
       const transform = next.components.find((component): component is TransformComponent => component.type === "transform");
       if (transform && parentInverse) Object.assign(transform, hierarchyMatrixTransform(multiplyHierarchyMatrices(parentInverse, hierarchyTransformMatrix(transform))));

@@ -2,6 +2,9 @@ import type { ChatgptGeneration, ChatgptGenerationPhase } from "./chatgpt-genera
 import type { PrototypeVisualProject } from "./prototype-project";
 import { restoreChatgptChoicePreview, parseChatgptQuestions } from "./chatgpt-questions";
 import { sceneSettingsDisplayFromLegacyDetail, type ChatgptSettingDisplay } from "./chatgpt-change-description";
+import { parseChatgptProduction } from "./chatgpt-production";
+import { interruptChatgptHarnessSnapshot, normalizeChatgptHarnessSnapshot } from "./chatgpt-harness-runtime";
+import { CHATGPT_HARNESS_CONTEXT_REF_LIMIT, normalizeChatgptHarnessContextRef } from "./chatgpt-harness-context-ref";
 
 export const CHATGPT_SESSION_STORAGE_KEY = "xrift-studio:chatgpt-sessions:v1";
 export const CHATGPT_MAX_SESSIONS = 20;
@@ -82,7 +85,13 @@ function browserStorage(): SessionStorage {
 function normalizeTurn(value: unknown, interrupted: boolean): ChatgptGeneration {
   if (!isRecord(value) || !statuses.includes(String(value.status)) || !isRecord(value.progress)) throw new Error("会話履歴の依頼を読み取れませんでした。保存した履歴を確認してください。");
   const progress = value.progress;
-  const wasInterrupted = interrupted && (value.status === "running" || value.status === "planned");
+  // Machine facts use the runtime's strict restoration boundary. Public text
+  // sanitization must not rewrite identifiers, fingerprints or journal order.
+  const harness = value.harness === undefined ? undefined : normalizeChatgptHarnessSnapshot(value.harness);
+  if (value.contextRefs !== undefined && (!Array.isArray(value.contextRefs) || value.contextRefs.length > CHATGPT_HARNESS_CONTEXT_REF_LIMIT)) throw new Error("制作入力の参照記録を読み込めません。保存した会話履歴を確認してください。");
+  const contextRefs = value.contextRefs === undefined ? undefined : (value.contextRefs as unknown[]).map(normalizeChatgptHarnessContextRef);
+  if (harness && harness.runId !== value.generationId) throw new Error("会話履歴と制作の実行IDが一致しません。保存した履歴を確認してください。");
+  const wasInterrupted = interrupted && (value.status === "running" || value.status === "planned" || harness?.phase === "running" || harness?.phase === "stopping");
   const turn: ChatgptGeneration = {
     generationId: identifier(value.generationId),
     status: wasInterrupted ? "cancelled" : value.status as ChatgptGeneration["status"],
@@ -106,11 +115,20 @@ function normalizeTurn(value: unknown, interrupted: boolean): ChatgptGeneration 
       })) : [],
     },
     revertAvailable: interrupted ? false : value.revertAvailable === true,
+    ...(harness ? { harness: interrupted ? interruptChatgptHarnessSnapshot(harness) : harness } : {}),
+    ...(contextRefs ? { contextRefs } : {}),
   };
   for (const key of ["sourceSceneId", "projectId", "sceneId", "sessionId"] as const) if (value[key] !== undefined) turn[key] = identifier(value[key]);
   if (progress.projectId !== undefined) turn.progress.projectId = identifier(progress.projectId);
   if (value.mode === "build" || value.mode === "plan" || value.mode === "goal") turn.mode = value.mode;
   if (turn.mode === "goal" && isRecord(value.goal)) turn.goal = { iteration: Math.max(1, integer(value.goal.iteration, 1)), noProgressPasses: integer(value.goal.noProgressPasses) };
+  const production = parseChatgptProduction(value.production);
+  if (production) {
+    turn.production = { ...production, focus: text(production.focus, 160), criteria: production.criteria.map(criterion => text(criterion, 240)) };
+    turn.productionPass = Math.min(production.maxPasses, Math.max(1, integer(value.productionPass, 1)));
+    turn.productionNoProgressPasses = integer(value.productionNoProgressPasses);
+    if (value.productionVisualReview === true) turn.productionVisualReview = true;
+  }
   if (typeof value.reasoningEffort === "string" && efforts.includes(value.reasoningEffort)) turn.reasoningEffort = value.reasoningEffort;
   for (const key of ["createdAt", "revertedAt"] as const) if (value[key] !== undefined) turn[key] = timestamp(value[key]);
   if (value.name !== undefined) turn.name = text(value.name, 100);
@@ -149,7 +167,9 @@ function normalizeTurn(value: unknown, interrupted: boolean): ChatgptGeneration 
 function normalizeSessions(values: readonly unknown[], interrupted: boolean): ChatgptSession[] {
   const sessions = values.map(value => {
     if (!isRecord(value) || !Array.isArray(value.turns)) throw new Error("会話履歴を読み取れませんでした。保存した履歴を確認してください。");
-    return { id: identifier(value.id), projectId: identifier(value.projectId), sceneId: identifier(value.sceneId), title: text(value.title, 80) || "新しいチャット", createdAt: timestamp(value.createdAt), updatedAt: timestamp(value.updatedAt), turns: value.turns.slice(-CHATGPT_MAX_SESSION_TURNS).map(turn => normalizeTurn(turn, interrupted)) };
+    // Validate retained and older entries before applying retention. Corrupt or
+    // future-version journals must not disappear during a routine save.
+    return { id: identifier(value.id), projectId: identifier(value.projectId), sceneId: identifier(value.sceneId), title: text(value.title, 80) || "新しいチャット", createdAt: timestamp(value.createdAt), updatedAt: timestamp(value.updatedAt), turns: value.turns.map(turn => normalizeTurn(turn, interrupted)).slice(-CHATGPT_MAX_SESSION_TURNS) };
   }).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const seen = new Set<string>();
   return sessions.filter(session => { if (seen.has(session.id)) return false; seen.add(session.id); return true; }).slice(0, CHATGPT_MAX_SESSIONS);
@@ -204,6 +224,7 @@ export function upsertChatgptSessionTurn(sessions: readonly ChatgptSession[], se
 function resultSummary(turn: ChatgptGeneration): string {
   const status = { running: "処理中", planned: "Plan確認待ち", completed: "完了", failed: "失敗", cancelled: "停止" }[turn.status];
   const lines = [turn.revertedAt ? `変更を戻しました（${turn.revertedAt}）。この依頼の変更は現在のSceneに残っていません。` : status, turn.progress.message, `保存済み ${turn.progress.completed} / ${turn.progress.total}`];
+  if (turn.production) lines.push(`制作 ${turn.productionPass ?? 1} / ${turn.production.maxPasses}回。焦点: ${turn.production.focus}`, `完了条件: ${turn.production.criteria.join("、")}`);
   if (turn.attachedEntities?.length) lines.push(`添付Entity（配下を優先）: ${turn.attachedEntities.map(entity => entity.name).join("、")}`);
   if (turn.attachedMaterials?.length) lines.push(`添付Material: ${turn.attachedMaterials.map(material => material.name).join("、")}`);
   if (turn.clarifications?.length) lines.unshift(...turn.clarifications.slice(-3).map(item => `確認: ${Array.from(item.question).slice(0, 80).join("")}\n${item.candidateId ? `候補ID: ${item.candidateId}\n` : ""}回答: ${Array.from(item.answer).slice(0, Math.max(160, 500 - (item.candidateId?.length ?? 0))).join("")}`));

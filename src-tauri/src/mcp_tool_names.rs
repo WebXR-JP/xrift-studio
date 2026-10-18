@@ -3,7 +3,7 @@
 // Source of truth: src/lib/visual-editor/mcp-tool-registry.ts
 // Regenerate with: pnpm mcp:tool-names
 
-pub const MCP_TOOL_NAMES: [&str; 165] = [
+pub const MCP_TOOL_NAMES: [&str; 168] = [
     "list_projects",
     "list_starter_templates",
     "create_project",
@@ -34,15 +34,18 @@ pub const MCP_TOOL_NAMES: [&str; 165] = [
     "get_publish_readiness",
     "publish_project",
     "get_editor_context",
+    "get_world_authoring_guide",
     "get_project_health",
     "analyze_performance",
     "begin_world_authoring",
     "get_world_authoring",
     "review_world_authoring",
     "complete_world_authoring",
+    "cancel_world_authoring",
     "get_scripting_capabilities",
     "analyze_component_code",
     "apply_component_code_import_plan",
+    "apply_r3f_scene",
     "list_assets",
     "update_project_metadata",
     "create_asset_folder",

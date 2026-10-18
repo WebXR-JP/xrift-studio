@@ -1272,7 +1272,7 @@ SDK API referenceのupload resultはID、version、content hashを定義する�
 - [ ] ライブラリへの戻り先があり、未保存変更がある時は保存、破棄、取消を選べる。
 - [ ] `pnpm typecheck`が通り、Vite開発サーバーで主要導線とコンソールエラーを確認できる。
 
-通常の確認では本番ビルドを実行しない。詳細は`AGENT.md`と`xrift-studio-verify`スキルに従う。
+通常の確認は型チェックと開発サーバーを使う。詳細は`AGENT.md`と`DEVELOPMENT.md`を参照する。
 
 ### Material / Texture / Import
 

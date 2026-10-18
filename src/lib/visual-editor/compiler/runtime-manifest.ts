@@ -30,6 +30,7 @@ import { extensionOfPath } from "../asset-format-registry";
 import { collectModelInstancingEntities } from "../model-instancing";
 import { isPublishedAsKtx2 } from "../texture-conversion";
 import { resolveRenderedTextFontId } from "../../../../packages/xrift-studio-runtime/src/text-font-catalog";
+import { isXriftExtrudeProfile } from "../../../../packages/xrift-studio-runtime/src/extrude-profile";
 
 export function compileRuntimeManifest(
   documents: VisualCompilerDocuments,
@@ -445,6 +446,16 @@ function resolveRuntimeGeometry(
       ...(component.geometry.terrain.holes
         ? { holes: [...component.geometry.terrain.holes] }
         : {}),
+    };
+  }
+  if (component.geometry?.kind === "extrude") {
+    if (!isXriftExtrudeProfile(component.geometry.extrude)) return null;
+    return {
+      kind: "extrude",
+      points: component.geometry.extrude.points.map(
+        (point): [number, number] => [point[0], point[1]],
+      ),
+      depth: component.geometry.extrude.depth,
     };
   }
   if (component.geometry?.kind === "builtin-primitive") {

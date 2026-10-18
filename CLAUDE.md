@@ -6,4 +6,4 @@
 
 よく使うコマンドとTauri MCPの読み取り操作は、`.claude/settings.json`で事前に許可しています。
 
-作業に合う資料を読んでください。機能追加・IPC連携は`docs/AGENT_IMPLEMENTATION.md`、画面設計は`xrift-studio-ux`、動作確認とデバッグは`xrift-studio-verify`、MCPでのワールド制作・調整は`xrift-world-direction`を使います。日本語の作成・推敲では、`AGENT.md`の文章と用語の方針に従ってください。
+作業に合う資料を読んでください。機能追加・IPC連携は`docs/AGENT_IMPLEMENTATION.md`、画面設計は`docs/UX_PRINCIPLES.md`、動作確認とデバッグは`DEVELOPMENT.md`を参照します。日本語の作成・推敲では、`AGENT.md`の文章と用語の方針に従ってください。

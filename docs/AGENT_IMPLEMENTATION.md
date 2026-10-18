@@ -84,4 +84,4 @@ Queueのdispatchは予約した作品・Scene・チャットをAppへ渡し、�
 
 Tauriコマンドを追加するときは、`src-tauri/src/lib.rs`の`#[tauri::command]`と`generate_handler!`の登録、`src/lib/tauri.ts`の型付きラッパーを揃える。Rustのsnake_caseとinvokeのcamelCaseの引数対応を確認する。必要な権限だけを`src-tauri/capabilities/default.json`に追加する。
 
-CLI連携は`src/lib/xrift-cli.ts`の既存経路を使い、`LogLine`を流す。処理中のbusy/finallyと二重操作防止は既存の`wrap`パターンを使う。依存追加は必要性を説明し、ロックファイルを更新する。フロントエンドとRustの変更に合う検証は検証スキルから選ぶ。
+CLI連携は`src/lib/xrift-cli.ts`の既存経路を使い、`LogLine`を流す。処理中のbusy/finallyと二重操作防止は既存の`wrap`パターンを使う。依存追加は必要性を説明し、ロックファイルを更新する。フロントエンドとRustの変更に合う検証は[開発ガイド](../DEVELOPMENT.md)で確認する。

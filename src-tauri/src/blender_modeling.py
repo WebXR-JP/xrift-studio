@@ -69,9 +69,46 @@ def make_geometry(part):
         obj = bpy.data.objects.new(part["name"], mesh)
         bpy.context.collection.objects.link(obj)
         return obj
+    elif shape == "extrude":
+        # A simple closed XY contour; closure is implicit. Depth is centred
+        # on Studio Z so the author's origin survives profile refinements.
+        profile = list(part["vertices"])
+        area = sum(a[0] * b[1] - b[0] * a[1]
+                   for a, b in zip(profile, profile[1:] + profile[:1]))
+        if area < 0:
+            profile.reverse()
+        count = len(profile)
+        half_depth = part["depth"] / 2
+        vertices = [STUDIO_TO_BLENDER @ Vector((x, y, z))
+                    for z in (-half_depth, half_depth) for x, y, _ in profile]
+        faces = [tuple(reversed(range(count))), tuple(range(count, count * 2))]
+        faces.extend((i, (i + 1) % count, (i + 1) % count + count, i + count)
+                     for i in range(count))
+        mesh = bpy.data.meshes.new(part["name"])
+        mesh.from_pydata(vertices, [], faces)
+        mesh.update()
+        obj = bpy.data.objects.new(part["name"], mesh)
+        bpy.context.collection.objects.link(obj)
+        return obj
     else:
         raise ValueError("Unsupported model shape")
     return bpy.context.object
+
+
+def expanded_parts(parts):
+    """Expand bounded data translations; never interpret expressions or code."""
+    for source in parts:
+        repeat = source.get("repeat")
+        count = repeat["count"] if repeat else 1
+        for index in range(count):
+            part = dict(source)
+            if repeat:
+                part["position"] = [value + index * offset
+                                    for value, offset in zip(source["position"], repeat["offset"])]
+                part["instance"] = index
+                if index:
+                    part["name"] = f"{source['name']} [{index + 1}]"
+            yield part
 
 
 def build(spec, glb_path, blend_path):
@@ -84,9 +121,13 @@ def build(spec, glb_path, blend_path):
     root = bpy.data.objects.new(spec["name"], None)
     bpy.context.collection.objects.link(root)
     objects = [root]
-    for part in spec["parts"]:
+    for part in expanded_parts(spec["parts"]):
         obj = make_geometry(part)
         obj.name = part["name"]
+        if part.get("id"):
+            obj["xriftPartId"] = part["id"]
+        if "instance" in part:
+            obj["xriftPartInstance"] = part["instance"]
         obj.parent = root
         obj.location = STUDIO_TO_BLENDER @ Vector(part["position"])
         # Studio uses Three.js intrinsic XYZ (Rx @ Ry @ Rz). Blender's
@@ -143,6 +184,7 @@ def build(spec, glb_path, blend_path):
     result = bpy.ops.export_scene.gltf(
         filepath=str(glb_path), export_format="GLB", use_selection=True,
         export_materials="EXPORT", export_yup=True, export_apply=True,
+        export_extras=True,
         export_animations=False, export_cameras=False, export_lights=False,
     )
     if "FINISHED" not in result or not glb_path.is_file():

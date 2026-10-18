@@ -1,4 +1,7 @@
 import { COMPONENT_PATCH_KEYS, RIGID_BODY_PATCH_KEYS, COLLIDER_PATCH_KEYS, LIGHT_PATCH_KEYS, TEXT_PATCH_KEYS, IMAGE_PATCH_KEYS, AUDIO_SOURCE_PATCH_KEYS, INTERACTION_TRIGGER_PATCH_KEYS } from "./component-patch-contract";
+import { untouchedChatgptStarterEntityIds } from "./chatgpt-starter-context";
+import worldAuthoringGuide from "./world-authoring-guide.json";
+import { isR3fSceneAuthoring } from "./r3f-scene-source";
 import { catalogMaterialTextures } from "./catalog-material-dependencies";
 import { inspectProjectHealth } from "./value-up/project-health";
 import { analyzeProjectPerformance } from "./value-up/performance-budget";
@@ -396,6 +399,7 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   XriftMcpDocumentToolHandler
 > = {
   get_editor_context: readEditorContext,
+  get_world_authoring_guide: readWorldAuthoringGuide,
   get_project_health: readProjectHealth,
   analyze_performance: readPerformanceReport,
   get_scripting_capabilities: readScriptingCapabilities,
@@ -513,6 +517,15 @@ function readProjectHealth(
     { health: health as unknown as Record<string, unknown> },
     `Project Healthを確認しました（${health.status}）`,
   );
+}
+
+function readWorldAuthoringGuide(context: XriftMcpEditorContext, args: Record<string, unknown>): XriftMcpEditorToolOutcome {
+  const topic = args.topic ?? "overview";
+  if (topic !== "overview" && topic !== "r3f" && topic !== "assets" && topic !== "blender") invalidArgument("topic", "overview, r3f, assets or blender");
+  const guide = topic === "overview"
+    ? { core: worldAuthoringGuide.core, routes: Object.fromEntries(Object.entries(worldAuthoringGuide.routes).map(([name, route]) => [name, { summary: route.summary }])) }
+    : { route: worldAuthoringGuide.routes[topic] };
+  return unchanged(context, { version: worldAuthoringGuide.version, topic, ...structuredClone(guide) }, "制作方法のガイドを取得しました");
 }
 
 function readPerformanceReport(
@@ -655,6 +668,7 @@ function readEditorContext(
     importBusy: context.importBusy,
     saveStatus: context.saveStatus,
     scriptRuntime: context.scriptRuntime ?? null,
+    starterEntityIds: untouchedChatgptStarterEntityIds(context.bundle),
     sceneSettings,
     selectedEntity: selectedEntity
       ? { id: selectedEntity.id, name: selectedEntity.name }
@@ -1780,6 +1794,9 @@ function listEntities(context: XriftMcpEditorContext): XriftMcpEditorToolOutcome
       // Distinguishes a shared-source Model node (transform-only proxy whose
       // geometry the Model root draws) from an Entity that owns its Meshes.
       ...(entity.modelNode ? { modelNode: entity.modelNode } : {}),
+      ...(isR3fSceneAuthoring(entity.codeAuthoring) ? { r3fAuthoring: {
+        version: entity.codeAuthoring.version, revision: entity.codeAuthoring.revision,
+      } } : {}),
       components: entity.components,
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
@@ -1843,6 +1860,9 @@ function getEntityComponents(
       entityName: entity.name,
       entityEnabled: entity.enabled,
       ...(entity.modelNode ? { modelNode: entity.modelNode } : {}),
+      ...(isR3fSceneAuthoring(entity.codeAuthoring) ? { r3fAuthoring: {
+        version: entity.codeAuthoring.version, revision: entity.codeAuthoring.revision, source: entity.codeAuthoring.source,
+      } } : {}),
       components,
       count: components.length,
     },
@@ -7309,7 +7329,7 @@ function isJsonValue(value: unknown): value is KhrInteractivityJsonValue {
   return false;
 }
 
-function assertWritableContext(
+export function assertWritableContext(
   context: XriftMcpEditorContext,
   argumentsValue: Record<string, unknown>,
   options: { allowPlay?: boolean } = {},

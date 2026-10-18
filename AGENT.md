@@ -30,20 +30,17 @@ PRの依頼には、作業ブランチへのPushとPR作成が含まれます。
 
 | 変更対象 | 読む資料 |
 |---|---|
-| UI・状態遷移 | `.agents/skills/xrift-studio-ux/SKILL.md`、`docs/AGENT_IMPLEMENTATION.md`のUI節 |
+| UI・状態遷移 | `docs/UX_PRINCIPLES.md`、`docs/UX_INTERACTIONS.md`、`docs/AGENT_IMPLEMENTATION.md`のUI節 |
 | Component・Graph・公開物 | `docs/AGENT_IMPLEMENTATION.md`の該当節、`docs/SCRIPTING.md` |
 | Sceneの更新・描画性能 | `docs/AGENT_IMPLEMENTATION.md`のScene節 |
 | MCP・Rustコマンド | `docs/AGENT_IMPLEMENTATION.md`のMCP節、`docs/MCP_EDITOR_TOOLS.md` |
 | 機能追加・IPC連携 | `docs/AGENT_IMPLEMENTATION.md`のIPC・CLI節 |
 | 日本語の作成・推敲 | `docs/JAPANESE_WRITING.md`で画面名と専門用語を確認 |
-| コード・画面の検証 | `.agents/skills/xrift-studio-verify/SKILL.md` |
+| コード・画面の検証 | `DEVELOPMENT.md`、`docs/AGENT_IMPLEMENTATION.md` |
 | Tauri MCPの接続 | `docs/AGENT_TAURI_MCP.md` |
-| 不具合の再現・修正 | `.agents/skills/xrift-studio-error-recovery/SKILL.md` |
-| ワールドの制作・調整 | `.agents/skills/xrift-world-direction/SKILL.md` |
-| 3Dモデルの制作・取り込み | `.agents/skills/xrift-mcp-blender-modeling/SKILL.md` |
-| リリース紹介動画 | `.agents/skills/xrift-release-promo-video/SKILL.md` |
+| 不具合の再現・修正 | `DEVELOPMENT.md`、問題が発生した機能の実装資料 |
 
-開発環境とコマンドは`DEVELOPMENT.md`にあります。文書だけを変更した場合は、内容・リンク・スキルの同期を確認してください。型チェックや実機起動は、変更の影響に応じて選びます。
+開発環境とコマンドは`DEVELOPMENT.md`にあります。文書だけを変更した場合は、内容とリンクを確認してください。フロントエンドの変更は型チェック、Rustの変更は`cargo check`を行い、変更に関係する回帰テストと操作を確認します。検証用データは既存作品から分離し、実モデル・実機で未確認の内容は報告に明記してください。
 
 ## 利用ガイドの更新
 
@@ -52,9 +49,3 @@ PRの依頼には、作業ブランチへのPushとPR作成が含まれます。
 `reviewedVersion`と`reviewedOn`には、実際に確認したソースのバージョンと日付を記録します。画像を更新していない場合は、本文と画像のどちらを確認したか報告してください。
 
 Pagesのワークフローはmainへのマージ後にガイドを公開します。PRを作成した段階では、公開済みと報告しません。
-
-## スキルの管理
-
-共通スキルは`.agents/skills/`で管理します。変更後は`node scripts/sync-agent-skills.mjs`で`.claude/skills/`へコピーし、`--check`で一致を確認してください。Claude専用スキルと、クライアント別の`agents/`メタデータは同期しません。削除した共通スキルのコピーは残るため、対象を確認して明示的に削除します。
-
-スキルのdescriptionには、使う場面を短く書いてください。詳しい手順や例は参照資料に分けます。日本語は、誰が何をするか、どの条件で操作できるかを明確に書いてください。利用者の環境にYomiyasuがある場合は、文体の推敲に使えます。Yomiyasu本体と推敲の作業ファイルはGitの管理対象から除外します。

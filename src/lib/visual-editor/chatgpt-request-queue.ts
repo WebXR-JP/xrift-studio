@@ -52,7 +52,9 @@ export function pauseChatgptRequestQueue(queues: ChatgptRequestQueues, scope: st
   return change(queues, scope, queue => ({ ...queue, pauseReason: reason }));
 }
 export function resumeChatgptRequestQueue(queues: ChatgptRequestQueues, scope: string) {
-  return change(queues, scope, queue => ({ items: queue.items.map(item => item.status === "failed" ? { ...item, status: "waiting", error: undefined } : item) }));
+  // An explicit user retry is a new execution. Its failed run remains closed
+  // in history; automatic in-run repairs keep their original ID and budget.
+  return change(queues, scope, queue => ({ items: queue.items.map(item => item.status === "failed" ? { ...item, id: crypto.randomUUID(), status: "waiting", error: undefined } : item) }));
 }
 export function cancelChatgptQueuedRequest(queues: ChatgptRequestQueues, scope: string, id: string) {
   return change(queues, scope, queue => ({ ...queue, items: queue.items.filter(item => item.id !== id || item.status === "running") }));

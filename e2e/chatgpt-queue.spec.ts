@@ -64,7 +64,7 @@ test("Enterで入力をすぐ空にし、処理中の次の依頼をFIFOで一�
       await page.setViewportSize({ width, height: 1000 });
       await call(page, "open_chatgpt_panel");
       const submit = panel.getByRole("button", { name: "依頼を送信", exact: true });
-      const source = panel.getByRole("checkbox", { name: "Blenderを使う", exact: true });
+      const source = panel.getByRole("checkbox", { name: "コード・Blenderで制作", exact: true });
       await expect(submit).toBeVisible(); await expect(source).toBeVisible(); await expect(prompt).toHaveValue("まだ送らない下書き");
       const bounds = await panel.boundingBox(), button = await submit.boundingBox();
       expect(button!.x + button!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width);

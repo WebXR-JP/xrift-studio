@@ -2,6 +2,9 @@ import meshColliderStatusSource from "../../../../packages/xrift-studio-runtime/
 import meshColliderGeometrySource from "../../../../packages/xrift-studio-runtime/src/mesh-collider-geometry.ts?raw";
 import meshCollidersSource from "../../../../packages/xrift-studio-runtime/src/mesh-colliders.tsx?raw";
 import primitiveGeometrySource from "../../../../packages/xrift-studio-runtime/src/primitive-geometry.tsx?raw";
+import extrudeGeometrySource from "../../../../packages/xrift-studio-runtime/src/extrude-geometry.ts?raw";
+import extrudeProfileSource from "../../../../packages/xrift-studio-runtime/src/extrude-profile.ts?raw";
+import { validateXriftExtrudeProfile } from "../../../../packages/xrift-studio-runtime/src/extrude-profile";
 import positionalAudioCleanupSource from "../../../../packages/xrift-studio-runtime/src/positional-audio-cleanup.ts?raw";
 import { opacityShaderChunk } from "../material-surface";
 import { createRigidBodyComponent } from "../scene-document";
@@ -98,6 +101,7 @@ import {
   type XRiftComponent,
 } from "../scene-document";
 import type { TerrainGeometry } from "../terrain";
+import type { ExtrudeGeometryData } from "../scene-document";
 import {
   resolveSceneSettings,
   type ScenePostprocessingSettings,
@@ -3013,11 +3017,17 @@ function renderMesh(
     geometry.kind === "terrain"
       ? registerTerrainDataConstant(geometry.terrain, context)
       : null;
+  const extrudeConstant =
+    geometry.kind === "extrude"
+      ? registerExtrudeDataConstant(geometry.extrude, context)
+      : null;
   const geometryJsxContent = terrainConstant
     ? renderTerrainGeometry(terrainConstant, context)
-    : geometry.kind === "primitive"
-      ? geometryJsx(geometry.primitive, context)
-      : "";
+    : extrudeConstant
+      ? renderExtrudeGeometry(extrudeConstant, context)
+      : geometry.kind === "primitive"
+        ? geometryJsx(geometry.primitive, context)
+        : "";
   const grassJsx =
     geometry.kind === "terrain" && terrainConstant
       ? renderTerrainGrassLayers(entity, geometry.terrain, terrainConstant, context)
@@ -3104,6 +3114,7 @@ const XriftMeshRenderOrder: FC<XriftMeshRenderOrderProps> = ({ renderOrder, chil
 type ResolvedMeshGeometry =
   | { kind: "primitive"; primitive: PrimitiveGeometry }
   | { kind: "terrain"; terrain: TerrainGeometry }
+  | { kind: "extrude"; extrude: ExtrudeGeometryData }
   | { kind: "model"; asset: ModelAsset };
 
 function resolveMeshGeometry(
@@ -3112,6 +3123,14 @@ function resolveMeshGeometry(
 ): ResolvedMeshGeometry | undefined {
   if (mesh.geometry?.kind === "terrain") {
     return { kind: "terrain", terrain: mesh.geometry.terrain };
+  }
+  if (mesh.geometry?.kind === "extrude") {
+    const error = validateXriftExtrudeProfile(mesh.geometry.extrude);
+    if (error) {
+      addDiagnostic(context, { severity: "blocking", code: "extrude-profile-invalid", message: error, sceneId: context.scene.sceneId, componentId: mesh.id, fieldPath: "geometry.extrude" });
+      return undefined;
+    }
+    return { kind: "extrude", extrude: mesh.geometry.extrude };
   }
   if (mesh.geometry?.kind === "builtin-primitive") {
     return { kind: "primitive", primitive: mesh.geometry.primitive };
@@ -3159,6 +3178,38 @@ function registerTerrainDataConstant(
     `const ${name}: XriftTerrainGeometryData = ${json};`,
   );
   return name;
+}
+
+function registerExtrudeDataConstant(
+  extrude: ExtrudeGeometryData,
+  context: CompileContext,
+): string {
+  const json = JSON.stringify(extrude);
+  const name = generatedIdentifier(
+    "XRIFT_EXTRUDE_DATA",
+    sha256Utf8(json).slice(0, 16),
+  );
+  context.supportDeclarations.set(
+    "extrude:data-types",
+    `type XriftExtrudeGeometryData = {
+  points: [number, number][];
+  depth: number;
+};`,
+  );
+  context.supportDeclarations.set(
+    `extrude-data:${name}`,
+    `const ${name}: XriftExtrudeGeometryData = ${json};`,
+  );
+  return name;
+}
+
+function renderExtrudeGeometry(
+  extrudeConstant: string,
+  context: CompileContext,
+): string {
+  context.extraImports.add('import { XriftExtrudeGeometry } from "./xrift-studio/primitive-geometry";');
+  includePrimitiveGeometry(context);
+  return `<XriftExtrudeGeometry points={${extrudeConstant}.points} depth={${extrudeConstant}.depth} />`;
 }
 
 function registerTerrainDataTypes(context: CompileContext): void {
@@ -4343,7 +4394,7 @@ function resolveMeshMaterial(
   const geometryAssetId =
     mesh.geometry?.kind === "asset" ? mesh.geometry.assetId : mesh.geometryAssetId;
   const geometry =
-    mesh.geometry?.kind === "terrain"
+    mesh.geometry?.kind === "terrain" || mesh.geometry?.kind === "extrude"
       ? undefined
       : getGeometryAsset(context.assets, geometryAssetId);
   const slots = geometry ? getGeometryMaterialSlots(geometry) : [];
@@ -6583,9 +6634,15 @@ function unsupportedAssetDiagnostic(
 
 function geometryJsx(geometry: PrimitiveGeometry, context: CompileContext): string {
   context.extraImports.add('import { XriftPrimitiveGeometry } from "./xrift-studio/primitive-geometry";');
-  const path = "src/xrift-studio/primitive-geometry.tsx";
-  context.runtimeOverlayFiles.set(path, compilerFile(path, primitiveGeometrySource));
+  includePrimitiveGeometry(context);
   return `<XriftPrimitiveGeometry primitive=${JSON.stringify(geometry)} />`;
+}
+
+function includePrimitiveGeometry(context: CompileContext): void {
+  for (const [name, source] of [["primitive-geometry.tsx", primitiveGeometrySource], ["extrude-geometry.ts", extrudeGeometrySource], ["extrude-profile.ts", extrudeProfileSource]]) {
+    const path = `src/xrift-studio/${name}`;
+    context.runtimeOverlayFiles.set(path, compilerFile(path, source!));
+  }
 }
 
 function generateXriftJson(

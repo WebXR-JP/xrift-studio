@@ -19,7 +19,7 @@ test("ChatGPT planning, application and cancellation route through the project s
 
 test("all ChatGPT actions are advertised once and accepted by the native allow-list", async () => {
   const native = await readFile(new URL("../src-tauri/src/mcp_tool_names.rs", import.meta.url), "utf8");
-  const allowed = [...native.matchAll(/^\s*"([a-z_]+)",$/gm)].map(match => match[1]);
+  const allowed = [...native.matchAll(/^\s*"([a-z][a-z0-9_]+)",$/gm)].map(match => match[1]);
   assert.deepEqual(allowed, registry.XRIFT_MCP_TOOL_NAMES);
   for (const name of chatgptTools) {
     assert.equal(registry.XRIFT_MCP_TOOLS.filter(tool => tool.name === name).length, 1, name);

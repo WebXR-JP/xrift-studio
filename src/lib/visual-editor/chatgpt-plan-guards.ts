@@ -7,6 +7,15 @@ import { CHATGPT_EDITOR_ACTIONS, parseChatgptComponentProperties, parseChatgptMa
 import { chatgptAttachmentEntityIds } from "./chatgpt-attachments";
 import { chatgptMaterialSettingsDisplay, chatgptSceneSettingsLabel, describeChatgptSceneSettings } from "./chatgpt-change-description";
 import { chatgptSceneMaterialTargets } from "./chatgpt-scene-material";
+import { sha256Utf8 } from "./compiler/hash";
+
+// Match the generated palette's identity without parsing or executing its
+// source. A retired palette can be reused after its recipe entry is removed.
+function canonicalR3fMaterialProperties(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalR3fMaterialProperties);
+  return value !== null && typeof value === "object"
+    ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, canonicalR3fMaterialProperties(item)])) : value;
+}
 
 /** Only same-Scene authoring conflicts are eligible for planning again. */
 export class ChatgptSceneConflictError extends Error {
@@ -42,6 +51,23 @@ export function chatgptPlanSnapshots(bundle: PrototypeVisualProject, plan: Chatg
   for (const operation of plan.operations ?? []) {
     if (operation.kind === "material-scene") result.materialScene = chatgptPlanningSnapshot(bundle);
     if ("entityId" in operation && operation.entityId) result[`entity:${operation.entityId}`] = JSON.stringify(bundle.scene.entities[operation.entityId]);
+    if ((operation.kind === "blender-model" || operation.kind === "r3f-scene") && operation.entityId) {
+      const authoredNodes = operation.kind === "r3f-scene" ? Object.values(bundle.scene.entities[operation.entityId]?.codeAuthoring?.nodes ?? {}).map(node => node.entityId) : [];
+      for (const id of new Set([...chatgptAttachmentEntityIds(Object.values(bundle.scene.entities), [operation.entityId]), ...authoredNodes])) {
+        const entity = bundle.scene.entities[id];
+        result[`entity:${id}`] = JSON.stringify(entity);
+        if (!entity) continue;
+        for (const component of entity.components) if (component.type === "mesh") {
+          snapshotProjectAsset(`project:${component.geometry?.kind === "asset" ? component.geometry.assetId : component.geometryAssetId}`);
+          for (const binding of component.materialBindings) snapshotProjectAsset(`project:${binding.materialAssetId}`);
+        }
+      }
+      if (operation.kind === "r3f-scene") for (const asset of Object.values(bundle.assets.assets)) {
+        if (asset.kind !== "material" || !/^asset-r3f-[a-f0-9]{28}$/.test(asset.id)) continue;
+        const id = `asset-r3f-${sha256Utf8(`${operation.entityId}:${JSON.stringify(canonicalR3fMaterialProperties(asset.properties))}`).slice(0, 28)}`;
+        if (asset.id === id) snapshotProjectAsset(`project:${id}`);
+      }
+    }
     if (operation.kind === "entity-delete") {
       for (const id of chatgptAttachmentEntityIds(Object.values(bundle.scene.entities), [operation.entityId])) result[`entity:${id}`] = JSON.stringify(bundle.scene.entities[id]);
       const parentId = bundle.scene.entities[operation.entityId]?.parentId;
@@ -66,9 +92,9 @@ export function chatgptOperationLabel(operation: NonNullable<ChatgptWorldPlan["o
   if (operation.kind === "material-scene") return "Scene全体のMaterialを一括変更";
   if (operation.kind === "scene-settings") return chatgptSceneSettingsLabel(parseChatgptSceneSettings(operation.settingsJson));
   if (operation.kind === "material-update") return `${bundle.assets.assets[operation.candidateId.slice(8)]?.name ?? "Material"}の設定を変更`;
-  const labels: Partial<Record<ChatgptOperation["kind"], string>> = { skybox: "Skyboxを設定", audio: "Audio Sourceを設定", "mesh-collision": "Colliderを設定", "model-attachment": "モデルを設定", material: "Materialを設定", catalog: "素材を追加", "blender-model": "Blenderでモデルを作成" };
+  const labels: Partial<Record<ChatgptOperation["kind"], string>> = { skybox: "Skyboxを設定", audio: "Audio Sourceを設定", "mesh-collision": "Colliderを設定", "model-attachment": "モデルを設定", material: "Materialを設定", catalog: "素材を追加", "blender-model": "Blenderでモデルを作成", "r3f-scene": "形状と配置をまとめて制作" };
   const label = CHATGPT_EDITOR_ACTIONS.find(spec => spec.kind === operation.kind)?.label ?? labels[operation.kind] ?? "操作";
-  const name = "entityId" in operation && operation.entityId ? bundle.scene.entities[operation.entityId]?.name : operation.kind === "catalog" || operation.kind === "component-add" ? operation.name : operation.kind === "blender-model" ? operation.model.name : undefined;
+  const name = "entityId" in operation && operation.entityId ? bundle.scene.entities[operation.entityId]?.name : operation.kind === "catalog" || operation.kind === "component-add" || operation.kind === "r3f-scene" ? operation.name : operation.kind === "blender-model" ? operation.model.name : undefined;
   return name ? `${name}：${label}` : label;
 }
 
@@ -83,6 +109,7 @@ function materialUpdateDescription(operation: Extract<ChatgptOperation, { kind: 
 export function chatgptOperationDetail(operation: ChatgptOperation, resources: ChatgptResourceContext,
   externalCandidates: readonly ExternalStoreAsset[] = [], bundle?: PrototypeVisualProject): string {
   const number = (value: number) => new Intl.NumberFormat("ja-JP", { useGrouping: false, maximumFractionDigits: 3 }).format(value);
+  if (operation.kind === "r3f-scene") return operation.entityId ? "保存した制作原本から続きを作り、手動編集を保って形状・配置・材質を更新" : "形状・配置・材質・照明をまとめて制作し、Entityとして保存";
   if (operation.kind === "scene-settings") return describeChatgptSceneSettings(parseChatgptSceneSettings(operation.settingsJson), bundle);
   if (operation.kind === "material-update") return materialUpdateDescription(operation, bundle);
   if (operation.kind === "entity-delete") {

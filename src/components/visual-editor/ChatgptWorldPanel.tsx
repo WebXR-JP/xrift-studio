@@ -3,6 +3,7 @@ import type { AssetManifest, MaterialAssetPatch } from "../../lib/visual-editor/
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { ArrowUp, Bot, Copy, LoaderCircle, Plug, Square, Undo2, UserRound, X } from "lucide-react";
 import { tauri, type BlenderStatus, type ChatgptAssetOptions, type ChatgptConnection, type ChatgptModel } from "../../lib/tauri";
+import { getChatgptBlenderStatus } from "../../lib/visual-editor/chatgpt-blender-status";
 import { CHATGPT_ALL_ASSETS, type ChatgptGeneration, type ChatgptGenerationMode } from "../../lib/visual-editor/chatgpt-generation";
 import { ChatgptSessionBar, type ChatgptSessionActions } from "./ChatgptSessionBar";
 import { useChatgptRequestQueue } from "./useChatgptRequestQueue";
@@ -21,9 +22,9 @@ import { parseChatgptComposerRequest } from "../../lib/visual-editor/chatgpt-goa
 import { ChatgptMaterialControls } from "./ChatgptMaterialControls";
 import { ChatgptSceneControls, type ChatgptSceneSettingsPatch } from "./ChatgptSceneControls";
 import type { SceneSettings } from "../../lib/visual-editor/scene-settings";
+import { preferredChatgptReasoningEffort } from "../../lib/visual-editor/chatgpt-reasoning";
 
 const effortLabels: Record<string, string> = { none: "なし（速さ優先）", minimal: "最小（速さ優先）", low: "低（速さ優先）", medium: "中（標準）", high: "高（じっくり）", xhigh: "より高い", max: "最大" };
-const preferredEffort = (model?: ChatgptModel) => ["low", "minimal", "medium", "high", "xhigh", "max", "none"].find(effort => model?.supportedReasoningEfforts?.includes(effort)) ?? "";
 const EMPTY_ENTITY_REFERENCES: readonly ChatgptEntityReference[] = [];
 const ATTACHMENT_DRAG_MIMES = [ENTITY_DRAG_MIME, ENTITIES_DRAG_MIME, MATERIAL_DRAG_MIME, MATERIALS_DRAG_MIME, ASSET_DRAG_MIME, ASSET_LIBRARY_ITEM_DRAG_MIME];
 
@@ -108,9 +109,9 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
   useEffect(() => { followingLatest.current = true; }, [draftScope]);
   const selectedModel = models.find(item => item.slug === model);
   const supportedEfforts = selectedModel?.supportedReasoningEfforts ?? [];
-  const effectiveEffort = reasoningEffort === "" ? "" : reasoningEffort && supportedEfforts.includes(reasoningEffort) ? reasoningEffort : preferredEffort(selectedModel);
+  const effectiveEffort = reasoningEffort === "" ? "" : reasoningEffort && supportedEfforts.includes(reasoningEffort) ? reasoningEffort : preferredChatgptReasoningEffort(selectedModel);
   useEffect(() => {
-    if (selectedModel) setReasoningEffort(current => current === "" || (current && selectedModel.supportedReasoningEfforts?.includes(current)) ? current : preferredEffort(selectedModel) || null);
+    if (selectedModel) setReasoningEffort(current => current === "" || (current && selectedModel.supportedReasoningEfforts?.includes(current)) ? current : preferredChatgptReasoningEffort(selectedModel) || null);
   }, [selectedModel]);
   const sync = async (next: ChatgptConnection) => {
     if (!mounted.current) return;
@@ -151,10 +152,10 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
     void refresh();
     return () => { active = false; mounted.current = false; clearTimeout(timer); };
   }, []);
-  const refreshBlenderStatus = async () => {
+  const refreshBlenderStatus = async (refresh = false) => {
     const epoch = ++blenderEpoch.current;
     setBlenderStatusError(false); setBlenderLoading(true); setBlenderStatus(null);
-    try { const next = await tauri.getBlenderStatus(); if (mounted.current && blenderEpoch.current === epoch) setBlenderStatus(next); }
+    try { const next = await getChatgptBlenderStatus({ refresh }); if (mounted.current && blenderEpoch.current === epoch) setBlenderStatus(next); }
     catch { if (mounted.current && blenderEpoch.current === epoch) setBlenderStatusError(true); }
     finally { if (mounted.current && blenderEpoch.current === epoch) setBlenderLoading(false); }
   };
@@ -181,7 +182,6 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
       const available = models.find(item => item.slug === resolvedModel);
       if (!available) return "この依頼で選んだモデルを現在のアカウントで利用できません。送信設定を更新してください。";
       if (request.reasoningEffort && !available.supportedReasoningEfforts?.includes(request.reasoningEffort)) return "この依頼の思考量を現在のモデルで利用できません。送信設定を更新してください。";
-      if (request.options.modelSource === "blender" && !blenderStatus?.available) return blenderStatusError ? "Blenderを確認できませんでした。利用できることを確認してから再開してください。" : blenderStatus ? "Blenderを利用できません。Blenderをインストールするか、送信設定を更新してください。" : "Blenderの利用可否を確認しています。";
       return undefined;
     },
     onDispatch: (request, resolvedModel, expectedScope) => onGenerate(resolvedModel, request.prompt, request.options, request.mode, request.reasoningEffort, expectedScope),
@@ -468,14 +468,14 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
         </select> : null}
         </div>
         <label className="flex items-center gap-1.5 rounded-full bg-slate-50 px-2 py-1.5 text-[11px] text-slate-600">
-          <input type="checkbox" aria-label="Blenderを使う" checked={modelSource !== "store" && Boolean(blenderStatus?.available)} disabled={choicesBusy || !blenderStatus?.available} onChange={event => setModelSource(event.target.checked ? "auto" : "store")} className="accent-slate-700" />Blenderを使う
+          <input type="checkbox" aria-label="コード・Blenderで制作" title="コードで形状を組み立て、必要に応じてBlenderも使います。" checked={modelSource !== "store"} disabled={choicesBusy} onChange={event => setModelSource(event.target.checked ? "auto" : "store")} className="accent-slate-700" />コード・Blenderで制作
         </label>
         {connectionControls}
         <div className="ml-auto flex shrink-0 items-center gap-1.5">{generating && onCancel && generation?.status === "running" ? <button type="button" aria-label="制作を停止" title="制作を停止" disabled={generation.cancelling} onClick={() => { queue.pause("制作を停止したため、送信待ちの依頼を保留しています。"); setError(null); void onCancel(generation.generationId).catch(e => setError(e instanceof Error ? e.message : String(e))); }} className="flex size-8 items-center justify-center rounded-full bg-slate-900 text-white disabled:opacity-50"><Square size={12} fill="currentColor" aria-hidden="true" /></button> : null}
         <button type="submit" aria-label="依頼を送信" title={dispatchBlockedReason || queue.dispatching ? "送信待ちへ追加" : "依頼を送信"} disabled={!canSubmit} className="flex size-8 items-center justify-center rounded-full bg-slate-900 text-white disabled:bg-slate-100 disabled:text-slate-400"><ArrowUp size={16} aria-hidden="true" /></button></div>
       </div>
-      {!blenderStatus?.available ? <div className="mt-1 flex items-center justify-between gap-2 text-[10px] leading-4 text-slate-500"><span>{blenderLoading ? "Blenderを確認しています。" : blenderStatusError ? "Blenderを確認できませんでした。" : "Blenderは未導入です。"}</span>
-        {!blenderLoading ? <button type="button" onClick={() => void refreshBlenderStatus()} className="shrink-0 rounded px-1 py-0.5 underline underline-offset-2">Blenderを再確認</button> : null}
+      {!blenderStatus?.available ? <div className="mt-1 flex items-center justify-between gap-2 text-[10px] leading-4 text-slate-500"><span>{blenderLoading ? "Blenderを確認しています。コードでの制作は利用できます。" : blenderStatusError ? "Blenderを確認できませんでした。コードでの制作は利用できます。" : "Blenderは未導入です。コードでの制作は利用できます。"}</span>
+        {!blenderLoading ? <button type="button" onClick={() => void refreshBlenderStatus(true)} className="shrink-0 rounded px-1 py-0.5 underline underline-offset-2">Blenderを再確認</button> : null}
       </div> : null}
     </form>
     <p className="text-[10px] leading-4 text-slate-400">ChatGPTの利用枠を使用します。変更はこのワールドに保存されます。</p>
