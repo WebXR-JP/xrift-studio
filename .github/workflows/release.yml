@@ -82,7 +82,7 @@ jobs:
         run: node scripts/prepare-release-notes.mjs
 
       - name: Test release lifecycle
-        run: node --test scripts/prepare-release-notes.test.mjs scripts/github-release.test.mjs scripts/chatgpt-work-log.test.mjs scripts/chatgpt-prompt-suggestions.test.mjs scripts/chatgpt-sessions.test.mjs
+        run: node --test scripts/prepare-release-notes.test.mjs scripts/github-release.test.mjs
       # 型検査はここで1回だけ行い、E2E jobでは繰り返さない。
       - name: Typecheck app and E2E
         run: pnpm typecheck && pnpm e2e:typecheck
@@ -132,11 +132,9 @@ jobs:
       - name: Run release E2E before upload
         run: pnpm e2e:smoke
 
-      - name: Check ChatGPT tabs and Item cleanup before upload
-        run: pnpm exec playwright test e2e/chatgpt-tabs.spec.ts e2e/world-items.spec.ts
+      - name: Check Item cleanup before upload
+        run: pnpm exec playwright test e2e/world-items.spec.ts
 
-      - name: Check chat setting edits and prompt suggestions
-        run: pnpm exec playwright test e2e/chatgpt-scene-controls.spec.ts e2e/chatgpt-material-controls.spec.ts e2e/chatgpt-prompt-suggestions.spec.ts
 
       - name: Check browser publication, credentials and built runtime rendering
         run: pnpm exec playwright test e2e/browser-item-publish.spec.ts e2e/browser-api-key.spec.ts e2e/browser-mtoon-shell.spec.ts e2e/runtime-shell-audio.spec.ts

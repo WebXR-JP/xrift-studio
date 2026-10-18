@@ -11,14 +11,14 @@ export function parseChatgptComposerRequest(value: string): { prompt: string; mo
 export function chatgptGoalNextPass(job: ChatgptGeneration, changed: boolean) {
   if (job.mode !== "goal" || (!changed && !job.plan?.hasMore)) return null;
   const noProgressPasses = changed ? 0 : (job.goal?.noProgressPasses ?? 0) + 1;
-  if (noProgressPasses >= 3) throw new Error("目標に向けた変更が3回続けて進まなかったため、制作を停止しました。保存済みの変更は残っています。目標や対象を具体的にして再開してください。");
+  if (noProgressPasses >= 3) throw new Error("目標に向けた変更でSceneに変化がない状態が続いたため、制作を停止しました。保存済みの変更は残っています。目標や対象を具体的にして再開してください。");
   return { iteration: (job.goal?.iteration ?? 1) + 1, noProgressPasses };
 }
 
 export function chatgptGoalConversation(history: ChatgptConversationTurn[], job: ChatgptGeneration): ChatgptConversationTurn[] {
   const prefix = "目標に向けた継続制作の記録";
   const result = sanitizeChatgptHistoryText([
-    `${prefix}（${job.goal?.iteration ?? 1}回目）。最新のSceneを正本として全体を見直してください。`,
+    `${prefix}。最新のScene JSONを正本として全体を見直し、差分が残る部分だけを変えてください。`,
     `この依頼の保存済み作業: ${job.progress.completed}件。完了した変更や既存Entityを重複して追加しないでください。`,
     ...(job.plan?.remainingWork ? [`残りの作業: ${job.plan.remainingWork}`] : []),
     ...job.progress.recentEvents.filter(event => event.saved).slice(-16).map(event => event.message),

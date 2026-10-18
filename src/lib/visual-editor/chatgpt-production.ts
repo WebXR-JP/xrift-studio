@@ -65,21 +65,21 @@ export function chatgptProductionNextPass(job: ChatgptGeneration, input: {
   const wholeScene = chatgptProductionNeedsWorldReview(direction) || input.requireVisualReview === true;
   if (!wholeScene && job.mode !== "goal" && !job.plan?.hasMore) return null;
   const pass = job.productionPass ?? 1;
-  if (!Number.isSafeInteger(pass) || pass < 1 || pass > direction.maxPasses) throw new Error("制作の回数を確認できませんでした");
+  if (!Number.isSafeInteger(pass) || pass < 1) throw new Error("制作の進行状況を確認できませんでした");
   const remainingWork = sanitizeChatgptHistoryText(input.review?.remainingWork?.trim() || job.plan?.remainingWork?.trim() || direction.criteria.join("、"), 600);
   if (wholeScene && !job.plan?.hasMore && !input.review) {
     throw new ChatgptProductionLimitError("review-required", remainingWork, `全体の見直しが完了していません。保存済みのSceneを確認してください。確認する項目: ${remainingWork}`);
   }
   const unfinished = Boolean(job.plan?.hasMore || input.review?.approved === false);
   if (!unfinished) return null;
-  if (pass >= direction.maxPasses) {
-    throw new ChatgptProductionLimitError("budget", remainingWork, `制作の上限${direction.maxPasses}回に達したため停止しました。保存済みのSceneは残っています。未確認・未完了の項目: ${remainingWork}`);
+  if (pass >= 12) {
+    throw new ChatgptProductionLimitError("budget", remainingWork, `見直しを重ねても完成条件に届かなかったため停止しました。保存済みのSceneは残っています。未確認・未完了の項目: ${remainingWork}`);
   }
   const previousNoProgress = input.noProgressPasses ?? job.productionNoProgressPasses ?? 0;
   if (!Number.isSafeInteger(previousNoProgress) || previousNoProgress < 0) throw new Error("制作の進行状況を確認できませんでした");
   const noProgressPasses = input.changed ? 0 : previousNoProgress + 1;
   if (noProgressPasses >= 3) {
-    throw new ChatgptProductionLimitError("no-progress", remainingWork, `制作が3回続けて進まなかったため停止しました。保存済みのSceneは残っています。未確認・未完了の項目: ${remainingWork}`);
+    throw new ChatgptProductionLimitError("no-progress", remainingWork, `Sceneに変化がない状態が続いたため停止しました。保存済みのSceneは残っています。未確認・未完了の項目: ${remainingWork}`);
   }
   return { pass: pass + 1, noProgressPasses, remainingWork };
 }
@@ -90,9 +90,9 @@ export function chatgptProductionConversation(history: ChatgptConversationTurn[]
   continuation: ChatgptProductionContinuation): ChatgptConversationTurn[] {
   const direction = parseChatgptProduction(job.production);
   if (!direction) return history;
-  const fixed = [prefix, `範囲: ${direction.scope}。細かさ: ${direction.detail}。焦点: ${direction.focus}。上限: ${direction.maxPasses}回。`,
+  const fixed = [prefix, `範囲: ${direction.scope}。細かさ: ${direction.detail}。焦点: ${direction.focus}。`,
     "完了条件:", ...direction.criteria.map((criterion, index) => `${index + 1}. ${criterion}`),
-    `制作: ${continuation.pass}/${direction.maxPasses}回目。保存済み: ${job.progress.completed}件。進展なし: ${continuation.noProgressPasses}回。`,
+    `最新のScene JSONを正本として、差分が残る部分だけを少しずつ変えてください。`,
     "初回の方針と完了条件を保ち、最新Sceneから未完了の作業だけを続けてください。既存Entityや完了した作業を重複追加しないでください。"].join("\n");
   const available = Math.max(0, 2000 - [...sanitizeChatgptHistoryText(fixed, 2000)].length - 1);
   const updates = [`未完了: ${continuation.remainingWork}`, ...job.progress.recentEvents.filter(event => event.saved).slice(-4).map(event => event.message)].join("\n");

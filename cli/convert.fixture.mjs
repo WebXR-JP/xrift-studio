@@ -40,6 +40,7 @@ import { runSceneLoadStateFixtureAssertions } from "../src/components/visual-edi
 import { runMeshColliderGeometryFixtureAssertions } from "../src/lib/visual-editor/mesh-collider-geometry.fixture.ts";
 import { runMeshCollisionActionsFixtureAssertions } from "../src/lib/visual-editor/mesh-collision-actions.fixture.ts";
 import { runAuthoringWorkflowFixtureAssertions } from "../src/lib/visual-editor/authoring-workflow.fixture.ts";
+import { runAuthoringNoopFixtureAssertions } from "../src/lib/visual-editor/authoring-noop.fixture.ts";
 import { runHierarchyTransferFixtureAssertions } from "../src/lib/visual-editor/hierarchy-transfer.fixture.ts";
 import { runEditorUiDefaultsFixtureAssertions } from "../src/components/visual-editor/editor-ui-defaults.fixture.ts";
 import { runWorldAssetImportFixtureAssertions as assertWorldAssetImports } from "../src/lib/visual-editor/scripting/world-asset-import.fixture.ts";
@@ -372,6 +373,7 @@ try {
     ["Mesh collider geometry", runMeshColliderGeometryFixtureAssertions],
     ["Mesh collision actions", runMeshCollisionActionsFixtureAssertions],
     ["Authoring workflow", runAuthoringWorkflowFixtureAssertions],
+    ["Authoring noop", runAuthoringNoopFixtureAssertions],
     ["Hierarchy transfer", runHierarchyTransferFixtureAssertions],
     ["Interactable late model layers", runInteractableLayerFixtureAssertions],
     ["model download optimization", runModelDownloadFixtureAssertions],

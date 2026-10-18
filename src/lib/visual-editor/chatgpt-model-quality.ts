@@ -47,7 +47,6 @@ export async function reviewChatgptModel(options: {
   checkCurrent: () => void;
   capture: (entityId: string, sourceHash: string, checkCurrent?: () => void) => Promise<{ label: string; dataUrl: string }[]>;
   commit: (before: PrototypeVisualProject, after: PrototypeVisualProject, entityId?: string) => void;
-  save: () => Promise<void>;
   progress: (message: string, saved?: boolean) => void;
 }) {
   const seen = new Set<string>();
@@ -82,11 +81,11 @@ export async function reviewChatgptModel(options: {
       options.progress(`見直しました：${review.summary}`);
       return;
     }
-    if (!review.model || pass === 2) throw new Error(`モデルの見直しが完了しませんでした。保存済みの形状から続けられます。${review.summary}`);
+    if (!review.model || pass === 2) throw new Error(`モデルの見直しが完了しませんでした。反映済みの形状から続けられます。${review.summary}`);
     const corrected = parseBlenderModelSpec(review.model);
     const currentSignature = signature(authored.source.spec), nextSignature = signature(corrected);
     seen.add(currentSignature);
-    if (corrected.name !== authored.source.spec.name || seen.has(nextSignature)) throw new Error("モデルの見直しが進まなかったため停止しました。最後に保存した形状は残っています");
+    if (corrected.name !== authored.source.spec.name || seen.has(nextSignature)) throw new Error("モデルの見直しが進まなかったため停止しました。最後に反映した形状は残っています");
     options.progress(`モデルを修正しています：${review.summary}`);
     const changed = await applyChatgptOperation(before, { kind: "blender-model", entityId: options.entityId,
       componentId: authored.componentId, model: corrected }, new Map(), options.resources, options.projectPath,
@@ -94,7 +93,6 @@ export async function reviewChatgptModel(options: {
     { generationId: options.generationId, checkCurrent: check });
     check();
     options.commit(before, changed.bundle, options.entityId);
-    await options.save();
-    options.progress(`修正して保存しました：${review.summary}`, true);
+    options.progress(`修正しました：${review.summary}`);
   }
 }

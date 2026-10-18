@@ -2,7 +2,7 @@ import { getMaterialAsset } from "./asset-manifest";
 import { getChatgptPlanningBlenderStatus } from "./chatgpt-blender-status";
 import { chatgptCandidatePreview, chatgptChoicePreviews } from "./chatgpt-choice-previews";
 import { chatgptMaterialSettingsDisplay, describeChatgptEntityEdit, sceneSettingsDisplay } from "./chatgpt-change-description";
-import { parseChatgptMaterialProperties, parseChatgptSceneSettings } from "./chatgpt-editor-actions";
+import { isChatgptEditorAction, parseChatgptMaterialProperties, parseChatgptSceneSettings } from "./chatgpt-editor-actions";
 import { MATERIAL_SHOWCASE_DEFINITIONS, materialShowcaseAssetId, getMaterialShowcaseAsset } from "./material-showcase-catalog";
 import { ensureCatalogMaterialTextures } from "./asset-import-persistence";
 import { applyExternalStoreInstallAndAnalyzeModel } from "./external-store";
@@ -18,6 +18,7 @@ import { createChatgptHarnessContextStore } from "./chatgpt-harness-context-taur
 import { parseChatgptSceneReview, type ChatgptSceneReview } from "./authoring-criteria";
 import { authoringActionFingerprint } from "./authoring-action";
 import { authoringSceneProgressFingerprint } from "./authoring-scene-progress";
+import { describeSkippedAuthoringChanges } from "./authoring-noop";
 import type { AuthoringProgressResult } from "./authoring-progress";
 import { assertChatgptPlanCurrent, assertChatgptPlanningCurrent, ChatgptSceneConflictError, chatgptOperationDetail, chatgptOperationLabel, chatgptOperationProgress, chatgptPlanSnapshots, chatgptPlanningSnapshot } from "./chatgpt-plan-guards";
 import { CHATGPT_SCENE_REPLAN_LIMIT, chatgptSceneRetryConversation, type ChatgptSceneRetry } from "./chatgpt-live-scene";
@@ -295,6 +296,14 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
       };
       checkTarget(); if (!sceneRetry) targetBridge.openChatgpt();
       const passStartFingerprint = authoringSceneProgressFingerprint(targetBridge.currentBundle());
+      // Steps that recompute to the current Scene are processed but never
+      // saved, and are reported once instead of as one save per step.
+      const skippedChangeLabels: string[] = [];
+      const flushSkippedChanges = () => {
+        const message = describeSkippedAuthoringChanges(skippedChangeLabels);
+        skippedChangeLabels.length = 0;
+        if (message) report({ progress: { ...job.progress, message } }, { phase: "placing", message });
+      };
       let expectedPlanSnapshots = target === "current" ? snapshots : chatgptPlanSnapshots(targetBridge.currentBundle(), plan);
       const commit = (expectedBundle: PrototypeVisualProject, nextBundle: PrototypeVisualProject, entityId?: string) => {
         checkTarget();
@@ -358,20 +367,20 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
           const applied = await dispatch("prepare", "取り込んだ素材を解析", () => applyExternalStoreInstallAndAnalyzeModel(project.path, before.assets, installed));
           commit(before, { ...before, assets: applied.manifest });
           assetIds.set(key, applied.primaryAssetId);
-          await saveTarget();
         }
       };
       for (const [index, edit] of (plan.edits ?? []).entries()) {
         const before = targetBridge.currentBundle();
-        phase("placing", `${completedBefore + index + 1}/${job.progress.total} 変更中：${describeChatgptEntityEdit(edit, before)}`);
+        const editLabel = describeChatgptEntityEdit(edit, before);
         assertChatgptPlanCurrent(before, plan, expectedPlanSnapshots);
         failedStep = `${before.scene.entities[edit.entityId]?.name ?? "Entity"}を調整`;
         const changed = editChatgptEntity(before, edit);
+        if (chatgptHarnessSceneFingerprint(changed.bundle) === chatgptHarnessSceneFingerprint(before)) { failedStep = undefined; skippedChangeLabels.push(editLabel); report({ progress: { ...job.progress, completed: completedBefore + index + 1 } }); continue; }
+        phase("placing", `${completedBefore + index + 1}/${job.progress.total} 変更中：${editLabel}`);
         failedStep = undefined;
         commit(before, changed.bundle, changed.entityId);
-        await saveTarget();
         const name = changed.bundle.scene.entities[changed.entityId].name;
-        const savedMessage = `保存しました：${describeChatgptEntityEdit(edit, before, changed.bundle)}`;
+        const savedMessage = `反映しました：${describeChatgptEntityEdit(edit, before, changed.bundle)}`;
         report({ plan: savedPlanObject(index, changed.entityId), progress: { ...job.progress, completed: completedBefore + index + 1, message: savedMessage } }, { phase: "placing", message: savedMessage, entityId: changed.entityId, name, saved: true });
         await new Promise(resolve => globalThis.setTimeout(resolve, 40));
       }
@@ -388,7 +397,6 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
           const withTextures = await dispatch("write", "Materialのテクスチャを保存", () => ensureCatalogMaterialTextures(project.path, manifest, material.properties), 0, true);
           if (!withTextures) throw new Error(`${value.name}のテクスチャを取り込めませんでした`);
           commit(before, { ...before, assets: withTextures });
-          await saveTarget();
         }
         phase("placing", `${index + 1 + (plan.edits?.length ?? 0)}/${job.progress.total}：${value.name}を配置しています`);
         const before = targetBridge.currentBundle();
@@ -396,10 +404,10 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
         const placed = placeChatgptObject(before, value, assetIds);
         failedStep = undefined;
         commit(before, placed.bundle, placed.entityId);
-        await saveTarget();
-        report({ plan: savedPlanObject((plan.edits?.length ?? 0) + index, placed.entityId), progress: { ...job.progress, completed: completedBefore + index + 1 + (plan.edits?.length ?? 0), message: `${value.name}を配置して保存しました` } },
-          { phase: "placing", message: `${value.name}を配置して保存しました`, entityId: placed.entityId, name: value.name, saved: true });
-        // Yield to the live Scene and Inspector between actual saved operations.
+        report({ plan: savedPlanObject((plan.edits?.length ?? 0) + index, placed.entityId), progress: { ...job.progress, completed: completedBefore + index + 1 + (plan.edits?.length ?? 0), message: `${value.name}を配置しました` } },
+          { phase: "placing", message: `${value.name}を配置しました`, entityId: placed.entityId, name: value.name, saved: true });
+        // Yield to the live Scene and Inspector so each placement is visible
+        // before the next one. Saving happens once, after all steps.
         await new Promise(resolve => globalThis.setTimeout(resolve, 40));
       }
       const reviewModel = async (entityId: string, brief: import("./chatgpt-modeling").BlenderModelBrief, componentId?: string, expectedSnapshot?: string) => {
@@ -408,7 +416,7 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
         await dispatch("inspect", "保存したモデルの実像を確認", () => reviewChatgptModel({ model, generationId, prompt, brief, entityId, componentId, expectedSnapshot, projectPath: project.path, reasoningEffort, resources,
           currentBundle: targetBridge.currentBundle, checkCurrent: checkTarget, capture: (id, hash, check) => dispatch("capture", "モデルを撮影", () => targetBridge.captureModelViews(id, hash, check)),
           request: (label, work) => dispatch("model-review", label, work, 1),
-          commit, save: saveTarget, progress: (message, saved) => report({ progress: { ...job.progress, phase: "importing", message } },
+          commit, progress: (message, saved) => report({ progress: { ...job.progress, phase: "importing", message } },
             { phase: "importing", message, entityId, name: brief.name, ...(saved ? { saved: true } : {}) }) }));
         failedStep = undefined;
       };
@@ -420,15 +428,17 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
         await importNeeded(requests.filter(asset => `${asset.providerId}:${asset.externalId}` === candidateId), name);
         const before = targetBridge.currentBundle();
         const step = job.progress.completed + 1;
-        phase("placing", `${step}/${job.progress.total} 変更中：${chatgptOperationProgress(operation, before, resources, result?.assetCandidates)}`);
+        const progressLabel = chatgptOperationProgress(operation, before, resources, result?.assetCandidates);
+        if (!isChatgptEditorAction(operation)) phase("placing", `${step}/${job.progress.total} 変更中：${progressLabel}`);
         assertChatgptPlanCurrent(before, plan, expectedPlanSnapshots);
         failedStep = name;
         const changed = await dispatch("write", name.slice(0, 160), () => applyChatgptOperation(before, operation, assetIds, resources, project.path,
           { prompt, brief: modelBrief?.brief ?? [...prompt].slice(0, 1600).join("") }, { generationId, checkCurrent: checkTarget }), 0, true);
+        if (chatgptHarnessSceneFingerprint(changed.bundle) === chatgptHarnessSceneFingerprint(before)) { failedStep = undefined; skippedChangeLabels.push(name); report({ progress: { ...job.progress, completed: step } }); return changed.entityId; }
+        if (isChatgptEditorAction(operation)) phase("placing", `${step}/${job.progress.total} 変更中：${progressLabel}`);
         failedStep = undefined;
         commit(before, changed.bundle, changed.entityId);
-        await saveTarget();
-        const savedMessage = `保存しました：${chatgptOperationProgress(operation, before, resources, result?.assetCandidates, changed.bundle)}`;
+        const savedMessage = `反映しました：${chatgptOperationProgress(operation, before, resources, result?.assetCandidates, changed.bundle)}`;
         const savedSettings = operation.kind === "scene-settings" ? sceneSettingsDisplay(parseChatgptSceneSettings(operation.settingsJson), before, changed.bundle)
           : operation.kind === "material-update" ? chatgptMaterialSettingsDisplay(parseChatgptMaterialProperties(operation.propertiesJson), getMaterialAsset(before.assets, operation.candidateId.slice(8)) ?? undefined, getMaterialAsset(changed.bundle.assets, operation.candidateId.slice(8)) ?? undefined) : undefined;
         const savedPlan = savedPlanObject((plan.edits?.length ?? 0) + plan.objects.length + index, changed.entityId, savedSettings);
@@ -478,7 +488,7 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
           const { operation, index } = drafts[ready.index];
           const entityId = await applyOperation({ ...operation, model: ready.model }, index, operation.model);
           if (entityId) modelsToReview.push({ entityId, brief: operation.model, componentId: operation.componentId, expectedSnapshot: chatgptModelSnapshot(targetBridge.currentBundle(), entityId) });
-          if (job.progress.completed < job.progress.total) phase("importing", "完成したモデルを保存しました。残りのモデルを制作しています");
+          if (job.progress.completed < job.progress.total) phase("importing", "完成したモデルを反映しました。残りのモデルを制作しています");
           failedStep = "モデルの詳細制作";
         } }, drafts.length);
         // Release the parallel workers' native generation lease before asking
@@ -486,6 +496,8 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
         if (!chatgptProductionNeedsWorldReview(job.production) && !job.productionVisualReview) for (const authored of modelsToReview) await reviewModel(authored.entityId, authored.brief, authored.componentId, authored.expectedSnapshot);
         failedStep = undefined;
       }
+      flushSkippedChanges();
+      phase("saving", "反映した変更をまとめて保存しています");
       phase("saving", "ワールドの保存結果を確認しています");
       await saveTarget(); if (createdProject) await refreshProjects();
       checkTarget();
@@ -542,11 +554,11 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
         const continuation = chatgptProgressConversation(chatgptProductionConversation(conversation, job, nextProduction), progress);
         report({ productionPass: nextProduction.pass, productionNoProgressPasses: nextProduction.noProgressPasses });
         retryRequest = { attempt: 0, completed: job.progress.completed, reason: "production", reconfirm: false, conversation: continuation };
-        phase("planning", `ここまでの変更を保存しました。完成条件に向けて${nextProduction.pass}/${job.production!.maxPasses}回目の制作を進めます`);
+        phase("planning", "ここまでの変更を保存しました。完成条件に向けて制作を続けます");
       } else if (nextGoal) {
         retryRequest = { attempt: 0, completed: job.progress.completed, reason: "goal", reconfirm: false, conversation: chatgptProgressConversation(chatgptGoalConversation(conversation, job), progress) };
         report({ goal: nextGoal });
-        phase("planning", `ここまでの変更を保存しました。目標に向けて${nextGoal.iteration}回目の制作と見直しを続けます`);
+        phase("planning", "ここまでの変更を保存しました。目標に向けて制作と見直しを続けます");
       } else if (plan.hasMore) {
         // Legacy plans still use the same finite request-wide runtime. A model's
         // partial result is a continuation, never a successful completion.
