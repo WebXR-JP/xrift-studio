@@ -845,7 +845,7 @@ export const tauri = {
   chatgptReviewModel: (model: string, generationId: string, prompt: string, brief: import("./visual-editor/chatgpt-modeling").BlenderModelBrief,
     spec: import("./visual-editor/chatgpt-modeling").BlenderModelSpec, images: { label: string; dataUrl: string }[], reasoningEffort?: string, originalPrompt?: string) =>
     invoke<{ approved: boolean; summary: string; model: import("./visual-editor/chatgpt-modeling").BlenderModelSpec | null }>("chatgpt_review_model", { model, generationId, prompt, brief, spec, images, reasoningEffort, originalPrompt }),
-  chatgptReviewScene: (model: string, generationId: string, prompt: string, production: import("./visual-editor/chatgpt-production").ChatgptProduction,
+  chatgptReviewScene: (model: string, generationId: string, prompt: string, production: { scope: string; detail: string; focus: string; criteria: string[]; maxPasses: number },
     sceneContext: ChatgptSceneContext, resourceContext: import("./visual-editor/chatgpt-resources").ChatgptResourceContext,
     images: { label: string; dataUrl: string }[], reasoningEffort?: string) =>
     invoke<import("./visual-editor/authoring-criteria").ChatgptSceneReview>("chatgpt_review_scene", { model, generationId, prompt, production, sceneContext, resourceContext, images, reasoningEffort }),

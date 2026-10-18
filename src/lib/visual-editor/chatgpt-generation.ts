@@ -64,7 +64,7 @@ export function rebaseChatgptStep(before: XriftMcpEditorContext["bundle"], next:
 }
 
 export type ChatgptGenerationPhase = "planning" | "planned" | "preparing" | "importing" | "placing" | "saving" | "completed" | "failed" | "cancelled";
-export type ChatgptGenerationMode = "build" | "plan" | "goal";
+export type ChatgptGenerationMode = "build" | "plan";
 export const CHATGPT_ALL_ASSETS: ChatgptAssetOptions = { models: true, materials: true, audio: true };
 export type ChatgptGenerationEvent = {
   sequence: number;
@@ -97,12 +97,8 @@ export type ChatgptGeneration = {
   contextRefs?: import("./chatgpt-harness-context-ref").ChatgptHarnessContextRef[];
   status: "running" | "planned" | "completed" | "failed" | "cancelled";
   mode?: ChatgptGenerationMode;
-  goal?: { iteration: number; noProgressPasses: number };
-  production?: import("./chatgpt-production").ChatgptProduction;
-  productionPass?: number;
-  productionNoProgressPasses?: number;
-  /** A code-authored result always receives the bounded rendered Scene review. */
-  productionVisualReview?: boolean;
+  agentRounds?: number;
+  
   cancelling?: boolean;
   model: string;
   reasoningEffort?: string;

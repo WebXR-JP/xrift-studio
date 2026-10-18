@@ -10,20 +10,20 @@ import { parseChatgptWorldPlan, chatgptAssetRequests, type ChatgptWorldPlan } fr
 import { applyChatgptOperation, createChatgptScaffold, editChatgptEntity, placeChatgptObject, rebaseChatgptStep, type ChatgptGeneration, type ChatgptGenerationEvent, type ChatgptGenerationMode } from "./chatgpt-generation";
 import { buildChatgptHarnessContext, chatgptHarnessSceneFingerprint } from "./chatgpt-harness-context";
 import { createChatgptHarnessRun, type ChatgptHarnessRun, type ChatgptHarnessKind } from "./chatgpt-harness-runtime";
-import { checkAuthoringEvidence } from "./authoring-evidence";
-import { sha256Utf8 } from "./compiler/hash";
+
+
 import { hasAuthoringRunOwner, readAuthoringState } from "./world-authoring";
 import { prepareChatgptHarnessContext, restoreChatgptHarnessContext } from "./chatgpt-harness-context-archive";
 import { createChatgptHarnessContextStore } from "./chatgpt-harness-context-tauri";
-import { parseChatgptSceneReview, type ChatgptSceneReview } from "./authoring-criteria";
+
 import { authoringActionFingerprint } from "./authoring-action";
 import { authoringSceneProgressFingerprint } from "./authoring-scene-progress";
 import { describeSkippedAuthoringChanges } from "./authoring-noop";
-import type { AuthoringProgressResult } from "./authoring-progress";
+
 import { assertChatgptPlanCurrent, assertChatgptPlanningCurrent, ChatgptSceneConflictError, chatgptOperationDetail, chatgptOperationLabel, chatgptOperationProgress, chatgptPlanSnapshots, chatgptPlanningSnapshot } from "./chatgpt-plan-guards";
-import { CHATGPT_SCENE_REPLAN_LIMIT, chatgptSceneRetryConversation, type ChatgptSceneRetry } from "./chatgpt-live-scene";
-import { chatgptGoalConversation, chatgptGoalNextPass } from "./chatgpt-goal";
-import { chatgptProductionConversation, chatgptProductionDirection, chatgptProductionNeedsWorldReview, chatgptProductionNextPass } from "./chatgpt-production";
+import { CHATGPT_SCENE_REPLAN_LIMIT, chatgptAgentConversation, chatgptSceneRetryConversation, type ChatgptSceneRetry } from "./chatgpt-live-scene";
+
+
 import { ChatgptPlanInputError, isChatgptPlanInputError } from "./chatgpt-plan-recovery";
 import { chatgptReferenceKey, type ChatgptResourceContext } from "./chatgpt-resources";
 import { chatgptConversationContext, createChatgptSession, extendChatgptRevertCheckpoint, upsertChatgptSessionTurn } from "./chatgpt-sessions";
@@ -35,11 +35,6 @@ import type { ChatgptSession, ChatgptRevertCheckpoint } from "./chatgpt-sessions
 
 type HostRef<T> = { current: T };
 type HostVisualSession = { bundle: PrototypeVisualProject; project: Project | null };
-// Only unsuccessful inspections are reusable, only within the same live run.
-// Exact bundle identity also invalidates this on manual edits or reloads.
-const rejectedWorldReviews = new WeakMap<ChatgptHarnessRun, {
-  bundle: PrototypeVisualProject; fingerprint: string; request: string; review: ChatgptSceneReview;
-}>();
 export type ChatgptPassRetry = { retry: ChatgptSceneRetry; target: "current" | "new"; sessionId?: string };
 export type ChatgptAuthoringHost = {
   chatgptGenerationRef: HostRef<string | null>;
@@ -96,10 +91,10 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
     const control = { cancelled: false };
     chatgptControlsRef.current.set(generationId, control);
     let job: ChatgptGeneration = { ...previousJob, generationId, sessionId, createdAt: previousJob?.createdAt ?? new Date().toISOString(), status: "running", mode, cancelling: false, error: undefined, model, reasoningEffort, prompt, options: { ...options }, sourceProjectId: sourceId, sourceSceneId, sceneId: sourceSceneId,
-      goal: mode === "goal" ? sceneRetry || approved ? previousJob?.goal ?? { iteration: 1, noProgressPasses: 0 } : { iteration: 1, noProgressPasses: 0 } : undefined,
+      
       attachedEntities: requestEntityIds.map(id => ({ id, name: sourceBridge.currentBundle().scene.entities[id]?.name ?? id })),
       attachedMaterials: requestMaterialIds.map(id => ({ id, name: sourceBridge.currentBundle().assets.assets[id]?.name ?? id })),
-      progress: { phase: "planning", message: sceneRetry?.reason === "goal" ? "目標と最新のSceneを見直し、次の改善を考えています" : sceneRetry?.reason === "clarification" ? "回答を基に、現在のSceneから制作内容を考えています" : sceneRetry?.reason === "plan-input" ? "利用できる素材と設定を確認し、制作の続きを考えています" : sceneRetry ? "手動編集を取り込み、現在のSceneから続きを考えています" : approved ? "確認した変更内容を反映する準備をしています" : "現在のSceneと制作に使う素材を確認しています", completed: completedBefore, total: completedBefore, recentEvents: sceneRetry || completedBefore > 0 ? previousJob?.progress.recentEvents ?? [] : [] } };
+      progress: { phase: "planning", message: sceneRetry?.reason === "agent" ? "最新のSceneを見て、残りの変更を考えています" : sceneRetry?.reason === "clarification" ? "回答を基に、現在のSceneから制作内容を考えています" : sceneRetry?.reason === "plan-input" ? "利用できる素材と設定を確認し、制作の続きを考えています" : sceneRetry ? "手動編集を取り込み、現在のSceneから続きを考えています" : approved ? "確認した変更内容を反映する準備をしています" : "現在のSceneと制作に使う素材を確認しています", completed: completedBefore, total: completedBefore, recentEvents: sceneRetry || completedBefore > 0 ? previousJob?.progress.recentEvents ?? [] : [] } };
     const jobs = chatgptGenerationsRef.current;
     let run = chatgptHarnessRunsRef.current.get(generationId);
     if (!run) {
@@ -119,10 +114,6 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
       chatgptHarnessRunsRef.current.set(generationId, run);
     }
     const harness = run;
-    // Answers and explicit resumptions can change how the same Scene should be
-    // judged. Only automatic continuation may reuse an unsuccessful review.
-    if (sceneRetry?.reason !== "production" && sceneRetry?.reason !== "goal") rejectedWorldReviews.delete(harness);
-    if (sceneRetry?.reason === "production") job = { ...job, progress: { ...job.progress, message: "完成条件と最新のSceneを確認し、未完了の作業を進めています" } };
     if (!jobs.has(generationId) && jobs.size >= 600) {
       const oldest = jobs.keys().next().value!;
       await chatgptHarnessRunsRef.current.get(oldest)?.stop("evicted");
@@ -159,7 +150,7 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
       if (!sourceBridge.currentContext().canGenerate) throw new Error("Playまたは素材の読み込みが始まりました。停止してから再試行してください");
     };
     try {
-      harness.beginPass(!sceneRetry ? previousJob ? "continue" : "initial" : sceneRetry.reason === "production" || sceneRetry.reason === "goal" ? "continue" : "repair");
+      harness.beginPass(!sceneRetry ? previousJob ? "continue" : "initial" : sceneRetry.reason === "agent" ? "continue" : "repair");
       flushChatgptSessions();
       const sourcePath = visualSessionRef.current?.project?.path;
       if (sourcePath && hasAuthoringRunOwner(readAuthoringState(await dispatch("context", "制作の実行状態を確認", () => tauri.readWorldAuthoring(sourcePath, sourceSceneId))))) {
@@ -178,7 +169,7 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
         selectedEntityId: sourceBridge.currentContext().selectedEntityId, conversation: target === "current" || sceneRetry ? conversation : [],
         attachedEntityIds: requestEntityIds, attachedMaterialIds: requestMaterialIds,
         builtinCandidates: builtinCatalog.listChatgptBuiltinCandidates("world", prompt), blenderAvailable: blender.available,
-        modelSource: options.modelSource ?? "auto", production: job.production, goal: mode === "goal",
+        modelSource: options.modelSource ?? "auto",
       });
       const sceneContext = packet.scene;
       const resources: ChatgptResourceContext = approved && previousPlan ? previousPlan.resources : packet.resources;
@@ -196,7 +187,7 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
       checkCancelled();
       if (!sourcePath) throw new Error("作品を保存してからChatGPTへ依頼してください");
       const preparedInput = approved ? null : await prepareInput(packet, sourcePath);
-      const result = preparedInput ? await dispatch("plan", "制作プランを生成", () => preparedInput.dispatch(verified => tauri.chatgptPlan(model, prompt, options, options.materials ? MATERIAL_SHOWCASE_DEFINITIONS.map(v => ({id: materialShowcaseAssetId(v.key), name: v.name, extension: v.extensionLabel})) : [], generationId, target === "current" || sceneRetry || mode === "goal" ? verified.scene : undefined, reasoningEffort, verified.resources), () => {
+      const result = preparedInput ? await dispatch("plan", "制作プランを生成", () => preparedInput.dispatch(verified => tauri.chatgptPlan(model, prompt, options, options.materials ? MATERIAL_SHOWCASE_DEFINITIONS.map(v => ({id: materialShowcaseAssetId(v.key), name: v.name, extension: v.extensionLabel})) : [], generationId, target === "current" || sceneRetry ? verified.scene : undefined, reasoningEffort, verified.resources), () => {
         checkSource(); if (target === "current") assertChatgptPlanningCurrent(sourceBridge.currentBundle(), planningSnapshot);
       }), 1) : null;
       checkCancelled();
@@ -209,13 +200,37 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
       if (!approved && target === "current") assertChatgptPlanningCurrent(sourceBridge.currentBundle(), planningSnapshot);
       const snapshots = approved ? previousPlan!.snapshots : chatgptPlanSnapshots(baseline, plan);
       assertChatgptPlanCurrent(sourceBridge.currentBundle(), plan, snapshots);
+      failedStep = "Planの事前検証";
+      {
+        let draft = baseline;
+        let dropped = 0;
+        const keptEdits: NonNullable<ChatgptWorldPlan["edits"]> = [];
+        for (const edit of plan.edits ?? []) {
+          try {
+            const changedEdit = editChatgptEntity(draft, edit);
+            if (chatgptHarnessSceneFingerprint(changedEdit.bundle) === chatgptHarnessSceneFingerprint(draft)) { dropped++; continue; }
+            draft = changedEdit.bundle; keptEdits.push(edit);
+          } catch { keptEdits.push(edit); }
+        }
+        const keptOperations: NonNullable<ChatgptWorldPlan["operations"]> = [];
+        for (const operation of plan.operations ?? []) {
+          if (!isChatgptEditorAction(operation)) { keptOperations.push(operation); continue; }
+          try {
+            const changedOp = await applyChatgptOperation(draft, operation, new Map(), resources, sourcePath);
+            if (chatgptHarnessSceneFingerprint(changedOp.bundle) === chatgptHarnessSceneFingerprint(draft)) { dropped++; continue; }
+            draft = changedOp.bundle; keptOperations.push(operation);
+          } catch { keptOperations.push(operation); }
+        }
+        if (dropped) {
+          plan = { ...plan, edits: keptEdits, operations: keptOperations };
+          if (!keptEdits.length && !keptOperations.length && !plan.objects.length) {
+            throw new ChatgptPlanInputError(`指定された${dropped}件の変更はすべて現在のSceneと同じ値でした。設定の再指定ではなく、Entityや素材の配置などSceneが実際に変わる操作を指定してください`);
+          }
+          report({}, { phase: "planning", message: `現在のSceneと同じ変更${dropped}件を計画から外しました` });
+        }
+      }
+      failedStep = undefined;
       const codeScene = plan.operations?.some(operation => operation.kind === "r3f-scene");
-      const production = chatgptProductionDirection(job.production, plan.questions?.length ? undefined : plan.production)
-        ?? (codeScene && !plan.questions?.length ? { scope: "model" as const, detail: "balanced" as const, focus: plan.title.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ").slice(0, 160) || "依頼されたScene",
-          criteria: [[...prompt.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")].slice(0, 240).join("") || "依頼された構成と見た目を備える"], maxPasses: 4 } : undefined);
-      if (codeScene) report({ productionVisualReview: true });
-      if (production && !job.production) report({ production, productionPass: 1, productionNoProgressPasses: 0 },
-        { phase: "planning", message: `制作方針：${production.focus}。完成条件：${production.criteria.join("、")}` });
       report({ questionPreviews: chatgptChoicePreviews(plan.questions ?? [], resources, result?.assetCandidates), plan: approved && job.plan ? job.plan : { title: plan.title, description: plan.description, hasMore: plan.hasMore, remainingWork: plan.remainingWork, questions: plan.questions, objects: [...(plan.edits ?? []).map(v => ({ name: v.name ?? baseline.scene.entities[v.entityId]?.name ?? "Entity", shape: "調整" })), ...plan.objects.map(v => ({ name: v.name, shape: v.shape, preview: chatgptCandidatePreview(v.externalId ?? v.materialExternalId, resources, result?.assetCandidates) })), ...(plan.operations ?? []).map(operation => ({ name: chatgptOperationLabel(operation, baseline), shape: operation.kind === "entity-delete" || operation.kind === "component-remove" ? "削除" : operation.kind === "catalog" || (operation.kind === "blender-model" || operation.kind === "r3f-scene") && !operation.entityId || operation.kind === "component-add" && !operation.entityId ? "追加" : "調整", detail: chatgptOperationDetail(operation, resources, result?.assetCandidates, baseline), preview: chatgptCandidatePreview("candidateId" in operation ? operation.candidateId : undefined, resources, result?.assetCandidates), ...(operation.kind === "scene-settings" ? { sceneSettingsSections: (["skybox", "fog"] as const).filter(section => parseChatgptSceneSettings(operation.settingsJson)[section] !== undefined), settings: sceneSettingsDisplay(parseChatgptSceneSettings(operation.settingsJson), baseline) } : operation.kind === "skybox" ? { sceneSettingsSections: ["skybox"] as ("skybox" | "fog")[] } : operation.kind === "material-update" ? { materialAssetId: operation.candidateId.slice(8), settings: chatgptMaterialSettingsDisplay(parseChatgptMaterialProperties(operation.propertiesJson), getMaterialAsset(baseline.assets, operation.candidateId.slice(8)) ?? undefined) } : {}) }))] },
         progress: { ...job.progress, total: completedBefore + plan.objects.length + (plan.edits?.length ?? 0) + (plan.operations?.length ?? 0) } });
       if (!approved && job.plan) report({ plan: { ...job.plan, objects: job.plan.objects.map(object => ({ ...object, saved: false })) } });
@@ -313,7 +328,6 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
         assertChatgptPlanCurrent(expectedBundle, plan, expectedPlanSnapshots);
         const nextFingerprint = chatgptHarnessSceneFingerprint(nextBundle);
         if (nextFingerprint === chatgptHarnessSceneFingerprint(expectedBundle)) return;
-        rejectedWorldReviews.delete(harness);
         harness.recordCommit(nextFingerprint);
         flushChatgptSessions();
         if (!targetBridge.applyGenerationStep({ expectedBundle, nextBundle, entityId })) throw new ChatgptSceneConflictError("反映中に作品が編集されました。編集内容を保ち、現在のSceneから制作を続けます");
@@ -456,7 +470,7 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
         const item = operations[cursor];
         if (!isDraft(item)) {
           const entityId = await applyOperation(item.operation, item.index);
-          if (item.operation.kind === "blender-model" && entityId && !chatgptProductionNeedsWorldReview(job.production) && !job.productionVisualReview) await reviewModel(entityId,
+          if (item.operation.kind === "blender-model" && entityId) await reviewModel(entityId,
             { name: item.operation.model.name, brief: [...prompt].slice(0, 1600).join("") }, item.operation.componentId);
           cursor++; continue;
         }
@@ -493,7 +507,7 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
         } }, drafts.length);
         // Release the parallel workers' native generation lease before asking
         // for a visual review under the same cancellable request.
-        if (!chatgptProductionNeedsWorldReview(job.production) && !job.productionVisualReview) for (const authored of modelsToReview) await reviewModel(authored.entityId, authored.brief, authored.componentId, authored.expectedSnapshot);
+        for (const authored of modelsToReview) await reviewModel(authored.entityId, authored.brief, authored.componentId, authored.expectedSnapshot);
         failedStep = undefined;
       }
       flushSkippedChanges();
@@ -501,84 +515,28 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
       phase("saving", "ワールドの保存結果を確認しています");
       await saveTarget(); if (createdProject) await refreshProjects();
       checkTarget();
-      let worldReview: ChatgptSceneReview | undefined;
-      let reviewFingerprint: string | undefined;
-      let reviewCaptures: { view: string; fingerprint: string }[] = [];
-      if (job.production && (chatgptProductionNeedsWorldReview(job.production) || job.productionVisualReview) && !job.plan?.hasMore) {
-        failedStep = "ワールド全体の見直し";
-        const reviewBundle = targetBridge.currentBundle();
-        const expectedReview = chatgptPlanningSnapshot(reviewBundle);
-        const checkReview = () => { checkTarget(); assertChatgptPlanningCurrent(targetBridge.currentBundle(), expectedReview); };
-        const request = JSON.stringify([model, prompt, reasoningEffort, job.production]);
-        const fingerprint = chatgptHarnessSceneFingerprint(reviewBundle);
-        const previousReview = rejectedWorldReviews.get(harness);
-        if (previousReview?.bundle === reviewBundle && previousReview.fingerprint === fingerprint
-          && previousReview.request === request && harness.snapshot().savedFingerprint === fingerprint) {
-          checkReview();
-          worldReview = structuredClone(previousReview.review);
-          reviewFingerprint = fingerprint;
-          phase("importing", `Sceneに変化がないため、前回の未完了項目を引き継ぎます：${worldReview.remainingWork || worldReview.summary}`);
-        } else {
-          phase("importing", "ワールド全体とスポーン位置からの見え方を確認しています");
-          const images = await dispatch("capture", "最新のSceneを2方向から撮影", () => targetBridge.captureWorldViews(checkReview));
-          checkReview();
-          const reviewPacket = buildChatgptHarnessContext(reviewBundle, { selectedEntityId: targetBridge.currentContext().selectedEntityId,
-            conversation, attachedEntityIds: requestEntityIds, attachedMaterialIds: requestMaterialIds, production: job.production });
-          reviewFingerprint = reviewPacket.sceneFingerprint;
-          const requiredLabels = ["ワールド全体の俯瞰", "スポーン位置からの視界（目の高さ1.6m）"];
-          if (images.length !== 2 || requiredLabels.some(label => !images.some(image => image.label === label && /^data:image\/(?:png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(image.dataUrl)))) throw new Error("ワールド全体とスポーン位置の画像を確認できませんでした");
-          reviewCaptures = images.map(image => ({ view: image.label, fingerprint: reviewFingerprint! }));
-          const preparedReview = await prepareInput(reviewPacket, project.path);
-          worldReview = parseChatgptSceneReview(await dispatch("model-review", "ワールド全体を完成条件と照合", () => preparedReview.dispatch(verified => tauri.chatgptReviewScene(model, generationId, prompt, job.production!, verified.scene, verified.resources, images, reasoningEffort), checkReview), 1), job.production.criteria);
-          checkReview();
-          phase("importing", `全体を見直しました：${worldReview.summary}`);
-          for (const verdict of worldReview.criteria) phase("importing", `${verdict.passed ? "確認済み" : "残る作業"}：${verdict.criterion}。${verdict.reason}`);
-          harness.recordInspection({ fingerprint: reviewFingerprint, approved: worldReview.approved, views: images.length,
-            evidence: sha256Utf8(JSON.stringify({ images: images.map(image => [image.label, sha256Utf8(image.dataUrl)]), criteria: worldReview.criteria })) });
-          flushChatgptSessions();
-          if (!worldReview.approved) rejectedWorldReviews.set(harness, { bundle: reviewBundle, fingerprint, request, review: structuredClone(worldReview) });
-          else rejectedWorldReviews.delete(harness);
-        }
-        failedStep = undefined;
-      }
       const changed = planningSnapshot !== chatgptPlanningSnapshot(targetBridge.currentBundle());
-      const progress = harness.recordProgress({ planFingerprint: authoringActionFingerprint("chatgpt-plan", plan), beforeFingerprint: passStartFingerprint,
+      const appliedSteps = (plan.edits?.length ?? 0) + plan.objects.length + (plan.operations?.length ?? 0);
+      const rounds = (job.agentRounds ?? 0) + 1;
+      const keepGoing = appliedSteps > 0 && changed && rounds < 24;
+      harness.recordProgress({ planFingerprint: authoringActionFingerprint("chatgpt-plan", plan), beforeFingerprint: passStartFingerprint,
         afterFingerprint: authoringSceneProgressFingerprint(targetBridge.currentBundle()), savedFingerprint: chatgptHarnessSceneFingerprint(targetBridge.currentBundle()),
-        continuing: Boolean(plan.hasMore || worldReview?.approved === false || !job.production && mode === "goal" && changed) });
+        continuing: keepGoing });
       flushChatgptSessions();
-      const nextProduction = chatgptProductionNextPass(job, { changed, review: worldReview, requireVisualReview: job.productionVisualReview });
-      const nextGoal = job.production ? null : chatgptGoalNextPass(job, changed);
       chatgptPlansRef.current.delete(generationId);
-      if (nextProduction || nextGoal || plan.hasMore) harness.finish({ fingerprint: chatgptHarnessSceneFingerprint(targetBridge.currentBundle()), hasMore: true });
-      if (nextProduction) {
-        const continuation = chatgptProgressConversation(chatgptProductionConversation(conversation, job, nextProduction), progress);
-        report({ productionPass: nextProduction.pass, productionNoProgressPasses: nextProduction.noProgressPasses });
-        retryRequest = { attempt: 0, completed: job.progress.completed, reason: "production", reconfirm: false, conversation: continuation };
-        phase("planning", "ここまでの変更を保存しました。完成条件に向けて制作を続けます");
-      } else if (nextGoal) {
-        retryRequest = { attempt: 0, completed: job.progress.completed, reason: "goal", reconfirm: false, conversation: chatgptProgressConversation(chatgptGoalConversation(conversation, job), progress) };
-        report({ goal: nextGoal });
-        phase("planning", "ここまでの変更を保存しました。目標に向けて制作と見直しを続けます");
-      } else if (plan.hasMore) {
-        // Legacy plans still use the same finite request-wide runtime. A model's
-        // partial result is a continuation, never a successful completion.
-        retryRequest = { attempt: 0, completed: job.progress.completed, reason: "goal", reconfirm: false,
-          conversation: chatgptProgressConversation(chatgptGoalConversation(conversation, job), progress) };
-        phase("planning", "保存済みのSceneから、残る作業を続けます");
+      if (keepGoing) {
+        harness.finish({ fingerprint: chatgptHarnessSceneFingerprint(targetBridge.currentBundle()), hasMore: true });
+        report({ agentRounds: rounds });
+        retryRequest = { attempt: 0, completed: job.progress.completed, reason: "agent", reconfirm: false, conversation: chatgptAgentConversation(conversation, job) };
+        phase("planning", "ここまでの変更を保存しました。最新のSceneを見て制作を続けます");
       } else {
         const finalFingerprint = chatgptHarnessSceneFingerprint(targetBridge.currentBundle());
-        const requireInspection = chatgptProductionNeedsWorldReview(job.production) || Boolean(job.productionVisualReview);
-        const evidence = checkAuthoringEvidence({ currentFingerprint: finalFingerprint, savedFingerprint: harness.snapshot().savedFingerprint,
-          requiredViews: requireInspection ? ["ワールド全体の俯瞰", "スポーン位置からの視界（目の高さ1.6m）"] : [], captures: reviewCaptures,
-          requiredCriteria: requireInspection ? job.production?.criteria : undefined,
-          review: { fingerprint: reviewFingerprint ?? finalFingerprint, approved: requireInspection ? worldReview?.approved === true : true, criteria: worldReview?.criteria } });
-        if (!evidence.complete) throw new ChatgptSceneConflictError(evidence.reasons.join("。"));
-        harness.finish({ fingerprint: finalFingerprint, requireInspection, checkpoint: completed => {
+        harness.finish({ fingerprint: finalFingerprint, checkpoint: completed => {
           recordChatgptGeneration({ ...job, harness: completed });
           flushChatgptSessions();
         } });
         report({ status: "completed", nextActions: ["get_editor_context", "capture_scene_view"],
-          progress: { ...job.progress, phase: "completed", message: worldReview?.approved ? "完成条件に沿ってワールド全体を見直し、保存しました。Scene Viewで確認できます" : mode === "goal" ? "目標に向けた制作と見直しを終えました。Scene Viewで結果を確認できます" : job.progress.total === 0 ? plan.description || "追加の変更はありません" : plan.hasMore ? "ここまでの変更を保存しました。結果を確認し、次の依頼を送れます" : "依頼を反映して保存しました。Scene ViewとInspectorで確認できます" } },
+          progress: { ...job.progress, phase: "completed", message: job.progress.total === 0 ? plan.description || "追加の変更はありません" : "依頼を反映して保存しました。Scene ViewとInspectorで確認できます" } },
           { phase: "completed", message: job.progress.total === 0 ? "Sceneの変更はありません" : "依頼した追加と調整を保存しました" });
         if (job.progress.total > 0) toast({ kind: "success", title: "依頼を反映しました", description: "Scene ViewとInspectorで結果を確認できます。" });
         return project;
@@ -610,7 +568,6 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
         } catch (boundaryError) { error = boundaryError; }
       }
       if (!retryRequest) {
-        rejectedWorldReviews.delete(harness);
         if (control.cancelled) await harness.stop("user"); else await harness.fail();
         const message = error instanceof Error ? error.message : String(error);
         report({ status: control.cancelled ? "cancelled" : "failed", cancelling: false, error: control.cancelled ? undefined : message, nextActions: ["get_chatgpt_connection", "get_editor_context"],
@@ -626,16 +583,10 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
     // Start a separate planning exchange only after the old native lease and
     // listeners are released. The same visible request keeps its saved results.
     return { retry: retryRequest!, target: createdProject ? "current" : target,
-      sessionId: retryRequest!.reason === "plan-input" || retryRequest!.reason === "goal" || retryRequest!.reason === "production" ? job.sessionId : sessionId };
+      sessionId: retryRequest!.reason === "plan-input" || retryRequest!.reason === "agent" ? job.sessionId : sessionId };
   };
 }
 
-function chatgptProgressConversation(history: { prompt: string; result: string }[], progress: AuthoringProgressResult) {
-  if (!progress.shouldReplan) return history;
-  const prompt = "Studioが記録した制作の進展";
-  const result = `${progress.kind === "cycle" ? "以前のSceneに戻る変更が繰り返されています" : "提案した制作でSceneに変化がありません"}。連続${progress.stalledPasses}回。保存済みの内容を再追加せず、元の完成条件に対する未完了の作業を別の方法で進めてください。必要な変更が残っていない場合はhasMore=falseとしてください。`;
-  return [...history.filter(turn => turn.prompt !== prompt).slice(-4), { prompt, result }];
-}
 
 /** One request owns one runtime across every plan, repair and continuation.
  * Each pass releases its native stream and Editor listener before the next. */

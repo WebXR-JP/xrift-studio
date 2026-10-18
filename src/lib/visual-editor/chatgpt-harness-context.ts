@@ -3,7 +3,6 @@ import { sha256Utf8 } from "./compiler/hash";
 import { chatgptPlanningSnapshot } from "./chatgpt-plan-guards";
 import { collectChatgptSceneContext, collectChatgptSceneResources } from "./chatgpt-scene-resources";
 import { isR3fSceneAuthoring } from "./r3f-scene-source";
-import { parseChatgptProduction, type ChatgptProduction } from "./chatgpt-production";
 import type { ChatgptSceneContext } from "../tauri";
 import type { PrototypeVisualProject } from "./prototype-project";
 import type { ChatgptBuiltinCandidate, ChatgptResourceContext } from "./chatgpt-resources";
@@ -16,8 +15,6 @@ export type ChatgptHarnessContextOptions = {
   builtinCandidates?: ChatgptBuiltinCandidate[];
   blenderAvailable?: boolean;
   modelSource?: ChatgptResourceContext["modelSource"];
-  production?: ChatgptProduction;
-  goal?: boolean;
 };
 
 export type ChatgptHarnessContext = {
@@ -25,7 +22,6 @@ export type ChatgptHarnessContext = {
   contractVersion: number;
   scene: ChatgptSceneContext;
   resources: ChatgptResourceContext;
-  production?: ChatgptProduction;
   /** Covers all authored Scene/Assets/Prefab values, including omitted Entities. */
   sceneFingerprint: string;
   /** Binds the exact request packet to that authored snapshot. */
@@ -142,8 +138,8 @@ export function normalizeChatgptHarnessContext(value: unknown): ChatgptHarnessCo
   const { fingerprint, contextBytes, ...content } = detached;
   const serialized = canonical(content);
   if (bytes(serialized) !== contextBytes || sha256Utf8(serialized) !== fingerprint) invalidContext();
-  const production = parseChatgptProduction(value.production);
-  if (value.production !== undefined && !production) invalidContext();
+  
+  
   return freeze(detached as ChatgptHarnessContext);
 }
 
@@ -165,7 +161,6 @@ export function buildChatgptHarnessContext(bundle: PrototypeVisualProject, optio
   // current authoring values; never summarize or truncate a code original.
   while (conversation.length && (conversation.length > 6 || bytes(JSON.stringify(conversation)) > 24 * 1024)) conversation.shift();
   const scene = collectChatgptSceneContext(bundle, options.selectedEntityId, conversation, options.attachedEntityIds);
-  if (options.goal) scene.goal = true;
   const resources: ChatgptResourceContext = {
     ...collectChatgptSceneResources(bundle, scene.entities.map(entity => entity.id), options.builtinCandidates ?? [], options.attachedMaterialIds),
     ...(options.blenderAvailable !== undefined ? { blenderAvailable: options.blenderAvailable } : {}),
@@ -184,11 +179,10 @@ export function buildChatgptHarnessContext(bundle: PrototypeVisualProject, optio
     else omittedSources.entityBudget++;
   }
   const totalEntities = Object.keys(bundle.scene.entities).length;
-  const production = parseChatgptProduction(options.production);
-  if (production || includedEntities.size < totalEntities || omittedSources.count) {
+  if (includedEntities.size < totalEntities || omittedSources.count) {
     const coverage = { totalEntities, includedEntities: includedEntities.size, omittedEntities: totalEntities - includedEntities.size,
       includedSourceCount: includedSources.size, omittedSourceCount: omittedSources.count, omittedSourceBytes: omittedSources.bytes };
-    const turns = [...(scene.conversation ?? []), { prompt: "Studioが記録したコンテキストの範囲", result: JSON.stringify({ ...coverage, ...(production ? { production } : {}) }) }];
+    const turns = [...(scene.conversation ?? []), { prompt: "Studioが記録したコンテキストの範囲", result: JSON.stringify(coverage) }];
     // Send omission facts through the existing validated Scene context boundary.
     // The provider can distinguish an absent original from a complete Scene.
     while (turns.length > 1 && (turns.length > 6 || bytes(JSON.stringify(turns)) > 24 * 1024)) turns.shift();
@@ -199,7 +193,6 @@ export function buildChatgptHarnessContext(bundle: PrototypeVisualProject, optio
     contractVersion: contract.version,
     scene,
     resources,
-    ...(production ? { production } : {}),
     sceneFingerprint: chatgptHarnessSceneFingerprint(bundle),
     omittedEntities: { total: totalEntities, included: includedEntities.size, count: totalEntities - includedEntities.size },
     omittedSources,

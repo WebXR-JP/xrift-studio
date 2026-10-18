@@ -7,8 +7,26 @@ export type ChatgptSceneRetry = {
   completed: number;
   conversation: ChatgptConversationTurn[];
   reconfirm: boolean;
-  reason?: "plan-input" | "clarification" | "goal" | "production";
+  reason?: "plan-input" | "clarification" | "agent";
 };
+
+/** Agent continuation: the latest Scene is the only source of truth. Saved
+ * steps are evidence of what exists now, never a reason to add it again. */
+export function chatgptAgentConversation(history: ChatgptConversationTurn[], job: ChatgptGeneration): ChatgptConversationTurn[] {
+  const saved = job.progress.recentEvents.filter(event => event.saved).map(event => event.message);
+  const result = sanitizeChatgptHistoryText([
+    "最新のScene JSONを正本として、残っている差分だけを提案してください。進め方の原則: 既存を再利用して最小の差分にする。現在の値と同じ設定は再指定しない。1件ずつSceneに反映できる単位に分ける。",
+    `この依頼で反映済みの作業は${job.progress.completed}件です。下記の作業や現在存在するEntityを重複して追加しないでください。`,
+    ...saved.slice(-16),
+    job.plan?.remainingWork ? `以前のPlanに残っていた作業: ${job.plan.remainingWork}` : "追加の変更が不要なら、操作を空にしてください。",
+  ].join("\n"), 2000);
+  const updated = { prompt: sanitizeChatgptHistoryText(job.prompt, 2000), result };
+  const previous = history[history.length - 1];
+  const retained = previous?.result.startsWith("最新のScene JSONを正本として") ? history.slice(0, -1) : history;
+  const conversation = [...retained.slice(-5), updated];
+  while (conversation.length > 1 && new TextEncoder().encode(JSON.stringify(conversation)).byteLength > 23 * 1024) conversation.shift();
+  return conversation;
+}
 
 /** Saved steps are evidence; a previous, partly executed plan is not completion. */
 export function chatgptSceneRetryConversation(history: ChatgptConversationTurn[], job: ChatgptGeneration, failure?: string): ChatgptConversationTurn[] {

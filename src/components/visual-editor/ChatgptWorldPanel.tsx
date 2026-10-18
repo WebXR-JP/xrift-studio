@@ -18,7 +18,6 @@ import { ChatgptQuestionForm } from "./ChatgptQuestionForm";
 import { ChatgptPlanSettings } from "./ChatgptPlanSettings";
 import type { ChatgptQuestionAnswer } from "../../lib/visual-editor/chatgpt-questions";
 import { chatgptPromptSuggestions, type ChatgptPromptSuggestion } from "../../lib/visual-editor/chatgpt-prompt-suggestions";
-import { parseChatgptComposerRequest } from "../../lib/visual-editor/chatgpt-goal";
 import { ChatgptMaterialControls } from "./ChatgptMaterialControls";
 import { ChatgptSceneControls, type ChatgptSceneSettingsPatch } from "./ChatgptSceneControls";
 import type { SceneSettings } from "../../lib/visual-editor/scene-settings";
@@ -212,8 +211,7 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
   const restoring = busy === "loading" || Boolean(connection?.restoring);
   const showConnect = !connection?.signedIn;
   const connectAlert = error ?? statusError ?? connection?.error;
-  const composerRequest = parseChatgptComposerRequest(prompt);
-  const canSubmit = Boolean(composerRequest.prompt);
+  const canSubmit = Boolean(prompt.trim());
   const suggestion = useMemo(() => chatgptPromptSuggestions({ generation, entities: entityReferences,
     materials: [...materialById.values()].filter(asset => asset.status === "ready"), attachedEntityIds, attachedMaterialIds,
     blenderAvailable: blenderStatus?.available,
@@ -238,9 +236,8 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
     requestAnimationFrame(() => { promptElement.current?.focus(); promptElement.current?.setSelectionRange(suggestion.prompt.length, suggestion.prompt.length); });
   };
   const send = (request = prompt.trim()) => {
-    const parsed = parseChatgptComposerRequest(request);
-    if (!parsed.prompt) return;
-    queue.enqueue({ id: createDocumentId("chatgpt-request"), model, prompt: parsed.prompt, attachedEntityIds: [...attachedEntityIds], attachedMaterialIds: [...attachedMaterialIds], options: { ...CHATGPT_ALL_ASSETS, modelSource }, mode: parsed.mode, reasoningEffort: effectiveEffort || undefined });
+    if (!request) return;
+    queue.enqueue({ id: createDocumentId("chatgpt-request"), model, prompt: request, attachedEntityIds: [...attachedEntityIds], attachedMaterialIds: [...attachedMaterialIds], options: { ...CHATGPT_ALL_ASSETS, modelSource }, mode: "build", reasoningEffort: effectiveEffort || undefined });
     setPrompt(""); setAttachedEntityIds([]); setAttachedMaterialIds([]); setError(null);
   };
   const attach = (entityIds: string[], materialIds: string[] = []) => {
@@ -330,7 +327,6 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
         {connectAlert ? <p role="alert" className="w-full max-w-md break-words rounded-lg bg-rose-50 p-2.5 text-left leading-5 text-rose-700">{connectAlert}</p> : null}
       </div> : <>
       {conversation.filter(turn => turn.generationId !== generation?.generationId).map(turn => <div key={turn.generationId} className="space-y-2">
-        {turn.mode === "goal" ? <p className="text-[11px] font-medium text-slate-500">Goal · {turn.goal?.iteration ?? 1}回</p> : null}
         <p className="ml-5 whitespace-pre-wrap break-words rounded-xl bg-slate-100 px-3 py-2.5 text-slate-800">{turn.prompt}</p>
         {turn.attachedEntities?.length ? <p className="break-words text-[11px] text-slate-500">添付：{turn.attachedEntities.map(entity => entity.name).join("、")}（配下を優先）</p> : null}
         {turn.attachedMaterials?.length ? <p className="break-words text-[11px] text-slate-500">添付Material：{turn.attachedMaterials.map(material => material.name).join("、")}</p> : null}
@@ -348,7 +344,6 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
         {turn.clarifications?.length ? <details><summary className="cursor-pointer text-[11px] text-slate-500">確認した内容</summary><dl className="mt-2 space-y-2 text-[11px]">{turn.clarifications.map((item, index) => <div key={index}><dt className="break-words text-slate-500">{item.question}</dt><dd className="break-words text-slate-700">{item.answer}</dd></div>)}</dl></details> : null}
       </div>)}
       {!generation ? <p className="leading-5 text-slate-500">今のSceneの編集を手伝います。小さな調整から依頼して、結果を見ながら進めましょう。</p> : <>
-        {generation.mode === "goal" ? <p aria-label="Goalの進行状況" className="text-[11px] font-medium text-slate-600">Goal · {generation.goal?.iteration ?? 1}回目{generation.status === "running" ? " · 制作と見直しを継続中" : ""}</p> : null}
         <p className="ml-5 whitespace-pre-wrap break-words rounded-xl bg-slate-100 px-3 py-2.5 text-slate-800">{generation.prompt}</p>
         {generation.attachedEntities?.length ? <p className="break-words text-[11px] text-slate-500">添付：{generation.attachedEntities.map(entity => entity.name).join("、")}（配下を優先）</p> : null}
         {generation.attachedMaterials?.length ? <p className="break-words text-[11px] text-slate-500">添付Material：{generation.attachedMaterials.map(material => material.name).join("、")}</p> : null}
@@ -358,10 +353,10 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
 
           {(generation.progress.total > 0 || canRevert) && generation.status !== "planned" ? <div role="group" aria-label="この依頼の保存と取り消し" className="space-y-1">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[11px] text-slate-500">{generation.revertedAt ? "変更を戻しました" : generation.mode === "goal" ? `保存済み ${generation.progress.completed}件` : `保存済み ${generation.progress.completed} / ${generation.progress.total}`}</p>
+              <p className="text-[11px] text-slate-500">{generation.revertedAt ? "変更を戻しました" : `保存済み ${generation.progress.completed} / ${generation.progress.total}`}</p>
               {canRevert && onRevert ? <button type="button" disabled={pending || Boolean(disabledReason)} title="この依頼で反映したすべての変更を元に戻して保存します" onClick={() => void run("revert", async () => { await onRevert(generation.generationId); })} className="flex min-h-8 items-center gap-1 rounded-md border border-slate-200 px-2 py-1.5 text-[11px] text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:opacity-50"><Undo2 size={13} aria-hidden="true" />この依頼の変更を戻す</button> : null}
             </div>
-            {!generation.revertedAt && generation.mode !== "goal" && generation.progress.total > 0 ? <progress aria-label="依頼の反映と保存" value={generation.progress.completed} max={generation.progress.total} className="h-1 w-full accent-brand-600" /> : null}
+            {!generation.revertedAt && generation.progress.total > 0 ? <progress aria-label="依頼の反映と保存" value={generation.progress.completed} max={generation.progress.total} className="h-1 w-full accent-brand-600" /> : null}
           </div> : null}
           {generation.plan ? <div className="space-y-2">
             <p className="break-words leading-5 text-slate-500">{generation.plan.description}</p>
@@ -417,7 +412,6 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
     </div>
     {awaitingQuestions ? connectionControls : null}
     <form hidden={awaitingQuestions} onSubmit={e => { e.preventDefault(); if (canSubmit) send(); }} className="shrink-0 rounded-xl border border-slate-300 bg-white p-2.5 focus-within:border-slate-500">
-      {composerRequest.mode === "goal" ? <p className="mb-2 text-[11px] leading-4 text-slate-600">Goal：目標に向けて制作と見直しを続けます。停止ボタンで終了できます。</p> : null}
       {showSuggestions && suggestion ? <div aria-label="入力候補" className="mb-2 flex min-w-0 items-center gap-2 text-[11px] text-slate-500">
         <span id={suggestionsId} className="min-w-0 flex-1 truncate" title={suggestion.prompt}>{suggestion.label}</span>
         <kbd className="shrink-0 rounded border border-slate-200 px-1 text-[10px]" aria-label="Tabで候補を入力">Tab</kbd>

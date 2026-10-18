@@ -2,7 +2,7 @@ import type { ChatgptGeneration, ChatgptGenerationPhase } from "./chatgpt-genera
 import type { PrototypeVisualProject } from "./prototype-project";
 import { restoreChatgptChoicePreview, parseChatgptQuestions } from "./chatgpt-questions";
 import { sceneSettingsDisplayFromLegacyDetail, type ChatgptSettingDisplay } from "./chatgpt-change-description";
-import { parseChatgptProduction } from "./chatgpt-production";
+
 import { interruptChatgptHarnessSnapshot, normalizeChatgptHarnessSnapshot } from "./chatgpt-harness-runtime";
 import { CHATGPT_HARNESS_CONTEXT_REF_LIMIT, normalizeChatgptHarnessContextRef } from "./chatgpt-harness-context-ref";
 
@@ -120,15 +120,8 @@ function normalizeTurn(value: unknown, interrupted: boolean): ChatgptGeneration 
   };
   for (const key of ["sourceSceneId", "projectId", "sceneId", "sessionId"] as const) if (value[key] !== undefined) turn[key] = identifier(value[key]);
   if (progress.projectId !== undefined) turn.progress.projectId = identifier(progress.projectId);
-  if (value.mode === "build" || value.mode === "plan" || value.mode === "goal") turn.mode = value.mode;
-  if (turn.mode === "goal" && isRecord(value.goal)) turn.goal = { iteration: Math.max(1, integer(value.goal.iteration, 1)), noProgressPasses: integer(value.goal.noProgressPasses) };
-  const production = parseChatgptProduction(value.production);
-  if (production) {
-    turn.production = { ...production, focus: text(production.focus, 160), criteria: production.criteria.map(criterion => text(criterion, 240)) };
-    turn.productionPass = Math.min(production.maxPasses, Math.max(1, integer(value.productionPass, 1)));
-    turn.productionNoProgressPasses = integer(value.productionNoProgressPasses);
-    if (value.productionVisualReview === true) turn.productionVisualReview = true;
-  }
+  if (value.mode === "build" || value.mode === "plan") turn.mode = value.mode;
+  if (Number.isSafeInteger(value.agentRounds)) turn.agentRounds = Math.max(0, value.agentRounds as number);
   if (typeof value.reasoningEffort === "string" && efforts.includes(value.reasoningEffort)) turn.reasoningEffort = value.reasoningEffort;
   for (const key of ["createdAt", "revertedAt"] as const) if (value[key] !== undefined) turn[key] = timestamp(value[key]);
   if (value.name !== undefined) turn.name = text(value.name, 100);
@@ -224,7 +217,7 @@ export function upsertChatgptSessionTurn(sessions: readonly ChatgptSession[], se
 function resultSummary(turn: ChatgptGeneration): string {
   const status = { running: "処理中", planned: "Plan確認待ち", completed: "完了", failed: "失敗", cancelled: "停止" }[turn.status];
   const lines = [turn.revertedAt ? `変更を戻しました（${turn.revertedAt}）。この依頼の変更は現在のSceneに残っていません。` : status, turn.progress.message, `保存済み ${turn.progress.completed} / ${turn.progress.total}`];
-  if (turn.production) lines.push(`制作 ${turn.productionPass ?? 1} / ${turn.production.maxPasses}回。焦点: ${turn.production.focus}`, `完了条件: ${turn.production.criteria.join("、")}`);
+  
   if (turn.attachedEntities?.length) lines.push(`添付Entity（配下を優先）: ${turn.attachedEntities.map(entity => entity.name).join("、")}`);
   if (turn.attachedMaterials?.length) lines.push(`添付Material: ${turn.attachedMaterials.map(material => material.name).join("、")}`);
   if (turn.clarifications?.length) lines.unshift(...turn.clarifications.slice(-3).map(item => `確認: ${Array.from(item.question).slice(0, 80).join("")}\n${item.candidateId ? `候補ID: ${item.candidateId}\n` : ""}回答: ${Array.from(item.answer).slice(0, Math.max(160, 500 - (item.candidateId?.length ?? 0))).join("")}`));
@@ -238,7 +231,7 @@ function resultSummary(turn: ChatgptGeneration): string {
 export function chatgptSessionTranscript(session: ChatgptSession): string {
   const safe = normalizeSessions([session], false)[0];
   return [safe.title, `作成: ${safe.createdAt}`, `更新: ${safe.updatedAt}`, ...safe.turns.map((turn, index) => [
-    `\n依頼 ${index + 1}${turn.createdAt ? `（${turn.createdAt}）` : ""}`, `モデル: ${turn.model}`, `思考量: ${turn.reasoningEffort ?? "モデルの既定"}`, ...(turn.mode === "goal" ? [`Goal（${turn.goal?.iteration ?? 1}回）`] : []), turn.prompt, resultSummary(turn),
+    `\n依頼 ${index + 1}${turn.createdAt ? `（${turn.createdAt}）` : ""}`, `モデル: ${turn.model}`, `思考量: ${turn.reasoningEffort ?? "モデルの既定"}`, turn.prompt, resultSummary(turn),
   ].join("\n"))].join("\n");
 }
 /** Earlier turns are data, not instructions. The native prompt enforces this too. */
