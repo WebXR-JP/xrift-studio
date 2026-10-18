@@ -67,27 +67,19 @@ AssetsのMaterial自体の設定変更を依頼された場合は、従来どお
 
 `chatgpt-starter-context.ts`は、実際の初期テンプレートとEntity・参照素材・階層を照合し、未編集の`starter-floor`・`starter-box`だけを`ChatgptSceneContext.starterEntityIds`へ渡す。明示的に添付した対象や配下、ほかのEntityのScript・Component・Modelから参照される対象は除く。全体を新しく作る依頼では、この一覧の床・箱を置き換えたり削除したりでき、既存の寸法や形を完成条件に含める必要はない。編集済みの作品、添付対象、依頼範囲外の内容は保持する。一覧が空または省略された場合、名前やIDだけから初期配置と推測しない。MCPの`get_editor_context.starterEntityIds`も同じ照合を使う。
 
-Planの`production`は、制作範囲`scope`、細かさ`detail`、焦点`focus`、完了条件`criteria`、回数の上限`maxPasses`を持つ。範囲は`edit`・`model`・`environment`・`world`、細かさは`focused`・`balanced`・`overview`から選ぶ。焦点は160文字以内、完了条件は重複しない1〜6件・各240文字以内、上限は1〜6回とする。未知のフィールド、空や重複した完了条件、範囲外の回数を拒否する。旧Planの欠落・nullは従来の動作として扱う。
-
-初回の`world`・`environment`には、制作・画像確認・修正を行う余地として3〜6回を提案する。`chatgptProductionDirection`は初回提案の上限を最低3回に整えるが、1回目で完了条件と画像確認を満たせば終了する。継続中に保存済みの上限は延長せず、旧履歴の1回上限も保持する。`model`・`edit`では1回の上限を引き続き使える。
+制作の継続は、制作方針・完了条件・回数の上限を持たない。`chatgpt-authoring-host.ts`は、最新のScene JSONを正本として次の変更を受け取り、1件ずつ反映して保存し、保存後にまたSceneを見て残りの差分だけを続ける。変更を受け取るたびに現在のSceneへ仮適用し、現在の値と同じ設定や調整は計画から外す。全部が現在の値と同じ計画は、ターンを消費せず、その場で「設定の再指定ではなく、Sceneが実際に変わる操作を指定してください」と返して考え直させる。反映した変更がなく、Sceneに差分が残らなければ終了する。暴走を止める歯止めだけを内部に持ち、回数を画面やモデルへの文脈へ出さない。
 
 範囲と細かさは、依頼した体験、Sceneの広さ、見る距離、操作の必要性からモデルが判断する。単語の一致で分類しない。家1軒を主役にする依頼では必要な構造を詳しく作り、街全体では道・区画・建物の大きさと配置を揃える。背景の建物には控えめな外観の違いを付け、同じモデルを共有して配置する。入ることを求められていない建物の内装や、見えない装飾で作業を増やさない。
 
-`environment`と`world`は通常のbuildでも、意味のある作業が残る間だけ保存と計画を繰り返す。最初の方針・完了条件・上限を同じ依頼の中で固定し、再計画でも回数をリセットしない。質問待ちは作業を進めず、回答後も同じ方針を使う。`chatgpt-production.ts`が継続と終了を判断し、会話には元の方針、残りの作業、保存済み件数を2000文字以内で引き継ぐ。`productionPass`と進展のない回数は履歴にも残すが、再起動後は自動再開しない。
+継続時の会話は`chatgptAgentConversation`が作る。最新のSceneを正本とすること、既存を再利用して最小の差分にすること、現在の値と同じ設定を再指定しないこと、1件ずつSceneに反映できる単位に分けることを、毎回同じ原則として渡す。反映済みの作業と既存Entityを重複して追加しない。
 
-`model`や`edit`でも`hasMore`を返して継続する場合は、同じ元の`maxPasses`を守る。小さな編集を繰り返すことで制作上限を迂回せず、scopeを別の値へ読み替えて予算を広げない。
-
-全体の制作では、個々の背景素材ごとの画像修正を繰り返さず、保存後のScene全体を2方向から描画して確認する。配置、導線、大きさの整合、必要な構造、空や照明のまとまりを最初の完了条件と照合する。未完了なら、具体的な残りの作業だけを次の計画へ渡す。完了条件を満たして全体の画像確認が終わった場合に完了とする。上限に達した場合や3回続けて進展がない場合は、未確認・未完了の項目を示して停止し、保存済みのSceneを保持する。未取得の映像やPlayの確認を完了扱いにしない。
-
-契約10では`chatgpt_review_scene`の結果に`criteria`を必須とし、元の`production.criteria`全件を元の順序で`{criterion, passed, reason}`として返す。条件名の言い換え、抜け、重複、追加、順序の変更を拒否する。`reason`は空でない600文字以内の日本語で、具体的なScene値と実画像の観察、または確認できなかった内容を述べる。未観測・不確実な条件は`passed: false`とし、元の条件をすべて満たした場合だけ`approved: true`と`remainingWork: ""`を許す。未完了の残作業は元の不合格条件だけに結び付け、求められていない内装や装飾で制作を延長しない。
-
-nativeのSchema・parserとフロントエンドの`authoring-criteria.ts`がこの整合を検査する。`authoring-evidence.ts`は、同じ最新の保存済みSceneのfingerprintと2方向の画像、全条件のレビュー、pending writeがないことを照合する。見直し中のScene変更、古い画像、未確認の条件、保存失敗を完了に変換しない。これは証拠の同一性と条件の網羅性の検査であり、実モデルの判断やPlayの動作を自動で保証するものではない。R3Fを導入した契約9とは別の契約更新として扱う。
+モデル単体の見直しは`chatgpt-model-quality.ts`が担う。反映した形状を撮影し、修正があれば反映して撮り直す。全体の完成を機械が判定する仕組みは持たない。毎回の指示でできたものが、その回の成果である。
 
 ## 制作入力と実行の記録
 
-`chatgpt-harness-context.ts`は同じbundleから限定したScene、resources、制作方針、省略した件数を作り、呼出元から切り離してfreezeする。`sceneFingerprint`は作品のauthoring値、`fingerprint`は会話とcatalogも含む入力packetを識別する。完全なR3F原本を優先し、容量に入らない原本を途中で切らない。
+`chatgpt-harness-context.ts`は同じbundleから限定したScene、resources、省略した件数を作り、呼出元から切り離してfreezeする。`sceneFingerprint`は作品のauthoring値、`fingerprint`は会話とcatalogも含む入力packetを識別する。完全なR3F原本を優先し、容量に入らない原本を途中で切らない。
 
-計画とScene全体レビューの前に、`chatgpt-harness-context-archive.ts`がpacketを作品の`.cache/xrift-studio-harness/contexts/<fingerprint>.json`へcanonical JSONで保存する。`authoring_context.rs`の固定cache内だけに保存し、一時ファイルのflushと既存ファイルを置換しない公開、読戻しによる長さ・canonical bytes・digestの検証を経て参照を返す。cacheは公開・作品の書き出しから除外する。会話履歴の`contextRefs`には直近8件の検証済み参照を残し、原本や画像bytesをjournalへ複写しない。
+計画の前に、`chatgpt-harness-context-archive.ts`がpacketを作品の`.cache/xrift-studio-harness/contexts/<fingerprint>.json`へcanonical JSONで保存する。`authoring_context.rs`の固定cache内だけに保存し、一時ファイルのflushと既存ファイルを置換しない公開、読戻しによる長さ・canonical bytes・digestの検証を経て参照を返す。cacheは公開・作品の書き出しから除外する。会話履歴の`contextRefs`には直近8件の検証済み参照を残し、原本や画像bytesをjournalへ複写しない。
 
 準備したhandleは一度だけdispatchできる。実行直前に保存内容を再検証し、そのI/O後に対象作品・Sceneと制作ownerを確認する。現在のSceneへの計画やレビューでは、最新の対象snapshotとの一致も確かめる。失敗したhandleを再利用せず、欠落・破損・不正な参照を新しい内容で黙って置換しない。保存対象はbounded authoring packetであり、nativeが作るproviderのHTTP body全体、内部の素材検索・repair・形状制作・画像の全記録とは区別する。復元は入力の検査に使い、推論の自動再送や再起動後の自動実行を許可しない。
 
@@ -99,15 +91,9 @@ nativeのSchema・parserとフロントエンドの`authoring-criteria.ts`がこ
 
 runtimeは同じrunのpass、repair、推論工程、変更、実行時間を累積する。型付きsnapshotと直近128件のjournalを会話へ保存し、`useChatgptSessions.flush()`が失敗したときは次の推論・副作用を始めない。進展記録の復元でもversion、field、pass順、分類と回数・循環長の整合を検査する。旧履歴の省略された任意fieldは許容し、壊れた新形式は記録ごと捨てずにエラーにする。
 
-## Goalの継続制作
+## エージェント型の継続
 
-`/goal 目標`は`chatgpt-goal.ts`でコマンドと本文を分け、Queueへ`mode: "goal"`として渡す。空の目標は送信しない。MCPは`generate_chatgpt_world`の`mode: "goal"`から同じ処理を使う。本文、モデル、思考量、添付、generationIdは継続中も保持する。
-
-各回は通常のPlan検証、Scene競合検出、編集、保存を通す。`production`があるGoalは同じ制作方針と回数上限を守り、完了条件を満たした後に空の追加計画を要求しない。`production`がない旧形式のGoalだけは、変更後に次の計画で見直す従来の処理を使う。各回のnative leaseとイベント購読を解放するループを使い、再帰呼び出しを積み重ねない。
-
-`ChatgptSceneContext.goal`をnative側の制作指示へ反映する。本文の2000文字枠は維持し、目標本文へ内部指示を継ぎ足さない。目標に関係する改善だけを続け、完了済みの変更やEntityを重複させず、手動編集を保持する。構造と設定の見直しを、受信していない映像やPlayの確認として報告しない。IPCの追加項目はauthoring契約5以降で扱う。
-
-進行状況と保存件数は同じ依頼へ集計し、Goalと見直し回数を画面・履歴・コピーに残す。質問待ちは`planned`として待機し、回答後もGoalを維持する。停止・エラーでは保存済みの変更を残し、後のQueueも保留する。作品・Sceneの変更では停止する。Studioの再起動後は既存の中断処理を使い、自動再開しない。
+継続は同じ依頼の中で、保存済みのSceneから次の変更を決める繰り返しである。各回は通常のPlan検証、無変更の除去、Scene競合検出、1件ずつの反映、保存を通す。回数や目標の概念は持たず、Sceneに差分がなくなった時点で止まる。質問待ちは`planned`として待機し、回答後は同じ依頼を続ける。停止・エラーでは保存済みの変更を残し、後のQueueも保留する。作品・Sceneの変更では停止する。Studioの再起動後は既存の中断処理を使い、自動再開しない。
 
 ## 結果からのMaterial調整
 
@@ -143,7 +129,7 @@ Skybox・Fogを変更した公開結果には、`plan.objects[].sceneSettingsSec
 
 原本全体で一意な明示的keyは、親グループを移した場合やラッパーを追加した場合も、旧Entityに対応付ける。metadata v1には任意の`identityKey`を保持し、以前の原本は保存したソースから対応を復元する。繰り返す子部品のkeyは親の範囲で区別する。一意だったkeyが重複して対応を確定できなくなった場合や、描画の親子構造を変えることで手動の寸法・材質・子Entity・追加Componentが変わる場合は、元のSceneを保って停止する。現在は未使用の旧Materialも、対象ルート由来ならPlanの競合検査に含める。
 
-この操作を含むPlanには、単体の家や部分編集でも`production`を必須とする。反映と保存の後、実際のSceneを2方向から確認する。未完了の項目だけを有限回の次の計画へ渡し、停止後の遅い応答は適用しない。個々の部品についてBlender制作や3方向のモデル確認を繰り返さない。編集・Play・公開は同じ形状とMaterialを使う。
+この操作を含むPlanも、通常のエージェント型の流れで扱う。反映と保存の後、最新のSceneを見て残りの差分だけを続ける。停止後の遅い応答は適用しない。個々の部品についてBlender制作や3方向のモデル確認を繰り返さない。編集・Play・公開は同じ形状とMaterialを使う。
 
 ### モデルの制作原本と部分修正
 
