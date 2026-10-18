@@ -217,7 +217,7 @@ for (const mode of ["build", "plan"]) {
     await expect.poll(() => page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptRequests.length)).toBe(2);
     if (mode === "plan") {
       await expect.poll(async () => (await job(page, id)).status).toBe("planned");
-      expect((await job(page, id)).progress.message).toContain("利用できる素材と設定に合わせた");
+      expect((await job(page, id)).progress.message).toBe("利用できる素材と設定に合わせて変更内容を見直しました。確認してから反映してください");
       expect((await call(page, "apply_chatgpt_plan", { generationId: id }, true)).ok).toBe(true);
     }
     await expect.poll(async () => (await job(page, id)).status).toBe("completed");
@@ -437,8 +437,11 @@ test("Skybox・環境光・Fog・画面効果・風・物理・編集設定を�
   await expect(chat.getByText("Plan：Sceneの設定", { exact: true })).toHaveCount(0);
   const results = chat.getByRole("list", { name: "依頼の作業結果", exact: true });
   await expect(results).toContainText("反映済み");
-  await expect(results).toContainText("Shadow Mapの種類");
-  await expect(results).not.toContainText("Scene設定を調整");
+  await expect(results.getByText(/^Shadow Mapの種類・.+を変更$/)).toBeVisible();
+  // The result must name its changed fields; the inline editor has a separate,
+  // valid "現在のScene設定を調整" title inside the same result row.
+  await expect(results.getByText("Scene設定を調整", { exact: true })).toHaveCount(0);
+  await expect(results.getByRole("group", { name: "現在のScene設定を調整", exact: true })).toBeVisible();
   await saveActions.scrollIntoViewIfNeeded();
   await page.screenshot({ path: info.outputPath("scene-settings-after.png") });
   const contexts = await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptSceneContexts);

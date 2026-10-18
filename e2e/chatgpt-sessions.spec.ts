@@ -116,7 +116,7 @@ test("複数Entityのドロップを添付表示し、配下を優先した依�
   await assertNoExternalActions(page);
 });
 
-test("大きいSceneでも添付した階層を先に参照し、重複と送信量超過を防ぐ", async ({ page }) => {
+test("大きいSceneでも添付した階層と選択対象を先に参照し、重複と送信量超過を防ぐ", async ({ page }) => {
   await ready(page);
   const result = await page.evaluate(async () => {
     const starterPath = "/src/lib/visual-editor/starter-templates.ts", contextPath = "/src/lib/visual-editor/chatgpt-scene-resources.ts";
@@ -128,7 +128,11 @@ test("大きいSceneでも添付した階層を先に参照し、重複と送信
     return { context, bytes: new TextEncoder().encode(JSON.stringify(context)).byteLength };
   });
   expect(result.context.entities.slice(0, 2).map((entity: any) => entity.id)).toEqual(["item-140", "item-145"]);
-  expect(result.context.entities.slice(0, 10).map((entity: any) => entity.id)).toEqual(expect.arrayContaining(Array.from({ length: 10 }, (_, index) => `item-${140 + index}`)));
+  // The selected Entity and attached parents are editing context, so they may
+  // precede descendants. Every relevant Entity must precede unrelated ones.
+  expect(result.context.entities.slice(0, 11).map((entity: any) => entity.id)).toEqual(expect.arrayContaining(["item-0", ...Array.from({ length: 10 }, (_, index) => `item-${140 + index}`)]));
+  expect(result.context.entities[11].id).toBe("item-1");
+  expect(result.context.selectedEntityId).toBe("item-0");
   expect(result.context.attachedEntityIds).toEqual(["item-140", "item-145"]);
   expect(new Set(result.context.entities.map((entity: any) => entity.id)).size).toBe(result.context.entities.length);
   expect(result.context.entities.length).toBeLessThanOrEqual(100);
@@ -190,7 +194,7 @@ test("添付の下書きはチャットごとに保持し、通常の貼り付�
 
 test("出力の全体コピーは案内・操作名・変更項目を含み、文字選択もできる", async ({ page }, info) => {
   await ready(page);
-  await plan(page, "コピーするPlan", "コピーするSphere", { hasMore: true, remainingWork: "次にベンチを追加します" });
+  await plan(page, "コピーするPlan", "コピーするSphere", { description: "コピーするPlanの手順を確認します。次の依頼ではベンチを追加できます", hasMore: false });
   await submit(page, "出力をまとめてコピーするための依頼");
   const output = panel(page).getByRole("region", { name: "コピーできる制作出力", exact: true });
   await expect(output.getByRole("button", { name: "続ける", exact: true })).toHaveCount(0);
@@ -204,7 +208,7 @@ test("出力の全体コピーは案内・操作名・変更項目を含み、�
   await panel(page).getByRole("button", { name: "出力をコピー", exact: true }).click();
   await expect(panel(page).getByText("出力をコピーしました", { exact: true })).toBeVisible();
   const copied = await page.evaluate(() => document.body.dataset.outputCopy!);
-  for (const text of ["出力をまとめてコピーするための依頼", "コピーするPlan", "コピーするPlanの手順を確認します", "次にベンチを追加します", "コピーするSphere", "作業の記録", "変更を戻す", "保存済み 1 / 1"]) expect(copied).toContain(text);
+  for (const text of ["出力をまとめてコピーするための依頼", "コピーするPlan", "コピーするPlanの手順を確認します", "次の依頼ではベンチを追加できます", "コピーするSphere", "作業の記録", "変更を戻す", "保存済み 1 / 1"]) expect(copied).toContain(text);
   expect(copied).not.toContain("まだ送信していない文章");
   expect(await output.locator("details").evaluateAll(elements => elements.map(element => (element as HTMLDetailsElement).open))).toEqual(before);
   // Touch selection is disabled on the editor shell; the output and its
@@ -279,29 +283,31 @@ test("2つの制作チャットを切替え、選択中の全文をコピーし�
 
 test("次の依頼は同じ会話の結果をnativeへ送り、保存済みEntityを繰り返さず追加する", async ({ page }, info) => {
   await ready(page);
-  await plan(page, "途中までの制作", "保存済みSphere", { hasMore: true, remainingWork: "次に通路へBoxを追加します" });
-  const firstId = await submit(page, "小さな広場を順に作る");
+  // A completed first request may suggest a separate enhancement. hasMore is
+  // reserved for unfinished work that the harness continues automatically.
+  await plan(page, "最初の制作", "保存済みSphere", { description: "球を追加しました。次の依頼では通路へBoxを追加できます", hasMore: false });
+  const firstId = await submit(page, "広場に球を一つ追加する");
   const firstScene = (await saved(page)).scene;
   const first = Object.values(firstScene.entities).find(entity => entity.name === "保存済みSphere")!;
   expect(first).toBeTruthy();
   await plan(page, "続きの制作", "続きを示すSphere", { hasMore: false });
   const count = await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptRequests.length);
-  await panel(page).getByRole("textbox", { name: "ワールドへの依頼", exact: true }).fill("未完了の作業を進めてください");
+  await panel(page).getByRole("textbox", { name: "ワールドへの依頼", exact: true }).fill("続きとして、もう一つ球を追加してください");
   await panel(page).getByRole("button", { name: "依頼を送信", exact: true }).click();
   await expect.poll(async () => page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptRequests.length)).toBe(count + 1);
   const nextId = await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptRequests.at(-1)!.generationId);
   await expect.poll(async () => (await job(page, nextId)).status).toBe("completed");
   const context = await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptSceneContexts.at(-1)!);
   expect(context.conversation).toHaveLength(1);
-  expect(context.conversation![0].prompt).toBe("小さな広場を順に作る");
+  expect(context.conversation![0].prompt).toBe("広場に球を一つ追加する");
   expect(context.conversation![0].result).toContain("保存済みSphere");
-  expect(context.conversation![0].result).toContain("次に通路へBoxを追加します");
+  expect(context.conversation![0].result).toContain("次の依頼では通路へBoxを追加できます");
   const after = (await saved(page)).scene;
   expect(after.entities[first.id]).toEqual(first);
   expect(Object.values(after.entities).filter(entity => entity.name === "保存済みSphere")).toHaveLength(1);
   expect(Object.values(after.entities).filter(entity => entity.name === "続きを示すSphere")).toHaveLength(1);
   expect((await job(page, nextId)).sessionId).toBe((await job(page, firstId)).sessionId);
-  await expect(panel(page).getByLabel("制作の会話と結果", { exact: true }).getByText("小さな広場を順に作る", { exact: true })).toBeVisible();
+  await expect(panel(page).getByLabel("制作の会話と結果", { exact: true }).getByText("広場に球を一つ追加する", { exact: true })).toBeVisible();
   await page.screenshot({ path: info.outputPath("continue-history.png") });
   await assertNoExternalActions(page);
 });
