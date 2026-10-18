@@ -15,7 +15,7 @@ export type ChatgptSceneRetry = {
 export function chatgptAgentConversation(history: ChatgptConversationTurn[], job: ChatgptGeneration): ChatgptConversationTurn[] {
   const saved = job.progress.recentEvents.filter(event => event.saved).map(event => event.message);
   const result = sanitizeChatgptHistoryText([
-    "最新のScene JSONを正本として、残っている差分だけを提案してください。進め方の原則: 既存を再利用して最小の差分にする。既存Entityの寸法・位置・向きや全体の範囲は、依頼が求めない限り変えない。現在の値と同じ設定は再指定しない。1件ずつSceneに反映できる単位に分ける。",
+    "最新のScene JSONを正本として、残っている差分だけを提案してください。進め方の原則: 既存を再利用して最小の差分にする。既存Entityの寸法・位置・向きや全体の範囲は、依頼が求めない限り変えない。現在の値と同じ設定は再指定しない。1件ずつSceneに反映できる単位に分ける。正しく作れる確信がなく、選択肢で結果が変わる場合は、大きな作り込みを始めず質問で聞く。",
     `この依頼で反映済みの作業は${job.progress.completed}件です。下記の作業や現在存在するEntityを重複して追加しないでください。`,
     ...saved.slice(-16),
     job.plan?.remainingWork ? `以前のPlanに残っていた作業: ${job.plan.remainingWork}` : "追加の変更が不要なら、操作を空にしてください。",

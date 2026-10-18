@@ -1616,7 +1616,7 @@ impl ChatgptProductionDirection {
 }
 
 
-const AGENT_INSTRUCTIONS: &str = " Work like a coding agent. Treat the current Scene JSON as authoritative and propose the smallest diff that moves the request forward. Reuse existing Entities and assets; never re-specify a value the Scene already has, because unchanged operations are dropped before execution. Split work into steps the host can apply and show one at a time. When no further change is needed, return empty objects, edits and operations. Do not claim evidence you have not received.";
+const AGENT_INSTRUCTIONS: &str = " Work like a coding agent. Treat the current Scene JSON as authoritative and propose the smallest diff that moves the request forward. Reuse existing Entities and assets; never re-specify a value the Scene already has, because unchanged operations are dropped before execution. Split work into steps the host can apply and show one at a time. When no further change is needed, return empty objects, edits and operations. When the request is too vague to build correctly and the choice changes the result, ask with questions instead of starting a large speculative build. Do not claim evidence you have not received.";
 
 // Shared creative policy and route bodies are also served by MCP. Capability
 // selection below uses the actual response schema, never prompt keywords.
