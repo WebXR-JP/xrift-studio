@@ -109,7 +109,7 @@ test("候補を1件だけ表示しTabでは入力だけ行い、編集した依�
   await input(page).fill(edited);
   await page.evaluate(() => { window.__XRIFT_RELEASE_E2E__!.chatgptPlanFixture = JSON.stringify({
     title: "床の調整", description: "床の名前を保存しました", objects: [],
-    edits: [{ entityId: "starter-floor", name: "候補から編集した床" }], hasMore: true, remainingWork: "次にベンチの配置を整えます",
+    edits: [{ entityId: "starter-floor", name: "候補から編集した床" }], hasMore: false,
   }); });
   await input(page).press("Enter");
   await completed(page, 1);
@@ -119,6 +119,7 @@ test("候補を1件だけ表示しTabでは入力だけ行い、編集した依�
   await expect(suggestions(page)).toBeVisible();
   await expect(suggestions(page).locator("span[title]")).toHaveCount(1);
   await expect.poll(() => titles(page)).not.toEqual(before);
+  expect((await titles(page))[0]).toContain("候補から編集した床");
   expect(await requests(page)).toHaveLength(1);
 });
 
