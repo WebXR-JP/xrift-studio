@@ -212,8 +212,33 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
             draft = changedEdit.bundle; keptEdits.push(edit);
           } catch { keptEdits.push(edit); }
         }
+        const mergeSettingsPatch = (base: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> => {
+          const merged: Record<string, unknown> = { ...base };
+          for (const [key, value] of Object.entries(patch)) {
+            const current = merged[key];
+            merged[key] = current && typeof current === "object" && !Array.isArray(current) && value && typeof value === "object" && !Array.isArray(value)
+              ? mergeSettingsPatch(current as Record<string, unknown>, value as Record<string, unknown>) : value;
+          }
+          return merged;
+        };
+        const settingsOps = (plan.operations ?? []).filter(operation => operation.kind === "scene-settings");
+        let effectiveOperations = plan.operations ?? [];
+        try {
+          if (settingsOps.length > 1) {
+            let merged: Record<string, unknown> = {};
+            for (const operation of settingsOps) merged = mergeSettingsPatch(merged, parseChatgptSceneSettings((operation as { settingsJson: string }).settingsJson) as Record<string, unknown>);
+            const mergedOp = { kind: "scene-settings", settingsJson: JSON.stringify(merged) } as (typeof settingsOps)[number];
+            let inserted = false;
+            effectiveOperations = [];
+            for (const operation of plan.operations ?? []) {
+              if (operation.kind === "scene-settings") { if (!inserted) { effectiveOperations.push(mergedOp); inserted = true; } continue; }
+              effectiveOperations.push(operation);
+            }
+            dropped += settingsOps.length - 1;
+          }
+        } catch { effectiveOperations = plan.operations ?? []; }
         const keptOperations: NonNullable<ChatgptWorldPlan["operations"]> = [];
-        for (const operation of plan.operations ?? []) {
+        for (const operation of effectiveOperations) {
           if (!isChatgptEditorAction(operation)) { keptOperations.push(operation); continue; }
           try {
             const changedOp = await applyChatgptOperation(draft, operation, new Map(), resources, sourcePath);
@@ -518,7 +543,8 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
       const changed = planningSnapshot !== chatgptPlanningSnapshot(targetBridge.currentBundle());
       const appliedSteps = (plan.edits?.length ?? 0) + plan.objects.length + (plan.operations?.length ?? 0);
       const rounds = (job.agentRounds ?? 0) + 1;
-      const keepGoing = appliedSteps > 0 && changed && rounds < 24;
+      const structuralSteps = (plan.edits?.length ?? 0) + plan.objects.length + (plan.operations ?? []).filter(operation => operation.kind !== "scene-settings").length;
+      const keepGoing = appliedSteps > 0 && structuralSteps > 0 && changed && rounds < 6;
       harness.recordProgress({ planFingerprint: authoringActionFingerprint("chatgpt-plan", plan), beforeFingerprint: passStartFingerprint,
         afterFingerprint: authoringSceneProgressFingerprint(targetBridge.currentBundle()), savedFingerprint: chatgptHarnessSceneFingerprint(targetBridge.currentBundle()),
         continuing: keepGoing });
