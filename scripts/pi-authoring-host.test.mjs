@@ -72,6 +72,7 @@ test("Pi uses the real host edit/save/capture/review paths and attests the final
   assert.equal(current.calls.captures.length, 1);
   assert.equal(current.calls.reviews.length, 1);
   assert.equal(current.job.status, "completed");
+  assert.deepEqual(current.job.nextActions, ["get_editor_context", "capture_scene_view"]);
   assert.equal(current.job.harness.savedFingerprint, chatgptHarnessSceneFingerprint(current.bundle));
   assert.equal(current.job.harness.inspection.fingerprint, current.job.harness.savedFingerprint);
   assert.equal(current.host.chatgptGenerationRef.current, null);
@@ -102,6 +103,7 @@ test("save failure preserves the edit and cannot produce completed or inspected 
   assert.equal(current.calls.commits.length, 1);
   assert.equal(current.calls.reviews.length, 0);
   assert.equal(current.job.status, "failed");
+  assert.match(current.job.error, /isolated disk failure/);
 });
 test("a manual edit during capture prevents stale review and completion", async () => {
   const current = fixture({ plan: (_n, api) => edit(api, "AI Light"), capture: (_n, api) => api.manualEdit("manual wins") });
@@ -124,7 +126,13 @@ test("cancel between Pi turns retains the same visible owner and prevents later 
 });
 test("invalid plan validation is repaired using a new bounded pass", async () => {
   const current = fixture({ plan: (n, api) => n === 1 ? { bad: true } : edit(api, "Valid repair"),
-    action: api => api.calls.commits.length === 0 ? "studio_author" : api.calls.reviews.length ? "studio_finish" : "studio_inspect" });
+    action: (api, args) => {
+      if (api.calls.plans.length === 1) {
+        assert.match(args[2], /replan-required/);
+        assert.doesNotMatch(args[2], /saved-pass/);
+      }
+      return api.calls.commits.length === 0 ? "studio_author" : api.calls.reviews.length ? "studio_finish" : "studio_inspect";
+    } });
   await current.run();
   assert.equal(current.calls.plans.length, 2);
   assert.equal(current.calls.commits.length, 1);

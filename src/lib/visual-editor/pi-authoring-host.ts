@@ -39,7 +39,8 @@ export async function runPiAuthoring(host: ChatgptAuthoringHost, initial: Reques
   };
   const report = (message: string, status?: "completed" | "cancelled" | "failed") => {
     const current = job(); if (!current) return;
-    const next = { ...current, harness: run()?.snapshot() ?? current.harness, ...(status ? { status, cancelling: false } : {}),
+    const next = { ...current, harness: run()?.snapshot() ?? current.harness, ...(status ? { status, cancelling: false, error: status === "failed" ? message : undefined,
+        nextActions: status === "completed" ? ["get_editor_context", "capture_scene_view"] : ["get_chatgpt_connection", "get_editor_context"] } : {}),
       progress: { ...current.progress, ...(status ? { phase: status } : {}), message } };
     host.chatgptGenerationsRef.current.set(runId, next); host.setChatgptGeneration(next); host.recordChatgptGeneration(next, Boolean(status)); host.flushChatgptSessions();
   };
@@ -87,8 +88,13 @@ export async function runPiAuthoring(host: ChatgptAuthoringHost, initial: Reques
           projectId = bridge.currentBundle().project.projectId; sceneId = bridge.currentBundle().scene.sceneId;
           const [model, prompt, options, generationId, mode = "build", , , reasoningEffort] = request;
           request = [model, prompt, options, generationId, result.retry.reconfirm ? "plan" : mode, result.target, undefined, reasoningEffort, result.sessionId, result.retry];
-          return { observation: { status: "saved-pass", changed: committed && authoringSceneProgressFingerprint(bridge.currentBundle()) !== originalProgress,
-            fingerprint: chatgptHarnessSceneFingerprint(bridge.currentBundle()), needsInspection: true } };
+          const fingerprint = chatgptHarnessSceneFingerprint(bridge.currentBundle());
+          const saved = run()!.snapshot().savedFingerprint === fingerprint && !run()!.snapshot().dirty;
+          const needsReplan = result.retry.reason !== "agent";
+          return { observation: { status: needsReplan ? "replan-required" : saved ? "saved-pass" : "unsaved-pass",
+            reason: result.retry.reason ?? "scene-conflict", saved,
+            changed: committed && authoringSceneProgressFingerprint(bridge.currentBundle()) !== originalProgress,
+            fingerprint, needsInspection: saved && !needsReplan } };
         }
         if (tool === "studio_inspect") {
           const runtime = run()!;
