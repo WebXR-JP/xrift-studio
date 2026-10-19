@@ -79,7 +79,7 @@ export async function runModelDownloadFixtureAssertions(): Promise<void> {
 async function assertAnimationAndSkin(): Promise<void> {
   const document = new Document();
   const buffer = document.createBuffer();
-  const accessor = (type: "VEC3" | "VEC4" | "SCALAR" | "MAT4", data: Float32Array | Uint16Array) => document.createAccessor().setType(type).setArray(data).setBuffer(buffer);
+  const accessor = (type: "VEC3" | "VEC4" | "SCALAR" | "MAT4", data: Float32Array<ArrayBuffer> | Uint16Array<ArrayBuffer>) => document.createAccessor().setType(type).setArray(data).setBuffer(buffer);
   const png = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg=="), (value) => value.charCodeAt(0));
   const material = document.createMaterial("Animated paint").setBaseColorTexture(document.createTexture().setMimeType("image/png").setImage(png));
   const primitive = document.createPrimitive().setMaterial(material)

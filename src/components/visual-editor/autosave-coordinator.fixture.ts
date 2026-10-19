@@ -115,7 +115,7 @@ async function assertNewSnapshotInterruptsRetryDelay(): Promise<void> {
   let waiting = false;
   let cleared = false;
   // A controllable timer proves wake-up without sleeping or timing thresholds.
-  globalThis.setTimeout = (() => { waiting = true; return 1; }) as typeof globalThis.setTimeout;
+  globalThis.setTimeout = (() => { waiting = true; return 1; }) as unknown as typeof globalThis.setTimeout;
   globalThis.clearTimeout = (() => { cleared = true; }) as typeof globalThis.clearTimeout;
   try {
     const started: string[] = [];

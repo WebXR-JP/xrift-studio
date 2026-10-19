@@ -830,6 +830,8 @@ export const tauri = {
   chatgptLogin: () => invoke<ChatgptConnection>("chatgpt_login"),
   chatgptLogout: () => invoke<ChatgptConnection>("chatgpt_logout"),
   chatgptModels: () => invoke<ChatgptModel[]>("chatgpt_models"),
+  chatgptAgentTurn: (model: string, generationId: string, transcript: string, reasoningEffort?: string) =>
+    invoke<string>("chatgpt_agent_turn", { model, generationId, transcript, reasoningEffort }),
   chatgptPlan: async (model: string, prompt: string, options: ChatgptAssetOptions, gltfMaterials: { id: string; name: string; extension: string }[] = [], generationId?: string, sceneContext?: ChatgptSceneContext, reasoningEffort?: string, resourceContext?: import("./visual-editor/chatgpt-resources").ChatgptResourceContext) => {
     await assertChatgptNativeContract(command => invoke(command));
     return invoke<{ plan: string; assetCandidates: ExternalStoreAsset[] }>("chatgpt_plan", { model, prompt, options, gltfMaterials, generationId, sceneContext, reasoningEffort, resourceContext });

@@ -1,0 +1,55 @@
+name: Pi Studio harness
+on:
+  push:
+    branches: [codex/pi-sdk-harness]
+  pull_request:
+    paths:
+      - 'src/lib/visual-editor/pi-*.ts'
+      - 'src/lib/visual-editor/chatgpt-authoring-host.ts'
+      - 'src-tauri/src/chatgpt/agent.rs'
+      - 'scripts/pi-*.test.mjs'
+      - 'e2e/pi-*.spec.ts'
+      - '.github/workflows/pi-harness.yml'
+permissions:
+  contents: read
+concurrency:
+  group: pi-harness-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  frontend:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+      - uses: flatt-security/setup-takumi-guard-npm@v1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:pi
+      - run: pnpm typecheck
+      - run: pnpm e2e:typecheck
+      - run: pnpm build
+      - if: runner.os == 'Linux'
+        run: pnpm exec playwright install --with-deps chromium
+      - if: runner.os == 'Linux'
+        run: pnpm e2e:test e2e/pi-studio-agent.spec.ts e2e/autosave.spec.ts --workers=1
+  native:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev libxdo-dev libssl-dev libayatana-appindicator3-dev patchelf
+      - run: cargo check --manifest-path src-tauri/Cargo.toml --lib --locked
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --lib chatgpt::agent::tests --locked

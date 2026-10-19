@@ -114,10 +114,10 @@ export async function runModelDecimationFixtureAssertions(): Promise<void> {
 
 /** 面ごとに頂点を分けた格子。書き出されたGLBの平面シェーディングと同じ形。 */
 function buildSplitVertexGrid(size: number): {
-  positions: Float32Array;
-  normals: Float32Array;
-  uvs: Float32Array;
-  indices: Uint32Array;
+  positions: Float32Array<ArrayBuffer>;
+  normals: Float32Array<ArrayBuffer>;
+  uvs: Float32Array<ArrayBuffer>;
+  indices: Uint32Array<ArrayBuffer>;
 } {
   const positions: number[] = [];
   const normals: number[] = [];

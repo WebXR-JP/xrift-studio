@@ -1,5 +1,7 @@
 # ChatGPT制作機能の拡張
 
+Studio内部の反復処理は[Piハーネス](./PI_STUDIO_HARNESS.md)を使う。制作passの文書検証・Editor反映・保存を再利用し、最新revisionの画像確認と実変更を完了条件にする。
+
 Studio内のChatGPTは、利用できる操作とComponent定義を読み、構造化したPlanを返す。実行は通常のEditor操作を通し、モデルの出力でScene文書を直接置換しない。
 
 制作方針と制作方法の説明は`world-authoring-guide.json`をMCP・制作専用スキルと共有する。nativeは実際の操作Schemaに合う詳細だけを追加し、素材検索とコード生成を別の応答で扱う。原本の事前検証、変更のないcommitの省略、同じ不合格レビューの再利用条件は[ワールド制作ハーネス](./WORLD_AUTHORING_HARNESS.md)を参照する。

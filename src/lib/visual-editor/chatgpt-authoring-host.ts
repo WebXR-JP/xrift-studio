@@ -60,7 +60,7 @@ export type ChatgptAuthoringHost = {
 };
 
 /** Scene/native adapters for the UI-independent authoring runtime. */
-export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
+export function createChatgptAuthoringPass(host: ChatgptAuthoringHost, piControlled = false, onCommitted?: () => void) {
  const { chatgptGenerationRef, mcpPublishActiveRef, mcpModelingActiveRef, visualSessionRef, projectsRoot, requireMcpProjectBridge, chatgptSessionsRef, selectedChatgptSessionIdRef, updateChatgptSessions, selectChatgptSession, chatgptGenerationsRef, chatgptControlsRef, chatgptPlansRef, chatgptRevertsRef, setChatgptGeneration, recordChatgptGeneration, mcpProjectBridgeRef, uniqueProjectDirectoryName, setVisualCompilationFresh, setVisualThumbnailReadiness, setVisualSession, waitForMcpProjectBridge, refreshProjects, toast, flushChatgptSessions, chatgptHarnessRunsRef } = host;
  return async (model: string, prompt: string, options: ChatgptAssetOptions, generationId: string = crypto.randomUUID(), mode: ChatgptGenerationMode = "build", target: "current" | "new" = "current", approved?: ChatgptWorldPlan, reasoningEffort?: string, requestedSessionId?: string, sceneRetry?: ChatgptSceneRetry, attachedEntityIds: readonly string[] = [], attachedMaterialIds: readonly string[] = []): Promise<Project | null | ChatgptPassRetry> => {
     if (chatgptGenerationRef.current) throw new Error("制作の依頼を処理中です。完了するか停止してから、次の依頼を送ってください");
@@ -356,6 +356,7 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
         harness.recordCommit(nextFingerprint);
         flushChatgptSessions();
         if (!targetBridge.applyGenerationStep({ expectedBundle, nextBundle, entityId })) throw new ChatgptSceneConflictError("反映中に作品が編集されました。編集内容を保ち、現在のSceneから制作を続けます");
+        onCommitted?.();
         expectedPlanSnapshots = chatgptPlanSnapshots(nextBundle, plan);
         if (job.revertAvailable !== false) {
           try {
@@ -544,7 +545,7 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
       const appliedSteps = (plan.edits?.length ?? 0) + plan.objects.length + (plan.operations?.length ?? 0);
       const rounds = (job.agentRounds ?? 0) + 1;
       const structuralSteps = (plan.edits?.length ?? 0) + plan.objects.length + (plan.operations ?? []).filter(operation => operation.kind !== "scene-settings").length;
-      const keepGoing = appliedSteps > 0 && structuralSteps > 0 && changed && rounds < 6;
+      const keepGoing = piControlled || appliedSteps > 0 && structuralSteps > 0 && changed && rounds < 6;
       harness.recordProgress({ planFingerprint: authoringActionFingerprint("chatgpt-plan", plan), beforeFingerprint: passStartFingerprint,
         afterFingerprint: authoringSceneProgressFingerprint(targetBridge.currentBundle()), savedFingerprint: chatgptHarnessSceneFingerprint(targetBridge.currentBundle()),
         continuing: keepGoing });
@@ -617,22 +618,8 @@ export function createChatgptAuthoringPass(host: ChatgptAuthoringHost) {
 /** One request owns one runtime across every plan, repair and continuation.
  * Each pass releases its native stream and Editor listener before the next. */
 export function createChatgptAuthoringRunner(host: ChatgptAuthoringHost) {
-  const pass = createChatgptAuthoringPass(host);
-  return async (...initial: Parameters<typeof pass>): Promise<Project | null> => {
-    initial[3] ??= crypto.randomUUID();
-    const runId = initial[3];
-    let request = initial;
-    try {
-      for (;;) {
-        const result = await pass(...request);
-        if (!result || !("retry" in result)) return result;
-        const [model, prompt, options, generationId, mode = "build", , , reasoningEffort] = request;
-        request = [model, prompt, options, generationId, result.retry.reconfirm ? "plan" : mode, result.target,
-          undefined, reasoningEffort, result.sessionId, result.retry];
-      }
-    } finally {
-      const run = host.chatgptHarnessRunsRef.current.get(runId);
-      if (run && ["completed", "cancelled", "failed"].includes(run.snapshot().phase)) host.chatgptHarnessRunsRef.current.delete(runId);
-    }
+  return async (...initial: Parameters<ReturnType<typeof createChatgptAuthoringPass>>): Promise<Project | null> => {
+    const { runPiAuthoring } = await import("./pi-authoring-host");
+    return runPiAuthoring(host, initial);
   };
 }
