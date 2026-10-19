@@ -19,6 +19,7 @@ function fixture(configuration = {}) {
   let bundle = createChatgptScaffold(emptyPlan(), "isolated-authoring-host-fixture");
   const project = { name: "isolated-authoring-host-fixture", path: "C:/isolated-authoring-host-fixture", kind: "world", format: "visual", title: "fixture", description: null, modifiedAtMs: null, uploadedAt: null, publicationId: null };
   const session = createChatgptSession(bundle.project.projectId, bundle.scene.sceneId, "制作テスト", "2026-10-17T00:00:00Z", "host-session");
+  const progressListeners = new Set();
   const calls = { plans: [], reviews: [], captures: [], commits: [], saves: [], cancels: [], snapshots: [], flushes: 0, toasts: [], unsubscribed: 0 };
   const bridge = {
     currentBundle: () => bundle,
@@ -45,7 +46,7 @@ function fixture(configuration = {}) {
     async waitForMcpProjectBridge() { return bridge; }, async refreshProjects() {}, toast(value) { calls.toasts.push(value); },
   };
   const update = next => { bundle = next; host.visualSessionRef.current = { bundle, project }; };
-  const api = { host, calls, bridge, project, get bundle() { return bundle; }, get job() { return host.chatgptGenerationsRef.current.get("host-generation"); },
+  const api = { host, calls, bridge, project, emitProgress(progress) { for (const listener of progressListeners) listener(progress); }, get bundle() { return bundle; }, get job() { return host.chatgptGenerationsRef.current.get("host-generation"); },
     manualEdit(name = "手動で変えたLight") { const id = Object.values(bundle.scene.entities).find(entity => entity.name !== "SpawnPoint").id; update(editChatgptEntity(bundle, { entityId: id, name }).bundle); },
     run(mode = "build") { return createChatgptAuthoringRunner(host)("fixture-model", "広場全体を整えてください", options, "host-generation", mode); },
   };
@@ -54,7 +55,7 @@ function fixture(configuration = {}) {
   const archived = new Map();
   tauri.readChatgptHarnessContext = async (_path, fingerprint) => archived.get(fingerprint) ?? null;
   tauri.writeChatgptHarnessContext = async (_path, fingerprint, content) => { if (archived.has(fingerprint) && archived.get(fingerprint) !== content) throw new Error("immutable context exists"); archived.set(fingerprint, content); };
-  tauri.onChatgptGenerationProgress = async () => () => { calls.unsubscribed++; };
+  tauri.onChatgptGenerationProgress = async listener => { progressListeners.add(listener); return () => { progressListeners.delete(listener); calls.unsubscribed++; }; };
   tauri.chatgptAgentTurn = async (...args) => await configuration.action?.(api, args) ?? (calls.captures.length ? "studio_finish" : "studio_inspect");
   tauri.chatgptCancelGeneration = async generationId => { calls.cancels.push(generationId); };
   tauri.chatgptPlan = async (...args) => { calls.plans.push(args); const plan = await configuration.plan?.(calls.plans.length, api) ?? emptyPlan(); return { plan: JSON.stringify(plan), assetCandidates: [] }; };
@@ -117,6 +118,9 @@ test("cancel between Pi turns retains the same visible owner and prevents later 
     assert.equal(api.host.chatgptGenerationRef.current, "host-generation");
     api.host.chatgptControlsRef.current.get("host-generation").cancelled = true;
     void api.host.chatgptHarnessRunsRef.current.get("host-generation").stop("user");
+    const cancelsBeforeLateLease = api.calls.cancels.length;
+    api.emitProgress({ generationId: "host-generation", stage: "request", message: "late native lease" });
+    assert.ok(api.calls.cancels.length > cancelsBeforeLateLease);
     return "studio_inspect";
   } });
   await assert.rejects(current.run());

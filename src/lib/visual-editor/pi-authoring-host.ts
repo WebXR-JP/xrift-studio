@@ -26,6 +26,7 @@ export async function runPiAuthoring(host: ChatgptAuthoringHost, initial: Reques
   let reviewed: string | undefined, approved = false;
   let contextRead = false, authored = false;
   let failure: unknown;
+  let unlisten: (() => void) | undefined;
   const control = { cancelled: false };
   const job = () => host.chatgptGenerationsRef.current.get(runId);
   const run = () => host.chatgptHarnessRunsRef.current.get(runId);
@@ -52,6 +53,13 @@ export async function runPiAuthoring(host: ChatgptAuthoringHost, initial: Reques
         // host. Subsequent tool selection is inferred by the native model.
         if (!contextRead) return "studio_context";
         if (!authored) return "studio_author";
+        // A native lease can be registered just after a stop request. Keep a
+        // request-scoped listener between author passes to cancel that late lease.
+        unlisten ??= await tauri.onChatgptGenerationProgress(progress => {
+          if (progress.generationId === runId && (control.cancelled || ["stopping", "cancelled", "failed"].includes(run()?.snapshot().phase ?? ""))) {
+            void tauri.chatgptCancelGeneration(runId).catch(() => undefined);
+          }
+        });
         report("最新のSceneと確認結果から、次の制作操作を考えています");
         return run()!.step("plan", "Piで次の制作操作を判断", () => tauri.chatgptAgentTurn(model, runId, transcript, initial[7]), { modelCalls: 1 });
       },
@@ -149,6 +157,7 @@ export async function runPiAuthoring(host: ChatgptAuthoringHost, initial: Reques
     report(error instanceof Error ? error.message : "制作を停止しました。保存済みの変更は残っています", cancelled ? "cancelled" : "failed");
     throw error;
   } finally {
+    unlisten?.();
     if (host.chatgptGenerationRef.current === runId) host.chatgptGenerationRef.current = null;
     host.chatgptControlsRef.current.delete(runId);
     const runtime = run();
