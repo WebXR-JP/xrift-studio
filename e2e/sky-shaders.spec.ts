@@ -1,6 +1,9 @@
+import { useOfficialFontMetrics } from "./official-font-metrics.fixture";
 import { expect, test } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+
+test.beforeEach(async ({ page }) => { await useOfficialFontMetrics(page); });
 
 test("33 sky presets render at all qualities and survive install and serialization", async ({ page }) => {
   test.setTimeout(180_000);

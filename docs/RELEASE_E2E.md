@@ -86,3 +86,5 @@ pnpm e2e:test
 - 新しいTauri IPCを`src/release-e2e/mock-tauri.ts`に明示したか
 - 公開開始より前で停止する境界を維持しているか
 - テスト用の成功結果が実機能の成功表示と混同されていないか
+
+制限のある検証環境では、公式のMSDFフォントmetadataを変更せず取得したキャッシュのパスを `XRIFT_E2E_FONT_METRICS_PATH` に指定できます。Material・Skybox試験はその一つのURLだけをキャッシュから返し、その他の通信・描画・エラー検査は変更しません。TLS検査は無効にしません。
