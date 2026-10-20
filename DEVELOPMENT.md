@@ -4,7 +4,7 @@ XRift Studioをソースからビルド・改変するための開発ガイド�
 
 ## 必要な環境
 
-- **Node.js** 22.13.0以上（開発用pnpmの要件。同梱する制作ツールは24系LTS）
+- **Node.js** 22.19.0以上（Pi SDKの要件。同梱する制作ツールは24系LTS）
 - [Rust](https://www.rust-lang.org/learn/get-started)のstable版
 - OS: Windows 10/11 / macOS 12+ / Linux
 
@@ -56,15 +56,17 @@ pnpm tauri:dev
 
 手動のRelease workflowでは、主要導線9件のE2EをOS別ビルドの前に実行します。個別機能の回帰テストは変更時に`pnpm e2e:test e2e/<対象>.spec.ts`で実行し、全件は`pnpm e2e:test`で確認できます。テスト範囲、アップロード禁止境界、失敗時の確認方法は [リリース前E2E](./docs/RELEASE_E2E.md) を参照してください。
 
-### ChatGPTに渡すScene・素材の契約確認
+### Piによる制作の確認
 
-ChatGPT連携のScene・素材情報を変更したら、次のテストを実行してください。フロントエンドの実カタログと収集処理で作ったJSONを、Rustの検証処理へ渡します。空のAudio Source、大きなScene、全組み込み素材のIDを、アカウント接続やAPI通信なしで確認できます。
+Studio内の制作チャットはPi SDKを使い、正式なEditorツールを呼びます。旧JSONプランの解析・適用、操作カタログ、独自のScene要約・再計画・入力アーカイブは削除しました。会話・Plan・使用量・進捗はPiの共通プロトコルと履歴を使います。SDKの実行ループ、OpenAI Responsesの通信、Editorへの反映、保存、停止を次で確認できます。モデル応答とnative IPCだけをテスト用に置き換え、実アカウントへの通信は行いません。
 
 ```bash
-node --test scripts/chatgpt-resource-contract.test.mjs
+pnpm pi:test
+node --test scripts/chatgpt-authoring-host.test.mjs scripts/chatgpt-sessions.test.mjs
+pnpm e2e:test e2e/chatgpt-pi-authoring.spec.ts
 ```
 
-`--generate-only <出力先.json>`の実行範囲は、JSONの生成とフロントエンド側の検査です。Rust側では`XRIFT_CHATGPT_RESOURCE_CONTRACT`にJSONの絶対パスを設定し、`cargo test --manifest-path src-tauri/Cargo.toml --lib`で検証できます。`chatgpt-editor.yml`では、frontendの生成物を専用artifactで受け渡し、Windows・macOS・Linuxで同じJSONを確認します。
+`pnpm pi:prepare`は導入済みのlockfileに一致する依存を配布リソースへコピーします。Tauriの開発・配布コマンドは、MCP sidecarとアプリ本体のビルド前にこの処理を自動で呼び出します。開発時にもTauriが`src-tauri/resources/pi`の存在を検査するため、SDKのコンパイルだけでは起動準備が完了しません。MCP sidecar単体の準備ではアプリ用の配布リソースを検査対象から外し、未生成の状態でもビルドできます。アプリ本体ではリソースの検査・同梱を維持します。実アカウントでの認証・推論とOS別アプリの起動は別途確認してください。詳しい経路は[Pi SDKによるStudio制作](./docs/CHATGPT_AUTHORING.md)を参照してください。
 
 ### 導入済みBlenderからの実GLB取り込み確認
 

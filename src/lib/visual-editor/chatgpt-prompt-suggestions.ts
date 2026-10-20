@@ -37,7 +37,7 @@ export function chatgptPromptSuggestions({ generation, entities, materials, atta
   ], entityById, 100);
   const materialIds = explicit ? currentMaterials : uniqueExisting([
     ...(generation?.attachedMaterials?.map(material => material.id) ?? []),
-    ...(generation?.plan?.objects.flatMap(object => "materialAssetId" in object && typeof object.materialAssetId === "string" ? [object.materialAssetId] : []) ?? []),
+    ...(generation?.plan?.objects?.flatMap(object => "materialAssetId" in object && typeof object.materialAssetId === "string" ? [object.materialAssetId] : []) ?? []),
   ], materialById, 16);
   const scope = { ...(entityIds.length ? { attachedEntityIds: entityIds } : {}), ...(materialIds.length ? { attachedMaterialIds: materialIds } : {}) };
   const result: ChatgptPromptSuggestion[] = [];
@@ -48,7 +48,7 @@ export function chatgptPromptSuggestions({ generation, entities, materials, atta
   // A new explicit attachment takes priority over unfinished work from another turn.
   if (!explicit && generation?.plan?.hasMore) add("remaining-work", "残りの作業を進める", "保存済みの変更を保ち、直前の依頼で残っている作業を今のSceneから進めてください。完了した変更は繰り返さず、対象が見つからなければ確認してください。", true);
 
-  if (!explicit && generation?.plan?.objects.some(object => object.name === "Scene全体のMaterialを一括変更")) addSceneMaterials();
+  if (!explicit && generation?.plan?.objects?.some(object => object.name === "Scene全体のMaterialを一括変更")) addSceneMaterials();
 
   if (materialIds.length) {
     const name = publicName(materialById.get(materialIds[0])!.name) || "Material";
@@ -66,11 +66,11 @@ export function chatgptPromptSuggestions({ generation, entities, materials, atta
     const targets = entityIds.length === 1 ? `添付したEntity「${name}」` : `「${name}」を含む添付したEntity`;
     add(`entity-surface:${entity.id}`, "Materialを見比べて選ぶ", `${targets}に合うMaterialを、使える素材から最大12候補、合う順にサムネイル付きで提案し、選んでから変更してください。対象ごとに違うMaterialも選べるようにしてください。指定した対象だけ割り当てを変え、ほかのEntityや共有Material自体は変更しないでください。`, true);
     const primitive = generation?.progress.recentEvents.some(event => event.saved && event.entityId === entity.id)
-      && generation.plan?.objects.some(object => ["box", "plane", "sphere", "cylinder", "cone"].includes(object.shape) && object.name === entity.name);
+      && generation.plan?.objects?.some(object => ["box", "plane", "sphere", "cylinder", "cone"].includes(object.shape) && object.name === entity.name);
     if (blenderAvailable && primitive) add(`entity-blender:${entity.id}`, "PrimitiveをBlenderで仕上げる", `添付したEntity「${name}」をBlenderのモデルに置き換えて仕上げたいです。配置・名前・親子関係を保つ形で3つの仕上げ案を提案し、選んでから進めてください。`, true);
   }
 
-  const skyResult = generation?.plan?.objects.some(object => object.settings?.some(setting => /^(?:Skybox|IBL)/u.test(setting.label)) || /^Skybox(?:を|の|：|$)/u.test(object.name));
+  const skyResult = generation?.plan?.objects?.some(object => object.settings?.some(setting => /^(?:Skybox|IBL)/u.test(setting.label)) || /^Skybox(?:を|の|：|$)/u.test(object.name));
   if (skyResult && !explicit) {
     add("sky-choices", "空の雰囲気を見比べて選ぶ", "今のSceneに合うSkyboxを、使える素材から最大12候補、合う順にサムネイル付きで提案し、選んでから設定してください。");
     add("sky-lighting", "空の明るさ・照明を調整", "今の空を保ち、Skyboxの明るさとAmbient LightをSceneに合わせて調整したいです。3つの選択肢で雰囲気を確認してから変更してください。");

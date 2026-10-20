@@ -69,7 +69,9 @@ ${entries}
 }
 
 const names = readRegistryToolNames();
-const rendered = renderRustModule(names);
+const registry = fs.readFileSync(REGISTRY_PATH, "utf8");
+const surfaces = [...registry.matchAll(/\{\s*name:\s*"([a-z][a-z0-9_]+)",\s*surface:\s*"([a-z-]+)"/g)].map(match => [match[1], match[2]]);
+const rendered = renderRustModule(names) + `\npub const MCP_TOOL_SURFACES: [(&str, &str); ${surfaces.length}] = [\n${surfaces.map(([name, surface]) => `    ("${name}", "${surface}"),`).join("\n")}\n];\n`;
 const checkOnly = process.argv.includes("--check");
 const current = fs.existsSync(GENERATED_PATH)
   ? fs.readFileSync(GENERATED_PATH, "utf8")

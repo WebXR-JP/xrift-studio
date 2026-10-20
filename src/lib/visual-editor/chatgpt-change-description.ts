@@ -1,6 +1,5 @@
 import { resolveSceneSettings } from "./scene-settings";
 import type { PrototypeVisualProject } from "./prototype-project";
-import type { ChatgptWorldPlan } from "./chatgpt-world";
 import { normalizeMaterialProperties, type MaterialAsset, type MaterialAssetPatch } from "./asset-manifest";
 
 export type ChatgptSettingDisplay = { label: string; value: string; previousValue?: string; enabled?: boolean; color?: string };
@@ -140,7 +139,7 @@ export function describeChatgptSceneSettings(patch: Record<string, unknown>, bef
   return changes.join("、") || `${Object.keys(leaves(patch)).map(path => fields[path] ?? sections[path] ?? path).join("・")}（値の変更なし）`;
 }
 
-export function describeChatgptEntityEdit(edit: NonNullable<ChatgptWorldPlan["edits"]>[number], before: PrototypeVisualProject, after?: PrototypeVisualProject): string {
+export function describeChatgptEntityEdit(edit: { entityId: string; name?: string; position?: number[]; scale?: number[]; rotation?: number[] }, before: PrototypeVisualProject, after?: PrototypeVisualProject): string {
   const original = before.scene.entities[edit.entityId], changed = after?.scene.entities[edit.entityId];
   const oldTransform = original?.components.find(component => component.type === "transform");
   const newTransform = changed?.components.find(component => component.type === "transform");

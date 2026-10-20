@@ -102,28 +102,6 @@ pub(crate) struct BlenderModelSpec {
     pub parts: Vec<BlenderModelPart>,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct BlenderModelBrief {
-    pub name: String,
-    pub brief: String,
-}
-impl BlenderModelBrief {
-    pub(crate) fn validate(&self) -> Result<(), String> {
-        if self.name.trim().is_empty() || self.name.chars().count() > 80 || self.name.chars().any(char::is_control)
-            || self.brief.trim().is_empty() || self.brief.chars().count() > 1600
-            || self.brief.chars().any(|c| c.is_control() && c != '\n' && c != '\t') {
-            return Err("モデルの名前・形・寸法を確認してください".into());
-        }
-        Ok(())
-    }
-}
-pub(crate) fn blender_brief_schema() -> serde_json::Value {
-    serde_json::json!({"type":"object","additionalProperties":false,"required":["name","brief"],"properties":{
-        "name":{"type":"string","minLength":1,"maxLength":80},
-        "brief":{"type":"string","minLength":1,"maxLength":1600}
-    }})
-}
-#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct BlenderModelPart {
     #[serde(skip_serializing_if = "Option::is_none")]

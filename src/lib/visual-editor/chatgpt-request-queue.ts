@@ -1,5 +1,5 @@
 import type { ChatgptAssetOptions } from "../tauri";
-import type { ChatgptGeneration, ChatgptGenerationMode } from "./chatgpt-generation";
+import type { PiAuthoringRun as ChatgptGeneration, PiMode as ChatgptGenerationMode } from "./pi-authoring";
 
 export type ChatgptRequestScope = { sceneScope: string; scope: string; requestId: string; attachedEntityIds?: readonly string[]; attachedMaterialIds?: readonly string[] };
 /** A Scene draft follows only the chat created by its own dispatched request. */

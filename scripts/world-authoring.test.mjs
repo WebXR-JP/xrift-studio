@@ -305,7 +305,7 @@ test('new Scene results and independent manual changes do not trigger a false re
 });
 
 test('derived asset thumbnails do not create authored progress or invalidate matching world evidence', async () => {
-  const { createChatgptScaffold } = await server.ssrLoadModule('/src/lib/visual-editor/chatgpt-generation.ts');
+  const { createChatgptScaffold } = await server.ssrLoadModule('/scripts/fixtures/pi-authoring.mjs');
   const bundle = createChatgptScaffold({ title: 'isolated', description: 'test', objects: [] }, 'isolated');
   const before = await authoringFingerprint(bundle), next = structuredClone(bundle);
   for (const asset of Object.values(next.assets.assets)) asset.thumbnail = 'derived-only-thumbnail';
@@ -315,7 +315,7 @@ test('derived asset thumbnails do not create authored progress or invalidate mat
 });
 
 async function codeAuthoredFixture() {
-  const { createChatgptScaffold } = await server.ssrLoadModule('/src/lib/visual-editor/chatgpt-generation.ts');
+  const { createChatgptScaffold } = await server.ssrLoadModule('/scripts/fixtures/pi-authoring.mjs');
   const bundle = createChatgptScaffold({ title: 'isolated', description: 'test', objects: [] }, 'isolated');
   const entity = Object.values(bundle.scene.entities)[0];
   entity.components.push({ id: 'authored-mesh', type: 'mesh', enabled: true, geometryAssetId: 'builtin:box',

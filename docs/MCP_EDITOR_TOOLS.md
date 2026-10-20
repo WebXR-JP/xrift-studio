@@ -2,7 +2,7 @@
 
 `generate_chatgpt_world`の`attachedEntityIds`には、現在のSceneのEntityを編集対象として添付できる。添付した根と配下のEntityを、送信量の範囲で周辺のEntityより優先する。`target=current`で使い、送信・再計画時には最新のSceneを読む。Entityの複製や移動は行わない。添付した名前は制作の履歴へ残す。`attachedMaterialIds`では、現在の作品にある利用可能なMaterialを最大16件添付できる。送信直前の設定を優先して渡し、`material-update`は既存の`update_material_asset`と同じ処理でMaterial自体を部分更新する。既存の割当・テクスチャ・Shaderを保ち、通常の保存・競合検査・依頼全体の取り消しを使う。
 
-Studio内のChatGPTは、公式定義に沿った`component-add`・`component-update`と、配下を含む`entity-delete`をPlanとして提案・実行できる。通常の`add_component`・`update_component`・`delete_entity`を使い、編集権限・型の検証・履歴・保存を共有する。操作を拡張する場合は[ChatGPT制作機能の拡張](./CHATGPT_AUTHORING.md)を参照する。
+Studio内の制作チャットはPi SDKを使い、公式定義に沿ったEntity・Component・素材のツールを直接呼ぶ。通常の`add_component`・`update_component`・`delete_entity`を使い、編集権限・型の検証・履歴・保存を共有する。操作を拡張する場合は[ChatGPT制作機能の拡張](./CHATGPT_AUTHORING.md)を参照する。
 
 `get_chatgpt_generation`が`status=planned`と`plan.questions`を返した場合、Sceneを変更せず回答を待っている。`answer_chatgpt_questions`に全ページの`questionIndex`（0から）と選択肢の本文または自由入力の`answer`を渡す。同じ作品・Sceneと最新revisionが必要。回答後は同じgenerationIdをポーリングする。回答前に`apply_chatgpt_plan`は使えない。
 
@@ -126,9 +126,7 @@ document toolの戻り値には`harness`が付くことがある。同じ種類�
 
 制作チャットの`/goal 目標`は、既存の`generate_chatgpt_world`へ`mode: "goal"`を指定すると同じ継続制作を開始できる。現在のSceneを各回で取得し、変更を保存して見直しを続け、必要な改善がなくなったら完了する。`cancel_chatgpt_generation`で停止する。質問待ち、進展なし、失敗、Scene変更では保存済みの成果を保持する。
 
-Studio内ChatGPTは同じgeneration/run IDの制作runtimeを使い、pass・repair・推論工程・変更工程・時間の予算を継続して数える。既定はpass 12回、repair 4回、hostへ登録した推論工程24回、変更工程192回、active time 20分、1工程4分。productionの上限1〜6回も併用し、先に到達した条件で停止する。確認待ちはpauseしてactive timeから除く。native内部のHTTP requestとtool attemptの全数をこの推論工程数として数えたとは扱わない。native内の既存loop・retry上限は別に維持する。
-
-authoring契約11では、初回の`world`・`environment`の上限を最低3回にし、制作・画像確認・修正の余地を確保する。モデルの提案は3〜6回とし、1回目で完成条件を満たせば終了する。保存済みの継続予算は延長せず、`model`・`edit`の1回上限も保持する。ChatGPTへ渡す`starterEntityIds`は同じ初期配置の照合を使い、明示的に添付した対象と配下を除く。
+Studio内ChatGPTは一つのPiセッションで制作する。正式ツールの直接登録、Pi標準の`tool_search`と`codemode`を使い、固定した担当別セッションやStudio独自のターン・呼出回数・制作時間の予算を設けない。外部MCP runの予算とは別の経路であり、そのjournalをPi操作へ重ねない。詳細は[Pi SDKによるStudio制作](./CHATGPT_AUTHORING.md)を参照する。
 
 モデル・副作用の前には会話履歴をflushし、保存失敗時は開始しない。Studio再起動後の実行中runは中断終了し、自動再開しない。`cancel_chatgpt_generation`は該当generationのnative cancelを依頼し、所有する処理の終了を待ち、遅着結果の反映を拒否する。MCP tool直列処理による`cancel_world_authoring`とは停止範囲が異なる。
 
@@ -144,13 +142,13 @@ authoring契約11では、初回の`world`・`environment`の上限を最低3回
 
 生成には接続アカウントの利用枠を使う。開始の応答は`generationId`と`status: "running"`を返す。既定は`target: "current"`、`mode: "build"`。現在のSceneで既存Entityの位置・回転・大きさ・名前、モデル・Material、Skybox・Audio Source・Colliderを調整し、必要なEntityを追加する。場所全体を作る依頼では、初期配置の再利用に縛られず、主な特徴・導線・照明を含む構成を作る。`hasMore`・`remainingWork`で必要な残作業を示し、利用者に内部JSONや件数の調整を要求しない。`target: "new"`を明示すると別のワールドを作る。
 
-MCP/APIの`mode: "plan"`はPlanの検証までを行い、`status: "planned"`と公開用のPlan概要を返す。Sceneやプロジェクトのファイルは変更しない。内容を確認した後、最新の`get_editor_context`から`projectId`・`sceneId`・`expectedRevision`と`generationId`を`apply_chatgpt_plan`へ渡す。元の作品とSceneを開いていることが必要で、古いrevisionは拒否する。確認済みPlanの対象が編集された場合は、手動編集を保持して新しいPlanを作り、同じ`generationId`の`status: "planned"`に戻す。新しい内容を確認してから、もう一度`apply_chatgpt_plan`を呼ぶ。モデルと思考量は維持する。`cancel_chatgpt_generation`は未反映のPlanを破棄するか、実行中の制作を停止する。Studioに確認待ちが表示された場合の操作名は「変更を反映」「変更を破棄」。
+MCP/APIの`mode: "plan"`はPlanの検証までを行い、`status: "planned"`と公開用のPlan概要を返す。Sceneやプロジェクトのファイルは変更しない。内容を確認した後、最新の`get_editor_context`から`projectId`・`sceneId`・`expectedRevision`と`generationId`を`apply_chatgpt_plan`へ渡す。元の作品とSceneを開いていることが必要で、古いrevisionは拒否する。確認後のSceneが変わった場合は、手動編集を保持して拒否する。最新のSceneから新しいPlanを依頼する。モデルと思考量は維持する。`cancel_chatgpt_generation`は未反映のPlanを破棄するか、実行中の制作を停止する。Studioに確認待ちが表示された場合の操作名は「変更を反映」「変更を破棄」。
 
-通常の制作では、推論中にSceneや素材が編集された場合、最新の情報から内容を考え直す。反映中は無関係な編集を組み合わせ、変更対象との競合だけを再計画する。保存済みの作業と手動編集を保ち、未完了の作業を続ける。自動再計画は同じ依頼で最大2回とし、進捗に状況を示す。上限に達した場合は変更を保持して停止し、次の依頼では現在のSceneと会話を読み直す。
+通常の制作では、推論中にSceneや素材が編集された場合、最新の情報から内容を考え直す。反映中は無関係な編集を組み合わせ、変更対象との競合だけを再計画する。保存済みの作業と手動編集を保ち、未完了の作業を続ける。再確認と修正は同じPiセッションで行う。停止やエラーでも保存済みの変更を保持する。次の依頼では現在のSceneと会話を読み直す。
 
 `get_chatgpt_generation`で同じIDを確認し、`progress`の`phase`・`message`（実行中の工程）、`completed`・`total`（保存済みの件数）、`recentEvents`（直近の実行結果）、`projectId`（生成先）を読む。状態は`running`・`planned`・`completed`・`cancelled`・`failed`。開始や途中の進行表示を完了と扱わない。検証後に下書きを保存し、素材の取り込みとEntityの調整・配置を順次進め、各工程の結果を保存する。途中の失敗や停止でも保存済みの結果を残す。停止は反映済みの変更を取り消さない。`completed`の保存先、または`failed`のエラーを確認し、`get_editor_context`と`capture_scene_view`で実物を確認する。制作中に作品やSceneが切り替わった場合は追加を停止する。公開は行わない。会話の公開履歴は端末へ保存し、Planの実行用データと変更を戻す控えはStudio終了まで保持する。
 
-ChatGPTへの全体一括のMaterial依頼では、候補を一度選んだ後、authoring契約7の`material-scene`で現在のSceneの有効なMesh Rendererの全スロットとModelの部分Entityへまとめて適用する。内部では既存の`set_material`を使い、1操作・1回の保存として扱う。32件を超えても依頼を分割せず、Scene全体の変更を検出して再確認し、依頼単位で元に戻せる。
+全体のMaterial変更にも正式な素材ツールを使う。Piが対象と設定を読み、変更して保存する。保存後のProject Healthと実描画画像が現在のSceneと一致し、依頼された条件を満たす場合だけ完了にする。
 
 `list_chatgpt_sessions`は現在の作品・Sceneの会話一覧、`get_chatgpt_session`は`sessionId`の会話とコピー用の全文を返す。`manage_chatgpt_session`は最新の作品・Scene・revisionで`create`・`select`・`rename`・`delete`を行う。履歴削除ではSceneを変更しない。`generate_chatgpt_world`の`sessionId`で会話を引き継ぎ、直近の相談と現在のSceneを使う。履歴は端末に最大20チャット・各30件・全体3MiBで保持する。再起動時には実行中・未反映Planを終了状態にし、失われた処理を実行中と表示しない。
 
@@ -479,9 +477,9 @@ Scriptだけを作る場合は`create_script_asset`の`templateId`に指定す�
 
 `search_external_assets`の3Dモデルには、Poly Havenの一覧APIが返す`polycount`と`dimensionsMm`が付く。寸法は幅・奥行・高さの順で、単位はmm。Poly Havenの写真スキャンには、木で数百万、岩でも数十万の三角形を持つモデルがある。取り込む前に値を読み、そのワールドの制作予算と比較する。上限の数値はこの文書では固定しない。
 
-## debug (16)
+## debug (17)
 
-`capture_scene_debug`, `capture_scene_view`, `set_scene_view_camera`,
+`capture_scene_debug`, `capture_scene_view`, `save_scene`, `set_scene_view_camera`,
 `start_recording`, `stop_recording`, `get_recording_status`,
 `set_recording_profile`, `set_recording_viewport`, `get_recording_viewport`,
 `set_recording_camera`, `get_recording_camera`,
@@ -495,6 +493,7 @@ SceneDocumentを書き換えない。現在表示中のSceneの読取、camera�
   形状 / テクスチャ別のVRAM概算（geometryVramBytes / textureVramBytes）、未算定テクスチャ数（unknownVramTextures）、
   テクスチャ内訳（compressedTextureVramBytes / uncompressedTextureVramBytes、compressedTextureCount / uncompressedTextureCount。未算定は除外）、
   カメラの奥を返す。WebMの録画もstart / stopで扱う
+- `save_scene`は通常のEditor自動保存をflushし、同じSceneが保存された場合だけfingerprintを返す。保存中にSceneが変われば再保存を求める。
 - `capture_scene_view`は描画したPNGを1枚、appの`debug-captures`へ保存し、パスを返す。数値やdocumentの確認に加え、この画像で実際の表示を確認する。
 - `set_scene_view_camera` — 俯瞰 (`top`) / 真下から (`bottom`) / 各軸 (`front`
   `back` `left` `right`) / 既定の斜め (`iso`) を選べる。`focusEntityId`でオブジェクトの

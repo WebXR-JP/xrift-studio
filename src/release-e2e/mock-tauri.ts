@@ -1,9 +1,7 @@
-import CHATGPT_AUTHORING_CONTRACT from "../lib/visual-editor/chatgpt-authoring-contract.json";
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import { emit } from "@tauri-apps/api/event";
 import type {
   ChatgptConnection,
-  ChatgptSceneContext,
   ChatgptAssetOptions,
   XriftMcpEditorResponse,
   Project,
@@ -32,22 +30,23 @@ export type ReleaseE2EState = {
   chatgptCreateGate: boolean;
   chatgptCreateWaiting: boolean;
   chatgptSavedSteps: Array<{ projectPath: string; projectId: string; entityNames: string[] }>;
-  chatgptPlanGate: boolean;
-  chatgptPlanWaiting: boolean;
-  chatgptPlanFixture: string | null;
-  chatgptSceneContexts: ChatgptSceneContext[];
+  piGate: boolean;
+  piWaiting: boolean;
+  piScript: { tool: string; arguments: Record<string, unknown> }[] | null;
+  piError: string | null;
   chatgptCancelledGenerations: string[];
   chatgptRequests: Array<{ generationId: string; options: ChatgptAssetOptions }>;
 };
 
+const piScopes = new Map<string, { projectId: string; sceneId: string }>();
 const mcpResponses = new Map<string, (response: XriftMcpEditorResponse) => void>();
 /** Uses the real App/Editor handlers, with only the native transport mocked. */
-export async function callReleaseE2EMcp(tool: string, argumentsValue: Record<string, unknown> = {}): Promise<XriftMcpEditorResponse> {
+export async function callReleaseE2EMcp(tool: string, argumentsValue: Record<string, unknown> = {}, internalGenerationId?: string): Promise<XriftMcpEditorResponse> {
   const id = crypto.randomUUID();
   return new Promise((resolve, reject) => {
     const timeout = window.setTimeout(() => { mcpResponses.delete(id); reject(new Error(`MCP fixture timeout: ${tool}`)); }, 30_000);
     mcpResponses.set(id, response => { clearTimeout(timeout); resolve(response); });
-    void emit("xrift-mcp-editor-request", { id, tool, arguments: argumentsValue, clientName: "Release E2E" }).catch(reject);
+    void emit("xrift-mcp-editor-request", { id, tool, arguments: argumentsValue, clientName: "Release E2E", internalGenerationId, internalScope: internalGenerationId ? piScopes.get(internalGenerationId) : undefined }).catch(reject);
   });
 }
 
@@ -285,10 +284,10 @@ export function installReleaseE2EMock(): void {
     chatgptCreateGate: false,
     chatgptCreateWaiting: false,
     chatgptSavedSteps: [],
-    chatgptPlanGate: false,
-    chatgptPlanWaiting: false,
-    chatgptPlanFixture: null,
-    chatgptSceneContexts: [],
+    piGate: false,
+    piWaiting: false,
+    piScript: null,
+    piError: null,
     chatgptCancelledGenerations: [],
     chatgptRequests: [],
   };
@@ -510,8 +509,6 @@ export function installReleaseE2EMock(): void {
           if (state.chatgpt.connecting) throw new Error("ブラウザでの接続が終わってから解除してください");
           state.chatgpt = { signedIn: false, email: null, planUsageEnabled: false, connecting: false, error: null };
           return { ...state.chatgpt };
-        case "chatgpt_authoring_contract":
-          return CHATGPT_AUTHORING_CONTRACT;
         case "chatgpt_models":
           if (!state.chatgpt.planUsageEnabled) throw new Error("ChatGPTプランの利用許可がありません");
           return [{ slug: "fixture-model", displayName: "検証用モデル" }];
@@ -520,29 +517,58 @@ export function installReleaseE2EMock(): void {
           state.chatgptCancelledGenerations.push(generationId);
           return { generationId, cancelled: true };
         }
-        case "chatgpt_plan": {
-          if (payload.sceneContext) state.chatgptSceneContexts.push(structuredClone(payload.sceneContext as ChatgptSceneContext));
+        case "chatgpt_pi_run": {
           const generationId = stringArg(payload, "generationId");
+          piScopes.set(generationId, { projectId: stringArg(payload, "projectId"), sceneId: stringArg(payload, "sceneId") });
           const cancelled = () => state.chatgptCancelledGenerations.includes(generationId);
-          state.chatgptRequests.push({ generationId, options: structuredClone(payload.options as ChatgptAssetOptions) });
-          state.chatgptPlanWaiting = true;
+          const context = JSON.parse(stringArg(payload, "context"));
+          const history = { sessionId: stringArg(payload, "historySessionId") || stringArg(payload, "sessionId") || generationId,
+            leafId: `reply-${generationId}`, nodes: [{ id: `reply-${generationId}`, parentId: typeof payload.historyLeafId === "string" ? payload.historyLeafId : null, label: "AIの応答", canBranch: true }] };
+          state.chatgptRequests.push({ generationId, options: context.options as ChatgptAssetOptions });
+          state.piWaiting = true;
           try {
-            while (state.chatgptPlanGate) {
-              if (cancelled()) throw new Error("検証用の生成処理を停止しました");
+            while (state.piGate) {
+              if (cancelled()) throw new Error("Piの検証用処理を停止しました");
               await new Promise(resolve => window.setTimeout(resolve, 25));
             }
-            await new Promise(resolve => window.setTimeout(resolve, 300));
-            if (cancelled()) throw new Error("検証用の生成処理を停止しました");
-          } finally { state.chatgptPlanWaiting = false; }
-          if (!state.chatgpt.planUsageEnabled) throw new Error("ChatGPTプランの利用許可がありません");
-          if (payload.prompt === "failure") throw new Error("検証用の生成エラー");
-          if (state.chatgptPlanFixture) return { plan: state.chatgptPlanFixture, assetCandidates: [] };
-          return { plan: JSON.stringify({ title: "検証用の広場", description: "生成操作の検証", objects: [
-            { name: "広場", shape: "plane", position: [0, 0, 0], scale: [12, 1, 12] },
-            { name: "ベンチ", shape: "box", position: [2, 0.5, 0], scale: [2, 1, 0.7] },
-            { name: "木", shape: "cone", position: [-2, 2, 0], scale: [2, 4, 2] },
-          ] }), assetCandidates: [] };
+            if (cancelled()) throw new Error("Piの検証用処理を停止しました");
+            if (state.piError) throw new Error(state.piError);
+            if (payload.mode === "plan") return { text: "", history, plan: { title: "Piの制作プラン", description: "家の本体と屋根を作り、正式な保存・検証・撮影で確認します" } };
+            let index = 0;
+            const channel = payload.onProgress as { id?: number } | string;
+            const channelId = typeof channel === "string" ? Number(channel.split(":")[1]) : channel.id;
+            const progress = (message: Record<string, unknown>) => {
+              if (channelId !== undefined) window.__TAURI_INTERNALS__?.runCallback?.(channelId, { index: index++, message: { type: "progress", ...message } });
+            };
+            const steps = state.piScript ?? [
+              { tool: "apply_r3f_scene", arguments: { name: "Piの家", source: 'export default function World(){return <group name="Piの家"><mesh key="body" name="家の本体" position={[0,1,0]}><boxGeometry args={[3,2,3]}/><meshStandardMaterial color="#b9986b"/></mesh><mesh key="roof" name="屋根" position={[0,2.6,0]} rotation={[0,Math.PI/4,0]}><boxGeometry args={[3.5,0.25,3.5]}/><meshStandardMaterial color="#704b40"/></mesh></group>}' } },
+              { tool: "save_scene", arguments: {} },
+              { tool: "get_project_health", arguments: {} },
+              { tool: "set_scene_view_camera", arguments: { preset: "iso" } },
+              { tool: "capture_scene_view", arguments: {} },
+            ];
+            for (const step of steps) {
+              if (cancelled()) throw new Error("Piの検証用処理を停止しました");
+              const before = await callReleaseE2EMcp("get_editor_context", {}, generationId);
+              if (!before.ok) throw new Error(JSON.stringify(before.error));
+              const current = before.result!;
+              if (current.projectId !== payload.projectId || current.sceneId !== payload.sceneId) throw new Error("Sceneが変わりました");
+              const operationId = crypto.randomUUID(), readOnly = step.tool.startsWith("get_");
+              progress({ message: `${step.tool} を実行しています`, tool: step.tool, operationId, readOnly });
+              const response = await callReleaseE2EMcp(step.tool, { projectId: current.projectId, sceneId: current.sceneId, expectedRevision: current.revision, ...step.arguments }, generationId);
+              if (!response.ok) throw new Error(JSON.stringify(response.error));
+              progress({ message: step.tool === "save_scene" ? "現在のSceneを保存しました" : `${step.tool} を確認しました`, tool: step.tool, operationId, readOnly,
+                mutationBeforeFingerprint: response.result?.mutationBeforeFingerprint,
+                changed: response.result?.revisionAfter !== undefined && response.result.revisionAfter !== response.result.revisionBefore,
+                saved: step.tool === "save_scene" });
+            }
+            return { text: "Piの経路で編集・保存を確認しました（推論と画像レビューは別の試験で検証）", history };
+          } finally { state.piWaiting = false; piScopes.delete(generationId); }
         }
+        case "chatgpt_pi_delete_history":
+          return null;
+        case "save_debug_image":
+          return "C:/XRiftE2E/debug-captures/pi-scene.png";
         case "read_image_data_url":
           throw new Error("Release E2E fixture does not contain binary files");
         case "check_xrift_latest":

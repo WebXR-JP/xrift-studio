@@ -1,5 +1,8 @@
-import type { ChatgptHarnessRun } from "./lib/visual-editor/chatgpt-harness-runtime";
-import { createChatgptAuthoringRunner } from "./lib/visual-editor/chatgpt-authoring-host";
+import { authoringSceneProgressFingerprint } from "./lib/visual-editor/authoring-scene-progress";
+import { chatgptPlanningSnapshot } from "./lib/visual-editor/chatgpt-plan-guards";
+import { authoringFingerprint } from "./lib/visual-editor/world-authoring";
+import type { PiRunControl, PiStoredPlan } from "./lib/visual-editor/pi-authoring";
+import { createPiAuthoringRunner } from "./lib/visual-editor/pi-authoring-host";
 import { createChatgptReasoningPreferences } from "./lib/visual-editor/chatgpt-reasoning";
 import { acquireAuthoringProjectWrite } from "./lib/visual-editor/world-authoring-native";
 import { hasAuthoringRunOwner, readAuthoringState } from "./lib/visual-editor/world-authoring";
@@ -12,8 +15,8 @@ import { hasAuthoringRunOwner, readAuthoringState } from "./lib/visual-editor/wo
 
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type ChatgptWorldPlan } from "./lib/visual-editor/chatgpt-world";
-import { rebaseChatgptStep, type ChatgptGeneration, type ChatgptGenerationMode } from "./lib/visual-editor/chatgpt-generation";
+import { rebaseChatgptStep } from "./lib/visual-editor/chatgpt-generation";
+import type { PiAuthoringRun as ChatgptGeneration, PiMode as ChatgptGenerationMode } from "./lib/visual-editor/pi-authoring";
 import { useChatgptSessions } from "./components/visual-editor/useChatgptSessions";
 
 
@@ -22,8 +25,8 @@ import { useChatgptSessions } from "./components/visual-editor/useChatgptSession
 
 
 import { validateChatgptQuestionAnswers, type ChatgptQuestionAnswer } from "./lib/visual-editor/chatgpt-questions";
-import { type ChatgptResourceContext } from "./lib/visual-editor/chatgpt-resources";
-import { chatgptConversationContext, chatgptRevertBundle, chatgptSessionTranscript, createChatgptSession, upsertChatgptSessionTurn, type ChatgptRevertCheckpoint } from "./lib/visual-editor/chatgpt-sessions";
+import { branchChatgptSession, piSessionHistoryRoots, chatgptRevertBundle, chatgptSessionTranscript, createChatgptSession, upsertChatgptSessionTurn, type ChatgptRevertCheckpoint } from "./lib/visual-editor/chatgpt-sessions";
+import { parsePiPackages } from "./lib/visual-editor/pi-settings";
 import { ProjectLibrary } from "./components/ProjectLibrary";
 import { retryStudioItemLoading } from "./lib/visual-editor/xrift-item-loader";
 import { StudioLoading } from "./components/StudioLoading";
@@ -1154,8 +1157,8 @@ function App() {
   const chatgptReasoningPreferences = useRef(createChatgptReasoningPreferences());
   const chatgptGenerationsRef = useRef(new Map<string, ChatgptGeneration>(chatgptSessions.flatMap(session => session.turns.map(turn => [turn.generationId, turn] as const))));
   const chatgptRevertsRef = useRef(new Map<string, ChatgptRevertCheckpoint>());
-  const chatgptPlansRef = useRef(new Map<string, { plan: ChatgptWorldPlan; snapshots: Record<string, string>; resources: ChatgptResourceContext; target: "current" | "new" }>());
-  const chatgptHarnessRunsRef = useRef(new Map<string, ChatgptHarnessRun>());
+  const chatgptPlansRef = useRef(new Map<string, PiStoredPlan>());
+  const piRunsRef = useRef(new Map<string, PiRunControl>());
   const chatgptControlsRef = useRef(new Map<string, { cancelled: boolean }>());
   const [chatgptGeneration, setChatgptGeneration] = useState<ChatgptGeneration | null>(null);
   const recordChatgptGeneration = (job: ChatgptGeneration, flush = false) => {
@@ -1164,7 +1167,7 @@ function App() {
     for (const id of ids) sessions = upsertChatgptSessionTurn(sessions, id, job);
     updateChatgptSessions(sessions, flush);
   };
-  const generateChatgptWorld = createChatgptAuthoringRunner({ chatgptGenerationRef, mcpPublishActiveRef, mcpModelingActiveRef, visualSessionRef, projectsRoot, requireMcpProjectBridge, chatgptSessionsRef, selectedChatgptSessionIdRef, updateChatgptSessions, selectChatgptSession, chatgptGenerationsRef, chatgptControlsRef, chatgptPlansRef, chatgptRevertsRef, setChatgptGeneration, recordChatgptGeneration, mcpProjectBridgeRef, uniqueProjectDirectoryName, setVisualCompilationFresh, setVisualThumbnailReadiness, setVisualSession, waitForMcpProjectBridge, refreshProjects, toast, chatgptHarnessRunsRef, flushChatgptSessions });
+  const generateChatgptWorld = createPiAuthoringRunner({ chatgptGenerationRef, mcpPublishActiveRef, mcpModelingActiveRef, visualSessionRef, projectsRoot, requireMcpProjectBridge, chatgptSessionsRef, selectedChatgptSessionIdRef, updateChatgptSessions, selectChatgptSession, chatgptGenerationsRef, chatgptControlsRef, chatgptPlansRef, chatgptRevertsRef, setChatgptGeneration, recordChatgptGeneration, mcpProjectBridgeRef, uniqueProjectDirectoryName, setVisualCompilationFresh, setVisualThumbnailReadiness, setVisualSession, waitForMcpProjectBridge, refreshProjects, toast, piRunsRef, flushChatgptSessions });
   const handleChatgptGenerate = async (model: string, prompt: string, options: ChatgptAssetOptions, mode: ChatgptGenerationMode = "build", reasoningEffort?: string,
     expectedScope?: { sceneScope: string; scope: string; requestId: string; attachedEntityIds?: readonly string[]; attachedMaterialIds?: readonly string[] }): Promise<void> => {
     let requestedSessionId: string | undefined;
@@ -1185,7 +1188,7 @@ function App() {
     const stored = chatgptPlansRef.current.get(generationId);
     if (!stored || job?.status !== "planned") throw new Error("反映できる変更内容がありません。依頼を送り直してください");
     if (stored.plan.questions?.length) throw new Error("確認事項に回答してから制作を進めてください");
-    if (job.sourceProjectId !== visualSessionRef.current?.bundle.project.projectId || job.sourceSceneId !== mcpProjectBridgeRef.current?.currentBundle().scene.sceneId) throw new Error("変更を依頼したワールドとSceneを開いてから反映してください");
+    if ((job.projectId ?? job.sourceProjectId) !== visualSessionRef.current?.bundle.project.projectId || (job.sceneId ?? job.sourceSceneId) !== mcpProjectBridgeRef.current?.currentBundle().scene.sceneId) throw new Error("変更を依頼したワールドとSceneを開いてから反映してください");
     await generateChatgptWorld(job.model, job.prompt, job.options, generationId, job.mode === "goal" ? "goal" : "build", stored.target, stored.plan, job.reasoningEffort, job.sessionId);
   };
   const answerChatgptQuestions = async (generationId: string, rawAnswers: ChatgptQuestionAnswer[]) => {
@@ -1193,31 +1196,28 @@ function App() {
     if (!job || job.status !== "planned" || !stored?.plan.questions?.length) throw new Error("回答待ちの確認事項がありません");
     const bridge = requireMcpProjectBridge("制作の確認事項に回答");
     const bundle = bridge.currentBundle();
-    if (job.sourceProjectId !== bundle.project.projectId || job.sourceSceneId !== bundle.scene.sceneId) throw new Error("確認事項を受け取った作品とSceneを開いてください");
+    if ((job.projectId ?? job.sourceProjectId) !== bundle.project.projectId || (job.sceneId ?? job.sourceSceneId) !== bundle.scene.sceneId) throw new Error("確認事項を受け取った作品とSceneを開いてください");
     const answers = validateChatgptQuestionAnswers(stored.plan.questions, rawAnswers);
-    const session = chatgptSessionsRef.current.find(session => session.id === job.sessionId);
     const answered = answers.map(answer => {
       const question = stored.plan.questions![answer.questionIndex];
       const candidateId = question.choiceCandidateIds?.[question.choices.indexOf(answer.answer)];
       return { question: question.question, answer: answer.answer, ...(candidateId ? { candidateId } : {}) };
     });
-    const conversation = [...(session ? chatgptConversationContext(session) : []).slice(-5), { prompt: "確認事項への回答", result: JSON.stringify(answered.map(answer => ({ ...answer, question: Array.from(answer.question).slice(0, 80).join("") }))) }];
-    while (conversation.length > 1 && new TextEncoder().encode(JSON.stringify(conversation)).byteLength > 23 * 1024) conversation.shift();
     const clarifications = [...(job.clarifications ?? []), ...answered].slice(-9);
     chatgptGenerationsRef.current.set(generationId, { ...job, clarifications });
     await generateChatgptWorld(job.model, job.prompt, job.options, generationId, job.mode ?? "build", stored.target, undefined, job.reasoningEffort, job.sessionId,
-      { attempt: 0, completed: job.progress.completed, conversation, reconfirm: job.mode === "plan", reason: "clarification" });
+      { kind: "answers", answers: answered });
   };
   const cancelChatgptGeneration = async (generationId: string) => {
     const control = chatgptControlsRef.current.get(generationId);
     const job = chatgptGenerationsRef.current.get(generationId);
     if (job?.status === "planned") {
-      const harness = chatgptHarnessRunsRef.current.get(generationId);
+      const harness = piRunsRef.current.get(generationId);
       if (harness) await harness.stop("user"); else await tauri.chatgptCancelGeneration(generationId);
-      const cancelled: ChatgptGeneration = { ...job, ...(harness ? { harness: harness.snapshot() } : {}), status: "cancelled", progress: { ...job.progress, phase: "cancelled", message: "未反映の変更を破棄しました。現在のSceneと保存済みの変更は保持されています" } };
+      const cancelled: ChatgptGeneration = { ...job, status: "cancelled", progress: { ...job.progress, phase: "cancelled", message: job.plan?.questions?.length ? "確認待ちの依頼を終了しました。保存済みの変更は残っています" : "未反映の変更を破棄しました。現在のSceneと保存済みの変更は保持されています" } };
       chatgptPlansRef.current.delete(generationId); chatgptGenerationsRef.current.set(generationId, cancelled); setChatgptGeneration(cancelled);
       if (cancelled.sessionId) updateChatgptSessions(upsertChatgptSessionTurn(chatgptSessionsRef.current, cancelled.sessionId, cancelled), true);
-      chatgptHarnessRunsRef.current.delete(generationId);
+      piRunsRef.current.delete(generationId);
       return { generationId, cancelled: true };
     }
     if (!control || !job || job.status !== "running") return { generationId, cancelled: false };
@@ -1225,7 +1225,7 @@ function App() {
     const cancelling = { ...job, cancelling: true };
     chatgptGenerationsRef.current.set(generationId, cancelling); setChatgptGeneration(cancelling);
     recordChatgptGeneration(cancelling);
-    const harness = chatgptHarnessRunsRef.current.get(generationId);
+    const harness = piRunsRef.current.get(generationId);
     // Acknowledge the stop request while the runtime drains its owned native
     // work. Keeping this MCP call open would prevent later progress/cancel
     // events from closing a lease that was registered just after the request.
@@ -1263,7 +1263,7 @@ function App() {
       return { generationId, reverted: true };
     } finally { if (chatgptGenerationRef.current === generationId) chatgptGenerationRef.current = null; }
   };
-  const manageChatgptSession = (action: "create" | "select" | "rename" | "delete", id?: string, title?: string) => {
+  const manageChatgptSession = (action: "create" | "select" | "rename" | "delete" | "branch", id?: string, title?: string, entryId?: string) => {
     if (chatgptGenerationRef.current) throw new Error("制作の処理が終わってからチャットを切り替えてください");
     const context = requireMcpProjectBridge("制作チャットの履歴").currentContext();
     const sessions = chatgptSessionsRef.current;
@@ -1273,8 +1273,8 @@ function App() {
       const retained = new Set(next.flatMap(session => session.turns.map(turn => turn.generationId)));
       for (const removed of sessions.filter(session => !next.some(kept => kept.id === session.id))) {
         for (const turn of removed.turns) if (!retained.has(turn.generationId)) {
-          void chatgptHarnessRunsRef.current.get(turn.generationId)?.stop("session-removed");
-          chatgptHarnessRunsRef.current.delete(turn.generationId);
+          void piRunsRef.current.get(turn.generationId)?.stop("session-removed");
+          piRunsRef.current.delete(turn.generationId);
           chatgptPlansRef.current.delete(turn.generationId); chatgptRevertsRef.current.delete(turn.generationId); chatgptGenerationsRef.current.delete(turn.generationId);
         }
       }
@@ -1283,13 +1283,19 @@ function App() {
     }
     const found = sessions.find(session => session.id === id && session.projectId === context.projectId && session.sceneId === context.sceneId);
     if (!found) throw new Error("このSceneのチャットを選んでください");
+    if (action === "branch") {
+      const branched = branchChatgptSession(found, entryId ?? "");
+      const next = [branched, ...sessions].slice(0, 20);
+      updateChatgptSessions(next, true); flushChatgptSessions(); selectChatgptSession(branched.id);
+      return branched;
+    }
     if (action === "delete") {
       const next = sessions.filter(session => session.id !== id);
       updateChatgptSessions(next, true);
       const retained = new Set(next.flatMap(session => session.turns.map(turn => turn.generationId)));
       for (const turn of found.turns) if (!retained.has(turn.generationId)) {
-        void chatgptHarnessRunsRef.current.get(turn.generationId)?.stop("session-removed");
-        chatgptHarnessRunsRef.current.delete(turn.generationId);
+        void piRunsRef.current.get(turn.generationId)?.stop("session-removed");
+        piRunsRef.current.delete(turn.generationId);
         chatgptPlansRef.current.delete(turn.generationId); chatgptRevertsRef.current.delete(turn.generationId); chatgptGenerationsRef.current.delete(turn.generationId);
       }
       selectChatgptSession(undefined); return found;
@@ -1297,6 +1303,16 @@ function App() {
     const next = { ...found, updatedAt: new Date().toISOString(), ...(action === "rename" ? { title: title?.trim().slice(0, 80) || "新しいチャット" } : {}) };
     updateChatgptSessions([next, ...sessions.filter(session => session.id !== id)], true); selectChatgptSession(next.id);
     return next;
+  };
+
+  const deleteChatgptSession = async (id: string) => {
+    if (chatgptGenerationRef.current) throw new Error("制作の処理が終わってから履歴を削除してください");
+    const context = requireMcpProjectBridge("制作チャットの履歴").currentContext();
+    const found = chatgptSessionsRef.current.find(session => session.id === id && session.projectId === context.projectId && session.sceneId === context.sceneId);
+    if (!found) throw new Error("このSceneのチャットを選んでください");
+    const retained = new Set(chatgptSessionsRef.current.filter(session => session.id !== id && session.projectId === found.projectId && session.sceneId === found.sceneId).flatMap(session => [...piSessionHistoryRoots(session)]));
+    for (const root of piSessionHistoryRoots(found)) if (!retained.has(root)) await tauri.chatgptPiDeleteHistory(found.projectId, found.sceneId, root);
+    return manageChatgptSession("delete", id);
   };
 
   const handleMcpProjectTool = async (
@@ -1343,7 +1359,7 @@ function App() {
         const bridge = requireMcpProjectBridge(request.tool);
         const context = bridge.currentContext();
         if (args.projectId !== context.projectId || args.sceneId !== context.sceneId || args.expectedRevision !== context.revision) throw new XriftMcpEditorToolError("STALE_REVISION", "get_editor_contextで対象とrevisionを再取得してください", context);
-        if (!context.canGenerate || chatgptGenerationRef.current || mcpPublishActiveRef.current || mcpModelingActiveRef.current) throw new XriftMcpEditorToolError("EDITOR_BUSY", "制作と素材の読み込みが終わってからモデルを作成してください");
+        if (!context.canGenerate || chatgptGenerationRef.current && request.internalGenerationId !== chatgptGenerationRef.current || mcpPublishActiveRef.current || mcpModelingActiveRef.current) throw new XriftMcpEditorToolError("EDITOR_BUSY", "制作と素材の読み込みが終わってからモデルを作成してください");
         mcpModelingActiveRef.current = true; setModelingBusy(true);
         let authoringWrite: Awaited<ReturnType<typeof acquireAuthoringProjectWrite>> = null;
         try {
@@ -1359,8 +1375,10 @@ function App() {
           checkModelingSource();
           const spec = parseBlenderModelSpec(args.model);
           try {
-            authoringWrite = await acquireAuthoringProjectWrite({ projectPath: path, sceneId, requestId: request.id, tool: request.tool, arguments: args, bundle: before,
-              journal: { read: tauri.readWorldAuthoring, write: tauri.saveWorldAuthoring }, checkCurrent: checkModelingSource });
+            if (!request.internalGenerationId) {
+              authoringWrite = await acquireAuthoringProjectWrite({ projectPath: path, sceneId, requestId: request.id, tool: request.tool, arguments: args, bundle: before,
+                journal: { read: tauri.readWorldAuthoring, write: tauri.saveWorldAuthoring }, checkCurrent: checkModelingSource });
+            }
           } catch (error) {
             if (error instanceof XriftMcpEditorToolError) throw error;
             throw new XriftMcpEditorToolError("AUTHORING_WRITE_STOPPED", error instanceof Error ? error.message : String(error));
@@ -1374,7 +1392,7 @@ function App() {
           if (!(await bridge.saveNow())) throw new XriftMcpEditorToolError("EDITOR_ERROR", "作成したモデルを保存できませんでした");
           let authoringWarning: string | undefined;
           try { await authoringWrite?.finish(nextBundle, true); } catch (error) { authoringWarning = String(error); }
-          return { modelAssetId: imported.modelAssetId, name: spec.name, nextActions: ["get_model_asset", "place_asset"], ...(authoringWarning ? { authoringWarning } : {}) };
+          return { changed: true, mutationBeforeFingerprint: authoringSceneProgressFingerprint(latest), modelAssetId: imported.modelAssetId, name: spec.name, nextActions: ["get_model_asset", "place_asset"], ...(authoringWarning ? { authoringWarning } : {}) };
         } catch (error) {
           await authoringWrite?.finish(bridge.currentBundle(), false, error instanceof Error ? error.message : String(error)).catch(() => undefined);
           throw error;
@@ -1400,7 +1418,7 @@ function App() {
           return revertChatgptGeneration(args.generationId);
         }
         if (!["create", "select", "rename", "delete"].includes(String(args.action)) || (args.sessionId !== undefined && typeof args.sessionId !== "string") || (args.title !== undefined && (typeof args.title !== "string" || !args.title.trim() || args.title.length > 80))) throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "チャットの操作とsessionId、80文字以内の名前を指定してください");
-        return { session: manageChatgptSession(args.action as "create" | "select" | "rename" | "delete", args.sessionId as string | undefined, args.title as string | undefined) };
+        return { session: args.action === "delete" ? await deleteChatgptSession(args.sessionId as string) : manageChatgptSession(args.action as "create" | "select" | "rename", args.sessionId as string | undefined, args.title as string | undefined) };
       }
       case "open_chatgpt_panel": {
         const bridge = requireMcpProjectBridge(request.tool);
@@ -1420,8 +1438,13 @@ function App() {
           throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "モデルと2000文字以内の依頼を指定してください");
         }
         const options = args.options ?? { models: true, materials: true, audio: true };
-        if (!options || typeof options !== "object" || Array.isArray(options) || Object.keys(options).some(key => !["models", "materials", "audio", "modelSource"].includes(key)) || !["models", "materials", "audio"].every(key => typeof (options as Record<string, unknown>)[key] === "boolean") || ((options as ChatgptAssetOptions).modelSource !== undefined && !["auto", "blender", "store"].includes((options as ChatgptAssetOptions).modelSource!))) {
+        if (!options || typeof options !== "object" || Array.isArray(options) || Object.keys(options).some(key => !["models", "materials", "audio", "modelSource", "extensions"].includes(key)) || !["models", "materials", "audio"].every(key => typeof (options as Record<string, unknown>)[key] === "boolean") || ((options as ChatgptAssetOptions).modelSource !== undefined && !["auto", "blender", "store"].includes((options as ChatgptAssetOptions).modelSource!))) {
           throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "optionsにはmodels・materials・audioのbooleanを指定してください");
+        }
+        const piOptions = options as ChatgptAssetOptions;
+        if (piOptions.extensions !== undefined) {
+          if (!Array.isArray(piOptions.extensions) || piOptions.extensions.some(source => typeof source !== "string")) throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "extensionsには固定バージョンの拡張を指定してください");
+          try { parsePiPackages(piOptions.extensions.join("\n")); } catch (error) { throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", error instanceof Error ? error.message : String(error)); }
         }
         if (args.mode !== undefined && args.mode !== "build" && args.mode !== "plan" && args.mode !== "goal") throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "modeにはbuild・plan・goalを指定してください");
         if (args.target !== undefined && args.target !== "current" && args.target !== "new") throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "targetにはcurrentまたはnewを指定してください");
@@ -1445,7 +1468,7 @@ function App() {
         if (args.projectId !== context.projectId || args.sceneId !== context.sceneId || args.expectedRevision !== context.revision) throw new XriftMcpEditorToolError("STALE_REVISION", "get_editor_contextで対象とrevisionを再取得してください", context);
         const job = typeof args.generationId === "string" ? chatgptGenerationsRef.current.get(args.generationId) : undefined;
         if (!job || job.status !== "planned" || !job.plan?.questions?.length) throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "回答待ちのgenerationIdを指定してください");
-        if (job.sourceProjectId !== context.projectId || job.sourceSceneId !== context.sceneId) throw new XriftMcpEditorToolError("STALE_REVISION", "確認事項を受け取ったSceneを開いてください");
+        if ((job.projectId ?? job.sourceProjectId) !== context.projectId || (job.sceneId ?? job.sourceSceneId) !== context.sceneId) throw new XriftMcpEditorToolError("STALE_REVISION", "確認事項を受け取ったSceneを開いてください");
         if (!context.canGenerate || chatgptGenerationRef.current) throw new XriftMcpEditorToolError("EDITOR_BUSY", "現在の処理が終わってから回答してください");
         const answers = validateChatgptQuestionAnswers(job.plan.questions, args.answers);
         void answerChatgptQuestions(job.generationId, answers).catch(() => undefined);
@@ -1457,6 +1480,7 @@ function App() {
         if (!context.canGenerate || chatgptGenerationRef.current || mcpPublishActiveRef.current || mcpModelingActiveRef.current) throw new XriftMcpEditorToolError("EDITOR_BUSY", "Play、素材の読み込み、制作、公開が終わってから再試行してください");
         const job = typeof args.generationId === "string" ? chatgptGenerationsRef.current.get(args.generationId) : undefined;
         if (!job || job.status !== "planned" || !chatgptPlansRef.current.has(job.generationId)) throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "反映できる変更内容のgenerationIdを指定してください");
+        if (chatgptPlansRef.current.get(job.generationId)!.snapshot !== chatgptPlanningSnapshot(requireMcpProjectBridge(request.tool).currentBundle())) throw new XriftMcpEditorToolError("STALE_REVISION", "プランの確認後にSceneが変わりました。最新のSceneからプランを作り直してください");
         if (job.plan?.questions?.length) throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "answer_chatgpt_questionsで確認事項に回答してください");
         if (job.sessionId && !chatgptSessionsRef.current.some(session => session.id === job.sessionId)) throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "変更を依頼したチャットの履歴がありません。新しく依頼してください");
         if (job.sourceProjectId !== context.projectId || job.sourceSceneId !== context.sceneId) throw new XriftMcpEditorToolError("STALE_REVISION", "変更を依頼したワールドとSceneを開いてください");
@@ -1756,9 +1780,15 @@ function App() {
       .onXriftMcpEditorRequest((request) => {
         if (disposed) return;
         if (isXriftMcpProjectTool(request.tool)) {
-          void handleMcpProjectToolRef
-            .current(request)
-            .then((result) => respond({ id: request.id, ok: true, result }))
+          void Promise.resolve().then(() => {
+            if (request.internalGenerationId) {
+              const context = mcpProjectBridgeRef.current?.currentContext();
+              if (request.internalGenerationId !== chatgptGenerationRef.current || !context || !request.internalScope || request.internalScope.projectId !== context.projectId || request.internalScope.sceneId !== context.sceneId) throw new XriftMcpEditorToolError("SCOPE_CHANGED", "開いている作品またはSceneが変わりました");
+              if (!context.canGenerate) throw new XriftMcpEditorToolError("EDITOR_BUSY", "Editで素材の処理完了を待ってから再試行してください");
+            }
+            return handleMcpProjectToolRef.current(request);
+          })
+            .then(async (result) => respond({ id: request.id, ok: true, result: request.internalGenerationId && request.tool === "create_blender_model" && mcpProjectBridgeRef.current ? { ...result, progressFingerprint: authoringSceneProgressFingerprint(mcpProjectBridgeRef.current.currentBundle()), fingerprint: await authoringFingerprint(mcpProjectBridgeRef.current.currentBundle()) } : result }))
             .catch((error) => fail(request.id, error));
           return;
         }
@@ -2106,7 +2136,8 @@ function App() {
                 onNew: () => { manageChatgptSession("create"); },
                 onSelect: id => { manageChatgptSession("select", id); },
                 onRename: (id, title) => { manageChatgptSession("rename", id, title); },
-                onDelete: id => { manageChatgptSession("delete", id); } }}
+                onBranch: (id, entryId) => { manageChatgptSession("branch", id, undefined, entryId); },
+                onDelete: async id => { await deleteChatgptSession(id); } }}
               chatgptHistoryError={chatgptHistoryError ?? undefined}
               chatgptBusy={chatgptGenerationRef.current !== null || modelingBusy}
               chatgptGeneration={chatgptGeneration}

@@ -28,6 +28,7 @@ const hooks = registerHooks({
   },
 });
 const api = await import("../src/lib/visual-editor/chatgpt-sessions.ts");
+const piSettings = await import("../src/lib/visual-editor/pi-settings.ts");
 const { sceneSettingsDisplay } = await import("../src/lib/visual-editor/chatgpt-change-description.ts");
 hooks.deregister();
 const date = "2026-10-14T00:00:00.000Z";
@@ -45,7 +46,47 @@ class MemoryStorage {
   setItem(key, value) { assert.equal(key, api.CHATGPT_SESSION_STORAGE_KEY); this.value = value; }
 }
 const withTurn = (...turns) => ({ ...session(), turns });
+
+test("additional instructions and a neutral reply survive restart without claiming pending input was received", () => {
+  const storage = new MemoryStorage();
+  const messages = [
+    { id: "pending-input", prompt: "入口を広く", delivery: "steer", state: "queued", attachedEntityIds: ["entry"] },
+    { id: "received-input", prompt: "窓を調整", delivery: "follow_up", state: "applied", attachedMaterialIds: ["window-material"] },
+  ];
+  api.saveChatgptSessions([withTurn(turn("neutral", { completionVerified: false, liveMessages: messages }))], storage);
+  const restored = api.loadChatgptSessions(storage)[0].turns[0];
+  assert.equal(restored.completionVerified, false);
+  assert.equal(restored.liveMessages[0].state, "unapplied");
+  assert.deepEqual(restored.liveMessages[0].attachedEntityIds, ["entry"]);
+  assert.equal(restored.liveMessages[1].state, "applied");
+  assert.deepEqual(restored.liveMessages[1].attachedMaterialIds, ["window-material"]);
+});
 const bytes = value => Buffer.byteLength(JSON.stringify(value), "utf8");
+
+test("Pi branch pointers survive storage and branch only at a finished response", () => {
+  const storage = new MemoryStorage();
+  const piHistory = { sessionId: 'pi-root', leafId: 'answer-1', nodes: [{ id: 'tool-1', parentId: null, label: 'ツール操作', canBranch: false }, { id: 'answer-1', parentId: 'tool-1', label: 'AIの応答', canBranch: true }] };
+  const source = withTurn(turn('pi-turn', { piHistory, options: { models: true, materials: true, audio: false, teamwork: true, extensions: ['npm:example@1.2.3'] } }));
+  const branched = api.branchChatgptSession(source, 'answer-1', date, 'branch-chat');
+  assert.deepEqual(branched.piBranch, { sessionId: 'pi-root', leafId: 'answer-1', parentSessionId: source.id });
+  assert.equal(branched.turns.length, 0);
+  assert.throws(() => api.branchChatgptSession(source, 'tool-1'), /分岐できる/);
+  api.saveChatgptSessions([source, branched], storage);
+  const restored = api.loadChatgptSessions(storage);
+  assert.deepEqual(restored.find(item => item.id === 'branch-chat').piBranch, branched.piBranch);
+  assert.equal(restored.find(item => item.id === source.id).turns[0].options.teamwork, undefined);
+  assert.deepEqual(restored.find(item => item.id === source.id).turns[0].options.extensions, ['npm:example@1.2.3']);
+});
+test("extension registrations require exact npm versions and persist explicit settings", () => {
+  for (const value of ['npm:example@latest', 'git:example', 'npm:../example@1.0.0', 'npm:example@^1.0.0']) assert.throws(() => piSettings.parsePiPackages(value));
+  let raw = null;
+  const storage = { getItem: () => raw, setItem(_key, value) { raw = value; } };
+  assert.deepEqual(piSettings.loadPiSettings(storage), { extensions: [] });
+  raw = JSON.stringify({ version: 1, teamwork: true, extensions: ['npm:old@1.0.0'] });
+  assert.deepEqual(piSettings.loadPiSettings(storage), { extensions: ['npm:old@1.0.0'] });
+  piSettings.savePiSettings({ extensions: ['npm:@example/tools@1.2.3'] }, storage);
+  assert.deepEqual(piSettings.loadPiSettings(storage), { extensions: ['npm:@example/tools@1.2.3'] });
+});
 
 test("twelve-choice metadata and catalog proposal thumbnails survive history reload", () => {
   const storage = new MemoryStorage();

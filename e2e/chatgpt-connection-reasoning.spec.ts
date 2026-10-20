@@ -46,7 +46,7 @@ async function openFixture(page: Page, width = 1440) {
         if (fixture.loginFailure) throw new Error(fixture.loginFailure);
       }
       if (command === "chatgpt_models") { fixture.modelCalls++; return structuredClone(fixture.models); }
-      if (command === "chatgpt_plan") fixture.requests.push(structuredClone(args ?? {}));
+      if (command === "chatgpt_pi_run") fixture.requests.push(structuredClone(args ?? {}));
       return invoke(command, args, options);
     };
   });
@@ -154,14 +154,14 @@ test("Planの切替なしで通常の依頼を保存し、選択した思考量�
   await expect(panel.getByRole("button", { name: "Plan", exact: true })).toHaveCount(0);
   await prompt.fill("最初の依頼で床を追加");
   await panel.getByRole("button", { name: "依頼を送信", exact: true }).click();
-  await expect(panel.getByRole("progressbar", { name: "依頼の反映と保存", exact: true })).toHaveAttribute("value", "3");
+  await expect(panel.getByRole("progressbar", { name: "依頼の反映と保存", exact: true })).toHaveAttribute("value", "1");
   expect(await page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.at(-1))).toMatchObject({ model: "fixture-a", reasoningEffort: "high", prompt: "最初の依頼で床を追加" });
   await expect(panel.getByRole("button", { name: "変更を反映", exact: true })).toHaveCount(0);
   await prompt.fill("通常の依頼で床を追加");
   await panel.getByRole("button", { name: "依頼を送信", exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.length)).toBe(2);
   expect(await page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.at(-1))).toMatchObject({ model: "fixture-a", reasoningEffort: "high", prompt: "通常の依頼で床を追加" });
-  await expect(panel.getByRole("progressbar", { name: "依頼の反映と保存", exact: true })).toHaveAttribute("value", "3");
+  await expect(panel.getByRole("progressbar", { name: "依頼の反映と保存", exact: true })).toHaveAttribute("value", "1");
 });
 
 test("モデル切替で対応する思考量を保ち、非対応なら既定へ戻してIPCから省く", async ({ page }) => {
@@ -181,7 +181,7 @@ test("モデル切替で対応する思考量を保ち、非対応なら既定�
   await expect(thinking.locator("option")).toHaveCount(1);
   await panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true }).fill("既定の思考量で床を追加");
   await panel.getByRole("button", { name: "依頼を送信", exact: true }).click();
-  await expect(panel.getByRole("progressbar", { name: "依頼の反映と保存", exact: true })).toHaveAttribute("value", "3");
+  await expect(panel.getByRole("progressbar", { name: "依頼の反映と保存", exact: true })).toHaveAttribute("value", "1");
   const request = await page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.at(-1)!);
   expect(request.model).toBe("fixture-d");
   expect(request.reasoningEffort).toBeUndefined();
@@ -196,7 +196,7 @@ test("モデル切替で対応する思考量を保ち、非対応なら既定�
   await panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true }).fill("明示したモデル既定のまま相談");
   await panel.getByRole("button", { name: "依頼を送信", exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.length)).toBe(2);
-  await expect(panel.getByRole("progressbar", { name: "依頼の反映と保存", exact: true })).toHaveAttribute("value", "3");
+  await expect(panel.getByRole("progressbar", { name: "依頼の反映と保存", exact: true })).toHaveAttribute("value", "1");
   const explicitDefault = await page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.at(-1)!);
   expect(explicitDefault.model).toBe("fixture-b");
   expect(explicitDefault.reasoningEffort).toBeUndefined();
@@ -208,7 +208,7 @@ test("UIは低を初期送信し、MCPも直近のモデル能力で低を選び
   await expect(panel.getByRole("combobox", { name: "思考量", exact: true })).toHaveValue("low");
   await panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true }).fill("低い思考量で床を追加");
   await panel.getByRole("button", { name: "依頼を送信", exact: true }).click();
-  await expect(panel.getByRole("progressbar", { name: "依頼の反映と保存", exact: true })).toHaveAttribute("value", "3");
+  await expect(panel.getByRole("progressbar", { name: "依頼の反映と保存", exact: true })).toHaveAttribute("value", "1");
   expect(await page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.at(-1))).toMatchObject({ model: "fixture-a", reasoningEffort: "low" });
 
   expect((await call(page, "get_chatgpt_connection")).ok).toBe(true);

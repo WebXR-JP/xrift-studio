@@ -15,32 +15,6 @@ test("only the complete /goal command selects Goal and preserves the author's fu
   assert.equal(goal.parseChatgptComposerRequest(`/goal ${objective}`).prompt, objective);
 });
 
-test("changed passes get another review; ordinary requests and satisfied goals finish", () => {
-  assert.equal(goal.chatgptGoalNextPass(job({ mode: "build", plan: { hasMore: true } }), true), null);
-  assert.equal(goal.chatgptGoalNextPass(job({ plan: { hasMore: false } }), false), null);
-  assert.deepEqual(goal.chatgptGoalNextPass(job({ plan: { hasMore: false } }), true), { iteration: 2, noProgressPasses: 0 });
-  assert.deepEqual(goal.chatgptGoalNextPass(job({ goal: { iteration: 80, noProgressPasses: 2 } }), true), { iteration: 81, noProgressPasses: 0 });
-});
-
-test("three unchanged passes with unfinished work stop rather than looping forever", () => {
-  let value = job({ plan: { hasMore: true } });
-  for (let index = 0; index < 2; index++) value = { ...value, goal: goal.chatgptGoalNextPass(value, false) };
-  assert.throws(() => goal.chatgptGoalNextPass(value, false), /3回続けて/);
-});
-
-test("continuations retain decisions and saved evidence in a bounded conversation", () => {
-  const decision = { prompt: "確認事項への回答", result: "木製のベンチ" };
-  let history = [decision];
-  const value = job({ plan: { hasMore: true, remainingWork: "照明を整える" } });
-  for (let pass = 0; pass < 100; pass++) history = goal.chatgptGoalConversation(history, value);
-  assert.equal(history.length, 2);
-  assert.deepEqual(history[0], decision);
-  assert.equal(history[1].prompt, value.prompt);
-  assert.match(history[1].result, /ベンチを保存しました/);
-  assert.match(history[1].result, /照明を整える/);
-  assert.ok(new TextEncoder().encode(JSON.stringify(history)).byteLength <= 23 * 1024);
-});
-
 test("Goal history survives restart as stopped work and never resumes automatically", () => {
   let data;
   const storage = { getItem: () => data ?? null, setItem: (_, value) => { data = value; } };
