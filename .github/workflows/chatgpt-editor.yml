@@ -121,7 +121,8 @@ jobs:
             playwright-report
           if-no-files-found: ignore
   native:
-    needs: frontend
+    # Native checks use their own checkout and exclude generated app resources.
+    # They do not depend on frontend artifacts; keep both checks independent.
     strategy:
       fail-fast: false
       matrix:
