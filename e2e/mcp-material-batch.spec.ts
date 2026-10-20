@@ -1,7 +1,10 @@
+import { useOfficialFontMetrics } from "./official-font-metrics.fixture";
 import { expect, test, type Page } from "@playwright/test";
 import type { XriftMcpEditorResponse } from "../src/lib/tauri";
 import type { MaterialAsset } from "../src/lib/visual-editor/asset-manifest";
 import type { readMaterialBatchState } from "./material-batch.fixture";
+
+test.beforeEach(async ({ page }) => { await useOfficialFontMetrics(page); });
 
 async function state(page: Page): Promise<ReturnType<typeof readMaterialBatchState>> {
   return page.evaluate(async () => {

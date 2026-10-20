@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync, existsSync } from "node:fs";
 import { prepareDraftRelease, finalizeDraftRelease } from "./github-release.mjs";
 
 const commit = "a".repeat(40);
@@ -334,4 +335,13 @@ test("finalize validates tag/version agreement before requesting the release", a
   const fake = fakeGithub();
   await assert.rejects(finalize(fake, { version: "1.2.4" }), /must match app version/);
   assert.deepEqual(fake.calls, []);
+});
+
+// Playwright accepts a group containing one existing and one missing file. Check
+// every selection so removed specs cannot silently disappear from the gate.
+test("release workflow selects existing E2E files individually", () => {
+  const workflow = readFileSync(new URL("../.github/workflows/release.yml", import.meta.url), "utf8");
+  const selections = [...workflow.matchAll(/e2e\/[a-z0-9-]+\.spec\.ts/g)].map(match => match[0]);
+  assert.ok(selections.length > 0, "release E2E selections must be present");
+  for (const file of selections) assert.ok(existsSync(new URL(`../${file}`, import.meta.url)), `release selects missing spec: ${file}`);
 });
