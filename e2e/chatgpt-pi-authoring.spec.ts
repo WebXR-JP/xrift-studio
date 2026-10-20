@@ -112,9 +112,9 @@ test("Pi history tree branches a conversation without reverting the actual Scene
 test("Pi extension settings reject unpinned sources and persist a registered version", async ({ page }) => {
   await ready(page);
   await call(page, "open_chatgpt_panel");
-  await page.getByText("Pi拡張設定", { exact: true }).click();
+  await page.getByText("制作拡張の設定", { exact: true }).click();
   await expect(page.getByRole("checkbox", { name: "制作・配置・確認を自動分担する" })).toHaveCount(0);
-  const input = page.getByRole("textbox", { name: "外部Pi拡張" });
+  const input = page.getByRole("textbox", { name: "外部拡張" });
   await input.fill("npm:example@latest");
   await page.getByRole("button", { name: "拡張設定を保存" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "npm:package@1.2.3" })).toBeVisible();
