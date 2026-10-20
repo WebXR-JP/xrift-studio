@@ -1448,7 +1448,7 @@ function App() {
         }
         if (args.mode !== undefined && args.mode !== "build" && args.mode !== "plan" && args.mode !== "goal") throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "modeにはbuild・plan・goalを指定してください");
         if (args.target !== undefined && args.target !== "current" && args.target !== "new") throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "targetにはcurrentまたはnewを指定してください");
-        if (args.reasoningEffort !== undefined && (typeof args.reasoningEffort !== "string" || !["none", "minimal", "low", "medium", "high", "xhigh", "max"].includes(args.reasoningEffort))) throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "reasoningEffortはlist_chatgpt_modelsの対応する思考量から指定してください");
+        if (args.reasoningEffort !== undefined && (typeof args.reasoningEffort !== "string" || !["none", "minimal", "low", "medium", "high", "xhigh", "max"].includes(args.reasoningEffort))) throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "reasoningEffortはlist_chatgpt_modelsの対応する回答の検討度から指定してください");
         if (args.sessionId !== undefined && (typeof args.sessionId !== "string" || !chatgptSessionsRef.current.some(session => session.id === args.sessionId && session.projectId === context.projectId && session.sceneId === context.sceneId))) throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "このSceneのsessionIdを指定してください");
         if (args.attachedEntityIds !== undefined && (!Array.isArray(args.attachedEntityIds) || args.attachedEntityIds.length > 100 || args.attachedEntityIds.some(id => typeof id !== "string" || !bridge.currentBundle().scene.entities[id]) || args.target === "new")) throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "添付には現在のSceneにあるEntityを指定してください。新規ワールドへの添付はできません");
         const generationId = crypto.randomUUID();

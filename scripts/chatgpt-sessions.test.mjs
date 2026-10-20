@@ -302,7 +302,7 @@ test("large Unicode event histories obey a global byte budget and preserve newes
 test("copy includes every retained request, model, effort, Plan, saved results, errors and revert time", () => {
   const value = withTurn(turn("first"), turn("second", { status: "failed", error: "通信が止まりました", revertedAt: "2026-10-14T00:02:00.000Z" }));
   const transcript = api.chatgptSessionTranscript(value);
-  for (const expected of ["依頼 1", "依頼 2", "fixture-model", "思考量: low", "Lightの調整", "保存済み 1 / 1", "通信が止まりました", "変更を戻しました", "2026-10-14T00:02:00.000Z"]) assert.ok(transcript.includes(expected));
+  for (const expected of ["依頼 1", "依頼 2", "fixture-model", "回答の検討度: low", "Lightの調整", "保存済み 1 / 1", "通信が止まりました", "変更を戻しました", "2026-10-14T00:02:00.000Z"]) assert.ok(transcript.includes(expected));
   assert.equal((transcript.match(/Lightを右に動かして/g) || []).length, 2);
 });
 
