@@ -276,6 +276,6 @@ mod tests {
             None,
         )
         .await;
-        assert!(result.unwrap_err().contains("大きすぎ"));
+        assert!(result.unwrap_err().contains("データ量が上限を超えました"));
     }
 }
