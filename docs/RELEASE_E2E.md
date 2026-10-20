@@ -41,9 +41,13 @@
 
 1. Chromiumと必要なシステム依存の導入
 2. `pnpm e2e:smoke`
-3. ChatGPTのタブ、Itemの保存・削除、チャットからのMaterial・Skybox・Fog調整、次の依頼候補の検査
+3. Piによる正式なEditor操作・保存・取り消し・Plan・競合・停止・履歴・権限制御、Itemの保存・削除、接続・思考量、正式なMaterial編集・保存・UndoとSkybox描画・保存の検査
 4. ブラウザ公開・認証情報・MToon・Audioの検査
 5. ギズモ・Hierarchyのドラッグ・描画品質・共通MToon描画の検査
+
+旧チャット専用の結果設定UI・依頼候補のspecはPi移行で削除されたため選択しません。`chatgpt-pi-authoring.spec.ts`と`chatgpt-connection-reasoning.spec.ts`で現行の制作導線を、`mcp-material-batch.spec.ts`と`sky-shaders.spec.ts`で正式な編集・描画経路を確認します。`chatgpt-model-source-integrity.spec.ts`も選択しますが、実Blender出力がない場合はSKIPし、必須の制作検査の代わりにはしません。
+
+`verify`のリリース回帰テストは、workflowが選ぶ個々のspecの存在も確認します。Playwrightは複数指定の一部が存在すれば成功し得るため、選択グループ全体の検出件数だけでは判定しません。
 
 型検査は`verify` jobで1回だけ行います。コンパイラfixtureと公開ステージング検査、E2Eのアップロード禁止境界は維持します。
 

@@ -132,11 +132,11 @@ jobs:
       - name: Run release E2E before upload
         run: pnpm e2e:smoke
 
-      - name: Check ChatGPT tabs and Item cleanup before upload
-        run: pnpm exec playwright test e2e/chatgpt-tabs.spec.ts e2e/world-items.spec.ts
+      - name: Check Pi authoring and Item cleanup before upload
+        run: pnpm exec playwright test e2e/chatgpt-pi-authoring.spec.ts e2e/world-items.spec.ts
 
-      - name: Check chat setting edits and prompt suggestions
-        run: pnpm exec playwright test e2e/chatgpt-scene-controls.spec.ts e2e/chatgpt-material-controls.spec.ts e2e/chatgpt-prompt-suggestions.spec.ts
+      - name: Check Pi connection, model sources and formal material/sky edits
+        run: pnpm exec playwright test e2e/chatgpt-connection-reasoning.spec.ts e2e/chatgpt-model-source-integrity.spec.ts e2e/mcp-material-batch.spec.ts e2e/sky-shaders.spec.ts
 
       - name: Check browser publication, credentials and built runtime rendering
         run: pnpm exec playwright test e2e/browser-item-publish.spec.ts e2e/browser-api-key.spec.ts e2e/browser-mtoon-shell.spec.ts e2e/runtime-shell-audio.spec.ts
