@@ -66,7 +66,7 @@ node --test scripts/chatgpt-authoring-host.test.mjs scripts/chatgpt-sessions.tes
 pnpm e2e:test e2e/chatgpt-pi-authoring.spec.ts
 ```
 
-`pnpm pi:prepare`は導入済みのlockfileに一致する依存を配布リソースへコピーします。Tauriの開発・配布コマンドから自動で呼び出します。実アカウントでの認証・推論とOS別アプリの起動は別途確認してください。詳しい経路は[Pi SDKによるStudio制作](./docs/CHATGPT_AUTHORING.md)を参照してください。
+`pnpm pi:prepare`は導入済みのlockfileに一致する依存を配布リソースへコピーします。Tauriの開発・配布コマンドは、MCP sidecarとアプリ本体のビルド前にこの処理を自動で呼び出します。開発時にもTauriが`src-tauri/resources/pi`の存在を検査するため、SDKのコンパイルだけでは起動準備が完了しません。MCP sidecar単体の準備ではアプリ用の配布リソースを検査対象から外し、未生成の状態でもビルドできます。アプリ本体ではリソースの検査・同梱を維持します。実アカウントでの認証・推論とOS別アプリの起動は別途確認してください。詳しい経路は[Pi SDKによるStudio制作](./docs/CHATGPT_AUTHORING.md)を参照してください。
 
 ### 導入済みBlenderからの実GLB取り込み確認
 

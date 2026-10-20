@@ -156,6 +156,8 @@ Sceneが変わった場合は手動編集を保持してエラーを返す。現
 `pnpm pi:prepare`はSDKを型検査し、導入済みのlockfileに一致する依存を`src-tauri/resources/pi`へ実ファイルとして配置する。
 追加の依存解決・インストールスクリプト・シンボリックリンクには依存しない。
 Tauriの配布リソースにこのディレクトリを含める。開発時はworkspaceのコンパイル済みrunnerを使う。
+開発起動と配布ビルドはいずれも、MCP sidecar・アプリ本体のビルド前に`pnpm pi:prepare`を実行する。開発ビルドでもTauriは配布リソースの存在を検査する。
+MCP sidecar単体のビルド中だけ、`TAURI_CONFIG`で`externalBin`と`resources`を空配列にする。未生成のアプリ用リソースを必要とせずsidecarを準備でき、アプリ本体の検査・同梱設定は変わらない。
 
 ```bash
 pnpm pi:test

@@ -4,7 +4,7 @@
   "version": "1.0.9",
   "identifier": "net.xrift.studio",
   "build": {
-    "beforeDevCommand": "pnpm --filter @xrift/studio-pi build && pnpm mcp:sidecar:prepare && pnpm dev",
+    "beforeDevCommand": "pnpm pi:prepare && pnpm mcp:sidecar:prepare && pnpm dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "pnpm pi:prepare && pnpm mcp:sidecar:prepare:release && pnpm build",
     "frontendDist": "../dist"

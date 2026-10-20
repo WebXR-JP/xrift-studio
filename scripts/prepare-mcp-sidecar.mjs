@@ -80,9 +80,11 @@ if (reusePrebuilt && existsSync(destination)) {
 }
 
 run("cargo", cargoArguments, false, {
-  // The sidecar is the file Tauri validates. Disable that validation only
-  // while compiling the sidecar itself so a clean checkout can bootstrap.
-  TAURI_CONFIG: JSON.stringify({ bundle: { externalBin: [] } }),
+  // The sidecar is the file Tauri validates. App resources may also be
+  // generated later (for example before the universal macOS app build).
+  // Exclude both only while compiling this standalone sidecar so a clean
+  // checkout can bootstrap; the main app still validates and bundles them.
+  TAURI_CONFIG: JSON.stringify({ bundle: { externalBin: [], resources: [] } }),
 });
 
 mkdirSync(destinationDirectory, { recursive: true });
