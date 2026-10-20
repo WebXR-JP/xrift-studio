@@ -116,7 +116,7 @@ export async function runStudioAgent(input: PiInput, host: HostCall, emit: (even
     ];
     const names = new Set([...studioTools, ...controls].map(tool => tool.name));
     for (const extension of resources.loader.getExtensions().extensions) for (const name of extension.tools.keys()) {
-      if (names.has(name) || ["read", "write", "edit", "bash", "powershell"].includes(name)) throw new Error(`Studioの操作と同名の拡張ツールは登録できません：${name}`);
+      if (names.has(name) || ["read", "write", "edit", "bash", "powershell"].includes(name)) throw new Error(`Studioの操作と同名の追加機能の操作は登録できません：${name}`);
     }
     const { session } = await createAgentSession({ modelRuntime: runtime, model, resourceLoader: resources.loader, settingsManager: settings, sessionManager: manager,
       noTools: "builtin", tools: ["+codemode", "+tool_search"], excludeTools: ["read", "write", "edit", "bash", "powershell", "find", "grep", "ls"],
@@ -141,7 +141,7 @@ export async function runStudioAgent(input: PiInput, host: HostCall, emit: (even
     let accepting = true;
     try {
       check();
-      await session.bindExtensions({ mode: "print", onError: error => emit({ type: "progress", message: `拡張エラー：${error.error.slice(0, 500)}` }) });
+      await session.bindExtensions({ mode: "print", onError: error => emit({ type: "progress", message: `追加機能でエラーが起きました：${error.error.slice(0, 500)}` }) });
       detach = live?.attach(async message => {
         const fingerprint = JSON.stringify(message);
         if (accepted.has(message.id)) {

@@ -93,7 +93,7 @@ pub async fn chatgpt_pi_delete_history(
 }
 fn pinned_package(source: &str) -> Result<(&str, &str), String> {
     let invalid =
-        || "拡張はnpm:package@1.2.3のように、正確なバージョンを指定してください".to_string();
+        || "追加機能はnpm:package@1.2.3のように、正確なバージョンを指定してください".to_string();
     let spec = source.strip_prefix("npm:").ok_or_else(invalid)?;
     let (name, version) = spec.rsplit_once('@').ok_or_else(invalid)?;
     let parts: Vec<&str> = name.strip_prefix('@').unwrap_or(name).split('/').collect();
@@ -127,10 +127,10 @@ async fn prepare_packages(
         let package_root = install_root.join("node_modules").join(name);
         let marker = install_root.join("installed.json");
         if !marker.is_file() || !package_root.join("package.json").is_file() {
-            progress.send(json!({ "type": "progress", "message": format!("拡張を導入しています：{source}") })).map_err(|_| "制作画面との接続が終了しました")?;
+            progress.send(json!({ "type": "progress", "message": format!("追加機能を導入しています：{source}") })).map_err(|_| "制作画面との接続が終了しました")?;
             tokio::fs::create_dir_all(&install_root)
                 .await
-                .map_err(|_| "拡張の保存先を作れませんでした")?;
+                .map_err(|_| "追加機能の保存先を作れませんでした")?;
             let mut command = tokio::process::Command::new(&paths.node_exe);
             crate::configure_runtime_command(&mut command, paths);
             command
@@ -154,24 +154,24 @@ async fn prepare_packages(
                 command
                     .status()
                     .await
-                    .map_err(|_| "拡張の導入を開始できませんでした".to_string())
+                    .map_err(|_| "追加機能の導入を開始できませんでした".to_string())
             })
             .await?;
             if !status.success() {
-                return Err(format!("拡張の導入に失敗しました：{source}。設定を修正または無効化して再試行してください"));
+                return Err(format!("追加機能の導入に失敗しました：{source}。設定を修正または無効化して再試行してください"));
             }
             let manifest: Value = serde_json::from_slice(
                 &tokio::fs::read(package_root.join("package.json"))
                     .await
-                    .map_err(|_| "導入した拡張を確認できません")?,
+                    .map_err(|_| "導入した追加機能を確認できません")?,
             )
-            .map_err(|_| "拡張のpackage.jsonが不正です")?;
+            .map_err(|_| "追加機能のpackage.jsonが不正です")?;
             if manifest["name"] != name || manifest["version"] != version {
-                return Err("拡張の名前またはバージョンが一致しません".into());
+                return Err("追加機能の名前またはバージョンが一致しません".into());
             }
             tokio::fs::write(&marker, source)
                 .await
-                .map_err(|_| "拡張の導入結果を保存できません")?;
+                .map_err(|_| "追加機能の導入結果を保存できません")?;
         }
         packages.push(json!({ "source": source, "path": package_root }));
     }
@@ -287,11 +287,11 @@ pub async fn chatgpt_pi_run(
     let context_value: Value =
         serde_json::from_str(&context).map_err(|_| "制作条件のJSONが不正です")?;
     let sources: Vec<String> = match context_value["options"].get("extensions") {
-        Some(value) => serde_json::from_value(value.clone()).map_err(|_| "拡張の一覧が不正です")?,
+        Some(value) => serde_json::from_value(value.clone()).map_err(|_| "追加機能の一覧が不正です")?,
         None => Vec::new(),
     };
     if sources.len() > 8 {
-        return Err("拡張は8件まで登録できます".into());
+        return Err("追加機能は8件まで登録できます".into());
     }
     for source in &sources {
         pinned_package(source)?;
