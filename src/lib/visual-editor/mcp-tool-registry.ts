@@ -202,6 +202,7 @@ export const XRIFT_MCP_TOOLS = [
 
   { name: "capture_scene_debug", surface: "debug" },
   { name: "capture_scene_view", surface: "debug" },
+  { name: "save_project", surface: "debug" },
   { name: "set_scene_view_camera", surface: "debug" },
 
   { name: "start_recording", surface: "debug" },

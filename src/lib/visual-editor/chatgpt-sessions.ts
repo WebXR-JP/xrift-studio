@@ -94,6 +94,7 @@ function normalizeTurn(value: unknown, interrupted: boolean): ChatgptGeneration 
   const wasInterrupted = interrupted && (value.status === "running" || value.status === "planned" || harness?.phase === "running" || harness?.phase === "stopping");
   const turn: ChatgptGeneration = {
     generationId: identifier(value.generationId),
+    ...(value.engine === "pi" ? { engine: "pi" as const } : {}),
     status: wasInterrupted ? "cancelled" : value.status as ChatgptGeneration["status"],
     cancelling: interrupted ? false : value.cancelling === true,
     model: text(value.model, 128), prompt: text(value.prompt, 2000),

@@ -6492,6 +6492,7 @@ pub fn run() {
             chatgpt::chatgpt_models,
             chatgpt::chatgpt_authoring_contract,
             chatgpt::chatgpt_plan,
+            chatgpt::pi_agent::run_pi_agent,
             chatgpt::modeling::chatgpt_model_specs,
             chatgpt::modeling::chatgpt_review_model,
             chatgpt::modeling::chatgpt_review_scene,

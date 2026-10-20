@@ -52,6 +52,8 @@ MToon・VRMの生成コードには、固定した`@pixiv/three-vrm`の配布ソ
 
 ## ChatGPTと手動編集を続ける
 
+新規依頼は`pi-authoring-host.ts`と同梱のPi SDKを使い、正式なMCP Editor処理へ接続する。[Pi SDKによる制作](./PI_AGENT.md)を先に読む。scope・revision・保存・画像・完了条件の検査を保持する。以下のPlan専用契約は旧形式Planの互換adapterに適用し、新しい依頼の別経路を追加しない。
+
 `/goal`とMCPの`mode: "goal"`は、同じgenerationIdで制作・保存・最新Sceneの見直しを続ける。変更後には必ずもう一度確認し、変更も残り作業もない場合に完了する。進展のない継続は3回で停止する。質問、停止、失敗、Scene変更、再起動の扱いと、native契約7の`ChatgptSceneContext.goal`は[ChatGPT制作の契約](./CHATGPT_AUTHORING.md#goalの継続制作)に従う。
 
 Sceneの正本は、開いているEditor bridgeの最新bundleとする。各依頼と再計画でScene・素材を読み直し、会話は制作意図と保存済みの作業を補う参照として渡す。以前のPlanの全項目を完了済みと扱わない。

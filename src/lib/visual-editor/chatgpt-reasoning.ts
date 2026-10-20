@@ -3,7 +3,7 @@ import type { ChatgptConnection, ChatgptModel } from "../tauri";
 /** An explicit selection, including the empty API-default choice, wins. */
 export function preferredChatgptReasoningEffort(model?: ChatgptModel): string {
   const supported = model?.supportedReasoningEfforts ?? [];
-  if (supported.includes("low")) return "low";
+  if (supported.includes("medium")) return "medium";
   return model?.defaultReasoningEffort && supported.includes(model.defaultReasoningEffort) ? model.defaultReasoningEffort : "";
 }
 

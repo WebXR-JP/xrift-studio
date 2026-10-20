@@ -333,6 +333,7 @@ export type RecordingFileSummary = {
 export type XriftMcpEditorRequestEvent = {
   id: string;
   clientName: string;
+  ownerGenerationId?: string;
   tool: string;
   arguments: Record<string, unknown>;
 };
@@ -835,6 +836,12 @@ export const tauri = {
     return invoke<{ plan: string; assetCandidates: ExternalStoreAsset[] }>("chatgpt_plan", { model, prompt, options, gltfMaterials, generationId, sceneContext, reasoningEffort, resourceContext });
   },
   chatgptCancelGeneration: (generationId: string) => invoke<{ generationId: string; cancelled: boolean }>("chatgpt_cancel_generation", { generationId }),
+  runPiAgent: (request: { generationId: string; sessionId: string; projectId: string; sceneId: string; model: string; prompt: string; reasoningEffort?: string; mode: "build" | "plan" },
+    onEvent: (event: { type: string; tool?: string; text?: string; ok?: boolean; changed?: boolean }) => void) => {
+    const channel = new Channel<{ type: string; tool?: string; text?: string; ok?: boolean; changed?: boolean }>();
+    channel.onmessage = onEvent;
+    return invoke<{ summary: string; completed: boolean }>("run_pi_agent", { request, onEvent: channel });
+  },
   chatgptModelSpecs: (model: string, briefs: import("./visual-editor/chatgpt-modeling").BlenderModelBrief[], generationId: string,
     reasoningEffort: string | undefined, onModel: (result: { index: number; model: import("./visual-editor/chatgpt-modeling").BlenderModelSpec }) => void,
     contexts?: { prompt: string; originalPrompt?: string; previous?: import("./visual-editor/chatgpt-modeling").BlenderModelSpec }[]) => {

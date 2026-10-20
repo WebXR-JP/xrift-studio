@@ -2825,6 +2825,16 @@ export function VisualEditorPrototype({
               { projectId, sceneId },
             );
           }
+          if (request.tool === "save_project") {
+            const revision = mcpRevisionRef.current;
+            if (args.expectedRevision !== revision) throw new XriftMcpEditorToolError("STALE_REVISION", "get_editor_contextで最新のrevisionを取得してください");
+            const path = await mcpProjectBridgeActionsRef.current?.saveNow();
+            if (!path || projectId !== bundleRef.current.project.projectId || sceneId !== bundleRef.current.scene.sceneId || revision !== mcpRevisionRef.current) {
+              throw new XriftMcpEditorToolError("STALE_REVISION", "保存中にSceneが変わりました。最新の状態を確認して保存してください");
+            }
+            await completeResponse({ id: request.id, ok: true, result: { projectId, sceneId, revision, saved: true } });
+            return;
+          }
           if (["begin_world_authoring", "get_world_authoring", "review_world_authoring", "complete_world_authoring", "cancel_world_authoring"].includes(request.tool)) {
             if (request.tool === "begin_world_authoring" && authoringOwnerBusyRef.current) throw new XriftMcpEditorToolError("EDITOR_BUSY", "現在の制作が終わるか停止してから、MCPの制作目標を開始してください。");
             const root = projectPathRef.current;
@@ -2938,9 +2948,13 @@ export function VisualEditorPrototype({
           }
           if (request.tool === "capture_scene_view") {
             const fingerprint = await authoringFingerprint(bundleRef.current);
+            const spawn = resolveRuntimeSpawn(bundleRef.current.scene);
+            const worldView: SceneScreenshotRequest["worldView"] = args.authoringView === "spawn"
+              ? { kind: "spawn", position: spawn.position, yaw: spawn.yaw }
+              : args.authoringView === "iso" ? { kind: "overview" } : undefined;
             // A frame is only worth anything from the Edit camera the caller
             // just placed; during Play the viewport is the play copy.
-            const captured = await requestSceneScreenshot();
+            const captured = await requestSceneScreenshot(undefined, worldView);
             if (!captured.ok) {
               throw new XriftMcpEditorToolError(
                 "SCENE_VIEW_CAPTURE_FAILED",
@@ -2963,7 +2977,7 @@ export function VisualEditorPrototype({
                 4,
             );
             let authoring = undefined;
-            if (args.authoringView !== undefined) {
+            if (args.authoringView !== undefined && args.recordAuthoring !== false) {
               const root = projectPathRef.current;
               if (!root) throw new Error("自動保存が完了していません。保存状態を確認してください。");
               if (fingerprint !== await authoringFingerprint(bundleRef.current)) throw new Error("撮影中にシーンが変更されました。撮り直してください。");

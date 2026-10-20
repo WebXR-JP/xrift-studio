@@ -3,7 +3,7 @@
 // Source of truth: src/lib/visual-editor/mcp-tool-registry.ts
 // Regenerate with: pnpm mcp:tool-names
 
-pub const MCP_TOOL_NAMES: [&str; 168] = [
+pub const MCP_TOOL_NAMES: [&str; 169] = [
     "list_projects",
     "list_starter_templates",
     "create_project",
@@ -163,6 +163,7 @@ pub const MCP_TOOL_NAMES: [&str; 168] = [
     "install_external_asset",
     "capture_scene_debug",
     "capture_scene_view",
+    "save_project",
     "set_scene_view_camera",
     "start_recording",
     "stop_recording",

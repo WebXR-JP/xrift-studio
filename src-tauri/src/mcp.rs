@@ -97,6 +97,8 @@ enum LimitedLine {
 struct XriftMcpEditorRequestEvent {
     id: String,
     client_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    owner_generation_id: Option<String>,
     tool: String,
     arguments: Value,
 }
@@ -520,6 +522,7 @@ async fn handle_broker_connection(
     let event = XriftMcpEditorRequestEvent {
         id: request_id.clone(),
         client_name: envelope.client_name,
+        owner_generation_id: None,
         tool: envelope.request.tool,
         arguments: envelope.request.arguments,
     };
@@ -585,6 +588,28 @@ async fn handle_broker_connection(
         .write_all(b"\n")
         .await
         .map_err(|error| error.to_string())
+}
+
+/// Internal agents use exactly the same Editor request/response path as MCP clients.
+/// No document mutation or filesystem fallback exists in the native adapter.
+pub(crate) async fn dispatch_internal(
+    app: &AppHandle, id: String, tool: String, arguments: Value, owner_generation_id: &str,
+) -> Result<XriftMcpEditorResponse, String> {
+    if !MCP_TOOL_NAMES.contains(&tool.as_str()) { return Err("未対応のStudio toolです".into()); }
+    let state = app.state::<XriftMcpBrokerState>();
+    let _guard = tokio::time::timeout(Duration::from_secs(10), state.request_lock.lock())
+        .await.map_err(|_| "Studioの別の操作が完了するまで待ってください")?;
+    let (sender, receiver) = oneshot::channel();
+    state.pending.lock().await.insert(id.clone(), sender);
+    let emitted = app.get_webview_window("main").ok_or("Editorがありません")?
+        .emit(MCP_EVENT_NAME, XriftMcpEditorRequestEvent {
+            id: id.clone(), client_name: "Studio Pi Agent".into(), owner_generation_id: Some(owner_generation_id.into()), tool: tool.clone(), arguments,
+        });
+    if emitted.is_err() { state.pending.lock().await.remove(&id); return Err("Editorに接続できません".into()); }
+    let response = tokio::time::timeout(Duration::from_secs(request_timeout_seconds(&tool)), receiver).await;
+    state.pending.lock().await.remove(&id);
+    response.map_err(|_| "Studio toolの応答が時間切れになりました")?
+        .map_err(|_| "Editorとの接続が終了しました".into())
 }
 
 async fn write_broker_error(
@@ -2022,8 +2047,16 @@ fn material_patch_schema() -> Value {
 })
 }
 
-fn tool_definitions() -> Value {
+pub(crate) fn tool_definitions() -> Value {
     json!([
+        {
+            "name": "save_project",
+            "description": "Flush current Editor drafts and autosave through Studio's normal validation and persistence. Returns saved=true only for the same current revision after saving. Read get_editor_context and retry on STALE_REVISION.",
+            "inputSchema": { "type": "object", "properties": {
+                "projectId": { "type": "string" }, "sceneId": { "type": "string" },
+                "expectedRevision": { "type": "integer", "minimum": 0 }
+            }, "required": ["projectId", "sceneId", "expectedRevision"], "additionalProperties": false }
+        },
         {
             "name": "list_projects",
             "description": "List the projects in the Studio Library with path, kind, format, title, last upload and which one is open. Call it before open_project, and to learn whether anything is open at all: while nothing is open, every editing tool answers EDITOR_UNAVAILABLE. Only Visual projects (editable: true) can be opened here; Classic projects are code projects and stay outside MCP. Needs no open project.",
@@ -3048,7 +3081,8 @@ fn tool_definitions() -> Value {
                 "properties": {
                     "projectId": { "type": "string", "minLength": 1 },
                     "sceneId": { "type": "string", "minLength": 1 },
-                    "authoringView": { "type": "string", "enum": ["spawn", "iso"] }
+                    "authoringView": { "type": "string", "enum": ["spawn", "iso"] },
+                    "recordAuthoring": { "type": "boolean", "description": "Default true. False captures the actual requested view without recording evidence in an explicit world-authoring run." }
                 },
                 "required": ["projectId", "sceneId"],
                 "additionalProperties": false

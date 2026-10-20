@@ -1,10 +1,12 @@
 packages:
   - "packages/*"
+injectWorkspacePackages: true
 
 allowBuilds:
+  '@google/genai': false
   esbuild: true
+  protobufjs: false
   sharp: false
 
 overrides:
   dompurify: 3.4.12
-

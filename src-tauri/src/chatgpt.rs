@@ -1,5 +1,6 @@
 //! Native ChatGPT connection. Renewable credentials are kept only in the OS vault.
 mod vault;
+pub(crate) mod pi_agent;
 pub(crate) mod modeling;
 mod public_catalog;
 use public_catalog::{cached_public_catalog, retrieve_initial_catalog_candidates};

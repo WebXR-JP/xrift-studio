@@ -40,6 +40,8 @@ pnpm install
 pnpm tauri:dev
 ```
 
+内部制作エージェントは同梱Pi SDKを使います。`pnpm agent:test`でSDK連携を確認し、`pnpm agent:prepare`で配布用workerとproduction依存を作ります。Tauriの開発・配布コマンドからも準備を実行します。詳細は[Pi SDKによる制作](./docs/PI_AGENT.md)を参照してください。
+
 依存管理にはpnpmを使います。`pnpm-lock.yaml`を唯一のロックファイルとして更新し、CIでは`pnpm install --frozen-lockfile`で再現性を確認します。`.npmrc`のTakumi Guard設定を、依存の導入と公開用shellの生成で引き継ぎます。
 
 ## UX の確認

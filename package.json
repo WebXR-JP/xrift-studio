@@ -13,6 +13,9 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "agent:build": "tsc -p packages/xrift-studio-agent/tsconfig.json",
+    "agent:prepare": "pnpm agent:build && node scripts/prepare-pi-agent.mjs",
+    "agent:test": "pnpm agent:build && node --test packages/xrift-studio-agent/dist/runtime.test.js",
     "dev": "vite",
     "build": "tsc && vite build",
     "release:snapshot": "node scripts/fetch-release-snapshot.mjs",

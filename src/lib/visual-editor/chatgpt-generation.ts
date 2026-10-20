@@ -92,6 +92,7 @@ export function editChatgptEntity(bundle: XriftMcpEditorContext["bundle"], edit:
   return { bundle: current, entityId: edit.entityId };
 }
 export type ChatgptGeneration = {
+  engine?: "pi";
   generationId: string;
   harness?: import("./chatgpt-harness-runtime").ChatgptHarnessSnapshot;
   contextRefs?: import("./chatgpt-harness-context-ref").ChatgptHarnessContextRef[];

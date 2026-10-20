@@ -1,5 +1,7 @@
 # ChatGPT制作機能の拡張
 
+新しい依頼の内部ハーネスはPi SDKへ移行した。現在の構成、正式なEditor tool、認証、画像による完了確認、同梱・検証は[Pi SDKによる制作](./PI_AGENT.md)を参照する。以降の構造化Planの説明は、保存済みの旧形式Planを適用する互換adapterに関するもの。新しい依頼の失敗時にこのadapterへ自動で切り替えない。
+
 Studio内のChatGPTは、利用できる操作とComponent定義を読み、構造化したPlanを返す。実行は通常のEditor操作を通し、モデルの出力でScene文書を直接置換しない。
 
 制作方針と制作方法の説明は`world-authoring-guide.json`をMCP・制作専用スキルと共有する。nativeは実際の操作Schemaに合う詳細だけを追加し、素材検索とコード生成を別の応答で扱う。原本の事前検証、変更のないcommitの省略、同じ不合格レビューの再利用条件は[ワールド制作ハーネス](./WORLD_AUTHORING_HARNESS.md)を参照する。

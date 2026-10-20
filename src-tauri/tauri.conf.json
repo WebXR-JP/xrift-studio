@@ -4,9 +4,9 @@
   "version": "1.0.9",
   "identifier": "net.xrift.studio",
   "build": {
-    "beforeDevCommand": "pnpm mcp:sidecar:prepare && pnpm dev",
+    "beforeDevCommand": "pnpm agent:build && pnpm mcp:sidecar:prepare && pnpm dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "pnpm mcp:sidecar:prepare:release && pnpm build",
+    "beforeBuildCommand": "pnpm agent:prepare && pnpm mcp:sidecar:prepare:release && pnpm build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -47,6 +47,7 @@
       }
     ],
     "externalBin": ["binaries/xrift-studio-mcp-sidecar"],
+    "resources": { "resources/pi-agent/": "pi-agent/" },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

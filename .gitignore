@@ -8,6 +8,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+src-tauri/resources/pi-agent/
 dist
 dist-ssr
 preview-dist

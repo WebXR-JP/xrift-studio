@@ -124,6 +124,8 @@ document toolの戻り値には`harness`が付くことがある。同じ種類�
 
 ### ChatGPTによる現在のSceneの編集
 
+Studio内の新しい依頼は[Pi SDK](./PI_AGENT.md)で実行する。操作のschemaとEditor handlerは外部MCPと共有し、`save_project`で下書きと自動保存をflushする。保存済み旧形式Planの適用だけは従来のadapterを使う。以下の旧Planのpass予算と内部処理は、新しいPiの20分・256操作の上限とは別である。
+
 制作チャットの`/goal 目標`は、既存の`generate_chatgpt_world`へ`mode: "goal"`を指定すると同じ継続制作を開始できる。現在のSceneを各回で取得し、変更を保存して見直しを続け、必要な改善がなくなったら完了する。`cancel_chatgpt_generation`で停止する。質問待ち、進展なし、失敗、Scene変更では保存済みの成果を保持する。
 
 Studio内ChatGPTは同じgeneration/run IDの制作runtimeを使い、pass・repair・推論工程・変更工程・時間の予算を継続して数える。既定はpass 12回、repair 4回、hostへ登録した推論工程24回、変更工程192回、active time 20分、1工程4分。productionの上限1〜6回も併用し、先に到達した条件で停止する。確認待ちはpauseしてactive timeから除く。native内部のHTTP requestとtool attemptの全数をこの推論工程数として数えたとは扱わない。native内の既存loop・retry上限は別に維持する。
