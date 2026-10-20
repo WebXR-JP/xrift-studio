@@ -14,7 +14,7 @@ use std::{
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 use tauri_plugin_opener::OpenerExt;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -83,6 +83,127 @@ trait CredentialStore: Send + Sync {
     fn delete(&self, entry: &str) -> Result<(), String>;
 }
 struct OsCredentialStore;
+impl OsCredentialStore {
+    fn supported() -> Result<(), String> {
+        // Unsupported platforms must never fall back to keyring's mock store.
+        if !cfg!(any(
+            target_os = "windows",
+            target_os = "macos",
+            target_os = "linux"
+        )) {
+            return Err("この端末ではChatGPTの接続を安全に保存できません".into());
+        }
+        Ok(())
+    }
+}
+impl CredentialStore for OsCredentialStore {
+    fn read(&self, entry: &str) -> Result<Option<String>, String> {
+        Self::supported()?;
+        vault::read(VAULT_SERVICE, entry)
+    }
+    fn write(&self, entry: &str, value: &str) -> Result<(), String> {
+        Self::supported()?;
+        vault::write(VAULT_SERVICE, entry, value)
+    }
+    fn delete(&self, entry: &str) -> Result<(), String> {
+        Self::supported()?;
+        vault::delete(VAULT_SERVICE, entry)
+    }
+}
+async fn vault_read(
+    store: Arc<dyn CredentialStore>,
+    entry: &'static str,
+) -> Result<Option<String>, String> {
+    tokio::task::spawn_blocking(move || store.read(entry))
+        .await
+        .map_err(|_| "保存した接続を読み取れませんでした".to_string())?
+}
+async fn vault_write(
+    store: Arc<dyn CredentialStore>,
+    entry: &'static str,
+    value: String,
+) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || store.write(entry, &value))
+        .await
+        .map_err(|_| "接続を保存できませんでした".to_string())?
+}
+async fn vault_delete(store: Arc<dyn CredentialStore>) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || store.delete(SESSION_ENTRY))
+        .await
+        .map_err(|_| "保存した接続を削除できませんでした".to_string())?
+}
+fn registration(session: &Session) -> Registration {
+    Registration {
+        client_id: session.client_id.clone(),
+        subject: session.subject.clone(),
+        email: session.email.clone(),
+    }
+}
+fn valid_registration(value: &Registration) -> bool {
+    !value.client_id.is_empty()
+        && value.client_id != "dynamic_agent_client"
+        && value.client_id.len() <= 512
+        && !value.subject.is_empty()
+        && value.subject.len() <= 1024
+}
+fn saved_session(session: &Session) -> Result<String, String> {
+    let refresh_token = session
+        .refresh_token
+        .as_ref()
+        .filter(|v| !v.is_empty())
+        .ok_or("更新用の認証情報がありません。次回起動時は再接続してください")?;
+    serde_json::to_string(&SavedSession {
+        version: 1,
+        registration: registration(session),
+        refresh_token: refresh_token.clone(),
+        scopes: session.scopes.clone(),
+        refresh_expires_at: now().saturating_add(REFRESH_LIFETIME),
+    })
+    .map_err(|_| "接続を保存できませんでした".into())
+}
+fn decode_saved_session(value: &str) -> Result<Session, String> {
+    let saved: SavedSession = serde_json::from_str(value)
+        .map_err(|_| "保存したChatGPTの接続が不正です。再接続してください")?;
+    if saved.version != 1
+        || !valid_registration(&saved.registration)
+        || saved.refresh_token.is_empty()
+        || saved.refresh_token.len() > 16_384
+        || saved.refresh_expires_at <= now()
+    {
+        return Err("保存したChatGPTの接続の有効期限が切れています。再接続してください".into());
+    }
+    Ok(Session {
+        client_id: saved.registration.client_id,
+        subject: saved.registration.subject,
+        email: saved.registration.email,
+        id_token: String::new(),
+        access_token: String::new(),
+        refresh_token: Some(saved.refresh_token),
+        scopes: saved.scopes,
+        expires_at: 0,
+    })
+}
+async fn persist_session(state: &ChatgptState, session: &Session) -> Result<(), String> {
+    let account = registration(session);
+    *state
+        .4
+        .lock()
+        .map_err(|_| "アカウントを保存できませんでした")? = Some(account.clone());
+    let value = saved_session(session);
+    // Save the rotating credential before the auxiliary account entry. A
+    // failure updating that entry must not leave an invalid old credential.
+    match value.as_ref() {
+        Ok(value) => vault_write(state.3.clone(), SESSION_ENTRY, value.clone()).await?,
+        Err(_) => vault_delete(state.3.clone()).await?,
+    }
+    vault_write(
+        state.3.clone(),
+        REGISTRATION_ENTRY,
+        serde_json::to_string(&account).map_err(|_| "アカウントを保存できませんでした")?,
+    )
+    .await?;
+    value.map(|_| ())
+}
 struct GenerationControl {
     id: String,
     cancelled: AtomicBool,
