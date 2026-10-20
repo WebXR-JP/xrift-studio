@@ -12,7 +12,7 @@ export function observeSession(session: AgentSession, officialNames: Set<string>
     emit({ type: "assistant", text: text.slice(-32_000) });
   };
   const unsubscribe = session.subscribe(event => {
-    if (event.type === "turn_start") emit({ type: "activity", phase: "thinking", message: "Piが次の作業を考えています" });
+    if (event.type === "turn_start") emit({ type: "activity", phase: "thinking", message: "次の作業を考えています" });
     if (event.type === "message_start" && event.message.role === "assistant") { sentAt = 0; assistant(""); }
     if (event.type === "message_update" && event.message.role === "assistant" && event.assistantMessageEvent.type === "text_delta") {
       assistant(event.message.content.filter(block => block.type === "text").map(block => block.text).join("\n"));
@@ -29,11 +29,11 @@ export function observeSession(session: AgentSession, officialNames: Set<string>
     }
     if (event.type === "tool_execution_start") {
       usage.toolCalls++;
-      if (!officialNames.has(event.toolName)) emit({ type: "progress", operationId: event.toolCallId, readOnly: true, tool: event.toolName, message: `${event.toolName} を実行しています` });
+      if (!officialNames.has(event.toolName)) emit({ type: "progress", operationId: event.toolCallId, readOnly: true, tool: event.toolName, message: event.toolName === "tool_search" ? "使える操作を確認しています" : "作業を進めています" });
     }
-    if (event.type === "compaction_start") emit({ type: "activity", phase: "compacting", message: "Piが会話を要約して作業を続けています" });
-    if (event.type === "auto_retry_start") emit({ type: "activity", phase: "retrying", message: `Piが接続を再試行しています（${event.attempt}回目）` });
-    if (event.type === "auto_retry_end" && !event.success) emit({ type: "activity", phase: "retrying", message: "Piの接続再試行を終えました" });
+    if (event.type === "compaction_start") emit({ type: "activity", phase: "compacting", message: "会話を整理して作業を続けています" });
+    if (event.type === "auto_retry_start") emit({ type: "activity", phase: "retrying", message: `接続を再試行しています（${event.attempt}回目）` });
+    if (event.type === "auto_retry_end" && !event.success) emit({ type: "activity", phase: "retrying", message: "制作の接続再試行を終えました" });
   });
   return { usage, dispose: () => { unsubscribe(); emit({ type: "usage", usage: { ...usage } }); } };
 }

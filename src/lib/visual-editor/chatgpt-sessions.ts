@@ -120,17 +120,25 @@ function normalizeTurn(value: unknown, interrupted: boolean): ChatgptGeneration 
     ...(contextRefs ? { contextRefs } : {}),
   };
   if (typeof value.assistantText === "string") turn.assistantText = text(value.assistantText, 32_000);
+  if (typeof value.completionVerified === "boolean") turn.completionVerified = value.completionVerified;
+  if (Array.isArray(value.liveMessages)) turn.liveMessages = value.liveMessages.map(raw => {
+    if (!isRecord(raw) || !["steer", "follow_up"].includes(String(raw.delivery)) || !["queued", "applied", "unapplied"].includes(String(raw.state))) throw new Error("追加指示の記録が不正です");
+    return { id: identifier(raw.id), prompt: text(raw.prompt, 2000), delivery: raw.delivery as "steer" | "follow_up",
+      state: interrupted && raw.state === "queued" ? "unapplied" : raw.state as "queued" | "applied" | "unapplied",
+      ...(Array.isArray(raw.attachedEntityIds) ? { attachedEntityIds: raw.attachedEntityIds.slice(0, 100).map(identifier) } : {}),
+      ...(Array.isArray(raw.attachedMaterialIds) ? { attachedMaterialIds: raw.attachedMaterialIds.slice(0, 16).map(identifier) } : {}) };
+  });
   if (isRecord(value.usage)) {
     const usage = value.usage;
     const fields = ["modelTurns", "toolCalls", "inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens", "totalTokens"] as const;
-    if (fields.some(key => typeof usage[key] !== "number" || !Number.isSafeInteger(usage[key]) || (usage[key] as number) < 0)) throw new Error("Piの使用量の記録が不正です");
+    if (fields.some(key => typeof usage[key] !== "number" || !Number.isSafeInteger(usage[key]) || (usage[key] as number) < 0)) throw new Error("使用量の記録が不正です");
     turn.usage = Object.fromEntries(fields.map(key => [key, usage[key]])) as import("./pi-authoring").PiUsage;
   }
   if (value.piHistory !== undefined) {
     const history = value.piHistory;
-    if (!isRecord(history) || !Array.isArray(history.nodes) || history.nodes.length > 300) throw new Error("Pi履歴の形式が不正です");
+    if (!isRecord(history) || !Array.isArray(history.nodes) || history.nodes.length > 300) throw new Error("会話履歴の形式が不正です");
     turn.piHistory = { sessionId: identifier(history.sessionId), leafId: history.leafId === null ? null : identifier(history.leafId), nodes: history.nodes.map(raw => {
-      if (!isRecord(raw) || typeof raw.canBranch !== "boolean") throw new Error("Pi履歴の項目が不正です");
+      if (!isRecord(raw) || typeof raw.canBranch !== "boolean") throw new Error("会話履歴の項目が不正です");
       return { id: identifier(raw.id), parentId: raw.parentId === null ? null : identifier(raw.parentId), label: text(raw.label, 80), canBranch: raw.canBranch };
     }) };
   }
@@ -190,7 +198,7 @@ function normalizeSessions(values: readonly unknown[], interrupted: boolean): Ch
     // future-version journals must not disappear during a routine save.
     let piBranch: ChatgptSession["piBranch"];
     if (value.piBranch !== undefined) {
-      if (!isRecord(value.piBranch)) throw new Error("Pi履歴の分岐元が不正です");
+      if (!isRecord(value.piBranch)) throw new Error("会話履歴の分岐元が不正です");
       piBranch = { sessionId: identifier(value.piBranch.sessionId), leafId: identifier(value.piBranch.leafId), parentSessionId: identifier(value.piBranch.parentSessionId) };
     }
     return { id: identifier(value.id), projectId: identifier(value.projectId), sceneId: identifier(value.sceneId), title: text(value.title, 80) || "新しいチャット", createdAt: timestamp(value.createdAt), updatedAt: timestamp(value.updatedAt), turns: value.turns.map(turn => normalizeTurn(turn, interrupted)).slice(-CHATGPT_MAX_SESSION_TURNS), ...(piBranch ? { piBranch } : {}) };
@@ -226,7 +234,7 @@ export function piSessionHistoryRoots(session: ChatgptSession): Set<string> {
 }
 export function branchChatgptSession(source: ChatgptSession, entryId: string, now = nowIso(), id = crypto.randomUUID()): ChatgptSession {
   const history = [...source.turns].reverse().filter(turn => piTurnInSession(source, turn)).map(turn => turn.piHistory).find(history => history?.nodes.some(node => node.id === entryId && node.canBranch));
-  if (!history) throw new Error("分岐できるPiの応答を選んでください");
+  if (!history) throw new Error("分岐できる制作の応答を選んでください");
   return { ...createChatgptSession(source.projectId, source.sceneId, `${source.title.slice(0, 65)}・別案`, now, id), piBranch: { sessionId: history.sessionId, leafId: identifier(entryId), parentSessionId: source.id } };
 }
 export function loadChatgptSessions(storage: SessionStorage = browserStorage()): ChatgptSession[] {
@@ -261,9 +269,10 @@ export function upsertChatgptSessionTurn(sessions: readonly ChatgptSession[], se
   }), false);
 }
 function resultSummary(turn: ChatgptGeneration): string {
-  const status = { running: "処理中", planned: "Plan確認待ち", completed: "完了", failed: "失敗", cancelled: "停止" }[turn.status];
+  const status = turn.status === "completed" && turn.completionVerified === false ? "応答済み" : { running: "処理中", planned: "Plan確認待ち", completed: "完了", failed: "失敗", cancelled: "停止" }[turn.status];
   const lines = [turn.revertedAt ? `変更を戻しました（${turn.revertedAt}）。この依頼の変更は現在のSceneに残っていません。` : status, turn.progress.message, `保存済み ${turn.progress.completed} / ${turn.progress.total}`];
-  if (turn.usage) lines.push(`Piの実行情報: モデル応答${turn.usage.modelTurns}回、ツール実行${turn.usage.toolCalls}回、合計${turn.usage.totalTokens}トークン`);
+  if (turn.liveMessages) for (const message of turn.liveMessages) lines.push(`追加指示（${message.state === "applied" ? "受信済み" : message.state === "unapplied" ? "未反映" : "待機中"}）：${message.prompt}`);
+  if (turn.usage) lines.push(`実行情報: モデル応答${turn.usage.modelTurns}回、ツール実行${turn.usage.toolCalls}回、合計${turn.usage.totalTokens}トークン`);
   if (turn.production) lines.push(`制作 ${turn.productionPass ?? 1} / ${turn.production.maxPasses}回。焦点: ${turn.production.focus}`, `完了条件: ${turn.production.criteria.join("、")}`);
   if (turn.attachedEntities?.length) lines.push(`添付Entity（配下を優先）: ${turn.attachedEntities.map(entity => entity.name).join("、")}`);
   if (turn.attachedMaterials?.length) lines.push(`添付Material: ${turn.attachedMaterials.map(material => material.name).join("、")}`);

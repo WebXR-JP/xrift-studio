@@ -64,6 +64,31 @@ function fixture(configuration = {}) {
 test.afterEach(async () => { for (const item of all) await Promise.all([...item.host.piRunsRef.current.values()].map(run => run.stop())); all.clear(); });
 test.after(() => server.close());
 
+test("a normal reply stays neutral and preserves an unconsumed additional instruction", async () => {
+  const current = fixture({ pi(_request, emit) {
+    emit({ type: "input", message: { id: "extra-one", prompt: "入口を広く", delivery: "steer" }, state: "queued" });
+    return { text: "現在のSceneを確認できます", completionVerified: false };
+  } });
+  await current.run();
+  assert.equal(current.job.status, "completed");
+  assert.equal(current.job.completionVerified, false);
+  assert.equal(current.job.error, undefined);
+  assert.equal(current.job.liveMessages[0].state, "unapplied");
+  assert.equal(current.host.chatgptSessionsRef.current[0].turns[0].liveMessages[0].prompt, "入口を広く");
+});
+
+test("native cancellation keeps accepted but unconsumed additional instructions recoverable", async () => {
+  const current = fixture({ pi(_request, emit, current) {
+    emit({ type: "input", message: { id: "extra-one", prompt: "窓を調整", delivery: "follow_up" }, state: "queued" });
+    current.host.chatgptControlsRef.current.get("host-generation").cancelled = true;
+    throw new Error("制作を停止しました");
+  } });
+  await assert.rejects(current.run(), /停止/);
+  assert.equal(current.job.status, "cancelled");
+  assert.equal(current.job.liveMessages[0].state, "unapplied");
+  assert.equal(current.host.chatgptGenerationRef.current, null);
+});
+
 test("a failed history checkpoint prevents Pi dispatch and releases the request", async () => {
   const current = fixture({ flush() { throw new Error("checkpoint unavailable"); } });
   await assert.rejects(current.run(), /checkpoint unavailable/);

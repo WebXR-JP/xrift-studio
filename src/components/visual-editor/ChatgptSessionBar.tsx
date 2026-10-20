@@ -42,7 +42,7 @@ export function ChatgptSessionBar({ sessions, activeSessionId, onSelect, onNew, 
       <div className="absolute right-0 top-9 z-20 max-h-80 w-72 max-w-[calc(100vw-3rem)] space-y-2 overflow-y-auto rounded-lg border border-slate-200 bg-white p-3 shadow-lg">
         <p className="leading-5">完了した応答から会話を別案に分岐できます。現在のSceneは変わりません。</p>
         {session?.piBranch ? <p className="text-[11px] text-slate-500">別の会話から分岐したチャットです。</p> : null}
-        {!history?.nodes.length ? <p className="text-slate-500">Piで依頼を実行すると履歴が表示されます。</p> : <ol aria-label="Piの履歴ツリー" className="space-y-1">{history.nodes.slice(-80).map(node => {
+        {!history?.nodes.length ? <p className="text-slate-500">制作チャットで依頼を実行すると履歴が表示されます。</p> : <ol aria-label="会話の履歴ツリー" className="space-y-1">{history.nodes.slice(-80).map(node => {
           let depth = 0, parent = node.parentId;
           while (parent && byId.has(parent) && depth < 8) { depth++; parent = byId.get(parent)!.parentId; }
           return <li key={node.id} style={{ marginLeft: Math.min(depth, 4) * 8 }} className="border-l border-slate-200 pl-2 text-[11px]">
@@ -62,7 +62,7 @@ export function ChatgptSessionBar({ sessions, activeSessionId, onSelect, onNew, 
           <button type="submit" disabled={!session || !title.trim() || disabled} className="rounded-md px-2 py-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-50">名前を保存</button>
         </form>
         <button type="button" disabled={!session || disabled} onClick={() => { if (session) act(() => onDelete(session.id)); }} className="rounded-md px-2 py-1.5 text-rose-700 hover:bg-rose-50 disabled:opacity-50">このチャットの履歴を削除</button>
-        <p className="text-[11px] leading-4 text-slate-500">一覧は最大20チャット、各30件を保存します。Piの詳細履歴も端末に保存します。削除時に他の分岐が参照している詳細履歴は残します。Sceneは変わりません。</p>
+        <p className="text-[11px] leading-4 text-slate-500">一覧は最大20チャット、各30件を保存します。制作の詳細履歴も端末に保存します。削除時に他の分岐が参照している詳細履歴は残します。Sceneは変わりません。</p>
       </div>
     </details>
   </div>;

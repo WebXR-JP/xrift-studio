@@ -9,7 +9,7 @@ export function loadPiSettings(storage: Pick<Storage, "getItem">): PiSettings {
   const raw = storage.getItem(PI_SETTINGS_KEY);
   if (raw === null) return { extensions: [] };
   const value = JSON.parse(raw);
-  if (![1, 2].includes(value?.version) || !Array.isArray(value.extensions) || value.extensions.some((source: unknown) => typeof source !== "string")) throw new Error("Piの設定を読み取れませんでした。設定を確認して保存し直してください。");
+  if (![1, 2].includes(value?.version) || !Array.isArray(value.extensions) || value.extensions.some((source: unknown) => typeof source !== "string")) throw new Error("制作の設定を読み取れませんでした。設定を確認して保存し直してください。");
   return { extensions: parsePiPackages(value.extensions.join("\n")) };
 }
 export function savePiSettings(settings: PiSettings, storage: Pick<Storage, "setItem">): void {

@@ -6,14 +6,18 @@ use std::future::Future;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 
 const FRAME_BYTES: usize = 1024 * 1024;
+pub(super) struct Input {
+    pub message: Value,
+    pub acknowledgement: tokio::sync::oneshot::Sender<Result<(), String>>,
+}
 
 async fn send<W: AsyncWrite + Unpin>(writer: &mut W, message: &Value) -> Result<(), String> {
-    let mut bytes = serde_json::to_vec(message).map_err(|_| "Piへの入力を作成できませんでした")?;
+    let mut bytes = serde_json::to_vec(message).map_err(|_| "制作処理への入力を作成できませんでした")?;
     bytes.push(b'\n');
     writer
         .write_all(&bytes)
         .await
-        .map_err(|_| "Piとの接続が終了しました".into())
+        .map_err(|_| "制作処理との接続が終了しました".into())
 }
 
 pub(super) async fn run<R, W, C, H, F, P>(
@@ -23,6 +27,7 @@ pub(super) async fn run<R, W, C, H, F, P>(
     cancellation: C,
     host: H,
     mut progress: P,
+    mut inputs: Option<tokio::sync::mpsc::UnboundedReceiver<Input>>,
 ) -> Result<Value, String>
 where
     R: AsyncRead + Unpin,
@@ -35,6 +40,7 @@ where
     send(&mut stdin, initial).await?;
     let mut reader = BufReader::new(stdout);
     let mut pending = FuturesUnordered::new();
+    let mut acknowledgements = std::collections::HashMap::new();
     let mut line = Vec::new();
     tokio::pin!(cancellation);
     let outcome = async {
@@ -43,6 +49,17 @@ where
             tokio::select! {
                 biased;
                 _ = &mut cancellation => return Err("制作を停止しました。保存済みの変更は残っています".into()),
+                input = async { match inputs.as_mut() { Some(receiver) => receiver.recv().await, None => std::future::pending().await } } => {
+                    if let Some(input) = input {
+                        let id = input.message["id"].as_str().ok_or("追加指示のIDが不正です")?.to_owned();
+                        if acknowledgements.contains_key(&id) {
+                            let _ = input.acknowledgement.send(Err("この追加指示を送信中です".into()));
+                            continue;
+                        }
+                        send(&mut stdin, &serde_json::json!({"type":"input", "id":id, "message":input.message})).await?;
+                        acknowledgements.insert(id, input.acknowledgement);
+                    } else { inputs = None; }
+                }
                 Some((id, response)) = pending.next(), if !pending.is_empty() => {
                     let mut response: Value = response?;
                     response["type"] = Value::from("tool_result");
@@ -52,31 +69,38 @@ where
                 // read_until preserves partially consumed bytes if a completed
                 // host call wins select. Keep the buffer across loop iterations.
                 count = bounded.read_until(b'\n', &mut line) => {
-                    let count = count.map_err(|_| "Piの出力を読み取れませんでした")?;
-                    if count == 0 { return Err("Piが完了記録を返さずに終了しました".into()); }
-                    if line.len() > FRAME_BYTES { return Err("Piの出力が大きすぎます".into()); }
+                    let count = count.map_err(|_| "制作の出力を読み取れませんでした")?;
+                    if count == 0 { return Err("制作処理が完了記録を返さずに終了しました".into()); }
+                    if line.len() > FRAME_BYTES { return Err("制作の出力が大きすぎます".into()); }
                     if line.last() != Some(&b'\n') { continue; }
-                    let message: Value = serde_json::from_slice(&line).map_err(|_| "Piの応答を読み取れませんでした")?;
+                    let message: Value = serde_json::from_slice(&line).map_err(|_| "制作の応答を読み取れませんでした")?;
                     line.clear();
                     match message["type"].as_str() {
                         Some("tool") => {
-                            let id = message["id"].as_u64().ok_or("Piの呼び出しIDが不正です")?;
-                            let name = message["tool"].as_str().ok_or("Piのツール名が不正です")?.to_owned();
-                            let args = message["arguments"].as_object().ok_or("Piのツール引数が不正です")?.clone();
+                            let id = message["id"].as_u64().ok_or("制作の呼び出しIDが不正です")?;
+                            let name = message["tool"].as_str().ok_or("制作のツール名が不正です")?.to_owned();
+                            let args = message["arguments"].as_object().ok_or("制作のツール引数が不正です")?.clone();
                             let response = host(name, args);
                             pending.push(async move { (Value::from(id), response.await) });
                         }
-                        Some("progress" | "activity" | "assistant" | "usage" | "history") => progress(message)?,
+                        Some("input_ack") => {
+                            if let Some(reply) = message["id"].as_str().and_then(|id| acknowledgements.remove(id)) {
+                                let result = if message["ok"] == true { Ok(()) } else { Err(message["message"].as_str().unwrap_or("追加指示を送信できませんでした").to_owned()) };
+                                let _ = reply.send(result);
+                            }
+                        }
+                        Some("progress" | "activity" | "assistant" | "usage" | "history" | "input") => progress(message)?,
                         Some("result") if pending.is_empty() => return Ok(message["result"].clone()),
-                        Some("result") => return Err("Piが処理中の操作を残して終了しました".into()),
-                        Some("error") => return Err(message["message"].as_str().unwrap_or("Piの制作を完了できませんでした").into()),
-                        _ => return Err("Piから未対応の応答を受け取りました".into()),
+                        Some("result") => return Err("制作処理が処理中の操作を残して終了しました".into()),
+                        Some("error") => return Err(message["message"].as_str().unwrap_or("制作の制作を完了できませんでした").into()),
+                        _ => return Err("制作処理から未対応の応答を受け取りました".into()),
                     }
                 }
             }
         }
     }.await;
     while pending.next().await.is_some() {}
+    for (_, reply) in acknowledgements { let _ = reply.send(Err("追加指示の受信を確認する前に応答が終了しました。入力を確認して再送してください".into())); }
     outcome
 }
 
@@ -114,6 +138,7 @@ mod tests {
                 }
             },
             |_| Ok(()),
+            None,
         );
         let child = async {
             let mut reader = BufReader::new(child_out);
@@ -182,6 +207,7 @@ mod tests {
                     }
                 },
                 |_| Ok(()),
+                None,
             )
             .await
         });
@@ -202,6 +228,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn live_input_is_acknowledged_while_an_editor_write_is_in_flight() {
+        let (native, child) = duplex(8192);
+        let (stdout, stdin) = split(native);
+        let (child_out, mut child_in) = split(child);
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let started = Arc::new(Notify::new());
+        let gate = Arc::new(Notify::new());
+        let host_started = started.clone();
+        let host_gate = gate.clone();
+        let initial = json!({"type":"start"});
+        let running = run(stdout, stdin, &initial, std::future::pending(), move |_, _| {
+            let started = host_started.clone();
+            let gate = host_gate.clone();
+            async move { started.notify_one(); gate.notified().await; Ok(json!({"ok":true})) }
+        }, |_| Ok(()), Some(receiver));
+        let child = async {
+            let mut reader = BufReader::new(child_out);
+            read(&mut reader).await;
+            send(&mut child_in, &json!({"type":"tool","id":1,"tool":"write","arguments":{}})).await.unwrap();
+            started.notified().await;
+            let (acknowledgement, reply) = oneshot::channel();
+            sender.send(Input { message: json!({"id":"live-one","prompt":"入口を広く","delivery":"steer"}), acknowledgement }).unwrap();
+            let input = read(&mut reader).await;
+            assert_eq!(input["type"], "input");
+            assert_eq!(input["message"]["prompt"], "入口を広く");
+            send(&mut child_in, &json!({"type":"input_ack","id":"live-one","ok":true})).await.unwrap();
+            reply.await.unwrap().unwrap();
+            gate.notify_one();
+            assert_eq!(read(&mut reader).await["type"], "tool_result");
+            send(&mut child_in, &json!({"type":"result","result":{"done":true}})).await.unwrap();
+        };
+        let (result, ()) = tokio::time::timeout(std::time::Duration::from_secs(3), async { tokio::join!(running, child) }).await.unwrap();
+        assert_eq!(result.unwrap()["done"], true);
+    }
+
+    #[tokio::test]
     async fn oversized_frames_are_rejected() {
         let frame = vec![b'x'; FRAME_BYTES + 1];
         let result = run(
@@ -211,6 +273,7 @@ mod tests {
             std::future::pending(),
             |_, _| async { Ok(json!({})) },
             |_| Ok(()),
+            None,
         )
         .await;
         assert!(result.unwrap_err().contains("大きすぎ"));

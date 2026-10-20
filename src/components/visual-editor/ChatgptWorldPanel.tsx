@@ -25,6 +25,7 @@ import type { SceneSettings } from "../../lib/visual-editor/scene-settings";
 import { preferredChatgptReasoningEffort } from "../../lib/visual-editor/chatgpt-reasoning";
 import { PiFeatureSettings, usePiFeatureSettings } from "./PiFeatureSettings";
 import { PiRunDetails } from "./PiRunDetails";
+import { ChatgptAdditionalMessages } from "./ChatgptAdditionalMessages";
 
 const effortLabels: Record<string, string> = { none: "なし（速さ優先）", minimal: "最小（速さ優先）", low: "低（速さ優先）", medium: "中（標準）", high: "高（じっくり）", xhigh: "より高い", max: "最大" };
 const EMPTY_ENTITY_REFERENCES: readonly ChatgptEntityReference[] = [];
@@ -78,6 +79,12 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
   const attachmentScopeIds = useMemo(() => chatgptAttachmentEntityIds(entityReferences, attachedEntityIds), [entityReferences, attachedEntityIds]);
   const [busy, setBusy] = useState<"loading" | "login" | "logout" | "generate" | "revert" | null>("loading");
   const [error, setError] = useState<string | null>(null);
+  const [delivery, setDelivery] = useState<"steer" | "follow_up">("steer");
+  const [liveSending, setLiveSending] = useState(false);
+  const liveSendingRef = useRef(false);
+  const liveAttempt = useRef<{ fingerprint: string; id: string } | null>(null);
+  const activeDraftScope = useRef(draftScope);
+  activeDraftScope.current = draftScope;
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const [copyNotice, setCopyNotice] = useState<string | null>(null);
@@ -196,11 +203,13 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
       const questions = generation?.status === "planned" && generation.plan?.questions?.length ? element.querySelector<HTMLElement>("[data-chatgpt-question-form]") : null;
       element.scrollTop = questions ? element.scrollTop + questions.getBoundingClientRect().top - element.getBoundingClientRect().top : element.scrollHeight;
     }
-  }, [draftScope, generation?.generationId, generation?.status, generation?.assistantText, generation?.progress.message, generation?.progress.recentEvents.length, error, statusError, copyNotice, queue.items.length, connection?.signedIn]);
+  }, [draftScope, generation?.generationId, generation?.status, generation?.liveMessages, generation?.assistantText, generation?.progress.message, generation?.progress.recentEvents.length, error, statusError, copyNotice, queue.items.length, connection?.signedIn]);
   const generating = busy === "generate" || generation?.status === "running" || queue.dispatching;
   const pending = busy !== null || Boolean(connection?.connecting || connection?.restoring) || generating || externallyBusy;
   const waitingRequests = queue.items.filter(request => request.status !== "running");
-  const choicesBusy = busy === "loading" || busy === "login" || busy === "logout" || Boolean(connection?.connecting || connection?.restoring);
+  const liveTarget = generation?.status === "running" && !generation.cancelling && generation.sessionId === draftScope
+    && `${generation.projectId}:${generation.sceneId}` === sceneScope ? generation : undefined;
+  const choicesBusy = Boolean(liveTarget && parseChatgptComposerRequest(prompt).mode === "build") || busy === "loading" || busy === "login" || busy === "logout" || Boolean(connection?.connecting || connection?.restoring);
   const awaitingQuestions = generation?.status === "planned" && Boolean(generation.plan?.questions?.length);
   const completedBeforePlan = Math.max(0, (generation?.progress.total ?? 0) - (generation?.plan?.objects?.length ?? 0));
   const completedInPlan = Math.max(0, (generation?.progress.completed ?? 0) - completedBeforePlan);
@@ -216,7 +225,7 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
   const showConnect = !connection?.signedIn;
   const connectAlert = error ?? statusError ?? connection?.error;
   const composerRequest = parseChatgptComposerRequest(prompt);
-  const canSubmit = Boolean(composerRequest.prompt);
+  const canSubmit = Boolean(composerRequest.prompt) && !liveSending;
   const suggestion = useMemo(() => chatgptPromptSuggestions({ generation, entities: entityReferences,
     materials: [...materialById.values()].filter(asset => asset.status === "ready"), attachedEntityIds, attachedMaterialIds,
     blenderAvailable: blenderStatus?.available,
@@ -240,9 +249,34 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
     if (suggestion.attachedMaterialIds?.length) setAttachedMaterialIds(current => [...new Set([...current, ...suggestion.attachedMaterialIds!.filter(id => materialById.get(id)?.status === "ready")])].slice(0, CHATGPT_MAX_MATERIAL_ATTACHMENTS));
     requestAnimationFrame(() => { promptElement.current?.focus(); promptElement.current?.setSelectionRange(suggestion.prompt.length, suggestion.prompt.length); });
   };
-  const send = (request = prompt.trim()) => {
+  const reuseAdditionalMessage = (message: NonNullable<ChatgptGeneration["liveMessages"]>[number]) => {
+    setPrompt(current => current.trim() ? `${current}\n\n${message.prompt}` : message.prompt);
+    setAttachedEntityIds(current => [...new Set([...current, ...(message.attachedEntityIds ?? []).filter(id => entityById.has(id))])].slice(0, 100));
+    setAttachedMaterialIds(current => [...new Set([...current, ...(message.attachedMaterialIds ?? []).filter(id => materialById.get(id)?.status === "ready")])].slice(0, CHATGPT_MAX_MATERIAL_ATTACHMENTS));
+    promptElement.current?.focus();
+  };
+  const send = async (request = prompt.trim()) => {
     const parsed = parseChatgptComposerRequest(request);
-    if (!parsed.prompt) return;
+    if (!parsed.prompt || liveSendingRef.current) return;
+    if (liveTarget && parsed.mode === "build") {
+      if (disabledReason || !connection?.planUsageEnabled || !liveTarget.projectId || !liveTarget.sceneId || !liveTarget.sessionId) { setError(disabledReason ?? "現在のSceneと接続を確認してください"); return; }
+      if (attachedEntityIds.some(id => !entityById.has(id)) || attachedMaterialIds.some(id => materialById.get(id)?.status !== "ready")) { setError("添付したEntityとMaterialを確認してください"); return; }
+      const scope = draftScope;
+      const draft = JSON.stringify([prompt, attachedEntityIds, attachedMaterialIds]);
+      const fingerprint = JSON.stringify([scope, liveTarget.generationId, request, delivery, attachedEntityIds, attachedMaterialIds]);
+      const id = liveAttempt.current?.fingerprint === fingerprint ? liveAttempt.current.id : crypto.randomUUID();
+      liveAttempt.current = { fingerprint, id };
+      liveSendingRef.current = true; setLiveSending(true); setError(null);
+      try {
+        await tauri.chatgptPiMessage({ id, generationId: liveTarget.generationId, projectId: liveTarget.projectId, sceneId: liveTarget.sceneId, sessionId: liveTarget.sessionId,
+          prompt: parsed.prompt, delivery, attachedEntityIds: [...attachedEntityIds], attachedMaterialIds: [...attachedMaterialIds] });
+        if (mounted.current && activeDraftScope.current === scope && JSON.stringify([currentDraft.current.prompt, currentDraft.current.attachedEntityIds, currentDraft.current.attachedMaterialIds]) === draft) {
+          setPrompt(""); setAttachedEntityIds([]); setAttachedMaterialIds([]);
+        }
+      } catch (error) { if (mounted.current && activeDraftScope.current === scope) setError(error instanceof Error ? error.message : String(error)); }
+      finally { liveSendingRef.current = false; if (mounted.current) setLiveSending(false); }
+      return;
+    }
     queue.enqueue({ id: createDocumentId("chatgpt-request"), model, prompt: parsed.prompt, attachedEntityIds: [...attachedEntityIds], attachedMaterialIds: [...attachedMaterialIds], options: { ...CHATGPT_ALL_ASSETS, modelSource, ...piFeatures.settings }, mode: parsed.mode, reasoningEffort: effectiveEffort || undefined });
     setPrompt(""); setAttachedEntityIds([]); setAttachedMaterialIds([]); setError(null);
   };
@@ -336,6 +370,8 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
       {conversation.filter(turn => turn.generationId !== generation?.generationId).map(turn => <div key={turn.generationId} className="space-y-2">
         {turn.mode === "goal" ? <p className="text-[11px] font-medium text-slate-500">Goal</p> : null}
         <p className="ml-5 whitespace-pre-wrap break-words rounded-xl bg-slate-100 px-3 py-2.5 text-slate-800">{turn.prompt}</p>
+        <ChatgptAdditionalMessages messages={turn.liveMessages} onReuse={awaitingQuestions ? undefined : reuseAdditionalMessage} />
+        {turn.completionVerified === false && turn.status === "completed" ? <p className="text-[11px] text-slate-500">応答済み</p> : null}
         {turn.attachedEntities?.length ? <p className="break-words text-[11px] text-slate-500">添付：{turn.attachedEntities.map(entity => entity.name).join("、")}（配下を優先）</p> : null}
         {turn.attachedMaterials?.length ? <p className="break-words text-[11px] text-slate-500">添付Material：{turn.attachedMaterials.map(material => material.name).join("、")}</p> : null}
         <PiRunDetails usage={turn.usage} running={false} />
@@ -358,6 +394,8 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
         {generation.attachedEntities?.length ? <p className="break-words text-[11px] text-slate-500">添付：{generation.attachedEntities.map(entity => entity.name).join("、")}（配下を優先）</p> : null}
         {generation.attachedMaterials?.length ? <p className="break-words text-[11px] text-slate-500">添付Material：{generation.attachedMaterials.map(material => material.name).join("、")}</p> : null}
         <div className="space-y-2 px-0.5">
+          <ChatgptAdditionalMessages messages={generation.liveMessages} onReuse={awaitingQuestions ? undefined : reuseAdditionalMessage} />
+          {generation.completionVerified === false && generation.status === "completed" ? <p className="text-[11px] text-slate-500">応答済み</p> : null}
           <PiRunDetails text={generation.assistantText} usage={generation.usage} running={generation.status === "running"} />
           {generation.cancelling || !chatgptProgressIsRecorded(generation.progress.message, generation.progress.recentEvents) ? <p role="status" aria-live="polite" className="break-words leading-5 text-slate-700">{generation.cancelling ? "現在の処理を安全に終えて停止しています…" : formatChatgptProgressMessage(generation.progress.message)}</p> : null}
           {generation.clarifications?.length ? <details><summary className="cursor-pointer text-[11px] text-slate-500">確認した内容</summary><dl className="mt-2 space-y-2 text-[11px]">{generation.clarifications.map((item, index) => <div key={index}><dt className="break-words text-slate-500">{item.question}</dt><dd className="break-words text-slate-700">{item.answer}</dd></div>)}</dl></details> : null}
@@ -423,6 +461,12 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
     </div>
     {awaitingQuestions ? connectionControls : null}
     <form hidden={awaitingQuestions} onSubmit={e => { e.preventDefault(); if (canSubmit) send(); }} className="shrink-0 rounded-xl border border-slate-300 bg-white p-2.5 focus-within:border-slate-500">
+      {liveTarget && composerRequest.mode === "build" ? <div className="mb-2 space-y-1">
+        <select aria-label="実行中の依頼への送信方法" value={delivery} onChange={event => setDelivery(event.target.value as "steer" | "follow_up")} disabled={liveSending} className="min-h-8 w-full rounded-md bg-slate-50 px-2 text-[11px] text-slate-700">
+          <option value="steer">今の制作に反映</option><option value="follow_up">終了後に実行</option>
+        </select>
+        <p role="status" className="text-[10px] leading-4 text-slate-500">{liveSending ? "追加指示を送信しています…" : delivery === "steer" ? "現在の応答と操作が終わったところで追加指示を受け取ります。同じモデルと制作方法で続けます。" : "現在の制作が終わってから、同じ会話で追加指示を実行します。"}</p>
+      </div> : null}
       {composerRequest.mode === "goal" ? <p className="mb-2 text-[11px] leading-4 text-slate-600">Goal：目標に向けて制作と見直しを続けます。停止ボタンで終了できます。</p> : null}
       {showSuggestions && suggestion ? <div aria-label="入力候補" className="mb-2 flex min-w-0 items-center gap-2 text-[11px] text-slate-500">
         <span id={suggestionsId} className="min-w-0 flex-1 truncate" title={suggestion.prompt}>{suggestion.label}</span>
@@ -478,7 +522,7 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
         </label>
         {connectionControls}
         <div className="ml-auto flex shrink-0 items-center gap-1.5">{generating && onCancel && generation?.status === "running" ? <button type="button" aria-label="制作を停止" title="制作を停止" disabled={generation.cancelling} onClick={() => { queue.pause("制作を停止したため、送信待ちの依頼を保留しています。"); setError(null); void onCancel(generation.generationId).catch(e => setError(e instanceof Error ? e.message : String(e))); }} className="flex size-8 items-center justify-center rounded-full bg-slate-900 text-white disabled:opacity-50"><Square size={12} fill="currentColor" aria-hidden="true" /></button> : null}
-        <button type="submit" aria-label="依頼を送信" title={dispatchBlockedReason || queue.dispatching ? "送信待ちへ追加" : "依頼を送信"} disabled={!canSubmit} className="flex size-8 items-center justify-center rounded-full bg-slate-900 text-white disabled:bg-slate-100 disabled:text-slate-400"><ArrowUp size={16} aria-hidden="true" /></button></div>
+        <button type="submit" aria-label={liveTarget && composerRequest.mode === "build" ? "追加指示を送信" : "依頼を送信"} title={liveTarget && composerRequest.mode === "build" ? delivery === "steer" ? "今の制作に反映" : "終了後に実行" : dispatchBlockedReason || queue.dispatching ? "送信待ちへ追加" : "依頼を送信"} disabled={!canSubmit} className="flex size-8 items-center justify-center rounded-full bg-slate-900 text-white disabled:bg-slate-100 disabled:text-slate-400"><ArrowUp size={16} aria-hidden="true" /></button></div>
       </div>
       {!blenderStatus?.available ? <div className="mt-1 flex items-center justify-between gap-2 text-[10px] leading-4 text-slate-500"><span>{blenderLoading ? "Blenderを確認しています。コードでの制作は利用できます。" : blenderStatusError ? "Blenderを確認できませんでした。コードでの制作は利用できます。" : "Blenderは未導入です。コードでの制作は利用できます。"}</span>
         {!blenderLoading ? <button type="button" onClick={() => void refreshBlenderStatus(true)} className="shrink-0 rounded px-1 py-0.5 underline underline-offset-2">Blenderを再確認</button> : null}

@@ -22,6 +22,8 @@ export type PiRunEvent = {
 
 export type PiAuthoringRun = {
   generationId: string;
+  completionVerified?: boolean;
+  liveMessages?: (import("../../../packages/studio-pi/src/protocol").PiLiveMessage & { state: "queued" | "applied" | "unapplied" })[];
   assistantText?: string;
   usage?: PiUsage;
   piHistory?: PiHistory;

@@ -39,7 +39,7 @@ export function createPiAuthoringRunner(host: PiAuthoringHost) {
   return async (model: string, prompt: string, options: ChatgptAssetOptions, generationId: string = crypto.randomUUID(), mode: ChatgptGenerationMode = "build", target: "current" | "new" = "current", approved?: PiPlan, reasoningEffort?: string, requestedSessionId?: string, continuation?: PiContinuation, attachedEntityIds: readonly string[] = [], attachedMaterialIds: readonly string[] = []): Promise<Project | null> => {
     if (host.chatgptGenerationRef.current || host.mcpPublishActiveRef.current || host.mcpModelingActiveRef.current) throw new Error("現在の処理が終わるか停止してから依頼してください");
     if (!tauri.isAvailable() || !host.projectsRoot) throw new Error("デスクトップ版でワールドを開いてください");
-    const source = host.requireMcpProjectBridge("Piの制作チャット");
+    const source = host.requireMcpProjectBridge("制作チャット");
     const scope = source.currentContext();
     if (!scope.canGenerate || source.currentBundle().project.projectKind !== "world") throw new Error("WorldをEditで開き、素材の読み込み完了を待ってください");
     const previous = host.chatgptGenerationsRef.current.get(generationId);
@@ -57,11 +57,11 @@ export function createPiAuthoringRunner(host: PiAuthoringHost) {
     host.selectChatgptSession(session.id);
     let bridge = source, project = host.visualSessionRef.current?.project ?? null, created: Project | null = null;
     let job: ChatgptGeneration = { ...previous, harness: undefined, contextRefs: undefined, goal: undefined, production: undefined, productionPass: undefined, productionNoProgressPasses: undefined, productionVisualReview: undefined, plan: undefined, nextActions: undefined, generationId, sessionId: session.id, createdAt: previous?.createdAt ?? new Date().toISOString(),
-      status: "running", cancelling: false, error: undefined, assistantText: undefined, usage: previous?.usage, mode, model, prompt, options, reasoningEffort,
+      status: "running", completionVerified: undefined, cancelling: false, error: undefined, assistantText: undefined, usage: previous?.usage, mode, model, prompt, options, reasoningEffort,
       sourceProjectId: previous?.sourceProjectId ?? scope.projectId, sourceSceneId: previous?.sourceSceneId ?? scope.sceneId, projectId: scope.projectId, sceneId: scope.sceneId,
       attachedEntities: previous?.attachedEntities ?? [...new Set(attachedEntityIds)].map(id => ({ id, name: source.currentBundle().scene.entities[id]?.name ?? id })),
       attachedMaterials: previous?.attachedMaterials ?? [...new Set(attachedMaterialIds)].map(id => ({ id, name: source.currentBundle().assets.assets[id]?.name ?? id })),
-      progress: { phase: "planning", message: "Piが現在のSceneと制作方法を確認しています", completed: completedBeforeResume, total: completedBeforeResume, recentEvents: previous?.progress.recentEvents ?? [] } };
+      progress: { phase: "planning", message: "現在のSceneと制作方法を確認しています", completed: completedBeforeResume, total: completedBeforeResume, recentEvents: previous?.progress.recentEvents ?? [] } };
     const control = { cancelled: false };
     host.chatgptGenerationRef.current = generationId;
     host.chatgptControlsRef.current.set(generationId, control);
@@ -130,6 +130,12 @@ export function createPiAuthoringRunner(host: PiAuthoringHost) {
         sessionId: job.sessionId, historySessionId: piHistory.sessionId, historyLeafId: piHistory.leafId ?? undefined,
         context: JSON.stringify(context) }, event => {
         if (event.type === "history") { report({ piHistory: event.history }); return; }
+        if (event.type === "input") {
+          const previous = job.liveMessages ?? [];
+          const next = { ...event.message, state: event.state };
+          report({ liveMessages: (previous.some(message => message.id === next.id) ? previous.map(message => message.id === next.id ? next : message) : [...previous, next]) });
+          return;
+        }
         if (event.type === "usage") { report({ usage: accumulateUsage(event.usage) }, undefined, false); return; }
         if (control.cancelled) return;
         if (event.type === "assistant") { report({ assistantText: event.text }, undefined, false); return; }
@@ -156,7 +162,7 @@ export function createPiAuthoringRunner(host: PiAuthoringHost) {
           { phase: event.saved ? "saving" : "placing", message: event.message, saved: event.saved && completed > 0 });
       });
       current();
-      job = { ...job, ...(result.history ? { piHistory: result.history } : {}), ...(result.usage ? { usage: accumulateUsage(result.usage) } : {}) };
+      job = { ...job, liveMessages: job.liveMessages?.map(message => message.state === "queued" ? { ...message, state: "unapplied" } : message), ...(result.history ? { piHistory: result.history } : {}), ...(result.usage ? { usage: accumulateUsage(result.usage) } : {}) };
       if (result.plan) {
         if (!result.plan.questions?.length && planningSnapshot !== chatgptPlanningSnapshot(bridge.currentBundle())) throw new Error("プラン作成中にSceneが変わりました。最新のSceneからプランを作り直してください");
         const plan: PiPlan = result.plan;
@@ -166,11 +172,12 @@ export function createPiAuthoringRunner(host: PiAuthoringHost) {
         return null;
       }
       host.chatgptPlansRef.current.delete(generationId);
-      report({ status: "completed", path: project?.path, name: project?.name, progress: { ...job.progress, phase: "completed", message: result.text || "保存と完成条件の確認が完了しました" } });
+      report({ status: "completed", completionVerified: result.completionVerified === true, path: project?.path, name: project?.name, progress: { ...job.progress, phase: "completed", message: result.text || "応答が終わりました。Sceneを確認できます。" } });
       return project;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       report({ status: control.cancelled ? "cancelled" : "failed", error: control.cancelled ? undefined : message,
+        liveMessages: job.liveMessages?.map(message => message.state === "queued" ? { ...message, state: "unapplied" } : message),
         progress: { ...job.progress, phase: control.cancelled ? "cancelled" : "failed", message } });
       throw error;
     } finally {

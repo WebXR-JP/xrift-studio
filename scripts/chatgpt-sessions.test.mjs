@@ -46,6 +46,21 @@ class MemoryStorage {
   setItem(key, value) { assert.equal(key, api.CHATGPT_SESSION_STORAGE_KEY); this.value = value; }
 }
 const withTurn = (...turns) => ({ ...session(), turns });
+
+test("additional instructions and a neutral reply survive restart without claiming pending input was received", () => {
+  const storage = new MemoryStorage();
+  const messages = [
+    { id: "pending-input", prompt: "入口を広く", delivery: "steer", state: "queued", attachedEntityIds: ["entry"] },
+    { id: "received-input", prompt: "窓を調整", delivery: "follow_up", state: "applied", attachedMaterialIds: ["window-material"] },
+  ];
+  api.saveChatgptSessions([withTurn(turn("neutral", { completionVerified: false, liveMessages: messages }))], storage);
+  const restored = api.loadChatgptSessions(storage)[0].turns[0];
+  assert.equal(restored.completionVerified, false);
+  assert.equal(restored.liveMessages[0].state, "unapplied");
+  assert.deepEqual(restored.liveMessages[0].attachedEntityIds, ["entry"]);
+  assert.equal(restored.liveMessages[1].state, "applied");
+  assert.deepEqual(restored.liveMessages[1].attachedMaterialIds, ["window-material"]);
+});
 const bytes = value => Buffer.byteLength(JSON.stringify(value), "utf8");
 
 test("Pi branch pointers survive storage and branch only at a finished response", () => {

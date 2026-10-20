@@ -34,6 +34,7 @@ pub struct ChatgptState(
     std::sync::Mutex<Option<Registration>>,
     Arc<dyn RefreshTransport>,
     std::sync::Mutex<std::collections::VecDeque<String>>,
+    std::sync::Mutex<Option<pi::ActiveInput>>,
 );
 impl Default for ChatgptState {
     fn default() -> Self {
@@ -45,6 +46,7 @@ impl Default for ChatgptState {
             std::sync::Mutex::new(None),
             Arc::new(OpenAiRefreshTransport),
             std::sync::Mutex::new(std::collections::VecDeque::new()),
+            std::sync::Mutex::new(None),
         )
     }
 }
@@ -226,6 +228,11 @@ struct GenerationLease<'a> {
 }
 impl Drop for GenerationLease<'_> {
     fn drop(&mut self) {
+        if let Ok(mut input) = self.state.7.lock() {
+            if input.as_ref().is_some_and(|input| input.generation_id == self.control.id) {
+                *input = None;
+            }
+        }
         if let Ok(mut active) = self.state.2.lock() {
             if active
                 .as_ref()

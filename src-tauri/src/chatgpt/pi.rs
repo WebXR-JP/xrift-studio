@@ -4,6 +4,49 @@ use super::*;
 use std::path::PathBuf;
 use std::process::Stdio;
 use tauri::ipc::Channel;
+pub(super) struct ActiveInput {
+    pub generation_id: String,
+    project_id: String,
+    scene_id: String,
+    session_id: String,
+    sender: tokio::sync::mpsc::UnboundedSender<super::pi_transport::Input>,
+    control: Arc<GenerationControl>,
+}
+
+#[tauri::command]
+pub async fn chatgpt_pi_message(
+    state: tauri::State<'_, ChatgptState>,
+    generation_id: String,
+    project_id: String,
+    scene_id: String,
+    session_id: String,
+    id: String,
+    prompt: String,
+    delivery: String,
+    attached_entity_ids: Option<Vec<String>>,
+    attached_material_ids: Option<Vec<String>>,
+) -> Result<(), String> {
+    if !valid_history_id(&id) || prompt.trim().is_empty() || prompt.chars().count() > 2000
+        || !matches!(delivery.as_str(), "steer" | "follow_up")
+        || attached_entity_ids.as_ref().is_some_and(|ids| ids.len() > 100 || ids.iter().any(|id| id.len() > 512))
+        || attached_material_ids.as_ref().is_some_and(|ids| ids.len() > 16 || ids.iter().any(|id| id.len() > 512)) {
+        return Err("追加指示の内容を確認してください".into());
+    }
+    let (acknowledgement, reply) = tokio::sync::oneshot::channel();
+    {
+        let active = state.7.lock().map_err(|_| "制作中の依頼を確認できませんでした")?;
+        let active = active.as_ref().ok_or("制作の準備中か応答が終了しています。入力を残したまま、もう一度送信してください")?;
+        if active.generation_id != generation_id || active.project_id != project_id || active.scene_id != scene_id
+            || active.session_id != session_id || active.control.cancelled.load(Ordering::Acquire) {
+            return Err("追加指示の対象が変わりました。開いているSceneとチャットを確認してください".into());
+        }
+        active.sender.send(super::pi_transport::Input {
+            message: json!({"id":id, "prompt":prompt, "delivery":delivery, "attachedEntityIds":attached_entity_ids, "attachedMaterialIds":attached_material_ids}),
+            acknowledgement,
+        }).map_err(|_| "この依頼は応答を終了しています。新しい依頼として送ってください")?;
+    }
+    reply.await.map_err(|_| "追加指示の受信を確認できませんでした。入力を確認して再送してください")?
+}
 
 fn valid_history_id(value: &str) -> bool {
     !value.is_empty()
@@ -30,12 +73,12 @@ pub async fn chatgpt_pi_delete_history(
 ) -> Result<(), String> {
     let _lease = begin_generation(&state, None)?;
     if !valid_history_id(&session_id) || project_id.is_empty() || scene_id.is_empty() {
-        return Err("Pi履歴のIDが不正です".into());
+        return Err("会話履歴のIDが不正です".into());
     }
     let path = app
         .path()
         .app_data_dir()
-        .map_err(|_| "Piの保存先を開けません")?
+        .map_err(|_| "制作の保存先を開けません")?
         .join("pi")
         .join("sessions")
         .join(digest_key(&[&project_id, &scene_id]))
@@ -44,7 +87,7 @@ pub async fn chatgpt_pi_delete_history(
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(_) => {
-            Err("Piの詳細履歴を削除できませんでした。履歴を保持したまま再試行してください".into())
+            Err("制作の詳細履歴を削除できませんでした。履歴を保持したまま再試行してください".into())
         }
     }
 }
@@ -193,12 +236,12 @@ fn runner_path(app: &AppHandle) -> Result<PathBuf, String> {
     let path = app
         .path()
         .resource_dir()
-        .map_err(|_| "Piのリソース保存先を確認できませんでした")?
+        .map_err(|_| "制作のリソース保存先を確認できませんでした")?
         .join("pi/dist/stdio.js");
     if path.is_file() {
         Ok(path)
     } else {
-        Err("Piの実行ファイルがありません。Studioをビルドし直してください".into())
+        Err("制作の実行ファイルがありません。Studioをビルドし直してください".into())
     }
 }
 #[tauri::command]
@@ -228,17 +271,18 @@ pub async fn chatgpt_pi_run(
         || project_id.len() > 160
         || scene_id.len() > 160
     {
-        return Err("Piの制作依頼が不正です".into());
+        return Err("制作の制作依頼が不正です".into());
     }
+    let chat_session_id = session_id.clone().unwrap_or_else(|| generation_id.clone());
     let session_id = history_session_id
         .or(session_id)
         .unwrap_or_else(|| generation_id.clone());
-    if !valid_history_id(&session_id)
+    if !valid_history_id(&session_id) || !valid_history_id(&chat_session_id)
         || history_leaf_id
             .as_deref()
             .is_some_and(|id| !valid_history_id(id))
     {
-        return Err("Pi履歴のIDが不正です".into());
+        return Err("会話履歴のIDが不正です".into());
     }
     let context_value: Value =
         serde_json::from_str(&context).map_err(|_| "制作条件のJSONが不正です")?;
@@ -268,7 +312,7 @@ pub async fn chatgpt_pi_run(
     let pi_root = app
         .path()
         .app_data_dir()
-        .map_err(|_| "Piの保存先を開けません")?
+        .map_err(|_| "制作の保存先を開けません")?
         .join("pi");
     let session_path = pi_root
         .join("sessions")
@@ -297,10 +341,15 @@ pub async fn chatgpt_pi_run(
         .kill_on_drop(true);
     let mut child = command
         .spawn()
-        .map_err(|_| "Piを起動できませんでした。制作ツールのセットアップを確認してください")?;
-    let stdin = child.stdin.take().ok_or("Piの入力を開けませんでした")?;
-    let stdout = child.stdout.take().ok_or("Piの出力を開けませんでした")?;
+        .map_err(|_| "制作処理を起動できませんでした。制作ツールのセットアップを確認してください")?;
+    let stdin = child.stdin.take().ok_or("制作の入力を開けませんでした")?;
+    let stdout = child.stdout.take().ok_or("制作の出力を開けませんでした")?;
     let definitions = tools();
+    let (input_sender, inputs) = tokio::sync::mpsc::unbounded_channel();
+    *state.7.lock().map_err(|_| "制作中の依頼を登録できませんでした")? = Some(ActiveInput {
+        generation_id: generation_id.clone(), project_id: project_id.clone(), scene_id: scene_id.clone(),
+        session_id: chat_session_id, sender: input_sender, control: lease.control.clone(),
+    });
     let initial = json!({ "type": "start", "input": { "token": token, "model": model, "prompt": prompt, "projectId": project_id,
         "sceneId": scene_id, "mode": mode, "context": context, "reasoningEffort": reasoning_effort, "tools": definitions,
         "session": { "id": session_id, "path": session_path, "leafId": history_leaf_id }, "packages": packages, "resourceRoot": resource_root } });
@@ -318,7 +367,7 @@ pub async fn chatgpt_pi_run(
             let cancelled = &lease.control.cancelled;
             async move {
                 if !allowed(&name) || mode == "plan" && !readonly(&name) {
-                    return Err("Piが許可されていない操作を要求しました".into());
+                    return Err("制作処理が許可されていない操作を要求しました".into());
                 }
                 for (key, expected) in [
                     ("projectId", project_id.as_str()),
@@ -350,6 +399,7 @@ pub async fn chatgpt_pi_run(
                 .send(message)
                 .map_err(|_| "制作画面との接続が終了しました".into())
         },
+        Some(inputs),
     )
     .await;
     // The transport has settled every accepted call before the process and

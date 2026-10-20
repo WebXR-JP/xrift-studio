@@ -9,5 +9,5 @@ export function studioUserMessage(prompt: string, context: PiContext): string {
       ? `確認事項への利用者の回答です。これまでの会話と現在のSceneに合わせて続きを進めてください。\n${JSON.stringify(continuation.answers)}`
       : prompt;
   return [action, `Studioの現在の作業条件：\n${JSON.stringify(conditions)}`,
-    ...(legacyConversation?.length ? [`Piへ移行する以前の会話（現在のSceneを正本として参照）：\n${JSON.stringify(legacyConversation)}`] : [])].join("\n\n");
+    ...(legacyConversation?.length ? [`制作処理へ移行する以前の会話（現在のSceneを正本として参照）：\n${JSON.stringify(legacyConversation)}`] : [])].join("\n\n");
 }

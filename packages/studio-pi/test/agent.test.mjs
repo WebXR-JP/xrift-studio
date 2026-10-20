@@ -37,7 +37,7 @@ async function fixture(responses, overrides = {}) {
     if (name === 'capture_scene_view') return { fingerprint, image: { mimeType: 'image/png', data: 'fixture-rendered-image' } };
     throw new Error(`Unknown tool ${name}`);
   };
-  return { run: (request = {}) => runStudioAgent({ ...input, ...request }, host, event => events.push(event), overrides.signal, runtime), calls, events, faux };
+  return { run: (request = {}) => runStudioAgent({ ...input, ...request }, host, event => events.push(event), overrides.signal, runtime, overrides.live), calls, events, faux };
 }
 const finalText = () => fauxAssistantMessage('保存と確認が完了しました');
 const verify = () => [invoke('save_scene', scope), invoke('get_project_health', scope), invoke('capture_scene_view', scope), finish(), finalText()];
@@ -134,8 +134,65 @@ test('codemode cannot hide the captured image or reach shell tools', async () =>
 
 test('ordinary assistant claims never mark an unverified result completed', async () => {
   const f = await fixture([fauxAssistantMessage('家を64件保存しました。完了です')]);
-  await assert.rejects(f.run(), /完成確認/);
+  const response = await f.run();
+  assert.equal(response.completionVerified, false);
+  assert.match(response.text, /家を64件/);
   assert.equal(f.calls.length, 0);
+});
+
+test('steering is received after the active tool, records attachments and deduplicates retries', async () => {
+  let send, captured;
+  const message = { id: 'input-one', prompt: '入口を広くしてください', delivery: 'steer', attachedEntityIds: ['house'] };
+  const f = await fixture([invoke('create_primitive', scope), context => {
+    assert.match(JSON.stringify(context.messages), /入口を広くしてください/);
+    assert.match(JSON.stringify(context.messages), /attachedEntityIds/);
+    assert.equal(f.events.filter(event => event.type === 'input' && event.state === 'applied').length, 1);
+    return verify()[0];
+  }, ...verify().slice(1)], {
+    live: { attach(handler) { captured = send = handler; return () => { send = undefined; }; } },
+    async host(name) {
+      if (name === 'create_primitive') { await send(message); await send(message); }
+    },
+  });
+  const response = await f.run();
+  assert.equal(response.completionVerified, true);
+  assert.equal(f.calls.filter(call => call.name === 'create_primitive').length, 1);
+  assert.equal(f.events.filter(event => event.type === 'input' && event.state === 'queued').length, 1);
+  assert.equal(send, undefined);
+  await assert.rejects(captured({ ...message, id: 'late-message' }), /応答を終了/);
+});
+
+test('follow-up waits for the first response and can edit after its completion gate', async () => {
+  let send, queued = false;
+  const message = { id: 'follow-one', prompt: '次は窓を調整してください', delivery: 'follow_up' };
+  const f = await fixture([invoke('create_primitive', scope), ...verify().slice(0, -1), context => {
+    assert.doesNotMatch(JSON.stringify(context.messages), /次は窓を調整/);
+    return finalText();
+  }, context => {
+    assert.match(JSON.stringify(context.messages), /次は窓を調整/);
+    return invoke('create_primitive', scope);
+  }, ...verify()], {
+    live: { attach(handler) { send = handler; return () => {}; } },
+    async host(name) {
+      if (name === 'create_primitive' && !queued) { queued = true; await send(message); }
+    },
+  });
+  assert.equal((await f.run()).completionVerified, true);
+  assert.equal(f.calls.filter(call => call.name === 'create_primitive').length, 2);
+  assert.equal(f.events.filter(event => event.type === 'input' && event.state === 'applied').length, 1);
+});
+
+test('late steering during the final reply invalidates the previous completion evidence', async () => {
+  let send;
+  const f = await fixture([...verify().slice(0, -1), async () => {
+    await send({ id: 'late-steer', delivery: 'steer', prompt: '屋根も調整してください' });
+    return finalText();
+  }, context => {
+    assert.match(JSON.stringify(context.messages), /屋根も調整してください/);
+    return fauxAssistantMessage('屋根の調整について応答しました');
+  }], { live: { attach(handler) { send = handler; return () => {}; } } });
+  assert.equal((await f.run()).completionVerified, false);
+  assert.equal(f.events.filter(event => event.type === 'input' && event.state === 'applied').length, 1);
 });
 
 test('plan is read-only, including refusing save and capture, then returns a reviewable plan', async () => {
@@ -174,7 +231,8 @@ test('old no-op, tool-call and turn budgets no longer truncate a Pi session', as
 
 test('cross-project calls and unknown tools never reach the Editor', async () => {
   const f = await fixture([invoke('publish_project', {}), invoke('create_primitive', { projectId: 'other', sceneId: 'scene' }), finalText()]);
-  await assert.rejects(f.run(), /完成確認/);
+  const response = await f.run();
+  assert.equal(response.completionVerified, false);
   assert.equal(f.calls.some(call => ['publish_project', 'create_primitive'].includes(call.name)), false);
 });
 

@@ -4,8 +4,8 @@ import type { PiUsage } from "../../lib/visual-editor/pi-authoring";
 const number = new Intl.NumberFormat("ja-JP");
 export const PiRunDetails = memo(function PiRunDetails({ text, usage, running }: { text?: string; usage?: PiUsage; running: boolean }) {
   return <>
-    {running && text ? <section aria-label="Piの応答" aria-busy="true" className="space-y-1">
-      <p className="text-[11px] text-slate-500">Piの応答（作業中）</p>
+    {running && text ? <section aria-label="応答" aria-busy="true" className="space-y-1">
+      <p className="text-[11px] text-slate-500">応答（作業中）</p>
       <p className="whitespace-pre-wrap break-words leading-5 text-slate-700">{text}</p>
     </section> : null}
     {usage ? <details className="text-[11px] text-slate-500">

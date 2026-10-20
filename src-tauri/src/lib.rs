@@ -6490,6 +6490,7 @@ pub fn run() {
             chatgpt::chatgpt_logout,
             chatgpt::chatgpt_models,
             chatgpt::pi::chatgpt_pi_run,
+            chatgpt::pi::chatgpt_pi_message,
             chatgpt::pi::chatgpt_pi_delete_history,
             chatgpt::chatgpt_cancel_generation,
             blender_modeling::get_blender_status,

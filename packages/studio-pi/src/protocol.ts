@@ -1,5 +1,7 @@
 /** JSON-only contract shared by the Pi runner and Studio. No SDK or Node imports. */
 export type PiMode = "build" | "plan" | "goal";
+export type PiLiveMessage = { id: string; prompt: string; delivery: "steer" | "follow_up"; attachedEntityIds?: string[]; attachedMaterialIds?: string[] };
+export type PiLiveRequest = PiLiveMessage & { generationId: string; projectId: string; sceneId: string; sessionId: string };
 export type PiQuestion = { question: string; choices: string[]; choiceCandidateIds?: (string | null)[] };
 export type PiPlan = { title: string; description: string; questions?: PiQuestion[] };
 export type PiAnswer = { question: string; answer: string; candidateId?: string };
@@ -17,9 +19,10 @@ export type PiContext = {
 export type PiHistory = { sessionId: string; leafId: string | null; nodes: { id: string; parentId: string | null; label: string; canBranch: boolean }[] };
 export type PiUsage = { modelTurns: number; toolCalls: number; inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; totalTokens: number };
 export type PiEvent =
+  | { type: "input"; message: PiLiveMessage; state: "queued" | "applied" | "unapplied" }
   | { type: "progress"; message: string; tool?: string; operationId?: string; readOnly?: boolean; changed?: boolean; saved?: boolean; mutationBeforeFingerprint?: string }
   | { type: "activity"; phase: "thinking" | "compacting" | "retrying"; message: string }
   | { type: "assistant"; text: string }
   | { type: "usage"; usage: PiUsage }
   | { type: "history"; history: PiHistory };
-export type PiResult = { text: string; history?: PiHistory; usage?: PiUsage; plan?: PiPlan };
+export type PiResult = { text: string; completionVerified?: boolean; history?: PiHistory; usage?: PiUsage; plan?: PiPlan };

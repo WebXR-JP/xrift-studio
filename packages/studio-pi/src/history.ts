@@ -23,12 +23,12 @@ export async function openHistory(stored?: StoredSession): Promise<SessionManage
   await mkdir(dirname(stored.path), { recursive: true, mode: 0o700 });
   try { const file = await open(stored.path, "wx", 0o600); await file.close(); }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
-  if ((await stat(stored.path)).size > 32 * 1024 * 1024) throw new Error("Pi履歴が32 MiBを超えました。新しいチャットで続けてください");
+  if ((await stat(stored.path)).size > 32 * 1024 * 1024) throw new Error("会話履歴が32 MiBを超えました。新しいチャットで続けてください");
   if (process.platform !== "win32") await chmod(stored.path, 0o600);
   const manager = SessionManager.open(stored.path, dirname(stored.path), dirname(stored.path));
   if (stored.leafId) {
     const entry = manager.getEntry(stored.leafId);
-    if (!entry || !resumeBoundary(entry)) throw new Error("分岐元・再開元のPi履歴が見つからないか、作業途中の記録です。完了した応答を選んでください");
+    if (!entry || !resumeBoundary(entry)) throw new Error("分岐元・再開元の会話履歴が見つからないか、作業途中の記録です。完了した応答を選んでください");
     manager.branch(stored.leafId);
   } else {
     // A process can stop between a tool call and its reply. Never restore an
@@ -43,12 +43,12 @@ export function historySummary(manager: SessionManager, id?: string): PiHistory 
   const leafId = [...manager.getBranch()].reverse().find(resumeBoundary)?.id;
   if (!id) return undefined;
   return { sessionId: id, leafId: leafId ?? null, nodes: manager.getEntries().slice(-300).map(entry => {
-    let label: string = entry.type;
+    let label = "会話の記録";
     if (entry.type === "message") {
       const message = entry.message;
-      label = message.role === "toolResult" ? `ツール結果：${message.toolName}` : message.role === "assistant"
-        ? message.content.some(block => block.type === "toolCall") ? "AIのツール操作" : "AIの応答"
-        : message.role === "user" ? "依頼" : message.role === "custom" && message.customType === "studio-run-outcome" ? "Studioの停止・失敗の記録" : message.role;
+      label = message.role === "toolResult" ? "操作の結果" : message.role === "assistant"
+        ? message.content.some(block => block.type === "toolCall") ? "AIの操作" : "AIの応答"
+        : message.role === "user" ? "依頼" : message.role === "custom" && message.customType === "studio-run-outcome" ? "停止・エラーの記録" : "会話の記録";
     } else if (entry.type === "compaction") label = "会話の要約";
     return { id: entry.id, parentId: entry.parentId, label, canBranch: canBranch(entry) };
   }) };

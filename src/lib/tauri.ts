@@ -832,6 +832,7 @@ export const tauri = {
   },
   chatgptCancelGeneration: (generationId: string) => invoke<{ generationId: string; cancelled: boolean }>("chatgpt_cancel_generation", { generationId }),
   chatgptPiDeleteHistory: (projectId: string, sceneId: string, sessionId: string) => invoke<void>("chatgpt_pi_delete_history", { projectId, sceneId, sessionId }),
+  chatgptPiMessage: (request: import("../../packages/studio-pi/src/protocol").PiLiveRequest) => invoke<void>("chatgpt_pi_message", request),
   detectXriftMcpClients: () =>
     invoke<XriftMcpClientStatus[]>("detect_xrift_mcp_clients"),
   registerXriftMcpClient: (clientId: XriftMcpClientId) =>
