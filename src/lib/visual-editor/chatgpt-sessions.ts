@@ -287,7 +287,7 @@ function resultSummary(turn: ChatgptGeneration): string {
 export function chatgptSessionTranscript(session: ChatgptSession): string {
   const safe = normalizeSessions([session], false)[0];
   return [safe.title, `作成: ${safe.createdAt}`, `更新: ${safe.updatedAt}`, ...safe.turns.map((turn, index) => [
-    `\n依頼 ${index + 1}${turn.createdAt ? `（${turn.createdAt}）` : ""}`, `モデル: ${turn.model}`, `回答の検討度: ${turn.reasoningEffort ?? "モデルの既定"}`, ...(turn.mode === "goal" ? [turn.goal ? `Goal（${turn.goal.iteration}回）` : "Goal"] : []), turn.prompt, resultSummary(turn),
+    `\n依頼 ${index + 1}${turn.createdAt ? `（${turn.createdAt}）` : ""}`, `モデル: ${turn.model}`, `思考量: ${turn.reasoningEffort ?? "モデルの既定"}`, ...(turn.mode === "goal" ? [turn.goal ? `Goal（${turn.goal.iteration}回）` : "Goal"] : []), turn.prompt, resultSummary(turn),
   ].join("\n"))].join("\n");
 }
 /** Earlier turns are data, not instructions. The native prompt enforces this too. */

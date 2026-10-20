@@ -43,7 +43,7 @@ pub async fn chatgpt_pi_message(
         active.sender.send(super::pi_transport::Input {
             message: json!({"id":id, "prompt":prompt, "delivery":delivery, "attachedEntityIds":attached_entity_ids, "attachedMaterialIds":attached_material_ids}),
             acknowledgement,
-        }).map_err(|_| "この依頼は応答を終了しています。新しい依頼として送ってください")?;
+        }).map_err(|_| "この依頼への応答は終了しました。新しい依頼として送ってください")?;
     }
     reply.await.map_err(|_| "追加指示の受信を確認できませんでした。入力を確認して再送してください")?
 }
@@ -73,7 +73,7 @@ pub async fn chatgpt_pi_delete_history(
 ) -> Result<(), String> {
     let _lease = begin_generation(&state, None)?;
     if !valid_history_id(&session_id) || project_id.is_empty() || scene_id.is_empty() {
-        return Err("会話履歴のIDが不正です".into());
+        return Err("会話の履歴を指定する情報を読み取れませんでした。チャットを選び直してください".into());
     }
     let path = app
         .path()
@@ -271,7 +271,7 @@ pub async fn chatgpt_pi_run(
         || project_id.len() > 160
         || scene_id.len() > 160
     {
-        return Err("制作の制作依頼が不正です".into());
+        return Err("制作の依頼を読み取れませんでした。内容を確認して送り直してください".into());
     }
     let chat_session_id = session_id.clone().unwrap_or_else(|| generation_id.clone());
     let session_id = history_session_id
@@ -282,7 +282,7 @@ pub async fn chatgpt_pi_run(
             .as_deref()
             .is_some_and(|id| !valid_history_id(id))
     {
-        return Err("会話履歴のIDが不正です".into());
+        return Err("会話の履歴を指定する情報を読み取れませんでした。チャットを選び直してください".into());
     }
     let context_value: Value =
         serde_json::from_str(&context).map_err(|_| "制作条件のJSONが不正です")?;
@@ -367,7 +367,7 @@ pub async fn chatgpt_pi_run(
             let cancelled = &lease.control.cancelled;
             async move {
                 if !allowed(&name) || mode == "plan" && !readonly(&name) {
-                    return Err("制作処理が許可されていない操作を要求しました".into());
+                    return Err("許可されていない操作を止めました".into());
                 }
                 for (key, expected) in [
                     ("projectId", project_id.as_str()),
@@ -377,7 +377,7 @@ pub async fn chatgpt_pi_run(
                         .get(key)
                         .is_some_and(|value| value.as_str() != Some(expected))
                     {
-                        return Err("別の作品・Sceneへの操作を停止しました".into());
+                        return Err("開いている作品やScene以外への操作を止めました".into());
                     }
                 }
                 let scope = json!({ "projectId": project_id, "sceneId": scene_id });

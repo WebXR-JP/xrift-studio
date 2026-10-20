@@ -40,7 +40,7 @@ export async function runStudioAgent(input: PiInput, host: HostCall, emit: (even
         cost: known?.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }] });
   }
   const model = runtime.getModel("xrift-chatgpt", input.model);
-  if (!model) throw new Error("選択したモデルを制作チャットで初期化できませんでした");
+  if (!model) throw new Error("選択したAIモデルを使えませんでした。モデルを選び直してください");
   const settings = SettingsManager.inMemory();
   const context = JSON.parse(input.context) as PiContext;
   const appliedRequests = [input.prompt];
@@ -116,7 +116,7 @@ export async function runStudioAgent(input: PiInput, host: HostCall, emit: (even
     ];
     const names = new Set([...studioTools, ...controls].map(tool => tool.name));
     for (const extension of resources.loader.getExtensions().extensions) for (const name of extension.tools.keys()) {
-      if (names.has(name) || ["read", "write", "edit", "bash", "powershell"].includes(name)) throw new Error(`Studioの操作と同名の追加機能の操作は登録できません：${name}`);
+      if (names.has(name) || ["read", "write", "edit", "bash", "powershell"].includes(name)) throw new Error(`Studioの操作と同じ名前の操作は追加できません：${name}`);
     }
     const { session } = await createAgentSession({ modelRuntime: runtime, model, resourceLoader: resources.loader, settingsManager: settings, sessionManager: manager,
       noTools: "builtin", tools: ["+codemode", "+tool_search"], excludeTools: ["read", "write", "edit", "bash", "powershell", "find", "grep", "ls"],
@@ -145,10 +145,10 @@ export async function runStudioAgent(input: PiInput, host: HostCall, emit: (even
       detach = live?.attach(async message => {
         const fingerprint = JSON.stringify(message);
         if (accepted.has(message.id)) {
-          if (accepted.get(message.id) !== fingerprint) throw new Error("追加指示の送信IDが重複しています");
+          if (accepted.get(message.id) !== fingerprint) throw new Error("同じ送信番号で異なる追加指示が届きました。入力を確認して送り直してください");
           return;
         }
-        if (!accepting || !session.isStreaming || signal?.aborted || plan) throw new Error("この依頼は応答を終了しています。追加指示を新しい依頼として送ってください");
+        if (!accepting || !session.isStreaming || signal?.aborted || plan) throw new Error("この依頼への応答は終了しました。追加の指示は、新しい依頼として送ってください");
         if (!message.id || !message.prompt.trim() || message.prompt.length > 2000 || !["steer", "follow_up"].includes(message.delivery)) throw new Error("追加指示の内容を確認してください");
         // Prefix prevents a chat message from invoking extension slash commands.
         const text = `追加の利用者の依頼：\n${message.prompt}\n\n添付した対象：${JSON.stringify({ attachedEntityIds: message.attachedEntityIds, attachedMaterialIds: message.attachedMaterialIds })}\n[message:${message.id}]`;
@@ -156,7 +156,7 @@ export async function runStudioAgent(input: PiInput, host: HostCall, emit: (even
         try {
           const disposition = await (message.delivery === "steer" ? session.steer(text) : session.followUp(text));
           if (!accepting) throw new Error("応答が終了しました。入力を確認して新しい依頼として送ってください");
-          if (disposition !== "queued") throw new Error("追加指示を制作の待ち列へ送れませんでした。入力内容を確認して再送してください");
+          if (disposition !== "queued") throw new Error("追加指示を送信待ちにできませんでした。入力内容を確認して、もう一度送ってください");
           accepted.set(message.id, fingerprint);
           emit({ type: "input", message, state: queued.has(message.id) ? "queued" : "applied" });
         } catch (error) { queued.delete(message.id); throw error; }

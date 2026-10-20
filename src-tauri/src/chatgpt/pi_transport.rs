@@ -70,16 +70,16 @@ where
                 // host call wins select. Keep the buffer across loop iterations.
                 count = bounded.read_until(b'\n', &mut line) => {
                     let count = count.map_err(|_| "制作の出力を読み取れませんでした")?;
-                    if count == 0 { return Err("制作処理が完了記録を返さずに終了しました".into()); }
-                    if line.len() > FRAME_BYTES { return Err("制作の出力が大きすぎます".into()); }
+                    if count == 0 { return Err("応答の受信が途中で終了しました。Sceneと保存状態を確認してから、続きを依頼してください".into()); }
+                    if line.len() > FRAME_BYTES { return Err("応答のデータ量が上限を超えました。Sceneを確認し、依頼を分けて続けてください".into()); }
                     if line.last() != Some(&b'\n') { continue; }
                     let message: Value = serde_json::from_slice(&line).map_err(|_| "制作の応答を読み取れませんでした")?;
                     line.clear();
                     match message["type"].as_str() {
                         Some("tool") => {
                             let id = message["id"].as_u64().ok_or("制作の呼び出しIDが不正です")?;
-                            let name = message["tool"].as_str().ok_or("制作のツール名が不正です")?.to_owned();
-                            let args = message["arguments"].as_object().ok_or("制作のツール引数が不正です")?.clone();
+                            let name = message["tool"].as_str().ok_or("実行する操作の名前を読み取れませんでした")?.to_owned();
+                            let args = message["arguments"].as_object().ok_or("操作に必要な情報を読み取れませんでした")?.clone();
                             let response = host(name, args);
                             pending.push(async move { (Value::from(id), response.await) });
                         }
@@ -91,9 +91,9 @@ where
                         }
                         Some("progress" | "activity" | "assistant" | "usage" | "history" | "input") => progress(message)?,
                         Some("result") if pending.is_empty() => return Ok(message["result"].clone()),
-                        Some("result") => return Err("制作処理が処理中の操作を残して終了しました".into()),
-                        Some("error") => return Err(message["message"].as_str().unwrap_or("制作の制作を完了できませんでした").into()),
-                        _ => return Err("制作処理から未対応の応答を受け取りました".into()),
+                        Some("result") => return Err("操作の結果を受け取る前に応答が終了しました。Sceneと保存状態を確認してください".into()),
+                        Some("error") => return Err(message["message"].as_str().unwrap_or("制作中にエラーが起きました").into()),
+                        _ => return Err("応答の形式を読み取れませんでした。アプリを再起動してから、もう一度お試しください".into()),
                     }
                 }
             }

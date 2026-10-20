@@ -100,8 +100,8 @@ test("Pi history tree branches a conversation without reverting the actual Scene
   const id = await generate(page);
   await expect.poll(async () => (await job(page, id)).status).toBe("completed");
   const before = (await call(page, "list_entities")).result!.entities;
-  await page.getByText("履歴ツリー", { exact: true }).click();
-  await page.getByRole("button", { name: "ここから分岐" }).click();
+  await page.getByText("会話の流れ", { exact: true }).click();
+  await page.getByRole("button", { name: "ここから別の案を始める" }).click();
   await expect.poll(async () => ((await call(page, "list_chatgpt_sessions")).result!.sessions as unknown[]).length).toBe(2);
   const sessions = (await call(page, "list_chatgpt_sessions")).result!;
   const branch = (sessions.sessions as { id: string; piBranch?: unknown }[]).find(item => item.id === sessions.activeSessionId)!;

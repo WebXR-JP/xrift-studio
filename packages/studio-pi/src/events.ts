@@ -33,7 +33,7 @@ export function observeSession(session: AgentSession, officialNames: Set<string>
     }
     if (event.type === "compaction_start") emit({ type: "activity", phase: "compacting", message: "会話を整理して作業を続けています" });
     if (event.type === "auto_retry_start") emit({ type: "activity", phase: "retrying", message: `接続を再試行しています（${event.attempt}回目）` });
-    if (event.type === "auto_retry_end" && !event.success) emit({ type: "activity", phase: "retrying", message: "制作の接続再試行を終えました" });
+    if (event.type === "auto_retry_end" && !event.success) emit({ type: "activity", phase: "retrying", message: "接続をやり直しましたが、応答を受け取れませんでした" });
   });
   return { usage, dispose: () => { unsubscribe(); emit({ type: "usage", usage: { ...usage } }); } };
 }

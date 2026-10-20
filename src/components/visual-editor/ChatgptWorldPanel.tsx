@@ -191,7 +191,7 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
       if (request.attachedMaterialIds?.some(id => materialById.get(id)?.status !== "ready")) return "添付したMaterialを利用できません。依頼を取り消し、現在のAssetsで添付を確認して送り直してください。";
       const available = models.find(item => item.slug === resolvedModel);
       if (!available) return "この依頼で選んだモデルを現在のアカウントで利用できません。送信設定を更新してください。";
-      if (request.reasoningEffort && !available.supportedReasoningEfforts?.includes(request.reasoningEffort)) return "この依頼の回答の検討度を現在のモデルで利用できません。送信設定を更新してください。";
+      if (request.reasoningEffort && !available.supportedReasoningEfforts?.includes(request.reasoningEffort)) return "この依頼の思考量を現在のモデルで利用できません。送信設定を更新してください。";
       return undefined;
     },
     onDispatch: (request, resolvedModel, expectedScope) => onGenerate(resolvedModel, request.prompt, request.options, request.mode, request.reasoningEffort, expectedScope),
@@ -512,8 +512,8 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
         <select aria-label="ワールド制作のモデル" disabled={choicesBusy || !models.length} value={model} onChange={e => setModel(e.target.value)} className="min-w-0 flex-1 rounded-full border-0 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-700 outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
           {!models.length ? <option value="">{busy === "loading" ? "確認中…" : "モデル"}</option> : models.map(m => <option key={m.slug} value={m.slug}>{m.displayName}</option>)}
         </select>
-        {connection?.planUsageEnabled ? <select aria-label="回答の検討度" title="回答前の検討をどの程度行うかを選びます。高い設定では時間がかかる場合があります" disabled={choicesBusy || !supportedEfforts.length} value={effectiveEffort} onChange={e => setReasoningEffort(e.target.value)} className="min-w-0 max-w-[55%] flex-1 rounded-full border-0 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-700 outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:opacity-60">
-          <option value="">回答の検討度：モデルの既定</option>
+        {connection?.planUsageEnabled ? <select aria-label="思考量" title="回答前の検討をどの程度行うかを選びます。高い設定では時間がかかる場合があります" disabled={choicesBusy || !supportedEfforts.length} value={effectiveEffort} onChange={e => setReasoningEffort(e.target.value)} className="min-w-0 max-w-[55%] flex-1 rounded-full border-0 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-700 outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:opacity-60">
+          <option value="">思考量：モデルの既定</option>
           {supportedEfforts.map(effort => <option key={effort} value={effort}>{effortLabels[effort] ?? effort}</option>)}
         </select> : null}
         </div>

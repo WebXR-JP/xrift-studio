@@ -28,7 +28,7 @@ export async function openHistory(stored?: StoredSession): Promise<SessionManage
   const manager = SessionManager.open(stored.path, dirname(stored.path), dirname(stored.path));
   if (stored.leafId) {
     const entry = manager.getEntry(stored.leafId);
-    if (!entry || !resumeBoundary(entry)) throw new Error("分岐元・再開元の会話履歴が見つからないか、作業途中の記録です。完了した応答を選んでください");
+    if (!entry || !resumeBoundary(entry)) throw new Error("選んだ履歴は見つからないか、応答の途中です。完了した応答を選んでください");
     manager.branch(stored.leafId);
   } else {
     // A process can stop between a tool call and its reply. Never restore an

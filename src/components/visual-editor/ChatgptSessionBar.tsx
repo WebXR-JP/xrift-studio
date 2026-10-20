@@ -38,16 +38,16 @@ export function ChatgptSessionBar({ sessions, activeSessionId, onSelect, onNew, 
     </select>
     <button type="button" title="新しいチャット" aria-label="新しいチャット" disabled={disabled} onClick={() => act(onNew)} className="flex size-8 shrink-0 items-center justify-center rounded-md text-slate-600 hover:bg-slate-100 disabled:opacity-50"><Plus size={16} aria-hidden="true" /></button>
     {onBranch ? <details className="relative shrink-0">
-      <summary className="cursor-pointer rounded-md px-2 py-1.5 hover:bg-slate-100">履歴ツリー</summary>
+      <summary className="cursor-pointer rounded-md px-2 py-1.5 hover:bg-slate-100">会話の流れ</summary>
       <div className="absolute right-0 top-9 z-20 max-h-80 w-72 max-w-[calc(100vw-3rem)] space-y-2 overflow-y-auto rounded-lg border border-slate-200 bg-white p-3 shadow-lg">
-        <p className="leading-5">完了した応答から会話を別案に分岐できます。現在のSceneは変わりません。</p>
-        {session?.piBranch ? <p className="text-[11px] text-slate-500">別の会話から分岐したチャットです。</p> : null}
-        {!history?.nodes.length ? <p className="text-slate-500">制作チャットで依頼を実行すると履歴が表示されます。</p> : <ol aria-label="会話の履歴ツリー" className="space-y-1">{history.nodes.slice(-80).map(node => {
+        <p className="leading-5">過去の応答を選んで、そこまでの会話から別の案を始められます。現在のSceneは変わりません。</p>
+        {session?.piBranch ? <p className="text-[11px] text-slate-500">過去の会話から別の案を始めたチャットです。</p> : null}
+        {!history?.nodes.length ? <p className="text-slate-500">制作チャットで依頼を実行すると履歴が表示されます。</p> : <ol aria-label="会話の会話の流れ" className="space-y-1">{history.nodes.slice(-80).map(node => {
           let depth = 0, parent = node.parentId;
           while (parent && byId.has(parent) && depth < 8) { depth++; parent = byId.get(parent)!.parentId; }
           return <li key={node.id} style={{ marginLeft: Math.min(depth, 4) * 8 }} className="border-l border-slate-200 pl-2 text-[11px]">
             <span>{node.label}{node.id === history.leafId ? "（現在）" : ""}</span>
-            {node.canBranch ? <button type="button" disabled={disabled} onClick={() => act(() => { if (session) onBranch(session.id, node.id); })} className="ml-2 min-h-8 rounded px-2 text-brand-700 hover:bg-slate-50 disabled:opacity-50">ここから分岐</button> : null}
+            {node.canBranch ? <button type="button" disabled={disabled} onClick={() => act(() => { if (session) onBranch(session.id, node.id); })} className="ml-2 min-h-8 rounded px-2 text-brand-700 hover:bg-slate-50 disabled:opacity-50">ここから別の案を始める</button> : null}
           </li>;
         })}</ol>}
       </div>

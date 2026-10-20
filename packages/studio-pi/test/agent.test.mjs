@@ -91,7 +91,7 @@ test('persisted SDK history branches from an exact completed response without im
     assert.ok(branch.history.nodes.length > result.history.nodes.length);
     assert.doesNotMatch(await readFile(path, 'utf8'), /fixture-only/);
     const invalid = await fixture([plan(), finalText()]);
-    await assert.rejects(invalid.run({ mode: 'plan', session: { id: 'root-chat', path, leafId: 'missing' } }), /分岐元/);
+    await assert.rejects(invalid.run({ mode: 'plan', session: { id: 'root-chat', path, leafId: 'missing' } }), /完了した応答を選んで/);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
@@ -159,7 +159,7 @@ test('steering is received after the active tool, records attachments and dedupl
   assert.equal(f.calls.filter(call => call.name === 'create_primitive').length, 1);
   assert.equal(f.events.filter(event => event.type === 'input' && event.state === 'queued').length, 1);
   assert.equal(send, undefined);
-  await assert.rejects(captured({ ...message, id: 'late-message' }), /応答を終了/);
+  await assert.rejects(captured({ ...message, id: 'late-message' }), /応答は終了/);
 });
 
 test('follow-up waits for the first response and can edit after its completion gate', async () => {

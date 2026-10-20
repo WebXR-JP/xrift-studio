@@ -13,7 +13,7 @@ export async function createStudioResources(packages: InstalledPackage[] = [], d
   try {
     const manager = new DefaultPackageManager({ cwd: root, agentDir: root, settingsManager: settings });
     const paths = packages.length ? (await manager.resolveExtensionSources(packages.map(item => item.path), { temporary: true })).extensions.filter(item => item.enabled).map(item => item.path) : [];
-    if (packages.length && !paths.length) throw new Error("登録したパッケージに追加機能がありません");
+    if (packages.length && !paths.length) throw new Error("登録したプログラムには、制作に使える追加機能がありません");
     const loader = new DefaultResourceLoader({ cwd: root, agentDir: root, settingsManager: settings, systemPrompt,
       noContextFiles: true, noSkills: true, noPromptTemplates: true, noThemes: true,
       additionalExtensionPaths: paths, extensionFactories: [createCodemodeExtension({ models: false }), createToolSearchExtension(), ...extensions] });

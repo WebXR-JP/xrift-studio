@@ -144,10 +144,10 @@ test("接続失敗は中央で再試行でき、復元中は重複接続と依�
   await expect(panel.getByRole("alert")).toHaveCount(0);
 });
 
-test("Planの切替なしで通常の依頼を保存し、選択した回答の検討度を次の依頼の実IPCにも渡す", async ({ page }) => {
+test("Planの切替なしで通常の依頼を保存し、選択した思考量を次の依頼の実IPCにも渡す", async ({ page }) => {
   const panel = await openFixture(page);
   await signIn(page);
-  const thinking = panel.getByRole("combobox", { name: "回答の検討度", exact: true });
+  const thinking = panel.getByRole("combobox", { name: "思考量", exact: true });
   await expect(thinking).toHaveValue("low");
   await thinking.selectOption("high");
   const prompt = panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true });
@@ -164,11 +164,11 @@ test("Planの切替なしで通常の依頼を保存し、選択した回答の�
   await expect(panel.getByRole("progressbar", { name: "依頼の反映と保存", exact: true })).toHaveAttribute("value", "1");
 });
 
-test("モデル切替で対応する回答の検討度を保ち、非対応なら既定へ戻してIPCから省く", async ({ page }) => {
+test("モデル切替で対応する思考量を保ち、非対応なら既定へ戻してIPCから省く", async ({ page }) => {
   const panel = await openFixture(page);
   await signIn(page);
   const model = panel.getByRole("combobox", { name: "ワールド制作のモデル", exact: true });
-  const thinking = panel.getByRole("combobox", { name: "回答の検討度", exact: true });
+  const thinking = panel.getByRole("combobox", { name: "思考量", exact: true });
   await thinking.selectOption("high");
   await model.selectOption("fixture-b");
   await expect(thinking).toHaveValue("high");
@@ -179,7 +179,7 @@ test("モデル切替で対応する回答の検討度を保ち、非対応な�
   await expect(thinking).toHaveValue("");
   await expect(thinking).toBeDisabled();
   await expect(thinking.locator("option")).toHaveCount(1);
-  await panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true }).fill("既定の回答の検討度で床を追加");
+  await panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true }).fill("既定の思考量で床を追加");
   await panel.getByRole("button", { name: "依頼を送信", exact: true }).click();
   await expect(panel.getByRole("progressbar", { name: "依頼の反映と保存", exact: true })).toHaveAttribute("value", "1");
   const request = await page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.at(-1)!);
@@ -205,8 +205,8 @@ test("モデル切替で対応する回答の検討度を保ち、非対応な�
 test("UIは低を初期送信し、MCPも直近のモデル能力で低を選び追加の一覧取得をしない", async ({ page }) => {
   const panel = await openFixture(page);
   await signIn(page);
-  await expect(panel.getByRole("combobox", { name: "回答の検討度", exact: true })).toHaveValue("low");
-  await panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true }).fill("低い回答の検討度で床を追加");
+  await expect(panel.getByRole("combobox", { name: "思考量", exact: true })).toHaveValue("low");
+  await panel.getByRole("textbox", { name: "ワールドへの依頼", exact: true }).fill("低い思考量で床を追加");
   await panel.getByRole("button", { name: "依頼を送信", exact: true }).click();
   await expect(panel.getByRole("progressbar", { name: "依頼の反映と保存", exact: true })).toHaveAttribute("value", "1");
   expect(await page.evaluate(() => window.__XRIFT_CHATGPT_CONNECTION_FIXTURE__!.requests.at(-1))).toMatchObject({ model: "fixture-a", reasoningEffort: "low" });
