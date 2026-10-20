@@ -74,3 +74,5 @@ API名、ノードの`op`、接続口のID、JSONキー、保存済みID、URL�
 画面文言を変えたら、README、利用ガイド、`docs/guide/manifest.json`の案内も確認してください。起動、新規作成、取り込み、編集、Play、保存、公開、終了の各操作と、未選択・処理中・成功・失敗・取り消しの表示を対象にします。
 
 `node --test scripts/japanese-copy.test.mjs scripts/ui-flow-copy.test.mjs`で、用語、検索、説明、保存形式、文書参照を確認できます。画面のソースを変えた場合は`pnpm typecheck`も実行してください。実画面では文字切れ、改行、空の枠、エラー時の案内を確かめます。実施した検証と未検証の範囲は、PRの説明に記載してください。
+
+制作チャットの画面では「外部拡張」を「制作に使う追加機能」、「思考量」を「回答の検討度」と表記します。APIの`reasoningEffort`などは変えません。応答文にはYomiyasu由来の文章方針を適用します。原文とライセンス、適用範囲は`packages/studio-pi/resources/yomiyasu/`にあります。

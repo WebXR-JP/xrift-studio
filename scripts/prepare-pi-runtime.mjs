@@ -12,6 +12,7 @@ rmSync(destination, { recursive: true, force: true });
 mkdirSync(destination, { recursive: true });
 cpSync(path.join(source, "package.json"), path.join(destination, "package.json"));
 cpSync(path.join(source, "dist"), path.join(destination, "dist"), { recursive: true });
+cpSync(path.join(source, "resources"), path.join(destination, "resources"), { recursive: true });
 // Materialize the installed, lockfile-selected dependency graph as ordinary
 // Node packages. No network resolution, install scripts or platform symlinks.
 const installed = new Map();

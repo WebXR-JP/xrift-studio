@@ -11,12 +11,13 @@ export const PiRunDetails = memo(function PiRunDetails({ text, usage, running }:
     {usage ? <details className="text-[11px] text-slate-500">
       <summary className="cursor-pointer">この依頼の実行情報</summary>
       <dl className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1">
-        <dt>モデル応答</dt><dd>{number.format(usage.modelTurns)}回</dd>
-        <dt>ツール実行</dt><dd>{number.format(usage.toolCalls)}回</dd>
-        <dt>合計トークン</dt><dd>{number.format(usage.totalTokens)}</dd>
+        <dt>AIが応答した回数</dt><dd>{number.format(usage.modelTurns)}回</dd>
+        <dt>操作を呼び出した回数</dt><dd>{number.format(usage.toolCalls)}回</dd>
+        <dt>使用量の合計（トークン）</dt><dd>{number.format(usage.totalTokens)}</dd>
         <dt>入力 / 出力</dt><dd>{number.format(usage.inputTokens)} / {number.format(usage.outputTokens)}</dd>
-        <dt>キャッシュ読取 / 書込</dt><dd>{number.format(usage.cacheReadTokens)} / {number.format(usage.cacheWriteTokens)}</dd>
+        <dt>保存済みデータの再利用 / 保存</dt><dd>{number.format(usage.cacheReadTokens)} / {number.format(usage.cacheWriteTokens)}</dd>
       </dl>
+      <p className="mt-2 leading-5">トークンはAIが文章や画像を扱うときの単位で、文字数とは異なります。再利用と保存の値もトークン数です。表示した回数は、制作を止める上限ではありません。</p>
     </details> : null}
   </>;
 });
