@@ -99,6 +99,10 @@ struct XriftMcpEditorRequestEvent {
     client_name: String,
     tool: String,
     arguments: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    internal_generation_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    internal_scope: Option<Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -522,6 +526,8 @@ async fn handle_broker_connection(
         client_name: envelope.client_name,
         tool: envelope.request.tool,
         arguments: envelope.request.arguments,
+        internal_generation_id: None,
+        internal_scope: None,
     };
     let emit_result = app
         .get_webview_window("main")
@@ -2022,8 +2028,15 @@ fn material_patch_schema() -> Value {
 })
 }
 
-fn tool_definitions() -> Value {
+pub(crate) fn tool_definitions() -> Value {
     json!([
+        {
+            "name": "save_scene",
+            "description": "Flush the Editor autosave for the current Scene. Returns the saved revision and fingerprint only after the exact current documents reach disk. A concurrent edit fails rather than certifying an older save.",
+            "inputSchema": { "type": "object", "properties": {
+                "projectId": { "type": "string" }, "sceneId": { "type": "string" }
+            }, "required": ["projectId", "sceneId"], "additionalProperties": false }
+        },
         {
             "name": "list_projects",
             "description": "List the projects in the Studio Library with path, kind, format, title, last upload and which one is open. Call it before open_project, and to learn whether anything is open at all: while nothing is open, every editing tool answers EDITOR_UNAVAILABLE. Only Visual projects (editable: true) can be opened here; Classic projects are code projects and stay outside MCP. Needs no open project.",
@@ -2135,7 +2148,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "generate_chatgpt_world",
-            "description": "Plan or edit a World using Studio's connected ChatGPT account and its usage allowance. Defaults to target=current and mode=build: validate the plan, save drafts, then adjust existing Entities and add new Entities sequentially to the current Scene, saving each result. Human edits made during reasoning trigger fresh planning from the current Scene. During execution, independent edits merge and conflicting edits trigger up to two fresh planning attempts, preserving saved results and continuing only unfinished work. mode=goal continues the same request across saved passes, reading the latest Scene and reviewing after every changed pass until no relevant work remains. Questions pause for answers; three unchanged passes with remaining work stop with an error. Cancellation and Scene changes preserve saved work. mode=plan returns a planned job without changing the Scene or project files; review its public plan and use apply_chatgpt_plan to execute it. target=new creates and opens a separate World after saving the source. Requires a World in Edit, a current get_editor_context snapshot and a slug from list_chatgpt_models. Optional reasoningEffort must be supported by that model. When omitted, recent list_chatgpt_models metadata selects low if supported, otherwise the supported catalog default; missing or expired metadata leaves the API default unchanged without another catalog request. Unsupported efforts are rejected before inference is sent. Options choose models/materials/audio; omit for all three. An active explicit MCP world-authoring run owns the Scene: continue that run or cancel_world_authoring before starting this separate ChatGPT run. Returns generationId immediately; poll get_chatgpt_generation. Saved partial results remain on failure or cancellation. Never publishes.",
+            "description": "Plan or edit a World with the Pi Coding Agent SDK using Studio's connected ChatGPT account and usage allowance. Pi reads live Scene data and calls official Studio editing, validation, saving and capture tools; errors feed back into the same agent loop. Requires a World in Edit and current projectId, sceneId, expectedRevision and an account model slug. Optional reasoningEffort must be supported by the model. Asset options and attachments are passed to Pi. mode=plan is read-only and returns a reviewable plan; apply_chatgpt_plan executes only against the unchanged Scene. mode=goal continues toward the original objective in one Pi session. Official tools are registered directly; Pi tool_search and codemode discover and compose operations. Independent reads may run concurrently, while writes retain revision checks. There are no fixed specialist sessions or Studio turn, call-count or overall run-time budgets. Completion requires the saved current Scene, valid Project Health, a current rendered image and explicit satisfied criteria. Cancellation stops new tools and drains admitted work, preserving partial results and manual edits. target=new saves the source and edits a separate World. An active explicit MCP authoring run must first be completed or cancelled. Returns generationId immediately; poll get_chatgpt_generation. Never publishes.",
             "inputSchema": { "type": "object", "properties": {
                 "projectId": { "type": "string", "minLength": 1 },
                 "sceneId": { "type": "string", "minLength": 1 },
@@ -2148,7 +2161,7 @@ fn tool_definitions() -> Value {
                 "prompt": { "type": "string", "minLength": 1, "maxLength": 2000 },
                 "target": { "type": "string", "enum": ["current", "new"], "default": "current" },
                 "mode": { "type": "string", "enum": ["build", "plan", "goal"], "default": "build" },
-                "options": { "type": "object", "properties": { "models": { "type": "boolean" }, "materials": { "type": "boolean" }, "audio": { "type": "boolean" }, "modelSource": { "type": "string", "enum": ["auto", "blender", "store"] } }, "required": ["models", "materials", "audio"], "additionalProperties": false }
+                "options": { "type": "object", "properties": { "models": { "type": "boolean" }, "materials": { "type": "boolean" }, "audio": { "type": "boolean" }, "modelSource": { "type": "string", "enum": ["auto", "blender", "store"] }, "extensions": { "type": "array", "maxItems": 8, "items": { "type": "string", "maxLength": 240 }, "description": "Explicitly trusted Pi npm packages, pinned as npm:package@1.2.3. Automatically installed without lifecycle scripts for build/goal. Their code has Studio's OS permissions. Not loaded in Plan." } }, "required": ["models", "materials", "audio"], "additionalProperties": false }
             }, "required": ["projectId", "sceneId", "expectedRevision", "model", "prompt"], "additionalProperties": false }
         },
         {
@@ -2168,7 +2181,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "answer_chatgpt_questions",
-            "description": "Answer all clarification pages from a planned ChatGPT job. Supply each zero-based questionIndex once and its selected choice text or the author's free-text answer. Requires the same project and Scene and a fresh revision. Resumes the same request with its attached Entities, model and mode; plan mode returns a plan for review and build mode continues after validation. No Scene changes happen while answers are incomplete. Poll get_chatgpt_generation after submission.",
+            "description": "Answer all clarification pages from a planned ChatGPT job. Supply each zero-based questionIndex once and its selected choice text or the author's free-text answer. Requires the same project and Scene and a fresh revision. Resumes the same Pi conversation and request with its attached Entities, model, mode, saved progress and usage. Questions may arise before work or after explicitly saving partial work. Routine implementation and validation need no approval. Plan mode remains read-only; build/goal continue in the actual target World without creating another World for each answer. No additional Scene edits happen while answers are incomplete. Poll get_chatgpt_generation after submission.",
             "inputSchema": { "type": "object", "properties": {
                 "generationId": { "type": "string", "minLength": 1 },
                 "projectId": { "type": "string", "minLength": 1 }, "sceneId": { "type": "string", "minLength": 1 }, "expectedRevision": { "type": "integer", "minimum": 0 },
@@ -2177,7 +2190,7 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "cancel_chatgpt_generation",
-            "description": "Discard a planned ChatGPT job or request cancellation of a running job by generationId. Does not undo Entities or assets already applied and saved. Cancellation may finish after an active step; poll get_chatgpt_generation for the final cancelled, completed or failed status. Returns whether cancellation was requested and never returns credentials.",
+            "description": "End pending clarification, discard a read-only Plan, or request cancellation of a running Pi job by generationId. Does not undo Entities or assets already applied and saved. Cancellation may finish after an active step; poll get_chatgpt_generation for the final cancelled, completed or failed status. Returns whether cancellation was requested and never returns credentials.",
             "inputSchema": { "type": "object", "properties": { "generationId": { "type": "string", "minLength": 1 } }, "required": ["generationId"], "additionalProperties": false }
         },
         {
@@ -5492,4 +5505,25 @@ mod tests {
             .and_then(OsStr::to_str)
             .is_some_and(|name| name.starts_with("xrift-studio-mcp-")));
     }
+}
+
+/// Internal Pi calls share the official Editor dispatcher and its revision,
+/// import, validation and persistence rules. The origin never comes from MCP clients.
+pub(crate) async fn call_pi_tool(app: &AppHandle, generation_id: &str, tool: &str, arguments: Value, scope: Value, read_only: bool, cancelled: &std::sync::atomic::AtomicBool) -> Result<XriftMcpEditorResponse, String> {
+    let state = app.state::<XriftMcpBrokerState>();
+    // Reads may overlap. Every mutation shares the official broker's write lock.
+    let _guard = if read_only { None } else { Some(state.request_lock.lock().await) };
+    if cancelled.load(Ordering::Acquire) { return Err("制作を停止しました".into()); }
+    let id = format!("pi-{}-{}", generation_id, MCP_MONOTONIC_START.get_or_init(Instant::now).elapsed().as_nanos());
+    let (sender, receiver) = oneshot::channel();
+    state.pending.lock().await.insert(id.clone(), sender);
+    let event = XriftMcpEditorRequestEvent { id: id.clone(), client_name: "Pi".into(), tool: tool.into(), arguments, internal_generation_id: Some(generation_id.into()), internal_scope: Some(scope) };
+    let emitted = app.get_webview_window("main").ok_or_else(|| "Editorのウィンドウがありません".to_string())
+        .and_then(|window| window.emit(MCP_EVENT_NAME, event).map_err(|_| "Editorへ操作を送れませんでした".to_string()));
+    if let Err(error) = emitted { state.pending.lock().await.remove(&id); return Err(error); }
+    // Do not abandon an admitted write on cancellation: drain its response first.
+    let response = tokio::time::timeout(Duration::from_secs(request_timeout_seconds(tool)), receiver).await;
+    state.pending.lock().await.remove(&id);
+    response.map_err(|_| "Editorの処理完了を確認できませんでした。Sceneの保存状態を確認してください".to_string())?
+        .map_err(|_| "Editorとの接続が終了しました".to_string())
 }

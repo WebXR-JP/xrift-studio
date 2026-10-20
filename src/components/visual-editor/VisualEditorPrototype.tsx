@@ -1493,7 +1493,9 @@ export function VisualEditorPrototype({
   const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
   const sceneChatgptSessions = chatgptSessionActions?.sessions.filter(session => session.projectId === bundle.project.projectId && session.sceneId === bundle.scene.sceneId);
   const selectedChatgptSession = sceneChatgptSessions?.find(session => session.id === chatgptSessionActions?.activeSessionId) ?? sceneChatgptSessions?.[0];
-  const sceneChatgptGeneration = chatgptSessionActions ? selectedChatgptSession?.turns[selectedChatgptSession.turns.length - 1] ?? null : chatgptGeneration && chatgptGenerationMatchesScene(chatgptGeneration, bundle.project.projectId, bundle.scene.sceneId) ? chatgptGeneration : null;
+  const livePiGeneration = chatgptGeneration && chatgptGenerationMatchesScene(chatgptGeneration, bundle.project.projectId, bundle.scene.sceneId)
+    && (!chatgptSessionActions || chatgptGeneration.sessionId === selectedChatgptSession?.id) ? chatgptGeneration : null;
+  const sceneChatgptGeneration = livePiGeneration ?? selectedChatgptSession?.turns[selectedChatgptSession.turns.length - 1] ?? null;
   const openMcpSettings = () => {
     setMcpSettingsOpen(true);
     void refreshMcpClients();
@@ -2728,6 +2730,7 @@ export function VisualEditorPrototype({
     const complete = async (
       request: XriftMcpEditorRequestEvent,
     ): Promise<void> => {
+      let piMutationBefore: PrototypeVisualProject | undefined;
       let authoringWriteScope: { root: string; projectId: string; sceneId: string } | undefined;
       const savedAuthoringEvidence = async () => {
         const saved = lastSavedBundleRef.current;
@@ -2736,11 +2739,18 @@ export function VisualEditorPrototype({
           pendingWrites: Boolean(autosaveCoordinatorRef.current?.isPending()) };
       };
       const completeResponse = async (response: Parameters<typeof tauri.completeXriftMcpRequest>[0]) => {
+        if (request.internalGenerationId && response.ok && (piMutationBefore || ["get_editor_context", "get_project_health", "save_scene", "capture_scene_view"].includes(request.tool))) {
+          const current = bundleRef.current;
+          const progressFingerprint = authoringSceneProgressFingerprint(current);
+          const mutationBeforeFingerprint = piMutationBefore ? authoringSceneProgressFingerprint(piMutationBefore) : undefined;
+          response = { ...response, result: { fingerprint: await authoringFingerprint(current), progressFingerprint, mutationBeforeFingerprint,
+            changed: mutationBeforeFingerprint !== undefined && mutationBeforeFingerprint !== progressFingerprint, ...response.result } };
+        }
         // Preserve successful edit results even when auxiliary history cannot be saved.
         // Reporting the edit itself as failed could make a client execute it twice.
         const root = projectPathRef.current;
         const sceneId = bundleRef.current.scene.sceneId;
-        if (authoringWriteScope || root && response.ok && request.arguments.sceneId === sceneId && request.arguments.projectId === bundleRef.current.project.projectId) {
+        if (!request.internalGenerationId && (authoringWriteScope || root && response.ok && request.arguments.sceneId === sceneId && request.arguments.projectId === bundleRef.current.project.projectId)) {
           try {
             const journalRoot = authoringWriteScope?.root ?? root!, journalScene = authoringWriteScope?.sceneId ?? sceneId;
             const state = readAuthoringState(await tauri.readWorldAuthoring(journalRoot, journalScene));
@@ -2772,6 +2782,11 @@ export function VisualEditorPrototype({
       );
       mcpHarnessStateRef.current = harness.state;
       try {
+        if (request.internalGenerationId) {
+          const current = bundleRef.current;
+          if (!request.internalScope || request.internalScope.projectId !== current.project.projectId || request.internalScope.sceneId !== current.scene.sceneId) throw new XriftMcpEditorToolError("SCOPE_CHANGED", "開いている作品またはSceneが変わりました");
+          if (editorModeRef.current !== "edit" || importBusyRef.current || projectExportLock.current) throw new XriftMcpEditorToolError("EDITOR_BUSY", "Editで素材の処理完了を待ってから再試行してください");
+        }
         // The registry says which surface owns a tool, so an unknown name is
         // simply one with no surface rather than something five membership
         // tests have to agree about.
@@ -2782,7 +2797,7 @@ export function VisualEditorPrototype({
             "対応していないAI editor toolです",
           );
         }
-        if (isAuthoringWriteTool(request.tool)) {
+        if (!request.internalGenerationId && isAuthoringWriteTool(request.tool)) {
           const root = projectPathRef.current, current = bundleRef.current;
           if (root && request.arguments.projectId === current.project.projectId && request.arguments.sceneId === current.scene.sceneId) {
             const state = readAuthoringState(await tauri.readWorldAuthoring(root, current.scene.sceneId));
@@ -2824,6 +2839,14 @@ export function VisualEditorPrototype({
               "対象シーンが現在のEditorと一致しません。get_editor_contextで再取得してください",
               { projectId, sceneId },
             );
+          }
+          if (request.tool === "save_scene") {
+            if (editorModeRef.current !== "edit" || importBusyRef.current) throw new XriftMcpEditorToolError("EDITOR_BUSY", "Editで素材の処理完了を待ってから保存してください");
+            const before = bundleRef.current;
+            if (!(await mcpProjectBridgeActionsRef.current?.saveNow())) throw new XriftMcpEditorToolError("EDITOR_ERROR", "Sceneを保存できませんでした");
+            if (bundleRef.current !== before) throw new XriftMcpEditorToolError("STALE_REVISION", "保存中にSceneが変更されました。最新のSceneを保存し直してください");
+            await completeResponse({ id: request.id, ok: true, result: { projectId, sceneId, revision: mcpRevisionRef.current, fingerprint: await authoringFingerprint(before), saved: true } });
+            return;
           }
           if (["begin_world_authoring", "get_world_authoring", "review_world_authoring", "complete_world_authoring", "cancel_world_authoring"].includes(request.tool)) {
             if (request.tool === "begin_world_authoring" && authoringOwnerBusyRef.current) throw new XriftMcpEditorToolError("EDITOR_BUSY", "現在の制作が終わるか停止してから、MCPの制作目標を開始してください。");
@@ -2947,6 +2970,7 @@ export function VisualEditorPrototype({
                 captured.message,
               );
             }
+            if (fingerprint !== await authoringFingerprint(bundleRef.current)) throw new XriftMcpEditorToolError("STALE_REVISION", "撮影中にSceneが変わりました。最新のSceneを撮り直してください");
             if (!tauri.isAvailable()) {
               throw new XriftMcpEditorToolError(
                 "SCENE_VIEW_CAPTURE_FAILED",
@@ -2983,6 +3007,7 @@ export function VisualEditorPrototype({
                 path,
                 byteLength,
                 editorMode: editorModeRef.current,
+                fingerprint,
                 image: {
                   mimeType: "image/png",
                   data: captured.dataUrl.slice(captured.dataUrl.indexOf(",") + 1),
@@ -3156,7 +3181,7 @@ export function VisualEditorPrototype({
             const revisionBefore = mcpRevisionRef.current;
             mcpRevisionRef.current += 1;
             mcpRevisionBundleRef.current = nextBundle;
-            bundleRef.current = nextBundle;
+            piMutationBefore ??= bundleRef.current; bundleRef.current = nextBundle;
             assetSelectionRef.current = shader.id;
             saveStatusRef.current = "dirty";
             setHistory((current) =>
@@ -3379,7 +3404,7 @@ export function VisualEditorPrototype({
               const revisionBefore = mcpRevisionRef.current;
               mcpRevisionRef.current += 1;
               mcpRevisionBundleRef.current = nextBundle;
-              bundleRef.current = nextBundle;
+              piMutationBefore ??= bundleRef.current; bundleRef.current = nextBundle;
               assetSelectionRef.current = modelAssetId;
               saveStatusRef.current = "dirty";
               setHistory((current) =>
@@ -3501,7 +3526,7 @@ export function VisualEditorPrototype({
             const revisionBefore = mcpRevisionRef.current;
             mcpRevisionRef.current += 1;
             mcpRevisionBundleRef.current = nextBundle;
-            bundleRef.current = nextBundle;
+            piMutationBefore ??= bundleRef.current; bundleRef.current = nextBundle;
             sceneSelectionRef.current = {
               kind: "entity",
               id: placed.rootEntityId,
@@ -3686,7 +3711,7 @@ export function VisualEditorPrototype({
               const revisionBefore = mcpRevisionRef.current;
               mcpRevisionRef.current += 1;
               mcpRevisionBundleRef.current = nextBundle;
-              bundleRef.current = nextBundle;
+              piMutationBefore ??= bundleRef.current; bundleRef.current = nextBundle;
               assetSelectionRef.current = textureAssetId;
               saveStatusRef.current = "dirty";
               setHistory((current) =>
@@ -3791,7 +3816,7 @@ export function VisualEditorPrototype({
             const revisionBefore = mcpRevisionRef.current;
             mcpRevisionRef.current += 1;
             mcpRevisionBundleRef.current = nextBundle;
-            bundleRef.current = nextBundle;
+            piMutationBefore ??= bundleRef.current; bundleRef.current = nextBundle;
             assetSelectionRef.current = assetId;
             saveStatusRef.current = "dirty";
             setHistory((current) =>
@@ -3851,7 +3876,7 @@ export function VisualEditorPrototype({
               const nextBundle = touchProject({ ...sourceBundle, assets: result.manifest,
                 scene: updateColliderComponent(sourceBundle.scene, entityId, { collisionModelAssetId: result.assetId }, componentId) });
               const revisionBefore = mcpRevisionRef.current;
-              mcpRevisionRef.current += 1; mcpRevisionBundleRef.current = nextBundle; bundleRef.current = nextBundle;
+              mcpRevisionRef.current += 1; mcpRevisionBundleRef.current = nextBundle; piMutationBefore ??= bundleRef.current; bundleRef.current = nextBundle;
               saveStatusRef.current = "dirty"; setSaveStatus("dirty");
               setHistory((current) => commitEditorHistory(current, { ...current.present, bundle: nextBundle }));
               await completeResponse({ id: request.id, ok: true, result: { entityId, componentId, assetId: result.assetId, triangles: result.triangles, revisionBefore, revisionAfter: mcpRevisionRef.current } });
@@ -4009,7 +4034,7 @@ export function VisualEditorPrototype({
               const revisionBefore = mcpRevisionRef.current;
               mcpRevisionRef.current += 1;
               mcpRevisionBundleRef.current = nextBundle;
-              bundleRef.current = nextBundle;
+              piMutationBefore ??= bundleRef.current; bundleRef.current = nextBundle;
               assetSelectionRef.current = modelAssetId;
               saveStatusRef.current = "dirty";
               setHistory((current) =>
@@ -4122,7 +4147,7 @@ export function VisualEditorPrototype({
           const revisionBefore = mcpRevisionRef.current;
           mcpRevisionRef.current += 1;
           mcpRevisionBundleRef.current = nextBundle;
-          bundleRef.current = nextBundle;
+          piMutationBefore ??= bundleRef.current; bundleRef.current = nextBundle;
           assetSelectionRef.current = shaderAssetId;
           saveStatusRef.current = "dirty";
           setHistory((current) =>
@@ -4386,7 +4411,7 @@ export function VisualEditorPrototype({
                 });
                 mcpRevisionRef.current += 1;
                 mcpRevisionBundleRef.current = nextBundle;
-                bundleRef.current = nextBundle;
+                piMutationBefore ??= bundleRef.current; bundleRef.current = nextBundle;
                 saveStatusRef.current = "dirty";
                 setHistory((current) =>
                   commitEditorHistory(current, {
@@ -4493,7 +4518,7 @@ export function VisualEditorPrototype({
             });
             mcpRevisionRef.current += 1;
             mcpRevisionBundleRef.current = nextBundle;
-            bundleRef.current = nextBundle;
+            piMutationBefore ??= bundleRef.current; bundleRef.current = nextBundle;
             assetSelectionRef.current = imported.id;
             saveStatusRef.current = "dirty";
             setHistory((current) =>
@@ -4866,7 +4891,7 @@ export function VisualEditorPrototype({
             const revisionBefore = mcpRevisionRef.current;
             mcpRevisionRef.current += 1;
             mcpRevisionBundleRef.current = nextBundle;
-            bundleRef.current = nextBundle;
+            piMutationBefore ??= bundleRef.current; bundleRef.current = nextBundle;
             sceneSelectionRef.current = { kind: "entity", id: entityId };
             assetSelectionRef.current = asset.id;
             saveStatusRef.current = "dirty";
@@ -5166,7 +5191,7 @@ export function VisualEditorPrototype({
           const revisionBefore = mcpRevisionRef.current;
           mcpRevisionRef.current += 1;
           mcpRevisionBundleRef.current = nextBundle;
-          bundleRef.current = nextBundle;
+          piMutationBefore ??= bundleRef.current; bundleRef.current = nextBundle;
           assetSelectionRef.current = asset.id;
           saveStatusRef.current = "dirty";
           setHistory((current) =>
@@ -5362,7 +5387,7 @@ export function VisualEditorPrototype({
           });
           mcpRevisionRef.current += 1;
           mcpRevisionBundleRef.current = nextBundle;
-          bundleRef.current = nextBundle;
+          piMutationBefore ??= bundleRef.current; bundleRef.current = nextBundle;
           assetSelectionRef.current = applied.primaryAssetId;
           saveStatusRef.current = "dirty";
           selectInstalledAsset(applied.primaryAssetId);
@@ -5482,7 +5507,7 @@ export function VisualEditorPrototype({
         if (outcome.changed) {
           mcpRevisionRef.current += 1;
           mcpRevisionBundleRef.current = outcome.bundle;
-          bundleRef.current = outcome.bundle;
+          piMutationBefore ??= bundleRef.current; bundleRef.current = outcome.bundle;
           sceneSelectionRef.current = outcome.sceneSelection;
           assetSelectionRef.current = outcome.assetSelection;
           saveStatusRef.current = "dirty";

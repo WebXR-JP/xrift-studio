@@ -15,14 +15,14 @@ test("生成モデルの原本をGLBと同時に保存し、再読み込み・�
     const modelingPath = "/src/lib/visual-editor/chatgpt-modeling.ts";
     const starterPath = "/src/lib/visual-editor/starter-templates.ts";
     const serializationPath = "/src/lib/visual-editor/serialization.ts";
-    const generationPath = "/src/lib/visual-editor/chatgpt-generation.ts";
+    const editorPath = "/src/lib/visual-editor/mcp-editor-tools.ts";
     const transferPath = "/src/lib/visual-editor/hierarchy-transfer.ts";
     const assignmentPath = "/src/lib/visual-editor/model-assignment.ts";
     const { createBlenderModelAsset }: typeof import("../src/lib/visual-editor/chatgpt-modeling") = await import(/* @vite-ignore */ modelingPath);
     const { readBlenderModelSource, readBlenderEntityModelSource }: typeof import("../src/lib/visual-editor/chatgpt-model-source") = await import(/* @vite-ignore */ sourcePath);
     const { createStarterVisualProject }: typeof import("../src/lib/visual-editor/starter-templates") = await import(/* @vite-ignore */ starterPath);
     const { assetManifestCodec }: typeof import("../src/lib/visual-editor/serialization") = await import(/* @vite-ignore */ serializationPath);
-    const { placeChatgptObject }: typeof import("../src/lib/visual-editor/chatgpt-generation") = await import(/* @vite-ignore */ generationPath);
+    const { executeXriftMcpEditorTool }: typeof import("../src/lib/visual-editor/mcp-editor-tools") = await import(/* @vite-ignore */ editorPath);
     const { createHierarchyTransfer, prepareHierarchyTransferFiles, planHierarchyImport }: typeof import("../src/lib/visual-editor/hierarchy-transfer") = await import(/* @vite-ignore */ transferPath);
     const { setEntityModel }: typeof import("../src/lib/visual-editor/model-assignment") = await import(/* @vite-ignore */ assignmentPath);
     const bundle = createStarterVisualProject("world", "blank", "model-source-integrity-isolated");
@@ -63,8 +63,13 @@ test("生成モデルの原本をGLBと同時に保存し、再読み込み・�
       const expectedImportSettings = structuredClone(firstAsset.importSettings);
       const firstAssetBeforeRevision = JSON.stringify(firstAsset);
       const original = await readBlenderModelSource(firstAsset, projectPath);
-      const firstPlaced = placeChatgptObject(first.bundle, { name: spec.name, shape: "model", externalId: `project:${first.modelAssetId}`,
-        position: [3, 0.2, -2], rotation: [0, 35, 0], scale: [1.2, 0.8, 1.4] }, new Map());
+      const scope = { projectId: first.bundle.project.projectId, sceneId: first.bundle.scene.sceneId };
+      const firstPlacement = executeXriftMcpEditorTool({ bundle: first.bundle, sceneSelection: null, assetSelection: null, editorMode: "edit", importBusy: false, revision: 0, saveStatus: "dirty" },
+        { id: "place-fixture-model", tool: "place_asset", arguments: { ...scope, expectedRevision: 0, assetId: first.modelAssetId } });
+      const entityId = String(firstPlacement.result.entityId);
+      const transformed = executeXriftMcpEditorTool({ bundle: firstPlacement.bundle, sceneSelection: null, assetSelection: null, editorMode: "edit", importBusy: false, revision: 1, saveStatus: "dirty" },
+        { id: "position-fixture-model", tool: "update_transform", arguments: { ...scope, expectedRevision: 1, entityId, position: [3, 0.2, -2], rotation: [0, 35 * Math.PI / 180, 0], scale: [1.2, 0.8, 1.4] } });
+      const firstPlaced = { bundle: transformed.bundle, entityId };
       const transformBeforeRevision = structuredClone(firstPlaced.bundle.scene.entities[firstPlaced.entityId].components.find(component => component.type === "transform"));
       const callsBeforeReuse = blenderCalls, writesBeforeReuse = writes.length;
       const reused = await createBlenderModelAsset(firstPlaced.bundle, structuredClone(spec), projectPath, { prompt: "同じ形をもう一度確認", previousAssetId: first.modelAssetId });
@@ -93,10 +98,10 @@ test("生成モデルの原本をGLBと同時に保存し、再読み込み・�
       const previousReads = readCount;
       const traversalRejected = await fails(() => readBlenderModelSource({ ...nextAsset, authoring: { ...nextAsset.authoring!, sourcePath: "assets/imported/../secrets.json" } }, projectPath));
       const traversalReadNothing = readCount === previousReads;
-      const placed = placeChatgptObject({ ...second.bundle, assets: reloaded.document }, { name: spec.name, shape: "model",
-        externalId: `project:${second.modelAssetId}`, position: [0, 0, 0], scale: [1, 1, 1] }, new Map());
+      const placed = executeXriftMcpEditorTool({ bundle: { ...second.bundle, assets: reloaded.document }, sceneSelection: null, assetSelection: null, editorMode: "edit", importBusy: false, revision: 0, saveStatus: "dirty" },
+        { id: "place-reloaded-fixture", tool: "place_asset", arguments: { ...scope, expectedRevision: 0, assetId: second.modelAssetId } });
       const withEntity = placed.bundle;
-      const entity = withEntity.scene.entities[placed.entityId];
+      const entity = withEntity.scene.entities[String(placed.result.entityId)];
       const mesh = entity.components.find(component => component.type === "mesh");
       const target = await readBlenderEntityModelSource(withEntity, entity.id, projectPath, mesh?.id);
       const explicitMesh = { id: "source-mesh", type: "mesh" as const, enabled: true, geometryAssetId: second.modelAssetId,

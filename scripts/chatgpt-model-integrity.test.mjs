@@ -10,7 +10,7 @@ const { assertBlenderModelSourceCurrent } = await load("chatgpt-model-integrity"
 const { createBlenderModelSource, readBlenderEntityModelSource } = await load("chatgpt-model-source");
 const { createAssetImportPlan, createModelReimportPlan, commitAssetImportPlan } = await load("asset-import");
 const { createStarterVisualProject } = await load("starter-templates");
-const { placeChatgptObject, applyChatgptOperation } = await load("chatgpt-generation");
+const { placeTestModel } = await server.ssrLoadModule("/scripts/fixtures/pi-authoring.mjs");
 const { createBlenderModelAsset } = await load("chatgpt-modeling");
 const { setEntityModel } = await load("model-assignment");
 const { createEmptyEntity } = await load("editor-session");
@@ -42,7 +42,7 @@ async function harness() {
   bundle.assets = await commitAssetImportPlan(bundle.assets, plan, async request => {
     for (const write of request.writes) disk.set(write.relativePath, write.payload.encoding === "bytes" ? write.payload.bytes : new Uint8Array(await (await fetch(write.payload.dataUrl)).arrayBuffer()));
   });
-  const placed = placeChatgptObject(bundle, { name: spec.name, shape: "model", externalId: `project:${plan.asset.id}`, position: [2, 0, -3], scale: [1, 1, 1] }, new Map());
+  const placed = placeTestModel(bundle, plan.asset.id, spec.name, [2, 0, -3], [1, 1, 1]);
   bundle = placed.bundle;
   const rootId = placed.entityId;
   const generatedIds = Object.keys(bundle.scene.entities).filter(id => id.startsWith(`${rootId}-model-node-`));
@@ -220,17 +220,6 @@ test("identical normalized geometry reuses the exact Asset and Scene without nat
     const reused = await createBlenderModelAsset(h.bundle, normalizedSame, "isolated-memory-project", { previousAssetId: h.modelId, prompt: "別の言い方で同じ形を依頼" });
     assert.equal(reused.bundle, h.bundle);
     assert.equal(reused.modelAssetId, h.modelId);
-    const applied = await applyChatgptOperation(h.bundle, { kind: "blender-model", entityId: h.rootId, model: normalizedSame }, new Map(),
-      { projectAssets: [], builtinCandidates: [], components: [], blenderAvailable: true, modelSource: "blender" }, "isolated-memory-project", { prompt: "形はそのまま確認" });
-    assert.equal(applied.bundle, h.bundle, "no model-attachment rewrite is performed for unchanged geometry");
-    assert.equal(applied.entityId, h.rootId);
-    assert.equal(nativeCalls, 0);
-    assert.equal(JSON.stringify(h.bundle), before, "child IDs, original prompt, recipe revision and assets remain unchanged");
-    const childTransform = h.bundle.scene.entities[h.generatedIds[0]].components.find(component => component.type === "transform");
-    childTransform.position[0] += 0.1;
-    await assert.rejects(applyChatgptOperation(h.bundle, { kind: "blender-model", entityId: h.rootId, model: normalizedSame }, new Map(),
-      { projectAssets: [], builtinCandidates: [], components: [], blenderAvailable: true, modelSource: "blender" }, "isolated-memory-project"), /手動編集/);
-    assert.equal(nativeCalls, 0, "manual-edit checks still run before the reuse path");
     h.bundle.assets.assets[h.modelId].sourceHash = "f".repeat(64);
     await assert.rejects(createBlenderModelAsset(h.bundle, normalizedSame, "isolated-memory-project", { previousAssetId: h.modelId }), /制作データ/);
     assert.equal(nativeCalls, 0, "stale source checks still run before the reuse path");

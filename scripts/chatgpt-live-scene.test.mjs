@@ -5,9 +5,9 @@ import { createServer } from "vite";
 const server = await createServer({ configFile: false, cacheDir: "node_modules/.vite-chatgpt-live-scene-test", server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: "custom", optimizeDeps: { noDiscovery: true, include: [] } });
 test.after(() => server.close());
 const load = name => server.ssrLoadModule(`/src/lib/visual-editor/${name}.ts`);
-const { rebaseChatgptStep, editChatgptEntity } = await load("chatgpt-generation");
+const { rebaseChatgptStep } = await load("chatgpt-generation");
+const { editChatgptEntity } = await server.ssrLoadModule("/scripts/fixtures/pi-authoring.mjs");
 const { ChatgptSceneConflictError, chatgptPlanningSnapshot, assertChatgptPlanningCurrent } = await load("chatgpt-plan-guards");
-const { chatgptSceneRetryConversation, CHATGPT_SCENE_REPLAN_LIMIT } = await load("chatgpt-live-scene");
 const { createStarterVisualProject } = await load("starter-templates");
 const { createEmptyEntity } = await load("editor-session");
 const { resolveSceneSettings } = await load("scene-settings");
@@ -72,32 +72,4 @@ test("fresh inference detects unrelated authoring changes but ignores thumbnail 
   derived.project.lastSavedAt = "2026-10-14T00:00:00Z";
   for (const asset of Object.values(derived.assets.assets)) asset.thumbnail = { status: "generated" };
   assert.doesNotThrow(() => assertChatgptPlanningCurrent(derived, snapshot));
-});
-
-const job = saved => ({ prompt: "広場を順に制作してください", progress: { completed: 1, recentEvents: [
-  { phase: "planning", message: "床とベンチを提案しています" },
-  { phase: "placing", message: "床を配置して保存しました", saved },
-  { phase: "placing", message: "ベンチを配置する準備をしています" },
-] }, plan: { remainingWork: "ベンチを追加する" } });
-
-test("replanning states only saved steps as completed and keeps prior history as reference", () => {
-  const history = [{ prompt: "以前の依頼", result: "以前の保存結果" }];
-  const conversation = chatgptSceneRetryConversation(history, job(true));
-  assert.equal(CHATGPT_SCENE_REPLAN_LIMIT, 2);
-  assert.deepEqual(conversation[0], history[0]);
-  assert.match(conversation[1].result, /床を配置して保存しました/);
-  assert.match(conversation[1].result, /手動編集を保持/);
-  assert.match(conversation[1].result, /以前のPlanに残っていた作業: ベンチを追加する/);
-  assert.doesNotMatch(conversation[1].result, /床とベンチを提案|ベンチを配置する準備/);
-  assert.doesNotMatch(chatgptSceneRetryConversation([], job(false))[0].result, /床を配置して保存しました/);
-});
-
-test("repeated manual edits replace automatic continuation and bound Unicode history for native input", () => {
-  const history = Array.from({ length: 6 }, (_, index) => ({ prompt: "依頼".repeat(600), result: `結果${index}`.repeat(400) }));
-  const first = chatgptSceneRetryConversation(history, job(true));
-  const repeated = chatgptSceneRetryConversation(first, job(true));
-  assert.deepEqual(repeated, first);
-  assert.ok(repeated.length <= 6);
-  assert.ok(Buffer.byteLength(JSON.stringify(repeated)) <= 23 * 1024);
-  assert.ok(repeated.every(turn => [...turn.prompt].length <= 2000 && [...turn.result].length <= 2000));
 });

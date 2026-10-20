@@ -46,6 +46,9 @@ on:
       - 'src/lib/application-bootstrap.*'
       - 'src/release-e2e/mock-tauri.ts'
       - 'src/lib/visual-editor/chatgpt-*.ts'
+      - 'src/lib/visual-editor/pi-authoring.ts'
+      - 'packages/studio-pi/**'
+      - 'scripts/prepare-pi-runtime.mjs'
       - 'src/components/visual-editor/useChatgptRequestQueue.ts'
       - 'src/lib/visual-editor/asset-import.ts'
       - 'src/lib/browser-project-storage.ts'
@@ -71,7 +74,6 @@ on:
       - 'scripts/model-assignment.test.mjs'
       - 'scripts/external-store-merge.test.mjs'
       - 'scripts/mcp-chatgpt-contract.test.mjs'
-      - 'scripts/chatgpt-panel-ui.mjs'
       - 'scripts/vite-guide.mjs'
       - 'scripts/vite-guide.test.mjs'
       - 'scripts/generate-mcp-tool-names.mjs'
@@ -101,27 +103,17 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm e2e:typecheck
       - run: pnpm mcp:tool-names --check
-      - run: node --test scripts/chatgpt-world.test.mjs scripts/chatgpt-generation.test.mjs scripts/chatgpt-sessions.test.mjs scripts/chatgpt-scene-resources.test.mjs scripts/chatgpt-builtin-catalog.test.mjs scripts/chatgpt-resources.test.mjs scripts/chatgpt-plan-guards.test.mjs scripts/chatgpt-live-scene.test.mjs scripts/chatgpt-request-queue.test.mjs scripts/chatgpt-modeling.test.mjs scripts/glb-import-size.test.mjs scripts/glb-store-size.test.mjs scripts/model-assignment.test.mjs scripts/external-store-merge.test.mjs scripts/mcp-chatgpt-contract.test.mjs scripts/guide.test.mjs scripts/vite-guide.test.mjs
-      - name: Generate frontend Scene and resource contract fixtures
-        run: node scripts/chatgpt-resource-contract.test.mjs --generate-only chatgpt-resource-contract/frontend-contexts.json
-      - uses: actions/upload-artifact@v4
-        with:
-          name: chatgpt-resource-contract
-          path: chatgpt-resource-contract/frontend-contexts.json
-          if-no-files-found: error
-      - name: Verify real panel UI with isolated native IPC
-        env:
-          XRIFT_TEST_CHROME: /usr/bin/google-chrome
-        run: node scripts/chatgpt-panel-ui.mjs
+      - run: node --test scripts/chatgpt-generation.test.mjs scripts/chatgpt-sessions.test.mjs scripts/chatgpt-live-scene.test.mjs scripts/chatgpt-request-queue.test.mjs scripts/chatgpt-modeling.test.mjs scripts/glb-import-size.test.mjs scripts/glb-store-size.test.mjs scripts/model-assignment.test.mjs scripts/external-store-merge.test.mjs scripts/mcp-chatgpt-contract.test.mjs scripts/guide.test.mjs scripts/vite-guide.test.mjs
+      - run: pnpm pi:test
+      - run: node --test scripts/chatgpt-authoring-host.test.mjs
       - run: pnpm exec playwright install --with-deps chromium
-      - name: Verify Editor tabs and MCP generation through the real App
-        run: pnpm exec playwright test e2e/chatgpt-tabs.spec.ts e2e/chatgpt-context-ui.spec.ts e2e/chatgpt-live-scene.spec.ts e2e/chatgpt-keyboard.spec.ts e2e/chatgpt-queue.spec.ts e2e/chatgpt-model-source.spec.ts e2e/chatgpt-modeling.spec.ts e2e/chatgpt-planning-recovery.spec.ts e2e/chatgpt-connection-reasoning.spec.ts e2e/chatgpt-sessions.spec.ts e2e/chatgpt-scene-settings.spec.ts e2e/model-assignment.spec.ts e2e/bootstrap-recovery.spec.ts e2e/canvas-event-lifecycle.spec.ts e2e/publish-readiness-race.spec.ts e2e/editor-ui-polish.spec.ts e2e/script-workspace.spec.ts
+      - name: Verify Pi authoring through the real App and official Editor tools
+        run: pnpm exec playwright test e2e/chatgpt-pi-authoring.spec.ts e2e/chatgpt-connection-reasoning.spec.ts e2e/model-assignment.spec.ts e2e/bootstrap-recovery.spec.ts e2e/canvas-event-lifecycle.spec.ts e2e/publish-readiness-race.spec.ts e2e/editor-ui-polish.spec.ts e2e/script-workspace.spec.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: chatgpt-panel-ui
+          name: pi-authoring-ui
           path: |
-            dev/chatgpt-ui-artifacts
             test-results
             playwright-report
           if-no-files-found: ignore
@@ -134,13 +126,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:
-      TAURI_CONFIG: '{"bundle":{"externalBin":[]}}'
+      TAURI_CONFIG: '{"bundle":{"externalBin":[],"resources":[]}}'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: chatgpt-resource-contract
-          path: chatgpt-resource-contract
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -151,6 +139,4 @@ jobs:
       - name: Check native integration and dependencies
         run: cargo check --locked --manifest-path src-tauri/Cargo.toml
       - name: Test authentication, MCP, saves and publication records
-        env:
-          XRIFT_CHATGPT_RESOURCE_CONTRACT: ${{ github.workspace }}/chatgpt-resource-contract/frontend-contexts.json
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib

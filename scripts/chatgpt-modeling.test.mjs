@@ -6,7 +6,6 @@ import { createServer } from "vite";
 const server = await createServer({ configFile: false, cacheDir: "node_modules/.vite-chatgpt-modeling-test", server: { middlewareMode: true, hmr: false, ws: false, watch: null }, appType: "custom", optimizeDeps: { noDiscovery: true, include: [] } });
 test.after(() => server.close());
 const { parseBlenderModelSpec, parseBlenderModelBrief } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-modeling.ts");
-const { parseChatgptOperations } = await server.ssrLoadModule("/src/lib/visual-editor/chatgpt-resources.ts");
 const { createAssetImportPlan } = await server.ssrLoadModule("/src/lib/visual-editor/asset-import.ts");
 const part = { name: "座面", shape: "box", position: [0, 0.4, 0], rotation: [10, 20, 30], scale: [1.2, 0.1, 0.5], color: [0.4, 0.2, 0.1, 1], metallic: 0, roughness: 0.6, vertices: null, faces: null, bevel: 0.02 };
 const model = { name: "木のベンチ", parts: [part] };
@@ -22,15 +21,6 @@ test("Blender parts and custom indexed mesh retain the proposed geometry and PBR
   for (const bad of [{ ...mesh, faces: [[0, 1, 3]] }, { ...part, shape: "python", source: "print('unexpected')" }, { ...part, position: [0, Infinity, 0] }, { ...part, color: [0, 0, 0, 2] }, { ...part, name: "line\nbreak" }]) {
     assert.throws(() => parseBlenderModelSpec({ ...model, parts: [bad] }));
   }
-});
-test("a Blender plan is enabled only by actual availability and the selected modeling source", () => {
-  const resources = { projectAssets: [], builtinCandidates: [], components: [], blenderAvailable: true, modelSource: "blender" };
-  const operation = { kind: "blender-model", model, position: [2, 0, -1], rotation: null, scale: null };
-  assert.equal(parseChatgptOperations([operation], resources, [], [])[0].model.name, model.name);
-  const brief = { name: model.name, brief: "幅1.8m。スラット座面、傾いた背もたれ、曲線の肘掛け" };
-  assert.deepEqual(parseChatgptOperations([{ ...operation, model: brief }], resources, [], [])[0].model, brief);
-  assert.throws(() => parseBlenderModelBrief({ ...brief, python: "unexpected" }));
-  for (const unavailable of [{ ...resources, blenderAvailable: false }, { ...resources, modelSource: "store" }]) assert.throws(() => parseChatgptOperations([operation], unavailable, [], []));
 });
 test("curved supports and revolved profiles have bounded geometry", () => {
   const tube = { ...part, shape: "tube", vertices: [[0, 0, 0], [0, 0.5, 0.2]], faces: null, bevel: 0.025 };

@@ -1,4 +1,3 @@
-import { assertChatgptNativeContract } from "./visual-editor/chatgpt-native-contract";
 import { SHARED_MATERIAL_LIBRARY_PROVIDER_ID, listSharedLibraryAssets, getSharedLibraryAssetOptions, installSharedLibraryAsset } from "./shared-material-library-store";
 import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -34,8 +33,6 @@ import {
 
 export type ChatgptConnection = { signedIn: boolean; email: string | null; accountId?: string | null; planUsageEnabled: boolean; connecting: boolean; restoring?: boolean; error: string | null };
 export type ChatgptModel = { slug: string; displayName: string; supportedReasoningEfforts?: string[]; defaultReasoningEffort?: string | null };
-export type ChatgptGenerationProgress = { generationId: string; stage: "model" | "catalog" | "request" | "receiving"; message: string; receivedCharacters?: number; eventCount?: number };
-export type ChatgptSceneContext = { title: string; goal?: boolean; selectedEntityId?: string; attachedEntityIds?: string[]; starterEntityIds?: string[]; entities: { id: string; name: string; parentId?: string; components: string[]; position: number[]; scale: number[]; rotation: number[] }[]; conversation?: { prompt: string; result: string }[] };
 
 export type ProjectKind = "world" | "item";
 export type ProjectFormat = "classic" | "visual";
@@ -214,7 +211,7 @@ export type LocalShaderImportSource = {
   source: string;
 };
 
-export type ChatgptAssetOptions = { models: boolean; materials: boolean; audio: boolean; modelSource?: "auto" | "blender" | "store" };
+export type ChatgptAssetOptions = { models: boolean; materials: boolean; audio: boolean; modelSource?: "auto" | "blender" | "store"; extensions?: string[] };
 export type BlenderStatus = { available: boolean; version?: string | null };
 
 export type ExternalStoreAssetKind = "hdri" | "texture" | "model" | "audio";
@@ -331,6 +328,8 @@ export type RecordingFileSummary = {
 };
 
 export type XriftMcpEditorRequestEvent = {
+  internalGenerationId?: string;
+  internalScope?: { projectId: string; sceneId: string };
   id: string;
   clientName: string;
   tool: string;
@@ -726,11 +725,7 @@ export const tauri = {
       ? readBrowserTextFile(projectPath, rel)
       : invoke<string>("read_text_file", { projectPath, rel }),
   /** Reads one immutable bounded input from the excluded project cache. */
-  readChatgptHarnessContext: (projectPath: string, fingerprint: string) =>
-    invoke<string | null>("read_chatgpt_harness_context", { projectPath, fingerprint }),
-  /** Atomically publishes flushed bytes and refuses to replace existing content. */
-  writeChatgptHarnessContext: (projectPath: string, fingerprint: string, content: string) =>
-    invoke<void>("write_chatgpt_harness_context", { projectPath, fingerprint, content }),
+
   /** Reads a regular UTF-8 .ts/.tsx file with the native 8 MiB limit. */
   readScriptSource: async (projectPath: string, rel: string) => {
     if (!isBrowserProjectPath(projectPath)) return invoke<string>("read_script_source", { projectPath, rel });
@@ -830,26 +825,13 @@ export const tauri = {
   chatgptLogin: () => invoke<ChatgptConnection>("chatgpt_login"),
   chatgptLogout: () => invoke<ChatgptConnection>("chatgpt_logout"),
   chatgptModels: () => invoke<ChatgptModel[]>("chatgpt_models"),
-  chatgptPlan: async (model: string, prompt: string, options: ChatgptAssetOptions, gltfMaterials: { id: string; name: string; extension: string }[] = [], generationId?: string, sceneContext?: ChatgptSceneContext, reasoningEffort?: string, resourceContext?: import("./visual-editor/chatgpt-resources").ChatgptResourceContext) => {
-    await assertChatgptNativeContract(command => invoke(command));
-    return invoke<{ plan: string; assetCandidates: ExternalStoreAsset[] }>("chatgpt_plan", { model, prompt, options, gltfMaterials, generationId, sceneContext, reasoningEffort, resourceContext });
+  chatgptPiRun: (request: import("./visual-editor/pi-authoring").PiAuthoringRequest, onEvent: (event: import("./visual-editor/pi-authoring").PiAuthoringEvent) => void) => {
+    const onProgress = new Channel<import("./visual-editor/pi-authoring").PiAuthoringEvent>();
+    onProgress.onmessage = onEvent;
+    return invoke<import("./visual-editor/pi-authoring").PiAuthoringResult>("chatgpt_pi_run", { ...request, onProgress });
   },
   chatgptCancelGeneration: (generationId: string) => invoke<{ generationId: string; cancelled: boolean }>("chatgpt_cancel_generation", { generationId }),
-  chatgptModelSpecs: (model: string, briefs: import("./visual-editor/chatgpt-modeling").BlenderModelBrief[], generationId: string,
-    reasoningEffort: string | undefined, onModel: (result: { index: number; model: import("./visual-editor/chatgpt-modeling").BlenderModelSpec }) => void,
-    contexts?: { prompt: string; originalPrompt?: string; previous?: import("./visual-editor/chatgpt-modeling").BlenderModelSpec }[]) => {
-    const channel = new Channel<{ index: number; model: import("./visual-editor/chatgpt-modeling").BlenderModelSpec }>();
-    channel.onmessage = onModel;
-    return invoke<{ index: number; model: import("./visual-editor/chatgpt-modeling").BlenderModelSpec }[]>("chatgpt_model_specs", { model, briefs, generationId, reasoningEffort, onModel: channel, contexts });
-  },
-  chatgptReviewModel: (model: string, generationId: string, prompt: string, brief: import("./visual-editor/chatgpt-modeling").BlenderModelBrief,
-    spec: import("./visual-editor/chatgpt-modeling").BlenderModelSpec, images: { label: string; dataUrl: string }[], reasoningEffort?: string, originalPrompt?: string) =>
-    invoke<{ approved: boolean; summary: string; model: import("./visual-editor/chatgpt-modeling").BlenderModelSpec | null }>("chatgpt_review_model", { model, generationId, prompt, brief, spec, images, reasoningEffort, originalPrompt }),
-  chatgptReviewScene: (model: string, generationId: string, prompt: string, production: import("./visual-editor/chatgpt-production").ChatgptProduction,
-    sceneContext: ChatgptSceneContext, resourceContext: import("./visual-editor/chatgpt-resources").ChatgptResourceContext,
-    images: { label: string; dataUrl: string }[], reasoningEffort?: string) =>
-    invoke<import("./visual-editor/authoring-criteria").ChatgptSceneReview>("chatgpt_review_scene", { model, generationId, prompt, production, sceneContext, resourceContext, images, reasoningEffort }),
-  onChatgptGenerationProgress: (handler: (progress: ChatgptGenerationProgress) => void) => listen<ChatgptGenerationProgress>("chatgpt-generation-progress", event => handler(event.payload)),
+  chatgptPiDeleteHistory: (projectId: string, sceneId: string, sessionId: string) => invoke<void>("chatgpt_pi_delete_history", { projectId, sceneId, sessionId }),
   detectXriftMcpClients: () =>
     invoke<XriftMcpClientStatus[]>("detect_xrift_mcp_clients"),
   registerXriftMcpClient: (clientId: XriftMcpClientId) =>

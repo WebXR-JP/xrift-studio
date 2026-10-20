@@ -28,6 +28,7 @@ const hooks = registerHooks({
   },
 });
 const api = await import("../src/lib/visual-editor/chatgpt-sessions.ts");
+const piSettings = await import("../src/lib/visual-editor/pi-settings.ts");
 const { sceneSettingsDisplay } = await import("../src/lib/visual-editor/chatgpt-change-description.ts");
 hooks.deregister();
 const date = "2026-10-14T00:00:00.000Z";
@@ -46,6 +47,31 @@ class MemoryStorage {
 }
 const withTurn = (...turns) => ({ ...session(), turns });
 const bytes = value => Buffer.byteLength(JSON.stringify(value), "utf8");
+
+test("Pi branch pointers survive storage and branch only at a finished response", () => {
+  const storage = new MemoryStorage();
+  const piHistory = { sessionId: 'pi-root', leafId: 'answer-1', nodes: [{ id: 'tool-1', parentId: null, label: 'ツール操作', canBranch: false }, { id: 'answer-1', parentId: 'tool-1', label: 'AIの応答', canBranch: true }] };
+  const source = withTurn(turn('pi-turn', { piHistory, options: { models: true, materials: true, audio: false, teamwork: true, extensions: ['npm:example@1.2.3'] } }));
+  const branched = api.branchChatgptSession(source, 'answer-1', date, 'branch-chat');
+  assert.deepEqual(branched.piBranch, { sessionId: 'pi-root', leafId: 'answer-1', parentSessionId: source.id });
+  assert.equal(branched.turns.length, 0);
+  assert.throws(() => api.branchChatgptSession(source, 'tool-1'), /分岐できる/);
+  api.saveChatgptSessions([source, branched], storage);
+  const restored = api.loadChatgptSessions(storage);
+  assert.deepEqual(restored.find(item => item.id === 'branch-chat').piBranch, branched.piBranch);
+  assert.equal(restored.find(item => item.id === source.id).turns[0].options.teamwork, undefined);
+  assert.deepEqual(restored.find(item => item.id === source.id).turns[0].options.extensions, ['npm:example@1.2.3']);
+});
+test("extension registrations require exact npm versions and persist explicit settings", () => {
+  for (const value of ['npm:example@latest', 'git:example', 'npm:../example@1.0.0', 'npm:example@^1.0.0']) assert.throws(() => piSettings.parsePiPackages(value));
+  let raw = null;
+  const storage = { getItem: () => raw, setItem(_key, value) { raw = value; } };
+  assert.deepEqual(piSettings.loadPiSettings(storage), { extensions: [] });
+  raw = JSON.stringify({ version: 1, teamwork: true, extensions: ['npm:old@1.0.0'] });
+  assert.deepEqual(piSettings.loadPiSettings(storage), { extensions: ['npm:old@1.0.0'] });
+  piSettings.savePiSettings({ extensions: ['npm:@example/tools@1.2.3'] }, storage);
+  assert.deepEqual(piSettings.loadPiSettings(storage), { extensions: ['npm:@example/tools@1.2.3'] });
+});
 
 test("twelve-choice metadata and catalog proposal thumbnails survive history reload", () => {
   const storage = new MemoryStorage();

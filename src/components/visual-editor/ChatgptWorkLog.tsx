@@ -1,4 +1,4 @@
-import type { ChatgptGenerationEvent } from "../../lib/visual-editor/chatgpt-generation";
+import type { PiRunEvent as ChatgptGenerationEvent } from "../../lib/visual-editor/pi-authoring";
 
 const legacySceneOperation = /^(?:\d+\s*\/\s*\d+\s*[：:]\s*)?Scene設定を調整(?:しています|して保存しました)?。?$/u;
 

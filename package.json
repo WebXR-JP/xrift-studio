@@ -10,7 +10,7 @@
     "xrift-studio": "./dist/cli/xrift-studio.mjs"
   },
   "engines": {
-    "node": ">=22.13.0"
+    "node": ">=22.19.0"
   },
   "scripts": {
     "dev": "vite",
@@ -44,7 +44,9 @@
     "test:recording": "node scripts/recording-session.test.mjs",
     "test:guide": "node --test scripts/guide.test.mjs",
     "guide:capture": "node scripts/guide/capture-guide.mjs capture",
-    "guide:media": "node scripts/guide/capture-guide.mjs list"
+    "guide:media": "node scripts/guide/capture-guide.mjs list",
+    "pi:prepare": "node scripts/prepare-pi-runtime.mjs",
+    "pi:test": "pnpm --filter @xrift/studio-pi build && node --test packages/studio-pi/test/*.test.mjs"
   },
   "overrides": {
     "dompurify": "3.4.12"

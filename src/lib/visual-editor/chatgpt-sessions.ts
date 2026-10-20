@@ -1,9 +1,9 @@
-import type { ChatgptGeneration, ChatgptGenerationPhase } from "./chatgpt-generation";
+import type { PiAuthoringRun as ChatgptGeneration, PiRunPhase as ChatgptGenerationPhase } from "./pi-authoring";
 import type { PrototypeVisualProject } from "./prototype-project";
 import { restoreChatgptChoicePreview, parseChatgptQuestions } from "./chatgpt-questions";
 import { sceneSettingsDisplayFromLegacyDetail, type ChatgptSettingDisplay } from "./chatgpt-change-description";
 import { parseChatgptProduction } from "./chatgpt-production";
-import { interruptChatgptHarnessSnapshot, normalizeChatgptHarnessSnapshot } from "./chatgpt-harness-runtime";
+import { interruptChatgptHarnessSnapshot, normalizeChatgptHarnessSnapshot } from "./chatgpt-legacy-history";
 import { CHATGPT_HARNESS_CONTEXT_REF_LIMIT, normalizeChatgptHarnessContextRef } from "./chatgpt-harness-context-ref";
 
 export const CHATGPT_SESSION_STORAGE_KEY = "xrift-studio:chatgpt-sessions:v1";
@@ -12,6 +12,7 @@ export const CHATGPT_MAX_SESSION_TURNS = 30;
 export const CHATGPT_SESSION_STORAGE_BYTES = 3 * 1024 * 1024;
 export const CHATGPT_CONVERSATION_BYTES = 24 * 1024;
 export type ChatgptSession = {
+  piBranch?: { sessionId: string; leafId: string; parentSessionId: string };
   id: string;
   projectId: string;
   sceneId: string;
@@ -23,7 +24,7 @@ export type ChatgptSession = {
 export type ChatgptConversationTurn = { prompt: string; result: string };
 export type ChatgptRevertCheckpoint = { before: PrototypeVisualProject; after: PrototypeVisualProject };
 type SessionStorage = Pick<Storage, "getItem" | "setItem">;
-const statuses = ["running", "planned", "completed", "failed", "cancelled"];
+const statuses = ["running", "planned", "completed", "failed", "cancelled", "thinking", "compacting", "retrying"];
 const phases: ChatgptGenerationPhase[] = ["planning", "planned", "preparing", "importing", "placing", "saving", "completed", "failed", "cancelled"];
 const efforts = ["none", "minimal", "low", "medium", "high", "xhigh", "max"];
 const utf8Bytes = (value: string) => new TextEncoder().encode(value).byteLength;
@@ -74,7 +75,7 @@ function timestamp(value: unknown): string {
   return new Date(value).toISOString();
 }
 function integer(value: unknown, fallback = 0): number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= 10000 ? value : fallback;
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 && value <= Number.MAX_SAFE_INTEGER ? value : fallback;
 }
 function browserStorage(): SessionStorage {
   try {
@@ -118,6 +119,24 @@ function normalizeTurn(value: unknown, interrupted: boolean): ChatgptGeneration 
     ...(harness ? { harness: interrupted ? interruptChatgptHarnessSnapshot(harness) : harness } : {}),
     ...(contextRefs ? { contextRefs } : {}),
   };
+  if (typeof value.assistantText === "string") turn.assistantText = text(value.assistantText, 32_000);
+  if (isRecord(value.usage)) {
+    const usage = value.usage;
+    const fields = ["modelTurns", "toolCalls", "inputTokens", "outputTokens", "cacheReadTokens", "cacheWriteTokens", "totalTokens"] as const;
+    if (fields.some(key => typeof usage[key] !== "number" || !Number.isSafeInteger(usage[key]) || (usage[key] as number) < 0)) throw new Error("Piの使用量の記録が不正です");
+    turn.usage = Object.fromEntries(fields.map(key => [key, usage[key]])) as import("./pi-authoring").PiUsage;
+  }
+  if (value.piHistory !== undefined) {
+    const history = value.piHistory;
+    if (!isRecord(history) || !Array.isArray(history.nodes) || history.nodes.length > 300) throw new Error("Pi履歴の形式が不正です");
+    turn.piHistory = { sessionId: identifier(history.sessionId), leafId: history.leafId === null ? null : identifier(history.leafId), nodes: history.nodes.map(raw => {
+      if (!isRecord(raw) || typeof raw.canBranch !== "boolean") throw new Error("Pi履歴の項目が不正です");
+      return { id: identifier(raw.id), parentId: raw.parentId === null ? null : identifier(raw.parentId), label: text(raw.label, 80), canBranch: raw.canBranch };
+    }) };
+  }
+  if (isRecord(value.options)) {
+    if (Array.isArray(value.options.extensions) && value.options.extensions.length <= 8 && value.options.extensions.every(source => typeof source === "string" && source.length <= 240)) turn.options.extensions = value.options.extensions as string[];
+  }
   for (const key of ["sourceSceneId", "projectId", "sceneId", "sessionId"] as const) if (value[key] !== undefined) turn[key] = identifier(value[key]);
   if (progress.projectId !== undefined) turn.progress.projectId = identifier(progress.projectId);
   if (value.mode === "build" || value.mode === "plan" || value.mode === "goal") turn.mode = value.mode;
@@ -136,12 +155,12 @@ function normalizeTurn(value: unknown, interrupted: boolean): ChatgptGeneration 
   if (Array.isArray(value.attachedMaterials)) turn.attachedMaterials = value.attachedMaterials.slice(0, 16).filter(isRecord).map(material => ({ id: identifier(material.id), name: text(material.name, 80) }));
   if (Array.isArray(value.clarifications)) turn.clarifications = value.clarifications.slice(-9).filter(isRecord).map(item => ({ question: text(item.question, 240), answer: text(item.answer, 500), ...(typeof item.candidateId === "string" && item.candidateId.length <= 320 && /^(?:builtin|project|poly-haven|ambient-cg|ai-lowpoly-props|otogura):[^\s\u0000-\u001f]+$/u.test(item.candidateId) ? { candidateId: item.candidateId } : {}) }));
   if (value.error !== undefined) turn.error = text(value.error, 2000);
-  if (isRecord(value.plan) && Array.isArray(value.plan.objects)) turn.plan = {
+  if (isRecord(value.plan)) turn.plan = {
     ...(value.plan.questions !== undefined ? { questions: parseChatgptQuestions(value.plan.questions) } : {}),
-    title: text(value.plan.title, 100), description: text(value.plan.description, 600),
+    title: text(value.plan.title, 160), description: text(value.plan.description, 8000),
     ...(typeof value.plan.hasMore === "boolean" ? { hasMore: value.plan.hasMore } : {}),
     ...(typeof value.plan.remainingWork === "string" ? { remainingWork: text(value.plan.remainingWork, 600) } : {}),
-    objects: value.plan.objects.slice(0, 32).filter(isRecord).map(object => {
+    objects: (Array.isArray(value.plan.objects) ? value.plan.objects : []).slice(0, 32).filter(isRecord).map(object => {
       const settings = normalizeSettingDisplays(object.settings) ?? normalizeSettingDisplays(typeof object.detail === "string" ? sceneSettingsDisplayFromLegacyDetail(object.detail) : undefined);
       const originalName = text(object.name, 80);
       const labels = settings ? [...new Set(settings.map(setting => setting.label))] : [];
@@ -169,7 +188,12 @@ function normalizeSessions(values: readonly unknown[], interrupted: boolean): Ch
     if (!isRecord(value) || !Array.isArray(value.turns)) throw new Error("会話履歴を読み取れませんでした。保存した履歴を確認してください。");
     // Validate retained and older entries before applying retention. Corrupt or
     // future-version journals must not disappear during a routine save.
-    return { id: identifier(value.id), projectId: identifier(value.projectId), sceneId: identifier(value.sceneId), title: text(value.title, 80) || "新しいチャット", createdAt: timestamp(value.createdAt), updatedAt: timestamp(value.updatedAt), turns: value.turns.map(turn => normalizeTurn(turn, interrupted)).slice(-CHATGPT_MAX_SESSION_TURNS) };
+    let piBranch: ChatgptSession["piBranch"];
+    if (value.piBranch !== undefined) {
+      if (!isRecord(value.piBranch)) throw new Error("Pi履歴の分岐元が不正です");
+      piBranch = { sessionId: identifier(value.piBranch.sessionId), leafId: identifier(value.piBranch.leafId), parentSessionId: identifier(value.piBranch.parentSessionId) };
+    }
+    return { id: identifier(value.id), projectId: identifier(value.projectId), sceneId: identifier(value.sceneId), title: text(value.title, 80) || "新しいチャット", createdAt: timestamp(value.createdAt), updatedAt: timestamp(value.updatedAt), turns: value.turns.map(turn => normalizeTurn(turn, interrupted)).slice(-CHATGPT_MAX_SESSION_TURNS), ...(piBranch ? { piBranch } : {}) };
   }).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const seen = new Set<string>();
   return sessions.filter(session => { if (seen.has(session.id)) return false; seen.add(session.id); return true; }).slice(0, CHATGPT_MAX_SESSIONS);
@@ -189,6 +213,21 @@ function boundBytes(sessions: ChatgptSession[]): ChatgptSession[] {
 }
 export function createChatgptSession(projectId: string, sceneId: string, title = "新しいチャット", now = nowIso(), id = crypto.randomUUID()): ChatgptSession {
   return { id: identifier(id), projectId: identifier(projectId), sceneId: identifier(sceneId), title: text(title, 80) || "新しいチャット", createdAt: timestamp(now), updatedAt: timestamp(now), turns: [] };
+}
+const piTurnInSession = (session: ChatgptSession, turn: ChatgptGeneration) =>
+  (turn.projectId ?? turn.sourceProjectId) === session.projectId && (turn.sceneId ?? turn.sourceSceneId ?? session.sceneId) === session.sceneId;
+/** A request creating a new World is also listed in the source chat; its Pi file belongs to the target. */
+export function piHistoryForSession(session: ChatgptSession) {
+  return [...session.turns].reverse().find(turn => turn.piHistory && piTurnInSession(session, turn))?.piHistory;
+}
+export function piSessionHistoryRoots(session: ChatgptSession): Set<string> {
+  return new Set([session.id, ...(session.piBranch ? [session.piBranch.sessionId] : []),
+    ...session.turns.filter(turn => piTurnInSession(session, turn)).flatMap(turn => turn.piHistory ? [turn.piHistory.sessionId] : [])]);
+}
+export function branchChatgptSession(source: ChatgptSession, entryId: string, now = nowIso(), id = crypto.randomUUID()): ChatgptSession {
+  const history = [...source.turns].reverse().filter(turn => piTurnInSession(source, turn)).map(turn => turn.piHistory).find(history => history?.nodes.some(node => node.id === entryId && node.canBranch));
+  if (!history) throw new Error("分岐できるPiの応答を選んでください");
+  return { ...createChatgptSession(source.projectId, source.sceneId, `${source.title.slice(0, 65)}・別案`, now, id), piBranch: { sessionId: history.sessionId, leafId: identifier(entryId), parentSessionId: source.id } };
 }
 export function loadChatgptSessions(storage: SessionStorage = browserStorage()): ChatgptSession[] {
   let raw: string | null;
@@ -224,11 +263,12 @@ export function upsertChatgptSessionTurn(sessions: readonly ChatgptSession[], se
 function resultSummary(turn: ChatgptGeneration): string {
   const status = { running: "処理中", planned: "Plan確認待ち", completed: "完了", failed: "失敗", cancelled: "停止" }[turn.status];
   const lines = [turn.revertedAt ? `変更を戻しました（${turn.revertedAt}）。この依頼の変更は現在のSceneに残っていません。` : status, turn.progress.message, `保存済み ${turn.progress.completed} / ${turn.progress.total}`];
+  if (turn.usage) lines.push(`Piの実行情報: モデル応答${turn.usage.modelTurns}回、ツール実行${turn.usage.toolCalls}回、合計${turn.usage.totalTokens}トークン`);
   if (turn.production) lines.push(`制作 ${turn.productionPass ?? 1} / ${turn.production.maxPasses}回。焦点: ${turn.production.focus}`, `完了条件: ${turn.production.criteria.join("、")}`);
   if (turn.attachedEntities?.length) lines.push(`添付Entity（配下を優先）: ${turn.attachedEntities.map(entity => entity.name).join("、")}`);
   if (turn.attachedMaterials?.length) lines.push(`添付Material: ${turn.attachedMaterials.map(material => material.name).join("、")}`);
   if (turn.clarifications?.length) lines.unshift(...turn.clarifications.slice(-3).map(item => `確認: ${Array.from(item.question).slice(0, 80).join("")}\n${item.candidateId ? `候補ID: ${item.candidateId}\n` : ""}回答: ${Array.from(item.answer).slice(0, Math.max(160, 500 - (item.candidateId?.length ?? 0))).join("")}`));
-  if (turn.plan) lines.push(`Plan: ${turn.plan.title}`, turn.plan.description, ...turn.plan.objects.map(object => `${object.name}（${object.shape}）${object.detail ? `：${object.detail}` : ""}`));
+  if (turn.plan) lines.push(`Plan: ${turn.plan.title}`, turn.plan.description, ...(turn.plan.objects ?? []).map(object => `${object.name}（${object.shape}）${object.detail ? `：${object.detail}` : ""}`));
   if (turn.plan?.hasMore) lines.push(`残りの作業: ${turn.plan.remainingWork || "この依頼の続き"}`);
   if (turn.plan?.questions?.length) lines.push(...turn.plan.questions.map((question, index) => `確認${index + 1}: ${question.question}\n${question.choices.map((choice, i) => `${i + 1}. ${choice}`).join("\n")}\nその他（自由入力）`));
   lines.push(...turn.progress.recentEvents.map(event => event.message));
@@ -238,7 +278,7 @@ function resultSummary(turn: ChatgptGeneration): string {
 export function chatgptSessionTranscript(session: ChatgptSession): string {
   const safe = normalizeSessions([session], false)[0];
   return [safe.title, `作成: ${safe.createdAt}`, `更新: ${safe.updatedAt}`, ...safe.turns.map((turn, index) => [
-    `\n依頼 ${index + 1}${turn.createdAt ? `（${turn.createdAt}）` : ""}`, `モデル: ${turn.model}`, `思考量: ${turn.reasoningEffort ?? "モデルの既定"}`, ...(turn.mode === "goal" ? [`Goal（${turn.goal?.iteration ?? 1}回）`] : []), turn.prompt, resultSummary(turn),
+    `\n依頼 ${index + 1}${turn.createdAt ? `（${turn.createdAt}）` : ""}`, `モデル: ${turn.model}`, `思考量: ${turn.reasoningEffort ?? "モデルの既定"}`, ...(turn.mode === "goal" ? [turn.goal ? `Goal（${turn.goal.iteration}回）` : "Goal"] : []), turn.prompt, resultSummary(turn),
   ].join("\n"))].join("\n");
 }
 /** Earlier turns are data, not instructions. The native prompt enforces this too. */

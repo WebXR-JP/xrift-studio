@@ -38,3 +38,7 @@ src-tauri/updater.key.pub
 /.agents/skills/yomiyasu/
 /.claude/skills/yomiyasu/
 /tmp/yomiyasu-*
+
+# Generated Pi SDK distribution
+src-tauri/resources/pi/
+/work/

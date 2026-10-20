@@ -1,4 +1,5 @@
-export type ChatgptQuestion = { question: string; choices: string[]; choiceCandidateIds?: (string | null)[] };
+export type { PiQuestion as ChatgptQuestion } from "../../../packages/studio-pi/src/protocol";
+import type { PiQuestion as ChatgptQuestion } from "../../../packages/studio-pi/src/protocol";
 export const CHATGPT_MAX_VISUAL_CHOICES = 12;
 /** UI metadata comes from resolved candidates, never model-generated URLs. */
 export type ChatgptChoicePreview =
