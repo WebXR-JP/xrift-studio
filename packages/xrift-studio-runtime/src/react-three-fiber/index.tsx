@@ -1,5 +1,6 @@
 import { XRiftStudioMeshColliders } from "../mesh-colliders.js";
 import { installPositionalAudioCleanup } from "../positional-audio-cleanup.js";
+import { createSceneRenderTarget } from "../scene/postprocessing.js";
 import { resolveXriftRuntimePhysicsMode, type XriftRuntimePhysicsSetting } from "../physics-mode.js";
 import { XriftModelInstancing } from "../script/model-instancing.js";
 import { XriftShadowMapSettings, type XriftShadowMapType } from "../script/light.js";
@@ -62,7 +63,6 @@ import {
   Euler,
   Fog,
   Group,
-  HalfFloatType,
   LoopOnce,
   LoopRepeat,
   Matrix4,
@@ -70,14 +70,12 @@ import {
   PerspectiveCamera,
   Object3D,
   Quaternion,
-  RGBAFormat,
   NoToneMapping,
   SRGBColorSpace,
   ShaderMaterial,
   SphereGeometry,
   Vector2,
   Vector3,
-  WebGLRenderTarget,
 } from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
@@ -1905,14 +1903,7 @@ function XriftRuntimePostprocessing({ result }: { result: XriftLoadResult }) {
   const hdrEnabled = hdr?.enabled !== false;
   const toneMapping = hdr?.toneMapping === "none" ? "none" : "aces";
   const pipeline = useMemo(() => {
-    const renderTarget = hdrEnabled
-      ? new WebGLRenderTarget(size.width, size.height, {
-          type: HalfFloatType,
-          format: RGBAFormat,
-          depthBuffer: true,
-          stencilBuffer: false,
-        })
-      : undefined;
+    const renderTarget = createSceneRenderTarget(gl, size.width, size.height);
     const composer = new EffectComposer(gl, renderTarget);
     const renderPass = new RenderPass(scene, camera);
     const aoPass = new SSAOPass(scene, camera, size.width, size.height);

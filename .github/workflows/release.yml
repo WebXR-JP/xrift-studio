@@ -83,6 +83,9 @@ jobs:
 
       - name: Test release lifecycle
         run: node --test scripts/prepare-release-notes.test.mjs scripts/github-release.test.mjs scripts/chatgpt-work-log.test.mjs scripts/chatgpt-prompt-suggestions.test.mjs scripts/chatgpt-sessions.test.mjs
+
+      - name: Test recording capture and guide
+        run: node --test scripts/recording-session.test.mjs scripts/guide.test.mjs
       # 型検査はここで1回だけ行い、E2E jobでは繰り返さない。
       - name: Typecheck app and E2E
         run: pnpm typecheck && pnpm e2e:typecheck
@@ -142,7 +145,7 @@ jobs:
         run: pnpm exec playwright test e2e/browser-item-publish.spec.ts e2e/browser-api-key.spec.ts e2e/browser-mtoon-shell.spec.ts e2e/runtime-shell-audio.spec.ts
 
       - name: Check editor dragging, quality and shared MToon rendering
-        run: pnpm exec playwright test e2e/gizmo-transform.spec.ts e2e/hierarchy-drag.spec.ts e2e/scene-view-quality.spec.ts e2e/mtoon-render.spec.ts --workers=1
+        run: pnpm exec playwright test e2e/gizmo-transform.spec.ts e2e/hierarchy-drag.spec.ts e2e/scene-view-quality.spec.ts e2e/mtoon-render.spec.ts e2e/openbrush-material-overrides.spec.ts --workers=1
 
       - name: Upload E2E failure report
         if: failure()

@@ -6,6 +6,7 @@ import {
   NoToneMapping,
   RGBAFormat,
   SRGBColorSpace,
+  UnsignedByteType,
   Vector2,
   WebGLRenderTarget,
   type Camera,
@@ -42,6 +43,28 @@ const XRIFT_POST_EFFECT_ORDER_IDS: readonly XriftScenePostEffectOrderId[] = [
 ];
 
 const sceneFrameRenderers = new WeakMap<Scene, WeakMap<WebGLRenderer, (camera: Camera) => void>>();
+
+/** Canvas MSAA does not carry into offscreen targets. Keep the composer's
+ * default half-float precision even when its tone mapping is disabled. */
+export function createSceneRenderTarget(
+  gl: WebGLRenderer,
+  width: number,
+  height: number,
+  type: typeof HalfFloatType | typeof UnsignedByteType = HalfFloatType,
+): WebGLRenderTarget {
+  const context = gl.getContext() as WebGL2RenderingContext;
+  const supported = context.getInternalformatParameter(
+    context.RENDERBUFFER, type === HalfFloatType ? context.RGBA16F : context.RGBA8, context.SAMPLES,
+  ) as Int32Array | null;
+  const samples = Math.min(4, gl.capabilities.maxSamples, supported?.length ? Math.max(...supported) : 0);
+  return new WebGLRenderTarget(width, height, {
+    type,
+    format: RGBAFormat,
+    depthBuffer: true,
+    stencilBuffer: false,
+    samples,
+  });
+}
 
 /** Read an actual composed frame with a temporary camera. Returns false until
  * the normal Scene compositor has mounted; callers must not substitute a raw
@@ -240,14 +263,7 @@ export function ScenePostprocessing({
    */
   const buildPipeline = useMemo(() => {
     return () => {
-    const renderTarget = hdrEnabled
-      ? new WebGLRenderTarget(size.width, size.height, {
-          type: HalfFloatType,
-          format: RGBAFormat,
-          depthBuffer: true,
-          stencilBuffer: false,
-        })
-      : undefined;
+    const renderTarget = createSceneRenderTarget(gl, size.width, size.height);
     const composer = new EffectComposer(gl, renderTarget);
     const renderPass = new RenderPass(scene, camera);
     const aoPass = new SSAOPass(scene, camera, size.width, size.height);

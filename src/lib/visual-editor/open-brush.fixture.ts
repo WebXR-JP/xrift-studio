@@ -25,6 +25,7 @@ export async function runOpenBrushFixtureAssertions(): Promise<void> {
   }
   await assertOpenBrushLoaderAcceptsOptionalGltfMaterials();
   await assertUnityExportBrushMaterials();
+  await assertRepeatedBrushMaterialIdentities();
   const document = {
     asset: { version: "2.0", generator: "Open Brush 2.8" },
     extensionsUsed: ["GOOGLE_tilt_brush_material"],
@@ -178,6 +179,54 @@ async function assertUnityExportBrushMaterials(): Promise<void> {
   geometry.setAttribute("_tb_unity_texcoord_0", legacyUv);
   await internal.replaceMaterial(mesh, "Dots");
   assert(geometry.getAttribute("a_texcoord0") === legacyUv, "Legacy four-component brush UVs must take priority over truncated standard UVs");
+}
+
+async function assertRepeatedBrushMaterialIdentities(): Promise<void> {
+  const binary = new Float32Array([
+    0, 0, 0, 1, 0, 0, 0, 1, 0,
+    0, 0, 1, 0, 0, 1, 0, 0, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  ]);
+  const document = {
+    asset: { version: "2.0", generator: "Open Brush UnityGLTF Exporter" },
+    scene: 0,
+    scenes: [{ nodes: [0, 1, 2] }],
+    nodes: [{ mesh: 0 }, { mesh: 1 }, { mesh: 0 }],
+    meshes: [0, 1].map((material) => ({
+      primitives: [{ attributes: { POSITION: 0, NORMAL: 1, COLOR_0: 2 }, material }],
+    })),
+    materials: [{ name: "DiamondHull (Instance)" }, { name: "DiamondHull (Instance)" }],
+    accessors: [
+      { bufferView: 0, componentType: 5126, count: 3, type: "VEC3", min: [0, 0, 0], max: [1, 1, 0] },
+      { bufferView: 1, componentType: 5126, count: 3, type: "VEC3" },
+      { bufferView: 2, componentType: 5126, count: 3, type: "VEC4" },
+    ],
+    bufferViews: [
+      { buffer: 0, byteOffset: 0, byteLength: 36 },
+      { buffer: 0, byteOffset: 36, byteLength: 36 },
+      { buffer: 0, byteOffset: 72, byteLength: 48 },
+    ],
+    buffers: [{ byteLength: binary.byteLength }],
+  };
+  const preset = new RawShaderMaterial({ uniforms: { sample: { value: 0 } } });
+  const loader = new GLTFLoader();
+  loader.register((parser) => {
+    const extension = createOpenBrushMaterialExtension(parser, "https://example.invalid/brushes/");
+    // Use the real vendor replacement and parser hooks without network I/O.
+    (extension as unknown as OpenBrushMaterialExtension).tiltShaderLoader.loadedMaterials.DiamondHull = preset;
+    return extension;
+  });
+  const bytes = createFixtureGlb(document, new Uint8Array(binary.buffer));
+  const gltf = await loader.parseAsync(bytes.buffer as ArrayBuffer, "");
+  const meshes = gltf.scene.children as Mesh<BufferGeometry, RawShaderMaterial>[];
+  const materials = meshes.map((mesh) => mesh.material);
+  assert(new Set(materials).size === 3, "Repeated brushes must retain independent material identities for per-node overrides");
+  assert(materials.every((material) => material !== preset), "A model material must not mutate the cached brush preset");
+  assert(materials.map((material) => gltf.parser.associations.get(material)?.materials).join(",") === "0,1,0", "Brush replacements must preserve original glTF material indices, including instanced meshes");
+  materials[0]!.uniforms.sample!.value = 3;
+  assert(materials[1]!.uniforms.sample!.value === 0 && materials[2]!.uniforms.sample!.value === 0, "Editing one brush slot must not change sibling uniforms");
+  materials.forEach((material) => material.dispose());
+  preset.dispose();
 }
 
 async function assertOpenBrushLoaderAcceptsOptionalGltfMaterials(): Promise<void> {
