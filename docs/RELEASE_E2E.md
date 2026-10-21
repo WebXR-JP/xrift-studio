@@ -36,6 +36,7 @@
 2. `pnpm typecheck`と`pnpm e2e:typecheck`の型検査
 3. `pnpm runtime:shell:check`とVRM同梱コードの検査・テスト
 4. `pnpm cli:test`のコンパイラfixtureと公開ステージング検査
+5. 録画の撮影間隔・フレーム取得と利用ガイドの回帰テスト
 
 `Release smoke E2E` jobは1台・1 workerで次を実行します。
 
@@ -43,7 +44,7 @@
 2. `pnpm e2e:smoke`
 3. Piによる正式なEditor操作・保存・取り消し・Plan・競合・停止・履歴・権限制御、Itemの保存・削除、接続・思考量、正式なMaterial編集・保存・UndoとSkybox描画・保存の検査
 4. ブラウザ公開・認証情報・MToon・Audioの検査
-5. ギズモ・Hierarchyのドラッグ・描画品質・共通MToon描画の検査
+5. ギズモ・Hierarchyのドラッグ・描画品質・共通MToon描画・Open Brushの個別マテリアル割り当てと輪郭の検査
 
 旧チャット専用の結果設定UI・依頼候補のspecはPi移行で削除されたため選択しません。`chatgpt-pi-authoring.spec.ts`と`chatgpt-connection-reasoning.spec.ts`で現行の制作導線を、`mcp-material-batch.spec.ts`と`sky-shaders.spec.ts`で正式な編集・描画経路を確認します。`chatgpt-model-source-integrity.spec.ts`も選択しますが、実Blender出力がない場合はSKIPし、必須の制作検査の代わりにはしません。
 
