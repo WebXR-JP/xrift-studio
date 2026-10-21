@@ -188,9 +188,25 @@ function installOpenBrushDocumentGuard(
       const material = materials[primitive?.material];
       if (!material) return;
       const brushName = resolveOpenBrushMaterialName(material);
-      if (brushName) pending.push(Promise.resolve(internal.replaceMaterial(
-        object as unknown as OpenBrushTargetMesh, brushName,
-      )));
+      if (brushName) {
+        const mesh = object as unknown as OpenBrushTargetMesh;
+        const original = mesh.material;
+        pending.push(Promise.resolve(internal.replaceMaterial(mesh, brushName)).then(() => {
+          // The vendor caches one material per brush, whereas a glTF can have
+          // many independent material slots using that brush. Keep their
+          // identities and parser associations after replacing the PBR source:
+          // the editor and generated material injections both resolve by index.
+          if (mesh.material === original) return;
+          const instance = (source: Material) => {
+            const result = source.clone();
+            gltfParser.associations.set(result, { materials: primitive.material });
+            return result;
+          };
+          mesh.material = Array.isArray(mesh.material)
+            ? mesh.material.map(instance)
+            : instance(mesh.material);
+        }));
+      }
     });
     return Promise.all(pending);
   };
@@ -323,7 +339,27 @@ export function markOpenBrushPbrFallback(
  * shader fails to compile.
  */
 export function normalizeOpenBrushGlslSource(source: string): string {
-  return source.replace(/^\s*#version\s+300\s+es\s*(?:\r?\n|$)/, "");
+  return source
+    .replace(/^\s*#version\s+300\s+es\s*(?:\r?\n|$)/, "")
+    // DiamondHull's legacy vertex shader transforms a normal as a point.
+    // Translation then changes its rim emission even when the model and
+    // camera move together. Normals need the inverse-transpose direction
+    // transform, normalized for the fragment shader's view-angle dot product.
+    .replace(
+      "v_worldNormal = (modelMatrix * vec4(a_normal, 1)).xyz;",
+      "v_worldNormal = normalize(transpose(inverse(mat3(modelMatrix))) * a_normal);",
+    );
+}
+
+/** Give MSAA coverage at the authored alpha cutoff instead of a binary edge. */
+function smoothOpenBrushCutoutEdges(source: string): string {
+  return source.replace(
+    /if\s*\(\s*brush_mask\s*<=\s*u_Cutoff\s*\)\s*\{\s*discard\s*;\s*\}/g,
+    `float xriftCoverageWidth = max(fwidth(brush_mask), 0.0001);
+  float xriftCoverage = clamp((brush_mask - u_Cutoff) / xriftCoverageWidth + 0.5, 0.0, 1.0);
+  if (xriftCoverage <= 0.0) { discard; }
+  ${source.includes("out vec4 fragColor;") ? "fragColor" : "gl_FragColor"}.a = xriftCoverage;`,
+  );
 }
 
 export function installIsolatedLoader(loader: InternalTiltShaderLoader): void {
@@ -397,6 +433,15 @@ async function loadIsolatedBrushMaterial(
   ]);
   source.vertexShader = normalizeOpenBrushGlslSource(String(vertexShader));
   source.fragmentShader = normalizeOpenBrushGlslSource(String(fragmentShader));
+  // Additive/transparent brushes keep their own authored blending. Cutout
+  // brushes retain the same threshold and use subpixel coverage only at its edge.
+  if (!source.transparent) {
+    const fragment = smoothOpenBrushCutoutEdges(source.fragmentShader);
+    if (fragment !== source.fragmentShader) {
+      source.fragmentShader = fragment;
+      source.alphaToCoverage = true;
+    }
+  }
   source.glslVersion = GLSL3;
 
   await Promise.all([
@@ -424,6 +469,11 @@ async function loadIsolatedBrushMaterial(
     UniformsLib.fog,
     source.uniforms,
   ]);
+  // Three supplies cameraPosition as a built-in uniform. The vendor's zero
+  // default overwrites that value when Object3D/Clone drops its mesh callback,
+  // making DiamondHull shade relative to the world origin. Leaving it out of
+  // the upload dictionary preserves the renderer's real camera on every clone.
+  delete source.uniforms.cameraPosition;
 
   const material = new RawShaderMaterial(source);
   material.userData.xriftOpenBrushResourcePaths = [

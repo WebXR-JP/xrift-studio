@@ -354,7 +354,8 @@ class RecordingSessionStore {
     const take = this.active;
     const source = this.source;
     if (!take || !source || take.stopRequested) return;
-    if (now - take.lastFrameAt < take.frameIntervalMs - 1) return;
+    const elapsed = now - take.lastFrameAt;
+    if (elapsed + 1e-6 < take.frameIntervalMs) return;
     const sourceWidth = source.width;
     const sourceHeight = source.height;
     if (sourceWidth === 0 || sourceHeight === 0) return;
@@ -379,7 +380,12 @@ class RecordingSessionStore {
     } catch {
       return;
     }
-    take.lastFrameAt = now;
+    // Keep the capture clock's phase. Resetting it to a slightly late render
+    // makes each small scheduling delay accumulate into another dropped frame.
+    // A long stall still copies only the latest available frame, without a burst.
+    take.lastFrameAt = Number.isFinite(elapsed)
+      ? take.lastFrameAt + Math.floor((elapsed + 1e-6) / take.frameIntervalMs) * take.frameIntervalMs
+      : now;
     take.frameCount += 1;
     take.frameDirty = true;
     take.track?.requestFrame?.();
@@ -595,7 +601,13 @@ class RecordingSessionStore {
     let recorder: MediaRecorder | null = null;
     if (mode === "media-recorder") {
       try {
-        stream = capture.captureStream!(profile.frameRate);
+        // One render owns one capture request. Mixing the stream's automatic
+        // timer with requestFrame() can sample before the fresh frame is drawn.
+        stream = capture.captureStream!(0);
+        if (typeof (stream.getVideoTracks()[0] as ActiveTake["track"])?.requestFrame !== "function") {
+          stream.getTracks().forEach((track) => track.stop());
+          stream = capture.captureStream!(profile.frameRate);
+        }
         recorder = new MediaRecorder(stream, {
           mimeType,
           videoBitsPerSecond: resolveRecordingBitrate(profile),

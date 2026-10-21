@@ -13,6 +13,8 @@ after(() => server.close());
 
 let recorder;
 let stoppedTracks;
+let requestedFrames;
+let captureRates;
 class Encoder {
   static isTypeSupported() { return true; }
   state = "inactive";
@@ -43,19 +45,70 @@ function sink(overrides = {}) {
 }
 beforeEach(() => {
   stoppedTracks = 0;
+  requestedFrames = 0;
+  captureRates = [];
   globalThis.window = { setTimeout, clearTimeout, setInterval, clearInterval, localStorage: { getItem() { return null; }, setItem() {} } };
   globalThis.document = {
     createElement() {
-      const track = { stop() { stoppedTracks++; } };
+      const track = { stop() { stoppedTracks++; }, requestFrame() { requestedFrames++; } };
       return {
         width: 100, height: 100,
         getContext() { return { fillRect() {}, drawImage() {} }; },
-        captureStream() { return { getVideoTracks() { return [track]; }, getTracks() { return [track]; } }; },
+        captureStream(rate) { captureRates.push(rate); return { getVideoTracks() { return [track]; }, getTracks() { return [track]; } }; },
         toBlob(callback) { callback(new Blob([new Uint8Array([7])])); },
       };
     },
   };
   globalThis.MediaRecorder = Encoder;
+});
+
+test("capture cadence keeps 30fps on a 16ms render clock instead of drifting to 21fps", async () => {
+  const store = new Store();
+  store.registerSource({ width: 100, height: 100 });
+  await store.startRecording({ sink: sink() });
+  const start = store.active.lastFrameAt;
+  for (let tick = 1; tick <= 62; tick++) store.pumpFrame(start + tick * 16);
+  assert.equal(store.active.frameCount, 30);
+  assert.equal(requestedFrames, 30);
+  assert.deepEqual(captureRates, [0]);
+  await store.stopRecording();
+});
+
+test("a render stall captures the latest image once without a catch-up burst", async () => {
+  const store = new Store();
+  store.registerSource({ width: 100, height: 100 });
+  await store.startRecording({ sink: sink() });
+  try {
+    const start = store.active.lastFrameAt;
+    store.pumpFrame(start + 1000);
+    store.pumpFrame(start + 1000);
+    store.pumpFrame(start + 1001);
+    assert.equal(store.active.frameCount, 2);
+    assert.equal(requestedFrames, 2);
+  } finally {
+    await store.stopRecording();
+  }
+});
+
+test("capture falls back to timed frames when requestFrame is unavailable", async () => {
+  const create = document.createElement;
+  document.createElement = () => {
+    const canvas = create();
+    const capture = canvas.captureStream;
+    canvas.captureStream = (rate) => {
+      const stream = capture(rate);
+      delete stream.getVideoTracks()[0].requestFrame;
+      return stream;
+    };
+    return canvas;
+  };
+  const store = new Store();
+  store.registerSource({ width: 100, height: 100 });
+  await store.startRecording({ sink: sink() });
+  assert.deepEqual(captureRates, [0, 30]);
+  assert.equal(requestedFrames, 0);
+  await store.stopRecording();
+  assert.equal(stoppedTracks, 2);
 });
 
 test("stop waits for slow final blob reads and keeps encoder chunk order", async () => {
