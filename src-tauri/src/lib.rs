@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 mod world_authoring;
 mod chatgpt;
 mod blender_modeling;
+mod background_process;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
@@ -593,7 +594,7 @@ fn extract_archive(archive: &Path, dest: &Path) -> Result<(), String> {
 }
 
 async fn run_npm_install_global(paths: &RuntimePaths, package_spec: &str) -> Result<(), String> {
-    let mut cmd = tokio::process::Command::new(&paths.node_exe);
+    let mut cmd = crate::background_process::tokio_command(&paths.node_exe);
     cmd.arg(&paths.npm_cli_js)
         .arg("install")
         .arg("--global")
@@ -664,7 +665,7 @@ async fn verify_xrift_runtime(paths: &RuntimePaths) -> Result<String, String> {
     let version = installed_cli_version(Path::new(&paths.xrift_js))
         .filter(|version| cli_version_supported(version))
         .ok_or("XRift CLIのファイルまたはバージョンを確認できません。セットアップを再試行してください。")?;
-    let mut cmd = tokio::process::Command::new(&paths.node_exe);
+    let mut cmd = crate::background_process::tokio_command(&paths.node_exe);
     cmd.arg(&paths.xrift_js).arg("--version").kill_on_drop(true);
     configure_runtime_command(&mut cmd, paths);
     let output = tokio::time::timeout(std::time::Duration::from_secs(20), cmd.output())
@@ -5325,7 +5326,7 @@ async fn clone_classic_project_repository(repository_url: String) -> Result<Stri
         .ok_or_else(|| "repository cache path is invalid".to_string())?;
     std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
 
-    let output = tokio::process::Command::new("git")
+    let output = crate::background_process::tokio_command("git")
         .args([
             "clone",
             "--depth",
@@ -5791,7 +5792,7 @@ fn reset_app_data(app: AppHandle, scope: String) -> Result<(), String> {
 fn kill_pid_tree(pid: u32) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        let out = std::process::Command::new("taskkill")
+        let out = crate::background_process::command("taskkill")
             .args(["/T", "/F", "/PID", &pid.to_string()])
             .output()
             .map_err(|e| e.to_string())?;
@@ -5804,10 +5805,10 @@ fn kill_pid_tree(pid: u32) -> Result<(), String> {
     }
     #[cfg(unix)]
     {
-        let _ = std::process::Command::new("kill")
+        let _ = crate::background_process::command("kill")
             .args(["-TERM", &format!("-{}", pid)])
             .status();
-        let _ = std::process::Command::new("kill")
+        let _ = crate::background_process::command("kill")
             .args(["-9", &pid.to_string()])
             .status();
     }
@@ -6057,7 +6058,7 @@ struct RecordingEncoderSupport {
 /// a `ffmpeg -version` is cheap enough and always current.
 #[tauri::command]
 fn recording_encoder_support() -> RecordingEncoderSupport {
-    let output = std::process::Command::new("ffmpeg")
+    let output = crate::background_process::command("ffmpeg")
         .arg("-version")
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
@@ -6238,7 +6239,7 @@ fn recording_begin_file(
         let stderr = std::fs::File::create(&log_path)
             .map(std::process::Stdio::from)
             .unwrap_or_else(|_| std::process::Stdio::null());
-        let mut child = std::process::Command::new("ffmpeg")
+        let mut child = crate::background_process::command("ffmpeg")
             .args(["-hide_banner", "-loglevel", "warning", "-y"])
             .args(["-f", "image2pipe", "-framerate", &frame_rate.to_string(), "-i", "pipe:0"])
             .args(codec)

@@ -1,7 +1,7 @@
 {
   "name": "xrift-studio",
   "private": true,
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "Community-built desktop app for creating XRift worlds and items",
   "type": "module",
   "license": "MIT",

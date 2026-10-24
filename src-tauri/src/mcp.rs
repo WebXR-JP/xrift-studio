@@ -1347,17 +1347,17 @@ fn client_command(executable: &Path, arguments: &[String]) -> Command {
         executable.extension().and_then(OsStr::to_str),
         Some(extension) if extension.eq_ignore_ascii_case("cmd") || extension.eq_ignore_ascii_case("bat")
     ) {
-        command = Command::new("cmd.exe");
+        command = crate::background_process::command("cmd.exe");
         command.args(["/D", "/S", "/C"]);
         command.arg(executable);
         command.args(arguments);
     } else {
-        command = Command::new(executable);
+        command = crate::background_process::command(executable);
         command.args(arguments);
     }
     #[cfg(not(windows))]
     {
-        command = Command::new(executable);
+        command = crate::background_process::command(executable);
         command.args(arguments);
     }
     command

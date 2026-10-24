@@ -41,7 +41,12 @@ mod tests {
             Self(root)
         }
         fn frame(&self, sequence: u64) {
-            fs::write(self.0.join("preview.json"), json!({"sequence":sequence,"completed":sequence,"total":2,"capturedAt":1_790_000_000_000_u64}).to_string()).unwrap();
+            self.frame_total(sequence, 2);
+        }
+        fn frame_total(&self, sequence: u64, total: u64) {
+            let metadata = json!({"sequence":sequence,"completed":sequence,"total":total,"capturedAt":1_790_000_000_000_u64}).to_string();
+            fs::write(self.0.join(format!("preview-{sequence}.json")), &metadata).unwrap();
+            fs::write(self.0.join("preview.json"), metadata).unwrap();
             fs::write(
                 self.0.join(format!("preview-{sequence}.png")),
                 include_bytes!("../../e2e/fixtures/blender-progress.png"),
@@ -87,6 +92,45 @@ mod tests {
         assert_eq!(events.lock().unwrap().len(), 2);
     }
     #[test]
+    fn fast_captures_between_polls_preserve_partial_and_final_frames() {
+        let fixture = Fixture::new();
+        fixture.frame(1);
+        fixture.frame(2);
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let captured = events.clone();
+        let mut stream = PreviewStream::new(
+            Arc::new(move |event| captured.lock().unwrap().push(event)),
+            "Fixture".into(),
+        );
+        stream.poll(&fixture.0);
+        stream.poll(&fixture.0);
+        let events = events.lock().unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0]["preview"]["completed"], 1);
+        assert_eq!(events[1]["preview"]["completed"], 2);
+    }
+
+    #[test]
+    fn delayed_poll_only_delivers_four_newest_captures() {
+        let fixture = Fixture::new();
+        for sequence in 1..=6 {
+            fixture.frame_total(sequence, 6);
+        }
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let captured = events.clone();
+        let mut stream = PreviewStream::new(
+            Arc::new(move |event| captured.lock().unwrap().push(event)),
+            "Fixture".into(),
+        );
+        stream.poll(&fixture.0);
+        stream.poll(&fixture.0);
+        let events = events.lock().unwrap();
+        assert_eq!(events.len(), 4);
+        assert_eq!(events[0]["preview"]["sequence"], 3);
+        assert_eq!(events[3]["preview"]["sequence"], 6);
+    }
+
+    #[test]
     fn subscribers_are_scoped_and_removed_on_run_completion() {
         let fixture = Fixture::new();
         let id = fixture.0.file_name().unwrap().to_string_lossy();
@@ -120,7 +164,7 @@ pub(super) fn callback_for(id: Option<&str>) -> Option<Callback> {
         .cloned()
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Frame {
     sequence: u64,
@@ -166,6 +210,27 @@ impl PreviewStream {
         if frame.sequence <= self.sequence
             || frame.sequence > 64
             || frame.total == 0
+            || frame.total > 256
+            || frame.completed == 0
+            || frame.completed > frame.total
+            || frame.captured_at > 8_000_000_000_000_000
+        {
+            return;
+        }
+        // Bound a delayed batch to the gallery's four newest actual captures.
+        let first = (self.sequence + 1).max(frame.sequence.saturating_sub(3));
+        for sequence in first..=frame.sequence {
+            let captured = bounded_file(&directory.join(format!("preview-{sequence}.json")), 1024)
+                .and_then(|bytes| serde_json::from_slice::<Frame>(&bytes).ok())
+                .or_else(|| (sequence == frame.sequence).then_some(frame));
+            if let Some(captured) = captured.filter(|captured| captured.sequence == sequence) {
+                self.emit_frame(directory, captured);
+            }
+        }
+    }
+
+    fn emit_frame(&mut self, directory: &Path, frame: Frame) {
+        if frame.total == 0
             || frame.total > 256
             || frame.completed == 0
             || frame.completed > frame.total

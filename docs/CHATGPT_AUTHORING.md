@@ -36,6 +36,8 @@ Studioは対象作品・Scene、revision、保存、描画などの実行境界�
 5. 正式ツールを入力スキーマごとPiへ直接登録する。Pi標準の`tool_search`で必要な定義を読み込み、`codemode`で複数の操作を組み立てる。
 6. Editorの通常のrevision、Undo、インポート、検証、自動保存を通る。検証エラーはPiへ戻す。
 
+制作のNode.jsは`background_process::tokio_command`から起動し、Windowsでコンソールの別ウィンドウを作らない。Blenderなどの補助処理も同じ起動処理を使い、進捗は制作チャット内で表示する。標準入出力の通信、終了コード、停止時の回収は既存の処理を保つ。
+
 SDKの組み込みread/write/bash、利用者のPi設定・認証ファイルは読み込まない。
 本体のStudio操作には正式ツールだけを許可し、公開・アカウント変更・作品切り替えを渡さない。
 `create_blender_model`は既存の固定runner、モデル仕様検証、通常のAsset保存を使う。
@@ -49,7 +51,7 @@ SDKが追加のuserメッセージを実際に受信した境界で、以前の�
 ## 実行の分担とツール探索
 
 一つのPiセッションが読み取り、設計、編集、確認を進める。固定したモデル設計・配置・確認の担当セッションは作らない。
-`teamwork.ts`、担当別のプロンプト・8ターン制限・設定項目を削除した。古い保存設定の分担指定は読み捨て、拡張の登録は保持する。
+`teamwork.ts`、担当別のプロンプト・8ターン制限・設定項目を削除した。古い保存設定の分担指定と、削除済みの拡張登録は使用しない。
 
 `get_editor_context`、`get_world_authoring_guide`、保存・整合性・撮影は最初からモデルへ公開する。
 残りの正式ツールは`deferred`で登録し、`tool_search`で必要な入力定義を公開するか、`codemode`内の`searchTools`・`describeTool`で調べる。

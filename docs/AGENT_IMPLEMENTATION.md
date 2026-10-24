@@ -75,3 +75,5 @@ MToon・VRMの生成コードには、固定した`@pixiv/three-vrm`の配布ソ
 Tauriコマンドを追加するときは、`src-tauri/src/lib.rs`の`#[tauri::command]`と`generate_handler!`の登録、`src/lib/tauri.ts`の型付きラッパーを揃える。Rustのsnake_caseとinvokeのcamelCaseの引数対応を確認する。必要な権限だけを`src-tauri/capabilities/default.json`に追加する。
 
 CLI連携は`src/lib/xrift-cli.ts`の既存経路を使い、`LogLine`を流す。処理中のbusy/finallyと二重操作防止は既存の`wrap`パターンを使う。依存追加は必要性を説明し、ロックファイルを更新する。フロントエンドとRustの変更に合う検証は[開発ガイド](../DEVELOPMENT.md)で確認する。
+
+Rustからバックグラウンドの外部プロセスを起動するときは、`background_process::command`または`background_process::tokio_command`を使う。Windowsでは`CREATE_NO_WINDOW`でコンソールの別ウィンドウを作らず、進捗と診断は既存のpipe・ログ・チャットへ流す。制作チャットのNode.js、CLI、Blender、Git、FFmpeg、停止コマンドにも同じ起動処理を適用する。利用者が明示的に開くアプリやブラウザーは既存のopenerを使う。

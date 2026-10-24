@@ -220,7 +220,7 @@ pub async fn chatgpt_pi_run(
         .join("sessions")
         .join(digest_key(&[&project_id, &scene_id]))
         .join(format!("{}.jsonl", digest_key(&[&session_id])));
-    let mut command = tokio::process::Command::new(&paths.node_exe);
+    let mut command = crate::background_process::tokio_command(&paths.node_exe);
     crate::configure_runtime_command(&mut command, &paths);
     command
         .arg(runner_path(&app)?)
