@@ -1,16 +1,16 @@
 {
-  "tag_name": "v1.0.13",
-  "html_url": "https://github.com/WebXR-JP/xrift-studio/releases/tag/v1.0.13",
-  "published_at": "2026-10-24T07:38:50Z",
+  "tag_name": "v1.0.14",
+  "html_url": "https://github.com/WebXR-JP/xrift-studio/releases/tag/v1.0.14",
+  "published_at": "2026-10-24T12:05:32Z",
   "draft": false,
   "prerelease": false,
   "assets": [
     {
-      "name": "XRift.Studio_1.0.13_darwin_universal_release.dmg",
+      "name": "XRift.Studio_1.0.14_darwin_universal_release.dmg",
       "state": "uploaded",
-      "size": 121146185,
-      "digest": "sha256:ad77e4805910e8c50badd647bb84998673bddd452faec6fd9d3f718b82c3b861",
-      "browser_download_url": "https://github.com/WebXR-JP/xrift-studio/releases/download/v1.0.13/XRift.Studio_1.0.13_darwin_universal_release.dmg"
+      "size": 121141358,
+      "digest": "sha256:61967b8c664d8fcff556ad1818f3ccdc4d45f5da2818d890dce90162d00e5440",
+      "browser_download_url": "https://github.com/WebXR-JP/xrift-studio/releases/download/v1.0.14/XRift.Studio_1.0.14_darwin_universal_release.dmg"
     }
   ]
 }
