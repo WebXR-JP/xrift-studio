@@ -423,6 +423,7 @@ import {
   collectRequiredScriptAssetIds,
   collectScriptReferencedAssetIds,
   collectScheduledScripts,
+  collectEditPreviewScene,
 } from "../../lib/visual-editor/scripting/script-schedule";
 import {
   normalizeScriptProvenance,
@@ -1370,6 +1371,7 @@ export function VisualEditorPrototype({
     ...(projectPath ? { projectPath } : {}),
     resolveScriptProvenance,
   });
+  const editPreviewScene = useMemo(() => collectEditPreviewScene(resolvedScriptScene), [resolvedScriptScene]);
   const scriptRuntimeReport = useMemo(
     () =>
       scriptExecutionScopeRenderCurrent
@@ -1437,8 +1439,9 @@ export function VisualEditorPrototype({
           normalizeScriptProvenance({ kind: "studio-editor", detail: null }),
         );
       }
-      if (playingRef.current) {
+      if (playingRef.current || collectRequiredScriptAssetIds(editPreviewScene).includes(assetId)) {
         const runtimeErrors = await scriptRuntime.compile({
+          ...(playingRef.current ? {} : { scene: editPreviewScene }),
           unapprovedPolicy: activePlayUnapprovedPolicyRef.current,
         });
         const blockingErrors =
@@ -1850,6 +1853,15 @@ export function VisualEditorPrototype({
   const [mcpError, setMcpError] = useState<string | null>(null);
   const [mcpLastActivity, setMcpLastActivity] =
     useState<XriftMcpActivity>(null);
+
+  useEffect(() => {
+    if (editorMode !== "edit" || playPreparing || !scriptExecutionScopeRenderCurrent) return;
+    let current = true;
+    void scriptRuntime.compile({ scene: editPreviewScene }).then(errors => {
+      if (current && errors.length) setNotice(`編集中のScript表示を更新できません: ${errors[0].message}`);
+    });
+    return () => { current = false; };
+  }, [editorMode, playPreparing, scriptExecutionScopeRenderCurrent, editPreviewScene, scriptRuntime.compile]);
 
   useEffect(() => {
     if (editorMode !== "play") {
@@ -4882,6 +4894,10 @@ export function VisualEditorPrototype({
                 },
               );
             }
+            if (template.id === "uikit-panel") {
+              const attached = latestComponentResult.scene.entities[entityId].components.find(component => component.id === latestComponentResult.componentId);
+              if (attached?.type === "script") attached.runIn = "play-and-edit";
+            }
             const nextBundle = touchProject({
               ...latestBundle,
               assets: latestAssets,
@@ -5216,16 +5232,16 @@ export function VisualEditorPrototype({
           let runtimeUnapprovedPolicy: "block" | "skip" = "block";
           if (
             request.tool === "update_script_asset" &&
-            editorModeRef.current === "play"
+            (editorModeRef.current === "play" || collectRequiredScriptAssetIds(collectEditPreviewScene(nextBundle.scene)).includes(asset.id))
           ) {
             runtimeUnapprovedPolicy =
               activePlayUnapprovedPolicyRef.current;
             runtimeErrors = await scriptCompileRef.current({
-              scene: resolvePrefabInstances(
+              scene: editorModeRef.current === "play" ? resolvePrefabInstances(
                 nextBundle.scene,
                 nextBundle.assets,
                 nextBundle.prefabs,
-              ).scene,
+              ).scene : collectEditPreviewScene(resolvePrefabInstances(nextBundle.scene, nextBundle.assets, nextBundle.prefabs).scene),
               assets: nextBundle.assets,
               unapprovedPolicy: runtimeUnapprovedPolicy,
             });
@@ -9659,6 +9675,10 @@ export function VisualEditorPrototype({
       const withScript = addEditorComponent(namedScene, mergedAssets, created.entityId,
         "scripting.script", projectKind, asset.id, { [asset.id]: scriptContract });
       if (!withScript.added) throw new Error(withScript.reason ?? "スクリプトを追加できませんでした");
+      if (template.id === "uikit-panel") {
+        const attached = withScript.scene.entities[created.entityId].components.find(component => component.id === withScript.componentId);
+        if (attached?.type === "script") attached.runIn = "play-and-edit";
+      }
       const hierarchyScene = createWorldAssetHierarchy(withScript.scene, mergedAssets, created.entityId, template.id);
       const prefabId = createDocumentId("prefab");
       const prefab = createPrefabDocument(hierarchyScene, mergedAssets, {
@@ -9702,6 +9722,10 @@ export function VisualEditorPrototype({
           { [committedAsset.id]: scriptContract },
         );
         if (componentResult.added) {
+          if (template.id === "uikit-panel") {
+            const attached = componentResult.scene.entities[entityId].components.find(component => component.id === componentResult.componentId);
+            if (attached?.type === "script") attached.runIn = "play-and-edit";
+          }
           mergedScene = createWorldAssetHierarchy(componentResult.scene, mergedAssets, entityId, template.id);
           attachedEntityName = latestBundle.scene.entities[entityId]?.name;
         }

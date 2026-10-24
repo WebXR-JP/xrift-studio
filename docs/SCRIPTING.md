@@ -37,7 +37,7 @@ property schemaは元データから導出する。Editor Stateが持ち、manif
 - `scriptAssetId`: 参照先スクリプト
 - `properties`: 宣言済みpropertyへの値。純JSONかつ有限数に限る
 - `assetReferences` / `entityReferences`: propertyが参照する素材とオブジェクトのID
-- `runIn`: 現在は`play`。schemaの`play-and-edit`は将来予約で、設定では選択できず実行もしない
+- `runIn`: `play`はPlay中に実行する。`play-and-edit`は編集画面でもnamed `Render`を表示し、`start`・`update`・Graphの通知はPlay中に実行する。Scriptのモジュールと`Render`自体は編集時にも評価される。Inspectorの「スクリプトを表示する場面」または`update_script_component`で変更する。UIKit Panelテンプレートは`play-and-edit`で作成する。
 
 1つのオブジェクトには複数のスクリプトのコンポーネントを付けられる。実行順はオブジェクト階層順で決まる。次にオブジェクト内のコンポーネント並び順で決まる。
 

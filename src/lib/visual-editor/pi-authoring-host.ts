@@ -138,6 +138,17 @@ export function createPiAuthoringRunner(host: PiAuthoringHost) {
         }
         if (event.type === "usage") { report({ usage: accumulateUsage(event.usage) }, undefined, false); return; }
         if (control.cancelled) return;
+        if (event.type === "preview") {
+          const preview = event.preview;
+          if (preview.source !== "blender" || preview.image?.mimeType !== "image/png" || !/^[A-Za-z0-9+/]+={0,2}$/.test(preview.image.data) || preview.image.data.length > 1_400_000
+            || typeof preview.name !== "string" || preview.name.length > 80 || typeof preview.operationId !== "string" || !/^[a-zA-Z0-9_-]{1,160}$/.test(preview.operationId)
+            || !Number.isSafeInteger(preview.sequence) || preview.sequence < 1 || !Number.isSafeInteger(preview.capturedAt) || preview.capturedAt < 0 || preview.capturedAt > 8_000_000_000_000_000
+            || !Number.isInteger(preview.total) || preview.total < 1 || preview.total > 256 || !Number.isInteger(preview.completed) || preview.completed < 1 || preview.completed > preview.total) return;
+          const previews = job.modelPreviews ?? [];
+          if (previews.some(item => item.operationId === preview.operationId && item.sequence >= preview.sequence)) return;
+          report({ modelPreviews: [...previews, preview].slice(-4) }, undefined, false);
+          return;
+        }
         if (event.type === "assistant") { report({ assistantText: event.text }, undefined, false); return; }
         if (event.type === "activity") {
           report({ progress: { ...job.progress, phase: event.phase, message: event.message } }, { phase: event.phase, message: event.message });

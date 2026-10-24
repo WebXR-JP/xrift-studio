@@ -24,6 +24,7 @@ import { ChatgptSceneControls, type ChatgptSceneSettingsPatch } from "./ChatgptS
 import type { SceneSettings } from "../../lib/visual-editor/scene-settings";
 import { preferredChatgptReasoningEffort } from "../../lib/visual-editor/chatgpt-reasoning";
 import { PiRunDetails } from "./PiRunDetails";
+import { ChatgptModelPreviews } from "./ChatgptModelPreviews";
 import { ChatgptAdditionalMessages } from "./ChatgptAdditionalMessages";
 import { ENTITY_REMAKE_BRIEF_MARKER, type ChatgptComposerRequest } from "../../lib/visual-editor/chatgpt-composer-request";
 
@@ -247,7 +248,7 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
       const questions = generation?.status === "planned" && generation.plan?.questions?.length ? element.querySelector<HTMLElement>("[data-chatgpt-question-form]") : null;
       element.scrollTop = questions ? element.scrollTop + questions.getBoundingClientRect().top - element.getBoundingClientRect().top : element.scrollHeight;
     }
-  }, [draftScope, generation?.generationId, generation?.status, generation?.liveMessages, generation?.assistantText, generation?.progress.message, generation?.progress.recentEvents.length, error, statusError, copyNotice, queue.items.length, connection?.signedIn]);
+  }, [draftScope, generation?.generationId, generation?.status, generation?.liveMessages, generation?.assistantText, generation?.modelPreviews, generation?.progress.message, generation?.progress.recentEvents.length, error, statusError, copyNotice, queue.items.length, connection?.signedIn]);
   const generating = busy === "generate" || generation?.status === "running" || queue.dispatching;
   const pending = busy !== null || Boolean(connection?.connecting || connection?.restoring) || generating || externallyBusy;
   const waitingRequests = queue.items.filter(request => request.status !== "running");
@@ -440,6 +441,7 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
           <ChatgptAdditionalMessages messages={generation.liveMessages} onReuse={awaitingQuestions ? undefined : reuseAdditionalMessage} />
           {generation.completionVerified === false && generation.status === "completed" ? <p className="text-[11px] text-slate-500">応答済み</p> : null}
           <PiRunDetails text={generation.assistantText} usage={generation.usage} running={generation.status === "running"} />
+          <ChatgptModelPreviews previews={generation.modelPreviews} />
           {generation.cancelling || !chatgptProgressIsRecorded(generation.progress.message, generation.progress.recentEvents) ? <p role="status" aria-live="polite" className="break-words leading-5 text-slate-700">{generation.cancelling ? "現在の処理を安全に終えて停止しています…" : formatChatgptProgressMessage(generation.progress.message)}</p> : null}
           {generation.clarifications?.length ? <details><summary className="cursor-pointer text-[11px] text-slate-500">確認した内容</summary><dl className="mt-2 space-y-2 text-[11px]">{generation.clarifications.map((item, index) => <div key={index}><dt className="break-words text-slate-500">{item.question}</dt><dd className="break-words text-slate-700">{item.answer}</dd></div>)}</dl></details> : null}
 

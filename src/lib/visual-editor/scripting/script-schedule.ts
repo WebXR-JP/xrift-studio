@@ -17,6 +17,14 @@ export type ScheduledScript = {
   order: number;
 };
 
+/** A compilation view only; the authored Scene and ordinary Play scripts stay intact. */
+export function collectEditPreviewScene(scene: SceneDocument): SceneDocument {
+  return { ...scene, entities: Object.fromEntries(Object.entries(scene.entities).map(([id, entity]) => {
+    const components = entity.components.filter(component => component.type !== "script" || component.runIn === "play-and-edit");
+    return [id, components.length === entity.components.length ? entity : { ...entity, components }];
+  })) };
+}
+
 export function collectScheduledScripts(
   scene: SceneDocument,
   options: { includeDisabled?: boolean } = {},

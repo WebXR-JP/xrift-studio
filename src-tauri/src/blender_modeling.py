@@ -3,6 +3,7 @@
 import json
 import math
 import sys
+import time
 from pathlib import Path
 
 import bpy
@@ -111,7 +112,73 @@ def expanded_parts(parts):
             yield part
 
 
-def build(spec, glb_path, blend_path):
+class ProgressPreviews:
+    """Render the actual evaluated meshes; temporary capture settings never enter the saved model."""
+    def __init__(self, directory, total):
+        self.directory, self.total = directory, total
+        self.sequence, self.completed, self.last_capture = 0, 0, 0
+        self.failed = False
+
+    def capture(self, objects, completed, force=False):
+        if self.failed or completed == self.completed or (not force and self.sequence and time.monotonic() - self.last_capture < 10):
+            return
+        scene = bpy.context.scene
+        render = scene.render
+        shading = scene.display.shading
+        saved = (scene.camera, render.engine, render.resolution_x, render.resolution_y, render.resolution_percentage,
+                 render.filepath, render.film_transparent, render.image_settings.file_format,
+                 shading.light, shading.color_type, shading.background_type, tuple(shading.background_color),
+                 shading.show_shadows, shading.show_cavity)
+        camera_data = bpy.data.cameras.new("XRift temporary progress camera")
+        camera = bpy.data.objects.new(camera_data.name, camera_data)
+        scene.collection.objects.link(camera)
+        try:
+            bpy.context.view_layer.update()
+            meshes = [obj for obj in objects if obj.type == "MESH"]
+            graph = bpy.context.evaluated_depsgraph_get()
+            corners = [evaluated.matrix_world @ Vector(corner) for obj in meshes
+                       for evaluated in [obj.evaluated_get(graph)] for corner in evaluated.bound_box]
+            minimum = Vector(tuple(min(point[axis] for point in corners) for axis in range(3)))
+            maximum = Vector(tuple(max(point[axis] for point in corners) for axis in range(3)))
+            center = (minimum + maximum) / 2
+            distance = max((maximum - minimum).length, 0.1)
+            camera.location = center + Vector((1.4, -1.8, 1.2)).normalized() * (distance * 2 + 1)
+            camera.rotation_euler = (center - camera.location).to_track_quat("-Z", "Y").to_euler()
+            camera_data.type = "ORTHO"
+            inverse_rotation = camera.rotation_euler.to_matrix().transposed()
+            projected = [inverse_rotation @ (point - center) for point in corners]
+            camera_data.ortho_scale = max(max(abs(point.x) * 2 for point in projected), max(abs(point.y) * 3 for point in projected), 0.05) * 1.15
+            camera_data.clip_end = distance * 10 + 100
+            scene.camera = camera
+            render.engine = "BLENDER_WORKBENCH"
+            render.resolution_x, render.resolution_y, render.resolution_percentage = 480, 320, 100
+            render.film_transparent = False
+            render.image_settings.file_format = "PNG"
+            shading.light, shading.color_type, shading.background_type = "STUDIO", "MATERIAL", "VIEWPORT"
+            shading.background_color = (0.92, 0.94, 0.96)
+            shading.show_shadows, shading.show_cavity = True, True
+            self.sequence += 1
+            render.filepath = str(self.directory / f"preview-{self.sequence}.png")
+            bpy.ops.render.render(write_still=True)
+            frame = {"sequence": self.sequence, "completed": completed, "total": self.total, "capturedAt": int(time.time() * 1000)}
+            temporary = self.directory / "preview-next.json"
+            temporary.write_text(json.dumps(frame), encoding="utf-8")
+            temporary.replace(self.directory / "preview.json")
+            self.completed, self.last_capture = completed, time.monotonic()
+        except Exception as error:
+            self.failed = True
+            (self.directory / "preview-error.txt").write_text("Progress capture unavailable", encoding="utf-8")
+            print(f"XRift progress capture unavailable: {type(error).__name__}", flush=True)
+        finally:
+            (scene.camera, render.engine, render.resolution_x, render.resolution_y, render.resolution_percentage,
+             render.filepath, render.film_transparent, render.image_settings.file_format,
+             shading.light, shading.color_type, shading.background_type, shading.background_color,
+             shading.show_shadows, shading.show_cavity) = saved
+            bpy.data.objects.remove(camera, do_unlink=True)
+            bpy.data.cameras.remove(camera_data)
+
+
+def build(spec, glb_path, blend_path, previews=False):
     # Factory startup is already isolated. Remove only that background Scene,
     # preserving every object in the person's separate Blender application.
     bpy.ops.object.select_all(action="SELECT")
@@ -121,7 +188,9 @@ def build(spec, glb_path, blend_path):
     root = bpy.data.objects.new(spec["name"], None)
     bpy.context.collection.objects.link(root)
     objects = [root]
-    for part in expanded_parts(spec["parts"]):
+    parts = list(expanded_parts(spec["parts"]))
+    progress = ProgressPreviews(glb_path.parent, len(parts)) if previews else None
+    for part in parts:
         obj = make_geometry(part)
         obj.name = part["name"]
         if part.get("id"):
@@ -169,6 +238,10 @@ def build(spec, glb_path, blend_path):
         bpy.ops.uv.smart_project(island_margin=0.02)
         bpy.ops.object.mode_set(mode="OBJECT")
         objects.append(obj)
+        if progress:
+            progress.capture(objects, len(objects) - 1)
+    if progress:
+        progress.capture(objects, len(parts), force=True)
     bpy.ops.object.select_all(action="DESELECT")
     for obj in objects:
         obj.select_set(True)
@@ -193,9 +266,10 @@ def build(spec, glb_path, blend_path):
 
 def main():
     args = sys.argv[sys.argv.index("--") + 1:]
-    if len(args) != 3:
+    previews = len(args) == 4 and args[-1] == "--progress-previews"
+    if len(args) != 3 and not previews:
         raise ValueError("Expected model JSON, GLB and blend paths")
-    input_path, glb_path, blend_path = [Path(value) for value in args]
+    input_path, glb_path, blend_path = [Path(value) for value in args[:3]]
     for path in (input_path, glb_path, blend_path):
         if not path.is_absolute() or path.parent.resolve() != input_path.parent.resolve():
             raise ValueError("All model files must be inside the same isolated directory")
@@ -203,7 +277,7 @@ def main():
         raise FileExistsError("Generated models must not overwrite existing files")
     with input_path.open("r", encoding="utf-8") as file:
         spec = json.load(file)
-    build(spec, glb_path, blend_path)
+    build(spec, glb_path, blend_path, previews=previews)
 
 
 if __name__ == "__main__":

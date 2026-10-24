@@ -225,7 +225,7 @@ async function main() {
     // Constrain React before the first resolution; installing the old template
     // first can already fail with ERESOLVE.
     const sharedPackages = ["react", "react-dom", "three", "@react-three/fiber",
-      "@react-three/drei", "@react-three/rapier", "@react-three/uikit", "hls.js"];
+      "@react-three/drei", "@react-three/rapier", "@react-three/uikit", "@pmndrs/uikit", "hls.js"];
     const typePackages = ["@types/react", "@types/react-dom", "@types/three"];
     await run(
       "npm",

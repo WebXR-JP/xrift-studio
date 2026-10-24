@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import type { ChatgptGeneration } from "../src/lib/visual-editor/chatgpt-generation";
 import type { XriftMcpEditorResponse } from "../src/lib/tauri";
 async function call(page: Page, tool: string, args: Record<string, unknown> = {}): Promise<XriftMcpEditorResponse> {
@@ -133,4 +134,24 @@ test("internal calls without native scope cannot read or edit the open Scene", a
   });
   for (const response of responses) expect(response).toMatchObject({ ok: false, error: { code: "SCOPE_CHANGED" } });
   await expect(page.getByRole("tree", { name: "シーンのEntity階層" }).getByText("拒否するEntity", { exact: true })).toHaveCount(0);
+});
+
+test("Blender progress images appear in the owning chat without entering persisted history", async ({ page }) => {
+  await ready(page);
+  const data = (await readFile(new URL("./fixtures/blender-progress.png", import.meta.url))).toString("base64");
+  await page.evaluate(data => {
+    window.__XRIFT_RELEASE_E2E__!.piPreviewFrames = Array.from({ length: 5 }, (_, index) => ({
+      source: "blender", operationId: "model-preview-fixture", name: "Blenderの検証モデル", sequence: index + 1,
+      completed: index + 1, total: 5, capturedAt: Date.now() + index,
+      image: { mimeType: "image/png", data },
+    }));
+  }, data);
+  await call(page, "open_chatgpt_panel");
+  const id = await generate(page);
+  await expect.poll(async () => (await job(page, id)).status).toBe("completed");
+  const gallery = page.getByRole("region", { name: "Blenderの制作画像", exact: true });
+  await expect(gallery.getByRole("img")).toHaveCount(4);
+  await expect(gallery.getByRole("img", { name: "Blenderの検証モデルの形状プレビュー（5/5パーツ）", exact: true })).toBeVisible();
+  expect(await gallery.getByRole("img").evaluateAll(images => images.every(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth === 480))).toBe(true);
+  expect(await page.evaluate(() => JSON.stringify(Object.values(localStorage)))).not.toContain(data);
 });

@@ -30,8 +30,8 @@ importers:
         specifier: 3.5.5
         version: 3.5.5(three@0.185.1)
       '@pmndrs/uikit':
-        specifier: 1.0.76
-        version: 1.0.76(three@0.185.1)
+        specifier: 1.0.77
+        version: 1.0.77(three@0.185.1)
       '@react-three/drei':
         specifier: 10.7.8
         version: 10.7.8(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(@types/three@0.185.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
@@ -42,8 +42,8 @@ importers:
         specifier: 2.2.0
         version: 2.2.0(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1)
       '@react-three/uikit':
-        specifier: 1.0.76
-        version: 1.0.76(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(react@19.2.8)(three@0.185.1)(use-sync-external-store@1.6.0(react@19.2.8))
+        specifier: 1.0.77
+        version: 1.0.77(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(react@19.2.8)(three@0.185.1)(use-sync-external-store@1.6.0(react@19.2.8))
       '@tauri-apps/api':
         specifier: ^2.11.1
         version: 2.11.1
@@ -70,7 +70,7 @@ importers:
         version: 0.2.0
       '@xrift/world-components':
         specifier: 0.57.1
-        version: 0.57.1(@react-three/drei@10.7.8(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(@types/three@0.185.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@react-three/rapier@2.2.0(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1))(@react-three/uikit@1.0.76(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(react@19.2.8)(three@0.185.1)(use-sync-external-store@1.6.0(react@19.2.8)))(hls.js@1.7.3)(react@19.2.8)(three@0.185.1)
+        version: 0.57.1(@react-three/drei@10.7.8(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(@types/three@0.185.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@react-three/rapier@2.2.0(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1))(@react-three/uikit@1.0.77(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(react@19.2.8)(three@0.185.1)(use-sync-external-store@1.6.0(react@19.2.8)))(hls.js@1.7.3)(react@19.2.8)(three@0.185.1)
       '@xyflow/react':
         specifier: 12.11.6
         version: 12.11.6(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -184,12 +184,18 @@ importers:
         specifier: 0.52.5
         version: 0.52.5(three@0.185.1)
     devDependencies:
+      '@pmndrs/uikit':
+        specifier: 1.0.77
+        version: 1.0.77(three@0.185.1)
       '@react-three/fiber':
         specifier: 9.7.0
         version: 9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
       '@react-three/rapier':
         specifier: 2.2.0
         version: 2.2.0(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1)
+      '@react-three/uikit':
+        specifier: 1.0.77
+        version: 1.0.77(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(react@19.2.8)(three@0.185.1)(use-sync-external-store@1.6.0(react@19.2.8))
       '@types/react':
         specifier: ~19.2.18
         version: 19.2.18
@@ -198,7 +204,7 @@ importers:
         version: 0.185.1
       '@xrift/world-components':
         specifier: 0.57.1
-        version: 0.57.1(@react-three/drei@10.7.8(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(@types/three@0.185.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@react-three/rapier@2.2.0(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1))(@react-three/uikit@1.0.76(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(react@19.2.8)(three@0.185.1)(use-sync-external-store@1.6.0(react@19.2.8)))(hls.js@1.7.3)(react@19.2.8)(three@0.185.1)
+        version: 0.57.1(@react-three/drei@10.7.8(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(@types/three@0.185.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@react-three/rapier@2.2.0(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1))(@react-three/uikit@1.0.77(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(react@19.2.8)(three@0.185.1)(use-sync-external-store@1.6.0(react@19.2.8)))(hls.js@1.7.3)(react@19.2.8)(three@0.185.1)
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -624,17 +630,17 @@ packages:
     engines: {node: '>=20'}
     hasBin: true
 
-  '@pmndrs/msdfonts@1.0.76':
-    resolution: {integrity: sha512-NKBJIOIrEoJovhes8TzAAmRtUuOPJIpyHjiCSMVfJLoV2MGRsArXiPkEm6+BDCk1N8eiHWuWGlw4/+LoCmHB2A==}
+  '@pmndrs/msdfonts@1.0.77':
+    resolution: {integrity: sha512-Lf7Uq12WMyywNwql7roBRyggxdH3XXAsEgae+zbXv4iVMcJa0cb+iLyqb6zpK+JSPHF0DMghmygJYcgf8/JYbw==}
 
   '@pmndrs/pointer-events@6.6.30':
     resolution: {integrity: sha512-YD2jWdgEqqAWJNOOZ1WZMunUby8jwuQyOMk8zbeqC39R4nkZnGvu1Pa5EMGbV1zd2vZTxXDxYcAVxtQuhVwf3g==}
 
-  '@pmndrs/uikit-pub-sub@1.0.76':
-    resolution: {integrity: sha512-+DVXInyj+/GAJJDTvElLrVqh8b1kmnPGZW1UQApUIwxZmhzCPmr2cAz0j1/vNyDG5VQNLWWmkItLi50/chKcwA==}
+  '@pmndrs/uikit-pub-sub@1.0.77':
+    resolution: {integrity: sha512-nfkXQF///Tz6/jIfCtJCxuHMHfLxWj+72fDTIeAlK8MteAelTPtHUH7JKvyoLay4HcGSWuCWJx8Hr5ax6dKX0g==}
 
-  '@pmndrs/uikit@1.0.76':
-    resolution: {integrity: sha512-qLE7kGaW5LGE4YdFzCQZaCiB6NvfL9JJ2NxaBSw8Z0lu/0uiUfA49vKHFxk/1qiGvTu+esrDCAydI+H2aN1kYg==}
+  '@pmndrs/uikit@1.0.77':
+    resolution: {integrity: sha512-HSuZbItVhl+xOtBxR5pJ/DqeHzlfVFNbGj/VFeDWU2We6vuYVs3/L6Lcmbxi/+qNXMn6YS5LjXBgtFwvjAXiWg==}
     peerDependencies:
       three: '>=0.162'
 
@@ -711,8 +717,8 @@ packages:
       react: ^19
       three: '>=0.159.0'
 
-  '@react-three/uikit@1.0.76':
-    resolution: {integrity: sha512-QpQNYkuR4Yc8IqMvbjkG+n07xftnMHUA825N/w7XTeSDl3Qj8DCU4XO4uf6+/4JpBx+8WyZD3bm3VdCJMCxn+w==}
+  '@react-three/uikit@1.0.77':
+    resolution: {integrity: sha512-ZHtepWERLseCFRmGXr6/EMpq9RHKIkIUheNyyLRTna7WS+sDbe8SuHDsiEHb3Nv73evtrpjC/1dGEoXcdPEfZw==}
     peerDependencies:
       '@react-three/fiber': '>=8'
       react: '>=18'
@@ -3020,18 +3026,18 @@ snapshots:
     dependencies:
       playwright: 1.63.0
 
-  '@pmndrs/msdfonts@1.0.76': {}
+  '@pmndrs/msdfonts@1.0.77': {}
 
   '@pmndrs/pointer-events@6.6.30': {}
 
-  '@pmndrs/uikit-pub-sub@1.0.76':
+  '@pmndrs/uikit-pub-sub@1.0.77':
     dependencies:
       '@preact/signals-core': 1.14.4
 
-  '@pmndrs/uikit@1.0.76(three@0.185.1)':
+  '@pmndrs/uikit@1.0.77(three@0.185.1)':
     dependencies:
-      '@pmndrs/msdfonts': 1.0.76
-      '@pmndrs/uikit-pub-sub': 1.0.76
+      '@pmndrs/msdfonts': 1.0.77
+      '@pmndrs/uikit-pub-sub': 1.0.77
       '@preact/signals-core': 1.14.4
       '@zappar/msdf-generator': 1.2.4
       three: 0.185.1
@@ -3122,10 +3128,10 @@ snapshots:
       three: 0.185.1
       three-stdlib: 2.36.1(three@0.185.1)
 
-  '@react-three/uikit@1.0.76(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(react@19.2.8)(three@0.185.1)(use-sync-external-store@1.6.0(react@19.2.8))':
+  '@react-three/uikit@1.0.77(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(react@19.2.8)(three@0.185.1)(use-sync-external-store@1.6.0(react@19.2.8))':
     dependencies:
       '@pmndrs/pointer-events': 6.6.30
-      '@pmndrs/uikit': 1.0.76(three@0.185.1)
+      '@pmndrs/uikit': 1.0.77(three@0.185.1)
       '@preact/signals-core': 1.14.4
       '@react-three/fiber': 9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
       react: 19.2.8
@@ -3525,7 +3531,7 @@ snapshots:
 
   '@xrift/sdk@0.2.0': {}
 
-  '@xrift/world-components@0.57.1(@react-three/drei@10.7.8(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(@types/three@0.185.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@react-three/rapier@2.2.0(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1))(@react-three/uikit@1.0.76(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(react@19.2.8)(three@0.185.1)(use-sync-external-store@1.6.0(react@19.2.8)))(hls.js@1.7.3)(react@19.2.8)(three@0.185.1)':
+  '@xrift/world-components@0.57.1(@react-three/drei@10.7.8(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(@types/three@0.185.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@react-three/rapier@2.2.0(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1))(@react-three/uikit@1.0.77(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(react@19.2.8)(three@0.185.1)(use-sync-external-store@1.6.0(react@19.2.8)))(hls.js@1.7.3)(react@19.2.8)(three@0.185.1)':
     dependencies:
       '@react-three/drei': 10.7.8(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(@types/three@0.185.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
       '@react-three/fiber': 9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1)
@@ -3533,7 +3539,7 @@ snapshots:
       three: 0.185.1
     optionalDependencies:
       '@react-three/rapier': 2.2.0(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(react@19.2.8)(three@0.185.1)
-      '@react-three/uikit': 1.0.76(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(react@19.2.8)(three@0.185.1)(use-sync-external-store@1.6.0(react@19.2.8))
+      '@react-three/uikit': 1.0.77(@react-three/fiber@9.7.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(three@0.185.1))(@types/react@19.2.18)(react@19.2.8)(three@0.185.1)(use-sync-external-store@1.6.0(react@19.2.8))
       hls.js: 1.7.3
 
   '@xyflow/react@12.11.6(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':

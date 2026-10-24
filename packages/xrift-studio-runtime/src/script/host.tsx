@@ -312,6 +312,8 @@ export type XriftScriptHostProps<
    */
   render?: ComponentType<ScriptRenderProps<Declaration>>;
   children?: ReactNode;
+  /** Edit preview evaluates Render without running the gameplay lifecycle. */
+  previewOnly?: boolean;
   onLog?: (entry: ScriptLogEntry) => void;
   onFailure?: (failure: ScriptFailure) => void;
 };
@@ -333,6 +335,7 @@ export function XriftScriptHost<
   resolveEntity,
   render: Render,
   children,
+  previewOnly = false,
   onLog,
   onFailure,
 }: XriftScriptHostProps<Declaration>) {
@@ -457,7 +460,7 @@ export function XriftScriptHost<
       (error) => fail("async", error),
     );
 
-    const graphEvents = createScriptGraphEvents(scene, () => active && !stopped, (error) => fail("event", error));
+    const graphEvents = createScriptGraphEvents(scene, () => !previewOnly && active && !stopped, (error) => fail("event", error));
     unsubscribes.add(graphEvents.dispose);
     const context: ScriptContext<Declaration> = {
       entity: { id: entityId, name: entityName, enabled: true },
@@ -491,7 +494,7 @@ export function XriftScriptHost<
           : null) as unknown as ScriptContext["object3d"] | null,
       getAssetUrl: (assetId) => resources.assets.url(assetId),
       on: (event, handler) => {
-        if (!active) return () => {};
+        if (!active || previewOnly) return () => {};
         const unsubscribeRoot = root.subscribe(
           event,
           handler,
@@ -510,7 +513,7 @@ export function XriftScriptHost<
         return unsubscribe;
       },
       emit: (event, payload) => {
-        if (active || disposing) root.emit(event, payload);
+        if (!previewOnly && (active || disposing)) root.emit(event, payload);
       },
       log: (...values) => {
         if (!active) return;
@@ -525,7 +528,7 @@ export function XriftScriptHost<
 
     let instance: ScriptInstance | void;
     try {
-      instance = script.start?.(context);
+      instance = previewOnly ? undefined : script.start?.(context);
     } catch (error) {
       fail("start", error);
       active = false;
@@ -590,6 +593,7 @@ export function XriftScriptHost<
       update: (delta) => {
         if (stopped) return;
         resources.update();
+        if (previewOnly) return;
         time.delta = delta;
         time.elapsed = (performance.now() - elapsedStart) / 1000;
         // Props are read fresh even when the Script has no update callback, so
@@ -627,6 +631,7 @@ export function XriftScriptHost<
     scene,
     camera,
     renderer,
+    previewOnly,
   ]);
 
   if (renderContext) {

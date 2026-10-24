@@ -94,9 +94,10 @@ export function ScriptComponentInspector({
 
       <label className="block">
         <span className="mb-1 block text-[11px] font-medium text-slate-600">
-          実行する場面
+          スクリプトを表示する場面
         </span>
         <select
+          aria-label="スクリプトを表示する場面"
           value={component.runIn}
           disabled={configurationDisabled}
           onChange={(event) =>
@@ -105,10 +106,11 @@ export function ScriptComponentInspector({
           className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs disabled:opacity-45"
         >
           <option value="play">動作確認のみ</option>
-          <option value="play-and-edit" disabled>
-            動作確認と編集中（未対応）
+          <option value="play-and-edit">
+            編集中の表示と動作確認
           </option>
         </select>
+        {component.runIn === "play-and-edit" ? <span className="mt-1 block text-[11px] leading-4 text-slate-500">編集中はモジュールとRenderを読み込みます。start・updateはPlayで実行します。</span> : null}
       </label>
 
       {contract === null ? (

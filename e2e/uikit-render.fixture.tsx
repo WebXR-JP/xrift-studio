@@ -9,7 +9,7 @@ export function uikitCamera() {
 }
 
 export function publishedRoundedTextReady(): boolean {
-  const root = [..._roots.values()].at(-1);
+  const root = [..._roots.values()].slice(-1)[0];
   let ready = false;
   root?.store.getState().scene.traverse(object => {
     const text = (object as unknown as { text?: { text: string; visible: boolean; textRenderInfo?: { blockBounds?: unknown } } }).text;

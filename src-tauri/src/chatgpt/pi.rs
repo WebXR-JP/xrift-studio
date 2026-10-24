@@ -234,6 +234,8 @@ pub async fn chatgpt_pi_run(
     let stdin = child.stdin.take().ok_or("制作の入力を開けませんでした")?;
     let stdout = child.stdout.take().ok_or("制作の出力を開けませんでした")?;
     let definitions = tools();
+    let preview_progress = on_progress.clone();
+    let _previews = crate::blender_modeling::subscribe_previews(&generation_id, Arc::new(move |event| { let _ = preview_progress.send(event); }));
     let (input_sender, inputs) = tokio::sync::mpsc::unbounded_channel();
     *state.7.lock().map_err(|_| "制作中の依頼を登録できませんでした")? = Some(ActiveInput {
         generation_id: generation_id.clone(), project_id: project_id.clone(), scene_id: scene_id.clone(),
