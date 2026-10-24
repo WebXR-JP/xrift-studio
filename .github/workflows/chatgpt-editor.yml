@@ -122,6 +122,8 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       - name: Verify Pi authoring through the real App and official Editor tools
         run: pnpm exec playwright test e2e/chatgpt-pi-authoring.spec.ts e2e/chatgpt-connection-reasoning.spec.ts e2e/model-assignment.spec.ts e2e/bootstrap-recovery.spec.ts e2e/canvas-event-lifecycle.spec.ts e2e/publish-readiness-race.spec.ts e2e/editor-ui-polish.spec.ts e2e/script-workspace.spec.ts e2e/uikit-and-entity-chat.spec.ts e2e/spatial-ui-authoring.spec.ts
+      - name: Verify UIKit in the minified desktop build
+        run: pnpm e2e:production
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -129,6 +131,8 @@ jobs:
           path: |
             test-results
             playwright-report
+            test-results-production
+            playwright-report-production
           if-no-files-found: ignore
   native:
     # Native checks use their own checkout and exclude generated app resources.

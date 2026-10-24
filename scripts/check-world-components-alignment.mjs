@@ -72,6 +72,10 @@ if (mismatches.length > 0) {
 const editorManifest = JSON.parse(read("package.json"));
 const compilerPackages = read("src/lib/visual-editor/compiler/runtime-packages.ts");
 const runtimeManifest = JSON.parse(read("packages/xrift-studio-runtime/package.json"));
+for (const name of ["@react-three/uikit", "@pmndrs/uikit"]) {
+  if (runtimeManifest.devDependencies[name] !== editorManifest.dependencies[name]) throw new Error(`${name} must match in Editor and runtime development`);
+}
+if (editorManifest.dependencies["@react-three/uikit"] !== editorManifest.dependencies["@pmndrs/uikit"]) throw new Error("UIKit React and core must share an exact version");
 for (const name of ["react", "react-dom"]) {
   const version = editorManifest.dependencies[name];
   if (!/^19\.2\.\d+$/.test(version) || !compilerPackages.includes(`"${name}@${version}"`)) {

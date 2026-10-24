@@ -1,7 +1,7 @@
 import { InMemoryCredentialStore, InMemoryModelsStore, Type, type TSchema, type ModelThinkingLevel } from "@earendil-works/pi-ai";
 import { createAgentSession, ModelRuntime, SettingsManager, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { openHistory, historySummary, recordFailedRun, type StoredSession } from "./history.js";
-import { createStudioResources, type InstalledPackage } from "./resources.js";
+import { createStudioResources } from "./resources.js";
 import { studioUserMessage } from "./conversation.js";
 import { observeSession } from "./events.js";
 import { japaneseWritingGuide } from "./writing-guide.js";
@@ -13,7 +13,7 @@ export type ToolSchema = { name: string; description: string; inputSchema: TSche
 export type PiInput = {
   token: string; model: string; reasoningEffort?: string; prompt: string; mode: PiMode;
   projectId: string; sceneId: string; context: string; tools: ToolSchema[];
-  session?: StoredSession; packages?: InstalledPackage[]; resourceRoot?: string;
+  session?: StoredSession; resourceRoot?: string;
 };
 export type HostCall = (tool: string, args: Record<string, unknown>) => Promise<Record<string, any>>;
 export type LiveInput = { attach: (handler: (message: PiLiveMessage) => Promise<void>) => () => void };
@@ -45,7 +45,7 @@ export async function runStudioAgent(input: PiInput, host: HostCall, emit: (even
   const settings = SettingsManager.inMemory();
   const context = JSON.parse(input.context) as PiContext;
   const appliedRequests = [input.prompt];
-  const resources = await createStudioResources(input.mode === "plan" ? [] : input.packages, input.resourceRoot, settings, prompt, [studioContextExtension(() => appliedRequests.join("\n\n追加指示：\n"), context)]);
+  const resources = await createStudioResources(input.resourceRoot, settings, prompt, [studioContextExtension(() => appliedRequests.join("\n\n追加指示：\n"), context)]);
   try {
     const manager = await openHistory(input.session);
     const preferences = context.options;
@@ -116,9 +116,6 @@ export async function runStudioAgent(input: PiInput, host: HostCall, emit: (even
         } }),
     ];
     const names = new Set([...studioTools, ...controls].map(tool => tool.name));
-    for (const extension of resources.loader.getExtensions().extensions) for (const name of extension.tools.keys()) {
-      if (names.has(name) || ["read", "write", "edit", "bash", "powershell"].includes(name)) throw new Error(`Studioの操作と同じ名前の操作は追加できません：${name}`);
-    }
     const { session } = await createAgentSession({ modelRuntime: runtime, model, resourceLoader: resources.loader, settingsManager: settings, sessionManager: manager,
       noTools: "builtin", tools: ["+codemode", "+tool_search"], excludeTools: ["read", "write", "edit", "bash", "powershell", "find", "grep", "ls"],
       thinkingLevel: (input.reasoningEffort === "none" ? "off" : input.reasoningEffort || "off") as ModelThinkingLevel, customTools: [...studioTools, ...controls] });
@@ -142,7 +139,7 @@ export async function runStudioAgent(input: PiInput, host: HostCall, emit: (even
     let accepting = true;
     try {
       check();
-      await session.bindExtensions({ mode: "print", onError: error => emit({ type: "progress", message: `追加機能でエラーが起きました：${error.error.slice(0, 500)}` }) });
+      await session.bindExtensions({ mode: "print", onError: error => emit({ type: "progress", message: `制作ツールでエラーが起きました：${error.error.slice(0, 500)}` }) });
       detach = live?.attach(async message => {
         const fingerprint = JSON.stringify(message);
         if (accepted.has(message.id)) {

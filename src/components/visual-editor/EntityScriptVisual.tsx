@@ -90,12 +90,14 @@ export function EntityScriptVisual({
     [component.entityReferences, scene],
   );
   if (entry?.script.renderMode === "wrap" && !asWrapper) return null;
-  if (!playing) return children ?? null;
+  if (!playing && component.runIn !== "play-and-edit") return children ?? null;
   if (!runtime || !entry) return null;
+  if (!playing && !entry.render) return children ?? null;
   return (
     <XriftScriptHost
       children={children}
       script={entry.script}
+      previewOnly={!playing}
       {...(entry.render ? { render: entry.render } : {})}
       properties={properties}
       entityId={entityId}

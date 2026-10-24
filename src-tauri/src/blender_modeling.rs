@@ -8,6 +8,9 @@ use std::sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex, OnceLock, Weak};
 use std::time::Duration;
 use tokio::process::Command;
 use tokio::sync::Notify;
+#[path = "blender_preview.rs"]
+mod preview;
+pub(crate) use preview::subscribe_previews;
 
 const RUNNER: &str = include_str!("blender_modeling.py");
 const CACHE: &str = ".cache/xrift-studio-blender";
@@ -635,6 +638,7 @@ async fn run_model(
     directory: &Path,
     model: &BlenderModelSpec,
     control: Option<&ModelGenerationControl>,
+    preview_callback: Option<Arc<dyn Fn(serde_json::Value) + Send + Sync>>,
 ) -> Result<BlenderModelResult, String> {
     check_generation(control)?;
     let source = directory.join("model.json");
@@ -694,12 +698,26 @@ async fn run_model(
         .env_remove("PYTHONHOME")
         .stdout(Stdio::from(stdout))
         .stderr(Stdio::from(stderr));
+    if preview_callback.is_some() { command.arg("--progress-previews"); }
     check_generation(control)?;
     let mut child = command
         .spawn()
         .map_err(|_| "Blenderをバックグラウンドで起動できませんでした")?;
-    let status = wait_model_process(&mut child, control).await?;
+    let mut previews = preview_callback.map(|callback| preview::PreviewStream::new(callback, model.name.clone()));
+    let status = {
+        let waiting = wait_model_process(&mut child, control);
+        tokio::pin!(waiting);
+        let mut interval = tokio::time::interval(Duration::from_secs(1));
+        loop {
+            tokio::select! {
+                biased;
+                status = &mut waiting => break status?,
+                _ = interval.tick(), if previews.is_some() => { if let Some(previews) = &mut previews { previews.poll(directory); } }
+            }
+        }
+    };
     check_generation(control)?;
+    if let Some(previews) = &mut previews { previews.poll(directory); }
     if !status.success() {
         let detail = fs::read_to_string(directory.join("blender.stderr.log")).unwrap_or_default();
         let detail: String = detail
@@ -738,6 +756,7 @@ pub(crate) async fn create_blender_model(
     generation_id: Option<String>,
 ) -> Result<BlenderModelResult, String> {
     validate_model_spec(&model)?;
+    let preview_callback = preview::callback_for(generation_id.as_deref());
     let generation = register_generation(generation_id)?;
     let control = generation.as_ref().map(|generation| generation.control.as_ref());
     check_generation(control)?;
@@ -749,7 +768,7 @@ pub(crate) async fn create_blender_model(
     };
     check_generation(control)?;
     let directory = task_directory(&root)?;
-    let result = run_model(&executable, &version, &directory, &model, control).await;
+    let result = run_model(&executable, &version, &directory, &model, control, preview_callback).await;
     if result.is_err() {
         let _ = cleanup_task(&root, &directory);
     }
@@ -1175,6 +1194,7 @@ mod tests {
             &directory,
             &model(),
             None,
+            None,
         )
         .await;
         assert!(result.is_err());
@@ -1330,6 +1350,41 @@ mod tests {
                 assert!(document["accessors"][positions]["count"].as_u64().unwrap() > 30);
             }
         }
+    }
+    #[tokio::test]
+    async fn installed_blender_streams_real_partial_and_final_captures_without_exporting_camera() {
+        if std::env::var("XRIFT_TEST_BLENDER").as_deref() != Ok("1") { return; }
+        let fixture = Fixture::new();
+        let frames = Arc::new(Mutex::new(Vec::new()));
+        let captured = frames.clone();
+        let id = format!("preview-{}", fixture.0.file_name().unwrap().to_string_lossy());
+        let _subscription = subscribe_previews(&id, Arc::new(move |event| { captured.lock().unwrap().push(event); }));
+        let mut spec = model();
+        spec.parts = ["box", "sphere", "cylinder", "cone", "torus"].into_iter().enumerate().map(|(index, shape)| {
+            let mut value = part(shape); value.position[0] = index as f64 * 1.5; value
+        }).collect();
+        let result = create_blender_model(fixture.0.to_string_lossy().into(), spec, Some(id)).await.unwrap();
+        let frames = frames.lock().unwrap();
+        assert!(!frames.iter().any(|event| event["type"] == "progress"), "Capture warning: {frames:?}");
+        let frames: Vec<_> = frames.iter().filter(|event| event["type"] == "preview").collect();
+        assert!(frames.len() >= 2, "Expected partial and final actual captures");
+        assert_eq!(frames.first().unwrap()["preview"]["completed"], 1);
+        assert_eq!(frames.last().unwrap()["preview"]["completed"], 5);
+        let output = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().join("node_modules/.cache/blender-progress");
+        fs::create_dir_all(&output).unwrap();
+        for (name, frame) in [("first.png", frames[0]), ("final.png", frames[frames.len() - 1])] {
+            use base64::Engine;
+            let bytes = base64::engine::general_purpose::STANDARD.decode(frame["preview"]["image"]["data"].as_str().unwrap()).unwrap();
+            assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n");
+            assert_eq!(u32::from_be_bytes(bytes[16..20].try_into().unwrap()), 480);
+            assert_eq!(u32::from_be_bytes(bytes[20..24].try_into().unwrap()), 320);
+            fs::write(output.join(name), bytes).unwrap();
+        }
+        assert_ne!(frames[0]["preview"]["image"], frames[frames.len() - 1]["preview"]["image"]);
+        let document = glb_json(Path::new(&result.path));
+        assert_eq!(document["meshes"].as_array().unwrap().len(), 5);
+        assert!(document.get("cameras").is_none());
+        assert!(!document["nodes"].as_array().unwrap().iter().any(|node| node["name"].as_str().is_some_and(|name| name.contains("progress camera"))));
     }
     #[tokio::test]
     async fn installed_blender_exports_real_geometry_pbr_and_studio_axes() {

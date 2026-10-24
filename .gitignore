@@ -13,6 +13,8 @@ dist-ssr
 preview-dist
 playwright-report
 test-results
+test-results-production
+playwright-report-production
 blob-report
 *.local
 src-tauri/binaries/

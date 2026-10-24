@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import type { ChatgptGeneration } from "../src/lib/visual-editor/chatgpt-generation";
 import type { XriftMcpEditorResponse } from "../src/lib/tauri";
 async function call(page: Page, tool: string, args: Record<string, unknown> = {}): Promise<XriftMcpEditorResponse> {
@@ -109,19 +110,19 @@ test("Pi history tree branches a conversation without reverting the actual Scene
   expect((await call(page, "list_entities")).result!.entities).toEqual(before);
 });
 
-test("Pi extension settings reject unpinned sources and persist a registered version", async ({ page }) => {
+test("authoring works with legacy extension settings without showing registration controls", async ({ page }) => {
   await ready(page);
+  await page.evaluate(() => localStorage.setItem("xrift-studio:pi-settings:v1", JSON.stringify({ version: 2, extensions: ["npm:example@1.2.3"] })));
   await call(page, "open_chatgpt_panel");
-  await page.getByText("追加機能の設定", { exact: true }).click();
-  await expect(page.getByRole("checkbox", { name: "制作・配置・確認を自動分担する" })).toHaveCount(0);
-  const input = page.getByRole("textbox", { name: "制作に使う追加機能" });
-  await input.fill("npm:example@latest");
-  await page.getByRole("button", { name: "追加機能の設定を保存" }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "npm:package@1.2.3" })).toBeVisible();
-  await input.fill("npm:example@1.2.3");
-  await page.getByRole("button", { name: "追加機能の設定を保存" }).click();
-  await expect(page.getByText("登録済み：1件", { exact: true })).toBeVisible();
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("xrift-studio:pi-settings:v1")!).extensions)).toEqual(["npm:example@1.2.3"]);
+  await expect(page.getByText("追加機能の設定", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "制作に使う追加機能" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "追加機能の設定を保存" })).toHaveCount(0);
+  await page.getByRole("textbox", { name: "ワールドへの依頼", exact: true }).fill("屋根のある家を作ってください");
+  await page.getByRole("button", { name: "依頼を送信", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptRequests.length)).toBe(1);
+  const id = await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptRequests[0].generationId);
+  await expect.poll(async () => (await job(page, id)).status).toBe("completed");
+  expect((await job(page, id)).options).not.toHaveProperty("extensions");
 });
 
 test("internal calls without native scope cannot read or edit the open Scene", async ({ page }) => {
@@ -133,4 +134,24 @@ test("internal calls without native scope cannot read or edit the open Scene", a
   });
   for (const response of responses) expect(response).toMatchObject({ ok: false, error: { code: "SCOPE_CHANGED" } });
   await expect(page.getByRole("tree", { name: "シーンのEntity階層" }).getByText("拒否するEntity", { exact: true })).toHaveCount(0);
+});
+
+test("Blender progress images appear in the owning chat without entering persisted history", async ({ page }) => {
+  await ready(page);
+  const data = (await readFile(new URL("./fixtures/blender-progress.png", import.meta.url))).toString("base64");
+  await page.evaluate(data => {
+    window.__XRIFT_RELEASE_E2E__!.piPreviewFrames = Array.from({ length: 5 }, (_, index) => ({
+      source: "blender", operationId: "model-preview-fixture", name: "Blenderの検証モデル", sequence: index + 1,
+      completed: index + 1, total: 5, capturedAt: Date.now() + index,
+      image: { mimeType: "image/png", data },
+    }));
+  }, data);
+  await call(page, "open_chatgpt_panel");
+  const id = await generate(page);
+  await expect.poll(async () => (await job(page, id)).status).toBe("completed");
+  const gallery = page.getByRole("region", { name: "Blenderの制作画像", exact: true });
+  await expect(gallery.getByRole("img")).toHaveCount(4);
+  await expect(gallery.getByRole("img", { name: "Blenderの検証モデルの形状プレビュー（5/5パーツ）", exact: true })).toBeVisible();
+  expect(await gallery.getByRole("img").evaluateAll(images => images.every(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth === 480))).toBe(true);
+  expect(await page.evaluate(() => JSON.stringify(Object.values(localStorage)))).not.toContain(data);
 });

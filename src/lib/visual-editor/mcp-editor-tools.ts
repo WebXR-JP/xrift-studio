@@ -4729,6 +4729,8 @@ function updateScriptComponent(
   argumentsValue: Record<string, unknown>,
 ): XriftMcpEditorToolOutcome {
   assertWritableContext(context, argumentsValue, { allowPlay: true });
+  const runIn = argumentsValue.runIn;
+  if (runIn !== undefined && runIn !== "play" && runIn !== "play-and-edit") invalidArgument("runIn", "play or play-and-edit");
   const entityId = requiredString(argumentsValue.entityId, "entityId");
   const componentId = requiredString(
     argumentsValue.componentId,
@@ -4751,11 +4753,12 @@ function updateScriptComponent(
   );
   if (
     argumentsValue.properties === undefined &&
+    runIn === undefined &&
     assetReferences === undefined &&
     entityReferences === undefined
   ) {
     invalidArgument(
-      "properties, assetReferences, entityReferences",
+      "properties, assetReferences, entityReferences, runIn",
       "at least one update",
     );
   }
@@ -4832,6 +4835,7 @@ function updateScriptComponent(
         !sameStringSet(component.entityReferences, entityReferences));
     return {
       ...component,
+      ...(runIn !== undefined ? { runIn: runIn as ScriptComponent["runIn"] } : {}),
       properties: {
         ...component.properties,
         ...(properties as typeof component.properties),
@@ -4870,6 +4874,7 @@ function updateScriptComponent(
       properties,
       assetReferences,
       entityReferences,
+      runIn,
       restartedDuringPlay:
         context.editorMode === "play" && referencesChanged,
       appliedOnNextFrame:

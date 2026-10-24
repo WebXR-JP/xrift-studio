@@ -26,7 +26,6 @@ import { useChatgptSessions } from "./components/visual-editor/useChatgptSession
 
 import { validateChatgptQuestionAnswers, type ChatgptQuestionAnswer } from "./lib/visual-editor/chatgpt-questions";
 import { branchChatgptSession, piSessionHistoryRoots, chatgptRevertBundle, chatgptSessionTranscript, createChatgptSession, upsertChatgptSessionTurn, type ChatgptRevertCheckpoint } from "./lib/visual-editor/chatgpt-sessions";
-import { parsePiPackages } from "./lib/visual-editor/pi-settings";
 import { ProjectLibrary } from "./components/ProjectLibrary";
 import { retryStudioItemLoading } from "./lib/visual-editor/xrift-item-loader";
 import { StudioLoading } from "./components/StudioLoading";
@@ -1384,7 +1383,7 @@ function App() {
             throw new XriftMcpEditorToolError("AUTHORING_WRITE_STOPPED", error instanceof Error ? error.message : String(error));
           }
           checkModelingSource();
-          const imported = await createBlenderModelAsset(before, spec, path, {}, { checkCurrent: checkModelingSource });
+          const imported = await createBlenderModelAsset(before, spec, path, {}, { generationId: request.internalGenerationId, checkCurrent: checkModelingSource });
           checkModelingSource();
           const latest = bridge.currentBundle();
           const nextBundle = rebaseChatgptStep(before, imported.bundle, latest);
@@ -1438,13 +1437,8 @@ function App() {
           throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "モデルと2000文字以内の依頼を指定してください");
         }
         const options = args.options ?? { models: true, materials: true, audio: true };
-        if (!options || typeof options !== "object" || Array.isArray(options) || Object.keys(options).some(key => !["models", "materials", "audio", "modelSource", "extensions"].includes(key)) || !["models", "materials", "audio"].every(key => typeof (options as Record<string, unknown>)[key] === "boolean") || ((options as ChatgptAssetOptions).modelSource !== undefined && !["auto", "blender", "store"].includes((options as ChatgptAssetOptions).modelSource!))) {
+        if (!options || typeof options !== "object" || Array.isArray(options) || Object.keys(options).some(key => !["models", "materials", "audio", "modelSource"].includes(key)) || !["models", "materials", "audio"].every(key => typeof (options as Record<string, unknown>)[key] === "boolean") || ((options as ChatgptAssetOptions).modelSource !== undefined && !["auto", "blender", "store"].includes((options as ChatgptAssetOptions).modelSource!))) {
           throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "optionsにはmodels・materials・audioのbooleanを指定してください");
-        }
-        const piOptions = options as ChatgptAssetOptions;
-        if (piOptions.extensions !== undefined) {
-          if (!Array.isArray(piOptions.extensions) || piOptions.extensions.some(source => typeof source !== "string")) throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "extensionsには固定バージョンの拡張を指定してください");
-          try { parsePiPackages(piOptions.extensions.join("\n")); } catch (error) { throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", error instanceof Error ? error.message : String(error)); }
         }
         if (args.mode !== undefined && args.mode !== "build" && args.mode !== "plan" && args.mode !== "goal") throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "modeにはbuild・plan・goalを指定してください");
         if (args.target !== undefined && args.target !== "current" && args.target !== "new") throw new XriftMcpEditorToolError("INVALID_ARGUMENTS", "targetにはcurrentまたはnewを指定してください");

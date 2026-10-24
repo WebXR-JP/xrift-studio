@@ -50,6 +50,13 @@ export default defineConfig(async ({ mode }) => ({
   //
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
+  // UIKit's R3F adapters register vanilla classes by constructor.name.
+  // Renaming several classes to the same short name makes Containers resolve
+  // to Text/Textarea and crashes the Canvas during mounting and cleanup.
+  build: { rolldownOptions: { output: { keepNames: true } } },
+  // Editor and workspace runtime must use the same provider contexts/classes,
+  // including when pnpm resolves an optional UIKit peer from another location.
+  resolve: { dedupe: ["react", "react-dom", "three", "@react-three/fiber", "@react-three/drei", "@react-three/rapier", "@react-three/uikit", "@pmndrs/uikit", "@xrift/world-components"] },
   // 2. tauri expects a fixed port, fail if that port is not available
   server: {
     port: 1420,

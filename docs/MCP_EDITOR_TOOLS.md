@@ -606,3 +606,7 @@ Playでは運転席をクリックして乗り、W/Sで前後移動、A/Dで旋�
 追加後は`get_entity_components`で構成、`capture_scene_view`でEdit中の見た目を確認し、`set_play_mode`で乗降と走行を確認する。既存の車は新規配置と別の編集対象であり、この操作だけでは差し替わらない。
 
 素材庫は`providerId: "shared-material-library"`で`search_external_assets`、`get_external_asset_options`、`install_external_asset`を使えます。`resolution`には取得したファイル名を指定し、`format`は省略します。GLBはModel、PNG・マスクはTextureです。未指定のライセンスを許諾として扱わないでください。
+
+### Scriptの編集プレビュー
+
+`update_script_component`の`runIn`は`play`または`play-and-edit`です。後者は編集画面でもnamed `Render`を表示します。モジュールと`Render`は編集時にも評価され、`start`・`update`はPlay中に実行します。UIKit Panelテンプレートは`play-and-edit`で作成します。

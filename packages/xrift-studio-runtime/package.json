@@ -59,6 +59,8 @@
   "devDependencies": {
     "@react-three/fiber": "9.7.0",
     "@react-three/rapier": "2.2.0",
+    "@react-three/uikit": "1.0.77",
+    "@pmndrs/uikit": "1.0.77",
     "@xrift/world-components": "0.57.1",
     "@types/react": "~19.2.18",
     "@types/three": "0.185.1",

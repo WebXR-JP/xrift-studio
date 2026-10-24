@@ -31,6 +31,7 @@ export type ReleaseE2EState = {
   chatgptCreateWaiting: boolean;
   chatgptSavedSteps: Array<{ projectPath: string; projectId: string; entityNames: string[] }>;
   piGate: boolean;
+  piPreviewFrames?: import("../../packages/studio-pi/src/protocol").PiModelPreview[];
   piWaiting: boolean;
   piScript: { tool: string; arguments: Record<string, unknown> }[] | null;
   piError: string | null;
@@ -239,6 +240,10 @@ function emitShellEvent(
 }
 
 export function installReleaseE2EMock(): void {
+  Object.assign(window, {
+    __XRIFT_RELEASE_E2E_CALL__: callReleaseE2EMcp,
+    __XRIFT_RELEASE_E2E_GLYPHS__: async () => (await import("./production-render-probe")).uikitGlyphCount(),
+  });
   // Tauri 2 checks this flag, independently of the mocked IPC internals.
   Object.defineProperty(window, "isTauri", { value: true, configurable: true });
   const searchParams = new URLSearchParams(window.location.search);
@@ -541,6 +546,7 @@ export function installReleaseE2EMock(): void {
             const progress = (message: Record<string, unknown>) => {
               if (channelId !== undefined) window.__TAURI_INTERNALS__?.runCallback?.(channelId, { index: index++, message: { type: "progress", ...message } });
             };
+            for (const preview of state.piPreviewFrames ?? []) progress({ type: "preview", preview });
             const steps = state.piScript ?? [
               { tool: "apply_r3f_scene", arguments: { name: "Piの家", source: 'export default function World(){return <group name="Piの家"><mesh key="body" name="家の本体" position={[0,1,0]}><boxGeometry args={[3,2,3]}/><meshStandardMaterial color="#b9986b"/></mesh><mesh key="roof" name="屋根" position={[0,2.6,0]} rotation={[0,Math.PI/4,0]}><boxGeometry args={[3.5,0.25,3.5]}/><meshStandardMaterial color="#704b40"/></mesh></group>}' } },
               { tool: "save_scene", arguments: {} },

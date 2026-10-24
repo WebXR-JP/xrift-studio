@@ -2161,7 +2161,7 @@ pub(crate) fn tool_definitions() -> Value {
                 "prompt": { "type": "string", "minLength": 1, "maxLength": 2000 },
                 "target": { "type": "string", "enum": ["current", "new"], "default": "current" },
                 "mode": { "type": "string", "enum": ["build", "plan", "goal"], "default": "build" },
-                "options": { "type": "object", "properties": { "models": { "type": "boolean" }, "materials": { "type": "boolean" }, "audio": { "type": "boolean" }, "modelSource": { "type": "string", "enum": ["auto", "blender", "store"] }, "extensions": { "type": "array", "maxItems": 8, "items": { "type": "string", "maxLength": 240 }, "description": "Explicitly trusted Pi npm packages, pinned as npm:package@1.2.3. Automatically installed without lifecycle scripts for build/goal. Their code has Studio's OS permissions. Not loaded in Plan." } }, "required": ["models", "materials", "audio"], "additionalProperties": false }
+                "options": { "type": "object", "properties": { "models": { "type": "boolean" }, "materials": { "type": "boolean" }, "audio": { "type": "boolean" }, "modelSource": { "type": "string", "enum": ["auto", "blender", "store"] } }, "required": ["models", "materials", "audio"], "additionalProperties": false }
             }, "required": ["projectId", "sceneId", "expectedRevision", "model", "prompt"], "additionalProperties": false }
         },
         {
@@ -4044,7 +4044,7 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "update_script_component",
-            "description": "Update Script Component property values and replace the declared Asset or Entity reference allowlists used by ctx.assets and ctx.find. During Play, property-only changes reach the same Script instance on the next frame; reference changes restart only the affected Entity.",
+            "description": "Update Script Component values, reference allowlists, or runIn. play-and-edit previews Render in Edit without start/update; Play runs the normal lifecycle. During Play, property-only changes reach the same instance on the next frame; reference changes restart only the affected Entity.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -4054,6 +4054,7 @@ pub(crate) fn tool_definitions() -> Value {
                     "entityId": { "type": "string" },
                     "componentId": { "type": "string" },
                     "properties": { "type": "object" },
+                    "runIn": { "type": "string", "enum": ["play", "play-and-edit"], "description": "Use play-and-edit for visible Render previews while editing. Script modules are evaluated; start and update run only in Play." },
                     "assetReferences": {
                         "type": "array",
                         "items": { "type": "string", "minLength": 1 },

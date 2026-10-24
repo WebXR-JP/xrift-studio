@@ -142,9 +142,6 @@ function normalizeTurn(value: unknown, interrupted: boolean): ChatgptGeneration 
       return { id: identifier(raw.id), parentId: raw.parentId === null ? null : identifier(raw.parentId), label: text(raw.label, 80), canBranch: raw.canBranch };
     }) };
   }
-  if (isRecord(value.options)) {
-    if (Array.isArray(value.options.extensions) && value.options.extensions.length <= 8 && value.options.extensions.every(source => typeof source === "string" && source.length <= 240)) turn.options.extensions = value.options.extensions as string[];
-  }
   for (const key of ["sourceSceneId", "projectId", "sceneId", "sessionId"] as const) if (value[key] !== undefined) turn[key] = identifier(value[key]);
   if (progress.projectId !== undefined) turn.progress.projectId = identifier(progress.projectId);
   if (value.mode === "build" || value.mode === "plan" || value.mode === "goal") turn.mode = value.mode;

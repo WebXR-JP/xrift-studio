@@ -22,6 +22,8 @@ export type PiRunEvent = {
 
 export type PiAuthoringRun = {
   generationId: string;
+  /** Live Blender captures; deliberately excluded from persisted chat history. */
+  modelPreviews?: import("../../../packages/studio-pi/src/protocol").PiModelPreview[];
   completionVerified?: boolean;
   liveMessages?: (import("../../../packages/studio-pi/src/protocol").PiLiveMessage & { state: "queued" | "applied" | "unapplied" })[];
   assistantText?: string;

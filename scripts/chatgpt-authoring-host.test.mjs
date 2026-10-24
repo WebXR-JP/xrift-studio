@@ -64,6 +64,27 @@ function fixture(configuration = {}) {
 test.afterEach(async () => { for (const item of all) await Promise.all([...item.host.piRunsRef.current.values()].map(run => run.stop())); all.clear(); });
 test.after(() => server.close());
 
+test("Blender captures update only the owning live run, stay bounded and do not fill saved chat history", async () => {
+  const data = image.split(',')[1];
+  const current = fixture({ pi(_request, emit, current) {
+    for (let sequence = 1; sequence <= 6; sequence++) {
+      const preview = { source: 'blender', operationId: 'model-fixture', name: '実写ではないテスト用の形状', sequence, completed: sequence, total: 6, capturedAt: 1_790_000_000_000 + sequence, image: { mimeType: 'image/png', data } };
+      emit({ type: 'preview', preview });
+      emit({ type: 'preview', preview });
+    }
+    assert.deepEqual(current.job.modelPreviews.map(frame => frame.sequence), [3, 4, 5, 6]);
+    emit({ type: 'preview', preview: { ...current.job.modelPreviews[0], capturedAt: Number.MAX_VALUE } });
+    assert.equal(current.job.modelPreviews.length, 4);
+    current.host.chatgptControlsRef.current.get('host-generation').cancelled = true;
+    emit({ type: 'preview', preview: { ...current.job.modelPreviews[0], sequence: 7 } });
+    assert.equal(current.job.modelPreviews.at(-1).sequence, 6);
+    throw new Error('制作を停止しました');
+  } });
+  await assert.rejects(current.run(), /停止/);
+  assert.equal(current.host.chatgptSessionsRef.current[0].turns[0].modelPreviews, undefined);
+  assert.equal(current.job.progress.completed, 0);
+});
+
 test("a normal reply stays neutral and preserves an unconsumed additional instruction", async () => {
   const current = fixture({ pi(_request, emit) {
     emit({ type: "input", message: { id: "extra-one", prompt: "入口を広く", delivery: "steer" }, state: "queued" });

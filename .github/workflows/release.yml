@@ -149,6 +149,9 @@ jobs:
       - name: Check spatial UI and Entity chat before upload
         run: pnpm exec playwright test e2e/uikit-and-entity-chat.spec.ts e2e/spatial-ui-authoring.spec.ts e2e/runtime-shell-rounded-text.spec.ts
 
+      - name: Check UIKit in the minified desktop build
+        run: pnpm e2e:production
+
       - name: Check browser publication, credentials and built runtime rendering
         run: pnpm exec playwright test e2e/browser-item-publish.spec.ts e2e/browser-api-key.spec.ts e2e/browser-mtoon-shell.spec.ts e2e/runtime-shell-audio.spec.ts
 
@@ -163,6 +166,8 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            playwright-report-production/
+            test-results-production/
           if-no-files-found: ignore
           retention-days: 14
 

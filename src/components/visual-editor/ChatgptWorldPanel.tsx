@@ -23,8 +23,8 @@ import { ChatgptMaterialControls } from "./ChatgptMaterialControls";
 import { ChatgptSceneControls, type ChatgptSceneSettingsPatch } from "./ChatgptSceneControls";
 import type { SceneSettings } from "../../lib/visual-editor/scene-settings";
 import { preferredChatgptReasoningEffort } from "../../lib/visual-editor/chatgpt-reasoning";
-import { PiFeatureSettings, usePiFeatureSettings } from "./PiFeatureSettings";
 import { PiRunDetails } from "./PiRunDetails";
+import { ChatgptModelPreviews } from "./ChatgptModelPreviews";
 import { ChatgptAdditionalMessages } from "./ChatgptAdditionalMessages";
 import { ENTITY_REMAKE_BRIEF_MARKER, type ChatgptComposerRequest } from "../../lib/visual-editor/chatgpt-composer-request";
 
@@ -79,7 +79,6 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
   const [model, setModel] = useState(generation?.model ?? "");
   const [reasoningEffort, setReasoningEffort] = useState<string | null>(generation?.reasoningEffort ?? null);
   const [modelSource, setModelSource] = useState<NonNullable<ChatgptAssetOptions["modelSource"]>>("auto");
-  const piFeatures = usePiFeatureSettings();
   const [blenderStatus, setBlenderStatus] = useState<BlenderStatus | null>(null);
   const [blenderStatusError, setBlenderStatusError] = useState(false);
   const [blenderLoading, setBlenderLoading] = useState(true);
@@ -249,7 +248,7 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
       const questions = generation?.status === "planned" && generation.plan?.questions?.length ? element.querySelector<HTMLElement>("[data-chatgpt-question-form]") : null;
       element.scrollTop = questions ? element.scrollTop + questions.getBoundingClientRect().top - element.getBoundingClientRect().top : element.scrollHeight;
     }
-  }, [draftScope, generation?.generationId, generation?.status, generation?.liveMessages, generation?.assistantText, generation?.progress.message, generation?.progress.recentEvents.length, error, statusError, copyNotice, queue.items.length, connection?.signedIn]);
+  }, [draftScope, generation?.generationId, generation?.status, generation?.liveMessages, generation?.assistantText, generation?.modelPreviews, generation?.progress.message, generation?.progress.recentEvents.length, error, statusError, copyNotice, queue.items.length, connection?.signedIn]);
   const generating = busy === "generate" || generation?.status === "running" || queue.dispatching;
   const pending = busy !== null || Boolean(connection?.connecting || connection?.restoring) || generating || externallyBusy;
   const waitingRequests = queue.items.filter(request => request.status !== "running");
@@ -323,7 +322,7 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
       finally { liveSendingRef.current = false; if (mounted.current) setLiveSending(false); }
       return;
     }
-    queue.enqueue({ id: createDocumentId("chatgpt-request"), model, prompt: parsed.prompt, attachedEntityIds: [...attachedEntityIds], attachedMaterialIds: [...attachedMaterialIds], options: { ...CHATGPT_ALL_ASSETS, modelSource, ...piFeatures.settings }, mode: parsed.mode, reasoningEffort: effectiveEffort || undefined });
+    queue.enqueue({ id: createDocumentId("chatgpt-request"), model, prompt: parsed.prompt, attachedEntityIds: [...attachedEntityIds], attachedMaterialIds: [...attachedMaterialIds], options: { ...CHATGPT_ALL_ASSETS, modelSource }, mode: parsed.mode, reasoningEffort: effectiveEffort || undefined });
     setPrompt(""); setAttachedEntityIds([]); setAttachedMaterialIds([]); setError(null);
   };
   const attach = (entityIds: string[], materialIds: string[] = []) => {
@@ -387,7 +386,6 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
         >{option.label}</button>)}
     </div> : null}
     {sessionActions ? <ChatgptSessionBar {...sessionActions} disabled={pending} /> : null}
-    <PiFeatureSettings settings={piFeatures.settings} onSave={piFeatures.save} error={piFeatures.error} disabled={pending} />
     {copyNotice ? <p role="status" className="shrink-0 select-text text-[11px] leading-4 text-slate-600">{copyNotice}</p> : null}
     {historyError ? <p role="alert" className="shrink-0 text-[11px] leading-4 text-amber-800">{historyError}</p> : null}
     <div ref={outputElement} role="region" aria-label="コピーできる制作出力" tabIndex={0} className="flex min-h-24 flex-1 select-text flex-col gap-3 [&_button]:select-text [&_summary]:select-text"
@@ -443,6 +441,7 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
           <ChatgptAdditionalMessages messages={generation.liveMessages} onReuse={awaitingQuestions ? undefined : reuseAdditionalMessage} />
           {generation.completionVerified === false && generation.status === "completed" ? <p className="text-[11px] text-slate-500">応答済み</p> : null}
           <PiRunDetails text={generation.assistantText} usage={generation.usage} running={generation.status === "running"} />
+          <ChatgptModelPreviews previews={generation.modelPreviews} />
           {generation.cancelling || !chatgptProgressIsRecorded(generation.progress.message, generation.progress.recentEvents) ? <p role="status" aria-live="polite" className="break-words leading-5 text-slate-700">{generation.cancelling ? "現在の処理を安全に終えて停止しています…" : formatChatgptProgressMessage(generation.progress.message)}</p> : null}
           {generation.clarifications?.length ? <details><summary className="cursor-pointer text-[11px] text-slate-500">確認した内容</summary><dl className="mt-2 space-y-2 text-[11px]">{generation.clarifications.map((item, index) => <div key={index}><dt className="break-words text-slate-500">{item.question}</dt><dd className="break-words text-slate-700">{item.answer}</dd></div>)}</dl></details> : null}
 
