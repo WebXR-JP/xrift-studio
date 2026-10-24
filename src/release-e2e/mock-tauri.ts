@@ -1,6 +1,5 @@
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import { emit } from "@tauri-apps/api/event";
-import { uikitGlyphCount } from "../../e2e/uikit-render.fixture";
 import type {
   ChatgptConnection,
   ChatgptAssetOptions,
@@ -241,7 +240,10 @@ function emitShellEvent(
 }
 
 export function installReleaseE2EMock(): void {
-  Object.assign(window, { __XRIFT_RELEASE_E2E_CALL__: callReleaseE2EMcp, __XRIFT_RELEASE_E2E_GLYPHS__: uikitGlyphCount });
+  Object.assign(window, {
+    __XRIFT_RELEASE_E2E_CALL__: callReleaseE2EMcp,
+    __XRIFT_RELEASE_E2E_GLYPHS__: async () => (await import("./production-render-probe")).uikitGlyphCount(),
+  });
   // Tauri 2 checks this flag, independently of the mocked IPC internals.
   Object.defineProperty(window, "isTauri", { value: true, configurable: true });
   const searchParams = new URLSearchParams(window.location.search);
