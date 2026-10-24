@@ -2241,9 +2241,9 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "get_world_authoring_guide",
-            "description": "Read the shared production contract and a concise route directory (overview, default), or load only the selected r3f, assets or blender procedure. Use the route that can express the intended form; do not load every procedure before making progress. Read-only, needs an open Editor but no project/scene scope arguments. R3F supports complete editable static source via apply_r3f_scene; assets covers reuse and targeted discovery; Blender covers complex bespoke geometry.",
+            "description": "Read the shared production contract and concise route/design directories (overview, default), or load only the needed topic. Routes: r3f for editable static source via apply_r3f_scene, assets for reuse and targeted discovery, blender for complex bespoke geometry. Design: spatial-ui for VR/WebGL card layout, readable typography and a complete reusable source example; environment for Skybox, IBL, lighting and rendering cost. Use spatial-ui for tutorials, exhibitions, signs or menus and environment when composing surroundings. Do not load every topic before making progress. Read-only, needs an open Editor but no project/scene scope arguments.",
             "inputSchema": { "type": "object", "properties": {
-                "topic": { "type": "string", "enum": ["overview", "r3f", "assets", "blender"] }
+                "topic": { "type": "string", "enum": ["overview", "r3f", "assets", "blender", "spatial-ui", "environment"] }
             }, "additionalProperties": false }
         },
         {
@@ -3363,6 +3363,7 @@ pub(crate) fn tool_definitions() -> Value {
                     "ambient": {
                         "type": "object",
                         "properties": {
+                            "enabled": { "type": "boolean" },
                             "color": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
                             "intensity": { "type": "number", "minimum": 0 }
                         },
@@ -4751,16 +4752,17 @@ mod tests {
     #[test]
     fn world_creation_policy_replaces_scaffolding_without_discarding_authored_work() {
         let instructions = mcp_authoring_instructions();
-        for expected in ["whole place", "without inventing a feature", "Never infer disposable content by a name or ID alone",
-            "starterEntityIds", "Preserve authored content outside the requested scope", "first saved result", "Finish as soon as the criteria pass", "existing run budget unchanged"] {
+        for expected in ["ワールド全体", "初期形状を残すためだけに新しい機能を作らない", "Never infer disposable content by a name or ID alone",
+            "starterEntityIds", "依頼の範囲外の制作物と作者の手動編集は保つ", "最初の保存時点", "完成条件を満たしたら作業を終える", "existing run budget unchanged"] {
             assert!(instructions.contains(expected), "missing creation policy: {expected}");
         }
         assert!(instructions.contains("target=current selects the project to work in"));
-        assert!(instructions.contains("a floor or one isolated prop is not a completed place"));
+        assert!(instructions.contains("床や小物1点だけでは、場所全体を作り終えたことにはならない"));
         assert!(instructions.contains("get_world_authoring_guide(topic:r3f)"));
-        assert!(!instructions.contains("Geometry args specify dimensions"), "route details load only when selected");
-        assert!(instructions.len() < 6500, "MCP core must stay bounded: {}", instructions.len());
-        eprintln!("MCP instructions UTF-8 bytes: {} (before: 10842)", instructions.len());
+        assert!(!instructions.contains("UTF-8で48,000バイト"), "route details load only when selected");
+        let characters = instructions.chars().count();
+        assert!(characters < 6500, "MCP core must stay bounded: {characters} characters");
+        eprintln!("MCP instructions: {characters} characters, {} UTF-8 bytes", instructions.len());
     }
 
     #[test]
@@ -4768,8 +4770,9 @@ mod tests {
         let tools = tool_definitions();
         let find = |name: &str| tools.as_array().unwrap().iter().find(|tool| tool["name"] == name).unwrap();
         let guide = find("get_world_authoring_guide");
-        assert_eq!(guide["inputSchema"]["properties"]["topic"]["enum"], json!(["overview", "r3f", "assets", "blender"]));
+        assert_eq!(guide["inputSchema"]["properties"]["topic"]["enum"], json!(["overview", "r3f", "assets", "blender", "spatial-ui", "environment"]));
         assert!(guide["inputSchema"]["properties"].get("projectId").is_none());
+        assert_eq!(find("update_scene_settings")["inputSchema"]["properties"]["ambient"]["properties"]["enabled"]["type"], "boolean");
         let apply = find("apply_r3f_scene");
         assert_eq!(apply["inputSchema"]["required"], json!(["projectId", "sceneId", "expectedRevision", "name", "source"]));
         assert_eq!(apply["inputSchema"]["properties"]["entityId"]["type"], json!(["string", "null"]));

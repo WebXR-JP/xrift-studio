@@ -1,4 +1,10 @@
 import runtimePackageManifest from "../../../../packages/xrift-studio-runtime/package.json";
+import studioPackageManifest from "../../../../package.json";
+
+export const COMPILER_UIKIT_PACKAGE_SPECS = [
+  `@react-three/uikit@${studioPackageManifest.dependencies["@react-three/uikit"]}`,
+  `@pmndrs/uikit@${studioPackageManifest.dependencies["@pmndrs/uikit"]}`,
+];
 
 /**
  * The `@xrift/world-components` version a Classic output is built against.

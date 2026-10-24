@@ -438,6 +438,7 @@ export function installReleaseE2EMock(): void {
           if (previous !== undefined && previous !== content) throw new Error("Immutable authoring context already exists");
           files.set(relativePath, content); projectFiles.set(projectPath, files); return null;
         }
+        case "read_script_source":
         case "read_text_file": {
           const projectPath = stringArg(payload, "projectPath");
           const relativePath = toPosixPath(stringArg(payload, "rel"));

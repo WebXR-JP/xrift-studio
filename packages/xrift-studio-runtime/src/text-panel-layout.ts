@@ -28,6 +28,8 @@ export type XriftTextBackground = {
   /** Gap behind the glyphs, so the plate cannot z-fight the text. */
   offset: number;
   doubleSided: boolean;
+  /** Corner radius in local metres; omitted keeps legacy square plates. */
+  borderRadius?: number;
 };
 
 export type XriftTextAnchorX = "left" | "center" | "right";

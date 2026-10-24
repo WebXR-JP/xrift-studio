@@ -72,6 +72,14 @@ on:
       - 'src/lib/visual-editor/editor-session.ts'
       - 'src/lib/visual-editor/asset-manifest.ts'
       - 'scripts/chatgpt-*.test.mjs'
+      - 'scripts/uikit-authoring.test.mjs'
+      - 'scripts/world-design-guide.test.mjs'
+      - 'scripts/component-code-authoring.test.mjs'
+      - 'e2e/uikit-*'
+      - 'e2e/prepare-uikit-export.ts'
+      - 'e2e/spatial-ui-authoring.spec.ts'
+      - 'src/lib/visual-editor/world-authoring-guide.json'
+      - 'scripts/generate-authoring-skill.mjs'
       - 'scripts/glb-import-size.test.mjs'
       - 'scripts/glb-store-size.test.mjs'
       - 'scripts/model-assignment.test.mjs'
@@ -107,11 +115,13 @@ jobs:
       - run: pnpm e2e:typecheck
       - run: pnpm mcp:tool-names --check
       - run: node --test scripts/chatgpt-generation.test.mjs scripts/chatgpt-sessions.test.mjs scripts/chatgpt-live-scene.test.mjs scripts/chatgpt-request-queue.test.mjs scripts/chatgpt-modeling.test.mjs scripts/glb-import-size.test.mjs scripts/glb-store-size.test.mjs scripts/model-assignment.test.mjs scripts/external-store-merge.test.mjs scripts/mcp-chatgpt-contract.test.mjs scripts/guide.test.mjs scripts/vite-guide.test.mjs
+      - run: node scripts/sync-agent-skills.mjs --check
+      - run: node --test scripts/uikit-authoring.test.mjs scripts/world-design-guide.test.mjs scripts/component-code-authoring.test.mjs
       - run: pnpm pi:test
       - run: node --test scripts/chatgpt-authoring-host.test.mjs
       - run: pnpm exec playwright install --with-deps chromium
       - name: Verify Pi authoring through the real App and official Editor tools
-        run: pnpm exec playwright test e2e/chatgpt-pi-authoring.spec.ts e2e/chatgpt-connection-reasoning.spec.ts e2e/model-assignment.spec.ts e2e/bootstrap-recovery.spec.ts e2e/canvas-event-lifecycle.spec.ts e2e/publish-readiness-race.spec.ts e2e/editor-ui-polish.spec.ts e2e/script-workspace.spec.ts
+        run: pnpm exec playwright test e2e/chatgpt-pi-authoring.spec.ts e2e/chatgpt-connection-reasoning.spec.ts e2e/model-assignment.spec.ts e2e/bootstrap-recovery.spec.ts e2e/canvas-event-lifecycle.spec.ts e2e/publish-readiness-race.spec.ts e2e/editor-ui-polish.spec.ts e2e/script-workspace.spec.ts e2e/uikit-and-entity-chat.spec.ts e2e/spatial-ui-authoring.spec.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:

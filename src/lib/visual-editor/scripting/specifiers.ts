@@ -16,6 +16,8 @@ export const SCRIPT_MODULE_SPECIFIERS = [
   "react/jsx-runtime",
   "@react-three/fiber",
   "@react-three/drei",
+  "@react-three/uikit",
+  "@pmndrs/uikit",
   "@react-three/rapier",
   "@xrift/world-components",
 ] as const;

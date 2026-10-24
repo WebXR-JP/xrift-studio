@@ -10,7 +10,7 @@
 export const SCRIPT_TRUST_KEY_VERSION = 1 as const;
 export const SCRIPT_TRUST_ALLOW_REMOTE_MODULES = false as const;
 /** Bump whenever the set or resolution rules of allowed module specifiers changes. */
-export const SCRIPT_MODULE_POLICY_VERSION = "1" as const;
+export const SCRIPT_MODULE_POLICY_VERSION = "2" as const;
 
 export const SCRIPT_PROVENANCE_KINDS = [
   "studio-template",

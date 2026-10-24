@@ -1,5 +1,6 @@
 import type { ChatgptAssetOptions } from "../../lib/tauri";
 import type { ChatgptRequestScope } from "../../lib/visual-editor/chatgpt-request-queue";
+import { entityRemakePrompt, type ChatgptComposerRequest } from "../../lib/visual-editor/chatgpt-composer-request";
 import { ChatgptWorldPanel } from "./ChatgptWorldPanel";
 import type { ChatgptSceneSettingsPatch } from "./ChatgptSceneControls";
 import type { ChatgptSessionActions } from "./ChatgptSessionBar";
@@ -1489,6 +1490,7 @@ export function VisualEditorPrototype({
   const scriptTabActive = activeEditorTab === SCRIPT_TAB_ID;
   const [chatgptTabVisited, setChatgptTabVisited] = useState(false);
   const [chatgptTabOpen, setChatgptTabOpen] = useState(false);
+  const [chatgptComposerRequest, setChatgptComposerRequest] = useState<ChatgptComposerRequest | null>(null);
   const [chatgptExpanded, setChatgptExpanded] = useState(false);
   const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
   const sceneChatgptSessions = chatgptSessionActions?.sessions.filter(session => session.projectId === bundle.project.projectId && session.sceneId === bundle.scene.sceneId);
@@ -4453,9 +4455,11 @@ export function VisualEditorPrototype({
                   [
                     isAudioImport
                       ? "audioAssetId"
-                      : isModelImport
-                        ? "modelAssetId"
-                        : "textureAssetId"
+                      : isFontImport
+                        ? "fontAssetId"
+                        : isModelImport
+                          ? "modelAssetId"
+                          : "textureAssetId"
                   ]: duplicate.id,
                   name: duplicate.name,
                   duplicate: true,
@@ -4499,6 +4503,7 @@ export function VisualEditorPrototype({
             if (
               !imported ||
               (imported.kind !== "audio" &&
+                imported.kind !== "font" &&
                 imported.kind !== "model" &&
                 imported.kind !== "texture") ||
               imported.kind !== importedKind
@@ -4551,9 +4556,11 @@ export function VisualEditorPrototype({
                 [
                   isAudioImport
                     ? "audioAssetId"
-                    : isModelImport
-                      ? "modelAssetId"
-                      : "textureAssetId"
+                    : isFontImport
+                      ? "fontAssetId"
+                      : isModelImport
+                        ? "modelAssetId"
+                        : "textureAssetId"
                 ]: imported.id,
                 name: imported.name,
                 duplicate: false,
@@ -4563,7 +4570,7 @@ export function VisualEditorPrototype({
                   imported.source.kind === "project"
                     ? imported.source.relativePath
                     : null,
-                ...(imported.kind === "audio"
+                ...(imported.kind === "audio" || imported.kind === "font"
                   ? { importMetadata: imported.importMetadata }
                   : {
                       importSettings: imported.importSettings,
@@ -11769,6 +11776,14 @@ export function VisualEditorPrototype({
     return entity ? { entityId: entity.id, name: entity.name } : null;
   })();
 
+  const sendEntityToChat = (entityId: string, mode: "attach" | "remake") => {
+    const entity = bundleRef.current.scene.entities[entityId];
+    if (!entity || renderedEditorMode === "play" || importBusy) return;
+    if (mode === "remake" && entity.modelNode) return;
+    setChatgptComposerRequest({ id: crypto.randomUUID(), sceneScope: `${bundle.project.projectId}:${bundle.scene.sceneId}`, entityId,
+      ...(mode === "remake" ? { prompt: entityRemakePrompt(entity), modelSource: "auto" as const } : {}) });
+    setViewportMaximized(false); setChatgptTabVisited(true); setChatgptTabOpen(true); setActiveEditorTab(CHATGPT_WORLD_TAB_ID); setTabletPanel("inspector");
+  };
   const viewportEditorTabs: { id: string; label: string; icon: "graph" | "script" | "ai"; closable: boolean }[] = interactivityEditorAsset
     ? [
         {
@@ -12126,6 +12141,7 @@ export function VisualEditorPrototype({
             onArrangeTerrains={handleArrangeTerrains}
             onCommand={executeCommand}
             clipboardAvailable={clipboardAvailable || Boolean(getHierarchyClipboard())}
+            onSendToChat={onChatgptGenerate && projectKind === "world" ? sendEntityToChat : undefined}
             onExportHierarchy={hierarchyTransfer.openExport}
             pasteShortcut={shortcutLabel("edit.paste")}
             shortcutLabel={shortcutLabel}
@@ -12216,6 +12232,7 @@ export function VisualEditorPrototype({
               handlePlaceSceneAsset(assetId, { position })
             }
             onEditCommand={executeCommand}
+            onSendToChat={onChatgptGenerate && projectKind === "world" ? sendEntityToChat : undefined}
             clipboardAvailable={clipboardAvailable || Boolean(getHierarchyClipboard())}
             onExportHierarchy={hierarchyTransfer.openExport}
             editDisabledReason={importBusy ? "素材の取り込みが終わるまでお待ちください" : null}
@@ -12319,6 +12336,8 @@ export function VisualEditorPrototype({
           {chatgptTabVisited && onChatgptGenerate ? <section aria-label="ChatGPTの制作チャット"
             className={chatgptDockActive ? `flex min-h-0 ${phone || chatgptExpandedActive ? "flex-1" : "basis-[min(76%,34rem)] shrink-0"} flex-col overflow-hidden border-l border-b border-editor-border bg-editor-surface p-3 text-xs text-slate-600` : "hidden"}>
             <ChatgptWorldPanel onGenerate={onChatgptGenerate} generation={sceneChatgptGeneration}
+              composerRequest={chatgptComposerRequest}
+              onComposerRequestHandled={id => setChatgptComposerRequest(current => current?.id === id ? null : current)}
               expanded={chatgptExpanded} onExpandedChange={phone ? undefined : setChatgptExpanded}
               entityReferences={chatgptEntityReferences} assets={bundle.assets} projectPath={projectPath}
               onApplyPlan={onChatgptApplyPlan} onAnswerQuestions={onChatgptAnswerQuestions} onCancel={onChatgptCancel}

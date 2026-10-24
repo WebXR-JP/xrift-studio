@@ -99,6 +99,12 @@ MCPの要求は常にshell (`App.tsx`) が受け取る。`project` toolはshell�
 
 共有方針は`world-authoring-guide.json`から読み込む。`get_world_authoring_guide`で`topic: "overview"`を指定すると共有方針と制作方法の概要、`r3f`・`assets`・`blender`では選んだ方法の詳細だけを返す。現在の接続先で使える操作はtool定義とcapabilityで確認する。全制作方法の長い説明を毎回のEditor contextへ追加しない。
 
+設計のガイドは`spatial-ui`と`environment`で取得する。前者は説明展示・案内・メニューの文字階層、余白、読む距離、再利用できる静的TSXの例とUIKit用Scriptの入口を返す。後者はSkyboxとIBLの違い、照明、VR/WebGLの負荷確認を説明する。overviewは概要だけを返し、作る内容に必要な詳細を選んで読む。R3Fの`Text`では`fontWeight`、`textAlign`、`lineHeight`、`letterSpacing`も保持する。Text背景の`borderRadius`は`update_component`で設定できる。
+
+UIKitは`list_script_templates`の`uikit-panel`を`apply_script_template`で配置し、`update_script_component`や`update_script_asset`で調整する。`@react-three/uikit`と`@pmndrs/uikit`をTSX Scriptの`Render`で使う。静的な`apply_r3f_scene`ではUIKitを実行しない。Font Assetを使う場合は`assetReferences`にも宣言し、Playで文字の読み込みと描画を確認する。右クリックからのチャット添付・AIでの作り替えも、既存の添付引数と`generate_chatgpt_world`の`options.modelSource`で同じ操作を頼めるため、専用toolは追加しない。作り替えの初期値は`auto`で、外部素材・コード・UIKit・Blenderを用途に合わせて選ぶ。利用者は送信前に`store`や`blender`へ変更できる。
+
+`update_scene_settings.ambient.enabled`でAmbient Lightの有効・無効を切り替え、`color`と`intensity`を調整する。強さの変更だけでは、無効な照明は有効にならない。`analyze_performance`は制作データの件数に基づく目安であり、ヘッドセットのフレーム時間を測る機能ではない。
+
 地形と草には14本、床には1本のtoolがある。説明がなければ、AIがtoolの多い機能を優先するおそれがあるため、用途に応じた選び方を伝える。設計判断と経緯は[ワールド制作ハーネス](./WORLD_AUTHORING_HARNESS.md)を参照する。
 
 document toolの戻り値には`harness`が付くことがある。同じ種類（地形、草、同じオブジェクトの
