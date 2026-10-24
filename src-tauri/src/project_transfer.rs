@@ -607,7 +607,7 @@ pub async fn import_project_from_repository(
         .ok_or_else(|| "repository cache path is invalid".to_string())?;
     std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
 
-    let output = tokio::process::Command::new("git")
+    let output = crate::background_process::tokio_command("git")
         .args(["clone", "--depth", "1", "--single-branch", "--no-tags", "--", &repository_url])
         .arg(&clone_root)
         .env("GIT_TERMINAL_PROMPT", "0")

@@ -161,6 +161,9 @@ class ProgressPreviews:
             render.filepath = str(self.directory / f"preview-{self.sequence}.png")
             bpy.ops.render.render(write_still=True)
             frame = {"sequence": self.sequence, "completed": completed, "total": self.total, "capturedAt": int(time.time() * 1000)}
+            # Keep each completed frame until native polling has consumed it.
+            # A fast model can finish both captures between two polling ticks.
+            (self.directory / f"preview-{self.sequence}.json").write_text(json.dumps(frame), encoding="utf-8")
             temporary = self.directory / "preview-next.json"
             temporary.write_text(json.dumps(frame), encoding="utf-8")
             temporary.replace(self.directory / "preview.json")

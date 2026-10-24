@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex, OnceLock, Weak};
 use std::time::Duration;
-use tokio::process::Command;
+use crate::background_process::tokio_command as hidden_command;
 use tokio::sync::Notify;
 #[path = "blender_preview.rs"]
 mod preview;
@@ -392,15 +392,6 @@ fn installed_candidates() -> Vec<PathBuf> {
         .filter_map(|path| trusted_executable(&path))
         .filter(|path| seen.insert(path.clone()))
         .collect()
-}
-fn hidden_command(executable: &Path) -> Command {
-    let mut command = Command::new(executable);
-    command.kill_on_drop(true).stdin(Stdio::null());
-    #[cfg(windows)]
-    {
-        command.creation_flags(0x08000000);
-    }
-    command
 }
 fn blender_path(path: &Path) -> PathBuf {
     // Rust canonical paths use Win32's verbatim prefix. Blender's file API
@@ -1084,9 +1075,7 @@ mod tests {
         std::os::unix::fs::symlink(&target, &link).unwrap();
         #[cfg(windows)]
         {
-            use std::os::windows::process::CommandExt;
-            let output = std::process::Command::new("powershell.exe")
-                .creation_flags(0x08000000)
+            let output = crate::background_process::command("powershell.exe")
                 .args(["-NoProfile", "-NonInteractive", "-Command", "New-Item -ItemType Junction -Path $env:XRIFT_BLENDER_TEST_LINK -Target $env:XRIFT_BLENDER_TEST_TARGET -ErrorAction Stop | Out-Null"])
                 .env("XRIFT_BLENDER_TEST_LINK", blender_path(&link))
                 .env("XRIFT_BLENDER_TEST_TARGET", blender_path(&target))
