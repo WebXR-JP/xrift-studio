@@ -43,8 +43,9 @@
 1. Chromiumと必要なシステム依存の導入
 2. `pnpm e2e:smoke`
 3. Piによる正式なEditor操作・保存・取り消し・Plan・競合・停止・履歴・権限制御、Itemの保存・削除、接続・思考量、正式なMaterial編集・保存・UndoとSkybox描画・保存の検査
-4. ブラウザ公開・認証情報・MToon・Audioの検査
-5. ギズモ・Hierarchyのドラッグ・描画品質・共通MToon描画・Open Brushの個別マテリアル割り当てと輪郭の検査
+4. UIKitの日本語フォント・公開コードの描画、Textの角丸、Entityの右クリックからの制作依頼の検査
+5. ブラウザ公開・認証情報・MToon・Audioの検査
+6. ギズモ・Hierarchyのドラッグ・描画品質・共通MToon描画・Open Brushの個別マテリアル割り当てと輪郭の検査
 
 旧チャット専用の結果設定UI・依頼候補のspecはPi移行で削除されたため選択しません。`chatgpt-pi-authoring.spec.ts`と`chatgpt-connection-reasoning.spec.ts`で現行の制作導線を、`mcp-material-batch.spec.ts`と`sky-shaders.spec.ts`で正式な編集・描画経路を確認します。`chatgpt-model-source-integrity.spec.ts`も選択しますが、実Blender出力がない場合はSKIPし、必須の制作検査の代わりにはしません。
 

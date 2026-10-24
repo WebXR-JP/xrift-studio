@@ -32,6 +32,15 @@ export default defineConfig(async ({ mode }) => ({
       // first encode otherwise re-optimizes dependencies and reloads the
       // page while the caller is waiting for the result.
       "ktx2-encoder",
+      // Built-shell fixtures import loader subpaths before the lazy Editor loads.
+      // Prebundle them so the first browser test keeps a stable module graph.
+      ...(mode === "e2e" ? [
+        "three/addons/loaders/GLTFLoader.js",
+        "three/addons/loaders/DRACOLoader.js",
+        "three/addons/loaders/KTX2Loader.js",
+        "three/examples/jsm/loaders/RGBELoader.js",
+        "three/examples/jsm/objects/Reflector.js",
+      ] : []),
       "monaco-editor/esm/vs/language/typescript/lib/typescriptServices.js",
     ],
     exclude: ["three-icosa"],

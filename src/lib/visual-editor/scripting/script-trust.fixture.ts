@@ -99,7 +99,7 @@ async function assertExecutionKeyInvalidation(): Promise<void> {
     baseKey !==
       (await createScriptExecutionKey(project, {
         ...base,
-        modulePolicyVersion: "2",
+        modulePolicyVersion: base.modulePolicyVersion + ".next",
       })),
     "module policy change retained approval key",
   );
@@ -123,7 +123,8 @@ async function assertExecutionKeyInvalidation(): Promise<void> {
 
 async function assertCanonicalSerialization(): Promise<void> {
   const project = fixtureProject("project-a", "/projects/example");
-  const fingerprint = await fixtureFingerprint("abc");
+  // Keep the canonical serialization vector independent of the active policy.
+  const fingerprint = { ...await fixtureFingerprint("abc"), modulePolicyVersion: "1" };
   const serialized = serializeScriptExecutionScope(project, fingerprint);
   assert(
     serialized ===
