@@ -96,6 +96,11 @@ jobs:
           node scripts/prepare-readable-three-vrm.mjs --check
           node --test scripts/readable-three-vrm.test.mjs scripts/async-map.test.mjs scripts/runtime-shell-fetch.test.mjs scripts/browser-api-key.test.mjs scripts/browser-project-session.test.mjs scripts/classic-mtoon-png.test.mjs
 
+      - name: Check spatial UI contracts and synchronized authoring guides
+        run: |
+          node scripts/sync-agent-skills.mjs --check
+          node --test scripts/uikit-authoring.test.mjs scripts/world-design-guide.test.mjs
+
       # 公開ステージングの tsc をなぞる staged world typecheck を含む。
       # コンパイラが出力するコードが公開ビルドで落ちる退行は、ここで
       # リリース前に止まる。
@@ -140,6 +145,9 @@ jobs:
 
       - name: Check Pi connection, model sources and formal material/sky edits
         run: pnpm exec playwright test e2e/chatgpt-connection-reasoning.spec.ts e2e/chatgpt-model-source-integrity.spec.ts e2e/mcp-material-batch.spec.ts e2e/sky-shaders.spec.ts
+
+      - name: Check spatial UI and Entity chat before upload
+        run: pnpm exec playwright test e2e/uikit-and-entity-chat.spec.ts e2e/spatial-ui-authoring.spec.ts e2e/runtime-shell-rounded-text.spec.ts
 
       - name: Check browser publication, credentials and built runtime rendering
         run: pnpm exec playwright test e2e/browser-item-publish.spec.ts e2e/browser-api-key.spec.ts e2e/browser-mtoon-shell.spec.ts e2e/runtime-shell-audio.spec.ts
