@@ -7,7 +7,7 @@ export type PiPlan = { title: string; description: string; questions?: PiQuestio
 export type PiAnswer = { question: string; answer: string; candidateId?: string };
 export type PiContinuation = { kind: "approved_plan"; plan: PiPlan } | { kind: "answers"; answers: PiAnswer[] };
 export type PiContext = {
-  options?: { models?: boolean; materials?: boolean; audio?: boolean; modelSource?: string; extensions?: string[] };
+  options?: { models?: boolean; materials?: boolean; audio?: boolean; modelSource?: string };
   target?: "current" | "new";
   selectedEntityId?: string | null;
   attachedEntityIds?: string[];

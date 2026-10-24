@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { InMemoryCredentialStore, InMemoryModelsStore, fauxProvider, fauxAssistantMessage, fauxToolCall, getCurrentTools } from '@earendil-works/pi-ai';
 import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 import { runStudioAgent } from '../dist/agent.js';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 const scope = { projectId: 'world', sceneId: 'scene' };
@@ -95,14 +95,15 @@ test('persisted SDK history branches from an exact completed response without im
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test('registered Pi package tools load and execute, while Plan never loads their code', async () => {
+test('legacy package registrations and local extensions never load in build or Plan', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'studio-pi-extension-'));
   try {
     await writeFile(join(directory, 'package.json'), JSON.stringify({ name: 'fixture-pi-extension', version: '1.0.0', type: 'module', pi: { extensions: ['./extension.js'] } }));
-    await writeFile(join(directory, 'extension.js'), `export default function(pi) { pi.registerTool({ name: 'fixture_external', label: 'external', description: 'fixture tool', parameters: {type:'object',properties:{}}, execute: async () => ({ content: [{type:'text',text:'EXTERNAL_RESULT'}], details:{} }) }); }`);
-    const f = await fixture([fauxAssistantMessage(fauxToolCall('fixture_external', {})), context => { assert.match(JSON.stringify(context.messages), /EXTERNAL_RESULT/); return verify()[0]; }, ...verify().slice(1)]);
+    await writeFile(join(directory, 'extension.js'), `throw new Error('EXTERNAL_CODE_MUST_NOT_LOAD');`);
+    await mkdir(join(directory, 'extensions'));
+    await writeFile(join(directory, 'extensions', 'local.js'), `throw new Error('LOCAL_CODE_MUST_NOT_LOAD');`);
+    const f = await fixture(verify());
     await f.run({ packages: [{ source: 'npm:fixture-pi-extension@1.0.0', path: directory }], resourceRoot: directory });
-    await writeFile(join(directory, 'extension.js'), `throw new Error('PLAN_MUST_NOT_LOAD_ME');`);
     const p = await fixture([fauxAssistantMessage(fauxToolCall('studio_plan', { title: 'Plan', description: '編集しない' })), finalText()]);
     await p.run({ mode: 'plan', packages: [{ source: 'npm:fixture-pi-extension@1.0.0', path: directory }], resourceRoot: directory });
   } finally { await rm(directory, { recursive: true, force: true }); }

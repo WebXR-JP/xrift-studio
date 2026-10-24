@@ -1,7 +1,7 @@
 import { createInterface } from "node:readline";
 import { runStudioAgent, type PiInput } from "./agent.js";
 import type { PiLiveMessage } from "./protocol.js";
-// Extension console output must never corrupt the JSONL transport.
+// Diagnostic console output must never corrupt the JSONL transport.
 for (const method of ["log", "info", "debug", "warn"] as const) console[method] = (...values: unknown[]) => { process.stderr.write(values.map(value => String(value)).join(" ") + "\n"); };
 const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
 let sequence = 0;

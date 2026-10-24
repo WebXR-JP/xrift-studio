@@ -211,7 +211,7 @@ export type LocalShaderImportSource = {
   source: string;
 };
 
-export type ChatgptAssetOptions = { models: boolean; materials: boolean; audio: boolean; modelSource?: "auto" | "blender" | "store"; extensions?: string[] };
+export type ChatgptAssetOptions = { models: boolean; materials: boolean; audio: boolean; modelSource?: "auto" | "blender" | "store" };
 export type BlenderStatus = { available: boolean; version?: string | null };
 
 export type ExternalStoreAssetKind = "hdri" | "texture" | "model" | "audio";

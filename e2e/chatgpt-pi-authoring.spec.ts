@@ -109,19 +109,19 @@ test("Pi history tree branches a conversation without reverting the actual Scene
   expect((await call(page, "list_entities")).result!.entities).toEqual(before);
 });
 
-test("Pi extension settings reject unpinned sources and persist a registered version", async ({ page }) => {
+test("authoring works with legacy extension settings without showing registration controls", async ({ page }) => {
   await ready(page);
+  await page.evaluate(() => localStorage.setItem("xrift-studio:pi-settings:v1", JSON.stringify({ version: 2, extensions: ["npm:example@1.2.3"] })));
   await call(page, "open_chatgpt_panel");
-  await page.getByText("追加機能の設定", { exact: true }).click();
-  await expect(page.getByRole("checkbox", { name: "制作・配置・確認を自動分担する" })).toHaveCount(0);
-  const input = page.getByRole("textbox", { name: "制作に使う追加機能" });
-  await input.fill("npm:example@latest");
-  await page.getByRole("button", { name: "追加機能の設定を保存" }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "npm:package@1.2.3" })).toBeVisible();
-  await input.fill("npm:example@1.2.3");
-  await page.getByRole("button", { name: "追加機能の設定を保存" }).click();
-  await expect(page.getByText("登録済み：1件", { exact: true })).toBeVisible();
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("xrift-studio:pi-settings:v1")!).extensions)).toEqual(["npm:example@1.2.3"]);
+  await expect(page.getByText("追加機能の設定", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "制作に使う追加機能" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "追加機能の設定を保存" })).toHaveCount(0);
+  await page.getByRole("textbox", { name: "ワールドへの依頼", exact: true }).fill("屋根のある家を作ってください");
+  await page.getByRole("button", { name: "依頼を送信", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptRequests.length)).toBe(1);
+  const id = await page.evaluate(() => window.__XRIFT_RELEASE_E2E__!.chatgptRequests[0].generationId);
+  await expect.poll(async () => (await job(page, id)).status).toBe("completed");
+  expect((await job(page, id)).options).not.toHaveProperty("extensions");
 });
 
 test("internal calls without native scope cannot read or edit the open Scene", async ({ page }) => {

@@ -2161,7 +2161,7 @@ pub(crate) fn tool_definitions() -> Value {
                 "prompt": { "type": "string", "minLength": 1, "maxLength": 2000 },
                 "target": { "type": "string", "enum": ["current", "new"], "default": "current" },
                 "mode": { "type": "string", "enum": ["build", "plan", "goal"], "default": "build" },
-                "options": { "type": "object", "properties": { "models": { "type": "boolean" }, "materials": { "type": "boolean" }, "audio": { "type": "boolean" }, "modelSource": { "type": "string", "enum": ["auto", "blender", "store"] }, "extensions": { "type": "array", "maxItems": 8, "items": { "type": "string", "maxLength": 240 }, "description": "Explicitly trusted Pi npm packages, pinned as npm:package@1.2.3. Automatically installed without lifecycle scripts for build/goal. Their code has Studio's OS permissions. Not loaded in Plan." } }, "required": ["models", "materials", "audio"], "additionalProperties": false }
+                "options": { "type": "object", "properties": { "models": { "type": "boolean" }, "materials": { "type": "boolean" }, "audio": { "type": "boolean" }, "modelSource": { "type": "string", "enum": ["auto", "blender", "store"] } }, "required": ["models", "materials", "audio"], "additionalProperties": false }
             }, "required": ["projectId", "sceneId", "expectedRevision", "model", "prompt"], "additionalProperties": false }
         },
         {

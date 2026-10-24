@@ -28,7 +28,6 @@ const hooks = registerHooks({
   },
 });
 const api = await import("../src/lib/visual-editor/chatgpt-sessions.ts");
-const piSettings = await import("../src/lib/visual-editor/pi-settings.ts");
 const { sceneSettingsDisplay } = await import("../src/lib/visual-editor/chatgpt-change-description.ts");
 hooks.deregister();
 const date = "2026-10-14T00:00:00.000Z";
@@ -75,19 +74,8 @@ test("Pi branch pointers survive storage and branch only at a finished response"
   const restored = api.loadChatgptSessions(storage);
   assert.deepEqual(restored.find(item => item.id === 'branch-chat').piBranch, branched.piBranch);
   assert.equal(restored.find(item => item.id === source.id).turns[0].options.teamwork, undefined);
-  assert.deepEqual(restored.find(item => item.id === source.id).turns[0].options.extensions, ['npm:example@1.2.3']);
+  assert.equal(restored.find(item => item.id === source.id).turns[0].options.extensions, undefined);
 });
-test("extension registrations require exact npm versions and persist explicit settings", () => {
-  for (const value of ['npm:example@latest', 'git:example', 'npm:../example@1.0.0', 'npm:example@^1.0.0']) assert.throws(() => piSettings.parsePiPackages(value));
-  let raw = null;
-  const storage = { getItem: () => raw, setItem(_key, value) { raw = value; } };
-  assert.deepEqual(piSettings.loadPiSettings(storage), { extensions: [] });
-  raw = JSON.stringify({ version: 1, teamwork: true, extensions: ['npm:old@1.0.0'] });
-  assert.deepEqual(piSettings.loadPiSettings(storage), { extensions: ['npm:old@1.0.0'] });
-  piSettings.savePiSettings({ extensions: ['npm:@example/tools@1.2.3'] }, storage);
-  assert.deepEqual(piSettings.loadPiSettings(storage), { extensions: ['npm:@example/tools@1.2.3'] });
-});
-
 test("twelve-choice metadata and catalog proposal thumbnails survive history reload", () => {
   const storage = new MemoryStorage();
   const ids = Array.from({ length: 12 }, (_, index) => `builtin:xrift-sky-shaders:sky-${index}`);

@@ -23,7 +23,6 @@ import { ChatgptMaterialControls } from "./ChatgptMaterialControls";
 import { ChatgptSceneControls, type ChatgptSceneSettingsPatch } from "./ChatgptSceneControls";
 import type { SceneSettings } from "../../lib/visual-editor/scene-settings";
 import { preferredChatgptReasoningEffort } from "../../lib/visual-editor/chatgpt-reasoning";
-import { PiFeatureSettings, usePiFeatureSettings } from "./PiFeatureSettings";
 import { PiRunDetails } from "./PiRunDetails";
 import { ChatgptAdditionalMessages } from "./ChatgptAdditionalMessages";
 import { ENTITY_REMAKE_BRIEF_MARKER, type ChatgptComposerRequest } from "../../lib/visual-editor/chatgpt-composer-request";
@@ -79,7 +78,6 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
   const [model, setModel] = useState(generation?.model ?? "");
   const [reasoningEffort, setReasoningEffort] = useState<string | null>(generation?.reasoningEffort ?? null);
   const [modelSource, setModelSource] = useState<NonNullable<ChatgptAssetOptions["modelSource"]>>("auto");
-  const piFeatures = usePiFeatureSettings();
   const [blenderStatus, setBlenderStatus] = useState<BlenderStatus | null>(null);
   const [blenderStatusError, setBlenderStatusError] = useState(false);
   const [blenderLoading, setBlenderLoading] = useState(true);
@@ -323,7 +321,7 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
       finally { liveSendingRef.current = false; if (mounted.current) setLiveSending(false); }
       return;
     }
-    queue.enqueue({ id: createDocumentId("chatgpt-request"), model, prompt: parsed.prompt, attachedEntityIds: [...attachedEntityIds], attachedMaterialIds: [...attachedMaterialIds], options: { ...CHATGPT_ALL_ASSETS, modelSource, ...piFeatures.settings }, mode: parsed.mode, reasoningEffort: effectiveEffort || undefined });
+    queue.enqueue({ id: createDocumentId("chatgpt-request"), model, prompt: parsed.prompt, attachedEntityIds: [...attachedEntityIds], attachedMaterialIds: [...attachedMaterialIds], options: { ...CHATGPT_ALL_ASSETS, modelSource }, mode: parsed.mode, reasoningEffort: effectiveEffort || undefined });
     setPrompt(""); setAttachedEntityIds([]); setAttachedMaterialIds([]); setError(null);
   };
   const attach = (entityIds: string[], materialIds: string[] = []) => {
@@ -387,7 +385,6 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
         >{option.label}</button>)}
     </div> : null}
     {sessionActions ? <ChatgptSessionBar {...sessionActions} disabled={pending} /> : null}
-    <PiFeatureSettings settings={piFeatures.settings} onSave={piFeatures.save} error={piFeatures.error} disabled={pending} />
     {copyNotice ? <p role="status" className="shrink-0 select-text text-[11px] leading-4 text-slate-600">{copyNotice}</p> : null}
     {historyError ? <p role="alert" className="shrink-0 text-[11px] leading-4 text-amber-800">{historyError}</p> : null}
     <div ref={outputElement} role="region" aria-label="コピーできる制作出力" tabIndex={0} className="flex min-h-24 flex-1 select-text flex-col gap-3 [&_button]:select-text [&_summary]:select-text"

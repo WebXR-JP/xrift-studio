@@ -91,93 +91,6 @@ pub async fn chatgpt_pi_delete_history(
         }
     }
 }
-fn pinned_package(source: &str) -> Result<(&str, &str), String> {
-    let invalid =
-        || "追加機能はnpm:package@1.2.3のように、正確なバージョンを指定してください".to_string();
-    let spec = source.strip_prefix("npm:").ok_or_else(invalid)?;
-    let (name, version) = spec.rsplit_once('@').ok_or_else(invalid)?;
-    let parts: Vec<&str> = name.strip_prefix('@').unwrap_or(name).split('/').collect();
-    if source.len() > 240
-        || parts.len() != if name.starts_with('@') { 2 } else { 1 }
-        || parts.iter().any(|part| {
-            part.is_empty()
-                || part.starts_with('.')
-                || part.starts_with('-')
-                || !part.bytes().all(|byte| {
-                    byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"-_.".contains(&byte)
-                })
-        })
-        || semver::Version::parse(version).is_err()
-    {
-        return Err(invalid());
-    }
-    Ok((name, version))
-}
-async fn prepare_packages(
-    root: &std::path::Path,
-    sources: &[String],
-    paths: &crate::RuntimePaths,
-    control: &GenerationControl,
-    progress: &Channel<Value>,
-) -> Result<Vec<Value>, String> {
-    let mut packages = Vec::new();
-    for source in sources {
-        let (name, version) = pinned_package(source)?;
-        let install_root = root.join("packages").join(digest_key(&[source]));
-        let package_root = install_root.join("node_modules").join(name);
-        let marker = install_root.join("installed.json");
-        if !marker.is_file() || !package_root.join("package.json").is_file() {
-            progress.send(json!({ "type": "progress", "message": format!("追加機能を導入しています：{source}") })).map_err(|_| "制作画面との接続が終了しました")?;
-            tokio::fs::create_dir_all(&install_root)
-                .await
-                .map_err(|_| "追加機能の保存先を作れませんでした")?;
-            let mut command = tokio::process::Command::new(&paths.node_exe);
-            crate::configure_runtime_command(&mut command, paths);
-            command
-                .current_dir(&install_root)
-                .arg(&paths.npm_cli_js)
-                .arg("install")
-                .arg("--prefix")
-                .arg(&install_root)
-                .arg("--ignore-scripts")
-                .arg("--no-audit")
-                .arg("--no-fund")
-                .arg("--save-exact")
-                .arg("--legacy-peer-deps")
-                .arg("--registry=https://npm.flatt.tech/")
-                .arg(format!("{name}@{version}"))
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .kill_on_drop(true);
-            let status = run_cancellable(control, Duration::from_secs(120), async {
-                command
-                    .status()
-                    .await
-                    .map_err(|_| "追加機能の導入を開始できませんでした".to_string())
-            })
-            .await?;
-            if !status.success() {
-                return Err(format!("追加機能の導入に失敗しました：{source}。設定を修正または無効化して再試行してください"));
-            }
-            let manifest: Value = serde_json::from_slice(
-                &tokio::fs::read(package_root.join("package.json"))
-                    .await
-                    .map_err(|_| "導入した追加機能を確認できません")?,
-            )
-            .map_err(|_| "追加機能のpackage.jsonが不正です")?;
-            if manifest["name"] != name || manifest["version"] != version {
-                return Err("追加機能の名前またはバージョンが一致しません".into());
-            }
-            tokio::fs::write(&marker, source)
-                .await
-                .map_err(|_| "追加機能の導入結果を保存できません")?;
-        }
-        packages.push(json!({ "source": source, "path": package_root }));
-    }
-    Ok(packages)
-}
-
 fn readonly(name: &str) -> bool {
     [
         "get_",
@@ -284,18 +197,7 @@ pub async fn chatgpt_pi_run(
     {
         return Err("会話の履歴を指定する情報を読み取れませんでした。チャットを選び直してください".into());
     }
-    let context_value: Value =
-        serde_json::from_str(&context).map_err(|_| "制作条件のJSONが不正です")?;
-    let sources: Vec<String> = match context_value["options"].get("extensions") {
-        Some(value) => serde_json::from_value(value.clone()).map_err(|_| "追加機能の一覧が不正です")?,
-        None => Vec::new(),
-    };
-    if sources.len() > 8 {
-        return Err("追加機能は8件まで登録できます".into());
-    }
-    for source in &sources {
-        pinned_package(source)?;
-    }
+    serde_json::from_str::<Value>(&context).map_err(|_| "制作条件のJSONが不正です")?;
     ensure_authorization_complete(&state)?;
     let lease = begin_generation(&state, Some(generation_id.clone()))?;
     let mut guard = state.0.lock().await;
@@ -318,19 +220,6 @@ pub async fn chatgpt_pi_run(
         .join("sessions")
         .join(digest_key(&[&project_id, &scene_id]))
         .join(format!("{}.jsonl", digest_key(&[&session_id])));
-    let resource_root = pi_root.join("resources");
-    let packages = if mode == "plan" {
-        Vec::new()
-    } else {
-        prepare_packages(
-            &resource_root,
-            &sources,
-            &paths,
-            &lease.control,
-            &on_progress,
-        )
-        .await?
-    };
     let mut command = tokio::process::Command::new(&paths.node_exe);
     crate::configure_runtime_command(&mut command, &paths);
     command
@@ -352,7 +241,7 @@ pub async fn chatgpt_pi_run(
     });
     let initial = json!({ "type": "start", "input": { "token": token, "model": model, "prompt": prompt, "projectId": project_id,
         "sceneId": scene_id, "mode": mode, "context": context, "reasoningEffort": reasoning_effort, "tools": definitions,
-        "session": { "id": session_id, "path": session_path, "leafId": history_leaf_id }, "packages": packages, "resourceRoot": resource_root } });
+        "session": { "id": session_id, "path": session_path, "leafId": history_leaf_id } } });
     let operation = super::pi_transport::run(
         stdout,
         stdin,
@@ -413,17 +302,7 @@ pub async fn chatgpt_pi_run(
 mod tests {
     use super::*;
     #[test]
-    fn package_sources_are_pinned_and_history_paths_are_scoped() {
-        assert!(pinned_package("npm:@example/pi-tools@1.2.3").is_ok());
-        for source in [
-            "npm:tools@latest",
-            "npm:tools@^1.2.3",
-            "git:example",
-            "npm:../tools@1.2.3",
-            "npm:tools@1.2.3;echo",
-        ] {
-            assert!(pinned_package(source).is_err(), "{source}");
-        }
+    fn history_paths_are_scoped() {
         assert!(!valid_history_id("../../outside"));
         assert_ne!(digest_key(&["ab", "c"]), digest_key(&["a", "bc"]));
     }
