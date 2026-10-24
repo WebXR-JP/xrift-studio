@@ -26,6 +26,7 @@ export type ScriptPropKind =
   | "entity";
 
 export type ScriptAssetKind =
+  | "font"
   | "model"
   | "material"
   | "texture"

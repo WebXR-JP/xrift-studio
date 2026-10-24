@@ -1214,6 +1214,7 @@ export function textComponentPresetInput(
         opacity: 0.92,
         paddingX: 0.18,
         paddingY: 0.12,
+        borderRadius: 0.08,
       },
     };
   }
@@ -1234,6 +1235,7 @@ export function textComponentPresetInput(
         opacity: 1,
         paddingX: 0.05,
         paddingY: 0.04,
+        borderRadius: 0.025,
       },
     };
   }
@@ -1260,6 +1262,7 @@ export function normalizeTextBackground(
     ...(textureAssetId ? { textureAssetId } : {}),
     paddingX: nonNegativeOr(input.paddingX, DEFAULT_TEXT_BACKGROUND.paddingX),
     paddingY: nonNegativeOr(input.paddingY, DEFAULT_TEXT_BACKGROUND.paddingY),
+    ...(input.borderRadius === undefined ? {} : { borderRadius: nonNegativeOr(input.borderRadius, 0) }),
     fit: input.fit === "fixed" ? "fixed" : "text",
     width: positiveOr(input.width, DEFAULT_TEXT_BACKGROUND.width),
     height: positiveOr(input.height, DEFAULT_TEXT_BACKGROUND.height),
@@ -1291,7 +1294,7 @@ function isValidTextBackgroundPatch(patch: TextBackgroundPatch): boolean {
   ) {
     return false;
   }
-  for (const value of [patch.paddingX, patch.paddingY, patch.offset]) {
+  for (const value of [patch.paddingX, patch.paddingY, patch.offset, patch.borderRadius]) {
     if (value !== undefined && (!Number.isFinite(value) || value < 0)) return false;
   }
   for (const value of [patch.width, patch.height]) {

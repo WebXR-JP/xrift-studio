@@ -5124,6 +5124,7 @@ export function SceneViewport({
   onEditCommand,
   clipboardAvailable,
   onExportHierarchy,
+  onSendToChat,
   editDisabledReason,
   shortcutLabel,
   frameSelectionRequest,
@@ -5213,6 +5214,7 @@ export function SceneViewport({
   onEditCommand: SceneContextMenuProps["onCommand"];
   clipboardAvailable: boolean;
   onExportHierarchy?: (entityId: string) => void;
+  onSendToChat?: SceneContextMenuProps["onSendToChat"];
   editDisabledReason?: string | null;
   shortcutLabel: SceneContextMenuProps["shortcutLabel"];
   frameSelectionRequest: number;
@@ -7575,6 +7577,8 @@ export function SceneViewport({
             selectionCount={contextMenu.entityId && selectedEntityIds.includes(contextMenu.entityId) ? selectedEntityIds.length : 1}
             clipboardAvailable={clipboardAvailable}
             onExportHierarchy={onExportHierarchy}
+            onSendToChat={onSendToChat}
+            canRemakeWithAi={Boolean(contextMenu.entityId && !scene.entities[contextMenu.entityId]?.modelNode)}
             touch={touch}
             disabledReason={editDisabledReason}
             shortcutLabel={shortcutLabel}

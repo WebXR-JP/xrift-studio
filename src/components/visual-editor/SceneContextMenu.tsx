@@ -16,6 +16,8 @@ export type SceneContextMenuProps = {
   touch?: boolean;
   source?: "scene" | "hierarchy";
   onExportHierarchy?: (entityId: string) => void;
+  onSendToChat?: (entityId: string, mode: "attach" | "remake") => void;
+  canRemakeWithAi?: boolean;
   extraContent?: ReactNode;
   renderCreation?: (close: () => void) => ReactNode;
   disabledReason?: string | null;
@@ -167,6 +169,17 @@ export function SceneContextMenu(props: SceneContextMenuProps) {
         {item("edit.duplicate", "複製", "duplicate", disabledReason)}
         {item("selection.rename", "名前を変更", "rename", disabledReason ?? (selectionCount > 1 ? "名前を変更するEntityを1件選んでください" : null))}
         {item("view.frame-selection", "フォーカス", "maximize")}
+        {props.onSendToChat ? <>
+          <div role="separator" className="my-1 border-t border-slate-200" />
+          {(["attach", "remake"] as const).filter(mode => mode === "attach" || props.canRemakeWithAi).map(mode => <button
+            key={mode} type="button" role="menuitem"
+            disabled={Boolean(disabledReason || selectionCount > 1)}
+            title={disabledReason ?? (selectionCount > 1 ? "Entityを1件選んでください" : mode === "attach" ? "対象を添付して制作チャットを開きます" : "対象と依頼文を入れて制作チャットを開きます")}
+            className={ENTITY_CONTEXT_ITEM_CLASS}
+            onClick={() => { props.onClose(false); props.onSendToChat?.(entityId, mode); }}>
+            <EDITOR_ICONS.ai size={14} aria-hidden="true" /><span className="flex-1">{mode === "attach" ? "チャットに送る" : "AIで作り替える…"}</span>
+          </button>)}
+        </> : null}
         <div role="separator" className="my-1 border-t border-slate-200" />
         {item("prefab.create", "再利用素材（Prefab）を作成", "prefab", disabledReason ?? (selectionCount > 1 ? "Prefabにする親Entityを1件選んでください" : null))}
         {props.onExportHierarchy ? <button type="button" role="menuitem" disabled={Boolean(disabledReason)}

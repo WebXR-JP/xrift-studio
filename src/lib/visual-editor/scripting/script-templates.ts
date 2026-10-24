@@ -28,7 +28,7 @@ export type ScriptTemplateDefinition = {
 };
 
 const NAME_TOKEN = "__XRIFT_SCRIPT_NAME__";
-export const SCRIPT_TEMPLATE_CATALOG_VERSION = 8 as const;
+export const SCRIPT_TEMPLATE_CATALOG_VERSION = 10 as const;
 
 /**
  * Built-in Script examples shared by the Assets creation flow and MCP.
@@ -37,6 +37,69 @@ export const SCRIPT_TEMPLATE_CATALOG_VERSION = 8 as const;
  * unchanged into generated World / Item projects.
  */
 export const SCRIPT_TEMPLATE_CATALOG: readonly ScriptTemplateDefinition[] = [
+  {
+    id: "uikit-panel",
+    name: "UIKit Panel",
+    description: "UIKitの角丸・余白・Flexboxで空間UIを作ります。Playで表示を確認し、Scriptのプロパティで見出し・本文・角丸を調整できます。初期フォントは英字用です。日本語には対応するfontFamiliesを指定してください。",
+    category: "appearance",
+    suggestedName: "UIKit Panel",
+    language: "tsx",
+    requiredAssetKinds: [],
+    requiredComponents: [],
+    entityReferenceCount: 0,
+    source: `import { defineScript, prop, type ScriptRenderProps } from "xrift:script";
+import { Suspense, useMemo } from "react";
+import { Container, Text, useTTF, type FontFamilies } from "@react-three/uikit";
+
+type PanelProps = {
+  title: { kind: "string" };
+  body: { kind: "string" };
+  width: { kind: "number" };
+  borderRadius: { kind: "number" };
+  font: { kind: "asset"; assetKind: "font" };
+};
+
+export default defineScript({
+  name: "${NAME_TOKEN}",
+  props: {
+    title: prop.string({ label: "見出し", default: "XRIFT STUDIO" }),
+    body: prop.string({ label: "本文", default: "Create a place. Share an experience." }),
+    width: prop.number({ label: "幅（m）", default: 1.8, min: 0.3, max: 10 }),
+    borderRadius: prop.number({ label: "Border Radius（px）", default: 20, min: 0, max: 80 }),
+    font: prop.asset({ label: "日本語などのFont（TTF）", kind: "font" }),
+  },
+  start() {},
+});
+
+function Panel({ ctx, fontFamilies, fontFamily }: ScriptRenderProps<PanelProps> & { fontFamilies?: FontFamilies; fontFamily?: string }) {
+  return <Container sizeX={ctx.props.width} sizeY={1.1} pixelSize={0.005}
+    fontFamilies={fontFamilies} fontFamily={fontFamily}
+    flexDirection="column" padding={28} gap={18} borderRadius={ctx.props.borderRadius}
+    backgroundColor="#152536" borderWidth={1} borderColor="#37516a">
+    <Text fontSize={12} color="#88e0d0">SPATIAL / UI</Text>
+    <Text fontSize={28} fontWeight="bold" color="#f3f8fc">{ctx.props.title}</Text>
+    <Text fontSize={17} color="#d8e5ee">{ctx.props.body}</Text>
+  </Container>;
+}
+
+function CustomFontPanel({ ctx, input }: ScriptRenderProps<PanelProps> & { input: Parameters<typeof useTTF>[0] }) {
+  const fontFamilies = useTTF(input);
+  return <Panel ctx={ctx} fontFamilies={fontFamilies} fontFamily={Object.keys(fontFamilies)[0]} />;
+}
+
+export function Render({ ctx }: ScriptRenderProps<PanelProps>) {
+  const url = ctx.props.font ? ctx.assets.url(ctx.props.font) : null;
+  // Keep the cache key above Suspense: React discards useMemo on an initial suspension.
+  const input = useMemo(() => {
+    if (!url) return null;
+    const charset = Array.from(new Set("SPATIAL / UI " + ctx.props.title + ctx.props.body)).filter(char => char !== "\\n").join("");
+    const atlasSize = Math.max(512, 2 ** Math.ceil(Math.log2(Math.ceil(Math.sqrt(Array.from(charset).length)) * 64)));
+    return [{ url, charset, textureSize: [atlasSize, atlasSize] as [number, number] }];
+  }, [url, ctx.props.title, ctx.props.body]);
+  return <Suspense fallback={null}>{input ? <CustomFontPanel ctx={ctx} input={input} /> : <Panel ctx={ctx} />}</Suspense>;
+}
+`,
+  },
   {
     id: "blank",
     name: "空のスクリプト",

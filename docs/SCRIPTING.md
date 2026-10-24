@@ -4,6 +4,8 @@
 
 制作者はTypeScriptのスクリプトでオブジェクトの動作を作れる。Editorの動作確認と公開ワールドには同じスクリプトを使い、XRift上でも同じ挙動になることを本書の契約とする。
 
+空間UIでは`@react-three/uikit`と`@pmndrs/uikit`もimportできる。UIKit Panelテンプレートは実ライブラリのContainerとTextで角丸・余白・Flexboxを描く。`Render`はPlayで実行し、公開物にも同じソースを含める。UIKitのパッケージ版はStudioに合わせて固定する。初期のInterは英字用で、日本語などにはFont Assetを宣言して`ctx.assets.url`から`useTTF`へ渡す。テンプレートは表示する文字から必要なglyphを生成し、文字数に合わせてatlasの大きさを決める。`useTTF`へ渡す配列は、子が読み込み待ちになる`Suspense`より上の`Render`で保持する。子の初回描画で作ると、再描画のたびに入力が変わり、読み込みが終わらない。長い日本語では末尾まで文字が欠けないことも実表示で確認する。フォントを読み込めない状態やEditの表示を、UIKitの描画確認として扱わない。
+
 本書は [ビジュアルエディターArchitecture 4.8](./VISUAL_EDITOR_ARCHITECTURE.md#48-scripting-script-asset--script-component)
 が定めた例外範囲の実装契約である。ここに書いていない形での任意コード実行は行わない。
 

@@ -3,7 +3,7 @@ import { platform } from "@tauri-apps/plugin-os";
 
 import runtimePackageManifest from "../../packages/xrift-studio-runtime/package.json";
 import { tauri, type ProjectKind, type RuntimePaths } from "./tauri";
-import { COMPILER_REACT_PACKAGE_SPECS, COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC, COMPILER_SDK_PACKAGE_SPEC } from "./visual-editor/compiler/runtime-packages";
+import { COMPILER_REACT_PACKAGE_SPECS, COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC, COMPILER_SDK_PACKAGE_SPEC, COMPILER_UIKIT_PACKAGE_SPECS } from "./visual-editor/compiler/runtime-packages";
 
 export type LogKind = "stdout" | "stderr" | "info" | "exit";
 export type LogLine = { kind: LogKind; text: string; ts: number };
@@ -68,6 +68,7 @@ const COMPILER_RUNTIME_PACKAGE_ALLOWLIST = new Set([
   COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC,
   COMPILER_SDK_PACKAGE_SPEC,
   ...COMPILER_REACT_PACKAGE_SPECS,
+  ...COMPILER_UIKIT_PACKAGE_SPECS,
 ]);
 
 /**

@@ -172,6 +172,10 @@ export type ComponentCodeImportText = {
   anchorY: "top" | "middle" | "bottom";
   outlineWidth: number;
   outlineColor: string;
+  fontWeight?: number;
+  textAlign?: "left" | "center" | "right" | "justify";
+  lineHeight?: number;
+  letterSpacing?: number;
 };
 
 export type ComponentCodeImportAssetDependency = {
@@ -710,6 +714,13 @@ function textFromJsx(
       index = end;
     }
   }
+  const fontWeight = typeof attributes.fontWeight === "number" && Number.isInteger(attributes.fontWeight)
+    && attributes.fontWeight >= 100 && attributes.fontWeight <= 900 ? attributes.fontWeight : undefined;
+  const textAlign = attributes.textAlign === "left" || attributes.textAlign === "center"
+    || attributes.textAlign === "right" || attributes.textAlign === "justify" ? attributes.textAlign : undefined;
+  const lineHeight = positiveFiniteNumber(attributes.lineHeight);
+  const letterSpacing = typeof attributes.letterSpacing === "number" && Number.isFinite(attributes.letterSpacing)
+    ? attributes.letterSpacing : undefined;
   for (const [field, valid] of [
     ["text", attributes.text === undefined || typeof attributes.text === "string"],
     ["color", attributes.color === undefined || Boolean(normalizeColor(attributes.color))],
@@ -719,6 +730,10 @@ function textFromJsx(
     ["outlineWidth", attributes.outlineWidth === undefined || nonNegativeFiniteNumber(attributes.outlineWidth) !== undefined],
     ["anchorX", attributes.anchorX === undefined || ["left", "center", "right"].includes(String(attributes.anchorX))],
     ["anchorY", attributes.anchorY === undefined || ["top", "middle", "bottom"].includes(String(attributes.anchorY))],
+    ["fontWeight", attributes.fontWeight === undefined || fontWeight !== undefined],
+    ["textAlign", attributes.textAlign === undefined || textAlign !== undefined],
+    ["lineHeight", attributes.lineHeight === undefined || lineHeight !== undefined],
+    ["letterSpacing", attributes.letterSpacing === undefined || letterSpacing !== undefined],
   ] as const) if (!valid) unsupportedImportValue(node, diagnostics, field, "Textの対応する値を指定してください");
   const text =
     typeof attributes.text === "string"
@@ -745,6 +760,10 @@ function textFromJsx(
     anchorY,
     outlineWidth: nonNegativeFiniteNumber(attributes.outlineWidth) ?? 0,
     outlineColor: normalizeColor(attributes.outlineColor) ?? "#000000",
+    ...(fontWeight !== undefined ? { fontWeight } : {}),
+    ...(textAlign !== undefined ? { textAlign } : {}),
+    ...(lineHeight !== undefined ? { lineHeight } : {}),
+    ...(letterSpacing !== undefined ? { letterSpacing } : {}),
   };
 }
 
@@ -999,7 +1018,7 @@ function convertJsxNode(
     const common = ["key", "name", "position", "rotation", "scale"];
     const supported: Record<string, string[]> = {
       Extrude: [...common, "args", "castShadow", "receiveShadow", "color", "metalness", "roughness", "side"],
-      Text: [...common, "text", "color", "fontSize", "maxWidth", "anchorX", "anchorY", "outlineWidth", "outlineColor"],
+      Text: [...common, "text", "color", "fontSize", "maxWidth", "anchorX", "anchorY", "outlineWidth", "outlineColor", "fontWeight", "textAlign", "lineHeight", "letterSpacing"],
       Billboard: common, Reflector: ["key", "name", "position", "rotation", "args", "color"], Sky: ["key", "name"], Environment: ["key", "name"],
     };
     if (supported[binding.imported]) diagnoseNativeAttributes(node, new Set(supported[binding.imported]), diagnostics);

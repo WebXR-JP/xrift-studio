@@ -877,6 +877,7 @@ export function HierarchyPanel({
   onExportHierarchy,
   renameRequest,
   onRename,
+  onSendToChat,
 }: {
   scene: SceneDocument;
   selection: EditorSelection;
@@ -884,6 +885,7 @@ export function HierarchyPanel({
   readOnly: boolean;
   playMode?: boolean;
   projectKind: VisualProjectKind;
+  onSendToChat?: (entityId: string, mode: "attach" | "remake") => void;
   onSelectionChange: (entityIds: string[], primaryEntityId: string | null) => void;
   onAssignMaterial: (entityId: string, materialAssetId: string) => void;
   onDropSceneAsset: (assetId: string, parentEntityId: string | null) => void;
@@ -1746,6 +1748,8 @@ export function HierarchyPanel({
         shortcutLabel={shortcutLabel ?? ((command) => command === "edit.paste" ? pasteShortcut ?? "" : "")}
         onCommand={onCommand}
         onExportHierarchy={onExportHierarchy}
+        onSendToChat={onSendToChat}
+        canRemakeWithAi={Boolean(contextEntityId && !scene.entities[contextEntityId]?.modelNode)}
         renderCreation={!contextEntityId ? (close) => <EditorCreationMenuSections
           entries={creationEntries}
           disabled={readOnly || playMode || importBusy}

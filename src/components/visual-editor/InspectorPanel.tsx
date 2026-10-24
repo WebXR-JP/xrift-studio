@@ -4460,6 +4460,14 @@ function TextInspector({
               <option value="fixed">サイズを指定</option>
             </select>
           </label>
+          <ColliderNumberField
+            label="Border Radius（m）"
+            value={background.borderRadius ?? 0}
+            min={0}
+            step={0.01}
+            disabled={readOnly}
+            onChange={(borderRadius) => patchBackground({ borderRadius })}
+          />
           {background.fit === "text" ? (
             <>
               <ColliderNumberField

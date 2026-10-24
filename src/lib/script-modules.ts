@@ -4,6 +4,8 @@ import * as ReactJsxRuntime from "react/jsx-runtime";
 import * as Fiber from "@react-three/fiber";
 import * as Drei from "@react-three/drei";
 import * as Rapier from "@react-three/rapier";
+import * as Uikit from "@react-three/uikit";
+import * as UikitCore from "@pmndrs/uikit";
 import * as XriftWorldComponents from "../../packages/xrift-studio-runtime/src/script/world-components";
 import * as XriftScript from "../../packages/xrift-studio-runtime/src/script/api";
 
@@ -37,6 +39,8 @@ const LIVE_MODULES: Record<string, Record<string, unknown>> = {
   "react/jsx-runtime": ReactJsxRuntime as unknown as Record<string, unknown>,
   "@react-three/fiber": Fiber as unknown as Record<string, unknown>,
   "@react-three/drei": Drei as unknown as Record<string, unknown>,
+  "@react-three/uikit": Uikit as unknown as Record<string, unknown>,
+  "@pmndrs/uikit": UikitCore as unknown as Record<string, unknown>,
   "@react-three/rapier": Rapier as unknown as Record<string, unknown>,
   "@xrift/world-components":
     XriftWorldComponents as unknown as Record<string, unknown>,

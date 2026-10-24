@@ -56,6 +56,7 @@ export type XriftRuntimeMaterialBinding = {
 
 /** Unlit plate drawn behind a Text component. */
 export type XriftRuntimeTextBackground = {
+  borderRadius?: number;
   mode: "none" | "color" | "texture";
   color: string;
   opacity: number;

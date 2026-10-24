@@ -149,7 +149,7 @@ import {
 } from "../open-brush";
 import { createOpenBrushRuntimeOverlayFile, createOpenBrushPresetOverlayFiles } from "./open-brush-emit";
 import { createMToonOverlayFiles } from "./mtoon-emit";
-import { COMPILER_MTOON_PACKAGE_SPEC } from "./runtime-packages";
+import { COMPILER_MTOON_PACKAGE_SPEC, COMPILER_UIKIT_PACKAGE_SPECS } from "./runtime-packages";
 import {
   createScenePostprocessingBridgeOverlayFiles,
   createScenePostprocessingOverlayFile,
@@ -587,6 +587,9 @@ export function compileVisualProject(
   ];
   const runtimePackageSpecs: string[] =
     outputMode === "classic-runtime" ? [XRIFT_STUDIO_RUNTIME_PACKAGE] : [];
+  if (scriptAssetIds.some(id => /["']@(?:react-three|pmndrs)\/uikit["']/u.test(documents.scriptSources?.[id] ?? ""))) {
+    runtimePackageSpecs.push(...COMPILER_UIKIT_PACKAGE_SPECS);
+  }
   if (usesOpenBrushModels) runtimePackageSpecs.push(OPEN_BRUSH_RUNTIME_PACKAGE);
   if (usesMToonMaterials || usesVrmModels) runtimePackageSpecs.push(COMPILER_MTOON_PACKAGE_SPEC);
   if (outputMode === "classic-jsx" && usesTextPanel) {

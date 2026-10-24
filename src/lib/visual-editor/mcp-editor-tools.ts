@@ -521,10 +521,13 @@ function readProjectHealth(
 
 function readWorldAuthoringGuide(context: XriftMcpEditorContext, args: Record<string, unknown>): XriftMcpEditorToolOutcome {
   const topic = args.topic ?? "overview";
-  if (topic !== "overview" && topic !== "r3f" && topic !== "assets" && topic !== "blender") invalidArgument("topic", "overview, r3f, assets or blender");
+  if (topic !== "overview" && topic !== "r3f" && topic !== "assets" && topic !== "blender" && topic !== "spatial-ui" && topic !== "environment") invalidArgument("topic", "overview, r3f, assets, blender, spatial-ui or environment");
   const guide = topic === "overview"
-    ? { core: worldAuthoringGuide.core, routes: Object.fromEntries(Object.entries(worldAuthoringGuide.routes).map(([name, route]) => [name, { summary: route.summary }])) }
-    : { route: worldAuthoringGuide.routes[topic] };
+    ? { core: worldAuthoringGuide.core, routes: Object.fromEntries(Object.entries(worldAuthoringGuide.routes).map(([name, route]) => [name, { summary: route.summary }])),
+        design: Object.fromEntries(Object.entries(worldAuthoringGuide.design).map(([name, guide]) => [name, { summary: guide.summary }])) }
+    : topic === "spatial-ui" || topic === "environment"
+      ? { design: worldAuthoringGuide.design[topic] }
+      : { route: worldAuthoringGuide.routes[topic] };
   return unchanged(context, { version: worldAuthoringGuide.version, topic, ...structuredClone(guide) }, "制作方法のガイドを取得しました");
 }
 
@@ -1623,6 +1626,7 @@ function updateSceneSettings(
         : applyAmbientPatch(
             currentSettings.ambient,
             sceneSettingsPatch(argumentsValue.ambient, "ambient", [
+              "enabled",
               "color",
               "intensity",
             ]),
@@ -7582,6 +7586,8 @@ function applyAmbientPatch(
   patch: Record<string, unknown>,
 ): SceneAmbientSettings {
   const next = { ...current };
+  const enabled = optionalBoolean(patch.enabled, "ambient.enabled");
+  if (enabled !== undefined) next.enabled = enabled;
   if (patch.color !== undefined) {
     next.color = sceneColor(patch.color, "ambient.color");
   }

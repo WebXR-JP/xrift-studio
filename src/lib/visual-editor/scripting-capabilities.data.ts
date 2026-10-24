@@ -118,6 +118,8 @@ export const XRIFT_SCRIPTING_CAPABILITIES: Record<string, unknown> = {
         "Render receives { ctx } as ScriptRenderProps after start(ctx) succeeds. It shares the same live context, declared Asset allowlist, and Inspector/MCP property values.",
       portableModelPattern:
         "Use a TSX Script, ctx.assets.url(declaredModelId), and @react-three/drei useGLTF/Clone. Self-contained GLB is recommended.",
+      spatialUiPattern:
+        "@react-three/uikit and @pmndrs/uikit are supported Script imports. Start with template uikit-panel for real Container/Text, Flexbox, padding, gap and borderRadius. UIKit properties use pixels; root sizeX/sizeY use metres with pixelSize. Render runs in Play, not Edit. Default Inter is for Latin; bind a declared Font Asset (TTF) for Japanese through the template's font property/useTTF. Memoize the TTF input above Suspense and size textureSize for the unique glyph count; the template handles both. A running Script alone does not prove that loading or all glyphs succeeded. Read get_world_authoring_guide(topic:spatial-ui), test Play and inspect scriptRuntime and capture_scene_view. The static apply_r3f_scene importer does not execute UIKit JSX.",
       restriction:
         "R3F useFrame remains unsupported; return update(delta) from start(ctx) for isolated frame work.",
     },

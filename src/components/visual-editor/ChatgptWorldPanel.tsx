@@ -1,6 +1,6 @@
 import { ChatgptWorkLog, chatgptProgressIsRecorded, formatChatgptProgressMessage } from "./ChatgptWorkLog";
 import type { AssetManifest, MaterialAssetPatch } from "../../lib/visual-editor/asset-manifest";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, Bot, Copy, LoaderCircle, Plug, Square, Undo2, UserRound, X } from "lucide-react";
 import { tauri, type BlenderStatus, type ChatgptAssetOptions, type ChatgptConnection, type ChatgptModel } from "../../lib/tauri";
 import { getChatgptBlenderStatus } from "../../lib/visual-editor/chatgpt-blender-status";
@@ -26,12 +26,29 @@ import { preferredChatgptReasoningEffort } from "../../lib/visual-editor/chatgpt
 import { PiFeatureSettings, usePiFeatureSettings } from "./PiFeatureSettings";
 import { PiRunDetails } from "./PiRunDetails";
 import { ChatgptAdditionalMessages } from "./ChatgptAdditionalMessages";
+import { ENTITY_REMAKE_BRIEF_MARKER, type ChatgptComposerRequest } from "../../lib/visual-editor/chatgpt-composer-request";
 
 const effortLabels: Record<string, string> = { none: "なし（速さ優先）", minimal: "最小（速さ優先）", low: "低（速さ優先）", medium: "中（標準）", high: "高（じっくり）", xhigh: "より高い", max: "最大" };
 const EMPTY_ENTITY_REFERENCES: readonly ChatgptEntityReference[] = [];
 const ATTACHMENT_DRAG_MIMES = [ENTITY_DRAG_MIME, ENTITIES_DRAG_MIME, MATERIAL_DRAG_MIME, MATERIALS_DRAG_MIME, ASSET_DRAG_MIME, ASSET_LIBRARY_ITEM_DRAG_MIME];
 
-export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, onCancel, onRevert, onClose, onOpenMcp, onMaterialChange, sceneSettings, onSceneSettingsChange, disabledReason, generation, conversation = [], onSelectEntity, sessionActions, historyError, assets, projectPath, externallyBusy = false, draftScope = "default", sceneScope = draftScope, entityReferences = EMPTY_ENTITY_REFERENCES, expanded = false, onExpandedChange }: {
+function revealComposerSelection(element: HTMLTextAreaElement) {
+  // A textarea does not scroll a programmatic selection into view. Measure the
+  // preceding wrapped text at the same width, including a long existing draft.
+  const measure = element.cloneNode() as HTMLTextAreaElement;
+  const style = getComputedStyle(element);
+  Object.assign(measure.style, { position: "fixed", left: "-10000px", visibility: "hidden", width: `${element.getBoundingClientRect().width}px`, height: "0", minHeight: "0", font: style.font, letterSpacing: style.letterSpacing });
+  measure.removeAttribute("id"); measure.removeAttribute("aria-label");
+  measure.tabIndex = -1;
+  measure.value = element.value.slice(0, element.selectionStart);
+  document.body.append(measure);
+  element.scrollTop = Math.max(0, measure.scrollHeight - element.clientHeight / 2 - parseFloat(style.lineHeight));
+  measure.remove();
+}
+
+export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, onCancel, onRevert, onClose, onOpenMcp, onMaterialChange, sceneSettings, onSceneSettingsChange, disabledReason, generation, conversation = [], onSelectEntity, sessionActions, historyError, assets, projectPath, externallyBusy = false, draftScope = "default", sceneScope = draftScope, entityReferences = EMPTY_ENTITY_REFERENCES, expanded = false, onExpandedChange, composerRequest: externalComposerRequest, onComposerRequestHandled }: {
+  composerRequest?: ChatgptComposerRequest | null;
+  onComposerRequestHandled?: (id: string) => void;
   expanded?: boolean;
   onExpandedChange?: (expanded: boolean) => void;
   onMaterialChange?: (assetId: string, patch: MaterialAssetPatch) => void;
@@ -102,6 +119,8 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
   const previousScope = useRef(draftScope);
   const currentDraft = useRef({ prompt, attachedEntityIds, attachedMaterialIds, model, reasoningEffort, modelSource });
   currentDraft.current = { prompt, attachedEntityIds, attachedMaterialIds, model, reasoningEffort, modelSource };
+  const consumedComposerRequest = useRef<string | null>(null);
+  const [composerFocus, setComposerFocus] = useState<{ id: string; selectBrief: boolean } | null>(null);
   useEffect(() => {
     if (previousScope.current === draftScope) return;
     drafts.current.set(previousScope.current, currentDraft.current);
@@ -116,6 +135,33 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
     setError(null);
     while (drafts.current.size > 20) drafts.current.delete(drafts.current.keys().next().value!);
   }, [draftScope]);
+  useEffect(() => {
+    if (!externalComposerRequest || consumedComposerRequest.current === externalComposerRequest.id) return;
+    consumedComposerRequest.current = externalComposerRequest.id;
+    if (externalComposerRequest.sceneScope === sceneScope && entityById.has(externalComposerRequest.entityId)) {
+      setAttachedEntityIds(current => [...new Set([...current, externalComposerRequest.entityId])].slice(0, 100));
+      if (externalComposerRequest.prompt) setPrompt(current => current.trim() ? `${current}\n\n${externalComposerRequest.prompt}` : externalComposerRequest.prompt!);
+      if (externalComposerRequest.modelSource) setModelSource(externalComposerRequest.modelSource);
+      setError(null);
+      setComposerFocus({ id: externalComposerRequest.id, selectBrief: Boolean(externalComposerRequest.prompt) });
+    }
+    onComposerRequestHandled?.(externalComposerRequest.id);
+  }, [externalComposerRequest, sceneScope, entityById, onComposerRequestHandled]);
+  // Select after React has committed the controlled textarea's new value.
+  useLayoutEffect(() => {
+    if (!composerFocus) return;
+    const element = promptElement.current;
+    if (!element) return;
+    if (!composerFocus.selectBrief) { element.focus(); return; }
+    const index = element.value.lastIndexOf(ENTITY_REMAKE_BRIEF_MARKER);
+    if (index >= 0) {
+      const start = index + ENTITY_REMAKE_BRIEF_MARKER.length + 1;
+      const end = element.value.indexOf("\n", start);
+      element.setSelectionRange(start, end < 0 ? element.value.length : end);
+    }
+    element.focus();
+    if (index >= 0) revealComposerSelection(element);
+  }, [composerFocus]);
   useEffect(() => { followingLatest.current = true; }, [draftScope]);
   const selectedModel = models.find(item => item.slug === model);
   const supportedEfforts = selectedModel?.supportedReasoningEfforts ?? [];
@@ -517,9 +563,11 @@ export function ChatgptWorldPanel({ onGenerate, onApplyPlan, onAnswerQuestions, 
           {supportedEfforts.map(effort => <option key={effort} value={effort}>{effortLabels[effort] ?? effort}</option>)}
         </select> : null}
         </div>
-        <label className="flex items-center gap-1.5 rounded-full bg-slate-50 px-2 py-1.5 text-[11px] text-slate-600">
-          <input type="checkbox" aria-label="コード・Blenderで制作" title="コードで形状を組み立て、必要に応じてBlenderも使います。" checked={modelSource !== "store"} disabled={choicesBusy} onChange={event => setModelSource(event.target.checked ? "auto" : "store")} className="accent-slate-700" />コード・Blenderで制作
-        </label>
+        <select aria-label="制作方法" title="AIにおまかせでは、Assets・外部素材・コード・UIKit・Blenderを用途に合わせて使います。" value={modelSource} disabled={choicesBusy} onChange={event => setModelSource(event.target.value as typeof modelSource)} className="min-w-0 rounded-full border-0 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-700 outline-none focus-visible:ring-2 focus-visible:ring-slate-400 disabled:opacity-60">
+          <option value="auto">AIにおまかせ</option>
+          <option value="store">素材ストア中心</option>
+          <option value="blender">Blenderで制作</option>
+        </select>
         {connectionControls}
         <div className="ml-auto flex shrink-0 items-center gap-1.5">{generating && onCancel && generation?.status === "running" ? <button type="button" aria-label="制作を停止" title="制作を停止" disabled={generation.cancelling} onClick={() => { queue.pause("制作を停止したため、送信待ちの依頼を保留しています。"); setError(null); void onCancel(generation.generationId).catch(e => setError(e instanceof Error ? e.message : String(e))); }} className="flex size-8 items-center justify-center rounded-full bg-slate-900 text-white disabled:opacity-50"><Square size={12} fill="currentColor" aria-hidden="true" /></button> : null}
         <button type="submit" aria-label={liveTarget && composerRequest.mode === "build" ? "追加指示を送信" : "依頼を送信"} title={liveTarget && composerRequest.mode === "build" ? delivery === "steer" ? "今の制作に反映" : "終了後に実行" : dispatchBlockedReason || queue.dispatching ? "送信待ちへ追加" : "依頼を送信"} disabled={!canSubmit} className="flex size-8 items-center justify-center rounded-full bg-slate-900 text-white disabled:bg-slate-100 disabled:text-slate-400"><ArrowUp size={16} aria-hidden="true" /></button></div>

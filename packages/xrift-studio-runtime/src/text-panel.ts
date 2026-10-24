@@ -22,6 +22,9 @@ import {
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
+  Shape,
+  ShapeGeometry,
+  type BufferGeometry,
   type Texture,
 } from "three";
 import { preloadFont, Text } from "troika-three-text";
@@ -132,7 +135,8 @@ export function peekTextPanelFont(url: string): FontLoadState | undefined {
 export class XriftTextPanelObject extends Group {
   readonly text: Text;
 
-  private readonly plate: Mesh<PlaneGeometry, MeshBasicMaterial>;
+  private readonly plate: Mesh<BufferGeometry, MeshBasicMaterial>;
+  private plateGeometryKey = "";
 
   private config: XriftTextPanelConfig | null = null;
 
@@ -281,10 +285,40 @@ export class XriftTextPanelObject extends Group {
       return;
     }
     this.plate.visible = true;
+    const borderRadius = background.borderRadius ?? 0;
+    const geometryKey = `${plate.width}:${plate.height}:${borderRadius}`;
+    if (geometryKey !== this.plateGeometryKey) {
+      const previous = this.plate.geometry;
+      this.plate.geometry = createTextPanelPlateGeometry(plate.width, plate.height, borderRadius);
+      previous.dispose();
+      this.plateGeometryKey = geometryKey;
+    }
     this.plate.scale.set(plate.width, plate.height, 1);
     this.plate.position.set(plate.centerX, plate.centerY, -Math.abs(background.offset));
     this.onLayout?.();
   }
+}
+
+/** Unit geometry; scaling by width/height retains the requested radius in metres. */
+export function createTextPanelPlateGeometry(width: number, height: number, requestedRadius: number): BufferGeometry {
+  const radius = Number.isFinite(requestedRadius) ? Math.min(Math.max(0, requestedRadius), width / 2, height / 2) : 0;
+  if (radius === 0) return new PlaneGeometry(1, 1);
+  const rx = radius / width, ry = radius / height;
+  const shape = new Shape();
+  shape.moveTo(-0.5 + rx, -0.5);
+  shape.lineTo(0.5 - rx, -0.5);
+  shape.absellipse(0.5 - rx, -0.5 + ry, rx, ry, -Math.PI / 2, 0, false, 0);
+  shape.lineTo(0.5, 0.5 - ry);
+  shape.absellipse(0.5 - rx, 0.5 - ry, rx, ry, 0, Math.PI / 2, false, 0);
+  shape.lineTo(-0.5 + rx, 0.5);
+  shape.absellipse(-0.5 + rx, 0.5 - ry, rx, ry, Math.PI / 2, Math.PI, false, 0);
+  shape.lineTo(-0.5, -0.5 + ry);
+  shape.absellipse(-0.5 + rx, -0.5 + ry, rx, ry, Math.PI, Math.PI * 1.5, false, 0);
+  shape.closePath();
+  const geometry = new ShapeGeometry(shape, 8);
+  const position = geometry.getAttribute("position"), uv = geometry.getAttribute("uv");
+  for (let index = 0; index < position.count; index++) uv.setXY(index, position.getX(index) + 0.5, position.getY(index) + 0.5);
+  return geometry;
 }
 
 function clampUnit(value: number): number {
