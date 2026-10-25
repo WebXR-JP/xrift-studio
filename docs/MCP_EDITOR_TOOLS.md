@@ -194,14 +194,14 @@ Editで実行すると、独立したBlenderプロセスが実GLBと編集可能
 
 変換中にEditorが観測したAssetのサムネイル・保存日時だけの更新は、最新状態へ合流して保持する。手動編集、取り消しで元へ戻した編集、停止やScript保存による明示的なrevision更新は、この例外に含めない。派生更新の比較は非同期の原本変換中だけ行い、通常の編集へ全Sceneの比較処理を追加しない。
 
-## document (99)
+## document (100)
 
 **Editor context / Project**
 `get_editor_context`, `get_world_authoring_guide`, `get_project_health`, `analyze_performance`, `get_scripting_capabilities`, `update_project_metadata`
 
 `get_project_health`は既存のProject / Scene / Asset検証を実行し、件数とほぼ0のScaleを報告する。`scope: document`の`ready`はファイルの存在、Playの動作、公開可能な状態を保証しない。指摘を修正したら再診断し、既存のPlay・Compile・公開前チェックへ進む。
 
-`analyze_performance`は編集データのEntity / Light / Rigid Body / Texture / Model件数を目安と比較する。無効な要素・未使用素材も含み、Prefab内部やScriptによる実行時生成は展開しない。80%超は`warning`、100%超は`over-budget`。FPS・メモリー・三角形数の測定ではなく、公開を止める条件には使わない。両ツールともdocument surfaceの読み取りで、Scene・revision・保存状態を変更しない。
+`analyze_performance`は編集データのEntity / Light / Rigid Body / Texture / Model件数を目安と比較する。無効な要素・未使用素材も含む。配置したPrefabは中身を展開して数え、配置数と展開したEntity数を`prefabExpansion`に返す。Light付きの街灯を20か所に置けば、Lightは20件と数える。Scriptによる実行時生成は含まない。80%超は`warning`、100%超は`over-budget`。FPS・メモリー・三角形数の測定ではなく、公開を止める条件には使わない。両ツールともdocument surfaceの読み取りで、Scene・revision・保存状態を変更しない。
 
 **素材一覧と整理**
 `list_assets`, `create_asset_folder`, `rename_asset`, `rename_asset_folder`,
@@ -263,7 +263,7 @@ Editで実行すると、独立したBlenderプロセスが実GLBと編集可能
 `update_scene_settings`, `list_entities`, `get_entity_components`,
 `get_entity_bounds`, `create_empty_entity`, `create_primitive`, `place_asset`,
 `list_scene_recipes`, `place_builtin_prefab`, `create_prefab`,
-`update_prefab_from_source`, `rename_entity`,
+`update_prefab_from_source`, `unpack_prefab_instance`, `rename_entity`,
 `duplicate_entity`, `reparent_entity`, `delete_entity`, `set_entity_enabled`,
 `update_transform`
 
@@ -324,6 +324,25 @@ Inspectorの「プレハブに反映」と同じ処理で、元のEntityの位�
 Prefabは1つのEntityで、`get_entity_bounds`は展開した形状を測り、その
 EntityのIDで返す。`get_entity_components`は、元のEntityに`prefabSources`、
 配置に`prefabInstances`（編集する元のEntity）を返す。
+
+元のEntityを変える書き込みは、結果の`prefabsPendingUpdate`で未反映のPrefabを返し、
+`nextActions`の先頭に`update_prefab_from_source`を置く。元のEntityの位置だけを
+動かした場合は配置の変更なので返さない。`get_editor_context`の`prefabs`は
+`sourceChanged`で、手動編集を含む未反映の変更を示す。配置へ形状の編集を
+向けた場合（`set_material`、`apply_r3f_scene`）は、元のEntityと展開の手順を
+エラーで返す。元のEntityを`duplicate_entity`で複製した結果と、元のEntityを
+削除した`delete_entity`の結果にも、連動しないことと回復の手順を返す。
+
+`unpack_prefab_instance`は、配置を同じEntityの下の通常のEntityへ展開する
+（設計上のUnpack）。描画は展開前と同じで、Prefabとほかの配置は変わらない。
+一つだけ形や色を変える場合に使う。`makeSource: true`では展開したEntityを
+Prefabの新しい元のEntityにし、元のEntityを削除したPrefabを再び編集できる
+ようにする。Prefab側のEntity IDを保つため、ほかの配置はそのまま連動する。
+R3Fで作った元のEntityの配置は、展開後も`r3fRootEntityId`の原本を
+`apply_r3f_scene`で修正できる。UIにはまだ展開の操作がない。
+
+`place_asset`は`rotation`と`scale`も受け付け、向きや大きさを変えた配置を
+1回の書き込みで置ける。
 
 **Component**
 `list_component_definitions`, `add_component`, `update_component`,

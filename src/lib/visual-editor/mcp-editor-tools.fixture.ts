@@ -12,7 +12,8 @@ import {
 } from "./asset-manifest";
 import { createDefaultCustomShader } from "./custom-shader-contract";
 import { prefabDocumentCodec } from "./serialization";
-import { createAnimationComponent } from "./scene-document";
+import { canonicalJson } from "./prefab-document";
+import { createAnimationComponent, getTransform } from "./scene-document";
 import { createScriptAsset } from "./scripting/script-files";
 import { extractScriptContract } from "./scripting/script-contract";
 import {
@@ -3963,6 +3964,8 @@ function assertMcpPrefabReuse(): void {
     if (outcome.changed) current = { ...current, bundle: outcome.bundle, revision: current.revision + 1 };
     return outcome;
   };
+  const call = (tool: XriftMcpEditorToolName, args: Record<string, unknown> = {}) => run(tool, args).result;
+  const canonicalPrefab = (id: string) => canonicalJson(current.bundle.prefabs[id]);
   const rejection = (tool: XriftMcpEditorToolName, args: Record<string, unknown>, context = current) => {
     try {
       executeXriftMcpEditorTool(context, { id: `fixture-prefab-reject-${tool}`, tool, arguments: args });
@@ -4050,6 +4053,82 @@ function assertMcpPrefabReuse(): void {
   assert(!run("update_prefab_from_source", { ...scope(), prefabAssetId }).changed && current.revision === revisionBefore + 1,
     "A reopened, unchanged Prefab must not consume a revision");
 
+  // Editing the original reports the copies that do not follow yet; moving the
+  // original only places that copy, so it is not pending.
+  const moveOnly = call("update_transform", { ...scope(), entityId: bench, position: [9.5, 0.5, -2] });
+  assert(moveOnly.prefabsPendingUpdate === undefined,
+    "Moving the original is its own placement, not a pending Prefab change");
+  const widened = call("update_transform", { ...scope(), entityId: bench, scale: [3.5, 1, 1] });
+  const pendingNotice = widened.prefabsPendingUpdate as { prefabAssetId: string; instanceCount: number }[] | undefined;
+  assert(pendingNotice?.[0]?.prefabAssetId === prefabAssetId && pendingNotice[0].instanceCount === 2
+    && (widened.nextActions as string[])[0] === "update_prefab_from_source",
+    "A write that changes the original names the Prefab whose copies are now stale");
+  const staleContext = (run("get_editor_context").result.prefabs as { prefabAssetId: string; sourceChanged?: boolean }[])
+    .find((prefab) => prefab.prefabAssetId === prefabAssetId);
+  assert(staleContext?.sourceChanged === true, "get_editor_context shows an original edited without updating");
+  run("update_prefab_from_source", { ...scope(), prefabAssetId });
+  assert((run("get_editor_context").result.prefabs as { prefabAssetId: string; sourceChanged?: boolean }[])
+    .find((prefab) => prefab.prefabAssetId === prefabAssetId)?.sourceChanged === false,
+    "Updating clears the pending original");
+
+  // Editing a copy cannot work; the error says where the edit belongs.
+  let copyError: XriftMcpEditorToolError | null = null;
+  try {
+    executeXriftMcpEditorTool(current, { id: "fixture-prefab-copy-material", tool: "set_material",
+      arguments: { ...scope(), entityId: copies[0], materialAssetId: BUILTIN_ASSET_IDS.material.blue } });
+  } catch (error) {
+    copyError = error instanceof XriftMcpEditorToolError ? error : null;
+  }
+  assert(copyError?.code === "MESH_NOT_FOUND" && copyError.message.includes("update_prefab_from_source")
+    && copyError.message.includes("unpack_prefab_instance")
+    && (copyError.details as { prefab?: { sourceEntityId: string } }).prefab?.sourceEntityId === bench,
+    "Editing a copy's Material points at the original and at unpacking");
+
+  // One write places a varied copy.
+  const turned = call("place_asset", { ...scope(), assetId: prefabAssetId, position: [3, 0.5, 6], rotation: [0, 1.2, 0], scale: [1.2, 1.2, 1.2] });
+  const turnedTransform = getTransform(current.bundle.scene.entities[turned.entityId as string])!;
+  assert(near(turnedTransform.rotation, [0, 1.2, 0]) && near(turnedTransform.scale, [1.2, 1.2, 1.2]) && near(turnedTransform.position, [3, 0.5, 6]),
+    "place_asset applies rotation and scale in the same write");
+  assert(rejection("place_asset", { ...scope(), assetId: prefabAssetId, scale: [1, 0, 1] }) === "INVALID_ARGUMENT",
+    "A zero scale is rejected rather than silently ignored");
+  run("delete_entity", { ...scope(), entityId: turned.entityId });
+
+  // Duplicating the original makes unlinked Entities, and the result says so.
+  const duplicated = call("duplicate_entity", { ...scope(), entityId: bench });
+  assert(typeof duplicated.prefabNotice === "string"
+    && (duplicated.originalOfPrefabs as { prefabAssetId: string }[])[0].prefabAssetId === prefabAssetId,
+    "Duplicating a Prefab's original warns that the duplicate is unlinked");
+  run("delete_entity", { ...scope(), entityId: duplicated.entityId });
+
+  // Runtime counts include what every copy instantiates.
+  const lamp = call("create_empty_entity", { ...scope(), name: "Street lamp" }).entityId as string;
+  run("add_component", { ...scope(), entityId: lamp, definitionId: "core.light.point" });
+  const lampPrefab = call("create_prefab", { ...scope(), entityId: lamp }).prefabAssetId as string;
+  const lightsOf = () => ((call("analyze_performance").performance as { metrics: { lights: number } }).metrics.lights);
+  const lightsBeforeCopies = lightsOf();
+  for (const x of [-6, -3, 0]) run("place_asset", { ...scope(), assetId: lampPrefab, position: [x, 0, 9] });
+  const performance = call("analyze_performance").performance as Record<string, unknown>;
+  assert((performance.metrics as { lights: number }).lights === lightsBeforeCopies + 3
+    && (performance.prefabExpansion as { placedCopies: number }).placedCopies === 5,
+    `analyze_performance counts the Light in every placed lamp: ${JSON.stringify(performance.metrics)} ${JSON.stringify(performance.prefabExpansion)}`);
+
+  // Unpacking makes one copy editable on its own and leaves the rest linked.
+  const prefabBeforeUnpack = canonicalPrefab(prefabId);
+  const boundsBeforeUnpack = worldBounds(copies[1]).world!;
+  const unpacked = call("unpack_prefab_instance", { ...scope(), entityId: copies[1] });
+  const unpackedRoot = unpacked.rootEntityId as string;
+  assert(unpacked.madeSource === false && current.bundle.scene.entities[unpackedRoot]?.parentId === copies[1]
+    && !current.bundle.scene.entities[copies[1]].components.some((component) => component.type === "prefab-instance"),
+    "Unpacking replaces the copy with ordinary Entities under the same Entity");
+  const boundsAfterUnpack = worldBounds(copies[1]).world!;
+  assert(near(boundsAfterUnpack.min, boundsBeforeUnpack.min) && near(boundsAfterUnpack.max, boundsBeforeUnpack.max),
+    "An unpacked copy is drawn exactly where and how it was");
+  assert(canonicalPrefab(prefabId) === prefabBeforeUnpack, "Unpacking one copy leaves the Prefab unchanged");
+  assert(call("set_material", { ...scope(), entityId: unpackedRoot, materialAssetId: BUILTIN_ASSET_IDS.material.blue }).materialAssetId
+    === BUILTIN_ASSET_IDS.material.blue, "An unpacked copy can be edited on its own");
+  assert(rejection("unpack_prefab_instance", { ...scope(), entityId: bench }) === "PREFAB_INSTANCE_NOT_FOUND",
+    "Only a placed copy can be unpacked");
+
   // A Prefab saved before roots were anchored keeps the offset its copies show.
   const legacyDocument = structuredClone(current.bundle.prefabs[prefabId]);
   rootOf(legacyDocument).position = [5, 0, 0];
@@ -4087,15 +4166,35 @@ function assertMcpPrefabReuse(): void {
     "A copy of the Prefab inside its own original is rejected instead of saving a cycle");
   run("delete_entity", { ...scope(), entityId: nested });
 
+  const lastCopy = call("place_asset", { ...scope(), assetId: prefabAssetId, position: [6, 0.5, 4] }).entityId as string;
   const beforeDeletion = JSON.stringify(current.bundle.prefabs[prefabId]);
-  run("delete_entity", { ...scope(), entityId: bench });
+  const deleted = call("delete_entity", { ...scope(), entityId: bench });
+  assert((deleted.orphanedPrefabs as { prefabAssetId: string }[] | undefined)?.some((prefab) => prefab.prefabAssetId === prefabAssetId)
+    && String(deleted.prefabNotice).includes("unpack_prefab_instance"),
+    "Deleting an original says its copies can no longer change and how to recover");
   assert(rejection("update_prefab_from_source", { ...scope(), prefabAssetId }) === "PREFAB_SOURCE_MISSING",
     "A deleted original cannot be applied");
-  assert(JSON.stringify(current.bundle.prefabs[prefabId]) === beforeDeletion && worldBounds(copies[1]).world,
+  assert(JSON.stringify(current.bundle.prefabs[prefabId]) === beforeDeletion && worldBounds(copies[0]).world,
     "Copies keep drawing the saved Prefab after the original is deleted");
   const orphan = (run("get_editor_context").result.prefabs as { prefabAssetId: string; sourceEntityId: string | null }[])
     .find((prefab) => prefab.prefabAssetId === prefabAssetId);
   assert(orphan?.sourceEntityId === null, "A deleted original is reported as unavailable");
+
+  // One copy becomes the new original, and the others follow it again.
+  const widthBeforeRestore = (() => { const box = worldBounds(lastCopy).world!; return box.max[0] - box.min[0]; })();
+  const restored = call("unpack_prefab_instance", { ...scope(), entityId: copies[0], makeSource: true });
+  assert(restored.madeSource === true && restored.sourceEntityId === restored.rootEntityId,
+    "makeSource turns the unpacked copy into the Prefab's original");
+  assert((call("get_editor_context").prefabs as { prefabAssetId: string; sourceEntityId: string | null; sourceChanged?: boolean }[])
+    .some((prefab) => prefab.prefabAssetId === prefabAssetId && prefab.sourceEntityId === restored.rootEntityId && prefab.sourceChanged === false),
+    "The restored original is listed and matches the Prefab");
+  call("update_transform", { ...scope(), entityId: restored.rootEntityId, scale: [5, 1, 1] });
+  assert(call("update_prefab_from_source", { ...scope(), prefabAssetId }).changed === true,
+    "A restored original can update the Prefab again");
+  const widthAfterRestore = (() => { const box = worldBounds(lastCopy).world!; return box.max[0] - box.min[0]; })();
+  assert(widthAfterRestore > widthBeforeRestore + 0.5, "The remaining copies follow the restored original");
+  assert(rejection("unpack_prefab_instance", { ...scope(), entityId: "entity-missing" }) === "ENTITY_NOT_FOUND",
+    "An unknown Entity is rejected");
 }
 
 function assert(condition: unknown, message: string): asserts condition {

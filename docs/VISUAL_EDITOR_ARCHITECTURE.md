@@ -1030,7 +1030,7 @@ toolbar、context menu、command palette、tooltip、Shortcut設定、ユーザ�
 - 作成成功では選択subtreeを同じ見た目のプレハブの配置に変換し、`prefabAssetId`、`prefabRevision`、prefab-localオブジェクトIDとsceneオブジェクトIDの対応を保持する。素材gridは新プレハブを選択し、`sceneSelection`は元rootに対応するinstance rootを保つ。
 - Instance差分は`overrides`に`prefabEntityId / componentType / fieldPath / value`のtyped operationとして保持する。プレハブ更新時はoverrideのないfieldだけを追従し、削除されたfieldや依存切れはconflict diagnosticにする。名前や配列indexだけでoverrideを対応しない。
 - 「Overrideを適用」「元に戻す」は対象fieldまたはcomponent単位のCommandとする。プレハブ自体の変更と一instanceのoverrideを同じ設定fieldで曖昧に編集しない。
-- UnpackはInstanceを通常オブジェクト群へ変換する一方向Commandとし、プレハブと他instanceは変更しない。元に戻すでは同じIDs、overrides、両selectionを復元する。
+- UnpackはInstanceを通常オブジェクト群へ変換する一方向Commandとし、プレハブと他instanceは変更しない。元に戻すでは同じIDs、overrides、両selectionを復元する。現在はMCPの`unpack_prefab_instance`だけが実装し、プレハブのrootをinstanceのオブジェクトの子として複製するため、展開前と同じ位置に描画する。`makeSource`では展開したオブジェクトを新しい元のオブジェクトにし、`sourceEntityMap`でプレハブ側のIDを保つ。元のオブジェクトを削除したプレハブも、これで再び更新できる。
 - プレハブを削除する時は全instanceと入れ子参照を列挙し、Unpack、置換、取消のいずれかを選ばせる。参照中のままdangling IDを残さない。
 - プレハブ化したsubtreeの元オブジェクトを削除しても、プレハブとプレハブdocumentは独立して保存できる状態を保つ。
 

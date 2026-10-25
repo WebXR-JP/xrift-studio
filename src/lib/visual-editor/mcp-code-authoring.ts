@@ -1,4 +1,4 @@
-import { assertWritableContext, XriftMcpEditorToolError, type XriftMcpEditorContext, type XriftMcpEditorToolOutcome } from "./mcp-editor-tools";
+import { assertWritableContext, prefabCopyGuidance, withPendingPrefabNotice, XriftMcpEditorToolError, type XriftMcpEditorContext, type XriftMcpEditorToolOutcome } from "./mcp-editor-tools";
 import { applyChatgptR3fScene } from "./chatgpt-code-authoring";
 import { ChatgptSceneConflictError } from "./chatgpt-plan-guards";
 import { ChatgptPlanInputError } from "./chatgpt-plan-recovery";
@@ -16,6 +16,10 @@ export async function applyMcpR3fScene(context: XriftMcpEditorContext, args: Rec
   if (args.entityId !== undefined && args.entityId !== null && (typeof args.entityId !== "string" || !args.entityId.trim())) {
     throw new XriftMcpEditorToolError("INVALID_ARGUMENT", "entityIdには制作原本を持つルートEntityのIDを指定してください");
   }
+  // A placed Prefab copy has no source of its own; its shape lives in the original.
+  const copy = typeof args.entityId === "string" && !context.bundle.scene.entities[args.entityId]?.codeAuthoring
+    ? prefabCopyGuidance(context, args.entityId) : null;
+  if (copy) throw new XriftMcpEditorToolError("R3F_SOURCE_INVALID", copy.message, { entityId: args.entityId, prefab: copy.prefab });
   try {
     const result = await applyChatgptR3fScene(context.bundle, { kind: "r3f-scene", name: args.name, source: args.source,
       ...(typeof args.entityId === "string" ? { entityId: args.entityId } : {}) }, { checkCurrent });
@@ -25,12 +29,12 @@ export async function applyMcpR3fScene(context: XriftMcpEditorContext, args: Rec
       ...result.bundle.project.metadata, updatedAt: context.now?.() ?? new Date().toISOString(),
     } } } : result.bundle;
     const authoring = bundle.scene.entities[result.entityId].codeAuthoring!;
-    return { changed, bundle, sceneSelection: changed ? { kind: "entity", id: result.entityId } : context.sceneSelection,
+    return withPendingPrefabNotice(context, "apply_r3f_scene", { changed, bundle, sceneSelection: changed ? { kind: "entity", id: result.entityId } : context.sceneSelection,
       assetSelection: changed ? null : context.assetSelection,
       result: { projectId: bundle.project.projectId, sceneId: bundle.scene.sceneId, entityId: result.entityId, changed,
         revisionBefore: context.revision, revisionAfter: context.revision + Number(changed), sourceRevision: authoring.revision,
         entityCount: Object.keys(authoring.nodes).length, nextActions: ["get_entity_components", "capture_scene_view"] },
-      activity: changed ? `「${args.name}」の形状と配置を原本から反映しました` : `「${args.name}」の原本による変更はありません` };
+      activity: changed ? `「${args.name}」の形状と配置を原本から反映しました` : `「${args.name}」の原本による変更はありません` });
   } catch (error) {
     if (error instanceof XriftMcpEditorToolError) throw error;
     if (error instanceof ChatgptSceneConflictError) throw new XriftMcpEditorToolError("R3F_EDIT_CONFLICT", error.message);

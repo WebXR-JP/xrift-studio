@@ -304,7 +304,10 @@ import {
 import { addDefaultDocumentAsset } from "./document-asset-creation";
 import {
   addPrefabAsset,
+  canonicalJson,
   createPrefabDocument,
+  prefabSourceHasPendingChanges,
+  unpackPrefabInstance,
   updatePrefabDocumentFromSource,
   type PrefabDocument,
 } from "./prefab-document";
@@ -460,6 +463,7 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   place_builtin_prefab: placeBuiltinPrefab,
   create_prefab: createPrefab,
   update_prefab_from_source: updatePrefabFromSource,
+  unpack_prefab_instance: unpackPrefabInstanceTool,
   add_component: addComponent,
   update_component: updateComponent,
   remove_component: removeComponent,
@@ -511,9 +515,10 @@ export function executeXriftMcpEditorTool(
   context: XriftMcpEditorContext,
   request: XriftMcpEditorRequest,
 ): XriftMcpEditorToolOutcome {
-  return XRIFT_MCP_DOCUMENT_TOOL_HANDLERS[request.tool](
+  return withPendingPrefabNotice(
     context,
-    request.arguments,
+    request.tool,
+    XRIFT_MCP_DOCUMENT_TOOL_HANDLERS[request.tool](context, request.arguments),
   );
 }
 
@@ -682,7 +687,7 @@ function readEditorContext(
     scriptRuntime: context.scriptRuntime ?? null,
     starterEntityIds: untouchedChatgptStarterEntityIds(context.bundle),
     sceneSettings,
-    prefabs: projectPrefabSummaries(context),
+    prefabs: projectPrefabSummaries(context, { pendingChanges: true }),
     selectedEntity: selectedEntity
       ? { id: selectedEntity.id, name: selectedEntity.name }
       : null,
@@ -1754,6 +1759,12 @@ function placeAsset(
   assertWritableContext(context, argumentsValue, { allowPlay: true });
   const assetId = requiredString(argumentsValue.assetId, "assetId");
   const position = optionalVec3(argumentsValue.position, "position") ?? [0, 0, 0];
+  // Varying each copy no longer needs a second write per placement.
+  const rotation = optionalVec3(argumentsValue.rotation, "rotation");
+  const scale = optionalVec3(argumentsValue.scale, "scale");
+  if (scale && scale.some((value) => Math.abs(value) < 0.0001)) {
+    invalidArgument("scale", "各軸の絶対値が0.0001以上の数値");
+  }
   const parentEntityId = optionalNullableString(
     argumentsValue.parentEntityId,
     "parentEntityId",
@@ -1774,7 +1785,9 @@ function placeAsset(
   }
   const bundle = touchProject(context, {
     ...context.bundle,
-    scene: placement.scene,
+    scene: rotation || scale
+      ? updateEntityTransform(placement.scene, placement.entityId, { rotation, scale })
+      : placement.scene,
     // Placing an animated Model creates the graph that plays it.
     assets: placement.assets,
   });
@@ -1792,6 +1805,8 @@ function placeAsset(
       assetId,
       assetName: placement.assetName,
       position,
+      ...(rotation ? { rotation } : {}),
+      ...(scale ? { scale } : {}),
       parentEntityId,
     },
     activity: `AIが「${placement.assetName}」をシーンへ配置しました`,
@@ -4000,7 +4015,7 @@ function updatePrefabFromSource(
   if (missingEntityIds.length > 0) {
     throw new XriftMcpEditorToolError(
       "PREFAB_SOURCE_MISSING",
-      "プレハブの元のEntityが削除されているため反映できません。配置済みのプレハブはそのまま残ります",
+      "プレハブの元のEntityが削除されているため反映できません。配置済みのプレハブはそのまま残ります。配置の一つをunpack_prefab_instance（makeSource: true）で展開すると、新しい元のEntityにできます",
       { prefabAssetId, missingEntityIds },
     );
   }
@@ -4085,16 +4100,6 @@ function requirePrefabDocument(
   return { asset, prefabId: reference.prefabId, document };
 }
 
-/** A Prefab read from disk has sorted keys; one built in memory does not. */
-function canonicalJson(value: unknown): string {
-  return JSON.stringify(value, (_key, entry: unknown) =>
-    entry && typeof entry === "object" && !Array.isArray(entry)
-      ? Object.fromEntries(
-          Object.keys(entry).sort().map((key) => [key, (entry as Record<string, unknown>)[key]]),
-        )
-      : entry);
-}
-
 /** Follows nested Prefab instances; the resolver would drop a cyclic copy. */
 function prefabReferenceCycle(
   context: XriftMcpEditorContext,
@@ -4136,7 +4141,10 @@ function countPrefabInstances(scene: SceneDocument): Map<string, number> {
  * editable original and how many copies draw from it. An agent that cannot
  * see them builds every repeated object again as unrelated Entities.
  */
-function projectPrefabSummaries(context: XriftMcpEditorContext) {
+function projectPrefabSummaries(
+  context: XriftMcpEditorContext,
+  options: { pendingChanges?: boolean } = {},
+) {
   const scene = context.bundle.scene;
   const counts = countPrefabInstances(scene);
   return Object.values(context.bundle.assets.assets)
@@ -4153,6 +4161,11 @@ function projectPrefabSummaries(context: XriftMcpEditorContext) {
         name: asset.name,
         sourceEntityId,
         instanceCount: counts.get(asset.id) ?? 0,
+        // Edits of the original that the copies do not draw yet, such as a
+        // manual edit made without 「プレハブに反映」.
+        ...(options.pendingChanges && document && sourceEntityId
+          ? { sourceChanged: prefabSourceHasPendingChanges(scene, context.bundle.assets, document) }
+          : {}),
       };
     })
     .sort((left, right) => left.name.localeCompare(right.name));
@@ -4161,6 +4174,177 @@ function projectPrefabSummaries(context: XriftMcpEditorContext) {
 /** User-facing kind: Prefab Assets are stored under the older `template` kind. */
 function mcpAssetKind(asset: SceneAsset): string {
   return isPrefabAsset(asset) ? "prefab" : asset.kind;
+}
+
+type PrefabCopy = { prefabAssetId: string; name: string | null; sourceEntityId: string | null };
+
+/** The Prefab a placed copy draws, when an edit aimed at the copy cannot work. */
+function prefabCopyOf(context: XriftMcpEditorContext, entityId: string): PrefabCopy | null {
+  const instance = context.bundle.scene.entities[entityId]?.components.find(
+    (component) => component.type === "prefab-instance",
+  );
+  if (!instance || instance.type !== "prefab-instance") return null;
+  const prefab = projectPrefabSummaries(context).find(
+    (item) => item.prefabAssetId === instance.prefabAssetId,
+  );
+  return {
+    prefabAssetId: instance.prefabAssetId,
+    name: prefab?.name ?? null,
+    sourceEntityId: prefab?.sourceEntityId ?? null,
+  };
+}
+
+/** Where an edit aimed at a copy belongs. */
+export function prefabCopyGuidance(context: XriftMcpEditorContext, entityId: string): { message: string; prefab: PrefabCopy } | null {
+  const prefab = prefabCopyOf(context, entityId);
+  if (!prefab) return null;
+  return {
+    prefab,
+    message: prefab.sourceEntityId
+      ? `このEntityはプレハブ「${prefab.name}」の配置で、形状は持っていません。全配置を変えるには元のEntity（${prefab.sourceEntityId}）を編集してupdate_prefab_from_sourceで反映し、この配置だけ変えるにはunpack_prefab_instanceで展開してから編集してください`
+      : `このEntityはプレハブ「${prefab.name}」の配置で、形状は持っていません。元のEntityがないため、unpack_prefab_instanceで展開してから編集してください。makeSource: trueにすると、展開したEntityがプレハブの新しい元のEntityになります`,
+  };
+}
+
+/**
+ * Unpack: one placed copy becomes ordinary Entities. Without it a copy could
+ * never differ from the others, and a Prefab whose original was deleted could
+ * never change again.
+ */
+function unpackPrefabInstanceTool(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const entityId = requiredString(argumentsValue.entityId, "entityId");
+  const entity = requireEntity(context.bundle.scene, entityId);
+  const makeSource = optionalBoolean(argumentsValue.makeSource, "makeSource") ?? false;
+  const instances = entity.components.filter(
+    (component) => component.type === "prefab-instance",
+  );
+  if (instances.length !== 1 || instances[0].type !== "prefab-instance") {
+    throw new XriftMcpEditorToolError(
+      "PREFAB_INSTANCE_NOT_FOUND",
+      instances.length === 0
+        ? "指定されたEntityはプレハブの配置ではありません"
+        : "複数のプレハブ配置を持つEntityは展開できません",
+      { entityId, instanceCount: instances.length },
+    );
+  }
+  const instance = instances[0];
+  const { asset, prefabId, document } = requirePrefabDocument(context, instance.prefabAssetId);
+  const scene = context.bundle.scene;
+  const previousSourceEntityId =
+    document.source.sceneId === scene.sceneId
+      ? (document.source.rootEntityIds.find((id) => scene.entities[id]) ?? null)
+      : null;
+  const unpacked = unpackPrefabInstance(
+    scene,
+    document,
+    entityId,
+    instance.id,
+    (kind) => createDocumentId(kind),
+    { makeSource },
+  );
+  if (!unpacked.unpacked) {
+    throw new XriftMcpEditorToolError(
+      "PREFAB_UNPACK_FAILED",
+      unpacked.reason === "multiple-roots"
+        ? "複数の最上位Entityを持つプレハブは、元のEntityにできません。makeSourceを外して展開してください"
+        : "プレハブの配置を展開できませんでした",
+      { entityId, prefabAssetId: instance.prefabAssetId, reason: unpacked.reason },
+    );
+  }
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    scene: unpacked.scene,
+    prefabs: makeSource
+      ? { ...context.bundle.prefabs, [prefabId]: unpacked.document }
+      : context.bundle.prefabs,
+  });
+  const root = unpacked.scene.entities[unpacked.rootEntityId];
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: { kind: "entity", id: entityId },
+    assetSelection: context.assetSelection,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      entityId,
+      rootEntityId: unpacked.rootEntityId,
+      entityCount: unpacked.entityIds.length,
+      prefabAssetId: asset.id,
+      name: asset.name,
+      madeSource: makeSource,
+      sourceEntityId: makeSource ? unpacked.rootEntityId : previousSourceEntityId,
+      ...(makeSource && previousSourceEntityId ? { previousSourceEntityId } : {}),
+      // An original made with apply_r3f_scene keeps its source in the copy.
+      ...(isR3fSceneAuthoring(root.codeAuthoring) ? { r3fRootEntityId: unpacked.rootEntityId } : {}),
+      nextActions: makeSource
+        ? ["get_entity_components", "update_prefab_from_source", "capture_scene_view"]
+        : ["get_entity_components", "capture_scene_view"],
+    },
+    activity: makeSource
+      ? `AIがプレハブ「${asset.name}」の配置を展開し、元のEntityにしました`
+      : `AIがプレハブ「${asset.name}」の配置を通常のEntityへ展開しました`,
+  };
+}
+
+/**
+ * A write that changed a Prefab's original leaves every copy drawing the old
+ * content until the Prefab is updated, which an agent easily forgets. Name the
+ * Prefabs that would change, so the result itself says what is pending.
+ */
+export function withPendingPrefabNotice(
+  context: XriftMcpEditorContext,
+  tool: string,
+  outcome: XriftMcpEditorToolOutcome,
+): XriftMcpEditorToolOutcome {
+  if (!outcome.changed || tool === "update_prefab_from_source" || tool === "create_prefab") {
+    return outcome;
+  }
+  const before = context.bundle.scene;
+  const after = outcome.bundle.scene;
+  if (before === after || after.sceneId !== before.sceneId) return outcome;
+  const pending: { prefabAssetId: string; name: string; sourceEntityId: string; instanceCount: number }[] = [];
+  const counts = countPrefabInstances(after);
+  for (const asset of Object.values(outcome.bundle.assets.assets)) {
+    if (!isPrefabAsset(asset)) continue;
+    const reference = getPrefabAssetDocumentReference(asset);
+    const document = reference ? outcome.bundle.prefabs[reference.prefabId] : undefined;
+    const sourceEntityId = document?.source.rootEntityIds[0];
+    if (!document || !sourceEntityId || document.source.sceneId !== after.sceneId || !after.entities[sourceEntityId]) continue;
+    // Untouched Entities keep their identity across an edit, so only a source
+    // subtree that actually changed pays for comparing the Prefab.
+    let touched = false;
+    const pendingIds = [...document.source.rootEntityIds];
+    const visited = new Set<string>();
+    while (pendingIds.length > 0 && !touched) {
+      const id = pendingIds.pop()!;
+      if (visited.has(id)) continue;
+      visited.add(id);
+      touched = before.entities[id] !== after.entities[id];
+      pendingIds.push(...(after.entities[id]?.children ?? []));
+    }
+    if (touched && prefabSourceHasPendingChanges(after, outcome.bundle.assets, document)) {
+      pending.push({ prefabAssetId: asset.id, name: asset.name, sourceEntityId, instanceCount: counts.get(asset.id) ?? 0 });
+    }
+  }
+  if (pending.length === 0) return outcome;
+  const nextActions = Array.isArray(outcome.result.nextActions)
+    ? (outcome.result.nextActions as unknown[]).filter((action) => action !== "update_prefab_from_source")
+    : [];
+  return {
+    ...outcome,
+    result: {
+      ...outcome.result,
+      prefabsPendingUpdate: pending,
+      nextActions: ["update_prefab_from_source", ...nextActions],
+    },
+  };
 }
 
 function addComponent(
@@ -5304,10 +5488,11 @@ function setMaterial(
         "マテリアルはすでに指定された状態です",
       );
     }
+    const copy = outcome.reason === "mesh-missing" ? prefabCopyGuidance(context, entityId) : null;
     throw new XriftMcpEditorToolError(
       setMaterialFailureCode(outcome.reason),
-      setMaterialFailureMessage(outcome.reason),
-      { entityId, materialAssetId, slot, reason: outcome.reason },
+      copy ? copy.message : setMaterialFailureMessage(outcome.reason),
+      { entityId, materialAssetId, slot, reason: outcome.reason, ...(copy ? { prefab: copy.prefab } : {}) },
     );
   }
   const bundle = touchProject(context, { ...context.bundle, scene: outcome.scene });
@@ -5842,6 +6027,11 @@ function duplicateEntity(
     ? updateEntityTransform(duplication.scene, newEntityId, { position })
     : duplication.scene;
   const bundle = touchProject(context, { ...context.bundle, scene });
+  // A duplicate of an original is an unrelated set of Entities: later edits of
+  // the Prefab never reach it. Placing the Prefab keeps the copy linked.
+  const originalOf = projectPrefabSummaries(context)
+    .filter((prefab) => prefab.sourceEntityId === entityId)
+    .map(({ prefabAssetId, name }) => ({ prefabAssetId, name }));
   return {
     changed: true,
     bundle,
@@ -5856,6 +6046,10 @@ function duplicateEntity(
       entityId: newEntityId,
       parentEntityId,
       position,
+      ...(originalOf.length > 0 ? {
+        prefabNotice: `複製したのはプレハブ「${originalOf[0].name}」の元のEntityです。この複製はプレハブと連動しないため、プレハブを直しても変わりません。連動する配置にはplace_assetでプレハブを置いてください`,
+        originalOfPrefabs: originalOf,
+      } : {}),
     },
     activity: "AIがEntityを複製しました",
   };
@@ -5977,6 +6171,11 @@ function deleteEntity(
   }
   const wasSelected = context.sceneSelection?.id === entityId;
   const bundle = touchProject(context, { ...context.bundle, scene });
+  // Copies keep drawing a Prefab whose original is gone, but nothing can
+  // change them any more. Say so while the deletion can still be undone.
+  const orphanedPrefabs = projectPrefabSummaries(context)
+    .filter((prefab) => prefab.sourceEntityId && !scene.entities[prefab.sourceEntityId])
+    .map(({ prefabAssetId, name, instanceCount }) => ({ prefabAssetId, name, instanceCount }));
   return {
     changed: true,
     bundle,
@@ -5988,6 +6187,10 @@ function deleteEntity(
       revisionBefore: context.revision,
       revisionAfter: context.revision + 1,
       entityId,
+      ...(orphanedPrefabs.length > 0 ? {
+        orphanedPrefabs,
+        prefabNotice: `プレハブ「${orphanedPrefabs[0].name}」の元のEntityを削除しました。配置済みのプレハブはそのまま表示されますが、変更を反映できません。配置の一つをunpack_prefab_instance（makeSource: true）で展開すると、新しい元のEntityにできます`,
+      } : {}),
     },
     activity: "AIがEntityを削除しました",
   };

@@ -2311,7 +2311,7 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "analyze_performance",
-            "description": "Read-only authoring counts for Entity, Light, Rigid Body, Texture and Model, compared with heuristic budgets. Use to locate count growth, then inspect assets and test Play on target devices. Includes disabled and unused authoring data; does not expand Prefabs or Script-generated objects, measure triangles, memory or FPS, or guarantee performance. Use get_project_health for document validation. Never block Publish based on these estimates.",
+            "description": "Read-only authoring counts for Entity, Light, Rigid Body, Texture and Model, compared with heuristic budgets. Use to locate count growth, then inspect assets and test Play on target devices. Includes disabled and unused authoring data and counts each placed Prefab copy with its expanded content (prefabExpansion); does not include Script-generated objects, measure triangles, memory or FPS, or guarantee performance. Use get_project_health for document validation. Never block Publish based on these estimates.",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         },
         {
@@ -3491,7 +3491,7 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "place_asset",
-            "description": "Place a project asset (Model, Prefab, Audio, a picture Texture, or an installed external Model) into the current XRift Studio scene and select the created entity. A Texture lands as an Image Entity: a one metre wide quad showing the picture at its own aspect ratio, centred on position — the way to hang photos in a gallery or put a poster on a wall; resize it with update_component (width, height) and rotate it to face the room with update_transform. Environment Textures (HDRI) are not placeable; they go to the skybox. The origin of a Model lands at position, so read get_entity_bounds or sample_terrain_point to put its base on the floor, and vary yaw and scale between copies of the same asset instead of repeating an identical instance. A Prefab lands as one Entity that draws the whole Prefab with its origin at position; get_entity_bounds measures what it draws. Change every copy through the Prefab's source Entity and update_prefab_from_source, not through a copy.",
+            "description": "Place a project asset (Model, Prefab, Audio, a picture Texture, or an installed external Model) into the current XRift Studio scene and select the created entity. A Texture lands as an Image Entity: a one metre wide quad showing the picture at its own aspect ratio, centred on position — the way to hang photos in a gallery or put a poster on a wall; resize it with update_component (width, height) and rotate it to face the room with update_transform. Environment Textures (HDRI) are not placeable; they go to the skybox. The origin of a Model lands at position, so read get_entity_bounds or sample_terrain_point to put its base on the floor, and vary yaw and scale between copies of the same asset instead of repeating an identical instance; rotation (radians) and scale set them in this same write. A Prefab lands as one Entity that draws the whole Prefab with its origin at position; get_entity_bounds measures what it draws. Change every copy through the Prefab's source Entity and update_prefab_from_source, not through a copy.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3505,6 +3505,8 @@ pub(crate) fn tool_definitions() -> Value {
                         "minItems": 3,
                         "maxItems": 3
                     },
+                    "rotation": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+                    "scale": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
                     "parentEntityId": { "type": ["string", "null"] }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "assetId"],
@@ -3917,7 +3919,7 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "create_prefab",
-            "description": "Create a reusable project Prefab Asset from an Entity and its child hierarchy. Use it when the same object repeats across the place (trees, benches, lamps, stalls): finish one copy, create the Prefab from the Entity that owns it, then place_asset the returned prefabAssetId for each further copy and vary each copy with update_transform. Separately built copies each need every later fix applied again. The source Entity stays in the Scene as the editable original and one of the copies. The Prefab's origin is the source Entity's own origin: its position only places that copy, while its rotation, scale, children and Components form the Prefab. An offset carried by a child moves every copy, so author the object around the source origin (base at y=0); an apply_r3f_scene root needs its top-level group at the origin, then update_transform the root. The result returns contentBounds around the origin and originWarning when the content sits beside it. To change every copy, edit the original and call update_prefab_from_source. get_editor_context.prefabs lists existing Prefabs; reuse one before building the object again. A copy cannot change the Prefab's content, so vary copies by Transform and give a different shape or colour its own Prefab. Official XRift components use place_builtin_prefab instead.",
+            "description": "Create a reusable project Prefab Asset from an Entity and its child hierarchy. Use it when the same object repeats across the place (trees, benches, lamps, stalls): finish one copy, create the Prefab from the Entity that owns it, then place_asset the returned prefabAssetId for each further copy and vary each copy with update_transform. Separately built copies each need every later fix applied again. The source Entity stays in the Scene as the editable original and one of the copies. The Prefab's origin is the source Entity's own origin: its position only places that copy, while its rotation, scale, children and Components form the Prefab. An offset carried by a child moves every copy, so author the object around the source origin (base at y=0); an apply_r3f_scene root needs its top-level group at the origin, then update_transform the root. The result returns contentBounds around the origin and originWarning when the content sits beside it. To change every copy, edit the original and call update_prefab_from_source. get_editor_context.prefabs lists existing Prefabs; reuse one before building the object again. A copy cannot change the Prefab's content, so vary copies by Transform, give a recurring different shape or colour its own Prefab, and unpack_prefab_instance one copy that must differ alone. Duplicating the original with duplicate_entity makes unlinked Entities. Official XRift components use place_builtin_prefab instead.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3933,7 +3935,7 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "update_prefab_from_source",
-            "description": "Apply the current hierarchy and Components of a project Prefab's source Entity to the Prefab so every placed copy follows, the same as the Inspector's 「プレハブに反映」. Call it after editing the original: apply_r3f_scene on its root, update_component, set_material, add_component or update_transform on its children. The source Entity's own position is that copy's placement and is not applied; its rotation, scale, children and Components are. Find the original in get_editor_context.prefabs or get_entity_components.prefabInstances. The content inside a placed copy cannot be edited per copy; its own Transform, enabled state and added Components stay with that copy. Rejected when the source Entity was deleted or is in another Scene, or when the source contains a copy of the same Prefab. An unchanged source returns changed false without a new revision. Capture the copies with capture_scene_view afterwards.",
+            "description": "Apply the current hierarchy and Components of a project Prefab's source Entity to the Prefab so every placed copy follows, the same as the Inspector's 「プレハブに反映」. Call it after editing the original: apply_r3f_scene on its root, update_component, set_material, add_component or update_transform on its children. The source Entity's own position is that copy's placement and is not applied; its rotation, scale, children and Components are. Find the original in get_editor_context.prefabs or get_entity_components.prefabInstances. The content inside a placed copy cannot be edited per copy; its own Transform, enabled state and added Components stay with that copy. Rejected when the source Entity was deleted (unpack_prefab_instance with makeSource true restores an original from a copy) or is in another Scene, or when the source contains a copy of the same Prefab. An unchanged source returns changed false without a new revision. Writes that change an original return prefabsPendingUpdate until this is called, and get_editor_context.prefabs shows sourceChanged. Capture the copies with capture_scene_view afterwards.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3943,6 +3945,22 @@ pub(crate) fn tool_definitions() -> Value {
                     "prefabAssetId": { "type": "string", "minLength": 1 }
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "prefabAssetId"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "unpack_prefab_instance",
+            "description": "Turn one placed Prefab copy into ordinary editable Entities under the same Entity, drawn exactly as before (Unpack). Use it when one copy must differ from the others: unpack it, then edit its Entities; the Prefab and the other copies stay unchanged. With makeSource true the unpacked Entities become the Prefab's new editable original instead, so a Prefab whose original was deleted (update_prefab_from_source returns PREFAB_SOURCE_MISSING) can be changed again: edit the returned rootEntityId, then update_prefab_from_source. The previous original, if any, stays as unlinked Entities. A copy made from an apply_r3f_scene root returns r3fRootEntityId, which apply_r3f_scene can revise after get_entity_components. Rejected for an Entity without exactly one Prefab copy, and makeSource for a Prefab with several top-level Entities.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string" },
+                    "sceneId": { "type": "string" },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityId": { "type": "string", "minLength": 1 },
+                    "makeSource": { "type": "boolean" }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "entityId"],
                 "additionalProperties": false
             }
         },
@@ -4297,7 +4315,7 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "duplicate_entity",
-            "description": "Duplicate an entity and its child hierarchy, optionally reparenting or repositioning the copy.",
+            "description": "Duplicate an entity and its child hierarchy, optionally reparenting or repositioning the copy. A duplicate of a Prefab's original is unlinked and never follows later Prefab updates (the result says so); place_asset the Prefab for a copy that does. Duplicating a placed Prefab copy keeps it linked.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -4331,7 +4349,7 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "delete_entity",
-            "description": "Delete an entity and its child hierarchy from the scene. A shared-source Model node (entity with modelNode) is part of its Model and cannot be deleted: it is hidden instead and the result says so; re-show it with set_entity_enabled.",
+            "description": "Delete an entity and its child hierarchy from the scene. A shared-source Model node (entity with modelNode) is part of its Model and cannot be deleted: it is hidden instead and the result says so; re-show it with set_entity_enabled. Deleting a Prefab's original leaves its placed copies drawn but unchangeable; the result returns orphanedPrefabs, and unpack_prefab_instance with makeSource true restores an original from a copy.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -4807,7 +4825,19 @@ mod tests {
             assert!(create.contains(expected), "create_prefab must explain {expected}");
         }
         assert!(find("get_editor_context")["description"].as_str().unwrap().contains("prefabs"));
-        assert!(find("place_asset")["description"].as_str().unwrap().contains("update_prefab_from_source"));
+        let place = find("place_asset");
+        assert!(place["description"].as_str().unwrap().contains("update_prefab_from_source"));
+        for field in ["rotation", "scale"] {
+            assert_eq!(place["inputSchema"]["properties"][field]["maxItems"], 3, "place_asset varies a copy in one write: {field}");
+        }
+        let unpack = find("unpack_prefab_instance");
+        assert_eq!(unpack["inputSchema"]["required"], json!(["projectId", "sceneId", "expectedRevision", "entityId"]));
+        assert_eq!(unpack["inputSchema"]["properties"]["makeSource"]["type"], "boolean");
+        // A deleted original must lead to the tool that restores one.
+        for name in ["update_prefab_from_source", "delete_entity"] {
+            assert!(find(name)["description"].as_str().unwrap().contains("unpack_prefab_instance"), "{name}");
+        }
+        assert!(find("analyze_performance")["description"].as_str().unwrap().contains("placed Prefab copy"));
         let instructions = mcp_authoring_instructions();
         for expected in ["create_prefab", "update_prefab_from_source", "get_editor_context"] {
             assert!(instructions.contains(expected), "shared guidance must reach MCP clients: {expected}");
@@ -4969,6 +4999,7 @@ mod tests {
             "update_scene_settings",
             "create_prefab",
             "update_prefab_from_source",
+            "unpack_prefab_instance",
         ] {
             let tool = tools
                 .iter()

@@ -77,7 +77,7 @@ test("a bench authored once becomes one Prefab whose copies follow every revisio
   assert.ok(copies.every(copy => studio.context.bundle.scene.entities[copy].children.length === 0));
   const context = studio.run("get_editor_context");
   assert.deepEqual(context.prefabs.find(item => item.prefabAssetId === prefab.prefabAssetId),
-    { prefabAssetId: prefab.prefabAssetId, name: "ベンチ", sourceEntityId: original, instanceCount: 3 });
+    { prefabAssetId: prefab.prefabAssetId, name: "ベンチ", sourceEntityId: original, instanceCount: 3, sourceChanged: false });
 
   const saved = prefabDocumentCodec.parse(prefabDocumentCodec.serialize(studio.context.bundle.prefabs[prefab.prefabId]));
   assert.equal(saved.ok, true, JSON.stringify(saved.issues));
@@ -87,7 +87,11 @@ test("a bench authored once becomes one Prefab whose copies follow every revisio
   const { r3fAuthoring } = studio.run("get_entity_components", { entityId: original });
   const revisedSource = r3fAuthoring.source.replace("args={[1.6, 0.04, 0.12]}", "args={[2.2, 0.04, 0.12]}").replace("#8a5a3b", "#3f6f4f");
   assert.notEqual(revisedSource, r3fAuthoring.source);
-  await studio.r3f({ name: "ベンチ", source: revisedSource, entityId: original });
+  await assert.rejects(studio.r3f({ name: "ベンチ", source: revisedSource, entityId: copies[0] }),
+    error => error.code === "R3F_SOURCE_INVALID" && error.message.includes(original), "a copy points at the original to revise");
+  const revision = await studio.r3f({ name: "ベンチ", source: revisedSource, entityId: original });
+  assert.deepEqual(revision.prefabsPendingUpdate?.map(item => item.prefabAssetId), [prefab.prefabAssetId], "revising the original says its copies are stale");
+  assert.equal(revision.nextActions[0], "update_prefab_from_source");
   assert.deepEqual(drawnMaterials(studio.context.bundle, copies[0]), before, "copies keep the saved Prefab until it is updated");
   const applied = studio.run("update_prefab_from_source", { ...studio.scope(), prefabAssetId: prefab.prefabAssetId });
   assert.equal(applied.changed, true);
@@ -107,6 +111,26 @@ test("a bench authored once becomes one Prefab whose copies follow every revisio
   assert.equal(compiled.canStage, true, JSON.stringify(compiled.diagnostics.filter(item => item.severity === "error")));
   const world = compiled.overlayFiles.find(file => file.relativePath === "src/World.tsx").content;
   assert.equal(world.split('"Slat"').length - 1, 12, "publishing draws the original and all three copies with every slat");
+});
+
+test("one unpacked bench takes its own source revision while the others stay linked", async () => {
+  const studio = session();
+  const original = (await studio.r3f({ name: "ベンチ", source: bench(1.6, "#8a5a3b") })).entityId;
+  const prefab = studio.run("create_prefab", { ...studio.scope(), entityId: original, name: "ベンチ" });
+  const [single, linked] = [[-3, 0, 4], [3, 0, 4]].map(position =>
+    studio.run("place_asset", { ...studio.scope(), assetId: prefab.prefabAssetId, position, rotation: [0, 0.4, 0] }).entityId);
+  const linkedBefore = drawnMaterials(studio.context.bundle, linked);
+  const unpacked = studio.run("unpack_prefab_instance", { ...studio.scope(), entityId: single });
+  assert.ok(unpacked.r3fRootEntityId, "a copy of an R3F original keeps its own editable source");
+  const { r3fAuthoring } = studio.run("get_entity_components", { entityId: unpacked.r3fRootEntityId });
+  await studio.r3f({ name: "赤いベンチ", source: r3fAuthoring.source.replace("#8a5a3b", "#b03a2e"), entityId: unpacked.r3fRootEntityId });
+  assert.notDeepEqual(drawnMaterials(studio.context.bundle, single), linkedBefore, "the unpacked bench changes alone");
+  assert.deepEqual(drawnMaterials(studio.context.bundle, linked), linkedBefore, "the linked copy is untouched");
+  const saved = prefabDocumentCodec.parse(prefabDocumentCodec.serialize(studio.context.bundle.prefabs[prefab.prefabId]));
+  assert.equal(saved.ok, true);
+  const compiled = compileVisualProject({ project: studio.context.bundle.project, scenes: { [studio.context.bundle.scene.sceneId]: studio.context.bundle.scene },
+    assets: studio.context.bundle.assets, prefabs: studio.context.bundle.prefabs }, { generatedAt: "2026-10-25T00:00:00.000Z" });
+  assert.equal(compiled.canStage, true, JSON.stringify(compiled.diagnostics.filter(item => item.severity === "error")));
 });
 
 test("making the Prefab from a root whose child carries the placement is reported, not silently offset", async () => {
