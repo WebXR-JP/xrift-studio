@@ -4,10 +4,14 @@ import {
   PARTICLE_AUTHORING_PRESETS,
   PARTICLE_PRESET_CATEGORY_LABELS,
   normalizeParticleProperties,
+  patchParticleProperties,
+  type ParticlePropertiesPatch,
   type ParticleAuthoringPreset,
   type ParticlePresetCategory,
 } from "../../lib/visual-editor";
 import { ParticlePresetCatalogPreview } from "./ParticlePresetCatalogPreview";
+import { ParticlePropertiesEditor } from "./ParticleAssetInspector";
+import { getParticlePresetTexture } from "../../lib/visual-editor/particle-preset-textures";
 
 export type ParticlePresetInstallResult = {
   assetName: string;
@@ -54,10 +58,26 @@ export function ParticlePresetStore({
   const [adding, setAdding] = useState(false);
   const [addedMessage, setAddedMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, ParticlePropertiesPatch>>({});
+  const [restartKey, setRestartKey] = useState(0);
 
-  const selected =
+  const basePreset =
     PARTICLE_AUTHORING_PRESETS.find((preset) => preset.id === selectedId) ??
     PARTICLE_AUTHORING_PRESETS[0];
+  const selected = useMemo(() => basePreset ? {
+    ...basePreset,
+    properties: drafts[basePreset.id] ?? basePreset.properties,
+  } : undefined, [basePreset, drafts]);
+  const properties = useMemo(() => normalizeParticleProperties(selected?.properties), [selected]);
+  const changeDraft = (patch: ParticlePropertiesPatch) => {
+    if (!selected || adding || disabledReason) return;
+    setDrafts((current) => ({
+      ...current,
+      [selected.id]: patchParticleProperties(normalizeParticleProperties(current[selected.id] ?? selected.properties), patch),
+    }));
+    setAddedMessage(null);
+    setError(null);
+  };
 
   const visible = useMemo(() => {
     const tokens = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
@@ -85,6 +105,7 @@ export function ParticlePresetStore({
     return {
       maxParticles: config.maxParticles,
       rate: config.emission.rateOverTime,
+      burstCount: config.emission.bursts.reduce((total, burst) => total + burst.count * burst.cycles, 0),
       lifetime: `${config.startLifetime.min.toFixed(1)}〜${config.startLifetime.max.toFixed(1)}秒`,
       blending: config.renderer.blending === "additive" ? "加算" : "通常",
       shape:
@@ -132,7 +153,7 @@ export function ParticlePresetStore({
             <div>
               <h3 className="text-xs font-semibold text-slate-900">パーティクル</h3>
               <p className="mt-0.5 text-[10px] leading-4 text-slate-500">
-                炎、雪、桜などのパーティクルを追加できます。追加後に色や量を調整してください。
+                炎、雪、花火などを選び、動く見本で色や量を調整して追加できます。
               </p>
             </div>
             <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700">
@@ -147,6 +168,7 @@ export function ParticlePresetStore({
               />
               <span className="sr-only">パーティクルを検索</span>
               <input
+                disabled={adding}
                 value={query}
                 onChange={(event) => setQuery(event.currentTarget.value)}
                 placeholder="名前または説明で検索"
@@ -154,6 +176,7 @@ export function ParticlePresetStore({
               />
             </label>
             <select
+              disabled={adding}
               value={category}
               onChange={(event) =>
                 setCategory(
@@ -186,6 +209,7 @@ export function ParticlePresetStore({
                   <button
                     key={preset.id}
                     type="button"
+                    disabled={adding}
                     data-catalog-card
                     aria-pressed={active}
                     onClick={() => {
@@ -230,7 +254,9 @@ export function ParticlePresetStore({
               className="aspect-[16/10] w-full overflow-hidden rounded-lg"
               detail
               live
+              restartKey={restartKey}
             />
+            <button type="button" className="text-xs text-brand-600" onClick={() => setRestartKey((value) => value + 1)}>見本を再生し直す</button>
             <div>
               <h3 className="text-base font-semibold text-slate-900">
                 {selected.name}
@@ -243,13 +269,16 @@ export function ParticlePresetStore({
             <dl className="space-y-1.5 rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px]">
               <SummaryRow label="最大数" value={`${summary.maxParticles} 粒`} />
               <SummaryRow label="放出" value={`毎秒 ${summary.rate} 粒`} />
+              {summary.burstCount > 0 ? <SummaryRow label="Burstの合計" value={`${summary.burstCount} 粒${properties.looping ? " / ループ" : ""}`} /> : null}
               <SummaryRow label="寿命" value={summary.lifetime} />
               <SummaryRow label="放出形状" value={summary.shape} />
               <SummaryRow label="ブレンド" value={summary.blending} />
+              <SummaryRow label="テクスチャ" value={getParticlePresetTexture(selected.id)?.name ?? "なし"} />
             </dl>
 
             <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 p-2.5">
               <input
+                disabled={adding}
                 type="checkbox"
                 checked={placeInScene}
                 onChange={(event) => setPlaceInScene(event.currentTarget.checked)}
@@ -290,15 +319,31 @@ export function ParticlePresetStore({
               </p>
             ) : null}
             {error ? (
-              <p className="flex items-start gap-1.5 text-[11px] text-rose-700">
+              <p role="alert" className="flex items-start gap-1.5 text-[11px] text-rose-700">
                 <CircleAlert size={13} className="mt-0.5 shrink-0" />
                 {error}
               </p>
             ) : null}
 
             <p className="text-[11px] leading-4 text-slate-500">
-              粒の見た目はテクスチャを割り当てると変わります。未指定のときは丸い光として描きます。
+              見本と同じテクスチャも追加して割り当てます。追加後はInspectorで変更できます。
             </p>
+            <details key={selected.id}>
+              <summary className="cursor-pointer text-xs font-semibold text-slate-800">追加前に設定を調整</summary>
+              <div className="mt-3 space-y-3">
+                <button
+                  type="button"
+                  disabled={adding || Boolean(disabledReason) || !drafts[selected.id]}
+                  className="text-xs text-brand-600 disabled:opacity-50"
+                  onClick={() => {
+                    setDrafts((current) => { const next = { ...current }; delete next[selected.id]; return next; });
+                    setAddedMessage(null);
+                    setError(null);
+                  }}
+                >テンプレートの設定に戻す</button>
+                <ParticlePropertiesEditor properties={properties} readOnly={adding || Boolean(disabledReason)} onChange={changeDraft} />
+              </div>
+            </details>
           </div>
         ) : (
           <p className="text-xs text-slate-500">パーティクルを選んでください</p>

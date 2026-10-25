@@ -5,7 +5,7 @@ import path from "node:path";
 
 test.beforeEach(async ({ page }) => { await useOfficialFontMetrics(page); });
 
-test("33 sky presets render at all qualities and survive install and serialization", async ({ page }) => {
+test("40 sky presets render at all qualities and survive install and serialization", async ({ page }) => {
   test.setTimeout(180_000);
   await page.goto("/e2e.html?scenario=ready");
   const result = await page.evaluate(async capture => {
@@ -13,7 +13,7 @@ test("33 sky presets render at all qualities and survive install and serializati
     (await load("/src/lib/visual-editor/sky-shader.fixture.ts")).runSkyShaderFixtureAssertions();
     return (await load("/e2e/sky-shaders.fixture.tsx")).renderSkyCatalog(capture) as Promise<{ count: number; revision: string; images: { id: string; data: string; shaderHash: string }[] }>;
   }, process.env.SKY_UPDATE_THUMBNAILS === "1");
-  expect(result.count).toBe(99);
+  expect(result.count).toBe(120);
   if (process.env.SKY_UPDATE_THUMBNAILS === "1") {
     const assets = path.resolve("public/visual-editor/sky-shaders/v3");
     const images = result.images.map(({ id, data, shaderHash }) => {
@@ -66,6 +66,26 @@ test("sky store filters, pauses, preserves quality and retries installation", as
   expect(errors).toEqual([]);
 });
 
+test("the time collection shortcut exposes seven rendered, installable skies", async ({ page }) => {
+  await page.goto("/e2e.html?scenario=ready");
+  await page.evaluate(async () => {
+    const url = "/e2e/sky-shaders.fixture.tsx";
+    (await import(/* @vite-ignore */ url)).mountSkyStore();
+  });
+  await page.getByRole("button", { name: "一日の空・7つの時間帯", exact: true }).click();
+  await expect(page.locator("[data-catalog-card]")).toHaveCount(7);
+  await page.locator("[data-catalog-card]").filter({ hasText: "茜の夕空" }).click();
+  await expect(page.locator("[data-sky-shader-preview] canvas")).toBeVisible();
+  const add = page.getByRole("button", { name: "Skyboxに設定", exact: true });
+  await add.click();
+  await expect(page.getByRole("button", { name: "一日の空・7つの時間帯", exact: true })).toBeDisabled();
+  await page.evaluate(async () => {
+    const url = "/e2e/sky-shaders.fixture.tsx";
+    (await import(/* @vite-ignore */ url)).finishInstall(false);
+  });
+  await expect(page.getByText(/Skyboxに設定しました/)).toBeVisible();
+});
+
 test("MCP exposes sky quality variants and applies them without changing uniforms", async ({ page }) => {
   await page.goto("/e2e.html?scenario=ready");
   const result = await page.evaluate(async () => {
@@ -85,5 +105,5 @@ test("MCP exposes sky quality variants and applies them without changing uniform
     const shader = changed.bundle.assets.assets[materialAssetId].shader;
     return { sky: listing.sky.length, water: listing.water.length, preserved: JSON.stringify(shader.uniforms) === before, steps: shader.variants[0].defines.XRIFT_SKY_CLOUD_STEPS };
   });
-  expect(result).toEqual({ sky: 33, water: 21, preserved: true, steps: "10" });
+  expect(result).toEqual({ sky: 40, water: 21, preserved: true, steps: "10" });
 });

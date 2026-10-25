@@ -170,6 +170,41 @@
       "id": "nebula-space",
       "bytes": 16484,
       "shaderHash": "e25185cf1911e9d32426248aeb2dd577151b6d000eff15e876daac1669ef380d"
+    },
+    {
+      "id": "creator-dawn",
+      "bytes": 8132,
+      "shaderHash": "a60905eaef414dad66ccef3d694eb8a8262bde3b8283d3bd46c61a4e943a0335"
+    },
+    {
+      "id": "creator-morning",
+      "bytes": 5648,
+      "shaderHash": "615aa4e4caa34f24920935070b96301b4715a96782d8f12d580c67da9bcff058"
+    },
+    {
+      "id": "creator-day",
+      "bytes": 9156,
+      "shaderHash": "6e7b80d44873ec557b17a56f4dd0555fc0d6521c3b0cc46594794cb4ef9f36da"
+    },
+    {
+      "id": "creator-golden",
+      "bytes": 6302,
+      "shaderHash": "738a451612f8cb2020c90e2766e9b04d5ece0c68eb610ac3736dc37e2f810c5b"
+    },
+    {
+      "id": "creator-sunset",
+      "bytes": 8674,
+      "shaderHash": "bbe612661052ee7deda862a8ded2dca3097f28e40e47d959a48cc18d4b9aa37f"
+    },
+    {
+      "id": "creator-twilight",
+      "bytes": 10476,
+      "shaderHash": "4e00da4bbeea30dda40d7e9d38440e97d7ecdb51db55295b84409ea24017b1fe"
+    },
+    {
+      "id": "creator-night",
+      "bytes": 8010,
+      "shaderHash": "65c81af4a187d593e391f1c8c44e98b0cedc1152fbecaaede303e53c50d2b3e6"
     }
   ]
 }

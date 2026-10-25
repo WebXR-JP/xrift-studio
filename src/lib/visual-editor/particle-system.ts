@@ -99,7 +99,15 @@ export const PARTICLE_PRESET_CATEGORY_LABELS: Readonly<
  * One list rather than a separate store catalog: a preset the store offers and
  * one the Inspector applies have to be the same numbers, and two lists drift.
  */
-export const PARTICLE_AUTHORING_PRESETS = [
+export type ParticleAuthoringPreset = {
+  id: string;
+  name: string;
+  description: string;
+  category: ParticlePresetCategory;
+  properties: ParticlePropertiesPatch;
+};
+
+export const PARTICLE_AUTHORING_PRESETS: readonly ParticleAuthoringPreset[] = [
   {
     id: "fire",
     name: "炎",
@@ -496,15 +504,66 @@ export const PARTICLE_AUTHORING_PRESETS = [
       },
     },
   },
-] satisfies ReadonlyArray<{
-  id: string;
-  name: string;
-  description: string;
-  category: ParticlePresetCategory;
-  properties: ParticlePropertiesPatch;
-}>;
+  ...createAdditionalParticlePresets(),
+];
 
-export type ParticleAuthoringPreset = (typeof PARTICLE_AUTHORING_PRESETS)[number];
+function createAdditionalParticlePresets(): ParticleAuthoringPreset[] {
+  // Resolve every preset independently so no settings leak from the previously
+  // selected Inspector preset. These use the shared runtime's existing features.
+  const entries: ParticleAuthoringPreset[] = [
+    { id: "embers", name: "舞い上がる火の粉", category: "fire", description: "ゆっくり上昇しながら赤く消える小さな火の粉", properties: {
+      maxParticles: 160, prewarm: true, startLifetime: { min: 2, max: 4 }, startSpeed: { min: 0.15, max: 0.5 }, startSize: { min: 0.015, max: 0.045 }, gravity: [0, 0.1, 0], emission: { rateOverTime: 24 }, shape: { type: "cone", radius: 0.5, angle: 20 }, velocityOverLifetime: { orbital: [0, 0.5, 0] },
+    } },
+    { id: "torch", name: "たいまつ", category: "fire", description: "小さな灯りに合う細く勢いのある炎", properties: {
+      maxParticles: 120, prewarm: true, startLifetime: { min: 0.25, max: 0.6 }, startSpeed: { min: 0.6, max: 1.2 }, startSize: { min: 0.06, max: 0.12 }, gravity: [0, 0.6, 0], emission: { rateOverTime: 90 }, shape: { type: "cone", radius: 0.06, angle: 12 },
+    } },
+    { id: "blizzard", name: "吹雪", category: "weather", description: "強い横風に流されて斜めに降る雪", properties: {
+      maxParticles: 900, prewarm: true, startLifetime: { min: 2, max: 3.5 }, startSpeed: { min: 0, max: 0.1 }, startSize: { min: 0.025, max: 0.06 }, gravity: [0, -0.7, 0], emission: { rateOverTime: 220 }, shape: { type: "box", size: [7, 2, 7] }, velocityOverLifetime: { linear: [2, -0.5, 0.3] }, colorOverLifetime: { start: [0.9, 0.96, 1, 0.8], end: [0.8, 0.9, 1, 0] }, renderer: { blending: "normal" },
+    } },
+    { id: "mist", name: "地面の霧", category: "weather", description: "地面近くをゆっくり流れる薄い霧", properties: {
+      maxParticles: 100, prewarm: true, startLifetime: { min: 4, max: 7 }, startSpeed: { min: 0, max: 0.02 }, startSize: { min: 0.7, max: 1.4 }, gravity: [0, 0, 0], emission: { rateOverTime: 12 }, shape: { type: "box", size: [6, 0.2, 6] }, velocityOverLifetime: { linear: [0.12, 0, 0] }, sizeOverLifetime: { min: 0.8, max: 2 }, colorOverLifetime: { start: [0.8, 0.88, 0.94, 0.12], end: [0.8, 0.88, 0.94, 0] }, renderer: { blending: "normal" },
+    } },
+    { id: "bubbles", name: "水中の泡", category: "water", description: "水底から浮かび上がる青白い粒子", properties: {
+      maxParticles: 140, prewarm: true, startLifetime: { min: 2.5, max: 4 }, startSpeed: { min: 0.05, max: 0.2 }, startSize: { min: 0.04, max: 0.12 }, gravity: [0, 0.18, 0], emission: { rateOverTime: 25 }, shape: { type: "box", size: [2, 0.1, 2] }, sizeOverLifetime: { min: 0.6, max: 1.3 }, colorOverLifetime: { start: [0.5, 0.85, 1, 0.5], end: [0.8, 0.95, 1, 0] }, renderer: { blending: "normal" },
+    } },
+    { id: "waterfall", name: "滝のしぶき", category: "water", description: "横に広がる放出口から勢いよく落ちる水", properties: {
+      maxParticles: 600, prewarm: true, startLifetime: { min: 0.8, max: 1.5 }, startSpeed: { min: 0, max: 0.1 }, startSize: { min: 0.04, max: 0.1 }, gravity: [0, -4, 0], emission: { rateOverTime: 240 }, shape: { type: "box", size: [2, 0.1, 0.3] }, velocityOverLifetime: { linear: [0, -1.5, 0.3] }, colorOverLifetime: { start: [0.65, 0.9, 1, 0.65], end: [0.9, 0.98, 1, 0] }, renderer: { mode: "stretched-billboard", blending: "normal" },
+    } },
+    { id: "splash", name: "水しぶき", category: "water", description: "一度だけ扇状に弾けて落ちる飛沫", properties: {
+      maxParticles: 160, duration: 1.5, looping: false, startLifetime: { min: 0.5, max: 1.2 }, startSpeed: { min: 1, max: 3 }, startSize: { min: 0.03, max: 0.08 }, gravity: [0, -5, 0], emission: { rateOverTime: 0, bursts: [{ time: 0, count: 100, cycles: 1, interval: 0 }] }, shape: { type: "cone", radius: 0.15, angle: 65 }, colorOverLifetime: { start: [0.6, 0.88, 1, 0.9], end: [0.8, 0.95, 1, 0] },
+    } },
+    { id: "pollen", name: "花粉", category: "nature", description: "暖かな光の中に漂う細かな黄色い粒子", properties: {
+      maxParticles: 150, prewarm: true, startLifetime: { min: 4, max: 7 }, startSpeed: { min: 0.01, max: 0.04 }, startSize: { min: 0.01, max: 0.025 }, gravity: [0, -0.005, 0], emission: { rateOverTime: 18 }, shape: { type: "box", size: [4, 3, 4] }, velocityOverLifetime: { linear: [0.05, 0.015, 0], orbital: [0, 0.12, 0] }, colorOverLifetime: { start: [1, 0.9, 0.45, 0.65], end: [1, 0.8, 0.3, 0] },
+    } },
+    { id: "autumn-leaves", name: "落ち葉", category: "nature", description: "風に流されながら舞い落ちる橙色の粒子", properties: {
+      maxParticles: 180, prewarm: true, startLifetime: { min: 4, max: 6 }, startSpeed: { min: 0, max: 0.08 }, startSize: { min: 0.05, max: 0.12 }, gravity: [0, -0.2, 0], emission: { rateOverTime: 20 }, shape: { type: "box", size: [5, 0.2, 5] }, velocityOverLifetime: { linear: [0.3, -0.1, 0], orbital: [0, 0.7, 0] }, colorOverLifetime: { start: [1, 0.5, 0.08, 0.9], end: [0.55, 0.15, 0.02, 0] }, renderer: { blending: "normal" },
+    } },
+    { id: "dust", name: "ほこり", category: "nature", description: "室内の光に浮かぶゆっくりした白い微粒子", properties: {
+      maxParticles: 120, prewarm: true, startLifetime: { min: 5, max: 9 }, startSpeed: { min: 0, max: 0.015 }, startSize: { min: 0.008, max: 0.02 }, gravity: [0, -0.002, 0], emission: { rateOverTime: 10 }, shape: { type: "box", size: [3, 3, 3] }, velocityOverLifetime: { linear: [0.015, 0, 0] }, colorOverLifetime: { start: [1, 0.96, 0.85, 0.35], end: [1, 0.96, 0.85, 0] }, renderer: { blending: "normal" },
+    } },
+    { id: "fireworks", name: "花火", category: "effect", description: "一点から球状に広がる一度きりの光の破裂", properties: {
+      maxParticles: 260, duration: 3, looping: false, startLifetime: { min: 1.2, max: 2.4 }, startSpeed: { min: 2, max: 4 }, startSize: { min: 0.025, max: 0.06 }, gravity: [0, -1, 0], emission: { rateOverTime: 0, bursts: [{ time: 0, count: 240, cycles: 1, interval: 0 }] }, shape: { type: "sphere", radius: 0.02 }, colorOverLifetime: { start: [1, 0.7, 0.25, 1], end: [1, 0.1, 0.3, 0] }, renderer: { mode: "stretched-billboard" },
+    } },
+    { id: "magic-aura", name: "魔法のオーラ", category: "effect", description: "紫の光が渦を巻きながら上昇する演出", properties: {
+      maxParticles: 240, prewarm: true, startLifetime: { min: 1.5, max: 3 }, startSpeed: { min: 0.1, max: 0.3 }, startSize: { min: 0.025, max: 0.07 }, gravity: [0, 0.15, 0], emission: { rateOverTime: 65 }, shape: { type: "sphere", radius: 0.8 }, velocityOverLifetime: { linear: [0, 0.25, 0], orbital: [0, 2, 0] }, colorOverLifetime: { start: [0.6, 0.2, 1, 0.9], end: [0.1, 0.8, 1, 0] },
+    } },
+    { id: "healing", name: "回復の光", category: "effect", description: "足元から立ちのぼる柔らかな緑の光", properties: {
+      maxParticles: 160, prewarm: true, startLifetime: { min: 1, max: 2.2 }, startSpeed: { min: 0.2, max: 0.5 }, startSize: { min: 0.04, max: 0.09 }, gravity: [0, 0.2, 0], emission: { rateOverTime: 45 }, shape: { type: "cone", radius: 0.7, angle: 5 }, colorOverLifetime: { start: [0.3, 1, 0.5, 0.85], end: [0.8, 1, 0.6, 0] },
+    } },
+    { id: "confetti-burst", name: "お祝いの紙吹雪", category: "effect", description: "一度に広がり、重力で落ちるお祝いの粒子", properties: {
+      maxParticles: 220, duration: 4, looping: false, startLifetime: { min: 2, max: 3.5 }, startSpeed: { min: 2.5, max: 5 }, startSize: { min: 0.06, max: 0.14 }, gravity: [0, -3, 0], emission: { rateOverTime: 0, bursts: [{ time: 0, count: 200, cycles: 1, interval: 0 }] }, shape: { type: "cone", radius: 0.2, angle: 55 }, velocityOverLifetime: { orbital: [0, 0.8, 0] }, colorOverLifetime: { start: [1, 0.3, 0.65, 1], end: [0.2, 0.7, 1, 0] }, renderer: { blending: "normal" },
+    } },
+  ];
+  return entries.map((entry) => ({ ...entry, properties: normalizeParticleProperties(entry.properties) }));
+}
+
+/** Apply a partial edit without losing the other values in nested settings. */
+export function patchParticleProperties(
+  current: ParticleProperties,
+  patch: ParticlePropertiesPatch,
+): ParticleProperties {
+  return applyParticlePropertiesPatch(current, patch);
+}
 
 export function getParticleAuthoringPreset(
   presetId: string,

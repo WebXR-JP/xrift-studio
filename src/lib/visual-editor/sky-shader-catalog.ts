@@ -1,5 +1,6 @@
 import type { ClassicR3fMaterialShader } from "./custom-shader-contract";
 import { SKY_VERTEX_SHADER, SKY_COMMON_GLSL } from "./sky-shader-glsl";
+import {SKYBOX_CREATOR_CATALOG} from './skybox-creator-catalog';
 import { EXTENDED_SKY_SHADER_CATALOG } from "./sky-shader-extended-catalog";
 
 /**
@@ -775,6 +776,7 @@ const VOLUMETRIC_STORE_PARAMETERS: readonly SkyShaderParameter[] = [
 
 export const SKY_SHADER_CATALOG: readonly SkyShaderCatalogEntry[] = [
   ...EXTENDED_SKY_SHADER_CATALOG,
+  ...SKYBOX_CREATOR_CATALOG,
   {
     id: "volumetric-daylight",
     label: "立体的な雲の昼空",

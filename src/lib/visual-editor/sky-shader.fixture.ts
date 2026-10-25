@@ -39,6 +39,27 @@ export function runSkyShaderFixtureAssertions(): void {
   assertCatalogInstall();
   assertSceneSettingsRoundTrip();
   assertCompiledWorld();
+  assertCreatorTimeCollection();
+}
+
+function assertCreatorTimeCollection(): void {
+  const entries = SKY_SHADER_CATALOG.filter(entry => entry.id.startsWith("creator-"));
+  assert(entries.length === 7, "The Skybox Creator time collection must contain seven skies");
+  for (const entry of entries) {
+    const prototype = createPrototypeProject("world", entry.id);
+    const installed = applySkyShaderCatalogInstall(prototype.assets, entry, { uCloudAmount: 0.31 });
+    const settings = resolveSceneSettings(prototype.scene.settings);
+    const compiled = compileVisualProject({
+      project: prototype.project,
+      scenes: { [prototype.scene.sceneId]: { ...prototype.scene, settings: { ...settings, skybox: { ...settings.skybox, enabled: true, materialAssetId: installed.primaryAssetId } } } },
+      assets: installed.manifest, prefabs: prototype.prefabs,
+    }, { generatedAt: "2026-10-25T00:00:00.000Z" });
+    const source = compiled.overlayFiles.find(file => file.relativePath === "src/World.tsx")?.content ?? "";
+    assert(compiled.canStage, `${entry.id} must compile as a normal sky Material`);
+    assert(source.includes("paletteLinear") && source.includes("colorspace_fragment"), `${entry.id} lost its authored color conversion`);
+    assert(source.includes('"uCloudAmount": { value: 0.31 }'), `${entry.id} lost the edited cloud amount`);
+    assert(!compiled.diagnostics.some(diagnostic => diagnostic.code === "sky-shader-unavailable"), `${entry.id} must resolve in the World`);
+  }
 }
 
 function assertCatalogIntegrity(): void {

@@ -191,6 +191,13 @@ export function SkyShaderStore({
               ))}
             </select>
           </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
+            <button type="button" disabled={adding} onClick={() => { setCategory("all"); setQuery("skybox-creator"); }}
+              className="rounded border border-slate-300 bg-white px-2 py-1 text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+              一日の空・7つの時間帯
+            </button>
+            <span>夜明けから星の夜まで、選んでSkyboxに設定できます。</span>
+          </div>
         </div>
         <div className="scrollbar-thin min-h-0 flex-1 overflow-auto p-3">
           {visible.length === 0 ? (

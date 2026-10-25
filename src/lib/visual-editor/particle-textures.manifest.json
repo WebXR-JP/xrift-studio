@@ -1,0 +1,90 @@
+[
+  {
+    "id": "glow",
+    "name": "柔らかな光",
+    "width": 256,
+    "height": 256,
+    "byteLength": 12360,
+    "sha256": "7dab4b89e777dc336fee1e5ad88131f293547d306c6c8a3a3d96a2a3f677171e"
+  },
+  {
+    "id": "smoke",
+    "name": "煙と霧",
+    "width": 256,
+    "height": 256,
+    "byteLength": 17430,
+    "sha256": "f417ce630aaec7160ca6989b122c72866371ee70af0eaebfe1941d0fe252454a"
+  },
+  {
+    "id": "flame",
+    "name": "炎",
+    "width": 256,
+    "height": 256,
+    "byteLength": 8447,
+    "sha256": "abd3e90a7bde5fb3e8e5dcea9ba49b522b309174454423d283b1d57f1de1aafd"
+  },
+  {
+    "id": "streak",
+    "name": "細い光の筋",
+    "width": 256,
+    "height": 256,
+    "byteLength": 9278,
+    "sha256": "3ae38525e7474b56ac26d19e4937d573ee66e31bb1c644ad9efcc49ff8b483f5"
+  },
+  {
+    "id": "droplet",
+    "name": "水滴",
+    "width": 256,
+    "height": 256,
+    "byteLength": 4906,
+    "sha256": "10c477ea745a8bbda9e85a0939d24270c9989de35fffdab1f5dc6e3bda5da353"
+  },
+  {
+    "id": "bubble",
+    "name": "泡",
+    "width": 256,
+    "height": 256,
+    "byteLength": 17145,
+    "sha256": "3a856af2628dc6a91701758f29bc8d0782211b28a3b36bb2c9585057ef90717d"
+  },
+  {
+    "id": "petal",
+    "name": "桜の花びら",
+    "width": 256,
+    "height": 256,
+    "byteLength": 1516,
+    "sha256": "7278bdc399e410707c11f4c0c169dac0a3696222af41e5d64690b4e76bbd86d8"
+  },
+  {
+    "id": "leaf",
+    "name": "落ち葉",
+    "width": 256,
+    "height": 256,
+    "byteLength": 1935,
+    "sha256": "9d015dc46b93d0e24da5198536c5eede81746108569f4e71de35add8928727e4"
+  },
+  {
+    "id": "confetti",
+    "name": "紙片",
+    "width": 256,
+    "height": 256,
+    "byteLength": 1270,
+    "sha256": "17d771795936c2091d2e1e1fd4edc88b1290c8a872ee109e2aa9b3f6dfa4fc35"
+  },
+  {
+    "id": "snowflake",
+    "name": "雪の結晶",
+    "width": 256,
+    "height": 256,
+    "byteLength": 10345,
+    "sha256": "f03a3088f7137cb1618af53405cd51114e65c9c0b48905d2557fe42ff75f4b06"
+  },
+  {
+    "id": "star",
+    "name": "光のきらめき",
+    "width": 256,
+    "height": 256,
+    "byteLength": 9083,
+    "sha256": "74142822b3840cc65753c2c6cd87ff1454cebec6ac771526165407bdfd43ff3d"
+  }
+]

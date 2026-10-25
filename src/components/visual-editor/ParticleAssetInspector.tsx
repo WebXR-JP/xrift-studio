@@ -43,13 +43,6 @@ export function ParticleAssetInspector({
   onOpenTexture,
 }: Props) {
   const properties = asset.properties;
-  const materials = Object.values(assets.assets).filter(
-    (candidate) => candidate.kind === "material",
-  );
-  const textures = Object.values(assets.assets).filter(
-    (candidate): candidate is TextureAsset =>
-      candidate.kind === "texture" && !isEnvironmentTextureAsset(candidate),
-  );
 
   return (
     <div className="space-y-3">
@@ -66,6 +59,31 @@ export function ParticleAssetInspector({
         onChange={onChange}
       />
 
+      <ParticlePropertiesEditor properties={properties} assets={assets} readOnly={readOnly} onChange={onChange} onOpenTexture={onOpenTexture} />
+    </div>
+  );
+}
+
+/** Shared controls for saved Assets and the store's unsaved preset drafts. */
+export function ParticlePropertiesEditor({
+  properties, assets, readOnly, onChange, onOpenTexture = () => {},
+}: {
+  properties: ParticleAsset["properties"];
+  assets?: AssetManifest;
+  readOnly: boolean;
+  onChange: Props["onChange"];
+  onOpenTexture?: Props["onOpenTexture"];
+}) {
+  const materials = Object.values(assets?.assets ?? {}).filter(
+    (candidate) => candidate.kind === "material",
+  );
+  const textures = Object.values(assets?.assets ?? {}).filter(
+    (candidate): candidate is TextureAsset =>
+      candidate.kind === "texture" && !isEnvironmentTextureAsset(candidate),
+  );
+  return (
+    <div className="space-y-3">
+
       <Section title="全体の設定">
         <NumberField label="最大数" value={properties.maxParticles} min={1} max={10000} step={1} disabled={readOnly} onChange={(maxParticles) => onChange({ maxParticles })} />
         <NumberField label="継続時間" value={properties.duration} min={0.01} max={600} step={0.1} suffix="秒" disabled={readOnly} onChange={(duration) => onChange({ duration })} />
@@ -81,6 +99,25 @@ export function ParticleAssetInspector({
         <RangeField label="速さ" value={properties.startSpeed} min={-1000} max={1000} disabled={readOnly} onChange={(startSpeed) => onChange({ startSpeed })} />
         <RangeField label="大きさ" value={properties.startSize} min={0} max={1000} disabled={readOnly} onChange={(startSize) => onChange({ startSize })} />
         <AngleRangeField label="放出時の回転" value={properties.startRotation} disabled={readOnly} onChange={(startRotation) => onChange({ startRotation })} />
+      </Section>
+
+      <Section title="Burst（一度に放出）">
+        <p className="text-[11px] leading-4 text-slate-500">指定した時刻にまとめて放出します。繰り返す場合は回数と間隔を設定してください。</p>
+        {properties.emission.bursts.map((burst, index) => (
+          <div key={index} className="space-y-2 border-t border-slate-200 pt-2">
+            <p className="text-xs font-semibold text-slate-700">Burst {index + 1}</p>
+            {([
+              ["time", "放出時刻", 0, 600, 0.1],
+              ["count", "放出数", 1, 100000, 1],
+              ["cycles", "回数", 1, 10000, 1],
+              ["interval", "間隔", 0, 600, 0.1],
+            ] as const).map(([key, label, min, max, step]) => (
+              <NumberField key={key} label={`${label} ${index + 1}`} value={burst[key]} min={min} max={max} step={step} suffix={key === "time" || key === "interval" ? "秒" : undefined} disabled={readOnly} onChange={(value) => onChange({ emission: { bursts: properties.emission.bursts.map((current, at) => at === index ? { ...current, [key]: value } : current) } })} />
+            ))}
+            <UtilityButton label={`Burst ${index + 1}を削除`} disabled={readOnly} onClick={() => onChange({ emission: { bursts: properties.emission.bursts.filter((_, at) => at !== index) } })} />
+          </div>
+        ))}
+        <UtilityButton label="Burstを追加" disabled={readOnly || properties.emission.bursts.length >= 64} onClick={() => onChange({ emission: { bursts: [...properties.emission.bursts, { time: 0, count: 30, cycles: 1, interval: 0 }] } })} />
       </Section>
 
       <Section title="形状">
@@ -196,6 +233,7 @@ export function ParticleAssetInspector({
         <SelectField label="表示方式" value={properties.renderer.mode} values={["billboard", "stretched-billboard"]} disabled={readOnly} onChange={(mode) => onChange({ renderer: { mode: mode as typeof properties.renderer.mode } })} />
         <SelectField label="色の重ね方" value={properties.renderer.blending} values={["normal", "additive"]} disabled={readOnly} onChange={(blending) => onChange({ renderer: { blending: blending as typeof properties.renderer.blending } })} />
         <SelectField label="描画順" value={properties.renderer.sortMode} values={["none", "distance", "youngest", "oldest"]} disabled={readOnly} onChange={(sortMode) => onChange({ renderer: { sortMode: sortMode as typeof properties.renderer.sortMode } })} />
+        {assets ? <>
         <AssetSelect label="マテリアル" value={properties.renderer.materialAssetId} options={materials} disabled={readOnly} onChange={(materialAssetId) => onChange({ renderer: { materialAssetId } })} />
         <ParticleTextureField
           value={properties.renderer.textureAssetId}
@@ -204,6 +242,7 @@ export function ParticleAssetInspector({
           onChange={(textureAssetId) => onChange({ renderer: { textureAssetId } })}
           onOpenTexture={onOpenTexture}
         />
+        </> : null}
         <Toggle label="影を落とす" checked={properties.renderer.castShadow} disabled={readOnly} onChange={(castShadow) => onChange({ renderer: { castShadow } })} />
         <Toggle label="影を受ける" checked={properties.renderer.receiveShadow} disabled={readOnly} onChange={(receiveShadow) => onChange({ renderer: { receiveShadow } })} />
       </Section>

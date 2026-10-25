@@ -1,4 +1,5 @@
 import type { ChatgptAssetOptions } from "../../lib/tauri";
+import { prepareParticlePresetTexture } from "../../lib/visual-editor/particle-preset-textures";
 import type { ChatgptRequestScope } from "../../lib/visual-editor/chatgpt-request-queue";
 import { entityRemakePrompt, type ChatgptComposerRequest } from "../../lib/visual-editor/chatgpt-composer-request";
 import { ChatgptWorldPanel } from "./ChatgptWorldPanel";
@@ -1786,6 +1787,7 @@ export function VisualEditorPrototype({
   const [componentImportBusy, setComponentImportBusy] = useState(false);
   const [mcpLocalAssetImportBusy, setMcpLocalAssetImportBusy] = useState(false);
   const [sceneRecipeImportBusy, setSceneRecipeImportBusy] = useState(false);
+  const [particlePresetImportBusy, setParticlePresetImportBusy] = useState(false);
   const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
   const [externalStoreOpen, setExternalStoreOpen] = useState(false);
   const [modelStoreIntent, setModelStoreIntent] = useState<{ entityId: string; componentId?: string } | null>(null);
@@ -2428,6 +2430,7 @@ export function VisualEditorPrototype({
     componentImportBusy ||
     mcpLocalAssetImportBusy ||
     sceneRecipeImportBusy ||
+    particlePresetImportBusy ||
     modelReimportBusy ||
     textureProcessingBusy ||
     modelOptimizationBusy ||
@@ -8028,77 +8031,93 @@ export function VisualEditorPrototype({
     ): Promise<ParticlePresetInstallResult> => {
       // The store throws so the shelf shows the reason next to the button the
       // author just pressed, rather than a notice behind the modal.
-      if (editorMode !== "edit") {
+      if (editorModeRef.current !== "edit") {
         throw new Error("動作確認を停止してからパーティクルを追加してください");
       }
-      if (importBusy) {
+      if (importBusyRef.current || importRunningRef.current || assetOperationRef.current !== null) {
         throw new Error("アセットのインポート完了後に追加してください");
       }
-
-      const assetId = createDocumentId("particle");
-      const folderId = resolveAssetCreationFolderId(
-        bundle.assets,
-        activeAssetFolderId,
-      );
-      const name = uniqueAssetName(bundle.assets, preset.name);
-      const added = addDefaultParticleAsset(bundle.assets, {
-        id: assetId,
-        name,
-        folderId,
-        properties: preset.properties,
-      });
-      if (!added.added) {
-        throw new Error("パーティクルを作成できませんでした");
-      }
-
-      // Asset creation and placement land as one history entry: undoing a
-      // preset the author did not want should not leave its Asset behind.
-      let scene = bundle.scene;
-      let placedAssets = added.manifest;
-      let placedEntityId: string | null = null;
-      if (placeInScene) {
-        const count = bundle.scene.rootEntityIds.length;
-        const placement = instantiateSceneAsset(
-          scene,
-          added.manifest,
-          bundle.prefabs,
-          assetId,
-          {
-            position: [
-              roundTo(((count % 5) - 2) * 1.35, 1),
-              0,
-              roundTo((Math.floor(count / 5) - 0.5) * 1.35, 1),
-            ],
-          },
+      const path = projectPathRef.current;
+      if (!path) throw new Error("自動保存の完了後に追加してください");
+      const bundle = bundleRef.current;
+      importRunningRef.current = true;
+      setParticlePresetImportBusy(true);
+      try {
+        const assetId = createDocumentId("particle");
+        const folderId = resolveAssetCreationFolderId(
+          bundle.assets,
+          activeAssetFolderId,
         );
-        if (!placement.placed) {
-          throw new Error("パーティクルをシーンへ配置できませんでした");
+        const name = uniqueAssetName(bundle.assets, preset.name);
+        const prepared = await prepareParticlePresetTexture(bundle.assets, preset, {
+          textureId: createDocumentId("texture"), folderId,
+          writeFile: (relativePath, dataUrl) => tauri.writeBinaryFile(path, relativePath, dataUrl),
+        });
+        const latest = bundleRef.current;
+        if (projectPathRef.current !== path || editorModeRef.current !== "edit" ||
+            latest.scene !== bundle.scene || latest.project !== bundle.project || latest.prefabs !== bundle.prefabs) {
+          throw new Error("追加中にプロジェクトが変更されました。現在の編集内容はそのままです。もう一度追加してください");
         }
-        scene = placement.scene;
-        placedAssets = placement.assets;
-        placedEntityId = placement.entityId;
-      }
+        const added = addDefaultParticleAsset(prepared.assets, {
+          id: assetId,
+          name,
+          folderId,
+          properties: prepared.preset.properties,
+        });
+        if (!added.added) {
+          throw new Error("パーティクルを作成できませんでした");
+        }
 
-      setBundle(touchProject({ ...bundle, assets: placedAssets, scene }));
-      if (placedEntityId) {
-        setSceneSelection({ kind: "entity", id: placedEntityId });
-        // Placing puts something in the Scene, so get out of the way and let
-        // the author look at it — the same rule Terrain and the glow shelf use.
-        setExternalStoreOpen(false);
-        setNotice(
-          `「${name}」をシーンへ配置しました`,
-        );
-      } else {
-        setNotice(`「${name}」をAssetsに追加しました`);
+        // Asset creation and placement land as one history entry: undoing a
+        // preset the author did not want should not leave its Asset behind.
+        let scene = bundle.scene;
+        let placedAssets = added.manifest;
+        let placedEntityId: string | null = null;
+        if (placeInScene) {
+          const count = bundle.scene.rootEntityIds.length;
+          const placement = instantiateSceneAsset(
+            scene,
+            added.manifest,
+            bundle.prefabs,
+            assetId,
+            {
+              position: [
+                roundTo(((count % 5) - 2) * 1.35, 1),
+                0,
+                roundTo((Math.floor(count / 5) - 0.5) * 1.35, 1),
+              ],
+            },
+          );
+          if (!placement.placed) {
+            throw new Error("パーティクルをシーンへ配置できませんでした");
+          }
+          scene = placement.scene;
+          placedAssets = placement.assets;
+          placedEntityId = placement.entityId;
+        }
+
+        const assets = latest.assets === bundle.assets ? placedAssets : mergeRecipeAssetsOntoLatest(bundle.assets, placedAssets, latest.assets);
+        setBundle(touchProject({ ...latest, assets, scene }));
+        if (placedEntityId) {
+          setSceneSelection({ kind: "entity", id: placedEntityId });
+          // Placing puts something in the Scene, so get out of the way and let
+          // the author look at it — the same rule Terrain and the glow shelf use.
+          setExternalStoreOpen(false);
+          setNotice(
+            `「${name}」をシーンへ配置しました`,
+          );
+        } else {
+          setNotice(`「${name}」をAssetsに追加しました`);
+        }
+        setAssetSelection(assetId);
+        return { assetName: name, placed: Boolean(placedEntityId) };
+      } finally {
+        importRunningRef.current = false;
+        setParticlePresetImportBusy(false);
       }
-      setAssetSelection(assetId);
-      return { assetName: name, placed: Boolean(placedEntityId) };
     },
     [
       activeAssetFolderId,
-      bundle,
-      editorMode,
-      importBusy,
       setAssetSelection,
       setBundle,
       setSceneSelection,
