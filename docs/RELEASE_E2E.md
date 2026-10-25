@@ -37,6 +37,7 @@
 3. `pnpm runtime:shell:check`とVRM同梱コードの検査・テスト
 4. `pnpm cli:test`のコンパイラfixtureと公開ステージング検査
 5. 録画の撮影間隔・フレーム取得と利用ガイドの回帰テスト
+6. プレハブの再利用・元のEntityからの反映・個別展開・未反映通知・公開コード生成の回帰テスト
 
 `Release smoke E2E` jobは1台・1 workerで次を実行します。
 
