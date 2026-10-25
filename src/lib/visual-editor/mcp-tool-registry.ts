@@ -127,6 +127,8 @@ export const XRIFT_MCP_TOOLS = [
   { name: "list_scene_recipes", surface: "document" },
   { name: "place_builtin_prefab", surface: "document" },
   { name: "create_prefab", surface: "document" },
+  { name: "update_prefab_from_source", surface: "document" },
+  { name: "unpack_prefab_instance", surface: "document" },
   { name: "add_component", surface: "document" },
   { name: "update_component", surface: "document" },
   { name: "remove_component", surface: "document" },

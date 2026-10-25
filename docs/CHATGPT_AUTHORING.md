@@ -68,13 +68,15 @@ Piが`get_modeling_tools`、`create_blender_model`、`get_model_asset`、`place_
 専用の`studio_model_and_place`と16配置の上限を削除した。既存Assetの再利用、生成後の確認、複数配置、寸法の検査をPiが組み立てる。
 モデル・Scene自体の形式検証や各正式ツールの入力条件は維持する。R3Fは`apply_r3f_scene`を使う。保存と完成確認は別途必要。
 
+木やベンチなど繰り返し置くものは、一つを仕上げて`create_prefab`でPrefabにし、残りは`place_asset`で配置する。配置ごとに別のEntityとして作ると、利用者が後で直すときに複製の数だけ同じ編集を繰り返すことになる。`get_editor_context`の`prefabs`で既存のPrefabを確認し、元のEntityを編集した後は`update_prefab_from_source`で全配置へ反映する。元のEntityを変えた書き込みの結果は`prefabsPendingUpdate`で未反映を示すため、反映し忘れたまま完成確認へ進みにくい。一つだけ変える配置や、元のEntityを削除したPrefabは`unpack_prefab_instance`で展開する。`analyze_performance`は配置したPrefabを展開して数える。共通ガイドと指示文の両方でこの手順を伝え、進捗には「プレハブの作成」「プレハブへの反映」「プレハブの展開」と表示する。
+
 ### 空間UIと環境の設計
 
 展示・教材・案内・メニューでは、共通ガイドの`spatial-ui`を読む。文字の階層、カードの余白、読む距離、立体見本と回遊を一緒に考える。ワールド全体や背景の変更では`environment`も読み、Skybox、IBL、照明と材質を調整する。ガイドの正本は`world-authoring-guide.json`で、MCPと制作スキルにも同じ内容を渡す。詳細とTSX例は必要なtopicだけ取得する。
 
 静的R3F取り込みの`Text`は、`fontWeight`、`textAlign`、`lineHeight`、`letterSpacing`を保存し、既存のText共通ランタイムで描画する。Text背景の`borderRadius`はm単位で、編集・Play・公開の共通ジオメトリへ反映する。AIからAmbient Lightを有効にするには、`update_scene_settings`の`ambient.enabled`を指定する。
 
-UIKitは静的R3F取り込みではなく、既存のTSX Script `Render`から実行する。`@react-three/uikit`と`@pmndrs/uikit`をStudioと公開物で使い、`uikit-panel`テンプレートを入口にする。日本語は宣言したFont Assetを`useTTF`へ渡す。公開物は同じScript原本を持ち、使用時にStudioと同じUIKit版を導入する。EditではScriptを実行しないため、表示確認にはPlayと実描画画像を使う。
+UIKitは静的R3F取り込みではなく、既存のTSX Script `Render`から実行する。`@react-three/uikit`と`@pmndrs/uikit`をStudioと公開物で使い、`uikit-panel`テンプレートを入口にする。日本語は宣言したFont Assetを`useTTF`へ渡す。公開物は同じScript原本を持ち、使用時にStudioと同じUIKit版を導入する。`uikit-panel`のRenderはEditでも描画され、既存のScriptは`runIn: play-and-edit`で編集プレビューできる。制作チャットには`set_play_mode`を渡していないため、Playを開始できない。そのためUIKitの表示と字形はEditの実描画画像で確認し、start・update・操作などPlayでしか起きない動作は、利用者が確かめる項目として報告する。
 
 Entityの右クリックは、対象IDとSceneを持つ入力依頼を制作チャットへ渡す。「チャットに送る」は添付のみ、「AIで作り替える…」は添付と依頼文、`modelSource: auto`を設定する。Textや空のEntityにも対応し、モデル内部の参照ノードは元のEntityから編集する。仕上がりの文を選択して入力へフォーカスし、既存の下書きと添付を保持する。制作方法は送信前に「AIにおまかせ」「素材ストア中心」「Blenderで制作」から変更できる。自動では外部素材・コード・UIKit・Blenderを用途に合わせて選び、既存の配置・しかけ・手動の子Entityを保つ。送信は既存のQueueと`generate_chatgpt_world`を使い、scope検証を維持する。
 

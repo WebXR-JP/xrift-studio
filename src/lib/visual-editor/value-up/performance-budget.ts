@@ -1,4 +1,5 @@
 import type { PrototypeVisualProject } from "../prototype-project";
+import { resolvePrefabInstances } from "../compiler/prefab-resolver";
 
 export type PerformanceBudget = {
   maxEntities: number;
@@ -21,7 +22,12 @@ export function analyzeProjectPerformance(
     const limit = budget[key as keyof PerformanceBudget];
     if (!Number.isSafeInteger(limit) || limit <= 0) throw new Error(`${key}には正の整数を指定してください (${value})`);
   }
-  const entities = Object.values(bundle.scene.entities);
+  // Every placed Prefab copy instantiates its whole content at runtime. Twenty
+  // copies of a lamp with a Light are twenty Lights, not the one authored.
+  const resolved = resolvePrefabInstances(bundle.scene, bundle.assets, bundle.prefabs).scene;
+  const entities = Object.values(resolved.entities);
+  const placedCopies = Object.values(bundle.scene.entities).reduce(
+    (count, entity) => count + entity.components.filter((c) => c.type === "prefab-instance").length, 0);
   const assets = Object.values(bundle.assets.assets);
   const metrics = {
     entities: entities.length,
@@ -46,8 +52,12 @@ export function analyzeProjectPerformance(
     scope: "authoring-counts" as const,
     tier: highestRatio > 1 ? "over-budget" as const : highestRatio > 0.8 ? "warning" as const : "within-budget" as const,
     metrics, budget: { ...budget }, warnings,
+    prefabExpansion: {
+      placedCopies,
+      expandedEntities: entities.length - Object.keys(bundle.scene.entities).length,
+    },
     limitations: [
-      "無効なEntity・Componentと未使用Assetも含む、編集データの件数です。Prefab内部やScriptによる実行時生成は展開しません。",
+      "無効なEntity・Componentと未使用Assetも含む、編集データの件数です。配置したPrefabは中身を展開して数えます。Scriptによる実行時生成は含みません。",
       "描画負荷、三角形数、Texture解像度、メモリー、FPSは測定していません。Playと対象端末で確認してください。",
     ],
   };

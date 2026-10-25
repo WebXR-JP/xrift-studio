@@ -628,7 +628,7 @@ authoring Registryが型付きで扱うXRiftのコンポーネントは`Interact
 - `import_audio_asset`は編集mode限定で、trustedな絶対pathをnative側の通常file、no-link、128 MiB、extension + signature、read前後size検査へ通し、content-addressed copy、atomic commit、history、自動保存を一件で確定する。`get_audio_asset`とimport結果は管理下relative pathとmetadataだけを返し、外部path、data URL、binary bytesをMCPへ返さない。
 - `import_model_asset`は単一ファイルのGLB / glTF / VRM / OBJを同じnative file境界で検証し、`get_model_asset` / `update_model_asset`でimport設定とマテリアル枠defaultを保存する。`reimport_model_asset`は管理下元データを再解析してderived metadataを3DモデルIDと参照を維持したままatomicに更新する。`import_skybox_asset`はHDR / EXRのequirectangularテクスチャをシーンskyboxへ設定し、`set_project_thumbnail`は既存のテクスチャから管理下thumbnailだけを更新する。
 - `import_shader_asset`はUTF-8 GLSL元データを管理下シェーダー素材へ追加し、`get_shader_asset` / `update_shader_asset`は元データ本文とhashを同じrevision、history、自動保存境界で扱う。任意の外部pathやshell操作は実行せず、シェーダー元データは明示的なMCP入力またはmanaged local importだけを受け付ける。
-- `create_prefab`は選択オブジェクトと子孫をプレハブdocumentへ複製し、プレハブ、managed document path、dependency referencesを一つのEditor revisionへ確定する。作成後はプレハブを選択し、`place_asset`で再利用できる。
+- `create_prefab`は選択オブジェクトと子孫をプレハブdocumentへ複製し、プレハブ、managed document path、dependency referencesを一つのEditor revisionへ確定する。作成後はプレハブを選択し、`place_asset`で再利用できる。`update_prefab_from_source`はInspectorの「プレハブに反映」と同じく、元のオブジェクトの現在の構成をプレハブdocumentへ一つのrevisionで反映する。
 - `ctx.audioSources`はruntime-onlyでSceneDocument revisionを変えない。保存する音源設定は`place_asset`、`add_component`、`update_component`、`remove_component`を使い、実行環境状態を暗黙に永続化しない。
 
 #### ライトと実行環境 event の所有境界
@@ -1025,11 +1025,12 @@ toolbar、context menu、command palette、tooltip、Shortcut設定、ユーザ�
 
 - オブジェクト一覧の一つ以上のrootオブジェクトを素材またはfolderへdragするか、context menuの「選択からプレハブを作成」で開始する。ドロップ中は作成先folderとdependency件数を示し、シーンへのreparentと混同しない。
 - プレハブはAssetManifestにstable `prefabAssetId`と`prefabDocumentPath`を持ち、`scenes/prefabs/<prefab-id>.scene.json`のversioned documentを参照する。
+- プレハブの原点は元のrootオブジェクト自身の原点とする。作成時にrootの位置を原点へ移し、回転と大きさは保つ。元のrootの位置はその1か所の配置であり、残すと全instanceが配置位置から同じ距離だけずれる。「プレハブに反映」はrootの位置を既存documentの値に保ち、それ以外を元のオブジェクトから取り直す。原点を移す前に保存したプレハブは、既存instanceの描画位置を保つため従来のずれを維持する。
 - dependency closureは選択root以下のオブジェクト、コンポーネント、subtree内参照、参照する3Dモデル、テクスチャ、マテリアル、パーティクル、入れ子プレハブIDを含む。素材binaryは複製せずstable素材IDで共有し、外部参照と入れ子循環をvalidationする。portable package化は別の明示操作とし、プレハブ作成時に元データfileを隠れてコピーしない。
 - 作成成功では選択subtreeを同じ見た目のプレハブの配置に変換し、`prefabAssetId`、`prefabRevision`、prefab-localオブジェクトIDとsceneオブジェクトIDの対応を保持する。素材gridは新プレハブを選択し、`sceneSelection`は元rootに対応するinstance rootを保つ。
 - Instance差分は`overrides`に`prefabEntityId / componentType / fieldPath / value`のtyped operationとして保持する。プレハブ更新時はoverrideのないfieldだけを追従し、削除されたfieldや依存切れはconflict diagnosticにする。名前や配列indexだけでoverrideを対応しない。
 - 「Overrideを適用」「元に戻す」は対象fieldまたはcomponent単位のCommandとする。プレハブ自体の変更と一instanceのoverrideを同じ設定fieldで曖昧に編集しない。
-- UnpackはInstanceを通常オブジェクト群へ変換する一方向Commandとし、プレハブと他instanceは変更しない。元に戻すでは同じIDs、overrides、両selectionを復元する。
+- UnpackはInstanceを通常オブジェクト群へ変換する一方向Commandとし、プレハブと他instanceは変更しない。元に戻すでは同じIDs、overrides、両selectionを復元する。現在はMCPの`unpack_prefab_instance`だけが実装し、プレハブのrootをinstanceのオブジェクトの子として複製するため、展開前と同じ位置に描画する。`makeSource`では展開したオブジェクトを新しい元のオブジェクトにし、`sourceEntityMap`でプレハブ側のIDを保つ。元のオブジェクトを削除したプレハブも、これで再び更新できる。
 - プレハブを削除する時は全instanceと入れ子参照を列挙し、Unpack、置換、取消のいずれかを選ばせる。参照中のままdangling IDを残さない。
 - プレハブ化したsubtreeの元オブジェクトを削除しても、プレハブとプレハブdocumentは独立して保存できる状態を保つ。
 

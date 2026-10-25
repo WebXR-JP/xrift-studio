@@ -13,6 +13,7 @@ import {
   type RegisteredSceneComponent,
   type SceneDocument,
   type SceneEntity,
+  type TransformComponent,
 } from "./scene-document";
 
 export const PREFAB_DOCUMENT_SCHEMA_VERSION = "0.1.0" as const;
@@ -99,7 +100,7 @@ export function createPrefabDocument(
         rootEntityIds: [...input.sourceRootEntityIds],
       },
       rootEntityIds: [...clone.rootEntityIds],
-      entities: clone.entities,
+      entities: moveRootsToPrefabOrigin(clone.entities, clone.rootEntityIds),
       sourceEntityMap: Object.fromEntries(
         Object.entries(clone.entityIdMap).map(([sourceEntityId, prefabEntityId]) => [
           prefabEntityId,
@@ -136,14 +137,191 @@ export function updatePrefabDocumentFromSource(
         : `${document.prefabId}/${kind}/${sourceId}`,
   });
   if (!updated) return null;
+  // The source root is one placed copy, so moving it must not move the others.
+  // Each root stays where this Prefab already draws it, which also keeps the
+  // offset of a Prefab saved before roots were anchored at the origin.
+  const entities = { ...updated.document.entities };
+  updated.document.rootEntityIds.forEach((rootEntityId, index) => {
+    const previous =
+      document.entities[rootEntityId] ??
+      document.entities[document.rootEntityIds[index] ?? ""];
+    const position = rootTransform(previous)?.position;
+    if (position) entities[rootEntityId] = withRootPosition(entities[rootEntityId], position);
+  });
   return {
     ...updated,
     document: {
       ...updated.document,
+      entities,
       ...(document.importMetadata
         ? { importMetadata: structuredClone(document.importMetadata) }
         : {}),
     },
+  };
+}
+
+/**
+ * A Prefab's origin is its root Entity's own origin. The source root's
+ * position only places that copy in its Scene; keeping it would offset every
+ * instance by the same distance from where it was placed. Rotation and scale
+ * stay, because they shape a root that draws its own Mesh, such as a ground
+ * plane laid flat. Further roots keep their offset from the first one.
+ */
+function moveRootsToPrefabOrigin(
+  entities: Record<string, SceneEntity>,
+  rootEntityIds: readonly string[],
+): Record<string, SceneEntity> {
+  const origin = rootTransform(entities[rootEntityIds[0]])?.position;
+  if (!origin || origin.every((value) => value === 0)) return entities;
+  const moved = { ...entities };
+  for (const rootEntityId of rootEntityIds) {
+    const position = rootTransform(moved[rootEntityId])?.position;
+    if (!position) continue;
+    moved[rootEntityId] = withRootPosition(moved[rootEntityId], [
+      position[0] - origin[0],
+      position[1] - origin[1],
+      position[2] - origin[2],
+    ]);
+  }
+  return moved;
+}
+
+export type UnpackPrefabInstanceResult =
+  | {
+      unpacked: true;
+      scene: SceneDocument;
+      document: PrefabDocument;
+      rootEntityId: string;
+      entityIds: string[];
+    }
+  | { unpacked: false; reason: "instance-missing" | "prefab-entity-missing" | "clone-failed" | "multiple-roots" };
+
+/**
+ * Turns one placed copy back into ordinary Entities under its host Entity, the
+ * Unpack of the Prefab design. The copy is drawn exactly as before because the
+ * Prefab root keeps its own Transform under the host. With `makeSource` the
+ * new Entities become the Prefab's editable original: Prefab Entity IDs do not
+ * change, so every other copy keeps resolving. That is how a Prefab whose
+ * original was deleted becomes editable again.
+ */
+export function unpackPrefabInstance(
+  scene: SceneDocument,
+  document: PrefabDocument,
+  hostEntityId: string,
+  instanceComponentId: string,
+  generateId: DocumentIdGenerator,
+  options: { makeSource?: boolean } = {},
+): UnpackPrefabInstanceResult {
+  const host = scene.entities[hostEntityId];
+  const instance = host?.components.find(
+    (component): component is PrefabInstanceComponent =>
+      component.id === instanceComponentId && component.type === "prefab-instance",
+  );
+  if (!host || !instance) return { unpacked: false, reason: "instance-missing" };
+  if (!document.entities[instance.sourceEntityId]) {
+    return { unpacked: false, reason: "prefab-entity-missing" };
+  }
+  if (
+    options.makeSource &&
+    (document.rootEntityIds.length !== 1 || document.rootEntityIds[0] !== instance.sourceEntityId)
+  ) {
+    return { unpacked: false, reason: "multiple-roots" };
+  }
+  // A new original gets back the Component IDs its Prefab was captured from
+  // when they are free, so capturing it again reproduces the same Prefab.
+  const capturedPrefix = `${document.prefabId}/component/`;
+  const usedComponentIds = new Set(
+    Object.values(scene.entities).flatMap((entity) => entity.components.map((component) => component.id)),
+  );
+  const cloneId: DocumentIdGenerator = (kind, sourceId) => {
+    if (options.makeSource && kind === "component" && sourceId.startsWith(capturedPrefix)) {
+      const captured = sourceId.slice(capturedPrefix.length);
+      if (captured && !usedComponentIds.has(captured)) {
+        usedComponentIds.add(captured);
+        return captured;
+      }
+    }
+    return generateId(kind, sourceId);
+  };
+  const clone = cloneEntityHierarchy(
+    { ...scene, rootEntityIds: [...document.rootEntityIds], entities: document.entities },
+    [instance.sourceEntityId],
+    cloneId,
+  );
+  if (
+    !clone ||
+    clone.rootEntityIds.length !== 1 ||
+    Object.keys(clone.entities).some((entityId) => scene.entities[entityId])
+  ) {
+    return { unpacked: false, reason: "clone-failed" };
+  }
+  const rootEntityId = clone.rootEntityIds[0];
+  const entities = { ...scene.entities, ...clone.entities };
+  entities[rootEntityId] = { ...clone.entities[rootEntityId], parentId: hostEntityId };
+  entities[hostEntityId] = {
+    ...host,
+    components: host.components.filter((component) => component.id !== instanceComponentId),
+    children: [...host.children, rootEntityId],
+  };
+  return {
+    unpacked: true,
+    scene: { ...scene, entities },
+    document: options.makeSource
+      ? {
+          ...document,
+          source: { sceneId: scene.sceneId, rootEntityIds: [rootEntityId] },
+          // Prefab Entity ID to the new Scene Entity, as created from a source.
+          sourceEntityMap: { ...clone.entityIdMap },
+        }
+      : document,
+    rootEntityId,
+    entityIds: Object.keys(clone.entities),
+  };
+}
+
+/** Whether applying the original now would change the Prefab its copies draw. */
+export function prefabSourceHasPendingChanges(
+  scene: SceneDocument,
+  assets: AssetManifest,
+  document: PrefabDocument,
+): boolean {
+  if (
+    document.source.sceneId !== scene.sceneId ||
+    document.source.rootEntityIds.some((entityId) => !scene.entities[entityId])
+  ) {
+    return false;
+  }
+  const updated = updatePrefabDocumentFromSource(scene, assets, document);
+  return Boolean(updated) && canonicalJson(updated!.document) !== canonicalJson(document);
+}
+
+/** A Prefab read from disk has sorted keys; one built in memory does not. */
+export function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, entry: unknown) =>
+    entry && typeof entry === "object" && !Array.isArray(entry)
+      ? Object.fromEntries(
+          Object.keys(entry).sort().map((key) => [key, (entry as Record<string, unknown>)[key]]),
+        )
+      : entry);
+}
+
+function rootTransform(entity: SceneEntity | undefined): TransformComponent | undefined {
+  return entity?.components.find(
+    (component): component is TransformComponent => component.type === "transform",
+  );
+}
+
+function withRootPosition(
+  entity: SceneEntity,
+  position: readonly [number, number, number],
+): SceneEntity {
+  return {
+    ...entity,
+    components: entity.components.map((component) =>
+      component.type === "transform"
+        ? { ...component, position: [position[0], position[1], position[2]] }
+        : component,
+    ),
   };
 }
 
