@@ -11,6 +11,7 @@ import {
   type ModelAsset,
 } from "./asset-manifest";
 import { createDefaultCustomShader } from "./custom-shader-contract";
+import { prefabDocumentCodec } from "./serialization";
 import { createAnimationComponent } from "./scene-document";
 import { createScriptAsset } from "./scripting/script-files";
 import { extractScriptContract } from "./scripting/script-contract";
@@ -19,6 +20,7 @@ import {
   XRIFT_MCP_LOCAL_ASSET_TOOLS,
   XriftMcpEditorToolError,
   type XriftMcpEditorContext,
+  type XriftMcpEditorToolName,
 } from "./mcp-editor-tools";
 import {
   XRIFT_MCP_DEBUG_TOOLS,
@@ -81,6 +83,7 @@ function assertMcpToolRegistryIsCoherent(): void {
 export function runXriftMcpEditorToolFixtures(): void {
   assertMcpToolRegistryIsCoherent();
   assertMcpMaterialBatchAuthoring();
+  assertMcpPrefabReuse();
   const initial = createPrototypeProject("world", "mcp-fixture");
   const particle = createDefaultParticleAsset({
     id: "asset-mcp-particle",
@@ -3931,6 +3934,168 @@ function assertWorldComponentAuthoring(initial: XriftMcpEditorContext): void {
     "Malformed parent cycles must terminate without reporting an active screen");
   assert(getWorldComponentAuthoring(scene, "item") === null, "World planning should not be imposed on item projects");
   assert(JSON.stringify(initial.bundle) === original, "Discovery and branched placements must not mutate the source document");
+}
+
+/**
+ * Repeated objects as Prefabs: one original, copies placed where they are
+ * asked for, and later edits of the original reaching every copy. Before this
+ * an agent could create a Prefab but never update one, and each copy was
+ * drawn offset by the original's own position.
+ */
+function assertMcpPrefabReuse(): void {
+  let current: XriftMcpEditorContext = {
+    bundle: createPrototypeProject("world", "mcp-prefab-fixture"),
+    sceneSelection: null,
+    assetSelection: null,
+    editorMode: "edit",
+    importBusy: false,
+    revision: 1,
+    saveStatus: "saved",
+    now: () => "2026-10-25T00:00:00.000Z",
+  };
+  const scope = () => ({
+    projectId: current.bundle.project.projectId,
+    sceneId: current.bundle.scene.sceneId,
+    expectedRevision: current.revision,
+  });
+  const run = (tool: XriftMcpEditorToolName, args: Record<string, unknown> = {}) => {
+    const outcome = executeXriftMcpEditorTool(current, { id: `fixture-prefab-${tool}`, tool, arguments: args });
+    if (outcome.changed) current = { ...current, bundle: outcome.bundle, revision: current.revision + 1 };
+    return outcome;
+  };
+  const rejection = (tool: XriftMcpEditorToolName, args: Record<string, unknown>, context = current) => {
+    try {
+      executeXriftMcpEditorTool(context, { id: `fixture-prefab-reject-${tool}`, tool, arguments: args });
+    } catch (error) {
+      return error instanceof XriftMcpEditorToolError ? error.code : String(error);
+    }
+    return null;
+  };
+  const near = (left: readonly number[], right: readonly number[]) =>
+    left.length === right.length && left.every((value, index) => Math.abs(value - right[index]) < 1e-6);
+  type Bounds = { min: [number, number, number]; max: [number, number, number] };
+  const center = (bounds: Bounds) => bounds.min.map((value, index) => (value + bounds.max[index]) / 2);
+  const worldBounds = (entityId: string) =>
+    run("get_entity_bounds", { entityId }).result as { world: Bounds | null; measuredEntityIds: string[] };
+
+  // The original sits away from the origin, rotated and stretched like a bench.
+  const bench = run("create_primitive", { ...scope(), shape: "box" }).result.entityId as string;
+  run("update_transform", { ...scope(), entityId: bench, position: [6, 0.5, -2], rotation: [0, 0.5, 0], scale: [2, 1, 1] });
+  const created = run("create_prefab", { ...scope(), entityId: bench, name: "Bench" });
+  const prefabAssetId = created.result.prefabAssetId as string;
+  const prefabId = created.result.prefabId as string;
+  const rootOf = (document: { rootEntityIds: string[]; entities: Record<string, { components: { type: string }[] }> }) =>
+    document.entities[document.rootEntityIds[0]].components.find(
+      (component): component is { type: "transform"; position: number[]; rotation: number[]; scale: number[] } =>
+        component.type === "transform",
+    )!;
+  const createdRoot = rootOf(current.bundle.prefabs[prefabId]);
+  assert(
+    near(createdRoot.position, [0, 0, 0]) && near(createdRoot.rotation, [0, 0.5, 0]) && near(createdRoot.scale, [2, 1, 1]),
+    "A Prefab's origin is its source root's own origin, keeping the root's rotation and scale",
+  );
+  assert(created.result.originWarning === undefined && created.result.contentBounds,
+    "Content built around its root reports bounds without an origin warning");
+  assert((created.result.nextActions as string[]).includes("place_asset"),
+    "create_prefab should lead to placing the copies");
+
+  const assetList = run("list_assets", { kind: "prefab" }).result.assets as { id: string; kind: string }[];
+  assert(assetList.some((asset) => asset.id === prefabAssetId && asset.kind === "prefab"),
+    "list_assets reports and filters Prefab Assets by the kind people see");
+  assert((run("list_assets", { kind: "template" }).result.assets as { id: string }[]).some((asset) => asset.id === prefabAssetId),
+    "The stored template kind keeps finding Prefabs");
+
+  const copies = [[-3, 0.5, 4], [0, 0.5, 4]].map((position) =>
+    run("place_asset", { ...scope(), assetId: prefabAssetId, position }).result.entityId as string);
+  const listed = (run("get_editor_context").result.prefabs as {
+    prefabAssetId: string; name: string; sourceEntityId: string | null; instanceCount: number;
+  }[]).find((prefab) => prefab.prefabAssetId === prefabAssetId);
+  assert(listed?.sourceEntityId === bench && listed.instanceCount === 2 && listed.name === "Bench",
+    "get_editor_context lists the Prefab with its editable original and copy count");
+
+  const firstCopy = worldBounds(copies[0]);
+  assert(firstCopy.world && near(center(firstCopy.world), [-3, 0.5, 4]),
+    `A placed copy draws at its own position, not offset by the original's: ${JSON.stringify(firstCopy.world)}`);
+  assert(JSON.stringify(firstCopy.measuredEntityIds) === JSON.stringify([copies[0]]),
+    "Expanded Prefab content is reported under the placed copy's own Entity ID");
+  const widthBefore = firstCopy.world.max[0] - firstCopy.world.min[0];
+
+  const instanceView = run("get_entity_components", { entityId: copies[0] }).result.prefabInstances as { prefabAssetId: string; sourceEntityId: string }[];
+  assert(instanceView?.[0]?.prefabAssetId === prefabAssetId && instanceView[0].sourceEntityId === bench,
+    "A copy points at the Scene Entity to edit, not at the Prefab document's internal ID");
+  const sourceView = run("get_entity_components", { entityId: bench }).result.prefabSources as { prefabAssetId: string; instanceCount: number }[];
+  assert(sourceView?.[0]?.prefabAssetId === prefabAssetId && sourceView[0].instanceCount === 2,
+    "The original says which Prefab it feeds and how many copies follow it");
+
+  // Moving the original is placing that one copy; widening it is the Prefab.
+  run("update_transform", { ...scope(), entityId: bench, position: [9, 0.5, -2], scale: [3, 1, 1] });
+  const revisionBefore = current.revision;
+  const updated = run("update_prefab_from_source", { ...scope(), prefabAssetId });
+  assert(updated.changed && updated.result.instanceCount === 2 && current.revision === revisionBefore + 1,
+    "update_prefab_from_source commits the original's changes in one revision");
+  const updatedRoot = rootOf(current.bundle.prefabs[prefabId]);
+  assert(near(updatedRoot.position, [0, 0, 0]) && near(updatedRoot.scale, [3, 1, 1]),
+    "Updating applies the original's scale but not the position of that one copy");
+  const afterUpdate = worldBounds(copies[0]);
+  assert(afterUpdate.world && near(center(afterUpdate.world), [-3, 0.5, 4])
+    && afterUpdate.world.max[0] - afterUpdate.world.min[0] > widthBefore + 1e-3,
+    "Every copy follows the updated original without moving");
+  const unchanged = run("update_prefab_from_source", { ...scope(), prefabAssetId });
+  assert(!unchanged.changed && unchanged.result.changed === false && current.revision === revisionBefore + 1,
+    "An unchanged original must not consume a revision");
+  // A saved Prefab comes back with sorted keys; that alone is not a change.
+  const reopened = prefabDocumentCodec.parse(prefabDocumentCodec.serialize(current.bundle.prefabs[prefabId]));
+  assert(reopened.ok, "The updated Prefab document must save and reopen");
+  current = { ...current, bundle: { ...current.bundle, prefabs: { ...current.bundle.prefabs, [prefabId]: reopened.document } } };
+  assert(!run("update_prefab_from_source", { ...scope(), prefabAssetId }).changed && current.revision === revisionBefore + 1,
+    "A reopened, unchanged Prefab must not consume a revision");
+
+  // A Prefab saved before roots were anchored keeps the offset its copies show.
+  const legacyDocument = structuredClone(current.bundle.prefabs[prefabId]);
+  rootOf(legacyDocument).position = [5, 0, 0];
+  const legacyContext: XriftMcpEditorContext = {
+    ...current,
+    bundle: { ...current.bundle, prefabs: { ...current.bundle.prefabs, [prefabId]: legacyDocument } },
+  };
+  const legacy = executeXriftMcpEditorTool(legacyContext, {
+    id: "fixture-prefab-legacy",
+    tool: "update_prefab_from_source",
+    arguments: { ...scope(), prefabAssetId },
+  });
+  assert(near(rootOf(legacy.bundle.prefabs[prefabId]).position, [5, 0, 0]),
+    "Updating an older Prefab keeps where its existing copies are drawn");
+
+  // A child carrying the placement would move every copy; say so at creation.
+  const group = run("create_empty_entity", { ...scope(), name: "Lamp" }).result.entityId as string;
+  const post = run("create_primitive", { ...scope(), shape: "cylinder", position: [4, 0.5, 4] }).result.entityId as string;
+  run("reparent_entity", { ...scope(), entityId: post, parentEntityId: group });
+  const offset = run("create_prefab", { ...scope(), entityId: group });
+  assert(typeof offset.result.originWarning === "string",
+    "create_prefab warns when the content sits beside the Prefab's origin");
+
+  assert(rejection("update_prefab_from_source", { ...scope(), prefabAssetId: "asset-missing" }) === "ASSET_NOT_FOUND",
+    "An unknown Prefab is rejected");
+  assert(rejection("update_prefab_from_source", { ...scope(), prefabAssetId: BUILTIN_ASSET_IDS.material.blue }) === "ASSET_KIND_MISMATCH",
+    "A non-Prefab Asset is rejected");
+  assert(rejection("update_prefab_from_source", { ...scope(), expectedRevision: current.revision - 1, prefabAssetId }) === "STALE_REVISION",
+    "A stale revision is rejected");
+  assert(rejection("update_prefab_from_source", { ...scope(), prefabAssetId }, { ...current, editorMode: "play" }) === "EDITOR_READ_ONLY",
+    "Play mode is read-only for Prefab updates");
+
+  const nested = run("place_asset", { ...scope(), assetId: prefabAssetId, parentEntityId: bench }).result.entityId as string;
+  assert(rejection("update_prefab_from_source", { ...scope(), prefabAssetId }) === "PREFAB_CYCLE",
+    "A copy of the Prefab inside its own original is rejected instead of saving a cycle");
+  run("delete_entity", { ...scope(), entityId: nested });
+
+  const beforeDeletion = JSON.stringify(current.bundle.prefabs[prefabId]);
+  run("delete_entity", { ...scope(), entityId: bench });
+  assert(rejection("update_prefab_from_source", { ...scope(), prefabAssetId }) === "PREFAB_SOURCE_MISSING",
+    "A deleted original cannot be applied");
+  assert(JSON.stringify(current.bundle.prefabs[prefabId]) === beforeDeletion && worldBounds(copies[1]).world,
+    "Copies keep drawing the saved Prefab after the original is deleted");
+  const orphan = (run("get_editor_context").result.prefabs as { prefabAssetId: string; sourceEntityId: string | null }[])
+    .find((prefab) => prefab.prefabAssetId === prefabAssetId);
+  assert(orphan?.sourceEntityId === null, "A deleted original is reported as unavailable");
 }
 
 function assert(condition: unknown, message: string): asserts condition {

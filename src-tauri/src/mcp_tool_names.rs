@@ -3,7 +3,7 @@
 // Source of truth: src/lib/visual-editor/mcp-tool-registry.ts
 // Regenerate with: pnpm mcp:tool-names
 
-pub const MCP_TOOL_NAMES: [&str; 169] = [
+pub const MCP_TOOL_NAMES: [&str; 170] = [
     "list_projects",
     "list_starter_templates",
     "create_project",
@@ -92,6 +92,7 @@ pub const MCP_TOOL_NAMES: [&str; 169] = [
     "list_scene_recipes",
     "place_builtin_prefab",
     "create_prefab",
+    "update_prefab_from_source",
     "add_component",
     "update_component",
     "remove_component",
@@ -175,7 +176,7 @@ pub const MCP_TOOL_NAMES: [&str; 169] = [
     "get_recording_camera",
 ];
 
-pub const MCP_TOOL_SURFACES: [(&str, &str); 169] = [
+pub const MCP_TOOL_SURFACES: [(&str, &str); 170] = [
     ("list_projects", "project"),
     ("list_starter_templates", "project"),
     ("create_project", "project"),
@@ -264,6 +265,7 @@ pub const MCP_TOOL_SURFACES: [(&str, &str); 169] = [
     ("list_scene_recipes", "document"),
     ("place_builtin_prefab", "document"),
     ("create_prefab", "document"),
+    ("update_prefab_from_source", "document"),
     ("add_component", "document"),
     ("update_component", "document"),
     ("remove_component", "document"),

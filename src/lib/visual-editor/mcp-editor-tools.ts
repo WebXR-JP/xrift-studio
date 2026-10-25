@@ -281,6 +281,7 @@ import {
   type MaterialTextureInfo,
   type MaterialTextureInfoPatch,
   type ModelAssetPatch,
+  type SceneAsset,
   type TextureImportSettingsPatch,
 } from "./asset-manifest";
 import {
@@ -304,7 +305,14 @@ import { addDefaultDocumentAsset } from "./document-asset-creation";
 import {
   addPrefabAsset,
   createPrefabDocument,
+  updatePrefabDocumentFromSource,
+  type PrefabDocument,
 } from "./prefab-document";
+import {
+  getPrefabAssetDocumentReference,
+  isPrefabAsset,
+  resolvePrefabInstances,
+} from "./compiler/prefab-resolver";
 import {
   updateParticleAsset,
   type ParticlePropertiesPatch,
@@ -451,6 +459,7 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   list_scene_recipes: listSceneRecipes,
   place_builtin_prefab: placeBuiltinPrefab,
   create_prefab: createPrefab,
+  update_prefab_from_source: updatePrefabFromSource,
   add_component: addComponent,
   update_component: updateComponent,
   remove_component: removeComponent,
@@ -673,11 +682,12 @@ function readEditorContext(
     scriptRuntime: context.scriptRuntime ?? null,
     starterEntityIds: untouchedChatgptStarterEntityIds(context.bundle),
     sceneSettings,
+    prefabs: projectPrefabSummaries(context),
     selectedEntity: selectedEntity
       ? { id: selectedEntity.id, name: selectedEntity.name }
       : null,
     selectedAsset: selectedAsset
-      ? { id: selectedAsset.id, name: selectedAsset.name, kind: selectedAsset.kind }
+      ? { id: selectedAsset.id, name: selectedAsset.name, kind: mcpAssetKind(selectedAsset) }
       : null,
   }, "Editor contextを取得しました");
 }
@@ -690,11 +700,12 @@ function listAssets(
   const kind = optionalString(argumentsValue.kind);
   const assets = Object.values(context.bundle.assets.assets)
     .filter((asset) => !query || asset.name.toLocaleLowerCase().includes(query))
-    .filter((asset) => !kind || asset.kind === kind)
+    // `template` is the stored kind of a Prefab; both names find it.
+    .filter((asset) => !kind || asset.kind === kind || mcpAssetKind(asset) === kind)
     .map((asset) => ({
       id: asset.id,
       name: asset.name,
-      kind: asset.kind,
+      kind: mcpAssetKind(asset),
       status: asset.status,
       folderId: asset.folderId ?? null,
       placeable: isScenePlaceableAsset(asset),
@@ -1857,6 +1868,19 @@ function getEntityComponents(
     definitionId: componentDefinitionId(component),
     ...JSON.parse(JSON.stringify(component)) as Record<string, unknown>,
   }));
+  // The instance Component's sourceEntityId names an Entity inside the Prefab
+  // document, not one in this Scene. Point at the Scene Entity to edit instead.
+  const prefabs = projectPrefabSummaries(context);
+  const prefabSources = prefabs.filter((prefab) => prefab.sourceEntityId === entityId);
+  const prefabInstances = entity.components.flatMap((component) => {
+    if (component.type !== "prefab-instance") return [];
+    const prefab = prefabs.find((item) => item.prefabAssetId === component.prefabAssetId);
+    return [{
+      prefabAssetId: component.prefabAssetId,
+      name: prefab?.name ?? null,
+      sourceEntityId: prefab?.sourceEntityId ?? null,
+    }];
+  });
   return unchanged(
     context,
     {
@@ -1867,6 +1891,8 @@ function getEntityComponents(
       ...(isR3fSceneAuthoring(entity.codeAuthoring) ? { r3fAuthoring: {
         version: entity.codeAuthoring.version, revision: entity.codeAuthoring.revision, source: entity.codeAuthoring.source,
       } } : {}),
+      ...(prefabSources.length > 0 ? { prefabSources } : {}),
+      ...(prefabInstances.length > 0 ? { prefabInstances } : {}),
       components,
       count: components.length,
     },
@@ -3036,12 +3062,23 @@ function getEntityBounds(
   const includeDescendants =
     optionalBoolean(argumentsValue.includeDescendants, "includeDescendants") ??
     true;
+  const { scene: measuredScene, includeDescendants: measureDescendants } =
+    prefabExpandedBoundsScene(context, entityId, includeDescendants);
   const bounds = getEntityWorldBounds(
-    context.bundle.scene,
+    measuredScene,
     context.bundle.assets,
     entityId,
-    { includeDescendants },
+    { includeDescendants: measureDescendants },
   );
+  // Expanded Prefab content has generated IDs no tool can address; report the
+  // placed instance Entity that draws it instead.
+  const authoringEntityIds = (ids: string[]) => [...new Set(ids.map((id) => {
+    let current: string | null = id;
+    while (current && !context.bundle.scene.entities[current]) {
+      current = measuredScene.entities[current]?.parentId ?? null;
+    }
+    return current ?? entityId;
+  }))];
   return unchanged(
     context,
     {
@@ -3054,13 +3091,51 @@ function getEntityBounds(
         entityWorldMatrix(context.bundle.scene, entityId),
         [0, 0, 0],
       ),
-      measuredEntityIds: bounds.measured,
-      unmeasuredEntityIds: bounds.unmeasured,
+      measuredEntityIds: authoringEntityIds(bounds.measured),
+      unmeasuredEntityIds: authoringEntityIds(bounds.unmeasured),
     },
     bounds.world
       ? `Entity「${entity.name}」のboundsを取得しました`
       : `Entity「${entity.name}」に測れるgeometryがありません`,
   );
+}
+
+/**
+ * A placed Prefab is one Entity whose geometry exists only once the Prefab is
+ * expanded, so the authoring Scene alone measures nothing. Measure what the
+ * Scene View draws. Without descendants, an instance still counts its own
+ * Prefab content, just not the Entities authored under it.
+ */
+function prefabExpandedBoundsScene(
+  context: XriftMcpEditorContext,
+  entityId: string,
+  includeDescendants: boolean,
+): { scene: SceneDocument; includeDescendants: boolean } {
+  const scene = context.bundle.scene;
+  const pending = [entityId];
+  const visited = new Set<string>();
+  let hasInstance = false;
+  while (pending.length > 0 && !hasInstance) {
+    const current = scene.entities[pending.pop()!];
+    if (!current || visited.has(current.id)) continue;
+    visited.add(current.id);
+    hasInstance = current.components.some((component) => component.type === "prefab-instance");
+    if (includeDescendants) pending.push(...current.children);
+  }
+  if (!hasInstance) return { scene, includeDescendants };
+  const resolved = resolvePrefabInstances(scene, context.bundle.assets, context.bundle.prefabs).scene;
+  if (includeDescendants) return { scene: resolved, includeDescendants };
+  const host = resolved.entities[entityId];
+  return {
+    scene: {
+      ...resolved,
+      entities: {
+        ...resolved.entities,
+        [entityId]: { ...host, children: host.children.filter((id) => !scene.entities[id]) },
+      },
+    },
+    includeDescendants: true,
+  };
 }
 
 /**
@@ -3817,6 +3892,8 @@ function createPrefab(
       [prefabId]: created.document,
     },
   });
+  const contentBounds = prefabContentBounds(context, created.document);
+  const offset = contentBounds && prefabContentOffset(contentBounds);
   return {
     changed: true,
     bundle,
@@ -3832,11 +3909,258 @@ function createPrefab(
       prefabAssetId,
       name,
       prefabPath,
-      document: created.document,
+      // Placed copies draw these bounds around the position they are given.
+      contentBounds,
+      ...(offset ? { originWarning:
+        `プレハブの形状が原点から水平に[${offset.map((value) => Math.round(value * 100) / 100).join(", ")}] m離れています。` +
+        "配置するたびに、指定した位置から同じだけずれて表示されます。" +
+        "形状を元のEntityの原点に合わせるか、位置を持つ子Entityからプレハブを作り直してください" } : {}),
+      document: summarizedPrefabDocument(created.document),
       references: created.references,
+      nextActions: ["place_asset", "update_transform", "capture_scene_view"],
     },
     activity: `AIがEntity「${entity.name}」からプレハブ「${name}」を作成しました`,
   };
+}
+
+/** Bounds of what one placed copy draws, in the coordinates of its instance. */
+function prefabContentBounds(
+  context: XriftMcpEditorContext,
+  document: PrefabDocument,
+): { min: Vec3; max: Vec3 } | null {
+  const rootEntityId = document.rootEntityIds[0];
+  if (!rootEntityId) return null;
+  const prefabScene: SceneDocument = {
+    ...context.bundle.scene,
+    rootEntityIds: [...document.rootEntityIds],
+    entities: document.entities,
+  };
+  const resolved = resolvePrefabInstances(prefabScene, context.bundle.assets, context.bundle.prefabs).scene;
+  return getEntityWorldBounds(resolved, context.bundle.assets, rootEntityId, {
+    includeDescendants: true,
+  }).world;
+}
+
+/**
+ * The horizontal offset of the content from the Prefab's origin, when the
+ * origin is outside its footprint: the usual result of making a Prefab from a
+ * root whose child carries the placement.
+ */
+function prefabContentOffset(bounds: { min: Vec3; max: Vec3 }): [number, number, number] | null {
+  const tolerance = 1e-3;
+  const outside = (axis: 0 | 2) =>
+    bounds.min[axis] > tolerance || bounds.max[axis] < -tolerance;
+  if (!outside(0) && !outside(2)) return null;
+  return [
+    (bounds.min[0] + bounds.max[0]) / 2,
+    0,
+    (bounds.min[2] + bounds.max[2]) / 2,
+  ];
+}
+
+/** Retained source baselines can reach megabytes; the agent needs the shape. */
+function summarizedPrefabDocument(document: PrefabDocument): Record<string, unknown> {
+  return {
+    ...document,
+    entities: Object.fromEntries(
+      Object.entries(document.entities).map(([id, entity]) => {
+        if (!isR3fSceneAuthoring(entity.codeAuthoring)) return [id, entity];
+        return [id, { ...entity, codeAuthoring: {
+          version: entity.codeAuthoring.version,
+          revision: entity.codeAuthoring.revision,
+        } }];
+      }),
+    ),
+  };
+}
+
+/**
+ * The Inspector's 「プレハブに反映」. Without it an agent could make a Prefab
+ * but never change one: every later edit of the original stayed on that one
+ * copy, so repeated objects were edited one at a time again.
+ */
+function updatePrefabFromSource(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const prefabAssetId = requiredString(argumentsValue.prefabAssetId, "prefabAssetId");
+  const { asset, prefabId, document } = requirePrefabDocument(context, prefabAssetId);
+  const scene = context.bundle.scene;
+  if (document.source.sceneId !== scene.sceneId) {
+    throw new XriftMcpEditorToolError(
+      "PREFAB_SOURCE_UNAVAILABLE",
+      "このプレハブの元のEntityは別のSceneにあります。そのSceneを開いてから反映してください",
+      { prefabAssetId, sourceSceneId: document.source.sceneId },
+    );
+  }
+  const missingEntityIds = document.source.rootEntityIds.filter(
+    (entityId) => !scene.entities[entityId],
+  );
+  if (missingEntityIds.length > 0) {
+    throw new XriftMcpEditorToolError(
+      "PREFAB_SOURCE_MISSING",
+      "プレハブの元のEntityが削除されているため反映できません。配置済みのプレハブはそのまま残ります",
+      { prefabAssetId, missingEntityIds },
+    );
+  }
+  const updated = updatePrefabDocumentFromSource(scene, context.bundle.assets, document);
+  if (!updated) {
+    throw new XriftMcpEditorToolError(
+      "PREFAB_UPDATE_FAILED",
+      "プレハブの元のEntityの構造を読み取れませんでした",
+      { prefabAssetId },
+    );
+  }
+  const cycle = prefabReferenceCycle(context, prefabAssetId, updated.document);
+  if (cycle) {
+    throw new XriftMcpEditorToolError(
+      "PREFAB_CYCLE",
+      "元のEntityの中に同じプレハブの配置があるため反映できません。その配置を元のEntityの外へ移してください",
+      { prefabAssetId, cycle },
+    );
+  }
+  const instanceCount = countPrefabInstances(scene).get(prefabAssetId) ?? 0;
+  const summary = {
+    projectId: context.bundle.project.projectId,
+    sceneId: scene.sceneId,
+    prefabAssetId,
+    prefabId,
+    name: asset.name,
+    sourceEntityId: document.source.rootEntityIds[0],
+    entityCount: Object.keys(updated.document.entities).length,
+    instanceCount,
+    references: updated.references,
+  };
+  if (canonicalJson(updated.document) === canonicalJson(document)) {
+    return unchanged(
+      context,
+      { ...summary, changed: false, revision: context.revision },
+      `プレハブ「${asset.name}」は元のEntityと同じ内容です`,
+    );
+  }
+  const bundle = touchProject(context, {
+    ...context.bundle,
+    prefabs: { ...context.bundle.prefabs, [prefabId]: updated.document },
+  });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: context.assetSelection,
+    result: {
+      ...summary,
+      changed: true,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      nextActions: ["capture_scene_view"],
+    },
+    activity: `AIがプレハブ「${asset.name}」へ元のEntityの変更を反映しました`,
+  };
+}
+
+function requirePrefabDocument(
+  context: XriftMcpEditorContext,
+  prefabAssetId: string,
+): { asset: SceneAsset; prefabId: string; document: PrefabDocument } {
+  const asset = context.bundle.assets.assets[prefabAssetId];
+  if (!asset) {
+    throw new XriftMcpEditorToolError(
+      "ASSET_NOT_FOUND",
+      "指定されたプレハブが見つかりません",
+      { prefabAssetId },
+    );
+  }
+  const reference = getPrefabAssetDocumentReference(asset);
+  const document = reference ? context.bundle.prefabs[reference.prefabId] : undefined;
+  if (!reference || !document) {
+    throw new XriftMcpEditorToolError(
+      isPrefabAsset(asset) ? "PREFAB_DOCUMENT_MISSING" : "ASSET_KIND_MISMATCH",
+      isPrefabAsset(asset)
+        ? "プレハブのデータを読み込めません"
+        : "指定された素材はプレハブではありません",
+      { prefabAssetId, kind: mcpAssetKind(asset) },
+    );
+  }
+  return { asset, prefabId: reference.prefabId, document };
+}
+
+/** A Prefab read from disk has sorted keys; one built in memory does not. */
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, entry: unknown) =>
+    entry && typeof entry === "object" && !Array.isArray(entry)
+      ? Object.fromEntries(
+          Object.keys(entry).sort().map((key) => [key, (entry as Record<string, unknown>)[key]]),
+        )
+      : entry);
+}
+
+/** Follows nested Prefab instances; the resolver would drop a cyclic copy. */
+function prefabReferenceCycle(
+  context: XriftMcpEditorContext,
+  prefabAssetId: string,
+  document: PrefabDocument,
+): string[] | null {
+  const visit = (current: PrefabDocument, path: string[]): string[] | null => {
+    for (const entity of Object.values(current.entities)) {
+      for (const component of entity.components) {
+        if (component.type !== "prefab-instance") continue;
+        const next = component.prefabAssetId;
+        if (next === prefabAssetId) return [...path, next];
+        if (path.includes(next)) continue;
+        const asset = context.bundle.assets.assets[next];
+        const reference = asset ? getPrefabAssetDocumentReference(asset) : null;
+        const nested = reference ? context.bundle.prefabs[reference.prefabId] : undefined;
+        const cycle = nested ? visit(nested, [...path, next]) : null;
+        if (cycle) return cycle;
+      }
+    }
+    return null;
+  };
+  return visit(document, [prefabAssetId]);
+}
+
+function countPrefabInstances(scene: SceneDocument): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const entity of Object.values(scene.entities)) {
+    for (const component of entity.components) {
+      if (component.type !== "prefab-instance") continue;
+      counts.set(component.prefabAssetId, (counts.get(component.prefabAssetId) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+/**
+ * Project Prefabs as an agent needs them: which Entity in this Scene is the
+ * editable original and how many copies draw from it. An agent that cannot
+ * see them builds every repeated object again as unrelated Entities.
+ */
+function projectPrefabSummaries(context: XriftMcpEditorContext) {
+  const scene = context.bundle.scene;
+  const counts = countPrefabInstances(scene);
+  return Object.values(context.bundle.assets.assets)
+    .filter(isPrefabAsset)
+    .map((asset) => {
+      const reference = getPrefabAssetDocumentReference(asset);
+      const document = reference ? context.bundle.prefabs[reference.prefabId] : undefined;
+      const sourceEntityId =
+        document?.source.sceneId === scene.sceneId
+          ? (document.source.rootEntityIds.find((entityId) => scene.entities[entityId]) ?? null)
+          : null;
+      return {
+        prefabAssetId: asset.id,
+        name: asset.name,
+        sourceEntityId,
+        instanceCount: counts.get(asset.id) ?? 0,
+      };
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+/** User-facing kind: Prefab Assets are stored under the older `template` kind. */
+function mcpAssetKind(asset: SceneAsset): string {
+  return isPrefabAsset(asset) ? "prefab" : asset.kind;
 }
 
 function addComponent(

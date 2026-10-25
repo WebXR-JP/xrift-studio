@@ -13,6 +13,7 @@ import {
   type RegisteredSceneComponent,
   type SceneDocument,
   type SceneEntity,
+  type TransformComponent,
 } from "./scene-document";
 
 export const PREFAB_DOCUMENT_SCHEMA_VERSION = "0.1.0" as const;
@@ -99,7 +100,7 @@ export function createPrefabDocument(
         rootEntityIds: [...input.sourceRootEntityIds],
       },
       rootEntityIds: [...clone.rootEntityIds],
-      entities: clone.entities,
+      entities: moveRootsToPrefabOrigin(clone.entities, clone.rootEntityIds),
       sourceEntityMap: Object.fromEntries(
         Object.entries(clone.entityIdMap).map(([sourceEntityId, prefabEntityId]) => [
           prefabEntityId,
@@ -136,14 +137,72 @@ export function updatePrefabDocumentFromSource(
         : `${document.prefabId}/${kind}/${sourceId}`,
   });
   if (!updated) return null;
+  // The source root is one placed copy, so moving it must not move the others.
+  // Each root stays where this Prefab already draws it, which also keeps the
+  // offset of a Prefab saved before roots were anchored at the origin.
+  const entities = { ...updated.document.entities };
+  updated.document.rootEntityIds.forEach((rootEntityId, index) => {
+    const previous =
+      document.entities[rootEntityId] ??
+      document.entities[document.rootEntityIds[index] ?? ""];
+    const position = rootTransform(previous)?.position;
+    if (position) entities[rootEntityId] = withRootPosition(entities[rootEntityId], position);
+  });
   return {
     ...updated,
     document: {
       ...updated.document,
+      entities,
       ...(document.importMetadata
         ? { importMetadata: structuredClone(document.importMetadata) }
         : {}),
     },
+  };
+}
+
+/**
+ * A Prefab's origin is its root Entity's own origin. The source root's
+ * position only places that copy in its Scene; keeping it would offset every
+ * instance by the same distance from where it was placed. Rotation and scale
+ * stay, because they shape a root that draws its own Mesh, such as a ground
+ * plane laid flat. Further roots keep their offset from the first one.
+ */
+function moveRootsToPrefabOrigin(
+  entities: Record<string, SceneEntity>,
+  rootEntityIds: readonly string[],
+): Record<string, SceneEntity> {
+  const origin = rootTransform(entities[rootEntityIds[0]])?.position;
+  if (!origin || origin.every((value) => value === 0)) return entities;
+  const moved = { ...entities };
+  for (const rootEntityId of rootEntityIds) {
+    const position = rootTransform(moved[rootEntityId])?.position;
+    if (!position) continue;
+    moved[rootEntityId] = withRootPosition(moved[rootEntityId], [
+      position[0] - origin[0],
+      position[1] - origin[1],
+      position[2] - origin[2],
+    ]);
+  }
+  return moved;
+}
+
+function rootTransform(entity: SceneEntity | undefined): TransformComponent | undefined {
+  return entity?.components.find(
+    (component): component is TransformComponent => component.type === "transform",
+  );
+}
+
+function withRootPosition(
+  entity: SceneEntity,
+  position: readonly [number, number, number],
+): SceneEntity {
+  return {
+    ...entity,
+    components: entity.components.map((component) =>
+      component.type === "transform"
+        ? { ...component, position: [position[0], position[1], position[2]] }
+        : component,
+    ),
   };
 }
 

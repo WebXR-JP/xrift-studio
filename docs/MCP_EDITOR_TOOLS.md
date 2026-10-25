@@ -194,7 +194,7 @@ Editで実行すると、独立したBlenderプロセスが実GLBと編集可能
 
 変換中にEditorが観測したAssetのサムネイル・保存日時だけの更新は、最新状態へ合流して保持する。手動編集、取り消しで元へ戻した編集、停止やScript保存による明示的なrevision更新は、この例外に含めない。派生更新の比較は非同期の原本変換中だけ行い、通常の編集へ全Sceneの比較処理を追加しない。
 
-## document (98)
+## document (99)
 
 **Editor context / Project**
 `get_editor_context`, `get_world_authoring_guide`, `get_project_health`, `analyze_performance`, `get_scripting_capabilities`, `update_project_metadata`
@@ -262,7 +262,8 @@ Editで実行すると、独立したBlenderプロセスが実GLBと編集可能
 **Scene / Entity**
 `update_scene_settings`, `list_entities`, `get_entity_components`,
 `get_entity_bounds`, `create_empty_entity`, `create_primitive`, `place_asset`,
-`list_scene_recipes`, `place_builtin_prefab`, `create_prefab`, `rename_entity`,
+`list_scene_recipes`, `place_builtin_prefab`, `create_prefab`,
+`update_prefab_from_source`, `rename_entity`,
 `duplicate_entity`, `reparent_entity`, `delete_entity`, `set_entity_enabled`,
 `update_transform`
 
@@ -302,6 +303,27 @@ Animationを持つGLB / VRMの展開ノード）はオブジェクト単体で�
 いる子は8隅を変換して含める箱にする。重なり判定が安全側になる。extent
 を解決できないメッシュ（metadataが無い時代の3Dモデルなど）はunionから黙って
 外さない。`unmeasuredEntityIds`に出す。「小さい」と「不明」を区別する。
+
+木、ベンチ、街灯など繰り返し置くものは、一つを仕上げて`create_prefab`で
+Prefabにし、残りは`place_asset`でそのPrefabを配置する。配置ごとに別の
+Entityとして作ると、後の修正を複製の数だけ繰り返すことになる。
+`get_editor_context`の`prefabs`は、作品のPrefabと、このSceneで編集する元の
+Entity（`sourceEntityId`）、配置数（`instanceCount`）を返す。AIは同じものを
+作り直す前に、ここで既存のPrefabを確認できる。`list_assets`はPrefabの`kind`を
+`prefab`と返し、`kind: "prefab"`で絞り込める。
+
+Prefabの原点は、元のEntity自身の原点になる。元のEntityの位置はその1か所の
+配置として扱い、Prefabに含めない。回転・大きさ・子Entity・Componentは含める。
+子に付けた位置のずれは全配置に残るため、`create_prefab`は形状が原点から水平に
+離れていると`originWarning`を返す。`contentBounds`は1配置分の形状の範囲を示す。
+
+元のEntityを編集したら、`update_prefab_from_source`で全配置へ反映する。
+Inspectorの「プレハブに反映」と同じ処理で、元のEntityの位置は反映しない。
+元のEntityが削除されている、別のSceneにある、元のEntityの中に同じPrefabの
+配置がある場合は拒否する。変更がなければrevisionを増やさない。配置した
+Prefabは1つのEntityで、`get_entity_bounds`は展開した形状を測り、その
+EntityのIDで返す。`get_entity_components`は、元のEntityに`prefabSources`、
+配置に`prefabInstances`（編集する元のEntity）を返す。
 
 **Component**
 `list_component_definitions`, `add_component`, `update_component`,

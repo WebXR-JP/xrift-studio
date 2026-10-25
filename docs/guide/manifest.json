@@ -646,7 +646,7 @@
       "description": "親子のEntityをプレハブにまとめ、同じ家具や仕掛けを繰り返し配置できます。",
       "group": "create",
       "file": "prefabs.md",
-      "keywords": "Prefab プレハブ 再利用 グループ 組み合わせ",
+      "keywords": "Prefab プレハブ 再利用 グループ 組み合わせ 反映 繰り返し AI",
       "related": [
         "objects",
         "materials",

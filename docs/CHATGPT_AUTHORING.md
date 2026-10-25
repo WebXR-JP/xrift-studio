@@ -68,6 +68,8 @@ Piが`get_modeling_tools`、`create_blender_model`、`get_model_asset`、`place_
 専用の`studio_model_and_place`と16配置の上限を削除した。既存Assetの再利用、生成後の確認、複数配置、寸法の検査をPiが組み立てる。
 モデル・Scene自体の形式検証や各正式ツールの入力条件は維持する。R3Fは`apply_r3f_scene`を使う。保存と完成確認は別途必要。
 
+木やベンチなど繰り返し置くものは、一つを仕上げて`create_prefab`でPrefabにし、残りは`place_asset`で配置する。配置ごとに別のEntityとして作ると、利用者が後で直すときに複製の数だけ同じ編集を繰り返すことになる。`get_editor_context`の`prefabs`で既存のPrefabを確認し、元のEntityを編集した後は`update_prefab_from_source`で全配置へ反映する。共通ガイドと指示文の両方でこの手順を伝え、進捗には「プレハブの作成」「プレハブへの反映」と表示する。
+
 ### 空間UIと環境の設計
 
 展示・教材・案内・メニューでは、共通ガイドの`spatial-ui`を読む。文字の階層、カードの余白、読む距離、立体見本と回遊を一緒に考える。ワールド全体や背景の変更では`environment`も読み、Skybox、IBL、照明と材質を調整する。ガイドの正本は`world-authoring-guide.json`で、MCPと制作スキルにも同じ内容を渡す。詳細とTSX例は必要なtopicだけ取得する。

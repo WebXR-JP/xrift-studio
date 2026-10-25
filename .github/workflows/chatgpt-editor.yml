@@ -75,6 +75,8 @@ on:
       - 'scripts/uikit-authoring.test.mjs'
       - 'scripts/world-design-guide.test.mjs'
       - 'scripts/component-code-authoring.test.mjs'
+      - 'scripts/prefab-authoring.test.mjs'
+      - 'src/lib/visual-editor/prefab-document.ts'
       - 'e2e/uikit-*'
       - 'e2e/prepare-uikit-export.ts'
       - 'e2e/spatial-ui-authoring.spec.ts'
@@ -116,7 +118,7 @@ jobs:
       - run: pnpm mcp:tool-names --check
       - run: node --test scripts/chatgpt-generation.test.mjs scripts/chatgpt-sessions.test.mjs scripts/chatgpt-live-scene.test.mjs scripts/chatgpt-request-queue.test.mjs scripts/chatgpt-modeling.test.mjs scripts/glb-import-size.test.mjs scripts/glb-store-size.test.mjs scripts/model-assignment.test.mjs scripts/external-store-merge.test.mjs scripts/mcp-chatgpt-contract.test.mjs scripts/guide.test.mjs scripts/vite-guide.test.mjs
       - run: node scripts/sync-agent-skills.mjs --check
-      - run: node --test scripts/uikit-authoring.test.mjs scripts/world-design-guide.test.mjs scripts/component-code-authoring.test.mjs
+      - run: node --test scripts/uikit-authoring.test.mjs scripts/world-design-guide.test.mjs scripts/component-code-authoring.test.mjs scripts/prefab-authoring.test.mjs
       - run: pnpm pi:test
       - run: node --test scripts/chatgpt-authoring-host.test.mjs
       - run: pnpm exec playwright install --with-deps chromium
