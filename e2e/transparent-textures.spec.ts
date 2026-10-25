@@ -59,6 +59,7 @@ test('ブラウザ版でPNGを保存し、実ストレージへの追加と再�
   await expect(dialog.getByRole('status')).toContainText('Assetsで選択されています');
   await page.setViewportSize({width:390,height:844});
   await page.getByRole('button',{name:'編集を始める',exact:true}).click();
+  await dialog.getByLabel('選択したアセットの詳細').evaluate(element=>{element.scrollTop=0;});
   await dialog.screenshot({path:'node_modules/.cache/transparent-texture-verification/store-mobile.png'});
   await page.setViewportSize({width:1440,height:1000});
   await dialog.getByRole('button',{name:'「アセットストア」を閉じる'}).click();
