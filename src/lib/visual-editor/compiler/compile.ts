@@ -1399,8 +1399,21 @@ function generateComponentSource(
     context.supportDeclarations.set("model-instancing-entities", `const modelInstancingEntities = ${JSON.stringify(instancingEntities)};`);
     roots.push("<XriftModelInstancing entityIds={modelInstancingEntities} />");
   }
+  // Rendering deliberately stops below disabled Entities. Their descendants
+  // remain structurally reachable and must not be diagnosed as orphaned.
+  // Do not promote them to roots: that would resurrect intentionally hidden work.
+  const reachableEntityIds = new Set<string>();
+  const pendingEntityIds = [...scene.rootEntityIds];
+  while (pendingEntityIds.length > 0) {
+    const entityId = pendingEntityIds.pop()!;
+    if (reachableEntityIds.has(entityId)) continue;
+    const entity = scene.entities[entityId];
+    if (!entity) continue;
+    reachableEntityIds.add(entityId);
+    pendingEntityIds.push(...entity.children);
+  }
   for (const entityId of Object.keys(scene.entities).sort()) {
-    if (!context.visitedEntityIds.has(entityId)) {
+    if (!reachableEntityIds.has(entityId)) {
       addDiagnostic(context, {
         severity: "warning",
         code: "orphan-entity-not-compiled",

@@ -113,6 +113,15 @@ export const Render = ({ ctx }: ScriptRenderProps) => {
 | `on` / `emit` | スクリプト間のイベント |
 | `log` | スクリプトConsoleへ出力する |
 
+`object3d`と`find`の戻り値にはThree.jsの`Object3D`型を使う。`add`、`traverse`、
+`worldToLocal`なども通常のThree.jsと同じ型で呼び出せる。`scene`、`camera`、`renderer`も
+実行時に渡すThree.jsの型を持つ。これらは型だけのimportで、別のThree.jsを読み込まない。
+`prop.asset({ kind: "font" })`などは指定した素材の種類を型にも保つ。
+
+Playのコンパイル成功は、公開プロジェクトのTypeScript型検査の成功を示すものではない。
+公開用の`tsc`は`strict`で検証するため、宣言から推論できない補助関数の引数や空の配列には
+`number`、`THREE.Mesh[]`などの型を書く。公開前に実際に変換したプロジェクトのビルドも確認する。
+
 ### 非同期処理と cleanup
 
 hot reload、実行時の失敗、動作確認の停止、unmountのあとに古いcallbackがオブジェクトを変えないようにする。

@@ -23,3 +23,26 @@ export function authoringSceneProgressFingerprint(bundle: PrototypeVisualProject
     item && typeof item === "object" && !Array.isArray(item)
       ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item));
 }
+
+/** Script bodies live outside the document bundle. Read their actual saved
+ * bytes before and after a write; revision counters or successful I/O alone
+ * cannot distinguish a new program from writing the same program again. */
+export async function readAuthoringSceneProgressFingerprint(
+  bundle: PrototypeVisualProject,
+  readSource: (relativePath: string) => Promise<string>,
+): Promise<string> {
+  const document = authoringSceneProgressFingerprint(bundle);
+  const scripts = Object.values(bundle.assets.assets)
+    .filter(asset => asset.kind === "script" && asset.source.kind === "project")
+    .sort((a, b) => a.id.localeCompare(b.id));
+  if (!scripts.length) return document;
+  const sources = await Promise.all(scripts.map(async asset => {
+    if (asset.source.kind !== "project") throw new Error("Script source must be a project file");
+    const path = asset.source.relativePath;
+    // An unreadable source is distinct from an empty source, and stays stable
+    // across failed reads. Project Health reports the missing file itself.
+    const sourceHash = await readSource(path).then(sha256Utf8, () => null);
+    return [asset.id, path, sourceHash];
+  }));
+  return sha256Utf8(JSON.stringify({ document, sources }));
+}

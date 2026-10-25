@@ -1376,7 +1376,8 @@ function App() {
           try {
             if (!request.internalGenerationId) {
               authoringWrite = await acquireAuthoringProjectWrite({ projectPath: path, sceneId, requestId: request.id, tool: request.tool, arguments: args, bundle: before,
-                journal: { read: tauri.readWorldAuthoring, write: tauri.saveWorldAuthoring }, checkCurrent: checkModelingSource });
+                journal: { read: tauri.readWorldAuthoring, write: tauri.saveWorldAuthoring }, checkCurrent: checkModelingSource,
+                readSource: relativePath => tauri.readTextFile(path, relativePath) });
             }
           } catch (error) {
             if (error instanceof XriftMcpEditorToolError) throw error;

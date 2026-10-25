@@ -37,7 +37,7 @@
     "e2e:release": "pnpm typecheck && pnpm e2e:typecheck && pnpm e2e:smoke",
     "cli:build": "vite build --config vite.cli.config.mjs",
     "mcp:tool-names": "node scripts/generate-mcp-tool-names.mjs",
-    "cli:test": "node scripts/check-world-components-alignment.mjs && node scripts/check-fixture-coverage.mjs && node scripts/generate-mcp-tool-names.mjs --check && pnpm cli:build && node dist/cli/fixture.mjs",
+    "cli:test": "node scripts/check-world-components-alignment.mjs && node scripts/check-fixture-coverage.mjs && node scripts/generate-mcp-tool-names.mjs --check && node --test scripts/script-publication-types.test.mjs scripts/compiler-disabled-hierarchy.test.mjs scripts/world-authoring.test.mjs && pnpm cli:build && node dist/cli/fixture.mjs",
     "runtime:build": "pnpm --filter xrift-studio-runtime build",
     "runtime:typecheck": "pnpm --filter xrift-studio-runtime typecheck",
     "runtime:shell:check": "node scripts/check-world-runtime-shell.mjs",

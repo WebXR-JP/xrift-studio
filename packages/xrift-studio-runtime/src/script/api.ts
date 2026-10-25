@@ -10,6 +10,7 @@
  */
 
 import type { ReactNode } from "react";
+import type { Camera, Object3D, Scene, WebGLRenderer } from "three";
 
 export type ScriptVec2 = [number, number];
 export type ScriptVec3 = [number, number, number];
@@ -48,6 +49,21 @@ export type ScriptPropDefinition = {
 
 type PropBuilderOptions = Omit<ScriptPropDefinition, "kind">;
 
+type AssetPropDefinition = PropBuilderOptions & { readonly kind: "asset" };
+
+function assetProp<Kind extends ScriptAssetKind>(
+  options: PropBuilderOptions & { kind: Kind },
+): AssetPropDefinition & { readonly assetKind: Kind };
+function assetProp(
+  options?: PropBuilderOptions & { kind?: ScriptAssetKind },
+): AssetPropDefinition;
+function assetProp(
+  options: PropBuilderOptions & { kind?: ScriptAssetKind } = {},
+): AssetPropDefinition {
+  const { kind: assetKind, ...rest } = options;
+  return { kind: "asset", ...rest, ...(assetKind ? { assetKind } : {}) };
+}
+
 /**
  * Property declarations. The Inspector renders fields from these, and the
  * values are stored on the Script Component as plain JSON.
@@ -81,14 +97,7 @@ export const prop = {
     return { kind: "color", ...options } as const satisfies ScriptPropDefinition;
   },
   /** Declares an Asset reference resolved through `ctx.assets`. */
-  asset(options: PropBuilderOptions & { kind?: ScriptAssetKind } = {}) {
-    const { kind: assetKind, ...rest } = options;
-    return {
-      kind: "asset",
-      ...(assetKind ? { assetKind } : {}),
-      ...rest,
-    } as const satisfies ScriptPropDefinition;
-  },
+  asset: assetProp,
   /** Resolved through `ctx.find`. */
   entity(options: PropBuilderOptions = {}) {
     return { kind: "entity", ...options } as const satisfies ScriptPropDefinition;
@@ -514,22 +523,12 @@ export type ScriptViewer = {
 };
 
 /**
- * Minimal structural stand-ins so this module stays dependency-free. The host
- * passes real three.js objects; scripts import three themselves for types.
+ * The host passes actual Three.js objects in both Play and published worlds.
+ * Keep their public types intact: a catch-all unknown member hides legitimate
+ * methods such as add, traverse and worldToLocal until the publication build.
+ * These imports are type-only and add no runtime dependency or second instance.
  */
-export type ScriptObject3D = {
-  visible: boolean;
-  position: { x: number; y: number; z: number; set(x: number, y: number, z: number): void };
-  rotation: { x: number; y: number; z: number };
-  scale: { x: number; y: number; z: number };
-  rotateOnAxis(axis: unknown, angle: number): unknown;
-  rotateX(angle: number): unknown;
-  rotateY(angle: number): unknown;
-  rotateZ(angle: number): unknown;
-  lookAt(target: unknown): void;
-  getWorldPosition(target: unknown): unknown;
-  [key: string]: unknown;
-};
+export type ScriptObject3D = Object3D;
 
 export type ScriptContext<
   Declaration extends ScriptPropsDeclaration = ScriptPropsDeclaration,
@@ -537,9 +536,9 @@ export type ScriptContext<
   entity: ScriptEntityHandle;
   /** This Entity's group. Mutating it during Play does not touch the document. */
   object3d: ScriptObject3D;
-  scene: unknown;
-  camera: unknown;
-  renderer: unknown;
+  scene: Scene;
+  camera: Camera;
+  renderer: WebGLRenderer;
   props: ScriptProps<Declaration>;
   time: ScriptTime;
   input: ScriptInput;

@@ -8,7 +8,7 @@ const { authoringFingerprint, authoringStatus, authoringTerminalReason, beginAut
 const { checkAuthoringEvidence } = await server.ssrLoadModule('/src/lib/visual-editor/authoring-evidence.ts');
 const { acquireAuthoringProjectWrite } = await server.ssrLoadModule('/src/lib/visual-editor/world-authoring-native.ts');
 const { authoringActionFingerprint } = await server.ssrLoadModule('/src/lib/visual-editor/authoring-action.ts');
-const { authoringSceneProgressFingerprint } = await server.ssrLoadModule('/src/lib/visual-editor/authoring-scene-progress.ts');
+const { authoringSceneProgressFingerprint, readAuthoringSceneProgressFingerprint } = await server.ssrLoadModule('/src/lib/visual-editor/authoring-scene-progress.ts');
 const { isR3fSceneAuthoring } = await server.ssrLoadModule('/src/lib/visual-editor/r3f-scene-source.ts');
 
 const begin = (budget, savedFingerprint = 'scene-a') => changeAuthoringState(null, 'begin_world_authoring', {
@@ -379,4 +379,62 @@ test('project writers persist semantic R3F stalls across reloads while retaining
   const invalid = structuredClone(state);
   invalid.run.pendingWrite = { requestId: 'invalid', fingerprint: 'exact', progressFingerprint: '' };
   assert.throws(() => readAuthoringState(invalid), /形式/);
+});
+
+test('saved Script body changes count as progress without manifest churn; identical writes still stop', async () => {
+  const {bundle} = await codeAuthoredFixture();
+  bundle.assets.assets.script = {id:'script',kind:'script',name:'Clock',status:'ready',contractVersion:'1.0.0',
+    language:'ts',source:{kind:'project',relativePath:'scripts/clock.ts'}};
+  let source='const hour = 1;';
+  const readSource=async relativePath=>{
+    assert.equal(relativePath,'scripts/clock.ts'); return source;
+  };
+  const exact=await authoringFingerprint(bundle);
+  let state=changeAuthoringState(null,'begin_world_authoring',{
+    blueprint:'Update saved clock behavior.',criteria:['Clock follows real time'],
+  },exact,{savedFingerprint:exact});
+  state=capture(capture(state,'spawn',exact),'iso',exact);
+  state=changeAuthoringState(state,'review_world_authoring',{
+    criterion:'Clock follows real time',passed:true,reason:'Checked the prior version.',
+    captureIds:[state.captures.spawn.id,state.captures.iso.id],
+  },exact);
+  const journal={read:async()=>structuredClone(state),write:async(_path,_scene,sequence,next)=>{
+    assert.equal(sequence,state.sequence);state=structuredClone(next);
+  }};
+  const options={projectPath:'isolated-project',sceneId:bundle.scene.sceneId,
+    tool:'update_script_asset',journal,readSource,checkCurrent(){},bundle};
+  const originalDocument=JSON.stringify(bundle);
+  for(let index=0;index<3;index++){
+    const lease=await acquireAuthoringProjectWrite({...options,requestId:`source-${index}`});
+    source=`const hour = ${index+2};`;
+    await lease.finish(bundle,true);
+    assert.equal(state.run.noProgress,0);
+    assert.equal(state.run.terminalReason,null);
+    assert.equal(state.run.journal.at(-1).kind,'write-changed');
+  }
+  assert.equal(JSON.stringify(bundle),originalDocument,'source accounting must not change the manifest or Undo document');
+  assert.deepEqual(state.captures,{},'old images must not verify a different saved program');
+  assert.deepEqual(state.reviews,{});
+  assert.equal(authoringStatus(state,exact).canComplete,false);
+  const fingerprint=await readAuthoringSceneProgressFingerprint(bundle,readSource);
+  for(let index=0;index<3;index++){
+    const lease=await acquireAuthoringProjectWrite({...options,requestId:`identical-${index}`});
+    await lease.finish(bundle,true);
+    assert.equal(state.run.noProgress,index+1);
+    assert.equal(await readAuthoringSceneProgressFingerprint(bundle,readSource),fingerprint);
+  }
+  assert.equal(authoringTerminalReason(state),'no-progress');
+  await assert.rejects(acquireAuthoringProjectWrite({...options,requestId:'must-stop'}),/停止/);
+});
+
+test('model source byte hashes participate in progress, thumbnail bookkeeping does not', async () => {
+  const {bundle}=await codeAuthoredFixture();
+  bundle.assets.assets.model={id:'model',kind:'model',name:'Bridge',status:'ready',sourceHash:'a'.repeat(64),
+    source:{kind:'project',relativePath:'models/bridge.glb'},materialSlots:[],importSettings:{},thumbnail:{status:'missing'}};
+  const before=authoringSceneProgressFingerprint(bundle);
+  const thumbnail=structuredClone(bundle);
+  thumbnail.assets.assets.model.thumbnail={status:'generated',derivedPath:'cache/bridge.png',sourceHash:'a'.repeat(64),rendererVersion:'1'};
+  assert.equal(authoringSceneProgressFingerprint(thumbnail),before);
+  const changed=structuredClone(bundle);changed.assets.assets.model.sourceHash='b'.repeat(64);
+  assert.notEqual(authoringSceneProgressFingerprint(changed),before);
 });

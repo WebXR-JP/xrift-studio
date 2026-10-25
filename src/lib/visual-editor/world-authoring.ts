@@ -159,9 +159,15 @@ export function finishAuthoringWrite(state: WorldAuthoringState, tool: string, r
   delete run.pendingWrite;
   run.consecutiveFailures = ok ? 0 : run.consecutiveFailures + 1;
   run.noProgress = progress.kind === "changed" ? 0 : Math.max(run.noProgress + 1, progress.stalledPasses);
+  if (progress.kind === "changed" && !changed) {
+    // A saved Script can change without changing Scene/Asset JSON. Its old
+    // screenshots and reviews are no longer evidence of the current program.
+    next.captures = {};
+    next.reviews = {};
+  }
   if (run.terminalReason !== "cancelled") run.terminalReason = authoringTerminalReason(next);
   next.completedFingerprint = null;
-  return append(next, ok ? changed ? "write-changed" : "write-noop" : "write-failed", tool, fingerprint, reason);
+  return append(next, ok ? changed || progress.kind === "changed" ? "write-changed" : "write-noop" : "write-failed", tool, fingerprint, reason);
 }
 export function observeAuthoringScene(state: WorldAuthoringState, tool: string, fingerprint: string): WorldAuthoringState {
   if (state.activity.fingerprint === fingerprint) return state;

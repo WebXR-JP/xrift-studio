@@ -25,7 +25,7 @@ import { textureProcessingSettings } from "../../lib/visual-editor/texture-proce
 import { normalizeTextureImportSettings } from "../../lib/visual-editor/asset-manifest";
 import { applyMaterialBatchPatch, applyMaterialBatchFieldValue } from "../../lib/visual-editor/material-batch";
 import { authoringFingerprint, authoringStatus, beginAuthoringWrite, changeAuthoringState, finishAuthoringWrite, isAuthoringWriteTool, observeAuthoringScene, readAuthoringState } from "../../lib/visual-editor/world-authoring";
-import { authoringSceneProgressFingerprint } from "../../lib/visual-editor/authoring-scene-progress";
+import { authoringSceneProgressFingerprint, readAuthoringSceneProgressFingerprint } from "../../lib/visual-editor/authoring-scene-progress";
 import { getWorldComponentAuthoring } from "../../lib/visual-editor/world-component-authoring";
 import { resolveRuntimeSpawn } from "../../lib/visual-editor/runtime-spawn";
 import {
@@ -2773,7 +2773,7 @@ export function VisualEditorPrototype({
             if (state) {
               const fingerprint = sameScene ? await authoringFingerprint(currentBundle) : state.activity.fingerprint;
               const next = authoringWriteScope ? finishAuthoringWrite(state, request.tool, request.id, fingerprint, response.ok && sameScene, response.error?.message,
-                sameScene ? authoringSceneProgressFingerprint(currentBundle) : state.run?.pendingWrite?.progressFingerprint ?? fingerprint)
+                sameScene ? await readAuthoringSceneProgressFingerprint(currentBundle, relativePath => tauri.readTextFile(journalRoot, relativePath)) : state.run?.pendingWrite?.progressFingerprint ?? fingerprint)
                 : observeAuthoringScene(state, request.tool, fingerprint);
               if (next !== state) await tauri.saveWorldAuthoring(journalRoot, journalScene, state.sequence, next);
               if (authoringWriteScope && sameScene) response = { ...response, result: { ...response.result,
@@ -2818,7 +2818,8 @@ export function VisualEditorPrototype({
             if (state?.run && state.run.terminalReason !== "completed") {
               const fingerprint = await authoringFingerprint(current);
               let next;
-              try { next = beginAuthoringWrite(state, request.tool, request.id, fingerprint, request.arguments, authoringSceneProgressFingerprint(current)); }
+              try { next = beginAuthoringWrite(state, request.tool, request.id, fingerprint, request.arguments,
+                await readAuthoringSceneProgressFingerprint(current, relativePath => tauri.readTextFile(root, relativePath))); }
               catch (error) { throw new XriftMcpEditorToolError("AUTHORING_WRITE_STOPPED", error instanceof Error ? error.message : String(error),
                 { authoring: authoringStatus(state, fingerprint, await savedAuthoringEvidence()) }); }
               await tauri.saveWorldAuthoring(root, current.scene.sceneId, state.sequence, next);
