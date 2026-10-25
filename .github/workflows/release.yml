@@ -96,6 +96,9 @@ jobs:
           node scripts/prepare-readable-three-vrm.mjs --check
           node --test scripts/readable-three-vrm.test.mjs scripts/async-map.test.mjs scripts/runtime-shell-fetch.test.mjs scripts/browser-api-key.test.mjs scripts/browser-project-session.test.mjs scripts/classic-mtoon-png.test.mjs
 
+      - name: Verify bundled transparent PNG catalog and import integrity
+        run: node --test scripts/transparent-textures.test.mjs
+
       - name: Check spatial UI contracts and synchronized authoring guides
         run: |
           node scripts/sync-agent-skills.mjs --check
@@ -139,6 +142,9 @@ jobs:
 
       - name: Run release E2E before upload
         run: pnpm e2e:smoke
+
+      - name: Check transparent texture store and browser PNG persistence
+        run: pnpm exec playwright test e2e/transparent-textures.spec.ts
 
       - name: Check Pi authoring and Item cleanup before upload
         run: pnpm exec playwright test e2e/chatgpt-pi-authoring.spec.ts e2e/world-items.spec.ts

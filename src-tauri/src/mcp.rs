@@ -3253,11 +3253,11 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "search_external_assets",
-            "description": "Search Poly Haven / ambientCG for CC0 assets, or shared-material-library for GLB models and PNG textures/masks with per-asset licenses (unspecified does not grant permission). Search CC0 models (furniture, seating, props, plants, shrubs, flowers, rocks, lighting fixtures, modular building parts, industrial equipment), PBR textures/materials, and HDRIs. Matches the query against name, description, category and tags. Model results carry polycount and dimensionsMm (width, depth, height in millimetres): compare polycount with the budget set for the world and dimensionsMm with the space the model goes into. Poly Haven trees are photogrammetry in the millions of triangles; make trees in Blender or from lighter parts instead. Returns external IDs for get_external_asset_options and install_external_asset.",
+            "description": "Use xrift-transparent-textures for 30 bundled transparent PNG illustrations (rabbit, animals, flowers, leaves, clouds, effects and decorations), licensed MIT. Search Poly Haven / ambientCG for CC0 assets, or shared-material-library for GLB models and PNG textures/masks with per-asset licenses (unspecified does not grant permission). Search CC0 models (furniture, seating, props, plants, shrubs, flowers, rocks, lighting fixtures, modular building parts, industrial equipment), PBR textures/materials, and HDRIs. Matches the query against name, description, category and tags. Model results carry polycount and dimensionsMm (width, depth, height in millimetres): compare polycount with the budget set for the world and dimensionsMm with the space the model goes into. Poly Haven trees are photogrammetry in the millions of triangles; make trees in Blender or from lighter parts instead. Returns external IDs for get_external_asset_options and install_external_asset.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "providerId": { "type": "string", "enum": ["poly-haven", "ambient-cg", "shared-material-library"] },
+                    "providerId": { "type": "string", "enum": ["poly-haven", "ambient-cg", "shared-material-library", "xrift-transparent-textures"] },
                     "query": { "type": "string" },
                     "kind": { "type": "string", "enum": ["hdri", "texture", "model"] },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 120 }
@@ -3267,11 +3267,11 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "get_external_asset_options",
-            "description": "List installable resolutions and formats for Poly Haven / ambientCG, or file variants for shared-material-library. For shared-material-library pass the returned resolution id (filename) to install_external_asset; animated GLBs are separate variants.",
+            "description": "For xrift-transparent-textures, use resolution original and omit format. List installable resolutions and formats for Poly Haven / ambientCG, or file variants for shared-material-library. For shared-material-library pass the returned resolution id (filename) to install_external_asset; animated GLBs are separate variants.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "providerId": { "type": "string", "enum": ["poly-haven", "ambient-cg", "shared-material-library"] },
+                    "providerId": { "type": "string", "enum": ["poly-haven", "ambient-cg", "shared-material-library", "xrift-transparent-textures"] },
                     "externalId": { "type": "string" }
                 },
                 "required": ["externalId"],
@@ -3280,14 +3280,14 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "install_external_asset",
-            "description": "For shared-material-library, use the filename resolution from get_external_asset_options and omit format: GLB becomes a Model, PNG/mask becomes a Texture. Preserve and check its license; unspecified does not grant permission. Download a Poly Haven or ambientCG asset into the open project and create XRift Studio assets: an HDRI becomes an environment Texture (applySkybox makes it the sky at once), a texture bundle becomes a PBR Material ready for set_material, and a Poly Haven Model is validated and saved as a self-contained glTF Model Asset to place with place_asset. Choose resolution from the download budget set for the world; larger textures multiply its size. Read polycount from search_external_assets before installing a model. ambientCG Models remain catalog-only until a compatible glTF download is available.",
+            "description": "For xrift-transparent-textures, use resolution original and omit format: saves the exact bundled PNG plus an alpha-blended, double-sided Material. For shared-material-library, use the filename resolution from get_external_asset_options and omit format: GLB becomes a Model, PNG/mask becomes a Texture. Preserve and check its license; unspecified does not grant permission. Download a Poly Haven or ambientCG asset into the open project and create XRift Studio assets: an HDRI becomes an environment Texture (applySkybox makes it the sky at once), a texture bundle becomes a PBR Material ready for set_material, and a Poly Haven Model is validated and saved as a self-contained glTF Model Asset to place with place_asset. Choose resolution from the download budget set for the world; larger textures multiply its size. Read polycount from search_external_assets before installing a model. ambientCG Models remain catalog-only until a compatible glTF download is available.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "projectId": { "type": "string" },
                     "sceneId": { "type": "string" },
                     "expectedRevision": { "type": "integer", "minimum": 0 },
-                    "providerId": { "type": "string", "enum": ["poly-haven", "ambient-cg", "shared-material-library"] },
+                    "providerId": { "type": "string", "enum": ["poly-haven", "ambient-cg", "shared-material-library", "xrift-transparent-textures"] },
                     "externalId": { "type": "string" },
                     "resolution": { "type": "string", "minLength": 1 },
                     "format": { "type": "string", "enum": ["hdr", "exr", "gltf", "glb"] },

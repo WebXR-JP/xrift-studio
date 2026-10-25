@@ -1,3 +1,4 @@
+import { TRANSPARENT_TEXTURES_PROVIDER_ID } from "../transparent-textures-store";
 import type { ExternalStoreInstallResult } from "../tauri";
 import { reimportModelAssetFromDisk } from "./asset-import-persistence";
 import {
@@ -157,6 +158,16 @@ export function applyExternalStoreInstall(
   const folders = { ...(manifest.folders ?? {}), [folder.id]: folder };
   const baseId = `external-${safeId(result.providerId)}-${safeId(result.externalId)}`;
   const credit = attribution(result);
+  if (result.providerId === TRANSPARENT_TEXTURES_PROVIDER_ID) {
+    const textureId = `${baseId}-base-color`;
+    const materialId = `${baseId}-material`;
+    const texture = manifest.assets[textureId];
+    const material = manifest.assets[materialId];
+    if (texture || material) {
+      if (texture?.kind !== "texture" || material?.kind !== "material") throw new Error("同じIDの素材があります。既存素材の名前と参照を確認してください。");
+      return { manifest, primaryAssetId: materialId, installedAssetIds: [textureId, materialId], kind: "material" };
+    }
+  }
   const assets: Record<string, SceneAsset> = { ...manifest.assets };
   let order = nextOrder({ ...manifest, folders }, folder.id);
 
@@ -283,7 +294,11 @@ export function applyExternalStoreInstall(
       folderId: folder.id,
       importSettings: {
         colorSpace: file.role === "base-color" ? "srgb" : "linear",
-        flipY: false,
+        flipY: result.providerId === TRANSPARENT_TEXTURES_PROVIDER_ID,
+        ...(result.providerId === TRANSPARENT_TEXTURES_PROVIDER_ID ? {
+          resize: { mode: "original" as const }, compression: { format: "source" as const, quality: 100 },
+          sampler: { wrapS: "clamp-to-edge" as const, wrapT: "clamp-to-edge" as const, magFilter: "linear" as const, minFilter: "linear-mipmap-linear" as const },
+        } : {}),
       },
     });
     if (!texture) throw new Error("テクスチャを作成できませんでした");
@@ -314,8 +329,9 @@ export function applyExternalStoreInstall(
     name: result.name,
     folderId: folder.id,
     properties: {
+      ...(result.providerId === TRANSPARENT_TEXTURES_PROVIDER_ID ? { alphaMode: "BLEND" as const, doubleSided: true } : {}),
       pbrMetallicRoughness: {
-        metallicFactor: 1,
+        metallicFactor: result.providerId === TRANSPARENT_TEXTURES_PROVIDER_ID ? 0 : 1,
         roughnessFactor: 1,
         ...(textureIds.get("base-color")
           ? { baseColorTexture: { textureAssetId: textureIds.get("base-color")!, texCoord: 0 } }

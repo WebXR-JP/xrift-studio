@@ -539,12 +539,14 @@
       "description": "「アセットストア」でモデル、マテリアル、空、水、Particle、ギミックの見本を探し、設定して追加できます。",
       "group": "create",
       "file": "external-resources.md",
-      "keywords": "アセットストア Skybox Creator 一日の空 時間帯 夜明け 夕暮れ Particle パーティクル テンプレート プリセット テクスチャ 自動割り当て 透明背景 花火 泡 霧 落ち葉 花びら 魔法 Burst 一括放出 放出数 寿命 重力 色 カタログ Poly Haven ambientCG AI LOWPOLY PROPS 素材庫 shared-material-library アニメーション PNG マスク ローポリ GLB CC0 音蔵 音声 楽曲 SFX BGM 効果音 環境音 音楽 素材 配布 モデル 3Dモデルを設定 選択Entity 差し替え Mesh Renderer Transform Collider さらに表示",
+      "keywords": "アセットストア Skybox Creator 一日の空 時間帯 夜明け 夕暮れ Particle パーティクル テンプレート プリセット テクスチャ 自動割り当て 透明背景 花火 泡 霧 落ち葉 花びら 魔法 Burst 一括放出 放出数 寿命 重力 色 カタログ Poly Haven ambientCG AI LOWPOLY PROPS 素材庫 shared-material-library アニメーション PNG マスク ローポリ GLB CC0 音蔵 音声 楽曲 SFX BGM 効果音 環境音 音楽 素材 配布 モデル 3Dモデルを設定 選択Entity 差し替え Mesh Renderer Transform Collider さらに表示 透過画像 PNG うさぎ Rabbit 雲 花 同梱",
       "related": [
         "assets",
         "materials",
         "interactivity"
-      ]
+      ],
+      "reviewedVersion": "1.0.16",
+      "reviewedOn": "2026-10-25"
     },
     {
       "slug": "lighting",

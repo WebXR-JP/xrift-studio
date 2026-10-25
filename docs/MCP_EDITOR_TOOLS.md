@@ -651,3 +651,7 @@ Playでは運転席をクリックして乗り、W/Sで前後移動、A/Dで旋�
 ### Scriptの編集プレビュー
 
 `update_script_component`の`runIn`は`play`または`play-and-edit`です。後者は編集画面でもnamed `Render`を表示します。モジュールと`Render`は編集時にも評価され、`start`・`update`はPlay中に実行します。UIKit Panelテンプレートは`play-and-edit`で作成します。
+
+### 同梱の透過画像
+
+`search_external_assets`に`providerId: "xrift-transparent-textures"`を渡すと、透過PNG30点を検索できます。`get_external_asset_options`で容量と原寸を確認し、`install_external_asset`へ`resolution: "original"`を渡します。`format`は省略します。通常どおりprojectId・sceneId・expectedRevisionが必要です。UIと同じ保存トランザクション・PNGのSHA256検証・Material生成・選択・Undoを使います。独立した非公開の取り込み経路はありません。

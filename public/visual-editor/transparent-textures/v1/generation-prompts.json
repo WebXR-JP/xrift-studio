@@ -1,0 +1,182 @@
+[
+  {
+    "id": "rabbit",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Remove the pale cream background of the existing beginner-book rabbit illustration; preserve the full rabbit, fine fur and whiskers with true transparent alpha. Built-in image_gen background-extraction."
+  },
+  {
+    "id": "cat",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: individual reusable transparent PNG decal for XRift Studio. Create ONE isolated subject: A small friendly calico cat sitting upright, three-quarter front view, tiny pink nose, warm expressive eyes and soft white orange charcoal fur. Entire ears, paws and tail visible. Style: warm polished storybook illustration with soft hand-painted shading, subtle material detail and clean readable silhouette, matching a cute softly shaded white rabbit illustration. Square canvas, subject comfortably within the central 75%, generous fully transparent padding on every edge. Real transparent alpha, no opaque background, no checkerboard, no cast shadow, no ground, no border, no words or logo, no sticker outline, no sprite sheet. Final image is a single ready-to-use cutout texture."
+  },
+  {
+    "id": "dog",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: individual reusable transparent PNG decal for XRift Studio. Create ONE isolated subject: A small friendly cream Shiba Inu sitting upright, three-quarter front view, curled fluffy tail, expressive dark eyes, paws fully visible. Style: warm polished storybook illustration with soft hand-painted shading, subtle material detail and clean readable silhouette, matching a cute softly shaded white rabbit illustration. Square canvas, subject comfortably within the central 75%, generous fully transparent padding on every edge. Real transparent alpha, no opaque background, no checkerboard, no cast shadow, no ground, no border, no words or logo, no sticker outline, no sprite sheet. Final image is a single ready-to-use cutout texture."
+  },
+  {
+    "id": "sparrow",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: individual reusable transparent PNG decal for XRift Studio. Create ONE isolated subject: A round little Japanese tree sparrow in a three-quarter side view, warm brown feather detail, folded wings and small feet, isolated without a branch. Style: warm polished storybook illustration with soft hand-painted shading, subtle material detail and clean readable silhouette, matching a cute softly shaded white rabbit illustration. Square canvas, subject comfortably within the central 75%, generous fully transparent padding on every edge. Real transparent alpha, no opaque background, no checkerboard, no cast shadow, no ground, no border, no words or logo, no sticker outline, no sprite sheet. Final image is a single ready-to-use cutout texture."
+  },
+  {
+    "id": "butterfly",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: individual reusable transparent PNG decal for XRift Studio. Create ONE isolated subject: One delicate blue and pale gold butterfly with fully spread wings, top-down view, fine symmetrical wing veins, entire antennae visible. Style: warm polished storybook illustration with soft hand-painted shading, subtle material detail and clean readable silhouette, matching a cute softly shaded white rabbit illustration. Square canvas, subject comfortably within the central 75%, generous fully transparent padding on every edge. Real transparent alpha, no opaque background, no checkerboard, no cast shadow, no ground, no border, no words or logo, no sticker outline, no sprite sheet. Final image is a single ready-to-use cutout texture."
+  },
+  {
+    "id": "goldfish",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: individual reusable transparent PNG decal for XRift Studio. Create ONE isolated subject: One elegant orange-and-white goldfish in side view, graceful flowing translucent fins and tail, cheerful dark eye, completely isolated without water or bowl. Style: warm polished storybook illustration with soft hand-painted shading, subtle material detail and clean readable silhouette, matching a cute softly shaded white rabbit illustration. Square canvas, subject comfortably within the central 75%, generous fully transparent padding on every edge. Real transparent alpha, no opaque background, no checkerboard, no cast shadow, no ground, no border, no words or logo, no sticker outline, no sprite sheet. Final image is a single ready-to-use cutout texture."
+  },
+  {
+    "id": "sakura",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of One pink five-petalled cherry blossom, delicate stamens and softly translucent petals, face-on. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "daisy",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of One white daisy blossom with a warm golden textured center and slightly curved petals, face-on. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "sunflower",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of One golden sunflower flower head, richly detailed brown seed center and layered yellow petals, front view. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "maple-leaf",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of One red-orange Japanese maple leaf with seven elegant lobes, tiny stem, natural leaf veins, autumn color. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "ginkgo-leaf",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of One golden yellow fan-shaped ginkgo leaf with a tiny stem and delicate radiating veins. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "ivy",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of A gracefully curved short ivy vine with five rich green heart-shaped leaves, delicate veins and thin stem. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "fern",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of One elegant green fern frond with fine individual leaflets and gently curling tip. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "grass",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of One small graceful tuft of green meadow grasses, slender layered blades and two tiny clover leaves, all roots hidden. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "cloud",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of One fluffy sunlit cumulus cloud, soft cream-white billows, subtle lavender underside, softly feathered alpha edge. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "moon",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of One pale golden crescent moon with subtle painterly crater texture, softly lit outer edge and clean crescent opening. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "sun",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of One warm small sun disc with nuanced honey-gold painterly texture and a soft amber luminous edge fading to transparency, no rays face or expression. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "stars",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of A tasteful small cluster of five luminous gold five-point stars of varied sizes, subtle painterly texture and gentle soft halos. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "sparkles",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of A small airy constellation of eight delicate warm-gold twinkling light sparkles and round glowing flecks, a soft decorative magic effect. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "smoke",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of One softly curling puff of pale gray chimney smoke, feathered translucent billows, wispy taper at the base. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "water-splash",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of One curved splash of turquoise clear water with several small droplets, glistening soft highlights, lively graceful arc. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "snowflake",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of One intricate icy crystalline six-armed snowflake, delicate branching facets, pale cyan and white highlights, perfectly visible full silhouette. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "balloons",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of A small bunch of three floating pastel balloons, dusty pink pale golden yellow and muted sky blue, delicate tied strings, entire strings visible. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "bunting",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of One gentle sagging string of five small pastel fabric triangular bunting flags, warm coral yellow cream mint and blue, subtle cloth weave, string ends visible. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "ribbon",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of One neatly tied dusty-red fabric bow, softly textured ribbon loops and two draping tails, entire bow visible. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "bubbles",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of A delicate cluster of three translucent soap bubbles of different sizes, subtle pastel rainbow rims, clear transparent interiors. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "coffee",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of One small warm ivory ceramic coffee cup on a matching saucer, rich brown coffee visible, gentle thin steam curl, three-quarter view. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "strawberry",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of One ripe red strawberry with a fresh leafy green crown, delicate seeds and softly painted highlights, three-quarter view. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "apple",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of One ripe red apple with a small green leaf and curved brown stem, soft painterly surface highlights, three-quarter view. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  },
+  {
+    "id": "gift",
+    "tool": "built-in image_gen",
+    "transparentBackground": true,
+    "prompt": "Use case: illustration-story. Asset type: single reusable transparent PNG texture decal for XRift Studio. Create ONE isolated illustration of One small cream paper gift box tied with a dusty rose satin ribbon and bow, three-quarter front view, soft tactile paper detail. Style: polished warm storybook illustration with soft hand-painted shading, subtle natural material detail and a clean readable silhouette. Square canvas, complete subject entirely visible within the central 75%, generous empty transparent padding on every side. True transparent alpha, including every interior gap, no opaque backdrop, no painted checkerboard, no floor or cast shadow, no words, no logos, no sticker outline, no sprite sheet. The result must work as a standalone cutout on light and dark 3D surfaces."
+  }
+]

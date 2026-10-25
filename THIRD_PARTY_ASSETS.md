@@ -165,3 +165,7 @@ XRift Studioが追加した依存ではありません。
 全点の出所・サイズ・SHA-256は`docs/asset-refresh/manifest.json`にあります。収録スタジオの編集用原本`tools/recipe-models/sources/recording-studio.original.glb`は、従来の形状と元のCC0テクスチャを保持しています。配布GLBとはハッシュが異なります。
 
 今回のBlender実行状況と編集用データについては`docs/asset-refresh/README.md`を参照してください。
+
+## XRift Studio transparent illustration pack v1
+
+`public/visual-editor/transparent-textures/v1/` contains 30 AI-generated transparent PNG illustrations. Generated with the built-in image_gen tool; individual prompts are preserved in `generation-prompts.json`. Rabbit is a transparent extraction of the project author's existing beginner-book illustration. The generated PNG bytes and alpha are distributed unchanged. Copyright (c) 2026 XRift Studio contributors, MIT; see the adjacent `LICENSE.txt`. The catalog records each PNG's dimensions, byte length and SHA-256.

@@ -59,6 +59,19 @@ export type ExternalStoreProvider = {
 
 export const EXTERNAL_STORE_PROVIDERS = [
   {
+    id: "xrift-transparent-textures",
+    kind: "remote-assets",
+    group: "light-decoration",
+    name: "透過画像",
+    badge: "同梱30点",
+    summary: "うさぎ・花・雲・飾りの透過PNGを追加",
+    homepageUrl: "https://github.com/WebXR-JP/xrift-studio/tree/main/public/visual-editor/transparent-textures/v1",
+    catalogKinds: ["texture"],
+    installableKinds: ["texture"],
+    authorFallback: "XRift Studio contributors / AI生成",
+    attributionNote: "AIで生成した透過PNGです。MIT。元のPNGと透過設定済みMaterialをAssetsへ追加します。",
+  },
+  {
     id: "shared-material-library",
     kind: "remote-assets",
     group: "material-sites",

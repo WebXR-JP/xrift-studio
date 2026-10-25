@@ -1,3 +1,4 @@
+import { TRANSPARENT_TEXTURES_PROVIDER_ID, TRANSPARENT_TEXTURES_CATEGORIES } from "../../lib/transparent-textures-store";
 import { useExternalLink } from "../useExternalLink";
 import "./external-asset-store.css";
 import { useEditorDevice } from "./useEditorDevice";
@@ -162,13 +163,15 @@ export function ExternalAssetStoreDialog({
   const [providerId, setProviderId] = useState<string>(() => tauri.isAvailable() ? DEFAULT_EXTERNAL_STORE_PROVIDER_ID : "xrift-scene-recipes");
   const provider = getExternalStoreProvider(providerId);
   const remoteAssetsAvailable = tauri.isAvailable() || provider.id === "otogura"
-    || provider.id === AI_LOWPOLY_PROPS_PROVIDER_ID || provider.id === "shared-material-library";
+    || provider.id === AI_LOWPOLY_PROPS_PROVIDER_ID || provider.id === "shared-material-library" || provider.id === TRANSPARENT_TEXTURES_PROVIDER_ID;
   const [catalogRevision, setCatalogRevision] = useState(0);
   const [assets, setAssets] = useState<ExternalStoreAsset[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(EXTERNAL_STORE_PAGE_SIZE);
   const [kind, setKind] = useState<StoreKindFilter>("all");
+  const [textureCategory, setTextureCategory] = useState("all");
+  const [textureBackground, setTextureBackground] = useState<"checker" | "light" | "dark">("checker");
   const [audioFilter, setAudioFilter] = useState<OtoguraAudioFilter>("all");
   const [loading, setLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -277,6 +280,7 @@ export function ExternalAssetStoreDialog({
     const tokens = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
     return assets
       .filter((asset) => kind === "all" || asset.assetKind === kind)
+      .filter((asset) => provider.id !== TRANSPARENT_TEXTURES_PROVIDER_ID || textureCategory === "all" || asset.category === textureCategory)
       .filter((asset) => provider.id !== "otogura" || matchesOtoguraAudioFilter(asset, audioFilter))
       .filter((asset) => {
         if (provider.id === AI_LOWPOLY_PROPS_PROVIDER_ID) return matchesAiLowpolyPropsQuery(asset, query);
@@ -285,7 +289,10 @@ export function ExternalAssetStoreDialog({
           .toLocaleLowerCase();
         return tokens.every((token) => text.includes(token));
       });
-  }, [assets, kind, query, provider.id, audioFilter]);
+  }, [assets, kind, query, provider.id, audioFilter, textureCategory]);
+  useEffect(() => {
+    if (provider.id === TRANSPARENT_TEXTURES_PROVIDER_ID && !matchingAssets.some(asset => asset.externalId === selectedId)) setSelectedId(matchingAssets[0]?.externalId ?? null);
+  }, [provider.id, matchingAssets, selectedId]);
   const visibleAssets = matchingAssets.slice(0, visibleCount);
   const selectedResolution = options?.resolutions.find((entry) => entry.id === resolution);
   const selectedFormat = selectedResolution?.formats.find((entry) => entry.id === fileFormat);
@@ -561,7 +568,12 @@ export function ExternalAssetStoreDialog({
                     className="h-8 w-full rounded-md border border-slate-300 bg-white pl-8 pr-3 text-xs outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
                   />
                 </label>
-                {provider.id === "otogura" ? (
+                {provider.id === TRANSPARENT_TEXTURES_PROVIDER_ID ? (
+                  <select value={textureCategory} onChange={event => setTextureCategory(event.target.value)} aria-label="透過画像のカテゴリ" className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-700">
+                    <option value="all">すべて（30点）</option>
+                    {TRANSPARENT_TEXTURES_CATEGORIES.map(category => <option key={category} value={category}>{category}</option>)}
+                  </select>
+                ) : provider.id === "otogura" ? (
                   <select
                     value={audioFilter}
                     onChange={(event) => setAudioFilter(event.currentTarget.value as OtoguraAudioFilter)}
@@ -635,6 +647,8 @@ export function ExternalAssetStoreDialog({
                     >
                         <CatalogThumbnailImage
                           src={asset.thumbnailUrl}
+                          fit={provider.id === TRANSPARENT_TEXTURES_PROVIDER_ID ? "contain" : "cover"}
+                          background={provider.id === TRANSPARENT_TEXTURES_PROVIDER_ID ? "checker" : undefined}
                           alt=""
                           className="aspect-square w-full"
                           fallback={<Boxes size={24} aria-hidden="true" />}
@@ -687,10 +701,19 @@ export function ExternalAssetStoreDialog({
               <div className="space-y-4">
                 <CatalogThumbnailImage
                   src={selected.thumbnailUrl}
+                  fit={provider.id === TRANSPARENT_TEXTURES_PROVIDER_ID ? "contain" : "cover"}
+                  background={provider.id === TRANSPARENT_TEXTURES_PROVIDER_ID ? textureBackground : undefined}
                   alt={`${selected.name}のプレビュー`}
                   className="aspect-[16/10] w-full rounded-lg"
                   fallback={<Boxes size={28} aria-hidden="true" />}
                 />
+                {provider.id === TRANSPARENT_TEXTURES_PROVIDER_ID ? <div className="space-y-2">
+                  <div role="group" aria-label="プレビューの背景" className="flex gap-1">
+                    {([ ["checker", "透過"], ["light", "明るい"], ["dark", "暗い"] ] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={textureBackground === value} onClick={() => setTextureBackground(value)} className={`min-h-9 rounded-md border px-3 text-xs ${textureBackground === value ? "border-brand-400 bg-brand-50 text-brand-800" : "border-slate-300 bg-white text-slate-700"}`}>{label}</button>)}
+                  </div>
+                  <p className="text-[11px] leading-5 text-slate-500">30点すべて透過PNGです。Assetsへの追加で元のPNGと透過設定済みMaterialを保存します。</p>
+                  {tauri.isAvailable() ? <button type="button" onClick={() => openLink(`https://raw.githubusercontent.com/WebXR-JP/xrift-studio/main/public/visual-editor/transparent-textures/v1/${selected.externalId}.png`)} className="inline-flex min-h-9 items-center rounded-md border border-slate-300 px-3 text-xs font-semibold text-slate-700">PNGをブラウザで開く</button> : <a href={selected.thumbnailUrl} download={`${selected.externalId}.png`} className="inline-flex min-h-9 items-center rounded-md border border-slate-300 px-3 text-xs font-semibold text-slate-700">PNGを保存</a>}
+                </div> : null}
                 <div>
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="text-base font-semibold text-slate-900">{selected.name}</h3>

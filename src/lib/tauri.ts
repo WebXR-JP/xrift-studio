@@ -1,3 +1,4 @@
+import { TRANSPARENT_TEXTURES_PROVIDER_ID, listTransparentTextureAssets, getTransparentTextureOptions, installTransparentTexture } from "./transparent-textures-store";
 import { SHARED_MATERIAL_LIBRARY_PROVIDER_ID, listSharedLibraryAssets, getSharedLibraryAssetOptions, installSharedLibraryAsset } from "./shared-material-library-store";
 import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -682,7 +683,9 @@ export const tauri = {
       sourceRelativePath: sourceRelativePath ?? null,
     }),
   listExternalStoreAssets: (providerId: string) =>
-    providerId === SHARED_MATERIAL_LIBRARY_PROVIDER_ID
+    providerId === TRANSPARENT_TEXTURES_PROVIDER_ID
+      ? listTransparentTextureAssets()
+      : providerId === SHARED_MATERIAL_LIBRARY_PROVIDER_ID
       ? listSharedLibraryAssets()
       : providerId === AI_LOWPOLY_PROPS_PROVIDER_ID
       ? listAiLowpolyPropsAssets()
@@ -690,7 +693,9 @@ export const tauri = {
       ? listBrowserOtoguraAssets()
       : invoke<ExternalStoreAsset[]>("list_external_store_assets", { providerId }),
   getExternalStoreAssetOptions: (providerId: string, externalId: string) =>
-    providerId === SHARED_MATERIAL_LIBRARY_PROVIDER_ID
+    providerId === TRANSPARENT_TEXTURES_PROVIDER_ID
+      ? getTransparentTextureOptions(externalId)
+      : providerId === SHARED_MATERIAL_LIBRARY_PROVIDER_ID
       ? getSharedLibraryAssetOptions(externalId)
       : providerId === AI_LOWPOLY_PROPS_PROVIDER_ID
       ? getAiLowpolyPropsAssetOptions(externalId)
@@ -704,7 +709,9 @@ export const tauri = {
     projectPath: string,
     request: ExternalStoreInstallRequest,
   ) =>
-    request.providerId === SHARED_MATERIAL_LIBRARY_PROVIDER_ID
+    request.providerId === TRANSPARENT_TEXTURES_PROVIDER_ID
+      ? installTransparentTexture(projectPath, request, tauri.commitVisualAssetImport)
+      : request.providerId === SHARED_MATERIAL_LIBRARY_PROVIDER_ID
       ? installSharedLibraryAsset(projectPath, request, tauri.commitVisualAssetImport)
       : request.providerId === AI_LOWPOLY_PROPS_PROVIDER_ID
       ? installAiLowpolyPropsAsset(projectPath, request, tauri.commitVisualAssetImport)
