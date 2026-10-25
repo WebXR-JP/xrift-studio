@@ -742,8 +742,19 @@ function assertVehicleTemplatesEmit(): void {
     const adapter = result.overlayFiles.find(file => file.relativePath.endsWith("/world-components.ts"));
     assert(Boolean(adapter?.content.includes('export * from "@xrift/world-components"')) && Boolean(adapter?.content.includes('XriftSeat as Seat')),
       `${id} must preserve official APIs and adapt lazy-loaded seats`);
-    assert(Boolean(adapter?.content.includes('import { Vehicle as SharedVehicle } from "@xrift/world-components"')) && Boolean(adapter?.content.includes('export { SharedVehicle as Vehicle }')),
-      "Vehicle and Seat must both resolve through the federation host, rather than mixing a bundled Vehicle with the host Seat");
+    // The shared adapter groups host imports and exports. Validate the named
+    // bindings, not whether the formatter put each import on one line.
+    for (const [api, binding] of [
+      ["Vehicle", "SharedVehicle"],
+      ["ScreenShareDisplay", "SharedScreenShareDisplay"],
+      ["useScreenShareContext", "sharedUseScreenShareContext"],
+      ["useWorldStorage", "sharedUseWorldStorage"],
+    ]) {
+      const source = adapter?.content ?? "";
+      const imported = new RegExp(`import\\s*\\{[^}]*\\b${api}\\s+as\\s+${binding}\\b[^}]*\\}\\s*from\\s*["']@xrift/world-components["']`).test(source);
+      const exported = new RegExp(`export\\s*\\{[^}]*\\b${binding}\\s+as\\s+${api}\\b[^}]*\\}`).test(source);
+      assert(imported && exported, `${api} must resolve through the federation host in the published adapter`);
+    }
     assert(result.overlayFiles.some(file => file.relativePath.endsWith("/seat.tsx") && file.content.includes("trackInteractionLayer")),
       `${id} must include late-loaded seat mesh tracking`);
     assert(new Set(result.overlayFiles.map(file => file.relativePath)).size === result.overlayFiles.length,
