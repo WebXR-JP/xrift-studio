@@ -99,7 +99,7 @@ jobs:
       - name: Check spatial UI contracts and synchronized authoring guides
         run: |
           node scripts/sync-agent-skills.mjs --check
-          node --test scripts/uikit-authoring.test.mjs scripts/world-design-guide.test.mjs
+          node --test scripts/uikit-authoring.test.mjs scripts/world-design-guide.test.mjs scripts/prefab-authoring.test.mjs
 
       # 公開ステージングの tsc をなぞる staged world typecheck を含む。
       # コンパイラが出力するコードが公開ビルドで落ちる退行は、ここで
