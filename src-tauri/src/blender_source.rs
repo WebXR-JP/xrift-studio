@@ -28,6 +28,7 @@ pub(crate) async fn convert_blender_source(project_path: String, data_url: Strin
         let runner = directory.join("export.py");
         write_new(&blend, &bytes)?;
         write_new(&runner, EXPORT_SOURCE.as_bytes())?;
+        write_new(&directory.join("blender_material_roundtrip.py"), include_str!("blender_material_roundtrip.py").as_bytes())?;
         let mut command = hidden_command(&executable);
         command.current_dir(&directory).arg("--background").arg("--factory-startup").arg("--disable-autoexec");
         if version >= semver::Version::new(4, 2, 0) { command.arg("--offline-mode"); }
