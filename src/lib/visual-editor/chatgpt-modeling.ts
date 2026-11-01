@@ -1,4 +1,5 @@
 import { tauri } from "../tauri";
+import { attachBlenderSource } from "./blender-source";
 import type { PrototypeVisualProject } from "./prototype-project";
 import { parseBlenderModelSpec, type BlenderModelSpec } from "./blender-model-spec";
 import { blenderModelSourceHash, createBlenderModelSource, readBlenderModelSource, type BlenderModelSourceMetadata } from "./chatgpt-model-source";
@@ -40,6 +41,12 @@ export async function createBlenderModelAsset(bundle: PrototypeVisualProject, mo
   if (!plan.canCommit || plan.asset?.kind !== "model") throw new Error(plan.diagnostics.find(item => item.severity === "blocking")?.message ?? "作成したGLBをModelとして取り込めませんでした");
   plan.asset = { ...plan.asset, ...(previousAsset?.kind === "model" ? { importSettings: structuredClone(previousAsset.importSettings) } : {}), authoring: recipe.authoring };
   plan.writes.push(recipe.write);
+  const blend = await tauri.readLocalModelImportSource(generated.blendPath);
+  execution.checkCurrent?.();
+  const blendBytes = new Uint8Array(await (await fetch(blend.dataUrl)).arrayBuffer());
+  if (blendBytes.byteLength !== blend.byteLength) throw new Error("Blenderの編集元を読み込めませんでした");
+  await attachBlenderSource(plan, blendBytes, `${spec.name}.blend`);
+  execution.checkCurrent?.();
   const assets = await commitAssetImportPlanToDisk(projectPath, bundle.assets, plan);
   execution.checkCurrent?.();
   return { bundle: { ...bundle, assets }, modelAssetId: plan.asset.id };

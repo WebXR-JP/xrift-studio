@@ -2,6 +2,7 @@ import meshColliderStatusSource from "../../../../packages/xrift-studio-runtime/
 import meshColliderGeometrySource from "../../../../packages/xrift-studio-runtime/src/mesh-collider-geometry.ts?raw";
 import meshCollidersSource from "../../../../packages/xrift-studio-runtime/src/mesh-colliders.tsx?raw";
 import primitiveGeometrySource from "../../../../packages/xrift-studio-runtime/src/primitive-geometry.tsx?raw";
+import stableModelCloneSource from "../../../../packages/xrift-studio-runtime/src/stable-model-clone.tsx?raw";
 import extrudeGeometrySource from "../../../../packages/xrift-studio-runtime/src/extrude-geometry.ts?raw";
 import extrudeProfileSource from "../../../../packages/xrift-studio-runtime/src/extrude-profile.ts?raw";
 import { validateXriftExtrudeProfile } from "../../../../packages/xrift-studio-runtime/src/extrude-profile";
@@ -3595,6 +3596,11 @@ function renderModelMesh(
   const urlConstant = registerAssetUrl(model, runtimeUrl, context);
   const componentName = generatedIdentifier("CompiledModel", mesh.id);
   context.dreiImports.add("Clone");
+  context.extraImports.add('import { StableModelClone } from "./xrift-studio/stable-model-clone";');
+  context.runtimeOverlayFiles.set(
+    "src/xrift-studio/stable-model-clone.tsx",
+    compilerFile("src/xrift-studio/stable-model-clone.tsx", stableModelCloneSource),
+  );
   const sourceExtension =
     model.source.kind === "project"
       ? fileExtension(model.source.relativePath)
@@ -3955,8 +3961,9 @@ const nativeMToonFrames = new WeakMap<import("three").Material, { renderer: obje
 `
     : "";
   const clonedModel = `<group${animationLoaded ? " ref={animationRoot}" : ""} scale={${formatNumber(modelScale)}}${vrm0Rotation}>
-      <Clone
+      <StableModelClone
         object={${poseSource.objectName}}
+        fallback={Clone}
         castShadow={${mesh.castShadow}}
         receiveShadow={${mesh.receiveShadow}}${inject}
       />

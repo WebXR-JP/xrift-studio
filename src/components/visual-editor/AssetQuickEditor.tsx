@@ -4237,6 +4237,7 @@ export function AssetQuickEditor({
     return (
       <ModelAssetInspector
         asset={asset}
+        projectPath={projectPath}
         assets={assets}
         preview={
           <AssetThumbnail

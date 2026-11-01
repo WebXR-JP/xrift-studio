@@ -214,6 +214,8 @@ export type ModelOptimizationOrigin = {
 
 export type ModelAsset = AssetBase<"model"> & {
   importSettings: ModelImportSettings;
+  /** Editable Blender project; runtime rendering continues to use source GLB. */
+  blenderSource?: { kind: "project"; relativePath: string };
   /** Durable geometry recipe for generated Models; the source remains immutable. */
   authoring?: {
     kind: "blender";

@@ -33,7 +33,8 @@ test("生成モデルの原本をGLBと同時に保存し、再読み込み・�
     let failCommit = true, readCount = 0, blenderCalls = 0;
     const invoke = window.__TAURI_INTERNALS__!.invoke!;
     window.__TAURI_INTERNALS__!.invoke = async (command, args, options) => {
-      if (command === "create_blender_model" && args?.projectPath === projectPath) { blenderCalls++; return { path: `${projectPath}\\output.glb`, fileName: "output.glb", byteLength }; }
+      if (command === "create_blender_model" && args?.projectPath === projectPath) { blenderCalls++; return { path: `${projectPath}\\output.glb`, fileName: "output.glb", byteLength, blendPath: `${projectPath}\\source.blend` }; }
+      if (command === "read_local_model_import_source" && args?.sourcePath === `${projectPath}\\source.blend`) return { fileName: "source.blend", mimeType: "application/x-blender", byteLength: 12, dataUrl: `data:application/x-blender;base64,${btoa("BLENDER-v500")}` };
       if (command === "read_local_model_import_source" && args?.sourcePath === `${projectPath}\\output.glb`) return { fileName: "output.glb", mimeType: "model/gltf-binary", byteLength, dataUrl };
       if (command === "commit_visual_asset_import" && args?.projectPath === projectPath) {
         const entries = args.writes as { relativePath: string; dataUrl: string }[];
@@ -120,12 +121,19 @@ test("生成モデルの原本をGLBと同時に保存し、再読み込み・�
       const transferSourcePath = transferredAsset.kind === "model" ? transferredAsset.authoring?.sourcePath : "";
       const reassigned = setEntityModel(imported.bundle.scene, imported.bundle.assets, imported.rootEntityIds[0], imported.assetIdMap[second.modelAssetId]);
       const replacedSource = await readBlenderEntityModelSource({ ...imported.bundle, scene: reassigned.scene }, imported.rootEntityIds[0], projectPath, reassigned.componentId);
+      const compilerPath = "/src/lib/visual-editor/compiler/compile.ts";
+      const { compilePrototypeVisualProject }: typeof import("../src/lib/visual-editor/compiler/compile") = await import(/* @vite-ignore */ compilerPath);
+      const publication = compilePrototypeVisualProject(withEntity);
+      const publishedModel = publication.assetCopyPlan.find(entry => entry.assetId === second.modelAssetId);
       return { rejectedCommit, originalUntouched, original, next, target: target && { modelAssetId: target.modelAssetId, componentId: target.componentId },
+        publicationUsesGlb: nextAsset.source.kind === "project" && publishedModel?.sourceRelativePath === nextAsset.source.relativePath && publishedModel?.targetRelativePath.endsWith(".glb"),
+        publicationExcludesBlend: !publication.assetCopyPlan.some(entry => entry.sourceRelativePath.endsWith(".blend") || entry.targetRelativePath.endsWith(".blend")),
         revisionsAreDistinct: first.modelAssetId !== second.modelAssetId && Boolean(reloaded.document.assets[first.modelAssetId]),
-        allCommitsContainBoth: writes.every(paths => paths.some(path => path.endsWith(".glb")) && paths.some(path => path.endsWith("/source.json"))),
+        allCommitsContainBoth: writes.every(paths => paths.some(path => path.endsWith(".glb")) && paths.some(path => path.endsWith("/source.json")) && paths.some(path => path.endsWith(".blend"))),
         tamperingRejected, staleGlbRejected, traversalRejected, traversalReadNothing, ambiguousRejected,
         transferPreservedSource: JSON.stringify(transferred?.source) === JSON.stringify(next),
         transferSourceNamespaced: transferSourcePath?.startsWith("assets/imported/hierarchy-"),
+        transferBlendNamespaced: transferredAsset.kind === "model" && transferredAsset.blenderSource?.relativePath.startsWith("assets/imported/hierarchy-"),
         lineageIsNotDependency: !prepared.bundle.assets.assets[first.modelAssetId],
         transferAllowsReplacement: Boolean(replacedSource) && reassigned.scene.entities[imported.rootEntityIds[0]].children.length === 0,
         sameSpecReusesExisting, revisionRetainsImportSettings, revisionOwnsImportSettings, rootTransformPreserved, oldRevisionUnchanged,
@@ -134,8 +142,9 @@ test("生成モデルの原本をGLBと同時に保存し、再読み込み・�
     } finally { window.__TAURI_INTERNALS__!.invoke = invoke; }
   }, { dataUrl: `data:model/gltf-binary;base64,${bytes.toString("base64")}`, byteLength: bytes.byteLength });
   expect(result).toMatchObject({ rejectedCommit: true, originalUntouched: true, revisionsAreDistinct: true, allCommitsContainBoth: true,
+    publicationUsesGlb: true, publicationExcludesBlend: true,
     tamperingRejected: true, staleGlbRejected: true, traversalRejected: true, traversalReadNothing: true, ambiguousRejected: true,
-    transferPreservedSource: true, transferSourceNamespaced: true, lineageIsNotDependency: true, transferAllowsReplacement: true,
+    transferPreservedSource: true, transferSourceNamespaced: true, transferBlendNamespaced: true, lineageIsNotDependency: true, transferAllowsReplacement: true,
     sameSpecReusesExisting: true, revisionRetainsImportSettings: true, revisionOwnsImportSettings: true, rootTransformPreserved: true, oldRevisionUnchanged: true });
   expect(result.revisedImportSettings).toEqual(result.expectedImportSettings);
   expect(result.revisedImportSettings).toMatchObject({ scale: 2.5, generateColliders: false, importAnimations: false });

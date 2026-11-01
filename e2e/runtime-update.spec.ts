@@ -27,7 +27,7 @@ test("必要なCLIの更新に失敗しても現在版を残し、同じ画面�
   await page.goto("/e2e.html?scenario=runtime-update-error");
   await page.getByRole("button", { name: "制作ツールを更新", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("CLIのダウンロードに失敗しました");
-  await expect(page.getByText("現在v0.24.4 → 推奨v0.25.0", { exact: true })).toBeVisible();
+  await expect(page.getByText("現在v0.24.4 → 推奨v0.26.0", { exact: true })).toBeVisible();
   await expect(projectHeading(page)).toHaveCount(0);
   await page.getByRole("button", { name: "更新を再試行", exact: true }).click();
   await expect(projectHeading(page)).toBeVisible();
@@ -55,7 +55,7 @@ test("Node.jsだけ準備する場合は導入済みの新しいCLIを更新対�
   await page.goto("/e2e.html?scenario=runtime-node-update");
   await expect(page.getByRole("heading", { name: "制作ツールの更新が必要です" })).toBeVisible();
   const cliItem = page.getByRole("listitem").filter({ hasText: "@xrift/cli" });
-  await expect(cliItem).toContainText("v0.26.0");
+  await expect(cliItem).toContainText("v0.27.0");
   await expect(cliItem).toContainText("導入済み");
   await expect(cliItem).not.toContainText("推奨");
   await expect(cliItem).not.toContainText("更新が必要");
@@ -67,7 +67,7 @@ test("Node.jsだけ準備する場合は導入済みの新しいCLIを更新対�
 test("任意の更新は処理中に閉じず、確認した実際のCLIバージョンを通知する", async ({ page }) => {
   await page.goto("/e2e.html?scenario=cli-update");
   const dialog = updateDialog(page);
-  await expect(dialog).toContainText("0.25.1");
+  await expect(dialog).toContainText("0.26.1");
   await dialog.getByRole("button", { name: "アップデート", exact: true }).evaluate((button: HTMLButtonElement) => {
     button.click();
     button.click();
@@ -77,7 +77,7 @@ test("任意の更新は処理中に閉じず、確認した実際のCLIバー�
   await page.keyboard.press("Escape");
   await expect(dialog).toBeVisible();
   await expect(page.getByText("@xrift/cliをアップデートしました", { exact: true })).toBeVisible();
-  await expect(page.getByText("v0.25.2", { exact: true })).toBeVisible();
+  await expect(page.getByText("v0.26.2", { exact: true })).toBeVisible();
   await expect(dialog).toHaveCount(0);
   expect(await runtimeCalls(page, "update_xrift")).toBe(1);
   expect(await runtimeCalls(page, "runtime_status")).toBeGreaterThan(1);
@@ -99,7 +99,7 @@ test("更新コマンドが成功してもCLIが古いままなら成功を通�
   const dialog = updateDialog(page);
   await dialog.getByRole("button", { name: "アップデート", exact: true }).click();
   await expect(page.getByText("アップデートに失敗しました", { exact: true })).toBeVisible();
-  await expect(page.getByText("CLIはv0.25.0です。v0.25.1へ更新してください。", { exact: false })).toBeVisible();
+  await expect(page.getByText("CLIはv0.26.0です。v0.26.1へ更新してください。", { exact: false })).toBeVisible();
   await expect(page.getByText("@xrift/cliをアップデートしました", { exact: true })).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "アップデート", exact: true })).toBeEnabled();
 });

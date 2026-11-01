@@ -166,6 +166,8 @@ MCP/APIの`mode: "plan"`はPlanの検証までを行い、`status: "planned"`と
 
 `get_modeling_tools`, `create_blender_model`
 
+パーツごとの既存`.blend`は`import_model_asset`で取り込める。端末にBlenderが必要で、128MB以内、外部リンクをローカル化し画像をパックしたファイルを使う。編集元はプロジェクト内にコピーし、Modelの`blenderSource`へ保存する。Assetsの「Blenderで編集」でそのコピーを開き、保存後に`reimport_model_asset`を実行すると、Model IDと配置を保ったまま表示用GLBを更新する。新しい`create_blender_model`の結果も編集元をAssetsの管理下へ保存する。公開には表示用GLBを使う。
+
 `get_modeling_tools`は導入済みのBlenderの利用状況と版を返す。プラグインやChatGPT接続は必要ない。`create_blender_model`には最新の`get_editor_context`の作品・Scene・revisionと`model`を渡す。`model`は名前と最大64個のpartsを持ち、各partはbox・sphere・cylinder・cone・torus・mesh・tube・latheから形状を選び、位置、Euler XYZの回転、寸法、色、metallic、roughnessを指定する。座標はStudioのY-up・メートルで、回転は度数。meshではverticesとfacesを指定する。tubeはverticesに2〜128個の中心線の点、bevelに管の半径を指定し、滑らかな曲線にする。latheはverticesに順番に並べた`[半径, 高さ, 0]`の断面を指定し、Y軸を中心に32分割で回転させる。tubeとlatheのfacesはnull。各パーツにUVを作る。任意のPythonや外部ファイルを渡すことはできない。
 
 Editで実行すると、独立したBlenderプロセスが実GLBと編集可能な`.blend`を作成し、GLBを通常のModelとしてAssetsに保存する。既存のBlender作品は変更しない。返された`modelAssetId`を`get_model_asset`で確認し、`place_asset`で配置する。作成中に利用者が別のEntityを編集しても、その編集を保存結果へ組み合わせる。作品やSceneが変わった場合は反映を停止する。
