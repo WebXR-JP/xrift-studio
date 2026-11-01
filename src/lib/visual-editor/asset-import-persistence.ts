@@ -295,8 +295,11 @@ export async function reimportModelAssetFromDisk(
   let diagnostics: AssetImportDiagnostic[] = [];
   try {
     reportModelReimport(onProgress, "reading-source", "モデルファイルを読み込んでいます");
-    const dataUrl = await tauri.readProjectFileDataUrl(projectPath, sourcePath);
-    const bytes = await dataUrlToArrayBuffer(dataUrl);
+    const dataUrl = await tauri.readProjectFileDataUrl(projectPath, asset.blenderSource?.relativePath ?? sourcePath);
+    const sourceBytes = await dataUrlToArrayBuffer(dataUrl);
+    const bytes = asset.blenderSource
+      ? await (await import("./blender-source")).convertBlendBytes(projectPath, new Uint8Array(sourceBytes))
+      : sourceBytes;
     reportModelReimport(onProgress, "inspecting-source", "モデル構造を検査しています");
     const plan = await createModelReimportPlan(asset, {
       textureImportSettings,

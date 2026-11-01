@@ -77,6 +77,14 @@ export function validateModelAssetContract(
     return [issue(path, "type", "Model Asset must be an object")];
   }
   const issues: ModelImportContractIssue[] = [];
+  if (value.blenderSource !== undefined) {
+    const source = value.blenderSource;
+    if (!isRecord(source) || source.kind !== "project" || typeof source.relativePath !== "string"
+      || normalizeProjectRelativePath(source.relativePath) !== source.relativePath
+      || !source.relativePath.startsWith("assets/imported/") || !source.relativePath.endsWith(".blend")) {
+      issues.push(issue(`${path}.blenderSource`, "path", "Blender source must be a managed project-relative .blend file"));
+    }
+  }
   if (value.kind !== "model") {
     issues.push(issue(`${path}.kind`, "enum", "Model Asset kind must be model"));
   }

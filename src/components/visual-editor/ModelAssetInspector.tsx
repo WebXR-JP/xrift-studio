@@ -1,4 +1,5 @@
-import { type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { tauri } from "../../lib/tauri";
 import { canInstanceModel } from "../../lib/visual-editor/model-instancing";
 import {
   describeModelOptimization,
@@ -36,6 +37,7 @@ export type ModelReimportImpactNotice = {
 
 export function ModelAssetInspector({
   asset,
+  projectPath,
   assets,
   preview,
   readOnly,
@@ -52,6 +54,7 @@ export function ModelAssetInspector({
   onRevertOptimization,
 }: {
   asset: ModelAsset;
+  projectPath?: string;
   assets: AssetManifest;
   preview: ReactNode;
   readOnly: boolean;
@@ -67,6 +70,18 @@ export function ModelAssetInspector({
   onOptimize?: (options: ModelOptimizationOptions) => void;
   onRevertOptimization?: () => void;
 }) {
+  const [blenderBusy, setBlenderBusy] = useState(false);
+  const [blenderMessage, setBlenderMessage] = useState("");
+  const openBlender = async () => {
+    if (!projectPath || !asset.blenderSource || blenderBusy) return;
+    setBlenderBusy(true);
+    setBlenderMessage("");
+    try {
+      await tauri.openBlenderSource(projectPath, asset.blenderSource.relativePath);
+      setBlenderMessage("Blenderで保存した後、「Blenderから再取り込み」で反映できます。");
+    } catch (error) { setBlenderMessage(error instanceof Error ? error.message : String(error)); }
+    finally { setBlenderBusy(false); }
+  };
   const metadata = asset.importMetadata;
   const openBrush = metadata?.openBrush;
   const reimportBusy =
@@ -122,10 +137,23 @@ export function ModelAssetInspector({
             onClick={onReimport}
             className="mt-2 h-8 rounded-md border border-violet-300 bg-violet-50 px-3 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
           >
-            {reimportBusy ? "再インポート中" : "元ファイルから再インポート"}
+            {reimportBusy ? "再インポート中" : asset.blenderSource ? "Blenderから再取り込み" : "元ファイルから再インポート"}
           </button>
         </div>
       </section>
+
+      {asset.blenderSource && (
+        <section className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+          <h3 className="text-sm font-semibold text-slate-900">Blenderの編集元</h3>
+          <p className="break-all text-xs text-slate-600">{asset.blenderSource.relativePath}</p>
+          <p className="text-xs text-slate-600">このプロジェクト内の.blendを編集します。パーツごとにファイルを分けて管理できます。</p>
+          <button type="button" disabled={readOnly || blenderBusy || !projectPath} onClick={() => void openBlender()}
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-xs text-slate-700 disabled:opacity-45">
+            {blenderBusy ? "Blenderを起動中" : "Blenderで編集"}
+          </button>
+          {blenderMessage && <p role="status" className="text-xs text-slate-600">{blenderMessage}</p>}
+        </section>
+      )}
 
       {openBrush ? (
         <section className="rounded-lg border border-fuchsia-200 bg-gradient-to-br from-fuchsia-50 to-violet-50 p-3 shadow-sm">

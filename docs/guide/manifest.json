@@ -1,7 +1,7 @@
 {
   "title": "XRift Studio 使い方ガイド",
-  "reviewedVersion": "1.0.16",
-  "reviewedOn": "2026-10-25",
+  "reviewedVersion": "1.0.17",
+  "reviewedOn": "2026-11-02",
   "siteUrl": "https://webxr-jp.github.io/xrift-studio/guide/",
   "groups": [
     {
@@ -448,11 +448,13 @@
     },
     {
       "slug": "assets",
+      "reviewedVersion": "1.0.17",
+      "reviewedOn": "2026-11-02",
       "title": "モデルや画像を取り込む",
-      "description": "モデル、画像、VRMアバターを取り込み、シーンへの配置や色、ポーズの調整を行います。",
+      "description": "モデル、画像、VRMアバターを取り込みます。Blenderの.blendをプロジェクトに保存してパーツを編集・再取り込みできます。",
       "group": "basics",
       "file": "assets.md",
-      "keywords": "インポート GLB GLTF VRM VRM 0.x VRM 1.0 アバター MToon PBR モデル 画像 音声 ファイル 読み込み Bone シェイプキー Open Brush OpenBrush DiamondHull ブラシ シェーダー UV マテリアル 割り当て ノード",
+      "keywords": "Blender blend 編集元 パーツ 再取り込み インポート GLB GLTF VRM VRM 0.x VRM 1.0 アバター MToon PBR モデル 画像 音声 ファイル 読み込み Bone シェイプキー Open Brush OpenBrush DiamondHull ブラシ シェーダー UV マテリアル 割り当て ノード",
       "related": [
         "external-resources",
         "textures",

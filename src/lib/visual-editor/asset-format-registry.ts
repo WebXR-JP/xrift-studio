@@ -204,6 +204,7 @@ export const ASSET_FORMATS = {
     },
   },
   model: {
+    blend: { label: "Blender", mimeType: "application/x-blender", scanInSource: false },
     "3dm": { label: "Rhino 3DM", mimeType: "model/3dm" },
     "3ds": { label: "3D Studio", mimeType: "model/3ds" },
     "3mf": { label: "3D Manufacturing Format", mimeType: "model/3mf" },

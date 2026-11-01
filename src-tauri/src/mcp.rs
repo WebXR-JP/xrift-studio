@@ -2661,7 +2661,7 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "import_model_asset",
-            "description": "Validate and import one trusted local single-file GLB, VRM, glTF, or OBJ model while Edit is active. sourcePath must be an absolute regular non-symlink file no larger than 128 MB; external companion files are not read implicitly.",
+            "description": "Validate and import one trusted local single-file GLB, VRM, glTF, OBJ, or Blender .blend model while Edit is active. sourcePath must be an absolute regular non-symlink file; external companion files are not read implicitly. Blender imports require installed Blender, a file no larger than 128 MB with packed textures and localized libraries, and save the editable .blend alongside the display GLB in the project. Use separate .blend files for independently editable parts.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -2788,7 +2788,7 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "reimport_model_asset",
-            "description": "Re-read a project-managed Model Asset source and atomically update its derived metadata while preserving the Model Asset ID and references. Edit mode only.",
+            "description": "Re-read a project-managed Model Asset source and atomically update its derived metadata while preserving the Model Asset ID and references. Models with blenderSource regenerate their display GLB from the saved project .blend using installed Blender. Save in Blender before reimporting. Edit mode only.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
