@@ -22,3 +22,14 @@ BlenderのカスタムプロパティとglTF extrasの仕様: [Blender glTF impo
 node --test scripts/commit-existing-model-blends.test.mjs
 & $blender --background --factory-startup --disable-autoexec --python-exit-code 1 --python scripts/blender-material-roundtrip.test.py
 ```
+
+実モデルのコピーを変形・保存して再取り込みまで検証する場合:
+
+```powershell
+& $blender --background --factory-startup --disable-autoexec --offline-mode --python-exit-code 1 --python scripts/prepare-blender-edit-smoke.py -- $prepared $editSmoke
+$env:XRIFT_BLENDER_EDIT_SMOKE = $editSmoke
+cargo test --manifest-path src-tauri/Cargo.toml installed_blender_reimports_edited_mtoon_source --lib
+pnpm exec playwright test e2e/blender-mtoon-edit.spec.ts
+```
+
+`$editSmoke`は新しい検証用ディレクトリです。元の作品は変更せず、コピーの全メッシュ頂点のX座標を10%広げて保存します。実Blenderの書き出し、Rustの再取り込みコマンド、Studioの素材更新処理をそれぞれ確認します。

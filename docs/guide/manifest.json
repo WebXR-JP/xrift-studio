@@ -1,6 +1,6 @@
 {
   "title": "XRift Studio 使い方ガイド",
-  "reviewedVersion": "1.0.17",
+  "reviewedVersion": "1.0.18",
   "reviewedOn": "2026-11-02",
   "siteUrl": "https://webxr-jp.github.io/xrift-studio/guide/",
   "groups": [
@@ -448,7 +448,7 @@
     },
     {
       "slug": "assets",
-      "reviewedVersion": "1.0.17",
+      "reviewedVersion": "1.0.18",
       "reviewedOn": "2026-11-02",
       "title": "モデルや画像を取り込む",
       "description": "モデル、画像、VRMアバターを取り込みます。Blenderの.blendをプロジェクトに保存してパーツを編集・再取り込みできます。",

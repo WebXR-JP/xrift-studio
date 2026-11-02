@@ -1239,6 +1239,30 @@ mod tests {
         }
     }
     #[tokio::test]
+    async fn installed_blender_reimports_edited_mtoon_source() {
+        let Ok(directory) = std::env::var("XRIFT_BLENDER_EDIT_SMOKE") else { return; };
+        use base64::Engine;
+        let fixture = Fixture::new();
+        let source = Path::new(&directory).join("edited.blend");
+        let original = fs::read(&source).unwrap();
+        let expected = glb_json(&Path::new(&directory).join("edited.glb"));
+        let data_url = format!("data:application/x-blender;base64,{}", base64::engine::general_purpose::STANDARD.encode(&original));
+        let converted = source::convert_blender_source(fixture.0.to_string_lossy().into(), data_url).await.unwrap();
+        let actual = glb_json(Path::new(&converted.path));
+        let mtoon = |document: &serde_json::Value| {
+            let mut settings: Vec<String> = document["materials"].as_array().unwrap().iter()
+                .filter_map(|m| m["extensions"].get("VRMC_materials_mtoon"))
+                .map(|value| serde_json::to_string(value).unwrap()).collect();
+            settings.sort();
+            settings
+        };
+        assert!(!mtoon(&expected).is_empty());
+        assert_eq!(mtoon(&actual), mtoon(&expected));
+        assert!(!actual["meshes"].as_array().unwrap().is_empty());
+        assert_eq!(fs::read(source).unwrap(), original);
+    }
+
+    #[tokio::test]
     async fn installed_blender_source_roundtrip_keeps_editable_original() {
         if std::env::var("XRIFT_TEST_BLENDER").as_deref() != Ok("1") { return; }
         use base64::Engine;
