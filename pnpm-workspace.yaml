@@ -7,5 +7,11 @@ allowBuilds:
   protobufjs: false
   sharp: false
 
+# The editor, publish staging and web-upload shell must stay on one
+# @xrift/world-components release. Its update is reviewed here, so keep it
+# installable while the registry's minimum release age policy is active.
+minimumReleaseAgeExclude:
+  - "@xrift/world-components@0.64.0"
+
 overrides:
   dompurify: 3.4.12
