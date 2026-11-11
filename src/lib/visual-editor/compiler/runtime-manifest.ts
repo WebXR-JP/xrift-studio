@@ -303,6 +303,7 @@ function runtimeXriftComponentSupport(
     case "xrift.billboard-y":
     case "xrift.interactable":
     case "xrift.grabbable":
+    case "xrift.seat":
     case "xrift.text-input":
     case "xrift.video-screen":
     case "xrift.video-player":

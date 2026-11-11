@@ -25,7 +25,7 @@ export const COMPILER_UIKIT_PACKAGE_SPECS = [
  * (scripts/check-world-components-alignment.mjs).
  */
 export const COMPILER_WORLD_COMPONENTS_PACKAGE_SPEC =
-  "@xrift/world-components@0.57.1";
+  "@xrift/world-components@0.64.0";
 export const COMPILER_SDK_PACKAGE_SPEC = "@xrift/sdk@0.2.0";
 
 // Resolve both packages in the same install, including for reused staging

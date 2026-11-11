@@ -1,6 +1,7 @@
 import {
   Activity,
   ArrowLeft,
+  Armchair,
   Axis3D,
   Box,
   Bot,
@@ -124,6 +125,7 @@ export const EDITOR_ICONS = {
   spawn: MapPin,
   interactable: Pointer,
   grabbable: Hand,
+  seat: Armchair,
   mirror: PanelsTopLeft,
   skybox: Image,
   portal: DoorOpen,

@@ -29,7 +29,7 @@ test('published Script retains the host storage, screen sharing and Vehicle cont
   const hostStorageHook=()=>playerStorage,hostVehicle=()=>null;
   const sharing={isRoomConnected:true,videoElement:null};
   const hostScreen=()=>null,hostScreenHook=()=>sharing;
-  const versions={react:['19.2.8',localRequire('react')],'react/jsx-runtime':['19.2.8',localRequire('react/jsx-runtime')],three:['0.185.1',localRequire('three')],'@xrift/world-components':['0.57.1',{useWorldStorage:hostStorageHook,Vehicle:hostVehicle,ScreenShareDisplay:hostScreen,useScreenShareContext:hostScreenHook}]};
+  const versions={react:['19.2.8',localRequire('react')],'react/jsx-runtime':['19.2.8',localRequire('react/jsx-runtime')],three:['0.185.1',localRequire('three')],'@xrift/world-components':['0.64.0',{useWorldStorage:hostStorageHook,Vehicle:hostVehicle,ScreenShareDisplay:hostScreen,useScreenShareContext:hostScreenHook}]};
   const scope=Object.fromEntries(Object.entries(versions).map(([name,[version,module]])=>[name,{[version]:{get:()=>()=>module,loaded:true}}]));
   const remote=await import(pathToFileURL(path.join(root,'dist','remoteEntry.js')).href);remote.init(scope);
   const probe=(await remote.get('./probe'))();

@@ -137,7 +137,7 @@ process.stdout.write(
 
 // Script templates must resolve their official API in Edit/Play and published shells.
 const officialTypes = read("node_modules/@xrift/world-components/dist/index.d.ts");
-for (const name of ["Vehicle", "Seat", "SeatControlInput", "VehiclePose"]) {
+for (const name of ["Vehicle", "Seat", "SeatControlInput", "VehiclePose", "GrabUseEvent", "GrabHoldEvent"]) {
   if (!new RegExp(`\\b${name}\\b`).test(officialTypes)) {
     throw new Error(`Official authoring API is missing: ${name}`);
   }

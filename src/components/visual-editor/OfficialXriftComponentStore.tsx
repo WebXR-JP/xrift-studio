@@ -31,7 +31,6 @@ export function OfficialXriftComponentStore({
     ...definitions,
     ...[
       { schemaId: "studio.vehicle", label: "Vehicle", importName: "Vehicle", category: "world", icon: "world" as const, description: "公式Vehicleを使う車を配置できます。車体、座席、タイヤ、煙の設定を含みます。「ギミック」のカスタム車からも追加できます。W/Sで前後に移動し、A/Dで旋回、Spaceで降車してください。", templateId: "vehicle" as const },
-      { schemaId: "studio.seat", label: "Seat", importName: "Seat", category: "world", icon: "world" as const, description: "座れる椅子。Playでクリックすると座り、Spaceで立ち上がります。", templateId: "seat" as const },
     ],
   ], [definitions]);
   const initial =

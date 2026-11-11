@@ -301,7 +301,7 @@ try {
     "Classic package must not depend on the unpublished runtime package",
   );
   assert(
-    packageJson.dependencies?.["@xrift/world-components"] === "0.57.1",
+    packageJson.dependencies?.["@xrift/world-components"] === "0.64.0",
     "Classic package must pin @xrift/world-components to the compiler's version when the template has none",
   );
   assert(packageJson.dependencies?.["@xrift/sdk"] === "0.2.0", "Classic package must install the SDK that provides xriftDev()");

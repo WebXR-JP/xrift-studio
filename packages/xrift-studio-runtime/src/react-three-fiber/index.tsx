@@ -28,6 +28,7 @@ import {
   LiveVideoPlayer,
   Portal,
   ScreenShareDisplay,
+  Seat,
   TagBoard,
   TextInput,
   Video180Sphere,
@@ -40,6 +41,7 @@ import {
   type InteractableProps,
   type PortalProps,
   type ScreenShareDisplayProps,
+  type SeatProps,
   type TagBoardProps,
   type TextInputProps,
   type Video180SphereProps,
@@ -801,6 +803,7 @@ function XriftRuntimeOfficialWrappers({
           transform:
             grabbableTransforms[id] ??
             parseRuntimeGrabbableTransform(properties.transform),
+          sync: booleanOr(properties.sync, true),
           enabled: booleanOr(properties.enabled, true),
         };
         return (
@@ -813,6 +816,10 @@ function XriftRuntimeOfficialWrappers({
             {children}
           </Grabbable>
         );
+      }
+      if (component.schemaId === "xrift.seat") {
+        const props = properties as unknown as Omit<SeatProps, "children">;
+        return <Seat {...props}>{children}</Seat>;
       }
       if (component.schemaId === "xrift.text-input") {
         const id = stringOr(properties.id, component.id);
@@ -856,6 +863,7 @@ function isRuntimeOfficialWrapperSchema(schemaId: string): boolean {
   return (
     schemaId === "xrift.interactable" ||
     schemaId === "xrift.grabbable" ||
+    schemaId === "xrift.seat" ||
     schemaId === "xrift.text-input"
   );
 }
@@ -937,11 +945,20 @@ function XriftRuntimeOfficialLeaves({
             );
           case "xrift.portal": {
             const portalProps = properties as unknown as PortalProps;
-            return (
+            return "worldId" in portalProps &&
+              typeof portalProps.worldId === "string" ? (
               <Portal
                 key={component.id}
                 {...portalProps}
-                instanceId={stringOr(portalProps.instanceId, "")}
+                worldId={portalProps.worldId}
+              />
+            ) : (
+              <Portal
+                key={component.id}
+                {...portalProps}
+                instanceId={
+                  (portalProps as { instanceId?: string }).instanceId ?? ""
+                }
               />
             );
           }

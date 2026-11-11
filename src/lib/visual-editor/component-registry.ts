@@ -12,7 +12,7 @@ import type {
 
 export const XRIFT_COMPONENT_MODULE = "@xrift/world-components" as const;
 /** npm package version used to verify the authoring registry. */
-export const XRIFT_COMPONENT_API_VERSION = "0.57.1" as const;
+export const XRIFT_COMPONENT_API_VERSION = "0.64.0" as const;
 export const XRIFT_COMPONENT_API_SOURCE =
   "https://github.com/WebXR-JP/xrift-world-components" as const;
 export const XRIFT_COMPONENT_SCHEMA_VERSION = "1.0.0" as const;
@@ -21,6 +21,7 @@ export const XRIFT_COMPONENT_SCHEMA_VERSION = "1.0.0" as const;
 export const XRIFT_COMPONENT_SCHEMA_IDS = {
   interactable: "xrift.interactable",
   grabbable: "xrift.grabbable",
+  seat: "xrift.seat",
   mirror: "xrift.mirror",
   skybox: "xrift.skybox",
   videoScreen: "xrift.video-screen",
@@ -49,6 +50,7 @@ export type XriftComponentCategory =
 export type XriftComponentIcon =
   | "interactable"
   | "grabbable"
+  | "seat"
   | "mirror"
   | "skybox"
   | "videoScreen"
@@ -287,7 +289,8 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
     schemaId: XRIFT_COMPONENT_SCHEMA_IDS.grabbable,
     importName: "Grabbable",
     label: "Grabbable",
-    description: "配下のEntityを掴んで移動できる対象にします。",
+    description:
+      "配下のEntityを掴んで運べる対象にします。掴んだ位置はインスタンスの全員に共有されます。",
     icon: "grabbable",
     category: "interaction",
     attachBehavior: REQUIRED_WRAPPER,
@@ -298,10 +301,18 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
       field(
         "transform",
         "Transform",
-        "親のローカル空間で表す現在の位置・回転・任意の均一スケール。",
+        "親のローカル空間で表す最初の位置・回転・任意の均一スケール。",
         "grabbable-transform",
         true,
         { nestedDefaults: { scale: 1 } },
+      ),
+      field(
+        "sync",
+        "Sync",
+        "掴んでいる様子と離した位置をインスタンスの全員に共有します。オフにすると自分の画面だけで動きます。",
+        "boolean",
+        false,
+        { defaultValue: true },
       ),
       field("enabled", "Enabled", "掴む操作を有効にします。", "boolean", false, {
         defaultValue: true,
@@ -311,15 +322,114 @@ export const XRIFT_COMPONENT_REGISTRY: readonly XriftComponentDefinition[] = [
       runtimeBinding(
         "onMove",
         "callback",
-        true,
-        "配置確定時の姿勢を受け取るコールバック。",
+        false,
+        "離したときの姿勢を受け取るコールバック。syncがオフのときに状態へ反映します。",
         "managed-transform-state",
       ),
       runtimeBinding(
-        "renderGhost",
-        "render-callback",
+        "onUseStart",
+        "callback",
         false,
-        "掴み中のゴーストを描画するコールバック。",
+        "掴んでいる間に「使う」を押したときのコールバック。呼ばれるのは持っている本人の画面だけです。",
+        "none",
+      ),
+      runtimeBinding(
+        "onUseEnd",
+        "callback",
+        false,
+        "「使う」を離したとき、置いたとき、物が消えたときのコールバック。",
+        "none",
+      ),
+      runtimeBinding(
+        "onGrab",
+        "callback",
+        false,
+        "誰かが持ち上げたときのコールバック。全員の画面で呼ばれます。",
+        "none",
+      ),
+      runtimeBinding(
+        "onRelease",
+        "callback",
+        false,
+        "手から離れたときのコールバック。全員の画面で呼ばれ、置いたときはonMoveの後になります。",
+        "none",
+      ),
+    ],
+  }),
+  componentDefinition({
+    schemaId: XRIFT_COMPONENT_SCHEMA_IDS.seat,
+    importName: "Seat",
+    label: "Seat",
+    description:
+      "配下のEntityを座れる場所にします。座面の原点と向きは置いた場所のワールド行列から決まります。",
+    icon: "seat",
+    category: "interaction",
+    attachBehavior: REQUIRED_WRAPPER,
+    fields: [
+      field("id", "ID", "一意の識別子。", "string", true, {
+        uniqueWithinScene: true,
+      }),
+      field("position", "Position", "座面の位置。子は座面を原点に描きます。", "vec3", false, {
+        defaultValue: [0, 0, 0],
+      }),
+      field("rotation", "Rotation", "座面の向き（ラジアン）。前方は-Zです。", "vec3", false, {
+        defaultValue: [0, 0, 0],
+      }),
+      field(
+        "exitOffset",
+        "Exit offset",
+        "降りる位置。座席から見た前後・左右（メートル）とワールドの上方向です。",
+        "json-object",
+        false,
+        {
+          defaultValue: { forward: 0.6, right: 0, up: 0 },
+          jsonObjectProperties: {
+            forward: "number",
+            right: "number",
+            up: "number",
+          },
+        },
+      ),
+      field(
+        "interactionText",
+        "Interaction text",
+        "狙ったときに表示するテキスト。",
+        "string",
+        false,
+        { defaultValue: "座る" },
+      ),
+      field("enabled", "Enabled", "座れるかどうか。ほかの人が座っている間は自動で無効になります。", "boolean", false, {
+        defaultValue: true,
+      }),
+      field(
+        "driver",
+        "Driver",
+        "囲んでいるVehicleの運転席にします。Vehicleの外では通常の座席として扱われます。",
+        "boolean",
+        false,
+        { defaultValue: false },
+      ),
+    ],
+    runtimeBindings: [
+      runtimeBinding(
+        "onEnter",
+        "callback",
+        false,
+        "誰かが座ったときのコールバック。自分・ほかの人のどちらでも呼ばれます。",
+        "none",
+      ),
+      runtimeBinding(
+        "onLeave",
+        "callback",
+        false,
+        "誰かが降りたときのコールバック。自分・ほかの人のどちらでも呼ばれます。",
+        "none",
+      ),
+      runtimeBinding(
+        "onControlInput",
+        "callback",
+        false,
+        "自分が座っている間、毎フレーム操縦入力を受け取るコールバック。",
         "none",
       ),
     ],

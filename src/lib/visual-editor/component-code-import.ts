@@ -95,13 +95,25 @@ export function createOfficialXriftComponentSample(importName: string): string {
     Grabbable: `<Grabbable
   id="sample-grabbable"
   transform={{ position: { x: 0, y: 1, z: -2 }, rotation: { x: 0, y: 0, z: 0 }, scale: 1 }}
-  onMove={() => {}}
+  sync={true}
 >
   <mesh>
     <sphereGeometry args={[0.3, 24, 16]} />
     <meshStandardMaterial color="#f59e0b" />
   </mesh>
 </Grabbable>`,
+    Seat: `<Seat
+  id="sample-seat"
+  position={[0, 0.45, 0]}
+  rotation={[0, 0, 0]}
+  exitOffset={{ forward: 0.6, right: 0, up: 0 }}
+  interactionText="座る"
+>
+  <mesh position={[0, -0.225, 0]}>
+    <boxGeometry args={[0.5, 0.45, 0.5]} />
+    <meshStandardMaterial color="#a2845e" />
+  </mesh>
+</Seat>`,
     Mirror: `<Mirror position={[0, 1.5, -3]} size={[3, 2]} color={0xcccccc} />`,
     Skybox: `<Skybox topColor={0x87ceeb} bottomColor={0xffffff} offset={0} exponent={1} />`,
     VideoScreen: `<VideoScreen id="sample-video" position={[0, 2, -4]} scale={[5.33, 3]} sync="global" muted />`,

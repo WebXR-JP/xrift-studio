@@ -5,7 +5,7 @@ import {
 } from "../component-registry";
 import { ASSET_MANIFEST_SCHEMA_VERSION, type AssetManifest } from "../asset-manifest";
 import { createPrefabAsset, createPrefabDocument } from "../prefab-document";
-import { SCENE_DOCUMENT_SCHEMA_VERSION, type SceneDocument } from "../scene-document";
+import { SCENE_DOCUMENT_SCHEMA_VERSION, type JsonObject, type SceneDocument } from "../scene-document";
 import { compileXriftComponent } from "./xrift-component-registry";
 import { resolvePrefabInstances } from "./prefab-resolver";
 
@@ -96,6 +96,60 @@ export function runXriftComponentRegistryFixtureAssertions(): void {
     compiledInteractable.mode === "wrapper" &&
       compiledInteractable.jsx?.includes("onInteract={() => {}}") === true,
     "Interactable must emit its required safe callback adapter",
+  );
+
+  const grabbable = requiredComponent(XRIFT_COMPONENT_SCHEMA_IDS.grabbable, {
+    transform: {
+      position: { x: 1, y: 2, z: 3 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: 1,
+    },
+  });
+  const compiledGrabbable = compileXriftComponent(
+    grabbable,
+    "world",
+    FIXTURE_SOURCE,
+  );
+  const compiledGrabbableSource =
+    compiledGrabbable.supportDeclarations[0]?.source ?? "";
+  assert(
+    compiledGrabbable.mode === "wrapper" &&
+      compiledGrabbableSource.includes("sync={true}") &&
+      compiledGrabbableSource.includes("onMove={(next) => setTransform"),
+    "Grabbable must emit the shared position sync and its managed transform state",
+  );
+  const unsharedGrabbable = requiredComponent(
+    XRIFT_COMPONENT_SCHEMA_IDS.grabbable,
+    {
+      transform: {
+        position: { x: 0, y: 1, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+      },
+      sync: false,
+    },
+  );
+  const compiledUnsharedGrabbable = compileXriftComponent(
+    unsharedGrabbable,
+    "world",
+    FIXTURE_SOURCE,
+  );
+  assert(
+    compiledUnsharedGrabbable.supportDeclarations[0]?.source.includes(
+      "sync={false}",
+    ) === true,
+    "Grabbable must preserve an authored local-only sync setting",
+  );
+
+  const seat = requiredComponent(XRIFT_COMPONENT_SCHEMA_IDS.seat);
+  const compiledSeat = compileXriftComponent(seat, "world", FIXTURE_SOURCE);
+  assert(
+    compiledSeat.mode === "wrapper" &&
+      compiledSeat.importName === "Seat" &&
+      compiledSeat.jsx?.includes('interactionText={"座る"}') === true &&
+      compiledSeat.jsx.includes(
+        'exitOffset={{"forward":0.6,"right":0,"up":0}}',
+      ),
+    "Seat must emit its documented defaults as a wrapper",
   );
 
   const entryLogBoard = requiredComponent(
@@ -265,6 +319,7 @@ function assertRequiredAuthoringIds(): void {
     [XRIFT_COMPONENT_SCHEMA_IDS.item, "placementId", "item-fixture-id"],
     [XRIFT_COMPONENT_SCHEMA_IDS.interactable, "id", "interactable-fixture-id"],
     [XRIFT_COMPONENT_SCHEMA_IDS.grabbable, "id", "grabbable-fixture-id"],
+    [XRIFT_COMPONENT_SCHEMA_IDS.seat, "id", "seat-fixture-id"],
     [XRIFT_COMPONENT_SCHEMA_IDS.videoScreen, "id", "video-screen-fixture-id"],
     [XRIFT_COMPONENT_SCHEMA_IDS.videoPlayer, "id", "video-player-fixture-id"],
     [
@@ -299,7 +354,7 @@ function assertRequiredAuthoringIds(): void {
 
 function requiredComponent(
   schemaId: string,
-  properties: Record<string, string> = {},
+  properties: JsonObject = {},
 ) {
   const component = createXriftComponent(schemaId, { properties });
   if (!component) throw new Error(`Fixture component is missing: ${schemaId}`);
