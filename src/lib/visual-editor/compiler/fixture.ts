@@ -3002,7 +3002,8 @@ export function runVisualCompilerFixtureAssertions(
       !modelSource.includes('"/xrift-studio/assets/'),
     "Project GLB path must be relative to the XRift base URL",
   );
-  assert(modelSource.includes("<Clone"), "Model clone was not generated");
+  assert(modelSource.includes("<StableModelClone") && modelSource.includes("fallback={Clone}"), "Stable model clone was not generated");
+  assert(modelResult.overlayFiles.some((file) => file.relativePath === "src/xrift-studio/stable-model-clone.tsx"), "Stable model clone runtime was not staged");
 
   // Open Brush brushes carry their motion in `uniform vec4 u_time`, and the
   // Materials come out of three-icosa already compiled, so no generated

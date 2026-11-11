@@ -4720,6 +4720,7 @@ fn local_model_mime_type(path: &Path) -> Option<&'static str> {
         Some("gltf") => Some("model/gltf+json"),
         Some("vrm") => Some("model/vrm"),
         Some("obj") => Some("model/obj"),
+        Some("blend") => Some("application/x-blender"),
         _ => None,
     }
 }
@@ -6496,6 +6497,8 @@ pub fn run() {
             chatgpt::chatgpt_cancel_generation,
             blender_modeling::get_blender_status,
             blender_modeling::create_blender_model,
+            blender_modeling::source::convert_blender_source,
+            blender_modeling::source::open_blender_source,
             runtime_paths,
             xrift_items::resolve_xrift_item,
             runtime_status,

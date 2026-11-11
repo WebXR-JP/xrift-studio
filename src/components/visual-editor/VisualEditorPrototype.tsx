@@ -1,4 +1,5 @@
 import type { ChatgptAssetOptions } from "../../lib/tauri";
+import { createDesktopAssetImportPlan } from "../../lib/visual-editor/blender-source";
 import { prepareParticlePresetTexture } from "../../lib/visual-editor/particle-preset-textures";
 import type { ChatgptRequestScope } from "../../lib/visual-editor/chatgpt-request-queue";
 import { entityRemakePrompt, type ChatgptComposerRequest } from "../../lib/visual-editor/chatgpt-composer-request";
@@ -66,7 +67,6 @@ import {
   autoFitBoxCollider,
   commitAssetImportPlanToDisk,
   commitAssetImportPlansToDisk,
-  createAssetImportPlan,
   sha256AssetBytes,
   planModelCompanionBatch,
   type ThreeModelCompanionFile,
@@ -4349,7 +4349,7 @@ export function VisualEditorPrototype({
                 `ローカル${assetLabel}のサイズが読み取り中に変わりました。ファイルを閉じて再試行してください`,
               );
             }
-            const plan = await createAssetImportPlan({
+            const plan = await createDesktopAssetImportPlan(projectPath, {
               fileName: source.fileName,
               bytes,
               mimeType: source.mimeType,
@@ -10636,7 +10636,7 @@ export function VisualEditorPrototype({
               textureImportMaxSizeRef.current,
               textureImportCompressionRef.current,
             );
-            const plan = await createAssetImportPlan({
+            const plan = await createDesktopAssetImportPlan(projectPath, {
               fileName: sourceFile.name,
               bytes,
               mimeType: sourceFile.type,
@@ -10706,7 +10706,8 @@ export function VisualEditorPrototype({
             if (
               duplicate &&
               duplicate.kind === plan.asset.kind &&
-              !plan.replacesAssetId
+              !plan.replacesAssetId &&
+              !(plan.asset.kind === "model" && plan.asset.blenderSource)
             ) {
               setHistory((current) => {
                 if (!isEnvironmentTextureAsset(duplicate)) {

@@ -1,7 +1,7 @@
 {
   "version": "565cef5bdb31",
   "runtimeContract": "2026-10-24-uikit-edit-preview-v1",
-  "cliVersion": "0.25.0",
+  "cliVersion": "0.26.0",
   "worldComponentsVersion": "0.64.0",
   "entry": "remoteEntry.js",
   "modules": [

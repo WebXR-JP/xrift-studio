@@ -86,6 +86,10 @@ jobs:
 
       - name: Test recording capture and guide
         run: node --test scripts/recording-session.test.mjs scripts/guide.test.mjs
+      - name: Test Blender source migration and MToon preservation
+        run: |
+          node --test scripts/commit-existing-model-blends.test.mjs
+          python3 scripts/blender-material-roundtrip.test.py
       # 型検査はここで1回だけ行い、E2E jobでは繰り返さない。
       - name: Typecheck app and E2E
         run: pnpm typecheck && pnpm e2e:typecheck

@@ -44,3 +44,4 @@ src-tauri/updater.key.pub
 # Generated Pi SDK distribution
 src-tauri/resources/pi/
 /work/
+__pycache__/

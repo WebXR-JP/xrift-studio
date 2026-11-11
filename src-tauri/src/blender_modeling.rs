@@ -10,6 +10,8 @@ use crate::background_process::tokio_command as hidden_command;
 use tokio::sync::Notify;
 #[path = "blender_preview.rs"]
 mod preview;
+#[path = "blender_source.rs"]
+pub(crate) mod source;
 pub(crate) use preview::subscribe_previews;
 
 const RUNNER: &str = include_str!("blender_modeling.py");
@@ -144,6 +146,7 @@ pub(crate) struct BlenderModelResult {
     path: String,
     file_name: String,
     byte_length: u64,
+    blend_path: String,
 }
 
 pub(crate) fn blender_model_schema() -> serde_json::Value {
@@ -738,6 +741,7 @@ async fn run_model(
         path: blender_path(&glb).to_string_lossy().to_string(),
         file_name,
         byte_length,
+        blend_path: blender_path(&blend).to_string_lossy().to_string(),
     })
 }
 #[tauri::command]
@@ -1234,6 +1238,47 @@ mod tests {
             write_new(&target, &source).unwrap();
         }
     }
+    #[tokio::test]
+    async fn installed_blender_reimports_edited_mtoon_source() {
+        let Ok(directory) = std::env::var("XRIFT_BLENDER_EDIT_SMOKE") else { return; };
+        use base64::Engine;
+        let fixture = Fixture::new();
+        let source = Path::new(&directory).join("edited.blend");
+        let original = fs::read(&source).unwrap();
+        let expected = glb_json(&Path::new(&directory).join("edited.glb"));
+        let data_url = format!("data:application/x-blender;base64,{}", base64::engine::general_purpose::STANDARD.encode(&original));
+        let converted = source::convert_blender_source(fixture.0.to_string_lossy().into(), data_url).await.unwrap();
+        let actual = glb_json(Path::new(&converted.path));
+        let mtoon = |document: &serde_json::Value| {
+            let mut settings: Vec<String> = document["materials"].as_array().unwrap().iter()
+                .filter_map(|m| m["extensions"].get("VRMC_materials_mtoon"))
+                .map(|value| serde_json::to_string(value).unwrap()).collect();
+            settings.sort();
+            settings
+        };
+        assert!(!mtoon(&expected).is_empty());
+        assert_eq!(mtoon(&actual), mtoon(&expected));
+        assert!(!actual["meshes"].as_array().unwrap().is_empty());
+        assert_eq!(fs::read(source).unwrap(), original);
+    }
+
+    #[tokio::test]
+    async fn installed_blender_source_roundtrip_keeps_editable_original() {
+        if std::env::var("XRIFT_TEST_BLENDER").as_deref() != Ok("1") { return; }
+        use base64::Engine;
+        let fixture = Fixture::new();
+        let project_path = fixture.0.to_string_lossy().to_string();
+        let generated = create_blender_model(project_path.clone(), model(), None).await.unwrap();
+        let original = fs::read(&generated.blend_path).unwrap();
+        let data_url = format!("data:application/x-blender;base64,{}", base64::engine::general_purpose::STANDARD.encode(&original));
+        let converted = source::convert_blender_source(project_path.clone(), data_url).await.unwrap();
+        assert_eq!(fs::read(&generated.blend_path).unwrap(), original);
+        assert_eq!(fs::read(&converted.blend_path).unwrap(), original);
+        let json = glb_json(Path::new(&converted.path));
+        assert!(!json["meshes"].as_array().unwrap().is_empty());
+        assert!(source::convert_blender_source(project_path, "data:application/x-blender;base64,YmFk".into()).await.is_err());
+    }
+
     #[tokio::test]
     async fn installed_blender_exports_two_real_quality_revisions_preserving_other_parts() {
         if std::env::var("XRIFT_TEST_BLENDER").as_deref() != Ok("1") { return; }

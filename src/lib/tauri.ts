@@ -669,7 +669,11 @@ export const tauri = {
     }),
   getBlenderStatus: () => invoke<BlenderStatus>("get_blender_status"),
   createBlenderModel: (projectPath: string, model: import("./visual-editor/chatgpt-modeling").BlenderModelSpec, generationId?: string) =>
-    invoke<{ path: string; fileName: string; byteLength: number }>("create_blender_model", { projectPath, model, generationId }),
+    invoke<{ path: string; fileName: string; byteLength: number; blendPath: string }>("create_blender_model", { projectPath, model, generationId }),
+  convertBlenderSource: (projectPath: string, dataUrl: string) =>
+    invoke<{ path: string; fileName: string; byteLength: number; blendPath: string }>("convert_blender_source", { projectPath, dataUrl }),
+  openBlenderSource: (projectPath: string, relativePath: string) =>
+    invoke<void>("open_blender_source", { projectPath, relativePath }),
   readLocalShaderImportSource: (sourcePath: string) =>
     invoke<LocalShaderImportSource>("read_local_shader_import_source", {
       sourcePath,
