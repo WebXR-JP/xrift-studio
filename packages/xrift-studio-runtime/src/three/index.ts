@@ -977,6 +977,7 @@ function isRuntimeOfficialWrapperComponent(schemaId: string): boolean {
   return (
     schemaId === "xrift.interactable" ||
     schemaId === "xrift.grabbable" ||
+    schemaId === "xrift.seat" ||
     schemaId === "xrift.text-input"
   );
 }

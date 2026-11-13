@@ -14,7 +14,7 @@ import { analyzeOfficialXriftWorldTemplate } from "./official-world-template-imp
 /** Pure assertions for official XRift samples and the safe Drei/R3F adapter. */
 export async function runComponentCodeImportFixtureAssertions(): Promise<void> {
   const definitions = listXriftComponentDefinitions("world");
-  assert(definitions.length === 16, "The official world catalog must contain 16 scene components including Item");
+  assert(definitions.length === 17, "The official world catalog must contain 17 scene components including Item");
 
   for (const definition of definitions) {
     const plan = analyzeComponentCode(
@@ -47,6 +47,22 @@ export async function runComponentCodeImportFixtureAssertions(): Promise<void> {
       );
     }
   }
+
+  const seatPlan = analyzeComponentCode(
+    createOfficialXriftComponentSample("Seat"),
+    "world",
+  );
+  const seatNode = seatPlan.nodes.find(
+    (node) => node.xriftComponents[0]?.schemaId === "xrift.seat",
+  );
+  assert(
+    seatNode?.transform.position[1] === 0.45 &&
+      seatNode.xriftComponents[0]?.properties.position === undefined &&
+      seatNode.xriftComponents[0]?.properties.rotation === undefined &&
+      (seatNode.xriftComponents[0]?.properties.exitOffset as { forward?: number })
+        ?.forward === 0.6,
+    "Seat must fold its group placement into the Entity and keep exitOffset",
+  );
 
   const dreiPlan = analyzeComponentCode(DREI_R3F_IMPORT_SAMPLE, "world");
   assert(

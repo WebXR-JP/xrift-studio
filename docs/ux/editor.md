@@ -220,7 +220,7 @@ Mesh Rendererの「歩行・当たり判定」から追加、解除、シーン�
 ### 操作中
 
 - 設定でPortalの`instanceId` / `disabled`、TagBoardの`title` / `columns` / `tags` / `scale`を変更する。同じ公式コンポーネントへPropsを即時反映する。通信、ユーザー状態の生成、シーン履歴以外の副作用は起こさない。
-- Interactable、Grabbable、TextInput、BillboardYは、同じオブジェクトの子要素を公式のラッパーで包む。独自の外観は追加しない。
+- Interactable、Grabbable、Seat、TextInput、BillboardYは、同じオブジェクトの子要素を公式のラッパーで包む。独自の外観は追加しない。
 
 ### 成功時
 

@@ -8,6 +8,7 @@ import {
   Mirror,
   Portal,
   ScreenShareDisplay,
+  Seat,
   Skybox,
   SpawnPoint,
   TagBoard,
@@ -26,6 +27,7 @@ import {
   type MirrorProps,
   type PortalProps,
   type ScreenShareDisplayProps,
+  type SeatProps,
   type SkyboxProps,
   type SpawnPointProps,
   type TagBoardProps,
@@ -77,6 +79,9 @@ const PREVIEW_INSTANCE_IMPLEMENTATION: InstanceContextValue = {
     };
   },
   navigateToInstance() {
+    // Studio never performs platform navigation from an editor preview.
+  },
+  navigateToWorld() {
     // Studio never performs platform navigation from an editor preview.
   },
 };
@@ -192,7 +197,16 @@ export function OfficialXriftComponentRenderer({
       );
     case XRIFT_COMPONENT_SCHEMA_IDS.portal: {
       const portalProps = properties as unknown as PortalProps;
-      return <Portal {...portalProps} instanceId={portalProps.instanceId ?? ""} />;
+      return "worldId" in portalProps && typeof portalProps.worldId === "string" ? (
+        <Portal {...portalProps} worldId={portalProps.worldId} />
+      ) : (
+        <Portal
+          {...portalProps}
+          instanceId={
+            (portalProps as { instanceId?: string }).instanceId ?? ""
+          }
+        />
+      );
     }
     default:
       return null;
@@ -288,6 +302,7 @@ export function isOfficialXriftWrapperComponent(
   return (
     component.schemaId === XRIFT_COMPONENT_SCHEMA_IDS.interactable ||
     component.schemaId === XRIFT_COMPONENT_SCHEMA_IDS.grabbable ||
+    component.schemaId === XRIFT_COMPONENT_SCHEMA_IDS.seat ||
     component.schemaId === XRIFT_COMPONENT_SCHEMA_IDS.textInput ||
     component.schemaId === XRIFT_COMPONENT_SCHEMA_IDS.billboardY
   );
@@ -341,6 +356,10 @@ function wrapOfficialComponent(
         </Grabbable>
       );
     }
+    case XRIFT_COMPONENT_SCHEMA_IDS.seat: {
+      const props = properties as unknown as Omit<SeatProps, "children">;
+      return <Seat {...props}>{children}</Seat>;
+    }
     case XRIFT_COMPONENT_SCHEMA_IDS.textInput: {
       const props = properties as unknown as Omit<
         TextInputProps,
@@ -380,6 +399,19 @@ function OfficialWrapperSample({ importName }: { importName: string }) {
           <sphereGeometry args={[0.3, 24, 16]} />
           <meshStandardMaterial color="#f59e0b" />
         </mesh>
+      );
+    case "Seat":
+      return (
+        <group>
+          <mesh position={[0, -0.26, 0]}>
+            <boxGeometry args={[0.18, 0.38, 0.18]} />
+            <meshStandardMaterial color="#8b5e3c" />
+          </mesh>
+          <mesh position={[0, -0.05, 0]}>
+            <boxGeometry args={[0.5, 0.08, 0.5]} />
+            <meshStandardMaterial color="#a2845e" />
+          </mesh>
+        </group>
       );
     case "TextInput":
       return (

@@ -3876,6 +3876,7 @@ export function runVisualCompilerFixtureAssertions(
       disabled: true,
     },
   });
+  const seat = createXriftComponent(XRIFT_COMPONENT_SCHEMA_IDS.seat);
   assert(skybox, "Skybox fixture component could not be created");
   assert(videoScreen, "VideoScreen fixture component could not be created");
   assert(videoPlayer, "VideoPlayer fixture component could not be created");
@@ -3889,6 +3890,7 @@ export function runVisualCompilerFixtureAssertions(
   assert(tagBoard, "TagBoard fixture component could not be created");
   assert(entryLogBoard, "EntryLogBoard fixture component could not be created");
   assert(portal, "Portal fixture component could not be created");
+  assert(seat, "Seat fixture component could not be created");
   const interactiveScene = {
     ...modelScene,
     entities: {
@@ -3926,6 +3928,7 @@ export function runVisualCompilerFixtureAssertions(
           tagBoard,
           entryLogBoard,
           portal,
+          seat,
         ],
       },
     },
@@ -3947,6 +3950,11 @@ export function runVisualCompilerFixtureAssertions(
   assert(interactiveSource.includes("useState"), "Managed runtime state was not generated");
   assert(interactiveSource.includes("onMove={(next)"), "Grabbable callback was not generated");
   assert(interactiveSource.includes("Skybox"), "Skybox import/output was not generated");
+  assert(
+    interactiveSource.includes("<Seat") &&
+      interactiveSource.includes('interactionText={"座る"}'),
+    "Seat wrapper was not generated",
+  );
   assert(
     interactiveSource.includes("reflectionInterval={3}"),
     "Authored Mirror reflection interval was lost from Classic output",
@@ -4000,6 +4008,7 @@ export function runVisualCompilerFixtureAssertions(
             diagnostic.componentId === tagBoard.id ||
             diagnostic.componentId === entryLogBoard.id ||
             diagnostic.componentId === portal.id ||
+            diagnostic.componentId === seat.id ||
             diagnostic.componentId === "component-fixture-grabbable"),
       ),
     "Runtime Skybox, Mirror, and BillboardY must use concrete adapters",

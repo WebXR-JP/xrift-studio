@@ -46,7 +46,7 @@ JSONで編集する場合は、既存の`world`設定に次の項目を追加し
 
 ### 3. ローカルで確認する
 
-Itemを含むworld-componentsとSDK 0.2.0以降が必要です。Studioの現行構成はworld-components 0.57.1です。古いコードプロジェクトでは依存関係を更新してください。
+Itemを含むworld-componentsとSDK 0.2.0以降が必要です。Studioの現行構成はworld-components 0.64.0です。古いコードプロジェクトでは依存関係を更新してください。
 
 `vite.config.ts`で、既存のpluginsに`xriftDev()`を追加します。
 

@@ -151,7 +151,7 @@ CLIはアプリ専用Node.jsから公式の`dist/index.js`を直接実行しま�
 
 CLI 0.26.0に対応し、StudioのSDKは **0.2.0** を維持します。ワールドの公開では、ビルド成果物の`<Item itemId>`と`xrift.json`の`world.items`をCLIが照合します。SDK経由の公開でも、設定にあるItem IDを公開オプションへ引き継ぎます。`xrift.json`のあるプロジェクトルートで実行し、タイトルと既存の除外設定を引き続き渡します。`check world --build` / `check item --build`ではビルドが実行されないため、種類を自動判定する **`check --build`** を維持します。コンパイラと公開用shellの生成には、想定する構成を持つ公式テンプレートを明示します。
 
-Item配置はworld-components **0.57.1** の公式Itemを使います。2026-10-13に[componentsのソース](https://github.com/WebXR-JP/xrift-world-components/tree/16f45d38e76a6312e90098ef9e87bb2dc567b6bc)と[world-templateのソース](https://github.com/WebXR-JP/xrift-world-template/tree/e8b22b78a51cf83748a2019c80e2b639bb137dff)を照合しました。配置ごとの固定`placementId`、`world.items`宣言、`remoteEntry.js`の`./Item`公開、公式の共有依存ラベルを保ちます。生成するVite設定にはSDK 0.2.0の`xriftDev()`を含めます。Studioの編集・Play用ローダーはネイティブで認証情報を付けて配信URLだけを返し、公開物はXRift側のItemLoaderを使います。
+Item配置はworld-components **0.64.0** の公式Itemを使います。2026-11-12に[componentsのソース](https://github.com/WebXR-JP/xrift-world-components/tree/bb5bd1c66cb1565bd039c7328d7b8ef3b4cd03c5)を、2026-10-13に[world-templateのソース](https://github.com/WebXR-JP/xrift-world-template/tree/e8b22b78a51cf83748a2019c80e2b639bb137dff)を照合しました。配置ごとの固定`placementId`、`world.items`宣言、`remoteEntry.js`の`./Item`公開、公式の共有依存ラベルを保ちます。生成するVite設定にはSDK 0.2.0の`xriftDev()`を含めます。Studioの編集・Play用ローダーはネイティブで認証情報を付けて配信URLだけを返し、公開物はXRift側のItemLoaderを使います。
 
 公式Componentsの更新では、エディター・Play・コンパイラ・公開用shell・runtime packageの版を揃えます。更新後は`scripts/check-world-components-alignment.mjs`と`pnpm runtime:shell:check`で整合を確認します。
 
