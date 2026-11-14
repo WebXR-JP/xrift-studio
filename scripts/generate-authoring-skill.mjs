@@ -19,7 +19,7 @@ if (
   Object.keys(guide.routes ?? {}).sort().join(",") !== "assets,blender,r3f" ||
   !Object.values(guide.routes).every((route) => text(route.summary) &&
     Array.isArray(route.instructions) && route.instructions.length > 0 && route.instructions.every(text)) ||
-  Object.keys(guide.design ?? {}).sort().join(",") !== "environment,model-quality,spatial-ui" ||
+  Object.keys(guide.design ?? {}).sort().join(",") !== "environment,model-quality,refinement,spatial-ui" ||
   !Object.values(guide.design).every((topic) => text(topic.summary) &&
     Array.isArray(topic.instructions) && topic.instructions.length > 0 && topic.instructions.every(text)) ||
   !text(guide.design["spatial-ui"].exampleSource)
@@ -36,10 +36,20 @@ const step = (instruction, index) => {
   return `${index + 1}. ${body}`;
 };
 const steps = (instructions) => instructions.map(step).join("\n\n");
-const modelQuality = guide.design["model-quality"];
+// 品質を上げる手順は、接続先から取得しなくても読めるように全文を収録する。
+const embedded = [
+  ["refinement", "既にあるものの品質を上げる"],
+  ["model-quality", "3Dモデルを作る・直す"],
+];
+const embeddedNames = new Set(embedded.map(([name]) => name));
+const sections = embedded.map(([name, heading]) => `## ${heading}
+
+${guide.design[name].summary}${code("get_world_authoring_guide")}の${code(`topic: "${name}"`)}と同じ内容。
+
+${steps(guide.design[name].instructions)}`).join("\n\n");
 const topics = [
   ...Object.entries(guide.routes).map(([name, route]) => `- ${code(name)}（制作方法）: ${route.summary}`),
-  ...Object.entries(guide.design).filter(([name]) => name !== "model-quality")
+  ...Object.entries(guide.design).filter(([name]) => !embeddedNames.has(name))
     .map(([name, topic]) => `- ${code(name)}（設計）: ${topic.summary}`),
 ];
 const content = `---
@@ -51,17 +61,13 @@ description: ${JSON.stringify(guide.skill.description)}
 
 # XRift Studioでワールドと3Dモデルを制作する
 
-最初に${code("list_projects")}と現在のSceneを確認する。接続中のStudioからは${code("get_world_authoring_guide")}で最新の制作ガイドを取得できる。この文書には、その基本方針とモデルの品質の手順を収録している。
+最初に${code("list_projects")}と現在のSceneを確認する。接続中のStudioからは${code("get_world_authoring_guide")}で最新の制作ガイドを取得できる。この文書には、その基本方針と、品質を上げる手順を収録している。
 
 ## 進め方
 
 ${steps(guide.core)}
 
-## 3Dモデルを作る・直す
-
-${modelQuality.summary}${code("get_world_authoring_guide")}の${code('topic: "model-quality"')}と同じ内容。
-
-${steps(modelQuality.instructions)}
+${sections}
 
 ## 必要なときに読むガイド
 

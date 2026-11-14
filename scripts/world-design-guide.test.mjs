@@ -23,7 +23,7 @@ test("design topics are discoverable, read-only and fetched separately from prod
   assert.equal(overview.bundle, ctx.bundle);
   assert.equal(overview.result.design["spatial-ui"].summary, guide.design["spatial-ui"].summary);
   assert.equal(overview.result.design["spatial-ui"].exampleSource, undefined);
-  for (const topic of ["spatial-ui", "environment", "model-quality"]) {
+  for (const topic of ["spatial-ui", "environment", "model-quality", "refinement"]) {
     const result = execute(ctx, request("get_world_authoring_guide", { topic }));
     assert.deepEqual(result.result.design, guide.design[topic]);
     assert.equal(result.result.route, undefined);
@@ -34,17 +34,19 @@ test("design topics are discoverable, read-only and fetched separately from prod
   assert.throws(() => execute(ctx, request("get_world_authoring_guide", { topic: "unknown" })), /topic/);
 });
 
-test("model quality steps are part of the shared core, load in full on demand and name only real Studio tools", async () => {
+test("quality steps are part of the shared core, load in full on demand and name only real Studio tools", async () => {
   const ctx = context(createPrototypeProject("world", "model-quality-isolated-fixture"));
   const overview = execute(ctx, request("get_world_authoring_guide", {})).result;
-  for (const expected of ["形を先に作って表面を後から合わせる", "普通に見る距離で分かる大きな欠点から直す", "直す前と同じ視点と照明で撮影して見比べる", "topic: model-quality"]) {
+  for (const expected of ["欠点が出る状況を再現して", "原因に合う最小の単位を直す", "形を先に作って表面を後から合わせる", "直す前と同じ視点と照明で撮影して見比べる", "直す前後に同じ操作を与えて結果を比べ", "基準を満たしたものだけを完成として扱い", "topic: refinement", "topic: model-quality"]) {
     assert.ok(overview.core.some(line => line.includes(expected)), expected);
   }
-  assert.equal(overview.design["model-quality"].summary, guide.design["model-quality"].summary);
-  assert.equal(overview.design["model-quality"].instructions, undefined);
+  for (const topic of ["model-quality", "refinement"]) {
+    assert.equal(overview.design[topic].summary, guide.design[topic].summary);
+    assert.equal(overview.design[topic].instructions, undefined);
+  }
   const { XRIFT_MCP_TOOLS } = await load("mcp-tool-registry");
   const known = new Set(XRIFT_MCP_TOOLS.map(tool => tool.name));
-  const authored = [...guide.core, ...guide.design["model-quality"].instructions, ...guide.routes.blender.instructions].join(" ");
+  const authored = [...guide.core, ...Object.values(guide.design).flatMap(topic => topic.instructions), ...Object.values(guide.routes).flatMap(route => route.instructions)].join(" ");
   const named = new Set(authored.match(/\b[a-z]+(?:_[a-z0-9]+)+\b/g));
   assert.ok(named.size > 0);
   for (const name of named) assert.ok(known.has(name), `unknown tool in authoring guidance: ${name}`);
