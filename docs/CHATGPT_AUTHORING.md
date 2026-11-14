@@ -70,6 +70,10 @@ Piが`get_modeling_tools`、`create_blender_model`、`get_model_asset`、`place_
 
 木やベンチなど繰り返し置くものは、一つを仕上げて`create_prefab`でPrefabにし、残りは`place_asset`で配置する。配置ごとに別のEntityとして作ると、利用者が後で直すときに複製の数だけ同じ編集を繰り返すことになる。`get_editor_context`の`prefabs`で既存のPrefabを確認し、元のEntityを編集した後は`update_prefab_from_source`で全配置へ反映する。元のEntityを変えた書き込みの結果は`prefabsPendingUpdate`で未反映を示すため、反映し忘れたまま完成確認へ進みにくい。一つだけ変える配置や、元のEntityを削除したPrefabは`unpack_prefab_instance`で展開する。`analyze_performance`は配置したPrefabを展開して数える。共通ガイドと指示文の両方でこの手順を伝え、進捗には「プレハブの作成」「プレハブへの反映」「プレハブの展開」と表示する。
 
+既にあるモデル、動作、案内の品質を上げるときは、共通ガイドの`refinement`を読む。依頼と基準版をそろえ、欠点が出る状況を再現して、原因に合う最小の単位を直す。直す前後を同じ視点や同じ操作で比べ、保ったもの、直した箇所、確認した条件、残る点を報告する。制作チャットはPlayを開始できないため、動作の比較は`simulate_interactivity_asset`で確かめられる範囲に限り、残りは利用者が確かめる項目として報告する。
+
+主役のモデルを作り込むときや、既存モデルの見た目を直すときは、共通ガイドの`model-quality`も読む。対象のModel・Entity・見る距離と保つ特徴を先に決め、`set_scene_view_camera`と`capture_scene_view`で欠点が出る視点から実際の描画を見る。資料から形と比率を拾い、形を先に作って表面を後から合わせる。普通に見る距離で目立つ欠点から直し、取り込んだ結果を同じ視点の前後の画像で比べる。`reimport_model_asset`や`set_entity_model`で既存の配置を保ち、直した箇所、残る欠点、未確認の環境を報告する。この流れの要点は共通ガイドの基本方針にも含めるため、topicを読まない制作にも届く。制作チャットは参考画像の添付、画像生成、Playの開始に対応しないため、資料のない箇所は推定として報告し、動きの途中の確認は利用者が確かめる項目に含める。この手順はガイドの文章であり、Studioは前後の比較を機械的には検査しない。
+
 ### 空間UIと環境の設計
 
 展示・教材・案内・メニューでは、共通ガイドの`spatial-ui`を読む。文字の階層、カードの余白、読む距離、立体見本と回遊を一緒に考える。ワールド全体や背景の変更では`environment`も読み、Skybox、IBL、照明と材質を調整する。ガイドの正本は`world-authoring-guide.json`で、MCPと制作スキルにも同じ内容を渡す。詳細とTSX例は必要なtopicだけ取得する。

@@ -535,11 +535,11 @@ function readProjectHealth(
 
 function readWorldAuthoringGuide(context: XriftMcpEditorContext, args: Record<string, unknown>): XriftMcpEditorToolOutcome {
   const topic = args.topic ?? "overview";
-  if (topic !== "overview" && topic !== "r3f" && topic !== "assets" && topic !== "blender" && topic !== "spatial-ui" && topic !== "environment") invalidArgument("topic", "overview, r3f, assets, blender, spatial-ui or environment");
+  if (topic !== "overview" && topic !== "r3f" && topic !== "assets" && topic !== "blender" && topic !== "spatial-ui" && topic !== "environment" && topic !== "model-quality" && topic !== "refinement") invalidArgument("topic", "overview, r3f, assets, blender, spatial-ui, environment, model-quality or refinement");
   const guide = topic === "overview"
     ? { core: worldAuthoringGuide.core, routes: Object.fromEntries(Object.entries(worldAuthoringGuide.routes).map(([name, route]) => [name, { summary: route.summary }])),
         design: Object.fromEntries(Object.entries(worldAuthoringGuide.design).map(([name, guide]) => [name, { summary: guide.summary }])) }
-    : topic === "spatial-ui" || topic === "environment"
+    : topic === "spatial-ui" || topic === "environment" || topic === "model-quality" || topic === "refinement"
       ? { design: worldAuthoringGuide.design[topic] }
       : { route: worldAuthoringGuide.routes[topic] };
   return unchanged(context, { version: worldAuthoringGuide.version, topic, ...structuredClone(guide) }, "制作方法のガイドを取得しました");
