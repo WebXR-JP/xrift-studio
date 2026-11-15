@@ -8236,7 +8236,7 @@ const {useLayoutEffect: useLayoutEffect$2,useMemo: useMemo$6,useRef: useRef$6} =
 
 const {useFrame: useFrame$4,useThree: useThree$5} = await importShared('@react-three/fiber');
 
-const {AmbientLight: AmbientLight$2,BasicShadowMap,DirectionalLight: DirectionalLight$1,HemisphereLight: HemisphereLight$1,Object3D: Object3D$1,PCFShadowMap,PCFSoftShadowMap,PointLight: PointLight$1,RectAreaLight: RectAreaLight$1,SpotLight: SpotLight$1,VSMShadowMap} = await importShared('three');
+const {AmbientLight: AmbientLight$2,BasicShadowMap,DirectionalLight: DirectionalLight$1,HemisphereLight: HemisphereLight$1,Object3D: Object3D$2,PCFShadowMap,PCFSoftShadowMap,PointLight: PointLight$1,RectAreaLight: RectAreaLight$1,SpotLight: SpotLight$1,VSMShadowMap} = await importShared('three');
 
 const XRIFT_LIGHT_RUNTIME_USER_DATA_KEY = "xriftLightRuntime";
 function XriftShadowMapSettings({ type }) {
@@ -9831,6 +9831,7 @@ var VRMExpressionMaterialColorType = {
   Color: "color",
   EmissionColor: "emissionColor",
   ShadeColor: "shadeColor",
+  MatcapColor: "matcapColor",
   RimColor: "rimColor",
   OutlineColor: "outlineColor"
 };
@@ -10397,6 +10398,11 @@ vrmBindingVRMExpressionLoaderPlugin.v0v1PresetNameMap = {
   neutral: "neutral"
 };
 var VRMExpressionLoaderPlugin = vrmBindingVRMExpressionLoaderPlugin;
+var VRMExpressionOverrideType = {
+  None: "none",
+  Block: "block",
+  Blend: "blend"
+};
 var vrmBindingVRMFirstPerson = class vrmClassVRMFirstPerson2 {
   /**
    * Create a new VRMFirstPerson object.
@@ -10735,6 +10741,12 @@ var VRMFirstPersonLoaderPlugin = class {
     }
   }
 };
+var VRMFirstPersonMeshAnnotationType = {
+  Auto: "auto",
+  Both: "both",
+  ThirdPersonOnly: "thirdPersonOnly",
+  FirstPersonOnly: "firstPersonOnly"
+};
 var _v3A = new THREE6.Vector3();
 var _v3B = new THREE6.Vector3();
 var _quatA = new THREE6.Quaternion();
@@ -10825,6 +10837,63 @@ var VRMHumanBoneList = [
   "rightLittleIntermediate",
   "rightLittleDistal"
 ];
+var VRMHumanBoneName = {
+  Hips: "hips",
+  Spine: "spine",
+  Chest: "chest",
+  UpperChest: "upperChest",
+  Neck: "neck",
+  Head: "head",
+  LeftEye: "leftEye",
+  RightEye: "rightEye",
+  Jaw: "jaw",
+  LeftUpperLeg: "leftUpperLeg",
+  LeftLowerLeg: "leftLowerLeg",
+  LeftFoot: "leftFoot",
+  LeftToes: "leftToes",
+  RightUpperLeg: "rightUpperLeg",
+  RightLowerLeg: "rightLowerLeg",
+  RightFoot: "rightFoot",
+  RightToes: "rightToes",
+  LeftShoulder: "leftShoulder",
+  LeftUpperArm: "leftUpperArm",
+  LeftLowerArm: "leftLowerArm",
+  LeftHand: "leftHand",
+  RightShoulder: "rightShoulder",
+  RightUpperArm: "rightUpperArm",
+  RightLowerArm: "rightLowerArm",
+  RightHand: "rightHand",
+  LeftThumbMetacarpal: "leftThumbMetacarpal",
+  LeftThumbProximal: "leftThumbProximal",
+  LeftThumbDistal: "leftThumbDistal",
+  LeftIndexProximal: "leftIndexProximal",
+  LeftIndexIntermediate: "leftIndexIntermediate",
+  LeftIndexDistal: "leftIndexDistal",
+  LeftMiddleProximal: "leftMiddleProximal",
+  LeftMiddleIntermediate: "leftMiddleIntermediate",
+  LeftMiddleDistal: "leftMiddleDistal",
+  LeftRingProximal: "leftRingProximal",
+  LeftRingIntermediate: "leftRingIntermediate",
+  LeftRingDistal: "leftRingDistal",
+  LeftLittleProximal: "leftLittleProximal",
+  LeftLittleIntermediate: "leftLittleIntermediate",
+  LeftLittleDistal: "leftLittleDistal",
+  RightThumbMetacarpal: "rightThumbMetacarpal",
+  RightThumbProximal: "rightThumbProximal",
+  RightThumbDistal: "rightThumbDistal",
+  RightIndexProximal: "rightIndexProximal",
+  RightIndexIntermediate: "rightIndexIntermediate",
+  RightIndexDistal: "rightIndexDistal",
+  RightMiddleProximal: "rightMiddleProximal",
+  RightMiddleIntermediate: "rightMiddleIntermediate",
+  RightMiddleDistal: "rightMiddleDistal",
+  RightRingProximal: "rightRingProximal",
+  RightRingIntermediate: "rightRingIntermediate",
+  RightRingDistal: "rightRingDistal",
+  RightLittleProximal: "rightLittleProximal",
+  RightLittleIntermediate: "rightLittleIntermediate",
+  RightLittleDistal: "rightLittleDistal"
+};
 var VRMHumanBoneParentMap = {
   hips: null,
   spine: "hips",
@@ -12254,6 +12323,10 @@ var VRMLookAtLoaderPlugin = class {
     return lookAt;
   }
 };
+var VRMLookAtTypeName = {
+  Bone: "bone",
+  Expression: "expression"
+};
 function resolveURL(url, path) {
   if (typeof url !== "string" || url === "") return "";
   if (/^https?:\/\//i.test(path) && /^\//.test(url)) {
@@ -12448,6 +12521,44 @@ var VRMCore = class {
     }
   }
 };
+var VRMCoreLoaderPlugin = class {
+  get name() {
+    return "VRMC_vrm";
+  }
+  constructor(parser, options) {
+    var _a, _b, _c, _d, _e;
+    this.parser = parser;
+    const helperRoot = options == null ? void 0 : options.helperRoot;
+    const autoUpdateHumanBones = options == null ? void 0 : options.autoUpdateHumanBones;
+    this.expressionPlugin = (_a = options == null ? void 0 : options.expressionPlugin) != null ? _a : new VRMExpressionLoaderPlugin(parser);
+    this.firstPersonPlugin = (_b = options == null ? void 0 : options.firstPersonPlugin) != null ? _b : new VRMFirstPersonLoaderPlugin(parser);
+    this.humanoidPlugin = (_c = options == null ? void 0 : options.humanoidPlugin) != null ? _c : new VRMHumanoidLoaderPlugin(parser, { helperRoot, autoUpdateHumanBones });
+    this.lookAtPlugin = (_d = options == null ? void 0 : options.lookAtPlugin) != null ? _d : new VRMLookAtLoaderPlugin(parser, { helperRoot });
+    this.metaPlugin = (_e = options == null ? void 0 : options.metaPlugin) != null ? _e : new VRMMetaLoaderPlugin(parser);
+  }
+  afterRoot(gltf) {
+    return __async2(this, null, function* () {
+      yield this.metaPlugin.afterRoot(gltf);
+      yield this.humanoidPlugin.afterRoot(gltf);
+      yield this.expressionPlugin.afterRoot(gltf);
+      yield this.lookAtPlugin.afterRoot(gltf);
+      yield this.firstPersonPlugin.afterRoot(gltf);
+      const meta = gltf.userData.vrmMeta;
+      const humanoid = gltf.userData.vrmHumanoid;
+      if (meta && humanoid) {
+        const vrmCore = new VRMCore({
+          scene: gltf.scene,
+          expressionManager: gltf.userData.vrmExpressionManager,
+          firstPerson: gltf.userData.vrmFirstPerson,
+          humanoid,
+          lookAt: gltf.userData.vrmLookAt,
+          meta
+        });
+        gltf.userData.vrmCore = vrmCore;
+      }
+    });
+  }
+};
 
 // src/VRM.ts
 var VRM = class extends VRMCore {
@@ -12601,9 +12712,23 @@ var MToonMaterialDebugMode = {
   /**
    * Render normally.
    */
-  None: "none"};
+  None: "none",
+  /**
+   * Visualize normals of the surface.
+   */
+  Normal: "normal",
+  /**
+   * Visualize lit/shade of the surface.
+   */
+  LitShadeRate: "litShadeRate",
+  /**
+   * Visualize UV of the surface.
+   */
+  UV: "uv"
+};
 var MToonMaterialOutlineWidthMode = {
   None: "none",
+  WorldCoordinates: "worldCoordinates",
   ScreenCoordinates: "screenCoordinates"
 };
 var encodingColorSpaceMap = {
@@ -14497,7 +14622,7 @@ var VRMSpringBoneJointHelper = class extends THREE92.Group {
     super.updateMatrixWorld(force);
   }
 };
-var VRMSpringBoneCollider = class extends THREE102.Object3D {
+var VRMSpringBoneCollider$1 = class VRMSpringBoneCollider extends THREE102.Object3D {
   constructor(shape) {
     super();
     this.colliderMatrix = new THREE102.Matrix4();
@@ -14563,7 +14688,7 @@ var _v3B23 = new THREE132.Vector3();
 var vrmSpringBoneWorldSpacePosition = new THREE132.Vector3();
 var _nextTail = new THREE132.Vector3();
 var _matA2 = new THREE132.Matrix4();
-var VRMSpringBoneJoint = class {
+var VRMSpringBoneJoint$1 = class VRMSpringBoneJoint {
   /**
    * Create a new VRMSpringBone.
    *
@@ -14767,7 +14892,7 @@ function lowestCommonAncestor(objects) {
   }
   return null;
 }
-var VRMSpringBoneManager = class {
+var VRMSpringBoneManager$1 = class VRMSpringBoneManager {
   constructor() {
     this._joints = /* @__PURE__ */ new Set();
     this._sortedJoints = [];
@@ -14988,7 +15113,7 @@ var vrmBindingVRMSpringBoneLoaderPlugin = class vrmClassVRMSpringBoneLoaderPlugi
       if (!isSpringBoneUsed) {
         return null;
       }
-      const manager = new VRMSpringBoneManager();
+      const manager = new VRMSpringBoneManager$1();
       const threeNodes = yield gltf.parser.getDependencies("node");
       const extension = (_b = json.extensions) == null ? void 0 : _b[vrmClassVRMSpringBoneLoaderPlugin2.EXTENSION_NAME];
       if (!extension) {
@@ -15134,7 +15259,7 @@ var vrmBindingVRMSpringBoneLoaderPlugin = class vrmClassVRMSpringBoneLoaderPlugi
       if (!schemaBoneGroups) {
         return null;
       }
-      const manager = new VRMSpringBoneManager();
+      const manager = new VRMSpringBoneManager$1();
       const threeNodes = yield gltf.parser.getDependencies("node");
       const colliderGroups = (_c = schemaSecondaryAnimation.colliderGroups) == null ? void 0 : _c.map(
         (schemaColliderGroup, iColliderGroup) => {
@@ -15225,7 +15350,7 @@ var vrmBindingVRMSpringBoneLoaderPlugin = class vrmClassVRMSpringBoneLoaderPlugi
     });
   }
   _importJoint(node, child, setting, colliderGroupsForSpring) {
-    const springBone = new VRMSpringBoneJoint(node, child, setting, colliderGroupsForSpring);
+    const springBone = new VRMSpringBoneJoint$1(node, child, setting, colliderGroupsForSpring);
     if (this.jointHelperRoot) {
       const helper = new VRMSpringBoneJointHelper(springBone);
       this.jointHelperRoot.add(helper);
@@ -15235,7 +15360,7 @@ var vrmBindingVRMSpringBoneLoaderPlugin = class vrmClassVRMSpringBoneLoaderPlugi
   }
   _importSphereCollider(destination, params) {
     const shape = new VRMSpringBoneColliderShapeSphere(params);
-    const collider = new VRMSpringBoneCollider(shape);
+    const collider = new VRMSpringBoneCollider$1(shape);
     destination.add(collider);
     if (this.colliderHelperRoot) {
       const helper = new VRMSpringBoneColliderHelper(collider);
@@ -15246,7 +15371,7 @@ var vrmBindingVRMSpringBoneLoaderPlugin = class vrmClassVRMSpringBoneLoaderPlugi
   }
   _importCapsuleCollider(destination, params) {
     const shape = new VRMSpringBoneColliderShapeCapsule(params);
-    const collider = new VRMSpringBoneCollider(shape);
+    const collider = new VRMSpringBoneCollider$1(shape);
     destination.add(collider);
     if (this.colliderHelperRoot) {
       const helper = new VRMSpringBoneColliderHelper(collider);
@@ -15257,7 +15382,7 @@ var vrmBindingVRMSpringBoneLoaderPlugin = class vrmClassVRMSpringBoneLoaderPlugi
   }
   _importPlaneCollider(destination, params) {
     const shape = new VRMSpringBoneColliderShapePlane(params);
-    const collider = new VRMSpringBoneCollider(shape);
+    const collider = new VRMSpringBoneCollider$1(shape);
     destination.add(collider);
     if (this.colliderHelperRoot) {
       const helper = new VRMSpringBoneColliderHelper(collider);
@@ -16085,6 +16210,63 @@ VRMUtils.rotateVRM0 = rotateVRM0;
  * @pixiv/three-vrm-springbone is distributed under MIT License
  * https://github.com/pixiv/three-vrm/blob/release/LICENSE
  */
+
+const threeVrm = /*#__PURE__*/Object.freeze(/*#__PURE__*/Object.defineProperty({
+    __proto__: null,
+    MToonMaterial,
+    MToonMaterialDebugMode,
+    MToonMaterialLoaderPlugin,
+    MToonMaterialOutlineWidthMode,
+    VRM,
+    VRMAimConstraint,
+    VRMCore,
+    VRMCoreLoaderPlugin,
+    VRMExpression,
+    VRMExpressionLoaderPlugin,
+    VRMExpressionManager,
+    VRMExpressionMaterialColorBind,
+    VRMExpressionMaterialColorType,
+    VRMExpressionMorphTargetBind,
+    VRMExpressionOverrideType,
+    VRMExpressionPresetName,
+    VRMExpressionTextureTransformBind,
+    VRMFirstPerson,
+    VRMFirstPersonLoaderPlugin,
+    VRMFirstPersonMeshAnnotationType,
+    VRMHumanBoneList,
+    VRMHumanBoneName,
+    VRMHumanBoneParentMap,
+    VRMHumanoid,
+    VRMHumanoidHelper,
+    VRMHumanoidLoaderPlugin,
+    VRMLoaderPlugin,
+    VRMLookAt,
+    VRMLookAtBoneApplier,
+    VRMLookAtExpressionApplier,
+    VRMLookAtHelper,
+    VRMLookAtLoaderPlugin,
+    VRMLookAtRangeMap,
+    VRMLookAtTypeName,
+    VRMMetaLoaderPlugin,
+    VRMNodeConstraint,
+    VRMNodeConstraintHelper,
+    VRMNodeConstraintLoaderPlugin,
+    VRMNodeConstraintManager,
+    VRMRequiredHumanBoneName,
+    VRMRollConstraint,
+    VRMRotationConstraint,
+    VRMSpringBoneCollider: VRMSpringBoneCollider$1,
+    VRMSpringBoneColliderHelper,
+    VRMSpringBoneColliderShape,
+    VRMSpringBoneColliderShapeCapsule,
+    VRMSpringBoneColliderShapePlane,
+    VRMSpringBoneColliderShapeSphere,
+    VRMSpringBoneJoint: VRMSpringBoneJoint$1,
+    VRMSpringBoneJointHelper,
+    VRMSpringBoneLoaderPlugin,
+    VRMSpringBoneManager: VRMSpringBoneManager$1,
+    VRMUtils
+}, Symbol.toStringTag, { value: 'Module' }));
 
 const __vite_import_meta_env__ = {"BASE_URL": "/"};
 const TEXT_FONT_DIRECTORY = "xrift-studio/vendor/text-fonts";
@@ -17131,6 +17313,148 @@ function updateMToonMaterials(root, delta, frameNumber, frameSource) {
             }
         }
     });
+}
+
+const {Object3D: Object3D$1} = await importShared('three');
+const { VRMSpringBoneCollider, VRMSpringBoneJoint, VRMSpringBoneManager } = threeVrm;
+/** userData survives Object3D.clone(), so the id finds the same object in any copy. */
+const TARGET_KEY = "xriftVrmSpringBoneTarget";
+/** A hidden tab resumes with a long frame. Cap it like the animation mixers do. */
+const MAX_STEP_SECONDS = 0.1;
+const setups = new WeakMap();
+/**
+ * Object3D.clone() builds a collider without its shape, and the collider's
+ * updateWorldMatrix() then reads `shape.offset` and throws. Box3.setFromObject()
+ * and getWorldPosition() reach it, so one cloned avatar took the editor down.
+ * The copy keeps the shape, which no simulation mutates.
+ */
+class CloneableVRMSpringBoneCollider extends VRMSpringBoneCollider {
+    copy(source, recursive) {
+        super.copy(source, recursive);
+        if (source instanceof VRMSpringBoneCollider) {
+            this.shape = source.shape;
+        }
+        return this;
+    }
+}
+/**
+ * Records a loaded VRM's spring bones so drawn clones can be bound to them.
+ *
+ * Call right after loading, before anything clones the scene. Nothing updates
+ * the loaded objects, so three-vrm's joints on them are released: its center
+ * cache would otherwise be copied into every clone, and a bone it owns stops
+ * following its own position, rotation and scale.
+ */
+function prepareVrmSpringBones(scene, manager) {
+    scene.traverse((object) => {
+        if (object instanceof VRMSpringBoneCollider && !(object instanceof CloneableVRMSpringBoneCollider)) {
+            Object.setPrototypeOf(object, CloneableVRMSpringBoneCollider.prototype);
+        }
+    });
+    if (!manager || setups.has(scene))
+        return;
+    const targetIds = new Map();
+    const target = (object) => {
+        let id = targetIds.get(object);
+        if (id === undefined) {
+            id = targetIds.size;
+            targetIds.set(object, id);
+            object.userData[TARGET_KEY] = id;
+        }
+        return id;
+    };
+    const groupIds = new Map();
+    const colliderGroups = [];
+    const joints = Array.from(manager.joints, (joint) => ({
+        bone: target(joint.bone),
+        child: joint.child ? target(joint.child) : null,
+        center: joint.center ? target(joint.center) : null,
+        settings: { ...joint.settings, gravityDir: joint.settings.gravityDir.clone() },
+        colliderGroups: joint.colliderGroups.map((group) => {
+            let id = groupIds.get(group);
+            if (id === undefined) {
+                id = colliderGroups.length;
+                groupIds.set(group, id);
+                colliderGroups.push({ name: group.name, colliders: group.colliders.map(target) });
+            }
+            return id;
+        }),
+    }));
+    for (const joint of manager.joints) {
+        joint.center = null;
+        joint.bone.matrixAutoUpdate = Object3D$1.DEFAULT_MATRIX_AUTO_UPDATE;
+    }
+    setups.set(scene, { joints, colliderGroups });
+}
+/**
+ * Binds the spring bones recorded for `source` to their copies under `root`.
+ * Returns null when `root` holds none of them: a model without spring bones,
+ * or one expanded node that does not contain the moving bones.
+ */
+function bindVrmSpringBones(source, root) {
+    const setup = setups.get(source);
+    if (!setup || setup.joints.length === 0)
+        return null;
+    const targets = new Map();
+    root.traverse((object) => {
+        const id = object.userData[TARGET_KEY];
+        if (typeof id === "number" && !targets.has(id))
+            targets.set(id, object);
+    });
+    const colliderGroups = setup.colliderGroups.map((group) => ({
+        name: group.name,
+        colliders: group.colliders.flatMap((id) => {
+            const collider = targets.get(id);
+            return collider instanceof VRMSpringBoneCollider ? [collider] : [];
+        }),
+    }));
+    const manager = new VRMSpringBoneManager();
+    const centers = new Set();
+    for (const joint of setup.joints) {
+        const bone = targets.get(joint.bone);
+        const child = joint.child === null ? null : targets.get(joint.child);
+        if (!bone || child === undefined)
+            continue;
+        const bound = new VRMSpringBoneJoint(bone, child, joint.settings, joint.colliderGroups.flatMap((index) => colliderGroups[index] ?? []));
+        const center = joint.center === null ? undefined : targets.get(joint.center);
+        if (center) {
+            // A copy of a bound clone carries a JSON copy of three-vrm's inverse
+            // cache, which its center setter would mistake for a live one.
+            if (!centers.has(center)) {
+                centers.add(center);
+                delete center.userData.inverseCacheProxy;
+            }
+            bound.center = center;
+        }
+        manager.addJoint(bound);
+    }
+    if (manager.joints.size === 0)
+        return null;
+    manager.setInitState();
+    let settled = false;
+    return {
+        manager,
+        update(delta) {
+            if (!settled) {
+                root.updateWorldMatrix(true, true);
+                manager.reset();
+                settled = true;
+                return;
+            }
+            manager.update(Math.min(Math.max(delta, 0), MAX_STEP_SECONDS));
+        },
+        reset() {
+            manager.reset();
+            settled = false;
+        },
+        dispose() {
+            manager.reset();
+            for (const joint of manager.joints) {
+                joint.center = null;
+                joint.bone.matrixAutoUpdate = Object3D$1.DEFAULT_MATRIX_AUTO_UPDATE;
+            }
+        },
+    };
 }
 
 /**
@@ -19506,6 +19830,7 @@ class XriftThreeLoader {
     const animations = [];
     const animationClipsByEntity = /* @__PURE__ */ new Map();
     const interactionAnimationCuesByEntity = /* @__PURE__ */ new Map();
+    const springBones = [];
     const spawnPoints = /* @__PURE__ */ new Map();
     for (const entity of Object.values(entryScene.entities)) {
       const group = new Group$1();
@@ -19551,6 +19876,7 @@ class XriftThreeLoader {
           animations,
           animationClipsByEntity,
           interactionAnimationCuesByEntity,
+          springBones,
           diagnostics
         });
         if (object) {
@@ -19576,6 +19902,7 @@ class XriftThreeLoader {
       animations,
       animationClipsByEntity,
       interactionAnimationCuesByEntity,
+      springBones,
       entities,
       spawnPoints,
       textures,
@@ -19646,8 +19973,10 @@ class XriftThreeLoader {
       vrmUtils.rotateVRM0(vrm);
       vrm.materials?.forEach((material) => material.update?.(0));
     }
-    if (isVrm)
+    if (isVrm) {
       removeNativeMToonOutlines(gltf.scene);
+      prepareVrmSpringBones(gltf.scene, gltf.userData.vrmSpringBoneManager);
+    }
     tagSourceMaterialIndices(gltf);
     stampObjectTimeUniforms(gltf.scene);
     gltf.scene.scale.multiplyScalar(asset.scale);
@@ -19818,6 +20147,9 @@ class XriftThreeLoader {
       const instance = selectRuntimeSourceNode(clone(loaded.root), component.geometry.sourceNodeIndex);
       applyModelMaterials(instance, loaded, component, input.manifest, input.materials, input.textures);
       applyModelPose(instance, component);
+      const springBones = bindVrmSpringBones(loaded.root, instance);
+      if (springBones)
+        input.springBones.push(springBones);
       instance.traverse((object) => {
         if (object instanceof Mesh$1) {
           object.castShadow = component.castShadow;
@@ -20202,6 +20534,8 @@ function configureMaterialTexture(source, textureInfo) {
   return texture;
 }
 function disposeXriftLoadResult(result) {
+  for (const springBones of result.springBones)
+    springBones.dispose();
   const geometries = /* @__PURE__ */ new Set();
   const materials = /* @__PURE__ */ new Set();
   const textures = /* @__PURE__ */ new Set();
@@ -25755,6 +26089,9 @@ function XriftRuntimeAnimations({ result }) {
             entry.mixer.update(Math.min(delta, 0.1));
             entry.bridge?.sample();
         }
+        // After the clips, so the springs follow this frame's animated parents.
+        for (const springBones of result.springBones)
+            springBones.update(delta);
     });
     return null;
 }
