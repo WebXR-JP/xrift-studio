@@ -141,7 +141,7 @@ import { runGltfDerivedAssetFixtureAssertions } from "../src/lib/visual-editor/g
 import { runOpenBrushMaterialCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/open-brush-material.fixture.ts";
 import { compileNativeOpenBrushModelTypecheckWorld } from "../src/lib/visual-editor/compiler/open-brush-model.fixture.ts";
 import { runMToonMaterialCompilerFixtureAssertions, runMToonThreeRuntimeFixtureAssertions } from "../src/lib/visual-editor/compiler/mtoon-material.fixture.ts";
-import { runVrmAvatarRuntimeFixtureAssertions } from "../src/lib/visual-editor/compiler/vrm-avatar.fixture.ts";
+import { compileVrmAvatarWorld, runVrmAvatarRuntimeFixtureAssertions, runVrmSpringBoneFixtureAssertions } from "../src/lib/visual-editor/compiler/vrm-avatar.fixture.ts";
 import { runPrimitiveGeometryCompilerFixtureAssertions } from "../src/lib/visual-editor/compiler/primitive-geometry.fixture.ts";
 import { runSupportReportFixtureAssertions } from "../src/lib/support-report.fixture.ts";
 import { runXriftCliFixtureAssertions } from "../src/lib/xrift-cli.fixture.ts";
@@ -382,6 +382,7 @@ try {
     ["MToon assigned material compiler", runMToonMaterialCompilerFixtureAssertions],
     ["MToon Three manifest runtime", runMToonThreeRuntimeFixtureAssertions],
     ["VRM 0.x and 1.0 native avatar runtime", runVrmAvatarRuntimeFixtureAssertions],
+    ["VRM spring bones on drawn clones", runVrmSpringBoneFixtureAssertions],
     ["runtime package compatibility", runRuntimePackageFixtureAssertions],
     ["model material compiler", runModelMaterialCompilerFixtures],
     ["terrain", runTerrainFixtureAssertions],
@@ -780,6 +781,17 @@ async function runStagedWorldTypecheck() {
     postprocessingOnly.overlayFiles,
     'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
   );
+  // A VRM avatar ships the pinned three-vrm, the MToon runtime and the spring
+  // bones; none of them appears in the feature-rich world below.
+  for (const version of ["0", "1"]) {
+    const vrmWorld = compileVrmAvatarWorld(version);
+    assert(vrmWorld.canStage, `VRM ${version} avatar world must be stageable`);
+    await typecheckWithTemplateOptions(
+      `vrm-${version}-avatar`,
+      vrmWorld.overlayFiles,
+      'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
+    );
+  }
   const compiled = compileStagedTypecheckWorld();
   const blocking = compiled.diagnostics.filter(
     (diagnostic) => diagnostic.severity === "blocking",

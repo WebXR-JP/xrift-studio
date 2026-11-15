@@ -1,15 +1,25 @@
-import { VRMLoaderPlugin, type MToonMaterial, type VRM } from "@pixiv/three-vrm";
+import { VRMLoaderPlugin, type MToonMaterial, type VRM, type VRMSpringBoneManager } from "@pixiv/three-vrm";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { Mesh, Quaternion, SkinnedMesh, SphereGeometry, Vector3 } from "three";
+import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
+import { Box3, Group, Mesh, Quaternion, SkinnedMesh, SphereGeometry, Vector3, type Object3D } from "three";
 import { normalizeModelImportSettings, type ModelAsset } from "../asset-manifest";
 import { createPrototypeProject } from "../prototype-project";
 import { compileVisualProject } from "./compile";
 import { COMPILER_MTOON_PACKAGE_SPEC } from "./runtime-packages";
 import { XriftThreeLoader, disposeXriftLoadResult } from "../../../../packages/xrift-studio-runtime/src/three/index";
+import { bindVrmSpringBones, prepareVrmSpringBones } from "../../../../packages/xrift-studio-runtime/src/vrm-spring-bone";
 import type { XriftRuntimeManifest } from "../../../../packages/xrift-studio-runtime/src/schema";
 
-/** A real, self-contained VRM avatar with required human bones, skin and morph. */
-export function createVrmAvatarFixtureBytes(version: "0" | "1", shape: "triangle" | "sphere" = "triangle"): Uint8Array {
+/**
+ * A real, self-contained VRM avatar with required human bones, skin and morph.
+ * `springBones` adds a hair strand on the head that gravity swings across a
+ * head collider, the way exported avatars carry hair and clothes.
+ */
+export function createVrmAvatarFixtureBytes(
+  version: "0" | "1",
+  shape: "triangle" | "sphere" = "triangle",
+  options: { springBones?: boolean } = {},
+): Uint8Array {
   const sphere = shape === "sphere" ? new SphereGeometry(0.35, 16, 12).toNonIndexed() : undefined;
   const positions = sphere?.getAttribute("position").array as Float32Array | undefined ?? new Float32Array([-0.3, 0, 0, 0.3, 0, 0, 0, 0.6, 0]);
   const normals = sphere?.getAttribute("normal").array as Float32Array | undefined ?? new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]);
@@ -36,7 +46,7 @@ export function createVrmAvatarFixtureBytes(version: "0" | "1", shape: "triangle
   const nodes = [
     { name: "hips", translation: [0, 1, 0], children: [1, 3, 6] },
     { name: "spine", translation: [0, 0.2, 0], children: [2, 9, 12] },
-    { name: "head", translation: [0, 0.4, 0] },
+    { name: "head", translation: [0, 0.4, 0], ...(options.springBones ? { children: [16] } : {}) },
     { name: "leftUpperLeg", translation: [-0.1, 0, 0], children: [4] },
     { name: "leftLowerLeg", translation: [0, -0.4, 0], children: [5] },
     { name: "leftFoot", translation: [0, -0.4, 0] },
@@ -50,7 +60,14 @@ export function createVrmAvatarFixtureBytes(version: "0" | "1", shape: "triangle
     { name: "rightLowerArm", translation: [0.3, 0, 0], children: [14] },
     { name: "rightHand", translation: [0.25, 0, 0] },
     { name: "Body", mesh: 0, skin: 0 },
+    // The tip leans forward slightly so gravity has a side to pull it to.
+    ...(options.springBones
+      ? [{ name: "hair", translation: [0, 0.1, 0], children: [17] }, { name: "hairTip", translation: [0, 0.15, 0.02] }]
+      : []),
   ];
+  // Soft, heavy hair, so a couple of seconds of gravity visibly swing it. The
+  // head collider sits on the strand's arc, 0.15 m in front of the root.
+  const springSettings = { stiffness: 0.2, gravityPower: 2, dragForce: 0.4, hitRadius: 0.01 };
   const mtoon = {
     specVersion: "1.0", shadeColorFactor: [0.02, 0.06, 0.15], shadingShiftFactor: -0.2,
     shadingToonyFactor: 0.85, giEqualizationFactor: 0.75,
@@ -68,6 +85,15 @@ export function createVrmAvatarFixtureBytes(version: "0" | "1", shape: "triangle
       },
       humanoid: { humanBones: Object.fromEntries(boneNames.map((bone, node) => [bone, { node }])) },
     },
+    ...(options.springBones ? {
+      VRMC_springBone: {
+        specVersion: "1.0",
+        colliders: [{ node: 2, shape: { sphere: { offset: [0, 0.1, 0.15], radius: 0.04 } } }],
+        colliderGroups: [{ name: "Head", colliders: [0] }],
+        // A center node makes three-vrm keep an inverse cache in its userData.
+        springs: [{ name: "Hair", center: 0, colliderGroups: [0], joints: [{ node: 16, ...springSettings, gravityDir: [0, -1, 0] }, { node: 17 }] }],
+      },
+    } : {}),
   } : {
     VRM: {
       specVersion: "0.0", exporterVersion: "XRift fixture",
@@ -79,11 +105,25 @@ export function createVrmAvatarFixtureBytes(version: "0" | "1", shape: "triangle
         vectorProperties: { _Color: [0.4, 0.6, 0.9, 1], _ShadeColor: [0.02, 0.06, 0.15, 1], _OutlineColor: [0.8, 0.03, 0.07, 1] },
         textureProperties: {}, keywordMap: {}, tagMap: {},
       }],
+      ...(options.springBones ? {
+        secondaryAnimation: {
+          // VRM 0.x stores collider z mirrored.
+          colliderGroups: [{ node: 2, colliders: [{ offset: { x: 0, y: 0.1, z: -0.15 }, radius: 0.04 }] }],
+          boneGroups: [{
+            comment: "Hair", bones: [16], colliderGroups: [0], gravityDir: { x: 0, y: -1, z: 0 },
+            stiffiness: springSettings.stiffness, gravityPower: springSettings.gravityPower,
+            dragForce: springSettings.dragForce, hitRadius: springSettings.hitRadius,
+          }],
+        },
+      } : {}),
     },
   };
   const json = {
     asset: { version: "2.0" }, scene: 0, scenes: [{ name: `FixtureVRM${version}`, nodes: [0, 15] }], nodes,
-    extensionsUsed: version === "1" ? ["VRMC_vrm", "VRMC_materials_mtoon"] : ["VRM"], extensions: extension,
+    extensionsUsed: version === "1"
+      ? ["VRMC_vrm", "VRMC_materials_mtoon", ...(options.springBones ? ["VRMC_springBone"] : [])]
+      : ["VRM"],
+    extensions: extension,
     buffers: [{ byteLength: binary.byteLength }], bufferViews,
     accessors: [
       { bufferView: 0, componentType: 5126, count: vertexCount, type: "VEC3", min: shape === "sphere" ? [-0.35, -0.35, -0.35] : [-0.3, 0, 0], max: shape === "sphere" ? [0.35, 0.35, 0.35] : [0.3, 0.6, 0] },
@@ -132,26 +172,7 @@ export async function runVrmAvatarRuntimeFixtureAssertions(): Promise<void> {
     const nativeMaterial = vrm.materials?.find(material => !(material as MToonMaterial).isOutline) as MToonMaterial | undefined;
     assert(nativeMaterial?.isMToonMaterial && nativeMaterial.v0CompatShade === (version === "0"), `VRM ${version} fixture must use the native MToon shader`);
 
-    const prototype = createPrototypeProject("world", `vrm-${version}-runtime`);
-    const model: ModelAsset = {
-      id: "native-vrm-avatar", name: "Native VRM avatar", kind: "model", status: "ready",
-      source: { kind: "project", relativePath: `assets/avatar-${version}.vrm` },
-      importSettings: normalizeModelImportSettings({}),
-      materialSlots: [{ slot: "default", name: "Native toon", sourceMaterialIndex: 0 }],
-    };
-    prototype.assets.assets[model.id] = model;
-    let modelKept = false;
-    for (const entity of Object.values(prototype.scene.entities)) {
-      entity.components = entity.components.filter(component => {
-        if (component.type !== "mesh") return true;
-        if (modelKept) return false;
-        modelKept = true;
-        component.geometry = { kind: "asset", assetId: model.id };
-        component.materialBindings = [];
-        return true;
-      });
-    }
-    const input = { project: prototype.project, assets: prototype.assets, scenes: { [prototype.scene.sceneId]: prototype.scene }, prefabs: prototype.prefabs };
+    const { input, model } = createVrmAvatarProjectInput(version);
     const emitted = compileVisualProject(input);
     assert(emitted.canStage && emitted.stagingPlan.runtimePackageSpecs.includes(COMPILER_MTOON_PACKAGE_SPEC), `VRM ${version} native output must include its loader dependency even without authored MToon`);
     assert(emitted.overlayFiles.some(file => file.relativePath === "src/xrift-studio/mtoon-runtime.ts"), `VRM ${version} native output must include the shared outline shader`);
@@ -160,7 +181,7 @@ export async function runVrmAvatarRuntimeFixtureAssertions(): Promise<void> {
     const manifest: XriftRuntimeManifest = JSON.parse(compiled.runtimeManifestFile.content);
     const modelAsset = manifest.assets[model.id];
     assert(modelAsset.kind === "model" && modelAsset.sourceFormat === "vrm", `VRM ${version} source type must survive publication`);
-    modelAsset.url = `data:model/gltf-binary;base64,${btoa(String.fromCharCode(...bytes))}`;
+    modelAsset.url = vrmDataUrl(bytes);
     const loaded = await new XriftThreeLoader({ assetBaseUrl: "https://fixture.invalid/" }).parse(manifest);
     try {
       assert(!loaded.diagnostics.some(item => item.severity === "error"), `VRM ${version} runtime failed: ${JSON.stringify(loaded.diagnostics)}`);
@@ -191,6 +212,135 @@ export async function runVrmAvatarRuntimeFixtureAssertions(): Promise<void> {
       });
     }
   }
+}
+
+/**
+ * Spring bones swing on the clones Edit, Play and output draw. Those clones
+ * also stay measurable: Box3 used to throw from a cloned collider and take
+ * the editor's Canvas down with it.
+ */
+export async function runVrmSpringBoneFixtureAssertions(): Promise<void> {
+  for (const version of ["0", "1"] as const) {
+    const bytes = createVrmAvatarFixtureBytes(version, "triangle", { springBones: true });
+    const native = await new GLTFLoader().register(parser => new VRMLoaderPlugin(parser)).parseAsync(bytes.buffer as ArrayBuffer, "");
+    const loadedSprings = native.userData.vrmSpringBoneManager as VRMSpringBoneManager | null | undefined;
+    assert(loadedSprings && loadedSprings.joints.size > 0 && loadedSprings.colliders.length === 1, `VRM ${version} fixture must carry spring joints and a head collider`);
+    prepareVrmSpringBones(native.scene, loadedSprings);
+    const sourceHair = native.scene.getObjectByName("hair");
+    assert(sourceHair, `VRM ${version} fixture lost its hair node`);
+    const sourceRest = sourceHair.quaternion.clone();
+
+    const drawn = cloneSkeleton(native.scene);
+    new Box3().setFromObject(drawn);
+    new Box3().setFromObject(cloneSkeleton(drawn));
+    const entity = new Group();
+    entity.add(drawn);
+    const springBones = bindVrmSpringBones(native.scene, drawn);
+    assert(springBones && springBones.manager.joints.size === loadedSprings.joints.size, `VRM ${version} drawn clone must receive every spring joint`);
+    const collider = springBones.manager.colliders[0];
+    assert(springBones.manager.colliders.length === 1 && collider && isInside(collider, entity), `VRM ${version} joints must collide with the drawn clone's own collider`);
+    const hair = drawn.getObjectByName("hair");
+    const tip = drawn.getObjectByName("hairTip");
+    assert(hair && tip, `VRM ${version} clone lost its hair nodes`);
+    const rest = hair.quaternion.clone();
+    let nearest = Infinity;
+    for (let frame = 0; frame < 120; frame++) {
+      springBones.update(1 / 60);
+      entity.updateMatrixWorld(true);
+      const center = new Vector3().setFromMatrixPosition(collider.colliderMatrix);
+      nearest = Math.min(nearest, tip.getWorldPosition(new Vector3()).distanceTo(center));
+    }
+    assert(hair.quaternion.angleTo(rest) > 0.3, `VRM ${version} hair did not swing under gravity`);
+    // Ignoring the collider, the tip would pass through its center.
+    assert(nearest > 0.03, `VRM ${version} hair passed through the head collider (${nearest.toFixed(3)} m)`);
+    assert(sourceHair.quaternion.equals(sourceRest), `VRM ${version} spring bones moved the shared loaded avatar`);
+
+    // Selection bounds copy a drawn clone again. The copy carries three-vrm's
+    // center cache as plain JSON, and must still bind and run.
+    const copied = bindVrmSpringBones(native.scene, cloneSkeleton(drawn));
+    assert(copied, `VRM ${version} copy of a drawn clone lost its spring bones`);
+    copied.update(1 / 60);
+    copied.update(1 / 60);
+    copied.dispose();
+
+    springBones.reset();
+    assert(hair.quaternion.angleTo(rest) < 1e-6, `VRM ${version} reset did not restore the bound pose`);
+    springBones.update(1 / 60);
+    springBones.update(1 / 60);
+    springBones.dispose();
+    assert(hair.quaternion.angleTo(rest) < 1e-6 && hair.matrixAutoUpdate && sourceHair.matrixAutoUpdate, `VRM ${version} stopping did not hand the hair back at rest`);
+  }
+
+  for (const version of ["0", "1"] as const) {
+    const bytes = createVrmAvatarFixtureBytes(version, "triangle", { springBones: true });
+    const { input, model } = createVrmAvatarProjectInput(version);
+    const world = compileVisualProject(input).overlayFiles.find(file => file.relativePath === "src/World.tsx")?.content ?? "";
+    assert(
+      world.includes("prepareVrmSpringBones(scene, vrmUserData.vrmSpringBoneManager)") &&
+        world.includes("bindVrmSpringBones(scene, root)") &&
+        world.includes("vrmSpringBones.current?.update(delta)"),
+      `VRM ${version} output must bind spring bones to the drawn avatar and step them every frame`,
+    );
+    const compiled = compileVisualProject(input, { outputMode: "classic-runtime" });
+    assert(compiled.canStage && compiled.runtimeManifestFile, `VRM ${version} runtime manifest must compile`);
+    const manifest: XriftRuntimeManifest = JSON.parse(compiled.runtimeManifestFile.content);
+    const modelAsset = manifest.assets[model.id];
+    assert(modelAsset?.kind === "model", `VRM ${version} runtime manifest lost the avatar`);
+    modelAsset.url = vrmDataUrl(bytes);
+    const loaded = await new XriftThreeLoader({ assetBaseUrl: "https://fixture.invalid/" }).parse(manifest);
+    try {
+      assert(loaded.springBones.length === 1, `VRM ${version} runtime must bind the placed avatar's spring bones`);
+      new Box3().setFromObject(loaded.root);
+      const hair = loaded.root.getObjectByName("hair");
+      assert(hair, `VRM ${version} runtime lost the hair node`);
+      const rest = hair.quaternion.clone();
+      for (let frame = 0; frame < 120; frame++) loaded.springBones[0]!.update(1 / 60);
+      assert(hair.quaternion.angleTo(rest) > 0.3, `VRM ${version} runtime hair did not swing under gravity`);
+    } finally {
+      disposeXriftLoadResult(loaded);
+    }
+  }
+}
+
+/** The fixture avatar's World, as the publish build receives it. */
+export function compileVrmAvatarWorld(version: "0" | "1") {
+  return compileVisualProject(createVrmAvatarProjectInput(version).input);
+}
+
+/** A prototype World whose only Model is the fixture avatar. */
+function createVrmAvatarProjectInput(version: "0" | "1") {
+  const prototype = createPrototypeProject("world", `vrm-${version}-runtime`);
+  const model: ModelAsset = {
+    id: "native-vrm-avatar", name: "Native VRM avatar", kind: "model", status: "ready",
+    source: { kind: "project", relativePath: `assets/avatar-${version}.vrm` },
+    importSettings: normalizeModelImportSettings({}),
+    materialSlots: [{ slot: "default", name: "Native toon", sourceMaterialIndex: 0 }],
+  };
+  prototype.assets.assets[model.id] = model;
+  let modelKept = false;
+  for (const entity of Object.values(prototype.scene.entities)) {
+    entity.components = entity.components.filter(component => {
+      if (component.type !== "mesh") return true;
+      if (modelKept) return false;
+      modelKept = true;
+      component.geometry = { kind: "asset", assetId: model.id };
+      component.materialBindings = [];
+      return true;
+    });
+  }
+  const input = { project: prototype.project, assets: prototype.assets, scenes: { [prototype.scene.sceneId]: prototype.scene }, prefabs: prototype.prefabs };
+  return { input, model };
+}
+
+function vrmDataUrl(bytes: Uint8Array): string {
+  return `data:model/gltf-binary;base64,${btoa(String.fromCharCode(...bytes))}`;
+}
+
+function isInside(object: Object3D, ancestor: Object3D): boolean {
+  for (let current: Object3D | null = object; current; current = current.parent) {
+    if (current === ancestor) return true;
+  }
+  return false;
 }
 
 function assert(value: unknown, message: string): asserts value {

@@ -3,15 +3,17 @@ import mtoonMaterialSource from "../../../../packages/xrift-studio-runtime/src/m
 import mtoonRuntimeSource from "../../../../packages/xrift-studio-runtime/src/mtoon-runtime.ts?raw";
 import readableVrmSource from "../../../../packages/xrift-studio-runtime/src/vendor/three-vrm-readable.js?raw";
 import readableVrmTypes from "../../../../packages/xrift-studio-runtime/src/vendor/three-vrm-readable.d.ts?raw";
+import vrmSpringBoneSource from "../../../../packages/xrift-studio-runtime/src/vrm-spring-bone.ts?raw";
 import { SCRIPT_RUNTIME_DIRECTORY } from "./script-emit";
 import type { CompilerOverlayFile } from "./types";
 
-/** The same MToon shading and outline code is used by Edit, Play and output. */
+/** The same MToon shading, outline and VRM spring bone code is used by Edit, Play and output. */
 export function createMToonOverlayFiles(): CompilerOverlayFile[] {
   return [
     ["mtoon-contract.ts", mtoonContractSource],
     ["mtoon-material.tsx", mtoonMaterialSource],
     ["mtoon-runtime.ts", mtoonRuntimeSource],
+    ["vrm-spring-bone.ts", vrmSpringBoneSource],
     ["three-vrm-readable.js", readableVrmSource],
     ["three-vrm-readable.d.ts", readableVrmTypes],
   ].map(([name, content]) => ({

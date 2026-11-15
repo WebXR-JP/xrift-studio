@@ -16,6 +16,7 @@ import { isAllowedCompilerRuntimePackage } from "../../xrift-cli";
 import mtoonMaterialSource from "../../../../packages/xrift-studio-runtime/src/mtoon-material.tsx?raw";
 import mtoonContractSource from "../../../../packages/xrift-studio-runtime/src/mtoon-contract.ts?raw";
 import mtoonRuntimeSource from "../../../../packages/xrift-studio-runtime/src/mtoon-runtime.ts?raw";
+import vrmSpringBoneSource from "../../../../packages/xrift-studio-runtime/src/vrm-spring-bone.ts?raw";
 import { XriftThreeLoader, disposeXriftLoadResult } from "../../../../packages/xrift-studio-runtime/src/three/index";
 import type { XriftRuntimeManifest } from "../../../../packages/xrift-studio-runtime/src/schema";
 import { Clock, DoubleSide, Mesh, Texture } from "three";
@@ -117,6 +118,7 @@ export function runMToonMaterialCompilerFixtureAssertions(mode: "primitive" | "m
   assert(runtime?.content === emittedSource(mtoonMaterialSource), "Output must ship the editor's exact MToon material implementation");
   assert(result.overlayFiles.find((file) => file.relativePath === "src/xrift-studio/mtoon-runtime.ts")?.content === emittedSource(mtoonRuntimeSource), "Output must ship the editor's MToon shading and outline implementation");
   assert(result.overlayFiles.find((file) => file.relativePath === "src/xrift-studio/mtoon-contract.ts")?.content === mtoonContractSource, "Output must ship the editor's MToon defaults");
+  assert(result.overlayFiles.find((file) => file.relativePath === "src/xrift-studio/vrm-spring-bone.ts")?.content === emittedSource(vrmSpringBoneSource), "Output must ship the editor's VRM spring bone implementation");
   assert(result.stagingPlan.runtimePackageSpecs.includes(COMPILER_MTOON_PACKAGE_SPEC), "MToon output forgot its shader dependency");
   assert(isAllowedCompilerRuntimePackage(COMPILER_MTOON_PACKAGE_SPEC), "Publication would reject MToon's shader dependency");
   assert(result.stagingPlan.assetCopyPlan.some((entry) => entry.assetId === texture.id), "Publication dropped MToon texture assets");
@@ -127,6 +129,7 @@ export function runMToonMaterialCompilerFixtureAssertions(mode: "primitive" | "m
   if (mode === "vrm") {
     assert(source.includes("new VRMLoaderPlugin(parser)") && source.includes("VRMUtils.rotateVRM0(vrm)"), "VRM output must load native materials and preserve VRM 0.x orientation");
     assert(source.includes("removeNativeMToonOutlines(scene)") && source.includes("attachMToonOutlines(root)"), "VRM output must rebuild outline passes on the final cloned model");
+    assert(source.includes("bindVrmSpringBones(scene, root)"), "VRM output must bind spring bones to the final cloned model");
   }
   return result;
 }

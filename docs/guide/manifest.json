@@ -454,7 +454,7 @@
       "description": "モデル、画像、VRMアバターを取り込みます。Blenderの.blendをプロジェクトに保存してパーツを編集・再取り込みできます。",
       "group": "basics",
       "file": "assets.md",
-      "keywords": "Blender blend 編集元 パーツ 再取り込み インポート GLB GLTF VRM VRM 0.x VRM 1.0 アバター MToon PBR モデル 画像 音声 ファイル 読み込み Bone シェイプキー Open Brush OpenBrush DiamondHull ブラシ シェーダー UV マテリアル 割り当て ノード",
+      "keywords": "Blender blend 編集元 パーツ 再取り込み インポート GLB GLTF VRM VRM 0.x VRM 1.0 アバター MToon PBR モデル 画像 音声 ファイル 読み込み Bone シェイプキー SpringBone スプリングボーン 揺れもの 髪 揺れ Open Brush OpenBrush DiamondHull ブラシ シェーダー UV マテリアル 割り当て ノード",
       "related": [
         "external-resources",
         "textures",

@@ -2254,6 +2254,8 @@ function XriftRuntimeAnimations({ result }: { result: XriftLoadResult }) {
       entry.mixer.update(Math.min(delta, 0.1));
       entry.bridge?.sample();
     }
+    // After the clips, so the springs follow this frame's animated parents.
+    for (const springBones of result.springBones) springBones.update(delta);
   });
 
   return null;

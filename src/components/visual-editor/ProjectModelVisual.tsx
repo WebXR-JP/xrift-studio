@@ -1,5 +1,6 @@
 import { applyOpenBrushMaterialProperties } from "../../../packages/xrift-studio-runtime/src/open-brush/material-properties";
 import { attachMToonOutlines, createMToonMaterial, removeNativeMToonOutlines, updateMToonMaterials } from "../../../packages/xrift-studio-runtime/src/mtoon-material";
+import { bindVrmSpringBones, prepareVrmSpringBones, type VrmSpringBoneRuntime } from "../../../packages/xrift-studio-runtime/src/vrm-spring-bone";
 import {
   useEffect,
   useLayoutEffect,
@@ -502,6 +503,19 @@ function ProjectModelRender({
     const outlines = attachMToonOutlines(renderedObject);
     return () => outlines.dispose();
   }, [renderedObject, viewportMaterialStyle]);
+  // VRM hair and clothes swing only in Play, as in a published world. Editing
+  // keeps the authored pose still; stopping returns the bones to it.
+  const springBonesRef = useRef<VrmSpringBoneRuntime | null>(null);
+  useLayoutEffect(() => {
+    if (!playing || !readyObject || !renderedObject) return;
+    const springBones = bindVrmSpringBones(readyObject, renderedObject);
+    springBonesRef.current = springBones;
+    return () => {
+      springBonesRef.current = null;
+      springBones?.dispose();
+      invalidate();
+    };
+  }, [invalidate, playing, readyObject, renderedObject]);
   const mixer = useMemo(
     () => (renderedObject ? new AnimationMixer(renderedObject) : null),
     [renderedObject],
@@ -661,6 +675,8 @@ function ProjectModelRender({
       mixer?.update(Math.min(delta, 0.1));
     }
     animationBridgeRef.current?.sample();
+    // After the clips, so the springs follow this frame's animated parents.
+    springBonesRef.current?.update(delta);
     const elapsed = frame.clock.getElapsedTime();
     if (renderedObject) updateMToonMaterials(renderedObject, delta, frame.gl.info.render.frame, frame.gl);
     renderedModel?.ownedMaterials.forEach((material) => {
@@ -1786,6 +1802,7 @@ async function parseSelfContainedModel(
         const vrm = gltf.userData.vrm as VRM | undefined;
         if (vrm) VRMUtils.rotateVRM0(vrm);
         removeNativeMToonOutlines(gltf.scene);
+        if (format === "vrm") prepareVrmSpringBones(gltf.scene, gltf.userData.vrmSpringBoneManager);
         repairImportedObject3DHierarchy(gltf.scene);
         tagSourceMaterialIndices(gltf, document);
         resolve({

@@ -3680,6 +3680,7 @@ function renderModelMesh(
     context.extraImports.add('import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";');
     context.extraImports.add('import { VRMLoaderPlugin, VRMUtils, type MToonMaterial, type VRM } from "./xrift-studio/three-vrm-readable";');
     context.extraImports.add('import { attachMToonOutlines, removeNativeMToonOutlines } from "./xrift-studio/mtoon-runtime";');
+    context.extraImports.add('import { bindVrmSpringBones, prepareVrmSpringBones, type VrmSpringBoneRuntime } from "./xrift-studio/vrm-spring-bone";');
     context.supportDeclarations.set("model-vrm-loader", `class CompiledVRMGLTFLoader extends GLTFLoader {
   constructor() {
     super();
@@ -3832,6 +3833,7 @@ const nativeMToonFrames = new WeakMap<import("three").Material, { renderer: obje
       vrm.materials?.forEach((material) => (material as MToonMaterial).update?.(0));
     }
     removeNativeMToonOutlines(scene);
+    prepareVrmSpringBones(scene, vrmUserData.vrmSpringBoneManager);
     scene.userData.xriftStudioVrmPrepared = true;
   }
   const vrmRoot = useRef<Group>(null);
@@ -3923,6 +3925,25 @@ const nativeMToonFrames = new WeakMap<import("three").Material, { renderer: obje
     ? `  const animationRoot = useRef<Group>(null);
   const { ${animationBindings} } = useAnimations(animations, animationRoot);${graphCueSource}${animationBridgeSource}`
     : "";
+  // Studio Play binds the same spring bones to the clone it draws. Declared
+  // after the clips so each frame's springs follow the animated parents.
+  const vrmSpringBoneSource = isVrm
+    ? `
+  const vrmSpringBones = useRef<VrmSpringBoneRuntime | null>(null);
+  useLayoutEffect(() => {
+    const root = vrmRoot.current;
+    if (!root) return;
+    const springBones = bindVrmSpringBones(scene, root);
+    vrmSpringBones.current = springBones;
+    return () => {
+      vrmSpringBones.current = null;
+      springBones?.dispose();
+    };
+  }, [${poseSource.objectName === "scene" ? "scene" : `scene, ${poseSource.objectName}`}]);
+  useFrame((_, delta) => {
+    vrmSpringBones.current?.update(delta);
+  });`
+    : "";
   // Open Brush brushes read `uniform vec4 u_time` for their motion, and the
   // Materials come out of three-icosa already compiled, so no Material
   // component drives them. Walk the loaded strokes each frame instead, using
@@ -3988,7 +4009,7 @@ const nativeMToonFrames = new WeakMap<import("three").Material, { renderer: obje
   ${loaderSource}
 ${vrmSource}
 ${poseSource.declaration}
-${brushTimeSource}${animationSource}
+${brushTimeSource}${animationSource}${vrmSpringBoneSource}
   return (
     ${renderedModelContent}
   );

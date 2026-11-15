@@ -67,6 +67,7 @@ import { detectTimeUniforms, stampObjectTimeUniforms } from "../shader-time.js";
 import { installMirrorReflectionInterval } from "../mirror-reflection.js";
 import { applyOpenBrushMaterialProperties } from "../open-brush/material-properties.js";
 import { createMToonMaterial, attachMToonOutlines, removeNativeMToonOutlines, type MToonSurfaceProperties } from "../mtoon-runtime.js";
+import { bindVrmSpringBones, prepareVrmSpringBones, type VrmSpringBoneRuntime } from "../vrm-spring-bone.js";
 export { updateMToonMaterials } from "../mtoon-runtime.js";
 import {
   getKhrInteractivityOnStartAnimationCues,
@@ -89,6 +90,8 @@ export type XriftLoadResult = {
   animations: AnimationClip[];
   animationClipsByEntity: Map<string, AnimationClip[]>;
   interactionAnimationCuesByEntity: Map<string, InteractivityAnimationCue[]>;
+  /** VRM spring bones bound to each drawn avatar; advance them after the clips. */
+  springBones: VrmSpringBoneRuntime[];
   entities: Map<string, Object3D>;
   /** Spawn-point marker objects keyed by their component id. */
   spawnPoints: Map<string, Object3D>;
@@ -216,6 +219,7 @@ export class XriftThreeLoader {
     const animations: AnimationClip[] = [];
     const animationClipsByEntity = new Map<string, AnimationClip[]>();
     const interactionAnimationCuesByEntity = new Map<string, InteractivityAnimationCue[]>();
+    const springBones: VrmSpringBoneRuntime[] = [];
     const spawnPoints = new Map<string, Object3D>();
 
     for (const entity of Object.values(entryScene.entities)) {
@@ -259,6 +263,7 @@ export class XriftThreeLoader {
           animations,
           animationClipsByEntity,
           interactionAnimationCuesByEntity,
+          springBones,
           diagnostics,
         });
         if (object) {
@@ -288,6 +293,7 @@ export class XriftThreeLoader {
       animations,
       animationClipsByEntity,
       interactionAnimationCuesByEntity,
+      springBones,
       entities,
       spawnPoints,
       textures,
@@ -385,7 +391,10 @@ export class XriftThreeLoader {
       vrmUtils.rotateVRM0(vrm);
       vrm.materials?.forEach((material: Material) => (material as Material & { update?: (delta: number) => void }).update?.(0));
     }
-    if (isVrm) removeNativeMToonOutlines(gltf.scene);
+    if (isVrm) {
+      removeNativeMToonOutlines(gltf.scene);
+      prepareVrmSpringBones(gltf.scene, gltf.userData.vrmSpringBoneManager);
+    }
     tagSourceMaterialIndices(gltf);
     // Open Brush brushes arrive from three-icosa with their GLSL already
     // compiled, so nothing has recorded their `u_time` uniform yet. Stamping
@@ -565,6 +574,7 @@ export class XriftThreeLoader {
     animations: AnimationClip[];
     animationClipsByEntity: Map<string, AnimationClip[]>;
     interactionAnimationCuesByEntity: Map<string, InteractivityAnimationCue[]>;
+    springBones: VrmSpringBoneRuntime[];
     diagnostics: XriftRuntimeDiagnostic[];
   }): Object3D | null {
     const { component } = input;
@@ -638,6 +648,9 @@ export class XriftThreeLoader {
         input.textures,
       );
       applyModelPose(instance, component);
+      // Bound after the authored pose, which becomes the springs' rest.
+      const springBones = bindVrmSpringBones(loaded.root, instance);
+      if (springBones) input.springBones.push(springBones);
       instance.traverse((object) => {
         if (object instanceof Mesh) {
           object.castShadow = component.castShadow;
@@ -1173,6 +1186,7 @@ export async function loadXriftRuntime(
 }
 
 export function disposeXriftLoadResult(result: XriftLoadResult): void {
+  for (const springBones of result.springBones) springBones.dispose();
   const geometries = new Set<BufferGeometry>();
   const materials = new Set<Material>();
   const textures = new Set<Texture>();

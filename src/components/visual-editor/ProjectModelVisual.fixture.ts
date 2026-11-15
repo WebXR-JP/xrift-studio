@@ -45,9 +45,13 @@ import {
   createClassicR3fMaterial,
   getModelSelectionBounds,
   inspectProjectModelMaterialRuntime,
+  loadProjectModelData,
   selectSourceModelNode,
   cloneSourceModelNode,
 } from "./ProjectModelVisual";
+import { tauri } from "../../lib/tauri";
+import { createVrmAvatarFixtureBytes } from "../../lib/visual-editor/compiler/vrm-avatar.fixture";
+import { bindVrmSpringBones } from "../../../packages/xrift-studio-runtime/src/vrm-spring-bone";
 import { getModelNodeMaterialSlots } from "./model-node-materials";
 import { attachModelSelectionHighlight } from "./model-selection-highlight";
 import {
@@ -79,6 +83,7 @@ export async function runProjectModelMaterialPreviewFixtureAssertions(): Promise
   assertClassicR3fMaterialReceivesSceneFog();
   await assertOpenBrushPbrFallbackKeepsTheModelUsable();
   await assertMaterialTextureEditsKeepReadySlots();
+  await assertVrmSpringBoneModelStaysMeasurable();
 
   const project = createPrototypeProject("world", "model-material-preview");
   const fixtureTextureAsset: TextureAsset = {
@@ -874,6 +879,37 @@ function assertAsyncTextureCompletionRequestsMaterialRender(): void {
   );
   material.dispose();
   texture.dispose();
+}
+
+/**
+ * A VRM with spring bone colliders, loaded the way the Scene loads it. Selection
+ * bounds clone the drawn copy again; that clone used to throw from its
+ * colliders and take the editor's Canvas down. Play binds the springs.
+ */
+async function assertVrmSpringBoneModelStaysMeasurable(): Promise<void> {
+  const readProjectFileDataUrl = tauri.readProjectFileDataUrl;
+  try {
+    for (const version of ["0", "1"] as const) {
+      const bytes = createVrmAvatarFixtureBytes(version, "triangle", { springBones: true });
+      Object.assign(tauri, {
+        readProjectFileDataUrl: async () => `data:model/gltf-binary;base64,${btoa(String.fromCharCode(...bytes))}`,
+      });
+      const { object } = await loadProjectModelData("fixture://vrm-spring-bones", `assets/avatar-${version}.vrm`, `spring-${version}`);
+      const drawn = cloneSourceModelNode(object);
+      const entity = new Group();
+      entity.add(drawn);
+      // The fixture body is one flat triangle, 0.6 m wide and tall.
+      const bounds = getModelSelectionBounds(drawn);
+      assert(bounds.scale[0] > 0.5 && bounds.scale[1] > 0.5, `VRM ${version} selection bounds lost the avatar: ${JSON.stringify(bounds)}`);
+      const springBones = bindVrmSpringBones(object, drawn);
+      assert(springBones && springBones.manager.joints.size > 0, `VRM ${version} Play found no spring bones on the drawn model`);
+      springBones.update(1 / 60);
+      springBones.update(1 / 60);
+      springBones.dispose();
+    }
+  } finally {
+    Object.assign(tauri, { readProjectFileDataUrl });
+  }
 }
 
 function assertModelSelectionBoundsStayLocal(): void {
