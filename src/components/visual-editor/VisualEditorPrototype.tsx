@@ -1,3 +1,5 @@
+import { withStableHandlers } from "./stable-panel";
+import { useStableMap } from "./content-equal";
 import type { ChatgptAssetOptions } from "../../lib/tauri";
 import { createDesktopAssetImportPlan } from "../../lib/visual-editor/blender-source";
 import { prepareParticlePresetTexture } from "../../lib/visual-editor/particle-preset-textures";
@@ -249,7 +251,7 @@ import {
 } from "../../lib/visual-editor/mcp-harness-guard";
 import { setProjectThumbnailFromAsset } from "../../lib/project-thumbnail";
 import { isDerivedMcpDocumentUpdate, isMcpDerivedRevisionCurrent } from "../../lib/visual-editor/mcp-derived-update";
-import { AssetsPanel } from "./AssetsPanel";
+import { AssetsPanel as AssetsPanelView } from "./AssetsPanel";
 import {
   ValueScrubContext,
   type ValueScrubTransaction,
@@ -292,7 +294,7 @@ import { SupportReportModal } from "../SupportReportModal";
 import { ConfirmDialog } from "../ConfirmDialog";
 import type { XriftMcpActivity } from "./AiConnectionPanel";
 import { commandTitle, EDITOR_ICONS } from "./editor-icons";
-import { HierarchyPanel } from "./HierarchyPanel";
+import { HierarchyPanel as HierarchyPanelView } from "./HierarchyPanel";
 import {
   ALL_MATERIAL_SLOTS,
   MaterialSlotAssignmentDialog,
@@ -304,12 +306,12 @@ import type {
 } from "./ModelAssetInspector";
 import type { TextureProcessingState } from "./AssetQuickEditor";
 import {
-  InspectorPanel,
+  InspectorPanel as InspectorPanelView,
   type MeshInspectorPatch,
   type ParticleEmitterInspectorPatch,
 } from "./InspectorPanel";
 import {
-  SceneViewport,
+  SceneViewport as SceneViewportView,
   SCENE_VIEW_TAB_ID,
   SCENE_VIEW_CAMERA_PRESETS,
   type SceneFocusState,
@@ -370,6 +372,13 @@ function mergeRecipeAssetsOntoLatest(
 }
 
 /** How long set_play_mode waits for React to commit the requested mode. */
+// The shell re-renders on every state change it owns. These boundaries keep
+// that from reaching a panel whose own inputs did not change.
+const HierarchyPanel = withStableHandlers(HierarchyPanelView);
+const SceneViewport = withStableHandlers(SceneViewportView);
+const InspectorPanel = withStableHandlers(InspectorPanelView);
+const AssetsPanel = withStableHandlers(AssetsPanelView);
+
 const PLAY_MODE_SETTLE_TIMEOUT_MS = 15_000;
 
 const RECORDING_TOOL_NAMES: ReadonlySet<string> = new Set([
@@ -1639,6 +1648,21 @@ export function VisualEditorPrototype({
     shaderEditorMaterial?.shader?.kind === "classic-r3f"
       ? shaderEditorMaterial.shader
       : null;
+  // The schedule is rebuilt from the Scene on every edit and almost never
+  // changes. Every Entity reads the runtime it goes into, so the previous Map
+  // is kept while the entries are the same.
+  const scriptOrderByComponentId = useStableMap(
+    useMemo(
+      () =>
+        new Map(
+          collectScheduledScripts(resolvedScriptScene).map((entry) => [
+            entry.componentId,
+            entry.order,
+          ]),
+        ),
+      [resolvedScriptScene],
+    ),
+  );
   const scriptViewportRuntime = useMemo<ScriptViewportRuntime>(() => {
     if (!scriptExecutionScopeRenderCurrent) {
       return {
@@ -1654,12 +1678,6 @@ export function VisualEditorPrototype({
         onFailure: scriptRuntime.handleFailure,
       };
     }
-    const orderByComponentId = new Map(
-      collectScheduledScripts(resolvedScriptScene).map((entry) => [
-        entry.componentId,
-        entry.order,
-      ]),
-    );
     return {
       scripts: scriptRuntime.state.scripts,
       assetDescriptors: scriptRuntime.state.assetDescriptors,
@@ -1667,7 +1685,7 @@ export function VisualEditorPrototype({
         scriptRuntime.state.assetDescriptorVersions,
       assetUrls: scriptRuntime.state.assetUrls,
       assetUrlVersions: scriptRuntime.state.assetUrlVersions,
-      orderByComponentId,
+      orderByComponentId: scriptOrderByComponentId,
       resolveAsset: (assetId) =>
         scriptRuntime.state.assetDescriptors.get(assetId) ?? null,
       resolveAssetUrl: (assetId) =>
@@ -1676,7 +1694,7 @@ export function VisualEditorPrototype({
       onFailure: scriptRuntime.handleFailure,
     };
   }, [
-    resolvedScriptScene,
+    scriptOrderByComponentId,
     scriptExecutionScopeRenderCurrent,
     scriptRuntime.state.scripts,
     scriptRuntime.state.assetDescriptors,
@@ -11829,6 +11847,22 @@ export function VisualEditorPrototype({
       ...(mode === "remake" ? { prompt: entityRemakePrompt(entity), modelSource: "auto" as const } : {}) });
     setViewportMaximized(false); setChatgptTabVisited(true); setChatgptTabOpen(true); setActiveEditorTab(CHATGPT_WORLD_TAB_ID); setTabletPanel("inspector");
   };
+  // A React element is a new object on every render, which would make the
+  // Inspector re-render with the shell. This one only depends on two settings.
+  const assetImportSettingsPanel = useMemo(() => (
+    <TextureImportSettingsPanel
+      textureMaxSize={textureImportMaxSize}
+      onTextureMaxSizeChange={(value) => {
+        setTextureImportMaxSize(value);
+        saveTextureImportMaxSize(value);
+      }}
+      textureCompression={textureImportCompression}
+      onTextureCompressionChange={(value) => {
+        setTextureImportCompression(value);
+        saveTextureImportCompression(value);
+      }}
+    />
+  ), [textureImportMaxSize, textureImportCompression]);
   const viewportEditorTabs: { id: string; label: string; icon: "graph" | "script" | "ai"; closable: boolean }[] = interactivityEditorAsset
     ? [
         {
@@ -12517,18 +12551,7 @@ export function VisualEditorPrototype({
             }
             onUpdateXriftComponent={handleUpdateXriftComponent}
             onRemoveXriftComponent={handleRemoveXriftComponent}
-            assetImportSettings={<TextureImportSettingsPanel
-              textureMaxSize={textureImportMaxSize}
-              onTextureMaxSizeChange={(value) => {
-                setTextureImportMaxSize(value);
-                saveTextureImportMaxSize(value);
-              }}
-              textureCompression={textureImportCompression}
-              onTextureCompressionChange={(value) => {
-                setTextureImportCompression(value);
-                saveTextureImportCompression(value);
-              }}
-            />}
+            assetImportSettings={assetImportSettingsPanel}
             sceneSettingsOpen={sceneSettingsOpen}
             onCloseSceneSettings={() => setSceneSettingsOpen(false)}
             onResetLayout={() => executeCommand("layout.reset")}

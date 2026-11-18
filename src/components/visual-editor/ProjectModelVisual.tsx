@@ -107,6 +107,7 @@ import { repairImportedObject3DHierarchy } from "../../lib/visual-editor/object3
 import type { SceneViewportMaterialStyle } from "./scene-viewport-display";
 import { createProjectModelPoseController } from "./project-model-pose-controller";
 import { bindModelNodePose, notifyModelNodePose } from "./project-model-node-pose-bridge";
+import { contentEqual } from "./content-equal";
 
 export type ProjectModelMaterialAssignment = {
   slot: string;
@@ -1353,6 +1354,9 @@ export function createClassicR3fMaterial(
   return material;
 }
 
+/** One object for "no shader textures", so setting it again is not a change. */
+const NO_CLASSIC_SHADER_TEXTURES: Readonly<Record<string, Texture>> = Object.freeze({});
+
 export function useClassicShaderTextures(
   material: MaterialAsset | undefined,
   assets: AssetManifest,
@@ -1361,7 +1365,7 @@ export function useClassicShaderTextures(
   const shader =
     material?.shader?.kind === "classic-r3f" ? material.shader : undefined;
   const [textures, setTextures] = useState<Readonly<Record<string, Texture>>>(
-    {},
+    NO_CLASSIC_SHADER_TEXTURES,
   );
   const signature = shader
     ? JSON.stringify(Object.entries(shader.uniforms)
@@ -1381,8 +1385,19 @@ export function useClassicShaderTextures(
 
   useEffect(() => {
     if (!shader || !hasTextures || !projectPath) {
-      setTextures({});
-      setReadiness({ key: signature, state: hasTextures ? { status: "error", message: "Shaderの画像の参照元を読み込めず、見た目を確認できませんでした" } : { status: "ready" } });
+      // This branch runs for every Material without shader textures — nearly
+      // all of them — each time its Assets change. Handing React a new empty
+      // object and a new status every time re-rendered each such Mesh a second
+      // time for no change, so both are only replaced when they differ.
+      setTextures(NO_CLASSIC_SHADER_TEXTURES);
+      const state: SceneReviewLoadState = hasTextures
+        ? { status: "error", message: "Shaderの画像の参照元を読み込めず、見た目を確認できませんでした" }
+        : { status: "ready" };
+      setReadiness((current) =>
+        current.key === signature && contentEqual(current.state, state, 1)
+          ? current
+          : { key: signature, state },
+      );
       return;
     }
     let active = true;
@@ -1435,7 +1450,7 @@ export function useClassicShaderTextures(
       })
       .catch(() => {
         if (active) {
-          setTextures({});
+          setTextures(NO_CLASSIC_SHADER_TEXTURES);
           setReadiness({ key: signature, state: { status: "error", message: "Shaderの画像を読み込めず、見た目を確認できませんでした" } });
         }
       });

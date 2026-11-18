@@ -47,6 +47,11 @@ MToon・VRMの生成コードには、固定した`@pixiv/three-vrm`の配布ソ
 
 - Entity単位の描画コンポーネントには`SceneDocument`そのものを渡さない。Scene ViewのEntity treeは`scene-entity-tree-store.ts`でEntityごとに更新を購読し、全ノード共通の値だけをcontextから受け取る。ノードのpropには、親Entityから決まる`entityId`、`inheritedRigidBody`、`ancestorEnabled`だけを渡す。Scene全体を親から渡すと、1 Entityの編集でも全Entityのpropsが変わり、`memo`で再描画を抑止できない。Entity単体を親から渡すだけでも不十分である。Componentを追加しても祖先のEntityは変わらず、memoした親が再描画を止めるため、子孫に変更が届かない。各Entityが直接更新を購読する構成にする。
 - SceneDocumentを作り直す処理では、変更していないEntityのオブジェクト同一性を保つ。`editor-session.ts`の更新は`{ ...scene.entities, [id]: { ...entity } }`の形を守る。`prefab-resolver.ts`はPrefabを展開したEntityだけを差し替え、それ以外は同じ参照を返す。全Entityをcloneすると、`memo`も`useMemo`も参照の一致を確認できず、Scene全体を再描画する。
+- Entity treeの共有contextには、すべてのEntityが描画に使う値だけを置く。選択中のEntity一覧のように一部のノードだけが読む値は、`scene-entity-tree-context.tsx`の専用contextへ分け、読む側が`useSceneSelectedEntityIds`で受け取る。共有contextへ載せると、1回の選択でScene内の全Entityが再描画される。各Entityが選択中かどうかは、storeのEntityごとの値で判定する。
+- Sceneから導出してcontextや依存配列へ渡す値は、内容が同じ間は前回のオブジェクトを返す。主光源は`useContentStable`、Scriptの実行順は`useStableMap`を通している（`content-equal.ts`）。導出した値は計算のたびに別のオブジェクトになり、全Meshが読むcontextへそのまま渡すと、1 Entityの移動でも全Meshを再描画する。
+- Entityの描画コンポーネントへ渡すAsset manifestには、`tracked-assets.ts`の`useTrackedAssets`が返す参照を使う。この参照はEntityごとに読み取ったAssetを記録し、そのAssetが変わったときだけ別のオブジェクトになる。manifestをそのまま渡すと、1つのMaterialを編集するたびに、そのMaterialを使わないEntityも再描画する。参照は読み取り専用とし、書き込み、manifestとの同一性の比較、`postMessage`、`structuredClone`には使わない。保存や編集には元のmanifestを渡す。
+- `VisualEditorPrototype`から各パネルへは、`stable-panel.tsx`の`withStableHandlers`を通してpropを渡す。名前が`on`で始まる関数は、イベントやeffectから呼ぶハンドラーとして扱い、同じ関数のまま最新の処理を呼ぶ。描画中に呼ぶ関数には`on`以外の名前を付け、`useCallback`で参照を保つ。propへ渡すJSXは`useMemo`で保持する。小さなオブジェクトと配列は内容で比較するため、毎renderで作り直してよい。
+- effectからstateを空の値へ戻すときは、モジュール内の同じ定数を渡す。`setTextures({})`のように新しい空オブジェクトを渡すと、内容が同じでも再描画が1回増える。対象がMeshごとのhookなら、Asset編集のたびに全Meshが2回描画される。
 - 一覧パネルの行数がSceneのEntity数やAsset数に比例する場合は、行を`memo`したコンポーネントに分ける。行から親のclosureを呼ぶ場合は、毎renderで更新する1つのrefにまとめて渡す。closureをpropとして直接渡すと毎renderで参照が変わり、`memo`で再描画を抑止できない。
 - Scene Viewの描画品質には、CSS表示サイズに対する固定の割合を使う。React Three FiberにdevicePixelRatioの範囲を渡すと、ディスプレイのdevicePixelRatioをその範囲に収める処理になる。1倍のディスプレイでは描画ピクセル数を減らせないため、範囲では指定しない。ラベルに示す割合と実際の描画ピクセル数を一致させる。
 

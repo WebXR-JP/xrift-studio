@@ -31,7 +31,8 @@
 | AIからの操作 | [MCPツール](./MCP_EDITOR_TOOLS.md) · [制作状態と実行制御](./WORLD_AUTHORING_HARNESS.md) |
 | 動作の検証 | [画面デバッグ](./MCP_DEBUGGING.md) · [リリース前の検証](./RELEASE_E2E.md) |
 | Homebrewでの配布 | [導入・定義の更新](./PACKAGE_MANAGERS.md) |
-| 内蔵モデルの更新記録 | [モデルの作成・再生成](./asset-refresh/README.md) · [提供元の検証記録](./asset-refresh/REPORT.ja.md) |
+| 内蔵モデルの更新記録 | [モデルの作成・再生成](./asset-refresh/README.md) · [提供元の検証記録](./asset-refresh/REPORT.ja.md) · [差し替え版の説明](./asset-refresh/MODEL_REFRESH_README.ja.md) |
+| 当たり判定の修正記録 | [Playを含む最終版](./collider-fix/PLAY_COLLIDER_FIX_NOTES.md) · [前回段階](./collider-fix/COLLIDER_FIX_NOTES.md) |
 | 不具合の報告 | [報告支援の設定](./BUG_REPORT_GPT.md) |
 | AI向けの作業ルール | [AGENT.md](../AGENT.md) |
 
@@ -39,7 +40,7 @@
 
 - 作業の許可と完了条件は [AGENT.md](../AGENT.md)、手順は該当する実装資料、APIの実行条件は現行ソースとtoolのschemaを確認します。
 - 設計案の「実装順」「受け入れ条件」を実装済みの証拠にしません。対応状況の記述とコードが違う場合は、コード・fixture・実画面で確認し、未確認の対応を断定しません。
-- `releases/`、`asset-refresh/`、`catalog-expansion/`、`guide-review/`、`sky-shader-verification/`は実施時点の記録です。現在の成功を保証しません。
+- `releases/`、`asset-refresh/`、`catalog-expansion/`、`collider-fix/`、`guide-review/`、`sky-shader-verification/`は実施時点の記録です。現在の成功を保証しません。
 - 大きな設計文書は変更対象の節だけを読みます。利用者向けの操作は`guide/`、機能IDは`UX_INTERACTIONS.md`から辿ります。
 
 ## 文書の管理
