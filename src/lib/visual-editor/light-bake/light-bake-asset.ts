@@ -1,5 +1,6 @@
 import { tauri } from "../../tauri";
 import {
+  LIGHTMAP_ASSET_DIRECTORY,
   LIGHTMAP_ASSET_FORMAT_VERSION,
   type AssetManifest,
   type LightmapAsset,
@@ -42,7 +43,7 @@ export async function saveLightmapAsset(input: SaveLightmapInput): Promise<Light
   ]);
   // 中身のハッシュを場所にする。焼き直すたびに別の場所へ書くので、
   // 「元に戻す」で前のライトマップへ戻っても、前のファイルが残っている。
-  const directory = `assets/imported/lightmaps/${imageHash.slice(0, 16)}`;
+  const directory = `${LIGHTMAP_ASSET_DIRECTORY}/${imageHash.slice(0, 16)}`;
   const imagePath = `${directory}/${LIGHTMAP_IMAGE_FILE}`;
   const dataPath = `${directory}/${LIGHTMAP_DATA_FILE}`;
   await tauri.commitVisualAssetImport(

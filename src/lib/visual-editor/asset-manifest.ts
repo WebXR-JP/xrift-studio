@@ -739,6 +739,9 @@ export type FontAsset = AssetBase<"font"> & {
 
 export const LIGHTMAP_ASSET_FORMAT_VERSION = 1 as const;
 
+/** ライトマップのファイルを置く、project相対のディレクトリ。直下に、画像のハッシュごとのディレクトリを作る。 */
+export const LIGHTMAP_ASSET_DIRECTORY = "assets/imported/lightmaps";
+
 /**
  * ライトベイクの結果。
  *
