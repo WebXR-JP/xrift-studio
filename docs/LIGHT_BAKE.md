@@ -101,3 +101,6 @@ Meshごとに次を持つ。
 
 - `pnpm cli:test`の「light bake」: BVHと総当たりの一致、UV2の重なりと実寸、テクセルの割り当て、UV2データの往復、焼いた影と跳ね返りの量、環境光の差分、Emissive、閉じた形の内側、適用と復元、Materialの共有と追従、Compilerの出力、Runtime JSONの拒否。
 - 同じく「staged world typecheck」: ライトマップを含むワールドの生成コードを、公開テンプレートと同じ設定の`tsc`で検査する。
+- `e2e/light-bake.spec.ts`: 検証用ページ（`e2e.html`）で、パネルからのベイク、Lightmap Assetの保存、Scene Viewへの適用、配置を変えた後の表示と焼き直し、Play、取り外しを確かめる。CIの実行対象には入っていない。
+
+検証用ページのモック（`src/release-e2e/mock-tauri.ts`）は、ライトマップのファイルだけを保持して読み戻す。ベイクが、書いた直後にファイルを読むためである。ほかのファイルの読み込みは失敗させたままにする。既存のspecが、その動作を前提にしている。
