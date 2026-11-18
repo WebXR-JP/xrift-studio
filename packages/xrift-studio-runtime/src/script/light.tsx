@@ -417,7 +417,17 @@ export type XriftScriptLightProps = {
   penumbra?: number;
   width?: number;
   height?: number;
+  /**
+   * ライトマップへ直接光まで焼いたライト。
+   *
+   * 焼いた光と二重にならないよう、描画では照らさない。ライト自体は残すので、
+   * 焼き直すときは同じ位置・色・強さを読める。
+   */
+  baked?: boolean;
 };
+
+/** ライトマップへ焼いたために描画で消しているライトの印。 */
+export const XRIFT_LIGHT_BAKED_USER_DATA_KEY = "xriftLightBaked";
 
 /**
  * One authored Light implementation for Studio and classic JSX output.
@@ -457,6 +467,7 @@ export function XriftScriptLight({
   penumbra = 0.5,
   width = 1,
   height = 1,
+  baked = false,
 }: XriftScriptLightProps) {
   const light = useMemo(() => createThreeLight(lightType), [lightType]);
   const target = useMemo(
@@ -547,10 +558,11 @@ export function XriftScriptLight({
       },
     );
     const state = bridge.read();
-    applyLightRuntimeState(light, state);
+    applyLightRuntimeState(light, state, baked);
     appliedRevision.current = state.revision;
   }, [
     angle,
+    baked,
     bridge,
     castShadow,
     shadowIntensity,
@@ -589,7 +601,7 @@ export function XriftScriptLight({
   useFrame(() => {
     const state = bridge.read();
     if (state.revision === appliedRevision.current) return;
-    applyLightRuntimeState(light, state);
+    applyLightRuntimeState(light, state, baked);
     appliedRevision.current = state.revision;
   });
 
@@ -720,8 +732,12 @@ function configureThreeLight(
 function applyLightRuntimeState(
   light: Light,
   state: Readonly<XriftLightRuntimeState>,
+  baked: boolean,
 ): void {
-  light.visible = state.enabled;
+  // 焼いたライトは、作者が有効にしていても描画では照らさない。
+  light.visible = state.enabled && !baked;
+  if (baked) light.userData[XRIFT_LIGHT_BAKED_USER_DATA_KEY] = true;
+  else delete light.userData[XRIFT_LIGHT_BAKED_USER_DATA_KEY];
   light.color.set(state.color);
   light.intensity = clampNonNegative(state.intensity);
   if (

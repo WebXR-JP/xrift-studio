@@ -239,6 +239,9 @@ function emitShellEvent(
   });
 }
 
+/** Asset files committed during this page load, keyed by project-relative path. */
+const committedAssetFiles = new Map<string, string>();
+
 export function installReleaseE2EMock(): void {
   Object.assign(window, {
     __XRIFT_RELEASE_E2E_CALL__: callReleaseE2EMcp,
@@ -490,10 +493,20 @@ export function installReleaseE2EMock(): void {
             stringArg(payload, "dataUrl"),
           );
           return null;
+        case "commit_visual_asset_import": {
+          // Keep committed Asset bytes so features that write a file and read it
+          // back (a baked lightmap) run end to end against the mocked project.
+          const writes = Array.isArray(payload.writes) ? payload.writes : [];
+          for (const write of writes as { relativePath?: unknown; dataUrl?: unknown }[]) {
+            if (typeof write.relativePath === "string" && typeof write.dataUrl === "string") {
+              committedAssetFiles.set(write.relativePath, write.dataUrl);
+            }
+          }
+          return null;
+        }
         case "write_binary_file":
         case "delete_path":
         case "rename_path":
-        case "commit_visual_asset_import":
         case "open_visual_asset_location":
         case "set_xrift_mcp_editor_ready":
         case "kill_pid_tree":
@@ -576,8 +589,11 @@ export function installReleaseE2EMock(): void {
           return null;
         case "save_debug_image":
           return "C:/XRiftE2E/debug-captures/pi-scene.png";
-        case "read_image_data_url":
+        case "read_image_data_url": {
+          const committed = committedAssetFiles.get(stringArg(payload, "rel"));
+          if (committed !== undefined) return committed;
           throw new Error("Release E2E fixture does not contain binary files");
+        }
         case "check_xrift_latest":
           return cliUpdate ? "0.26.1" : RECOMMENDED_XRIFT_VERSION;
         case "update_xrift":

@@ -436,7 +436,7 @@ AssetManifestはSceneDocumentから独立し、右設定の素材contextとimpor
 }
 ```
 
-素材kindは`model | texture | material | prefab | particle | audio | script | shader | interactivity`の閉じた集合とし、検証、設定、compiler adapterを同じ変更で揃える。`source.kind = "project"`の`relativePath`はproject root相対の`/`区切りへ正規化し、OSの絶対パス、Blob URL、tokenを保存しない。`script` kindは [4.8スクリプト](#48-scripting-script-asset--script-component) のcontractに従い、`source.kind = "project"`だけを許してコード本文と派生schemaをmanifestへ保存しない。
+素材kindは`model | texture | material | prefab | particle | audio | script | shader | interactivity | lightmap`の閉じた集合とし、検証、設定、compiler adapterを同じ変更で揃える。`source.kind = "project"`の`relativePath`はproject root相対の`/`区切りへ正規化し、OSの絶対パス、Blob URL、tokenを保存しない。`script` kindは [4.8スクリプト](#48-scripting-script-asset--script-component) のcontractに従い、`source.kind = "project"`だけを許してコード本文と派生schemaをmanifestへ保存しない。
 
 3Dモデル / テクスチャは次のmetadataを持つ。
 

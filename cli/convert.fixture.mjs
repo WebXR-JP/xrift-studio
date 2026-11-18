@@ -47,6 +47,7 @@ import { runRuntimePackageFixtureAssertions } from "../src/lib/visual-editor/com
 import { spawn } from "node:child_process";
 import { runModelDownloadFixtureAssertions } from "../src/lib/visual-editor/model-download.fixture.ts";
 import { runModelInstancingFixtureAssertions } from "../src/lib/visual-editor/model-instancing.fixture.ts";
+import { runLightBakeFixtureAssertions } from "../src/lib/visual-editor/light-bake/light-bake.fixture.ts";
 import {
   chmod,
   mkdir,
@@ -377,6 +378,7 @@ try {
     ["Interactable late model layers", runInteractableLayerFixtureAssertions],
     ["model download optimization", runModelDownloadFixtureAssertions],
     ["model instancing", runModelInstancingFixtureAssertions],
+    ["light bake", runLightBakeFixtureAssertions],
     ["visual compiler", runVisualCompilerFixtureAssertions],
     ["primitive geometry compiler", runPrimitiveGeometryCompilerFixtureAssertions],
     ["OpenBrush assigned material compiler", runOpenBrushMaterialCompilerFixtureAssertions],
@@ -552,6 +554,12 @@ async function convertRichWorld(fixtureRoot) {
         ? documents.scriptSources[asset.id]
         : `fixture bytes for ${asset.id}`,
     );
+    if (asset.kind === "lightmap") {
+      // A lightmap is two files: the image and the lightmap UVs baked with it.
+      const data = path.join(visualRoot, asset.lightmap.dataPath);
+      await mkdir(path.dirname(data), { recursive: true });
+      await writeFile(data, `fixture lightmap uv data for ${asset.id}`);
+    }
   }
   await writeFile(path.join(visualRoot, "public", "thumbnail.png"), "thumbnail");
 
@@ -580,6 +588,19 @@ async function convertRichWorld(fixtureRoot) {
   const outputFiles = (await listFilesRecursively(classicRoot)).map((file) =>
     path.relative(classicRoot, file).replaceAll(path.sep, "/"),
   );
+  // The baked lightmap ships as the two files the editor draws with, flat in
+  // the world root, byte for byte.
+  for (const [suffix, expected] of [
+    ["lightmap.exr", "fixture bytes for staged-typecheck-lightmap"],
+    ["lightmap-uv.bin", "fixture lightmap uv data for staged-typecheck-lightmap"],
+  ]) {
+    const file = outputFiles.find((entry) => entry === `public/xrift-studio-staged-typecheck-lightmap-${suffix}`);
+    assert(file, `the lightmap file ${suffix} was not copied to the world root`);
+    assert(
+      (await readFile(path.join(classicRoot, file), "utf8")) === expected,
+      `the published ${suffix} must be the exact file the editor uses`,
+    );
+  }
   const font = outputFiles.find((file) => /^public\/[^/]+\.woff$/.test(file));
   assert(font, `the Text font was not copied to the world root, got ${outputFiles.filter((file) => file.startsWith("public/")).join(", ")}`);
   assert(

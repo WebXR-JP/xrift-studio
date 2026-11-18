@@ -4312,6 +4312,37 @@ export function AssetQuickEditor({
     return <AudioAssetInspector asset={asset} projectPath={projectPath} />;
   }
 
+  if (asset.kind === "lightmap") {
+    const lightmap = asset.lightmap;
+    const megabytes = (lightmap.byteLength + lightmap.dataByteLength) / (1024 * 1024);
+    return (
+      <EditorSection title="ライトマップ">
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs leading-4 text-slate-600">
+            ライトベイクで焼いた陰影です。Scene Viewと公開したワールドが、この画像とUV2データをそのまま使います。
+          </p>
+          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-slate-700">
+            <dt className="text-slate-500">画像</dt>
+            <dd>{lightmap.size} × {lightmap.size}px（EXR・半精度）</dd>
+            <dt className="text-slate-500">細かさ</dt>
+            <dd>1mあたり {lightmap.stats.texelsPerMeter.toFixed(1)}px</dd>
+            <dt className="text-slate-500">対象</dt>
+            <dd>Mesh {lightmap.stats.meshCount}件・Entity {lightmap.entityIds.length}件</dd>
+            <dt className="text-slate-500">焼いたライト</dt>
+            <dd>{lightmap.bakedLightComponentIds.length}灯（直接光と影まで）</dd>
+            <dt className="text-slate-500">サイズ</dt>
+            <dd>{megabytes >= 0.1 ? `${megabytes.toFixed(1)} MB` : `${Math.max(1, Math.round(megabytes * 1024))} KB`}</dd>
+            <dt className="text-slate-500">日時</dt>
+            <dd>{new Date(lightmap.bakedAt).toLocaleString("ja-JP")}</dd>
+          </dl>
+          <p className="mt-2 text-[11px] leading-4 text-slate-500">
+            焼き直しと取り外しは、画面下の「ライトベイク」から行います。
+          </p>
+        </div>
+      </EditorSection>
+    );
+  }
+
   if (asset.kind === "shader") {
     return (
       <EditorSection title="GLSLシェーダー">

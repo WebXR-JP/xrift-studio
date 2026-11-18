@@ -652,6 +652,7 @@ export type AssetKindIconName =
   | "graph"
   | "audio"
   | "font"
+  | "light"
   | "script"
   | "prefab"
   | "primitive";
@@ -671,6 +672,7 @@ export const ASSET_KIND_UI = {
   interactivity: { icon: "graph", label: "Node Graph" },
   audio: { icon: "audio", label: "音声" },
   font: { icon: "font", label: "フォント" },
+  lightmap: { icon: "light", label: "ライトマップ" },
   script: { icon: "script", label: "スクリプト" },
   shader: { icon: "script", label: "GLSLシェーダー" },
   template: { icon: "prefab", label: "プレハブ" },

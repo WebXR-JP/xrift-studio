@@ -1,3 +1,18 @@
+import {
+  listLightBakeLights,
+  listLightBakeMeshes,
+  resolveLightBakeStatus,
+  setSceneLightmap,
+  updateSceneLightBakeSettings,
+} from "./light-bake/light-bake-scene";
+
+import { updateMeshLightBakeSettings } from "./scene-document";
+import {
+  SCENE_LIGHT_BAKE_QUALITIES,
+  SCENE_LIGHT_BAKE_RESOLUTIONS,
+  type SceneLightBakeQuality,
+  type SceneLightBakeResolution,
+} from "./scene-settings";
 import { COMPONENT_PATCH_KEYS, RIGID_BODY_PATCH_KEYS, COLLIDER_PATCH_KEYS, LIGHT_PATCH_KEYS, TEXT_PATCH_KEYS, IMAGE_PATCH_KEYS, AUDIO_SOURCE_PATCH_KEYS, INTERACTION_TRIGGER_PATCH_KEYS } from "./component-patch-contract";
 import { untouchedChatgptStarterEntityIds } from "./chatgpt-starter-context";
 import worldAuthoringGuide from "./world-authoring-guide.json";
@@ -439,6 +454,9 @@ const XRIFT_MCP_DOCUMENT_TOOL_HANDLERS: Record<
   get_particle_asset: getParticleAsset,
   update_particle_asset: updateParticleAssetTool,
   update_scene_settings: updateSceneSettings,
+  get_light_bake: getLightBake,
+  set_light_bake_targets: setLightBakeTargets,
+  update_light_bake_settings: updateLightBakeSettings,
   place_asset: placeAsset,
   list_entities: listEntities,
   list_component_definitions: listComponentDefinitions,
@@ -1696,6 +1714,8 @@ function updateSceneSettings(
               "allowInfiniteJump",
             ]),
           ),
+    // ライトベイクの設定は専用のtoolが変える。ここではそのまま引き継ぐ。
+    lightBake: currentSettings.lightBake,
     editor:
       argumentsValue.editor === undefined
         ? currentSettings.editor
@@ -1749,6 +1769,185 @@ function updateSceneSettings(
       synchronizedDuringPlay: context.editorMode === "play",
     },
     activity: "AIがシーン設定を更新しました",
+  };
+}
+
+/** ライトベイクの対象・ライトの扱い・設定・今のライトマップを読む。 */
+function lightBakeSnapshot(bundle: PrototypeVisualProject) {
+  const settings = resolveSceneSettings(bundle.scene.settings).lightBake;
+  const status = resolveLightBakeStatus(bundle.scene, bundle.assets);
+  return {
+    settings: {
+      resolution: settings.resolution,
+      quality: settings.quality,
+      softness: settings.softness,
+    },
+    lightmap:
+      status.state === "none"
+        ? { state: "none" as const }
+        : {
+            state: status.state,
+            assetId: status.lightmap.id,
+            size: status.lightmap.lightmap.size,
+            texelsPerMeter: status.lightmap.lightmap.stats.texelsPerMeter,
+            meshCount: status.lightmap.lightmap.stats.meshCount,
+            entityIds: status.lightmap.lightmap.entityIds,
+            bakedLightComponentIds: status.lightmap.lightmap.bakedLightComponentIds,
+            bakedAt: status.lightmap.lightmap.bakedAt,
+          },
+    meshes: listLightBakeMeshes(bundle.scene, bundle.assets),
+    lights: listLightBakeLights(bundle.scene),
+  };
+}
+
+function getLightBake(
+  context: XriftMcpEditorContext,
+): XriftMcpEditorToolOutcome {
+  return unchanged(
+    context,
+    {
+      projectId: context.bundle.project.projectId,
+      sceneId: context.bundle.scene.sceneId,
+      revision: context.revision,
+      ...lightBakeSnapshot(context.bundle),
+    },
+    "ライトベイクの状態を確認しました",
+  );
+}
+
+function setLightBakeTargets(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const enabled = requiredBoolean(argumentsValue.enabled, "enabled");
+  const selectStatic = optionalBoolean(argumentsValue.selectStatic, "selectStatic") ?? false;
+  const requested = optionalEntityIds(argumentsValue.entityIds);
+  if (!requested && !selectStatic) {
+    invalidArgument("entityIds", "Entity idの配列、またはselectStatic: true");
+  }
+  const scene = context.bundle.scene;
+  const entityIds = selectStatic
+    ? [
+        ...new Set(
+          listLightBakeMeshes(scene, context.bundle.assets)
+            .filter((entry) => !entry.movableReason)
+            .map((entry) => entry.entityId),
+        ),
+      ]
+    : (requested ?? []);
+  let next = scene;
+  for (const entityId of entityIds) {
+    const entity = next.entities[entityId];
+    if (!entity) {
+      throw new XriftMcpEditorToolError("ENTITY_NOT_FOUND", "指定されたEntityが見つかりません", {
+        entityId,
+      });
+    }
+    const meshes = entity.components.filter(
+      (component) => component.type === "mesh" && component.enabled,
+    );
+    if (meshes.length === 0) {
+      throw new XriftMcpEditorToolError(
+        "INVALID_ARGUMENT",
+        "ライトベイクの対象にできるのは、有効なMeshを持つEntityです",
+        { entityId },
+      );
+    }
+    for (const mesh of meshes) {
+      next = updateMeshLightBakeSettings(next, entityId, { enabled }, mesh.id);
+    }
+  }
+  if (next === scene) {
+    return unchanged(
+      context,
+      {
+        projectId: context.bundle.project.projectId,
+        sceneId: scene.sceneId,
+        revision: context.revision,
+        ...lightBakeSnapshot(context.bundle),
+      },
+      "ライトベイクの対象はすでに指定された状態です",
+    );
+  }
+  const bundle = touchProject(context, { ...context.bundle, scene: next });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: context.assetSelection,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      ...lightBakeSnapshot(bundle),
+    },
+    activity: enabled
+      ? `AIが${entityIds.length}件のMeshをライトベイクの対象にしました`
+      : `AIが${entityIds.length}件のMeshをライトベイクの対象から外しました`,
+  };
+}
+
+function updateLightBakeSettings(
+  context: XriftMcpEditorContext,
+  argumentsValue: Record<string, unknown>,
+): XriftMcpEditorToolOutcome {
+  assertWritableContext(context, argumentsValue);
+  const patch: Parameters<typeof updateSceneLightBakeSettings>[1] = {};
+  if (argumentsValue.resolution !== undefined) {
+    if (!(SCENE_LIGHT_BAKE_RESOLUTIONS as readonly unknown[]).includes(argumentsValue.resolution)) {
+      invalidArgument("resolution", "256、512、1024、2048、4096のいずれか");
+    }
+    patch.resolution = argumentsValue.resolution as SceneLightBakeResolution;
+  }
+  if (argumentsValue.quality !== undefined) {
+    if (!(SCENE_LIGHT_BAKE_QUALITIES as readonly unknown[]).includes(argumentsValue.quality)) {
+      invalidArgument("quality", "draft、standard、highのいずれか");
+    }
+    patch.quality = argumentsValue.quality as SceneLightBakeQuality;
+  }
+  if (argumentsValue.softness !== undefined) {
+    const softness = argumentsValue.softness;
+    if (typeof softness !== "number" || !Number.isFinite(softness) || softness < 0 || softness > 1) {
+      invalidArgument("softness", "0以上1以下の数値");
+    }
+    patch.softness = softness as number;
+  }
+  const removeLightmap = optionalBoolean(argumentsValue.removeLightmap, "removeLightmap") ?? false;
+  if (Object.keys(patch).length === 0 && !removeLightmap) {
+    invalidArgument("Light bake settings", "resolution、quality、softness、removeLightmapのいずれか");
+  }
+  let next = updateSceneLightBakeSettings(context.bundle.scene, patch);
+  if (removeLightmap) next = setSceneLightmap(next, undefined);
+  if (next === context.bundle.scene) {
+    return unchanged(
+      context,
+      {
+        projectId: context.bundle.project.projectId,
+        sceneId: context.bundle.scene.sceneId,
+        revision: context.revision,
+        ...lightBakeSnapshot(context.bundle),
+      },
+      "ライトベイクの設定はすでに指定された状態です",
+    );
+  }
+  const bundle = touchProject(context, { ...context.bundle, scene: next });
+  return {
+    changed: true,
+    bundle,
+    sceneSelection: context.sceneSelection,
+    assetSelection: context.assetSelection,
+    result: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      revisionBefore: context.revision,
+      revisionAfter: context.revision + 1,
+      ...lightBakeSnapshot(bundle),
+    },
+    activity: removeLightmap
+      ? "AIが焼いた陰影をSceneから外しました"
+      : "AIがライトベイクの設定を更新しました",
   };
 }
 

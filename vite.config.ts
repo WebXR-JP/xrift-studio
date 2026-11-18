@@ -32,6 +32,9 @@ export default defineConfig(async ({ mode }) => ({
       // first encode otherwise re-optimizes dependencies and reloads the
       // page while the caller is waiting for the result.
       "ktx2-encoder",
+      // Same for the lightmap writer: only the light bake Worker imports it,
+      // and a reload in the middle of the first bake would throw the bake away.
+      "three/examples/jsm/exporters/EXRExporter.js",
       // Built-shell fixtures import loader subpaths before the lazy Editor loads.
       // Prebundle them so the first browser test keeps a stable module graph.
       ...(mode === "e2e" ? [

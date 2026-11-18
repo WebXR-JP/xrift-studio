@@ -95,7 +95,29 @@ export type MeshComponent = ComponentBase & {
   renderOrder?: number;
   /** Static per-Entity Model pose. Timeline authoring can keyframe this later. */
   modelPose?: ModelPoseState;
+  /**
+   * ライトベイクの対象にするかどうか。
+   *
+   * 対象のMeshは、ベイクのときに影を落とし、光を跳ね返し、焼いた陰影を受ける。
+   * 省略は対象外。動かす予定のMeshは対象にしない。焼いた陰影は動いても元の
+   * 場所に残る。
+   */
+  lightBake?: MeshLightBakeSettings;
 };
+
+export type MeshLightBakeSettings = {
+  enabled: boolean;
+  /** ライトマップの細かさの倍率。省略は1。大きくするとこのMeshだけ細かく焼く。 */
+  scale?: number;
+};
+
+export const MESH_LIGHT_BAKE_SCALE_MIN = 0.1;
+export const MESH_LIGHT_BAKE_SCALE_MAX = 8;
+
+/** Meshがライトベイクの対象か。 */
+export function isMeshLightBakeTarget(mesh: MeshComponent): boolean {
+  return mesh.enabled && mesh.lightBake?.enabled === true;
+}
 
 export type ModelPoseState = {
   /** Bone local Euler rotation offsets from the imported rest pose, in radians. */
@@ -295,12 +317,24 @@ export type LightComponent = ComponentBase & {
   penumbra?: number;
   width?: number;
   height?: number;
+  /**
+   * ライトベイクでの扱い。省略は "realtime"。
+   *
+   * - realtime: これまでどおり描画時に照らす。ベイクは跳ね返った光だけを焼く。
+   * - baked: 直接光と影まで焼く。ライトマップがある間、このライトは描画時に
+   *   消える。ベイクの対象でないMeshやアバターには届かなくなる。
+   */
+  bakeMode?: LightBakeMode;
 };
+
+export const LIGHT_BAKE_MODES = ["realtime", "baked"] as const;
+export type LightBakeMode = (typeof LIGHT_BAKE_MODES)[number];
 
 export type LightPatch = Partial<
   Pick<
     LightComponent,
     | "enabled"
+    | "bakeMode"
     | "lightType"
     | "color"
     | "intensity"
@@ -2152,6 +2186,7 @@ export function updateLightComponent(
   );
   if (!entity || !current) return scene;
   if (patch.enabled !== undefined && typeof patch.enabled !== "boolean") return scene;
+  if (patch.bakeMode !== undefined && !LIGHT_BAKE_MODES.includes(patch.bakeMode)) return scene;
   if (patch.lightType !== undefined && !isLightType(patch.lightType)) return scene;
   if (
     patch.color !== undefined &&
@@ -2927,6 +2962,54 @@ export function updateMeshShadowSettings(
   });
 }
 
+export type MeshLightBakePatch = {
+  enabled?: boolean;
+  /** `null` は倍率の指定を外して1へ戻す。 */
+  scale?: number | null;
+};
+
+/** Meshをライトベイクの対象にする、または外す。細かさの倍率もここで変える。 */
+export function updateMeshLightBakeSettings(
+  scene: SceneDocument,
+  entityId: string,
+  patch: MeshLightBakePatch,
+  componentId?: string,
+): SceneDocument {
+  const entity = scene.entities[entityId];
+  const mesh = entity ? getMesh(entity, componentId) : undefined;
+  if (!entity || !mesh) return scene;
+  if (patch.enabled !== undefined && typeof patch.enabled !== "boolean") return scene;
+  if (
+    patch.scale !== undefined &&
+    patch.scale !== null &&
+    (!Number.isFinite(patch.scale) ||
+      patch.scale < MESH_LIGHT_BAKE_SCALE_MIN ||
+      patch.scale > MESH_LIGHT_BAKE_SCALE_MAX)
+  ) {
+    return scene;
+  }
+  const enabled = patch.enabled ?? mesh.lightBake?.enabled ?? false;
+  const scale = patch.scale === undefined ? mesh.lightBake?.scale : (patch.scale ?? undefined);
+  const normalizedScale = scale === 1 ? undefined : scale;
+  if (
+    enabled === (mesh.lightBake?.enabled ?? false) &&
+    normalizedScale === mesh.lightBake?.scale
+  ) {
+    return scene;
+  }
+  const next: MeshComponent = { ...mesh };
+  if (!enabled && normalizedScale === undefined) {
+    // 対象外で倍率も既定なら、項目ごと持たない。保存した文書を既定の形に保つ。
+    delete next.lightBake;
+  } else {
+    next.lightBake = {
+      enabled,
+      ...(normalizedScale !== undefined ? { scale: normalizedScale } : {}),
+    };
+  }
+  return replaceMesh(scene, entityId, mesh.id, next);
+}
+
 export function updateMeshVisibilitySettings(
   scene: SceneDocument,
   entityId: string,
@@ -3486,6 +3569,8 @@ function cloneSceneComponent(
       materialBindings: component.materialBindings.map((binding) => ({
         ...binding,
       })),
+      // 複製したMeshも同じくベイクの対象にする。次のベイクで一緒に焼かれる。
+      ...(component.lightBake ? { lightBake: { ...component.lightBake } } : {}),
       ...(component.modelPose
         ? {
             modelPose: {

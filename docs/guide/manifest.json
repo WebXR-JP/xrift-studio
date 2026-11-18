@@ -1,7 +1,7 @@
 {
   "title": "XRift Studio 使い方ガイド",
   "reviewedVersion": "1.0.19",
-  "reviewedOn": "2026-11-14",
+  "reviewedOn": "2026-11-18",
   "siteUrl": "https://webxr-jp.github.io/xrift-studio/guide/",
   "groups": [
     {
@@ -558,10 +558,24 @@
       "file": "lighting.md",
       "keywords": "ライト 明るさ 暗い 照明 影 IBL Bloom Emissive Exposure SSAO",
       "related": [
+        "light-bake",
         "materials",
         "sky-and-water",
         "performance",
         "video-tutorials"
+      ]
+    },
+    {
+      "slug": "light-bake",
+      "title": "ライトベイクで陰影を焼く",
+      "description": "動かないMeshを対象に選び、やわらかい影と跳ね返った光をライトマップに焼きます。ライトの扱い、設定、焼き直しを説明します。",
+      "group": "create",
+      "file": "light-bake.md",
+      "keywords": "ライトベイク ベイク ライトマップ lightmap 焼く 影 間接光 GI グローバルイルミネーション UV2 static 軽くする",
+      "related": [
+        "lighting",
+        "performance",
+        "publishing"
       ]
     },
     {

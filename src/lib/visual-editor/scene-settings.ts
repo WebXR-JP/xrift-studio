@@ -199,6 +199,28 @@ export type ScenePhysicsSettings = {
   allowInfiniteJump: boolean;
 };
 
+export const SCENE_LIGHT_BAKE_RESOLUTIONS = [256, 512, 1024, 2048, 4096] as const;
+export type SceneLightBakeResolution = (typeof SCENE_LIGHT_BAKE_RESOLUTIONS)[number];
+
+export const SCENE_LIGHT_BAKE_QUALITIES = ["draft", "standard", "high"] as const;
+export type SceneLightBakeQuality = (typeof SCENE_LIGHT_BAKE_QUALITIES)[number];
+
+/**
+ * ライトベイクの設定と、Sceneが使っているライトマップ。
+ *
+ * ベイクの結果そのものはLightmap Assetが持ち、Sceneはそのidだけを持つ。
+ * 対象のMeshとライトの扱いは、それぞれのComponentが持つ。
+ */
+export type SceneLightBakeSettings = {
+  /** このSceneが描画に使うLightmap Asset。無ければ焼いた陰影は無い。 */
+  lightmapAssetId?: string;
+  /** ライトマップ画像の一辺の上限（ピクセル）。 */
+  resolution: SceneLightBakeResolution;
+  quality: SceneLightBakeQuality;
+  /** 焼く影のやわらかさ。0でくっきり、1で大きくぼける。 */
+  softness: number;
+};
+
 export type SceneGizmoSettings = {
   size: number;
   gridVisible: boolean;
@@ -226,6 +248,7 @@ export type SceneSettings = {
   postprocessing: ScenePostprocessingSettings;
   vegetation: SceneVegetationSettings;
   physics: ScenePhysicsSettings;
+  lightBake: SceneLightBakeSettings;
   editor: {
     backgroundColor: string;
     gizmo: SceneGizmoSettings;
@@ -333,6 +356,14 @@ export const DEFAULT_SCENE_SETTINGS: SceneSettings = {
     gravity: 9.81,
     allowInfiniteJump: true,
   },
+  lightBake: {
+    lightmapAssetId: undefined,
+    // 1024pxは、家一軒ほどのSceneを数cm刻みで焼ける大きさ。画像は半精度で
+    // 持つので、2048pxにするとダウンロードもGPUメモリも4倍になる。
+    resolution: 1024,
+    quality: "standard",
+    softness: 0.35,
+  },
   editor: {
     backgroundColor: "#18181b",
     gizmo: {
@@ -425,6 +456,7 @@ export function resolveSceneSettings(value: unknown): SceneSettings {
   const vegetation = isRecord(settings.vegetation) ? settings.vegetation : {};
   const editor = isRecord(settings.editor) ? settings.editor : {};
   const gizmo = isRecord(editor.gizmo) ? editor.gizmo : {};
+  const lightBake = isRecord(settings.lightBake) ? settings.lightBake : {};
   const resolvedSkyboxImageAssetId =
     typeof skybox.imageAssetId === "string" && skybox.imageAssetId.trim()
       ? skybox.imageAssetId
@@ -666,6 +698,24 @@ export function resolveSceneSettings(value: unknown): SceneSettings {
       allowInfiniteJump: booleanOr(
         physics.allowInfiniteJump,
         DEFAULT_SCENE_SETTINGS.physics.allowInfiniteJump,
+      ),
+    },
+    lightBake: {
+      lightmapAssetId:
+        typeof lightBake.lightmapAssetId === "string" && lightBake.lightmapAssetId.trim()
+          ? lightBake.lightmapAssetId
+          : undefined,
+      resolution: (SCENE_LIGHT_BAKE_RESOLUTIONS as readonly unknown[]).includes(
+        lightBake.resolution,
+      )
+        ? (lightBake.resolution as SceneLightBakeResolution)
+        : DEFAULT_SCENE_SETTINGS.lightBake.resolution,
+      quality: (SCENE_LIGHT_BAKE_QUALITIES as readonly unknown[]).includes(lightBake.quality)
+        ? (lightBake.quality as SceneLightBakeQuality)
+        : DEFAULT_SCENE_SETTINGS.lightBake.quality,
+      softness: Math.min(
+        finiteOr(lightBake.softness, DEFAULT_SCENE_SETTINGS.lightBake.softness, 0),
+        1,
       ),
     },
     editor: {

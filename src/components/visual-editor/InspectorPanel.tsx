@@ -5994,6 +5994,7 @@ export function InspectorPanel({
   onUpdateXriftComponent,
   onRemoveXriftComponent,
   sceneSettingsOpen,
+  lightBake,
   assetImportSettings,
   onCloseSceneSettings,
   onResetLayout,
@@ -6139,6 +6140,8 @@ export function InspectorPanel({
   onRemoveXriftComponent: (entityId: string, componentId: string) => void;
   /** The right inspector can temporarily present scene-wide settings. */
   sceneSettingsOpen: boolean;
+  /** ライトベイクのパネル。開いている間はInspectorの内容をこれに差し替える。 */
+  lightBake?: { open: boolean; onClose: () => void; panel: ReactNode };
   assetImportSettings?: ReactNode;
   onCloseSceneSettings: () => void;
   onResetLayout: () => void;
@@ -6181,10 +6184,15 @@ export function InspectorPanel({
       : xriftDefinition
         ? EDITOR_ICONS[xriftDefinition.icon]
         : EDITOR_ICONS.sceneEntity;
-  const InspectorIcon = sceneSettingsOpen ? EDITOR_ICONS.settings : EntityIcon;
+  const lightBakeOpen = lightBake?.open === true;
+  const InspectorIcon = lightBakeOpen
+    ? EDITOR_ICONS.light
+    : sceneSettingsOpen ? EDITOR_ICONS.settings : EntityIcon;
   const multiSelectionActive =
-    !sceneSettingsOpen && (asset ? selectedAssetIds.length > 1 : selectedEntityIds.length > 1);
-  const inspectorContextLabel = sceneSettingsOpen
+    !sceneSettingsOpen && !lightBakeOpen && (asset ? selectedAssetIds.length > 1 : selectedEntityIds.length > 1);
+  const inspectorContextLabel = lightBakeOpen
+    ? `ライトベイク · ${scene.name}`
+    : sceneSettingsOpen
     ? `シーン設定 · ${scene.name}`
     : asset && selectedAssetIds.length > 1
       ? `Assets · ${selectedAssetIds.length}件`
@@ -6198,7 +6206,14 @@ export function InspectorPanel({
    * what it goes back to, and the name of the layer that is showing now.
    */
   const inspectorBackTarget: { label: string; current: string; onBack: () => void; title: string } | null =
-    sceneSettingsOpen
+    lightBakeOpen && lightBake
+      ? {
+          label: asset?.name ?? entity?.name ?? "Inspector",
+          current: "ライトベイク",
+          onBack: lightBake.onClose,
+          title: `ライトベイクを閉じて${asset?.name ?? entity?.name ?? "Inspector"}へ戻る`,
+        }
+      : sceneSettingsOpen
       ? {
           label: asset?.name ?? entity?.name ?? "Inspector",
           current: "シーン設定",
@@ -6262,7 +6277,9 @@ export function InspectorPanel({
         </div>
       ) : null}
       <div className={`scrollbar-thin min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain ${touch ? "p-2" : "p-3"}`}>
-        {sceneSettingsOpen ? (
+        {lightBakeOpen && lightBake ? (
+          lightBake.panel
+        ) : sceneSettingsOpen ? (
           <>
           <section className="mb-3 rounded-md border border-slate-200 bg-white p-2.5" aria-label="エディターの操作">
             <button

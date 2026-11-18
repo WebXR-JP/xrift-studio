@@ -1,4 +1,18 @@
 import { createEditorCanvasEvents } from "../../lib/visual-editor/canvas-events";
+import {
+  EditorSceneLightmap,
+  LightBakeSceneBridgeBinding,
+  LightBakeTargetOverlay,
+  SceneBakedLightContext,
+  type LightBakeSceneBridge,
+} from "./SceneLightBake";
+import { XRIFT_LIGHTMAP_SCOPE_USER_DATA_KEY } from "../../../packages/xrift-studio-runtime/src/lightmap-apply";
+import { XRIFT_LIGHTMAP_SCALE_USER_DATA_KEY } from "../../lib/visual-editor/light-bake/collect-scene";
+import {
+  resolveSceneLightmap,
+  suppressedBakedLightComponentIds,
+} from "../../lib/visual-editor/light-bake/light-bake-scene";
+import { isMeshLightBakeTarget } from "../../lib/visual-editor/scene-document";
 import { XRiftStudioMeshColliders, XriftColliderLoadContext } from "../../../packages/xrift-studio-runtime/src/mesh-colliders";
 import { bakeXriftColliderGeometry } from "../../../packages/xrift-studio-runtime/src/mesh-collider-geometry";
 import { XriftExtrudeGeometry, XriftPrimitiveGeometry } from "../../../packages/xrift-studio-runtime/src/primitive-geometry";
@@ -1371,6 +1385,8 @@ function LightVisual({
 }) {
   const mapAsset = component.mapAssetId ? assets.assets[component.mapAssetId] : undefined;
   const [map, setMap] = useState<Texture | null>(null);
+  // ライトマップへ直接光まで焼いたライトは、二重に照らさないよう描画では消す。
+  const baked = useContext(SceneBakedLightContext).has(component.id);
   useEffect(() => {
     let active = true;
     let loaded: Texture | null = null;
@@ -1430,6 +1446,7 @@ function LightVisual({
           penumbra={component.penumbra ?? 0.5}
           width={component.width ?? 1}
           height={component.height ?? 1}
+          baked={baked}
         />
       ) : null}
       {showHelperVisual && component.enabled ? (
@@ -1775,7 +1792,19 @@ function ComponentVisual({
     case "mesh":
       if (!viewportMaterialStyle) return null;
       return (
-        <group userData={{ meshComponentId: component.id }}>
+        <group
+          userData={
+            // ベイクの対象には印を付ける。ベイクするときも、焼いた陰影を貼るときも、
+            // この印の配下にあるMeshだけを扱う。
+            isMeshLightBakeTarget(component)
+              ? {
+                  meshComponentId: component.id,
+                  [XRIFT_LIGHTMAP_SCOPE_USER_DATA_KEY]: true,
+                  [XRIFT_LIGHTMAP_SCALE_USER_DATA_KEY]: component.lightBake?.scale ?? 1,
+                }
+              : { meshComponentId: component.id }
+          }
+        >
           <MeshVisual
             component={component}
             graphAnimationCues={graphAnimationCues}
@@ -5177,6 +5206,10 @@ export function SceneViewport({
   onBoundsResult,
   onExitRecordingView,
   recordingPanel,
+  lightBakePicking = false,
+  onLightBakePick,
+  lightBakeBridgeRef,
+  onLightmapStatus,
 }: {
   scene: SceneDocument;
   assets: AssetManifest;
@@ -5281,6 +5314,15 @@ export function SceneViewport({
   onExitRecordingView?: () => void;
   /** Recording controls opened from the Scene View toolbar. */
   recordingPanel?: RecordingPanelProps;
+  /** ライトベイクの対象を選んでいる間はtrue。クリックが選択ではなく対象の切り替えになる。 */
+  lightBakePicking?: boolean;
+  onLightBakePick?: (entityId: string) => void;
+  /** 描画中のシーンをベイク用に読む窓口を受け取る。 */
+  lightBakeBridgeRef?: MutableRefObject<LightBakeSceneBridge | null>;
+  /** ライトマップを何枚のMeshへ貼れたか、読めなかった場合はその理由。 */
+  onLightmapStatus?: (
+    status: { applied: number; total: number } | { error: string } | null,
+  ) => void;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const { tablet: isTablet, phone, touch } = useEditorDevice();
@@ -5543,6 +5585,26 @@ export function SceneViewport({
     [assets, prefabs, scene],
   );
   const modelInstancingEntities = useMemo(() => collectModelInstancingEntities(preview.scene, assets), [preview.scene, assets]);
+  const sceneLightmap = useMemo(
+    () => resolveSceneLightmap(preview.scene, assets),
+    [preview.scene, assets],
+  );
+  // 中身が同じなら同じSetを返す。Sceneを編集するたびに全Lightを描き直さないため。
+  const bakedLightIdsRef = useRef<ReadonlySet<string>>(new Set<string>());
+  // ライトマップが実際に出ている間だけ、焼いたライトを消す。読み込み中や
+  // 読めなかったときは、ライトを点けたままにしてSceneを暗くしない。
+  const [lightmapShown, setLightmapShown] = useState(false);
+  const bakedLightIds = useMemo(() => {
+    const next = lightmapShown
+      ? suppressedBakedLightComponentIds(preview.scene, assets)
+      : new Set<string>();
+    const previous = bakedLightIdsRef.current;
+    if (next.size === previous.size && [...next].every((id) => previous.has(id))) {
+      return previous;
+    }
+    bakedLightIdsRef.current = next;
+    return next;
+  }, [preview.scene, assets, lightmapShown]);
   const sceneSettings = useMemo(
     () => resolveSceneSettings(scene.settings),
     [scene.settings],
@@ -6268,6 +6330,13 @@ export function SceneViewport({
         });
         const fallbackEntityId =
           pick?.authoringEntityId ?? leftGesture.pressedEntityId;
+        if (lightBakePicking && editorMode === "edit") {
+          // 対象を選んでいる間は、クリックしたMeshそのものを切り替える。
+          // 親のグループを先に選ぶ通常の選び方は使わない。
+          if (fallbackEntityId) onLightBakePick?.(fallbackEntityId);
+          leftPointerGestureRef.current = null;
+          return;
+        }
         // Clicking the selected Entity again drills into its subtree, so
         // content buried inside a large mesh stays reachable by clicks alone.
         const entityId =
@@ -6506,7 +6575,10 @@ export function SceneViewport({
         !touchNavigationActive &&
         // A brush is a gesture over the ground; leaving gizmos live lets a
         // stroke grab and drag an object instead of painting.
-        !terrainEditing,
+        !terrainEditing &&
+        // ベイクの対象を選んでいる間のクリックは、対象の切り替えだけに使う。
+        // ギズモが残っていると、クリックが物を動かす操作になってしまう。
+        !lightBakePicking,
       playing: editorMode === "play",
       physicsEnabled: editorMode === "play" && projectKind === "world",
       transformMode,
@@ -6531,6 +6603,7 @@ export function SceneViewport({
       onTransformCommit,
       projectKind,
       projectPath,
+      lightBakePicking,
       renderDisplayMode,
       terrainEditing,
       touchNavigationActive,
@@ -7196,6 +7269,7 @@ export function SceneViewport({
           {qualityMode === "auto" && automaticQuality !== "quarter" && editorMode === "edit" && !thumbnailCaptureActive && !recordingViewActive ? (
             <ViewportLoadProtection onReduce={reduceAutomaticQuality} />
           ) : null}
+          <SceneBakedLightContext.Provider value={bakedLightIds}>
           <SceneLightingContext.Provider value={viewportLighting}>
           <SceneWindContext.Provider value={viewportWind}>
           <color
@@ -7347,6 +7421,27 @@ export function SceneViewport({
                   selectedEntityIds={selectedEntityIds}
                 >
                   {editorMode === "play" ? <XriftModelInstancing entityIds={modelInstancingEntities} entityKey="renderedEntityId" /> : null}
+                  {/* 焼いた陰影。ライトを見せない表示では貼らない。貼る処理も読む
+                      ファイルも、公開したワールドと同じものを使う。 */}
+                  {sceneLightmap && projectPath && displayProfile.showSceneLighting ? (
+                    <EditorSceneLightmap
+                      key={sceneLightmap.id}
+                      asset={sceneLightmap}
+                      projectPath={projectPath}
+                      onShownChange={setLightmapShown}
+                      onStatus={(status) =>
+                        onLightmapStatus?.(
+                          "error" in status
+                            ? status
+                            : { applied: status.applied, total: status.total },
+                        )
+                      }
+                    />
+                  ) : null}
+                  {lightBakeBridgeRef ? (
+                    <LightBakeSceneBridgeBinding bridgeRef={lightBakeBridgeRef} />
+                  ) : null}
+                  {lightBakePicking && editorMode === "edit" ? <LightBakeTargetOverlay /> : null}
                   {preview.scene.rootEntityIds.map((entityId) => (
                     <SceneEntityHierarchy key={entityId} entityId={entityId} />
                   ))}
@@ -7402,6 +7497,7 @@ export function SceneViewport({
           />
           </SceneWindContext.Provider>
           </SceneLightingContext.Provider>
+          </SceneBakedLightContext.Provider>
         </Canvas>
         {recordingViewActive && recordingViewport.showRecordingIndicator ? (
           <RecordingFrameBadge profile={recordingProfile} />

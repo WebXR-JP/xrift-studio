@@ -305,6 +305,10 @@ function cloneBuiltinAsset(asset: SceneAsset): SceneAsset {
     return { ...asset, source: { ...asset.source } };
   }
 
+  if (asset.kind === "lightmap") {
+    return { ...asset, source: { ...asset.source } };
+  }
+
   return { ...asset, source: { ...asset.source } };
 }
 
