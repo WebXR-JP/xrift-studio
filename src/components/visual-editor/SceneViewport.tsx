@@ -18,7 +18,10 @@ import {
   SceneEntityTreeProvider,
   useSceneEntityNode,
   useSceneEntityTreeShared,
+  useSceneSelectedEntityIds,
 } from "./scene-entity-tree-context";
+import { useContentStable } from "./content-equal";
+import { useTrackedAssets } from "./tracked-assets";
 import {
   Canvas,
   addAfterEffect,
@@ -2337,7 +2340,7 @@ function RuntimeOwnedRigidBody({
   );
 }
 
-function EntityObject({
+function EntityObjectView({
   entity,
   authoringEntityId,
   assets,
@@ -2352,7 +2355,6 @@ function EntityObject({
   runtimeRevision,
   transformMode,
   transformSpace,
-  selectedEntityIds,
   gizmo,
   projectPath,
   onTransformCommit,
@@ -2381,7 +2383,6 @@ function EntityObject({
   runtimeRevision: number;
   transformMode: TransformMode;
   transformSpace: TransformSpace;
-  selectedEntityIds: readonly string[];
   gizmo: SceneSettings["editor"]["gizmo"];
   projectPath?: string;
   onTransformCommit: (entityId: string, patch: TransformPatch, peers?: readonly { entityId: string; patch: TransformPatch }[]) => void;
@@ -2646,7 +2647,6 @@ function EntityObject({
           objectRef={objectRef}
           transformMode={transformMode}
           transformSpace={transformSpace}
-          selectedEntityIds={selectedEntityIds}
           gizmo={gizmo}
           onDragStart={() => {
             transformDraggingRef.current = true;
@@ -2662,6 +2662,13 @@ function EntityObject({
     </>
   );
 }
+
+/**
+ * One Entity in the Scene View. Memoised because its parent node re-renders
+ * whenever anything the tree shares changes — the Asset manifest above all —
+ * while this Entity's own inputs usually have not.
+ */
+const EntityObject = memo(EntityObjectView);
 
 function getObjectAuthoringTransform(object: Object3D): TransformPatch {
   const boneRotation = object.userData.xriftModelNodeBoneRotation as Vec3 | undefined;
@@ -2687,7 +2694,6 @@ function EntityTransformGizmo({
   objectRef,
   transformMode,
   transformSpace,
-  selectedEntityIds,
   gizmo,
   onDragStart,
   onDragEnd,
@@ -2696,7 +2702,6 @@ function EntityTransformGizmo({
   objectRef: MutableRefObject<Group>;
   transformMode: TransformMode;
   transformSpace: TransformSpace;
-  selectedEntityIds: readonly string[];
   gizmo: SceneSettings["editor"]["gizmo"];
   onDragStart: () => void;
   onDragEnd: (peers?: readonly { entityId: string; patch: TransformPatch }[]) => void;
@@ -2706,6 +2711,10 @@ function EntityTransformGizmo({
   const invalidate = useThree((state) => state.invalidate);
   const localControlsRef = useRef<ElementRef<typeof TransformControls> | null>(null);
   const pivotRef = useRef<Group>(null!);
+  // Read here rather than passed down: the gizmo is the only thing in the
+  // tree that needs the whole selection, and threading it through every
+  // Entity re-rendered the Scene on each click.
+  const selectedEntityIds = useSceneSelectedEntityIds();
   const multiple = selectedEntityIds.length > 1;
   const lastTouchRef = useRef<PointerEvent | null>(null);
   const draggingTouchRef = useRef<PointerEvent | null>(null);
@@ -3320,20 +3329,39 @@ const SceneEntityHierarchy = memo(function SceneEntityHierarchy({
 }) {
   const node = useSceneEntityNode(entityId);
   const shared = useSceneEntityTreeShared();
+  // This Entity's own view of the Assets: it changes only when an Asset this
+  // Entity's visuals actually read does, so editing one Material no longer
+  // re-renders the Entities that do not use it.
+  const assets = useTrackedAssets(shared.assets);
   const entity = node.entity;
-  if (!entity) return null;
-  const ownRigidBody = entity.components.find(
+  const ownRigidBody = entity?.components.find(
     (component): component is RigidBodyComponent =>
       component.type === "rigid-body" && component.enabled,
   );
   const rigidBodyOwner = ownRigidBody ?? inheritedRigidBody;
-  const effectivelyEnabled = ancestorEnabled && entity.enabled;
+  const effectivelyEnabled = ancestorEnabled && (entity?.enabled ?? false);
+  // Built once per change to the child list. A fresh array of elements on
+  // every render would be a new `children` prop, and `EntityObject` could
+  // never skip a render.
+  const childNodes = useMemo(
+    () =>
+      node.childIds.map((childId) => (
+        <SceneEntityHierarchy
+          key={childId}
+          entityId={childId}
+          inheritedRigidBody={rigidBodyOwner}
+          ancestorEnabled={effectivelyEnabled}
+        />
+      )),
+    [effectivelyEnabled, node.childIds, rigidBodyOwner],
+  );
+  if (!entity) return null;
 
   return (
     <EntityObject
       entity={entity}
       authoringEntityId={node.authoringEntityId}
-      assets={shared.assets}
+      assets={assets}
       projectPath={shared.projectPath}
       selected={node.selected}
       primary={node.primary}
@@ -3346,7 +3374,6 @@ const SceneEntityHierarchy = memo(function SceneEntityHierarchy({
       runtimeRevision={node.runtimeRevision}
       transformMode={shared.transformMode}
       transformSpace={shared.transformSpace}
-      selectedEntityIds={shared.selectedEntityIds}
       gizmo={shared.gizmo}
       onTransformCommit={shared.onTransformCommit}
       onDraggingChange={shared.onDraggingChange}
@@ -3357,14 +3384,7 @@ const SceneEntityHierarchy = memo(function SceneEntityHierarchy({
       displayProfile={shared.displayProfile}
       renderThumbnail={shared.renderThumbnail}
     >
-      {node.childIds.map((childId) => (
-        <SceneEntityHierarchy
-          key={childId}
-          entityId={childId}
-          inheritedRigidBody={rigidBodyOwner}
-          ancestorEnabled={effectivelyEnabled}
-        />
-      ))}
+      {childNodes}
     </EntityObject>
   );
 });
@@ -5572,9 +5592,15 @@ export function SceneViewport({
     () => resolveSceneWind(sceneSettings.vegetation),
     [sceneSettings.vegetation],
   );
-  const viewportLighting = useMemo(
-    () => resolveSceneLighting(scene, sceneSettings.ambient),
-    [scene, sceneSettings.ambient],
+  // Resolved from the Scene, so it is recomputed on every edit, and nearly
+  // every edit leaves the key light where it was. Every Mesh reads this
+  // context; without holding on to the previous object, moving one Entity
+  // re-rendered all of them.
+  const viewportLighting = useContentStable(
+    useMemo(
+      () => resolveSceneLighting(scene, sceneSettings.ambient),
+      [scene, sceneSettings.ambient],
+    ),
   );
   const effectiveDisplayMode = editorMode === "play" ? "scene" : displayMode;
   // Play and thumbnail capture are previews of the published world, so they
@@ -6485,7 +6511,6 @@ export function SceneViewport({
       physicsEnabled: editorMode === "play" && projectKind === "world",
       transformMode,
       transformSpace,
-      selectedEntityIds,
       gizmo: activeGizmo,
       onTransformCommit,
       onDraggingChange: handleTransformDraggingChange,
@@ -6507,7 +6532,6 @@ export function SceneViewport({
       projectKind,
       projectPath,
       renderDisplayMode,
-      selectedEntityIds,
       terrainEditing,
       touchNavigationActive,
       transformMode,
@@ -7320,6 +7344,7 @@ export function SceneViewport({
                 <SceneEntityTreeProvider
                   input={entityTreeInput}
                   shared={entityTreeShared}
+                  selectedEntityIds={selectedEntityIds}
                 >
                   {editorMode === "play" ? <XriftModelInstancing entityIds={modelInstancingEntities} entityKey="renderedEntityId" /> : null}
                   {preview.scene.rootEntityIds.map((entityId) => (

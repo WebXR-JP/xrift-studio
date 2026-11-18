@@ -43,7 +43,6 @@ export type SceneEntityTreeShared = {
   physicsEnabled: boolean;
   transformMode: TransformMode;
   transformSpace: TransformSpace;
-  selectedEntityIds: readonly string[];
   gizmo: SceneGizmoSettings;
   onTransformCommit: (entityId: string, patch: TransformPatch, peers?: readonly { entityId: string; patch: TransformPatch }[]) => void;
   onDraggingChange: (dragging: boolean) => void;
@@ -56,6 +55,14 @@ export type SceneEntityTreeShared = {
 
 const StoreContext = createContext<SceneEntityTreeStore | null>(null);
 const SharedContext = createContext<SceneEntityTreeShared | null>(null);
+/**
+ * The whole selection, in order. Kept apart from `SharedContext` on purpose:
+ * it changes on every click, and only the transform gizmo — one node — needs
+ * the list. Each Entity learns whether it is selected from its own store
+ * slice, so a selection change wakes the Entities that gained or lost it and
+ * nothing else.
+ */
+const SelectionContext = createContext<readonly string[] | null>(null);
 
 const OUTSIDE_PROVIDER =
   "SceneEntityTreeProviderの外でEntity treeを描画しています";
@@ -63,10 +70,12 @@ const OUTSIDE_PROVIDER =
 export function SceneEntityTreeProvider({
   input,
   shared,
+  selectedEntityIds,
   children,
 }: {
   input: SceneEntityTreeInput;
   shared: SceneEntityTreeShared;
+  selectedEntityIds: readonly string[];
   children: ReactNode;
 }) {
   const storeRef = useRef<SceneEntityTreeStore | null>(null);
@@ -82,7 +91,11 @@ export function SceneEntityTreeProvider({
 
   return (
     <StoreContext.Provider value={store}>
-      <SharedContext.Provider value={shared}>{children}</SharedContext.Provider>
+      <SharedContext.Provider value={shared}>
+        <SelectionContext.Provider value={selectedEntityIds}>
+          {children}
+        </SelectionContext.Provider>
+      </SharedContext.Provider>
     </StoreContext.Provider>
   );
 }
@@ -91,6 +104,13 @@ export function useSceneEntityTreeShared(): SceneEntityTreeShared {
   const shared = useContext(SharedContext);
   if (!shared) throw new Error(OUTSIDE_PROVIDER);
   return shared;
+}
+
+/** Every selected Entity id. Re-renders the caller on each selection change. */
+export function useSceneSelectedEntityIds(): readonly string[] {
+  const selection = useContext(SelectionContext);
+  if (!selection) throw new Error(OUTSIDE_PROVIDER);
+  return selection;
 }
 
 export function useSceneEntityNode(entityId: string): SceneEntityNodeSnapshot {

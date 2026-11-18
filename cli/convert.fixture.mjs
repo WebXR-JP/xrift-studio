@@ -135,6 +135,7 @@ import { runScriptExecutionScopeFixtureAssertions } from "../src/components/visu
 import { runXriftComponentRegistryFixtureAssertions } from "../src/lib/visual-editor/compiler/xrift-component-registry.fixture.ts";
 import { runEntityClipboardFixtureAssertions } from "../src/lib/visual-editor/entity-clipboard.fixture.ts";
 import { runSceneEntityTreeStoreFixtureAssertions } from "../src/components/visual-editor/scene-entity-tree-store.fixture.ts";
+import { runRenderIsolationFixtureAssertions } from "../src/components/visual-editor/render-isolation.fixture.ts";
 import { runSceneClickSelectionFixtureAssertions } from "../src/lib/visual-editor/scene-click-selection.fixture.ts";
 import { runMcpHarnessGuardFixtureAssertions } from "../src/lib/visual-editor/mcp-harness-guard.fixture.ts";
 import { runGltfDerivedAssetFixtureAssertions } from "../src/lib/visual-editor/gltf-derived-assets.fixture.ts";
@@ -440,6 +441,7 @@ try {
     ["entity clipboard and mirror paste", runEntityClipboardFixtureAssertions],
     ["editor UI defaults", runEditorUiDefaultsFixtureAssertions],
     ["scene entity tree store", runSceneEntityTreeStoreFixtureAssertions],
+    ["Scene View render isolation", runRenderIsolationFixtureAssertions],
     ["scene click selection", runSceneClickSelectionFixtureAssertions],
     ["editor layout", runEditorLayoutFixtureAssertions],
     ["scene viewport quality", runSceneViewportQualityFixtureAssertions],
