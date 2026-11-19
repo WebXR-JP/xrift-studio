@@ -34,6 +34,9 @@ import imageQuadObjectSource from "../../../../packages/xrift-studio-runtime/src
 import imageQuadLayoutSource from "../../../../packages/xrift-studio-runtime/src/image-quad-layout.ts?raw";
 import imageRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/image-runtime.ts?raw";
 import troikaTextTypesSource from "../../../../packages/xrift-studio-runtime/src/troika-three-text.d.ts?raw";
+import lightmapRuntimeSource from "../../../../packages/xrift-studio-runtime/src/script/lightmap.tsx?raw";
+import lightmapApplySource from "../../../../packages/xrift-studio-runtime/src/lightmap-apply.ts?raw";
+import lightmapDataSource from "../../../../packages/xrift-studio-runtime/src/lightmap-data.ts?raw";
 import runtimePackageManifest from "../../../../packages/xrift-studio-runtime/package.json";
 
 import type { AssetManifest, ScriptAsset } from "../asset-manifest";
@@ -94,6 +97,9 @@ export const TEXT_FONT_CATALOG_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/text-
 export const TEXT_PANEL_TYPES_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/troika-three-text.d.ts`;
 export const IMAGE_QUAD_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/image-quad-runtime.tsx`;
 export const IMAGE_QUAD_OBJECT_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/image-quad.ts`;
+export const LIGHTMAP_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/lightmap-runtime.tsx`;
+export const LIGHTMAP_APPLY_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/lightmap-apply.ts`;
+export const LIGHTMAP_DATA_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/lightmap-data.ts`;
 export const IMAGE_QUAD_LAYOUT_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/image-quad-layout.ts`;
 export const IMAGE_RUNTIME_OVERLAY_PATH = `${SCRIPT_RUNTIME_DIRECTORY}/image-runtime.ts`;
 
@@ -327,6 +333,28 @@ export function createRuntimeBridgeOverlayFiles(): CompilerOverlayFile[] {
     overlay(IMAGE_RUNTIME_OVERLAY_PATH, rewriteImageQuadImports(imageRuntimeSource)),
     overlay(IMAGE_QUAD_LAYOUT_OVERLAY_PATH, rewriteImageQuadImports(imageQuadLayoutSource)),
   ];
+}
+
+/**
+ * ライトマップを貼る処理を、公開するワールドへそのまま同梱する。
+ *
+ * エディターのScene Viewが読み込んでいるのと同じソースである。公開物の側に
+ * 別の実装を持たせないので、エディターで見えている陰影がそのまま公開される。
+ */
+export function createLightmapOverlayFiles(): CompilerOverlayFile[] {
+  return [
+    overlay(LIGHTMAP_RUNTIME_OVERLAY_PATH, rewriteLightmapImports(lightmapRuntimeSource)),
+    overlay(LIGHTMAP_APPLY_OVERLAY_PATH, rewriteLightmapImports(lightmapApplySource)),
+    overlay(LIGHTMAP_DATA_OVERLAY_PATH, rewriteLightmapImports(lightmapDataSource)),
+  ];
+}
+
+function rewriteLightmapImports(source: string): string {
+  return source.replace(
+    /(\bfrom\s*)(["'])\.{1,2}\/(lightmap-apply|lightmap-data)\.js\2/g,
+    (_whole, prefix: string, quote: string, moduleName: string) =>
+      `${prefix}${quote}./${moduleName}${quote}`,
+  );
 }
 
 function overlay(relativePath: string, content: string): CompilerOverlayFile {

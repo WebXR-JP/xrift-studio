@@ -66,7 +66,8 @@ for (const width of [1280, 1600]) {
     await expect(ai).toHaveText("");
     await expect(dock.getByRole("button", { name: "設定", exact: true })).toHaveCount(0);
     const rail = dock.getByRole("navigation", { name: "エディターのヘルプと設定" });
-    await expect(rail.getByRole("button")).toHaveCount(2);
+    await expect(rail.getByRole("button")).toHaveCount(3);
+    await expect(rail.getByRole("button", { name: "ライトベイクを開く", exact: true })).toHaveAttribute("aria-pressed", "false");
     const tree = page.getByRole("tree", { name: "シーンのEntity階層" });
     await tree.getByText("Plane", { exact: true }).click();
     const sceneSettings = dock.getByRole("button", { name: "シーン設定を開く", exact: true });

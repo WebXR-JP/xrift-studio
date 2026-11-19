@@ -288,6 +288,30 @@ import { ComponentCodeImportDialog } from "./ComponentCodeImportDialog";
 import { InteractivityGraphEditor } from "./InteractivityGraphEditor";
 import { GuideLink } from "../guide/GuideLink";
 import { EditorUtilityRail } from "./EditorUtilityRail";
+import { LightBakePanel, type LightBakeJobState } from "./LightBakePanel";
+import type { LightBakeSceneBridge } from "./SceneLightBake";
+import {
+  LightBakeCancelledError,
+  startLightBake,
+} from "../../lib/visual-editor/light-bake/light-bake-job";
+import { lightBakeQualitySettings } from "../../lib/visual-editor/light-bake/bake";
+import { saveLightmapAsset } from "../../lib/visual-editor/light-bake/light-bake-asset";
+import {
+  authoredBakedLightComponentIds,
+  computeLightBakeSignature,
+  findSceneLightmapAsset,
+  LIGHT_BAKE_MAX_TEXELS_PER_METER,
+  listLightBakeMeshes,
+  resolveSceneLightmap,
+  setSceneLightmap,
+  updateSceneLightBakeSettings,
+} from "../../lib/visual-editor/light-bake/light-bake-scene";
+import {
+  isMeshLightBakeTarget,
+  updateMeshLightBakeSettings,
+  type LightBakeMode,
+  type MeshComponent,
+} from "../../lib/visual-editor/scene-document";
 import { useEditorDevice } from "./useEditorDevice";
 import { EditorPanelVisibilityContext } from "./editor-panel-visibility";
 import { SupportReportModal } from "../SupportReportModal";
@@ -836,6 +860,22 @@ function withLiveGizmoSettings(
     ? history
     : replaceEditorHistoryPresent(history, { ...history.present, bundle });
 }
+
+/** ライトベイクを1回走らせた結果。 */
+type LightBakeRunResult =
+  | {
+      ok: true;
+      assetId: string;
+      size: number;
+      texelsPerMeter: number;
+      meshCount: number;
+      texelCount: number;
+      durationMs: number;
+      entityIds: string[];
+      bakedLightComponentIds: string[];
+      warnings: string[];
+    }
+  | { ok: false; cancelled: boolean; message: string };
 
 function touchProject(bundle: PrototypeVisualProject): PrototypeVisualProject {
   return {
@@ -1807,6 +1847,20 @@ export function VisualEditorPrototype({
   const [sceneRecipeImportBusy, setSceneRecipeImportBusy] = useState(false);
   const [particlePresetImportBusy, setParticlePresetImportBusy] = useState(false);
   const [sceneSettingsOpen, setSceneSettingsOpen] = useState(false);
+  const [lightBakeOpen, setLightBakeOpen] = useState(false);
+  const [lightBakePicking, setLightBakePicking] = useState(false);
+  const [lightBakeJob, setLightBakeJob] = useState<LightBakeJobState>({ state: "idle" });
+  const [lightBakeWarnings, setLightBakeWarnings] = useState<readonly string[]>([]);
+  const [lightmapViewStatus, setLightmapViewStatus] = useState<
+    { applied: number; total: number } | { error: string } | null
+  >(null);
+  const lightBakeBridgeRef = useRef<LightBakeSceneBridge | null>(null);
+  const lightBakeCancelRef = useRef<(() => void) | null>(null);
+  const runLightBakeRef = useRef<
+    (options?: {
+      onCommit?: (next: PrototypeVisualProject, before: PrototypeVisualProject) => void;
+    }) => Promise<LightBakeRunResult>
+  >(async () => ({ ok: false, cancelled: false, message: "Editorの準備ができていません。" }));
   const [externalStoreOpen, setExternalStoreOpen] = useState(false);
   const [modelStoreIntent, setModelStoreIntent] = useState<{ entityId: string; componentId?: string } | null>(null);
   const [supportOpen, setSupportOpen] = useState(false);
@@ -3265,6 +3319,54 @@ export function VisualEditorPrototype({
             }
             setMcpLocalAssetImportBusy(false);
           }
+        }
+        if (request.tool === "bake_lighting") {
+          // パネルの「ベイク」と同じ処理を走らせ、終わるまで待って結果を返す。
+          assertMcpExternalStoreWrite(request.arguments, {
+            bundle: bundleRef.current,
+            editorMode: editorModeRef.current,
+            importBusy: importBusyRef.current,
+            revision: mcpRevisionRef.current,
+          });
+          if (!currentProjectPath) {
+            throw new XriftMcpEditorToolError(
+              "PROJECT_NOT_SAVED",
+              "ライトベイクの前に自動保存の完了を確認してください",
+            );
+          }
+          const revisionBefore = mcpRevisionRef.current;
+          const result = await runLightBakeRef.current({
+            onCommit: (next, before) => {
+              mcpRevisionRef.current += 1;
+              mcpRevisionBundleRef.current = next;
+              piMutationBefore ??= before;
+              saveStatusRef.current = "dirty";
+            },
+          });
+          if (!result.ok) {
+            throw new XriftMcpEditorToolError(
+              result.cancelled ? "LIGHT_BAKE_CANCELLED" : "LIGHT_BAKE_FAILED",
+              result.message,
+            );
+          }
+          await completeResponse({
+            id: request.id,
+            ok: true,
+            result: {
+              lightmapAssetId: result.assetId,
+              size: result.size,
+              texelsPerMeter: result.texelsPerMeter,
+              meshCount: result.meshCount,
+              texelCount: result.texelCount,
+              durationMs: result.durationMs,
+              entityIds: result.entityIds,
+              bakedLightComponentIds: result.bakedLightComponentIds,
+              warnings: result.warnings,
+              revisionBefore,
+              revisionAfter: mcpRevisionRef.current,
+            },
+          });
+          return;
         }
         if (
           request.tool === "get_shader_asset" ||
@@ -9152,6 +9254,235 @@ export function VisualEditorPrototype({
     [editorMode, projectPath],
   );
 
+  /** 複数のMeshを、まとめてライトベイクの対象にする、または外す。1回の「元に戻す」で戻る。 */
+  const handleSetLightBakeTargets = useCallback(
+    (entityIds: readonly string[], enabled: boolean) => {
+      if (editorMode !== "edit" || entityIds.length === 0) return;
+      updateScene((scene) => {
+        let next = scene;
+        for (const entityId of entityIds) {
+          const entity = next.entities[entityId];
+          if (!entity) continue;
+          for (const component of entity.components) {
+            if (component.type !== "mesh" || !component.enabled) continue;
+            next = updateMeshLightBakeSettings(next, entityId, { enabled }, component.id);
+          }
+        }
+        return next;
+      });
+    },
+    [editorMode, updateScene],
+  );
+
+  /** Scene Viewでクリックした Mesh の、対象かどうかを切り替える。 */
+  const handleLightBakePick = useCallback(
+    (entityId: string) => {
+      const entity = bundleRef.current.scene.entities[entityId];
+      const mesh = entity?.components.find(
+        (component): component is MeshComponent => component.type === "mesh" && component.enabled,
+      );
+      if (!entity || !mesh) {
+        setNotice("Meshを持つEntityをクリックすると、ベイクの対象を切り替えられます");
+        return;
+      }
+      const enabled = !isMeshLightBakeTarget(mesh);
+      handleSetLightBakeTargets([entityId], enabled);
+      setNotice(
+        enabled
+          ? `「${entity.name}」をベイクの対象にしました`
+          : `「${entity.name}」をベイクの対象から外しました`,
+      );
+    },
+    [handleSetLightBakeTargets],
+  );
+
+  const handleSetLightBakeMode = useCallback(
+    (entityId: string, componentId: string, mode: LightBakeMode) => {
+      if (editorMode !== "edit") return;
+      updateScene((scene) => updateLightComponent(scene, entityId, { bakeMode: mode }, componentId));
+    },
+    [editorMode, updateScene],
+  );
+
+  const handleLightBakeSettingsChange = useCallback(
+    (patch: Parameters<typeof updateSceneLightBakeSettings>[1]) => {
+      if (editorMode !== "edit") return;
+      updateScene((scene) => updateSceneLightBakeSettings(scene, patch));
+    },
+    [editorMode, updateScene],
+  );
+
+  const handleRemoveLightmap = useCallback(() => {
+    if (editorMode !== "edit") return;
+    updateScene((scene) => setSceneLightmap(scene, undefined));
+    setLightmapViewStatus(null);
+    setNotice("焼いた陰影をSceneから外しました。ライトマップのAssetは残っています。「元に戻す」で戻せます");
+  }, [editorMode, updateScene]);
+
+  const handleCancelLightBake = useCallback(() => {
+    lightBakeCancelRef.current?.();
+  }, []);
+
+  /**
+   * ライトベイクを実行する。
+   *
+   * Scene Viewが今描いているシーンを読み、Workerで焼き、結果をLightmap Assetとして
+   * プロジェクトへ保存してから、Sceneにそれを使わせる。公開は同じAssetをコピーする。
+   * パネルのボタンとMCPの `bake_lighting` が、同じこの関数を通る。
+   */
+  const runLightBake = useCallback(
+    async (
+      options: {
+        /** Sceneへ反映した直後に、同期的に呼ばれる。MCPのrevision管理が使う。 */
+        onCommit?: (next: PrototypeVisualProject, before: PrototypeVisualProject) => void;
+      } = {},
+    ): Promise<LightBakeRunResult> => {
+      const fail = (message: string): LightBakeRunResult => {
+        setLightBakeJob({ state: "failed", message });
+        return { ok: false, cancelled: false, message };
+      };
+      if (editorModeRef.current !== "edit") {
+        return fail("ライトベイクはEdit中に実行できます。Playを止めてから実行してください。");
+      }
+      const currentProjectPath = projectPathRef.current;
+      if (!currentProjectPath) {
+        return fail("プロジェクトの保存後にライトベイクを実行できます。");
+      }
+      if (lightBakeCancelRef.current) {
+        return { ok: false, cancelled: false, message: "ライトベイクはすでに実行中です。" };
+      }
+      const bridge = lightBakeBridgeRef.current;
+      if (!bridge) {
+        return fail("Scene Viewの準備ができていません。少し待ってからもう一度実行してください。");
+      }
+      const startBundle = bundleRef.current;
+      const startScene = startBundle.scene;
+      const settings = resolveSceneSettings(startScene.settings).lightBake;
+      const quality = lightBakeQualitySettings(settings.quality);
+      // 対象を変えた直後は、Scene Viewへの反映が遅れる。文書の対象が描画に
+      // 出そろうまで待つ。読み込みの遅いModelは1.5秒で見切り、後で件数を伝える。
+      const expectedTargets = listLightBakeMeshes(startScene, startBundle.assets)
+        .filter((entry) => entry.target)
+        .map((entry) => entry.entityId);
+      const waitUntil = performance.now() + 1500;
+      for (;;) {
+        const drawn = bridge.targetEntityIds();
+        if (expectedTargets.every((entityId) => drawn.has(entityId))) break;
+        if (performance.now() > waitUntil) break;
+        await new Promise((resolve) => window.requestAnimationFrame(resolve));
+      }
+      let collected: ReturnType<LightBakeSceneBridge["collect"]>;
+      try {
+        collected = bridge.collect(authoredBakedLightComponentIds(startScene));
+      } catch (error) {
+        return fail(
+          `Sceneを読み取れませんでした。${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+      if (!collected.input.meshes.some((mesh) => mesh.receives)) {
+        return fail(
+          "ライトマップを表示できるMeshが対象にありません。対象のMeshを選び、Scene Viewの表示を「シーン」にして、Modelの読み込みが終わってから実行してください。",
+        );
+      }
+      const targetCount = new Set(expectedTargets).size;
+      const warnings = [...collected.warnings];
+      if (collected.entityIds.length < targetCount) {
+        warnings.push(
+          `対象 ${targetCount}件のうち、${collected.entityIds.length}件を焼きました。Unlit・MToon・カスタムシェーダーのMeshは影を落としますが、焼いた陰影は表示しません。`,
+        );
+      }
+      const signature = computeLightBakeSignature(startScene, startBundle.assets);
+      const job = startLightBake(
+        collected.input,
+        {
+          layout: {
+            maxSize: settings.resolution,
+            maxTexelsPerMeter: LIGHT_BAKE_MAX_TEXELS_PER_METER,
+          },
+          settings: { ...quality, softness: settings.softness, seed: 1 },
+          denoise: true,
+        },
+        (progress) => setLightBakeJob({ state: "running", progress }),
+      );
+      lightBakeCancelRef.current = job.cancel;
+      setLightBakeWarnings([]);
+      setLightBakeJob({
+        state: "running",
+        progress: { phase: "preparing", fraction: 0, texelCount: 0 },
+      });
+      try {
+        const output = await job.promise;
+        const existing =
+          resolveSceneLightmap(bundleRef.current.scene, bundleRef.current.assets) ??
+          findSceneLightmapAsset(bundleRef.current.assets, startScene.sceneId);
+        const asset = await saveLightmapAsset({
+          projectPath: currentProjectPath,
+          manifest: bundleRef.current.assets,
+          scene: startScene,
+          output,
+          entityIds: collected.entityIds,
+          bakedLightComponentIds: collected.bakedLightComponentIds,
+          signature,
+          settings: { quality: settings.quality, softness: settings.softness, ...quality },
+          existingAssetId: existing?.id,
+          createAssetId: () => createDocumentId("lightmap"),
+        });
+        // 焼いている間に作者が進めた編集の上へ、ライトマップだけを足す。
+        const before = bundleRef.current;
+        const nextBundle = touchProject({
+          ...before,
+          scene: setSceneLightmap(before.scene, asset.id),
+          assets: {
+            ...before.assets,
+            assets: { ...before.assets.assets, [asset.id]: asset },
+          },
+        });
+        bundleRef.current = nextBundle;
+        options.onCommit?.(nextBundle, before);
+        setSaveStatus("dirty");
+        setHistory((current) =>
+          commitEditorHistory(current, { ...current.present, bundle: nextBundle }),
+        );
+        setLightmapViewStatus(null);
+        setLightBakeWarnings(warnings);
+        setLightBakeJob({ state: "idle" });
+        setNotice(
+          `ライトベイクが終わりました。${output.size}pxのライトマップをAssetsへ保存し、Sceneに適用しました（${(output.durationMs / 1000).toFixed(1)}秒）`,
+        );
+        return {
+          ok: true,
+          assetId: asset.id,
+          size: output.size,
+          texelsPerMeter: output.texelsPerMeter,
+          meshCount: output.stats.receiverCount,
+          texelCount: output.stats.texelCount,
+          durationMs: Math.round(output.durationMs),
+          entityIds: collected.entityIds,
+          bakedLightComponentIds: collected.bakedLightComponentIds,
+          warnings,
+        };
+      } catch (error) {
+        if (error instanceof LightBakeCancelledError) {
+          setLightBakeJob({ state: "idle" });
+          setNotice("ライトベイクを中止しました。Sceneは変えていません");
+          return { ok: false, cancelled: true, message: error.message };
+        }
+        return fail(error instanceof Error ? error.message : String(error));
+      } finally {
+        lightBakeCancelRef.current = null;
+      }
+    },
+    [],
+  );
+  runLightBakeRef.current = runLightBake;
+
+  const handleBakeLighting = useCallback(() => {
+    void runLightBake();
+  }, [runLightBake]);
+
+  // 画面を離れるときは、走っているベイクを止める。Workerを残さない。
+  useEffect(() => () => lightBakeCancelRef.current?.(), []);
+
   const handleClearNodeCollider = useCallback(
     (entityId: string, componentId: string) => {
       updateScene((scene) =>
@@ -12299,6 +12630,10 @@ export function VisualEditorPrototype({
               renderedReadOnly ? undefined : handleGizmoSettingsChange
             }
             notice={null}
+            lightBakePicking={lightBakeOpen && lightBakePicking && !renderedReadOnly}
+            onLightBakePick={handleLightBakePick}
+            lightBakeBridgeRef={lightBakeBridgeRef}
+            onLightmapStatus={setLightmapViewStatus}
             onSelect={handleSceneViewportSelection}
             onTransformCommit={handleGizmoCommit}
             onDropPrimitive={(creationId, position) =>
@@ -12553,6 +12888,39 @@ export function VisualEditorPrototype({
             onRemoveXriftComponent={handleRemoveXriftComponent}
             assetImportSettings={assetImportSettingsPanel}
             sceneSettingsOpen={sceneSettingsOpen}
+            lightBake={{
+              open: lightBakeOpen,
+              onClose: () => {
+                setLightBakeOpen(false);
+                setLightBakePicking(false);
+              },
+              panel: (
+                <LightBakePanel
+                  scene={bundle.scene}
+                  assets={bundle.assets}
+                  readOnly={editorMode !== "edit"}
+                  canBake={Boolean(projectPath)}
+                  cannotBakeReason="プロジェクトの保存後にライトベイクを実行できます"
+                  job={lightBakeJob}
+                  picking={lightBakePicking}
+                  viewStatus={lightmapViewStatus}
+                  warnings={lightBakeWarnings}
+                  onTogglePicking={() => setLightBakePicking((current) => !current)}
+                  onSetTargets={handleSetLightBakeTargets}
+                  onSetLightMode={handleSetLightBakeMode}
+                  onSettingsChange={handleLightBakeSettingsChange}
+                  onBake={handleBakeLighting}
+                  onCancel={handleCancelLightBake}
+                  onRemoveLightmap={handleRemoveLightmap}
+                  onSelectEntity={(entityId) => setSceneSelection({ kind: "entity", id: entityId })}
+                  onOpenLightmapAsset={(assetId) => {
+                    setLightBakeOpen(false);
+                    setLightBakePicking(false);
+                    handleSelectAsset(assetId);
+                  }}
+                />
+              ),
+            }}
             onCloseSceneSettings={() => setSceneSettingsOpen(false)}
             onResetLayout={() => executeCommand("layout.reset")}
             onOpenSupport={() => setSupportOpen(true)}
@@ -12960,6 +13328,17 @@ export function VisualEditorPrototype({
             sceneSettingsOpen={sceneSettingsOpen}
             onToggleSceneSettings={() => {
               setSceneSettingsOpen((current) => !current);
+              setLightBakeOpen(false);
+              setLightBakePicking(false);
+              setViewportMaximized(false);
+              setActiveEditorTab(SCENE_VIEW_TAB_ID);
+              if (tablet) setTabletPanel("inspector");
+            }}
+            lightBakeOpen={lightBakeOpen}
+            onToggleLightBake={() => {
+              setLightBakeOpen((current) => !current);
+              setLightBakePicking(false);
+              setSceneSettingsOpen(false);
               setViewportMaximized(false);
               setActiveEditorTab(SCENE_VIEW_TAB_ID);
               if (tablet) setTabletPanel("inspector");

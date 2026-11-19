@@ -3,7 +3,7 @@
 // Source of truth: src/lib/visual-editor/mcp-tool-registry.ts
 // Regenerate with: pnpm mcp:tool-names
 
-pub const MCP_TOOL_NAMES: [&str; 171] = [
+pub const MCP_TOOL_NAMES: [&str; 175] = [
     "list_projects",
     "list_starter_templates",
     "create_project",
@@ -69,6 +69,9 @@ pub const MCP_TOOL_NAMES: [&str; 171] = [
     "get_particle_asset",
     "update_particle_asset",
     "update_scene_settings",
+    "get_light_bake",
+    "set_light_bake_targets",
+    "update_light_bake_settings",
     "place_asset",
     "list_entities",
     "list_component_definitions",
@@ -148,6 +151,7 @@ pub const MCP_TOOL_NAMES: [&str; 171] = [
     "reimport_model_asset",
     "process_texture_asset",
     "bake_mesh_collider",
+    "bake_lighting",
     "optimize_model_asset",
     "revert_asset_optimization",
     "apply_scene_recipe",
@@ -177,7 +181,7 @@ pub const MCP_TOOL_NAMES: [&str; 171] = [
     "get_recording_camera",
 ];
 
-pub const MCP_TOOL_SURFACES: [(&str, &str); 171] = [
+pub const MCP_TOOL_SURFACES: [(&str, &str); 175] = [
     ("list_projects", "project"),
     ("list_starter_templates", "project"),
     ("create_project", "project"),
@@ -243,6 +247,9 @@ pub const MCP_TOOL_SURFACES: [(&str, &str); 171] = [
     ("get_particle_asset", "document"),
     ("update_particle_asset", "document"),
     ("update_scene_settings", "document"),
+    ("get_light_bake", "document"),
+    ("set_light_bake_targets", "document"),
+    ("update_light_bake_settings", "document"),
     ("place_asset", "document"),
     ("list_entities", "document"),
     ("list_component_definitions", "document"),
@@ -322,6 +329,7 @@ pub const MCP_TOOL_SURFACES: [(&str, &str); 171] = [
     ("reimport_model_asset", "local-asset"),
     ("process_texture_asset", "local-asset"),
     ("bake_mesh_collider", "local-asset"),
+    ("bake_lighting", "local-asset"),
     ("optimize_model_asset", "local-asset"),
     ("revert_asset_optimization", "local-asset"),
     ("apply_scene_recipe", "local-asset"),

@@ -1,5 +1,6 @@
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import { emit } from "@tauri-apps/api/event";
+import { LIGHTMAP_ASSET_DIRECTORY } from "../lib/visual-editor/asset-manifest";
 import type {
   ChatgptConnection,
   ChatgptAssetOptions,
@@ -238,6 +239,15 @@ function emitShellEvent(
     });
   });
 }
+
+/**
+ * Lightmap files written during this page load, keyed by project-relative path.
+ * A bake writes its two files and the Scene View reads them straight back, so
+ * they are the one binary this fixture keeps. Every other read still fails:
+ * specs that import a real file expect that, and bring their own disk when they
+ * need the bytes back.
+ */
+const committedLightmapFiles = new Map<string, string>();
 
 export function installReleaseE2EMock(): void {
   Object.assign(window, {
@@ -490,10 +500,22 @@ export function installReleaseE2EMock(): void {
             stringArg(payload, "dataUrl"),
           );
           return null;
+        case "commit_visual_asset_import": {
+          const writes = Array.isArray(payload.writes) ? payload.writes : [];
+          for (const write of writes as { relativePath?: unknown; dataUrl?: unknown }[]) {
+            if (
+              typeof write.relativePath === "string" &&
+              typeof write.dataUrl === "string" &&
+              write.relativePath.startsWith(`${LIGHTMAP_ASSET_DIRECTORY}/`)
+            ) {
+              committedLightmapFiles.set(write.relativePath, write.dataUrl);
+            }
+          }
+          return null;
+        }
         case "write_binary_file":
         case "delete_path":
         case "rename_path":
-        case "commit_visual_asset_import":
         case "open_visual_asset_location":
         case "set_xrift_mcp_editor_ready":
         case "kill_pid_tree":
@@ -576,8 +598,11 @@ export function installReleaseE2EMock(): void {
           return null;
         case "save_debug_image":
           return "C:/XRiftE2E/debug-captures/pi-scene.png";
-        case "read_image_data_url":
+        case "read_image_data_url": {
+          const lightmapFile = committedLightmapFiles.get(stringArg(payload, "rel"));
+          if (lightmapFile !== undefined) return lightmapFile;
           throw new Error("Release E2E fixture does not contain binary files");
+        }
         case "check_xrift_latest":
           return cliUpdate ? "0.26.1" : RECOMMENDED_XRIFT_VERSION;
         case "update_xrift":

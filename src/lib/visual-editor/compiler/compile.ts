@@ -36,6 +36,12 @@ import {
   type SceneAsset,
 } from "../asset-manifest";
 import { isPublishedAsKtx2 } from "../texture-conversion";
+import {
+  lightmappedEntityIds,
+  resolveSceneLightmap,
+  suppressedBakedLightComponentIds,
+} from "../light-bake/light-bake-scene";
+import { isMeshLightBakeTarget } from "../scene-document";
 import { getBuiltinPrimitiveCreation } from "../creation-catalog";
 import { PHYSICAL_MATERIAL_EXTENSION_NAMES } from "../material-extension-registry";
 import {
@@ -125,6 +131,7 @@ import { collectRequiredScriptAssetIds } from "../scripting/script-schedule";
 import { createScriptAssetRuntimeDescriptorMap } from "../scripting/asset-runtime";
 import {
   createImageQuadOverlayFiles,
+  createLightmapOverlayFiles,
   createInteractableOverlayFiles,
   createInteractionTriggerOverlayFiles,
   createRuntimeBridgeOverlayFiles,
@@ -235,6 +242,10 @@ type CompileContext = {
    * the published world can do what Play does.
    */
   interactionTriggerTargetEntityIds: ReadonlySet<string>;
+  /** 焼いた陰影を貼るEntity。Meshに印を付け、公開物でも同じMeshへ貼る。 */
+  lightmappedEntityIds: ReadonlySet<string>;
+  /** ライトマップへ直接光まで焼いてあり、公開物でも描画から消すLight。 */
+  bakedLightComponentIds: ReadonlySet<string>;
 };
 
 type RenderedXriftWrapper = {
@@ -306,6 +317,23 @@ export function compileVisualProject(
       code: "script-unsupported-runtime-output",
       message:
         "Runtime JSON出力ではスクリプトを表現できません。Classic JSX出力を選んでください。",
+    });
+  }
+  if (
+    outputMode === "classic-runtime" &&
+    resolvedEntryScene &&
+    lightmappedEntityIds(resolvedEntryScene.scene, documents.assets).size > 0
+  ) {
+    // Runtime JSONを読む側は、まだライトマップを貼れない。焼いた陰影なしで
+    // 公開すると、作者がエディターで見ていたものと違うワールドになる。
+    // 違うものを黙って出さず、ここで止める。
+    diagnostics.push({
+      severity: "blocking",
+      code: "lightmap-unsupported-runtime-output",
+      message:
+        "ブラウザ版からの公開は、焼いた陰影（ライトマップ）にまだ対応していません。デスクトップ版から公開するか、ライトベイクでライトマップを外してから公開してください。",
+      sceneId: resolvedEntryScene.scene.sceneId,
+      fieldPath: "settings.lightBake.lightmapAssetId",
     });
   }
   // Interaction Triggers used to be blocked here: the manifest could carry the
@@ -472,6 +500,9 @@ export function compileVisualProject(
     )
   ) {
     overlayFiles.push(...createImageQuadOverlayFiles());
+  }
+  if (outputMode === "classic-jsx" && generated.includes('from "./xrift-studio/lightmap-runtime"')) {
+    overlayFiles.push(...createLightmapOverlayFiles());
   }
   if (outputMode === "classic-jsx" && generated.includes('from "./xrift-studio/interactable"')) {
     overlayFiles.push(...createInteractableOverlayFiles().filter(file => !overlayFiles.some(existing => existing.relativePath === file.relativePath)));
@@ -1382,6 +1413,8 @@ function generateComponentSource(
       scene,
       assets,
     ),
+    lightmappedEntityIds: lightmappedEntityIds(scene, assets),
+    bakedLightComponentIds: suppressedBakedLightComponentIds(scene, assets),
   };
   const sceneSettings = resolveSceneSettings(scene.settings);
   const sceneEnvironment = renderSceneEnvironment(sceneSettings, context);
@@ -1400,6 +1433,8 @@ function generateComponentSource(
     context.supportDeclarations.set("model-instancing-entities", `const modelInstancingEntities = ${JSON.stringify(instancingEntities)};`);
     roots.push("<XriftModelInstancing entityIds={modelInstancingEntities} />");
   }
+  const lightmapJsx = renderSceneLightmap(context, assetCopyPlan);
+  if (lightmapJsx) roots.push(lightmapJsx);
   // Rendering deliberately stops below disabled Entities. Their descendants
   // remain structurally reachable and must not be diagnosed as orphaned.
   // Do not promote them to roots: that would resurrect intentionally hidden work.
@@ -2449,7 +2484,15 @@ function renderEntity(
     }
     if (component.type === "mesh") {
       const rendered = renderMesh(entity, component, context);
-      if (rendered) localContent.push(rendered);
+      if (rendered) {
+        // ベイクの対象には、エディターと同じ印を付ける。公開物でライトマップを
+        // 貼る処理は、この印の配下にあるMeshを、エディターと同じ順に数える。
+        localContent.push(
+          context.lightmappedEntityIds.has(entity.id) && isMeshLightBakeTarget(component)
+            ? `<group userData={{ xriftLightmapScope: true }}>\n${indent(rendered, 1)}\n</group>`
+            : rendered,
+        );
+      }
     } else if (component.type === "animation") {
       // v1 removed the Animation Component and opening a project converts it
       // into a graph, so nothing here should still carry one. Skipped rather
@@ -5914,7 +5957,7 @@ function renderLight(
   context.extraImports.add(
     'import { XriftScriptLight } from "./xrift-studio/light-runtime";',
   );
-  const lightJsx = `<XriftScriptLight componentId=${JSON.stringify(light.id)} lightType=${JSON.stringify(light.lightType)} enabled={${light.enabled}} color=${JSON.stringify(light.color)} intensity={${formatNumber(light.intensity)}} castShadow={${light.castShadow}} targetPosition={${JSON.stringify(light.targetPosition ?? [0, 0, -1])}} shadowIntensity={${formatNumber(light.shadowIntensity ?? 1)}} shadowStyle=${JSON.stringify(light.shadowStyle ?? "soft")} shadowMapSize={${formatNumber(light.shadowMapSize ?? 256)}} shadowMapWidth={${formatNumber(light.shadowMapWidth ?? light.shadowMapSize ?? 256)}} shadowMapHeight={${formatNumber(light.shadowMapHeight ?? light.shadowMapSize ?? 256)}} shadowRadius={${formatNumber(light.shadowRadius ?? 2)}} shadowBias={${formatNumber(light.shadowBias ?? -0.0002)}} shadowNormalBias={${formatNumber(light.shadowNormalBias ?? 0.35)}} shadowBlurSamples={${formatNumber(light.shadowBlurSamples ?? 8)}} shadowAutoUpdate={${light.shadowAutoUpdate ?? true}} shadowCameraNear={${formatNumber(light.shadowCameraNear ?? (light.lightType === "directional" ? 1 : 0.5))}} shadowCameraFar={${formatNumber(light.shadowCameraFar ?? (light.lightType === "directional" ? 400 : 500))}} shadowCameraLeft={${formatNumber(light.shadowCameraLeft ?? -120)}} shadowCameraRight={${formatNumber(light.shadowCameraRight ?? 120)}} shadowCameraTop={${formatNumber(light.shadowCameraTop ?? 120)}} shadowCameraBottom={${formatNumber(light.shadowCameraBottom ?? -120)}} shadowFocus={${formatNumber(light.shadowFocus ?? 1)}} shadowAspect={${formatNumber(light.shadowAspect ?? 1)}} groundColor=${JSON.stringify(light.groundColor ?? "#334155")} distance={${formatNumber(light.distance ?? 0)}} decay={${formatNumber(light.decay ?? 2)}} angle={${formatNumber(light.angle ?? Math.PI / 3)}} penumbra={${formatNumber(light.penumbra ?? 0.5)}} width={${formatNumber(light.width ?? 1)}} height={${formatNumber(light.height ?? 1)}}${light.lightType === "spot" && light.mapAssetId ? " map={spotMap}" : ""} />`;
+  const lightJsx = `<XriftScriptLight componentId=${JSON.stringify(light.id)} lightType=${JSON.stringify(light.lightType)} enabled={${light.enabled}} color=${JSON.stringify(light.color)} intensity={${formatNumber(light.intensity)}} castShadow={${light.castShadow}} targetPosition={${JSON.stringify(light.targetPosition ?? [0, 0, -1])}} shadowIntensity={${formatNumber(light.shadowIntensity ?? 1)}} shadowStyle=${JSON.stringify(light.shadowStyle ?? "soft")} shadowMapSize={${formatNumber(light.shadowMapSize ?? 256)}} shadowMapWidth={${formatNumber(light.shadowMapWidth ?? light.shadowMapSize ?? 256)}} shadowMapHeight={${formatNumber(light.shadowMapHeight ?? light.shadowMapSize ?? 256)}} shadowRadius={${formatNumber(light.shadowRadius ?? 2)}} shadowBias={${formatNumber(light.shadowBias ?? -0.0002)}} shadowNormalBias={${formatNumber(light.shadowNormalBias ?? 0.35)}} shadowBlurSamples={${formatNumber(light.shadowBlurSamples ?? 8)}} shadowAutoUpdate={${light.shadowAutoUpdate ?? true}} shadowCameraNear={${formatNumber(light.shadowCameraNear ?? (light.lightType === "directional" ? 1 : 0.5))}} shadowCameraFar={${formatNumber(light.shadowCameraFar ?? (light.lightType === "directional" ? 400 : 500))}} shadowCameraLeft={${formatNumber(light.shadowCameraLeft ?? -120)}} shadowCameraRight={${formatNumber(light.shadowCameraRight ?? 120)}} shadowCameraTop={${formatNumber(light.shadowCameraTop ?? 120)}} shadowCameraBottom={${formatNumber(light.shadowCameraBottom ?? -120)}} shadowFocus={${formatNumber(light.shadowFocus ?? 1)}} shadowAspect={${formatNumber(light.shadowAspect ?? 1)}} groundColor=${JSON.stringify(light.groundColor ?? "#334155")} distance={${formatNumber(light.distance ?? 0)}} decay={${formatNumber(light.decay ?? 2)}} angle={${formatNumber(light.angle ?? Math.PI / 3)}} penumbra={${formatNumber(light.penumbra ?? 0.5)}} width={${formatNumber(light.width ?? 1)}} height={${formatNumber(light.height ?? 1)}}${context.bakedLightComponentIds.has(light.id) ? " baked" : ""}${light.lightType === "spot" && light.mapAssetId ? " map={spotMap}" : ""} />`;
   if (light.lightType !== "spot" || !light.mapAssetId) return lightJsx;
   const texture = getTextureAsset(context.assets, light.mapAssetId);
   const runtimeUrl = texture ? context.assetRuntimeUrls.get(texture.id) : undefined;
@@ -5932,6 +5975,59 @@ function renderLight(
   return ${lightJsx};
 };`);
   return `<${componentName} />`;
+}
+
+/**
+ * Sceneが使うライトマップを、公開するワールドでも貼る。
+ *
+ * 画像とUV2データは、エディターが描画に使っているファイルのコピーで、貼る処理も
+ * エディターと同じソースである。公開のために焼き直すことはしない。
+ */
+function renderSceneLightmap(
+  context: CompileContext,
+  assetCopyPlan: readonly AssetCopyPlanEntry[],
+): string | null {
+  const lightmap = resolveSceneLightmap(context.scene, context.assets);
+  if (!lightmap || context.lightmappedEntityIds.size === 0) return null;
+  const targetFor = (sourceRelativePath: string) =>
+    assetCopyPlan.find(
+      (entry) =>
+        entry.assetId === lightmap.id &&
+        entry.sourceRelativePath === sourceRelativePath &&
+        entry.supportedByCompiler,
+    )?.targetRelativePath;
+  const imageTarget = targetFor(lightmap.source.relativePath);
+  const dataTarget = targetFor(lightmap.lightmap.dataPath);
+  if (!imageTarget || !dataTarget) {
+    addDiagnostic(context, {
+      severity: "warning",
+      code: "lightmap-unavailable",
+      message: "ライトマップのファイルを公開物へ含められません。焼いた陰影なしで書き出します",
+      sceneId: context.scene.sceneId,
+      assetId: lightmap.id,
+      fieldPath: "settings.lightBake.lightmapAssetId",
+    });
+    return null;
+  }
+  context.referencedAssetIds.add(lightmap.id);
+  const imageConstant = registerAssetUrl(lightmap, publicAssetPath(imageTarget), context);
+  const dataConstant = `${imageConstant}_UV`;
+  context.supportDeclarations.set(
+    `asset-url:${dataConstant}`,
+    `const ${dataConstant} = ${JSON.stringify(publicAssetPath(dataTarget))} as const;`,
+  );
+  context.extraImports.add(
+    'import { XriftSceneLightmap } from "./xrift-studio/lightmap-runtime";',
+  );
+  context.supportDeclarations.set(
+    "scene-environment:lightmap",
+    `const XRiftStudioLightmap: FC = () => {
+  const atlasUrl = useCompiledAssetUrl(${imageConstant});
+  const dataUrl = useCompiledAssetUrl(${dataConstant});
+  return <XriftSceneLightmap atlasUrl={atlasUrl} dataUrl={dataUrl} />;
+};`,
+  );
+  return "<XRiftStudioLightmap />";
 }
 
 /**
@@ -6570,6 +6666,37 @@ function createAssetCopyPlan(
     // statically, never copied into public runtime assets. See script-emit.ts.
     if (asset.kind === "script" || asset.kind === "shader") continue;
     if (asset.source.kind !== "project") continue;
+    if (asset.kind === "lightmap") {
+      // ライトマップは画像とUV2データの二つで一組。エディターが描画に使っている
+      // ファイルを、焼き直しも変換もせずにそのままコピーする。
+      const files = [asset.source.relativePath, asset.lightmap.dataPath];
+      if (!files.every(isSafeRelativePath)) {
+        diagnostics.push({
+          severity: "blocking",
+          code: "asset-copy-source-invalid",
+          message: "ライトマップのcopy元がproject-relative pathではありません",
+          assetId: asset.id,
+          fieldPath: "source.relativePath",
+        });
+        continue;
+      }
+      for (const sourceRelativePath of files) {
+        const fileName = sourceRelativePath.split("/").filter(Boolean).pop() ?? "lightmap.bin";
+        const targetRelativePath =
+          outputMode === "classic-runtime"
+            ? `public/${PUBLISHED_RUNTIME_ASSET_PREFIX}${safeFileSegment(asset.id)}-${safeFileSegment(fileName)}`
+            : `public/xrift-studio-${safeFileSegment(asset.id)}-${safeFileSegment(fileName)}`;
+        targets.add(targetRelativePath);
+        plan.push({
+          assetId: asset.id,
+          sourceRelativePath,
+          targetRelativePath,
+          purpose: "other",
+          supportedByCompiler: asset.status === "ready",
+        });
+      }
+      continue;
+    }
     if (!isSafeRelativePath(asset.source.relativePath)) {
       diagnostics.push({
         severity: "blocking",

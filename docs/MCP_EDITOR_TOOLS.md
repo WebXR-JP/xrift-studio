@@ -196,7 +196,7 @@ Editで実行すると、独立したBlenderプロセスが実GLBと編集可能
 
 変換中にEditorが観測したAssetのサムネイル・保存日時だけの更新は、最新状態へ合流して保持する。手動編集、取り消しで元へ戻した編集、停止やScript保存による明示的なrevision更新は、この例外に含めない。派生更新の比較は非同期の原本変換中だけ行い、通常の編集へ全Sceneの比較処理を追加しない。
 
-## document (100)
+## document (103)
 
 **Editor context / Project**
 `get_editor_context`, `get_world_authoring_guide`, `get_project_health`, `analyze_performance`, `get_scripting_capabilities`, `update_project_metadata`
@@ -363,6 +363,13 @@ Bone / 空ノードは`DEPENDENCY_MISSING`で断る。poseで非表示にした�
 描画と同時にColliderからも外れる。`get_entity_bounds`はboundsを持つノードを
 実測に含める。
 
+**ライトベイク**
+`get_light_bake`, `set_light_bake_targets`, `update_light_bake_settings`
+
+`get_light_bake`は、対象のMesh、ライトの扱い、設定、ライトマップの状態（`none` / `current` / `stale`）を返す。`set_light_bake_targets`は`entityIds`か`selectStatic: true`で対象を切り替える。`update_light_bake_settings`は画像の大きさ・品質・影のやわらかさを変え、`removeLightmap: true`で焼いた陰影を外す。ライトを「ベイク」にするには、Lightへの`update_component`で`bakeMode`を`baked`にする。
+
+実際に焼くのは`bake_lighting`（local-asset）で、設定と対象を変えただけでは見た目は変わらない。手順は`get_light_bake` → `set_light_bake_targets` → `bake_lighting` → `capture_scene_view`の順になる。仕組みは[ライトベイクの仕組み](./LIGHT_BAKE.md)にある。
+
 **Terrain**
 `get_terrain`, `sample_terrain_point`, `list_terrain_presets`,
 `create_terrain`, `create_terrain_from_preset`, `sculpt_terrain`,
@@ -461,13 +468,15 @@ operationが型を決めているソケット (秒数、繰り返し回数、ani
 **コンポーネントコードの取り込み**
 `analyze_component_code`, `apply_component_code_import_plan`
 
-## local-asset (15)
+## local-asset (16)
 
 `import_audio_asset`, `import_font_asset`, `import_texture_asset`, `import_model_asset`,
 `import_skybox_asset`, `import_shader_asset`, `reimport_model_asset`,
 `process_texture_asset`, `optimize_model_asset`, `revert_asset_optimization`,
 `apply_scene_recipe`, `get_shader_asset`, `update_shader_asset`,
-`set_project_thumbnail`
+`set_project_thumbnail`, `bake_lighting`
+
+`bake_lighting`は、ライトベイクのパネルの「ベイク」と同じ処理を実行する。Scene Viewが描いているシーンを読むので、Edit中で、表示モードが「シーン」のときに使う。終わるまで待って、Lightmap Assetのid、画像の大きさ、細かさ、注意を返す。計算はWeb Workerで走り、数秒から数分かかる。
 
 `import_font_asset`が受け付けるのはTTF、OTF、WOFFだけだ。WOFF2はtext
 rendererが解釈できない。組版が終わらないままテキストが空になる。

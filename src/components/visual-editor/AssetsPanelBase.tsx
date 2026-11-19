@@ -109,6 +109,7 @@ const KIND_FOLDERS: BrowserFolder[] = [
   { id: "folder-textures", name: "Textures", icon: "texture", kind: "texture" },
   { id: "folder-audio", name: "Audio", icon: "audio", kind: "audio" },
   { id: "folder-fonts", name: "Fonts", icon: "font", kind: "font" },
+  { id: "folder-lightmaps", name: "Lightmaps", icon: "light", kind: "lightmap" },
   { id: "folder-particles", name: "Particles", icon: "particle", kind: "particle" },
   { id: "folder-interactivity", name: "Interactivity", icon: "graph", kind: "interactivity" },
   { id: "folder-scripts", name: "Scripts", icon: "script", kind: "script" },

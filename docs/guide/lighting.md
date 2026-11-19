@@ -20,6 +20,8 @@ Directional LightとSpot Lightの向きは、「照らす方向」で変えら�
 
 Directional Light、Point Light、Spot Lightで影を出すには、`castShadow`を有効にしてください。ライトごとに`shadow.intensity`、`shadow.mapSize.x/y`、`shadow.radius`を調整できます。影の解像度の初期値は256 pxです。表面に縞が出る場合や、影が物体から離れる場合は、`shadow.bias`と`shadow.normalBias`を調整してください。
 
+動かない床や建物の影は、[ライトベイク](./light-bake.md)であらかじめ焼くこともできます。縁のやわらかい影と、跳ね返った光が加わります。
+
 「シーン設定 → Shadow Map」では、シーン全体で使うThree.jsの影アルゴリズムを選べます。初期値の`PCFShadowMap`は、ソフトな影を表示します。各ライトの解像度は256 px、Radiusは2で始まります。`BasicShadowMap`では、Radiusを変えてもぼかせません。現在のThree.jsでは、`PCFSoftShadowMap`は`PCFShadowMap`に変換されます。VSMのぼかし回数は、ライトごとのBlur Samplesで調整してください。
 
 ## 全体の明るさを調整する

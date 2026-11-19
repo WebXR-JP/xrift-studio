@@ -737,6 +737,60 @@ export type FontAsset = AssetBase<"font"> & {
   importMetadata: FontImportMetadata;
 };
 
+export const LIGHTMAP_ASSET_FORMAT_VERSION = 1 as const;
+
+/** ライトマップのファイルを置く、project相対のディレクトリ。直下に、画像のハッシュごとのディレクトリを作る。 */
+export const LIGHTMAP_ASSET_DIRECTORY = "assets/imported/lightmaps";
+
+/**
+ * ライトベイクの結果。
+ *
+ * エディターでベイクした時点で作られ、Sceneが参照する。Scene Viewはこの
+ * Assetの画像とUV2を読んで描き、公開は同じ2つのファイルをそのままコピーする。
+ * 公開のときに焼き直したり、別の形式へ変換したりはしない。
+ *
+ * `source` が画像（EXR）、`lightmap.dataPath` がUV2のデータで、二つで一組。
+ * 片方だけを差し替えると、陰影が別の面へずれる。
+ */
+export type LightmapAsset = AssetBase<"lightmap"> & {
+  source: AssetSource & { kind: "project" };
+  lightmap: LightmapAssetData;
+};
+
+export type LightmapAssetData = {
+  formatVersion: typeof LIGHTMAP_ASSET_FORMAT_VERSION;
+  /** 画像の一辺（ピクセル）。 */
+  size: number;
+  byteLength: number;
+  /** UV2データのproject相対パス。 */
+  dataPath: string;
+  dataHash: string;
+  dataByteLength: number;
+  /** ベイクしたScene。 */
+  sceneId: string;
+  bakedAt: string;
+  /** ベイクした時点のSceneの状態。今のSceneと違えば、焼き直しが要る。 */
+  signature: string;
+  /** ライトマップを持つEntity。 */
+  entityIds: string[];
+  /** 直接光まで焼いたLightコンポーネント。描画時にはこのライトを消す。 */
+  bakedLightComponentIds: string[];
+  settings: {
+    quality: "draft" | "standard" | "high";
+    softness: number;
+    samples: number;
+    bounces: number;
+  };
+  stats: {
+    meshCount: number;
+    triangleCount: number;
+    texelCount: number;
+    /** 1メートルあたりのピクセル数。 */
+    texelsPerMeter: number;
+    durationMs: number;
+  };
+};
+
 export type TemplateAsset = AssetBase<"template"> & {
   /** Project-relative scene-fragment document referenced by this template. */
   templatePath: string;
@@ -794,6 +848,7 @@ export type SceneAsset =
   | InteractivityAsset
   | AudioAsset
   | FontAsset
+  | LightmapAsset
   | ScriptAsset
   | ShaderAsset
   | TemplateAsset;
@@ -885,6 +940,14 @@ export function getFontAsset(
 ): FontAsset | undefined {
   const asset = manifest.assets[assetId];
   return asset?.kind === "font" ? asset : undefined;
+}
+
+export function getLightmapAsset(
+  manifest: AssetManifest,
+  assetId: string | undefined,
+): LightmapAsset | undefined {
+  const asset = assetId ? manifest.assets[assetId] : undefined;
+  return asset?.kind === "lightmap" ? asset : undefined;
 }
 
 export function getGeometryAsset(

@@ -7,7 +7,8 @@ export function collectModelInstancingEntities(scene: SceneDocument, assets: Ass
     c.enabled && ["script", "interaction-trigger"].includes(c.type)))) return [];
   return Object.values(scene.entities).filter((entity) => {
     const mesh = entity.components.find((c) => c.type === "mesh" && c.enabled);
-    if (!mesh || mesh.type !== "mesh" || mesh.modelPose || mesh.maxDistance) return false;
+    // ライトマップを貼るMeshは、Meshごとに別のUV2を持つ。同じ形として束ねられない。
+    if (!mesh || mesh.type !== "mesh" || mesh.modelPose || mesh.maxDistance || mesh.lightBake?.enabled) return false;
     const assetId = mesh.geometry?.kind === "asset" ? mesh.geometry.assetId : mesh.geometryAssetId;
     const asset = assets.assets[assetId];
     if (asset?.kind !== "model" || !asset.importSettings.instanceMeshes || !canInstanceModel(asset)) return false;

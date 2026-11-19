@@ -12,6 +12,7 @@ import {
   SHADER_ASSET_STAGES,
   AUDIO_MIME_BY_FORMAT,
   FONT_MIME_BY_FORMAT,
+  LIGHTMAP_ASSET_FORMAT_VERSION,
   type AssetManifest,
   type ScriptAssetLanguage,
   type SkyboxAsset,
@@ -39,6 +40,8 @@ import {
 } from "./prefab-document";
 import {
   DEFAULT_SCENE_SETTINGS,
+  SCENE_LIGHT_BAKE_QUALITIES,
+  SCENE_LIGHT_BAKE_RESOLUTIONS,
   SCENE_POST_EFFECT_ORDER_IDS,
 } from "./scene-settings";
 import {
@@ -320,6 +323,7 @@ export function validateAssetManifest(value: unknown): DocumentValidationIssue[]
     "interactivity",
     "audio",
     "font",
+    "lightmap",
     "script",
     "shader",
     "template",
@@ -508,6 +512,37 @@ export function validateAssetManifest(value: unknown): DocumentValidationIssue[]
             `${path}.source`,
             "font-source",
             "Font Asset source must be project-relative",
+          ),
+        );
+      }
+    }
+    if (candidate.kind === "lightmap") {
+      const lightmap = candidate.lightmap;
+      if (
+        !isRecord(lightmap) ||
+        lightmap.formatVersion !== LIGHTMAP_ASSET_FORMAT_VERSION ||
+        !Number.isInteger(lightmap.size) ||
+        Number(lightmap.size) <= 0 ||
+        typeof lightmap.dataPath !== "string" ||
+        !lightmap.dataPath ||
+        typeof lightmap.sceneId !== "string" ||
+        !isUniqueStringArray(lightmap.entityIds, true) ||
+        !isUniqueStringArray(lightmap.bakedLightComponentIds, true)
+      ) {
+        issues.push(
+          issue(
+            `${path}.lightmap`,
+            "lightmap-metadata",
+            "Lightmap Asset must describe its image size, UV data and baked Scene",
+          ),
+        );
+      }
+      if (!isRecord(candidate.source) || candidate.source.kind !== "project") {
+        issues.push(
+          issue(
+            `${path}.source`,
+            "lightmap-source",
+            "Lightmap Asset image must be a project file",
           ),
         );
       }
@@ -1123,6 +1158,7 @@ function validateSceneSettings(
       "postprocessing",
       "vegetation",
       "physics",
+      "lightBake",
       "editor",
     ],
     path,
@@ -1442,6 +1478,30 @@ function validateSceneSettings(
       // because XRift derives the downward direction from this value.
       validateFinite(entry, "gravity", `${path}.physics`, issues, 0);
       validateBoolean(entry, "allowInfiniteJump", `${path}.physics`, issues);
+    },
+  );
+  validateSceneSettingsObject(
+    value.lightBake,
+    ["lightmapAssetId", "resolution", "quality", "softness"],
+    `${path}.lightBake`,
+    issues,
+    (entry) => {
+      if (entry.lightmapAssetId !== undefined && typeof entry.lightmapAssetId !== "string") {
+        issues.push(issue(`${path}.lightBake.lightmapAssetId`, "type", "lightmapAssetId must be a string"));
+      }
+      if (
+        entry.resolution !== undefined &&
+        !(SCENE_LIGHT_BAKE_RESOLUTIONS as readonly unknown[]).includes(entry.resolution)
+      ) {
+        issues.push(issue(`${path}.lightBake.resolution`, "value", "lightmap resolution must be 256, 512, 1024, 2048 or 4096"));
+      }
+      if (
+        entry.quality !== undefined &&
+        !(SCENE_LIGHT_BAKE_QUALITIES as readonly unknown[]).includes(entry.quality)
+      ) {
+        issues.push(issue(`${path}.lightBake.quality`, "value", "light bake quality must be draft, standard or high"));
+      }
+      validateFinite(entry, "softness", `${path}.lightBake`, issues, 0);
     },
   );
   validateSceneSettingsObject(

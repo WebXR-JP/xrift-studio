@@ -62,6 +62,7 @@ export const COLLIDER_PATCH_KEYS = patchKeysOf<ColliderPatch>()([
 
 export const LIGHT_PATCH_KEYS = patchKeysOf<LightPatch>()([
   "enabled",
+  "bakeMode",
   "lightType",
   "color",
   "intensity",

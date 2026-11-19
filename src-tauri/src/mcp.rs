@@ -2536,6 +2536,64 @@ pub(crate) fn tool_definitions() -> Value {
             }
         },
         {
+            "name": "get_light_bake",
+            "description": "Read the Scene's light bake state: which meshes are bake targets (and which look movable), how each Light is handled (realtime or baked), the bake settings, and whether a lightmap exists and still matches the Scene (none, current, or stale). Call this before set_light_bake_targets or bake_lighting to see what will be baked.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "set_light_bake_targets",
+            "description": "Mark meshes as light bake targets or remove them. A target casts baked shadows, bounces light and receives the lightmap, so choose geometry that never moves: floors, walls, buildings, fixed furniture. Pass entityIds, or selectStatic:true to mark every mesh that has no physics, Script, wind or animation. Avatars, doors and anything a trigger moves must stay out, because baked shading stays where the object was. This only changes the selection; run bake_lighting afterward to produce the lightmap. Unlit, MToon and custom-shader meshes still cast shadows as targets but do not display the lightmap.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "entityIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "maxItems": 2000 },
+                    "selectStatic": { "type": "boolean" },
+                    "enabled": { "type": "boolean" }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision", "enabled"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "update_light_bake_settings",
+            "description": "Change light bake settings, or remove the baked lighting from the Scene. resolution is the maximum lightmap size in pixels; texel density is derived from it, so raise it when shadows look blocky and lower it to cut download size. quality trades time for noise (draft to check placement, standard, high before publishing). softness (0 to 1) widens the penumbra of Lights set to baked. removeLightmap:true detaches the lightmap so the Scene renders with realtime lighting only; the Lightmap Asset stays in Assets. To choose whether a Light is baked, use update_component on the Light with bakeMode \"realtime\" or \"baked\": a baked Light is burned into the lightmap with its shadows and stops lighting anything at runtime, so non-target meshes and avatars no longer receive it. Settings changes take effect at the next bake_lighting.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "expectedRevision": { "type": "integer", "minimum": 0 },
+                    "resolution": { "enum": [256, 512, 1024, 2048, 4096] },
+                    "quality": { "enum": ["draft", "standard", "high"] },
+                    "softness": { "type": "number", "minimum": 0, "maximum": 1 },
+                    "removeLightmap": { "type": "boolean" }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision"],
+                "additionalProperties": false
+            }
+        },
+        {
+            "name": "bake_lighting",
+            "description": "Bake lighting for the current bake targets into a lightmap, exactly as the Light Bake panel's Bake button does. Studio generates lightmap UVs, path-traces soft shadows, bounced light and ambient occlusion in the Scene View's own scene, saves the result as a Lightmap Asset in the project, and applies it to the Scene. The published world copies those same files, so what the editor shows is what ships. Requires Edit mode, a saved project, at least one target (set_light_bake_targets) and the Scene View in its normal Scene display with models loaded. It can take from seconds to minutes; the call returns when the bake has finished. Returns the Lightmap Asset id, lightmap size, texel density and warnings. Afterward use capture_scene_view to judge the result; re-run after moving targets or changing Lights, because get_light_bake then reports stale.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "projectId": { "type": "string", "minLength": 1 },
+                    "sceneId": { "type": "string", "minLength": 1 },
+                    "expectedRevision": { "type": "integer", "minimum": 0 }
+                },
+                "required": ["projectId", "sceneId", "expectedRevision"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "set_mesh_collision",
             "description": "Set one mesh's collision using the Inspector quick actions. add makes a fixed walkable mesh, remove disables its colliders, exclusive disables ALL Scene colliders including triggers and automatic generation before adding this mesh. Use exclusive only when the user requests scene-wide replacement. Inherited mesh generation is split into explicit meshes; inherited Ball/Cuboid generation is rejected to preserve shape. Inspect the returned sources and capture_scene_view afterward. inspect_colliders reads sources; update_component edits individual physics settings.",
             "inputSchema": {

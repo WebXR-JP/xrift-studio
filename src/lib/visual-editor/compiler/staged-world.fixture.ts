@@ -1,7 +1,9 @@
 import {
+  LIGHTMAP_ASSET_FORMAT_VERSION,
   SCRIPT_ASSET_CONTRACT_VERSION,
   normalizeTextureImportSettings,
   type AssetManifest,
+  type LightmapAsset,
   type TextureAsset,
 } from "../asset-manifest";
 import { instantiateSceneAsset } from "../asset-placement";
@@ -21,6 +23,8 @@ import {
   createTextComponent,
   createVegetationWindComponent,
   textComponentPresetInput,
+  updateLightComponent,
+  updateMeshLightBakeSettings,
   DEFAULT_TEXT_BACKGROUND,
   SCRIPT_CONTRACT_VERSION,
   type ScriptComponent,
@@ -179,7 +183,7 @@ export function createStagedTypecheckWorldDocuments(): VisualCompilerDocuments {
     "Staged Rotator",
   );
   if (!scriptSource) throw new Error("default Script template is missing");
-  const assets: AssetManifest = {
+  let assets: AssetManifest = {
     ...particle.manifest,
     assets: {
       ...particle.manifest.assets,
@@ -261,11 +265,48 @@ export function createStagedTypecheckWorldDocuments(): VisualCompilerDocuments {
     },
   };
 
+  // A baked lightmap: the scope marker around a Mesh, a Light switched off
+  // because it was baked, and the shared lightmap runtime overlays all have to
+  // compile inside the same world as everything above.
+  const bakedLight = scene.entities["entity-world-light"]?.components.find(
+    (component) => component.type === "light",
+  );
+  if (!bakedLight) throw new Error("staged fixture lost its starter Light");
+  scene = updateMeshLightBakeSettings(scene, "entity-world-floor", { enabled: true });
+  scene = updateLightComponent(scene, "entity-world-light", { bakeMode: "baked" }, bakedLight.id);
+  const lightmap: LightmapAsset = {
+    id: "staged-typecheck-lightmap",
+    name: "Staged lightmap",
+    kind: "lightmap",
+    status: "ready",
+    source: {
+      kind: "project",
+      relativePath: "assets/imported/lightmaps/0000000000000000/lightmap.exr",
+    },
+    lightmap: {
+      formatVersion: LIGHTMAP_ASSET_FORMAT_VERSION,
+      size: 64,
+      byteLength: 1,
+      dataPath: "assets/imported/lightmaps/0000000000000000/lightmap-uv.bin",
+      dataHash: "0".repeat(64),
+      dataByteLength: 1,
+      sceneId: scene.sceneId,
+      bakedAt: "2026-01-01T00:00:00.000Z",
+      signature: "staged",
+      entityIds: ["entity-world-floor"],
+      bakedLightComponentIds: [bakedLight.id],
+      settings: { quality: "draft", softness: 0.35, samples: 24, bounces: 1 },
+      stats: { meshCount: 1, triangleCount: 2, texelCount: 1, texelsPerMeter: 8, durationMs: 1 },
+    },
+  };
+  assets = { ...assets, assets: { ...assets.assets, [lightmap.id]: lightmap } };
+
   const settings = resolveSceneSettings(scene.settings);
   scene = {
     ...scene,
     settings: {
       ...settings,
+      lightBake: { ...settings.lightBake, lightmapAssetId: lightmap.id },
       skybox: {
         ...settings.skybox,
         enabled: true,
