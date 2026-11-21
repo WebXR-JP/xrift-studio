@@ -1,6 +1,6 @@
 cask "xrift-studio" do
-  version "1.0.18"
-  sha256 "315ff1e4fda2e04c71be0d33b28aea04da4b8c58e65c2353a9a68321926131e6"
+  version "1.0.20"
+  sha256 "b06f6a664fcc0042be7dc9bff141f4ba77e98cad8777299b62ba42f844e162d8"
 
   url "https://github.com/WebXR-JP/xrift-studio/releases/download/v#{version}/XRift.Studio_#{version}_darwin_universal_release.dmg"
   name "XRift Studio"
