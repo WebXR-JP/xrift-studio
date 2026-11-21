@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { InMemoryCredentialStore, InMemoryModelsStore, fauxProvider, fauxAssistantMessage, fauxToolCall, getCurrentTools } from '@earendil-works/pi-ai';
 import { ModelRuntime } from '@earendil-works/pi-coding-agent';
-import { runStudioAgent } from '../dist/agent.js';
+import { modelTool, runStudioAgent } from '../dist/agent.js';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -286,11 +286,29 @@ test('OpenAI Responses transport uses native-supplied bearer auth, the selected 
       if (name === 'capture_scene_view') return { fingerprint: 'saved', image: { mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=' } };
       return { fingerprint: 'saved' };
     };
-    const result = await runStudioAgent({ ...input, reasoningEffort: 'high' }, host, () => {}, undefined, runtime);
+    // A root anyOf is valid JSON Schema for MCP clients, but OpenAI answers 400 invalid_json_schema for the whole request.
+    const tools = schemas.map(tool => tool.name !== 'save_scene' ? tool : { ...tool, inputSchema: { type: 'object', properties: { skybox: { type: 'object' }, fog: { type: 'object' } }, anyOf: [{ required: ['skybox'] }, { required: ['fog'] }] } });
+    const result = await runStudioAgent({ ...input, tools, reasoningEffort: 'high' }, host, () => {}, undefined, runtime);
     assert.match(result.text, /確認しました/);
     assert.equal(requests.length, 5);
     assert.ok(requests.every(request => request.path === '/v1/responses' && request.authorization === 'Bearer native-fixture-token' && request.body.store === false && request.body.reasoning.effort === 'high'));
     assert.ok(requests[0].body.tools.every(tool => !['read', 'write', 'bash', 'edit'].includes(tool.name)));
     assert.match(JSON.stringify(requests[3].body.input), /input_image/);
+    const sent = requests.flatMap(request => request.body.tools).filter(tool => tool.parameters);
+    assert.ok(sent.every(tool => tool.parameters.type === 'object' && ['anyOf', 'oneOf', 'allOf', 'not', 'enum'].every(key => !(key in tool.parameters))));
+    const save = sent.find(tool => tool.name === 'save_scene');
+    assert.match(save.description, /at least one of: skybox, fog/);
+    assert.deepEqual(Object.keys(save.parameters.properties), ['skybox', 'fog']);
   } finally { await new Promise(resolve => server.close(resolve)); }
+});
+
+test('root schema rules OpenAI rejects become description text and nested rules are kept', () => {
+  const nested = { type: 'object', properties: { value: { anyOf: [{ type: 'number' }, { type: 'null' }] } }, required: ['value'], additionalProperties: false };
+  assert.deepEqual(modelTool('Read.', nested), { description: 'Read.', parameters: nested });
+  const exclusive = modelTool('Edit.', { ...nested, oneOf: [{ required: ['patch'], not: { required: ['fieldUpdates'] } }, { required: ['fieldUpdates'], not: { required: ['patch'] } }] });
+  assert.deepEqual(exclusive.parameters, nested);
+  assert.equal(exclusive.description, 'Edit. Provide exactly one of: patch, fieldUpdates.');
+  const other = modelTool('Edit.', { properties: {}, not: { required: ['legacy'] } });
+  assert.deepEqual(other.parameters, { properties: {}, type: 'object' });
+  assert.equal(other.description, 'Edit. Input rule (not): {"required":["legacy"]}.');
 });
