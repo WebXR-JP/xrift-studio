@@ -30,6 +30,27 @@ Choose production by the outcome. In auto mode, combine existing Assets, fitting
 In plan mode use only read tools, then studio_plan. Use studio_questions only for a consequential unresolved user decision; include just that decision and why it is needed, not a request to approve routine code or verification. If it arises after edits, save the current Scene first, then ask and retain the completed work. Continue in the same conversation after the answer. In build/goal continue working and checking the request. Save with save_scene, inspect get_project_health, then call capture_scene_view directly and judge the actual image. Capture and completion controls are model-only so their results cannot be hidden inside a codemode script. Other Studio tools return structured objects to codemode. Then studio_finish with completion criteria and evidence. A later edit invalidates earlier evidence. Ordinary text is not completion. Report runtime and multiplayer behavior that you could not verify. Conversation branching does not restore the Scene; live Studio state is authoritative.
 ${japaneseWritingGuide}`;
 
+const rootOnly = ["anyOf", "oneOf", "allOf", "not", "enum"] as const;
+const requiredNames = (rule: any): string | undefined => Array.isArray(rule?.required) && rule.required.length ? rule.required.join(" + ") : undefined;
+/**
+ * OpenAI rejects a function whose parameters carry anyOf/oneOf/allOf/not/enum at the root,
+ * and one such tool fails the whole request. The Editor validates the same rules at dispatch,
+ * so the root rule moves into the description instead of being sent as schema.
+ */
+export function modelTool(description: string, inputSchema: Record<string, any>): { description: string; parameters: Record<string, any> } {
+  const parameters: Record<string, any> = { ...inputSchema, type: "object" };
+  const notes: string[] = [];
+  for (const key of rootOnly) {
+    const rule = parameters[key];
+    if (rule === undefined) continue;
+    delete parameters[key];
+    const names = Array.isArray(rule) ? rule.map(requiredNames) : [];
+    if (key !== "anyOf" && key !== "oneOf" || !names.length || names.some(name => !name)) notes.push(`Input rule (${key}): ${JSON.stringify(rule)}.`);
+    else notes.push(`Provide ${key === "oneOf" ? "exactly one" : "at least one"} of: ${names.join(", ")}.`);
+  }
+  return { description: [description, ...notes].join(" "), parameters };
+}
+
 /** Pi owns execution. This adapter only binds Studio tools and validates Studio evidence. */
 export async function runStudioAgent(input: PiInput, host: HostCall, emit: (event: PiEvent) => void, signal?: AbortSignal, runtimeOverride?: ModelRuntime, live?: LiveInput): Promise<PiResult> {
   const runtime = runtimeOverride ?? await ModelRuntime.create({ credentials: new InMemoryCredentialStore(), modelsStore: new InMemoryModelsStore(), modelsPath: null, refreshOnCreate: false });
@@ -58,8 +79,7 @@ export async function runStudioAgent(input: PiInput, host: HostCall, emit: (even
       if (finished || plan) throw new Error("この依頼は完了または確認待ちです");
     };
     const inScope = (context: Record<string, any>) => context.projectId === input.projectId && context.sceneId === input.sceneId && context.editorMode === "edit" && !context.importBusy;
-    const studioTools: ToolDefinition[] = available.map(definition => ({ name: definition.name, label: definition.name, description: definition.description,
-      parameters: definition.inputSchema, exposure: definition.name === "capture_scene_view" ? "model-only" : essential.has(definition.name) ? "direct" : "deferred",
+    const studioTools: ToolDefinition[] = available.map(definition => ({ name: definition.name, label: definition.name, ...modelTool(definition.description, definition.inputSchema), exposure: definition.name === "capture_scene_view" ? "model-only" : essential.has(definition.name) ? "direct" : "deferred",
       ...(definition.name === "capture_scene_view" ? {} : { outputSchema: Type.Record(Type.String(), Type.Any()) }),
       executionMode: definition.readOnly ? "parallel" : "sequential", annotations: { readOnlyHint: definition.readOnly },
       execute: async (operationId, args) => {
