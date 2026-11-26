@@ -1,13 +1,16 @@
-import React, { Suspense } from "react";
+import React, { Suspense, useEffect, useState } from "react";
+import { createRoot as createDomRoot } from "react-dom/client";
 import { advance, createRoot, extend } from "@react-three/fiber";
 import { Physics } from "@react-three/rapier";
 import { XRiftProvider } from "@xrift/world-components";
 import * as THREE from "three";
+import { ShaderCubeTextureField, ShaderVolumeTextureField } from "../src/components/visual-editor/CustomShaderFields";
 import { PrimitiveMeshVisual } from "../src/components/visual-editor/SceneViewport";
 import { classicShaderTextureCacheSize } from "../src/components/visual-editor/classic-shader-textures";
 import { tauri } from "../src/lib/tauri";
 import { XriftWorld } from "../packages/xrift-studio-runtime/src/react-three-fiber/index";
-import type { AssetManifest, MaterialAsset } from "../src/lib/visual-editor/asset-manifest";
+import type { AssetManifest, MaterialAsset, TextureAsset } from "../src/lib/visual-editor/asset-manifest";
+import type { ClassicR3fShaderUniform } from "../src/lib/visual-editor/custom-shader-contract";
 import type { MeshComponent, SceneEntity } from "../src/lib/visual-editor/scene-document";
 
 extend(THREE);
@@ -190,4 +193,38 @@ export async function renderCustomShaderParity(mode: Mode) {
     target.dispose();
     renderer.dispose();
   }
+}
+
+/** What the two texture fields last handed to their owner. */
+export const savedTextureFields: { volume?: unknown; cube?: unknown; opened: string[] } = { opened: [] };
+
+/**
+ * Mounts the 3D texture and cube map fields of the Inspector on their own,
+ * over the editor, with seven pictures to choose from.
+ */
+export function mountShaderTextureFields() {
+  const names = ["strip", "px", "nx", "py", "ny", "pz", "nz"];
+  const textures = names.map((name) => ({
+    id: `texture-${name}`, name: `${name}.png`, kind: "texture", status: "ready",
+    source: { kind: "project", relativePath: `assets/textures/${name}.png` },
+  })) as unknown as TextureAsset[];
+  function Fields() {
+    const [volume, setVolume] = useState<Extract<ClassicR3fShaderUniform, { kind: "texture-3d" }>>(
+      { kind: "texture-3d", textureAssetId: "texture-strip" });
+    const [cube, setCube] = useState<Extract<ClassicR3fShaderUniform, { kind: "texture-cube" }>>(
+      { kind: "texture-cube", faces: names.slice(1).map((name) => ({ textureAssetId: `texture-${name}` })) });
+    useEffect(() => { savedTextureFields.volume = volume; savedTextureFields.cube = cube; }, [volume, cube]);
+    const open = (assetId: string) => { savedTextureFields.opened.push(assetId); };
+    return (
+      <div className="w-80 space-y-3 p-3">
+        <ShaderVolumeTextureField uniform={volume} textures={textures} disabled={false} ariaLabel="Lut" onChange={setVolume} onOpenTexture={open} />
+        <ShaderCubeTextureField uniform={cube} textures={textures} disabled={false} ariaLabel="Sky" onChange={setCube} onOpenTexture={open} />
+      </div>
+    );
+  }
+  document.getElementById("root")!.style.display = "none";
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;inset:0;display:flex;align-items:flex-start;background:white";
+  document.body.append(host);
+  createDomRoot(host).render(<Fields />);
 }

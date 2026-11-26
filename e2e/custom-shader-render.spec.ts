@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import type { XriftMcpEditorResponse } from "../src/lib/tauri";
 import { execFileSync } from "node:child_process";
 import zlib from "node:zlib";
 
@@ -120,4 +121,116 @@ test("カスタムシェーダーの新しいuniformと描画設定を、編集�
   // Taking the Material off gives the mesh its culling back.
   expect(reports.filter(report => report.swapped).map(report => [report.mode, report.swapped])).toEqual([["edit", [true, false]], ["jsx", [true, false]]]);
   expect(errors).toEqual([]);
+});
+
+const INSPECTOR_VERTEX = `uniform mat4 uPlacement;
+uniform vec3 uOffsets[3];
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  gl_Position = projectionMatrix * modelViewMatrix * (uPlacement * vec4(position + uOffsets[0], 1.0));
+}`;
+const INSPECTOR_FRAGMENT = `uniform float uGain;
+varying vec2 vUv;
+void main() {
+  gl_FragColor = vec4(vec3(vUv, 0.5) * uGain, 1.0);
+}`;
+type InspectorShader = {
+  uniforms: Record<string, { kind: string; value: number[] }>;
+  variants: Record<string, unknown>[];
+};
+
+async function call(page: Page, tool: string, args: Record<string, unknown> = {}, fresh = false): Promise<XriftMcpEditorResponse> {
+  return page.evaluate(async ({ tool, args, fresh }) => {
+    const path = "/src/release-e2e/mock-tauri.ts";
+    const { callReleaseE2EMcp: invoke } = await import(/* @vite-ignore */ path);
+    const context = fresh ? (await invoke("get_editor_context")).result! : {};
+    return invoke(tool, { ...(fresh ? { projectId: context.projectId, sceneId: context.sceneId, expectedRevision: context.revision } : {}), ...args });
+  }, { tool, args, fresh });
+}
+
+test("カスタムシェーダーの行列・配列・テクスチャの欄と描画設定を、Inspectorで編集して保存する", async ({ page }, info) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto("/e2e.html?scenario=ready");
+  await expect(page.getByRole("button", { name: /新規プロジェクト/ })).toBeVisible({ timeout: 120_000 });
+  expect((await call(page, "create_project", { name: "custom-shader-inspector-fixture", kind: "world", templateId: "blank" })).ok).toBe(true);
+  await expect.poll(async () => (await call(page, "get_editor_context")).result?.saveStatus).toBe("saved");
+
+  // An AI client writes the shader; the author then adjusts it in the Inspector.
+  const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  const created = await call(page, "create_custom_shader", { name: "Lamp Glow", shader: {
+    vertexShader: INSPECTOR_VERTEX, fragmentShader: INSPECTOR_FRAGMENT,
+    uniforms: {
+      uGain: { kind: "number", value: 1 },
+      uPlacement: { kind: "matrix", value: identity },
+      uOffsets: { kind: "array", value: [0, 0, 0, 0, 0, 0, 0, 0, 0] },
+    },
+    variants: [{ name: "default", defines: {}, side: "double", transparent: false, depthWrite: true }],
+  } }, true);
+  expect(created.ok, JSON.stringify(created)).toBe(true);
+  const materialAssetId = created.result!.materialAssetId as string;
+  const saved = async () => (await call(page, "get_custom_shader", { materialAssetId })).result!.shader as InspectorShader;
+  expect((await saved()).uniforms.uPlacement).toEqual({ kind: "matrix", value: identity });
+
+  await expect(page.getByText("シェーダーの調整値", { exact: true })).toBeVisible();
+  const lists = page.locator("textarea[aria-invalid]");
+  await expect(lists).toHaveCount(2);
+  const matrix = lists.filter({ hasText: "1, 0, 0, 0" });
+  const array = lists.filter({ hasNotText: "1, 0, 0, 0" });
+  await expect(matrix).toHaveCount(1);
+
+  // A mat4 by columns: the last column moves the mesh.
+  const moved = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.5, 0.25, 0, 1];
+  await matrix.fill("1, 0, 0, 0,\n0, 1, 0, 0,\n0, 0, 1, 0,\n0.5, 0.25, 0, 1");
+  await expect.poll(async () => (await saved()).uniforms.uPlacement!.value).toEqual(moved);
+  // Fifteen numbers are neither a mat3 nor a mat4: the field says so and nothing is saved.
+  await matrix.fill("1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.5, 0.25, 0");
+  await expect(matrix).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByText(/^保存していません。9個（mat3）か16個（mat4）の数値/)).toBeVisible();
+  expect((await saved()).uniforms.uPlacement!.value).toEqual(moved);
+  await matrix.fill("1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.5, 0.25, 0, 1");
+  await expect(matrix).toHaveAttribute("aria-invalid", "false");
+
+  const offsets = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
+  await array.fill(offsets.join(", "));
+  await expect.poll(async () => (await saved()).uniforms.uOffsets!.value).toEqual(offsets);
+
+  // 描画設定: a glow is added to the frame, in the transparent pass, without depth, and is never culled.
+  await expect(page.getByText("描画設定", { exact: true }).first()).toBeVisible();
+  await page.getByLabel("defaultのBlending").selectOption("additive");
+  await expect(page.getByText(/Normal以外では、Transparentも有効にしてください/)).toBeVisible();
+  // Each checkbox shows the saved document, which follows the click a moment later.
+  await page.getByLabel("defaultのTransparent").click();
+  await expect(page.getByLabel("defaultのTransparent")).toBeChecked();
+  await expect(page.getByText(/Normal以外では、Transparentも有効にしてください/)).toHaveCount(0);
+  await page.getByLabel("defaultのDepth Write").click();
+  await expect(page.getByLabel("defaultのDepth Write")).not.toBeChecked();
+  await page.getByLabel("defaultのFrustum Culling").click();
+  await expect(page.getByLabel("defaultのFrustum Culling")).not.toBeChecked();
+  await expect.poll(async () => (await saved()).variants[0]).toMatchObject({ blending: "additive", transparent: true, depthWrite: false, frustumCulled: false });
+  await page.screenshot({ path: info.outputPath("custom-shader-inspector.png") });
+  // The defaults are saved as absent keys, the way older documents are written.
+  await page.getByLabel("defaultのBlending").selectOption("normal");
+  await page.getByLabel("defaultのFrustum Culling").click();
+  await expect(page.getByLabel("defaultのFrustum Culling")).toBeChecked();
+  await expect.poll(async () => {
+    const variant = (await saved()).variants[0]!;
+    return ["blending" in variant, "frustumCulled" in variant];
+  }).toEqual([false, false]);
+
+  // The 3D texture and cube map fields, on their own: a blank project has no Texture to offer them.
+  const fixture = "/e2e/custom-shader-render.fixture.tsx";
+  await page.evaluate(async url => (await import(/* @vite-ignore */ url)).mountShaderTextureFields(), fixture);
+  const fields = () => page.evaluate(async url => (await import(/* @vite-ignore */ url)).savedTextureFields, fixture) as
+    Promise<{ volume: Record<string, unknown>; cube: { faces: { textureAssetId: string }[] }; opened: string[] }>;
+  await expect(page.getByLabel("Lut", { exact: true })).toHaveValue("texture-strip");
+  await page.getByLabel("Lutのスライス数").fill("32");
+  await expect.poll(async () => (await fields()).volume).toEqual({ kind: "texture-3d", textureAssetId: "texture-strip", slices: 32 });
+  await page.getByLabel("Lutのスライス数").fill("");
+  await expect.poll(async () => (await fields()).volume).toEqual({ kind: "texture-3d", textureAssetId: "texture-strip" });
+  await page.getByLabel("Skyの-Z面").selectOption("texture-strip");
+  await expect.poll(async () => (await fields()).cube.faces.map(face => face.textureAssetId))
+    .toEqual(["texture-px", "texture-nx", "texture-py", "texture-ny", "texture-pz", "texture-strip"]);
+  await expect(page.getByText("6枚とも同じ大きさの正方形の画像を選びます。")).toBeVisible();
+  await page.screenshot({ path: info.outputPath("custom-shader-texture-fields.png") });
 });
