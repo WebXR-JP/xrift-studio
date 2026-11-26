@@ -1,9 +1,8 @@
 @AGENT.md
 
-## Claude Codeの設定
+## Claude Code 向けの設定
 
-ブラウザのプレビューには、`.claude/launch.json`の`web`設定をpreview_startで使ってください。ポート1420で開発サーバーが起動済みなら、そのサーバーを使い、`http://localhost:1420/preview.html`を開きます。
-
-よく使うコマンドとTauri MCPの読み取り操作は、`.claude/settings.json`で事前に許可しています。
-
-作業に合う資料を読んでください。機能追加・IPC連携は`docs/AGENT_IMPLEMENTATION.md`、画面設計は`docs/UX_PRINCIPLES.md`、動作確認とデバッグは`DEVELOPMENT.md`を参照します。日本語の作成・推敲では、`AGENT.md`の文章と用語の方針に従ってください。
+- ブラウザプレビューには `.claude/launch.json` の `web` 設定を `preview_start` で使ってください。ポート 1420 で開発サーバーがすでに起動している場合はそのまま利用し、`http://localhost:1420/preview.html` を開きます。
+- よく使うコマンドと Tauri MCP の読み取り操作は、`.claude/settings.json` で事前に許可しています。
+- 変更対象に合わせて関連ドキュメントを参照してください。機能追加や IPC 連携は `docs/AGENT_IMPLEMENTATION.md`、画面設計は `docs/UX_PRINCIPLES.md`、動作確認やデバッグ手順は `DEVELOPMENT.md` にまとめています。
+- ドキュメント・PR・コミットメッセージの日本語は、[AGENT.md](./AGENT.md) と [docs/JAPANESE_WRITING.md](./docs/JAPANESE_WRITING.md) の方針に沿って自然な表現で書いてください。

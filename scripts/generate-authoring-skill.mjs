@@ -38,13 +38,13 @@ const step = (instruction, index) => {
 const steps = (instructions) => instructions.map(step).join("\n\n");
 // 品質を上げる手順は、接続先から取得しなくても読めるように全文を収録する。
 const embedded = [
-  ["refinement", "既にあるものの品質を上げる"],
-  ["model-quality", "3Dモデルを作る・直す"],
+  ["refinement", "既存の制作物の品質を上げる"],
+  ["model-quality", "3D モデルを作る・直す"],
 ];
 const embeddedNames = new Set(embedded.map(([name]) => name));
 const sections = embedded.map(([name, heading]) => `## ${heading}
 
-${guide.design[name].summary}${code("get_world_authoring_guide")}の${code(`topic: "${name}"`)}と同じ内容。
+${guide.design[name].summary}${code("get_world_authoring_guide")} の ${code(`topic: "${name}"`)} に相当する。
 
 ${steps(guide.design[name].instructions)}`).join("\n\n");
 const topics = [
@@ -57,11 +57,11 @@ name: ${guide.skill.name}
 description: ${JSON.stringify(guide.skill.description)}
 ---
 
-<!-- scripts/generate-authoring-skill.mjsで生成。変更は共通ガイドの正本に加え、再生成してください。 -->
+<!-- scripts/generate-authoring-skill.mjs で自動生成しています。変更は共通ガイド（src/lib/visual-editor/world-authoring-guide.json）を更新し、再生成してください。 -->
 
-# XRift Studioでワールドと3Dモデルを制作する
+# XRift Studio でワールドと 3D モデルを制作する
 
-最初に${code("list_projects")}と現在のSceneを確認する。接続中のStudioからは${code("get_world_authoring_guide")}で最新の制作ガイドを取得できる。この文書には、その基本方針と、品質を上げる手順を収録している。
+最初に ${code("list_projects")} と現在の Scene を確認する。接続中の Studio からは ${code("get_world_authoring_guide")} で最新の制作ガイドを取得できる。このスキルには、基本方針と品質改善の手順をまとめている。
 
 ## 進め方
 
@@ -71,17 +71,17 @@ ${sections}
 
 ## 必要なときに読むガイド
 
-${code("get_world_authoring_guide")}のtopicは、使うものだけを取得する。作業前にすべてを読まない。
+${code("get_world_authoring_guide")} の topic は、実際に使うものだけを取得する。作業前にすべて読み込む必要はない。
 
 ${topics.join("\n")}
 
-## Studioでの制作と確認
+## Studio での制作と確認
 
-静的ソースを保存して制作する場合は、${code("apply_r3f_scene")}で原本を所有するルートを作成・更新する。修正前に${code("get_entity_components")}でそのルートを読み、完全な${code("r3fAuthoring.source")}を使う。一般のComponentコード取り込みでは、保存された原本を更新できない。対応する操作と制限は、ツールのスキーマと返された機能情報で確認する。
+静的ソースで制作する場合は、${code("apply_r3f_scene")} でソースを持つルート Entity を作成・更新する。修正前に ${code("get_entity_components")} でそのルートを読み込み、完全な ${code("r3fAuthoring.source")} を使って編集する。通常の Component コード取り込みでは保存済みのソースを更新できない。対応する操作や制限は、ツールのスキーマと返却された機能情報で確認する。
 
-ワールド全体の制作では、${code("get_world_authoring")}で作業を再開するか、${code("begin_world_authoring")}で設計内容と完成条件を保存する。書き込みには現在のrevisionを使う。保存した結果をスポーン視点（spawn）と斜め上からの俯瞰（iso）で撮影し、${code("review_world_authoring")}で完成条件を一つずつ確認・記録して、${code("complete_world_authoring")}で終える。小さな直接編集では、ワールド全体の制作手順を始める必要はない。
+ワールド全体の制作では、${code("get_world_authoring")} で作業を再開するか、${code("begin_world_authoring")} で設計内容と完成条件を保存する。書き込みには現在の revision を使う。保存した結果をスポーン視点（spawn）と斜め上からの俯瞰（iso）で撮影し、${code("review_world_authoring")} で完成条件を一つずつ確認・記録したうえで、${code("complete_world_authoring")} で完了する。小規模な直接編集では、ワールド全体の制作手順を開始する必要はない。
 
-[共通ガイド](../../../src/lib/visual-editor/world-authoring-guide.json)から、Studio ChatGPT・MCP・このスキルへ同じ基本方針を渡す。
+Studio ChatGPT・MCP・このスキルの基本方針は、[共通ガイド](../../../src/lib/visual-editor/world-authoring-guide.json)で一元管理している。
 `;
 
 let stale = false;

@@ -1,5 +1,5 @@
-# XRift Studio Agent Guide
+# XRift Studio エージェントガイド
 
-Codex用のプロジェクト指示です。作業前に[AGENT.md](./AGENT.md)を読み、依頼に関係する実装資料を参照してください。日本語の作成・推敲では、`AGENT.md`の文章と用語の方針に従ってください。
+Codex 向けのプロジェクト指示です。作業を始める前に [AGENT.md](./AGENT.md) を読み、変更対象に関係するドキュメントを確認してください。ドキュメント・PR・コミットメッセージの日本語は、[AGENT.md](./AGENT.md) と [docs/JAPANESE_WRITING.md](./docs/JAPANESE_WRITING.md) の方針に沿って自然な日本語で書きます。
 
-制作専用スキルは`world-authoring-guide.json`から生成します。正本を変更したら`node scripts/sync-agent-skills.mjs`でCodex・Claude Code用の両コピーを更新し、`node scripts/sync-agent-skills.mjs --check`で一致を確認してください。アプリ本体の開発では、制作スキルの読込は不要です。
+ワールド制作専用スキルは `src/lib/visual-editor/world-authoring-guide.json` から自動生成しています。元の JSON を編集した場合は `node scripts/sync-agent-skills.mjs` を実行して Codex 用・Claude Code 用の両方を更新し、`node scripts/sync-agent-skills.mjs --check` で差分がないことを確認してください。アプリ本体の開発では、制作スキルを読み込む必要はありません。

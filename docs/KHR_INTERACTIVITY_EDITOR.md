@@ -1,88 +1,64 @@
 # KHR_interactivity Editor / MCP design
 
-## Script interoperability
+## スクリプトとの相互運用
 
-`event/send` notifies `ctx.graph.on(name, handler)` and `ctx.graph.emit(name)`
-starts matching `event/receive` nodes. Use the same event ID/name on both sides.
-Delivery is scoped to the Three.js Scene and uses the same runtime in Studio Play
-and published worlds. Receivers in separate trigger Components can communicate.
-Graph delivery is queued per frame, including self-delivery exactly once; stopping
-or rebuilding a trigger drops its queue. Script listeners are released on stop,
-failure and reload. These are transient notifications without payloads or replay,
-not a TypeScript-to-Graph converter. Script-only payload events retain their existing
-`ctx.on` / `ctx.emit` API. The Script editor's API guide and
-`get_scripting_capabilities` expose this contract and a two-way example.
+`event/send` はスクリプト側の `ctx.graph.on(name, handler)` に通知を送り、`ctx.graph.emit(name)` は対応する `event/receive` ノードを起動する。双方で同じイベント ID／名前を指定する。配信のスコープは Three.js の Scene 単位であり、Studio の Play と公開済みワールドの両方で同じランタイムを使用する。別々の Interaction Trigger Component にある受信ノード同士でも通信できる。
 
-## Goal
+グラフ側への配信はフレームごとにキューへ積まれ、自分自身への配信も厳密に 1 回だけ行われる。トリガーの停止や再構築が起きるとキューは破棄される。スクリプト側のリスナーは停止・失敗・リロード時に解放される。これはペイロードやリプレイを持たない一時的な通知機構であり、TypeScript からグラフへの変換機能ではない。ペイロード付きのスクリプト専用イベントには、引き続き既存の `ctx.on` / `ctx.emit` API を使う。スクリプトエディターの API ガイドと `get_scripting_capabilities` では、この仕様と双方向通信のサンプルを提供している。
 
-XRift Studio stores reusable behavior as a canonical glTF `KHR_interactivity`
-extension object. The visual editor, JSON import/export, project persistence, and
-MCP tools all edit the same object and use the same validator. React Flow state
-is never the portable source of truth.
+## 目的
 
-The editor is a docked modal over the center/right of the Visual Editor. The
-left side of Scene View remains visible so animation and object state can be
-checked while authoring behavior.
+XRift Studio では、再利用可能な振る舞いを glTF `KHR_interactivity` 拡張の正規（canonical）オブジェクトとして保存する。ビジュアルエディター、JSON のインポート／エクスポート、プロジェクトの永続化、MCP ツールはいずれも同じオブジェクトを編集し、共通のバリデーターを通す。React Flow の画面状態が可搬な元データになることはない。
 
-## Saved Asset
+ノードグラフエディターは、ビジュアルエディターの中央〜右側にドッキングされたモーダルとして表示する。Scene View の左側を見える状態のまま残すことで、アニメーションやオブジェクトの状態を確認しながら振る舞いを編集できる。
 
-`InteractivityAsset` is a document Asset with:
+## 保存されるアセット
+
+`InteractivityAsset` は次の構成を持つドキュメントアセットである。
 
 - `extensionName: "KHR_interactivity"`
 - `specStatus: "release-candidate-2026-07-16"`
-- `extension.graphs`, the canonical Khronos graph data
-- optional `extras.xriftStudio.position` per node for authoring layout only
+- `extension.graphs`: Khronos 仕様に準拠した正規グラフデータ
+- `extras.xriftStudio.position`（任意）: ノードごとの編集用レイアウト座標のみを保持
 
-The Asset type is displayed as Node Graph. Newly generated graph names use
-Main, Interaction Trigger or Animation as appropriate. Asset names generated
-from a Model append Animation to the Model's name; new Assets created manually
-use numbered Node Graph names, and duplicated graphs append Copy. Names assigned
-by the author, including names already saved in an existing project, remain
-unchanged. Renaming UI labels does not change operations, socket IDs or saved
-type signatures.
+UI 上のアセット種別は `Node Graph` として表示する。新規生成されるグラフ名は用途に応じて `Main`、`Interaction Trigger`、`Animation` とする。モデルから生成されたアセット名はモデル名に `Animation` を付加し、手動作成した新規アセットは連番の `Node Graph` 名、複製したグラフは `Copy` を付加する。既存プロジェクトに保存済みの名前を含め、作者が付けた名前はそのまま維持する。UI 表示名を変更しても、オペレーション名、ソケット ID、保存済みの型シグネチャは変わらない。
 
-Unknown extension-defined operations are preserved. XRift Studio only adds a
-dedicated socket template where it understands the operation; it does not
-replace unknown behavior with proprietary event names or JavaScript.
+未知の拡張定義オペレーションはそのまま保持する。XRift Studio は自身が理解するオペレーションに対してだけ専用のソケットテンプレートを提供し、未知の振る舞いを独自のイベント名や JavaScript に置き換えることはしない。
 
-## Validation boundary
+## バリデーション境界
 
-Before UI or MCP writes are committed, validation checks:
+UI または MCP からの書き込みを確定する前に、バリデーターは以下を検査する。
 
-- default graph, declaration, node, flow, value-source, and type indexes
-- the RC type signatures, typed value lengths, JSON scalar kinds, and duplicate types
-- inline, type-default, and connected value sources
-- value connections form no cycle; a flow cycle is a loop and is allowed
-- nodes require declarations
-- core operation names versus extension-defined operation declarations
-- bounded graph/node counts for editor safety
+- 既定グラフ、宣言（declaration）、ノード、フロー、値ソース、型の各インデックスの妥当性
+- RC 仕様の型シグネチャ、型付き配列の長さ、JSON スカラー種別、重複する型定義
+- インライン値、型既定値、接続済みの値ソースの整合性
+- 値接続に循環がないこと（フロー接続の循環はループとして許可する）
+- すべてのノードが対応する宣言を持つこと
+- コアオペレーション名と拡張定義オペレーション宣言の区別
+- エディター保護のためのグラフ数・ノード数の上限
 
-Warnings do not destroy or block unknown extension operations. Structural
-errors reject the write atomically.
+警告は未知の拡張オペレーションを破壊したりブロックしたりしない。一方で構造エラーがある場合は、その書き込み全体をアトミックに拒否する。
 
-## MCP authoring surface
+## MCP オーサリングインターフェース
 
-The built-in `xrift-studio` MCP server exposes:
+同梱の `xrift-studio` MCP サーバーは次のツールを公開している。
 
-**Read**
+**読み取り**
 
-- `list_interactivity_operations` — every operation the palette offers, each with
-  its English label and Japanese description, its sockets, which of its value inputs
-  have a type the operation fixes, and whether the Play runtime executes it
-- `list_interaction_trigger_targets` — every Entity, Component and property an
-  action can write to, with kinds, ranges and enum options
-- `get_interactivity_asset` — the canonical JSON
-- `validate_interactivity_asset` — schema diagnostics and runtime diagnostics
-- `simulate_interactivity_asset` — what the graph does, and when
+- `list_interactivity_operations` — パレットに登録された全オペレーションの一覧。英語ラベル、日本語説明、ソケット一覧、型が固定されている入力値ソケット、および Play ランタイムで実行されるかどうかを返す
+- `list_interaction_trigger_targets` — アクションが書き込み可能な全 Entity・Component・プロパティと、種別・値範囲・列挙オプションを返す
+- `get_interactivity_asset` — 正規 JSON を返す
+- `validate_interactivity_asset` — スキーマ診断とランタイム診断を返す
+- `simulate_interactivity_asset` — グラフがいつ何を実行するかをシミュレーションして返す
 
-**The graph list**
+**グラフ一覧の操作**
 
 - `create_interactivity_asset`, `create_model_animation_graph`,
   `update_interactivity_asset`
 - `add_interactivity_graph`, `update_interactivity_graph`,
   `delete_interactivity_graph`
 
-**Nodes and wires**
+**ノードと接続の操作**
 
 - `add_interactivity_node`, `duplicate_interactivity_node`,
   `delete_interactivity_node`
@@ -92,640 +68,280 @@ The built-in `xrift-studio` MCP server exposes:
   `configure_interactivity_trigger_action`
 - `move_interactivity_node`, `layout_interactivity_graph`
 
-Every operation the node editor offers is here. The four the editor keeps to
-itself are Undo / Redo, selection, the canvas view (zoom, fit, panel widths) and
-the timeline's own range and playhead — none of them change the document.
+ノードエディターが提供するドキュメント編集操作はすべて上記に含まれている。エディター側だけにとどめているのは、Undo / Redo、選択状態、キャンバスの表示状態（ズーム・全体表示・パネル幅）、タイムラインの範囲と再生位置の 4 つのみであり、これらはいずれもドキュメントを変更しない。
 
-Write tools require `projectId`, `sceneId`, and `expectedRevision`, exactly like
-the other XRift Studio editing tools. This prevents an AI client from applying a
-graph mutation to a stale editor snapshot.
+書き込み系ツールは他の XRift Studio 編集ツールと同じく `projectId`、`sceneId`、`expectedRevision` を必須とする。これにより、AI クライアントが古いエディター状態に対してグラフ変更を適用してしまうのを防ぐ。
 
-`add_interactivity_node` takes the defining extension from the operation
-template when the caller does not name one, exactly as the palette does. An
-operation KHR_interactivity does not define is only legal when its declaration
-names the extension that does, and a caller who had to supply that name by hand
-met a validation failure the Editor never produces.
+`add_interactivity_node` は、呼び出し側が拡張名を省略した場合でも、パレットと同じくオペレーションテンプレートから定義元の拡張名を補完する。`KHR_interactivity` コア仕様に含まれないオペレーションは宣言に拡張名を明記しなければ不正になるため、呼び出し側に手入力を強いるとエディターでは起こらないバリデーションエラーが発生するのを防ぐ設計である。
 
-A typical animation workflow is:
+典型的なアニメーション構築の流れは次のとおり。
 
-1. Read editor context and operation templates.
-2. Create an empty Interactivity Asset.
-3. Add `event/onStart` and `animation/start`.
-4. Connect `out` to `in` as a flow.
-5. Set `animation`, `startTime`, `endTime`, and `speed` inline values or connect
-   value-producing nodes.
-6. Validate, then read the canonical JSON for review or reuse.
+1. エディターコンテキストとオペレーションテンプレートを読み取る。
+2. 空の Interactivity アセットを作成する。
+3. `event/onStart` と `animation/start` を追加する。
+4. `out` から `in` へフローを接続する。
+5. `animation`、`startTime`、`endTime`、`speed` にインライン値を設定するか、値を出力するノードを接続する。
+6. バリデーションを実行し、レビューや再利用のために正規 JSON を確認する。
 
-`flow/setDelay` uses the current RC name and socket shape (`in`, `cancel`,
-`out`, `err`, `done`, and `lastDelay`). Older private names such as
-`flow/delay` are rejected unless an extension explicitly defines them.
+`flow/setDelay` は現行 RC 仕様の名前とソケット構成（`in`、`cancel`、`out`、`err`、`done`、`lastDelay`）を使う。`flow/delay` のような古い非公式名は、拡張で明示的に定義されていない限り拒否される。
 
-With this surface an MCP client can generate reusable animation-start graphs,
-delayed sequences, branches, variable and glTF Object Model pointer operations,
-or vendor-extension nodes. It can also inspect and repair an existing graph
-without replacing its canonical JSON.
+このインターフェースにより、MCP クライアントは再利用可能なアニメーション開始グラフ、遅延シーケンス、条件分岐、変数や glTF Object Model ポインター操作、さらにはベンダー拡張ノードまで生成できる。また、正規 JSON 全体を置き換えることなく既存グラフを検査・修復できる。
 
-### Every operation says what it does, as an action
+### 各オペレーションの動作説明
 
-An operation template carries an English `label` and a required Japanese
-`description`. The label uses a standard node name, such as Random or Set Delay.
-The description explains when the node runs and what it does before the author
-adds it to the canvas. Categories, ports and type names also appear in English;
-numbered inputs and outputs display only their position, counting from 1.
-Operation buttons and explanations remain in Japanese.
+各オペレーションテンプレートは、英語の `label` と必須の日本語 `description` を持つ。`label` には `Random` や `Set Delay` のような標準的なノード名を使い、`description` にはキャンバスへ配置する前に動作タイミングと効果が分かる説明を書く。Category、Port、型名も英語で表示し、番号付きの入出力ポートは 1 から始まる位置番号のみを表示する。操作ボタンと説明文は日本語で表示する。
 
-The description is one plain sentence saying when the node runs and what it
-leaves behind — including the part that is not visible from the sockets, such
-as `flow/setDelay` continuing out of Out immediately and out of Done only
-after the wait. It appears under the label in the palette, in the Node
-Inspector's header while the fields below are being edited, and in the card's
-hover text; the palette's search matches it as well as the label and the raw
-`op`, so「間隔」finds `flow/throttle`. `list_interactivity_operations` returns
-it too, so an MCP client chooses on behavior rather than on the shape of a name.
+`description` は、そのノードがいつ動き何をもたらすかを平易な 1 文で表現する。たとえば `flow/setDelay` が `Out` は即座に進み、`Done` は待機後に進むといった、ソケット名だけでは読み取りにくい仕様も含める。この説明はパレットのラベル下、Node Inspector のヘッダー、カードのツールチップに表示され、パレット検索でもラベルや生の `op` 名と合わせて対象になる（例: 「間隔」で `flow/throttle` がヒットする）。`list_interactivity_operations` もこの説明を返すため、MCP クライアントも名前の印象ではなく実際の挙動をもとにノードを選べる。
 
-It is a required field rather than an optional one: an operation added to the
-palette without a sentence explaining it is a node no author can be expected to
-try. When a label changes, the socket hints in `InteractivityNodeCard.tsx` that
-quote it by name (Set Delay's Delay ID) change with it, or the two
-tell the author to look for a node that is no longer there.
+説明文は任意ではなく必須フィールドとしている。何を起こすか分からないノードをパレットに並べても作者は使いこなせないためである。ラベルを変更したときは、`InteractivityNodeCard.tsx` 内でその名前を参照するソケットヒント（例: `Set Delay` の `Delay ID`）も合わせて更新し、存在しないノード名を案内してしまわないようにする。
 
-### A fixed value is a socket's own literal
+### 固定値はソケット自身のリテラルとして扱う
 
-KHR_interactivity has no constant node. A number that does not come from
-another node reaches a socket as that socket's `value`, and the socket's type
-entry is what decides whether the author is sending `3` or `(0, 1, 0)`. So
-entering a fixed value and choosing its type are one operation. The Node
-Inspector offers both in the same place.
+`KHR_interactivity` には定数ノードが存在しない。他ノードから配線されていない値は、そのソケット自身の `value` として保持され、`3` を渡すのか `(0, 1, 0)` を渡すのかはソケットの型エントリーで決まる。そのため固定値の入力と型の選択は一体の操作であり、Node Inspector では両方を同じ場所に並べて編集できるようにしている。
 
-The Node Inspector's value list is therefore built from every value input the operation
-declares, unioned with whatever the node already carries — the same union the
-card and the height estimate use, so a socket drawn on the canvas is always one
-the author can type into. Reading `node.values` alone was the bug this replaced:
-`pointer/set` and `variable/set` land with no literal at all, so their `value`
-socket appeared on the card and the Inspector showed nothing, and the only ways
-to put a number there were to hand-edit the canonical JSON or to call
-`set_interactivity_value`. A socket fed by a wire is listed too, as connected,
-rather than hidden — a socket that vanishes when wired reads as a socket that
-stopped existing.
+Node Inspector の値一覧は、オペレーションが宣言する全入力値ソケットとノードがすでに持つ値ソケットの和集合から構築する（カードの描画や高さ見積もりも同じ和集合を使うため、キャンバス上に表示されるソケットは必ず Inspector から入力できる）。以前は `node.values` だけを読んでいたため、初期状態でリテラルを持たない `pointer/set` や `variable/set` ではカード上に `value` ソケットがあるのに Inspector に何も表示されず、JSON の手編集や `set_interactivity_value` でしか値を入れられない不具合があった。ワイヤーが接続されているソケットも隠さず「接続済み」として一覧に表示する。接続した途端に項目が消えると、ソケット自体がなくなったように見えてしまうためである。
 
-Each free socket carries a type list: `bool`, `int`, `float`, `float2`,
-`float3`, `float4`. Their display names are Boolean, Integer, Float, Vector2,
-Vector3 and Vector4; the saved signatures remain unchanged. Matrices are left
-out because four rows of boxes typed by hand is not an input anyone finishes;
-`math/combine2x2` builds one out of
-numbers that are. Changing the type rewrites the literal to the new length,
-keeping the leading components and padding with zero, because a `float3` type
-over a one-entry value is rejected by the validator and read as zero by the
-runtime — the author would have changed the type and silently lost the number
-they had typed.
+型を自由に選べるソケットでは、`bool`、`int`、`float`、`float2`、`float3`、`float4` を選択できる。UI 上の表示名はそれぞれ `Boolean`、`Integer`、`Float`、`Vector2`、`Vector3`、`Vector4` とし、保存される型シグネチャは変更しない。行列型は手入力に向かないため除外しており、必要な場合は `math/combine2x2` などを使って数値から組み立てる。型を切り替えると、先頭成分を保持しつつ不足分を 0 で埋めてリテラルを新しい長さへ変換する。`float3` 型に対して要素 1 個のままにするとバリデーターで拒否され、ランタイムでも 0 として読まれて入力値が静かに失われてしまうためである。
 
-Not every socket is free. `fixedValueTypes` on the operation template names the
-ones the operation decides: a delay in seconds, a loop count, an animation
-index, a bezier handle, the operands of a logical operation. Those show their
-type and do not offer to change it, and `set_interactivity_value` refuses
-another signature for them with `SIGNATURE_NOT_ALLOWED`, so the Inspector and
-MCP agree on what is legal. `list_interactivity_operations` returns the map, so
-a client can tell the fixed sockets from the ones it may send a vector into
-without first being refused. A socket left out of the map is genuinely free:
-`pointer/set` writes whatever the pointer holds, a variable takes its own type,
-and Add adds two numbers or two vectors.
+ただしすべてのソケットが自由型ではない。オペレーションテンプレートの `fixedValueTypes` は、遅延秒数、ループ回数、アニメーションインデックス、ベジェ制御点、論理演算のオペランドなど、オペレーション側で型が定まっているソケットを列挙する。これらは Inspector 上で型名を表示するだけで変更 UI を出さず、`set_interactivity_value` でも別シグネチャの指定を `SIGNATURE_NOT_ALLOWED` で拒否することで、Inspector と MCP のルールを一致させている。`list_interactivity_operations` もこのマップを返すため、クライアントは事前に固定型と自由型を判別できる。マップに含まれないソケットは真に自由型であり、`pointer/set` はポインター先の型、変数は変数自身の型、`Add` は数値同士やベクトル同士を扱える。
 
-Retyping is refused for a socket fed by a wire as well. Such a socket takes its
-type from the node upstream, and writing one here would describe a value this
-node never reads.
+ワイヤーが接続されているソケットに対する型変更も拒否する。接続済みソケットの型は上流ノードから決まるため、下流側に別の型を書いても実際に読まれない値になってしまうためである。
 
-### Refusing what the canvas cannot draw
+### キャンバスで描けない接続を拒否する
 
-A node's sockets are part of its operation's signature, and the runtime reads
-only the ones it knows. The canvas can only draw a wire between handles the
-operation declares; a socket name invented over MCP saves as valid JSON and then
-does nothing at Play, which is the hardest kind of failure to see from the
-outside. `connect_interactivity_nodes` and `set_interactivity_value` therefore
-refuse a socket the operation does not declare. Operations with no template stay
-unchecked, because they are the deliberate escape hatch for extensions this
-build does not know.
+ノードのソケットはオペレーションのシグネチャの一部であり、ランタイムは自身が認識しているソケットだけを読み取る。キャンバス側もオペレーションが宣言するハンドル間にしかワイヤーを引けない。もし MCP 経由で存在しないソケット名を書けてしまうと、JSON としては保存に成功するのに Play 時に何も起きないという、外部から最も原因を追いにくい不具合になる。そのため `connect_interactivity_nodes` と `set_interactivity_value` は、オペレーションが宣言していないソケットを拒否する。一方、テンプレートを持たない未知の拡張オペレーションは意図的な逃げ道として未検査のまま通す。
 
-`configure_interactivity_trigger_action` applies the same rule to an action's
-target: the Entity, the Component on it and the property on that target kind all
-have to exist, and the value is written with the type the property needs — an
-enum by its option id rather than by the index the socket happens to store. The
-same call carries the seconds the change takes and the easing curve, and refuses
-a duration on a property with no midpoint, because a gradual change the runtime
-cannot make is a promise the graph would break.
+`configure_interactivity_trigger_action` でも同じ原則をターゲット指定に適用している。対象の Entity、その上の Component、および対象種別のプロパティがすべて存在することを検証し、プロパティが要求する型で値を書き込む（列挙型はソケット内部のインデックスではなくオプション ID で指定する）。変化にかける秒数とイージング曲線も同じ呼び出しで受け取り、中間値を持たないプロパティへの時間指定は拒否する。ランタイムが補間できない変化をグラフ上で約束させないためである。
 
-### One frame is not one instant
+### 1 フレームは 1 瞬間ではない
 
-A frame can be far longer than 1/60s: a tab returning from the background, a
-stall, or a dry run stepping in whole seconds. Inside one, the engine walks to
-each moment something happens, in order, rather than to the next pending timer.
-That distinction matters because an interpolation finishing mid-frame continues
-into new waits, and one of those can be due *before* a timer that was already
-pending. Jumping straight to the pending timer ran the later event first and
-then set the clock back to run the earlier one — a sequence silently reordering
-itself on exactly the frames a player is most likely to notice.
+1 フレームの経過時間は、タブのバックグラウンド復帰、処理落ち、あるいは 1 秒刻みのドライランなどにより、1/60 秒を大きく超えることがある。エンジンは 1 フレーム内で「次に控えているタイマー」へ一気に飛ぶのではなく、イベントが発生する各時刻へ順番に歩を進める。なぜなら、フレーム途中で補間が完了したときに新しい待機ノードが起動し、その完了時刻が既存の待機タイマーより**前**になるケースがあるためである。既存のタイマーへ直接ジャンプしてしまうと、後のイベントが先に発火してから時計が巻き戻る形になり、ユーザーが最も気づきやすいフレームで実行順序が密かに狂ってしまう。
 
-Three neighbouring rules follow from the same principle, that a node's answer
-must not depend on how the frame happened to be sliced:
+「ノードの結果がフレームの刻み方に依存してはならない」という同じ原則から、次の 3 つのルールも定めている。
 
-- Restarting `animation/start` replaces that node's pending completion instead
-  of stacking a second one, the way a timed write replaces its interpolation. A
-  clip retriggered on a loop otherwise leaves a queue of `done` flows that all
-  fire later, long after the play they belonged to ended.
-- `flow/doN` with an explicit `n` of 0 lets nothing through. Reading the count
-  as `n || 1` turned a closed gate into a gate that passes once.
-- `flow/switch` with no readable selection takes `default`. An integer cast of
-  "nothing" is 0, so an unwired node quietly took the first case instead of the
-  fallback the author wired for exactly this.
+- `animation/start` を再実行すると、そのノードに紐づく未完了の完了待ちを積み増すのではなく置き換える（時間付きプロパティ書き込みが進行中の補間を置き換えるのと同じ仕組み）。これをしないと、ループでクリップを再起動するたびに古い再生の `done` フローが溜まり、再生終了後にまとめて発火してしまう。
+- `flow/doN` に明示的に `n = 0` を渡した場合は 1 回も通さない。`n || 1` のように評価すると、閉じたゲートが 1 回だけ通ってしまう不具合になる。
+- `flow/switch` で有効な選択値が読めない場合は `default` に進む。「値なし」を整数へキャストすると `0` になるため、未接続ノードが作者の意図した `default` ではなく先頭のケースへ黙って分岐してしまうのを防ぐ。
 
-Two behaviours are deliberate Studio choices rather than readings of the
-specification, and are called out here so nobody has to guess from the code:
-`flow/waitAll` re-arms itself once it fires `completed`, so it can be used
-inside a loop without a `reset` wire; and `flow/multiGate` cycles through the
-outputs that are actually connected, so an unconnected socket does not consume
-a turn.
+また、仕様の解釈ではなく Studio 独自の意図的な設計判断として次の 2 点を明記しておく。
 
-### Reading a sequence back
+- `flow/waitAll` は `completed` を発火した時点で自動的に再武装されるため、`reset` ワイヤーを繋がなくてもループ内で繰り返し使える。
+- `flow/multiGate` は実際に接続されている出力ソケットだけを巡回するため、未接続のソケットでターンを空費しない。
 
-`simulate_interactivity_asset` runs the graph with no renderer and reports the
-animation starts and stops, the property writes with the seconds each is spread
-over, the events, the logs, the first time each node ran, and the nodes that
-were never reached. It is the Editor's timeline as data. Reading the JSON says
-what a graph is wired to do; only running it says whether the delay lands where
-its author meant, whether a loop terminates inside the horizon, and which branch
-is dead. Nothing is written, so it needs no revision.
+### シーケンスのシミュレーション検証
 
-The recipe catalogue is back in the add panel, under「よく作るもの」, and it is
-derived rather than curated: `RUNNABLE_INTERACTIVITY_RECIPES` is
-`INTERACTIVITY_RECIPES` filtered by whether the runtime actually executes the
-graph the recipe builds. That is the fix for why it was pulled the first time —
-nearly all of it was `pointer/*` shapes Play ignores, so it read as a head start
-and then did nothing when the world ran. An operation that becomes runnable
-brings its recipe back on its own; one that stops being runnable takes its
-recipe out before an author can pick it.
+`simulate_interactivity_asset` はレンダラーを使わずにグラフを実行し、アニメーションの開始・停止、プロパティ書き込みと補間時間、イベント、ログ、各ノードの初回実行時刻、および一度も到達しなかったノードを報告する。エディターのタイムラインをデータとして取得できる機能である。JSON を読むだけでは配線構造しか分からないが、シミュレーション実行によって遅延が意図どおりの時刻に着地するか、ループが一定時間内に終了するか、到達不能な分岐がないかを確認できる。ドキュメントを一切書き換えないためリビジョン指定は不要である。
 
-The interaction recipes —「押したらテレポートする」「押したら表示を切り替える」
-「押したら動かす」— all target something Entity-scoped, because a recipe is built
-without a Scene in front of it and cannot know which of an Entity's two Audio
-Sources the author meant. `__xrift_self__` covers the Entity, so the same recipe
-works on every door without being re-pointed.
+追加パネルの「よく作るもの」レシピ一覧は、手作業の選定リストではなく自動導出としている。`RUNNABLE_INTERACTIVITY_RECIPES` は、`INTERACTIVITY_RECIPES` のうち現行ランタイムが実際に実行できるグラフを構築するものだけを抽出した一覧である。以前この一覧を一度引っ込めた原因は、Play が無視する `pointer/*` 構成のレシピが大部分を占めており、選んだのに実行時に何も起きない状態だったことにある。自動導出にすることで、あるオペレーションが実行可能になれば該当レシピが自動的に復活し、逆に非対応になれば作者が選ぶ前に一覧から外れる。
+
+インタラクション系レシピ（「押したらテレポートする」「押したら表示を切り替える」「押したら動かす」）はいずれも Entity スコープの対象を指す。レシピ生成時点では目の前のシーンが分からず、ある Entity に Audio Source が 2 つある場合どちらを狙うべきか決められないためである。`__xrift_self__` を使うことで、同じレシピをどのドアに取り付けても指し直しなしで動作させられる。
 
 ### Animation belongs to the graph
 
-v1 removed the Animation Component. It played one clip, and a Model whose
-motion is split across dozens of them — gulls, water, a flag — had no way to
-say "all of these"; the one choice it offered was the one nobody wanted to
-make. A clip is now started by an `animation/start` node, beside the waits and
-conditions it runs with.
+v1 で従来の Animation Component を廃止した。旧 Component は 1 つのクリップしか再生できず、カモメや水面や旗のように動きが数十クリップに分かれているモデルに対して「全部まとめて再生する」と指定する手段がなかったためである。現在は待機や条件分岐と同じグラフ上で、`animation/start` ノードを使ってクリップを開始する。
 
-Three things follow, and they are the whole of the breaking change:
+この破壊的変更に伴う仕様は次の 3 点に集約される。
 
-- **Placing an animated Model creates its graph.** It arrives playing, as it
-  always has; what plays it is an Asset the author can open and edit.
-- **No Component is needed to animate an Entity.** The mixer exists wherever a
-  Model has clips and the Scene runs a graph, in Studio Play and in a published
-  world alike. `xrift/setProperty` with `targetKind: "animation"` addresses that
-  mixer, with an empty component id.
-- **Opening a project converts what is left.** `migrateAnimationComponentsToGraphs`
-  turns each autoplaying Component into a graph that plays its clip with its
-  loop and speed, plus the Trigger that runs it, and removes the Component. It
-  runs in `parseVisualProjectFiles`, over Scenes and Prefabs together against
-  one manifest, so a Prefab cannot be left animating until it is placed. A
-  Component that was not autoplaying is dropped rather than converted: it was a
-  handle for another graph to command, and starting it would animate something
-  the world never animated.
+- **アニメーション付きモデルを配置するとグラフが自動作成される。** 従来どおり配置直後から再生が始まるが、その実体は作者が開いて編集できる Node Graph アセットになる。
+- **アニメーション再生に専用 Component は不要。** モデルがクリップを持ちシーンがグラフを実行する環境であれば、Studio の Play でも公開済みワールドでもミキサーが存在する。`targetKind: "animation"` を指定した `xrift/setProperty` は、空の Component ID でそのミキサーを操作できる。
+- **プロジェクトを開く際に残存データを自動変換する。** `migrateAnimationComponentsToGraphs` は、自動再生が有効だった各旧 Component を、元のクリップ・ループ・速度設定を引き継ぐグラフと実行用 Trigger へ変換し、旧 Component を削除する。この変換は `parseVisualProjectFiles` 内でシーンとプレハブを 1 つのマニフェストに対してまとめて処理するため、配置されるまで変換漏れが残るプレハブは発生しない。一方、自動再生がオフだった Component は他グラフから操作するためのハンドルだったため、変換して自動再生を始めると意図しない動きを生むおそれがあり、変換せず削除する。
 
-The document type stays readable — that is what makes the conversion possible —
-but nothing authors, renders, publishes or edits it. `update_component` refuses
-one with `COMPONENT_REMOVED`; `remove_component` still works, because that is
-the way out.
+ドキュメント型定義自体は変換のために読み取り可能なまま残しているが、新規作成・描画・公開・編集の対象からは外している。`update_component` は `COMPONENT_REMOVED` で拒否し、除去手段として `remove_component` だけを受け付ける。
 
-### Generating a graph from a Model's clips
+### モデルのクリップからグラフを生成する
 
-`create_model_animation_graph` builds `event/onStart` → `flow/sequence` →
-one `animation/start` per clip, and is the same thing the Model Inspector's
-button does. It exists because the Animation Component plays one clip, and a
-Model whose motion is spread over sixty-four of them cannot say "play them all"
-any other way: by hand that is one node and three inline values per clip.
+`create_model_animation_graph` は、`event/onStart` → `flow/sequence` → 各クリップごとの `animation/start` という構造のグラフを生成する（モデル Inspector の「アニメーションのGraphを作る」ボタンと同じ処理）。64 個のクリップを持つモデルで全クリップを再生するには、手作業だと 1 クリップごとに 1 ノードと 3 つのインライン値の設定が必要になるため、この生成機能を用意している。
 
-Three decisions are worth stating, because a caller cannot infer them:
+呼び出し側が推測しにくい 3 つの設計判断を明記しておく。
 
-- **No `endTime`.** An unbounded `animation/start` runs until something stops
-  it, which the mixer surfaces as a loop. Ambient motion — gulls, water, a flag
-  — has no moment it should stop at, and making every generated node carry an
-  end time would mean editing sixty-four of them to get there.
-- **Grouped fan-out.** A flow output reaches one node, so the fan-out is
-  `flow/sequence`; its outputs are numbered and the spec runs whatever is
-  connected, so nothing limits it to the three the template declares. They are
-  grouped eight at a time anyway: one card with sixty-four sockets is taller
-  than the canvas, and every edge in the graph would leave the same point.
-- **Not attached.** The tool creates the Asset and stops. Which Entity carries
-  it is a placement decision, and folding sixty-four generated nodes and a
-  Component addition into one undo step makes both harder to take back.
+- **`endTime` を設定しない。** 終了時刻を指定しない `animation/start` は停止されるまで再生を続けるため、ミキサー上ではループ再生になる。カモメや水面や旗のような環境アニメーションに固定の終了時刻はなく、全ノードに終了時刻を入れると 64 ノードすべてを手修正する必要が出てしまう。
+- **8 本単位でファンアウトをグループ化する。** 1 つのフロー出力は 1 ノードにしか繋げないため、分岐には `flow/sequence` を使う。仕様上は接続された番号付き出力をすべて実行するためテンプレートの 3 本という制限はないが、64 個のソケットを持つ巨大なカードは画面の高さを超え、すべての線が 1 点に集中してしまうため、8 本ずつに分割して連結している。
+- **Entity には自動で取り付けない。** このツールはアセットを作成するだけで終了する。どの Entity に付けるかは配置側の判断であり、64 個のノード生成と Component 追加を 1 つの Undo ステップにまとめると双方の取り回しが悪くなるためである。
 
-The clip's name is written to `extras.xriftStudio.clipName` and shown on the
-card. Nothing reads it at runtime — `animation/start` addresses a clip by index
-— so a graph whose extras were stripped still plays; without it the canvas is a
-column of identical cards.
+各クリップ名は `extras.xriftStudio.clipName` に書き込まれ、カード上に表示される。ランタイムはクリップをインデックスで参照するため `extras` を削っても再生自体は動くが、この情報がないとキャンバス上に区別のつかないカードが縦に並ぶことになってしまう。
 
-### Layout is part of the handover
+### レイアウトも引き継ぎの一部
 
-`move_interactivity_node` and `layout_interactivity_graph` exist because a graph
-an agent builds is opened by a person. Without them every MCP-authored graph
-arrives as a stack of cards on the same spot, and the author's first act is to
-press the align button. `layout_interactivity_graph` produces exactly the
-arrangement that button does.
+`move_interactivity_node` と `layout_interactivity_graph` を用意しているのは、AI エージェントが組み立てたグラフを最終的に人間が開いて編集するためである。これらがなければ、MCP で作成したグラフはすべて同じ座標にカードが重なった状態になり、作者が最初に整列ボタンを押す手間が発生する。`layout_interactivity_graph` はエディターの整列ボタンとまったく同じレイアウトを生成する。
 
-The MCP boundary deliberately does not accept arbitrary JavaScript, write into
-an unknown project revision, or silently keep a mutation that fails validation.
+MCP 境界では、任意の JavaScript の受け入れ、未知のリビジョンへの書き込み、バリデーションに失敗した変更の黙認を意図的に禁止している。
 
-## XRIFT_studio_interaction: interaction triggers
+## XRIFT_studio_interaction: インタラクショントリガー
 
-Studio adds one extension of its own, `XRIFT_studio_interaction`, for the
-question a graph cannot answer in core KHR terms: what happens when a player
-interacts with this Entity, and which Scene Component does it change.
+Studio は、`KHR_interactivity` コア仕様だけでは表現できない「プレイヤーがこの Entity を操作したときに何が起き、どのシーン Component を書き換えるか」を扱うため、独自拡張 `XRIFT_studio_interaction` を定義している。
 
-| Operation | Sockets | Configuration |
+| オペレーション | ソケット | Configuration |
 | --- | --- | --- |
-| `xrift/onInteract` | flow `out` | none; the Entity carrying the graph is the source |
-| `xrift/setProperty` | flow `in`, `out`, `done`, value `value`, `duration` | `entity`, `component`, `targetKind`, `property`, `easing`, and `asset` or `text` for the two kinds whose value is not a number |
-| `xrift/toggleProperty` | flow `in`, `out` | the same four, restricted to an ON/OFF property |
+| `xrift/onInteract` | フロー `out` | なし（このグラフを持つ Entity 自身が発火元になる） |
+| `xrift/setProperty` | フロー `in`・`out`・`done`、値 `value`・`duration` | `entity`、`component`、`targetKind`、`property`、`easing`、および非数値型 2 種用の `asset` または `text` |
+| `xrift/toggleProperty` | フロー `in`・`out` | 上記と同じ 4 項目（ON/OFF プロパティ専用） |
 
-Each declaration names the extension, so the graph stays a valid
-`KHR_interactivity` document and another tool preserves it as an unknown
-operation rather than failing to load it.
+各宣言には拡張名が明記されるため、グラフは有効な `KHR_interactivity` ドキュメントのまま維持され、他ツールでも読み込みエラーにならず未知のオペレーションとして保持される。
 
-The target lives in `configuration` because it is structural — which Entity,
-which Component, which property — while the value stays in the `value` socket
-where the KHR type system can check it. `targetKind` is stored beside the
-Component id so the published runtime, which has no Scene document, can resolve
-the write on its own. Enum values (Audio Source playback) are stored as the
-option index, because KHR_interactivity has no string type.
+どの Entity のどの Component のどのプロパティを書き換えるかという対象指定は構造情報であるため `configuration` に置き、書き込む値は `KHR_interactivity` の型システムで検証できるよう `value` ソケットに置く。`targetKind` を Component ID と並べて保存しているのは、シーンの元ドキュメントを持たない公開先ランタイムが単独で書き込み先を解決できるようにするためである。列挙値（Audio Source の再生状態など）は `KHR_interactivity` に文字列型がないため、オプションのインデックスとして格納する。
 
 ### What a trigger can write
 
-`packages/xrift-studio-runtime/src/script/interaction-trigger.ts` holds the
-property registry and the parse, and it is the single source of truth for both
-surfaces. A property belongs there only when Play and the published world apply
-it through the same runtime bridge:
+`packages/xrift-studio-runtime/src/script/interaction-trigger.ts` がプロパティレジストリとパーサーを保持しており、エディターとランタイム双方の唯一の定義元である。プロパティをここに登録できるのは、Play と公開済みワールドが同じランタイムブリッジを通して適用できるものに限られる。
 
 | Target | Properties |
 | --- | --- |
-| Entity | `enabled` (visibility; physics colliders are unchanged) |
-| Transform | `position`, `rotation` (degrees), `scale` |
-| Animation | `playing`, `clip`, `speed`, `time` |
-| Material | `baseColor`, `emissive`, `emissiveIntensity`, `opacity` |
-| Particle | `emitting`, `restart`, `emissionRate`, `sizeMultiplier`, `opacity`, `color` |
-| Audio Source | `playback` (play / pause / stop), `volume`, `loop` |
-| Light | `enabled`, `intensity`, `color` |
-| Text | `enabled`, `text`, `color`, `fontSize`, `fontWeight`, `fontId`, `textAlign`, `lineHeight`, `letterSpacing`, `maxWidth`, `outlineWidth`, `outlineColor` |
-| Image | `enabled`, `color`, `opacity` |
-| Scene | `exposure`, `fade`, `fadeColor`, `postprocessing`, `bloom` (+`bloomStrength`, `bloomRadius`, `bloomThreshold`), `ao`, `grading`, `fog` (+`fogColor`, `fogNear`, `fogFar`), `ambient` (+`ambientColor`, `ambientIntensity`), `skybox`, `skyboxIbl`, `skyboxExposure`, `skyboxRotation`, `skyboxImage`, `cameraFov` |
+| Entity | `enabled`（表示・非表示。物理 Collider は変化しない） |
+| Transform | `position`、`rotation`（度数法）、`scale` |
+| Animation | `playing`、`clip`、`speed`、`time` |
+| Material | `baseColor`、`emissive`、`emissiveIntensity`、`opacity` |
+| Particle | `emitting`、`restart`、`emissionRate`、`sizeMultiplier`、`opacity`、`color` |
+| Audio Source | `playback`（play / pause / stop）、`volume`、`loop` |
+| Light | `enabled`、`intensity`、`color` |
+| Text | `enabled`、`text`、`color`、`fontSize`、`fontWeight`、`fontId`、`textAlign`、`lineHeight`、`letterSpacing`、`maxWidth`、`outlineWidth`、`outlineColor` |
+| Image | `enabled`、`color`、`opacity` |
+| Scene | `exposure`、`fade`、`fadeColor`、`postprocessing`、`bloom`（+`bloomStrength`、`bloomRadius`、`bloomThreshold`）、`ao`、`grading`、`fog`（+`fogColor`、`fogNear`、`fogFar`）、`ambient`（+`ambientColor`、`ambientIntensity`）、`skybox`、`skyboxIbl`、`skyboxExposure`、`skyboxRotation`、`skyboxImage`、`cameraFov` |
 | Player | `teleport` |
 
-Entity, Transform, Material, Scene and Player belong to the Entity rather than
-to a Component that can appear twice, so they carry no Component id. Scene and
-Player are addressed through reserved Entity ids, because they belong to no
-Entity at all and an action still needs something in that slot.
+Entity、Transform、Material、Scene、Player は複数取り付けられる Component ではなく Entity や環境そのものに属するため、Component ID を持たない。Scene と Player は特定の Entity に属さないため、アクションのスロットを埋めるための予約済み Entity ID を使って指定する。
 
-Image deliberately offers no picture swap (`textureAssetId`). A swapped-in
-picture has to be decoded at runtime from an Asset id, and a published world
-converts its pictures to KTX2, so that decode needs the world's transcoder path
-the way the authored picture's loader already has it. The Scene target's
-`skyboxImage` gets away with a plain loader because a sky is never converted.
-Until the swap can go through the same decoder on Play and on the published
-world, a graph fades a picture (`opacity` with a duration), hides it
-(`enabled`) or tints it (`color`), and a slideshow is two Images toggled
-against each other. The size and the anchor are geometry, not runtime state,
-and stay out for the same reason the Text plate does.
+Image には意図的に画像の差し替え（`textureAssetId`）を設けていない。実行時にアセット ID から画像を差し替えるには動的デコードが必要になるが、公開済みワールドでは画像が KTX2 へ変換されるため、既存の画像ローダーと同じくワールド側のトランスコーダー経路を通す必要がある（Scene ターゲットの `skyboxImage` は空画像が変換されないため通常のローダーで済んでいる）。Play と公開済みワールドの両方で同じデコーダーを通せるようになるまでは、グラフからはフェード（時間指定付き `opacity`）、表示切替（`enabled`）、色味変更（`color`）を使い、スライドショーは 2 つの Image を切り替えて表現する。また、サイズと基準点（アンカー）は実行時状態ではなくジオメトリ構成であるため、Text の背景板と同じ理由で対象外としている。
 
-### A value can come from the graph
+### 値はグラフの計算結果からも渡せる
 
-An action's `value` socket takes a literal, or a wire. The static walk that
-derives dependencies and drives the Editor's diagnostics has no expression
-evaluator, so it cannot say what a wired socket will produce - but the
-interpreter can, and does: it evaluates the socket and hands the applier a
-concrete value.
+アクションの `value` ソケットにはリテラルだけでなくワイヤー接続も受け付ける。依存関係を抽出してエディターの診断に使う静的走査処理には式評価器がないため、接続済みソケットがどの値を生むかまでは判定できないが、ランタイムのインタプリターはソケットを評価して具体的な値をアプライヤーへ渡すことができる。
 
-The walk therefore records a wired socket as `{ kind: "linked" }` rather than
-dropping the action. Dropping it was the old behaviour, and it cost two things
-that have nothing to do with the value: the Editor called a fully configured
-node unfinished, and the Component lost the `entityReferences` and
-`assetReferences` the action plainly names - so a compiler could publish a world
-whose trigger writes to an Entity it never emitted.
+そのため静的走査では、アクションを無視せず接続済みソケットを `{ kind: "linked" }` として記録する。以前は接続済みソケットを持つアクションを落としていたため、値とは無関係な 2 つの問題が生じていた。1 つは完全に設定済みのノードがエディター上で未完成扱いになること、もう 1 つはアクションが明示的に指している `entityReferences` と `assetReferences` が Component から失われ、コンパイラが「出力していない Entity へ書き込むトリガー」を公開してしまうことだった。
 
-This is what makes a computed value usable at all: `variable/get`, `math/add`
-and the rest run in the interpreter, and a wire from one of them into an action
-is now a finished graph rather than a broken one.
+この変更により、`variable/get` や `math/add` などの計算ノードからアクションの `value` ソケットへ繋いだグラフが、壊れたグラフではなく完結したグラフとして扱われ、動的な計算値をそのまま適用できるようになった。
 
-### The Player target moves whoever pressed the button
+### Player ターゲットはボタンを押した本人だけを移動させる
 
-`teleport` takes the position the player's feet land on, exactly as a
-SpawnPoint does, and is applied instantly — there is no duration on a trigger
-action, so「ゆっくり移動する」is not what this is.
+`teleport` は `SpawnPoint` と同じくプレイヤーの足元が着地する座標を受け取り、瞬時に移動を適用する。トリガーアクション側で移動時間は持たないため、「ゆっくり移動する」演出ではない。
 
-**It moves the player and leaves the SpawnPoint alone.** Falling out of the
-world still returns to the Scene's SpawnPoint rather than to wherever the last
-teleport put someone: a teleport into a pit has to be recoverable, not a loop.
-Routing teleport through `setSpawnPoint` — which the player already watches —
-would have been less code and would have made that impossible.
+**プレイヤーだけを移動させ、`SpawnPoint` は変更しない。** ワールドから落下したときは最後のテレポート先ではなくシーン本来の `SpawnPoint` に戻るようにするためである（穴の中にテレポートしてしまった場合でも復帰できなければ無限ループになる）。プレイヤーがすでに監視している `setSpawnPoint` を流用すればコード量は減るが、この復帰要件を満たせなくなるため意図的に分離している。
 
-Like Scene, it is **client-local**: a graph runs inside each viewer's own
-runtime, so a teleport button moves whoever pressed it and nobody else.
+Scene ターゲットと同様に**クライアントローカル**であり、グラフは各ビューアー自身のランタイム内で実行されるため、テレポートボタンを押した本人だけが移動し、他の参加者は動かない。
 
-Both output modes run the graph. Runtime JSON used to refuse a Scene with a
-trigger - the manifest could carry the graph, and nothing on the runtime side
-read it, so a published world's buttons would have gone quiet. The manifest now
-inlines the graph on an `interaction-trigger` component and
-`XriftRuntimeInteractionTriggers` runs it through the same component Studio's
-Play uses, mounting the Scene and player bridges alongside. Scripts are still
-blocked in Runtime JSON, and for a different reason: a graph is data the
-interpreter walks, and a Script is source that has to be evaluated.
+この機能は両方の出力モードで動作する。以前はランタイム JSON モードがトリガー付きシーンを拒否していた（マニフェストにグラフを載せてもランタイム側に読む仕組みがなく、公開済みワールドのボタンが反応しなかったため）。現在はマニフェストが `interaction-trigger` Component にグラフをインライン展開し、`XriftRuntimeInteractionTriggers` が Studio の Play と同じコンポーネントを通じて実行し、Scene ブリッジと Player ブリッジを併せてマウントする。なお、スクリプトがランタイム JSON で引き続きブロックされるのは別理由であり、グラフがインタプリターで走査できるデータであるのに対し、スクリプトはコード評価を要するソースコードだからである。
 
-Play and the published world reach the player through the same bridge
-(`player-runtime.ts` for the contract, `player-runtime-host.tsx` for the
-component that fills it in), and both fill it from `useTeleport()`. In a
-published world that is xrift-frontend's implementation; in Play it is the
-Studio player's, which moves the official `PhysicsPlayer`'s capsule directly.
-The one place it does **not** work is a generated project's own `npm run dev`:
-`DevEnvironment` leaves `useTeleport()` at the package's `console.log`
-placeholder, so a teleport there logs and does nothing.
+Play と公開済みワールドはいずれも同じブリッジ（契約定義は `player-runtime.ts`、実装注入コンポーネントは `player-runtime-host.tsx`）を通じてプレイヤーへ到達し、双方とも `useTeleport()` から実装を受け取る。公開済みワールドでは `xrift-frontend` の実装が使われ、Play では公式 `PhysicsPlayer` のカプセルを直接移動させる Studio プレイヤーの実装が使われる。唯一動作しないのは生成プロジェクト単体の `npm run dev` であり、`DevEnvironment` の `useTeleport()` がパッケージ既定の `console.log` プレースホルダーのままになっているため、ログ出力のみを行って移動はしない。
 
-### Who sees an action
+### アクションの影響範囲
 
-A trigger graph runs inside the runtime of whoever pressed the button. The
-interaction bus is a module in that person's page and nothing it does crosses
-the network, so **every action today reaches one viewer**. Two very different
-things were hiding under that one fact, and the registry now separates them:
+トリガーグラフはボタンを押した本人のランタイム内で実行される。インタラクションバスはその人のページ内モジュールであり、ネットワークを越える処理は持たないため、**既定ではすべてのアクションが 1 人のビューアーにしか届かない**。この 1 つの事実の中に性質のまったく異なる 2 種類が混ざっていたため、レジストリ上で明確に分離している。
 
-| Scope | Targets | What it means |
+| スコープ | 対象ターゲット | 意味 |
 | --- | --- | --- |
-| `viewer`「この画面だけ」 | シーン, Player | One viewer is the right answer and always will be |
-| `world`「操作した人だけ」 | オブジェクト, 位置・回転・大きさ, Animation, マテリアル, パーティクル, 音源, ライト, テキスト, 画像 | ワールド content everyone should be seeing, **not synchronised yet** |
+| `viewer`「この画面だけ」 | シーン、Player | 1 人のビューアーだけに反映するのが本来あるべき姿であり、今後も変わらない |
+| `world`「操作した人だけ」 | Entity、Transform、Animation、Material、Particle、Audio Source、Light、Text、Image | 全員が共有して見るべきワールド内のコンテンツだが、**既定では未同期** |
 
-The first is a design: synchronising the picture would decide for the person on
-the slowest headset, and synchronising a teleport would move somebody who
-pressed nothing. The second is a gap. A door that opens for one person is a
-different feature from a door that opens, and an author cannot discover which
-one they built alone in the editor - it takes a second person in the room.
+前者は意図的な設計である。画面効果を同期すると最も非力なヘッドセットの利用者の描画設定まで強制してしまい、テレポートを同期するとボタンを押していない人まで動かしてしまう。一方、後者は機能ギャップである。「1 人だけに見える開くドア」と「全員に対して開くドア」は別の振る舞いだが、1 人でエディターを使っているだけでは区別がつかず、部屋に 2 人目が入って初めて気づくことになる。
 
-So the scope is part of the sentence the Editor shows for every action, and the
-property picker carries the note under it. `getXriftInteractionScope` derives it
-from the target, and a fixture asserts every property lands in the half its
-target belongs to, so a new target cannot arrive without an answer.
+そのためエディターでは各アクションの説明文にスコープを含め、プロパティピッカーの下にも注記を表示する。スコープは `getXriftInteractionScope` がターゲットから自動導出し、フィクスチャテストですべてのプロパティが所属ターゲットに対応するスコープへ分類されることを検証しているため、新しいターゲットを追加する際に未分類のまま残ることはない。
 
-A `world`-scoped action can be marked「同じ部屋の全員に反映する」, which is what makes that
-half real rather than only honest. See below.
+さらに、`world` スコープのアクションには「同じ部屋の全員に反映する」を設定でき、実運用で全員へ同期できる（次節参照）。
 
-### Sharing an action with the room
+### 部屋全体へのアクション共有
 
-XRift already synchronises state: `useInstanceState(stateId, initial)` is a
-`useState` the platform keeps in step across the instance over its own socket,
-and its `states` map holds what the room currently agrees on. Nothing here
-invents a protocol on top of that.
+XRift プラットフォームにはすでに状態同期の仕組みがある。`useInstanceState(stateId, initial)` は独自ソケット越しにインスタンス全体で歩調を合わせる `useState` であり、その `states` マップに現在の部屋の合意状態が保持される。ここでは独自プロトコルを新設せず、プラットフォームの仕組みをそのまま利用する。
 
-A `world`-scoped action carries `configuration.shared`. When it is set:
+`world` スコープのアクションには `configuration.shared` を設定できる。有効にした場合の動作は次のとおり。
 
-* the action is applied locally **and** broadcast, so the person who pressed
-  does not wait for a round trip to see their own button work;
-* every runtime in the room applies what arrives, through the applier rather
-  than by re-running the graph - replaying the flow would fire everything else
-  it does, a sound and a delay and a second write, once per person;
-* a runtime that joins later applies everything already in `states`, which is
-  why the value travels as state and not as an event. A door opened before
-  somebody arrived is still open when they walk in.
+- アクションはローカルに適用されると**同時に**ブロードキャストされるため、ボタンを押した本人はネットワークの往復を待たずに自分の操作結果を確認できる。
+- 部屋内の各ランタイムは届いた状態をグラフの再実行ではなくアプライヤー経由で直接適用する。フロー自体を再実行してしまうと、効果音や待機ノードや後続の書き込みまで参加人数分だけ重複発火してしまうためである。
+- 後から入室したランタイムは `states` にすでに格納されている値をすべて適用する。イベントではなく状態として伝播させることで、入室前に開けられたドアが後から入った人にも開いた状態で表示される。
 
-Three answers fall out of using the platform's own mechanism rather than
-designing one:
+プラットフォーム標準の仕組みを使うことで、競合や遅延に関する挙動も明確になる。
 
-| Question | Answer |
+| 疑問 | 挙動 |
 | --- | --- |
-| Who wins | The last press. `sendState` overwrites the id |
-| What about the delay | The presser applies immediately; the broadcast is what everyone converges on |
-| What does a late joiner see | The current value, applied on mount from `states` |
+| 競合時にどちらが勝つか | 最後に押した操作（`sendState` が同じ ID を上書きする） |
+| 遅延の扱い | 操作した本人は即座に反映し、ブロードキャスト結果へ全員が収束する |
+| 後から入室した人にどう見えるか | マウント時に `states` から現在値が適用される |
 
-The id is derived from what the action is - the resolved Entity, the Component,
-the target and the property - so every viewer computes the same one without
-agreeing on anything first. Two actions writing the same property of the same
-Component deliberately collide: they are the same shared fact, and the last
-press wins for everyone.
+状態 ID はアクションの内容（解決済み Entity、Component、ターゲット、プロパティ）から一意に導出するため、事前に合意を取らなくてもすべてのビューアーが同じ ID を算出できる。同じ Component の同じプロパティへ書き込む別々のアクション同士が同じ ID に衝突するのは意図的であり、共有される事実が同じである以上、最後の操作が全員に勝つ設計になっている。
 
-The flag is refused on a `viewer`-scoped property. Synchronising the picture
-would decide for the person on the slowest headset, and synchronising a teleport
-would move somebody who pressed nothing.
+`viewer` スコープのプロパティに対する `shared` フラグは拒否する。描画設定の同期は非力な端末へ負荷を押し付けることになり、テレポートの同期は操作していない人を動かしてしまうためである。
 
-In Studio there is one viewer and the package's default implementation is a
-local Map, so a shared action behaves like a local one. The same send and the
-same receive run - the room is simply a room of one.
+Studio 内ではビューアーが 1 人だけであり、パッケージ既定の実装もローカルの `Map` であるため、共有アクションはローカルアクションと同様に動作する。送信と受信のコード経路自体は本番と同じものが動いており、参加者が 1 人だけの部屋として機能する。
 
-### The Scene target is this viewer's, and only this viewer's
+### Scene ターゲットは操作したビューアー専用
 
-Everything under `Scene` is **client-local**. A graph runs inside each viewer's
-own runtime, so the write lands on that viewer's renderer and reaches nobody
-else. That is the point rather than a limitation: post effects are a Scene
-setting, so switching them on used to mean switching them on for the person on
-the slowest headset too, and an author's only options were「品質を上げる」or
-「いちばん重い端末に合わせて諦める」. A world can now put a「画質を上げる」button
-in the room and let each person answer for their own device.
+`Scene` 配下の設定はすべて**クライアントローカル**である。グラフは各ビューアー自身のランタイム内で実行されるため、変更はその人のレンダラーだけに反映され、他者には届かない。これは制限ではなく意図した設計である。ポストエフェクトはシーン全体の設定であるため、以前は有効にすると最も性能の低いヘッドセットでも重くなってしまい、作者は「品質を上げる」か「一番重い端末に合わせて諦める」の二択しか選べなかった。現在はワールド内に「画質を上げる」ボタンを置き、各利用者が自分の端末に合わせて切り替えられる。
 
-Nothing here is synchronised and nothing is saved. Stop, and re-entry, put the
-Scene settings back — the same contract every other runtime override keeps.
+これらの変更はネットワーク同期も永続保存もされない。Play の停止や再入室を行うとシーン本来の設定に戻る点も、他のランタイムオーバーライドと同じ仕様である。
 
-The set deliberately mirrors the Scene Settings panel rather than a hand-picked
-subset, because「設定にあるのにグラフから触れない」is the shape of the original
-complaint. The Editor-only rows are the exception: the gizmo, the grid and the
-editor background are not part of what a viewer sees.
+対象プロパティ群を厳選した一部ではなく Scene Settings パネル全体と揃えているのは、「設定画面にあるのにグラフから触れない」という要望を防ぐためである。例外はギズモ、グリッド、エディター背景といった編集時専用の項目だけであり、これらはビューアーの画面に含まれないため除外している。
 
-`skyboxImage`, `skyboxExposure` and `skyboxRotation` act on the background and
-on image-based lighting. A swapped image replaces a gradient, Box, Dome or Sky
-Shader sky as well, because those are meshes rather than `scene.background`;
-they carry `userData.xriftSceneSkybox` so the runtime can find them, and the
-three surfaces that build a sky all set it.
+`skyboxImage`、`skyboxExposure`、`skyboxRotation` は背景と IBL（環境照明）の両方に作用する。画像を差し替えるとグラデーション・Box・Dome・Sky Shader による空も置き換わる。これらは `scene.background` ではなくメッシュとして配置されているため、空を構築する 3 つの経路すべてで `userData.xriftSceneSkybox` を付与し、ランタイム側から確実に発見できるようにしている。
 
-`ambient` turns on an ambient light the runtime owns when the Scene has none,
-so「明るくする」does not quietly fail on exactly the Scenes whose 環境光 is off.
+`ambient` は、元のシーンに環境光が存在しない場合でもランタイム側が所有する環境光を有効にする。これにより、環境光がオフになっているシーンで「明るくする」アクションが黙って失敗するのを防いでいる。
 
-The post effect **layer order** (`postprocessing.order`) is the one visible
-Scene row with no viewer override, and deliberately. Every other row here
-answers「この端末でどこまで描くか」, which is each viewer's own question; the
-order answers「どんな絵にするか」, which is the author's, and a viewer who
-reorders the passes does not get a lighter frame, only a different look than
-the world was tuned for. It is also not a quantity: `KHR_interactivity` has no
-string type, so an order would have to travel as `configuration` the way an
-Asset id does, with no duration to interpolate over. Turning a layer off stays
-available — that is `bloom`, `ao` and `grading` — so「画質を上げる」still costs
-what it should on the device that asked for it.
+ポストエフェクトの**レイヤー適用順**（`postprocessing.order`）だけは、ビューアー側で表示される項目でありながら意図的にオーバーライド対象から外している。他の項目がいずれも「この端末でどこまで描くか」という利用者ごとの負荷調整に関わるのに対し、適用順は「どんな絵作りにするか」という作者側の表現意図であり、順番を入れ替えても処理が軽くなるわけではなく意図しない見た目になるだけだからである。また数量ではないため `KHR_interactivity` に文字列型がない制約上、`configuration` 経由でしか扱えず補間もできない。なお各レイヤーの ON/OFF（`bloom`、`ao`、`grading`）は引き続き切り替えられるため、「画質を上げる」ボタンによる端末別の負荷調整は支障なく機能する。
 
-### A value that is not a number
+### 数値以外の値の扱い
 
-`asset` and `string` properties store their value in `configuration`, beside
-the Entity and Component ids, rather than in the `value` socket. Two reasons,
-and both are the same reason the target lives there: `KHR_interactivity` has no
-string type, and neither an Asset id nor a sentence is a quantity to
-interpolate toward. A duration on one of them is not honoured — half of an
-素材 is nothing, and half of「開いています」is not a word.
+`asset` 型と `string` 型のプロパティは、`value` ソケットではなく Entity ID や Component ID と並べて `configuration` に値を格納する。理由はターゲット指定と同じく 2 つある。`KHR_interactivity` に文字列型が存在しないこと、そしてアセット ID や文章は時間補間できる数量ではないことである。これらに補間時間を指定しても無視される（素材の半分や「開いています」の半分といった中間状態は存在しないため）。
 
-They reach the host as `writeAsset` and `writeString`, which are separate
-because the obligations differ: an Asset id names something the published world
-has to carry, a string names nothing at all. The Interaction Trigger Component
-records the Asset ids its graph can reach in `assetReferences`, derived from
-the graph exactly as `entityReferences` is, and that is what makes the compiler
-publish a sky image nothing in the Scene document mentions.
+ホスト側へは `writeAsset` と `writeString` という別々の経路で渡される。アセット ID は公開済みワールドに同梱すべきファイルを指すのに対し、文字列は外部依存を持たないという責務の違いがあるためである。Interaction Trigger Component は、`entityReferences` と同じ仕組みでグラフが到達可能なアセット ID を `assetReferences` に自動記録する。これにより、シーン本体からは直接参照されていない空画像であってもコンパイラが公開物へ確実に含められる。
 
-Both derived lists are read from **every** action node rather than by walking
-forward from `xrift/onInteract`: a graph that starts itself on `event/onStart`,
-or one behind `event/receive`, still needs its Assets published.
+これら 2 つの自動抽出リストは、`xrift/onInteract` から前方走査するのではなく**すべてのアクションノード**を対象に収集する。`event/onStart` や `event/receive` を起点とするグラフでも、必要なアセットを漏れなく公開するためである。
 
-Writes go through the runtime bridges Scripts already own — Audio Source,
-Light, Particle, and the Animation bridge added for this — so a trigger and a
-Script changing the same Component compose instead of overwriting each other.
-Transform and Material have no bridge: they are written onto the object, so the
-trigger keeps the first value it saw and restores it on Stop, and a Material is
-cloned before it is changed so a shared Asset never leaks the write into another
-Entity. Everything a trigger changes is runtime state that Stop discards.
+プロパティへの書き込みはスクリプトと同じランタイムブリッジ（Audio Source、Light、Particle、および本機能のために追加した Animation ブリッジ）を経由する。これにより、トリガーとスクリプトが同じ Component を操作しても互いに上書きせず合成される。一方、Transform と Material には専用ブリッジがなくオブジェクトへ直接書き込むため、トリガー側が最初に観測した元の値を控えておき Play 停止時に復元する。また Material は書き換え前にクローンするため、共有マテリアルへの変更が他の Entity に波及することはない。トリガーが変更する内容はすべて実行時状態であり、Play を停止すると破棄される。
 
-A timed write is the same node: `xrift/setProperty` takes a `duration` value
-socket and an `easing` configuration, and a positive duration interpolates
-instead of setting. That is what a fade, a dimming light or a moving door is
-made of, and it is one node because "move this over two seconds" is one thought.
+時間変化を伴う書き込みも同じ `xrift/setProperty` ノードで行う。`duration` 値ソケットと `easing` 設定を受け取り、正の秒数が指定されていれば即時設定ではなく補間を行う。「2 秒かけて動かす」という意図を 1 つの思考単位のまま 1 ノードで表現でき、フェード、照明の調光、ドアの開閉などを簡潔に組める。
 
-The node has two flow outputs because the two questions are different. `out`
-continues as soon as the change starts, which is how several things move at
-once; `done` continues when it has finished, which is how one thing follows
-another. A write with no duration finishes immediately and takes both, so a
-sequence built through `done` does not stall the day its author sets the
-duration back to zero.
+このノードが `out` と `done` の 2 つのフロー出力を持つのは、役割が異なるからである。`out` は変化開始直後に進むため複数の動きを同時実行でき、`done` は補間完了後に進むため順番に動作を繋げられる。`duration` が 0（または未指定）の書き込みは即座に完了して両方の出力へ進むため、後から秒数を 0 に戻しても `done` に繋いだ後続処理が止まることはない。
 
-The press walk behind「押したときの動き」follows both, and follows
-`flow/setDelay` as well, because the engine does: a door that opens, waits and
-closes itself is one press, and a walk that stopped at the first timed write
-would have shown the author only the opening — and would have left the Entities
-written after the wait out of the list of what a press touches, which is what
-the compiler emits a disabled trigger target from.
+「押したときの動き」の裏側にある走査処理も `out` と `done` の両方、さらに `flow/setDelay` の先まで辿る。ランタイム自体がそう動くからであり、「開いて待機して自動で閉じるドア」を 1 回の操作として正しく把握する必要がある。最初の時間付き書き込みで走査を止めてしまうと、開く動きしか表示されず、待機後に書き換える Entity が操作対象リストから漏れてコンパイラが無効状態のターゲット Entity を出力し損ねてしまう。
 
-An overshooting curve returns a ratio above 1 on purpose, and the blend is not
-clamped, so Ease Out Back really passes its target. What keeps that from
-leaving a property outside its range is the write itself: a value is clamped to
-the range the property declares as it is applied, which is the same protection
-a hand-typed value needs.
+オーバーシュートするイージング曲線では意図的に 1 を超える比率を返し、補間計算側ではクランプしないことで `Ease Out Back` が本当に目標値をわずかに通り過ぎてから戻るようにしている。それでもプロパティが許容範囲外に壊れないのは、書き込み適用側でプロパティ定義の有効範囲にクランプしているためであり、手入力された値と同じ安全策が働いている。
 
-The curves are a curated set rather than arbitrary beziers — `linear`,
-`ease-in`, `ease-out`, `ease-in-out`, `ease-in-strong`, `ease-out-strong`, and
-`ease-out-back`, which overshoots and settles. The Inspector offers a duration
-only for properties that have a halfway point: a switch or a picked option would
-otherwise promise a fade that could only be a jump at the end.
+イージング曲線は任意のベジェではなく厳選した 7 種（`linear`、`ease-in`、`ease-out`、`ease-in-out`、`ease-in-strong`、`ease-out-strong`、およびオーバーシュートして収束する `ease-out-back`）を提供する。Inspector は中間状態を持つプロパティに対してだけ時間入力を表示し、ON/OFF スイッチや列挙選択肢で「フェードするように見えて最後に切り替わるだけ」の誤解を防いでいる。
 
-An action whose target is not yet chosen is a warning, not an error: the graph
-is saved, the node is preserved, and the Editor, the compiler, and
-`validate_interactivity_asset` all report it the same way.
+ターゲットがまだ選択されていないアクションはエラーではなく警告として扱う。グラフは保存できノードも消えずに残り、エディター・コンパイラ・`validate_interactivity_asset` のすべてが同じ警告を報告する。
 
-`list_interaction_trigger_targets` returns that registry resolved against the
-open Scene: every Entity, the Components on it a trigger can write, and the
-property names, kinds, ranges and enum options each one accepts. The node
-editor builds its target pickers from the same call, so an MCP client cannot
-choose a target the Inspector would refuse to offer — and a property name that
-is not on the list produces a graph that validates and then does nothing.
+`list_interaction_trigger_targets` は、開いているシーンに対してプロパティレジストリを解決した結果を返す（全 Entity、トリガーから書き込み可能な Component、各プロパティ名・種別・値範囲・列挙オプション）。ノードエディターのターゲット選択 UI も同じ呼び出しから構築するため、MCP クライアントが Inspector では選べないターゲットを指定してしまうことはなく、リストにないプロパティ名で「検証は通るのに実行時に動かない」グラフが生まれるのも防いでいる。
 
-### Attaching a graph
+### グラフの取り付け
 
-An Interaction Trigger Component holds `interactivityAssetId` and the Entity ids
-the graph writes to, mirroring the Script Component split. The interaction
-itself comes from the official `Interactable` on the same Entity; without one
-the Inspector says so and the compiler warns, because the trigger would never
-fire.
+Interaction Trigger Component は、Script Component の構成と同様に `interactivityAssetId` とグラフの書き込み先 Entity ID 一覧を保持する。プレイヤーからのインタラクション自体は同じ Entity に付いた公式 `Interactable` が受け取るため、`Interactable` が付いていない場合はトリガーが発火しない旨を Inspector で案内し、コンパイラでも警告を出す。
 
-`update_component` repoints the Component at another graph through
-`patch.interactivityAssetId`; an id that is not an Interactivity Asset is
-rejected rather than leaving a trigger pointed at a Material. `entityReferences`
-is not in the patch because it is derived, not authored: every graph write —
-from the node editor or from an MCP tool — re-reads the action targets and
-rewrites the list, so a graph an agent wires up cannot be published with no
-dependencies recorded.
+`update_component` の `patch.interactivityAssetId` で参照先グラフを差し替えられる。Interactivity アセット以外の ID を渡した場合は拒否し、トリガーがマテリアルなどを指してしまう事故を防ぐ。`entityReferences` は作者が直接書く項目ではなく自動導出値なのでパッチ対象には含めず、ノードエディターや MCP ツールからグラフを書き換えるたびにアクション対象を再走査して自動更新する。これにより、AI エージェントが配線したグラフが依存関係未記録のまま公開される事態を防いでいる。
 
-In Play, Studio supplies the player's half of the official contract: it
-raycasts the Interactables registered through `XRiftProvider` and calls the
-`onInteract` the component parked in userData. In a published world the XRift
-player does that, and the compiler wires `onInteract` to the same emit. An
-Entity a trigger re-shows is emitted even when it is authored disabled, hidden,
-so the published world can do what Play does.
+Play モードでは Studio が公式契約のプレイヤー側を担い、`XRiftProvider` に登録された Interactable へレイキャストを行って `userData` に格納された `onInteract` を呼び出す。公開済みワールドでは XRift プレイヤー側がそれを担い、コンパイラが `onInteract` を同じイベント発行へ接続する。トリガーによって再表示される可能性がある Entity は、初期状態が無効（非表示）であっても公開物へ出力し、Play と同じ挙動を保証する。
 
-Collider-entered triggers are not implemented. Studio Play has no player body
-to enter one, so a `onTriggerEnter` operation could not be tested before
-publishing, which is the drift this document exists to prevent.
+Collider への進入トリガーは未実装である。Studio の Play 環境には Collider へ進入するプレイヤーボディが存在しないため、`onTriggerEnter` のようなオペレーションを公開前にテストできず、本書が防ごうとしている「Play と公開先の乖離」を生むからである。
 
-## Runtime boundary
+## ランタイム境界
 
-The Asset, project serialization, and runtime manifest preserve the full
-canonical graph. Operations are implemented one at a time; an unsupported
-operation must remain serialized and behave as a no-op rather than being
-translated to arbitrary JavaScript. WebXR controller/input acquisition remains
-an application responsibility and is connected to graph events at the host
-boundary.
+アセット、プロジェクトのシリアライズ、およびランタイムマニフェストは、正規グラフの完全な構造をそのまま保持する。各オペレーションは段階的に実装しており、未対応のオペレーションは任意の JavaScript へ変換するのではなく、シリアライズを維持したまま何もしない（no-op）ノードとして扱う。WebXR のコントローラーや入力取得はアプリケーション側の責務とし、ホスト境界でグラフイベントへ接続する。
 
-### One engine, two surfaces
+### 1 つのエンジン、2 つの実行面
 
-`packages/xrift-studio-runtime/src/interactivity/` holds the interpreter, and
-it is the single source of truth. It lives in the runtime package because the
-Play preview and the published world run from the same graph and must not
-drift apart: Studio imports it for Play and for its authoring diagnostics, and
-the three.js and React Three Fiber runtimes import it for playback. Studio adds
-only the Japanese notes shown in its UI, keyed off the shared classification,
-so a newly implemented operation cannot keep reading as unsupported in the
-Editor.
+インタプリタ本体は `packages/xrift-studio-runtime/src/interactivity/` に置き、唯一の実装として共有する。Play プレビューと公開済みワールドが同じグラフから動作して挙動が乖離しないようにするための構成であり、Studio は Play 実行とオーサリング診断のために読み込み、Three.js および React Three Fiber ランタイムは再生のために読み込む。Studio 側が上乗せするのは共通分類をキーにした UI 用の日本語説明だけであり、新しく実装されたオペレーションがエディター上で未対応表示のまま残ることはない。
 
-The engine keeps the two evaluation directions apart. Values are pulled on
-demand, and a cycle among them is a reported error, because a value that
-depends on itself has no answer. Flows are pushed from an entry point, and a
-cycle among them is a loop, which is how a graph repeats; it is bounded by an
-activation budget per frame rather than forbidden by the schema. Waits and
-timed changes are scheduled and continued at the moment they come due, so a
-chain of one-second waits lands on whole seconds instead of drifting by a frame
-on every hop.
+エンジンは 2 つの評価方向を明確に分離している。値は必要になったタイミングで引き出す（プル評価）方式とし、値同士の循環依存は解が定まらないためエラーとして報告する。フローは起点から押し出す（プッシュ評価）方式とし、フローの循環は繰り返し（ループ）として許可したうえで、スキーマ禁止ではなく 1 フレームあたりの実行回数上限（activation budget）で保護する。待機や時間補間は正確な予定時刻でスケジュールして継続するため、1 秒待機を直列に繋いでもステップごとに 1 フレームずつ遅延が蓄積せず、ちょうど整数秒で発火する。
 
-Everything the engine changes in the world goes through `InteractivityHost`.
-The engine itself knows nothing about three.js, React, or the Scene document,
-which is what lets Studio and a published world supply different plumbing under
-one contract — and what lets the whole interpreter be exercised without a
-renderer.
+エンジンがワールドへ加える変更はすべて `InteractivityHost` を通る。エンジン自体は Three.js、React、シーンのドキュメント構造を一切知らないため、Studio と公開済みワールドが異なる内部実装を共通契約の下で差し替えられ、さらにレンダラーなしでインタプリタ全体をテスト・シミュレーションできる。
 
-`dryRunInteractivityGraph` runs a graph forward without a renderer and reports
-what happens and when. The Editor uses it for diagnostics, the Model visual
-uses it for the clips a graph starts and stops, and the fixtures use it to
-assert ordering and timing without a clock. Randomness is seeded, so two runs
-of one graph produce the same report.
+`dryRunInteractivityGraph` はレンダラーを使わずにグラフを時間進行させ、いつ何が起きたかをレポートする。エディターは診断に、モデル表示はグラフが開始・停止するクリップの把握に、フィクスチャテストは実時計なしで順序とタイミングを検証するために利用している。乱数にはシードを与えるため、同じグラフを 2 回実行しても常に同一のレポートが得られる。
 
-### What the engine executes
+### エンジンが実行する範囲
 
-The Editor node badges, the recipe list, the compiler, and
-`list_interactivity_operations` all read one table, so an operation can never
-look supported on one surface and unsupported on another.
+エディターのノードバッジ、レシピ一覧、コンパイラ、`list_interactivity_operations` はすべて同じ 1 つの対応表を参照する。そのため、ある画面では対応済みに見えるのに別の画面では非対応になる食い違いは起きない。
 
-| Group | Support | Notes |
+| グループ | 対応状況 | 備考 |
 | --- | --- | --- |
-| `event/onStart`, `event/onTick`, `event/receive` | executed | Entry points. |
-| `event/send` | conditional | Reaches other graphs in the Asset; the Scene-facing notification needs a host. |
-| `flow/branch`, `switch`, `sequence`, `setDelay`, `cancelDelay`, `doN`, `multiGate`, `waitAll`, `throttle`, `for`, `while` | executed | Waiting, ordering, repeating and joining. |
-| `variable/get`, `set`, `interpolate` | executed | `interpolate` advances every frame and continues on `done`. |
-| `math/*`, `type/*`, `ref/eq` | executed | Arithmetic, comparison, logic, vectors and conversions. |
-| `animation/start`, `stop`, `stopAt` | conditional | Needs a host that owns the clips. |
-| `xrift/onInteract`, `setProperty`, `toggleProperty` | conditional | Needs the graph to be attached to an Entity. Scene writes also need the Scene bridge, which a published world carries whenever it carries behavior. |
-| `pointer/get`, `set`, `interpolate` | ignored | Implemented in the interpreter; no host resolves a glTF Object Model pointer yet. |
-| everything else | ignored | Serialized, never executed. |
+| `event/onStart`、`event/onTick`、`event/receive` | executed | 実行の起点 |
+| `event/send` | conditional | 同一アセット内の他グラフへ届く。シーン全体への通知にはホストが必要 |
+| `flow/branch`、`switch`、`sequence`、`setDelay`、`cancelDelay`、`doN`、`multiGate`、`waitAll`、`throttle`、`for`、`while` | executed | 待機、順序制御、繰り返し、合流 |
+| `variable/get`、`set`、`interpolate` | executed | `interpolate` は毎フレーム進行し、完了時に `done` へ進む |
+| `math/*`、`type/*`、`ref/eq` | executed | 算術、比較、論理、ベクトル演算、型変換 |
+| `animation/start`、`stop`、`stopAt` | conditional | クリップを所有するホストが必要 |
+| `xrift/onInteract`、`setProperty`、`toggleProperty` | conditional | グラフが Entity に取り付けられている必要がある。Scene 書き込みには Scene ブリッジが必要（振る舞いを持つ公開済みワールドには同梱される） |
+| `pointer/get`、`set`、`interpolate` | ignored | インタプリタ内には実装済みだが、glTF Object Model ポインターを解決するホストが未実装 |
+| その他すべて | ignored | シリアライズは保持するが実行しない |
 
-Two rules keep the no-op honest:
+no-op の挙動で誤解を生まないよう、次の 2 つのルールを設けている。
 
-- **A no-op node produces no flow output.** Execution stops at an unimplemented
-  operation rather than continuing as though it had succeeded. Doing otherwise
-  is worse than nothing: a graph gated behind a branch would start both sides.
-- **An operation classified as unsupported stays unsupported in the UI even
-  when the interpreter would run it.** `pointer/*` is the current case: a badge
-  that promised a write no host performs would be a lie the author only
-  discovers in Play.
+- **no-op ノードはフロー出力を発火しない。** 未実装のオペレーションで成功したかのように先へ進むのではなく、その場で実行を止める。先へ進めてしまうと、分岐の先に置いた処理の両側が誤って動いてしまうなど、何もしないよりも悪い結果になる。
+- **未対応と分類されたオペレーションは、インタプリタ側で動くとしても UI 上では未対応のままにする。** 現在の `pointer/*` がこれに該当する。ホスト側が書き込めないのに実行可能バッジを表示すると、Play を押すまで気づけない誤案内になるためである。
 
-`collectInteractivityRuntimeDiagnostics` reports every node the walk refuses to
-run, together with the nodes it stopped at while running the graph. The
-Editor merges those warnings into the same Diagnostics list as schema
-validation, the compiler emits them as `interactivity-operation-not-executed`,
-and `validate_interactivity_asset` returns them as `runtimeDiagnostics`
-alongside the schema `diagnostics`. They are warnings everywhere: an
-unsupported operation is a documented boundary, not a broken graph, and it must
-stay in the canonical JSON either way.
+`collectInteractivityRuntimeDiagnostics` は、走査時に実行を拒否したノードと、実行途中で停止したノードをすべて報告する。エディターはこれらの警告をスキーマ検証と同じ診断一覧へ統合し、コンパイラは `interactivity-operation-not-executed` として出力し、`validate_interactivity_asset` はスキーマ側の `diagnostics` と並べて `runtimeDiagnostics` として返す。いずれもエラーではなく警告扱いである。未対応オペレーションは仕様上の境界であって壊れたグラフではなく、正規 JSON 上ではそのまま保持し続けなければならない。
