@@ -17,6 +17,7 @@ import { XRiftStudioMeshColliders, XriftColliderLoadContext } from "../../../pac
 import { bakeXriftColliderGeometry } from "../../../packages/xrift-studio-runtime/src/mesh-collider-geometry";
 import { XriftExtrudeGeometry, XriftPrimitiveGeometry } from "../../../packages/xrift-studio-runtime/src/primitive-geometry";
 import { SceneContextMenu, type SceneContextMenuProps } from "./SceneContextMenu";
+import { SceneCustomShaderCompile } from "./SceneCustomShaderCompile";
 import { useSceneReviewResource, type SceneReviewLoadState } from "./scene-review-readiness";
 import { createWorldPlaySeatStore } from "./world-play-seat-store";
 import { materialSurfaceProps } from "../../lib/visual-editor/material-surface";
@@ -7354,6 +7355,10 @@ export function SceneViewport({
             onResult={onBoundsResult}
           />
           <RecordingCanvasSource />
+          {/* Compiles Custom Shaders on request and records the programs the
+              Scene fails to draw with, so the Inspector and the MCP tools can
+              say why a Material shows nothing. */}
+          <SceneCustomShaderCompile assets={assets} />
 
           <ScenePerformanceProbe
             enabled={debugOverlayEnabled || videoRecording}

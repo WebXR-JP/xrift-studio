@@ -104,6 +104,7 @@ import { runInteractivityAnimationPlanFixtureAssertions } from "../packages/xrif
 import { runInteractivityGraphListFixtureAssertions } from "../src/lib/visual-editor/interactivity-recipes.fixture.ts";
 import { runShaderTimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/shader-time.fixture.ts";
 import { runShaderCompileErrorsFixtureAssertions } from "../packages/xrift-studio-runtime/src/shader-compile-errors.fixture.ts";
+import { runCustomShaderCompileFixtureAssertions } from "../src/lib/visual-editor/custom-shader-compile.fixture.ts";
 import { runTextPanelFixtureAssertions } from "../packages/xrift-studio-runtime/src/text-panel.fixture.ts";
 import { runFontImportFixtureAssertions } from "../src/lib/visual-editor/font-import.fixture.ts";
 import { runTextComponentFixtureAssertions } from "../src/lib/visual-editor/text-component.fixture.ts";
@@ -410,6 +411,7 @@ try {
     ["interactivity graph list", runInteractivityGraphListFixtureAssertions],
     ["shader time", runShaderTimeFixtureAssertions],
     ["shader compile errors", runShaderCompileErrorsFixtureAssertions],
+    ["custom shader compile results", runCustomShaderCompileFixtureAssertions],
     ["text panel", runTextPanelFixtureAssertions],
     ["font import", runFontImportFixtureAssertions],
     ["text component", runTextComponentFixtureAssertions],

@@ -251,6 +251,10 @@ import {
 } from "../../lib/visual-editor/mcp-harness-guard";
 import { setProjectThumbnailFromAsset } from "../../lib/project-thumbnail";
 import { isDerivedMcpDocumentUpdate, isMcpDerivedRevisionCurrent } from "../../lib/visual-editor/mcp-derived-update";
+import {
+  checkCustomShaderForMcp,
+  customShaderCompileStore,
+} from "../../lib/visual-editor/custom-shader-compile";
 import { AssetsPanel as AssetsPanelView } from "./AssetsPanel";
 import {
   ValueScrubContext,
@@ -5578,6 +5582,16 @@ export function VisualEditorPrototype({
             setMcpLocalAssetImportBusy(false);
           }
         }
+        // Reading a Custom Shader compiles it first, so the answer is about
+        // the GLSL as it is now and not about the last time a mesh drew it.
+        // This waits, so it comes before the document is read below.
+        const readShaderCompile =
+          request.tool === "get_custom_shader"
+            ? await checkCustomShaderForMcp(
+                bundleRef.current.assets,
+                request.arguments.materialAssetId,
+              )
+            : null;
         const sourceBundle = bundleRef.current;
         const sourceRevision = mcpRevisionRef.current;
         const sourceDerivedRevision = mcpDerivedRevisionRef.current;
@@ -5591,6 +5605,12 @@ export function VisualEditorPrototype({
             saveStatus: saveStatusRef.current,
             scriptContracts: scriptContractsRef.current,
             scriptRuntime: scriptRuntimeReportRef.current,
+            customShaderCompile: readShaderCompile
+              ? {
+                  ...customShaderCompileStore.getSnapshots(),
+                  [readShaderCompile.materialAssetId]: readShaderCompile.snapshot,
+                }
+              : customShaderCompileStore.getSnapshots(),
           };
         let outcome: ReturnType<typeof executeXriftMcpEditorTool>;
         if (request.tool === "apply_r3f_scene") {
@@ -5681,6 +5701,23 @@ export function VisualEditorPrototype({
             }).format(new Date()),
             revision: mcpRevisionRef.current,
           });
+        }
+        if (
+          request.tool === "create_custom_shader" ||
+          request.tool === "update_custom_shader"
+        ) {
+          // The GLSL is saved either way; what the client needs back is whether
+          // it compiles. Giving the Scene a frame first lets the answer include
+          // the meshes that already use the Material.
+          if (outcome.changed) {
+            await waitForEditorCommit();
+            await waitForEditorCommit();
+          }
+          const written = await checkCustomShaderForMcp(
+            outcome.bundle.assets,
+            outcome.result.materialAssetId,
+          );
+          if (written) outcome.result.compile = written.compile;
         }
         const synchronizesScriptRuntime =
           editorModeRef.current === "play" &&
