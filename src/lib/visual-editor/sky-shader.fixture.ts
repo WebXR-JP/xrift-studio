@@ -57,7 +57,7 @@ function assertCreatorTimeCollection(): void {
     const source = compiled.overlayFiles.find(file => file.relativePath === "src/World.tsx")?.content ?? "";
     assert(compiled.canStage, `${entry.id} must compile as a normal sky Material`);
     assert(source.includes("paletteLinear") && source.includes("colorspace_fragment"), `${entry.id} lost its authored color conversion`);
-    assert(source.includes('"uCloudAmount": { value: 0.31 }'), `${entry.id} lost the edited cloud amount`);
+    assert(source.includes('"uCloudAmount":{"kind":"number","value":0.31}'), `${entry.id} lost the edited cloud amount`);
     assert(!compiled.diagnostics.some(diagnostic => diagnostic.code === "sky-shader-unavailable"), `${entry.id} must resolve in the World`);
   }
 }
@@ -491,7 +491,7 @@ function assertCompiledWorld(): void {
     "The Sky Shader was not emitted into the compiled World",
   );
   assert(
-    source.includes('"uStarCount": { value: 2400 }'),
+    source.includes('"uStarCount":{"kind":"number","value":2400}'),
     "The Sky Shader uniform values were not emitted as literals",
   );
   assert(

@@ -5,6 +5,7 @@ import {
 } from "three";
 import type { ClassicR3fMaterialShader } from "../../lib/visual-editor/custom-shader-contract";
 import { windDrivenUniforms, type ResolvedWind } from "../../lib/visual-editor/wind-contract";
+import { advanceMaterialTimeUniforms } from "../../../packages/xrift-studio-runtime/src/shader-time";
 import { createClassicR3fMaterial } from "./ProjectModelVisual";
 
 export const WATER_PREVIEW_CAMERA = { position: [8, 5.6, 12] as [number, number, number], fov: 44 };
@@ -48,8 +49,7 @@ export function createWaterPreviewObjects(shader: ClassicR3fMaterialShader, wind
 }
 
 export function applyWaterPreviewTime(material: ShaderMaterial, elapsed: number): void {
-  const uniform = material.uniforms.uTime;
-  if (uniform) uniform.value = elapsed;
+  advanceMaterialTimeUniforms(material, elapsed);
 }
 
 // Static cards must NOT each mount an R3F Canvas. Browsers limit live WebGL

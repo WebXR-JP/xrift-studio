@@ -20,9 +20,19 @@ import {
 } from "react";
 import { Canvas } from "@react-three/fiber";
 import {
+  findClassicShaderTextureIssues,
+  isClassicShaderImageSource,
+  isClassicShaderTextureSource,
   isDrivenShaderUniform,
   resolveShaderUniformLabel,
 } from "../../lib/visual-editor";
+import {
+  ShaderArrayField,
+  ShaderCubeTextureField,
+  ShaderMatrixField,
+  ShaderVariantSettings,
+  ShaderVolumeTextureField,
+} from "./CustomShaderFields";
 import { Color, DoubleSide, type Material } from "three";
 import { tauri } from "../../lib/tauri";
 import {
@@ -1968,10 +1978,20 @@ function CustomShaderQuickEditor({
   const touch = useEditorTouch();
   const shader =
     asset.shader?.kind === "classic-r3f" ? asset.shader : undefined;
+  // A sampler2D reads a picture or, for float data, an EXR. Every other
+  // environment image belongs to the Skybox.
   const textures = Object.values(assets.assets).filter(
     (candidate): candidate is TextureAsset =>
-      candidate.kind === "texture" && !isEnvironmentTextureAsset(candidate),
+      candidate.kind === "texture" &&
+      (isEnvironmentTextureAsset(candidate)
+        ? getTextureSourceFormat(candidate) === "exr"
+        : isClassicShaderTextureSource(candidate)),
   );
+  // A volume and a cube map are built from decoded pixels.
+  const imageTextures = textures.filter(isClassicShaderImageSource);
+  const textureIssues = shader
+    ? findClassicShaderTextureIssues(shader, assets)
+    : [];
   const shaderAssets = Object.values(assets.assets).filter(
     (candidate): candidate is ShaderAsset => candidate.kind === "shader",
   );
@@ -2122,6 +2142,9 @@ function CustomShaderQuickEditor({
                   shader.sourceModulePath,
                 );
                 const driven = isDrivenShaderUniform(name);
+                const textureIssue = textureIssues.find(
+                  (issue) => issue.uniformName === name,
+                );
                 return (
                   <div key={name} className="space-y-0.5">
                     <div className={`grid items-center gap-2 ${touch ? "grid-cols-1" : "grid-cols-[minmax(0,1fr)_7.5rem]"}`}>
@@ -2188,7 +2211,7 @@ function CustomShaderQuickEditor({
                           }}
                           className={`${INPUT_CLASS} font-mono text-[10px]`}
                         />
-                      ) : (
+                      ) : uniform.kind === "texture" ? (
                         <div className="flex min-w-0 items-center gap-1">
                           <select
                             value={uniform.textureAssetId}
@@ -2223,8 +2246,58 @@ function CustomShaderQuickEditor({
                             開く
                           </button>
                         </div>
+                      ) : (
+                        <span className="truncate font-mono text-[10px] text-slate-500">
+                          {uniform.kind === "matrix"
+                            ? uniform.value.length === 9
+                              ? "mat3"
+                              : "mat4"
+                            : uniform.kind === "array"
+                              ? `${uniform.value.length}個の数値`
+                              : uniform.kind === "texture-3d"
+                                ? "3Dテクスチャ"
+                                : "キューブマップ"}
+                        </span>
                       )}
                     </div>
+                    {uniform.kind === "matrix" ? (
+                      <ShaderMatrixField
+                        uniform={uniform}
+                        disabled={readOnly}
+                        ariaLabel={meta.label}
+                        onChange={(value) => updateUniform(name, value)}
+                      />
+                    ) : uniform.kind === "array" ? (
+                      <ShaderArrayField
+                        uniform={uniform}
+                        disabled={readOnly}
+                        ariaLabel={meta.label}
+                        onChange={(value) => updateUniform(name, value)}
+                      />
+                    ) : uniform.kind === "texture-3d" ? (
+                      <ShaderVolumeTextureField
+                        uniform={uniform}
+                        textures={imageTextures}
+                        disabled={readOnly}
+                        ariaLabel={meta.label}
+                        onChange={(value) => updateUniform(name, value)}
+                        onOpenTexture={onOpenTexture}
+                      />
+                    ) : uniform.kind === "texture-cube" ? (
+                      <ShaderCubeTextureField
+                        uniform={uniform}
+                        textures={imageTextures}
+                        disabled={readOnly}
+                        ariaLabel={meta.label}
+                        onChange={(value) => updateUniform(name, value)}
+                        onOpenTexture={onOpenTexture}
+                      />
+                    ) : null}
+                    {textureIssue ? (
+                      <p className="text-[10px] leading-4 text-amber-700">
+                        {textureIssue.message}
+                      </p>
+                    ) : null}
                     {showUniformNames ? (
                       <div className="font-mono text-[9px] text-slate-400">
                         {name}
@@ -2234,6 +2307,16 @@ function CustomShaderQuickEditor({
                 );
               })}
             </div>
+          </div>
+          <div className="rounded border border-slate-200 bg-slate-50 p-2">
+            <div className="mb-1.5 text-[11px] font-semibold text-slate-700">
+              描画設定
+            </div>
+            <ShaderVariantSettings
+              variants={shader.variants}
+              disabled={readOnly}
+              onChange={(variants) => updateShader({ variants })}
+            />
           </div>
           <button
             type="button"

@@ -1,14 +1,11 @@
 import { createEditorCanvasEvents } from "../../lib/visual-editor/canvas-events";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BackSide, Color, SphereGeometry, Vector2, Vector3, Vector4, type ShaderMaterial } from "three";
+import { Color, SphereGeometry, Vector2, Vector3, Vector4 } from "three";
 import type { ClassicR3fMaterialShader } from "../../lib/visual-editor";
 import { validateClassicR3fMaterialShader } from "../../lib/visual-editor";
-import {
-  applyTimeUniformValue,
-  type MutableUniformValue,
-  type TimeUniformSpec,
-} from "../../../packages/xrift-studio-runtime/src/shader-time";
+import { advanceMaterialTimeUniforms } from "../../../packages/xrift-studio-runtime/src/shader-time";
+import { configureClassicShaderSkyMaterial } from "../../../packages/xrift-studio-runtime/src/classic-shader-runtime";
 import { createClassicR3fMaterial } from "./ProjectModelVisual";
 
 type View = { azimuth: number; elevation: number };
@@ -176,21 +173,20 @@ function SkyShaderPreviewDome({ shader, running, view, onError }: {
   const elapsed = useRef(6.5);
   const geometry = useMemo(() => new SphereGeometry(1, 48, 32), []);
   const programKey = `${shader.sourceModulePath}\n${shader.vertexShader}\n${shader.fragmentShader}\n${JSON.stringify(shader.variants)}`;
-  const material = useMemo(() => {
-    const next = createClassicR3fMaterial(shader, {}, "");
-    next.side = BackSide;
-    next.depthTest = false;
-    next.depthWrite = false;
-    next.needsUpdate = true;
-    return next;
+  const material = useMemo(
+    () =>
+      configureClassicShaderSkyMaterial(
+        createClassicR3fMaterial(shader, {}, ""),
+      ),
     // A slider must update uniforms, not dispose/recompile the program.
-  }, [programKey]);
+    [programKey],
+  );
 
   useEffect(() => () => geometry.dispose(), [geometry]);
   useEffect(() => () => material.dispose(), [material]);
   useEffect(() => {
     elapsed.current = 6.5;
-    applyPreviewTime(material, elapsed.current);
+    advanceMaterialTimeUniforms(material, elapsed.current);
     invalidate();
   }, [material, invalidate]);
   useEffect(() => {
@@ -226,16 +222,7 @@ function SkyShaderPreviewDome({ shader, running, view, onError }: {
   useFrame((_state, delta) => {
     if (!running) return;
     elapsed.current += Math.min(delta, 0.1);
-    applyPreviewTime(material, elapsed.current);
+    advanceMaterialTimeUniforms(material, elapsed.current);
   });
   return <mesh geometry={geometry} material={material} frustumCulled={false} />;
-}
-
-function applyPreviewTime(material: ShaderMaterial, elapsed: number): void {
-  const specs = material.userData.xriftTimeUniforms as TimeUniformSpec[] | undefined;
-  if (!Array.isArray(specs)) return;
-  for (const spec of specs) {
-    const uniform = material.uniforms[spec.name];
-    if (uniform) applyTimeUniformValue(uniform as MutableUniformValue, spec, elapsed);
-  }
 }

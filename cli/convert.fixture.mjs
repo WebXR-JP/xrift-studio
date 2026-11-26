@@ -104,6 +104,11 @@ import { runInteractivityAnimationPlanFixtureAssertions } from "../packages/xrif
 import { runInteractivityGraphListFixtureAssertions } from "../src/lib/visual-editor/interactivity-recipes.fixture.ts";
 import { runShaderTimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/shader-time.fixture.ts";
 import { runClassicShaderRuntimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/classic-shader-runtime.fixture.ts";
+import { runCustomShaderContractFixtureAssertions } from "../src/lib/visual-editor/custom-shader-contract.fixture.ts";
+import {
+  runClassicShaderCompilerFixtureAssertions,
+  runClassicShaderRuntimeManifestFixtureAssertions,
+} from "../src/lib/visual-editor/compiler/classic-shader.fixture.ts";
 import { runTextPanelFixtureAssertions } from "../packages/xrift-studio-runtime/src/text-panel.fixture.ts";
 import { runFontImportFixtureAssertions } from "../src/lib/visual-editor/font-import.fixture.ts";
 import { runTextComponentFixtureAssertions } from "../src/lib/visual-editor/text-component.fixture.ts";
@@ -410,6 +415,9 @@ try {
     ["interactivity graph list", runInteractivityGraphListFixtureAssertions],
     ["shader time", runShaderTimeFixtureAssertions],
     ["custom shader material builder", runClassicShaderRuntimeFixtureAssertions],
+    ["custom shader contract", runCustomShaderContractFixtureAssertions],
+    ["custom shader compiler", runClassicShaderCompilerFixtureAssertions],
+    ["custom shader Runtime JSON loader", runClassicShaderRuntimeManifestFixtureAssertions],
     ["text panel", runTextPanelFixtureAssertions],
     ["font import", runFontImportFixtureAssertions],
     ["text component", runTextComponentFixtureAssertions],
@@ -756,6 +764,15 @@ async function runStagedWorldTypecheck() {
     await typecheckWithTemplateOptions(
       `mtoon-${mode}-only`,
       runMToonMaterialCompilerFixtureAssertions(mode).overlayFiles,
+      'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
+    );
+  }
+  // The shared Custom Shader Material module ships with the world, so the
+  // world that uses every uniform kind is typechecked on its own too.
+  for (const mode of ["primitive", "model"]) {
+    await typecheckWithTemplateOptions(
+      `custom-shader-${mode}-only`,
+      runClassicShaderCompilerFixtureAssertions(mode).overlayFiles,
       'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
     );
   }

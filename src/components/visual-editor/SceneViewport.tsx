@@ -74,11 +74,11 @@ import {
   XRIFT_SCENE_SKYBOX_USER_DATA_KEY,
   type XriftSceneRuntimeAsset,
 } from "../../../packages/xrift-studio-runtime/src/script/scene-runtime";
+import { advanceMaterialTimeUniforms } from "../../../packages/xrift-studio-runtime/src/shader-time";
 import {
-  applyTimeUniformValue,
-  type MutableUniformValue,
-  type TimeUniformSpec,
-} from "../../../packages/xrift-studio-runtime/src/shader-time";
+  XriftClassicShaderAttachment,
+  configureClassicShaderSkyMaterial,
+} from "../../../packages/xrift-studio-runtime/src/classic-shader-material";
 import {
   EntityScriptVisual,
   EntityScriptChildren,
@@ -945,10 +945,16 @@ function TerrainMeshVisual({
     authoredShaderMaterial,
     material?.shader?.kind === "classic-r3f" ? material.shader : undefined,
   );
-  useFrame((state) => {
-    const uniform = authoredShaderMaterial?.uniforms?.uTime;
-    if (uniform) uniform.value = state.clock.getElapsedTime();
-  });
+  useFrame((state) =>
+    advanceMaterialTimeUniforms(
+      authoredShaderMaterial,
+      state.clock.getElapsedTime(),
+    ),
+  );
+  useEffect(
+    () => () => authoredShaderMaterial?.dispose(),
+    [authoredShaderMaterial],
+  );
   const usesAuthoredShader =
     Boolean(authoredShaderMaterial) &&
     // Only the shading modes: wireframe, ghost and collider views exist to
@@ -962,7 +968,7 @@ function TerrainMeshVisual({
     >
       <TerrainGeometryView terrain={terrain} />
       {usesAuthoredShader && authoredShaderMaterial ? (
-        <primitive object={authoredShaderMaterial} attach="material" />
+        <XriftClassicShaderAttachment material={authoredShaderMaterial} />
       ) : viewportMaterialStyle === "scene" && material?.properties.extensions.VRMC_materials_mtoon ? (
         <XriftMToonMaterial properties={material.properties} textures={materialTextures} doubleSided />
       ) : viewportMaterialStyle === "unlit" ? (
@@ -1142,10 +1148,14 @@ export function PrimitiveMeshVisual({
     authoredShaderMaterial,
     material?.shader?.kind === "classic-r3f" ? material.shader : undefined,
   );
-  const resolvedCustomShaderMaterial = authoredShaderMaterial ?? customShaderMaterial;
   const meshRef = useRef<Mesh | null>(null);
   const customShaderInstance = useMemo(() => {
-    const instance = resolvedCustomShaderMaterial?.clone();
+    // A Custom Shader Material is built for this mesh alone, so the mesh wears
+    // it as it is: the clock, the wind and the key light then write into the
+    // Material that is drawn. A copy would keep the values it was made with.
+    // Only an Open Brush preset, which other meshes share, is copied.
+    if (authoredShaderMaterial) return authoredShaderMaterial;
+    const instance = customShaderMaterial?.clone();
     if (!instance || material?.shader?.kind !== "openbrush") return instance;
     const overrides = material.shader.sourceOverrides;
     applyCustomShaderSourceOverrides(
@@ -1163,37 +1173,13 @@ export function PrimitiveMeshVisual({
     );
     applyOpenBrushMaterialAssetProperties(instance, material, materialTextures);
     return hasCustomShaderEntrypoints(instance) ? instance : undefined;
-  }, [material, materialTextures, resolvedCustomShaderMaterial]);
-  useFrame((state) => {
-    if (
-      !authoredShaderMaterial ||
-      material?.shader?.kind !== "classic-r3f"
-    ) {
-      return;
-    }
-    const elapsed = state.clock.getElapsedTime();
-    const specs = authoredShaderMaterial.userData.xriftTimeUniforms as
-      | TimeUniformSpec[]
-      | undefined;
-    if (Array.isArray(specs)) {
-      for (const spec of specs) {
-        const uniform = authoredShaderMaterial.uniforms[spec.name];
-        if (uniform) {
-          applyTimeUniformValue(
-            uniform as MutableUniformValue,
-            spec,
-            elapsed,
-          );
-        }
-      }
-      return;
-    }
-    const uniformName = material.shader.animatedTimeUniform;
-    const uniform = uniformName
-      ? authoredShaderMaterial.uniforms[uniformName]
-      : undefined;
-    if (uniform) uniform.value = elapsed;
-  });
+  }, [authoredShaderMaterial, customShaderMaterial, material, materialTextures]);
+  useFrame((state) =>
+    advanceMaterialTimeUniforms(
+      authoredShaderMaterial,
+      state.clock.getElapsedTime(),
+    ),
+  );
   const materialRef = useRef<MeshStandardMaterial | null>(null);
   useMaterialPreviewRenderSync(materialRef, materialTextures);
   useLayoutEffect(() => {
@@ -1314,6 +1300,8 @@ export function PrimitiveMeshVisual({
           depthWrite={false}
           side={DoubleSide}
         />
+      ) : customShaderInstance && customShaderInstance === authoredShaderMaterial ? (
+        <XriftClassicShaderAttachment material={customShaderInstance} />
       ) : customShaderInstance ? (
         <primitive object={customShaderInstance} attach="material" />
       ) : material?.properties.extensions.VRMC_materials_mtoon ? (
@@ -4735,14 +4723,13 @@ function SkyShaderPreview({
     () => createSkyGeometry(settings.projection),
     [settings.projection],
   );
-  const material = useMemo(() => {
-    const next = createClassicR3fMaterial(shader, {}, "");
-    next.side = BackSide;
-    next.depthTest = false;
-    next.depthWrite = false;
-    next.needsUpdate = true;
-    return next;
-  }, [shader]);
+  const material = useMemo(
+    () =>
+      configureClassicShaderSkyMaterial(
+        createClassicR3fMaterial(shader, {}, ""),
+      ),
+    [shader],
+  );
   const driven = useMemo(
     () => skyShaderDrivenUniforms(shader, settings),
     [settings, shader],
@@ -4784,17 +4771,7 @@ function SkyShaderPreview({
     if (settings.projection === "infinite" && meshRef.current) {
       meshRef.current.position.copy(camera.position);
     }
-    const elapsed = clock.getElapsedTime();
-    const specs = material.userData.xriftTimeUniforms as
-      | TimeUniformSpec[]
-      | undefined;
-    if (!Array.isArray(specs)) return;
-    for (const spec of specs) {
-      const uniform = material.uniforms[spec.name];
-      if (uniform) {
-        applyTimeUniformValue(uniform as MutableUniformValue, spec, elapsed);
-      }
-    }
+    advanceMaterialTimeUniforms(material, clock.getElapsedTime());
   });
 
   return (

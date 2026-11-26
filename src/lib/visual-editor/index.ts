@@ -19,6 +19,7 @@ export * from "./classic-project-creation";
 export * from "./collider-diagnostics";
 export * from "./catalog-thumbnails";
 export * from "./custom-shader-contract";
+export * from "./custom-shader-textures";
 export * from "./shader-files";
 export * from "./document-id";
 export * from "./draco-import";
