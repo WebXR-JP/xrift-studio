@@ -299,6 +299,7 @@ import {
   type SceneAsset,
   type TextureImportSettingsPatch,
 } from "./asset-manifest";
+import { findClassicShaderTextureIssues } from "./custom-shader-textures";
 import {
   createDefaultCustomShader,
   validateClassicR3fMaterialShader,
@@ -9496,6 +9497,19 @@ function assertCustomShaderAssetReferences(
         { field, assetId, expectedStage: stage, actualStage: asset.stage },
       );
     }
+  }
+  // A texture uniform that names a missing Asset, or one its kind cannot
+  // read, would be saved and then refused when the project is opened again.
+  const textureIssues = findClassicShaderTextureIssues(shader, assets);
+  if (textureIssues.length > 0) {
+    throw new XriftMcpEditorToolError(
+      "CUSTOM_SHADER_TEXTURE_INVALID",
+      "カスタムシェーダーのテクスチャuniformを使えません",
+      {
+        diagnostics: textureIssues.map((issue) => issue.message),
+        uniforms: textureIssues.map((issue) => issue.uniformName),
+      },
+    );
   }
 }
 
