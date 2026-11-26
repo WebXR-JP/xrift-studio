@@ -847,7 +847,7 @@
       "description": "カスタムシェーダーを作り、頂点とフラグメントのGLSLで色や質感を編集できます。",
       "group": "materials-advanced",
       "file": "custom-shaders.md",
-      "keywords": "GLSL Shader カスタムシェーダー 頂点 フラグメント uniform PBR",
+      "keywords": "GLSL Shader カスタムシェーダー 頂点 フラグメント uniform PBR スクリプト Script setUniform 動作中 シェーダーの調整値",
       "related": [
         "materials",
         "sky-and-water",
