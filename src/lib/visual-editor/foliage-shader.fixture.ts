@@ -36,6 +36,7 @@ import {
 import { createPrototypeProject, ensureBuiltinMaterialAsset } from "./prototype-project";
 import { SCENE_RECIPES, SCENE_RECIPE_IDS } from "./scene-recipe-catalog";
 import { resolveSceneSettings } from "./scene-settings";
+import { isDrivenShaderUniform, resolveShaderUniformLabel } from "./shader-uniform-labels";
 import { WIND_DRIVEN_UNIFORMS, usesWindContract } from "./wind-contract";
 
 /**
@@ -159,10 +160,24 @@ function assertParametersNameUniforms(): void {
       }
       assert(parameter.label.length > 0 && parameter.hint.length > 0, `${entry.id}: ${parameter.uniform} needs a label and a hint`);
     }
-    // Every value an author can change has a readable name in the Inspector.
+    // Every value an author can change has a readable name in the Inspector,
+    // and every value the Scene writes is marked as written for the author.
     for (const [name, uniform] of Object.entries(entry.shader.uniforms)) {
-      if (DRIVEN_UNIFORMS.has(name) || uniform.kind === "texture") continue;
+      if (uniform.kind === "texture") continue;
+      const shown = resolveShaderUniformLabel(name, entry.shader.sourceModulePath);
+      if (DRIVEN_UNIFORMS.has(name)) {
+        assert(
+          isDrivenShaderUniform(name) && Boolean(shown.hint),
+          `${entry.id}: the Inspector must say that the Scene writes ${name}`,
+        );
+        continue;
+      }
       assert(named.has(name), `${entry.id}: the uniform ${name} has no parameter`);
+      const parameter = entry.parameters.find((candidate) => candidate.uniform === name);
+      assert(
+        shown.label === parameter?.label && shown.hint === parameter.hint && !isDrivenShaderUniform(name),
+        `${entry.id}: the Inspector must show ${name} under its own name`,
+      );
     }
   }
 }

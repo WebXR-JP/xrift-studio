@@ -147,6 +147,49 @@ test("木のセットを置くと、葉と樹皮のマテリアルと画像が�
   expect(errors).toEqual([]);
 });
 
+test("アセットストアで木を選ぶと、いっしょに追加される素材が分かり、シーンへ追加できる", async ({ page }, info) => {
+  test.setTimeout(180_000);
+  await page.goto("/e2e.html?scenario=ready");
+  await expect(page.getByRole("heading", { name: "プロジェクト" })).toBeVisible({ timeout: 120_000 });
+  await page.getByRole("button", { name: /新規プロジェクト/ }).click();
+  await page.getByRole("button", { name: /ワールドをビジュアルで作る/ }).click();
+  await page.getByRole("radio", { name: /空のワールド|Blank/ }).click();
+  await page.getByLabel("プロジェクト名").fill("foliage-store");
+  await page.getByRole("button", { name: "作成して開く" }).click();
+  await expect(page.getByRole("banner").getByText("ビジュアルエディター")).toBeVisible();
+
+  const assets = page.getByRole("region", { name: "Assets" });
+  const shelf = page.getByRole("region", { name: "3Dセット一覧" });
+  const detail = page.getByRole("complementary", { name: "選択した3Dセットの詳細" });
+  const hierarchy = page.getByRole("tree", { name: "シーンのEntity階層" });
+  await assets.getByRole("button", { name: "アセットストア" }).click();
+  await page.getByRole("button", { name: /^3Dセット/ }).click();
+  // Three trees, each with its lighter version.
+  await shelf.getByLabel("3Dセットを検索").fill("風にそよぐ");
+  await expect(shelf.getByTestId("scene-recipe-card")).toHaveCount(6);
+  await expect(shelf.getByRole("button", { name: /軽量版/ })).toHaveCount(3);
+
+  // A tree brings more than its Model, and the detail says so before it is placed.
+  await shelf.getByRole("button", { name: "広葉樹（風にそよぐ）", exact: true }).click();
+  await expect(detail.getByText("マテリアル「広葉樹の葉と樹皮」と画像 2 枚もAssetsに追加します")).toBeVisible();
+  await detail.getByRole("button", { name: "広葉樹（風にそよぐ）をシーンへ追加" }).click();
+  // A set without steps to follow closes the store once it is placed.
+  await expect(hierarchy.getByText("広葉樹（風にそよぐ）", { exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("region", { name: "3Dセット一覧" })).toBeHidden();
+  await expect(assets.getByText("広葉樹の葉と樹皮").first()).toBeVisible();
+
+  // The Material's values carry their own names in the Inspector, and the
+  // ones the Scene writes are marked.
+  await assets.getByText("広葉樹の葉と樹皮").first().click();
+  const values = page.getByText("シェーダーの調整値").locator("xpath=ancestor::div[2]");
+  for (const label of ["葉の色み", "苔の量", "枝の揺れ", "葉のそよぎ"]) {
+    await expect(values.getByText(label, { exact: true }).first()).toBeVisible();
+  }
+  await expect(values.getByText("光の強さ").first()).toContainText("自動");
+  await expect(values.getByText("風速").first()).toContainText("自動");
+  await page.screenshot({ path: info.outputPath("foliage-inspector.png") });
+});
+
 test("ストアのカードは、木を葉と樹皮のシェーダーで描く", async ({ page }, info) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
