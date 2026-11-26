@@ -4,7 +4,7 @@ import { advance, createRoot, extend } from "@react-three/fiber";
 import { Physics } from "@react-three/rapier";
 import { XRiftProvider } from "@xrift/world-components";
 import * as THREE from "three";
-import { ShaderCubeTextureField, ShaderVolumeTextureField } from "../src/components/visual-editor/CustomShaderFields";
+import { ShaderCubeTextureField, ShaderMatrixField, ShaderVolumeTextureField } from "../src/components/visual-editor/CustomShaderFields";
 import { PrimitiveMeshVisual } from "../src/components/visual-editor/SceneViewport";
 import { classicShaderTextureCacheSize } from "../src/components/visual-editor/classic-shader-textures";
 import { tauri } from "../src/lib/tauri";
@@ -233,4 +233,48 @@ export function mountShaderTextureFields() {
   host.style.cssText = "position:fixed;inset:0;display:flex;align-items:flex-start;background:white";
   document.body.append(host);
   createDomRoot(host).render(<Fields />);
+}
+
+/**
+ * The owner of a matrix field that saves late: what the field sent, what the
+ * owner holds, and the two ways its value changes.
+ */
+export const lateMatrixOwner: {
+  /** Lists the field sent that the owner has not applied yet, oldest first. */
+  pending: number[][];
+  held: number[];
+  /** Applies the oldest pending list, as a save that comes back. */
+  deliver: () => void;
+  /** Replaces the value from outside the field, as Undo or an AI client does. */
+  replace: (value: number[]) => void;
+} = { pending: [], held: [], deliver: () => {}, replace: () => {} };
+
+/**
+ * Mounts the matrix field of the Inspector on its own, with an owner that
+ * applies what the field sends only when the test says so. The Inspector
+ * applies it a moment after the typing, and by then the author may have
+ * typed on.
+ */
+export function mountLateShaderMatrixField() {
+  function Field() {
+    const [value, setValue] = useState([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+    useEffect(() => {
+      lateMatrixOwner.held = value;
+      lateMatrixOwner.deliver = () => {
+        const next = lateMatrixOwner.pending.shift();
+        if (next) setValue(next);
+      };
+      lateMatrixOwner.replace = setValue;
+    }, [value]);
+    return (
+      <div className="w-80 p-3">
+        <ShaderMatrixField uniform={{ kind: "matrix", value }} disabled={false} ariaLabel="Late placement"
+          onChange={(uniform) => { lateMatrixOwner.pending.push(uniform.value); }} />
+      </div>
+    );
+  }
+  const host = document.createElement("div");
+  host.style.cssText = "position:fixed;inset:0;display:flex;align-items:flex-start;background:white";
+  document.body.append(host);
+  createDomRoot(host).render(<Field />);
 }

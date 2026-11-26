@@ -48,6 +48,9 @@ function sameNumbers(left: readonly number[], right: readonly number[]): boolean
   );
 }
 
+/** How many lists a field remembers having sent, to know them when they come back. */
+const SENT_LISTS_REMEMBERED = 16;
+
 /**
  * A list of numbers as text.
  *
@@ -78,10 +81,20 @@ function ShaderNumberListField({
   const [draft, setDraft] = useState(saved);
   const draftRef = useRef(draft);
   draftRef.current = draft;
+  // Lists this field has sent and not yet seen come back as the saved value.
+  const sentRef = useRef<number[][]>([]);
   useEffect(() => {
+    // A list this field sent has come back. Saving takes a moment, and the
+    // author may have typed on since, so the text stays as typed.
+    const echoed = sentRef.current.findIndex((sent) => sameNumbers(sent, value));
+    if (echoed >= 0) {
+      sentRef.current = sentRef.current.slice(echoed + 1);
+      return;
+    }
     // The saved value changed somewhere else (Undo, an AI client): show it.
     // While the draft still reads as the saved numbers, it is the author's own
     // typing and stays as typed.
+    sentRef.current = [];
     const typed = parseShaderNumberList(draftRef.current);
     if (!typed || !sameNumbers(typed, value)) setDraft(saved);
     // `saved` is the value written out, so it stands in for `value`.
@@ -103,6 +116,9 @@ function ShaderNumberListField({
           setDraft(next);
           const numbers = parseShaderNumberList(next);
           if (numbers && accepts(numbers) && !sameNumbers(numbers, value)) {
+            // A list the owner refuses never comes back, so only the last few
+            // are remembered.
+            sentRef.current = [...sentRef.current.slice(-(SENT_LISTS_REMEMBERED - 1)), numbers];
             onChange(numbers);
           }
         }}

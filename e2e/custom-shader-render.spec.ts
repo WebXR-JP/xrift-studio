@@ -241,3 +241,54 @@ test("カスタムシェーダーの行列・配列・テクスチャの欄と�
   await expect(page.getByText("6枚とも同じ大きさの正方形の画像を選びます。")).toBeVisible();
   await page.screenshot({ path: info.outputPath("custom-shader-texture-fields.png") });
 });
+
+test("数値の欄は、保存が遅れて届いても入力中の文字を保ち、ほかからの変更は表示する", async ({ page }) => {
+  await page.goto("/e2e/custom-shader-render.html");
+  const fixture = "/e2e/custom-shader-render.fixture.tsx";
+  await page.evaluate(async url => (await import(/* @vite-ignore */ url)).mountLateShaderMatrixField(), fixture);
+  /** The owner's state, after it applied the oldest list the field sent when asked to. */
+  const owner = (deliver = false) => page.evaluate(async ({ url, deliver }) => {
+    const { lateMatrixOwner } = await import(/* @vite-ignore */ url);
+    if (deliver) lateMatrixOwner.deliver();
+    return { pending: lateMatrixOwner.pending.length as number, held: [...lateMatrixOwner.held] as number[] };
+  }, { url: fixture, deliver });
+  /** Lets the field draw what a delivered value made of it. */
+  const settle = () => page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  const field = page.getByLabel("Late placement");
+  await expect(field).toHaveValue("1, 0, 0, 0,\n0, 1, 0, 0,\n0, 0, 1, 0,\n0, 0, 0, 1");
+
+  // A mat4 is typed and, before its save comes back, the author types on:
+  // fifteen numbers are no matrix and are not sent.
+  const moved = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.5, 0.25, 0, 1];
+  const unfinished = "1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.5, 0.25, 0";
+  await field.fill(moved.join(", "));
+  await field.fill(unfinished);
+  expect((await owner()).pending).toBe(1);
+  // The save of the mat4 comes back: the field keeps what is being typed.
+  await expect.poll(async () => (await owner(true)).held).toEqual(moved);
+  await settle();
+  await expect(field).toHaveValue(unfinished);
+  await expect(field).toHaveAttribute("aria-invalid", "true");
+
+  // A number retyped digit by digit: every step is a matrix, and the save of
+  // one step comes back after the next digit was typed.
+  await field.fill(`${unfinished}, 2.5`);
+  await field.fill(`${unfinished}, 2.57`);
+  expect((await owner()).pending).toBe(2);
+  await owner(true);
+  await settle();
+  await expect(field).toHaveValue(`${unfinished}, 2.57`);
+  await expect.poll(async () => (await owner(true)).held).toEqual([...moved.slice(0, 15), 2.57]);
+  await settle();
+  await expect(field).toHaveValue(`${unfinished}, 2.57`);
+  await expect(field).toHaveAttribute("aria-invalid", "false");
+
+  // A change from outside the field (Undo, an AI client) replaces the text.
+  await page.evaluate(async url => (await import(/* @vite-ignore */ url)).lateMatrixOwner.replace([2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 1]), fixture);
+  await expect(field).toHaveValue("2, 0, 0, 0,\n0, 2, 0, 0,\n0, 0, 2, 0,\n0, 0, 0, 1");
+  // The text an outside change replaced is not kept back when it is retyped and saved.
+  await field.fill(moved.join(", "));
+  await expect.poll(async () => (await owner(true)).held).toEqual(moved);
+  await settle();
+  await expect(field).toHaveValue(moved.join(", "));
+});
