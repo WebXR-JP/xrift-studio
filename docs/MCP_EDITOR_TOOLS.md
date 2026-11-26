@@ -233,6 +233,23 @@ Editで実行すると、独立したBlenderプロセスが実GLBと編集可能
 
 未知のパス、Shader・メタデータのパス、不正な値は`INVALID_ARGUMENT`で全変更前に拒否する。`updatedMaterialAssetIds`は実際に変えた素材だけを返し、すべて同じ値ならrevisionを増やさない。更新後は`get_material_asset`で保存値を読み、割り当てたMeshを`capture_scene_view`で確認する。一括編集はPlay中に`EDITOR_READ_ONLY`となる。Play中の単体編集には`update_material_asset`を使う。
 
+`create_custom_shader`の`shader`と`update_custom_shader`の`patch`は、次のuniformとvariantの設定を受け付ける。`get_custom_shader`は保存した値をそのまま返す。追加した項目はすべて省略でき、省略時の描画は変わらない。編集・Play・生成するワールド・Runtime JSONの読み込みは、共有ランタイムの`createClassicShaderMaterial`でこの記述からマテリアルを組み立てる。
+
+| `kind` | GLSLの型 | 値 |
+| --- | --- | --- |
+| `number`、`color`、`vector` | `float`、`vec3`、`vec2`〜`vec4` | `value`に数値、`#rrggbb`、2〜4個の数値 |
+| `matrix` | `mat3`、`mat4` | `value`に9個か16個の数値を列優先で並べる |
+| `array` | `float`、`vecN`、`matN`の配列 | `value`に1〜4096個の数値を平らに並べる。`vec3 uPoints[4]`は12個 |
+| `texture` | `sampler2D` | `textureAssetId`。8bitの画像、KTX2、EXRを読む。EXRはファイルの精度（16bitか32bit）の浮動小数で渡る |
+| `texture-3d` | `sampler3D` | `textureAssetId`に、スライスを左から右へ並べた8bitの画像を指定する。`slices`を省くと正方形のスライスとして数える。一辺とスライス数は256まで。スライス内の横がx、縦がy（画像の上端が0）、スライスの番号がzになる |
+| `texture-cube` | `samplerCube` | `faces`に`{ "textureAssetId": "…" }`を+X、-X、+Y、-Y、+Z、-Zの順で6個。同じ大きさの正方形の8bitの画像 |
+
+テクスチャのuniformは`colorSpace`（`srgb`か`linear`。省略時は変換しない）と`filter`（`linear`か`nearest`。省略時は`linear`）を持てる。`texture`と`texture-3d`は`wrapS`・`wrapT`に、`texture-3d`は`wrapR`にも、`repeat`か`clamp-to-edge`を指定できる。省略時は`texture`が`repeat`、`texture-3d`が`clamp-to-edge`になる。32bitのEXRを`filter: "linear"`で読むには端末の対応が要る。数値の表には`filter: "nearest"`か16bitのEXRを使う。
+
+`variants`の各要素は、`side`、`transparent`、`depthWrite`、`defines`に加えて、`blending`（`normal`、`additive`、`multiply`、`subtractive`。省略時は`normal`）と`frustumCulled`（省略時は`true`）を持てる。`blending`は`transparent`を変えない。光や煙を重ねる場合は`transparent: true`と`depthWrite: false`も指定する。`frustumCulled: false`は、頂点シェーダーがMeshを元の位置から大きく動かす場合に指定する。そのマテリアルを着けたMeshだけがカリングの対象から外れ、マテリアルを外すと元に戻る。
+
+形式が不正な記述は`CUSTOM_SHADER_INVALID`で拒否し、`details.diagnostics`に`uniforms.<名前>: …`や`variants[0]: …`の形で理由をすべて返す。存在しないTexture、その種類のuniformで読めないTexture（`texture-3d`と`texture-cube`のKTX2・EXR、すべての種類のHDR）、大きさが条件に合わない画像は`CUSTOM_SHADER_TEXTURE_INVALID`で拒否する。`details.uniforms`に対象のuniform名、`details.diagnostics`に原因を返す。Textureは先に`import_texture_asset`で取り込み、`get_texture_asset`で大きさを確かめてから指定する。どちらの場合もマテリアルは変更しない。
+
 `create_custom_shader`は任意のGLSLを受ける。「空っぽく見せる」用途には使わず、カタログから選ぶ。
 ゼロから書くとカタログが持つ数値を自分で決めることに
 なる。`list_material_presets`は空・水・グロー・glTF拡張のカタログを返す。名前付きの
