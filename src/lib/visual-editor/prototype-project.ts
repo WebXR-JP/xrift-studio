@@ -16,6 +16,7 @@ import {
   DEFAULT_GLOW_MATERIAL_PRESET,
 } from "./glow-material-catalog";
 import { getMaterialShowcaseAsset } from "./material-showcase-catalog";
+import { getFoliageMaterialAsset } from "./foliage-shader-catalog";
 import { createDocumentId } from "./document-id";
 import {
   VISUAL_PROJECT_SCHEMA_VERSION,
@@ -118,7 +119,9 @@ export function ensureBuiltinMaterialAsset(
     // a project gets the one a placed 見本 uses and no more, which is why
     // thirteen extension demonstrations do not lengthen every new project's
     // Asset panel.
-    getMaterialShowcaseAsset(materialAssetId);
+    getMaterialShowcaseAsset(materialAssetId) ??
+    // The foliage Material arrives the same way, with the first tree.
+    getFoliageMaterialAsset(materialAssetId);
   if (!builtin) return assets;
   return {
     ...assets,

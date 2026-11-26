@@ -166,6 +166,12 @@ XRift Studioが追加した依存ではありません。
 
 今回のBlender実行状況と編集用データについては`docs/asset-refresh/README.md`を参照してください。
 
+## XRift Studio foliage pictures and tree models v1
+
+`public/visual-editor/foliage/v1/` contains the two AI-generated pictures the bundled trees are drawn with: `foliage-leaves.webp`, a 2 x 2 atlas of leaf sprigs with the cut-out in alpha, and `foliage-bark.webp`, a tiling bark with a height in alpha. Both were generated with Codex image generation from text prompts only, with no picture given as input. The prompts and the processing applied afterwards are preserved in `generation-prompts.json`; `catalog.json` records each file's dimensions, byte length and SHA-256. Copyright (c) 2026 XRift Studio contributors, MIT; see the adjacent `LICENSE.txt`.
+
+The six tree models in the same folder (`foliage-broadleaf.glb`, `foliage-garden-tree.glb`, `foliage-shrub.glb` and a lighter `-light` version of each) are project-original procedural meshes written by `scripts/generate-foliage-models.mjs`. They contain no pictures. `node scripts/generate-foliage-models.mjs --check` verifies that the bundled files are what the generator writes, and the same licence applies.
+
 ## XRift Studio transparent illustration pack v1
 
 `public/visual-editor/transparent-textures/v1/` contains 30 AI-generated transparent PNG illustrations. Generated with the built-in image_gen tool; individual prompts are preserved in `generation-prompts.json`. Rabbit is a transparent extraction of the project author's existing beginner-book illustration. The generated PNG bytes and alpha are distributed unchanged. Copyright (c) 2026 XRift Studio contributors, MIT; see the adjacent `LICENSE.txt`. The catalog records each PNG's dimensions, byte length and SHA-256.
