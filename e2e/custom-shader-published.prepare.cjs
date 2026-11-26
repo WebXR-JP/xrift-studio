@@ -67,9 +67,9 @@ void main() {
 #endif
 }`;
 
-// A plane that reads two pictures through five samplers, each drawn much
+// A plane that reads two pictures through eight samplers, each drawn much
 // smaller than it is, so that only a sampler that reads mip levels shows the
-// average of the picture. Five bands from the bottom.
+// average of the picture. Eight bands from the bottom.
 const SAMPLER_VERTEX = `varying vec2 vUv;
 void main() {
   vUv = uv;
@@ -80,6 +80,9 @@ uniform sampler2D uMipped;
 uniform sampler2D uMippedNearest;
 uniform sampler2D uFlat;
 uniform sampler2D uSlanted;
+uniform samplerCube uCubePlain;
+uniform samplerCube uCubeMipped;
+uniform samplerCube uCubeMippedNearest;
 varying vec2 vUv;
 void main() {
   // The checker tiled 7.3 times: one pixel of the frame covers almost six texels.
@@ -93,8 +96,16 @@ void main() {
   vec3 mippedNearest = texture2D(uMippedNearest, tiled).rgb;
   vec3 flat_ = texture2D(uFlat, slanted).rgb;
   vec3 slantedColor = texture2D(uSlanted, slanted).rgb;
-  float band = floor(vUv.y * 5.0);
-  vec3 color = band < 1.0 ? plain : band < 2.0 ? mipped : band < 3.0 ? mippedNearest : band < 4.0 ? flat_ : slantedColor;
+  // The centre of one texel of the +Z face, asked for six levels down, where a
+  // 64 texel face is one texel. A cube map without mip levels has only the
+  // full-size face to answer with.
+  vec3 texel = vec3(0.265625, -0.296875, 1.0);
+  vec3 cubePlain = textureLod(uCubePlain, texel, 6.0).rgb;
+  vec3 cubeMipped = textureLod(uCubeMipped, texel, 6.0).rgb;
+  vec3 cubeMippedNearest = textureLod(uCubeMippedNearest, texel, 6.0).rgb;
+  float band = floor(vUv.y * 8.0);
+  vec3 color = band < 1.0 ? plain : band < 2.0 ? mipped : band < 3.0 ? mippedNearest : band < 4.0 ? flat_
+    : band < 5.0 ? slantedColor : band < 6.0 ? cubePlain : band < 7.0 ? cubeMipped : cubeMippedNearest;
   gl_FragColor = vec4(color, 1.0);
 }`;
 
@@ -216,6 +227,10 @@ function png(width, height, texel) {
           uMippedNearest: { kind: "texture", textureAssetId: "parity-checker", generateMipmaps: true, filter: "nearest" },
           uFlat: { kind: "texture", textureAssetId: "parity-stripes", generateMipmaps: true },
           uSlanted: { kind: "texture", textureAssetId: "parity-stripes", generateMipmaps: true, anisotropy: 8 },
+          // The checker on all six faces of a cube map.
+          uCubePlain: { kind: "texture-cube", faces: Array.from({ length: 6 }, () => ({ textureAssetId: "parity-checker" })) },
+          uCubeMipped: { kind: "texture-cube", faces: Array.from({ length: 6 }, () => ({ textureAssetId: "parity-checker" })), generateMipmaps: true, anisotropy: 4 },
+          uCubeMippedNearest: { kind: "texture-cube", faces: Array.from({ length: 6 }, () => ({ textureAssetId: "parity-checker" })), generateMipmaps: true, filter: "nearest" },
         },
         variants: [{ name: "default", defines: {}, side: "double", transparent: false, depthWrite: true }],
       },
