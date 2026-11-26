@@ -475,6 +475,8 @@ ctx.lifecycle.onDispose(() => {
               "setTexture",
               "setTextureTransform",
               "resetTextureTransform",
+              "setUniform",
+              "resetUniform",
               "list",
               "select",
             ].map((method) => (
@@ -509,6 +511,30 @@ ctx.log(ctx.materials.list());`}</GuideCode>
               resetTextureTransform(slot)
             </code>
             で、そのスロットだけ元に戻せます。
+          </p>
+        </section>
+
+        <section>
+          <h4 className="text-[11px] font-bold text-slate-700">
+            カスタムシェーダーのuniformを変える
+          </h4>
+          <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+            カスタムシェーダーのマテリアルが持つuniformを、名前で指定して変えられます。
+            毎フレーム呼び出せます。値はマテリアルに保存した値と同じ形で渡してください。
+            数値1個、同じ個数の数値、色、テクスチャのいずれかです。
+          </p>
+          <GuideCode>{`const walker = ctx.find(ctx.props.walker);
+walker?.getWorldPosition(position);
+ctx.materials.setUniform("uWalker", position);
+ctx.materials.setUniform("uTint", ctx.props.tint);
+ctx.materials.setUniform("uFade", 0.5);
+
+ctx.materials.resetUniform("uFade");`}</GuideCode>
+          <p className="mt-2 text-[10px] leading-relaxed text-slate-500">
+            戻り値は、その名前のuniformを持つマテリアルの数です。PBRやMToonのマテリアルは変更しません。
+            形の合わない値はエラーになり、反映されません。理由はConsoleで確認できます。
+            <code className="mx-0.5 text-slate-700">resetUniform(name)</code>
+            で、マテリアルの値に戻せます。
           </p>
         </section>
 

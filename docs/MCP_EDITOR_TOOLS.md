@@ -251,6 +251,12 @@ Editで実行すると、独立したBlenderプロセスが実GLBと編集可能
 
 Custom ShaderをModelへ`set_material`で割り当てると、頂点シェーダーはそのMeshの属性を名前で読む。glTFの独自属性は小文字の名前になるため、`_AMAT`は`attribute float _amat;`と宣言する。`EXT_mesh_gpu_instancing`のインスタンスごとの独自属性はインスタンスごとに1つの値で届き、`_aoffset`と`_AOFFSET`のどちらでも読める。インスタンスの配置には`instanceMatrix`を使う。編集・Play・公開は同じ読み込み処理を使う。仕様は[3Dモデルの読み込み仕様](./MODEL_IMPORT_CONTRACT.md#インスタンスごとの属性)にある。
 
+`update_custom_shader`が変えるのは保存するuniformの値だ。歩く人の位置やCPUで計算した値など、動作中に変わる値には使わない。
+その場合はScriptを書き、`ctx.materials.setUniform(name, value)`で毎フレーム渡す。専用toolは設けない。値を決めるのは実行中のScriptで、
+documentには残らないためだ。受け付ける値の形、失敗時の表示、時計のuniformとの関係は`get_scripting_capabilities`の
+`runtime.materials.uniforms`が返す。uniformの名前と保存値は`get_custom_shader`で読み、形の合わない値は
+`get_editor_context.scriptRuntime.failures`で確認する。
+
 `kind: "gltf"`はglTF拡張とPBRテクスチャのマテリアルを返す。50種類の見本セットに加え、互換性のために旧カタログの素材IDを保持している。Clearcoat、Transmission、Volume、Dispersion、Iridescence、Sheen、Anisotropy、Emissive、Specular、IOR、Unlitと、Normal Map・ORM・UV・Alphaの比較を含む。
 
 `comparisonMaterialAssetId`は比較用のマテリアルを指す。拡張を比較する見本は基本のPBR値を揃え、テクスチャを比較する見本は比較対象のマップやUV設定だけを変える。`textureAssetIds`は必要な同梱テクスチャを返す。効果を見比べるときは`list_scene_recipes`の`shelf: "materials"`から選び、`apply_scene_recipe`で見本一式を置く。既存のモデルへ質感だけを付けるときは`create_material_from_preset`を使う。テクスチャが必要なプリセットは、保存済みのプロジェクトへ画像も取り込んでからMaterialを作成する。`parameters`は受け付けず、調整には通常のMaterial更新を使う。

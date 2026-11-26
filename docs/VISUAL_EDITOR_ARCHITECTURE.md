@@ -645,8 +645,9 @@ authoring Registryが型付きで扱うXRiftのコンポーネントは`Interact
 - `ctx.assets.loadTexture`はスクリプトのコンポーネントの`assetReferences`にあるテクスチャだけを受け付ける。実行環境resolverはURLだけでなく、素材ID、`colorSpace`、画像の繰り返しと補間のwrap / mag / min filter、`flipY`、`generateMipmaps`をdescriptorとして動作確認hostと公開adapterの両方へ渡す。
 - スクリプトが省略したload optionはテクスチャの読み込み設定を継承し、明示したfieldだけをスクリプトinstanceの読み込みへ優先する。`generateMipmaps: false`とmipmap filterの組み合わせは`linear`へ正規化する。Studio動作確認と生成物で別の暗黙defaultを持たない。
 - `ctx.materials`はattachedオブジェクト自身のownedメッシュだけへ実行環境overrideを重ねる。`setTextureTransform`はマテリアル枠ごとのテクスチャcloneに`offset`、`repeat`、`center`、`rotation`を適用し、読み込んだ元データテクスチャ、共有テクスチャ、別slot、子オブジェクト、別オブジェクトを変更しない。
-- スクリプトの再起動、実行時の失敗、停止では、そのスクリプトownerのマテリアルclone、テクスチャclone、override、読み込みcacheを破棄する。`resetTextureTransform(slot)`は実行中に指定slotのtransformだけを戻し、他スクリプトownerのoverrideを外さない。
-- `ctx.assets` / `ctx.materials`はruntime-onlyで、AssetManifest revisionを変更しない。保存するテクスチャの読み込み・繰り返し・補間設定は`get_texture_asset` / `update_texture_asset`、マテリアルのPBR / テクスチャbindingは`get_material_asset` / `update_material_asset` / `set_material_texture_transform`、メッシュの割り当て枠への割当は`set_material`を使う。新規localテクスチャimportは編集modeの`import_texture_asset`に限定する。
+- `ctx.materials.setUniform`はカスタムシェーダー（three.jsの`ShaderMaterial` / `RawShaderMaterial`そのもの）のuniformを名前で上書きする。値はスクリプト所有cloneのuniform表に置き、共有マテリアルと、共有マテリアルが持つ値のオブジェクトを変更しない。上書きしていないuniformは共有マテリアルの項目を参照するため、時計や風など描画側がマテリアルへ書き込む値はcloneにも届く。three.jsは初回描画時のuniform表を読み続ける。そのためcloneのuniform表は作り直さず、項目だけを差し替える。値の変更でシェーダープログラムを作り直さない。
+- スクリプトの再起動、実行時の失敗、停止では、そのスクリプトownerのマテリアルclone、テクスチャclone、override、読み込みcacheを破棄する。`resetTextureTransform(slot)`は実行中に指定slotのtransformだけを戻し、他スクリプトownerのoverrideを外さない。`resetUniform(name)`も同じく、指定したuniformだけを戻す。
+- `ctx.assets` / `ctx.materials`はruntime-onlyで、AssetManifest revisionを変更しない。保存するテクスチャの読み込み・繰り返し・補間設定は`get_texture_asset` / `update_texture_asset`、マテリアルのPBR / テクスチャbindingは`get_material_asset` / `update_material_asset` / `set_material_texture_transform`、カスタムシェーダーのuniformの値は`get_custom_shader` / `update_custom_shader`、メッシュの割り当て枠への割当は`set_material`を使う。新規localテクスチャimportは編集modeの`import_texture_asset`に限定する。
 - `get_scripting_capabilities`は上記の素材default、明示optionの優先順位、filter / mipmap、clone隔離と、実行環境一時操作 / MCP永続操作のtool対応を機械可読に返す。MCP clientがスクリプトAPIから永続化を推測しないようにする。
 
 #### 動的評価の限定
