@@ -31,6 +31,19 @@ Inspectorの「シェーダーの調整値」には、シェーダーが持つun
 
 `sampler2D`のテクスチャにはEXRも選べます。EXRは浮動小数のまま渡るため、1を超える値や、位置などの数値を読めます。精度はファイルに合わせ、16bitか32bitになります。32bitの値をなめらかに補間できない端末があります。数値の表として読むEXRは16bitで保存するか、`update_custom_shader`で`filter`を`nearest`にしてください。HDR（.hdr）は選べません。
 
+## 遠くの面のちらつきを抑える
+
+`sampler2D`とキューブマップのテクスチャは、初期状態では元の大きさの画像だけを読みます。遠くの面や、細かく繰り返す模様がちらつく場合は、AIクライアントの`update_custom_shader`で、そのuniformの`generateMipmaps`を`true`にしてください。画像を小さく描く場所で、Mipmaps（縮小表示用の画像）を読むようになります。テクスチャのInspectorにあるMipmapsは標準のマテリアルで使う設定です。カスタムシェーダーではuniformごとに指定します。
+
+| `filter` | 拡大したとき | 縮小したとき（`generateMipmaps`が`true`） |
+|---|---|---|
+| `linear`（初期値） | なめらかに補間します | 縮小表示用の画像を、補間して読みます |
+| `nearest` | 画素をくっきり見せます | 縮小表示用の画像から、最も近い画素を読みます |
+
+地面や壁のように斜めから見る面は、`anisotropy`を2〜16にすると、奥までぼやけずに描けます。`anisotropy`を2以上にできるのは、`generateMipmaps`が`true`で、`filter`が`linear`のuniformです。端末が対応する値までが使われます。
+
+Mipmapsは、PNGやJPEGなどの8bitの画像では読み込むときに作られます。KTX2へ圧縮したテクスチャでは、ファイルに含まれるMipmapsを使います。含まれない場合は、元の大きさの画像だけを読みます。EXRにはMipmapsを作りません。3Dテクスチャには`generateMipmaps`と`anisotropy`を指定できません。
+
 ## 合成とカリングを設定する
 
 Inspectorの「合成とカリング」では、バリアントごとに描き方を選べます。バリアントは、Meshの名前に応じて切り替える設定の組です。

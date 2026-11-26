@@ -481,6 +481,8 @@
     },
     {
       "slug": "textures",
+      "reviewedVersion": "1.0.20",
+      "reviewedOn": "2026-11-26",
       "title": "テクスチャで模様を付ける",
       "description": "画像をマテリアルに貼り、模様や凹凸の陰影を加えます。Normal Mapなどの用途と入力条件も確認できます。",
       "group": "basics",
@@ -849,7 +851,7 @@
       "description": "カスタムシェーダーを作り、頂点とフラグメントのGLSLで色や質感を編集できます。コンパイルできないときの直し方も説明します。",
       "group": "materials-advanced",
       "file": "custom-shaders.md",
-      "keywords": "GLSL Shader カスタムシェーダー 頂点 フラグメント uniform PBR attribute 属性 インスタンス instancing EXT_mesh_gpu_instancing スクリプト Script setUniform 動作中 シェーダーの調整値 コンパイル エラー 表示されない コンパイラのログ 行列 配列 3Dテクスチャ キューブマップ EXR 加算 Blending Frustum Culling カリング",
+      "keywords": "GLSL Shader カスタムシェーダー 頂点 フラグメント uniform PBR attribute 属性 インスタンス instancing EXT_mesh_gpu_instancing スクリプト Script setUniform 動作中 シェーダーの調整値 コンパイル エラー 表示されない コンパイラのログ 行列 配列 3Dテクスチャ キューブマップ EXR 加算 Blending Frustum Culling カリング Mipmaps ミップマップ generateMipmaps anisotropy 異方性 ちらつき 遠く",
       "related": [
         "materials",
         "sky-and-water",

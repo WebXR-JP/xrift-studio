@@ -2,6 +2,7 @@ import {
   CompressedTexture,
   DataTexture,
   HalfFloatType,
+  LinearMipmapLinearFilter,
   RGBAFormat,
   Texture,
   type Material,
@@ -42,6 +43,7 @@ void main() {
 const FRAGMENT = `precision highp sampler3D;
 uniform sampler2D uPicture;
 uniform sampler2D uPictureNearest;
+uniform sampler2D uPictureMipped;
 uniform sampler2D uData;
 uniform sampler2D uCompressed;
 uniform sampler3D uLut;
@@ -50,7 +52,7 @@ uniform mat3 uNormalMatrix;
 uniform vec3 uTint;
 varying vec2 vUv;
 void main() {
-  vec3 color = texture2D(uPicture, vUv).rgb + texture2D(uPictureNearest, vUv).rgb + texture2D(uData, vUv).rgb + texture2D(uCompressed, vUv).rgb;
+  vec3 color = texture2D(uPicture, vUv).rgb + texture2D(uPictureNearest, vUv).rgb + texture2D(uPictureMipped, vUv * 8.0).rgb + texture2D(uData, vUv).rgb + texture2D(uCompressed, vUv).rgb;
   color = texture(uLut, color).rgb + textureCube(uSky, uNormalMatrix * vec3(vUv, 1.0)).rgb;
   gl_FragColor = vec4(color * uTint, 1.0);
 }`;
@@ -99,6 +101,13 @@ function fixtureShader(): ClassicR3fMaterialShader {
         wrapS: "clamp-to-edge",
         wrapT: "clamp-to-edge",
       },
+      // And once more through its mip levels: tiled, so drawn smaller than it is.
+      uPictureMipped: {
+        kind: "texture",
+        textureAssetId: "fixture-shader-picture",
+        generateMipmaps: true,
+        anisotropy: 8,
+      },
       uData: { kind: "texture", textureAssetId: "fixture-shader-data", filter: "nearest" },
       uCompressed: { kind: "texture", textureAssetId: "fixture-shader-compressed" },
       uLut: { kind: "texture-3d", textureAssetId: "fixture-shader-lut", slices: 4 },
@@ -106,6 +115,8 @@ function fixtureShader(): ClassicR3fMaterialShader {
         kind: "texture-cube",
         faces: FACE_IDS.map((textureAssetId) => ({ textureAssetId })),
         colorSpace: "srgb",
+        generateMipmaps: true,
+        anisotropy: 4,
       },
     },
     variants: [
@@ -243,6 +254,7 @@ function drawnState(material: ShaderMaterial): string {
         generateMipmaps: texture.generateMipmaps,
         magFilter: texture.magFilter,
         minFilter: texture.minFilter,
+        anisotropy: texture.anisotropy,
         wrapS: texture.wrapS,
         wrapT: texture.wrapT,
         wrapR: texture.wrapR,
@@ -390,6 +402,16 @@ function assertEditorAndWorldBuildTheSameMaterial(
       drawnState(editor) === drawnState(world),
       `the editor and the generated world must build the same Material for a mesh named "${meshName}"`,
     );
+    // The sampler options took effect, rather than being equally ignored.
+    for (const [name, anisotropy] of [["uPictureMipped", 8], ["uSky", 4]] as const) {
+      const sampled = world.uniforms[name]?.value as Texture;
+      assert(
+        sampled.generateMipmaps &&
+          sampled.minFilter === LinearMipmapLinearFilter &&
+          sampled.anisotropy === anisotropy,
+        `${name} must reach the generated world reading its mip levels, with its anisotropy`,
+      );
+    }
     assert(
       classicShaderDisablesFrustumCulling(editor) === (meshName !== ""),
       "only the mesh the variant names may leave frustum culling",
@@ -449,6 +471,26 @@ function assertUnreadableTexturesStopPublication(): void {
  * same Materials from the same manifest.
  */
 export async function runClassicShaderRuntimeManifestFixtureAssertions(): Promise<void> {
+  // The manifest is data: every uniform, sampler options included, as written.
+  const complete = compileShaderWorld(fixtureShader(), "primitive", "classic-runtime");
+  assert(
+    complete.result.canStage && complete.result.runtimeManifestFile,
+    `the Runtime JSON output must carry a shader with every field: ${JSON.stringify(complete.result.diagnostics.filter((entry) => entry.severity === "blocking"))}`,
+  );
+  const completeUniforms = (
+    JSON.parse(complete.result.runtimeManifestFile.content) as {
+      assets: Record<string, { shader?: ClassicR3fMaterialShader }>;
+    }
+  ).assets[complete.material.id]?.shader?.uniforms;
+  assert(
+    JSON.stringify(completeUniforms?.uPictureMipped) ===
+      JSON.stringify({ anisotropy: 8, generateMipmaps: true, kind: "texture", textureAssetId: "fixture-shader-picture" }) &&
+      completeUniforms?.uSky?.kind === "texture-cube" &&
+      completeUniforms.uSky.generateMipmaps === true &&
+      completeUniforms.uSky.anisotropy === 4,
+    `the Runtime JSON manifest must carry the mip levels and anisotropy of a texture uniform: ${JSON.stringify(completeUniforms?.uPictureMipped)}`,
+  );
+
   // No textures: the loader reads its Assets over the network.
   const authored = fixtureShader();
   const shader: ClassicR3fMaterialShader = {
