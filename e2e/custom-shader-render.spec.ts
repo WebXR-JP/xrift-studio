@@ -29,7 +29,7 @@ test.beforeAll(() => {
   execFileSync(process.execPath, ["e2e/custom-shader-published.prepare.cjs"], { stdio: "pipe" });
 });
 
-test("カスタムシェーダーの新しいuniformと描画設定を、編集と公開の2経路が同じ絵で描く", async ({ page }, info) => {
+test("カスタムシェーダーの新しいuniformと合成・カリングの設定を、編集と公開の2経路が同じ絵で描く", async ({ page }, info) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
@@ -149,7 +149,7 @@ async function call(page: Page, tool: string, args: Record<string, unknown> = {}
   }, { tool, args, fresh });
 }
 
-test("カスタムシェーダーの行列・配列・テクスチャの欄と描画設定を、Inspectorで編集して保存する", async ({ page }, info) => {
+test("カスタムシェーダーの行列・配列・テクスチャの欄と合成・カリングの設定を、Inspectorで編集して保存する", async ({ page }, info) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto("/e2e.html?scenario=ready");
   await expect(page.getByRole("button", { name: /新規プロジェクト/ })).toBeVisible({ timeout: 120_000 });
@@ -195,8 +195,8 @@ test("カスタムシェーダーの行列・配列・テクスチャの欄と�
   await array.fill(offsets.join(", "));
   await expect.poll(async () => (await saved()).uniforms.uOffsets!.value).toEqual(offsets);
 
-  // 描画設定: a glow is added to the frame, in the transparent pass, without depth, and is never culled.
-  await expect(page.getByText("描画設定", { exact: true }).first()).toBeVisible();
+  // 合成とカリング: a glow is added to the frame, in the transparent pass, without depth, and is never culled.
+  await expect(page.getByText("合成とカリング", { exact: true })).toBeVisible();
   await page.getByLabel("defaultのBlending").selectOption("additive");
   await expect(page.getByText(/Normal以外では、Transparentも有効にしてください/)).toBeVisible();
   // Each checkbox shows the saved document, which follows the click a moment later.

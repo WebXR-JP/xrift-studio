@@ -344,7 +344,7 @@
 - マテリアル設定に「カスタムシェーダーを作成」を置き、標準PBRマテリアルから切り替えると初期GLSL、uniform、既定のvariantを同じマテリアルへ作成する。作成だけではシーンの割り当てを変えず、マテリアルを選択した状態を保つ。
 - カスタムシェーダーはマテリアル内の編集可能なシェーダー契約として、頂点 / フラグメントGLSL、uniform値、variant、時間uniformを持つ。既存の3Dモデル由来シェーダーを直接壊さず、マテリアル単位のコピーとして編集する。
 - MCPは`create_custom_shader`、`get_custom_shader`、`update_custom_shader`を公開し、`get_editor_context`のプロジェクトID、シーンID、リビジョンを要求する。既存マテリアルへの設定と新規マテリアル作成は同じAssetManifest境界へ入る。
-- 「シェーダーの調整値」は、行列（mat3・mat4）、数値の配列、3Dテクスチャ（横並びの画像とスライス数）、キューブマップ（6枚の画像）のuniformも編集できる。数値の並びは入力途中の文字を保ち、個数が合ったときだけ保存する。合わない間は「保存していません」と条件を示す。「描画設定」はvariantごとにBlending、Transparent、Depth Write、Frustum Cullingを持ち、Normal以外のBlendingでTransparentが無効なら注意を表示する。選べないTextureを指すuniformは、原因を欄の下に表示する。
+- 「シェーダーの調整値」は、行列（mat3・mat4）、数値の配列、3Dテクスチャ（横並びの画像とスライス数）、キューブマップ（6枚の画像）のuniformも編集できる。数値の並びは入力途中の文字を保ち、個数が合ったときだけ保存する。合わない間は「保存していません」と条件を示す。「合成とカリング」はvariantごとにBlending、Transparent、Depth Write、Frustum Cullingを持ち、Normal以外のBlendingでTransparentが無効なら注意を表示する。選べないTextureを指すuniformは、原因を欄の下に表示する。
 
 ### 処理中
 
