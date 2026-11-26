@@ -36,6 +36,10 @@ import {
   useSceneSelectedEntityIds,
 } from "./scene-entity-tree-context";
 import { useContentStable } from "./content-equal";
+import {
+  applyLightingDrivenUniforms,
+  applyWindDrivenUniforms,
+} from "./scene-driven-uniforms";
 import { useTrackedAssets } from "./tracked-assets";
 import {
   Canvas,
@@ -98,6 +102,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentProps,
   type CSSProperties,
   type DragEvent,
   type ElementRef,
@@ -164,11 +169,9 @@ import {
   resolveSkyShaderMaterial,
   resolveSceneWind,
   skyShaderDrivenUniforms,
-  lightingDrivenUniforms,
   materialAlphaRenderProps,
   resolveSceneLighting,
   UNLIT_SCENE_LIGHTING,
-  windDrivenUniforms,
   STILL_WIND,
   createTerrainMeshBuffers,
   terrainHeightRange,
@@ -439,25 +442,7 @@ function useLightingDrivenMaterial(
   const lighting = useContext(SceneLightingContext);
   useEffect(() => {
     if (!material || !shader) return;
-    for (const entry of lightingDrivenUniforms(shader, lighting)) {
-      const uniform = material.uniforms[entry.name];
-      if (!uniform) continue;
-      if (entry.kind === "number") {
-        uniform.value = entry.value;
-        continue;
-      }
-      const current = uniform.value;
-      if (current instanceof Vector3) {
-        current.set(entry.value[0], entry.value[1], entry.value[2]);
-      } else {
-        uniform.value = new Vector3(
-          entry.value[0],
-          entry.value[1],
-          entry.value[2],
-        );
-      }
-    }
-    material.needsUpdate = true;
+    applyLightingDrivenUniforms(material, shader, lighting);
   }, [lighting, material, shader]);
 }
 
@@ -469,22 +454,71 @@ function useWindDrivenMaterial(
   const wind = useContext(SceneWindContext);
   useEffect(() => {
     if (!material || !shader) return;
-    for (const entry of windDrivenUniforms(shader, wind)) {
-      const uniform = material.uniforms[entry.name];
-      if (!uniform) continue;
-      if (entry.kind === "number") {
-        uniform.value = entry.value;
-        continue;
-      }
-      const current = uniform.value;
-      if (current instanceof Vector2) {
-        current.set(entry.value[0], entry.value[1]);
-      } else {
-        uniform.value = new Vector2(entry.value[0], entry.value[1]);
-      }
-    }
-    material.needsUpdate = true;
+    applyWindDrivenUniforms(material, shader, wind);
   }, [material, shader, wind]);
+}
+
+/**
+ * Supplies the Scene's wind and key light to every Material drawn under it.
+ *
+ * Both are resolved here, from the Scene and its settings, by the functions
+ * the compiler resolves them with, so what the Scene View pushes into a
+ * Material is what a published world carries in it.
+ */
+export function SceneDrivenUniformsScope({
+  scene,
+  sceneSettings,
+  children,
+}: {
+  scene: SceneDocument;
+  sceneSettings: SceneSettings;
+  children: ReactNode;
+}) {
+  const wind = useMemo(
+    () => resolveSceneWind(sceneSettings.vegetation),
+    [sceneSettings.vegetation],
+  );
+  // Resolved from the Scene, so it is recomputed on every edit, and nearly
+  // every edit leaves the key light where it was. Every Mesh reads this
+  // context; without holding on to the previous object, moving one Entity
+  // re-rendered all of them.
+  const lighting = useContentStable(
+    useMemo(
+      () => resolveSceneLighting(scene, sceneSettings.ambient),
+      [scene, sceneSettings.ambient],
+    ),
+  );
+  return (
+    <SceneLightingContext.Provider value={lighting}>
+      <SceneWindContext.Provider value={wind}>{children}</SceneWindContext.Provider>
+    </SceneLightingContext.Provider>
+  );
+}
+
+/**
+ * A Model in the Scene View, in Edit and in Play.
+ *
+ * Reads the Scene's wind and key light where a primitive and a terrain read
+ * them, and hands them to the Model. A Custom Shader Material the Model wears
+ * (foliage, for one) then sways and is lit as it will be in the published
+ * world, where the compiler writes the same values into the Material. A
+ * preview outside the Scene View leaves both out and keeps the saved values.
+ */
+function SceneModelVisual(
+  props: Omit<
+    ComponentProps<typeof ProjectModelVisual>,
+    "sceneWind" | "sceneLighting"
+  >,
+) {
+  const sceneWind = useContext(SceneWindContext);
+  const sceneLighting = useContext(SceneLightingContext);
+  return (
+    <ProjectModelVisual
+      {...props}
+      sceneWind={sceneWind}
+      sceneLighting={sceneLighting}
+    />
+  );
 }
 
 const SCENE_VIEW_ENTITY_ORIGIN_HIT_RADIUS_PX = 18;
@@ -635,7 +669,7 @@ function RenderDistanceGate({
   return <group ref={ref}>{children}</group>;
 }
 
-function MeshVisual({
+export function MeshVisual({
   component,
   graphAnimationCues,
   playing,
@@ -747,7 +781,7 @@ function MeshVisual({
   if (projectModelSource && projectPath && geometry?.kind === "model") {
     return (
       <RenderDistanceGate maxDistance={component.maxDistance} renderOrder={component.renderOrder}>
-        <ProjectModelVisual
+        <SceneModelVisual
           projectPath={projectPath}
           sourceRelativePath={projectModelSource}
           sourceHash={geometry.sourceHash}
@@ -5635,20 +5669,6 @@ export function SceneViewport({
       document.removeEventListener("visibilitychange", clear);
     };
   }, [editorMode, gizmoSettings.snapHoldShift]);
-  const viewportWind = useMemo(
-    () => resolveSceneWind(sceneSettings.vegetation),
-    [sceneSettings.vegetation],
-  );
-  // Resolved from the Scene, so it is recomputed on every edit, and nearly
-  // every edit leaves the key light where it was. Every Mesh reads this
-  // context; without holding on to the previous object, moving one Entity
-  // re-rendered all of them.
-  const viewportLighting = useContentStable(
-    useMemo(
-      () => resolveSceneLighting(scene, sceneSettings.ambient),
-      [scene, sceneSettings.ambient],
-    ),
-  );
   const effectiveDisplayMode = editorMode === "play" ? "scene" : displayMode;
   // Play and thumbnail capture are previews of the published world, so they
   // always draw at full quality however the editing view is set.
@@ -7255,8 +7275,7 @@ export function SceneViewport({
             <ViewportLoadProtection onReduce={reduceAutomaticQuality} />
           ) : null}
           <SceneBakedLightContext.Provider value={bakedLightIds}>
-          <SceneLightingContext.Provider value={viewportLighting}>
-          <SceneWindContext.Provider value={viewportWind}>
+          <SceneDrivenUniformsScope scene={scene} sceneSettings={sceneSettings}>
           <color
             attach="background"
             args={[
@@ -7485,8 +7504,7 @@ export function SceneViewport({
             onFocusChange={onFocusChange}
             recordingCamera={recordingCameraControl}
           />
-          </SceneWindContext.Provider>
-          </SceneLightingContext.Provider>
+          </SceneDrivenUniformsScope>
           </SceneBakedLightContext.Provider>
         </Canvas>
         {recordingViewActive && recordingViewport.showRecordingIndicator ? (

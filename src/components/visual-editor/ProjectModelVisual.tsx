@@ -78,7 +78,13 @@ import {
   type ClassicR3fMaterialShader,
   type MaterialAsset,
   type ModelPoseState,
+  type ResolvedSceneLighting,
+  type ResolvedWind,
 } from "../../lib/visual-editor";
+import {
+  applyLightingDrivenUniforms,
+  applyWindDrivenUniforms,
+} from "./scene-driven-uniforms";
 import {
   applyCoreMaterialPreviewTextures,
   refreshMaterialPreviewRender,
@@ -114,6 +120,12 @@ type ResolvedProjectModelMaterialAssignment =
     classicShaderTextures: Readonly<Record<string, Texture>>;
   };
 
+/** A Custom Shader Material a Model's mesh wears, with the shader it was built from. */
+export type ProjectModelClassicShaderMaterial = {
+  material: ShaderMaterial;
+  shader: ClassicR3fMaterialShader;
+};
+
 type Props = {
   projectPath: string;
   sourceRelativePath: string;
@@ -133,6 +145,14 @@ type Props = {
   sourceNodeName?: string;
   /** Scene View-only material override. It never changes the imported Asset. */
   viewportMaterialStyle?: SceneViewportMaterialStyle;
+  /**
+   * The Scene's wind and key light, for the Custom Shader Materials this Model
+   * wears. The Scene View gives both, in Edit and in Play, so those Materials
+   * read what the published world writes into them. A preview outside a Scene
+   * leaves them out, and the Materials keep the values saved in them.
+   */
+  sceneWind?: ResolvedWind;
+  sceneLighting?: ResolvedSceneLighting;
   /** Centers and scales one source node for a compact Asset Inspector preview. */
   fitPreview?: boolean;
   loadRevision?: number;
@@ -228,6 +248,8 @@ export function ProjectModelVisual({
   sourceNodeIndex,
   sourceNodeName,
   viewportMaterialStyle = "scene",
+  sceneWind,
+  sceneLighting,
   fitPreview = false,
   loadRevision = 0,
   onLoadStateChange,
@@ -295,6 +317,8 @@ export function ProjectModelVisual({
           sourceNodeIndex={sourceNodeIndex}
           sourceNodeName={sourceNodeName}
           viewportMaterialStyle={viewportMaterialStyle}
+          sceneWind={sceneWind}
+          sceneLighting={sceneLighting}
           fitPreview={fitPreview}
           onMaterialRuntimeInfoChange={onMaterialRuntimeInfoChange}
         />
@@ -396,6 +420,8 @@ function ProjectModelRender({
   sourceNodeIndex,
   sourceNodeName,
   viewportMaterialStyle,
+  sceneWind,
+  sceneLighting,
   fitPreview,
   onMaterialRuntimeInfoChange,
 }: {
@@ -422,6 +448,8 @@ function ProjectModelRender({
   sourceNodeIndex?: number;
   sourceNodeName?: string;
   viewportMaterialStyle: SceneViewportMaterialStyle;
+  sceneWind?: ResolvedWind;
+  sceneLighting?: ResolvedSceneLighting;
   fitPreview: boolean;
   onMaterialRuntimeInfoChange?: (
     materials: readonly ProjectModelMaterialRuntimeInfo[],
@@ -456,16 +484,25 @@ function ProjectModelRender({
       scale: [1, 1, 1] as [number, number, number],
     };
     const ownedGeometries: BufferGeometry[] = [];
+    const classicShaderMaterials: ProjectModelClassicShaderMaterial[] = [];
     const ownedMaterials = applyAssignedMaterialPreviews(
       object,
       assignedMaterials,
       sourceMaterials,
       ownedGeometries,
+      classicShaderMaterials,
     );
     ownedMaterials.push(
       ...applySceneViewportMaterialStyle(object, viewportMaterialStyle),
     );
-    return { object, poseController, ownedMaterials, ownedGeometries, selectionBounds };
+    return {
+      object,
+      poseController,
+      ownedMaterials,
+      ownedGeometries,
+      classicShaderMaterials,
+      selectionBounds,
+    };
   }, [
     assignedMaterials,
     fitPreview,
@@ -475,6 +512,21 @@ function ProjectModelRender({
     viewportMaterialStyle,
   ]);
   const renderedObject = renderedModel?.object ?? null;
+  // The Scene's wind and key light, for every Custom Shader Material the Model
+  // wears: one per mesh and slot, each built for the variant its mesh resolves
+  // to. The published world carries the same values in the Material, written
+  // by the compiler. A layout effect, so the first frame that draws these
+  // Materials already has them, and again whenever the Scene's values change.
+  useLayoutEffect(() => {
+    if (!renderedModel || (!sceneWind && !sceneLighting)) return;
+    for (const { material, shader } of renderedModel.classicShaderMaterials) {
+      if (sceneWind) applyWindDrivenUniforms(material, shader, sceneWind);
+      if (sceneLighting) {
+        applyLightingDrivenUniforms(material, shader, sceneLighting);
+      }
+    }
+    invalidate();
+  }, [invalidate, renderedModel, sceneLighting, sceneWind]);
   useLayoutEffect(() => {
     if (!renderedModel) return;
     renderedModel.poseController.apply(pose);
@@ -828,6 +880,11 @@ export function applyAssignedMaterialPreviews(
   }[],
   sourceMaterials: ReadonlyMap<number, Material> = collectSourceMaterials(object),
   ownedGeometries: BufferGeometry[] = [],
+  /**
+   * Receives every Custom Shader Material built here, with its shader, so the
+   * caller can feed it what the Scene drives. One entry per mesh and slot.
+   */
+  classicShaderMaterials: ProjectModelClassicShaderMaterial[] = [],
 ): Material[] {
   const globalAssignmentBySourceIndex = new Map(
     assignments
@@ -874,6 +931,16 @@ export function applyAssignedMaterialPreviews(
         assignment.classicShaderTextures,
         child.name,
       );
+      if (
+        assignment.material.shader?.kind === "classic-r3f" &&
+        (preview as ShaderMaterial).isShaderMaterial
+      ) {
+        // Not the PBR fallback of a shader that failed validation.
+        classicShaderMaterials.push({
+          material: preview as ShaderMaterial,
+          shader: assignment.material.shader,
+        });
+      }
       if (assignment.material.shader?.kind === "openbrush") {
         const geometry = mesh.geometry;
         if (geometry && (preview as { isShaderMaterial?: boolean }).isShaderMaterial) {
