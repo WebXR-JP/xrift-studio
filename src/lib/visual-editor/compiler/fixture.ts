@@ -3825,12 +3825,15 @@ export function runVisualCompilerFixtureAssertions(
     `Classic custom Material should be stageable: ${JSON.stringify(classicResult.diagnostics)}`,
   );
   [
-    "<shaderMaterial",
+    // The Material is built by the module the editor draws with; the entry
+    // hands it the descriptor, which carries the variants and the time uniform.
+    'import { XriftClassicShaderMaterial, type XriftClassicShader } from "./xrift-studio/classic-shader-material";',
+    "<XriftClassicShaderMaterial attach={attach} meshName={meshName}",
     'meshName={object.name}',
     'object.name === "House"',
-    'material.uniforms["uTime"].value',
-    "CLASSIC_MATERIAL_VARIANTS",
-    "readonly CompiledClassicShaderVariant[]",
+    ": XriftClassicShader = {",
+    '"animatedTimeUniform":"uTime"',
+    '"meshNameIncludes":"Water"',
   ].forEach((fragment) =>
     assert(
       classicSource.includes(fragment),

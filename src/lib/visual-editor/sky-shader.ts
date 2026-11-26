@@ -1,6 +1,7 @@
 import type { AssetManifest, MaterialAsset } from "./asset-manifest";
 import {
   isClassicR3fMaterialShader,
+  isClassicShaderTextureUniform,
   validateClassicR3fMaterialShader,
   type ClassicR3fMaterialShader,
 } from "./custom-shader-contract";
@@ -127,7 +128,7 @@ export function skyShaderTextureUniformNames(
   shader: ClassicR3fMaterialShader,
 ): string[] {
   return Object.entries(shader.uniforms)
-    .filter(([, uniform]) => uniform.kind === "texture")
+    .filter(([, uniform]) => isClassicShaderTextureUniform(uniform))
     .map(([name]) => name);
 }
 

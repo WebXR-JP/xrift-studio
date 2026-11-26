@@ -63,8 +63,10 @@ import {
 import type { PrototypeVisualProject } from "../prototype-project";
 import { normalizeParticleProperties } from "../particle-system";
 import {
+  classicShaderTextureAssetIds,
   validateClassicR3fMaterialShader,
   type ClassicR3fMaterialShader,
+  type ClassicR3fShaderUniform,
 } from "../custom-shader-contract";
 import {
   resolveSkyShaderMaterial,
@@ -87,7 +89,17 @@ import {
   TERRAIN_GRASS_VERTEX_SHADER,
   terrainGrassRuntimeSource,
 } from "../terrain-grass-runtime";
-import { detectTimeUniforms } from "../../../../packages/xrift-studio-runtime/src/shader-time";
+import { resolveClassicShaderTimeUniforms } from "../../../../packages/xrift-studio-runtime/src/classic-shader-contract";
+import {
+  classicShaderTextureFormat,
+  findClassicShaderTextureIssues,
+} from "../custom-shader-textures";
+import {
+  CLASSIC_SHADER_DATA_TEXTURE_IMPORT_PATH,
+  CLASSIC_SHADER_MATERIAL_IMPORT_PATH,
+  createClassicShaderDataTextureOverlayFile,
+  createClassicShaderOverlayFiles,
+} from "./classic-shader-emit";
 import { xriftShaderSourceKey } from "../../../../packages/xrift-studio-runtime/src/shader-compile-errors";
 import { XRIFT_SCENE_SKYBOX_USER_DATA_KEY } from "../../../../packages/xrift-studio-runtime/src/scene-constants";
 import type { VisualProjectKind } from "../project-document";
@@ -223,6 +235,8 @@ type CompileContext = {
   threeValueImports: Set<string>;
   threeTypeImports: Set<string>;
   supportDeclarations: Map<string, string>;
+  /** Names the entry imports from the shared Custom Shader Material module. */
+  classicShaderImports: Set<string>;
   runtimeOverlayFiles: Map<string, CompilerOverlayFile>;
   /** Per compilation: expanded nodes share the same material IDs and resolvers. */
   materialComponentNames: Map<string, string>;
@@ -506,6 +520,18 @@ export function compileVisualProject(
   }
   if (outputMode === "classic-jsx" && generated.includes('from "./xrift-studio/lightmap-runtime"')) {
     overlayFiles.push(...createLightmapOverlayFiles());
+  }
+  if (
+    outputMode === "classic-jsx" &&
+    generated.includes(`from ${JSON.stringify(CLASSIC_SHADER_MATERIAL_IMPORT_PATH)}`)
+  ) {
+    overlayFiles.push(...createClassicShaderOverlayFiles());
+  }
+  if (
+    outputMode === "classic-jsx" &&
+    generated.includes(`from ${JSON.stringify(CLASSIC_SHADER_DATA_TEXTURE_IMPORT_PATH)}`)
+  ) {
+    overlayFiles.push(createClassicShaderDataTextureOverlayFile());
   }
   if (outputMode === "classic-jsx" && generated.includes('from "./xrift-studio/shader-compile-watch"')) {
     overlayFiles.push(...createShaderCompileWatchOverlayFiles());
@@ -1400,6 +1426,7 @@ function generateComponentSource(
     threeValueImports: new Set(),
     threeTypeImports: new Set(),
     supportDeclarations: new Map(),
+    classicShaderImports: new Set(),
     runtimeOverlayFiles,
     materialComponentNames: new Map(),
     materialInjectionNames: new Map(),
@@ -1474,6 +1501,13 @@ function generateComponentSource(
     context.extraImports.add('import { installPositionalAudioCleanup } from "./xrift-studio/positional-audio-cleanup";');
     context.supportDeclarations.set("positional-audio-cleanup", "installPositionalAudioCleanup();");
     context.runtimeOverlayFiles.set("src/xrift-studio/positional-audio-cleanup.ts", compilerFile("src/xrift-studio/positional-audio-cleanup.ts", positionalAudioCleanupSource, "source"));
+  }
+  if (context.classicShaderImports.size > 0) {
+    // One import for everything the entry takes from the shared module: two
+    // declarations naming the same type would not compile.
+    context.extraImports.add(
+      `import { ${[...context.classicShaderImports].sort().join(", ")} } from ${JSON.stringify(CLASSIC_SHADER_MATERIAL_IMPORT_PATH)};`,
+    );
   }
   const threeValueImports = new Set(context.threeValueImports);
   if (context.usesDoubleSide) threeValueImports.add("DoubleSide");
@@ -1646,10 +1680,54 @@ function skyMeshPlacementProps(
 }
 
 /**
+ * A number as the generated world receives it: the viewport's value, with the
+ * two values JSON cannot carry (a non-finite number, negative zero) as zero.
+ */
+function publishedUniformNumber(value: number): number {
+  return Number.isFinite(value) && !Object.is(value, -0) ? value : 0;
+}
+
+/**
+ * The descriptor the generated world draws: the authored shader with the
+ * uniforms the Scene drives replaced by the Scene's values.
+ *
+ * Authoring references (the preview Model, the Shader Assets the GLSL was
+ * read from) are left out: the world draws from the GLSL itself.
+ */
+function publishedClassicShader(
+  shader: ClassicR3fMaterialShader,
+  driven: ReadonlyMap<
+    string,
+    { kind: "number"; value: number } | { kind: string; value: readonly number[] }
+  >,
+): ClassicR3fMaterialShader {
+  const uniforms: Record<string, ClassicR3fShaderUniform> = {};
+  for (const [name, uniform] of Object.entries(shader.uniforms)) {
+    const override = driven.get(name);
+    uniforms[name] = !override
+      ? uniform
+      : typeof override.value === "number"
+        ? { kind: "number", value: publishedUniformNumber(override.value) }
+        : { kind: "vector", value: override.value.map(publishedUniformNumber) };
+  }
+  return {
+    kind: "classic-r3f",
+    sourceModulePath: shader.sourceModulePath,
+    vertexShader: shader.vertexShader,
+    fragmentShader: shader.fragmentShader,
+    uniforms,
+    variants: shader.variants,
+    ...(shader.animatedTimeUniform
+      ? { animatedTimeUniform: shader.animatedTimeUniform }
+      : {}),
+  };
+}
+
+/**
  * Emits the Sky Shader slot: the scene's Custom Shader Material drawn on the
- * sky mesh instead of the gradient. Uniform values are literals, exactly as the
- * Mesh Renderer path emits them, and Scene Settings drives the framing uniforms
- * the shader declares.
+ * sky mesh instead of the gradient. The Material is built by the function the
+ * editor's sky uses, and Scene Settings drives the framing uniforms the shader
+ * declares.
  */
 function registerSkyShaderSupport(
   settings: SceneSettings,
@@ -1659,133 +1737,77 @@ function registerSkyShaderSupport(
   const skybox = settings.skybox;
   context.reactValueImports.add("useEffect");
   context.reactValueImports.add("useMemo");
-  context.threeValueImports.add("BackSide");
   const geometryFactory = skyGeometryFactorySource(settings, context);
-  const driven = new Map(
-    skyShaderDrivenUniforms(shader, skybox).map((entry) => [entry.name, entry]),
+  // A texture uniform stays unbound here, as it does on the editor's sky: the
+  // sky mesh is outside the Mesh Renderer path that loads Texture Assets, and
+  // the diagnostic tells the author which uniform lost its Texture.
+  const published = publishedClassicShader(
+    shader,
+    new Map(
+      skyShaderDrivenUniforms(shader, skybox).map((entry) => [entry.name, entry]),
+    ),
   );
-  const uniformEntries: string[] = [];
-  for (const [name, uniform] of Object.entries(shader.uniforms)) {
-    const override = driven.get(name);
-    if (override) {
-      if (override.kind === "number") {
-        uniformEntries.push(
-          `${JSON.stringify(name)}: { value: ${formatNumber(override.value)} }`,
-        );
-      } else {
-        context.threeValueImports.add("Vector3");
-        uniformEntries.push(
-          `${JSON.stringify(name)}: { value: new Vector3(${override.value.map(formatNumber).join(", ")}) }`,
-        );
-      }
-      continue;
-    }
-    if (uniform.kind === "number") {
-      uniformEntries.push(
-        `${JSON.stringify(name)}: { value: ${formatNumber(uniform.value)} }`,
-      );
-      continue;
-    }
-    if (uniform.kind === "color") {
-      context.threeValueImports.add("Color");
-      uniformEntries.push(
-        `${JSON.stringify(name)}: { value: new Color(${JSON.stringify(uniform.value)}) }`,
-      );
-      continue;
-    }
-    if (uniform.kind === "vector") {
-      const vectorType =
-        uniform.value.length === 2
-          ? "Vector2"
-          : uniform.value.length === 3
-            ? "Vector3"
-            : "Vector4";
-      context.threeValueImports.add(vectorType);
-      uniformEntries.push(
-        `${JSON.stringify(name)}: { value: new ${vectorType}(${uniform.value.map(formatNumber).join(", ")}) }`,
-      );
-      continue;
-    }
-    // Texture uniforms are resolved by the Mesh Renderer path, which the sky
-    // mesh does not go through. Emitting null keeps the world compiling while
-    // the diagnostic tells the author which uniform lost its Texture.
-    uniformEntries.push(`${JSON.stringify(name)}: { value: null }`);
-  }
-
-  const timeUniforms = detectTimeUniforms(shader);
+  const animated = resolveClassicShaderTimeUniforms(shader).length > 0;
   const followsCamera = skybox.projection === "infinite";
-  if (followsCamera || timeUniforms.length > 0) {
+  if (followsCamera || animated) context.fiberImports.add("useFrame");
+  if (followsCamera) {
     context.reactValueImports.add("useRef");
-    context.fiberImports.add("useFrame");
+    context.threeTypeImports.add("Mesh");
   }
-  if (followsCamera) context.threeTypeImports.add("Mesh");
-  if (timeUniforms.length > 0) context.threeTypeImports.add("ShaderMaterial");
-  const variant =
-    shader.variants.find((candidate) => !candidate.meshNameIncludes) ??
-    shader.variants[0];
-  const frameBody = [
-    followsCamera
-      ? `    if (meshRef.current) meshRef.current.position.copy(camera.position);`
-      : "",
-    ...timeUniforms.map((spec) => {
-      if (spec.glslType === "vec4") {
-        return `    {
-      const uniform = materialRef.current?.uniforms[${JSON.stringify(spec.name)}];
-      if (uniform) {
-        const value = uniform.value;
-        if (value && "set" in value) {
-          value.set(elapsed / 20, elapsed, elapsed * 2, elapsed * 3);
-        } else {
-          uniform.value = [elapsed / 20, elapsed, elapsed * 2, elapsed * 3];
-        }
-      }
-    }`;
-      }
-      return `    if (materialRef.current?.uniforms[${JSON.stringify(spec.name)}]) { materialRef.current.uniforms[${JSON.stringify(spec.name)}].value = elapsed; }`;
-    }),
-  ].filter(Boolean);
+  for (const name of [
+    "configureClassicShaderSkyMaterial",
+    "createClassicShaderMaterial",
+    "type XriftClassicShader",
+    ...(animated ? ["advanceMaterialTimeUniforms"] : []),
+  ]) {
+    context.classicShaderImports.add(name);
+  }
   // Only the values the callback actually reads are destructured, so the
   // generated World stays clean under a strict unused-locals setting.
   const frameArguments = [
     ...(followsCamera ? ["camera"] : []),
-    ...(timeUniforms.length > 0 ? ["clock"] : []),
+    ...(animated ? ["clock"] : []),
+  ];
+  const frameBody = [
+    ...(followsCamera
+      ? ["    if (meshRef.current) meshRef.current.position.copy(camera.position);"]
+      : []),
+    ...(animated
+      ? ["    advanceMaterialTimeUniforms(material, clock.getElapsedTime());"]
+      : []),
   ];
   const frameCode =
     frameBody.length > 0
       ? `  useFrame(({ ${frameArguments.join(", ")} }) => {
-${timeUniforms.length > 0 ? "    const elapsed = clock.getElapsedTime();\n" : ""}${frameBody.join("\n")}
+${frameBody.join("\n")}
   });
 `
       : "";
 
   context.supportDeclarations.set(
+    "scene-environment:sky-shader-descriptor",
+    `const XRIFT_STUDIO_SKY_SHADER: XriftClassicShader = ${JSON.stringify(published)};`,
+  );
+  context.supportDeclarations.set(
     "scene-environment:sky-shader",
     `const XRiftStudioSkyShader: FC = () => {
-${followsCamera ? "  const meshRef = useRef<Mesh>(null);\n" : ""}${timeUniforms.length > 0 ? "  const materialRef = useRef<ShaderMaterial>(null);\n" : ""}  const geometry = useMemo(() => {
+${followsCamera ? "  const meshRef = useRef<Mesh>(null);\n" : ""}  const geometry = useMemo(() => {
     ${geometryFactory}
   }, []);
-  const uniforms = useMemo(() => ({
-    ${uniformEntries.join(",\n    ")}
-  }), []);
+  const material = useMemo(
+    () => configureClassicShaderSkyMaterial(createClassicShaderMaterial(XRIFT_STUDIO_SKY_SHADER)),
+    [],
+  );
   useEffect(() => () => geometry.dispose(), [geometry]);
+  useEffect(() => () => material.dispose(), [material]);
 ${frameCode}  return (
     <mesh
       geometry={geometry}
+      material={material}
       ${skyMeshPlacementProps(settings, followsCamera ? "ref={meshRef}" : "")}
       frustumCulled={false}
       renderOrder={-1}
-    >
-      <shaderMaterial
-        ${timeUniforms.length > 0 ? "ref={materialRef}" : ""}
-        side={BackSide}
-        depthTest={false}
-        depthWrite={false}
-        vertexShader={${JSON.stringify(shader.vertexShader)}}
-        fragmentShader={${JSON.stringify(shader.fragmentShader)}}
-        uniforms={uniforms}
-        defines={${JSON.stringify(variant.defines)}}
-      />
-    </mesh>
+    />
   );
 };`,
   );
@@ -4888,25 +4910,9 @@ function registerClassicR3fMaterialComponent(
     "material:00-props-type",
     "type CompiledMaterialProps = { attach?: string; meshName?: string; sourceMaterial?: import(\"three\").Material; doubleSided?: boolean };",
   );
-  context.supportDeclarations.set(
-    "material:00-classic-variant-type",
-    `type CompiledClassicShaderVariant = {
-  name: string;
-  meshNameIncludes: string | null;
-  defines: Record<string, string>;
-  side: "front" | "back" | "double";
-  transparent: boolean;
-  depthWrite: boolean;
-};`,
-  );
-  context.reactValueImports.add("useMemo");
-  ["BackSide", "DoubleSide", "FrontSide"].forEach((name) =>
-    context.threeValueImports.add(name),
-  );
+  context.classicShaderImports.add("XriftClassicShaderMaterial");
+  context.classicShaderImports.add("type XriftClassicShader");
 
-  const textureLines: string[] = [];
-  const textureDependencies: string[] = [];
-  const uniformEntries: string[] = [];
   // Wind is authored on the Scene, not on the Material, so a shader that opts
   // into the wind contract gets the scene's values rather than whatever was
   // saved in its own uniforms.
@@ -4914,217 +4920,116 @@ function registerClassicR3fMaterialComponent(
     (component): component is Extract<typeof component, { type: "vegetation-wind" }> =>
       component.type === "vegetation-wind",
   );
-  const wind = new Map(
-    windDrivenUniforms(
-      shader,
-      resolveSceneWind(
-        resolveSceneSettings(context.scene.settings).vegetation,
-        entityWind,
-      ),
-    ).map((entry) => [entry.name, entry]),
+  const sceneSettings = resolveSceneSettings(context.scene.settings);
+  const published = publishedClassicShader(
+    shader,
+    new Map<
+      string,
+      { kind: "number"; value: number } | { kind: string; value: readonly number[] }
+    >([
+      ...windDrivenUniforms(
+        shader,
+        resolveSceneWind(sceneSettings.vegetation, entityWind),
+      ).map((entry) => [entry.name, entry] as const),
+      // The scene's key light, supplied the same way the wind is, so a
+      // published world shades its official Materials from the same light the
+      // editor did. A uniform both contracts name follows the light.
+      ...lightingDrivenUniforms(
+        shader,
+        resolveSceneLighting(context.scene, sceneSettings.ambient),
+      ).map((entry) => [entry.name, entry] as const),
+    ]),
   );
-  // The scene's key light, supplied the same way the wind is, so a published
-  // world shades its official Materials from the same light the editor did.
-  const lighting = new Map(
-    lightingDrivenUniforms(
-      shader,
-      resolveSceneLighting(
-        context.scene,
-        resolveSceneSettings(context.scene.settings).ambient,
-      ),
-    ).map((entry) => [entry.name, entry]),
-  );
-  for (const [uniformName, uniform] of Object.entries(shader.uniforms)) {
-    const lightingOverride = lighting.get(uniformName);
-    if (lightingOverride) {
-      if (lightingOverride.kind === "number") {
-        uniformEntries.push(
-          `${JSON.stringify(uniformName)}: { value: ${formatNumber(lightingOverride.value)} }`,
-        );
-      } else {
-        context.threeValueImports.add("Vector3");
-        uniformEntries.push(
-          `${JSON.stringify(uniformName)}: { value: new Vector3(${lightingOverride.value.map(formatNumber).join(", ")}) }`,
-        );
-      }
-      continue;
-    }
-    const windOverride = wind.get(uniformName);
-    if (windOverride) {
-      if (windOverride.kind === "number") {
-        uniformEntries.push(
-          `${JSON.stringify(uniformName)}: { value: ${formatNumber(windOverride.value)} }`,
-        );
-      } else {
-        context.threeValueImports.add("Vector2");
-        uniformEntries.push(
-          `${JSON.stringify(uniformName)}: { value: new Vector2(${windOverride.value.map(formatNumber).join(", ")}) }`,
-        );
-      }
-      continue;
-    }
-    if (uniform.kind === "number") {
-      uniformEntries.push(
-        `${JSON.stringify(uniformName)}: { value: ${formatNumber(uniform.value)} }`,
-      );
-      continue;
-    }
-    if (uniform.kind === "color") {
-      context.threeValueImports.add("Color");
-      uniformEntries.push(
-        `${JSON.stringify(uniformName)}: { value: new Color(${JSON.stringify(uniform.value)}) }`,
-      );
-      continue;
-    }
-    if (uniform.kind === "vector") {
-      const vectorType =
-        uniform.value.length === 2
-          ? "Vector2"
-          : uniform.value.length === 3
-            ? "Vector3"
-            : "Vector4";
-      context.threeValueImports.add(vectorType);
-      uniformEntries.push(
-        `${JSON.stringify(uniformName)}: { value: new ${vectorType}(${uniform.value.map(formatNumber).join(", ")}) }`,
-      );
-      continue;
-    }
 
-    context.referencedAssetIds.add(uniform.textureAssetId);
-    const texture = getTextureAsset(context.assets, uniform.textureAssetId);
-    const runtimeUrl = texture
-      ? context.assetRuntimeUrls.get(texture.id)
-      : undefined;
-    if (!texture || !runtimeUrl) {
+  // A Texture Asset the world could not draw is reported here, with the same
+  // wording the Inspector and the MCP tools use for it.
+  const issues = findClassicShaderTextureIssues(published, context.assets);
+  for (const issue of issues) {
+    addDiagnostic(context, {
+      severity: "blocking",
+      code: "classic-shader-texture-unavailable",
+      message: `Custom Shader「${asset.name}」の${issue.message}`,
+      sceneId: context.scene.sceneId,
+      entityId: entity.id,
+      componentId: mesh.id,
+      assetId: issue.assetId ?? asset.id,
+      fieldPath: `material.${asset.id}.shader.uniforms.${issue.uniformName}`,
+    });
+  }
+
+  // One load per Texture Asset, however many uniforms and Materials read it.
+  // The shared builder takes a clone for each uniform's sampler state.
+  const textureLines: string[] = [];
+  const textureEntries: string[] = [];
+  const textureDependencies: string[] = [];
+  for (const textureAssetId of classicShaderTextureAssetIds(published)) {
+    context.referencedAssetIds.add(textureAssetId);
+    const texture = getTextureAsset(context.assets, textureAssetId);
+    if (!texture) continue;
+    const runtimeUrl = context.assetRuntimeUrls.get(texture.id);
+    if (!runtimeUrl) {
       addDiagnostic(context, {
         severity: "blocking",
         code: "classic-shader-texture-unavailable",
-        message: `Custom Shader uniform「${uniformName}」のテクスチャを出力できません`,
+        message: `Custom Shader「${asset.name}」が読むテクスチャ「${texture.name}」を出力できません`,
         sceneId: context.scene.sceneId,
         entityId: entity.id,
         componentId: mesh.id,
-        assetId: uniform.textureAssetId,
-        fieldPath: `material.${asset.id}.shader.uniforms.${uniformName}`,
+        assetId: texture.id,
+        fieldPath: `material.${asset.id}.shader.uniforms`,
       });
-      uniformEntries.push(`${JSON.stringify(uniformName)}: { value: null }`);
       continue;
     }
+    const format = classicShaderTextureFormat(texture);
+    if (format === "unsupported") continue;
     const variableName = generatedIdentifier(
       "classicTexture",
-      `${asset.id}:${uniformName}`,
+      `${asset.id}:${texture.id}`,
     );
-    const usesKtx2 = isPublishedAsKtx2(texture);
-    registerCompiledTextureRuntime(context, usesKtx2);
     const urlConstant = registerAssetUrl(texture, runtimeUrl, context);
-    const optionsConstant = generatedIdentifier(
-      "CLASSIC_TEXTURE_OPTIONS",
-      `${asset.id}:${uniformName}`,
-    );
-    const settings = texture.importSettings;
-    const filter = uniform.filter ?? settings.sampler.magFilter;
-    context.supportDeclarations.set(
-      `texture-options:${optionsConstant}`,
-      `const ${optionsConstant}: CompiledTextureOptions = ${JSON.stringify({
-        channel: 0,
-        colorSpace: uniform.colorSpace ?? "linear",
-        flipY: settings.flipY,
-        generateMipmaps:
-          uniform.generateMipmaps ?? settings.generateMipmaps,
-        magFilter: filter,
-        minFilter: filter,
-        wrapS: uniform.wrapS ?? settings.sampler.wrapS,
-        wrapT: uniform.wrapT ?? settings.sampler.wrapT,
-      })};`,
-    );
     textureLines.push(
       `const ${variableName}Url = useCompiledAssetUrl(${urlConstant});`,
-      `const ${variableName} = useCompiledTexture(${usesKtx2 ? "useCompiledKtx2" : "useTexture"}(${variableName}Url), ${optionsConstant});`,
     );
-    textureDependencies.push(variableName);
-    uniformEntries.push(
-      `${JSON.stringify(uniformName)}: { value: ${variableName} }`,
-    );
-  }
-
-  const variantsConstant = generatedIdentifier(
-    "CLASSIC_MATERIAL_VARIANTS",
-    asset.id,
-  );
-  context.supportDeclarations.set(
-    `material-variants:${variantsConstant}`,
-    `const ${variantsConstant}: readonly CompiledClassicShaderVariant[] = ${JSON.stringify(
-      shader.variants.map((variant) => ({
-        ...variant,
-        meshNameIncludes: variant.meshNameIncludes ?? null,
-      })),
-    )} as const;`,
-  );
-  const timeUniforms = detectTimeUniforms(shader);
-  const hasTimeUniforms = timeUniforms.length > 0;
-  if (hasTimeUniforms) {
-    context.reactValueImports.add("useRef");
-    context.fiberImports.add("useFrame");
-    context.threeTypeImports.add("ShaderMaterial");
-  }
-  const timeUniformCode = hasTimeUniforms
-    ? `  const materialRef = useRef<ShaderMaterial>(null);
-  useFrame((state) => {
-    const material = materialRef.current;
-    if (!material) return;
-    const elapsed = state.clock.getElapsedTime();
-${timeUniforms
-  .map((spec) => {
-    if (spec.glslType === "vec4") {
-      return `    {
-      const uniform = material.uniforms[${JSON.stringify(spec.name)}];
-      if (uniform) {
-        const value = uniform.value;
-        if (value && "set" in value) {
-          value.set(elapsed / 20, elapsed, elapsed * 2, elapsed * 3);
-        } else {
-          uniform.value = [elapsed / 20, elapsed, elapsed * 2, elapsed * 3];
-        }
-      }
-    }`;
+    if (format === "ktx2") {
+      registerCompiledKtx2Runtime(context);
+      textureLines.push(
+        `const ${variableName} = useCompiledKtx2(${variableName}Url);`,
+      );
+    } else if (format === "float") {
+      context.fiberImports.add("useLoader");
+      context.extraImports.add(
+        `import { XriftClassicShaderDataTextureLoader } from ${JSON.stringify(CLASSIC_SHADER_DATA_TEXTURE_IMPORT_PATH)};`,
+      );
+      textureLines.push(
+        `const ${variableName} = useLoader(XriftClassicShaderDataTextureLoader, ${variableName}Url);`,
+      );
+    } else {
+      // Not drei's useTexture: it uploads the loaded picture at once, and a
+      // Custom Shader never samples that one. Its uniforms take clones, and a
+      // strip or a cube face is only read for its pixels, so the upload would
+      // keep a second copy on the GPU.
+      context.fiberImports.add("useLoader");
+      context.threeValueImports.add("TextureLoader");
+      textureLines.push(
+        `const ${variableName} = useLoader(TextureLoader, ${variableName}Url);`,
+      );
     }
-    return `    if (material.uniforms[${JSON.stringify(spec.name)}]) { material.uniforms[${JSON.stringify(spec.name)}].value = elapsed; }`;
-  })
-  .join("\n")}
-  });
-`
-    : "";
-  const source = `const ${componentName}: FC<CompiledMaterialProps> = ({ attach = "material", meshName = "" }) => {
-${textureLines.length > 0 ? `${textureLines.map((line) => `  ${line}`).join("\n")}\n` : ""}  const uniforms = useMemo(() => ({
-    ${uniformEntries.join(",\n    ")}
-  }), [${textureDependencies.join(", ")}]);
-  const normalizedMeshName = meshName.toLocaleLowerCase();
-  const variant =
-    ${variantsConstant}.find(
-      (candidate) =>
-        candidate.meshNameIncludes &&
-        normalizedMeshName.includes(candidate.meshNameIncludes.toLocaleLowerCase()),
-    ) ??
-    ${variantsConstant}.find((candidate) => !candidate.meshNameIncludes) ??
-    ${variantsConstant}[0];
-${timeUniformCode}  const side =
-    variant.side === "back"
-      ? BackSide
-      : variant.side === "front"
-        ? FrontSide
-        : DoubleSide;
-  return (
-    <shaderMaterial
-      ${hasTimeUniforms ? "ref={materialRef}" : ""}
-      attach={attach}
-      vertexShader={${JSON.stringify(shader.vertexShader)}}
-      fragmentShader={${JSON.stringify(shader.fragmentShader)}}
-      uniforms={uniforms}
-      defines={variant.defines}
-      side={side}
-      transparent={variant.transparent}
-      depthWrite={variant.depthWrite}
-    />
+    textureEntries.push(`${JSON.stringify(texture.id)}: ${variableName}`);
+    textureDependencies.push(variableName);
+  }
+  if (textureEntries.length > 0) context.reactValueImports.add("useMemo");
+
+  const shaderConstant = generatedIdentifier("CLASSIC_SHADER", asset.id);
+  context.supportDeclarations.set(
+    `material-shader:${shaderConstant}`,
+    `const ${shaderConstant}: XriftClassicShader = ${JSON.stringify(published)};`,
   );
+  const source = `const ${componentName}: FC<CompiledMaterialProps> = ({ attach = "material", meshName = "" }) => {
+${textureLines.map((line) => `  ${line}\n`).join("")}${
+    textureEntries.length > 0
+      ? `  const textures = useMemo(() => ({ ${textureEntries.join(", ")} }), [${textureDependencies.join(", ")}]);\n`
+      : ""
+  }  return <XriftClassicShaderMaterial attach={attach} meshName={meshName} shader={${shaderConstant}}${textureEntries.length > 0 ? " textures={textures}" : ""} />;
 };`;
   context.supportDeclarations.set(declarationKey, source);
   return componentName;

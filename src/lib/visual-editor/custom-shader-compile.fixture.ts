@@ -718,9 +718,11 @@ function assertPublishedWorldNamesTheMaterial(): void {
     entry.includes(`const CUSTOM_SHADER_MATERIAL_NAMES = ${JSON.stringify([{ name: "Glow 板", key }])};`),
     "the reader is given the name of each Material the world draws, by the key of its GLSL, and no others",
   );
+  // The GLSL travels in the Material's descriptor, and the shared builder
+  // hands it to three.js as it is.
   assert(
-    entry.includes(`vertexShader={${JSON.stringify(shader.vertexShader)}}`) &&
-      entry.includes(`fragmentShader={${JSON.stringify(shader.fragmentShader)}}`),
+    entry.includes(`"vertexShader":${JSON.stringify(shader.vertexShader)}`) &&
+      entry.includes(`"fragmentShader":${JSON.stringify(shader.fragmentShader)}`),
     "the world must compile the author's GLSL unchanged, which is what the key is computed from",
   );
   const watch = compiled.overlayFiles.find(

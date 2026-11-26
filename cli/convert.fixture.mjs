@@ -104,6 +104,12 @@ import { runAnimationMixerControllerFixtureAssertions } from "../packages/xrift-
 import { runInteractivityAnimationPlanFixtureAssertions } from "../packages/xrift-studio-runtime/src/interactivity-animation-plan.fixture.ts";
 import { runInteractivityGraphListFixtureAssertions } from "../src/lib/visual-editor/interactivity-recipes.fixture.ts";
 import { runShaderTimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/shader-time.fixture.ts";
+import { runClassicShaderRuntimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/classic-shader-runtime.fixture.ts";
+import { runCustomShaderContractFixtureAssertions } from "../src/lib/visual-editor/custom-shader-contract.fixture.ts";
+import {
+  runClassicShaderCompilerFixtureAssertions,
+  runClassicShaderRuntimeManifestFixtureAssertions,
+} from "../src/lib/visual-editor/compiler/classic-shader.fixture.ts";
 import { runShaderCompileErrorsFixtureAssertions } from "../packages/xrift-studio-runtime/src/shader-compile-errors.fixture.ts";
 import { runCustomShaderCompileFixtureAssertions } from "../src/lib/visual-editor/custom-shader-compile.fixture.ts";
 import { runTextPanelFixtureAssertions } from "../packages/xrift-studio-runtime/src/text-panel.fixture.ts";
@@ -414,6 +420,10 @@ try {
     ["interactivity animation plan", runInteractivityAnimationPlanFixtureAssertions],
     ["interactivity graph list", runInteractivityGraphListFixtureAssertions],
     ["shader time", runShaderTimeFixtureAssertions],
+    ["custom shader material builder", runClassicShaderRuntimeFixtureAssertions],
+    ["custom shader contract", runCustomShaderContractFixtureAssertions],
+    ["custom shader compiler", runClassicShaderCompilerFixtureAssertions],
+    ["custom shader Runtime JSON loader", runClassicShaderRuntimeManifestFixtureAssertions],
     ["shader compile errors", runShaderCompileErrorsFixtureAssertions],
     ["custom shader compile results", runCustomShaderCompileFixtureAssertions],
     ["text panel", runTextPanelFixtureAssertions],
@@ -764,6 +774,15 @@ async function runStagedWorldTypecheck() {
     await typecheckWithTemplateOptions(
       `mtoon-${mode}-only`,
       runMToonMaterialCompilerFixtureAssertions(mode).overlayFiles,
+      'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
+    );
+  }
+  // The shared Custom Shader Material module ships with the world, so the
+  // world that uses every uniform kind is typechecked on its own too.
+  for (const mode of ["primitive", "model"]) {
+    await typecheckWithTemplateOptions(
+      `custom-shader-${mode}-only`,
+      runClassicShaderCompilerFixtureAssertions(mode).overlayFiles,
       'export { World } from "./World";\nexport type { WorldProps } from "./World";\n',
     );
   }

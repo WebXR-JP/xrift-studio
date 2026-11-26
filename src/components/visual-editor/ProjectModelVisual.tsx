@@ -34,27 +34,15 @@ import {
 import {
   Box3,
   AnimationMixer,
-  BackSide,
-  ClampToEdgeWrapping,
   Color,
   DoubleSide,
   FrontSide,
   Group,
-  LinearFilter,
   LoopOnce,
   LoopRepeat,
   MeshBasicMaterial,
   MeshStandardMaterial,
-  NearestFilter,
-  NoColorSpace,
-  RepeatWrapping,
   ShaderMaterial,
-  SRGBColorSpace,
-  TextureLoader,
-  UniformsLib,
-  UniformsUtils,
-  Vector2,
-  Vector4,
   Vector3,
   type Material,
   type BufferGeometry,
@@ -63,14 +51,14 @@ import {
   type Texture,
 } from "three";
 import { tauri } from "../../lib/tauri";
-import { useSceneReviewResource, type SceneReviewLoadState } from "./scene-review-readiness";
 import {
-  applyTimeUniformValue,
-  detectTimeUniforms,
+  advanceMaterialTimeUniforms,
   stampMaterialTimeUniforms,
-  type MutableUniformValue,
-  type TimeUniformSpec,
 } from "../../../packages/xrift-studio-runtime/src/shader-time";
+import {
+  applyClassicShaderMeshState,
+  createClassicShaderMaterial,
+} from "../../../packages/xrift-studio-runtime/src/classic-shader-runtime";
 import {
   normalizeMaterialProperties,
   applyCustomShaderSourceOverrides,
@@ -108,7 +96,9 @@ import { repairImportedObject3DHierarchy } from "../../lib/visual-editor/object3
 import type { SceneViewportMaterialStyle } from "./scene-viewport-display";
 import { createProjectModelPoseController } from "./project-model-pose-controller";
 import { bindModelNodePose, notifyModelNodePose } from "./project-model-node-pose-bridge";
-import { contentEqual } from "./content-equal";
+
+export { useClassicShaderTextures } from "./classic-shader-textures";
+import { useClassicShaderTextures } from "./classic-shader-textures";
 
 export type ProjectModelMaterialAssignment = {
   slot: string;
@@ -681,32 +671,9 @@ function ProjectModelRender({
     springBonesRef.current?.update(delta);
     const elapsed = frame.clock.getElapsedTime();
     if (renderedObject) updateMToonMaterials(renderedObject, delta, frame.gl.info.render.frame, frame.gl);
-    renderedModel?.ownedMaterials.forEach((material) => {
-      const shader = material as ShaderMaterial;
-      const specs = material.userData.xriftTimeUniforms as
-        | TimeUniformSpec[]
-        | undefined;
-      if (Array.isArray(specs)) {
-        for (const spec of specs) {
-          const uniform = shader.uniforms?.[spec.name];
-          if (uniform) {
-            applyTimeUniformValue(
-              uniform as MutableUniformValue,
-              spec,
-              elapsed,
-            );
-          }
-        }
-        return;
-      }
-      const uniformName = material.userData.xriftAnimatedTimeUniform;
-      if (
-        typeof uniformName === "string" &&
-        shader.uniforms?.[uniformName]
-      ) {
-        shader.uniforms[uniformName].value = elapsed;
-      }
-    });
+    renderedModel?.ownedMaterials.forEach((material) =>
+      advanceMaterialTimeUniforms(material as ShaderMaterial, elapsed),
+    );
   });
 
   // Expanded node Entities already carry the source Model scale on their
@@ -959,6 +926,11 @@ export function applyAssignedMaterialPreviews(
     mesh.material = Array.isArray(mesh.material)
       ? mesh.material.map(createPreview)
       : createPreview(mesh.material);
+    // This tree is a clone made for these assignments and thrown away with
+    // them, so there is nothing to undo when a Material is taken off again.
+    for (const worn of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+      applyClassicShaderMeshState(child, worn);
+    }
   });
   return ownedMaterials;
 }
@@ -1272,196 +1244,20 @@ export function createAssignedMaterialPreviewMaterial(
   return preview;
 }
 
+/**
+ * The Custom Shader Material the editor draws with.
+ *
+ * It is the function the generated world and the Runtime JSON loader call, so
+ * the Scene View, Play and every preview show what will be published.
+ * `textures` holds the loaded texture of each Texture Asset the shader reads,
+ * keyed by Asset id, as `useClassicShaderTextures` returns it.
+ */
 export function createClassicR3fMaterial(
   shader: ClassicR3fMaterialShader,
   textures: Readonly<Record<string, Texture>>,
   meshName: string,
 ): ShaderMaterial {
-  const normalizedMeshName = meshName.toLocaleLowerCase();
-  const variant =
-    shader.variants.find(
-      (candidate) =>
-        candidate.meshNameIncludes &&
-        normalizedMeshName.includes(
-          candidate.meshNameIncludes.toLocaleLowerCase(),
-        ),
-    ) ??
-    shader.variants.find((candidate) => !candidate.meshNameIncludes) ??
-    shader.variants[0];
-  const authoredUniforms = Object.fromEntries(
-    Object.entries(shader.uniforms).map(([name, uniform]) => {
-      if (uniform.kind === "texture") {
-        return [name, { value: textures[name] ?? null }];
-      }
-      if (uniform.kind === "color") {
-        return [name, { value: new Color(uniform.value) }];
-      }
-      if (uniform.kind === "vector") {
-        const value =
-          uniform.value.length === 2
-            ? new Vector2(uniform.value[0], uniform.value[1])
-            : uniform.value.length === 3
-              ? new Vector3(
-                  uniform.value[0],
-                  uniform.value[1],
-                  uniform.value[2],
-                )
-              : new Vector4(
-                  uniform.value[0],
-                  uniform.value[1],
-                  uniform.value[2],
-                  uniform.value[3],
-                );
-        return [name, { value }];
-      }
-      return [name, { value: uniform.value }];
-    }),
-  );
-  // Scene Settings の Fog をカスタムシェーダーへ届ける。
-  // ShaderMaterial.fog は既定 false で、その場合 three は USE_FOG を定義せず
-  // fogColor / fogNear / fogFar も供給しないため、authored GLSL が
-  // <fog_fragment> を include しても何も起きない。
-  // UniformsUtils.merge は Texture まで clone してしまうので fog 側だけを clone し、
-  // 著者の uniform を後ろに置いて同名があれば著者側を優先する。
-  const uniforms = {
-    ...UniformsUtils.clone(UniformsLib.fog),
-    ...authoredUniforms,
-  };
-  const material = new ShaderMaterial({
-    name: `${shader.sourceModulePath}:${variant.name}`,
-    vertexShader: shader.vertexShader,
-    fragmentShader: shader.fragmentShader,
-    uniforms,
-    defines: { ...variant.defines },
-    side:
-      variant.side === "back"
-        ? BackSide
-        : variant.side === "double"
-          ? DoubleSide
-          : FrontSide,
-    transparent: variant.transparent,
-    depthWrite: variant.depthWrite,
-    // fog チャンクを include していないシェーダーは USE_FOG を無視するので後方互換。
-    fog: true,
-  });
-  if (shader.animatedTimeUniform) {
-    material.userData.xriftAnimatedTimeUniform = shader.animatedTimeUniform;
-  }
-  const timeUniforms = detectTimeUniforms(shader);
-  if (timeUniforms.length > 0) {
-    material.userData.xriftTimeUniforms = timeUniforms;
-  }
-  material.needsUpdate = true;
-  return material;
-}
-
-/** One object for "no shader textures", so setting it again is not a change. */
-const NO_CLASSIC_SHADER_TEXTURES: Readonly<Record<string, Texture>> = Object.freeze({});
-
-export function useClassicShaderTextures(
-  material: MaterialAsset | undefined,
-  assets: AssetManifest,
-  projectPath?: string,
-): Readonly<Record<string, Texture>> {
-  const shader =
-    material?.shader?.kind === "classic-r3f" ? material.shader : undefined;
-  const [textures, setTextures] = useState<Readonly<Record<string, Texture>>>(
-    NO_CLASSIC_SHADER_TEXTURES,
-  );
-  const signature = shader
-    ? JSON.stringify(Object.entries(shader.uniforms)
-        .filter(([, uniform]) => uniform.kind === "texture")
-        .map(([name, uniform]) => {
-          const asset = uniform.kind === "texture" ? assets.assets[uniform.textureAssetId] : undefined;
-          return [name, uniform, asset?.sourceHash, asset?.source];
-        }).sort(([a], [b]) => String(a).localeCompare(String(b))))
-    : "";
-  const hasTextures = Boolean(shader && Object.values(shader.uniforms).some(uniform => uniform.kind === "texture"));
-  const reportReview = useSceneReviewResource(`classic:${projectPath ?? ""}:${signature}`, { status: hasTextures ? "loading" : "ready" });
-  const [readiness, setReadiness] = useState<{ key: string; state: SceneReviewLoadState }>({ key: "", state: { status: "ready" } });
-  useLayoutEffect(() => {
-    if (!hasTextures) reportReview({ status: "ready" });
-    else if (readiness.key === signature) reportReview(readiness.state);
-  }, [hasTextures, readiness, reportReview, signature]);
-
-  useEffect(() => {
-    if (!shader || !hasTextures || !projectPath) {
-      // This branch runs for every Material without shader textures — nearly
-      // all of them — each time its Assets change. Handing React a new empty
-      // object and a new status every time re-rendered each such Mesh a second
-      // time for no change, so both are only replaced when they differ.
-      setTextures(NO_CLASSIC_SHADER_TEXTURES);
-      const state: SceneReviewLoadState = hasTextures
-        ? { status: "error", message: "Shaderの画像の参照元を読み込めず、見た目を確認できませんでした" }
-        : { status: "ready" };
-      setReadiness((current) =>
-        current.key === signature && contentEqual(current.state, state, 1)
-          ? current
-          : { key: signature, state },
-      );
-      return;
-    }
-    let active = true;
-    const loaded: Texture[] = [];
-    void Promise.all(
-      Object.entries(shader.uniforms).flatMap(([uniformName, uniform]) => {
-        if (uniform.kind !== "texture") return [];
-        const asset = assets.assets[uniform.textureAssetId];
-        if (
-          asset?.kind !== "texture" ||
-          asset.source.kind !== "project"
-        ) {
-          return [];
-        }
-        return [
-          tauri
-            .readProjectFileDataUrl(projectPath, asset.source.relativePath)
-            .then((dataUrl) => new TextureLoader().loadAsync(dataUrl))
-            .then((texture) => {
-              loaded.push(texture);
-              texture.colorSpace =
-                uniform.colorSpace === "srgb"
-                  ? SRGBColorSpace
-                  : NoColorSpace;
-              texture.generateMipmaps = uniform.generateMipmaps ?? false;
-              texture.magFilter =
-                uniform.filter === "nearest" ? NearestFilter : LinearFilter;
-              texture.minFilter =
-                uniform.filter === "nearest" ? NearestFilter : LinearFilter;
-              texture.wrapS =
-                uniform.wrapS === "clamp-to-edge"
-                  ? ClampToEdgeWrapping
-                  : RepeatWrapping;
-              texture.wrapT =
-                uniform.wrapT === "clamp-to-edge"
-                  ? ClampToEdgeWrapping
-                  : RepeatWrapping;
-              texture.needsUpdate = true;
-              return [uniformName, texture] as const;
-            }),
-        ];
-      }),
-    )
-      .then((entries) => {
-        if (active) {
-          setTextures(Object.fromEntries(entries));
-          const expected = Object.values(shader.uniforms).filter(uniform => uniform.kind === "texture").length;
-          setReadiness({ key: signature, state: entries.length === expected ? { status: "ready" } : { status: "error", message: "Shaderの画像が不足し、見た目を確認できませんでした" } });
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setTextures(NO_CLASSIC_SHADER_TEXTURES);
-          setReadiness({ key: signature, state: { status: "error", message: "Shaderの画像を読み込めず、見た目を確認できませんでした" } });
-        }
-      });
-    return () => {
-      active = false;
-      loaded.forEach((texture) => texture.dispose());
-    };
-  }, [assets, hasTextures, projectPath, shader, signature]);
-
-  return textures;
+  return createClassicShaderMaterial(shader, { textures, meshName });
 }
 
 /**

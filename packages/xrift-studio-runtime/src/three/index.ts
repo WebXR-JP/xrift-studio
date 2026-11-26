@@ -11,7 +11,6 @@ import {
   DirectionalLight,
   DoubleSide,
   EquirectangularReflectionMapping,
-  FrontSide,
   Float32BufferAttribute,
   Group,
   HemisphereLight,
@@ -32,9 +31,6 @@ import {
   SpotLight,
   ShaderMaterial,
   SRGBColorSpace,
-  Vector2,
-  Vector3,
-  Vector4,
   Texture,
   TextureLoader,
   WebGLRenderer,
@@ -63,7 +59,16 @@ import {
   type XriftImageQuadConfig,
 } from "../image-quad.js";
 
-import { detectTimeUniforms, stampObjectTimeUniforms } from "../shader-time.js";
+import { stampObjectTimeUniforms } from "../shader-time.js";
+import {
+  applyClassicShaderMeshState,
+  createClassicShaderMaterial,
+} from "../classic-shader-runtime.js";
+import { XriftClassicShaderDataTextureLoader } from "../classic-shader-data-texture.js";
+import {
+  resolveClassicShaderVariant,
+  type XriftClassicShader,
+} from "../classic-shader-contract.js";
 import { installMirrorReflectionInterval } from "../mirror-reflection.js";
 import { applyOpenBrushMaterialProperties } from "../open-brush/material-properties.js";
 import { createMToonMaterial, attachMToonOutlines, removeNativeMToonOutlines, type MToonSurfaceProperties } from "../mtoon-runtime.js";
@@ -114,6 +119,9 @@ const DEFAULT_KTX2_TRANSCODER_PATH =
   "https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/basis/";
 const DEFAULT_DRACO_DECODER_PATH =
   "https://www.gstatic.com/draco/versioned/decoders/1.5.7/";
+
+/** Builds, once per variant, the Custom Shader Material a named mesh wears. */
+type ClassicShaderMaterialFactory = (meshName: string) => ShaderMaterial;
 
 type LoadedModel = {
   root: Object3D;
@@ -199,7 +207,14 @@ export class XriftThreeLoader {
       ): asset is Extract<XriftRuntimeAsset, { kind: "texture" | "skybox" }> =>
         asset.kind === "texture" || asset.kind === "skybox",
     );
-    const [modelEntries, textureEntries] = await Promise.all([
+    const shaderDataAssetIds = classicShaderDataTextureAssetIds(manifest);
+    const shaderDataAssets = textureAssets.filter(
+      (asset) =>
+        asset.kind === "skybox" &&
+        asset.sourceFormat === "exr" &&
+        shaderDataAssetIds.has(asset.id),
+    );
+    const [modelEntries, textureEntries, shaderDataEntries] = await Promise.all([
       Promise.all(
         modelAssets.map(async (asset) => [
           asset.id,
@@ -212,10 +227,25 @@ export class XriftThreeLoader {
           await this.loadTexture(asset, assetBase, ktx2TranscoderPath),
         ] as const),
       ),
+      Promise.all(
+        shaderDataAssets.map(async (asset) => [
+          asset.id,
+          await new XriftClassicShaderDataTextureLoader(this.manager).loadAsync(
+            new URL(asset.url, assetBase).toString(),
+          ),
+        ] as const),
+      ),
     ]);
     const models = new Map(modelEntries);
     const textures = new Map(textureEntries);
-    const materials = this.createMaterials(manifest, textures, diagnostics);
+    const { materials, classicShaders } = this.createMaterials(
+      manifest,
+      textures,
+      // An EXR read as shader data keeps the precision its file stores, which
+      // the environment copy of the same Asset does not.
+      new Map<string, Texture>([...textureEntries, ...shaderDataEntries]),
+      diagnostics,
+    );
     const entities = new Map<string, Object3D>();
     const animations: AnimationClip[] = [];
     const animationClipsByEntity = new Map<string, AnimationClip[]>();
@@ -260,6 +290,7 @@ export class XriftThreeLoader {
           fontUrlsByAssetId,
           models,
           materials,
+          classicShaders,
           textures,
           animations,
           animationClipsByEntity,
@@ -466,20 +497,28 @@ export class XriftThreeLoader {
   private createMaterials(
     manifest: XriftRuntimeManifest,
     textures: ReadonlyMap<string, Texture>,
+    shaderTextures: ReadonlyMap<string, Texture>,
     diagnostics: XriftRuntimeDiagnostic[],
-  ): Map<string, Material> {
+  ): {
+    materials: Map<string, Material>;
+    classicShaders: Map<string, ClassicShaderMaterialFactory>;
+  } {
     const materials = new Map<string, Material>();
+    const classicShaders = new Map<string, ClassicShaderMaterialFactory>();
     for (const asset of Object.values(manifest.assets)) {
       if (asset.kind !== "material") continue;
       if (asset.shader?.kind === "classic-r3f") {
-        const material = createRuntimeClassicShaderMaterial(
+        const factory = createRuntimeClassicShaderFactory(
           asset.shader,
-          textures,
+          shaderTextures,
           diagnostics,
           asset.id,
+          asset.name,
         );
-        material.name = asset.name;
-        materials.set(asset.id, material);
+        classicShaders.set(asset.id, factory);
+        // A mesh without a name of its own, a primitive for one, wears the
+        // fallback variant.
+        materials.set(asset.id, factory(""));
         continue;
       }
       const properties = asset.properties;
@@ -561,7 +600,7 @@ export class XriftThreeLoader {
       material.name = asset.name;
       materials.set(asset.id, material);
     }
-    return materials;
+    return { materials, classicShaders };
   }
 
   private createComponentObject(input: {
@@ -572,6 +611,7 @@ export class XriftThreeLoader {
     fontUrlsByAssetId: ReadonlyMap<string, string>;
     models: ReadonlyMap<string, LoadedModel>;
     materials: ReadonlyMap<string, Material>;
+    classicShaders: ReadonlyMap<string, ClassicShaderMaterialFactory>;
     textures: ReadonlyMap<string, Texture>;
     animations: AnimationClip[];
     animationClipsByEntity: Map<string, AnimationClip[]>;
@@ -589,6 +629,7 @@ export class XriftThreeLoader {
           createPrimitiveGeometry(component.geometry.primitive),
           material ?? new MeshStandardMaterial({ color: 0xbfc7d5 }),
         );
+        applyClassicShaderMeshState(mesh, material);
         mesh.castShadow = component.castShadow;
         mesh.receiveShadow = component.receiveShadow;
         mesh.userData.xriftStudioComponentId = component.id;
@@ -603,6 +644,7 @@ export class XriftThreeLoader {
           createXriftExtrudeGeometry({ points: component.geometry.points, depth: component.geometry.depth }),
           material ?? new MeshStandardMaterial({ color: 0xbfc7d5 }),
         );
+        applyClassicShaderMeshState(mesh, material);
         mesh.castShadow = component.castShadow;
         mesh.receiveShadow = component.receiveShadow;
         mesh.userData.xriftStudioComponentId = component.id;
@@ -617,6 +659,7 @@ export class XriftThreeLoader {
           createTerrainGeometry(component.geometry),
           material ?? new MeshStandardMaterial({ color: 0x6b8e4e }),
         );
+        applyClassicShaderMeshState(mesh, material);
         mesh.castShadow = component.castShadow;
         mesh.receiveShadow = component.receiveShadow;
         mesh.userData.xriftStudioComponentId = component.id;
@@ -647,6 +690,7 @@ export class XriftThreeLoader {
         component,
         input.manifest,
         input.materials,
+        input.classicShaders,
         input.textures,
       );
       applyModelPose(instance, component);
@@ -1011,73 +1055,60 @@ function isRuntimeOfficialLeafComponent(schemaId: string): boolean {
   );
 }
 
-function createRuntimeClassicShaderMaterial(
-  shader: Extract<
-    NonNullable<Extract<XriftRuntimeAsset, { kind: "material" }>['shader']>,
-    { kind: "classic-r3f" }
-  >,
+/** Texture Assets that a Custom Shader reads through a `texture` uniform. */
+function classicShaderDataTextureAssetIds(
+  manifest: XriftRuntimeManifest,
+): Set<string> {
+  const ids = new Set<string>();
+  for (const asset of Object.values(manifest.assets)) {
+    if (asset.kind !== "material" || asset.shader?.kind !== "classic-r3f") {
+      continue;
+    }
+    for (const uniform of Object.values(asset.shader.uniforms)) {
+      if (uniform.kind === "texture") ids.add(uniform.textureAssetId);
+    }
+  }
+  return ids;
+}
+
+/**
+ * One Custom Shader Material per variant, built by the function the editor and
+ * the generated world use.
+ *
+ * Every mesh that resolves to the same variant shares one Material, as every
+ * mesh shared the single Material this loader used to build.
+ */
+function createRuntimeClassicShaderFactory(
+  shader: XriftClassicShader,
   textures: ReadonlyMap<string, Texture>,
   diagnostics: XriftRuntimeDiagnostic[],
   assetId: string,
-): ShaderMaterial {
-  const variant =
-    shader.variants.find((candidate) => !candidate.meshNameIncludes) ??
-    shader.variants[0];
-  const uniforms = Object.fromEntries(
-    Object.entries(shader.uniforms).map(([name, uniform]) => {
-      if (uniform.kind === "texture") {
-        const texture = textures.get(uniform.textureAssetId)?.clone() ?? null;
-        if (!texture && uniform.textureAssetId) {
-          diagnostics.push({
-            severity: "warning",
-            code: "custom-shader-texture-not-loaded",
-            message: `Custom Shader texture could not be loaded: ${uniform.textureAssetId}`,
-            assetId,
-          });
-        }
-        return [name, { value: texture }] as const;
-      }
-      if (uniform.kind === "color") {
-        return [name, { value: new Color(uniform.value) }] as const;
-      }
-      if (uniform.kind === "vector") {
-        const value = uniform.value;
-        const vector =
-          value.length === 2
-            ? new Vector2(value[0] ?? 0, value[1] ?? 0)
-            : value.length === 3
-              ? new Vector3(value[0] ?? 0, value[1] ?? 0, value[2] ?? 0)
-              : new Vector4(
-                  value[0] ?? 0,
-                  value[1] ?? 0,
-                  value[2] ?? 0,
-                  value[3] ?? 0,
-                );
-        return [name, { value: vector }] as const;
-      }
-      return [name, { value: uniform.value }] as const;
-    }),
-  );
-  const material = new ShaderMaterial({
-    name: shader.sourceModulePath,
-    vertexShader: shader.vertexShader,
-    fragmentShader: shader.fragmentShader,
-    uniforms,
-    defines: variant?.defines ?? {},
-    side:
-      variant?.side === "back"
-        ? BackSide
-        : variant?.side === "double"
-          ? DoubleSide
-          : FrontSide,
-    transparent: variant?.transparent ?? false,
-    depthWrite: variant?.depthWrite ?? true,
-  });
-  const timeUniforms = detectTimeUniforms(shader);
-  if (timeUniforms.length > 0) {
-    material.userData.xriftTimeUniforms = timeUniforms;
-  }
-  return material;
+  assetName: string,
+): ClassicShaderMaterialFactory {
+  const byVariant = new Map<number, ShaderMaterial>();
+  return (meshName) => {
+    const variant = resolveClassicShaderVariant(shader, meshName);
+    const key = variant ? shader.variants.indexOf(variant) : -1;
+    const existing = byVariant.get(key);
+    if (existing) return existing;
+    const material = createClassicShaderMaterial(shader, {
+      meshName,
+      textures,
+      onDiagnostic: (diagnostic) =>
+        diagnostics.push({
+          severity: "warning",
+          code:
+            diagnostic.code === "texture-not-loaded"
+              ? "custom-shader-texture-not-loaded"
+              : "custom-shader-texture-unsupported",
+          message: diagnostic.message,
+          assetId,
+        }),
+    });
+    material.name = assetName;
+    byVariant.set(key, material);
+    return material;
+  };
 }
 
 function runtimeTextureWrapping(
@@ -1291,6 +1322,7 @@ function applyModelMaterials(
   component: Extract<XriftRuntimeComponent, { type: "mesh" }>,
   manifest: XriftRuntimeManifest,
   materials: ReadonlyMap<string, Material>,
+  classicShaders: ReadonlyMap<string, ClassicShaderMaterialFactory>,
   textures: ReadonlyMap<string, Texture>,
 ): void {
   const asset =
@@ -1357,9 +1389,15 @@ function applyModelMaterials(
         }, shaderTextures);
         return instance;
       }
+      // A Custom Shader picks its variant from the mesh it is put on.
+      const classicShader = materialId
+        ? classicShaders.get(materialId)
+        : undefined;
+      if (classicShader) return classicShader(object.name);
       return (materialId ? materials.get(materialId) : undefined) ?? material;
     });
     object.material = Array.isArray(object.material) ? next : next[0] ?? object.material;
+    for (const material of next) applyClassicShaderMeshState(object, material);
   });
 }
 

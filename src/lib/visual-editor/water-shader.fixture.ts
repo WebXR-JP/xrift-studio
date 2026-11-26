@@ -356,11 +356,11 @@ function assertCompiledWorld(): void {
   );
   // The scene's wind must win over whatever the Material happened to store.
   assert(
-    source.includes('"uWindSpeed": { value: 1.75 }'),
+    source.includes('"uWindSpeed":{"kind":"number","value":1.75}'),
     "The scene wind speed was not pushed into the compiled Water Material",
   );
   assert(
-    source.includes('"uWindDirection": { value: new Vector2(1, 0) }'),
+    source.includes('"uWindDirection":{"kind":"vector","value":[1,0]}'),
     "The scene wind direction was not pushed into the compiled Water Material",
   );
 
@@ -384,7 +384,7 @@ function assertCompiledWorld(): void {
     still.overlayFiles.find((file) => file.relativePath === "src/World.tsx")
       ?.content ?? "";
   assert(
-    stillSource.includes('"uWindSpeed": { value: 0 }'),
+    stillSource.includes('"uWindSpeed":{"kind":"number","value":0}'),
     "Disabling the scene wind must freeze the water rather than leave it drifting",
   );
 
@@ -435,11 +435,11 @@ function assertCompiledRiver(): void {
     "The river GLSL or its define was not emitted into the compiled World",
   );
   assert(
-    source.includes('"uWindSpeed": { value: 0 }'),
+    source.includes('"uWindSpeed":{"kind":"number","value":0}'),
     "Still air must stop the wind's share of a river",
   );
   assert(
-    source.includes('"uFlowSpeed": { value: 0.85 }'),
+    source.includes('"uFlowSpeed":{"kind":"number","value":0.85}'),
     "Still air must not stop the current, and the author's flow speed must reach the World",
   );
 }

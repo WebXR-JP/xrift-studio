@@ -2692,6 +2692,139 @@ export function runXriftMcpEditorToolFixtures(): void {
     revision: current.revision + 1,
   };
 
+  // Every uniform kind and variant setting goes in and comes back unchanged.
+  const customShaderArguments = (patch: Record<string, unknown>) => ({
+    projectId: bundle.project.projectId,
+    sceneId: bundle.scene.sceneId,
+    expectedRevision: current.revision,
+    materialAssetId: customShaderAssetId,
+    patch,
+  });
+  const customShaderCode = (patch: Record<string, unknown>) => {
+    try {
+      executeXriftMcpEditorTool(current, {
+        id: "fixture-update-custom-shader-rejected",
+        tool: "update_custom_shader",
+        arguments: customShaderArguments(patch),
+      });
+    } catch (error) {
+      return error instanceof XriftMcpEditorToolError
+        ? { code: error.code, details: JSON.stringify(error.details) }
+        : undefined;
+    }
+    return { code: "ACCEPTED", details: "" };
+  };
+  const customShaderFields = {
+    uniforms: {
+      uTime: { kind: "number", value: 0 },
+      uProjector: { kind: "matrix", value: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 2, 3, 4, 1] },
+      uBasis: { kind: "matrix", value: [1, 0, 0, 0, 1, 0, 0, 0, 1] },
+      uHens: { kind: "array", value: [0, 0, 1, 2, 0, 3, -4, 0, 5] },
+    },
+    variants: [
+      {
+        name: "hens",
+        meshNameIncludes: "Hen",
+        defines: { HEN: "1" },
+        side: "double",
+        transparent: false,
+        depthWrite: true,
+        frustumCulled: false,
+      },
+      {
+        name: "glow",
+        meshNameIncludes: "Lamp",
+        defines: {},
+        side: "front",
+        transparent: true,
+        depthWrite: false,
+        blending: "additive",
+      },
+      { name: "default", defines: {}, side: "front", transparent: false, depthWrite: true },
+    ],
+  };
+  const customShaderExtended = executeXriftMcpEditorTool(current, {
+    id: "fixture-update-custom-shader-fields",
+    tool: "update_custom_shader",
+    arguments: customShaderArguments(customShaderFields),
+  });
+  current = {
+    ...current,
+    bundle: customShaderExtended.bundle,
+    revision: current.revision + 1,
+  };
+  const customShaderExtendedRead = executeXriftMcpEditorTool(current, {
+    id: "fixture-get-custom-shader-fields",
+    tool: "get_custom_shader",
+    arguments: { materialAssetId: customShaderAssetId },
+  }).result.shader as { uniforms: unknown; variants: unknown; fragmentShader: string };
+  assert(
+    customShaderExtended.changed &&
+      JSON.stringify(customShaderExtendedRead.uniforms) ===
+        JSON.stringify(customShaderFields.uniforms) &&
+      JSON.stringify(customShaderExtendedRead.variants) ===
+        JSON.stringify(customShaderFields.variants) &&
+      customShaderExtendedRead.fragmentShader.includes("uTime"),
+    "update_custom_shader must store matrix and array uniforms, blending and frustumCulled, and get_custom_shader must return them, leaving the other fields alone",
+  );
+  const rejectedMatrix = customShaderCode({
+    uniforms: { uProjector: { kind: "matrix", value: Array(10).fill(0) } },
+  });
+  assert(
+    rejectedMatrix?.code === "CUSTOM_SHADER_INVALID" &&
+      rejectedMatrix.details.includes("uniforms.uProjector"),
+    `a matrix that is neither mat3 nor mat4 must be refused with its uniform named: ${JSON.stringify(rejectedMatrix)}`,
+  );
+  const rejectedBlending = customShaderCode({
+    variants: [{ ...customShaderFields.variants[2], blending: "screen" }],
+  });
+  assert(
+    rejectedBlending?.code === "CUSTOM_SHADER_INVALID" &&
+      rejectedBlending.details.includes("variants[0]"),
+    `an unknown blending must be refused with its variant named: ${JSON.stringify(rejectedBlending)}`,
+  );
+  for (const [label, uniform] of [
+    ["texture", { kind: "texture", textureAssetId: "texture-that-does-not-exist" }],
+    ["texture-3d", { kind: "texture-3d", textureAssetId: "texture-that-does-not-exist", slices: 8 }],
+    [
+      "texture-cube",
+      {
+        kind: "texture-cube",
+        faces: Array.from({ length: 6 }, () => ({ textureAssetId: "texture-that-does-not-exist" })),
+      },
+    ],
+  ] as const) {
+    const rejected = customShaderCode({ uniforms: { uMap: uniform } });
+    assert(
+      rejected?.code === "CUSTOM_SHADER_TEXTURE_INVALID" &&
+        rejected.details.includes("uMap"),
+      `a ${label} uniform naming a missing Texture must be refused before it is saved: ${JSON.stringify(rejected)}`,
+    );
+  }
+  const customShaderWithFields = executeXriftMcpEditorTool(current, {
+    id: "fixture-create-custom-shader-fields",
+    tool: "create_custom_shader",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      name: "Fixture Lamp Glow",
+      shader: { variants: [customShaderFields.variants[1]], uniforms: customShaderFields.uniforms },
+    },
+  });
+  assert(
+    customShaderWithFields.changed &&
+      JSON.stringify(
+        (customShaderWithFields.result.shader as { variants: unknown }).variants,
+      ) === JSON.stringify([customShaderFields.variants[1]]),
+    "create_custom_shader must accept and return the new variant settings",
+  );
+  current = {
+    ...current,
+    bundle: customShaderWithFields.bundle,
+    revision: current.revision + 1,
+  };
+
   const textureTransformUpdated = executeXriftMcpEditorTool(current, {
     id: "fixture-material-tiling",
     tool: "set_material_texture_transform",

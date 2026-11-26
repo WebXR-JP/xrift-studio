@@ -13,7 +13,6 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import type { Group, Mesh, ShaderMaterial } from "three";
 import type {
   AssetManifest,
-  ClassicR3fMaterialShader,
   MaterialAsset,
   ModelAsset,
 } from "../../lib/visual-editor";
@@ -23,11 +22,7 @@ import {
   validateClassicR3fMaterialShader,
 } from "../../lib/visual-editor";
 import { OpenBrushCatalogPreview } from "./OpenBrushCatalogPreview";
-import {
-  applyTimeUniformValue,
-  type MutableUniformValue,
-  type TimeUniformSpec,
-} from "../../../packages/xrift-studio-runtime/src/shader-time";
+import { advanceMaterialTimeUniforms } from "../../../packages/xrift-studio-runtime/src/shader-time";
 import {
   ProjectModelVisual,
   createClassicR3fMaterial,
@@ -465,7 +460,7 @@ function StandaloneCustomShaderPreview({
         <color attach="background" args={["#0f172a"]} />
         <ambientLight intensity={1.2} />
         <directionalLight position={[2, 3, 4]} intensity={2.2} />
-        <StandaloneCustomShaderScene material={material} shader={shader} />
+        <StandaloneCustomShaderScene material={material} />
         {captureKey && onCapture ? (
           <WebGlThumbnailCapture
             captureKey={captureKey}
@@ -496,10 +491,8 @@ function StandaloneCustomShaderPreview({
 
 function StandaloneCustomShaderScene({
   material,
-  shader,
 }: {
   material: ShaderMaterial;
-  shader: ClassicR3fMaterialShader;
 }) {
   const meshRef = useRef<Mesh | null>(null);
 
@@ -509,25 +502,9 @@ function StandaloneCustomShaderScene({
     material.needsUpdate = true;
   }, [material]);
 
-  useFrame((state) => {
-    const elapsed = state.clock.getElapsedTime();
-    const specs = material.userData.xriftTimeUniforms as
-      | TimeUniformSpec[]
-      | undefined;
-    if (Array.isArray(specs)) {
-      for (const spec of specs) {
-        const uniform = material.uniforms[spec.name];
-        if (uniform) {
-          applyTimeUniformValue(uniform as MutableUniformValue, spec, elapsed);
-        }
-      }
-      return;
-    }
-    const uniformName = shader.animatedTimeUniform;
-    if (uniformName && material.uniforms[uniformName]) {
-      material.uniforms[uniformName].value = elapsed;
-    }
-  });
+  useFrame((state) =>
+    advanceMaterialTimeUniforms(material, state.clock.getElapsedTime()),
+  );
 
   return (
     <mesh ref={meshRef}>

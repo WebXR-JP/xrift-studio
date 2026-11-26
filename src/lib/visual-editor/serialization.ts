@@ -23,7 +23,10 @@ import { getBuiltinPrefabRecipe } from "./builtin-prefab-catalog";
 import { validateModelAssetContract } from "./model-import-contract";
 import { validateKhrInteractivityExtension } from "./interactivity-graph";
 import { isOpenBrushMaterialShader } from "./open-brush";
-import { isClassicR3fMaterialShader } from "./custom-shader-contract";
+import {
+  classicShaderUniformTextureAssetIds,
+  isClassicR3fMaterialShader,
+} from "./custom-shader-contract";
 import {
   MATERIAL_EXTENSION_DESCRIPTORS,
   materialExtensionFieldNames,
@@ -678,17 +681,20 @@ function validateMaterialAsset(
     for (const [uniformName, uniform] of Object.entries(
       asset.shader.uniforms,
     )) {
-      if (uniform.kind !== "texture") continue;
-      const texture = assets[uniform.textureAssetId];
-      if (!isRecord(texture) || texture.kind !== "texture") {
+      // A cube map names six Assets; every other texture kind names one.
+      classicShaderUniformTextureAssetIds(uniform).forEach((assetId, index) => {
+        const texture = assets[assetId];
+        if (isRecord(texture) && texture.kind === "texture") return;
         issues.push(
           issue(
-            `${path}.shader.uniforms.${uniformName}.textureAssetId`,
+            uniform.kind === "texture-cube"
+              ? `${path}.shader.uniforms.${uniformName}.faces.${index}.textureAssetId`
+              : `${path}.shader.uniforms.${uniformName}.textureAssetId`,
             "reference",
             "Classic shader uniform must reference a Texture Asset",
           ),
         );
-      }
+      });
     }
     if (asset.shader.sourceModelAssetId) {
       const model = assets[asset.shader.sourceModelAssetId];

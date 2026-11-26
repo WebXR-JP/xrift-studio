@@ -571,6 +571,14 @@ glTFは一つのメッシュに複数のメッシュprimitiveを持ち、各prim
 
 GLSLを直接書くマテリアルはシェーダー素材として持つ。シェーダー素材はUTF-8のGLSL元データとhashを管理下に保存し、マテリアル側はシェーダー素材ID、typed uniform values、テクスチャuniformの素材ID参照を持つ。Studio動作確認、Editorプレビュー、生成物は同じuniform descriptorを読む。空の背景シェーダーと水面マテリアルもこの仕組みの上に置き、シーンの風とライトを共通入力として受け取る（[マテリアルカタログ仕様](./MATERIAL_CATALOG_SPEC.md)）。
 
+コードから取り込んだShaderMaterialは、マテリアルの`shader`に`kind: "classic-r3f"`の記述として持つ。記述の型と上限は`packages/xrift-studio-runtime/src/classic-shader-contract.ts`、ShaderMaterialの組み立ては`classic-shader-runtime.ts`の`createClassicShaderMaterial`が単一の実装である。編集画面（Scene View、Play、プレビュー）は`createClassicR3fMaterial`経由で、Runtime JSONの読み込みは直接この関数を呼ぶ。生成するワールドには同じソースを`src/xrift-studio/`へ同梱し、`XriftClassicShaderMaterial`が呼ぶ。経路ごとの組み立て処理を増やさない。
+
+uniformの種類は`number`、`color`、`vector`、`matrix`（9個か16個、列優先）、`array`（1〜4096個の数値）、`texture`、`texture-3d`、`texture-cube`。variantは`side`、`transparent`、`depthWrite`、`defines`、`blending`、`frustumCulled`を持つ。後から加えた項目はすべて省略可能で、省略時は以前の描画になる。上限の根拠は`CLASSIC_SHADER_LIMITS`の注釈に記す。
+
+テクスチャはTexture Assetごとに1回だけ読み込み、uniformごとに複製を渡す。複製は画像を共有し、サンプラーの設定だけを持つ。`texture`は8bitの画像・KTX2・EXRを読む。EXRは`classic-shader-data-texture.ts`がファイルの精度（16bitか32bit）のまま読む。`texture-3d`は横並びの8bit画像から、`texture-cube`は6枚の8bit画像から作り、同じ画像からは1つだけ作る。2Dの画像は上端がv = 1、3Dは画像の上端がy = 0になる。
+
+`frustumCulled: false`はマテリアルの`userData`に記録し、`applyClassicShaderMeshState`がそのマテリアルを着けたMeshへ反映する。外すと、ほかに求めるマテリアルがなければMeshの元の値へ戻す。時刻のuniformは`userData.xriftTimeUniforms`に記録し、各経路が`advanceMaterialTimeUniforms`で進める。組み立てた後に`uniforms`やその要素を差し替えない。値だけを書き換える。
+
 #### マテリアルの新規作成
 
 素材の「作成」から「マテリアル」を選び、名前とauthoringプリセットを指定する。既定プリセットは「標準サーフェス」として白、不透明、metallic `0`、roughness `0.7`、double-sided offを明示し、Khronos coreの省略時既定値と同一だと誤解させない。「glTF既定値」プリセットを選んだ場合だけmetallic / roughnessを`1`にする。

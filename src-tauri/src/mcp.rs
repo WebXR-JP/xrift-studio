@@ -1974,6 +1974,70 @@ fn terrain_grass_appearance_schema() -> Value {
     })
 }
 
+/// The classic-r3f Custom Shader fields, shared by the create and update tools.
+/// The Editor validates the same rules and answers with the reason for each
+/// uniform or variant; this schema is what tells a client the shape to send.
+fn custom_shader_schema(description: &str, minimum_properties: u64) -> Value {
+    let wrap = json!({ "type": "string", "enum": ["repeat", "clamp-to-edge"] });
+    json!({
+        "type": "object",
+        "description": description,
+        "minProperties": minimum_properties,
+        "properties": {
+            "sourceModulePath": { "type": "string", "minLength": 1, "description": "A label for where the shader came from. It is never loaded or evaluated." },
+            "vertexShader": { "type": "string", "description": "GLSL containing void main(), at most 524288 characters." },
+            "fragmentShader": { "type": "string", "description": "GLSL containing void main(), at most 524288 characters." },
+            "uniforms": {
+                "type": "object",
+                "description": "GLSL uniform name to its value. At most 128 uniforms. This key replaces every uniform, so send the complete object.",
+                "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                        "kind": { "type": "string", "enum": ["number", "color", "vector", "matrix", "array", "texture", "texture-3d", "texture-cube"] },
+                        "value": { "type": ["number", "string", "array"], "description": "number: one number. color: #rrggbb. vector: 2 to 4 numbers. matrix: 9 numbers (mat3) or 16 numbers (mat4), column-major. array: 1 to 4096 flat numbers for float[], vecN[] or matN[]." },
+                        "textureAssetId": { "type": "string", "minLength": 1, "description": "texture: an image, KTX2 or EXR Texture Asset (EXR is read as float data). texture-3d: an image Texture Asset holding the slices side by side." },
+                        "slices": { "type": "integer", "minimum": 1, "maximum": 256, "description": "texture-3d only. Slices in the strip; omit for square slices (width / height)." },
+                        "faces": {
+                            "type": "array", "minItems": 6, "maxItems": 6,
+                            "description": "texture-cube only. Six image Texture Assets of one square size, in +X, -X, +Y, -Y, +Z, -Z order.",
+                            "items": { "type": "object", "properties": { "textureAssetId": { "type": "string", "minLength": 1 } }, "required": ["textureAssetId"] }
+                        },
+                        "colorSpace": { "type": "string", "enum": ["srgb", "linear"], "description": "Texture kinds. Default linear." },
+                        "filter": { "type": "string", "enum": ["nearest", "linear"], "description": "Texture kinds. Default linear." },
+                        "generateMipmaps": { "type": "boolean", "description": "texture and texture-cube. Default false." },
+                        "wrapS": wrap.clone(),
+                        "wrapT": wrap.clone(),
+                        "wrapR": wrap
+                    },
+                    "required": ["kind"]
+                }
+            },
+            "variants": {
+                "type": "array", "minItems": 1, "maxItems": 32,
+                "description": "How the shader is drawn, per mesh name. A mesh wears the first variant whose meshNameIncludes its name contains, otherwise the variant without meshNameIncludes. This key replaces every variant, so send the complete array.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                        "meshNameIncludes": { "type": "string", "minLength": 1, "maxLength": 80, "description": "Case-insensitive part of an Object3D name. Omit on the fallback variant." },
+                        "defines": { "type": "object", "additionalProperties": { "type": "string" }, "description": "GLSL #define names to values. At most 32." },
+                        "side": { "type": "string", "enum": ["front", "back", "double"] },
+                        "transparent": { "type": "boolean", "description": "Draw in the transparent pass, after opaque surfaces and back to front." },
+                        "depthWrite": { "type": "boolean" },
+                        "blending": { "type": "string", "enum": ["normal", "additive", "multiply", "subtractive"], "description": "Default normal. It does not set transparent: a glow is transparent true, depthWrite false, blending additive." },
+                        "frustumCulled": { "type": "boolean", "description": "Default true. false keeps the meshes wearing this variant drawn even when their own bounds are off screen, for a vertex shader that moves them elsewhere." }
+                    },
+                    "required": ["name", "defines", "side", "transparent", "depthWrite"]
+                }
+            },
+            "animatedTimeUniform": { "type": "string", "description": "A number uniform that receives the elapsed seconds every frame. Uniforms declared with a time name such as uTime are found without it." },
+            "vertexShaderAssetId": { "type": "string", "minLength": 1, "description": "A vertex Shader Asset the GLSL is read from." },
+            "fragmentShaderAssetId": { "type": "string", "minLength": 1, "description": "A fragment Shader Asset the GLSL is read from." },
+            "sourceModelAssetId": { "type": "string", "minLength": 1, "description": "A Model Asset the Material preview draws on." }
+        }
+    })
+}
+
 fn material_patch_schema() -> Value {
     json!({
     "type": "object",
@@ -4291,7 +4355,7 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "create_custom_shader",
-            "description": "Create a reusable Material with an authored GLSL Custom Shader, or attach a starter/provided Custom Shader to an existing Material. The shader is saved inside the Material and is immediately available to set_material, Scene View, Play, and compile. The result's compile field reports whether the Scene View could compile and link it: status ok, or error with compile.issues, one per failed program, holding the GLSL compiler's own programLog, vertexLog and fragmentLog plus lines[] whose line is the line in your own source (reportedLine is the number in the raw log, which also counts the code three.js puts in front). The shader is saved even when it does not compile, and its Material then draws nothing, so fix the reported lines with update_custom_shader. status pending (the driver was still compiling after 5 seconds) or unknown (no Scene View was showing) means there is no outcome yet: call get_custom_shader for it.",
+            "description": "Create a reusable Material with an authored GLSL Custom Shader (kind classic-r3f), or attach a starter/provided Custom Shader to an existing Material. Choose it for a surface an ordinary Material cannot express, such as a ShaderMaterial taken from a code-built React Three Fiber world; for a sky or water look use list_material_presets instead. shader.uniforms maps each GLSL uniform name to { kind, ... }: number, color (#rrggbb), vector (2 to 4 numbers), matrix (9 numbers for mat3 or 16 for mat4, column-major), array (1 to 4096 flat numbers for float[], vecN[] or matN[]; a mat2 is an array of 4; standalone headsets guarantee only 224 vec4 rows per fragment program), texture (sampler2D from a Texture Asset: an image, a KTX2, or an EXR, which is read as float data in the precision its file stores), texture-3d (sampler3D cut from a strip image whose slices sit side by side, such as a 32-cubed colour table drawn as 1024 x 32; slices defaults to width / height and each side may be 256 texels at most) and texture-cube (samplerCube from faces, six { textureAssetId } in +X, -X, +Y, -Y, +Z, -Z order, all one square size). A texture kind takes colorSpace, filter, wrapS and wrapT (texture-3d also wrapR) and keeps the three.js loader orientation, where the top row of the picture is v = 1; in a texture-3d the top row of each slice is v = 0 and the leftmost slice is w = 0. texture-3d and texture-cube need an image that is not KTX2, EXR or HDR. shader.variants needs at least one entry and holds defines, side, transparent and depthWrite, and may add blending (normal, additive, multiply or subtractive) and frustumCulled. Blending does not move a variant into the transparent pass on its own: for a glow send transparent true, depthWrite false and blending additive. Send frustumCulled false only for the variant whose vertex shader moves its meshes away from their own bounds, because those meshes are then drawn even when off screen. The shader is saved inside the Material and is immediately available to set_material, Scene View, Play, and compile. Fails with CUSTOM_SHADER_INVALID, with the reason for each uniform or variant in details.diagnostics, and with CUSTOM_SHADER_TEXTURE_INVALID when a texture uniform names a Texture Asset that is missing or that its kind cannot read; nothing is saved in either case. That validation checks the shape only, not whether the GLSL compiles. The result's compile field reports whether the Scene View could compile and link it: status ok, or error with compile.issues, one per failed program, holding the GLSL compiler's own programLog, vertexLog and fragmentLog plus lines[] whose line is the line in your own source (reportedLine is the number in the raw log, which also counts the code three.js puts in front). The shader is saved even when it does not compile, and its Material then draws nothing, so fix the reported lines with update_custom_shader. status pending (the driver was still compiling after 5 seconds) or unknown (no Scene View was showing) means there is no outcome yet: call get_custom_shader for it. Next, assign it with set_material and check the result with capture_scene_view.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -4301,7 +4365,7 @@ pub(crate) fn tool_definitions() -> Value {
                     "materialAssetId": { "type": "string", "minLength": 1 },
                     "name": { "type": "string", "minLength": 1, "maxLength": 100 },
                     "folderId": { "type": "string", "minLength": 1 },
-                    "shader": { "type": "object", "description": "Optional complete or partial classic-r3f shader. Omitted fields use the starter shader." }
+                    "shader": custom_shader_schema("Optional complete or partial classic-r3f shader. Omitted fields use the starter shader.", 0)
                 },
                 "required": ["projectId", "sceneId", "expectedRevision"],
                 "additionalProperties": false
@@ -4309,7 +4373,7 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "get_custom_shader",
-            "description": "Read the authored GLSL, uniforms, variants, and animated time uniform stored in a Material, and compile it in the Scene View to report compile. Choose it to learn why a Material draws nothing, to read in full a failure listed in get_editor_context.customShaderErrors, or after a write answered pending or unknown. compile.status is ok, error, pending or unknown. On error each of compile.issues carries programLog, vertexLog, fragmentLog and lines[] (line is your own source line, reportedLine the line in the raw log); origin check is the Material compiled on a plain mesh for this call, origin scene is the program a mesh in the Scene is drawn with, which an instanced or skinned mesh can fail on its own. Compiling changes nothing in the project, and the call never waits for a Material nothing draws. Returns an error when the Material is still PBR or an OpenBrush preset.",
+            "description": "Read the authored GLSL, uniforms, variants, and animated time uniform stored in a Material, and compile it in the Scene View to report compile. The shader comes in the shape create_custom_shader accepts: every uniform kind (number, color, vector, matrix, array, texture, texture-3d, texture-cube) and every variant field (defines, side, transparent, depthWrite, blending, frustumCulled). A variant without blending is drawn normal and one without frustumCulled is culled. Call it before update_custom_shader, because that tool replaces uniforms or variants whole. Choose it to learn why a Material draws nothing, to read in full a failure listed in get_editor_context.customShaderErrors, or after a write answered pending or unknown. compile.status is ok, error, pending or unknown. On error each of compile.issues carries programLog, vertexLog, fragmentLog and lines[] (line is your own source line, reportedLine the line in the raw log); origin check is the Material compiled on a plain mesh for this call, origin scene is the program a mesh in the Scene is drawn with, which an instanced or skinned mesh can fail on its own. Compiling changes nothing in the project, and the call never waits for a Material nothing draws. Returns CUSTOM_SHADER_NOT_FOUND when the Material is still PBR or an OpenBrush preset.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -4321,7 +4385,7 @@ pub(crate) fn tool_definitions() -> Value {
         },
         {
             "name": "update_custom_shader",
-            "description": "Validate and persist a partial GLSL Custom Shader update inside one Material. Updates use the same project, scene, revision, history, autosave, Play dependency, and Scene View path as Material editing; invalid GLSL IR is rejected with diagnostics and does not change the document. That validation only checks the shape (void main() in both stages, uniforms, variants): GLSL that passes it is saved even when it does not compile, and the Material then draws nothing. Read compile in the result, which has the same shape as in get_custom_shader: on status error correct the lines named in compile.issues[].lines[].line and send the patch again.",
+            "description": "Validate and persist a partial GLSL Custom Shader update inside one Material. Each key of patch replaces that field whole: to change one uniform, or one variant's blending or frustumCulled, read get_custom_shader, edit the entry and send the complete uniforms or variants back. The uniform kinds, the variant fields and their limits are the ones create_custom_shader describes. Updates use the same project, scene, revision, history, autosave, Play dependency, and Scene View path as Material editing. Invalid data is rejected with CUSTOM_SHADER_INVALID and details.diagnostics naming the uniform or variant, and a texture uniform whose Texture Asset is missing or unreadable for its kind with CUSTOM_SHADER_TEXTURE_INVALID; neither changes the document. That validation only checks the shape (void main() in both stages, uniforms, variants): GLSL that passes it is saved even when it does not compile, and the Material then draws nothing. Read compile in the result, which has the same shape as in get_custom_shader: on status error correct the lines named in compile.issues[].lines[].line and send the patch again. Check the change with capture_scene_view on a mesh that wears the Material.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -4329,7 +4393,7 @@ pub(crate) fn tool_definitions() -> Value {
                     "sceneId": { "type": "string" },
                     "expectedRevision": { "type": "integer", "minimum": 0 },
                     "materialAssetId": { "type": "string", "minLength": 1 },
-                    "patch": { "type": "object", "minProperties": 1 }
+                    "patch": custom_shader_schema("The shader fields to replace. At least one.", 1)
                 },
                 "required": ["projectId", "sceneId", "expectedRevision", "materialAssetId", "patch"],
                 "additionalProperties": false
@@ -4954,6 +5018,47 @@ mod tests {
         assert_eq!(mtoon.pointer("/specVersion/enum"), Some(&json!(["1.0"])));
         assert_eq!(mtoon.pointer("/outlineWidthMode/enum"), Some(&json!(["none", "worldCoordinates", "screenCoordinates"])));
         assert_eq!(patch.pointer("/shadingModel/enum"), Some(&json!(["standard", "mtoon-0.x", "mtoon-1.0"])));
+    }
+
+    #[test]
+    fn custom_shader_tools_expose_every_uniform_kind_and_variant_setting() {
+        let tools = tool_definitions();
+        let tools = tools.as_array().expect("tool list");
+        let create = tools.iter().find(|tool| tool["name"] == "create_custom_shader").expect("create tool");
+        let update = tools.iter().find(|tool| tool["name"] == "update_custom_shader").expect("update tool");
+        let read = tools.iter().find(|tool| tool["name"] == "get_custom_shader").expect("read tool");
+        let shader = create.pointer("/inputSchema/properties/shader").expect("shader");
+        let patch = update.pointer("/inputSchema/properties/patch").expect("patch");
+        assert_eq!(shader.get("properties"), patch.get("properties"), "create and update must describe one shader shape");
+        assert_eq!(patch.pointer("/minProperties"), Some(&json!(1)));
+        assert_eq!(
+            shader.pointer("/properties/uniforms/additionalProperties/properties/kind/enum"),
+            Some(&json!(["number", "color", "vector", "matrix", "array", "texture", "texture-3d", "texture-cube"]))
+        );
+        let variant = shader.pointer("/properties/variants/items/properties").expect("variant");
+        assert_eq!(variant.pointer("/blending/enum"), Some(&json!(["normal", "additive", "multiply", "subtractive"])));
+        assert_eq!(variant.pointer("/frustumCulled/type"), Some(&json!("boolean")));
+        // Old callers send neither field, so neither may become required.
+        assert_eq!(
+            shader.pointer("/properties/variants/items/required"),
+            Some(&json!(["name", "defines", "side", "transparent", "depthWrite"]))
+        );
+        for tool in [create, update, read] {
+            let description = tool["description"].as_str().unwrap();
+            for word in ["matrix", "array", "texture-3d", "texture-cube", "blending", "frustumCulled"] {
+                assert!(
+                    tool["name"] == "update_custom_shader" && ["matrix", "array", "texture-3d", "texture-cube"].contains(&word)
+                        || description.contains(word),
+                    "{} must mention {word}", tool["name"]
+                );
+            }
+        }
+        // An AI provider rejects a tool whose parameters carry a condition at the root.
+        for tool in [create, update] {
+            for key in ["anyOf", "oneOf", "allOf", "not", "enum"] {
+                assert!(tool["inputSchema"].get(key).is_none(), "{} has a root {key}", tool["name"]);
+            }
+        }
     }
 
     #[test]
