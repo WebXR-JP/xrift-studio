@@ -843,11 +843,13 @@
     },
     {
       "slug": "custom-shaders",
+      "reviewedVersion": "1.0.20",
+      "reviewedOn": "2026-11-26",
       "title": "GLSLでマテリアルを編集する",
-      "description": "カスタムシェーダーを作り、頂点とフラグメントのGLSLで色や質感を編集できます。",
+      "description": "カスタムシェーダーを作り、頂点とフラグメントのGLSLで色や質感を編集できます。コンパイルできないときの直し方も説明します。",
       "group": "materials-advanced",
       "file": "custom-shaders.md",
-      "keywords": "GLSL Shader カスタムシェーダー 頂点 フラグメント uniform PBR",
+      "keywords": "GLSL Shader カスタムシェーダー 頂点 フラグメント uniform PBR コンパイル エラー 表示されない コンパイラのログ",
       "related": [
         "materials",
         "sky-and-water",
