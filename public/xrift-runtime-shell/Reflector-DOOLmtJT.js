@@ -1,4 +1,4 @@
-import { importShared } from './__federation_fn_import-DO4bQy68.js';
+import { importShared } from './__federation_fn_import-KOOfp08f.js';
 
 const {Color,Matrix4,Mesh,Plane,ShaderMaterial,UniformsUtils,Vector3,Vector4,WebGLRenderTarget,HalfFloatType} = await importShared('three');
 

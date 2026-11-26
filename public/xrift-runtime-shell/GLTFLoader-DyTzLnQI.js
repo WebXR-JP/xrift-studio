@@ -1,4 +1,4 @@
-import { importShared } from './__federation_fn_import-DO4bQy68.js';
+import { importShared } from './__federation_fn_import-KOOfp08f.js';
 
 const {BufferAttribute: BufferAttribute$1,BufferGeometry: BufferGeometry$1,Float32BufferAttribute,InstancedBufferAttribute: InstancedBufferAttribute$1,InterleavedBuffer: InterleavedBuffer$1,InterleavedBufferAttribute: InterleavedBufferAttribute$1,TriangleFanDrawMode: TriangleFanDrawMode$1,TriangleStripDrawMode: TriangleStripDrawMode$1,TrianglesDrawMode,Vector3: Vector3$2} = await importShared('three');
 

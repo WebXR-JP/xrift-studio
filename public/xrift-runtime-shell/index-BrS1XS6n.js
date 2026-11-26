@@ -1,10 +1,10 @@
-import { importShared } from './__federation_fn_import-DO4bQy68.js';
+import { importShared } from './__federation_fn_import-KOOfp08f.js';
 import { _ as __vitePreload } from './preload-helper-Dea3Szod.js';
-import { G as GLTFLoader, c as clone } from './GLTFLoader-Oiq62wBr.js';
-import { DRACOLoader } from './__federation_shared_three/addons/loaders/DRACOLoader.js-CyYRng7f.js';
-import { KTX2Loader } from './__federation_shared_three/addons/loaders/KTX2Loader.js-CNPoFHEQ.js';
-import { R as Reflector } from './Reflector-C3IAZMsG.js';
-import { T as Text, p as preloadFont } from './troika-three-text.esm-sZQUIM6h.js';
+import { G as GLTFLoader, c as clone } from './GLTFLoader-DyTzLnQI.js';
+import { DRACOLoader } from './__federation_shared_three/addons/loaders/DRACOLoader.js-Ct_OpDe7.js';
+import { KTX2Loader } from './__federation_shared_three/addons/loaders/KTX2Loader.js-Cs5IY5h1.js';
+import { R as Reflector } from './Reflector-DOOLmtJT.js';
+import { T as Text, p as preloadFont } from './troika-three-text.esm-IN3pr1sn.js';
 
 /** Read accessors, not .array: imported glTF can have interleaved attributes. */
 function bakeXriftColliderGeometry(position, index, matrix, flipWinding = false) {
@@ -327,7 +327,7 @@ const CopyShader = {
 
 };
 
-const {BufferGeometry: BufferGeometry$4,Float32BufferAttribute: Float32BufferAttribute$2,OrthographicCamera,Mesh: Mesh$6} = await importShared('three');
+const {BufferGeometry: BufferGeometry$5,Float32BufferAttribute: Float32BufferAttribute$2,OrthographicCamera,Mesh: Mesh$6} = await importShared('three');
 
 
 /**
@@ -432,7 +432,7 @@ const _camera = new OrthographicCamera( -1, 1, 1, -1, 0, 1 );
 
 // https://github.com/mrdoob/three.js/pull/21358
 
-class FullscreenTriangleGeometry extends BufferGeometry$4 {
+class FullscreenTriangleGeometry extends BufferGeometry$5 {
 
 	constructor() {
 
@@ -513,7 +513,7 @@ class FullScreenQuad {
 
 }
 
-const {ShaderMaterial: ShaderMaterial$4,UniformsUtils: UniformsUtils$2} = await importShared('three');
+const {ShaderMaterial: ShaderMaterial$5,UniformsUtils: UniformsUtils$3} = await importShared('three');
 
 /**
  * This pass can be used to create a post processing effect
@@ -564,7 +564,7 @@ class ShaderPass extends Pass {
 		 */
 		this.material = null;
 
-		if ( shader instanceof ShaderMaterial$4 ) {
+		if ( shader instanceof ShaderMaterial$5 ) {
 
 			this.uniforms = shader.uniforms;
 
@@ -572,9 +572,9 @@ class ShaderPass extends Pass {
 
 		} else if ( shader ) {
 
-			this.uniforms = UniformsUtils$2.clone( shader.uniforms );
+			this.uniforms = UniformsUtils$3.clone( shader.uniforms );
 
-			this.material = new ShaderMaterial$4( {
+			this.material = new ShaderMaterial$5( {
 
 				name: ( shader.name !== undefined ) ? shader.name : 'unspecified',
 				defines: Object.assign( {}, shader.defines ),
@@ -835,7 +835,7 @@ class ClearMaskPass extends Pass {
 
 }
 
-const {HalfFloatType: HalfFloatType$5,NoBlending: NoBlending$1,Timer,Vector2: Vector2$7,WebGLRenderTarget: WebGLRenderTarget$3} = await importShared('three');
+const {HalfFloatType: HalfFloatType$7,NoBlending: NoBlending$1,Timer,Vector2: Vector2$7,WebGLRenderTarget: WebGLRenderTarget$3} = await importShared('three');
 
 /**
  * Used to implement post-processing effects in three.js.
@@ -894,7 +894,7 @@ class EffectComposer {
 			this._width = size.width;
 			this._height = size.height;
 
-			renderTarget = new WebGLRenderTarget$3( this._width * this._pixelRatio, this._height * this._pixelRatio, { type: HalfFloatType$5 } );
+			renderTarget = new WebGLRenderTarget$3( this._width * this._pixelRatio, this._height * this._pixelRatio, { type: HalfFloatType$7 } );
 			renderTarget.texture.name = 'EffectComposer.rt1';
 
 		} else {
@@ -1190,7 +1190,7 @@ class EffectComposer {
 
 }
 
-const {Color: Color$a} = await importShared('three');
+const {Color: Color$b} = await importShared('three');
 
 /**
  * This class represents a render pass. It takes a camera and a scene and produces
@@ -1292,7 +1292,7 @@ class RenderPass extends Pass {
 		 */
 		this.isRenderPass = true;
 
-		this._oldClearColor = new Color$a();
+		this._oldClearColor = new Color$b();
 
 	}
 
@@ -1848,7 +1848,7 @@ class SimplexNoise {
 
 }
 
-const {Matrix4: Matrix4$2,Vector2: Vector2$6} = await importShared('three');
+const {Matrix4: Matrix4$3,Vector2: Vector2$6} = await importShared('three');
 
 
 /**
@@ -1883,8 +1883,8 @@ const SSAOShader = {
 		'cameraNear': { value: null },
 		'cameraFar': { value: null },
 		'resolution': { value: new Vector2$6() },
-		'cameraProjectionMatrix': { value: new Matrix4$2() },
-		'cameraInverseProjectionMatrix': { value: new Matrix4$2() },
+		'cameraProjectionMatrix': { value: new Matrix4$3() },
+		'cameraInverseProjectionMatrix': { value: new Matrix4$3() },
 		'kernelRadius': { value: 8 },
 		'minDistance': { value: 0.005 },
 		'maxDistance': { value: 0.05 },
@@ -2170,7 +2170,7 @@ const SSAOBlurShader = {
 
 };
 
-const {AddEquation,Color: Color$9,CustomBlending,DataTexture,DepthTexture,DstAlphaFactor,DstColorFactor,FloatType: FloatType$2,HalfFloatType: HalfFloatType$4,MathUtils: MathUtils$1,MeshNormalMaterial,NearestFilter,NoBlending,RedFormat: RedFormat$1,DepthStencilFormat,UnsignedInt248Type,RepeatWrapping: RepeatWrapping$1,ShaderMaterial: ShaderMaterial$3,UniformsUtils: UniformsUtils$1,Vector3: Vector3$5,WebGLRenderTarget: WebGLRenderTarget$2,ZeroFactor} = await importShared('three');
+const {AddEquation,Color: Color$a,CustomBlending,DataTexture,DepthTexture,DstAlphaFactor,DstColorFactor,FloatType: FloatType$4,HalfFloatType: HalfFloatType$6,MathUtils: MathUtils$1,MeshNormalMaterial,NearestFilter: NearestFilter$1,NoBlending,RedFormat: RedFormat$1,DepthStencilFormat,UnsignedInt248Type,RepeatWrapping: RepeatWrapping$2,ShaderMaterial: ShaderMaterial$4,UniformsUtils: UniformsUtils$2,Vector3: Vector3$5,WebGLRenderTarget: WebGLRenderTarget$2,ZeroFactor} = await importShared('three');
 
 /**
  * A pass for a basic SSAO effect.
@@ -2300,23 +2300,23 @@ class SSAOPass extends Pass {
 		// normal render target with depth buffer
 
 		this.normalRenderTarget = new WebGLRenderTarget$2( this.width, this.height, {
-			minFilter: NearestFilter,
-			magFilter: NearestFilter,
-			type: HalfFloatType$4,
+			minFilter: NearestFilter$1,
+			magFilter: NearestFilter$1,
+			type: HalfFloatType$6,
 			depthTexture: depthTexture
 		} );
 
 		// ssao render target
 
-		this.ssaoRenderTarget = new WebGLRenderTarget$2( this.width, this.height, { type: HalfFloatType$4 } );
+		this.ssaoRenderTarget = new WebGLRenderTarget$2( this.width, this.height, { type: HalfFloatType$6 } );
 
 		this.blurRenderTarget = this.ssaoRenderTarget.clone();
 
 		// ssao material
 
-		this.ssaoMaterial = new ShaderMaterial$3( {
+		this.ssaoMaterial = new ShaderMaterial$4( {
 			defines: Object.assign( {}, SSAOShader.defines ),
-			uniforms: UniformsUtils$1.clone( SSAOShader.uniforms ),
+			uniforms: UniformsUtils$2.clone( SSAOShader.uniforms ),
 			vertexShader: SSAOShader.vertexShader,
 			fragmentShader: SSAOShader.fragmentShader,
 			blending: NoBlending
@@ -2341,9 +2341,9 @@ class SSAOPass extends Pass {
 
 		// blur material
 
-		this.blurMaterial = new ShaderMaterial$3( {
+		this.blurMaterial = new ShaderMaterial$4( {
 			defines: Object.assign( {}, SSAOBlurShader.defines ),
-			uniforms: UniformsUtils$1.clone( SSAOBlurShader.uniforms ),
+			uniforms: UniformsUtils$2.clone( SSAOBlurShader.uniforms ),
 			vertexShader: SSAOBlurShader.vertexShader,
 			fragmentShader: SSAOBlurShader.fragmentShader
 		} );
@@ -2352,9 +2352,9 @@ class SSAOPass extends Pass {
 
 		// material for rendering the depth
 
-		this.depthRenderMaterial = new ShaderMaterial$3( {
+		this.depthRenderMaterial = new ShaderMaterial$4( {
 			defines: Object.assign( {}, SSAODepthShader.defines ),
-			uniforms: UniformsUtils$1.clone( SSAODepthShader.uniforms ),
+			uniforms: UniformsUtils$2.clone( SSAODepthShader.uniforms ),
 			vertexShader: SSAODepthShader.vertexShader,
 			fragmentShader: SSAODepthShader.fragmentShader,
 			blending: NoBlending
@@ -2365,8 +2365,8 @@ class SSAOPass extends Pass {
 
 		// material for rendering the content of a render target
 
-		this.copyMaterial = new ShaderMaterial$3( {
-			uniforms: UniformsUtils$1.clone( CopyShader.uniforms ),
+		this.copyMaterial = new ShaderMaterial$4( {
+			uniforms: UniformsUtils$2.clone( CopyShader.uniforms ),
 			vertexShader: CopyShader.vertexShader,
 			fragmentShader: CopyShader.fragmentShader,
 			transparent: true,
@@ -2384,7 +2384,7 @@ class SSAOPass extends Pass {
 
 		this._fsQuad = new FullScreenQuad( null );
 
-		this._originalClearColor = new Color$9();
+		this._originalClearColor = new Color$a();
 
 	}
 
@@ -2620,9 +2620,9 @@ class SSAOPass extends Pass {
 
 		}
 
-		this.noiseTexture = new DataTexture( data, width, height, RedFormat$1, FloatType$2 );
-		this.noiseTexture.wrapS = RepeatWrapping$1;
-		this.noiseTexture.wrapT = RepeatWrapping$1;
+		this.noiseTexture = new DataTexture( data, width, height, RedFormat$1, FloatType$4 );
+		this.noiseTexture.wrapS = RepeatWrapping$2;
+		this.noiseTexture.wrapT = RepeatWrapping$2;
 		this.noiseTexture.needsUpdate = true;
 
 	}
@@ -2669,7 +2669,7 @@ SSAOPass.OUTPUT = {
 	'Normal': 4
 };
 
-const {Color: Color$8} = await importShared('three');
+const {Color: Color$9} = await importShared('three');
 
 
 /**
@@ -2690,7 +2690,7 @@ const LuminosityHighPassShader = {
 		'tDiffuse': { value: null },
 		'luminosityThreshold': { value: 1.0 },
 		'smoothWidth': { value: 1.0 },
-		'defaultColor': { value: new Color$8( 0x000000 ) },
+		'defaultColor': { value: new Color$9( 0x000000 ) },
 		'defaultOpacity': { value: 0.0 }
 
 	},
@@ -2733,7 +2733,7 @@ const LuminosityHighPassShader = {
 
 };
 
-const {AdditiveBlending: AdditiveBlending$2,Color: Color$7,HalfFloatType: HalfFloatType$3,MeshBasicMaterial: MeshBasicMaterial$3,ShaderMaterial: ShaderMaterial$2,UniformsUtils,Vector2: Vector2$5,Vector3: Vector3$4,WebGLRenderTarget: WebGLRenderTarget$1} = await importShared('three');
+const {AdditiveBlending: AdditiveBlending$3,Color: Color$8,HalfFloatType: HalfFloatType$5,MeshBasicMaterial: MeshBasicMaterial$3,ShaderMaterial: ShaderMaterial$3,UniformsUtils: UniformsUtils$1,Vector2: Vector2$5,Vector3: Vector3$4,WebGLRenderTarget: WebGLRenderTarget$1} = await importShared('three');
 
 /**
  * This pass is inspired by the bloom pass of Unreal Engine. It creates a
@@ -2805,7 +2805,7 @@ class UnrealBloomPass extends Pass {
 		 * @type {Color}
 		 * @default (0,0,0)
 		 */
-		this.clearColor = new Color$7( 0, 0, 0 );
+		this.clearColor = new Color$8( 0, 0, 0 );
 
 		/**
 		 * Overwritten to disable the swap.
@@ -2824,20 +2824,20 @@ class UnrealBloomPass extends Pass {
 		let resx = Math.round( this.resolution.x / 2 );
 		let resy = Math.round( this.resolution.y / 2 );
 
-		this.renderTargetBright = new WebGLRenderTarget$1( resx, resy, { type: HalfFloatType$3 } );
+		this.renderTargetBright = new WebGLRenderTarget$1( resx, resy, { type: HalfFloatType$5 } );
 		this.renderTargetBright.texture.name = 'UnrealBloomPass.bright';
 		this.renderTargetBright.texture.generateMipmaps = false;
 
 		for ( let i = 0; i < this.nMips; i ++ ) {
 
-			const renderTargetHorizontal = new WebGLRenderTarget$1( resx, resy, { type: HalfFloatType$3 } );
+			const renderTargetHorizontal = new WebGLRenderTarget$1( resx, resy, { type: HalfFloatType$5 } );
 
 			renderTargetHorizontal.texture.name = 'UnrealBloomPass.h' + i;
 			renderTargetHorizontal.texture.generateMipmaps = false;
 
 			this.renderTargetsHorizontal.push( renderTargetHorizontal );
 
-			const renderTargetVertical = new WebGLRenderTarget$1( resx, resy, { type: HalfFloatType$3 } );
+			const renderTargetVertical = new WebGLRenderTarget$1( resx, resy, { type: HalfFloatType$5 } );
 
 			renderTargetVertical.texture.name = 'UnrealBloomPass.v' + i;
 			renderTargetVertical.texture.generateMipmaps = false;
@@ -2853,12 +2853,12 @@ class UnrealBloomPass extends Pass {
 		// luminosity high pass material
 
 		const highPassShader = LuminosityHighPassShader;
-		this.highPassUniforms = UniformsUtils.clone( highPassShader.uniforms );
+		this.highPassUniforms = UniformsUtils$1.clone( highPassShader.uniforms );
 
 		this.highPassUniforms[ 'luminosityThreshold' ].value = threshold;
 		this.highPassUniforms[ 'smoothWidth' ].value = 0.01;
 
-		this.materialHighPassFilter = new ShaderMaterial$2( {
+		this.materialHighPassFilter = new ShaderMaterial$3( {
 			uniforms: this.highPassUniforms,
 			vertexShader: highPassShader.vertexShader,
 			fragmentShader: highPassShader.fragmentShader
@@ -2903,20 +2903,20 @@ class UnrealBloomPass extends Pass {
 
 		// blend material
 
-		this.copyUniforms = UniformsUtils.clone( CopyShader.uniforms );
+		this.copyUniforms = UniformsUtils$1.clone( CopyShader.uniforms );
 
-		this.blendMaterial = new ShaderMaterial$2( {
+		this.blendMaterial = new ShaderMaterial$3( {
 			uniforms: this.copyUniforms,
 			vertexShader: CopyShader.vertexShader,
 			fragmentShader: CopyShader.fragmentShader,
 			premultipliedAlpha: true,
-			blending: AdditiveBlending$2,
+			blending: AdditiveBlending$3,
 			depthTest: false,
 			depthWrite: false,
 			transparent: true
 		} );
 
-		this._oldClearColor = new Color$7();
+		this._oldClearColor = new Color$8();
 		this._oldClearAlpha = 1;
 
 		this._basic = new MeshBasicMaterial$3();
@@ -3109,7 +3109,7 @@ class UnrealBloomPass extends Pass {
 
 		}
 
-		return new ShaderMaterial$2( {
+		return new ShaderMaterial$3( {
 
 			defines: {
 				'KERNEL_RADIUS': kernelRadius
@@ -3169,7 +3169,7 @@ class UnrealBloomPass extends Pass {
 
 	_getCompositeMaterial( nMips ) {
 
-		return new ShaderMaterial$2( {
+		return new ShaderMaterial$3( {
 
 			defines: {
 				'NUM_MIPS': nMips
@@ -3605,7 +3605,7 @@ try {
 } catch (e) {
 }
 
-const {DataTextureLoader: DataTextureLoader$1,DataUtils: DataUtils$1,FloatType: FloatType$1,HalfFloatType: HalfFloatType$2,LinearFilter: LinearFilter$1,LinearSRGBColorSpace: LinearSRGBColorSpace$3,RedFormat,RGFormat,RGBAFormat: RGBAFormat$1} = await importShared('three');
+const {DataTextureLoader: DataTextureLoader$1,DataUtils: DataUtils$1,FloatType: FloatType$3,HalfFloatType: HalfFloatType$4,LinearFilter: LinearFilter$3,LinearSRGBColorSpace: LinearSRGBColorSpace$3,RedFormat,RGFormat,RGBAFormat: RGBAFormat$2} = await importShared('three');
 
 // Referred to the original Industrial Light & Magic OpenEXR implementation and the TinyEXR / Syoyo Fujita
 // implementation, so I have preserved their copyright notices.
@@ -3707,7 +3707,7 @@ class EXRLoader extends DataTextureLoader$1 {
 		 * @type {(HalfFloatType|FloatType)}
 		 * @default HalfFloatType
 		 */
-		this.type = HalfFloatType$2;
+		this.type = HalfFloatType$4;
 
 		/**
 		 * Texture output format.
@@ -3715,7 +3715,7 @@ class EXRLoader extends DataTextureLoader$1 {
 		 * @type {(RGBAFormat|RGFormat|RedFormat)}
 		 * @default RGBAFormat
 		 */
-		this.outputFormat = RGBAFormat$1;
+		this.outputFormat = RGBAFormat$2;
 
 		/**
 		 * For multi-part EXR files, the index of the part to load.
@@ -6592,10 +6592,10 @@ class EXRLoader extends DataTextureLoader$1 {
 
 				case 4:
 
-					if ( outputFormat == RGBAFormat$1 ) {
+					if ( outputFormat == RGBAFormat$2 ) {
 
 						fillAlpha = ! channels.A;
-						EXRDecoder.format = RGBAFormat$1;
+						EXRDecoder.format = RGBAFormat$2;
 						EXRDecoder.colorSpace = LinearSRGBColorSpace$3;
 						EXRDecoder.outputChannels = 4;
 						EXRDecoder.decodeChannels = { R: 0, G: 1, B: 2, A: 3 };
@@ -6624,10 +6624,10 @@ class EXRLoader extends DataTextureLoader$1 {
 
 				case 1:
 
-					if ( outputFormat == RGBAFormat$1 ) {
+					if ( outputFormat == RGBAFormat$2 ) {
 
 						fillAlpha = true;
-						EXRDecoder.format = RGBAFormat$1;
+						EXRDecoder.format = RGBAFormat$2;
 						EXRDecoder.colorSpace = LinearSRGBColorSpace$3;
 						EXRDecoder.outputChannels = 4;
 						EXRDecoder.shouldExpand = true;
@@ -6667,7 +6667,7 @@ class EXRLoader extends DataTextureLoader$1 {
 			// Luminance/chroma images always decode to RGBA; override whatever the output-format switch selected.
 			if ( EXRDecoder.yCbCr ) {
 
-				EXRDecoder.format = RGBAFormat$1;
+				EXRDecoder.format = RGBAFormat$2;
 				EXRDecoder.outputChannels = 4;
 				EXRDecoder.decodeChannels = { Y: 0, RY: 1, BY: 2 };
 				fillAlpha = true;
@@ -6679,11 +6679,11 @@ class EXRLoader extends DataTextureLoader$1 {
 				// half
 				switch ( outputType ) {
 
-					case FloatType$1:
+					case FloatType$3:
 						EXRDecoder.getter = parseFloat16;
 						break;
 
-					case HalfFloatType$2:
+					case HalfFloatType$4:
 						EXRDecoder.getter = parseUint16;
 						break;
 
@@ -6694,11 +6694,11 @@ class EXRLoader extends DataTextureLoader$1 {
 				// float
 				switch ( outputType ) {
 
-					case FloatType$1:
+					case FloatType$3:
 						EXRDecoder.getter = parseFloat32;
 						break;
 
-					case HalfFloatType$2:
+					case HalfFloatType$4:
 						EXRDecoder.getter = decodeFloat32;
 
 				}
@@ -6714,7 +6714,7 @@ class EXRLoader extends DataTextureLoader$1 {
 
 			switch ( outputType ) {
 
-				case FloatType$1:
+				case FloatType$3:
 					EXRDecoder.byteArray = new Float32Array( size );
 
 					// Fill initially with 1s for the alpha value if the texture is not RGBA, RGB values will be overwritten
@@ -6723,7 +6723,7 @@ class EXRLoader extends DataTextureLoader$1 {
 
 					break;
 
-				case HalfFloatType$2:
+				case HalfFloatType$4:
 					EXRDecoder.byteArray = new Uint16Array( size );
 
 					if ( fillAlpha )
@@ -6872,7 +6872,7 @@ class EXRLoader extends DataTextureLoader$1 {
 
 			const byteArray = EXRDecoder.byteArray;
 
-			if ( this.outputFormat == RGBAFormat$1 ) {
+			if ( this.outputFormat == RGBAFormat$2 ) {
 
 				for ( let i = 0; i < byteArray.length; i += 4 )
 					byteArray[ i + 2 ] = ( byteArray[ i + 1 ] = byteArray[ i ] );
@@ -6894,7 +6894,7 @@ class EXRLoader extends DataTextureLoader$1 {
 			const byteArray = EXRDecoder.byteArray;
 			const nPixels = EXRDecoder.width * EXRDecoder.height;
 
-			if ( this.type === HalfFloatType$2 ) {
+			if ( this.type === HalfFloatType$4 ) {
 
 				for ( let i = 0; i < nPixels; i ++ ) {
 
@@ -6939,8 +6939,8 @@ class EXRLoader extends DataTextureLoader$1 {
 			format: EXRDecoder.format,
 			colorSpace: EXRDecoder.colorSpace,
 			type: this.type,
-			minFilter: LinearFilter$1,
-			magFilter: LinearFilter$1,
+			minFilter: LinearFilter$3,
+			magFilter: LinearFilter$3,
 			generateMipmaps: false,
 			flipY: false,
 		};
@@ -6988,7 +6988,7 @@ class EXRLoader extends DataTextureLoader$1 {
 
 }
 
-const {DataTextureLoader,DataUtils,FloatType,HalfFloatType: HalfFloatType$1,LinearFilter,LinearSRGBColorSpace: LinearSRGBColorSpace$2} = await importShared('three');
+const {DataTextureLoader,DataUtils,FloatType: FloatType$2,HalfFloatType: HalfFloatType$3,LinearFilter: LinearFilter$2,LinearSRGBColorSpace: LinearSRGBColorSpace$2} = await importShared('three');
 
 
 /**
@@ -7022,7 +7022,7 @@ class HDRLoader extends DataTextureLoader {
          * @type {(HalfFloatType|FloatType)}
          * @default HalfFloatType
          */
-		this.type = HalfFloatType$1;
+		this.type = HalfFloatType$3;
 
 	}
 
@@ -7375,7 +7375,7 @@ class HDRLoader extends DataTextureLoader {
 
 		switch ( this.type ) {
 
-			case FloatType:
+			case FloatType$2:
 
 				numElements = image_rgba_data.length / 4;
 				const floatArray = new Float32Array( numElements * 4 );
@@ -7387,10 +7387,10 @@ class HDRLoader extends DataTextureLoader {
 				}
 
 				data = floatArray;
-				type = FloatType;
+				type = FloatType$2;
 				break;
 
-			case HalfFloatType$1:
+			case HalfFloatType$3:
 
 				numElements = image_rgba_data.length / 4;
 				const halfArray = new Uint16Array( numElements * 4 );
@@ -7402,7 +7402,7 @@ class HDRLoader extends DataTextureLoader {
 				}
 
 				data = halfArray;
-				type = HalfFloatType$1;
+				type = HalfFloatType$3;
 				break;
 
 			default:
@@ -7419,8 +7419,8 @@ class HDRLoader extends DataTextureLoader {
 			exposure: rgbe_header_info.exposure,
 			type: type,
 			colorSpace: LinearSRGBColorSpace$2,
-			minFilter: LinearFilter,
-			magFilter: LinearFilter,
+			minFilter: LinearFilter$2,
+			magFilter: LinearFilter$2,
 			generateMipmaps: false,
 			flipY: true
 		};
@@ -7469,7 +7469,7 @@ const {useEffect: useEffect$9,useMemo: useMemo$8,useRef: useRef$9} = await impor
 
 const {useFrame: useFrame$7,useThree: useThree$7} = await importShared('@react-three/fiber');
 
-const {AmbientLight: AmbientLight$3,Color: Color$6,EquirectangularReflectionMapping: EquirectangularReflectionMapping$2,Fog: Fog$2,LinearSRGBColorSpace: LinearSRGBColorSpace$1,SRGBColorSpace: SRGBColorSpace$6,TextureLoader: TextureLoader$1} = await importShared('three');
+const {AmbientLight: AmbientLight$3,Color: Color$7,EquirectangularReflectionMapping: EquirectangularReflectionMapping$2,Fog: Fog$2,LinearSRGBColorSpace: LinearSRGBColorSpace$1,SRGBColorSpace: SRGBColorSpace$7,TextureLoader: TextureLoader$1} = await importShared('three');
 const XRIFT_SCENE_RUNTIME_USER_DATA_KEY = "xriftSceneRuntime";
 /**
  * The authored compositor values, published for whoever needs to read them.
@@ -7673,7 +7673,7 @@ function createXriftGraphEventQueue(scope, names, receive) {
 }
 const isAmbientLight = (object) => object.isAmbientLight === true;
 const isAuthoredSky = (object) => object.userData[XRIFT_SCENE_SKYBOX_USER_DATA_KEY] === true;
-const linearColor$1 = (rgb) => new Color$6().setRGB(rgb[0], rgb[1], rgb[2], LinearSRGBColorSpace$1);
+const linearColor$1 = (rgb) => new Color$7().setRGB(rgb[0], rgb[1], rgb[2], LinearSRGBColorSpace$1);
 async function loadEquirectangularTexture(asset) {
     const format = asset.sourceFormat;
     let texture;
@@ -7683,7 +7683,7 @@ async function loadEquirectangularTexture(asset) {
     }
     else {
         texture = await new TextureLoader$1().loadAsync(asset.url);
-        texture.colorSpace = SRGBColorSpace$6;
+        texture.colorSpace = SRGBColorSpace$7;
     }
     texture.name = asset.name ? `${asset.name} (skybox)` : "xrift-scene-skybox";
     texture.flipY = asset.flipY ?? false;
@@ -7750,7 +7750,7 @@ function applyFog(scene, state, authored) {
     const far = Math.max(state.fogFar ?? baseFog?.far ?? 100, near + 0.001);
     const color = state.fogColor
         ? linearColor$1(state.fogColor)
-        : (baseFog?.color.clone() ?? new Color$6(0xffffff));
+        : (baseFog?.color.clone() ?? new Color$7(0xffffff));
     const live = scene.fog;
     if (live instanceof Fog$2 && live !== base) {
         live.color.copy(color);
@@ -7822,7 +7822,7 @@ function applyAmbient(scene, state, authored) {
     }
     owned.visible = true;
     owned.intensity = state.ambientIntensity ?? 1;
-    owned.color.copy(state.ambientColor ? linearColor$1(state.ambientColor) : new Color$6(0xffffff));
+    owned.color.copy(state.ambientColor ? linearColor$1(state.ambientColor) : new Color$7(0xffffff));
 }
 function applySky(scene, state, authored, override) {
     const touched = state.skybox !== null ||
@@ -8059,16 +8059,16 @@ const {useFrame: useFrame$6,useThree: useThree$6} = await importShared('@react-t
 
 const {useEffect: useEffect$8,useLayoutEffect: useLayoutEffect$3,useMemo: useMemo$7,useRef: useRef$8} = await importShared('react');
 
-const {ACESFilmicToneMapping: ACESFilmicToneMapping$1,HalfFloatType,NoToneMapping: NoToneMapping$1,RGBAFormat,SRGBColorSpace: SRGBColorSpace$5,Vector2: Vector2$4,WebGLRenderTarget} = await importShared('three');
+const {ACESFilmicToneMapping: ACESFilmicToneMapping$1,HalfFloatType: HalfFloatType$2,NoToneMapping: NoToneMapping$1,RGBAFormat: RGBAFormat$1,SRGBColorSpace: SRGBColorSpace$6,Vector2: Vector2$4,WebGLRenderTarget} = await importShared('three');
 /** Canvas MSAA does not carry into offscreen targets. Keep the composer's
  * default half-float precision even when its tone mapping is disabled. */
-function createSceneRenderTarget(gl, width, height, type = HalfFloatType) {
+function createSceneRenderTarget(gl, width, height, type = HalfFloatType$2) {
     const context = gl.getContext();
-    const supported = context.getInternalformatParameter(context.RENDERBUFFER, type === HalfFloatType ? context.RGBA16F : context.RGBA8, context.SAMPLES);
+    const supported = context.getInternalformatParameter(context.RENDERBUFFER, type === HalfFloatType$2 ? context.RGBA16F : context.RGBA8, context.SAMPLES);
     const samples = Math.min(4, gl.capabilities.maxSamples, supported?.length ? Math.max(...supported) : 0);
     return new WebGLRenderTarget(width, height, {
         type,
-        format: RGBAFormat,
+        format: RGBAFormat$1,
         depthBuffer: true,
         stencilBuffer: false,
         samples,
@@ -8084,7 +8084,7 @@ function resolveXriftRuntimePhysicsMode(setting, projectKind) {
     return setting === true || projectKind === "world" ? "local" : "off";
 }
 
-const {InstancedMesh: InstancedMesh$1,Material: Material$2,Matrix4: Matrix4$1} = await importShared('three');
+const {InstancedMesh: InstancedMesh$1,Material: Material$2,Matrix4: Matrix4$2} = await importShared('three');
 
 /** Shared by Play and both publication formats. Authoring meshes stay attached. */
 function createModelInstancing(root, entityIds, entityKey) {
@@ -8105,7 +8105,7 @@ function createModelInstancing(root, entityIds, entityKey) {
     return {
         update() {
             root.updateMatrixWorld(true);
-            const inverse = new Matrix4$1().copy(root.matrixWorld).invert();
+            const inverse = new Matrix4$2().copy(root.matrixWorld).invert();
             const hidden = new Set(originals);
             const candidates = [];
             const materialKeys = new Map();
@@ -8139,7 +8139,7 @@ function createModelInstancing(root, entityIds, entityKey) {
                 if (materials.some((m) => m.transparent || m.isShaderMaterial ||
                     m.onBeforeCompile !== Material$2.prototype.onBeforeCompile))
                     return;
-                const matrix = new Matrix4$1().multiplyMatrices(inverse, mesh.matrixWorld);
+                const matrix = new Matrix4$2().multiplyMatrices(inverse, mesh.matrixWorld);
                 // InstancedMesh cannot render mirrored transforms correctly.
                 if (matrix.determinant() <= 0)
                     return;
@@ -8383,7 +8383,7 @@ function createXriftExtrudeGeometry(profile) {
     return new ExtrudeGeometry(shape, { depth: profile.depth, steps: 1, bevelEnabled: false, curveSegments: 1 });
 }
 
-const {BufferGeometry: BufferGeometry$3,FileLoader,Float32BufferAttribute: Float32BufferAttribute$1,Group: Group$4,LineBasicMaterial,LineSegments,Loader,Material: Material$1,Mesh: Mesh$5,MeshPhongMaterial,Points,PointsMaterial: PointsMaterial$1,Vector3: Vector3$3,Color: Color$5,SRGBColorSpace: SRGBColorSpace$4} = await importShared('three');
+const {BufferGeometry: BufferGeometry$4,FileLoader: FileLoader$1,Float32BufferAttribute: Float32BufferAttribute$1,Group: Group$4,LineBasicMaterial,LineSegments,Loader: Loader$1,Material: Material$1,Mesh: Mesh$5,MeshPhongMaterial,Points,PointsMaterial: PointsMaterial$1,Vector3: Vector3$3,Color: Color$6,SRGBColorSpace: SRGBColorSpace$5} = await importShared('three');
 
 
 // o object_name | g group_name
@@ -8403,7 +8403,7 @@ const _vC = new Vector3$3();
 const _ab = new Vector3$3();
 const _cb = new Vector3$3();
 
-const _color$1 = new Color$5();
+const _color$1 = new Color$6();
 
 function ParserState() {
 
@@ -8820,7 +8820,7 @@ function ParserState() {
  * @augments Loader
  * @three_import import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
  */
-class OBJLoader extends Loader {
+class OBJLoader extends Loader$1 {
 
 	/**
 	 * Constructs a new OBJ loader.
@@ -8854,7 +8854,7 @@ class OBJLoader extends Loader {
 
 		const scope = this;
 
-		const loader = new FileLoader( this.manager );
+		const loader = new FileLoader$1( this.manager );
 		loader.setPath( this.path );
 		loader.setRequestHeader( this.requestHeader );
 		loader.setWithCredentials( this.withCredentials );
@@ -8954,7 +8954,7 @@ class OBJLoader extends Loader {
 								parseFloat( data[ 4 ] ),
 								parseFloat( data[ 5 ] ),
 								parseFloat( data[ 6 ] ),
-								SRGBColorSpace$4
+								SRGBColorSpace$5
 							);
 
 							state.colors.push( _color$1.r, _color$1.g, _color$1.b );
@@ -9154,7 +9154,7 @@ class OBJLoader extends Loader {
 				// Skip o/g line declarations that did not follow with any faces
 				if ( geometry.vertices.length === 0 ) continue;
 
-				const buffergeometry = new BufferGeometry$3();
+				const buffergeometry = new BufferGeometry$4();
 
 				buffergeometry.setAttribute( 'position', new Float32BufferAttribute$1( geometry.vertices, 3 ) );
 
@@ -9298,7 +9298,7 @@ class OBJLoader extends Loader {
 
 				const material = new PointsMaterial$1( { size: 1, sizeAttenuation: false } );
 
-				const buffergeometry = new BufferGeometry$3();
+				const buffergeometry = new BufferGeometry$4();
 
 				buffergeometry.setAttribute( 'position', new Float32BufferAttribute$1( state.vertices, 3 ) );
 
@@ -16388,7 +16388,7 @@ function resolveTextPanelPlate(background, blockBounds, anchorX, anchorY) {
  *     bounds, so a caption plate fits its caption without anyone typing width
  *     and height by hand.
  */
-const {DoubleSide: DoubleSide$3,FrontSide: FrontSide$3,Group: Group$3,Mesh: Mesh$4,MeshBasicMaterial: MeshBasicMaterial$2,PlaneGeometry: PlaneGeometry$2,Shape,ShapeGeometry} = await importShared('three');
+const {DoubleSide: DoubleSide$4,FrontSide: FrontSide$3,Group: Group$3,Mesh: Mesh$4,MeshBasicMaterial: MeshBasicMaterial$2,PlaneGeometry: PlaneGeometry$2,Shape,ShapeGeometry} = await importShared('three');
 /**
  * Han unification means an unqualified CJK run can resolve to a Chinese face,
  * which renders Japanese kanji with the wrong shapes. Studio authors Japanese
@@ -16572,7 +16572,7 @@ class XriftTextPanelObject extends Group$3 {
         // it does not disappear behind or in front of nearby world geometry.
         material.alphaTest = background.mode === "texture" ? 0.01 : 0;
         material.depthWrite = true;
-        material.side = background.doubleSided ? DoubleSide$3 : FrontSide$3;
+        material.side = background.doubleSided ? DoubleSide$4 : FrontSide$3;
         material.toneMapped = false;
         material.needsUpdate = true;
     }
@@ -16676,7 +16676,7 @@ function resolveImageQuadPlate(config, imageAspect) {
  * the decoded picture's own aspect ratio, so an author sets a width and the
  * photo keeps its proportions without anyone typing a height.
  */
-const {DoubleSide: DoubleSide$2,FrontSide: FrontSide$2,Group: Group$2,Mesh: Mesh$3,MeshBasicMaterial: MeshBasicMaterial$1,MeshStandardMaterial: MeshStandardMaterial$1,PlaneGeometry: PlaneGeometry$1} = await importShared('three');
+const {DoubleSide: DoubleSide$3,FrontSide: FrontSide$2,Group: Group$2,Mesh: Mesh$3,MeshBasicMaterial: MeshBasicMaterial$1,MeshStandardMaterial: MeshStandardMaterial$1,PlaneGeometry: PlaneGeometry$1} = await importShared('three');
 /**
  * Width divided by height of a decoded Texture, or null when it is not known.
  *
@@ -16748,7 +16748,7 @@ class XriftImageQuadObject extends Group$2 {
             material.alphaTest = 0.01;
             material.depthWrite = true;
         }
-        material.side = config.doubleSided ? DoubleSide$2 : FrontSide$2;
+        material.side = config.doubleSided ? DoubleSide$3 : FrontSide$2;
         // An unlit picture is shown exactly as authored, so it skips tone mapping
         // the way the Text plate does; a lit one is part of the scene's light.
         material.toneMapped = wantsLit;
@@ -16920,6 +16920,651 @@ function stampObjectTimeUniforms(root) {
     });
     return stamped;
 }
+/**
+ * Advances every time uniform recorded on one live material.
+ *
+ * This is the clock: the editor's Scene View, the previews, the generated
+ * world and the Runtime JSON adapter all call it once per frame with the same
+ * elapsed seconds, so a shader cannot run on one path and stand still on
+ * another.
+ */
+function advanceMaterialTimeUniforms(material, elapsedSeconds) {
+    const specs = material?.userData?.xriftTimeUniforms;
+    const uniforms = material?.uniforms;
+    if (!Array.isArray(specs) || !uniforms)
+        return;
+    for (const spec of specs) {
+        const uniform = uniforms[spec.name];
+        if (uniform) {
+            applyTimeUniformValue(uniform, spec, elapsedSeconds);
+        }
+    }
+}
+/**
+ * Advances the time uniforms of every material under an object tree,
+ * including each slot of a multi-material mesh.
+ */
+function advanceObjectTimeUniforms(root, elapsedSeconds) {
+    if (!root)
+        return;
+    root.traverse((object) => {
+        const mesh = object;
+        if (!mesh.material)
+            return;
+        const entries = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const entry of entries) {
+            advanceMaterialTimeUniforms(entry, elapsedSeconds);
+        }
+    });
+}
+
+const CLASSIC_SHADER_LIMITS = {
+    /**
+     * Texels along one axis of a `texture-3d`. WebGL 2 guarantees no more than
+     * 256 (MAX_3D_TEXTURE_SIZE), so a larger volume would draw on one device and
+     * come out black on another.
+     */
+    volumeAxis: 256,
+    cubeFaces: 6,
+};
+/** The variant a mesh wears: its own name first, then the fallback. */
+function resolveClassicShaderVariant(shader, meshName = "") {
+    const normalizedMeshName = meshName.toLocaleLowerCase();
+    return (shader.variants.find((candidate) => candidate.meshNameIncludes &&
+        normalizedMeshName.includes(candidate.meshNameIncludes.toLocaleLowerCase())) ??
+        shader.variants.find((candidate) => !candidate.meshNameIncludes) ??
+        shader.variants[0]);
+}
+/**
+ * How a strip image of `width` x `height` divides into a volume, or why it
+ * does not. The editor, the compiler and the code that builds the texture all
+ * decide with this function, so an image accepted while authoring is an image
+ * that draws.
+ */
+function resolveClassicShaderVolumeLayout(width, height, slices) {
+    if (!(width > 0) || !(height > 0))
+        return { error: { reason: "no-size" } };
+    const count = slices ?? width / height;
+    if (!Number.isInteger(count) || count < 1) {
+        return {
+            error: slices === undefined
+                ? { reason: "not-square", width, height }
+                : { reason: "slices" },
+        };
+    }
+    const sliceWidth = width / count;
+    if (!Number.isInteger(sliceWidth) || sliceWidth < 1) {
+        return { error: { reason: "width", width, slices: count } };
+    }
+    const limit = CLASSIC_SHADER_LIMITS.volumeAxis;
+    if (sliceWidth > limit || height > limit || count > limit) {
+        return {
+            error: { reason: "too-large", sliceWidth, height, slices: count, limit },
+        };
+    }
+    return { layout: { slices: count, sliceWidth } };
+}
+/**
+ * The time uniforms a shader animates: the ones its GLSL declares under a
+ * conventional name, plus the authored `animatedTimeUniform` when it names a
+ * number uniform the declaration scan could not see.
+ */
+function resolveClassicShaderTimeUniforms(shader) {
+    const specs = detectTimeUniforms(shader);
+    const manual = shader.animatedTimeUniform;
+    if (manual &&
+        !specs.some((spec) => spec.name === manual) &&
+        shader.uniforms[manual]?.kind === "number") {
+        return [{ name: manual, glslType: "float" }, ...specs];
+    }
+    return specs;
+}
+
+const {AdditiveBlending: AdditiveBlending$2,BackSide: BackSide$3,ClampToEdgeWrapping: ClampToEdgeWrapping$2,Color: Color$5,CubeTexture,Data3DTexture,DoubleSide: DoubleSide$2,FloatType: FloatType$1,FrontSide: FrontSide$1,HalfFloatType: HalfFloatType$1,LinearFilter: LinearFilter$1,Matrix3: Matrix3$1,Matrix4: Matrix4$1,MultiplyBlending: MultiplyBlending$1,NearestFilter,NoColorSpace: NoColorSpace$2,NormalBlending: NormalBlending$2,RGBAFormat,RepeatWrapping: RepeatWrapping$1,SRGBColorSpace: SRGBColorSpace$4,ShaderMaterial: ShaderMaterial$2,SubtractiveBlending: SubtractiveBlending$1,UVMapping,UniformsLib,UniformsUtils,UnsignedByteType,Vector2: Vector2$2,Vector3: Vector3$2,Vector4: Vector4$1} = await importShared('three');
+const CLASSIC_SHADER_BLENDING = {
+    normal: NormalBlending$2,
+    additive: AdditiveBlending$2,
+    multiply: MultiplyBlending$1,
+    subtractive: SubtractiveBlending$1,
+};
+const TIME_UNIFORMS_USER_DATA_KEY = "xriftTimeUniforms";
+const FRUSTUM_CULLING_USER_DATA_KEY = "xriftClassicShaderFrustumCulled";
+function createClassicShaderMaterial(shader, options = {}) {
+    const variant = resolveClassicShaderVariant(shader, options.meshName);
+    const ownedTextures = [];
+    const authoredUniforms = {};
+    for (const [name, uniform] of Object.entries(shader.uniforms)) {
+        authoredUniforms[name] = {
+            value: createUniformValue(name, uniform, options, ownedTextures),
+        };
+    }
+    // Scene Settings fog has to reach an authored shader. ShaderMaterial.fog is
+    // false by default, and then three.js neither defines USE_FOG nor supplies
+    // fogColor / fogNear / fogFar, so a `#include <fog_fragment>` does nothing.
+    // UniformsUtils.merge would clone the textures too, so only the fog uniforms
+    // are cloned; the authored ones come last and win a name clash.
+    const uniforms = {
+        ...UniformsUtils.clone(UniformsLib.fog),
+        ...authoredUniforms,
+    };
+    const blending = variant?.blending ?? "normal";
+    const material = new ShaderMaterial$2({
+        name: `${shader.sourceModulePath}:${variant?.name ?? ""}`,
+        vertexShader: shader.vertexShader,
+        fragmentShader: shader.fragmentShader,
+        uniforms,
+        defines: { ...(variant?.defines ?? {}) },
+        side: variant?.side === "back"
+            ? BackSide$3
+            : variant?.side === "double"
+                ? DoubleSide$2
+                : FrontSide$1,
+        transparent: variant?.transparent ?? false,
+        depthWrite: variant?.depthWrite ?? true,
+        blending: CLASSIC_SHADER_BLENDING[blending] ?? NormalBlending$2,
+        // three.js draws multiply and subtractive only with premultiplied colour:
+        // without it the renderer reports an error and leaves the previous blend
+        // function in place. The two modes read the colour as it is written, so
+        // nothing else about the shader changes.
+        premultipliedAlpha: blending === "multiply" || blending === "subtractive",
+        // A shader that includes no fog chunk ignores USE_FOG, so this is safe.
+        fog: true,
+    });
+    const timeUniforms = resolveClassicShaderTimeUniforms(shader);
+    if (timeUniforms.length > 0) {
+        material.userData[TIME_UNIFORMS_USER_DATA_KEY] = timeUniforms;
+    }
+    if (variant?.frustumCulled === false) {
+        material.userData[FRUSTUM_CULLING_USER_DATA_KEY] = false;
+    }
+    if (ownedTextures.length > 0) {
+        // The clones belong to this Material, so they go when it goes. Listening
+        // for the event keeps every existing `material.dispose()` call correct. A
+        // disposed Material can be drawn again, which uploads its textures again,
+        // so the list is kept for the next dispose.
+        material.addEventListener("dispose", () => {
+            for (const texture of ownedTextures)
+                texture.dispose();
+        });
+    }
+    material.needsUpdate = true;
+    return material;
+}
+/** True when the variant this Material was built from opts out of culling. */
+function classicShaderDisablesFrustumCulling(material) {
+    return material?.userData?.[FRUSTUM_CULLING_USER_DATA_KEY] === false;
+}
+const FRUSTUM_CULLING_HOLDS = new WeakMap();
+const NOTHING_TO_UNDO = () => { };
+/**
+ * Applies what a Material asks of the mesh wearing it, and returns the undo.
+ *
+ * Frustum culling belongs to the mesh, not to the Material, so it is switched
+ * off while a Material that asks for it is worn and put back when the last
+ * such Material is taken off. A mesh with several slots keeps one count.
+ */
+function applyClassicShaderMeshState(mesh, material) {
+    if (!material || !classicShaderDisablesFrustumCulling(material)) {
+        return NOTHING_TO_UNDO;
+    }
+    let hold = FRUSTUM_CULLING_HOLDS.get(mesh);
+    if (!hold) {
+        hold = { original: mesh.frustumCulled, holders: new Set() };
+        FRUSTUM_CULLING_HOLDS.set(mesh, hold);
+    }
+    // One entry per wearing: the same Material can sit on two slots of a mesh.
+    const wearing = {};
+    hold.holders.add(wearing);
+    mesh.frustumCulled = false;
+    return () => {
+        const current = FRUSTUM_CULLING_HOLDS.get(mesh);
+        if (!current || !current.holders.delete(wearing))
+            return;
+        if (current.holders.size > 0)
+            return;
+        FRUSTUM_CULLING_HOLDS.delete(mesh);
+        mesh.frustumCulled = current.original;
+    };
+}
+function createUniformValue(name, uniform, options, ownedTextures) {
+    switch (uniform.kind) {
+        case "number":
+            return uniform.value;
+        case "color":
+            return new Color$5(uniform.value);
+        case "vector": {
+            const value = uniform.value;
+            return value.length === 2
+                ? new Vector2$2(value[0] ?? 0, value[1] ?? 0)
+                : value.length === 3
+                    ? new Vector3$2(value[0] ?? 0, value[1] ?? 0, value[2] ?? 0)
+                    : new Vector4$1(value[0] ?? 0, value[1] ?? 0, value[2] ?? 0, value[3] ?? 0);
+        }
+        case "matrix":
+            // Column-major, which is the order three.js stores and GLSL reads.
+            return uniform.value.length === 9
+                ? new Matrix3$1().fromArray(uniform.value)
+                : new Matrix4$1().fromArray(uniform.value);
+        case "array":
+            // three.js sends a flat array of numbers as it is, for float[], vecN[]
+            // and matN[] alike. A copy keeps the document's array out of the renderer.
+            return uniform.value.slice();
+        case "texture":
+        case "texture-3d":
+        case "texture-cube": {
+            const texture = createUniformTexture(name, uniform, options);
+            if (texture)
+                ownedTextures.push(texture);
+            return texture;
+        }
+        default:
+            // A kind written by a newer Studio. Binding nothing is the honest result.
+            return null;
+    }
+}
+function lookupTexture(textures, assetId) {
+    if (!textures)
+        return null;
+    if (textures instanceof Map) {
+        return textures.get(assetId) ?? null;
+    }
+    return (textures[assetId] ?? null);
+}
+function wrapping(value, fallback) {
+    return (value ?? fallback) === "clamp-to-edge"
+        ? ClampToEdgeWrapping$2
+        : RepeatWrapping$1;
+}
+function isCompressedTexture(texture) {
+    return (texture
+        .isCompressedTexture === true);
+}
+function isDataTexture(texture) {
+    return (texture.isDataTexture === true);
+}
+function isFloatTexture(texture) {
+    return texture.type === HalfFloatType$1 || texture.type === FloatType$1;
+}
+function createUniformTexture(name, uniform, options) {
+    const report = (diagnostic) => options.onDiagnostic?.({ ...diagnostic, uniformName: name });
+    const filter = uniform.filter === "nearest" ? NearestFilter : LinearFilter$1;
+    if (uniform.kind === "texture") {
+        const source = lookupTexture(options.textures, uniform.textureAssetId);
+        if (!source) {
+            report({
+                code: "texture-not-loaded",
+                assetId: uniform.textureAssetId,
+                message: `Custom Shader texture could not be loaded: ${uniform.textureAssetId}`,
+            });
+            return null;
+        }
+        const texture = source.clone();
+        const compressed = isCompressedTexture(texture);
+        const data = isDataTexture(texture);
+        // Float data is numbers, not colour: it has no sRGB encoding to undo.
+        texture.colorSpace =
+            uniform.colorSpace === "srgb" && !isFloatTexture(texture)
+                ? SRGBColorSpace$4
+                : NoColorSpace$2;
+        // Compressed textures carry encoded mip levels; WebGL cannot generate them.
+        texture.generateMipmaps = !compressed && (uniform.generateMipmaps ?? false);
+        texture.magFilter = filter;
+        texture.minFilter = filter;
+        texture.wrapS = wrapping(uniform.wrapS, "repeat");
+        texture.wrapT = wrapping(uniform.wrapT, "repeat");
+        // The orientation three.js loaders hand a ShaderMaterial: a decoded picture
+        // is flipped so its top row is v = 1, while data and compressed textures
+        // arrive already arranged. The Asset's own flipY is for glTF surfaces.
+        if (data)
+            texture.flipY = false;
+        else if (!compressed)
+            texture.flipY = true;
+        texture.mapping = UVMapping;
+        texture.needsUpdate = true;
+        return texture;
+    }
+    if (uniform.kind === "texture-3d") {
+        const source = lookupTexture(options.textures, uniform.textureAssetId);
+        if (!source) {
+            report({
+                code: "texture-not-loaded",
+                assetId: uniform.textureAssetId,
+                message: `Custom Shader texture could not be loaded: ${uniform.textureAssetId}`,
+            });
+            return null;
+        }
+        const volume = resolveVolume(source, uniform.slices, options.readImagePixels);
+        if (typeof volume === "string") {
+            report({
+                code: volume.startsWith("unsupported")
+                    ? "texture-unsupported"
+                    : "texture-3d-layout",
+                assetId: uniform.textureAssetId,
+                message: `Custom Shader 3D texture could not be built from ${uniform.textureAssetId}: ${volume}`,
+            });
+            return null;
+        }
+        const texture = volume.clone();
+        texture.colorSpace =
+            uniform.colorSpace === "srgb" ? SRGBColorSpace$4 : NoColorSpace$2;
+        texture.generateMipmaps = false;
+        texture.magFilter = filter;
+        texture.minFilter = filter;
+        texture.wrapS = wrapping(uniform.wrapS, "clamp-to-edge");
+        texture.wrapT = wrapping(uniform.wrapT, "clamp-to-edge");
+        texture.wrapR = wrapping(uniform.wrapR, "clamp-to-edge");
+        // WebGL refuses to flip a volume upload, so rows stay in picture order.
+        texture.flipY = false;
+        texture.needsUpdate = true;
+        return texture;
+    }
+    const sources = [];
+    for (const face of uniform.faces) {
+        const source = lookupTexture(options.textures, face.textureAssetId);
+        if (!source) {
+            report({
+                code: "texture-not-loaded",
+                assetId: face.textureAssetId,
+                message: `Custom Shader texture could not be loaded: ${face.textureAssetId}`,
+            });
+            return null;
+        }
+        sources.push(source);
+    }
+    const cube = resolveCube(sources);
+    if (typeof cube === "string") {
+        report({
+            code: cube.startsWith("unsupported")
+                ? "texture-unsupported"
+                : "texture-cube-layout",
+            message: `Custom Shader cube map could not be built: ${cube}`,
+        });
+        return null;
+    }
+    const texture = cube.clone();
+    texture.colorSpace =
+        uniform.colorSpace === "srgb" ? SRGBColorSpace$4 : NoColorSpace$2;
+    texture.generateMipmaps = uniform.generateMipmaps ?? false;
+    texture.magFilter = filter;
+    texture.minFilter = filter;
+    texture.needsUpdate = true;
+    return texture;
+}
+/**
+ * Rearranges a strip of slices into the row order of a 3D texture.
+ *
+ * `pixels` is 8-bit RGBA, top row first, `width` x `height`, holding `slices`
+ * pictures side by side. The result is slice by slice, each slice row by row:
+ * `u` runs along a slice's width, `v` down its height from the top row, and
+ * `w` from the leftmost slice to the rightmost.
+ */
+function sliceClassicShaderVolume(pixels, width, height, slices) {
+    const sliceWidth = width / slices;
+    const rowBytes = sliceWidth * 4;
+    const rows = pixels instanceof Uint8Array || pixels instanceof Uint8ClampedArray
+        ? pixels
+        : Uint8Array.from(pixels);
+    const volume = new Uint8Array(rowBytes * height * slices);
+    for (let slice = 0; slice < slices; slice += 1) {
+        for (let row = 0; row < height; row += 1) {
+            const source = (row * width + slice * sliceWidth) * 4;
+            volume.set(rows.subarray(source, source + rowBytes), (slice * height + row) * rowBytes);
+        }
+    }
+    return volume;
+}
+function describeVolumeLayoutError(error) {
+    switch (error.reason) {
+        case "no-size":
+            return "the image has no size";
+        case "not-square":
+            return `the image is ${error.width} x ${error.height}, which is not a row of square slices; set slices`;
+        case "slices":
+            return "slices must be a whole number of 1 or more";
+        case "width":
+            return `the image width ${error.width} is not a multiple of ${error.slices} slices`;
+        default:
+            return `the volume is ${error.sliceWidth} x ${error.height} x ${error.slices}; each side may be ${error.limit} texels at most`;
+    }
+}
+const readImagePixelsWithCanvas = (image) => {
+    if (!image || typeof image !== "object")
+        return null;
+    const picture = image;
+    const width = picture.naturalWidth || picture.width || 0;
+    const height = picture.naturalHeight || picture.height || 0;
+    if (picture.data) {
+        // Already rows of 8-bit RGBA, for example a DataTexture's image.
+        return picture.data.length === width * height * 4
+            ? { data: picture.data, width, height }
+            : null;
+    }
+    if (typeof document === "undefined" || !(width > 0) || !(height > 0)) {
+        return null;
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context)
+        return null;
+    context.drawImage(image, 0, 0);
+    try {
+        return context.getImageData(0, 0, width, height);
+    }
+    catch {
+        // A picture from another origin without CORS cannot be read back.
+        return null;
+    }
+};
+/** Volumes already built from a decoded picture, so Materials share them. */
+const VOLUME_CACHE = new WeakMap();
+function resolveVolume(source, slices, readImagePixels = readImagePixelsWithCanvas) {
+    if (isCompressedTexture(source)) {
+        return "unsupported: a compressed (KTX2) texture cannot be sliced";
+    }
+    if (isFloatTexture(source)) {
+        return "unsupported: a float texture cannot be sliced";
+    }
+    const cacheOwner = source.source;
+    let cache = VOLUME_CACHE.get(cacheOwner);
+    if (!cache) {
+        cache = new Map();
+        VOLUME_CACHE.set(cacheOwner, cache);
+    }
+    const cacheKey = slices === undefined ? "auto" : String(slices);
+    const cached = cache.get(cacheKey);
+    if (cached !== undefined)
+        return cached;
+    const build = () => {
+        const pixels = readImagePixels(source.image);
+        if (!pixels)
+            return "the image could not be read";
+        const { layout, error } = resolveClassicShaderVolumeLayout(pixels.width, pixels.height, slices);
+        if (!layout)
+            return describeVolumeLayoutError(error);
+        const volume = new Data3DTexture(sliceClassicShaderVolume(pixels.data, pixels.width, pixels.height, layout.slices), layout.sliceWidth, pixels.height, layout.slices);
+        volume.format = RGBAFormat;
+        volume.type = UnsignedByteType;
+        volume.unpackAlignment = 1;
+        return volume;
+    };
+    const built = build();
+    cache.set(cacheKey, built);
+    return built;
+}
+/** Cube maps already assembled from six decoded pictures. */
+const CUBE_CACHE = new WeakMap();
+function resolveCube(sources) {
+    if (sources.length !== CLASSIC_SHADER_LIMITS.cubeFaces) {
+        return `a cube map needs ${CLASSIC_SHADER_LIMITS.cubeFaces} faces`;
+    }
+    if (sources.some((source) => isCompressedTexture(source))) {
+        return "unsupported: a compressed (KTX2) texture cannot be a cube face";
+    }
+    if (sources.some((source) => isFloatTexture(source))) {
+        return "unsupported: a float texture cannot be a cube face";
+    }
+    const first = sources[0];
+    if (!first)
+        return "a cube map needs 6 faces";
+    const cacheOwner = first.source;
+    let cache = CUBE_CACHE.get(cacheOwner);
+    if (!cache) {
+        cache = new Map();
+        CUBE_CACHE.set(cacheOwner, cache);
+    }
+    const cacheKey = sources.map((source) => source.source.uuid).join("|");
+    const cached = cache.get(cacheKey);
+    if (cached !== undefined)
+        return cached;
+    const build = () => {
+        const images = sources.map((source) => source.image);
+        const sizes = images.map((image) => {
+            const picture = (image ?? {});
+            return [
+                picture.naturalWidth || picture.width || 0,
+                picture.naturalHeight || picture.height || 0,
+            ];
+        });
+        const size = sizes[0]?.[0] ?? 0;
+        if (!(size > 0))
+            return "a face image has no size";
+        if (sizes.some(([width, height]) => width !== size || height !== size)) {
+            return `every face must be the same square size; got ${sizes
+                .map(([width, height]) => `${width} x ${height}`)
+                .join(", ")}`;
+        }
+        const cube = new CubeTexture(images);
+        cube.format = first.format;
+        cube.type = first.type;
+        return cube;
+    };
+    const built = build();
+    cache.set(cacheKey, built);
+    return built;
+}
+
+const {ClampToEdgeWrapping: ClampToEdgeWrapping$1,FileLoader,FloatType,HalfFloatType,LinearFilter,Loader,NoColorSpace: NoColorSpace$1} = await importShared('three');
+/**
+ * Float data for a Custom Shader `sampler2D`, read from an EXR Texture Asset.
+ *
+ * Kept apart from the Material builder so that a world without such a uniform
+ * does not carry the EXR decoder.
+ */
+/**
+ * The widest sample type stored in an EXR file's first part.
+ *
+ * EXR keeps a type per channel: 16-bit half floats, 32-bit floats or 32-bit
+ * unsigned integers. Returns null when the bytes are not an EXR header.
+ */
+function readExrSampleType(buffer) {
+    const bytes = new Uint8Array(buffer);
+    const view = new DataView(buffer);
+    if (bytes.length < 8 || view.getUint32(0, true) !== 20000630)
+        return null;
+    let offset = 8;
+    // This file is shipped into published worlds, and the platform's code check
+    // refuses a world that builds a string from character codes (it reads that
+    // as obfuscation). EXR header names are ASCII, which a TextDecoder reads as
+    // they are.
+    const decoder = new TextDecoder();
+    const readName = () => {
+        let end = offset;
+        while (end < bytes.length && bytes[end] !== 0)
+            end += 1;
+        if (end >= bytes.length)
+            return null;
+        const name = decoder.decode(bytes.subarray(offset, end));
+        offset = end + 1;
+        return name;
+    };
+    for (;;) {
+        const name = readName();
+        if (name === null)
+            return null;
+        // An empty name ends the header without a channel list.
+        if (name === "")
+            return null;
+        const type = readName();
+        if (type === null || offset + 4 > bytes.length)
+            return null;
+        const size = view.getInt32(offset, true);
+        offset += 4;
+        if (size < 0 || offset + size > bytes.length)
+            return null;
+        if (name !== "channels" || type !== "chlist") {
+            offset += size;
+            continue;
+        }
+        const end = offset + size;
+        let widest = null;
+        while (offset < end && bytes[offset] !== 0) {
+            if (readName() === null || offset + 16 > end)
+                return null;
+            // 0 is a 32-bit unsigned integer, 1 a half float, 2 a 32-bit float.
+            const sampleType = view.getInt32(offset, true);
+            offset += 16;
+            if (sampleType === 1)
+                widest ?? (widest = "half");
+            else
+                widest = "float";
+        }
+        return widest;
+    }
+}
+/**
+ * Decodes an EXR as a data texture in the precision the file stores.
+ *
+ * A half-float file stays 16-bit, which every WebGL 2 device can filter. A
+ * 32-bit file stays 32-bit so that values wider than a half float (16-bit
+ * integers, large coordinates) arrive exactly; filtering those linearly needs
+ * a device that supports it, so `filter: "nearest"` is the portable choice.
+ * Rows are arranged the way three.js arranges every EXR: the picture's top row
+ * is v = 1, as it is for an 8-bit image.
+ */
+function createClassicShaderDataTexture(buffer) {
+    const type = readExrSampleType(buffer) === "float" ? FloatType : HalfFloatType;
+    const texture = new EXRLoader()
+        .setDataType(type)
+        .createDataTexture(buffer);
+    texture.colorSpace = NoColorSpace$1;
+    texture.generateMipmaps = false;
+    texture.minFilter = LinearFilter;
+    texture.magFilter = LinearFilter;
+    texture.wrapS = ClampToEdgeWrapping$1;
+    texture.wrapT = ClampToEdgeWrapping$1;
+    texture.flipY = false;
+    texture.needsUpdate = true;
+    return texture;
+}
+/**
+ * Loads an EXR Texture Asset as Custom Shader float data.
+ *
+ * A three.js Loader, so a published world reads the file the way it reads
+ * every other Asset and React Three Fiber's `useLoader` keeps one decoded
+ * texture per URL.
+ */
+class XriftClassicShaderDataTextureLoader extends Loader {
+    load(url, onLoad, onProgress, onError) {
+        const loader = new FileLoader(this.manager);
+        loader.setResponseType("arraybuffer");
+        loader.setPath(this.path);
+        loader.setRequestHeader(this.requestHeader);
+        loader.setWithCredentials(this.withCredentials);
+        loader.load(url, (buffer) => {
+            try {
+                onLoad(createClassicShaderDataTexture(buffer));
+            }
+            catch (error) {
+                if (onError)
+                    onError(error);
+                else
+                    console.error(error);
+            }
+        }, onProgress, onError);
+    }
+}
 
 /** Match the official Mirror default without counting recursive renderer passes. */
 function installMirrorReflectionInterval(reflector, reflectionInterval = 2) {
@@ -16938,7 +17583,7 @@ function installMirrorReflectionInterval(reflector, reflectionInterval = 2) {
     };
 }
 
-const {Vector4: Vector4$1} = await importShared('three');
+const {Vector4} = await importShared('three');
 
 /** Apply authored brush controls identically in the editor and publication. */
 function applyOpenBrushMaterialProperties(material, properties, shaderTextures = {}) {
@@ -16962,7 +17607,7 @@ function applyOpenBrushMaterialProperties(material, properties, shaderTextures =
     if (varyingIndex < 0 || !shader.fragmentShader)
         return;
     if (!uniforms.xriftBaseColorFactor) {
-        uniforms.xriftBaseColorFactor = { value: new Vector4$1(...factor) };
+        uniforms.xriftBaseColorFactor = { value: new Vector4(...factor) };
         const bodyStart = varyingIndex + varyingDeclaration.length;
         const shaderHeader = shader.fragmentShader.slice(0, bodyStart);
         const shaderBody = shader.fragmentShader
@@ -16972,11 +17617,11 @@ function applyOpenBrushMaterialProperties(material, properties, shaderTextures =
         // fragment input makes WebGL reject the linked shader program.
         shader.fragmentShader = `${shaderHeader}\nuniform vec4 xriftBaseColorFactor;${shaderBody}`;
     }
-    else if (uniforms.xriftBaseColorFactor.value instanceof Vector4$1) {
+    else if (uniforms.xriftBaseColorFactor.value instanceof Vector4) {
         uniforms.xriftBaseColorFactor.value.set(...factor);
     }
     else {
-        uniforms.xriftBaseColorFactor.value = new Vector4$1(...factor);
+        uniforms.xriftBaseColorFactor.value = new Vector4(...factor);
     }
     shader.needsUpdate = true;
 }
@@ -17004,7 +17649,7 @@ const MTOON_DEFAULTS = Object.freeze({
     uvAnimationRotationSpeedFactor: 0,
 });
 
-const {AdditiveBlending: AdditiveBlending$1,BackSide: BackSide$2,BufferGeometry: BufferGeometry$2,Color: Color$4,DoubleSide: DoubleSide$1,FrontSide: FrontSide$1,InstancedMesh,Material,Matrix3,Mesh: Mesh$2,MultiplyBlending,NormalBlending: NormalBlending$1,SkinnedMesh,SubtractiveBlending,Vector2: Vector2$2} = await importShared('three');
+const {AdditiveBlending: AdditiveBlending$1,BackSide: BackSide$2,BufferGeometry: BufferGeometry$3,Color: Color$4,DoubleSide: DoubleSide$1,FrontSide,InstancedMesh,Material,Matrix3,Mesh: Mesh$2,MultiplyBlending,NormalBlending: NormalBlending$1,SkinnedMesh,SubtractiveBlending,Vector2: Vector2$1} = await importShared('three');
 const opacityBindings = new WeakMap();
 /** Three r185 uses a vec4 varying even for RGB color attributes. */
 function prepareMToonVertexColorShader(material) {
@@ -17102,10 +17747,10 @@ function createMToonMaterial(properties, textures = {}, doubleSided = properties
         alphaTest: properties.alphaMode === "MASK" ? properties.alphaCutoff : 0,
         alphaToCoverage: properties.alphaToCoverage ?? false,
         blending: { normal: NormalBlending$1, additive: AdditiveBlending$1, multiply: MultiplyBlending, subtractive: SubtractiveBlending }[properties.blending ?? "normal"],
-        side: doubleSided ? DoubleSide$1 : FrontSide$1,
+        side: doubleSided ? DoubleSide$1 : FrontSide,
         ...(textures.baseColorMap ? { map: textures.baseColorMap } : {}),
         ...(textures.normalMap ? { normalMap: textures.normalMap } : {}),
-        normalScale: new Vector2$2(properties.normalTexture?.scale ?? 1, properties.normalTexture?.scale ?? 1),
+        normalScale: new Vector2$1(properties.normalTexture?.scale ?? 1, properties.normalTexture?.scale ?? 1),
         emissive: new Color$4(...properties.emissiveFactor),
         emissiveIntensity: properties.extensions.KHR_materials_emissive_strength?.emissiveStrength ?? 1,
         ...(textures.emissiveMap ? { emissiveMap: textures.emissiveMap } : {}),
@@ -17171,7 +17816,7 @@ function removeNativeMToonOutlines(root) {
         const indices = new Map(kept.map(({ index }, current) => [index, current]));
         const source = mesh.geometry;
         // Share buffer attributes; only group metadata belongs to this mesh.
-        const geometry = new BufferGeometry$2();
+        const geometry = new BufferGeometry$3();
         geometry.index = source.index;
         geometry.attributes = { ...source.attributes };
         geometry.morphAttributes = { ...source.morphAttributes };
@@ -17455,6 +18100,227 @@ function bindVrmSpringBones(source, root) {
             }
         },
     };
+}
+
+const {BufferGeometry: BufferGeometry$2,InstancedBufferAttribute} = await importShared('three');
+
+/**
+ * Per-instance attributes of `EXT_mesh_gpu_instancing`, delivered per instance.
+ *
+ * three.js builds an InstancedMesh from TRANSLATION / ROTATION / SCALE and turns
+ * `_COLOR_0` into `instanceColor`, but it puts every other instance attribute
+ * (an application's own, such as `_AOFFSET`) on the geometry as a plain
+ * per-vertex BufferAttribute. A shader reading it then receives the values of
+ * the first few instances as if they belonged to the first few vertices.
+ *
+ * This plugin gives the instanced Mesh InstancedBufferAttributes instead, one
+ * value per instance. Which attribute belongs to which Mesh is read from the
+ * glTF JSON through the parser's associations, never guessed from counts, so a
+ * model that declares no such attribute is returned before any object is read.
+ *
+ * The Editor, the Runtime loader and the generated world all register it, so
+ * one GLB draws the same way in Edit, Play and a published world. The GLB
+ * bytes are never rewritten.
+ */
+function registerGltfInstanceAttributes(loader) {
+    // GLTFLoader ignores a callback it already holds, so a loader shared by
+    // several loads (React Three Fiber's useLoader) is registered only once.
+    loader.register(createGltfInstanceAttributesPlugin);
+    return loader;
+}
+const GPU_INSTANCING_EXTENSION = "EXT_mesh_gpu_instancing";
+function createGltfInstanceAttributesPlugin(parser) {
+    return {
+        // The key three.js files this plugin under; it is not a glTF extension.
+        name: "XRIFT_instance_attributes",
+        afterRoot: () => {
+            const declared = readDeclaredInstanceAttributes(parser.json);
+            return declared.size > 0
+                ? bindDeclaredInstanceAttributes(parser, declared)
+                : null;
+        },
+    };
+}
+/**
+ * The instance attributes the glTF JSON declares, by node index.
+ *
+ * Only application-specific semantics are taken, which glTF spells with a
+ * leading underscore. `_COLOR_0` already became `instanceColor`, and the
+ * transform semantics became the instance matrices.
+ */
+function readDeclaredInstanceAttributes(json) {
+    const declared = new Map();
+    const nodes = asRecord$3(json)?.nodes;
+    if (!Array.isArray(nodes))
+        return declared;
+    nodes.forEach((node, nodeIndex) => {
+        const attributes = asRecord$3(asRecord$3(asRecord$3(asRecord$3(node)?.extensions)?.[GPU_INSTANCING_EXTENSION])
+            ?.attributes);
+        if (!attributes)
+            return;
+        const accessors = new Map();
+        for (const [semantic, accessorIndex] of Object.entries(attributes)) {
+            if (!semantic.startsWith("_") || semantic === "_COLOR_0")
+                continue;
+            if (typeof accessorIndex !== "number" || !Number.isInteger(accessorIndex))
+                continue;
+            accessors.set(semantic, accessorIndex);
+        }
+        if (accessors.size > 0)
+            declared.set(nodeIndex, accessors);
+    });
+    return declared;
+}
+async function bindDeclaredInstanceAttributes(parser, declared) {
+    const nodes = [];
+    for (const [object, reference] of parser.associations) {
+        const nodeIndex = reference?.nodes;
+        if (typeof nodeIndex !== "number" || !object.isObject3D)
+            continue;
+        const accessorIndices = declared.get(nodeIndex);
+        if (!accessorIndices)
+            continue;
+        const meshes = collectNodeInstancedMeshes(parser, object);
+        if (meshes.length > 0)
+            nodes.push({ nodeIndex, meshes, accessorIndices });
+    }
+    // Resolved while each node was built, so this only reads the parser's cache.
+    const sources = new Map();
+    const semantics = new Set();
+    for (const { accessorIndices } of nodes) {
+        for (const [semantic, accessorIndex] of accessorIndices) {
+            semantics.add(semantic);
+            if (sources.has(accessorIndex))
+                continue;
+            sources.set(accessorIndex, await parser.getDependency("accessor", accessorIndex));
+        }
+    }
+    const loaded = new Set(sources.values());
+    const instancedBySource = new Map();
+    const geometriesBySource = new Map();
+    for (const { nodeIndex, meshes, accessorIndices } of nodes) {
+        for (const mesh of meshes) {
+            const usable = new Set();
+            for (const [semantic, accessorIndex] of accessorIndices) {
+                const count = sources.get(accessorIndex).count;
+                if (count >= mesh.count) {
+                    usable.add(semantic);
+                    continue;
+                }
+                // glTF requires one value per instance. A shorter accessor would make
+                // the draw call read past its buffer, so it stays as three.js loads it.
+                console.warn(`[XRift Studio] ${GPU_INSTANCING_EXTENSION}のノード${nodeIndex}は${mesh.count}個のインスタンスを描きますが、${semantic}の値は${count}個です。頂点ごとの属性のまま読み込みました。`);
+            }
+            if (usable.size === 0)
+                continue;
+            const key = `${nodeIndex}:${[...usable].join(",")}`;
+            let derived = geometriesBySource.get(mesh.geometry);
+            if (!derived)
+                geometriesBySource.set(mesh.geometry, (derived = new Map()));
+            let geometry = derived.get(key);
+            if (!geometry) {
+                geometry = shareGeometry(mesh.geometry);
+                // three.js wrote every node's instance accessors onto the one geometry
+                // these nodes share. Only this node's own belong on its copy.
+                for (const [name, attribute] of Object.entries(geometry.attributes)) {
+                    if (semantics.has(name) && loaded.has(attribute))
+                        geometry.deleteAttribute(name);
+                }
+                for (const [semantic, accessorIndex] of accessorIndices) {
+                    const source = sources.get(accessorIndex);
+                    if (!usable.has(semantic)) {
+                        geometry.setAttribute(semantic, source);
+                        continue;
+                    }
+                    let attribute = instancedBySource.get(source);
+                    if (!attribute) {
+                        attribute = toInstancedAttribute(source);
+                        instancedBySource.set(source, attribute);
+                    }
+                    // three.js keeps the glTF spelling for instance attributes and
+                    // lower-cases custom vertex attributes (`_AMAT` becomes `_amat`).
+                    // A shader may read either spelling. A vertex attribute that already
+                    // owns the lower-cased name keeps it.
+                    geometry.setAttribute(semantic, attribute);
+                    const lowerCased = semantic.toLowerCase();
+                    if (lowerCased !== semantic && !geometry.hasAttribute(lowerCased)) {
+                        geometry.setAttribute(lowerCased, attribute);
+                    }
+                }
+                derived.set(key, geometry);
+            }
+            mesh.geometry = geometry;
+        }
+    }
+}
+/**
+ * The InstancedMeshes three.js built for one glTF node: the node object itself,
+ * or what it grouped for several primitives or for a camera or light on the
+ * same node. Child glTF nodes own their instancing and are not entered.
+ */
+function collectNodeInstancedMeshes(parser, node) {
+    if (node.isInstancedMesh)
+        return [node];
+    const meshes = [];
+    for (const child of node.children) {
+        const reference = parser.associations.get(child);
+        if (typeof reference?.nodes === "number")
+            continue;
+        for (const candidate of [child, ...child.children]) {
+            if (candidate.isInstancedMesh) {
+                meshes.push(candidate);
+            }
+        }
+    }
+    return meshes;
+}
+/**
+ * A geometry of its own for the instanced Mesh, sharing every buffer.
+ *
+ * glTF lets several nodes use one mesh, and three.js gives them one geometry.
+ * Writing instance attributes onto it would hand one node's values, and its
+ * instance count, to every other node, so only the attribute table is copied.
+ */
+function shareGeometry(source) {
+    const geometry = new BufferGeometry$2();
+    geometry.name = source.name;
+    geometry.index = source.index;
+    geometry.attributes = { ...source.attributes };
+    geometry.morphAttributes = { ...source.morphAttributes };
+    geometry.morphTargetsRelative = source.morphTargetsRelative;
+    geometry.groups = source.groups.map((group) => ({ ...group }));
+    geometry.drawRange = { ...source.drawRange };
+    geometry.boundingBox = source.boundingBox?.clone() ?? null;
+    geometry.boundingSphere = source.boundingSphere?.clone() ?? null;
+    geometry.userData = source.userData;
+    return geometry;
+}
+/** Shares the accessor's array; an interleaved accessor is copied out once. */
+function toInstancedAttribute(source) {
+    const interleaved = source.isInterleavedBufferAttribute
+        ? source
+        : undefined;
+    const attribute = new InstancedBufferAttribute(interleaved ? deinterleave(interleaved) : source.array, source.itemSize, source.normalized);
+    attribute.name = source.name;
+    if (!interleaved)
+        attribute.gpuType = source.gpuType;
+    return attribute;
+}
+function deinterleave(source) {
+    const { array, stride } = source.data;
+    const values = new array.constructor(source.count * source.itemSize);
+    for (let index = 0; index < source.count; index += 1) {
+        for (let component = 0; component < source.itemSize; component += 1) {
+            values[index * source.itemSize + component] =
+                array[index * stride + source.offset + component] ?? 0;
+        }
+    }
+    return values;
+}
+function asRecord$3(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value)
+        ? value
+        : undefined;
 }
 
 /**
@@ -19774,7 +20640,7 @@ function isRecord$1(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-const {AmbientLight: AmbientLight$1,BackSide: BackSide$1,BoxGeometry: BoxGeometry$1,BufferGeometry: BufferGeometry$1,ClampToEdgeWrapping,Color: Color$3,ConeGeometry,CylinderGeometry,DirectionalLight,DoubleSide,EquirectangularReflectionMapping: EquirectangularReflectionMapping$1,FrontSide,Float32BufferAttribute,Group: Group$1,HemisphereLight,LoadingManager,Mesh: Mesh$1,MeshBasicMaterial,MeshStandardMaterial,MirroredRepeatWrapping,NoColorSpace,PlaneGeometry,PointLight,RectAreaLight,RepeatWrapping,SphereGeometry: SphereGeometry$1,SpotLight,ShaderMaterial: ShaderMaterial$1,SRGBColorSpace: SRGBColorSpace$3,Vector2: Vector2$1,Vector3: Vector3$2,Vector4,Texture,TextureLoader} = await importShared('three');
+const {AmbientLight: AmbientLight$1,BackSide: BackSide$1,BoxGeometry: BoxGeometry$1,BufferGeometry: BufferGeometry$1,ClampToEdgeWrapping,Color: Color$3,ConeGeometry,CylinderGeometry,DirectionalLight,DoubleSide,EquirectangularReflectionMapping: EquirectangularReflectionMapping$1,Float32BufferAttribute,Group: Group$1,HemisphereLight,LoadingManager,Mesh: Mesh$1,MeshBasicMaterial,MeshStandardMaterial,MirroredRepeatWrapping,NoColorSpace,PlaneGeometry,PointLight,RectAreaLight,RepeatWrapping,SphereGeometry: SphereGeometry$1,SpotLight,ShaderMaterial: ShaderMaterial$1,SRGBColorSpace: SRGBColorSpace$3,Texture,TextureLoader} = await importShared('three');
 const DEFAULT_KTX2_TRANSCODER_PATH = "https://cdn.jsdelivr.net/gh/pmndrs/drei-assets@master/basis/";
 const DEFAULT_DRACO_DECODER_PATH = "https://www.gstatic.com/draco/versioned/decoders/1.5.7/";
 class XriftThreeLoader {
@@ -19813,7 +20679,9 @@ class XriftThreeLoader {
     const assets = Object.values(manifest.assets);
     const modelAssets = assets.filter((asset) => asset.kind === "model");
     const textureAssets = assets.filter((asset) => asset.kind === "texture" || asset.kind === "skybox");
-    const [modelEntries, textureEntries] = await Promise.all([
+    const shaderDataAssetIds = classicShaderDataTextureAssetIds(manifest);
+    const shaderDataAssets = textureAssets.filter((asset) => asset.kind === "skybox" && asset.sourceFormat === "exr" && shaderDataAssetIds.has(asset.id));
+    const [modelEntries, textureEntries, shaderDataEntries] = await Promise.all([
       Promise.all(modelAssets.map(async (asset) => [
         asset.id,
         await this.loadModel(asset, assetBase, dracoDecoderPath)
@@ -19821,11 +20689,22 @@ class XriftThreeLoader {
       Promise.all(textureAssets.map(async (asset) => [
         asset.id,
         await this.loadTexture(asset, assetBase, ktx2TranscoderPath)
+      ])),
+      Promise.all(shaderDataAssets.map(async (asset) => [
+        asset.id,
+        await new XriftClassicShaderDataTextureLoader(this.manager).loadAsync(new URL(asset.url, assetBase).toString())
       ]))
     ]);
     const models = new Map(modelEntries);
     const textures = new Map(textureEntries);
-    const materials = this.createMaterials(manifest, textures, diagnostics);
+    const { materials, classicShaders } = this.createMaterials(
+      manifest,
+      textures,
+      // An EXR read as shader data keeps the precision its file stores, which
+      // the environment copy of the same Asset does not.
+      new Map([...textureEntries, ...shaderDataEntries]),
+      diagnostics
+    );
     const entities = /* @__PURE__ */ new Map();
     const animations = [];
     const animationClipsByEntity = /* @__PURE__ */ new Map();
@@ -19872,6 +20751,7 @@ class XriftThreeLoader {
           fontUrlsByAssetId,
           models,
           materials,
+          classicShaders,
           textures,
           animations,
           animationClipsByEntity,
@@ -19946,7 +20826,7 @@ class XriftThreeLoader {
         sourceMaterials: /* @__PURE__ */ new Map()
       };
     }
-    const loader = new GLTFLoader(this.manager);
+    const loader = registerGltfInstanceAttributes(new GLTFLoader(this.manager));
     const isVrm = asset.sourceFormat === "vrm" || /\.vrm(?:[?#]|$)/i.test(asset.url);
     if (isVrm) {
       loader.register((parser) => {
@@ -19958,7 +20838,7 @@ class XriftThreeLoader {
     const dracoLoader = new DRACOLoader(this.manager).setDecoderPath(dracoDecoderPath);
     loader.setDRACOLoader(dracoLoader);
     if (asset.openBrush?.renderer === "three-icosa") {
-      const { createOpenBrushMaterialExtension } = await __vitePreload(async () => { const { createOpenBrushMaterialExtension } = await import('./material-extension-CF47PTxW.js');return { createOpenBrushMaterialExtension }},true              ?[]:void 0);
+      const { createOpenBrushMaterialExtension } = await __vitePreload(async () => { const { createOpenBrushMaterialExtension } = await import('./material-extension-2Z7t06tl.js');return { createOpenBrushMaterialExtension }},true              ?[]:void 0);
       loader.register((parser) => createOpenBrushMaterialExtension(parser, asset.openBrush.brushBaseUrl));
     }
     let gltf;
@@ -20012,15 +20892,16 @@ class XriftThreeLoader {
       loader.dispose();
     }
   }
-  createMaterials(manifest, textures, diagnostics) {
+  createMaterials(manifest, textures, shaderTextures, diagnostics) {
     const materials = /* @__PURE__ */ new Map();
+    const classicShaders = /* @__PURE__ */ new Map();
     for (const asset of Object.values(manifest.assets)) {
       if (asset.kind !== "material")
         continue;
       if (asset.shader?.kind === "classic-r3f") {
-        const material2 = createRuntimeClassicShaderMaterial(asset.shader, textures, diagnostics, asset.id);
-        material2.name = asset.name;
-        materials.set(asset.id, material2);
+        const factory = createRuntimeClassicShaderFactory(asset.shader, shaderTextures, diagnostics, asset.id, asset.name);
+        classicShaders.set(asset.id, factory);
+        materials.set(asset.id, factory(""));
         continue;
       }
       const properties = asset.properties;
@@ -20094,7 +20975,7 @@ class XriftThreeLoader {
       material.name = asset.name;
       materials.set(asset.id, material);
     }
-    return materials;
+    return { materials, classicShaders };
   }
   createComponentObject(input) {
     const { component } = input;
@@ -20102,6 +20983,7 @@ class XriftThreeLoader {
       if (component.geometry.kind === "primitive") {
         const material = component.geometry.primitive === "plane" ? runtimeDoubleSidedMToonMaterial(component, input) : runtimeAuthoredSurfaceMaterial(component, input);
         const mesh = new Mesh$1(createPrimitiveGeometry(component.geometry.primitive), material ?? new MeshStandardMaterial({ color: 12568533 }));
+        applyClassicShaderMeshState(mesh, material);
         mesh.castShadow = component.castShadow;
         mesh.receiveShadow = component.receiveShadow;
         mesh.userData.xriftStudioComponentId = component.id;
@@ -20113,6 +20995,7 @@ class XriftThreeLoader {
       if (component.geometry.kind === "extrude") {
         const material = runtimeAuthoredSurfaceMaterial(component, input);
         const mesh = new Mesh$1(createXriftExtrudeGeometry({ points: component.geometry.points, depth: component.geometry.depth }), material ?? new MeshStandardMaterial({ color: 12568533 }));
+        applyClassicShaderMeshState(mesh, material);
         mesh.castShadow = component.castShadow;
         mesh.receiveShadow = component.receiveShadow;
         mesh.userData.xriftStudioComponentId = component.id;
@@ -20124,6 +21007,7 @@ class XriftThreeLoader {
       if (component.geometry.kind === "terrain") {
         const material = runtimeDoubleSidedMToonMaterial(component, input);
         const mesh = new Mesh$1(createTerrainGeometry(component.geometry), material ?? new MeshStandardMaterial({ color: 7048782 }));
+        applyClassicShaderMeshState(mesh, material);
         mesh.castShadow = component.castShadow;
         mesh.receiveShadow = component.receiveShadow;
         mesh.userData.xriftStudioComponentId = component.id;
@@ -20145,7 +21029,7 @@ class XriftThreeLoader {
         return null;
       }
       const instance = selectRuntimeSourceNode(clone(loaded.root), component.geometry.sourceNodeIndex);
-      applyModelMaterials(instance, loaded, component, input.manifest, input.materials, input.textures);
+      applyModelMaterials(instance, loaded, component, input.manifest, input.materials, input.classicShaders, input.textures);
       applyModelPose(instance, component);
       const springBones = bindVrmSpringBones(loaded.root, instance);
       if (springBones)
@@ -20416,46 +21300,41 @@ function isRuntimeOfficialWrapperComponent(schemaId) {
 function isRuntimeOfficialLeafComponent(schemaId) {
   return schemaId === "xrift.video-screen" || schemaId === "xrift.video-player" || schemaId === "xrift.live-video-player" || schemaId === "xrift.video-180-sphere" || schemaId === "xrift.screen-share-display" || schemaId === "xrift.tag-board" || schemaId === "xrift.entry-log-board" || schemaId === "xrift.portal" || schemaId === "xrift.item";
 }
-function createRuntimeClassicShaderMaterial(shader, textures, diagnostics, assetId) {
-  const variant = shader.variants.find((candidate) => !candidate.meshNameIncludes) ?? shader.variants[0];
-  const uniforms = Object.fromEntries(Object.entries(shader.uniforms).map(([name, uniform]) => {
-    if (uniform.kind === "texture") {
-      const texture = textures.get(uniform.textureAssetId)?.clone() ?? null;
-      if (!texture && uniform.textureAssetId) {
-        diagnostics.push({
-          severity: "warning",
-          code: "custom-shader-texture-not-loaded",
-          message: `Custom Shader texture could not be loaded: ${uniform.textureAssetId}`,
-          assetId
-        });
-      }
-      return [name, { value: texture }];
+function classicShaderDataTextureAssetIds(manifest) {
+  const ids = /* @__PURE__ */ new Set();
+  for (const asset of Object.values(manifest.assets)) {
+    if (asset.kind !== "material" || asset.shader?.kind !== "classic-r3f") {
+      continue;
     }
-    if (uniform.kind === "color") {
-      return [name, { value: new Color$3(uniform.value) }];
+    for (const uniform of Object.values(asset.shader.uniforms)) {
+      if (uniform.kind === "texture")
+        ids.add(uniform.textureAssetId);
     }
-    if (uniform.kind === "vector") {
-      const value = uniform.value;
-      const vector = value.length === 2 ? new Vector2$1(value[0] ?? 0, value[1] ?? 0) : value.length === 3 ? new Vector3$2(value[0] ?? 0, value[1] ?? 0, value[2] ?? 0) : new Vector4(value[0] ?? 0, value[1] ?? 0, value[2] ?? 0, value[3] ?? 0);
-      return [name, { value: vector }];
-    }
-    return [name, { value: uniform.value }];
-  }));
-  const material = new ShaderMaterial$1({
-    name: shader.sourceModulePath,
-    vertexShader: shader.vertexShader,
-    fragmentShader: shader.fragmentShader,
-    uniforms,
-    defines: variant?.defines ?? {},
-    side: variant?.side === "back" ? BackSide$1 : variant?.side === "double" ? DoubleSide : FrontSide,
-    transparent: variant?.transparent ?? false,
-    depthWrite: variant?.depthWrite ?? true
-  });
-  const timeUniforms = detectTimeUniforms(shader);
-  if (timeUniforms.length > 0) {
-    material.userData.xriftTimeUniforms = timeUniforms;
   }
-  return material;
+  return ids;
+}
+function createRuntimeClassicShaderFactory(shader, textures, diagnostics, assetId, assetName) {
+  const byVariant = /* @__PURE__ */ new Map();
+  return (meshName) => {
+    const variant = resolveClassicShaderVariant(shader, meshName);
+    const key = variant ? shader.variants.indexOf(variant) : -1;
+    const existing = byVariant.get(key);
+    if (existing)
+      return existing;
+    const material = createClassicShaderMaterial(shader, {
+      meshName,
+      textures,
+      onDiagnostic: (diagnostic) => diagnostics.push({
+        severity: "warning",
+        code: diagnostic.code === "texture-not-loaded" ? "custom-shader-texture-not-loaded" : "custom-shader-texture-unsupported",
+        message: diagnostic.message,
+        assetId
+      })
+    });
+    material.name = assetName;
+    byVariant.set(key, material);
+    return material;
+  };
 }
 function runtimeTextureWrapping(value) {
   if (value === "repeat")
@@ -20628,7 +21507,7 @@ function materialForBinding(component, materials) {
   const first = component.materialBindings[0];
   return first ? materials.get(first.materialAssetId) : void 0;
 }
-function applyModelMaterials(root, loaded, component, manifest, materials, textures) {
+function applyModelMaterials(root, loaded, component, manifest, materials, classicShaders, textures) {
   const asset = component.geometry.kind === "model" ? manifest.assets[component.geometry.assetId] : void 0;
   if (!asset || asset.kind !== "model")
     return;
@@ -20670,9 +21549,14 @@ function applyModelMaterials(root, loaded, component, manifest, materials, textu
         }, shaderTextures);
         return instance;
       }
+      const classicShader = materialId ? classicShaders.get(materialId) : void 0;
+      if (classicShader)
+        return classicShader(object.name);
       return (materialId ? materials.get(materialId) : void 0) ?? material;
     });
     object.material = Array.isArray(object.material) ? next : next[0] ?? object.material;
+    for (const material of next)
+      applyClassicShaderMeshState(object, material);
   });
 }
 function collectSourceMaterials(root) {
@@ -25967,20 +26851,7 @@ function numberOr(value, fallback, minimum) {
 function XriftRuntimeTimeUniforms({ result }) {
     useFrame((state, delta) => {
         updateMToonMaterials(result.root, delta);
-        const elapsed = state.clock.getElapsedTime();
-        result.root.traverse((object) => {
-            const mesh = object;
-            const material = mesh.material;
-            const specs = material?.userData?.xriftTimeUniforms;
-            if (!Array.isArray(specs) || !material)
-                return;
-            for (const spec of specs) {
-                const uniform = material.uniforms[spec.name];
-                if (uniform) {
-                    applyTimeUniformValue(uniform, spec, elapsed);
-                }
-            }
-        });
+        advanceObjectTimeUniforms(result.root, state.clock.getElapsedTime());
     });
     return null;
 }

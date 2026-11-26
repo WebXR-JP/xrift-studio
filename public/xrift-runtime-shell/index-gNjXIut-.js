@@ -1,5 +1,5 @@
-import { importShared } from './__federation_fn_import-DO4bQy68.js';
-import { World } from './__federation_expose_World-BxV3D91s.js';
+import { importShared } from './__federation_fn_import-KOOfp08f.js';
+import { World } from './__federation_expose_World-COObxSw0.js';
 
 const world = {"physics":{"gravity":9.81,"allowInfiniteJump":true},"camera":{"near":0.1,"far":1000}};
 const xriftConfig = {

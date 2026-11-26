@@ -1,5 +1,5 @@
-import { importShared } from './__federation_fn_import-DO4bQy68.js';
-import { X as XriftItem } from './index-q66fhYVz.js';
+import { importShared } from './__federation_fn_import-KOOfp08f.js';
+import { X as XriftItem } from './index-BrS1XS6n.js';
 
 const {jsx} = await importShared('react/jsx-runtime');
 const MANIFEST_URL = new URL("./xrift-runtime.json", import.meta.url).href;
