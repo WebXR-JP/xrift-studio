@@ -261,6 +261,8 @@ Mipmapsの作り方は画像の形式で決まる。8bitの画像は読み込む
 
 `variants`の各要素は、`side`、`transparent`、`depthWrite`、`defines`に加えて、`blending`（`normal`、`additive`、`multiply`、`subtractive`。省略時は`normal`）と`frustumCulled`（省略時は`true`）を持てる。`blending`は`transparent`を変えない。光や煙を重ねる場合は`transparent: true`と`depthWrite: false`も指定する。`frustumCulled: false`は、頂点シェーダーがMeshを元の位置から大きく動かす場合に指定する。そのマテリアルを着けたMeshだけがカリングの対象から外れ、マテリアルを外すと元に戻る。
 
+シーンが決める値は、次の名前のuniformを宣言したシェーダーにだけ渡る。マテリアルに保存した値の代わりに使われる。風は`uWindDirection`（`vector`、2個）、`uWindSpeed`、`uWindTurbulence`（`number`）。主光源と環境光は`uSunDirection`、`uSunColor`、`uAmbientColor`（`vector`、3個）、`uSunIntensity`、`uAmbientIntensity`（`number`）。割り当て先がプリミティブ、Terrain、モデルのどれでも、編集・Play・生成するワールド・Runtime JSONで同じ値になる。時刻は`uTime`などの名前か`animatedTimeUniform`で受け取る。
+
 形式が不正な記述は`CUSTOM_SHADER_INVALID`で拒否し、`details.diagnostics`に`uniforms.<名前>: …`や`variants[0]: …`の形で理由をすべて返す。存在しないTexture、その種類のuniformで読めないTexture（`texture-3d`と`texture-cube`のKTX2・EXR、すべての種類のHDR）、大きさが条件に合わない画像は`CUSTOM_SHADER_TEXTURE_INVALID`で拒否する。`details.uniforms`に対象のuniform名、`details.diagnostics`に原因を返す。Textureは先に`import_texture_asset`で取り込み、`get_texture_asset`で大きさを確かめてから指定する。どちらの場合もマテリアルは変更しない。
 
 `create_custom_shader`は任意のGLSLを受ける。「空っぽく見せる」用途には使わず、カタログから選ぶ。
