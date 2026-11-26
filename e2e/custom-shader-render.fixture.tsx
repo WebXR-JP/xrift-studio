@@ -7,7 +7,6 @@ import { PrimitiveMeshVisual } from "../src/components/visual-editor/SceneViewpo
 import { classicShaderTextureCacheSize } from "../src/components/visual-editor/classic-shader-textures";
 import { tauri } from "../src/lib/tauri";
 import { XriftWorld } from "../packages/xrift-studio-runtime/src/react-three-fiber/index";
-import { loadBuiltShellWorld } from "./vrm-mtoon-render.fixture";
 import type { AssetManifest, MaterialAsset } from "../src/lib/visual-editor/asset-manifest";
 import type { MeshComponent, SceneEntity } from "../src/lib/visual-editor/scene-document";
 
@@ -15,8 +14,8 @@ extend(THREE);
 const directory = "/node_modules/.cache/xrift-studio/custom-shader-render-parity/";
 const SIZE = 160;
 const TEXTURE_UNIFORMS = ["uPicture", "uData", "uLut", "uSky"];
-/** Edit, the generated World, the Runtime JSON adapter from source and the built shell. */
-type Mode = "edit" | "jsx" | "runtime" | "shell";
+/** Edit, the generated World and the Runtime JSON adapter. */
+type Mode = "edit" | "jsx" | "runtime";
 type ShaderMesh = THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
 
 function base64(bytes: Uint8Array) {
@@ -104,11 +103,9 @@ export async function renderCustomShaderParity(mode: Mode) {
     const expected = mode === "edit" ? 12 : 2;
     if (mode === "edit") root.render(wrap(editorMeshes()));
     else if (mode === "jsx") root.render(wrap(React.createElement(generated.World)));
-    else if (mode === "runtime") {
+    else {
+      // What the browser publication shell mounts, here from source.
       root.render(wrap(<Physics paused><XriftWorld manifest={`${location.origin}${directory}${generated.parityRuntimeManifest}`} physics="inherit" /></Physics>));
-    } else {
-      const World = await loadBuiltShellWorld(`${location.origin}/xrift-runtime-shell/remoteEntry.js`);
-      root.render(wrap(<Physics paused>{React.createElement(World)}</Physics>));
     }
     const meshes = await waitFor(() => {
       const found = shaderMeshes();
