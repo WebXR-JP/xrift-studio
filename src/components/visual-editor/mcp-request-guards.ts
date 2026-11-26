@@ -100,6 +100,26 @@ export function mcpOptionalVec3(
   return [value[0] as number, value[1] as number, value[2] as number];
 }
 
+/**
+ * What `capture_scene_view` draws around the Scene itself.
+ *
+ * Omitting `showEditorHelpers` keeps the picture clients received before the
+ * option existed: the Scene View as the author sees it. Only `false` asks for
+ * the frame without the grid, gizmo, selection outline and helper markers.
+ */
+export function mcpSceneViewCaptureOptions(
+  argumentsValue: Record<string, unknown>,
+): { showEditorHelpers: boolean } {
+  const value = argumentsValue.showEditorHelpers;
+  if (value !== undefined && typeof value !== "boolean") {
+    throw new XriftMcpEditorToolError(
+      "INVALID_ARGUMENT",
+      "showEditorHelpersはbooleanで指定してください",
+    );
+  }
+  return { showEditorHelpers: value !== false };
+}
+
 export type McpExternalStoreWriteContext = {
   bundle: PrototypeVisualProject;
   editorMode: EditorMode;
