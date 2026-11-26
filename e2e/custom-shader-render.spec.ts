@@ -108,14 +108,14 @@ test("カスタムシェーダーの新しいuniformと合成・カリングの�
   expect(edit.frames.glowFar).toBe(edit.frames.glowBlack);
   expect(decode(edit.frames.plainFar).some((_value, index) => index % 4 === 0 && lit(decode(edit.frames.plainFar), index))).toBe(false);
 
-  // The sampler plane, five bands from the bottom, each sampled much smaller
+  // The sampler plane, eight bands from the bottom, each sampled much smaller
   // than its picture. Only a sampler that reads mip levels shows the average.
   await info.attach("custom-shader-sampled.png", { body: png(decode(edit.frames.sampled)), contentType: "image/png" });
   const sampled = decode(edit.frames.sampled);
   /** The red channel inside one band of the plane, which covers pixels 40 to 119 both ways. */
   const band = (index: number) => {
     const values: number[] = [];
-    for (let y = 40 + 16 * index + 3; y < 40 + 16 * index + 13; y += 1) {
+    for (let y = 40 + 10 * index + 2; y < 40 + 10 * index + 8; y += 1) {
       for (let x = 44; x < 116; x += 1) values.push(sampled[(y * SIZE + x) * 4]!);
     }
     return values;
@@ -132,6 +132,11 @@ test("カスタムシェーダーの新しいuniformと合成・カリングの�
   // do not depend on the GPU of the machine that runs the test.
   expect(offGrey(band(3), 2), "the stripes at a slant without anisotropy").toBe(0);
   expect(offGrey(band(4), 60), "the stripes at a slant with anisotropy").toBeGreaterThan(0.5);
+  // A cube map asked for its smallest level: one texel of the face without
+  // mip levels, the average of the face with them.
+  expect(offGrey(band(5), 100), "the cube map without mip levels").toBe(1);
+  expect(offGrey(band(6), 2), "the cube map through mip levels").toBe(0);
+  expect(offGrey(band(7), 2), "the cube map through mip levels, nearest").toBe(0);
   const sampler = (generateMipmaps: boolean, minFilter: string, magFilter: string, anisotropy: number) => ({
     generateMipmaps, minFilter, magFilter, anisotropy,
     gpu: {
@@ -156,10 +161,14 @@ test("カスタムシェーダーの新しいuniformと合成・カリングの�
       uMippedNearest: sampler(true, "nearest-mipmap-linear", "nearest", 1),
       uFlat: sampler(true, "linear-mipmap-linear", "linear", 1),
       uSlanted: sampler(true, "linear-mipmap-linear", "linear", 8),
+      uCubePlain: sampler(false, "linear", "linear", 1),
+      uCubeMipped: sampler(true, "linear-mipmap-linear", "linear", 4),
+      uCubeMippedNearest: sampler(true, "nearest-mipmap-linear", "nearest", 1),
     });
     // The picture, the float data, the 3D table and the cube: one each on the
-    // GPU. The checker and the stripes: one for each way they are sampled.
-    expect(report.gpuTextures, report.mode).toBe(9);
+    // GPU. The checker, the stripes and the checker cube: one for each way
+    // they are sampled.
+    expect(report.gpuTextures, report.mode).toBe(12);
     for (const [name, frame] of Object.entries(report.frames)) {
       expect(frame === edit.frames[name as keyof typeof edit.frames], `${report.mode} ${name}`).toBe(true);
     }

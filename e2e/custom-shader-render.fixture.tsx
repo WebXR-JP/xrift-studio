@@ -19,7 +19,7 @@ const directory = "/node_modules/.cache/xrift-studio/custom-shader-render-parity
 const SIZE = 160;
 const TEXTURE_UNIFORMS = ["uPicture", "uData", "uLut", "uSky"];
 /** The samplers of the third Material: with and without mip levels, and anisotropy. */
-const SAMPLER_UNIFORMS = ["uPlain", "uMipped", "uMippedNearest", "uFlat", "uSlanted"];
+const SAMPLER_UNIFORMS = ["uPlain", "uMipped", "uMippedNearest", "uFlat", "uSlanted", "uCubePlain", "uCubeMipped", "uCubeMippedNearest"];
 const FILTER_NAMES: Record<number, string> = {
   [THREE.NearestFilter]: "nearest",
   [THREE.LinearFilter]: "linear",
@@ -193,14 +193,16 @@ export async function renderCustomShaderParity(mode: Mode) {
     const samplerState = Object.fromEntries(SAMPLER_UNIFORMS.map((name) => {
       const texture = samplers.material.uniforms[name]!.value as THREE.Texture;
       const handle = (renderer.properties.get(texture) as { __webglTexture?: WebGLTexture }).__webglTexture;
-      const bound = gl.getParameter(gl.TEXTURE_BINDING_2D) as WebGLTexture | null;
-      gl.bindTexture(gl.TEXTURE_2D, handle ?? null);
+      const cube = (texture as THREE.CubeTexture).isCubeTexture === true;
+      const kind = cube ? gl.TEXTURE_CUBE_MAP : gl.TEXTURE_2D;
+      const bound = gl.getParameter(cube ? gl.TEXTURE_BINDING_CUBE_MAP : gl.TEXTURE_BINDING_2D) as WebGLTexture | null;
+      gl.bindTexture(kind, handle ?? null);
       const gpu = handle ? {
-        minFilter: glFilterNames[gl.getTexParameter(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER) as number],
-        magFilter: glFilterNames[gl.getTexParameter(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER) as number],
-        anisotropy: anisotropic ? gl.getTexParameter(gl.TEXTURE_2D, anisotropic.TEXTURE_MAX_ANISOTROPY_EXT) as number : null,
+        minFilter: glFilterNames[gl.getTexParameter(kind, gl.TEXTURE_MIN_FILTER) as number],
+        magFilter: glFilterNames[gl.getTexParameter(kind, gl.TEXTURE_MAG_FILTER) as number],
+        anisotropy: anisotropic ? gl.getTexParameter(kind, anisotropic.TEXTURE_MAX_ANISOTROPY_EXT) as number : null,
       } : null;
-      gl.bindTexture(gl.TEXTURE_2D, bound);
+      gl.bindTexture(kind, bound);
       return [name, {
         generateMipmaps: texture.generateMipmaps,
         minFilter: FILTER_NAMES[texture.minFilter], magFilter: FILTER_NAMES[texture.magFilter],

@@ -77,6 +77,23 @@ void main() {
 
 値はGLBから読み込みます。外部のファイルを参照する`.gltf`は取り込み時にGLBへ変換されるため、インスタンスごとの独自属性は残りません。必要なデータを含むGLBを取り込んでください。
 
+## シーンの風とライトを読む
+
+シェーダーが次の名前のuniformを持つと、マテリアルに保存した値の代わりに、シーンの値が渡されます。風はシーン設定の風、光はシーンでいちばん強いDirectional Lightと、シーン設定のAmbient Lightです。葉を風で揺らす、幹をシーンの光で照らす、といった表現に使えます。
+
+| uniform名 | GLSLの型 | 渡される値 |
+|---|---|---|
+| `uWindDirection` | `vec2` | 風が吹いていく向き。水平の、長さ1のベクトルです |
+| `uWindSpeed` | `float` | 風の速度。風を無効にすると0になります |
+| `uWindTurbulence` | `float` | 突風の強さ。0〜1です |
+| `uSunDirection` | `vec3` | 面から光源へ向かう向き。長さ1のベクトルです |
+| `uSunColor` | `vec3` | 光の色 |
+| `uSunIntensity` | `float` | 光の強さ。Directional Lightがなければ0になります |
+| `uAmbientColor` | `vec3` | Ambient Lightの色 |
+| `uAmbientIntensity` | `float` | Ambient Lightの強さ。無効にすると0になります |
+
+Scene ViewとPlay、公開したワールドで、同じ値が使われます。割り当て先がプリミティブ、Terrain、モデルのどれでも同じです。シーンの風やライトを変えると、Scene Viewの表示も変わります。Inspectorのマテリアルのプレビューには、保存した値が使われます。
+
 ## 動作中に値を変える
 
 「シェーダーの調整値」で設定した値は、ワールドの動作中は変わりません。歩く人の位置に合わせて草を倒すなど、動作中に値を変えるにはスクリプトを使います。スクリプトから`ctx.materials.setUniform`へ、uniformの名前と値を渡してください。名前は、「シェーダーの調整値」の「uniform名」を押すと表示されます。
