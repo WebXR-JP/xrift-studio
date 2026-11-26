@@ -577,6 +577,10 @@ uniformの種類は`number`、`color`、`vector`、`matrix`（9個か16個、列
 
 テクスチャはTexture Assetごとに1回だけ読み込み、uniformごとに複製を渡す。複製は画像を共有し、サンプラーの設定だけを持つ。`texture`は8bitの画像・KTX2・EXRを読む。EXRは`classic-shader-data-texture.ts`がファイルの精度（16bitか32bit）のまま読む。`texture-3d`は横並びの8bit画像から、`texture-cube`は6枚の8bit画像から作り、同じ画像からは1つだけ作る。2Dの画像は上端がv = 1、3Dは画像の上端がy = 0になる。
 
+`texture`と`texture-cube`は、`generateMipmaps: true`でMipmapsを読む。`filter`は1段階の中の読み方を決め、隣り合う2段階は常に混ぜる。`linear`は`LinearMipmapLinearFilter`、`nearest`は`NearestMipmapLinearFilter`になる。8bitの画像は読み込むときにMipmapsを作る。KTX2はファイルが持つMipmapsを使い、持たなければ元の画像だけを読む。EXRには作らない。浮動小数のMipmapsは端末の拡張機能がないと作れず、作れない端末では黒く描かれるためである。`anisotropy`（1〜16）は、three.jsがMipmapsを読み`filter`が`linear`の場合にだけ反映する。それ以外で2以上を指定した記述は、検証で拒否する。Texture Asset自身のサンプラー設定はuniformへ引き継がない。
+
+シーンが決めるuniformは、宣言したシェーダーにだけ渡す。風は`uWindDirection`・`uWindSpeed`・`uWindTurbulence`、主光源と環境光は`uSunDirection`・`uSunColor`・`uSunIntensity`・`uAmbientColor`・`uAmbientIntensity`である。編集画面とPlayは、`scene-driven-uniforms.ts`の`applyWindDrivenUniforms`と`applyLightingDrivenUniforms`で、描画中のマテリアルへ書き込む。プリミティブとTerrainはMeshごとのhookが、モデルは`ProjectModelVisual`が書き込む。モデルはMeshとスロットごとにvariantを選んでマテリアルを組み立てるため、そのすべてが対象になる。プレビューなどScene Viewの外で描くモデルには渡さず、マテリアルに保存した値を使う。公開物では、`compiler/classic-shader-publish.ts`の`publishedSceneClassicShader`が記述へ書き込む。生成するワールドとRuntime JSONのマニフェストは同じ記述を持つ。Runtime JSONの読み込みは、シーンの風とライトを読まない。
+
 `frustumCulled: false`はマテリアルの`userData`に記録し、`applyClassicShaderMeshState`がそのマテリアルを着けたMeshへ反映する。外すと、ほかに求めるマテリアルがなければMeshの元の値へ戻す。時刻のuniformは`userData.xriftTimeUniforms`に記録し、各経路が`advanceMaterialTimeUniforms`で進める。組み立てた後に`uniforms`やその要素を差し替えない。値だけを書き換える。
 
 #### マテリアルの新規作成

@@ -218,6 +218,33 @@ function describeInvalidSampler(
   return undefined;
 }
 
+/**
+ * `anisotropy` on a kind that can read mip levels. The renderer applies it
+ * only where the mip levels are blended with a linear filter, so a larger
+ * number anywhere else would be saved and then do nothing.
+ */
+function describeInvalidAnisotropy(
+  uniform: Record<string, unknown>,
+): string | undefined {
+  const anisotropy = uniform.anisotropy;
+  if (anisotropy === undefined) return undefined;
+  if (
+    typeof anisotropy !== "number" ||
+    !Number.isInteger(anisotropy) ||
+    anisotropy < 1 ||
+    anisotropy > CLASSIC_SHADER_LIMITS.anisotropy
+  ) {
+    return `anisotropyは1〜${CLASSIC_SHADER_LIMITS.anisotropy}の整数で指定してください`;
+  }
+  if (
+    anisotropy > 1 &&
+    (uniform.generateMipmaps !== true || uniform.filter === "nearest")
+  ) {
+    return 'anisotropyを2以上にするには、generateMipmapsをtrueにし、filterを"linear"にしてください';
+  }
+  return undefined;
+}
+
 function describeInvalidUniform(value: unknown): string | undefined {
   if (!value || typeof value !== "object") return "オブジェクトで指定してください";
   const uniform = value as Record<string, unknown>;
@@ -226,7 +253,10 @@ function describeInvalidUniform(value: unknown): string | undefined {
       if (!isNonEmptyString(uniform.textureAssetId)) {
         return "textureAssetIdにテクスチャのIDを指定してください";
       }
-      return describeInvalidSampler(uniform, ["wrapS", "wrapT"]);
+      return (
+        describeInvalidSampler(uniform, ["wrapS", "wrapT"]) ??
+        describeInvalidAnisotropy(uniform)
+      );
     case "texture-3d":
       if (!isNonEmptyString(uniform.textureAssetId)) {
         return "textureAssetIdにテクスチャのIDを指定してください";
@@ -243,6 +273,9 @@ function describeInvalidUniform(value: unknown): string | undefined {
       if (uniform.generateMipmaps !== undefined) {
         return "texture-3dはgenerateMipmapsを指定できません";
       }
+      if (uniform.anisotropy !== undefined) {
+        return "texture-3dはanisotropyを指定できません";
+      }
       return describeInvalidSampler(uniform, ["wrapS", "wrapT", "wrapR"]);
     case "texture-cube":
       if (
@@ -257,7 +290,9 @@ function describeInvalidUniform(value: unknown): string | undefined {
       ) {
         return "facesに+X、-X、+Y、-Y、+Z、-Zの順で6件のtextureAssetIdを指定してください";
       }
-      return describeInvalidSampler(uniform, []);
+      return (
+        describeInvalidSampler(uniform, []) ?? describeInvalidAnisotropy(uniform)
+      );
     case "number":
       return typeof uniform.value === "number" && Number.isFinite(uniform.value)
         ? undefined

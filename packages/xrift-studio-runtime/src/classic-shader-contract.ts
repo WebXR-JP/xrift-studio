@@ -27,6 +27,20 @@ export const CLASSIC_SHADER_BLEND_MODES = [
 ] as const satisfies readonly XriftClassicShaderBlending[];
 
 export type XriftClassicShaderWrap = "repeat" | "clamp-to-edge";
+/**
+ * How texels are picked inside one level of a picture. `generateMipmaps`
+ * decides whether a picture drawn smaller than it is reads its mip levels:
+ *
+ * | `filter`  | `generateMipmaps` | drawn larger | drawn smaller                              |
+ * | --------- | ----------------- | ------------ | ------------------------------------------ |
+ * | `linear`  | omitted, `false`  | linear       | linear, in the full-size picture only      |
+ * | `nearest` | omitted, `false`  | nearest      | nearest, in the full-size picture only     |
+ * | `linear`  | `true`            | linear       | linear in the two closest levels, blended  |
+ * | `nearest` | `true`            | nearest      | nearest in the two closest levels, blended |
+ *
+ * The two closest levels are always blended, so a surface shows no line where
+ * the level changes.
+ */
 export type XriftClassicShaderFilter = "nearest" | "linear";
 export type XriftClassicShaderColorSpace = "srgb" | "linear";
 
@@ -42,7 +56,23 @@ export type XriftClassicShaderUniform =
       kind: "texture";
       textureAssetId: string;
       colorSpace?: XriftClassicShaderColorSpace;
+      /**
+       * `true` samples the picture through mip levels where it is drawn smaller
+       * than it is, which is what keeps a distant surface from shimmering. An
+       * 8-bit picture has its levels built when it is uploaded. A KTX2 uses the
+       * levels its file holds, and is sampled without them when it holds none.
+       * EXR float data is never given any: WebGL builds them only with optional
+       * extensions, so it would read on one device and be black on another.
+       * Omitted means `false`: the full-size picture alone is sampled.
+       */
       generateMipmaps?: boolean;
+      /**
+       * Samples taken along the direction a surface is seen at a slant, a whole
+       * number from 1 to 16. Above 1 it needs `generateMipmaps: true` and a
+       * linear `filter`, and a device uses as many as it supports. Omitted
+       * means 1, which is no anisotropic filtering.
+       */
+      anisotropy?: number;
       filter?: XriftClassicShaderFilter;
       wrapS?: XriftClassicShaderWrap;
       wrapT?: XriftClassicShaderWrap;
@@ -67,7 +97,10 @@ export type XriftClassicShaderUniform =
       kind: "texture-cube";
       faces: XriftClassicShaderCubeFace[];
       colorSpace?: XriftClassicShaderColorSpace;
+      /** As on `texture`: `true` builds mip levels and samples through them. */
       generateMipmaps?: boolean;
+      /** As on `texture`: 1 to 16, above 1 only with mip levels and `linear`. */
+      anisotropy?: number;
       filter?: XriftClassicShaderFilter;
     }
   | { kind: "number"; value: number }
@@ -141,6 +174,12 @@ export const CLASSIC_SHADER_LIMITS = {
    */
   volumeAxis: 256,
   cubeFaces: 6,
+  /**
+   * The largest `anisotropy`. It is the most any common GPU offers
+   * (MAX_TEXTURE_MAX_ANISOTROPY_EXT); a device that offers less uses its own
+   * maximum, and one without the extension samples without it.
+   */
+  anisotropy: 16,
 } as const;
 
 /** The variant a mesh wears: its own name first, then the fallback. */
