@@ -130,6 +130,7 @@ export function runMToonMaterialCompilerFixtureAssertions(mode: "primitive" | "m
     assert(source.includes("new VRMLoaderPlugin(parser)") && source.includes("VRMUtils.rotateVRM0(vrm)"), "VRM output must load native materials and preserve VRM 0.x orientation");
     assert(source.includes("removeNativeMToonOutlines(scene)") && source.includes("attachMToonOutlines(root)"), "VRM output must rebuild outline passes on the final cloned model");
     assert(source.includes("bindVrmSpringBones(scene, root)"), "VRM output must bind spring bones to the final cloned model");
+    assert(source.includes("useLoader(CompiledVRMGLTFLoader, modelUrl, registerGltfInstanceAttributes)"), "VRM output must load custom instance attributes as the Editor does");
   }
   return result;
 }
