@@ -1,13 +1,15 @@
 import { createEditorCanvasEvents } from "../../lib/visual-editor/canvas-events";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { PerspectiveCamera } from "three";
 import type { ClassicR3fMaterialShader } from "../../lib/visual-editor/custom-shader-contract";
 import { validateClassicR3fMaterialShader } from "../../lib/visual-editor/custom-shader-contract";
 import type { ResolvedWind } from "../../lib/visual-editor/wind-contract";
 import {
   WATER_PREVIEW_CAMERA, WATER_PREVIEW_TARGET, WATER_PREVIEW_TIME,
   applyWaterPreviewTime, createWaterPreviewObjects, requestWaterThumbnail,
-  retainWaterThumbnailRenderer, waterPreviewBackground,
+  retainWaterThumbnailRenderer, waterPreviewBackground, waterPreviewView,
+  type WaterPreviewView,
 } from "./water-preview-renderer";
 
 /** Real GLSL, one shared snapshot context for cards and one live detail Canvas. */
@@ -99,6 +101,21 @@ function WaterPreviewSurface({ shader, wind, running }: {
   const objects = useMemo(() => createWaterPreviewObjects(shader, wind), [shader, wind]);
   const elapsed = useRef(WATER_PREVIEW_TIME);
   const invalidate = useThree((state) => state.invalidate);
+  const camera = useThree((state) => state.camera);
+  // A sea and a river are framed from different places, and the Canvas keeps
+  // one camera while the author moves between presets. The view is compared by
+  // value: the shader object changes with every slider, the framing rarely.
+  const viewKey = JSON.stringify(waterPreviewView(shader));
+  const view = useMemo(() => JSON.parse(viewKey) as WaterPreviewView, [viewKey]);
+  useEffect(() => {
+    camera.position.set(...view.position);
+    if ((camera as PerspectiveCamera).isPerspectiveCamera) {
+      (camera as PerspectiveCamera).fov = view.fov;
+      camera.updateProjectionMatrix();
+    }
+    camera.lookAt(...view.target);
+    invalidate();
+  }, [camera, invalidate, view]);
   useEffect(() => { applyWaterPreviewTime(objects.material, elapsed.current); invalidate(); }, [objects, invalidate]);
   useEffect(() => () => objects.dispose(), [objects]);
   useFrame((_state, delta) => {

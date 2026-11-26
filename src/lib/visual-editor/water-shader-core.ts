@@ -89,6 +89,9 @@ ${WAVE_MATH}
 varying vec3 vWorldPosition;
 varying vec3 vSurfacePosition;
 varying vec3 vWorldNormal;
+#ifdef WATER_FLOW
+varying vec4 vFlowFrame;
+#endif
 #include <fog_pars_vertex>
 
 void main() {
@@ -98,6 +101,15 @@ void main() {
   vWorldNormal = normalize(vec3(dot(viewMatrix[0].xyz, viewNormal),
     dot(viewMatrix[1].xyz, viewNormal), dot(viewMatrix[2].xyz, viewNormal)));
   vWorldPosition = worldPosition.xyz;
+#ifdef WATER_FLOW
+  // A river belongs to the mesh it is drawn on: the current runs along the
+  // mesh's own X axis and down its own centre line, so the Entity's Transform
+  // turns and places it and one Material serves every stretch.
+  vec2 flowAxis = (modelMatrix * vec4(1.0, 0.0, 0.0, 0.0)).xz;
+  vFlowFrame = vec4(
+    dot(flowAxis, flowAxis) > 0.000001 ? normalize(flowAxis) : vec2(1.0, 0.0),
+    modelMatrix[3].xz);
+#endif
   // Off by default: Studio's ordinary Plane has only four vertices.
   // Opt in only on a subdivided horizontal mesh (the pack contains two).
   if (uWaveDisplacement > 0.0) {
@@ -166,6 +178,16 @@ uniform float uRainStrength;
 #endif
 #ifdef WATER_ICE
 uniform float uIceCoverage;
+#endif
+#ifdef WATER_FLOW
+uniform float uFlowAngle;
+uniform float uFlowSpeed;
+uniform float uRapids;
+uniform float uChannelWidth;
+uniform float uChannelDepth;
+uniform float uBankSoftness;
+uniform float uClarity;
+varying vec4 vFlowFrame;
 #endif
 varying vec3 vWorldPosition;
 varying vec3 vSurfacePosition;
@@ -290,6 +312,33 @@ vec2 xriftWaterIce(vec2 p) {
   return vec2(first, sqrt(second)-sqrt(first));
 }
 #endif
+
+#ifdef WATER_FLOW
+// Noise carried by a current: x is the value, yz its slope across and along
+// the flow, scaled so that the denser axis reads 1 whatever the density and a
+// pattern drawn out downstream tilts less that way than across. Two copies
+// ride downstream half a cycle apart and trade
+// places while the other is at full strength. One scrolled copy reads as a
+// conveyor belt; this one changes shape as it travels. Every pass starts from
+// another patch of noise, so the same ripple never comes round twice, and the
+// coordinates stay bounded however long the world has been open.
+// travel is metres the current has run, pace how much of that this spot keeps,
+// reach how far a feature rides before it hands over.
+vec3 xriftWaterFlowNoise(vec2 metres, vec2 scale, float travel, float pace, float reach) {
+  float cycle = travel / reach;
+  float first = fract(cycle), second = fract(cycle + 0.5);
+  float weight = 1.0 - abs(1.0 - 2.0 * first);
+  vec2 seedA = vec2(3.71, 1.37) * mod(floor(cycle), 89.0);
+  vec2 seedB = vec2(5.13, 2.91) * mod(floor(cycle + 0.5), 89.0) + 17.3;
+  vec3 a = xriftWaterNoiseGradient(vec2(metres.x, metres.y - first * reach * pace) * scale + seedA);
+  vec3 b = xriftWaterNoiseGradient(vec2(metres.x, metres.y - second * reach * pace) * scale + seedB);
+  // Two unrelated copies at half strength are flatter than one at full
+  // strength; without this the surface would breathe once per cycle.
+  float gain = inversesqrt(weight * weight + (1.0 - weight) * (1.0 - weight));
+  vec3 mixed = a * weight + b * (1.0 - weight);
+  return vec3(0.5 + (mixed.x - 0.5) * gain, mixed.yz * gain * scale / max(scale.x, scale.y));
+}
+#endif
 `;
 
 export const WATER_FRAGMENT_SHADER = `${SURFACE_UNIFORMS}
@@ -304,6 +353,47 @@ void main() {
   vec3 detailNormal = xriftWaterDetailNormal(
     vWorldPosition.xz, uDetailScale, uDetailStrength, windDirection, phase);
   vec2 slope = wave.normal.xz / max(wave.normal.y, 0.15) + detailNormal.xz / max(detailNormal.y, 0.15);
+#ifdef WATER_FLOW
+  // A river. The current carries the surface whether or not the air moves;
+  // wind only ruffles it, and still air must not leave a frozen wind pattern
+  // lying on moving water.
+  float flowGust = clamp(max(uWindSpeed, 0.0) * max(uWaveSpeed, 0.0) * 3.0, 0.0, 1.0);
+  slope *= flowGust * 0.3;
+  vec2 flowDirection = xriftWaterRotate(normalize(vFlowFrame.xy), uFlowAngle * XRIFT_WATER_PI / 180.0);
+  vec2 flowSide = vec2(-flowDirection.y, flowDirection.x);
+  // x across the channel, y downstream, in world metres: stretches that line
+  // up share one pattern across the join.
+  vec2 flowPoint = vec2(dot(vWorldPosition.xz, flowSide), dot(vWorldPosition.xz, flowDirection));
+  float flowOffset = flowPoint.x - dot(vFlowFrame.zw, flowSide);
+  float flowHalfWidth = max(uChannelWidth, 0.05) * 0.5;
+  float flowAcross = clamp(abs(flowOffset) / flowHalfWidth, 0.0, 1.0);
+  // An author-specified parabolic bed; there is NO terrain/depth lookup here.
+  float flowDepth = max(uChannelDepth, 0.0) * (1.0 - flowAcross * flowAcross);
+  // Fastest down the middle, dragging along the banks.
+  float flowPace = mix(0.35, 1.0, sqrt(1.0 - flowAcross * flowAcross));
+  // Linear in time on purpose: a rate that itself varied with time would make
+  // the current speed up the longer the world stays open.
+  float flowTravel = uTime * max(uFlowSpeed, 0.0);
+  float rapids = clamp(uRapids, 0.0, 1.0);
+  // Long swells drawn out along the current.
+  vec2 flowSlope = xriftWaterFlowNoise(flowPoint, vec2(0.95, 0.28), flowTravel, flowPace, 2.6).yz * 0.6;
+  if (uDetailQuality >= 1.0) {
+    flowSlope += xriftWaterFlowNoise(flowPoint + vec2(3.1, 7.7), vec2(2.1, 0.62), flowTravel, flowPace, 1.5).yz * 0.4;
+  }
+  flowSlope *= 0.12 + 0.3 * rapids;
+  // Fine ripples riding it, at the density the author set for every ripple.
+  vec2 rippleScale = vec2(1.0, 0.55) * max(uDetailScale, 0.01) * 4.0;
+  vec2 ripplePoint = flowPoint * rippleScale;
+  float rippleFootprint = max(length(dFdx(ripplePoint)), length(dFdy(ripplePoint)));
+  vec2 rippleSlope = xriftWaterFlowNoise(flowPoint, rippleScale, flowTravel, flowPace, 0.85).yz *
+    (1.0 - smoothstep(0.35, 1.8, rippleFootprint));
+  if (uDetailQuality >= 1.0) {
+    rippleSlope += xriftWaterFlowNoise(flowPoint + vec2(1.9, 0.7), rippleScale * 2.07, flowTravel, flowPace, 0.5).yz *
+      0.5 * (1.0 - smoothstep(0.25, 1.0, rippleFootprint));
+  }
+  flowSlope += rippleSlope * uDetailStrength * 0.16 * (0.35 + 0.9 * rapids);
+  slope += flowSide * flowSlope.x + flowDirection * flowSlope.y;
+#endif
 #ifdef WATER_RAIN
   if (uRainStrength > 0.0 && uDetailQuality >= 1.0) slope += xriftWaterRainSlope(vWorldPosition.xz, phase);
 #endif
@@ -316,10 +406,44 @@ void main() {
   float fresnel = 0.02037 + 0.97963 * pow(1.0 - ndv, max(uFresnelPower, 0.1));
   vec3 skyColor = xriftWaterSkyReflection(reflect(-viewDirection, normal), drift);
   float crest = clamp(wave.crest, -1.0, 1.0);
+#ifdef WATER_FLOW
+  // The crest is a wind swell's. On a river it tints only as far as the wind
+  // actually raises one.
+  crest *= flowGust * clamp(uWaveHeight * 2.0, 0.0, 1.0);
+#endif
   float shallow = clamp(0.13 + (1.0-ndv)*0.19 + max(crest, 0.0)*0.19, 0.0, 1.0);
   vec3 body = mix(uDeepColor, uShallowColor, shallow);
   float foam = xriftWaterFoam(vWorldPosition.xz, drift, crest, wave.compression);
   float shoreMask = 1.0;
+
+#ifdef WATER_FLOW
+  // White water belongs to the current, not to wind-driven crests: long
+  // islands drawn out downstream and broken into lace, thicker over the
+  // shallows, gone where the water runs out.
+  float whiteWater = rapids * clamp(uFoamAmount, 0.0, 1.0);
+  vec2 foamScale = vec2(1.1, 0.3) * max(uFoamScale, 0.02);
+  float island = xriftWaterFlowNoise(flowPoint, foamScale, flowTravel, flowPace, 3.0).x +
+    0.2 * rapids * smoothstep(0.45, 0.95, flowAcross);
+  // The islands bend the streaks inside them, or they would lie as ruled lines.
+  float foamStreak = xriftWaterFlowNoise(flowPoint + vec2(5.3 + (island - 0.5) * 0.3, 1.1),
+    foamScale * vec2(5.5, 2.4), flowTravel, flowPace, 1.6).x;
+  float foamLace = xriftWaterFlowNoise(flowPoint + vec2(2.7, 8.9), foamScale * vec2(13.0, 9.0),
+    flowTravel, flowPace, 0.7).x;
+  float foamThreshold = mix(1.0, 0.24, whiteWater);
+  foam = smoothstep(foamThreshold, foamThreshold + max(uFoamSharpness, 0.02) + 0.1, island) *
+    smoothstep(0.38, 0.58, foamStreak) * (0.3 + 0.7 * smoothstep(0.3, 0.62, foamLace)) *
+    smoothstep(0.0, 0.04, flowDepth) * step(0.0001, whiteWater);
+  // Shallow water is clear water. A slanted line of sight passes through more
+  // of it, so the far bank hides its bed sooner than the near one.
+  float clarity = clamp(uClarity, 0.0, 1.0);
+  float flowOpacity = 1.0 - exp(-flowDepth / (mix(0.05, 1.5, clarity * clarity) * max(ndv, 0.2)));
+  body = mix(uShallowColor, body, flowOpacity);
+  // The waterline wanders a little, so a straight mesh does not end in a ruled edge.
+  float bankSoftness = max(uBankSoftness, 0.005);
+  float waterline = flowHalfWidth - abs(flowOffset) +
+    (xriftWaterNoise(vec2(flowPoint.y * 0.45, sign(flowOffset) * 7.3)) - 0.5) * bankSoftness;
+  shoreMask *= smoothstep(0.0, bankSoftness, waterline);
+#endif
 
 #ifdef WATER_SHORE
   // Author-specified straight shoreline; there is NO terrain/depth lookup here.
@@ -457,6 +581,10 @@ void main() {
   float haze = (1.0-exp(-distanceToCamera/max(uHazeDistance, 1.0))) * 0.48;
   color = mix(color, uHorizonColor, haze);
   float alpha = mix(clamp(uOpacity, 0.0, 1.0), 1.0, clamp(fresnel*0.75 + foam*0.6, 0.0, 1.0));
+#ifdef WATER_FLOW
+  // The bed shows through the shallows; reflection and foam still close over it.
+  alpha = mix(clamp(uOpacity, 0.0, 1.0) * flowOpacity, 1.0, clamp(fresnel*0.75 + foam*0.6, 0.0, 1.0));
+#endif
   // Opacity zero must really hide the surface; preserve the shore's transparent edge.
   alpha *= shoreMask * smoothstep(0.0, 0.015, uOpacity);
   gl_FragColor = vec4(max(color, vec3(0.0)), clamp(alpha, 0.0, 1.0));

@@ -140,6 +140,7 @@ import {
   WATER_SHADER_CATALOG,
   defaultWaterShaderParameterValues,
   getWaterShaderCatalogEntry,
+  isFlowingWaterShader,
   waterShaderCategoryLabel,
   type WaterShaderCatalogEntry,
 } from "./water-shader-catalog";
@@ -2836,11 +2837,15 @@ function createMaterialFromPreset(
       alreadyInstalled: installed.alreadyInstalled,
       parameters: values,
       // A sky Material only becomes the sky once the Scene points at it, and
-      // water is a Material on a plane. Neither happens here.
+      // water is a Material on a plane. Neither happens here. A river also
+      // has a direction and a width, and both come from the mesh it is put
+      // on: assigned to a square floor it would be a strip across the middle.
       nextStep:
         kind === "sky"
           ? "update_scene_settingsのskyboxでこのマテリアルを指定してください"
-          : "set_materialで板ポリなどのメッシュの割り当て枠へ割り当ててください",
+          : isFlowingWaterShader(entry.shader)
+            ? "set_materialで細長い水平のPlaneの割り当て枠へ割り当ててください。流れはPlaneの中心線に沿ってローカルX軸の向きへ進むので、Entityの回転で向きを決め、uChannelWidthをPlaneの幅に合わせます"
+            : "set_materialで板ポリなどのメッシュの割り当て枠へ割り当ててください",
     },
     activity: `AIが${kind === "sky" ? "Skybox" : "Water"} Material「${entry.label}」を追加しました`,
   };

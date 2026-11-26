@@ -584,7 +584,7 @@
       "description": "空の背景にSkybox Shader、水面にWater Shaderを設定します。背景と照明の設定も説明します。",
       "group": "create",
       "file": "sky-and-water.md",
-      "keywords": "Skybox Skybox Shader Water Shader 空 水 海 背景 HDRI IBL 風 360度 全天球 パノラマ PNG JPEG Equirectangular Skybox Texture 背景画像",
+      "keywords": "Skybox Skybox Shader Water Shader 空 水 海 川 小川 早瀬 流れ 背景 HDRI IBL 風 360度 全天球 パノラマ PNG JPEG Equirectangular Skybox Texture 背景画像",
       "related": [
         "lighting",
         "external-resources",
