@@ -113,6 +113,7 @@ import { runImageComponentFixtureAssertions } from "../src/lib/visual-editor/ima
 import { runScriptAudioSourceHostFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/audio-source-host.fixture.ts";
 import { runLightRuntimeFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/light.fixture.ts";
 import { runScriptMaterialTextureFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/material-texture.fixture.ts";
+import { runScriptMaterialUniformFixtureAssertions } from "../packages/xrift-studio-runtime/src/script/material-uniform.fixture.ts";
 import { runScriptTrustFixtureAssertions } from "../src/lib/visual-editor/scripting/script-trust.fixture.ts";
 import { runScriptRuntimeReportFixtureAssertions } from "../src/lib/visual-editor/scripting/runtime-report.fixture.ts";
 import { runScriptEmitFixtureAssertions } from "../src/lib/visual-editor/compiler/script-emit.fixture.ts";
@@ -433,6 +434,7 @@ try {
     ["script audio source host", runScriptAudioSourceHostFixtureAssertions],
     ["light runtime", runLightRuntimeFixtureAssertions],
     ["script material texture", runScriptMaterialTextureFixtureAssertions],
+    ["script material uniform", runScriptMaterialUniformFixtureAssertions],
     ["script trust", runScriptTrustFixtureAssertions],
     ["script runtime report", runScriptRuntimeReportFixtureAssertions],
     ["script emit", runScriptEmitFixtureAssertions],

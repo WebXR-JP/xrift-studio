@@ -251,6 +251,12 @@ Editで実行すると、独立したBlenderプロセスが実GLBと編集可能
 
 Custom ShaderをModelへ`set_material`で割り当てると、頂点シェーダーはそのMeshの属性を名前で読む。glTFの独自属性は小文字の名前になるため、`_AMAT`は`attribute float _amat;`と宣言する。`EXT_mesh_gpu_instancing`のインスタンスごとの独自属性はインスタンスごとに1つの値で届き、`_aoffset`と`_AOFFSET`のどちらでも読める。インスタンスの配置には`instanceMatrix`を使う。編集・Play・公開は同じ読み込み処理を使う。仕様は[3Dモデルの読み込み仕様](./MODEL_IMPORT_CONTRACT.md#インスタンスごとの属性)にある。
 
+`update_custom_shader`が変えるのは保存するuniformの値だ。歩く人の位置やCPUで計算した値など、動作中に変わる値には使わない。
+その場合はScriptを書き、`ctx.materials.setUniform(name, value)`で毎フレーム渡す。専用toolは設けない。値を決めるのは実行中のScriptで、
+documentには残らないためだ。受け付ける値の形、失敗時の表示、時計のuniformとの関係は`get_scripting_capabilities`の
+`runtime.materials.uniforms`が返す。uniformの名前と保存値は`get_custom_shader`で読み、形の合わない値は
+`get_editor_context.scriptRuntime.failures`で確認する。
+
 カスタムシェーダーのGLSLは、Scene Viewのレンダラーでコンパイルして確かめる。`create_custom_shader`、`update_custom_shader`、`get_custom_shader`の結果には`compile`が入る。`compile.status`は`ok`、`error`、`pending`、`unknown`のいずれか。`error`のとき`compile.issues`は失敗したプログラムごとに1件で、GLSLコンパイラの出力をそのまま`programLog`、`vertexLog`、`fragmentLog`に持つ。`lines`の各要素は`stage`、作者のGLSLでの行`line`、ログに出た行`reportedLine`、`message`、該当行の本文`source`を持つ。ログの行番号はThree.jsが前に足すコードと`#include`の展開を数えるため、`line`と`reportedLine`は一致しない。`#include`の中で起きたエラーは、その`#include`の行と`include`の名前を返す。`#line`、展開されるループ、コンパイルした本文との照合で行を確定できない場合は、`line`を返さない。リンクの失敗は行を持たず、`programLog`に理由が入る。
 
 `origin: "check"`は、ツールの呼び出しでMaterialを平面のMeshへ割り当ててコンパイルした結果を表す。Meshへ割り当てていないMaterialや画面外のMaterialも、これで確かめられる。`origin: "scene"`は、Scene内のMeshを実際に描くプログラムの失敗を表す。インスタンス描画やスキンメッシュは専用のプログラムを持つため、そのMeshだけが失敗する場合もここに入る。Sceneがリンク済みのプログラムで描いているvariantは、コンパイルし直さない。

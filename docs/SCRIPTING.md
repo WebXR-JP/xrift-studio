@@ -360,6 +360,8 @@ sensorの停止・削除時はその元データの`exit`を送る。そのた�
 | `setTexture(slot, textureOrNull)` | `baseColor`、`normal`、`emissive`、`metallicRoughness`、`occlusion`のslotを変更する。`null`で外す |
 | `setTextureTransform(slot, transform)` | slotのテクスチャに`offset`、`repeat`、`center`、radianの`rotation`を部分上書きする |
 | `resetTextureTransform(slot)` | 指定slotにこのhandleが付けたテクスチャtransformだけを取り除く |
+| `setUniform(name, value)` | カスタムシェーダーのuniformを名前で指定して変更する。その名前のuniformを持つマテリアル数を返す |
+| `resetUniform(name)` | 指定したuniformにこのhandleが付けたoverrideだけを取り除く。その名前のuniformを持つマテリアル数を返す |
 | `reset()` | `ctx.materials`ではこのスクリプト全体、選択handleではそのhandleのマテリアルoverrideを取り除く |
 
 setterの返り値は対応して変更したマテリアル数だ。未対応のマテリアルpropertyは無視する。
@@ -370,6 +372,72 @@ handleは非同期に追加されたメッシュにも追従する。そのた�
 現在のslot値を保つ。hostは対象マテリアル枠ごとにテクスチャcloneを所有する。元データテクスチャと共有素材を直接変更しない。
 `resetTextureTransform(slot)`はそのslotだけを元のtransformへ戻す。
 スクリプトの再起動または停止では、そのスクリプトのcloneとoverrideだけを外す。最後のスクリプトが終了した時点で元のマテリアルへ戻す。
+
+#### カスタムシェーダーのuniform
+
+マテリアルに保存したuniformの値は、ワールドの動作中は変わらない。歩く人の位置で草を倒す、CPUで計算した座標を渡す、
+明かりを徐々に強めるといった値は、スクリプトから`setUniform`で渡す。
+
+```ts
+import { defineScript, prop } from "xrift:script";
+import { Vector3 } from "three";
+
+export default defineScript({
+  name: "GrassWalker",
+  props: {
+    walker: prop.entity({ label: "歩く人" }),
+    tint: prop.color({ label: "色", default: "#7fbf5a" }),
+  },
+  start(ctx) {
+    const position = new Vector3();
+    return {
+      update() {
+        const walker = ctx.find(ctx.props.walker);
+        if (!walker) return;
+        walker.getWorldPosition(position);
+        ctx.materials.setUniform("uWalker", position);
+        ctx.materials.setUniform("uTint", ctx.props.tint);
+      },
+    };
+  },
+});
+```
+
+対象は、three.jsの`ShaderMaterial`または`RawShaderMaterial`そのもので描画するマテリアルだ。GLSLを保存したカスタムシェーダーと
+Open Brushのプリセットが該当する。PBRとMToonのマテリアルは対象外で、`setUniform`だけを呼んだ場合は何も変えない。
+返り値は、対象のうちその名前のuniformを持つマテリアル数だ。0なら描画は変わらない。
+uniformの名前と保存値は、マテリアルのInspectorにある「シェーダーの調整値」か、MCPの`get_custom_shader`で確認する。
+
+値は、マテリアルが持つそのuniformの値と同じ形で渡す。
+
+| マテリアルが持つ値 | 渡せる値 |
+| --- | --- |
+| 数値（GLSLの`float`、`int`、`bool`） | 有限の数値1個。`bool`には0か1を渡す |
+| `Vector2` / `Vector3` / `Vector4` | 同じ個数の数値の配列、または同じ個数のベクトル。`Vector3`には色の文字列と`Color`も渡せる |
+| `Color` | 色の文字列（`"#ff6600"`など）、16進数（`0xff6600`）、`Color`、数値3個の配列か`Vector3` |
+| `Matrix3` / `Matrix4` | 数値9個または16個の配列（列優先）、または同じ大きさの行列 |
+| 数値の配列（GLSLの配列uniform） | 同じ個数の数値の配列か型付き配列。`vec3 points[4]`には数値12個を渡す |
+| テクスチャ、または未設定の`null` | `ctx.assets.loadTexture`のテクスチャ、three.jsの`Texture`、`null` |
+
+色の文字列、16進数、`Color`は、マテリアルの色uniformと同じ変換でリニアRGBにして渡す。配列とベクトルは変換しない。
+hostは値を数値として写し取る。呼び出したあとに同じ配列や`Vector3`を書き換えても、次に`setUniform`を呼ぶまで描画は変わらない。
+`setUniform`は毎フレーム呼べる。2回目からは同じ保持領域へ書き込み、マテリアルのcloneとシェーダープログラムを作り直さない。
+
+形の合わない値、真偽値、`NaN`、無限大、色として読めない文字列は`TypeError`になる。メッセージにはuniformの名前、受け取れる形、
+渡された形、対象の`meshIndex`と`materialIndex`が入る。番号は`ctx.materials.list()`と同じで、`select`へそのまま渡せる。
+拒否した呼び出しは何も変えず、直前のoverrideと描画中のマテリアルを残す。捕捉しなかった例外は通常のスクリプトの失敗として
+スクリプトConsoleに表示する。`update`の中で5回続くとスクリプトを停止する。形の合わない値をWebGLへ渡して、描画のたびにエラーを出すことはない。
+あとから読み込まれたメッシュのuniformと形が合わない場合は、そのマテリアルにだけoverrideを適用しない。
+
+overrideはuniformの名前ごとに合成する。複数スクリプトではコンポーネント実行順が後のものを採用する。同じスクリプトの中では、
+`ctx.materials`と`select(...)`のhandleのうち最後に書いた値を採用する。`resetUniform(name)`はそのhandleのoverrideだけを外し、
+残っているoverrideがあればその値へ、なければマテリアルの値へ戻す。`reset()`、スクリプトの再起動、実行時の失敗、停止でも外れる。
+スクリプトが自分で作ったテクスチャ（`DataTexture`など）は、`ctx.lifecycle.onDispose`でスクリプトが破棄する。
+
+上書きしていないuniformは、スクリプトのcloneでも共有マテリアルの値をそのまま参照する。そのため、描画側がマテリアルへ毎フレーム書き込む時計は、
+スクリプトがほかの値を上書きしているマテリアルでも進む。時計は、マテリアルの「時間を受け取る変数名」（`animatedTimeUniform`）と、
+`uTime`など名前から検出した時間uniformだ。同じ名前を`setUniform`で上書きすると、overrideが有効な間はスクリプトの値で描画する。
+`resetUniform`で外すと、その時点の経過時間で時計に戻る。上書きした時刻から再開するわけではない。
 
 ### パーティクルの実行時操作
 
@@ -440,7 +508,7 @@ burstの合計が残り容量を越えた場合は、後ろのburstから上限�
 
 | 変更経路 | 保存 | 動作確認中の反映 | 停止 / 再起動 |
 | --- | --- | --- | --- |
-| `ctx.audioSources`、`ctx.lights`、`ctx.materials`、`ctx.particles`、`ctx.viewer`、`setTextureTransform` | runtime-only。document revisionは変えない | setterを呼んだ時点から対象オブジェクトの所有player / ライト / cloneに反映 | そのスクリプトの再生要求、clone、overrideを外し、元のコンポーネント / 素材値へ戻る |
+| `ctx.audioSources`、`ctx.lights`、`ctx.materials`、`ctx.particles`、`ctx.viewer`、`setTextureTransform`、`setUniform` | runtime-only。document revisionは変えない | setterを呼んだ時点から対象オブジェクトの所有player / ライト / cloneに反映 | そのスクリプトの再生要求、clone、overrideを外し、元のコンポーネント / 素材値へ戻る |
 | スクリプトのコンポーネントの宣言済みproperty | シーンdocument | 同じスクリプトinstanceの`ctx.props`へ次のframeから反映 | 保存値として残る |
 | スクリプト元データ、スクリプト / 素材 / オブジェクト参照、コンポーネント構成 | 元データ / シーンdocument | 保存済み元データをcompileし、成功後に影響するオブジェクトだけを再起動。失敗時はlast-good moduleを継続 | 保存値として残る |
 | 既存マテリアル / パーティクルのproperty | AssetManifest | 設定またはMCPから保存し、その素材を参照するオブジェクト / Emitterだけを再反映 | 保存値として残る |
@@ -472,8 +540,10 @@ MCP clientは最初に`get_scripting_capabilities`を呼ぶ。利用可能なス
 | ライトのコンポーネントを追加・保存する | 対象外 | `add_component(definitionId: "core.light.*")`後に`update_component` |
 | テクスチャを一時的に読み込む | `ctx.assets.loadTexture`。素材の色空間、画像の繰り返しと補間、上下反転、Mipmapを既定値にする | 対象外 |
 | 動作確認中だけマテリアルの見た目やUVを変える | `ctx.materials.set*` / `setTextureTransform`。オブジェクト所有cloneだけを変更 | 対象外 |
+| 動作確認中だけカスタムシェーダーのuniformを変える | `ctx.materials.setUniform`。オブジェクト所有cloneのuniformだけを変更 | 対象外 |
 | テクスチャの読み込み・繰り返し・補間設定を保存する | 対象外 | `get_texture_asset` / `update_texture_asset`。新規画像は編集中の`import_texture_asset` |
 | マテリアルのPBR値やテクスチャbindingを保存する | 対象外 | `get_material_asset` / `update_material_asset` / `set_material_texture_transform` |
+| カスタムシェーダーのGLSLとuniformの値を保存する | 対象外 | `get_custom_shader` / `update_custom_shader` |
 | マテリアルをメッシュの割り当て枠へ保存して割り当てる | 対象外 | `set_material` |
 
 スクリプト実行環境の再生要求、option、transformは停止で消える。MCP authoringはシーンdocument / AssetManifestと通常の履歴へ残る。
@@ -634,6 +704,7 @@ XRift公式shortcutと競合する。そのためversion 5では`keyboard-move`�
 | マテリアルテクスチャのrepeat / offset / center / rotation | 対応。オブジェクト / マテリアル枠所有cloneだけを変更 | 対応 | runtime-only | `ctx.materials.setTextureTransform` |
 | オブジェクト自身のマテリアルのcolor / opacity / emissive / metalness / roughness | 対応 | 対応 | runtime-only | `ctx.materials` |
 | オブジェクト自身のマテリアルへのテクスチャ設定 | 対応 | 対応 | runtime-only | `ctx.materials.setTexture` |
+| オブジェクト自身のカスタムシェーダーのuniform（数値 / ベクトル / 行列 / 配列 / 色 / テクスチャ） | 対応。オブジェクト所有cloneのuniformだけを変更 | 対応。同じ実行環境実装 | runtime-only | `ctx.materials.setUniform` |
 | オブジェクト自身のパーティクルの再生 / 放出 / 速度 / サイズ / 色 | 対応 | 対応 | runtime-only | `ctx.particles` |
 | パーティクルのburst-only / loop / non-loop duration | 対応。上限10,000 particles | 対応。同じ実行環境実装 | AssetManifest | 設定 / `update_particle_asset` |
 | project KTX2を使うマテリアル / パーティクルの描画 | 対応。local Basis transcoder | 対応。Basis fileを生成物へ同梱 | AssetManifest | 素材 / マテリアル / パーティクル設定 |
@@ -701,8 +772,12 @@ ES moduleのstrict modeでは`eval`をlexical bindingで遮蔽できない。
 - スクリプトの`ctx.assets.loadTexture`はThree.jsの標準`TextureLoader`を使う。マテリアル / パーティクルpreviewと
   `classic-jsx`のKTX2描画はlocal Basis transcoderに対応済みだ。一方KTX2、HDR、EXR、動画テクスチャ、cubeテクスチャ、
   renderer capabilityに応じたtranscoding、進捗と再試行を含むスクリプト用typed loaderは未対応だ
-- `ctx.materials`はメッシュに既に設定されたマテリアルの実行環境cloneを操作する。マテリアルのrecipe全体、
-  シェーダー固有uniform、複数UV setの選択は未対応だ
+- `ctx.materials`はメッシュに既に設定されたマテリアルの実行環境cloneを操作する。マテリアルのrecipe全体と
+  複数UV setの選択は未対応だ
+- `ctx.materials.setUniform`の対象は、three.jsの`ShaderMaterial` / `RawShaderMaterial`そのものに限る。MToonのように
+  独自のpropertyを持つ派生マテリアルは対象外だ。構造体のuniform、テクスチャの配列、`Matrix2`は扱えない。
+  マテリアルの値が`null`のuniformはテクスチャ用として扱う。uniformの名前をスクリプトから列挙するAPIと、
+  ノードグラフからuniformを書くpropertyはない
 - パーティクルはStudioと公開で共通実装になった。burstの時刻 / cycle / intervalとnon-looping durationに対応した。
   ただしworld-space simulation、per-particle size / rotation、stretched billboard、sort modeは互換表示だ。
   完全なsimulationではない。poolは10,000 particlesが上限だ。容量を越えるburstは切る
