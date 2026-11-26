@@ -4,6 +4,7 @@ import {
   type ShaderMaterial,
 } from "three";
 import type { ClassicR3fMaterialShader } from "../../lib/visual-editor/custom-shader-contract";
+import { isFlowingWaterShader } from "../../lib/visual-editor/water-shader-catalog";
 import { windDrivenUniforms, type ResolvedWind } from "../../lib/visual-editor/wind-contract";
 import { createClassicR3fMaterial } from "./ProjectModelVisual";
 
@@ -14,6 +15,44 @@ export const WATER_PREVIEW_TIME = 12.5;
 export function waterPreviewBackground(shader: ClassicR3fMaterialShader): string {
   const color = shader.uniforms.uHorizonColor;
   return color?.kind === "color" ? color.value : "#a7bdcb";
+}
+
+export type WaterPreviewView = {
+  position: [number, number, number];
+  target: [number, number, number];
+  fov: number;
+  /** Metres the sample bed lies under the surface. */
+  bedDepth: number;
+  bedColor: string;
+};
+
+/**
+ * Where the preview stands, and what lies under the water.
+ *
+ * A sea is looked at from above the swell. A river is a few metres across and
+ * would be a thin line from there, so a flowing preset is framed from its own
+ * bank at a distance set by its width, over a bed just under the surface: the
+ * clear margins are the point of it, and they need something to show.
+ */
+export function waterPreviewView(shader: ClassicR3fMaterialShader): WaterPreviewView {
+  const width = shader.uniforms.uChannelWidth;
+  if (!isFlowingWaterShader(shader) || width?.kind !== "number") {
+    return {
+      position: WATER_PREVIEW_CAMERA.position,
+      target: [WATER_PREVIEW_TARGET[0], WATER_PREVIEW_TARGET[1], WATER_PREVIEW_TARGET[2]],
+      fov: WATER_PREVIEW_CAMERA.fov,
+      bedDepth: 0.8,
+      bedColor: "#7b817a",
+    };
+  }
+  const span = Math.min(Math.max(width.value, 0.3), 60);
+  return {
+    position: [-1.6 * span, 0.42 * span + 0.6, 0.5 * span],
+    target: [1.6 * span, 0, -0.08 * span],
+    fov: WATER_PREVIEW_CAMERA.fov,
+    bedDepth: 0.06,
+    bedColor: "#8d8872",
+  };
 }
 
 /** Shared by the live inspector and the one-context thumbnail renderer. */
@@ -35,11 +74,12 @@ export function createWaterPreviewObjects(shader: ClassicR3fMaterialShader, wind
   scene.add(surface);
   // Neutral sample bed makes opacity and an authored shoreline visible. Not part
   // of the installed material, and not a promise of scene-depth refraction.
+  const view = waterPreviewView(shader);
   const bedGeometry = new PlaneGeometry(120, 120);
-  const bedMaterial = new MeshBasicMaterial({ color: "#7b817a" });
+  const bedMaterial = new MeshBasicMaterial({ color: view.bedColor });
   const bed = new Mesh(bedGeometry, bedMaterial);
   bed.rotation.x = -Math.PI / 2;
-  bed.position.y = -0.8;
+  bed.position.y = -view.bedDepth;
   scene.add(bed);
   return {
     scene, material,
@@ -92,9 +132,10 @@ export function requestWaterThumbnail(shader: ClassicR3fMaterialShader, wind: Re
       renderer.toneMapping = ACESFilmicToneMapping;
     }
     const objects = createWaterPreviewObjects(shader, wind);
-    const camera = new PerspectiveCamera(WATER_PREVIEW_CAMERA.fov, 16/9, 0.1, 500);
-    camera.position.set(...WATER_PREVIEW_CAMERA.position);
-    camera.lookAt(...WATER_PREVIEW_TARGET);
+    const view = waterPreviewView(shader);
+    const camera = new PerspectiveCamera(view.fov, 16/9, 0.1, 500);
+    camera.position.set(...view.position);
+    camera.lookAt(...view.target);
     let shaderError: string | undefined;
     renderer.debug.onShaderError = (gl, program) => {
       shaderError = gl.getProgramInfoLog(program) || "GLSLのコンパイルに失敗しました";

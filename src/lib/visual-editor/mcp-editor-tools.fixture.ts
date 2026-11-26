@@ -1489,6 +1489,48 @@ export function runXriftMcpEditorToolFixtures(): void {
   );
   current = { ...current, bundle: skyAgain.bundle, revision: current.revision + 1 };
 
+  // A river takes its direction and its centre line from the mesh it is put
+  // on, and it keeps flowing in still air. A caller told only "assign it to a
+  // mesh" lays it on a square floor and gets a strip across the middle.
+  const waterPresets = materialPresets.result.water as Array<{
+    id: string;
+    category: string;
+    notes: string;
+    parameters: Array<{ uniform: string }>;
+  }>;
+  const riverPreset = waterPresets.find((entry) => entry.category === "river");
+  assert(
+    riverPreset !== undefined &&
+      riverPreset.notes.includes("風が止まっていても") &&
+      riverPreset.parameters.some(
+        (parameter) => parameter.uniform === "uFlowSpeed",
+      ),
+    "list_material_presets should list a river and say that it flows without wind",
+  );
+  // The outcome is read and dropped: the Scene the later assertions use stays
+  // as it was.
+  const riverMaterial = executeXriftMcpEditorTool(current, {
+    id: "fixture-create-river-material",
+    tool: "create_material_from_preset",
+    arguments: {
+      projectId: bundle.project.projectId,
+      sceneId: bundle.scene.sceneId,
+      expectedRevision: current.revision,
+      kind: "water",
+      presetId: riverPreset.id,
+      parameters: { uFlowSpeed: 1.25 },
+    },
+  });
+  const riverNextStep = String(riverMaterial.result.nextStep);
+  assert(
+    riverMaterial.changed &&
+      riverNextStep.includes("Plane") &&
+      riverNextStep.includes("uChannelWidth") &&
+      (riverMaterial.result.parameters as Record<string, unknown>)
+        .uFlowSpeed === 1.25,
+    "create_material_from_preset should say how a river is laid out and keep the caller's flow speed",
+  );
+
   let glowParameterCode: string | undefined;
   try {
     executeXriftMcpEditorTool(current, {

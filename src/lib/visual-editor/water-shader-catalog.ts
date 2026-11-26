@@ -3,7 +3,7 @@ import { WATER_FRAGMENT_SHADER, WATER_VERTEX_SHADER } from "./water-shader-core"
 
 /** Installed presets remain ordinary, self-contained Material Assets. */
 export type WaterShaderCatalogCategory =
-  | "lake" | "ocean" | "coast" | "tropical" | "weather" | "night" | "stylized" | "fantasy";
+  | "lake" | "river" | "ocean" | "coast" | "tropical" | "weather" | "night" | "stylized" | "fantasy";
 export type WaterShaderParameterGroup = "波・さざ波" | "反射・透明感" | "泡" | "演出" | "色";
 export type WaterShaderParameter = {
   uniform: string;
@@ -27,11 +27,11 @@ export type WaterShaderCatalogEntry = {
   shader: ClassicR3fMaterialShader;
 };
 
-export const WATER_SHADER_CATALOG_REVISION = "xrift-studio-water-shaders@2";
+export const WATER_SHADER_CATALOG_REVISION = "xrift-studio-water-shaders@3";
 export const WATER_SHADER_CATALOG_SOURCE_URL = "https://github.com/WebXR-JP/xrift-studio";
 export const WATER_SHADER_CATALOG_AUTHOR = "XRift Studio contributors";
 export const WATER_SHADER_CATEGORIES = [
-  "ocean", "coast", "tropical", "weather", "night", "stylized", "fantasy", "lake",
+  "ocean", "coast", "tropical", "weather", "night", "stylized", "fantasy", "lake", "river",
 ] as const satisfies readonly WaterShaderCatalogCategory[];
 export const WATER_SHADER_PARAMETER_GROUPS = [
   "波・さざ波", "反射・透明感", "泡", "演出", "色",
@@ -39,7 +39,7 @@ export const WATER_SHADER_PARAMETER_GROUPS = [
 
 export function waterShaderCategoryLabel(category: WaterShaderCatalogCategory): string {
   return {
-    lake: "湖・内海", ocean: "外洋・うねり", coast: "海岸・磯", tropical: "南国・浅瀬",
+    lake: "湖・内海", river: "川・小川", ocean: "外洋・うねり", coast: "海岸・磯", tropical: "南国・浅瀬",
     weather: "荒天・雨", night: "夕景・夜の海", stylized: "アニメ・絵画", fantasy: "幻想・SF",
   }[category];
 }
@@ -81,7 +81,7 @@ const COMMON_PARAMETERS: readonly WaterShaderParameter[] = [
   color("uHorizonColor", "映り込む水平線の色", "水平線付近の反射と遠景のかすみに使います。"),
 ];
 
-type Feature = "SHORE" | "CAUSTICS" | "STREAKS" | "GLOW" | "TOON" | "PIGMENT" | "INK" | "IRIDESCENT" | "GRID" | "RAIN" | "ICE";
+type Feature = "SHORE" | "CAUSTICS" | "STREAKS" | "GLOW" | "TOON" | "PIGMENT" | "INK" | "IRIDESCENT" | "GRID" | "RAIN" | "ICE" | "FLOW";
 const FEATURE_PARAMETERS: Record<Feature, readonly WaterShaderParameter[]> = {
   SHORE: [
     number("uShoreAngle", "岸から沖へ向かう方角", "ワールドXZ上の角度です。0度は+X、90度は+Z。岸は指定した直線として扱います。", "演出", -180, 180, 1),
@@ -104,6 +104,18 @@ const FEATURE_PARAMETERS: Record<Feature, readonly WaterShaderParameter[]> = {
   GRID: [number("uGridScale", "発光グリッドの密度", "波の形で歪む光の格子です。遠くでは模様を薄くしてちらつきを抑えます。", "演出", 0.05, 2, 0.05)],
   RAIN: [number("uRainStrength", "雨の波紋", "時間差で広がる円形の波紋です。品質0では省略します。雨粒自体は生成しません。", "演出", 0, 3, 0.05)],
   ICE: [number("uIceCoverage", "氷の覆う割合", "流氷風の平面的な模様です。氷の立体メッシュやColliderは作りません。", "演出", 0, 1, 0.02)],
+  // A current is the one motion here that does not belong to the wind: a river
+  // runs in still air. Its speed is therefore a value of its own, and the
+  // hints say so, because every other control on this shelf stops with the wind.
+  FLOW: [
+    number("uFlowSpeed", "流れの速さ", "水が流れる速さ（m/秒）の目安です。シーンの風が止まっていても流れ続けます。0で流れが止まります。", "演出", 0, 4, 0.05),
+    number("uFlowAngle", "流れる向き", "0度でメッシュのローカルX軸の向きへ流れます。Entityを回すと流れも回ります。流れは直線として扱います。", "演出", -180, 180, 1),
+    number("uRapids", "早瀬の強さ", "大きいほど流れのさざ波が立ち、白い筋が増えます。白い筋の量は「白波の量」にも比例します。", "演出", 0, 1, 0.02),
+    number("uChannelWidth", "川幅", "水のある幅（m）です。メッシュの中心線が川の中心になり、これより外側は透明になります。", "演出", 0.3, 60, 0.1),
+    number("uChannelDepth", "中央の深さ", "川の中央の深さ（m）の目安です。岸へ向かって浅くなり、浅い所ほど透けます。地形の深さは読み取りません。", "演出", 0.02, 5, 0.01),
+    number("uBankSoftness", "水ぎわのぼかし", "水ぎわが消えていく幅（m）です。水ぎわの線も同じ幅でゆらぎます。", "演出", 0.01, 3, 0.01),
+    number("uClarity", "水の澄み具合", "大きいほど深い所まで透けます。背景を歪ませる屈折は行いません。", "演出", 0, 1, 0.02),
+  ],
 };
 
 const BASE_VALUES: Record<string, number | string> = {
@@ -124,8 +136,24 @@ const FEATURE_DEFAULTS: Record<Feature, Record<string, number | string>> = {
   TOON: { uBandCount: 4 }, PIGMENT: { uPigmentStrength: 0.95 }, INK: {},
   IRIDESCENT: { uIridescence: 0.75 }, GRID: { uGridScale: 0.35 },
   RAIN: { uRainStrength: 1.2 }, ICE: { uIceCoverage: 0.65 },
+  FLOW: { uFlowSpeed: 0.6, uFlowAngle: 0, uRapids: 0.3, uChannelWidth: 3, uChannelDepth: 0.35, uBankSoftness: 0.25, uClarity: 0.6 },
 };
 const COMMON_NOTES = "通常のPlaneでも使用できます。輪郭を上下させる場合は、分割した水平メッシュに割り当てて「頂点変位」を上げてください。反射は空色の近似で、物体の映り込みや画面屈折はありません。";
+/**
+ * The shared controls answer to the wind everywhere else on the shelf. On a
+ * river the same uniforms shape only what the wind adds on top of the current,
+ * and a hint that still promised "0 stops everything" would be wrong there.
+ */
+const FLOW_HINTS: Readonly<Record<string, string>> = {
+  uWaveSpeed: "風で立つさざ波とうねりの速さです。シーン設定の風に対する倍率で、0にすると風の分だけが消えます。流れは「流れの速さ」で変えます。",
+  uWaveHeight: "風で立つうねりの傾きです。川では小さく保つと、流れの模様が主役になります。",
+  uDetailStrength: "流れに乗るさざ波と、風で立つさざ波の強さです。",
+  uFoamAmount: "流れに乗る白い筋の量です。「早瀬の強さ」が0のときは出ません。",
+  uOpacity: "深い所の不透明度です。浅い所は「水の澄み具合」に応じて透けます。0で完全に非表示です。",
+};
+/** Only what the store card is lit by: in a Scene the lighting contract supplies the sun. */
+const RIVER_SUN: [number, number, number] = [0.86, 0.42, -0.29];
+const FLOW_NOTES = "細長い水平のPlaneに割り当てると、Planeの中心線に沿ってローカルX軸の向きへ流れます。流れはシーンの風が止まっていても動き、風で動くのは表面の細かなさざ波だけです。流れは直線で、曲がった川は短い直線をつないで作ります。川底・岩・地形には自動で合わせません。反射は空色の近似で、物体の映り込みや画面屈折はありません。";
 
 type Preset = Pick<WaterShaderCatalogEntry, "id" | "label" | "category" | "description" | "features" | "cost"> & {
   effects?: readonly Feature[];
@@ -153,7 +181,12 @@ function preset(input: Preset): WaterShaderCatalogEntry {
     parameters: [
       ...COMMON_PARAMETERS.filter((parameter) => {
         if (effects.includes("INK") && ["uRoughness", "uReflectivity", "uGlintStrength", "uCloudReflection", "uScatterStrength", "uZenithColor"].includes(parameter.uniform)) return false;
+        // A river raises no crest for the back light to pass through.
+        if (effects.includes("FLOW") && parameter.uniform === "uScatterStrength") return false;
         return !(effects.includes("TOON") && parameter.uniform === "uScatterStrength");
+      }).map((parameter) => {
+        const hint = effects.includes("FLOW") ? FLOW_HINTS[parameter.uniform] : undefined;
+        return hint ? { ...parameter, hint } : parameter;
       }),
       ...effects.flatMap((feature) => FEATURE_PARAMETERS[feature]),
     ],
@@ -290,7 +323,35 @@ export const WATER_SHADER_CATALOG: readonly WaterShaderCatalogEntry[] = [
     values: { uDeepColor: "#154952", uShallowColor: "#82bec6", uFoamColor: "#dfedf0",
       uZenithColor: "#8ba7bc", uHorizonColor: "#d9e6e7", uWaveHeight: 0.12, uWaveScale: 1.6,
       uWaveSpeed: 0.1, uDetailStrength: 0.5, uFoamAmount: 0.08, uIceCoverage: 0.69, uRoughness: 0.18 } }),
+  preset({ id: "clear-stream", label: "澄んだ小川", category: "river", cost: "medium", effects: ["FLOW"],
+    description: "岸の浅い所が透ける、澄んだ小川。流れに乗って形を変えながら下るさざ波と、流れに沿って伸びるゆるいうねりを描きます。風が止まっていても流れます。",
+    features: ["流れに乗るさざ波", "浅瀬が透ける岸", "風がなくても流れる"], notes: FLOW_NOTES, sunDirection: RIVER_SUN,
+    values: { uWaveHeight: 0.06, uWaveScale: 5, uWaveLayers: 2, uWaveSpeed: 0.3, uDetailScale: 2.4, uDetailStrength: 0.8,
+      uReflectivity: 0.9, uRoughness: 0.1, uGlintStrength: 1.3, uCloudReflection: 0.15, uHazeDistance: 600, uOpacity: 0.92,
+      uFoamAmount: 0.35, uFoamScale: 1.2, uDeepColor: "#3a3620", uShallowColor: "#7f8f6b", uFoamColor: "#e8efe6" } }),
+  preset({ id: "mountain-rapids", label: "白く泡立つ早瀬", category: "river", cost: "high", effects: ["FLOW"],
+    description: "速く浅い流れ。流れに沿って伸びる白い筋と、細かく立つさざ波で水の勢いを見せます。岩への当たりや落差は描かないので、岩は別のメッシュで置きます。",
+    features: ["流れに沿う白い筋", "細かく立つさざ波", "速い流れ"], notes: FLOW_NOTES, sunDirection: RIVER_SUN,
+    values: { uFlowSpeed: 1.8, uRapids: 0.85, uChannelWidth: 4, uChannelDepth: 0.3, uBankSoftness: 0.3, uClarity: 0.5,
+      uWaveHeight: 0.1, uWaveScale: 5, uWaveLayers: 2, uWaveSpeed: 0.3, uDetailScale: 2.6, uDetailStrength: 1.3,
+      uReflectivity: 0.86, uRoughness: 0.16, uGlintStrength: 1.4, uCloudReflection: 0.15, uHazeDistance: 600, uOpacity: 0.92,
+      uFoamAmount: 0.7, uFoamSharpness: 0.2, uFoamScale: 1.3, uDeepColor: "#24362f", uShallowColor: "#7fa596", uFoamColor: "#eef4f0" } }),
+  preset({ id: "slow-river", label: "ゆるやかな川", category: "river", cost: "medium", effects: ["FLOW"],
+    description: "幅のある深い川。ゆっくり下る大きなうねりが空を広く映し、岸の近くだけが浅く透けます。",
+    features: ["ゆっくり下るうねり", "広く映る空", "幅のある流れ"], notes: FLOW_NOTES, sunDirection: RIVER_SUN,
+    values: { uFlowSpeed: 0.25, uRapids: 0.08, uChannelWidth: 14, uChannelDepth: 1.6, uBankSoftness: 0.8, uClarity: 0.3,
+      uWaveHeight: 0.12, uWaveScale: 3, uWaveLayers: 2, uWaveSpeed: 0.25, uDetailScale: 0.9, uDetailStrength: 0.7,
+      uReflectivity: 0.95, uRoughness: 0.08, uGlintStrength: 1.5, uCloudReflection: 0.3, uHazeDistance: 800, uOpacity: 0.95,
+      uFoamAmount: 0.1, uDeepColor: "#1f3b33", uShallowColor: "#6f8f6a" } }),
 ];
+
+/**
+ * True for a river. Its current runs on a speed of its own instead of the
+ * wind's, which changes what the shelf, the preview and the tools say about it.
+ */
+export function isFlowingWaterShader(shader: ClassicR3fMaterialShader): boolean {
+  return shader.variants.some((variant) => variant.defines.WATER_FLOW !== undefined);
+}
 
 export function getWaterShaderCatalogEntry(entryId: string): WaterShaderCatalogEntry | undefined {
   return WATER_SHADER_CATALOG.find((entry) => entry.id === entryId);

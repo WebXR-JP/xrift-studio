@@ -490,6 +490,7 @@ import {
   mcpOptionalString,
   mcpOptionalVec3,
   mcpRequiredString,
+  mcpSceneViewCaptureOptions,
   scriptCompileErrorsForMcp,
   waitForEditorCommit,
   waitForEditorState,
@@ -1155,7 +1156,7 @@ export function VisualEditorPrototype({
     useState<SceneScreenshotRequest | null>(null);
   const sceneScreenshotIdRef = useRef(0);
   const requestSceneScreenshot = useCallback(
-    (modelView?: SceneScreenshotRequest["modelView"], worldView?: SceneScreenshotRequest["worldView"], checkCurrent?: () => void) =>
+    (modelView?: SceneScreenshotRequest["modelView"], worldView?: SceneScreenshotRequest["worldView"], checkCurrent?: () => void, showEditorHelpers = true) =>
       new Promise<{ ok: true; dataUrl: string } | { ok: false; message: string }>(
         (resolve) => {
           const id = sceneScreenshotIdRef.current + 1;
@@ -1177,18 +1178,20 @@ export function VisualEditorPrototype({
             id,
             ...(modelView ? { modelView } : {}),
             ...(worldView ? { worldView } : {}),
+            ...(showEditorHelpers ? {} : { showEditorHelpers: false }),
             onCapture: (dataUrl) => settle({ ok: true, dataUrl }),
             onError: (message) => settle({ ok: false, message }),
           });
           // The Canvas does not render while the window is hidden, so a request
-          // that never reaches a frame must still answer the MCP client.
+          // that never reaches a frame must still answer the MCP client. A frame
+          // without editing helpers may wait for a gizmo drag or a load to end.
           timeout = window.setTimeout(
             () =>
               settle({
                 ok: false,
                 message: "シーンのフレームを取得できませんでした",
               }),
-            modelView || worldView ? 15_000 : 5_000,
+            modelView || worldView || !showEditorHelpers ? 15_000 : 5_000,
           );
           if (checkCurrent) cancellationPoll = window.setInterval(() => {
             try { checkCurrent(); }
@@ -3050,10 +3053,11 @@ export function VisualEditorPrototype({
             return;
           }
           if (request.tool === "capture_scene_view") {
+            const { showEditorHelpers } = mcpSceneViewCaptureOptions(args);
             const fingerprint = await authoringFingerprint(bundleRef.current);
             // A frame is only worth anything from the Edit camera the caller
             // just placed; during Play the viewport is the play copy.
-            const captured = await requestSceneScreenshot();
+            const captured = await requestSceneScreenshot(undefined, undefined, undefined, showEditorHelpers);
             if (!captured.ok) {
               throw new XriftMcpEditorToolError(
                 "SCENE_VIEW_CAPTURE_FAILED",
@@ -3097,6 +3101,7 @@ export function VisualEditorPrototype({
                 path,
                 byteLength,
                 editorMode: editorModeRef.current,
+                showEditorHelpers,
                 fingerprint,
                 image: {
                   mimeType: "image/png",

@@ -14,6 +14,26 @@ GLSLエディターの変更は自動保存されます。表示が「保存待�
 
 保存した変更は、同じマテリアルを使うすべての場所に反映されます。一つのEntityだけを変える場合は、先にマテリアルを分けてください。画像やuniformの値は、Inspectorで確認できます。
 
+## モデルの属性を読む
+
+頂点シェーダーでは、割り当て先のメッシュが持つ属性を`attribute`で宣言して読めます。GLBの独自属性は、小文字の名前で宣言してください。たとえば`_AMAT`は`attribute float _amat;`と書きます。
+
+同じ形を並べたGLB（`EXT_mesh_gpu_instancing`）では、インスタンスごとの独自属性も同じ書き方で読めます。値は頂点ごとではなく、インスタンスごとに1つ届きます。各インスタンスの位置には`instanceMatrix`を使います。
+
+```glsl
+attribute vec3 _aoffset;
+
+void main() {
+  vec4 local = vec4(position + _aoffset, 1.0);
+  #ifdef USE_INSTANCING
+    local = instanceMatrix * local;
+  #endif
+  gl_Position = projectionMatrix * modelViewMatrix * local;
+}
+```
+
+値はGLBから読み込みます。外部のファイルを参照する`.gltf`は取り込み時にGLBへ変換されるため、インスタンスごとの独自属性は残りません。必要なデータを含むGLBを取り込んでください。
+
 ## 動作中に値を変える
 
 「シェーダーの調整値」で設定した値は、ワールドの動作中は変わりません。歩く人の位置に合わせて草を倒すなど、動作中に値を変えるにはスクリプトを使います。スクリプトから`ctx.materials.setUniform`へ、uniformの名前と値を渡してください。名前は、「シェーダーの調整値」の「uniform名」を押すと表示されます。

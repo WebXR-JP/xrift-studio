@@ -5,6 +5,7 @@ import {
   Bone,
   DoubleSide,
   Group,
+  InstancedBufferAttribute,
   Mesh,
   MeshBasicMaterial,
   MeshPhysicalMaterial,
@@ -13,8 +14,10 @@ import {
   SRGBColorSpace,
   Texture,
   Vector3,
+  type InstancedMesh,
   type Material,
   type BufferGeometry,
+  type ShaderMaterial,
 } from "three";
 import {
   BUILTIN_ASSET_IDS,
@@ -52,6 +55,15 @@ import {
 import { tauri } from "../../lib/tauri";
 import { createVrmAvatarFixtureBytes } from "../../lib/visual-editor/compiler/vrm-avatar.fixture";
 import { bindVrmSpringBones } from "../../../packages/xrift-studio-runtime/src/vrm-spring-bone";
+import {
+  GPU_INSTANCING_FIXTURE,
+  GPU_INSTANCING_FIXTURE_FRAGMENT_SHADER,
+  GPU_INSTANCING_FIXTURE_VERTEX_SHADER,
+  assertGpuInstancingFixtureLoaded,
+  createGpuInstancingFixtureGlb,
+  createOrdinaryFixtureGlb,
+  gpuInstancingFixtureDataUrl,
+} from "../../../packages/xrift-studio-runtime/src/gltf-instance-attributes.fixture";
 import { getModelNodeMaterialSlots } from "./model-node-materials";
 import { attachModelSelectionHighlight } from "./model-selection-highlight";
 import {
@@ -84,6 +96,7 @@ export async function runProjectModelMaterialPreviewFixtureAssertions(): Promise
   await assertOpenBrushPbrFallbackKeepsTheModelUsable();
   await assertMaterialTextureEditsKeepReadySlots();
   await assertVrmSpringBoneModelStaysMeasurable();
+  await assertInstanceAttributesReachTheSceneView();
 
   const project = createPrototypeProject("world", "model-material-preview");
   const fixtureTextureAsset: TextureAsset = {
@@ -907,6 +920,87 @@ async function assertVrmSpringBoneModelStaysMeasurable(): Promise<void> {
       springBones.update(1 / 60);
       springBones.dispose();
     }
+  } finally {
+    Object.assign(tauri, { readProjectFileDataUrl });
+  }
+}
+
+/**
+ * A GLB with EXT_mesh_gpu_instancing, loaded the way the Scene View, Play and
+ * the Asset previews load it. Its custom instance attributes arrive one value
+ * per instance, and stay so on the copy each Entity draws and under a Custom
+ * Shader assigned to the Model's slot.
+ */
+async function assertInstanceAttributesReachTheSceneView(): Promise<void> {
+  const readProjectFileDataUrl = tauri.readProjectFileDataUrl;
+  try {
+    const bytes = createGpuInstancingFixtureGlb();
+    Object.assign(tauri, {
+      readProjectFileDataUrl: async () => gpuInstancingFixtureDataUrl(bytes),
+    });
+    const { object } = await loadProjectModelData("fixture://gpu-instancing", "assets/tufts.glb", "instanced");
+    assertGpuInstancingFixtureLoaded(object, "Scene View source");
+
+    // The whole Model, as an unexpanded Model Entity draws it.
+    const drawn = cloneSourceModelNode(object);
+    assertGpuInstancingFixtureLoaded(drawn, "Scene View copy");
+
+    // One glTF node, as an expanded node Entity draws it.
+    const sourceNodeIndex = object.getObjectByName("Tufts")
+      ?.userData[PROJECT_MODEL_SOURCE_NODE_INDEX_USER_DATA_KEY] as number | undefined;
+    assert(sourceNodeIndex === 0, "The instanced node lost its glTF node index");
+    const node = cloneSourceModelNode(object, sourceNodeIndex) as InstancedMesh;
+    const nodeOffset = node.geometry?.getAttribute("_aoffset");
+    assert(
+      node.isInstancedMesh && node.count === 5 &&
+        nodeOffset instanceof InstancedBufferAttribute &&
+        Array.from(nodeOffset.array).every((value, index) =>
+          near(value, GPU_INSTANCING_FIXTURE.nodes.Tufts.offsets[index]!)),
+      "An expanded instanced node must keep its instances and their own values",
+    );
+
+    // A Custom Shader replaces the Material only; it reads the same geometry.
+    const material: MaterialAsset = {
+      id: "instanced-tuft-shader",
+      name: "Tuft shader",
+      kind: "material",
+      status: "ready",
+      source: { kind: "document" },
+      properties: normalizeMaterialProperties({}),
+      shader: {
+        kind: "classic-r3f",
+        sourceModulePath: "studio://custom-shader",
+        vertexShader: GPU_INSTANCING_FIXTURE_VERTEX_SHADER,
+        fragmentShader: GPU_INSTANCING_FIXTURE_FRAGMENT_SHADER,
+        uniforms: {},
+        variants: [{ name: "default", defines: {}, side: "double", transparent: false, depthWrite: true }],
+      },
+    };
+    const owned = applyAssignedMaterialPreviews(drawn, [{ sourceMaterialIndex: 0, material }]);
+    const tufts = drawn.getObjectByName("Tufts") as InstancedMesh;
+    assert(
+      owned.length === 4 && (tufts.material as ShaderMaterial).isShaderMaterial &&
+        (tufts.material as ShaderMaterial).vertexShader === GPU_INSTANCING_FIXTURE_VERTEX_SHADER,
+      "The assigned Custom Shader did not reach the instanced Mesh",
+    );
+    assertGpuInstancingFixtureLoaded(drawn, "Scene View copy with a Custom Shader");
+    owned.forEach((entry) => entry.dispose());
+
+    // An ordinary Model goes through the same loader and is not changed by it.
+    const ordinaryBytes = createOrdinaryFixtureGlb();
+    Object.assign(tauri, {
+      readProjectFileDataUrl: async () => gpuInstancingFixtureDataUrl(ordinaryBytes),
+    });
+    const ordinary = await loadProjectModelData("fixture://gpu-instancing", "assets/quad.glb", "ordinary");
+    const quad = ordinary.object.getObjectByName("Quad") as Mesh;
+    assert(
+      quad?.isMesh && !(quad as unknown as InstancedMesh).isInstancedMesh &&
+        Object.keys(quad.geometry.attributes).sort().join(",") === "_amat,position" &&
+        Object.values(quad.geometry.attributes).every(
+          (attribute) => !(attribute instanceof InstancedBufferAttribute),
+        ),
+      "An ordinary Model must load exactly as three.js loads it",
+    );
   } finally {
     Object.assign(tauri, { readProjectFileDataUrl });
   }

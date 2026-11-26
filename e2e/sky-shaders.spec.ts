@@ -105,5 +105,5 @@ test("MCP exposes sky quality variants and applies them without changing uniform
     const shader = changed.bundle.assets.assets[materialAssetId].shader;
     return { sky: listing.sky.length, water: listing.water.length, preserved: JSON.stringify(shader.uniforms) === before, steps: shader.variants[0].defines.XRIFT_SKY_CLOUD_STEPS };
   });
-  expect(result).toEqual({ sky: 40, water: 21, preserved: true, steps: "10" });
+  expect(result).toEqual({ sky: 40, water: 24, preserved: true, steps: "10" });
 });

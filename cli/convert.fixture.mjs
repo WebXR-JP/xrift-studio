@@ -91,6 +91,7 @@ import { runAudioSourceRuntimeFixtureAssertions } from "../packages/xrift-studio
 import { runRuntimeSchemaFixtureAssertions } from "../packages/xrift-studio-runtime/src/schema.fixture.ts";
 import { runRuntimePhysicsModeFixtureAssertions } from "../packages/xrift-studio-runtime/src/physics-mode.fixture.ts";
 import { runMirrorReflectionFixtureAssertions } from "../packages/xrift-studio-runtime/src/mirror-reflection.fixture.ts";
+import { runGltfInstanceAttributesFixtureAssertions } from "../packages/xrift-studio-runtime/src/gltf-instance-attributes.fixture.ts";
 import { runInteractivityEngineFixtureAssertions } from "../packages/xrift-studio-runtime/src/interactivity/engine.fixture.ts";
 import { runTimerQueueFixtureAssertions } from "../packages/xrift-studio-runtime/src/interactivity/timer-queue.fixture.ts";
 import {
@@ -126,6 +127,7 @@ import { runCustomMaterialPreviewFixtureAssertions } from "../src/components/vis
 import { runEditorDragDataFixture } from "../src/components/visual-editor/editor-drag-data.fixture.ts";
 import { runEditorLayoutFixtureAssertions } from "../src/components/visual-editor/editor-layout.fixture.ts";
 import { runSceneViewportQualityFixtureAssertions } from "../src/components/visual-editor/scene-viewport-quality.fixture.ts";
+import { runSceneViewCaptureFixtureAssertions } from "../src/components/visual-editor/scene-view-capture.fixture.ts";
 import { runSceneVramEstimateFixtureAssertions } from "../src/components/visual-editor/scene-vram-estimate.fixture.ts";
 import { runVramEstimateFixtureAssertions } from "../src/lib/visual-editor/vram-estimate.fixture.ts";
 import { runWorldPlaySpawnFixtureAssertions } from "../src/components/visual-editor/world-play-spawn.fixture.ts";
@@ -399,6 +401,7 @@ try {
     ["runtime schema", runRuntimeSchemaFixtureAssertions],
     ["runtime Physics placement", runRuntimePhysicsModeFixtureAssertions],
     ["mirror reflection interval", runMirrorReflectionFixtureAssertions],
+    ["glTF instance attributes", runGltfInstanceAttributesFixtureAssertions],
     ["interactivity engine", runInteractivityEngineFixtureAssertions],
     ["interactivity timer queue", runTimerQueueFixtureAssertions],
     ["animation runtime bridge", runAnimationRuntimeBridgeFixtureAssertions],
@@ -449,6 +452,7 @@ try {
     ["scene click selection", runSceneClickSelectionFixtureAssertions],
     ["editor layout", runEditorLayoutFixtureAssertions],
     ["scene viewport quality", runSceneViewportQualityFixtureAssertions],
+    ["Scene View capture without editing helpers", runSceneViewCaptureFixtureAssertions],
     ["scene VRAM estimate", runSceneVramEstimateFixtureAssertions],
     ["world play spawn", runWorldPlaySpawnFixtureAssertions],
     ["script execution scope", runScriptExecutionScopeFixtureAssertions],
