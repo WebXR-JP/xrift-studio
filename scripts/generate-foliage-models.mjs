@@ -207,7 +207,7 @@ const SHRUB = {
 };
 
 /**
- * The same tree for the middle distance: half as many leaf cards, each larger,
+ * A lighter version of the same tree: half as many leaf cards, each larger,
  * tubes for the trunk and limbs only, and a larger crown core to fill in.
  * @param {TreeSpec} spec
  * @returns {TreeSpec}
@@ -239,7 +239,7 @@ export const FOLIAGE_MODELS = [
 // ---------------------------------------------------------------------------
 // Numbers every machine agrees on
 //
-// + - * / and Math.sqrt are exact by IEEE 754, but Math.sin, Math.cos and **
+// + - * / and Math.sqrt are fixed by IEEE 754, but Math.sin, Math.cos and **
 // come from whichever maths library the runtime was built with, and those
 // disagree in the last bit. One bit is enough to swap two branches of nearly
 // equal thickness, after which the tree grows differently. So these three are
