@@ -83,6 +83,9 @@ function texture(key: "leaves" | "bark"): ClassicR3fShaderUniform {
     // picture is read at the size it is drawn.
     generateMipmaps: true,
     filter: "linear",
+    // A trunk and a card are mostly seen at a slant, where mip levels alone
+    // turn the picture to mush.
+    anisotropy: 4,
     wrapS: "repeat",
     wrapT: "repeat",
   };

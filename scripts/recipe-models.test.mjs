@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import vm from 'node:vm';
 import { disposeCatalogModel } from '../src/components/visual-editor/dispose-catalog-model.ts';
+import { FOLIAGE_MODELS } from './generate-foliage-models.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
@@ -17,13 +18,23 @@ const catalog = read('src/lib/visual-editor/builtin-recipe-models.ts');
 const sampleSource = read('src/lib/visual-editor/catalog-sample-models.ts');
 const samples = vm.runInNewContext(sampleSource.match(/CATALOG_SAMPLE_MODELS[^=]*= (\[[\s\S]*?\n\]);/)[1]);
 const sampleModelIds = new Set(samples.map((entry) => entry.modelId));
+// The trees come from their own generator (scripts/generate-foliage-models.mjs)
+// and are listed in a file of their own.
+const foliageSource = read('src/lib/visual-editor/foliage-recipe-models.ts');
+const foliage = vm.runInNewContext(
+  foliageSource.match(/FOLIAGE_RECIPE_MODELS[^=]*= (\[[\s\S]*?\n\]);/)[1],
+  { PROVENANCE: foliageSource.match(/const PROVENANCE =\s*"([^"]+)"/)[1] },
+);
+const foliageModelIds = new Set(foliage.map((entry) => entry.modelId));
 const definitions = vm.runInNewContext(
   catalog.match(/BUILTIN_RECIPE_MODELS[^=]*= (\[[\s\S]*?\n\]);/)[1],
-  { CATALOG_SAMPLE_MODELS: samples },
+  { CATALOG_SAMPLE_MODELS: samples, FOLIAGE_RECIPE_MODELS: foliage },
 );
 // Catalog samples ride along in the catalog for material-showcase recipes; the
 // pinned 32-file manifest only covers the recipe-owned models.
-const recipeDefinitions = definitions.filter((entry) => !sampleModelIds.has(entry.modelId));
+const recipeDefinitions = definitions.filter(
+  (entry) => !sampleModelIds.has(entry.modelId) && !foliageModelIds.has(entry.modelId),
+);
 const recipes = read('src/lib/visual-editor/scene-recipe-catalog.ts');
 
 function recipe(name) {
@@ -50,6 +61,35 @@ test('all 32 actual GLBs match pinned metadata and content-derived asset IDs', (
     const item = manifest.find((d) => d.modelId === definition.modelId);
     assert.equal(item?.sha256, hash);
     assert.ok(buffer.length < 1_000_000, `${definition.fileName} exceeds 1 MB`);
+  }
+});
+
+test('the tree GLBs match pinned metadata and content-derived asset IDs', () => {
+  // What is inside each file is checked against its generator by
+  // scripts/foliage-models.test.mjs. Here: the catalog names those same bytes.
+  assert.deepEqual(Array.from(foliage, (d) => d.fileName), FOLIAGE_MODELS.map((model) => model.fileName));
+  assert.equal(new Set(foliage.map((d) => d.modelId)).size, foliage.length);
+  for (const definition of foliage) {
+    const buffer = fs.readFileSync(path.join(root, 'public', definition.publicPath));
+    const hash = createHash('sha256').update(buffer).digest('hex');
+    assert.equal(hash, definition.sha256, definition.fileName);
+    assert.equal(buffer.length, definition.byteLength, definition.fileName);
+    assert.equal(definition.assetId, `model-${path.basename(definition.fileName, '.glb')}-${hash.slice(0, 12)}`);
+    assert.ok(buffer.length < 1_000_000, `${definition.fileName} exceeds 1 MB`);
+    const json = buffer.subarray(20, 20 + buffer.readUInt32LE(12)).toString('utf8');
+    const gltf = JSON.parse(json);
+    const positions = gltf.meshes.flatMap(mesh => mesh.primitives.map(primitive => gltf.accessors[primitive.attributes.POSITION]));
+    let longest = 0;
+    for (const axis of [0, 1, 2]) {
+      const min = Math.min(...positions.map(accessor => accessor.min[axis]));
+      const max = Math.max(...positions.map(accessor => accessor.max[axis]));
+      assert.equal(definition.bounds.min[axis], min, `${definition.fileName} bounds`);
+      assert.equal(definition.bounds.max[axis], max, `${definition.fileName} bounds`);
+      longest = Math.max(longest, max - min);
+    }
+    assert.ok(Math.abs(definition.approxRadius - longest / 2) < 1e-3, `${definition.fileName} radius`);
+    // Nothing in the file says on which machine it was made.
+    assert.doesNotMatch(json, /[A-Za-z]:[\\/]|\/Users\/|\/home\//, definition.fileName);
   }
 });
 

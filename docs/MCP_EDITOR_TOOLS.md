@@ -342,6 +342,16 @@ Animationを持つGLB / VRMの展開ノード）はオブジェクト単体で�
 見劣りする。`note`は配置後の残作業を示す。落とさず
 そのまま返す。
 
+風にそよぐ木（`scene-recipe.foliage-broadleaf`、`scene-recipe.foliage-garden-tree`、
+`scene-recipe.foliage-shrub`と、それぞれの軽量版`scene-recipe.foliage-broadleaf-light`、
+`scene-recipe.foliage-garden-tree-light`、`scene-recipe.foliage-shrub-light`）は、
+木のModelに加えて、Custom Shaderのマテリアル`foliage-shader-broadleaf-material`と、
+葉と樹皮のTextureを2枚追加する。どの木もこのマテリアルを共有するので、2本目からは
+Modelだけが増える。軽量版は葉の束が約半分で、たくさん並べる木や離れて見る木に使う。葉の色みや揺れの強さは
+`get_custom_shader`で読み、`update_custom_shader`でuniformを書き換える。変更はすべての木に
+反映される。風と光のuniform（`uWindDirection`、`uSunDirection`など）はSceneが書くので、
+値を入れても次の描画で置き換わる。風は`update_scene_settings`の`vegetation`で変える。
+
 「しかけ・チュートリアル」カテゴリのセットは、形状に加えて音源と
 ノードグラフまで組み込んで配置する。`behaviours`は押したときに何が
 起きるかを1本ずつ返す。`lesson`はそのセットが教える手順を返す。押すと音が

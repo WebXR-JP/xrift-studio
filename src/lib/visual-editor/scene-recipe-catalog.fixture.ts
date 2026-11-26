@@ -3,6 +3,7 @@ import { BUILTIN_RECIPE_AUDIO, getBuiltinRecipeAudio } from "./builtin-recipe-au
 import { getBuiltinRecipeModel } from "./builtin-recipe-models";
 import { getBuiltinPrimitiveCreation } from "./creation-catalog";
 import { getMaterialShowcaseAsset } from "./material-showcase-catalog";
+import { getFoliageMaterialAsset } from "./foliage-shader-catalog";
 import { BUILTIN_MATERIAL_ASSETS } from "./prototype-project";
 import {
   collectXriftInteractionActions,
@@ -144,7 +145,9 @@ export function runSceneRecipeCatalogFixtureAssertions(): void {
       }
       if (part.kind === "model") {
         if (part.materialAssetId) assert(
-          BUILTIN_MATERIAL_ASSETS.some(material => material.id === part.materialAssetId) || Boolean(getMaterialShowcaseAsset(part.materialAssetId)),
+          BUILTIN_MATERIAL_ASSETS.some(material => material.id === part.materialAssetId) || Boolean(getMaterialShowcaseAsset(part.materialAssetId)) ||
+            // A tree wears the foliage Material, which arrives with the first tree.
+            Boolean(getFoliageMaterialAsset(part.materialAssetId)),
           `${recipe.id} overrides its model with an unknown Material`,
         );
         assert(
